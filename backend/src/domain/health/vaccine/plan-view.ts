@@ -16,6 +16,7 @@ import {
   CORE_SCHEDULE,
   RHYTHM_ALL_IGNORED,
   VACCINE_KIND_LABELS,
+  VACCINE_KIND_SHORT_LABELS,
   type VaccineKind,
 } from './schedule-table';
 import { recommendProductsForStep } from './products';
@@ -68,6 +69,8 @@ export interface PlanStepDto {
   status: 'DONE' | 'DUE' | 'UPCOMING' | 'OVERDUE';
   /** 待接种 / 已完成 / 尽快补种 */
   statusLabel: string;
+  /** 类别**短名**（计划行那种窄位置用；长名会把行撑成两行） */
+  kindShort?: string;
   /** 卡片上那行**短话**（原型 B/F/I 卡上那句）；与 `basis` 分工见程序表 */
   hint?: string;
   /**
@@ -194,6 +197,7 @@ export function toStepDto(
     key: step.key,
     kind: step.kind,
     kindLabel: VACCINE_KIND_LABELS[step.kind],
+    kindShort: VACCINE_KIND_SHORT_LABELS[step.kind],
     label: step.label,
     layer: step.layer,
     windowStart: toDateText(step.windowStart),

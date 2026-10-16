@@ -67,6 +67,29 @@ export function stepStatusTone(step: VaccineStep): VaccineStatusTone {
  * 老板 2026-10-15 定：**每个待办项都带标识** ——
  * 之前只有钩端带，反而让人以为"没标的就是不重要"。
  */
+/**
+ * **计划行**那一行的标题（窄位置，2026-10-16 老板："像核心疫苗这种标题比较长的，
+ * 排版依然非常混乱"，以及"免疫计划列表中，不显示第几针"）。
+ *
+ * 两条规则：
+ *   ① 用**短名**（核心疫苗）而不是长名（核心疫苗（犬瘟、细小、腺病毒））——
+ *      长名 + 右边的标识会把一行挤成两行；
+ *   ② 首免系列的"第 N 针"**不显示** —— 一行里已经有窗口日期，第几针由顺序自然带出；
+ *      其余步骤名（首针 / 每年一次 / 补一针 / 加强（每 3 年）/ 评估 / 26 周补强）照旧显示，
+ *      它们是"这一针是什么"的信息，不是序号。
+ *
+ * ⚠️ 「下一针」卡片仍然用长名 + 步�骤名（那里有整行空间，家长最关心"这一针防什么"）。
+ */
+export function stepPlanTitle(step: VaccineStep): string {
+  const kind = String(step?.kindShort || step?.kindLabel || '').trim()
+  const label = String(step?.label || '').trim()
+  if (!kind) return label
+  if (!label) return kind
+  // "第 1 针 / 第 2 针…" 是序号，不是信息
+  if (/^第\s*\d+\s*针$/.test(label)) return kind
+  return `${kind} · ${label}`
+}
+
 export function stepLayerLabel(layer: VaccineLayer): string {
   return layer === 'SUGGEST' ? '强烈建议' : '必打'
 }

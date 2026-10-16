@@ -574,7 +574,10 @@ describe('dog-profile-health · 新增记录直接路由', () => {
      * 不再弹选择面板（老板 2026-10-03 就要去掉这层弹窗）。
      * 文案是"上传"不是"拍"：识别只开相册、不调相机（上面 2026-10-04 那条）。
      */
-    expect(page).toContain("'上传疫苗本'")
+    // 2026-10-16 第 3 条：抗体检测与上传疫苗本**合成一个按钮**，
+    // 点一下先问是哪种凭证（疫苗本 / 抗体检测报告）
+    expect(page).toContain("'上传疫苗本 / 报告'")
+    expect(page).toContain("'疫苗本（传照片识别）'")
     expect(page).toContain("return '记一条'")
     // 过敏已不在这个页面
     expect(page).not.toContain("['拍检测报告，AI 识别', '手动点选 / 手输']")

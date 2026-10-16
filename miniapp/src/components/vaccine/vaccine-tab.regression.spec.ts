@@ -1,6 +1,8 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { stepPlanTitle } from '../../domain/vaccine/status'
+import type { VaccineStep } from '../../domain/vaccine/types'
 
 /**
  * ══ 疫苗板块 · 组件层结构契约（2026-10-15 重构）════════════════════════════
@@ -213,6 +215,40 @@ describe('疫苗 · 忽略弹层（原型 J）', () => {
   })
 });
 
+/** 造一个最小可用的步骤（这个文件是结构契约，只需要用到标题相关的字段） */
+const step = (extra: Partial<VaccineStep>): VaccineStep =>
+  ({
+    key: 'core-puppy-2',
+    kind: 'core',
+    kindLabel: '核心疫苗（犬瘟、细小、腺病毒）',
+    label: '第 2 针',
+    layer: 'MUST',
+    windowStart: '2026-11-01',
+    windowEnd: '2026-11-15',
+    status: 'UPCOMING',
+    statusLabel: '待接种',
+    titerable: false,
+    products: [],
+    ...extra,
+  }) as VaccineStep
+
+describe('疫苗 · 计划行的排版（老板 2026-10-16："标题长的排版非常混乱"）', () => {
+  it('短名进计划行，长名留给卡片；"第 N 针"这种序号不进计划行', () => {
+    const long = step({ kindShort: '核心疫苗', label: '第 2 针' });
+    expect(stepPlanTitle(long)).toBe('核心疫苗');
+    expect(stepPlanTitle(step({ kindShort: '核心疫苗', label: '每年一次' }))).toBe(
+      '核心疫苗 · 每年一次',
+    );
+    expect(stepPlanTitle(step({ kindShort: '狂犬疫苗', label: '补一针' }))).toBe(
+      '狂犬疫苗 · 补一针',
+    );
+    // 没有短名时退回长名，不许空着
+    expect(stepPlanTitle(step({ kindShort: '', kindLabel: '钩端螺旋体', label: '' }))).toBe(
+      '钩端螺旋体',
+    );
+  });
+});
+
 describe('疫苗 · 抗体检测的入口位置（需求 R9：能记录、不主动提示）', () => {
   const list = read('RecordList.vue')
   const editor = read('RecordEditor.vue')
@@ -223,15 +259,25 @@ describe('疫苗 · 抗体检测的入口位置（需求 R9：能记录、不主
     expect(list).not.toContain('add-test')
   })
 
-  it('入口在「记一条」里面（家长主动打开的），靠一个类型切换进出', () => {
-    expect(editor).toContain('vk-editor__types')
-    expect(editor).toContain('onSwitchType')
-    expect(editor).toContain("emit('switch-mode', mode)")
+  it('入口与「上传疫苗本」合成**一个按钮**（老板 2026-10-16 第 3 条）', () => {
+    const page = readFileSync(
+      resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
+      'utf-8',
+    )
+    expect(page).toContain('上传疫苗本 / 报告')
+    expect(page).toContain("'疫苗本（传照片识别）'")
+    expect(page).toContain("'抗体检测报告（传报告照片）'")
+    expect(page).toContain('vaccineSectionRef.value?.addAntibodyTest?.()')
   })
 
-  it('只有"新建"时能切类型；改已有记录时不能（类型是定死的）', () => {
-    expect(editor).toContain('const canSwitchType = computed(() => !canRemove.value)')
-    expect(editor).toContain('v-if="canSwitchType"')
+  it('抗体检测的记录能留原件（报告照片），且是选填', () => {
+    expect(editor).toContain('报告照片')
+    expect(editor).toContain('uploadHealthImage')
+  })
+
+  it('🔴「检了什么」是**单选**：一份报告就是一份报告（老板 2026-10-16 第 5 条）', () => {
+    expect(editor).toContain("const target = ref<AntibodyTarget>('CORE')")
+    expect(editor).not.toContain('toggleTarget')
   })
 
   it('需要它的那一处仍然明说：「下一针」展开里的「先做抗体检测」（核心那一针能省掉）', () => {
@@ -277,7 +323,8 @@ describe('疫苗 · 免疫计划（PlanTimeline，原型 A/B/C/F/I/K）', () => 
     expect(timeline).toContain('vk-plan__when')
     expect(timeline).toContain('vk-plan__kind')
     expect(timeline).toContain('kindTone(step.kind)')
-    expect(timeline).toContain('stepTitle(step)')
+    // 计划行用**短名 + 不显示第几针**（老板 2026-10-16：标题长的排版很乱）
+    expect(timeline).toContain('stepPlanTitle')
     // 两个层级标识走 status.ts（唯一一份），组件只套 token
     expect(timeline).toContain('stepLayerLabel')
     expect(timeline).toContain('layerLabel(step.layer)')

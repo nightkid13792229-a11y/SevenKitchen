@@ -34,7 +34,7 @@
         <view class="vk-plan__body">
           <view class="vk-plan__line">
             <view class="vk-plan__kind" :class="`vk-plan__kind--${kindTone(step.kind)}`" />
-            <text class="vk-plan__step">{{ stepTitle(step) }}</text>
+            <text class="vk-plan__step">{{ planTitle(step) }}</text>
             <!-- 层级标识只挂在**还要打的行**上：已完成的行再写"必打"没有意义，
                  原型 K/F 里那两行也没有标识。 -->
             <text
@@ -64,8 +64,8 @@ import type { VaccineKind, VaccineLayer, VaccineStep } from '../../domain/vaccin
 import {
   stepKindTone,
   stepLayerLabel,
+  stepPlanTitle,
   stepRowNote,
-  stepTitle,
   stepWindowText,
 } from '../../domain/vaccine/status'
 
@@ -86,6 +86,10 @@ const plan = computed(() => props.plan || [])
 
 function windowText(step: VaccineStep) {
   return stepWindowText(step)
+}
+
+function planTitle(step: VaccineStep) {
+  return stepPlanTitle(step)
 }
 
 function rowNote(step: VaccineStep) {

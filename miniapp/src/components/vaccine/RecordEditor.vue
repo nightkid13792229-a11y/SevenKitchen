@@ -15,21 +15,6 @@
         <text class="vk-editor__close" @tap="onCancel">关闭</text>
       </view>
 
-      <!-- 记的是哪一种（只在**新建**时给；改已有记录时类型不能变）。
-           抗体检测的入口就放在这里：家长是主动点「记一条」进来的，
-           页面上**不摆**任何招呼他去做抗体检测的入口（需求 R9：能记录、不主动提示）。 -->
-      <view v-if="canSwitchType" class="vk-editor__types">
-        <text
-          class="vk-editor__type"
-          :class="{ 'vk-editor__type--on': isRecordMode }"
-          @tap="onSwitchType('record')"
-        >疫苗记录</text>
-        <text
-          class="vk-editor__type"
-          :class="{ 'vk-editor__type--on': !isRecordMode }"
-          @tap="onSwitchType('antibody')"
-        >抗体检测</text>
-      </view>
 
       <!-- ① 疫苗记录：名称 + 日期 -->
       <template v-if="isRecordMode">
@@ -114,10 +99,20 @@
               v-for="option in targetOptions"
               :key="option.value"
               class="vk-editor__chip"
-              :class="{ 'vk-editor__chip--on': targets.indexOf(option.value) >= 0 }"
-              @tap="toggleTarget(option.value)"
+              :class="{ 'vk-editor__chip--on': target === option.value }"
+              @tap="pickTarget(option.value)"
             >{{ option.label }}</text>
           </view>
+        </view>
+
+        <view class="vk-editor__block">
+          <text class="vk-editor__label">报告照片</text>
+          <view class="vk-editor__field" @tap="pickReportPhoto">
+            <text :class="{ 'vk-editor__date--empty': reportPhotos.length === 0 }">
+              {{ reportPhotos.length > 0 ? `已上传 ${reportPhotos.length} 张，点一下看` : '点这里上传（选填）' }}
+            </text>
+          </view>
+          <text v-if="uploadingPhoto" class="vk-editor__hint">正在上传…</text>
         </view>
 
         <view class="vk-editor__block">
@@ -174,6 +169,7 @@ import {
   type VaccineComponentOption,
 } from '../../domain/vaccine/catalog'
 import { todayDateText } from '../../utils/date'
+import { uploadHealthImage } from '../../utils/api'
 
 const props = withDefaults(defineProps<{
   visible: boolean
@@ -220,8 +216,6 @@ const emit = defineEmits<{
   (event: 'save-test', payload: AntibodyTestPayload, testId: string): void
   (event: 'remove', id: string): void
   (event: 'cancel'): void
-  /** 切换记的是哪一种（疫苗记录 / 抗体检测） */
-  (event: 'switch-mode', mode: 'record' | 'antibody'): void
 }>()
 
 const name = ref('')
@@ -231,7 +225,14 @@ const notes = ref('')
 const pickerOpen = ref(false)
 const keyword = ref('')
 const errorText = ref('')
-const targets = ref<AntibodyTarget[]>(['CORE'])
+/**
+ * 「检了什么」**单选**（老板 2026-10-16："检查项目为什么可以多选呢？"）。
+ *
+ * 一次抗体检测对应**一份报告**，报告上写的是哪一项就是哪一项：
+ * 核心三项与狂犬是两张不同的报告（送检项目不同、出报告的机构也可能不同）。
+ * 多选还会让计划那边说不清 —— 只有核心那一项会影响接种安排。
+ */
+const target = ref<AntibodyTarget>('CORE')
 const result = ref<AntibodyResult>('PASS')
 
 const isRecordMode = computed(() => props.mode !== 'antibody')
@@ -245,13 +246,7 @@ const maxDate = computed(() => todayDateText())
 
 const canRemove = computed(() => Boolean(props.record?.id || props.test?.id))
 
-/** 只有"新建"时能切换记的是哪一种（改已有记录时类型是定死的） */
-const canSwitchType = computed(() => !canRemove.value)
 
-function onSwitchType(mode: 'record' | 'antibody') {
-  if (mode === props.mode) return
-  emit('switch-mode', mode)
-}
 const componentChoices = computed(() => componentOptionsOf(props.componentOptions))
 const targetOptions = computed(() => ANTIBODY_TARGET_OPTIONS)
 const resultOptions = computed(() => ANTIBODY_RESULT_OPTIONS)
@@ -275,11 +270,49 @@ const showComponents = computed(() => {
   return !findCatalogProduct(props.products || [], text)
 })
 
+/** 报告照片（选填）：抗体检测记录和疫苗本一样要能留原件（需求 R9） */
+const reportPhotos = ref<string[]>([])
+const uploadingPhoto = ref(false)
+
+async function pickReportPhoto() {
+  if (reportPhotos.value.length > 0) {
+    uni.previewImage({ urls: reportPhotos.value })
+    return
+  }
+  if (uploadingPhoto.value) return
+  try {
+    const picked = await new Promise<string[]>((resolve, reject) => {
+      uni.chooseMedia({
+        count: 3,
+        mediaType: ['image'],
+        sourceType: ['album'],
+        success: (res: any) =>
+          resolve((res?.tempFiles || []).map((item: any) => String(item.tempFilePath))),
+        fail: (error: any) => reject(error),
+      })
+    })
+    if (picked.length === 0) return
+    uploadingPhoto.value = true
+    const urls: string[] = []
+    for (const filePath of picked) {
+      const uploaded = await uploadHealthImage(filePath)
+      if (uploaded?.url) urls.push(uploaded.url)
+    }
+    reportPhotos.value = [...reportPhotos.value, ...urls]
+  } catch (error: any) {
+    // 家长取消选图不算错，不弹提示
+    if (error?.errMsg && String(error.errMsg).indexOf('cancel') >= 0) return
+    uni.showToast({ title: '照片没传上，再试一次', icon: 'none' })
+  } finally {
+    uploadingPhoto.value = false
+  }
+}
+
 const antibodyHint = computed(() => {
-  if (targets.value.indexOf('CORE') >= 0) {
+  if (target.value === 'CORE') {
     return '核心疫苗合格时，这一针改由抗体检测替代；结果以兽医判读为准。'
   }
-  if (targets.value.indexOf('RABIES') >= 0) {
+  if (target.value === 'RABIES') {
     return '狂犬的抗体检测只作记录（出行 / 出入境常用），不影响接种安排。'
   }
   return ''
@@ -296,7 +329,12 @@ watch(
     if (props.mode === 'antibody') {
       const test = props.test
       date.value = String(test?.testedAt || '').slice(0, 10) || todayDateText()
-      targets.value = test && test.targets && test.targets.length > 0 ? [...test.targets] : ['CORE']
+      reportPhotos.value =
+        test && Array.isArray(test.attachments) ? test.attachments.map(String) : []
+      target.value =
+        test && Array.isArray(test.targets) && test.targets.length > 0
+          ? test.targets[0]
+          : 'CORE'
       result.value = (test?.result || 'PASS') as AntibodyResult
       return
     }
@@ -350,12 +388,8 @@ function onDateChange(event: any) {
   errorText.value = ''
 }
 
-function toggleTarget(value: AntibodyTarget) {
-  const list = [...targets.value]
-  const at = list.indexOf(value)
-  if (at >= 0) list.splice(at, 1)
-  else list.push(value)
-  targets.value = list
+function pickTarget(value: AntibodyTarget) {
+  target.value = value
   errorText.value = ''
 }
 
@@ -381,14 +415,11 @@ function onSave() {
   }
 
   if (!isRecordMode.value) {
-    if (targets.value.length === 0) {
-      errorText.value = '至少选一项检测项目'
-      return
-    }
     const payload: AntibodyTestPayload = {
       testedAt: date.value,
-      targets: [...targets.value],
+      targets: [target.value],
       result: result.value,
+      ...(reportPhotos.value.length > 0 ? { attachments: [...reportPhotos.value] } : {}),
     }
     emit('save-test', payload, String(props.test?.id || ''))
     return

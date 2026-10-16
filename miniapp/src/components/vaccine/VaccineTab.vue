@@ -59,7 +59,6 @@
         @save-record="onSaveRecord"
         @save-test="onSaveTest"
         @remove="onRemoveFromEditor"
-        @switch-mode="onSwitchEditorMode"
         @cancel="closeEditor"
       />
       </view>
@@ -260,6 +259,16 @@ function addRecord() {
   editorPresetComponents.value = []
   editorHeading.value = '记一条接种记录'
   editorVisible.value = true
+  // 老板 2026-10-16 第 4 条：底部固定栏点「记一条」要**定位到输入窗**
+  //（录入卡是内联的，不滚过去就等于"点了没反应"）。
+  // 已经开着时再点也要滚（watch 不会触发）→ 所以这里直接滚一次。
+  scrollToAnchor('vk-anchor-editor')
+}
+
+/** 底部「上传疫苗本 / 报告」→ 抗体检测报告：开抗体录入卡，并滚到它那里 */
+function addAntibodyTest() {
+  onAntibody(null)
+  scrollToAnchor('vk-anchor-editor')
 }
 
 /**
@@ -352,24 +361,6 @@ watch(
     if (count > 0) scrollToAnchor('vk-anchor-scan')
   },
 )
-
-/**
- * 在录入卡里切换"记疫苗记录 / 记抗体检测"。
- *
- * 抗体检测的入口就在这儿 —— 家长是主动点「记一条」进来的，
- * 页面上不摆招呼他去做抗体检测的入口（需求 R9：能记录、不主动提示）。
- */
-function onSwitchEditorMode(mode: 'record' | 'antibody') {
-  editorMode.value = mode
-  editorRecord.value = null
-  editorTest.value = null
-  if (mode === 'antibody') {
-    editorPresetName.value = ''
-    editorPresetComponents.value = []
-    return
-  }
-  editorHeading.value = '记一条接种记录'
-}
 
 function closeEditor() {
   editorVisible.value = false
@@ -597,6 +588,8 @@ defineExpose({
   startScan,
   /** 底部「记一条」→ 打开录入器 */
   addRecord,
+  /** 底部「上传疫苗本 / 报告」选到"抗体检测报告"时 → 开抗体录入卡 */
+  addAntibodyTest,
   /** 录入器开着（有内容还没保存）→ 切书签前拦一下 */
   countUnsaveableDrafts: () => (editorVisible.value ? 1 : 0),
   /** 识别结果还没逐条确认 → 切书签前拦一下 */

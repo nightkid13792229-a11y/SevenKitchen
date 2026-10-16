@@ -72,6 +72,8 @@ export interface VaccineStep {
   status: VaccineStepStatus
   statusLabel: string
   /** 依据文案（展开时给家长看） */
+  /** 类别**短名**（计划行那种窄位置用；长名会把行撑成两行） */
+  kindShort?: string
   /** 卡片上那行**短话**（后端按程序表逐行下发；原型 B/F/I 卡上那句） */
   hint?: string
   /** 这一针被抗体检测替代了（原型 F）：时间含义变成"下次评估" */

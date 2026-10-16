@@ -1268,14 +1268,31 @@ const stickySecondaryText = computed(() => {
  */
 const stickyLeftText = computed(() => {
   if (!selectedDog.value) return ''
-  return activeHealthTab.value === 'vaccine' ? '上传疫苗本' : ''
+  // 老板 2026-10-16 第 3 条：抗体检测的入口与"上传疫苗本"**合成一个按钮**
+  return activeHealthTab.value === 'vaccine' ? '上传疫苗本 / 报告' : ''
 })
 
-/** 左侧按钮：疫苗页 = 上传疫苗本（AI 识别）；其余板块没有这个按钮 */
+/**
+ * 左侧按钮：疫苗页 = 上传疫苗本 / 报告；其余板块没有这个按钮。
+ *
+ * 两种东西都要能传，所以点一下先问是哪种（老板 2026-10-16 第 3 条：
+ * "抗体检测……应该与上传疫苗本结合一下，做到一个按钮中"）：
+ *   · 疫苗本 → 传照片走 AI 识别，逐条确认（原来的路）
+ *   · 抗体检测报告 → 开抗体检测录入卡，报告照片选填
+ * 这两件事本来就是同一类动作（把纸质凭证收进来），合成一个入口更省地方。
+ */
 function onStickyLeft() {
-  if (activeHealthTab.value === 'vaccine') {
-    vaccineSectionRef.value?.startScan?.()
-  }
+  if (activeHealthTab.value !== 'vaccine') return
+  uni.showActionSheet({
+    itemList: ['疫苗本（传照片识别）', '抗体检测报告（传报告照片）'],
+    success: ({ tapIndex }) => {
+      if (tapIndex === 0) {
+        vaccineSectionRef.value?.startScan?.()
+        return
+      }
+      vaccineSectionRef.value?.addAntibodyTest?.()
+    },
+  })
 }
 
 /**

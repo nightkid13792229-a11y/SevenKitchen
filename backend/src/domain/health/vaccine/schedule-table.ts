@@ -70,6 +70,25 @@ export const VACCINE_KIND_LABELS: Record<VaccineKind, string> = {
   other: '其他',
 };
 
+/**
+ * 类别的**短名**（2026-10-16 老板："像核心疫苗这种标题比较长的，排版依然非常混乱"）。
+ *
+ * 分工：
+ *   · **长名**（上面那份）→ 「下一针」卡片、"查看详情"这种有整行空间的地方，
+ *     它回答了家长最关心的"这一针防什么"；
+ *   · **短名**（这份）→ 免疫计划那种一行只有几个字的窄位置，
+ *     长名会把行撑成两行、和右边的日期标识挤在一起。
+ *
+ * 两份都由后端下发，前端不做截断（截断会截出"核心疫苗（犬瘟、细…"这种半截话）。
+ */
+export const VACCINE_KIND_SHORT_LABELS: Record<VaccineKind, string> = {
+  core_early: '早期核心',
+  core: '核心疫苗',
+  rabies: '狂犬疫苗',
+  lepto: '钩端螺旋体',
+  other: '其他',
+};
+
 /** 分级（需求 第四节）：必打 / 强烈建议 —— 页面上只讲这两层 */
 export type VaccineLayer = 'MUST' | 'SUGGEST';
 

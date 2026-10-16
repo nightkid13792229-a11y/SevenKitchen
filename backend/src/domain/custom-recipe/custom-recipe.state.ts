@@ -209,3 +209,54 @@ export function suggestSubStage(
       return null;
   }
 }
+
+/**
+ * 自动完成的判定（2026-10-16，批次 4.1）。
+ *
+ * ## 为什么单独抽出来
+ *
+ * 定时任务最怕的就是"边界写错，半夜批量改错状态" ——
+ * 而这类错**很难在事后发现**：顾客不会因为订单被提前完成来投诉，
+ * 他只会觉得"我还没确认怎么就完成了"。
+ *
+ * 抽成纯函数之后可以**穷举边界**：没设闹钟、时间没到、时间刚到、
+ * 已经完成了、已取消了、还没交付……每一种都能单独测。
+ *
+ * ## 判定规则
+ *
+ * 只有**同时**满足这三条才自动完成：
+ *   ① 状态是「已交付」（顾客还没确认）
+ *   ② 设了闹钟（`autoCompleteAt` 非空）
+ *   ③ 闹钟时间已到（`now >= autoCompleteAt`）
+ *
+ * 其余情况一律**不做**，并给出人能看懂的原因 —— 日志里要能答出
+ * "这一单为什么没被自动完成"。
+ */
+export function decideAutoComplete(input: {
+  status: CustomRecipeStatus;
+  autoCompleteAt: Date | null | undefined;
+  now: Date;
+}): { shouldComplete: boolean; reason: string } {
+  if (input.status !== CustomRecipeStatus.DELIVERED) {
+    return {
+      shouldComplete: false,
+      reason: `状态是「${STATUS_LABELS[input.status] ?? input.status}」，不在等确认`,
+    };
+  }
+
+  if (!input.autoCompleteAt) {
+    return {
+      shouldComplete: false,
+      reason: '没有设自动完成时间（可能是历史订单，或交付时配置为「不自动完成」）',
+    };
+  }
+
+  if (input.now.getTime() < input.autoCompleteAt.getTime()) {
+    return {
+      shouldComplete: false,
+      reason: `还没到点（${input.autoCompleteAt.toISOString()}）`,
+    };
+  }
+
+  return { shouldComplete: true, reason: '到点且仍在等确认' };
+}

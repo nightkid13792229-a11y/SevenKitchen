@@ -49,6 +49,7 @@ import { PlatformOptionsService } from './application/platform-options/platform-
 import { CustomRecipeViewService } from './application/custom-recipe/custom-recipe-view.service';
 import { CustomRecipeDeliveryService } from './application/custom-recipe/custom-recipe-delivery.service';
 import { CustomRecipeAftersaleService } from './application/custom-recipe/custom-recipe-aftersale.service';
+import { CustomRecipeSchedulerService } from './application/scheduler/custom-recipe-scheduler.service';
 import { SharedPhotosController } from './interfaces/controllers/shared-photos.controller';
 import { CustomRecipeService } from './application/custom-recipe/custom-recipe.service';
 import { CustomRecipeConfigService } from './application/custom-recipe/custom-recipe-config.service';
@@ -423,6 +424,7 @@ validatePrismaConfig();
     CustomRecipeViewService,
     CustomRecipeDeliveryService,
     CustomRecipeAftersaleService,
+    CustomRecipeSchedulerService,
     DogService,
     {
       provide: DOG_REPOSITORY,

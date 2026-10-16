@@ -1,0 +1,414 @@
+<template>
+  <div class="aftersale-workbench">
+    <div class="page-header">
+      <h1>售后待办</h1>
+      <div class="header-actions">
+        <el-switch
+          v-model="includeClosed"
+          active-text="含已处理"
+          @change="load"
+        />
+        <el-button :loading="loading" @click="load">刷新</el-button>
+      </div>
+    </div>
+
+    <!--
+      这一页的排序与"能做什么"全部由**后端算好**：
+      · 等太久的排前面；同等时长下"调整食谱"比"问个问题"急
+        （前者顾客的狗可能正在吃着不合适的饭）
+      · 每个状态显示哪几个按钮，后端给 actions 清单
+      前端不自己排、不自己判断状态。
+    -->
+    <el-alert
+      v-if="includeClosed"
+      type="info"
+      :closable="false"
+      show-icon
+      title="正在显示全部（含已处理）"
+      description="默认只列未处理完的 —— 打开这一页就该看到「还有几件事没做」。"
+      class="tip"
+    />
+
+    <el-empty
+      v-if="!loading && items.length === 0"
+      :description="includeClosed ? '还没有任何售后' : '没有待处理的售后，很好'"
+    />
+
+    <el-card
+      v-for="item in items"
+      :key="item.id"
+      shadow="never"
+      class="aftersale-card"
+      :class="{ 'is-urgent': item.isUrgent }"
+    >
+      <div class="card-head">
+        <div class="head-left">
+          <el-tag :type="statusTagType(item.status)" size="small">
+            {{ item.statusLabel }}
+          </el-tag>
+          <el-tag type="info" size="small" effect="plain">
+            {{ item.typeLabel }}
+          </el-tag>
+          <!-- 等了多久：客服一眼看出哪条催得急 -->
+          <span class="waiting" :class="{ 'is-long': item.isUrgent }">
+            等了 {{ formatWaiting(item.hoursWaiting) }}
+          </span>
+        </div>
+        <div class="head-right">
+          <span class="order-no">{{ item.orderId }}</span>
+        </div>
+      </div>
+
+      <div class="card-body">
+        <div class="meta">
+          <span v-if="item.dogName">🐕 {{ item.dogName }}</span>
+          <span v-if="item.customerName">{{ item.customerName }}</span>
+          <span v-if="item.customerPhone">{{ item.customerPhone }}</span>
+        </div>
+        <div class="description">{{ item.description }}</div>
+        <div v-if="item.photos && item.photos.length" class="photos">
+          <el-image
+            v-for="(photo, index) in item.photos"
+            :key="index"
+            :src="photo"
+            :preview-src-list="item.photos"
+            fit="cover"
+            class="photo"
+          />
+        </div>
+      </div>
+
+      <div class="card-actions">
+        <!-- 按钮清单来自后端，前端照它渲染 -->
+        <el-button
+          v-for="action in item.actions"
+          :key="action.code"
+          :type="action.style === 'primary' ? 'primary' : 'default'"
+          :disabled="!action.enabled"
+          :loading="actingId === item.id"
+          @click="handleAction(item, action)"
+        >
+          {{ action.label }}
+        </el-button>
+        <el-button link type="primary" @click="goToOrder(item.orderId)">
+          看订单
+        </el-button>
+      </div>
+    </el-card>
+
+    <!--
+      处理完成的弹窗。
+      处理说明**必填**（后端也会拦）—— 顾客看到"已处理"却不知道
+      处理了什么，等于没处理。
+    -->
+    <el-dialog v-model="resolveVisible" title="处理完成" width="520px">
+      <el-form label-position="top">
+        <el-form-item label="给顾客的处理说明（会显示给顾客看）">
+          <el-input
+            v-model="resolveForm.handleNote"
+            type="textarea"
+            :rows="4"
+            maxlength="1000"
+            show-word-limit
+            placeholder="例如：已把鸡胸肉换成火鸡胸并重新交付了一版，请查收"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="resolveVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="submitting"
+          :disabled="!resolveForm.handleNote.trim()"
+          @click="submitResolve"
+        >
+          确认完成
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="rejectVisible" title="不受理" width="520px">
+      <el-form label-position="top">
+        <el-form-item label="为什么不受理（会显示给顾客看）">
+          <el-input
+            v-model="rejectForm.reason"
+            type="textarea"
+            :rows="4"
+            maxlength="200"
+            show-word-limit
+            placeholder="例如：这属于健康问题，建议先带狗狗看医生"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="rejectVisible = false">取消</el-button>
+        <el-button
+          type="danger"
+          :loading="submitting"
+          :disabled="!rejectForm.reason.trim()"
+          @click="submitReject"
+        >
+          确认不受理
+        </el-button>
+      </template>
+    </el-dialog>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { onMounted, reactive, ref } from 'vue';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { customRecipeApi, type AdminAftersaleItem } from '@/api/customRecipe';
+import { getApiErrorMessage, toastApiError } from '@/utils/apiError';
+
+/**
+ * 售后待办（2026-10-16，批次 3.1）
+ *
+ * ## 这一页里没有业务判断
+ *
+ * · **顺序**由后端算（等太久的排前面；同等的"调整食谱"比"问个问题"急）
+ * · **能做什么**由后端给（`item.actions`）—— 前端不判断状态
+ * · **"等了多久"**也是后端算的
+ *
+ * 前端只做两件带主观判断的事：**紧急度变红**（等超过 24 小时）与
+ * **状态标签的颜色** —— 都是纯呈现。
+ */
+
+const loading = ref(false);
+const items = ref<AdminAftersaleItem[]>([]);
+const includeClosed = ref(false);
+const actingId = ref('');
+const submitting = ref(false);
+
+const resolveVisible = ref(false);
+const rejectVisible = ref(false);
+const activeItem = ref<AdminAftersaleItem | null>(null);
+const resolveForm = reactive({ handleNote: '' });
+const rejectForm = reactive({ reason: '' });
+
+const load = async () => {
+  loading.value = true;
+  try {
+    const data = await customRecipeApi.listAftersales({
+      includeClosed: includeClosed.value,
+    });
+    items.value = data?.items ?? [];
+  } catch (error) {
+    toastApiError(error, '加载售后列表失败', ElMessage);
+  } finally {
+    loading.value = false;
+  }
+};
+
+/** 状态标签颜色 —— 纯呈现映射 */
+const statusTagType = (status: string) => {
+  switch (status) {
+    case 'PENDING':
+      return 'warning';
+    case 'ACCEPTED':
+      return 'primary';
+    case 'PROCESSING':
+      return 'primary';
+    case 'RESOLVED':
+      return 'success';
+    case 'REJECTED':
+      return 'info';
+    default:
+      return 'info';
+  }
+};
+
+/** 等了多久 → 人话 */
+const formatWaiting = (hours: number) => {
+  if (hours < 1) return '不到 1 小时';
+  if (hours < 24) return `${Math.floor(hours)} 小时`;
+  return `${Math.floor(hours / 24)} 天`;
+};
+
+const handleAction = async (
+  item: AdminAftersaleItem,
+  action: { code: string; label: string },
+) => {
+  activeItem.value = item;
+
+  if (action.code === 'RESOLVE') {
+    resolveForm.handleNote = '';
+    resolveVisible.value = true;
+    return;
+  }
+  if (action.code === 'REJECT') {
+    rejectForm.reason = '';
+    rejectVisible.value = true;
+    return;
+  }
+
+  // 受理 / 标记处理中：不需要额外输入，但要二次确认（避免手滑）
+  try {
+    await ElMessageBox.confirm(
+      `确定把「${item.typeLabel}」这条标记为「${action.label}」吗？`,
+      action.label,
+      { confirmButtonText: action.label, cancelButtonText: '再想想' },
+    );
+  } catch {
+    return;
+  }
+
+  actingId.value = item.id;
+  try {
+    if (action.code === 'ACCEPT') {
+      await customRecipeApi.acceptAftersale(item.id);
+    } else if (action.code === 'PROCESSING') {
+      await customRecipeApi.markAftersaleProcessing(item.id);
+    }
+    ElMessage.success(`已${action.label}`);
+    await load();
+  } catch (error) {
+    toastApiError(error, `${action.label}失败`, ElMessage);
+  } finally {
+    actingId.value = '';
+  }
+};
+
+const submitResolve = async () => {
+  if (!activeItem.value) return;
+  submitting.value = true;
+  try {
+    await customRecipeApi.resolveAftersale(activeItem.value.id, {
+      handleNote: resolveForm.handleNote.trim(),
+    });
+    ElMessage.success('已处理完成，顾客能看到你的说明');
+    resolveVisible.value = false;
+    await load();
+  } catch (error) {
+    // 后端会说清原因（比如"请写一句给顾客的处理说明"），直接显示它
+    toastApiError(error, '处理失败', ElMessage);
+  } finally {
+    submitting.value = false;
+  }
+};
+
+const submitReject = async () => {
+  if (!activeItem.value) return;
+  submitting.value = true;
+  try {
+    await customRecipeApi.rejectAftersale(activeItem.value.id, {
+      reason: rejectForm.reason.trim(),
+    });
+    ElMessage.success('已标记为不受理，顾客能看到原因');
+    rejectVisible.value = false;
+    await load();
+  } catch (error) {
+    toastApiError(error, '操作失败', ElMessage);
+  } finally {
+    submitting.value = false;
+  }
+};
+
+const goToOrder = (orderId: string) => {
+  window.open(`/custom-recipes/${encodeURIComponent(orderId)}`, '_self');
+};
+
+onMounted(load);
+</script>
+
+<style scoped>
+.aftersale-workbench {
+  padding: 20px;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.page-header h1 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.tip {
+  margin-bottom: 16px;
+}
+
+.aftersale-card {
+  margin-bottom: 16px;
+}
+
+/*
+  催得急的（后端算的 `isUrgent`）：左边一道红条，扫一眼就知道先看哪条。
+  ⚠️ 阈值（24 小时）在后端领域层 —— 前端只认这个布尔值，
+  老板哪天说"12 小时就该催"，改后端一处即可。
+*/
+.aftersale-card.is-urgent {
+  border-left: 4px solid var(--el-color-danger);
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.head-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.waiting {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
+.waiting.is-long {
+  color: var(--el-color-danger);
+  font-weight: 600;
+}
+
+.order-no {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
+.meta {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
+.description {
+  margin-bottom: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.photos {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.photo {
+  width: 80px;
+  height: 80px;
+  border-radius: 6px;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+</style>

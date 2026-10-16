@@ -108,6 +108,14 @@
           <el-icon><EditPen /></el-icon>
           <span>定制食谱订单</span>
         </el-menu-item>
+        <el-menu-item index="/custom-recipes/aftersales">
+
+          <el-icon><Bell /></el-icon>
+
+          <span>售后待办</span>
+
+        </el-menu-item>
+
         <el-menu-item index="/custom-recipes/config">
           <el-icon><Setting /></el-icon>
           <span>食谱定制设置</span>
@@ -301,7 +309,8 @@ import {
   Dish,
   TrendCharts,
   Lock,
-  Collection
+  Collection,
+  Bell
 } from '@element-plus/icons-vue'
 
 const route = useRoute()

@@ -177,6 +177,38 @@ export interface CustomRecipeConfig {
   updatedAt?: string
 }
 
+// ===== 售后处理（2026-10-16 批次 3.1）=====
+
+/** 后台待办里的一条售后 */
+export interface AdminAftersaleItem {
+  id: string;
+  orderId: string;
+  dogName: string;
+  customerName: string;
+  customerPhone: string;
+  orderStatus: string;
+  type: string;
+  typeLabel: string;
+  status: string;
+  statusLabel: string;
+  description: string;
+  photos: string[];
+  createdAt: string;
+  acceptedAt?: string | null;
+  resolvedAt?: string | null;
+  /** 等了多久 —— 客服一眼看出哪条催得急（后端算的） */
+  hoursWaiting: number;
+  /** 是不是"催得急"（标红）—— 阈值由后端定，前端不判断 */
+  isUrgent: boolean;
+  /** 现在能做什么（后端算的，前端照着渲染） */
+  actions: Array<{
+    code: string;
+    label: string;
+    enabled: boolean;
+    style?: string;
+  }>;
+}
+
 /** 手工创建并交付的载荷（与设计器交付并存，用于特殊情况的兜底） */
 export interface CreateCustomRecipePayload {
   name: string
@@ -272,6 +304,33 @@ export const customRecipeApi = {
     };
     return data?.sets?.custom_recipe_delivery_item ?? [];
   },
+
+  // ---------- 售后（批次 3.1）----------
+
+  /**
+   * 售后待办列表。
+   *
+   * 默认只列未处理完的；排序由后端算（等太久的排前面），
+   * 前端不再自己排 —— 与顾客侧渲染契约同一套思路。
+   */
+  listAftersales: (
+    params?: { status?: string; includeClosed?: boolean },
+  ): Promise<{ items: AdminAftersaleItem[] }> =>
+    api.get('/admin/custom-recipe/aftersales', { params }),
+
+  acceptAftersale: (id: string) =>
+    api.post(`/admin/custom-recipe/aftersales/${id}/accept`),
+
+  markAftersaleProcessing: (id: string) =>
+    api.post(`/admin/custom-recipe/aftersales/${id}/processing`),
+
+  resolveAftersale: (
+    id: string,
+    payload: { handleNote: string; linkedDeliveryId?: string },
+  ) => api.post(`/admin/custom-recipe/aftersales/${id}/resolve`, payload),
+
+  rejectAftersale: (id: string, payload: { reason: string }) =>
+    api.post(`/admin/custom-recipe/aftersales/${id}/reject`, payload),
 
   /** 保存食谱定制设置（仅管理员） */
   updateConfig: (payload: Partial<CustomRecipeConfig>) =>

@@ -1,0 +1,95 @@
+{
+  "_doc": [
+    "食谱定制重构 · 四条红线守卫的「已知违规清单」（2026-10-16 建立）。",
+    "",
+    "为什么要这份清单，而不是直接要求归零：",
+    "  这些违规是**长期存在的存量**（状态文案在多个端各写一份），",
+    "  如果守卫一上来就要求零违规，它会从第一天就是红的，",
+    "  然后就没人看了 —— 等于没有守卫。",
+    "",
+    "所以规则是：**存量记录在案，不允许新增**。",
+    "  · 违规**文件集合**必须是这里的子集（换一个新文件写就算新增 ✗）",
+    "  · 违规**条数**不得超过这里记录的数（同一个文件里多写几处也算新增 ✗）",
+    "  · 修好之后可以少，不必回头改这份清单（守卫允许变好）",
+    "",
+    "每一条都写了「为什么现在还有」与「什么时候清掉」，",
+    "批次 5「计算后端化收尾」结束时，这份清单应当清空。"
+  ],
+
+  "gd01_status_writes": {
+    "title": "后端直接写定制单状态（应只经状态机）",
+    "why": "状态流转表目前硬编码在 custom-recipe.service.ts，且有若干路径直接 update 绕过它。批次 1.2 会把它们收敛到唯一入口。",
+    "clearAt": "批次 1.2",
+    "maxTotal": 15,
+    "files": {
+      "backend/src/application/custom-recipe/custom-recipe.service.ts": 10,
+      "backend/src/application/payment/wechat-payment.service.ts": 3,
+      "backend/src/interfaces/controllers/admin.controller.ts": 1,
+      "backend/src/interfaces/controllers/auth.controller.ts": 1
+    },
+    "notes": {
+      "backend/src/application/payment/wechat-payment.service.ts": "支付回调确认收款、迟到付款自动退款 —— 属于状态机的合法调用方，批次 1.2 改成走状态机而不是直写",
+      "backend/src/interfaces/controllers/admin.controller.ts": "管理员相关操作里的级联更新",
+      "backend/src/interfaces/controllers/auth.controller.ts": "账号注销/合并时的级联更新"
+    }
+  },
+
+  "gd02_status_maps": {
+    "title": "前端把小写状态码映射成中文",
+    "why": "同一个状态码在三个端各写一份中文，加一个枚举要改六处 —— 2026-10-04 加「已取消」时漏了两处半，顾客看到英文枚举。批次 1.3 做成选项字典后由后端下发。",
+    "clearAt": "批次 5（批次 1.3 备好字典，批次 5 改前端）",
+    "maxTotal": 15,
+    "files": {
+      "miniapp/src/utils/custom-recipe-order.ts": 10,
+      "admin-web/src/constants/customRecipeOrder.ts": 5
+    },
+    "notes": {
+      "miniapp/src/utils/custom-recipe-order.ts": "10 = 5 条状态文案 + 5 条状态样式档位（CUSTOM_RECIPE_STATUS_TEXT / _CLASS）",
+      "admin-web/src/constants/customRecipeOrder.ts": "5 条状态元数据（text + tagType）"
+    }
+  },
+
+  "gd02_goal_maps": {
+    "title": "前端把小写定制目标映射成中文",
+    "why": "定制目标（减重/维持/增重/健康管理）在四处各写一份中文。批次 1.3 之后由选项字典下发。",
+    "clearAt": "批次 5",
+    "maxTotal": 16,
+    "files": {
+      "miniapp/src/utils/custom-recipe-order.ts": 4,
+      "admin-web/src/views/CustomRecipes/OrderDetail.vue": 4,
+      "admin-web/src/views/CustomRecipes/OrderList.vue": 4,
+      "admin-web/src/views/RecipeDesigner/components/DogInsightPanel.vue": 4
+    },
+    "notes": {
+      "admin-web/src/views/RecipeDesigner/components/DogInsightPanel.vue": "设计器右侧的「爱犬洞察」面板会展示该狗的定制单需求，因此也带着一份目标文案"
+    }
+  },
+
+  "gd03_business_arithmetic": {
+    "title": "前端把后端已经给的值再算一遍（抵扣余额兜底）",
+    "why": "老板要求「所有计算交给后端，前端只渲染」。后端 my-orders 与 orders/:orderId 两个接口都已返回 creditRemaining，前端仍留了兜底相减。",
+    "clearAt": "批次 5",
+    "maxTotal": 2,
+    "files": {
+      "miniapp/src/pages/custom-recipe/order-detail.vue": 1,
+      "miniapp/src/pages/custom-recipe/orders.vue": 1
+    },
+    "notes": {
+      "_general": "⚠️ 2026-10-16 核实更正两件事：① 这三处**不是**「后端没给、前端自己算」，而是**后端已给、前端还留兜底**（`order.creditRemaining !== undefined ? 用它 : 自己相减`），性质是冗余而非「真在算」，严重度比原先记录的低；② 此前勘察报告说「列表接口不返回 creditRemaining」是**错的** —— 实测 custom-recipe.controller.ts 的 my-orders（:123）与 orders/:orderId（:245）两个接口都返回。",
+      "_knownGap": "❗已知抓不到的第三处：`miniapp/src/pages/custom-recipe/success.vue` 写成了三元表达式（`x ?? (a !== undefined ? Number(a) - Number(b) : fallback)`），没有 `Math.max` 包着，本守卫的正则匹配不到。**宁可少抓这一处，也不要放宽正则去误伤一片**（放宽后连 CSS 类名 `.credit` 都会被算成违规）。批次 5 手工清 `creditRemaining` 兜底时，三处必须一起清。"
+    }
+  },
+
+  "gd04_duplicate_assessment": {
+    "title": "前端重复实现了营养合规评估引擎",
+    "why": "admin-web 那份是后端 domain/recipe-designer/recipe-assessment.ts 的**逐字拷贝**（diff 仅 95 行，90 个对比用例输出逐字节相同）。批次 5 删副本、改调后端。",
+    "clearAt": "批次 5.3",
+    "maxTotal": 1,
+    "files": {
+      "admin-web/src/utils/recipeDesigner/assessment.ts": 1
+    },
+    "notes": {
+      "_general": "⚠️ 删除**前**必须先把后端缺的 dataGaps 补上，否则「哪个原料缺哪个字段」的提示会静默消失。详见技术方案 5.2.2。"
+    }
+  }
+}

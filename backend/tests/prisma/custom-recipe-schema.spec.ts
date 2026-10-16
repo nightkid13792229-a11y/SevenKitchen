@@ -47,6 +47,61 @@ describe('食谱定制 · 数据库结构守卫', () => {
     expect(block).toMatch(/@@map\("custom_recipe_config"\)/);
   });
 
+  it('配置单例保留 2026-10-16（批次 1.4）新增的全部参数', () => {
+    const block = modelBlock(schema, 'CustomRecipeConfig');
+
+    /**
+     * 这些参数原先都**写死在代码里**（有的还写死在两处）。
+     * 加这批守卫是因为 `schema.prisma` 被并行会话整体覆盖过 ——
+     * 定义一旦消失，代码读配置就会拿到 undefined，
+     * 而"配置缺字段"在运行时的表现是「近期名额已满」这类**看不出原因**的错
+     * （2026-10-16 实测踩到过，坏了 5 条排期测试）。
+     */
+    const expected: Array<[string, RegExp]> = [
+      ['每日交付上限', /dailyDeliveryCapacity\s+Int\s+@default\(4\)/],
+      ['售后窗口', /aftersaleWindowDays\s+Int\s+@default\(30\)/],
+      ['免费调整次数', /freeRevisionCount\s+Int\s+@default\(1\)/],
+      ['免费调整窗口', /freeRevisionWindowDays\s+Int\s+@default\(7\)/],
+      ['自动完成天数', /autoCompleteDays\s+Int\s+@default\(3\)/],
+      ['要求确认收货', /requireCustomerConfirm\s+Boolean\s+@default\(true\)/],
+      ['交付物清单', /deliveryItemCodes\s+String\[\]/],
+      ['附件张数上限', /attachmentMaxCount\s+Int\s+@default\(9\)/],
+      ['附件大小上限', /attachmentMaxSizeMb\s+Int\s+@default\(10\)/],
+      ['默认营养标准', /defaultNutritionStandard\s+String/],
+      ['默认能量密度', /defaultEnergyDensityKcalPerKg\s+Int\s+@default\(3200\)/],
+      ['生产损耗率', /productionLossRate\s+Decimal\s+@default\(1\.07\)/],
+      ['默认工时', /defaultLaborHours\s+Decimal\s+@default\(2\)/],
+      ['排期前瞻天数', /scheduleLookaheadDays\s+Int\s+@default\(45\)/],
+      ['占位重试次数', /slotRetryTimes\s+Int\s+@default\(5\)/],
+      ['业务编号前缀', /orderNoPrefix\s+String\s+@default\("CR"\)/],
+    ];
+
+    const missing = expected
+      .filter(([, pattern]) => !pattern.test(block))
+      .map(([label]) => label);
+
+    expect(missing).toEqual([]);
+  });
+
+  it('批次 1.4 的迁移存在，且是「只加列」而不是重建表', () => {
+    const sql = readFileSync(
+      join(
+        __dirname,
+        '../..',
+        'prisma/migrations/20261016233000_custom_recipe_config_expansion/migration.sql',
+      ),
+      'utf8',
+    );
+
+    expect(sql).toMatch(/ALTER TABLE "custom_recipe_config"/);
+    expect(sql).toMatch(
+      /ADD COLUMN "auto_complete_days" INTEGER NOT NULL DEFAULT 3/,
+    );
+    // 只加列：不许出现删表/删列，回滚只需 drop 这些列
+    expect(sql).not.toMatch(/DROP TABLE/i);
+    expect(sql).not.toMatch(/DROP COLUMN/i);
+  });
+
   it('定制单保留额度台账与支付/关单字段', () => {
     const block = modelBlock(schema, 'CustomRecipeOrder');
 

@@ -331,9 +331,15 @@ export class CustomRecipeController {
       throw new BadRequestException('请选择文件');
     }
 
-    // Validate file size (max 10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      throw new BadRequestException('文件大小不能超过10MB');
+    /**
+     * 附件大小上限来自后台配置（批次 1.4）。
+     * 此前这个 10MB **在两个控制器里各写一遍**，改一处会漏另一处。
+     */
+    const limits = await this.customRecipeService.getAttachmentLimits();
+    if (file.size > limits.maxSizeBytes) {
+      throw new BadRequestException(
+        `文件大小不能超过${limits.maxSizeMb}MB`,
+      );
     }
 
     if (!orderId) {

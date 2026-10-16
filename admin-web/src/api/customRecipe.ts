@@ -139,6 +139,41 @@ export interface CustomRecipeConfig {
   deliveryWorkDays: number
   dailyCapacity: number
   paymentTimeoutMinutes: number
+
+  // ===== 2026-10-16（批次 1.4）：原先写死在代码里的参数，现在后台可调 =====
+  /** 每日交付上限（份）—— 与接单上限分开：收钱与交货是两件事 */
+  dailyDeliveryCapacity: number
+  /** 售后受理窗口（天） */
+  aftersaleWindowDays: number
+  /** 免费调整次数 */
+  freeRevisionCount: number
+  /** 免费调整时间窗（天），不能超过售后窗口 */
+  freeRevisionWindowDays: number
+  /** 交付后几天顾客未确认则自动完成 */
+  autoCompleteDays: number
+  /** 是否要求顾客点「确认收到」 */
+  requireCustomerConfirm: boolean
+  /** 交付物包含哪几样（取值来自「选项字典」里的交付物选项集） */
+  deliveryItemCodes: string[]
+  /** 附件张数上限 */
+  attachmentMaxCount: number
+  /** 附件大小上限（MB） */
+  attachmentMaxSizeMb: number
+  /** 后台手工建食谱的默认营养标准 */
+  defaultNutritionStandard: string
+  /** 默认能量密度 kcal/kg */
+  defaultEnergyDensityKcalPerKg: number
+  /** 生产损耗率（1.07 = 损耗 7%） */
+  productionLossRate: number
+  /** 默认工时（小时） */
+  defaultLaborHours: number
+  /** 排期往前找多少天 */
+  scheduleLookaheadDays: number
+  /** 占位冲突最多重试几天 */
+  slotRetryTimes: number
+  /** 业务编号前缀 */
+  orderNoPrefix: string
+
   updatedAt?: string
 }
 
@@ -220,6 +255,23 @@ export const customRecipeApi = {
 
   /** 读取食谱定制设置 */
   getConfig: () => api.get<CustomRecipeConfig>(`${BASE}/config`),
+
+  /**
+   * 交付物候选项 —— 从**选项字典**读，不在这里写死清单。
+   *
+   * 这一页本身就是在拆"前端各写一份清单"的毛病，
+   * 自己再写一份「专属食谱 / 采购与制作单 / 营养报告」就说不过去了。
+   */
+  getDeliveryItemOptions: async (): Promise<
+    Array<{ code: string; label: string }>
+  > => {
+    const data = (await api.get(
+      '/options?sets=custom_recipe_delivery_item',
+    )) as {
+      sets?: Record<string, Array<{ code: string; label: string }>>
+    };
+    return data?.sets?.custom_recipe_delivery_item ?? [];
+  },
 
   /** 保存食谱定制设置（仅管理员） */
   updateConfig: (payload: Partial<CustomRecipeConfig>) =>

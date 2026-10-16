@@ -24,6 +24,15 @@
     </div>
 
     <el-alert
+      type="warning"
+      :closable="false"
+      show-icon
+      class="snapshot-alert"
+      title="⚠️ 生产损耗率有两个值，待确认"
+      description="设计器发布路径目前写死 1.05（损耗 5%），后台手工建食谱用 1.07（损耗 7%），而小程序 DIY 制作单按 7% 告诉顾客。同一条食谱走不同入口会算出不同的采购量。改这里不会影响那两处写死的值 —— 需要先确认统一成哪个。"
+    />
+
+    <el-alert
       v-if="!isAdmin"
       type="warning"
       :closable="false"
@@ -115,6 +124,195 @@
             超时未付款的定制订单会自动关闭，释放当天的排期名额；0 表示不自动关单
           </span>
         </el-form-item>
+
+        <el-divider content-position="left">交付与售后</el-divider>
+
+        <el-form-item label="每日交付上限">
+          <el-input-number
+            v-model="form.dailyDeliveryCapacity"
+            :min="1"
+            :max="200"
+            :precision="0"
+            style="width: 200px"
+          />
+          <span class="form-tip">
+            一天最多交出几份。与「每日接单上限」分开：接单是收钱那一刻，交付是交出食谱那一天
+          </span>
+        </el-form-item>
+
+        <el-form-item label="交付后自动完成">
+          <el-input-number
+            v-model="form.autoCompleteDays"
+            :min="1"
+            :max="90"
+            :precision="0"
+            style="width: 200px"
+          />
+          <span class="form-tip">顾客几天内没点「确认收到」，系统自动完成这单</span>
+        </el-form-item>
+
+        <el-form-item label="要求顾客确认">
+          <el-switch v-model="form.requireCustomerConfirm" />
+          <span class="form-tip">关闭后交付即完成，不再等顾客点确认</span>
+        </el-form-item>
+
+        <el-form-item label="交付物">
+          <el-select
+            v-model="form.deliveryItemCodes"
+            multiple
+            style="width: 420px"
+            placeholder="至少留一样"
+          >
+            <el-option
+              v-for="item in deliveryItemOptions"
+              :key="item.code"
+              :label="item.label"
+              :value="item.code"
+            />
+          </el-select>
+          <span class="form-tip">
+            交付给顾客时包含哪几样；候选项来自「选项字典」的交付物选项集
+          </span>
+        </el-form-item>
+
+        <el-form-item label="售后窗口（天）">
+          <el-input-number
+            v-model="form.aftersaleWindowDays"
+            :min="0"
+            :max="365"
+            :precision="0"
+            style="width: 200px"
+          />
+          <span class="form-tip">交付后多少天内顾客可以提售后</span>
+        </el-form-item>
+
+        <el-form-item label="免费调整">
+          <el-input-number
+            v-model="form.freeRevisionCount"
+            :min="0"
+            :max="20"
+            :precision="0"
+            style="width: 120px"
+          />
+          <span class="form-tip" style="margin: 0 8px">次，限交付后</span>
+          <el-input-number
+            v-model="form.freeRevisionWindowDays"
+            :min="0"
+            :max="365"
+            :precision="0"
+            style="width: 120px"
+          />
+          <span class="form-tip" style="margin-left: 8px">天内（不能超过售后窗口）</span>
+        </el-form-item>
+
+        <el-divider content-position="left">资料附件</el-divider>
+
+        <el-form-item label="附件张数上限">
+          <el-input-number
+            v-model="form.attachmentMaxCount"
+            :min="1"
+            :max="30"
+            :precision="0"
+            style="width: 200px"
+          />
+          <span class="form-tip">顾客提交定制单时最多传几张（小程序原先写死 9 张）</span>
+        </el-form-item>
+
+        <el-form-item label="附件大小上限">
+          <el-input-number
+            v-model="form.attachmentMaxSizeMb"
+            :min="1"
+            :max="50"
+            :precision="0"
+            style="width: 200px"
+          />
+          <span class="form-tip">
+            MB（原先这个 10 在后端**两个控制器里各写一遍**）
+          </span>
+        </el-form-item>
+
+        <el-divider content-position="left">设计默认值与排期</el-divider>
+
+        <el-form-item label="默认营养标准">
+          <el-input
+            v-model="form.defaultNutritionStandard"
+            style="width: 220px"
+          />
+          <span class="form-tip">后台手工建定制食谱时的默认值</span>
+        </el-form-item>
+
+        <el-form-item label="默认能量密度">
+          <el-input-number
+            v-model="form.defaultEnergyDensityKcalPerKg"
+            :min="500"
+            :max="9000"
+            :step="50"
+            :precision="0"
+            style="width: 200px"
+          />
+          <span class="form-tip">kcal/kg</span>
+        </el-form-item>
+
+        <el-form-item label="生产损耗率">
+          <el-input-number
+            v-model="form.productionLossRate"
+            :min="1"
+            :max="2"
+            :step="0.01"
+            :precision="2"
+            style="width: 200px"
+          />
+          <span class="form-tip">
+            1.07 表示损耗 7%。
+            <strong>注意：设计器发布路径目前仍写死 1.05，改这里不会影响它</strong>
+            —— 两处口径不一致待确认，见下方提示
+          </span>
+        </el-form-item>
+
+        <el-form-item label="默认工时">
+          <el-input-number
+            v-model="form.defaultLaborHours"
+            :min="0"
+            :max="100"
+            :step="0.5"
+            :precision="1"
+            style="width: 200px"
+          />
+          <span class="form-tip">小时</span>
+        </el-form-item>
+
+        <el-form-item label="排期往前找">
+          <el-input-number
+            v-model="form.scheduleLookaheadDays"
+            :min="7"
+            :max="365"
+            :precision="0"
+            style="width: 200px"
+          />
+          <span class="form-tip">天（连续这么多天排不上就明确报错，原写死 45）</span>
+        </el-form-item>
+
+        <el-form-item label="占位重试次数">
+          <el-input-number
+            v-model="form.slotRetryTimes"
+            :min="1"
+            :max="30"
+            :precision="0"
+            style="width: 200px"
+          />
+          <span class="form-tip">抢名额抢输时最多换几天重试（原写死 5）</span>
+        </el-form-item>
+
+        <el-form-item label="业务编号前缀">
+          <el-input
+            v-model="form.orderNoPrefix"
+            maxlength="8"
+            style="width: 140px"
+          />
+          <span class="form-tip">
+            1~8 位大写字母；会拼进顾客看到的单号（如 CR20261016-0001），原写死 CR
+          </span>
+        </el-form-item>
       </el-form>
 
       <div v-if="updatedAt" class="updated-at">上次更新时间：{{ updatedAt }}</div>
@@ -126,6 +324,7 @@
 import { onMounted, reactive, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { customRecipeApi } from '@/api/customRecipe';
+import { platformOptionsApi } from '@/api/platformOptions';
 import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole';
 import { getApiErrorMessage, toastApiError } from '@/utils/apiError';
 
@@ -143,7 +342,33 @@ const form = reactive({
   deliveryWorkDays: 3,
   dailyCapacity: 4,
   paymentTimeoutMinutes: 30,
+
+  // ===== 批次 1.4：原先写死在代码里的参数 =====
+  dailyDeliveryCapacity: 4,
+  aftersaleWindowDays: 30,
+  freeRevisionCount: 1,
+  freeRevisionWindowDays: 7,
+  autoCompleteDays: 3,
+  requireCustomerConfirm: true,
+  deliveryItemCodes: ['RECIPE', 'SHOPPING_SOP', 'NUTRITION_REPORT'] as string[],
+  attachmentMaxCount: 9,
+  attachmentMaxSizeMb: 10,
+  defaultNutritionStandard: 'FEDIAF_2025',
+  defaultEnergyDensityKcalPerKg: 3200,
+  productionLossRate: 1.07,
+  defaultLaborHours: 2,
+  scheduleLookaheadDays: 45,
+  slotRetryTimes: 5,
+  orderNoPrefix: 'CR',
 });
+
+/**
+ * 交付物候选项从**选项字典**读，不在这里写死。
+ *
+ * 这一页本身就是在拆"前端各写一份清单"的问题，
+ * 自己再写一份就说不过去了。
+ */
+const deliveryItemOptions = ref<Array<{ code: string; label: string }>>([]);
 
 /**
  * 定制费调低时，可抵扣金额必须跟着降下来 ——
@@ -167,6 +392,28 @@ const loadConfig = async () => {
     form.deliveryWorkDays = Number(data?.deliveryWorkDays ?? 3);
     form.dailyCapacity = Number(data?.dailyCapacity ?? 4);
     form.paymentTimeoutMinutes = Number(data?.paymentTimeoutMinutes ?? 30);
+
+    form.dailyDeliveryCapacity = Number(data?.dailyDeliveryCapacity ?? 4);
+    form.aftersaleWindowDays = Number(data?.aftersaleWindowDays ?? 30);
+    form.freeRevisionCount = Number(data?.freeRevisionCount ?? 1);
+    form.freeRevisionWindowDays = Number(data?.freeRevisionWindowDays ?? 7);
+    form.autoCompleteDays = Number(data?.autoCompleteDays ?? 3);
+    form.requireCustomerConfirm = Boolean(data?.requireCustomerConfirm ?? true);
+    form.deliveryItemCodes = Array.isArray(data?.deliveryItemCodes)
+      ? [...data.deliveryItemCodes]
+      : ['RECIPE', 'SHOPPING_SOP', 'NUTRITION_REPORT'];
+    form.attachmentMaxCount = Number(data?.attachmentMaxCount ?? 9);
+    form.attachmentMaxSizeMb = Number(data?.attachmentMaxSizeMb ?? 10);
+    form.defaultNutritionStandard = data?.defaultNutritionStandard ?? 'FEDIAF_2025';
+    form.defaultEnergyDensityKcalPerKg = Number(
+      data?.defaultEnergyDensityKcalPerKg ?? 3200,
+    );
+    form.productionLossRate = Number(data?.productionLossRate ?? 1.07);
+    form.defaultLaborHours = Number(data?.defaultLaborHours ?? 2);
+    form.scheduleLookaheadDays = Number(data?.scheduleLookaheadDays ?? 45);
+    form.slotRetryTimes = Number(data?.slotRetryTimes ?? 5);
+    form.orderNoPrefix = data?.orderNoPrefix ?? 'CR';
+
     updatedAt.value = data?.updatedAt
       ? new Date(data.updatedAt).toLocaleString()
       : '';
@@ -193,6 +440,19 @@ const handleSave = async () => {
     return;
   }
 
+  /**
+   * 这两条后端也会拦（并且是权威），在前端先判一次只是为了
+   * 让用户不用等一次往返才知道哪里填错了。
+   */
+  if (form.freeRevisionWindowDays > form.aftersaleWindowDays) {
+    saveError.value = `免费调整窗口（${form.freeRevisionWindowDays} 天）不能超过售后窗口（${form.aftersaleWindowDays} 天）`;
+    return;
+  }
+  if (form.deliveryItemCodes.length === 0) {
+    saveError.value = '交付物至少要留一样；一样都不给的话顾客收到的是空的';
+    return;
+  }
+
   saving.value = true;
   try {
     const data = await customRecipeApi.updateConfig({ ...form });
@@ -210,8 +470,24 @@ const handleSave = async () => {
   }
 };
 
+/**
+ * 交付物候选项从「选项字典」读。
+ *
+ * 读失败**不拦住页面**：交付物下拉空着不影响改其它参数，
+ * 页面顶部已经有整体报错提示了。
+ */
+const loadDeliveryItemOptions = async () => {
+  try {
+    const data = await customRecipeApi.getDeliveryItemOptions();
+    deliveryItemOptions.value = data;
+  } catch (error) {
+    console.error(error);
+  }
+};
+
 onMounted(() => {
   loadConfig();
+  loadDeliveryItemOptions();
 });
 </script>
 

@@ -50,18 +50,26 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   ) {}
 
   /**
-   * 自动排期的防呆上限（2026-10-04）：连续这么多天都排不上就明确报错，
-   * 而不是无声地一直往后找。正常 1~2 天内必然有空位。
+   * 自动排期的防呆上限的**兜底值**（2026-10-04）。
+   *
+   * 连续这么多天都排不上就明确报错，而不是无声地一直往后找。
+   * 正常 1~2 天内必然有空位。
+   *
+   * 2026-10-16（批次 1.4）：真正取值改从后台配置读（`resolveScheduleLookaheadDays`）——
+   * 这个常量只作为配置读不到时的兜底。下同。
    */
-  private static readonly MAX_SCHEDULE_LOOKAHEAD_DAYS = 45;
+  private static readonly FALLBACK_SCHEDULE_LOOKAHEAD_DAYS = 45;
 
-  /** 并发抢名额的重试次数：抢输一次就换下一天，最多换这么多天 */
-  private static readonly SLOT_BOOKING_MAX_ATTEMPTS = 5;
+  /** 并发抢名额的重试次数的**兜底值**：抢输一次就换下一天，最多换这么多天 */
+  private static readonly FALLBACK_SLOT_BOOKING_ATTEMPTS = 5;
 
   /**
-   * Generate a unique order ID in format CRYYYYMMDDXXXX
+   * 生成订单号：`<前缀>YYYYMMDDXXXX`。
+   *
+   * 前缀原先写死 'CR'，2026-10-16（批次 1.4）改为从后台配置读。
    */
-  private generateOrderId(): string {
+  private async generateOrderId(): Promise<string> {
+    const prefix = await this.resolveOrderNoPrefix();
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -69,7 +77,7 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     const random = Math.floor(Math.random() * 10000)
       .toString()
       .padStart(4, '0');
-    return `CR${year}${month}${day}${random}`;
+    return `${prefix}${year}${month}${day}${random}`;
   }
 
   /**
@@ -81,7 +89,7 @@ export class CustomRecipeService implements ICustomRecipeRepository {
    */
   private async generateUniqueOrderId(): Promise<string> {
     for (let attempt = 0; attempt < 10; attempt += 1) {
-      const candidate = this.generateOrderId();
+      const candidate = await this.generateOrderId();
       const existing = await this.prisma.customRecipeOrder.findUnique({
         where: { orderId: candidate },
         select: { id: true },
@@ -180,12 +188,10 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     const capacity = config.dailyCapacity;
     /** 抢输的日子记下来跳过，避免反复撞同一天 */
     const takenDays = new Set<string>();
+    /** 最多换几天重试（原写死 5，2026-10-16 起从配置读） */
+    const maxAttempts = await this.resolveSlotRetryTimes();
 
-    for (
-      let attempt = 0;
-      attempt < CustomRecipeService.SLOT_BOOKING_MAX_ATTEMPTS;
-      attempt += 1
-    ) {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       const scheduledDate = await this.findNextAvailableDate(
         capacity,
         takenDays,
@@ -1317,6 +1323,88 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   }
 
   /**
+   * 从配置里读一个正整数，读不到就用兜底值。
+   *
+   * ⚠️ **为什么不能只判 catch**（2026-10-16 踩到的，坏了 5 条排期测试）：
+   * 只 try/catch 的话，"配置取到了、但**字段是 undefined**"（配置表还没升级、
+   * 或调用方只传了部分字段）会把 undefined 当成 0 天往下走 ——
+   * 排期循环一次都不执行，顾客直接看到「近期名额已满」这种莫名其妙的错。
+   */
+  private async resolvePositiveIntFromConfig(
+    read: (
+      config: Awaited<ReturnType<CustomRecipeConfigService['getConfig']>>,
+    ) => unknown,
+    fallback: number,
+  ): Promise<number> {
+    try {
+      const config = await this.configService.getConfig();
+      const value = Number(read(config));
+      return Number.isInteger(value) && value > 0 ? value : fallback;
+    } catch {
+      /**
+       * 配置读不到也不能拦住下单：排期是下单链路的一环，
+       * 退回兜底值继续跑，总比让顾客下不了单好。
+       */
+      return fallback;
+    }
+  }
+
+  /**
+   * 排期往前找多少天（原为写死的 45）· 批次 1.4
+   */
+  private resolveScheduleLookaheadDays(): Promise<number> {
+    return this.resolvePositiveIntFromConfig(
+      (config) => config.scheduleLookaheadDays,
+      CustomRecipeService.FALLBACK_SCHEDULE_LOOKAHEAD_DAYS,
+    );
+  }
+
+  /** 占位冲突时最多换几天重试（原为写死的 5）· 批次 1.4 */
+  private resolveSlotRetryTimes(): Promise<number> {
+    return this.resolvePositiveIntFromConfig(
+      (config) => config.slotRetryTimes,
+      CustomRecipeService.FALLBACK_SLOT_BOOKING_ATTEMPTS,
+    );
+  }
+
+  /**
+   * 附件限额（批次 1.4）。
+   *
+   * 原先**在两个控制器里各写一遍 `10 * 1024 * 1024`**，
+   * 而且小程序那边的"最多 9 张"又是第三处。现在统一从这里读。
+   */
+  async getAttachmentLimits(): Promise<{
+    maxSizeBytes: number;
+    maxSizeMb: number;
+    maxCount: number;
+  }> {
+    const maxSizeMb = await this.resolvePositiveIntFromConfig(
+      (config) => config.attachmentMaxSizeMb,
+      10,
+    );
+    const maxCount = await this.resolvePositiveIntFromConfig(
+      (config) => config.attachmentMaxCount,
+      9,
+    );
+    return {
+      maxSizeMb,
+      maxSizeBytes: maxSizeMb * 1024 * 1024,
+      maxCount,
+    };
+  }
+
+  /** 业务编号前缀（原为写死的 'CR'）· 批次 1.4 */
+  private async resolveOrderNoPrefix(): Promise<string> {
+    try {
+      const config = await this.configService.getConfig();
+      const prefix = String(config.orderNoPrefix ?? '').trim();
+      return prefix || 'CR';
+    } catch {
+      return 'CR';
+    }
+  }
+
+  /**
    * Get schedule for a specific date
    */
   async getSchedule(date: Date): Promise<any | null> {
@@ -1506,12 +1594,10 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   ): Promise<Date | null> {
     const todayKey = TimezoneUtil.toShanghaiDateString(new Date());
     let cursor = this.getScheduleStartDate();
+    /** 往前找多少天（原写死 45，2026-10-16 起从配置读） */
+    const lookaheadDays = await this.resolveScheduleLookaheadDays();
 
-    for (
-      let i = 0;
-      i < CustomRecipeService.MAX_SCHEDULE_LOOKAHEAD_DAYS;
-      i += 1
-    ) {
+    for (let i = 0; i < lookaheadDays; i += 1) {
       const key = TimezoneUtil.toShanghaiDateString(cursor);
 
       if (key >= todayKey && !excludeDays.has(key)) {

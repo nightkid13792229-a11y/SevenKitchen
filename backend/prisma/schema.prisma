@@ -2490,6 +2490,57 @@ model CustomRecipeConfig {
   /// 与鲜食（PaymentConfig）、补剂（SupplementShopConfig）各自独立。
   paymentTimeoutMinutes Int @default(30) @map("payment_timeout_minutes")
 
+  // ===== 以下为 2026-10-16 食谱定制重构 · 批次 1.4 新增 =====
+  //
+  // 统一理由：老板要求「把所有的字段、算法等解耦出来」。
+  // 此前它们散落在代码里写死 —— 有的还写死在两处且值不一样（见 productionLossRate）。
+
+  /// 每日交付上限（份）。与「每日接单上限」分开：
+  /// 接单是收钱那一刻，交付是交出食谱那一天，对一个人来说这是两件事。
+  dailyDeliveryCapacity Int     @default(4) @map("daily_delivery_capacity")
+
+  /// 售后受理窗口（天）：交付后多少天内顾客可以提售后
+  aftersaleWindowDays   Int     @default(30) @map("aftersale_window_days")
+  /// 免费调整次数（限交付后 freeRevisionWindowDays 天内）
+  freeRevisionCount     Int     @default(1) @map("free_revision_count")
+  /// 免费调整的时间窗（天）
+  freeRevisionWindowDays Int    @default(7) @map("free_revision_window_days")
+
+  /// 交付后多少天顾客未确认则自动完成（老板 2026-10-16 定为 3 天）
+  autoCompleteDays      Int     @default(3) @map("auto_complete_days")
+  /// 是否要求顾客点「确认收到」（关闭则交付即完成）
+  requireCustomerConfirm Boolean @default(true) @map("require_customer_confirm")
+  /// 交付物开关：这一版交付里包含哪几样。
+  /// 取值是选项集 `custom_recipe_delivery_item` 里的码 —— 后台可开关。
+  deliveryItemCodes     String[] @default(["RECIPE", "SHOPPING_SOP", "NUTRITION_REPORT"]) @map("delivery_item_codes")
+
+  /// 顾客上传附件的张数上限（小程序原先写死 9 张）
+  attachmentMaxCount    Int     @default(9) @map("attachment_max_count")
+  /// 单个附件大小上限（MB）。原先在**两个控制器里各写一遍 10**
+  attachmentMaxSizeMb   Int     @default(10) @map("attachment_max_size_mb")
+
+  /// 后台手工建定制食谱时的默认营养标准（原先写死在控制器里）
+  defaultNutritionStandard String @default("FEDIAF_2025") @map("default_nutrition_standard")
+  /// 默认能量密度 kcal/kg（原先写死 3200）
+  defaultEnergyDensityKcalPerKg Int @default(3200) @map("default_energy_density_kcal_per_kg")
+  /// 生产损耗率（≥1 的系数）。
+  ///
+  /// ⚠️ **口径冲突，待老板拍板**：项目里现在有两个值 ——
+  ///   · 设计器发布路径用 `1.05`（recipe-designer.service.ts 的 PUBLISHED_RECIPE_PRODUCTION_LOSS_RATE）
+  ///   · 后台手工建食谱用 `1.07`（admin-custom-recipe.controller.ts 里写死）
+  ///   · 小程序 DIY 制作单按 `7%` 展示给顾客
+  /// 本次**先加字段、不改现有两处的取值** —— 改取值会改变生产行为，需老板确认口径。
+  productionLossRate    Decimal @default(1.07) @map("production_loss_rate") @db.Decimal(6, 4)
+  /// 默认工时（小时），原先写死 2
+  defaultLaborHours     Decimal @default(2) @map("default_labor_hours") @db.Decimal(6, 2)
+
+  /// 排期往前找多少天（原先写死 45）
+  scheduleLookaheadDays Int     @default(45) @map("schedule_lookahead_days")
+  /// 占位冲突时最多换几天重试（原先写死 5）
+  slotRetryTimes        Int     @default(5) @map("slot_retry_times")
+  /// 定制单业务编号前缀（原先写死 'CR'）
+  orderNoPrefix         String  @default("CR") @map("order_no_prefix") @db.VarChar(8)
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

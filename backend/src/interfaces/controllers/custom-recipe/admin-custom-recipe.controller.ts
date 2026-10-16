@@ -26,6 +26,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CustomRecipeService } from '../../../application/custom-recipe/custom-recipe.service';
 import { CustomRecipeDeliveryService } from '../../../application/custom-recipe/custom-recipe-delivery.service';
+import { CustomRecipeAftersaleService } from '../../../application/custom-recipe/custom-recipe-aftersale.service';
 import {
   CustomRecipeConfigService,
   type UpdateCustomRecipeConfigDto,
@@ -75,6 +76,8 @@ export class AdminCustomRecipeController {
      * 交付服务（2026-10-16 批次 2.1）：建交付记录 + 内容快照 + 算喂食量。
      */
     private readonly deliveryService: CustomRecipeDeliveryService,
+    /** 售后处理（批次 3.1）：待办列表、受理、处理完成、不受理 */
+    private readonly aftersaleService: CustomRecipeAftersaleService,
   ) {}
 
   /**
@@ -520,6 +523,92 @@ export class AdminCustomRecipeController {
       status: 'DELIVERED',
       deliveredAt: new Date(),
     });
+  }
+
+  // ---------- 售后处理（批次 3.1）----------
+
+  /**
+   * 售后待办列表。
+   *
+   * 默认只列**未处理完**的 —— 客服打开就要看到"还有几件事没做"。
+   * 排序由后端算（等太久的排前面；同等的"调整食谱"比"问个问题"急），
+   * 前端不再自己排。
+   */
+  @Get('aftersales')
+  @ApiOperation({ summary: 'List aftersale requests for staff' })
+  async listAftersales(
+    @Query('status') status?: string,
+    @Query('includeClosed') includeClosed?: string,
+  ) {
+    const items = await this.aftersaleService.listForStaff({
+      status: status || null,
+      includeClosed: includeClosed === 'true',
+    });
+    return ApiResponseDto.success({ items });
+  }
+
+  /** 受理 */
+  @Post('aftersales/:id/accept')
+  @ApiOperation({ summary: 'Accept an aftersale request' })
+  async acceptAftersale(@Req() req: any, @Param('id') id: string) {
+    return ApiResponseDto.success(
+      await this.aftersaleService.accept({
+        aftersaleId: id,
+        handlerId: this.currentOperatorId(req),
+      }),
+    );
+  }
+
+  /** 标记处理中 */
+  @Post('aftersales/:id/processing')
+  @ApiOperation({ summary: 'Mark an aftersale request as processing' })
+  async startAftersale(@Req() req: any, @Param('id') id: string) {
+    return ApiResponseDto.success(
+      await this.aftersaleService.startProcessing({
+        aftersaleId: id,
+        handlerId: this.currentOperatorId(req),
+      }),
+    );
+  }
+
+  /**
+   * 处理完成。
+   *
+   * 处理说明**必填** —— 顾客看到"已处理"却不知道处理了什么，等于没处理。
+   */
+  @Post('aftersales/:id/resolve')
+  @ApiOperation({ summary: 'Resolve an aftersale request' })
+  async resolveAftersale(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body('handleNote') handleNote: string,
+    @Body('linkedDeliveryId') linkedDeliveryId?: string,
+  ) {
+    return ApiResponseDto.success(
+      await this.aftersaleService.resolve({
+        aftersaleId: id,
+        handlerId: this.currentOperatorId(req),
+        handleNote,
+        linkedDeliveryId: linkedDeliveryId || null,
+      }),
+    );
+  }
+
+  /** 不受理（原因必填，顾客要知道为什么） */
+  @Post('aftersales/:id/reject')
+  @ApiOperation({ summary: 'Reject an aftersale request' })
+  async rejectAftersale(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body('reason') reason: string,
+  ) {
+    return ApiResponseDto.success(
+      await this.aftersaleService.reject({
+        aftersaleId: id,
+        handlerId: this.currentOperatorId(req),
+        reason,
+      }),
+    );
   }
 
   /**

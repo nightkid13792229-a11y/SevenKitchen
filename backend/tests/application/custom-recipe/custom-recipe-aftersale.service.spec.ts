@@ -394,4 +394,230 @@ describe('CustomRecipeAftersaleService · 顾客撤回', () => {
       service.cancel({ aftersaleId: 'a1', customerId: 'customer-1' }),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
+
+describe('CustomRecipeAftersaleService · 后台处理', () => {
+  function createForStaff(options: {
+    rows?: unknown[];
+    row?: unknown;
+  } = {}) {
+    const prisma = {
+      customRecipeAftersale: {
+        findMany: jest.fn().mockResolvedValue(options.rows ?? []),
+        findUnique: jest.fn().mockResolvedValue(options.row ?? null),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    };
+    const service = new CustomRecipeAftersaleService(
+      prisma as unknown as PrismaService,
+      { getConfig: jest.fn() } as unknown as CustomRecipeConfigService,
+      {
+        listSet: jest
+          .fn()
+          .mockResolvedValue([{ code: 'ADJUST_RECIPE', label: '调整食谱' }]),
+      } as unknown as PlatformOptionsService,
+    );
+    return { service, prisma };
+  }
+
+  describe('★ 待办排序：等太久的排前面，"调整食谱"比"问个问题"急', () => {
+    it('等得久的排在前面', async () => {
+      const now = new Date('2026-10-16T12:00:00+08:00');
+      const { service } = createForStaff({
+        rows: [
+          {
+            id: 'a-new',
+            orderId: 'o1',
+            type: 'QUESTION',
+            status: 'PENDING',
+            description: 'x',
+            photos: [],
+            createdAt: new Date('2026-10-16T11:00:00+08:00'), // 等了 1 小时
+            acceptedAt: null,
+            resolvedAt: null,
+            order: { orderId: 'CR1', customerId: 'c1', status: 'COMPLETED', dog: { name: '豆豆' }, customer: { nickname: '张三', phone: '138' } },
+          },
+          {
+            id: 'a-old',
+            orderId: 'o2',
+            type: 'QUESTION',
+            status: 'PENDING',
+            description: 'y',
+            photos: [],
+            createdAt: new Date('2026-10-14T12:00:00+08:00'), // 等了两天
+            acceptedAt: null,
+            resolvedAt: null,
+            order: { orderId: 'CR2', customerId: 'c2', status: 'COMPLETED', dog: { name: '旺财' }, customer: { nickname: '李四', phone: '139' } },
+          },
+        ],
+      });
+
+      const list = await service.listForStaff({ now });
+
+      expect(list.map((item) => item.id)).toEqual(['a-old', 'a-new']);
+      // 等了多久也要给出来，客服一眼看出哪条催得急
+      expect(list[0].hoursWaiting).toBeGreaterThan(40);
+    });
+
+    it('★ 同等时长下，"调整食谱"比"问个问题"急（狗可能正在吃不对的饭）', async () => {
+      const now = new Date('2026-10-16T12:00:00+08:00');
+      const sameTime = new Date('2026-10-16T10:00:00+08:00');
+      const { service } = createForStaff({
+        rows: [
+          {
+            id: 'a-question',
+            orderId: 'o1',
+            type: 'QUESTION',
+            status: 'PENDING',
+            description: 'x',
+            photos: [],
+            createdAt: sameTime,
+            acceptedAt: null,
+            resolvedAt: null,
+            order: { orderId: 'CR1', customerId: 'c1', status: 'COMPLETED', dog: null, customer: null },
+          },
+          {
+            id: 'a-adjust',
+            orderId: 'o2',
+            type: 'ADJUST_RECIPE',
+            status: 'PENDING',
+            description: 'y',
+            photos: [],
+            createdAt: sameTime,
+            acceptedAt: null,
+            resolvedAt: null,
+            order: { orderId: 'CR2', customerId: 'c2', status: 'COMPLETED', dog: null, customer: null },
+          },
+        ],
+      });
+
+      const list = await service.listForStaff({ now });
+
+      expect(list.map((item) => item.id)).toEqual(['a-adjust', 'a-question']);
+    });
+
+    it('默认只列未处理完的（客服要看"还有几件事没做"）', async () => {
+      const { service, prisma } = createForStaff({ rows: [] });
+
+      await service.listForStaff();
+
+      const where = (prisma.customRecipeAftersale.findMany as jest.Mock).mock
+        .calls[0][0].where;
+      expect(where.status).toEqual({ in: ['PENDING', 'ACCEPTED', 'PROCESSING'] });
+    });
+
+    it('明确要看已关闭的时才带上它们', async () => {
+      const { service, prisma } = createForStaff({ rows: [] });
+
+      await service.listForStaff({ includeClosed: true });
+
+      const where = (prisma.customRecipeAftersale.findMany as jest.Mock).mock
+        .calls[0][0].where;
+      expect(where.status).toBeUndefined();
+    });
+
+    it('★ 每条都带上"现在能做什么"，前端照着渲染', async () => {
+      const { service } = createForStaff({
+        rows: [
+          {
+            id: 'a1',
+            orderId: 'o1',
+            type: 'QUESTION',
+            status: 'PENDING',
+            description: 'x',
+            photos: [],
+            createdAt: new Date(),
+            acceptedAt: null,
+            resolvedAt: null,
+            order: { orderId: 'CR1', customerId: 'c1', status: 'COMPLETED', dog: null, customer: null },
+          },
+        ],
+      });
+
+      const list = await service.listForStaff();
+
+      const codes = list[0].actions.map((a: { code: string }) => a.code);
+      expect(codes).toContain('ACCEPT');
+      expect(codes).toContain('REJECT');
+      // 待受理时还不能"处理完成"（得先受理）
+      expect(codes).not.toContain('RESOLVE');
+    });
+  });
+
+  describe('流转校验', () => {
+    it('待受理 → 已受理', async () => {
+      const { service, prisma } = createForStaff({
+        row: { id: 'a1', status: 'PENDING' },
+      });
+
+      await service.accept({ aftersaleId: 'a1', handlerId: 'staff-1' });
+
+      const arg = (prisma.customRecipeAftersale.update as jest.Mock).mock.calls[0][0];
+      expect(arg.data.status).toBe('ACCEPTED');
+      expect(arg.data.handlerId).toBe('staff-1');
+      // 受理时间要记下来 —— 顾客的进度时间轴靠它
+      expect(arg.data.acceptedAt).toBeInstanceOf(Date);
+    });
+
+    it('★ 已解决的不能再受理（终态不可回转）', async () => {
+      const { service } = createForStaff({
+        row: { id: 'a1', status: 'RESOLVED' },
+      });
+
+      await expect(
+        service.accept({ aftersaleId: 'a1', handlerId: 'staff-1' }),
+      ).rejects.toThrow(/不能改成/);
+    });
+
+    it('★ 处理说明必填 —— 顾客看到"已处理"却不知道处理了什么，等于没处理', async () => {
+      const { service } = createForStaff({
+        row: { id: 'a1', status: 'ACCEPTED' },
+      });
+
+      await expect(
+        service.resolve({
+          aftersaleId: 'a1',
+          handlerId: 'staff-1',
+          handleNote: '   ',
+        }),
+      ).rejects.toThrow(/请写一句给顾客的处理说明/);
+    });
+
+    it('★ 不受理的原因必填（顾客要知道为什么）', async () => {
+      const { service } = createForStaff({
+        row: { id: 'a1', status: 'PENDING' },
+      });
+
+      await expect(
+        service.reject({ aftersaleId: 'a1', handlerId: 'staff-1', reason: '' }),
+      ).rejects.toThrow(/请写明不受理的原因/);
+    });
+
+    it('处理完成时把说明与关联的新交付版本一起存下来', async () => {
+      const { service, prisma } = createForStaff({
+        row: { id: 'a1', status: 'PROCESSING' },
+      });
+
+      await service.resolve({
+        aftersaleId: 'a1',
+        handlerId: 'staff-1',
+        handleNote: '已把鸡胸肉换成火鸡胸，重新交付了一版',
+        linkedDeliveryId: 'delivery-2',
+      });
+
+      const arg = (prisma.customRecipeAftersale.update as jest.Mock).mock.calls[0][0];
+      expect(arg.data.status).toBe('RESOLVED');
+      expect(arg.data.handleNote).toContain('火鸡胸');
+      expect(arg.data.linkedDeliveryId).toBe('delivery-2');
+      expect(arg.data.resolvedAt).toBeInstanceOf(Date);
+    });
+
+    it('售后单不存在时报 404', async () => {
+      const { service } = createForStaff({ row: null });
+
+      await expect(
+        service.accept({ aftersaleId: '不存在', handlerId: 's1' }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+});
 });

@@ -10,8 +10,11 @@ import { CustomRecipeConfigService } from './custom-recipe-config.service';
 import { PlatformOptionsService } from '../platform-options/platform-options.service';
 import { CUSTOM_RECIPE_AFTERSALE_TYPE_SET } from '../platform-options/option-sets.registry';
 import {
+  ALLOWED_AFTERSALE_TRANSITIONS,
   CUSTOM_RECIPE_AFTERSALE_STATUS_LABELS,
+  aftersaleUrgency,
   canCustomerCancelAftersale,
+  canTransitionAftersale,
   describeAftersaleProgress,
   isAftersaleOpen,
 } from '../../domain/custom-recipe/custom-recipe.aftersale';
@@ -254,6 +257,243 @@ export class CustomRecipeAftersaleService {
     });
 
     return { cancelled: true };
+  }
+
+  // ==================== 后台 ====================
+
+  /**
+   * 后台待办列表。
+   *
+   * 默认只列**未处理完**的（客服打开就要看到"还有几件事没做"），
+   * 按紧急度排序 —— 排序规则在领域层（`aftersaleUrgency`），
+   * 不是藏在 SQL 里：**等太久的排前面，同等的"调整食谱"比"问个问题"急**
+   * （前者顾客的狗可能正在吃着不合适的饭）。
+   */
+  async listForStaff(input?: {
+    status?: string | null;
+    includeClosed?: boolean;
+    limit?: number;
+    now?: Date;
+  }) {
+    const now = input?.now ?? new Date();
+    const where: Record<string, unknown> = {};
+
+    if (input?.status) {
+      where.status = input.status;
+    } else if (!input?.includeClosed) {
+      where.status = { in: ['PENDING', 'ACCEPTED', 'PROCESSING'] };
+    }
+
+    const rows = await this.prisma.customRecipeAftersale.findMany({
+      where,
+      orderBy: { createdAt: 'asc' },
+      take: input?.limit ?? 100,
+      include: {
+        order: {
+          select: {
+            orderId: true,
+            customerId: true,
+            status: true,
+            dog: { select: { name: true } },
+            customer: { select: { nickname: true, phone: true } },
+          },
+        },
+      },
+    });
+
+    const labels = await this.typeLabels();
+
+    return rows
+      .map((row) => {
+        const urgency = aftersaleUrgency({
+          status: row.status,
+          type: row.type,
+          createdAt: row.createdAt,
+          now,
+        });
+        return {
+          id: row.id,
+          orderId: row.order.orderId,
+          dogName: row.order.dog?.name ?? '',
+          customerName: row.order.customer?.nickname ?? '',
+          customerPhone: row.order.customer?.phone ?? '',
+          orderStatus: row.order.status,
+          type: row.type,
+          typeLabel: labels[row.type] ?? row.type,
+          status: row.status,
+          statusLabel: CUSTOM_RECIPE_AFTERSALE_STATUS_LABELS[row.status],
+          description: row.description,
+          photos: row.photos ?? [],
+          createdAt: row.createdAt,
+          acceptedAt: row.acceptedAt,
+          resolvedAt: row.resolvedAt,
+          /** 等了多久 —— 客服一眼看出哪条催得急 */
+          hoursWaiting: urgency.hoursWaiting,
+          /** 后台能做什么（与顾客侧渲染契约同一套思路） */
+          actions: this.staffActions(row.status),
+        };
+      })
+      .sort((a, b) => {
+        const ua = aftersaleUrgency({
+          status: a.status as never,
+          type: a.type,
+          createdAt: a.createdAt,
+          now,
+        });
+        const ub = aftersaleUrgency({
+          status: b.status as never,
+          type: b.type,
+          createdAt: b.createdAt,
+          now,
+        });
+        return ub.score - ua.score;
+      });
+  }
+
+  /** 受理 */
+  async accept(input: { aftersaleId: string; handlerId: string }) {
+    const row = await this.mustFind(input.aftersaleId);
+    this.assertTransition(row.status, 'ACCEPTED');
+
+    await this.prisma.customRecipeAftersale.update({
+      where: { id: row.id },
+      data: {
+        status: 'ACCEPTED',
+        handlerId: input.handlerId,
+        acceptedAt: new Date(),
+      },
+    });
+    return { status: 'ACCEPTED' };
+  }
+
+  /** 开始处理 */
+  async startProcessing(input: { aftersaleId: string; handlerId: string }) {
+    const row = await this.mustFind(input.aftersaleId);
+    this.assertTransition(row.status, 'PROCESSING');
+
+    await this.prisma.customRecipeAftersale.update({
+      where: { id: row.id },
+      data: { status: 'PROCESSING', handlerId: input.handlerId },
+    });
+    return { status: 'PROCESSING' };
+  }
+
+  /**
+   * 处理完成。
+   *
+   * `handleNote` 是**给顾客看的说明**，所以必填 ——
+   * 顾客收到"已处理"却不知道处理了什么，等于没处理。
+   */
+  async resolve(input: {
+    aftersaleId: string;
+    handlerId: string;
+    handleNote: string;
+    /** 结果是"调整食谱"时，指向重新交付的那一版 */
+    linkedDeliveryId?: string | null;
+  }) {
+    const note = (input.handleNote || '').trim();
+    if (!note) {
+      throw new BadRequestException(
+        '请写一句给顾客的处理说明 —— 顾客看到"已处理"但不知道处理了什么，等于没处理',
+      );
+    }
+
+    const row = await this.mustFind(input.aftersaleId);
+    this.assertTransition(row.status, 'RESOLVED');
+
+    await this.prisma.customRecipeAftersale.update({
+      where: { id: row.id },
+      data: {
+        status: 'RESOLVED',
+        handlerId: input.handlerId,
+        handleNote: note,
+        resolvedAt: new Date(),
+        ...(input.linkedDeliveryId
+          ? { linkedDeliveryId: input.linkedDeliveryId }
+          : {}),
+      },
+    });
+    return { status: 'RESOLVED' };
+  }
+
+  /** 驳回（原因必填，顾客要知道为什么） */
+  async reject(input: {
+    aftersaleId: string;
+    handlerId: string;
+    reason: string;
+  }) {
+    const reason = (input.reason || '').trim();
+    if (!reason) {
+      throw new BadRequestException('请写明不受理的原因，顾客需要知道为什么');
+    }
+
+    const row = await this.mustFind(input.aftersaleId);
+    this.assertTransition(row.status, 'REJECTED');
+
+    await this.prisma.customRecipeAftersale.update({
+      where: { id: row.id },
+      data: {
+        status: 'REJECTED',
+        handlerId: input.handlerId,
+        rejectReason: reason,
+        resolvedAt: new Date(),
+      },
+    });
+    return { status: 'REJECTED' };
+  }
+
+  /** 后台在某个状态下能做什么（前端照着渲染） */
+  private staffActions(status: string) {
+    const actions: Array<{
+      code: string;
+      label: string;
+      enabled: boolean;
+      style?: string;
+    }> = [];
+    const canTo = (to: never) =>
+      canTransitionAftersale(status as never, to) ||
+      (ALLOWED_AFTERSALE_TRANSITIONS[
+        status as keyof typeof ALLOWED_AFTERSALE_TRANSITIONS
+      ] ?? []
+      ).includes(to);
+
+    if (canTo('ACCEPTED' as never)) {
+      actions.push({ code: 'ACCEPT', label: '受理', enabled: true, style: 'primary' });
+    }
+    if (canTo('PROCESSING' as never)) {
+      actions.push({ code: 'PROCESSING', label: '标记处理中', enabled: true });
+    }
+    if (canTo('RESOLVED' as never)) {
+      actions.push({ code: 'RESOLVE', label: '处理完成', enabled: true, style: 'primary' });
+    }
+    if (canTo('REJECTED' as never)) {
+      actions.push({ code: 'REJECT', label: '不受理', enabled: true, style: 'line' });
+    }
+    return actions;
+  }
+
+  private async mustFind(id: string) {
+    const row = await this.prisma.customRecipeAftersale.findUnique({
+      where: { id },
+    });
+    if (!row) throw new NotFoundException('售后单不存在');
+    return row;
+  }
+
+  /** 流转校验，不合法就抛（与订单状态机同一套思路） */
+  private assertTransition(from: string, to: string): void {
+    if (
+      (ALLOWED_AFTERSALE_TRANSITIONS[
+        from as keyof typeof ALLOWED_AFTERSALE_TRANSITIONS
+      ] ?? []
+      ).includes(to as never)
+    ) {
+      return;
+    }
+    throw new BadRequestException(
+      `售后单当前是「${CUSTOM_RECIPE_AFTERSALE_STATUS_LABELS[from as never] ?? from}」，` +
+        `不能改成「${CUSTOM_RECIPE_AFTERSALE_STATUS_LABELS[to as never] ?? to}」`,
+    );
   }
 
   // ==================== 内部 ====================

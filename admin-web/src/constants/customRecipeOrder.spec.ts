@@ -2,44 +2,53 @@ import { describe, expect, it } from 'vitest'
 import {
   canDeliverCustomRecipe,
   getCustomRecipeRefundStatusText,
-  getCustomRecipeStatusTagType,
-  getCustomRecipeStatusText,
   isCustomRecipeOrderOpen,
   isCustomRecipeRedelivery,
   isCustomRecipeRefundSucceeded,
 } from './customRecipeOrder'
 
 /**
- * 状态字典的回归（2026-10-04 第 6 条）。
+ * 订单判断规则与退款文案的回归（2026-10-04 第 6 条 + 2026-10-16 批次 3.3）。
  *
- * 重点防的是"漏一档"：详情页原来少了 CANCELLED，同一张单在列表里是
- * "已取消"、点进详情变成英文枚举。字典收成一份后，这里把五档全钉死。
+ * ## ⚠️ 状态文案的测试搬走了，不是删了
+ *
+ * 这里原来有四个用例，钉的是「五档状态都有中文文案，一档都不能少」。
+ * 那条意图**完全有效，而且比原来更要紧了** —— 只是它现在属于**后端**：
+ *
+ *   后端 `tests/application/platform-options/platform-options.service.spec.ts`
+ *   断言 `result.unlabeled` 为空，且期望列表里含 `COMPLETED`。
+ *   服务启动时会自动把**枚举的全部取值**补进选项字典，缺标签会打 warn。
+ *
+ * 为什么搬走而不是在前端再守一遍：前端那份 `CUSTOM_RECIPE_STATUS_META`
+ * **恰恰是漏掉 `COMPLETED` 的那一份** —— 顾客在小程序点「确认收到」后，
+ * 后台显示的是英文 `COMPLETED`。在前端再守一遍等于把同一个毛病留着。
+ *
+ * 前端现在只保证一件事：**去后端取**（那条断言在
+ * `views/CustomRecipes/customRecipeOrderPage.regression.spec.ts` 里）。
  */
-describe('定制订单状态文案', () => {
-  it('五档状态都有中文文案，一档都不能少', () => {
-    expect(getCustomRecipeStatusText('PENDING_PAYMENT')).toBe('待付款')
-    expect(getCustomRecipeStatusText('PAID')).toBe('已付款')
-    expect(getCustomRecipeStatusText('IN_PROGRESS')).toBe('制作中')
-    expect(getCustomRecipeStatusText('DELIVERED')).toBe('已交付')
-    // 这一档就是详情页此前缺失、直接显示英文 CANCELLED 的那个
-    expect(getCustomRecipeStatusText('CANCELLED')).toBe('已取消')
+
+describe('订单判断规则（文案无关）', () => {
+  it('可交付的状态：已付款 / 制作中 / 已交付 / 已完成', () => {
+    expect(canDeliverCustomRecipe('PAID')).toBe(true)
+    expect(canDeliverCustomRecipe('IN_PROGRESS')).toBe(true)
+    expect(canDeliverCustomRecipe('DELIVERED')).toBe(true)
+    // 2026-10-16 新增：售后改稿后要能重新交付
+    expect(canDeliverCustomRecipe('COMPLETED')).toBe(true)
+    expect(canDeliverCustomRecipe('PENDING_PAYMENT')).toBe(false)
+    expect(canDeliverCustomRecipe('CANCELLED')).toBe(false)
   })
 
-  it('小写或空值不会显示成空白', () => {
-    expect(getCustomRecipeStatusText('cancelled')).toBe('已取消')
-    expect(getCustomRecipeStatusText(null)).toBe('-')
-    expect(getCustomRecipeStatusText(undefined)).toBe('-')
+  it('重新交付：已交付 / 已完成都算', () => {
+    expect(isCustomRecipeRedelivery('DELIVERED')).toBe(true)
+    expect(isCustomRecipeRedelivery('COMPLETED')).toBe(true)
+    expect(isCustomRecipeRedelivery('IN_PROGRESS')).toBe(false)
   })
 
-  it('未知状态原样返回，方便发现后端加了新枚举', () => {
-    expect(getCustomRecipeStatusText('REFUNDING')).toBe('REFUNDING')
-  })
-
-  it('标签颜色唯一来自字典', () => {
-    expect(getCustomRecipeStatusTagType('DELIVERED')).toBe('success')
-    expect(getCustomRecipeStatusTagType('CANCELLED')).toBe('info')
-    expect(getCustomRecipeStatusTagType('PENDING_PAYMENT')).toBe('warning')
-    expect(getCustomRecipeStatusTagType('WHATEVER')).toBe('info')
+  it('进行中的单才会因为超期被催', () => {
+    expect(isCustomRecipeOrderOpen('PAID')).toBe(true)
+    expect(isCustomRecipeOrderOpen('IN_PROGRESS')).toBe(true)
+    expect(isCustomRecipeOrderOpen('DELIVERED')).toBe(false)
+    expect(isCustomRecipeOrderOpen('CANCELLED')).toBe(false)
   })
 })
 

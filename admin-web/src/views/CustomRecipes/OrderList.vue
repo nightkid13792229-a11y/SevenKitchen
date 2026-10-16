@@ -72,13 +72,19 @@
     <el-card class="filter-card">
       <el-form :inline="true" :model="filters" class="filter-form">
         <el-form-item label="状态">
+          <!--
+            状态选项来自**选项字典**（2026-10-16 批次 3.3）。
+            此前这里是写死的六行 —— 后端加「已完成」时这里没跟上，
+            而且加一档就要改前端。
+          -->
           <el-select v-model="filters.status" placeholder="全部" clearable @change="loadOrders">
             <el-option label="全部" value=""></el-option>
-            <el-option label="待付款" value="PENDING_PAYMENT"></el-option>
-            <el-option label="已付款" value="PAID"></el-option>
-            <el-option label="制作中" value="IN_PROGRESS"></el-option>
-            <el-option label="已交付" value="DELIVERED"></el-option>
-            <el-option label="已取消" value="CANCELLED"></el-option>
+            <el-option
+              v-for="item in statusItems"
+              :key="item.code"
+              :label="item.label"
+              :value="item.code"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="日期范围">
@@ -159,8 +165,9 @@
           <template #default="{ row }">
             <!-- 状态文案与详情页共用一份字典（constants/customRecipeOrder）：
                  两处各写一份的结果就是详情页漏了「已取消」，显示成英文 CANCELLED -->
-            <el-tag :type="getCustomRecipeStatusTagType(row.status)">
-              {{ getCustomRecipeStatusText(row.status) }}
+            <!-- 文案与色调都来自选项字典（后端下发） -->
+            <el-tag :type="statusTone(row.status) || undefined">
+              {{ statusLabel(row.status) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -257,13 +264,35 @@ import type {
 } from '@/api/customRecipe';
 import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole';
 import {
-  getCustomRecipeStatusTagType,
-  getCustomRecipeStatusText,
-} from '@/constants/customRecipeOrder';
+  CUSTOM_RECIPE_STATUS_SET,
+  useOptionSet,
+} from '@/composables/useOptionSet';
 import { getEstimatedDeliveryInfo } from '@/utils/customRecipe';
 import { toastApiError } from '@/utils/apiError';
 
 const router = useRouter();
+
+/**
+ * 状态中文与色调来自**选项字典**（2026-10-16 批次 3.3）。
+ *
+ * 此前是本地那一份 `CUSTOM_RECIPE_STATUS_META` —— 后端加「已完成」时
+ * 它没跟上，顾客确认收到后**老板在后台看到的是英文 `COMPLETED`**。
+ * 这跟 2026-10-04 加「已取消」时漏了两处半是同一个毛病：
+ * **只要中文还有第二份拷贝，就一定会再漏一次。**
+ */
+/**
+ * ⚠️ **解构**出来，不要留成对象属性 ——
+ * 模板里只有**顶层**的 ref 会自动解包，`statusOptions.items` 这种
+ * 嵌套的不会；而项目守卫又明令模板里不许写 `.value`
+ * （2026-10-14 老板报过"按钮点不动"，根因就是模板里写了 `.value`）。
+ * 解构是同时满足这两条的唯一写法。
+ */
+const {
+  items: statusItems,
+  ensure: ensureStatusOptions,
+  labelOf: statusLabel,
+  toneOf: statusTone,
+} = useOptionSet(CUSTOM_RECIPE_STATUS_SET);
 
 /** 口径 2：只有管理员能改食谱定制设置，入口对客服置灰 */
 const isAdmin = useIsAdmin();
@@ -301,6 +330,8 @@ const currentOrderId = ref('');
 
 // 生命周期
 onMounted(() => {
+  // 状态中文来自选项字典：与订单列表并行加载，不阻塞列表
+  ensureStatusOptions();
   loadOrders();
   loadStatistics();
 });

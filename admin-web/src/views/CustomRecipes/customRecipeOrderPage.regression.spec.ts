@@ -138,18 +138,38 @@ describe('退款与时效信息（第 5 条）', () => {
 })
 
 describe('状态文案只有一份字典（第 6 条）', () => {
-  it('详情页与列表页都用共享字典，已取消不再是英文 CANCELLED', () => {
-    expect(orderDetail).toContain('getCustomRecipeStatusText(order.value?.status)')
-    expect(orderDetail).toContain('getCustomRecipeStatusTagType(order.value?.status)')
-    expect(orderList).toContain('getCustomRecipeStatusText(row.status)')
-    expect(orderList).toContain('getCustomRecipeStatusTagType(row.status)')
+  it('★ 详情页与列表页都从**选项字典**取状态文案', () => {
+    /**
+     * 2026-10-16（批次 3.3）把口径又推了一步：
+     *
+     * 原先两个页面共用的是 `constants/customRecipeOrder.ts` 里那份**本地**字典 ——
+     * 它解决了"两个页面各写一份"，但**没解决后端加枚举时前端要跟上**。
+     * 而这件事真的又发生了一次：后端加 `COMPLETED` 时这份本地字典没跟上，
+     * 顾客在小程序点「确认收到」之后，**后台显示的是英文 `COMPLETED`**。
+     *
+     * 现在中文只存在于后端的选项字典里，两个页面都来取。
+     * 这条守卫因此比原来更强：**不只是"只有一份"，而是"那一份在后端"**。
+     */
+    for (const source of [orderDetail, orderList]) {
+      expect(source).toContain('useOptionSet')
+      expect(source).toContain('CUSTOM_RECIPE_STATUS_SET')
+    }
+    expect(orderDetail).toContain('statusLabel(order.value?.status)')
+    expect(orderList).toContain('statusLabel(row.status)')
   })
 
-  it('两个页面都不再自己维护状态 map（防"改一处漏一处"复发）', () => {
+  it('★ 两个页面都不再自己维护状态 map（防"改一处漏一处"复发）', () => {
     expect(orderDetail).not.toContain("PENDING_PAYMENT: '待付款'")
     expect(orderList).not.toContain("PENDING_PAYMENT: '待付款'")
-    expect(orderDetail).toContain("from '@/constants/customRecipeOrder'")
-    expect(orderList).toContain("from '@/constants/customRecipeOrder'")
+    // 不许再从本地常量表取状态文案（退款文案那部分仍可用本地常量）
+    expect(orderDetail).not.toContain('getCustomRecipeStatusText')
+    expect(orderList).not.toContain('getCustomRecipeStatusText')
+  })
+
+  it('★ 列表页的状态筛选选项也来自字典（加一档不用改前端）', () => {
+    // 此前是写死的六行 el-option
+    expect(orderList).not.toContain('<el-option label="待付款" value="PENDING_PAYMENT">')
+    expect(orderList).toContain('v-for="item in statusItems"')
   })
 })
 

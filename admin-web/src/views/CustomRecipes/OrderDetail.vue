@@ -627,11 +627,13 @@ import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole';
 import {
   canDeliverCustomRecipe,
   getCustomRecipeRefundStatusText,
-  getCustomRecipeStatusTagType,
-  getCustomRecipeStatusText,
   isCustomRecipeRedelivery,
   isCustomRecipeRefundSucceeded,
 } from '@/constants/customRecipeOrder';
+import {
+  CUSTOM_RECIPE_STATUS_SET,
+  useOptionSet,
+} from '@/composables/useOptionSet';
 import {
   compareDogProfileAllergies,
   compareDogProfileMedicalConditions,
@@ -680,8 +682,20 @@ const order = ref<CustomRecipeOrderDetail | null>(null);
 
 // ---------- 面板上的派生展示 ----------
 
-const statusText = computed(() => getCustomRecipeStatusText(order.value?.status));
-const statusTagType = computed(() => getCustomRecipeStatusTagType(order.value?.status));
+/**
+ * 状态中文与色调来自**选项字典**（2026-10-16 批次 3.3）。
+ *
+ * 此前是本地那份 `CUSTOM_RECIPE_STATUS_META` —— 后端加「已完成」时没跟上，
+ * 顾客在小程序点「确认收到」后，**这里会显示英文 `COMPLETED`**。
+ */
+const {
+  ensure: ensureStatusOptions,
+  labelOf: statusLabel,
+  toneOf: statusTone,
+} = useOptionSet(CUSTOM_RECIPE_STATUS_SET);
+
+const statusText = computed(() => statusLabel(order.value?.status));
+const statusTagType = computed(() => statusTone(order.value?.status) || undefined);
 
 /** 预计交付倒计时：超期的单要标红，已交付/已取消的不再催 */
 const deliveryInfo = computed(() =>
@@ -924,6 +938,8 @@ const recipeFormRules: FormRules = {
 
 // 生命周期
 onMounted(() => {
+  // 状态中文来自选项字典（与订单详情并行加载，不阻塞）
+  ensureStatusOptions();
   loadOrderDetail();
   loadIngredientOptions();
 });

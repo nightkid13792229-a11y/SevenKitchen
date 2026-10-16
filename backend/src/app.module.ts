@@ -48,6 +48,7 @@ import { AdminPlatformOptionsController } from './interfaces/controllers/admin-p
 import { PlatformOptionsService } from './application/platform-options/platform-options.service';
 import { CustomRecipeViewService } from './application/custom-recipe/custom-recipe-view.service';
 import { CustomRecipeDeliveryService } from './application/custom-recipe/custom-recipe-delivery.service';
+import { CustomRecipeAftersaleService } from './application/custom-recipe/custom-recipe-aftersale.service';
 import { SharedPhotosController } from './interfaces/controllers/shared-photos.controller';
 import { CustomRecipeService } from './application/custom-recipe/custom-recipe.service';
 import { CustomRecipeConfigService } from './application/custom-recipe/custom-recipe-config.service';
@@ -421,6 +422,7 @@ validatePrismaConfig();
     PlatformOptionsService,
     CustomRecipeViewService,
     CustomRecipeDeliveryService,
+    CustomRecipeAftersaleService,
     DogService,
     {
       provide: DOG_REPOSITORY,

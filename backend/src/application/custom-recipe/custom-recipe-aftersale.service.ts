@@ -1,0 +1,289 @@
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { CustomRecipeStatus } from '@prisma/client';
+import { PrismaService } from '../../infrastructure/prisma.service';
+import { CustomRecipeConfigService } from './custom-recipe-config.service';
+import { PlatformOptionsService } from '../platform-options/platform-options.service';
+import { CUSTOM_RECIPE_AFTERSALE_TYPE_SET } from '../platform-options/option-sets.registry';
+import {
+  CUSTOM_RECIPE_AFTERSALE_STATUS_LABELS,
+  canCustomerCancelAftersale,
+  describeAftersaleProgress,
+  isAftersaleOpen,
+} from '../../domain/custom-recipe/custom-recipe.aftersale';
+
+/**
+ * 定制食谱 · 售后（2026-10-16，批次 2.5）
+ *
+ * ## 它补上的是什么
+ *
+ * 在此之前**售后完全没有**：通用售后页只认成品订单，定制单点进去是错的页面。
+ * 顾客交付后不满意，只能微信找客服，**系统里一点痕迹都不留** ——
+ * 谁提的、什么时候提的、怎么处理的，全靠聊天记录。
+ *
+ * ## 三条设计口径
+ *
+ * **一、售后独立于订单状态。** 不把"售后中"做成订单的一个状态 ——
+ * 否则"已交付"与"售后中"会互相覆盖，跟原来 `DELIVERED` 是死胡同一样僵。
+ * 一张已完成的单可以同时挂着一条售后单。
+ *
+ * **二、类型来自选项字典，不写死。** 老板想加一类"要发票"或改个说法，
+ * 后台改一次就行，不用发版（这是批次 1.3 建字典的用处）。
+ *
+ * **三、窗口从交付时间起算。** 天数取配置 `aftersale_window_days`。
+ * 超窗口不允许**新提**，但**已提的照常处理到底** ——
+ * 不能因为窗口到了就把人家等着回复的售后单扔掉。
+ */
+@Injectable()
+export class CustomRecipeAftersaleService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly configService: CustomRecipeConfigService,
+    private readonly platformOptions: PlatformOptionsService,
+  ) {}
+
+  /**
+   * 顾客提交售后。
+   */
+  async create(input: {
+    orderIdOrId: string;
+    customerId: string;
+    type: string;
+    description: string;
+    photos?: string[];
+    now?: Date;
+  }): Promise<{
+    id: string;
+    type: string;
+    typeLabel: string;
+    status: string;
+    statusLabel: string;
+  }> {
+    const now = input.now ?? new Date();
+
+    const order = await this.prisma.customRecipeOrder.findFirst({
+      where: {
+        OR: [{ orderId: input.orderIdOrId }, { id: input.orderIdOrId }],
+      },
+      select: {
+        id: true,
+        orderId: true,
+        customerId: true,
+        status: true,
+        deliveredAt: true,
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`定制订单不存在: ${input.orderIdOrId}`);
+    }
+    if (order.customerId !== input.customerId) {
+      throw new ForbiddenException('无权操作此订单');
+    }
+    if (order.status === CustomRecipeStatus.CANCELLED) {
+      throw new BadRequestException('订单已取消，不需要提售后');
+    }
+
+    const currentDelivery = await this.prisma.customRecipeDelivery.findFirst({
+      where: { orderId: order.id, replacedByDeliveryId: null },
+      orderBy: { version: 'desc' },
+      select: { id: true, deliveredAt: true },
+    });
+
+    if (!currentDelivery) {
+      throw new BadRequestException('这张订单还没有交付，暂时不能提售后');
+    }
+
+    /**
+     * 窗口校验。超窗口**不允许新提**，但见下方：已提的照常处理到底。
+     */
+    const windowDays = await this.getWindowDays();
+    if (windowDays > 0) {
+      const closesAt = new Date(
+        currentDelivery.deliveredAt.getTime() +
+          windowDays * 24 * 60 * 60 * 1000,
+      );
+      if (now.getTime() > closesAt.getTime()) {
+        throw new BadRequestException(
+          `已超过售后受理期（交付后 ${windowDays} 天内），如需帮助请联系客服`,
+        );
+      }
+    }
+
+    /**
+     * 同一条售后单不许重复提。
+     *
+     * 为什么拦：顾客提完没看到变化，很可能再提一次 ——
+     * 后台就会出现两条一模一样的待办，客服还得自己去重。
+     * 只拦"还没处理完的"，已解决的可以再提（同一个问题复发了）。
+     */
+    const open = await this.prisma.customRecipeAftersale.findFirst({
+      where: {
+        orderId: order.id,
+        status: { in: ['PENDING', 'ACCEPTED', 'PROCESSING'] },
+      },
+      select: { id: true },
+    });
+    if (open) {
+      throw new BadRequestException(
+        '你已经提交过售后，我们正在处理中。有新情况可以直接在客服里补充',
+      );
+    }
+
+    const trimmed = (input.description || '').trim();
+    if (!trimmed) {
+      throw new BadRequestException('请说一下遇到的具体情况');
+    }
+
+    const typeLabel = await this.resolveTypeLabel(input.type);
+
+    const created = await this.prisma.customRecipeAftersale.create({
+      data: {
+        orderId: order.id,
+        deliveryId: currentDelivery.id,
+        type: input.type,
+        description: trimmed,
+        photos: input.photos ?? [],
+      },
+    });
+
+    return {
+      id: created.id,
+      type: created.type,
+      typeLabel,
+      status: created.status,
+      statusLabel: CUSTOM_RECIPE_AFTERSALE_STATUS_LABELS[created.status],
+    };
+  }
+
+  /**
+   * 顾客看自己的售后单（含进度）。
+   *
+   * 返回的是**能直接渲染的形态** —— 状态中文、处理进展、能不能撤回
+   * 都由后端算好，与订单详情那边的渲染契约同一套思路。
+   */
+  async listForCustomer(orderIdOrId: string, customerId: string) {
+    const order = await this.prisma.customRecipeOrder.findFirst({
+      where: { OR: [{ orderId: orderIdOrId }, { id: orderIdOrId }] },
+      select: { id: true, customerId: true },
+    });
+    if (!order) {
+      throw new NotFoundException(`定制订单不存在: ${orderIdOrId}`);
+    }
+    if (order.customerId !== customerId) {
+      throw new ForbiddenException('无权访问此订单');
+    }
+
+    const rows = await this.prisma.customRecipeAftersale.findMany({
+      where: { orderId: order.id },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const labels = await this.typeLabels();
+
+    return rows.map((row) => ({
+      id: row.id,
+      type: row.type,
+      typeLabel: labels[row.type] ?? row.type,
+      status: row.status,
+      statusLabel: CUSTOM_RECIPE_AFTERSALE_STATUS_LABELS[row.status],
+      description: row.description,
+      photos: row.photos ?? [],
+      createdAt: row.createdAt,
+      resolvedAt: row.resolvedAt,
+      /**
+       * 处理结果对顾客可见的部分。
+       *
+       * `handleNote` 是客服写的**对外说明**，可以直接给顾客看；
+       * 内部备注（如果有）不会走这个接口。
+       */
+      handleNote: row.handleNote ?? null,
+      rejectReason: row.rejectReason ?? null,
+      /** 能不能撤回 —— 后端算好，前端不判断 */
+      canCancel: canCustomerCancelAftersale(row.status),
+      /** 进度时间轴（与订单进度同一套渲染思路） */
+      progress: describeAftersaleProgress({
+        status: row.status,
+        createdAt: row.createdAt,
+        acceptedAt: row.acceptedAt,
+        resolvedAt: row.resolvedAt,
+      }),
+    }));
+  }
+
+  /**
+   * 顾客撤回售后。
+   *
+   * 只在"还没人受理"时允许 —— 客服已经在处理了还抽走，
+   * 会让客服白忙一轮。
+   */
+  async cancel(input: {
+    aftersaleId: string;
+    customerId: string;
+  }): Promise<{ cancelled: boolean }> {
+    const row = await this.prisma.customRecipeAftersale.findUnique({
+      where: { id: input.aftersaleId },
+      include: { order: { select: { customerId: true } } },
+    });
+
+    if (!row) {
+      throw new NotFoundException('售后单不存在');
+    }
+    if (row.order.customerId !== input.customerId) {
+      throw new ForbiddenException('无权操作');
+    }
+    if (!canCustomerCancelAftersale(row.status)) {
+      throw new BadRequestException(
+        isAftersaleOpen(row.status)
+          ? '我们已经在处理了，如需补充情况请联系客服'
+          : '这条售后已经处理完，不需要撤回',
+      );
+    }
+
+    await this.prisma.customRecipeAftersale.update({
+      where: { id: row.id },
+      data: {
+        status: 'REJECTED',
+        rejectReason: '顾客自行撤回',
+        resolvedAt: new Date(),
+      },
+    });
+
+    return { cancelled: true };
+  }
+
+  // ==================== 内部 ====================
+
+  private async getWindowDays(): Promise<number> {
+    try {
+      const config = await this.configService.getConfig();
+      const value = Number(config.aftersaleWindowDays);
+      return Number.isInteger(value) && value >= 0 ? value : 30;
+    } catch {
+      return 30;
+    }
+  }
+
+  /** 类型码 → 中文（来自选项字典，不在这里写第二份） */
+  private async typeLabels(): Promise<Record<string, string>> {
+    try {
+      const items = await this.platformOptions.listSet(
+        CUSTOM_RECIPE_AFTERSALE_TYPE_SET,
+      );
+      const map: Record<string, string> = {};
+      for (const item of items) map[item.code] = item.label;
+      return map;
+    } catch {
+      return {};
+    }
+  }
+
+  private async resolveTypeLabel(code: string): Promise<string> {
+    const labels = await this.typeLabels();
+    return labels[code] ?? code;
+  }
+}

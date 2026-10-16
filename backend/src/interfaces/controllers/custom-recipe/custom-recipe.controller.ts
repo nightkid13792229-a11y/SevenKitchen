@@ -22,6 +22,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CustomRecipeService } from '../../../application/custom-recipe/custom-recipe.service';
 import { CustomRecipeDeliveryService } from '../../../application/custom-recipe/custom-recipe-delivery.service';
+import { CustomRecipeAftersaleService } from '../../../application/custom-recipe/custom-recipe-aftersale.service';
 import { CustomRecipeViewService } from '../../../application/custom-recipe/custom-recipe-view.service';
 import { CustomRecipeConfigService } from '../../../application/custom-recipe/custom-recipe-config.service';
 import { WechatPaymentService } from '../../../application/payment/wechat-payment.service';
@@ -52,6 +53,8 @@ export class CustomRecipeController {
     private readonly viewService: CustomRecipeViewService,
     /** 交付记录（批次 2.4）：顾客看内容、确认收到 */
     private readonly deliveryService: CustomRecipeDeliveryService,
+    /** 售后（批次 2.5）：顾客提交、查看进度、撤回 */
+    private readonly aftersaleService: CustomRecipeAftersaleService,
   ) {}
 
   /**
@@ -461,6 +464,72 @@ export class CustomRecipeController {
       /** 之前已经确认过 —— 前端据此提示"你已经确认过了"，而不是报错 */
       alreadyConfirmed: result.alreadyConfirmed,
     });
+  }
+
+  /**
+   * 提交售后（批次 2.5）。
+   *
+   * 类型来自选项字典（`custom_recipe_aftersale_type`），
+   * 窗口天数取配置 —— 两者都不写死在这里。
+   */
+  @Post('orders/:orderId/aftersale')
+  @ApiOperation({ summary: 'Customer submits an aftersale request' })
+  async createAftersale(
+    @Req() req: any,
+    @Param('orderId') orderId: string,
+    @Body('type') type: string,
+    @Body('description') description: string,
+    @Body('photos') photos?: string[],
+  ) {
+    const userId = req.user.userId;
+
+    if (!type) {
+      throw new BadRequestException('请选择问题类型');
+    }
+
+    const result = await this.aftersaleService.create({
+      orderIdOrId: orderId,
+      customerId: userId,
+      type,
+      description,
+      photos: Array.isArray(photos) ? photos : [],
+    });
+
+    return ApiResponseDto.success(result);
+  }
+
+  /**
+   * 看这张单的售后（含进度）。
+   *
+   * 返回的是**能直接渲染的形态**：状态中文、进度时间轴、
+   * 能不能撤回都在里面 —— 与订单详情那边的渲染契约同一套思路。
+   */
+  @Get('orders/:orderId/aftersale')
+  @ApiOperation({ summary: 'List aftersale requests of an order' })
+  async listAftersale(@Req() req: any, @Param('orderId') orderId: string) {
+    const list = await this.aftersaleService.listForCustomer(
+      orderId,
+      req.user.userId,
+    );
+    return ApiResponseDto.success({ items: list });
+  }
+
+  /**
+   * 撤回售后。
+   *
+   * 只在"还没人受理"时允许 —— 客服已经在处理了还抽走会让客服白忙一轮。
+   */
+  @Post('aftersale/:aftersaleId/cancel')
+  @ApiOperation({ summary: 'Customer cancels an aftersale request' })
+  async cancelAftersale(
+    @Req() req: any,
+    @Param('aftersaleId') aftersaleId: string,
+  ) {
+    const result = await this.aftersaleService.cancel({
+      aftersaleId,
+      customerId: req.user.userId,
+    });
+    return ApiResponseDto.success(result);
   }
 
   /**

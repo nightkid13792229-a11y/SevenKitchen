@@ -79,6 +79,14 @@ export const ENUM_SOURCES: Record<
 /** 定制订单状态（主状态，顾客看的那六档） */
 export const CUSTOM_RECIPE_STATUS_SET = 'custom_recipe_status';
 
+/**
+ * 定制售后类型选项集（2026-10-16 批次 2.5）。
+ *
+ * 售后类型**不写死在代码里**：老板想加一类"要发票"或改个说法，
+ * 后台改一次就行，不用发版 —— 这正是批次 1.3 建字典的用处。
+ */
+export const CUSTOM_RECIPE_AFTERSALE_TYPE_SET = 'custom_recipe_aftersale_type';
+
 export const OPTION_SET_DEFINITIONS: readonly OptionSetDefinition[] = [
   {
     code: CUSTOM_RECIPE_STATUS_SET,

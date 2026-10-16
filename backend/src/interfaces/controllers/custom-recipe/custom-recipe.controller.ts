@@ -20,6 +20,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CustomRecipeService } from '../../../application/custom-recipe/custom-recipe.service';
+import { CustomRecipeViewService } from '../../../application/custom-recipe/custom-recipe-view.service';
 import { CustomRecipeConfigService } from '../../../application/custom-recipe/custom-recipe-config.service';
 import { WechatPaymentService } from '../../../application/payment/wechat-payment.service';
 import { SubmitCustomRecipeOrderDTO } from '../../../application/custom-recipe/dto/custom-recipe.dto';
@@ -38,6 +39,15 @@ export class CustomRecipeController {
   constructor(
     private readonly customRecipeService: CustomRecipeService,
     private readonly wechatPaymentService: WechatPaymentService,
+    /**
+     * 渲染契约的视图组装（2026-10-16 批次 1.5）。
+     *
+     * 加上它之后，响应里会多一个 `renderable` 字段 ——
+     * 状态中文、能不能点、进度时间轴都在里面，前端照着渲染即可。
+     * **这是追加字段**，老小程序忽略它、继续用原来的 `status` 字符串，
+     * 因此两端可以不同步上线（真正切换在批次 2）。
+     */
+    private readonly viewService: CustomRecipeViewService,
   ) {}
 
   /**
@@ -274,6 +284,43 @@ export class CustomRecipeController {
       paymentConfirmedAt: order.paymentConfirmedAt,
       inProgressAt: order.inProgressAt,
       deliveredAt: order.deliveredAt,
+
+      /**
+       * 渲染契约三件套（2026-10-16 批次 1.5）。
+       *
+       * 状态中文、能不能点、为什么不能点、进度时间轴 —— 全在这里，
+       * 小程序拿到后**只管渲染**，不再自己写映射表与判断。
+       *
+       * ⚠️ 这是**追加字段**：上面的 `status` 字符串原样保留，
+       * 老小程序忽略 `renderable` 照常工作，所以两端不必同批上线。
+       * 真正切到三件套、删掉旧字段是在批次 2。
+       */
+      renderable: await this.viewService.buildCustomerView({
+        status: order.status,
+        createdAt: order.createdAt,
+        paymentConfirmedAt: order.paymentConfirmedAt,
+        deliveredAt: order.deliveredAt,
+        completedAt: order.completedAt ?? null,
+        estimatedDeliveryDate: order.estimatedDeliveryDate ?? null,
+        paymentDeadlineAt: this.resolvePaymentDeadline(
+          order,
+          await this.customRecipeService.getPaymentTimeoutMinutes(),
+        ),
+        cancellationReason: order.cancellationReason ?? null,
+        refundStatus: order.refundStatus ?? null,
+        refundAmount: this.toNullableNumber(order.refundAmount),
+        /**
+         * 批次 2 之前没有独立的交付表，先用"订单上挂了食谱"代表已交付。
+         * 批次 2 会换成查 `custom_recipe_delivery`。
+         */
+        hasAnyDelivery: Boolean(order.recipeId),
+        hasUnconfirmedDelivery:
+          order.status === 'DELIVERED' && Boolean(order.recipeId),
+        aftersaleWindowDays:
+          await this.customRecipeService.getAftersaleWindowDays(),
+        requireCustomerConfirm:
+          await this.customRecipeService.getRequireCustomerConfirm(),
+      }),
     });
   }
 

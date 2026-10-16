@@ -2399,6 +2399,12 @@ model CustomRecipeOrder {
   /// 已经用掉的抵扣额度（元）。剩余额度 = credit_amount - credit_used。
   creditUsed            Decimal                  @default(0) @map("credit_used") @db.Decimal(10, 2)
   status                CustomRecipeStatus       @default(PENDING_PAYMENT) @map("status")
+  /// 内部子阶段（2026-10-16 批次 1.2）。
+  ///
+  /// 与主状态解耦：主状态每加一档三个端都要改展示，
+  /// 而子阶段**只影响后台工作台** —— 顾客侧永远只看到「制作中」。
+  /// 历史订单为 null（不强行塞默认值，免得后台误以为这些单都在待接单）。
+  subStage              CustomRecipeSubStage?    @map("sub_stage")
   paymentConfirmedAt    DateTime?                @map("payment_confirmed_at")
   /// 微信支付交易号（对账/客服排查用）
   paymentTransactionId  String?                  @map("payment_transaction_id")
@@ -2409,6 +2415,20 @@ model CustomRecipeOrder {
   cancellationReason    String?                  @map("cancellation_reason")
   recipeId              String?                  @unique @map("recipe_id")
   healthInfoSyncedAt    DateTime?                @map("health_info_synced_at")
+
+  // ===== 2026-10-16 批次 1.2 新增：状态机需要的四个时间/归属字段 =====
+
+  /// 完成时间。`COMPLETED` 这一档必须有地方记"什么时候完成的"，
+  /// 否则报表与售后窗口都算不出来。
+  completedAt           DateTime?                @map("completed_at")
+  /// 预计自动完成时间 = 交付时间 + 配置的自动完成天数。
+  /// 定时任务扫这个字段把超期未确认的单转成 COMPLETED。
+  autoCompleteAt        DateTime?                @map("auto_complete_at")
+  /// 接单时间（后台点「接单」时写）
+  acceptedAt            DateTime?                @map("accepted_at")
+  /// 处理人。现阶段只有老板一个人接单/设计/交付，留痕用；
+  /// 将来加人时不用改表。
+  handledBy             String?                  @map("handled_by")
 
   /// 线上退款（顾客自助取消 → 微信原路退回）。2026-09-28 新增：
   /// 决策 12 要求"还没开始制作就能取消并全额退款"，此前完全没有退款通道。
@@ -2893,9 +2913,37 @@ enum CustomRecipeStatus {
   PAID
   IN_PROGRESS
   DELIVERED
+  /// 已完成（2026-10-16 批次 1.2 新增）。
+  ///
+  /// 为什么必须加：此前 `DELIVERED` 是**死胡同** ——
+  /// 它在流转表里的可流转列表是空数组，交货之后系统再也不会有任何动作，
+  /// 于是"顾客确认收货"和"交付后的售后"这两件事无处安放。
+  ///
+  /// 进入方式：顾客点「确认收到」，或交付后超过 autoCompleteDays 天自动完成。
+  COMPLETED
   /// 未付款超时自动关闭（或人工关闭）。
   /// 关单时必须把当天占用的排期名额释放掉，否则接单能力会被"僵尸单"吃掉。
   CANCELLED
+}
+
+/// 定制单的**内部子阶段**（2026-10-16 批次 1.2 新增）。
+///
+/// 与主状态解耦的理由：主状态每加一档，三个端都要改文案与展示
+/// （2026-10-04 加「已取消」时就漏了两处半）。而子阶段**只影响后台工作台**，
+/// 顾客侧永远只看到「制作中」这一档。
+enum CustomRecipeSubStage {
+  /// 已付款，还没有人接
+  PENDING_ACCEPT
+  /// 已接单
+  ACCEPTED
+  /// 资料不足，等顾客补充
+  NEED_INFO
+  /// 营养师设计中
+  DESIGNING
+  /// 内部审核中
+  IN_REVIEW
+  /// 设计完成，待交付
+  READY_TO_DELIVER
 }
 
 enum CustomAttachmentType {

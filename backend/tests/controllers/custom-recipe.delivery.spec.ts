@@ -36,6 +36,10 @@ describe('CustomRecipeController · 交付与编号口径', () => {
     };
 
     const customRecipeService = {
+      // 批次 1.5：视图服务要用（售后窗口天数、是否要求确认收货）
+      getAftersaleWindowDays: jest.fn().mockResolvedValue(30),
+      getRequireCustomerConfirm: jest.fn().mockResolvedValue(true),
+      getPaymentTimeoutMinutes: jest.fn().mockResolvedValue(30),
       getOrderByOrderId: jest.fn().mockResolvedValue(order),
       updateOrder: jest.fn().mockResolvedValue({}),
       updateOrderStatus: jest.fn().mockResolvedValue(undefined),
@@ -250,6 +254,10 @@ describe('CustomRecipeController · 交付与编号口径', () => {
 describe('CustomRecipeController · 顾客端编号口径', () => {
   function createCustomerController() {
     const customRecipeService = {
+      // 批次 1.5：视图服务要用（售后窗口天数、是否要求确认收货）
+      getAftersaleWindowDays: jest.fn().mockResolvedValue(30),
+      getRequireCustomerConfirm: jest.fn().mockResolvedValue(true),
+      getPaymentTimeoutMinutes: jest.fn().mockResolvedValue(30),
       getOrders: jest.fn().mockResolvedValue({
         orders: [
           {
@@ -298,12 +306,28 @@ describe('CustomRecipeController · 顾客端编号口径', () => {
       ['prisma']: { dog: { findFirst: jest.fn() } },
     };
 
+    /**
+     * 第三个参数是 2026-10-16（批次 1.5）加的视图服务 ——
+     * 它负责组装 `renderable` 三件套（状态中文 / 动作 / 进度）。
+     * 本文件测的是"业务编号回得对不对"，所以给它一个最小替身即可；
+     * 三件套本身的逻辑在 `custom-recipe-action-resolver.spec.ts` 里
+     * 用纯函数穷举测过，不在这里重复。
+     */
+    const viewService = {
+      buildCustomerView: jest.fn().mockResolvedValue({
+        status: { code: 'PAID', label: '已付款', tone: 'info' },
+        actions: [],
+        progress: { current: 'PAID', timeline: [] },
+      }),
+    };
+
     const controller = new CustomRecipeController(
       customRecipeService as any,
       {} as any,
+      viewService as any,
     );
 
-    return { controller };
+    return { controller, viewService };
   }
 
   // 控制器第一个参数是 @Req()，它读的是 req.user

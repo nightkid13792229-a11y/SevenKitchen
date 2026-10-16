@@ -20,6 +20,11 @@ import {
 } from '../../domain/custom-recipe/custom-recipe.repository';
 import { CustomRecipeConfigService } from './custom-recipe-config.service';
 import {
+  assertTransition,
+  suggestSubStage,
+  timestampFieldFor,
+} from '../../domain/custom-recipe/custom-recipe.state';
+import {
   CustomRecipeStatus,
   TargetGoal,
   CustomAttachmentType,
@@ -470,26 +475,16 @@ export class CustomRecipeService implements ICustomRecipeRepository {
    *      原先不释放，而每天只有 5 个名额，僵尸单会直接吃掉接单能力；
    *   3. 「制作中」补记 inProgressAt（这一列此前从来没被写过）。
    */
-  private static readonly ALLOWED_STATUS_TRANSITIONS: Record<
-    CustomRecipeStatus,
-    CustomRecipeStatus[]
-  > = {
-    [CustomRecipeStatus.PENDING_PAYMENT]: [
-      CustomRecipeStatus.PAID,
-      CustomRecipeStatus.CANCELLED,
-    ],
-    [CustomRecipeStatus.PAID]: [
-      CustomRecipeStatus.IN_PROGRESS,
-      CustomRecipeStatus.DELIVERED,
-      CustomRecipeStatus.CANCELLED,
-    ],
-    [CustomRecipeStatus.IN_PROGRESS]: [
-      CustomRecipeStatus.DELIVERED,
-      CustomRecipeStatus.CANCELLED,
-    ],
-    [CustomRecipeStatus.DELIVERED]: [],
-    [CustomRecipeStatus.CANCELLED]: [],
-  };
+  /**
+   * 合法流转表**已搬到领域层**（2026-10-16 批次 1.2）：
+   * `domain/custom-recipe/custom-recipe.state.ts`。
+   *
+   * 搬走的原因：此前它是这里的私有常量，而**有三条路径绕过它**直接写库
+   * （交付、建食谱交付、人工确认收款），于是"有校验"是假的 ——
+   * 能改状态的地方有四处，被校验的只有一处。
+   *
+   * 现在所有改状态的地方统一走 `assertTransition`。
+   */
 
   async updateOrderStatus(
     orderIdOrId: string,
@@ -511,28 +506,52 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       return;
     }
 
-    const allowed =
-      CustomRecipeService.ALLOWED_STATUS_TRANSITIONS[order.status] ?? [];
-
-    if (!allowed.includes(status)) {
+    /**
+     * 流转校验走**领域层唯一真源**（批次 1.2）。
+     * 把领域层抛的 Error 翻译成 Web 层的 400 —— 领域层不认识 Nest。
+     */
+    try {
+      assertTransition(order.status, status);
+    } catch (error) {
       throw new BadRequestException(
-        `订单当前状态（${order.status}）不能改为 ${status}`,
+        error instanceof Error ? error.message : '订单状态不能这样变更',
       );
     }
 
+    /**
+     * 时间戳由状态机统一决定写哪个字段（批次 1.2）。
+     * 此前这三个 if 散在这里，而 `inProgressAt` 曾有一段时间**从来没被写过**
+     * （2026-09-28 才补上）—— 集中到 `timestampFieldFor` 就不会再漏。
+     */
+    const timestampField = timestampFieldFor(status);
+    const subStage = suggestSubStage(status);
+
     await this.prisma.$transaction(async (tx) => {
+      /**
+       * ⚠️ 这里用了**计算属性名**（`[timestampField]`），而它会让 TypeScript 的
+       * "多余属性检查"失效 —— 写一个 schema 里根本不存在的列，`tsc` **不报错**，
+       * 只在运行时炸。
+       *
+       * 2026-10-16 实测踩到：顺手在这里写了 `autoCompleteAt: null`，
+       * 而那个列属于批次 1.6（交付单）还没建，类型检查一声不吭地放过了。
+       * ⇒ 往这个 data 里加字段时，**必须回 schema.prisma 确认列真的存在**。
+       */
       await tx.customRecipeOrder.update({
         where: { id: order.id },
         data: {
           status,
-          ...(status === CustomRecipeStatus.IN_PROGRESS
-            ? { inProgressAt: new Date() }
-            : {}),
-          ...(status === CustomRecipeStatus.DELIVERED
-            ? { deliveredAt: new Date() }
-            : {}),
-          ...(status === CustomRecipeStatus.PAID
-            ? { paymentConfirmedAt: new Date() }
+          ...(status === CustomRecipeStatus.CANCELLED
+            ? {}
+            : subStage
+              ? { subStage }
+              : {}),
+          ...(timestampField ? { [timestampField]: new Date() } : {}),
+          /**
+           * 完成后清掉"自动完成闹钟"（批次 1.2 加的列）——
+           * 留着的话定时任务会一直扫到这张已完成的单。
+           */
+          ...(status === CustomRecipeStatus.COMPLETED
+            ? { autoCompleteAt: null }
             : {}),
           ...(status === CustomRecipeStatus.CANCELLED
             ? {
@@ -1401,6 +1420,33 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       return prefix || 'CR';
     } catch {
       return 'CR';
+    }
+  }
+
+  // ==================== 渲染契约要用的配置（批次 1.5）====================
+
+  /**
+   * 售后窗口天数（批次 1.5 加）。
+   *
+   * 顾客侧的「有问题」按钮能不能点，由后端按交付时间 + 这个天数算出来 ——
+   * 此前是小程序自己判 `7 天`（写死），而后端配置是 30 天，
+   * **两边口径本来就不一致**。现在以配置为准。
+   */
+  async getAftersaleWindowDays(): Promise<number | null> {
+    const value = await this.resolvePositiveIntFromConfig(
+      (config) => config.aftersaleWindowDays,
+      30,
+    );
+    return value;
+  }
+
+  /** 是否要求顾客确认收货（批次 1.5 加）—— 决定小程序显不显示「确认收到」 */
+  async getRequireCustomerConfirm(): Promise<boolean> {
+    try {
+      const config = await this.configService.getConfig();
+      return config.requireCustomerConfirm !== false;
+    } catch {
+      return true;
     }
   }
 

@@ -215,8 +215,8 @@ describe('PlatformOptionsService', () => {
     it('空库时把 ENUM 类的全部取值补进来', async () => {
       const result = await service.syncEnumBackedSets();
 
-      // 定制订单状态 5 档 + 定制目标 4 档 = 9
-      expect(result.inserted).toBe(9);
+      // 定制订单状态 6 档 + 定制目标 4 档 = 10
+      expect(result.inserted).toBe(10);
       expect(result.unlabeled).toEqual([]);
 
       const statuses = await service.listSet(CUSTOM_RECIPE_STATUS_SET);
@@ -225,6 +225,7 @@ describe('PlatformOptionsService', () => {
         'PAID',
         'IN_PROGRESS',
         'DELIVERED',
+        'COMPLETED',
         'CANCELLED',
       ]);
       // 中文来自登记表，不是英文码
@@ -352,7 +353,7 @@ describe('PlatformOptionsService', () => {
       expect(status.sourceType).toBe('ENUM');
       // ENUM 类不能增删 —— 前端据此把「新增/删除」按钮置灰
       expect(status.canAddOrRemove).toBe(false);
-      expect(status.itemCount).toBe(5);
+      expect(status.itemCount).toBe(6);
 
       const aftersale = sets.find(
         (row) => row.code === 'custom_recipe_aftersale_type',
@@ -371,8 +372,8 @@ describe('PlatformOptionsService', () => {
       const status = (await service.listAllSetsForAdmin()).find(
         (row) => row.code === CUSTOM_RECIPE_STATUS_SET,
       )!;
-      expect(status.itemCount).toBe(5);
-      expect(status.enabledCount).toBe(4);
+      expect(status.itemCount).toBe(6);
+      expect(status.enabledCount).toBe(5);
     });
 
     it('色彩档位由后端给出（前端不自己写一份）', () => {

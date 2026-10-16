@@ -152,12 +152,27 @@ describe('CustomRecipeService · 链路加固', () => {
       scheduledDate: new Date('2099-06-01'),
     });
 
+    /**
+     * 2026-10-16（批次 1.2）：流转校验搬到领域层后，报错信息**变详细了** ——
+     * 它现在会告诉你「允许的去向」。对客服很实用：照着提示就知道下一步能做什么。
+     */
     await expect(
       service.updateOrderStatus(
         'CR202609280001',
         CustomRecipeStatus.PENDING_PAYMENT,
       ),
-    ).rejects.toThrow('不能改为');
+    ).rejects.toThrow(
+      /不能从 DELIVERED（已交付）改为 PENDING_PAYMENT（待付款）/,
+    );
+
+    // 关键的一条：报错必须写明**允许的去向**（否则客服还得来问开发）
+    await expect(
+      service.updateOrderStatus(
+        'CR202609280001',
+        CustomRecipeStatus.PENDING_PAYMENT,
+      ),
+    ).rejects.toThrow(/允许的去向：.*COMPLETED（已完成）/);
+
     expect(orderUpdate).not.toHaveBeenCalled();
   });
 

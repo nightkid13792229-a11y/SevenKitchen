@@ -102,6 +102,14 @@ export const OPTION_SET_DEFINITIONS: readonly OptionSetDefinition[] = [
       },
       { code: 'DELIVERED', label: '已交付', tone: 'success', sortOrder: 40 },
       /**
+       * 2026-10-16（批次 1.2）新增的这一档。
+       *
+       * 加它的**同一轮**就在这里补了标签 —— 这正是启动同步机制要保证的事：
+       * 忘了配也不会漏到顾客眼前（会自动补一行并在启动日志里 warn）。
+       * 对照 2026-10-04 加「已取消」时，三个端漏了两处半。
+       */
+      { code: 'COMPLETED', label: '已完成', tone: 'success', sortOrder: 50 },
+      /**
        * 2026-10-04 新增的这一档，当时三个端漏了两处半。
        * 现在它有唯一来源 —— 就是这一行。
        */

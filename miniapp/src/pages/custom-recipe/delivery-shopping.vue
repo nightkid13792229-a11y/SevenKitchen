@@ -126,6 +126,26 @@
         <text class="section-note">{{ content.storage }}</text>
       </view>
 
+      <!--
+        存长图（2026-10-16 批次 2.7）。
+        用途很实在：买菜时直接把图给摊主看，或者打印出来贴冰箱上。
+
+        ⚠️ 画布放在**屏幕外**（见样式），不是隐藏 ——
+        小程序里 `display:none` 的画布取不到绘图上下文。
+      -->
+      <button class="save-image" :disabled="generating" @tap="saveAsImage">
+        {{ generating ? '正在生成图片...' : '保存为图片（买菜/打印用）' }}
+      </button>
+
+      <canvas
+        canvas-id="deliveryPrintCanvas"
+        id="deliveryPrintCanvas"
+        class="print-canvas"
+        :width="CANVAS_OUTPUT_WIDTH"
+        :height="canvasOutputHeight"
+        :style="canvasStyle"
+      ></canvas>
+
       <!-- 回到第 1 页：顾客做完饭多半要回去看"每天喂多少" -->
       <button class="goto-recipe" @tap="goRecipe">返回专属食谱</button>
 
@@ -140,6 +160,8 @@
 import { computed, ref } from 'vue';
 import { onLoad, onPullDownRefresh } from '@dcloudio/uni-app';
 import { fetchDelivery, type OrderDelivery } from '@/api/custom-recipe';
+import { PrintCanvasBuilder } from '@/utils/print-canvas';
+import { drawDeliverySheet } from '@/utils/delivery-print';
 
 const orderId = ref('');
 const loading = ref(true);
@@ -181,6 +203,112 @@ const hasBatch = computed(
 const lossPercent = computed(() =>
   Math.round((Number(content.value.shopping.lossRate || 1) - 1) * 100),
 );
+
+// ==================== 长图导出（批次 2.7）====================
+
+/** 逻辑宽度与 DIY 制作单一致（1200），导出的图放一起看着像一套 */
+const CANVAS_LOGICAL_WIDTH = 1200;
+const CANVAS_LOGICAL_HEIGHT = 1697;
+const CANVAS_OUTPUT_SCALE = 2;
+const CANVAS_OUTPUT_WIDTH = CANVAS_LOGICAL_WIDTH * CANVAS_OUTPUT_SCALE;
+/** 画布底部给页脚留的高度 */
+const CANVAS_FOOTER_SPACE = 60;
+
+/**
+ * 画布高度按内容自适应。
+ *
+ * canvas **不会自动分页** —— 内容超出就被裁掉，而裁掉的偏偏是最下面的
+ * 「怎么存」和页脚。所以先画一遍量高度，再定画布尺寸重画一次。
+ * （与 DIY 制作单同一套做法，见那页的注释。）
+ */
+const canvasLogicalHeight = ref(CANVAS_LOGICAL_HEIGHT);
+const canvasOutputHeight = computed(
+  () => canvasLogicalHeight.value * CANVAS_OUTPUT_SCALE,
+);
+const canvasStyle = computed(() => ({
+  width: `${CANVAS_OUTPUT_WIDTH}px`,
+  height: `${canvasOutputHeight.value}px`,
+}));
+
+const generating = ref(false);
+
+/** 等画布按新的高度完成一次重排再画，否则会画在旧尺寸上 */
+const waitForCanvasResize = () =>
+  new Promise((resolve) => setTimeout(resolve, 30));
+
+/** 交付日期 → 「2026-10-16」。纯格式化，不涉及业务判断 */
+const deliveredAtText = computed(() => {
+  const iso = delivery.value?.deliveredAt;
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+});
+
+const saveAsImage = async () => {
+  if (!delivery.value) return;
+  generating.value = true;
+  uni.showLoading({ title: '生成中...', mask: true });
+  try {
+    await waitForCanvasResize();
+
+    canvasLogicalHeight.value = CANVAS_LOGICAL_HEIGHT;
+    await waitForCanvasResize();
+
+    const build = (height: number) =>
+      new PrintCanvasBuilder({
+        canvasId: 'deliveryPrintCanvas',
+        width: CANVAS_LOGICAL_WIDTH,
+        height,
+        outputScale: CANVAS_OUTPUT_SCALE,
+        autoHeight: true,
+      });
+
+    const sheetInput = () => ({
+      content: content.value,
+      version: delivery.value?.version,
+      deliveredAtText: deliveredAtText.value,
+      dogName: delivery.value?.dogName ?? null,
+      lossPercentText: `${lossPercent.value}%`,
+    });
+
+    // 第一遍：用基准高度量内容
+    let builder = build(canvasLogicalHeight.value);
+    drawDeliverySheet(builder, sheetInput());
+    /**
+     * `PrintCanvasBuilder.getCurrentY()` 是画完之后的**内容底部**。
+     * 用它决定画布要撑多高 —— canvas 不会自动分页，
+     * 高度不够就会把最下面的「怎么存」和页脚**裁掉**。
+     */
+    const needed = Math.ceil(builder.getCurrentY() + CANVAS_FOOTER_SPACE);
+
+    if (needed > CANVAS_LOGICAL_HEIGHT) {
+      canvasLogicalHeight.value = needed;
+      await waitForCanvasResize();
+      builder = build(canvasLogicalHeight.value);
+      drawDeliverySheet(builder, sheetInput());
+    }
+
+    builder.drawFooter(
+      `赛文的食堂 | 采购与制作单 | ${deliveredAtText.value || ''}`,
+    );
+
+    const imagePath = await builder.toImage();
+    uni.hideLoading();
+    uni.previewImage({
+      urls: [imagePath],
+      success: () => {
+        // 预览页里用户可以长按保存；这里再给一次明确的保存入口
+      },
+    });
+  } catch (error) {
+    console.error('[DeliveryShopping] 生成图片失败:', error);
+    uni.hideLoading();
+    uni.showToast({ title: '生成失败', icon: 'none' });
+  } finally {
+    generating.value = false;
+  }
+};
 
 const load = async () => {
   loading.value = true;
@@ -389,6 +517,26 @@ onPullDownRefresh(async () => {
   font-size: 27rpx;
   line-height: 1.6;
   color: rgba(244, 236, 216, 0.85);
+}
+
+.save-image {
+  margin: 8rpx 0 16rpx;
+  border-radius: 16rpx;
+  background: rgba(201, 162, 39, 0.16);
+  color: #c9a227;
+  font-size: 28rpx;
+}
+
+/*
+  ⚠️ 画布要放到**屏幕外**，不能用 display:none ——
+  小程序里被 display:none 的画布取不到绘图上下文，画出来是空白。
+*/
+.print-canvas {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  z-index: -1;
+  pointer-events: none;
 }
 
 .footer-note {

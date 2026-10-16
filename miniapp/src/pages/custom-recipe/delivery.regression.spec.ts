@@ -238,3 +238,69 @@ describe('交付内容页 · 只渲染不计算', () => {
       'pages/custom-recipe/delivery-shopping',
     );
   });
+
+/**
+ * 交付物 · 长图导出（2026-10-16，批次 2.7）
+ *
+ * ## 为什么单独盯这两个文件
+ *
+ * 长图是「采购与制作」那张单子的**打印版**，它必须和屏幕上看到的**一模一样** ——
+ * 一旦绘制代码里自己算一遍（比如把各行采购量加起来），
+ * 就会出现"手机上写 1660g、长图上写别的数"这种事，
+ * 而顾客是照着图去买菜的。
+ */
+describe('交付物 · 长图导出', () => {
+  const printSource = stripComments(read('src/utils/delivery-print.ts'));
+  // 变量在这里重新取一次：上面那个 describe 里的同名变量作用域不跨块
+  const shoppingSource = stripComments(read(SHOPPING_PAGE));
+
+  it('★ 绘制文件里没有任何计算（与页面同一条红线）', () => {
+    // 采购量、合计、损耗全部来自快照，这里只许做字符串拼接
+    expect(printSource).not.toMatch(/\.reduce\(/);
+    expect(printSource).not.toMatch(/Number\(/);
+    expect(printSource).not.toMatch(/parseFloat|parseInt/);
+    // 也不许出现算术运算（模板里的 `${x} g` 是拼接，不含运算符）
+    expect(printSource).not.toMatch(
+      /\b(?:purchaseG|netG|totalNetG|totalPurchaseG|dailyIntakeG|perMealG|perKgG|cycleDays)\b\s*[-+*/]/,
+    );
+  });
+
+  it('★ 复用 DIY 那套画布，不另写排版', () => {
+    expect(printSource).toContain('PrintCanvasBuilder');
+    for (const method of [
+      'drawBrandHeader',
+      'drawFactCards',
+      'drawTable',
+      'drawSectionTitle',
+      'drawProductionSteps',
+    ]) {
+      // drawFooter 由页面调用（页脚日期是页面的信息），不在绘制文件里
+    }
+    for (const method of [
+      'drawBrandHeader',
+      'drawFactCards',
+      'drawTable',
+      'drawSectionTitle',
+      'drawProductionSteps',
+    ]) {
+      expect(printSource).toContain(method);
+    }
+  });
+
+  it('★ 补充剂要说明"不计入采购总量"（否则顾客会算重）', () => {
+    expect(printSource).toContain('不计入');
+  });
+
+  it('★ 长图高度按内容撑开，不用固定 A4（否则最下面会被裁掉）', () => {
+    expect(shoppingSource).toContain('getCurrentY()');
+    expect(shoppingSource).toContain('CANVAS_FOOTER_SPACE');
+    // 内容超出要重画一遍
+    expect(shoppingSource).toContain('needed > CANVAS_LOGICAL_HEIGHT');
+  });
+
+  it('★ 画布放在屏幕外，不能用 display:none（那样画出来是空白）', () => {
+    expect(shoppingSource).toContain('position: fixed');
+    expect(shoppingSource).toContain('left: -9999px');
+    expect(shoppingSource).not.toMatch(/\.print-canvas\s*\{[^}]*display:\s*none/);
+  });
+});

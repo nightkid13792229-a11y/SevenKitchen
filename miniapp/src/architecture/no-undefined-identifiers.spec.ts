@@ -252,6 +252,10 @@ function collectBoundNames(text: string): Set<string> {
  *    （`boundNames` ✓）。真正要拦的 `dogApi.vaccinePlan(` ✗ 一点不受影响 ✓ ——
  *    `dogApi` 是 import 进来的 ✓，从来不在绑定集合里 ✓。
  */
+/** 静态资源扩展名：`logo.png` 这种不是"访问了 logo 对象" */
+const STATIC_FILE_EXTENSIONS =
+  /^\.(png|jpe?g|gif|webp|svg|bmp|ico|css|less|scss|js|mjs|cjs|ts|json|wxml|wxss|wxs)(?![a-z0-9])/i;
+
 function collectCalled(
   text: string,
   defined: Set<string>,
@@ -278,6 +282,23 @@ function collectCalled(
   }
   // ② 点号访问：名字.
   for (const m of text.matchAll(/([A-Za-z_$][\w$]*)\./g)) {
+    /*
+     * ⚠️ **静态资源路径的误报**（2026-10-16 修）。
+     *
+     * `'/static/logo.png'` 里的 `logo.` 会被这条规则当成一次点号访问 ——
+     * 它前面是 `/`，不在上面那几个排除字符里，于是被记成
+     * "`logo()` 调用了却找不到定义"。
+     *
+     * 基线里已经有 4 条同类误报（`diy-sheet` / `login` /
+     * `recipe-designer/publish` / `recipe-nutrition-report`，全是 `logo`）——
+     * 说明这是**会反复出现**的一类，不是个例。
+     * 与其每加一个带 logo 的页面就往基线塞一条，不如在这里一次性排掉。
+     *
+     * 排除方式刻意**只认文件扩展名**：不动 `xxx.` 的一般情形，
+     * 所以"真的少定义了某个对象、然后访问它"照样会被抓住。
+     */
+    const after = text.slice(m.index + m[1].length, m.index + m[1].length + 6);
+    if (STATIC_FILE_EXTENSIONS.test(after)) continue;
     record(m[1], m.index, 'access')
   }
   return called

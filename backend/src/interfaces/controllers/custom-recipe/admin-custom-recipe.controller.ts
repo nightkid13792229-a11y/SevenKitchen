@@ -285,6 +285,32 @@ export class AdminCustomRecipeController {
   }
 
   /**
+   * 生产损耗率（系数，1.07 = 多买 7%）。
+   *
+   * 读配置；读不到时回落到 `1.07` —— 那是 `schema.prisma` 里
+   * `CustomRecipeConfig.productionLossRate` 的默认值。
+   *
+   * 刻意**不静默回落**：配置读不到说明有问题，日志里留一行，
+   * 免得"值变了但没人知道为什么"。
+   */
+  private async resolveProductionLossRate(): Promise<number> {
+    try {
+      const config = await this.customRecipeConfigService.getConfig();
+      const value = Number(config?.productionLossRate);
+      if (Number.isFinite(value) && value >= 1) {
+        return value;
+      }
+      console.warn(
+        '[CustomRecipe] 配置里的生产损耗率不合法，按 1.07 处理：',
+        config?.productionLossRate,
+      );
+    } catch (error) {
+      console.warn('[CustomRecipe] 读取生产损耗率失败，按 1.07 处理：', error);
+    }
+    return 1.07;
+  }
+
+  /**
    * 登录人的角色 → 渲染契约里的"看的人是谁"。
    *
    * 认不出来时按 `STAFF`（**权限更小的那个**）——
@@ -417,6 +443,26 @@ export class AdminCustomRecipeController {
     @Param('orderId') orderId: string,
     @Body() dto: CreateRecipeDTO,
   ) {
+    /**
+     * 生产损耗率读**配置**，不再写死（2026-10-16 批次 5.7）。
+     *
+     * ## 这里原来写死 1.07，而设计器那边写死 1.05
+     *
+     * 后果：**同一道食谱，从哪个入口发布，顾客要买的量差 2%**。
+     * 而采购量就是按这个值算的 —— 顾客照着买，多买少买都不对。
+     *
+     * ## 为什么现在能自己定下来了
+     *
+     * `CustomRecipeConfig.productionLossRate` 这个字段**本来就是为了统一它才加的**
+     * （schema 里写着："此前它们散落在代码里写死 —— 有的还写死在两处且值不一样"）。
+     * 也就是说这不是一个"要老板拍板的口径"，而是**一个没做完的重构**：
+     * 字段加了，两处写死的值没改成读它。
+     *
+     * 改成读配置之后：① 两边自然一致；② 老板能在后台设置页直接改，
+     * 不用改代码。
+     */
+    const lossRate = await this.resolveProductionLossRate();
+
     const order = await this.customRecipeService.getOrderByOrderId(orderId);
 
     if (!order) {
@@ -471,7 +517,7 @@ export class AdminCustomRecipeController {
         customerDogId: order.dogId,
         energyDensityKcalPerKg:
           dto.nutritionTarget?.energy_density_kcal_per_kg || 3200,
-        productionLossRate: 1.07,
+        productionLossRate: lossRate,
       },
     });
 

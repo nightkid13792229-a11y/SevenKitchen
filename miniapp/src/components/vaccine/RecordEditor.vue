@@ -310,7 +310,7 @@ async function pickReportPhoto() {
 
 const antibodyHint = computed(() => {
   if (target.value === 'CORE') {
-    return '核心疫苗合格时，这一针改由抗体检测替代；结果以兽医判读为准。'
+    return '核心疫苗合格时，这一针改由抗体检测替代（结果以兽医判读为准）。20 周龄之前、或打完上一针不满 4 周的报告，先不作数。'
   }
   if (target.value === 'RABIES') {
     return '狂犬的抗体检测只作记录（出行 / 出入境常用），不影响接种安排。'

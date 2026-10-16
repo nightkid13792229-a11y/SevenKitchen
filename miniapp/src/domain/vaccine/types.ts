@@ -123,10 +123,25 @@ export interface VaccinePlanResponse {
   noRecordAtAll: boolean
 }
 
+/**
+ * 一条"为什么不作数"的说明（后端算的）。
+ *
+ * 例：接种日期还没到 / 比狗狗生日还早 / 打在 4 周龄之前 / 狂犬两针间隔不足一年 /
+ * 抗体检测在 20 周龄前做 / 离上一针不满 4 周。
+ *
+ * ⚠️ 2026-10-16：这些原来**只在后端算、前端没显示** —— 家长记了一条未来日期的记录，
+ *    只会觉得"记了没反应"。现在跟着记录一起显示（记录行下面一行 + 点开看建议）。
+ */
 export interface VaccineConflict {
   kind?: string
-  message?: string
-  [key: string]: unknown
+  /** 哪一条记录（接种记录或抗体检测的 id） */
+  recordId?: string
+  recordDate?: string
+  vaccineName?: string
+  /** 一句话：为什么不作数 */
+  reason?: string
+  /** 该怎么办 */
+  suggestion?: string
 }
 
 /** 一条接种记录（GET /dogs/:dogId/vaccines 的条目） */

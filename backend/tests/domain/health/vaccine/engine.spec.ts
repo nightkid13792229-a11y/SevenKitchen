@@ -1,4 +1,5 @@
 import {
+  addDays,
   addWeeks,
   addYears,
   buildPlanView,
@@ -688,5 +689,86 @@ describe('引擎 · 抗体检测那条路的年龄下限（需求 R9：20 周龄
   it('成年犬照样能给这条路（不要一刀切关掉）', () => {
     const view = build(dog(200));
     expect(view.next!.titerable).toBe(true);
+  });
+});
+
+describe('引擎 · 抗体检测的第二个条件：最后一针之后至少 4 周（需求 R9 依据栏）', () => {
+  const birthday = dog(60);
+  const lastDose = addWeeks(birthday, 30);
+  const coreRecord = record('c1', '卫佳伍', lastDose);
+  const buildWithTest = (testedAt: Date) =>
+    buildPlanView({
+      dogId: 'dog-1',
+      birthday: toDateText(birthday),
+      records: [coreRecord],
+      antibodyTests: [
+        {
+          id: 't1',
+          testedAt: toDateText(testedAt),
+          targets: ['CORE'],
+          result: 'PASS',
+          nextReviewAt: toDateText(addYears(testedAt, 3)),
+        },
+      ],
+      today: new Date(
+        Math.max(TODAY.getTime(), addDays(testedAt, 1).getTime()),
+      ),
+    });
+
+  it('打完针第 3 天就测 → **不算**（拿刚打进去的抗体证明不用打这一针，自相矛盾）', () => {
+    const view = buildWithTest(addDays(lastDose, 3));
+    expect(view.plan.some((step) => step.titer)) .toBe(false);
+  });
+
+  it('打完针第 27 天测 → 也还不算（差一天）', () => {
+    const view = buildWithTest(addDays(lastDose, 27));
+    expect(view.plan.some((step) => step.titer)).toBe(false);
+  });
+
+  it('打完针满 28 天测 → 算数，且下一次评估 = 检测日 + 3 年', () => {
+    const testedAt = addDays(lastDose, 28);
+    const view = buildWithTest(testedAt);
+    const covered = view.plan.find((step) => step.titer);
+    expect(covered).toBeDefined();
+    expect(covered!.titer!.testedAt).toBe(toDateText(testedAt));
+    expect(covered!.titer!.nextReviewAt).toBe(toDateText(addYears(testedAt, 3)));
+  });
+});
+
+describe('引擎 · 抗体检测不作数时要**说清为什么**（不然家长以为记了没反应）', () => {
+  const birthday = dog(60);
+  const lastDose = addWeeks(birthday, 30);
+  const coreRecord = record('c1', '卫佳伍', lastDose);
+  const buildWithTest = (testedAt: Date) =>
+    buildPlanView({
+      dogId: 'dog-1',
+      birthday: toDateText(birthday),
+      records: [coreRecord],
+      antibodyTests: [
+        {
+          id: 't1',
+          testedAt: toDateText(testedAt),
+          targets: ['CORE'],
+          result: 'PASS',
+          nextReviewAt: toDateText(addYears(testedAt, 3)),
+        },
+      ],
+      today: new Date(Math.max(TODAY.getTime(), addDays(testedAt, 1).getTime())),
+    });
+
+  it('离上一针不满 4 周 → 报一条冲突，并说明"刚打完测到的是那一针的抗体"', () => {
+    const view = buildWithTest(addDays(lastDose, 3));
+    const conflict = view.conflicts.find((item) =>
+      String(item.reason).includes('不满 4 周'),
+    );
+    expect(conflict).toBeDefined();
+    expect(String(conflict!.suggestion)).toContain('满 4 周后复查');
+  });
+
+  it('满 4 周 → 不再报这条冲突', () => {
+    const view = buildWithTest(addDays(lastDose, 28));
+    expect(
+      view.conflicts.some((item) => String(item.reason).includes('不满 4 周')),
+    ).toBe(false);
   });
 });

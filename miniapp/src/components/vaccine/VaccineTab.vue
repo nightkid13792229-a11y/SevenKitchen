@@ -79,6 +79,7 @@
         :tests="tests"
         :loading="loading"
         :pending-review-count="pendingReviewCount"
+        :conflicts="planConflicts"
         @edit-record="onEditRecord"
         @edit-test="onEditTest"
         @verify-record="onVerifyRecord"
@@ -166,6 +167,8 @@ const rhythm = computed(() => planData.value?.rhythm || '')
 const ignoredItems = computed(() => planData.value?.ignored?.items || [])
 const ignoredCount = computed(() => planData.value?.ignored?.count || 0)
 const pendingReviewCount = computed(() => planData.value?.pendingReview || 0)
+/** 后端算好的"哪条记录为什么不作数"（给记录区显示） */
+const planConflicts = computed(() => planData.value?.conflicts || [])
 const catalogProducts = computed(() => readCatalogProducts(catalog.value))
 const componentOptions = computed(() => readComponentOptions(catalog.value))
 

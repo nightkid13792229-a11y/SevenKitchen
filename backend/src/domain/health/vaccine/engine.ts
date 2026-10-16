@@ -1159,6 +1159,9 @@ export function pickNext(steps: MatchedStep[]): MatchedStep | null {
  *
  * `RABIES` 只记录、不影响计划（法定每年，法规优先）。
  */
+/** 最后一针核心疫苗之后，至少隔这么久再测（需求 R9 的依据栏） */
+const TITER_AFTER_DOSE_DAYS = 28;
+
 function findCoreTiterCover(
   tests: AntibodyTestLike[],
   birthday: Date,
@@ -1180,9 +1183,21 @@ function findCoreTiterCover(
       Boolean(item.date),
     )
     .filter((item) => item.date.getTime() >= minimumAge.getTime())
+    /**
+     * 两个条件缺一不可（需求 R9 的依据栏写得很清楚，2026-10-16 补上第二条）：
+     *   ① 检测时狗已满 20 周龄 —— WSAVA 2024："presence of antibody in the serum
+     *      of an animal **over 20 weeks of age** is held to indicate protection"；
+     *      20 周前母源抗体（MDA）可能还在，测出来的"有抗体"未必是它自己的免疫力。
+     *   ② **最后一针核心疫苗之后至少 4 周**再测 —— 刚打完就测，测到的是刚打进去的
+     *      抗体，等于拿"刚打的这一针"去证明"不用打这一针"，逻辑上自相矛盾。
+     *
+     * ⚠️ 原来只判了"在最后一针之后"（`> lastCoreDose`），没判这 4 周 ——
+     *    打完针第 2 天做的检测也会被算作"已替代"。
+     */
     .filter(
       (item) =>
-        lastCoreDose === undefined || item.date.getTime() > lastCoreDose,
+        lastCoreDose === undefined ||
+        item.date.getTime() >= lastCoreDose + TITER_AFTER_DOSE_DAYS * DAY_MS,
     )
     .sort((a, b) => b.date.getTime() - a.date.getTime());
 

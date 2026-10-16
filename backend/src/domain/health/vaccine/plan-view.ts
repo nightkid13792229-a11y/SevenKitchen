@@ -172,6 +172,10 @@ export function selectPlanSteps(steps: MatchedStep[]): MatchedStep[] {
   return selected;
 }
 
+/** 最后一针核心疫苗之后至少隔这么久再测（需求 R9 的依据栏；与引擎里同一个口径） */
+const TITER_AFTER_DOSE_DAYS = 28;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 /* ===========================================================================
  * ② 一步 → 下发形状
  * =========================================================================== */
@@ -440,24 +444,59 @@ export function buildConflicts(input: {
     });
   }
 
-  // ④ 抗体检测在 20 周龄之前做（指南：20 周龄以上的抗体才指示保护）
+  /**
+   * ④ 抗体检测的两个时间条件（需求 R9 的依据栏，两条都要满足）：
+   *    · 检测时已满 20 周龄（WSAVA：20 周龄以上的抗体才指示保护）
+   *    · 最后一针核心疫苗之后**至少 4 周**（刚打完就测，测到的是刚打进去的抗体）
+   * 不满足的**不作数**，但要**明说为什么** —— 否则家长只会觉得"记了没反应"。
+   */
+  const lastCoreDoseTime = input.records
+    .filter((record) => {
+      const kinds = input.prepared.find((item) => item.record.id === record.id)
+        ?.kinds;
+      return Array.isArray(kinds) && kinds.includes('core');
+    })
+    .map((record) => parseDateText(record.vaccinationDate)?.getTime() ?? 0)
+    .sort((a, b) => b - a)[0];
+
   const titerMinimumAge = addWeeks(birthday, 20);
   for (const test of input.tests) {
     if (!Array.isArray(test.targets) || !test.targets.includes('CORE'))
       continue;
     const date = parseDateText(test.testedAt);
     if (!date) continue;
-    if (date.getTime() >= titerMinimumAge.getTime()) continue;
-    conflicts.push({
-      kind: 'core',
-      recordId: test.id,
-      recordDate: toDateText(date),
-      vaccineName: '抗体检测（核心三项）',
-      reason: '这份抗体检测是在 20 周龄之前做的',
-      suggestion:
-        'WSAVA 2024：20 周龄以上犬只血清中有抗体才被认为指示保护。' +
-        '这一份先不作为"可以不打"的依据，建议 20 周龄后复查，或直接按计划接种。',
-    });
+
+    if (date.getTime() < titerMinimumAge.getTime()) {
+      conflicts.push({
+        kind: 'core',
+        recordId: test.id,
+        recordDate: toDateText(date),
+        vaccineName: '抗体检测（核心三项）',
+        reason: '这份抗体检测是在 20 周龄之前做的',
+        suggestion:
+          'WSAVA 2024：20 周龄以上犬只血清中有抗体才被认为指示保护。' +
+          '这一份先不作为"可以不打"的依据，建议 20 周龄后复查，或直接按计划接种。',
+      });
+      continue;
+    }
+
+    // ⑤ 最后一针核心疫苗之后不满 4 周就测（拿刚打进去的抗体证明"不用打这一针"）
+    if (
+      lastCoreDoseTime !== undefined &&
+      lastCoreDoseTime > 0 &&
+      date.getTime() < lastCoreDoseTime + TITER_AFTER_DOSE_DAYS * DAY_MS
+    ) {
+      conflicts.push({
+        kind: 'core',
+        recordId: test.id,
+        recordDate: toDateText(date),
+        vaccineName: '抗体检测（核心三项）',
+        reason: '这份抗体检测离上一针核心疫苗太近（不满 4 周）',
+        suggestion:
+          '刚接种完测到的是这一针打进去的抗体，不能用来证明"这一针本可以不打"。' +
+          '建议接种满 4 周后复查；这一份先不作为依据。',
+      });
+    }
   }
 
   return conflicts;

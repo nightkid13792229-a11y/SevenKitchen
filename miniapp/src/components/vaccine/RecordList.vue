@@ -32,6 +32,10 @@
         <view class="vk-records__body">
           <text class="vk-records__name">{{ entryTitle(entry) }}</text>
           <text v-if="entryNote(entry)" class="vk-records__note">{{ entryNote(entry) }}</text>
+          <!-- 这一条为什么不作数（后端算好的，以前只在后端算、界面不显示） -->
+          <text v-if="conflictOf(entry)" class="vk-records__warn">
+            {{ conflictOf(entry)!.reason }}
+          </text>
         </view>
         <text v-if="isPending(entry)" class="vk-records__check">待核对</text>
         <text class="vk-records__date">{{ formatFullDate(entry.date) }}</text>
@@ -60,6 +64,7 @@
 import { computed, ref } from 'vue'
 import type {
   AntibodyTest,
+  VaccineConflict,
   VaccineRecord,
   VaccineTimelineEntry,
 } from '../../domain/vaccine/types'
@@ -71,11 +76,14 @@ const props = withDefaults(defineProps<{
   loading?: boolean
   /** 有几条记录待核对（后端算好下发；0 = 不显示那一行） */
   pendingReviewCount?: number
+  /** 后端算好的"为什么不作数"（按记录 id 对号入座） */
+  conflicts?: VaccineConflict[]
 }>(), {
   records: () => [],
   tests: () => [],
   loading: false,
   pendingReviewCount: 0,
+  conflicts: () => [],
 })
 
 const emit = defineEmits<{
@@ -165,6 +173,19 @@ function entryNote(entry: VaccineTimelineEntry): string {
   return String(entry.record.notes || '')
 }
 
+/**
+ * 这一条对应的"为什么不作数"。
+ *
+ * 后端把冲突挂在记录的 id 上（`recordId`）；行里的 id 带了 `record-` / `test-` 前缀，
+ * 所以两边都试一下。
+ */
+function conflictOf(entry: VaccineTimelineEntry): VaccineConflict | null {
+  const list = props.conflicts || []
+  if (list.length === 0) return null
+  const rawId = String(entry.id).replace(/^(record|test)-/, '')
+  return list.find((item) => String(item.recordId || '') === rawId) || null
+}
+
 /** 待核对（R7）：识别出来还没对照本子确认的那几条 */
 function isPending(entry: VaccineTimelineEntry): boolean {
   return entry.type === 'record' && entry.record.productVerified === false
@@ -177,7 +198,23 @@ function toggleExpanded() {
 /**
  * 点一行：待核对的**先给核对动作**（那是唯一的出路），其余进编辑。
  */
-function onEntryTap(entry: VaccineTimelineEntry) {
+async function onEntryTap(entry: VaccineTimelineEntry) {
+  // 有冲突的行：先把"为什么、该怎么办"讲清楚 —— 这是他现在最需要知道的
+  const conflict = conflictOf(entry)
+  if (conflict) {
+    const confirmed = await new Promise<boolean>((resolve) => {
+      uni.showModal({
+        title: String(conflict.reason || '这一条暂时不作数'),
+        content: String(conflict.suggestion || ''),
+        confirmText: '去修改',
+        cancelText: '知道了',
+        success: (res) => resolve(Boolean(res.confirm)),
+        fail: () => resolve(false),
+      })
+    })
+    if (!confirmed) return
+  }
+
   if (isPending(entry) && entry.type === 'record') {
     emit('verify-record', entry.record)
     return
@@ -268,6 +305,14 @@ function onPreviewBook() {
   font-size: 26rpx;
   font-weight: 600;
   color: $vk-text;
+}
+
+.vk-records__warn {
+  display: block;
+  margin-top: 4rpx;
+  font-size: $vk-font-sub;
+  color: $vk-warning;
+  line-height: 1.45;
 }
 
 .vk-records__note {

@@ -233,6 +233,29 @@ const step = (extra: Partial<VaccineStep>): VaccineStep =>
     ...extra,
   }) as VaccineStep
 
+describe('疫苗 · 不作数的记录要说清为什么（老板 2026-10-16："20周够吗？有依据吗？"）', () => {
+  const list = read('RecordList.vue')
+  const tab = read('VaccineTab.vue')
+
+  it('🔴 后端算好的 conflicts 必须显示出来（原来只在后端算、界面不显示）', () => {
+    expect(tab).toContain('planConflicts')
+    expect(tab).toContain(':conflicts="planConflicts"')
+    expect(list).toContain('conflictOf')
+    expect(list).toContain('vk-records__warn')
+  })
+
+  it('点那一条先讲清"为什么、该怎么办"，再进编辑', () => {
+    expect(list).toContain('conflict.suggestion')
+    expect(list).toContain("confirmText: '去修改'")
+  })
+
+  it('录入卡的抗体提示写明两个时间条件（20 周龄 / 最后一针后 4 周）', () => {
+    const editor = read('RecordEditor.vue')
+    expect(editor).toContain('20 周龄之前')
+    expect(editor).toContain('不满 4 周')
+  })
+});
+
 describe('疫苗 · 「下一针」卡的展开态（老板 2026-10-16 第 2、3 条）', () => {
   const card = read('NextCard.vue')
 

@@ -1,4 +1,4 @@
-import { normalizeNutritionProfile } from './nutrition-profile.utils';
+import { normalizeNutritionProfileCached } from './nutrition-profile.utils';
 import type { NutritionProfile, NutritionProfileV2 } from './types';
 
 export type NutritionFieldTab =
@@ -534,6 +534,20 @@ const cloneDerivedNutritionField = (
   sourceFieldPaths: [...field.sourceFieldPaths],
 });
 
+/**
+ * 目录的**路径索引**（2026-10-16 加）。
+ *
+ * `findNutritionField` 是线性扫描 + 克隆对象；而 `getNutritionProfileFieldValue`
+ * 每次取值都调它一遍 —— 一次配方评估要取（食材数 × 目标营养素数）次，
+ * 实测 15 个食材约 2000 次，累计是笔可观的开销。
+ *
+ * 这里建一次索引，并让**只读**的取值路径直接用共享定义（不克隆）。
+ * 公开的 `findNutritionField` 仍然克隆，行为不变 —— 它的调用方可能改写返回值。
+ */
+const NUTRITION_FIELD_BY_PATH: Map<string, NutritionFieldDefinition> = new Map(
+  NUTRITION_FIELD_CATALOG.map((field) => [field.fieldPath as string, field]),
+);
+
 export function listSupplementTargetFields(): NutritionFieldDefinition[] {
   return NUTRITION_FIELD_CATALOG.map(cloneNutritionField);
 }
@@ -570,9 +584,21 @@ export function getNutritionProfileFieldValue(
   nutritionProfile: NutritionProfile | null | undefined,
   fieldPath: string,
 ): number | undefined {
-  const field = findNutritionField(fieldPath);
+  /**
+   * 走索引 + 共享定义（不克隆）：这里只读 `tabKey` / `fieldKey`，
+   * 不需要 `findNutritionField` 那份防御性拷贝。见 `NUTRITION_FIELD_BY_PATH`。
+   */
+  const field = fieldPath ? NUTRITION_FIELD_BY_PATH.get(fieldPath) : undefined;
   if (field) {
-    const normalized = normalizeNutritionProfile(
+    /**
+     * 走**带缓存**的归一化（2026-10-16）。
+     *
+     * 这里原本直接调 `normalizeNutritionProfile`，每次重建整份空档案；
+     * 而它又被读取模块的每一条字段读取调用（食材数 × 目标营养素数），
+     * 是"编辑器每敲一下卡几百毫秒"的主要来源之一。
+     * 详见 `normalizeNutritionProfileCached` 的说明。
+     */
+    const normalized = normalizeNutritionProfileCached(
       nutritionProfile,
     ) as NutritionProfileV2 | null;
     const tabValues = normalized?.[field.tabKey] as

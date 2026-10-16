@@ -191,6 +191,71 @@ export function normalizeNutritionProfile(
 export const upgradeNutritionProfileToV2 = normalizeNutritionProfile;
 
 /**
+ * 归一化结果的**读路径缓存**（2026-10-16 加）。
+ *
+ * ## 为什么要有它
+ *
+ * `normalizeNutritionProfile` 每次都会重建整份空档案（5 个 tab，每个走
+ * `Object.fromEntries(keys.map(...))`）。而读路径上它被**反复**调用：
+ *
+ *   · `nutrition-profile-reader.ts` 的三个读函数各调一次；
+ *   · `nutrition-field-catalog.getNutritionProfileFieldValue` 里**还调一次**。
+ *
+ * 一次配方评估 = 食材数 × 目标营养素数（实测 137 条）次字段读取。
+ * 15 个食材实测要 **679ms**，其中绝大部分是这种重复重建 ——
+ * 编辑器里每敲一下重量就卡这么久。
+ *
+ * ## 为什么用 WeakMap
+ *
+ * 以 profile 对象本身作键：同一次评估里传的是同一个对象，命中；
+ * 不同评估之间是不同对象，不会串。WeakMap 不阻止回收，也不会泄漏。
+ *
+ * ## 为什么冻结
+ *
+ * 原本每次都返回**新对象**，调用方即使误写也只影响自己。缓存之后大家共用同一个，
+ * 误写就会串数据。冻结把"目前没人写"变成"结构上写不了" —— 真有人写会当场报错，
+ * 而不是静默算出一个错的营养值（那关系到狗的健康）。
+ *
+ * ## 边界（重要）
+ *
+ * **只给读路径用**，不要用在写路径上：
+ *   · 写路径继续调原始 `normalizeNutritionProfile`，行为完全不变；
+ *   · 使用方目前只有 `nutrition-profile-reader.ts` 与 `nutrition-field-catalog.ts`
+ *     这两个纯读模块；
+ *   · 调用方**不得改写**返回值（已冻结）；也不得在拿到结果后去改**入参**
+ *     再指望重新归一化（缓存不会失效）。
+ */
+const normalizedProfileCache = new WeakMap<object, NutritionProfileV2>();
+
+export function normalizeNutritionProfileCached(
+  input: NutritionProfile | null | undefined,
+): NutritionProfileV2 | null {
+  if (!input || typeof input !== 'object') {
+    return normalizeNutritionProfile(input);
+  }
+
+  const cached = normalizedProfileCache.get(input);
+  if (cached) return cached;
+
+  const normalized = normalizeNutritionProfile(input);
+  if (!normalized) return null;
+
+  Object.freeze(normalized.meta);
+  Object.freeze(normalized.macros);
+  Object.freeze(normalized.minerals);
+  Object.freeze(normalized.vitamins);
+  Object.freeze(normalized.fattyAcids);
+  Object.freeze(normalized.aminoAcids);
+  if (Array.isArray(normalized.customItems)) {
+    Object.freeze(normalized.customItems);
+  }
+  Object.freeze(normalized);
+
+  normalizedProfileCache.set(input, normalized);
+  return normalized;
+}
+
+/**
  * Safe runtime read helper while the legacy admin editor still expects items[].
  * Legacy payloads stay legacy; structured v2 payloads get defaults filled in.
  */

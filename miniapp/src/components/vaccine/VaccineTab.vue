@@ -435,7 +435,7 @@ function onEditTest(test: AntibodyTest) {
  * 「记一条」（或拍完疫苗本回到页面），卡片出现在**上方**，屏幕上什么都不会变 ——
  * 看起来就像"点了没反应"。
  */
-function scrollToAnchor(id: string) {
+function scrollToAnchor(id: string, attempt = 0) {
   nextTick(() => {
     const query = uni.createSelectorQuery()
     query.select(`#${id}`).boundingClientRect()
@@ -443,7 +443,22 @@ function scrollToAnchor(id: string) {
     query.exec((res) => {
       const rect = res && res[0]
       const viewport = res && res[1]
-      if (!rect || !viewport) return
+      if (!rect || !viewport) {
+        /**
+         * ⚠️ 2026-10-16 修（老板："有提醒弹窗时，点弹窗里的『去修改』之后定位不过去"）。
+         *
+         * 根因：小程序的 `nextTick` 只保证**数据已设**，不保证新子树已经在视图层**布局完成**。
+         * 弹窗（`uni.showModal`）关掉之后紧接着查，节点常常还查不到 →
+         * 老代码 `if (!rect) return` 就**静默放弃**了，于是"有时能滚、有时不能"。
+         *
+         * 现在：查不到就**隔一帧再试**（最多 6 次 ≈ 400ms），查到才滚。
+         * 这样"弹窗关闭后布局稍慢"的情况也能滚到位。
+         */
+        if (attempt < 6) {
+          setTimeout(() => scrollToAnchor(id, attempt + 1), 60)
+        }
+        return
+      }
       const top = Math.max(0, rect.top + viewport.scrollTop - 16)
       uni.pageScrollTo({ scrollTop: top, duration: 200 })
     })

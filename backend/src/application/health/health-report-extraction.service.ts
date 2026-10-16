@@ -587,6 +587,10 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
    *   ② **我们不设阈值** —— 报告没写结论就填 UNKNOWN，
    *      **绝不按数值大小自己判"合格"**（判错的后果是家长以为狗有保护力、实际没有，
    *      这与"疫苗记录宁可多提醒一次"的安全方向正好相反）；
+   *      ⚠️ 2026-10-19 老板拿真报告实测：一张《荧光免疫检测报告单》通篇只有数值 +
+   *      一条分级条（S1~S6），模型两次都把 result 填成了 PASS ✗ ——
+   *      所以提示词里把这张纸写成**明确的反例**，出口另加一道
+   *      "结论必须来自报告"的兜底（见 guardAntibodyResultByReportText）；
    *   ③ 数值只做**照抄**（1:80、0.5 IU/ml 这类），系统不换算、不分档、不解读。
    */
   ANTIBODY_REPORT: [
@@ -613,12 +617,31 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
     '  判定为准 ✗。例如这张纸上只有「犬瘟抗体 1:80」这一行字，就填 result: "UNKNOWN"、',
     '  value: "1:80" ✓（只给数值不给结论的报告很常见，照这个填）。',
     '',
+    '  ⚠️⚠️ **有"分级条 / 参考范围"也仍然是"没写结论"**（2026-10-19 老板拿真报告实测踩到 ✗）：',
+    '  那张《荧光免疫检测报告单》的原文长这样 ——',
+    '    项目      全称                  检测类型  结果      单位   分级条 S1~S6',
+    '    CDV-Ab   犬瘟热病毒抗体         定量     1234.47   RFU    40/65/150/560/1000',
+    '    CPV-Ab   犬细小病毒抗体         定量     1936.85   RFU    25/35/70/480/4200',
+    '    ICH-Ab   犬传染性肝炎病毒抗体    定量     5144.95   RFU    20/60/125/545/2180',
+    '  这张纸通篇**没有"合格 / 不合格 / 阳性 / 阴性"这类结论**，只有数值 + 一条分级条',
+    '  （分级条 = S1~S6 那种刻度、低/中/高、或一串参考区间数字，都算分级条）→',
+    '  它必须填 result: "UNKNOWN" ✓（这一张的 testedAt: "2025-04-13"、targets: ["CORE"]、',
+    '  value: "1234.47"、unit: "RFU" ✓；第一次识别把它填成 PASS 就是错的 ✗）。',
+    '  **绝对不许**看数值落在分级条的哪一档、比参考区间高还是低，就推断成 PASS / FAIL ✗ ——',
+    '  分级条只是**报告印的刻度**，不是报告的结论；**数值落在哪一档只有兽医能解读**，',
+    '  我们不设阈值、不替兽医判读 ✗。',
+    '',
     '· value 照抄报告上的**原始数值**（例如 "1:80"、"0.5"、"S3"），一个字符都不要改：',
     '  **不要换算、不要四舍五入、不要按数值分档、不要加你自己的解释**；报告没写数值就留空。',
     '· unit 只放**单位本身**（例如 "滴度"、"IU/ml"）；数值里已经带着单位的',
     '  （例如 "0.5 IU/ml"）就照抄在 value 里，unit 可以留空。',
     '· testedAt 填**检测日期**（采样日期），只写 YYYY-MM-DD；看不清或没写就留**空字符串**，',
     '  **不要编、也不要拿报告上的其它日期顶上**。',
+    '  ⚠️ **只许抄报告上印着的"检测时间 / 采样时间 / 检测日期"那一行**（报告抬头写着',
+    '  「检测时间：2025-04-13 14:44:32」→ testedAt: "2025-04-13" ✓，只取日期那一段）。',
+    '  **报告上找不到这一行就留空字符串 ""** ✓ —— **绝对不许填"今天"** ✗：',
+    '  今天是**你读这张图的日期**，不是从报告上读到的，填进去就是编 ✗',
+    '  （老板实测：低清图那一次 testedAt 被填成了上传当天 ✗）。宁可留空让家长自己补 ✓。',
     '· notes 只写报告上有、家长真的需要知道的补充（例如"建议 3 个月后复查"）；没有就留空。',
     '· **看不清才说**：数值或结论被手指、印章、反光挡住、真读不出来时，',
     '  在 warnings 里**点名说清是哪一项**（例如"狂犬抗体那一行的数值被印章压住"）；',
@@ -1137,6 +1160,95 @@ export function resolveAntibodyResult(value: unknown): AntibodyResult {
   if (/合格|达标|有保护力|有抗体|阳性/.test(raw)) return 'PASS';
 
   return 'UNKNOWN';
+}
+
+/**
+ * 「报告上真的写了结论」的字眼（2026-10-19 老板拿真报告实测之后加的**出口兜底**）。
+ *
+ * ⚠️ 为什么提示词写死了还要有这一道：**提示词不等于保证**。
+ * 老板用一张真实的《荧光免疫检测报告单》测了两次，两次都把 result 填成 PASS ——
+ * 那张纸上通篇只有数值 + 一条分级条（S1~S6），一个"合格 / 阳性"的字都没有。
+ * 按我们定的硬规矩：**报告没写结论 → UNKNOWN**（我们不设阈值、不替兽医判读）。
+ * 判错的代价是家长以为狗有保护力、实际没有，与"疫苗记录宁可多提醒一次"的安全方向
+ * 正好相反 —— 所以出口必须再拦一道，不能只靠提示词。
+ *
+ * 判据只有一条：**模型回的原始草稿 + OCR 原文里，能不能找到结论字眼**。
+ * 找不到就把 PASS / FAIL 降级成 UNKNOWN，并给家长一句能懂的话。
+ *
+ * ⚠️ 三个"不许"：
+ *   · 只对**抗体检测报告**生效 —— 其余四类一个字都不动；
+ *   · 不许把**数值本身**当结论（"1234.47""S3"都不算），也不认 PASS / FAIL 这两个
+ *     我们自己的枚举名：它们是**模型的判断**，不是报告上的字（认了这道兜底就废了）；
+ *   · **不许反过来过度**：报告真的写了"合格 / 有保护力"时，原文里必然有这些字，
+ *     这时保持 PASS / FAIL 不动（别把好东西也降级）。
+ *
+ * 中英文都认（大小写不敏感）：模型可能照抄报告上的中文，也可能回英文原词。
+ * ⚠️ "不合格 = 不 + 合格"这种**否定式放在前面**，与 resolveAntibodyResult 里
+ *    那条"先判不合格"的规矩保持一致（这道兜底只判"有没有结论字眼"，
+ *    方向仍然由 resolveAntibodyResult 定，但两处的词表不该长得不一样）。
+ * ⚠️ 英文那边"not protected"里含 protected，所以 protected 一项就覆盖了它的否定式。
+ */
+const ANTIBODY_VERDICT_WORD_PATTERN =
+  /不合格|合格|未达标|没达标|达标|无保护力|有保护力|阴性|阳性|protected|positive|negative/i;
+
+/** 结论没写在报告上时给家长的话（出口兜底用，与提示词里那条口径同一句话） */
+export const ANTIBODY_NO_VERDICT_WARNING =
+  '报告上没有写合格与否的结论，已按"未判读"记录；是否合格请让兽医判读。';
+
+/**
+ * 拼出"能用来判断结论的原文"：
+ *   ① 模型回的**原始**草稿（drafts[0] 那一份原始值，不是归一化之后的草稿）——
+ *      视觉直读那条路拿不到 OCR 文本，模型回的原文就是**唯一**的证据，
+ *      所以这一份必须算进去（否则报告上写了"合格"、模型照抄回来的也会被误降级 ✗）；
+ *   ② OCR 原文（有就一起看；PDF / Word 那条路抽出来的文字也在里面）。
+ */
+export function collectAntibodyVerdictSource(
+  rawDraft: unknown,
+  ocrText?: unknown,
+): string {
+  let rawJson = '';
+  if (rawDraft !== undefined && rawDraft !== null) {
+    if (typeof rawDraft === 'string') {
+      rawJson = rawDraft;
+    } else {
+      try {
+        const serialized = JSON.stringify(rawDraft);
+        rawJson = typeof serialized === 'string' ? serialized : '';
+      } catch {
+        // JSON.parse 出来的东西不会有循环引用；真出意外就退化成"没有原文"，
+        // 方向仍然是保守的（降级成 UNKNOWN），不会把可疑的 PASS 放过去
+        rawJson = '';
+      }
+    }
+  }
+
+  return `${rawJson}\n${String(ocrText ?? '')}`;
+}
+
+/**
+ * 出口兜底：**结论必须来自报告**（判据见上面 ANTIBODY_VERDICT_WORD_PATTERN）。
+ *
+ * PASS / FAIL 却在原文里找不到任何结论字眼 → 一律降级 UNKNOWN；
+ * 原文里找得到结论字眼 → **原样放行**（别把报告真写了的结论也降级）。
+ */
+export function guardAntibodyResultByReportText(input: {
+  /** 归一化之后的结论（`drafts[0].result`；草稿还没产出时可能没有） */
+  result?: unknown;
+  rawDraft?: unknown;
+  ocrText?: unknown;
+}): { result: AntibodyResult; downgraded: boolean } {
+  const result = resolveAntibodyResult(input.result);
+  if (result === 'UNKNOWN') {
+    // 本来就没判合格/不合格 —— 没有什么要拦的
+    return { result: 'UNKNOWN', downgraded: false };
+  }
+
+  const source = collectAntibodyVerdictSource(input.rawDraft, input.ocrText);
+  if (ANTIBODY_VERDICT_WORD_PATTERN.test(source)) {
+    return { result, downgraded: false };
+  }
+
+  return { result: 'UNKNOWN', downgraded: true };
 }
 
 export function normalizeDrafts(
@@ -1971,13 +2083,47 @@ export class HealthReportExtractionService {
     }
 
     /*
-     * 抗体检测报告：一张纸上核心与狂犬**两项都有**时补一句提示（2026-10-19）。
+     * 抗体检测报告的**出口兜底**（2026-10-19），一共两条，都只作用于这一类：
+     *   ⓐ **结论必须来自报告** —— 报告没写结论时不许被"顺推"成 PASS / FAIL；
+     *   ⓑ 一张纸上核心与狂犬**两项都有**时补一句提示，让家长知道另一项要单独再传。
      *
-     * 提示词已经让模型自己说这句话了；这里是**出口的兜底** ——
-     * 提示词不等于保证，而"这张纸测了两项、我们只录了一项"是家长必须知道的事
-     * （否则他会以为狂犬抗体也一起录好了）。模型已经说过的就不重复。
+     * 两条都是同一个道理：**提示词不等于保证**，而这两件事都关系到"家长会不会
+     * 以为狗已经有保护力"，判错的代价比多提醒一次大得多，所以出口必须再拦一道。
      */
     if (documentType === 'ANTIBODY_REPORT') {
+      /*
+       * ⓐ **结论必须来自报告**这道出口兜底（2026-10-19 老板拿真报告实测之后加的）。
+       *
+       * 老板用一张真实的《荧光免疫检测报告单》测了两次：纸上只有数值 + 一条分级条
+       * （S1~S6），一个结论字都没有，模型两次都把 result 填成 PASS ✗。
+       * 提示词里已经把这张纸写成明确的反例，但**提示词不等于保证** ——
+       * 这里按"模型回的原始草稿 + OCR 原文里有没有结论字眼"再判一次：
+       * 找不到就强制降级 UNKNOWN，并给家长一句能懂的话（我们不替兽医判读）。
+       *
+       * ⚠️ 只对这一条路生效，其余四类一个字都不动。
+       */
+      const rawDraft = Array.isArray(parsedRecord.drafts)
+        ? (parsedRecord.drafts as unknown[])[0]
+        : undefined;
+      const guarded = guardAntibodyResultByReportText({
+        result: drafts[0]?.result,
+        rawDraft,
+        ocrText,
+      });
+      if (guarded.downgraded && drafts[0]) {
+        this.logger.warn(
+          `抗体检测报告：模型回了 ${String(drafts[0].result)}，但原始草稿与报告原文里` +
+            '找不到任何结论字眼 → 已降级为 UNKNOWN（不替兽医判读）',
+        );
+        drafts[0].result = 'UNKNOWN';
+        warnings.push(ANTIBODY_NO_VERDICT_WARNING);
+      }
+
+      /*
+       * ⓑ 一张纸上两项都有时补一句提示。
+       * 提示词已经让模型自己说这句话了，但"这张纸测了两项、我们只录了一项"是
+       * 家长必须知道的事（否则他会以为狂犬抗体也一起录好了）。模型说过的就不重复。
+       */
       const { ambiguous } = resolveAntibodyTargets(
         readAntibodyTargetsSource(parsedRecord),
       );

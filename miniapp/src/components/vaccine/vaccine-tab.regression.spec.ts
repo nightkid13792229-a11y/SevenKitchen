@@ -252,6 +252,23 @@ const step = (extra: Partial<VaccineStep>): VaccineStep =>
     ...extra,
   }) as VaccineStep
 
+describe('疫苗 · 定位到录入卡（老板 2026-10-16："有弹窗时定位不过去"）', () => {
+  const tab = read('VaccineTab.vue')
+
+  it('🔴 查不到锚点要**重试**，不能静默放弃（nextTick 不保证已布局）', () => {
+    expect(tab).toContain('function scrollToAnchor(id: string, attempt = 0)')
+    expect(tab).toContain('if (attempt < 6)')
+    expect(tab).toContain('setTimeout(() => scrollToAnchor(id, attempt + 1), 60)')
+  })
+
+  it('有冲突弹窗那条路也要走同一个定位（点「去修改」之后）', () => {
+    // 记录区：先弹冲突说明 —— 确认后继续走 emit('edit-record')
+    const list = read('RecordList.vue')
+    expect(list).toContain("confirmText: '去修改'")
+    expect(list).toContain("emit('edit-record', entry.record)")
+  })
+});
+
 describe('疫苗 · 抗体检测接入 AI 识别（老板 2026-10-16 第 2 条）', () => {
   const tab = read('VaccineTab.vue')
   const scan = read('ScanConfirm.vue')
@@ -288,6 +305,12 @@ describe('疫苗 · 抗体检测接入 AI 识别（老板 2026-10-16 第 2 条�
     expect(docScan).toContain('ANTIBODY_REPORT')
     // deferConfirm 不再只认疫苗本
     expect(docScan).toContain('if (props.deferConfirm) {')
+  })
+
+  it('识别填的那一份要说清"这是照报告填的，请核对"（抗体报告没有独立确认页）', () => {
+    const editor = read('RecordEditor.vue')
+    expect(editor).toContain('下面这些是照报告填好的，请核对一下')
+    expect(editor).toContain('v-if="preset"')
   })
 
   it('报告上的数值与单位也留得住（识别出来就预填，选填）', () => {

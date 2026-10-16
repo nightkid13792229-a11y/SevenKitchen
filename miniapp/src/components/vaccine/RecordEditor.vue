@@ -83,6 +83,13 @@
 
       <!-- ② 抗体检测：日期 + 项目 + 结果 -->
       <template v-else>
+        <!-- 这一份是**照报告识别填的** → 说一句"请核对"。
+             抗体报告没有像疫苗本那样的独立确认页（一份报告只有一条记录，
+             逐条确认那一页是给"一张本子读出多条"用的）；确认就落在这一张卡上，
+             所以这句提示必须在这儿。 -->
+        <text v-if="preset" class="vk-editor__hint vk-editor__hint--block">
+          下面这些是照报告填好的，请核对一下；哪里不对直接改。
+        </text>
         <view class="vk-editor__block">
           <text class="vk-editor__label">什么时候检的</text>
           <picker mode="date" :value="date" :end="maxDate" @change="onDateChange">
@@ -625,6 +632,12 @@ function onCancel() {
 
 .vk-editor__date--empty {
   color: $vk-placeholder;
+}
+
+.vk-editor__hint--block {
+  display: block;
+  margin-bottom: 14rpx;
+  color: $vk-text-body;
 }
 
 .vk-editor__hint {

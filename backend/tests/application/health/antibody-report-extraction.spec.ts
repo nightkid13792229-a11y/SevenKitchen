@@ -11,17 +11,27 @@
  *   ③ 日期读不出就留空字符串（testedAt: ''），不许编；
  *   ④ 明显不是抗体检测报告的那张纸 → documentType: 'NOT_MEDICAL'、drafts 空、说清原因。
  *
+ * 2026-10-19 老板拿真报告实测后补的第五件（见下面「结论必须来自报告」两段）：
+ *   ⑤ 提示词不等于保证 —— 真报告（只有数值 + 分级条）实测两次都被填成 PASS，
+ *      所以**出口再拦一道**：PASS / FAIL 必须在"模型回的原始草稿 + OCR 原文"里
+ *      找得到结论字眼（合格 / 不合格 / 有保护力 / 阳性 / 阴性 / protected…），
+ *      找不到就强制降级 UNKNOWN 并给家长一句话；
+ *      **反过来也不许过度**：报告真写了"合格 / 有保护力"时保持 PASS / FAIL 不动。
+ *
  * 另外锁住对外契约的形状（前端已按它写）：drafts 里**只有一条**，
  * 键正好是 testedAt / targets / result / value / unit / notes 这六个。
  */
 
 import { Test, TestingModule } from '@nestjs/testing';
 import {
+  ANTIBODY_NO_VERDICT_WARNING,
   HEALTH_REPORT_OCR_PROVIDER,
   HEALTH_DOCUMENT_TYPES,
   HealthReportExtractionService,
   buildSystemPrompt,
+  collectAntibodyVerdictSource,
   filterContradictoryWarnings,
+  guardAntibodyResultByReportText,
   normalizeDocumentType,
   normalizeDrafts,
   resolveAntibodyResult,
@@ -39,6 +49,22 @@ const okJsonResponse = (payload: Record<string, unknown>) => ({
 
 /** 抗体草稿的对外契约字段（多一个少一个都算违约） */
 const DRAFT_KEYS = ['notes', 'result', 'targets', 'testedAt', 'unit', 'value'];
+
+/**
+ * 老板那张真实报告（2026-10-19 实测判错的那一张）—— 原文照抄。
+ *
+ * ⚠️ 通篇**只有数值 + 一条分级条**（40/65/150/560/1000 这种刻度），
+ * 一个"合格 / 不合格 / 阳性 / 阴性"的字都没有。
+ * 按我们定的硬规矩：报告没写结论 → result 必须 UNKNOWN。
+ */
+const REAL_REPORT_OCR_TEXT = [
+  '荧光免疫检测报告单',
+  '检测时间：2025-04-13 14:44:32',
+  '项目      全称                  检测类型  结果      单位   分级条',
+  'CDV-Ab   犬瘟热病毒抗体         定量     1234.47   RFU    40/65/150/560/1000',
+  'CPV-Ab   犬细小病毒抗体         定量     1936.85   RFU    25/35/70/480/4200',
+  'ICH-Ab   犬传染性肝炎病毒抗体    定量     5144.95   RFU    20/60/125/545/2180',
+].join('\n');
 
 describe('抗体检测报告识别（第五类）', () => {
   let service: HealthReportExtractionService;
@@ -159,6 +185,37 @@ describe('抗体检测报告识别（第五类）', () => {
       expect(prompt).toContain('drafts 留空数组');
     });
 
+    it('⚠️ 把老板那张真报告写成明确反例：有数值 + 有分级条也仍然是"没写结论"', () => {
+      const prompt = buildSystemPrompt('ANTIBODY_REPORT');
+
+      // 那张《荧光免疫检测报告单》的原文（数值 + 分级条）要出现在提示词里
+      expect(prompt).toContain('荧光免疫检测报告单');
+      expect(prompt).toContain('1234.47');
+      expect(prompt).toContain('40/65/150/560/1000');
+      // 结论只许照抄：这一张必须填 UNKNOWN
+      expect(prompt).toContain('也仍然是"没写结论"');
+      expect(prompt).toContain('分级条');
+      // 明令不许"看数值落在哪一档就推断"
+      expect(prompt).toContain('**绝对不许**看数值落在分级条的哪一档');
+      // 看图版与 AUTO 里嵌的是同一份字段结构 → 反例同样在里面
+      expect(buildSystemPrompt('ANTIBODY_REPORT', 'image')).toContain('1234.47');
+      expect(buildSystemPrompt('AUTO')).toContain('40/65/150/560/1000');
+      // 其余四类一个字都不该被带进去
+      expect(buildSystemPrompt('ALLERGY_REPORT')).not.toContain('分级条');
+      expect(buildSystemPrompt('CHECKUP_REPORT')).not.toContain('分级条');
+      expect(buildSystemPrompt('MEDICAL_RECORD')).not.toContain('分级条');
+      expect(buildSystemPrompt('VACCINE_BOOK')).not.toContain('分级条');
+    });
+
+    it('日期只能来自报告上的"检测时间/采样时间"，找不到就留空、绝对不许填今天', () => {
+      const prompt = buildSystemPrompt('ANTIBODY_REPORT');
+
+      expect(prompt).toContain('检测时间 / 采样时间 / 检测日期');
+      expect(prompt).toContain('绝对不许填"今天"');
+      // 读不出来的方向仍然是留空字符串
+      expect(prompt).toContain('空字符串');
+    });
+
     it('看图版只是开场白不同，字段结构与文本版共用同一份', () => {
       const imagePrompt = buildSystemPrompt('ANTIBODY_REPORT', 'image');
       const ocrPrompt = buildSystemPrompt('ANTIBODY_REPORT');
@@ -222,6 +279,116 @@ describe('抗体检测报告识别（第五类）', () => {
       expect(resolveAntibodyResult('')).toBe('UNKNOWN');
       expect(resolveAntibodyResult(undefined)).toBe('UNKNOWN');
       expect(resolveAntibodyResult('S3')).toBe('UNKNOWN');
+    });
+
+    /*
+     * 出口兜底：**结论必须来自报告**（2026-10-19 老板拿真报告实测之后加的）。
+     *
+     * 提示词已经写死了"报告没写结论就填 UNKNOWN"，但**提示词不等于保证**：
+     * 那张只有数值 + 分级条的真报告，模型两次都回了 PASS。
+     * 这里锁住判据 —— PASS / FAIL 必须在"模型回的原始草稿 + OCR 原文"里
+     * 找得到结论字眼，找不到就降级；找得到就一个字都不动。
+     */
+    it('原文里找不到任何结论字眼 → PASS / FAIL 一律降级 UNKNOWN', () => {
+      // 老板那张真报告：通篇只有数值 + 分级条，模型却回了 PASS
+      const real = guardAntibodyResultByReportText({
+        result: 'PASS',
+        rawDraft: {
+          testedAt: '2025-04-13',
+          targets: ['CORE'],
+          result: 'PASS',
+          value: '1234.47',
+          unit: 'RFU',
+        },
+        ocrText: REAL_REPORT_OCR_TEXT,
+      });
+      expect(real).toEqual({ result: 'UNKNOWN', downgraded: true });
+
+      // 反方向同理：报告没说"不合格"，也不许回 FAIL
+      expect(
+        guardAntibodyResultByReportText({
+          result: 'FAIL',
+          rawDraft: { result: 'FAIL', value: '1936.85', unit: 'RFU' },
+          ocrText: REAL_REPORT_OCR_TEXT,
+        }),
+      ).toEqual({ result: 'UNKNOWN', downgraded: true });
+    });
+
+    it('"PASS / FAIL"是我们自己的枚举名、数值与分级条也不是结论 —— 都不算原文里有结论', () => {
+      // ⚠️ 认了 PASS / FAIL 这两个词，这道兜底就等于没有（模型自己说的不算证据）
+      expect(
+        guardAntibodyResultByReportText({
+          result: 'PASS',
+          rawDraft: { result: 'PASS', value: '1234.47', unit: 'RFU' },
+        }).downgraded,
+      ).toBe(true);
+      for (const value of ['1234.47', 'S3', '40/65/150/560/1000', '5144.95']) {
+        expect(
+          guardAntibodyResultByReportText({
+            result: 'PASS',
+            rawDraft: { testedAt: '2025-04-13', targets: ['CORE'], value },
+          }).downgraded,
+        ).toBe(true);
+      }
+    });
+
+    it('原文里真的有结论字眼 → 原样放行（别把好东西也降级）', () => {
+      // 模型照抄了报告上的中文
+      expect(
+        guardAntibodyResultByReportText({
+          result: 'PASS',
+          rawDraft: { result: '合格', value: '1:80' },
+        }),
+      ).toEqual({ result: 'PASS', downgraded: false });
+      // 结论写在 OCR 原文里（模型自己回的是英文枚举）
+      expect(
+        guardAntibodyResultByReportText({
+          result: 'PASS',
+          rawDraft: { result: 'PASS', value: '1:80' },
+          ocrText: '犬瘟热病毒抗体 检测结论：合格（有保护力）',
+        }),
+      ).toEqual({ result: 'PASS', downgraded: false });
+      expect(
+        guardAntibodyResultByReportText({
+          result: 'FAIL',
+          rawDraft: { result: '无保护力', value: '1:4' },
+        }),
+      ).toEqual({ result: 'FAIL', downgraded: false });
+      // 英文报告上的写法也认（大小写不敏感）
+      expect(
+        guardAntibodyResultByReportText({
+          result: 'PASS',
+          ocrText: 'Result: Positive',
+        }),
+      ).toEqual({ result: 'PASS', downgraded: false });
+      expect(
+        guardAntibodyResultByReportText({
+          result: 'FAIL',
+          ocrText: 'Result: not protected',
+        }),
+      ).toEqual({ result: 'FAIL', downgraded: false });
+    });
+
+    it('本来就没判（UNKNOWN）→ 不算降级、也不加那句话', () => {
+      expect(guardAntibodyResultByReportText({ result: 'UNKNOWN' })).toEqual({
+        result: 'UNKNOWN',
+        downgraded: false,
+      });
+      expect(guardAntibodyResultByReportText({})).toEqual({
+        result: 'UNKNOWN',
+        downgraded: false,
+      });
+    });
+
+    it('原始草稿是字符串 / 缺失都不抛错（拿不到原文时方向仍然是保守的）', () => {
+      expect(collectAntibodyVerdictSource('{"result":"合格"}')).toContain('合格');
+      expect(collectAntibodyVerdictSource(undefined, '检测结论：合格')).toContain('合格');
+      expect(collectAntibodyVerdictSource(undefined)).not.toContain('合格');
+      // 什么都拿不到 → 降级（宁可让家长自己补，也不放过一个可疑的 PASS）
+      expect(guardAntibodyResultByReportText({ result: 'PASS' })).toEqual({
+        result: 'UNKNOWN',
+        downgraded: true,
+      });
     });
 
     it('检的是哪一项：只留一项，两项都有时取 CORE 并标记', () => {
@@ -322,6 +489,134 @@ describe('抗体检测报告识别（第五类）', () => {
       expect(result.allergies).toEqual([]);
       expect(result.medicalConditions).toEqual([]);
       expect(Array.isArray(result.warnings)).toBe(true);
+      // 本来就没判结论 → 不叨叨那句"没写合格与否"
+      expect(result.warnings).not.toContain(ANTIBODY_NO_VERDICT_WARNING);
+    });
+
+    /*
+     * ⚠️ 这一条就是老板 2026-10-19 实测判错的那张真报告（复刻，含分级条）。
+     * 上面「一份只给数值的报告」只锁了 normalizeDrafts：模型**自己没回结论**。
+     * 而真实事故里模型**自作主张回了 PASS** —— 提示词拦不住，必须靠出口兜底。
+     */
+    it('⚠️ 真报告复刻（只有数值 + 分级条，模型自判 PASS）→ 降级 UNKNOWN + 那句给家长的话', async () => {
+      ocrProvider.recognizeImage.mockResolvedValue({ text: REAL_REPORT_OCR_TEXT });
+      setFetchResponse({
+        drafts: [
+          {
+            testedAt: '2025-04-13',
+            targets: ['CORE'],
+            // 报告上根本没有"合格"这两个字，是模型按数值自己顺推出来的 ✗
+            result: 'PASS',
+            value: '1234.47',
+            unit: 'RFU',
+          },
+        ],
+        warnings: [],
+      });
+
+      const result = await service.extractFromReport({
+        imageUrl: 'https://cdn/antibody-real-report.jpg',
+        documentType: 'ANTIBODY_REPORT',
+      });
+
+      expect(result.documentType).toBe('ANTIBODY_REPORT');
+      expect(result.drafts[0]).toEqual({
+        // 日期与数值照抄（这两样老板核对过是对的）
+        testedAt: '2025-04-13',
+        targets: ['CORE'],
+        // ⚠️ 结论降级：我们不设阈值、不替兽医判读
+        result: 'UNKNOWN',
+        value: '1234.47',
+        unit: 'RFU',
+        notes: '',
+      });
+      expect(result.warnings).toContain(ANTIBODY_NO_VERDICT_WARNING);
+    });
+
+    it('⚠️ 看图那条路（没有 OCR 原文）同样降级 —— 模型回的 PASS 自己不算证据', async () => {
+      // 打开视觉直读：这条路 ocrText 是空的，唯一的"原文"就是模型回的原始草稿
+      delete process.env.HEALTH_REPORT_VISION;
+      setFetchResponse({
+        drafts: [
+          {
+            testedAt: '2025-04-13',
+            targets: ['CORE'],
+            result: 'PASS',
+            value: '1234.47',
+            unit: 'RFU',
+          },
+        ],
+        warnings: [],
+      });
+
+      const result = await service.extractFromReport({
+        imageUrl: 'https://cdn/antibody-real-report-vision.jpg',
+        documentType: 'ANTIBODY_REPORT',
+      });
+
+      expect(ocrProvider.recognizeImage).not.toHaveBeenCalled();
+      expect(result.drafts[0].result).toBe('UNKNOWN');
+      expect(result.warnings).toContain(ANTIBODY_NO_VERDICT_WARNING);
+    });
+
+    it('报告上写了"合格 / 有保护力" → 仍然是 PASS（不许被误降级）', async () => {
+      const qualified = await extractAntibody({
+        drafts: [
+          { testedAt: '2026-05-08', targets: ['CORE'], result: '合格', value: '1:80' },
+        ],
+        warnings: [],
+      });
+      expect(qualified.drafts[0].result).toBe('PASS');
+      expect(qualified.warnings).not.toContain(ANTIBODY_NO_VERDICT_WARNING);
+
+      const protectedDog = await extractAntibody({
+        drafts: [
+          { testedAt: '2026-05-08', targets: ['CORE'], result: '有保护力', value: '1:80' },
+        ],
+        warnings: [],
+      });
+      expect(protectedDog.drafts[0].result).toBe('PASS');
+      expect(protectedDog.warnings).not.toContain(ANTIBODY_NO_VERDICT_WARNING);
+    });
+
+    it('结论写在报告原文（OCR 文字）里、模型只回英文枚举 → 也仍然是 PASS', async () => {
+      ocrProvider.recognizeImage.mockResolvedValue({
+        text: '犬瘟热病毒抗体  检测结论：合格（有保护力）',
+      });
+      setFetchResponse({
+        drafts: [
+          { testedAt: '2026-05-08', targets: ['CORE'], result: 'PASS', value: '1:80' },
+        ],
+        warnings: [],
+      });
+
+      const result = await service.extractFromReport({
+        imageUrl: 'https://cdn/antibody-qualified.jpg',
+        documentType: 'ANTIBODY_REPORT',
+      });
+
+      expect(result.drafts[0].result).toBe('PASS');
+      expect(result.warnings).not.toContain(ANTIBODY_NO_VERDICT_WARNING);
+    });
+
+    it('报告上写了"不合格 / 无保护力" → 仍然是 FAIL（不许被误降级）', async () => {
+      const unqualified = await extractAntibody({
+        drafts: [
+          { testedAt: '2026-05-08', targets: ['CORE'], result: '不合格', value: '1:4' },
+        ],
+        warnings: [],
+      });
+      expect(unqualified.drafts[0].result).toBe('FAIL');
+      expect(unqualified.warnings).not.toContain(ANTIBODY_NO_VERDICT_WARNING);
+
+      const notProtected = await extractAntibody({
+        drafts: [
+          { testedAt: '2026-05-08', targets: ['CORE'], result: '无保护力', value: '1:4' },
+        ],
+        warnings: [],
+      });
+      expect(notProtected.drafts[0].result).toBe('FAIL');
+      expect(notProtected.warnings).not.toContain(ANTIBODY_NO_VERDICT_WARNING);
     });
 
     it('狂犬抗体报告 → targets: [\'RABIES\']', async () => {

@@ -248,7 +248,7 @@ function onRestore(key: string) {
 .vk-next__eyebrow {
   display: flex;
   align-items: center;
-  font-size: 22rpx;
+  font-size: $vk-font-sub;
   opacity: 0.88;
 }
 
@@ -266,7 +266,7 @@ function onRestore(key: string) {
 
 .vk-next__when {
   display: block;
-  font-size: 25rpx;
+  font-size: $vk-font-body;
   line-height: 1.55;
 }
 
@@ -290,7 +290,7 @@ function onRestore(key: string) {
   line-height: 68rpx;
   height: 68rpx;
   border-radius: 18rpx;
-  font-size: 25rpx;
+  font-size: $vk-font-button;
   font-weight: 600;
 }
 
@@ -316,14 +316,14 @@ function onRestore(key: string) {
 
 .vk-next__field-label {
   display: block;
-  font-size: 22rpx;
+  font-size: $vk-font-sub;
   opacity: 0.8;
   margin-bottom: 6rpx;
 }
 
 .vk-next__field-text {
   display: block;
-  font-size: 25rpx;
+  font-size: $vk-font-body;
   line-height: 1.55;
 }
 
@@ -339,7 +339,7 @@ function onRestore(key: string) {
   line-height: 68rpx;
   height: 68rpx;
   border-radius: 18rpx;
-  font-size: 25rpx;
+  font-size: $vk-font-button;
   font-weight: 600;
   border: 1px solid rgba(255, 255, 255, 0.55);
   color: $vk-white;
@@ -365,7 +365,7 @@ function onRestore(key: string) {
 
 .vk-next__combo-title {
   display: block;
-  font-size: 27rpx;
+  font-size: $vk-font-title;
   font-weight: 700;
 }
 
@@ -377,14 +377,14 @@ function onRestore(key: string) {
 
 .vk-next__combo-label {
   display: block;
-  font-size: 22rpx;
+  font-size: $vk-font-sub;
   opacity: 0.8;
   margin-top: 14rpx;
 }
 
 .vk-next__combo-text {
   display: block;
-  font-size: 25rpx;
+  font-size: $vk-font-body;
   line-height: 1.55;
   margin-top: 6rpx;
 }
@@ -420,19 +420,19 @@ function onRestore(key: string) {
 }
 
 .vk-next__ignored-name {
-  font-size: 25rpx;
+  font-size: $vk-font-body;
   font-weight: 600;
 }
 
 .vk-next__ignored-reason {
   display: block;
-  font-size: 21rpx;
+  font-size: $vk-font-badge;
   opacity: 0.85;
   margin-top: 4rpx;
 }
 
 .vk-next__restore {
-  font-size: 25rpx;
+  font-size: $vk-font-body;
   font-weight: 600;
   text-decoration: underline;
 }

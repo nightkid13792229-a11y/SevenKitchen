@@ -4518,9 +4518,11 @@ describe('RecipeDesignerService', () => {
         },
         report: expect.objectContaining({
           ingredientRows: [
+            // 2026-10-15 起（提交 3836ba27）食材行不再有 amountLabel：食材只给重量占比，
+            // 浓度列对食材固定为 '-'。旧断言 expectation 是 amountLabel: '100g'（改版前的旧行为）。
             expect.objectContaining({
               ingredientName: '鸡胸肉',
-              amountLabel: '100g',
+              concentrationLabel: '-',
               weightPercentLabel: '100%',
             }),
           ],
@@ -4707,7 +4709,12 @@ describe('RecipeDesignerService', () => {
     );
   });
 
-  it('formats published supplement report rows with display unit, brand, and spec', () => {
+  // 2026-10-15 起（提交 3836ba27）「食谱原料清单」一列的口径变了：食材给重量占比、
+  // 补剂给浓度，不再把食材的克和补剂的粒/片混在同一列「用量」里比较。
+  // 旧断言钉的是改版前的 amountLabel（补剂显示单位「2平勺」）——那是旧行为，已随改版废弃。
+  // 现在补剂这一列读 supplementTargets 渲染「每kg食材添加{值}{单位}{名称}」，
+  // 补剂自身的添加量（多少克/多少平勺）不再出现在这份报告的这一行里。
+  it('formats published supplement report rows with concentration, brand, and spec', () => {
     const rows = (service as any).buildPublishedIngredientReportRows(
       {
         items: [
@@ -4730,6 +4737,15 @@ describe('RecipeDesignerService', () => {
               brand: 'NOW',
               productModel: '227g/瓶',
             },
+            supplementTargets: [
+              {
+                fieldPath: 'minerals.calcium',
+                nutrientTargetKey: 'calcium',
+                label: '钙',
+                unit: 'mg',
+                targetValue: 2800,
+              },
+            ],
           },
         ],
       },
@@ -4748,7 +4764,7 @@ describe('RecipeDesignerService', () => {
     expect(rows).toEqual([
       {
         ingredientName: '碳酸钙粉 · NOW · 227g/瓶',
-        amountLabel: '2平勺',
+        concentrationLabel: '每kg食材添加2800mg钙',
         weightPercentLabel: '-',
       },
     ]);

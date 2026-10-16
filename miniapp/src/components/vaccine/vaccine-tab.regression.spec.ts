@@ -110,7 +110,11 @@ describe('疫苗 · 板块编排（VaccineTab）', () => {
      *    要恢复的话，得先给它一个家长看得见的入口，别再挂一个走不到的接口。
      */
     for (const name of [
-      'reload',
+      /*
+       * ⚠️ 2026-10-16：`reload` 从这份名单里去掉了 —— 它一直暴露着，
+       *    但**唯一会用的宿主页面从没调用过**，新加的"声明 vs 暴露"守卫
+       *    （src/architecture/expose-contract.spec.ts）把这对不上抓了出来。
+       */
       'startScan',
       'addRecord',
       'countUnsaveableDrafts',
@@ -281,6 +285,20 @@ describe('疫苗 · 定位到录入卡（老板 2026-10-16："有弹窗时定位
     const list = read('RecordList.vue')
     expect(list).toContain("confirmText: '去修改'")
     expect(list).toContain("emit('edit-record', entry.record)")
+  })
+});
+
+describe('疫苗 · "未判读"要解释一句（清单 E2 的发现）', () => {
+  it('🔴 报告没写结论时，界面要说清"为什么是未判读"', () => {
+    const editor = read('RecordEditor.vue')
+    /*
+     * 后端会把"报告没写结论"和"我们不替兽医判"都算好，
+     * 但那句话只在**兜底降级**时才推给前端，而且前端根本不显示 warnings ✗ ——
+     * 家长只看到一个"未判读"，不知道是报告没写、还是我们读不出来。
+     */
+    expect(editor).toContain("result === 'UNKNOWN'")
+    expect(editor).toContain('报告上没有写合格与否的结论')
+    expect(editor).toContain('以兽医的判读为准')
   })
 });
 

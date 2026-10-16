@@ -112,13 +112,32 @@ async function extract(url, fileName) {
   return body.data;
 }
 
+/**
+ * 删掉云上那张评测照片。
+ *
+ * ⚠️ 2026-10-16 修（E2 的抗体版脚本发现的）：这里原来请求的是
+ *    `DELETE /health/attachments/vaccine/<key>` —— **这条路由不存在** ✗
+ *    （真实路由是 `DELETE /health/attachments`，key 放在 body 里）。
+ *    404 又被 `.catch(() => {})` 吞掉 → **疫苗本评测的照片其实一直留在云上** ✗，
+ *    而且没人知道（跑分输出一切正常）。
+ *
+ * 现在：走正确路由，并且**删不掉要大声说出来**（不再静默）。
+ */
 async function dropAttachment(url) {
-  const key = String(url || '').split('/').pop();
+  const key = String(url || '').split('/').slice(-2).join('/');
   if (!key) return;
-  await fetch(`${API_BASE}/health/attachments/vaccine/${key}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${TOKEN}` },
-  }).catch(() => {});
+  try {
+    const res = await fetch(`${API_BASE}/health/attachments`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key }),
+    });
+    if (!res.ok) {
+      console.log(`⚠️ 评测照片没删掉（HTTP ${res.status}）：${key} —— 请手工清一下云上这张`);
+    }
+  } catch (error) {
+    console.log(`⚠️ 评测照片没删掉（${String(error.message).slice(0, 50)}）：${key}`);
+  }
 }
 
 /**
@@ -276,13 +295,38 @@ async function mintToken() {
  * （用不到就跳过这一项，其余指标照跑 ✓）。
  */
 async function loadLibrary() {
-  try {
-    const mod = await import('./dist/src/domain/health/vaccine-products.js');
-    return { findProductByText: mod.findProductByText };
-  } catch (error) {
-    console.log(`（跳过"产品认对没"这一项：加载产品库失败 ${String(error.message).slice(0, 60)}）\n`);
-    return null;
+  /*
+   * ⚠️ 2026-10-16 修：这里原来 import 的是 `domain/health/vaccine-products.js` ——
+   *    那是**重建之前**的老路径，疫苗板块重做时文件搬到了 `domain/health/vaccine/products.js` ✗。
+   *    于是 import 一直失败 → 指标静默降级成"跳过" → 跑分照样输出一份看着很正常的报告，
+   *    只有最要紧的那一项（**认成的是不是同一支产品**）悄悄没了 ✗。
+   *    提示只打在输出开头，看 tail 的人根本看不见 —— 这次就是这么漏掉的。
+   *
+   * 现在：两条路径都试；两条都失败就**大声报警**（见下面的 failedLibrary），
+   * 并且**退出码非 0**，不允许"静默跳过"再发生一次。
+   */
+  const candidates = [
+    './dist/src/domain/health/vaccine/products.js',
+    './dist/src/domain/health/vaccine-products.js',
+  ];
+  const errors = [];
+  for (const candidate of candidates) {
+    try {
+      const mod = await import(candidate);
+      if (typeof mod.findProductByText === 'function') {
+        return { findProductByText: mod.findProductByText };
+      }
+      errors.push(`${candidate}: 没有导出 findProductByText`);
+    } catch (error) {
+      errors.push(`${candidate}: ${String(error.message).slice(0, 60)}`);
+    }
   }
+  console.log('╔══════════════════════════════════════════════════════════════════╗');
+  console.log('║ 🔴 产品库加载失败 —— 「认成的是不是同一支产品」这一项【没有测】   ║');
+  console.log('╚══════════════════════════════════════════════════════════════════╝');
+  for (const line of errors) console.log(`   · ${line}`);
+  console.log('   修法：确认 dist 里产品库的实际路径，把它加进上面的 candidates ✓\n');
+  return null;
 }
 
 async function main() {

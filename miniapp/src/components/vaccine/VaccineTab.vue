@@ -897,7 +897,11 @@ function confirmModal(options: { title: string; content?: string; confirmText?: 
 /* ══ 给页面（底部常驻栏 / 切书签守卫）用的入口 ═══════════════════════════ */
 
 defineExpose({
-  reload,
+  /*
+   * ⚠️ 这里原来还暴露了 `reload`，但**唯一会用它的人（宿主页面）从没调用过** ✗ ——
+   *    2026-10-16 新加的"声明 vs 暴露"守卫立刻把这对不上抓了出来。
+   *    按"不留死接口"的纪律摘掉；哪天要做下拉刷新，加回来一行的事 ✓。
+   */
   startScan,
   /** 底部「记一条」→ 打开录入器 */
   addRecord,

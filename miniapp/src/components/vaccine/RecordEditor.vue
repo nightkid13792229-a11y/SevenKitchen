@@ -87,6 +87,13 @@
              抗体报告没有像疫苗本那样的独立确认页（一份报告只有一条记录，
              逐条确认那一页是给"一张本子读出多条"用的）；确认就落在这一张卡上，
              所以这句提示必须在这儿。 -->
+        <!--
+          "未判读"要解释一句（清单 E2 的发现）：报告没写合格与否时，界面上只有一个
+          "未判读"，家长不知道这是**报告没写**、还是我们读不出来。这一句把口径讲清楚。
+        -->
+        <text v-if="result === 'UNKNOWN'" class="vk-editor__hint vk-editor__hint--block">
+          报告上没有写合格与否的结论 —— 是否合格请以兽医的判读为准。
+        </text>
         <text v-if="preset" class="vk-editor__hint vk-editor__hint--block">
           下面这些是照报告填好的，请核对一下；哪里不对直接改。
           <template v-if="pendingPages > 0">
@@ -838,7 +845,7 @@ function onCancel() {
   line-height: 76rpx;
   height: 76rpx;
   border-radius: 20rpx;
-  font-size: $vk-font-body;
+  font-size: $vk-font-button;
   font-weight: 600;
 }
 

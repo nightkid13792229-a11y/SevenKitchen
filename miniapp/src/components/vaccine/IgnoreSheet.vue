@@ -121,7 +121,7 @@ function onConfirm() {
 
 .vk-ignore__title {
   display: block;
-  font-size: 30rpx;
+  font-size: $vk-font-card-title;
   font-weight: 700;
   color: $vk-text;
   margin-bottom: 20rpx;
@@ -151,7 +151,7 @@ function onConfirm() {
 }
 
 .vk-ignore__name {
-  font-size: 27rpx;
+  font-size: $vk-font-title;
   font-weight: 600;
   color: $vk-text;
 }
@@ -174,7 +174,7 @@ function onConfirm() {
   line-height: 76rpx;
   height: 76rpx;
   border-radius: 20rpx;
-  font-size: 26rpx;
+  font-size: $vk-font-button;
   font-weight: 600;
 }
 

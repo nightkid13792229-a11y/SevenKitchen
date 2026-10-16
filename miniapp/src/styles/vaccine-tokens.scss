@@ -89,8 +89,9 @@ $vk-font-section: 28rpx;   /* 板块标题（免疫计划 / 接种记录）14px 
 $vk-font-card-title: 30rpx;/* 卡片 / 弹层标题（录入器 / 确认页）15px */
 $vk-font-title: 27rpx;     /* 计划行标题 13.5px */
 $vk-font-body: 26rpx;      /* 正文 13px */
-$vk-font-sub: 23rpx;       /* 小字 11.5px */
-$vk-font-badge: 21rpx;     /* 角标 10.5px */
+$vk-font-button: 25rpx;    /* 按钮文字 12.5px（与下面两个 vk-button-* mixin 同一档）*/
+$vk-font-sub: 23rpx;       /* 小字 11.5px（字段标签 / 提示 / "展开全部"）*/
+$vk-font-badge: 21rpx;     /* 角标 / 最小辅助字 10.5px（缩略图时间戳也算这一档）*/
 
 /* ── 间距 / 圆角 ─────────────────────────────────────────────────────── */
 $vk-gap-block: 16rpx;      /* 块与块 8px */
@@ -119,7 +120,7 @@ $vk-bar-height: 24rpx;
   justify-content: center;
   height: 72rpx;
   border-radius: 20rpx;
-  font-size: 25rpx;
+  font-size: $vk-font-button;
   font-weight: 600;
   background: $vk-brand;
   color: #ffffff;
@@ -131,7 +132,7 @@ $vk-bar-height: 24rpx;
   justify-content: center;
   height: 72rpx;
   border-radius: 20rpx;
-  font-size: 25rpx;
+  font-size: $vk-font-button;
   font-weight: 600;
   background: #f2f4ec;
   color: #4a5a4a;

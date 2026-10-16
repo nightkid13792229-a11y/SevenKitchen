@@ -363,7 +363,7 @@ async function onEntryTap(entry: VaccineTimelineEntry) {
 }
 
 .vk-records__title {
-  font-size: 28rpx;
+  font-size: $vk-font-section;
   font-weight: 700;
   color: $vk-record-title;
 }
@@ -383,7 +383,7 @@ async function onEntryTap(entry: VaccineTimelineEntry) {
 
 .vk-records__empty {
   display: block;
-  font-size: 25rpx;
+  font-size: $vk-font-body;
   color: $vk-text-faint;
   padding: 16rpx 4rpx 8rpx;
 }
@@ -407,7 +407,7 @@ async function onEntryTap(entry: VaccineTimelineEntry) {
 }
 
 .vk-records__name {
-  font-size: 26rpx;
+  font-size: $vk-font-body;
   font-weight: 600;
   color: $vk-text;
 }
@@ -422,7 +422,7 @@ async function onEntryTap(entry: VaccineTimelineEntry) {
 
 .vk-records__note {
   display: block;
-  font-size: 21rpx;
+  font-size: $vk-font-badge;
   color: $vk-text-faint;
   margin-top: 4rpx;
 }
@@ -513,7 +513,7 @@ async function onEntryTap(entry: VaccineTimelineEntry) {
 .vk-attach__time {
   display: block;
   margin-top: 6rpx;
-  font-size: 20rpx;
+  font-size: $vk-font-badge;
   color: $vk-text-faint;
 }
 
@@ -526,7 +526,7 @@ async function onEntryTap(entry: VaccineTimelineEntry) {
 
 .vk-records__more {
   text-align: center;
-  font-size: 24rpx;
+  font-size: $vk-font-sub;
   color: $vk-record-accent;
   font-weight: 600;
   padding: 18rpx 0 6rpx;
@@ -541,7 +541,7 @@ async function onEntryTap(entry: VaccineTimelineEntry) {
 }
 
 .vk-records__add-text {
-  font-size: 25rpx;
+  font-size: $vk-font-body;
   font-weight: 600;
   color: $vk-text-muted;
 }

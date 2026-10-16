@@ -323,7 +323,7 @@ function onSave() {
 }
 
 .vk-scan__title {
-  font-size: 30rpx;
+  font-size: $vk-font-card-title;
   font-weight: 700;
   color: $vk-text-strong;
 }
@@ -415,7 +415,7 @@ function onSave() {
 .vk-scan__name {
   flex: 1;
   min-width: 0;
-  font-size: 27rpx;
+  font-size: $vk-font-title;
   font-weight: 700;
   color: $vk-text;
 }
@@ -440,7 +440,7 @@ function onSave() {
   border: 1px solid $vk-field-border;
   border-radius: 18rpx;
   padding: 16rpx 18rpx;
-  font-size: 26rpx;
+  font-size: $vk-font-body;
   color: $vk-text;
 }
 
@@ -450,7 +450,7 @@ function onSave() {
 
 .vk-scan__why {
   display: block;
-  font-size: 22rpx;
+  font-size: $vk-font-sub;
   color: $vk-warning;
   line-height: 1.5;
   margin-top: 12rpx;
@@ -469,7 +469,7 @@ function onSave() {
   border-radius: 18rpx;
   border: 1px solid $vk-brand;
   color: $vk-brand;
-  font-size: 25rpx;
+  font-size: $vk-font-button;
   font-weight: 600;
 }
 
@@ -485,7 +485,7 @@ function onSave() {
   line-height: 76rpx;
   height: 76rpx;
   border-radius: 20rpx;
-  font-size: 26rpx;
+  font-size: $vk-font-button;
   font-weight: 600;
 }
 

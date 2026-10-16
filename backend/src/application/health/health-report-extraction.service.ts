@@ -2159,11 +2159,23 @@ export class HealthReportExtractionService {
      *
      * ⚠️ 只记数量和类型，不记识别出来的内容（疫苗名、日期属于用户数据）。
      */
-    this.logger.log(
+    /**
+     * ⚠️ 2026-10-16 清单 E4：**"什么都没读出来"要自己跳出来**。
+     *
+     * 原来成功和失败都是同一级别的 log —— 家长报"识别失败"时，我们要在成百上千行里翻 ✗。
+     * 现在一条都没读出来就记 `warn`，并带上固定的 `[Extraction][EMPTY]` 标记：
+     *   · `journalctl -u sevenkitchen-backend -p warning` 直接能看到
+     *   · `bash backend/scripts/scan-failure-report.sh` 会把它汇总成一张看得懂的表
+     */
+    const logLine =
       `[Extraction] type=${documentType} drafts=${drafts.length} ` +
-        `warnings=${warnings.length} image=${String(input.imageUrl).slice(0, 120)}` +
-        (warnings.length > 0 ? ` firstWarning=${String(warnings[0]).slice(0, 80)}` : ''),
-    );
+      `warnings=${warnings.length} image=${String(input.imageUrl).slice(0, 120)}` +
+      (warnings.length > 0 ? ` firstWarning=${String(warnings[0]).slice(0, 80)}` : '');
+    if (drafts.length === 0) {
+      this.logger.warn(`[Extraction][EMPTY] ${logLine}`);
+    } else {
+      this.logger.log(logLine);
+    }
 
     return {
       documentType,

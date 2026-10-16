@@ -252,10 +252,20 @@ describe('疫苗 · 识别结果页（老板 2026-10-16 的三个问题）', () 
     expect(scan).toContain('名字没读出来、是狂犬、产品库里没有这个名字、日期可疑')
   })
 
-  it('🔴 名称与日期必须**看起来就能改**（有框 + 明写「改」）', () => {
+  it('🔴 名称与日期必须**看起来就能改**：给它们输入框（有框 = 能改）', () => {
     expect(scan).toContain('vk-scan__field')
-    expect(scan).toContain('vk-scan__edit')
-    expect(scan).toContain('>改<')
+    /*
+     * ⚠️ 2026-10-16 老板："把疫苗产品名称和日期放到输入框中就可以了，不需要再加一个
+     *    「改」的按钮。" —— 有框本身就说明能改，再挂一个「改」是重复。
+     */
+    expect(scan).not.toContain('vk-scan__edit')
+  })
+
+  it('🔴 「删掉」必须先确认（手一滑就少一条，而少的那条未必马上发现）', () => {
+    expect(scan).toContain('@tap="onRemoveRow(index)"')
+    expect(scan).toContain('async function onRemoveRow')
+    expect(scan).toContain("title: '删掉这一条？'")
+    expect(scan).toContain("confirmText: '删除'")
   })
 
   it('识别漏掉的那条，能在这一页直接补（走同一个录入器）', () => {
@@ -531,7 +541,8 @@ describe('疫苗 · 识别结果逐条确认（ScanConfirm，原型 E）', () =>
     const template = templateOf(scan)
     expect(template).toContain('@input="onNameInput(index, $event)"')
     expect(template).toContain('@change="onDateChange(index, $event)"')
-    expect(template).toContain('@tap="removeRow(index)"')
+    // 2026-10-16 起走确认弹窗（防误触），不再直接删
+    expect(template).toContain('@tap="onRemoveRow(index)"')
     // 缺名称或日期的那几条不静默丢，也不交上去
     expect(scan).toContain('还没有填好名称和日期')
   })

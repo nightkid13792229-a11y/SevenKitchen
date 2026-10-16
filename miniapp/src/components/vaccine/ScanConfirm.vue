@@ -22,8 +22,8 @@
       <view class="vk-scan__line">
         <!-- ⚠️ 2026-10-16 老板："名字可以修改是可以修改，但用户可能并不知道
              当前 UI 下名字是可以修改的。" —— 原来它是个**没有边框的输入框**，
-             看着和静态文字一模一样。现在按录入卡的写法给它一个框（有框 = 能改），
-             右侧再明写一个「改」。 -->
+             看着和静态文字一模一样。现在按录入卡的写法给它一个框（有框 = 能改）。
+             后来又按老板要求去掉了右侧那个「改」字：有框本身就够了，不必再说一遍。 -->
         <view class="vk-scan__field">
           <input
             class="vk-scan__name"
@@ -32,10 +32,9 @@
             placeholder-class="vk-scan__ph"
             @input="onNameInput(index, $event)"
           />
-          <text class="vk-scan__edit">改</text>
         </view>
         <text v-if="isCare(row)" class="vk-scan__badge">待核对</text>
-        <text class="vk-scan__del" @tap="removeRow(index)">删掉</text>
+        <text class="vk-scan__del" @tap="onRemoveRow(index)">删掉</text>
       </view>
 
       <picker mode="date" :value="row.date" @change="onDateChange(index, $event)">
@@ -44,7 +43,6 @@
             class="vk-scan__date"
             :class="{ 'vk-scan__date--empty': !row.date }"
           >{{ row.date || '点这里选日期' }}</text>
-          <text class="vk-scan__edit">改</text>
         </view>
       </picker>
 
@@ -139,6 +137,29 @@ function verifyRow(index: number) {
 
 function removeRow(index: number) {
   rows.value.splice(index, 1)
+}
+
+/**
+ * 删一条要**先问一句**（老板 2026-10-16）。
+ *
+ * 这些行是识别出来的、家长正要用的；「删掉」两个字紧挨着输入框，
+ * 手一滑就少一条 —— 而少的那条他未必马上发现（保存之后才发现没存进去）。
+ */
+async function onRemoveRow(index: number) {
+  const row = rows.value[index]
+  const name = String(row?.name || '').trim()
+  const confirmed = await new Promise<boolean>((resolve) => {
+    uni.showModal({
+      title: '删掉这一条？',
+      content: name ? `「${name}」不会保存。` : '这一条不会保存。',
+      confirmText: '删除',
+      cancelText: '先留着',
+      success: (res) => resolve(Boolean(res.confirm)),
+      fail: () => resolve(false),
+    })
+  })
+  if (!confirmed) return
+  removeRow(index)
 }
 
 function onAddManual() {
@@ -239,13 +260,6 @@ function onSave() {
 
 .vk-scan__field--date {
   margin-top: 8rpx;
-}
-
-/* 只给名称那一格：明写"改"，免得家长以为它只是标题 */
-.vk-scan__edit {
-  flex-shrink: 0;
-  font-size: 21rpx;
-  color: $vk-brand;
 }
 
 .vk-scan__add {

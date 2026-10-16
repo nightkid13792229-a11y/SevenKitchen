@@ -27,6 +27,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CustomRecipeService } from '../../../application/custom-recipe/custom-recipe.service';
 import { CustomRecipeDeliveryService } from '../../../application/custom-recipe/custom-recipe-delivery.service';
 import { CustomRecipeAftersaleService } from '../../../application/custom-recipe/custom-recipe-aftersale.service';
+import { CustomRecipeViewService } from '../../../application/custom-recipe/custom-recipe-view.service';
 import {
   CustomRecipeConfigService,
   type UpdateCustomRecipeConfigDto,
@@ -42,6 +43,7 @@ import { CustomRecipeStatus } from '@prisma/client';
 import { WechatService } from '../../../infrastructure/wechat/wechat.service';
 import { WechatPaymentService } from '../../../application/payment/wechat-payment.service';
 import { ApiResponseDto } from '../../dto/common/response.dto';
+import { TimezoneUtil } from '../../../utils/timezone.util';
 import {
   formatDateToYYYYMMDD,
   getMonthRange,
@@ -78,6 +80,15 @@ export class AdminCustomRecipeController {
     private readonly deliveryService: CustomRecipeDeliveryService,
     /** 售后处理（批次 3.1）：待办列表、受理、处理完成、不受理 */
     private readonly aftersaleService: CustomRecipeAftersaleService,
+    /**
+     * 后台视角的渲染契约（批次 5.5）。
+     *
+     * `buildStaffView` 从批次 2 就写好了（接单/去设计/交付/重新交付/
+     * 取消/处理售后/恢复抵扣/联系客户 全都算得出），但**一直没人调用** ——
+     * 于是后台页面只能自己写死状态判断，也就有了"订单一变已完成、
+     * 「查看食谱」就消失"这一类 bug。
+     */
+    private readonly viewService: CustomRecipeViewService,
   ) {}
 
   /**
@@ -209,12 +220,14 @@ export class AdminCustomRecipeController {
    */
   @Get('orders/:orderId')
   @ApiOperation({ summary: 'Get order detail' })
-  async getOrderDetail(@Param('orderId') orderId: string) {
+  async getOrderDetail(@Req() req: any, @Param('orderId') orderId: string) {
     const order = await this.customRecipeService.getOrderByOrderId(orderId);
 
     if (!order) {
       throw new NotFoundException('订单不存在');
     }
+
+    const hasAnyDelivery = (order.deliveries ?? []).length > 0;
 
     return ApiResponseDto.success({
       ...order,
@@ -225,7 +238,39 @@ export class AdminCustomRecipeController {
         0,
         Number(order.creditAmount) - Number(order.creditUsed),
       ),
+      /**
+       * ★ 后台视角的渲染契约（批次 5.5）。
+       *
+       * 后台页面此前自己用 `status === 'XXX'` 决定显示哪些按钮 ——
+       * 于是"订单一变已完成，「查看食谱」就消失"这类 bug 反复出现。
+       * 现在与顾客端走同一套思路：**判定在后端，前端只画**。
+       */
+      renderable: await this.viewService.buildStaffView({
+        status: order.status,
+        /**
+         * ⚠️ **按登录人的真实角色**，不能写死。
+         *
+         * 第一版这里硬编码了 `'STAFF'` —— 于是老板以管理员登录时
+         * 「重新交付」也是灰的，提示"需要管理员权限，请联系管理员操作"：
+         * 他自己就是管理员，却被告知去找管理员。
+         */
+        viewer: this.resolveViewerRole(req),
+        hasAnyDelivery,
+        hasOpenAftersale: await this.aftersaleService.hasOpenForOrder(order.id),
+      }),
     });
+  }
+
+  /**
+   * 登录人的角色 → 渲染契约里的"看的人是谁"。
+   *
+   * 认不出来时按 `STAFF`（**权限更小的那个**）——
+   * 宁可少显示一个按钮，也不要因为角色解析失败把管理员动作漏给普通员工。
+   */
+  private resolveViewerRole(req: any): 'STAFF' | 'ADMIN' {
+    return String(req?.user?.role ?? '').toUpperCase() === 'ADMIN'
+      ? 'ADMIN'
+      : 'STAFF';
   }
 
   /**
@@ -676,7 +721,26 @@ export class AdminCustomRecipeController {
       new Date(`${to}T00:00:00+08:00`),
     );
 
-    return ApiResponseDto.success({ days });
+    /**
+     * ⚠️ `date` 必须序列化成 **`YYYY-MM-DD`**，不能直接扔 Date。
+     *
+     * 2026-10-16 的 bug（后台排期日历整张是空的）：
+     * 这里原来直接返回 `days`，`date` 于是被序列化成
+     * `2026-09-30T16:00:00.000Z`（上海时间 10-01 的 UTC 表示）。
+     * 而日历页是**按 `YYYY-MM-DD` 建索引**的 —— 键对不上，
+     * 于是每个格子都查不到数据，月历一片空白；
+     * 格子里取"几日"用的是 `date.slice(-2)`，得到 `"0Z"` → `NaN`。
+     *
+     * 根子在于：**日历是"日期"概念，不是"时刻"**。
+     * 用时间戳表示日期，就一定会有人按字符串去比、然后对不上。
+     * 这里统一在接口边界转成上海日期字符串。
+     */
+    return ApiResponseDto.success({
+      days: days.map((day) => ({
+        ...day,
+        date: TimezoneUtil.toShanghaiDateString(day.date),
+      })),
+    });
   }
 
   /**

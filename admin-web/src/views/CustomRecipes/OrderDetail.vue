@@ -581,8 +581,17 @@
         </template>
       </div>
 
-      <!-- 已完成的食谱信息 -->
-      <div class="completed-recipe-section" v-if="order.status === 'DELIVERED' && order.recipe">
+      <!--
+        已交付的食谱信息（2026-10-16 批次 5.5 修）。
+
+        ⚠️ 这里原来是 `order.status === 'DELIVERED'` ——
+        而同一个文件里"能不能交付"用的是 `canDeliverCustomRecipe()`（含 `COMPLETED`）。
+        **同一件事两套判断**，后果是：顾客点完「确认收到」订单变成已完成，
+        这一块**整块消失** —— 老板反而看不到交付的是哪份食谱了。
+
+        现在两处用同一个常量。
+      -->
+      <div class="completed-recipe-section" v-if="canDeliver && order.recipe">
         <h3>已完成的食谱</h3>
         <el-descriptions :column="2" border>
           <el-descriptions-item label="食谱名称">

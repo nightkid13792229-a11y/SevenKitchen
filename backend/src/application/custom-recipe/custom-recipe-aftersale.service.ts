@@ -269,6 +269,23 @@ export class CustomRecipeAftersaleService {
    * 不是藏在 SQL 里：**等太久的排前面，同等的"调整食谱"比"问个问题"急**
    * （前者顾客的狗可能正在吃着不合适的饭）。
    */
+  /**
+   * 这单有没有**还没处理完**的售后（批次 5.5）。
+   *
+   * 用途：后台订单详情要据此决定显不显示「处理售后」按钮。
+   * 此前后台是自己在页面里判断的，与顾客端一样会出现"两套口径"。
+   *
+   * 只回一个布尔值，不回列表 —— 调用方只需要知道"有没有"，
+   * 让它自己去遍历列表既慢又容易写错（比如忘了过滤已完成的）。
+   */
+  async hasOpenForOrder(orderId: string): Promise<boolean> {
+    const row = await this.prisma.customRecipeAftersale.findFirst({
+      where: { orderId, status: { in: ['PENDING', 'ACCEPTED', 'PROCESSING'] } },
+      select: { id: true },
+    });
+    return Boolean(row);
+  }
+
   async listForStaff(input?: {
     status?: string | null;
     includeClosed?: boolean;

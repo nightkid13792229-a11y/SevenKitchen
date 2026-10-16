@@ -43,6 +43,9 @@ import { AdminPurchasingController } from './interfaces/controllers/admin-purcha
 import { StaffProductionController } from './interfaces/controllers/staff-production.controller';
 import { CustomRecipeController, PublicCustomRecipeConfigController } from './interfaces/controllers/custom-recipe/custom-recipe.controller';
 import { AdminCustomRecipeController } from './interfaces/controllers/custom-recipe/admin-custom-recipe.controller';
+import { PlatformOptionsController } from './interfaces/controllers/platform-options.controller';
+import { AdminPlatformOptionsController } from './interfaces/controllers/admin-platform-options.controller';
+import { PlatformOptionsService } from './application/platform-options/platform-options.service';
 import { SharedPhotosController } from './interfaces/controllers/shared-photos.controller';
 import { CustomRecipeService } from './application/custom-recipe/custom-recipe.service';
 import { CustomRecipeConfigService } from './application/custom-recipe/custom-recipe-config.service';
@@ -321,6 +324,8 @@ validatePrismaConfig();
     LabelModule,
   ],
   controllers: [
+    PlatformOptionsController,
+    AdminPlatformOptionsController,
     DogsController,
     RecipesController,
     HealthController,
@@ -410,6 +415,7 @@ validatePrismaConfig();
       : []),
   ],
   providers: [
+    PlatformOptionsService,
     DogService,
     {
       provide: DOG_REPOSITORY,

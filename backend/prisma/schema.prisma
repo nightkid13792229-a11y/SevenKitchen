@@ -2496,6 +2496,77 @@ model CustomRecipeConfig {
   @@map("custom_recipe_config")
 }
 
+/// ===== 平台选项字典（2026-10-16 新增，食谱定制重构 · 批次 1.3）=====
+///
+/// 要解决的问题（老板原话：「把所有的字段、算法等解耦出来」）：
+/// 同一个状态码的中文此前在三个端各写一份 —— 小程序 5 处、后台 1 处、
+/// 成品订单线还有一份。加一个枚举要改六处，2026-10-04 加「已取消」时就漏了两处半，
+/// 顾客看到的是英文 `CANCELLED`。
+///
+/// 做法：把「码 → 展示元数据」收成数据，由后端统一下发，前端零映射。
+///
+/// **两个来源**（sourceType）：
+///   · `ENUM` —— 选项由代码里的 Prisma 枚举定义。后台只能改标签/色调/排序/启用，
+///     **不能增删**（因为代码里有 if-else 依赖这些值，比如「已付款才能取消」）。
+///   · `DATA` —— 选项纯粹是数据（定制目标、活动量档位、售后类型…）。
+///     代码不做判断，后台可以自由增删改。
+///
+/// **启动时自动同步**（见 `PlatformOptionsService.onModuleInit`）：
+/// 从 Prisma 生成的枚举对象里枚举全部取值并 upsert 进本表。
+/// 这样「加了枚举忘了加文案」不可能再发生 —— 漏了会自动补一行，
+/// 并在启动日志里 warn 提醒「这条还没配中文」。
+model PlatformOptionSet {
+  /// 选项集标识，例如 order_status / custom_recipe_goal / aftersale_type
+  code        String   @id @db.VarChar(48)
+  /// 后台展示用名称，例如「定制订单状态」
+  name        String   @db.VarChar(64)
+  description String?  @db.VarChar(200)
+  /// ENUM = 由代码枚举定义（不可增删）；DATA = 纯数据（可增删）
+  sourceType  String   @default("DATA") @map("source_type") @db.VarChar(8)
+  /// sourceType=ENUM 时，代码里的枚举名（用于启动同步与漂移告警）
+  enumName    String?  @map("enum_name") @db.VarChar(48)
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  items PlatformOptionItem[]
+
+  @@map("platform_option_set")
+}
+
+/// 选项集里的一项。
+///
+/// `tone` 是**语义档位**（neutral / info / progress / success / warning / danger），
+/// 不是颜色值 —— 前端把档位映射到自己的样式类，换配色不用改数据库。
+model PlatformOptionItem {
+  id          String   @id @default(uuid()) @map("id")
+  /// 属于哪个选项集（外键指向 PlatformOptionSet.code）
+  setId       String   @map("set_id") @db.VarChar(48)
+  /// 码：写进业务表的就是它（例如 PAID）
+  code        String   @db.VarChar(48)
+  /// 展示用中文（例如「已付款」）—— 前端零映射的来源
+  label       String   @db.VarChar(64)
+  /// 一句话说明，给后台维护者与顾客提示用
+  description String?  @db.VarChar(200)
+  /// 色彩档位，见上方说明
+  tone        String?  @db.VarChar(16)
+  icon        String?  @db.VarChar(32)
+  sortOrder   Int      @default(0) @map("sort_order")
+  /// 下线的选项置 false，不物理删除 —— 免得历史数据里的码找不到对应行
+  enabled     Boolean  @default(true)
+  isDefault   Boolean  @default(false) @map("is_default")
+  /// 业务附加参数（例如活动量的系数）。前端不解释，只透传。
+  extra       Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  set PlatformOptionSet @relation(fields: [setId], references: [code], onDelete: Cascade)
+
+  @@unique([setId, code])
+  @@index([setId, enabled, sortOrder])
+  @@map("platform_option_item")
+}
+
 enum OrderStatus {
   INIT
   PENDING_PAYMENT

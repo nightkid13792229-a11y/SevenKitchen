@@ -288,6 +288,28 @@ describe('疫苗 · 定位到录入卡（老板 2026-10-16："有弹窗时定位
   })
 });
 
+describe('疫苗 · 口径修订（老板 2026-10-17 定）', () => {
+  it('🔴 抗体合格改成"1 年后复查"（原来是从疫苗免疫期平移来的 3 年，指南没有这个说法）', () => {
+    const engine = stripComments(
+      readFileSync(resolve(process.cwd(), '../backend/src/domain/health/vaccine/engine.ts'), 'utf-8'),
+    )
+    // 间隔一律由引擎算，不再读记录上存的那个日期（否则老记录会继续按 3 年走 ✗）
+    expect(engine).toContain('addYears(latest.date, 1)')
+    expect(engine).not.toContain('addYears(latest.date, 3)')
+  })
+
+  it('🔴 狂犬不再说"法定每年"（国家法律只说"定期"）', () => {
+    const table = stripComments(
+      readFileSync(
+        resolve(process.cwd(), '../backend/src/domain/health/vaccine/schedule-table.ts'),
+        'utf-8',
+      ),
+    )
+    expect(table).not.toContain('法定每年')
+    expect(table).toContain('免疫证明')
+  })
+});
+
 describe('疫苗 · 两个忽略原因的区别要说出来（老板 2026-10-16 拍板）', () => {
   const sheet = read('IgnoreSheet.vue')
 

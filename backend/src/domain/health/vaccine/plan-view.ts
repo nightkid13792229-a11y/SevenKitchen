@@ -331,7 +331,8 @@ export function buildRhythm(
   // 但节奏句仍要说清它的规律（原型 F：核心疫苗每 3 年评估一次）
   if (kinds.has('core') || coreReplacedByTiter) {
     parts.push(
-      coreReplacedByTiter ? '核心疫苗每 3 年评估一次' : '核心疫苗每 3 年一次',
+      // 2026-10-17：抗体替代时改成"每 1 年复查一次"（原来写"每 3 年评估一次"）
+      coreReplacedByTiter ? '核心疫苗每年复查抗体' : '核心疫苗每 3 年一次',
     );
   }
   return parts.length > 0 ? `之后：${parts.join('，')}` : '';

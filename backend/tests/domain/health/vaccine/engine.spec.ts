@@ -303,14 +303,14 @@ describe('引擎 · 抗体检测（需求 R9 / 技术方案 1.2）', () => {
           testedAt: toDateText(TODAY),
           targets: ['CORE'],
           result: 'PASS',
-          nextReviewAt: toDateText(addYears(TODAY, 3)),
+          nextReviewAt: toDateText(addYears(TODAY, 1)),
         },
       ],
     });
     const coreStep = view.plan.find((step) => step.kind === 'core');
     expect(coreStep!.status).toBe('DONE');
     expect(coreStep!.label).toBe('评估');
-    expect(coreStep!.windowStart).toBe(toDateText(addYears(TODAY, 3)));
+    expect(coreStep!.windowStart).toBe(toDateText(addYears(TODAY, 1)));
     expect(coreStep!.basis).toContain('抗体检测');
     // 狂犬与钩端不受影响
     expect(view.plan.find((step) => step.kind === 'rabies')!.status).not.toBe(
@@ -525,7 +525,7 @@ describe('引擎 · 常见产品（兽医审核意见第 5、6 条）', () => {
             testedAt: toDateText(TODAY),
             targets: ['CORE'],
             result: 'PASS',
-            nextReviewAt: toDateText(addYears(TODAY, 3)),
+            nextReviewAt: toDateText(addYears(TODAY, 1)),
           },
         ],
       },
@@ -654,7 +654,7 @@ describe('引擎 · 抗体检测替代那一针（原型 F）', () => {
           result: 'PASS',
           // ⚠️ 用项目的 toDateText（本地时区），别用 toISOString().slice(0,10)
           //    —— 东八区会整体差一天（这个项目踩过）
-          nextReviewAt: toDateText(addYears(new Date('2026-10-15T00:00:00'), 3)),
+          nextReviewAt: toDateText(addYears(new Date('2026-10-15T00:00:00'), 1)),
         },
       ],
       today: TODAY,
@@ -667,9 +667,12 @@ describe('引擎 · 抗体检测替代那一针（原型 F）', () => {
     expect(covered!.hint).not.toContain('6~8 周');
     expect(covered!.titer).toBeDefined();
     expect(covered!.titer!.testedAt).toBe('2026-10-15');
-    expect(covered!.titer!.nextReviewAt).toBe('2029-10-15');
-    // 节奏那一句也要跟着说"评估"
-    expect(view.rhythm).toContain('评估');
+    /**
+     * ⚠️ 2026-10-17 老板定：抗体合格**改成 1 年后复查**（原来是从疫苗免疫期平移来的 3 年）——
+     * 指南里没有"抗体管几年"的说法，宁可复查勤一点也不漏掉。
+     */
+    expect(covered!.titer!.nextReviewAt).toBe('2027-10-15');
+    expect(view.rhythm).toContain('每年复查抗体')
   });
 });
 
@@ -707,7 +710,7 @@ describe('引擎 · 抗体检测的第二个条件：最后一针之后至少 4 
           testedAt: toDateText(testedAt),
           targets: ['CORE'],
           result: 'PASS',
-          nextReviewAt: toDateText(addYears(testedAt, 3)),
+          nextReviewAt: toDateText(addYears(testedAt, 1)),
         },
       ],
       today: new Date(
@@ -725,13 +728,13 @@ describe('引擎 · 抗体检测的第二个条件：最后一针之后至少 4 
     expect(view.plan.some((step) => step.titer)).toBe(false);
   });
 
-  it('打完针满 28 天测 → 算数，且下一次评估 = 检测日 + 3 年', () => {
+  it('打完针满 28 天测 → 算数，且下一次评估 = 检测日 + 1 年', () => {
     const testedAt = addDays(lastDose, 28);
     const view = buildWithTest(testedAt);
     const covered = view.plan.find((step) => step.titer);
     expect(covered).toBeDefined();
     expect(covered!.titer!.testedAt).toBe(toDateText(testedAt));
-    expect(covered!.titer!.nextReviewAt).toBe(toDateText(addYears(testedAt, 3)));
+    expect(covered!.titer!.nextReviewAt).toBe(toDateText(addYears(testedAt, 1)));
   });
 });
 
@@ -750,7 +753,7 @@ describe('引擎 · 抗体检测不作数时要**说清为什么**（不然家�
           testedAt: toDateText(testedAt),
           targets: ['CORE'],
           result: 'PASS',
-          nextReviewAt: toDateText(addYears(testedAt, 3)),
+          nextReviewAt: toDateText(addYears(testedAt, 1)),
         },
       ],
       today: new Date(Math.max(TODAY.getTime(), addDays(testedAt, 1).getTime())),

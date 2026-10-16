@@ -206,21 +206,21 @@ describe('原型 F · 录了抗体检测之后（同一只 3 岁的狗）', () =
           testedAt: '2026-10-15',
           targets: ['CORE'],
           result: 'PASS',
-          nextReviewAt: '2029-10-15',
+          nextReviewAt: '2027-10-15',
         },
       ],
     },
   );
 
-  it('核心那一针变成"评估"：这次不用打、下次评估 2029/10/15', () => {
+  it('核心那一针变成"评估"：这次不用打、下次评估 2027/10/15', () => {
     const core = view.plan.find((step) => step.kind === 'core');
     expect(core!.label).toBe('评估');
     expect(core!.status).toBe('DONE');
-    expect(core!.windowStart).toBe('2029-10-15');
+    expect(core!.windowStart).toBe('2027-10-15');
     expect(core!.basis).toContain('抗体检测');
   });
 
-  it('狂犬与钩端不受影响；节奏那句话改成"核心疫苗每 3 年评估一次"', () => {
+  it('狂犬与钩端不受影响；节奏那句话改成"核心疫苗每年复查抗体"', () => {
     expect(view.plan.find((step) => step.kind === 'rabies')!.windowStart).toBe(
       '2026-11-20',
     );
@@ -228,7 +228,7 @@ describe('原型 F · 录了抗体检测之后（同一只 3 岁的狗）', () =
       '2027-03-10',
     );
     expect(view.rhythm).toBe(
-      '之后：狂犬与钩端每年一次，核心疫苗每 3 年评估一次',
+      '之后：狂犬与钩端每年一次，核心疫苗每年复查抗体',
     );
   });
 });
@@ -282,7 +282,12 @@ describe('原型 H · 记录这一针（一支联苗一次记完）', () => {
     // 钩端：首免那两针已经打过（这一针卫佳捌算首免第 1 针）
     const leptoSteps = view.plan.filter((step) => step.kind === 'lepto');
     expect(leptoSteps.length).toBeGreaterThan(0);
-    // 成年犬补一针已打过 → 核心下一次 = 那一针 + 3 年
+    /**
+     * 成年犬补一针已打过 → 核心下一次 = 那一针 + 3 年 = 2029/10/15。
+     * ⚠️ 这个 3 年是**核心疫苗本身的加强周期**（WSAVA：此后不高于每 3 年一次），
+     *    与"抗体复查 1 年"是两回事 —— 2026-10-17 改口径时我一度把这里也误改成 1 年 ✗，
+     *    被这条断言挡回来了 ✓ 别动它。
+     */
     const core = view.plan.find((step) => step.kind === 'core');
     expect(core!.windowStart).toBe('2029-10-15');
   });

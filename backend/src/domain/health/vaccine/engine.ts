@@ -1090,8 +1090,40 @@ export function matchRecords(
       status = 'OVERDUE';
     }
 
+    /**
+     * 「原建议时间」= 这一步**确实有过、而且已经过去**的那个建议窗口（修法 A，2026-10-16）。
+     *
+     * 为什么补在这里：`missedWindowStart/End` 原来只有"起针逾期、窗口被挪到今天"
+     * 那一条路会写（`moveToTodayIfMissed`），而**加强针的窗口本来就不挪** ——
+     * 一只狂犬漏了两年的狗，状态算得出"逾期"、窗口也还留在原处，却没人把它
+     * 标成"原建议时间"，于是前端只能写「建议尽快安排」✗
+     * （验收表 R15 要的是「建议尽快补种（原建议时间 X，已过）」）。
+     * 前端本来就认这两个字段，所以这里补上即可，**前端一行都不用改**。
+     *
+     * 三个条件缺一不可（后两条是这次最容易做偏的地方）：
+     *   · `status === 'OVERDUE'` —— 只有逾期才配说"原建议时间"；
+     *   · `!step.movedToToday` —— **被挪到今天的那种不许补**：它的窗口是"今天起算"的，
+     *     补上去会写出「原建议时间（今天）~（今天+宽限），已过」，凭空说一个
+     *     **还没过去的窗口**"已过"是错的。它真正错过的那个窗口在挪的时候就存好了
+     *     （`missedWindowStart` 已有值），这里只原样保留、绝不改写；
+     *   · `today > windowEnd` —— 窗口终点真的在今天之前（"起点在过去、且不等于今天"
+     *     是同一件事：终点都过去了，起点自然也在过去）。窗口还开着的 / 还没到的
+     *     是"待接种"，不是"逾期"，一个字都不能补。
+     */
+    const missed =
+      status === 'OVERDUE' &&
+      !step.movedToToday &&
+      !step.missedWindowStart &&
+      today.getTime() > step.windowEnd.getTime()
+        ? {
+            missedWindowStart: step.windowStart,
+            missedWindowEnd: step.windowEnd,
+          }
+        : {};
+
     return {
       ...step,
+      ...missed,
       status,
       statusLabel:
         status === 'DONE'

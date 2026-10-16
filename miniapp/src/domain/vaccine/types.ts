@@ -163,6 +163,8 @@ export interface VaccineRecord {
   kindLabels?: string[]
   /** 名称有没有被人工核对过（R7：待核对不算数） */
   productVerified?: boolean
+  /** 这条记录是**什么时候录进来的**（附件区要显示"上传时间"） */
+  createdAt?: string
 }
 
 /**
@@ -210,6 +212,8 @@ export interface AntibodyTestPayload {
   unit?: string | null
   nextReviewAt?: string | null
   attachments?: string[]
+  /** 这次检测是**什么时候录进来的**（附件区要显示"上传时间"） */
+  createdAt?: string
 }
 
 /** 产品库里的一个产品（只有对外字段下发给前端） */

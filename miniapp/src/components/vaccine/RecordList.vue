@@ -27,9 +27,10 @@
       <text v-else-if="entries.length === 0" class="vk-records__empty">我们还没有你的接种记录 —— 点下面的「记一条」，或者用「上传疫苗本」把照片传上来，我们帮你读出来。</text>
 
       <view
-        v-for="entry in visibleEntries"
+        v-for="(entry, index) in visibleEntries"
         :key="entry.id"
         class="vk-records__row"
+        :class="{ 'vk-records__row--first': index === 0 }"
         @tap="onEntryTap(entry)"
       >
         <view class="vk-records__body">
@@ -55,11 +56,35 @@
       </view>
     </view>
 
-    <!-- 疫苗本：整本只展示一次（R10）。叫法统一成"疫苗本"（2026-10-16 自检 V17：
-         "本子""疫苗本原件"好几个叫法指的是同一个东西） -->
-    <view v-if="bookUrls.length > 0" class="vk-records__book" @tap="onPreviewBook">
-      <text class="vk-records__book-title">查看疫苗本</text>
-      <text class="vk-records__book-count">{{ bookUrls.length }} 张</text>
+    <!-- 附件区（2026-10-16 老板：不再只叫"疫苗本" —— 这里既有疫苗本照片，
+         也有抗体检测报告照片）：
+           · 可展开；展开后**按来源分区**（疫苗本 / 抗体检测报告）
+           · 每一张显示**上传时间**
+           · 每一张都能**删除** -->
+    <view v-if="attachmentGroups.length > 0" class="vk-attach">
+      <view class="vk-attach__head" @tap="toggleAttachments">
+        <text class="vk-attach__title">疫苗本 / 抗体检测附件</text>
+        <text class="vk-attach__count">{{ attachmentTotal }} 张</text>
+        <text class="vk-attach__toggle">{{ attachOpen ? '收起' : '展开 ›' }}</text>
+      </view>
+
+      <view v-if="attachOpen" class="vk-attach__body">
+        <view v-for="group in attachmentGroups" :key="group.kind" class="vk-attach__group">
+          <text class="vk-attach__group-title">{{ group.label }}（{{ group.items.length }} 张）</text>
+          <view class="vk-attach__grid">
+            <view v-for="item in group.items" :key="item.url" class="vk-attach__item">
+              <image
+                class="vk-attach__img"
+                :src="item.url"
+                mode="aspectFill"
+                @tap="previewOne(item.url)"
+              />
+              <text class="vk-attach__time">{{ item.uploadedAt }}</text>
+              <text class="vk-attach__del" @tap.stop="onRemoveAttachment(group.kind, item)">删除</text>
+            </view>
+          </view>
+        </view>
+      </view>
     </view>
   </view>
 </template>
@@ -72,6 +97,7 @@ import type {
   VaccineRecord,
   VaccineTimelineEntry,
 } from '../../domain/vaccine/types'
+import { formatDateTime } from '../../utils/date'
 import { antibodyEntryTitle, formatFullDate } from '../../domain/vaccine/status'
 
 const props = withDefaults(defineProps<{
@@ -95,6 +121,8 @@ const emit = defineEmits<{
   (event: 'edit-test', test: AntibodyTest): void
   (event: 'verify-record', record: VaccineRecord): void
   (event: 'preview', urls: string[]): void
+  /** 删掉某一条记录 / 检测上的某一张附件 */
+  (event: 'remove-attachment', payload: { kind: 'record' | 'test'; ownerId: string; url: string }): void
 }>()
 
 /** 没展开时只给最近几条（原型 C 屏：两行 + 查看全部 6 条） */
@@ -137,21 +165,57 @@ const visibleEntries = computed(() => (
   expanded.value ? entries.value : entries.value.slice(0, RECENT_COUNT)
 ))
 
-/** 疫苗本（原件照片：所有记录 + 抗体检测上的附件，整本只展示一次） */
-const bookUrls = computed(() => {
-  const urls: string[] = []
-  for (const record of props.records || []) {
-    for (const url of record?.attachments || []) {
-      if (url && urls.indexOf(url) < 0) urls.push(url)
+/**
+ * 附件区分组（2026-10-16 老板提的）：
+ * 按来源分成"疫苗本"与"抗体检测报告"两区，每张带上传时间，每张可删。
+ *
+ * 「上传时间」用记录自己的 `createdAt` —— 那是这张照片真正被传上来的时刻；
+ * 记录上的日期（接种日 / 检测日）是**报告上印的**日子，两者常常不是同一天。
+ */
+const attachmentGroups = computed(() => {
+  const groupOf = (
+    kind: 'record' | 'test',
+    label: string,
+    list: { id: string; attachments?: string[]; createdAt?: string }[],
+  ) => {
+    const items: { url: string; uploadedAt: string; ownerId: string }[] = []
+    for (const owner of list || []) {
+      for (const url of owner?.attachments || []) {
+        if (!url) continue
+        items.push({
+          url: String(url),
+          uploadedAt: owner.createdAt ? formatDateTime(String(owner.createdAt)) : '',
+          ownerId: String(owner.id),
+        })
+      }
     }
+    return { kind, label, items }
   }
-  for (const test of props.tests || []) {
-    for (const url of test?.attachments || []) {
-      if (url && urls.indexOf(url) < 0) urls.push(url)
-    }
-  }
-  return urls
+  return [
+    groupOf('record', '疫苗本', props.records || []),
+    groupOf('test', '抗体检测报告', props.tests || []),
+  ].filter((group) => group.items.length > 0)
 })
+
+const attachmentTotal = computed(() =>
+  attachmentGroups.value.reduce((sum, group) => sum + group.items.length, 0),
+)
+
+const attachOpen = ref(false)
+
+function toggleAttachments() {
+  attachOpen.value = !attachOpen.value
+}
+
+/** 点一张看大图（分区之后按张看，比"整本一起看"更清楚） */
+function previewOne(url: string) {
+  const urls = attachmentGroups.value.flatMap((group) => group.items.map((item) => item.url))
+  uni.previewImage({ urls, current: url })
+}
+
+function onRemoveAttachment(kind: 'record' | 'test', item: { url: string; ownerId: string }) {
+  emit('remove-attachment', { kind, ownerId: item.ownerId, url: item.url })
+}
 
 /**
  * 这一行叫什么。
@@ -242,9 +306,6 @@ async function onEntryTap(entry: VaccineTimelineEntry) {
   emit('edit-record', entry.record)
 }
 
-function onPreviewBook() {
-  emit('preview', bookUrls.value)
-}
 </script>
 
 <style scoped lang="scss">
@@ -304,6 +365,11 @@ function onPreviewBook() {
   padding: 16rpx 4rpx 8rpx;
 }
 
+/* 第一行不画顶部横线（老板 2026-10-16） */
+.vk-records__row--first {
+  border-top: none;
+}
+
 .vk-records__row {
   display: flex;
   align-items: center;
@@ -354,6 +420,87 @@ function onPreviewBook() {
   color: $vk-text-faint;
 }
 
+/* ── 附件区（疫苗本 / 抗体检测报告）────────────────────────────────── */
+.vk-attach {
+  margin-top: 14rpx;
+  background: $vk-card-bg;
+  border: 1px solid $vk-card-border;
+  border-radius: $vk-card-radius;
+  padding: 0 24rpx;
+}
+
+.vk-attach__head {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 22rpx 0;
+}
+
+.vk-attach__title {
+  font-size: $vk-font-body;
+  font-weight: 600;
+  color: $vk-text-strong;
+}
+
+.vk-attach__count {
+  font-size: $vk-font-sub;
+  color: $vk-text-faint;
+}
+
+.vk-attach__toggle {
+  margin-left: auto;
+  font-size: $vk-font-sub;
+  color: $vk-brand;
+}
+
+.vk-attach__body {
+  padding-bottom: 18rpx;
+}
+
+.vk-attach__group + .vk-attach__group {
+  margin-top: 18rpx;
+  padding-top: 18rpx;
+  border-top: 1px solid $vk-line-soft;
+}
+
+.vk-attach__group-title {
+  display: block;
+  font-size: $vk-font-sub;
+  color: $vk-text-muted;
+  margin-bottom: 12rpx;
+}
+
+.vk-attach__grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+
+.vk-attach__item {
+  width: 176rpx;
+}
+
+.vk-attach__img {
+  width: 176rpx;
+  height: 176rpx;
+  border-radius: 14rpx;
+  background: $vk-page-bg;
+}
+
+.vk-attach__time {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 20rpx;
+  color: $vk-text-faint;
+}
+
+.vk-attach__del {
+  display: block;
+  margin-top: 2rpx;
+  font-size: $vk-font-sub;
+  color: $vk-danger;
+}
+
 .vk-records__more {
   text-align: center;
   font-size: 24rpx;
@@ -376,26 +523,6 @@ function onPreviewBook() {
   color: $vk-text-muted;
 }
 
-.vk-records__book {
-  display: flex;
-  align-items: center;
-  gap: 16rpx;
-  background: $vk-card-bg;
-  border: 1px dashed $vk-field-border;
-  border-radius: 22rpx;
-  padding: 22rpx 24rpx;
-  margin-top: 14rpx;
-}
 
-.vk-records__book-title {
-  font-size: 25rpx;
-  font-weight: 600;
-  color: $vk-ghost-fg;
-}
 
-.vk-records__book-count {
-  margin-left: auto;
-  font-size: $vk-font-sub;
-  color: $vk-text-faint;
-}
 </style>

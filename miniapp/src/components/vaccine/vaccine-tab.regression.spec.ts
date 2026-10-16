@@ -284,6 +284,42 @@ describe('疫苗 · 定位到录入卡（老板 2026-10-16："有弹窗时定位
   })
 });
 
+describe('疫苗 · 附件区与首行横线（老板 2026-10-16）', () => {
+  const list = read('RecordList.vue')
+  const timeline = read('PlanTimeline.vue')
+
+  it('🔴 首行不画顶部横线（计划与记录两侧）', () => {
+    expect(timeline).toContain("'vk-plan__row--first': index === 0")
+    expect(timeline).toContain('.vk-plan__row--first {\n  border-top: none;')
+    expect(list).toContain("'vk-records__row--first': index === 0")
+    expect(list).toContain('.vk-records__row--first {\n  border-top: none;')
+  })
+
+  it('🔴 附件区改名成「疫苗本 / 抗体检测附件」（里面不只有疫苗本）', () => {
+    expect(list).toContain('疫苗本 / 抗体检测附件')
+    expect(list).not.toContain('查看疫苗本')
+  })
+
+  it('附件区可展开、按来源分区、每张有上传时间、每张可删', () => {
+    expect(list).toContain('toggleAttachments')
+    // 两个分区：疫苗本 / 抗体检测报告
+    expect(list).toContain("groupOf('record', '疫苗本'")
+    expect(list).toContain("groupOf('test', '抗体检测报告'")
+    // 上传时间用记录自己的 createdAt（照片真正传上来的时刻）
+    expect(list).toContain('formatDateTime')
+    expect(list).toContain('vk-attach__time')
+    // 删除
+    expect(list).toContain('onRemoveAttachment')
+    expect(list).toContain("emit('remove-attachment'")
+    const tab = read('VaccineTab.vue')
+    expect(tab).toContain('@remove-attachment="onRemoveAttachment"')
+    expect(tab).toContain('async function onRemoveAttachment')
+    // 删之前问一句，并把云上的文件一起清掉
+    expect(tab).toContain("title: '删掉这张照片？'")
+    expect(tab).toContain('deleteHealthAttachment')
+  })
+});
+
 describe('疫苗 · 抗体检测接入 AI 识别（老板 2026-10-16 第 2 条）', () => {
   const tab = read('VaccineTab.vue')
   const scan = read('ScanConfirm.vue')
@@ -639,7 +675,8 @@ describe('疫苗 · 免疫计划（PlanTimeline，原型 A/B/C/F/I/K）', () => 
   })
 
   it('🔴 按后端给的顺序画，不重排；"现在"那一行由后端的 nextKey 决定', () => {
-    expect(timeline).toContain('v-for="step in plan"')
+    // 2026-10-16：加了 index（第一行不画顶部横线要用它）
+    expect(timeline).toContain('v-for="(step, index) in plan"')
     expect(timeline).toContain("step.key === nextKey")
     expect(timeline).not.toContain('.sort(')
   })
@@ -666,8 +703,13 @@ describe('疫苗 · 记录列表（RecordList，原型 C/F/K）', () => {
      * ⚠️ 2026-10-16 自检 V17：这句原来钉的是"查看疫苗本原件"——同一个东西在这页有
      *    "本子""疫苗本原件"好几个叫法。统一成「疫苗本」（原名件照片仍整本只展示一处）。
      */
-    expect(list).toContain('查看疫苗本')
-    expect(list).toContain('@tap="onPreviewBook"')
+    /*
+     * ⚠️ 2026-10-16 老板：这一块不再叫「查看疫苗本」—— 里面既有疫苗本照片，
+     *    也有抗体检测报告照片。现在叫「疫苗本 / 抗体检测附件」，可展开、按来源分区。
+     */
+    expect(list).toContain('疫苗本 / 抗体检测附件')
+    // 2026-10-16：改成按张预览（分区之后按张看更清楚），由 previewOne 承担
+    expect(list).toContain('previewOne(item.url)')
   })
 
   it('待核对的记录带角标，点它是去核对而不是去编辑（R7）', () => {

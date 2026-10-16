@@ -21,12 +21,13 @@
            原来 @tap 在 `.vk-plan__body` 上 —— 左边那列日期（占了三分之一宽度）
            点了没反应；家长想展开往往先去点日期，于是以为"这一项打不开"✗。 -->
       <view
-        v-for="step in plan"
+        v-for="(step, index) in plan"
         :key="step.key"
         class="vk-plan__row"
         :class="{
           'vk-plan__row--now': step.key === nextKey,
           'vk-plan__row--far': step.status === 'UPCOMING',
+          'vk-plan__row--first': index === 0,
         }"
         @tap="toggleRow(step.key)"
       >
@@ -230,6 +231,12 @@ function layerLabel(layer: VaccineLayer) {
   padding: 16rpx 0;
   border-top: 1px solid $vk-line;
   position: relative;
+}
+
+/* 第一行不画顶部横线（老板 2026-10-16：最上方那条线多余）——
+   用类名而不是 :first-child，稳一点 */
+.vk-plan__row--first {
+  border-top: none;
 }
 
 .vk-plan__row--now::before {

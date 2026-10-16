@@ -116,6 +116,7 @@
         @edit-test="onEditTest"
         @verify-record="onVerifyRecord"
         @preview="previewAttachments"
+        @remove-attachment="onRemoveAttachment"
       />
       </template>
     </template>
@@ -141,6 +142,8 @@ import ScanConfirm from './ScanConfirm.vue'
 import IgnoreSheet from './IgnoreSheet.vue'
 import HealthDocumentScan from '../dog-profile/HealthDocumentScan.vue'
 import { vaccineApi } from '../../api/vaccines'
+import { dogApi } from '../../api/dogs'
+import { extractHealthAttachmentKey } from '../../utils/health-records'
 import { todayDateText } from '../../utils/date'
 import {
   readCatalogProducts,
@@ -811,6 +814,56 @@ async function onRestore(key: string) {
 }
 
 /* ══ 原件预览（R10：整本只展示一次、可预览）═════════════════════════════ */
+
+/**
+ * 删掉某一条记录 / 检测上的某一张附件（老板 2026-10-16：附件区每张都要能删）。
+ *
+ * 两件事都要做，缺一不可：
+ *   ① 把这张图从那条记录 / 检测的 `attachments` 里去掉（否则下次进来它又出现）；
+ *   ② 顺手把云上的文件删掉（不然白占空间）。
+ * ② 失败不影响 ① —— 记录上的引用才是家长看得见的东西。
+ */
+async function onRemoveAttachment(payload: {
+  kind: 'record' | 'test'
+  ownerId: string
+  url: string
+}) {
+  if (!props.dogId || saving.value || !payload?.url) return
+  const confirmed = await confirmModal({
+    title: '删掉这张照片？',
+    content: '只删照片，记录本身还在。',
+    confirmText: '删除',
+  })
+  if (!confirmed) return
+
+  saving.value = true
+  try {
+    if (payload.kind === 'test') {
+      const test = tests.value.find((item) => item.id === payload.ownerId)
+      const rest = (test?.attachments || []).filter((url) => url !== payload.url)
+      await vaccineApi.antibodyTests.update(props.dogId, payload.ownerId, {
+        attachments: rest,
+      })
+    } else {
+      const record = records.value.find((item) => item.id === payload.ownerId)
+      const rest = (record?.attachments || []).filter((url) => url !== payload.url)
+      await vaccineApi.records.update(props.dogId, payload.ownerId, {
+        attachments: rest,
+      })
+    }
+    // 云上的文件顺手删掉（删不掉也不拦着 —— 记录上的引用已经去掉了）
+    const key = extractHealthAttachmentKey(payload.url)
+    if (key) {
+      void dogApi.deleteHealthAttachment('vaccine', key).catch(() => {})
+    }
+    uni.showToast({ title: '已删掉', icon: 'success' })
+    await refreshAfterWrite()
+  } catch (error: any) {
+    uni.showToast({ title: error?.message || '没删掉，再试一次', icon: 'none' })
+  } finally {
+    saving.value = false
+  }
+}
 
 function previewAttachments(urls: string[]) {
   if (!urls || urls.length === 0) return

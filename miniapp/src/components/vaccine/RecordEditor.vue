@@ -113,35 +113,32 @@
         </view>
 
         <view class="vk-editor__block">
-          <text class="vk-editor__label">数值（选填）</text>
-          <view class="vk-editor__field">
-            <input
-              class="vk-editor__input"
-              :value="valueText"
-              placeholder="报告上写的数值，例：1:80"
-              placeholder-class="vk-editor__ph"
-              @input="onValueInput"
-            />
-          </view>
-          <view class="vk-editor__field vk-editor__field--tight">
-            <input
-              class="vk-editor__input"
-              :value="unitText"
-              placeholder="单位，例：滴度 / IU/ml"
-              placeholder-class="vk-editor__ph"
-              @input="onUnitInput"
-            />
-          </view>
-        </view>
-
-        <view class="vk-editor__block">
           <text class="vk-editor__label">报告照片</text>
-          <view class="vk-editor__field" @tap="pickReportPhoto">
-            <text :class="{ 'vk-editor__date--empty': reportPhotos.length === 0 }">
-              {{ reportPhotos.length > 0 ? `已上传 ${reportPhotos.length} 张，点一下看` : '点这里上传（选填）' }}
-            </text>
+          <!-- 缩略图格子：**点图看大图、点 × 删掉、点 ＋ 再加一张**
+               （老板 2026-10-16："报告的照片需要提供预览窗和编辑、删除、新增功能"）。
+               原来只有一个文字块：有图时点它只能预览，既加不了也删不掉 ✗。 -->
+          <view class="vk-editor__photos">
+            <view v-for="(url, index) in reportPhotos" :key="url" class="vk-editor__photo">
+              <image
+                class="vk-editor__photo-img"
+                :src="url"
+                mode="aspectFill"
+                @tap="previewReportPhoto(index)"
+              />
+              <text class="vk-editor__photo-del" @tap.stop="removeReportPhoto(index)">×</text>
+            </view>
+            <view
+              v-if="reportPhotos.length < MAX_REPORT_PHOTOS"
+              class="vk-editor__photo-add"
+              @tap="pickReportPhoto"
+            >
+              <text class="vk-editor__photo-add-text">＋</text>
+            </view>
           </view>
           <text v-if="uploadingPhoto" class="vk-editor__hint">正在上传…</text>
+          <text v-else-if="reportPhotos.length === 0" class="vk-editor__hint">
+            点上面的 ＋ 传报告照片（选填）
+          </text>
         </view>
 
         <view class="vk-editor__block">
@@ -316,29 +313,34 @@ const showComponents = computed(() => {
 })
 
 /** 报告照片（选填）：抗体检测记录和疫苗本一样要能留原件（需求 R9） */
-const valueText = ref('')
-const unitText = ref('')
 const reportPhotos = ref<string[]>([])
 const uploadingPhoto = ref(false)
 
-function onValueInput(event: any) {
-  valueText.value = String(event?.detail?.value || '')
+/** 报告照片最多几张（一张报告通常 1~2 页） */
+const MAX_REPORT_PHOTOS = 6
+
+/** 点缩略图看大图（可左右滑，与其它附件同一套交互） */
+function previewReportPhoto(index: number) {
+  const urls = [...reportPhotos.value]
+  if (urls.length === 0) return
+  uni.previewImage({ urls, current: urls[index] })
 }
 
-function onUnitInput(event: any) {
-  unitText.value = String(event?.detail?.value || '')
+/** 删掉某一张（这一份表单还没保存，删了重传即可，不做二次确认） */
+function removeReportPhoto(index: number) {
+  reportPhotos.value = reportPhotos.value.filter((_, at) => at !== index)
 }
 
 async function pickReportPhoto() {
-  if (reportPhotos.value.length > 0) {
-    uni.previewImage({ urls: reportPhotos.value })
+  if (uploadingPhoto.value) return
+  if (reportPhotos.value.length >= MAX_REPORT_PHOTOS) {
+    uni.showToast({ title: `最多 ${MAX_REPORT_PHOTOS} 张`, icon: 'none' })
     return
   }
-  if (uploadingPhoto.value) return
   try {
     const picked = await new Promise<string[]>((resolve, reject) => {
       uni.chooseMedia({
-        count: 3,
+        count: Math.max(1, MAX_REPORT_PHOTOS - reportPhotos.value.length),
         mediaType: ['image'],
         sourceType: ['album'],
         success: (res: any) =>
@@ -401,8 +403,6 @@ watch(
         test && Array.isArray(test.attachments)
           ? test.attachments.map(String)
           : (preset?.attachments || []).map(String)
-      valueText.value = String(test?.value || preset?.value || '')
-      unitText.value = String(test?.unit || preset?.unit || '')
       target.value =
         test && Array.isArray(test.targets) && test.targets.length > 0
           ? test.targets[0]
@@ -495,8 +495,6 @@ function onSave() {
       testedAt: date.value,
       targets: [target.value],
       result: result.value,
-      ...(valueText.value.trim() ? { value: valueText.value.trim() } : {}),
-      ...(unitText.value.trim() ? { unit: unitText.value.trim() } : {}),
       ...(reportPhotos.value.length > 0 ? { attachments: [...reportPhotos.value] } : {}),
     }
     emit('save-test', payload, String(props.test?.id || ''))
@@ -565,6 +563,58 @@ function onCancel() {
   margin-left: auto;
   font-size: $vk-font-sub;
   color: $vk-text-faint;
+}
+
+.vk-editor__photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14rpx;
+  margin-top: 6rpx;
+}
+
+.vk-editor__photo {
+  position: relative;
+  width: 148rpx;
+  height: 148rpx;
+}
+
+.vk-editor__photo-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 14rpx;
+  background: $vk-page-bg;
+}
+
+/* × 压在右上角，点着方便又不挡图 */
+.vk-editor__photo-del {
+  position: absolute;
+  top: -10rpx;
+  right: -10rpx;
+  width: 40rpx;
+  height: 40rpx;
+  line-height: 36rpx;
+  text-align: center;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: $vk-white;
+  font-size: 26rpx;
+}
+
+.vk-editor__photo-add {
+  width: 148rpx;
+  height: 148rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed $vk-field-border;
+  border-radius: 14rpx;
+  background: $vk-white;
+}
+
+.vk-editor__photo-add-text {
+  font-size: 44rpx;
+  color: $vk-text-faint;
+  line-height: 1;
 }
 
 .vk-editor__types {

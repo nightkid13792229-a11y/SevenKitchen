@@ -313,11 +313,25 @@ describe('疫苗 · 抗体检测接入 AI 识别（老板 2026-10-16 第 2 条�
     expect(editor).toContain('v-if="preset"')
   })
 
-  it('报告上的数值与单位也留得住（识别出来就预填，选填）', () => {
+  it('🔴 抗体检测只记三样：项目 / 日期 / 结果（老板 2026-10-16）', () => {
     const editor = read('RecordEditor.vue')
-    expect(editor).toContain('数值（选填）')
-    expect(editor).toContain('valueText')
-    expect(editor).toContain('unitText')
+    /*
+     * 老板："抗体检测录入框中，只记录检查项目、检查日期、报告结果即可，不需要记录数值。"
+     * 数值与单位从表单里撤掉 —— 报告照片里本来就看得见，不必再让家长抄一遍。
+     */
+    expect(editor).not.toContain('数值（选填）')
+    expect(editor).not.toContain('valueText')
+    expect(editor).not.toContain('unitText')
+  })
+
+  it('报告照片：能预览、能删、能再加（缩略图格子）', () => {
+    const editor = read('RecordEditor.vue')
+    expect(editor).toContain('vk-editor__photos')
+    expect(editor).toContain('previewReportPhoto')
+    expect(editor).toContain('uni.previewImage')
+    expect(editor).toContain('removeReportPhoto')
+    expect(editor).toContain('vk-editor__photo-add')
+    expect(editor).toContain('vk-editor__photo-del')
   })
 });
 

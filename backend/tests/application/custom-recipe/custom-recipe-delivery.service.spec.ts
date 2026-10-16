@@ -40,6 +40,7 @@ function buildRecipe(overrides: Record<string, unknown> = {}) {
     name: '豆豆的减重食谱',
     coverImageUrl: null,
     energyDensityKcalPerKg: 3620,
+    productionLossRate: 1.07,
     nutritionStandard: 'FEDIAF_2025',
     isCustomRecipe: true,
     customerOwnerId: 'customer-1',
@@ -220,6 +221,50 @@ describe('CustomRecipeDeliveryService', () => {
       expect(result.autoCompleteAt?.toISOString()).toBe(
         new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString(),
       );
+    });
+
+    it('★ 采购清单进了快照，且用的是库里的损耗系数', async () => {
+      const { service, txProxy } = createService({});
+
+      await service.deliver({
+        orderIdOrId: 'CR202610160001',
+        recipeIdOrBizId: 'CR1759000000000',
+        deliveredBy: 'admin-1',
+        cycleDays: 14,
+      });
+
+      const snapshot = (txProxy.customRecipeDelivery.create as jest.Mock).mock
+        .calls[0][0].data.contentSnapshot;
+
+      // 每天 259.7g × 14 天 = 3635.8g
+      expect(snapshot.shopping.totalNetG).toBeCloseTo(3635.8, 0);
+      expect(snapshot.shopping.lines).toHaveLength(2);
+      // 鸡胸肉占 70%：净 2545.1g，采购 2545.1 × 1.07 = 2723.3g
+      const chicken = snapshot.shopping.lines.find(
+        (line: { name: string }) => line.name === '鸡胸肉',
+      );
+      /**
+       * 容差给到 0.5 而不是 0.05：`purchaseG` 在计算时保留 1 位小数
+       * （2723.257 → 2723.2），与未取整的乘积差 0.057。
+       * 这是**取整本身造成的**，不是算错。
+       */
+      expect(chicken.purchaseG).toBeCloseTo(chicken.netG * 1.07, 0);
+      // 对外给的是系数（与库里一致）
+      expect(snapshot.shopping.lossRate).toBeCloseTo(1.07, 4);
+    });
+
+    it('★ 没传做几天时按 7 天算（与小程序 DIY 的默认值一致）', async () => {
+      const { service, txProxy } = createService({});
+
+      await service.deliver({
+        orderIdOrId: 'CR202610160001',
+        recipeIdOrBizId: 'CR1759000000000',
+        deliveredBy: 'admin-1',
+      });
+
+      const snapshot = (txProxy.customRecipeDelivery.create as jest.Mock).mock
+        .calls[0][0].data.contentSnapshot;
+      expect(snapshot.feeding.cycleDays).toBe(7);
     });
 
     it('补充剂被单独识别出来（不与食材混）', async () => {
@@ -486,7 +531,7 @@ describe('CustomRecipeDeliveryService', () => {
   });
 
   describe('交付物清单', () => {
-    it('配置里开了但这一版没内容的项不出现', async () => {
+    it('配置里开了、内容也有 → 都出现（采购清单从批次 2.2 起有内容了）', async () => {
       const { service } = createService({
         config: { deliveryItemCodes: ['RECIPE', 'SHOPPING_SOP'] },
       });
@@ -497,7 +542,21 @@ describe('CustomRecipeDeliveryService', () => {
         deliveredBy: 'admin-1',
       });
 
-      // 采购清单在批次 4 才落地，现在没有内容 → 不该出现
+      // 有了喂食量就能算出采购量 → 采购与制作单这一项有内容了
+      expect(result.itemCodes).toEqual(['RECIPE', 'SHOPPING_SOP']);
+    });
+
+    it('★ 算不出采购量时这一项不出现（点开是空白比不显示更糟）', async () => {
+      // 取不到狗狗档案 → 没有喂食量 → 采购清单为空
+      const { service } = createService({ dog: null });
+
+      const result = await service.deliver({
+        orderIdOrId: 'CR202610160001',
+        recipeIdOrBizId: 'CR1759000000000',
+        deliveredBy: 'admin-1',
+        items: ['RECIPE', 'SHOPPING_SOP'],
+      });
+
       expect(result.itemCodes).toEqual(['RECIPE']);
     });
 

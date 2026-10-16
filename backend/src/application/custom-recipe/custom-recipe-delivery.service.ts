@@ -18,6 +18,10 @@ import {
   type SnapshotRecipeItem,
   type SnapshotSupplement,
 } from '../../domain/custom-recipe/custom-recipe.delivery';
+import {
+  buildShoppingList,
+  toSnapshotShopping,
+} from '../../domain/custom-recipe/custom-recipe.shopping';
 
 /**
  * 定制食谱 · 交付服务（2026-10-16，批次 2.1）
@@ -65,12 +69,14 @@ export class CustomRecipeDeliveryService {
     deliveredBy: string;
     /** 交付物清单；不传则按「配置 + 这一版实际有没有内容」算 */
     items?: string[];
-    /** 覆盖喂食参数（正常不用传，后端自己算） */
-    feedingParams?: {
-      dailyIntakeG?: number | null;
-      mealsPerDay?: number | null;
-      cycleDays?: number | null;
-    } | null;
+    /**
+     * 这一批做几天（批次 2.2）。
+     *
+     * 为什么让它当参数、而不是放全局配置：**"做多少天的量"是营养师
+     * 每次交付的业务决定**（同一只狗，这次做 7 天的、下次做 14 天的），
+     * 不是一个全局开关。不传时按 7 天算，并在快照里如实记下用了几天。
+     */
+    cycleDays?: number | null;
     /** 便于测试注入 */
     now?: Date;
   }): Promise<{
@@ -108,7 +114,12 @@ export class CustomRecipeDeliveryService {
 
     const recipe = await this.resolveRecipe(input.recipeIdOrBizId, order);
 
-    const snapshot = await this.buildSnapshot({ order, recipe, now });
+    const snapshot = await this.buildSnapshot({
+      order,
+      recipe,
+      now,
+      cycleDays: input.cycleDays ?? null,
+    });
     const itemCodes = input.items ?? (await this.configuredItemCodes(snapshot));
 
     const deliveryItems = resolveDeliveryItems(itemCodes, {
@@ -355,6 +366,8 @@ export class CustomRecipeDeliveryService {
       name: string;
       coverImageUrl: string | null;
       energyDensityKcalPerKg: unknown;
+      /** 生产损耗率 —— 存的是**系数**（1.07 = 多买 7%），不是比率 */
+      productionLossRate: unknown;
       nutritionStandard: string | null;
       items: Array<{
         ratioPercent: number | null;
@@ -364,6 +377,7 @@ export class CustomRecipeDeliveryService {
       }>;
     };
     now: Date;
+    cycleDays: number | null;
   }): Promise<DeliveryContentSnapshot> {
     const energyDensity = Number(input.recipe.energyDensityKcalPerKg);
 
@@ -380,6 +394,7 @@ export class CustomRecipeDeliveryService {
     const feeding = await this.computeFeeding({
       dogId: input.order.dogId,
       energyDensityKcalPerKg: energyDensity,
+      cycleDays: input.cycleDays,
     });
 
     /**
@@ -414,8 +429,30 @@ export class CustomRecipeDeliveryService {
           ? energyDensity
           : null,
       },
-      /** 采购清单在批次 4 与制作单一起落地；在那之前如实留空 */
-      shopping: null,
+      /**
+       * 采购清单（批次 2.2）—— 这套算法原先在**小程序页面里**，
+       * 也就是"买多少"是顾客手机上算出来的。现在搬到后端。
+       *
+       * 算不出来时（没有喂食量）给的是空清单而不是乱猜，
+       * 原因记在订单日志里，前端只显示"暂时算不出要买多少"。
+       */
+      shopping: toSnapshotShopping(
+        buildShoppingList({
+          items: items.map((item) => ({
+            name: item.name,
+            ratioPercent: item.ratioPercent ?? null,
+            isSupplement: item.isSupplement,
+            preparation: item.preparation,
+          })),
+          dailyIntakeG: feeding.dailyIntakeG,
+          cycleDays: feeding.cycleDays,
+          /**
+           * ⚠️ 这里传的是**系数**（1.07），不是比率（0.07）。
+           * 库里 `production_loss_rate` 存的就是系数。
+           */
+          foodLossRate: Number(input.recipe.productionLossRate),
+        }),
+      ),
       supplements,
       steps: [],
       now: input.now,
@@ -431,6 +468,7 @@ export class CustomRecipeDeliveryService {
   private async computeFeeding(input: {
     dogId: string;
     energyDensityKcalPerKg: number;
+    cycleDays: number | null;
   }): Promise<{
     dailyIntakeG: number | null;
     mealsPerDay: number | null;
@@ -456,7 +494,8 @@ export class CustomRecipeDeliveryService {
         where: { id: input.dogId },
         select: { cachedTargetFoodKcal: true, mealsPerDay: true },
       });
-      if (!dog) return empty;
+      const cycleDays = positiveOrNull(input.cycleDays) ?? DEFAULT_CYCLE_DAYS;
+      if (!dog) return { ...empty, cycleDays };
 
       const finalKcal =
         dog.cachedTargetFoodKcal === null ||
@@ -464,7 +503,11 @@ export class CustomRecipeDeliveryService {
           ? null
           : Number(dog.cachedTargetFoodKcal);
       if (finalKcal === null || !Number.isFinite(finalKcal) || finalKcal <= 0) {
-        return { ...empty, mealsPerDay: dog.mealsPerDay ?? null };
+        return {
+          ...empty,
+          mealsPerDay: dog.mealsPerDay ?? null,
+          cycleDays,
+        };
       }
 
       const dailyIntakeG = calculateDailyIntakeG(
@@ -480,7 +523,7 @@ export class CustomRecipeDeliveryService {
           mealsPerDay && mealsPerDay > 0
             ? round1(dailyIntakeG / mealsPerDay)
             : null,
-        cycleDays: null,
+        cycleDays,
       };
     } catch {
       return empty;
@@ -516,6 +559,20 @@ export class CustomRecipeDeliveryService {
       return 3;
     }
   }
+}
+
+/**
+ * 交付时没指定"做几天"时的默认值。
+ *
+ * 取 7 是因为小程序 DIY 制作单的默认天数也是 7 —— 两边默认值必须一致，
+ * 否则同一道食谱在两个入口会算出不同的采购量。
+ */
+const DEFAULT_CYCLE_DAYS = 7;
+
+function positiveOrNull(value: number | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  const num = Number(value);
+  return Number.isFinite(num) && num > 0 ? num : null;
 }
 
 function round1(value: number): number {

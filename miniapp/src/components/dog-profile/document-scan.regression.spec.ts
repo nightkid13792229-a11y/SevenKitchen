@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { stripComments } from '../../architecture/source-text'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
@@ -11,9 +12,11 @@ import { resolve } from 'node:path'
  */
 describe('拍照录入 · 组件', () => {
   function readScan() {
-    return readFileSync(
-      resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
-      'utf-8',
+    return stripComments(
+      readFileSync(
+        resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
+        'utf-8',
+      ),
     )
   }
 
@@ -75,8 +78,16 @@ describe('拍照录入 · 组件', () => {
   it('不做医学判断：界面只展示"照抄来的"字段', () => {
     const scan = readScan()
 
-    expect(scan).toContain('识别把握')
-    // 不出现任何诊断性措辞
+    /*
+     * ⚠️ 2026-10-16 修：这一行原来写的是 `toContain('识别把握')` —— 而"识别把握"
+     *    只出现在**注释**里（注释在解释"这个字段为什么被去掉"）。
+     *    也就是说它一直靠注释混过去、什么都没验证 ✗。
+     *    现在这个文件统一先剥注释再断言，它立刻暴露了。
+     *
+     * 本条真正要守的是：组件的**界面**里不许出现把握度/诊断性措辞。
+     */
+    expect(scan).not.toContain('识别把握')
+    expect(scan).not.toContain('置信度')
     expect(scan).not.toContain('可能是')
     expect(scan).not.toContain('建议治疗')
   })
@@ -167,9 +178,11 @@ describe('拍照录入 · 组件', () => {
   })
 
 function readScanFile() {
-  return readFileSync(
-    resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
-    'utf-8',
+  return stripComments(
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
+      'utf-8',
+    ),
   )
 }
 
@@ -276,9 +289,11 @@ describe('拍照录入 · 接线', () => {
       resolve(process.cwd(), 'src/components/vaccine/VaccineTab.vue'),
       'utf-8',
     )
-    const next = readFileSync(
-      resolve(process.cwd(), 'src/components/vaccine/NextCard.vue'),
-      'utf-8',
+    const next = stripComments(
+      readFileSync(
+        resolve(process.cwd(), 'src/components/vaccine/NextCard.vue'),
+        'utf-8',
+      ),
     )
 
     expect(vaccine).toContain('<HealthDocumentScan')
@@ -286,8 +301,12 @@ describe('拍照录入 · 接线', () => {
     // 疫苗侧把它**当识别服务用**：确认页是疫苗自己的 ScanConfirm（只有名称 + 日期两列）
     expect(vaccine).toContain('defer-confirm')
     expect(vaccine).toContain("import ScanConfirm from './ScanConfirm.vue'")
-    // 入口文案在「下一针」卡上（原型 A 屏那两个按钮）
-    expect(next).toContain('上传疫苗本')
+    /*
+     * 2026-10-16 老板："下一针窗口中，取消掉上传疫苗本的按钮，只保留记录这一针" ——
+     * 这张卡不再放上传入口；上传疫苗本 / 报告在底部固定栏（全局入口）。
+     */
+    expect(next).not.toContain('上传疫苗本')
+    expect(next).toContain('记录这一针')
   })
 
   it('过敏报告那条路搬去了定制食谱，仍然走同一个识别接口', () => {
@@ -301,7 +320,7 @@ describe('拍照录入 · 接线', () => {
   })
 
   it('API 层把 documentType 与 drafts 暴露出来', () => {
-    const api = readFileSync(resolve(process.cwd(), 'src/api/dogs.ts'), 'utf-8')
+    const api = stripComments(readFileSync(resolve(process.cwd(), 'src/api/dogs.ts'), 'utf-8'))
 
     expect(api).toContain('documentType?')
     expect(api).toContain('drafts: Record<string, any>[]')
@@ -394,7 +413,7 @@ describe('动物名提醒与化验数据', () => {
 
   it('化验数据独立成一栏，不再混进检查结论', () => {
     const scan = readScan()
-    const utils = readFileSync(resolve(process.cwd(), 'src/utils/health-records.ts'), 'utf-8')
+    const utils = stripComments(readFileSync(resolve(process.cwd(), 'src/utils/health-records.ts'), 'utf-8'))
     const section = readFileSync(
       resolve(process.cwd(), 'src/components/dog-profile/HealthRecordsSection.vue'),
       'utf-8',
@@ -413,7 +432,7 @@ describe('动物名提醒与化验数据', () => {
   })
 
   it('卡片标题不再拿数字墙当标题', () => {
-    const utils = readFileSync(resolve(process.cwd(), 'src/utils/health-records.ts'), 'utf-8')
+    const utils = stripComments(readFileSync(resolve(process.cwd(), 'src/utils/health-records.ts'), 'utf-8'))
 
     expect(utils).toContain('shortPrimary')
     expect(utils).toContain("'含化验数据'")

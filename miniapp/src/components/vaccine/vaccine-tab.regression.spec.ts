@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { stripComments } from '../../architecture/source-text'
 import { stepPlanTitle } from '../../domain/vaccine/status'
 import type { VaccineStep } from '../../domain/vaccine/types'
 
@@ -20,7 +21,13 @@ import type { VaccineStep } from '../../domain/vaccine/types'
 
 const DIR = resolve(process.cwd(), 'src/components/vaccine')
 
-const read = (name: string) => readFileSync(resolve(DIR, name), 'utf-8')
+/**
+ * ⚠️ 一律先 `stripComments()` 再断言（architecture/source-text.ts 里的规矩）：
+ * "源码里不许出现某个说法"这类断言，会被**注释里提到那个词**骗到 ——
+ * 而那几条注释往往正是在解释"为什么不该这么写"，于是越解释越误报。
+ * 今天（2026-10-16）我在这个文件上又踩了一次，所以在这里一次性修掉。
+ */
+const read = (name: string) => stripComments(readFileSync(resolve(DIR, name), 'utf-8'))
 
 const COMPONENTS = [
   'VaccineTab.vue',
@@ -178,12 +185,15 @@ describe('疫苗 · 下一针（NextCard，原型 A/B/C/F/I/K/G）', () => {
     expect(card).toContain('恢复')
   })
 
-  it('两种入口按钮：上传疫苗本 / 记录这一针', () => {
+  it('这张卡只有「记录这一针」一个动作（老板 2026-10-16 定）', () => {
     const template = templateOf(card)
-    // "上传"不写"拍"：识别只开相册、不调相机（老板 2026-10-04 定）
-    expect(template).toContain('上传疫苗本')
-    expect(template).not.toContain('拍疫苗本')
     expect(template).toContain('记录这一针')
+    /*
+     * 老板 2026-10-16："下一针窗口中，取消掉上传疫苗本的按钮，只保留记录这一针" ——
+     * 这张卡只做一件事；上传疫苗本是全局动作，放在底部固定栏里。
+     */
+    expect(template).not.toContain('上传疫苗本')
+    expect(template).not.toContain('onScan')
   })
 })
 
@@ -315,9 +325,10 @@ describe('疫苗 · 「下一针」卡的展开态（老板 2026-10-16 第 2、3
     expect(acts).toContain('记录这一针')
   })
 
-  it('收起态那排藏起来之后，「上传疫苗本」在展开态仍然够得着', () => {
+  it('展开态也不放「上传疫苗本」（与收起态一致）', () => {
     const detail = card.slice(card.indexOf('vk-next__detail'))
-    expect(detail).toContain('@tap="onScan"')
+    expect(detail).not.toContain('上传疫苗本')
+    expect(detail).not.toContain('onScan')
   })
 
   it('🔴 展开里不再复述"接下来还有哪几项"—— 正下方就是完整的免疫计划', () => {
@@ -525,10 +536,17 @@ describe('疫苗 · 识别结果逐条确认（ScanConfirm，原型 E）', () =>
     expect(scan).toContain('还没有填好名称和日期')
   })
 
-  it('"待核对"的行给核对动作，且没确认的不会保存', () => {
+  it('"待核对"的行给核对动作，并说清它的后果', () => {
     expect(scan).toContain('待核对')
     expect(scan).toContain('@tap="verifyRow(index)"')
-    expect(scan).toContain('没确认的不会保存')
+    /*
+     * ⚠️ 2026-10-16 修：这里原来钉的是"没确认的不会保存" —— 与事实相反：
+     *    待核对的行**会先存下来**（只是不参与计划）。当时那条守卫能过，
+     *    是因为**注释里**还留着那句话 ✗（这个文件现在也统一先剥注释了）。
+     *    真正要守的是"说清后果"，不是那句话本身。
+     */
+    expect(scan).not.toContain('没确认的不会保存')
+    expect(scan).toContain('暂时不参与提醒')
   })
 
   it('底部两个键：全部不要 / 确认并保存', () => {

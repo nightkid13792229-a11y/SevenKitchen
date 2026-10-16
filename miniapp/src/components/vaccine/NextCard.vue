@@ -18,9 +18,10 @@
       <text class="vk-next__when">{{ stepWhenText(next) }}</text>
       <text v-if="hint && !expanded" class="vk-next__hint">{{ hint }}</text>
       <!-- 收起时才给这一排：展开后详情里自己有「记录这一针」，
-           两边同时出现就是**同一张卡上两个一模一样的按钮**（老板 2026-10-16 第 2 条） -->
+           两边同时出现就是**同一张卡上两个一模一样的按钮**（老板 2026-10-16 第 2 条）。
+           2026-10-16 老板："下一针窗口中，取消掉上传疫苗本的按钮，只保留记录这一针" ——
+           这张卡只做"记录这一针"一件事；上传疫苗本在底部固定栏里（那里是全局入口）。 -->
       <view v-if="!expanded" class="vk-next__acts">
-        <text class="vk-next__btn vk-next__btn--ghost" @tap="onScan">上传疫苗本</text>
         <text class="vk-next__btn vk-next__btn--solid" @tap="onRecord">记录这一针</text>
       </view>
     </template>
@@ -28,9 +29,8 @@
     <template v-else>
       <text class="vk-next__what">暂无需要接种的项目</text>
       <text class="vk-next__when">{{ idleText }}</text>
-      <view class="vk-next__acts">
-        <text class="vk-next__btn vk-next__btn--ghost" @tap="onScan">上传疫苗本</text>
-      </view>
+      <!-- 这一排原来只有一个「上传疫苗本」；那张卡上不放它了，所以整排撤掉
+           （要传疫苗本走底部固定栏） -->
     </template>
 
     <!-- 已忽略的项：**只要有就必须能看见**（否则一旦还有别的待办，
@@ -59,7 +59,6 @@
       </view>
       <view class="vk-next__detail-acts">
         <text class="vk-next__act vk-next__act--ghost" @tap="onIgnore">这个先不打（忽略）</text>
-        <text class="vk-next__act vk-next__act--ghost" @tap="onScan">上传疫苗本</text>
       </view>
 
       <!-- 两针一起打：提示本身就是录入入口（需求 R11 / 原型 G 屏） -->
@@ -116,7 +115,6 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   (event: 'record', step: VaccineStep | null): void
-  (event: 'scan'): void
   /** 组合那一针：带上 combo 的常见产品去预填（不是主按钮那一支） */
   (event: 'record-combo', products: string[]): void
   (event: 'antibody', step: VaccineStep | null): void
@@ -199,10 +197,6 @@ function toggleDetail() {
 
 function toggleIgnored() {
   ignoredOpen.value = !ignoredOpen.value
-}
-
-function onScan() {
-  emit('scan')
 }
 
 function onRecord() {

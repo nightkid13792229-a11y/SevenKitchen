@@ -35,7 +35,6 @@
         :ignored-count="ignoredCount"
         @record="onRecordStep"
         @record-combo="onRecordCombo"
-        @scan="startScan"
         @antibody="onAntibody"
         @ignore="onIgnore"
         @restore="onRestore"

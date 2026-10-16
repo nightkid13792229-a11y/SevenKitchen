@@ -659,6 +659,10 @@ model Recipe {
   referenceDogId         String?                     @map("reference_dog_id")
   sourceDesignRecipeId   String?                     @unique @map("source_design_recipe_id")
   customOrder            CustomRecipeOrder?          @relation("CustomRecipeOrders")
+  /// 这道食谱被交付过几次（批次 1.6）。
+  /// 一道食谱**只能交付给一张定制单**（`custom_recipe_order.recipe_id` 是唯一约束），
+  /// 但同一张单可以多次交付同一道（重新交付会产生新版本）。
+  deliveries             CustomRecipeDelivery[]
   series                 RecipeSeries?               @relation(fields: [seriesId], references: [id])
   healthTagAssignments   RecipeHealthTagAssignment[]
   items                  RecipeItem[]
@@ -2469,6 +2473,14 @@ model CustomRecipeOrder {
   /// 处理人。现阶段只有老板一个人接单/设计/交付，留痕用；
   /// 将来加人时不用改表。
   handledBy             String?                  @map("handled_by")
+  /// 配置化问卷里 `binding=EXTRA` 字段的回答（批次 1.6）。
+  ///
+  /// 为什么与核心列**双轨**：算法（过敏拦截、能量计算）依赖核心列是强类型的，
+  /// 全塞进 JSON 会让 `WHERE allergies && ARRAY['chicken']` 这类查询失效。
+  /// 所以核心字段永远有列，后台新加的问答进这里。
+  answers               Json?                    @map("answers")
+  /// 下单时用的表单版本（批次 1.6）—— 便于回溯"当时问的是什么"。
+  formSchemaVersion     Int?                     @map("form_schema_version")
 
   /// 线上退款（顾客自助取消 → 微信原路退回）。2026-09-28 新增：
   /// 决策 12 要求"还没开始制作就能取消并全额退款"，此前完全没有退款通道。
@@ -2482,6 +2494,8 @@ model CustomRecipeOrder {
   createdAt             DateTime                 @default(now()) @map("created_at")
   updatedAt             DateTime                 @updatedAt @map("updated_at")
   attachmentsRecords    CustomRecipeAttachment[]
+  deliveries            CustomRecipeDelivery[]
+  aftersales            CustomRecipeAftersale[]
   customer              User                     @relation("CustomRecipeOrderCustomer", fields: [customerId], references: [id], onDelete: Cascade)
   dog                   Dog                      @relation("CustomRecipeOrderDog", fields: [dogId], references: [id], onDelete: Cascade)
   recipe                Recipe?                  @relation("CustomRecipeOrders", fields: [recipeId], references: [id])
@@ -2496,8 +2510,14 @@ model CustomRecipeOrder {
 model CustomRecipeSchedule {
   id              String   @id @default(uuid()) @map("id")
   date            DateTime @unique @map("date") @db.Date
+  /// 当天的**接单**容量。与下面的交付容量分开：
+  /// 接单是收钱那一刻，交付是交出食谱那一天，对一个人来说这是两件事。
   capacity        Int      @default(4) @map("capacity")
   bookedCount     Int      @default(0) @map("booked_count")
+  /// 当天的**交付**容量（批次 1.6）—— 影响承诺交付日往后排
+  deliveryCapacity Int     @default(4) @map("delivery_capacity")
+  /// 当天已占用的交付位（批次 1.6）
+  deliveryCount   Int      @default(0) @map("delivery_count")
   isAvailable     Boolean  @default(true) @map("is_available")
   isPublicHoliday Boolean  @default(false) @map("is_public_holiday")
   notes           String?  @map("notes")
@@ -2605,6 +2625,170 @@ model CustomRecipeConfig {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("custom_recipe_config")
+}
+
+/// ===== 交付 / 售后 / 日历 / 问卷（2026-10-16 新增，批次 1.6）=====
+///
+/// 这四张表是"真正把食谱交付给客户"的地基。在它们存在之前：
+///   · 交付 = 往订单上写一个 `recipe_id` ＋ 改状态 ＋ 发条通知，
+///     **没有交付记录、没有内容留档**；
+///   · 售后**完全没有**（通用售后页只认成品订单，定制单点进去是错的页面）。
+///
+/// 四张表全部**只新增**，不改任何既有表的结构，回滚直接 drop。
+
+/// 一次交付 = 一条记录。同一张订单可以有多条（重新交付、售后修改后再交付）。
+model CustomRecipeDelivery {
+  id              String    @id @default(uuid()) @map("id")
+  orderId         String    @map("order_id")
+  /// 第几次交付，从 1 开始；同一订单内唯一
+  version         Int
+  /// 交付出去的那道私密食谱（recipe.id）
+  recipeId        String    @map("recipe_id")
+  /// 交付时食谱的版本号快照
+  recipeVersion   Int?      @map("recipe_version")
+
+  /// 【核心】交付时刻**冻结**的内容快照。
+  ///
+  /// 为什么必须有：现状是"就地覆盖同一行 Recipe"，营养师交付后再改配方，
+  /// 顾客下次打开看到的内容会**跟着变**，而且查不到改了哪。
+  /// 快照是唯一能回溯的手段。
+  contentSnapshot Json      @map("content_snapshot")
+
+  /// 这一版包含哪些交付物（取值来自选项集 custom_recipe_delivery_item）
+  items           Json      @default("[]")
+  /// 营养师给定的喂食参数（几餐 / 每餐多少 / 做几天）—— 决定采购量与制作量
+  feedingParams   Json?     @map("feeding_params")
+
+  deliveredBy     String    @map("delivered_by")
+  deliveredAt     DateTime  @default(now()) @map("delivered_at")
+
+  /// 通知状态：PENDING / SENT / FAILED（失败由定时任务重试）
+  notifyStatus    String?   @map("notify_status") @db.VarChar(20)
+  notifiedAt      DateTime? @map("notified_at")
+  viewedAt        DateTime? @map("viewed_at")
+  confirmedAt     DateTime? @map("confirmed_at")
+  /// CUSTOMER（顾客主动确认）/ AUTO（超期自动完成）
+  confirmChannel  String?   @map("confirm_channel") @db.VarChar(20)
+
+  /// 被哪一版替换（重新交付时指向新版本）；null = 当前有效版本
+  replacedByDeliveryId String? @map("replaced_by_delivery_id")
+  revokedAt       DateTime? @map("revoked_at")
+  revokeReason    String?   @map("revoke_reason") @db.VarChar(200)
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  order           CustomRecipeOrder      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  recipe          Recipe                 @relation(fields: [recipeId], references: [id])
+  aftersales      CustomRecipeAftersale[]
+
+  @@unique([orderId, version])
+  @@index([orderId])
+  @@index([recipeId])
+  @@index([deliveredAt])
+  @@map("custom_recipe_delivery")
+}
+
+/// 售后单。**独立于订单状态** —— 否则"已交付"与"售后中"会互相覆盖，
+/// 跟现状 `DELIVERED` 是终态一样僵。
+model CustomRecipeAftersale {
+  id            String   @id @default(uuid()) @map("id")
+  orderId       String   @map("order_id")
+  /// 针对哪一版交付提出的（可空：交付前也可能提）
+  deliveryId    String?  @map("delivery_id")
+  /// 类型 —— 取值来自选项集 `custom_recipe_aftersale_type`
+  type          String   @map("type") @db.VarChar(48)
+  status        CustomRecipeAftersaleStatus @default(PENDING)
+  description   String   @db.VarChar(1000)
+  photos        String[] @default([])
+
+  handlerId     String?  @map("handler_id")
+  handleNote    String?  @map("handle_note") @db.VarChar(1000)
+  acceptedAt    DateTime? @map("accepted_at")
+  resolvedAt    DateTime? @map("resolved_at")
+  /// 处理结果是"调整食谱"时，指向重新交付的那一版
+  linkedDeliveryId String? @map("linked_delivery_id")
+  rejectReason  String?  @map("reject_reason") @db.VarChar(200)
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  order         CustomRecipeOrder     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  delivery      CustomRecipeDelivery? @relation(fields: [deliveryId], references: [id])
+
+  @@index([orderId])
+  @@index([status])
+  @@index([handlerId])
+  @@map("custom_recipe_aftersale")
+}
+
+enum CustomRecipeAftersaleStatus {
+  /// 待受理
+  PENDING
+  /// 已受理
+  ACCEPTED
+  /// 处理中
+  PROCESSING
+  /// 已解决
+  RESOLVED
+  /// 已拒绝
+  REJECTED
+}
+
+/// 按星期几的默认接单规则。
+///
+/// 日历上**具体某一天**的设置（`custom_recipe_schedule`）优先级更高；
+/// 这张表管的是"每周日固定休息"这类规律。
+model CustomRecipeWeekdayRule {
+  /// 0 = 周日 … 6 = 周六（与 JS `getDay()` 一致，避免转换出错）
+  weekday          Int     @id
+  isOpen           Boolean @default(true) @map("is_open")
+  /// 留空表示用配置里的全局值
+  capacity         Int?
+  deliveryCapacity Int?    @map("delivery_capacity")
+  note             String? @db.VarChar(100)
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("custom_recipe_weekday_rule")
+}
+
+/// 定制问卷字段（批次 1.6）。
+///
+/// 老板已连续改了 6 批定制页文案与结构，每次都要改小程序发版。
+/// 做完这张表，**改字段不用发版**。
+///
+/// 边界（刻意克制）：只做**字段级**配置，不做拖拽建表单；
+/// `type` 是受控白名单，不能自定义控件；结构化字段必须绑词表。
+model CustomRecipeFormField {
+  id            String   @id @default(uuid()) @map("id")
+  /// 分组码：BASIC / GOAL / ALLERGY / PREFERENCE / NOTE / ATTACHMENT
+  sectionCode   String   @map("section_code") @db.VarChar(32)
+  /// 字段码，稳定标识；有历史数据后**不允许改**，只能停用
+  key           String   @unique @db.VarChar(48)
+  label         String   @db.VarChar(64)
+  /// 受控类型白名单：SINGLE_CHOICE / MULTI_CHOICE / BOOLEAN / TEXT /
+  /// TEXTAREA / DATE / ATTACHMENT / DERIVED_READONLY
+  type          String   @db.VarChar(24)
+  required      Boolean  @default(false)
+  enabled       Boolean  @default(true)
+  sortOrder     Int      @default(0) @map("sort_order")
+  helpText      String?  @map("help_text") @db.VarChar(200)
+  placeholder   String?  @db.VarChar(100)
+  /// 选项来源：指向 `platform_option_set.code`；选择类字段必填
+  optionSetCode String?  @map("option_set_code") @db.VarChar(48)
+  /// 条件显示，如 {"field":"hasFoodAllergy","equals":true}
+  visibleWhen   Json?    @map("visible_when")
+  /// 校验规则，如 {"maxLength":500,"maxCount":9}
+  validation    Json?
+  /// 【关键】落到订单的哪里：
+  ///   `CORE:targetGoal` = 写核心列（算法要用的强类型字段）
+  ///   `EXTRA`           = 写 `order.answers` JSON
+  binding       String   @default("EXTRA") @db.VarChar(48)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([sectionCode, sortOrder])
+  @@map("custom_recipe_form_field")
 }
 
 /// ===== 平台选项字典（2026-10-16 新增，食谱定制重构 · 批次 1.3）=====

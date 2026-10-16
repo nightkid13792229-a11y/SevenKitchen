@@ -166,4 +166,83 @@ describe('食谱定制 · 数据库结构守卫', () => {
     expect(paymentSql).toContain('payment_transaction_id');
     expect(paymentSql).toContain('cancelled_at');
   });
+
+  describe('交付 / 售后 / 日历 / 问卷（2026-10-16 批次 1.6）', () => {
+    it('四张表都在（交付、售后、星期规则、问卷字段）', () => {
+      for (const model of [
+        'CustomRecipeDelivery',
+        'CustomRecipeAftersale',
+        'CustomRecipeWeekdayRule',
+        'CustomRecipeFormField',
+      ]) {
+        expect({ model, ok: modelBlock(schema, model).length > 0 }).toEqual({
+          model,
+          ok: true,
+        });
+      }
+    });
+
+    it('★ 交付单必须带 contentSnapshot（否则"交付后改配方会串改历史"这个缺陷会重演）', () => {
+      const block = modelBlock(schema, 'CustomRecipeDelivery');
+      expect(block).toMatch(/contentSnapshot\s+Json\s+@map\("content_snapshot"\)/);
+      // 版本号要么有，要么无法区分"第几版"
+      expect(block).toMatch(/version\s+Int/);
+      expect(block).toMatch(/@@unique\(\[orderId, version\]\)/);
+      // 替换关系：重新交付时旧版本要能指向新版本
+      expect(block).toMatch(/replacedByDeliveryId/);
+    });
+
+    it('★ 交付的食谱外键是 RESTRICT（食谱被交付过就不许删）', () => {
+      const block = modelBlock(schema, 'CustomRecipeDelivery');
+      expect(block).toMatch(
+        /recipe\s+Recipe\s+@relation\(fields: \[recipeId\], references: \[id\]\)/,
+      );
+      // 不带 onDelete 时 Prisma 默认就是 RESTRICT —— 这里用"没有 CASCADE"来锁住意图
+      expect(block).not.toMatch(/recipe\s+Recipe[^\n]*onDelete: Cascade/);
+    });
+
+    it('售后单独立于订单状态（有自己的状态枚举）', () => {
+      const block = modelBlock(schema, 'CustomRecipeAftersale');
+      expect(block).toMatch(/status\s+CustomRecipeAftersaleStatus/);
+      // 处理"调整食谱"时要能关联到重新交付的那一版
+      expect(block).toMatch(/linkedDeliveryId/);
+      // 交付记录被删时售后痕迹要保留（SET NULL），不是一起删掉
+      expect(block).toMatch(
+        /delivery\s+CustomRecipeDelivery\?\s+@relation\(fields: \[deliveryId\], references: \[id\]\)/,
+      );
+    });
+
+    it('问卷字段的 binding 双轨机制在（核心列 vs EXTRA JSON）', () => {
+      const block = modelBlock(schema, 'CustomRecipeFormField');
+      expect(block).toMatch(/binding\s+String\s+@default\("EXTRA"\)/);
+      expect(block).toMatch(/optionSetCode\s+String\?/);
+      expect(block).toMatch(/visibleWhen\s+Json\?/);
+    });
+
+    it('订单补了 answers 与 formSchemaVersion；排期补了交付容量', () => {
+      const order = modelBlock(schema, 'CustomRecipeOrder');
+      expect(order).toMatch(/answers\s+Json\?\s+@map\("answers"\)/);
+      expect(order).toMatch(/formSchemaVersion\s+Int\?/);
+
+      const schedule = modelBlock(schema, 'CustomRecipeSchedule');
+      expect(schedule).toMatch(/deliveryCapacity\s+Int\s+@default\(4\)/);
+      expect(schedule).toMatch(/deliveryCount\s+Int\s+@default\(0\)/);
+    });
+
+    it('迁移存在，且只新增（不 drop、不改既有列类型）', () => {
+      const sql = readProjectFile(
+        'prisma/migrations/20261017000000_custom_recipe_delivery_and_aftersale/migration.sql',
+      );
+      expect(sql).toMatch(/CREATE TABLE "custom_recipe_delivery"/);
+      expect(sql).toMatch(/CREATE TABLE "custom_recipe_aftersale"/);
+      expect(sql).toMatch(/CREATE INDEX "custom_recipe_delivery_order_id_idx"/);
+      expect(sql).toMatch(
+        /FOREIGN KEY \("recipe_id"\) REFERENCES "recipe"\("id"\) ON DELETE RESTRICT/,
+      );
+      // 只加不改
+      expect(sql).not.toMatch(/DROP TABLE/i);
+      expect(sql).not.toMatch(/DROP COLUMN/i);
+      expect(sql).not.toMatch(/ALTER COLUMN/i);
+    });
+  });
 });

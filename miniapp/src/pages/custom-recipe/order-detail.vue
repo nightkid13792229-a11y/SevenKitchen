@@ -364,9 +364,20 @@ const loadOrderDetail = async () => {
   needLogin.value = false;
   try {
     const detail = await fetchOrderDetail(orderId.value);
-    if (detail) {
-      order.value = detail as typeof order.value;
+
+    /**
+     * ⚠️ 这里用「先判空再赋值」而不是 `if (detail) { ... } else { ... }`。
+     *
+     * 原因：2026-10-16 我往 `if/else` 中间插了一段 try/catch，
+     * 结果把 `else` 劈成了悬空的语法错误 —— **单元测试全绿，构建才报错**
+     * （vitest 不完整编译 SFC）。项目规则要求改了小程序必须跑一次构建，
+     * 就是防这个。保持这个写法，别再往 if/else 中间插东西。
+     */
+    if (!detail) {
+      loadFailed.value = true;
+      return;
     }
+    order.value = detail as typeof order.value;
 
     /**
      * 已有的售后条数（只用于文案"你有 N 条反馈"）。
@@ -379,8 +390,6 @@ const loadOrderDetail = async () => {
       aftersaleCount.value = aftersales.length;
     } catch {
       aftersaleCount.value = 0;
-    } else {
-      loadFailed.value = true;
     }
   } catch (error) {
     // 401 不能报成"网络错误"：那会让顾客去查自己的网络，方向完全错了

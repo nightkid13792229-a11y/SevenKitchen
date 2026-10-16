@@ -227,6 +227,31 @@ else
   info "Applying database migrations..."
   pnpm prisma migrate deploy
   ok "Database migrations applied"
+  echo ""
+
+  # ==========================================================================
+  # 选项字典的初始内容（2026-10-16 加）
+  #
+  # ⚠️ 为什么必须在这里跑，而不是靠服务启动时自动补齐：
+  #   · **枚举类**的集（订单状态、定制目标）服务启动时会自动补齐 —— 那一套是防
+  #     "加了枚举忘了配中文"，不依赖部署。
+  #   · **数据类**的集（售后类型、交付物、活动量、餐数）**没有任何自动补齐**：
+  #     它们是运营内容，刻意不放在启动逻辑里（运营故意清空某个集时，
+  #     重启一次就被塞回来，他会以为系统在跟他作对）。
+  #
+  # 于是这些内容**只能靠部署时 seed**。2026-10-16 实测踩到：
+  # 部署过三次都没跑过 seed，生产上四个数据类选项集**全是 0 条** ——
+  # 顾客打开售后页没有任何类型可选，根本提交不了。
+  #
+  # 幂等：只补**空的**集，已有内容一行不动（运营改过的以数据库为准）。
+  # ==========================================================================
+  info "Seeding option dictionaries (idempotent)..."
+  if pnpm ts-node -r tsconfig-paths/register prisma/seed-platform-options.ts --apply; then
+    ok "Option dictionaries seeded"
+  else
+    # 不 fail：seed 失败不该拦住整个部署（服务本身还能跑，只是少几个下拉选项）
+    warn "Option dictionary seeding failed — 服务照常部署，但后台下拉可能是空的"
+  fi
 fi
 echo ""
 

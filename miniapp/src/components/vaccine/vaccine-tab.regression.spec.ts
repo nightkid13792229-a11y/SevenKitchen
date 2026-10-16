@@ -233,6 +233,24 @@ const step = (extra: Partial<VaccineStep>): VaccineStep =>
     ...extra,
   }) as VaccineStep
 
+describe('疫苗 · 计划项展开详情（老板 2026-10-16 第 2 条）', () => {
+  const timeline = read('PlanTimeline.vue')
+
+  it('每一项都有展开入口，展开后三样都给全：分类定义 / 依据 / 常见产品', () => {
+    expect(timeline).toContain('vk-plan__more')
+    expect(timeline).toContain("isOpen(step.key) ? '收起' : '详情 ›'")
+    expect(timeline).toContain('step.kindDefinition')
+    expect(timeline).toContain('step.basis')
+    expect(timeline).toContain('step.products.join')
+    expect(timeline).toContain('这一类是什么')
+  })
+
+  it('同时只展开一项（不然几条依据叠在一起，版面又被撑爆）', () => {
+    expect(timeline).toContain("const openKey = ref('')")
+    expect(timeline).toContain("openKey.value = openKey.value === key ? '' : key")
+  })
+});
+
 describe('疫苗 · 不作数的记录要说清为什么（老板 2026-10-16："20周够吗？有依据吗？"）', () => {
   const list = read('RecordList.vue')
   const tab = read('VaccineTab.vue')

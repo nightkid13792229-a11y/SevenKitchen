@@ -31,7 +31,7 @@
           <text v-if="windowText(step).sub" class="vk-plan__when-sub">{{ windowText(step).sub }}</text>
         </view>
 
-        <view class="vk-plan__body">
+        <view class="vk-plan__body" @tap="toggleRow(step.key)">
           <view class="vk-plan__line">
             <view class="vk-plan__kind" :class="`vk-plan__kind--${kindTone(step.kind)}`" />
             <text class="vk-plan__step">{{ planTitle(step) }}</text>
@@ -42,12 +42,30 @@
               class="vk-plan__layer"
               :class="{ 'vk-plan__layer--suggest': step.layer === 'SUGGEST' }"
             >{{ layerLabel(step.layer) }}</text>
+            <!-- 每一项都能展开：这一类是什么（定义）/ 为什么这么排（依据）/ 能打什么（常见产品） -->
+            <text class="vk-plan__more">{{ isOpen(step.key) ? '收起' : '详情 ›' }}</text>
           </view>
           <text
             v-if="rowNote(step).text"
             class="vk-plan__note"
             :class="{ 'vk-plan__note--over': rowNote(step).overdue }"
           >{{ rowNote(step).text }}</text>
+
+          <!-- 展开详情 -->
+          <view v-if="isOpen(step.key)" class="vk-plan__detail">
+            <view v-if="step.kindDefinition" class="vk-plan__field">
+              <text class="vk-plan__field-label">这一类是什么</text>
+              <text class="vk-plan__field-text">{{ step.kindDefinition }}</text>
+            </view>
+            <view v-if="step.basis" class="vk-plan__field">
+              <text class="vk-plan__field-label">依据</text>
+              <text class="vk-plan__field-text">{{ step.basis }}</text>
+            </view>
+            <view v-if="step.products && step.products.length > 0" class="vk-plan__field">
+              <text class="vk-plan__field-label">常见产品</text>
+              <text class="vk-plan__field-text">{{ step.products.join('、') }}</text>
+            </view>
+          </view>
         </view>
       </view>
 
@@ -59,7 +77,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { VaccineKind, VaccineLayer, VaccineStep } from '../../domain/vaccine/types'
 import {
   stepKindTone,
@@ -83,6 +101,22 @@ const props = withDefaults(defineProps<{
 })
 
 const plan = computed(() => props.plan || [])
+
+/**
+ * 展开的是哪一项（同时只开一项：一次看一项，版面不会被几条依据撑爆）。
+ *
+ * 老板 2026-10-16："免疫计划板块，每一项计划都需要给一个展开详情的按钮，
+ * 点击这个按钮之后，可以看到该计划的疫苗分类的定义、依据和常见疫苗推荐。"
+ */
+const openKey = ref('')
+
+function isOpen(key: string): boolean {
+  return openKey.value === key
+}
+
+function toggleRow(key: string) {
+  openKey.value = openKey.value === key ? '' : key
+}
 
 function windowText(step: VaccineStep) {
   return stepWindowText(step)
@@ -152,6 +186,38 @@ function layerLabel(layer: VaccineLayer) {
 .vk-plan__row--far .vk-plan__when-main,
 .vk-plan__row--far .vk-plan__when-sub {
   color: $vk-text-faint;
+}
+
+.vk-plan__more {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-size: $vk-font-sub;
+  color: $vk-brand;
+}
+
+.vk-plan__detail {
+  margin-top: 10rpx;
+  padding: 14rpx 16rpx;
+  background: $vk-page-bg;
+  border-radius: 16rpx;
+}
+
+.vk-plan__field + .vk-plan__field {
+  margin-top: 10rpx;
+}
+
+.vk-plan__field-label {
+  display: block;
+  font-size: 21rpx;
+  color: $vk-text-faint;
+}
+
+.vk-plan__field-text {
+  display: block;
+  margin-top: 2rpx;
+  font-size: $vk-font-sub;
+  color: $vk-text-body;
+  line-height: 1.55;
 }
 
 .vk-plan__row {

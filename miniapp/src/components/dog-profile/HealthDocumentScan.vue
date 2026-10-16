@@ -1132,7 +1132,16 @@ function pickAndScan() {
 
 /** 多张一起识别：逐张上传 + 识别，最后合并成一份待确认结果 */
 async function scanAll(filePaths: string[]) {
-  isBusy.value = true
+  /**
+   * ⚠️ 2026-10-16 修（老板："上传疫苗本两次都识别失败"）：
+   *    `isBusy` 原来在函数**第一行**就置真，而复位它的 `finally` 在下面那个大 try 上 ——
+   *    偏偏"压图 / 糊图检查"这两步在 try **外面**。只要它们抛一次错，
+   *    异常直接冒出去（连 `catch` 都够不着），`isBusy` 就**永远停在 true**：
+   *    之后每次点上传都在第一行被 `if (isBusy) return` 挡回去 ——
+   *    表现就是"点了没反应 / 一直识别失败"，而且刷新页面之前不会好。
+   *
+   *    现在整段（含准备阶段）都在同一个 try 里，任何路径都会复位。
+   */
   showConfirm.value = false
   scannedImageCount.value = 0
   requestedImageCount.value = filePaths.length
@@ -1155,6 +1164,10 @@ async function scanAll(filePaths: string[]) {
   let preparedPaths: string[] = []
   try {
     preparedPaths = await prepareScanImages(filePaths)
+  } catch (error) {
+    // 压图失败不该让整件事死掉：拿原图继续（慢一点，但能出结果）
+    preparedPaths = []
+    void error
   } finally {
     uni.hideLoading()
   }
@@ -1169,7 +1182,14 @@ async function scanAll(filePaths: string[]) {
    * （实测 540 像素宽的化验单被读出根本不存在的参考范围）。
    * 与其让家长把编出来的数值当成真的，不如先问一句。
    */
-  const blurry = await findBlurryScanImages(filePaths)
+  let blurry: string[] = []
+  try {
+    blurry = await findBlurryScanImages(filePaths)
+  } catch (error) {
+    // 这只是"先提醒一句"的检查，它自己失败不该拦住识别
+    void error
+    blurry = []
+  }
   if (blurry.length > 0) {
     const goOn = await confirmBlurryScanImages(blurry)
     if (!goOn) {
@@ -1177,6 +1197,7 @@ async function scanAll(filePaths: string[]) {
       return
     }
   }
+
 
   /**
    * **不属于某一页**的提示（例如"第 1、3 张没能识别"这种总结）。
@@ -1206,8 +1227,17 @@ async function scanAll(filePaths: string[]) {
    */
   let failed = 0
 
+  isBusy.value = true
   try {
-    for (let index = 0; index < filePaths.length; index += 1) {
+    /**
+     * 准备阶段（原来在 try 外面）：
+     *   ① 把原图压到"识别用"的尺寸；
+     *   ② 太糊的图先问一句要不要继续。
+     * 这两步也会失败（相册拿到的临时文件读不出来、canvas 不可用…），
+     * 放进 try 才能保证 `isBusy` 被复位、并且给用户一句能看懂的话。
+     */
+    {
+
       uni.showLoading({
         title: filePaths.length > 1
           ? `识别中 ${index + 1}/${filePaths.length}…`

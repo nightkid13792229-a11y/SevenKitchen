@@ -63,27 +63,31 @@
           </view>
         </view>
 
+        <!--
+          按钮由**后端下发**（`renderable.actions`，2026-10-16 批次 5.4）。
+
+          此前这里是写死的状态判断：
+            `v-if="order.status === 'PENDING_PAYMENT'"` → 立即付款
+            `v-else-if="order.status === 'DELIVERED'"`  → 查看定制食谱
+          后果很具体：订单一变成「已完成」，**「查看定制食谱」就消失了** ——
+          顾客确认收货后反而在列表里找不到自己的食谱，只能绕进详情页。
+
+          现在与详情页走同一套后端判定，列表只负责画。
+        -->
         <view class="order-footer">
           <button
-            v-if="order.status === 'PENDING_PAYMENT'"
+            v-for="action in actionsOf(order)"
+            :key="action.code"
             class="action-btn"
-            :disabled="payingOrderId === order.orderId"
-            @tap.stop="payOrder(order.orderId)"
+            :class="actionClassOf(action)"
+            :disabled="!action.enabled || payingOrderId === order.orderId"
+            @tap.stop="onListAction(order, action)"
           >
-            {{ payingOrderId === order.orderId ? '支付中...' : '立即付款' }}
-          </button>
-          <button
-            v-else-if="order.status === 'DELIVERED'"
-            class="action-btn primary"
-            @tap.stop="viewRecipe(order.recipeId)"
-          >
-            查看定制食谱
-          </button>
-          <button
-            class="action-btn secondary"
-            @tap.stop="contactService"
-          >
-            联系客服
+            {{
+              payingOrderId === order.orderId && action.code === 'PAY'
+                ? '支付中...'
+                : action.label
+            }}
           </button>
         </view>
 
@@ -273,6 +277,84 @@ const viewOrderDetail = (orderId: string) => {
  * 待付款订单的付款入口：列表里直接调起微信支付，少一跳。
  * 支付通道不可用时（MANUAL）再去提交成功页看客服收款方式。
  */
+/**
+ * 渲染契约里的按钮（2026-10-16 批次 5.4）。
+ *
+ * ⚠️ **不在前端判断"这单该显示哪些按钮"** ——
+ * 那是业务判定，由后端 `renderable.actions` 下发。
+ * 前端只做一件事：把 code 接到对应的处理函数上。
+ *
+ * 老后端不返回 renderable 时回退到"只看详情"，
+ * 而不是回退到写死的状态判断（那正是这次要修掉的东西）。
+ */
+interface ListAction {
+  code: string;
+  label: string;
+  enabled: boolean;
+  disabledReason?: string | null;
+  style?: string | null;
+}
+
+function actionsOf(order: CustomRecipeOrderItem): ListAction[] {
+  const actions = (order as any).renderable?.actions;
+  if (Array.isArray(actions) && actions.length > 0) {
+    return actions as ListAction[];
+  }
+  // 老后端兜底：至少让顾客能点进详情
+  return [
+    { code: 'VIEW_DETAIL', label: '查看详情', enabled: true, style: 'line' },
+  ];
+}
+
+/** 后端的 style 是语义档位，映射成类名是纯呈现 */
+function actionClassOf(action: ListAction): string {
+  switch (action.style) {
+    case 'primary':
+      return 'primary';
+    case 'line':
+      return 'secondary';
+    default:
+      return 'secondary';
+  }
+}
+
+/** code → 处理函数。**这是前端唯一该做的事** */
+function onListAction(order: CustomRecipeOrderItem, action: ListAction) {
+  if (!action.enabled) return;
+  switch (action.code) {
+    case 'PAY':
+      void payOrder(order.orderId);
+      return;
+    case 'VIEW_DELIVERY':
+    case 'VIEW_DETAIL':
+      viewRecipe(order.recipeId);
+      return;
+    case 'CONTACT_SERVICE':
+      void contactService();
+      return;
+    /**
+     * 下面这些**都进详情页**，不在列表上直接做。
+     *
+     * 理由：列表里没有足够上下文。举例——
+     * 「确认收到」点下去就不可撤销了，而顾客在列表上看不到交付物内容；
+     * 「有问题」（提售后）要先看到喂食量和采购清单才好描述问题。
+     * 把这类动作放在列表上，等于鼓励顾客在信息不足时做决定。
+     *
+     * 显式列出而不是交给 default：将来后端加了新按钮，
+     * **至少落进这里有个明确去处**，而不是静默走到某个分支。
+     */
+    case 'CONFIRM_RECEIPT':
+    case 'APPLY_AFTERSALE':
+    case 'ORDER_FINISHED_FOOD':
+    case 'CANCEL_SELF':
+      viewOrderDetail(order.orderId);
+      return;
+    default:
+      // 后端加了没见过的按钮：进详情页，至少不会点不动
+      viewOrderDetail(order.orderId);
+  }
+}
+
 const payOrder = async (orderId: string) => {
   if (payingOrderId.value) return;
 

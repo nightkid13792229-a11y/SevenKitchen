@@ -459,6 +459,26 @@ export class CustomRecipeService implements ICustomRecipeRepository {
             },
           },
           attachmentsRecords: true,
+          /**
+           * 交付与售后（2026-10-16 批次 5.4）。
+           *
+           * 加它们是为了让**列表也能下发渲染契约** ——
+           * 此前列表页用写死的 `status === 'DELIVERED'` 决定按钮，
+           * 结果订单一变成「已完成」，列表上就再也看不到「查看定制食谱」：
+           * 顾客确认收货后反而找不到自己的食谱了。
+           *
+           * `deliveries` 只取当前有效的那版（被替换掉的不算），
+           * 因为"有没有交付""有没有待确认的交付"问的都是当前这版。
+           */
+          deliveries: {
+            where: { replacedByDeliveryId: null },
+            select: { confirmedAt: true },
+          },
+          aftersales: {
+            where: { status: { in: ['PENDING', 'PROCESSING'] } },
+            select: { id: true },
+            take: 1,
+          },
         },
         orderBy: { createdAt: 'desc' },
         skip,

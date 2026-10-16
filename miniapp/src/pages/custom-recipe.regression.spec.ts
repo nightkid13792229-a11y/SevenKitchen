@@ -1877,3 +1877,87 @@ describe('定制页 · 报告缩略图相关（第五批补丁）', () => {
     expect(page).toContain('hasFoodAllergy.value = true;')
   })
 })
+
+/**
+ * 订单列表的按钮必须来自后端契约（2026-10-16 批次 5.4）
+ *
+ * ## 事故经过
+ *
+ * 列表页原先用写死的状态判断决定按钮：
+ *   `v-if="order.status === 'PENDING_PAYMENT'"` → 立即付款
+ *   `v-else-if="order.status === 'DELIVERED'"`  → 查看定制食谱
+ *
+ * 于是订单一变成「已完成」（顾客点了"确认收到"），
+ * **「查看定制食谱」就从列表上消失了** ——
+ * 顾客刚确认收货，回头想在列表里打开自己的食谱，发现没入口了。
+ *
+ * 而详情页是对的（用 `renderable.actions`）—— 同一件事两套判定，
+ * 迟早只改一处。这正是老板说的"前端只渲染"要解决的问题。
+ */
+describe('订单列表按钮来自后端契约', () => {
+  const raw = read('src/pages/custom-recipe/orders.vue');
+
+  /**
+   * ⚠️ **必须先剥注释** —— 这段代码的说明注释里**逐字引用了被删掉的旧代码**
+   * （"此前这里是 `v-if="order.status === 'PENDING_PAYMENT'"`"）。
+   * 第一版没剥，守卫对着注释红了 —— 本项目第 6 次栽在"注释骗过断言"上。
+   */
+  const source = raw
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1');
+
+  it('★ 不再用写死的状态判断决定按钮', () => {
+    const footerStart = source.indexOf('class="order-footer"');
+    const footerEnd = source.indexOf('</view>', footerStart);
+    const footer = source.slice(footerStart, footerEnd);
+
+    expect(footer).not.toContain('order.status');
+    expect(footer).not.toContain('PENDING_PAYMENT');
+    expect(footer).not.toContain('DELIVERED');
+  });
+
+  /**
+   * ⚠️ **不在本守卫范围内的一处前端判断**（记录在案，不是漏了）
+   *
+   * 支付时限提示那一行还留着 `order.status === 'PENDING_PAYMENT' &&`。
+   * 它**不能直接删** —— 因为 `buildPaymentTimeoutHint` 在没有截止时间时
+   * 会退回**全局配置**分支（"请在 30 分钟内完成支付"），
+   * 而对已付款单后端返回的 `paymentDeadlineAt` 是 `null`，
+   * 于是一旦去掉那个状态判断，**已付款的订单上会冒出一句
+   * "请在 30 分钟内完成支付，超时订单会自动取消"**。
+   *
+   * 也就是说：那个判断实际在**挡一个错**。要清掉它，
+   * 得先把提示文案本身改成由后端下发（`renderable` 里加一项），
+   * 而那属于另一处改动，不适合塞进这一批。
+   *
+   * 这里把它写下来，免得下次有人看到"还有一处写死判断"就直接删掉。
+   */
+  it('（记录）支付时限提示仍有一处前端状态判断，删之前要先改后端', () => {
+    expect(source).toContain("order.status === 'PENDING_PAYMENT'");
+    // 一旦这行没了，说明有人动过 —— 提醒他同时确认提示文案已改由后端下发
+    expect(source).toContain('paymentHintOf');
+  });
+
+  it('★ 按钮从 renderable.actions 渲染', () => {
+    expect(source).toContain('actionsOf(order)');
+    expect(source).toContain('action.code');
+    expect(source).toContain('action.label');
+  });
+
+  it('★ "能不能点"也用后端的 enabled，不是前端判的', () => {
+    expect(source).toContain('action.enabled');
+  });
+
+  it('★ 前端只做 code → 处理函数的映射', () => {
+    expect(source).toContain('function onListAction');
+    for (const code of ['PAY', 'VIEW_DELIVERY', 'CONTACT_SERVICE']) {
+      expect(source).toContain(`case '${code}'`);
+    }
+  });
+
+  it('老后端不返回 renderable 时兜底成"查看详情"，而不是回到写死判断', () => {
+    expect(source).toContain("code: 'VIEW_DETAIL'");
+    expect(source).toContain("label: '查看详情'");
+  });
+});

@@ -125,8 +125,53 @@ export class CustomRecipeController {
     const paymentTimeoutMinutes =
       await this.customRecipeService.getPaymentTimeoutMinutes();
 
+    /**
+     * ★ 渲染契约（2026-10-16 批次 5.4）。
+     *
+     * 列表页此前用**写死的状态判断**决定按钮
+     * （`status === 'PENDING_PAYMENT'` / `status === 'DELIVERED'`），
+     * 于是订单一变成「已完成」，列表上就**再也看不到「查看定制食谱」** ——
+     * 顾客确认收货后反而找不到自己的食谱，只能绕进详情页。
+     *
+     * 现在按钮与状态文案都由后端算（与详情页同一套判定）。
+     *
+     * ⚠️ 三个配置值在这里取**一次**，不是每单取一次；渲染契约并发组装。
+     * 逐单去取配置会让 20 单的列表查 60 次配置。
+     */
+    const [requireCustomerConfirm, aftersaleWindowDays] = await Promise.all([
+      this.customRecipeService.getRequireCustomerConfirm(),
+      this.customRecipeService.getAftersaleWindowDays(),
+    ]);
+
+    const renderables = await Promise.all(
+      orders.map((order) =>
+        this.viewService.buildCustomerView({
+          status: order.status,
+          createdAt: order.createdAt,
+          paymentConfirmedAt: order.paymentConfirmedAt,
+          deliveredAt: order.deliveredAt,
+          completedAt: order.completedAt,
+          estimatedDeliveryDate: order.estimatedDeliveryDate,
+          paymentDeadlineAt: this.resolvePaymentDeadline(
+            order,
+            paymentTimeoutMinutes,
+          ),
+          cancellationReason: order.cancellationReason,
+          refundStatus: order.refundStatus ?? null,
+          refundAmount: this.toNullableNumber(order.refundAmount),
+          hasAnyDelivery: (order.deliveries ?? []).length > 0,
+          hasUnconfirmedDelivery: (order.deliveries ?? []).some(
+            (delivery: any) => !delivery.confirmedAt,
+          ),
+          hasOpenAftersale: (order.aftersales ?? []).length > 0,
+          requireCustomerConfirm,
+          aftersaleWindowDays,
+        }),
+      ),
+    );
+
     return ApiResponseDto.success({
-      orders: orders.map((order) => ({
+      orders: orders.map((order, index) => ({
         orderId: order.orderId,
         dogName: order.dog?.name ?? '',
         targetGoal: order.targetGoal,
@@ -163,6 +208,7 @@ export class CustomRecipeController {
         refundAmount: this.toNullableNumber(order.refundAmount),
         refundedAt: order.refundedAt ?? null,
         createdAt: order.createdAt,
+        renderable: renderables[index],
       })),
       total,
       page,

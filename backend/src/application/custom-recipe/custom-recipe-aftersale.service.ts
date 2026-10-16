@@ -329,6 +329,8 @@ export class CustomRecipeAftersaleService {
           resolvedAt: row.resolvedAt,
           /** 等了多久 —— 客服一眼看出哪条催得急 */
           hoursWaiting: urgency.hoursWaiting,
+          /** 是不是"催得急"（后台标红）—— 阈值由后端定，前端不判断 */
+          isUrgent: urgency.isUrgent,
           /** 后台能做什么（与顾客侧渲染契约同一套思路） */
           actions: this.staffActions(row.status),
         };

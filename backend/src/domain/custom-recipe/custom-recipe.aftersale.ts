@@ -142,6 +142,13 @@ export function describeAftersaleProgress(input: {
 }
 
 /**
+ * 待受理超过这么多小时就算"催得急"（后台会标红）。
+ *
+ * 24 小时是**一天**：顾客昨天提的还没人理，今天就该显眼。
+ */
+export const AFTERSALE_URGENT_HOURS = 24;
+
+/**
  * 后台待办排序用的紧急度。
  *
  * 规则很简单，但**写出来比藏在排序代码里好**：
@@ -154,7 +161,12 @@ export function aftersaleUrgency(input: {
   type: string;
   createdAt: Date;
   now: Date;
-}): { hoursWaiting: number; typeWeight: number; score: number } {
+}): {
+  hoursWaiting: number;
+  typeWeight: number;
+  score: number;
+  isUrgent: boolean;
+} {
   const hoursWaiting = Math.max(
     0,
     (input.now.getTime() - input.createdAt.getTime()) / (60 * 60 * 1000),
@@ -162,9 +174,21 @@ export function aftersaleUrgency(input: {
   const typeWeight = input.type === 'ADJUST_RECIPE' ? 2 : 1;
   const pendingWeight = input.status === 'PENDING' ? 1.5 : 1;
 
+  const roundedHours = Math.round(hoursWaiting * 10) / 10;
+
   return {
-    hoursWaiting: Math.round(hoursWaiting * 10) / 10,
+    hoursWaiting: roundedHours,
     typeWeight,
-    score: hoursWaiting * typeWeight * pendingWeight,
+    score: roundedHours * typeWeight * pendingWeight,
+    /**
+     * 是不是"催得急"。
+     *
+     * ⚠️ **放在这里而不是让前端判** —— 前端原来写的是
+     * `item.status === 'PENDING' && item.hoursWaiting >= 24`，
+     * 那又是"前端在判断业务状态"。阈值这种东西改一次
+     * （比如老板说"12 小时就该催"）不该去改前端。
+     */
+    isUrgent:
+      input.status === 'PENDING' && roundedHours >= AFTERSALE_URGENT_HOURS,
   };
 }

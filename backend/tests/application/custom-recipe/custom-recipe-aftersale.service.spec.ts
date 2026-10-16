@@ -495,6 +495,60 @@ describe('CustomRecipeAftersaleService · 后台处理', () => {
       expect(list.map((item) => item.id)).toEqual(['a-adjust', 'a-question']);
     });
 
+    it('★ "催得急"由后端判定（前端原来自己判 status，那是业务判断）', async () => {
+      const now = new Date('2026-10-16T12:00:00+08:00');
+      const { service } = createForStaff({
+        rows: [
+          {
+            id: 'a-fresh',
+            orderId: 'o1',
+            type: 'QUESTION',
+            status: 'PENDING',
+            description: 'x',
+            photos: [],
+            createdAt: new Date('2026-10-16T11:00:00+08:00'), // 1 小时
+            acceptedAt: null,
+            resolvedAt: null,
+            order: { orderId: 'CR1', customerId: 'c1', status: 'COMPLETED', dog: null, customer: null },
+          },
+          {
+            id: 'a-stale',
+            orderId: 'o2',
+            type: 'QUESTION',
+            status: 'PENDING',
+            description: 'y',
+            photos: [],
+            createdAt: new Date('2026-10-15T11:00:00+08:00'), // 25 小时
+            acceptedAt: null,
+            resolvedAt: null,
+            order: { orderId: 'CR2', customerId: 'c2', status: 'COMPLETED', dog: null, customer: null },
+          },
+          {
+            id: 'a-accepted',
+            orderId: 'o3',
+            type: 'QUESTION',
+            status: 'ACCEPTED',
+            description: 'z',
+            photos: [],
+            createdAt: new Date('2026-10-10T11:00:00+08:00'), // 很久了，但已受理
+            acceptedAt: now,
+            resolvedAt: null,
+            order: { orderId: 'CR3', customerId: 'c3', status: 'COMPLETED', dog: null, customer: null },
+          },
+        ],
+      });
+
+      const list = await service.listForStaff({ now });
+      const byId = Object.fromEntries(list.map((item) => [item.id, item]));
+
+      // 25 小时且还没人受理 → 催得急
+      expect(byId['a-stale'].isUrgent).toBe(true);
+      // 才 1 小时 → 不急
+      expect(byId['a-fresh'].isUrgent).toBe(false);
+      // 已经受理了 → 不急（有人在处理了，标红只会干扰）
+      expect(byId['a-accepted'].isUrgent).toBe(false);
+    });
+
     it('默认只列未处理完的（客服要看"还有几件事没做"）', async () => {
       const { service, prisma } = createForStaff({ rows: [] });
 

@@ -1673,6 +1673,21 @@ export class HealthReportExtractionService {
       );
     }
 
+    /**
+     * 把这次识别的**结果概览**打一行日志（2026-10-16 加）。
+     *
+     * 起因：老板两次上传疫苗本都提示"没有识别到内容"，但生产日志里什么都看不到 ——
+     * 成功的请求 Nest 不记录，于是我只能靠猜。这一行把"读出了几条、模型判成什么类型、
+     * 给了什么提醒、看的是哪张图"记全，下次直接看日志就知道卡在哪。
+     *
+     * ⚠️ 只记数量和类型，不记识别出来的内容（疫苗名、日期属于用户数据）。
+     */
+    this.logger.log(
+      `[Extraction] type=${documentType} drafts=${drafts.length} ` +
+        `warnings=${warnings.length} image=${String(input.imageUrl).slice(0, 120)}` +
+        (warnings.length > 0 ? ` firstWarning=${String(warnings[0]).slice(0, 80)}` : ''),
+    );
+
     return {
       documentType,
       drafts,

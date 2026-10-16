@@ -16,7 +16,6 @@ import {
   CORE_SCHEDULE,
   RHYTHM_ALL_IGNORED,
   VACCINE_KIND_LABELS,
-  VACCINE_KIND_DEFINITIONS,
   VACCINE_KIND_SHORT_LABELS,
   type VaccineKind,
 } from './schedule-table';
@@ -72,8 +71,6 @@ export interface PlanStepDto {
   statusLabel: string;
   /** 类别**短名**（计划行那种窄位置用；长名会把行撑成两行） */
   kindShort?: string;
-  /** 类别**定义**：这一类是什么、为什么要打（展开详情时给家长看） */
-  kindDefinition?: string;
   /** 卡片上那行**短话**（原型 B/F/I 卡上那句）；与 `basis` 分工见程序表 */
   hint?: string;
   /**
@@ -213,7 +210,6 @@ export function toStepDto(
     kind: step.kind,
     kindLabel: VACCINE_KIND_LABELS[step.kind],
     kindShort: VACCINE_KIND_SHORT_LABELS[step.kind],
-    kindDefinition: VACCINE_KIND_DEFINITIONS[step.kind],
     label: step.label,
     layer: step.layer,
     windowStart: toDateText(step.windowStart),

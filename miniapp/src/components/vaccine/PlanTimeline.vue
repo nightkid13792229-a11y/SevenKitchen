@@ -42,7 +42,7 @@
               class="vk-plan__layer"
               :class="{ 'vk-plan__layer--suggest': step.layer === 'SUGGEST' }"
             >{{ layerLabel(step.layer) }}</text>
-            <!-- 每一项都能展开：这一类是什么（定义）/ 为什么这么排（依据）/ 能打什么（常见产品） -->
+            <!-- 每一项都能展开：为什么这么排（依据）/ 能打什么（常见产品） -->
             <text class="vk-plan__more">{{ isOpen(step.key) ? '收起' : '详情 ›' }}</text>
           </view>
           <text
@@ -53,10 +53,9 @@
 
           <!-- 展开详情 -->
           <view v-if="isOpen(step.key)" class="vk-plan__detail">
-            <view v-if="step.kindDefinition" class="vk-plan__field">
-              <text class="vk-plan__field-label">这一类是什么</text>
-              <text class="vk-plan__field-text">{{ step.kindDefinition }}</text>
-            </view>
+            <!-- 2026-10-16 老板要求去掉"类别定义"那一格（原话见需求文档），
+                 展开里只留这一刻真正用得上的两样：依据 + 常见产品。
+                 ⚠️ 注释里也别把那几个字抄回来 —— 守卫是查源码文本的，抄了就红。 -->
             <view v-if="step.basis" class="vk-plan__field">
               <text class="vk-plan__field-label">依据</text>
               <text class="vk-plan__field-text">{{ step.basis }}</text>

@@ -1226,6 +1226,8 @@ async function scanAll(filePaths: string[]) {
    * 门诊病历成一条病历记录，谁也不吃掉谁。
    */
   let failed = 0
+  /** 这次没读出来的图（保留下来以便排查，见上面那处说明） */
+  const keepForDiagnosis: { index: number; url: string }[] = []
 
   isBusy.value = true
   try {
@@ -1295,9 +1297,16 @@ async function scanAll(filePaths: string[]) {
       speciesHint: String((data as { speciesHint?: string }).speciesHint || ''),
           })
         } else {
-          // 这张啥也没读出来 → 传上去的图没用了，立刻删掉，别占 COS 空间
+          /**
+           * 这张啥也没读出来。
+           *
+           * ⚠️ 2026-10-16：**暂时不再立刻删掉这张图** —— 老板两次上传都提示
+           *    "没有识别到内容"，可图一删我就没法复现、没法看是哪张、
+           *    也没法判断是照片的问题还是识别的问题。先留着（后端日志里也有它的地址），
+           *    排查完再恢复"没用的图立刻删"。
+           */
           pageDraftCache[index] = { type: imageType, drafts: [] }
-          await dropUploadedFile(uploadedUrl)
+          keepForDiagnosis.push({ index: index + 1, url: uploadedUrl })
           failed += 1
           pageResults.push({
             index: index + 1,
@@ -1346,9 +1355,17 @@ async function scanAll(filePaths: string[]) {
     const collectedCount = [...draftsByType.values()]
       .reduce((sum, list) => sum + list.length, 0)
     if (collectedCount === 0) {
-      throw new Error(
-        firstReadableWarning || collectedWarnings[0] || '没识别到内容，请换一张更清晰的图片',
-      )
+      /**
+       * 说清是"没读出来"还是"读出来了但用不上"。
+       *
+       * 后端会给一句具体原因（例如"未识别到可用内容，请换一张更清晰的图片，
+       * 或改用手工填写"），优先用它 —— 那是唯一能告诉家长该怎么做的话。
+       */
+      const reason =
+        collectedWarnings[0] ||
+        firstReadableWarning ||
+        '没识别到内容，请换一张更清晰的图片，或改用手工填写'
+      throw new Error(reason)
     }
 
     if (failed > 0) {

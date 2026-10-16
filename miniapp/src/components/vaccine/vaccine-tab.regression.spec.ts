@@ -236,13 +236,18 @@ const step = (extra: Partial<VaccineStep>): VaccineStep =>
 describe('疫苗 · 计划项展开详情（老板 2026-10-16 第 2 条）', () => {
   const timeline = read('PlanTimeline.vue')
 
-  it('每一项都有展开入口，展开后三样都给全：分类定义 / 依据 / 常见产品', () => {
+  it('每一项都有展开入口，展开后给：依据 + 常见产品', () => {
     expect(timeline).toContain('vk-plan__more')
     expect(timeline).toContain("isOpen(step.key) ? '收起' : '详情 ›'")
-    expect(timeline).toContain('step.kindDefinition')
     expect(timeline).toContain('step.basis')
     expect(timeline).toContain('step.products.join')
-    expect(timeline).toContain('这一类是什么')
+    /*
+     * ⚠️ 2026-10-16 老板："「这一类是什么」这个字段不再展示，可以删除掉。"
+     *    所以展开里只剩"这一刻真正用得上"的两样：依据 + 常见产品。
+     *    要加回来，得先问老板。
+     */
+    expect(timeline).not.toContain('这一类是什么')
+    expect(timeline).not.toContain('step.kindDefinition')
   })
 
   it('同时只展开一项（不然几条依据叠在一起，版面又被撑爆）', () => {

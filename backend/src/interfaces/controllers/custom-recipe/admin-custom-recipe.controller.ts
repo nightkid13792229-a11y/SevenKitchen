@@ -25,6 +25,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CustomRecipeService } from '../../../application/custom-recipe/custom-recipe.service';
+import { CustomRecipeDeliveryService } from '../../../application/custom-recipe/custom-recipe-delivery.service';
 import {
   CustomRecipeConfigService,
   type UpdateCustomRecipeConfigDto,
@@ -70,7 +71,24 @@ export class AdminCustomRecipeController {
      * 不构成循环依赖。
      */
     private readonly wechatPaymentService: WechatPaymentService,
+    /**
+     * 交付服务（2026-10-16 批次 2.1）：建交付记录 + 内容快照 + 算喂食量。
+     */
+    private readonly deliveryService: CustomRecipeDeliveryService,
   ) {}
+
+  /**
+   * 取当前操作人标识，用于交付留痕（"谁交的"）。
+   *
+   * 后台现阶段只有老板一个人操作，但留痕不嫌早 ——
+   * 将来加人时不用回头补数据。取不到就记 `unknown`，不编造。
+   */
+  private currentOperatorId(req: {
+    user?: { userId?: string; staffId?: string; id?: string };
+  }): string {
+    const user = req?.user;
+    return user?.userId || user?.staffId || user?.id || 'unknown';
+  }
 
   // ---------- 食谱定制设置 ----------
 
@@ -455,6 +473,7 @@ export class AdminCustomRecipeController {
   @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Deliver an existing custom recipe to the order' })
   async deliverRecipe(
+    @Req() req: any,
     @Param('orderId') orderId: string,
     @Body('recipeId') recipeId: string,
   ) {
@@ -463,10 +482,19 @@ export class AdminCustomRecipeController {
       throw new BadRequestException('请选择要交付的食谱');
     }
 
-    const result = await this.customRecipeService.deliverExistingRecipe(
-      orderId,
-      target,
-    );
+    /**
+     * 2026-10-16（批次 2.1）：改走**交付服务**。
+     *
+     * 此前这里是 `deliverExistingRecipe` —— 它只改订单（写 recipeId + 改状态），
+     * **不留交付记录、不留内容快照**，而且**绕过了状态机**。
+     * 现在交付服务做同样的事，但会：生成快照、建版本记录、走状态机、
+     * 算出"每天喂多少克"、设置自动完成闹钟。
+     */
+    const result = await this.deliveryService.deliver({
+      orderIdOrId: orderId,
+      recipeIdOrBizId: target,
+      deliveredBy: this.currentOperatorId(req),
+    });
 
     /**
      * 重新交付也要发通知：顾客手里那份已经换了，不通知他会一直按旧食谱看。

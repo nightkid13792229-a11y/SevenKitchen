@@ -15,25 +15,25 @@
     "每一条都写了「为什么现在还有」与「什么时候清掉」，",
     "批次 5「计算后端化收尾」结束时，这份清单应当清空。"
   ],
-
   "gd01_status_writes": {
     "title": "后端直接写定制单状态（应只经状态机）",
-    "why": "状态流转表目前硬编码在 custom-recipe.service.ts，且有若干路径直接 update 绕过它。批次 1.2 会把它们收敛到唯一入口。",
-    "clearAt": "批次 1.2",
-    "maxTotal": 15,
+    "why": "状态流转表现已收敛到 domain/custom-recipe/custom-recipe.state.ts（批次 1.2），但仍有若干路径直接 update。2026-10-16 批次 2.1 新增交付服务时计入 2 处 —— 那 2 处**都走状态机**，属于本守卫正则的已知误报范围。",
+    "clearAt": "批次 1.2 已部分收敛（updateOrderStatus 走状态机）；剩余为支付回调、级联更新、交付服务",
+    "maxTotal": 17,
     "files": {
       "backend/src/application/custom-recipe/custom-recipe.service.ts": 10,
       "backend/src/application/payment/wechat-payment.service.ts": 3,
       "backend/src/interfaces/controllers/admin.controller.ts": 1,
-      "backend/src/interfaces/controllers/auth.controller.ts": 1
+      "backend/src/interfaces/controllers/auth.controller.ts": 1,
+      "backend/src/application/custom-recipe/custom-recipe-delivery.service.ts": 2
     },
     "notes": {
       "backend/src/application/payment/wechat-payment.service.ts": "支付回调确认收款、迟到付款自动退款 —— 属于状态机的合法调用方，批次 1.2 改成走状态机而不是直写",
       "backend/src/interfaces/controllers/admin.controller.ts": "管理员相关操作里的级联更新",
-      "backend/src/interfaces/controllers/auth.controller.ts": "账号注销/合并时的级联更新"
+      "backend/src/interfaces/controllers/auth.controller.ts": "账号注销/合并时的级联更新",
+      "backend/src/application/custom-recipe/custom-recipe-delivery.service.ts": "2026-10-16（批次 2.1）新增交付服务，2 处 = deliver 与 confirmReceipt 各一次状态写入。⚠️ 这 2 处**都先调用了 assertTransition**（状态机唯一真源），不是绕过校验；但本守卫的判定是「数 customRecipeOrder.update 出现次数」，正则分不出\"有没有先过状态机\"。所以额外加了 custom-recipe-delivery-state-machine.spec.ts 专门盯这一点 —— 宁可多一条守卫，也不放宽这里的正则（放宽会误伤一片）。"
     }
   },
-
   "gd02_status_maps": {
     "title": "前端把小写状态码映射成中文",
     "why": "同一个状态码在三个端各写一份中文，加一个枚举要改六处 —— 2026-10-04 加「已取消」时漏了两处半，顾客看到英文枚举。批次 1.3 做成选项字典后由后端下发。",
@@ -48,7 +48,6 @@
       "admin-web/src/constants/customRecipeOrder.ts": "5 条状态元数据（text + tagType）"
     }
   },
-
   "gd02_goal_maps": {
     "title": "前端把小写定制目标映射成中文",
     "why": "定制目标（减重/维持/增重/健康管理）在四处各写一份中文。批次 1.3 之后由选项字典下发。",
@@ -64,7 +63,6 @@
       "admin-web/src/views/RecipeDesigner/components/DogInsightPanel.vue": "设计器右侧的「爱犬洞察」面板会展示该狗的定制单需求，因此也带着一份目标文案"
     }
   },
-
   "gd03_business_arithmetic": {
     "title": "前端把后端已经给的值再算一遍（抵扣余额兜底）",
     "why": "老板要求「所有计算交给后端，前端只渲染」。后端 my-orders 与 orders/:orderId 两个接口都已返回 creditRemaining，前端仍留了兜底相减。",
@@ -79,7 +77,6 @@
       "_knownGap": "❗已知抓不到的第三处：`miniapp/src/pages/custom-recipe/success.vue` 写成了三元表达式（`x ?? (a !== undefined ? Number(a) - Number(b) : fallback)`），没有 `Math.max` 包着，本守卫的正则匹配不到。**宁可少抓这一处，也不要放宽正则去误伤一片**（放宽后连 CSS 类名 `.credit` 都会被算成违规）。批次 5 手工清 `creditRemaining` 兜底时，三处必须一起清。"
     }
   },
-
   "gd04_duplicate_assessment": {
     "title": "前端重复实现了营养合规评估引擎",
     "why": "admin-web 那份是后端 domain/recipe-designer/recipe-assessment.ts 的**逐字拷贝**（diff 仅 95 行，90 个对比用例输出逐字节相同）。批次 5 删副本、改调后端。",

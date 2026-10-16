@@ -251,7 +251,7 @@ const showComponents = computed(() => {
 
 const antibodyHint = computed(() => {
   if (targets.value.indexOf('CORE') >= 0) {
-    return '核心疫苗合格时，这一针改由抗体检测替代；报告请以兽医判读为准，我们不设阈值。'
+    return '核心疫苗合格时，这一针改由抗体检测替代；结果以兽医判读为准。'
   }
   if (targets.value.indexOf('RABIES') >= 0) {
     return '狂犬的抗体检测只作记录（出行 / 出入境常用），不影响接种安排。'

@@ -245,6 +245,38 @@ const step = (extra: Partial<VaccineStep>): VaccineStep =>
     ...extra,
   }) as VaccineStep
 
+describe('疫苗 · 多条识别结果里"是哪一条错了"（老板 2026-10-16）', () => {
+  const scan = read('ScanConfirm.vue')
+  const tab = read('VaccineTab.vue')
+
+  it('🔴 错误挂在**那一行**上：标红 + 写清原因 + 给一条出路', () => {
+    expect(scan).toContain("'vk-scan__row--error': row.error")
+    expect(scan).toContain('row.error')
+    expect(scan).toContain('去补全这一条')
+  })
+
+  it('🔴 逐条存：一条失败不影响后面的，能存的先存进去', () => {
+    // 每一条都单独 try/catch，失败只记到它自己身上
+    expect(tab).toContain('failedRows.push({')
+    expect(tab).toContain('scanRows.value = failedRows')
+    // 提示要说清"存了几条、还剩几条"，而不是一句笼统的报错
+    expect(tab).toContain('还有 ${failedRows.length} 条要处理')
+  })
+
+  it('"去补全"走录入器（那里能勾"含哪些疫苗"），补完把那一条从列表里拿掉', () => {
+    expect(tab).toContain('function onScanFixRow(row: VaccineScanRow, index: number)')
+    expect(tab).toContain("editorHeading.value = '补全这一条'")
+    expect(tab).toContain('scanRows.value = scanRows.value.filter((_, at) => at !== editorFixIndex.value)')
+  })
+
+  it('补全时把识别到的名称与日期一起带过去（不让家长重打一遍）', () => {
+    expect(tab).toContain('editorPresetName.value = String(row.name || \'\')')
+    expect(tab).toContain('editorDate.value = String(row.date || \'\')')
+    const editor = read('RecordEditor.vue')
+    expect(editor).toContain('presetDate')
+  })
+});
+
 describe('疫苗 · 识别结果页（老板 2026-10-16 的三个问题）', () => {
   const scan = read('ScanConfirm.vue')
 

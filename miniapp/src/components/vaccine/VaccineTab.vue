@@ -54,6 +54,7 @@
         :preset-name="editorPresetName"
         :preset-components="editorPresetComponents"
         :saving="saving"
+        :preset-date="editorDate"
         @save-record="onSaveRecord"
         @save-test="onSaveTest"
         @remove="onRemoveFromEditor"
@@ -70,6 +71,7 @@
         @save="onScanSave"
         @discard="onScanDiscard"
         @add-manual="onAddManualRecord"
+        @fix-row="onScanFixRow"
       />
 
     <!-- 识别服务（四类记录共用）。疫苗侧只取结果里的**名称 + 日期**；
@@ -241,11 +243,22 @@ const editorRecord = ref<VaccineRecord | null>(null)
 const editorTest = ref<AntibodyTest | null>(null)
 const editorPresetName = ref('')
 const editorPresetComponents = ref<string[]>([])
+/** 预填日期（"补全这一条"用） */
+const editorDate = ref('')
+/**
+ * 正在补全的是识别结果里的第几条（-1 = 不是补全）。
+ *
+ * 补全并存好之后，要把那一条从识别结果里**拿掉** —— 它已经作为一条真正的记录进去了，
+ * 继续留在待确认列表里会让家长以为还没存。
+ */
+const editorFixIndex = ref(-1)
 /** 录入卡标题：新建一条 = 记一条接种记录；补记某一针 = 记录这一针（原型 D / H） */
 const editorHeading = ref('记一条接种记录')
 
 /** 底部「记一条」：一条空白记录 */
 function addRecord() {
+  editorFixIndex.value = -1
+  editorDate.value = ''
   editorMode.value = 'record'
   editorRecord.value = null
   editorTest.value = null
@@ -272,6 +285,8 @@ function addAntibodyTest() {
  * 选一支同时含两类的苗，两个类别同时完成（需求 R11）。日期默认为今天。
  */
 function onRecordStep(step: VaccineStep | null) {
+  editorFixIndex.value = -1
+  editorDate.value = ''
   editorMode.value = 'record'
   editorRecord.value = null
   editorTest.value = null
@@ -299,6 +314,8 @@ function onRecordCombo(products: string[]) {
 
 /** 「先做抗体检测」：同一个录入器的抗体模式 */
 function onAntibody(_step: VaccineStep | null) {
+  editorFixIndex.value = -1
+  editorDate.value = ''
   editorMode.value = 'antibody'
   editorRecord.value = null
   editorTest.value = null
@@ -368,6 +385,14 @@ async function onSaveRecord(payload: VaccineRecordPayload, recordId: string) {
   try {
     if (recordId) await vaccineApi.records.update(props.dogId, recordId, payload)
     else await vaccineApi.records.create(props.dogId, payload)
+    /**
+     * 这一条是"补全识别结果里的某一条" → 把它从待确认列表里拿掉。
+     * 它已经作为一条真正的记录进去了；留着会让家长以为还没存。
+     */
+    if (editorFixIndex.value >= 0) {
+      scanRows.value = scanRows.value.filter((_, at) => at !== editorFixIndex.value)
+      editorFixIndex.value = -1
+    }
     closeEditor()
     uni.showToast({ title: '已保存', icon: 'success' })
     await refreshAfterWrite()
@@ -483,9 +508,23 @@ function onScanned(payload: { drafts: Record<string, any>[]; documentType?: stri
   })
 }
 
+/**
+ * 保存识别结果（逐条存）。
+ *
+ * ⚠️ 2026-10-16 老板："一次识别出多条记录时，现在的报错机制很难让用户第一时间
+ *    定位到哪一条记错了。" —— 老写法是**遇到第一条失败就整批中断**，只弹一句 toast，
+ *    家长既不知道是哪条、也不知道剩下的几条到底存没存 ✗。
+ *
+ * 现在：
+ *   · 逐条存，**一条失败不影响后面的**（能存的先存进去）；
+ *   · 失败的那条**把原因挂回它自己那一行**（标红 + 说清 + 给「去补全这一条」）；
+ *   · 提示改成"存了几条、还剩几条要处理"，而不是一句笼统的报错；
+ *   · 只要还有要处理的，这一页就不关 —— 家长能立刻看到是哪一条。
+ */
 async function onScanSave(rows: VaccineScanRow[]) {
   if (!props.dogId || saving.value) return
   saving.value = true
+  const failedRows: VaccineScanRow[] = []
   let saved = 0
   try {
     for (const row of rows) {
@@ -496,20 +535,56 @@ async function onScanSave(rows: VaccineScanRow[]) {
         productVerified: !row.needsReview || row.verified,
       }
       if (row.attachments && row.attachments.length > 0) payload.attachments = row.attachments
-      await vaccineApi.records.create(props.dogId, payload)
-      saved += 1
+      try {
+        await vaccineApi.records.create(props.dogId, payload)
+        saved += 1
+      } catch (error: any) {
+        // 这一条没存上：原因写在它自己身上，其余的继续存
+        failedRows.push({
+          ...row,
+          error: String(error?.message || '这一条没存上，再试一次'),
+        })
+      }
     }
-    scanRows.value = []
-    uni.showToast({ title: `已保存 ${saved} 条`, icon: 'success' })
-    await refreshAfterWrite()
-  } catch (error: any) {
-    // 存进去的那几条不重复存：把剩下的留在这一页（与老流程同一条纪律）
-    scanRows.value = rows.slice(saved)
-    uni.showToast({ title: error?.message || '有记录没存上，剩下的还在这', icon: 'none' })
+
+    if (failedRows.length === 0) {
+      scanRows.value = []
+      uni.showToast({ title: `已保存 ${saved} 条`, icon: 'success' })
+    } else {
+      // 只留下要处理的那几条（已存进去的不再重复出现）
+      scanRows.value = failedRows
+      uni.showToast({
+        title: saved > 0
+          ? `已保存 ${saved} 条，还有 ${failedRows.length} 条要处理`
+          : `有 ${failedRows.length} 条要处理`,
+        icon: 'none',
+      })
+    }
     await refreshAfterWrite()
   } finally {
     saving.value = false
   }
+}
+
+/**
+ * 某一条认不出含什么疫苗 → 交给**唯一录入器**补全。
+ *
+ * 为什么不在这一页解决：判断"这一针顶哪一类"要靠病种，而病种要么查产品库、
+ * 要么由家长勾 —— 这一页只有名称 + 日期两列（需求 R12），勾不了。
+ *
+ * 补全并存好之后，把这一条从识别结果里拿掉（它已经作为一条记录进去了）。
+ */
+function onScanFixRow(row: VaccineScanRow, index: number) {
+  editorMode.value = 'record'
+  editorRecord.value = null
+  editorTest.value = null
+  editorPresetName.value = String(row.name || '')
+  editorPresetComponents.value = []
+  editorDate.value = String(row.date || '')
+  editorHeading.value = '补全这一条'
+  editorFixIndex.value = index
+  editorVisible.value = true
+  scrollToAnchor('vk-anchor-editor')
 }
 
 /**

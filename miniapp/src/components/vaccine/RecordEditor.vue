@@ -198,6 +198,8 @@ const props = withDefaults(defineProps<{
    * （原型 H：点进来时名字已经填好，家长不用判断"该记在核心那边还是钩端那边"）。
    */
   presetName?: string
+  /** 预填日期（"补全这一条"时把识别到的日期带过来；空 = 用今天） */
+  presetDate?: string
   /** 正在保存 */
   saving?: boolean
 }>(), {
@@ -208,6 +210,7 @@ const props = withDefaults(defineProps<{
   componentOptions: () => [],
   presetComponents: () => [],
   presetName: '',
+  presetDate: '',
   saving: false,
 })
 
@@ -320,7 +323,7 @@ const antibodyHint = computed(() => {
 
 /** 每次打开都按传进来的记录重铺一遍（切换编辑对象时不能留上一条的残留） */
 watch(
-  () => [props.visible, props.record, props.test, props.mode, props.presetName] as const,
+  () => [props.visible, props.record, props.test, props.mode, props.presetName, props.presetDate] as const,
   () => {
     if (!props.visible) return
     errorText.value = ''
@@ -340,7 +343,10 @@ watch(
     }
     const record = props.record
     name.value = String(record?.vaccineName || props.presetName || '')
-    date.value = String(record?.vaccinationDate || '').slice(0, 10) || todayDateText()
+    date.value =
+      String(record?.vaccinationDate || '').slice(0, 10) ||
+      String(props.presetDate || '').slice(0, 10) ||
+      todayDateText()
     components.value = record && Array.isArray(record.components)
       ? [...record.components]
       : [...(props.presetComponents || [])]

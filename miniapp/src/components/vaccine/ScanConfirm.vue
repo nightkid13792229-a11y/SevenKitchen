@@ -17,7 +17,10 @@
       v-for="(row, index) in rows"
       :key="row.key"
       class="vk-scan__row"
-      :class="{ 'vk-scan__row--care': isCare(row) }"
+      :class="{
+        'vk-scan__row--care': isCare(row),
+        'vk-scan__row--error': row.error,
+      }"
     >
       <view class="vk-scan__line">
         <!-- ⚠️ 2026-10-16 老板："名字可以修改是可以修改，但用户可能并不知道
@@ -52,6 +55,16 @@
           <text class="vk-scan__act" @tap="verifyRow(index)">我已对照本子核对</text>
         </view>
       </template>
+
+      <!-- 这一条没存上：**错误就挂在这一行上**（老板 2026-10-16：
+           一次识别多条时，只弹一句 toast，家长根本不知道是哪一条）。
+           给两件事：说清原因 + 一条能走出去的路（去补全 / 删掉）。 -->
+      <view v-if="row.error" class="vk-scan__error">
+        <text class="vk-scan__error-text">{{ row.error }}</text>
+        <view class="vk-scan__acts">
+          <text class="vk-scan__act vk-scan__act--fix" @tap="onFixRow(index)">去补全这一条</text>
+        </view>
+      </view>
     </view>
 
     <!-- 识别漏掉的那条，家长可以在这一页直接补上（老板 2026-10-16 问）——
@@ -93,6 +106,8 @@ const emit = defineEmits<{
   (event: 'discard'): void
   /** 识别漏掉的那条，家长自己补 —— 交给唯一录入器 */
   (event: 'add-manual'): void
+  /** 这一条认不出类别 → 交给录入器补全（那里能勾"含哪些疫苗"） */
+  (event: 'fix-row', row: VaccineScanRow, index: number): void
 }>()
 
 /**
@@ -160,6 +175,11 @@ async function onRemoveRow(index: number) {
   })
   if (!confirmed) return
   removeRow(index)
+}
+
+function onFixRow(index: number) {
+  const row = rows.value[index]
+  if (row) emit('fix-row', row, index)
 }
 
 function onAddManual() {
@@ -260,6 +280,27 @@ function onSave() {
 
 .vk-scan__field--date {
   margin-top: 8rpx;
+}
+
+.vk-scan__row--error {
+  border-color: $vk-danger;
+  background: $vk-over-bg;
+}
+
+.vk-scan__error {
+  margin-top: 8rpx;
+}
+
+.vk-scan__error-text {
+  display: block;
+  font-size: $vk-font-sub;
+  color: $vk-danger;
+  line-height: 1.5;
+}
+
+.vk-scan__act--fix {
+  border-color: $vk-danger;
+  color: $vk-danger;
 }
 
 .vk-scan__add {

@@ -791,14 +791,25 @@ describe('识别结果 · 三个实测问题（2026-10-09）', () => {
    * 那个板块已经不在新版里了。新版的行为由下面这条盯：
    * **存进去的那几条不重复存，剩下的留在页面上**（不静默丢数据）。
    */
-  it('保存识别结果时：存进去的不重复存，没存上的留在这一页', () => {
-    const section = readFileSync(
-      resolve(process.cwd(), 'src/components/vaccine/VaccineTab.vue'),
-      'utf-8',
+  it('保存识别结果时：逐条存，一条失败不影响后面的，失败留在这一页', () => {
+    const section = stripComments(
+      readFileSync(
+        resolve(process.cwd(), 'src/components/vaccine/VaccineTab.vue'),
+        'utf-8',
+      ),
     )
 
-    expect(section).toContain('scanRows.value = rows.slice(saved)')
+    /*
+     * ⚠️ 2026-10-16 改：原来是"遇到第一条失败就整批中断"（`rows.slice(saved)` 把
+     *    剩下的原样留着），只弹一句 toast —— 老板反馈"一次识别多条时，很难第一时间
+     *    定位是哪一条记错了"。
+     *    现在：逐条存、失败的**把原因挂回它自己那一行**、能存的先存进去。
+     */
+    expect(section).toContain('failedRows.push({')
+    expect(section).toContain('scanRows.value = failedRows')
     expect(section).toContain('saved += 1')
+    // 失败行上要能看到原因，并有出路
+    expect(section).toContain('onScanFixRow')
   })
 })
 

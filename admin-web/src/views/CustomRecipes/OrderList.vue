@@ -193,29 +193,25 @@
             <el-button link type="primary" @click="viewDetail(row.orderId)">
               查看
             </el-button>
+            <!--
+              按钮由**后端下发**（`renderable.actions`，2026-10-16 批次 5.6）。
+
+              此前这里是写死的状态判断（`row.status === 'PENDING_PAYMENT'` /
+              `'PAID'` / `'DELIVERED'`）。最直接的后果：
+              **订单一变成「已完成」，「查看食谱」就消失了** ——
+              顾客点完「确认收到」，老板反而看不到交付了哪份食谱。
+
+              这与顾客端那个 bug、以及详情页那个 bug **是同一个成因**：
+              判定散在前端，改一处漏一处。
+            -->
             <el-button
-              v-if="row.status === 'PENDING_PAYMENT'"
+              v-for="action in rowActions(row)"
+              :key="action.code"
               link
-              type="success"
-              @click="confirmPayment(row)"
+              :type="actionButtonType(action)"
+              @click="runRowAction(row, action)"
             >
-              确认付款
-            </el-button>
-            <el-button
-              v-if="row.status === 'PAID'"
-              link
-              type="warning"
-              @click="startProcessing(row)"
-            >
-              开始制作
-            </el-button>
-            <el-button
-              v-if="row.status === 'DELIVERED'"
-              link
-              type="info"
-              @click="viewRecipe(row.recipeId)"
-            >
-              查看食谱
+              {{ action.label }}
             </el-button>
           </template>
         </el-table-column>
@@ -397,6 +393,69 @@ const resetFilters = () => {
 const viewDetail = (orderId: string) => {
   currentOrderId.value = orderId;
   detailDrawerVisible.value = true;
+};
+
+/**
+ * 行内按钮（2026-10-16 批次 5.6）—— **由后端契约驱动**。
+ *
+ * ⚠️ 这里**不判断"这单该显示哪些按钮"**。那是业务判定，
+ * 由后端 `renderable.actions` 下发；前端只做 code → 处理函数的映射。
+ *
+ * 老后端不返回契约时兜底成空的（只留"查看"）——
+ * **不回退到写死的状态判断**，那正是这一批要修掉的东西。
+ */
+interface RowAction {
+  code: string;
+  label: string;
+  enabled: boolean;
+  disabledReason?: string | null;
+  style?: string | null;
+}
+
+const rowActions = (row: CustomRecipeOrderDetail): RowAction[] => {
+  const actions = (row as any).renderable?.actions;
+  return Array.isArray(actions) ? (actions as RowAction[]) : [];
+};
+
+/** 后端的 style 是语义档位，映射成 Element 的 type 是纯呈现 */
+const actionButtonType = (action: RowAction) => {
+  switch (action.style) {
+    case 'primary':
+      return 'success';
+    case 'danger':
+      return 'danger';
+    default:
+      return 'primary';
+  }
+};
+
+/** code → 处理函数。**这是前端唯一该做的事** */
+const runRowAction = (row: CustomRecipeOrderDetail, action: RowAction) => {
+  if (!action.enabled) {
+    // 不能点时把原因说出来，而不是静默无反应
+    if (action.disabledReason) ElMessage.info(action.disabledReason);
+    return;
+  }
+  switch (action.code) {
+    case 'CONFIRM_PAYMENT':
+      void confirmPayment(row);
+      return;
+    case 'ACCEPT_ORDER':
+      void startProcessing(row);
+      return;
+    case 'DELIVER':
+    case 'DESIGN':
+    case 'RESOLVE_AFTERSALE':
+    case 'RESTORE_CREDIT':
+      /**
+       * 这几个都要在详情页做 —— 列表里没有足够上下文。
+       * 尤其「交付」：得先看到喂食量与采购清单才好确认交出去的是对的。
+       */
+      viewDetail(row.orderId);
+      return;
+    default:
+      viewDetail(row.orderId);
+  }
 };
 
 const confirmPayment = async (order: CustomRecipeOrderDetail) => {

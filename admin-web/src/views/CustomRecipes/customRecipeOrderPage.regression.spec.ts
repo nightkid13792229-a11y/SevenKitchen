@@ -1,4 +1,12 @@
 import { describe, expect, it } from 'vitest'
+/**
+ * ⚠️ 用 Vite 的 `?raw` 读源码，**不要用 `node:fs`**。
+ *
+ * 这个坑我第 14 轮踩过一次：用 node:fs 时 `npm test` 全绿、
+ * 而 `npm run build` 直接失败（构建的 tsconfig 里没有 node 类型）。
+ * 这一轮加守卫时**又踩了一次** —— 所以把这句话写在文件头上。
+ */
+import orderListSource from './OrderList.vue?raw'
 // 用 Vite 的 `?raw` 读源码：admin-web 的 vitest 是 node 环境（没有 jsdom），
 // Element Plus 页面挂不起来，所以接线用"读源码断言"锁住，
 // 真正的算法（过敏比对、倒计时）放在 utils 里由单测真跑。
@@ -223,3 +231,48 @@ describe('接口调用统一收在 api 层（铁律 2）', () => {
     expect(customRecipeApiSource).toContain('`${BASE}/orders/${orderId}/confirm-payment`')
   })
 })
+
+/**
+ * 后台订单列表按钮必须来自后端契约（2026-10-16 批次 5.6）
+ *
+ * ## 事故经过（同一类 bug 在三个地方各出现一次）
+ *
+ * · 顾客端列表：`status === 'DELIVERED'` 决定「查看定制食谱」
+ *   → 订单变已完成，**顾客找不到自己的食谱**
+ * · 后台详情：`status === 'DELIVERED'` 决定"已交付食谱"区块
+ *   → 顾客确认收货后，**老板看不到交付的是哪份**
+ * · 后台列表：同一个判断决定「查看食谱」按钮 → 同样消失
+ *
+ * 三次都是同一个成因：**判定散在前端，改一处漏一处**。
+ * 所以这里钉死：后台列表也只做 code → 处理函数的映射。
+ */
+describe('后台订单列表按钮来自后端契约', () => {
+  const raw = orderListSource;
+  /** ⚠️ 先剥注释 —— 说明注释里引用了被删掉的旧判断（本项目栽过 6 次） */
+  const source = raw
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1');
+
+  it('★ 不再用写死的状态判断决定按钮', () => {
+    const start = source.indexOf('操作');
+    const end = source.indexOf('</el-table-column>', start);
+    const block = source.slice(start, end > 0 ? end : start + 2000);
+    expect(block).not.toContain("row.status === 'PENDING_PAYMENT'");
+    expect(block).not.toContain("row.status === 'PAID'");
+    expect(block).not.toContain("row.status === 'DELIVERED'");
+  });
+
+  it('★ 按钮从 renderable.actions 渲染', () => {
+    expect(source).toContain('rowActions(row)');
+    expect(source).toContain('action.code');
+    expect(source).toContain('action.label');
+    expect(source).toContain('action.enabled');
+  });
+
+  it('★ 前端只做 code → 处理函数的映射', () => {
+    for (const code of ['CONFIRM_PAYMENT', 'ACCEPT_ORDER', 'DELIVER']) {
+      expect(source).toContain(`case '${code}'`);
+    }
+  });
+});

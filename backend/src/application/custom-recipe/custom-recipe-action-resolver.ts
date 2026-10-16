@@ -89,6 +89,17 @@ export const CUSTOM_RECIPE_ACTIONS = {
   /** 去订购成品（用定制费抵扣） */
   ORDER_FINISHED_FOOD: 'ORDER_FINISHED_FOOD',
 
+  /**
+   * 后台：确认付款（批次 5.6 补）。
+   *
+   * 为什么需要它：正常情况下钱到账是微信回调自动确认的，
+   * 但回调会失败 —— 那时顾客付了钱、订单还挂在"待付款"，
+   * 老板得能手动确认，否则这单收不到也做不了。
+   *
+   * 此前后台列表页有这个按钮（页面自己判断 `status === 'PENDING_PAYMENT'`），
+   * 而契约里没有 —— 直接换成契约驱动的话，这个操作会**凭空消失**。
+   */
+  CONFIRM_PAYMENT: 'CONFIRM_PAYMENT',
   /** 后台：接单 */
   ACCEPT_ORDER: 'ACCEPT_ORDER',
   /** 后台：去设计食谱 */
@@ -284,11 +295,26 @@ export function resolveStaffActions(
   const isAdmin = ctx.viewer === 'ADMIN';
   const actions: RenderableAction[] = [];
 
+  // ---- 确认付款 ----
+  /**
+   * 只对"待付款"出现。管理员与员工都能点 ——
+   * 这是**核对钱有没有到**，不是改业务口径，不需要管理员权限
+   * （与"交付"不同：那个会写进顾客看到的交付物）。
+   */
+  if (ctx.status === CustomRecipeStatus.PENDING_PAYMENT) {
+    actions.push({
+      code: CUSTOM_RECIPE_ACTIONS.CONFIRM_PAYMENT,
+      label: '确认付款',
+      enabled: true,
+      style: 'primary',
+    });
+  }
+
   // ---- 接单 ----
   if (ctx.status === CustomRecipeStatus.PAID) {
     actions.push({
       code: CUSTOM_RECIPE_ACTIONS.ACCEPT_ORDER,
-      label: '接单',
+      label: '开始制作',
       enabled: true,
       style: 'primary',
     });

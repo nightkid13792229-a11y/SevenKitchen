@@ -141,6 +141,7 @@ export class AdminCustomRecipeController {
   @Get('orders')
   @ApiOperation({ summary: 'Get all custom recipe orders' })
   async getAllOrders(
+    @Req() req: any,
     @Query('status') status?: string,
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
@@ -157,8 +158,29 @@ export class AdminCustomRecipeController {
       pageSize,
     });
 
+    /**
+     * ★ 后台列表也下发渲染契约（批次 5.6）。
+     *
+     * 与详情页同一套判定。此前列表页自己写死 `status === 'DELIVERED'`
+     * 决定「查看食谱」按钮 —— 订单一变已完成，那个按钮就消失了。
+     * 这与顾客端那个 bug **是同一个成因**：判定散在前端，改一处漏一处。
+     */
+    const viewer = this.resolveViewerRole(req);
+    const renderables = await Promise.all(
+      orders.map(async (order) =>
+        this.viewService.buildStaffView({
+          status: order.status,
+          viewer,
+          hasAnyDelivery: (order.deliveries ?? []).length > 0,
+          hasOpenAftersale: await this.aftersaleService.hasOpenForOrder(
+            order.id,
+          ),
+        }),
+      ),
+    );
+
     return ApiResponseDto.success({
-      orders: orders.map((order) => ({
+      orders: orders.map((order, index) => ({
         ...order,
         amount: Number(order.amount),
         creditAmount: Number(order.creditAmount),
@@ -167,6 +189,7 @@ export class AdminCustomRecipeController {
           0,
           Number(order.creditAmount) - Number(order.creditUsed),
         ),
+        renderable: renderables[index],
       })),
       total,
       page,

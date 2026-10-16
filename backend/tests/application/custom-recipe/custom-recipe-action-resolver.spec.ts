@@ -81,6 +81,91 @@ describe('动作解析器', () => {
       }
     }
 
+    /**
+     * ★ 后台能做的每一件事，契约里都要有（批次 5.6）
+     *
+     * ## 为什么专门守这条
+     *
+     * 后台列表页原来自已写死判断渲染三个按钮：
+     * 「确认付款」「开始制作」「查看食谱」。
+     * 我在把列表改成**契约驱动**时才发现 —— 契约里**根本没有「确认付款」**。
+     *
+     * 也就是说：如果直接换，老板会**凭空少一个操作**，
+     * 而且这种缺失**不会报错**：页面上只是少了个按钮，
+     * 谁也不会发现，直到哪天微信回调失败、钱到了账却确认不了。
+     *
+     * 所以这里逐个点名：**这几个后台操作，契约里必须查得到。**
+     */
+    it('★ 后台原有的每个操作，契约里都能查到', () => {
+      const EXPECTED_ADMIN_ACTIONS: Array<{
+        code: string;
+        status: string;
+        why: string;
+      }> = [
+        {
+          code: 'CONFIRM_PAYMENT',
+          status: 'PENDING_PAYMENT',
+          why: '微信回调会失败，钱到账了得能手动确认',
+        },
+        {
+          code: 'ACCEPT_ORDER',
+          status: 'PAID',
+          why: '收了钱要能开工（页面上的「开始制作」）',
+        },
+        {
+          code: 'DESIGN',
+          status: 'PAID',
+          why: '要去设计食谱',
+        },
+        {
+          code: 'DESIGN',
+          status: 'IN_PROGRESS',
+          why: '制作中也还要能回去改',
+        },
+        {
+          code: 'DELIVER',
+          status: 'IN_PROGRESS',
+          why: '做完要能交付',
+        },
+        {
+          code: 'DELIVER',
+          status: 'COMPLETED',
+          why: '售后改稿后要能**重新交付** —— 已完成是最需要它的时候',
+        },
+        {
+          code: 'RESTORE_CREDIT',
+          status: 'COMPLETED',
+          why: '恢复抵扣额度，只有管理员看得到',
+        },
+        {
+          code: 'CONTACT_SERVICE',
+          status: 'IN_PROGRESS',
+          why: '联系客户',
+        },
+      ];
+
+      for (const expected of EXPECTED_ADMIN_ACTIONS) {
+        const actions = resolveStaffActions(
+          ctx({
+            status: expected.status as never,
+            viewer: 'ADMIN',
+            hasAnyDelivery: true,
+          }),
+        );
+        const found = actions.find((a) => a.code === expected.code);
+        expect({
+          code: expected.code,
+          status: expected.status,
+          found: Boolean(found),
+        }).toEqual({
+          code: expected.code,
+          status: expected.status,
+          found: true,
+          // 缺了就是缺了：这条失败说明后台会少一个 "why" 里说的操作
+        });
+      }
+    });
+
     it('每个动作都有文案与 code（前端要照着渲染）', () => {
       for (const status of ALL_STATUSES) {
         for (const viewer of ALL_VIEWERS) {

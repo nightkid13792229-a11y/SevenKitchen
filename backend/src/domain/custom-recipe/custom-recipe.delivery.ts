@@ -1,0 +1,298 @@
+/**
+ * 交付内容快照（2026-10-16，批次 1.6）
+ *
+ * ## 为什么要有"快照"
+ *
+ * 现状是：交付 = 往订单上写一个 `recipe_id`。而私密食谱是**就地覆盖同一行**的
+ * （版本号恒为 1），于是营养师交付之后再改配方，**顾客下次打开看到的内容会跟着变**，
+ * 而且查不到改了哪。
+ *
+ * 快照把"交付那一刻的内容"冻结下来，之后改配方不影响顾客手里那一版。
+ *
+ * ## 为什么单独一个文件、而且是纯函数
+ *
+ * 两处要用它：
+ *   · **历史回填**（把已有的已交付订单补上交付记录）—— 一次性脚本
+ *   · **交付动作**（批次 2 的交付服务）
+ * 抽成纯函数，两边共用同一套结构，不会"回填出来的和以后交出来的长得不一样"。
+ *
+ * 而且纯函数可以穷举测试：少一个字段、多一个字段都会被立刻发现 ——
+ * 快照这种"给出去就收不回来"的东西，改结构要非常小心。
+ */
+
+/** 交付物码（与选项集 `custom_recipe_delivery_item` 对齐） */
+export const DELIVERY_ITEM_CODES = {
+  RECIPE: 'RECIPE',
+  SHOPPING_SOP: 'SHOPPING_SOP',
+  NUTRITION_REPORT: 'NUTRITION_REPORT',
+} as const;
+
+export type DeliveryItemCode =
+  (typeof DELIVERY_ITEM_CODES)[keyof typeof DELIVERY_ITEM_CODES];
+
+/** 交付单里的一项（给前端渲染用） */
+export interface DeliveryItemDescriptor {
+  code: string;
+  label: string;
+  description?: string | null;
+  /** 有没有实际内容 —— 没有内容的项不该出现在交付清单里 */
+  available: boolean;
+}
+
+// ==================== 快照结构 ====================
+
+export interface SnapshotRecipeItem {
+  name: string;
+  /** 制备方法（如"切丁煮熟"） */
+  preparation?: string | null;
+  /** 占比，如 32（表示 32%） */
+  ratioPercent?: number | null;
+  weightG?: number | null;
+  /** 是不是营养补充剂（补充剂单列一块，不和食材混） */
+  isSupplement?: boolean;
+}
+
+export interface SnapshotRecipe {
+  recipeId: string;
+  name: string;
+  coverImageUrl?: string | null;
+  /** 内部主键（排查用；前端不显示） */
+  internalId?: string | null;
+  items: SnapshotRecipeItem[];
+}
+
+export interface SnapshotFeeding {
+  dailyIntakeG: number | null;
+  mealsPerDay: number | null;
+  perMealG: number | null;
+  cycleDays: number | null;
+}
+
+export interface SnapshotNutrition {
+  standard: string | null;
+  /** 能量密度 kcal/kg */
+  energyDensityKcalPerKg: number | null;
+  /** 核心营养（蛋白质/脂肪/灰分/水分/纤维/碳水…），键值对 */
+  macros?: Record<string, number | null> | null;
+  /** 一句话白话结论 —— 顾客看不懂"每 1000kcal"那套术语 */
+  plainConclusion?: string | null;
+}
+
+export interface SnapshotShoppingLine {
+  name: string;
+  /** 净用量（克） */
+  netG: number;
+  /** 建议采购量（含损耗余量，好买的量向上取整） */
+  purchaseG: number;
+  /** 推荐商品（可空） */
+  recommendedProductId?: string | null;
+}
+
+export interface SnapshotShopping {
+  lines: SnapshotShoppingLine[];
+  totalNetG: number;
+  totalPurchaseG: number;
+  /** 用的损耗率系数（1.07 = 损耗 7%） */
+  lossRate: number;
+}
+
+export interface SnapshotSupplement {
+  name: string;
+  /** 这一批要加多少（克） */
+  totalG: number | null;
+  /** 每 kg 食材添加量（给"配方比例"那一页用） */
+  perKgG?: number | null;
+  brand?: string | null;
+  /** 什么时候加（出锅前 / 冷却后…） */
+  timing?: string | null;
+}
+
+export interface DeliveryContentSnapshot {
+  /** 快照结构版本 —— 将来改结构时，旧快照仍能按老版本渲染 */
+  schemaVersion: number;
+  recipe: SnapshotRecipe;
+  feeding: SnapshotFeeding;
+  nutrition: SnapshotNutrition;
+  shopping: SnapshotShopping;
+  supplements: SnapshotSupplement[];
+  steps: string[];
+  storage?: string | null;
+  /** 快照生成时间（ISO） */
+  generatedAt: string;
+}
+
+/** 当前快照结构版本。改结构时 +1，并在渲染端保留对旧版本的支持。 */
+export const SNAPSHOT_SCHEMA_VERSION = 1;
+
+// ==================== 组装 ====================
+
+export interface BuildSnapshotInput {
+  recipe: SnapshotRecipe;
+  feeding?: Partial<SnapshotFeeding> | null;
+  nutrition?: Partial<SnapshotNutrition> | null;
+  shopping?: {
+    lines?: SnapshotShoppingLine[];
+    lossRate?: number | null;
+  } | null;
+  supplements?: SnapshotSupplement[] | null;
+  steps?: string[] | null;
+  storage?: string | null;
+  /** 便于测试注入；不传则取当前时间 */
+  now?: Date;
+}
+
+/**
+ * 组装交付内容快照。
+ *
+ * ## 三条口径
+ *
+ * **一、只放渲染需要的字段。**
+ * 完整的营养评估明细有几百个营养项、几十 KB —— 那是"报告页"按需再查的东西，
+ * 不该塞进每一条交付记录里。
+ *
+ * **二、缺失就给 null，不给 0。**
+ * `0 g` 和"没填"是两回事：前者会让顾客以为"这道食谱不含脂肪"。
+ *
+ * **三、数字保留原样，不做取整。**
+ * 取整是渲染层的事，快照存的是事实。
+ */
+export function buildDeliverySnapshot(
+  input: BuildSnapshotInput,
+): DeliveryContentSnapshot {
+  const feeding = input.feeding ?? {};
+  const nutrition = input.nutrition ?? {};
+  const lines = (input.shopping?.lines ?? []).map((line) => ({
+    ...line,
+    netG: round1(line.netG),
+    purchaseG: round1(line.purchaseG),
+  }));
+
+  return {
+    schemaVersion: SNAPSHOT_SCHEMA_VERSION,
+    recipe: {
+      recipeId: input.recipe.recipeId,
+      name: input.recipe.name,
+      coverImageUrl: input.recipe.coverImageUrl ?? null,
+      internalId: input.recipe.internalId ?? null,
+      items: input.recipe.items ?? [],
+    },
+    feeding: {
+      dailyIntakeG: nullableNumber(feeding.dailyIntakeG),
+      mealsPerDay: nullableNumber(feeding.mealsPerDay),
+      perMealG: nullableNumber(feeding.perMealG),
+      cycleDays: nullableNumber(feeding.cycleDays),
+    },
+    nutrition: {
+      standard: nutrition.standard ?? null,
+      energyDensityKcalPerKg: nullableNumber(
+        nutrition.energyDensityKcalPerKg,
+      ),
+      macros: nutrition.macros ?? null,
+      plainConclusion: nutrition.plainConclusion ?? null,
+    },
+    shopping: {
+      lines,
+      totalNetG: round1(sum(lines.map((line) => line.netG))),
+      totalPurchaseG: round1(sum(lines.map((line) => line.purchaseG))),
+      /**
+       * 损耗率取不到时用 1（= 没有损耗）而不是 1.07 ——
+       * 宁可少留余量让人觉得买少了，也不要在没有依据时凭空加 7%。
+       */
+      lossRate: nullableNumber(input.shopping?.lossRate) ?? 1,
+    },
+    supplements: (input.supplements ?? []).map((item) => ({
+      ...item,
+      totalG: nullableNumber(item.totalG),
+      perKgG: nullableNumber(item.perKgG),
+    })),
+    steps: input.steps ?? [],
+    storage: input.storage ?? null,
+    generatedAt: (input.now ?? new Date()).toISOString(),
+  };
+}
+
+// ==================== 交付物清单 ====================
+
+export interface DeliveryItemAvailability {
+  /** 这一版有没有食谱本体 */
+  hasRecipe: boolean;
+  /** 有没有采购与制作单的内容（要有食材明细才算） */
+  hasShoppingSop: boolean;
+  /** 有没有营养报告（要有营养数据才算） */
+  hasNutritionReport: boolean;
+}
+
+/**
+ * 按配置与"实际有没有内容"筛出这一版真正该交付哪几样。
+ *
+ * ## 为什么要看"实际有没有"
+ *
+ * 配置里开了「营养评估报告」，但这一版**恰好没有营养数据**（例如设计器还没跑评估）。
+ * 如果照配置硬塞，顾客会看到一个点开是空白的报告入口 —— 比不显示更糟。
+ *
+ * ## 为什么要看配置
+ *
+ * 老板可能决定某段时间不交付某样（例如先不给采购单，观察顾客反应）。
+ * 配置是开关，内容是事实，**两者都满足才出现**。
+ */
+export function resolveDeliveryItems(
+  configuredCodes: readonly string[],
+  availability: DeliveryItemAvailability,
+): DeliveryItemDescriptor[] {
+  const configured = new Set(configuredCodes);
+  const items: DeliveryItemDescriptor[] = [];
+
+  if (
+    configured.has(DELIVERY_ITEM_CODES.RECIPE) &&
+    availability.hasRecipe
+  ) {
+    items.push({
+      code: DELIVERY_ITEM_CODES.RECIPE,
+      label: '专属食谱',
+      description: '食材配比、营养成分、每天喂多少',
+      available: true,
+    });
+  }
+
+  if (
+    configured.has(DELIVERY_ITEM_CODES.SHOPPING_SOP) &&
+    availability.hasShoppingSop
+  ) {
+    items.push({
+      code: DELIVERY_ITEM_CODES.SHOPPING_SOP,
+      label: '采购与制作单',
+      description: '要买什么、买多少、怎么做',
+      available: true,
+    });
+  }
+
+  if (
+    configured.has(DELIVERY_ITEM_CODES.NUTRITION_REPORT) &&
+    availability.hasNutritionReport
+  ) {
+    items.push({
+      code: DELIVERY_ITEM_CODES.NUTRITION_REPORT,
+      label: '营养评估报告',
+      description: '营养是否达标，附一句白话结论',
+      available: true,
+    });
+  }
+
+  return items;
+}
+
+// ==================== 内部工具 ====================
+
+function nullableNumber(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+function round1(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+function sum(values: number[]): number {
+  return values.reduce((total, value) => total + value, 0);
+}

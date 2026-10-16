@@ -270,6 +270,28 @@ export class CustomRecipeDeliveryService {
     });
   }
 
+  /**
+   * 顾客视角取交付内容（批次 2.4）。
+   *
+   * 与 `getCurrent` 的区别：这个用**订单主键**（调用方已经从订单详情那边
+   * 做过归属校验了），并且支持按版本号回看历史 —— 重新交付之后，
+   * 顾客与客服都可能要翻回上一版看"当时给的是什么"。
+   */
+  async findForCustomer(input: {
+    orderId: string;
+    version?: number | null;
+  }) {
+    if (input.version) {
+      return this.prisma.customRecipeDelivery.findFirst({
+        where: { orderId: input.orderId, version: input.version },
+      });
+    }
+    return this.prisma.customRecipeDelivery.findFirst({
+      where: { orderId: input.orderId, replacedByDeliveryId: null },
+      orderBy: { version: 'desc' },
+    });
+  }
+
   /** 取当前有效的那一版交付（没有被替换的那一版） */
   async getCurrent(orderIdOrId: string) {
     const order = await this.resolveOrder(orderIdOrId);

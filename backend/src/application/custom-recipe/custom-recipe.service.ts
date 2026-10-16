@@ -354,6 +354,26 @@ export class CustomRecipeService implements ICustomRecipeRepository {
           },
         },
         attachmentsRecords: true,
+        /**
+         * 交付记录（2026-10-16 批次 2.4）。
+         *
+         * 只取当前有效的那一版（`replacedByDeliveryId = null`），
+         * 且只取页面要用到的字段 —— 完整快照有几十 KB，
+         * 订单详情不该背着它（要看内容走交付详情接口）。
+         */
+        deliveries: {
+          where: { replacedByDeliveryId: null },
+          orderBy: { version: 'desc' },
+          take: 1,
+          select: {
+            id: true,
+            version: true,
+            deliveredAt: true,
+            confirmedAt: true,
+            items: true,
+            notifyStatus: true,
+          },
+        },
       },
     });
   }

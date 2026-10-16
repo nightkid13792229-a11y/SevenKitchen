@@ -14,12 +14,14 @@ import {
   Req,
   ParseIntPipe,
   BadRequestException,
+  NotFoundException,
   UseInterceptors,
   UploadedFile,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CustomRecipeService } from '../../../application/custom-recipe/custom-recipe.service';
+import { CustomRecipeDeliveryService } from '../../../application/custom-recipe/custom-recipe-delivery.service';
 import { CustomRecipeViewService } from '../../../application/custom-recipe/custom-recipe-view.service';
 import { CustomRecipeConfigService } from '../../../application/custom-recipe/custom-recipe-config.service';
 import { WechatPaymentService } from '../../../application/payment/wechat-payment.service';
@@ -48,6 +50,8 @@ export class CustomRecipeController {
      * 因此两端可以不同步上线（真正切换在批次 2）。
      */
     private readonly viewService: CustomRecipeViewService,
+    /** 交付记录（批次 2.4）：顾客看内容、确认收到 */
+    private readonly deliveryService: CustomRecipeDeliveryService,
   ) {}
 
   /**
@@ -240,6 +244,14 @@ export class CustomRecipeController {
       throw new BadRequestException('无权访问此订单');
     }
 
+    /**
+     * 当前有效的那一版交付（`replacedByDeliveryId = null`）。
+     *
+     * 重新交付后只会有最新一版符合条件 —— 旧版本留着可查，
+     * 但顾客默认看到的是最新的那份。
+     */
+    const currentDelivery = (order.deliveries ?? [])[0] ?? null;
+
     return ApiResponseDto.success({
       orderId: order.orderId,
       dogId: order.dogId,
@@ -284,6 +296,25 @@ export class CustomRecipeController {
       paymentConfirmedAt: order.paymentConfirmedAt,
       inProgressAt: order.inProgressAt,
       deliveredAt: order.deliveredAt,
+      /**
+       * 交付摘要（批次 2.4）—— **不含快照本体**。
+       *
+       * 快照有几十 KB，而订单详情页只需要知道"交没交、第几版、
+       * 包含哪几样"。要看内容走 `orders/:orderId/delivery`。
+       */
+      delivery: currentDelivery
+        ? {
+            id: currentDelivery.id,
+            version: currentDelivery.version,
+            deliveredAt: currentDelivery.deliveredAt,
+            confirmedAt: currentDelivery.confirmedAt,
+            itemCodes: Array.isArray(currentDelivery.items)
+              ? currentDelivery.items
+              : [],
+            /** 交付后几天自动完成 —— 页面要写"请在 X 前确认" */
+            autoCompleteAt: order.autoCompleteAt ?? null,
+          }
+        : null,
 
       /**
        * 渲染契约三件套（2026-10-16 批次 1.5）。
@@ -310,17 +341,125 @@ export class CustomRecipeController {
         refundStatus: order.refundStatus ?? null,
         refundAmount: this.toNullableNumber(order.refundAmount),
         /**
-         * 批次 2 之前没有独立的交付表，先用"订单上挂了食谱"代表已交付。
-         * 批次 2 会换成查 `custom_recipe_delivery`。
+         * 批次 2.4：改成看**真的交付记录**，不再拿"订单上挂了食谱"顶替。
+         *
+         * 两者的区别在重新交付与撤回时会体现出来：食谱挂着不等于顾客
+         * 手里有一版可看的内容（撤回后食谱还在，但交付记录已经失效）。
          */
-        hasAnyDelivery: Boolean(order.recipeId),
-        hasUnconfirmedDelivery:
-          order.status === 'DELIVERED' && Boolean(order.recipeId),
+        hasAnyDelivery: Boolean(currentDelivery),
+        hasUnconfirmedDelivery: Boolean(
+          currentDelivery && !currentDelivery.confirmedAt,
+        ),
+        /**
+         * 售后窗口从**交付时间**起算，不是下单时间。
+         *
+         * ⚠️ 这里刻意**不重复传 deliveredAt** —— 上面响应体里已经有一个
+         * `deliveredAt: order.deliveredAt`，两处重名会直接编译不过
+         * （`order.deliveredAt` 与交付记录的 `deliveredAt` 在正常路径下
+         * 是同一个时刻，交付服务写订单时就用了它）。
+         * 没交付时 `hasAnyDelivery=false` 已经挡住「有问题」，不需要靠窗口兜。
+         */
         aftersaleWindowDays:
           await this.customRecipeService.getAftersaleWindowDays(),
         requireCustomerConfirm:
           await this.customRecipeService.getRequireCustomerConfirm(),
       }),
+    });
+  }
+
+  /**
+   * 取当前交付内容（批次 2.4）。
+   *
+   * ## 为什么单独一个接口，不塞进订单详情
+   *
+   * 交付快照有几十 KB（完整食材、喂食参数、采购清单、步骤、补充剂），
+   * 而**列表与详情页绝大多数时候不需要它** —— 顾客十次里只有一次会点开看。
+   * 塞进详情会白白拖慢每一次打开。
+   *
+   * ## 只返回**当前有效**的那一版
+   *
+   * 重新交付后旧版本仍然留在库里（客服与顾客都可能要回看），
+   * 但默认看到的是最新的。要看历史版本走 `?version=N`。
+   */
+  @Get('orders/:orderId/delivery')
+  @ApiOperation({ summary: 'Get the current delivery of an order' })
+  async getOrderDelivery(
+    @Req() req: any,
+    @Param('orderId') orderId: string,
+    @Query('version') version?: string,
+  ) {
+    const userId = req.user.userId;
+    const order = await this.customRecipeService.getOrderByOrderId(orderId);
+
+    if (!order) {
+      throw new BadRequestException('订单不存在');
+    }
+    /** 归属校验：别人的订单连"有没有交付"都不该知道 */
+    if (order.customerId !== userId) {
+      throw new BadRequestException('无权访问此订单');
+    }
+
+    const parsedVersion = version ? Number(version) : null;
+    const delivery = await this.deliveryService.findForCustomer({
+      orderId: order.id,
+      version:
+        parsedVersion !== null && Number.isInteger(parsedVersion)
+          ? parsedVersion
+          : null,
+    });
+
+    if (!delivery) {
+      /**
+       * 还没交付时回 404 而不是空对象 ——
+       * 前端能明确区分"还没交"与"交了个空的"。
+       */
+      throw new NotFoundException('这张订单还没有交付内容');
+    }
+
+    return ApiResponseDto.success({
+      id: delivery.id,
+      version: delivery.version,
+      deliveredAt: delivery.deliveredAt,
+      confirmedAt: delivery.confirmedAt,
+      itemCodes: Array.isArray(delivery.items) ? delivery.items : [],
+      /** 内容快照：前端照着渲染，不做任何加工 */
+      content: delivery.contentSnapshot,
+      /** 交付后几天自动完成 —— 页面要写"请在 X 前确认" */
+      autoCompleteAt: order.autoCompleteAt ?? null,
+    });
+  }
+
+  /**
+   * 顾客确认收到（批次 2.4）。
+   *
+   * 幂等：重复点不报错，也**不刷新确认时间** ——
+   * 那个时间是售后窗口的起算依据，不能被第二次点击改掉。
+   */
+  @Post('orders/:orderId/confirm-receipt')
+  @ApiOperation({ summary: 'Customer confirms receipt of the delivery' })
+  async confirmReceipt(
+    @Req() req: any,
+    @Param('orderId') orderId: string,
+  ) {
+    const userId = req.user.userId;
+    const order = await this.customRecipeService.getOrderByOrderId(orderId);
+
+    if (!order) {
+      throw new BadRequestException('订单不存在');
+    }
+    if (order.customerId !== userId) {
+      throw new BadRequestException('无权操作此订单');
+    }
+
+    const result = await this.deliveryService.confirmReceipt({
+      orderIdOrId: orderId,
+      channel: 'CUSTOMER',
+    });
+
+    return ApiResponseDto.success({
+      confirmed: result.confirmed,
+      /** 之前已经确认过 —— 前端据此提示"你已经确认过了"，而不是报错 */
+      alreadyConfirmed: result.alreadyConfirmed,
     });
   }
 

@@ -214,7 +214,7 @@
 
         <!-- 无数据提示 -->
         <view v-if="foodItemsDetailed.length === 0 && supplementItemsDetailed.length === 0" class="no-data">
-          <text class="no-data-text">暂无采购数据</text>
+          <text class="no-data-text">暂无用量数据</text>
         </view>
       </view>
     </view>

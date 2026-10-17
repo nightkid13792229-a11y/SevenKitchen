@@ -40,7 +40,15 @@ describe('我的订单合并补剂订单', () => {
     // 补剂的已付款段位包含"待分装 / 分装中 / 待发货"
     expect(source).toContain("IN_PROGRESS: ['PAID', 'PACKING', 'PACKED']")
     // 两组映射分别按订单类型取用，避免补剂状态漏进鲜食筛选
-    expect(source).toContain("orderType === 'supplement' ? SUPPLEMENT_STATUS_GROUPS : FOOD_STATUS_GROUPS")
+    /**
+     * 2026-10-18：加了定制单，分发变成三分支。
+     * 这条守卫的**意图不变** —— 三种单的状态名不同，不能互相套用分组
+     * （否则"已付款"会被错算成"制作中"）。
+     */
+    expect(source).toContain('CUSTOM_STATUS_GROUPS')
+    expect(source).toContain('SUPPLEMENT_STATUS_GROUPS')
+    expect(source).toContain('FOOD_STATUS_GROUPS')
+    expect(source).toContain("orderType === 'custom'")
   })
 
   it('两类订单都打上类型标记，并按 createdAt 混排倒序', () => {

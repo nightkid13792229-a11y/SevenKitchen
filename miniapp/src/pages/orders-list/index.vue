@@ -34,6 +34,12 @@
             >
               补剂
             </text>
+            <text
+              v-else-if="order._orderType === 'custom'"
+              class="order-type-tag order-type-tag--custom"
+            >
+              定制
+            </text>
           </view>
           <text
             class="order-status"
@@ -42,6 +48,31 @@
             {{ getStatusText(order) }}
           </text>
         </view>
+
+        <!--
+          定制单（2026-10-18 并入）。
+          顾客找的是"我给狗定的那份食谱"，所以标题用**食谱名**，
+          没交付时显示「设计中的专属食谱」—— 订单号不是他要找的东西。
+          整卡可点，进定制订单详情。
+        -->
+        <template v-else-if="order._orderType === 'custom'">
+          <view class="order-summary">
+            <text class="summary-title">{{ customOrderTitle(order) }}</text>
+            <text v-if="customOrderSubtitle(order)" class="custom-order-sub">
+              {{ customOrderSubtitle(order) }}
+            </text>
+          </view>
+          <view class="order-footer">
+            <view class="order-footer-left">
+              <text class="order-amount"
+                >¥{{ formatAmountText(customOrderAmount(order)) }}</text
+              >
+            </view>
+            <view class="order-footer-right">
+              <text class="order-detail-btn">查看详情 ›</text>
+            </view>
+          </view>
+        </template>
 
         <!--
           补剂订单：字段结构与鲜食完全不同，且没有独立详情页，
@@ -250,6 +281,11 @@ import {
 } from '../../api/supplements';
 import { runSupplementPayment } from '../../utils/supplement-payment';
 import { formatShortDateTime } from '../../utils/date';
+// 定制单（2026-10-18 并入三单合一）
+import {
+  fetchMyOrders,
+  type CustomRecipeOrderDetail,
+} from '@/api/custom-recipe';
 import { requestWechatOrderPayment } from '../../utils/wechat-payment';
 import { confirmWechatReceiptBeforeInternalComplete } from '../../utils/wechat-confirm-receipt';
 import {
@@ -324,13 +360,21 @@ interface Order {
  * 两类订单的字段几乎不重叠（鲜食是 firstItem/address，补剂是 items/orderNo），
  * 用一个下划线前缀的字段挂在订单对象上区分；前缀是为了不和后端返回的字段撞名。
  */
-type OrderType = 'food' | 'supplement';
+type OrderType = 'food' | 'supplement' | 'custom';
 
 type FoodOrderRow = Order & { _orderType: 'food' };
 
 type SupplementOrderRow = SupplementOrder & { _orderType: 'supplement' };
 
-type UnifiedOrder = FoodOrderRow | SupplementOrderRow;
+/**
+ * 定制单（2026-10-18 并入）。
+ *
+ * 顾客在这里看到的是"我给狗定的那份食谱"，所以卡片标题用**食谱名**，
+ * 没交付时显示「设计中的专属食谱」—— 订单号不是他要找的东西。
+ */
+type CustomOrderRow = CustomRecipeOrderDetail & { _orderType: 'custom' };
+
+type UnifiedOrder = FoodOrderRow | SupplementOrderRow | CustomOrderRow;
 
 // 状态筛选Tab
 const selectedStatus = ref<string>('ALL');
@@ -441,12 +485,14 @@ async function loadOrders() {
       });
 
   try {
-    const [res, supplementOrders] = await Promise.all([
+    const [res, supplementOrders, customOrders] = await Promise.all([
       request({
         url: apiUrl,
         method: 'GET',
       }),
       supplementPromise,
+      // 定制单（2026-10-18 并入）—— 内部已吞异常，失败给空数组
+      fetchAllCustomOrders(),
     ]);
 
     if (DEBUG) {
@@ -454,6 +500,7 @@ async function loadOrders() {
         code: res.code,
         orderCount: res.data?.length || 0,
         supplementCount: supplementOrders.length,
+        customCount: customOrders.length,
         viewAllOrders: viewAllOrders.value,
       });
       console.log(
@@ -476,7 +523,11 @@ async function loadOrders() {
         ...order,
         _orderType: 'food' as const,
       }));
-      allOrders.value = mergeOrdersByCreatedAtDesc(foodOrders, supplementOrders);
+      allOrders.value = mergeOrdersByCreatedAtDesc(
+        foodOrders,
+        supplementOrders,
+        customOrders,
+      );
       updateStatusCounts();
       filterOrders();
     }
@@ -525,10 +576,27 @@ async function fetchAllSupplementOrders(): Promise<SupplementOrderRow[]> {
 function mergeOrdersByCreatedAtDesc(
   foodOrders: FoodOrderRow[],
   supplementOrders: SupplementOrderRow[],
+  customOrders: CustomOrderRow[] = [],
 ): UnifiedOrder[] {
-  return [...foodOrders, ...supplementOrders].sort(
+  return [...foodOrders, ...supplementOrders, ...customOrders].sort(
     (a, b) => toCreatedAtTime(b.createdAt) - toCreatedAtTime(a.createdAt),
   );
+}
+
+/**
+ * 拉定制单（2026-10-18 并入）。
+ *
+ * 失败返回空数组，不让整个列表挂掉 —— 顾客至少还能看到成品和补剂订单。
+ */
+async function fetchAllCustomOrders(): Promise<CustomOrderRow[]> {
+  try {
+    const data = await fetchMyOrders({ page: 1, pageSize: 50 });
+    const list = (data?.orders || []) as CustomRecipeOrderDetail[];
+    return list.map((order) => ({ ...order, _orderType: 'custom' as const }));
+  } catch (error) {
+    console.warn('[OrdersList] 拉取定制单失败:', error);
+    return [];
+  }
 }
 
 function toCreatedAtTime(value?: string): number {
@@ -574,12 +642,30 @@ const SUPPLEMENT_STATUS_GROUPS: Record<string, string[]> = {
   CANCELLED: ['CANCELLED'],
 };
 
+/**
+ * 定制单的状态分组（2026-10-18）。
+ *
+ * 定制单的状态名跟成品不一样（PENDING_PAYMENT / PAID / DELIVERED / COMPLETED /
+ * CANCELLED），所以不能直接套用 FOOD_STATUS_GROUPS —— 那会把"已付款"错算成"制作中"。
+ */
+const CUSTOM_STATUS_GROUPS: Record<string, string[]> = {
+  PENDING_PAYMENT: ['PENDING_PAYMENT'],
+  IN_PROGRESS: ['PAID'],
+  WAIT_RECEIVE: ['DELIVERED'],
+  COMPLETED: ['COMPLETED'],
+  CANCELLED: ['CANCELLED'],
+};
+
 function getStatusesForTab(
   status: string,
   orderType: OrderType = 'food',
 ): string[] | null {
   const statusGroups =
-    orderType === 'supplement' ? SUPPLEMENT_STATUS_GROUPS : FOOD_STATUS_GROUPS;
+    orderType === 'custom'
+      ? CUSTOM_STATUS_GROUPS
+      : orderType === 'supplement'
+        ? SUPPLEMENT_STATUS_GROUPS
+        : FOOD_STATUS_GROUPS;
   return statusGroups[status] || null;
 }
 
@@ -611,7 +697,49 @@ function viewOrder(orderId: string) {
  * 补剂没有独立详情页，卡片上已经把订单号、状态、明细、物流、售后、金额展示全了。
  * 所以点补剂卡片不再跳转——跳过去也只能落在一个「不指向这一单」的列表页上。
  */
+/**
+ * 定制单卡片的三行文案（2026-10-18）。
+ *
+ * 标题用**食谱名**（没交付时「设计中的专属食谱」）—— 顾客认的是"给我家狗做的那份"，
+ * 不是订单号。副标题给"给谁 + 交付日期"，这是他在这一页真正想知道的两件事。
+ */
+function customOrderTitle(order: UnifiedOrder): string {
+  const row = order as CustomOrderRow;
+  const name = (row.recipeName || '').trim();
+  return name || '设计中的专属食谱';
+}
+
+function customOrderSubtitle(order: UnifiedOrder): string {
+  const row = order as CustomOrderRow;
+  const goal = (row.targetGoal || '').trim();
+  const scheduled = (row.scheduledDate || '').trim();
+  const parts: string[] = [];
+  if (goal) parts.push(`目标：${goal}`);
+  if (scheduled) parts.push(`交付日期 ${scheduled}`);
+  return parts.join(' · ');
+}
+
+function customOrderAmount(order: UnifiedOrder): number {
+  const row = order as CustomOrderRow;
+  const value = Number(row.amount);
+  return Number.isFinite(value) ? value : 0;
+}
+
+/** 金额显示：整数不带小数，有角分才保留两位 */
+function formatAmountText(value: number): string {
+  if (!Number.isFinite(value)) return '0';
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
 function handleOrderTap(order: UnifiedOrder) {
+  if (order._orderType === 'custom') {
+    uni.navigateTo({
+      url: `/pages/custom-recipe/order-detail?orderId=${encodeURIComponent(
+        (order as CustomOrderRow).orderId,
+      )}`,
+    });
+    return;
+  }
   if (order._orderType !== 'food') return;
   viewOrder(order.id);
 }
@@ -1472,5 +1600,19 @@ function formatAddress(address?: { regionText?: string }): string {
 
 .customer-service-bottom-action {
   width: 100%;
+}
+
+/* ===== 定制单（2026-10-18 并入三单合一）===== */
+.order-type-tag--custom {
+  background: #fff1e3;
+  color: #b45309;
+}
+
+.custom-order-sub {
+  display: block;
+  font-size: 22rpx;
+  color: #8a7a66;
+  margin-top: 8rpx;
+  line-height: 1.5;
 }
 </style>

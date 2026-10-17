@@ -435,3 +435,36 @@ freeRevisionCount: 2
 ```
 
 **全部生效。**
+
+
+---
+
+## 十四、AI 封面图：查清后确认是**一个功能**，不是一个按钮
+
+阶段 4 里"AI 封面图"这项，我原以为只差一个设计器按钮。查完后端发现：**差的是整条链路。**
+
+### 现有的两个东西（都不够用）
+
+| 已有 | 它能做什么 | 缺什么 |
+|---|---|---|
+| `CoverImageService.renderTitleOnCover` | 在**已有**封面图上叠标题文字 | **不会生图** |
+| `AgentProviderConfigService.getEnabledDeepSeekRuntimeConfig` | 取 DeepSeek 的 baseUrl / model / apiKey | **写死 `provider: 'deepseek'`**、走 `findDeepSeekConfig`；取不到智谱的配置 |
+
+### 要接上还差 5 步
+
+| # | 要做 | 说明 |
+|---|---|---|
+| 1 | 加**通用的** provider 配置读取 | 现在只有 DeepSeek 版。要么加 `findProviderConfig(purpose, provider)`，要么把现有方法泛化 |
+| 2 | 写**智谱 glm-image 的客户端** | 跟 DeepSeek 的 chat 接口形状完全不同（生图是另一套请求/响应） |
+| 3 | 图生成后**上传 COS** | 与现有 `CoverImageService` 的上传逻辑复用即可 |
+| 4 | 加后端接口 | 例如 `POST /admin/recipes/:id/generate-cover` |
+| 5 | 加后台按钮 + 加载态 + 失败重试 | 最后一步，也是最简单的 |
+
+**前 4 步都是后端，第 5 步才是"按钮"。**
+
+### 为什么没有勉强做完
+
+这条链路涉及**外部付费接口**（智谱生图约 0.1 元/张）与**新的 provider 集成**，
+做一半比不做更糟 —— 会出现"按钮在、点了报错"的状态，比"没有按钮"更让人困惑。
+
+**建议单独排一轮**，且先在本地验证一次真实生图请求，再上线。

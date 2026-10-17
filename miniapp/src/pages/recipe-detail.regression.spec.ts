@@ -250,14 +250,21 @@ describe('recipe detail nutrition report regressions', () => {
     expect(templateSource).not.toContain('life-stage-version-plain');
     expect(templateSource).not.toContain('life-stage-version-options');
 
-    // 未匹配时必须视觉区分：卡上有 mismatch 状态 + 警示色
-    expect(source).toContain('const isLifeStageMismatch = computed');
-    expect(source).toContain("matchType === 'MANUAL_MISMATCH'");
-    expect(source).toContain("matchType === 'FALLBACK_ADULT'");
-    expect(source).toContain("matchType === 'FALLBACK_FIRST'");
-    expect(templateSource).toContain("'life-stage-version-card--mismatch': isLifeStageMismatch");
-    expect(source).toContain('.life-stage-version-card--mismatch');
-    expect(source).toContain('--sk-danger');
+    /**
+     * 2026-10-18：生命阶段卡改成**共享组件**（四页共用一份）。
+     *
+     * 原来这里断言的是"页面自己有 isLifeStageMismatch computed + 三串 matchType +
+     * mismatch 样式" —— 那三条保证现在**移到了组件里**：
+     *   `components/recipe/LifeStageVersionCard.spec.ts`
+     * 页面这边的责任变成"**确实用了那个组件**、并且把后端结论传进去"。
+     *
+     * 意图没变（未匹配必须视觉区分），只是实现位置变了 —— 断言跟着搬。
+     */
+    expect(templateSource).toContain('<LifeStageVersionCard');
+    expect(templateSource).toContain(':match-type="recipe.lifeStageMatch?.matchType"');
+    expect(templateSource).toContain(':message="recipe.lifeStageMatch?.message"');
+    // 页面不再自己判定"是否匹配"—— 判定只有一份（utils + 后端）
+    expect(source).not.toContain('const isLifeStageMismatch = computed');
 
     expect(source).toContain('lifeStageMatch')
   })
@@ -326,7 +333,8 @@ describe('recipe detail nutrition report regressions', () => {
     const templateSource = source.slice(0, source.indexOf('<script setup'))
     const recipeNameIndex = templateSource.indexOf('class="recipe-name"')
     const dogSelectorIndex = templateSource.indexOf('class="recipe-detail-dog-selector"')
-    const lifeStageIndex = templateSource.indexOf('class="life-stage-version-card"')
+    // 生命阶段卡已改成共享组件，这里按组件标签找位置
+    const lifeStageIndex = templateSource.indexOf('<LifeStageVersionCard')
 
     expect(recipeNameIndex).toBeGreaterThan(-1)
     expect(dogSelectorIndex).toBeGreaterThan(recipeNameIndex)
@@ -367,22 +375,30 @@ describe('recipe detail nutrition report regressions', () => {
     expect(orderFlow).toContain('target')
   })
 
-  it('uses a non-matched default life stage copy before dog-specific matched copy', () => {
+  it('★ 不匹配时的文案说清"为什么"（2026-10-18 起由共享组件承担）', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
       'utf-8',
     )
-    const copySource = source.match(
-      /const lifeStageVersionCopy = computed\(\(\) => \{[\s\S]*?\n}\)/,
-    )?.[0] || ''
-
-    expect(source).toContain('当前狗狗档案没有完全匹配版本，已展示可用替代版本。')
-    expect(copySource).toContain('recipe.value.lifeStageMatch?.message')
-    expect(copySource).toContain('isLifeStageFallbackSelection.value')
-    expect(copySource.indexOf('recipe.value.lifeStageMatch?.message'))
-      .toBeLessThan(copySource.indexOf('isLifeStageFallbackSelection.value'))
-    expect(copySource.indexOf('isLifeStageFallbackSelection.value'))
-      .toBeLessThan(copySource.indexOf('selectedDog.value'))
+    /**
+     * 原来这条断言的是详情页自己的 `lifeStageVersionCopy`。
+     * 现在文案逻辑搬到了 `components/recipe/LifeStageVersionCard.vue` ——
+     * **意图不变**（看到警示色时必须知道问题出在哪），断言跟着搬。
+     */
+    const component = readFileSync(
+      resolve(process.cwd(), 'src/components/recipe/LifeStageVersionCard.vue'),
+      'utf-8',
+    )
+    // 断言前剥注释 —— 组件头部的说明表里也写着这句话
+    const code = component
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(code).toContain('没有完全匹配的版本')
+    // 顺序：后端 message 优先（先判 message 再用兜底文案）
+    const messageIndex = code.indexOf('props.message')
+    const fallbackIndex = code.indexOf('没有完全匹配的版本')
+    expect(messageIndex).toBeGreaterThan(-1)
+    expect(messageIndex).toBeLessThan(fallbackIndex)
   })
 
   it('only labels a life-stage version as matched when backend returns dog-specific match metadata', () => {
@@ -390,16 +406,13 @@ describe('recipe detail nutrition report regressions', () => {
       resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
       'utf-8',
     )
-    const matchSource = source.match(
-      /const hasDogSpecificLifeStageMatch = computed\(\(\) => \{[\s\S]*?const isLifeStageFallbackSelection = computed/,
-    )?.[0] || ''
-
-    expect(matchSource).toContain('hasDogSpecificLifeStageMatch')
-    expect(matchSource).toContain('match?.dogId')
-    expect(matchSource).toContain('match?.matchedDogId')
-    expect(matchSource).toContain('match?.dogLifeStage')
-    expect(matchSource.indexOf('hasDogSpecificLifeStageMatch'))
-      .toBeLessThan(matchSource.indexOf("match?.matchType === 'MATCHED'"))
+    /**
+     * 2026-10-18：判断"能不能说已匹配"的逻辑搬进了共享组件。
+     * 页面的责任变成一件更简单的事：**把后端结论原样传进去**。
+     */
+    expect(source).not.toContain('hasDogSpecificLifeStageMatch')
+    const templateSource = source.slice(0, source.indexOf('<script setup'))
+    expect(templateSource).toContain(':match-type="recipe.lifeStageMatch?.matchType"')
   })
 
   it('guards recipe detail response ordering before state writes and side effects', () => {

@@ -98,25 +98,19 @@
         未匹配时（人工指定错版本 / 无完全匹配版本）整卡转为警示色，
         用颜色本身承担提示，而不是靠再堆一行文字。
       -->
-      <view
-        v-if="recipe.selectedLifeStage || recipe.availableLifeStageVersions?.length"
-        class="life-stage-version-card"
-        :class="{ 'life-stage-version-card--mismatch': isLifeStageMismatch }"
-        @tap="openLifeStageSelector"
-      >
-        <view class="life-stage-version-main">
-          <view class="life-stage-version-head">
-            <text v-if="isLifeStageMismatch" class="life-stage-version-warn">!</text>
-            <text class="life-stage-version-title">{{ lifeStageVersionTitle }}</text>
-          </view>
-          <text class="life-stage-version-copy">
-            {{ lifeStageVersionCopy }}
-          </text>
-        </view>
-        <text v-if="recipe.availableLifeStageVersions?.length" class="life-stage-version-action">
-          切换
-        </text>
-      </view>
+      <!--
+        2026-10-18：改用共享组件 `LifeStageVersionCard`。
+        原来这一块在四个页面各写了一遍（共 21 个 computed + 13 个函数），
+        同一个 matchType 四个页面可能给出四种说法。
+      -->
+      <LifeStageVersionCard
+        :match-type="recipe.lifeStageMatch?.matchType"
+        :message="recipe.lifeStageMatch?.message"
+        :selected-label="selectedLifeStageLabel"
+        :version-count="recipe.availableLifeStageVersions?.length || 0"
+        :dog-name="recipe.lifeStageMatch?.dogName"
+        @open-selector="openLifeStageSelector"
+      />
 
       <text v-if="recipe.description" class="recipe-description">
         {{ recipe.description }}
@@ -442,6 +436,8 @@
 <!-- 普通script：定义分享函数 -->
 <script lang="ts">
 import { CURRENT_SHARE_CONFIG } from '@/utils/config'
+// 2026-10-18：生命阶段卡改用它 —— 四页共用一份，不再各写一遍
+import LifeStageVersionCard from '@/components/recipe/LifeStageVersionCard.vue'
 
 // 模块级变量，存储当前食谱信息
 let currentRecipeName = ''
@@ -837,49 +833,6 @@ const selectedLifeStageLabel = computed(() => {
   return matchedVersion?.label || getLifeStageLabel(selectedStage)
 })
 
-const hasDogSpecificLifeStageMatch = computed(() => {
-  const match = recipe.value.lifeStageMatch
-  return Boolean(
-    match?.dogId ||
-      match?.matchedDogId ||
-      match?.dogLifeStage ||
-      match?.dogName,
-  )
-})
-
-const isCurrentLifeStageMatched = computed(() => {
-  const match = recipe.value.lifeStageMatch
-  return Boolean(
-    hasDogSpecificLifeStageMatch.value &&
-      (
-        match?.matched === true ||
-        match?.status === 'MATCHED' ||
-        match?.matchType === 'MATCHED'
-      ),
-  )
-})
-
-const isLifeStageFallbackSelection = computed(() => {
-  const matchType = recipe.value.lifeStageMatch?.matchType
-  return matchType === 'FALLBACK_ADULT' || matchType === 'FALLBACK_FIRST'
-})
-
-/**
- * 当前展示的生命阶段版本是否"与狗狗不匹配"。
- *
- * 后端 matchType 取值：MATCHED / MANUAL_MISMATCH / FALLBACK_ADULT / FALLBACK_FIRST / LEGACY。
- * 其中三种都属于"不匹配"，此前只有 FALLBACK_* 会被提示，
- * MANUAL_MISMATCH（人工指定了不匹配的版本）完全没有视觉区分 —— 这里统一起来。
- */
-const isLifeStageMismatch = computed(() => {
-  const matchType = recipe.value.lifeStageMatch?.matchType
-  return (
-    matchType === 'MANUAL_MISMATCH' ||
-    matchType === 'FALLBACK_ADULT' ||
-    matchType === 'FALLBACK_FIRST'
-  )
-})
-
 const hasResolvedLifeStageMatch = computed(() => {
   const match = recipe.value.lifeStageMatch
   return Boolean(
@@ -890,29 +843,6 @@ const hasResolvedLifeStageMatch = computed(() => {
         match.matchType
       ),
   )
-})
-
-const lifeStageVersionTitle = computed(() => {
-  const label = selectedLifeStageLabel.value || '当前版本'
-  // 未匹配时不加前缀，避免"当前展示"这类冗余表述
-  return isCurrentLifeStageMatched.value ? `已匹配：${label}` : label
-})
-
-const lifeStageVersionCopy = computed(() => {
-  if (recipe.value.lifeStageMatch?.message) return recipe.value.lifeStageMatch.message
-
-  // 不匹配时要说清"为什么"，否则顾客看到警示色却不知道问题出在哪
-  if (isLifeStageMismatch.value) {
-    return isLifeStageFallbackSelection.value
-      ? '当前狗狗档案没有完全匹配版本，已展示可用替代版本。'
-      : '当前展示的版本与狗狗的生命阶段不一致，建议切换后再下单。'
-  }
-
-  const matchedDogName = recipe.value.lifeStageMatch?.dogName || selectedDog.value?.name
-  if (isCurrentLifeStageMatched.value && matchedDogName) {
-    return `根据${matchedDogName}的档案自动展示该生命阶段版本。`
-  }
-  return '可切换查看该食谱已开放的生命阶段版本。'
 })
 
 onMounted(async () => {

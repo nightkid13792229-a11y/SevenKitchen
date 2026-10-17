@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>顾客端订单链路 · 现状与目标（2026-10-18）</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: #FAF7F2; color: #3F3222; padding: 26px 22px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: 22px; margin-bottom: 6px; }
+  h2 { font-size: 17px; margin: 40px 0 6px; padding-top: 12px; border-top: 2px solid #E4D8C8; }
+  h2 span { font-size: 12.5px; font-weight: 400; color: #8A7A66; margin-left: 8px; }
+  .sub { font-size: 12.5px; color: #6E5F4B; line-height: 1.8; max-width: 1400px; }
+  .sub b { color: #3F3222; }
+  code { background: #F0E6D8; padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+
+  .row { display: flex; gap: 18px; overflow-x: auto; padding: 14px 0 20px; align-items: flex-start; }
+  .col { width: 366px; flex: 0 0 366px; }
+  .col__head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12.5px; font-weight: 700; }
+  .col__tag { font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+  .tag--now { background: #F3E4E1; color: #96271a; }
+  .tag--target { background: #E3F0E6; color: #1e5b35; }
+  .col__note { font-size: 11.5px; color: #8A7A66; line-height: 1.75; margin-top: 8px; }
+  .col__note b { color: #b4453a; }
+
+  .phone {
+    width: 366px; background: #FAF7F2; border: 1px solid #EDE0D0;
+    border-radius: 20px; overflow: hidden; position: relative;
+    box-shadow: 0 6px 24px rgba(74,55,38,.06);
+  }
+  .navbar { height: 42px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: #FAF7F2; }
+  .navbar__back { font-size: 16px; color: #6E5F4B; }
+  .navbar__t { font-size: 13.5px; font-weight: 600; }
+  .body { padding: 0 10px 14px; }
+
+  /* 状态头 */
+  .shell { background: linear-gradient(135deg,#1e3a2f,#16261f); border-radius: 14px; padding: 13px; color: #f4ecd8; margin-bottom: 10px; }
+  .shell__row { display: flex; align-items: baseline; }
+  .shell__s { font-size: 16px; font-weight: 800; }
+  .shell__s--warn { color: #E8C88A; }
+  .shell__no { margin-left: auto; font-size: 10px; color: rgba(244,236,216,.5); }
+  .shell__h { font-size: 11px; color: rgba(244,236,216,.65); margin-top: 5px; line-height: 1.5; }
+
+  .sec { margin-bottom: 11px; }
+  .sec__t { font-size: 12px; font-weight: 700; margin-bottom: 7px; color: #3F3222; }
+  .card { background: #fff; border: 1px solid #EDE0D0; border-radius: 12px; padding: 11px 12px; }
+  .card--warn { border-color: #F0C8BC; background: #FFFBFA; }
+  .card--good { border-color: #B9D8C2; background: #F7FBF8; }
+
+  .kv { display: flex; font-size: 11.5px; padding: 6px 0; border-bottom: 1px dashed #F4EBE0; }
+  .kv:last-child { border-bottom: 0; }
+  .kv__k { color: #9C8B76; width: 74px; flex: 0 0 74px; }
+  .kv__v { flex: 1; }
+  .kv__v b { color: #B45309; }
+
+  /* 时间轴 */
+  .tl { padding-left: 3px; }
+  .tl__i { position: relative; padding-left: 19px; padding-bottom: 11px; }
+  .tl__i:last-child { padding-bottom: 0; }
+  .tl__i::before { content: ""; position: absolute; left: 5px; top: 13px; bottom: 0; width: 1.5px; background: #EBDFD0; }
+  .tl__i:last-child::before { display: none; }
+  .tl__d { position: absolute; left: 0; top: 2px; width: 12px; height: 12px; border-radius: 50%; background: #EBDFD0; border: 2.5px solid #FAF7F2; }
+  .tl__i--done .tl__d { background: #B45309; }
+  .tl__i--now .tl__d { background: #B45309; box-shadow: 0 0 0 3px #F7E4CC; }
+  .tl__l { font-size: 11.5px; font-weight: 600; }
+  .tl__i--wait .tl__l { color: #B3A492; font-weight: 400; }
+  .tl__t { font-size: 10px; color: #9C8B76; margin-top: 1px; }
+
+  /* 按钮 */
+  .btns { margin-top: 10px; display: flex; flex-direction: column; gap: 7px; }
+  .btn { text-align: center; font-size: 12.5px; font-weight: 700; padding: 10px 0; border-radius: 10px; }
+  .btn--main { background: #B45309; color: #fff; }
+  .btn--line { background: #fff; color: #6E5F4B; border: 1.5px solid #EDE0D0; }
+  .btn--ghost { background: #fff; color: #B45309; border: 1.5px solid #E5C9A3; }
+  .btn--del { background: #FCEAE5; color: #b4453a; border: 1.5px solid #F0C8BC; }
+
+  /* 售后表单 */
+  .opt { display: flex; align-items: center; gap: 9px; padding: 10px 11px; border: 1.5px solid #EDE0D0; border-radius: 11px; margin-bottom: 7px; font-size: 12px; background: #fff; }
+  .opt--on { border-color: #B45309; background: #FFF8F1; }
+  .opt--off { opacity: .42; }
+  .opt small { display: block; color: #8A7A66; font-size: 10px; margin-top: 2px; }
+  .opt__x { margin-left: auto; font-size: 10px; color: #b4453a; font-weight: 700; }
+
+  .textarea { border: 1.5px solid #EDE0D0; border-radius: 10px; padding: 9px 11px; font-size: 11.5px; color: #B3A492; min-height: 56px; background: #fff; }
+  .upload { border: 1.5px dashed #E5C9A3; border-radius: 10px; padding: 12px; text-align: center; font-size: 11.5px; color: #B45309; background: #FFFDF8; }
+
+  .badge { display: inline-block; font-size: 9.5px; font-weight: 700; border-radius: 999px; padding: 2px 8px; }
+  .badge--paid { background: #FFF1E3; color: #B45309; }
+  .badge--delivered { background: #E3F0E6; color: #1e5b35; }
+  .badge--after { background: #FCEAE5; color: #b4453a; }
+  .badge--done { background: #EFEAE3; color: #6E5F4B; }
+  .badge--wait { background: #FBE7C0; color: #8a5a00; }
+  .badge--cancel { background: #EFEAE3; color: #9C8B76; }
+
+  /* 列表 */
+  .lcard { background: #fff; border: 1px solid #EDE0D0; border-radius: 12px; padding: 11px 12px; margin-bottom: 8px; }
+  .lcard__top { display: flex; align-items: baseline; margin-bottom: 7px; }
+  .lcard__dog { font-size: 13px; font-weight: 800; }
+  .lcard__no { margin-left: auto; font-size: 9.5px; color: #B3A492; }
+
+  .tabs { display: flex; gap: 6px; margin-bottom: 9px; }
+  .tab { flex: 1; text-align: center; font-size: 11.5px; padding: 7px 0; border-radius: 9px; background: #fff; border: 1.5px solid #EDE0D0; color: #6E5F4B; }
+  .tab--on { background: #FFF1E3; border-color: #E5C9A3; color: #B45309; font-weight: 700; }
+
+  .mark { display: inline-block; font-size: 9px; font-weight: 700; border-radius: 4px; padding: 1px 5px; margin-left: 4px; vertical-align: 1px; }
+  .mark--fix { background: #FCEAE5; color: #b4453a; }
+  .mark--add { background: #FBE7C0; color: #8a5a00; }
+  .mark--keep { background: #F0E6D8; color: #8A7A66; }
+
+  .banner { background: #FFF8EC; border: 2px solid #E8C88A; border-radius: 12px; padding: 14px 16px; max-width: 1400px; margin: 16px 0 8px; }
+  .banner__t { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+  .banner ul { margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.9; color: #6E5F4B; }
+  .banner b { color: #3F3222; }
+
+  table.diff { margin: 10px 0 0; border-collapse: collapse; font-size: 12.5px; background: #fff; max-width: 1400px; width: 100%; }
+  table.diff th, table.diff td { text-align: left; padding: 8px 10px; border-top: 1px solid #F0E6D8; vertical-align: top; }
+  table.diff th { background: #FBF5EC; font-weight: 600; border-top: 0; }
+  .del { color: #b4453a; }
+  .new { color: #1e5b35; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>顾客端订单链路 · 现状与目标</h1>
+<div class="sub">
+  2026-10-18 ｜ 第 1 批：<b>定制订单详情 / 售后页 / 定制订单列表</b> ｜ 只画原型，不动代码<br />
+  左边照线上代码还原（<code>order-detail.vue</code> 36KB / <code>aftersale.vue</code> 12KB / <code>orders.vue</code> 20KB）
+</div>
+
+<div class="banner">
+  <div class="banner__t">扒代码扒出来的四件事（都不是小事）</div>
+  <ul>
+    <li><b>① 前后端都还留着「确认收到」</b> —— 后端动作表里 <code>CONFIRM_RECEIPT</code> 还在，
+      前端还有 <code>handleConfirmReceipt</code>。你早就取消了。</li>
+    <li><b>② 定制订单列表完全没有状态显示</b> —— 现在只显示「狗狗 / 目标 / 预计交付 / 可抵扣 / 退款」。
+      <b>顾客看不到"我这单现在是什么状态"。</b></li>
+    <li><b>③ 售后类型是成品线共用的 5 种</b>（<code>REFUND / REMAKE / COMPLAINT / RESOLVED / RESHIP</code>），
+      含投诉和补发。你定过定制售后<b>只留「调整食谱」一种</b>。</li>
+    <li><b>④ 售后状态里没有「已撤回」</b> —— 现在是 <code>PENDING / ACCEPTED / PROCESSING / RESOLVED / REJECTED</code>，
+      但你定过顾客可以撤回。</li>
+  </ul>
+</div>
+
+<!-- ================================================================ -->
+<h2>一、定制订单详情 <span>改动最集中</span></h2>
+
+<div class="row">
+
+  <div class="col">
+    <div class="col__head"><span>现状（线上）</span><span class="col__tag tag--now">按代码还原</span></div>
+    <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">定制订单</span></div>
+      <div class="body">
+
+        <div class="shell" style="margin-top:8px">
+          <div class="shell__row">
+            <span class="shell__s">已交付</span>
+            <span class="shell__no">CR20261016001</span>
+          </div>
+          <div class="shell__h">营养师已交付，你可以查看专属食谱</div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">进度</div>
+          <div class="card">
+            <div class="tl">
+              <div class="tl__i tl__i--done"><span class="tl__d"></span><div class="tl__l">已下单</div><div class="tl__t">10-16 14:20</div></div>
+              <div class="tl__i tl__i--done"><span class="tl__d"></span><div class="tl__l">已付款</div><div class="tl__t">10-16 14:25</div></div>
+              <div class="tl__i tl__i--now"><span class="tl__d"></span><div class="tl__l">已交付</div><div class="tl__t">10-17 18:30</div></div>
+              <div class="tl__i tl__i--wait"><span class="tl__d"></span><div class="tl__l">已完成</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">成品抵扣额度</div>
+          <div class="card">
+            <div class="kv"><span class="kv__k">额度总额</span><span class="kv__v">¥300</span></div>
+            <div class="kv"><span class="kv__k">已抵扣</span><span class="kv__v">¥0</span></div>
+            <div class="kv"><span class="kv__k">剩余可用</span><span class="kv__v"><b>¥300</b></span></div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">定制信息</div>
+          <div class="card">
+            <div class="kv"><span class="kv__k">定制对象</span><span class="kv__v">豆豆（柯基）</span></div>
+            <div class="kv"><span class="kv__k">定制目标</span><span class="kv__v">减重</span></div>
+            <div class="kv"><span class="kv__k">定制费</span><span class="kv__v">¥300</span></div>
+            <div class="kv"><span class="kv__k">预计交付</span><span class="kv__v"><b>10-20（周三）</b></span></div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">你的需求</div>
+          <div class="card">
+            <div class="kv"><span class="kv__k">疾病史</span><span class="kv__v">—</span></div>
+            <div class="kv"><span class="kv__k">过敏信息</span><span class="kv__v">鸡肉、小麦</span></div>
+            <div class="kv"><span class="kv__k">喜欢的食材</span><span class="kv__v">南瓜</span></div>
+            <div class="kv"><span class="kv__k">不吃的食材</span><span class="kv__v">—</span></div>
+            <div class="kv"><span class="kv__k">其它需求</span><span class="kv__v">—</span></div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">你的专属食谱</div>
+          <div class="card">
+            <div class="kv"><span class="kv__k">第 1 版</span><span class="kv__v">低脂鸡肉南瓜餐 · 10-17 交付</span></div>
+            <div class="btn btn--ghost" style="margin-top:8px">查看完整内容</div>
+          </div>
+        </div>
+
+        <div class="btns">
+          <div class="btn btn--main">确认收到 <span class="mark mark--fix">要删</span></div>
+          <div class="btn btn--ghost">有问题</div>
+          <div class="btn btn--line">用这份食谱订购成品</div>
+          <div class="btn btn--line">联系客服</div>
+          <div class="btn btn--line">返回定制订单</div>
+        </div>
+
+      </div>
+    </div>
+    <div class="col__note">
+      <b>问题一：动作里还有「确认收到」</b>（后端 <code>CONFIRM_RECEIPT</code> 也还在）。
+      <br /><br />
+      <b>问题二：状态只有"已交付"，没有"售后中"</b> ——
+      顾客提了售后，页面看起来还是"已交付"。
+      <br /><br />
+      另外「预计交付」这个说法也要改成「交付日期」（已定的是一次确定日期）。
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="col__head"><span>目标（有售后进行中）</span><span class="col__tag tag--target">该改成这样</span></div>
+    <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">定制订单</span></div>
+      <div class="body">
+
+        <div class="shell" style="margin-top:8px">
+          <div class="shell__row">
+            <span class="shell__s shell__s--warn">售后中</span>
+            <span class="shell__no">CR20261016001</span>
+          </div>
+          <div class="shell__h">你在处理一个售后，处理完会自动变成「已完成」</div>
+        </div>
+        <div class="sub" style="font-size:11px;margin:-3px 0 9px">
+          <span class="mark mark--fix">改</span> 有未完成售后时，<b>状态显示「售后中」</b>
+          （底层还是「已交付」，由后端决定显示什么）
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">进度</div>
+          <div class="card">
+            <div class="tl">
+              <div class="tl__i tl__i--done"><span class="tl__d"></span><div class="tl__l">已下单</div><div class="tl__t">10-16 14:20</div></div>
+              <div class="tl__i tl__i--done"><span class="tl__d"></span><div class="tl__l">已付款</div><div class="tl__t">10-16 14:25</div></div>
+              <div class="tl__i tl__i--done"><span class="tl__d"></span><div class="tl__l">已交付</div><div class="tl__t">10-17 18:30</div></div>
+              <div class="tl__i tl__i--now"><span class="tl__d"></span><div class="tl__l">售后处理中</div><div class="tl__t">10-18 09:12</div></div>
+              <div class="tl__i tl__i--wait"><span class="tl__d"></span><div class="tl__l">已完成</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">成品抵扣额度</div>
+          <div class="card">
+            <div class="kv"><span class="kv__k">额度总额</span><span class="kv__v">¥300</span></div>
+            <div class="kv"><span class="kv__k">剩余可用</span><span class="kv__v"><b>¥300</b></span></div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">定制信息</div>
+          <div class="card">
+            <div class="kv"><span class="kv__k">定制对象</span><span class="kv__v">豆豆（柯基）</span></div>
+            <div class="kv"><span class="kv__k">交付日期</span><span class="kv__v"><b>10-17（周五）</b></span></div>
+            <div class="kv"><span class="kv__k">售后窗口</span><span class="kv__v"><b>还剩 6 天</b></span></div>
+            <div class="kv"><span class="kv__k">免费修改</span><span class="kv__v"><b>还剩 1 次</b></span></div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">你的专属食谱</div>
+          <div class="card">
+            <div class="kv"><span class="kv__k">第 1 版</span><span class="kv__v">低脂鸡肉南瓜餐 · 10-17 交付</span></div>
+            <div class="btn btn--ghost" style="margin-top:8px">查看完整内容</div>
+          </div>
+        </div>
+
+        <div class="btns">
+          <div class="btn btn--main">查看售后进度 <span class="mark mark--add">新</span></div>
+          <div class="btn btn--line">用这份食谱订购成品</div>
+          <div class="btn btn--line">联系客服</div>
+          <div class="btn btn--del">撤回这个售后 <span class="mark mark--add">新</span></div>
+          <div class="btn btn--line">返回定制订单</div>
+        </div>
+
+      </div>
+    </div>
+    <div class="col__note">
+      <b>删掉「确认收到」</b>，换成「查看售后进度」。
+      <br /><br />
+      新加两块顾客真正关心的：<b>售后窗口还剩几天</b>、<b>免费修改还剩几次</b> ——
+      现在这两个数字顾客完全看不到，他不知道自己还有没有机会提。
+      <br /><br />
+      「预计交付」→「交付日期」。
+    </div>
+  </div>
+
+</div>
+
+<!-- ================================================================ -->
+<h2>二、售后页 <span>基本等于重画</span></h2>
+
+<div class="row">
+
+  <div class="col">
+    <div class="col__head"><span>现状（线上）</span><span class="col__tag tag--now">按代码还原</span></div>
+    <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">售后与问题反馈</span></div>
+      <div class="body">
+
+        <div class="sec" style="margin-top:9px">
+          <div class="sec__t">遇到什么问题了？</div>
+          <div class="opt opt--on"><div>答疑<small>问问这份食谱怎么喂、怎么存</small></div></div>
+          <div class="opt"><div>调整食谱<small>想改食材或份量</small></div></div>
+          <div class="opt"><div>退款<small>不想要了，申请退款</small></div></div>
+          <div class="opt"><div>投诉<small>对服务不满意</small></div></div>
+        </div>
+        <div class="sub" style="font-size:11px;margin:-6px 0 10px">
+          <span class="mark mark--fix">要改</span> 这 4 种是<b>成品线的类型</b>（后端枚举还有 REFUND / REMAKE / COMPLAINT / RESHIP / RESOLVED）
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">说明</div>
+          <div class="textarea">说清楚遇到什么问题，越具体越好</div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">照片（选填）</div>
+          <div class="upload">＋ 上传照片</div>
+        </div>
+
+        <div class="btn btn--main">提交</div>
+
+      </div>
+    </div>
+    <div class="col__note">
+      <b>现在这页有四个问题：</b>
+      <br /><br />
+      ① 类型里有<b>答疑 / 退款 / 投诉</b> —— 你定过：答疑走企业微信、交付后不退款、投诉不做类型
+      <br /><br />
+      ② <b>没有告诉顾客还剩几次免费修改</b>
+      <br /><br />
+      ③ <b>没有告诉顾客窗口还剩几天</b>
+      <br /><br />
+      ④ <b>提交后不能撤回</b>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="col__head"><span>目标（只留一种类型）</span><span class="col__tag tag--target">该改成这样</span></div>
+    <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">调整食谱</span></div>
+      <div class="body">
+
+        <div class="card card--good" style="margin-top:9px">
+          <div class="kv"><span class="kv__k">售后窗口</span><span class="kv__v"><b>还剩 6 天</b>（10-24 到期）</span></div>
+          <div class="kv"><span class="kv__k">免费修改</span><span class="kv__v"><b>还剩 2 次</b></span></div>
+        </div>
+        <div class="sub" style="font-size:11px;margin:-4px 0 10px">
+          <span class="mark mark--add">新</span> 这两个数字顾客必须先看到 ——
+          不然他不知道自己还能不能提
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">想改哪里？</div>
+          <div class="textarea" style="min-height:76px">
+            例如：鸡肉能不能换成鸭肉？它最近不太爱吃鸡胸肉了
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">照片（选填）</div>
+          <div class="upload">＋ 上传照片</div>
+        </div>
+
+        <div class="card" style="background:#FFFDF8;border-color:#E8C88A;margin-top:14px">
+          <div style="font-size:11.5px;line-height:1.75;color:#6E5F4B">
+            提交后营养师会帮你调整，一般 <b>1–2 天</b>内重新交付。<br />
+            改完之前你可以随时撤回。
+          </div>
+        </div>
+
+        <div class="btn btn--main" style="margin-top:12px">提交</div>
+        <div class="btn btn--line" style="margin-top:8px">其它问题？联系客服</div>
+
+      </div>
+    </div>
+    <div class="col__note">
+      <b>整页只剩一件事：填"想改哪里"。</b>
+      <br /><br />
+      答疑、退款、投诉全部拿掉 ——
+      答疑和投诉走<b>企业微信</b>，交付后<b>不退款</b>（只调整食谱）。
+      <br /><br />
+      底部留一个「其它问题？联系客服」，把那三类都接过去。
+      <br /><br />
+      <b>提交后能撤回</b> → 售后状态要加一个「已撤回」。
+    </div>
+  </div>
+
+</div>
+
+<!-- ================================================================ -->
+<h2>三、定制订单列表 <span>现在完全没有状态</span></h2>
+
+<div class="row">
+
+  <div class="col">
+    <div class="col__head"><span>现状（线上）</span><span class="col__tag tag--now">按代码还原</span></div>
+    <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">我的定制订单</span></div>
+      <div class="body">
+
+        <div class="lcard" style="margin-top:9px">
+          <div class="lcard__top">
+            <span class="lcard__dog">狗狗：豆豆</span>
+            <span class="lcard__no">CR20261016001</span>
+          </div>
+          <div class="kv"><span class="kv__k">目标</span><span class="kv__v">减重</span></div>
+          <div class="kv"><span class="kv__k">预计交付</span><span class="kv__v">10-20</span></div>
+          <div class="kv"><span class="kv__k">可抵扣</span><span class="kv__v">¥300</span></div>
+        </div>
+
+        <div class="lcard">
+          <div class="lcard__top">
+            <span class="lcard__dog">狗狗：旺财</span>
+            <span class="lcard__no">CR20261004002</span>
+          </div>
+          <div class="kv"><span class="kv__k">目标</span><span class="kv__v">维持</span></div>
+          <div class="kv"><span class="kv__k">预计交付</span><span class="kv__v">10-05</span></div>
+          <div class="kv"><span class="kv__k">退款</span><span class="kv__v">已退 ¥300</span></div>
+        </div>
+
+      </div>
+    </div>
+    <div class="col__note">
+      <b>整页没有一处状态。</b>
+      <br /><br />
+      顾客打开这页，看不出哪张单在等付款、哪张在做、哪张已经交付、哪张在售后。
+      <b>只能靠"预计交付"这个日期去猜。</b>
+      <br /><br />
+      代码里也确实没有状态字段的渲染（没有 tab、没有 badge、没有 <code>statusText</code>）。
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="col__head"><span>目标（加状态 + 筛选）</span><span class="col__tag tag--target">该改成这样</span></div>
+    <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">我的定制订单</span></div>
+      <div class="body">
+
+        <div class="tabs" style="margin-top:9px">
+          <div class="tab tab--on">全部</div>
+          <div class="tab">进行中</div>
+          <div class="tab">已完成</div>
+        </div>
+
+        <div class="lcard">
+          <div class="lcard__top">
+            <span class="lcard__dog">豆豆</span>
+            <span class="badge badge--after">售后中</span>
+            <span class="lcard__no">CR20261016001</span>
+          </div>
+          <div class="kv"><span class="kv__k">目标</span><span class="kv__v">减重</span></div>
+          <div class="kv"><span class="kv__k">交付日期</span><span class="kv__v">10-17</span></div>
+          <div class="kv"><span class="kv__k">售后窗口</span><span class="kv__v">还剩 6 天</span></div>
+        </div>
+
+        <div class="lcard">
+          <div class="lcard__top">
+            <span class="lcard__dog">旺财</span>
+            <span class="badge badge--wait">已付款</span>
+            <span class="lcard__no">CR20261018003</span>
+          </div>
+          <div class="kv"><span class="kv__k">目标</span><span class="kv__v">维持</span></div>
+          <div class="kv"><span class="kv__k">交付日期</span><span class="kv__v">10-21</span></div>
+        </div>
+
+        <div class="lcard">
+          <div class="lcard__top">
+            <span class="lcard__dog">小黑</span>
+            <span class="badge badge--done">已完成</span>
+            <span class="lcard__no">CR20260920007</span>
+          </div>
+          <div class="kv"><span class="kv__k">目标</span><span class="kv__v">增重</span></div>
+          <div class="kv"><span class="kv__k">交付日期</span><span class="kv__v">09-23</span></div>
+          <div class="kv"><span class="kv__k">成品抵扣</span><span class="kv__v"><b>剩余 ¥300</b></span></div>
+        </div>
+
+      </div>
+    </div>
+    <div class="col__note">
+      <b>加三样：状态标签 / 交付日期 / 售后窗口剩余</b>。
+      <br /><br />
+      状态标签用的是<b>跟订单详情同一套说法</b>（待付款 / 已付款 / 已交付 / 售后中 / 已完成 / 已取消）——
+      这样两页不会打架。
+      <br /><br />
+      标签的<b>文案和颜色都由后端下发</b>，前端不自己判断。
+    </div>
+  </div>
+
+</div>
+
+<!-- ================================================================ -->
+<h2>四、三页的改动清单</h2>
+<table class="diff">
+  <tr><th style="width:110px">页面</th><th style="width:60px">类型</th><th style="width:230px">改什么</th><th>说明</th></tr>
+
+  <tr><td rowspan="5"><b>订单详情</b></td>
+    <td class="del" style="font-weight:700">删</td><td><b>「确认收到」动作</b></td>
+    <td>前端 <code>handleConfirmReceipt</code> + 后端 <code>CONFIRM_RECEIPT</code> 都要删</td></tr>
+  <tr><td class="new" style="font-weight:700">加</td><td><b>「售后中」状态</b></td>
+    <td>有未完成售后时，状态显示「售后中」（底层仍是已交付，由后端决定）</td></tr>
+  <tr><td class="new" style="font-weight:700">加</td><td><b>售后窗口剩余 / 免费次数剩余</b></td>
+    <td>现在顾客完全看不到这两个数字</td></tr>
+  <tr><td class="new" style="font-weight:700">加</td><td><b>「查看售后进度」/「撤回售后」</b></td>
+    <td>替代原来的「有问题」+ 新增撤回</td></tr>
+  <tr><td style="color:#8A7A66;font-weight:700">改</td><td>「预计交付」→「交付日期」</td>
+    <td>已定：给的是确定日期，不是预计</td></tr>
+
+  <tr><td rowspan="4"><b>售后页</b></td>
+    <td class="del" style="font-weight:700">删</td><td><b>答疑 / 退款 / 投诉 三种类型</b></td>
+    <td>答疑与投诉走企业微信；交付后不退款只调整</td></tr>
+  <tr><td class="new" style="font-weight:700">加</td><td><b>窗口剩余 + 免费次数剩余</b></td>
+    <td>让顾客知道还能不能提</td></tr>
+  <tr><td class="new" style="font-weight:700">加</td><td><b>「其它问题？联系客服」</b></td>
+    <td>把那三类接过去</td></tr>
+  <tr><td class="new" style="font-weight:700">加</td><td><b>「已撤回」状态</b></td>
+    <td>后端 <code>CustomRecipeAftersaleStatus</code> 现在没有这个值，要加</td></tr>
+
+  <tr><td rowspan="3"><b>订单列表</b></td>
+    <td class="new" style="font-weight:700">加</td><td><b>状态标签</b></td>
+    <td>现在整页没有状态 —— 顾客看不出哪张在等付款、哪张在售后</td></tr>
+  <tr><td class="new" style="font-weight:700">加</td><td><b>筛选（全部 / 进行中 / 已完成）</b></td>
+    <td>订单多了以后必须有</td></tr>
+  <tr><td class="new" style="font-weight:700">加</td><td><b>售后窗口剩余</b></td>
+    <td>已交付的单在列表上就能看出"还能提几天"</td></tr>
+</table>
+
+<div class="banner" style="margin-top:18px;border-color:#CFE3D5;background:#F7FBF8">
+  <div class="banner__t" style="color:#1e5b35">一个共用的东西</div>
+  <ul style="color:#3F3222">
+    <li><b>状态标签在三个地方都要出现</b>（详情的状态头、列表的徽章、售后页的状态）——
+      所以它应该抽成<b>一个组件</b>：<code>OrderStatusBadge</code>，吃后端给的
+      <code>{ code, label, tone }</code>。</li>
+    <li><b>「售后窗口剩余几天 / 免费次数剩余几次」也是三处都要</b>
+      （详情、售后页、列表）—— 同样该由后端算好下发，前端只显示。</li>
+  </ul>
+</div>
+
+</body>
+</html>

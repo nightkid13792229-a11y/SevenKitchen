@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
-<title>交付物第 1 页 · 原型 v6（2026-10-17）</title>
+<title>交付物第 1 页 · 原型 v7（2026-10-17）</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -176,7 +176,7 @@
 </head>
 <body>
 
-<h1>交付物 · 第 1 页原型 v6</h1>
+<h1>交付物 · 第 1 页原型 v7</h1>
 <div class="sub">
   2026-10-17 ｜ 按你第 4 轮 5 条意见改 ｜ <b>只改原型和文档，不动代码</b>
 </div>
@@ -189,8 +189,13 @@
     <li><b>去掉「一句话看懂这份食谱」这个标题</b>；并回答：后端那两个字段<b>要合并</b>。</li>
     <li><b>核心营养成分</b>重新排版：标题居中、标准居中、三个主指标三等分、报告入口挪进板块内。</li>
     <li><b>食材表去掉重复的"食材"表头</b>（原来标题和表头各写一次）。</li>
-    <li><b>「需补充的营养素」→「额外补充的营养素」</b>，且列的是<b>营养素</b>（钙 / Omega-3），
+    <li><b>「需补充的营养素」→「额外补充的营养素」</b>，且列的是<b>营养素</b>，
       <b>不是补剂产品名</b>（钙粉 / 鱼油）。</li>
+    <li><b>不用自己编的营养素名</b>：原来我写了"Omega-3"，但系统字典里
+      <b>没有这个营养素</b>，只有 <code>epaDha</code>（EPA + DHA）。
+      现在全部换成了字典里的真名（钙 / 锌 / 维生素 D）。</li>
+    <li><b>浓度按食谱详情页的格式写</b>：「每kg食材添加 5g」，不是「5 g/kg」。</li>
+    <li><b>去掉「封面生成中」小标</b>。</li>
   </ol>
 </div>
 
@@ -249,9 +254,9 @@
         <div class="sec">
           <div class="supp">
             <div class="supp__h"><span class="supp__t">额外补充的营养素</span><span class="supp__c">3 种</span></div>
-            <div class="supp__item"><span class="supp__n">钙</span><span class="supp__v">5 g / kg</span></div>
-            <div class="supp__item"><span class="supp__n">Omega-3<span class="supp__sci">DHA + EPA</span></span><span class="supp__v">2 g / kg</span></div>
-            <div class="supp__item"><span class="supp__n">维生素 E</span><span class="supp__v">0.3 g / kg</span></div>
+            <div class="supp__item"><span class="supp__n">钙</span><span class="supp__v">每kg食材添加 5g</span></div>
+            <div class="supp__item"><span class="supp__n">锌</span><span class="supp__v">每kg食材添加 0.1g</span></div>
+            <div class="supp__item"><span class="supp__n">维生素 D</span><span class="supp__v">每kg食材添加 0.02g</span></div>
           </div>
         </div>
 
@@ -262,6 +267,9 @@
       靠的是底部那层 92% 深的遮罩 + 文字双层阴影。
       <br /><br />
       遮罩不是"可选装饰"，是硬要求：<b>AI 生成的图我们保证不了它一定够暗</b>。
+      <br /><br />
+      营养素用的是<b>系统字典里的真名</b>（钙 / 锌 / 维生素 D），
+      浓度照食谱详情页的写法：<b>每kg食材添加 5g</b>。
     </div>
   </div>
 
@@ -318,7 +326,6 @@
 
         <div class="cover cover--fallback">
           <div class="cover__scrim"></div>
-          <span class="cover__cap cover__cap--warn">封面生成中</span>
           <div class="cover__txt">
             <div class="cover__name">低脂鸡肉南瓜餐</div>
             <div class="cover__for">为 豆豆 定制</div>
@@ -346,7 +353,8 @@
     <div class="col__note">
       <b>布局一点不位移</b>，只有背景从"照片"换成"品牌深色块"。
       <br /><br />
-      左上角「封面生成中」这个小标要不要留，还是你定。
+      <b>不显示任何"封面生成中 / 暂无封面"字样</b> —— 顾客看到的就应该是一块
+      完整的、有食谱名的封面，而不是"缺了什么"。
     </div>
   </div>
 
@@ -379,9 +387,15 @@
   </tr>
   <tr>
     <td class="del">「需补充的营养素」里写：钙粉、鱼油、维生素 E 胶囊</td>
-    <td class="new">「额外补充的营养素」里写：<b>钙、Omega-3（DHA+EPA）、维生素 E</b></td>
-    <td><b>这是概念错误</b>：钙粉/鱼油是<b>产品</b>，钙/Omega-3 才是<b>营养素</b>。
+    <td class="new">「额外补充的营养素」里写：<b>钙、锌、维生素 D</b></td>
+    <td><b>概念错误</b>：钙粉/鱼油是<b>产品</b>，钙/锌才是<b>营养素</b>。
       而且同一营养素可能对应不同产品（补钙可以用碳酸钙，也可以用蛋壳粉）。</td>
+  </tr>
+  <tr>
+    <td class="del">「Omega-3（DHA + EPA）」<br />浓度写「2 g / kg」</td>
+    <td class="new">「EPA + DHA」<br />浓度写「每kg食材添加 2g」</td>
+    <td><b>系统里没有"Omega-3"这个营养素</b>，字典里只有 <code>epaDha</code>。
+      那个名字是我自己编的。浓度也改成照食谱详情页的写法。</td>
   </tr>
 </table>
 
@@ -410,16 +424,12 @@
 <table class="diff">
   <tr><th style="width:250px">待定</th><th>说明</th></tr>
   <tr>
-    <td>「封面生成中」这个小标留不留</td>
-    <td>留：顾客知道以后会有图。不留：更干净，但顾客不会期待封面。</td>
+    <td>第 2 页的「喂食提醒」要不要更具体</td>
+    <td>现在只有换粮过渡一条。要不要加"吃不完要冷藏""观察便便"这类？</td>
   </tr>
   <tr>
-    <td>营养素浓度的单位</td>
-    <td>我现在写「5 g / kg 食材」。也可以写成百分比或"每份"。</td>
-  </tr>
-  <tr>
-    <td>「Omega-3」后面要不要带 DHA+EPA</td>
-    <td>我带了（小字）。营养师看得懂，顾客可能不关心。</td>
+    <td>营养素的排序</td>
+    <td>我现在按"钙 / 锌 / 维生素 D"排。要不要按补充量从大到小？还是按字典顺序？</td>
   </tr>
 </table>
 

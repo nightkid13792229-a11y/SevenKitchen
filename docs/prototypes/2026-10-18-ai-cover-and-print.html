@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>AI 封面图 + 长图重做 + 支付确认页 · 现状与目标（2026-10-18）</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: #FAF7F2; color: #3F3222; padding: 26px 22px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: 22px; margin-bottom: 6px; }
+  h2 { font-size: 17px; margin: 40px 0 6px; padding-top: 12px; border-top: 2px solid #E4D8C8; }
+  h2 span { font-size: 12.5px; font-weight: 400; color: #8A7A66; margin-left: 8px; }
+  .sub { font-size: 12.5px; color: #6E5F4B; line-height: 1.8; max-width: 1400px; }
+  code { background: #F0E6D8; padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+
+  .row { display: flex; gap: 18px; overflow-x: auto; padding: 14px 0 20px; align-items: flex-start; }
+  .col { width: 366px; flex: 0 0 366px; }
+  .col--wide { width: 560px; flex: 0 0 560px; }
+  .col__head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12.5px; font-weight: 700; }
+  .col__tag { font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+  .tag--now { background: #F3E4E1; color: #96271a; }
+  .tag--target { background: #E3F0E6; color: #1e5b35; }
+  .col__note { font-size: 11.5px; color: #8A7A66; line-height: 1.75; margin-top: 8px; }
+  .col__note b { color: #b4453a; }
+
+  .phone { width: 366px; background: #FAF7F2; border: 1px solid #EDE0D0; border-radius: 20px; overflow: hidden; box-shadow: 0 6px 24px rgba(74,55,38,.06); }
+  .navbar { height: 42px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: #FAF7F2; }
+  .navbar__back { font-size: 16px; color: #6E5F4B; }
+  .navbar__t { font-size: 13.5px; font-weight: 600; }
+  .body { padding: 0 10px 14px; }
+
+  /* 后台框 */
+  .win { width: 560px; background: #fff; border: 1px solid #DFE3E9; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 16px rgba(40,50,70,.06); }
+  .win__bar { height: 32px; background: #FAFBFC; border-bottom: 1px solid #EDF0F3; display: flex; align-items: center; gap: 6px; padding: 0 12px; }
+  .win__dot { width: 8px; height: 8px; border-radius: 50%; background: #DDE1E7; }
+  .win__t { font-size: 11px; color: #6B7280; margin-left: 5px; }
+  .win__body { padding: 13px; }
+
+  .fld { display: flex; align-items: flex-start; padding: 7px 0; border-bottom: 1px dashed #EEF1F5; font-size: 11.5px; }
+  .fld:last-child { border-bottom: 0; }
+  .fld__l { width: 96px; flex: 0 0 96px; color: #5A6270; padding-top: 2px; }
+  .fld__v { flex: 1; }
+  .ipt { border: 1px solid #D8DCE2; border-radius: 5px; padding: 4px 8px; font-size: 11px; color: #2B2F36; background: #fff; display: block; }
+  .btn2 { display: inline-block; border-radius: 5px; padding: 4px 12px; font-size: 11px; font-weight: 700; }
+  .btn2--blue { background: #3B5BDB; color: #fff; }
+  .btn2--line { border: 1px solid #D8DCE2; color: #5A6270; background: #fff; }
+  .btn2--ai { background: linear-gradient(135deg,#7C5CD6,#3B5BDB); color: #fff; }
+
+  .coverbox { width: 100%; height: 120px; border-radius: 8px; border: 1px dashed #D8DCE2; background: #FAFBFC; display: flex; align-items: center; justify-content: center; color: #B0B7C3; font-size: 11px; }
+  .coverbox--gen {
+    background:
+      radial-gradient(circle at 30% 26%, rgba(255,236,190,.9), rgba(255,236,190,0) 42%),
+      radial-gradient(circle at 72% 34%, rgba(214,160,80,.92), rgba(214,160,80,0) 46%),
+      linear-gradient(150deg, #d9a556, #8a5424 62%, #5c3616);
+    border: 0; position: relative;
+  }
+  .coverbox--gen span { position: absolute; bottom: 7px; left: 9px; color: #fff; font-size: 10.5px; text-shadow: 0 1px 3px rgba(0,0,0,.6); }
+
+  /* 长图 */
+  .longimg { background: #fff; border: 1px solid #EDE0D0; border-radius: 8px; overflow: hidden; width: 340px; }
+  .li__hd { background: linear-gradient(135deg,#1e3a2f,#16261f); color: #f4ecd8; padding: 10px 12px; }
+  .li__brand { font-size: 9px; opacity: .7; letter-spacing: 1px; }
+  .li__t { font-size: 15px; font-weight: 800; margin-top: 2px; }
+  .li__b { padding: 10px 12px; }
+  .li__h { font-size: 10.5px; font-weight: 700; margin: 9px 0 5px; color: #6E5F4B; }
+  .li__h:first-child { margin-top: 0; }
+  .lirow { display: flex; font-size: 10px; padding: 3.5px 0; border-bottom: 1px dashed #F4EBE0; }
+  .lirow__n { flex: 1; }
+  .lirow__v { width: 86px; text-align: right; font-weight: 700; color: #B45309; }
+  .lirow__a { width: 52px; text-align: right; color: #8A7A66; }
+  .lihead { display: flex; font-size: 9px; color: #A9967E; padding-bottom: 4px; border-bottom: 1px solid #F0E6D8; }
+  .li__note { font-size: 9px; color: #9C8B76; line-height: 1.6; margin-top: 5px; }
+  .li__ft { border-top: 1px solid #F0E6D8; padding: 9px 12px; display: flex; align-items: center; gap: 8px; }
+  .qr { width: 40px; height: 40px; border-radius: 5px; background: repeating-conic-gradient(#3F3222 0 25%, #fff 0 50%) 0 0/8px 8px; flex: 0 0 40px; }
+  .li__ftt { font-size: 9px; color: #6E5F4B; line-height: 1.5; }
+
+  /* 支付页 */
+  .ok { text-align: center; padding: 16px 0 10px; }
+  .ok__i { width: 44px; height: 44px; border-radius: 50%; background: #E3F0E6; color: #1e5b35; font-size: 22px; display: flex; align-items: center; justify-content: center; margin: 0 auto 8px; }
+  .ok__t { font-size: 15px; font-weight: 800; }
+  .card { background: #fff; border: 1px solid #EDE0D0; border-radius: 13px; padding: 12px; margin-bottom: 9px; }
+  .card__t { font-size: 12px; font-weight: 700; margin-bottom: 8px; }
+  .kv { display: flex; font-size: 11.5px; padding: 6px 0; border-bottom: 1px dashed #F4EBE0; }
+  .kv:last-child { border-bottom: 0; }
+  .kv__k { color: #9C8B76; width: 76px; flex: 0 0 76px; }
+  .kv__v { flex: 1; }
+  .kv__v b { color: #B45309; }
+  .paybtn { background: #B45309; color: #fff; text-align: center; font-size: 13px; font-weight: 700; padding: 12px 0; border-radius: 11px; }
+
+  .mark { display: inline-block; font-size: 9px; font-weight: 700; border-radius: 4px; padding: 1px 5px; margin-left: 4px; vertical-align: 1px; }
+  .mark--fix { background: #FCEAE5; color: #b4453a; }
+  .mark--add { background: #FBE7C0; color: #8a5a00; }
+
+  .banner { background: #FFF8EC; border: 2px solid #E8C88A; border-radius: 12px; padding: 14px 16px; max-width: 1400px; margin: 16px 0 8px; }
+  .banner__t { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+  .banner ul { margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.9; color: #6E5F4B; }
+  .banner b { color: #3F3222; }
+
+  table.diff { margin: 10px 0 0; border-collapse: collapse; font-size: 12.5px; background: #fff; max-width: 1400px; width: 100%; }
+  table.diff th, table.diff td { text-align: left; padding: 8px 10px; border-top: 1px solid #F0E6D8; vertical-align: top; }
+  table.diff th { background: #FBF5EC; font-weight: 600; border-top: 0; }
+  .del2 { color: #b4453a; }
+  .new { color: #1e5b35; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>AI 封面图 + 长图重做 + 支付确认页</h1>
+<div class="sub">
+  2026-10-18 ｜ 第 4 批（收尾）｜ 只画原型，不动代码
+</div>
+
+<div class="banner">
+  <div class="banner__t">这一批查出来的最大一件事</div>
+  <ul>
+    <li><b>长图完全按旧口径做的，不只是"加个二维码"。</b>
+      它现在有三列：原料名称 / <b>建议采购量</b> / <b>实际用量</b>，
+      下面还有一句「<b>已按 X% 的加工损耗留出余量</b>」 ——
+      <b>采购量整条线在长图上还是活的</b>。</li>
+    <li>也就是说，采购量这件事一共有 <b>4 个地方</b>要删：交付第 1 页、交付第 2 页、
+      DIY 制作单、<b>长图</b>。前三个前面都说过了，长图是这次才发现的。</li>
+    <li>另外两处是小事：<b>支付确认页</b>的"预计交付"要改文案；
+      <b>AI 封面图</b>是唯一要新做的功能（文案生成已经有了）。</li>
+  </ul>
+</div>
+
+<!-- ================================================================ -->
+<h2>一、AI 生成封面图 <span>唯一要新做的功能</span></h2>
+
+<div class="row">
+
+  <div class="col--wide col">
+    <div class="col__head"><span>后台食谱编辑页</span><span class="col__tag tag--target">新增按钮</span></div>
+    <div class="win">
+      <div class="win__bar"><span class="win__dot"></span><span class="win__dot"></span><span class="win__dot"></span><span class="win__t">食谱编辑 · 低脂鸡肉南瓜餐</span></div>
+      <div class="win__body">
+
+        <div class="fld">
+          <span class="fld__l">封面图</span>
+          <span class="fld__v">
+            <div class="coverbox">点击上传 / 拖拽图片</div>
+            <div style="margin-top:7px;display:flex;gap:7px">
+              <span class="btn2 btn2--ai">✨ AI 生成封面图 <span class="mark mark--add">新增</span></span>
+              <span class="btn2 btn2--line">从素材库选</span>
+            </div>
+            <div style="font-size:10px;color:#8A7A66;margin-top:6px">
+              没封面时交付页用品牌深色块兜底，不会留白
+            </div>
+          </span>
+        </div>
+
+        <div class="fld">
+          <span class="fld__l">食谱名</span>
+          <span class="fld__v"><span class="ipt">低脂鸡肉南瓜餐</span></span>
+        </div>
+
+        <div class="fld">
+          <span class="fld__l">一句话卖点</span>
+          <span class="fld__v">
+            <span class="ipt" style="min-height:40px">为控体重设计：脂肪只有 9%，蛋白质 32% 足够…</span>
+            <div style="margin-top:6px"><span class="btn2 btn2--ai">✨ AI 生成卖点与说明</span>
+              <span style="font-size:10px;color:#1D6034;margin-left:6px">✓ 已有</span></div>
+          </span>
+        </div>
+
+      </div>
+    </div>
+    <div class="col__note">
+      <b>文案生成已经有了</b>（`AI 生成卖点与说明` 对话框，含卖点 / 说明 / 建议标签），
+      <b>只缺封面图</b>。
+      <br /><br />
+      按钮放在上传框下面，跟「从素材库选」并排 —— 三种来源一眼看全：
+      <b>自己传 / AI 生 / 素材库</b>。
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="col__head"><span>点「AI 生成封面图」</span><span class="col__tag tag--target">弹窗</span></div>
+    <div class="win" style="width:366px">
+      <div class="win__bar"><span class="win__dot"></span><span class="win__dot"></span><span class="win__dot"></span><span class="win__t">AI 生成封面图</span></div>
+      <div class="win__body">
+
+        <div style="font-size:11px;color:#5A6270;line-height:1.7">
+          会根据食谱名和食材自动写提示词。也可以自己改。
+        </div>
+
+        <div style="margin-top:9px">
+          <div style="font-size:10.5px;color:#8A7A66;margin-bottom:4px">提示词</div>
+          <div class="ipt" style="min-height:52px;line-height:1.6">
+            白色陶瓷盘里盛着鸡肉块、南瓜块和西兰花，俯拍，柔和自然光，浅木色桌面，暖色调，食物摄影风格
+          </div>
+        </div>
+
+        <div style="margin-top:9px">
+          <div style="font-size:10.5px;color:#8A7A66;margin-bottom:4px">画幅</div>
+          <div style="display:flex;gap:6px">
+            <span class="btn2 btn2--blue">3:2（封面）</span>
+            <span class="btn2 btn2--line">1:1</span>
+            <span class="btn2 btn2--line">16:9</span>
+          </div>
+        </div>
+
+        <div style="margin-top:10px">
+          <div class="coverbox coverbox--gen" style="height:104px">
+            <span>低脂鸡肉南瓜餐</span>
+          </div>
+          <div style="font-size:10px;color:#8A7A66;margin-top:5px">生成耗时约 28 秒</div>
+        </div>
+
+        <div style="margin-top:9px;display:flex;gap:7px">
+          <span class="btn2 btn2--line" style="flex:1;text-align:center">重新生成</span>
+          <span class="btn2 btn2--blue" style="flex:1;text-align:center">采用这张</span>
+        </div>
+
+      </div>
+    </div>
+    <div class="col__note">
+      <b>一次只生成一张</b>（glm-image 约 28 秒/张），不满意点「重新生成」。
+      <br /><br />
+      不做"一次出四张挑一张" —— 那样要等近两分钟，而且 token 翻四倍。
+      <br /><br />
+      生成结果<b>直接存成 <code>coverImageUrl</code></b>，跟手动上传走同一条路。
+    </div>
+  </div>
+
+</div>
+
+<!-- ================================================================ -->
+<h2>二、长图 <span>要重做，不只是加二维码</span></h2>
+
+<div class="row">
+
+  <div class="col">
+    <div class="col__head"><span>现状</span><span class="col__tag tag--now">按代码还原</span></div>
+    <div class="longimg">
+      <div class="li__hd">
+        <div class="li__brand">赛文的食堂</div>
+        <div class="li__t">专属食谱</div>
+      </div>
+      <div class="li__b">
+
+        <div class="li__h">每天 / 餐数 / 每餐 / 做几天 / 总净重</div>
+
+        <div class="li__h" style="color:#b4453a">食材采购清单 <span class="mark mark--fix">要改</span></div>
+        <div class="lihead"><span class="lirow__n">原料名称</span><span class="lirow__a">建议采购量</span><span class="lirow__v">实际用量</span></div>
+        <div class="lirow"><span class="lirow__n">鸡胸肉</span><span class="lirow__a">2054g</span><span class="lirow__v">1920g</span></div>
+        <div class="lirow"><span class="lirow__n">南瓜</span><span class="lirow__a">1284g</span><span class="lirow__v">1200g</span></div>
+        <div class="lirow"><span class="lirow__n">糙米</span><span class="lirow__a">1284g</span><span class="lirow__v">1200g</span></div>
+        <div class="lirow"><span class="lirow__n">西兰花</span><span class="lirow__a">514g</span><span class="lirow__v">480g</span></div>
+
+        <div class="li__note" style="color:#b4453a">
+          已按 7% 的加工损耗留出余量，实际用量 1920g …
+        </div>
+
+        <div class="li__note">
+          补充剂不计入上面的采购总量，请单独准备。
+        </div>
+
+        <div class="li__h">营养补充剂</div>
+        <div class="lihead"><span class="lirow__n">名称</span><span class="lirow__v">总量</span></div>
+        <div class="lirow"><span class="lirow__n">钙</span><span class="lirow__v">24g</span></div>
+
+        <div class="li__h">制作步骤 / 储存 / 提醒</div>
+
+      </div>
+      <div class="li__ft" style="justify-content:center;color:#B0B7C3;font-size:10px">
+        （没有二维码）
+      </div>
+    </div>
+    <div class="col__note">
+      <b>三列：原料名称 / 建议采购量 / 实际用量</b> —— 而且采购量那列在中间，
+      比"实际用量"还显眼。
+      <br /><br />
+      下面那句「已按 7% 的加工损耗留出余量」是<b>整个旧口径的化石</b>。
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="col__head"><span>目标</span><span class="col__tag tag--target">该改成这样</span></div>
+    <div class="longimg">
+      <div class="li__hd">
+        <div class="li__brand">赛文的食堂</div>
+        <div class="li__t">专属食谱</div>
+      </div>
+      <div class="li__b">
+
+        <div class="li__h">每天 320 克 · 2 餐 · 每餐 160 克 · 做 15 天 · 总净重 4800 克</div>
+
+        <div class="li__h">食材净用量</div>
+        <div class="lihead"><span class="lirow__n">原料名称</span><span class="lirow__v">净用量</span></div>
+        <div class="lirow"><span class="lirow__n">鸡胸肉</span><span class="lirow__v">1920 克</span></div>
+        <div class="lirow"><span class="lirow__n">南瓜</span><span class="lirow__v">1200 克</span></div>
+        <div class="lirow"><span class="lirow__n">糙米</span><span class="lirow__v">1200 克</span></div>
+        <div class="lirow"><span class="lirow__n">西兰花</span><span class="lirow__v">480 克</span></div>
+
+        <div class="li__note" style="color:#1e5b35">
+          只写这次要用多少。买多少你自己判断。
+        </div>
+
+        <div class="li__h">营养补充剂</div>
+        <div class="lihead"><span class="lirow__n">名称</span><span class="lirow__v">总量</span></div>
+        <div class="lirow"><span class="lirow__n">钙</span><span class="lirow__v">24g</span></div>
+
+        <div class="li__h">制作步骤 / 储存 / 提醒</div>
+
+      </div>
+      <div class="li__ft">
+        <div class="qr"></div>
+        <div class="li__ftt">
+          想看电子版、留下售后？<br />
+          <b>扫码打开小程序</b>
+        </div>
+      </div>
+    </div>
+    <div class="col__note">
+      <b>两个改动：</b>
+      <br /><br />
+      ① 采购量整列删掉、损耗那句话删掉、两列并成一列「净用量」；
+      下面那句"补充剂不计入采购总量"也跟着删（没有采购总量了）
+      <br /><br />
+      ② 底部加二维码 + 一句话引导
+      <br /><br />
+      <b>二维码要说明"扫了能干什么"</b> —— 只说"扫码"没人会扫。
+    </div>
+  </div>
+
+</div>
+
+<!-- ================================================================ -->
+<h2>三、支付确认页 <span>只改文案 + 补两句</span></h2>
+
+<div class="row">
+
+  <div class="col">
+    <div class="col__head"><span>现状</span><span class="col__tag tag--now">按代码还原</span></div>
+    <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">提交成功</span></div>
+      <div class="body">
+
+        <div class="ok">
+          <div class="ok__i">✓</div>
+          <div class="ok__t">定制需求已提交</div>
+        </div>
+
+        <div class="card">
+          <div class="kv"><span class="kv__k">预计交付</span><span class="kv__v"><b>排期中</b></span></div>
+          <div class="kv"><span class="kv__k">订单编号</span><span class="kv__v">CR20261016001</span></div>
+          <div class="kv"><span class="kv__k">定制对象</span><span class="kv__v">豆豆（柯基）</span></div>
+          <div class="kv"><span class="kv__k">定制费</span><span class="kv__v"><b>¥300</b></span></div>
+          <div class="kv"><span class="kv__k">当前状态</span><span class="kv__v">待付款</span></div>
+          <div class="kv"><span class="kv__k">成品抵扣额度</span><span class="kv__v">¥300</span></div>
+        </div>
+
+        <div class="paybtn">立即微信支付 ¥300</div>
+        <div class="btn btn--line" style="margin-top:8px;text-align:center;font-size:13px;font-weight:700;padding:12px 0;border-radius:11px;background:#fff;color:#B45309;border:1.5px solid #E5C9A3">查看订单详情</div>
+
+      </div>
+    </div>
+    <div class="col__note">
+      <b>问题一：「预计交付」写着"排期中"</b> ——
+      但实际下单时就确定了交付日期，这个说法让顾客以为还没定。
+      <br /><br />
+      <b>问题二：没告诉顾客"我在等什么"</b> —— 付完钱之后多久有东西、
+      会收到什么、有问题找谁，都没有。
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="col__head"><span>目标</span><span class="col__tag tag--target">该改成这样</span></div>
+    <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">提交成功</span></div>
+      <div class="body">
+
+        <div class="ok">
+          <div class="ok__i">✓</div>
+          <div class="ok__t">定制需求已提交</div>
+        </div>
+
+        <div class="card">
+          <div class="kv"><span class="kv__k">交付日期</span><span class="kv__v"><b>10 月 20 日（周三）</b></span></div>
+          <div class="kv"><span class="kv__k">订单编号</span><span class="kv__v">CR20261016001</span></div>
+          <div class="kv"><span class="kv__k">定制对象</span><span class="kv__v">豆豆（柯基）</span></div>
+          <div class="kv"><span class="kv__k">定制费</span><span class="kv__v"><b>¥300</b></span></div>
+          <div class="kv"><span class="kv__k">成品抵扣额度</span><span class="kv__v">¥300</span></div>
+        </div>
+        <div class="sub" style="font-size:11px;margin:-3px 0 9px">
+          <span class="mark mark--fix">改</span> 「预计交付 · 排期中」→「<b>交付日期 · 具体日期</b>」
+        </div>
+
+        <div class="card" style="background:#FFFCF7;border-color:#F0DFC4">
+          <div class="card__t">付完钱之后</div>
+          <div style="font-size:11.5px;line-height:1.85;color:#6E5F4B">
+            · <b>10 月 20 日</b>当天，专属食谱会出现在「我的订单」里<br />
+            · 同时会给你发一条<b>微信通知</b>（没收到就去「我的 → 消息」看）<br />
+            · 拿到食谱后 <b>7 天内可以提 2 次免费修改</b>
+          </div>
+        </div>
+        <div class="sub" style="font-size:11px;margin:-3px 0 9px">
+          <span class="mark mark--add">新</span> 告诉顾客"在等什么" ——
+          这是付款页，也是最该说清下一步的地方
+        </div>
+
+        <div class="paybtn">立即微信支付 ¥300</div>
+        <div style="text-align:center;font-size:11px;color:#8A7A66;margin-top:8px">
+          付完钱可以随时退，交付前全额
+        </div>
+
+      </div>
+    </div>
+    <div class="col__note">
+      <b>三处改动：</b>
+      <br /><br />
+      ① 「预计交付 · 排期中」→「交付日期 · 具体日期」
+      <br /><br />
+      ② 新增一段「付完钱之后」：什么时候拿到、怎么收到、能改几次
+      <br /><br />
+      ③ 底部加一句退款承诺 —— <b>付款页最需要打消的就是"付了能退吗"</b>
+    </div>
+  </div>
+
+</div>
+
+<!-- ================================================================ -->
+<h2>四、出口表</h2>
+<table class="diff">
+  <tr><th style="width:200px">可点元素</th><th style="width:300px">通向哪</th><th>现状</th></tr>
+
+  <tr><td colspan="3" style="background:#FFF9EC;font-weight:700;color:#8a5a00">后台 · AI 封面图</td></tr>
+  <tr><td>「AI 生成封面图」</td><td>弹窗：写提示词 → 生成 → 预览 → 采用</td><td class="del2">❌ 没有 → 新增</td></tr>
+  <tr><td>「采用这张」</td><td>存成 <code>coverImageUrl</code>，跟手动上传同一条路</td><td class="del2">❌ 没有 → 新增</td></tr>
+  <tr><td>「重新生成」</td><td>原地再生成一张</td><td class="del2">❌ 没有 → 新增</td></tr>
+
+  <tr><td colspan="3" style="background:#FFF9EC;font-weight:700;color:#8a5a00">长图</td></tr>
+  <tr><td>「保存长图」按钮</td><td>生成图片存相册（现有 <code>delivery-print.ts</code>）</td><td class="new">✅ 有</td></tr>
+  <tr><td><b>底部二维码</b></td><td>扫码打开小程序 → 该订单（需小程序码，带 <code>orderId</code>）</td><td class="del2">❌ 没有 → 新增</td></tr>
+
+  <tr><td colspan="3" style="background:#FFF9EC;font-weight:700;color:#8a5a00">支付确认页</td></tr>
+  <tr><td>「立即微信支付」</td><td><code>runCustomRecipePayment</code></td><td class="new">✅ 有</td></tr>
+  <tr><td>「查看订单详情」</td><td><code>/pages/custom-recipe/order-detail?orderId=</code></td><td class="new">✅ 有</td></tr>
+  <tr><td>「返回首页」</td><td><code>switchTab /pages/home/index</code></td><td class="new">✅ 有</td></tr>
+</table>
+
+<!-- ================================================================ -->
+<h2>五、这一批的改动清单</h2>
+<table class="diff">
+  <tr><th style="width:130px">对象</th><th style="width:60px">类型</th><th style="width:200px">改什么</th><th>说明</th></tr>
+
+  <tr><td><b>AI 封面图</b></td>
+    <td class="del2" style="font-weight:700">新建</td>
+    <td>后台「AI 生成封面图」按钮 + 弹窗</td>
+    <td>文案生成已有，只缺图。glm-image 约 28 秒/张，一次生成一张，不满意重生成。
+      结果存成 <code>coverImageUrl</code></td></tr>
+
+  <tr><td rowspan="2"><b>长图</b></td>
+    <td class="del2" style="font-weight:700">删</td>
+    <td>「建议采购量」列 + 「实际用量」列 + 损耗说明 + "补充剂不计入采购总量"</td>
+    <td><b>长图完全按旧口径做的</b> —— 两列并成一列「净用量」</td></tr>
+  <tr><td class="new" style="font-weight:700">加</td>
+    <td>底部二维码 + 一句引导</td>
+    <td>要说明"扫了能干什么"，只说"扫码"没人会扫</td></tr>
+
+  <tr><td rowspan="3"><b>支付确认页</b></td>
+    <td class="new" style="font-weight:700">改</td>
+    <td>「预计交付 · 排期中」→「交付日期 · 具体日期」</td>
+    <td>下单时就确定了，说"排期中"让顾客以为还没定</td></tr>
+  <tr><td class="new" style="font-weight:700">加</td>
+    <td>「付完钱之后」一段</td>
+    <td>什么时候拿到 / 怎么收到 / 能改几次</td></tr>
+  <tr><td class="new" style="font-weight:700">加</td>
+    <td>退款承诺一句</td>
+    <td>付款页最需要打消的就是"付了能退吗"</td></tr>
+</table>
+
+<div class="banner" style="margin-top:18px;border-color:#E8CFC8;background:#FFF9F8">
+  <div class="banner__t">要你定的两件事</div>
+  <ul>
+    <li><b>① 长图的二维码，扫了之后跳到哪？</b>
+      <br />我建议跳到<b>这张订单的交付第 1 页</b>（带 <code>orderId</code> 的小程序码）——
+      顾客扫码就是"想看电子版"或"想提售后"，都在这张单上。</li>
+    <li><b>② 长图还需要保留"制作步骤"吗？</b>
+      <br />现在有。但长图是<b>贴在冰箱上</b>看的，步骤字太小。
+      我建议长图<b>只留用量 + 补剂 + 储存</b>，步骤让顾客回小程序看 ——
+      二维码就是干这个的。</li>
+  </ul>
+</div>
+
+</body>
+</html>

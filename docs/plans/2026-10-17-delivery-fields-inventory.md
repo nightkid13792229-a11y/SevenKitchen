@@ -76,12 +76,12 @@ DeliveryContentSnapshot
 |---|---|---|
 | 封面 | `recipe.coverImageUrl` | ✅ **有**（我之前说"缺"是错的） |
 | 食谱名 | `recipe.name` | ✅ |
-| **为谁定制（狗名/品种/年龄/体重）** | —— | 🔴 **快照里没有** |
-| 卖点 + 一句话结论 | `Recipe.sellingPoint`（模型有）+ `nutrition.plainConclusion` | 🟡 **模型有，快照没带** |
+| **为谁定制（狗名/品种/年龄/体重）** | —— | 🔴 **快照里没有**（唯一真缺的"数据"） |
+| 卖点 + 一句话结论 | **`Recipe.sellingPoint`（模型有、后台可编辑、AI 能生成）** | 🟡 **快照没带** |
 | 营养标准 | `nutrition.standard` | ✅ |
 | 核心营养成分 | `nutrition.macros` + `energyDensityKcalPerKg` | ✅ |
 | 食材 + 占比 | `recipe.items[].name` + `.ratioPercent` | ✅ |
-| **额外补充的营养素 + 浓度** | `supplements[].perKgG` 有浓度，但 `name` 是**产品名** | 🔴 **缺营养素名** |
+| **额外补充的营养素 + 浓度** | `supplements[].perKgG` 有浓度；营养素名在**已有的 `supplementTargets[].label`** 里 | 🟡 **快照没带** |
 | 完整营养报告入口 | `recipe.recipeId` | ✅ |
 
 ### 第 2 页「采购与制作」
@@ -98,100 +98,111 @@ DeliveryContentSnapshot
 
 ---
 
-## 三、真正缺的，只有 2 样
+## 三、老板两问之后：真正缺的，一个新增字段都没有
 
-### 缺口 1：狗狗信息
+### 问 1：`nutrientLabel` 不能沿用已有的营养素字典吗？
 
-快照里**完全没有**狗的名字、品种、年龄、体重。
+**能，而且比字典更直接 —— 已有的 `supplementTargets` JSON 里就带营养素中文名。**
 
-而第 1 页的封面要把这些叠上去（老板定的）。
+`RecipeItem.supplementTargets` 的元素形状（`recipe-designer.service.ts:5966`）：
 
-**要补什么**：一个 `dog` 对象，字段**全部取自现有的 `dog` 表**，不新造名字：
+```js
+{
+  fieldPath: string,        // 营养素标识
+  label: string,            // ← 营养素中文名（"钙"）
+  targetValuePerKg: number, // ← 每 kg 加多少
+  unit: string,             // ← 单位（g / mg）
+}
+```
 
-| 用什么 | 来自 |
+**所以 `nutrientLabel` 撤回。** 要做的是：交付快照的 `supplements[]`
+把这个**已有的 JSON 原样透传**，第 1 页从 `label` 取名字。
+
+| 现有 `SnapshotSupplement` | 要补什么 |
 |---|---|
-| 狗名 | `dog.name` |
-| 品种名 | `dogBreed.name`（经 `dog.breedId` 关联） |
-| 年龄 | `dog.birthday` 推算（或前端传，但**后端算更好**） |
-| 体重 | `dog.currentWeightKg` |
+| `name`（**产品名**，如"鱼油"） | 保留 —— 第 2 页买的时候用 |
+| `perKgG` | 保留 |
+| `timing` / `brand` / `totalG` | 保留 |
+| —— | **补 `supplementTargets`（已有 JSON，直接透传）** |
 
-> **建议**：不要新造 `dogName` / `dogBreed` 这类字段，
-> 直接给 `dog: { name, breedName, ageText, weightKg }` 一组 —— 名字全部沿用现有列名。
+> 这不是"新增字段"，是"已有的字段没传下去"。
 
-### 缺口 2：营养素名称
+### 问 2：Web 后台的卖点用的是哪个字段？能复用吗？
 
-`supplements[].name` 现在是**原料名**（"鱼油"），不是**营养素名**（"EPA + DHA"）。
+**能，而且它就是 `Recipe.sellingPoint`。**
 
-而第 1 页要展示的是"额外补充的**营养素**"（老板 2026-10-17 明确要求）。
-
-**要补什么**：`supplements[]` 上补一个 `nutrientLabel`，
-值取 `nutrition_nutrient_definition.name`（`RecipeItem.nutrientTargetKey` 关联过去）。
-
-| 现有 | 补之后 |
+| 查什么 | 结果 |
 |---|---|
-| `name: "鱼油"` | `name: "鱼油"`（产品，第 2 页买的时候用）<br />**`nutrientLabel: "EPA + DHA"`**（营养素，第 1 页展示用） |
+| Web 后台表单 | `admin-web/src/views/Recipes/RecipeForm.vue:200` → `v-model="form.sellingPoint"` |
+| placeholder | "**一句话**说明这款食谱的核心卖点（可选，**不超过 40 字**）" |
+| 数据库 | `Recipe.sellingPoint String? @db.VarChar(120)` |
+| **AI 生成** | 后台已经有「**AI 生成卖点与说明**」对话框，直接产出 `sellingPoint`（40 字）+ `description`（400 字）+ 推荐标签 |
 
-> ⚠️ 这一条也**不是新造概念** —— `nutrientTargetKey` 和字典表都在。
+**所以 `oneLineSummary` 也不需要新增 —— `sellingPoint` 本来就是"一句话"，而且已经有 AI 在生成它。**
 
----
+### 🔴 顺带查出三件事（都是"有字段但没传值"）
 
-## 四、要删的（老板 2026-10-17 定）
+查 `custom-recipe-delivery.service.ts:450` 交付时给 `nutrition` 传了什么：
 
-| 字段 / 逻辑 | 在哪 | 删了之后 |
+```js
+nutrition: {
+  standard: input.recipe.nutritionStandard,
+  energyDensityKcalPerKg: ...,
+}
+```
+
+**只传了两项。** 所以：
+
+| 字段 | 状态 | 后果 |
 |---|---|---|
-| `shopping.lines[].purchaseG` | 快照 | — |
-| `shopping.totalPurchaseG` | 快照 | — |
-| `shopping.lossRate` | 快照 | — |
-| `actualAmount = theoreticalAmount * (1 + lossRate)` | `diy-sheet` 前端 | **整段消失** |
-| `globalSupplementLossRate` | `diy-sheet` 前端 | **整段消失** |
-| "建议采购合计"、"已按 7% 损耗留出余量" | 两页文案 | **删掉** |
+| `nutrition.macros` | **没传** → 永远是 null | 核心营养成分在交付页从来没显示过 |
+| `nutrition.plainConclusion` | **没传**，而且**数据库里根本没有这个字段** | 「一句话营养结论」从来没显示过 |
+| `recipe.sellingPoint` | **快照里没带** | 卖点在交付页从来没显示过 |
 
-**收益：`diy-sheet` 里"前端算采购量"那一整块不用搬后端了 —— 直接不用了。**
+> 这也解释了为什么我第一次扒线上代码时看到第 1 页「营养」只有两项 ——
+> 不是设计如此，是**没传值**。
+
+**`plainConclusion` 怎么处理**：它数据库没有来源、交付从没显示过。
+按老板"卖点和营养结论合成一句"的决定，**这一句就写进 `sellingPoint`**，
+`plainConclusion` 从快照类型里删掉即可（避免以后有人以为它有用）。
 
 ---
 
-## 五、我要撤回的三个"新增"
+## 四、真正要动的（共 5 项，全是"补传已有字段"或"删"）
 
-| 我原来提的 | 结论 |
+| # | 动什么 | 性质 | 新增字段？ |
+|---|---|---|---|
+| 1 | 快照补 `dog` 一组（name / breedName / ageText / weightKg） | 补数据（名字用现有列名） | ❌ |
+| 2 | `supplements[]` 透传 `supplementTargets` | 补传已有 JSON | ❌ |
+| 3 | `nutrition` 补传 `macros` | 补传已有字段 | ❌ |
+| 4 | `recipe` 补传 `sellingPoint` | 补传已有字段 | ❌ |
+| 5 | 删采购量整条线（`purchaseG` / `totalPurchaseG` / `lossRate`） | 删 | ❌ |
+| — | `plainConclusion` 从快照类型删除 | 删（它从来没有值） | ❌ |
+
+**新增字段：0 个。**
+
+---
+
+## 五、我撤回的新增（全部 6 个）
+
+| 我提的 | 结论 |
 |---|---|
-| `items[].kind` | ❌ **撤回**。用现有的 `ingredientType`（已经在用了） |
-| `items[].netAmountG` | ❌ **撤回**。用现有的 `shopping.lines[].netG`（后端算好的） |
-| `usage[]` 整组 | ❌ **撤回**。没有这个数组，也没有 `ingredientId`（快照是冻结的，不该有 id） |
-| `referenceValues` | ❌ **撤回**（上一轮） |
-
-**我提的 5 个新增里，撤回了 4 个。**
-
----
-
-## 六、剩下真正要动的（共 4 项）
-
-| # | 动什么 | 性质 |
-|---|---|---|
-| 1 | 快照补 `dog` 一组 | **补数据**（字段名全用现有的） |
-| 2 | `supplements[]` 补 `nutrientLabel` | **补数据**（来自已有字典） |
-| 3 | 删采购量整条线（含 `lossRate`） | **删** |
-| 4 | `oneLineSummary` 要不要新增 | ⚠️ **待老板定，见下** |
-
-### 第 4 项要老板定
-
-`Recipe.sellingPoint`（`VarChar(120)`）**已经存在**，`nutrition.plainConclusion` 也存在。
-
-老板定过"卖点和一句话结论合成一句"。那有两种做法：
-
-| 方案 | 做法 | 代价 |
-|---|---|---|
-| **A** | **不新增字段**：把合成后的整句写进 `sellingPoint`，`plainConclusion` 停用 | 零迁移，但 `sellingPoint` 这名字就不再只是"卖点"了 |
-| **B** | **新增** `oneLineSummary`，两个旧字段废弃 | 语义更准，但要迁移旧数据 |
-
-> 按"能用已有的就用已有的"，**我倾向 A**。
-> 但 `sellingPoint` 这个名字确实会变得名不副实 —— 这一条你定。
+| `items[].kind` | ❌ 用现有 `ingredientType` |
+| `items[].netAmountG` | ❌ 用现有 `shopping.lines[].netG` |
+| `usage[]` 整组 | ❌ 快照是冻结的，没有也不该有 id |
+| `referenceValues` | ❌ 饭量能算，不需要存 |
+| `nutrientLabel` | ❌ 用已有 `supplementTargets[].label` |
+| `oneLineSummary` | ❌ 用已有 `Recipe.sellingPoint` |
 
 ---
 
-## 七、一句话总结
+## 六、一句话总结
 
 | 我一开始说的 | 实际情况 |
 |---|---|
-| 要新增一堆字段 | **两页要的东西 98% 已经存在** |
-| 交付页缺封面、卖点、营养素 | 封面 ✅ 有；卖点模型有（快照没带）；营养素名确实缺 |
-| 工作量是"重构三个页面" | **补 2 样数据 + 删 1 条线 + 抽共享组件** |
+| 要新增一堆字段 | **一个都不用新增** |
+| 交付页缺封面、卖点、营养素 | 封面 ✅ 有；卖点 ✅ 有（快照没带）；营养素名 ✅ 有（快照没带） |
+| 工作量是"重构三个页面" | **补传 4 处已有字段 + 删 1 条线 + 抽共享组件** |
+
+**真正的教训**：我这 5 轮提的每一个"新增字段"，后端都已经有了 ——
+有的甚至已经在前端显示了好几年。问题从来不是"缺字段"，是**"字段没传到位"**。

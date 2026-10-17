@@ -285,6 +285,7 @@ import {
 } from '../../utils/life-stage-match'
 import LifeStageVersionCard from '@/components/recipe/LifeStageVersionCard.vue'
 import { useDogSelection } from '@/composables/useDogSelection'
+import { usePackagePlan } from '@/composables/usePackagePlan'
 import {
   DEFAULT_ORDER_CYCLE_DAYS,
   MIN_PACKAGE_SPEC_G,
@@ -538,12 +539,35 @@ const tempPerMealG = ref(0)
 const isLoadingDogCalc = ref(false)
 const dogCalcFailed = ref(false)
 
-const selectedCycleDays = ref(DEFAULT_ORDER_CYCLE_DAYS)
-const lastSelectedCycleDays = ref(DEFAULT_ORDER_CYCLE_DAYS)
-const packagePlan = ref<PackagePlanItem[]>([])
-const packagePlanDogId = ref<string | null>(null)
-const showPackageEditor = ref(false)
-const isCustomPackagePlan = ref(false)
+/**
+ * 分装计划（2026-10-18 收进 composable）。
+ *
+ * 这 6 个 ref + 9 个函数原来在本页和**成品订购页**各写一遍，一字不差。
+ * 参数用**函数**传（饭量会随选狗变，传值会拿到第一次的快照）。
+ */
+const {
+  selectedCycleDays,
+  lastSelectedCycleDays,
+  packagePlan,
+  packagePlanDogId,
+  showPackageEditor,
+  isCustomPackagePlan,
+  normalizePackageSpecValue,
+  normalizePackagePlanRow,
+  rebuildPackagePlan,
+  resetPackagePlan,
+  togglePackageEditor,
+  cancelCustomPackagePlan,
+  addPackagePlanRow,
+  updatePackagePlanRow,
+  removePackagePlanRow,
+  getPrimaryPackageSpecG,
+} = usePackagePlan({
+  dailyIntakeG: () => displayDailyIntakeG.value,
+  mealsPerDay: () => selectedDog.value?.mealsPerDay,
+  dogId: () => selectedDogId.value,
+  perMealG: () => perMealG.value,
+})
 
 // 「每日饭量是怎么算的？」展开状态
 const feedingNoteExpanded = ref(false)
@@ -962,95 +986,6 @@ function selectCycle(days: number) {
   lastSelectedCycleDays.value = days
   showPackageEditor.value = false
   rebuildPackagePlan()
-}
-
-function rebuildPackagePlan() {
-  packagePlan.value = buildDefaultPackagePlan({
-    dailyIntakeG: displayDailyIntakeG.value,
-    mealsPerDay: selectedDog.value?.mealsPerDay || 2,
-    days: selectedCycleDays.value,
-  })
-  packagePlanDogId.value = selectedDogId.value
-}
-
-function normalizePackagePlanRow(row: PackagePlanItem): PackagePlanItem {
-  return {
-    packageSpecG: normalizePackageSpecValue(row.packageSpecG),
-    packageCount: Math.max(1, Math.floor(Number(row.packageCount) || 1)),
-  }
-}
-
-function normalizePackageSpecValue(value: string | number | null | undefined): number {
-  const normalized = Math.floor(Number(value))
-  return Number.isFinite(normalized) && normalized > 0 ? normalized : 0
-}
-
-function togglePackageEditor() {
-  if (isCustomPackagePlan.value) {
-    // 取消自定义会直接丢掉顾客填的每袋克数与袋数，先确认一次。
-    // ⚠️ confirmText / cancelText 最多 4 个汉字：超出时微信既不显示弹窗也不报错，
-    //    表现就是「点了没反应」（此处踩过一次）。
-    uni.showModal({
-      title: '取消自定义分装',
-      content: '取消后你填写的每袋克数和袋数会恢复为系统默认分装。',
-      confirmText: '仍要取消',
-      cancelText: '继续编辑',
-      success: (res) => {
-        if (res.confirm) {
-          cancelCustomPackagePlan()
-          uni.showToast({ title: '已恢复默认分装', icon: 'none' })
-        }
-      },
-    })
-    return
-  }
-
-  lastSelectedCycleDays.value = selectedCycleDays.value || lastSelectedCycleDays.value
-  isCustomPackagePlan.value = true
-  showPackageEditor.value = true
-}
-
-function cancelCustomPackagePlan() {
-  isCustomPackagePlan.value = false
-  showPackageEditor.value = false
-  selectedCycleDays.value = lastSelectedCycleDays.value
-  rebuildPackagePlan()
-}
-
-function addPackagePlanRow() {
-  packagePlan.value = [
-    ...packagePlan.value,
-    {
-      packageSpecG: Math.max(MIN_PACKAGE_SPEC_G, Math.round(perMealG.value || displayDailyIntakeG.value || 100)),
-      packageCount: 1,
-    },
-  ]
-}
-
-function updatePackagePlanRow(index: number, field: keyof PackagePlanItem, value: string | number) {
-  const nextValue = field === 'packageSpecG'
-    ? normalizePackageSpecValue(value)
-    : Math.max(1, Math.floor(Number(value) || 1))
-  packagePlan.value = packagePlan.value.map((row, rowIndex) =>
-    rowIndex === index ? { ...row, [field]: nextValue } : row
-  )
-}
-
-function removePackagePlanRow(index: number) {
-  if (packagePlan.value.length <= 1) {
-    return
-  }
-  packagePlan.value = packagePlan.value.filter((_, rowIndex) => rowIndex !== index)
-}
-
-function getPrimaryPackageSpecG(plan: PackagePlanItem[]): number {
-  const primaryRow = [...plan].sort(
-    (left, right) =>
-      right.packageCount - left.packageCount
-      || right.packageSpecG - left.packageSpecG,
-  )[0]
-
-  return primaryRow?.packageSpecG || 1
 }
 
 async function generateSheet() {

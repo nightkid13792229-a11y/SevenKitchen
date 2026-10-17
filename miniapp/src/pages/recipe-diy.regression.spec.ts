@@ -351,11 +351,19 @@ describe('recipe diy regressions', () => {
       'utf-8',
     )
 
-    expect(source).toContain('取消自定义分装')
-    expect(source).toContain('已恢复默认分装')
-    expect(source).toContain('仍要取消')
+    /**
+     * 2026-10-18：二次确认整体移到 composable `usePackagePlan.togglePackageEditor`。
+     * **意图不变**（取消自定义前必须确认），所以断言改成盯 composable。
+     */
+    const packagePlanComposable = readFileSync(
+      resolve(__dirname, '../composables/usePackagePlan.ts'),
+      'utf-8',
+    )
+    expect(packagePlanComposable).toContain('取消自定义分装')
+    expect(packagePlanComposable).toContain('已恢复默认分装')
+    expect(packagePlanComposable).toContain('仍要取消')
     // ⚠️ cancelText 必须 ≤4 个汉字，否则微信既不显示弹窗也不报错（点了没反应）
-    expect(source).toContain('继续编辑')
+    expect(packagePlanComposable).toContain('继续编辑')
     // 互斥说明常驻，不靠点击失败解释
     const templateSource = source.slice(0, source.indexOf('<script setup'))
     expect(templateSource).toContain('已启用自定义分装，上方天数选择暂不生效')

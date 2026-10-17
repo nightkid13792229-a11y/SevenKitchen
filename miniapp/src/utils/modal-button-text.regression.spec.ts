@@ -82,8 +82,13 @@ describe('modal button text regressions', () => {
       'utf-8',
     )
 
-    expect(source).toContain("confirmText: '仍要取消'")
-    expect(source).toContain("cancelText: '继续编辑'")
+    // 2026-10-18：分装的二次确认移到 composable `usePackagePlan`
+    expect(
+      readFileSync(resolve(__dirname, '../composables/usePackagePlan.ts'), 'utf8'),
+    ).toContain("confirmText: '仍要取消'")
+    expect(
+      readFileSync(resolve(__dirname, '../composables/usePackagePlan.ts'), 'utf8'),
+    ).toContain("cancelText: '继续编辑'")
     expect(source).not.toContain('继续自定义')
   })
 

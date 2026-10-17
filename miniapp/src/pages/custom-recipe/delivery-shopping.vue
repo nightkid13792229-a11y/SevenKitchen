@@ -95,6 +95,21 @@
             </text>
           </view>
         </view>
+
+        <!--
+          一键买齐（2026-10-18）。
+
+          ⚠️ **只有全部补剂都带 `ingredientId` 时才显示** ——
+          老快照里没有这个字段。拿不到 id 就建不了下单行，
+          显示一个点了报错的按钮，比不显示更糟。
+        -->
+        <button
+          v-if="canBuySupplements"
+          class="buy-supplements-btn"
+          @tap="handleBuySupplements"
+        >
+          一键买齐预分装补剂
+        </button>
       </view>
 
       <view v-if="content.steps.length" class="section">
@@ -147,6 +162,7 @@ import { fetchDelivery, type OrderDelivery } from '@/api/custom-recipe';
 import RecipeIngredientUsageTable from '@/components/recipe/RecipeIngredientUsageTable.vue';
 import { PrintCanvasBuilder } from '@/utils/print-canvas';
 import { drawDeliverySheet } from '@/utils/delivery-print';
+import { saveSupplementPurchaseDraft } from '@/api/supplements';
 
 const orderId = ref('');
 const loading = ref(true);
@@ -203,6 +219,65 @@ const foodUsageRows = computed(() => {
 });
 
 /** 补剂「这次要备多少」—— 后端已算好 `totalG`，前端只格式化 */
+/**
+ * 能不能一键买齐（2026-10-18）。
+ *
+ * ⚠️ 要求**每一个**补剂都同时有 `ingredientId` 和正数用量：
+ *   · 老快照里没有 `ingredientId` → 建不了下单行
+ *   · 用量为 0 或 null → 买了也没意义
+ *
+ * 拿不到就**整颗按钮不显示** —— 顾客看到按钮点进去必然失败，还不如不显示。
+ */
+const canBuySupplements = computed(() => {
+  const list = content.value.supplements || [];
+  if (list.length === 0) return false;
+  return list.every(
+    (item) =>
+      Boolean(item.ingredientId) &&
+      item.totalG !== null &&
+      item.totalG !== undefined &&
+      Number(item.totalG) > 0,
+  );
+});
+
+/** 一键买齐：把补剂清单交给补剂下单页（行带用量，塞不进 URL，走本地存储） */
+function handleBuySupplements() {
+  const lines = (content.value.supplements || [])
+    .filter(
+      (item) =>
+        Boolean(item.ingredientId) &&
+        item.totalG !== null &&
+        item.totalG !== undefined &&
+        Number(item.totalG) > 0,
+    )
+    .map((item) => ({
+      ingredientId: String(item.ingredientId),
+      amount: Number(item.totalG),
+      name: item.name,
+      unit: 'g',
+      specText: item.brand || '',
+    }));
+
+  if (lines.length === 0) {
+    uni.showToast({ title: '暂无可购买的补剂', icon: 'none' });
+    return;
+  }
+
+  /**
+   * ⚠️ 只传**确认存在**的字段：
+   * `recipeId` 在 `content.recipe` 里（`OrderDelivery` 顶层没有它）。
+   * `dogId` / `cycleDays` 这个接口不返回 —— 不传，下单页会用自己的默认值，
+   * 比塞个 undefined 装作有值更干净。
+   */
+  saveSupplementPurchaseDraft({
+    lines,
+    recipeId: content.value.recipe?.recipeId || undefined,
+    recipeName: content.value.recipe?.name,
+  });
+
+  uni.navigateTo({ url: '/pages/supplement-order/index' });
+}
+
 function formatSupplementTotal(item: { totalG?: number | null }): string {
   const value = item?.totalG;
   if (value === null || value === undefined) return '—';
@@ -583,5 +658,22 @@ onPullDownRefresh(async () => {
   color: #8a7a66;
   margin-top: 6rpx;
   line-height: 1.5;
+}
+
+/* ===== 一键买齐（2026-10-18）===== */
+.buy-supplements-btn {
+  margin-top: 20rpx;
+  background: #fff;
+  border: 2rpx solid #e5c9a3;
+  border-radius: 999rpx;
+  color: #b45309;
+  font-size: 26rpx;
+  font-weight: 700;
+  padding: 16rpx 0;
+  line-height: 1.4;
+}
+
+.buy-supplements-btn::after {
+  border: none;
 }
 </style>

@@ -43,6 +43,8 @@ export interface DeliveryItemDescriptor {
 
 export interface SnapshotRecipeItem {
   name: string;
+  /** 食材 id（2026-10-18 补；用途同上，老快照没有） */
+  ingredientId?: string | null;
   /** 制备方法（如"切丁煮熟"） */
   preparation?: string | null;
   /** 占比，如 32（表示 32%） */
@@ -156,6 +158,16 @@ export interface SnapshotSupplementTarget {
 
 export interface SnapshotSupplement {
   name: string;
+  /**
+   * 补剂对应的食材 id（2026-10-18 补）。
+   *
+   * 用途：交付第 2 页的「换一个」「去买」「一键买齐」都要拿它去下单页建行 ——
+   * 补剂行必须带 id，光有名字建不了行。
+   *
+   * 老快照没有这个字段 → 可选。前端拿不到就**不显示购买入口**
+   * （比显示个点了报错的按钮强）。
+   */
+  ingredientId?: string | null;
   /** 这一批要加多少（克） */
   totalG: number | null;
   /** 每 kg 食材添加量（给"配方比例"那一页用） */

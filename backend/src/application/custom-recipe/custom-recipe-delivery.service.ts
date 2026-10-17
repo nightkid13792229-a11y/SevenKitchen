@@ -493,7 +493,11 @@ export class CustomRecipeDeliveryService {
         preparationMethod: string | null;
         /** 补剂营养素目标（钙/锌/…）· 2026-10-18 */
         supplementTargets: unknown;
-        ingredient: { name: string; type: string } | null;
+        /**
+         * `resolveRecipe` 用的是 `include: { ingredient: true }` ——
+         * 运行时**一直都有 `id`**，只是此前类型里没写（2026-10-18 补）。
+         */
+        ingredient: { id: string; name: string; type: string } | null;
       }>;
     };
     /** 狗狗档案：封面要叠品种/年龄/体重 · 2026-10-18 */
@@ -510,6 +514,8 @@ export class CustomRecipeDeliveryService {
 
     const items: SnapshotRecipeItem[] = input.recipe.items.map((item) => ({
       name: item.ingredient?.name ?? '未知食材',
+      // 2026-10-18：补剂/食材 id 进快照，第 2 页的购买入口要用它建下单行
+      ingredientId: item.ingredient?.id ?? null,
       preparation: item.preparationMethod ?? null,
       ratioPercent:
         item.ratioPercent === null ? null : Number(item.ratioPercent),
@@ -558,6 +564,7 @@ export class CustomRecipeDeliveryService {
             : item.ratioPercent * 10;
         return {
           name: item.name,
+          ingredientId: item.ingredientId ?? source?.ingredient?.id ?? null,
           /**
            * 这一批要备多少（2026-10-18 补上）。
            *

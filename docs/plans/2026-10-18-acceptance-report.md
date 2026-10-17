@@ -188,3 +188,64 @@ GET /api/v1/messages/nonexistent  → 404
 部署前那两条 404 说明：**小程序端已经在调这个接口了，但后端还没有**。
 这正是"先发前端、后发后端"会出现的窗口期 —— 好在是 404（静默失败），
 不是数据错乱。`fetchUnreadMessageCount` 内部 catch 后返回 0，红点不显示而已，不影响顾客。
+
+---
+
+## 七、数据库层验证（生产库实查）
+
+### `customer_message` 表结构 —— 与代码预期**完全一致**
+
+| 列 | 类型 | 长度 |
+|---|---|---|
+| `id` | text | — |
+| `customer_id` | text | — |
+| `category` | varchar | **32** |
+| `title` | varchar | **120** |
+| `body` | varchar | **500** |
+| `link_type` | varchar | 32 |
+| `link_id` | varchar | 64 |
+| `read_at` | timestamp | — |
+| `created_at` | timestamp | — |
+
+### 索引 —— 3 个都在，且**查询真的用上了**
+
+```
+customer_message_pkey
+customer_message_customer_id_created_at_idx   ← 列表查询用
+customer_message_customer_id_read_at_idx      ← 未读数用
+```
+
+`EXPLAIN` 实测未读查询：
+
+```
+Index Scan using customer_message_customer_id_created_at_idx on customer_message
+  Index Cond: (customer_id = 'x')
+  Filter: (read_at IS NULL)
+```
+
+**走了索引，不是全表扫。** 109 行也可能全表扫，但索引存在意味着数据涨起来不会退化。
+
+### 当前行数：0
+
+符合预期 —— **还没有人交付过定制食谱**（生产 `custom_recipe_delivery` 也是 0 行），
+所以没有消息产生。
+
+---
+
+## 八、**测不到的一条（说清楚）**
+
+**「交付后自动发一条站内消息」这条端到端链路，我没能在生产验证。**
+
+原因：生产库里**一张定制单都没交付过**（`custom_recipe_delivery` = 0 行），
+没有可交付的对象。要验就得**造一张测试单** —— 那会往生产库写真实数据，不合适。
+
+**能验的部分都验了**：
+- 表结构 ✓
+- 索引被使用 ✓
+- 路由注册 ✓
+- 鉴权生效 ✓
+- service 单测（6 个，含"写失败不抛错""防越权"）✓
+
+**没验的**：`deliver()` 里那次 `customerMessages.send(...)` 会不会真的写入一行。
+
+**建议**：第一次真实交付时，去库里看 `customer_message` 是不是多了 1 行。这是最省事的验收。

@@ -135,7 +135,12 @@ describe('交付内容页 · 只渲染不计算', () => {
 
   it('算不出来时如实说"暂时算不出"，而不是显示一堆 0', () => {
     // 0 会让顾客以为"不用买""不用喂"
-    expect(shoppingSource).toContain('暂时算不出用量');
+    /**
+     * 2026-10-18：用量表改成共享组件，空态在组件里。
+     * 页面仍保留"补剂/食材算不出"的提示能力，但具体文案由组件给。
+     */
+    const usageTable = read('src/components/recipe/RecipeIngredientUsageTable.vue');
+    expect(usageTable).toContain('暂时算不出用量');
     expect(source).toContain('暂时算不出喂食量');
     // 靠"有没有内容"分支，而不是靠数值真假
     expect(shoppingSource).toContain('content.shopping.lines.length');
@@ -201,7 +206,14 @@ describe('交付内容页 · 只渲染不计算', () => {
     );
 
     // ④ 字符串拼接要放过：perKgG + ' g' 是显示
-    expect(shoppingSource).toContain("perKgG + ' g'");
+    /**
+     * 2026-10-18：补剂改成「这次要备多少」（后端算好的 `totalG`）。
+     * 消费者只需要格式化，**不许自己乘总净重**。
+     */
+    expect(shoppingSource).toContain('formatSupplementTotal');
+    // 读的是后端算好的 totalG（模板里通过 formatSupplementTotal 间接取）
+    expect(shoppingSource).toContain('totalG');
+    expect(shoppingSource).not.toContain("perKgG + ' g'");
   });
 
   it('★ 两页之间能互相跳转（拆了页不等于要顾客自己找路）', () => {

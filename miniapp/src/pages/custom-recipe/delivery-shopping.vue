@@ -62,52 +62,38 @@
         而不是显示一堆 0 让顾客以为不用买。
       -->
       <view class="section">
-        <view class="section-title">每种食材要用多少（净用量）</view>
-        <template v-if="content.shopping.lines.length">
-          <view
-            v-for="(line, index) in content.shopping.lines"
-            :key="index"
-            class="shopping-row"
-          >
-            <text class="shopping-name">{{ line.name }}</text>
-            <view class="shopping-amount">
-              <text class="shopping-buy">{{ line.netG }} 克</text>
-            </view>
-          </view>
-          <view class="shopping-total">
-            <text>合计净重 {{ content.shopping.totalNetG }} 克</text>
-          </view>
-          <text class="section-note">
-            只写"这次要用多少"。要买多少，你自己判断 —— 不同食材的损耗差很多，我们没法替你估。
-          </text>
-        </template>
-        <text v-else class="section-note">暂时算不出用量，请联系客服</text>
+        <view class="section-title">每种食材要用多少</view>
+        <RecipeIngredientUsageTable :items="foodUsageRows" />
+        <text v-if="content.shopping.lines.length" class="section-note">
+          只写"这次要用多少"。要买多少，你自己判断 —— 不同食材的损耗差很多，我们没法替你估。
+        </text>
       </view>
 
       <!--
-        补充剂按"每 kg 食材加多少"给 —— 顾客做的量不一定是 14 天，
-        给一个按 kg 的比例他才好自己换算。
+        补剂：2026-10-18 改成「**这次要备多少**」。
+
+        老板原话："就不再展示营养素添加量，而是应该展示每一个补剂需要用多少了"。
+        原来给的是"每 kg 食材加多少"（比例），顾客还得自己乘一遍总净重。
+
+        ⚠️ 「换一个 / 去买」暂未接入：快照里**没有产品信息**
+        （哪一瓶、什么规格、什么价）。要做得再拉一次食谱的补剂替代品接口 —— 单独一步。
       -->
       <view v-if="content.supplements.length" class="section">
-        <view class="section-title">营养补充剂（每 kg 食材加多少）</view>
-        <view
-          v-for="(item, index) in content.supplements"
-          :key="index"
-          class="supplement-row"
-        >
-          <view class="supplement-main">
-            <text class="supplement-name">{{ item.name }}</text>
-            <text v-if="item.timing" class="supplement-timing">
-              {{ item.timing }}
+        <view class="section-title">额外补充的营养素</view>
+        <view class="supp-card-list">
+          <view
+            v-for="(item, index) in content.supplements"
+            :key="index"
+            class="supp-card"
+          >
+            <view class="supp-card__top">
+              <text class="supp-card__name">{{ item.name }}</text>
+              <text class="supp-card__amount">{{ formatSupplementTotal(item) }}</text>
+            </view>
+            <text v-if="supplementHint(item)" class="supp-card__sub">
+              {{ supplementHint(item) }}
             </text>
           </view>
-          <text class="supplement-amount">
-            {{
-              item.perKgG !== null && item.perKgG !== undefined
-                ? item.perKgG + ' g'
-                : '按说明加'
-            }}
-          </text>
         </view>
       </view>
 
@@ -158,6 +144,7 @@
 import { computed, ref } from 'vue';
 import { onLoad, onPullDownRefresh } from '@dcloudio/uni-app';
 import { fetchDelivery, type OrderDelivery } from '@/api/custom-recipe';
+import RecipeIngredientUsageTable from '@/components/recipe/RecipeIngredientUsageTable.vue';
 import { PrintCanvasBuilder } from '@/utils/print-canvas';
 import { drawDeliverySheet } from '@/utils/delivery-print';
 
@@ -196,6 +183,54 @@ const hasBatch = computed(
     content.value.feeding.cycleDays !== null ||
     content.value.shopping.totalNetG > 0,
 );
+
+/**
+ * 用量表的行（2026-10-18）。
+ *
+ * 快照里 `shopping.lines` 只有 name/netG，没有制备方法 ——
+ * 制备方法在 `recipe.items` 里。按名称对齐后合并。
+ */
+const foodUsageRows = computed(() => {
+  const preparations = new Map<string, string | null>();
+  for (const item of content.value.recipe.items || []) {
+    if (item.preparation) preparations.set(item.name, item.preparation);
+  }
+  return (content.value.shopping.lines || []).map((line) => ({
+    name: line.name,
+    netG: line.netG,
+    preparation: preparations.get(line.name) ?? null,
+  }));
+});
+
+/** 补剂「这次要备多少」—— 后端已算好 `totalG`，前端只格式化 */
+function formatSupplementTotal(item: { totalG?: number | null }): string {
+  const value = item?.totalG;
+  if (value === null || value === undefined) return '—';
+  const num = Number(value);
+  if (!Number.isFinite(num)) return '—';
+  return `${Math.round(num * 10) / 10} g`;
+}
+
+/**
+ * 补剂下面那行小字。
+ *
+ * 有营养素目标就给「每 kg 食材 5g」（顾客想知道浓度），
+ * 没有就给添加时机（"随餐"/"出锅前"）—— 总有一样能说。
+ */
+function supplementHint(item: {
+  perKgG?: number | null;
+  timing?: string | null;
+  targets?: Array<{ label: string; targetValuePerKg: number | null }> | null;
+}): string {
+  const target = (item?.targets || [])[0];
+  if (target && target.targetValuePerKg !== null && target.targetValuePerKg !== undefined) {
+    return `${target.label} · 每 kg 食材 ${target.targetValuePerKg}g`;
+  }
+  if (item?.perKgG !== null && item?.perKgG !== undefined) {
+    return `每 kg 食材 ${item.perKgG}g`;
+  }
+  return (item?.timing || '').trim();
+}
 
 // ==================== 长图导出（批次 2.7）====================
 
@@ -428,63 +463,18 @@ onPullDownRefresh(async () => {
   color: #f4ecd8;
 }
 
-.shopping-row,
-.supplement-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16rpx 0;
-  border-bottom: 1rpx solid rgba(244, 236, 216, 0.08);
-}
 
-.shopping-name,
-.supplement-name {
-  font-size: 28rpx;
-  color: #f4ecd8;
-}
 
-.shopping-amount {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-}
 
-.shopping-buy {
-  font-size: 30rpx;
-  font-weight: 600;
-  color: #c9a227;
-}
 
 .shopping-net {
   font-size: 22rpx;
   color: rgba(244, 236, 216, 0.45);
 }
 
-.shopping-total {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 16rpx;
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #f4ecd8;
-}
 
-.supplement-main {
-  display: flex;
-  flex-direction: column;
-}
 
-.supplement-timing {
-  margin-top: 4rpx;
-  font-size: 22rpx;
-  color: rgba(244, 236, 216, 0.45);
-}
 
-.supplement-amount {
-  font-size: 30rpx;
-  font-weight: 600;
-  color: #c9a227;
-}
 
 .step-row {
   display: flex;
@@ -536,5 +526,45 @@ onPullDownRefresh(async () => {
   font-size: 22rpx;
   line-height: 1.6;
   color: rgba(244, 236, 216, 0.4);
+}
+
+/* ===== 2026-10-18 新增：补剂卡 ===== */
+.supp-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.supp-card {
+  background: #fff;
+  border: 1px solid #ede0d0;
+  border-radius: 22rpx;
+  padding: 20rpx 24rpx;
+}
+
+.supp-card__top {
+  display: flex;
+  align-items: baseline;
+}
+
+.supp-card__name {
+  flex: 1;
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #3f3222;
+}
+
+.supp-card__amount {
+  font-size: 26rpx;
+  font-weight: 800;
+  color: #b45309;
+}
+
+.supp-card__sub {
+  display: block;
+  font-size: 21rpx;
+  color: #8a7a66;
+  margin-top: 6rpx;
+  line-height: 1.5;
 }
 </style>

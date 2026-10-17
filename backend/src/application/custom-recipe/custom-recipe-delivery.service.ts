@@ -482,6 +482,18 @@ export class CustomRecipeDeliveryService {
      * 补充剂单列一块（不与食材混）—— 顾客采购时"要吃多少"和"要加多少"是两件事。
      * 数量按"每 kg 食材加多少克"给，顾客才好按自己做的量换算。
      */
+    /**
+     * 这批的总净重（克）—— 补剂总量要用它换算。
+     *
+     * 注意：这里**只算一次**，不用等 `buildShoppingList` 的结果，
+     * 因为补剂总量与"每种食材多少克"无关，只跟总量有关。
+     * 取不到就是 0，`sumSupplementTotalG` 会把 0 当成"不知道"。
+     */
+    const shoppingTotalNetG =
+      feeding.dailyIntakeG !== null && feeding.cycleDays !== null
+        ? feeding.dailyIntakeG * feeding.cycleDays
+        : 0;
+
     const supplements: SnapshotSupplement[] = items
       .filter((item) => item.isSupplement)
       .map((item, index) => {
@@ -492,13 +504,21 @@ export class CustomRecipeDeliveryService {
         const source = input.recipe.items.filter(
           (raw) => raw.ingredient?.type === 'SUPPLEMENT',
         )[index];
+        const perKgG =
+          item.ratioPercent === null || item.ratioPercent === undefined
+            ? null
+            : item.ratioPercent * 10;
         return {
           name: item.name,
-          totalG: null,
-          perKgG:
-            item.ratioPercent === null || item.ratioPercent === undefined
-              ? null
-              : item.ratioPercent * 10,
+          /**
+           * 这一批要备多少（2026-10-18 补上）。
+           *
+           * `perKgG` 是"每 kg 食材加多少克"，乘上这批的总净重就是总量 ——
+           * **后端算，前端不乘**（硬边界：所有计算在后端）。
+           * 总净重取不到时给 null，不给 0（0 会被读成"不用加"）。
+           */
+          totalG: sumSupplementTotalG(perKgG, shoppingTotalNetG),
+          perKgG,
           brand: null,
           timing: item.preparation,
           targets: toSnapshotSupplementTargets(source?.supplementTargets),
@@ -776,4 +796,21 @@ function toSnapshotDog(
         ? dog.currentWeightKg
         : null,
   };
+}
+
+/**
+ * 补剂这一批要备多少克。
+ *
+ * `perKgG`（每 kg 食材加多少克）× 总净重（kg）。
+ * 任一缺失就给 null —— **不给 0**：0 会被读成"这次不用加"，
+ * 而 null 会被渲染成「—」，顾客知道那是"没算出来"。
+ */
+function sumSupplementTotalG(
+  perKgG: number | null,
+  totalNetG: number,
+): number | null {
+  if (perKgG === null || !Number.isFinite(perKgG)) return null;
+  if (!Number.isFinite(totalNetG) || totalNetG <= 0) return null;
+  const total = (perKgG * totalNetG) / 1000;
+  return Math.round(total * 10) / 10;
 }

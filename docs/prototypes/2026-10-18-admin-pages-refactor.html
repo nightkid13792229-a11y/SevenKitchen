@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>后台定制四页 · 现状与目标（2026-10-18）</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: #F4F5F7; color: #2B2F36; padding: 26px 22px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: 22px; margin-bottom: 6px; }
+  h2 { font-size: 17px; margin: 40px 0 6px; padding-top: 12px; border-top: 2px solid #D8DCE2; }
+  h2 span { font-size: 12.5px; font-weight: 400; color: #7B8494; margin-left: 8px; }
+  .sub { font-size: 12.5px; color: #5A6270; line-height: 1.8; max-width: 1400px; }
+  code { background: #E9ECF1; padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+
+  .row { display: flex; gap: 18px; overflow-x: auto; padding: 14px 0 20px; align-items: flex-start; }
+  .col { width: 660px; flex: 0 0 660px; }
+  .col__head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12.5px; font-weight: 700; }
+  .col__tag { font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+  .tag--now { background: #F5E3E0; color: #9B2C1E; }
+  .tag--target { background: #E2F1E6; color: #1D6034; }
+  .col__note { font-size: 11.5px; color: #7B8494; line-height: 1.75; margin-top: 8px; }
+  .col__note b { color: #B4453A; }
+
+  /* 桌面框 */
+  .win { background: #fff; border: 1px solid #DFE3E9; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 16px rgba(40,50,70,.06); }
+  .win__bar { height: 34px; background: #FAFBFC; border-bottom: 1px solid #EDF0F3; display: flex; align-items: center; gap: 7px; padding: 0 12px; }
+  .win__dot { width: 9px; height: 9px; border-radius: 50%; background: #DDE1E7; }
+  .win__t { font-size: 11.5px; color: #6B7280; margin-left: 6px; }
+  .win__body { padding: 14px; }
+  .win__body--gray { background: #F7F8FA; }
+
+  /* 后台通用 */
+  .stat-row { display: flex; gap: 10px; margin-bottom: 12px; }
+  .stat { flex: 1; background: #fff; border: 1px solid #E5E9EF; border-radius: 8px; padding: 11px 13px; }
+  .stat--on { border-color: #C7D2FE; background: #F5F7FF; }
+  .stat--warn { border-color: #FBD5A5; background: #FFFBF5; }
+  .stat__v { font-size: 20px; font-weight: 800; color: #2B2F36; }
+  .stat__v--blue { color: #3B5BDB; }
+  .stat__v--orange { color: #D97706; }
+  .stat__l { font-size: 10.5px; color: #8A93A3; margin-top: 3px; }
+
+  table.tbl { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  table.tbl th { text-align: left; font-size: 10.5px; color: #8A93A3; font-weight: 600; padding: 7px 8px; background: #FAFBFC; border-bottom: 1px solid #EDF0F3; }
+  table.tbl td { padding: 8px; border-bottom: 1px solid #F3F5F8; }
+  table.tbl tr:last-child td { border-bottom: 0; }
+
+  .ftag { display: inline-block; font-size: 9.5px; font-weight: 700; border-radius: 4px; padding: 1px 6px; }
+  .ftag--wait { background: #FEF3C7; color: #92400E; }
+  .ftag--doing { background: #DBEAFE; color: #1E40AF; }
+  .ftag--done { background: #DCFCE7; color: #166534; }
+  .ftag--after { background: #FEE2E2; color: #991B1B; }
+
+  /* 表单行 */
+  .field { display: flex; align-items: center; padding: 7px 0; border-bottom: 1px dashed #EEF1F5; font-size: 11.5px; }
+  .field:last-child { border-bottom: 0; }
+  .field__l { width: 150px; flex: 0 0 150px; color: #5A6270; }
+  .field__v { flex: 1; }
+  .field__v--del { color: #B4453A; text-decoration: line-through; }
+  .field__v--new { color: #1D6034; font-weight: 700; }
+  .input { border: 1px solid #D8DCE2; border-radius: 5px; padding: 4px 8px; font-size: 11px; color: #2B2F36; background: #fff; display: inline-block; min-width: 70px; }
+  .input--off { background: #F3F5F8; color: #B0B7C3; text-decoration: line-through; }
+
+  .grp { font-size: 11px; font-weight: 700; color: #8A93A3; margin: 12px 0 4px; letter-spacing: .5px; }
+  .grp:first-child { margin-top: 0; }
+
+  /* 日历 */
+  .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+  .cal__h { font-size: 9.5px; color: #8A93A3; text-align: center; padding-bottom: 3px; }
+  .cal__d { border: 1px solid #E5E9EF; border-radius: 6px; padding: 6px 5px; min-height: 48px; font-size: 10px; background: #fff; }
+  .cal__d--off { background: #F7F8FA; color: #B0B7C3; }
+  .cal__n { font-weight: 700; font-size: 11px; }
+  .cal__b { font-size: 9px; color: #8A93A3; margin-top: 3px; line-height: 1.4; }
+
+  .mark { display: inline-block; font-size: 9px; font-weight: 700; border-radius: 4px; padding: 1px 5px; margin-left: 4px; vertical-align: 1px; }
+  .mark--fix { background: #FEE2E2; color: #991B1B; }
+  .mark--add { background: #FEF3C7; color: #92400E; }
+
+  .banner { background: #FFF9EC; border: 2px solid #E8C88A; border-radius: 10px; padding: 14px 16px; max-width: 1400px; margin: 16px 0 8px; }
+  .banner__t { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+  .banner ul { margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.9; color: #5A6270; }
+  .banner b { color: #2B2F36; }
+
+  table.diff { margin: 10px 0 0; border-collapse: collapse; font-size: 12.5px; background: #fff; max-width: 1400px; width: 100%; }
+  table.diff th, table.diff td { text-align: left; padding: 8px 10px; border-top: 1px solid #EDF0F3; vertical-align: top; }
+  table.diff th { background: #FAFBFC; font-weight: 600; border-top: 0; }
+  .del { color: #B4453A; }
+  .new { color: #1D6034; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>后台定制四页 · 现状与目标</h1>
+<div class="sub">
+  2026-10-18 ｜ 第 2 批：<b>工作台 / 订单详情+交付单 / 配置页 / 排期日历</b> ｜ 只画原型，不动代码<br />
+  <code>OrderList.vue</code> 633 行 · <code>OrderDetail.vue</code> 1576 行 · <code>Config.vue</code> 548 行 · <code>ScheduleCalendar.vue</code> 472 行
+</div>
+
+<div class="banner">
+  <div class="banner__t">先说三个查出来的实情</div>
+  <ul>
+    <li><b>① 没有"独立工作台"，但订单列表顶部有 4 张统计卡</b> ——
+      待付款 / 制作中 / 已交付 / <b>总收入</b>。你要的"两档待办"现在<b>不存在</b>。</li>
+    <li><b>② 后台订单详情能交付，但<b>没有交付历史</b> —— 交付完就是一个状态，
+      看不到"第 1 版 / 第 2 版、谁交的、什么时候、通知发没发出去"。</li>
+    <li><b>③ 配置页有 4 个字段要删、5 个要加</b>（详见第二节）。"要求顾客确认"这个开关还在，
+      而你已经取消了确认收货。</li>
+  </ul>
+</div>
+
+<!-- ================================================================ -->
+<h2>一、工作台（两档待办）</h2>
+
+<div class="row">
+
+  <div class="col">
+    <div class="col__head"><span>现状（订单列表顶部）</span><span class="col__tag tag--now">按代码还原</span></div>
+    <div class="win">
+      <div class="win__bar"><span class="win__dot"></span><span class="win__dot"></span><span class="win__dot"></span><span class="win__t">定制食谱订单</span></div>
+      <div class="win__body">
+
+        <div class="stat-row">
+          <div class="stat"><div class="stat__v">3</div><div class="stat__l">待付款</div></div>
+          <div class="stat"><div class="stat__v">2</div><div class="stat__l">制作中</div></div>
+          <div class="stat"><div class="stat__v">18</div><div class="stat__l">已交付</div></div>
+          <div class="stat"><div class="stat__v">¥5,400</div><div class="stat__l">总收入</div></div>
+        </div>
+
+        <table class="tbl">
+          <tr><th>订单号</th><th>狗狗</th><th>客户</th><th>目标</th><th>状态</th><th>操作</th></tr>
+          <tr><td>CR...001</td><td>豆豆</td><td>张女士</td><td>减重</td><td><span class="ftag ftag--doing">制作中</span></td><td>详情</td></tr>
+          <tr><td>CR...002</td><td>旺财</td><td>李先生</td><td>维持</td><td><span class="ftag ftag--wait">待付款</span></td><td>详情</td></tr>
+          <tr><td>CR...003</td><td>小黑</td><td>王先生</td><td>增重</td><td><span class="ftag ftag--done">已交付</span></td><td>详情</td></tr>
+        </table>
+
+      </div>
+    </div>
+    <div class="col__note">
+      <b>4 张卡里只有 2 张是真待办</b>（待交付 ⇐ 制作中、待售后）。
+      <br /><br />
+      「待付款」不是你的活 —— 那是顾客没付，超时会自动关单。
+      「总收入」是报表数字，不是待办。
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="col__head"><span>目标（两档待办）</span><span class="col__tag tag--target">该改成这样</span></div>
+    <div class="win">
+      <div class="win__bar"><span class="win__dot"></span><span class="win__dot"></span><span class="win__dot"></span><span class="win__t">定制工作台</span></div>
+      <div class="win__body win__body--gray">
+
+        <div class="stat-row">
+          <div class="stat stat--on">
+            <div class="stat__v stat__v--blue">2</div>
+            <div class="stat__l">待交付</div>
+          </div>
+          <div class="stat stat--warn">
+            <div class="stat__v stat__v--orange">1</div>
+            <div class="stat__l">待售后 <span class="mark mark--fix">超 48 小时标红</span></div>
+          </div>
+        </div>
+
+        <div class="grp">待交付（2）</div>
+        <table class="tbl">
+          <tr><th>交付日期</th><th>狗狗</th><th>客户</th><th>状态</th><th>操作</th></tr>
+          <tr>
+            <td><b style="color:#B4453A">今天</b></td><td>豆豆</td><td>张女士</td>
+            <td>已付款</td><td>去设计</td>
+          </tr>
+          <tr>
+            <td>明天</td><td>旺财</td><td>李先生</td>
+            <td>已付款</td><td>去设计</td>
+          </tr>
+        </table>
+
+        <div class="grp">待售后（1）</div>
+        <table class="tbl">
+          <tr><th>提交时间</th><th>狗狗</th><th>客户</th><th>等多久</th><th>操作</th></tr>
+          <tr>
+            <td>10-16 09:12</td><td>小黑</td><td>王先生</td>
+            <td><b style="color:#B4453A">已等 2 天</b></td><td>处理</td>
+          </tr>
+        </table>
+
+      </div>
+    </div>
+    <div class="col__note">
+      <b>只有两个队列，</b>每个都按"最该先做的"排序：
+      <br /><br />
+      · <b>待交付</b>按<b>交付日期</b>排，今天到期的最上面（红色）
+      <br />
+      · <b>待售后</b>按<b>等了多久</b>排，超 48 小时标红
+      <br /><br />
+      「待付款」「总收入」不在这 —— 它们属于"订单列表"，不属于"我今天要做什么"。
+    </div>
+  </div>
+
+</div>
+
+<!-- ================================================================ -->
+<h2>二、配置页 <span>4 删 5 加</span></h2>
+
+<div class="row">
+
+  <div class="col">
+    <div class="col__head"><span>现状</span><span class="col__tag tag--now">按代码还原</span></div>
+    <div class="win">
+      <div class="win__bar"><span class="win__dot"></span><span class="win__dot"></span><span class="win__dot"></span><span class="win__t">食谱定制设置</span></div>
+      <div class="win__body">
+
+        <div class="grp">价格</div>
+        <div class="field"><span class="field__l">定制费（元）</span><span class="field__v"><span class="input">300</span></span></div>
+
+        <div class="grp">产能</div>
+        <div class="field"><span class="field__l">每日接单上限</span><span class="field__v"><span class="input">4</span> <span class="mark mark--fix">要删</span></span></div>
+        <div class="field"><span class="field__l">每日交付上限</span><span class="field__v"><span class="input">4</span> ✅ 保留（唯一上限）</span></div>
+
+        <div class="grp">交付</div>
+        <div class="field"><span class="field__l">要求顾客确认</span><span class="field__v"><span class="input">开</span> <span class="mark mark--fix">要删</span></span></div>
+        <div class="field"><span class="field__l">交付物</span><span class="field__v">7 个勾选项</span></div>
+
+        <div class="grp">售后</div>
+        <div class="field"><span class="field__l">免费调整</span><span class="field__v"><span class="input">1</span> 次 <span class="mark mark--fix">改 2</span></span></div>
+        <div class="field"><span class="field__l">售后窗口天数</span><span class="field__v" style="color:#B4453A">（没有这个字段）</span></div>
+
+        <div class="grp">附件</div>
+        <div class="field"><span class="field__l">张数上限</span><span class="field__v"><span class="input">9</span></span></div>
+        <div class="field"><span class="field__l">大小上限</span><span class="field__v"><span class="input">10MB</span></span></div>
+
+        <div class="grp">设计默认值</div>
+        <div class="field"><span class="field__l">默认营养标准</span><span class="field__v"><span class="input">FEDIAF</span></span></div>
+        <div class="field"><span class="field__l">默认能量密度</span><span class="field__v"><span class="input">1.2</span></span></div>
+        <div class="field"><span class="field__l">生产损耗率</span><span class="field__v"><span class="input">1.07</span> <span class="mark mark--fix">要删</span></span></div>
+        <div class="field"><span class="field__l">默认工时</span><span class="field__v"><span class="input">1</span></span></div>
+
+        <div class="grp">排期</div>
+        <div class="field"><span class="field__l">排期往前找</span><span class="field__v"><span class="input">45</span> 天 <span class="mark mark--fix">要删</span></span></div>
+        <div class="field"><span class="field__l">占位重试次数</span><span class="field__v"><span class="input">5</span></span></div>
+        <div class="field"><span class="field__l">业务编号前缀</span><span class="field__v"><span class="input">CR</span></span></div>
+
+      </div>
+    </div>
+    <div class="col__note">
+      <b>4 个要删：</b>每日接单上限、要求顾客确认、生产损耗率、排期往前找。
+      <br /><br />
+      <b>0 个售后配置</b>—— 窗口天数、免费次数、无理由退款、超时提醒全都没有。
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="col__head"><span>目标</span><span class="col__tag tag--target">该改成这样</span></div>
+    <div class="win">
+      <div class="win__bar"><span class="win__dot"></span><span class="win__dot"></span><span class="win__dot"></span><span class="win__t">食谱定制设置</span></div>
+      <div class="win__body">
+
+        <div class="grp">价格</div>
+        <div class="field"><span class="field__l">定制费（元）</span><span class="field__v"><span class="input">300</span></span></div>
+
+        <div class="grp">产能</div>
+        <div class="field"><span class="field__l">每日交付上限</span><span class="field__v"><span class="input">4</span> 一天最多交出几份</span></div>
+        <div class="field"><span class="field__l">（接单不限量）</span><span class="field__v" style="color:#8A93A3;font-size:10.5px">顾客可以一直下单，日期往后排</span></div>
+
+        <div class="grp">交付</div>
+        <div class="field"><span class="field__l">交付物</span><span class="field__v">按需求文档的 5 项</span></div>
+
+        <div class="grp">售后 <span class="mark mark--add">整组新增</span></div>
+        <div class="field"><span class="field__l">售后窗口（天）</span><span class="field__v field__v--new"><span class="input">7</span> 从首次交付算，重新交付不重算</span></div>
+        <div class="field"><span class="field__l">免费修改次数</span><span class="field__v field__v--new"><span class="input">2</span> 按顾客提了几次算</span></div>
+        <div class="field"><span class="field__l">无理由退款</span><span class="field__v field__v--new">交付前随时可退（不设天数；交付后不退）</span></div>
+        <div class="field"><span class="field__l">售后超时提醒（小时）</span><span class="field__v field__v--new"><span class="input">48</span> 超过就标红</span></div>
+
+        <div class="grp">附件</div>
+        <div class="field"><span class="field__l">张数上限</span><span class="field__v"><span class="input">9</span></span></div>
+        <div class="field"><span class="field__l">允许类型</span><span class="field__v field__v--new">照片 / PDF / Word</span></div>
+        <div class="field"><span class="field__l">大小上限</span><span class="field__v"><span class="input">10MB</span></span></div>
+
+        <div class="grp">设计默认值</div>
+        <div class="field"><span class="field__l">默认营养标准</span><span class="field__v"><span class="input">FEDIAF</span></span></div>
+        <div class="field"><span class="field__l">默认能量密度</span><span class="field__v"><span class="input">1.2</span></span></div>
+        <div class="field"><span class="field__l">默认工时</span><span class="field__v"><span class="input">1</span></span></div>
+
+        <div class="grp">通知 <span class="mark mark--add">新增</span></div>
+        <div class="field"><span class="field__l">小程序消息中心</span><span class="field__v field__v--new"><span class="input">开</span></span></div>
+        <div class="field"><span class="field__l">订阅消息模板</span><span class="field__v">（沿用环境变量）</span></div>
+
+        <div class="grp">AI 生成 <span class="mark mark--add">整组新增</span></div>
+        <div class="field"><span class="field__l">服务商</span><span class="field__v field__v--new">智谱</span></div>
+        <div class="field"><span class="field__l">API Key</span><span class="field__v field__v--new"><span class="input">••••••••</span> 加密存库</span></div>
+        <div class="field"><span class="field__l">文案模型</span><span class="field__v field__v--new"><span class="input">glm-4-flash</span></span></div>
+        <div class="field"><span class="field__l">封面图模型</span><span class="field__v field__v--new"><span class="input">glm-image</span> 约 28 秒/张</span></div>
+
+        <div class="grp">排期</div>
+        <div class="field"><span class="field__l">占位重试次数</span><span class="field__v"><span class="input">5</span></span></div>
+        <div class="field"><span class="field__l">业务编号前缀</span><span class="field__v"><span class="input">CR</span></span></div>
+
+      </div>
+    </div>
+    <div class="col__note">
+      <b>4 删：</b>每日接单上限 / 要求顾客确认 / 生产损耗率 / 排期往前找
+      <br />
+      <b>5 加：</b>售后窗口 7 天 / 免费 2 次 / 无理由退款口径 / 超时 48 小时 / 消息中心开关
+      <br />
+      <b>整组新增：</b>AI 生成（服务商 / Key / 文案模型 / 封面模型）
+      <br /><br />
+      <b>「生产损耗率」为什么删</b>：交付和 DIY 都不再展示采购量了，这个参数<b>只服务于 DIY 的参考线</b>，
+      不该出现在定制配置里。
+    </div>
+  </div>
+
+</div>
+
+<!-- ================================================================ -->
+<h2>三、排期日历 <span>"接单"这个维度要拿掉</span></h2>
+
+<div class="row">
+
+  <div class="col">
+    <div class="col__head"><span>现状</span><span class="col__tag tag--now">按代码还原</span></div>
+    <div class="win">
+      <div class="win__bar"><span class="win__dot"></span><span class="win__dot"></span><span class="win__dot"></span><span class="win__t">排期日历</span></div>
+      <div class="win__body">
+
+        <div class="field" style="border:0">
+          <span class="field__l">每周规则</span>
+          <span class="field__v" style="font-size:11px">
+            周一 <b>接单</b> · 周二 <b>接单</b> · 周三 <b>接单</b> · 周四 <b>接单</b> ·
+            周五 <b>接单</b> · 周六 休 · 周日 休
+          </span>
+        </div>
+        <div class="sub" style="font-size:11px;color:#B4453A;margin:4px 0 12px">
+          「接单」这个维度要删 —— 接单不限量了，只剩「交付」
+        </div>
+
+        <div class="cal">
+          <div class="cal__h">一</div><div class="cal__h">二</div><div class="cal__h">三</div>
+          <div class="cal__h">四</div><div class="cal__h">五</div><div class="cal__h">六</div><div class="cal__h">日</div>
+
+          <div class="cal__d"><div class="cal__n">13</div><div class="cal__b">可约<br />接 3 / 交 2</div></div>
+          <div class="cal__d"><div class="cal__n">14</div><div class="cal__b">可约<br />接 4 / 交 1</div></div>
+          <div class="cal__d"><div class="cal__n">15</div><div class="cal__b">已满<br />接 4 / 交 4</div></div>
+          <div class="cal__d"><div class="cal__n">16</div><div class="cal__b">可约<br />接 1 / 交 0</div></div>
+          <div class="cal__d"><div class="cal__n">17</div><div class="cal__b">可约<br />接 2 / 交 1</div></div>
+          <div class="cal__d cal__d--off"><div class="cal__n">18</div><div class="cal__b">休</div></div>
+          <div class="cal__d cal__d--off"><div class="cal__n">19</div><div class="cal__b">休</div></div>
+
+          <div class="cal__d"><div class="cal__n">20</div><div class="cal__b">单独设过<br />关闭</div></div>
+          <div class="cal__d"><div class="cal__n">21</div><div class="cal__b">可约<br /></div></div>
+          <div class="cal__d"><div class="cal__n">22</div><div class="cal__b">可约</div></div>
+          <div class="cal__d"><div class="cal__n">23</div><div class="cal__b">可约</div></div>
+          <div class="cal__d"><div class="cal__n">24</div><div class="cal__b">可约</div></div>
+          <div class="cal__d cal__d--off"><div class="cal__n">25</div><div class="cal__b">休</div></div>
+          <div class="cal__d cal__d--off"><div class="cal__n">26</div><div class="cal__b">休</div></div>
+        </div>
+
+      </div>
+    </div>
+    <div class="col__note">
+      现在每天显示<b>两个数字：接了几单 / 交付几份</b>。
+      接单不限量以后，<b>「接」这个数就没意义了</b>。
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="col__head"><span>目标</span><span class="col__tag tag--target">该改成这样</span></div>
+    <div class="win">
+      <div class="win__bar"><span class="win__dot"></span><span class="win__dot"></span><span class="win__dot"></span><span class="win__t">排期日历</span></div>
+      <div class="win__body">
+
+        <div class="field" style="border:0">
+          <span class="field__l">每周规则</span>
+          <span class="field__v" style="font-size:11px">
+            周一 <b>营业</b> · 周二 <b>营业</b> · 周三 <b>营业</b> · 周四 <b>营业</b> ·
+            周五 <b>营业</b> · 周六 休 · 周日 休
+          </span>
+        </div>
+        <div class="sub" style="font-size:11px;color:#1D6034;margin:4px 0 12px">
+          「接单」→「<b>营业</b>」（就是这天做不做）。周末可以单独打开 = 加班
+        </div>
+
+        <div class="cal">
+          <div class="cal__h">一</div><div class="cal__h">二</div><div class="cal__h">三</div>
+          <div class="cal__h">四</div><div class="cal__h">五</div><div class="cal__h">六</div><div class="cal__h">日</div>
+
+          <div class="cal__d"><div class="cal__n">13</div><div class="cal__b">交 2 / 4</div></div>
+          <div class="cal__d"><div class="cal__n">14</div><div class="cal__b">交 1 / 4</div></div>
+          <div class="cal__d"><div class="cal__n">15</div><div class="cal__b"><b style="color:#B4453A">已排满 4 / 4</b></div></div>
+          <div class="cal__d"><div class="cal__n">16</div><div class="cal__b">交 0 / 4</div></div>
+          <div class="cal__d"><div class="cal__n">17</div><div class="cal__b">交 1 / 4</div></div>
+          <div class="cal__d cal__d--off"><div class="cal__n">18</div><div class="cal__b">休</div></div>
+          <div class="cal__d cal__d--off"><div class="cal__n">19</div><div class="cal__b">休</div></div>
+
+          <div class="cal__d"><div class="cal__n">20</div><div class="cal__b">请假（关闭）</div></div>
+          <div class="cal__d"><div class="cal__n">21</div><div class="cal__b">交 0 / 4</div></div>
+          <div class="cal__d"><div class="cal__n">22</div><div class="cal__b">交 0 / 4</div></div>
+          <div class="cal__d"><div class="cal__n">23</div><div class="cal__b">交 0 / 4</div></div>
+          <div class="cal__d"><div class="cal__n">24</div><div class="cal__b">交 0 / 4</div></div>
+          <div class="cal__d cal__d--off"><div class="cal__n">25</div><div class="cal__b">休</div></div>
+          <div class="cal__d cal__d--off"><div class="cal__n">26</div><div class="cal__b">休</div></div>
+        </div>
+
+        <div class="sub" style="font-size:11px;color:#1D6034;margin-top:10px">
+          <b>每天只显示一个数字：交 2 / 4</b>（已排交付 / 上限）。
+          <br />周末可以单独打开表示加班 —— 打开后那天也能排交付。
+        </div>
+
+      </div>
+    </div>
+    <div class="col__note">
+      <b>两个改动：</b>
+      <br /><br />
+      ① 「接单」维度拿掉，只留「交付」（因为接单不限量了）
+      <br /><br />
+      ② 卡上从"接 X / 交 Y"变成"交 X / 上限 Y" ——
+      <b>一眼看出这天还能不能再排</b>，而不是看两个数字自己算。
+    </div>
+  </div>
+
+</div>
+
+<!-- ================================================================ -->
+<h2>四、订单详情 + 交付单 <span>要加交付历史</span></h2>
+
+<div class="row">
+
+  <div class="col">
+    <div class="col__head"><span>现状（交付那块）</span><span class="col__tag tag--now">按代码还原</span></div>
+    <div class="win">
+      <div class="win__bar"><span class="win__dot"></span><span class="win__dot"></span><span class="win__dot"></span><span class="win__t">定制订单详情 · CR20261016001</span></div>
+      <div class="win__body">
+
+        <div class="grp">订单信息</div>
+        <div class="field"><span class="field__l">状态</span><span class="field__v"><span class="ftag ftag--done">已交付</span></span></div>
+        <div class="field"><span class="field__l">交付时间</span><span class="field__v">2026-10-17 18:30</span></div>
+
+        <div class="grp">从已设计好的食谱交付</div>
+        <div class="field">
+          <span class="field__l">选择食谱</span>
+          <span class="field__v"><span class="input">低脂鸡肉南瓜餐</span></span>
+        </div>
+        <div class="field">
+          <span class="field__l"></span>
+          <span class="field__v" style="font-size:11px">
+            选中一条点交付即可，顾客会收到通知。
+            <b>交付食谱（含重新交付）只有管理员能做。</b>
+          </span>
+        </div>
+        <div class="field">
+          <span class="field__l"></span>
+          <span class="field__v">
+            <span style="display:inline-block;background:#3B5BDB;color:#fff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:5px">交付到订单</span>
+          </span>
+        </div>
+
+        <div class="grp" style="color:#B4453A">❌ 没有的东西</div>
+        <div class="field"><span class="field__l">交付历史</span><span class="field__v" style="color:#B4453A">看不到"第 1 版 / 第 2 版"</span></div>
+        <div class="field"><span class="field__l">通知状态</span><span class="field__v" style="color:#B4453A">发没发出去、发到谁，都看不到</span></div>
+        <div class="field"><span class="field__l">交付人 / 时间（历次）</span><span class="field__v" style="color:#B4453A">只留最后一次</span></div>
+
+      </div>
+    </div>
+    <div class="col__note">
+      <b>好消息</b>：这里<b>本来就没有"顾客查看确认"</b> —— 所以不用删东西。
+      <br /><br />
+      <b>坏消息</b>：交付完就是一个状态覆盖，<b>没有历史</b>。
+      顾客说"我收到的是旧版"，你查不出来。
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="col__head"><span>目标（加交付历史）</span><span class="col__tag tag--target">该改成这样</span></div>
+    <div class="win">
+      <div class="win__bar"><span class="win__dot"></span><span class="win__dot"></span><span class="win__dot"></span><span class="win__t">定制订单详情 · CR20261016001</span></div>
+      <div class="win__body">
+
+        <div class="grp">订单信息</div>
+        <div class="field"><span class="field__l">状态</span><span class="field__v"><span class="ftag ftag--done">已交付</span></span></div>
+        <div class="field"><span class="field__l">售后窗口</span><span class="field__v field__v--new">还剩 6 天（10-24 到期）</span></div>
+        <div class="field"><span class="field__l">免费修改</span><span class="field__v field__v--new">还剩 1 次（已用 1 次）</span></div>
+
+        <div class="grp">交付记录 <span class="mark mark--add">新增</span></div>
+        <table class="tbl">
+          <tr><th>版本</th><th>交付时间</th><th>交付人</th><th>通知</th><th>操作</th></tr>
+          <tr>
+            <td><b>第 2 版</b><br /><span style="font-size:10px;color:#8A93A3">当前</span></td>
+            <td>10-17 18:30</td><td>老板</td>
+            <td><span class="ftag ftag--done">已发出</span></td>
+            <td>查看内容</td>
+          </tr>
+          <tr>
+            <td>第 1 版</td>
+            <td>10-17 09:12</td><td>老板</td>
+            <td><span class="ftag ftag--done">已发出</span></td>
+            <td>查看内容</td>
+          </tr>
+        </table>
+
+        <div class="grp">重新交付</div>
+        <div class="field">
+          <span class="field__l">选择食谱</span>
+          <span class="field__v"><span class="input">低脂鸡肉南瓜餐 v3</span></span>
+        </div>
+        <div class="field">
+          <span class="field__l"></span>
+          <span class="field__v" style="font-size:11px">
+            重新交付会<b>生成第 3 版</b>，旧版仍可查看。
+            <b>售后窗口不重算。</b>
+          </span>
+        </div>
+        <div class="field">
+          <span class="field__l"></span>
+          <span class="field__v">
+            <span style="display:inline-block;background:#3B5BDB;color:#fff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:5px">重新交付（第 3 版）</span>
+          </span>
+        </div>
+
+        <div class="grp">通知异常时 <span class="mark mark--add">新增</span></div>
+        <div class="field">
+          <span class="field__l">订阅消息失败</span>
+          <span class="field__v" style="font-size:11px">
+            <span class="ftag ftag--after">未发出</span>
+            顾客没点"允许"，发不出去 → <b>用企业微信手动告知</b>
+          </span>
+        </div>
+
+      </div>
+    </div>
+    <div class="col__note">
+      <b>加三样：</b>交付记录（含版本/时间/交付人/通知状态）、售后窗口与免费次数剩余、通知失败的兜底提示。
+      <br /><br />
+      <b>为什么"通知状态"必须留</b>：顾客说"我没收到"时，你一眼能看出是
+      <b>没发出去</b>还是<b>发了没看</b> —— 这两种处理方式完全不同。
+    </div>
+  </div>
+
+</div>
+
+<!-- ================================================================ -->
+<h2>五、后台四页的出口表 <span>按上一批立的规矩</span></h2>
+<table class="diff">
+  <tr><th style="width:190px">可点元素</th><th style="width:330px">通向哪</th><th>现状</th></tr>
+
+  <tr><td colspan="3" style="background:#F5F7FF;font-weight:700;color:#3B5BDB">工作台</td></tr>
+  <tr><td>「待交付」卡片</td><td>原地筛出待交付列表（按交付日期排）</td><td class="del">❌ 没有 → 新增</td></tr>
+  <tr><td>「待售后」卡片</td><td>原地筛出待售后列表（按等了多久排）</td><td class="del">❌ 没有 → 新增</td></tr>
+  <tr><td>行内「去设计」</td><td><code>/CustomRecipes/OrderDetail?id=</code> → 进详情后「去设计食谱」带订单进编辑器</td><td class="del">❌ 没有 → 新增</td></tr>
+  <tr><td>行内「处理」</td><td>售后处理（<code>/CustomRecipes/AftersaleList</code> 或直接弹窗）</td><td class="new">✅ 有（在售后列表页）</td></tr>
+
+  <tr><td colspan="3" style="background:#F5F7FF;font-weight:700;color:#3B5BDB">订单详情 + 交付单</td></tr>
+  <tr><td>「交付到订单」</td><td>调交付接口 → 订单转已交付 → 刷新本页</td><td class="new">✅ 有</td></tr>
+  <tr><td>「重新交付」</td><td>同上，但生成新版本</td><td class="new">✅ 有</td></tr>
+  <tr><td>交付记录行「查看内容」</td><td>该版本的交付快照（只读）</td><td class="del">❌ 没有交付记录 → 新增</td></tr>
+  <tr><td>「去设计食谱」</td><td>编辑器并带上这张订单</td><td class="new">✅ 有（编辑器的订单绑定）</td></tr>
+  <tr><td>「联系客户」</td><td>企业微信 / 电话</td><td class="new">✅ 有</td></tr>
+  <tr><td>「取消订单」</td><td>调取消接口 → 自动原路退款</td><td class="new">✅ 有</td></tr>
+
+  <tr><td colspan="3" style="background:#F5F7FF;font-weight:700;color:#3B5BDB">配置页</td></tr>
+  <tr><td>「保存」</td><td>调配置接口 → 立即对新单生效，老单按快照不变</td><td class="new">✅ 有</td></tr>
+  <tr><td>「交付物」勾选项</td><td>原地勾选</td><td class="new">✅ 有 → 按需求文档改成 5 项</td></tr>
+
+  <tr><td colspan="3" style="background:#F5F7FF;font-weight:700;color:#3B5BDB">排期日历</td></tr>
+  <tr><td>「上个月 / 下个月」</td><td>翻页</td><td class="new">✅ 有</td></tr>
+  <tr><td>单日点击</td><td>切换该日"营不营业 / 可交付几份"</td><td class="new">✅ 有 → 删掉"接单"那一维</td></tr>
+  <tr><td>「每周规则」</td><td>批量设周一到周日</td><td class="new">✅ 有 → 「接单」改「营业」</td></tr>
+</table>
+
+<div class="banner" style="margin-top:16px;border-color:#CFE3D5;background:#F7FBF8">
+  <div class="banner__t" style="color:#1D6034">出口表又查出一处</div>
+  <ul style="color:#2B2F36">
+    <li><b>工作台的"待交付 → 去设计"这条链现在不存在。</b>
+      现在要交付，得先进订单列表 → 找订单 → 进详情 → 去设计。
+      <b>四步。</b>工作台的价值就是把这条链压到一步。</li>
+  </ul>
+</div>
+
+<h2>六、这一批的改动清单</h2>
+<table class="diff">
+  <tr><th style="width:110px">页面</th><th style="width:60px">类型</th><th style="width:200px">改什么</th><th>说明</th></tr>
+
+  <tr><td rowspan="2"><b>工作台</b></td>
+    <td class="del" style="font-weight:700">删</td><td>待付款 / 总收入 两张卡</td>
+    <td>不是待办：待付款超时会自动关单，总收入是报表数字</td></tr>
+  <tr><td class="new" style="font-weight:700">改</td><td>只留<b>待交付 / 待售后</b></td>
+    <td>待交付按交付日期排（今天到期标红）；待售后按等了多久排（超 48 小时标红）</td></tr>
+
+  <tr><td rowspan="3"><b>配置页</b></td>
+    <td class="del" style="font-weight:700">删 4 个</td><td>每日接单上限 / 要求顾客确认 / 生产损耗率 / 排期往前找</td>
+    <td>接单不限量、取消确认收货、不再给采购量、排期不设上限</td></tr>
+  <tr><td class="new" style="font-weight:700">加 5 个</td><td>售后窗口 7 天 / 免费 2 次 / 无理由退款口径 / 超时 48 小时 / 消息中心开关</td>
+    <td>现在售后配置<b>一个都没有</b></td></tr>
+  <tr><td class="new" style="font-weight:700">加一组</td><td>AI 生成（服务商 / Key / 文案模型 / 封面模型）</td>
+    <td>Key 加密存库，不写进配置文件</td></tr>
+
+  <tr><td rowspan="2"><b>排期日历</b></td>
+    <td class="del" style="font-weight:700">删</td><td>「接单」维度</td>
+    <td>接单不限量后没意义</td></tr>
+  <tr><td class="new" style="font-weight:700">改</td><td>每天显示「交 X / 上限 Y」</td>
+    <td>一眼看出还能不能再排，而不是看两个数字自己算</td></tr>
+
+  <tr><td rowspan="3"><b>订单详情</b></td>
+    <td class="new" style="font-weight:700">加</td><td>交付记录（版本 / 时间 / 交付人 / 通知状态）</td>
+    <td>现在交付完就覆盖，<b>看不到历史</b></td></tr>
+  <tr><td class="new" style="font-weight:700">加</td><td>售后窗口 + 免费次数剩余</td>
+    <td>老板也需要知道自己给的承诺还剩多少</td></tr>
+  <tr><td class="new" style="font-weight:700">加</td><td>通知失败的兜底提示</td>
+    <td>订阅消息发不出去时，提示走企业微信</td></tr>
+</table>
+
+<div class="banner" style="margin-top:18px;border-color:#E8CFC8;background:#FFF9F8">
+  <div class="banner__t">要你定的一件事</div>
+  <ul>
+    <li><b>「待付款」这张卡要不要留？</b></li>
+    <li>按"两档待办"的说法它该删（那是顾客没付，不是你的活）。
+      但有一件事：<b>支付通道出问题时会落到「人工确认付款」兜底</b> ——
+      那种情况下你确实需要看到"哪些单还没付"。</li>
+    <li><b>我的建议</b>：工作台只留两档，但<b>订单列表里保留「待付款」筛选</b>；
+      需要兜底时去列表里找，不让它占着工作台。</li>
+  </ul>
+</div>
+
+</body>
+</html>

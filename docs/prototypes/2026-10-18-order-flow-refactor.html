@@ -77,6 +77,15 @@
   .btn--ghost { background: #fff; color: #B45309; border: 1.5px solid #E5C9A3; }
   .btn--del { background: #FCEAE5; color: #b4453a; border: 1.5px solid #F0C8BC; }
 
+  /* 客服 inline 按钮（复用成品订购页的组件样式） */
+  .cs-inline {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 9px 0; border-radius: 10px; background: #F7FBF8;
+    border: 1.5px solid #B9D8C2;
+  }
+  .cs-inline__icon { font-size: 13px; }
+  .cs-inline__t { font-size: 12.5px; font-weight: 700; color: #1e5b35; }
+
   /* 售后表单 */
   .opt { display: flex; align-items: center; gap: 9px; padding: 10px 11px; border: 1.5px solid #EDE0D0; border-radius: 11px; margin-bottom: 7px; font-size: 12px; background: #fff; }
   .opt--on { border-color: #B45309; background: #FFF8F1; }
@@ -85,6 +94,12 @@
   .opt__x { margin-left: auto; font-size: 10px; color: #b4453a; font-weight: 700; }
 
   .textarea { border: 1.5px solid #EDE0D0; border-radius: 10px; padding: 9px 11px; font-size: 11.5px; color: #B3A492; min-height: 56px; background: #fff; }
+  .files { display: flex; flex-direction: column; gap: 6px; }
+  .file { display: flex; align-items: center; gap: 8px; background: #FBF8F3; border: 1px solid #EDE0D0; border-radius: 9px; padding: 7px 9px; font-size: 11.5px; }
+  .file__ico { width: 22px; height: 22px; border-radius: 6px; background: #FBEEE0; display: flex; align-items: center; justify-content: center; font-size: 12px; flex: 0 0 22px; }
+  .file__n { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file__a { font-size: 10.5px; color: #B45309; }
+  .file__x { font-size: 10.5px; color: #b4453a; }
   .upload { border: 1.5px dashed #E5C9A3; border-radius: 10px; padding: 12px; text-align: center; font-size: 11.5px; color: #B45309; background: #FFFDF8; }
 
   .badge { display: inline-block; font-size: 9.5px; font-weight: 700; border-radius: 999px; padding: 2px 8px; }
@@ -100,6 +115,8 @@
   .lcard__top { display: flex; align-items: baseline; margin-bottom: 7px; }
   .lcard__dog { font-size: 13px; font-weight: 800; }
   .lcard__no { margin-left: auto; font-size: 9.5px; color: #B3A492; }
+  .lcard__t { font-size: 13.5px; font-weight: 800; margin-bottom: 3px; }
+  .lcard__sub { font-size: 10.5px; color: #8A7A66; margin-bottom: 7px; }
 
   .tabs { display: flex; gap: 6px; margin-bottom: 9px; }
   .tab { flex: 1; text-align: center; font-size: 11.5px; padding: 7px 0; border-radius: 9px; background: #fff; border: 1.5px solid #EDE0D0; color: #6E5F4B; }
@@ -141,6 +158,12 @@
       含投诉和补发。你定过定制售后<b>只留「调整食谱」一种</b>。</li>
     <li><b>④ 售后状态里没有「已撤回」</b> —— 现在是 <code>PENDING / ACCEPTED / PROCESSING / RESOLVED / REJECTED</code>，
       但你定过顾客可以撤回。</li>
+    <li><b>⑤ 售后页根本没有任何上传功能</b> —— 500 行里没有 <code>chooseImage</code> / <code>uploadFile</code>。
+      后端有 <code>photos String[]</code> 字段，但前端<b>从来没接</b>。
+      （我之前在原型里画的"＋ 上传照片"是我编的，线上没有。）</li>
+    <li><b>⑥ 支付确认页是有的，是我在清单里叫错了名字</b> ——
+      它叫 <code>success.vue</code>，我标成"提交成功页（优先级低）"，
+      但它上面有「<b>立即微信支付 ¥300</b>」按钮，<b>它就是支付确认页</b>。</li>
   </ul>
 </div>
 
@@ -269,7 +292,11 @@
           <div class="card">
             <div class="kv"><span class="kv__k">额度总额</span><span class="kv__v">¥300</span></div>
             <div class="kv"><span class="kv__k">剩余可用</span><span class="kv__v"><b>¥300</b></span></div>
+            <div class="btn btn--ghost" style="margin-top:8px">用这份食谱订购成品 <span class="mark mark--add">挪进来</span></div>
           </div>
+        </div>
+        <div class="sub" style="font-size:11px;margin:-4px 0 9px">
+          <b>入口放进额度里更合理</b> —— 抵扣额度就是拿来买成品的，放在一起顾客一看就懂
         </div>
 
         <div class="sec">
@@ -292,10 +319,15 @@
 
         <div class="btns">
           <div class="btn btn--main">查看售后进度 <span class="mark mark--add">新</span></div>
-          <div class="btn btn--line">用这份食谱订购成品</div>
-          <div class="btn btn--line">联系客服</div>
-          <div class="btn btn--del">撤回这个售后 <span class="mark mark--add">新</span></div>
+          <div class="cs-inline">
+            <span class="cs-inline__icon">💬</span>
+            <span class="cs-inline__t">咨询客服</span>
+          </div>
           <div class="btn btn--line">返回定制订单</div>
+        </div>
+        <div class="sub" style="font-size:11px;margin:6px 0 0">
+          <b>「撤回售后」挪到售后进度页里</b>；客服改成成品订购页那种标识
+          （复用现成组件 <code>CustomerServiceInlineButton</code>）
         </div>
 
       </div>
@@ -384,8 +416,23 @@
         </div>
 
         <div class="sec">
-          <div class="sec__t">照片（选填）</div>
-          <div class="upload">＋ 上传照片</div>
+          <div class="sec__t">附件（选填）</div>
+          <div class="files">
+            <div class="file">
+              <span class="file__ico">🖼</span>
+              <span class="file__n">便便状态.jpg</span>
+              <span class="file__a">预览</span>
+              <span class="file__x">删除</span>
+            </div>
+            <div class="file">
+              <span class="file__ico">📄</span>
+              <span class="file__n">血常规报告.pdf</span>
+              <span class="file__a">预览</span>
+              <span class="file__x">删除</span>
+            </div>
+          </div>
+          <div class="upload" style="margin-top:7px">＋ 上传照片 / 文档</div>
+          <div class="sub" style="font-size:10.5px;margin:6px 0 0">支持照片、PDF、Word。每条可预览、可删除。</div>
         </div>
 
         <div class="card" style="background:#FFFDF8;border-color:#E8C88A;margin-top:14px">
@@ -397,6 +444,14 @@
 
         <div class="btn btn--main" style="margin-top:12px">提交</div>
         <div class="btn btn--line" style="margin-top:8px">其它问题？联系客服</div>
+
+        <div class="card" style="background:#FFFBFA;border-color:#F0C8BC;margin-top:14px">
+          <div class="sec__t" style="color:#b4453a">我提交过的售后</div>
+          <div class="kv"><span class="kv__k">10-18 提交</span><span class="kv__v">想改鸡肉 → 鸭肉</span></div>
+          <div class="kv"><span class="kv__k">状态</span><span class="kv__v"><b>处理中</b></span></div>
+          <div class="btn btn--del" style="margin-top:9px">撤回这个售后 <span class="mark mark--add">挪到这里</span></div>
+          <div class="sub" style="font-size:10.5px;margin:7px 0 0">撤回不占用免费次数</div>
+        </div>
 
       </div>
     </div>
@@ -471,32 +526,32 @@
 
         <div class="lcard">
           <div class="lcard__top">
-            <span class="lcard__dog">豆豆</span>
             <span class="badge badge--after">售后中</span>
-            <span class="lcard__no">CR20261016001</span>
+            <span class="lcard__no">CR20261016001 ›</span>
           </div>
-          <div class="kv"><span class="kv__k">目标</span><span class="kv__v">减重</span></div>
+          <div class="lcard__t">低脂鸡肉南瓜餐</div>
+          <div class="lcard__sub">给 豆豆 · 柯基 3 岁</div>
           <div class="kv"><span class="kv__k">交付日期</span><span class="kv__v">10-17</span></div>
           <div class="kv"><span class="kv__k">售后窗口</span><span class="kv__v">还剩 6 天</span></div>
         </div>
 
         <div class="lcard">
           <div class="lcard__top">
-            <span class="lcard__dog">旺财</span>
             <span class="badge badge--wait">已付款</span>
-            <span class="lcard__no">CR20261018003</span>
+            <span class="lcard__no">CR20261018003 ›</span>
           </div>
-          <div class="kv"><span class="kv__k">目标</span><span class="kv__v">维持</span></div>
+          <div class="lcard__t">设计中的专属食谱</div>
+          <div class="lcard__sub">给 旺财 · 田园犬 2 岁</div>
           <div class="kv"><span class="kv__k">交付日期</span><span class="kv__v">10-21</span></div>
         </div>
 
         <div class="lcard">
           <div class="lcard__top">
-            <span class="lcard__dog">小黑</span>
             <span class="badge badge--done">已完成</span>
-            <span class="lcard__no">CR20260920007</span>
+            <span class="lcard__no">CR20260920007 ›</span>
           </div>
-          <div class="kv"><span class="kv__k">目标</span><span class="kv__v">增重</span></div>
+          <div class="lcard__t">高能量牛肉餐</div>
+          <div class="lcard__sub">给 小黑 · 边牧 1 岁</div>
           <div class="kv"><span class="kv__k">交付日期</span><span class="kv__v">09-23</span></div>
           <div class="kv"><span class="kv__k">成品抵扣</span><span class="kv__v"><b>剩余 ¥300</b></span></div>
         </div>
@@ -506,10 +561,13 @@
     <div class="col__note">
       <b>加三样：状态标签 / 交付日期 / 售后窗口剩余</b>。
       <br /><br />
-      状态标签用的是<b>跟订单详情同一套说法</b>（待付款 / 已付款 / 已交付 / 售后中 / 已完成 / 已取消）——
-      这样两页不会打架。
+      <b>标题改成食谱名</b>（交付前显示"设计中的专属食谱"），
+      下面一行小字「给 豆豆 · 柯基 3 岁」——
+      因为顾客认的是"给我家狗做的那份"，不是订单号。
       <br /><br />
-      标签的<b>文案和颜色都由后端下发</b>，前端不自己判断。
+      <b>「目标」这个字段删掉</b> —— 它已经在食谱名里体现了（低脂/高能量），列表上再列一次是重复。
+      <br /><br />
+      整张卡<b>可点</b>，点进<b>该订单的详情页</b>（右侧 <code>›</code> 是提示）。
     </div>
   </div>
 
@@ -527,8 +585,15 @@
     <td>有未完成售后时，状态显示「售后中」（底层仍是已交付，由后端决定）</td></tr>
   <tr><td class="new" style="font-weight:700">加</td><td><b>售后窗口剩余 / 免费次数剩余</b></td>
     <td>现在顾客完全看不到这两个数字</td></tr>
-  <tr><td class="new" style="font-weight:700">加</td><td><b>「查看售后进度」/「撤回售后」</b></td>
-    <td>替代原来的「有问题」+ 新增撤回</td></tr>
+  <tr><td class="new" style="font-weight:700">加</td><td><b>「查看售后进度」</b></td>
+    <td>替代原来的「有问题」；点进去是<b>售后页</b>（<code>aftersale?orderId=xxx</code>），该页兼做"提交"和"看进度"</td></tr>
+  <tr><td class="new" style="font-weight:700">挪</td><td>「用这份食谱订购成品」</td>
+    <td><b>挪进「成品抵扣额度」板块</b> —— 抵扣额度就是拿来买成品的，放一起顾客一看就懂</td></tr>
+  <tr><td class="new" style="font-weight:700">换</td><td>「联系客服」按钮</td>
+    <td>改成成品订购页那种<b>客服标识</b>（直接复用现成组件 <code>CustomerServiceInlineButton</code>：
+      图标 + 「咨询客服」，点了开企业微信）</td></tr>
+  <tr><td class="new" style="font-weight:700">挪</td><td>「撤回这个售后」</td>
+    <td><b>挪进售后进度页</b>（售后页里"我提交过的售后"那块）</td></tr>
   <tr><td style="color:#8A7A66;font-weight:700">改</td><td>「预计交付」→「交付日期」</td>
     <td>已定：给的是确定日期，不是预计</td></tr>
 
@@ -541,6 +606,11 @@
     <td>把那三类接过去</td></tr>
   <tr><td class="new" style="font-weight:700">加</td><td><b>「已撤回」状态</b></td>
     <td>后端 <code>CustomRecipeAftersaleStatus</code> 现在没有这个值，要加</td></tr>
+  <tr><td class="del" style="font-weight:700">补</td><td><b>附件上传（照片 + PDF/Word）</b></td>
+    <td><b>现在完全没有上传功能</b>。要加：照片 + PDF + Word，
+      每条可<b>预览 / 删除 / 继续新增</b>（跟定制页的上传能力对齐）</td></tr>
+  <tr><td class="new" style="font-weight:700">加</td><td><b>「我提交过的售后」+ 撤回</b></td>
+    <td>售后页兼做进度页；撤回放在这里（<b>撤回不占免费次数</b>）</td></tr>
 
   <tr><td rowspan="3"><b>订单列表</b></td>
     <td class="new" style="font-weight:700">加</td><td><b>状态标签</b></td>
@@ -549,6 +619,45 @@
     <td>订单多了以后必须有</td></tr>
   <tr><td class="new" style="font-weight:700">加</td><td><b>售后窗口剩余</b></td>
     <td>已交付的单在列表上就能看出"还能提几天"</td></tr>
+</table>
+
+<!-- ================================================================ -->
+<h2>五、几个口径写死在这（避免以后又各说各的）</h2>
+<table class="diff">
+  <tr><th style="width:180px">项</th><th>约定</th></tr>
+  <tr>
+    <td><b>三个筛选对应哪些状态</b></td>
+    <td>
+      · <b>全部</b> = 6 个状态全要（含已取消）<br />
+      · <b>进行中</b> = <code>待付款 / 已付款 / 已交付 / 售后中</code><br />
+      · <b>已完成</b> = <code>已完成</code>（+ 可考虑把「已取消」并进来，看你）
+    </td>
+  </tr>
+  <tr>
+    <td><b>状态标签的颜色</b></td>
+    <td>待付款 <span class="badge badge--wait">黄</span>
+      已付款 <span class="badge badge--paid">橙</span>
+      已交付 <span class="badge badge--delivered">绿</span>
+      售后中 <span class="badge badge--after">红</span>
+      已完成 <span class="badge badge--done">灰</span>
+      已取消 <span class="badge badge--cancel">浅灰</span></td>
+  </tr>
+  <tr>
+    <td><b>列表卡片</b></td>
+    <td>标题 = <b>食谱名</b>（交付前显示「设计中的专属食谱」）／
+      副标题 = 给谁 + 品种年龄 ／ <b>删掉「目标」</b>（已在食谱名里体现）／
+      整张卡<b>可点</b> → 该订单详情页</td>
+  </tr>
+  <tr>
+    <td><b>「返回定制订单」去哪</b></td>
+    <td><code>redirectTo('/pages/custom-recipe/orders')</code> —— 用 replace 而不是压栈，
+      避免顾客在"订单详情 ↔ 订单列表"之间来回堆栈</td>
+  </tr>
+  <tr>
+    <td><b>「查看售后进度」去哪</b></td>
+    <td>同一个售后页 <code>aftersale?orderId=xxx</code> ——
+      <b>这页兼做两件事</b>：没提过售后就是提交表单；提过了就显示进度 + 撤回</td>
+  </tr>
 </table>
 
 <div class="banner" style="margin-top:18px;border-color:#CFE3D5;background:#F7FBF8">

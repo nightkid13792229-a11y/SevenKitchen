@@ -123,7 +123,7 @@
       <div class="win__body">
 
         <div class="stat-row">
-          <div class="stat"><div class="stat__v">3</div><div class="stat__l">待付款</div></div>
+          <div class="stat"><div class="stat__v">3</div><div class="stat__l">待付款 <span class="mark mark--fix">要删</span></div></div>
           <div class="stat"><div class="stat__v">2</div><div class="stat__l">制作中</div></div>
           <div class="stat"><div class="stat__v">18</div><div class="stat__l">已交付</div></div>
           <div class="stat"><div class="stat__v">¥5,400</div><div class="stat__l">总收入</div></div>
@@ -201,7 +201,7 @@
 </div>
 
 <!-- ================================================================ -->
-<h2>二、配置页 <span>4 删 5 加</span></h2>
+<h2>二、配置页 <span>6 删 5 加 + AI 拆两块</span></h2>
 
 <div class="row">
 
@@ -279,31 +279,36 @@
 
         <div class="grp">设计默认值</div>
         <div class="field"><span class="field__l">默认营养标准</span><span class="field__v"><span class="input">FEDIAF</span></span></div>
-        <div class="field"><span class="field__l">默认能量密度</span><span class="field__v"><span class="input">1.2</span></span></div>
-        <div class="field"><span class="field__l">默认工时</span><span class="field__v"><span class="input">1</span></span></div>
 
         <div class="grp">通知 <span class="mark mark--add">新增</span></div>
         <div class="field"><span class="field__l">小程序消息中心</span><span class="field__v field__v--new"><span class="input">开</span></span></div>
         <div class="field"><span class="field__l">订阅消息模板</span><span class="field__v">（沿用环境变量）</span></div>
 
-        <div class="grp">AI 生成 <span class="mark mark--add">整组新增</span></div>
-        <div class="field"><span class="field__l">服务商</span><span class="field__v field__v--new">智谱</span></div>
+        <div class="grp">AI · 写文案 <span class="mark mark--add">已有用途</span></div>
+        <div class="field"><span class="field__l">服务商</span><span class="field__v"><span class="input">DeepSeek</span></span></div>
+        <div class="field"><span class="field__l">模型</span><span class="field__v field__v--new"><span class="input">deepseek-v4.1-flash</span></span></div>
+        <div class="field"><span class="field__l">API Key</span><span class="field__v"><span class="input">••••••••</span> 加密存库</span></div>
+        <div class="field"><span class="field__l">启用</span><span class="field__v"><span class="input">开</span></span></div>
+
+        <div class="grp">AI · 生封面图 <span class="mark mark--add">新用途</span></div>
+        <div class="field"><span class="field__l">服务商</span><span class="field__v field__v--new"><span class="input">智谱</span></span></div>
+        <div class="field"><span class="field__l">模型</span><span class="field__v field__v--new"><span class="input">glm-image</span> 约 28 秒/张</span></div>
         <div class="field"><span class="field__l">API Key</span><span class="field__v field__v--new"><span class="input">••••••••</span> 加密存库</span></div>
-        <div class="field"><span class="field__l">文案模型</span><span class="field__v field__v--new"><span class="input">glm-4-flash</span></span></div>
-        <div class="field"><span class="field__l">封面图模型</span><span class="field__v field__v--new"><span class="input">glm-image</span> 约 28 秒/张</span></div>
+        <div class="field"><span class="field__l">启用</span><span class="field__v field__v--new"><span class="input">开</span></span></div>
 
         <div class="grp">排期</div>
-        <div class="field"><span class="field__l">占位重试次数</span><span class="field__v"><span class="input">5</span></span></div>
         <div class="field"><span class="field__l">业务编号前缀</span><span class="field__v"><span class="input">CR</span></span></div>
 
       </div>
     </div>
     <div class="col__note">
-      <b>4 删：</b>每日接单上限 / 要求顾客确认 / 生产损耗率 / 排期往前找
+      <b>6 删：</b>每日接单上限 / 要求顾客确认 / 生产损耗率 / 排期往前找 /
+      <b>默认能量密度 / 默认工时</b>（这两个<b>只在配置里读写、没有任何业务使用</b>）/
+      占位重试次数（技术参数，见下）
       <br />
       <b>5 加：</b>售后窗口 7 天 / 免费 2 次 / 无理由退款口径 / 超时 48 小时 / 消息中心开关
       <br />
-      <b>整组新增：</b>AI 生成（服务商 / Key / 文案模型 / 封面模型）
+      <b>AI 拆两块：</b>写文案（DeepSeek V4.1 Flash）+ 生封面图（智谱 glm-image）
       <br /><br />
       <b>「生产损耗率」为什么删</b>：交付和 DIY 都不再展示采购量了，这个参数<b>只服务于 DIY 的参考线</b>，
       不该出现在定制配置里。
@@ -538,6 +543,54 @@
 </div>
 
 <!-- ================================================================ -->
+<h2>四之二、「占位重试次数」到底是什么 <span>老板问的第 3 条</span></h2>
+
+<div class="win" style="max-width:900px">
+  <div class="win__bar"><span class="win__dot"></span><span class="win__dot"></span><span class="win__dot"></span><span class="win__t">它不是业务配置，是并发兜底</span></div>
+  <div class="win__body">
+
+    <div class="sub" style="font-size:12.5px;line-height:1.9">
+      下单时，系统是这么排的（<code>custom-recipe.service.ts:203-232</code>）：
+    </div>
+
+    <div style="background:#F7F8FA;border-radius:8px;padding:13px 15px;margin:12px 0;font-size:12px;line-height:2;font-family:ui-monospace,Menlo,monospace">
+      循环（最多 <b>N</b> 次）:<br />
+      &nbsp;&nbsp;1. 找下一个还有空位的日子<br />
+      &nbsp;&nbsp;2. 尝试占住它<br />
+      &nbsp;&nbsp;3. <b>如果这时候正好被别人抢走了</b> → 本次不写订单，换一天再试<br />
+      <br />
+      循环 N 次都没抢到 → 报错「排期失败」
+    </div>
+
+    <div class="sub" style="font-size:12.5px;line-height:1.9">
+      <b>N 就是「占位重试次数」</b>（默认 5）。
+      <br /><br />
+      它防的是这种情况：<b>两个顾客同一秒下单，都想抢同一个名额</b>。
+      系统不会让两个人占同一天，输的那个换一天重试 —— 重试几次由 N 决定。
+    </div>
+
+    <div class="grp">为什么建议从配置页拿掉</div>
+    <table class="tbl">
+      <tr><th style="width:150px">理由</th><th>说明</th></tr>
+      <tr><td>它不是业务决策</td><td>改大改小都不影响"能做几份"，只影响"抢不到时多试几次"</td></tr>
+      <tr><td>调到很低会出事</td><td>如果设成 1，稍微有点并发，顾客就会看到"排期失败"</td></tr>
+      <tr><td>调到很高没意义</td><td>5 次已经足够（每次都换一天，不会死循环在同一天）</td></tr>
+    </table>
+
+    <div class="banner" style="margin-top:14px;border-color:#CFE3D5;background:#F7FBF8">
+      <div class="banner__t" style="color:#1D6034">建议</div>
+      <div style="font-size:12.5px;line-height:1.8;color:#2B2F36">
+        <b>从配置页拿掉，代码里写死 5。</b>
+        这类"技术兜底参数"放在业务配置里，只会让人误以为它跟产能有关。
+        <br /><br />
+        （同类还有：<b>业务编号前缀</b> —— 改它会导致订单号规则变化，
+        属于"一次设定就不再动"的东西，也不该天天摆在配置页上。）
+      </div>
+    </div>
+
+  </div>
+</div>
+
 <h2>五、后台四页的出口表 <span>按上一批立的规矩</span></h2>
 <table class="diff">
   <tr><th style="width:190px">可点元素</th><th style="width:330px">通向哪</th><th>现状</th></tr>
@@ -586,12 +639,19 @@
     <td>待交付按交付日期排（今天到期标红）；待售后按等了多久排（超 48 小时标红）</td></tr>
 
   <tr><td rowspan="3"><b>配置页</b></td>
-    <td class="del" style="font-weight:700">删 4 个</td><td>每日接单上限 / 要求顾客确认 / 生产损耗率 / 排期往前找</td>
-    <td>接单不限量、取消确认收货、不再给采购量、排期不设上限</td></tr>
+    <td class="del" style="font-weight:700">删 6 个</td>
+    <td>每日接单上限 / 要求顾客确认 / 生产损耗率 / 排期往前找 /
+      <b>默认能量密度 / 默认工时</b> / 占位重试次数</td>
+    <td>前四个是策略变了；<b>中间两个「只在配置里读写、没有任何业务使用」</b>；
+      最后一个是技术参数（建议写死 5）</td></tr>
   <tr><td class="new" style="font-weight:700">加 5 个</td><td>售后窗口 7 天 / 免费 2 次 / 无理由退款口径 / 超时 48 小时 / 消息中心开关</td>
     <td>现在售后配置<b>一个都没有</b></td></tr>
-  <tr><td class="new" style="font-weight:700">加一组</td><td>AI 生成（服务商 / Key / 文案模型 / 封面模型）</td>
-    <td>Key 加密存库，不写进配置文件</td></tr>
+  <tr><td class="new" style="font-weight:700">加两组</td>
+    <td>AI · 写文案（<b>DeepSeek V4.1 Flash</b>）<br />AI · 生封面图（<b>智谱 glm-image</b>）</td>
+    <td><b>架构已支持</b>：<code>AgentProviderConfig</code> 的 <code>purpose</code> 是自由字符串、
+      <code>unique(purpose, provider)</code> —— <b>加一种用途只需加一条记录，不用改表</b>。<br />
+      现有 4 条里已经有 <code>RECIPE_COPYWRITING</code>（写文案），只需改它的 model；
+      生图要新增一个 <code>RECIPE_COVER_IMAGE</code></td></tr>
 
   <tr><td rowspan="2"><b>排期日历</b></td>
     <td class="del" style="font-weight:700">删</td><td>「接单」维度</td>

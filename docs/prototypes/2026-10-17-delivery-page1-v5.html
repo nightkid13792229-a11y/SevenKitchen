@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>交付物第 1 页 · 原型 v5（2026-10-17）</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: #FAF7F2; color: #3F3222; padding: 26px 22px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: 22px; margin-bottom: 6px; }
+  h2 { font-size: 17px; margin: 42px 0 6px; padding-top: 12px; border-top: 2px solid #E4D8C8; }
+  h2 span { font-size: 12.5px; font-weight: 400; color: #8A7A66; margin-left: 8px; }
+  .sub { font-size: 12.5px; color: #6E5F4B; line-height: 1.8; max-width: 1400px; }
+  .sub b { color: #3F3222; }
+  code { background: #F0E6D8; padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+
+  .row { display: flex; gap: 18px; overflow-x: auto; padding: 14px 0 20px; align-items: flex-start; }
+  .col { width: 372px; flex: 0 0 372px; }
+  .col__head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12.5px; font-weight: 700; }
+  .col__tag { font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+  .tag--main { background: #FBE7C0; color: #8a5a00; }
+  .tag--alt { background: #E3F0E6; color: #1e5b35; }
+  .col__note { font-size: 11.5px; color: #8A7A66; line-height: 1.75; margin-top: 8px; }
+  .col__note b { color: #b4453a; }
+
+  .phone {
+    width: 372px; background: #FAF7F2; border: 1px solid #EDE0D0;
+    border-radius: 20px; overflow: hidden;
+    box-shadow: 0 6px 24px rgba(74,55,38,.06);
+  }
+  .navbar { height: 42px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: #FAF7F2; }
+  .navbar__back { font-size: 16px; color: #6E5F4B; }
+  .navbar__t { font-size: 13.5px; font-weight: 600; }
+  .body { padding: 0 10px 14px; }
+
+  /* ① 封面 */
+  .cover {
+    position: relative; height: 190px; border-radius: 15px; overflow: hidden;
+    margin-bottom: 11px; display: flex; align-items: flex-end;
+    background:
+      radial-gradient(circle at 26% 22%, rgba(255,236,190,.85), rgba(255,236,190,0) 42%),
+      radial-gradient(circle at 74% 30%, rgba(214,160,80,.9), rgba(214,160,80,0) 45%),
+      radial-gradient(circle at 48% 74%, rgba(150,88,40,.95), rgba(150,88,40,0) 55%),
+      linear-gradient(150deg, #d9a556, #8a5424 62%, #5c3616);
+  }
+  .cover--fallback {
+    background: linear-gradient(145deg, #24483a, #16261f 62%, #0e1a15);
+  }
+  .cover__scrim {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(20,14,8,0) 38%, rgba(20,14,8,.82) 100%);
+  }
+  .cover__txt { position: relative; padding: 14px 15px; width: 100%; color: #fff; }
+  .cover__name { font-size: 20px; font-weight: 800; letter-spacing: .3px; text-shadow: 0 1px 6px rgba(0,0,0,.35); }
+  .cover__for { font-size: 12.5px; color: rgba(255,255,255,.88); margin-top: 6px; }
+  .cover__facts { font-size: 11px; color: rgba(255,255,255,.62); margin-top: 3px; }
+  .cover__cap {
+    position: absolute; top: 11px; left: 12px; font-size: 9.5px;
+    background: rgba(0,0,0,.34); color: rgba(255,255,255,.9);
+    border-radius: 999px; padding: 3px 9px; backdrop-filter: blur(4px);
+  }
+  .cover__cap--warn { background: rgba(180,69,58,.82); }
+
+  /* ② 一句话 */
+  .oneline {
+    background: #FFF8EC; border: 1.5px solid #E8C88A; border-radius: 13px;
+    padding: 12px 13px; margin-bottom: 11px;
+  }
+  .oneline__lead { font-size: 10.5px; color: #8a5a00; font-weight: 700; margin-bottom: 5px; }
+  .oneline__t { font-size: 13.5px; line-height: 1.65; color: #3F3222; }
+
+  /* 区块 */
+  .sec { margin-bottom: 13px; }
+  .sec__t { font-size: 12.5px; font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; }
+  .sec__t em { font-style: normal; margin-left: auto; font-size: 10.5px; font-weight: 400; color: #A9967E; }
+
+  /* ③ 核心营养 */
+  .std { font-size: 11.5px; color: #1e5b35; background: #F2F8F4; border-radius: 8px; padding: 6px 9px; margin-bottom: 9px; }
+  .nutri { display: flex; gap: 7px; margin-bottom: 7px; }
+  .nutri__c { flex: 1; background: #FBF8F3; border-radius: 10px; padding: 9px 6px; text-align: center; }
+  .nutri__v { font-size: 17px; font-weight: 800; color: #B45309; }
+  .nutri__l { font-size: 9.5px; color: #9C8B76; margin-top: 2px; }
+  .nutri__row { font-size: 11px; color: #6E5F4B; line-height: 1.9; }
+  .nutri__row b { color: #3F3222; }
+
+  /* ④ 食材表 */
+  .thead { display: flex; font-size: 10.5px; color: #A9967E; padding: 0 2px 6px; border-bottom: 1px solid #F0E6D8; }
+  .thead__n { flex: 1; }
+  .thead__r { width: 62px; text-align: right; }
+  .item { display: flex; align-items: center; font-size: 12.5px; padding: 9px 2px; border-bottom: 1px dashed #F4EBE0; }
+  .item:last-child { border-bottom: 0; }
+  .item__n { flex: 1; }
+  .item__r { width: 62px; text-align: right; font-weight: 700; color: #B45309; }
+
+  /* ⑤ 营养素表（独立底色） */
+  .supp { background: #F4F7F5; border-radius: 12px; padding: 11px 12px; }
+  .supp__h { display: flex; align-items: center; margin-bottom: 7px; }
+  .supp__t { font-size: 12px; font-weight: 700; color: #1e5b35; }
+  .supp__c { margin-left: auto; font-size: 10px; color: #7C9A88; }
+  .supp__item { display: flex; font-size: 12px; padding: 6px 0; border-bottom: 1px dashed #DFE9E3; }
+  .supp__item:last-child { border-bottom: 0; }
+  .supp__n { flex: 1; }
+  .supp__v { color: #1e5b35; font-weight: 700; font-size: 11.5px; }
+
+  .btn { text-align: center; font-size: 12.5px; font-weight: 700; padding: 11px 0; border-radius: 11px; background: #fff; color: #B45309; border: 1.5px solid #E5C9A3; margin-top: 12px; }
+
+  /* 第 2 页 */
+  .grid3 { display: flex; gap: 7px; }
+  .cell { flex: 1; background: #FBF8F3; border-radius: 10px; padding: 9px 6px; text-align: center; }
+  .cell--edit { border: 1.5px dashed #B9D8C2; background: #F7FBF8; }
+  .cell__v { font-size: 18px; font-weight: 800; color: #B45309; }
+  .cell__u { font-size: 9.5px; color: #9C8B76; margin-top: 2px; }
+  .hint { font-size: 10.5px; color: #9C8B76; line-height: 1.6; margin-top: 7px; }
+  .hint--good { color: #1e5b35; }
+  .note-box { background: #F7FBF8; border: 1.5px dashed #B9D8C2; border-radius: 11px; padding: 10px 12px; }
+
+  .banner { background: #FFF8EC; border: 2px solid #E8C88A; border-radius: 12px; padding: 14px 16px; max-width: 1400px; margin: 16px 0 8px; }
+  .banner__t { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+  .banner ol { margin: 0; padding-left: 20px; font-size: 12.5px; line-height: 1.9; color: #6E5F4B; }
+  .banner b { color: #3F3222; }
+
+  table.diff { margin: 10px 0 0; border-collapse: collapse; font-size: 12.5px; background: #fff; max-width: 1400px; width: 100%; }
+  table.diff th, table.diff td { text-align: left; padding: 8px 10px; border-top: 1px solid #F0E6D8; vertical-align: top; }
+  table.diff th { background: #FBF5EC; font-weight: 600; border-top: 0; }
+  .del { color: #b4453a; }
+  .new { color: #1e5b35; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>交付物 · 第 1 页原型 v5</h1>
+<div class="sub">
+  2026-10-17 ｜ 按你第 3 轮 7 条意见重画 ｜ 对应需求 <code>2026-10-17-custom-recipe-requirements-v2.md</code> § 2.4<br />
+  <b>本版只画原型和文档，不动代码。</b>
+</div>
+
+<div class="banner" style="margin-top:18px">
+  <div class="banner__t">7 条怎么落进页面的</div>
+  <ol>
+    <li><b>封面缺失不留空</b>：用品牌深色渐变块，<b>文字位置完全不变</b>，不显示"暂无封面"。</li>
+    <li><b>食谱名 + 为谁定制 + 品种年龄体重，全部融进封面</b>（原来各占一块）。</li>
+    <li><b>卖点和营养结论合成一句</b>。</li>
+    <li><b>营养背书和核心营养合成一块</b>（标准作为数值的眉注）。</li>
+    <li><b>原料拆成两块</b>：食材表（名称+占比）／营养素表（名称+补充浓度，独立底色）。</li>
+    <li><b>文案全量精简</b>（见页面上的绿字标注）。</li>
+    <li>这一页<b>不含喂食量、不含制备方法、不含采购量</b>。</li>
+  </ol>
+</div>
+
+<!-- ================================================================ -->
+<h2>一、第 1 页（主场景） <span>有封面时</span></h2>
+
+<div class="row">
+
+  <div class="col">
+    <div class="col__head"><span>专属食谱</span><span class="col__tag tag--main">有封面</span></div>
+    <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">专属食谱</span></div>
+      <div class="body">
+
+        <!-- ① 封面 -->
+        <div class="cover">
+          <div class="cover__scrim"></div>
+          <span class="cover__cap">第 1 版 · 10-17 交付</span>
+          <div class="cover__txt">
+            <div class="cover__name">低脂鸡肉南瓜餐</div>
+            <div class="cover__for">为 豆豆 定制</div>
+            <div class="cover__facts">柯基 · 3 岁 · 11.2kg</div>
+          </div>
+        </div>
+
+        <!-- ② 一句话 -->
+        <div class="oneline">
+          <div class="oneline__lead">一句话看懂这份食谱</div>
+          <div class="oneline__t">
+            为控体重设计：脂肪只有 9%，蛋白质 32% 足够，钙磷比 1.2:1 在安全范围。
+          </div>
+        </div>
+
+        <!-- ③ 核心营养 -->
+        <div class="sec">
+          <div class="sec__t">营养成分</div>
+          <div class="std">✓ 符合 FEDIAF 犬营养标准（2018）</div>
+          <div class="nutri">
+            <div class="nutri__c"><div class="nutri__v">32%</div><div class="nutri__l">蛋白质</div></div>
+            <div class="nutri__c"><div class="nutri__v">9%</div><div class="nutri__l">脂肪</div></div>
+            <div class="nutri__c"><div class="nutri__v">1.2</div><div class="nutri__l">钙磷比</div></div>
+          </div>
+          <div class="nutri__row">
+            灰分 <b>6%</b> · 水分 <b>68%</b> · 纤维 <b>3%</b> · 碳水 <b>22%</b><br />
+            能量密度 <b>1.2 kcal/g</b>
+          </div>
+        </div>
+
+        <!-- ④ 食材 -->
+        <div class="sec">
+          <div class="sec__t">食材 <em>4 种</em></div>
+          <div class="thead"><span class="thead__n">食材</span><span class="thead__r">占比</span></div>
+          <div class="item"><span class="item__n">鸡胸肉</span><span class="item__r">40%</span></div>
+          <div class="item"><span class="item__n">南瓜</span><span class="item__r">25%</span></div>
+          <div class="item"><span class="item__n">糙米</span><span class="item__r">25%</span></div>
+          <div class="item"><span class="item__n">西兰花</span><span class="item__r">10%</span></div>
+        </div>
+
+        <!-- ⑤ 营养素 -->
+        <div class="sec">
+          <div class="supp">
+            <div class="supp__h">
+              <span class="supp__t">需要补充的营养素</span>
+              <span class="supp__c">3 种</span>
+            </div>
+            <div class="supp__item"><span class="supp__n">钙粉</span><span class="supp__v">每 kg 5g</span></div>
+            <div class="supp__item"><span class="supp__n">鱼油</span><span class="supp__v">每 kg 2g</span></div>
+            <div class="supp__item"><span class="supp__n">维生素 E</span><span class="supp__v">每 kg 0.3g</span></div>
+          </div>
+        </div>
+
+        <div class="btn">查看完整营养报告 ›</div>
+
+      </div>
+    </div>
+    <div class="col__note">
+      从上到下一次是：<b>长什么样 → 一句话说清是干嘛的 → 营养够不够 → 有哪些食材 → 还要补什么</b>。
+      <br /><br />
+      顾客在这一页只做一件事：确认"这就是我要的那份"。
+    </div>
+  </div>
+
+  <!-- 封面缺失 -->
+  <div class="col">
+    <div class="col__head"><span>同一页 · 封面还没生成</span><span class="col__tag tag--alt">兜底</span></div>
+    <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">专属食谱</span></div>
+      <div class="body">
+
+        <div class="cover cover--fallback">
+          <div class="cover__scrim"></div>
+          <span class="cover__cap cover__cap--warn">封面生成中</span>
+          <div class="cover__txt">
+            <div class="cover__name">低脂鸡肉南瓜餐</div>
+            <div class="cover__for">为 豆豆 定制</div>
+            <div class="cover__facts">柯基 · 3 岁 · 11.2kg</div>
+          </div>
+        </div>
+
+        <div class="oneline">
+          <div class="oneline__lead">一句话看懂这份食谱</div>
+          <div class="oneline__t">
+            为控体重设计：脂肪只有 9%，蛋白质 32% 足够，钙磷比 1.2:1 在安全范围。
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">营养成分</div>
+          <div class="std">✓ 符合 FEDIAF 犬营养标准（2018）</div>
+          <div class="nutri">
+            <div class="nutri__c"><div class="nutri__v">32%</div><div class="nutri__l">蛋白质</div></div>
+            <div class="nutri__c"><div class="nutri__v">9%</div><div class="nutri__l">脂肪</div></div>
+            <div class="nutri__c"><div class="nutri__v">1.2</div><div class="nutri__l">钙磷比</div></div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">食材 <em>4 种</em></div>
+          <div class="thead"><span class="thead__n">食材</span><span class="thead__r">占比</span></div>
+          <div class="item"><span class="item__n">鸡胸肉</span><span class="item__r">40%</span></div>
+          <div class="item"><span class="item__n">南瓜</span><span class="item__r">25%</span></div>
+        </div>
+
+      </div>
+    </div>
+    <div class="col__note">
+      <b>关键点：整页布局一点不位移</b> —— 只有封面那块从"照片"换成"品牌色块"。
+      <br /><br />
+      <b>不写"暂无封面"</b>，也不留灰占位框 —— 那会让顾客以为这东西没做完。
+      右上角小字「封面生成中」是可选的，你觉得多余可以去掉。
+    </div>
+  </div>
+
+  <!-- 第 2 页 -->
+  <div class="col">
+    <div class="col__head"><span>第 2 页 · 采购与制作</span><span class="col__tag tag--main">配套改动</span></div>
+    <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">采购与制作</span></div>
+      <div class="body">
+
+        <div class="sec" style="margin-top:11px">
+          <div class="sec__t">每天怎么喂 <em>营养师参考值，可改</em></div>
+          <div class="grid3">
+            <div class="cell cell--edit"><div class="cell__v">320</div><div class="cell__u">克 / 天 ✎</div></div>
+            <div class="cell cell--edit"><div class="cell__v">2</div><div class="cell__u">餐 / 天 ✎</div></div>
+            <div class="cell"><div class="cell__v">160</div><div class="cell__u">克 / 餐</div></div>
+          </div>
+          <div class="hint">改了以后，下面的用量会重新算。</div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">这次做多少</div>
+          <div class="grid3">
+            <div class="cell cell--edit"><div class="cell__v">14</div><div class="cell__u">天 ✎</div></div>
+            <div class="cell"><div class="cell__v">4480</div><div class="cell__u">克 总净重</div></div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">每种食材要用多少 <em>净用量</em></div>
+          <div class="thead"><span class="thead__n">食材</span><span class="thead__r">要用</span></div>
+          <div class="item"><span class="item__n">鸡胸肉</span><span class="item__r">1600</span></div>
+          <div class="item"><span class="item__n">南瓜</span><span class="item__r">1000</span></div>
+          <div class="item"><span class="item__n">糙米</span><span class="item__r">1000</span></div>
+          <div class="item"><span class="item__n">西兰花</span><span class="item__r">400</span></div>
+          <div class="hint hint--good">
+            只给"这次要用多少"。买多少你自己判断。
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">补剂</div>
+          <div class="supp">
+            <div class="supp__item"><span class="supp__n">钙粉 · 需 22g</span><span class="supp__v">去买 ›</span></div>
+            <div class="supp__item"><span class="supp__n">鱼油 · 需 9g</span><span class="supp__v">去买 ›</span></div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">怎么做</div>
+          <div class="hint" style="margin-top:0">
+            1. 鸡胸肉切块，蒸 15 分钟<br />
+            2. 南瓜去皮，蒸 12 分钟<br />
+            3. 糙米煮 25 分钟<br />
+            4. 全部拌在一起，分装
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">怎么存</div>
+          <div class="hint" style="margin-top:0">
+            真空分装：-18℃ 冷冻 6 个月，0–4℃ 冷藏 3 天。
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">喂食提醒</div>
+          <div class="hint" style="margin-top:0">
+            换粮请用 7 天过渡：第 1 周按 7:3 混原来的粮，逐周调整比例。
+          </div>
+        </div>
+
+        <div class="btn">保存长图（带小程序二维码）</div>
+
+      </div>
+    </div>
+    <div class="col__note">
+      <b>没有采购量、没有损耗率、没有"建议采购合计"。</b>
+      只给"这次要用多少"。
+      <br /><br />
+      喂食量和天数都标了 ✎ —— 顾客能改，改完用量重算。
+    </div>
+  </div>
+
+</div>
+
+<!-- ================================================================ -->
+<h2>二、文案对照 <span>这轮又精简了这些</span></h2>
+<table class="diff">
+  <tr><th style="width:300px">改之前</th><th style="width:280px">改之后</th><th>为什么</th></tr>
+  <tr>
+    <td class="del">单独一块「食谱名」+ 单独一块「适用狗狗」</td>
+    <td class="new">全部融进封面</td>
+    <td>顾客第一眼看的是"这食谱长什么样、是不是给我的"，分成两块反而要来回看</td>
+  </tr>
+  <tr>
+    <td class="del">卖点：低脂高蛋白，帮它慢慢瘦下来<br />结论：蛋白质充足、脂肪偏低，适合需要控体重的成犬；钙磷比 1.2:1，在安全范围内</td>
+    <td class="new">为控体重设计：脂肪只有 9%，蛋白质 32% 足够，钙磷比 1.2:1 在安全范围。</td>
+    <td>两句说的是同一件事，合成一句既省地方又更好懂</td>
+  </tr>
+  <tr>
+    <td class="del">「营养背书」一块 + 「核心营养」一块</td>
+    <td class="new">一块，标准当眉注</td>
+    <td>标准本来就是"这些数字对照的标准"，分开写等于让顾客自己连线</td>
+  </tr>
+  <tr>
+    <td class="del">食材配比（含制备方法、占比）</td>
+    <td class="new">食材表只给名称 + 占比</td>
+    <td>第 1 页是"有哪些食材"，制备方法属于第 2 页的"怎么做"</td>
+  </tr>
+  <tr>
+    <td class="del">营养补充剂（混在食材里）</td>
+    <td class="new">独立一块「需要补充的营养素」，只给名称 + 补充浓度</td>
+    <td>食材和营养素是两回事，混在一起顾客分不清哪些能吃、哪些是补的</td>
+  </tr>
+  <tr>
+    <td class="del">第 1 页顶部「每天怎么喂」三个大字</td>
+    <td class="new">移到第 2 页</td>
+    <td>第 1 页判断"要不要"，第 2 页才动手"怎么做"</td>
+  </tr>
+  <tr>
+    <td class="del">第 2 页「要买什么（含损耗余量）」+ 建议采购合计 + 7% 说明</td>
+    <td class="new">每种食材要用多少（净用量）</td>
+    <td>付费交付不能拿估算的损耗率当严格信息</td>
+  </tr>
+</table>
+
+<!-- ================================================================ -->
+<h2>三、还需要你定的 <span>我没敢自己拍</span></h2>
+<table class="diff">
+  <tr><th style="width:250px">待定</th><th>说明</th></tr>
+  <tr>
+    <td>封面缺失时，要不要显示「封面生成中」这个小标</td>
+    <td>我画了。好处是顾客知道以后会有图；坏处是他可能觉得"还没做完，我等会儿再来"。
+      要留还是删？</td>
+  </tr>
+  <tr>
+    <td>「一句话」前面那个小标题要不要</td>
+    <td>我写了「一句话看懂这份食谱」。要不要直接就是那句话，不加小标题？</td>
+  </tr>
+  <tr>
+    <td>营养素那一块，浓度用什么单位</td>
+    <td>我按「每 kg 5g」写（跟第 2 页的补剂用量对得上）。也可以写成"占食谱的 0.5%"。</td>
+  </tr>
+  <tr>
+    <td>第 2 页的「喂食提醒」要不要更具体</td>
+    <td>现在只有换粮过渡一条。要不要加"吃不完要冷藏""观察便便"这类？</td>
+  </tr>
+</table>
+
+</body>
+</html>

@@ -6,6 +6,8 @@ import {
 import { CustomRecipeStatus } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { CustomRecipeConfigService } from './custom-recipe-config.service';
+import { Optional } from '@nestjs/common';
+import { CustomerMessageService } from '../message/customer-message.service';
 import { calculateDailyIntakeG } from '../../domain/dog/dog-calc.service';
 import {
   assertTransition,
@@ -52,6 +54,14 @@ export class CustomRecipeDeliveryService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: CustomRecipeConfigService,
+    /**
+     * 站内消息（2026-10-18）。
+     *
+     * 放**参数表最后**并 @Optional：既有测试按位置调用构造函数，
+     * 插在中间会让它们全部错位（这个坑在本文件里踩过一次）。
+     */
+    @Optional()
+    private readonly customerMessages?: CustomerMessageService,
   ) {}
 
   /**
@@ -130,7 +140,7 @@ export class CustomRecipeDeliveryService {
       hasNutritionReport: snapshot.nutrition.energyDensityKcalPerKg !== null,
     });
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       /** 版本号 = 该订单已有交付数 + 1；唯一索引兜底防并发重号 */
       const existingCount = await tx.customRecipeDelivery.count({
         where: { orderId: order.id },
@@ -190,9 +200,47 @@ export class CustomRecipeDeliveryService {
         redelivered,
         deliveryId: delivery.id,
         autoCompleteAt,
+        customerId: order.customerId,
         itemCodes: deliveryItems.map((item) => item.code),
       };
     });
+
+    /**
+     * 站内消息（2026-10-18 加）。
+     *
+     * ## 为什么在这时候发
+     *
+     * 交付是顾客最需要知道的一件事 —— 而且顾客不一定点了订阅消息的"允许"，
+     * 那时候订阅消息根本发不出去，且**失败不报错**。
+     * 站内消息是唯一"一定送得到"的渠道。
+     *
+     * ## 为什么在事务**外面**发
+     *
+     * 消息写失败不该回滚已经完成的交付 —— 食谱已经交出去了，
+     * 因为一条通知没写成功就把交易回滚，是本末倒置。
+     * `CustomerMessageService.send` 内部已经吞掉异常并打日志。
+     *
+     * ## 为什么正文不写食谱名之外的细节
+     *
+     * 消息只存"一句摘要 + 一个指针"，点进去现查。
+     * 存副本的话，重新交付之后旧消息会跟实际不一致。
+     */
+    await this.customerMessages
+      ?.send({
+        customerId: result.customerId,
+        category: 'DELIVERY',
+        title:
+          result.version > 1
+            ? `你的专属食谱已重新交付（第 ${result.version} 版）`
+            : '你的专属食谱已交付',
+        body: `${result.recipeName} 已交付，点开看完整食谱。`,
+        linkType: 'DELIVERY',
+        // 指向**订单**而不是交付记录：重新交付后顾客仍应落到最新那版
+        linkId: result.orderId,
+      })
+      .catch(() => false);
+
+    return result;
   }
 
   /**

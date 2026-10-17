@@ -207,6 +207,7 @@ model User {
   password                String?              @map("password") @db.VarChar(255)
   addresses               Address[]
   customRecipeOrders      CustomRecipeOrder[]  @relation("CustomRecipeOrderCustomer")
+  customerMessages        CustomerMessage[]    @relation("CustomerMessage")
   diySheets               DIYSheet[]
   dogs                    Dog[]
   favoriteRecipes         FavoriteRecipe[]
@@ -4330,4 +4331,44 @@ model SupplementOrderItem {
 
   @@index([orderId])
   @@map("supplement_order_item")
+}
+
+/// 站内消息（2026-10-18 · 老板定）
+///
+/// ## 为什么要有它
+///
+/// 微信订阅消息**顾客没点"允许"就发不出去**，而且失败不报错。
+/// 站内消息是唯一"一定送得到"的渠道 —— 两个都要，互为兜底。
+///
+/// ## 为什么不做成"每个业务一张表"
+///
+/// 交付通知、售后结果、物流更新、系统公告看起来各不相干，
+/// 但对顾客来说都是"我的消息"，混在一个列表里按时间排才是他要的。
+/// 所以用 `category` 分类、`linkType` + `linkId` 指向业务对象 ——
+/// **消息本身不存业务内容，只存一句摘要 + 一个指针**。
+model CustomerMessage {
+  id         String  @id @default(uuid()) @map("id")
+  customerId String  @map("customer_id")
+  customer   User    @relation("CustomerMessage", fields: [customerId], references: [id], onDelete: Cascade)
+
+  /// 分类：DELIVERY / AFTERSALE / SHIPPING / SYSTEM
+  /// 决定图标与"全部 / 交付 / 售后 / 物流"四档筛选
+  category String @db.VarChar(32)
+
+  title String @db.VarChar(120)
+  body  String @db.VarChar(500)
+
+  /// 点进去到哪：DELIVERY / AFTERSALE / ORDER / SHIPPING / NONE
+  linkType String? @map("link_type") @db.VarChar(32)
+  linkId   String? @map("link_id") @db.VarChar(64)
+
+  /// 已读时间；null = 未读
+  readAt DateTime? @map("read_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  /// 列表按"谁 + 时间倒序"查；未读数也走这个索引
+  @@index([customerId, createdAt])
+  @@index([customerId, readAt])
+  @@map("customer_message")
 }

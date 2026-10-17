@@ -44,6 +44,8 @@ import { StaffProductionController } from './interfaces/controllers/staff-produc
 import { CustomRecipeController, PublicCustomRecipeConfigController } from './interfaces/controllers/custom-recipe/custom-recipe.controller';
 import { AdminCustomRecipeController } from './interfaces/controllers/custom-recipe/admin-custom-recipe.controller';
 import { PlatformOptionsController } from './interfaces/controllers/platform-options.controller';
+import { CustomerMessageController } from './interfaces/controllers/customer-message.controller';
+import { CustomerMessageService } from './application/message/customer-message.service';
 import { AdminPlatformOptionsController } from './interfaces/controllers/admin-platform-options.controller';
 import { PlatformOptionsService } from './application/platform-options/platform-options.service';
 import { CustomRecipeViewService } from './application/custom-recipe/custom-recipe-view.service';
@@ -329,6 +331,7 @@ validatePrismaConfig();
     LabelModule,
   ],
   controllers: [
+    CustomerMessageController,
     PlatformOptionsController,
     AdminPlatformOptionsController,
     DogsController,
@@ -420,6 +423,7 @@ validatePrismaConfig();
       : []),
   ],
   providers: [
+    CustomerMessageService,
     PlatformOptionsService,
     CustomRecipeViewService,
     CustomRecipeDeliveryService,

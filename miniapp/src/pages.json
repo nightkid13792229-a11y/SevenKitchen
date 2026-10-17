@@ -276,6 +276,13 @@
         "navigationBarTitleText": "采购与制作",
         "enablePullDownRefresh": true
       }
+    },
+    {
+      "path": "pages/messages/index",
+      "style": {
+        "navigationBarTitleText": "消息",
+        "enablePullDownRefresh": true
+      }
     }
   ],
   "subPackages": [

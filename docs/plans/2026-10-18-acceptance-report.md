@@ -161,3 +161,30 @@ GET /api/v1/messages    → HTTP 401
 |---|---|---|
 | `selling_point_200` | `VARCHAR(120) → 200` | **只是放宽**。PostgreSQL 里改 varchar 宽度是**元数据操作**，不重写表、不锁表、不丢数据 |
 | `customer_message` | `CREATE TABLE` + 2 索引 | **纯新增**，不动任何已有表 |
+
+### 上线后日志检查
+
+**部署前（03:04 / 03:06）** 有两条 `Cannot GET /api/v1/messages/unread-count` —— 是 404。
+那是因为**新代码还没上线**（旧进程 `1311574` 里没有这个路由）。
+
+**部署后（03:12 起，新进程 `1683440`）**：只有一条 `Unauthorized`，
+是我自己的验证 curl（未带 token，401 是预期）。
+
+### 路由注册的决定性验证
+
+```
+GET /api/v1/messages              → 401
+GET /api/v1/messages/unread-count → 401
+GET /api/v1/messages/nonexistent  → 404
+```
+
+**401 vs 404 就是"路由在不在"的判据**：
+前两个存在（被 `AuthGuard` 拦），第三个不存在。
+
+**结论：消息中心的后端已上线且可用。**
+
+### 一个观察（值得记）
+
+部署前那两条 404 说明：**小程序端已经在调这个接口了，但后端还没有**。
+这正是"先发前端、后发后端"会出现的窗口期 —— 好在是 404（静默失败），
+不是数据错乱。`fetchUnreadMessageCount` 内部 catch 后返回 0，红点不显示而已，不影响顾客。

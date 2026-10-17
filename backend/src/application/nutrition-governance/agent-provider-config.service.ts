@@ -192,6 +192,69 @@ export class AgentProviderConfigService {
   }
 
   /**
+   * 通用 provider 运行时配置（2026-10-18）。
+   *
+   * ## 为什么要有它
+   *
+   * 原有的 `getEnabledDeepSeekRuntimeConfig` **写死** `provider: 'DEEPSEEK'`，
+   * 而且取不到时会**回退到全局默认**（一个纯文本模型）。
+   * 生图用途（`RECIPE_COVER_IMAGE` / provider = ZHIPU）用不了它：
+   * 回退到 DeepSeek 的文本模型，请求必然失败，而且报错信息会骗人。
+   *
+   * ## 与 DeepSeek 版的区别
+   *
+   * **不回退**。指定的 `purpose` 没配就是没配，直接报清楚 —— 
+   * 让管理员去后台把它配上，而不是偷偷用一个不相干的模型顶上。
+   */
+  async getEnabledProviderRuntimeConfig(input: {
+    purpose: string;
+    provider: string;
+  }): Promise<{
+    provider: string;
+    baseUrl: string;
+    model: string;
+    apiKey: string;
+    maxConcurrency: number;
+    requestTimeoutMs: number;
+    retryCount: number;
+  }> {
+    const config = await this.prisma.agentProviderConfig.findUnique({
+      where: {
+        purpose_provider: {
+          purpose: input.purpose,
+          provider: input.provider,
+        },
+      },
+    });
+
+    if (!config) {
+      throw new BadRequestException(
+        `${input.provider} 的「${input.purpose}」用法还没配置，请到后台 AI 设置里添加`,
+      );
+    }
+    if (!config.enabled) {
+      throw new BadRequestException(
+        `${input.provider} 的「${input.purpose}」用法未启用`,
+      );
+    }
+    if (!config.apiKeyEncrypted) {
+      throw new BadRequestException(
+        `${input.provider} 的 API Key 未配置`,
+      );
+    }
+
+    return {
+      provider: config.provider,
+      baseUrl: config.baseUrl,
+      model: config.model,
+      apiKey: this.decryptApiKey(config.apiKeyEncrypted),
+      maxConcurrency: config.maxConcurrency,
+      requestTimeoutMs: config.requestTimeoutMs,
+      retryCount: config.retryCount,
+    };
+  }
+
+  /**
    * 只在该用途**确实单独配过**（有自己的行、且已启用）时返回它的模型。
    *
    * 为什么不直接用 getEnabledDeepSeekRuntimeConfig：那个会回退到全局默认，

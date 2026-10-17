@@ -410,6 +410,8 @@ export class CustomRecipeDeliveryService {
         item.ratioPercent === null ? null : Number(item.ratioPercent),
       weightG:
         item.exampleWeight === null ? null : Number(item.exampleWeight),
+      // 枚举原样透传，不在这一层压缩成布尔 —— 压成布尔会丢掉 PACKAGING
+      ingredientType: item.ingredient?.type ?? null,
       isSupplement: item.ingredient?.type === 'SUPPLEMENT',
     }));
 

@@ -196,8 +196,22 @@ const content = computed(
 );
 
 /** 食材与补充剂分开渲染（补充剂单独一块，不与食材混） */
+/**
+ * 食材 = `ingredientType === 'FOOD'`。
+ *
+ * ⚠️ 2026-10-17 修的真实缺陷：这里原来是 `filter(item => !item.isSupplement)`。
+ * 但 `IngredientType` 有三个值（FOOD / SUPPLEMENT / **PACKAGING**），
+ * 布尔只有两种状态 —— **包材被归进"非补剂"，于是当成食材列了出来**。
+ *
+ * 旧交付快照里没有 `ingredientType`（只有 `isSupplement`），
+ * 所以留一个回退：没有新字段时按旧逻辑走，不至于让历史交付变成空白。
+ */
 const foodItems = computed(() =>
-  (content.value.recipe.items || []).filter((item) => !item.isSupplement),
+  (content.value.recipe.items || []).filter((item) =>
+    item.ingredientType
+      ? item.ingredientType === 'FOOD'
+      : !item.isSupplement,
+  ),
 );
 const supplementItems = computed(() =>
   (content.value.recipe.items || []).filter((item) => item.isSupplement),

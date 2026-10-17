@@ -282,6 +282,62 @@ describe('CustomRecipeDeliveryService', () => {
       expect(snapshot.supplements[0].name).toBe('鱼油');
       expect(snapshot.supplements[0].timing).toBe('出锅前拌入');
     });
+
+    /**
+     * 2026-10-17 修的真实缺陷。
+     *
+     * ## bug 是怎么发生的
+     *
+     * `IngredientType` 枚举有**三个**值：`FOOD` / `SUPPLEMENT` / `PACKAGING`。
+     * 快照原来只记一个布尔 `isSupplement`（`type === 'SUPPLEMENT'`）。
+     *
+     * 布尔只有两种状态 —— **`PACKAGING`（包材）被归进了"非补剂"**，
+     * 于是小程序交付页 `filter(item => !item.isSupplement)` 把包材当成了食材，
+     * 顾客会在「食材」清单里看到包装袋。
+     *
+     * ## 修法
+     *
+     * 快照里**把枚举原样带下去**（`ingredientType`），前端才能区分三种。
+     */
+    it('★ 包材不能被当成食材：快照要带原始枚举，不能只给布尔', async () => {
+      const { service, txProxy } = createService({
+        recipe: buildRecipe({
+          items: [
+            {
+              ratioPercent: 100,
+              exampleWeight: 500,
+              preparationMethod: '切丁煮熟',
+              ingredient: { name: '鸡胸肉', type: 'FOOD' },
+            },
+            {
+              ratioPercent: null,
+              exampleWeight: null,
+              preparationMethod: null,
+              ingredient: { name: '真空袋', type: 'PACKAGING' },
+            },
+          ],
+        }),
+      });
+
+      await service.deliver({
+        orderIdOrId: 'CR202610160001',
+        recipeIdOrBizId: 'CR1759000000000',
+        deliveredBy: 'admin-1',
+      });
+
+      const snapshot = (txProxy.customRecipeDelivery.create as jest.Mock).mock
+        .calls[0][0].data.contentSnapshot;
+      const byName = (name: string) =>
+        snapshot.recipe.items.find((item: any) => item.name === name);
+
+      // 三种类型各自保留原值 —— 这是前端能正确分组的前提
+      expect(byName('鸡胸肉').ingredientType).toBe('FOOD');
+      expect(byName('真空袋').ingredientType).toBe('PACKAGING');
+
+      // 而且能看出：只靠布尔根本分不开 FOOD 和 PACKAGING
+      expect(byName('鸡胸肉').isSupplement).toBe(false);
+      expect(byName('真空袋').isSupplement).toBe(false);
+    });
   });
 
   describe('★ 隐私边界（2026-09-28 专门修过，不能再犯）', () => {

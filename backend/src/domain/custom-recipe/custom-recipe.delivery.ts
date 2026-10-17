@@ -48,7 +48,17 @@ export interface SnapshotRecipeItem {
   /** 占比，如 32（表示 32%） */
   ratioPercent?: number | null;
   weightG?: number | null;
-  /** 是不是营养补充剂（补充剂单列一块，不和食材混） */
+  /**
+   * 原料类型，照抄 `IngredientType` 枚举：`FOOD` / `SUPPLEMENT` / `PACKAGING`。
+   *
+   * ⚠️ 为什么不能只用 `isSupplement`（2026-10-17 修的真实缺陷）：
+   * 布尔只有两种状态，而枚举有**三种**。`PACKAGING`（包材）被压进
+   * "非补剂"那一类，于是交付页 `filter(!isSupplement)` 会把包材当成食材列出来。
+   *
+   * 判断"是食材"必须用 `ingredientType === 'FOOD'`，不是 `!isSupplement`。
+   */
+  ingredientType?: string | null;
+  /** @deprecated 用 `ingredientType` 替代。保留是因为旧快照里只有这个字段。 */
   isSupplement?: boolean;
 }
 

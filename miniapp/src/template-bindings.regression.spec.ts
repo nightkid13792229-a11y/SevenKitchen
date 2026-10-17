@@ -160,6 +160,129 @@ describe('模板绑定的完整性（2026-10-04 老板报的"点了没反应"）
     expect(problems).toEqual([])
   })
 
+  /**
+   * 模板里**直接引用的变量**，脚本里也必须存在（2026-10-17 新增）。
+   *
+   * ## 为什么要补这一条
+   *
+   * 上面那条只查**函数调用**（`名字(`）。而 2026-10-17 修的一个真 bug
+   * 恰恰不是函数、是变量：
+   *
+   * `custom-recipe/index.vue` 的模板里写着 `v-if="healthPrefillHint"`，
+   * 而脚本里**从来没定义过这个变量**。后果不是报错，而是**静默**：
+   * 「已从档案带出」那句提示永远不会显示，顾客看到过敏标签莫名其妙已经填好，
+   * 不知道是系统给的。
+   *
+   * 它躲过了三道关：
+   *   · **构建不报错** —— vite 只转译不做类型检查；
+   *   · **tsc 不查模板** —— 模板是另一套编译；
+   *   · **旧守卫只查函数** —— 变量引用不在范围内。
+   *
+   * ## 为什么只查「整个表达式就是一个名字」
+   *
+   * `{{ item.name }}`、`{{ a + b }}`、`{{ format(x) }}` 这些不查 ——
+   * 它们的根名字可能是 v-for 局部变量、插槽参数，静态判断很容易误报。
+   * 只查 `{{ 单个名字 }}` 这一种：它**要么是想显示一个本地值**，
+   * 要么就是写漏了 —— 后者正是我们要抓的。
+   *
+   * v-for / v-slot 的局部名会先收集起来排除，避免误报。
+   */
+  it('模板里直接引用的变量，script 里也有定义', () => {
+    const problems: string[] = []
+
+    for (const file of files) {
+      const source = readFileSync(resolve(process.cwd(), file), 'utf-8')
+      const script = scriptOf(source)
+
+      const propNames = propsDeclaredIn(script)
+
+      for (const name of bareVarsInTemplate(source)) {
+        if (propNames.has(name)) {
+          continue
+        }
+        if (!isDefinedInScript(script, name)) {
+          problems.push(`${file} → {{ ${name} }}`)
+        }
+      }
+    }
+
+    expect(problems).toEqual([])
+  })
+
+  /**
+   * 组件 props 的名字。
+   *
+   * 为什么单独抽出来、而不是直接放宽 `isDefinedInScript`：
+   * 那个判据同时被"函数"那条守卫用着，放宽它会**同时削弱**那一条
+   * （比如 `{ foo: 1 }` 里的 `foo` 也会被当成"已定义"）。
+   * 所以只在这条新守卫里单独认 props，两条各管各的。
+   *
+   * 认两种写法：
+   *   · `defineProps<{ primaryText: string }>()` —— 内联类型字面量
+   *   · `interface Props { primaryText?: string }` + `defineProps<Props>()`
+   */
+  function propsDeclaredIn(script: string): Set<string> {
+    const names = new Set<string>()
+
+    const collectFrom = (block: string) => {
+      for (const hit of block.matchAll(/([a-zA-Z_$][\w$]*)\??\s*:/g)) {
+        names.add(hit[1])
+      }
+    }
+
+    for (const hit of script.matchAll(/defineProps\s*<\s*\{([\s\S]*?)\}\s*>/g)) {
+      collectFrom(hit[1])
+    }
+    for (const hit of script.matchAll(/interface\s+(\w+)[^{]*\{([\s\S]*?)\n\}/g)) {
+      collectFrom(hit[2])
+    }
+    for (const hit of script.matchAll(/defineProps\(\s*\{([\s\S]*?)\}\s*\)/g)) {
+      collectFrom(hit[1])
+    }
+    // `withDefaults(defineProps<Props>(), ...)`：Props 的名字由上面的 interface 收
+    return names
+  }
+
+  /**
+   * 模板里 `{{ 单个名字 }}` 形式引用的名字（已排除局部变量）。
+   */
+  function bareVarsInTemplate(source: string): string[] {
+    const match = source.match(/<template>([\s\S]*)<\/template>/)
+    if (!match) {
+      return []
+    }
+    const tpl = match[1]
+    const found = new Set<string>()
+
+    // v-for / v-slot 的局部名，在模板里合法但不在 script 里
+    const locals = new Set<string>()
+    for (const v of tpl.matchAll(
+      /v-for="\s*\(?\s*([\w$]+)\s*(?:,\s*([\w$]+))?\s*(?:,\s*([\w$]+))?\s*\)?\s+(?:in|of)\s/g,
+    )) {
+      for (const g of v.slice(1)) {
+        if (g) locals.add(g)
+      }
+    }
+    for (const v of tpl.matchAll(/(?:v-slot|#)[\w-]*="\s*\{([^}]*)\}/g)) {
+      for (const n of v[1].split(',')) {
+        const name = n.split(':').pop()!.trim()
+        if (name) locals.add(name)
+      }
+    }
+
+    for (const mu of tpl.matchAll(/\{\{\s*([^}]+?)\s*\}\}/g)) {
+      const expr = mu[1].trim()
+      if (!/^[a-zA-Z_$][\w$]*$/.test(expr)) {
+        continue
+      }
+      if (locals.has(expr) || BUILTINS.has(expr) || expr.startsWith('$')) {
+        continue
+      }
+      found.add(expr)
+    }
+    return [...found].sort()
+  }
+
   /*
    * 「疫苗板块那三个附件函数必须在」那一条随旧板块一起删除（2026-10-15）。
    *

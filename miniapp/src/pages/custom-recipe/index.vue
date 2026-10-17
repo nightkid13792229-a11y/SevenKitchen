@@ -694,6 +694,14 @@ const hasFoodAllergy = ref<boolean | null>(null);
  */
 const clearedAllergiesBackup = ref<string[] | null>(null);
 
+/**
+ * 从档案带出来的过敏原（2026-10-17 修）。
+ *
+ * 为什么要单独记一份：界面上要显示「这些是从档案带出的」，
+ * 但**不能一有过敏就显示** —— 顾客自己手动加的那些不是档案来的。
+ */
+const prefilledAllergies = ref<string[]>([]);
+
 /** 答题。答"有"展开录入界面；答"没有"只留一句说明 */
 function answerFoodAllergy(hasAllergy: boolean) {
   hasFoodAllergy.value = hasAllergy;
@@ -1249,6 +1257,32 @@ const preferencePrefillHint = computed(() => {
   return '已从档案带出你上次填过的口味，可以直接修改。两项都可以留空。';
 });
 
+/**
+ * 「这些过敏原是从档案带出的」（2026-10-17 修）。
+ *
+ * ## 这个 bug 是怎么来的
+ *
+ * 模板里一直有 `v-if="healthPrefillHint"`（早就写好了），
+ * 但**脚本里从来没定义过这个变量** —— 于是那句话永远不会显示。
+ *
+ * 后果不是报错，而是**静默**：顾客打开定制页，过敏标签莫名其妙已经填好了几条，
+ * **不知道是系统自动给的**，会以为是上次在这页填的、甚至以为填错了。
+ *
+ * ## 为什么要比对而不是只看"有没有"
+ *
+ * 顾客可以删掉档案带来的项、也能自己加新的。
+ * 只有**当前列表里还留着至少一项档案带来的**，那句话才成立。
+ */
+const healthPrefillHint = computed(() => {
+  const fromArchive = prefilledAllergies.value;
+  if (fromArchive.length === 0) return '';
+  const stillThere = fromArchive.filter((item) =>
+    formData.value.allergies.includes(item),
+  );
+  if (stillThere.length === 0) return '';
+  return `已从档案带出 ${stillThere.length} 项过敏原，可以直接修改或补充。`;
+});
+
 
 /**
  * 按钮只讲"下一步要付多少钱"。
@@ -1581,6 +1615,7 @@ const loadDogArchiveInfo = async (dogId: string) => {
   hasFoodAllergy.value = null;
   // 撤销用的备份也属于上一只狗
   clearedAllergiesBackup.value = null;
+  prefilledAllergies.value = [];
   // 口味同理：它也会写进新狗的单子，留着上一只狗的口味没有意义
   formData.value.preferredIngredients = [];
   formData.value.dislikedIngredients = [];
@@ -1627,6 +1662,8 @@ const loadDogArchiveInfo = async (dogId: string) => {
     formData.value.allergies = Array.isArray(summary.allergies)
       ? [...summary.allergies]
       : [];
+    // 记下这一批是档案带来的，供界面提示用
+    prefilledAllergies.value = [...formData.value.allergies];
     // 档案里已经有过敏记录 → 这一问默认答"有过敏"（本来就是事实，
     // 让家长再答一遍反而是多一道题）；档案里没有就保持未答，等他选
     if (formData.value.allergies.length > 0) {

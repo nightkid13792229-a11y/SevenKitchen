@@ -311,8 +311,27 @@ return matchType === 'MANUAL_MISMATCH' || 'FALLBACK_ADULT' || 'FALLBACK_FIRST'
 | `RecipeNutritionCard` | ✅ | 交付第 1 页 / 详情页 |
 | `RecipeIngredientRatioTable` | ✅ | 交付第 1 页 / 详情页 |
 | `RecipeIngredientUsageTable` | ✅ | 交付第 2 页 / DIY 制作单 |
-| `OrderStatusBadge` | ✅ 已建 | 待接入（现有页面用的是后端下发的选项字典，本来就对） |
+| `OrderStatusBadge` | ✅ 已建但**未接入** | 见下方说明 —— 它不是螺丝松了，是**接口还没准备好** |
 | `LifeStageVersionCard` | ✅ **四页全部统一** | 详情 / 订购 / DIY 配置 / DIY 制作单 |
+
+### `OrderStatusBadge` 为什么建好了却没用
+
+建它是因为"状态标签在三个地方都要出现"（详情头 / 列表徽章 / 售后页）。
+
+但真要接的时候发现**列表接口没给这个能力**：
+
+| 页面 | 状态文案从哪来 |
+|---|---|
+| 定制订单详情 | ✅ 后端 `renderable.status.label` |
+| 定制订单列表 | ✅ 后端下发的选项字典（`useOptionSet`） |
+| **三单合一列表**（`orders-list`） | ❌ **页面级业务映射** —— 含退款 / 超时关闭 / 补剂特例（`PACKING`/`PACKED`）<br />后端列表接口**只回状态码，不回 `renderable.status`** |
+
+要接这个组件，得让**后端在合并列表接口里也返回 `renderable.status`** ——
+那是后端改动，不是前端替换。**硬换会破坏现有的退款/超时/补剂特例。**
+
+所以：**组件留着，等后端接口补齐再接。** 现在不动。
+
+---
 
 ### composable：只完成 1/4，**原因写在这里**
 

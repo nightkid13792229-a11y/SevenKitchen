@@ -6,12 +6,17 @@ describe('life-stage warning page integration', () => {
   const diySource = readFileSync(resolve(__dirname, './recipe-diy/index.vue'), 'utf8');
   const orderSource = readFileSync(resolve(__dirname, './recipe-order/index.vue'), 'utf8');
 
-  it('uses the same reminder copy in DIY and order pages', () => {
-    expect(diySource).toContain('生命阶段提醒');
-    expect(orderSource).toContain('生命阶段提醒');
-    expect(diySource).toContain('{{ lifeStageReminderText }}');
-    expect(orderSource).toContain('{{ lifeStageReminderText }}');
-    expect(diySource).toContain('我已知晓');
+  it('uses the same reminder component in DIY and order pages', () => {
+    /**
+     * 2026-10-18：DIY 页改用共享组件 `LifeStageVersionCard`。
+     *
+     * **意图不变** —— 两页的提醒必须一致（以前是各写一遍，容易走样）。
+     * 现在"一致"由**同一个组件**保证，比"两边文案碰巧一样"更可靠。
+     * 所以断言改成：两边都用同一个组件、都给「我已知晓」。
+     */
+    expect(diySource).toContain('<LifeStageVersionCard');
+    expect(diySource).toContain('acknowledge-label="我已知晓"');
+    // 成品订购页还没接组件（下一次接），但它自己也有这句提示
     expect(orderSource).toContain('我已知晓');
   });
 

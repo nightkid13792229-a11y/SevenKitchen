@@ -42,9 +42,15 @@ describe('recipe diy regressions', () => {
       /async function switchToRecommendedLifeStage[\s\S]*?\n}\n/,
     )?.[0] || ''
 
-    expect(templateSource).toContain('v-if="recommendedLifeStageOption"')
-    expect(templateSource).toContain('@tap="switchToRecommendedLifeStage"')
-    expect(templateSource).toContain("切换到{{ recommendedLifeStageOption.label }}")
+    /**
+     * 2026-10-18：改用共享组件后，"有没有切换按钮"由 `switch-label` 决定。
+     * **意图不变** —— 只有存在推荐版本时才给切换入口。
+     */
+    expect(templateSource).toContain(':switch-label="recommendedLifeStageOption')
+    expect(templateSource).toContain('@open-selector="switchToRecommendedLifeStage"')
+    expect(templateSource).toContain('@open-selector="switchToRecommendedLifeStage"')
+    // 2026-10-18：切换文案改由 `switch-label` 传进共享组件（不再是插值模板）
+    expect(templateSource).toContain('切换到${recommendedLifeStageOption.label}')
     expect(source).toContain("const selectedLifeStage = ref('')")
     expect(source).toContain('availableLifeStageVersions?: RecipeLifeStageVersion[]')
     expect(source).toContain('const recommendedLifeStageOption = computed')

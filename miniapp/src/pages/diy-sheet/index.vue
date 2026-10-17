@@ -38,18 +38,20 @@
     </view>
 
     <!--
-      生命阶段提醒（静态）
+      生命阶段提醒（静态）· 2026-10-18 改用共享组件
+
       顾客在 DIY 页点「生成制作单」时已经确认过并留痕，这里**不再要求确认**，
       只把结论留在页面上作为记录 —— 避免同一个提醒反复打断。
+      所以只给 variant="warning"，不给任何动作按钮。
     -->
-    <view v-if="!isLifeStageMatch && dog" class="warning-card">
-      <view class="warning-header">
-        <text class="warning-title">生命阶段提醒</text>
-      </view>
-      <text class="warning-text">
-        {{ lifeStageReminderText }}
-      </text>
-    </view>
+    <LifeStageVersionCard
+      v-if="!isLifeStageMatch && dog"
+      variant="warning"
+      :match-type="lifeStageVerdict?.matchType"
+      :message="lifeStageVerdict?.message"
+      :selected-label="lifeStageVerdict?.selectedLifeStage"
+      :dog-name="lifeStageVerdict?.dogName || dog?.name"
+    />
 
       <!-- 后端结论没取到：不静默放行，给一条中性提示 -->
       <view v-if="lifeStageCheckFailed" class="life-stage-unknown-note">
@@ -536,6 +538,7 @@ import {
   type LifeStageMatchVerdict
 } from '../../utils/life-stage-match'
 import ImagePreviewModal from '../../components/ImagePreviewModal.vue'
+import LifeStageVersionCard from '@/components/recipe/LifeStageVersionCard.vue'
 import { normalizeImageUrl, getOptimizedProductImageUrl } from '../../utils/config'
 import { formatSupplementAmountWithDisplayUnit } from '../../utils/diy-sheet-format'
 import { getPackagePlanTotal, type PackagePlanItem } from '../../utils/order-package-plan'

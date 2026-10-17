@@ -25,7 +25,7 @@
   <view
     v-if="visible"
     class="life-stage-card"
-    :class="`life-stage-card--${visualState}`"
+    :class="[`life-stage-card--${visualState}`, { 'life-stage-card--loud': variant === 'warning' }]"
   >
     <view class="life-stage-card__main">
       <view class="life-stage-card__head">
@@ -37,11 +37,23 @@
       </view>
       <text class="life-stage-card__copy">{{ copy }}</text>
     </view>
-    <text
-      v-if="hasVersions"
-      class="life-stage-card__action"
-      @tap="emit('open-selector')"
-    >切换 ›</text>
+    <view class="life-stage-card__actions">
+      <text
+        v-if="switchLabel"
+        class="life-stage-card__action"
+        @tap="emit('open-selector')"
+      >{{ switchLabel }}</text>
+      <text
+        v-else-if="hasVersions"
+        class="life-stage-card__action"
+        @tap="emit('open-selector')"
+      >切换 ›</text>
+      <text
+        v-if="acknowledgeLabel"
+        class="life-stage-card__action life-stage-card__action--primary"
+        @tap="emit('acknowledge')"
+      >{{ acknowledgeLabel }}</text>
+    </view>
   </view>
 </template>
 
@@ -61,6 +73,21 @@ const props = withDefaults(
     versionCount?: number
     /** 狗狗名字（兜底文案里用） */
     dogName?: string | null
+    /**
+     * 形态（2026-10-18）。
+     *
+     * 四个页面需要的样子不一样：
+     *   `display` —— 详情页：只是告知"现在看的是哪一版"
+     *   `warning` —— 成品订购 / DIY 配置 / DIY 制作单：要显眼，顾客得注意到
+     *
+     * 预览色与文案都跟着变，**但不是两个组件** ——
+     * 它们的信息结构完全一样，差的是强调程度。
+     */
+    variant?: 'display' | 'warning'
+    /** 有「切换到 X」动作时传文案；不传就不显示这个按钮 */
+    switchLabel?: string | null
+    /** 有「我已了解」动作时传文案；不传就不显示 */
+    acknowledgeLabel?: string | null
   }>(),
   {
     matchType: null,
@@ -68,10 +95,16 @@ const props = withDefaults(
     selectedLabel: null,
     versionCount: 0,
     dogName: null,
+    variant: 'display',
+    switchLabel: null,
+    acknowledgeLabel: null,
   },
 )
 
-const emit = defineEmits<{ (event: 'open-selector'): void }>()
+const emit = defineEmits<{
+  (event: 'open-selector'): void
+  (event: 'acknowledge'): void
+}>()
 
 /** 3 种界面状态；LEGACY 与未知一律不显示 */
 const visualState = computed<'matched' | 'manual' | 'mismatch' | 'hidden'>(() => {
@@ -196,5 +229,29 @@ const hasVersions = computed(() => (props.versionCount || 0) > 1)
   color: #b45309;
   margin-left: 16rpx;
   flex: 0 0 auto;
+}
+
+/* ===== 双动作（2026-10-18）===== */
+.life-stage-card__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8rpx;
+  margin-left: 16rpx;
+  flex: 0 0 auto;
+}
+
+.life-stage-card__action--primary {
+  background: #b45309;
+  color: #fff;
+  border-radius: 999rpx;
+  padding: 6rpx 18rpx;
+}
+
+/* warning 形态：顾客必须注意到，所以即使"已匹配"也用告警底色 */
+.life-stage-card--loud.life-stage-card--matched,
+.life-stage-card--loud.life-stage-card--manual {
+  background: #fffbfa;
+  border-color: #f0c8bc;
 }
 </style>

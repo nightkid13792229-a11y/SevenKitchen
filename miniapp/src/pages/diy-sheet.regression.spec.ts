@@ -365,7 +365,15 @@ describe('diy sheet layout regressions', () => {
     )
 
     expect(source).toContain('生命阶段提醒')
-    expect(source).toContain('{{ lifeStageReminderText }}')
+    /**
+     * 2026-10-18：生命阶段块改用共享组件 `LifeStageVersionCard`。
+     *
+     * **意图不变** —— 制作单上必须能看到生命阶段提醒（顾客在 DIY 页确认过，
+     * 制作单留作记录）。只是渲染方式从内联模板变成了组件。
+     */
+    expect(source).toContain('<LifeStageVersionCard')
+    expect(source).toContain('variant="warning"')
+    expect(source).toContain(':match-type="lifeStageVerdict?.matchType"')
     expect(source).toContain('../../utils/life-stage-match')
     // 2026-09-19：结论由后端给出，制作单不再自己算
     expect(source).toContain('fetchLifeStageMatch')

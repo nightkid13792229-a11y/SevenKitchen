@@ -163,6 +163,7 @@ import RecipeIngredientUsageTable from '@/components/recipe/RecipeIngredientUsag
 import { PrintCanvasBuilder } from '@/utils/print-canvas';
 import { drawDeliverySheet } from '@/utils/delivery-print';
 import { saveSupplementPurchaseDraft } from '@/api/supplements';
+import { getBaseUrl } from '@/utils/config';
 
 const orderId = ref('');
 const loading = ref(true);
@@ -368,20 +369,37 @@ const saveAsImage = async () => {
       });
 
     /**
-     * 小程序码素材（2026-10-18）。
+     * 小程序码（2026-10-18 改为**服务端生成**）。
      *
-     * 微信后台下载的静态图片，代码生不出来。所以**先探测它存不存在** ——
-     * 不存在就不传，长图底部那一块整块不画（不画占位方块）。
-     * 素材放到 `static/delivery/miniapp-code.png` 之后，这里自动开始画。
+     * 原先要人工从微信后台下载一张图放进 `static/` ——
+     * 那要求人去做机器能做的事，而且图片不进仓库就没法上线。
+     *
+     * 现在后端用微信 `wxacode.getUnlimited` 生成并缓存到 COS，
+     * 这里**下载到本地临时文件**再画（canvas 的 drawImage 只认本地路径）。
+     *
+     * 任何一步失败都返回 null → 长图**整块不画二维码**，其余内容照常。
      */
-    const MINIAPP_CODE_PATH = '/static/delivery/miniapp-code.png';
-    const qrCodePath = await new Promise<string | null>((resolve) => {
-      uni.getImageInfo({
-        src: MINIAPP_CODE_PATH,
-        success: () => resolve(MINIAPP_CODE_PATH),
-        fail: () => resolve(null),
-      });
-    });
+    const qrCodePath = await (async (): Promise<string | null> => {
+      try {
+        const res: any = await new Promise((resolve, reject) => {
+          uni.request({
+            url: `${getBaseUrl()}/custom-recipe-config/miniapp-code`,
+            success: resolve,
+            fail: reject,
+          });
+        });
+        const url = String(res?.data?.data?.url || '').trim();
+        if (!url) return null;
+
+        const download: any = await new Promise((resolve, reject) => {
+          uni.downloadFile({ url, success: resolve, fail: reject });
+        });
+        return download?.statusCode === 200 ? download.tempFilePath : null;
+      } catch {
+        // 拿不到就整块不画 —— 不能让二维码把整张长图搞失败
+        return null;
+      }
+    })();
 
     const sheetInput = () => ({
       content: content.value,

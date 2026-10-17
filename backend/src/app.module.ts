@@ -139,6 +139,7 @@ import {
 } from './application/ingredient-tag/ingredient-tag.service';
 import { PrismaIngredientTagRepository } from './infrastructure/repositories/prisma-ingredient-tag.repository';
 import { TencentCosService } from './infrastructure/services/tencent-cos.service';
+import { MiniProgramCodeService } from './application/wechat/mini-program-code.service';
 import { ImageOptimizationService } from './infrastructure/services/image-optimization.service';
 import { PdfGeneratorService } from './infrastructure/services/pdf-generator.service';
 import { WechatModule } from './infrastructure/wechat/wechat.module';
@@ -525,6 +526,7 @@ validatePrismaConfig();
       useClass: PrismaIngredientTagRepository,
     },
     TencentCosService,
+    MiniProgramCodeService,
     ImageOptimizationService,
     PdfGeneratorService,
     GlobalConfigService,

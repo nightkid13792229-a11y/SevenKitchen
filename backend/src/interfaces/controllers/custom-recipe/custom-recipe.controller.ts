@@ -17,6 +17,7 @@ import {
   NotFoundException,
   UseInterceptors,
   UploadedFile,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -24,6 +25,7 @@ import { CustomRecipeService } from '../../../application/custom-recipe/custom-r
 import { CustomRecipeDeliveryService } from '../../../application/custom-recipe/custom-recipe-delivery.service';
 import { CustomRecipeAftersaleService } from '../../../application/custom-recipe/custom-recipe-aftersale.service';
 import { CustomRecipeViewService } from '../../../application/custom-recipe/custom-recipe-view.service';
+import { MiniProgramCodeService } from '../../../application/wechat/mini-program-code.service';
 import { CustomRecipeConfigService } from '../../../application/custom-recipe/custom-recipe-config.service';
 import { WechatPaymentService } from '../../../application/payment/wechat-payment.service';
 import { SubmitCustomRecipeOrderDTO } from '../../../application/custom-recipe/dto/custom-recipe.dto';
@@ -757,7 +759,37 @@ export class CustomRecipeController {
 export class PublicCustomRecipeConfigController {
   constructor(
     private readonly customRecipeConfigService: CustomRecipeConfigService,
+    private readonly miniProgramCodeService: MiniProgramCodeService,
   ) {}
+
+  /**
+   * 小程序码地址（2026-10-18）
+   *
+   * 长图底部要放它，扫了进小程序首页。
+   *
+   * **由服务端生成**，不需要人工从微信后台下载图片再塞进 `static/` ——
+   * 那要求人去做一件机器能做的事，而且图片不进代码仓库就没法上线。
+   *
+   * 第一次调用会去微信生成（几百毫秒），之后走进程内缓存。
+   * 生成失败返回 503，让前端**优雅地不画那一块**（而不是画个空白方块）。
+   */
+  @Get('miniapp-code')
+  @ApiOperation({ summary: '小程序码图片地址（扫码进小程序首页）' })
+  async getMiniProgramCode(): Promise<ApiResponseDto<{ url: string }>> {
+    try {
+      return ApiResponseDto.success({
+        url: await this.miniProgramCodeService.getCodeUrl(),
+      });
+    } catch (error: any) {
+      /**
+       * 用 503 而不是 500：这是"暂时拿不到"（微信配额/网络），不是程序错误。
+       * 前端据此**跳过二维码那一块**，长图照常生成。
+       */
+      throw new ServiceUnavailableException(
+        error?.message || '小程序码暂时不可用',
+      );
+    }
+  }
 
   @Get()
   @ApiOperation({ summary: '读取食谱定制的公开配置（定制费 / 可抵扣金额 / 交付周期）' })

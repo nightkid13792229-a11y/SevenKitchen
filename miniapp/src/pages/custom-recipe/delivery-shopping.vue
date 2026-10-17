@@ -292,11 +292,28 @@ const saveAsImage = async () => {
         autoHeight: true,
       });
 
+    /**
+     * 小程序码素材（2026-10-18）。
+     *
+     * 微信后台下载的静态图片，代码生不出来。所以**先探测它存不存在** ——
+     * 不存在就不传，长图底部那一块整块不画（不画占位方块）。
+     * 素材放到 `static/delivery/miniapp-code.png` 之后，这里自动开始画。
+     */
+    const MINIAPP_CODE_PATH = '/static/delivery/miniapp-code.png';
+    const qrCodePath = await new Promise<string | null>((resolve) => {
+      uni.getImageInfo({
+        src: MINIAPP_CODE_PATH,
+        success: () => resolve(MINIAPP_CODE_PATH),
+        fail: () => resolve(null),
+      });
+    });
+
     const sheetInput = () => ({
       content: content.value,
       version: delivery.value?.version,
       deliveredAtText: deliveredAtText.value,
       dogName: delivery.value?.dogName ?? null,
+      qrCodePath,
     });
 
     // 第一遍：用基准高度量内容

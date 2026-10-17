@@ -33,7 +33,13 @@ export interface DeliverySheetInput {
   deliveredAtText: string;
   /** 狗狗名字（拿不到就留空，不编） */
   dogName?: string | null;
-  /** 损耗系数 → 百分比文案由页面给（那是展示换算，不在这个文件里做） */
+  /**
+   * 小程序码图片路径（2026-10-18）。
+   *
+   * **由页面预先确认素材存在后再传** —— 传 null 表示没有素材，
+   * 底部那一块整块不画（不画占位方块，见表尾注释）。
+   */
+  qrCodePath?: string | null;
 }
 
 /** 文案：有值就显示，没有就显示占位符 —— 不显示 0，0 会让人以为"不用买" */
@@ -138,5 +144,13 @@ export function drawDeliverySheet(
   if (content.storage) {
     builder.drawSectionTitle('怎么存');
     builder.drawNote(content.storage);
+  }
+
+  // ---- 小程序码（2026-10-18）----
+  //
+  // 只写"扫码"没人会扫，所以配一句说清"扫了能干什么"。
+  // 素材没准备好时 `qrCodePath` 为 null，这一块整块不画。
+  if (input.qrCodePath) {
+    builder.drawMiniProgramCode(input.qrCodePath, '扫码打开小程序');
   }
 }

@@ -791,6 +791,49 @@ export class PrintCanvasBuilder {
   /**
    * 绘制页脚
    */
+  /**
+   * 画小程序码 + 一句引导（2026-10-18）。
+   *
+   * ## 为什么是同步的、路径由调用方传
+   *
+   * `uni.getImageInfo` 是异步的，而 `drawDeliverySheet` 是同步的 ——
+   * 不能在里面 await。所以**由页面预先确认素材存在**，再把路径传进来。
+   *
+   * ## 为什么"没有素材就整块不画"
+   *
+   * 小程序码是微信后台下载的**静态图片**，代码生不出来。
+   * 如果没素材还画一个方块占位，**上线后顾客扫到的是空白** —— 比没有更糟。
+   * 所以调用方传 null 时这里直接返回，不留占位。
+   */
+  drawMiniProgramCode(imagePath: string, caption: string) {
+    if (!imagePath) return
+
+    const size = 110
+    const gap = 22
+    const left = this.pagePadding
+    const top = this.currentY + 24
+
+    try {
+      this.ctx.drawImage(imagePath, left, top, size, size)
+    } catch (error) {
+      // 素材路径写错/文件损坏：不画这一块，也不让整张长图失败
+      console.warn('[PrintCanvas] 小程序码绘制失败，跳过:', error)
+      return
+    }
+
+    const textLeft = left + size + gap
+    this.ctx.setTextAlign('left')
+    this.ctx.setFillStyle('#2f3a2a')
+    this.ctx.setFontSize(this.FONT_SIZES.NOTE)
+    this.ctx.fillText(caption, textLeft, top + 42)
+    this.ctx.setFillStyle('#9aa189')
+    this.ctx.setFontSize(this.FONT_SIZES.FOOTER)
+    this.ctx.fillText('看电子版、提售后、找客服', textLeft, top + 72)
+
+    this.currentY = top + size + 24
+    console.log('[PrintCanvas] 小程序码绘制完成:', { y: this.currentY })
+  }
+
   drawFooter(text: string) {
     const lineY = this.canvasHeight - 62
     this.ctx.setStrokeStyle('#e5e8d4')

@@ -301,6 +301,38 @@ return matchType === 'MANUAL_MISMATCH' || 'FALLBACK_ADULT' || 'FALLBACK_FIRST'
 
 ---
 
+## 五之三、执行结果（2026-10-18 代码落地后回填）
+
+### 组件：全部完成
+
+| 组件 | 状态 | 用在哪 |
+|---|---|---|
+| `RecipeCover` | ✅ | 交付第 1 页 / 详情页 |
+| `RecipeNutritionCard` | ✅ | 交付第 1 页 / 详情页 |
+| `RecipeIngredientRatioTable` | ✅ | 交付第 1 页 / 详情页 |
+| `RecipeIngredientUsageTable` | ✅ | 交付第 2 页 / DIY 制作单 |
+| `OrderStatusBadge` | ✅ 已建 | 待接入（现有页面用的是后端下发的选项字典，本来就对） |
+| `LifeStageVersionCard` | ✅ **四页全部统一** | 详情 / 订购 / DIY 配置 / DIY 制作单 |
+
+### composable：只完成 1/4，**原因写在这里**
+
+`useLifeStageVersion` 只接了 **DIY 制作单** 一页。为什么没接完：
+
+| 页面 | 数据来源 | 为什么不一致 |
+|---|---|---|
+| DIY 制作单 | 自己 `fetchLifeStageMatch` | ✅ 与 composable 形状一致 |
+| 详情页 | 结论**内嵌在配方接口**（`recipe.lifeStageMatch`） | 不单独请求，塞进去要多一次请求 |
+| DIY 配置页 | `isLifeStageMatch` 是**可变 ref**，值在别处赋 | 不是 computed，形状不同 |
+| 成品订购页 | 自己 fetch，但**选狗变化时要重查** | 请求时机不同 |
+
+> **界面已经统一了**（用户看到的四页一致），但**数据流的重复还在** ——
+> 每页还有约 6 行相同的状态声明。
+>
+> 硬塞进一个 composable 要改三页的**请求时机**，那是真重构不是机械替换。
+> **半途而废比不接更糟**，所以先接一页、把边界写清楚，留给下一次。
+
+---
+
 ## 六、验收标准（可量化，不靠感觉）
 
 | # | 验收 | 怎么量 |

@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>食谱定制页 · 原型 v4（2026-10-17）</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: #FAF7F2; color: #3F3222; padding: 26px 22px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: 22px; margin-bottom: 6px; }
+  h2 { font-size: 17px; margin: 40px 0 6px; padding-top: 12px; border-top: 2px solid #E4D8C8; }
+  h2 span { font-size: 12.5px; font-weight: 400; color: #8A7A66; margin-left: 8px; }
+  .sub { font-size: 12.5px; color: #6E5F4B; line-height: 1.8; max-width: 1360px; }
+  .sub b { color: #3F3222; }
+  code { background: #F0E6D8; padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+
+  .row { display: flex; gap: 18px; overflow-x: auto; padding: 14px 0 22px; align-items: flex-start; }
+  .col { width: 372px; flex: 0 0 372px; }
+  .col__head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12.5px; font-weight: 700; }
+  .col__tag { font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #F7E4CC; color: #8C3D06; }
+  .col__tag--new { background: #FBE7C0; color: #8a5a00; }
+  .col__tag--alt { background: #EFEAE3; color: #4a5568; }
+  .col__note { font-size: 11.5px; color: #8A7A66; line-height: 1.75; margin-top: 8px; }
+  .col__note b { color: #b4453a; }
+  .col__note del { color: #C0B0A0; }
+
+  .phone {
+    width: 372px; background: #FAF7F2; border: 1px solid #EDE0D0;
+    border-radius: 20px; padding: 0 10px 0; position: relative; overflow: hidden;
+    box-shadow: 0 6px 24px rgba(74,55,38,.06);
+  }
+  .navbar { height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: #FAF7F2; }
+  .navbar__back { font-size: 16px; color: #6E5F4B; line-height: 1; }
+  .navbar__t { font-size: 14px; font-weight: 600; }
+  .navbar__cap { margin-left: auto; font-size: 10.5px; color: #B3A492; }
+  .body { padding: 0 0 8px; }
+
+  .card { background: #fff; border: 1px solid #EDE0D0; border-radius: 14px; padding: 12px; margin-bottom: 9px; }
+  .card__title { font-size: 13.5px; font-weight: 700; margin-bottom: 9px; display: flex; align-items: center; gap: 6px; }
+  .card__title em { font-style: normal; margin-left: auto; font-size: 10.5px; font-weight: 400; color: #9C8B76; }
+  .card--new { border-color: #E8C88A; background: #FFFDF8; }
+  .card--ghost { background: #FBF8F3; border-style: dashed; }
+
+  .seg { margin: 16px 0 8px; display: flex; align-items: center; gap: 8px; }
+  .seg__n { width: 20px; height: 20px; border-radius: 50%; background: #B45309; color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex: 0 0 20px; }
+  .seg__t { font-size: 13px; font-weight: 700; }
+
+  .hero { background: linear-gradient(135deg,#1e3a2f,#16261f); border-radius: 14px; padding: 13px; color: #f4ecd8; margin-bottom: 9px; }
+  .hero__id { display: flex; align-items: center; gap: 10px; }
+  .hero__av { width: 44px; height: 44px; border-radius: 50%; background: #c9a227; display: flex; align-items: center; justify-content: center; font-size: 18px; flex: 0 0 44px; }
+  .hero__name { font-size: 16px; font-weight: 700; }
+  .hero__line { font-size: 11px; color: rgba(244,236,216,.6); margin-top: 3px; }
+  .hero__switch { font-size: 10.5px; color: #c9a227; margin-left: auto; }
+  .badge { font-size: 9.5px; background: #c9a227; color: #16261f; border-radius: 999px; padding: 1px 7px; vertical-align: 2px; font-weight: 700; }
+
+  .kv { display: flex; font-size: 12px; padding: 7px 0; border-bottom: 1px dashed #F4EBE0; align-items: center; }
+  .kv:last-child { border-bottom: 0; }
+  .kv__k { color: #9C8B76; width: 74px; flex: 0 0 74px; }
+  .kv__v { flex: 1; }
+  .kv__v b { color: #B45309; }
+  .kv__go { font-size: 11px; color: #B45309; font-weight: 600; }
+
+  .facts { display: flex; gap: 14px; font-size: 12px; }
+  .fact { flex: 1; }
+  .fact__l { font-size: 10px; color: #A9967E; }
+  .fact__v { font-size: 13px; font-weight: 700; margin-top: 2px; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 11px; background: #FBEEE0; color: #8C3D06; border-radius: 999px; padding: 4px 10px; }
+  .chip--add { background: #fff; border: 1px dashed #E5C9A3; color: #B45309; }
+  .chip--warn { background: #FCEAE5; color: #b4453a; }
+  .chip--on { background: #B45309; color: #fff; }
+
+  .btnrow { display: flex; gap: 9px; margin-top: 11px; }
+  .btn { flex: 1; text-align: center; font-size: 13px; font-weight: 700; padding: 11px 0; border-radius: 11px; }
+  .btn--main { background: #B45309; color: #fff; }
+  .btn--ghost { background: #fff; color: #B45309; border: 1.5px solid #E5C9A3; }
+  .btn--line { background: #fff; color: #6E5F4B; border: 1.5px solid #EDE0D0; }
+
+  .hint { font-size: 11px; color: #9C8B76; line-height: 1.6; margin-top: 6px; }
+
+  .opt { display: flex; align-items: center; gap: 9px; padding: 9px 11px; border: 1.5px solid #EDE0D0; border-radius: 11px; margin-bottom: 6px; font-size: 12.5px; background: #fff; }
+  .opt--on { border-color: #B45309; background: #FFF8F1; }
+  .opt__box { width: 16px; height: 16px; border-radius: 5px; border: 1.5px solid #D6C7B4; flex: 0 0 16px; }
+  .opt--on .opt__box { background: #B45309; border-color: #B45309; }
+  .opt__box--r { border-radius: 50%; }
+
+  .input { border: 1.5px solid #EDE0D0; border-radius: 10px; padding: 9px 11px; font-size: 11.5px; color: #B3A492; background: #fff; }
+
+  .files { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .file { display: flex; align-items: center; gap: 8px; background: #FBF8F3; border: 1px solid #EDE0D0; border-radius: 9px; padding: 7px 9px; font-size: 11.5px; }
+  .file__ico { width: 22px; height: 22px; border-radius: 6px; background: #FBEEE0; display: flex; align-items: center; justify-content: center; font-size: 12px; flex: 0 0 22px; }
+  .file__n { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file__a { font-size: 10.5px; color: #B45309; }
+  .file__x { font-size: 11px; color: #b4453a; }
+
+  .bottom { margin: 14px -10px 0; padding: 12px 18px 16px; background: linear-gradient(180deg,rgba(250,247,242,0),#FAF7F2 22%); }
+  .paybar { background: #fff; border: 1px solid #EDE0D0; border-radius: 13px; padding: 11px; }
+  .paybar__date { font-size: 12.5px; font-weight: 700; }
+  .paybar__date b { color: #B45309; }
+  .paybar__note { font-size: 10.5px; color: #8A7A66; line-height: 1.55; margin-top: 4px; }
+
+  .mask { position: absolute; inset: 0; background: rgba(40,30,20,.42); display: flex; align-items: flex-end; }
+  .sheet { width: 100%; background: #FAF7F2; border-radius: 20px 20px 0 0; padding: 16px 14px 18px; max-height: 88%; overflow-y: auto; }
+  .sheet__handle { width: 36px; height: 4px; border-radius: 2px; background: #E0D2BF; margin: 0 auto 12px; }
+  .sheet__t { font-size: 15px; font-weight: 700; }
+  .section-label { font-size: 11px; color: #A9967E; margin: 12px 0 7px; }
+
+  .banner { background: #FFF8EC; border: 2px solid #E8C88A; border-radius: 12px; padding: 14px 16px; max-width: 1360px; margin-bottom: 8px; }
+  .banner__t { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+  .banner ol { margin: 0; padding-left: 20px; font-size: 12.5px; line-height: 1.9; color: #6E5F4B; }
+  .banner b { color: #3F3222; }
+
+  table.ask { margin: 10px 0 0; border-collapse: collapse; font-size: 12.5px; background: #fff; max-width: 1360px; }
+  table.ask th, table.ask td { text-align: left; padding: 8px 10px; border-top: 1px solid #F0E6D8; vertical-align: top; }
+  table.ask th { background: #FBF5EC; font-weight: 600; white-space: nowrap; border-top: 0; }
+  .del { color: #b4453a; }
+  .new { color: #1e5b35; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>食谱定制页 · 原型 v4</h1>
+<div class="sub">
+  2026-10-17 ｜ 按你第 2 轮 6 条意见重画。v3 的关键变化是<b>先为健康犬设计</b>。<br />
+  对应需求：<code>docs/plans/2026-10-17-custom-recipe-requirements-v2.md</code> § 2.3
+</div>
+
+<div class="banner" style="margin-top:18px">
+  <div class="banner__t">这一版的核心变化</div>
+  <ol>
+    <li><b>先为健康犬设计。</b>生产上 4625 只狗里，只有 25 只有过敏记录（0.5%）、
+      259 只有就诊记录（5.6%）—— <b>94% 以上没有这些</b>。所以页面在健康犬面前要极干净。</li>
+    <li><b>就诊 + 体检 合成一块「健康档案」</b>：都为空时只占一行。</li>
+    <li><b>文案全部重写</b>：删掉对内的话、删掉啰嗦的解释。</li>
+    <li><b>「现在吃什么」</b>：加「生骨肉」；<b>删掉「每天大概吃多少」</b>（交付物里给参考饭量，用户自己可调）。</li>
+    <li><b>「为什么想换」</b>：四选一（更健康 / 疾病调理 / 挑食 / 其他-可输入）。</li>
+    <li><b>上传支持文档</b>（PDF / Word），并带预览、删除、新增。</li>
+    <li><b>底部不再重复显示金额</b>（按钮上已有 ¥300）。</li>
+  </ol>
+</div>
+
+<!-- ================================================================ -->
+<h2>一、主界面 <span>健康犬的样子 —— 这是 94% 用户看到的</span></h2>
+
+<div class="row">
+
+  <div class="col">
+    <div class="col__head">
+      <span class="col__name">定制页 · 健康犬（无过敏 / 无就诊 / 无体检）</span>
+      <span class="col__tag col__tag--new">主场景</span>
+    </div>
+    <div class="phone">
+      <div class="navbar">
+        <span class="navbar__back">‹</span>
+        <span class="navbar__t">定制专属食谱</span>
+      </div>
+      <div class="body">
+
+        <div class="hero">
+          <div class="hero__id">
+            <div class="hero__av">🐕</div>
+            <div>
+              <div class="hero__name">旺财</div>
+              <div class="hero__line">中华田园犬 · 2 岁 · 公</div>
+            </div>
+            <span class="hero__switch">切换 ▼</span>
+          </div>
+        </div>
+
+        <div class="seg"><span class="seg__n">1</span><span class="seg__t">确认以下信息</span></div>
+
+        <div class="card">
+          <div class="card__title">体重管理</div>
+          <div class="facts">
+            <div class="fact"><div class="fact__l">体重</div><div class="fact__v">11.2kg</div></div>
+            <div class="fact"><div class="fact__l">体况</div><div class="fact__v">偏胖 7/9</div></div>
+            <div class="fact"><div class="fact__l">活动量</div><div class="fact__v">正常</div></div>
+          </div>
+          <div class="hint" style="color:#B45309;margin-top:9px">建议：减重。你想帮它？</div>
+          <div class="chips" style="margin-top:7px">
+            <span class="chip chip--on">减重</span><span class="chip">维持</span><span class="chip">增重</span>
+          </div>
+          <div class="hint">数据不对？<span class="kv__go">去改 ›</span></div>
+        </div>
+
+        <div class="card">
+          <div class="card__title">过敏 <em style="color:#B45309">必答</em></div>
+          <div class="chips">
+            <span class="chip chip--add">没有过敏</span>
+            <span class="chip chip--add">有，选一下</span>
+          </div>
+        </div>
+
+        <div class="card card--ghost">
+          <div class="kv" style="border:0;padding:0">
+            <span class="kv__v" style="color:#8A7A66">没有任何就诊和体检记录</span>
+            <span class="kv__go">去补填 ›</span>
+          </div>
+        </div>
+
+        <div class="seg"><span class="seg__n">2</span><span class="seg__t">还需要你告诉我</span></div>
+
+        <div class="card card--new">
+          <div class="card__title">它现在吃什么 <em style="color:#B45309">必填</em></div>
+
+          <div class="section-label" style="margin-top:0">主要吃什么</div>
+          <div class="chips">
+            <span class="chip chip--on">干粮</span>
+            <span class="chip">湿粮 / 罐头</span>
+            <span class="chip">自制</span>
+            <span class="chip">生骨肉</span>
+            <span class="chip">混着喂</span>
+          </div>
+
+          <div class="section-label">为什么想换 <span style="color:#A9967E">（可多选）</span></div>
+          <div class="chips">
+            <span class="chip chip--on">更健康</span>
+            <span class="chip">疾病调理</span>
+            <span class="chip">挑食</span>
+            <span class="chip">其他</span>
+          </div>
+        </div>
+
+        <div class="card card--new">
+          <div class="card__title">最近肠胃怎么样 <em>选填</em></div>
+          <div class="chips">
+            <span class="chip">正常</span><span class="chip chip--on">软便</span>
+            <span class="chip">便秘</span><span class="chip">呕吐</span>
+            <span class="chip">换粮拉稀</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card__title">补充说明 <em>选填</em></div>
+          <div class="input" style="min-height:52px">还有什么想让我们知道的？</div>
+          <div class="btnrow"><div class="btn btn--line">＋ 上传照片 / 文档</div></div>
+        </div>
+
+        <div class="seg"><span class="seg__n">3</span><span class="seg__t">下单前请确认</span></div>
+      </div>
+
+      <div class="bottom">
+        <div class="paybar">
+          <div class="paybar__date" style="color:#B3A492">预计 10 月 20 日（周三）交付</div>
+          <div class="paybar__note">定价含营养师一对一设计，不含食材；付完可全额抵扣成品鲜食。</div>
+          <div class="btnrow"><div class="btn" style="background:#E8DFD2;color:#B3A492">还差：有没有过敏</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="col__note">
+      <b>健康犬只看到 5 块</b>，其中 2 块几乎不用动（健康档案就一行字）。
+      但<b>过敏必须主动回答</b> —— 所以进页面时底部按钮是锁着的，答完才解锁。
+      <br /><br />
+      对比 v3：<del>「先确认这些对不对」</del>→「确认以下信息」；
+      <del>就诊一块 + 体检一块</del> → 合成一行；
+      <del>「方式一/二/三」三行说明</del> → 删掉；
+      <del>「有报告的话最快：拍一下…」</del> → 删掉。
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="col__head">
+      <span class="col__name">同一页 · 有过敏 & 有就诊时</span>
+      <span class="col__tag col__tag--alt">展开态</span>
+    </div>
+    <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">定制专属食谱</span></div>
+      <div class="body">
+
+        <div class="hero">
+          <div class="hero__id">
+            <div class="hero__av">🐕</div>
+            <div><div class="hero__name">豆豆</div><div class="hero__line">柯基 · 3 岁 · 公 · 已绝育</div></div>
+            <span class="hero__switch">切换 ▼</span>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:9px">
+          <div class="card__title">体重管理</div>
+          <div class="facts">
+            <div class="fact"><div class="fact__l">体重</div><div class="fact__v">11.2kg</div></div>
+            <div class="fact"><div class="fact__l">体况</div><div class="fact__v">偏胖 7/9</div></div>
+            <div class="fact"><div class="fact__l">活动量</div><div class="fact__v">正常</div></div>
+          </div>
+          <div class="hint" style="color:#B45309;margin-top:9px">建议：减重。你想帮它？</div>
+          <div class="chips" style="margin-top:7px">
+            <span class="chip chip--on">减重</span><span class="chip">维持</span><span class="chip">增重</span>
+          </div>
+        </div>
+
+        <div class="card card--new">
+          <div class="card__title">过敏</div>
+          <div class="chips">
+            <span class="chip">没有过敏</span>
+            <span class="chip chip--on">有，选一下</span>
+          </div>
+          <div class="chips" style="margin-top:9px">
+            <span class="chip chip--warn">鸡肉 ✕</span>
+            <span class="chip chip--warn">小麦 ✕</span>
+            <span class="chip chip--add">＋ 添加</span>
+          </div>
+          <div class="btnrow">
+            <div class="btn btn--line">📷 拍检测报告，自动识别</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card__title">健康档案</div>
+          <div class="kv">
+            <span class="kv__k">最近就诊</span>
+            <span class="kv__v">09-20 胰腺炎 · 治疗中</span>
+            <span class="kv__go">补填 ›</span>
+          </div>
+          <div class="kv">
+            <span class="kv__k">最近体检</span>
+            <span class="kv__v">08-12 血常规</span>
+            <span class="kv__go">补填 ›</span>
+          </div>
+        </div>
+
+        <div class="card card--new">
+          <div class="card__title">它现在吃什么 <em style="color:#B45309">必填</em></div>
+          <div class="section-label" style="margin-top:0">主要吃什么</div>
+          <div class="chips">
+            <span class="chip">干粮</span><span class="chip">湿粮 / 罐头</span>
+            <span class="chip chip--on">自制</span><span class="chip">生骨肉</span><span class="chip">混着喂</span>
+          </div>
+          <div class="section-label">为什么想换</div>
+          <div class="chips">
+            <span class="chip">更健康</span>
+            <span class="chip chip--on">疾病调理</span>
+            <span class="chip">挑食</span>
+            <span class="chip">其他</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col__note">
+      有过敏时才展开录入（点选 + 拍报告识别）。
+      <br /><br />
+      健康档案两块都有记录时，各占一行 —— 不额外占版面。
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="col__head">
+      <span class="col__name">上传：照片 + 文档</span>
+      <span class="col__tag col__tag--new">本轮扩展</span>
+    </div>
+    <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">定制专属食谱</span></div>
+      <div class="body" style="padding-top:9px">
+
+        <div class="card">
+          <div class="card__title">补充说明 <em>选填</em></div>
+          <div class="input" style="min-height:52px">还有什么想让我们知道的？</div>
+
+          <div class="section-label">已上传（3）</div>
+          <div class="files">
+            <div class="file">
+              <span class="file__ico">🖼</span>
+              <span class="file__n">现在的粮袋子.jpg</span>
+              <span class="file__a">预览</span>
+              <span class="file__x">删除</span>
+            </div>
+            <div class="file">
+              <span class="file__ico">📄</span>
+              <span class="file__n">血常规报告.pdf</span>
+              <span class="file__a">预览</span>
+              <span class="file__x">删除</span>
+            </div>
+            <div class="file">
+              <span class="file__ico">📝</span>
+              <span class="file__n">兽医诊断.docx</span>
+              <span class="file__a">预览</span>
+              <span class="file__x">删除</span>
+            </div>
+          </div>
+
+          <div class="btnrow">
+            <div class="btn btn--line">＋ 上传照片 / 文档</div>
+          </div>
+          <div class="hint">支持照片、PDF、Word。最多 9 个。</div>
+        </div>
+
+      </div>
+    </div>
+    <div class="col__note">
+      <b>这一块扩展了：</b>原来只能传照片，现在支持 PDF / Word
+      （<b>从微信里选文件</b>）。每一条都能<b>预览</b>和<b>删除</b>，下面还能继续加。
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="col__head">
+      <span class="col__name">付款前确认</span>
+      <span class="col__tag col__tag--new">本轮改动</span>
+    </div>
+    <div class="phone" style="height:640px">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">定制专属食谱</span></div>
+      <div style="opacity:.3;filter:blur(1.5px);padding:0 0 8px">
+        <div class="hero"><div class="hero__id"><div class="hero__av">🐕</div><div><div class="hero__name">旺财</div><div class="hero__line">中华田园犬 · 2 岁</div></div></div></div>
+        <div class="card"><div class="card__title">体重管理</div></div>
+        <div class="card"><div class="card__title">过敏</div></div>
+        <div class="card"><div class="card__title">健康档案</div></div>
+        <div class="card"><div class="card__title">它现在吃什么</div></div>
+      </div>
+      <div class="mask">
+        <div class="sheet">
+          <div class="sheet__handle"></div>
+          <div class="sheet__t">确认一下，再付款</div>
+
+          <div class="card" style="margin-top:12px">
+            <div class="kv"><span class="kv__k">给谁定制</span><span class="kv__v">旺财（中华田园犬 · 11.2kg）</span></div>
+            <div class="kv"><span class="kv__k">交付日期</span><span class="kv__v"><b>10 月 20 日（周三）</b></span></div>
+          </div>
+
+          <div class="card">
+            <div class="card__title">你会得到什么</div>
+            <div class="kv"><span class="kv__k">包含</span><span class="kv__v">一份专属食谱 + 7 天内免费调整 2 次</span></div>
+            <div class="kv"><span class="kv__k">不含</span><span class="kv__v" style="color:#b4453a">食材（需自己按分量买）</span></div>
+            <div class="kv"><span class="kv__k">付完后</span><span class="kv__v">可<b>全额抵扣</b>成品鲜食</span></div>
+          </div>
+
+          <div class="btnrow" style="margin-top:14px">
+            <div class="btn btn--ghost">再看看</div>
+            <div class="btn btn--main">支付 ¥300</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col__note">
+      删掉了原来的「今天 10 月 17 日」—— 顾客自己知道今天几号，写出来只是占地方。
+      <br /><br />
+      底部也<b>不再单独显示 ¥300</b>，因为按钮上已经有了。
+    </div>
+  </div>
+
+</div>
+
+<!-- ================================================================ -->
+<h2>二、文案对照 <span>逐条看删了什么、改了什么</span></h2>
+<table class="ask">
+  <tr>
+    <th style="width:300px">v3（啰嗦 / 对内）</th>
+    <th style="width:260px">v4（给用户看）</th>
+    <th>为什么</th>
+  </tr>
+  <tr>
+    <td class="del">先确认这些对不对</td>
+    <td class="new">确认以下信息</td>
+    <td>原来那句像是在征求同意，其实只是让顾客核对</td>
+  </tr>
+  <tr>
+    <td class="del">✅ 已从档案带出 2 项过敏原，可以直接修改或补充。</td>
+    <td class="new">（整句删掉，标签直接显示）</td>
+    <td>顾客只关心"有没有过敏"，不关心数据从哪来</td>
+  </tr>
+  <tr>
+    <td class="del">方式一：从常见过敏原里点选<br />方式二：手动输入<br />方式三：上传报告 AI 识别</td>
+    <td class="new">＋ 添加　／　📷 拍检测报告，自动识别</td>
+    <td>把"三种方式"写成功能清单是站在我们视角；顾客只要看到两个按钮</td>
+  </tr>
+  <tr>
+    <td class="del">有报告的话最快：拍一下，自动把过敏原读出来给你确认。</td>
+    <td class="new">（删掉）</td>
+    <td>按钮上已经写了"自动识别"，不用再解释一遍</td>
+  </tr>
+  <tr>
+    <td class="del">之后有新的就诊吗？去补填 ›<br />填完回来会自动更新，不需要重填定制需求。</td>
+    <td class="new">没有任何就诊和体检记录　　去补填 ›</td>
+    <td>健康犬只需要知道"可以跳过"；技术细节不该出现在这里</td>
+  </tr>
+  <tr>
+    <td class="del">告诉我们它现在吃什么，才好在交付时给你一个靠谱的过渡方案。</td>
+    <td class="new">（删掉）</td>
+    <td>解释"为什么要填"会让页面变吵</td>
+  </tr>
+  <tr>
+    <td class="del">这里放"没地方归类的话"。过敏报告、化验单请在上面对应板块上传。</td>
+    <td class="new">还有什么想让我们知道的？</td>
+    <td>后面那句是在教顾客分类，其实他自己会放</td>
+  </tr>
+  <tr>
+    <td class="del">¥300 是营养师定制费，不含食材。付完后可全额抵扣成品鲜食。</td>
+    <td class="new">定价含营养师一对一设计，不含食材；付完可全额抵扣成品鲜食。</td>
+    <td>金额已在按钮上，这里只说"定价包含什么"</td>
+  </tr>
+</table>
+
+<!-- ================================================================ -->
+<h2>三、还需要你定的 <span>这几条我没敢自己改</span></h2>
+<table class="ask">
+  <tr><th style="width:240px">待定</th><th>说明</th></tr>
+  <tr>
+    <td>过敏选"没有"之后，还要不要再确认一次？</td>
+    <td>过敏是安全项。现在点一下就定了，顾客可能误点。要不要在下单前再问一句？</td>
+  </tr>
+  <tr>
+    <td>文档上传的大小上限</td>
+    <td>照片现在是单张 10MB。PDF / Word 要不要放宽到 20MB？</td>
+  </tr>
+  <tr>
+    <td>「疾病调理」要不要跟"有就诊记录"联动？</td>
+    <td>如果他选了「疾病调理」但档案里没有就诊记录，要不要提醒他去补？</td>
+  </tr>
+  <tr>
+    <td>健康档案那一行要不要合并进「过敏」卡？</td>
+    <td>现在单独一块只为放一句"没有记录"。可以合并省一块版面，但会让过敏卡变长。</td>
+  </tr>
+</table>
+
+</body>
+</html>

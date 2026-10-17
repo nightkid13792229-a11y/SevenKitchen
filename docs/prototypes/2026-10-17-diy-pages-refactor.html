@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>DIY 两页 · 现状与重构目标（2026-10-17）</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: #FAF7F2; color: #3F3222; padding: 26px 22px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: 22px; margin-bottom: 6px; }
+  h2 { font-size: 17px; margin: 42px 0 6px; padding-top: 12px; border-top: 2px solid #E4D8C8; }
+  h2 span { font-size: 12.5px; font-weight: 400; color: #8A7A66; margin-left: 8px; }
+  .sub { font-size: 12.5px; color: #6E5F4B; line-height: 1.8; max-width: 1400px; }
+  .sub b { color: #3F3222; }
+  code { background: #F0E6D8; padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+
+  .row { display: flex; gap: 18px; overflow-x: auto; padding: 14px 0 20px; align-items: flex-start; }
+  .col { width: 366px; flex: 0 0 366px; }
+  .col__head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12.5px; font-weight: 700; }
+  .col__tag { font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+  .tag--now { background: #F3E4E1; color: #96271a; }
+  .tag--target { background: #E3F0E6; color: #1e5b35; }
+  .col__note { font-size: 11.5px; color: #8A7A66; line-height: 1.75; margin-top: 8px; }
+  .col__note b { color: #b4453a; }
+
+  .phone {
+    width: 366px; background: #FAF7F2; border: 1px solid #EDE0D0;
+    border-radius: 20px; overflow: hidden;
+    box-shadow: 0 6px 24px rgba(74,55,38,.06);
+  }
+  .navbar { height: 42px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: #FAF7F2; }
+  .navbar__back { font-size: 16px; color: #6E5F4B; }
+  .navbar__t { font-size: 13.5px; font-weight: 600; }
+  .body { padding: 0 10px 16px; }
+
+  .cover { position: relative; height: 132px; border-radius: 13px; overflow: hidden; margin-bottom: 10px; }
+  .cover--img {
+    background:
+      radial-gradient(circle at 30% 26%, rgba(255,236,190,.9), rgba(255,236,190,0) 42%),
+      radial-gradient(circle at 72% 34%, rgba(214,160,80,.92), rgba(214,160,80,0) 46%),
+      linear-gradient(150deg, #d9a556, #8a5424 62%, #5c3616);
+  }
+  .cover__scrim { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(18,12,6,0) 30%, rgba(18,12,6,.32) 58%, rgba(18,12,6,.90) 100%); }
+  .cover__txt { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 13px; color: #fff; }
+  .cover__name { font-size: 17px; font-weight: 800; line-height: 1.25; text-shadow: 0 1px 3px rgba(0,0,0,.55), 0 2px 12px rgba(0,0,0,.45); }
+
+  .card { background: #fff; border: 1px solid #EDE0D0; border-radius: 13px; padding: 12px; margin-bottom: 9px; }
+  .card--warn { border-color: #E8C88A; background: #FFFDF8; }
+  .card--del { border-color: #F0C8BC; background: #FFFBFA; }
+  .sec__t { font-size: 12.5px; font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; }
+  .sec__t em { font-style: normal; margin-left: auto; font-size: 10.5px; font-weight: 400; color: #A9967E; }
+
+  .std { font-size: 11px; color: #1e5b35; background: #F2F8F4; border-radius: 8px; padding: 6px 9px; margin-bottom: 9px; text-align: center; }
+
+  /* 六项信息 */
+  .facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+  .fact { background: #FBF8F3; border-radius: 8px; padding: 7px 6px; }
+  .fact__l { font-size: 9px; color: #A9967E; }
+  .fact__v { font-size: 12.5px; font-weight: 700; margin-top: 2px; }
+  .fact__v--calc { color: #B45309; }
+
+  /* 狗选择 */
+  .dogs { display: flex; gap: 7px; }
+  .dog { display: flex; align-items: center; gap: 6px; background: #fff; border: 1.5px solid #EDE0D0; border-radius: 999px; padding: 5px 11px 5px 5px; font-size: 11.5px; }
+  .dog--on { border-color: #B45309; background: #FFF8F1; }
+  .dog__av { width: 22px; height: 22px; border-radius: 50%; background: #EFE6D6; display: flex; align-items: center; justify-content: center; font-size: 11px; }
+
+  /* 天数 */
+  .days { display: flex; gap: 7px; }
+  .day { flex: 1; text-align: center; font-size: 12px; font-weight: 700; padding: 9px 0; border-radius: 10px; background: #FBF8F3; border: 1.5px solid #EDE0D0; color: #6E5F4B; }
+  .day--on { background: #FFF1E3; border-color: #E5C9A3; color: #B45309; }
+
+  /* 分装 */
+  .pack { display: flex; align-items: center; gap: 8px; margin-top: 9px; }
+  .pack__in { flex: 1; background: #FBF8F3; border: 1.5px solid #EDE0D0; border-radius: 9px; padding: 8px 10px; font-size: 12px; text-align: center; }
+  .pack__l { font-size: 10px; color: #A9967E; text-align: center; }
+
+  /* 表格 */
+  .thead { display: flex; font-size: 10px; color: #A9967E; padding: 0 2px 6px; border-bottom: 1px solid #F0E6D8; }
+  .th-n { flex: 1; }
+  .th-m { width: 66px; }
+  .th-r { width: 66px; text-align: right; }
+  .item { display: flex; align-items: baseline; font-size: 11.5px; padding: 7px 2px; border-bottom: 1px dashed #F4EBE0; }
+  .item:last-child { border-bottom: 0; }
+  .it-n { flex: 1; }
+  .it-m { width: 66px; color: #8A7A66; font-size: 10.5px; }
+  .it-r { width: 66px; text-align: right; font-weight: 700; color: #B45309; }
+  .it-r small { display: block; font-weight: 400; color: #9C8B76; font-size: 9.5px; }
+  .table-h { font-size: 11px; font-weight: 700; margin: 10px 0 6px; color: #6E5F4B; }
+  .table-h:first-child { margin-top: 0; }
+  .table-h em { font-style: normal; color: #A9967E; font-weight: 400; margin-left: 5px; }
+
+  .total-line { display: flex; font-size: 11.5px; padding: 7px 2px 0; border-top: 1px solid #F0E6D8; margin-top: 5px; }
+  .total-line b { margin-left: auto; color: #b4453a; }
+
+  .note-line { font-size: 10px; color: #9C8B76; margin-top: 5px; line-height: 1.5; }
+
+  .steps { font-size: 11px; line-height: 1.9; color: #3F3222; }
+  .steps b { color: #B45309; }
+
+  .btn { text-align: center; font-size: 13px; font-weight: 700; padding: 12px 0; border-radius: 12px; background: #B45309; color: #fff; margin-top: 12px; }
+  .btn--line { background: #fff; color: #B45309; border: 1.5px solid #E5C9A3; }
+
+  .mark { display: inline-block; font-size: 9px; font-weight: 700; border-radius: 4px; padding: 1px 5px; margin-left: 4px; vertical-align: 1px; }
+  .mark--comp { background: #E3F0E6; color: #1e5b35; }
+  .mark--logic { background: #E6EDF7; color: #23477e; }
+  .mark--keep { background: #F0E6D8; color: #8A7A66; }
+  .mark--del { background: #FCEAE5; color: #b4453a; }
+  .mark--diy { background: #F3E8F5; color: #6b2e7a; }
+
+  .banner { background: #FFF8EC; border: 2px solid #E8C88A; border-radius: 12px; padding: 14px 16px; max-width: 1400px; margin: 16px 0 8px; }
+  .banner__t { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+  .banner ul { margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.9; color: #6E5F4B; }
+  .banner b { color: #3F3222; }
+  .legend { display: flex; gap: 14px; font-size: 11.5px; color: #6E5F4B; margin-top: 10px; flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+  table.diff { margin: 10px 0 0; border-collapse: collapse; font-size: 12.5px; background: #fff; max-width: 1400px; width: 100%; }
+  table.diff th, table.diff td { text-align: left; padding: 8px 10px; border-top: 1px solid #F0E6D8; vertical-align: top; }
+  table.diff th { background: #FBF5EC; font-weight: 600; border-top: 0; }
+  .del { color: #b4453a; }
+  .new { color: #1e5b35; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>DIY 两页 · 现状与重构目标</h1>
+<div class="sub">
+  2026-10-17 ｜ 对应 <code>2026-10-17-recipe-presentation-refactor.md</code><br />
+  「DIY 配置页」= <code>recipe-diy/index.vue</code>（2092 行）｜
+  「DIY 制作单」= <code>diy-sheet/index.vue</code>（3367 行）。<b>只画原型，不动代码。</b>
+</div>
+
+<div class="banner">
+  <div class="banner__t">这两个页面跟交付两页的重合度高得惊人</div>
+  <ul>
+    <li><b>DIY 配置页</b> ≈ 交付第 2 页的"调节"部分（选狗 + 饭量 + 天数 + 分装）
+      —— 只不过 DIY 是"从零配"，交付是"看营养师给的那份"。</li>
+    <li><b>DIY 制作单</b> ≈ 交付第 2 页的内容部分（食材用量 + 补剂 + 制作流程 + 储存）。</li>
+    <li><b>制作单里那块「建议采购量 + 建议采购合计 + 已按 7% 损耗」正是老板要删的。</b></li>
+    <li>两个页面都有<b>生命阶段提醒</b> —— 印证了"四页共用"的判断。</li>
+  </ul>
+  <div class="legend">
+    <span><i style="background:#E3F0E6"></i>共享组件</span>
+    <span><i style="background:#E6EDF7"></i>抽 composable / 搬后端</span>
+    <span><i style="background:#F3E8F5"></i>DIY 独有（不进共享）</span>
+    <span><i style="background:#FCEAE5"></i>要删</span>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<h2>一、DIY 配置页 <span>左边照代码还原</span></h2>
+
+<div class="row">
+
+  <div class="col">
+    <div class="col__head"><span>现状（线上）</span><span class="col__tag tag--now">按代码还原</span></div>
+    <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">DIY 食谱配置</span></div>
+      <div class="body">
+
+        <div class="cover cover--img" style="margin-top:8px"></div>
+
+        <div class="std">✓ 符合 FEDIAF 犬营养标准（2018）· 点击看说明</div>
+
+        <div class="card">
+          <div class="sec__t">选择爱犬</div>
+          <div class="dogs">
+            <div class="dog dog--on"><span class="dog__av">🐕</span>豆豆</div>
+            <div class="dog"><span class="dog__av">🐕</span>旺财</div>
+          </div>
+          <div class="facts" style="margin-top:9px">
+            <div class="fact"><div class="fact__l">年龄</div><div class="fact__v">3 岁</div></div>
+            <div class="fact"><div class="fact__l">性别</div><div class="fact__v">公</div></div>
+            <div class="fact"><div class="fact__l">体重</div><div class="fact__v">11.2kg</div></div>
+            <div class="fact"><div class="fact__l">每日餐次</div><div class="fact__v">2 餐</div></div>
+            <div class="fact"><div class="fact__l">每日饭量</div><div class="fact__v fact__v--calc">320g</div></div>
+            <div class="fact"><div class="fact__l">每餐约</div><div class="fact__v fact__v--calc">160g</div></div>
+          </div>
+          <div class="note-line">每日饭量是怎么算的？ ›</div>
+        </div>
+
+        <div class="card card--warn">
+          <div class="sec__t" style="margin-bottom:4px">⚠️ 生命阶段提醒</div>
+          <div class="note-line" style="margin-top:0;color:#8a5a00">
+            这条食谱有幼犬版，已为你切到成犬版
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="sec__t">快速选择备餐天数</div>
+          <div class="days">
+            <div class="day">7 天</div>
+            <div class="day day--on">14 天</div>
+            <div class="day">21 天</div>
+            <div class="day">30 天</div>
+          </div>
+          <div class="pack">
+            <div class="pack__in">200</div>
+            <div class="pack__l">每袋</div>
+            <div class="pack__in">2</div>
+            <div class="pack__l">袋数</div>
+          </div>
+          <div class="note-line">＋ 添加多个分装规格</div>
+        </div>
+
+        <div class="btn">生成制作单</div>
+
+      </div>
+    </div>
+    <div class="col__note">
+      配置页的职责：<b>选狗 → 看饭量 → 选做几天 → 选分装</b>，然后生成制作单。
+      <br /><br />
+      注意「每日饭量 / 每餐约」是<b>后端算好的</b>（<code>calc-for-recipe</code>），
+      这一页只是显示 —— 这点本来就是对的。
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="col__head"><span>目标（重构后）</span><span class="col__tag tag--target">该改成这样</span></div>
+    <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">DIY 食谱配置</span></div>
+      <div class="body">
+
+        <div class="cover cover--img" style="margin-top:8px">
+          <div class="cover__scrim"></div>
+          <div class="cover__txt"><div class="cover__name">低脂鸡肉南瓜餐</div></div>
+        </div>
+        <div class="sub" style="font-size:11px;margin:-3px 0 9px">
+          <span class="mark mark--comp">共享组件</span> 封面块（只叠食谱名，与详情页一致）
+        </div>
+
+        <div class="card">
+          <div class="sec__t">选择爱犬</div>
+          <div class="dogs">
+            <div class="dog dog--on"><span class="dog__av">🐕</span>豆豆</div>
+            <div class="dog"><span class="dog__av">🐕</span>旺财</div>
+          </div>
+          <div class="facts" style="margin-top:9px">
+            <div class="fact"><div class="fact__l">年龄</div><div class="fact__v">3 岁</div></div>
+            <div class="fact"><div class="fact__l">性别</div><div class="fact__v">公</div></div>
+            <div class="fact"><div class="fact__l">体重</div><div class="fact__v">11.2kg</div></div>
+            <div class="fact"><div class="fact__l">每日餐次</div><div class="fact__v">2 餐</div></div>
+            <div class="fact"><div class="fact__l">每日饭量</div><div class="fact__v fact__v--calc">320g</div></div>
+            <div class="fact"><div class="fact__l">每餐约</div><div class="fact__v fact__v--calc">160g</div></div>
+          </div>
+        </div>
+        <div class="sub" style="font-size:11px;margin:-3px 0 9px">
+          <span class="mark mark--logic">composable</span> useDogSelection
+          <span class="mark mark--logic">后端</span> 饭量已经是后端算的（不变）
+        </div>
+
+        <div class="card card--warn">
+          <div class="sec__t" style="margin-bottom:4px">⚠️ 生命阶段提醒</div>
+          <div class="note-line" style="margin-top:0;color:#8a5a00">
+            这条食谱有幼犬版，已为你切到成犬版
+          </div>
+        </div>
+        <div class="sub" style="font-size:11px;margin:-3px 0 9px">
+          <span class="mark mark--comp">共享组件</span> 生命阶段卡（四页共用）
+        </div>
+
+        <div class="card">
+          <div class="sec__t">做几天</div>
+          <div class="days">
+            <div class="day">7 天</div>
+            <div class="day day--on">14 天</div>
+            <div class="day">21 天</div>
+            <div class="day">30 天</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="sec__t">怎么分装 <em>DIY 独有</em></div>
+          <div class="pack">
+            <div class="pack__in">200</div>
+            <div class="pack__l">每袋（克）</div>
+            <div class="pack__in">2</div>
+            <div class="pack__l">袋数</div>
+          </div>
+          <div class="note-line">＋ 添加多个分装规格</div>
+        </div>
+        <div class="sub" style="font-size:11px;margin:-3px 0 9px">
+          <span class="mark mark--diy">DIY 独有</span> 交付页没有分装 ——
+          交付只告诉"这次做多少"，不管你怎么装
+        </div>
+
+        <div class="btn">生成制作单</div>
+
+      </div>
+    </div>
+    <div class="col__note">
+      <b>这一页变化很小</b> —— 它本来就没什么重复字段的问题。
+      <br /><br />
+      真正要做的：把「选狗」「生命阶段」「封面」换成共享组件，
+      把配置逻辑（天数/分装）收进一个 composable。
+      <br /><br />
+      顺便把「做几天」和「怎么分装」拆成两张卡 —— 现在是混在一张卡里的。
+    </div>
+  </div>
+
+</div>
+
+<!-- ================================================================ -->
+<h2>二、DIY 制作单 <span>这块要删的东西最多</span></h2>
+
+<div class="row">
+
+  <div class="col">
+    <div class="col__head"><span>现状（线上）</span><span class="col__tag tag--now">按代码还原</span></div>
+    <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">制作清单</span></div>
+      <div class="body">
+
+        <div class="cover cover--img" style="margin-top:8px"></div>
+        <div class="std">✓ 符合 FEDIAF 犬营养标准（2018）</div>
+
+        <div class="card card--warn">
+          <div class="sec__t" style="margin-bottom:4px">⚠️ 生命阶段提醒</div>
+          <div class="note-line" style="margin-top:0;color:#8a5a00">已为你切到成犬版</div>
+        </div>
+
+        <div class="card">
+          <div class="sec__t">制作清单</div>
+          <div class="facts">
+            <div class="fact"><div class="fact__l">狗狗</div><div class="fact__v">豆豆</div></div>
+            <div class="fact"><div class="fact__l">每天</div><div class="fact__v">320g</div></div>
+            <div class="fact"><div class="fact__l">做几天</div><div class="fact__v">14 天</div></div>
+          </div>
+        </div>
+
+        <div class="card card--del">
+          <div class="sec__t">食材 <em style="color:#b4453a">含采购量</em></div>
+          <div class="thead"><span class="th-n">原料名称</span><span class="th-m">制备方法</span><span class="th-r">建议采购量</span></div>
+          <div class="item"><span class="it-n">鸡胸肉</span><span class="it-m">切丁煮熟</span><span class="it-r">1712g</span></div>
+          <div class="item"><span class="it-n">南瓜</span><span class="it-m">蒸熟压泥</span><span class="it-r">1070g</span></div>
+          <div class="item"><span class="it-n">糙米</span><span class="it-m">煮软</span><span class="it-r">1070g</span></div>
+          <div class="item"><span class="it-n">西兰花</span><span class="it-m">焯水切碎</span><span class="it-r">428g</span></div>
+          <div class="total-line"><span>建议采购合计</span><b>4280g</b></div>
+          <div class="note-line">建议采购量已计算制作损耗。</div>
+        </div>
+
+        <div class="card">
+          <div class="sec__t">营养补充剂</div>
+          <div class="thead"><span class="th-n">补剂名称</span><span class="th-m">添加时机</span><span class="th-r">添加总量</span></div>
+          <div class="item"><span class="it-n">钙粉</span><span class="it-m">随餐</span><span class="it-r">22g</span></div>
+          <div class="item"><span class="it-n">鱼油</span><span class="it-m">出锅前</span><span class="it-r">9g</span></div>
+        </div>
+
+        <div class="card">
+          <div class="sec__t">制作流程</div>
+          <div class="steps">
+            <b>1.</b> 鸡胸肉切块蒸 15 分钟<br />
+            <b>2.</b> 南瓜去皮蒸 12 分钟<br />
+            <b>3.</b> 糙米煮 25 分钟<br />
+            <b>4.</b> 全部放凉拌匀，分装
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="sec__t">制作设备推荐 <em>查看详情 →</em></div>
+        </div>
+
+        <div class="btn btn--line">购买预分装补剂</div>
+
+      </div>
+    </div>
+    <div class="col__note">
+      <b>这个页面的问题最集中：</b>
+      <br /><br />
+      ① 食材表给的是「建议采购量」，而且大字 — 要改成净用量<br />
+      ② 还有「建议采购合计」和「已按 7% 损耗」的说明<br />
+      ③ 这些数字是<b>页面自己算的</b>：<code>theoreticalAmount * (1 + lossRate)</code>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="col__head"><span>目标（重构后）</span><span class="col__tag tag--target">该改成这样</span></div>
+    <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">制作清单</span></div>
+      <div class="body">
+
+        <div class="cover cover--img" style="margin-top:8px">
+          <div class="cover__scrim"></div>
+          <div class="cover__txt"><div class="cover__name">低脂鸡肉南瓜餐</div></div>
+        </div>
+        <div class="sub" style="font-size:11px;margin:-3px 0 9px">
+          <span class="mark mark--comp">共享组件</span> 封面块
+        </div>
+
+        <div class="card card--warn">
+          <div class="sec__t" style="margin-bottom:4px">⚠️ 生命阶段提醒</div>
+          <div class="note-line" style="margin-top:0;color:#8a5a00">已为你切到成犬版</div>
+        </div>
+        <div class="sub" style="font-size:11px;margin:-3px 0 9px">
+          <span class="mark mark--comp">共享组件</span> 生命阶段卡
+        </div>
+
+        <div class="card">
+          <div class="sec__t">制作清单</div>
+          <div class="facts">
+            <div class="fact"><div class="fact__l">狗狗</div><div class="fact__v">豆豆</div></div>
+            <div class="fact"><div class="fact__l">每天</div><div class="fact__v">320g</div></div>
+            <div class="fact"><div class="fact__l">做几天</div><div class="fact__v">14 天</div></div>
+          </div>
+        </div>
+
+        <div class="card" style="border-color:#B9D8C2;background:#F7FBF8">
+          <div class="sec__t">食材 <em style="color:#1e5b35">只给净用量</em></div>
+          <div class="thead"><span class="th-n">原料名称</span><span class="th-m">制备方法</span><span class="th-r">净用量</span></div>
+          <div class="item"><span class="it-n">鸡胸肉</span><span class="it-m">切丁煮熟</span><span class="it-r">1600g</span></div>
+          <div class="item"><span class="it-n">南瓜</span><span class="it-m">蒸熟压泥</span><span class="it-r">1000g</span></div>
+          <div class="item"><span class="it-n">糙米</span><span class="it-m">煮软</span><span class="it-r">1000g</span></div>
+          <div class="item"><span class="it-n">西兰花</span><span class="it-m">焯水切碎</span><span class="it-r">400g</span></div>
+          <div class="total-line" style="border-color:#CFE3D5;color:#1e5b35">
+            <span>合计净重</span><b style="color:#1e5b35">4000g</b>
+          </div>
+          <div class="note-line" style="color:#1e5b35">
+            只写"这次要用多少"。买多少你自己判断。
+          </div>
+        </div>
+        <div class="sub" style="font-size:11px;margin:-3px 0 9px">
+          <span class="mark mark--comp">共享组件</span> 用量表（与交付第 2 页同一套）
+          <span class="mark mark--logic">后端</span> 数字由后端算，页面不再乘损耗
+        </div>
+
+        <div class="card">
+          <div class="sec__t">营养补充剂</div>
+          <div class="thead"><span class="th-n">补剂名称</span><span class="th-m">添加时机</span><span class="th-r">添加总量</span></div>
+          <div class="item"><span class="it-n">钙粉</span><span class="it-m">随餐</span><span class="it-r">20g</span></div>
+          <div class="item"><span class="it-n">鱼油</span><span class="it-m">出锅前</span><span class="it-r">8g</span></div>
+        </div>
+        <div class="sub" style="font-size:11px;margin:-3px 0 9px">
+          <span class="mark mark--logic">后端</span> 补剂量也从后端来（现在页面自己算）
+        </div>
+
+        <div class="card">
+          <div class="sec__t">制作流程</div>
+          <div class="steps">
+            <b>1.</b> 鸡胸肉切块蒸 15 分钟<br />
+            <b>2.</b> 南瓜去皮蒸 12 分钟<br />
+            <b>3.</b> 糙米煮 25 分钟<br />
+            <b>4.</b> 全部放凉拌匀，分装
+          </div>
+        </div>
+        <div class="sub" style="font-size:11px;margin:-3px 0 9px">
+          <span class="mark mark--comp">共享组件</span> 制作步骤块（与交付第 2 页同一套）
+        </div>
+
+        <div class="card">
+          <div class="sec__t">制作设备推荐 <em>查看详情 →</em></div>
+        </div>
+        <div class="sub" style="font-size:11px;margin:-3px 0 9px">
+          <span class="mark mark--diy">DIY 独有</span> 交付页没有这个
+        </div>
+
+        <div class="btn btn--line">购买预分装补剂</div>
+
+      </div>
+    </div>
+    <div class="col__note">
+      <b>变化集中在食材表：</b>
+      采购量 → 净用量、删掉"建议采购合计"、删掉损耗说明。
+      <br /><br />
+      <b>但制备方法要保留</b> —— 制作单是"动手做"的时候看的，
+      知道"切丁煮熟"有用；详情页是"看这是什么"，不需要。
+      <br /><br />
+      → 所以<b>用量表和占比表是两个组件</b>，不是一个组件加参数。
+    </div>
+  </div>
+
+</div>
+
+<!-- ================================================================ -->
+<h2>三、DIY 两页的改动清单</h2>
+<table class="diff">
+  <tr><th style="width:70px">类型</th><th style="width:230px">改什么</th><th>说明</th></tr>
+  <tr>
+    <td class="new" style="font-weight:700">删</td>
+    <td><b>采购量整条线</b></td>
+    <td>食材表的「建议采购量」列 → 改「净用量」；「建议采购合计」删；
+      「已按 7% 损耗留出余量」删；<code>actualAmount = theoretical * (1 + lossRate)</code> 整段删</td>
+  </tr>
+  <tr>
+    <td class="new" style="font-weight:700">搬后端</td>
+    <td><b>补剂量计算</b></td>
+    <td>现在在 <code>diy-sheet</code> 前端算，改成后端给</td>
+  </tr>
+  <tr>
+    <td class="new" style="font-weight:700">搬后端</td>
+    <td><b>分装规格的换算</b></td>
+    <td>每袋多少克 / 几袋 / 总克数 —— 现在前端算</td>
+  </tr>
+  <tr>
+    <td style="color:#1e5b35;font-weight:700">抽组件</td>
+    <td>封面块 / 生命阶段卡 / 用量表 / 制作步骤块</td>
+    <td>四个都跟交付第 2 页共用同一套</td>
+  </tr>
+  <tr>
+    <td style="color:#23477e;font-weight:700">抽逻辑</td>
+    <td>选狗 / 天数选择 / 分装配置</td>
+    <td><code>useDogSelection</code> + <code>usePackagePlan</code></td>
+  </tr>
+  <tr>
+    <td style="color:#6b2e7a;font-weight:700">DIY 独有</td>
+    <td>分装规格 / 制作设备推荐</td>
+    <td><b>不进共享组件</b> —— 交付页不需要这两个</td>
+  </tr>
+  <tr>
+    <td style="color:#8A7A66;font-weight:700">保留</td>
+    <td>制作流程 / 购买预分装补剂弹窗</td>
+    <td>逻辑不变，只是数据来源改后端</td>
+  </tr>
+</table>
+
+<!-- ================================================================ -->
+<h2>四、这一轮之后，两页各剩多少</h2>
+<table class="diff">
+  <tr><th style="width:230px">页面</th><th style="width:200px">script 现在</th><th style="width:200px">目标</th><th>靠什么降下来</th></tr>
+  <tr>
+    <td><b>DIY 配置页</b></td>
+    <td class="del">908 行</td>
+    <td class="new">&lt; 300 行</td>
+    <td>选狗 / 天数 / 分装 收进 composable；饭量本来就是后端的</td>
+  </tr>
+  <tr>
+    <td><b>DIY 制作单</b></td>
+    <td class="del">1603 行</td>
+    <td class="new">&lt; 300 行</td>
+    <td><b>删掉采购量整段</b>（这是最大的一块）+ 补剂量搬后端 + 四个组件抽出去</td>
+  </tr>
+</table>
+
+<div class="banner" style="margin-top:18px;border-color:#CFE3D5;background:#F7FBF8">
+  <div class="banner__t" style="color:#1e5b35">一个值得注意的点</div>
+  <ul style="color:#3F3222">
+    <li><b>DIY 制作单的 1603 行里，最大的一块就是"算采购量"。</b>
+      按老板的决定删掉之后，不用搬后端、不用抽组件，<b>这一段直接消失</b> ——
+      这是本轮"净减少代码"最明显的一处。</li>
+    <li><b>用量表要做成两个组件</b>（占比表 / 用量表），不是一个组件加参数：
+      详情页要「名称 + 占比」、制作单要「名称 + 制备方法 + 净用量」。
+      参数越少，漏传的机会越少。</li>
+  </ul>
+</div>
+
+</body>
+</html>

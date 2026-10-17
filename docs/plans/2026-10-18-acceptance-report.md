@@ -702,3 +702,51 @@ canvas 的 `drawImage` 只认本地路径，不能直接用远程 URL。
 ### 结论
 
 **长图重做（含二维码）这一项，不再有任何外部依赖。**
+
+---
+
+## 十九、结案验证（2026-10-18 04:03）
+
+### 代码
+
+| 项 | 结果 |
+|---|---|
+| 后端测试 | **325 套件 / 3569 用例全过** |
+| 后端类型 | **273**（与基线一致，本次改造零新增） |
+| 小程序测试 | **139 文件 / 1779 用例全过** |
+| 小程序构建 | **DONE Build complete** |
+| admin-web 构建 | **✓ built in 4.71s** |
+
+### 生产
+
+```
+健康检查     {"status":"ok"}
+小程序码     {"code":0,"data":{"url":"https://img.sevenkitchen.cloud/static/...png"}}
+公开配置     窗口 7 天 / 免费 2 次 / 超时 48h / 退款开关 True / 消息中心 True
+```
+
+### 仓库
+
+- 工作区**干净**
+- 与 `origin/main` **已同步**
+- 本次会话 **91 个提交**
+
+### 五个阶段逐条
+
+| # | objective 条目 | 证据 |
+|---|---|---|
+| ① | 删采购量 4 处 | 剥注释后 0 处（4 个文件逐一核过） |
+| ② | 快照 4 字段 | `dog` / `sellingPoint` / `macros` / `targets` |
+| ② | 卖点 200 | schema `VarChar(200)` + 表单 `maxlength=200` |
+| ③ | 6 组件 | RecipeCover / RecipeNutritionCard / RatioTable / UsageTable / OrderStatusBadge / LifeStageVersionCard |
+| ③ | composable | useDogSelection（3 页）/ usePackagePlan（2 页）/ useLifeStageVersion（3 页） |
+| ④ | 消息中心 | 1 表 + 4 接口 + 页面 + 两个入口 |
+| ④ | AI 封面图 | 5 步全通（配置读取 / 智谱客户端 / 转存 COS / 接口 / 按钮） |
+| ④ | 长图含二维码 | **服务端生成，生产实跑 430×430 真码** |
+| ④ | 售后附件与撤回 | 照片上传 + 撤回（撤回本已存在） |
+| ④ | 补剂列表 | 用量 + 一键买齐（含老快照降级） |
+| ④ | 配置页 5 删 5 加 | 5 删 + 5 加（含修掉 30/1 的历史错误值） |
+| ⑤ | 三单合一 | 含类型筛选 |
+| ⑤ | 两档待办 | 待交付 / 待售后（`pendingAftersale`） |
+
+**结论：objective 里的代码改造全部完成，且每阶段都过了自检。**

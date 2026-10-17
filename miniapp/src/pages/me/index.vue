@@ -193,6 +193,19 @@
           <text class="function-count">({{ totalOrderCount }}笔)</text>
         </view>
 
+        <!--
+          消息（2026-10-18 加）。
+          底部只有 3 个 tab，塞不下第 4 个；消息是"被动来看"的，
+          不值得占 tab —— 放这里 + 首页铃铛两处就够。
+        -->
+        <view class="function-item" @tap="goToMessages">
+          <text class="function-text">消息</text>
+          <text v-if="unreadMessageCount > 0" class="function-badge">
+            {{ unreadMessageCount > 99 ? '99+' : unreadMessageCount }}
+          </text>
+          <text v-else class="function-count">(0条)</text>
+        </view>
+
         <view class="function-item" @tap="goToAddressList">
           <text class="function-text">收货地址</text>
           <text class="function-count">({{ userInfo.addressCount || 0 }}个)</text>
@@ -280,6 +293,7 @@ import { onShow } from "@dcloudio/uni-app";
 import { getToken, clearToken, request } from "../../utils/api";
 import { resolveUserAvatarSrc } from "../../utils/user-profile";
 import { refreshCurrentTabBar } from '../../utils/tabbar';
+import { fetchUnreadMessageCount } from '@/api/messages';
 import { navigateToDogCreate } from '../../utils/dog-profile-entry';
 import { useRecipeDesignerEntry } from '../../utils/recipe-designer-entry';
 import {
@@ -453,6 +467,25 @@ async function goToDogList() {
 // 直接建档（统一入口：带来源埋点，建档成功后回到「我的」页）
 function goToDogCreate() {
   navigateToDogCreate({ source: 'my_page' })
+}
+
+/**
+ * 未读消息数（2026-10-18）。
+ *
+ * 失败静默给 0 —— 红点拿不到不该打扰顾客。
+ * onShow 时刷新，从消息页返回要立刻变。
+ */
+const unreadMessageCount = ref(0)
+async function refreshUnreadMessages() {
+  if (!uni.getStorageSync('token')) {
+    unreadMessageCount.value = 0
+    return
+  }
+  unreadMessageCount.value = await fetchUnreadMessageCount()
+}
+
+function goToMessages() {
+  uni.navigateTo({ url: '/pages/messages/index' })
 }
 
 // 跳转订单列表
@@ -711,6 +744,8 @@ onShow(() => {
   void loadRecipeDesignerEntry();
   refreshCurrentTabBar();
   refreshCustomerTestModeState();
+  // 从消息页返回时红点要立刻变（失败静默给 0，不打扰顾客）
+  void refreshUnreadMessages();
 
   // 检查登录状态（每次显示页面时都会执行）
   const token = getToken();
@@ -1116,5 +1151,20 @@ onShow(() => {
 .loading-text {
   color: #fff;
   font-size: 28rpx;
+}
+
+/* 未读消息角标（2026-10-18） */
+.function-badge {
+  min-width: 34rpx;
+  height: 34rpx;
+  border-radius: 999rpx;
+  background: #d93f3f;
+  color: #fff;
+  font-size: 20rpx;
+  font-weight: 700;
+  text-align: center;
+  line-height: 34rpx;
+  padding: 0 10rpx;
+  margin-left: 12rpx;
 }
 </style>

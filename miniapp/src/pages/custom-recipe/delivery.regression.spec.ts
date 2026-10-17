@@ -119,7 +119,11 @@ describe('交付内容页 · 只渲染不计算', () => {
     // 直接绑到快照字段上，中间不经过任何加工
     expect(source).toContain('content.feeding.dailyIntakeG');
     expect(source).toContain('content.feeding.perMealG');
-    expect(source).toContain('content.nutrition.energyDensityKcalPerKg');
+    /**
+     * 2026-10-18：营养数值改由 `RecipeNutritionCard` 渲染，
+     * 页面负责**把快照里的 macros 原样传进去**（不再自己挑字段）。
+     */
+    expect(source).toContain('content.nutrition.macros');
     // 用量与制作那一块搬到了第 2 页
     expect(shoppingSource).toContain('content.shopping.lines');
     // 2026-10-18：采购量整条线删掉 —— 只绑净用量，不再绑 purchaseG
@@ -213,7 +217,14 @@ describe('交付内容页 · 只渲染不计算', () => {
 
   it('补充剂与食材分开渲染（顾客采购时是两件事）', () => {
     expect(source).toContain('isSupplement');
-    expect(source).toContain('supplementItems');
+    /**
+     * 2026-10-18：补剂那一块改成"额外补充的营养素"（列营养素名不是产品名），
+     * 来源是 `content.supplements[].targets`。
+     * 与食材依然**分成两块**渲染 —— 食材走 `foodItems`，营养素走 `nutrientRows`。
+     */
+    expect(source).toContain('content.value.supplements')
+    expect(source).toContain('nutrientRows')
+    expect(source).toContain('foodItems');
   });
 
   it('★ 明确告诉顾客"这一版是冻结的，之后改配方不影响"', () => {

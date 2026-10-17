@@ -16,16 +16,27 @@
         这里一个数字都不自己算 —— 包括"每天喂多少克"和"要买多少"，
         它们全部来自快照。
       -->
-      <view class="hero">
-        <text class="hero-title">{{ content.recipe.name }}</text>
-        <text class="hero-sub">
-          第 {{ delivery.version }} 版 · 交付于 {{ formatTime(delivery.deliveredAt) }}
-        </text>
-        <view class="hero-items">
-          <text v-for="code in delivery.itemCodes" :key="code" class="hero-item">
-            {{ itemLabel(code) }}
-          </text>
-        </view>
+      <!--
+        2026-10-18 重写：封面、一句话、核心营养、食材占比全部改用共享组件。
+
+        改之前这一页是这样：hero 只有食谱名 → 食材配比（带制备方法）→
+        营养补充剂（按占比给）→ 营养（能量密度 + 标准）→ 一个"去买食材"按钮。
+        跟定稿原型差了四块，而且食材表多了一列制备方法。
+      -->
+      <RecipeCover
+        :cover-image-url="content.recipe.coverImageUrl"
+        :title="content.recipe.name"
+        :subtitles="coverSubtitles"
+        :badge="`第 ${delivery.version} 版 · ${formatTime(delivery.deliveredAt)} 交付`"
+      />
+
+      <!-- 一句话：默认两行，点开看全文 -->
+      <view v-if="sellingPointText" class="oneline" @tap="sellingPointOpen = !sellingPointOpen">
+        <text
+          class="oneline-text"
+          :class="{ 'oneline-text--open': sellingPointOpen }"
+        >{{ sellingPointText }}</text>
+        <text class="oneline-toggle">{{ sellingPointOpen ? '收起' : '展开' }}</text>
       </view>
 
       <!-- 每天怎么喂：顾客最关心的三个数 -->
@@ -58,81 +69,59 @@
         </text>
       </view>
 
-      <!-- 食材配比 -->
+      <!-- 食材：**只给名称 + 占比**（不带制备方法 —— 那是制作单的事） -->
       <view class="section">
-        <view class="section-title">食材配比</view>
-        <view
-          v-for="(item, index) in foodItems"
-          :key="index"
-          class="ingredient-row"
-        >
-          <view class="ingredient-main">
-            <text class="ingredient-name">{{ item.name }}</text>
-            <text v-if="item.preparation" class="ingredient-prep">
-              {{ item.preparation }}
-            </text>
-          </view>
-          <text class="ingredient-ratio">
-            {{ item.ratioPercent !== null ? item.ratioPercent + '%' : '—' }}
-          </text>
-        </view>
-        <text v-if="!foodItems.length" class="section-note">这份食谱还没有配比信息</text>
-      </view>
-
-      <!-- 营养补充剂：单独一块，不和食材混 -->
-      <view v-if="supplementItems.length" class="section">
-        <view class="section-title">营养补充剂</view>
-        <view
-          v-for="(item, index) in supplementItems"
-          :key="index"
-          class="ingredient-row"
-        >
-          <view class="ingredient-main">
-            <text class="ingredient-name">{{ item.name }}</text>
-            <text v-if="item.preparation" class="ingredient-prep">
-              {{ item.preparation }}
-            </text>
-          </view>
-          <text class="ingredient-ratio">
-            {{ item.ratioPercent !== null ? item.ratioPercent + '%' : '—' }}
-          </text>
-        </view>
-      </view>
-
-      <!-- 营养达标情况 -->
-      <view v-if="content.nutrition.standard || content.nutrition.energyDensityKcalPerKg" class="section">
-        <view class="section-title">营养</view>
-        <view v-if="content.nutrition.energyDensityKcalPerKg" class="info-row">
-          <text class="label">能量密度</text>
-          <text class="value">{{ content.nutrition.energyDensityKcalPerKg }} kcal/kg</text>
-        </view>
-        <view v-if="content.nutrition.standard" class="info-row">
-          <text class="label">参照标准</text>
-          <text class="value">{{ content.nutrition.standard }}</text>
-        </view>
-        <text v-if="content.nutrition.plainConclusion" class="section-note">
-          {{ content.nutrition.plainConclusion }}
-        </text>
+        <view class="section-title">食材</view>
+        <RecipeIngredientRatioTable :items="foodItems" />
       </view>
 
       <!--
-        去第 2 页「采购与制作」（2026-10-16 批次 2.6）。
+        额外补充的营养素：**列营养素名（钙）而不是产品名（钙粉）**。
 
-        为什么拆成两页：这两件事的**使用时机不一样** ——
-        「每天喂多少」是天天要看的，「要买什么、怎么做」是采购和做饭那一次才看。
-        混在一页里，天天要看的那个每次都得划过一大段采购清单。
+        老板 2026-10-18 定的口径：这一页是"我的配方要求什么"，
+        产品是第 2 页"我要买哪一瓶"的事。两个别混。
       -->
-      <button class="goto-shopping" @tap="goShopping">
-        <text class="goto-title">去买食材 / 看做法</text>
-        <text class="goto-sub">
-          要买什么、买多少、怎么做、怎么存
-        </text>
-      </button>
+      <view v-if="nutrientRows.length" class="section">
+        <view class="section-title">额外补充的营养素</view>
+        <view class="nutrient-box">
+          <view
+            v-for="(row, index) in nutrientRows"
+            :key="index"
+            class="nutrient-row"
+          >
+            <text class="nutrient-name">{{ row.label }}</text>
+            <text class="nutrient-value">{{ row.text }}</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 核心营养成分：标准 + 8 项 + 报告入口，合成一块（与详情页同一套） -->
+      <view class="section">
+        <RecipeNutritionCard
+          :standard="content.nutrition.standard"
+          :macros="content.nutrition.macros || null"
+          :report-available="false"
+        />
+      </view>
 
       <view class="footer-note">
         <text>这份内容在交付时已存档，之后调整配方不会改变你现在看到的版本。</text>
       </view>
     </template>
+
+    <!--
+      固定栏：进第 2 页的**唯一入口**。
+      老板 2026-10-18 审原型时指出"这边没给入口，顾客进不去第 2 页"——
+      原来那个按钮在页面最底部，要滚到底才看得到。
+    -->
+    <view v-if="delivery" class="bottom-bar">
+      <view class="bottom-bar__inner">
+        <view v-if="deliveryDateText" class="bottom-bar__date">
+          <text class="bottom-bar__date-text">{{ deliveryDateText }}</text>
+        </view>
+        <button class="bottom-bar__btn" @tap="goShopping">开始采购与制作</button>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -140,6 +129,9 @@
 import { computed, ref } from 'vue';
 import { onLoad, onPullDownRefresh } from '@dcloudio/uni-app';
 import { fetchDelivery, type OrderDelivery } from '@/api/custom-recipe';
+import RecipeCover from '@/components/recipe/RecipeCover.vue';
+import RecipeNutritionCard from '@/components/recipe/RecipeNutritionCard.vue';
+import RecipeIngredientRatioTable from '@/components/recipe/RecipeIngredientRatioTable.vue';
 
 /**
  * 交付内容 · 第 1 页「专属食谱」（2026-10-16，批次 2.4；2.6 拆页）
@@ -212,27 +204,80 @@ const foodItems = computed(() =>
       : !item.isSupplement,
   ),
 );
-const supplementItems = computed(() =>
-  (content.value.recipe.items || []).filter((item) => item.isSupplement),
-);
-
 const hasFeeding = computed(
   () =>
     content.value.feeding.dailyIntakeG !== null ||
     content.value.feeding.mealsPerDay !== null,
 );
 
-/** 损耗**系数**（1.07）→ **百分比**（7）。纯展示换算，不含业务判断 */
-const lossPercent = computed(() =>
-  Math.round((Number(content.value.shopping.lossRate || 1) - 1) * 100),
+/**
+ * 封面叠的两行（2026-10-18）：
+ *   「为 豆豆 定制」+「柯基 · 3 岁 · 11.2kg」
+ *
+ * 年龄从月数换成"几岁/几个月"是**渲染层的事**，
+ * 后端只存月数（见快照的 `recipe.dog.ageMonths`）。
+ */
+const coverSubtitles = computed(() => {
+  const dog = content.value.recipe.dog;
+  if (!dog) return [];
+  const lines: string[] = [];
+  if (dog.name) lines.push(`为 ${dog.name} 定制`);
+
+  const facts: string[] = [];
+  if (dog.breedName) facts.push(dog.breedName);
+  if (dog.ageMonths !== null && dog.ageMonths !== undefined) {
+    const months = Number(dog.ageMonths);
+    if (Number.isFinite(months) && months >= 0) {
+      facts.push(months >= 12 ? `${Math.floor(months / 12)} 岁` : `${months} 个月`);
+    }
+  }
+  if (dog.weightKg !== null && dog.weightKg !== undefined) {
+    const kg = Number(dog.weightKg);
+    if (Number.isFinite(kg) && kg > 0) facts.push(`${kg}kg`);
+  }
+  if (facts.length) lines.push(facts.join(' · '));
+  return lines;
+});
+
+/** 一句话卖点（默认只显示两行，点开看全文） */
+const sellingPointOpen = ref(false);
+const sellingPointText = computed(() =>
+  (content.value.recipe.sellingPoint || '').trim(),
 );
 
-const DELIVERY_ITEM_LABELS: Record<string, string> = {
-  RECIPE: '专属食谱',
-  SHOPPING_SOP: '采购与制作单',
-  NUTRITION_REPORT: '营养评估报告',
-};
-const itemLabel = (code: string) => DELIVERY_ITEM_LABELS[code] || code;
+/**
+ * 额外补充的营养素：**名称 + 每 kg 添加量**。
+ *
+ * 口径：这一页列**营养素**（钙/锌/维生素D），不是产品（钙粉/鱼油）。
+ * 数据来自快照的 `supplements[].targets`。
+ */
+const nutrientRows = computed(() => {
+  const rows: Array<{ label: string; text: string }> = [];
+  for (const supplement of content.value.supplements || []) {
+    for (const target of supplement.targets || []) {
+      const label = (target.label || '').trim();
+      if (!label) continue;
+      const perKg = target.targetValuePerKg;
+      const unit = (target.unit || 'g').trim();
+      const text =
+        perKg === null || perKg === undefined
+          ? '按说明添加'
+          : `每kg食材添加 ${perKg}${unit}`;
+      // 同一个营养素可能挂在多个补剂下，去重
+      if (!rows.some((row) => row.label === label)) rows.push({ label, text });
+    }
+  }
+  return rows;
+});
+
+/** 底部固定栏上那行交付日期 */
+const deliveryDateText = computed(() => {
+  const raw = (delivery.value as any)?.deliveryDate || '';
+  if (!raw) return '';
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return '';
+  return `交付于 ${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+});
 
 const formatTime = (iso: string) => {
   const d = new Date(iso);
@@ -301,42 +346,10 @@ onPullDownRefresh(async () => {
   background: #d8bc85;
 }
 
-.hero {
-  padding: 36rpx 32rpx;
-  margin-bottom: 24rpx;
-  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
-  border: 1rpx solid rgba(216, 188, 133, 0.5);
-  border-radius: 28rpx;
-}
 
-.hero-title {
-  display: block;
-  font-size: 38rpx;
-  font-weight: 700;
-  color: #f4ecd8;
-}
 
-.hero-sub {
-  display: block;
-  margin-top: 10rpx;
-  font-size: 24rpx;
-  color: rgba(244, 236, 216, 0.6);
-}
 
-.hero-items {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12rpx;
-  margin-top: 20rpx;
-}
 
-.hero-item {
-  padding: 8rpx 18rpx;
-  font-size: 24rpx;
-  color: #f4ecd8;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 100rpx;
-}
 
 .section {
   padding: 28rpx 32rpx;
@@ -387,37 +400,10 @@ onPullDownRefresh(async () => {
   color: rgba(244, 236, 216, 0.6);
 }
 
-.ingredient-row,
-.shopping-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 18rpx 0;
-  border-bottom: 1rpx solid rgba(216, 188, 133, 0.12);
-}
 
-.ingredient-main {
-  display: flex;
-  flex-direction: column;
-  gap: 4rpx;
-  flex: 1;
-}
 
-.ingredient-name,
-.shopping-name {
-  font-size: 28rpx;
-  color: #f4ecd8;
-}
 
-.ingredient-prep {
-  font-size: 22rpx;
-  color: rgba(244, 236, 216, 0.5);
-}
 
-.ingredient-ratio {
-  font-size: 28rpx;
-  color: #d8bc85;
-}
 
 .shopping-amount {
   display: flex;
@@ -452,21 +438,8 @@ onPullDownRefresh(async () => {
   color: rgba(244, 236, 216, 0.5);
 }
 
-.info-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 14rpx 0;
-}
 
-.info-row .label {
-  font-size: 26rpx;
-  color: rgba(244, 236, 216, 0.6);
-}
 
-.info-row .value {
-  font-size: 26rpx;
-  color: #f4ecd8;
-}
 
 .step-row {
   display: flex;
@@ -494,28 +467,8 @@ onPullDownRefresh(async () => {
   color: #f4ecd8;
 }
 
-.goto-shopping {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8rpx;
-  margin: 24rpx 0;
-  padding: 32rpx;
-  border-radius: 20rpx;
-  background: linear-gradient(135deg, #c9a227, #a8861d);
-  text-align: left;
-}
 
-.goto-title {
-  font-size: 34rpx;
-  font-weight: 600;
-  color: #16261f;
-}
 
-.goto-sub {
-  font-size: 24rpx;
-  color: rgba(22, 38, 31, 0.75);
-}
 
 .footer-note {
   padding: 20rpx 8rpx 60rpx;
@@ -523,5 +476,115 @@ onPullDownRefresh(async () => {
   line-height: 1.6;
   text-align: center;
   color: rgba(244, 236, 216, 0.45);
+}
+
+/* ===== 2026-10-18 新增：一句话卖点 ===== */
+.oneline {
+  background: #fff8ec;
+  border: 1.5px solid #e8c88a;
+  border-radius: 24rpx;
+  padding: 22rpx 26rpx;
+  margin-bottom: 20rpx;
+}
+
+.oneline-text {
+  display: block;
+  font-size: 26rpx;
+  line-height: 1.65;
+  color: #3f3222;
+  /* 默认两行：存得下 200 字，只露两行 */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.oneline-text--open {
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+
+.oneline-toggle {
+  display: block;
+  text-align: right;
+  font-size: 21rpx;
+  font-weight: 700;
+  color: #b45309;
+  margin-top: 8rpx;
+}
+
+/* ===== 2026-10-18 新增：额外补充的营养素 ===== */
+.nutrient-box {
+  background: #f4f7f5;
+  border-radius: 24rpx;
+  padding: 8rpx 24rpx;
+}
+
+.nutrient-row {
+  display: flex;
+  align-items: baseline;
+  padding: 16rpx 0;
+  border-bottom: 1px dashed #dfe9e3;
+}
+
+.nutrient-row:last-child {
+  border-bottom: 0;
+}
+
+.nutrient-name {
+  flex: 1;
+  font-size: 25rpx;
+  font-weight: 600;
+  color: #3f3222;
+}
+
+.nutrient-value {
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #1e5b35;
+}
+
+/* ===== 2026-10-18 新增：底部固定栏 ===== */
+.bottom-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 16rpx 24rpx calc(16rpx + constant(safe-area-inset-bottom));
+  padding-bottom: calc(16rpx + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, rgba(22, 38, 31, 0), #16261f 34%);
+}
+
+.bottom-bar__inner {
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 16rpx 20rpx;
+}
+
+.bottom-bar__date {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10rpx;
+}
+
+.bottom-bar__date-text {
+  font-size: 21rpx;
+  color: #8a7a66;
+}
+
+.bottom-bar__btn {
+  width: 100%;
+  background: #b45309;
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 700;
+  border-radius: 18rpx;
+  padding: 22rpx 0;
+  line-height: 1.2;
+}
+
+.bottom-bar__btn::after {
+  border: 0;
 }
 </style>

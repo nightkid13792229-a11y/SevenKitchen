@@ -54,7 +54,7 @@ describe('recipe diy regressions', () => {
     expect(source).toContain("const selectedLifeStage = ref('')")
     expect(source).toContain('availableLifeStageVersions?: RecipeLifeStageVersion[]')
     expect(source).toContain('const recommendedLifeStageOption = computed')
-    expect(source).toContain('version.lifeStage === selectedDogRecipeLifeStage.value')
+    expect(source).toContain('version.lifeStage === dogLifeStage.value')
     expect(source).toContain('function resetDiyLifeStageDependentState')
     expect(switchSource).toContain('const option = recommendedLifeStageOption.value')
     expect(switchSource).toContain('selectedLifeStage.value = option.lifeStage')

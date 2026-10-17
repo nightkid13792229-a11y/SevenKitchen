@@ -62,6 +62,21 @@ export function useLifeStageVersion(options: {
   applicableStages?: () => unknown
   /** 狗狗名字（兜底文案里用） */
   dogName?: () => string | null | undefined
+  /**
+   * 当前选中的食谱版本（生命阶段）。
+   *
+   * ⚠️ **只有 DIY 配置页需要**（2026-10-18 对比得出）：
+   * 那页允许顾客手动切版本，切完要按**新版**重新判定是否匹配，
+   * 所以请求要带上 `lifeStage`。其它页不传即可。
+   */
+  lifeStage?: () => string | null | undefined
+  /**
+   * 拿到结论后的回调（可选）。
+   *
+   * ⚠️ DIY 配置页每次拿到结论都要把 `showWarning` 置回 `true` ——
+   * 否则顾客切了版本、结论变了，提醒却不弹了。
+   */
+  onVerdict?: (verdict: LifeStageMatchVerdict | null) => void
 }) {
   /**
    * 先解构再使用。
@@ -70,7 +85,7 @@ export function useLifeStageVersion(options: {
    * 会把 `options.recipeId()` 这类链式调用误读成 `options()`，
    * 于是报"调用了却没定义"。解构后没有这个前缀，守卫就不误报了。
    */
-  const { recipeId, dogId, applicableStages, dogName } = options
+  const { recipeId, dogId, applicableStages, dogName, lifeStage, onVerdict } = options
 
   const verdict = ref<LifeStageMatchVerdict | null>(null) as Ref<LifeStageMatchVerdict | null>
 
@@ -123,14 +138,27 @@ export function useLifeStageVersion(options: {
   async function check(): Promise<void> {
     const currentRecipeId = recipeId()
     const currentDogId = dogId()
-    if (!currentRecipeId || !currentDogId) return
+    if (!currentRecipeId || !currentDogId) {
+      /**
+       * 没有食谱或没有狗 —— **要重置**，不是直接返回。
+       *
+       * ⚠️ 这一点是 DIY 配置页的做法（2026-10-18 对比得出）：顾客把狗取消选中后，
+       * 上一次的结论还挂在页面上会显示"不匹配"，属于假警报。所以要清干净。
+       */
+      verdict.value = null
+      checkFailed.value = false
+      onVerdict?.(null)
+      return
+    }
 
     const result = await fetchLifeStageMatch({
       recipeId: currentRecipeId,
       dogId: currentDogId,
+      ...(lifeStage?.() ? { lifeStage: lifeStage() as string } : {}),
     })
     verdict.value = result
     checkFailed.value = !result
+    onVerdict?.(result)
   }
 
   /** 供"切换狗狗后重新查"这类场景使用 */

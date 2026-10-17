@@ -286,6 +286,7 @@ import {
 import LifeStageVersionCard from '@/components/recipe/LifeStageVersionCard.vue'
 import { useDogSelection } from '@/composables/useDogSelection'
 import { usePackagePlan } from '@/composables/usePackagePlan'
+import { useLifeStageVersion } from '@/composables/useLifeStageVersion'
 import {
   DEFAULT_ORDER_CYCLE_DAYS,
   MIN_PACKAGE_SPEC_G,
@@ -397,7 +398,34 @@ const HOME_RECIPE_STATS_DIRTY_KEY = 'home_recipe_stats_dirty'
 const healthTagUuidLabelMap = ref<Record<string, string>>({})
 
 // 生命阶段校验
-const isLifeStageMatch = ref(true)
+/**
+ * 生命阶段状态（2026-10-18 收进 composable）。
+ *
+ * 本页与其它三页的**真实差异**（对比后加进 composable 的可选参数）：
+ *   ① 顾客能手动切版本 → 查询要带 `lifeStage`
+ *   ② 每次拿到结论要把 `showWarning` 置回 `true`（切版本后提醒要重新出现）
+ *   ③ 取消选狗时要**重置**三个状态，否则会挂着上次的"不匹配"假警报
+ */
+const {
+  verdict: lifeStageVerdict,
+  checkFailed: lifeStageCheckFailed,
+  dogLifeStage,
+  reminderText: lifeStageReminderText,
+  check: checkLifeStageMatch,
+} = useLifeStageVersion({
+  recipeId: () => recipeId.value,
+  dogId: () => selectedDog.value?.id,
+  applicableStages: () => recipe.value.applicableLifeStages,
+  dogName: () => selectedDog.value?.name,
+  lifeStage: () => selectedLifeStage.value || undefined,
+  onVerdict: () => {
+    // 结论变了就重新亮起警示（切版本后提醒不能消失）
+    showWarning.value = true
+  },
+})
+
+/** 页面自己要读"是否匹配"来渲染（composable 里是 computed，这里保持 ref 语义不变） */
+const isLifeStageMatch = computed(() => !isLifeStageMismatch(lifeStageVerdict.value?.matchType))
 const showWarning = ref(true)
 /**
  * 本次进入页面已经确认过生命阶段提醒的狗狗。
@@ -413,33 +441,13 @@ const isLifeStageAcknowledged = computed(() => {
  * 生命阶段匹配结论 —— **由后端给出**（2026-09-19 起不再前端自己算）。
  * 前端重算认不出混血犬的体型，算不出时还会被当成"匹配"静默放行。
  */
-const lifeStageVerdict = ref<LifeStageMatchVerdict | null>(null)
 
-/**
- * 是否"没能拿到后端结论"（网络/服务异常）。
- * 这种情况**绝不能静默放行** —— 那正是本次重构要消灭的问题；
- * 但也不该误报成"不匹配"，所以单独用一个中性提示。
- */
-const lifeStageCheckFailed = ref(false)
 
-/** 狗狗需要的食谱生命阶段（后端算出来的） */
-const selectedDogRecipeLifeStage = computed(
-  () => lifeStageVerdict.value?.dogLifeStage || '',
-)
-
-const lifeStageReminderText = computed(() => {
-  if (lifeStageVerdict.value?.message) return lifeStageVerdict.value.message
-  return buildLifeStageReminderText({
-    applicableStages: recipe.value.applicableLifeStages,
-    dogLifeStage: selectedDogRecipeLifeStage.value,
-    dogName: selectedDog.value?.name,
-  })
-})
 const recommendedLifeStageOption = computed(() => {
-  const targetLifeStage = selectedDogRecipeLifeStage.value
+  const targetLifeStage = dogLifeStage.value
   if (!targetLifeStage) return null
   const version = recipe.value.availableLifeStageVersions?.find(
-    version => version.lifeStage === selectedDogRecipeLifeStage.value,
+    version => version.lifeStage === dogLifeStage.value,
   )
   if (!version || version.lifeStage === recipe.value.selectedLifeStage) return null
   return {
@@ -812,33 +820,6 @@ function retryDogCalc() {
   void loadDogCalc(selectedDogId.value)
 }
 
-async function checkLifeStageMatch() {
-  const dogId = selectedDog.value?.id
-  if (!dogId || !recipe.value) {
-    lifeStageVerdict.value = null
-    lifeStageCheckFailed.value = false
-    isLifeStageMatch.value = true
-    return
-  }
-
-  const verdict = await fetchLifeStageMatch({
-    recipeId: recipeId.value,
-    dogId,
-    lifeStage: selectedLifeStage.value || undefined,
-  })
-
-  lifeStageVerdict.value = verdict
-  if (!verdict) {
-    lifeStageCheckFailed.value = true
-    isLifeStageMatch.value = true
-    return
-  }
-
-  lifeStageCheckFailed.value = false
-
-  isLifeStageMatch.value = !isLifeStageMismatch(verdict.matchType)
-  showWarning.value = true
-}
 
 function resetDiyLifeStageDependentState() {
   dogCalcResult.value = null

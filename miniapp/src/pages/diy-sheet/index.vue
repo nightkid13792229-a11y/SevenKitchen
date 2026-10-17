@@ -827,7 +827,7 @@ const supplementNutrientBaseWeightG = computed(() => {
 const {
   verdict: lifeStageVerdict,
   checkFailed: lifeStageCheckFailed,
-  dogLifeStage: selectedDogRecipeLifeStage,
+  dogLifeStage,
   isMatch: isLifeStageMatch,
   reminderText: lifeStageReminderText,
   check: checkLifeStageMatch,

@@ -60,10 +60,23 @@ describe('useLifeStageVersion · 生命阶段公共状态', () => {
   })
 
   it('缺 recipeId 或 dogId 时不发请求', () => {
-    expect(source).toContain('if (!currentRecipeId || !currentDogId) return')
+    expect(source).toContain('if (!currentRecipeId || !currentDogId) {')
+    // 且要**重置**，不是直接 return（否则取消选狗后还挂着上次的"不匹配"）
+    expect(source).toContain('verdict.value = null')
+    expect(source).toContain('checkFailed.value = false')
   })
 
   it('查询失败不抛错（只置标记）', () => {
     expect(source).not.toMatch(/throw new Error/)
+  })
+
+  it('★ 支持带 lifeStage 查询（DIY 配置页手动切版本后要按新版重判）', () => {
+    expect(source).toContain('lifeStage?: () => string | null | undefined')
+    expect(source).toContain('...(lifeStage?.() ? { lifeStage: lifeStage() as string } : {})')
+  })
+
+  it('★ 支持 onVerdict 回调（DIY 配置页拿到结论要重新亮警示）', () => {
+    expect(source).toContain('onVerdict?: (verdict: LifeStageMatchVerdict | null) => void')
+    expect(source).toContain('onVerdict?.(result)')
   })
 })

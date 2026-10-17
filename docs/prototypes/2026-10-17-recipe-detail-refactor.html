@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>食谱详情页 · 现状与重构目标（2026-10-17）</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: #FAF7F2; color: #3F3222; padding: 26px 22px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: 22px; margin-bottom: 6px; }
+  h2 { font-size: 17px; margin: 42px 0 6px; padding-top: 12px; border-top: 2px solid #E4D8C8; }
+  h2 span { font-size: 12.5px; font-weight: 400; color: #8A7A66; margin-left: 8px; }
+  .sub { font-size: 12.5px; color: #6E5F4B; line-height: 1.8; max-width: 1400px; }
+  .sub b { color: #3F3222; }
+  code { background: #F0E6D8; padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+
+  .row { display: flex; gap: 20px; overflow-x: auto; padding: 14px 0 20px; align-items: flex-start; }
+  .col { width: 372px; flex: 0 0 372px; }
+  .col__head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12.5px; font-weight: 700; }
+  .col__tag { font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+  .tag--now { background: #F3E4E1; color: #96271a; }
+  .tag--target { background: #E3F0E6; color: #1e5b35; }
+  .col__note { font-size: 11.5px; color: #8A7A66; line-height: 1.75; margin-top: 8px; }
+  .col__note b { color: #b4453a; }
+
+  .phone {
+    width: 372px; background: #FAF7F2; border: 1px solid #EDE0D0;
+    border-radius: 20px; overflow: hidden;
+    box-shadow: 0 6px 24px rgba(74,55,38,.06);
+  }
+  .navbar { height: 42px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: #FAF7F2; }
+  .navbar__back { font-size: 16px; color: #6E5F4B; }
+  .navbar__t { font-size: 13.5px; font-weight: 600; }
+  .body { padding: 0 10px 16px; }
+
+  /* 封面 */
+  .cover { position: relative; height: 168px; border-radius: 14px; overflow: hidden; margin-bottom: 10px; }
+  .cover--img {
+    background:
+      radial-gradient(circle at 30% 26%, rgba(255,236,190,.9), rgba(255,236,190,0) 42%),
+      radial-gradient(circle at 72% 34%, rgba(214,160,80,.92), rgba(214,160,80,0) 46%),
+      linear-gradient(150deg, #d9a556, #8a5424 62%, #5c3616);
+  }
+  .cover--letter { background: #EFE6D6; display: flex; align-items: center; justify-content: center; }
+  .cover__letter { font-size: 56px; font-weight: 800; color: #C0AF98; }
+  .cover__badge {
+    position: absolute; left: 10px; bottom: 10px; font-size: 10px; font-weight: 700;
+    background: rgba(0,0,0,.5); color: #fff; border-radius: 999px; padding: 3px 9px;
+  }
+  .cover__scrim {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(18,12,6,0) 30%, rgba(18,12,6,.30) 55%, rgba(18,12,6,.90) 100%);
+  }
+  .cover__txt { position: absolute; left: 0; right: 0; bottom: 0; padding: 13px 14px; color: #fff; }
+  .cover__name { font-size: 19px; font-weight: 800; line-height: 1.25; text-shadow: 0 1px 3px rgba(0,0,0,.55), 0 2px 12px rgba(0,0,0,.45); }
+  .cover__for { font-size: 12px; margin-top: 6px; text-shadow: 0 1px 3px rgba(0,0,0,.6); }
+  .cover__facts { font-size: 10.5px; color: rgba(255,255,255,.8); margin-top: 2px; text-shadow: 0 1px 3px rgba(0,0,0,.6); }
+
+  /* 通用 */
+  .sec { margin-bottom: 11px; }
+  .sec__t { font-size: 12.5px; font-weight: 700; margin-bottom: 7px; display: flex; align-items: center; }
+  .sec__t em { font-style: normal; margin-left: auto; font-size: 10.5px; font-weight: 400; color: #A9967E; }
+  .card { background: #fff; border: 1px solid #EDE0D0; border-radius: 13px; padding: 12px; margin-bottom: 9px; }
+
+  /* 名称块 */
+  .name-block { margin-bottom: 9px; }
+  .name-block__t { font-size: 20px; font-weight: 800; }
+  .name-block__s { font-size: 12px; color: #8A7A66; margin-top: 4px; }
+  .price-hint { font-size: 11px; color: #A9967E; margin-top: 6px; }
+
+  /* 狗选择器 */
+  .dogs { display: flex; gap: 7px; margin-top: 9px; }
+  .dog { display: flex; align-items: center; gap: 6px; background: #fff; border: 1.5px solid #EDE0D0; border-radius: 999px; padding: 5px 11px 5px 5px; font-size: 11.5px; }
+  .dog--on { border-color: #B45309; background: #FFF8F1; }
+  .dog__av { width: 22px; height: 22px; border-radius: 50%; background: #EFE6D6; display: flex; align-items: center; justify-content: center; font-size: 11px; }
+
+  /* 生命阶段卡 */
+  .ls { background: #fff; border: 1.5px solid #EDE0D0; border-radius: 13px; padding: 11px 12px; margin-bottom: 9px; display: flex; align-items: center; gap: 9px; }
+  .ls--warn { border-color: #E8C88A; background: #FFFDF8; }
+  .ls__main { flex: 1; }
+  .ls__t { font-size: 12.5px; font-weight: 700; }
+  .ls__c { font-size: 10.5px; color: #8A7A66; margin-top: 3px; line-height: 1.5; }
+  .ls__go { font-size: 11px; color: #B45309; font-weight: 700; white-space: nowrap; }
+
+  /* 表格 */
+  .thead { display: flex; font-size: 10.5px; color: #A9967E; padding: 0 2px 6px; border-bottom: 1px solid #F0E6D8; }
+  .th-n { flex: 1; }
+  .th-m { width: 70px; }
+  .th-r { width: 48px; text-align: right; }
+  .item { display: flex; align-items: baseline; font-size: 12px; padding: 7px 2px; border-bottom: 1px dashed #F4EBE0; }
+  .item:last-child { border-bottom: 0; }
+  .it-n { flex: 1; }
+  .it-m { width: 70px; color: #8A7A66; font-size: 11px; }
+  .it-r { width: 48px; text-align: right; font-weight: 700; color: #B45309; }
+  .table-h { font-size: 11.5px; font-weight: 700; margin: 10px 0 6px; color: #6E5F4B; }
+  .table-h:first-child { margin-top: 0; }
+  .table-h em { font-style: normal; color: #A9967E; font-weight: 400; margin-left: 5px; }
+
+  /* 营养卡 */
+  .std { font-size: 11px; color: #1e5b35; background: #F2F8F4; border-radius: 8px; padding: 6px 9px; margin-bottom: 9px; text-align: center; }
+  .nutri { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .nutri__c { background: #FBF8F3; border-radius: 8px; padding: 7px 4px; text-align: center; }
+  .nutri__v { font-size: 13px; font-weight: 800; color: #B45309; }
+  .nutri__l { font-size: 9px; color: #9C8B76; margin-top: 1px; }
+  .report-link { display: block; text-align: center; font-size: 12px; font-weight: 700; color: #B45309; margin-top: 11px; padding-top: 10px; border-top: 1px dashed #F0E6D8; }
+
+  /* 标注 */
+  .mark { display: inline-block; font-size: 9.5px; font-weight: 700; border-radius: 4px; padding: 1px 5px; margin-left: 5px; vertical-align: 1px; }
+  .mark--comp { background: #E3F0E6; color: #1e5b35; }
+  .mark--logic { background: #E6EDF7; color: #23477e; }
+  .mark--keep { background: #F0E6D8; color: #8A7A66; }
+  .mark--del { background: #FCEAE5; color: #b4453a; }
+
+  .legend { display: flex; gap: 14px; font-size: 11.5px; color: #6E5F4B; margin-top: 10px; flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+  .banner { background: #FFF8EC; border: 2px solid #E8C88A; border-radius: 12px; padding: 14px 16px; max-width: 1400px; margin: 16px 0 8px; }
+  .banner__t { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+  .banner ul { margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.9; color: #6E5F4B; }
+  .banner b { color: #3F3222; }
+
+  table.diff { margin: 10px 0 0; border-collapse: collapse; font-size: 12.5px; background: #fff; max-width: 1400px; width: 100%; }
+  table.diff th, table.diff td { text-align: left; padding: 8px 10px; border-top: 1px solid #F0E6D8; vertical-align: top; }
+  table.diff th { background: #FBF5EC; font-weight: 600; border-top: 0; }
+  .del { color: #b4453a; }
+  .new { color: #1e5b35; font-weight: 600; }
+  .decide { color: #a05a00; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<h1>食谱详情页 · 现状与重构目标</h1>
+<div class="sub">
+  2026-10-17 ｜ 对应 <code>2026-10-17-recipe-presentation-refactor.md</code><br />
+  左边<b>照线上代码还原</b>（`recipe-detail/index.vue`，2494 行），右边是重构后该长什么样。
+  <b>只画原型，不动代码。</b>
+</div>
+
+<div class="banner">
+  <div class="banner__t">先说三个从代码里扒出来的意外</div>
+  <ul>
+    <li><b>① 详情页的「标准 + 核心营养」已经是合在一块的</b>（同一个 `standard-card`，8 项指标）。
+      你要求交付页做的"合成一块" —— <b>详情页早就这么做了，反而交付页要学它。</b></li>
+    <li><b>② 无封面时详情页用「食谱名首字母」占位</b>（灰底大字），不是我给交付页设计的"深色块叠文字"。
+      两页得统一成一种。</li>
+    <li><b>③ 详情页的封面和名称是分开两块</b>（封面图一块、名称+卖点在下面）。
+      而你要交付页"名称/为谁定制/狗信息融进封面"。<b>这里有个方向要你定。</b></li>
+  </ul>
+  <div class="legend">
+    <span><i style="background:#E3F0E6"></i>抽成共享组件</span>
+    <span><i style="background:#E6EDF7"></i>抽成 composable</span>
+    <span><i style="background:#F0E6D8"></i>保留不动</span>
+    <span><i style="background:#FCEAE5"></i>要删</span>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<h2>一、现状 vs 目标 <span>左边照代码还原</span></h2>
+
+<div class="row">
+
+  <div class="col">
+    <div class="col__head"><span>现状（线上）</span><span class="col__tag tag--now">按代码还原</span></div>
+    <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">食谱详情</span></div>
+      <div class="body">
+
+        <div class="cover cover--img">
+          <span class="cover__badge">成犬 · 低脂</span>
+        </div>
+
+        <div class="name-block">
+          <div class="name-block__t">低脂鸡肉南瓜餐</div>
+          <div class="name-block__s">低脂高蛋白，帮它慢慢瘦下来</div>
+          <div class="price-hint">价格按狗狗体重计算，进入订购可见</div>
+          <div class="dogs">
+            <div class="dog dog--on"><span class="dog__av">🐕</span>豆豆</div>
+            <div class="dog"><span class="dog__av">🐕</span>旺财</div>
+          </div>
+        </div>
+
+        <div class="ls ls--warn">
+          <div class="ls__main">
+            <div class="ls__t">已匹配：成犬版</div>
+            <div class="ls__c">这条食谱有幼犬版，已为你切到成犬版</div>
+          </div>
+          <span class="ls__go">切换 ›</span>
+        </div>
+
+        <div class="card">
+          <div class="sec__t">食谱配方 <em>3 类原料</em></div>
+
+          <div class="table-h">食材</div>
+          <div class="thead"><span class="th-n">食材</span><span class="th-m">制备方法</span><span class="th-r">占比</span></div>
+          <div class="item"><span class="it-n">鸡胸肉</span><span class="it-m">切丁煮熟</span><span class="it-r">40%</span></div>
+          <div class="item"><span class="it-n">南瓜</span><span class="it-m">蒸熟压泥</span><span class="it-r">25%</span></div>
+          <div class="item"><span class="it-n">糙米</span><span class="it-m">煮软</span><span class="it-r">25%</span></div>
+          <div class="item"><span class="it-n">西兰花</span><span class="it-m">焯水切碎</span><span class="it-r">10%</span></div>
+
+          <div class="table-h">营养补充剂 <em>2 种</em></div>
+          <div class="item"><span class="it-n">钙粉</span><span class="it-m" style="width:auto">每kg食材添加 5g</span></div>
+          <div class="item"><span class="it-n">鱼油</span><span class="it-m" style="width:auto">每kg食材添加 2g</span></div>
+
+          <div class="table-h">其他物料 <em>1 种</em></div>
+          <div class="item"><span class="it-n">真空袋</span><span class="it-m">分装用</span><span class="it-r">—</span></div>
+        </div>
+
+        <div class="card">
+          <div class="std">✓ 符合 FEDIAF 犬营养标准（2018）</div>
+          <div class="sec__t" style="justify-content:center">核心营养成分</div>
+          <div class="nutri">
+            <div class="nutri__c"><div class="nutri__v">32%</div><div class="nutri__l">蛋白质</div></div>
+            <div class="nutri__c"><div class="nutri__v">9%</div><div class="nutri__l">脂肪</div></div>
+            <div class="nutri__c"><div class="nutri__v">6%</div><div class="nutri__l">灰分</div></div>
+            <div class="nutri__c"><div class="nutri__v">68%</div><div class="nutri__l">含水量</div></div>
+            <div class="nutri__c"><div class="nutri__v">3%</div><div class="nutri__l">膳食纤维</div></div>
+            <div class="nutri__c"><div class="nutri__v">22%</div><div class="nutri__l">碳水</div></div>
+            <div class="nutri__c"><div class="nutri__v">1.2</div><div class="nutri__l">kcal/g</div></div>
+            <div class="nutri__c"><div class="nutri__v">1.2</div><div class="nutri__l">钙磷比</div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="sec__t">营养 · 详细营养报告</div>
+          <span class="report-link">查看完整报告 ›</span>
+        </div>
+
+      </div>
+    </div>
+    <div class="col__note">
+      <b>这就是线上真实结构</b>（照 <code>recipe-detail</code> 还原）：
+      封面 → 名称+卖点+选狗 → 生命阶段卡 → 配方（食材/补剂/其他物料）→ 标准+核心营养 → 报告入口。
+      <br /><br />
+      页面底部还有收藏、切换版本两个动作，没画进这一屏。
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="col__head"><span>目标（重构后）</span><span class="col__tag tag--target">该改成这样</span></div>
+    <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">食谱详情</span></div>
+      <div class="body">
+
+        <div class="cover cover--img">
+          <div class="cover__scrim"></div>
+          <div class="cover__txt">
+            <div class="cover__name">低脂鸡肉南瓜餐</div>
+            <div class="cover__for">低脂高蛋白，帮它慢慢瘦下来</div>
+            <div class="cover__facts">给 豆豆 看 · 柯基 · 3 岁 · 11.2kg</div>
+          </div>
+        </div>
+        <div class="sub" style="font-size:11px;margin:-4px 0 10px">
+          <span class="mark mark--comp">共享组件</span> 封面块 —— 名称/卖点/给谁看 全融进去
+        </div>
+
+        <div class="ls ls--warn">
+          <div class="ls__main">
+            <div class="ls__t">已换成成犬版</div>
+            <div class="ls__c">这条食谱有幼犬版，已自动切到适合豆豆的版本</div>
+          </div>
+          <span class="ls__go">切换 ›</span>
+        </div>
+        <div class="sub" style="font-size:11px;margin:-4px 0 10px">
+          <span class="mark mark--comp">共享组件</span> 生命阶段卡（四页共用）
+          <span class="mark mark--logic">composable</span> 切换交互
+        </div>
+
+        <div class="card">
+          <div class="sec__t">食谱配方 <em>3 类原料</em></div>
+
+          <div class="table-h">食材</div>
+          <div class="thead"><span class="th-n">食材</span><span class="th-m">制备方法</span><span class="th-r">占比</span></div>
+          <div class="item"><span class="it-n">鸡胸肉</span><span class="it-m">切丁煮熟</span><span class="it-r">40%</span></div>
+          <div class="item"><span class="it-n">南瓜</span><span class="it-m">蒸熟压泥</span><span class="it-r">25%</span></div>
+          <div class="item"><span class="it-n">糙米</span><span class="it-m">煮软</span><span class="it-r">25%</span></div>
+          <div class="item"><span class="it-n">西兰花</span><span class="it-m">焯水切碎</span><span class="it-r">10%</span></div>
+
+          <div class="table-h">营养补充剂 <em>2 种</em></div>
+          <div class="item"><span class="it-n">钙粉</span><span class="it-m" style="width:auto">每kg食材添加 5g</span></div>
+          <div class="item"><span class="it-n">鱼油</span><span class="it-m" style="width:auto">每kg食材添加 2g</span></div>
+
+          <div class="table-h">其他物料 <em>1 种</em></div>
+          <div class="item"><span class="it-n">真空袋</span><span class="it-m">分装用</span><span class="it-r">—</span></div>
+        </div>
+        <div class="sub" style="font-size:11px;margin:-4px 0 10px">
+          <span class="mark mark--comp">共享组件</span> 食材表 / 营养素表
+          <span class="mark mark--logic">后端</span> 三类分组的判断搬后端（现在前端用 <code>ingredientType</code> 自己 filter）
+        </div>
+
+        <div class="card">
+          <div class="std">✓ 符合 FEDIAF 犬营养标准（2018）</div>
+          <div class="sec__t" style="justify-content:center">核心营养成分</div>
+          <div class="nutri">
+            <div class="nutri__c"><div class="nutri__v">32%</div><div class="nutri__l">蛋白质</div></div>
+            <div class="nutri__c"><div class="nutri__v">9%</div><div class="nutri__l">脂肪</div></div>
+            <div class="nutri__c"><div class="nutri__v">6%</div><div class="nutri__l">灰分</div></div>
+            <div class="nutri__c"><div class="nutri__v">68%</div><div class="nutri__l">含水量</div></div>
+            <div class="nutri__c"><div class="nutri__v">3%</div><div class="nutri__l">膳食纤维</div></div>
+            <div class="nutri__c"><div class="nutri__v">22%</div><div class="nutri__l">碳水</div></div>
+            <div class="nutri__c"><div class="nutri__v">1.2</div><div class="nutri__l">kcal/g</div></div>
+            <div class="nutri__c"><div class="nutri__v">1.2</div><div class="nutri__l">钙磷比</div></div>
+          </div>
+          <span class="report-link">查看完整营养报告 ›</span>
+        </div>
+        <div class="sub" style="font-size:11px;margin:-4px 0 0">
+          <span class="mark mark--comp">共享组件</span> 核心营养成分块
+          <b>报告入口挪进这块</b>（原来单独一张卡）
+        </div>
+
+      </div>
+    </div>
+    <div class="col__note">
+      <b>结构几乎不变</b> —— 这次改的是"谁来计算、谁来渲染"，不是重新设计界面。
+      <br /><br />
+      变化只有三处：① 名称/卖点融进封面 ② 报告入口并进营养块 ③ 生命阶段文案按后端 <code>matchType</code> 归三类。
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="col__head"><span>拆完之后，页面只剩什么</span><span class="col__tag tag--target">目标</span></div>
+    <div class="phone" style="min-height:520px">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">详情页（重构后）</span></div>
+      <div class="body" style="padding-top:8px">
+
+        <div class="card" style="border-color:#B9D8C2;background:#F7FBF8">
+          <div class="sec__t" style="color:#1e5b35">页面自己只做三件事</div>
+          <div style="font-size:12px;line-height:2;color:#3F3222">
+            1. 取数据（一次接口调用）<br />
+            2. 把数据传给组件<br />
+            3. 监听组件抛出的事件
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="sec__t">它用到的组件</div>
+          <div style="font-size:11.5px;line-height:1.95;color:#6E5F4B">
+            · <b>RecipeCover</b>（封面 + 名 + 卖点 + 给谁看）<br />
+            · <b>LifeStageVersionCard</b>（四页共用）<br />
+            · <b>RecipeIngredientTable</b>（食材/营养素/物料，参数化）<br />
+            · <b>RecipeNutritionCard</b>（标准 + 8 项 + 报告入口）
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="sec__t">它用到的 composable</div>
+          <div style="font-size:11.5px;line-height:1.95;color:#6E5F4B">
+            · useRecipeFavorite（收藏）<br />
+            · useRecipeShare（分享）<br />
+            · useRecipeReviews（评价）<br />
+            · useLifeStageVersionSelection（切版本）<br />
+            · useDogSelection（选狗）
+          </div>
+        </div>
+
+        <div class="card" style="border-color:#F0C8BC;background:#FFFBFA">
+          <div class="sec__t" style="color:#b4453a">它不再自己做的事</div>
+          <div style="font-size:11.5px;line-height:1.95;color:#96271a">
+            · 不算分组（食材/补剂/物料）→ 后端给 kind<br />
+            · 不算生命周期匹配 → 后端给 matchType<br />
+            · 不拼提示文案 → 组件内部按 matchType 归三类<br />
+            · 不再写 9 个 isXxxMatched 之类的 computed
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="sec__t">行数目标</div>
+          <div style="font-size:12px;line-height:1.9">
+            script：<b style="color:#b4453a">965 行</b> → <b style="color:#1e5b35">&lt; 250 行</b><br />
+            style：140 条规则 → <b style="color:#1e5b35">组件自带，页面几乎为 0</b>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <div class="col__note">
+      这一屏不是界面，是<b>重构后这个页面的"内容清单"</b> ——
+      页面本身变成一个薄壳，其余全在组件和 composable 里。
+    </div>
+  </div>
+
+</div>
+
+<!-- ================================================================ -->
+<h2>二、要你定的三件事</h2>
+<table class="diff">
+  <tr><th style="width:240px">要定的</th><th>说明</th><th style="width:330px">我的建议</th></tr>
+  <tr>
+    <td class="decide">① 详情页要不要也把名称/卖点融进封面？</td>
+    <td>现在详情页是<b>分开两块</b>（封面图一块、名称+卖点在下面）。
+      而你要交付页"名称/为谁定制/狗信息融进封面"。<br />
+      如果统一，详情页也要改成叠加式；如果不统一，两页就是两种观感。</td>
+    <td><b>建议统一成叠加式</b> —— 理由是交付页那版信息密度更高，
+      而且封面图 + 名称叠在一起，顾客一眼就知道"这是什么、给谁看"。</td>
+  </tr>
+  <tr>
+    <td class="decide">② 无封面时的占位，用哪一种？</td>
+    <td>详情页现在是<b>食谱名首字母</b>（灰底大字）；<br />
+      我给交付页设计的是<b>深色块 + 完整文字</b>。</td>
+    <td><b>建议用深色块 + 完整文字</b> ——
+      顾客至少能看到食谱名；只有首字母等于什么都没说。</td>
+  </tr>
+  <tr>
+    <td class="decide">③ 食材表要不要显示"制备方法"？</td>
+    <td>详情页显示（食材/制备方法/占比三列）；<br />
+      你给交付页定的是<b>只显示名称 + 占比</b>（制备方法属于第 2 页的"怎么做"）。</td>
+    <td><b>建议做成参数</b>：详情页显示、交付页不显示。
+      因为详情页是"看这食谱怎么做"，交付页是"确认是不是我要的"。</td>
+  </tr>
+</table>
+
+<!-- ================================================================ -->
+<h2>三、这一页的改动清单</h2>
+<table class="diff">
+  <tr><th style="width:70px">类型</th><th style="width:230px">改什么</th><th>说明</th></tr>
+  <tr><td class="s" style="color:#1e5b35;font-weight:700">抽组件</td><td>封面块</td><td>名称/卖点/给谁看 融进去（待你定 ①）</td></tr>
+  <tr><td class="s" style="color:#1e5b35;font-weight:700">抽组件</td><td>生命阶段卡</td><td>四页共用，按 <code>matchType</code> 归三类</td></tr>
+  <tr><td class="s" style="color:#1e5b35;font-weight:700">抽组件</td><td>食材表 / 营养素表</td><td>参数化控制要不要显示"制备方法"（待你定 ③）</td></tr>
+  <tr><td class="s" style="color:#1e5b35;font-weight:700">抽组件</td><td>核心营养成分块</td><td>标准 + 8 项 + <b>报告入口</b>并进来</td></tr>
+  <tr><td class="s" style="color:#23477e;font-weight:700">抽逻辑</td><td>收藏 / 分享 / 评价 / 选狗 / 切版本</td><td>5 个 composable，页面不再自己管</td></tr>
+  <tr><td class="s" style="color:#23477e;font-weight:700">搬后端</td><td>原料三类分组</td><td>现在前端 <code>filter(ingredientType)</code>，改由后端给分好组的数组</td></tr>
+  <tr><td class="s" style="color:#8A7A66;font-weight:700">保留</td><td>内部预览条 / 价格提示 / 无狗引导</td><td>这三块是详情页特有的，不动</td></tr>
+</table>
+
+</body>
+</html>

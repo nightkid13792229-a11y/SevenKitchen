@@ -154,7 +154,7 @@ const actualAmount = theoreticalAmount * (1 + lossRate)
 | 19 | 收藏 / 取消 / 状态检查 | 详情页 15 行 | `useRecipeFavorite()` |
 | 20 | 分享（令牌生成 + onShareAppMessage） | 详情页 29 行 + 单独的 script 块 | `useRecipeShare()` |
 | 21 | 评价（列表 + 表单） | 详情页 12 行 + 2 个组件 | `useRecipeReviews()` |
-| 22 | **生命周期版本匹配** | **详情页 133 行 / 10 个 computed** | `useLifeStageVersionMatch()` |
+| 22 | **生命周期版本匹配** | **四页合计 21 个 computed + 13 个函数** | `LifeStageVersionCard` 组件 + `useLifeStageVersionSelection()`（见第五章） |
 | 23 | **分装规格** | DIY 配置页 | `usePackagePlan()` |
 
 > **第 22 条是老板的 B 清单里没提到、但最大的一块。**
@@ -162,7 +162,79 @@ const actualAmount = theoreticalAmount * (1 + lossRate)
 
 ---
 
-## 五、验收标准（可量化，不靠感觉）
+## 五、生命阶段匹配：一个被漏掉的跨页共享模块
+
+> 老板 2026-10-17 追问："食谱详情页，成品订购、DIY 制作、食谱定制相关的页面和板块，
+> 是否都应该有生命阶段的匹配模块呢？如果都应该有的话，
+> 那生命阶段的匹配模块，我们是否也不能跳过去呢？"
+
+**他的判断是对的，而且这块比"字段重复"更容易出问题 —— 因为它是逻辑重复。**
+
+### 5.1 哪些页面需要，哪些不需要
+
+| 页面 | 需要匹配吗 | 为什么 |
+|---|---|---|
+| 食谱详情页 | ✅ **需要** | 顾客在这里看食谱，要告诉他"这个版本不适合你家狗" |
+| 成品订购 | ✅ **需要** | 下单必须买对版本 |
+| DIY 配置页 | ✅ **需要** | 顾客要基于适合的版本配置 |
+| DIY 制作单 | ✅ **需要** | 制作单要显示正确的版本 |
+| **定制页（下单）** | ❌ **不需要** | 定制是营养师**为这只狗做的**，天然匹配。<br />它只用生命阶段做**展示**（"生命阶段：成犬"），不做版本切换 |
+| **交付两页** | ❌ **不需要** | 同上 —— 交付的就是这只狗的那一份 |
+
+### 5.2 现状：四个页面各写一套
+
+| 页面 | 自有 computed | 自有函数 |
+|---|---|---|
+| 食谱详情页 | 9 | 4 |
+| 成品订购 | 5 | 5 |
+| DIY 配置 | 4 | 3 |
+| DIY 制作单 | 3 | 1 |
+| **合计** | **21** | **13** |
+
+### 5.3 但算法本身在后端，已经做好了
+
+后端返回的 `RecipeLifeStageMatchDto`（`recipe-response.dto.ts:20`）已经包含：
+
+```js
+{
+  dogLifeStage, dogLifeStageLabel,
+  selectedLifeStage,
+  matchType: 'MATCHED' | 'MANUAL_MISMATCH' | 'FALLBACK_ADULT' | 'FALLBACK_FIRST' | 'LEGACY',
+  message,          // ← 现成的提示文案
+}
+```
+
+前端 `isLifeStageMismatch` 也是**读后端**的，不是自己算：
+
+```js
+const matchType = recipe.value.lifeStageMatch?.matchType
+return matchType === 'MANUAL_MISMATCH' || 'FALLBACK_ADULT' || 'FALLBACK_FIRST'
+```
+
+**所以重复的不是"算法"，是"把 `matchType` 翻译成界面"这件事 —— 四个页面各翻译了三到五遍。**
+
+### 5.4 该怎么做
+
+| 层 | 做什么 |
+|---|---|
+| **后端** | 已经够了。**保持 `matchType` + `message` 不变**（不要改成前端友好文案，让前端决定措辞） |
+| **共享组件** | `LifeStageVersionCard` —— 吃 `{ match, versions, selectedId }`，渲染：版本名 + 提示语 + 切换入口 |
+| **共享 composable** | `useLifeStageVersionSelection()` —— 处理"切换版本"的交互（打开选择器、选中、回写） |
+| **各页面** | 只传数据、只听事件，**不再自己写 `isXxxMatched` 这类 computed** |
+
+**这一块做完，四个页面合计能删掉约 20 个 computed。**
+
+> ⚠️ 注意一个边界：`matchType` 有 5 种，但**界面表现不必有 5 种**。
+> 建议归成 3 类：
+> · `MATCHED` / `LEGACY` → 正常，不提示
+> · `MANUAL_MISMATCH` → 提醒"你可能选错了版本"
+> · `FALLBACK_ADULT` / `FALLBACK_FIRST` → 提醒"已自动换成适合的版本"
+>
+> 归类的判断放在**组件内部**，页面不管。
+
+---
+
+## 六、验收标准（可量化，不靠感觉）
 
 | # | 验收 | 怎么量 |
 |---|---|---|
@@ -174,6 +246,7 @@ const actualAmount = theoreticalAmount * (1 + lossRate)
 | 6 | **DIY 配置页 script 行数** | 908 → **< 300** |
 | 7 | **四个页面的 `<style>` 规则总数** | 433 → **一套共享组件内的规则** |
 | 8 | **改一次"净用量"的字段名** | **只需改 1 个文件** |
+| 9 | **四个页面的生命阶段 computed 总数** | 21 → **0**（全部走共享组件） |
 
 **第 8 条是真正的验收** —— 它直接回答老板担心的那件事。
 **做法**：随便挑一个字段（比如净用量），改它的名字，然后看要改几个地方。
@@ -181,7 +254,7 @@ const actualAmount = theoreticalAmount * (1 + lossRate)
 
 ---
 
-## 六、不做什么
+## 七、不做什么
 
 | # | 不做 | 原因 |
 |---|---|---|
@@ -193,7 +266,7 @@ const actualAmount = theoreticalAmount * (1 + lossRate)
 
 ---
 
-## 七、执行顺序（每步可单独验收）
+## 八、执行顺序（每步可单独验收）
 
 | 阶段 | 做什么 | 风险 |
 |---|---|---|
@@ -209,7 +282,7 @@ const actualAmount = theoreticalAmount * (1 + lossRate)
 
 ---
 
-## 八、风险
+## 九、风险
 
 | 风险 | 说明 | 对策 |
 |---|---|---|

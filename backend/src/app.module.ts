@@ -78,6 +78,7 @@ import { PrismaOrderRepository } from './infrastructure/repositories/prisma-orde
 import { PrismaService } from './infrastructure/prisma.service';
 import { RecipeService } from './application/recipe/recipe.service';
 import { CoverImageService } from './application/recipe/cover-image.service';
+import { RecipeCoverImageService } from './application/recipe-designer/recipe-cover-image.service';
 import { InMemoryAddressRepository } from './infrastructure/repositories/in-memory-address.repository';
 import { PrismaAddressRepository } from './infrastructure/repositories/prisma-address.repository';
 import { RECIPE_REPOSITORY_TOKEN } from './interfaces/controllers/recipes.controller';
@@ -490,6 +491,7 @@ validatePrismaConfig();
     OrderSourcePlanService,
     RecipeService,
     CoverImageService,
+    RecipeCoverImageService,
     AddressService,
     {
       provide: ADDRESS_REPOSITORY,

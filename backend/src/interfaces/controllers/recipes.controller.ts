@@ -3,7 +3,7 @@
  * Handles recipe related endpoints
  */
 
-import {
+import { BadRequestException,
   Controller,
   Get,
   Post,
@@ -62,6 +62,7 @@ import {
   type AllergenHit,
 } from '../../domain/dog/allergen-vocabulary';
 import { AllergenVocabularyService } from '../../application/health/allergen-vocabulary.service';
+import { RecipeCoverImageService } from '../../application/recipe-designer/recipe-cover-image.service';
 import { DiySheetService } from '../../application/recipe/diy-sheet.service';
 import { OrderService } from '../../application/order/order.service';
 import {
@@ -72,7 +73,7 @@ import { FilterOptionsDto } from '../dto/recipes/filter-options.dto';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { AuthGuard, CurrentUser } from '../auth';
 import { LifeStageAcknowledgementDto } from '../dto/recipes/life-stage-acknowledgement.dto';
-import { StaffGuard } from '../guards/role.guard';
+import { AdminGuard, StaffGuard } from '../guards/role.guard';
 import type { RequestUser } from '../auth/request-user.interface';
 import { JwtAuthService } from '../auth/jwt.service';
 import {
@@ -113,6 +114,7 @@ export class RecipesController {
     @Inject(RECIPE_REPOSITORY_TOKEN)
     private readonly recipeRepository: RecipeRepository,
     private readonly diySheetService: DiySheetService,
+    private readonly recipeCoverImageService: RecipeCoverImageService,
     private readonly prisma: PrismaService,
     private readonly jwtAuthService: JwtAuthService,
     private readonly orderService: OrderService,
@@ -1887,6 +1889,82 @@ export class RecipesController {
 
     await this.incrementRecipeViewCount(id);
     return ApiResponseDto.success(null);
+  }
+
+  /**
+   * AI 生成封面图（2026-10-18）
+   *
+   * ## 为什么不覆盖已有的图
+   *
+   * 这个接口**只返回生成好的地址，不写库**。要不要用这张、换不换，
+   * 由管理员在界面上确认后再保存。
+   *
+   * 理由：生图有随机性，出来一张不像的图就直接覆盖上去，
+   * 管理员得再来一遍、而且原图已经丢了。**先看再存**才是对的。
+   *
+   * ## 权限
+   *
+   * 与「交付食谱」「改配置」同级 —— 仅 ADMIN。
+   * 这个接口会**花钱**（每张约 0.1 元），不该让员工随手点。
+   */
+  @Post(':id/ai-cover')
+  @UseGuards(AuthGuard, AdminGuard)
+  @ApiSecurity('bearer')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'AI 生成食谱封面图（不写库，由界面确认后再保存）' })
+  @ApiParam({ name: 'id', description: 'Recipe ID' })
+  async generateAiCover(
+    @Param('id') id: string,
+  ): Promise<
+    ApiResponseDto<{ url: string; provider: string; model: string }>
+  > {
+    if (!(await this.recipeCoverImageService.isAvailable())) {
+      throw new BadRequestException(
+        'AI 生图还没配置：请到后台「AI 设置」里添加 purpose=RECIPE_COVER_IMAGE、provider=ZHIPU 的一条并启用',
+      );
+    }
+
+    const recipe = await this.prisma.recipe.findFirst({
+      where: { recipeId: id },
+      orderBy: { version: 'desc' },
+      include: {
+        items: {
+          include: { ingredient: { select: { name: true, type: true } } },
+        },
+      },
+    });
+
+    if (!recipe) {
+      throw new NotFoundException('Recipe not found');
+    }
+
+    /**
+     * 提示词只取**食材名**，不带重量与营养数据 ——
+     * 那些对画面没帮助，反而会让模型画出奇怪的东西。
+     * 补剂排除掉：它们不是"这道菜"的组成部分。
+     */
+    const foodNames = recipe.items
+      .filter((item) => item.ingredient?.type !== 'SUPPLEMENT')
+      .map((item) => item.ingredient?.name)
+      .filter((name): name is string => Boolean(name))
+      .slice(0, 5);
+
+    const result = await this.recipeCoverImageService.generate({
+      recipeName: recipe.name,
+      /**
+       * `Recipe` 没有 `lifeStage` 字段（那是旧记忆）——
+       * 实际是 `seriesLifeStage`（单值）与 `applicableLifeStages`（JSON 数组）。
+       * 优先用数组，取不到再退回 seriesLifeStage。
+       */
+      lifeStageLabels: Array.isArray(recipe.applicableLifeStages)
+        ? (recipe.applicableLifeStages as string[])
+        : recipe.seriesLifeStage
+          ? [recipe.seriesLifeStage]
+          : [],
+      foodNames,
+    });
+
+    return ApiResponseDto.success(result);
   }
 
   @Post(':id/share-token')

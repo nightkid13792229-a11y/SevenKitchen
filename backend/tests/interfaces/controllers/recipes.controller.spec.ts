@@ -12,6 +12,7 @@ import { RecipesController } from 'src/recipes.controller';
 import { RECIPE_REPOSITORY_TOKEN } from 'src/recipes.controller';
 import { InMemoryRecipeRepository } from 'src/infrastructure/repositories/in-memory-recipe.repository';
 import { DiySheetService } from 'src/application/recipe/diy-sheet.service';
+import { RecipeCoverImageService } from 'src/application/recipe-designer/recipe-cover-image.service';
 import {
   DogService,
   DOG_REPOSITORY,
@@ -133,6 +134,20 @@ describe('RecipesController (e2e)', () => {
       controllers: [RecipesController],
       providers: [
         DiySheetService,
+        {
+          /**
+           * 2026-10-18：RecipesController 加了 AI 封面图生成（注入这个服务）。
+           * 本 spec 不测生图，给个"未配置"的桩 —— 也顺便锁住
+           * "没配置时必须报清楚，而不是发一个空洞的请求出去"。
+           */
+          provide: RecipeCoverImageService,
+          useValue: {
+            isAvailable: jest.fn(async () => false),
+            generate: jest.fn(async () => {
+              throw new Error('未配置时不该被调用');
+            }),
+          },
+        },
         DogService,
         {
           // 阶段 D1/D2：DogService 注入计划服务以让 calcPreview 反映计划。

@@ -249,3 +249,45 @@ Index Scan using customer_message_customer_id_created_at_idx on customer_message
 **没验的**：`deliver()` 里那次 `customerMessages.send(...)` 会不会真的写入一行。
 
 **建议**：第一次真实交付时，去库里看 `customer_message` 是不是多了 1 行。这是最省事的验收。
+
+---
+
+## 九、那条端到端链路的验证思路（以及我为什么没有造数据）
+
+有人会问：为什么不直接造一条测试消息、或者跑一遍交付？
+
+### 生产环境：不造数据
+
+造测试单会往生产库写真实订单 / 交付记录 / 退款链路。
+**验证一个功能不该以污染生产数据为代价。**
+
+### 本地环境：我没有动它
+
+查下来本地库是**真落后 8 个 migration**（已应用 176 / 共 184），
+`customer_message`、`custom_recipe_delivery`、`custom_recipe_aftersale` **本地从来没建过**。
+
+跑 `prisma migrate deploy` 能补齐，但**那是老板的开发环境，改它超出这次任务范围**。
+
+### 那这条链路到底靠什么可信？
+
+| 证据 | 说明 |
+|---|---|
+| **表结构逐列核对** | 生产库 9 列，类型与长度与代码**完全一致** |
+| **索引被实际使用** | `EXPLAIN` 显示走了 `customer_message_customer_id_created_at_idx` |
+| **Prisma 模型可加载** | 路由返回 401（不是 500），说明 `CustomerMessageService` 注入成功、<br />Prisma client 认识 `customerMessage` 模型 —— **否则模块初始化就会炸** |
+| **service 单测 6 个** | 含"写失败不抛错""超长截断""防越权""limit 夹取" |
+| **模块注册无误** | `app.module.ts` 的 controller + provider 都注册了，启动无报错 |
+
+> **唯一没被直接观测到的**：`deliver()` 里那一行 `customerMessages.send(...)`
+> 在真实交付时会不会被执行到。
+>
+> 这需要**一次真实交付**才能看到。建议第一次交付后去库里数一下
+> `SELECT count(*) FROM customer_message` —— 从 0 变 1 就是通了。
+
+### 为什么接受这个缺口
+
+因为补它的代价（造生产测试数据）**大于**风险本身：
+`send()` 外面包了 `?.` 和 `.catch()` —— **就算它完全不执行，交付流程也不受影响**。
+所以这条链路的失效模式是"顾客收不到通知"，**不是"交付失败"**。
+
+**影响可控，所以不为此造数据。**

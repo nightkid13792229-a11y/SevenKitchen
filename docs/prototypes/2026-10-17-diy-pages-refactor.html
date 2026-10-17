@@ -142,6 +142,11 @@
     <li><b>DIY 制作单</b> ≈ 交付第 2 页的内容部分（食材用量 + 补剂 + 制作流程 + 储存）。</li>
     <li><b>制作单里那块「建议采购量 + 建议采购合计 + 已按 7% 损耗」正是老板要删的。</b></li>
     <li>两个页面都有<b>生命阶段提醒</b> —— 印证了"四页共用"的判断。</li>
+    <li><b>⚠️ 更正我上一版原型的两个错：</b>
+      ① 天数我画成了 7/14/21/30 —— <b>代码里就是 <code>[7, 15, 30]</b></code>，而且
+      <code>recipe-diy</code> 和 <code>recipe-order</code> 共用同一个常量，本来就是统一的。
+      ② 制作单的补剂<b>不是没有入口</b> —— 每行有个可点徽章开"换产品"弹窗、底部有"购买预分装补剂"，
+      只是<b>藏得深、列表里没有直接可点的购买</b>。</li>
   </ul>
   <div class="legend">
     <span><i style="background:#E3F0E6"></i>共享组件</span>
@@ -172,10 +177,10 @@
             <div class="dog dog--on"><span class="dog__av">🐕</span>豆豆</div>
             <div class="dog"><span class="dog__av">🐕</span>旺财</div>
           </div>
+          <div class="note-line" style="margin-top:8px;font-size:11px;color:#6E5F4B">
+            3 岁 · 公 · 11.2kg
+          </div>
           <div class="facts" style="margin-top:9px">
-            <div class="fact"><div class="fact__l">年龄</div><div class="fact__v">3 岁</div></div>
-            <div class="fact"><div class="fact__l">性别</div><div class="fact__v">公</div></div>
-            <div class="fact"><div class="fact__l">体重</div><div class="fact__v">11.2kg</div></div>
             <div class="fact"><div class="fact__l">每日餐次</div><div class="fact__v">2 餐</div></div>
             <div class="fact"><div class="fact__l">每日饭量</div><div class="fact__v fact__v--calc">320g</div></div>
             <div class="fact"><div class="fact__l">每餐约</div><div class="fact__v fact__v--calc">160g</div></div>
@@ -193,9 +198,8 @@
         <div class="card">
           <div class="sec__t">快速选择备餐天数</div>
           <div class="days">
-            <div class="day">7 天</div>
-            <div class="day day--on">14 天</div>
-            <div class="day">21 天</div>
+            <div class="day day--on">7 天</div>
+            <div class="day">15 天</div>
             <div class="day">30 天</div>
           </div>
           <div class="pack">
@@ -239,18 +243,18 @@
             <div class="dog dog--on"><span class="dog__av">🐕</span>豆豆</div>
             <div class="dog"><span class="dog__av">🐕</span>旺财</div>
           </div>
+          <div style="font-size:11.5px;color:#6E5F4B;margin-top:8px">
+            3 岁 · 公 · 11.2kg
+          </div>
           <div class="facts" style="margin-top:9px">
-            <div class="fact"><div class="fact__l">年龄</div><div class="fact__v">3 岁</div></div>
-            <div class="fact"><div class="fact__l">性别</div><div class="fact__v">公</div></div>
-            <div class="fact"><div class="fact__l">体重</div><div class="fact__v">11.2kg</div></div>
-            <div class="fact"><div class="fact__l">每日餐次</div><div class="fact__v">2 餐</div></div>
-            <div class="fact"><div class="fact__l">每日饭量</div><div class="fact__v fact__v--calc">320g</div></div>
-            <div class="fact"><div class="fact__l">每餐约</div><div class="fact__v fact__v--calc">160g</div></div>
+            <div class="fact" style="background:#FFF1E3"><div class="fact__l">每日餐次</div><div class="fact__v">2 餐</div></div>
+            <div class="fact" style="background:#FFF1E3"><div class="fact__l">每日饭量</div><div class="fact__v fact__v--calc">320g</div></div>
+            <div class="fact" style="background:#FFF1E3"><div class="fact__l">每餐饭量</div><div class="fact__v fact__v--calc">160g</div></div>
           </div>
         </div>
         <div class="sub" style="font-size:11px;margin:-3px 0 9px">
+          <b>年龄/性别/体重收成一行小字</b>，三个格子只留给"吃什么、吃多少"
           <span class="mark mark--logic">composable</span> useDogSelection
-          <span class="mark mark--logic">后端</span> 饭量已经是后端算的（不变）
         </div>
 
         <div class="card card--warn">
@@ -266,9 +270,8 @@
         <div class="card">
           <div class="sec__t">做几天</div>
           <div class="days">
-            <div class="day">7 天</div>
-            <div class="day day--on">14 天</div>
-            <div class="day">21 天</div>
+            <div class="day day--on">7 天</div>
+            <div class="day">15 天</div>
             <div class="day">30 天</div>
           </div>
         </div>
@@ -324,30 +327,34 @@
         </div>
 
         <div class="card">
-          <div class="sec__t">制作清单</div>
+          <div class="sec__t">制作清单 <em style="color:#b4453a">文案该改</em></div>
           <div class="facts">
             <div class="fact"><div class="fact__l">狗狗</div><div class="fact__v">豆豆</div></div>
             <div class="fact"><div class="fact__l">每天</div><div class="fact__v">320g</div></div>
-            <div class="fact"><div class="fact__l">做几天</div><div class="fact__v">14 天</div></div>
+            <div class="fact"><div class="fact__l">做几天</div><div class="fact__v">15 天</div></div>
           </div>
         </div>
 
         <div class="card card--del">
           <div class="sec__t">食材 <em style="color:#b4453a">含采购量</em></div>
           <div class="thead"><span class="th-n">原料名称</span><span class="th-m">制备方法</span><span class="th-r">建议采购量</span></div>
-          <div class="item"><span class="it-n">鸡胸肉</span><span class="it-m">切丁煮熟</span><span class="it-r">1712g</span></div>
-          <div class="item"><span class="it-n">南瓜</span><span class="it-m">蒸熟压泥</span><span class="it-r">1070g</span></div>
-          <div class="item"><span class="it-n">糙米</span><span class="it-m">煮软</span><span class="it-r">1070g</span></div>
-          <div class="item"><span class="it-n">西兰花</span><span class="it-m">焯水切碎</span><span class="it-r">428g</span></div>
-          <div class="total-line"><span>建议采购合计</span><b>4280g</b></div>
+          <div class="item"><span class="it-n">鸡胸肉</span><span class="it-m">切丁煮熟</span><span class="it-r">2054g</span></div>
+          <div class="item"><span class="it-n">南瓜</span><span class="it-m">蒸熟压泥</span><span class="it-r">1284g</span></div>
+          <div class="item"><span class="it-n">糙米</span><span class="it-m">煮软</span><span class="it-r">1284g</span></div>
+          <div class="item"><span class="it-n">西兰花</span><span class="it-m">焯水切碎</span><span class="it-r">514g</span></div>
+          <div class="total-line"><span>建议采购合计</span><b>5136g</b></div>
           <div class="note-line">建议采购量已计算制作损耗。</div>
         </div>
 
-        <div class="card">
-          <div class="sec__t">营养补充剂</div>
+        <div class="card card--del">
+          <div class="sec__t">营养补充剂 <em style="color:#b4453a">列表里没有购买入口</em></div>
           <div class="thead"><span class="th-n">补剂名称</span><span class="th-m">添加时机</span><span class="th-r">添加总量</span></div>
-          <div class="item"><span class="it-n">钙粉</span><span class="it-m">随餐</span><span class="it-r">22g</span></div>
-          <div class="item"><span class="it-n">鱼油</span><span class="it-m">出锅前</span><span class="it-r">9g</span></div>
+          <div class="item"><span class="it-n">钙粉 <span class="mark mark--keep">有替代</span></span><span class="it-m">随餐</span><span class="it-r">24g</span></div>
+          <div class="item"><span class="it-n">鱼油 <span class="mark mark--keep">有替代</span></span><span class="it-m">出锅前</span><span class="it-r">10g</span></div>
+          <div class="note-line">
+            现在：名字旁边有个小徽章点了能换产品（进弹窗才有「去购买」），
+            再加上底部那个「购买预分装补剂」。
+          </div>
         </div>
 
         <div class="card">
@@ -364,7 +371,7 @@
           <div class="sec__t">制作设备推荐 <em>查看详情 →</em></div>
         </div>
 
-        <div class="btn btn--line">购买预分装补剂</div>
+        <div class="btn btn--line">一键买齐自产补剂</div>
 
       </div>
     </div>
@@ -400,23 +407,23 @@
         </div>
 
         <div class="card">
-          <div class="sec__t">制作清单</div>
+          <div class="sec__t">基础信息</div>
           <div class="facts">
             <div class="fact"><div class="fact__l">狗狗</div><div class="fact__v">豆豆</div></div>
             <div class="fact"><div class="fact__l">每天</div><div class="fact__v">320g</div></div>
-            <div class="fact"><div class="fact__l">做几天</div><div class="fact__v">14 天</div></div>
+            <div class="fact"><div class="fact__l">做几天</div><div class="fact__v">15 天</div></div>
           </div>
         </div>
 
         <div class="card" style="border-color:#B9D8C2;background:#F7FBF8">
           <div class="sec__t">食材 <em style="color:#1e5b35">只给净用量</em></div>
           <div class="thead"><span class="th-n">原料名称</span><span class="th-m">制备方法</span><span class="th-r">净用量</span></div>
-          <div class="item"><span class="it-n">鸡胸肉</span><span class="it-m">切丁煮熟</span><span class="it-r">1600g</span></div>
-          <div class="item"><span class="it-n">南瓜</span><span class="it-m">蒸熟压泥</span><span class="it-r">1000g</span></div>
-          <div class="item"><span class="it-n">糙米</span><span class="it-m">煮软</span><span class="it-r">1000g</span></div>
-          <div class="item"><span class="it-n">西兰花</span><span class="it-m">焯水切碎</span><span class="it-r">400g</span></div>
+          <div class="item"><span class="it-n">鸡胸肉</span><span class="it-m">切丁煮熟</span><span class="it-r">1920g</span></div>
+          <div class="item"><span class="it-n">南瓜</span><span class="it-m">蒸熟压泥</span><span class="it-r">1200g</span></div>
+          <div class="item"><span class="it-n">糙米</span><span class="it-m">煮软</span><span class="it-r">1200g</span></div>
+          <div class="item"><span class="it-n">西兰花</span><span class="it-m">焯水切碎</span><span class="it-r">480g</span></div>
           <div class="total-line" style="border-color:#CFE3D5;color:#1e5b35">
-            <span>合计净重</span><b style="color:#1e5b35">4000g</b>
+            <span>合计净重</span><b style="color:#1e5b35">4800g</b>
           </div>
           <div class="note-line" style="color:#1e5b35">
             只写"这次要用多少"。买多少你自己判断。
@@ -427,14 +434,31 @@
           <span class="mark mark--logic">后端</span> 数字由后端算，页面不再乘损耗
         </div>
 
-        <div class="card">
-          <div class="sec__t">营养补充剂</div>
+        <div class="card" style="border-color:#B9D8C2;background:#F7FBF8">
+          <div class="sec__t">营养补充剂 <em style="color:#1e5b35">每行都能买</em></div>
           <div class="thead"><span class="th-n">补剂名称</span><span class="th-m">添加时机</span><span class="th-r">添加总量</span></div>
-          <div class="item"><span class="it-n">钙粉</span><span class="it-m">随餐</span><span class="it-r">20g</span></div>
-          <div class="item"><span class="it-n">鱼油</span><span class="it-m">出锅前</span><span class="it-r">8g</span></div>
+          <div class="item">
+            <span class="it-n">钙粉</span><span class="it-m">随餐</span><span class="it-r">24g</span>
+          </div>
+          <div class="item" style="border-bottom:1px dashed #CFE3D5;padding-bottom:0">
+            <span class="it-n" style="flex:1"></span>
+            <span style="font-size:10.5px;color:#1e5b35">已选：碳酸钙粉 · 500g 装</span>
+            <span style="font-size:10.5px;color:#B45309;font-weight:700;margin-left:auto">换一个</span>
+            <span style="font-size:10.5px;color:#fff;background:#1e5b35;border-radius:999px;padding:2px 9px;font-weight:700;margin-left:8px">去买</span>
+          </div>
+          <div class="item">
+            <span class="it-n">鱼油</span><span class="it-m">出锅前</span><span class="it-r">10g</span>
+          </div>
+          <div class="item" style="border-bottom:0;padding-top:0">
+            <span class="it-n" style="flex:1"></span>
+            <span style="font-size:10.5px;color:#1e5b35">已选：深海鱼油 · 200ml</span>
+            <span style="font-size:10.5px;color:#B45309;font-weight:700;margin-left:auto">换一个</span>
+            <span style="font-size:10.5px;color:#fff;background:#1e5b35;border-radius:999px;padding:2px 9px;font-weight:700;margin-left:8px">去买</span>
+          </div>
         </div>
         <div class="sub" style="font-size:11px;margin:-3px 0 9px">
-          <span class="mark mark--logic">后端</span> 补剂量也从后端来（现在页面自己算）
+          <b>每行补三个东西：已选的规格、换一个、去买</b> —— 不用先进弹窗才知道能买
+          <span class="mark mark--logic">后端</span> 补剂量也由后端算
         </div>
 
         <div class="card">
@@ -457,7 +481,7 @@
           <span class="mark mark--diy">DIY 独有</span> 交付页没有这个
         </div>
 
-        <div class="btn btn--line">购买预分装补剂</div>
+        <div class="btn btn--line">一键买齐自产补剂</div>
 
       </div>
     </div>
@@ -503,6 +527,30 @@
     <td style="color:#23477e;font-weight:700">抽逻辑</td>
     <td>选狗 / 天数选择 / 分装配置</td>
     <td><code>useDogSelection</code> + <code>usePackagePlan</code></td>
+  </tr>
+  <tr>
+    <td class="new" style="font-weight:700">改</td>
+    <td><b>爱犬信息收成一行小字</b></td>
+    <td>年龄/性别/体重不再占三个格子（太占篇幅），改成选择器下方一行
+      「3 岁 · 公 · 11.2kg」；<b>三个格子只留给每日餐次 / 每日饭量 / 每餐饭量</b></td>
+  </tr>
+  <tr>
+    <td class="new" style="font-weight:700">确认</td>
+    <td><b>天数只留 7 / 15 / 30</b></td>
+    <td><b>代码里已经是这样</b>（<code>ORDER_CYCLE_OPTIONS = [7, 15, 30]</code>），
+      而且 <code>recipe-diy</code> 与 <code>recipe-order</code> 共用同一个常量 —— 无需改动。
+      <b>我上一版原型画成 7/14/21/30 是我编的</b></td>
+  </tr>
+  <tr>
+    <td class="new" style="font-weight:700">改</td>
+    <td><b>制作单「制作清单」→「基础信息」</b></td>
+    <td>原本文案不准确 —— 那块列的是狗、每天多少、做几天，属于基础信息</td>
+  </tr>
+  <tr>
+    <td class="new" style="font-weight:700">改</td>
+    <td><b>补剂表每行加「换一个 / 去买」</b></td>
+    <td>现在只有：名字旁边一个小徽章（进弹窗才有去购买）+ 底部「一键买齐」。
+      <b>顾客不知道列表里就能买</b>。改成每行直接给：已选规格 / 换一个 / 去买</td>
   </tr>
   <tr>
     <td style="color:#6b2e7a;font-weight:700">DIY 独有</td>

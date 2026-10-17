@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 /**
  * Recipes Controller API Tests
  */
@@ -2269,5 +2271,38 @@ describe('RecipesController (e2e)', () => {
       expect(response.body.message).toMatch(/Dog not found|Recipe not found/);
       expect(response.body.data).toBeNull();
     });
+  });
+
+  /**
+   * 路由顺序守卫（2026-10-18）
+   *
+   * `@Get('ai-cover-availability')` 必须写在 `@Get(':id')` **之前**。
+   *
+   * 踩过一次：一开始把它放在 `@Post(':id/ai-cover')` 旁边（文件很后面），
+   * 结果请求被 `GET /recipes/:id` 当成 `id='ai-cover-availability'` 吃掉，
+   * 返回 `{"code":404,"message":"Recipe not found"}` ——
+   * **接口永远调不通，而且不报错、不崩、测试全绿**。
+   *
+   * Nest 按声明顺序匹配，`@Get(':id')` 是通配，后面的一律被它抢走。
+   */
+  it('ai-cover-availability 声明在 :id 之前（否则被当成 recipeId 吃掉）', () => {
+    const source = readFileSync(
+      join(__dirname, '../../../src/interfaces/controllers/recipes.controller.ts'),
+      'utf8',
+    );
+    /**
+     * ⚠️ **必须先剥注释** —— 这段代码的注释里本身就写着 `@Get(':id')`，
+     * 不剥的话 `indexOf` 会命中注释，断言立刻误报（本会话第三次踩这个坑）。
+     */
+    const code = source
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
+
+    const availabilityAt = code.indexOf("@Get('ai-cover-availability')");
+    const paramAt = code.indexOf("@Get(':id')");
+
+    expect(availabilityAt).toBeGreaterThan(-1);
+    expect(paramAt).toBeGreaterThan(-1);
+    expect(availabilityAt).toBeLessThan(paramAt);
   });
 });

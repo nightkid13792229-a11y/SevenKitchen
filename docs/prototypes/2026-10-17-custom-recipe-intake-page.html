@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>食谱定制页 · 原型 v2（2026-10-17）</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: #FAF7F2; color: #3F3222; padding: 26px 22px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: 22px; margin-bottom: 6px; }
+  h2 { font-size: 17px; margin: 40px 0 6px; padding-top: 12px; border-top: 2px solid #E4D8C8; }
+  h2 span { font-size: 12.5px; font-weight: 400; color: #8A7A66; margin-left: 8px; }
+  .sub { font-size: 12.5px; color: #6E5F4B; line-height: 1.8; max-width: 1320px; }
+  .sub b { color: #3F3222; }
+  code { background: #F0E6D8; padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+
+  .row { display: flex; gap: 18px; overflow-x: auto; padding: 14px 0 22px; align-items: flex-start; }
+  .col { width: 372px; flex: 0 0 372px; }
+  .col__head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12.5px; font-weight: 700; }
+  .col__tag { font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #F7E4CC; color: #8C3D06; }
+  .col__tag--new { background: #FBE7C0; color: #8a5a00; }
+  .col__tag--alt { background: #EFEAE3; color: #4a5568; }
+  .col__note { font-size: 11.5px; color: #8A7A66; line-height: 1.75; margin-top: 8px; }
+  .col__note b { color: #b4453a; }
+
+  /* ---------- 手机 ---------- */
+  .phone {
+    width: 372px; min-height: 700px; background: #FAF7F2; border: 1px solid #EDE0D0;
+    border-radius: 20px; padding: 0 10px 14px; position: relative;
+    box-shadow: 0 6px 24px rgba(74,55,38,.06);
+  }
+  .navbar {
+    height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 12px;
+    background: #FAF7F2; margin: 0 -10px; border-radius: 20px 20px 0 0;
+  }
+  .navbar__back { font-size: 16px; color: #6E5F4B; line-height: 1; }
+  .navbar__t { font-size: 14px; font-weight: 600; }
+  .navbar__cap { margin-left: auto; font-size: 10.5px; color: #B3A492; }
+
+  .card { background: #fff; border: 1px solid #EDE0D0; border-radius: 14px; padding: 12px; margin-bottom: 9px; }
+  .card__title { font-size: 13.5px; font-weight: 700; margin-bottom: 9px; display: flex; align-items: center; gap: 6px; }
+  .card__title em { font-style: normal; margin-left: auto; font-size: 10.5px; font-weight: 400; color: #9C8B76; }
+  .card--readonly { background: #FBF8F3; border-style: dashed; }
+
+  /* 段落标题 */
+  .seg { margin: 16px 0 8px; display: flex; align-items: center; gap: 8px; }
+  .seg__n { width: 20px; height: 20px; border-radius: 50%; background: #B45309; color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex: 0 0 20px; }
+  .seg__t { font-size: 13px; font-weight: 700; color: #3F3222; }
+  .seg__hint { font-size: 10.5px; color: #A9967E; margin-left: auto; }
+
+  /* Hero */
+  .hero { background: linear-gradient(135deg,#1e3a2f,#16261f); border-radius: 14px; padding: 13px; color: #f4ecd8; margin-bottom: 9px; }
+  .hero__id { display: flex; align-items: center; gap: 10px; }
+  .hero__av { width: 44px; height: 44px; border-radius: 50%; background: #c9a227; display: flex; align-items: center; justify-content: center; font-size: 18px; flex: 0 0 44px; }
+  .hero__name { font-size: 16px; font-weight: 700; }
+  .hero__line { font-size: 11px; color: rgba(244,236,216,.6); margin-top: 3px; }
+  .hero__switch { font-size: 10.5px; color: #c9a227; margin-left: auto; }
+  .hero__facts { display: flex; gap: 8px; margin-top: 11px; }
+  .hero__fact { flex: 1; background: rgba(244,236,216,.08); border-radius: 9px; padding: 7px 8px; }
+  .hero__fl { font-size: 9.5px; color: rgba(244,236,216,.5); }
+  .hero__fv { font-size: 12.5px; font-weight: 700; color: #c9a227; margin-top: 2px; }
+
+  /* 只读行 */
+  .kv { display: flex; font-size: 12px; padding: 7px 0; border-bottom: 1px dashed #F4EBE0; align-items: center; }
+  .kv:last-child { border-bottom: 0; }
+  .kv__k { color: #9C8B76; width: 86px; flex: 0 0 86px; }
+  .kv__v { flex: 1; }
+  .kv__v b { color: #B45309; }
+  .kv__go { font-size: 11px; color: #B45309; font-weight: 600; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 11px; background: #FBEEE0; color: #8C3D06; border-radius: 999px; padding: 4px 10px; }
+  .chip--add { background: #fff; border: 1px dashed #E5C9A3; color: #B45309; }
+  .chip--warn { background: #FCEAE5; color: #b4453a; }
+
+  .btnrow { display: flex; gap: 9px; margin-top: 11px; }
+  .btn { flex: 1; text-align: center; font-size: 13px; font-weight: 700; padding: 11px 0; border-radius: 11px; }
+  .btn--main { background: #B45309; color: #fff; }
+  .btn--ghost { background: #fff; color: #B45309; border: 1.5px solid #E5C9A3; }
+  .btn--line { background: #fff; color: #6E5F4B; border: 1.5px solid #EDE0D0; }
+  .btn--lock { background: #E8DFD2; color: #B3A492; }
+
+  .hint { font-size: 11px; color: #9C8B76; line-height: 1.6; margin-top: 6px; }
+  .hint--warn { color: #b4453a; }
+  .opt { display: flex; align-items: center; gap: 9px; padding: 10px 11px; border: 1.5px solid #EDE0D0; border-radius: 11px; margin-bottom: 7px; font-size: 12.5px; background: #fff; }
+  .opt--on { border-color: #B45309; background: #FFF8F1; }
+  .opt__box { width: 16px; height: 16px; border-radius: 5px; border: 1.5px solid #D6C7B4; flex: 0 0 16px; }
+  .opt--on .opt__box { background: #B45309; border-color: #B45309; }
+  .opt__box--r { border-radius: 50%; }
+  .opt small { color: #9C8B76; font-size: 10.5px; margin-left: auto; }
+
+  /* 底部固定条 */
+  .bottom { position: sticky; bottom: 0; margin: 14px -10px -14px; padding: 12px 18px 16px; background: linear-gradient(180deg,rgba(250,247,242,0),#FAF7F2 22%); }
+  .paybar { background: #fff; border: 1px solid #EDE0D0; border-radius: 13px; padding: 11px; }
+  .paybar__date { font-size: 12.5px; font-weight: 700; }
+  .paybar__date b { color: #B45309; }
+  .paybar__note { font-size: 10.5px; color: #8A7A66; line-height: 1.55; margin-top: 4px; }
+
+  /* 弹窗 */
+  .mask { position: absolute; inset: 0; background: rgba(40,30,20,.42); border-radius: 20px; display: flex; align-items: flex-end; }
+  .sheet { width: 100%; background: #FAF7F2; border-radius: 20px 20px 0 0; padding: 16px 14px 18px; max-height: 86%; overflow-y: auto; }
+  .sheet__handle { width: 36px; height: 4px; border-radius: 2px; background: #E0D2BF; margin: 0 auto 12px; }
+  .sheet__t { font-size: 15px; font-weight: 700; }
+  .sheet__sub { font-size: 11.5px; color: #8A7A66; margin-top: 4px; line-height: 1.6; }
+  .search { margin: 11px 0; padding: 9px 11px; border: 1.5px solid #EDE0D0; border-radius: 10px; font-size: 12px; color: #B3A492; background: #fff; }
+  .sec-label { font-size: 11px; color: #A9967E; margin: 12px 0 7px; }
+
+  /* 顶部说明条 */
+  .banner { background: #FFF8EC; border: 2px solid #E8C88A; border-radius: 12px; padding: 14px 16px; max-width: 1320px; margin-bottom: 8px; }
+  .banner__t { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+  .banner ul { margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.85; color: #6E5F4B; }
+  .banner b { color: #3F3222; }
+
+  .legend { display: flex; gap: 16px; font-size: 11.5px; color: #6E5F4B; margin-top: 10px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+</style>
+</head>
+<body>
+
+<h1>食谱定制页 · 原型 v2</h1>
+<div class="sub">
+  日期：2026-10-17 ｜ 对应需求：<code>docs/plans/2026-10-17-custom-recipe-requirements-v2.md</code> § 2.3<br />
+  本次只画**定制页本身和它的三个弹窗**。交付物两页、售后页不在这一版。
+</div>
+
+<div class="banner" style="margin-top:18px">
+  <div class="banner__t">这一版改了什么（对照现在线上的页面）</div>
+  <ul>
+    <li><b>结构从"4 步问卷"改成"三段"</b>：先核对档案 → 再补充 → 最后告知。顾客要打的字从 4 段变 1~2 段。</li>
+    <li><b>拿掉「饮食偏好」</b>（爱吃的 / 不吃的）。档案里虽有这个字段，但生产上 4625 只狗填了 <b>0 只</b>，确实是低频。</li>
+    <li><b>新增「它现在吃什么」</b>（必填）：干粮/湿粮/自制/混着喂 + 为什么想换。没有这个，过渡方案只能写套话。</li>
+    <li><b>新增「肠胃情况」</b>（选填）：软便/便秘/呕吐等，对症型顾客最关键。</li>
+    <li><b>新增「就诊记录确认」</b>：档案里已有 336 条就诊记录，这一页只做确认 + 跳转补填，不重复收集。</li>
+    <li><b>新增下单前告知</b>：把「确定的交付日期」和「¥300 不含食材」在付款前说清（现在这两句只在付完钱之后才出现）。</li>
+  </ul>
+  <div class="legend">
+    <span><i style="background:#FBE7C0"></i>本轮新增</span>
+    <span><i style="background:#FBF8F3;border:1px dashed #D6C7B4"></i>只读（来自档案）</span>
+    <span><i style="background:#FBEEE0"></i>沿用现有</span>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<h2>一、定制页主界面 <span>三段式：核对 → 补充 → 告知</span></h2>
+
+<div class="row">
+
+  <!-- ============ 主界面 ============ -->
+  <div class="col">
+    <div class="col__head"><span class="col__name">定制页（可滚动）</span></div>
+    <div class="phone">
+      <div class="navbar">
+        <span class="navbar__back">‹</span>
+        <span class="navbar__t">定制专属食谱</span>
+        <span class="navbar__cap">赛文的食堂</span>
+      </div>
+
+      <!-- Hero -->
+      <div class="hero">
+        <div class="hero__id">
+          <div class="hero__av">🐕</div>
+          <div>
+            <div class="hero__name">豆豆</div>
+            <div class="hero__line">柯基 · 3 岁 · 公 · 已绝育</div>
+          </div>
+          <span class="hero__switch">切换 ▼</span>
+        </div>
+      </div>
+
+      <!-- 第一段 -->
+      <div class="seg">
+        <span class="seg__n">1</span>
+        <span class="seg__t">先确认这些对不对</span>
+        <span class="seg__hint">来自档案</span>
+      </div>
+
+      <!-- 体重管理（沿用现有） -->
+      <div class="card">
+        <div class="card__title">体重管理 <em>档案</em></div>
+        <div class="kv"><span class="kv__k">当前体重</span><span class="kv__v">11.2 kg</span></div>
+        <div class="kv"><span class="kv__k">体况评分</span><span class="kv__v">偏胖（7/9）</span></div>
+        <div class="kv"><span class="kv__k">活动量</span><span class="kv__v">正常</span></div>
+        <div class="hint" style="color:#B45309">我们建议：减重。想帮它减重、维持，还是增重？</div>
+        <div class="chips" style="margin-top:8px">
+          <span class="chip chip--add" style="background:#B45309;color:#fff;border-style:solid">减重</span>
+          <span class="chip">维持</span>
+          <span class="chip">增重</span>
+        </div>
+        <div class="hint">这些来自档案，不准？<span class="kv__go">去改 ›</span></div>
+      </div>
+
+      <!-- 过敏（沿用现有，改只读+补充） -->
+      <div class="card">
+        <div class="card__title">过敏信息 <em>档案</em></div>
+        <div class="chips">
+          <span class="chip chip--warn">鸡肉</span>
+          <span class="chip chip--warn">小麦</span>
+          <span class="chip chip--add" onclick="openSheet('sheet-allergy')">+ 补充</span>
+        </div>
+        <div class="hint">有没有漏的？过敏是安全项，我们会严格避开。</div>
+      </div>
+
+      <!-- 就诊记录（本轮新增：只确认，不收集） -->
+      <div class="card">
+        <div class="card__title">就诊记录 <em>档案</em></div>
+        <div class="kv"><span class="kv__k">最近一次</span><span class="kv__v">2026-09-20 · 胰腺炎</span></div>
+        <div class="kv"><span class="kv__k">当前状态</span><span class="kv__v">治疗中</span></div>
+        <div class="hint">
+          之后有新的就诊吗？<span class="kv__go">去补填 ›</span><br />
+          填完回来这里会自动更新，<b>不需要重填定制需求</b>。
+        </div>
+      </div>
+
+      <!-- 第二段 -->
+      <div class="seg">
+        <span class="seg__n">2</span>
+        <span class="seg__t">还需要你告诉我</span>
+        <span class="seg__hint">只有这里要打字</span>
+      </div>
+
+      <!-- 现在吃什么（本轮新增 · 必填） -->
+      <div class="card" style="border-color:#E8C88A;background:#FFFDF8">
+        <div class="card__title">它现在吃什么 <em style="color:#B45309">必填</em></div>
+        <div class="kv"><span class="kv__k">主要吃</span><span class="kv__v">干粮</span></div>
+        <div class="kv"><span class="kv__k">每天多少</span><span class="kv__v">说不清</span></div>
+        <div class="kv"><span class="kv__k">为什么想换</span><span class="kv__v">有症状 · 医生说</span></div>
+        <div class="hint" style="color:#B45309">
+          告诉我们它现在吃什么，才好在交付时给你一个靠谱的过渡方案。
+        </div>
+        <div class="btnrow" style="margin-top:8px">
+          <div class="btn btn--ghost" onclick="openSheet('sheet-food')">填写 ›</div>
+        </div>
+      </div>
+
+      <!-- 肠胃（本轮新增 · 选填） -->
+      <div class="card" style="border-color:#E8C88A;background:#FFFDF8">
+        <div class="card__title">最近肠胃怎么样 <em>选填</em></div>
+        <div class="chips">
+          <span class="chip">正常</span>
+          <span class="chip" style="background:#B45309;color:#fff">软便</span>
+          <span class="chip">便秘</span>
+          <span class="chip">呕吐过</span>
+          <span class="chip">换粮容易拉稀</span>
+        </div>
+        <div class="hint">选填。有的话告诉我们，配方会针对性调整。</div>
+      </div>
+
+      <!-- 备注 + 附件（沿用现有） -->
+      <div class="card">
+        <div class="card__title">还有什么想让我知道的 <em>选填</em></div>
+        <div style="border:1.5px solid #EDE0D0;border-radius:10px;padding:9px;min-height:58px;font-size:11.5px;color:#B3A492;background:#fff">
+          例如：它最近在换粮、吃某种药、不爱嚼硬的，或者软便 / 便秘
+        </div>
+        <div class="btnrow">
+          <div class="btn btn--line">📷 上传照片（0/9）</div>
+        </div>
+        <div class="hint">过敏报告、化验单、现在的粮袋子都可以传。</div>
+      </div>
+
+      <!-- 第三段 -->
+      <div class="seg">
+        <span class="seg__n">3</span>
+        <span class="seg__t">下单前请确认</span>
+      </div>
+
+      <div class="bottom">
+        <div class="paybar">
+          <div class="paybar__date">预计 <b>10 月 20 日（周三）</b> 交付</div>
+          <div class="paybar__note">
+            ¥300 是营养师定制费，<b>不含食材</b>。<br />
+            付完后可<b>全额抵扣</b>成品鲜食。
+          </div>
+          <div class="btnrow">
+            <div class="btn btn--main" onclick="openSheet('sheet-confirm')">确认定制</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col__note">
+      <b>三段的读法：</b>第 1 段全是「看」，只有发现不对才点「去改」；
+      第 2 段才需要打字；第 3 段是付款前最后一眼。
+      <br /><br />
+      底部那条<b>一直跟着滚</b>，不是滚到底才出现 —— 顾客随时能看到交付日期和 ¥300 的说明。
+    </div>
+  </div>
+
+  <!-- ============ 弹窗 1：过敏 ============ -->
+  <div class="col">
+    <div class="col__head">
+      <span class="col__name">弹窗 ① · 过敏原选择</span>
+      <span class="col__tag col__tag--alt">沿用现有 + 补充</span>
+    </div>
+    <div class="phone" style="min-height:700px;position:relative">
+      <div class="navbar">
+        <span class="navbar__back">‹</span>
+        <span class="navbar__t">定制专属食谱</span>
+      </div>
+      <div style="opacity:.35;filter:blur(1.5px)">
+        <div class="hero"><div class="hero__id"><div class="hero__av">🐕</div><div><div class="hero__name">豆豆</div><div class="hero__line">柯基 · 3 岁</div></div></div></div>
+        <div class="card"><div class="card__title">体重管理</div><div class="kv"><span class="kv__k">体况评分</span><span class="kv__v">偏胖（7/9）</span></div><div class="kv"><span class="kv__k">活动量</span><span class="kv__v">正常</span></div></div>
+        <div class="card"><div class="card__title">过敏信息</div><div class="chips"><span class="chip chip--warn">鸡肉</span><span class="chip chip--warn">小麦</span></div></div>
+        <div class="card"><div class="card__title">就诊记录</div><div class="kv"><span class="kv__k">最近一次</span><span class="kv__v">2026-09-20</span></div></div>
+        <div class="card"><div class="card__title">它现在吃什么</div><div class="kv"><span class="kv__k">主要吃</span><span class="kv__v">干粮</span></div></div>
+        <div class="card"><div class="card__title">肠胃情况</div><div class="chips"><span class="chip">软便</span></div></div>
+        <div class="card"><div class="card__title">还有什么想让我知道的</div></div>
+      </div>
+      <div class="mask">
+        <div class="sheet">
+          <div class="sheet__handle"></div>
+          <div class="sheet__t">它对什么过敏？</div>
+          <div class="sheet__sub">勾选后会严格从配方里排除。不确定的先不选，写在备注里也行。</div>
+          <div class="search">🔍 搜索食物（如：牛肉、玉米、乳制品）</div>
+
+          <div class="sec-label">已选（2）</div>
+          <div class="chips">
+            <span class="chip chip--warn">鸡肉 ✕</span>
+            <span class="chip chip--warn">小麦 ✕</span>
+          </div>
+
+          <div class="sec-label">常见过敏原</div>
+          <div class="chips">
+            <span class="chip">牛肉</span>
+            <span class="chip">羊肉</span>
+            <span class="chip chip--warn">鸡肉 ✓</span>
+            <span class="chip">鸡蛋</span>
+            <span class="chip">乳制品</span>
+            <span class="chip">玉米</span>
+            <span class="chip">大豆</span>
+            <span class="chip chip--warn">小麦 ✓</span>
+            <span class="chip">鱼肉</span>
+            <span class="chip">大米</span>
+          </div>
+
+          <div class="btnrow" style="margin-top:14px">
+            <div class="btn btn--ghost">取消</div>
+            <div class="btn btn--main">确定（2 项）</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col__note">
+      沿用现在线上那个"过敏原快捷选 + 搜索"的交互，只改一处：<b>从档案读出来的会自动出现在「已选」里</b>，
+      顾客不用重复勾。
+    </div>
+  </div>
+
+  <!-- ============ 弹窗 2：现在吃什么 ============ -->
+  <div class="col">
+    <div class="col__head">
+      <span class="col__name">弹窗 ② · 它现在吃什么</span>
+      <span class="col__tag col__tag--new">本轮新增</span>
+    </div>
+    <div class="phone" style="min-height:700px;position:relative">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">定制专属食谱</span></div>
+      <div style="opacity:.35;filter:blur(1.5px)">
+        <div class="hero"><div class="hero__id"><div class="hero__av">🐕</div><div><div class="hero__name">豆豆</div><div class="hero__line">柯基 · 3 岁</div></div></div></div>
+        <div class="card"><div class="card__title">体重管理</div><div class="kv"><span class="kv__k">体况评分</span><span class="kv__v">偏胖（7/9）</span></div></div>
+        <div class="card"><div class="card__title">过敏信息</div><div class="chips"><span class="chip chip--warn">鸡肉</span><span class="chip chip--warn">小麦</span></div></div>
+        <div class="card"><div class="card__title">就诊记录</div><div class="kv"><span class="kv__k">最近一次</span><span class="kv__v">2026-09-20</span></div></div>
+        <div class="card"><div class="card__title">它现在吃什么</div><div class="kv"><span class="kv__k">主要吃</span><span class="kv__v">干粮</span></div></div>
+        <div class="card"><div class="card__title">肠胃情况</div><div class="chips"><span class="chip">软便</span></div></div>
+        <div class="card"><div class="card__title">还有什么想让我知道的</div></div>
+      </div>
+      <div class="mask">
+        <div class="sheet">
+          <div class="sheet__handle"></div>
+          <div class="sheet__t">它现在吃什么？</div>
+          <div class="sheet__sub">
+            三个小问题，30 秒。<b>这是营养师设计过渡方案的基础</b> —— 不知道它现在吃什么，
+            就没法告诉你该怎么换。
+          </div>
+
+          <div class="sec-label">① 现在主要吃什么</div>
+          <div class="opt opt--on"><span class="opt__box opt__box--r"></span>干粮（膨化粮）</div>
+          <div class="opt"><span class="opt__box opt__box--r"></span>湿粮 / 罐头</div>
+          <div class="opt"><span class="opt__box opt__box--r"></span>自制（自己煮）</div>
+          <div class="opt"><span class="opt__box opt__box--r"></span>混着喂</div>
+          <div class="opt"><span class="opt__box opt__box--r"></span>说不清</div>
+
+          <div class="sec-label">② 每天大概吃多少 <small style="color:#A9967E">（选填，不清也没关系）</small></div>
+          <div class="chips">
+            <span class="chip">不到 100g</span>
+            <span class="chip">100–200g</span>
+            <span class="chip">200–300g</span>
+            <span class="chip">300g 以上</span>
+            <span class="chip" style="background:#B45309;color:#fff">说不清</span>
+          </div>
+
+          <div class="sec-label">③ 为什么想换 <small style="color:#A9967E">（可多选）</small></div>
+          <div class="chips">
+            <span class="chip">想更健康</span>
+            <span class="chip" style="background:#B45309;color:#fff">有症状</span>
+            <span class="chip">吃腻了</span>
+            <span class="chip" style="background:#B45309;color:#fff">医生说</span>
+            <span class="chip">没时间做</span>
+            <span class="chip">其他</span>
+          </div>
+
+          <div class="btnrow" style="margin-top:14px">
+            <div class="btn btn--main">填好了</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col__note">
+      <b>为什么必填：</b>交付物里要写「第 1 周按 7:3 混原来的粮」，但"原来的粮"是什么，
+      营养师现在完全不知道 —— 那句过渡建议只能写套话。
+      <br /><br />
+      「每天多少」<b>故意允许"说不清"</b>：顾客掂量不准是常态，逼着填只会得到瞎报的数字。
+      营养师按体重倒推就行。
+    </div>
+  </div>
+
+  <!-- ============ 弹窗 3：提交确认 ============ -->
+  <div class="col">
+    <div class="col__head">
+      <span class="col__name">弹窗 ③ · 提交确认</span>
+      <span class="col__tag col__tag--new">本轮新增</span>
+    </div>
+    <div class="phone" style="min-height:700px;position:relative">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">定制专属食谱</span></div>
+      <div style="opacity:.35;filter:blur(1.5px)">
+        <div class="hero"><div class="hero__id"><div class="hero__av">🐕</div><div><div class="hero__name">豆豆</div><div class="hero__line">柯基 · 3 岁</div></div></div></div>
+        <div class="card"><div class="card__title">体重管理</div><div class="kv"><span class="kv__k">体况评分</span><span class="kv__v">偏胖（7/9）</span></div></div>
+        <div class="card"><div class="card__title">过敏信息</div><div class="chips"><span class="chip chip--warn">鸡肉</span><span class="chip chip--warn">小麦</span></div></div>
+        <div class="card"><div class="card__title">就诊记录</div><div class="kv"><span class="kv__k">最近一次</span><span class="kv__v">2026-09-20</span></div></div>
+        <div class="card"><div class="card__title">它现在吃什么</div><div class="kv"><span class="kv__k">主要吃</span><span class="kv__v">干粮</span></div></div>
+        <div class="card"><div class="card__title">肠胃情况</div><div class="chips"><span class="chip">软便</span></div></div>
+        <div class="card"><div class="card__title">还有什么想让我知道的</div></div>
+      </div>
+      <div class="mask">
+        <div class="sheet">
+          <div class="sheet__handle"></div>
+          <div class="sheet__t">确认一下，再付款</div>
+
+          <div class="card" style="margin-top:12px">
+            <div class="kv"><span class="kv__k">给谁定制</span><span class="kv__v">豆豆（柯基 · 11.2kg）</span></div>
+            <div class="kv"><span class="kv__k">交付日期</span><span class="kv__v"><b>10 月 20 日（周三）</b></span></div>
+            <div class="kv"><span class="kv__k">今天</span><span class="kv__v">10 月 17 日（周六）</span></div>
+          </div>
+
+          <div class="card">
+            <div class="card__title">这 ¥300 是什么</div>
+            <div class="kv"><span class="kv__k">包含</span><span class="kv__v">营养师为豆豆设计一份专属食谱 + 7 天内免费调整 2 次</span></div>
+            <div class="kv"><span class="kv__k">不包含</span><span class="kv__v" style="color:#b4453a">食材（需自己按分量购买）</span></div>
+            <div class="kv"><span class="kv__k">付完后</span><span class="kv__v">可<b>全额抵扣</b>成品鲜食</span></div>
+          </div>
+
+          <div class="hint">
+            交付后 7 天内可免费调整 2 次。7 天后订单自动完成，之后仍可联系我们。
+          </div>
+
+          <div class="btnrow" style="margin-top:14px">
+            <div class="btn btn--ghost">再看看</div>
+            <div class="btn btn--main">支付 ¥300</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col__note">
+      <b>这道弹窗是防误解的最后一道防线。</b>
+      现在线上这一页对 ¥300 <b>没有任何解释</b>，按钮只写"下一步：支付 ¥300" ——
+      顾客很可能以为含食材，而说明只在付完钱之后才出现。
+      <br /><br />
+      交付日期在这里再念一次，也是同一个道理。
+    </div>
+  </div>
+
+</div>
+
+<!-- ================================================================ -->
+<h2>二、还有三个边界状态 <span>不是主流程，但顾客一定会遇到</span></h2>
+
+<div class="row">
+
+  <!-- 档案为空 -->
+  <div class="col">
+    <div class="col__head"><span class="col__name">A · 档案里没有就诊记录</span><span class="col__tag col__tag--new">新增</span></div>
+    <div class="phone" style="min-height:420px">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">定制专属食谱</span></div>
+      <div class="hero"><div class="hero__id"><div class="hero__av">🐕</div><div><div class="hero__name">旺财</div><div class="hero__line">中华田园犬 · 2 岁</div></div></div></div>
+      <div class="card card--readonly">
+        <div class="card__title">就诊记录 <em>档案</em></div>
+        <div class="hint" style="margin-top:0">
+          档案里还没有就诊记录。<br />
+          狗狗健康的话，<b>可以跳过</b> ›
+        </div>
+        <div class="btnrow" style="margin-top:9px">
+          <div class="btn btn--line">去补填 ›</div>
+        </div>
+      </div>
+    </div>
+    <div class="col__note">
+      生产上 4625 只狗里只有 <b>336 条</b>就诊记录（约 7%）。
+      所以绝大多数顾客看到的是这一屏 —— <b>必须允许"跳过"，不能挡住下单</b>。
+    </div>
+  </div>
+
+  <!-- 待付款提醒 -->
+  <div class="col">
+    <div class="col__head"><span class="col__name">B · 有未付款的单</span><span class="col__tag col__tag--alt">沿用</span></div>
+    <div class="phone" style="min-height:420px">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">定制专属食谱</span></div>
+      <div class="card" style="background:#FFF8EC;border-color:#E8C88A">
+        <div class="card__title" style="margin-bottom:4px">你还有一笔定制单没付</div>
+        <div class="hint" style="margin-top:0">
+          CR20261017-0001 · 豆豆 · ¥300 · 还剩 18 分钟<br />
+          不限制下单张数，<b>这只提醒你一下，不影响你继续填</b>。
+        </div>
+        <div class="btnrow" style="margin-top:9px">
+          <div class="btn btn--ghost">去付款</div>
+        </div>
+      </div>
+      <div class="hero"><div class="hero__id"><div class="hero__av">🐕</div><div><div class="hero__name">旺财</div><div class="hero__line">可以给另一只狗再定制</div></div></div></div>
+    </div>
+    <div class="col__note">
+      老板定过：<b>不限制同一顾客的定制单张数</b>。
+      所以这条只能是提醒，<b>绝不能做成阻断</b>。
+    </div>
+  </div>
+
+  <!-- 校验拦截 -->
+  <div class="col">
+    <div class="col__head"><span class="col__name">C · 必填没填完</span><span class="col__tag col__tag--new">新增</span></div>
+    <div class="phone" style="min-height:420px">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">定制专属食谱</span></div>
+      <div class="card" style="border-color:#F0C8BC;background:#FFFBFA">
+        <div class="card__title" style="color:#b4453a">它现在吃什么 <em style="color:#b4453a">还差一项</em></div>
+        <div class="hint hint--warn" style="margin-top:0">
+          还需要知道你为什么要换 —— 这决定配方往哪个方向做。
+        </div>
+        <div class="btnrow" style="margin-top:9px">
+          <div class="btn btn--ghost">去填 ›</div>
+        </div>
+      </div>
+      <div class="bottom" style="position:static;margin-top:10px">
+        <div class="paybar">
+          <div class="paybar__date" style="color:#B3A492">预计 10 月 20 日（周三） 交付</div>
+          <div class="paybar__note">¥300 是营养师定制费，不含食材。</div>
+          <div class="btnrow">
+            <div class="btn btn--lock">还差 1 项，填完就能提交</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col__note">
+      按钮置灰时<b>要说清差什么</b>，不能只变灰不动。
+      一个点不动又不说话的按钮，顾客只会以为系统坏了。
+    </div>
+  </div>
+
+</div>
+
+<!-- ================================================================ -->
+<h2>三、这一版还没定的 <span>等你确认后再画</span></h2>
+<div class="sub">
+  <table style="max-width:1320px;margin-top:10px;border-collapse:collapse;font-size:12.5px;background:#fff">
+    <tr style="background:#FBF5EC"><th style="text-align:left;padding:8px 10px;width:200px">还没定的</th><th style="text-align:left;padding:8px 10px">说明</th></tr>
+    <tr><td style="padding:8px 10px;border-top:1px solid #F0E6D8">肠胃情况要不要问</td><td style="padding:8px 10px;border-top:1px solid #F0E6D8">我按"选填"画了。如果你觉得对 C 类顾客不够，可以改成必填。</td></tr>
+    <tr><td style="padding:8px 10px;border-top:1px solid #F0E6D8">预算 / 做饭时间</td><td style="padding:8px 10px;border-top:1px solid #F0E6D8">我按"不问"画了（显得像推销）。但预算真的会影响食谱能不能执行。</td></tr>
+    <tr><td style="padding:8px 10px;border-top:1px solid #F0E6D8">「每天多少」的区间怎么划</td><td style="padding:8px 10px;border-top:1px solid #F0E6D8">我按 100g 一档画了。实际应该按体重百分比算，那样对不同体型的狗才公平。</td></tr>
+    <tr><td style="padding:8px 10px;border-top:1px solid #F0E6D8">档案数据的「去改」跳哪</td><td style="padding:8px 10px;border-top:1px solid #F0E6D8">体重/体况/活动量都在健康管理里改。跳过去能不能自动跳回来，要试。</td></tr>
+  </table>
+</div>
+
+<script>
+  function openSheet(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = 'flex';
+  }
+  // 给底部的"确认定制"按钮接一个简易弹窗（本页只画了一屏，不做真页面）
+  document.addEventListener('DOMContentLoaded', function () {
+    var btn = document.querySelector('.btn--main[onclick*="sheet-confirm"]');
+    if (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        // 滚动到第三个弹窗那一列，方便对照
+        var cols = document.querySelectorAll('.row .col');
+        var target = cols[3];
+        if (target) target.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      });
+    }
+  });
+</script>
+</body>
+</html>

@@ -23,7 +23,28 @@ export const AGENT_PURPOSES: AgentPurposeMeta[] = [
     purpose: 'RECIPE_COPYWRITING',
     label: '食谱文案生成',
     description: '为食谱生成合规的一句话卖点与详细说明，并推荐合规标签',
-    defaultModel: 'deepseek-v4-pro',
+    /**
+     * 2026-10-18 老板定：文案用 **DeepSeek V4.1 Flash**。
+     *
+     * ⚠️ 模型名就是 `deepseek-flash` —— **不是** `deepseek-v4.1-flash`。
+     * 官方「模型 & 价格」写明："模型名请使用 deepseek-flash"，
+     * 它的模型版本才是 `DeepSeek-V4.1-Flash-1017`。
+     * 旧名 `deepseek-v4-flash` 已下线，请求会由 V4.1-Flash 提供服务。
+     */
+    defaultModel: 'deepseek-flash',
+  },
+  {
+    purpose: 'RECIPE_COVER_IMAGE',
+    label: '食谱封面图生成',
+    description: '按食谱名与食材生成封面图（约 28 秒/张，一次生成一张）',
+    /**
+     * 2026-10-18 老板定：封面图用**智谱 glm-image**。
+     *
+     * 为什么不用 cogview-4：实测 8 秒出图，但**食材画得不准**
+     * （说鸡胸肉+南瓜+糙米，出来像炒饭）。glm-image 慢 20 秒，
+     * 但三样食材分得清 —— 食谱封面必须和内容对得上。
+     */
+    defaultModel: 'glm-image',
   },
   {
     purpose: 'RECIPE_DESIGN',

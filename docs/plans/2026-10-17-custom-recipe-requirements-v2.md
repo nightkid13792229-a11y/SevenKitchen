@@ -1077,6 +1077,17 @@ Web 后台的食谱编辑页里已经有「**AI 生成卖点与说明**」对话
 调低会出事（设 1 稍有并发就"排期失败"），调高没意义。
 **建议从配置页拿掉，代码里写死 5。**
 
+> **⚠️ 模型 ID 更正（2026-10-18 执行时查证）**
+>
+> 老板说的「DeepSeek V4.1 Flash」，**API 模型名就是 `deepseek-flash`** ——
+> 不是 `deepseek-v4.1-flash`（那个名字不存在）。
+> 官方[「模型 & 价格」](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/) 写明：
+> "模型名请使用 `deepseek-flash`"，它的**模型版本**才是 `DeepSeek-V4.1-Flash-1017`；
+> 旧名 `deepseek-v4-flash` 已下线，请求会由 V4.1-Flash 提供服务。
+>
+> 生图用智谱 `glm-image`（约 28 秒/张）。
+> 已落到 `admin-web/src/constants/agentPurposes.ts` 的 `RECIPE_COVER_IMAGE` / `RECIPE_COPYWRITING`。
+
 > **AI 配置不需要改表结构**：`AgentProviderConfig` 的 `purpose` 是自由字符串、
 > `@@unique([purpose, provider])`。现有 4 条里已经有 `RECIPE_COPYWRITING`（写文案），
 > 只需改它的 model；生图新增一条 `RECIPE_COVER_IMAGE`（provider=ZHIPU）即可。

@@ -438,6 +438,7 @@
 import { CURRENT_SHARE_CONFIG } from '@/utils/config'
 // 2026-10-18：生命阶段卡改用它 —— 四页共用一份，不再各写一遍
 import LifeStageVersionCard from '@/components/recipe/LifeStageVersionCard.vue'
+import { useDogSelection } from '@/composables/useDogSelection'
 
 // 模块级变量，存储当前食谱信息
 let currentRecipeName = ''
@@ -636,11 +637,26 @@ const isFavorite = ref(false)
 const recipeId = ref('')
 const shareToken = ref('')
 const dogId = ref<string | null>(null)
-const dogs = ref<any[]>([])
+/**
+ * 选狗状态（2026-10-18 收进 composable）。
+ *
+ * 这段原来在**七个页面**各写一遍，写法还不一致（有的 `dogId`、有的 `selectedDogId`）。
+ * composable 只管"选哪只"；列表还是本页自己拉（各页接口不同）。
+ *
+ * ⚠️ `dogId` 暂时保留 —— 它是本页 API 请求用的，与 `selectedDogId` 是同一个概念的两份记录，
+ * 合并属于另一步（会动到 5 处请求参数），这里先只统一"选中项"。
+ */
+const {
+  dogs,
+  selectedDogId,
+  selectedDog,
+  setDogs,
+  syncFromMatch,
+} = useDogSelection()
 const dogsLoaded = ref(false)
 // 未登录时也应该看到「订购前需先建档」的预告（原实现只在已登录时才拉列表，导致新用户毫无提示）
 const hasToken = ref(Boolean(uni.getStorageSync('token')))
-const selectedDogId = ref('')
+
 const initialDogId = ref('')
 const showReviewForm = ref(false)
 const reviewListRef = ref<InstanceType<typeof ReviewList> | null>(null)
@@ -692,9 +708,7 @@ const hasStructuredNutritionReport = computed(() => {
   )
 })
 
-const selectedDog = computed(() => {
-  return dogs.value.find((dog) => dog.id === selectedDogId.value) || null
-})
+
 
 // 首次加载骨架屏 / 失败重试态
 const showDetailSkeleton = computed(() => detailLoading.value && !recipe.value.id)
@@ -1027,11 +1041,10 @@ async function loadDogsForDetail() {
 }
 
 function syncSelectedDogFromMatch(matchedDogId?: string | null) {
-  if (!matchedDogId) return
-  if (dogs.value.length > 0 && !dogs.value.some((dog) => dog.id === matchedDogId)) return
-  selectedDogId.value = matchedDogId
-  dogId.value = matchedDogId
-  uni.setStorageSync('dogId', matchedDogId)
+  // 选中项与持久化都在 composable 里（含"列表外的不采纳"那条校验）
+  syncFromMatch(matchedDogId)
+  // 本页还有一个请求用的 dogId，跟着一起改
+  if (matchedDogId) dogId.value = matchedDogId
 }
 
 async function checkFavoriteStatus() {

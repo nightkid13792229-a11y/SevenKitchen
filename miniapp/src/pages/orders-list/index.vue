@@ -1,6 +1,23 @@
 <template>
   <view class="container">
     <!-- 状态筛选Tab -->
+    <!--
+      类型筛选（2026-10-18 加，老板定"按类型筛"）。
+      放在状态筛选**上面**：先想"我要找哪种单"，再想"它到哪一步了"。
+      与状态筛选**叠加生效**（不是二选一）—— 两个维度互相独立。
+    -->
+    <view class="type-tabs">
+      <view
+        v-for="tab in TYPE_TABS"
+        :key="tab.value"
+        class="type-tab"
+        :class="{ active: selectedType === tab.value }"
+        @tap="selectType(tab.value)"
+      >
+        <text class="type-tab-text">{{ tab.label }}</text>
+      </view>
+    </view>
+
     <view class="status-tabs">
       <view
         v-for="tab in statusTabs"
@@ -55,7 +72,7 @@
           没交付时显示「设计中的专属食谱」—— 订单号不是他要找的东西。
           整卡可点，进定制订单详情。
         -->
-        <template v-else-if="order._orderType === 'custom'">
+        <template v-if="order._orderType === 'custom'">
           <view class="order-summary">
             <text class="summary-title">{{ customOrderTitle(order) }}</text>
             <text v-if="customOrderSubtitle(order)" class="custom-order-sub">
@@ -379,6 +396,26 @@ type UnifiedOrder = FoodOrderRow | SupplementOrderRow | CustomOrderRow;
 // 状态筛选Tab
 const selectedStatus = ref<string>('ALL');
 
+/**
+ * 类型筛选（2026-10-18）。
+ *
+ * 老板定："不管在哪个页面…"—— 这里是"按类型"，因为顾客找东西的心智是
+ * "我给狗定的那份食谱在哪""我买的狗粮到哪了"，**先想类型，再想状态**。
+ */
+type TypeFilter = 'ALL' | 'custom' | 'food' | 'supplement';
+const TYPE_TABS: Array<{ label: string; value: TypeFilter }> = [
+  { label: '全部', value: 'ALL' },
+  { label: '定制', value: 'custom' },
+  { label: '成品', value: 'food' },
+  { label: '补剂', value: 'supplement' },
+];
+const selectedType = ref<TypeFilter>('ALL');
+
+function selectType(value: TypeFilter) {
+  selectedType.value = value;
+  filterOrders();
+}
+
 const statusTabs = ref<Array<{ label: string; value: string; count: number }>>([
   { label: '全部', value: 'ALL', count: 0 },
   { label: '未付款', value: 'PENDING_PAYMENT', count: 0 },
@@ -616,7 +653,11 @@ function updateStatusCounts() {
 // 根据选中状态筛选订单
 // Phase 9: Simplified filter logic
 function filterOrders() {
-  orders.value = getOrdersByTab(selectedStatus.value);
+  const byStatus = getOrdersByTab(selectedStatus.value);
+  orders.value =
+    selectedType.value === 'ALL'
+      ? byStatus
+      : byStatus.filter((order) => order._orderType === selectedType.value);
 }
 
 /**
@@ -1614,5 +1655,36 @@ function formatAddress(address?: { regionText?: string }): string {
   color: #8a7a66;
   margin-top: 8rpx;
   line-height: 1.5;
+}
+
+/* ===== 类型筛选（2026-10-18）===== */
+.type-tabs {
+  display: flex;
+  gap: 12rpx;
+  padding: 16rpx 24rpx 0;
+}
+
+.type-tab {
+  flex: 1;
+  text-align: center;
+  border-radius: 999rpx;
+  padding: 12rpx 0;
+  background: #fff;
+  border: 2rpx solid #ede0d0;
+}
+
+.type-tab.active {
+  background: #fff1e3;
+  border-color: #e5c9a3;
+}
+
+.type-tab-text {
+  font-size: 24rpx;
+  color: #6e5f4b;
+}
+
+.type-tab.active .type-tab-text {
+  color: #b45309;
+  font-weight: 700;
 }
 </style>

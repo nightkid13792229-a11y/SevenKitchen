@@ -599,6 +599,11 @@ AI 生成的封面**可能是浅色的**（白盘子装的食物、浅色桌布�
 | `diy-sheet` 里 `actualAmount = theoreticalAmount * (1 + lossRate)` | 采购量删了，这段前端计算**整块消失**，不用搬后端 |
 | `nutrition.plainConclusion`（从快照类型删） | **数据库里根本没这个字段**，交付时也没传过 —— 它从来没有值。合并后的那句话写进 `sellingPoint` |
 
+> **⚠️ 本节的前提是"食谱展示层重构"** —— 补传那 4 项属于跨模块改造，
+> 完整的抽象/解耦需求（含详情页、DIY 两页、共享组件、composables）
+> 见 **《[食谱展示层重构需求](2026-10-17-recipe-presentation-refactor.md)》**。
+> 本文只保留与交付两页直接相关的部分，不重复写。
+
 ##### 上一版我提过、现已撤回的 6 个"新增"
 
 `items[].kind`（用 `ingredientType`）、`items[].netAmountG`（用 `netG`）、

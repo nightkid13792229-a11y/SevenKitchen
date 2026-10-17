@@ -539,6 +539,7 @@ import {
 } from '../../utils/life-stage-match'
 import ImagePreviewModal from '../../components/ImagePreviewModal.vue'
 import LifeStageVersionCard from '@/components/recipe/LifeStageVersionCard.vue'
+import { useLifeStageVersion } from '@/composables/useLifeStageVersion'
 import { normalizeImageUrl, getOptimizedProductImageUrl } from '../../utils/config'
 import { formatSupplementAmountWithDisplayUnit } from '../../utils/diy-sheet-format'
 import { getPackagePlanTotal, type PackagePlanItem } from '../../utils/order-package-plan'
@@ -817,40 +818,25 @@ const supplementNutrientBaseWeightG = computed(() => {
  * 生命阶段匹配结论 —— **由后端给出**（2026-09-19 起不再前端自己算）。
  * 前端重算认不出混血犬的体型，算不出时还会被当成"匹配"静默放行。
  */
-const lifeStageVerdict = ref<LifeStageMatchVerdict | null>(null)
-
-/** 没能拿到后端结论时走中性提示，不静默放行 */
-const lifeStageCheckFailed = ref(false)
-
-const selectedDogRecipeLifeStage = computed(
-  () => lifeStageVerdict.value?.dogLifeStage || '',
-)
-
-const isLifeStageMatch = computed(() => {
-  const verdict = lifeStageVerdict.value
-  if (!verdict) return true
-  return !isLifeStageMismatch(verdict.matchType)
+/**
+ * 生命阶段状态（2026-10-18 收进 composable）。
+ *
+ * 这段原来在**四个页面各写一遍**（21 computed + 13 函数）。
+ * 现在数据在 composable、UI 在 `LifeStageVersionCard`，页面只剩"什么时候调 check"。
+ */
+const {
+  verdict: lifeStageVerdict,
+  checkFailed: lifeStageCheckFailed,
+  dogLifeStage: selectedDogRecipeLifeStage,
+  isMatch: isLifeStageMatch,
+  reminderText: lifeStageReminderText,
+  check: checkLifeStageMatch,
+} = useLifeStageVersion({
+  recipeId: () => recipeId.value,
+  dogId: () => dogId.value,
+  applicableStages: () => recipe.value?.applicableLifeStages || [],
+  dogName: () => dog.value?.name,
 })
-
-const lifeStageReminderText = computed(() => {
-  if (lifeStageVerdict.value?.message) return lifeStageVerdict.value.message
-  return buildLifeStageReminderText({
-    applicableStages: recipe.value.applicableLifeStages || [],
-    dogLifeStage: selectedDogRecipeLifeStage.value,
-    dogName: dog.value?.name,
-  })
-})
-
-/** 向后端索取生命阶段结论（食谱 × 狗狗） */
-async function checkLifeStageMatch() {
-  if (!recipeId.value || !dogId.value) return
-  const verdict = await fetchLifeStageMatch({
-    recipeId: recipeId.value,
-    dogId: dogId.value,
-  })
-  lifeStageVerdict.value = verdict
-  lifeStageCheckFailed.value = !verdict
-}
 
 // 格式化狗狗年龄
 const dogAgeText = computed(() => {

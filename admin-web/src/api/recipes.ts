@@ -41,6 +41,27 @@ export const recipeApi = {
   },
 
   /**
+   * AI 封面图能不能用（2026-10-18）。
+   *
+   * 后台按钮据此置灰 —— 没配置时不让点，而不是点了才报错。
+   */
+  getAiCoverAvailability: () => {
+    return request.get<{ available: boolean }>('/recipes/ai-cover-availability');
+  },
+
+  /**
+   * AI 生成封面图（2026-10-18）。
+   *
+   * ⚠️ **只返回地址，不落库** —— 生图有随机性，出来不像的可以直接重来，
+   * 不会把原图冲掉。落库走既有保存流程。
+   */
+  generateAiCover: (id: string) => {
+    return request.post<{ url: string; provider: string; model: string }>(
+      `/recipes/${id}/ai-cover`,
+    );
+  },
+
+  /**
    * AI 生成合规卖点与说明（只生成，不落库；落库走既有保存流程）
    */
   generateCopywriting: (id: string) => {

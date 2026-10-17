@@ -1907,6 +1907,25 @@ export class RecipesController {
    * 与「交付食谱」「改配置」同级 —— 仅 ADMIN。
    * 这个接口会**花钱**（每张约 0.1 元），不该让员工随手点。
    */
+  /**
+   * AI 生图能不能用（2026-10-18）。
+   *
+   * 后台按钮据此**置灰 + 说明**，而不是让管理员点了才报错。
+   * 注意路径写在 `:id/...` **之前** —— 否则 `ai-cover-availability`
+   * 会被当成一个 recipeId 吃掉。
+   */
+  @Get('ai-cover-availability')
+  @UseGuards(AuthGuard, StaffGuard)
+  @ApiSecurity('bearer')
+  @ApiOperation({ summary: 'AI 封面图是否可用（未配置时按钮置灰）' })
+  async getAiCoverAvailability(): Promise<
+    ApiResponseDto<{ available: boolean }>
+  > {
+    return ApiResponseDto.success({
+      available: await this.recipeCoverImageService.isAvailable(),
+    });
+  }
+
   @Post(':id/ai-cover')
   @UseGuards(AuthGuard, AdminGuard)
   @ApiSecurity('bearer')

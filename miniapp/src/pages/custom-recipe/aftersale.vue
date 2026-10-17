@@ -97,6 +97,39 @@
         />
         <text class="word-count">{{ form.description.length }} / 1000</text>
 
+        <!--
+          附件（2026-10-18 加）。
+          老板："只上传照片吗？PDF和Word能不能上传呢？"
+
+          走后端专用接口 `/custom-recipe/upload-attachment`，它自带归属校验与大小上限。
+          **类型上目前只做图片** —— 微信的 `chooseMessageFile` 能选 PDF/Word，
+          但这条链路还要后端配合扩展白名单，单独一步做。
+        -->
+        <view class="attach-block">
+          <view class="attach-head">
+            <text class="attach-title">照片（选填）</text>
+            <text v-if="attachments.length" class="attach-count">
+              已传 {{ attachments.length }} 张
+            </text>
+          </view>
+          <view class="attach-list">
+            <view
+              v-for="(url, index) in attachments"
+              :key="url + index"
+              class="attach-item"
+            >
+              <image class="attach-thumb" :src="url" mode="aspectFill" @tap="previewAttach(index)" />
+              <text class="attach-remove" @tap.stop="removeAttach(index)">×</text>
+            </view>
+            <view v-if="attachments.length < MAX_ATTACH" class="attach-add" @tap="pickAttach">
+              <text class="attach-add-icon">＋</text>
+            </view>
+          </view>
+          <text class="attach-tip">
+            {{ uploading ? '上传中…' : '拍了便便、粮袋这类照片，比文字说得清' }}
+          </text>
+        </view>
+
         <button
           class="btn-primary"
           :loading="submitting"
@@ -122,6 +155,7 @@ import { computed, reactive, ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import {
   cancelAftersale,
+  uploadAftersaleAttachment,
   fetchAftersales,
   fetchAftersaleTypes,
   submitAftersale,
@@ -152,6 +186,67 @@ const submitting = ref(false);
 const cancellingId = ref('');
 
 const form = reactive({ type: '', description: '' });
+
+/**
+ * 附件（2026-10-18）。
+ *
+ * 上限**不在前端写死**为准 —— 后端的 `getAttachmentLimits` 才是权威，
+ * 这里只是提前挡一下，给一句人话提示（不要等传完才报错）。
+ */
+const MAX_ATTACH = 9;
+const attachments = ref<string[]>([]);
+const uploading = ref(false);
+
+async function pickAttach() {
+  if (uploading.value) return;
+  if (attachments.value.length >= MAX_ATTACH) {
+    uni.showToast({ title: `最多 ${MAX_ATTACH} 张`, icon: 'none' });
+    return;
+  }
+
+  let filePath = '';
+  try {
+    const chosen: any = await new Promise((resolve, reject) => {
+      uni.chooseImage({
+        count: 1,
+        sizeType: ['compressed'],
+        // 只从相册选：只给一个来源时微信不再弹"拍照/相册"选择器
+        sourceType: ['album'],
+        success: resolve,
+        fail: reject,
+      });
+    });
+    filePath = chosen?.tempFilePaths?.[0] || '';
+  } catch {
+    // 顾客取消：静默返回
+    return;
+  }
+  if (!filePath) return;
+
+  uploading.value = true;
+  uni.showLoading({ title: '上传中…' });
+  try {
+    const { url } = await uploadAftersaleAttachment(orderId.value, filePath);
+    attachments.value = [...attachments.value, url];
+    uni.showToast({ title: '已上传', icon: 'none' });
+  } catch (error: any) {
+    uni.showToast({ title: error?.message || '上传失败，请重试', icon: 'none' });
+  } finally {
+    uploading.value = false;
+    uni.hideLoading();
+  }
+}
+
+function removeAttach(index: number) {
+  attachments.value = attachments.value.filter((_, i) => i !== index);
+}
+
+function previewAttach(index: number) {
+  uni.previewImage({
+    urls: attachments.value,
+    current: attachments.value[index],
+  });
+}
 
 /** 有未处理完的就不再显示表单（后端也会拦，这里只是省一次往返） */
 const canSubmitNew = computed(
@@ -188,6 +283,8 @@ const handleSubmit = async () => {
       orderId: orderId.value,
       type: form.type,
       description: form.description.trim(),
+      // 附件（2026-10-18）：接口早就支持了，之前只是没传
+      photos: attachments.value,
     });
 
     if (!result.ok) {
@@ -496,5 +593,85 @@ onLoad((options) => {
   font-size: 26rpx;
   line-height: 1.6;
   color: rgba(244, 236, 216, 0.7);
+}
+
+/* ===== 附件（2026-10-18）===== */
+.attach-block {
+  margin-top: 20rpx;
+}
+
+.attach-head {
+  display: flex;
+  align-items: baseline;
+  margin-bottom: 12rpx;
+}
+
+.attach-title {
+  flex: 1;
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #3f3222;
+}
+
+.attach-count {
+  font-size: 21rpx;
+  color: #9c8b76;
+}
+
+.attach-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14rpx;
+}
+
+.attach-item {
+  position: relative;
+  width: 140rpx;
+  height: 140rpx;
+}
+
+.attach-thumb {
+  width: 140rpx;
+  height: 140rpx;
+  border-radius: 14rpx;
+  background: #f4ebe0;
+}
+
+.attach-remove {
+  position: absolute;
+  top: -8rpx;
+  right: -8rpx;
+  width: 36rpx;
+  height: 36rpx;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.62);
+  color: #fff;
+  font-size: 24rpx;
+  text-align: center;
+  line-height: 36rpx;
+}
+
+.attach-add {
+  width: 140rpx;
+  height: 140rpx;
+  border-radius: 14rpx;
+  border: 2rpx dashed #e5c9a3;
+  background: #fffdf8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.attach-add-icon {
+  font-size: 40rpx;
+  color: #b45309;
+}
+
+.attach-tip {
+  display: block;
+  font-size: 20rpx;
+  color: #b3a492;
+  margin-top: 10rpx;
+  line-height: 1.5;
 }
 </style>

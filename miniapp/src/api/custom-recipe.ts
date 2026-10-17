@@ -22,7 +22,8 @@
  * 页面必须有降级路径。等全量上线后再把它改成必填（见批次 5）。
  */
 
-import { request } from '../utils/api';
+import { request, getToken } from '../utils/api';
+import { getBaseUrl } from '../utils/config';
 
 /** 后端下发的状态（能直接渲染） */
 export interface RenderableStatus {
@@ -541,4 +542,49 @@ export function toneToClass(tone: string | undefined): string {
     default:
       return 'neutral';
   }
+}
+
+/**
+ * 上传售后附件（2026-10-18）。
+ *
+ * 走的是定制单**专用**的上传接口 `/custom-recipe/upload-attachment` ——
+ * 它自带两件正确的事：
+ *   ① **归属校验**：只能往自己的订单上挂文件（2026-10-04 修过越权）
+ *   ② **大小上限来自后台配置**（`getAttachmentLimits`），不在前端写死
+ *
+ * 前端调这个接口要带 `orderId`（后端用它做归属校验）。
+ */
+export async function uploadAftersaleAttachment(
+  orderId: string,
+  filePath: string,
+): Promise<{ url: string }> {
+  return new Promise((resolve, reject) => {
+    const token = getToken();
+    uni.uploadFile({
+      url: `${getBaseUrl()}/custom-recipe/upload-attachment`,
+      filePath,
+      name: 'file',
+      formData: { orderId },
+      header: { Authorization: token ? `Bearer ${token}` : '' },
+      success: (res) => {
+        try {
+          const parsed =
+            typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
+          if (parsed?.code !== 0) {
+            reject(new Error(parsed?.message || '上传失败'));
+            return;
+          }
+          const url = String(parsed?.data?.url || '').trim();
+          if (!url) {
+            reject(new Error('上传失败，请重试'));
+            return;
+          }
+          resolve({ url });
+        } catch {
+          reject(new Error('上传失败，请重试'));
+        }
+      },
+      fail: () => reject(new Error('上传失败，请检查网络')),
+    });
+  });
 }

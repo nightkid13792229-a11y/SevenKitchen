@@ -156,20 +156,29 @@ describe('recipe-order phase one UI contract', () => {
   });
 
   it('offers a quick switch to the selected dog matched life-stage recipe version from the warning', () => {
+    /**
+     * 2026-10-18：生命阶段块改用共享组件 `LifeStageVersionCard`。
+     *
+     * **意图不变** —— 警示卡上必须有"切换到匹配版本"的入口，
+     * 且只有存在推荐版本时才显示。只是渲染方式从内联模板变成了组件参数。
+     */
     const warningSource = templateSource.match(
-      /<view v-if="!isLifeStageMatch && showWarning"[\s\S]*?<\/view>\s*<\/view>\s*(?:<!--[\s\S]*?-->\s*)?<view class="feeding-note-toggle"/,
-    )?.[0] || '';
-    const switchSource = source.match(
-      /async function switchToRecommendedLifeStage[\s\S]*?\n}\n\nasync function loadDogs/,
+      /<LifeStageVersionCard[\s\S]*?<view class="feeding-note-toggle"/,
     )?.[0] || '';
 
-    expect(warningSource).toContain('v-if="recommendedLifeStageOption"');
-    expect(warningSource).toContain('@tap="switchToRecommendedLifeStage"');
-    expect(warningSource).toContain("切换到{{ recommendedLifeStageOption.label }}");
+    expect(warningSource).toContain(':switch-label="recommendedLifeStageOption');
+    expect(warningSource).toContain('@open-selector="switchToRecommendedLifeStage"');
+    expect(warningSource).toContain('切换到${recommendedLifeStageOption.label}');
+    expect(warningSource).toContain('acknowledge-label="我已知晓"');
+    expect(warningSource).toContain('@acknowledge="dismissWarning"');
     expect(source).toContain('const recommendedLifeStageOption = computed');
     expect(source).toContain('version.lifeStage === selectedDogRecipeLifeStage.value');
-    expect(switchSource).toContain('const option = recommendedLifeStageOption.value');
-    expect(switchSource).toContain('await selectLifeStageVersion(option)');
+    // 切换动作本身没变（只是入口从内联按钮变成了组件事件）
+    const switchFn = source.match(
+      /async function switchToRecommendedLifeStage[\s\S]*?\n}\n/,
+    )?.[0] || '';
+    expect(switchFn).toContain('recommendedLifeStageOption.value');
+    expect(switchFn).toContain('selectLifeStageVersion(');
   });
 
   it('defaults the selected dog from repurchase, detail handoff, cached dog, then first dog', () => {

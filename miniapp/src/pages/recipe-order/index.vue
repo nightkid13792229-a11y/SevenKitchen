@@ -118,32 +118,30 @@
         </view>
         </view>
 
-        <view v-if="!isLifeStageMatch && showWarning" class="warning-card inline-warning-card">
-          <view class="warning-header">
-            <text class="warning-title">生命阶段提醒</text>
-          </view>
+        <!--
+          生命阶段提醒 · 2026-10-18 改用共享组件（四页最后一页）
+
+          这一页是"警示 + 切换 + 确认"：顾客点"我已知晓"才放行下单，
+          并且**留痕**（`confirmLifeStageMismatch` 会写 acknowledgement）。
+        -->
+        <LifeStageVersionCard
+          v-if="!isLifeStageMatch && showWarning"
+          variant="warning"
+          :match-type="lifeStageVerdict?.matchType"
+          :message="lifeStageVerdict?.message"
+          :selected-label="lifeStageVerdict?.selectedLifeStage"
+          :dog-name="lifeStageVerdict?.dogName"
+          :switch-label="recommendedLifeStageOption ? `切换到${recommendedLifeStageOption.label}` : null"
+          acknowledge-label="我已知晓"
+          @open-selector="switchToRecommendedLifeStage"
+          @acknowledge="dismissWarning"
+        />
 
         <!-- 后端结论没取到：不静默放行，给一条中性提示（不是警示色，避免网络抖动吓到顾客） -->
         <view v-if="lifeStageCheckFailed" class="life-stage-unknown-note">
           <text class="life-stage-unknown-text">
             暂时无法确认这份食谱是否适合当前狗狗，建议稍后重试或联系客服。
           </text>
-        </view>
-          <text class="warning-text">
-            {{ lifeStageReminderText }}
-          </text>
-          <view class="warning-actions">
-            <button
-              v-if="recommendedLifeStageOption"
-              class="btn-switch-stage"
-              @tap="switchToRecommendedLifeStage"
-            >
-              切换到{{ recommendedLifeStageOption.label }}
-            </button>
-            <button class="btn-continue" @tap="dismissWarning">
-              我已知晓
-            </button>
-          </view>
         </view>
 
         <!-- 首单喂食量说明：默认收起，避免挤压主要内容 -->
@@ -544,6 +542,7 @@ import {
   isLifeStageMismatch,
   type LifeStageMatchVerdict,
 } from '../../utils/life-stage-match'
+import LifeStageVersionCard from '@/components/recipe/LifeStageVersionCard.vue'
 import {
   DEFAULT_ORDER_CYCLE_DAYS,
   MIN_PACKAGE_SPEC_G,

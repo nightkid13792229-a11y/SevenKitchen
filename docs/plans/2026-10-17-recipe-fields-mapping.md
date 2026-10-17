@@ -150,11 +150,130 @@ netAmountStr: formatNetAmount(totalTheoretical, true)
 
 ---
 
-## 五、最终字段清单
+## 五、老板四问（2026-10-17）—— 其中三问推翻了我的建议
 
-> 原则：**能用已有的就用已有的**；新增的必须带单位。
+> 老板追问的四个问题，查完代码后 **有三个我原来写错了**。
+> 这一节把错在哪、正确是什么，逐条记清楚。
 
-### 5.1 食谱（新增 1 个）
+### 问 1：`items[].kind` 怎么判断食材还是补剂？之前怎么判断的？
+
+**之前就有判断，而且比我想的更细。**
+
+数据库 `Ingredient.type` 是枚举 `IngredientType`，**有三个值**：
+
+```
+FOOD | SUPPLEMENT | PACKAGING
+```
+
+后端交付接口把它压成了**布尔**：
+
+```js
+// custom-recipe-delivery.service.ts:413
+isSupplement: item.ingredient?.type === 'SUPPLEMENT'
+```
+
+**问题：布尔只有两种状态，`PACKAGING`（包材）被归进了"非补剂"，也就是"食材"。**
+
+🔴 **这是个真 bug**：如果食谱里含包材，交付页会把它当食材列出来。
+（食谱详情页是对的 —— 它有单独的「其他物料」区块。）
+
+**所以 `kind` 不是"新的判断方式"，而是"把枚举原样传下去，不压缩成布尔"**：
+
+| 现在 | 改后 |
+|---|---|
+| `isSupplement: true/false` | `kind` 取 `FOOD` / `SUPPLEMENT` / `PACKAGING` 三值之一 |
+| 两个状态，包材丢失 | **三个状态，跟数据库一致** |
+
+### 问 2：`usage[].name` 和 `items[].name` 有什么区别？
+
+**没有区别 —— 这是我设计冗余了。**
+
+`usage` 本来就是"每个食材用了多少"，它是 `items` 的**派生数据**。
+再带一份 `name`，等于把名字存两遍 —— **正是老板担心的"改一个忘一个"**。
+
+**修正**：
+
+| 原来（错） | 改成 |
+|---|---|
+| `usage[].name` + `usage[].netAmountG` | **`usage[].ingredientId` + `usage[].netAmountG`** |
+
+名字从 `items` 里按 `ingredientId` 取，**不重复存**。
+
+### 问 3：喂食参数为什么定全新字段？之前没有吗？
+
+**有，而且已经是一个能用的接口了。** 这是我最该查到却没查的一条。
+
+后端已有：
+
+```
+POST /dogs/:id/calc-for-recipe   →  按食谱能量密度算饭量
+```
+
+返回：
+
+```js
+// backend/src/application/dog/dog.service.ts:802-811
+{
+  dailyIntakeG: number,      // 每天多少克
+  perMealIntakeG: number,    // 每餐多少克（后端已算好）
+  mealsPerDay: number,       // 每天几餐
+}
+```
+
+**`dailyIntakeG` 还是成品订购的规范字段**（`order.service.ts` 里就在用）。
+
+🔴 我上一版提的 `feeding.dailyAmountG` / `feeding.perMealAmountG` **是给已有字段改名** ——
+第二次犯同一个错。
+
+🔴 我上一版还说"`perMealG` 是前端除法算的" —— **也不对，后端算好的**。
+
+**修正**：直接用现有名字。
+
+| 原来（错） | 改成（已存在） |
+|---|---|
+| `feeding.dailyAmountG` | **`dailyIntakeG`** |
+| `feeding.perMealAmountG` | **`perMealIntakeG`** |
+| `feeding.mealsPerDay` | `mealsPerDay` ✅（这个本来就对） |
+| `feeding.cycleDays` | `cycleDays`（交付页已在用） |
+
+**只有一个是真的要新增**：`referenceValues`（营养师给的原始值，顾客改过之后还能查回来）。
+
+### 问 4：金额为什么按每 100g 命名？
+
+**因为我把"展示口径"写进了字段名 —— 不应该。**
+
+后端已有的价格字段是**按采购单位**的：
+
+```
+referencePricePerPurchaseUnit    // 参考价 / 采购单位
+```
+
+而「每 100g」是**前端展示时换算出来的**：
+
+```js
+// recipe-detail/index.vue:757-762
+if (entry && Number.isFinite(entry.pricePer100g)) {
+  return { amount: entry.pricePer100g, isMin: false }
+}
+if (Number.isFinite(data.minPricePer100g)) { ... }
+```
+
+**所以**：
+
+| 原来（错） | 改成 |
+|---|---|
+| `price.referenceAmountPer100g` | 后端用 **`referencePricePerPurchaseUnit`**（已有）<br />前端展示要 100g 就本地换算，**不给它单独起一个后端字段** |
+
+> 换个说法：**字段名描述"数据是什么"，不描述"屏幕上怎么显示"。**
+> 「每 100g」是显示逻辑，改个文案就可能变成「每 kg」。
+
+---
+
+## 六、最终字段清单（**已按四问修正**）
+
+> 原则：**能用已有的就用已有的**；新增的必须带单位、且不重复存已有信息。
+
+### 6.1 食谱
 
 | 字段 | 状态 | 说明 |
 |---|---|---|
@@ -163,11 +282,11 @@ netAmountStr: formatNetAmount(totalTheoretical, true)
 | `nutritionStandardExplain` | ✅ 已有 | |
 | **`oneLineSummary`** | 🆕 **新增** | 卖点 + 一句话结论合成的整句，取代 `sellingPoint` + `plainConclusion` |
 
-### 5.2 食材 / 营养素（全部用已有名）
+### 6.2 食材 / 营养素（全部用已有名，只有 kind 是新的）
 
 | 字段 | 状态 | 说明 |
 |---|---|---|
-| `items[].kind` | 🆕 新增 | `FOOD` / `SUPPLEMENT`，取代 `isSupplement` + `ingredientType` 两套判断 |
+| **`items[].kind`** | 🆕 **新增** | `FOOD` / `SUPPLEMENT` / **`PACKAGING`**（三值，跟数据库枚举一致）<br />取代丢失包材的布尔 `isSupplement` |
 | `items[].name` | ✅ 已有 | |
 | `items[].preparationMethod` | ✅ 已有 | ⚠️ 交付接口现在叫 `preparation`，要改回来 |
 | `items[].ratioPercent` | ✅ 已有 | ⚠️ 详情页现在叫 `ratio`，要改 |
@@ -176,36 +295,33 @@ netAmountStr: formatNetAmount(totalTheoretical, true)
 | `items[].nutrientTargetKey` | ✅ 已有 | 营养素字典码 |
 | `items[].nutrientTargetValue` | ✅ 已有 | 每 kg 食材加多少 |
 
-### 5.3 用量（新增，放渲染契约不放 `RecipeItem` 表）
+### 6.3 用量（新增一组，但**不重复存名字**）
 
 | 字段 | 状态 | 说明 |
 |---|---|---|
-| `usage[].name` | 🆕 | 食材名 |
+| **`usage[].ingredientId`** | 🆕 | **关联到 `items`，不再单独存 name** |
 | **`usage[].netAmountG`** | 🆕 | **净用量（克）** —— 唯一要展示的量 |
 | `usageTotal.netAmountG` | 🆕 | 合计净重 |
 | ~~`purchaseAmountG`~~ | ❌ **不建** | 老板 2026-10-17：采购量整条删掉 |
 
-> 只有"净用量"这一个量。**没有采购量、没有损耗率、没有合计采购重。**
+### 6.4 喂食参数（**全部用已有名，只新增一个**）
 
-### 5.4 喂食参数（全新，按规范定）
+| 字段 | 状态 | 说明 |
+|---|---|---|
+| `dailyIntakeG` | ✅ 已有 | 每天多少克（`calc-for-recipe` 就返回这个） |
+| `mealsPerDay` | ✅ 已有 | 每天几餐 |
+| `perMealIntakeG` | ✅ 已有 | 每餐多少克 —— **后端算好，前端不做除法** |
+| `cycleDays` | ✅ 已有 | 做几天（交付页在用） |
+| **`referenceValues`** | 🆕 **新增** | 营养师给的原始值（顾客改过后仍能查回来） |
 
-| 字段 | 说明 |
-|---|---|
-| `feeding.dailyAmountG` | 每天多少克（统一叫这个，不要 `dailyIntakeG`） |
-| `feeding.mealsPerDay` | 每天几餐 |
-| **`feeding.perMealAmountG`** | 每餐多少克 —— **后端算好**，前端不做除法 |
-| `feeding.cycleDays` | 做几天 |
-| `feeding.referenceValues` | **营养师给的原始值**（顾客改过之后仍能查回来） |
+### 6.5 金额（**不按展示单位命名**）
 
-### 5.5 金额（跟用量彻底分开）
+| 字段 | 状态 | 说明 |
+|---|---|---|
+| `referencePricePerPurchaseUnit` | ✅ 已有 | 参考价 / 采购单位 |
+| ~~`referenceAmountPer100g`~~ | ❌ **不建** | 「每 100g」是前端展示换算，不是后端字段 |
 
-| 字段 | 说明 |
-|---|---|
-| `price.referenceAmountPer100g` | 参考价。**`amount` 这个词只表示钱，且必须带 `price.` 前缀** |
-
----
-
-## 六、改动清单：只改 5 处 + 3 个新增
+## 七、改动清单：只改 5 处 + 3 个新增
 
 > 不是"重构三个页面"，是**改 5 个地方**。这是这份表最有价值的结论。
 
@@ -221,7 +337,7 @@ netAmountStr: formatNetAmount(totalTheoretical, true)
 
 ---
 
-## 七、"改一个字段要改几处"
+## 八、"改一个字段要改几处"
 
 | 场景 | 现在 | 之后 |
 |---|---|---|
@@ -234,7 +350,7 @@ netAmountStr: formatNetAmount(totalTheoretical, true)
 
 ---
 
-## 八、顺带发现
+## 九、顺带发现
 
 ### 1. 交付接口 BFF 在改名字
 
@@ -251,7 +367,7 @@ preparation: item.preparationMethod ?? null    // 数据库叫 preparationMethod
 
 ---
 
-## 九、下一步
+## 十、下一步
 
 | 步 | 做什么 | 改代码吗 |
 |---|---|---|

@@ -392,3 +392,46 @@ aftersale_window_days | free_revision_count
 ```
 
 **已生效。**
+
+---
+
+## 十三、「5 加」补齐（2026-10-18 03:38 部署生效）
+
+### 补了哪三个
+
+| 字段 | 类型 | 默认 | 依据 |
+|---|---|---|---|
+| `aftersaleOverdueHours` | 小时数 | **48** | V44「超过 48 小时未处理，后台标红（时长可配）」 |
+| `allowRefundBeforeDelivery` | 开关 | **开** | V24「交付前可以无理由全额退」（不设天数 → 用开关） |
+| `messageCenterEnabled` | 开关 | **开** | 2.8.4「消息中心开关」 |
+
+前两个（售后窗口 / 免费次数）**字段本来就有**，只是默认值错了，上一轮改对。
+
+### 一个判断：这三个放**公开**接口
+
+它们不是内部参数，是**给顾客看的政策**：
+
+- 售后超时小时数 = **我们对顾客的响应承诺**
+- 交付前可无理由退 = **下单页必须说清楚**
+- 消息中心开关 = 关了就藏入口
+
+> **顾客不知道自己的权利，等于没有这项权利。**
+
+### 生产验证（实查）
+
+```
+aftersale_window_days | free_revision_count | aftersale_overdue_hours | allow_refund_before_delivery | message_center_enabled
+                     7 |                   2 |                      48 | t                            | t
+```
+
+公开接口 `GET /api/v1/custom-recipe-config` 返回：
+
+```
+aftersaleWindowDays: 7
+aftersaleOverdueHours: 48
+allowRefundBeforeDelivery: true
+messageCenterEnabled: true
+freeRevisionCount: 2
+```
+
+**全部生效。**

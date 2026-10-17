@@ -236,7 +236,7 @@ POST /dogs/:id/calc-for-recipe   →  按食谱能量密度算饭量
 | `feeding.mealsPerDay` | `mealsPerDay` ✅（这个本来就对） |
 | `feeding.cycleDays` | `cycleDays`（交付页已在用） |
 
-**只有一个是真的要新增**：`referenceValues`（营养师给的原始值，顾客改过之后还能查回来）。
+**而且一个都不用新增** —— 连我原以为要加的 `referenceValues` 也不需要（见 6.4 的追问）。
 
 ### 问 4：金额为什么按每 100g 命名？
 
@@ -304,7 +304,7 @@ if (Number.isFinite(data.minPricePer100g)) { ... }
 | `usageTotal.netAmountG` | 🆕 | 合计净重 |
 | ~~`purchaseAmountG`~~ | ❌ **不建** | 老板 2026-10-17：采购量整条删掉 |
 
-### 6.4 喂食参数（**全部用已有名，只新增一个**）
+### 6.4 喂食参数（**全部用已有名，一个都不新增**）
 
 | 字段 | 状态 | 说明 |
 |---|---|---|
@@ -312,7 +312,57 @@ if (Number.isFinite(data.minPricePer100g)) { ... }
 | `mealsPerDay` | ✅ 已有 | 每天几餐 |
 | `perMealIntakeG` | ✅ 已有 | 每餐多少克 —— **后端算好，前端不做除法** |
 | `cycleDays` | ✅ 已有 | 做几天（交付页在用） |
-| **`referenceValues`** | 🆕 **新增** | 营养师给的原始值（顾客改过后仍能查回来） |
+| ~~`referenceValues`~~ | ❌ **删除**（老板 2026-10-17） | 见下 |
+
+#### 为什么 `referenceValues` 也不需要（老板 2026-10-17 追问）
+
+> 老板："因为后端有一套完整的狗狗的热量计算方式。热量如果也能计算出来，
+> 再加上食谱本身也有热量密度的字段和值，那饭量不是就可以直接算出来了吗？
+> 还需要营养师手动的去录入或者计算这个值吗？"
+
+**不需要。他说的完全成立。** 查证如下：
+
+**交付页现在的算法**（`custom-recipe-delivery.service.ts:535-546`）：
+
+```js
+dailyIntakeG = dog.cachedTargetFoodKcal / 食谱能量密度
+perMealG     = dailyIntakeG / mealsPerDay
+```
+
+**两个输入都已经有了：**
+
+| 输入 | 存在哪 | 怎么来的 |
+|---|---|---|
+| 目标热量 `cachedTargetFoodKcal` | 狗狗档案（缓存字段） | 由体重、**体况评分**、活动量、生命阶段、绝育、零食、**进行中的减重计划**算出 |
+| 食谱能量密度 `energyDensityKcalPerKg` | 食谱记录 | 营养师录食谱时就有 |
+
+**所以饭量是纯计算结果，营养师不用手填。**
+
+**连"原始值"也不用存** —— 因为它**随时可以重新算出来**：
+
+| 想显示什么 | 怎么拿 |
+|---|---|
+| "参考值 320 克/天" | 用当前档案再调一次计算，**不需要存快照** |
+| 顾客改成了 280 | 记在 `dailyIntakeGOverride`（或类似）即可 |
+
+> 而且"实时算"比"存快照"更好：**狗胖了，参考值本来就该跟着变**。
+> 存了快照反而会给出一个过期的建议。
+
+**⚠️ 唯一的前提**：`cachedTargetFoodKcal` 必须跟着狗的数据更新。
+查了，已经有这个机制（`dog.service.ts:485`
+"Recalculates cachedTargetFoodKcal if relevant fields changed"）。
+
+**⚠️ 但有一个产品问题要定**：如果营养师觉得算出来的量不合适，**他有没有权力改？**
+
+现在**没有入口**。两种做法：
+
+| 方案 | 做法 | 结果 |
+|---|---|---|
+| **A（推荐）** | 不改交付值；营养师要调，就去**改档案里的目标热量** | 只有一个事实来源 |
+| B | 给营养师一个"覆盖"字段 | 又多一个"两个值谁算数"的问题 |
+
+> 推荐 A 的理由：如果允许在交付时覆盖，那"这单的饭量"和"档案的饭量"
+> 就会不一样，下次重新交付又按档案算 —— **顾客会发现数字跳来跳去**。
 
 ### 6.5 金额（**不按展示单位命名**）
 
@@ -333,7 +383,8 @@ if (Number.isFinite(data.minPricePer100g)) { ... }
 | 4 | `theoreticalAmount` / `netAmount` → `netAmountG` | DIY 制作单 | 1 个文件 |
 | 5 | **删掉采购量整条线** | DIY 制作单 + 交付第 2 页 | 2 个文件（**净减少代码**） |
 
-**3 个新增**：`oneLineSummary`、`items[].kind`、`feeding.*`（全新一组）。
+**真正新增的只有 3 个**：`oneLineSummary`、`items[].kind`、`usage[]`（一组）。
+喂食参数**一个都不新增**，全部沿用已有字段。
 
 ---
 

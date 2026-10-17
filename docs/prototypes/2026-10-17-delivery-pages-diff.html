@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>交付物两页 · 现状 vs 需求（2026-10-17）</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: #FAF7F2; color: #3F3222; padding: 26px 22px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: 22px; margin-bottom: 6px; }
+  h2 { font-size: 17px; margin: 42px 0 6px; padding-top: 12px; border-top: 2px solid #E4D8C8; }
+  h2 span { font-size: 12.5px; font-weight: 400; color: #8A7A66; margin-left: 8px; }
+  .sub { font-size: 12.5px; color: #6E5F4B; line-height: 1.8; max-width: 1400px; }
+  .sub b { color: #3F3222; }
+  code { background: #F0E6D8; padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+
+  .row { display: flex; gap: 16px; overflow-x: auto; padding: 14px 0 20px; align-items: flex-start; }
+  .col { width: 366px; flex: 0 0 366px; }
+  .col__head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12.5px; font-weight: 700; }
+  .col__tag { font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+  .tag--now { background: #F3E4E1; color: #96271a; }
+  .tag--should { background: #E3F0E6; color: #1e5b35; }
+
+  .phone {
+    width: 366px; background: #fff; border: 1px solid #EDE0D0;
+    border-radius: 18px; overflow: hidden;
+    box-shadow: 0 6px 24px rgba(74,55,38,.06);
+  }
+  .phone--now { border-color: #E8CFC8; }
+  .navbar { height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: #FAF7F2; border-bottom: 1px solid #F0E6D8; }
+  .navbar__back { font-size: 15px; color: #6E5F4B; }
+  .navbar__t { font-size: 13px; font-weight: 600; }
+  .body { padding: 10px; }
+
+  /* 深色 hero（来自代码：delivery 页的 hero 是深绿） */
+  .hero { background: linear-gradient(135deg,#1e3a2f,#16261f); border-radius: 13px; padding: 13px; color: #f4ecd8; margin-bottom: 9px; }
+  .hero__t { font-size: 16px; font-weight: 700; }
+  .hero__s { font-size: 10.5px; color: rgba(244,236,216,.55); margin-top: 4px; }
+  .hero__tags { display: flex; gap: 5px; margin-top: 9px; flex-wrap: wrap; }
+  .hero__tag { font-size: 9.5px; background: rgba(201,162,39,.2); color: #c9a227; border-radius: 999px; padding: 2px 8px; }
+
+  .sec { margin-bottom: 11px; }
+  .sec__t { font-size: 12.5px; font-weight: 700; margin-bottom: 7px; display: flex; align-items: center; gap: 6px; }
+  .sec__note { font-size: 10.5px; color: #9C8B76; line-height: 1.6; }
+
+  .grid3 { display: flex; gap: 7px; }
+  .cell { flex: 1; background: #FBF8F3; border-radius: 10px; padding: 9px 6px; text-align: center; }
+  .cell__v { font-size: 18px; font-weight: 700; color: #B45309; }
+  .cell__u { font-size: 9.5px; color: #9C8B76; margin-top: 2px; }
+
+  .rowitem { display: flex; font-size: 11.5px; padding: 6px 0; border-bottom: 1px dashed #F4EBE0; align-items: baseline; }
+  .rowitem:last-child { border-bottom: 0; }
+  .rowitem__k { flex: 1; }
+  .rowitem__v { font-weight: 700; color: #B45309; }
+  .rowitem__v--sm { font-weight: 400; color: #9C8B76; font-size: 10.5px; }
+
+  .btn { text-align: center; font-size: 12.5px; font-weight: 700; padding: 10px 0; border-radius: 10px; background: #B45309; color: #fff; margin-top: 4px; }
+  .btn--line { background: #fff; color: #6E5F4B; border: 1.5px solid #EDE0D0; }
+
+  /* 标注 */
+  .mark { display: inline-block; font-size: 9.5px; font-weight: 700; border-radius: 4px; padding: 1px 5px; margin-left: 5px; vertical-align: 1px; }
+  .mark--bad { background: #FCEAE5; color: #b4453a; }
+  .mark--miss { background: #FBE7C0; color: #8a5a00; }
+  .mark--ok { background: #E3F0E6; color: #1e5b35; }
+  .mark--del { background: #F0E6D8; color: #8A7A66; text-decoration: line-through; }
+
+  .blocked { border: 1.5px dashed #E8CFC8; background: #FFF9F8; border-radius: 10px; padding: 9px 11px; font-size: 11.5px; color: #96271a; }
+  .added { border: 1.5px dashed #B9D8C2; background: #F7FBF8; border-radius: 10px; padding: 9px 11px; font-size: 11.5px; color: #1e5b35; }
+
+  .banner { background: #FFF8EC; border: 2px solid #E8C88A; border-radius: 12px; padding: 14px 16px; max-width: 1400px; margin: 16px 0 8px; }
+  .banner__t { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+  .banner ul { margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.9; color: #6E5F4B; }
+  .banner b { color: #3F3222; }
+
+  table.diff { margin: 10px 0 0; border-collapse: collapse; font-size: 12.5px; background: #fff; max-width: 1400px; width: 100%; }
+  table.diff th, table.diff td { text-align: left; padding: 8px 10px; border-top: 1px solid #F0E6D8; vertical-align: top; }
+  table.diff th { background: #FBF5EC; font-weight: 600; border-top: 0; }
+  table.diff td.s { white-space: nowrap; font-weight: 700; }
+  .s--bad { color: #b4453a; }
+  .s--miss { color: #8a5a00; }
+  .s--ok { color: #1e5b35; }
+  .legend { display: flex; gap: 14px; font-size: 11.5px; color: #6E5F4B; margin-top: 10px; flex-wrap: wrap; }
+
+  .cover { height: 96px; border-radius: 11px; background: linear-gradient(135deg,#c9a227,#8a6d13); display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,.85); font-size: 11px; margin-bottom: 9px; }
+</style>
+</head>
+<body>
+
+<h1>交付物两页 · 现状 vs 需求</h1>
+<div class="sub">
+  2026-10-17 ｜ 对应需求：<code>docs/plans/2026-10-17-custom-recipe-requirements-v2.md</code> § 2.4<br />
+  左边「现状」是<b>根据线上代码 <code>delivery.vue</code> / <code>delivery-shopping.vue</code> 还原</b>的（不是我随意画的），
+  右边「应该」是按需求 2.4 画的。
+</div>
+
+<div class="banner">
+  <div class="banner__t">一句话结论：这两页跟需求差得比较多</div>
+  <ul>
+    <li>它们是<b>第一轮那次没经你审的冲刺</b>按旧需求做的，所以基本没落在新需求上。</li>
+    <li><b>最严重的两处</b>：第 1 页放着「每天怎么喂」（该在第 2 页）；
+      第 2 页<b>大字显示采购量（含 7% 损耗）</b> —— 正是你说过"付费交付不能拿估算的损耗率当严格信息"的那一条。</li>
+    <li>第 1 页缺<b>封面、卖点、核心营养表、营养报告入口</b>；第 2 页缺<b>补剂的购买入口</b>、长图缺<b>二维码</b>。</li>
+  </ul>
+  <div class="legend">
+    <span><span class="mark mark--bad">错</span> 不符合需求</span>
+    <span><span class="mark mark--miss">缺</span> 需求里有、现在没有</span>
+    <span><span class="mark mark--ok">有</span> 已经对了</span>
+    <span><span class="mark mark--del">移走</span> 该挪到另一页</span>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<h2>一、第 1 页「专属食谱」 <span>回答"这是不是我要的那份"</span></h2>
+
+<div class="row">
+
+  <div class="col">
+    <div class="col__head"><span>现在（线上）</span><span class="col__tag tag--now">按代码还原</span></div>
+    <div class="phone phone--now">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">专属食谱</span></div>
+      <div class="body">
+
+        <div class="hero">
+          <div class="hero__t">低脂鸡肉南瓜餐</div>
+          <div class="hero__s">第 1 版 · 交付于 2026-10-17 14:30</div>
+          <div class="hero__tags">
+            <span class="hero__tag">专属食谱</span>
+            <span class="hero__tag">采购清单</span>
+            <span class="hero__tag">补剂清单</span>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">每天怎么喂 <span class="mark mark--del">该在第2页</span></div>
+          <div class="grid3">
+            <div class="cell"><div class="cell__v">320</div><div class="cell__u">克 / 天</div></div>
+            <div class="cell"><div class="cell__v">2</div><div class="cell__u">餐 / 天</div></div>
+            <div class="cell"><div class="cell__v">160</div><div class="cell__u">克 / 餐</div></div>
+          </div>
+          <div class="sec__note" style="margin-top:6px">这份量是按 14 天配的</div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">食材配比 <span class="mark mark--ok">有</span></div>
+          <div class="rowitem"><span class="rowitem__k">鸡胸肉 · 蒸</span><span class="rowitem__v--sm">40%</span></div>
+          <div class="rowitem"><span class="rowitem__k">南瓜 · 蒸</span><span class="rowitem__v--sm">25%</span></div>
+          <div class="rowitem"><span class="rowitem__k">糙米 · 煮</span><span class="rowitem__v--sm">25%</span></div>
+          <div class="rowitem"><span class="rowitem__k">西兰花 · 焯</span><span class="rowitem__v--sm">10%</span></div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">营养补充剂 <span class="mark mark--ok">有</span></div>
+          <div class="rowitem"><span class="rowitem__k">钙粉</span><span class="rowitem__v--sm">随餐</span></div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">营养 <span class="mark mark--bad">只有2项</span></div>
+          <div class="rowitem"><span class="rowitem__k">能量密度</span><span class="rowitem__v--sm">1.2 kcal/g</span></div>
+          <div class="rowitem"><span class="rowitem__k">参照标准</span><span class="rowitem__v--sm">FEDIAF 2018</span></div>
+        </div>
+
+        <div class="btn btn--line">去买食材 / 看做法</div>
+
+      </div>
+    </div>
+    <div class="sub" style="margin-top:8px;font-size:11.5px">
+      <b>缺</b>：封面、卖点、核心营养表（蛋白/脂肪/灰分/水分/纤维/碳水/钙磷比）、营养报告入口
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="col__head"><span>应该（按需求 2.4.1）</span><span class="col__tag tag--should">该改成这样</span></div>
+    <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">专属食谱</span></div>
+      <div class="body">
+
+        <div class="cover">🍗 食谱封面（AI 生成 · 老板审核）<span class="mark mark--miss" style="margin-left:6px">缺</span></div>
+
+        <div class="hero" style="margin-bottom:9px">
+          <div class="hero__t">低脂鸡肉南瓜餐</div>
+          <div class="hero__s">为豆豆定制 · 3 岁柯基 · 11.2kg</div>
+        </div>
+
+        <div class="added" style="margin-bottom:9px">
+          <b>低脂高蛋白，帮它慢慢瘦下来</b> <span class="mark mark--miss">缺：卖点</span><br />
+          <span style="font-size:10.5px">一句话，让顾客快速判断"这是不是我要的"</span>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">营养背书 <span class="mark mark--ok">有</span></div>
+          <div class="sec__note">✓ 符合 FEDIAF 犬营养标准（2018）</div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">一句话营养结论 <span class="mark mark--ok">有</span></div>
+          <div class="sec__note" style="color:#3F3222">
+            蛋白质充足、脂肪偏低，适合需要控体重的成犬；钙磷比 1.2:1，在安全范围内。
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">核心营养 <span class="mark mark--miss">缺</span></div>
+          <div class="grid3" style="margin-bottom:6px">
+            <div class="cell"><div class="cell__v">32%</div><div class="cell__u">蛋白</div></div>
+            <div class="cell"><div class="cell__v">9%</div><div class="cell__u">脂肪</div></div>
+            <div class="cell"><div class="cell__v">1.2</div><div class="cell__u">钙磷比</div></div>
+          </div>
+          <div class="rowitem"><span class="rowitem__k">灰分 / 水分 / 纤维 / 碳水</span><span class="rowitem__v--sm">6% / 68% / 3% / 22%</span></div>
+          <div class="rowitem"><span class="rowitem__k">能量密度</span><span class="rowitem__v--sm">1.2 kcal/g</span></div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">食材配比 <span class="mark mark--ok">有</span></div>
+          <div class="rowitem"><span class="rowitem__k">鸡胸肉 · 蒸</span><span class="rowitem__v--sm">40%</span></div>
+          <div class="rowitem"><span class="rowitem__k">南瓜 · 蒸</span><span class="rowitem__v--sm">25%</span></div>
+          <div class="rowitem"><span class="rowitem__k">糙米 · 煮</span><span class="rowitem__v--sm">25%</span></div>
+        </div>
+
+        <div class="btn btn--line">查看完整营养报告 › <span class="mark mark--miss">缺</span></div>
+
+        <div class="sec__note" style="margin-top:9px;color:#96271a">
+          ↑ 这一页<b>不含每日喂食量</b>（已移到第 2 页）
+        </div>
+
+      </div>
+    </div>
+    <div class="sub" style="margin-top:8px;font-size:11.5px">
+      顾客在这一页只做一件事：<b>确认"这就是我要的那份"</b>。
+      所以它要能被一眼看懂 —— 封面、卖点、结论、配比。
+    </div>
+  </div>
+
+</div>
+
+<!-- ================================================================ -->
+<h2>二、第 2 页「采购与制作」 <span>回答"接下来怎么做"</span></h2>
+
+<div class="row">
+
+  <div class="col">
+    <div class="col__head"><span>现在（线上）</span><span class="col__tag tag--now">按代码还原</span></div>
+    <div class="phone phone--now">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">采购与制作</span></div>
+      <div class="body">
+
+        <div class="hero">
+          <div class="hero__t">采购与制作</div>
+          <div class="hero__s">低脂鸡肉南瓜餐 · 第 1 版</div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">这一批要做多少 <span class="mark mark--ok">有</span></div>
+          <div class="rowitem"><span class="rowitem__k">每天</span><span class="rowitem__v">320 克</span></div>
+          <div class="rowitem"><span class="rowitem__k">这批做</span><span class="rowitem__v">14 天</span></div>
+          <div class="rowitem"><span class="rowitem__k">总净重</span><span class="rowitem__v">4480 克</span></div>
+          <div class="rowitem"><span class="rowitem__k">每餐</span><span class="rowitem__v">160 克</span></div>
+        </div>
+
+        <div class="blocked">
+          <b>要买什么（含损耗余量）</b> <span class="mark mark--bad">错</span>
+          <div class="rowitem" style="border-color:#F3DDD6">
+            <span class="rowitem__k">鸡胸肉</span>
+            <span class="rowitem__v">1712 克</span>
+          </div>
+          <div style="font-size:10px;color:#96271a;margin-top:-3px;margin-bottom:6px">净用 1600 克</div>
+          <div class="rowitem" style="border-color:#F3DDD6">
+            <span class="rowitem__k">南瓜</span>
+            <span class="rowitem__v">1070 克</span>
+          </div>
+          <div style="font-size:10px;color:#96271a;margin-top:-3px;margin-bottom:6px">净用 1000 克</div>
+          <div style="font-size:11px;margin-top:6px">
+            <b>建议采购合计 4794 克</b><br />
+            已按 7% 的加工损耗留出余量，实际用量…
+          </div>
+        </div>
+
+        <div class="sec" style="margin-top:11px">
+          <div class="sec__t">营养补充剂 <span class="mark mark--bad">没有购买入口</span></div>
+          <div class="rowitem"><span class="rowitem__k">钙粉</span><span class="rowitem__v--sm">每 kg 5g</span></div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">怎么做 <span class="mark mark--ok">有</span></div>
+          <div class="sec__note">1. 鸡胸肉切块蒸熟…</div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">怎么存 <span class="mark mark--ok">有</span></div>
+          <div class="sec__note">分装真空袋，-18℃ 冷冻 6 个月…</div>
+        </div>
+
+        <div class="btn btn--line">保存长图 <span class="mark mark--bad">无二维码</span></div>
+        <div class="btn btn--line" style="margin-top:6px">返回专属食谱</div>
+
+      </div>
+    </div>
+    <div class="sub" style="margin-top:8px;font-size:11.5px">
+      <b>最严重的一处</b>：采购量用大字显示，净用量是小字。
+      这正好反了 —— 我们只该给净用量。
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="col__head"><span>应该（按需求 2.4.2）</span><span class="col__tag tag--should">该改成这样</span></div>
+    <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">采购与制作</span></div>
+      <div class="body">
+
+        <div class="hero">
+          <div class="hero__t">采购与制作</div>
+          <div class="hero__s">低脂鸡肉南瓜餐 · 为豆豆定制</div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">每天怎么喂 <span class="mark mark--miss">从第1页移来</span>
+            <span class="mark mark--miss">可改</span>
+          </div>
+          <div class="grid3">
+            <div class="cell" style="border:1.5px dashed #B9D8C2"><div class="cell__v">320</div><div class="cell__u">克 / 天 ✎</div></div>
+            <div class="cell" style="border:1.5px dashed #B9D8C2"><div class="cell__v">2</div><div class="cell__u">餐 / 天 ✎</div></div>
+            <div class="cell"><div class="cell__v">160</div><div class="cell__u">克 / 餐</div></div>
+          </div>
+          <div class="sec__note" style="margin-top:6px">
+            营养师参考值，你可以自己改 —— 改了下面的用量会重新算。
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">这次做多少 <span class="mark mark--ok">有</span></div>
+          <div class="rowitem"><span class="rowitem__k">做几天</span><span class="rowitem__v">14 天 ✎</span></div>
+          <div class="rowitem"><span class="rowitem__k">总净重</span><span class="rowitem__v">4480 克</span></div>
+          <div class="sec__note" style="margin-top:5px">改喂食量或天数后，这里跟着重算</div>
+        </div>
+
+        <div class="added" style="margin-bottom:11px">
+          <b>每种食材净用量</b> <span class="mark mark--bad">采购量删掉</span>
+          <div class="rowitem" style="border-color:#CFE3D5">
+            <span class="rowitem__k">鸡胸肉</span><span class="rowitem__v">1600 克</span>
+          </div>
+          <div class="rowitem" style="border-color:#CFE3D5">
+            <span class="rowitem__k">南瓜</span><span class="rowitem__v">1000 克</span>
+          </div>
+          <div class="rowitem" style="border-color:#CFE3D5">
+            <span class="rowitem__k">糙米</span><span class="rowitem__v">1000 克</span>
+          </div>
+          <div class="sec__note" style="margin-top:6px;color:#1e5b35">
+            只给"这次要用多少"，<b>不给采购量</b>。买多少你自己判断。
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">补剂用量与购买 <span class="mark mark--miss">缺购买入口</span></div>
+          <div class="rowitem">
+            <span class="rowitem__k">钙粉 · 每 kg 食材 5g</span>
+            <span class="rowitem__v--sm">本次 22g</span>
+          </div>
+          <div class="btn btn--line" style="margin-top:6px">🛒 去买这份补剂</div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">制作步骤 <span class="mark mark--ok">有</span></div>
+          <div class="sec__note">1. 鸡胸肉切块蒸熟…</div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">怎么存 <span class="mark mark--ok">有</span></div>
+          <div class="sec__note">分装真空袋，-18℃ 冷冻 6 个月…</div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__t">喂食提醒 <span class="mark mark--miss">只保留这一类</span></div>
+          <div class="sec__note">换粮请用 7 天过渡：第 1 周按 7:3 混原来的粮…</div>
+        </div>
+
+        <div class="btn btn--line">保存长图（带小程序二维码）<span class="mark mark--miss">缺二维码</span></div>
+        <div class="btn btn--line" style="margin-top:6px">返回专属食谱</div>
+
+      </div>
+    </div>
+    <div class="sub" style="margin-top:8px;font-size:11.5px">
+      这一页是<b>真正动手时看的</b>：每天吃多少、这次做多少、每种用多少、补剂去哪买、怎么做、怎么存。
+    </div>
+  </div>
+
+</div>
+
+<!-- ================================================================ -->
+<h2>三、差异清单 <span>一共 11 条</span></h2>
+<table class="diff">
+  <tr>
+    <th style="width:70px">页</th><th style="width:230px">项</th>
+    <th style="width:110px">现状</th><th>要改成</th>
+  </tr>
+  <tr>
+    <td>1</td><td><b>采购量</b></td>
+    <td class="s s--ok">—</td>
+    <td>第 2 页在显示「采购量（含 7% 损耗）」并<b>用大字突出</b>。
+      要<b>整个删掉</b>，只留净用量。<br />
+      <span style="color:#8A7A66">理由：付费交付不能拿估算的损耗率当严格信息。</span></td>
+  </tr>
+  <tr>
+    <td>1</td><td>每日喂食量</td>
+    <td class="s s--bad">在第1页</td>
+    <td><b>移到第 2 页</b>，并让顾客可改（改了自动重算用量）。</td>
+  </tr>
+  <tr>
+    <td>1</td><td>食谱封面</td>
+    <td class="s s--miss">缺</td>
+    <td>新增。AI 生成 + 老板审核。</td>
+  </tr>
+  <tr>
+    <td>1</td><td>卖点（一句话）</td>
+    <td class="s s--miss">缺</td>
+    <td>新增。AI 生成 + 老板审核。</td>
+  </tr>
+  <tr>
+    <td>1</td><td>核心营养表</td>
+    <td class="s s--bad">只有2项</td>
+    <td>补全：蛋白 / 脂肪 / 灰分 / 水分 / 纤维 / 碳水 / 能量密度 / 钙磷比。</td>
+  </tr>
+  <tr>
+    <td>1</td><td>完整营养报告入口</td>
+    <td class="s s--miss">缺</td>
+    <td>新增一个"查看完整报告"的入口。</td>
+  </tr>
+  <tr>
+    <td>1</td><td>一句话营养结论</td>
+    <td class="s s--ok">有</td>
+    <td>保留，但改成 AI 生成 + 老板审核。</td>
+  </tr>
+  <tr>
+    <td>1</td><td>食材配比 / 营养背书</td>
+    <td class="s s--ok">有</td>
+    <td>保留。</td>
+  </tr>
+  <tr>
+    <td>2</td><td>补剂的购买入口</td>
+    <td class="s s--miss">缺</td>
+    <td>补剂要能直接买：推广联盟商品跳转、自产预分装一键买齐。</td>
+  </tr>
+  <tr>
+    <td>2</td><td>长图里的二维码</td>
+    <td class="s s--miss">缺</td>
+    <td>长图加小程序二维码，扫码进首页。</td>
+  </tr>
+  <tr>
+    <td>2</td><td>喂食提醒 / 复诊与调整建议</td>
+    <td class="s s--ok">有</td>
+    <td>保留<b>喂食建议提醒</b>；确认<b>没有</b>复诊与调整建议（需求要删）。</td>
+  </tr>
+</table>
+
+<div class="banner" style="margin-top:22px;border-color:#E8CFC8;background:#FFF9F8">
+  <div class="banner__t">要我按这个改，还是先改哪几条？</div>
+  <ul>
+    <li><b>取消采购量</b>这条最简单，但影响最直接（顾客会看到少了一列）。</li>
+    <li><b>喂食量搬家</b>同时要加"顾客可改 + 重算"，工作量中等。</li>
+    <li><b>封面 / 卖点 / 核心营养表</b>要先有数据来源（AI 生成 + 营养数据补齐）。</li>
+    <li><b>补剂购买入口</b>要接 DIY 那条路，可能要等其他模块。</li>
+  </ul>
+</div>
+
+</body>
+</html>

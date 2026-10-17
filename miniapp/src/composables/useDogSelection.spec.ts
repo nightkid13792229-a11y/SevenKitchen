@@ -22,9 +22,24 @@ describe('useDogSelection · 选狗公共状态', () => {
     expect(source).not.toMatch(/selectedDog[\s\S]{0,120}return dogs\.value\[0\]/)
   })
 
-  it('★ setDogs 会校验并校正选中项（防"选中一只不存在的狗"）', () => {
+  it('★ setDogs 不自动选中（只清理失效的），自动选要显式调用', () => {
+    /**
+     * 2026-10-18 改的：第一版 `setDogs` 会顺手自动选中，
+     * 结果把页面原有的 `if (!selectedDogId.value) selectDog(x)` 守卫永久短路，
+     * **页面自己的副作用（饭量计算等）全不跑**。连踩两次才看明白。
+     *
+     * 现在的约定：副作用必须出现在函数名里。
+     */
+    expect(source).toContain('function setDogsAndSelect')
+    // setDogs 里只允许"清掉失效选中项"，不允许按优先级挑一只
+    const setDogsBody = source.slice(
+      source.indexOf('function setDogs(list: T[])'),
+      source.indexOf('function setDogsAndSelect'),
+    )
+    expect(setDogsBody).toContain('selectedDogId.value = \'\'')
+    expect(setDogsBody).not.toContain('dogs.value[0]?.id')
+    // 挑一只的逻辑只在显式版本里
     expect(source).toContain('const valid = candidates.find')
-    expect(source).toContain('selectedDogId.value = valid ??')
   })
 
   it('★ syncFromMatch 校验存在性，列表外的不采纳', () => {

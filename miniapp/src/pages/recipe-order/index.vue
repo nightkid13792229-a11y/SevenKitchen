@@ -543,6 +543,7 @@ import {
   type LifeStageMatchVerdict,
 } from '../../utils/life-stage-match'
 import LifeStageVersionCard from '@/components/recipe/LifeStageVersionCard.vue'
+import { useDogSelection } from '@/composables/useDogSelection'
 import {
   DEFAULT_ORDER_CYCLE_DAYS,
   MIN_PACKAGE_SPEC_G,
@@ -776,8 +777,21 @@ const recipe = ref<Recipe>({
 })
 const lifeStageDropdownVisible = ref(false)
 
-const dogs = ref<Dog[]>([])
-const selectedDogId = ref('')
+/**
+ * 选狗状态（2026-10-18 收进 composable，泛型绑定 `Dog`）。
+ *
+ * ⚠️ `setDogs` **不会自动选中** —— 这一页的 `selectDog()` 里除了选中，
+ * 还有价格预览重置、饭量计算、生命阶段检查；
+ * 而且它开头是 `if (dogId === selectedDogId.value) return` ——
+ * 一旦提前把 `selectedDogId` 填上，那些副作用就**全部不跑**。
+ * 所以这里的守卫 `if (!selectedDogId.value) selectDog(...)` 必须保持有效。
+ */
+const {
+  dogs,
+  selectedDogId,
+  selectedDog,
+  setDogs,
+} = useDogSelection<Dog>()
 const selectedCycleDays = ref<number | null>(DEFAULT_ORDER_CYCLE_DAYS)
 const lastSelectedCycleDays = ref(DEFAULT_ORDER_CYCLE_DAYS)
 const selectedSourcePlan = ref<IngredientSourcePlanCode>('MARKET_PREMIUM')
@@ -885,10 +899,6 @@ const isAdminUser = computed(() => {
 // 健康标签UUID到名称的映射（动态加载）
 const healthTagUuidLabelMap = ref<Record<string, string>>({})
 
-// 选中的狗狗
-const selectedDog = computed(() => {
-  return dogs.value.find(d => d.id === selectedDogId.value)
-})
 /**
  * 生命阶段匹配结论 —— **由后端给出**。
  *
@@ -1436,7 +1446,7 @@ async function loadDogs() {
     })
     if (res.code === 0 && res.data) {
       dogsLoadFailed.value = false
-      dogs.value = res.data
+      setDogs(res.data)
 
       // 自动选中狗狗（再次购买优先，其次详情页传入，再其次本地缓存）
       if (dogs.value.length > 0 && !selectedDogId.value) {
@@ -1449,7 +1459,7 @@ async function loadDogs() {
     }
   } catch (error) {
     console.error('Load dogs error:', error)
-    dogs.value = []
+    setDogs([])
     dogsLoadFailed.value = true
     dogListLoadedOnce = true
   }

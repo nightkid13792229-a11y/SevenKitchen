@@ -46,25 +46,53 @@ export function useDogSelection<T extends { id: string } = any>(
   )
 
   /**
-   * 灌入列表并校正选中项。
+   * 灌入列表。
    *
-   * 校正规则（按优先级）：
-   *   1. 传进来的 `preferredId`（通常是 URL 参数）
-   *   2. 当前已选的那只（还在列表里就保留）
-   *   3. 列表第一只
+   * ## ⚠️ 它**不会自动选中**（2026-10-18 改过一次）
    *
-   * 为什么必须校正：顾客可能删了狗、或者链接里带的是别人的狗 id ——
-   * 不校正的话页面会停在"选中了一只不存在的狗"，各处显示都对不上。
+   * 第一版会顺手按 `preferredId > 当前选中 > 第一只` 自动选。
+   * 结果在接页面时**连踩两次坑**：
+   *
+   *   页面原来的写法是 `if (!selectedDogId.value) selectDog(x)` ——
+   *   而 `selectDog()` 里除了选中，还有一堆副作用
+   *   （饭量计算、生命阶段检查、价格预览……）。
+   *   一旦 `setDogs` 先把 `selectedDogId` 填上，那个守卫就**永远短路**，
+   *   副作用全不跑，页面表现为"列表出来了但什么都不算"。
+   *
+   * 其中一个页面的 `selectDog` 开头还有 `if (dogId === selectedDogId.value) return` ——
+   * 自动选中会让它**立刻返回**，问题更隐蔽。
+   *
+   * ## 所以现在的约定
+   *
+   * · `setDogs(list)` —— **只灌列表 + 清理失效的选中项**，绝不替你选
+   * · `setDogsAndSelect(list, preferredId)` —— 想自动选就用这个，**名字里写明白**
+   *
+   * 让副作用出现在函数名里，调用方就不会被它悄悄改变行为。
    */
-  function setDogs(list: T[], preferredId?: string | null) {
+  function setDogs(list: T[]) {
     dogs.value = Array.isArray(list) ? list : []
+    // 选中项已不在列表里（顾客删了狗）→ 清掉，免得页面停在一个不存在的 id 上
+    if (
+      selectedDogId.value &&
+      !dogs.value.some((dog) => dog.id === selectedDogId.value)
+    ) {
+      selectedDogId.value = ''
+    }
+  }
 
-    const candidates = [
-      preferredId,
-      selectedDogId.value,
-      dogs.value[0]?.id,
-    ].filter((id): id is string => typeof id === 'string' && id.length > 0)
+  /**
+   * 灌列表**并且**选一只（显式版本）。
+   *
+   * 优先级：`preferredId` > 当前选中（还在列表里）> 第一只。
+   * 只用在你确定"选完之后不需要额外副作用"的场合；
+   * 需要跑页面自己的 `selectDog()` 时，请用 `setDogs()` + 手动调用。
+   */
+  function setDogsAndSelect(list: T[], preferredId?: string | null) {
+    setDogs(list)
 
+    const candidates = [preferredId, selectedDogId.value, dogs.value[0]?.id].filter(
+      (id): id is string => typeof id === 'string' && id.length > 0,
+    )
     const valid = candidates.find((id) =>
       dogs.value.some((dog) => dog.id === id),
     )
@@ -99,5 +127,13 @@ export function useDogSelection<T extends { id: string } = any>(
     select(id)
   }
 
-  return { dogs, selectedDogId, selectedDog, setDogs, select, syncFromMatch }
+  return {
+    dogs,
+    selectedDogId,
+    selectedDog,
+    setDogs,
+    setDogsAndSelect,
+    select,
+    syncFromMatch,
+  }
 }

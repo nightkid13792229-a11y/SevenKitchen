@@ -97,17 +97,6 @@
           <span class="form-tip">从预约日起算，遇公众假期自动顺延</span>
         </el-form-item>
 
-        <el-form-item label="每日接单上限">
-          <el-input-number
-            v-model="form.dailyCapacity"
-            :min="1"
-            :max="200"
-            :step="1"
-            :precision="0"
-            style="width: 200px"
-          />
-          <span class="form-tip">同一天约满后，顾客提交会提示"该日期已约满"</span>
-        </el-form-item>
 
         <el-divider content-position="left">支付</el-divider>
 
@@ -151,10 +140,6 @@
           <span class="form-tip">顾客几天内没点「确认收到」，系统自动完成这单</span>
         </el-form-item>
 
-        <el-form-item label="要求顾客确认">
-          <el-switch v-model="form.requireCustomerConfirm" />
-          <span class="form-tip">关闭后交付即完成，不再等顾客点确认</span>
-        </el-form-item>
 
         <el-form-item label="交付物">
           <el-select
@@ -241,17 +226,6 @@
           <span class="form-tip">后台手工建定制食谱时的默认值</span>
         </el-form-item>
 
-        <el-form-item label="默认能量密度">
-          <el-input-number
-            v-model="form.defaultEnergyDensityKcalPerKg"
-            :min="500"
-            :max="9000"
-            :step="50"
-            :precision="0"
-            style="width: 200px"
-          />
-          <span class="form-tip">kcal/kg</span>
-        </el-form-item>
 
         <el-form-item label="生产损耗率">
           <el-input-number
@@ -269,28 +243,7 @@
           </span>
         </el-form-item>
 
-        <el-form-item label="默认工时">
-          <el-input-number
-            v-model="form.defaultLaborHours"
-            :min="0"
-            :max="100"
-            :step="0.5"
-            :precision="1"
-            style="width: 200px"
-          />
-          <span class="form-tip">小时</span>
-        </el-form-item>
 
-        <el-form-item label="排期往前找">
-          <el-input-number
-            v-model="form.scheduleLookaheadDays"
-            :min="7"
-            :max="365"
-            :precision="0"
-            style="width: 200px"
-          />
-          <span class="form-tip">天（连续这么多天排不上就明确报错，原写死 45）</span>
-        </el-form-item>
 
         <el-form-item label="占位重试次数">
           <el-input-number
@@ -336,6 +289,22 @@ const saving = ref(false);
 const saveError = ref('');
 const updatedAt = ref('');
 
+/**
+ * ⚠️ 2026-10-18：这 5 个字段**已从界面移除，但保留在表单状态里**。
+ *
+ * 移除的：每日接单上限 / 要求顾客确认 / 排期往前找 / 默认能量密度 / 默认工时
+ *   · 接单不限量了 → 接单上限没意义
+ *   · 取消"确认收货" → 要求顾客确认没意义
+ *   · 排期不设上限 → 往前找多少天没意义
+ *   · 后两个**只在配置里读写、全后端 0 处业务引用**（查过）
+ *
+ * **为什么保留在状态里**：从界面拿掉一个字段，不该把它的值也清掉 ——
+ * 保存时原样带回，数据库里的旧值不受影响。
+ * 如果哪天要彻底删列，走 migration，别靠"表单不再传"来实现。
+ *
+ * 注意：**「生产损耗率」不在此列**。它一度被我误判为可删，
+ * 实际是"新食谱的默认生产损耗率"，生产模块靠它算投料量。**已保留**。
+ */
 const form = reactive({
   feeAmount: 300,
   creditAmount: 300,

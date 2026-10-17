@@ -59,8 +59,18 @@ describe('食谱定制 · 数据库结构守卫', () => {
      */
     const expected: Array<[string, RegExp]> = [
       ['每日交付上限', /dailyDeliveryCapacity\s+Int\s+@default\(4\)/],
-      ['售后窗口', /aftersaleWindowDays\s+Int\s+@default\(30\)/],
-      ['免费调整次数', /freeRevisionCount\s+Int\s+@default\(1\)/],
+      /**
+       * 2026-10-18：默认值从 30 / 1 改成 7 / 2。
+       *
+       * 依据老板 10-17 的明确决定：
+       *   V22「售后窗口就留 7 天吧」
+       *   V23「那就改成 7 天之内免费修改两次吧」
+       *
+       * 旧默认值（30 / 1）是 10-16 写的，早于决策 —— 一直没改，
+       * 生产库里那一行也还是 30 / 1（说明没人动过，是纯旧默认值）。
+       */
+      ['售后窗口', /aftersaleWindowDays\s+Int\s+@default\(7\)/],
+      ['免费调整次数', /freeRevisionCount\s+Int\s+@default\(2\)/],
       ['免费调整窗口', /freeRevisionWindowDays\s+Int\s+@default\(7\)/],
       ['自动完成天数', /autoCompleteDays\s+Int\s+@default\(3\)/],
       ['要求确认收货', /requireCustomerConfirm\s+Boolean\s+@default\(true\)/],

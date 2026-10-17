@@ -314,8 +314,8 @@ const form = reactive({
 
   // ===== 批次 1.4：原先写死在代码里的参数 =====
   dailyDeliveryCapacity: 4,
-  aftersaleWindowDays: 30,
-  freeRevisionCount: 1,
+  aftersaleWindowDays: 7,   // 老板 2026-10-17 V22：售后窗口 7 天
+  freeRevisionCount: 2,     // 老板 2026-10-17 V23：7 天内免费修改 2 次
   freeRevisionWindowDays: 7,
   autoCompleteDays: 3,
   requireCustomerConfirm: true,

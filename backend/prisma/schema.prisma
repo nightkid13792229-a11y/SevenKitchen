@@ -2581,9 +2581,9 @@ model CustomRecipeConfig {
   dailyDeliveryCapacity Int     @default(4) @map("daily_delivery_capacity")
 
   /// 售后受理窗口（天）：交付后多少天内顾客可以提售后
-  aftersaleWindowDays   Int     @default(30) @map("aftersale_window_days")
+  aftersaleWindowDays   Int     @default(7) @map("aftersale_window_days")
   /// 免费调整次数（限交付后 freeRevisionWindowDays 天内）
-  freeRevisionCount     Int     @default(1) @map("free_revision_count")
+  freeRevisionCount     Int     @default(2) @map("free_revision_count")
   /// 免费调整的时间窗（天）
   freeRevisionWindowDays Int    @default(7) @map("free_revision_window_days")
 

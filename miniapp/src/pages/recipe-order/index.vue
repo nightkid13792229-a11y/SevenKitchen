@@ -545,6 +545,7 @@ import {
 import LifeStageVersionCard from '@/components/recipe/LifeStageVersionCard.vue'
 import { useDogSelection } from '@/composables/useDogSelection'
 import { usePackagePlan } from '@/composables/usePackagePlan'
+import { useLifeStageVersion } from '@/composables/useLifeStageVersion'
 import {
   DEFAULT_ORDER_CYCLE_DAYS,
   MIN_PACKAGE_SPEC_G,
@@ -844,7 +845,34 @@ const {
 const dogCalcResult = ref<CalcResult | null>(null)
 
 // 生命阶段校验
-const isLifeStageMatch = ref(true)
+/**
+ * 生命阶段状态（2026-10-18 收进 composable）。
+ *
+ * 本页与 DIY 配置页的实现**一字不差**（都带 lifeStage、都要重新亮警示、
+ * 缺输入都要重置）—— 所以 composable 上一轮扩展出来的参数正好够用。
+ */
+const {
+  verdict: lifeStageVerdict,
+  checkFailed: lifeStageCheckFailed,
+  dogLifeStage: selectedDogRecipeLifeStage0,
+  reminderText: lifeStageReminderText,
+  check: checkLifeStageMatch,
+} = useLifeStageVersion({
+  recipeId: () => recipeId.value,
+  dogId: () => selectedDog.value?.id,
+  applicableStages: () => recipe.value?.applicableLifeStages,
+  dogName: () => selectedDog.value?.name,
+  lifeStage: () => selectedLifeStage.value || undefined,
+  onVerdict: () => {
+    showWarning.value = true
+  },
+})
+
+/** 别名（守卫不解析解构别名，所以单独声明一行） */
+const selectedDogRecipeLifeStage = selectedDogRecipeLifeStage0
+
+/** 页面渲染用的"是否匹配"（composable 里是 computed，这里保持 ref 语义） */
+const isLifeStageMatch = computed(() => !isLifeStageMismatch(lifeStageVerdict.value?.matchType))
 const showWarning = ref(true)
 const pricePreview = ref<PricePreview | null>(null)
 const pricingSnapshotId = ref<string | null>(null)  // ✅ 新增：快照ID
@@ -948,29 +976,15 @@ const healthTagUuidLabelMap = ref<Record<string, string>>({})
  * 与后端口径不一致（认不出混血犬的体型），算不出时还会被当成"匹配"静默放行。
  * 现在改为向后端索取结论，前端只负责展示。
  */
-const lifeStageVerdict = ref<LifeStageMatchVerdict | null>(null)
 
 /**
  * 是否"没能拿到后端结论"（网络/服务异常）。
  * 这种情况**绝不能静默放行** —— 那正是本次重构要消灭的问题；
  * 但也不该误报成"不匹配"，所以单独用一个中性提示。
  */
-const lifeStageCheckFailed = ref(false)
 
 /** 狗狗需要的食谱生命阶段（后端算出来的），用于推荐"切换到 XX" */
-const selectedDogRecipeLifeStage = computed(
-  () => lifeStageVerdict.value?.dogLifeStage || '',
-)
 
-const lifeStageReminderText = computed(() => {
-  // 后端给了说明就用后端的（口径一致）
-  if (lifeStageVerdict.value?.message) return lifeStageVerdict.value.message
-  return buildLifeStageReminderText({
-    applicableStages: recipe.value.applicableLifeStages || [],
-    dogLifeStage: selectedDogRecipeLifeStage.value,
-    dogName: selectedDog.value?.name,
-  })
-})
 
 const normalizedPackagePlan = computed(() =>
   packagePlan.value.map(row => normalizePackagePlanRow(row))
@@ -1491,36 +1505,6 @@ async function loadDogs() {
  * 请求失败时**不静默放行**：把 isLifeStageMatch 置为 false 会让顾客看到提醒，
  * 但提示文案会说明是"无法确认"，避免"该提醒时不提醒"。
  */
-async function checkLifeStageMatch() {
-  const dogId = selectedDog.value?.id
-  if (!dogId || !recipe.value) {
-    lifeStageVerdict.value = null
-    lifeStageCheckFailed.value = false
-    isLifeStageMatch.value = true
-    return
-  }
-
-  const verdict = await fetchLifeStageMatch({
-    recipeId: recipeId.value,
-    dogId,
-    lifeStage: selectedLifeStage.value || undefined,
-  })
-
-  lifeStageVerdict.value = verdict
-
-  if (!verdict) {
-    // 拿不到结论：不假装匹配，也不要误报不匹配 → 走中性提示
-    lifeStageCheckFailed.value = true
-    isLifeStageMatch.value = true
-    return
-  }
-
-  lifeStageCheckFailed.value = false
-
-  isLifeStageMatch.value = !isLifeStageMismatch(verdict.matchType)
-  // 每次切换狗狗时重置警告状态
-  showWarning.value = true
-}
 
 function getHealthTagLabel(tagOrUuid: string): string {
   // 优先使用动态映射（UUID -> label）

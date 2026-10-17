@@ -199,7 +199,7 @@
             <el-input
               v-model="form.sellingPoint"
               placeholder="一句话说明这款食谱的核心卖点（可选，不超过 40 字）"
-              maxlength="40"
+              maxlength="200"
               show-word-limit
               :disabled="isReadOnly"
             />
@@ -1111,7 +1111,7 @@
       />
       <el-form label-width="90px">
         <el-form-item label="一句话卖点">
-          <el-input v-model="aiDraft.sellingPoint" maxlength="40" show-word-limit />
+          <el-input v-model="aiDraft.sellingPoint" maxlength="200" show-word-limit />
         </el-form-item>
         <el-form-item label="详细说明">
           <el-input

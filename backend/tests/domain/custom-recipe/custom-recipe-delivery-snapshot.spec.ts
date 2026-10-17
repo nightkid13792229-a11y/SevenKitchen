@@ -78,8 +78,17 @@ describe('交付内容快照', () => {
         ].sort(),
       );
 
+      // 2026-10-18 新增 sellingPoint（封面下方那句话）与 dog（封面叠的狗信息）
       expect(Object.keys(snapshot.recipe).sort()).toEqual(
-        ['recipeId', 'name', 'coverImageUrl', 'internalId', 'items'].sort(),
+        [
+          'recipeId',
+          'name',
+          'coverImageUrl',
+          'internalId',
+          'sellingPoint',
+          'dog',
+          'items',
+        ].sort(),
       );
       expect(Object.keys(snapshot.feeding).sort()).toEqual(
         ['dailyIntakeG', 'mealsPerDay', 'perMealG', 'cycleDays'].sort(),

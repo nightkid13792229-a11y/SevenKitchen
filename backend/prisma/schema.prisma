@@ -63,10 +63,10 @@ model Order {
 
   /// 本单是"某张订单的重做"：指向原单；为空表示这是一张正常订单。
   /// @unique 保证一张原单最多被重做一次（数据库级防重复）。
-  remakeFromOrderId            String?                     @unique @map("remake_from_order_id")
-  remakeFromOrder              Order?                      @relation("OrderRemake", fields: [remakeFromOrderId], references: [id], onDelete: SetNull)
+  remakeFromOrderId String? @unique @map("remake_from_order_id")
+  remakeFromOrder   Order?  @relation("OrderRemake", fields: [remakeFromOrderId], references: [id], onDelete: SetNull)
   /// 原单反向指向它的重做单
-  remakeOrder                  Order?                      @relation("OrderRemake")
+  remakeOrder       Order?  @relation("OrderRemake")
   /// 本单是"某张现货订单的免费补发"：指向原单；为空表示这是一张正常订单。
   /// 与重做单的区别：重做要走采购→排产→生产，补发是直接从成品库存里再拿一套寄出。
   ///
@@ -75,10 +75,10 @@ model Order {
   /// 所以一张原单历史上可以有多张补发单。真正的防重复是数据库里的
   /// **部分唯一索引**（仅对 status <> 'CANCELLED' 的行生效，见 migration）——
   /// Prisma schema 表达不了部分索引，只能落在 SQL 里。
-  reshipFromOrderId            String?                     @map("reship_from_order_id")
-  reshipFromOrder              Order?                      @relation("OrderReship", fields: [reshipFromOrderId], references: [id], onDelete: SetNull)
+  reshipFromOrderId String? @map("reship_from_order_id")
+  reshipFromOrder   Order?  @relation("OrderReship", fields: [reshipFromOrderId], references: [id], onDelete: SetNull)
   /// 原单反向指向它历史上所有的补发单（有效的最多一张）
-  reshipOrders                 Order[]                     @relation("OrderReship")
+  reshipOrders      Order[] @relation("OrderReship")
 
   @@index([customerId])
   @@index([status])
@@ -91,7 +91,7 @@ model Order {
 // 订单友好短号当日自增序列（SK + YYYYMMDD + -NNN）
 model OrderSequence {
   dateKey String @id @map("date_key") @db.VarChar(8)
-  lastSeq Int    @map("last_seq") @default(0)
+  lastSeq Int    @default(0) @map("last_seq")
 
   @@map("order_sequence")
 }
@@ -387,19 +387,19 @@ model DogBreed {
 }
 
 model Dog {
-  id                   String              @id @default(uuid()) @map("id")
-  ownerId              String              @map("owner_id")
-  name                 String              @map("name")
-  breedId              String              @map("breed_id")
-  birthday             DateTime            @map("birthday")
-  gender               DogGender           @map("gender")
-  isNeutered           Boolean             @map("is_neutered")
-  currentWeightKg      Float               @map("current_weight_kg")
+  id                       String                    @id @default(uuid()) @map("id")
+  ownerId                  String                    @map("owner_id")
+  name                     String                    @map("name")
+  breedId                  String                    @map("breed_id")
+  birthday                 DateTime                  @map("birthday")
+  gender                   DogGender                 @map("gender")
+  isNeutered               Boolean                   @map("is_neutered")
+  currentWeightKg          Float                     @map("current_weight_kg")
   /// 当前体重的最后更新时间。
   /// 2026-09-27 新增：dog 表原本只有 created_at，无法判断"档案里这个体重是什么时候录的"，
   /// 于是「体重超过 60 天就提醒顾客更新」这条规则没有数据基础可算。
   /// 建档时写入；之后每次改档案体重（含从体重记录同步过来）时刷新。
-  weightUpdatedAt      DateTime?           @map("weight_updated_at")
+  weightUpdatedAt          DateTime?                 @map("weight_updated_at")
   /// ===== 繁殖期信息（2026-09-29 新增，阶段 A）=====
   ///
   /// 背景：原来只有 lifeStageOverride 一个枚举，顾客无法把狗切到怀孕/哺乳，
@@ -411,17 +411,17 @@ model Dog {
   ///   · matingDate 是已知事实
   ///   · expectedDueDate 可能是兽医 B 超给出的更准的值（犬孕期均值约 63 天，个体有差异）
   /// 填写任一个即可算出孕周；两者都填时以 expectedDueDate 为准。
-  matingDate           DateTime?           @map("mating_date")
-  expectedDueDate      DateTime?           @map("expected_due_date")
+  matingDate               DateTime?                 @map("mating_date")
+  expectedDueDate          DateTime?                 @map("expected_due_date")
   /// 分娩日：哺乳期分期的唯一依据（产后第几周决定系数 L）。
-  deliveryDate         DateTime?           @map("delivery_date")
+  deliveryDate             DateTime?                 @map("delivery_date")
   /// 窝仔数：哺乳期系数随窝仔数显著变化（1-4 只与 5-8 只公式不同）。
-  litterSize           Int?                @map("litter_size")
-  bcsScore             Int                 @map("bcs_score")
-  activityLevel        ActivityLevel       @map("activity_level")
-  lifeStageOverride    LifeStageOverride   @map("life_stage_override")
-  sizeClassOverride    DogSizeCategory?    @map("size_class_override")
-  mealsPerDay          Int                 @default(2) @map("meals_per_day")
+  litterSize               Int?                      @map("litter_size")
+  bcsScore                 Int                       @map("bcs_score")
+  activityLevel            ActivityLevel             @map("activity_level")
+  lifeStageOverride        LifeStageOverride         @map("life_stage_override")
+  sizeClassOverride        DogSizeCategory?          @map("size_class_override")
+  mealsPerDay              Int                       @default(2) @map("meals_per_day")
   /// 「顾客是否亲自确认过这一项」的时间戳（2026-09-27 新增）。
   ///
   /// 背景：建档表单给体况评分、活动量、每日餐数都预填了默认值并渲染成"已选中"，
@@ -433,16 +433,16 @@ model Dog {
   ///   · 有值 + 未确认 —— 可以正常下单，但**不算满足定制门槛**，进定制页时要求补确认
   ///   · 有值 + 已确认 —— 顾客亲自选过
   /// 老档案不回填（老板决定「不追溯」），因此为 NULL 即"未确认"。
-  bcsScoreConfirmedAt      DateTime? @map("bcs_score_confirmed_at")
+  bcsScoreConfirmedAt      DateTime?                 @map("bcs_score_confirmed_at")
   /// 顾客确认体况分时的体重（2026-09-29，阶段 C8）。
   /// 「体重变化 ≥5% 就提醒重评体况」需要这个基准值，否则只有确认时间、没有参照体重。
-  bcsConfirmedWeightKg     Float?    @map("bcs_confirmed_weight_kg")
-  activityLevelConfirmedAt DateTime? @map("activity_level_confirmed_at")
-  mealsPerDayConfirmedAt   DateTime? @map("meals_per_day_confirmed_at")
-  treatInputMode       TreatInputMode      @default(ESTIMATE_LEVEL) @map("treat_input_mode")
-  treatLevel           TreatLevel          @default(LOW) @map("treat_level")
-  manualTreatKcal      Int?                @map("manual_treat_kcal")
-  medicalHistory       String?             @map("medical_history")
+  bcsConfirmedWeightKg     Float?                    @map("bcs_confirmed_weight_kg")
+  activityLevelConfirmedAt DateTime?                 @map("activity_level_confirmed_at")
+  mealsPerDayConfirmedAt   DateTime?                 @map("meals_per_day_confirmed_at")
+  treatInputMode           TreatInputMode            @default(ESTIMATE_LEVEL) @map("treat_input_mode")
+  treatLevel               TreatLevel                @default(LOW) @map("treat_level")
+  manualTreatKcal          Int?                      @map("manual_treat_kcal")
+  medicalHistory           String?                   @map("medical_history")
   /// 健康标签的人工修正（2026-10-01，第八期）。
   ///
   /// 系统原本只用关键词从病历自由文本里"猜"领域标签（ckd / pancreatitis…），
@@ -451,30 +451,30 @@ model Dog {
   /// 形状：{ "added": ["ckd"], "removed": ["dental"] }
   ///   · 派生标签 − removed + added = 最终标签
   ///   · 只存"人工改了什么"，不存最终结果 —— 病历再变时派生部分照样跟着变
-  healthTagOverrides   Json                @default("{}") @map("health_tag_overrides")
-  preferredFoods       String?             @map("preferred_foods")
-  cachedTargetFoodKcal Int                 @default(0) @map("cached_target_food_kcal")
-  createdAt            DateTime            @default(now()) @map("created_at")
-  customBreedName      String?             @map("custom_breed_name")
-  avatarUrl            String?             @map("avatar_url")
-  allergyFoods         String?             @map("allergy_foods")
-  pickyFoods           String?             @map("picky_foods")
-  allergyRecords       AllergyRecord[]
-  allergyReports       AllergyReport[]
-  allergyTrials        AllergyTrial[]
-  healthShareTokens    DogHealthShareToken[]
-  vaccineDecisions     VaccineDecision[]
-  antibodyTests        AntibodyTestRecord[]
-  dietPreferences      DogDietPreference[]
-  dietPreferenceChanges DogDietPreferenceChange[]
-  checkupRecords       CheckupRecord[]
-  customRecipeOrders   CustomRecipeOrder[] @relation("CustomRecipeOrderDog")
-  owner                User                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  medicalRecords       MedicalRecord[]
-  orders               Order[]
-  vaccineRecords       VaccineRecord[]
-  weightRecords        WeightRecord[]
-  weightGoalPlans      WeightGoalPlan[]
+  healthTagOverrides       Json                      @default("{}") @map("health_tag_overrides")
+  preferredFoods           String?                   @map("preferred_foods")
+  cachedTargetFoodKcal     Int                       @default(0) @map("cached_target_food_kcal")
+  createdAt                DateTime                  @default(now()) @map("created_at")
+  customBreedName          String?                   @map("custom_breed_name")
+  avatarUrl                String?                   @map("avatar_url")
+  allergyFoods             String?                   @map("allergy_foods")
+  pickyFoods               String?                   @map("picky_foods")
+  allergyRecords           AllergyRecord[]
+  allergyReports           AllergyReport[]
+  allergyTrials            AllergyTrial[]
+  healthShareTokens        DogHealthShareToken[]
+  vaccineDecisions         VaccineDecision[]
+  antibodyTests            AntibodyTestRecord[]
+  dietPreferences          DogDietPreference[]
+  dietPreferenceChanges    DogDietPreferenceChange[]
+  checkupRecords           CheckupRecord[]
+  customRecipeOrders       CustomRecipeOrder[]       @relation("CustomRecipeOrderDog")
+  owner                    User                      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  medicalRecords           MedicalRecord[]
+  orders                   Order[]
+  vaccineRecords           VaccineRecord[]
+  weightRecords            WeightRecord[]
+  weightGoalPlans          WeightGoalPlan[]
 
   @@index([ownerId])
   @@index([ownerId, createdAt])
@@ -536,61 +536,61 @@ enum WeightGoalAdjustmentReason {
 }
 
 model WeightGoalPlan {
-  id                       String               @id @default(uuid()) @map("id")
-  dogId                    String               @map("dog_id")
-  direction                WeightGoalDirection  @map("direction")
-  status                   WeightGoalPlanStatus @map("status")
+  id        String               @id @default(uuid()) @map("id")
+  dogId     String               @map("dog_id")
+  direction WeightGoalDirection  @map("direction")
+  status    WeightGoalPlanStatus @map("status")
 
   /// 建立计划时的体重与体况分（留档：以后体况变了也能回溯当时的判断依据）
-  startWeightKg            Float                @map("start_weight_kg")
-  startBcsScore            Int                  @map("start_bcs_score")
+  startWeightKg Float @map("start_weight_kg")
+  startBcsScore Int   @map("start_bcs_score")
 
   /// 目标体重 = 理想体重。
   /// **顾客可自由改、计划期间随时可改**（老板决定：系统算出的目标体重本身有
   /// 不确定性，权限交还顾客；安全由 floorKcal 与自动校正负责，不靠限制输入）。
-  targetWeightKg           Float                @map("target_weight_kg")
+  targetWeightKg          Float @map("target_weight_kg")
   /// 系统最初建议的目标体重。留着是为了在顾客把目标改得离建议 >30% 时提示一次。
-  suggestedTargetWeightKg  Float                @map("suggested_target_weight_kg")
+  suggestedTargetWeightKg Float @map("suggested_target_weight_kg")
 
   /// 当前每日能量目标（kcal）。计划生效期间就是它参与喂食克数换算。
   /// ⚠️ 口径是**毛值**（与算法的 gross 同一层，见需求文档 §3.2 的对比表）——
   /// 零食仍要照常扣减，不能直接当作净食物量。
-  currentKcal              Int                  @map("current_kcal")
+  currentKcal              Int   @map("current_kcal")
   /// 安全下限：不低于 RER(目标体重) × 0.6
   /// （知识库原文：「多数犬可耐受低至理想体重 RER 的 60%」）
-  floorKcal                Int                  @map("floor_kcal")
+  floorKcal                Int   @map("floor_kcal")
   /// 安全上限：增重时不超过维持需求 × 1.4；减重时不超过维持量
-  ceilingKcal              Int                  @map("ceiling_kcal")
+  ceilingKcal              Int   @map("ceiling_kcal")
   /// 目标速率（%/周）。减重取 0.5-2%/周（SACN5），增重同区间。
-  targetRatePercentPerWeek Float                @map("target_rate_percent_per_week")
+  targetRatePercentPerWeek Float @map("target_rate_percent_per_week")
 
   /// ===== 日程 =====
-  startDate                DateTime             @map("start_date")
-  estimatedGoalDate        DateTime?            @map("estimated_goal_date")
+  startDate              DateTime  @map("start_date")
+  estimatedGoalDate      DateTime? @map("estimated_goal_date")
   /// 下次复查日（提醒用）
-  nextReviewDate           DateTime?            @map("next_review_date")
+  nextReviewDate         DateTime? @map("next_review_date")
   /// 最近一次称重日。连续 8 周未称重 → 转 PAUSED。
-  lastWeighInDate          DateTime?            @map("last_weigh_in_date")
+  lastWeighInDate        DateTime? @map("last_weigh_in_date")
   /// 最近一次算出的速率（%/周）。约定：**按体重变化方向带符号 —— 掉重为负、增重为正**
   /// （与顾客看到的口径一致：「最近 2 周：−1.1%/周」）。
   /// 判断「够不够快」时再按 direction 换算成「朝目标推进的速率」，
   /// 见 `domain/dog/weight-goal-plan.ts` 的 `resolveProgressRate`。
-  lastRatePercentPerWeek   Float?               @map("last_rate_percent_per_week")
+  lastRatePercentPerWeek Float?    @map("last_rate_percent_per_week")
 
   /// ===== 状态流转时间戳 =====
-  pausedAt                 DateTime?            @map("paused_at")
+  pausedAt             DateTime? @map("paused_at")
   /// 暂停原因（孕哺联动 / 长期未称重），恢复时清空
-  pausedReason             String?              @map("paused_reason")
-  maintenanceStartedAt     DateTime?            @map("maintenance_started_at")
+  pausedReason         String?   @map("paused_reason")
+  maintenanceStartedAt DateTime? @map("maintenance_started_at")
   /// 维持期满 3 个月 → 自动 COMPLETED
-  completedAt              DateTime?            @map("completed_at")
-  cancelledAt              DateTime?            @map("cancelled_at")
+  completedAt          DateTime? @map("completed_at")
+  cancelledAt          DateTime? @map("cancelled_at")
 
-  createdAt                DateTime             @default(now()) @map("created_at")
-  updatedAt                DateTime             @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  dog                      Dog                          @relation(fields: [dogId], references: [id], onDelete: Cascade)
-  adjustments              WeightGoalPlanAdjustment[]
+  dog         Dog                        @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  adjustments WeightGoalPlanAdjustment[]
 
   /// 「一只狗同时只能有一个未结束的计划」用**部分唯一索引**兜底，
   /// 见 migration.sql —— Prisma schema 表达不了 WHERE 条件。
@@ -614,7 +614,7 @@ model WeightGoalPlanAdjustment {
   note               String?                    @map("note")
   createdAt          DateTime                   @default(now()) @map("created_at")
 
-  plan               WeightGoalPlan             @relation(fields: [planId], references: [id], onDelete: Cascade)
+  plan WeightGoalPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
 
   @@index([planId, createdAt])
   @@map("weight_goal_plan_adjustment")
@@ -636,7 +636,7 @@ model Recipe {
   coverTitle             String?                     @map("cover_title") @db.VarChar(20)
   description            String?                     @map("description")
   /// 一句话卖点（合规文案，由 AI 生成 + 人工确认后保存）
-  sellingPoint           String?                     @map("selling_point") @db.VarChar(120)
+  sellingPoint           String?                     @map("selling_point") @db.VarChar(200)
   detailImages           Json?                       @map("detail_images")
   diyGenCount            Int                         @default(0) @map("diy_gen_count")
   favoriteCount          Int                         @default(0) @map("favorite_count")
@@ -721,7 +721,7 @@ model RecipeItem {
   sortOrder              Int                           @default(0) @map("sort_order")
   exampleWeight          Float?                        @map("example_weight")
   ingredient             Ingredient                    @relation(fields: [ingredientId], references: [id])
-  nutritionFood          NutritionFood?                 @relation(fields: [nutritionFoodId], references: [id])
+  nutritionFood          NutritionFood?                @relation(fields: [nutritionFoodId], references: [id])
   recipe                 Recipe                        @relation(fields: [recipeId, recipeVersion], references: [recipeId, version], onDelete: Cascade)
   supplementAlternatives RecipeSupplementAlternative[]
 
@@ -759,17 +759,17 @@ model DesignSource {
 }
 
 model RecipeHealthTag {
-  id          String                      @id @default(uuid()) @map("id")
-  name        String                      @db.VarChar(100)
-  description String?
-  parentId    String?                     @map("parent_id")
-  sort        Int                         @default(0)
-  color       String?                     @db.VarChar(20)
-  createdAt   DateTime                    @default(now()) @map("created_at")
-  updatedAt   DateTime                    @updatedAt @map("updated_at")
-  parent      RecipeHealthTag?            @relation("HealthTagHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
-  children    RecipeHealthTag[]           @relation("HealthTagHierarchy")
-  assignments RecipeHealthTagAssignment[]
+  id                String                      @id @default(uuid()) @map("id")
+  name              String                      @db.VarChar(100)
+  description       String?
+  parentId          String?                     @map("parent_id")
+  sort              Int                         @default(0)
+  color             String?                     @db.VarChar(20)
+  createdAt         DateTime                    @default(now()) @map("created_at")
+  updatedAt         DateTime                    @updatedAt @map("updated_at")
+  parent            RecipeHealthTag?            @relation("HealthTagHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children          RecipeHealthTag[]           @relation("HealthTagHierarchy")
+  assignments       RecipeHealthTagAssignment[]
   seriesCoverBadges RecipeSeriesCoverBadge[]
 
   @@index([parentId])
@@ -853,23 +853,23 @@ model PreparationMethod {
 }
 
 model ProductionBatch {
-  id                     String                         @id @default(uuid()) @map("id")
-  productionDate         DateTime                       @map("production_date")
-  status                 ProductionBatchStatus          @map("status")
+  id                          String                         @id @default(uuid()) @map("id")
+  productionDate              DateTime                       @map("production_date")
+  status                      ProductionBatchStatus          @map("status")
   /// 批次来源：顾客订单履约 / 试吃装备货
-  source                 ProductionBatchSource          @default(ORDER) @map("source")
+  source                      ProductionBatchSource          @default(ORDER) @map("source")
   /// 备货生产单 ID（订单批次为 null）
-  tastingPackProductionPlanId String?                  @map("tasting_pack_production_plan_id")
-  plannedOutputG         Float?                         @map("planned_output_g")
-  actualOutputG          Float?                         @map("actual_output_g")
-  surplusG               Float?                         @map("surplus_g")
-  shortageG              Float?                         @map("shortage_g")
-  actualCost             Decimal?                       @map("actual_cost") @db.Decimal(10, 2)
-  costSettlementSnapshot Json?                          @map("cost_settlement_snapshot")
-  completedAt            DateTime?                      @map("completed_at")
-  createdAt              DateTime                       @default(now()) @map("created_at")
-  packagingUnits         PackagingUnit[]
-  costSettlement         ProductionBatchCostSettlement?
+  tastingPackProductionPlanId String?                        @map("tasting_pack_production_plan_id")
+  plannedOutputG              Float?                         @map("planned_output_g")
+  actualOutputG               Float?                         @map("actual_output_g")
+  surplusG                    Float?                         @map("surplus_g")
+  shortageG                   Float?                         @map("shortage_g")
+  actualCost                  Decimal?                       @map("actual_cost") @db.Decimal(10, 2)
+  costSettlementSnapshot      Json?                          @map("cost_settlement_snapshot")
+  completedAt                 DateTime?                      @map("completed_at")
+  createdAt                   DateTime                       @default(now()) @map("created_at")
+  packagingUnits              PackagingUnit[]
+  costSettlement              ProductionBatchCostSettlement?
 
   @@index([productionDate])
   @@index([status])
@@ -916,38 +916,38 @@ model PackagingUnit {
 }
 
 model Ingredient {
-  id                            String                        @id @default(uuid())
+  id                            String                         @id @default(uuid())
   name                          String
   type                          IngredientType
-  procurementStrategy           IngredientProcurementStrategy @default(DAILY_PURCHASE) @map("procurement_strategy")
-  diyEnabled                    Boolean                       @default(false) @map("diy_enabled")
-  procurementEnabled            Boolean                       @default(false) @map("procurement_enabled")
-  brand                         String?                       @db.VarChar(100)
-  productModel                  String?                       @map("product_model") @db.VarChar(100)
-  purchaseChannel               String?                       @map("purchase_channel") @db.VarChar(200)
+  procurementStrategy           IngredientProcurementStrategy  @default(DAILY_PURCHASE) @map("procurement_strategy")
+  diyEnabled                    Boolean                        @default(false) @map("diy_enabled")
+  procurementEnabled            Boolean                        @default(false) @map("procurement_enabled")
+  brand                         String?                        @db.VarChar(100)
+  productModel                  String?                        @map("product_model") @db.VarChar(100)
+  purchaseChannel               String?                        @map("purchase_channel") @db.VarChar(200)
   notes                         String?
-  baseUnit                      BaseUnit                      @map("base_unit")
-  unitDisplayLabel              String?                       @map("unit_display_label") @db.VarChar(50)
-  nutritionProfile              Json?                         @map("nutrition_profile")
-  purchaseUnit                  String                        @map("purchase_unit") @db.VarChar(50)
-  purchaseToBaseRatio           Float                         @map("purchase_to_base_ratio")
-  currentPricePerPurchaseUnit   Decimal                       @map("current_price_per_purchase_unit") @db.Decimal(10, 2)
-  effectivePricePerPurchaseUnit Decimal?                      @map("effective_price_per_purchase_unit") @db.Decimal(10, 2)
-  weightG                       Float?                        @map("weight_g")
-  maxCapacityG                  Float?                        @map("max_capacity_g")
-  safetyStock                   Float?                        @map("safety_stock")
-  reorderPoint                  Float?                        @map("reorder_point")
-  targetStock                   Float?                        @map("target_stock")
-  physicalForm                  IngredientPhysicalForm?       @map("physical_form")
+  baseUnit                      BaseUnit                       @map("base_unit")
+  unitDisplayLabel              String?                        @map("unit_display_label") @db.VarChar(50)
+  nutritionProfile              Json?                          @map("nutrition_profile")
+  purchaseUnit                  String                         @map("purchase_unit") @db.VarChar(50)
+  purchaseToBaseRatio           Float                          @map("purchase_to_base_ratio")
+  currentPricePerPurchaseUnit   Decimal                        @map("current_price_per_purchase_unit") @db.Decimal(10, 2)
+  effectivePricePerPurchaseUnit Decimal?                       @map("effective_price_per_purchase_unit") @db.Decimal(10, 2)
+  weightG                       Float?                         @map("weight_g")
+  maxCapacityG                  Float?                         @map("max_capacity_g")
+  safetyStock                   Float?                         @map("safety_stock")
+  reorderPoint                  Float?                         @map("reorder_point")
+  targetStock                   Float?                         @map("target_stock")
+  physicalForm                  IngredientPhysicalForm?        @map("physical_form")
   /// 内容物是否油性（鱼油、鱼肝油等）：分装标签效期取更保守的一档
-  isOilBased                    Boolean                       @default(false) @map("is_oil_based")
-  supplementRetailEnabled       Boolean                       @default(false) @map("supplement_retail_enabled")
-  shelfLifeMonths               Int?                          @map("shelf_life_months")
-  storageCondition              String?                       @map("storage_condition") @db.VarChar(200)
-  openedShelfLifeDays           Int?                          @map("opened_shelf_life_days")
+  isOilBased                    Boolean                        @default(false) @map("is_oil_based")
+  supplementRetailEnabled       Boolean                        @default(false) @map("supplement_retail_enabled")
+  shelfLifeMonths               Int?                           @map("shelf_life_months")
+  storageCondition              String?                        @map("storage_condition") @db.VarChar(200)
+  openedShelfLifeDays           Int?                           @map("opened_shelf_life_days")
   properties                    Json
-  createdAt                     DateTime                      @default(now()) @map("created_at")
-  updatedAt                     DateTime                      @updatedAt @map("updated_at")
+  createdAt                     DateTime                       @default(now()) @map("created_at")
+  updatedAt                     DateTime                       @updatedAt @map("updated_at")
   priceChanges                  IngredientPriceChange[]
   tags                          IngredientTagAssignment[]
   purchaseItems                 PurchaseItem[]
@@ -1364,23 +1364,23 @@ model VaccineDecision {
 /// 只有 targets 含 CORE 且结果合格时，才会影响免疫计划（替代核心疫苗的加强）；
 /// RABIES 只作记录（用途是出行 / 出入境证明），不影响计划。
 model AntibodyTestRecord {
-  id           String              @id @default(uuid()) @map("id")
-  dogId        String              @map("dog_id")
+  id           String             @id @default(uuid()) @map("id")
+  dogId        String             @map("dog_id")
   /// 检测日期
-  testedAt     DateTime            @map("tested_at") @db.Date
+  testedAt     DateTime           @map("tested_at") @db.Date
   /// 检了什么：CORE / RABIES，可多值
-  targets      String[]            @default([]) @map("targets")
-  result       AntibodyTestResult  @default(UNKNOWN) @map("result")
+  targets      String[]           @default([]) @map("targets")
+  result       AntibodyTestResult @default(UNKNOWN) @map("result")
   /// 报告上的原始数值与单位（可空，不强求）
-  value        String?             @map("value")
-  unit         String?             @map("unit")
+  value        String?            @map("value")
+  unit         String?            @map("unit")
   /// 下次评估时间（合格时算：检测日 + 3 年）
-  nextReviewAt DateTime?           @map("next_review_at") @db.Date
-  notes        String?             @map("notes")
-  attachments  String[]            @default([]) @map("attachments")
-  createdAt    DateTime            @default(now()) @map("created_at")
-  updatedAt    DateTime            @updatedAt @map("updated_at")
-  dog          Dog                 @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  nextReviewAt DateTime?          @map("next_review_at") @db.Date
+  notes        String?            @map("notes")
+  attachments  String[]           @default([]) @map("attachments")
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+  dog          Dog                @relation(fields: [dogId], references: [id], onDelete: Cascade)
 
   @@index([dogId])
   @@index([dogId, testedAt])
@@ -1473,17 +1473,17 @@ model WeightRecord {
 }
 
 model VaccineRecord {
-  id              String        @id @default(uuid()) @map("id")
-  dogId           String        @map("dog_id")
-  vaccineName     String        @map("vaccine_name")
-  vaccinationDate DateTime      @map("vaccination_date") @db.Date
-  notes           String?       @map("notes")
+  id              String   @id @default(uuid()) @map("id")
+  dogId           String   @map("dog_id")
+  vaccineName     String   @map("vaccine_name")
+  vaccinationDate DateTime @map("vaccination_date") @db.Date
+  notes           String?  @map("notes")
   /// 报告原件（2026-10-01 新增）。
   /// 拍疫苗本识别出来的记录，把顾客拍的原图一并留档 ——
   /// 疫苗本是接种凭证，出行、寄养、换医院都可能要看原件，
   /// 此前只存了 AI 抄下来的文字，原件丢了就无从对证。
   /// 与 checkup_record / medical_record / allergy_record 同一套存法（URL 数组）。
-  attachments     String[]      @default([]) @map("attachments")
+  attachments     String[] @default([]) @map("attachments")
   /// 这条记录被归成的疫苗类别（2026-10-05）。
   ///
   /// 取值 core / rabies / lepto / other，**可多值** —— 一支组合苗能同时属于
@@ -1494,7 +1494,7 @@ model VaccineRecord {
   /// 我们从此不再提醒，而且没人看得出来为什么。
   ///
   /// 空数组 = 老记录（这一列是后加的），读时按名字兼容推导一次。
-  kinds           String[]      @default([]) @map("kinds")
+  kinds           String[] @default([]) @map("kinds")
   /// 这一针**含哪些病种**（2026-10-06）。
   ///
   /// 取值 cdv / cpv / cav / cpi / rabies / lepto / ccov / bordetella / lyme，可多值。
@@ -1507,25 +1507,23 @@ model VaccineRecord {
   ///
   /// 所以：**病种是顾客看得见、也勾得动的东西**（记录上显示的就是它），
   /// 类别（kinds）由病种推导出来给计划用，不再给顾客看、也不手写。
-  components      String[]      @default([]) @map("components")
+  components      String[] @default([]) @map("components")
   /**
    * 这一针的**产品名有没有被人工核对过**（2026-10-09 安全默认值）。
-   *
    * 背景：AI 可能把贴纸认成**另一支真实存在**的苗（实测：狂犬苗「锐必威」
    * 被读成联苗「优免康」✗）—— 那样系统会以为"狂犬打过了"，从此不再提醒 ✗。
    * 疫苗这件事两个方向的后果不对称：
-   *   · 错算成"没打" → 多提醒一次 ✓ 最多烦一下
-   *   · 错算成"打了" → **狗漏打** ✗✗（狂犬还是法定强制免疫）
+   * · 错算成"没打" → 多提醒一次 ✓ 最多烦一下
+   * · 错算成"打了" → **狗漏打** ✗✗（狂犬还是法定强制免疫）
    * 所以默认倒向安全：**没核对过的记录，不算进计划** ✓
-   *
    * 默认 true（手工填写、老记录都算数 ✓）；
    * 只有"识别出来且我们有理由怀疑"（品牌对不上 / 复核读到不一样的字 / 狂犬）
    * 才落成 false，等顾客点一下「我已对照本子核对」再算数 ✓。
    */
-  productVerified Boolean       @default(true) @map("product_verified")
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt @map("updated_at")
-  dog             Dog           @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  productVerified Boolean  @default(true) @map("product_verified")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  dog             Dog      @relation(fields: [dogId], references: [id], onDelete: Cascade)
 
   @@index([dogId])
   @@index([dogId, vaccinationDate])
@@ -1815,26 +1813,26 @@ enum AllergyCertainty {
 ///   · 再挑战与结论（见 AllergyTrialChallenge）
 /// **不存用药建议、不存系统给出的诊断。**
 model AllergyTrial {
-  id              String                @id @default(uuid()) @map("id")
-  dogId           String                @map("dog_id")
-  status          AllergyTrialStatus    @default(DRAFT) @map("status")
+  id              String                  @id @default(uuid()) @map("id")
+  dogId           String                  @map("dog_id")
+  status          AllergyTrialStatus      @default(DRAFT) @map("status")
   /// 表现方向，决定建议排除期长度
-  direction       AllergyTrialDirection @default(SKIN) @map("direction")
+  direction       AllergyTrialDirection   @default(SKIN) @map("direction")
   /// 这次要排查的过敏原（一般是 1~3 个"怀疑对象"）
-  focusAllergens  String[]              @default([]) @map("focus_allergens")
-  startDate       DateTime?             @map("start_date") @db.Date
-  plannedEndDate  DateTime?             @map("planned_end_date") @db.Date
+  focusAllergens  String[]                @default([]) @map("focus_allergens")
+  startDate       DateTime?               @map("start_date") @db.Date
+  plannedEndDate  DateTime?               @map("planned_end_date") @db.Date
   /// 建议时长（天）。按方向算出来，但允许兽医/顾客调整
-  plannedDays     Int                   @default(42) @map("planned_days")
+  plannedDays     Int                     @default(42) @map("planned_days")
   /// 排除期在喂什么（自由记录：自家某个食谱、或处方粮）
-  currentFoodNote String?               @map("current_food_note")
+  currentFoodNote String?                 @map("current_food_note")
   /// 必守清单的勾选状态：{ noTreats: true, ... }
-  strictRules     Json                  @default("{}") @map("strict_rules")
-  notes           String?               @map("notes")
-  concludedAt     DateTime?             @map("concluded_at")
-  createdAt       DateTime              @default(now()) @map("created_at")
-  updatedAt       DateTime              @updatedAt @map("updated_at")
-  dog             Dog                   @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  strictRules     Json                    @default("{}") @map("strict_rules")
+  notes           String?                 @map("notes")
+  concludedAt     DateTime?               @map("concluded_at")
+  createdAt       DateTime                @default(now()) @map("created_at")
+  updatedAt       DateTime                @updatedAt @map("updated_at")
+  dog             Dog                     @relation(fields: [dogId], references: [id], onDelete: Cascade)
   logs            AllergyTrialLog[]
   challenges      AllergyTrialChallenge[]
 
@@ -1850,19 +1848,19 @@ model AllergyTrial {
 /// 打卡刻意做得很轻：痒不痒、大便怎么样、有没有破戒，三个动作，
 /// 十几秒能完成。太重的话顾客坚持不到 6 周，计划就废了。
 model AllergyTrialLog {
-  id           String       @id @default(uuid()) @map("id")
-  trialId      String       @map("trial_id")
-  logDate      DateTime     @map("log_date") @db.Date
+  id          String       @id @default(uuid()) @map("id")
+  trialId     String       @map("trial_id")
+  logDate     DateTime     @map("log_date") @db.Date
   /// 0 = 不痒，3 = 很痒；null = 当天没记这一项
-  itchScore    Int?         @map("itch_score")
+  itchScore   Int?         @map("itch_score")
   /// 0 = 正常，3 = 拉稀；null = 当天没记这一项
-  stoolScore   Int?         @map("stool_score")
+  stoolScore  Int?         @map("stool_score")
   /// 今天有没有破戒（偷吃 / 有人喂了别的）
-  brokeStrict  Boolean      @default(false) @map("broke_strict")
-  note         String?      @map("note")
-  createdAt    DateTime     @default(now()) @map("created_at")
-  updatedAt    DateTime     @updatedAt @map("updated_at")
-  trial        AllergyTrial @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  brokeStrict Boolean      @default(false) @map("broke_strict")
+  note        String?      @map("note")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  trial       AllergyTrial @relation(fields: [trialId], references: [id], onDelete: Cascade)
 
   @@unique([trialId, logDate])
   @@index([trialId, logDate])
@@ -1979,12 +1977,12 @@ model GlobalConfig {
   /// 否则部署那一刻就等于把功能关了（老板没让关的东西不能自己关 ✗）。
   /// 注意：小程序在**拉不到开关**时一律按"关"处理（宁可少一个功能，
   /// 也不要给错建议 ✓）—— 那条兜底在小程序侧，不在这里。
-  vaccineFeatureEnabled               Boolean  @default(true) @map("vaccine_feature_enabled")
+  vaccineFeatureEnabled      Boolean @default(true) @map("vaccine_feature_enabled")
   /// 关掉疫苗板块时给顾客看的一句话（可空：空 = 不解释，板块直接不出现）
-  vaccineFeatureNotice                String?  @map("vaccine_feature_notice") @db.VarChar(200)
+  vaccineFeatureNotice       String? @map("vaccine_feature_notice") @db.VarChar(200)
   /// 健康报告识别（疫苗本 / 体检 / 病历 / 过敏报告）的**全局每日上限**（B5）。
   /// 0 = 不限量。判断发生在调模型**之前**：超了直接拒绝，一分钱不花 ✓。
-  healthExtractionDailyLimit           Int      @default(500) @map("health_extraction_daily_limit")
+  healthExtractionDailyLimit Int     @default(500) @map("health_extraction_daily_limit")
 
   @@map("global_config")
 }
@@ -2195,27 +2193,27 @@ model NutritionAgentReviewJob {
 }
 
 model PurchaseList {
-  id                   String                @id @default(uuid()) @map("id")
-  targetDate           DateTime              @map("target_date")
-  kind                 PurchaseListKind      @default(ORDER_DEMAND) @map("kind")
-  status               PurchaseListStatus    @map("status")
-  totalEstimatedCost   Decimal               @map("total_estimated_cost") @db.Decimal(10, 2)
-  itemCount            Int                   @map("item_count")
-  createdById          String                @map("created_by_id")
-  sourceOrderIds       String[]              @map("source_order_ids")
+  id                      String                @id @default(uuid()) @map("id")
+  targetDate              DateTime              @map("target_date")
+  kind                    PurchaseListKind      @default(ORDER_DEMAND) @map("kind")
+  status                  PurchaseListStatus    @map("status")
+  totalEstimatedCost      Decimal               @map("total_estimated_cost") @db.Decimal(10, 2)
+  itemCount               Int                   @map("item_count")
+  createdById             String                @map("created_by_id")
+  sourceOrderIds          String[]              @map("source_order_ids")
   /// 备货采购单来源（订单需求采购单为 null）
-  sourceTastingPackPlanId String?            @map("source_tasting_pack_plan_id")
-  reimbursementId      String?               @map("reimbursement_id")
-  createdAt            DateTime              @default(now()) @map("created_at")
-  updatedAt            DateTime              @updatedAt @map("updated_at")
-  completedAt          DateTime?             @map("completed_at")
-  startedAt            DateTime?             @map("started_at")
-  orderDateSnapshot    Json?                 @map("order_date_snapshot")
-  items                PurchaseItem[]
-  inventoryAllocations InventoryAllocation[]
-  createdBy            User                  @relation("PurchaseListCreator", fields: [createdById], references: [id])
-  reimbursement        Reimbursement?        @relation(fields: [reimbursementId], references: [id])
-  records              PurchaseRecord[]      @relation("PurchaseListRecords")
+  sourceTastingPackPlanId String?               @map("source_tasting_pack_plan_id")
+  reimbursementId         String?               @map("reimbursement_id")
+  createdAt               DateTime              @default(now()) @map("created_at")
+  updatedAt               DateTime              @updatedAt @map("updated_at")
+  completedAt             DateTime?             @map("completed_at")
+  startedAt               DateTime?             @map("started_at")
+  orderDateSnapshot       Json?                 @map("order_date_snapshot")
+  items                   PurchaseItem[]
+  inventoryAllocations    InventoryAllocation[]
+  createdBy               User                  @relation("PurchaseListCreator", fields: [createdById], references: [id])
+  reimbursement           Reimbursement?        @relation(fields: [reimbursementId], references: [id])
+  records                 PurchaseRecord[]      @relation("PurchaseListRecords")
 
   @@index([targetDate])
   @@index([kind])
@@ -2418,87 +2416,87 @@ model IngredientPriceChange {
 }
 
 model CustomRecipeOrder {
-  id                    String                   @id @default(uuid()) @map("id")
-  orderId               String                   @unique @map("order_id")
-  customerId            String                   @map("customer_id")
-  dogId                 String                   @map("dog_id")
-  targetGoal            TargetGoal               @map("target_goal")
+  id                    String                @id @default(uuid()) @map("id")
+  orderId               String                @unique @map("order_id")
+  customerId            String                @map("customer_id")
+  dogId                 String                @map("dog_id")
+  targetGoal            TargetGoal            @map("target_goal")
   /// 顾客是否勾选了「需要健康管理」。
   /// 2026-09-28 新增：此前这个勾选被折进 targetGoal（改成 HEALTH_SUPPORT），
   /// 于是"减重 + 需要健康管理"会把减重**丢掉**。老板定的口径是
   /// 「减重/维持/增重以顾客选的为准」，所以两者必须分开存。
-  needsHealthManagement Boolean                  @default(false) @map("needs_health_management")
-  allergies             String[]                 @default([]) @map("allergies")
-  medicalConditions     String[]                 @default([]) @map("medical_conditions")
-  additionalNotes       String?                  @map("additional_notes")
-  preferredIngredients  String[]                 @default([]) @map("preferred_ingredients")
-  dislikedIngredients   String[]                 @default([]) @map("disliked_ingredients")
-  attachments           Json?                    @map("attachments")
-  scheduledDate         DateTime                 @map("scheduled_date") @db.Date
-  estimatedDeliveryDate DateTime?                @map("estimated_delivery_date") @db.Date
-  amount                Decimal                  @default(299) @db.Decimal(10, 2)
+  needsHealthManagement Boolean               @default(false) @map("needs_health_management")
+  allergies             String[]              @default([]) @map("allergies")
+  medicalConditions     String[]              @default([]) @map("medical_conditions")
+  additionalNotes       String?               @map("additional_notes")
+  preferredIngredients  String[]              @default([]) @map("preferred_ingredients")
+  dislikedIngredients   String[]              @default([]) @map("disliked_ingredients")
+  attachments           Json?                 @map("attachments")
+  scheduledDate         DateTime              @map("scheduled_date") @db.Date
+  estimatedDeliveryDate DateTime?             @map("estimated_delivery_date") @db.Date
+  amount                Decimal               @default(299) @db.Decimal(10, 2)
   /// 提交时快照下来的「可抵扣金额」（元）。
   /// 后台调价只影响之后的单，已提交的订单按当时快照执行。
-  creditAmount          Decimal                  @default(300) @map("credit_amount") @db.Decimal(10, 2)
+  creditAmount          Decimal               @default(300) @map("credit_amount") @db.Decimal(10, 2)
   /// 已经用掉的抵扣额度（元）。剩余额度 = credit_amount - credit_used。
-  creditUsed            Decimal                  @default(0) @map("credit_used") @db.Decimal(10, 2)
-  status                CustomRecipeStatus       @default(PENDING_PAYMENT) @map("status")
+  creditUsed            Decimal               @default(0) @map("credit_used") @db.Decimal(10, 2)
+  status                CustomRecipeStatus    @default(PENDING_PAYMENT) @map("status")
   /// 内部子阶段（2026-10-16 批次 1.2）。
   ///
   /// 与主状态解耦：主状态每加一档三个端都要改展示，
   /// 而子阶段**只影响后台工作台** —— 顾客侧永远只看到「制作中」。
   /// 历史订单为 null（不强行塞默认值，免得后台误以为这些单都在待接单）。
-  subStage              CustomRecipeSubStage?    @map("sub_stage")
-  paymentConfirmedAt    DateTime?                @map("payment_confirmed_at")
+  subStage              CustomRecipeSubStage? @map("sub_stage")
+  paymentConfirmedAt    DateTime?             @map("payment_confirmed_at")
   /// 微信支付交易号（对账/客服排查用）
-  paymentTransactionId  String?                  @map("payment_transaction_id")
-  inProgressAt          DateTime?                @map("in_progress_at")
-  deliveredAt           DateTime?                @map("delivered_at")
+  paymentTransactionId  String?               @map("payment_transaction_id")
+  inProgressAt          DateTime?             @map("in_progress_at")
+  deliveredAt           DateTime?             @map("delivered_at")
   /// 关单时间与原因（超时自动关单 / 人工关闭）
-  cancelledAt           DateTime?                @map("cancelled_at")
-  cancellationReason    String?                  @map("cancellation_reason")
-  recipeId              String?                  @unique @map("recipe_id")
-  healthInfoSyncedAt    DateTime?                @map("health_info_synced_at")
+  cancelledAt           DateTime?             @map("cancelled_at")
+  cancellationReason    String?               @map("cancellation_reason")
+  recipeId              String?               @unique @map("recipe_id")
+  healthInfoSyncedAt    DateTime?             @map("health_info_synced_at")
 
   // ===== 2026-10-16 批次 1.2 新增：状态机需要的四个时间/归属字段 =====
 
   /// 完成时间。`COMPLETED` 这一档必须有地方记"什么时候完成的"，
   /// 否则报表与售后窗口都算不出来。
-  completedAt           DateTime?                @map("completed_at")
+  completedAt       DateTime? @map("completed_at")
   /// 预计自动完成时间 = 交付时间 + 配置的自动完成天数。
   /// 定时任务扫这个字段把超期未确认的单转成 COMPLETED。
-  autoCompleteAt        DateTime?                @map("auto_complete_at")
+  autoCompleteAt    DateTime? @map("auto_complete_at")
   /// 接单时间（后台点「接单」时写）
-  acceptedAt            DateTime?                @map("accepted_at")
+  acceptedAt        DateTime? @map("accepted_at")
   /// 处理人。现阶段只有老板一个人接单/设计/交付，留痕用；
   /// 将来加人时不用改表。
-  handledBy             String?                  @map("handled_by")
+  handledBy         String?   @map("handled_by")
   /// 配置化问卷里 `binding=EXTRA` 字段的回答（批次 1.6）。
   ///
   /// 为什么与核心列**双轨**：算法（过敏拦截、能量计算）依赖核心列是强类型的，
   /// 全塞进 JSON 会让 `WHERE allergies && ARRAY['chicken']` 这类查询失效。
   /// 所以核心字段永远有列，后台新加的问答进这里。
-  answers               Json?                    @map("answers")
+  answers           Json?     @map("answers")
   /// 下单时用的表单版本（批次 1.6）—— 便于回溯"当时问的是什么"。
-  formSchemaVersion     Int?                     @map("form_schema_version")
+  formSchemaVersion Int?      @map("form_schema_version")
 
   /// 线上退款（顾客自助取消 → 微信原路退回）。2026-09-28 新增：
   /// 决策 12 要求"还没开始制作就能取消并全额退款"，此前完全没有退款通道。
-  refundStatus          String?                  @map("refund_status") @db.VarChar(20)
-  refundAmount          Decimal?                 @map("refund_amount") @db.Decimal(10, 2)
-  refundOutNo           String?                  @map("refund_out_no") @db.VarChar(64)
-  refundId              String?                  @map("refund_id") @db.VarChar(64)
-  refundReason          String?                  @map("refund_reason") @db.VarChar(200)
-  refundedAt            DateTime?                @map("refunded_at")
+  refundStatus String?   @map("refund_status") @db.VarChar(20)
+  refundAmount Decimal?  @map("refund_amount") @db.Decimal(10, 2)
+  refundOutNo  String?   @map("refund_out_no") @db.VarChar(64)
+  refundId     String?   @map("refund_id") @db.VarChar(64)
+  refundReason String?   @map("refund_reason") @db.VarChar(200)
+  refundedAt   DateTime? @map("refunded_at")
 
-  createdAt             DateTime                 @default(now()) @map("created_at")
-  updatedAt             DateTime                 @updatedAt @map("updated_at")
-  attachmentsRecords    CustomRecipeAttachment[]
-  deliveries            CustomRecipeDelivery[]
-  aftersales            CustomRecipeAftersale[]
-  customer              User                     @relation("CustomRecipeOrderCustomer", fields: [customerId], references: [id], onDelete: Cascade)
-  dog                   Dog                      @relation("CustomRecipeOrderDog", fields: [dogId], references: [id], onDelete: Cascade)
-  recipe                Recipe?                  @relation("CustomRecipeOrders", fields: [recipeId], references: [id])
+  createdAt          DateTime                 @default(now()) @map("created_at")
+  updatedAt          DateTime                 @updatedAt @map("updated_at")
+  attachmentsRecords CustomRecipeAttachment[]
+  deliveries         CustomRecipeDelivery[]
+  aftersales         CustomRecipeAftersale[]
+  customer           User                     @relation("CustomRecipeOrderCustomer", fields: [customerId], references: [id], onDelete: Cascade)
+  dog                Dog                      @relation("CustomRecipeOrderDog", fields: [dogId], references: [id], onDelete: Cascade)
+  recipe             Recipe?                  @relation("CustomRecipeOrders", fields: [recipeId], references: [id])
 
   @@index([customerId])
   @@index([dogId])
@@ -2508,21 +2506,21 @@ model CustomRecipeOrder {
 }
 
 model CustomRecipeSchedule {
-  id              String   @id @default(uuid()) @map("id")
-  date            DateTime @unique @map("date") @db.Date
+  id               String   @id @default(uuid()) @map("id")
+  date             DateTime @unique @map("date") @db.Date
   /// 当天的**接单**容量。与下面的交付容量分开：
   /// 接单是收钱那一刻，交付是交出食谱那一天，对一个人来说这是两件事。
-  capacity        Int      @default(4) @map("capacity")
-  bookedCount     Int      @default(0) @map("booked_count")
+  capacity         Int      @default(4) @map("capacity")
+  bookedCount      Int      @default(0) @map("booked_count")
   /// 当天的**交付**容量（批次 1.6）—— 影响承诺交付日往后排
-  deliveryCapacity Int     @default(4) @map("delivery_capacity")
+  deliveryCapacity Int      @default(4) @map("delivery_capacity")
   /// 当天已占用的交付位（批次 1.6）
-  deliveryCount   Int      @default(0) @map("delivery_count")
-  isAvailable     Boolean  @default(true) @map("is_available")
-  isPublicHoliday Boolean  @default(false) @map("is_public_holiday")
-  notes           String?  @map("notes")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  deliveryCount    Int      @default(0) @map("delivery_count")
+  isAvailable      Boolean  @default(true) @map("is_available")
+  isPublicHoliday  Boolean  @default(false) @map("is_public_holiday")
+  notes            String?  @map("notes")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   @@index([date])
   @@map("custom_recipe_schedule")
@@ -2577,32 +2575,32 @@ model CustomRecipeConfig {
 
   /// 每日交付上限（份）。与「每日接单上限」分开：
   /// 接单是收钱那一刻，交付是交出食谱那一天，对一个人来说这是两件事。
-  dailyDeliveryCapacity Int     @default(4) @map("daily_delivery_capacity")
+  dailyDeliveryCapacity Int @default(4) @map("daily_delivery_capacity")
 
   /// 售后受理窗口（天）：交付后多少天内顾客可以提售后
-  aftersaleWindowDays   Int     @default(30) @map("aftersale_window_days")
+  aftersaleWindowDays    Int @default(30) @map("aftersale_window_days")
   /// 免费调整次数（限交付后 freeRevisionWindowDays 天内）
-  freeRevisionCount     Int     @default(1) @map("free_revision_count")
+  freeRevisionCount      Int @default(1) @map("free_revision_count")
   /// 免费调整的时间窗（天）
-  freeRevisionWindowDays Int    @default(7) @map("free_revision_window_days")
+  freeRevisionWindowDays Int @default(7) @map("free_revision_window_days")
 
   /// 交付后多少天顾客未确认则自动完成（老板 2026-10-16 定为 3 天）
-  autoCompleteDays      Int     @default(3) @map("auto_complete_days")
+  autoCompleteDays       Int      @default(3) @map("auto_complete_days")
   /// 是否要求顾客点「确认收到」（关闭则交付即完成）
-  requireCustomerConfirm Boolean @default(true) @map("require_customer_confirm")
+  requireCustomerConfirm Boolean  @default(true) @map("require_customer_confirm")
   /// 交付物开关：这一版交付里包含哪几样。
   /// 取值是选项集 `custom_recipe_delivery_item` 里的码 —— 后台可开关。
-  deliveryItemCodes     String[] @default(["RECIPE", "SHOPPING_SOP", "NUTRITION_REPORT"]) @map("delivery_item_codes")
+  deliveryItemCodes      String[] @default(["RECIPE", "SHOPPING_SOP", "NUTRITION_REPORT"]) @map("delivery_item_codes")
 
   /// 顾客上传附件的张数上限（小程序原先写死 9 张）
-  attachmentMaxCount    Int     @default(9) @map("attachment_max_count")
+  attachmentMaxCount  Int @default(9) @map("attachment_max_count")
   /// 单个附件大小上限（MB）。原先在**两个控制器里各写一遍 10**
-  attachmentMaxSizeMb   Int     @default(10) @map("attachment_max_size_mb")
+  attachmentMaxSizeMb Int @default(10) @map("attachment_max_size_mb")
 
   /// 后台手工建定制食谱时的默认营养标准（原先写死在控制器里）
-  defaultNutritionStandard String @default("FEDIAF_2025") @map("default_nutrition_standard")
+  defaultNutritionStandard      String  @default("FEDIAF_2025") @map("default_nutrition_standard")
   /// 默认能量密度 kcal/kg（原先写死 3200）
-  defaultEnergyDensityKcalPerKg Int @default(3200) @map("default_energy_density_kcal_per_kg")
+  defaultEnergyDensityKcalPerKg Int     @default(3200) @map("default_energy_density_kcal_per_kg")
   /// 生产损耗率（≥1 的系数）。
   ///
   /// ⚠️ **口径冲突，待老板拍板**：项目里现在有两个值 ——
@@ -2610,16 +2608,16 @@ model CustomRecipeConfig {
   ///   · 后台手工建食谱用 `1.07`（admin-custom-recipe.controller.ts 里写死）
   ///   · 小程序 DIY 制作单按 `7%` 展示给顾客
   /// 本次**先加字段、不改现有两处的取值** —— 改取值会改变生产行为，需老板确认口径。
-  productionLossRate    Decimal @default(1.07) @map("production_loss_rate") @db.Decimal(6, 4)
+  productionLossRate            Decimal @default(1.07) @map("production_loss_rate") @db.Decimal(6, 4)
   /// 默认工时（小时），原先写死 2
-  defaultLaborHours     Decimal @default(2) @map("default_labor_hours") @db.Decimal(6, 2)
+  defaultLaborHours             Decimal @default(2) @map("default_labor_hours") @db.Decimal(6, 2)
 
   /// 排期往前找多少天（原先写死 45）
-  scheduleLookaheadDays Int     @default(45) @map("schedule_lookahead_days")
+  scheduleLookaheadDays Int    @default(45) @map("schedule_lookahead_days")
   /// 占位冲突时最多换几天重试（原先写死 5）
-  slotRetryTimes        Int     @default(5) @map("slot_retry_times")
+  slotRetryTimes        Int    @default(5) @map("slot_retry_times")
   /// 定制单业务编号前缀（原先写死 'CR'）
-  orderNoPrefix         String  @default("CR") @map("order_no_prefix") @db.VarChar(8)
+  orderNoPrefix         String @default("CR") @map("order_no_prefix") @db.VarChar(8)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -2638,49 +2636,49 @@ model CustomRecipeConfig {
 
 /// 一次交付 = 一条记录。同一张订单可以有多条（重新交付、售后修改后再交付）。
 model CustomRecipeDelivery {
-  id              String    @id @default(uuid()) @map("id")
-  orderId         String    @map("order_id")
+  id            String @id @default(uuid()) @map("id")
+  orderId       String @map("order_id")
   /// 第几次交付，从 1 开始；同一订单内唯一
-  version         Int
+  version       Int
   /// 交付出去的那道私密食谱（recipe.id）
-  recipeId        String    @map("recipe_id")
+  recipeId      String @map("recipe_id")
   /// 交付时食谱的版本号快照
-  recipeVersion   Int?      @map("recipe_version")
+  recipeVersion Int?   @map("recipe_version")
 
   /// 【核心】交付时刻**冻结**的内容快照。
   ///
   /// 为什么必须有：现状是"就地覆盖同一行 Recipe"，营养师交付后再改配方，
   /// 顾客下次打开看到的内容会**跟着变**，而且查不到改了哪。
   /// 快照是唯一能回溯的手段。
-  contentSnapshot Json      @map("content_snapshot")
+  contentSnapshot Json @map("content_snapshot")
 
   /// 这一版包含哪些交付物（取值来自选项集 custom_recipe_delivery_item）
-  items           Json      @default("[]")
+  items         Json  @default("[]")
   /// 营养师给定的喂食参数（几餐 / 每餐多少 / 做几天）—— 决定采购量与制作量
-  feedingParams   Json?     @map("feeding_params")
+  feedingParams Json? @map("feeding_params")
 
-  deliveredBy     String    @map("delivered_by")
-  deliveredAt     DateTime  @default(now()) @map("delivered_at")
+  deliveredBy String   @map("delivered_by")
+  deliveredAt DateTime @default(now()) @map("delivered_at")
 
   /// 通知状态：PENDING / SENT / FAILED（失败由定时任务重试）
-  notifyStatus    String?   @map("notify_status") @db.VarChar(20)
-  notifiedAt      DateTime? @map("notified_at")
-  viewedAt        DateTime? @map("viewed_at")
-  confirmedAt     DateTime? @map("confirmed_at")
+  notifyStatus   String?   @map("notify_status") @db.VarChar(20)
+  notifiedAt     DateTime? @map("notified_at")
+  viewedAt       DateTime? @map("viewed_at")
+  confirmedAt    DateTime? @map("confirmed_at")
   /// CUSTOMER（顾客主动确认）/ AUTO（超期自动完成）
-  confirmChannel  String?   @map("confirm_channel") @db.VarChar(20)
+  confirmChannel String?   @map("confirm_channel") @db.VarChar(20)
 
   /// 被哪一版替换（重新交付时指向新版本）；null = 当前有效版本
-  replacedByDeliveryId String? @map("replaced_by_delivery_id")
-  revokedAt       DateTime? @map("revoked_at")
-  revokeReason    String?   @map("revoke_reason") @db.VarChar(200)
+  replacedByDeliveryId String?   @map("replaced_by_delivery_id")
+  revokedAt            DateTime? @map("revoked_at")
+  revokeReason         String?   @map("revoke_reason") @db.VarChar(200)
 
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  order           CustomRecipeOrder      @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  recipe          Recipe                 @relation(fields: [recipeId], references: [id])
-  aftersales      CustomRecipeAftersale[]
+  order      CustomRecipeOrder       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  recipe     Recipe                  @relation(fields: [recipeId], references: [id])
+  aftersales CustomRecipeAftersale[]
 
   @@unique([orderId, version])
   @@index([orderId])
@@ -2692,29 +2690,29 @@ model CustomRecipeDelivery {
 /// 售后单。**独立于订单状态** —— 否则"已交付"与"售后中"会互相覆盖，
 /// 跟现状 `DELIVERED` 是终态一样僵。
 model CustomRecipeAftersale {
-  id            String   @id @default(uuid()) @map("id")
-  orderId       String   @map("order_id")
+  id          String                      @id @default(uuid()) @map("id")
+  orderId     String                      @map("order_id")
   /// 针对哪一版交付提出的（可空：交付前也可能提）
-  deliveryId    String?  @map("delivery_id")
+  deliveryId  String?                     @map("delivery_id")
   /// 类型 —— 取值来自选项集 `custom_recipe_aftersale_type`
-  type          String   @map("type") @db.VarChar(48)
-  status        CustomRecipeAftersaleStatus @default(PENDING)
-  description   String   @db.VarChar(1000)
-  photos        String[] @default([])
+  type        String                      @map("type") @db.VarChar(48)
+  status      CustomRecipeAftersaleStatus @default(PENDING)
+  description String                      @db.VarChar(1000)
+  photos      String[]                    @default([])
 
-  handlerId     String?  @map("handler_id")
-  handleNote    String?  @map("handle_note") @db.VarChar(1000)
-  acceptedAt    DateTime? @map("accepted_at")
-  resolvedAt    DateTime? @map("resolved_at")
+  handlerId        String?   @map("handler_id")
+  handleNote       String?   @map("handle_note") @db.VarChar(1000)
+  acceptedAt       DateTime? @map("accepted_at")
+  resolvedAt       DateTime? @map("resolved_at")
   /// 处理结果是"调整食谱"时，指向重新交付的那一版
-  linkedDeliveryId String? @map("linked_delivery_id")
-  rejectReason  String?  @map("reject_reason") @db.VarChar(200)
+  linkedDeliveryId String?   @map("linked_delivery_id")
+  rejectReason     String?   @map("reject_reason") @db.VarChar(200)
 
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  order         CustomRecipeOrder     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  delivery      CustomRecipeDelivery? @relation(fields: [deliveryId], references: [id])
+  order    CustomRecipeOrder     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  delivery CustomRecipeDelivery? @relation(fields: [deliveryId], references: [id])
 
   @@index([orderId])
   @@index([status])
@@ -2741,12 +2739,12 @@ enum CustomRecipeAftersaleStatus {
 /// 这张表管的是"每周日固定休息"这类规律。
 model CustomRecipeWeekdayRule {
   /// 0 = 周日 … 6 = 周六（与 JS `getDay()` 一致，避免转换出错）
-  weekday          Int     @id
-  isOpen           Boolean @default(true) @map("is_open")
+  weekday          Int      @id
+  isOpen           Boolean  @default(true) @map("is_open")
   /// 留空表示用配置里的全局值
   capacity         Int?
-  deliveryCapacity Int?    @map("delivery_capacity")
-  note             String? @db.VarChar(100)
+  deliveryCapacity Int?     @map("delivery_capacity")
+  note             String?  @db.VarChar(100)
   updatedAt        DateTime @updatedAt @map("updated_at")
 
   @@map("custom_recipe_weekday_rule")
@@ -3056,8 +3054,6 @@ enum GrowthCurveType {
   SLOW
   VERY_SLOW
 }
-
-
 
 enum MedicalStatus {
   /// 待确认：信息来自顾客自述（如定制食谱时填写），系统不替顾客/兽医下判断。
@@ -3380,32 +3376,32 @@ model SearchAliasAuditLog {
 
 /// 营养原料库 - 独立于采购库的完整营养数据
 model NutritionFood {
-  id                String                 @id @default(uuid()) @map("id")
-  name              String                 @map("name") @db.VarChar(200)
-  nameEn            String?                @map("name_en") @db.VarChar(200)
-  displayNameZh           String?          @map("display_name_zh") @db.VarChar(200)
-  displayNameZhSource     String?          @map("display_name_zh_source") @db.VarChar(50)
-  displayNameZhReviewedAt DateTime?        @map("display_name_zh_reviewed_at")
-  displayNameZhReviewedBy String?          @map("display_name_zh_reviewed_by")
-  category          NutritionFoodCategory  @map("category")
-  dataSource        String                 @map("data_source") @db.VarChar(100)
-  externalId        String?                @map("external_id") @db.VarChar(100)
-  version           Int                    @default(1) @map("version")
-  status            NutritionFoodStatus    @default(PENDING) @map("status")
-  preparationState      String?                @map("preparation_state") @db.VarChar(50)
-  preparationStateLabel String?                @map("preparation_state_label") @db.VarChar(100)
-  ediblePortionLabel    String?                @map("edible_portion_label") @db.VarChar(100)
-  processingLabel       String?                @map("processing_label") @db.VarChar(100)
-  nutritionData         Json                   @map("nutrition_data")
-  notes                 String?                @map("notes")
-  createdBy             String?                @map("created_by")
-  verifiedBy            String?                @map("verified_by")
-  verifiedAt            DateTime?              @map("verified_at")
-  createdAt             DateTime               @default(now()) @map("created_at")
-  updatedAt             DateTime               @updatedAt @map("updated_at")
-  mappings          NutritionFoodMapping[]
-  recipeItems       RecipeItem[]
-  designRecipeItems DesignRecipeItem[]
+  id                      String                 @id @default(uuid()) @map("id")
+  name                    String                 @map("name") @db.VarChar(200)
+  nameEn                  String?                @map("name_en") @db.VarChar(200)
+  displayNameZh           String?                @map("display_name_zh") @db.VarChar(200)
+  displayNameZhSource     String?                @map("display_name_zh_source") @db.VarChar(50)
+  displayNameZhReviewedAt DateTime?              @map("display_name_zh_reviewed_at")
+  displayNameZhReviewedBy String?                @map("display_name_zh_reviewed_by")
+  category                NutritionFoodCategory  @map("category")
+  dataSource              String                 @map("data_source") @db.VarChar(100)
+  externalId              String?                @map("external_id") @db.VarChar(100)
+  version                 Int                    @default(1) @map("version")
+  status                  NutritionFoodStatus    @default(PENDING) @map("status")
+  preparationState        String?                @map("preparation_state") @db.VarChar(50)
+  preparationStateLabel   String?                @map("preparation_state_label") @db.VarChar(100)
+  ediblePortionLabel      String?                @map("edible_portion_label") @db.VarChar(100)
+  processingLabel         String?                @map("processing_label") @db.VarChar(100)
+  nutritionData           Json                   @map("nutrition_data")
+  notes                   String?                @map("notes")
+  createdBy               String?                @map("created_by")
+  verifiedBy              String?                @map("verified_by")
+  verifiedAt              DateTime?              @map("verified_at")
+  createdAt               DateTime               @default(now()) @map("created_at")
+  updatedAt               DateTime               @updatedAt @map("updated_at")
+  mappings                NutritionFoodMapping[]
+  recipeItems             RecipeItem[]
+  designRecipeItems       DesignRecipeItem[]
 
   @@unique([name, dataSource, version])
   @@index([category])
@@ -3435,20 +3431,20 @@ model NutritionFoodMapping {
 }
 
 model NutritionSourceRecord {
-  id                  String                           @id @default(uuid()) @map("id")
-  sourceType          NutritionGovernanceSourceType    @map("source_type")
-  sourceKey           String                           @map("source_key") @db.VarChar(200)
-  sourceTitle         String                           @map("source_title") @db.VarChar(300)
-  sourceDetail        Json?                            @map("source_detail")
-  foodName            String                           @map("food_name") @db.VarChar(300)
-  foodNameEn          String?                          @map("food_name_en") @db.VarChar(300)
-  dataType            String?                          @map("data_type") @db.VarChar(100)
-  category            String?                          @map("category") @db.VarChar(100)
-  rawData             Json                             @map("raw_data")
-  normalizedNutrition Json?                            @map("normalized_nutrition")
-  status              NutritionGovernanceRecordStatus  @default(ACTIVE) @map("status")
-  createdAt           DateTime                         @default(now()) @map("created_at")
-  updatedAt           DateTime                         @updatedAt @map("updated_at")
+  id                  String                          @id @default(uuid()) @map("id")
+  sourceType          NutritionGovernanceSourceType   @map("source_type")
+  sourceKey           String                          @map("source_key") @db.VarChar(200)
+  sourceTitle         String                          @map("source_title") @db.VarChar(300)
+  sourceDetail        Json?                           @map("source_detail")
+  foodName            String                          @map("food_name") @db.VarChar(300)
+  foodNameEn          String?                         @map("food_name_en") @db.VarChar(300)
+  dataType            String?                         @map("data_type") @db.VarChar(100)
+  category            String?                         @map("category") @db.VarChar(100)
+  rawData             Json                            @map("raw_data")
+  normalizedNutrition Json?                           @map("normalized_nutrition")
+  status              NutritionGovernanceRecordStatus @default(ACTIVE) @map("status")
+  createdAt           DateTime                        @default(now()) @map("created_at")
+  updatedAt           DateTime                        @updatedAt @map("updated_at")
   candidates          IngredientNutritionCandidate[]
   supplementDrafts    SupplementNutritionDraft[]
 
@@ -3460,31 +3456,31 @@ model NutritionSourceRecord {
 }
 
 model IngredientNutritionCandidate {
-  id                   String                    @id @default(uuid()) @map("id")
-  ingredientId         String                    @map("ingredient_id")
-  sourceRecordId       String                    @map("source_record_id")
-  sourcePriority       Int                       @map("source_priority")
-  confidence           NutritionMatchConfidence  @map("confidence")
-  score                Float                     @map("score")
-  matchReasons         Json                      @map("match_reasons")
-  agentReview          Json?                     @map("agent_review")
-  agentReviewStatus    String?                   @map("agent_review_status") @db.VarChar(40)
-  hardGateResults      Json?                     @map("hard_gate_results")
-  reviewGroup          String?                   @map("review_group") @db.VarChar(40)
-  preparationState     String?                   @map("preparation_state") @db.VarChar(50)
+  id                    String                   @id @default(uuid()) @map("id")
+  ingredientId          String                   @map("ingredient_id")
+  sourceRecordId        String                   @map("source_record_id")
+  sourcePriority        Int                      @map("source_priority")
+  confidence            NutritionMatchConfidence @map("confidence")
+  score                 Float                    @map("score")
+  matchReasons          Json                     @map("match_reasons")
+  agentReview           Json?                    @map("agent_review")
+  agentReviewStatus     String?                  @map("agent_review_status") @db.VarChar(40)
+  hardGateResults       Json?                    @map("hard_gate_results")
+  reviewGroup           String?                  @map("review_group") @db.VarChar(40)
+  preparationState      String?                  @map("preparation_state") @db.VarChar(50)
   preparationStateLabel String?                  @map("preparation_state_label") @db.VarChar(100)
-  ediblePortionLabel   String?                   @map("edible_portion_label") @db.VarChar(100)
-  processingLabel      String?                   @map("processing_label") @db.VarChar(100)
-  reviewNote           String?                   @map("review_note")
-  normalizedNutrition  Json                      @map("normalized_nutrition")
-  status               NutritionCandidateStatus  @default(CANDIDATE) @map("status")
-  confirmationSnapshot Json?                     @map("confirmation_snapshot")
-  confirmedBy          String?                   @map("confirmed_by")
-  confirmedAt          DateTime?                 @map("confirmed_at")
-  createdAt            DateTime                  @default(now()) @map("created_at")
-  updatedAt            DateTime                  @updatedAt @map("updated_at")
-  ingredient           Ingredient                @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
-  sourceRecord         NutritionSourceRecord     @relation(fields: [sourceRecordId], references: [id], onDelete: Cascade)
+  ediblePortionLabel    String?                  @map("edible_portion_label") @db.VarChar(100)
+  processingLabel       String?                  @map("processing_label") @db.VarChar(100)
+  reviewNote            String?                  @map("review_note")
+  normalizedNutrition   Json                     @map("normalized_nutrition")
+  status                NutritionCandidateStatus @default(CANDIDATE) @map("status")
+  confirmationSnapshot  Json?                    @map("confirmation_snapshot")
+  confirmedBy           String?                  @map("confirmed_by")
+  confirmedAt           DateTime?                @map("confirmed_at")
+  createdAt             DateTime                 @default(now()) @map("created_at")
+  updatedAt             DateTime                 @updatedAt @map("updated_at")
+  ingredient            Ingredient               @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  sourceRecord          NutritionSourceRecord    @relation(fields: [sourceRecordId], references: [id], onDelete: Cascade)
 
   @@unique([ingredientId, sourceRecordId])
   @@index([ingredientId])
@@ -3497,23 +3493,23 @@ model IngredientNutritionCandidate {
 }
 
 model SupplementNutritionDraft {
-  id                  String                          @id @default(uuid()) @map("id")
-  ingredientId        String                          @map("ingredient_id")
-  sourceRecordId      String?                         @map("source_record_id")
-  imageUrl            String                          @map("image_url")
-  imageKey            String                          @map("image_key") @db.VarChar(300)
-  ocrText             String?                         @map("ocr_text")
-  aiExtraction        Json                            @map("ai_extraction")
-  normalizedNutrition Json?                           @map("normalized_nutrition")
-  missingFields       String[]                        @default([]) @map("missing_fields")
-  status              SupplementNutritionDraftStatus  @default(DRAFT) @map("status")
-  createdBy           String?                         @map("created_by")
-  confirmedBy         String?                         @map("confirmed_by")
-  confirmedAt         DateTime?                       @map("confirmed_at")
-  createdAt           DateTime                        @default(now()) @map("created_at")
-  updatedAt           DateTime                        @updatedAt @map("updated_at")
-  ingredient          Ingredient                      @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
-  sourceRecord        NutritionSourceRecord?          @relation(fields: [sourceRecordId], references: [id], onDelete: SetNull)
+  id                  String                         @id @default(uuid()) @map("id")
+  ingredientId        String                         @map("ingredient_id")
+  sourceRecordId      String?                        @map("source_record_id")
+  imageUrl            String                         @map("image_url")
+  imageKey            String                         @map("image_key") @db.VarChar(300)
+  ocrText             String?                        @map("ocr_text")
+  aiExtraction        Json                           @map("ai_extraction")
+  normalizedNutrition Json?                          @map("normalized_nutrition")
+  missingFields       String[]                       @default([]) @map("missing_fields")
+  status              SupplementNutritionDraftStatus @default(DRAFT) @map("status")
+  createdBy           String?                        @map("created_by")
+  confirmedBy         String?                        @map("confirmed_by")
+  confirmedAt         DateTime?                      @map("confirmed_at")
+  createdAt           DateTime                       @default(now()) @map("created_at")
+  updatedAt           DateTime                       @updatedAt @map("updated_at")
+  ingredient          Ingredient                     @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  sourceRecord        NutritionSourceRecord?         @relation(fields: [sourceRecordId], references: [id], onDelete: SetNull)
 
   @@index([ingredientId])
   @@index([sourceRecordId])
@@ -3523,44 +3519,44 @@ model SupplementNutritionDraft {
 
 /// 设计配方 - 配方设计工作台
 model DesignRecipe {
-  id                     String                        @id @default(uuid()) @map("id")
-  name                   String                        @map("name") @db.VarChar(200)
-  version                Int                           @default(1) @map("version")
-  contentRevision        Int                           @default(0) @map("content_revision")
-  status                 DesignRecipeStatus            @default(DRAFT) @map("status")
-  fediafDogScenario      FediafDogScenario             @default(ADULT_MER_110) @map("fediaf_dog_scenario")
-  energyDensityKcalPerKg Float?                        @map("energy_density_kcal_per_kg")
-  totalWeightG           Float                         @default(0) @map("total_weight_g")
-  nutritionStandard      String                        @default("FEDIAF_2025") @map("nutrition_standard")
-  calculatedNutrition    Json                          @default("{}") @map("calculated_nutrition")
-  complianceStatus       Json                          @default("{}") @map("compliance_status")
-  assessmentSummary      Json                          @default("{}") @map("assessment_summary")
-  missingDataReport      Json                          @default("[]") @map("missing_data_report")
-  complianceScore        Float                         @default(0) @map("compliance_score")
-  isCompliant            Boolean                       @default(false) @map("is_compliant")
-  reviewStatus           DesignRecipeReviewStatus      @default(NONE) @map("review_status")
-  reviewNote             String?                       @map("review_note")
-  reviewedBy             String?                       @map("reviewed_by")
-  reviewedAt             DateTime?                     @map("reviewed_at")
-  targetHealthTags       String[]                      @default([]) @map("target_health_tags")
-  applicableLifeStages   String[]                      @default([]) @map("applicable_life_stages")
-  notes                  String?                       @map("notes")
-  createdBy              String                        @map("created_by")
-  publishedAt            DateTime?                     @map("published_at")
-  publishedRecipeId      String?                       @map("published_recipe_id")
-  publishedRecipeVersion Int?                          @map("published_recipe_version")
-  revisionOfDesignRecipeId String?                     @map("revision_of_design_recipe_id")
-  revisionBaseRecipeId   String?                       @map("revision_base_recipe_id")
-  seriesId               String?                       @map("series_id")
-  seriesLifeStage        String?                       @map("series_life_stage")
-  customerDogId          String?                       @map("customer_dog_id")
-  createdAt              DateTime                      @default(now()) @map("created_at")
-  updatedAt              DateTime                      @updatedAt @map("updated_at")
-  items                  DesignRecipeItem[]
-  aiGenerationLog        DesignRecipeAIGenerationLog?
-  aiDesignData           DesignRecipeAiDesignData?
-  publishSnapshots       DesignRecipePublishSnapshot[]
-  series                 RecipeSeries?                 @relation(fields: [seriesId], references: [id])
+  id                       String                        @id @default(uuid()) @map("id")
+  name                     String                        @map("name") @db.VarChar(200)
+  version                  Int                           @default(1) @map("version")
+  contentRevision          Int                           @default(0) @map("content_revision")
+  status                   DesignRecipeStatus            @default(DRAFT) @map("status")
+  fediafDogScenario        FediafDogScenario             @default(ADULT_MER_110) @map("fediaf_dog_scenario")
+  energyDensityKcalPerKg   Float?                        @map("energy_density_kcal_per_kg")
+  totalWeightG             Float                         @default(0) @map("total_weight_g")
+  nutritionStandard        String                        @default("FEDIAF_2025") @map("nutrition_standard")
+  calculatedNutrition      Json                          @default("{}") @map("calculated_nutrition")
+  complianceStatus         Json                          @default("{}") @map("compliance_status")
+  assessmentSummary        Json                          @default("{}") @map("assessment_summary")
+  missingDataReport        Json                          @default("[]") @map("missing_data_report")
+  complianceScore          Float                         @default(0) @map("compliance_score")
+  isCompliant              Boolean                       @default(false) @map("is_compliant")
+  reviewStatus             DesignRecipeReviewStatus      @default(NONE) @map("review_status")
+  reviewNote               String?                       @map("review_note")
+  reviewedBy               String?                       @map("reviewed_by")
+  reviewedAt               DateTime?                     @map("reviewed_at")
+  targetHealthTags         String[]                      @default([]) @map("target_health_tags")
+  applicableLifeStages     String[]                      @default([]) @map("applicable_life_stages")
+  notes                    String?                       @map("notes")
+  createdBy                String                        @map("created_by")
+  publishedAt              DateTime?                     @map("published_at")
+  publishedRecipeId        String?                       @map("published_recipe_id")
+  publishedRecipeVersion   Int?                          @map("published_recipe_version")
+  revisionOfDesignRecipeId String?                       @map("revision_of_design_recipe_id")
+  revisionBaseRecipeId     String?                       @map("revision_base_recipe_id")
+  seriesId                 String?                       @map("series_id")
+  seriesLifeStage          String?                       @map("series_life_stage")
+  customerDogId            String?                       @map("customer_dog_id")
+  createdAt                DateTime                      @default(now()) @map("created_at")
+  updatedAt                DateTime                      @updatedAt @map("updated_at")
+  items                    DesignRecipeItem[]
+  aiGenerationLog          DesignRecipeAIGenerationLog?
+  aiDesignData             DesignRecipeAiDesignData?
+  publishSnapshots         DesignRecipePublishSnapshot[]
+  series                   RecipeSeries?                 @relation(fields: [seriesId], references: [id])
 
   @@unique([name, version])
   @@index([status])
@@ -3695,21 +3691,21 @@ enum NutritionStandardReviewStatus {
 }
 
 model NutritionStandardVersion {
-  id               String                    @id @default(uuid()) @map("id")
-  code             String                    @unique @map("code") @db.VarChar(80)
-  standardCode     String                    @map("standard_code") @db.VarChar(50)
-  name             String                    @map("name") @db.VarChar(120)
-  species          NutritionStandardSpecies  @map("species")
-  publicationMonth String                    @map("publication_month") @db.VarChar(7)
-  sourceTitle      String                    @map("source_title") @db.VarChar(300)
-  sourceUrl        String                    @map("source_url") @db.VarChar(500)
-  pdfUrl           String                    @map("pdf_url") @db.VarChar(500)
-  importBatch      String                    @map("import_batch") @db.VarChar(80)
-  importStatus     String                    @default("IMPORTED") @map("import_status") @db.VarChar(40)
-  isActive         Boolean                   @default(true) @map("is_active")
-  importedAt       DateTime                  @default(now()) @map("imported_at")
-  createdAt        DateTime                  @default(now()) @map("created_at")
-  updatedAt        DateTime                  @updatedAt @map("updated_at")
+  id               String                   @id @default(uuid()) @map("id")
+  code             String                   @unique @map("code") @db.VarChar(80)
+  standardCode     String                   @map("standard_code") @db.VarChar(50)
+  name             String                   @map("name") @db.VarChar(120)
+  species          NutritionStandardSpecies @map("species")
+  publicationMonth String                   @map("publication_month") @db.VarChar(7)
+  sourceTitle      String                   @map("source_title") @db.VarChar(300)
+  sourceUrl        String                   @map("source_url") @db.VarChar(500)
+  pdfUrl           String                   @map("pdf_url") @db.VarChar(500)
+  importBatch      String                   @map("import_batch") @db.VarChar(80)
+  importStatus     String                   @default("IMPORTED") @map("import_status") @db.VarChar(40)
+  isActive         Boolean                  @default(true) @map("is_active")
+  importedAt       DateTime                 @default(now()) @map("imported_at")
+  createdAt        DateTime                 @default(now()) @map("created_at")
+  updatedAt        DateTime                 @updatedAt @map("updated_at")
   entries          NutritionStandardEntry[]
 
   @@unique([id, species])
@@ -3719,21 +3715,21 @@ model NutritionStandardVersion {
 }
 
 model NutritionNutrientDefinition {
-  id                    String                    @id @default(uuid()) @map("id")
-  code                  String                    @unique @map("code") @db.VarChar(80)
-  fieldPath             String?                   @map("field_path") @db.VarChar(120)
-  name                  String                    @map("name") @db.VarChar(120)
-  nameEn                String                    @map("name_en") @db.VarChar(160)
-  category              String                    @map("category") @db.VarChar(60)
-  defaultIngredientUnit String?                   @map("default_ingredient_unit") @db.VarChar(20)
-  defaultStandardUnit   String                    @map("default_standard_unit") @db.VarChar(30)
-  isDirect              Boolean                   @default(true) @map("is_direct")
-  isDerived             Boolean                   @default(false) @map("is_derived")
-  expression            Json?                     @map("expression")
-  sortOrder             Int                       @default(0) @map("sort_order")
-  isActive              Boolean                   @default(true) @map("is_active")
-  createdAt             DateTime                  @default(now()) @map("created_at")
-  updatedAt             DateTime                  @updatedAt @map("updated_at")
+  id                    String                   @id @default(uuid()) @map("id")
+  code                  String                   @unique @map("code") @db.VarChar(80)
+  fieldPath             String?                  @map("field_path") @db.VarChar(120)
+  name                  String                   @map("name") @db.VarChar(120)
+  nameEn                String                   @map("name_en") @db.VarChar(160)
+  category              String                   @map("category") @db.VarChar(60)
+  defaultIngredientUnit String?                  @map("default_ingredient_unit") @db.VarChar(20)
+  defaultStandardUnit   String                   @map("default_standard_unit") @db.VarChar(30)
+  isDirect              Boolean                  @default(true) @map("is_direct")
+  isDerived             Boolean                  @default(false) @map("is_derived")
+  expression            Json?                    @map("expression")
+  sortOrder             Int                      @default(0) @map("sort_order")
+  isActive              Boolean                  @default(true) @map("is_active")
+  createdAt             DateTime                 @default(now()) @map("created_at")
+  updatedAt             DateTime                 @updatedAt @map("updated_at")
   standardEntries       NutritionStandardEntry[]
 
   @@index([category])
@@ -3742,30 +3738,30 @@ model NutritionNutrientDefinition {
 }
 
 model NutritionStandardEntry {
-  id                 String                           @id @default(uuid()) @map("id")
-  versionId          String                           @map("version_id")
-  nutrientId         String                           @map("nutrient_id")
-  fediafName         String                           @map("fediaf_name") @db.VarChar(160)
-  category           String                           @map("category") @db.VarChar(60)
-  sourceTable        String                           @map("source_table") @db.VarChar(20)
-  sourceType         NutritionStandardEntrySourceType @map("source_type")
-  pdfPage            Int                              @map("pdf_page")
-  species            NutritionStandardSpecies         @map("species")
-  lifeStage          String                           @map("life_stage") @db.VarChar(80)
-  basis              NutritionStandardBasis           @map("basis")
-  unit               String                           @map("unit") @db.VarChar(30)
-  minValue           Float?                           @map("min_value")
-  maxValue           Float?                           @map("max_value")
-  recommendedValue   Float?                           @map("recommended_value")
-  maxType            NutritionStandardMaxType         @default(UNSPECIFIED) @map("max_type")
-  footnoteRefs       String[]                         @default([]) @map("footnote_refs")
-  notes              String?                          @map("notes")
-  sortOrder          Int                              @default(0) @map("sort_order")
-  createdAt          DateTime                         @default(now()) @map("created_at")
-  updatedAt          DateTime                         @updatedAt @map("updated_at")
-  version            NutritionStandardVersion         @relation(fields: [versionId, species], references: [id, species], onDelete: Cascade)
-  nutrient           NutritionNutrientDefinition      @relation(fields: [nutrientId], references: [id])
-  reviewEvents       NutritionStandardReviewEvent[]
+  id               String                           @id @default(uuid()) @map("id")
+  versionId        String                           @map("version_id")
+  nutrientId       String                           @map("nutrient_id")
+  fediafName       String                           @map("fediaf_name") @db.VarChar(160)
+  category         String                           @map("category") @db.VarChar(60)
+  sourceTable      String                           @map("source_table") @db.VarChar(20)
+  sourceType       NutritionStandardEntrySourceType @map("source_type")
+  pdfPage          Int                              @map("pdf_page")
+  species          NutritionStandardSpecies         @map("species")
+  lifeStage        String                           @map("life_stage") @db.VarChar(80)
+  basis            NutritionStandardBasis           @map("basis")
+  unit             String                           @map("unit") @db.VarChar(30)
+  minValue         Float?                           @map("min_value")
+  maxValue         Float?                           @map("max_value")
+  recommendedValue Float?                           @map("recommended_value")
+  maxType          NutritionStandardMaxType         @default(UNSPECIFIED) @map("max_type")
+  footnoteRefs     String[]                         @default([]) @map("footnote_refs")
+  notes            String?                          @map("notes")
+  sortOrder        Int                              @default(0) @map("sort_order")
+  createdAt        DateTime                         @default(now()) @map("created_at")
+  updatedAt        DateTime                         @updatedAt @map("updated_at")
+  version          NutritionStandardVersion         @relation(fields: [versionId, species], references: [id, species], onDelete: Cascade)
+  nutrient         NutritionNutrientDefinition      @relation(fields: [nutrientId], references: [id])
+  reviewEvents     NutritionStandardReviewEvent[]
 
   @@unique([versionId, nutrientId, sourceTable, lifeStage, basis, unit])
   @@index([versionId])
@@ -3837,55 +3833,55 @@ model FeedbackReply {
 /// 设计文档：docs/plans/2026-09-18-supplement-shop-design.md
 /// 刻意与鲜食的 GlobalConfig 解耦：补剂的倍率/服务费/运费策略独立可调。
 model SupplementShopConfig {
-  id                        String                       @id @default("singleton") @map("id")
-  enabled                   Boolean                      @default(false) @map("enabled")
+  id      String  @id @default("singleton") @map("id")
+  enabled Boolean @default(false) @map("enabled")
 
   // ---- 定价 ----
-  markupMultiplier          Decimal                      @default(2.0) @map("markup_multiplier") @db.Decimal(6, 2)
-  serviceFeeMode            SupplementServiceFeeMode     @default(PER_ORDER) @map("service_fee_mode")
-  serviceFeeAmount          Decimal                      @default(9.9) @map("service_fee_amount") @db.Decimal(10, 2)
-  packagingFeePerBag        Decimal                      @default(0) @map("packaging_fee_per_bag") @db.Decimal(10, 2)
-  priceRoundingMode         SupplementPriceRoundingMode  @default(CEIL_TO_0_1) @map("price_rounding_mode")
-  minOrderAmount            Decimal                      @default(0) @map("min_order_amount") @db.Decimal(10, 2)
-  roundUpUsage              Boolean                      @default(true) @map("round_up_usage")
+  markupMultiplier   Decimal                     @default(2.0) @map("markup_multiplier") @db.Decimal(6, 2)
+  serviceFeeMode     SupplementServiceFeeMode    @default(PER_ORDER) @map("service_fee_mode")
+  serviceFeeAmount   Decimal                     @default(9.9) @map("service_fee_amount") @db.Decimal(10, 2)
+  packagingFeePerBag Decimal                     @default(0) @map("packaging_fee_per_bag") @db.Decimal(10, 2)
+  priceRoundingMode  SupplementPriceRoundingMode @default(CEIL_TO_0_1) @map("price_rounding_mode")
+  minOrderAmount     Decimal                     @default(0) @map("min_order_amount") @db.Decimal(10, 2)
+  roundUpUsage       Boolean                     @default(true) @map("round_up_usage")
 
   // ---- 加量（2026-09-24）----
   /// 用户一次最多买几份（每份 = 每个补剂多做一袋同样规格的小袋）
-  maxPortionMultiplier      Int                          @default(3) @map("max_portion_multiplier")
+  maxPortionMultiplier Int @default(3) @map("max_portion_multiplier")
   /// 一次购买覆盖的总天数上限。效期安全红线：粉剂分装效期 6 个月 = 180 天，
   /// 默认 90 天正好用一半，留足余量。
-  maxTotalDays              Int                          @default(90) @map("max_total_days")
+  maxTotalDays         Int @default(90) @map("max_total_days")
 
   // ---- 支付超时（2026-09-24 与鲜食解耦）----
   /// 补剂订单的支付超时（分钟）。**与鲜食订单各自独立**：
   /// 两种生意的节奏不一样，共用一个值会让调一边影响另一边。
   /// 0 表示不自动关单。
-  paymentTimeoutMinutes     Int                          @default(30) @map("payment_timeout_minutes")
+  paymentTimeoutMinutes Int @default(30) @map("payment_timeout_minutes")
 
   // ---- 运费 ----
-  shippingMode              SupplementShippingMode       @default(FLAT_RATE) @map("shipping_mode")
-  flatShippingFee           Decimal                      @default(8.0) @map("flat_shipping_fee") @db.Decimal(10, 2)
-  shippingTemplateId        String?                      @map("shipping_template_id")
-  freeShippingThreshold     Decimal?                     @map("free_shipping_threshold") @db.Decimal(10, 2)
+  shippingMode          SupplementShippingMode @default(FLAT_RATE) @map("shipping_mode")
+  flatShippingFee       Decimal                @default(8.0) @map("flat_shipping_fee") @db.Decimal(10, 2)
+  shippingTemplateId    String?                @map("shipping_template_id")
+  freeShippingThreshold Decimal?               @map("free_shipping_threshold") @db.Decimal(10, 2)
 
   // ---- 分装有效期 ----
-  powderShelfLifeMonths     Int                          @default(6) @map("powder_shelf_life_months")
-  solidShelfLifeMonths      Int                          @default(9) @map("solid_shelf_life_months")
+  powderShelfLifeMonths     Int @default(6) @map("powder_shelf_life_months")
+  solidShelfLifeMonths      Int @default(9) @map("solid_shelf_life_months")
   /// 油性软胶囊（鱼油/鱼肝油等）的分装效期，比固体系数更保守
-  oilShelfLifeMonths        Int                          @default(6) @map("oil_shelf_life_months")
-  minRemainingShelfLifeDays Int                          @default(90) @map("min_remaining_shelf_life_days")
+  oilShelfLifeMonths        Int @default(6) @map("oil_shelf_life_months")
+  minRemainingShelfLifeDays Int @default(90) @map("min_remaining_shelf_life_days")
 
   // ---- 售后 ----
-  aftersalePolicy           String?                      @map("aftersale_policy") @db.VarChar(200)
+  aftersalePolicy String? @map("aftersale_policy") @db.VarChar(200)
 
   // ---- 分装标签 ----
   /// 标签上显示的品牌名（同时作为分装者）
-  labelBrandName            String                       @default("赛文的食堂") @map("label_brand_name") @db.VarChar(100)
+  labelBrandName              String  @default("赛文的食堂") @map("label_brand_name") @db.VarChar(100)
   /// 标签上是否提示「内含干燥剂，请勿食用」
-  labelIncludeDesiccantNotice Boolean                    @default(true) @map("label_include_desiccant_notice")
+  labelIncludeDesiccantNotice Boolean @default(true) @map("label_include_desiccant_notice")
 
-  createdAt                 DateTime                     @default(now()) @map("created_at")
-  updatedAt                 DateTime                     @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("supplement_shop_config")
 }
@@ -3899,38 +3895,38 @@ model SupplementShopConfig {
 ///
 /// 沿用 supplement_shop_config 的单例模式：id 固定为 'singleton'。
 model TastingPackConfig {
-  id                   String            @id @default("singleton") @map("id")
+  id      String  @id @default("singleton") @map("id")
   /// 总开关：未开启时小程序不展示试吃装入口
-  enabled              Boolean           @default(false) @map("enabled")
+  enabled Boolean @default(false) @map("enabled")
 
   // ---- 定价 ----
   /// 试吃倍率：成本 → 实收。默认 1.25（相当于正装口径约 75 折）
-  tastingMultiplier    Decimal           @default(1.25) @map("tasting_multiplier") @db.Decimal(6, 3)
+  tastingMultiplier Decimal              @default(1.25) @map("tasting_multiplier") @db.Decimal(6, 3)
   /// 售价圆整规则。一律向上取整，避免"算出来 1.0001、实收 1.00"的负毛利
-  priceRoundingMode    PriceRoundingMode @default(CEIL_TO_1) @map("price_rounding_mode")
+  priceRoundingMode PriceRoundingMode    @default(CEIL_TO_1) @map("price_rounding_mode")
   /// 定价用哪个成本基数：今日原料价 or 库存批次成本。默认按今日原料价
-  costBasisMode        TastingPackCostBasis @default(LIVE) @map("cost_basis_mode")
+  costBasisMode     TastingPackCostBasis @default(LIVE) @map("cost_basis_mode")
 
   // ---- 售卖 ----
   /// 单次限购套数
-  maxSetsPerOrder      Int               @default(5) @map("max_sets_per_order")
+  maxSetsPerOrder Int @default(5) @map("max_sets_per_order")
 
   // ---- 备货 ----
   /// 补货预警阈值：可用套数低于此值时后台提示补货
-  lowStockThreshold    Int               @default(10) @map("low_stock_threshold")
+  lowStockThreshold    Int     @default(10) @map("low_stock_threshold")
   /// 一键备货默认套数
-  defaultRestockSets   Int               @default(20) @map("default_restock_sets")
+  defaultRestockSets   Int     @default(20) @map("default_restock_sets")
   /// 成品保质期（月）。入库时据此推算到期日；急冻 -18℃ 口径默认 6 个月
-  shelfLifeMonths      Int               @default(6) @map("shelf_life_months")
+  shelfLifeMonths      Int     @default(6) @map("shelf_life_months")
   /// 新建试吃装时的默认袋数（每道菜几袋）
-  defaultBagsPerRecipe Int               @default(2) @map("default_bags_per_recipe")
+  defaultBagsPerRecipe Int     @default(2) @map("default_bags_per_recipe")
   /// 新建试吃装时的默认每袋克重
-  defaultPackSpecG     Int               @default(80) @map("default_pack_spec_g")
+  defaultPackSpecG     Int     @default(80) @map("default_pack_spec_g")
   /// 是否允许强制排产（原料已备齐时跳过"采购清单已完成"检查）。强制排产会记操作日志
-  allowForceSchedule   Boolean           @default(true) @map("allow_force_schedule")
+  allowForceSchedule   Boolean @default(true) @map("allow_force_schedule")
 
-  createdAt            DateTime          @default(now()) @map("created_at")
-  updatedAt            DateTime          @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("tasting_pack_config")
 }
@@ -3953,36 +3949,36 @@ enum PriceRoundingMode {
 /// 它是**现货**：不做"按单生产"，而是提前做好一批放库存里卖，
 /// 顾客下单只扣库存，不排产。
 model TastingPack {
-  id              String            @id @default(uuid()) @map("id")
+  id            String            @id @default(uuid()) @map("id")
   /// 面客编号：分享链接与后台复制链接都用它，比 uuid 好念好认
-  code            String            @unique @map("code") @db.VarChar(32)
-  name            String            @map("name") @db.VarChar(100)
+  code          String            @unique @map("code") @db.VarChar(32)
+  name          String            @map("name") @db.VarChar(100)
   /// 一句话卖点
-  subtitle        String?           @map("subtitle") @db.VarChar(200)
-  coverImageUrl   String?           @map("cover_image_url")
-  detailImages    Json?             @map("detail_images")
-  status          TastingPackStatus @default(DRAFT) @map("status")
+  subtitle      String?           @map("subtitle") @db.VarChar(200)
+  coverImageUrl String?           @map("cover_image_url")
+  detailImages  Json?             @map("detail_images")
+  status        TastingPackStatus @default(DRAFT) @map("status")
 
   // ---- 规格 ----
   /// 每道菜几袋
-  bagsPerRecipe   Int               @default(2) @map("bags_per_recipe")
+  bagsPerRecipe Int @default(2) @map("bags_per_recipe")
   /// 每袋多少克
-  packSpecG       Int               @default(80) @map("pack_spec_g")
+  packSpecG     Int @default(80) @map("pack_spec_g")
 
   // ---- 定价 ----
   /// 手动定价覆盖（元/套）。为空 = 按「成本 × 试吃倍率」自动算
-  manualPrice     Decimal?          @map("manual_price") @db.Decimal(10, 2)
+  manualPrice     Decimal? @map("manual_price") @db.Decimal(10, 2)
   /// 单次限购覆盖。为空 = 用「试吃装设置」里的全局值
-  maxSetsOverride Int?              @map("max_sets_override")
+  maxSetsOverride Int?     @map("max_sets_override")
 
-  sortOrder       Int               @default(0) @map("sort_order")
-  createdById     String?           @map("created_by_id")
-  createdAt       DateTime          @default(now()) @map("created_at")
-  updatedAt       DateTime          @updatedAt @map("updated_at")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdById String?  @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
-  items          TastingPackItem[]
-  stockBatches   TastingPackStockBatch[]
-  stockLedger    TastingPackStockLedger[]
+  items           TastingPackItem[]
+  stockBatches    TastingPackStockBatch[]
+  stockLedger     TastingPackStockLedger[]
   productionPlans TastingPackProductionPlan[]
 
   @@index([status])
@@ -4014,28 +4010,28 @@ model TastingPackItem {
 /// 一次备货入库 = 一条批次记录。扣减按**先到期先出**，
 /// 每笔进出都写 `tasting_pack_stock_ledger` 流水，可对账可追溯。
 model TastingPackStockBatch {
-  id                String                  @id @default(uuid()) @map("id")
-  batchNo           String                  @unique @map("batch_no") @db.VarChar(32)
-  tastingPackId     String                  @map("tasting_pack_id")
+  id                String                 @id @default(uuid()) @map("id")
+  batchNo           String                 @unique @map("batch_no") @db.VarChar(32)
+  tastingPackId     String                 @map("tasting_pack_id")
   /// 生产日期
-  producedAt        DateTime                @map("produced_at")
+  producedAt        DateTime               @map("produced_at")
   /// 到期日 = 生产日期 + 保质期月数（入库时算好并落库，事后改配置不影响老批次）
-  expiresAt         DateTime                @map("expires_at")
+  expiresAt         DateTime               @map("expires_at")
   /// 入库套数
-  quantityTotal     Int                     @map("quantity_total")
+  quantityTotal     Int                    @map("quantity_total")
   /// 剩余套数（含被订单占用但未付款的部分；释放时回补）
-  quantityRemaining Int                     @map("quantity_remaining")
+  quantityRemaining Int                    @map("quantity_remaining")
   /// 入库时锁定的单套成本（元）。现货按批次成本定价与核算毛利，不随原料价波动
-  unitCost          Decimal?                @map("unit_cost") @db.Decimal(10, 2)
-  status            TastingPackStockStatus  @default(AVAILABLE) @map("status")
-  note              String?                 @map("note") @db.VarChar(200)
+  unitCost          Decimal?               @map("unit_cost") @db.Decimal(10, 2)
+  status            TastingPackStockStatus @default(AVAILABLE) @map("status")
+  note              String?                @map("note") @db.VarChar(200)
   /// 关联的备货生产单（第 4 批接入）
-  productionPlanId  String?                 @map("production_plan_id")
-  createdById       String?                 @map("created_by_id")
-  createdAt         DateTime                @default(now()) @map("created_at")
-  updatedAt         DateTime                @updatedAt @map("updated_at")
+  productionPlanId  String?                @map("production_plan_id")
+  createdById       String?                @map("created_by_id")
+  createdAt         DateTime               @default(now()) @map("created_at")
+  updatedAt         DateTime               @updatedAt @map("updated_at")
 
-  tastingPack TastingPack               @relation(fields: [tastingPackId], references: [id], onDelete: Cascade)
+  tastingPack TastingPack              @relation(fields: [tastingPackId], references: [id], onDelete: Cascade)
   ledger      TastingPackStockLedger[]
 
   @@index([tastingPackId, status, expiresAt])
@@ -4048,16 +4044,16 @@ model TastingPackStockBatch {
 /// 只记变动，不记余额；余额看批次上的 `quantityRemaining`。
 /// `reason` 说明这笔变动的业务来源，`orderId` 让"哪一单扣的"可追溯。
 model TastingPackStockLedger {
-  id            String                @id @default(uuid()) @map("id")
-  tastingPackId String                @map("tasting_pack_id")
-  batchId       String?               @map("batch_id")
+  id            String                 @id @default(uuid()) @map("id")
+  tastingPackId String                 @map("tasting_pack_id")
+  batchId       String?                @map("batch_id")
   /// 正数=入库，负数=出库
-  delta         Int                   @map("delta")
+  delta         Int                    @map("delta")
   reason        TastingPackStockReason @map("reason")
-  orderId       String?               @map("order_id")
-  note          String?               @map("note") @db.VarChar(200)
-  operatorId    String?               @map("operator_id")
-  createdAt     DateTime              @default(now()) @map("created_at")
+  orderId       String?                @map("order_id")
+  note          String?                @map("note") @db.VarChar(200)
+  operatorId    String?                @map("operator_id")
+  createdAt     DateTime               @default(now()) @map("created_at")
 
   tastingPack TastingPack            @relation(fields: [tastingPackId], references: [id], onDelete: Cascade)
   batch       TastingPackStockBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
@@ -4075,33 +4071,33 @@ model TastingPackStockLedger {
 /// 这张表就是那条"没有订单也能生产"的通路：
 /// 备货生产单 → 原料需求 → 采购清单 → 排产 → 完工 → 入库。
 model TastingPackProductionPlan {
-  id              String                            @id @default(uuid()) @map("id")
+  id            String                          @id @default(uuid()) @map("id")
   /// 内部单号，方便车间口头沟通
-  planNo          String                            @unique @map("plan_no") @db.VarChar(32)
-  tastingPackId   String                            @map("tasting_pack_id")
+  planNo        String                          @unique @map("plan_no") @db.VarChar(32)
+  tastingPackId String                          @map("tasting_pack_id")
   /// 计划做几套
-  sets            Int                               @map("sets")
+  sets          Int                             @map("sets")
   /// 计划生产日期（排产后作为生产批次的日期）
-  plannedDate     DateTime                          @map("planned_date")
-  status          TastingPackProductionPlanStatus   @default(PLANNED) @map("status")
+  plannedDate   DateTime                        @map("planned_date")
+  status        TastingPackProductionPlanStatus @default(PLANNED) @map("status")
 
   /// 用料快照：与订单的 pricing_breakdown_snapshot.ingredientDetails 同构，
   /// 这样现有采购清单与原料库存抵扣逻辑可以原样复用。
   /// 一旦建单就冻结 —— 事后改商品或改配方不影响这张已经在执行的单。
-  ingredientRequirementSnapshot Json                @map("ingredient_requirement_snapshot")
+  ingredientRequirementSnapshot Json @map("ingredient_requirement_snapshot")
   /// 每道菜要做多少克、分几袋（车间看的）
-  dishPlanSnapshot              Json                @map("dish_plan_snapshot")
+  dishPlanSnapshot              Json @map("dish_plan_snapshot")
 
-  purchaseListId    String?                         @map("purchase_list_id")
-  productionBatchId String?                         @map("production_batch_id")
+  purchaseListId    String?   @map("purchase_list_id")
+  productionBatchId String?   @map("production_batch_id")
   /// 实际入库套数（可能因为损耗少于计划套数）
-  stockedSets       Int?                            @map("stocked_sets")
-  stockedAt         DateTime?                       @map("stocked_at")
-  cancelledReason   String?                         @map("cancelled_reason") @db.VarChar(200)
-  note              String?                         @map("note") @db.VarChar(200)
-  createdById       String?                         @map("created_by_id")
-  createdAt         DateTime                        @default(now()) @map("created_at")
-  updatedAt         DateTime                        @updatedAt @map("updated_at")
+  stockedSets       Int?      @map("stocked_sets")
+  stockedAt         DateTime? @map("stocked_at")
+  cancelledReason   String?   @map("cancelled_reason") @db.VarChar(200)
+  note              String?   @map("note") @db.VarChar(200)
+  createdById       String?   @map("created_by_id")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
   tastingPack TastingPack @relation(fields: [tastingPackId], references: [id], onDelete: Cascade)
 
@@ -4209,81 +4205,81 @@ enum SupplementOrderStatus {
 /// 补剂订单（独立于鲜食订单，见 docs/plans/2026-09-18-supplement-shop-design.md）
 /// 金额与配置在创建时快照，之后不随「补剂商城设置」变化。
 model SupplementOrder {
-  id                        String                @id @default(uuid()) @map("id")
-  orderNo                   String                @unique @map("order_no") @db.VarChar(32)
-  userId                    String                @map("user_id")
-  status                    SupplementOrderStatus @default(PENDING_PAYMENT) @map("status")
-  bagCount                  Int                   @map("bag_count")
+  id       String                @id @default(uuid()) @map("id")
+  orderNo  String                @unique @map("order_no") @db.VarChar(32)
+  userId   String                @map("user_id")
+  status   SupplementOrderStatus @default(PENDING_PAYMENT) @map("status")
+  bagCount Int                   @map("bag_count")
 
   // ---- 加量（2026-09-24）----
   /// 本单买了几份（1 = 未加量）。加量 = 每个补剂多做几袋同样规格的小袋。
-  portionMultiplier         Int                   @default(1) @map("portion_multiplier")
+  portionMultiplier Int  @default(1) @map("portion_multiplier")
   /// 本单覆盖的总天数（= 制作单天数 × 份数）。**下单时快照**，不做派生：
   /// 这是"卖出去的补剂没有超出分装效期"的凭证，事后改配置不能影响它。
-  totalDays                 Int?                  @map("total_days")
+  totalDays         Int? @map("total_days")
 
   // ---- 金额构成（对用户）----
-  amountSupplement          Decimal               @map("amount_supplement") @db.Decimal(10, 2)
-  amountServiceFee          Decimal               @map("amount_service_fee") @db.Decimal(10, 2)
-  amountPackaging           Decimal               @map("amount_packaging") @db.Decimal(10, 2)
-  amountGoods               Decimal               @map("amount_goods") @db.Decimal(10, 2)
-  amountShipping            Decimal               @map("amount_shipping") @db.Decimal(10, 2)
-  amountTotal               Decimal               @map("amount_total") @db.Decimal(10, 2)
+  amountSupplement    Decimal @map("amount_supplement") @db.Decimal(10, 2)
+  amountServiceFee    Decimal @map("amount_service_fee") @db.Decimal(10, 2)
+  amountPackaging     Decimal @map("amount_packaging") @db.Decimal(10, 2)
+  amountGoods         Decimal @map("amount_goods") @db.Decimal(10, 2)
+  amountShipping      Decimal @map("amount_shipping") @db.Decimal(10, 2)
+  amountTotal         Decimal @map("amount_total") @db.Decimal(10, 2)
   /// 内部成本，用于毛利分析（用户不可见）
-  supplementCost            Decimal               @map("supplement_cost") @db.Decimal(10, 2)
-  shippingDescription       String?               @map("shipping_description") @db.VarChar(200)
+  supplementCost      Decimal @map("supplement_cost") @db.Decimal(10, 2)
+  shippingDescription String? @map("shipping_description") @db.VarChar(200)
 
   // ---- 快照 ----
   /// 下单时的补剂商城配置快照（倍率、服务费、运费策略等），便于事后复盘定价
-  pricingSnapshot           Json?                 @map("pricing_snapshot")
+  pricingSnapshot         Json? @map("pricing_snapshot")
   /// 收货信息快照
-  shippingAddressSnapshot   Json                  @map("shipping_address_snapshot")
+  shippingAddressSnapshot Json  @map("shipping_address_snapshot")
 
   // ---- 来源（制作单/食谱/狗狗）----
-  recipeId                  String?               @map("recipe_id")
-  recipeName                String?               @map("recipe_name") @db.VarChar(200)
-  dogId                     String?               @map("dog_id")
-  dogName                   String?               @map("dog_name") @db.VarChar(100)
-  diySheetId                String?               @map("diy_sheet_id")
-  cycleDays                 Int?                  @map("cycle_days")
-  remark                    String?               @db.VarChar(500)
+  recipeId   String? @map("recipe_id")
+  recipeName String? @map("recipe_name") @db.VarChar(200)
+  dogId      String? @map("dog_id")
+  dogName    String? @map("dog_name") @db.VarChar(100)
+  diySheetId String? @map("diy_sheet_id")
+  cycleDays  Int?    @map("cycle_days")
+  remark     String? @db.VarChar(500)
 
   // ---- 支付 ----
-  paymentMethod             String?               @map("payment_method") @db.VarChar(20)
-  paymentStatus             String?               @map("payment_status") @db.VarChar(20)
-  transactionId             String?               @map("transaction_id") @db.VarChar(64)
-  paidAt                    DateTime?             @map("paid_at")
-  cancelledAt               DateTime?             @map("cancelled_at")
-  cancellationReason        String?               @map("cancellation_reason") @db.VarChar(200)
+  paymentMethod      String?   @map("payment_method") @db.VarChar(20)
+  paymentStatus      String?   @map("payment_status") @db.VarChar(20)
+  transactionId      String?   @map("transaction_id") @db.VarChar(64)
+  paidAt             DateTime? @map("paid_at")
+  cancelledAt        DateTime? @map("cancelled_at")
+  cancellationReason String?   @map("cancellation_reason") @db.VarChar(200)
 
   // ---- 售后（退款 / 免费补发）----
-  aftersaleType             String?               @map("aftersale_type") @db.VarChar(20)
-  aftersaleReason           String?               @map("aftersale_reason") @db.VarChar(200)
-  aftersaleAt               DateTime?             @map("aftersale_at")
+  aftersaleType   String?   @map("aftersale_type") @db.VarChar(20)
+  aftersaleReason String?   @map("aftersale_reason") @db.VarChar(200)
+  aftersaleAt     DateTime? @map("aftersale_at")
 
   // ---- 线上退款（微信原路退回）----
-  refundStatus              String?               @map("refund_status") @db.VarChar(20)
-  refundAmount              Decimal?              @map("refund_amount") @db.Decimal(10, 2)
-  refundOutNo               String?               @map("refund_out_no") @db.VarChar(64)
-  refundId                  String?               @map("refund_id") @db.VarChar(64)
-  refundReason              String?               @map("refund_reason") @db.VarChar(200)
-  refundRequestedAt         DateTime?             @map("refund_requested_at")
-  refundedAt                DateTime?             @map("refunded_at")
+  refundStatus      String?   @map("refund_status") @db.VarChar(20)
+  refundAmount      Decimal?  @map("refund_amount") @db.Decimal(10, 2)
+  refundOutNo       String?   @map("refund_out_no") @db.VarChar(64)
+  refundId          String?   @map("refund_id") @db.VarChar(64)
+  refundReason      String?   @map("refund_reason") @db.VarChar(200)
+  refundRequestedAt DateTime? @map("refund_requested_at")
+  refundedAt        DateTime? @map("refunded_at")
 
   /// 免费补发单回指的原单号
-  reshipFromOrderNo         String?               @map("reship_from_order_no") @db.VarChar(32)
+  reshipFromOrderNo String? @map("reship_from_order_no") @db.VarChar(32)
 
   // ---- 发货 ----
-  trackingNumber            String?               @map("tracking_number") @db.VarChar(64)
-  carrierCode               String?               @map("carrier_code") @db.VarChar(40)
-  shippedAt                 DateTime?             @map("shipped_at")
-  completedAt               DateTime?             @map("completed_at")
+  trackingNumber String?   @map("tracking_number") @db.VarChar(64)
+  carrierCode    String?   @map("carrier_code") @db.VarChar(40)
+  shippedAt      DateTime? @map("shipped_at")
+  completedAt    DateTime? @map("completed_at")
 
-  createdAt                 DateTime              @default(now()) @map("created_at")
-  updatedAt                 DateTime              @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  user                      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  items                     SupplementOrderItem[]
+  user  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items SupplementOrderItem[]
 
   @@index([userId, createdAt])
   @@index([status, createdAt])
@@ -4293,40 +4289,40 @@ model SupplementOrder {
 /// 补剂订单行：一个补剂 = 一袋（按品种分装）
 /// 同时承载分装结果（批号、原瓶到期日、分装后效期、分装时间）
 model SupplementOrderItem {
-  id                String                 @id @default(uuid()) @map("id")
-  orderId           String                 @map("order_id")
-  ingredientId      String                 @map("ingredient_id")
+  id           String @id @default(uuid()) @map("id")
+  orderId      String @map("order_id")
+  ingredientId String @map("ingredient_id")
 
   // ---- 下单时的商品快照 ----
-  name              String                 @map("name") @db.VarChar(200)
-  brand             String?                @db.VarChar(100)
-  productModel      String?                @map("product_model") @db.VarChar(200)
-  physicalForm      IngredientPhysicalForm? @map("physical_form")
-  unit              String                 @map("unit") @db.VarChar(20)
+  name             String                  @map("name") @db.VarChar(200)
+  brand            String?                 @db.VarChar(100)
+  productModel     String?                 @map("product_model") @db.VarChar(200)
+  physicalForm     IngredientPhysicalForm? @map("physical_form")
+  unit             String                  @map("unit") @db.VarChar(20)
   /// 制作单上给用户的用量
-  requestedAmount   Float                  @map("requested_amount")
+  requestedAmount  Float                   @map("requested_amount")
   /// 实际分装量（向上取整后）
-  packedAmount      Float                  @map("packed_amount")
-  unitCost          Decimal                @map("unit_cost") @db.Decimal(12, 6)
-  cost              Decimal                @db.Decimal(10, 2)
-  price             Decimal                @db.Decimal(10, 2)
-  bags              Int                    @default(1) @map("bags")
+  packedAmount     Float                   @map("packed_amount")
+  unitCost         Decimal                 @map("unit_cost") @db.Decimal(12, 6)
+  cost             Decimal                 @db.Decimal(10, 2)
+  price            Decimal                 @db.Decimal(10, 2)
+  bags             Int                     @default(1) @map("bags")
   /// 分装后标示有效期（月）
-  shelfLifeMonths   Int                    @map("shelf_life_months")
+  shelfLifeMonths  Int                     @map("shelf_life_months")
   /// 储存条件快照（标签用）
-  storageCondition  String?                @map("storage_condition") @db.VarChar(200)
+  storageCondition String?                 @map("storage_condition") @db.VarChar(200)
 
   // ---- 分装结果（后台分装工单填写）----
-  batchNo           String?                @map("batch_no") @db.VarChar(40)
+  batchNo          String?   @map("batch_no") @db.VarChar(40)
   /// 分装时填写的原瓶到期日
-  sourceExpiryDate  DateTime?              @map("source_expiry_date")
+  sourceExpiryDate DateTime? @map("source_expiry_date")
   /// 实际标签效期 = min(原瓶到期日, 分装日 + shelfLifeMonths)
-  packedExpiryDate  DateTime?              @map("packed_expiry_date")
-  packedAt          DateTime?              @map("packed_at")
+  packedExpiryDate DateTime? @map("packed_expiry_date")
+  packedAt         DateTime? @map("packed_at")
 
-  createdAt         DateTime               @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
-  order             SupplementOrder        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order SupplementOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
   @@map("supplement_order_item")

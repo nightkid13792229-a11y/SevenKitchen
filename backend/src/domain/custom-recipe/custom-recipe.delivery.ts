@@ -62,12 +62,38 @@ export interface SnapshotRecipeItem {
   isSupplement?: boolean;
 }
 
+/**
+ * 封面上要叠的狗狗信息（2026-10-18 加）。
+ *
+ * 交付第 1 页的封面上要写「为 豆豆 定制 / 柯基 · 3 岁 · 11.2kg」，
+ * 这些在快照里原本没有 —— 顾客改了档案，"交付时那只狗是什么样"就查不回来了。
+ * 所以交付那一刻把档案抄进快照。
+ */
+export interface SnapshotDog {
+  name: string | null;
+  breedName: string | null;
+  /** 年龄（月）。存月数而不是"3 岁"这种文案 —— 文案是渲染层的事 */
+  ageMonths: number | null;
+  /** 体重（kg） */
+  weightKg: number | null;
+}
+
 export interface SnapshotRecipe {
   recipeId: string;
   name: string;
   coverImageUrl?: string | null;
   /** 内部主键（排查用；前端不显示） */
   internalId?: string | null;
+  /**
+   * 一句话卖点（2026-10-18 加）。
+   *
+   * 交付第 1 页要显示"为控体重设计：脂肪只有 9%…"那句 ——
+   * 它来自 `Recipe.sellingPoint`（后台可手填、也可 AI 生成）。
+   * 上限 200 字，页面**默认只显示两行**，可展开。
+   */
+  sellingPoint?: string | null;
+  /** 封面要叠的狗信息（2026-10-18 加） */
+  dog?: SnapshotDog | null;
   items: SnapshotRecipeItem[];
 }
 
@@ -113,6 +139,21 @@ export interface SnapshotShopping {
   lossRate: number;
 }
 
+/**
+ * 一个补剂要补的**营养素目标**（2026-10-18 加）。
+ *
+ * ⚠️ 顾客看到的是「**钙** 每kg加 5g」，不是「钙粉 每kg加 5g」——
+ * 前者是营养素口径（配方需求），后者是产品口径（买哪瓶）。
+ * 两个别混：交付第 1 页列营养素，第 2 页列产品。
+ */
+export interface SnapshotSupplementTarget {
+  /** 营养素名，如「钙」「锌」「维生素 D」 */
+  label: string;
+  /** 每 kg 食材要补多少 */
+  targetValuePerKg: number | null;
+  unit: string | null;
+}
+
 export interface SnapshotSupplement {
   name: string;
   /** 这一批要加多少（克） */
@@ -122,6 +163,8 @@ export interface SnapshotSupplement {
   brand?: string | null;
   /** 什么时候加（出锅前 / 冷却后…） */
   timing?: string | null;
+  /** 这个补剂对应的营养素目标（2026-10-18 加） */
+  targets?: SnapshotSupplementTarget[] | null;
 }
 
 export interface DeliveryContentSnapshot {
@@ -145,6 +188,8 @@ export const SNAPSHOT_SCHEMA_VERSION = 1;
 
 export interface BuildSnapshotInput {
   recipe: SnapshotRecipe;
+  /** 狗狗档案（2026-10-18 加）—— 封面要叠品种/年龄/体重 */
+  dog?: SnapshotDog | null;
   feeding?: Partial<SnapshotFeeding> | null;
   nutrition?: Partial<SnapshotNutrition> | null;
   shopping?: {
@@ -191,6 +236,9 @@ export function buildDeliverySnapshot(
       name: input.recipe.name,
       coverImageUrl: input.recipe.coverImageUrl ?? null,
       internalId: input.recipe.internalId ?? null,
+      // 2026-10-18：封面要叠"为谁定制"，卖点要显示在封面下方
+      sellingPoint: input.recipe.sellingPoint ?? null,
+      dog: input.dog ?? null,
       items: input.recipe.items ?? [],
     },
     feeding: {
@@ -221,6 +269,12 @@ export function buildDeliverySnapshot(
       ...item,
       totalG: nullableNumber(item.totalG),
       perKgG: nullableNumber(item.perKgG),
+      // 2026-10-18：营养素目标（钙/锌/维生素D…）随补剂一起进快照
+      targets: (item.targets ?? []).map((target) => ({
+        label: target.label,
+        targetValuePerKg: nullableNumber(target.targetValuePerKg),
+        unit: target.unit ?? null,
+      })),
     })),
     steps: input.steps ?? [],
     storage: input.storage ?? null,

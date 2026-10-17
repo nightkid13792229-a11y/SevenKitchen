@@ -113,10 +113,12 @@ export class CustomRecipeDeliveryService {
     }
 
     const recipe = await this.resolveRecipe(input.recipeIdOrBizId, order);
+    const dog = await this.resolveDogForSnapshot(order.dogId);
 
     const snapshot = await this.buildSnapshot({
       order,
       recipe,
+      dog,
       now,
       cycleDays: input.cycleDays ?? null,
     });
@@ -322,6 +324,48 @@ export class CustomRecipeDeliveryService {
   }
 
   /**
+   * 取狗狗档案（快照要用）· 2026-10-18
+   *
+   * 交付那一刻把档案抄进快照 —— 顾客事后改了体重/生日，
+   * "当时是照着什么做的"还能查回来。
+   *
+   * 取不到不报错：狗删了不该让交付失败，封面少一行字而已。
+   */
+  private async resolveDogForSnapshot(dogId: string) {
+    try {
+      const dog = await this.prisma.dog.findUnique({
+        where: { id: dogId },
+        select: {
+          name: true,
+          birthday: true,
+          currentWeightKg: true,
+          customBreedName: true,
+          breedId: true,
+        },
+      });
+      if (!dog) return null;
+      // Dog 与 DogBreed 没有 Prisma 关联（只有 breedId），所以单独查一次
+      const breed = dog.breedId
+        ? await this.prisma.dogBreed.findUnique({
+            where: { id: dog.breedId },
+            select: { name: true },
+          })
+        : null;
+      return {
+        name: dog.name ?? null,
+        // 自己填的品种优先（"中华田园犬"这类词表里可能没有）
+        breedName: dog.customBreedName ?? breed?.name ?? null,
+        birthday: dog.birthday ?? null,
+        currentWeightKg:
+          dog.currentWeightKg === null ? null : Number(dog.currentWeightKg),
+      };
+    } catch (error) {
+      console.warn('[CustomRecipeDelivery] 读取狗狗档案失败，封面将不含狗信息：', error);
+      return null;
+    }
+  }
+
+  /**
    * 取食谱，并守住那条隐私边界（2026-09-28 专门修过）：
    * **只能交付「这位顾客 + 这只狗」的私密定制食谱**。
    */
@@ -391,13 +435,26 @@ export class CustomRecipeDeliveryService {
       /** 生产损耗率 —— 存的是**系数**（1.07 = 多买 7%），不是比率 */
       productionLossRate: unknown;
       nutritionStandard: string | null;
+      /** 一句话卖点（交付第 1 页封面下方那句）· 2026-10-18 */
+      sellingPoint: string | null;
+      /** 核心营养 8 项（蛋白质/脂肪/…/钙磷比）· 2026-10-18 */
+      nutritionDetailedData: unknown;
       items: Array<{
         ratioPercent: number | null;
         exampleWeight: number | null;
         preparationMethod: string | null;
+        /** 补剂营养素目标（钙/锌/…）· 2026-10-18 */
+        supplementTargets: unknown;
         ingredient: { name: string; type: string } | null;
       }>;
     };
+    /** 狗狗档案：封面要叠品种/年龄/体重 · 2026-10-18 */
+    dog: {
+      name: string | null;
+      breedName: string | null;
+      birthday: Date | null;
+      currentWeightKg: number | null;
+    } | null;
     now: Date;
     cycleDays: number | null;
   }): Promise<DeliveryContentSnapshot> {
@@ -427,31 +484,46 @@ export class CustomRecipeDeliveryService {
      */
     const supplements: SnapshotSupplement[] = items
       .filter((item) => item.isSupplement)
-      .map((item) => ({
-        name: item.name,
-        totalG: null,
-        perKgG:
-          item.ratioPercent === null || item.ratioPercent === undefined
-            ? null
-            : item.ratioPercent * 10,
-        brand: null,
-        timing: item.preparation,
-      }));
+      .map((item, index) => {
+        /**
+         * 补剂的营养素目标从**原始 item** 取（快照里的 items 已经丢了关联）。
+         * 用 index 对齐：两边都按 `input.recipe.items` 的同序过滤而来。
+         */
+        const source = input.recipe.items.filter(
+          (raw) => raw.ingredient?.type === 'SUPPLEMENT',
+        )[index];
+        return {
+          name: item.name,
+          totalG: null,
+          perKgG:
+            item.ratioPercent === null || item.ratioPercent === undefined
+              ? null
+              : item.ratioPercent * 10,
+          brand: null,
+          timing: item.preparation,
+          targets: toSnapshotSupplementTargets(source?.supplementTargets),
+        };
+      });
 
     return buildDeliverySnapshot({
       recipe: {
         recipeId: input.recipe.recipeId,
         name: input.recipe.name,
+        // 2026-10-18：封面下方那句话 + 封面要叠的狗信息
+        sellingPoint: input.recipe.sellingPoint ?? null,
         coverImageUrl: input.recipe.coverImageUrl,
         internalId: input.recipe.id,
         items,
       },
+      dog: toSnapshotDog(input.dog),
       feeding,
       nutrition: {
         standard: input.recipe.nutritionStandard,
         energyDensityKcalPerKg: Number.isFinite(energyDensity)
           ? energyDensity
           : null,
+        // 2026-10-18：核心营养 8 项（交付第 1 页的 4×2 网格）
+        macros: toSnapshotMacros(input.recipe.nutritionDetailedData),
       },
       /**
        * 采购清单（批次 2.2）—— 这套算法原先在**小程序页面里**，
@@ -601,4 +673,107 @@ function positiveOrNull(value: number | null | undefined): number | null {
 
 function round1(value: number): number {
   return Math.round(value * 10) / 10;
+}
+
+// ==================== 快照补传字段的转换（2026-10-18）====================
+
+/**
+ * 核心营养 8 项 —— 从 `Recipe.nutritionDetailedData` 里挑出**交付第 1 页要显示的**那些。
+ *
+ * 为什么只挑 8 项：完整的营养评估有几百项、几十 KB，
+ * 那是"报告页"按需再查的东西，不该塞进每一条交付记录。
+ *
+ * ⚠️ 缺失就给 null，不给 0 —— `0%` 和"没算"是两回事。
+ */
+function toSnapshotMacros(
+  detailed: unknown,
+): Record<string, number | null> | null {
+  if (!detailed || typeof detailed !== 'object') return null;
+  const source = detailed as Record<string, unknown>;
+  const pick = (key: string): number | null => {
+    const value = source[key];
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+  };
+  const macros = {
+    proteinPercent: pick('proteinPercent'),
+    fatPercent: pick('fatPercent'),
+    ashPercent: pick('ashPercent'),
+    moisturePercent: pick('moisturePercent'),
+    crudeFiberPercent: pick('crudeFiberPercent'),
+    carbohydratePercent: pick('carbohydratePercent'),
+    energyDensityKcalPerKg: pick('energyDensityKcalPerKg'),
+    calciumPhosphorusRatio: pick('calciumPhosphorusRatio'),
+  };
+  // 全空等于没算 —— 不要给前端一个"8 个 null"的块
+  const hasAny = Object.values(macros).some((value) => value !== null);
+  return hasAny ? macros : null;
+}
+
+/**
+ * 补剂的营养素目标。
+ *
+ * 库里 `RecipeItem.supplementTargets` 是 JSON 数组，
+ * 元素形如 `{ fieldPath, label, targetValuePerKg, unit }`。
+ * 这里**只留渲染要的三个字段** —— `fieldPath` 是内部路由用的，顾客不该看到。
+ */
+function toSnapshotSupplementTargets(
+  raw: unknown,
+): Array<{ label: string; targetValuePerKg: number | null; unit: string | null }> {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+    .map((item) => ({
+      label: typeof item.label === 'string' ? item.label : '',
+      targetValuePerKg:
+        typeof item.targetValuePerKg === 'number' &&
+        Number.isFinite(item.targetValuePerKg)
+          ? item.targetValuePerKg
+          : null,
+      unit: typeof item.unit === 'string' ? item.unit : null,
+    }))
+    .filter((item) => item.label.length > 0);
+}
+
+/**
+ * 狗狗档案 → 快照。
+ *
+ * 年龄存**月数**而不是"3 岁"：文案是渲染层的事，后端只存事实。
+ * 生日缺失时给 null，不猜。
+ */
+function toSnapshotDog(
+  dog:
+    | {
+        name: string | null;
+        breedName: string | null;
+        birthday: Date | null;
+        currentWeightKg: number | null;
+      }
+    | null
+    | undefined,
+): {
+  name: string | null;
+  breedName: string | null;
+  ageMonths: number | null;
+  weightKg: number | null;
+} | null {
+  if (!dog) return null;
+  let ageMonths: number | null = null;
+  if (dog.birthday instanceof Date && Number.isFinite(dog.birthday.getTime())) {
+    const now = new Date();
+    ageMonths = Math.max(
+      0,
+      (now.getFullYear() - dog.birthday.getFullYear()) * 12 +
+        (now.getMonth() - dog.birthday.getMonth()),
+    );
+  }
+  return {
+    name: dog.name ?? null,
+    breedName: dog.breedName ?? null,
+    ageMonths,
+    weightKg:
+      typeof dog.currentWeightKg === 'number' &&
+      Number.isFinite(dog.currentWeightKg)
+        ? dog.currentWeightKg
+        : null,
+  };
 }

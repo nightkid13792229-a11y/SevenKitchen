@@ -99,12 +99,24 @@ export interface DeliveryContent {
     recipeId: string;
     name: string;
     coverImageUrl?: string | null;
+    /** 一句话卖点（2026-10-18）—— 交付页默认只显示两行，可展开 */
+    sellingPoint?: string | null;
+    /** 封面要叠的狗信息（2026-10-18）—— 顾客改档案后仍能看到"交付时那只狗" */
+    dog?: {
+      name: string | null;
+      breedName: string | null;
+      /** 年龄（月）—— 几岁几分是渲染层换算 */
+      ageMonths: number | null;
+      weightKg: number | null;
+    } | null;
     items: Array<{
       name: string;
       preparation?: string | null;
       ratioPercent?: number | null;
       weightG?: number | null;
       isSupplement?: boolean;
+      /** 原料类型：FOOD / SUPPLEMENT / PACKAGING（三态，不能压成布尔） */
+      ingredientType?: string | null;
     }>;
   };
   feeding: {
@@ -116,6 +128,17 @@ export interface DeliveryContent {
   nutrition: {
     standard: string | null;
     energyDensityKcalPerKg: number | null;
+    /** 核心营养 8 项（2026-10-18）—— 交付第 1 页的 4×2 网格 */
+    macros?: {
+      proteinPercent: number | null;
+      fatPercent: number | null;
+      ashPercent: number | null;
+      moisturePercent: number | null;
+      crudeFiberPercent: number | null;
+      carbohydratePercent: number | null;
+      energyDensityKcalPerKg: number | null;
+      calciumPhosphorusRatio: number | null;
+    } | null;
     plainConclusion?: string | null;
   };
   shopping: {
@@ -134,6 +157,17 @@ export interface DeliveryContent {
     perKgG?: number | null;
     brand?: string | null;
     timing?: string | null;
+    /**
+     * 营养素目标（2026-10-18）—— 如「钙 每kg加 5g」。
+     *
+     * ⚠️ 交付第 1 页列的是**营养素名**（钙），不是产品名（钙粉）——
+     * 前者是配方需求，后者是"买哪瓶"。
+     */
+    targets?: Array<{
+      label: string;
+      targetValuePerKg: number | null;
+      unit: string | null;
+    }> | null;
   }>;
   steps: string[];
   storage?: string | null;

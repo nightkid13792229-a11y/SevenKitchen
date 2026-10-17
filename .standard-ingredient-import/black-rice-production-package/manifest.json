@@ -1,0 +1,34 @@
+{
+  "packageVersion": 1,
+  "scope": "new-standard-ingredient-records-only",
+  "wholeDatabaseMigration": false,
+  "ingredientType": "FOOD",
+  "ingredientName": "黑米",
+  "localImportAudit": {
+    "createdAt": "2026-06-29T04:54:24.652Z",
+    "alignmentId": null,
+    "manifestHash": "d28326de78bb0fc796be96687c96702b6599697ab402dd4f1d6e18d423d80b0c"
+  },
+  "recordCounts": {
+    "ingredient": 1,
+    "nutrition_food": 2,
+    "nutrition_food_mapping": 2,
+    "ingredient_tag_assignment": 0,
+    "procurement_sku": 0
+  },
+  "ids": {
+    "ingredientIds": [
+      "36131203-2980-46b8-ac3c-7d38a4f713ae"
+    ],
+    "nutritionFoodIds": [
+      "a89a730b-829b-4d39-93d7-910dcfe99cf6",
+      "066eb6a5-f12c-4da9-a761-97d54fff65c3"
+    ],
+    "nutritionFoodMappingIds": [
+      "316aaac1-6758-4208-b56e-5acb77db92be",
+      "a1148f7c-adfc-418b-98e0-60a86bb5a1fd"
+    ],
+    "ingredientTagAssignmentIds": [],
+    "procurementSkuIds": []
+  }
+}

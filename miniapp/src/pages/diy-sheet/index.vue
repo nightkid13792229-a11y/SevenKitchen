@@ -107,7 +107,7 @@
               <text class="header-item name-col">原料名称</text>
               <text class="header-item recommend-col">{{ DIY_SHEET_FOOD_RECOMMENDATION_LABEL }}</text>
               <text class="header-item method-col">制备方法</text>
-              <text class="header-item actual-col">建议采购量</text>
+              <text class="header-item actual-col">净用量</text>
             </view>
             <view v-for="(item, idx) in foodItemsDetailed" :key="'food-' + idx" class="table-row food-table">
               <text class="row-item name-col">{{ item.nutritionStateLabel ? `${item.ingredientName}（${item.nutritionStateLabel}）` : item.ingredientName }}</text>
@@ -133,21 +133,21 @@
                 class="row-item actual-col highlight amount-link"
                 @tap.stop="showAmountDetailModal(item)"
               >
-                {{ item.actualAmountStr }}
+                {{ item.netAmountStr }}
               </text>
             </view>
             <!-- 合计行 -->
             <view class="table-row total-row food-table">
-              <text class="row-item name-col total-label">建议采购合计</text>
+              <text class="row-item name-col total-label">合计净重</text>
               <text class="row-item recommend-col">-</text>
               <text class="row-item method-col">-</text>
-              <text class="row-item actual-col total-value highlight">{{ foodItemsTotal.actualAmountStr }}</text>
+              <text class="row-item actual-col total-value highlight">{{ foodItemsTotal.netAmountStr }}</text>
             </view>
           </view>
-          <!-- 不给顾客看内部口径的那个百分比，只说明数字已预留余量 -->
+          <!-- 2026-10-18：采购量整条线删掉，只给净用量 -->
           <view class="purchase-amount-note">
             <text class="purchase-amount-note-text">
-              建议采购量已计算制作损耗。
+              只写这次要用多少。要买多少，你自己判断。
             </text>
           </view>
         </view>
@@ -423,16 +423,9 @@
             <text class="spec-value">{{ currentAmountDetail.preparationMethod }}</text>
           </view>
           <view class="spec-divider"></view>
-          <view class="spec-row">
-            <text class="spec-label">净用量：</text>
-            <text class="spec-value">{{ currentAmountDetail.theoreticalAmountStr }}</text>
-          </view>
           <view class="spec-row highlight-row">
-            <text class="spec-label">建议采购量：</text>
-            <text class="spec-value highlight-value">{{ currentAmountDetail.actualAmountStr }}</text>
-          </view>
-          <view class="purchase-amount-note">
-            <text class="purchase-amount-note-text">建议采购量已预留烹饪缩水余量。</text>
+            <text class="spec-label">净用量：</text>
+            <text class="spec-value highlight-value">{{ currentAmountDetail.theoreticalAmountStr }}</text>
           </view>
         </view>
       </view>
@@ -660,7 +653,6 @@ const printCanvasStyle = computed(() => ({
 }))
 
 // 全局配置中的补剂损耗率（默认5%）
-const globalSupplementLossRate = ref(0.05)
 const packagePlanTotal = computed(() => getPackagePlanTotal(packagePlan.value))
 const totalFoodNetWeightG = computed(() => packagePlanTotal.value.totalGrams || dailyIntakeG.value * cycleDays.value)
 
@@ -807,13 +799,10 @@ const supplementItems = computed(() => {
 // 食材类合计
 const foodItemsTotal = computed(() => {
   const totalTheoretical = foodItems.value.reduce((sum: number, item: any) => sum + item.theoreticalAmount, 0)
-  const totalActual = foodItems.value.reduce((sum: number, item: any) => sum + item.actualAmount, 0)
   return {
     theoreticalAmount: totalTheoretical,
-    actualAmount: totalActual,
     theoreticalAmountStr: formatNetAmount(totalTheoretical, true),
-    netAmountStr: formatNetAmount(totalTheoretical, true),
-    actualAmountStr: formatAmount(totalActual, true)
+    netAmountStr: formatNetAmount(totalTheoretical, true)
   }
 })
 
@@ -1027,7 +1016,7 @@ function formatPurchaseAmount(amount: number): string {
 
 /**
  * 净重的展示格式：不做「好买的量」进位，保留真实用量，
- * 好和旁边的建议采购量形成「净重 / 建议采购量」的对照。
+ * 2026-10-18：采购量删掉后，这一列就是唯一的用量数字（净用量）。
  */
 function formatNetAmount(amount: number, isFood: boolean): string {
   if (!Number.isFinite(amount) || amount <= 0) return '0g'
@@ -1055,11 +1044,11 @@ function formatFoodPrepTotalForPrint(amount: number): string {
 }
 
 /**
- * 纸质制作单上这一列给顾客看的是「建议采购量」（含缩水余量）。
+ * 纸质制作单上这一列给顾客看的是「净用量」（2026-10-18 起不再含缩水余量）。
  * 不再写「含 7% 损耗」——损耗率是我们的内部口径，顾客只需要知道该买多少。
  */
 function getFoodPrepAmountHeaderForPrint(): string {
-  return '净重/建议采购量'
+  return '净用量'
 }
 
 function formatSupplementTargetForPrint(item: any): string {
@@ -1431,11 +1420,6 @@ async function loadEquipmentRecommendations() {
         ]
       }
 
-      // 获取补剂损耗率（后端存储1.05表示5%损耗，需要减1）
-      if (res.data.supplementLossRate) {
-        globalSupplementLossRate.value = res.data.supplementLossRate - 1
-        console.log('[DIYSheet] 补剂损耗率加载成功:', globalSupplementLossRate.value)
-      }
     }
   } catch (error) {
     console.error('[DIYSheet] Load equipment recommendations error:', error)
@@ -1542,7 +1526,7 @@ async function handlePrint() {
         const foodRows = foodItemsDetailed.value.map(item => [
           item.nutritionStateLabel ? `${item.ingredientName}（${item.nutritionStateLabel}）` : item.ingredientName,
           item.recommendedPrintText,
-          `${item.netAmountStr} / ${item.actualAmountStr}`,
+          item.netAmountStr,
           item.preparationMethod || item.nutritionStateLabel || '-'
         ])
 
@@ -1553,7 +1537,7 @@ async function handlePrint() {
             totalRow: [
               '合计',
               '-',
-              `${foodItemsTotal.value.netAmountStr} / ${foodItemsTotal.value.actualAmountStr}`,
+              foodItemsTotal.value.netAmountStr,
               '-'
             ],
             colWidths: [200, 290, 240, 390],
@@ -1561,7 +1545,6 @@ async function handlePrint() {
           }
         )
 
-        builder.drawNote('建议采购量已计算制作损耗。')
       }
 
       // 4. 营养补充剂
@@ -1952,10 +1935,6 @@ function handlePurchase(purchaseLink: any, productName: string) {
   })
 }
 
-function getRecipeLossRate(): number {
-  return recipe.value?.productionLossRate ? recipe.value.productionLossRate - 1 : 0.07
-}
-
 function formatNutritionStateForDisplay(item: any): string {
   return (
     item?.nutritionStateLabel ||
@@ -1968,28 +1947,28 @@ function formatNutritionStateForDisplay(item: any): string {
   )
 }
 
+/**
+ * 制作清单的一行。
+ *
+ * 2026-10-18：**采购量整条线删掉**（老板定）——
+ * 只给"这次要用多少"（净用量），买多少让顾客自己判断。
+ *
+ * 所以这里不再算含损耗的「实际用量」，也不再读任何损耗率：
+ * 损耗率是经验估算，不同食材差很多，乘进去当"建议采购量"等于用估算冒充精算。
+ */
 function buildPurchaseListItem(item: any) {
   const isFood = item.type === 'FOOD'
-  const lossRate = isFood ? getRecipeLossRate() : globalSupplementLossRate.value
-  const theoreticalAmount = (item.netAmount ?? item.amount) * 1000
-  const actualAmount = theoreticalAmount * (1 + lossRate)
+  const netAmount = (item.netAmount ?? item.amount) * 1000
 
   return {
     name: item.name,
     type: item.type,
-    theoreticalAmount,
-    actualAmount,
-    lossRate,
+    netAmount,
     displayUnit: item.displayUnit || item.unit || 'g',
     nutritionStateLabel: formatNutritionStateForDisplay(item),
     preparationMethod: item.preparationMethod || null,
-    theoreticalAmountStr: formatNetAmount(theoreticalAmount, isFood),
-    netAmountStr: formatNetAmount(theoreticalAmount, isFood),
-    actualAmountStr: formatAmount(actualAmount, isFood),
-    lossRateStr: `${(lossRate * 100).toFixed(0)}%`,
-    calculationProcess: isFood
-      ? `理论用量 ${formatAmount(theoreticalAmount, false)} × (1 + ${(lossRate * 100).toFixed(0)}%损耗率) = 实际用量 ${formatAmount(actualAmount, false)}`
-      : `营养需求 ${theoreticalAmount.toFixed(2)}mg ÷ 浓度 × (1 + ${(lossRate * 100).toFixed(0)}%损耗率) = 实际用量 ${formatAmount(actualAmount, false)}`
+    theoreticalAmountStr: formatNetAmount(netAmount, isFood),
+    netAmountStr: formatNetAmount(netAmount, isFood),
   }
 }
 
@@ -3352,7 +3331,7 @@ onShareTimeline(() => {
 }
 
 
-/* 「建议采购量」的说明：不给顾客看损耗率，只说明已预留余量 */
+/* 用量说明：2026-10-18 起不再提损耗，只说明"买多少你自己判断" */
 .purchase-amount-note {
   margin-top: 12rpx;
   padding: 0 4rpx;

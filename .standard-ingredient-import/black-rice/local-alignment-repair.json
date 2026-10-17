@@ -1,0 +1,186 @@
+{
+  "createdAt": "2026-06-29T08:02:12.330Z",
+  "scope": "local-only-migration-baseline-repair",
+  "checksumRepairs": [
+    {
+      "migrationName": "20260125192532_add_reimbursement_cost_details",
+      "targetChecksum": "14245bd2879e200f25bffd7e0e0c85b4b189a899e9017818ed4d82a96a9f116a",
+      "updatedRows": 1
+    },
+    {
+      "migrationName": "20260131000000_add_favorite_recipe_table",
+      "targetChecksum": "92f28cbfc786e8f6b9b82301b36bb37c7fd0956ce22e296f8737c7c4c92cb2ab",
+      "updatedRows": 1
+    }
+  ],
+  "edibleYieldPatch": {
+    "missingNames": [
+      "兔里脊"
+    ],
+    "before": [
+      {
+        "name": "三文鱼",
+        "type": "FOOD",
+        "edible_yield_rate": "1"
+      },
+      {
+        "name": "牛肝",
+        "type": "FOOD",
+        "edible_yield_rate": "1"
+      },
+      {
+        "name": "牛霖",
+        "type": "FOOD",
+        "edible_yield_rate": "1"
+      },
+      {
+        "name": "猪心",
+        "type": "FOOD",
+        "edible_yield_rate": "1"
+      },
+      {
+        "name": "猪肝",
+        "type": "FOOD",
+        "edible_yield_rate": "1"
+      },
+      {
+        "name": "猪里脊",
+        "type": "FOOD",
+        "edible_yield_rate": "1"
+      },
+      {
+        "name": "青口贝",
+        "type": "FOOD",
+        "edible_yield_rate": "0.4"
+      },
+      {
+        "name": "青花鱼",
+        "type": "FOOD",
+        "edible_yield_rate": "1"
+      },
+      {
+        "name": "鸡心",
+        "type": "FOOD",
+        "edible_yield_rate": "1"
+      },
+      {
+        "name": "鸡肝",
+        "type": "FOOD",
+        "edible_yield_rate": "1"
+      },
+      {
+        "name": "鸡腿肉",
+        "type": "FOOD",
+        "edible_yield_rate": "1"
+      },
+      {
+        "name": "鸡蛋",
+        "type": "FOOD",
+        "edible_yield_rate": "1"
+      }
+    ],
+    "after": [
+      {
+        "name": "三文鱼",
+        "type": "FOOD",
+        "edible_yield_rate": "0.92"
+      },
+      {
+        "name": "牛肝",
+        "type": "FOOD",
+        "edible_yield_rate": "0.95"
+      },
+      {
+        "name": "牛霖",
+        "type": "FOOD",
+        "edible_yield_rate": "0.95"
+      },
+      {
+        "name": "猪心",
+        "type": "FOOD",
+        "edible_yield_rate": "0.90"
+      },
+      {
+        "name": "猪肝",
+        "type": "FOOD",
+        "edible_yield_rate": "0.95"
+      },
+      {
+        "name": "猪里脊",
+        "type": "FOOD",
+        "edible_yield_rate": "0.95"
+      },
+      {
+        "name": "青口贝",
+        "type": "FOOD",
+        "edible_yield_rate": "0.55"
+      },
+      {
+        "name": "青花鱼",
+        "type": "FOOD",
+        "edible_yield_rate": "0.95"
+      },
+      {
+        "name": "鸡心",
+        "type": "FOOD",
+        "edible_yield_rate": "0.90"
+      },
+      {
+        "name": "鸡肝",
+        "type": "FOOD",
+        "edible_yield_rate": "0.95"
+      },
+      {
+        "name": "鸡腿肉",
+        "type": "FOOD",
+        "edible_yield_rate": "0.95"
+      },
+      {
+        "name": "鸡蛋",
+        "type": "FOOD",
+        "edible_yield_rate": "0.88"
+      }
+    ],
+    "updatedCount": 12
+  },
+  "checksumBeforeRows": [
+    {
+      "migration_name": "20260125192532_add_reimbursement_cost_details",
+      "checksum": "8c0a31b2ea8789c5fb921cbe0f115db7a9a1e1b96e473958371598d7e89dcb71",
+      "finished_at": "2026-01-25T11:29:34.753Z",
+      "rolled_back_at": null
+    },
+    {
+      "migration_name": "20260131000000_add_favorite_recipe_table",
+      "checksum": "f5844494b04f94902083e190addf96defe03b763816a91739e6be11de7088226",
+      "finished_at": null,
+      "rolled_back_at": "2026-01-31T15:34:05.681Z"
+    },
+    {
+      "migration_name": "20260131000000_add_favorite_recipe_table",
+      "checksum": "f5844494b04f94902083e190addf96defe03b763816a91739e6be11de7088226",
+      "finished_at": "2026-01-31T15:34:05.683Z",
+      "rolled_back_at": null
+    }
+  ],
+  "checksumAfterRows": [
+    {
+      "migration_name": "20260125192532_add_reimbursement_cost_details",
+      "checksum": "14245bd2879e200f25bffd7e0e0c85b4b189a899e9017818ed4d82a96a9f116a",
+      "finished_at": "2026-01-25T11:29:34.753Z",
+      "rolled_back_at": null
+    },
+    {
+      "migration_name": "20260131000000_add_favorite_recipe_table",
+      "checksum": "f5844494b04f94902083e190addf96defe03b763816a91739e6be11de7088226",
+      "finished_at": null,
+      "rolled_back_at": "2026-01-31T15:34:05.681Z"
+    },
+    {
+      "migration_name": "20260131000000_add_favorite_recipe_table",
+      "checksum": "92f28cbfc786e8f6b9b82301b36bb37c7fd0956ce22e296f8737c7c4c92cb2ab",
+      "finished_at": "2026-01-31T15:34:05.683Z",
+      "rolled_back_at": null
+    }
+  ]
+}

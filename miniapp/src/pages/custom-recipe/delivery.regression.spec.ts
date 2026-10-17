@@ -115,20 +115,23 @@ describe('交付内容页 · 只渲染不计算', () => {
     expect(hits('content.shopping.totalPurchaseG')).toBe(false);
   });
 
-  it('★ 喂食量、采购量、营养值都直接来自快照（两页合起来看）', () => {
+  it('★ 喂食量、净用量、营养值都直接来自快照（两页合起来看）', () => {
     // 直接绑到快照字段上，中间不经过任何加工
     expect(source).toContain('content.feeding.dailyIntakeG');
     expect(source).toContain('content.feeding.perMealG');
     expect(source).toContain('content.nutrition.energyDensityKcalPerKg');
-    // 采购与制作那一块搬到了第 2 页
+    // 用量与制作那一块搬到了第 2 页
     expect(shoppingSource).toContain('content.shopping.lines');
-    expect(shoppingSource).toContain('line.purchaseG');
+    // 2026-10-18：采购量整条线删掉 —— 只绑净用量，不再绑 purchaseG
+    expect(shoppingSource).toContain('line.netG');
     expect(shoppingSource).toContain('content.shopping.totalNetG');
+    expect(shoppingSource).not.toContain('line.purchaseG');
+    expect(shoppingSource).not.toContain('totalPurchaseG');
   });
 
   it('算不出来时如实说"暂时算不出"，而不是显示一堆 0', () => {
     // 0 会让顾客以为"不用买""不用喂"
-    expect(shoppingSource).toContain('暂时算不出要买多少');
+    expect(shoppingSource).toContain('暂时算不出用量');
     expect(source).toContain('暂时算不出喂食量');
     // 靠"有没有内容"分支，而不是靠数值真假
     expect(shoppingSource).toContain('content.shopping.lines.length');
@@ -140,7 +143,9 @@ describe('交付内容页 · 只渲染不计算', () => {
      * "合计多少克""这批做几天 × 每天多少克"。
      * 所以对它的要求与第 1 页一样严。
      */
-    expect(shoppingSource).toContain('content.shopping.totalPurchaseG');
+    // 2026-10-18：合计从"采购合计"改成"合计净重"
+    expect(shoppingSource).toContain('content.shopping.totalNetG');
+    expect(shoppingSource).not.toContain('content.shopping.totalPurchaseG');
 
     /**
      * ⚠️ **第一版这条守卫写窄了。**
@@ -287,8 +292,10 @@ describe('交付物 · 长图导出', () => {
     }
   });
 
-  it('★ 补充剂要说明"不计入采购总量"（否则顾客会算重）', () => {
-    expect(printSource).toContain('不计入');
+  it('★ 补充剂要说明它不在食材里（否则顾客会算重）', () => {
+    // 2026-10-18：采购量删掉后，"不计入采购总量"失去指代对象，
+    // 改成直接说明"不在上面的食材里，需要单独准备"。
+    expect(printSource).toContain('补充剂不在上面的食材里');
   });
 
   it('★ 长图高度按内容撑开，不用固定 A4（否则最下面会被裁掉）', () => {

@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "createdAt": "2026-06-21T15:58:42.046Z",
+  "alignmentId": null,
+  "dbAlignmentStatus": "not-required-for-local",
+  "manifestHash": "789ffb09b7db3cfaebf4ab34e4f0f42410d1b796412dad41dcc621510532c2fc",
+  "ingredientIds": [
+    "b30a0138-7795-48d7-a6cb-cd4b0c2ab464"
+  ],
+  "nutritionFoodIds": [
+    "63843913-46a8-447c-ac7a-59effdd02042",
+    "96cdabbc-a3f0-411c-ba6f-0a605873306d"
+  ],
+  "nutritionFoodMappingIds": [
+    "6fd35c03-9237-48ac-8bb4-3becf8fa36a2",
+    "e77ef33c-3606-471b-95f1-72f89471e1e7"
+  ],
+  "ingredientTagAssignmentIds": [],
+  "procurementSkuIds": [],
+  "nutritionAudits": [
+    {
+      "profileId": "afcd-f000402-basa-fillet-raw",
+      "essentialCoveragePercent": 58.69565217391305,
+      "blockingIssues": [],
+      "reviewIssues": []
+    },
+    {
+      "profileId": "afcd-f000403-basa-fillet-steamed",
+      "essentialCoveragePercent": 58.69565217391305,
+      "blockingIssues": [],
+      "reviewIssues": []
+    }
+  ]
+}

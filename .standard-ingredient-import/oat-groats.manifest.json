@@ -1,0 +1,951 @@
+{
+  "version": 1,
+  "operationMode": "local-draft",
+  "ingredient": {
+    "type": "FOOD",
+    "name": "燕麦米",
+    "brand": null,
+    "productModel": null,
+    "tagIds": [],
+    "procurementSkus": [],
+    "notes": "标准食材；按去壳燕麦 / oat groats / hulled oats 处理，非调味即食燕麦片。主 raw 档案优先匹配 AFCD F006136 Oats, hulled, uncooked；不复用本地已有“燕麦”的 NutritionFood。"
+  },
+  "nutritionProfiles": [
+    {
+      "id": "afcd-f006136-oat-groats-raw-merged-v1",
+      "name": "燕麦米，生/干",
+      "nameEn": "Oat groats / hulled oats, uncooked",
+      "dataSource": "AFCD",
+      "externalId": "AFCD:F006136; supplemental fields USDA_FDC:173904, MEXT:01004",
+      "category": "GRAIN",
+      "basis": "PER_100G",
+      "preparationState": "raw",
+      "preparationStateLabel": "生/干",
+      "ediblePortionLabel": "去壳可食部分；每 100g",
+      "processingLabel": "去壳燕麦米；未煮熟，未调味，未强化",
+      "isPrimary": true,
+      "yieldRate": 1,
+      "notes": "主来源 AFCD F006136（Oats, hulled, uncooked）。USDA SR Legacy 173904 仅补铜、锰、必需氨基酸、胆碱、维生素K；MEXT 01004 仅补泛酸和生物素。维生素E按 AFCD 生育酚分项和 FEDIAF 2025 犬用活性系数换算。AFCD/USDA/MEXT 均未提供可采用的氯、维生素D、维生素B12；维生素A因来源零值含 imputed/unclear 成分，暂不计入完整性。",
+      "nutrients": {
+        "moisture": {
+          "value": 8,
+          "unit": "g"
+        },
+        "energyKj": {
+          "value": 1589,
+          "unit": "kJ"
+        },
+        "energyKcal": {
+          "value": 380,
+          "unit": "kcal"
+        },
+        "crudeProtein": {
+          "value": 12.5,
+          "unit": "g"
+        },
+        "crudeFat": {
+          "value": 9.8,
+          "unit": "g"
+        },
+        "ash": {
+          "value": 1.5,
+          "unit": "g"
+        },
+        "carbohydrate": {
+          "value": 55.5,
+          "unit": "g"
+        },
+        "fiber": {
+          "value": 8.6,
+          "unit": "g"
+        },
+        "totalSugars": {
+          "value": 1.2,
+          "unit": "g"
+        },
+        "starch": {
+          "value": 54.3,
+          "unit": "g"
+        },
+        "calcium": {
+          "value": 37,
+          "unit": "mg"
+        },
+        "phosphorus": {
+          "value": 305,
+          "unit": "mg"
+        },
+        "potassium": {
+          "value": 310,
+          "unit": "mg"
+        },
+        "sodium": {
+          "value": 4,
+          "unit": "mg"
+        },
+        "magnesium": {
+          "value": 117,
+          "unit": "mg"
+        },
+        "iodine": {
+          "value": 74,
+          "unit": "ug"
+        },
+        "iron": {
+          "value": 3.9,
+          "unit": "mg"
+        },
+        "selenium": {
+          "value": 17,
+          "unit": "ug"
+        },
+        "seleniumWetDiet": {
+          "value": 17,
+          "unit": "ug"
+        },
+        "seleniumDryDiet": {
+          "value": 17,
+          "unit": "ug"
+        },
+        "zinc": {
+          "value": 2.3,
+          "unit": "mg"
+        },
+        "copper": {
+          "value": 0.391,
+          "unit": "mg"
+        },
+        "manganese": {
+          "value": 3.63,
+          "unit": "mg"
+        },
+        "saturatedFattyAcids": {
+          "value": 1.79,
+          "unit": "g"
+        },
+        "monounsaturatedFattyAcids": {
+          "value": 4.32,
+          "unit": "g"
+        },
+        "polyunsaturatedFattyAcids": {
+          "value": 3.2,
+          "unit": "g"
+        },
+        "linoleicAcid": {
+          "value": 3.1,
+          "unit": "g"
+        },
+        "alphaLinolenicAcid": {
+          "value": 0.1,
+          "unit": "g"
+        },
+        "arachidonicAcid": {
+          "value": 0,
+          "unit": "mg",
+          "measuredZero": true
+        },
+        "epa": {
+          "value": 0,
+          "unit": "mg",
+          "measuredZero": true
+        },
+        "dha": {
+          "value": 0,
+          "unit": "mg",
+          "measuredZero": true
+        },
+        "dpa": {
+          "value": 0,
+          "unit": "mg",
+          "measuredZero": true
+        },
+        "arginine": {
+          "value": 0.85,
+          "unit": "g"
+        },
+        "histidine": {
+          "value": 0.275,
+          "unit": "g"
+        },
+        "isoleucine": {
+          "value": 0.503,
+          "unit": "g"
+        },
+        "leucine": {
+          "value": 0.98,
+          "unit": "g"
+        },
+        "lysine": {
+          "value": 0.637,
+          "unit": "g"
+        },
+        "methionine": {
+          "value": 0.207,
+          "unit": "g"
+        },
+        "cystine": {
+          "value": 0.455,
+          "unit": "g"
+        },
+        "phenylalanine": {
+          "value": 0.665,
+          "unit": "g"
+        },
+        "tyrosine": {
+          "value": 0.395,
+          "unit": "g"
+        },
+        "threonine": {
+          "value": 0.382,
+          "unit": "g"
+        },
+        "tryptophan": {
+          "value": 0.161,
+          "unit": "g"
+        },
+        "valine": {
+          "value": 0.688,
+          "unit": "g"
+        },
+        "vitaminB1": {
+          "value": 0.31,
+          "unit": "mg"
+        },
+        "vitaminB2": {
+          "value": 0.01,
+          "unit": "mg"
+        },
+        "vitaminB3": {
+          "value": 1.2,
+          "unit": "mg"
+        },
+        "vitaminB5": {
+          "value": 1.29,
+          "unit": "mg"
+        },
+        "vitaminB6": {
+          "value": 0.2,
+          "unit": "mg"
+        },
+        "vitaminB9": {
+          "value": 17,
+          "unit": "ug"
+        },
+        "vitaminB7": {
+          "value": 22,
+          "unit": "ug"
+        },
+        "choline": {
+          "value": 40.4,
+          "unit": "mg"
+        },
+        "vitaminK": {
+          "value": 2,
+          "unit": "ug"
+        },
+        "vitaminE": {
+          "value": 0.48,
+          "unit": "mg"
+        }
+      },
+      "sourceForms": {
+        "moisture": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "moisture",
+          "sourceValue": 8,
+          "sourceUnit": "g",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+        },
+        "energyKj": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "energyKj",
+          "sourceValue": 1589,
+          "sourceUnit": "kJ",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+        },
+        "energyKcal": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "Energy with dietary fibre, equated",
+          "sourceValue": 1589,
+          "sourceUnit": "kJ",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files",
+          "conversion": "1589 kJ / 4.184 = 379.78 kcal, rounded to 380 kcal"
+        },
+        "crudeProtein": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "Protein",
+          "sourceValue": 12.5,
+          "sourceUnit": "g",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files",
+          "nitrogenFactor": 5.83
+        },
+        "crudeFat": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "crudeFat",
+          "sourceValue": 9.8,
+          "sourceUnit": "g",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+        },
+        "ash": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "ash",
+          "sourceValue": 1.5,
+          "sourceUnit": "g",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+        },
+        "carbohydrate": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "Available carbohydrate, with sugar alcohols",
+          "sourceValue": 55.5,
+          "sourceUnit": "g",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+        },
+        "fiber": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "fiber",
+          "sourceValue": 8.6,
+          "sourceUnit": "g",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+        },
+        "totalSugars": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "totalSugars",
+          "sourceValue": 1.2,
+          "sourceUnit": "g",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+        },
+        "starch": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "starch",
+          "sourceValue": 54.3,
+          "sourceUnit": "g",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+        },
+        "calcium": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "calcium",
+          "sourceValue": 37,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+        },
+        "phosphorus": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "phosphorus",
+          "sourceValue": 305,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+        },
+        "potassium": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "potassium",
+          "sourceValue": 310,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+        },
+        "sodium": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "sodium",
+          "sourceValue": 4,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+        },
+        "magnesium": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "magnesium",
+          "sourceValue": 117,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+        },
+        "iodine": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "iodine",
+          "sourceValue": 74,
+          "sourceUnit": "ug",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+        },
+        "iron": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "iron",
+          "sourceValue": 3.9,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+        },
+        "selenium": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "selenium",
+          "sourceValue": 17,
+          "sourceUnit": "ug",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+        },
+        "seleniumWetDiet": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "Selenium (Se)",
+          "sourceValue": 17,
+          "sourceUnit": "ug",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files",
+          "mappingNote": "同一食材硒含量映射到 FEDIAF wet/dry selenium 两个标准代码；不是新增测量值。"
+        },
+        "seleniumDryDiet": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "Selenium (Se)",
+          "sourceValue": 17,
+          "sourceUnit": "ug",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files",
+          "mappingNote": "同一食材硒含量映射到 FEDIAF wet/dry selenium 两个标准代码；不是新增测量值。"
+        },
+        "zinc": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "zinc",
+          "sourceValue": 2.3,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+        },
+        "copper": {
+          "source": "USDA_FDC",
+          "sourceFoodId": "173904",
+          "sourceFoodName": "Cereals, oats, regular and quick, not fortified, dry",
+          "sourceComponent": "copper",
+          "sourceValue": 0.391,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fdc.nal.usda.gov/download-datasets/",
+          "supplementalField": true
+        },
+        "manganese": {
+          "source": "USDA_FDC",
+          "sourceFoodId": "173904",
+          "sourceFoodName": "Cereals, oats, regular and quick, not fortified, dry",
+          "sourceComponent": "manganese",
+          "sourceValue": 3.63,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fdc.nal.usda.gov/download-datasets/",
+          "supplementalField": true
+        },
+        "saturatedFattyAcids": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "saturatedFattyAcids",
+          "sourceValue": 1.79,
+          "sourceUnit": "g",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+        },
+        "monounsaturatedFattyAcids": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "monounsaturatedFattyAcids",
+          "sourceValue": 4.32,
+          "sourceUnit": "g",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+        },
+        "polyunsaturatedFattyAcids": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "polyunsaturatedFattyAcids",
+          "sourceValue": 3.2,
+          "sourceUnit": "g",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+        },
+        "linoleicAcid": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "linoleicAcid",
+          "sourceValue": 3.1,
+          "sourceUnit": "g",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+        },
+        "alphaLinolenicAcid": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "alphaLinolenicAcid",
+          "sourceValue": 0.1,
+          "sourceUnit": "g",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+        },
+        "arachidonicAcid": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "arachidonicAcid",
+          "sourceValue": 0,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files",
+          "reportedZero": true,
+          "zeroBasis": "AFCD F006136 fatty-acid component reported as 0 in official nutrient profile."
+        },
+        "epa": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "epa",
+          "sourceValue": 0,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files",
+          "reportedZero": true,
+          "zeroBasis": "AFCD F006136 fatty-acid component reported as 0 in official nutrient profile."
+        },
+        "dha": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "dha",
+          "sourceValue": 0,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files",
+          "reportedZero": true,
+          "zeroBasis": "AFCD F006136 fatty-acid component reported as 0 in official nutrient profile."
+        },
+        "dpa": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "dpa",
+          "sourceValue": 0,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files",
+          "reportedZero": true,
+          "zeroBasis": "AFCD F006136 fatty-acid component reported as 0 in official nutrient profile."
+        },
+        "arginine": {
+          "source": "USDA_FDC",
+          "sourceFoodId": "173904",
+          "sourceFoodName": "Cereals, oats, regular and quick, not fortified, dry",
+          "sourceComponent": "arginine",
+          "sourceValue": 0.85,
+          "sourceUnit": "g",
+          "evidenceUri": "https://fdc.nal.usda.gov/download-datasets/",
+          "supplementalField": true
+        },
+        "histidine": {
+          "source": "USDA_FDC",
+          "sourceFoodId": "173904",
+          "sourceFoodName": "Cereals, oats, regular and quick, not fortified, dry",
+          "sourceComponent": "histidine",
+          "sourceValue": 0.275,
+          "sourceUnit": "g",
+          "evidenceUri": "https://fdc.nal.usda.gov/download-datasets/",
+          "supplementalField": true
+        },
+        "isoleucine": {
+          "source": "USDA_FDC",
+          "sourceFoodId": "173904",
+          "sourceFoodName": "Cereals, oats, regular and quick, not fortified, dry",
+          "sourceComponent": "isoleucine",
+          "sourceValue": 0.503,
+          "sourceUnit": "g",
+          "evidenceUri": "https://fdc.nal.usda.gov/download-datasets/",
+          "supplementalField": true
+        },
+        "leucine": {
+          "source": "USDA_FDC",
+          "sourceFoodId": "173904",
+          "sourceFoodName": "Cereals, oats, regular and quick, not fortified, dry",
+          "sourceComponent": "leucine",
+          "sourceValue": 0.98,
+          "sourceUnit": "g",
+          "evidenceUri": "https://fdc.nal.usda.gov/download-datasets/",
+          "supplementalField": true
+        },
+        "lysine": {
+          "source": "USDA_FDC",
+          "sourceFoodId": "173904",
+          "sourceFoodName": "Cereals, oats, regular and quick, not fortified, dry",
+          "sourceComponent": "lysine",
+          "sourceValue": 0.637,
+          "sourceUnit": "g",
+          "evidenceUri": "https://fdc.nal.usda.gov/download-datasets/",
+          "supplementalField": true
+        },
+        "methionine": {
+          "source": "USDA_FDC",
+          "sourceFoodId": "173904",
+          "sourceFoodName": "Cereals, oats, regular and quick, not fortified, dry",
+          "sourceComponent": "methionine",
+          "sourceValue": 0.207,
+          "sourceUnit": "g",
+          "evidenceUri": "https://fdc.nal.usda.gov/download-datasets/",
+          "supplementalField": true
+        },
+        "cystine": {
+          "source": "USDA_FDC",
+          "sourceFoodId": "173904",
+          "sourceFoodName": "Cereals, oats, regular and quick, not fortified, dry",
+          "sourceComponent": "cystine",
+          "sourceValue": 0.455,
+          "sourceUnit": "g",
+          "evidenceUri": "https://fdc.nal.usda.gov/download-datasets/",
+          "supplementalField": true
+        },
+        "phenylalanine": {
+          "source": "USDA_FDC",
+          "sourceFoodId": "173904",
+          "sourceFoodName": "Cereals, oats, regular and quick, not fortified, dry",
+          "sourceComponent": "phenylalanine",
+          "sourceValue": 0.665,
+          "sourceUnit": "g",
+          "evidenceUri": "https://fdc.nal.usda.gov/download-datasets/",
+          "supplementalField": true
+        },
+        "tyrosine": {
+          "source": "USDA_FDC",
+          "sourceFoodId": "173904",
+          "sourceFoodName": "Cereals, oats, regular and quick, not fortified, dry",
+          "sourceComponent": "tyrosine",
+          "sourceValue": 0.395,
+          "sourceUnit": "g",
+          "evidenceUri": "https://fdc.nal.usda.gov/download-datasets/",
+          "supplementalField": true
+        },
+        "threonine": {
+          "source": "USDA_FDC",
+          "sourceFoodId": "173904",
+          "sourceFoodName": "Cereals, oats, regular and quick, not fortified, dry",
+          "sourceComponent": "threonine",
+          "sourceValue": 0.382,
+          "sourceUnit": "g",
+          "evidenceUri": "https://fdc.nal.usda.gov/download-datasets/",
+          "supplementalField": true
+        },
+        "tryptophan": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "tryptophan",
+          "sourceValue": 0.161,
+          "sourceUnit": "g",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+        },
+        "valine": {
+          "source": "USDA_FDC",
+          "sourceFoodId": "173904",
+          "sourceFoodName": "Cereals, oats, regular and quick, not fortified, dry",
+          "sourceComponent": "valine",
+          "sourceValue": 0.688,
+          "sourceUnit": "g",
+          "evidenceUri": "https://fdc.nal.usda.gov/download-datasets/",
+          "supplementalField": true
+        },
+        "vitaminB1": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "vitaminB1",
+          "sourceValue": 0.31,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+        },
+        "vitaminB2": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "vitaminB2",
+          "sourceValue": 0.01,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+        },
+        "vitaminB3": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "vitaminB3",
+          "sourceValue": 1.2,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+        },
+        "vitaminB5": {
+          "source": "MEXT",
+          "sourceFoodId": "01004",
+          "sourceFoodName": "CEREALS/Common oats/oatmeal, raw",
+          "sourceComponent": "vitaminB5",
+          "sourceValue": 1.29,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01004_7",
+          "supplementalField": true
+        },
+        "vitaminB6": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "vitaminB6",
+          "sourceValue": 0.2,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+        },
+        "vitaminB9": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "vitaminB9",
+          "sourceValue": 17,
+          "sourceUnit": "ug",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+        },
+        "vitaminB7": {
+          "source": "MEXT",
+          "sourceFoodId": "01004",
+          "sourceFoodName": "CEREALS/Common oats/oatmeal, raw",
+          "sourceComponent": "vitaminB7",
+          "sourceValue": 22,
+          "sourceUnit": "ug",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01004_7",
+          "supplementalField": true
+        },
+        "choline": {
+          "source": "USDA_FDC",
+          "sourceFoodId": "173904",
+          "sourceFoodName": "Cereals, oats, regular and quick, not fortified, dry",
+          "sourceComponent": "choline",
+          "sourceValue": 40.4,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fdc.nal.usda.gov/download-datasets/",
+          "supplementalField": true
+        },
+        "vitaminK": {
+          "source": "USDA_FDC",
+          "sourceFoodId": "173904",
+          "sourceFoodName": "Cereals, oats, regular and quick, not fortified, dry",
+          "sourceComponent": "vitaminK",
+          "sourceValue": 2,
+          "sourceUnit": "ug",
+          "evidenceUri": "https://fdc.nal.usda.gov/download-datasets/",
+          "supplementalField": true
+        },
+        "vitaminE": {
+          "source": "AFCD",
+          "sourceFoodId": "F006136",
+          "sourceFoodName": "Oats, hulled, uncooked",
+          "sourceComponent": "Vitamin E; alpha/beta/gamma/delta tocopherol components",
+          "sourceValue": 0.48,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files",
+          "vitaminEForm": "FEDIAF_TOCOPHEROL_ACTIVITY",
+          "alphaTocopherolMg": 0.4,
+          "betaTocopherolMg": 0,
+          "gammaTocopherolMg": 0.3,
+          "deltaTocopherolMg": 0,
+          "totalVitaminEMg": 0.48,
+          "conversionNote": "按 FEDIAF 2025 犬用维生素 E 活性系数折算；alpha 1.49 IU/mg、beta 0.33 IU/mg、gamma 0.01 IU/mg、delta 0.25 IU/mg。"
+        }
+      }
+    }
+  ],
+  "sourceCandidates": [
+    {
+      "source": "AFCD",
+      "sourceId": "AFCD:F006136",
+      "sourceName": "Australian Food Composition Database Release 3.0",
+      "matchedName": "Oats, hulled, uncooked",
+      "stateTags": [
+        "raw"
+      ],
+      "essentialCoveragePercent": 91.3,
+      "role": "identity-primary-raw-profile",
+      "url": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files",
+      "notes": "身份最贴近“燕麦米/去壳燕麦”；官方 Excel 文件中 Derivation=Analysed。无精确同源熟制 hulled oats 档案。"
+    },
+    {
+      "source": "USDA_FDC",
+      "sourceId": "USDA_FDC:173904",
+      "sourceName": "USDA FoodData Central SR Legacy",
+      "matchedName": "Cereals, oats, regular and quick, not fortified, dry",
+      "stateTags": [
+        "dried"
+      ],
+      "essentialCoveragePercent": 89.1,
+      "role": "supplemental-fields",
+      "fieldsUsed": [
+        "copper",
+        "manganese",
+        "essential amino acids except tryptophan",
+        "choline",
+        "vitaminK"
+      ],
+      "url": "https://fdc.nal.usda.gov/download-datasets/",
+      "notes": "官方 SR Legacy 干燕麦档案，字段覆盖好，但语义是 regular/quick oats，不优先于 AFCD hulled oats。"
+    },
+    {
+      "source": "USDA_FDC",
+      "sourceId": "USDA_FDC:173905",
+      "sourceName": "USDA FoodData Central SR Legacy",
+      "matchedName": "Cereals, oats, regular and quick, unenriched, cooked with water (includes boiling and microwaving), without salt",
+      "stateTags": [
+        "cooked"
+      ],
+      "essentialCoveragePercent": 84.8,
+      "role": "cooked-reference-not-imported",
+      "url": "https://fdc.nal.usda.gov/download-datasets/",
+      "notes": "同为 USDA 的 cooked oats 候选，但不是精确的 oat groats/hulled oats 熟制；保留为审核参考，不导入为燕麦米熟制档案。"
+    },
+    {
+      "source": "MEXT",
+      "sourceId": "MEXT:01004",
+      "sourceName": "Japan MEXT Standard Tables of Food Composition",
+      "matchedName": "CEREALS/Common oats/oatmeal, raw",
+      "stateTags": [
+        "raw"
+      ],
+      "essentialCoveragePercent": 56.5,
+      "role": "supplemental-fields",
+      "fieldsUsed": [
+        "vitaminB5",
+        "vitaminB7"
+      ],
+      "url": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01004_7",
+      "notes": "官方 raw oatmeal 档案，非去壳燕麦米精确档案；仅用于补泛酸和生物素。"
+    },
+    {
+      "source": "CNF",
+      "sourceId": "CNF:4421",
+      "sourceName": "Canadian Nutrient File",
+      "matchedName": "Grains, oats",
+      "stateTags": [
+        "raw"
+      ],
+      "essentialCoveragePercent": 0,
+      "role": "candidate-not-adopted",
+      "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=4421&wbdisable=true",
+      "notes": "找到官方候选，但本次未下载/解析完整营养明细；不优先于 AFCD hulled oats。"
+    },
+    {
+      "source": "CIQUAL",
+      "sourceId": "CIQUAL:9310",
+      "sourceName": "ANSES Ciqual 2025",
+      "matchedName": "Oat, raw",
+      "stateTags": [
+        "raw"
+      ],
+      "essentialCoveragePercent": 0,
+      "role": "candidate-not-adopted",
+      "url": "https://zenodo.org/records/17550133",
+      "notes": "找到 Oat, raw 和 cooked oat flakes 候选；不是精确 hulled oat groats。"
+    }
+  ],
+  "sourceSearchLog": [
+    {
+      "source": "USDA_FDC",
+      "status": "candidate_found",
+      "query": "oat groats / oats raw / cereals oats regular quick dry / cooked with water",
+      "searchedAt": "2026-06-17T15:53:42Z",
+      "evidenceUri": "https://fdc.nal.usda.gov/download-datasets/",
+      "notes": "官方 SR Legacy CSV 已下载解析；找到 173904 dry oats 和 173905 cooked oats。用于补字段和熟制参考，但 173904/173905 均非精确 hulled oat groats。"
+    },
+    {
+      "source": "NZFCD",
+      "status": "source_unavailable",
+      "query": "oat groats / hulled oats / oats in FOODfiles 2024",
+      "searchedAt": "2026-06-17T15:53:42Z",
+      "evidenceUri": "https://www.foodcomposition.co.nz/foodfiles/",
+      "notes": "官方 FOODfiles 2024 MSI 已下载，但当前 macOS 环境缺少 7z/msiextract，无法在本轮可靠解析；未采用。"
+    },
+    {
+      "source": "NEVO",
+      "status": "source_unavailable",
+      "query": "oat groats / hulled oats / oats in NEVO 2025/9.0",
+      "searchedAt": "2026-06-17T15:53:42Z",
+      "evidenceUri": "https://www.rivm.nl/en/dutch-food-composition-database/use-of-nevo-online/request-dataset",
+      "notes": "NEVO 2025/9.0 数据集需通过 RIVM 条款/表单获取；本轮未获得可机读数据文件，未采用。"
+    },
+    {
+      "source": "MEXT",
+      "status": "candidate_found",
+      "query": "えんばく オートミール raw / common oats oatmeal raw",
+      "searchedAt": "2026-06-17T15:53:42Z",
+      "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01004_7",
+      "notes": "找到 01004 Common oats/oatmeal raw；非精确 hulled oat groats，但可作为官方 raw oat 近邻来源补泛酸、生物素。"
+    },
+    {
+      "source": "AFCD",
+      "status": "candidate_found",
+      "query": "oat groats / hulled oats / oats hulled uncooked",
+      "searchedAt": "2026-06-17T15:53:42Z",
+      "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files",
+      "notes": "官方 AFCD Release 3.0 Excel 已解析；找到 F006136 Oats, hulled, uncooked，身份最贴近燕麦米，选为主 raw 档案。"
+    },
+    {
+      "source": "AUSNUT",
+      "status": "state_mismatch",
+      "query": "oat groats / hulled oats / rolled oats / porridge oats in AUSNUT 2023",
+      "searchedAt": "2026-06-17T15:53:42Z",
+      "evidenceUri": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/ausnut/data-files",
+      "notes": "官方 AUSNUT 2023 文件已解析；找到 rolled oats uncooked 和 porridge made with water，但未找到 hulled oat groats。"
+    },
+    {
+      "source": "CNF",
+      "status": "candidate_found",
+      "query": "oat groats / grains oats Canadian Nutrient File",
+      "searchedAt": "2026-06-17T15:53:42Z",
+      "evidenceUri": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=4421&wbdisable=true",
+      "notes": "找到 CNF Food code 4421 Grains, oats；未作为主来源，因为 AFCD 有更精确的 hulled uncooked 身份匹配。"
+    },
+    {
+      "source": "COFID",
+      "status": "state_mismatch",
+      "query": "oat groats / hulled oats / porridge oats CoFID 2021",
+      "searchedAt": "2026-06-17T15:53:42Z",
+      "evidenceUri": "https://www.gov.uk/government/publications/composition-of-foods-integrated-dataset-cofid",
+      "notes": "官方 CoFID 2021 Excel 已解析；找到 porridge oats unfortified 和 porridge cooked entries，但未找到 hulled oat groats。"
+    },
+    {
+      "source": "CIQUAL",
+      "status": "candidate_found",
+      "query": "oat raw / oat flakes cooked Ciqual 2025",
+      "searchedAt": "2026-06-17T15:53:42Z",
+      "evidenceUri": "https://zenodo.org/records/17550133",
+      "notes": "官方 Ciqual 2025 数据集已解析；找到 9310 Oat, raw 和 9313 Oat flakes cooked in water。未采用为主来源，因为不是精确 hulled oat groats。"
+    }
+  ],
+  "dbAlignmentReport": {
+    "id": "",
+    "status": "not-required-for-local",
+    "notes": "Local draft write approved without production DB alignment. Production-readonly DB alignment remains required before production package export or deployment."
+  },
+  "operatorConfirmation": {
+    "localWriteApproved": true,
+    "productionPackageApproved": false
+  }
+}

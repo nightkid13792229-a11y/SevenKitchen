@@ -1,0 +1,14 @@
+{
+  "nutritionAudits": [
+    {
+      "profileId": "mext-01182-black-rice-raw",
+      "blockingIssues": [],
+      "reviewIssues": []
+    },
+    {
+      "profileId": "mext-01184-black-rice-cooked",
+      "blockingIssues": [],
+      "reviewIssues": []
+    }
+  ]
+}

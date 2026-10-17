@@ -185,7 +185,6 @@ const content = computed(
       shopping: {
         lines: [],
         totalNetG: 0,
-        totalPurchaseG: 0,
         lossRate: 1,
       },
       supplements: [],

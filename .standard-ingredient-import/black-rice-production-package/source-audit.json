@@ -1,0 +1,56 @@
+{
+  "sourceCandidates": [
+    {
+      "source": "MEXT",
+      "sourceId": "MEXT:01182",
+      "sourceName": "Japan MEXT Standard Tables of Food Composition (2023 supplement)",
+      "matchedName": "穀類/こめ/［水稲穀粒］/黒米",
+      "stateTags": [
+        "raw"
+      ],
+      "essentialCoveragePercent": 56.52173913043478,
+      "sameSourceRawCookedPair": true,
+      "role": "identity-primary-raw-profile",
+      "url": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7",
+      "notes": "白名单主源；身份和 raw 状态精确匹配，且有同源 cooked 黑米档案。氨基酸和脂肪酸分表为空，未跨源补普通米种值。"
+    },
+    {
+      "source": "MEXT",
+      "sourceId": "MEXT:01184",
+      "sourceName": "Japan MEXT Standard Tables of Food Composition (2023 supplement)",
+      "matchedName": "穀類/こめ/［水稲めし］/黒米",
+      "stateTags": [
+        "cooked"
+      ],
+      "essentialCoveragePercent": 50,
+      "sameSourceRawCookedPair": true,
+      "role": "identity-cooked-companion-profile",
+      "url": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01184_7",
+      "notes": "白名单主源；身份和 cooked 状态精确匹配，与 raw 档案同源。氨基酸和脂肪酸分表为空，钠为 Tr 不数值化，碘和维生素D未提供。"
+    },
+    {
+      "source": "USDA_FDC",
+      "sourceId": "USDA_FDC:2710825",
+      "sourceName": "USDA FoodData Central Foundation Foods",
+      "matchedName": "Rice, black, unenriched, raw",
+      "stateTags": [
+        "raw"
+      ],
+      "essentialCoveragePercent": 30.434782608695656,
+      "sameSourceRawCookedPair": false,
+      "role": "candidate-not-adopted",
+      "url": "https://fdc.nal.usda.gov/fdc-app.html#/food-details/2710825/nutrients",
+      "notes": "官方 Foundation raw 黑米档案；没有匹配的 cooked 黑米同源档案，且 FEDIAF 必需覆盖低于 MEXT raw，因此不采用。"
+    }
+  ],
+  "nutritionAudits": [
+    {
+      "profileId": "mext-01182-black-rice-raw",
+      "essentialCoveragePercent": 56.52173913043478
+    },
+    {
+      "profileId": "mext-01184-black-rice-cooked",
+      "essentialCoveragePercent": 50
+    }
+  ]
+}

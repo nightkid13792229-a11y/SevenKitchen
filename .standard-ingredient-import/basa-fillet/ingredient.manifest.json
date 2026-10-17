@@ -1,0 +1,902 @@
+{
+  "version": 1,
+  "operationMode": "local-draft",
+  "ingredient": {
+    "type": "FOOD",
+    "name": "巴沙鱼柳",
+    "brand": null,
+    "productModel": null,
+    "tagIds": [],
+    "notes": "标准食材；按巴沙鱼/博氏巨鲶/低眼无齿芒鱼（basa / Pangasius hypophthalmus）鱼柳可食部处理，非调味、非裹粉、非预炸。主档案采用 AFCD F000402 raw，同源附 AFCD F000403 steamed/no added fat 熟档案；未复用本地已有 NutritionFood。 FEDIAF 2025 当前实现必需营养素覆盖率：raw 58.70%，steamed 58.70%；缺口主要为完整氨基酸谱、氯、锰和部分维生素。",
+    "procurementSkus": []
+  },
+  "nutritionProfiles": [
+    {
+      "id": "afcd-f000402-basa-fillet-raw",
+      "name": "生/鲜 / 鱼柳可食部分；每100g / 未调味、未裹粉、未煮熟",
+      "nameEn": "Bassa (basa), fillet, raw",
+      "dataSource": "AFCD",
+      "externalId": "F000402",
+      "category": "SEAFOOD",
+      "basis": "PER_100G",
+      "preparationState": "raw",
+      "preparationStateLabel": "生/鲜",
+      "ediblePortionLabel": "鱼柳可食部分；每 100g",
+      "processingLabel": "巴沙鱼柳；未调味、未裹粉、未煮熟",
+      "isPrimary": true,
+      "yieldRate": 1,
+      "notes": "主档案；食谱设计器按生重称量。AFCD F000402 为澳洲市场水产养殖进口巴沙鱼柳的 raw 档案。",
+      "sourceForms": {
+        "energyKcal": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "Energy with dietary fibre, equated \n(kJ)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx",
+          "originalValue": 332,
+          "originalUnit": "kJ",
+          "conversion": "kJ / 4.184"
+        },
+        "moisture": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "Moisture (water) \n(g)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "crudeProtein": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "Protein \n(g)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "crudeFat": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "Fat, total \n(g)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "ash": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "Ash \n(g)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "carbohydrate": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "Available carbohydrate, without sugar alcohols \n(g)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "fiber": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "Total dietary fibre \n(g)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "calcium": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "Calcium (Ca) \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "phosphorus": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "Phosphorus (P) \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "potassium": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "Potassium (K) \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "sodium": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "Sodium (Na) \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "magnesium": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "Magnesium (Mg) \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "iron": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "Iron (Fe) \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "zinc": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "Zinc (Zn) \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "copper": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "Copper (Cu) \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "iodine": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "Iodine (I) \n(ug)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "selenium": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "Selenium (Se) \n(ug)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "vitaminB1": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "Thiamin (B1) \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "vitaminB2": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "Riboflavin (B2) \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "vitaminB3": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "Niacin (B3) \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "vitaminB6": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "Pyridoxine (B6) \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "vitaminB12": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "Cobalamin (B12) \n(ug)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "vitaminD": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "Cholecalciferol (D3) \n(ug)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx",
+          "vitaminDForm": "vitamin_d3_cholecalciferol",
+          "cholecalciferolUg": 0.04,
+          "ergocalciferolUg": 0,
+          "hydroxyCholecalciferolUg": 0,
+          "hydroxyErgocalciferolUg": 0,
+          "conversionBasis": "FEDIAF ordinary vitamin D3, 1 ug = 40 IU"
+        },
+        "vitaminE": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "Vitamin E \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx",
+          "vitaminEForm": "SOURCE_ALPHA_TOCOPHEROL_EQUIVALENT",
+          "alphaTocopherolEquivalentMg": 0.95,
+          "alphaTocopherolMg": 1,
+          "totalVitaminEMg": 0.95,
+          "conversionBasis": "AFCD Vitamin E is source total vitamin E activity: alpha + beta/2 + gamma/10; converted to FEDIAF IU with d-alpha-tocopherol 1 mg = 1.49 IU"
+        },
+        "saturatedFattyAcids": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "Total saturated fatty acids, equated \n(g)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "monounsaturatedFattyAcids": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "Total monounsaturated fatty acids, equated \n(g)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "polyunsaturatedFattyAcids": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "Total polyunsaturated fatty acids, equated \n(g)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "linoleicAcid": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "C18:2w6 (g)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "alphaLinolenicAcid": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "C18:3w3 (g)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "arachidonicAcid": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "C20:4w6 (mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "epa": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "C20:5w3 (mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "dpa": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "C22:5w3 (mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "dha": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "C22:6w3 (mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "tryptophan": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "Tryptophan \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "cholesterol": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000402",
+          "sourceFieldName": "Cholesterol \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        }
+      },
+      "nutrients": {
+        "energyKcal": {
+          "value": 79.349904,
+          "unit": "kcal"
+        },
+        "moisture": {
+          "value": 83.2,
+          "unit": "g"
+        },
+        "crudeProtein": {
+          "value": 15.7,
+          "unit": "g"
+        },
+        "crudeFat": {
+          "value": 1.8,
+          "unit": "g"
+        },
+        "ash": {
+          "value": 1.1,
+          "unit": "g"
+        },
+        "carbohydrate": {
+          "value": 0.0,
+          "unit": "g",
+          "measuredZero": true
+        },
+        "fiber": {
+          "value": 0.0,
+          "unit": "g",
+          "measuredZero": true
+        },
+        "calcium": {
+          "value": 18.0,
+          "unit": "mg"
+        },
+        "phosphorus": {
+          "value": 350.0,
+          "unit": "mg"
+        },
+        "potassium": {
+          "value": 347.0,
+          "unit": "mg"
+        },
+        "sodium": {
+          "value": 84.0,
+          "unit": "mg"
+        },
+        "magnesium": {
+          "value": 31.0,
+          "unit": "mg"
+        },
+        "iron": {
+          "value": 0.4,
+          "unit": "mg"
+        },
+        "zinc": {
+          "value": 0.24,
+          "unit": "mg"
+        },
+        "copper": {
+          "value": 0.008,
+          "unit": "mg"
+        },
+        "iodine": {
+          "value": 30.0,
+          "unit": "ug"
+        },
+        "selenium": {
+          "value": 20.0,
+          "unit": "ug"
+        },
+        "vitaminB1": {
+          "value": 0.15,
+          "unit": "mg"
+        },
+        "vitaminB2": {
+          "value": 0.13,
+          "unit": "mg"
+        },
+        "vitaminB3": {
+          "value": 3.3,
+          "unit": "mg"
+        },
+        "vitaminB6": {
+          "value": 0.44,
+          "unit": "mg"
+        },
+        "vitaminB12": {
+          "value": 2.0,
+          "unit": "ug"
+        },
+        "vitaminD": {
+          "value": 0.04,
+          "unit": "ug"
+        },
+        "vitaminE": {
+          "value": 0.95,
+          "unit": "mg"
+        },
+        "saturatedFattyAcids": {
+          "value": 0.5,
+          "unit": "g"
+        },
+        "monounsaturatedFattyAcids": {
+          "value": 0.5,
+          "unit": "g"
+        },
+        "polyunsaturatedFattyAcids": {
+          "value": 0.2,
+          "unit": "g"
+        },
+        "linoleicAcid": {
+          "value": 0.12,
+          "unit": "g"
+        },
+        "alphaLinolenicAcid": {
+          "value": 0.01,
+          "unit": "g"
+        },
+        "arachidonicAcid": {
+          "value": 21.27,
+          "unit": "mg"
+        },
+        "epa": {
+          "value": 7.13,
+          "unit": "mg"
+        },
+        "dpa": {
+          "value": 8.33,
+          "unit": "mg"
+        },
+        "dha": {
+          "value": 42.83,
+          "unit": "mg"
+        },
+        "tryptophan": {
+          "value": 173.0,
+          "unit": "mg"
+        },
+        "cholesterol": {
+          "value": 74.0,
+          "unit": "mg"
+        }
+      }
+    },
+    {
+      "id": "afcd-f000403-basa-fillet-steamed",
+      "name": "熟/蒸 / 鱼柳可食部分；每100g熟重 / 无额外加脂",
+      "nameEn": "Bassa (basa), fillet, steamed, no added fat",
+      "dataSource": "AFCD",
+      "externalId": "F000403",
+      "category": "SEAFOOD",
+      "basis": "PER_100G",
+      "preparationState": "cooked",
+      "preparationStateLabel": "熟/蒸",
+      "ediblePortionLabel": "鱼柳可食部分；每 100g",
+      "processingLabel": "巴沙鱼柳；蒸/水煮/微波/汆煮轻烹饪；无额外加脂",
+      "isPrimary": false,
+      "yieldRate": 1,
+      "notes": "轻烹饪熟档案；食谱设计器按熟后重量称量。AFCD F000403 为 steamed/no added fat recipe 档案。",
+      "sourceForms": {
+        "energyKcal": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "Energy with dietary fibre, equated \n(kJ)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx",
+          "originalValue": 396,
+          "originalUnit": "kJ",
+          "conversion": "kJ / 4.184"
+        },
+        "moisture": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "Moisture (water) \n(g)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "crudeProtein": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "Protein \n(g)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "crudeFat": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "Fat, total \n(g)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "ash": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "Ash \n(g)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "carbohydrate": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "Available carbohydrate, without sugar alcohols \n(g)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "fiber": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "Total dietary fibre \n(g)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "calcium": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "Calcium (Ca) \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "phosphorus": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "Phosphorus (P) \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "potassium": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "Potassium (K) \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "sodium": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "Sodium (Na) \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "magnesium": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "Magnesium (Mg) \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "iron": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "Iron (Fe) \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "zinc": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "Zinc (Zn) \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "copper": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "Copper (Cu) \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "iodine": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "Iodine (I) \n(ug)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "selenium": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "Selenium (Se) \n(ug)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "vitaminB1": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "Thiamin (B1) \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "vitaminB2": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "Riboflavin (B2) \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "vitaminB3": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "Niacin (B3) \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "vitaminB6": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "Pyridoxine (B6) \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "vitaminB12": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "Cobalamin (B12) \n(ug)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "vitaminD": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "Cholecalciferol (D3) \n(ug)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx",
+          "vitaminDForm": "vitamin_d3_cholecalciferol",
+          "cholecalciferolUg": 0.04,
+          "ergocalciferolUg": 0,
+          "hydroxyCholecalciferolUg": 0,
+          "hydroxyErgocalciferolUg": 0,
+          "conversionBasis": "FEDIAF ordinary vitamin D3, 1 ug = 40 IU"
+        },
+        "vitaminE": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "Vitamin E \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx",
+          "vitaminEForm": "SOURCE_ALPHA_TOCOPHEROL_EQUIVALENT",
+          "alphaTocopherolEquivalentMg": 1.13,
+          "alphaTocopherolMg": 1.1,
+          "totalVitaminEMg": 1.13,
+          "conversionBasis": "AFCD Vitamin E is source total vitamin E activity: alpha + beta/2 + gamma/10; converted to FEDIAF IU with d-alpha-tocopherol 1 mg = 1.49 IU"
+        },
+        "saturatedFattyAcids": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "Total saturated fatty acids, equated \n(g)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "monounsaturatedFattyAcids": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "Total monounsaturated fatty acids, equated \n(g)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "polyunsaturatedFattyAcids": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "Total polyunsaturated fatty acids, equated \n(g)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "linoleicAcid": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "C18:2w6 (g)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "alphaLinolenicAcid": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "C18:3w3 (g)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "arachidonicAcid": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "C20:4w6 (mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "epa": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "C20:5w3 (mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "dpa": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "C22:5w3 (mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "dha": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "C22:6w3 (mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "tryptophan": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "Tryptophan \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        },
+        "cholesterol": {
+          "source": "AFCD Release 3",
+          "sourceCode": "AFCD",
+          "sourceFoodKey": "F000403",
+          "sourceFieldName": "Cholesterol \n(mg)",
+          "sourceUrl": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx"
+        }
+      },
+      "nutrients": {
+        "energyKcal": {
+          "value": 94.646272,
+          "unit": "kcal"
+        },
+        "moisture": {
+          "value": 80.0,
+          "unit": "g"
+        },
+        "crudeProtein": {
+          "value": 18.7,
+          "unit": "g"
+        },
+        "crudeFat": {
+          "value": 2.1,
+          "unit": "g"
+        },
+        "ash": {
+          "value": 1.3,
+          "unit": "g"
+        },
+        "carbohydrate": {
+          "value": 0.0,
+          "unit": "g",
+          "measuredZero": true
+        },
+        "fiber": {
+          "value": 0.0,
+          "unit": "g",
+          "measuredZero": true
+        },
+        "calcium": {
+          "value": 22.0,
+          "unit": "mg"
+        },
+        "phosphorus": {
+          "value": 375.0,
+          "unit": "mg"
+        },
+        "potassium": {
+          "value": 351.0,
+          "unit": "mg"
+        },
+        "sodium": {
+          "value": 85.0,
+          "unit": "mg"
+        },
+        "magnesium": {
+          "value": 33.0,
+          "unit": "mg"
+        },
+        "iron": {
+          "value": 0.48,
+          "unit": "mg"
+        },
+        "zinc": {
+          "value": 0.28,
+          "unit": "mg"
+        },
+        "copper": {
+          "value": 0.009,
+          "unit": "mg"
+        },
+        "iodine": {
+          "value": 28.6,
+          "unit": "ug"
+        },
+        "selenium": {
+          "value": 23.8,
+          "unit": "ug"
+        },
+        "vitaminB1": {
+          "value": 0.143,
+          "unit": "mg"
+        },
+        "vitaminB2": {
+          "value": 0.139,
+          "unit": "mg"
+        },
+        "vitaminB3": {
+          "value": 3.34,
+          "unit": "mg"
+        },
+        "vitaminB6": {
+          "value": 0.42,
+          "unit": "mg"
+        },
+        "vitaminB12": {
+          "value": 2.0,
+          "unit": "ug"
+        },
+        "vitaminD": {
+          "value": 0.04,
+          "unit": "ug"
+        },
+        "vitaminE": {
+          "value": 1.13,
+          "unit": "mg"
+        },
+        "saturatedFattyAcids": {
+          "value": 0.6,
+          "unit": "g"
+        },
+        "monounsaturatedFattyAcids": {
+          "value": 0.6,
+          "unit": "g"
+        },
+        "polyunsaturatedFattyAcids": {
+          "value": 0.24,
+          "unit": "g"
+        },
+        "linoleicAcid": {
+          "value": 0.14,
+          "unit": "g"
+        },
+        "alphaLinolenicAcid": {
+          "value": 0.01,
+          "unit": "g"
+        },
+        "arachidonicAcid": {
+          "value": 25.32,
+          "unit": "mg"
+        },
+        "epa": {
+          "value": 8.49,
+          "unit": "mg"
+        },
+        "dpa": {
+          "value": 9.91,
+          "unit": "mg"
+        },
+        "dha": {
+          "value": 50.99,
+          "unit": "mg"
+        },
+        "tryptophan": {
+          "value": 206.0,
+          "unit": "mg"
+        },
+        "cholesterol": {
+          "value": 88.0,
+          "unit": "mg"
+        }
+      }
+    }
+  ],
+  "sourceCandidates": [
+    {
+      "sourceId": "AFCD:F000402",
+      "source": "AFCD",
+      "sourceName": "Australian Food Composition Database Release 3",
+      "matchedName": "Bassa (basa), fillet, raw",
+      "stateTags": [
+        "raw"
+      ],
+      "essentialCoveragePercent": 58.69565217391305,
+      "sameSourceRawCookedPair": true,
+      "sourceUrl": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+    },
+    {
+      "sourceId": "AFCD:F000403",
+      "source": "AFCD",
+      "sourceName": "Australian Food Composition Database Release 3",
+      "matchedName": "Bassa (basa), fillet, steamed, no added fat",
+      "stateTags": [
+        "cooked"
+      ],
+      "essentialCoveragePercent": 58.69565217391305,
+      "sameSourceRawCookedPair": true,
+      "sourceUrl": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files"
+    }
+  ],
+  "sourceEvidence": {
+    "afcdDataFiles": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files",
+    "nutrientProfilesXlsx": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx",
+    "foodDetailsXlsx": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Food%20Details.xlsx",
+    "nutrientDetailsXlsx": "https://www.foodstandards.gov.au/sites/default/files/2025-12/AFCD%20Release%203%20-%20Nutrient%20details.xlsx",
+    "localFiles": [
+      "sources/afcd-release-3-nutrient-profiles.xlsx",
+      "sources/afcd-release-3-food-details.xlsx",
+      "sources/afcd-release-3-nutrient-details.xlsx"
+    ]
+  },
+  "dbAlignmentReport": {
+    "id": "",
+    "status": ""
+  },
+  "operatorConfirmation": {
+    "localWriteApproved": true,
+    "productionPackageApproved": false
+  }
+}

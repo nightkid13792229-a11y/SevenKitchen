@@ -1,0 +1,842 @@
+{
+  "version": 1,
+  "operationMode": "production-package",
+  "ingredient": {
+    "type": "FOOD",
+    "name": "黑米",
+    "brand": null,
+    "productModel": null,
+    "tagIds": [],
+    "procurementSkus": [],
+    "notes": "标准食材；按黑米/黑色稻米谷粒处理，非调味、非强化、非即食产品。营养档案采用 MEXT 日本食品标准成分表（八订）增补2023年的同源生/熟两套黑米档案：01182 生/干谷粒为主档案，01184 熟米饭为辅助熟制档案。MEXT 黑米的氨基酸表和脂肪酸表存在页面但数值为空；本次按主食谷物业务判断接受该缺口，不用普通白米/糙米跨源补字段。"
+  },
+  "nutritionProfiles": [
+    {
+      "id": "mext-01182-black-rice-raw",
+      "name": "黑米，生/干",
+      "nameEn": "Black rice, grain, raw",
+      "dataSource": "MEXT",
+      "externalId": "MEXT:01182",
+      "category": "GRAIN",
+      "basis": "PER_100G",
+      "preparationState": "raw",
+      "preparationStateLabel": "生/干",
+      "ediblePortionLabel": "可食部；每 100g",
+      "processingLabel": "黑米谷粒；未煮熟，未调味，未强化",
+      "isPrimary": true,
+      "yieldRate": 1,
+      "notes": "主档案；食谱设计器按生重称量。MEXT 01182 为“穀類/こめ/［水稲穀粒］/黒米”。氨基酸与脂肪酸分表为空，未补普通米种替代值；FEDIAF 2025 当前实现必需营养素覆盖率 56.5%。",
+      "nutrients": {
+        "energyKj": {
+          "value": 1447,
+          "unit": "kJ"
+        },
+        "energyKcal": {
+          "value": 341,
+          "unit": "kcal"
+        },
+        "moisture": {
+          "value": 15.2,
+          "unit": "g"
+        },
+        "crudeProtein": {
+          "value": 7.8,
+          "unit": "g"
+        },
+        "crudeFat": {
+          "value": 3.2,
+          "unit": "g"
+        },
+        "carbohydrate": {
+          "value": 72,
+          "unit": "g"
+        },
+        "fiber": {
+          "value": 5.6,
+          "unit": "g"
+        },
+        "ash": {
+          "value": 1.4,
+          "unit": "g"
+        },
+        "sodium": {
+          "value": 1,
+          "unit": "mg"
+        },
+        "potassium": {
+          "value": 270,
+          "unit": "mg"
+        },
+        "calcium": {
+          "value": 15,
+          "unit": "mg"
+        },
+        "magnesium": {
+          "value": 110,
+          "unit": "mg"
+        },
+        "phosphorus": {
+          "value": 310,
+          "unit": "mg"
+        },
+        "iron": {
+          "value": 0.9,
+          "unit": "mg"
+        },
+        "zinc": {
+          "value": 1.9,
+          "unit": "mg"
+        },
+        "copper": {
+          "value": 0.22,
+          "unit": "mg"
+        },
+        "manganese": {
+          "value": 4.28,
+          "unit": "mg"
+        },
+        "iodine": {
+          "value": 0,
+          "unit": "ug",
+          "measuredZero": true
+        },
+        "selenium": {
+          "value": 3,
+          "unit": "ug"
+        },
+        "vitaminAIu": {
+          "value": 3,
+          "unit": "ug"
+        },
+        "vitaminDIu": {
+          "value": 0,
+          "unit": "ug",
+          "measuredZero": true
+        },
+        "vitaminEIu": {
+          "value": 1.3,
+          "unit": "mg"
+        },
+        "vitaminB1": {
+          "value": 0.39,
+          "unit": "mg"
+        },
+        "vitaminB2": {
+          "value": 0.1,
+          "unit": "mg"
+        },
+        "vitaminB3": {
+          "value": 6.9,
+          "unit": "mg"
+        },
+        "vitaminB6": {
+          "value": 0.49,
+          "unit": "mg"
+        },
+        "vitaminB9": {
+          "value": 49,
+          "unit": "ug"
+        },
+        "vitaminB5": {
+          "value": 0.83,
+          "unit": "mg"
+        },
+        "vitaminB7": {
+          "value": 5.8,
+          "unit": "ug"
+        }
+      },
+      "sourceForms": {
+        "energyKj": {
+          "source": "MEXT",
+          "sourceFoodId": "01182",
+          "sourceFoodName": "穀類/こめ/［水稲穀粒］/黒米",
+          "sourceComponent": "エネルギー",
+          "sourceValue": 1447,
+          "sourceUnit": "kJ",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7"
+        },
+        "energyKcal": {
+          "source": "MEXT",
+          "sourceFoodId": "01182",
+          "sourceFoodName": "穀類/こめ/［水稲穀粒］/黒米",
+          "sourceComponent": "エネルギー",
+          "sourceValue": 341,
+          "sourceUnit": "kcal",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7"
+        },
+        "moisture": {
+          "source": "MEXT",
+          "sourceFoodId": "01182",
+          "sourceFoodName": "穀類/こめ/［水稲穀粒］/黒米",
+          "sourceComponent": "水分",
+          "sourceValue": 15.2,
+          "sourceUnit": "g",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7"
+        },
+        "crudeProtein": {
+          "source": "MEXT",
+          "sourceFoodId": "01182",
+          "sourceFoodName": "穀類/こめ/［水稲穀粒］/黒米",
+          "sourceComponent": "たんぱく質",
+          "sourceValue": 7.8,
+          "sourceUnit": "g",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7"
+        },
+        "crudeFat": {
+          "source": "MEXT",
+          "sourceFoodId": "01182",
+          "sourceFoodName": "穀類/こめ/［水稲穀粒］/黒米",
+          "sourceComponent": "脂質",
+          "sourceValue": 3.2,
+          "sourceUnit": "g",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7"
+        },
+        "carbohydrate": {
+          "source": "MEXT",
+          "sourceFoodId": "01182",
+          "sourceFoodName": "穀類/こめ/［水稲穀粒］/黒米",
+          "sourceComponent": "炭水化物",
+          "sourceValue": 72,
+          "sourceUnit": "g",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7"
+        },
+        "fiber": {
+          "source": "MEXT",
+          "sourceFoodId": "01182",
+          "sourceFoodName": "穀類/こめ/［水稲穀粒］/黒米",
+          "sourceComponent": "食物繊維総量",
+          "sourceValue": 5.6,
+          "sourceUnit": "g",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7"
+        },
+        "ash": {
+          "source": "MEXT",
+          "sourceFoodId": "01182",
+          "sourceFoodName": "穀類/こめ/［水稲穀粒］/黒米",
+          "sourceComponent": "灰分",
+          "sourceValue": 1.4,
+          "sourceUnit": "g",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7"
+        },
+        "sodium": {
+          "source": "MEXT",
+          "sourceFoodId": "01182",
+          "sourceFoodName": "穀類/こめ/［水稲穀粒］/黒米",
+          "sourceComponent": "ナトリウム",
+          "sourceValue": 1,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7"
+        },
+        "potassium": {
+          "source": "MEXT",
+          "sourceFoodId": "01182",
+          "sourceFoodName": "穀類/こめ/［水稲穀粒］/黒米",
+          "sourceComponent": "カリウム",
+          "sourceValue": 270,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7"
+        },
+        "calcium": {
+          "source": "MEXT",
+          "sourceFoodId": "01182",
+          "sourceFoodName": "穀類/こめ/［水稲穀粒］/黒米",
+          "sourceComponent": "カルシウム",
+          "sourceValue": 15,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7"
+        },
+        "magnesium": {
+          "source": "MEXT",
+          "sourceFoodId": "01182",
+          "sourceFoodName": "穀類/こめ/［水稲穀粒］/黒米",
+          "sourceComponent": "マグネシウム",
+          "sourceValue": 110,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7"
+        },
+        "phosphorus": {
+          "source": "MEXT",
+          "sourceFoodId": "01182",
+          "sourceFoodName": "穀類/こめ/［水稲穀粒］/黒米",
+          "sourceComponent": "リン",
+          "sourceValue": 310,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7"
+        },
+        "iron": {
+          "source": "MEXT",
+          "sourceFoodId": "01182",
+          "sourceFoodName": "穀類/こめ/［水稲穀粒］/黒米",
+          "sourceComponent": "鉄",
+          "sourceValue": 0.9,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7"
+        },
+        "zinc": {
+          "source": "MEXT",
+          "sourceFoodId": "01182",
+          "sourceFoodName": "穀類/こめ/［水稲穀粒］/黒米",
+          "sourceComponent": "亜鉛",
+          "sourceValue": 1.9,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7"
+        },
+        "copper": {
+          "source": "MEXT",
+          "sourceFoodId": "01182",
+          "sourceFoodName": "穀類/こめ/［水稲穀粒］/黒米",
+          "sourceComponent": "銅",
+          "sourceValue": 0.22,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7"
+        },
+        "manganese": {
+          "source": "MEXT",
+          "sourceFoodId": "01182",
+          "sourceFoodName": "穀類/こめ/［水稲穀粒］/黒米",
+          "sourceComponent": "マンガン",
+          "sourceValue": 4.28,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7"
+        },
+        "iodine": {
+          "source": "MEXT",
+          "sourceFoodId": "01182",
+          "sourceFoodName": "穀類/こめ/［水稲穀粒］/黒米",
+          "sourceComponent": "ヨウ素",
+          "sourceValue": 0,
+          "sourceUnit": "ug",
+          "measuredZero": true,
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7"
+        },
+        "selenium": {
+          "source": "MEXT",
+          "sourceFoodId": "01182",
+          "sourceFoodName": "穀類/こめ/［水稲穀粒］/黒米",
+          "sourceComponent": "セレン",
+          "sourceValue": 3,
+          "sourceUnit": "ug",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7"
+        },
+        "vitaminAIu": {
+          "source": "MEXT",
+          "sourceFoodId": "01182",
+          "sourceFoodName": "穀類/こめ/［水稲穀粒］/黒米",
+          "sourceComponent": "レチノール活性当量",
+          "sourceValue": 3,
+          "sourceUnit": "ug",
+          "vitaminAForm": "SOURCE_RETINOL_ACTIVITY_EQUIVALENTS",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7"
+        },
+        "vitaminDIu": {
+          "source": "MEXT",
+          "sourceFoodId": "01182",
+          "sourceFoodName": "穀類/こめ/［水稲穀粒］/黒米",
+          "sourceComponent": "ビタミンD",
+          "sourceValue": 0,
+          "sourceUnit": "ug",
+          "measuredZero": true,
+          "vitaminDForm": "total_vitamin_d_d2_d3",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7"
+        },
+        "vitaminEIu": {
+          "source": "MEXT",
+          "sourceFoodId": "01182",
+          "sourceFoodName": "穀類/こめ/［水稲穀粒］/黒米",
+          "sourceComponent": "トコフェロール分項（α/β/γ；δはTrで数値化せず）",
+          "sourceValue": 1.3,
+          "sourceUnit": "mg",
+          "alphaTocopherolMg": 1.3,
+          "betaTocopherolMg": 0.1,
+          "gammaTocopherolMg": 0.3,
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7"
+        },
+        "vitaminB1": {
+          "source": "MEXT",
+          "sourceFoodId": "01182",
+          "sourceFoodName": "穀類/こめ/［水稲穀粒］/黒米",
+          "sourceComponent": "ビタミンB1",
+          "sourceValue": 0.39,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7"
+        },
+        "vitaminB2": {
+          "source": "MEXT",
+          "sourceFoodId": "01182",
+          "sourceFoodName": "穀類/こめ/［水稲穀粒］/黒米",
+          "sourceComponent": "ビタミンB2",
+          "sourceValue": 0.1,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7"
+        },
+        "vitaminB3": {
+          "source": "MEXT",
+          "sourceFoodId": "01182",
+          "sourceFoodName": "穀類/こめ/［水稲穀粒］/黒米",
+          "sourceComponent": "ナイアシン",
+          "sourceValue": 6.9,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7"
+        },
+        "vitaminB6": {
+          "source": "MEXT",
+          "sourceFoodId": "01182",
+          "sourceFoodName": "穀類/こめ/［水稲穀粒］/黒米",
+          "sourceComponent": "ビタミンB6",
+          "sourceValue": 0.49,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7"
+        },
+        "vitaminB9": {
+          "source": "MEXT",
+          "sourceFoodId": "01182",
+          "sourceFoodName": "穀類/こめ/［水稲穀粒］/黒米",
+          "sourceComponent": "葉酸",
+          "sourceValue": 49,
+          "sourceUnit": "ug",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7"
+        },
+        "vitaminB5": {
+          "source": "MEXT",
+          "sourceFoodId": "01182",
+          "sourceFoodName": "穀類/こめ/［水稲穀粒］/黒米",
+          "sourceComponent": "パントテン酸",
+          "sourceValue": 0.83,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7"
+        },
+        "vitaminB7": {
+          "source": "MEXT",
+          "sourceFoodId": "01182",
+          "sourceFoodName": "穀類/こめ/［水稲穀粒］/黒米",
+          "sourceComponent": "ビオチン",
+          "sourceValue": 5.8,
+          "sourceUnit": "ug",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7"
+        }
+      }
+    },
+    {
+      "id": "mext-01184-black-rice-cooked",
+      "name": "黑米，熟/米饭",
+      "nameEn": "Black rice, cooked rice",
+      "dataSource": "MEXT",
+      "externalId": "MEXT:01184",
+      "category": "GRAIN",
+      "basis": "PER_100G",
+      "preparationState": "cooked",
+      "preparationStateLabel": "熟/米饭",
+      "ediblePortionLabel": "可食部；每 100g 熟重",
+      "processingLabel": "黑米米饭；熟制，未调味",
+      "isPrimary": false,
+      "yieldRate": 1,
+      "notes": "同源熟制档案；食谱设计器按熟后重量称量。MEXT 01184 为“穀類/こめ/［水稲めし］/黒米”。氨基酸与脂肪酸分表为空，未补普通米种替代值；FEDIAF 2025 当前实现必需营养素覆盖率 50.0%。",
+      "nutrients": {
+        "energyKj": {
+          "value": 634,
+          "unit": "kJ"
+        },
+        "energyKcal": {
+          "value": 150,
+          "unit": "kcal"
+        },
+        "moisture": {
+          "value": 62,
+          "unit": "g"
+        },
+        "crudeProtein": {
+          "value": 3.6,
+          "unit": "g"
+        },
+        "crudeFat": {
+          "value": 1.4,
+          "unit": "g"
+        },
+        "carbohydrate": {
+          "value": 32.2,
+          "unit": "g"
+        },
+        "fiber": {
+          "value": 3.3,
+          "unit": "g"
+        },
+        "ash": {
+          "value": 0.6,
+          "unit": "g"
+        },
+        "potassium": {
+          "value": 130,
+          "unit": "mg"
+        },
+        "calcium": {
+          "value": 7,
+          "unit": "mg"
+        },
+        "magnesium": {
+          "value": 55,
+          "unit": "mg"
+        },
+        "phosphorus": {
+          "value": 150,
+          "unit": "mg"
+        },
+        "iron": {
+          "value": 0.4,
+          "unit": "mg"
+        },
+        "zinc": {
+          "value": 0.9,
+          "unit": "mg"
+        },
+        "copper": {
+          "value": 0.11,
+          "unit": "mg"
+        },
+        "manganese": {
+          "value": 1.95,
+          "unit": "mg"
+        },
+        "selenium": {
+          "value": 2,
+          "unit": "ug"
+        },
+        "vitaminAIu": {
+          "value": 1,
+          "unit": "ug"
+        },
+        "vitaminEIu": {
+          "value": 0.3,
+          "unit": "mg"
+        },
+        "vitaminB1": {
+          "value": 0.14,
+          "unit": "mg"
+        },
+        "vitaminB2": {
+          "value": 0.04,
+          "unit": "mg"
+        },
+        "vitaminB3": {
+          "value": 3,
+          "unit": "mg"
+        },
+        "vitaminB6": {
+          "value": 0.18,
+          "unit": "mg"
+        },
+        "vitaminB9": {
+          "value": 19,
+          "unit": "ug"
+        },
+        "vitaminB5": {
+          "value": 0.4,
+          "unit": "mg"
+        },
+        "vitaminB7": {
+          "value": 2.7,
+          "unit": "ug"
+        }
+      },
+      "sourceForms": {
+        "energyKj": {
+          "source": "MEXT",
+          "sourceFoodId": "01184",
+          "sourceFoodName": "穀類/こめ/［水稲めし］/黒米",
+          "sourceComponent": "エネルギー",
+          "sourceValue": 634,
+          "sourceUnit": "kJ",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01184_7"
+        },
+        "energyKcal": {
+          "source": "MEXT",
+          "sourceFoodId": "01184",
+          "sourceFoodName": "穀類/こめ/［水稲めし］/黒米",
+          "sourceComponent": "エネルギー",
+          "sourceValue": 150,
+          "sourceUnit": "kcal",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01184_7"
+        },
+        "moisture": {
+          "source": "MEXT",
+          "sourceFoodId": "01184",
+          "sourceFoodName": "穀類/こめ/［水稲めし］/黒米",
+          "sourceComponent": "水分",
+          "sourceValue": 62,
+          "sourceUnit": "g",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01184_7"
+        },
+        "crudeProtein": {
+          "source": "MEXT",
+          "sourceFoodId": "01184",
+          "sourceFoodName": "穀類/こめ/［水稲めし］/黒米",
+          "sourceComponent": "たんぱく質",
+          "sourceValue": 3.6,
+          "sourceUnit": "g",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01184_7"
+        },
+        "crudeFat": {
+          "source": "MEXT",
+          "sourceFoodId": "01184",
+          "sourceFoodName": "穀類/こめ/［水稲めし］/黒米",
+          "sourceComponent": "脂質",
+          "sourceValue": 1.4,
+          "sourceUnit": "g",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01184_7"
+        },
+        "carbohydrate": {
+          "source": "MEXT",
+          "sourceFoodId": "01184",
+          "sourceFoodName": "穀類/こめ/［水稲めし］/黒米",
+          "sourceComponent": "炭水化物",
+          "sourceValue": 32.2,
+          "sourceUnit": "g",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01184_7"
+        },
+        "fiber": {
+          "source": "MEXT",
+          "sourceFoodId": "01184",
+          "sourceFoodName": "穀類/こめ/［水稲めし］/黒米",
+          "sourceComponent": "食物繊維総量",
+          "sourceValue": 3.3,
+          "sourceUnit": "g",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01184_7"
+        },
+        "ash": {
+          "source": "MEXT",
+          "sourceFoodId": "01184",
+          "sourceFoodName": "穀類/こめ/［水稲めし］/黒米",
+          "sourceComponent": "灰分",
+          "sourceValue": 0.6,
+          "sourceUnit": "g",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01184_7"
+        },
+        "potassium": {
+          "source": "MEXT",
+          "sourceFoodId": "01184",
+          "sourceFoodName": "穀類/こめ/［水稲めし］/黒米",
+          "sourceComponent": "カリウム",
+          "sourceValue": 130,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01184_7"
+        },
+        "calcium": {
+          "source": "MEXT",
+          "sourceFoodId": "01184",
+          "sourceFoodName": "穀類/こめ/［水稲めし］/黒米",
+          "sourceComponent": "カルシウム",
+          "sourceValue": 7,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01184_7"
+        },
+        "magnesium": {
+          "source": "MEXT",
+          "sourceFoodId": "01184",
+          "sourceFoodName": "穀類/こめ/［水稲めし］/黒米",
+          "sourceComponent": "マグネシウム",
+          "sourceValue": 55,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01184_7"
+        },
+        "phosphorus": {
+          "source": "MEXT",
+          "sourceFoodId": "01184",
+          "sourceFoodName": "穀類/こめ/［水稲めし］/黒米",
+          "sourceComponent": "リン",
+          "sourceValue": 150,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01184_7"
+        },
+        "iron": {
+          "source": "MEXT",
+          "sourceFoodId": "01184",
+          "sourceFoodName": "穀類/こめ/［水稲めし］/黒米",
+          "sourceComponent": "鉄",
+          "sourceValue": 0.4,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01184_7"
+        },
+        "zinc": {
+          "source": "MEXT",
+          "sourceFoodId": "01184",
+          "sourceFoodName": "穀類/こめ/［水稲めし］/黒米",
+          "sourceComponent": "亜鉛",
+          "sourceValue": 0.9,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01184_7"
+        },
+        "copper": {
+          "source": "MEXT",
+          "sourceFoodId": "01184",
+          "sourceFoodName": "穀類/こめ/［水稲めし］/黒米",
+          "sourceComponent": "銅",
+          "sourceValue": 0.11,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01184_7"
+        },
+        "manganese": {
+          "source": "MEXT",
+          "sourceFoodId": "01184",
+          "sourceFoodName": "穀類/こめ/［水稲めし］/黒米",
+          "sourceComponent": "マンガン",
+          "sourceValue": 1.95,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01184_7"
+        },
+        "selenium": {
+          "source": "MEXT",
+          "sourceFoodId": "01184",
+          "sourceFoodName": "穀類/こめ/［水稲めし］/黒米",
+          "sourceComponent": "セレン",
+          "sourceValue": 2,
+          "sourceUnit": "ug",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01184_7"
+        },
+        "vitaminAIu": {
+          "source": "MEXT",
+          "sourceFoodId": "01184",
+          "sourceFoodName": "穀類/こめ/［水稲めし］/黒米",
+          "sourceComponent": "レチノール活性当量",
+          "sourceValue": 1,
+          "sourceUnit": "ug",
+          "vitaminAForm": "SOURCE_RETINOL_ACTIVITY_EQUIVALENTS",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01184_7"
+        },
+        "vitaminEIu": {
+          "source": "MEXT",
+          "sourceFoodId": "01184",
+          "sourceFoodName": "穀類/こめ/［水稲めし］/黒米",
+          "sourceComponent": "トコフェロール分項（α/β/γ；δは未提供）",
+          "sourceValue": 0.3,
+          "sourceUnit": "mg",
+          "alphaTocopherolMg": 0.3,
+          "betaTocopherolMg": 0,
+          "gammaTocopherolMg": 0.1,
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01184_7"
+        },
+        "vitaminB1": {
+          "source": "MEXT",
+          "sourceFoodId": "01184",
+          "sourceFoodName": "穀類/こめ/［水稲めし］/黒米",
+          "sourceComponent": "ビタミンB1",
+          "sourceValue": 0.14,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01184_7"
+        },
+        "vitaminB2": {
+          "source": "MEXT",
+          "sourceFoodId": "01184",
+          "sourceFoodName": "穀類/こめ/［水稲めし］/黒米",
+          "sourceComponent": "ビタミンB2",
+          "sourceValue": 0.04,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01184_7"
+        },
+        "vitaminB3": {
+          "source": "MEXT",
+          "sourceFoodId": "01184",
+          "sourceFoodName": "穀類/こめ/［水稲めし］/黒米",
+          "sourceComponent": "ナイアシン",
+          "sourceValue": 3,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01184_7"
+        },
+        "vitaminB6": {
+          "source": "MEXT",
+          "sourceFoodId": "01184",
+          "sourceFoodName": "穀類/こめ/［水稲めし］/黒米",
+          "sourceComponent": "ビタミンB6",
+          "sourceValue": 0.18,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01184_7"
+        },
+        "vitaminB9": {
+          "source": "MEXT",
+          "sourceFoodId": "01184",
+          "sourceFoodName": "穀類/こめ/［水稲めし］/黒米",
+          "sourceComponent": "葉酸",
+          "sourceValue": 19,
+          "sourceUnit": "ug",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01184_7"
+        },
+        "vitaminB5": {
+          "source": "MEXT",
+          "sourceFoodId": "01184",
+          "sourceFoodName": "穀類/こめ/［水稲めし］/黒米",
+          "sourceComponent": "パントテン酸",
+          "sourceValue": 0.4,
+          "sourceUnit": "mg",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01184_7"
+        },
+        "vitaminB7": {
+          "source": "MEXT",
+          "sourceFoodId": "01184",
+          "sourceFoodName": "穀類/こめ/［水稲めし］/黒米",
+          "sourceComponent": "ビオチン",
+          "sourceValue": 2.7,
+          "sourceUnit": "ug",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01184_7"
+        }
+      }
+    }
+  ],
+  "sourceCandidates": [
+    {
+      "source": "MEXT",
+      "sourceId": "MEXT:01182",
+      "sourceName": "Japan MEXT Standard Tables of Food Composition (2023 supplement)",
+      "matchedName": "穀類/こめ/［水稲穀粒］/黒米",
+      "stateTags": [
+        "raw"
+      ],
+      "essentialCoveragePercent": 56.52173913043478,
+      "sameSourceRawCookedPair": true,
+      "role": "identity-primary-raw-profile",
+      "url": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7",
+      "notes": "白名单主源；身份和 raw 状态精确匹配，且有同源 cooked 黑米档案。氨基酸和脂肪酸分表为空，未跨源补普通米种值。"
+    },
+    {
+      "source": "MEXT",
+      "sourceId": "MEXT:01184",
+      "sourceName": "Japan MEXT Standard Tables of Food Composition (2023 supplement)",
+      "matchedName": "穀類/こめ/［水稲めし］/黒米",
+      "stateTags": [
+        "cooked"
+      ],
+      "essentialCoveragePercent": 50,
+      "sameSourceRawCookedPair": true,
+      "role": "identity-cooked-companion-profile",
+      "url": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01184_7",
+      "notes": "白名单主源；身份和 cooked 状态精确匹配，与 raw 档案同源。氨基酸和脂肪酸分表为空，钠为 Tr 不数值化，碘和维生素D未提供。"
+    },
+    {
+      "source": "USDA_FDC",
+      "sourceId": "USDA_FDC:2710825",
+      "sourceName": "USDA FoodData Central Foundation Foods",
+      "matchedName": "Rice, black, unenriched, raw",
+      "stateTags": [
+        "raw"
+      ],
+      "essentialCoveragePercent": 30.434782608695656,
+      "sameSourceRawCookedPair": false,
+      "role": "candidate-not-adopted",
+      "url": "https://fdc.nal.usda.gov/fdc-app.html#/food-details/2710825/nutrients",
+      "notes": "官方 Foundation raw 黑米档案；没有匹配的 cooked 黑米同源档案，且 FEDIAF 必需覆盖低于 MEXT raw，因此不采用。"
+    }
+  ],
+  "sourceEvidence": {
+    "mextRaw": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01182_7",
+    "mextCooked": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01184_7",
+    "usdaRawReference": "https://fdc.nal.usda.gov/fdc-app.html#/food-details/2710825/nutrients",
+    "selectionDecision": "采用 MEXT-only 生/熟两套档案；不做跨源补字段。"
+  },
+  "dbAlignmentReport": {
+    "id": "2367d46bd26d",
+    "status": "passing",
+    "notes": "Production-readonly DB alignment passed on 2026-06-29 after local migration baseline repair. Non-critical row count warnings are limited to transaction tables: order and inventory_ledger_entry."
+  },
+  "operatorConfirmation": {
+    "localWriteApproved": true,
+    "productionPackageApproved": true
+  }
+}

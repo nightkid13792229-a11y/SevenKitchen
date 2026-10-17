@@ -92,7 +92,13 @@ export interface SnapshotShoppingLine {
   name: string;
   /** 净用量（克） */
   netG: number;
-  /** 建议采购量（含损耗余量，好买的量向上取整） */
+  /**
+   * ⚠️ 2026-10-18 起**不再展示**（老板定：只给净用量，买多少顾客自己判断）。
+   *
+   * 仍保留的原因：交付快照是**冻结契约**，删字段会动到已交付数据的结构；
+   * 而且它跟 `netG` 一起被几个守卫测试引用。**当前没有任何界面消费它。**
+   * 若将来清理，记得连 `foodLossRate` / `supplementLossRate` 一起看。
+   */
   purchaseG: number;
   /** 推荐商品（可空） */
   recommendedProductId?: string | null;
@@ -101,6 +107,7 @@ export interface SnapshotShoppingLine {
 export interface SnapshotShopping {
   lines: SnapshotShoppingLine[];
   totalNetG: number;
+  /** @deprecated 2026-10-18 起不再展示，见 purchaseG */
   totalPurchaseG: number;
   /** 用的损耗率系数（1.07 = 损耗 7%） */
   lossRate: number;

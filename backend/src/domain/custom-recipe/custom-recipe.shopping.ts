@@ -41,7 +41,13 @@ export interface ShoppingLine {
   name: string;
   /** 净用量（克） */
   netG: number;
-  /** 建议采购量（克，含损耗余量） */
+  /**
+   * ⚠️ 2026-10-18 起**不再展示**（老板定：只给净用量，买多少顾客自己判断）。
+   *
+   * 仍保留的原因：交付快照是**冻结契约**，删字段会动到已交付数据的结构；
+   * 而且它跟 `netG` 一起被几个守卫测试引用。**当前没有任何界面消费它。**
+   * 若将来清理，记得连 `foodLossRate` / `supplementLossRate` 一起看。
+   */
   purchaseG: number;
   /** 是不是营养补充剂（补剂与食材的损耗率不同） */
   isSupplement: boolean;
@@ -54,6 +60,7 @@ export interface ShoppingListResult {
   /** 食材净用量合计（克） */
   totalNetG: number;
   /** 建议采购量合计（克） */
+  /** @deprecated 2026-10-18 起不再展示，见 purchaseG */
   totalPurchaseG: number;
   /** 实际用到的食材损耗系数（1.07 = 多买 7%） */
   foodLossRate: number;

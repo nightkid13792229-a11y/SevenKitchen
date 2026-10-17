@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "createdAt": "2026-06-19T13:34:23.480Z",
+  "alignmentId": null,
+  "dbAlignmentStatus": "not-required-for-local",
+  "manifestHash": "e97e03b7f5b8f758a8e38e193b1d82537e122a60614144f31c3ba4dbff4f0835",
+  "ingredientIds": [
+    "fcd93c98-3500-4c89-afe3-1bce83afa092"
+  ],
+  "nutritionFoodIds": [
+    "6852c161-55b9-4b36-a8d3-283ae19315f2"
+  ],
+  "nutritionFoodMappingIds": [
+    "16bf0aec-9237-4458-885a-27d25bc390f8"
+  ],
+  "ingredientTagAssignmentIds": [],
+  "procurementSkuIds": [],
+  "nutritionAudits": [
+    {
+      "profileId": "afcd-f006136-oat-groats-raw-merged-v1",
+      "essentialCoveragePercent": 91.30434782608695,
+      "blockingIssues": [],
+      "reviewIssues": []
+    }
+  ]
+}

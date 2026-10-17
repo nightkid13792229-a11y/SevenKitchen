@@ -119,9 +119,13 @@ export interface DeliveryContent {
     plainConclusion?: string | null;
   };
   shopping: {
-    lines: Array<{ name: string; netG: number; purchaseG: number }>;
+    /**
+     * `purchaseG`（建议采购量）仍由后端返回，但**前端不再展示** ——
+     * 2026-10-18 老板定：只给净用量，买多少让顾客自己判断。
+     */
+    lines: Array<{ name: string; netG: number; purchaseG?: number }>;
     totalNetG: number;
-    totalPurchaseG: number;
+    totalPurchaseG?: number;
     lossRate: number;
   };
   supplements: Array<{

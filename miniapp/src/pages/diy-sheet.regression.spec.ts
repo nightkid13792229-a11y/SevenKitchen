@@ -519,7 +519,9 @@ describe('diy sheet layout regressions', () => {
     // 适用阶段标签不再进图片
     expect(source).not.toContain('stages: recipe.value.applicableLifeStages')
     expect(source).toContain("['原料名称', '已选商品', getFoodPrepAmountHeaderForPrint(), '制备方法']")
-    expect(source).toContain('`${item.netAmountStr} / ${item.actualAmountStr}`')
+    // 2026-10-18：采购量删掉后，纸质单这一列只印净用量（原来印"净重 / 建议采购量"两个数）
+    expect(source).not.toContain('actualAmountStr')
+    expect(source).toContain('item.netAmountStr')
     expect(source).toContain('item.recommendedPrintText')
     // 目标补充量 排在 添加总量 之前
     expect(source).toContain("['补剂名称', '已选商品 / 规格', '目标补充量', '添加总量']")
@@ -619,10 +621,15 @@ describe('diy sheet layout regressions', () => {
   })
 
   /**
-   * 2026-09-22：损耗率继续算，但**不给顾客看这个词**。
-   * 页面上这一列统一叫「建议采购量」（已含缩水余量），纸质制作单同口径。
+   * 2026-10-18（老板定）：**采购量整条线删掉**。
+   *
+   * 原来这一列是「建议采购量」= 净用量 × (1 + 损耗率)，
+   * 现在只给**净用量**，买多少让顾客自己判断。
+   *
+   * 理由：损耗率是经验估算，不同食材差很多（肉几乎不损耗、叶菜损耗大），
+   * 乘进去当"建议采购量"给顾客，等于用估算冒充精算。
    */
-  it('presents the loss-inclusive amount as a suggested purchase amount', () => {
+  it('★ 只给净用量，不给采购量（损耗整条线删掉）', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
       'utf-8',
@@ -639,16 +646,22 @@ describe('diy sheet layout regressions', () => {
     expect(source).not.toContain('备料量（含')
     expect(source).not.toContain('formatRecipeLossRatePercent()')
 
-    // 统一叫「建议采购量」
-    expect(templateSource).toContain('建议采购量')
-    expect(source).toContain("return '净重/建议采购量'")
-    // 一列两个数：净重 / 建议采购量
+    // 列头只叫「净用量」
+    expect(templateSource).toContain('净用量')
+    expect(templateSource).not.toContain('建议采购量')
+    expect(source).toContain("return '净用量'")
+
+    // 只用净用量，不再有采购量相关的一切
     expect(source).toContain('netAmountStr')
-    expect(source).toContain('`${item.netAmountStr} / ${item.actualAmountStr}`')
-    expect(source).toContain('function formatNetAmount')
-    expect(source).toContain('getFoodPrepAmountHeaderForPrint()')
-    expect(templateSource).toContain('建议采购合计')
-    expect(templateSource).toContain('建议采购量已计算制作损耗')
+    expect(source).not.toContain('actualAmount')
+    expect(source).not.toContain('lossRate')
+    expect(source).not.toContain('globalSupplementLossRate')
+    expect(templateSource).not.toContain('建议采购合计')
+    expect(templateSource).not.toContain('建议采购量已计算制作损耗')
+    // 合计行改成「合计净重」
+    expect(templateSource).toContain('合计净重')
+    // 明确告诉顾客"买多少你自己判断"
+    expect(templateSource).toContain('要买多少，你自己判断')
 
     // 取整到「好买的量」
     expect(source).toContain('function formatPurchaseAmount')

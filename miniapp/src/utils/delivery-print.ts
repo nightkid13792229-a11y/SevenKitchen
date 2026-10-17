@@ -34,7 +34,6 @@ export interface DeliverySheetInput {
   /** 狗狗名字（拿不到就留空，不编） */
   dogName?: string | null;
   /** 损耗系数 → 百分比文案由页面给（那是展示换算，不在这个文件里做） */
-  lossPercentText: string;
 }
 
 /** 文案：有值就显示，没有就显示占位符 —— 不显示 0，0 会让人以为"不用买" */
@@ -79,34 +78,29 @@ export function drawDeliverySheet(
     builder.drawFactCards('这一批要做多少', feedingFacts, { columns: 5 });
   }
 
-  // ---- 食材采购清单 ----
+  // ---- 食材净用量 ----
+  //
+  // 2026-10-18：**采购量整条线删掉**（老板定）。
+  // 只给"这次要用多少"，买多少让顾客自己判断 ——
+  // 损耗率是经验估算，不同食材差很多，乘进去当"建议采购量"等于用估算冒充精算。
   if (content.shopping.lines.length > 0) {
-    builder.drawSectionTitle('要买什么（含损耗余量）');
+    builder.drawSectionTitle('每种食材要用多少（净用量）');
     builder.drawTable(
-      ['原料名称', '建议采购量', '实际用量'],
+      ['原料名称', '净用量'],
       content.shopping.lines.map((line) => [
         line.name,
-        `${text(line.purchaseG, '—')} g`,
         `${text(line.netG, '—')} g`,
       ]),
       {
-        colWidths: [460, 280, 280],
-        wrapColumns: [true, false, false],
-        totalRow: [
-          '合计',
-          `${text(content.shopping.totalPurchaseG, '—')} g`,
-          `${text(content.shopping.totalNetG, '—')} g`,
-        ],
+        colWidths: [700, 320],
+        wrapColumns: [true, false],
+        totalRow: ['合计净重', `${text(content.shopping.totalNetG, '—')} g`],
       },
     );
-    builder.drawNote(
-      `已按 ${input.lossPercentText} 的加工损耗留出余量，实际用量 ${text(
-        content.shopping.totalNetG,
-      )} 克。`,
-    );
+    builder.drawNote('只写这次要用多少。要买多少，你自己判断。');
   } else {
-    builder.drawSectionTitle('要买什么')
-    builder.drawNote('暂时算不出要买多少，请联系客服')
+    builder.drawSectionTitle('每种食材要用多少')
+    builder.drawNote('暂时算不出用量，请联系客服')
   }
 
   // ---- 营养补充剂（按每 kg 食材给，顾客好按自己做的量换算）----
@@ -128,11 +122,10 @@ export function drawDeliverySheet(
     );
     /**
      * 补充剂**不进食材配比** —— 它不是"食材重量"，按克算总重没意义。
-     * 这一句要写在单子上，否则顾客会把它算进采购总量。
+     * 2026-10-18：采购量删掉后，"不计入采购总量"这句话失去指代对象，
+     * 改成直接说明"要单独准备"。
      */
-    builder.drawSupplementNotice(
-      '补充剂不计入上面的采购总量，请单独准备。',
-    );
+    builder.drawSupplementNotice('补充剂不在上面的食材里，需要单独准备。');
   }
 
   // ---- 怎么做 ----

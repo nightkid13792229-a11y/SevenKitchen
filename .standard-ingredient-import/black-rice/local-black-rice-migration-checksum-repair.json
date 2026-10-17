@@ -1,0 +1,23 @@
+{
+  "createdAt": "2026-06-29T09:02:07.149Z",
+  "scope": "local-only-black-rice-migration-checksum-repair",
+  "migrationName": "202606290001_add_black_rice_standard_ingredient",
+  "targetChecksum": "c5c56e62deeebba75109c650c651e6b410947e4c7ccc45662101c2917a8dcbe3",
+  "updatedRows": 1,
+  "before": [
+    {
+      "migration_name": "202606290001_add_black_rice_standard_ingredient",
+      "checksum": "e3675ec58bd3ae165cdeeb38037ad9975dc3fc38436702dd4f4f3f502b35b1d7",
+      "finished_at": "2026-06-29T08:54:45.730Z",
+      "rolled_back_at": null
+    }
+  ],
+  "after": [
+    {
+      "migration_name": "202606290001_add_black_rice_standard_ingredient",
+      "checksum": "c5c56e62deeebba75109c650c651e6b410947e4c7ccc45662101c2917a8dcbe3",
+      "finished_at": "2026-06-29T08:54:45.730Z",
+      "rolled_back_at": null
+    }
+  ]
+}

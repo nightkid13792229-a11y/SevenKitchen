@@ -1,0 +1,1542 @@
+[
+  {
+    "id": "05110da5-c93a-40fc-ae86-68c283ef6899",
+    "checksum": "ef2f754bd945c51778ac26f20f6bdda88e4bf408beabc833f6ea4d62538e24bd",
+    "finished_at": "2025-12-21T15:00:31.505Z",
+    "migration_name": "20251215000000_order_persistence",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2025-12-21T15:00:31.468Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "a92ef01a-7386-4b45-8993-4a7f61093f68",
+    "checksum": "32cb6be33586a4c59051e6fb20c24be884013c4967af71b7810c7e6ef0a7dcab",
+    "finished_at": "2025-12-21T15:00:31.517Z",
+    "migration_name": "20251215010000_address_persistence",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2025-12-21T15:00:31.506Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "ca72ffab-3fb2-496f-a27c-fce4dc029bda",
+    "checksum": "64e2c3b0b720f4ffb34cfa6c3b04b83027f130f9724c6eea830298fa18ac282d",
+    "finished_at": "2025-12-21T15:00:31.533Z",
+    "migration_name": "20251215020000_dog_persistence",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2025-12-21T15:00:31.518Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "f4eae9d3-ac57-4ee5-88fe-c1244ddb7c1a",
+    "checksum": "ab0f0ba40e5a809c6c2299c986dbd754c4ef8a9809c0435469b69529dc4f6fee",
+    "finished_at": "2025-12-21T15:00:31.564Z",
+    "migration_name": "20251216060116_recipe_persistence",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2025-12-21T15:00:31.534Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "207da0bf-cb4a-4758-abcf-29568ff31581",
+    "checksum": "132030671523bdcbbf619723d1e42a68b0b1a0eb94c42b9c57fc3d536ba2848a",
+    "finished_at": "2025-12-21T15:00:31.590Z",
+    "migration_name": "20251216063921_order_persistence_table_mapping",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2025-12-21T15:00:31.566Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "80b6bf6f-af97-4e32-bb26-3136665dbae6",
+    "checksum": "acfab0d2d8e720a74308aca6160e93e8f26a55927bf547a098baf1a06aa02f86",
+    "finished_at": "2025-12-21T15:00:31.602Z",
+    "migration_name": "20251216070826_address_persistence_table_mapping",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2025-12-21T15:00:31.591Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "1c9ddcd4-5962-4c15-a153-890ccb1c93be",
+    "checksum": "f4fabd38e7716ea0fc0c4fb76e242b361c65849e26b78f3644766ba6502dc88c",
+    "finished_at": "2025-12-21T15:00:31.606Z",
+    "migration_name": "20251216101028_add_order_dog_address_references",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2025-12-21T15:00:31.603Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "ad81c51d-4591-41dc-bcf5-ffeb10db630c",
+    "checksum": "2c198d269255ca2d325cbcdb2834fc61d6333735791cb2b77f3cd631fcef31b4",
+    "finished_at": "2025-12-21T15:00:31.610Z",
+    "migration_name": "20251216115956_add_daily_intake_g_to_order_item",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2025-12-21T15:00:31.607Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "d8178d36-3066-4c7a-a0d9-1e83c25a0eb4",
+    "checksum": "59f57acf58fd4496f4e41fb64bca8bef885e3f6492cd676460586ed881c91c63",
+    "finished_at": "2025-12-21T15:00:31.635Z",
+    "migration_name": "20251216133724_add_production_batch_and_packaging_unit",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2025-12-21T15:00:31.611Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "016f3259-da1a-40db-99f2-d0bc0fb28ebd",
+    "checksum": "5b1c8eaef8ddc0db914369aea009b31643ffdbfa09fe7319d7dffc9d9b049304",
+    "finished_at": "2025-12-21T15:00:31.643Z",
+    "migration_name": "20251216151402_add_allocation_lock_to_order_item",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2025-12-21T15:00:31.636Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "cdf43acc-62bd-4133-b345-433066dc6c6f",
+    "checksum": "2f19b156fd937ad9c5eb3b729e3cccee200a485129189232fa79912699393b6c",
+    "finished_at": "2025-12-21T15:00:31.651Z",
+    "migration_name": "20251216161937_add_kitchen_task_fields_to_packaging_unit",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2025-12-21T15:00:31.643Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "41964ce1-af79-485c-bf67-e449049594ed",
+    "checksum": "6a88637c935128c9fe587dbe35b4f5f891d9cb1e6811475b0270e5ab366d75c6",
+    "finished_at": "2025-12-21T15:00:31.668Z",
+    "migration_name": "20251217010000_add_inventory_ledger_entry",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2025-12-21T15:00:31.652Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "fc2020b0-cf75-4c78-a700-6c3e0b1ae816",
+    "checksum": "147f0b4e6e5cc0b9b3b43ffb4184ed335acca587f05588b33ca8ce27e75bbf17",
+    "finished_at": "2025-12-21T15:00:31.673Z",
+    "migration_name": "20251219193259_add_order_cancellation_fields",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2025-12-21T15:00:31.669Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "e4c4cbe4-f658-4e3f-9db5-2da05a19300c",
+    "checksum": "a487e8d3ed776e309b150db691503db5139c95cb74ca0d5fb1cc4161db700a8d",
+    "finished_at": "2025-12-21T15:00:31.677Z",
+    "migration_name": "20251219202028_add_payment_tracking_fields",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2025-12-21T15:00:31.674Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "9eccb7b1-e6d5-4f4b-b403-18cadfe55d4e",
+    "checksum": "7a8ffade89c1a1a5fb57607e0ce094a45ded58c3752d9ba21e42af63d143322c",
+    "finished_at": "2025-12-21T15:00:31.692Z",
+    "migration_name": "20251219202948_add_order_status_history",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2025-12-21T15:00:31.678Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "6b5e3926-a15f-42da-bf14-14b829f093b6",
+    "checksum": "8633a0da6af51fa9960f58c7560d31aa8147ac2ea05085977003a63462ab8c69",
+    "finished_at": "2025-12-21T15:00:31.696Z",
+    "migration_name": "20251219225121_fix_order_payment_columns",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2025-12-21T15:00:31.693Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "abe1f345-0a94-49de-80c9-5279d98746c6",
+    "checksum": "5ad2d73f911f81d8fcf08892e4a93ac663766cf0f55826e38fe324fb8a433ee4",
+    "finished_at": "2025-12-21T15:00:31.700Z",
+    "migration_name": "20251220000000_add_order_shipping_fields",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2025-12-21T15:00:31.697Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "570e2197-c958-4a35-b7c6-7cb7cca3cd71",
+    "checksum": "d887a697bf3b22f51283f709ed214b30ba6b253225a8201d1dd4421bd0b04e1a",
+    "finished_at": "2025-12-21T15:00:31.703Z",
+    "migration_name": "20251220003000_fix_order_shipping_columns",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2025-12-21T15:00:31.700Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "e0d48eec-8a63-4c4a-9055-a5d4c5d2c840",
+    "checksum": "d887a697bf3b22f51283f709ed214b30ba6b253225a8201d1dd4421bd0b04e1a",
+    "finished_at": "2025-12-21T15:00:31.707Z",
+    "migration_name": "20251220010000_fix_all_order_lifecycle_columns",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2025-12-21T15:00:31.704Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "1ccd7425-0adc-4b4e-a823-7e3fcedcd27f",
+    "checksum": "e70200027d6b45fd7c1cdd7b2ff765bbedab52cc6c682557bc15a5ecd986aaf8",
+    "finished_at": "2025-12-24T07:29:23.223Z",
+    "migration_name": "20251224145000_add_custom_breed_name",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2025-12-24T07:29:23.213Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "6d8ca617-4409-4c05-ab5d-e8b31468b432",
+    "checksum": "e0b4b554951a022b9445e124d51c0965fd159af6ededcf3a2e65231271b26dcd",
+    "finished_at": "2026-01-06T12:00:44.426Z",
+    "migration_name": "20260106195839_add_example_weight_to_recipe_item",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-01-06T12:00:44.426Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "46366c9b-ed5c-4c89-8dbc-0037ec8b1715",
+    "checksum": "3a9343622ab1b0ad2363305d5156de62b91f4a7ce4b058815dfe11cacff9b409",
+    "finished_at": "2026-01-09T14:44:00.527Z",
+    "migration_name": "20260109000000_add_order_freezing_and_aftersale",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-01-09T14:44:00.515Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "ab91596e-dc92-4539-9fcf-02d70e9ee25a",
+    "checksum": "127e400bf4f3452f373a875cebad26ad1063fd79b602879aba06e138916da936",
+    "finished_at": null,
+    "migration_name": "20260109000000_phase9_order_status_optimization",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260109000000_phase9_order_status_optimization\n\nDatabase error code: 42601\n\nDatabase error:\nERROR: syntax error at or near \"ENUM\"\n\nPosition:\n\u001b[1m 78\u001b[0m -- ----------------------------------------------------------------------------\n\u001b[1m 79\u001b[0m -- Step 3: Add comments for documentation\n\u001b[1m 80\u001b[0m -- ----------------------------------------------------------------------------\n\u001b[1m 81\u001b[0m\n\u001b[1m 82\u001b[0m COMMENT ON TYPE \"OrderStatus\" IS 'Phase 9: E-commerce Standard Order Status - Simplified from 10 to 7 states aligned with industry standards';\n\u001b[1m 83\u001b[1;31m \u001b[0m\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42601), message: \"syntax error at or near \\\"ENUM\\\"\", detail: None, hint: None, position: Some(Original(3101)), where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"scan.l\"), line: Some(1244), routine: Some(\"scanner_yyerror\") }\n\n   0: sql_schema_connector::apply_migration::apply_script\n           with migration_name=\"20260109000000_phase9_order_status_optimization\"\n             at schema-engine/connectors/sql-schema-connector/src/apply_migration.rs:113\n   1: schema_commands::commands::apply_migrations::Applying migration\n           with migration_name=\"20260109000000_phase9_order_status_optimization\"\n             at schema-engine/commands/src/commands/apply_migrations.rs:95\n   2: schema_core::state::ApplyMigrations\n             at schema-engine/core/src/state.rs:260",
+    "rolled_back_at": "2026-01-09T14:44:07.939Z",
+    "started_at": "2026-01-09T14:44:00.527Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "2322b9bb-096f-4f8e-8b7c-f1deb3c9b924",
+    "checksum": "430934e0fa832426e2efd04e56cef894f7704c163064e9552d44407a7c6b00ad",
+    "finished_at": null,
+    "migration_name": "20260109000000_phase9_order_status_optimization",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260109000000_phase9_order_status_optimization\n\nDatabase error code: 42710\n\nDatabase error:\nERROR: enum label \"PURCHASING\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42710), message: \"enum label \\\"PURCHASING\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"pg_enum.c\"), line: Some(293), routine: Some(\"AddEnumLabel\") }\n\n",
+    "rolled_back_at": "2026-05-11T05:06:30.101Z",
+    "started_at": "2026-05-11T05:06:03.623Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "56a50d0f-c798-43ff-a7c0-0545d7068b90",
+    "checksum": "430934e0fa832426e2efd04e56cef894f7704c163064e9552d44407a7c6b00ad",
+    "finished_at": "2026-05-11T05:06:30.109Z",
+    "migration_name": "20260109000000_phase9_order_status_optimization",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-05-11T05:06:30.109Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "810b7c00-a424-4863-8fe0-ee1ad208f61c",
+    "checksum": "8c0a31b2ea8789c5fb921cbe0f115db7a9a1e1b96e473958371598d7e89dcb71",
+    "finished_at": "2026-01-25T11:29:34.753Z",
+    "migration_name": "20260125192532_add_reimbursement_cost_details",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-01-25T11:29:34.746Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "2f886b00-b084-4579-b1a7-6ef915eba683",
+    "checksum": "422c9af0829deac49b7efc38d001296f126afe6795e050e0ebabf84435b4c936",
+    "finished_at": "2026-01-25T12:55:20.216Z",
+    "migration_name": "20260125205511_update_reimbursement_status_and_add_payment_proof",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-01-25T12:55:20.216Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "e4e971c6-40a8-437d-afdc-c2fb4f9878b6",
+    "checksum": "f085c3a040dbefb85fbcd53d247f56d424ce6435e7ee1457bb24e4116ad04a80",
+    "finished_at": "2026-01-25T14:53:14.683Z",
+    "migration_name": "20260125225305_remove_allergy_record_fields",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-01-25T14:53:14.683Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "f7a6ed68-5ec0-4a38-bf25-6359f0f5a61e",
+    "checksum": "b5e26ee1f7d142ad19100bb1a400db1293781243dfee81de93b65bff00fee5bf",
+    "finished_at": "2026-01-27T10:39:24.957Z",
+    "migration_name": "20260127183915_add_min_pot_weight_config",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-01-27T10:39:24.957Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "420982ab-fbd9-489d-b86b-ddae7400927a",
+    "checksum": "b494af7be83f94a88134ecc9da0464e3b5337bef49b9cbe6c4d5b95edabe48c8",
+    "finished_at": "2026-06-11T07:09:50.756Z",
+    "migration_name": "20260130050000_create_user_table_if_missing",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-11T07:09:50.744Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "f2c84c00-9d3d-4186-87bc-5f7320fdb310",
+    "checksum": "822621e0aaacf3a0c8569ca868167512e2de993208035e93ddde7b0f8d0d58a7",
+    "finished_at": "2026-01-31T15:33:49.263Z",
+    "migration_name": "20260130_add_is_custom_recipe",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-01-31T15:33:49.263Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "873bf7d7-c59a-4fd6-aa66-6354b4d393ba",
+    "checksum": "f5844494b04f94902083e190addf96defe03b763816a91739e6be11de7088226",
+    "finished_at": null,
+    "migration_name": "20260131000000_add_favorite_recipe_table",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260131000000_add_favorite_recipe_table\n\nDatabase error code: 42P07\n\nDatabase error:\nERROR: relation \"favorite_recipe\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42P07), message: \"relation \\\"favorite_recipe\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"heap.c\"), line: Some(1150), routine: Some(\"heap_create_with_catalog\") }\n\n   0: sql_schema_connector::apply_migration::apply_script\n           with migration_name=\"20260131000000_add_favorite_recipe_table\"\n             at schema-engine/connectors/sql-schema-connector/src/apply_migration.rs:113\n   1: schema_commands::commands::apply_migrations::Applying migration\n           with migration_name=\"20260131000000_add_favorite_recipe_table\"\n             at schema-engine/commands/src/commands/apply_migrations.rs:95\n   2: schema_core::state::ApplyMigrations\n             at schema-engine/core/src/state.rs:260",
+    "rolled_back_at": "2026-01-31T15:34:05.681Z",
+    "started_at": "2026-01-31T15:33:53.106Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "de4b9557-d840-426c-9592-b14d85ccbe88",
+    "checksum": "f5844494b04f94902083e190addf96defe03b763816a91739e6be11de7088226",
+    "finished_at": "2026-01-31T15:34:05.683Z",
+    "migration_name": "20260131000000_add_favorite_recipe_table",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-01-31T15:34:05.683Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "bc454c04-e8c0-4c5a-b716-93751375edda",
+    "checksum": "8ae0cfac4d2d29fac10fad9e2398b5405260befb35fc224be796175422086875",
+    "finished_at": null,
+    "migration_name": "20260201230300_add_original_target_production_date",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260201230300_add_original_target_production_date\n\nDatabase error code: 42701\n\nDatabase error:\nERROR: column \"original_target_production_date\" of relation \"order\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42701), message: \"column \\\"original_target_production_date\\\" of relation \\\"order\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"tablecmds.c\"), line: Some(7347), routine: Some(\"check_for_column_name_collision\") }\n\n",
+    "rolled_back_at": "2026-06-11T07:09:46.137Z",
+    "started_at": "2026-05-11T05:06:40.113Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "4fa769d9-50a0-4ad6-a9bb-9328ff6264f9",
+    "checksum": "8ae0cfac4d2d29fac10fad9e2398b5405260befb35fc224be796175422086875",
+    "finished_at": "2026-06-11T07:09:46.140Z",
+    "migration_name": "20260201230300_add_original_target_production_date",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-11T07:09:46.140Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "cd569752-a185-4f01-8490-1b0724237e13",
+    "checksum": "2498dfe5db5c8b5764c38c27ce51a1edb1a8f6f0964d6674b4b69f251a992b94",
+    "finished_at": "2026-06-11T07:09:50.771Z",
+    "migration_name": "20260201230900_create_missing_foundation_tables_if_missing",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-11T07:09:50.756Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "fa6ee273-24ee-427e-bff4-89924eb17948",
+    "checksum": "5b541480a3b807a89d628e5f85b2cd2815557cf39e128c50c86d7382b534c672",
+    "finished_at": null,
+    "migration_name": "20260201231000_add_missing_purchase_and_custom_recipe_tables",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260201231000_add_missing_purchase_and_custom_recipe_tables\n\nDatabase error code: 42P16\n\nDatabase error:\nERROR: multiple primary keys for table \"purchase_list\" are not allowed\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42P16), message: \"multiple primary keys for table \\\"purchase_list\\\" are not allowed\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"index.c\"), line: Some(223), routine: Some(\"index_check_primary_key\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:06:40.760Z",
+    "started_at": "2026-06-11T07:09:50.772Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "40a0bd7d-e395-442e-a4af-d264b2de1293",
+    "checksum": "5b541480a3b807a89d628e5f85b2cd2815557cf39e128c50c86d7382b534c672",
+    "finished_at": "2026-06-16T17:06:40.764Z",
+    "migration_name": "20260201231000_add_missing_purchase_and_custom_recipe_tables",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:06:40.764Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "3744ffef-236e-4b71-90cb-8728e1e029a0",
+    "checksum": "342a7b7722326c3726905ec0870837767578da091b79141faa75ffd1293494e7",
+    "finished_at": null,
+    "migration_name": "2026020123300000_add_only_missing_tables",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 2026020123300000_add_only_missing_tables\n\nDatabase error code: 42P07\n\nDatabase error:\nERROR: relation \"purchase_list\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42P07), message: \"relation \\\"purchase_list\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"heap.c\"), line: Some(1150), routine: Some(\"heap_create_with_catalog\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:07:45.730Z",
+    "started_at": "2026-06-16T17:06:41.429Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "ec8a31b9-a4b3-4773-b5ac-2754a7ba4280",
+    "checksum": "342a7b7722326c3726905ec0870837767578da091b79141faa75ffd1293494e7",
+    "finished_at": "2026-06-16T17:07:45.733Z",
+    "migration_name": "2026020123300000_add_only_missing_tables",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:07:45.733Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "344921bb-5784-41ff-b136-b99faefe16ab",
+    "checksum": "2834d15d6e49e923f5508743018086f9ddd750cba76f7d8cb06398a6316bbb58",
+    "finished_at": null,
+    "migration_name": "20260203210000_add_reimbursement_table",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260203210000_add_reimbursement_table\n\nDatabase error code: 42P16\n\nDatabase error:\nERROR: multiple primary keys for table \"reimbursement\" are not allowed\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42P16), message: \"multiple primary keys for table \\\"reimbursement\\\" are not allowed\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"index.c\"), line: Some(223), routine: Some(\"index_check_primary_key\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:08:21.241Z",
+    "started_at": "2026-06-16T17:07:46.369Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "f2753419-747f-4000-8bbc-799bdf10e7bc",
+    "checksum": "2834d15d6e49e923f5508743018086f9ddd750cba76f7d8cb06398a6316bbb58",
+    "finished_at": "2026-06-16T17:08:21.244Z",
+    "migration_name": "20260203210000_add_reimbursement_table",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:08:21.244Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "0268dbd5-62f6-4e8e-ab6d-7c30ff2c7348",
+    "checksum": "e05e19f9fe17e7e9f05ea99ab0f3411ad6f074e3378bbadd918f3f2523f48b48",
+    "finished_at": null,
+    "migration_name": "20260204170000_add_is_common_to_dog_breed",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260204170000_add_is_common_to_dog_breed\n\nDatabase error code: 42701\n\nDatabase error:\nERROR: column \"is_common\" of relation \"dog_breed\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42701), message: \"column \\\"is_common\\\" of relation \\\"dog_breed\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"tablecmds.c\"), line: Some(7347), routine: Some(\"check_for_column_name_collision\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:08:56.450Z",
+    "started_at": "2026-06-16T17:08:21.890Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "b981e4c5-d422-4694-8425-2647ec6e2d28",
+    "checksum": "e05e19f9fe17e7e9f05ea99ab0f3411ad6f074e3378bbadd918f3f2523f48b48",
+    "finished_at": "2026-06-16T17:08:56.453Z",
+    "migration_name": "20260204170000_add_is_common_to_dog_breed",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:08:56.453Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "0d21d517-7443-44e2-8d33-f3ccedce0db0",
+    "checksum": "3b0c19979efa36d35ff2860538f0d9c27f4a2c6c79b5d892b7f2b8614d6d69e1",
+    "finished_at": null,
+    "migration_name": "20260329000000_add_recipe_share_token",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260329000000_add_recipe_share_token\n\nDatabase error code: 42P07\n\nDatabase error:\nERROR: relation \"recipe_share_token\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42P07), message: \"relation \\\"recipe_share_token\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"heap.c\"), line: Some(1150), routine: Some(\"heap_create_with_catalog\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:09:11.509Z",
+    "started_at": "2026-06-16T17:08:57.079Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "25a35d65-799b-4f5d-a59d-00ebd540c1e1",
+    "checksum": "3b0c19979efa36d35ff2860538f0d9c27f4a2c6c79b5d892b7f2b8614d6d69e1",
+    "finished_at": "2026-06-16T17:09:11.512Z",
+    "migration_name": "20260329000000_add_recipe_share_token",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:09:11.512Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "fcd7f8cc-607e-4339-b2fa-1f0a5f0e37fa",
+    "checksum": "ef1af38d0180c5e4ab0a9521a1cc608e1789592e4d555df246641be689cf0f38",
+    "finished_at": null,
+    "migration_name": "20260331120000_add_ingredient_price_change",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260331120000_add_ingredient_price_change\n\nDatabase error code: 42703\n\nDatabase error:\nERROR: column \"pricing_group_code\" does not exist\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42703), message: \"column \\\"pricing_group_code\\\" does not exist\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"indexcmds.c\"), line: Some(1891), routine: Some(\"ComputeIndexAttrs\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:09:43.420Z",
+    "started_at": "2026-06-16T17:09:12.148Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "0987fa18-282b-4d38-96b1-8fc2a1b8e847",
+    "checksum": "ef1af38d0180c5e4ab0a9521a1cc608e1789592e4d555df246641be689cf0f38",
+    "finished_at": "2026-06-16T17:09:43.423Z",
+    "migration_name": "20260331120000_add_ingredient_price_change",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:09:43.423Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "3daba370-0018-4551-9e65-9de1dd6e25d0",
+    "checksum": "bb506ceb981b0fb265c9a90ea410b824c09b48dd0dff26a872a2beb22c3b7819",
+    "finished_at": null,
+    "migration_name": "20260331180000_add_home_header_bg_image_url",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260331180000_add_home_header_bg_image_url\n\nDatabase error code: 42701\n\nDatabase error:\nERROR: column \"home_header_bg_image_url\" of relation \"global_config\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42701), message: \"column \\\"home_header_bg_image_url\\\" of relation \\\"global_config\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"tablecmds.c\"), line: Some(7347), routine: Some(\"check_for_column_name_collision\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:09:52.276Z",
+    "started_at": "2026-06-16T17:09:44.060Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "1cdf57b6-0fe6-4f59-9e0a-b7d4c8dc28c0",
+    "checksum": "bb506ceb981b0fb265c9a90ea410b824c09b48dd0dff26a872a2beb22c3b7819",
+    "finished_at": "2026-06-16T17:09:52.280Z",
+    "migration_name": "20260331180000_add_home_header_bg_image_url",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:09:52.280Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "6fee70ea-2677-41c4-9b32-c711612cdd62",
+    "checksum": "d2cef0c65c9f14915e74b83e852aa6ea628746542ca3819377a6d6d92d0d36ca",
+    "finished_at": "2026-06-16T17:09:52.934Z",
+    "migration_name": "20260331223000_make_purchase_record_quantity_decimal",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:09:52.915Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "13f63f82-485b-4064-8baf-ac033114cc28",
+    "checksum": "c672db4489ab27ea38b51a24c3ca348259b0c41344ab3343c7339c412eb8b4f9",
+    "finished_at": null,
+    "migration_name": "20260401170000_add_purchase_record_normalization_fields",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260401170000_add_purchase_record_normalization_fields\n\nDatabase error code: 42701\n\nDatabase error:\nERROR: column \"actual_package_count\" of relation \"purchase_record\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42701), message: \"column \\\"actual_package_count\\\" of relation \\\"purchase_record\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"tablecmds.c\"), line: Some(7347), routine: Some(\"check_for_column_name_collision\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:10:09.060Z",
+    "started_at": "2026-06-16T17:09:52.935Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "fc546d6d-6d82-4e88-9e58-63f4655bc3c5",
+    "checksum": "c672db4489ab27ea38b51a24c3ca348259b0c41344ab3343c7339c412eb8b4f9",
+    "finished_at": "2026-06-16T17:10:09.063Z",
+    "migration_name": "20260401170000_add_purchase_record_normalization_fields",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:10:09.063Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "be8eaeb8-9ce0-4439-b140-1b3df815bf34",
+    "checksum": "ff40d7bd23268e6eefbcfc17449865040eb9ceb3c3b1d979b3e66b28a0cf675b",
+    "finished_at": null,
+    "migration_name": "20260401193000_add_purchase_item_suggested_product_fields",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260401193000_add_purchase_item_suggested_product_fields\n\nDatabase error code: 42701\n\nDatabase error:\nERROR: column \"suggested_product_id\" of relation \"purchase_item\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42701), message: \"column \\\"suggested_product_id\\\" of relation \\\"purchase_item\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"tablecmds.c\"), line: Some(7347), routine: Some(\"check_for_column_name_collision\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:10:23.176Z",
+    "started_at": "2026-06-16T17:10:09.741Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "9f236759-5d5c-4045-a139-0c66785a8484",
+    "checksum": "ff40d7bd23268e6eefbcfc17449865040eb9ceb3c3b1d979b3e66b28a0cf675b",
+    "finished_at": "2026-06-16T17:10:23.180Z",
+    "migration_name": "20260401193000_add_purchase_item_suggested_product_fields",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:10:23.180Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "e5261a45-d20c-40ea-ab2f-01faf687d136",
+    "checksum": "538b17ac2057c738640841b89665355c6dfbc0ebb991f2f150c5b97f47957705",
+    "finished_at": "2026-06-16T17:10:23.832Z",
+    "migration_name": "20260401210000_remove_pricing_group_fields",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:10:23.825Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "c14cbf36-ef28-49e0-b14d-3e86589c86d4",
+    "checksum": "98bf799af235157df46719e99af6ace558b121055aebb1b80c17c268a56100c1",
+    "finished_at": null,
+    "migration_name": "20260401233000_add_order_admin_remark",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260401233000_add_order_admin_remark\n\nDatabase error code: 42701\n\nDatabase error:\nERROR: column \"admin_remark\" of relation \"order\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42701), message: \"column \\\"admin_remark\\\" of relation \\\"order\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"tablecmds.c\"), line: Some(7347), routine: Some(\"check_for_column_name_collision\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:10:31.966Z",
+    "started_at": "2026-06-16T17:10:23.832Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "37bc7cf6-439a-4bff-b35c-a1ae12377a70",
+    "checksum": "98bf799af235157df46719e99af6ace558b121055aebb1b80c17c268a56100c1",
+    "finished_at": "2026-06-16T17:10:31.967Z",
+    "migration_name": "20260401233000_add_order_admin_remark",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:10:31.967Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "8f1403b2-d914-48ff-8141-7d6755a62476",
+    "checksum": "2990a9df48530a524e1e4133d7fd91dc3946bdeee3a7d358bb084c8f4195c0ef",
+    "finished_at": null,
+    "migration_name": "20260402120000_add_stock_replenishment_purchasing",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260402120000_add_stock_replenishment_purchasing\n\nDatabase error code: 42710\n\nDatabase error:\nERROR: type \"IngredientProcurementStrategy\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42710), message: \"type \\\"IngredientProcurementStrategy\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"typecmds.c\"), line: Some(1167), routine: Some(\"DefineEnum\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:10:57.604Z",
+    "started_at": "2026-06-16T17:10:32.612Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "ce127b5d-19de-4ebc-97ac-f46592923eba",
+    "checksum": "2990a9df48530a524e1e4133d7fd91dc3946bdeee3a7d358bb084c8f4195c0ef",
+    "finished_at": "2026-06-16T17:10:57.608Z",
+    "migration_name": "20260402120000_add_stock_replenishment_purchasing",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:10:57.608Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "714fba1d-1a6f-4b85-b450-4a5a3ea4fdc1",
+    "checksum": "6eb03d508a48ce765fe5826476e6288425bf3725bd505c0d4ceb5bd866959152",
+    "finished_at": null,
+    "migration_name": "20260402153000_add_ingredient_stock_policy_fields",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260402153000_add_ingredient_stock_policy_fields\n\nDatabase error code: 42701\n\nDatabase error:\nERROR: column \"safety_stock\" of relation \"ingredient\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42701), message: \"column \\\"safety_stock\\\" of relation \\\"ingredient\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"tablecmds.c\"), line: Some(7347), routine: Some(\"check_for_column_name_collision\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:11:12.453Z",
+    "started_at": "2026-06-16T17:10:58.247Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "b59013d6-8b32-4fd9-ba99-d9212fc82cdb",
+    "checksum": "6eb03d508a48ce765fe5826476e6288425bf3725bd505c0d4ceb5bd866959152",
+    "finished_at": "2026-06-16T17:11:12.456Z",
+    "migration_name": "20260402153000_add_ingredient_stock_policy_fields",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:11:12.456Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "4ae206c7-421f-400d-ae88-fde5a51d6722",
+    "checksum": "f1e945d6bbbc8aaca999c6415643d1c8e6c30f805114f9e421d1b34d4cbee293",
+    "finished_at": null,
+    "migration_name": "20260402190000_add_aliases_to_dog_breed",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260402190000_add_aliases_to_dog_breed\n\nDatabase error code: 42701\n\nDatabase error:\nERROR: column \"aliases\" of relation \"dog_breed\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42701), message: \"column \\\"aliases\\\" of relation \\\"dog_breed\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"tablecmds.c\"), line: Some(7347), routine: Some(\"check_for_column_name_collision\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:11:20.395Z",
+    "started_at": "2026-06-16T17:11:13.103Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "eff2f769-b1e0-46ad-ac1a-2b794a0e0d2b",
+    "checksum": "f1e945d6bbbc8aaca999c6415643d1c8e6c30f805114f9e421d1b34d4cbee293",
+    "finished_at": "2026-06-16T17:11:20.398Z",
+    "migration_name": "20260402190000_add_aliases_to_dog_breed",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:11:20.398Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "56c6ca38-8a33-4289-b52b-3cb50691ea04",
+    "checksum": "0f264a39dff10f0ec0a491797512a23094ee970b77656ed8b44fc042c3c80c77",
+    "finished_at": null,
+    "migration_name": "20260402213000_add_inventory_management_foundation",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260402213000_add_inventory_management_foundation\n\nDatabase error code: 42710\n\nDatabase error:\nERROR: enum label \"MANUAL_ADJUSTMENT\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42710), message: \"enum label \\\"MANUAL_ADJUSTMENT\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"pg_enum.c\"), line: Some(293), routine: Some(\"AddEnumLabel\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:11:58.158Z",
+    "started_at": "2026-06-16T17:11:21.033Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "a4e316bb-dd48-4816-84df-931400a356fc",
+    "checksum": "0f264a39dff10f0ec0a491797512a23094ee970b77656ed8b44fc042c3c80c77",
+    "finished_at": "2026-06-16T17:11:58.161Z",
+    "migration_name": "20260402213000_add_inventory_management_foundation",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:11:58.161Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "95635da8-b686-4170-93a0-781102a8c61d",
+    "checksum": "a0f3916e663395bd23d561e1de63a5726ddc5d63327f94ca1011ba5621e0700a",
+    "finished_at": null,
+    "migration_name": "20260403121500_add_procurement_sku",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260403121500_add_procurement_sku\n\nDatabase error code: 42P07\n\nDatabase error:\nERROR: relation \"procurement_sku\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42P07), message: \"relation \\\"procurement_sku\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"heap.c\"), line: Some(1150), routine: Some(\"heap_create_with_catalog\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:12:16.900Z",
+    "started_at": "2026-06-16T17:11:58.792Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "b07d50a9-dc5a-4a3c-a618-f124c48b1e11",
+    "checksum": "a0f3916e663395bd23d561e1de63a5726ddc5d63327f94ca1011ba5621e0700a",
+    "finished_at": "2026-06-16T17:12:16.903Z",
+    "migration_name": "20260403121500_add_procurement_sku",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:12:16.903Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "710549d7-499a-4c4f-8d0b-22e186c0c807",
+    "checksum": "597494363221b3dbefb8ee562dd56b11baa9d8e3f648e61d660daa7bc9a00442",
+    "finished_at": null,
+    "migration_name": "20260403133000_add_purchase_procurement_sku_snapshots",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260403133000_add_purchase_procurement_sku_snapshots\n\nDatabase error code: 42701\n\nDatabase error:\nERROR: column \"procurement_sku_id\" of relation \"purchase_item\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42701), message: \"column \\\"procurement_sku_id\\\" of relation \\\"purchase_item\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"tablecmds.c\"), line: Some(7347), routine: Some(\"check_for_column_name_collision\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:12:32.461Z",
+    "started_at": "2026-06-16T17:12:17.549Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "c0c50855-f320-4fc8-95ad-6809bc5a6d58",
+    "checksum": "597494363221b3dbefb8ee562dd56b11baa9d8e3f648e61d660daa7bc9a00442",
+    "finished_at": "2026-06-16T17:12:32.464Z",
+    "migration_name": "20260403133000_add_purchase_procurement_sku_snapshots",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:12:32.464Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "a928619e-fc3f-4b51-9a2a-8d87a694263f",
+    "checksum": "84145b09cf272bf36e4d6837aac970f80418b83e2f160cba2008dea2409e7b8d",
+    "finished_at": null,
+    "migration_name": "20260403183000_add_reimbursement_paid_fields",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260403183000_add_reimbursement_paid_fields\n\nDatabase error code: 42701\n\nDatabase error:\nERROR: column \"paid_by_id\" of relation \"reimbursement\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42701), message: \"column \\\"paid_by_id\\\" of relation \\\"reimbursement\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"tablecmds.c\"), line: Some(7347), routine: Some(\"check_for_column_name_collision\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:12:48.499Z",
+    "started_at": "2026-06-16T17:12:33.109Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "12ec8ffa-26b3-4cdf-91d4-a56b9b2d3d01",
+    "checksum": "84145b09cf272bf36e4d6837aac970f80418b83e2f160cba2008dea2409e7b8d",
+    "finished_at": "2026-06-16T17:12:48.501Z",
+    "migration_name": "20260403183000_add_reimbursement_paid_fields",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:12:48.501Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "9653b440-d597-4d15-be7e-37d6cb485906",
+    "checksum": "e45756a50bbaeedf2b206cbc5dccb8ba66f65cc52fe4073cae53e565b81b0072",
+    "finished_at": null,
+    "migration_name": "20260403190000_add_dog_profile_event",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260403190000_add_dog_profile_event\n\nDatabase error code: 42P07\n\nDatabase error:\nERROR: relation \"dog_profile_event\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42P07), message: \"relation \\\"dog_profile_event\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"heap.c\"), line: Some(1150), routine: Some(\"heap_create_with_catalog\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:13:12.751Z",
+    "started_at": "2026-06-16T17:12:49.172Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "a947bcaf-c023-4dca-9fc5-eba52274a56e",
+    "checksum": "e45756a50bbaeedf2b206cbc5dccb8ba66f65cc52fe4073cae53e565b81b0072",
+    "finished_at": "2026-06-16T17:13:12.754Z",
+    "migration_name": "20260403190000_add_dog_profile_event",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:13:12.754Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "8e62a9e0-632d-4031-a43e-aea7d778c1e9",
+    "checksum": "3e5c468ad77be134a6ee18e3fda250266edec8f915edb1a120925309625131d2",
+    "finished_at": null,
+    "migration_name": "20260403190000_add_finance_expense_foundation",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260403190000_add_finance_expense_foundation\n\nDatabase error code: 42710\n\nDatabase error:\nERROR: type \"FinanceExpenseCategory\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42710), message: \"type \\\"FinanceExpenseCategory\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"typecmds.c\"), line: Some(1167), routine: Some(\"DefineEnum\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:13:50.291Z",
+    "started_at": "2026-06-16T17:13:13.417Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "d18cdf4d-065d-4e98-a5e9-266264a79f05",
+    "checksum": "3e5c468ad77be134a6ee18e3fda250266edec8f915edb1a120925309625131d2",
+    "finished_at": "2026-06-16T17:13:50.298Z",
+    "migration_name": "20260403190000_add_finance_expense_foundation",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:13:50.298Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "7ac47c8d-63c5-42f4-a8f0-255df553e417",
+    "checksum": "85d25a12e70ff18fb10a58368f09004890cbb426b9423c8ad3ab585e78aaeea8",
+    "finished_at": null,
+    "migration_name": "20260407123000_add_dog_avatar",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260407123000_add_dog_avatar\n\nDatabase error code: 42701\n\nDatabase error:\nERROR: column \"avatar_url\" of relation \"dog\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42701), message: \"column \\\"avatar_url\\\" of relation \\\"dog\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"tablecmds.c\"), line: Some(7347), routine: Some(\"check_for_column_name_collision\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:14:01.103Z",
+    "started_at": "2026-06-16T17:13:53.562Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "88e237da-e69c-4470-a494-15985f0c4aa3",
+    "checksum": "85d25a12e70ff18fb10a58368f09004890cbb426b9423c8ad3ab585e78aaeea8",
+    "finished_at": "2026-06-16T17:14:01.106Z",
+    "migration_name": "20260407123000_add_dog_avatar",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:14:01.106Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "3df4ea8c-338b-46f1-b298-98d82711dbd1",
+    "checksum": "bc7a53da7e9d947aa0d66898d011b2bd39b772b2de6b8598471190ec7981099b",
+    "finished_at": "2026-06-16T17:14:02.234Z",
+    "migration_name": "20260407234500_add_missing_recommended_product_table",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:14:02.221Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "2e613f51-248d-4c17-9325-8c3ded1ec975",
+    "checksum": "31d644dfe89572911c11c6289b5316f04fc27d91203d8478a34e2cb2dcea2a56",
+    "finished_at": null,
+    "migration_name": "20260408133000_add_feedback_nutrition_design_foundation",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260408133000_add_feedback_nutrition_design_foundation\n\nDatabase error code: 42710\n\nDatabase error:\nERROR: type \"NutritionFoodCategory\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42710), message: \"type \\\"NutritionFoodCategory\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"typecmds.c\"), line: Some(1167), routine: Some(\"DefineEnum\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:14:33.330Z",
+    "started_at": "2026-06-16T17:14:02.236Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "b2aa8577-b1fa-4782-961a-73136682d105",
+    "checksum": "31d644dfe89572911c11c6289b5316f04fc27d91203d8478a34e2cb2dcea2a56",
+    "finished_at": "2026-06-16T17:14:33.332Z",
+    "migration_name": "20260408133000_add_feedback_nutrition_design_foundation",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:14:33.332Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "9c15f9d5-ea9d-46df-a7bb-c183c84fe1a3",
+    "checksum": "1d49300e5400f9d76e481c3c1ade07a041df2d68d0869475b2a976b14370560f",
+    "finished_at": null,
+    "migration_name": "20260411150000_add_ingredient_nutrition_profile",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260411150000_add_ingredient_nutrition_profile\n\nDatabase error code: 42701\n\nDatabase error:\nERROR: column \"nutrition_profile\" of relation \"ingredient\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42701), message: \"column \\\"nutrition_profile\\\" of relation \\\"ingredient\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"tablecmds.c\"), line: Some(7347), routine: Some(\"check_for_column_name_collision\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:14:46.443Z",
+    "started_at": "2026-06-16T17:14:33.975Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "762f8579-6be5-4678-91d0-8e6b8c7bf67a",
+    "checksum": "1d49300e5400f9d76e481c3c1ade07a041df2d68d0869475b2a976b14370560f",
+    "finished_at": "2026-06-16T17:14:46.447Z",
+    "migration_name": "20260411150000_add_ingredient_nutrition_profile",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:14:46.447Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "7d565123-4312-438d-8092-dd33aee282cd",
+    "checksum": "1e7f0d7c9074f3ded72af8a9ba3817eb7d7ae1e7eece17e87dba9b4a859607e3",
+    "finished_at": null,
+    "migration_name": "20260411153000_extend_procurement_sku_domain_fields",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260411153000_extend_procurement_sku_domain_fields\n\nDatabase error code: 42701\n\nDatabase error:\nERROR: column \"supplier_name\" of relation \"procurement_sku\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42701), message: \"column \\\"supplier_name\\\" of relation \\\"procurement_sku\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"tablecmds.c\"), line: Some(7347), routine: Some(\"check_for_column_name_collision\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:15:04.980Z",
+    "started_at": "2026-06-16T17:14:50.321Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "9014dacb-5ba0-4c62-a1e5-18bea587b536",
+    "checksum": "1e7f0d7c9074f3ded72af8a9ba3817eb7d7ae1e7eece17e87dba9b4a859607e3",
+    "finished_at": "2026-06-16T17:15:04.984Z",
+    "migration_name": "20260411153000_extend_procurement_sku_domain_fields",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:15:04.984Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "c842d174-07b7-437e-ab51-3a1c8410b850",
+    "checksum": "04c1796d77db39ad04320873a7baea59f5a1bc7a94789bcfd582463a7f6fc0a1",
+    "finished_at": null,
+    "migration_name": "20260411173000_add_procurement_sku_to_inventory_ledger",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260411173000_add_procurement_sku_to_inventory_ledger\n\nDatabase error code: 42701\n\nDatabase error:\nERROR: column \"procurement_sku_id\" of relation \"inventory_ledger_entry\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42701), message: \"column \\\"procurement_sku_id\\\" of relation \\\"inventory_ledger_entry\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"tablecmds.c\"), line: Some(7347), routine: Some(\"check_for_column_name_collision\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:15:29.701Z",
+    "started_at": "2026-06-16T17:15:07.416Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "5b0f4de7-a2b0-409f-b2b8-92e0100e699c",
+    "checksum": "04c1796d77db39ad04320873a7baea59f5a1bc7a94789bcfd582463a7f6fc0a1",
+    "finished_at": "2026-06-16T17:15:29.709Z",
+    "migration_name": "20260411173000_add_procurement_sku_to_inventory_ledger",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:15:29.709Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "da64d579-e697-43b1-be8f-e2ad72636e68",
+    "checksum": "459a942d25894ea12f436d6a1ad304d964b925c6fa9d42104abfbd0d4ffbbe50",
+    "finished_at": null,
+    "migration_name": "20260411183000_add_procurement_sku_to_inventory_operations",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260411183000_add_procurement_sku_to_inventory_operations\n\nDatabase error code: 42701\n\nDatabase error:\nERROR: column \"procurement_sku_id\" of relation \"inventory_adjustment\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42701), message: \"column \\\"procurement_sku_id\\\" of relation \\\"inventory_adjustment\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"tablecmds.c\"), line: Some(7347), routine: Some(\"check_for_column_name_collision\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:15:50.625Z",
+    "started_at": "2026-06-16T17:15:33.147Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "f7bbb3a1-36e1-4294-8d8c-7db114c75df3",
+    "checksum": "459a942d25894ea12f436d6a1ad304d964b925c6fa9d42104abfbd0d4ffbbe50",
+    "finished_at": "2026-06-16T17:15:50.632Z",
+    "migration_name": "20260411183000_add_procurement_sku_to_inventory_operations",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:15:50.632Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "4bf1aa6f-9cfc-49ed-b789-c26ec00661ac",
+    "checksum": "cada635b557155c045b422384a7a8f05144f03d2de382a2eaedaf0805c56ce03",
+    "finished_at": "2026-06-16T17:15:55.092Z",
+    "migration_name": "20260414134500_fix_ingredient_price_change_source_quantity_precision",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:15:55.079Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "2101f5f8-15ea-4ba7-8b4f-51183f394dca",
+    "checksum": "496ed4d724473831ae281a9eb6aeb8ab9ced660d6862fe8439b8449dfa526e1b",
+    "finished_at": null,
+    "migration_name": "20260414180000_ingredient_domain_restructure",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260414180000_ingredient_domain_restructure\n\nDatabase error code: 42701\n\nDatabase error:\nERROR: column \"diy_enabled\" of relation \"ingredient\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42701), message: \"column \\\"diy_enabled\\\" of relation \\\"ingredient\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"tablecmds.c\"), line: Some(7347), routine: Some(\"check_for_column_name_collision\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:18:01.146Z",
+    "started_at": "2026-06-16T17:15:55.094Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "c5e3af3e-3649-447c-979b-5bf66d27c227",
+    "checksum": "496ed4d724473831ae281a9eb6aeb8ab9ced660d6862fe8439b8449dfa526e1b",
+    "finished_at": "2026-06-16T17:18:01.152Z",
+    "migration_name": "20260414180000_ingredient_domain_restructure",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:18:01.152Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "7d494c50-e881-46fe-a69a-2620d49b66f0",
+    "checksum": "adcb051193d10fff0ff09e568ef230142c7814a14ad0aa220292a54a748abd2f",
+    "finished_at": "2026-06-16T17:18:15.161Z",
+    "migration_name": "202604160001_add_order_item_package_plan",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:18:15.112Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "0dd20dcf-c3e2-4ae0-89c1-1bae11fb9b37",
+    "checksum": "6bc231cb55d9b4a25dd33e094cc4d8efdef2563914a86088dc4cd786c22bcb63",
+    "finished_at": null,
+    "migration_name": "202604170001_add_inventory_allocations",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 202604170001_add_inventory_allocations\n\nDatabase error code: 42710\n\nDatabase error:\nERROR: type \"InventoryAllocationStatus\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42710), message: \"type \\\"InventoryAllocationStatus\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"typecmds.c\"), line: Some(1167), routine: Some(\"DefineEnum\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:19:08.266Z",
+    "started_at": "2026-06-16T17:18:15.166Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "3a552828-4c78-4d07-8a4c-9e174b4aa852",
+    "checksum": "6bc231cb55d9b4a25dd33e094cc4d8efdef2563914a86088dc4cd786c22bcb63",
+    "finished_at": "2026-06-16T17:19:08.275Z",
+    "migration_name": "202604170001_add_inventory_allocations",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:19:08.275Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "438ac03a-b95e-4454-af08-b2910cdec5d2",
+    "checksum": "7ee9805ed0ad0fac68986d34db7b97c5c127fedcb47e7f05c26dcdcb2586af1f",
+    "finished_at": null,
+    "migration_name": "202604170002_add_production_completion_settlement",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 202604170002_add_production_completion_settlement\n\nDatabase error code: 42701\n\nDatabase error:\nERROR: column \"result_status\" of relation \"packaging_unit\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42701), message: \"column \\\"result_status\\\" of relation \\\"packaging_unit\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"tablecmds.c\"), line: Some(7347), routine: Some(\"check_for_column_name_collision\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:20:17.247Z",
+    "started_at": "2026-06-16T17:19:12.502Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "13322a19-4a32-43e0-892c-51bac0c83e27",
+    "checksum": "7ee9805ed0ad0fac68986d34db7b97c5c127fedcb47e7f05c26dcdcb2586af1f",
+    "finished_at": "2026-06-16T17:20:17.250Z",
+    "migration_name": "202604170002_add_production_completion_settlement",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:20:17.250Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "75cd556c-e486-4ac3-8f2c-8234bec5ebe2",
+    "checksum": "0675894f436af5a2e31af91c3b61e821e34e9ee2862233ba6574b7059680f71d",
+    "finished_at": null,
+    "migration_name": "202604170003_add_order_settlement_adjustments",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 202604170003_add_order_settlement_adjustments\n\nDatabase error code: 42P07\n\nDatabase error:\nERROR: relation \"order_settlement_adjustment\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42P07), message: \"relation \\\"order_settlement_adjustment\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"heap.c\"), line: Some(1150), routine: Some(\"heap_create_with_catalog\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:21:20.150Z",
+    "started_at": "2026-06-16T17:20:17.976Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "b3db4509-f989-4611-8c14-3ae2bcd728bf",
+    "checksum": "0675894f436af5a2e31af91c3b61e821e34e9ee2862233ba6574b7059680f71d",
+    "finished_at": "2026-06-16T17:21:20.157Z",
+    "migration_name": "202604170003_add_order_settlement_adjustments",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:21:20.157Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "1ddebf7f-18e7-4a49-8506-fba450c9c2a4",
+    "checksum": "c202a41cdadd35452ab8952fdc4d46263b9b554015c7fbdf1ab932511c1f1c0a",
+    "finished_at": null,
+    "migration_name": "20260417190000_add_recipe_item_supplement_targets",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260417190000_add_recipe_item_supplement_targets\n\nDatabase error code: 42701\n\nDatabase error:\nERROR: column \"supplement_targets\" of relation \"recipe_item\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42701), message: \"column \\\"supplement_targets\\\" of relation \\\"recipe_item\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"tablecmds.c\"), line: Some(7347), routine: Some(\"check_for_column_name_collision\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:21:54.394Z",
+    "started_at": "2026-06-16T17:21:23.414Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "db5a9c53-123b-4cb3-ae8a-3341c967985b",
+    "checksum": "c202a41cdadd35452ab8952fdc4d46263b9b554015c7fbdf1ab932511c1f1c0a",
+    "finished_at": "2026-06-16T17:21:54.401Z",
+    "migration_name": "20260417190000_add_recipe_item_supplement_targets",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:21:54.401Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "07ee605f-53a5-482b-af6f-fa73ddbba6a0",
+    "checksum": "6d47927ea81ade404a936b411892b621a7821c9d77afcf467ac50a702ece1627",
+    "finished_at": null,
+    "migration_name": "202604180001_add_procurement_sku_source_tier",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 202604180001_add_procurement_sku_source_tier\n\nDatabase error code: 42710\n\nDatabase error:\nERROR: type \"ProcurementSkuSourceTier\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42710), message: \"type \\\"ProcurementSkuSourceTier\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"typecmds.c\"), line: Some(1167), routine: Some(\"DefineEnum\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:22:26.165Z",
+    "started_at": "2026-06-16T17:21:57.158Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "122c9e6f-5908-432a-be04-801151f45615",
+    "checksum": "6d47927ea81ade404a936b411892b621a7821c9d77afcf467ac50a702ece1627",
+    "finished_at": "2026-06-16T17:22:26.172Z",
+    "migration_name": "202604180001_add_procurement_sku_source_tier",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:22:26.172Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "820d76fd-b539-4597-a6f6-53edbab7b7a2",
+    "checksum": "f9dc06bc83fa51c211e0d1e2fff3f29484a90e80e5ebe987a886dbf786feb7ff",
+    "finished_at": "2026-06-16T17:22:33.199Z",
+    "migration_name": "202604190001_add_procurement_sku_price_history",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:22:33.168Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "3f1890d5-f9a9-4207-8fcc-cec22b2b7480",
+    "checksum": "0fe99948e116567e2b7d2af6d0fc9917b2456d2e9333982c0cafed30ec26bc2e",
+    "finished_at": "2026-06-16T17:22:33.234Z",
+    "migration_name": "202604190002_backfill_procurement_sku_price_history",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:22:33.202Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "910f2b94-5393-4b26-a3fd-3e1972d4068f",
+    "checksum": "74790f6d3ad2a4a9aaa224d1997cfa24fc4f3e6150a9be6913ddb5f1dfcd5aac",
+    "finished_at": "2026-06-16T17:22:33.251Z",
+    "migration_name": "202604190003_remove_procurement_sku_display_unit",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:22:33.239Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "fa601737-8b5e-4659-a2b1-df027062a6e3",
+    "checksum": "57d35479ee87832bae281d15863736a091dc7ba09c976860b1328b16bc8b43fe",
+    "finished_at": "2026-06-16T17:22:33.273Z",
+    "migration_name": "202604190004_backfill_missing_procurement_sku_initial_price_history",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:22:33.258Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "de4fae5f-5344-450b-b774-5f568e3ba0dc",
+    "checksum": "70e2a8112e294fdf270925a2946c267b34be4f58397db62f4e273d726d4629e5",
+    "finished_at": null,
+    "migration_name": "202604210001_add_purchase_item_no_purchase_marker",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 202604210001_add_purchase_item_no_purchase_marker\n\nDatabase error code: 42701\n\nDatabase error:\nERROR: column \"no_purchase_needed\" of relation \"purchase_item\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42701), message: \"column \\\"no_purchase_needed\\\" of relation \\\"purchase_item\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"tablecmds.c\"), line: Some(7347), routine: Some(\"check_for_column_name_collision\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:23:31.668Z",
+    "started_at": "2026-06-16T17:22:33.276Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "8804c038-b4a0-4de1-97bf-f76bca5a79f6",
+    "checksum": "70e2a8112e294fdf270925a2946c267b34be4f58397db62f4e273d726d4629e5",
+    "finished_at": "2026-06-16T17:23:31.680Z",
+    "migration_name": "202604210001_add_purchase_item_no_purchase_marker",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:23:31.680Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "14733921-e30f-4397-85a0-7b38f09fa55a",
+    "checksum": "aff1df589798f939704902c9d09153380c531200253b18eef50cd002b3aa12e2",
+    "finished_at": null,
+    "migration_name": "20260425120000_add_diy_sheet_header_bg_config",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260425120000_add_diy_sheet_header_bg_config\n\nDatabase error code: 42701\n\nDatabase error:\nERROR: column \"diy_sheet_header_bg_image_url\" of relation \"global_config\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42701), message: \"column \\\"diy_sheet_header_bg_image_url\\\" of relation \\\"global_config\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"tablecmds.c\"), line: Some(7347), routine: Some(\"check_for_column_name_collision\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:24:24.229Z",
+    "started_at": "2026-06-16T17:23:35.625Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "5f6580bd-7f44-4762-93ad-3d0d9b2f6fdb",
+    "checksum": "aff1df589798f939704902c9d09153380c531200253b18eef50cd002b3aa12e2",
+    "finished_at": "2026-06-16T17:24:24.233Z",
+    "migration_name": "20260425120000_add_diy_sheet_header_bg_config",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:24:24.233Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "86eafcec-509a-45ff-9d01-be87b2e53cbb",
+    "checksum": "c8fc6ec1c2bd842c440eed42c68707a2971d3f9bc15f8111ba0d3ef0d850bb30",
+    "finished_at": "2026-06-16T17:24:24.892Z",
+    "migration_name": "202604280001_add_order_shipping_address_snapshot",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:24:24.888Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "adde75b6-2d33-4ade-8732-cb6d6acc924a",
+    "checksum": "30a9a60a4292b48f232e9777daa6bee618f3e6ad48fefa1a520463d988ed1311",
+    "finished_at": "2026-05-31T06:48:27.771Z",
+    "migration_name": "202605070001_add_platform_payment_customer_service_config",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-05-31T06:48:27.771Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "933124f0-502f-49b7-b51e-bbdd9beb176e",
+    "checksum": "8ce2ac5d8fc701c160043bab8cedb4ada9626f7c07fec7e1b2467c8bb63fc072",
+    "finished_at": "2026-05-11T05:07:37.586Z",
+    "migration_name": "202605110001_add_nutrition_governance",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-05-11T05:07:37.586Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "b0334528-acf0-4c28-8911-682a9e555cb7",
+    "checksum": "5c9542202e9a53b286bd82a685bc482ed11ebe41aa93c86dbd4b4b9e5fbc54ea",
+    "finished_at": null,
+    "migration_name": "202605120001_add_recipe_item_nutrition_food_state",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 202605120001_add_recipe_item_nutrition_food_state\n\nDatabase error code: 42701\n\nDatabase error:\nERROR: column \"preparation_state\" of relation \"nutrition_food\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42701), message: \"column \\\"preparation_state\\\" of relation \\\"nutrition_food\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"tablecmds.c\"), line: Some(7347), routine: Some(\"check_for_column_name_collision\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:24:51.043Z",
+    "started_at": "2026-06-16T17:24:24.892Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "d37f870f-0181-4ee3-816d-191f6131e3dd",
+    "checksum": "5c9542202e9a53b286bd82a685bc482ed11ebe41aa93c86dbd4b4b9e5fbc54ea",
+    "finished_at": "2026-06-16T17:24:51.046Z",
+    "migration_name": "202605120001_add_recipe_item_nutrition_food_state",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:24:51.046Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "96dd2dfd-a570-4a8d-a108-4a2ac8cd1fe5",
+    "checksum": "94e9682d07c8188ff5d947690ebff9c59812bfa99f417179ac074456f1c48578",
+    "finished_at": null,
+    "migration_name": "202605120002_agent_assisted_nutrition_review",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 202605120002_agent_assisted_nutrition_review\n\nDatabase error code: 42701\n\nDatabase error:\nERROR: column \"edible_portion_label\" of relation \"nutrition_food\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42701), message: \"column \\\"edible_portion_label\\\" of relation \\\"nutrition_food\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"tablecmds.c\"), line: Some(7347), routine: Some(\"check_for_column_name_collision\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:25:23.923Z",
+    "started_at": "2026-06-16T17:24:51.709Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "b04b91c3-5ad0-411f-9d22-554f799e5c3d",
+    "checksum": "94e9682d07c8188ff5d947690ebff9c59812bfa99f417179ac074456f1c48578",
+    "finished_at": "2026-06-16T17:25:23.926Z",
+    "migration_name": "202605120002_agent_assisted_nutrition_review",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:25:23.926Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "042ac92c-1184-401b-b338-559c5d2bb946",
+    "checksum": "3be7f2b8de1132e82f1da1a7a32a6d5a309a2aabe9ea8fba7ec451e52e1dc11e",
+    "finished_at": "2026-06-16T17:25:24.576Z",
+    "migration_name": "202605130001_deepseek_agent_nutrition_matching",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:25:24.572Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "2614cd60-61ff-48f3-9ec6-ad851244729e",
+    "checksum": "c5c0b3c40fde3885230436cfbc37ed43188982f4e4dc60bb3940cc6055d1f5cd",
+    "finished_at": null,
+    "migration_name": "202605170001_replace_fediaf_standard_table",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 202605170001_replace_fediaf_standard_table\n\nDatabase error code: 42710\n\nDatabase error:\nERROR: type \"NutritionStandardSpecies\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42710), message: \"type \\\"NutritionStandardSpecies\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"typecmds.c\"), line: Some(1167), routine: Some(\"DefineEnum\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:26:45.798Z",
+    "started_at": "2026-06-16T17:25:24.577Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "bbf68bf4-8595-4fa7-9255-3920e6cb8d43",
+    "checksum": "c5c0b3c40fde3885230436cfbc37ed43188982f4e4dc60bb3940cc6055d1f5cd",
+    "finished_at": "2026-06-16T17:26:45.803Z",
+    "migration_name": "202605170001_replace_fediaf_standard_table",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:26:45.803Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "4573bd7a-d52e-46ad-bd7f-41fff4af70f6",
+    "checksum": "10ed0017222374461ee1d54230734e0c8e6d543986d3643bf7a86e5f6565c500",
+    "finished_at": "2026-06-16T17:26:50.304Z",
+    "migration_name": "202605180001_add_nzfcd_nutrition_source",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:26:50.279Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "8cfa65d0-6ea9-4014-8dc9-07a9b490020e",
+    "checksum": "278c31f8c7105d723ec61088a22ef8f3b829c1e41702c2f85b26a9527d7eba35",
+    "finished_at": "2026-06-16T17:26:50.317Z",
+    "migration_name": "202605180002_add_agent_review_model",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:26:50.311Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "a8394574-7b94-4e99-af89-687acb87a00c",
+    "checksum": "5f323e13afc620ea689f062aaf281aa2e59804eabbd2e13b83163ddb1da5669e",
+    "finished_at": null,
+    "migration_name": "20260518010000_mobile_recipe_designer_free_total",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260518010000_mobile_recipe_designer_free_total\n\nDatabase error code: 42701\n\nDatabase error:\nERROR: column \"assessment_summary\" of relation \"design_recipe\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42701), message: \"column \\\"assessment_summary\\\" of relation \\\"design_recipe\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"tablecmds.c\"), line: Some(7347), routine: Some(\"check_for_column_name_collision\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:27:29.932Z",
+    "started_at": "2026-06-16T17:26:50.319Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "b008412c-979a-478f-a333-2a2cf50ebe7e",
+    "checksum": "5f323e13afc620ea689f062aaf281aa2e59804eabbd2e13b83163ddb1da5669e",
+    "finished_at": "2026-06-16T17:27:29.936Z",
+    "migration_name": "20260518010000_mobile_recipe_designer_free_total",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:27:29.936Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "6e3708d1-c6c0-43d0-ab26-989206284545",
+    "checksum": "cd7ebf0bc53c058fd8717add954ad4400a96c003d54c5fb906bcc357e2b9768b",
+    "finished_at": "2026-06-16T17:27:36.842Z",
+    "migration_name": "20260518020000_allow_design_recipe_missing_energy_density",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:27:36.828Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "2a7ebfd1-b5fc-45cf-849c-0719b68723f9",
+    "checksum": "725024a171fe2f946d64750d411bb5b39be62d5aa43d576d468a6e63d81a772b",
+    "finished_at": "2026-06-16T17:27:36.860Z",
+    "migration_name": "20260518030000_add_design_recipe_item_ingredient_id",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:27:36.844Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "900880d3-ddc0-4487-892e-8ad6ebc3333f",
+    "checksum": "108a9dfb1901bbb404d6a7844d3ab8e426012d4230fa0d96d6a6e85240fcfcff",
+    "finished_at": null,
+    "migration_name": "20260518040000_add_nutrition_food_display_name_zh",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260518040000_add_nutrition_food_display_name_zh\n\nDatabase error code: 42701\n\nDatabase error:\nERROR: column \"display_name_zh\" of relation \"nutrition_food\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42701), message: \"column \\\"display_name_zh\\\" of relation \\\"nutrition_food\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"tablecmds.c\"), line: Some(7347), routine: Some(\"check_for_column_name_collision\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:28:03.579Z",
+    "started_at": "2026-06-16T17:27:36.863Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "9826585d-1486-4d71-8f41-e73ee5f66708",
+    "checksum": "108a9dfb1901bbb404d6a7844d3ab8e426012d4230fa0d96d6a6e85240fcfcff",
+    "finished_at": "2026-06-16T17:28:03.585Z",
+    "migration_name": "20260518040000_add_nutrition_food_display_name_zh",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:28:03.585Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "6bba75dd-a307-473a-8e17-90798c8afd49",
+    "checksum": "9a408c1de7c74733b8655cd923262050e5a3df0dfbb6e63e166154b5c4c9980c",
+    "finished_at": "2026-06-16T17:28:06.442Z",
+    "migration_name": "202605200001_add_tfda_nutrition_governance_source_type",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:28:06.434Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "c3712d01-76a6-444a-b7a9-46ae00b17cf8",
+    "checksum": "5cddf5522bdc26f61077927b06b9116177631649ecd97cc8dec4a244a07e9b3a",
+    "finished_at": "2026-06-16T17:28:06.448Z",
+    "migration_name": "202605200002_add_recipe_designer_reproduction_scenario",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:28:06.443Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "fe04511b-023f-4490-9fb4-a5a0899f7e21",
+    "checksum": "f602511456a7c2c30a19124017070149f9659870ce7c8b46e68dd92893afba8e",
+    "finished_at": "2026-05-31T06:48:27.760Z",
+    "migration_name": "20260520162000_add_order_detail_notes",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-05-31T06:48:27.760Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "f3660cc0-788a-4a7b-ac6a-b74b9ba7302a",
+    "checksum": "2e18ca113be0770173fb0ae8619d59da45b6c5ec7ed7eb48da8e3f1898433127",
+    "finished_at": "2026-06-16T17:28:06.453Z",
+    "migration_name": "202605210001_add_nevo_nutrition_source_type",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:28:06.449Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "9a44f076-ec2c-42cf-8142-dbba78e2344c",
+    "checksum": "af4c79aa9a01994c392e9bdad72aa7944bcb5c4fe72fc4f9b7f8bfd58f74ba7f",
+    "finished_at": "2026-05-31T07:04:16.387Z",
+    "migration_name": "20260521160000_add_user_wechat_identity",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-05-31T07:04:16.387Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "7b59497f-7cd4-4162-916e-2cac2c620c63",
+    "checksum": "fcb01e79e3cb710a2b501c1e1faef98d6a7f0043ea865e93bfb0776a101c9831",
+    "finished_at": null,
+    "migration_name": "202605220001_add_search_governance",
+    "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 202605220001_add_search_governance\n\nDatabase error code: 42710\n\nDatabase error:\nERROR: type \"SearchGovernanceDomain\" already exists\n\nDbError { severity: \"ERROR\", parsed_severity: Some(Error), code: SqlState(E42710), message: \"type \\\"SearchGovernanceDomain\\\" already exists\", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\"typecmds.c\"), line: Some(1167), routine: Some(\"DefineEnum\") }\n\n",
+    "rolled_back_at": "2026-06-16T17:29:00.398Z",
+    "started_at": "2026-06-16T17:28:06.455Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "83d6b5ba-b198-48dd-9d58-06849642ae6e",
+    "checksum": "fcb01e79e3cb710a2b501c1e1faef98d6a7f0043ea865e93bfb0776a101c9831",
+    "finished_at": "2026-06-16T17:29:00.408Z",
+    "migration_name": "202605220001_add_search_governance",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:29:00.408Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "7a75c798-1e80-4bf6-9cfa-3d5179fbc873",
+    "checksum": "d859de1b807c67d9cdc2419958c3f255e478e7b9fdbb49cfd2216bc6e69ff448",
+    "finished_at": "2026-05-31T07:04:38.347Z",
+    "migration_name": "20260522091500_add_account_migration",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-05-31T07:04:38.347Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "c5d4f78c-7653-44c6-8556-1194de38f5e5",
+    "checksum": "3cc71b2c9fff7a2a170649ae8b43186fb3b867d7eb83ef367763a9b9e24fc24a",
+    "finished_at": "2026-06-16T17:29:06.622Z",
+    "migration_name": "20260522105000_add_order_refund_records",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:29:06.530Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "cf9a3278-ddde-4fb7-86f6-8fd39baa6c28",
+    "checksum": "408e300159a61d6e9e50b309af338b52b50b5082d1317f93aadf149ec6874799",
+    "finished_at": "2026-05-31T06:48:27.767Z",
+    "migration_name": "20260522183500_add_customer_service_float_button",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-05-31T06:48:27.767Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "f4db35d1-9674-4478-84a4-1cd2137d7916",
+    "checksum": "465d0f00f83046c99cff04ed826be8c81ce3f49046897b9a6bb029aae9f38f1b",
+    "finished_at": "2026-06-16T17:29:06.712Z",
+    "migration_name": "20260522193000_add_customer_service_conversations",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:29:06.625Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "266714c5-f924-4526-be7d-62e38be705af",
+    "checksum": "3cb055b3b2cb1d6630ef37015f419fe146929f3bbf93bf0b0d7de150b042e408",
+    "finished_at": "2026-05-26T07:53:14.323Z",
+    "migration_name": "202605260001_add_design_recipe_item_include_in_assessment",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-05-26T07:53:14.323Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "dde58b2f-384b-4030-8e0d-82eba058b083",
+    "checksum": "f8330a9f5ccad916c544ad9543c445f33a8943c0ffc865e2f9e6146265c1ff0e",
+    "finished_at": "2026-06-16T17:29:06.727Z",
+    "migration_name": "202605270001_remove_recipe_nutrition_report_url",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:29:06.715Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "aec510a4-1526-4277-aeb9-90bcf30d1743",
+    "checksum": "41adce9f0ee3a8054099e4ddb39909e352a8c2f2af0ff698cefa8d2c82131b12",
+    "finished_at": "2026-06-16T17:29:06.742Z",
+    "migration_name": "202605270002_add_recipe_designer_revision_links",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:29:06.730Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "c5fc7e03-4228-4e53-a081-f085aa8ec5f1",
+    "checksum": "aaef4141ecb7ada41d4d78abd5634af15afa15a321caf83d2abc246fd985cd73",
+    "finished_at": "2026-06-16T17:29:06.901Z",
+    "migration_name": "202605270003_add_ingredient_creation_agent",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:29:06.745Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "89ab938e-f126-4eb1-86ee-d7434cf1b81d",
+    "checksum": "9a6234f63962afc2c4e4c4d8bcd5028d462a741e814ee7a897b032eef777ccf4",
+    "finished_at": "2026-06-16T17:29:06.954Z",
+    "migration_name": "202605300001_drop_ingredient_creation_agent",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:29:06.906Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "d8686a10-9934-49cd-b01e-6f03a3c44dad",
+    "checksum": "54a12efd5857bec1919f3dd6111e8d0e9719f9feb0fa3b595c90112a7151f0c3",
+    "finished_at": "2026-05-31T06:47:23.376Z",
+    "migration_name": "202605310001_add_recipe_series_life_stage_versions",
+    "logs": "",
+    "rolled_back_at": null,
+    "started_at": "2026-05-31T06:47:23.376Z",
+    "applied_steps_count": 0
+  },
+  {
+    "id": "6f5b6892-52f4-48fb-aa42-8258859417aa",
+    "checksum": "40f1c75b9a3ff2bb5213b4d619cba4777a07cba3f3baf2ae51a4155c6690df77",
+    "finished_at": "2026-06-16T17:29:07.018Z",
+    "migration_name": "202606110001_add_order_shipping_notification",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:29:06.958Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "e50edfcb-8d33-4d5b-9532-48aa2654e746",
+    "checksum": "cdbb465c5cc6e917e0ee7a30458810bf5f8a337222d40ba6f57013cafec7f75c",
+    "finished_at": "2026-06-16T17:29:07.054Z",
+    "migration_name": "202606110001_reclassify_fiber_ingredients_as_food",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:29:07.025Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "41ad97e2-313a-4f77-aace-529f01b88dd8",
+    "checksum": "83dadd5aab6dc4fbfb955716813f28b6b941b277d780ce64ce24ba259f871a45",
+    "finished_at": "2026-06-16T17:29:07.114Z",
+    "migration_name": "202606110002_backfill_fiber_food_recipe_ratios",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:29:07.061Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "88b992fd-6a10-40b4-9e62-5de1df476490",
+    "checksum": "eaee2c115d2518ee5f5fe9a3a301869d5b187e7c52edfb3a94f677f0b3b37d1d",
+    "finished_at": "2026-06-16T17:29:07.319Z",
+    "migration_name": "202606110002_revert_functional_powders_to_supplements",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:29:07.136Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "d7a9152e-0664-4088-83c2-76d36eb1dcde",
+    "checksum": "45b3eb1dde288f1cac0d14fd04270168015a3c12f386a0614ea1173f814fefdf",
+    "finished_at": "2026-06-16T17:29:07.514Z",
+    "migration_name": "20260611090000_add_recipe_series_business_status",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:29:07.373Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "6bfb772b-b131-47f8-8440-7c94e5edf759",
+    "checksum": "00c487288183fb4c2f0b7904ea161b90014ecde4dcc4990c1e21c7f9d5bccde8",
+    "finished_at": "2026-06-16T17:29:07.634Z",
+    "migration_name": "20260611180000_add_customer_recipe_designer_context",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:29:07.581Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "7bbc88ae-6b0d-4d20-96d3-8a0865f38f96",
+    "checksum": "dcb993644488816dd67d36aac56e73d32bac2a092e0747e7e0f06494cb264834",
+    "finished_at": "2026-06-16T17:29:07.722Z",
+    "migration_name": "202606130001_add_diy_sheet_package_plan",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-16T17:29:07.642Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "8f333e2b-fe83-46ea-92d6-a3e42b679482",
+    "checksum": "23461f42b78ea4f50a16c80af34a55a7302a9cdf73664e1b935c3a4aba294b55",
+    "finished_at": "2026-06-29T04:54:11.342Z",
+    "migration_name": "202606260001_add_design_recipe_item_supplement_targets",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-06-29T04:54:11.330Z",
+    "applied_steps_count": 1
+  }
+]

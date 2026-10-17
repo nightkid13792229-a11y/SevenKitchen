@@ -62,7 +62,7 @@
         而不是显示一堆 0 让顾客以为不用买。
       -->
       <view class="section">
-        <view class="section-title">要买什么（含损耗余量）</view>
+        <view class="section-title">每种食材要用多少（净用量）</view>
         <template v-if="content.shopping.lines.length">
           <view
             v-for="(line, index) in content.shopping.lines"
@@ -71,19 +71,17 @@
           >
             <text class="shopping-name">{{ line.name }}</text>
             <view class="shopping-amount">
-              <text class="shopping-buy">{{ line.purchaseG }} 克</text>
-              <text class="shopping-net">净用 {{ line.netG }} 克</text>
+              <text class="shopping-buy">{{ line.netG }} 克</text>
             </view>
           </view>
           <view class="shopping-total">
-            <text>建议采购合计 {{ content.shopping.totalPurchaseG }} 克</text>
+            <text>合计净重 {{ content.shopping.totalNetG }} 克</text>
           </view>
           <text class="section-note">
-            已按 {{ lossPercent }}% 的加工损耗留出余量，实际用量
-            {{ content.shopping.totalNetG }} 克。
+            只写"这次要用多少"。要买多少，你自己判断 —— 不同食材的损耗差很多，我们没法替你估。
           </text>
         </template>
-        <text v-else class="section-note">暂时算不出要买多少，请联系客服</text>
+        <text v-else class="section-note">暂时算不出用量，请联系客服</text>
       </view>
 
       <!--
@@ -183,7 +181,7 @@ const content = computed(
         energyDensityKcalPerKg: null,
         plainConclusion: null,
       },
-      shopping: { lines: [], totalNetG: 0, totalPurchaseG: 0, lossRate: 1 },
+      shopping: { lines: [], totalNetG: 0, lossRate: 1 },
       supplements: [],
       steps: [],
       storage: null,
@@ -197,11 +195,6 @@ const hasBatch = computed(
     content.value.feeding.dailyIntakeG !== null ||
     content.value.feeding.cycleDays !== null ||
     content.value.shopping.totalNetG > 0,
-);
-
-/** 损耗**系数**（1.07）→ **百分比**（7）。纯展示换算，不含业务判断 */
-const lossPercent = computed(() =>
-  Math.round((Number(content.value.shopping.lossRate || 1) - 1) * 100),
 );
 
 // ==================== 长图导出（批次 2.7）====================
@@ -269,7 +262,6 @@ const saveAsImage = async () => {
       version: delivery.value?.version,
       deliveredAtText: deliveredAtText.value,
       dogName: delivery.value?.dogName ?? null,
-      lossPercentText: `${lossPercent.value}%`,
     });
 
     // 第一遍：用基准高度量内容

@@ -544,6 +544,7 @@ import {
 } from '../../utils/life-stage-match'
 import LifeStageVersionCard from '@/components/recipe/LifeStageVersionCard.vue'
 import { useDogSelection } from '@/composables/useDogSelection'
+import { usePackagePlan } from '@/composables/usePackagePlan'
 import {
   DEFAULT_ORDER_CYCLE_DAYS,
   MIN_PACKAGE_SPEC_G,
@@ -792,11 +793,54 @@ const {
   selectedDog,
   setDogs,
 } = useDogSelection<Dog>()
-const selectedCycleDays = ref<number | null>(DEFAULT_ORDER_CYCLE_DAYS)
-const lastSelectedCycleDays = ref(DEFAULT_ORDER_CYCLE_DAYS)
 const selectedSourcePlan = ref<IngredientSourcePlanCode>('MARKET_PREMIUM')
-const packagePlan = ref<PackagePlanItem[]>([])
-const packagePlanDogId = ref<string | null>(null)
+
+/**
+ * 分装计划（2026-10-18 收进 composable）。
+ *
+ * 这 6 个 ref + 9 个函数原来跟 DIY 配置页各写一遍、一字不差。
+ * 注意 `packagePlanDogId` 在这里**同时**被 `selectDog` 用来判断"分装是不是这只狗的"。
+ */
+const {
+  selectedCycleDays,
+  lastSelectedCycleDays,
+  packagePlan,
+  packagePlanDogId,
+  showPackageEditor,
+  isCustomPackagePlan,
+  normalizePackageSpecValue,
+  normalizePackagePlanRow,
+  rebuildPackagePlan,
+  resetPackagePlan,
+  togglePackageEditor,
+  cancelCustomPackagePlan,
+  addPackagePlanRow,
+  updatePackagePlanRow,
+  removePackagePlanRow,
+  getPrimaryPackageSpecG,
+} = usePackagePlan({
+  dailyIntakeG: () => displayDailyIntakeG.value,
+  mealsPerDay: () => selectedDog.value?.mealsPerDay,
+  dogId: () => selectedDogId.value,
+  perMealG: () => perMealG.value,
+  /**
+   * 分装一改就要**重新算价**（2026-10-18）。
+   *
+   * 本页原来的三个变更函数末尾都有这两句，DIY 配置页没有（那页不算价）。
+   * 抽进 composable 时如果只保留 DIY 版，就会出现
+   * 「顾客改完每袋克数，价格还是旧的」—— **会按错价格下单**。
+   */
+  onPlanChanged: () => {
+    invalidatePackagePlanPricingPreview()
+    schedulePricePreview()
+  },
+  /**
+   * 本页进自定义分装时要**清掉天数** —— 顾客自己定分装后，
+   * "按 7 天配送"不再是约束，留着容易误导。
+   * （DIY 配置页不清：那页的天数还参与换算。这是真实产品差异。）
+   */
+  clearCycleOnCustom: true,
+})
 const dogCalcResult = ref<CalcResult | null>(null)
 
 // 生命阶段校验
@@ -806,8 +850,6 @@ const pricePreview = ref<PricePreview | null>(null)
 const pricingSnapshotId = ref<string | null>(null)  // ✅ 新增：快照ID
 const isPricePreviewLoading = ref(false)
 const pricePreviewError = ref('')
-const showPackageEditor = ref(false)
-const isCustomPackagePlan = ref(false)
 let pricingPreviewRequestSeq = 0
 let dogCalcRequestSeq = 0
 let pricePreviewDebounceTimer: ReturnType<typeof setTimeout> | null = null
@@ -1212,30 +1254,6 @@ function formatIngredientAmount(ingredient: IngredientCostItem): string {
   }
 
   return `${amount.toFixed(1)}${displayUnit}`
-}
-
-function togglePackageEditor() {
-  if (isCustomPackagePlan.value) {
-    cancelCustomPackagePlan()
-    return
-  }
-
-  lastSelectedCycleDays.value = selectedCycleDays.value || lastSelectedCycleDays.value
-  selectedCycleDays.value = null
-  isCustomPackagePlan.value = true
-  showPackageEditor.value = true
-  invalidatePackagePlanPricingPreview()
-  loadPricePreview()
-}
-
-function cancelCustomPackagePlan() {
-  clearPricePreviewDebounce()
-  isCustomPackagePlan.value = false
-  showPackageEditor.value = false
-  selectedCycleDays.value = lastSelectedCycleDays.value
-  rebuildPackagePlan()
-  pricePreviewError.value = ''
-  loadPricePreview()
 }
 
 // 自动配置参数（从订单详情页"再次购买"传递）
@@ -1700,27 +1718,6 @@ function applyAutoConfig() {
   rebuildPackagePlan()
 }
 
-function rebuildPackagePlan() {
-  packagePlan.value = buildDefaultPackagePlan({
-    dailyIntakeG: displayDailyIntakeG.value,
-    mealsPerDay: selectedDog.value?.mealsPerDay || 2,
-    days: selectedCycleDays.value,
-  })
-  packagePlanDogId.value = selectedDogId.value
-}
-
-function normalizePackagePlanRow(row: PackagePlanItem): PackagePlanItem {
-  return {
-    packageSpecG: normalizePackageSpecValue(row.packageSpecG),
-    packageCount: Math.max(1, Math.floor(Number(row.packageCount) || 1)),
-  }
-}
-
-function normalizePackageSpecValue(value: string | number | null | undefined): number {
-  const normalized = Math.floor(Number(value))
-  return Number.isFinite(normalized) && normalized > 0 ? normalized : 0
-}
-
 function clearPricePreviewDebounce() {
   if (pricePreviewDebounceTimer !== null) {
     clearTimeout(pricePreviewDebounceTimer)
@@ -1741,38 +1738,6 @@ function invalidatePackagePlanPricingPreview() {
   pricingPreviewRequestSeq += 1
   pricePreviewError.value = ''
   resetPricePreviewState()
-}
-
-function addPackagePlanRow() {
-  packagePlan.value = [
-    ...packagePlan.value,
-    {
-      packageSpecG: Math.max(MIN_PACKAGE_SPEC_G, Math.round(perMealG.value || displayDailyIntakeG.value || 100)),
-      packageCount: 1,
-    },
-  ]
-  invalidatePackagePlanPricingPreview()
-  schedulePricePreview()
-}
-
-function updatePackagePlanRow(index: number, field: keyof PackagePlanItem, value: string | number) {
-  const nextValue = field === 'packageSpecG'
-    ? normalizePackageSpecValue(value)
-    : Math.max(1, Math.floor(Number(value) || 1))
-  packagePlan.value = packagePlan.value.map((row, rowIndex) =>
-    rowIndex === index ? { ...row, [field]: nextValue } : row
-  )
-  invalidatePackagePlanPricingPreview()
-  schedulePricePreview()
-}
-
-function removePackagePlanRow(index: number) {
-  if (packagePlan.value.length <= 1) {
-    return
-  }
-  packagePlan.value = packagePlan.value.filter((_, rowIndex) => rowIndex !== index)
-  invalidatePackagePlanPricingPreview()
-  schedulePricePreview()
 }
 
 // 选择制作工艺
@@ -1808,16 +1773,6 @@ function selectCycle(days: number) {
   rebuildPackagePlan()
   pricePreviewError.value = ''
   loadPricePreview()
-}
-
-function getPrimaryPackageSpecG(plan: PackagePlanItem[]): number {
-  const primaryRow = [...plan].sort(
-    (left, right) =>
-      right.packageCount - left.packageCount
-      || right.packageSpecG - left.packageSpecG,
-  )[0]
-
-  return primaryRow?.packageSpecG || 1
 }
 
 function buildPricingPreviewItem() {

@@ -31,7 +31,7 @@ describe('usePackagePlan · 分装计划公共状态', () => {
 
   it('★ 参数是函数（响应式来源），且先解构', () => {
     expect(source).toContain('dailyIntakeG: () => number | null | undefined')
-    expect(source).toContain('const { dailyIntakeG, mealsPerDay, dogId, perMealG } = options')
+    expect(source).toContain('const { dailyIntakeG, mealsPerDay, dogId, perMealG, onPlanChanged, clearCycleOnCustom } =')
   })
 
   it('★ 取消自定义有二次确认（会丢顾客填的内容）', () => {

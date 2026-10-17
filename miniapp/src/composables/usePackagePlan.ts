@@ -55,9 +55,40 @@ export function usePackagePlan(options: {
   dogId?: () => string | null | undefined
   /** 每餐克数（新增一行时的默认每袋克数会参考它） */
   perMealG?: () => number | null | undefined
+  /**
+   * 分装被改动后的回调（**可选**）。
+   *
+   * ⚠️ 这个参数是被一个真回归逼出来的：
+   *
+   * 成品订购页原来的 `addPackagePlanRow` / `updatePackagePlanRow` / `removePackagePlanRow`
+   * 末尾都会 `invalidatePackagePlanPricingPreview()` + `schedulePricePreview()` ——
+   * **改分装要重新算价**。
+   *
+   * 而 DIY 配置页的同名函数**没有**这两句（那页不算价）。
+   *
+   * 两个同名函数**行为其实不一样**。抽进 composable 时如果只保留 DIY 版，
+   * 订购页就会出现「顾客改完每袋克数，价格还是旧的」——**顾客会按错价格下单**。
+   *
+   * 所以用回调把"改完之后要做什么"交还给页面。
+   */
+  onPlanChanged?: () => void
+  /**
+   * 进入「自定义分装」时是否**清空天数选择**（默认 `false`）。
+   *
+   * ⚠️ 这是两个页面**真实的产品差异**，不是实现细节：
+   *
+   * · **成品订购页要清** —— 顾客既然自己定每袋多少克、多少袋，
+   *   "按 7 天配送"就不再是约束条件了，留着会让人以为还按天数算
+   * · **DIY 配置页不清** —— 那页的天数还参与饭量/用量换算
+   *
+   * 一开始我把两个页面的 `togglePackageEditor` 当成"一字不差"合并了，
+   * 结果订购页少了这一句 —— 表现为**进入自定义分装后天数还显示着**，容易误导。
+   */
+  clearCycleOnCustom?: boolean
 }) {
   // 参数解构（链式调用会被项目守卫误读成 `options()`，见 useLifeStageVersion 里的同类说明）
-  const { dailyIntakeG, mealsPerDay, dogId, perMealG } = options
+  const { dailyIntakeG, mealsPerDay, dogId, perMealG, onPlanChanged, clearCycleOnCustom } =
+    options
 
   /** 配送周期（7 / 15 / 30 天） */
   const selectedCycleDays = ref<number | null>(DEFAULT_ORDER_CYCLE_DAYS)
@@ -100,6 +131,7 @@ export function usePackagePlan(options: {
       days: selectedCycleDays.value,
     })
     packagePlanDogId.value = dogId?.() ?? null
+    onPlanChanged?.()
   }
 
   /** 清空分装（换狗时由页面显式调用） */
@@ -136,8 +168,14 @@ export function usePackagePlan(options: {
 
     lastSelectedCycleDays.value =
       selectedCycleDays.value || lastSelectedCycleDays.value
+    if (clearCycleOnCustom) {
+      // 顾客自己定分装，天数不再是约束 —— 清掉，免得看着以为还按天数算
+      selectedCycleDays.value = null
+    }
     isCustomPackagePlan.value = true
     showPackageEditor.value = true
+    // 进入自定义后分装变了（要按默认重建），价格得重算
+    onPlanChanged?.()
   }
 
   /** 取消自定义：退回上一次的非自定义周期，并重算默认分装 */
@@ -158,6 +196,7 @@ export function usePackagePlan(options: {
         packageCount: 1,
       },
     ]
+    onPlanChanged?.()
   }
 
   function updatePackagePlanRow(
@@ -172,6 +211,7 @@ export function usePackagePlan(options: {
     packagePlan.value = packagePlan.value.map((row, rowIndex) =>
       rowIndex === index ? { ...row, [field]: nextValue } : row,
     )
+    onPlanChanged?.()
   }
 
   function removePackagePlanRow(index: number) {
@@ -182,6 +222,7 @@ export function usePackagePlan(options: {
     packagePlan.value = packagePlan.value.filter(
       (_, rowIndex) => rowIndex !== index,
     )
+    onPlanChanged?.()
   }
 
   /** 袋数最多的那一行的每袋克数（用来给"主规格"一个说法） */

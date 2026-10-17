@@ -34,7 +34,10 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).toContain('packagePlanDogId');
     expect(source).toContain('isPackagePlanReadyForDog');
     expect(source).toContain('packagePlanDogId.value = null');
-    expect(source).toContain('packagePlanDogId.value = selectedDogId.value');
+    // 2026-10-18：分装状态移到 composable，`packagePlanDogId` 由它按 dogId() 回调写入
+    expect(source).toContain('dogId: () => selectedDogId.value');
+    expect(readFileSync(resolve(__dirname, '../composables/usePackagePlan.ts'), 'utf8'))
+      .toContain('packagePlanDogId.value = dogId?.() ?? null');
   });
 
   it('uses normalized package rows for totals, preview, and checkout storage', () => {
@@ -60,16 +63,28 @@ describe('recipe-order phase one UI contract', () => {
   });
 
   it('invalidates stale preview state before debounced package row repricing', () => {
-    const updatePackagePlanRowSource = source.match(
-      /function updatePackagePlanRow[\s\S]*?\r?\n}\r?\n\r?\nfunction removePackagePlanRow/,
-    )?.[0] || '';
-
+    /**
+     * 2026-10-18：分装的三个变更函数移入 `usePackagePlan`，
+     * 但「改分装 → 重新算价」**不能跟着丢** —— 丢了顾客会按旧价格下单。
+     *
+     * 所以 composable 暴露 `onPlanChanged` 回调，本页把它接到
+     * `invalidatePackagePlanPricingPreview()` + `schedulePricePreview()`。
+     *
+     * 断言改成盯**这条接线还在**，而不是盯函数体位置。
+     */
     expect(source).toContain('function invalidatePackagePlanPricingPreview');
     expect(source).toContain('pricingPreviewRequestSeq += 1');
     expect(source).toContain('resetPricePreviewState()');
-    expect(updatePackagePlanRowSource).toContain('invalidatePackagePlanPricingPreview()');
-    expect(updatePackagePlanRowSource.indexOf('invalidatePackagePlanPricingPreview()'))
-      .toBeLessThan(updatePackagePlanRowSource.indexOf('schedulePricePreview()'));
+
+    const wiring = source.slice(
+      source.indexOf('onPlanChanged'),
+      source.indexOf('onPlanChanged') + 260,
+    );
+    expect(wiring).toContain('invalidatePackagePlanPricingPreview()');
+    expect(wiring).toContain('schedulePricePreview()');
+    // 顺序：先作废旧预览，再排新的
+    expect(wiring.indexOf('invalidatePackagePlanPricingPreview()'))
+      .toBeLessThan(wiring.indexOf('schedulePricePreview()'));
   });
 
   it('stores preparation and cooking methods for checkout display', () => {
@@ -219,7 +234,9 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).toContain('packagePlanValidationMessage');
     expect(source).toContain('每袋重量不能少于 ${MIN_PACKAGE_SPEC_G}g');
     expect(source).toContain('if (packagePlanValidationMessage.value) return');
-    expect(source).toContain('Math.max(MIN_PACKAGE_SPEC_G');
+    // 2026-10-18：新增行的默认克数在 composable 里
+    expect(readFileSync(resolve(__dirname, '../composables/usePackagePlan.ts'), 'utf8'))
+      .toContain('Math.max(MIN_PACKAGE_SPEC_G');
     expect(templateSource).toContain("{{ showPackageEditor ? '取消自定义' : '自定义分装' }}");
     expect(templateSource).toContain(':class="{ active: !isCustomPackagePlan && selectedCycleDays === days, disabled: isCustomPackagePlan }"');
     expect(templateSource).toContain('v-if="packagePlanValidationMessage"');
@@ -281,10 +298,21 @@ describe('recipe-order phase one UI contract', () => {
   });
 
   it('clears default cycle selection while editing a custom package plan', () => {
-    expect(source).toContain('const selectedCycleDays = ref<number | null>(DEFAULT_ORDER_CYCLE_DAYS)');
-    expect(source).toContain('const lastSelectedCycleDays = ref(DEFAULT_ORDER_CYCLE_DAYS)');
-    expect(source).toContain('selectedCycleDays.value = null');
-    expect(source).toContain('selectedCycleDays.value = lastSelectedCycleDays.value');
+    // 2026-10-18：分装状态移到 composable，周期默认值由它初始化
+    expect(readFileSync(resolve(__dirname, '../composables/usePackagePlan.ts'), 'utf8'))
+      .toContain('const selectedCycleDays = ref<number | null>(DEFAULT_ORDER_CYCLE_DAYS)');
+    expect(readFileSync(resolve(__dirname, '../composables/usePackagePlan.ts'), 'utf8'))
+      .toContain('const lastSelectedCycleDays = ref(DEFAULT_ORDER_CYCLE_DAYS)');
+    /**
+     * 2026-10-18：进自定义分装要清天数 —— 这条**是真实产品差异**。
+     * 成品订购页清（顾客自己定分装后天数不再是约束），DIY 配置页不清（天数还参与换算）。
+     * 所以断言盯「本页开启了 clearCycleOnCustom」+「composable 里真的清」。
+     */
+    expect(source).toContain('clearCycleOnCustom: true');
+    expect(readFileSync(resolve(__dirname, '../composables/usePackagePlan.ts'), 'utf8'))
+      .toContain('selectedCycleDays.value = null');
+    expect(readFileSync(resolve(__dirname, '../composables/usePackagePlan.ts'), 'utf8'))
+      .toContain('selectedCycleDays.value = lastSelectedCycleDays.value');
     expect(source).toContain('const hasSelectedCycleOrCustomPackagePlan = computed(() => Boolean(');
     expect(source).toContain('selectedCycleDays.value || isCustomPackagePlan.value');
     expect(source).toContain('&& hasSelectedCycleOrCustomPackagePlan.value');

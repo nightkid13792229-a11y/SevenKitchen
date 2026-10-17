@@ -144,10 +144,9 @@
   <ul>
     <li><b>① 详情页的「标准 + 核心营养」已经是合在一块的</b>（同一个 `standard-card`，8 项指标）。
       你要求交付页做的"合成一块" —— <b>详情页早就这么做了，反而交付页要学它。</b></li>
-    <li><b>② 无封面时详情页用「食谱名首字母」占位</b>（灰底大字），不是我给交付页设计的"深色块叠文字"。
-      两页得统一成一种。</li>
-    <li><b>③ 详情页的封面和名称是分开两块</b>（封面图一块、名称+卖点在下面）。
-      而你要交付页"名称/为谁定制/狗信息融进封面"。<b>这里有个方向要你定。</b></li>
+    <li><b>② 无封面时详情页原来用「食谱名首字母」占位</b> —— <b>已定：改成交付页那套（深色块 + 完整文字）</b>。</li>
+    <li><b>③ 详情页原来把封面和名称分成两块</b> —— <b>已定：改成叠加式，但只叠食谱名</b>，
+      不叠"为谁定制"和狗信息。</li>
   </ul>
   <div class="legend">
     <span><i style="background:#E3F0E6"></i>抽成共享组件</span>
@@ -248,12 +247,23 @@
           <div class="cover__scrim"></div>
           <div class="cover__txt">
             <div class="cover__name">低脂鸡肉南瓜餐</div>
-            <div class="cover__for">低脂高蛋白，帮它慢慢瘦下来</div>
-            <div class="cover__facts">给 豆豆 看 · 柯基 · 3 岁 · 11.2kg</div>
           </div>
         </div>
         <div class="sub" style="font-size:11px;margin:-4px 0 10px">
-          <span class="mark mark--comp">共享组件</span> 封面块 —— 名称/卖点/给谁看 全融进去
+          <span class="mark mark--comp">共享组件</span> 封面块 —— <b>详情页只叠食谱名</b>；
+          交付页才叠"为谁定制 + 狗信息"
+        </div>
+
+        <div class="card" style="padding:11px 12px">
+          <div class="name-block__s" style="margin-top:0">低脂高蛋白，帮它慢慢瘦下来</div>
+          <div class="price-hint" style="margin-top:5px">价格按狗狗体重计算，进入订购可见</div>
+          <div class="dogs">
+            <div class="dog dog--on"><span class="dog__av">🐕</span>豆豆</div>
+            <div class="dog"><span class="dog__av">🐕</span>旺财</div>
+          </div>
+        </div>
+        <div class="sub" style="font-size:11px;margin:-4px 0 10px">
+          卖点 / 价格提示 / 选狗 <span class="mark mark--keep">保留原样</span>
         </div>
 
         <div class="ls ls--warn">
@@ -272,22 +282,23 @@
           <div class="sec__t">食谱配方 <em>3 类原料</em></div>
 
           <div class="table-h">食材</div>
-          <div class="thead"><span class="th-n">食材</span><span class="th-m">制备方法</span><span class="th-r">占比</span></div>
-          <div class="item"><span class="it-n">鸡胸肉</span><span class="it-m">切丁煮熟</span><span class="it-r">40%</span></div>
-          <div class="item"><span class="it-n">南瓜</span><span class="it-m">蒸熟压泥</span><span class="it-r">25%</span></div>
-          <div class="item"><span class="it-n">糙米</span><span class="it-m">煮软</span><span class="it-r">25%</span></div>
-          <div class="item"><span class="it-n">西兰花</span><span class="it-m">焯水切碎</span><span class="it-r">10%</span></div>
+          <div class="thead"><span class="th-n">食材</span><span class="th-r">占比</span></div>
+          <div class="item"><span class="it-n">鸡胸肉</span><span class="it-r">40%</span></div>
+          <div class="item"><span class="it-n">南瓜</span><span class="it-r">25%</span></div>
+          <div class="item"><span class="it-n">糙米</span><span class="it-r">25%</span></div>
+          <div class="item"><span class="it-n">西兰花</span><span class="it-r">10%</span></div>
 
           <div class="table-h">营养补充剂 <em>2 种</em></div>
           <div class="item"><span class="it-n">钙粉</span><span class="it-m" style="width:auto">每kg食材添加 5g</span></div>
           <div class="item"><span class="it-n">鱼油</span><span class="it-m" style="width:auto">每kg食材添加 2g</span></div>
 
           <div class="table-h">其他物料 <em>1 种</em></div>
-          <div class="item"><span class="it-n">真空袋</span><span class="it-m">分装用</span><span class="it-r">—</span></div>
+          <div class="item"><span class="it-n">真空袋</span><span class="it-r">—</span></div>
         </div>
         <div class="sub" style="font-size:11px;margin:-4px 0 10px">
-          <span class="mark mark--comp">共享组件</span> 食材表 / 营养素表
-          <span class="mark mark--logic">后端</span> 三类分组的判断搬后端（现在前端用 <code>ingredientType</code> 自己 filter）
+          <span class="mark mark--comp">共享组件</span> 食材表 / 营养素表 ——
+          <b>食材表不再显示"制备方法"</b>
+          <span class="mark mark--logic">后端</span> 三类分组搬后端
         </div>
 
         <div class="card">
@@ -315,7 +326,8 @@
     <div class="col__note">
       <b>结构几乎不变</b> —— 这次改的是"谁来计算、谁来渲染"，不是重新设计界面。
       <br /><br />
-      变化只有三处：① 名称/卖点融进封面 ② 报告入口并进营养块 ③ 生命阶段文案按后端 <code>matchType</code> 归三类。
+      变化只有四处：① <b>食谱名叠进封面</b>（只叠名字）② <b>食材表去掉制备方法</b>
+      ③ 报告入口并进营养块 ④ 生命阶段文案按后端 <code>matchType</code> 归三类。
     </div>
   </div>
 
@@ -384,44 +396,51 @@
 </div>
 
 <!-- ================================================================ -->
-<h2>二、要你定的三件事</h2>
+<h2>二、已定的三件事 <span>老板 2026-10-17 拍板</span></h2>
 <table class="diff">
-  <tr><th style="width:240px">要定的</th><th>说明</th><th style="width:330px">我的建议</th></tr>
+  <tr><th style="width:240px">已定</th><th>怎么定</th><th style="width:300px">影响</th></tr>
   <tr>
-    <td class="decide">① 详情页要不要也把名称/卖点融进封面？</td>
-    <td>现在详情页是<b>分开两块</b>（封面图一块、名称+卖点在下面）。
-      而你要交付页"名称/为谁定制/狗信息融进封面"。<br />
-      如果统一，详情页也要改成叠加式；如果不统一，两页就是两种观感。</td>
-    <td><b>建议统一成叠加式</b> —— 理由是交付页那版信息密度更高，
-      而且封面图 + 名称叠在一起，顾客一眼就知道"这是什么、给谁看"。</td>
+    <td class="new">① 无封面时用什么占位</td>
+    <td><b>不用食谱名首字母</b>。用交付页那套：<b>深色块 + 完整文字</b>。</td>
+    <td>详情页的 <code>cover-placeholder</code>（灰底首字母）删掉，改用共享组件的兜底</td>
   </tr>
   <tr>
-    <td class="decide">② 无封面时的占位，用哪一种？</td>
-    <td>详情页现在是<b>食谱名首字母</b>（灰底大字）；<br />
-      我给交付页设计的是<b>深色块 + 完整文字</b>。</td>
-    <td><b>建议用深色块 + 完整文字</b> ——
-      顾客至少能看到食谱名；只有首字母等于什么都没说。</td>
+    <td class="new">② 封面叠什么</td>
+    <td>详情页<b>只叠食谱名</b>；<b>不显示"为谁定制"和狗信息</b>。<br />
+      卖点、价格提示、选狗器<b>留在封面下方</b>，位置不变。</td>
+    <td>同一个 <code>RecipeCover</code> 组件，用参数控制叠哪些行 ——
+      交付页叠三行，详情页叠一行</td>
   </tr>
   <tr>
-    <td class="decide">③ 食材表要不要显示"制备方法"？</td>
-    <td>详情页显示（食材/制备方法/占比三列）；<br />
-      你给交付页定的是<b>只显示名称 + 占比</b>（制备方法属于第 2 页的"怎么做"）。</td>
-    <td><b>建议做成参数</b>：详情页显示、交付页不显示。
-      因为详情页是"看这食谱怎么做"，交付页是"确认是不是我要的"。</td>
+    <td class="new">③ 食材表要不要显示制备方法</td>
+    <td><b>不显示</b>。食材表只留「名称 + 占比」两列。</td>
+    <td>与交付页一致 —— <b>共享组件的列变成固定的两列</b>，不用做参数了</td>
   </tr>
 </table>
+
+<div class="banner" style="margin-top:14px;border-color:#CFE3D5;background:#F7FBF8">
+  <div class="banner__t" style="color:#1e5b35">这三条定完之后，一个额外的好处</div>
+  <ul style="color:#3F3222">
+    <li><b>食材表不用做"显示/隐藏制备方法"的参数了</b> —— 四个页面统一两列，
+      组件更简单，也不会因为参数漏传导致某一页多一列。</li>
+    <li><b>封面组件也不用做"叠一行还是三行"的复杂参数</b> ——
+      就是一个"给几行文字"的数组，详情页传 1 条，交付页传 3 条。</li>
+  </ul>
+</div>
 
 <!-- ================================================================ -->
 <h2>三、这一页的改动清单</h2>
 <table class="diff">
   <tr><th style="width:70px">类型</th><th style="width:230px">改什么</th><th>说明</th></tr>
-  <tr><td class="s" style="color:#1e5b35;font-weight:700">抽组件</td><td>封面块</td><td>名称/卖点/给谁看 融进去（待你定 ①）</td></tr>
+  <tr><td class="s" style="color:#1e5b35;font-weight:700">抽组件</td><td>封面块</td><td><b>只叠食谱名</b>（已定）。交付页才叠"为谁定制 + 狗信息"</td></tr>
   <tr><td class="s" style="color:#1e5b35;font-weight:700">抽组件</td><td>生命阶段卡</td><td>四页共用，按 <code>matchType</code> 归三类</td></tr>
-  <tr><td class="s" style="color:#1e5b35;font-weight:700">抽组件</td><td>食材表 / 营养素表</td><td>参数化控制要不要显示"制备方法"（待你定 ③）</td></tr>
+  <tr><td class="s" style="color:#1e5b35;font-weight:700">抽组件</td><td>食材表 / 营养素表</td><td><b>固定两列</b>：名称 + 占比。<b>不做参数</b>（已定）</td></tr>
   <tr><td class="s" style="color:#1e5b35;font-weight:700">抽组件</td><td>核心营养成分块</td><td>标准 + 8 项 + <b>报告入口</b>并进来</td></tr>
   <tr><td class="s" style="color:#23477e;font-weight:700">抽逻辑</td><td>收藏 / 分享 / 评价 / 选狗 / 切版本</td><td>5 个 composable，页面不再自己管</td></tr>
   <tr><td class="s" style="color:#23477e;font-weight:700">搬后端</td><td>原料三类分组</td><td>现在前端 <code>filter(ingredientType)</code>，改由后端给分好组的数组</td></tr>
-  <tr><td class="s" style="color:#8A7A66;font-weight:700">保留</td><td>内部预览条 / 价格提示 / 无狗引导</td><td>这三块是详情页特有的，不动</td></tr>
+  <tr><td class="s" style="color:#b4453a;font-weight:700">要删</td><td>封面首字母占位（<code>cover-placeholder</code>）</td><td>改用共享组件的"深色块 + 完整文字"兜底</td></tr>
+  <tr><td class="s" style="color:#b4453a;font-weight:700">要删</td><td>食材表的「制备方法」列</td><td>食材表只留「名称 + 占比」</td></tr>
+  <tr><td class="s" style="color:#8A7A66;font-weight:700">保留</td><td>内部预览条 / 价格提示 / 无狗引导 / 选狗器</td><td>这几块是详情页特有的，位置不变</td></tr>
 </table>
 
 </body>

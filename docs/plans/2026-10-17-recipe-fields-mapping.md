@@ -155,7 +155,7 @@ netAmountStr: formatNetAmount(totalTheoretical, true)
 > 老板追问的四个问题，查完代码后 **有三个我原来写错了**。
 > 这一节把错在哪、正确是什么，逐条记清楚。
 
-### 问 1：`items[].kind` 怎么判断食材还是补剂？之前怎么判断的？
+### 问 1：`ingredientType` 怎么判断食材还是补剂？之前怎么判断的？
 
 **之前就有判断，而且比我想的更细。**
 
@@ -177,11 +177,12 @@ isSupplement: item.ingredient?.type === 'SUPPLEMENT'
 🔴 **这是个真 bug**：如果食谱里含包材，交付页会把它当食材列出来。
 （食谱详情页是对的 —— 它有单独的「其他物料」区块。）
 
-**所以 `kind` 不是"新的判断方式"，而是"把枚举原样传下去，不压缩成布尔"**：
+**所以不是要造新字段 —— `ingredientType` 这个名字代码里早就有**（`recipe-designer.service.ts:7026` 在返回、详情页在用）。
+缺的只是**交付快照里没带它**。要做的两件事：① 用原料那边的名字 `ingredientType`；② 把值复制进快照。
 
 | 现在 | 改后 |
 |---|---|
-| `isSupplement: true/false` | `kind` 取 `FOOD` / `SUPPLEMENT` / `PACKAGING` 三值之一 |
+| `isSupplement: true/false` | `ingredientType` 取 `FOOD` / `SUPPLEMENT` / `PACKAGING` 三值之一 |
 | 两个状态，包材丢失 | **三个状态，跟数据库一致** |
 
 ### 问 2：`usage[].name` 和 `items[].name` 有什么区别？
@@ -191,13 +192,14 @@ isSupplement: item.ingredient?.type === 'SUPPLEMENT'
 `usage` 本来就是"每个食材用了多少"，它是 `items` 的**派生数据**。
 再带一份 `name`，等于把名字存两遍 —— **正是老板担心的"改一个忘一个"**。
 
-**修正**：
+**修正（一开始想用 `ingredientId` 关联，但又错了 —— 见 6.3）**：
 
 | 原来（错） | 改成 |
 |---|---|
-| `usage[].name` + `usage[].netAmountG` | **`usage[].ingredientId` + `usage[].netAmountG`** |
+| 另开 `usage[]` 数组存 name + netAmountG | **不另开数组，直接在 `items[].netAmountG`** |
 
-名字从 `items` 里按 `ingredientId` 取，**不重复存**。
+`items` 本来就是这份交付的原料清单，用量是它自己的属性，
+挂在同一条记录上就没有"两份名字"的问题了。
 
 ### 问 3：喂食参数为什么定全新字段？之前没有吗？
 
@@ -282,11 +284,11 @@ if (Number.isFinite(data.minPricePer100g)) { ... }
 | `nutritionStandardExplain` | ✅ 已有 | |
 | **`oneLineSummary`** | 🆕 **新增** | 卖点 + 一句话结论合成的整句，取代 `sellingPoint` + `plainConclusion` |
 
-### 6.2 食材 / 营养素（全部用已有名，只有 kind 是新的）
+### 6.2 食材 / 营养素（**全部用已有名，一个都不新造**）
 
 | 字段 | 状态 | 说明 |
 |---|---|---|
-| **`items[].kind`** | 🆕 **新增** | `FOOD` / `SUPPLEMENT` / **`PACKAGING`**（三值，跟数据库枚举一致）<br />取代丢失包材的布尔 `isSupplement` |
+| **`items[].ingredientType`** | ✅ **已有名字，需补进快照** | `FOOD` / `SUPPLEMENT` / **`PACKAGING`**（三值，跟数据库 `Ingredient.type` 一致）<br />取代丢失包材的布尔 `isSupplement` |
 | `items[].name` | ✅ 已有 | |
 | `items[].preparationMethod` | ✅ 已有 | ⚠️ 交付接口现在叫 `preparation`，要改回来 |
 | `items[].ratioPercent` | ✅ 已有 | ⚠️ 详情页现在叫 `ratio`，要改 |
@@ -295,13 +297,27 @@ if (Number.isFinite(data.minPricePer100g)) { ... }
 | `items[].nutrientTargetKey` | ✅ 已有 | 营养素字典码 |
 | `items[].nutrientTargetValue` | ✅ 已有 | 每 kg 食材加多少 |
 
-### 6.3 用量（新增一组，但**不重复存名字**）
+### 6.3 用量（**不另开数组，直接挂在 `items` 上**）
+
+**老板 2026-10-17 追问后修正**：
+
+> "原料的分类字段不能直接去调用原料的分类字段吗？为什么还要用枚举呢？"
+> "原料在后端不是已经被分成了食材、补充剂和包材三类吗？"
+
+查下来：`SnapshotRecipeItem` 里**没有 `ingredientId`** ——
+它是纯冻结副本（只有 name / preparation / ratioPercent / weightG 这些**值**）。
+
+所以：
+
+| 原来（错） | 改成 | 为什么 |
+|---|---|---|
+| 新开一个 `usage[]` 数组，用 `ingredientId` 关联 | **直接在 `items[].netAmountG`** | 快照里没有 id、**也不该有** —— 有了 id 就会有人去查活数据，快照就不冻结了 |
 
 | 字段 | 状态 | 说明 |
 |---|---|---|
-| **`usage[].ingredientId`** | 🆕 | **关联到 `items`，不再单独存 name** |
-| **`usage[].netAmountG`** | 🆕 | **净用量（克）** —— 唯一要展示的量 |
+| **`items[].netAmountG`** | 🆕 | **净用量（克）** —— 唯一要展示的量 |
 | `usageTotal.netAmountG` | 🆕 | 合计净重 |
+| ~~`usage[].ingredientId`~~ | ❌ **不建** | 快照里没有 id |
 | ~~`purchaseAmountG`~~ | ❌ **不建** | 老板 2026-10-17：采购量整条删掉 |
 
 ### 6.4 喂食参数（**全部用已有名，一个都不新增**）
@@ -383,7 +399,8 @@ perMealG     = dailyIntakeG / mealsPerDay
 | 4 | `theoreticalAmount` / `netAmount` → `netAmountG` | DIY 制作单 | 1 个文件 |
 | 5 | **删掉采购量整条线** | DIY 制作单 + 交付第 2 页 | 2 个文件（**净减少代码**） |
 
-**真正新增的只有 3 个**：`oneLineSummary`、`items[].kind`、`usage[]`（一组）。
+**真正新增的只有 2 个**：`oneLineSummary`、`items[].netAmountG`。
+`ingredientType` 是**已有名字**（详情页与食谱接口都在用），只是快照里缺、要补。
 喂食参数**一个都不新增**，全部沿用已有字段。
 
 ---

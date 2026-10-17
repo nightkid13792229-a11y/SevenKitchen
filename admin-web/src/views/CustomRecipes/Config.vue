@@ -190,6 +190,32 @@
           <span class="form-tip" style="margin-left: 8px">天内（不能超过售后窗口）</span>
         </el-form-item>
 
+        <!-- ===== 2026-10-18 新增三个（配置页「5 加」里缺的）===== -->
+        <el-form-item label="售后超时提醒">
+          <el-input-number
+            v-model="form.aftersaleOverdueHours"
+            :min="1"
+            :max="720"
+            :precision="0"
+            style="width: 120px"
+          />
+          <span class="form-tip" style="margin-left: 8px">
+            小时内没处理，后台待办标红（这是给顾客的响应承诺）
+          </span>
+        </el-form-item>
+
+        <el-form-item label="交付前无理由退款">
+          <el-switch v-model="form.allowRefundBeforeDelivery" />
+          <span class="form-tip">
+            开启后顾客在交付前可随时全额退（不设天数）；交付后只调整食谱、不退款
+          </span>
+        </el-form-item>
+
+        <el-form-item label="站内消息中心">
+          <el-switch v-model="form.messageCenterEnabled" />
+          <span class="form-tip">关了之后小程序隐藏消息入口（已有消息仍在库里）</span>
+        </el-form-item>
+
         <el-divider content-position="left">资料附件</el-divider>
 
         <el-form-item label="附件张数上限">
@@ -315,6 +341,9 @@ const form = reactive({
   // ===== 批次 1.4：原先写死在代码里的参数 =====
   dailyDeliveryCapacity: 4,
   aftersaleWindowDays: 7,   // 老板 2026-10-17 V22：售后窗口 7 天
+  aftersaleOverdueHours: 48,        // 2026-10-18：售后单超多少小时没处理要标红
+  allowRefundBeforeDelivery: true,  // 2026-10-18：交付前可无理由全额退
+  messageCenterEnabled: true,       // 2026-10-18：站内消息中心开关
   freeRevisionCount: 2,     // 老板 2026-10-17 V23：7 天内免费修改 2 次
   freeRevisionWindowDays: 7,
   autoCompleteDays: 3,

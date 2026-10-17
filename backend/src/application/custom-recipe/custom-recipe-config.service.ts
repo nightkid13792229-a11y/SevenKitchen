@@ -95,6 +95,12 @@ export interface CustomRecipeConfigDto {
   freeRevisionCount: number;
   /** 免费调整时间窗（天） */
   freeRevisionWindowDays: number;
+  /** 售后单超多少小时未处理要标红（2026-10-18 · V44） */
+  aftersaleOverdueHours: number;
+  /** 交付前是否允许无理由全额退款（2026-10-18 · V24） */
+  allowRefundBeforeDelivery: boolean;
+  /** 站内消息中心总开关（2026-10-18） */
+  messageCenterEnabled: boolean;
   /** 交付后自动完成天数 */
   autoCompleteDays: number;
   /** 是否要求顾客确认收到 */
@@ -128,6 +134,12 @@ export interface PublicCustomRecipeConfigDto {
   feeAmount: number;
   creditAmount: number;
   deliveryWorkDays: number;
+  /** 售后单超多少小时要提醒（顾客侧用来显示"我们多久内响应"）· 2026-10-18 */
+  aftersaleOverdueHours: number;
+  /** 交付前是否允许无理由全额退款 · 2026-10-18 · V24 */
+  allowRefundBeforeDelivery: boolean;
+  /** 站内消息中心开关 · 2026-10-18 */
+  messageCenterEnabled: boolean;
   /**
    * 支付超时（分钟）；0 = 不自动关单。
    *
@@ -204,6 +216,15 @@ export class CustomRecipeConfigService {
       autoCompleteDays: config.autoCompleteDays,
       requireCustomerConfirm: config.requireCustomerConfirm,
       aftersaleWindowDays: config.aftersaleWindowDays,
+      /**
+       * 这三个是**给顾客看的政策**，不是内部参数 —— 所以放公开 DTO 里：
+       *   · 交付前可无理由退 → 下单页要说清楚
+       *   · 售后超时小时数 → 顾客等多久该催，这是承诺
+       *   · 消息中心开关 → 关了就藏入口
+       */
+      aftersaleOverdueHours: config.aftersaleOverdueHours,
+      allowRefundBeforeDelivery: config.allowRefundBeforeDelivery,
+      messageCenterEnabled: config.messageCenterEnabled,
       freeRevisionCount: config.freeRevisionCount,
       freeRevisionWindowDays: config.freeRevisionWindowDays,
     };
@@ -315,6 +336,14 @@ export class CustomRecipeConfigService {
       // 上限 365 天：再长就不叫"售后窗口"了，等于无限责任
       if (!Number.isInteger(value) || value < 0 || value > 365) {
         throw new BadRequestException('售后窗口必须是 0~365 的整数（天）');
+      }
+    }
+
+    if (dto.aftersaleOverdueHours !== undefined) {
+      const value = dto.aftersaleOverdueHours;
+      // 下限 1 小时：0 意味着"一提交就标红"，没有意义；上限 720（30 天）够长了
+      if (!Number.isInteger(value) || value < 1 || value > 720) {
+        throw new BadRequestException('售后超时提醒必须是 1~720 的整数（小时）');
       }
     }
 
@@ -525,6 +554,9 @@ export class CustomRecipeConfigService {
     paymentTimeoutMinutes: number;
     dailyDeliveryCapacity: number;
     aftersaleWindowDays: number;
+    aftersaleOverdueHours: number;
+    allowRefundBeforeDelivery: boolean;
+    messageCenterEnabled: boolean;
     freeRevisionCount: number;
     freeRevisionWindowDays: number;
     autoCompleteDays: number;
@@ -550,6 +582,9 @@ export class CustomRecipeConfigService {
 
       dailyDeliveryCapacity: Number(row.dailyDeliveryCapacity),
       aftersaleWindowDays: Number(row.aftersaleWindowDays),
+      aftersaleOverdueHours: Number(row.aftersaleOverdueHours),
+      allowRefundBeforeDelivery: Boolean(row.allowRefundBeforeDelivery),
+      messageCenterEnabled: Boolean(row.messageCenterEnabled),
       freeRevisionCount: Number(row.freeRevisionCount),
       freeRevisionWindowDays: Number(row.freeRevisionWindowDays),
       autoCompleteDays: Number(row.autoCompleteDays),

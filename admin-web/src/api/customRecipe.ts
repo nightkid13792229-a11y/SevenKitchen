@@ -147,6 +147,12 @@ export interface CustomRecipeConfig {
   dailyDeliveryCapacity: number
   /** 售后受理窗口（天） */
   aftersaleWindowDays: number
+  /** 售后单超多少小时没处理要标红 · 2026-10-18 */
+  aftersaleOverdueHours: number
+  /** 交付前是否允许无理由全额退款 · 2026-10-18 */
+  allowRefundBeforeDelivery: boolean
+  /** 站内消息中心开关 · 2026-10-18 */
+  messageCenterEnabled: boolean
   /** 免费调整次数 */
   freeRevisionCount: number
   /** 免费调整时间窗（天），不能超过售后窗口 */

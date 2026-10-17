@@ -16,8 +16,12 @@ function buildRow(overrides: Record<string, unknown> = {}) {
     paymentTimeoutMinutes: 30,
     // ===== 批次 1.4 新增 =====
     dailyDeliveryCapacity: 4,
-    aftersaleWindowDays: 30,
-    freeRevisionCount: 1,
+    aftersaleWindowDays: 7,
+    // 2026-10-18 新增的三个（配置页「5 加」里缺的）
+    aftersaleOverdueHours: 48,
+    allowRefundBeforeDelivery: true,
+    messageCenterEnabled: true,
+    freeRevisionCount: 2,
     freeRevisionWindowDays: 7,
     autoCompleteDays: 3,
     requireCustomerConfirm: true,
@@ -113,14 +117,24 @@ describe('CustomRecipeConfigService', () => {
         orderNotifyTemplateId: null,
 
         /**
+         * 2026-10-18 新增的三个 —— 它们是**给顾客看的政策**，所以公开：
+         *   · 售后超时小时数 = 我们对顾客的响应承诺
+         *   · 交付前可无理由退 = 下单页要说清楚
+         *   · 消息中心开关 = 关了就藏入口
+         */
+        aftersaleOverdueHours: 48,
+        allowRefundBeforeDelivery: true,
+        messageCenterEnabled: true,
+
+        /**
          * 2026-10-16（批次 1.4）：顾客确实需要知道的几个。
          * 每一个都写明了"为什么要给顾客"，没有理由的不进这份白名单。
          */
         attachmentMaxCount: 9, // 小程序要据此限制上传张数
         autoCompleteDays: 3, // 顾客要知道"几天内确认"
         requireCustomerConfirm: true, // 决定是否显示「确认收到」
-        aftersaleWindowDays: 30, // 顾客要知道还能不能提售后
-        freeRevisionCount: 1, // 售后页要写明免费改几次
+        aftersaleWindowDays: 7, // 顾客要知道还能不能提售后（2026-10-18：30→7）
+        freeRevisionCount: 2, // 售后页要写明免费改几次（2026-10-18：1→2）
         freeRevisionWindowDays: 7, // 以及几天内有效
       });
 

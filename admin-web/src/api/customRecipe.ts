@@ -131,6 +131,8 @@ export interface CustomRecipeStatistics {
   inProgress: number
   delivered: number
   totalRevenue: number
+  /** 待售后（未处理完的售后单数）· 2026-10-18 · 两档待办之一 */
+  pendingAftersale: number
 }
 
 export interface CustomRecipeConfig {

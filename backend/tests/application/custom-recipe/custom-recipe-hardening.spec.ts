@@ -45,6 +45,8 @@ describe('CustomRecipeService · 链路加固', () => {
       findMany: jest.fn(),
       count: jest.fn(),
     },
+    // 2026-10-18：统计里加了"待售后"（两档待办之一）
+    customRecipeAftersale: { count: jest.fn().mockResolvedValue(0) },
     allergyRecord: { findFirst: jest.fn(), create: jest.fn() },
     medicalRecord: { findFirst: jest.fn(), create: jest.fn() },
     recipe: { findMany: jest.fn(), findFirst: jest.fn() },

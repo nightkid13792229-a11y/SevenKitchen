@@ -31,6 +31,7 @@ import {
   type WeekdayRule,
 } from '../../domain/custom-recipe/custom-recipe.calendar';
 import {
+  CustomRecipeAftersaleStatus,
   CustomRecipeStatus,
   TargetGoal,
   CustomAttachmentType,
@@ -1229,7 +1230,8 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       where.createdAt = { ...where.createdAt, lte: filters.dateTo };
     }
 
-    const [pendingPayment, inProgress, delivered, orders] = await Promise.all([
+    const [pendingPayment, inProgress, delivered, orders, pendingAftersale] =
+      await Promise.all([
       this.prisma.customRecipeOrder.count({
         where: { ...where, status: CustomRecipeStatus.PENDING_PAYMENT },
       }),
@@ -1258,6 +1260,26 @@ export class CustomRecipeService implements ICustomRecipeRepository {
         },
         select: { amount: true },
       }),
+      /**
+       * 待售后（2026-10-18 加）。
+       *
+       * 老板定的两档待办之一。口径：**未处理完的售后单**数量 ——
+       * 排除 RESOLVED（已完成）与 WITHDRAWN（顾客撤回）。
+       *
+       * 注意**不受日期范围过滤**：一单半个月前提交、现在还没处理，
+       * 它今天仍然是待办。按创建日期筛掉它等于把漏掉的事藏起来。
+       */
+      this.prisma.customRecipeAftersale.count({
+        where: {
+          status: {
+            in: [
+              CustomRecipeAftersaleStatus.PENDING,
+              CustomRecipeAftersaleStatus.ACCEPTED,
+              CustomRecipeAftersaleStatus.PROCESSING,
+            ],
+          },
+        },
+      }),
     ]);
 
     const totalRevenue = orders.reduce(
@@ -1270,6 +1292,8 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       inProgress,
       delivered,
       totalRevenue,
+      /** 两档待办（2026-10-18）：待交付 = inProgress，待售后 = pendingAftersale */
+      pendingAftersale,
     };
   }
 

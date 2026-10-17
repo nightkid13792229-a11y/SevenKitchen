@@ -16,52 +16,45 @@
       </el-tooltip>
     </div>
 
-    <!-- 统计卡片 -->
+    <!--
+      两档待办（2026-10-18 改）。
+
+      原来是四张统计卡：待付款 / 制作中 / 已交付 / 收入。
+      老板定了"只保留待交付 / 待售后"：
+
+        · **待付款不是待办** —— 那是顾客没付，超时会自动关单；
+          需要兜底时去下面的「状态」筛选里找
+        · **收入是报表数字** —— 不属于"我今天要做什么"
+
+      点卡片 = 直接筛到对应的队列，不让人再去下拉框里找一遍。
+    -->
     <el-row :gutter="20" class="stats-row">
-      <el-col :span="6">
-        <el-card class="stat-card">
-          <div class="stat-content">
-            <div class="stat-icon pending">💰</div>
-            <div class="stat-info">
-              <div class="stat-value">{{ statistics.pendingPayment }}</div>
-              <div class="stat-label">待付款</div>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-      <el-col :span="6">
-        <el-card class="stat-card">
+      <el-col :span="12">
+        <el-card
+          class="stat-card stat-card--todo"
+          :class="{ 'stat-card--active': filters.status === 'IN_PROGRESS' }"
+          @click="focusTodoQueue('IN_PROGRESS')"
+        >
           <div class="stat-content">
             <div class="stat-icon progress">🔨</div>
             <div class="stat-info">
               <div class="stat-value">{{ statistics.inProgress }}</div>
-              <div class="stat-label">制作中</div>
+              <div class="stat-label">待交付</div>
             </div>
           </div>
         </el-card>
       </el-col>
-      <el-col :span="6">
-        <el-card class="stat-card">
+      <el-col :span="12">
+        <el-card
+          class="stat-card stat-card--todo stat-card--warn"
+          :class="{ 'stat-card--active': filters.status === 'AFTERSALE' }"
+          @click="focusTodoQueue('AFTERSALE')"
+        >
           <div class="stat-content">
-            <div class="stat-icon delivered">✅</div>
+            <div class="stat-icon aftersale">🔧</div>
             <div class="stat-info">
-              <div class="stat-value">{{ statistics.delivered }}</div>
-              <div class="stat-label">已交付</div>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-      <el-col :span="6">
-        <el-card class="stat-card">
-          <div class="stat-content">
-            <div class="stat-icon revenue">💵</div>
-            <div class="stat-info">
-              <div class="stat-value">¥{{ statistics.totalRevenue }}</div>
-              <!-- 口径：已收款（已付款/制作中/已交付）的定制费合计。
-                   选定日期范围时按所选区间统计，不限日期时是累计 —— 所以标签不能再写"本月"。 -->
-              <div class="stat-label">
-                {{ dateRange && dateRange.length === 2 ? '区间收入' : '累计收入' }}
-              </div>
+              <div class="stat-value">{{ statistics.pendingAftersale }}</div>
+              <div class="stat-label">待售后</div>
             </div>
           </div>
         </el-card>
@@ -307,7 +300,19 @@ const statistics = ref<CustomRecipeStatistics>({
   inProgress: 0,
   delivered: 0,
   totalRevenue: 0,
+  pendingAftersale: 0,
 });
+
+/**
+ * 点待办卡 = 直接筛到那个队列（2026-10-18）。
+ *
+ * 再点一次取消筛选 —— 否则点了"待交付"之后，想回全部还得去下拉框里找。
+ */
+function focusTodoQueue(status: string) {
+  filters.status = filters.status === status ? '' : status;
+  pagination.page = 1;
+  void loadOrders();
+}
 
 const filters = reactive({
   status: '',
@@ -628,6 +633,26 @@ const getGoalText = (goal: string) => {
 .countdown-text {
   font-size: 12px;
   color: #909399;
+}
+
+/* ===== 两档待办卡（2026-10-18）===== */
+.stat-card--todo {
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.stat-card--todo:hover {
+  border-color: #c7d2fe;
+}
+
+.stat-card--active {
+  border-color: #3b5bdb;
+  box-shadow: 0 0 0 1px #3b5bdb inset;
+}
+
+.stat-card--warn .stat-icon.aftersale {
+  background: #fee2e2;
+  color: #991b1b;
 }
 </style>
 

@@ -284,6 +284,7 @@ import {
   type LifeStageMatchVerdict,
 } from '../../utils/life-stage-match'
 import LifeStageVersionCard from '@/components/recipe/LifeStageVersionCard.vue'
+import { useDogSelection } from '@/composables/useDogSelection'
 import {
   DEFAULT_ORDER_CYCLE_DAYS,
   MIN_PACKAGE_SPEC_G,
@@ -372,11 +373,22 @@ function toggleStandardExplain() {
   standardExplainVisible.value = !standardExplainVisible.value
 }
 
-const dogs = ref<Dog[]>([])
+/**
+ * 选狗状态（2026-10-18 收进 composable，泛型绑定 `Dog`）。
+ *
+ * ⚠️ 注意 `selectedDog` 原来是**存的副本**（`selectedDog.value = dog`），
+ * 不是从 `dogs` 算出来的 —— 列表一刷新它就可能变旧。
+ * composable 里它是 computed，跟着 `dogs` 走，**顺手修掉了这个隐患**。
+ */
+const {
+  dogs,
+  selectedDogId,
+  selectedDog,
+  setDogs,
+  select: selectDogState,
+} = useDogSelection<Dog>()
 // 列表加载失败与「没有档案」是两件事：失败时若显示"暂无档案"会诱导重复建档
 const dogsLoadFailed = ref(false)
-const selectedDogId = ref<string | null>(null)
-const selectedDog = ref<Dog | null>(null)
 const isGeneratingSheet = ref(false)
 const HOME_RECIPE_STATS_DIRTY_KEY = 'home_recipe_stats_dirty'
 
@@ -656,11 +668,21 @@ async function loadDogs() {
     console.log('[RecipeDiy] loadDogs API响应:', res)
 
     if (res.code === 0 && res.data) {
-      dogs.value = res.data
+      /**
+       * 灌列表（2026-10-18）。
+       *
+       * ⚠️ `setDogs` 会**自动校正 `selectedDogId`** —— 所以下面**不能**再写
+       * `if (!selectedDogId.value)` 才会选：那样 `selectDog()` 永远不跑，
+       * **饭量计算和生命阶段检查就废了**。
+       *
+       * 这里改成：灌完列表**无条件**调一次 `selectDog(preferred)` ——
+       * 它除了选中，还要 `loadDogCalc` + `checkLifeStageMatch`。
+       */
+      setDogs(res.data)
       console.log('[RecipeDiy] 狗狗列表加载成功, 数量:', res.data.length)
 
       // 自动选择狗狗（优先使用详情页传入，其次使用本地缓存）
-      if (res.data.length > 0 && !selectedDogId.value) {
+      if (res.data.length > 0) {
         const preferredDogId = initialDogId.value || uni.getStorageSync('dogId') || ''
         const preferredDog = res.data.find((dog: Dog) => dog.id === preferredDogId) || res.data[0]
         console.log('[RecipeDiy] 自动选择狗狗:', preferredDog)
@@ -670,12 +692,12 @@ async function loadDogs() {
     } else {
       // 拿到了响应但结论不可用：按失败处理，不能显示成「暂无档案」
       dogsLoadFailed.value = true
-      dogs.value = []
+      setDogs([])
     }
   } catch (error) {
     console.error('[RecipeDiy] Load dogs error:', error)
     dogsLoadFailed.value = true
-    dogs.value = []
+    setDogs([])
   }
 
   console.log('[RecipeDiy] loadDogs 结束')
@@ -692,8 +714,7 @@ async function selectDog(dogId: string) {
   const dog = dogs.value.find(item => item.id === dogId)
   if (!dog) return
 
-  selectedDogId.value = dog.id
-  selectedDog.value = dog
+  selectDogState(dog.id)
   isCustomPackagePlan.value = false
   showPackageEditor.value = false
   packagePlan.value = []

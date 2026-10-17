@@ -23,10 +23,16 @@ import { computed, ref, type Ref } from 'vue'
  * 但**读**的时候不在这里做：各页的优先级不同（URL 参数 > storage > 第一只），
  * 那属于页面的入口逻辑。
  */
-export function useDogSelection(options: { storageKey?: string } = {}) {
+export function useDogSelection<T extends { id: string } = any>(
+  options: { storageKey?: string } = {},
+) {
   const storageKey = options.storageKey ?? 'dogId'
 
-  const dogs = ref<any[]>([]) as Ref<any[]>
+  /**
+   * 泛型：调用方的狗类型（各页可能是 `Dog` / `DogProfile` / 简化对象）。
+   * 不声明泛型的话返回值是 `any[]`，赋给 `Dog[]` 会丢类型。
+   */
+  const dogs = ref<T[]>([]) as Ref<T[]>
   const selectedDogId = ref('')
 
   /**
@@ -35,7 +41,7 @@ export function useDogSelection(options: { storageKey?: string } = {}) {
    * 找不到返回 `null` —— **不要返回 `dogs[0]`**：
    * "没选"和"选了第一只"是两回事，前者该提示顾客选，后者不该。
    */
-  const selectedDog = computed(
+  const selectedDog = computed<T | null>(
     () => dogs.value.find((dog) => dog.id === selectedDogId.value) || null,
   )
 
@@ -50,7 +56,7 @@ export function useDogSelection(options: { storageKey?: string } = {}) {
    * 为什么必须校正：顾客可能删了狗、或者链接里带的是别人的狗 id ——
    * 不校正的话页面会停在"选中了一只不存在的狗"，各处显示都对不上。
    */
-  function setDogs(list: any[], preferredId?: string | null) {
+  function setDogs(list: T[], preferredId?: string | null) {
     dogs.value = Array.isArray(list) ? list : []
 
     const candidates = [

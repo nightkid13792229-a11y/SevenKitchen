@@ -127,7 +127,11 @@ function createService(options: {
   const configService = {
     getConfig: jest.fn().mockResolvedValue({
       deliveryItemCodes: ['RECIPE', 'SHOPPING_SOP', 'NUTRITION_REPORT'],
-      autoCompleteDays: 3,
+      /**
+       * 2026-10-18：自动完成天数改成读**售后窗口**（需求 2.5.5「交付后满 7 天」），
+       * 不再读 `autoCompleteDays`（那是已被 V12 取消的旧机制）。
+       */
+      aftersaleWindowDays: 3,
       ...(options.config ?? {}),
     }),
   };
@@ -202,7 +206,7 @@ describe('CustomRecipeDeliveryService', () => {
       expect(snapshot.feeding.perMealG).toBeNull();
     });
 
-    it('订单转已交付，并设置自动完成闹钟（交付时间 + 配置天数）', async () => {
+    it('订单转已交付，并设置自动完成闹钟（交付时间 + 售后窗口天数）', async () => {
       const now = new Date('2026-10-16T10:00:00+08:00');
       const { service, txProxy } = createService({});
 

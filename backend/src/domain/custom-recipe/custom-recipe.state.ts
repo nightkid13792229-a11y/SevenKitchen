@@ -236,11 +236,34 @@ export function decideAutoComplete(input: {
   status: CustomRecipeStatus;
   autoCompleteAt: Date | null | undefined;
   now: Date;
+  /**
+   * 有没有**还没处理完**的售后（2026-10-18 补）。
+   *
+   * ⚠️ 这项是老板 2026-10-17 明确要求过的（需求 2.5.5）：
+   *
+   *   "为什么不能到期强制完成：否则会出现「顾客的问题还没解决，
+   *     订单却显示已完成」—— 他会以为被敷衍了。"
+   *
+   * 窗口到期只是"不再接受**新**申请"，**不影响手头这一件** ——
+   * 所以有未完成的售后时，时间到了也**不许**自动完成，必须等老板处理完。
+   */
+  hasOpenAftersale?: boolean;
 }): { shouldComplete: boolean; reason: string } {
   if (input.status !== CustomRecipeStatus.DELIVERED) {
     return {
       shouldComplete: false,
       reason: `状态是「${STATUS_LABELS[input.status] ?? input.status}」，不在等确认`,
+    };
+  }
+
+  /**
+   * 有未处理完的售后 → **不自动完成**（需求 2.5.5）。
+   * 放在时间判断**之前**：这一条与"到没到点"无关。
+   */
+  if (input.hasOpenAftersale) {
+    return {
+      shouldComplete: false,
+      reason: '还有没处理完的售后，等处理完再完成',
     };
   }
 

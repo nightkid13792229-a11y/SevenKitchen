@@ -129,16 +129,19 @@
           </span>
         </el-form-item>
 
-        <el-form-item label="交付后自动完成">
-          <el-input-number
-            v-model="form.autoCompleteDays"
-            :min="1"
-            :max="90"
-            :precision="0"
-            style="width: 200px"
-          />
-          <span class="form-tip">顾客几天内没点「确认收到」，系统自动完成这单</span>
-        </el-form-item>
+        <!--
+          2026-10-18：删掉「交付后自动完成」这个字段。
+
+          老板 2026-10-17（V12）明确取消：
+            "我们也不需要设置多少多少天内未确认，系统将自动完成"
+
+          现在的口径（需求 2.5.5）：**交付后满售后窗口天数（7 天）自动完成**，
+          有未处理完的售后则等处理完 —— 天数跟售后窗口**同一个来源**，
+          不再单独配。
+
+          `autoCompleteDays` 仍留在表单状态里（只从界面移除，不删数据）——
+          跟这次删掉的另外 5 个字段一样的处理。
+        -->
 
 
         <el-form-item label="交付物">

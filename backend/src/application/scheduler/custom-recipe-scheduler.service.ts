@@ -99,6 +99,15 @@ export class CustomRecipeSchedulerService {
         orderId: true,
         status: true,
         autoCompleteAt: true,
+        /**
+         * 2026-10-18：有未处理完的售后时**不许**自动完成（需求 2.5.5）。
+         * 在 SQL 里就把它捞出来，省得每单再查一次。
+         */
+        aftersales: {
+          where: { status: { in: ['PENDING', 'ACCEPTED', 'PROCESSING'] } },
+          select: { id: true },
+          take: 1,
+        },
       },
       orderBy: { autoCompleteAt: 'asc' },
       take: batchSize,
@@ -120,6 +129,7 @@ export class CustomRecipeSchedulerService {
         status: order.status,
         autoCompleteAt: order.autoCompleteAt,
         now,
+        hasOpenAftersale: (order.aftersales ?? []).length > 0,
       });
 
       if (!decision.shouldComplete) {

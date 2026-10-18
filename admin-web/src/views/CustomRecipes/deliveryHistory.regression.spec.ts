@@ -1,6 +1,14 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+/**
+ * ⚠️ 用 Vite 的 `?raw` 导入，**不要用 `node:fs`** ——
+ * 构建的 tsconfig 里没有 node 类型，用 `node:fs` 会让 `npm run build` 直接失败。
+ *
+ * 这条不是猜的：`scheduleCalendar.regression.spec.ts` 的头部就写着同一句，
+ * 而且注明了"我在售后页那次就是这么挂的"。**这次我又踩了一遍** ——
+ * 写新 spec 前应该先看一眼同目录下的老 spec 怎么写的。
+ */
+import page from '@/views/CustomRecipes/OrderDetail.vue?raw'
+import api from '@/api/customRecipe.ts?raw'
 
 /**
  * 后台交付历史守卫（2026-10-18 · 需求 2.8.6）
@@ -16,43 +24,34 @@ function stripComments(source: string): string {
 }
 
 describe('后台订单详情 · 交付历史', () => {
-  const page = stripComments(
-    readFileSync(
-      resolve(process.cwd(), 'src/views/CustomRecipes/OrderDetail.vue'),
-      'utf-8',
-    ),
-  )
-  const api = readFileSync(
-    resolve(process.cwd(), 'src/api/customRecipe.ts'),
-    'utf-8',
-  )
+  const cleanPage = stripComments(page)
 
   it('★ 单独拉全部版本（详情里只有最新一版）', () => {
     expect(api).toContain('getOrderDeliveries')
     expect(api).toContain('/deliveries')
-    expect(page).toContain('getOrderDeliveries')
+    expect(cleanPage).toContain('getOrderDeliveries')
   })
 
   it('★ 四个信息都要有：版本 / 时间 / 交付人 / 通知状态', () => {
-    expect(page).toContain('item.version')
-    expect(page).toContain('item.deliveredAt')
-    expect(page).toContain('item.deliveredBy')
-    expect(page).toContain('item.notifyStatus')
+    expect(cleanPage).toContain('item.version')
+    expect(cleanPage).toContain('item.deliveredAt')
+    expect(cleanPage).toContain('item.deliveredBy')
+    expect(cleanPage).toContain('item.notifyStatus')
   })
 
   it('★ "当前是哪一版"由后端给（isCurrent），页面不自己判断', () => {
-    expect(page).toContain('item.isCurrent')
+    expect(cleanPage).toContain('item.isCurrent')
     // 不许在页面里拿 replacedByDeliveryId 自己算
-    expect(page).not.toContain('replacedByDeliveryId')
+    expect(cleanPage).not.toContain('replacedByDeliveryId')
   })
 
   it('★ PENDING 写明"未发出"，不能写"待发送"', () => {
     // 顾客没点订阅授权时，订阅消息永远发不出去；写"待发送"会被误读成再等等
-    expect(page).toContain("'— 通知未发出'")
-    expect(page).not.toContain('待发送')
+    expect(cleanPage).toContain("'— 通知未发出'")
+    expect(cleanPage).not.toContain('待发送')
   })
 
   it('拉历史失败不影响订单详情展示', () => {
-    expect(page).toContain('deliveryHistory.value = [];')
+    expect(cleanPage).toContain('deliveryHistory.value = [];')
   })
 })

@@ -174,7 +174,21 @@ export class CustomRecipeDeliveryService {
         });
       }
 
-      /** 自动完成闹钟 = 交付时间 + 配置的天数 */
+      /**
+       * 自动完成闹钟 = 交付时间 + **售后窗口天数**（2026-10-18 修正）。
+       *
+       * ⚠️ 此前用的是 `autoCompleteDays`（默认 **3 天**）——
+       * 那是**旧的"顾客不点确认收到就自动完成"**机制，
+       * 已被 2026-10-17 的 **V12 取消**。
+       *
+       * 需求 2.5.5 现在的口径是：
+       *   「没有售后 → 交付后满 **7 天**（= 售后窗口）系统自动变已完成」
+       *
+       * 用 3 天会**在售后窗口还没关的时候就完成**，顾客那时还能提售后，
+       * 状态却已经显示"已完成"—— 正是老板说的那种"他会以为被敷衍了"。
+       *
+       * 另外：有未处理完的售后时，定时任务那边会跳过（`decideAutoComplete`）。
+       */
       const autoCompleteDays = await this.getAutoCompleteDays();
       const autoCompleteAt =
         autoCompleteDays > 0
@@ -721,13 +735,25 @@ export class CustomRecipeDeliveryService {
     }).map((item) => item.code);
   }
 
+  /**
+   * 交付后多久自动变「已完成」（天）。
+   *
+   * **2026-10-18 改为读「售后窗口」**，不再读 `autoCompleteDays`。
+   *
+   * 为什么：`autoCompleteDays` 是旧机制"顾客不点确认收到就自动完成"的参数，
+   * 已被 V12 取消。现在「已完成」的含义是**售后窗口关闭**
+   * （需求 2.5.5："交付后满 7 天，系统自动变"），
+   * 所以天数必须跟售后窗口**同一个来源** —— 否则改了一个另一个不改，两边对不上。
+   *
+   * 取不到时回落到 7（与 schema 默认值一致），**不回落 3**。
+   */
   private async getAutoCompleteDays(): Promise<number> {
     try {
       const config = await this.configService.getConfig();
-      const value = Number(config.autoCompleteDays);
-      return Number.isInteger(value) && value > 0 ? value : 3;
+      const value = Number(config.aftersaleWindowDays);
+      return Number.isInteger(value) && value > 0 ? value : 7;
     } catch {
-      return 3;
+      return 7;
     }
   }
 }

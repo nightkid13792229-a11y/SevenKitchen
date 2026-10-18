@@ -27,7 +27,13 @@ describe('定制订单 · 取消退款与通知守卫', () => {
     expect(controller).toContain('createCustomRecipeRefund');
     expect(service).toContain('async cancelOrderByCustomer');
     expect(service).toContain('无权操作此订单');
-    expect(service).toContain('订单已开始制作，无法自助取消');
+    /**
+     * ⚠️ 2026-10-18：原来这里断言「订单已开始制作，无法自助取消」——
+     * 那锁的是被 **V39 推翻**的旧口径（"只要没交付，随时都可以退"）。
+     *
+     * 制作中**仍然没交付**，现在允许取消；真正的边界是**已交付**。
+     */
+    expect(service).toContain('订单已交付，不能取消');
   });
 
   it('退款失败就不取消订单（不能出现"取消了钱没退"）', () => {

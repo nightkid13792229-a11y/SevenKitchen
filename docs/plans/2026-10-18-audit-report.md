@@ -215,3 +215,40 @@ lines = (input.shopping?.lines ?? []).map((line) => ({
 | **合计** | **23 处** | **14 处** |
 
 **每一条都是「代码还停在旧决策上」或「数据层有、界面没用」。**
+
+---
+
+## 十二、排障记录：上传/预览报「在项目根目录未找到 app.json」
+
+### 现象
+
+构建产物完好（`dist/build/mp-weixin/app.json` 存在、45 个页面、624 个文件），
+`project.config.json` 的 `miniprogramRoot` 也对，但：
+
+```
+cli upload  → 错误：app.json: 在项目根目录未找到 app.json
+cli preview → 同样的错
+```
+
+**`preview` 也报同样的错**，说明**不是上传的问题**，是开发者工具**解析不到项目根**。
+
+### 解法
+
+```bash
+cd miniapp
+/Applications/wechatwebdevtools.app/Contents/MacOS/cli close --project "$(pwd)"
+sleep 5
+/Applications/wechatwebdevtools.app/Contents/MacOS/cli open  --project "$(pwd)"
+sleep 12
+/Applications/wechatwebdevtools.app/Contents/MacOS/cli upload --project "$(pwd)" --version "..." --desc "..." --lang zh
+```
+
+**关掉项目再重开**即恢复（上传拿到 `✔ upload`）。
+
+### 为什么值得记
+
+我一开始以为是自己把产物搞坏了，于是**白重建了一次**（`rm -rf dist` + 完整构建）。
+真正的原因是开发者工具侧的项目状态。
+
+**判别方法**：先跑 `cli preview` —— 它也报同样的错，就说明是工具侧状态，
+不是产物问题；产物问题只会让 upload 失败、preview 正常。

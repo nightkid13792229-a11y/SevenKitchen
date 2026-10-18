@@ -681,11 +681,11 @@ describe('custom recipe BCS gate · 与建档页统一为动作题（阶段 C6�
 })
 
 /**
- * 定制页首屏加载态（2026-10-04）
+ * 定制页首屏加载态（2026-10-04，2026-10-18 补读取失败态）
  *
  * 真实缺陷：狗狗档案是异步读的，请求还没回来页面就落到了"还没有狗狗档案"空态。
  * 一位明明有 3 只狗的顾客会被这句误报引导去重复建档。
- * 加载态、未登录态、空态必须是三个互斥的分支。
+ * 加载态、未登录态、读取失败态、真空态必须是四个互斥的分支。
  */
 describe('custom recipe first paint · 首屏加载态', () => {
   const submit = read(`${PAGE_DIR}/index.vue`)
@@ -693,20 +693,53 @@ describe('custom recipe first paint · 首屏加载态', () => {
   it('请求未回来之前显示"正在读取"，不显示"还没有狗狗档案"', () => {
     expect(submit).toContain('dogsLoading')
     expect(submit).toContain('正在读取狗狗档案')
-    // 三个分支互斥且顺序正确：未登录 → 加载中 → 空态。
-    // 2026-10-04：选狗器搬进 Banner 之后，这一组状态卡里不再有 picker 分支，
-    // 所以判据从"未登录 → 有档案 → 加载中 → 空态"变成上面这三支。
+    // 四个分支互斥且顺序正确：未登录 → 加载中 → 读取失败 → 空态。
     // 空态用带 </text> 的实际元素定位，避免命中注释里提到的同一句话。
     const needLoginIndex = submit.indexOf('v-if="needLogin"')
     const loadingIndex = submit.indexOf('v-else-if="dogsLoading"')
+    const failedIndex = submit.indexOf('v-else-if="dogsLoadFailed"')
     const emptyIndex = submit.indexOf('还没有狗狗档案</text>')
 
     expect(needLoginIndex).toBeGreaterThan(-1)
     expect(loadingIndex).toBeGreaterThan(needLoginIndex)
-    // 空态文案排在加载分支之后（v-else-if 分支）
-    expect(emptyIndex).toBeGreaterThan(loadingIndex)
-    // Banner 里的选狗器也必须在（三种状态卡之外的唯一选狗入口）
+    expect(failedIndex).toBeGreaterThan(loadingIndex)
+    // 空态文案排在读取失败分支之后（v-else-if 分支）
+    expect(emptyIndex).toBeGreaterThan(failedIndex)
+    // Banner 里的选狗器也必须在（几种状态卡之外的唯一选狗入口）
     expect(submit).toContain('v-if="dogOptions.length > 1"')
+  })
+
+  it('读取失败单独一态，绝不落到"创建狗狗档案"', () => {
+    expect(submit).toContain('const dogsLoadFailed = ref(false)')
+    expect(submit).toContain('狗狗档案没读出来')
+    expect(submit).toContain('不用重新建档')
+    expect(submit).toContain('@tap="loadDogs"')
+
+    const loadDogsSource =
+      submit.match(/const loadDogs = async \(\) => \{[\s\S]*?\n\};/)?.[0] || ''
+    expect(loadDogsSource).not.toBe('')
+    expect(loadDogsSource).toContain('dogsLoadFailed.value = true')
+    expect(loadDogsSource).toContain('dogsLoadFailed.value = false')
+    // 只有页面上本来就没有狗时，才切到"读取失败"卡
+    expect(loadDogsSource).toContain('if (dogOptions.value.length === 0)')
+
+    const showSource =
+      submit.match(/const showStatusSection = computed\([\s\S]*?\n\);/)?.[0] || ''
+    expect(showSource).toContain('dogsLoadFailed.value')
+  })
+
+  it('无狗时 Banner 不再写"请选择狗狗"，按状态给话', () => {
+    const heroTitleSource =
+      submit.match(/const heroTitle = computed\([\s\S]*?\n\}\);/)?.[0] || ''
+    expect(heroTitleSource).not.toBe('')
+    expect(heroTitleSource).toContain("if (needLogin.value) return '登录后选择狗狗'")
+    expect(heroTitleSource).toContain("if (dogsLoading.value) return '正在读取狗狗档案…'")
+    expect(heroTitleSource).toContain(
+      "if (dogOptions.value.length === 0) return '还没有狗狗档案'",
+    )
+    // 模板两处（多狗 picker / 单狗或空态）都改用 heroTitle
+    const titleBindings = submit.match(/\{\{ heroTitle \}\}/g) || []
+    expect(titleBindings.length).toBeGreaterThanOrEqual(2)
   })
 
   it('初始就是加载态，且无论成功失败都会退出加载态', () => {

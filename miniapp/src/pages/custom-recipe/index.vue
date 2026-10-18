@@ -20,21 +20,14 @@
           <image class="hero-card__avatar" :src="dogAvatarSrc" mode="aspectFill" />
           <view class="hero-card__name-block">
             <!--
-              没选时把话说全（2026-10-18）。
+              标题按状态给话（2026-10-18）：
+              未登录 / 读取中 / 0 只狗 / 多只狗未选，四种说法由 heroTitle 统一给，
+              不再在各处写死"请选择狗狗"。
 
               ⚠️ **不新增说明块** —— 2026-10-05 老板明确说过
               "不要那块「先选一下要给哪只狗狗定制」的说明，Banner 上的选择器本身就是引导"。
-
-              但只有三个字"请选择狗狗"时，养几十只狗的顾客会以为页面坏了。
-              所以在**同一个位置**把「有几只、点这里换」说出来，不占额外版面。
             -->
-            <text class="hero-card__title">
-              {{
-                selectedDog
-                  ? selectedDog.name || '狗狗'
-                  : `请选择狗狗（共 ${dogOptions.length} 只）`
-              }}
-            </text>
+            <text class="hero-card__title">{{ heroTitle }}</text>
             <text v-if="dogHeroLine" class="hero-card__line">{{ dogHeroLine }}</text>
             <text class="hero-card__switch">
               {{ selectedDog ? '切换 ▼' : '点这里选 ▼' }}
@@ -47,7 +40,7 @@
         <view class="hero-card__identity-inner">
           <image class="hero-card__avatar" :src="dogAvatarSrc" mode="aspectFill" />
           <view class="hero-card__name-block">
-            <text class="hero-card__title">{{ selectedDog ? (selectedDog.name || '狗狗') : '请选择狗狗' }}</text>
+            <text class="hero-card__title">{{ heroTitle }}</text>
             <text v-if="dogHeroLine" class="hero-card__line">{{ dogHeroLine }}</text>
           </view>
         </view>
@@ -204,6 +197,15 @@
       <view v-else-if="dogsLoading" class="no-dog-hint">
         <text class="no-dog-hint-title">正在读取狗狗档案…</text>
         <text class="no-dog-hint-desc">马上就好，读完就能选要定制的狗狗了。</text>
+      </view>
+
+      <!-- 读取失败：网络/后端异常也会让 dogOptions 为空。
+           不能把它当成"没有档案"——有狗的用户会被引导去重复建档。
+           这里只给重试，不给建档入口。 -->
+      <view v-else-if="dogsLoadFailed" class="no-dog-hint">
+        <text class="no-dog-hint-title">狗狗档案没读出来</text>
+        <text class="no-dog-hint-desc">网络或服务暂时不可用，先重试一次；不用重新建档，避免出现重复档案。</text>
+        <button class="no-dog-hint-btn" @tap="loadDogs">重试</button>
       </view>
 
       <!-- 无档案时的引导：原先只弹一句 toast，页面上没有任何建档入口，提交按钮永久不可用 -->
@@ -613,6 +615,15 @@ const selectedDog = ref<any>(null);
 const dogsLoading = ref(true);
 
 /**
+ * 狗狗档案读取失败（网络 / 后端异常）。
+ *
+ * 必须和"真的没有档案"分开：读取失败时页面若显示"还没有狗狗档案 +
+ * 创建狗狗档案"，有狗的用户会被引导去重复建档。
+ * 只有**成功读到 0 只狗**才显示建档引导。
+ */
+const dogsLoadFailed = ref(false);
+
+/**
  * 当前狗狗的体重管理计划（阶段 D1）。
  *
  * 进行中/in 维持期时才带出来 —— 计划才是顾客当下真正在执行的方案，
@@ -991,6 +1002,22 @@ const submitting = ref(false);
 const needLogin = ref(false);
 
 /**
+ * Banner 标题：未登录 / 读取中 / 真的没有档案 / 有狗未选，各有各的说法。
+ *
+ * 2026-10-18 修：无狗时原先写死「请选择狗狗」，可这块点不动 ——
+ * 明明没有狗可选，却摆一句"请选择"，和下方的建档引导打架。
+ * 现在按状态给话：没登录说"登录后选择"，读取中说"正在读取"，
+ * 真的 0 只狗说"还没有狗狗档案"，只有多只狗未选时才说"请选择（共 N 只）"。
+ */
+const heroTitle = computed(() => {
+  if (selectedDog.value) return selectedDog.value.name || '狗狗';
+  if (needLogin.value) return '登录后选择狗狗';
+  if (dogsLoading.value) return '正在读取狗狗档案…';
+  if (dogOptions.value.length === 0) return '还没有狗狗档案';
+  return `请选择狗狗（共 ${dogOptions.value.length} 只）`;
+});
+
+/**
  * 排期口径（2026-10-04 拍板）：顾客**不选日期**，前端也不传日期。
  *
  * 排期由后端"从今天起找最近的可接单工作日"（当天约满或遇公众假期顺延）决定，
@@ -1363,6 +1390,7 @@ const showStatusSection = computed(
     gateBlocked.value ||
     needLogin.value ||
     dogsLoading.value ||
+    dogsLoadFailed.value ||
     dogOptions.value.length === 0,
 );
 
@@ -1640,6 +1668,7 @@ const loadDogs = async () => {
     needLogin.value = true;
     dogOptions.value = [];
     selectedDog.value = null;
+    dogsLoadFailed.value = false;
     dogsLoading.value = false;
     return;
   }
@@ -1647,6 +1676,8 @@ const loadDogs = async () => {
   // 每次读档案都先回到加载态：否则从建档页返回重新拉取时，
   // 列表还没回来又会先闪一下"还没有狗狗档案"
   dogsLoading.value = true;
+  // 重试时先退出上次的失败态；本次成功/失败会重新决定
+  dogsLoadFailed.value = false;
 
   try {
     // 统一走 utils/api 的 request：它按全站统一响应结构 {code,message,data} 解包，
@@ -1661,6 +1692,7 @@ const loadDogs = async () => {
 
     if (res.code === 0 && res.data) {
       needLogin.value = false;
+      dogsLoadFailed.value = false;
       const dogs = Array.isArray(res.data) ? res.data : [];
 
       dogOptions.value = dogs.map((dog: any) => ({
@@ -1705,6 +1737,7 @@ const loadDogs = async () => {
       needLogin.value = true;
       dogOptions.value = [];
       selectedDog.value = null;
+      dogsLoadFailed.value = false;
       uni.showToast({
         title: '登录已过期，请重新登录',
         icon: 'none',
@@ -1714,6 +1747,16 @@ const loadDogs = async () => {
     }
 
     console.error('加载狗狗列表异常:', error);
+    /**
+     * 读取失败 ≠ 没有档案（2026-10-18）。
+     *
+     * 只有页面上本来就没有狗时才切到"读取失败"卡；
+     * 已经有狗时保留旧数据，只弹一次 toast —— 不能因为一次刷新失败
+     * 就把顾客的狗列表清空、或把他引去"创建狗狗档案"重复建档。
+     */
+    if (dogOptions.value.length === 0) {
+      dogsLoadFailed.value = true;
+    }
     uni.showToast({
       title: '网络错误，请检查后端服务',
       icon: 'none',

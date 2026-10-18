@@ -851,19 +851,23 @@ export class OrderService {
   /**
    * 计算这单能用掉多少「定制费抵扣」。
    *
-   * 已确认的业务口径：
-   *   - **只抵货款，不抵运费**
+   * 已确认的业务口径（**2026-10-18 按 V1 修正**）：
+   *   - **抵的是"最终总费用"，含运费** —— 09-25 那个"只抵货款"已被 V1 推翻
    *   - 额度绑定它产出的那道定制食谱（拿别的食谱抵不了）
-   *   - 余额结转：货款不够就只抵剩下的，余额留到下次
-   *   - **货款端直接减**：订单金额校验规则保持 货款+运费=总额 不变，
-   *     因此退款、结算、财务报表都不用改
+   *   - 余额结转：总额不够就只抵剩下的，余额留到下次
+   *   - **金额端拆成两段减**（先货款、后运费），
+   *     以保证 `货款 + 运费 = 总额` 这条校验规则不变，
+   *     退款/结算/财务报表都不用改
    *
    * 返回 null 表示这单没有可用抵扣。
    */
   private async resolveCustomRecipeCredit(params: {
     customerId?: string;
     recipeId?: string;
+    /** 货款（不含运费） */
     amountProduct: number;
+    /** 运费；抵扣抵完货款后还能继续抵它（V1 口径） */
+    amountShipping?: number;
   }): Promise<{
     customRecipeOrderId: string;
     applied: number;
@@ -881,9 +885,17 @@ export class OrderService {
     });
     if (!credit || credit.remaining <= 0) return null;
 
-    const applied = this.roundMoney(
-      Math.min(credit.remaining, params.amountProduct),
+    /**
+     * 能抵多少 = min(剩余额度, 货款 + 运费)。
+     *
+     * ⚠️ 2026-10-18 前这里只取 `amountProduct` —— 运费不参与，
+     * 于是"满 300 的额度抵一张 20 元运费的订单"时，运费永远抵不掉，
+     * 跟 V1 的"减免最终总费用"对不上。
+     */
+    const creditCap = this.roundMoney(
+      Math.max(0, params.amountProduct) + Math.max(0, params.amountShipping ?? 0),
     );
+    const applied = this.roundMoney(Math.min(credit.remaining, creditCap));
     if (applied <= 0) return null;
 
     return {
@@ -2567,6 +2579,8 @@ export class OrderService {
           customerId: dto.customerId,
           recipeId: itemDto.recipeId,
           amountProduct: pricing.productPrice,
+          // V1：抵的是最终总费用，所以要把运费一起算进可抵上限
+          amountShipping: shippingFee,
         }).catch((error) => {
           console.error(
             '[PreviewPricing] 定制抵扣查询失败，按不抵扣处理:',
@@ -2575,19 +2589,68 @@ export class OrderService {
           return null;
         });
 
-    // 口径：货款端直接减，运费不参与抵扣
-    const netProductAmount = customRecipeCredit
-      ? this.roundMoney(pricing.productPrice - customRecipeCredit.applied)
-      : pricing.productPrice;
+    /**
+     * 抵扣口径（2026-10-18 按 V1 改）。
+     *
+     * ## 改之前是错的
+     *
+     * 旧注释写着「只抵货款，不抵运费」—— 那是 **09-25 的决定**，
+     * 已被 2026-10-17 的 **V1 推翻**。老板原话：
+     *
+     *   "不要做复杂了，就是抵扣额度可以用于减免用户最终在成品订单中支付的总费用"
+     *
+     * 也就是**含运费**。
+     *
+     * ## 怎么拆才不破坏账
+     *
+     * 订单的金额校验规则是 `货款 + 运费 = 总额`，退款/结算/报表都按这个读。
+     * 所以不能直接把运费清零，而是把抵扣额**先抵货款、抵不完再抵运费**：
+     *
+     * ```
+     * 抵货款 = min(抵扣额, 货款)
+     * 抵运费 = 抵扣额 - 抵货款        ← 只有货款抵完了才动运费
+     * ```
+     *
+     * 这样 `净货款 + 净运费 = 净总额` 仍然成立，下游一处都不用改。
+     */
+    /**
+     * ⚠️ **再夹一次上限**，不能只依赖 resolver 那边。
+     *
+     * resolver 已经 cap 到「货款 + 运费」，但这两处是**分开两段代码**——
+     * 将来谁改了其中一处（比如加了"最多抵 X%"），另一处就会算出负运费。
+     * 金额算错是**不可回滚的**（顾客已经付了钱），所以这里再兜一次。
+     */
+    const maxApplicable = this.roundMoney(
+      Math.max(0, pricing.productPrice) + Math.max(0, shippingFee),
+    );
+    const safeApplied = customRecipeCredit
+      ? Math.min(Math.max(0, customRecipeCredit.applied), maxApplicable)
+      : 0;
+
+    const creditAppliedToProduct = customRecipeCredit
+      ? Math.min(safeApplied, pricing.productPrice)
+      : 0;
+    const creditAppliedToShipping = customRecipeCredit
+      ? this.roundMoney(safeApplied - creditAppliedToProduct)
+      : 0;
+
+    const netProductAmount = this.roundMoney(
+      pricing.productPrice - creditAppliedToProduct,
+    );
+    const netShippingAmount = this.roundMoney(shippingFee - creditAppliedToShipping);
 
     const pricingResult = {
       amountProduct: netProductAmount,
-      amountShipping: shippingFee,
-      amountTotal: this.roundMoney(netProductAmount + shippingFee),
-      // 抵扣元数据：金额本身已经含在（净）货款里，这些只用于展示与审计
+      amountShipping: netShippingAmount,
+      amountTotal: this.roundMoney(netProductAmount + netShippingAmount),
+      // 抵扣元数据：金额本身已经含在（净）金额里，这些只用于展示与审计
       ...(customRecipeCredit
         ? {
-            creditAmountApplied: customRecipeCredit.applied,
+            creditAmountApplied: this.roundMoney(safeApplied),
+            /** 其中抵在货款上的部分（2026-10-18 拆分，供对账用） */
+            creditAppliedToProduct: this.roundMoney(creditAppliedToProduct),
+            /** 其中抵在运费上的部分（V1：抵扣含运费） */
+            creditAppliedToShipping: this.roundMoney(creditAppliedToShipping),
             creditOriginalProductAmount:
               customRecipeCredit.originalProductAmount,
             customRecipeCreditOrderId: customRecipeCredit.customRecipeOrderId,

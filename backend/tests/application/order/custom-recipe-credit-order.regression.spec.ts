@@ -13,17 +13,30 @@ describe('定制费抵扣 · 下单链路', () => {
     'utf-8',
   );
 
-  it('只抵货款，运费不参与抵扣', () => {
+  it('★ 抵扣含运费（2026-10-18 · V1 推翻了 09-25 的"只抵货款"）', () => {
+    /**
+     * ⚠️ **这是一次需求覆盖，不是放松守卫。**
+     *
+     * 09-25 的决定是「只抵货款，不抵运费」，本用例当初就是锁它的。
+     * 2026-10-17 的 **V1** 明确推翻：
+     *   "不要做复杂了，就是抵扣额度可以用于减免用户最终在成品订单中支付的总费用"
+     *
+     * 也就是**含运费**。所以现在允许 `shippingFee - creditAppliedToShipping`。
+     *
+     * **但原守卫真正在意的那条不变量没变**：
+     * `货款 + 运费 = 总额` 必须仍然成立（退款/结算/报表都按这个读）。
+     */
     const start = source.indexOf('const netProductAmount =');
     expect(start).toBeGreaterThan(-1);
-    const block = source.slice(start, start + 600);
+    const block = source.slice(start - 800, start + 900);
 
-    // 净货款 = 原货款 − 抵扣；运费原样进入总额
-    expect(block).toContain('pricing.productPrice - customRecipeCredit.applied');
-    expect(block).toContain('netProductAmount + shippingFee');
-    // 运费行不能被抵扣污染
-    expect(block).not.toContain('shippingFee -');
-    expect(block).not.toContain('shippingFee + customRecipeCredit');
+    // 抵扣先抵货款、抵不完再抵运费
+    expect(block).toContain('creditAppliedToProduct');
+    expect(block).toContain('creditAppliedToShipping');
+    expect(block).toContain('shippingFee - creditAppliedToShipping');
+
+    // ★ 不变量：总额 = 净货款 + 净运费（不能被拆坏）
+    expect(block).toContain('netProductAmount + netShippingAmount');
   });
 
   it('成本口径的原始货款不被抵扣改写', () => {

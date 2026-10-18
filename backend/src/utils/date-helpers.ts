@@ -88,6 +88,15 @@ export async function getPublicHolidaysForYear(
     return holidayCache.get(year)!;
   }
 
+  /**
+   * 上次失败过、且还没到重试时间 → 直接回空，不去撞接口。
+   * （排期是主流程，不能被一个不可达的外部接口反复拖慢。）
+   */
+  const lastFailureAt = holidayFailureCache.get(year);
+  if (lastFailureAt && Date.now() - lastFailureAt < HOLIDAY_RETRY_AFTER_MS) {
+    return [];
+  }
+
   try {
     // ⚠️ 必须带超时。这是第三方公开接口（timor.tech），
     // 没有超时的话对方一慢，整条"提交定制订单"就会一直挂在网络上。
@@ -138,16 +147,46 @@ export async function getPublicHolidaysForYear(
 
     // Cache the result
     holidayCache.set(year, holidays);
+    holidayFailureCache.delete(year);
     return holidays;
   } catch (error) {
     console.error('[DateHelpers] Failed to fetch public holidays:', error);
   }
 
-  // Fallback: return empty array if API fails or times out.
-  // 缓存空结果，避免每次下单都去撞一遍不可达的接口。
-  holidayCache.set(year, []);
+  /**
+   * 失败兜底（2026-10-18 改，对应附录 B #4「法定节假日兜底」）。
+   *
+   * ## 改之前是错的
+   *
+   * 原实现把**空结果永久写进 `holidayCache`** —— 接口只要在**第一次**调用时
+   * 挂了（哪怕只是超时一次），那一年的节假日就**再也不会生效**，
+   * 一直到进程重启。而"顺延公众假期"在配置里是打开着的 ——
+   * 等于**静默失效**：老板以为在顺延，实际没有。
+   *
+   * ## 现在
+   *
+   * 失败**单独记时间**，`HOLIDAY_RETRY_AFTER_MS` 之后重试。
+   * 这样：
+   *   · 接口短暂抖动 → 几分钟后自动恢复，不用重启
+   *   · 接口长期不可达 → 仍然不阻塞排期（每次只用一次失败标记，不撞接口）
+   *
+   * ## 为什么不内置一份节假日表
+   *
+   * 中国法定节假日**每年由国务院公布**，内置表必然过期；
+   * 而且调休补班日每年都不一样，写死等于制造错误数据。
+   */
+  holidayFailureCache.set(year, Date.now());
   return [];
 }
+
+/**
+ * 失败过的那一年什么时候可以重试。
+ *
+ * 与"成功缓存"分开：成功是永久的（同一年的节假日不会变），
+ * 失败是临时的（接口可能只是刚才抖了一下）。
+ */
+const holidayFailureCache = new Map<number, number>();
+const HOLIDAY_RETRY_AFTER_MS = 10 * 60 * 1000;
 
 /**
  * Check if two dates are the same day

@@ -150,6 +150,52 @@ export const OPTION_SET_DEFINITIONS: readonly OptionSetDefinition[] = [
   },
 
   {
+    code: 'custom_recipe_current_food',
+    name: '目前在喂什么',
+    description: '定制页必填：决定过渡方案怎么写',
+    /**
+     * 为什么是 DATA 而不是 ENUM：库里存的是 VARCHAR(32)，不是枚举列 ——
+     * 以后加一种喂法（比如"冻干"）**不用改库**，加一条选项就行。
+     */
+    sourceType: 'DATA',
+    seed: [
+      { code: 'DRY', label: '干粮', tone: 'info', sortOrder: 10 },
+      { code: 'WET', label: '湿粮或罐头', tone: 'info', sortOrder: 20 },
+      { code: 'HOMEMADE', label: '自制', tone: 'info', sortOrder: 30 },
+      { code: 'RAW', label: '生骨肉', tone: 'info', sortOrder: 40 },
+      { code: 'MIXED', label: '混着喂', tone: 'info', sortOrder: 50 },
+    ],
+  },
+
+  {
+    code: 'custom_recipe_change_reason',
+    name: '为什么想换',
+    description: '定制页必填（多选）：直接决定配方方向',
+    sourceType: 'DATA',
+    seed: [
+      { code: 'HEALTHIER', label: '更健康', tone: 'success', sortOrder: 10 },
+      { code: 'MEDICAL', label: '疾病调理', tone: 'warning', sortOrder: 20 },
+      { code: 'PICKY', label: '挑食', tone: 'warning', sortOrder: 30 },
+      // 选它会要求顾客手填原因（changeReasonOther）
+      { code: 'OTHER', label: '其他', tone: 'info', sortOrder: 40 },
+    ],
+  },
+
+  {
+    code: 'custom_recipe_stomach',
+    name: '最近肠胃情况',
+    description: '定制页选填（多选）：换粮最常见的诱因',
+    sourceType: 'DATA',
+    seed: [
+      { code: 'NORMAL', label: '正常', tone: 'success', sortOrder: 10 },
+      { code: 'SOFT', label: '软便', tone: 'warning', sortOrder: 20 },
+      { code: 'CONSTIPATION', label: '便秘', tone: 'warning', sortOrder: 30 },
+      { code: 'VOMIT', label: '呕吐', tone: 'warning', sortOrder: 40 },
+      { code: 'TRANSITION_DIARRHEA', label: '换粮拉稀', tone: 'warning', sortOrder: 50 },
+    ],
+  },
+
+  {
     code: 'custom_recipe_aftersale_type',
     name: '定制售后类型',
     description: '顾客提交售后时可选的类型',

@@ -34,6 +34,16 @@ export interface CreateCustomRecipeOrderDTO {
   syncToHealthProfile: boolean;
   /** 顾客是否勾选了「需要健康管理」（与减重/维持/增重相互独立，2026-09-28） */
   needsHealthManagement?: boolean;
+
+  // ===== 2026-10-18 新增：需求 2.3.4「第二段：补充」=====
+  /** 目前在喂什么（code，必填）—— 决定过渡方案怎么写 */
+  currentFoodMain?: string | null;
+  /** 为什么想换（code 数组，必填） */
+  changeReasons?: string[];
+  /** 选「其他」时手填的原因 */
+  changeReasonOther?: string | null;
+  /** 最近肠胃情况（code 数组，选填） */
+  stomachConditions?: string[];
 }
 
 export interface UpdateCustomRecipeOrderDTO {

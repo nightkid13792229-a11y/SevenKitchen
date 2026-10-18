@@ -74,6 +74,13 @@ export class CustomRecipeController {
       allergies: dto.allergies || [],
       medicalConditions: dto.medicalConditions || [],
       additionalNotes: dto.additionalNotes,
+      // 2026-10-18：需求 2.3.4 第二段（只问档案里没有的）
+      currentFoodMain: dto.currentFoodMain || null,
+      changeReasons: Array.isArray(dto.changeReasons) ? dto.changeReasons : [],
+      changeReasonOther: dto.changeReasonOther || null,
+      stomachConditions: Array.isArray(dto.stomachConditions)
+        ? dto.stomachConditions
+        : [],
       preferredIngredients: dto.preferredIngredients || [],
       dislikedIngredients: dto.dislikedIngredients || [],
       attachmentUrls: dto.attachmentUrls || [],

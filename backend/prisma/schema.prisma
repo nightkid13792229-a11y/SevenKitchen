@@ -2434,6 +2434,25 @@ model CustomRecipeOrder {
   additionalNotes       String?                  @map("additional_notes")
   preferredIngredients  String[]                 @default([]) @map("preferred_ingredients")
   dislikedIngredients   String[]                 @default([]) @map("disliked_ingredients")
+  /// ===== 2026-10-18 新增：需求 2.3.4「第二段：补充（只问档案里没有的）」=====
+  ///
+  /// 为什么加这几个：交付物里要写「第 1 周按 7:3 混原来的粮，约 2 周过渡」——
+  /// 但"原来的粮"是什么，营养师不知道。没有这个输入，过渡方案只能写套话。
+  ///
+  /// 存 code（来自平台选项字典），不存中文 —— 中文会随文案调整而变，
+  /// 而且后台统计时没法聚合。选项本身由 `custom_recipe_current_food` 等字典提供。
+  ///
+  /// ⚠️ 注意：这跟旧字段 `preferredIngredients` / `dislikedIngredients` **不是一回事**。
+  /// 那两个是"爱吃什么/不吃什么"（2026-10-17 已决定拿掉，属低频），
+  /// 这里的 `currentFoodMain` 是"现在喂的是什么粮" —— 决定过渡方案，必填。
+  currentFoodMain       String?                  @map("current_food_main") @db.VarChar(32)
+  /// 为什么想换（多选，code 数组）
+  changeReasons         String[]                 @default([]) @map("change_reasons")
+  /// 选「其他」时顾客手填的原因
+  changeReasonOther     String?                  @map("change_reason_other") @db.VarChar(120)
+  /// 最近肠胃情况（多选，code 数组）：正常 / 软便 / 便秘 / 呕吐 / 换粮拉稀
+  stomachConditions     String[]                 @default([]) @map("stomach_conditions")
+
   attachments           Json?                    @map("attachments")
   scheduledDate         DateTime                 @map("scheduled_date") @db.Date
   estimatedDeliveryDate DateTime?                @map("estimated_delivery_date") @db.Date

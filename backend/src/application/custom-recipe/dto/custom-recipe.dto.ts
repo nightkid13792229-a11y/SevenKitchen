@@ -40,6 +40,36 @@ export class SubmitCustomRecipeOrderDTO {
   @IsOptional()
   additionalNotes?: string;
 
+  // ===== 2026-10-18 新增：需求 2.3.4「第二段：补充（只问档案里没有的）」=====
+
+  @ApiPropertyOptional({
+    description: '目前在喂什么（选项 code，来自 custom_recipe_current_food）',
+  })
+  @IsOptional()
+  @IsString()
+  currentFoodMain?: string;
+
+  @ApiPropertyOptional({
+    description: '为什么想换（选项 code 数组，来自 custom_recipe_change_reason）',
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  changeReasons?: string[];
+
+  @ApiPropertyOptional({ description: '选「其他」时手填的原因' })
+  @IsOptional()
+  @IsString()
+  changeReasonOther?: string;
+
+  @ApiPropertyOptional({
+    description: '最近肠胃情况（选项 code 数组，来自 custom_recipe_stomach）',
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  stomachConditions?: string[];
+
   @ApiPropertyOptional({ description: 'Preferred ingredients' })
   @IsOptional()
   @IsArray()

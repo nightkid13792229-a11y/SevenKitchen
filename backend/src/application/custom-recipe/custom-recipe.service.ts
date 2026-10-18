@@ -233,6 +233,11 @@ export class CustomRecipeService implements ICustomRecipeRepository {
             allergies: data.allergies || [],
             medicalConditions: data.medicalConditions || [],
             additionalNotes: data.additionalNotes,
+            // 2026-10-18：需求 2.3.4 第二段（只问档案里没有的）
+            currentFoodMain: data.currentFoodMain || null,
+            changeReasons: data.changeReasons || [],
+            changeReasonOther: data.changeReasonOther || null,
+            stomachConditions: data.stomachConditions || [],
             preferredIngredients: data.preferredIngredients || [],
             dislikedIngredients: data.dislikedIngredients || [],
             attachments: data.attachmentUrls || [],

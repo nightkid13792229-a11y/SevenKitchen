@@ -2430,6 +2430,13 @@ model CustomRecipeOrder {
   /// 「减重/维持/增重以顾客选的为准」，所以两者必须分开存。
   needsHealthManagement Boolean                  @default(false) @map("needs_health_management")
   allergies             String[]                 @default([]) @map("allergies")
+  /// ===== 2026-10-19 新增：过敏信息改为顾客自由文本 =====
+  ///
+  /// 为什么加：全局过敏原词表维护成本高、原料关联匹配难；
+  /// 顾客改为一个文本框 + 报告 AI 识别回填，文本原样进订单快照，
+  /// 设计器显示原文并由营养师 AI 辅助 + 人工核对。
+  /// `allergies` 数组保留：老订单/结构化记录仍可读，新订单可为空。
+  allergyText           String?                  @map("allergy_text") @db.VarChar(1000)
   medicalConditions     String[]                 @default([]) @map("medical_conditions")
   additionalNotes       String?                  @map("additional_notes")
   preferredIngredients  String[]                 @default([]) @map("preferred_ingredients")

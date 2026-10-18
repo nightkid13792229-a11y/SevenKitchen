@@ -120,7 +120,11 @@
             <text v-for="(item, index) in order.medicalConditions" :key="`c-${index}`" class="tag">{{ item }}</text>
           </view>
         </view>
-        <view class="tag-group" v-if="(order.allergies || []).length">
+        <view class="tag-group" v-if="order.allergyText">
+          <text class="tag-label">过敏信息</text>
+          <text class="allergy-text">{{ order.allergyText }}</text>
+        </view>
+        <view class="tag-group" v-else-if="(order.allergies || []).length">
           <text class="tag-label">过敏信息</text>
           <view class="tag-list">
             <text v-for="(item, index) in order.allergies" :key="`a-${index}`" class="tag">{{ item }}</text>
@@ -295,6 +299,8 @@ interface CustomRecipeOrderDetail {
   recipeId?: string | null;
   recipeName?: string | null;
   allergies?: string[];
+  /** 过敏自由文本（2026-10-19） */
+  allergyText?: string | null;
   medicalConditions?: string[];
   preferredIngredients?: string[];
   dislikedIngredients?: string[];
@@ -645,6 +651,7 @@ const hasRequirements = computed(() => {
   return Boolean(
     (value.medicalConditions || []).length ||
       (value.allergies || []).length ||
+      Boolean(value.allergyText) ||
       (value.preferredIngredients || []).length ||
       (value.dislikedIngredients || []).length ||
       value.additionalNotes,
@@ -1168,6 +1175,15 @@ const goOrders = () => {
   color: var(--sk-primary, #1e3a2f);
   background: var(--sk-primary-tint, #eef3ea);
   border-radius: 999rpx;
+}
+
+/* 2026-10-19：过敏自由文本，原文展示、可换行 */
+.allergy-text {
+  display: block;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #26261f;
+  white-space: pre-wrap;
 }
 
 .notes-block {

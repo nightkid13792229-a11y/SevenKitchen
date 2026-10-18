@@ -274,6 +274,8 @@ export interface DogDesignInsight {
     needsHealthManagement: boolean
     additionalNotes: string | null
     allergies: string[]
+    /** 过敏自由文本（2026-10-19）：订单快照，设计器原文展示 */
+    allergyText?: string | null
     medicalConditions: string[]
     preferredIngredients: string[]
     dislikedIngredients: string[]

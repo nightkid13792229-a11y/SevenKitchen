@@ -402,7 +402,8 @@ describe('custom recipe page · 档案带出与目标口径', () => {
     expect(page).toContain('fetchDogHealthSummary')
 
     // 后端这个汇总接口前端此前**从未调用过**
-    expect(page).toContain('formData.value.allergies = Array.isArray(summary.allergies)')
+    expect(page).toContain('const summaryAllergies = Array.isArray(summary.allergies)')
+    expect(page).toContain('formData.value.allergies = summaryAllergies')
     expect(page).toContain('formData.value.preferredIngredients = splitFoodText(summary.preferredFoods)')
     expect(page).toContain('formData.value.dislikedIngredients = splitFoodText(summary.pickyFoods)')
     // 读不到档案不能挡住下单
@@ -572,7 +573,9 @@ describe('定制页 · 过敏存档与知情同意下线', () => {
   })
 
   it('needsHealthManagement 按"这一单有没有填过敏"推导', () => {
-    expect(page).toContain('needsHealthManagement: formData.value.allergies.length > 0')
+    expect(page).toContain('needsHealthManagement:');
+    expect(page).toContain('formData.value.allergies.length > 0 ||');
+    expect(page).toContain('Boolean(formData.value.allergyText.trim())');
     // 疾病史已不再录入，不能拿它当依据
     expect(page).not.toContain('medicalConditions')
   })
@@ -1352,21 +1355,17 @@ describe('定制页 · 过敏快速选择是开关', () => {
     .filter((line) => !line.trim().startsWith('*') && !line.trim().startsWith('//'))
     .join('\n')
 
-  it('再点一下取消：同一个函数既加也删', () => {
-    expect(page).toContain('const toggleAllergenByName = (name: string) => {')
-    expect(page).toContain('@tap="toggleAllergenByName(name)"')
-    // 手输走 addAllergenByName（手输的那条档案里没有，不该一点就把已有记录删掉）
-    expect(page).toContain('const addAllergenByName = (name: string) => {')
+  it('过敏原改为纯文本：文本框 + 报告识别回填', () => {
+    expect(page).toContain('v-model="formData.allergyText"')
+    expect(page).toContain('<textarea')
+    expect(page).toContain('formData.value.allergyText')
+    // 2026-10-19：快捷标签/手输弹窗下线
+    expect(page).not.toContain('toggleAllergenByName')
+    expect(page).not.toContain('addAllergenByName')
 
-    const toggleSource =
-      page.match(/const toggleAllergenByName = \(name: string\) => \{[\s\S]*?\n\};/)?.[0] || ''
-    expect(toggleSource).not.toBe('')
-    // 已选中 → splice 掉
-    expect(toggleSource).toContain('formData.value.allergies.splice(index, 1)')
-    // 未选中 → push 进去
-    expect(toggleSource).toContain('formData.value.allergies.push(value)')
-    // 选中态只认一个判据，不会出现"看着选中其实没选中"
-    expect(page).toContain('isAllergenAdded(name)')
+    const scan = page.match(/function onAllergensScanned[\s\S]*?\n\}/)?.[0] || ''
+    expect(scan).toContain('formData.value.allergyText')
+    expect(scan).toContain('additions')
   })
 
   it('删掉"点一下就加，不用打字"这句提示', () => {
@@ -1379,9 +1378,9 @@ describe('定制页 · 过敏快速选择是开关', () => {
     expect(liveSource).not.toContain('enableHealthManagement')
     expect(liveSource).not.toContain('需要健康管理')
     expect(liveSource).not.toContain('toggleHealthManagement')
-    // 过敏板块的标题与手输、扫描、已传报告都在
+    // 过敏板块的标题与文本、扫描、已传报告都在
     expect(page).toContain('过敏信息')
-    expect(page).toContain('addAllergen')
+    expect(page).toContain('formData.allergyText')
     expect(page).toContain('<AllergyScanBlock')
     expect(page).toContain('已上传的检测报告')
   })
@@ -1543,13 +1542,14 @@ describe('定制页 · 第二轮精简（2026-10-05）', () => {
     expect(template).toContain('过敏信息')
   })
 
-  it('过敏标签流：选中不加勾；只有一块（2026-10-05 合并后）', () => {
+  it('过敏信息：纯文本框，不再有快捷标签', () => {
     expect(code).not.toContain("isAllergenAdded(name) ? ' ✓' : ''")
-    // 2026-10-05 老板要求把"快选 + 手输/识别清单"两块合成一条标签流
-    expect(code).toContain('const allergenChips = computed(')
-    expect(template).toContain('v-for="name in allergenChips"')
-    expect(template).not.toContain('v-for="(allergen, index) in formData.allergies"')
-    expect(template).not.toContain('removeCustomAllergen')
+    // 2026-10-19：快捷标签/全局词表从顾客侧下线
+    expect(code).not.toContain('allergenChips')
+    expect(code).not.toContain('commonAllergens')
+    expect(template).toContain('v-model="formData.allergyText"')
+    expect(template).toContain('<textarea')
+    expect(template).not.toContain('v-for="name in allergenChips"')
     expect(code).not.toContain('暂无过敏信息')
   })
 
@@ -1703,12 +1703,12 @@ describe('定制页 · 2026-10-05 第二批（6 条）', () => {
     expect(resolve).toContain("return '';")
   })
 
-  it('③ 「+ 添加」跟在过敏原标签流后面', () => {
-    const chips = template.indexOf('allergen-quick-add')
-    const addRow = template.indexOf('allergen-add-row')
-
-    expect(chips).toBeGreaterThan(-1)
-    expect(addRow).toBeGreaterThan(chips)
+  it('③ 过敏信息改为文本框，不再有「+ 添加」', () => {
+    expect(template).toContain('allergy-text')
+    expect(template).toContain('v-model="formData.allergyText"')
+    expect(template).not.toContain('allergen-quick-add')
+    expect(template).not.toContain('allergen-add-row')
+    expect(template).not.toContain('@tap="addAllergen"')
     // 顶部那行空标题栏（health-header）已经没有内容，整块删掉
     expect(template).not.toContain('health-header')
   })
@@ -1825,13 +1825,14 @@ describe('定制页 · 2026-10-05 第三批（4 条）', () => {
     expect(template).toContain('小家伙是否对部分食物过敏？')
     expect(template).toContain('@tap="answerFoodAllergy(true)"')
     expect(template).toContain('@tap="answerFoodAllergy(false)"')
-    // 录入界面整块收在"有过敏"分支里（快选、手输、扫描、已上传报告）
+    // 录入界面整块收在"有过敏"分支里（文本框、扫描、已上传报告）
     const editor = template.slice(
       template.indexOf('v-if="hasFoodAllergy === true"'),
       template.indexOf('v-else-if="hasFoodAllergy === false"'),
     )
-    expect(editor).toContain('allergen-quick-add')
-    expect(editor).toContain('addAllergen')
+    expect(editor).toContain('allergy-text')
+    expect(editor).toContain('v-model="formData.allergyText"')
+    expect(editor).toContain('<textarea')
     expect(editor).toContain('<AllergyScanBlock')
     expect(editor).toContain('allergyReports')
     // 没作答不能提交（否则"跳过"这件事只做了一半）
@@ -1844,7 +1845,7 @@ describe('定制页 · 2026-10-05 第三批（4 条）', () => {
     expect(code).not.toContain('noFoodAllergyNote')
     expect(template).not.toContain('不再新增过敏信息')
     // 档案里有过敏时默认答"有"（让家长再答一遍是多余的）
-    expect(code).toContain('if (formData.value.allergies.length > 0) {')
+    expect(code).toContain('if (formData.value.allergyText || summaryAllergies.length > 0) {')
     expect(code).toContain('hasFoodAllergy.value = true;')
     // 换狗要重新问（上一只狗的答案不能替新狗作答）
     expect(code).toContain('hasFoodAllergy.value = null;')

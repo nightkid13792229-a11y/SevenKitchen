@@ -73,6 +73,8 @@ export interface CustomRecipeOrderDetail {
   targetGoal?: string
   /** 下单当时顾客手填的过敏（快照，不会随档案更新） */
   allergies?: string[]
+  /** 过敏自由文本快照（2026-10-19） */
+  allergyText?: string | null
   medicalConditions?: string[]
   additionalNotes?: string | null
   preferredIngredients?: string[]

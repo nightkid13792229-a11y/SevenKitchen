@@ -18,6 +18,8 @@ export interface CreateCustomRecipeOrderDTO {
   dogId: string;
   targetGoal: TargetGoal;
   allergies: string[];
+  /** 过敏原自由文本（2026-10-19）：订单快照，设计器显示原文 */
+  allergyText?: string | null;
   medicalConditions: string[];
   additionalNotes?: string;
   preferredIngredients: string[];

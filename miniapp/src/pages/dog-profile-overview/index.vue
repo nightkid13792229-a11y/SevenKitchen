@@ -500,6 +500,11 @@
             <text class="allergy-tags__label">过敏原</text>
             <text class="allergy-tags__add" @tap="addAllergyFromOverview">+ 添加</text>
           </view>
+          <!-- 2026-10-19：定制页改为自由文本，这里把原文显示出来 -->
+          <view v-if="form.allergyFoods" class="allergy-tags__text">
+            <text class="allergy-tags__text-label">定制页 / 档案里的过敏文本</text>
+            <text class="allergy-tags__text-value">{{ form.allergyFoods }}</text>
+          </view>
           <view v-if="allergyNames.length > 0" class="allergy-tags__list">
             <view
               v-for="(name, index) in allergyNames"
@@ -513,7 +518,7 @@
               >×</text>
             </view>
           </view>
-          <text v-else class="allergy-tags__empty">
+          <text v-else-if="!form.allergyFoods" class="allergy-tags__empty">
             还没记过敏原。知道对什么过敏就在这里加一条；也可以在定制食谱里拍检测报告自动读。
           </text>
         </view>
@@ -646,6 +651,8 @@ interface DogProfileDetail {
   medicalRecords?: any[]
   checkupRecords?: any[]
   allergyRecords?: any[]
+  /** 过敏自由文本（定制页填写，2026-10-19） */
+  allergyFoods?: string
   pickyFoods?: string
   dirtyFields?: string[]
   [key: string]: any
@@ -767,6 +774,7 @@ const form = reactive<Record<string, any>>({
   medicalRecords: [],
   checkupRecords: [],
   allergyRecords: [],
+  allergyFoods: '',
   pickyFoods: '',
   // 活动量/餐数是否亲自选过（定制门槛按此判定，不看"有没有值"；
   // 体况的确认状态在上面的「体况确认状态」一组里）
@@ -1397,6 +1405,7 @@ function populateForm(nextProfile: DogProfileDetail) {
   form.medicalRecords = cloneDeep(mergedHealthState.medicalRecords)
   form.checkupRecords = cloneDeep(mergedHealthState.checkupRecords)
   form.allergyRecords = cloneDeep(mergedHealthState.allergyRecords)
+  form.allergyFoods = String(nextProfile.allergyFoods || '')
   form.pickyFoods = mergedHealthState.pickyFoods
   breedSearchKeyword.value = form.customBreedName || form.breedName || ''
   showManualBreedEntry.value = form.breedId === MIXED_BREED_VIRTUAL_ID
@@ -2699,6 +2708,30 @@ function goToHealthProfile() {
   font-size: 22rpx;
   line-height: 1.6;
   color: #8a8f83;
+}
+
+/* 定制页 / 档案里的过敏自由文本（2026-10-19） */
+.allergy-tags__text {
+  margin-top: 10rpx;
+  padding: 14rpx 18rpx;
+  background: #f7f9f1;
+  border: 1rpx solid #e3e6d4;
+  border-radius: 12rpx;
+}
+
+.allergy-tags__text-label {
+  display: block;
+  font-size: 22rpx;
+  color: #8a8f83;
+}
+
+.allergy-tags__text-value {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #26261f;
+  white-space: pre-wrap;
 }
 
 .allergy-tags__remove {

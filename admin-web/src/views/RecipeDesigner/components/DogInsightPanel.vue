@@ -133,14 +133,14 @@
 
           <div class="allergy-tier allergy-tier--note">
             <div class="allergy-tier__head">
-              <span class="allergy-tier__label">员工备注 · 会与上面的记录合并生效</span>
+              <span class="allergy-tier__label">档案里的过敏文本 · 会与上面的记录合并生效</span>
             </div>
             <div class="allergy-tier__text">{{ insight.dog.allergyFoods || '无' }}</div>
           </div>
 
           <div v-if="!hasAnyAllergy" class="allergy-panel__empty">
             这只狗没有记录任何过敏。有过敏史的话，让顾客在小程序
-            「健康管理 → 过敏」里记一条，或在下方的员工备注里补充。
+            「健康管理 → 过敏」里记一条，或在下方补充。
           </div>
         </div>
 
@@ -223,6 +223,12 @@
               <span class="label">健康管理</span>
               <span class="value" :class="{ empty: !insight.customRecipeOrder.needsHealthManagement }">
                 {{ insight.customRecipeOrder.needsHealthManagement ? '需要' : '未勾选' }}
+              </span>
+            </div>
+            <div class="profile-item full">
+              <span class="label">订单里填的过敏文本</span>
+              <span class="value allergy-text-value" :class="{ empty: !insight.customRecipeOrder.allergyText }">
+                {{ insight.customRecipeOrder.allergyText || '无' }}
               </span>
             </div>
             <div class="profile-item full">
@@ -825,6 +831,14 @@ defineExpose({ loadInsight })
 }
 .profile-item .value.empty {
   color: #c0c4cc;
+}
+/* 2026-10-19：订单里的过敏自由文本，原文展示、可换行 */
+.allergy-text-value {
+  padding: 6px 8px;
+  background: #fafafa;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  line-height: 1.6;
 }
 /* 每日目标能量卡片 */
 .energy-card {

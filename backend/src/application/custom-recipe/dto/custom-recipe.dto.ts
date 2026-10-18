@@ -10,6 +10,7 @@ import {
   IsDateString,
   IsBoolean,
   IsEnum,
+  MaxLength,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { TargetGoal, CustomAttachmentType } from '@prisma/client';
@@ -28,6 +29,18 @@ export class SubmitCustomRecipeOrderDTO {
   @IsArray()
   @IsString({ each: true })
   allergies?: string[];
+
+  /**
+   * 过敏原自由文本（2026-10-19）。
+   *
+   * 顾客在定制页只填一段文本；报告 AI 识别的结果也回填到这里。
+   * 订单快照原样保存，设计器显示原文，营养师 AI 辅助 + 人工核对。
+   */
+  @ApiPropertyOptional({ description: '过敏原自由文本（顾客填写/报告识别回填）' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  allergyText?: string;
 
   @ApiPropertyOptional({ description: 'Medical conditions' })
   @IsOptional()
@@ -234,6 +247,8 @@ export class CustomRecipeOrderDetailResponseDTO extends CustomRecipeOrderRespons
     activityLevel: string;
   };
   allergies!: string[];
+  /** 过敏原自由文本（2026-10-19）：订单快照，老订单为 null */
+  allergyText?: string | null;
   medicalConditions!: string[];
   preferredIngredients!: string[];
   dislikedIngredients!: string[];

@@ -298,37 +298,26 @@
           <!-- "这些是从档案带出来的"：不说明的话，顾客会以为是上次在这页填的 -->
           <text v-if="healthPrefillHint" class="health-prefill-hint">{{ healthPrefillHint }}</text>
 
-          <!-- 过敏原标签：**一块、一种样式**（2026-10-05 老板要求合并）。
-               改前是两块两色 —— 上面浅绿的常见过敏原快选、下面金色的
-               "手动/AI 识别"清单（还各带个「删除」），既乱又费版面。
-               现在合成一条标签流：常见过敏原在前，档案带出/报告识别/手输的
-               接在后面，**同一套配色、同一套交互**：
-                 · 未选 = 浅底，点了选中
-                 · 已选 = 深底，再点一下取消（等于原来那条「删除」）
-               选中态不加 ✓，靠高亮表示（老板 2026-10-05 的口径）。 -->
-          <view class="allergen-quick-add">
-            <view class="tag-list">
-              <view
-                v-for="name in allergenChips"
-                :key="name"
-                class="tag-item allergen-quick-tag"
-                :class="{ 'allergen-quick-tag--added': isAllergenAdded(name) }"
-                @tap="toggleAllergenByName(name)"
-              >{{ name }}</view>
-            </view>
-          </view>
-
-          <!-- 手动添加入口：紧跟在这条标签流后面（列表里没有的才需要手打） -->
-          <view class="allergen-add-row">
-            <text class="add-btn" @tap="addAllergen">+ 添加</text>
-          </view>
-
-          <!-- 一键清除之后给一条"撤销"：老板问"清除了还想恢复怎么办" ——
-               清除只是把这一单的选择清掉，撤销就是把它们放回去 -->
-          <view v-if="clearedAllergiesBackup" class="allergy-cleared">
-            <text class="allergy-cleared__text">
-              已清除这一单的过敏原（{{ clearedAllergiesBackup.length }} 项）
+          <!-- 2026-10-19：过敏原改为纯文本 + 报告 AI 回填。
+               顾客自己写、报告识别结果都进这一段；营养师在后台看原文。
+               快捷标签和全局词表不再出现在顾客侧。 -->
+          <view class="allergy-text">
+            <text class="allergy-text__label">过敏原 / 吃了会怎样</text>
+            <textarea
+              v-model="formData.allergyText"
+              class="allergy-text__input"
+              placeholder="例如：鸡肉、牛肉；吃鸡胸会挠；不确定的也写上"
+              maxlength="500"
+              auto-height
+            />
+            <text class="allergy-text__hint">
+              只写不能吃的；多个用顿号分开。不确定的也写上，营养师会核对。
             </text>
+          </view>
+
+          <!-- 一键清除之后给一条"撤销"：清的是这一单的过敏文本与已选记录 -->
+          <view v-if="clearedAllergiesBackup" class="allergy-cleared">
+            <text class="allergy-cleared__text">已清除这一单的过敏信息</text>
             <text class="allergy-cleared__undo" @tap="undoClearAllergies">撤销</text>
           </view>
 
@@ -340,7 +329,7 @@
             v-if="formData.dogId"
             :key="formData.dogId"
             :dog-id="formData.dogId"
-            :has-allergens="formData.allergies.length > 0"
+            :has-allergens="Boolean(formData.allergyText.trim()) || formData.allergies.length > 0"
             @scanned="onAllergensScanned"
             @clear-all="clearAllAllergies"
           />
@@ -660,24 +649,37 @@ const hasSelectedDog = computed(() => Boolean(formData.value.dogId));
 const hasFoodAllergy = ref<boolean | null>(null);
 
 /**
- * "一键清除"之前的那一份过敏原（撤销用）。
+ * "一键清除"之前的那一份过敏信息（撤销用）。
  *
- * 非空时页面上会出现一条「已清除 N 项 · 撤销」。
+ * 非空时页面上会出现一条「已清除这一单的过敏信息 · 撤销」。
  * 换狗或重新读档案时清空 —— 那份备份属于上一只狗/上一版档案。
  */
-const clearedAllergiesBackup = ref<string[] | null>(null);
+const clearedAllergiesBackup = ref<{ allergies: string[]; text: string } | null>(
+  null,
+);
 
 /**
- * 从档案带出来的过敏原（2026-10-17 修）。
+ * 从档案带出来的过敏文本（2026-10-19）。
  *
- * 为什么要单独记一份：界面上要显示「这些是从档案带出的」，
- * 但**不能一有过敏就显示** —— 顾客自己手动加的那些不是档案来的。
+ * 只用于显示「这些是从档案带出的」提示；顾客改过之后提示仍然成立，
+ * 因为内容确实是从档案带来的。
  */
-const prefilledAllergies = ref<string[]>([]);
+const prefilledAllergyText = ref('');
 
 /** 答题。答"有"展开录入界面；答"没有"只留一句说明 */
 function answerFoodAllergy(hasAllergy: boolean) {
   hasFoodAllergy.value = hasAllergy;
+  /**
+   * 2026-10-19：答「没有」时清掉这一单的过敏文本/数组。
+   *
+   * 否则顾客先填了再改成"没有"，隐藏的文本仍会跟着订单提交，
+   * 营养师会看到一份"顾客说没有过敏、却带着过敏原"的单子。
+   */
+  if (!hasAllergy) {
+    formData.value.allergies = [];
+    formData.value.allergyText = '';
+    clearedAllergiesBackup.value = null;
+  }
 }
 
 /**
@@ -703,15 +705,20 @@ const allergyReportPageCount = computed(() =>
  */
 function clearAllAllergies() {
   // 清之前先留一份：清错了能一键撤销（老板问"清除了还想恢复怎么办"）
-  clearedAllergiesBackup.value = [...formData.value.allergies];
+  clearedAllergiesBackup.value = {
+    allergies: [...formData.value.allergies],
+    text: formData.value.allergyText,
+  };
   formData.value.allergies = [];
+  formData.value.allergyText = '';
   uni.showToast({ title: '已清除，可点「撤销」恢复', icon: 'none' });
 }
 
 /** 撤销"一键清除"：把清掉的那一份放回去 */
 function undoClearAllergies() {
   if (!clearedAllergiesBackup.value) return;
-  formData.value.allergies = [...clearedAllergiesBackup.value];
+  formData.value.allergies = [...clearedAllergiesBackup.value.allergies];
+  formData.value.allergyText = clearedAllergiesBackup.value.text;
   clearedAllergiesBackup.value = null;
   uni.showToast({ title: '已恢复', icon: 'none' });
 }
@@ -936,6 +943,13 @@ const formData = ref({
   dogId: '',
   targetGoal: '',
   allergies: [] as string[],
+  /**
+   * 过敏原自由文本（2026-10-19）。
+   *
+   * 顾客只填这一段；报告 AI 识别的结果也回填到这里。
+   * 订单保存原文快照，设计器显示原文。
+   */
+  allergyText: '',
   /**
    * 2026-10-18：需求 2.3.4「第二段：补充（只问档案里没有的）」。
    *
@@ -1263,6 +1277,13 @@ const canSubmit = computed(() => {
   if (!hasOpenPlan.value && weightGoalChoice.value === null) return false;
   // 第二步那一问必须答：答"没有"才能跳过录入界面，所以不能默认成没答
   if (hasFoodAllergy.value === null) return false;
+  // 2026-10-19：答"有过敏"必须留下文本，否则营养师没有任何依据
+  if (
+    hasFoodAllergy.value === true &&
+    !formData.value.allergyText.trim()
+  ) {
+    return false;
+  }
   /**
    * 需求 2.3.4 的两项必填（2026-10-18）。
    *
@@ -1325,29 +1346,15 @@ const preferencePrefillHint = computed(() => {
 });
 
 /**
- * 「这些过敏原是从档案带出的」（2026-10-17 修）。
+ * 「这些过敏信息是从档案带出的」（2026-10-19 改为文本提示）。
  *
- * ## 这个 bug 是怎么来的
- *
- * 模板里一直有 `v-if="healthPrefillHint"`（早就写好了），
- * 但**脚本里从来没定义过这个变量** —— 于是那句话永远不会显示。
- *
- * 后果不是报错，而是**静默**：顾客打开定制页，过敏标签莫名其妙已经填好了几条，
- * **不知道是系统自动给的**，会以为是上次在这页填的、甚至以为填错了。
- *
- * ## 为什么要比对而不是只看"有没有"
- *
- * 顾客可以删掉档案带来的项、也能自己加新的。
- * 只有**当前列表里还留着至少一项档案带来的**，那句话才成立。
+ * 定制页现在是纯文本，不再逐项比对；只要还没被顾客清空，
+ * 这句提示就成立。
  */
 const healthPrefillHint = computed(() => {
-  const fromArchive = prefilledAllergies.value;
-  if (fromArchive.length === 0) return '';
-  const stillThere = fromArchive.filter((item) =>
-    formData.value.allergies.includes(item),
-  );
-  if (stillThere.length === 0) return '';
-  return `已从档案带出 ${stillThere.length} 项过敏原，可以直接修改或补充。`;
+  if (!prefilledAllergyText.value) return '';
+  if (!formData.value.allergyText.trim()) return '';
+  return '已从档案带出过敏信息，可以直接修改或补充。';
 });
 
 
@@ -1735,6 +1742,24 @@ function splitFoodText(raw: unknown): string[] {
 }
 
 /**
+ * 合并档案文本与档案里的结构化过敏原（2026-10-19）。
+ *
+ * 档案可能同时有：
+ *   · allergyFoods —— 以前/员工写的自由文本
+ *   · allergies —— 结构化记录（老数据/概览页添加）
+ * 两者都要给顾客看到；相同的部分不重复拼。
+ */
+function mergeAllergyText(left: string, right: string): string {
+  const a = String(left || '').trim();
+  const b = String(right || '').trim();
+  if (!a) return b;
+  if (!b) return a;
+  if (a.includes(b)) return a;
+  if (b.includes(a)) return b;
+  return `${a}；${b}`;
+}
+
+/**
  * 带出档案已有信息（决策 3）。
  *
  * 只**预填**，不覆盖顾客已经改过的东西：
@@ -1751,12 +1776,13 @@ const loadDogArchiveInfo = async (dogId: string) => {
 
   // ① 先清空上一只狗带出来的一切（含扫描出来的候选过敏原所在的报告列表）
   formData.value.allergies = [];
+  formData.value.allergyText = '';
   // "是否对食物过敏"这一问也要跟着换狗重置：上一只狗答过的答案
   // 不能替新狗作答（答"没有"会把新狗的录入界面藏起来）
   hasFoodAllergy.value = null;
   // 撤销用的备份也属于上一只狗
   clearedAllergiesBackup.value = null;
-  prefilledAllergies.value = [];
+  prefilledAllergyText.value = '';
   // 口味同理：它也会写进新狗的单子，留着上一只狗的口味没有意义
   formData.value.preferredIngredients = [];
   formData.value.dislikedIngredients = [];
@@ -1800,14 +1826,24 @@ const loadDogArchiveInfo = async (dogId: string) => {
      */
     healthSummary.value = summary;
 
-    formData.value.allergies = Array.isArray(summary.allergies)
+    const summaryAllergies = Array.isArray(summary.allergies)
       ? [...summary.allergies]
       : [];
-    // 记下这一批是档案带来的，供界面提示用
-    prefilledAllergies.value = [...formData.value.allergies];
-    // 档案里已经有过敏记录 → 这一问默认答"有过敏"（本来就是事实，
+    formData.value.allergies = summaryAllergies;
+    // 2026-10-19：档案里的自由文本 + 结构化记录都带出来，合并成一段文本
+    const profileText = String(
+      detailRes?.data?.profile?.allergyFoods ||
+        selectedDog.value?.allergyFoods ||
+        '',
+    ).trim();
+    formData.value.allergyText = mergeAllergyText(
+      profileText,
+      summaryAllergies.join('、'),
+    );
+    prefilledAllergyText.value = formData.value.allergyText;
+    // 档案里已经有过敏信息 → 这一问默认答"有过敏"（本来就是事实，
     // 让家长再答一遍反而是多一道题）；档案里没有就保持未答，等他选
-    if (formData.value.allergies.length > 0) {
+    if (formData.value.allergyText || summaryAllergies.length > 0) {
       hasFoodAllergy.value = true;
     }
     // 过敏可能刚从档案带出来，方向要跟着它算的体况对齐一次
@@ -1897,105 +1933,12 @@ const previewAttachment = (url: string) => {
   uni.previewImage({ urls: [url] });
 };
 
-const addAllergen = () => {
-  uni.showModal({
-    title: '添加过敏原',
-    editable: true,
-    placeholderText: '请输入过敏原',
-    success: (res) => {
-      if (res.confirm && res.content) {
-        // 手输的这一条档案里还没有，直接选中它；已有则不动（不能点一下就删掉）
-        addAllergenByName(res.content);
-      }
-    },
-  });
-};
-
-/**
- * 常见过敏原标签（2026-10-04 第六期统一）。
- *
- * 与「健康管理 → 过敏」的「一点即选」同一份清单、同一个口径。
- * 改造前定制页只能手打 —— 顾客在档案里点过的过敏原，
- * 到这里得重新回忆、重新拼写一遍。
- */
-const commonAllergens = ref<string[]>([
-  '鸡肉', '牛肉', '羊肉', '猪肉', '鸭肉', '鱼肉',
-  '鸡蛋', '牛奶', '小麦', '玉米', '大豆', '虾',
-]);
-
-/** 标签清单优先用后端词表（后台可维护、按循证常见度排），失败就用上面的兜底 */
-onMounted(async () => {
+onMounted(() => {
   // 2026-10-18：需求 2.3.4 的三组选项 + 2.3.5 的预估交付日期
   void ensureCurrentFoodOptions();
   void ensureChangeReasonOptions();
   void ensureStomachOptions();
   void loadEstimatedDelivery();
-
-  try {
-    const res: any = await dogApi.commonAllergens();
-    if (res?.code !== 0) return;
-    const list = Array.isArray(res?.data?.allergens) ? res.data.allergens : [];
-    const names = list
-      .map((item: any) => String(item?.name || '').trim())
-      .filter(Boolean);
-    if (names.length > 0) {
-      commonAllergens.value = names;
-    }
-  } catch {
-    // 读不到词表不是错误 —— 用兜底清单继续
-  }
-});
-
-/** 记一条过敏原（去重，不制造重复项） */
-const addAllergenByName = (name: string) => {
-  const value = String(name || '').trim();
-  if (!value) return;
-  if (formData.value.allergies.includes(value)) {
-    uni.showToast({ title: '已经加过这一条了', icon: 'none' });
-    return;
-  }
-  formData.value.allergies.push(value);
-};
-
-/**
- * 点一下标签 = 选中，再点一下 = 取消（2026-10-04 老板要求）。
- *
- * 改前只能"加"：点错了得跑到下面的过敏列表里找到那一条再点「删除」，
- * 同一个标签要管两处。现在标签自己就是开关，判定与显示用同一个
- * isAllergenAdded，不会出现"看着是选中、实际没选中"。
- */
-const toggleAllergenByName = (name: string) => {
-  const value = String(name || '').trim();
-  if (!value) return;
-
-  const index = formData.value.allergies.indexOf(value);
-  if (index >= 0) {
-    formData.value.allergies.splice(index, 1);
-    return;
-  }
-  formData.value.allergies.push(value);
-};
-
-const isAllergenAdded = (name: string) =>
-  formData.value.allergies.includes(String(name || '').trim());
-
-/**
- * 过敏原标签流 = 常见过敏原 + 这一单里其余已选（档案带出 / 报告识别 / 手输）。
- *
- * 2026-10-05 老板要求把原来"两块两色"（浅绿快选 + 金色手输清单）合成一块：
- *   · 常见过敏原在前（位置稳定，选中时标签不会跳来跳去）
- *   · 其余已选的接在后面（它们本来就不在清单里，只有被选中时才会出现）
- *   · 全部走同一套 toggle：点一下选中、再点一下取消
- */
-const allergenChips = computed(() => {
-  const common = commonAllergens.value.map((item) => String(item || '').trim());
-  const extras: string[] = [];
-  for (const item of formData.value.allergies) {
-    const value = String(item || '').trim();
-    if (!value || common.includes(value) || extras.includes(value)) continue;
-    extras.push(value);
-  }
-  return [...common, ...extras];
 });
 
 /**
@@ -2032,18 +1975,32 @@ async function loadAllergyReports(dogId: string) {
   }
 }
 
-/** 扫描确认后的过敏原并进这一单（去重，已记的跳过） */
+/** 扫描确认后的过敏原并进这一单的文本（去重，已在文本里的跳过） */
 function onAllergensScanned(payload: { allergens?: string[] }) {
   const list = Array.isArray(payload?.allergens) ? payload.allergens : [];
-  let added = 0;
+  const existingText = formData.value.allergyText.trim();
+  const additions: string[] = [];
   for (const name of list) {
     const value = String(name || '').trim();
-    if (!value || formData.value.allergies.includes(value)) continue;
-    formData.value.allergies.push(value);
-    added += 1;
+    if (!value) continue;
+    // 结构化数组留给老记录/概览页；文本是这一单的主口径
+    if (!formData.value.allergies.includes(value)) {
+      formData.value.allergies.push(value);
+    }
+    if (!existingText.includes(value) && !additions.includes(value)) {
+      additions.push(value);
+    }
+  }
+  if (additions.length > 0) {
+    formData.value.allergyText = [existingText, additions.join('、')]
+      .filter(Boolean)
+      .join('、');
   }
   uni.showToast({
-    title: added > 0 ? `已加入 ${added} 项过敏原` : '这几项档案里已经有了',
+    title:
+      additions.length > 0
+        ? `已把 ${additions.length} 项填进过敏文本，请核对`
+        : '这些过敏原已经在过敏文本里了',
     icon: 'none',
   });
   // 报告存好了，列表刷新一下（"已上传的检测报告"要立刻看得到）
@@ -2155,6 +2112,11 @@ const submitOrder = async () => {
       title = '请先选择：减重、维持还是增重';
     } else if (hasFoodAllergy.value === null) {
       title = '请先回答：小家伙是否对部分食物过敏';
+    } else if (
+      hasFoodAllergy.value === true &&
+      !formData.value.allergyText.trim()
+    ) {
+      title = '还差：过敏原（吃了会怎样也写上）';
     } else if (!formData.value.currentFoodMain) {
       // 需求 2.3.7：说清差哪一项，不能只变灰不动
       title = '还差：现在主要喂什么';
@@ -2233,7 +2195,9 @@ const submitOrder = async () => {
     const submitData = {
       ...formData.value,
       syncToHealthProfile: true,
-      needsHealthManagement: formData.value.allergies.length > 0,
+      needsHealthManagement:
+        formData.value.allergies.length > 0 ||
+        Boolean(formData.value.allergyText.trim()),
     };
 
     // 统一走 request()：只有 code === 0 才会 resolve，
@@ -2815,33 +2779,40 @@ const getBCSText = (bcsScore: number) => {
   margin-bottom: 0;
 }
 
-.add-btn {
-  padding: 8rpx 20rpx;
-  font-size: 24rpx;
-  color: var(--sk-gold, #b08d4f);
-  background: transparent;
-  border: 1rpx solid var(--sk-gold, #b08d4f);
-  border-radius: 999rpx;
+/* 过敏原自由文本（2026-10-19） */
+.allergy-text {
+  margin-top: 20rpx;
+  margin-bottom: 16rpx;
 }
 
-.tag-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14rpx;
-}
-
-.tag-item {
-  display: flex;
-  align-items: center;
-  padding: 12rpx 22rpx;
+.allergy-text__label {
+  display: block;
+  margin-bottom: 12rpx;
   font-size: 26rpx;
-  color: var(--sk-primary, #1e3a2f);
-  background: #ffffff;
-  border: 1rpx solid var(--sk-line, #e3e6d4);
-  border-radius: 999rpx;
+  font-weight: 700;
+  color: #3f3222;
 }
 
-/* 常见过敏原一点即选（2026-10-04 第六期统一） */
+.allergy-text__input {
+  width: 100%;
+  min-height: 150rpx;
+  padding: 20rpx;
+  font-size: 26rpx;
+  line-height: 1.6;
+  background: #ffffff;
+  border: 1rpx solid #e3e6d4;
+  border-radius: 14rpx;
+  box-sizing: border-box;
+}
+
+.allergy-text__hint {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #968f6d;
+}
+
 /* 已上传的检测报告（2026-10-04 从健康管理搬来） */
 .allergy-reports {
   margin-top: 16rpx;
@@ -2962,44 +2933,7 @@ const getBCSText = (bcsScore: number) => {
   border-bottom: 1rpx solid var(--sk-primary, #1e3a2f);
 }
 
-/* 手动添加入口：紧跟合并后的标签流（2026-10-05 起只有一条标签流） */
-.allergen-add-row {
-  display: flex;
-  margin-bottom: 16rpx;
-}
-
-.allergen-quick-add {
-  /* 与上面"是否有过敏"那个带边框的选择器拉开距离（老板反馈挨得太近） */
-  margin-top: 24rpx;
-  margin-bottom: 16rpx;
-}
-.allergen-quick-tag {
-  background: var(--sk-primary-tint, #eef3ea);
-}
-.allergen-quick-tag--added {
-  color: #ffffff;
-  background: var(--sk-primary, #1e3a2f);
-  border-color: var(--sk-primary, #1e3a2f);
-}
-.tag-item.editable {
-  background: var(--sk-gold-soft, #f6efe0);
-  border-color: rgba(176, 141, 79, 0.35);
-}
-
-.remove-btn {
-  margin-left: 12rpx;
-  font-size: 24rpx;
-  color: var(--sk-ink-3, #968f6d);
-}
-
-.empty-text {
-  font-size: 26rpx;
-  color: var(--sk-ink-3, #968f6d);
-}
-
-.add-btn {
-  display: inline-block;
-}
+/* 手动添加入口/常见标签已下线（2026-10-19 改为文本框） */
 
 .notes-input {
   width: 100%;

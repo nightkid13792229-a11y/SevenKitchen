@@ -93,7 +93,10 @@ describe('档案最新信息与来源标注（第 4 条）', () => {
   it('档案最新的过敏（结构化记录 + 设计备注）单独展示', () => {
     expect(orderDetail).toContain('过敏（档案最新）')
     expect(orderDetail).toContain('v-for="(record, index) in order.dog.allergyRecords"')
-    expect(orderDetail).toContain('设计备注里记录的过敏：{{ order.dog.allergyFoods }}')
+    expect(orderDetail).toContain('档案里的过敏文本：{{ order.dog.allergyFoods }}')
+    // 2026-10-19：订单里的自由文本快照单独展示
+    expect(orderDetail).toContain('过敏文本（下单时填写）')
+    expect(orderDetail).toContain('order.allergyText')
   })
 
   it('下单时填写的那份仍单独展示，两个口径不混在一起', () => {

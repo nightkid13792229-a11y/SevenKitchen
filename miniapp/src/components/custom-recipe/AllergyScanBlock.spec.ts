@@ -18,21 +18,35 @@ describe('定制食谱 · 过敏录入', () => {
       'utf-8',
     )
 
-  it('四条路都在：点选 / 手输 / 拍报告 / 看已传报告', () => {
+  it('顾客输入只剩：文本框 / 拍报告 / 看已传报告', () => {
     const source = page()
 
-    // 点选（常见过敏原）。2026-10-04 起标签是 toggle：点一下选中、再点一下取消，
-    // 所以这里锁的是 toggle 那条路，判定是否选中仍走 isAllergenAdded。
-    expect(source).toContain('toggleAllergenByName(name)')
-    expect(source).toContain('isAllergenAdded(name)')
-    // 手输
-    expect(source).toContain('addAllergen')
+    // 2026-10-19：过敏原改为纯文本，快捷标签/手输弹窗下线
+    expect(source).toContain('v-model="formData.allergyText"')
+    expect(source).toContain('<textarea')
     // 拍报告识别
     expect(source).toContain('<AllergyScanBlock')
     expect(source).toContain('@scanned="onAllergensScanned"')
     // 已传报告
     expect(source).toContain('allergyReports')
     expect(source).toContain('previewAllergyReport')
+    // 旧的快捷标签/手输入口不再出现
+    expect(source).not.toContain('toggleAllergenByName')
+    expect(source).not.toContain('addAllergen')
+  })
+
+  it('答"有过敏"必须留下文本才能提交', () => {
+    const source = page()
+    expect(source).toContain('hasFoodAllergy.value === true')
+    expect(source).toContain('!formData.value.allergyText.trim()')
+    expect(source).toContain('还差：过敏原')
+  })
+
+  it('答"没有过敏"会清掉已填文本，避免隐藏内容跟着提交', () => {
+    const source = page()
+    const answer = source.match(/function answerFoodAllergy[\s\S]*?\n\}/)?.[0] || ''
+    expect(answer).toContain('formData.value.allergies = []')
+    expect(answer).toContain("formData.value.allergyText = ''")
   })
 
   it('识别结果要家长确认才生效，不是 AI 自己写进档案', () => {
@@ -155,9 +169,12 @@ describe('过敏报告 · 按钮文案与一键清除', () => {
     const source = page()
 
     expect(source).toContain('@clear-all="clearAllAllergies"')
-    expect(source).toContain(':has-allergens="formData.allergies.length > 0"')
+    expect(source).toContain(
+      ':has-allergens="Boolean(formData.allergyText.trim()) || formData.allergies.length > 0"',
+    )
     const clear = source.match(/function clearAllAllergies\(\)[\s\S]*?\n\}/)?.[0] || ''
     expect(clear).toContain('formData.value.allergies = []')
+    expect(clear).toContain("formData.value.allergyText = ''")
     // 不该去调删除档案里过敏记录的接口
     expect(clear).not.toContain('remove')
   })
@@ -197,14 +214,16 @@ describe('过敏报告 · 第六批（提醒合并 / 单张删除 / 标签合并
   it('一键清除之后能给"撤销"（老板问：清除了还想恢复怎么办）', () => {
     const source = page()
 
-    expect(source).toContain('const clearedAllergiesBackup = ref<string[] | null>(null)')
+    expect(source).toContain('const clearedAllergiesBackup = ref<{ allergies: string[]; text: string } | null>')
     const clear = source.match(/function clearAllAllergies\(\)[\s\S]*?\n\}/)?.[0] || ''
-    // 清之前先备份
-    expect(clear).toContain('clearedAllergiesBackup.value = [...formData.value.allergies]')
+    // 清之前先备份（文本 + 结构化数组）
+    expect(clear).toContain('clearedAllergiesBackup.value = {')
+    expect(clear).toContain('text: formData.value.allergyText')
     const undo = source.match(/function undoClearAllergies\(\)[\s\S]*?\n\}/)?.[0] || ''
-    expect(undo).toContain('formData.value.allergies = [...clearedAllergiesBackup.value]')
+    expect(undo).toContain('formData.value.allergies = [...clearedAllergiesBackup.value.allergies]')
+    expect(undo).toContain('formData.value.allergyText = clearedAllergiesBackup.value.text')
     // 界面上要有撤销入口
-    expect(source).toContain('clearedAllergiesBackup.length }} 项')
+    expect(source).toContain('已清除这一单的过敏信息')
     expect(source).toContain('@tap="undoClearAllergies"')
     // 换狗时备份要清掉（那是上一只狗的）
     expect(source).toContain('clearedAllergiesBackup.value = null')
@@ -224,20 +243,14 @@ describe('过敏报告 · 第六批（提醒合并 / 单张删除 / 标签合并
     expect(remove).toContain('await loadAllergyReports(dogId)')
   })
 
-  it('过敏原标签合并成一块：常见 + 其余已选，同一套配色与 toggle', () => {
+  it('不再有常见过敏原快捷标签；报告结果回填到文本', () => {
     const source = page()
 
-    const chips = source.match(/const allergenChips = computed\([\s\S]*?\n\}\);/)?.[0] || ''
-    expect(chips).toContain('commonAllergens.value')
-    expect(chips).toContain('formData.value.allergies')
-    // 常见在前、其余接在后面（位置稳定，选中时标签不跳）
-    expect(chips).toContain('return [...common, ...extras]')
-    // 两块两色的痕迹都清掉（只看过敏信息这一段：饮食偏好那边仍用同一套标签样式）
-    expect(source).not.toContain('removeCustomAllergen')
-    const allergySection = source.slice(
-      source.indexOf('<text class="title-text">过敏信息</text>'),
-      source.indexOf('<text class="title-text">饮食偏好（可选）</text>'),
-    )
-    expect(allergySection).not.toContain('tag-item editable')
+    expect(source).not.toContain('allergenChips')
+    expect(source).not.toContain('commonAllergens')
+    expect(source).not.toContain('toggleAllergenByName')
+    const scan = source.match(/function onAllergensScanned[\s\S]*?\n\}/)?.[0] || ''
+    expect(scan).toContain('formData.value.allergyText')
+    expect(scan).toContain('additions')
   })
 })

@@ -231,6 +231,8 @@ export class CustomRecipeService implements ICustomRecipeRepository {
             targetGoal: data.targetGoal,
             needsHealthManagement: data.needsHealthManagement === true,
             allergies: data.allergies || [],
+            // 2026-10-19：顾客自由文本快照；老订单为 null
+            allergyText: data.allergyText?.trim() || null,
             medicalConditions: data.medicalConditions || [],
             additionalNotes: data.additionalNotes,
             // 2026-10-18：需求 2.3.4 第二段（只问档案里没有的）
@@ -264,6 +266,8 @@ export class CustomRecipeService implements ICustomRecipeRepository {
               dislikedIngredients: data.dislikedIngredients || [],
             },
           );
+          // 2026-10-19：自由文本合并进狗狗档案（保留旧文本，不静默覆盖）
+          await this.mergeAllergyTextTx(tx, data.dogId, data.allergyText);
           await tx.customRecipeOrder.update({
             where: { id: order.id },
             data: { healthInfoSyncedAt: new Date() },
@@ -2157,6 +2161,46 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       dietPreferences.preferredIngredients || [],
       dietPreferences.dislikedIngredients || [],
     );
+  }
+
+  /**
+   * 把顾客填的过敏自由文本合并进 `dog.allergyFoods`（2026-10-19）。
+   *
+   * 合并而不是覆盖：旧文本可能是员工备注或历史记录，
+   * 不能因为这一单没提到就丢掉。用「；」分隔；已被包含时不重复追加。
+   */
+  private async mergeAllergyTextTx(
+    tx: any,
+    dogId: string,
+    allergyText?: string | null,
+  ): Promise<void> {
+    const incoming = String(allergyText || '').trim();
+    if (!incoming) return;
+
+    const dog = await tx.dog.findUnique({
+      where: { id: dogId },
+      select: { allergyFoods: true },
+    });
+    if (!dog) return;
+
+    const existing = String(dog.allergyFoods || '').trim();
+    let next = existing;
+    if (!existing) {
+      next = incoming;
+    } else if (existing.includes(incoming)) {
+      next = existing;
+    } else if (incoming.includes(existing)) {
+      next = incoming;
+    } else {
+      next = `${existing}；${incoming}`;
+    }
+
+    if (next !== existing) {
+      await tx.dog.update({
+        where: { id: dogId },
+        data: { allergyFoods: next },
+      });
+    }
   }
 
   /** 把这次的饮食偏好并进档案（自由文本 + 结构化表），不覆盖旧内容 */

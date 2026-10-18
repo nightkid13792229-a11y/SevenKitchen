@@ -56,6 +56,9 @@ describe('CustomRecipeService · 同步到狗狗健康档案', () => {
     // 提交定制单现在会先校验"这只狗是不是你的"
     dog: {
       findFirst: jest.fn().mockResolvedValue({ id: 'dog-1', ownerId: 'user-1' }),
+      // 2026-10-19：过敏自由文本合并要先读 allergyFoods，再按需 update
+      findUnique: jest.fn(),
+      update: jest.fn(),
     },
     customRecipeSchedule: {
       findUnique: jest.fn(),
@@ -135,6 +138,8 @@ describe('CustomRecipeService · 同步到狗狗健康档案', () => {
     mockPrismaService.customRecipeOrder.update.mockResolvedValue({});
     mockPrismaService.allergyRecord.findFirst.mockResolvedValue(null);
     mockPrismaService.medicalRecord.findFirst.mockResolvedValue(null);
+    mockPrismaService.dog.findUnique.mockResolvedValue({ allergyFoods: null });
+    mockPrismaService.dog.update.mockResolvedValue({});
     allergyCreate.mockResolvedValue({});
     medicalCreate.mockResolvedValue({});
   });
@@ -232,5 +237,51 @@ describe('CustomRecipeService · 同步到狗狗健康档案', () => {
         }),
       }),
     );
+  });
+
+  // ===== 2026-10-19：过敏自由文本（顾客文本 + 报告识别回填）=====
+
+  it('过敏自由文本写入订单快照', async () => {
+    await submit({ allergyText: '鸡肉、牛肉' });
+
+    const data = mockPrismaService.customRecipeOrder.create.mock.calls[0][0].data;
+    expect(data.allergyText).toBe('鸡肉、牛肉');
+  });
+
+  it('过敏自由文本并进 dog.allergyFoods（空档案直接写）', async () => {
+    await submit({ allergyText: '鸡肉、牛肉' });
+
+    expect(mockPrismaService.dog.update).toHaveBeenCalledWith({
+      where: { id: 'dog-1' },
+      data: { allergyFoods: '鸡肉、牛肉' },
+    });
+  });
+
+  it('已有过敏文本时合并，不覆盖旧内容', async () => {
+    mockPrismaService.dog.findUnique.mockResolvedValue({ allergyFoods: '鹿肉' });
+
+    await submit({ allergyText: '鸡肉、牛肉' });
+
+    expect(mockPrismaService.dog.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { allergyFoods: '鹿肉；鸡肉、牛肉' },
+      }),
+    );
+  });
+
+  it('相同/包含的文本不重复追加', async () => {
+    mockPrismaService.dog.findUnique.mockResolvedValue({
+      allergyFoods: '鸡肉、牛肉',
+    });
+
+    await submit({ allergyText: '鸡肉' });
+
+    expect(mockPrismaService.dog.update).not.toHaveBeenCalled();
+  });
+
+  it('syncToHealthProfile 关掉时不合并过敏文本', async () => {
+    await submit({ allergyText: '鸡肉', syncToHealthProfile: false });
+
+    expect(mockPrismaService.dog.update).not.toHaveBeenCalled();
   });
 });

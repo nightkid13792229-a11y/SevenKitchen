@@ -250,8 +250,14 @@
             </template>
             <span v-else-if="!order.dog?.allergyFoods" class="empty-text">档案里没有过敏记录</span>
             <div v-if="order.dog?.allergyFoods" class="source-note">
-              设计备注里记录的过敏：{{ order.dog.allergyFoods }}
+              档案里的过敏文本：{{ order.dog.allergyFoods }}
             </div>
+          </el-descriptions-item>
+          <el-descriptions-item label="过敏文本（下单时填写）">
+            <div v-if="order.allergyText" class="allergy-text-block">
+              {{ order.allergyText }}
+            </div>
+            <span v-else class="empty-text">无</span>
           </el-descriptions-item>
           <el-descriptions-item label="过敏史（下单时填写）">
             <el-tag
@@ -294,7 +300,7 @@
           </el-descriptions-item>
         </el-descriptions>
         <p class="source-hint">
-          「档案最新」来自顾客的健康档案与设计备注，顾客之后改了这里会跟着变；
+          「档案最新」来自顾客的健康档案、定制页填写与员工备注，顾客之后改了这里会跟着变；
           「下单时填写」是下单当天的快照，不会变。两者不一致时以上面提示为准。
         </p>
         <div v-if="order.additionalNotes" class="notes-section">
@@ -1624,6 +1630,12 @@ h3 {
   font-size: 12px;
   color: #909399;
   line-height: 1.6;
+}
+
+.allergy-text-block {
+  white-space: pre-wrap;
+  line-height: 1.6;
+  color: #303133;
 }
 
 .overdue-tag {

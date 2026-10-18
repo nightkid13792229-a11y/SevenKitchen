@@ -72,6 +72,8 @@ export class CustomRecipeController {
       dogId: dto.dogId,
       targetGoal: dto.targetGoal,
       allergies: dto.allergies || [],
+      // 2026-10-19：顾客自由文本（报告识别也回填到这里）
+      allergyText: dto.allergyText ?? null,
       medicalConditions: dto.medicalConditions || [],
       additionalNotes: dto.additionalNotes,
       // 2026-10-18：需求 2.3.4 第二段（只问档案里没有的）
@@ -331,6 +333,8 @@ export class CustomRecipeController {
       recipeName: order.recipe?.name ?? null,
       recipeCoverImageUrl: order.recipe?.coverImageUrl ?? null,
       allergies: order.allergies,
+      // 2026-10-19：自由文本原样返回（老订单为 null）
+      allergyText: order.allergyText ?? null,
       medicalConditions: order.medicalConditions,
       preferredIngredients: order.preferredIngredients,
       dislikedIngredients: order.dislikedIngredients,

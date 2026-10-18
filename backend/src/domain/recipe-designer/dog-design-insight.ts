@@ -108,6 +108,8 @@ export interface DogDesignInsight {
     /** 顾客填的备注（原样给出，供营养师阅读） */
     additionalNotes: string | null;
     allergies: string[];
+    /** 过敏原自由文本（2026-10-19）：订单快照，设计器原文显示 */
+    allergyText?: string | null;
     medicalConditions: string[];
     preferredIngredients: string[];
     dislikedIngredients: string[];

@@ -160,7 +160,17 @@ describe('CustomRecipeService · 顾客自助取消', () => {
     expect(rebooked).toBeTruthy();
   });
 
-  it('已开始制作的单不能自助取消（要联系客服）', async () => {
+  /**
+   * ⚠️ 2026-10-18 改：**制作中也能自助取消**（V39 覆盖了之前的做法）。
+   *
+   * 老板原话："只要还没交付，随时都可以退，没有问题，我是这个意思"
+   *
+   * 原来的用例锁的是「已开始制作不能取消」—— 那与 V39 冲突：
+   * 制作中仍然**没交付**，顾客就该能退。
+   *
+   * 代价（可能已买食材）是老板明确接受的。
+   */
+  it('★ 制作中也能自助取消（V39：只要没交付就能退）', async () => {
     orderFindUnique.mockResolvedValue({
       id: 'cr-uuid-1',
       orderId: 'CR202609280001',
@@ -169,9 +179,26 @@ describe('CustomRecipeService · 顾客自助取消', () => {
       scheduledDate: new Date('2099-06-01'),
     });
 
+    const result = await service.cancelOrderByCustomer(
+      'CR202609280001',
+      'user-1',
+      refundOk,
+    );
+    expect(result.cancelled).toBe(true);
+  });
+
+  it('★ 已交付的单不能取消（要转售后）', async () => {
+    orderFindUnique.mockResolvedValue({
+      id: 'cr-uuid-1',
+      orderId: 'CR202609280001',
+      customerId: 'user-1',
+      status: CustomRecipeStatus.DELIVERED,
+      scheduledDate: new Date('2099-06-01'),
+    });
+
     await expect(
       service.cancelOrderByCustomer('CR202609280001', 'user-1', refundOk),
-    ).rejects.toThrow('已开始制作');
+    ).rejects.toThrow('已交付');
     expect(
       mockPrismaService.customRecipeOrder.updateMany,
     ).not.toHaveBeenCalled();

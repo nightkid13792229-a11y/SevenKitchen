@@ -874,15 +874,29 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       throw new BadRequestException('无权操作此订单');
     }
 
+    /**
+     * 什么时候顾客能自助取消（2026-10-18 按 V39 改）。
+     *
+     * 老板原话（V39）：
+     *   "只要还没交付，随时都可以退，没有问题，我是这个意思"
+     *
+     * 所以口径是**「交付前」**，而不是"还没开始做"——
+     * 此前把 `IN_PROGRESS`（制作中）排除在外、提示"已开始制作，请联系客服"，
+     * 与 V39 冲突：制作中仍然**没交付**，顾客就该能退。
+     *
+     * 代价是可能已经买了食材 —— 但那是**老板明确接受的**风险
+     * （"不要做复杂了"），不能因此把顾客卡住。
+     */
     const cancellable: CustomRecipeStatus[] = [
       CustomRecipeStatus.PENDING_PAYMENT,
       CustomRecipeStatus.PAID,
+      CustomRecipeStatus.IN_PROGRESS,
     ];
 
     if (!cancellable.includes(order.status)) {
       throw new BadRequestException(
-        order.status === CustomRecipeStatus.IN_PROGRESS
-          ? '订单已开始制作，无法自助取消，请联系客服'
+        order.status === CustomRecipeStatus.DELIVERED
+          ? '订单已交付，不能取消；如果有问题请提交售后'
           : '该订单当前状态无法取消',
       );
     }

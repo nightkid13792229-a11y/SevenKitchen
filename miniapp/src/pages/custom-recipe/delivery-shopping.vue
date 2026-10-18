@@ -126,6 +126,44 @@
       </view>
 
       <!--
+        制作设备推荐（2026-10-18 · 需求 2.4.2 ⑦ / V56）
+
+        老板："也需要有制作设备推荐的板块"。
+
+        数据来自 `/global-config` 的 `equipmentRecommendations` ——
+        它是**全局配置**（不是每份食谱不同），所以不进交付快照：
+        快照是冻结的，设备清单会随运营调整，塞进快照就等于锁死了。
+
+        **拿不到就整块不画**（不占版面、不留空壳）。
+      -->
+      <view v-if="equipmentList.length" class="section">
+        <view class="section-title">制作设备</view>
+        <view class="equipment-row-list">
+          <view
+            v-for="item in equipmentList"
+            :key="item.id"
+            class="equipment-row"
+            @tap="openEquipment(item)"
+          >
+            <image
+              v-if="item.imageUrl"
+              :src="item.imageUrl"
+              class="equipment-row__icon"
+              mode="aspectFill"
+            />
+            <view v-else class="equipment-row__icon equipment-row__icon--empty">
+              <text class="equipment-row__initial">{{ item.name.slice(0, 1) }}</text>
+            </view>
+            <view class="equipment-row__text">
+              <text class="equipment-row__name">{{ item.name }}</text>
+              <text v-if="item.reason" class="equipment-row__reason">{{ item.reason }}</text>
+            </view>
+            <text v-if="item.purchaseLink" class="equipment-row__action">去买 ›</text>
+          </view>
+        </view>
+      </view>
+
+      <!--
         存长图（2026-10-16 批次 2.7）。
         用途很实在：买菜时直接把图给摊主看，或者打印出来贴冰箱上。
 
@@ -164,6 +202,7 @@ import { PrintCanvasBuilder } from '@/utils/print-canvas';
 import { drawDeliverySheet } from '@/utils/delivery-print';
 import { saveSupplementPurchaseDraft } from '@/api/supplements';
 import { getBaseUrl } from '@/utils/config';
+import { request } from '@/utils/api';
 
 const orderId = ref('');
 const loading = ref(true);
@@ -228,6 +267,51 @@ const foodUsageRows = computed(() => {
  *
  * 拿不到就**整颗按钮不显示** —— 顾客看到按钮点进去必然失败，还不如不显示。
  */
+/**
+ * 制作设备推荐（2026-10-18 · 需求 2.4.2 ⑦）
+ *
+ * 从 `/global-config` 取，**不进交付快照** —— 设备清单是运营随时会调的全局配置，
+ * 塞进快照等于锁死在某一次交付里。
+ *
+ * 拿不到就空数组 → 整块不画。
+ */
+const equipmentList = ref<
+  Array<{
+    id: string;
+    name: string;
+    reason?: string | null;
+    imageUrl?: string | null;
+    purchaseLink?: string | null;
+  }>
+>([]);
+
+async function loadEquipment() {
+  try {
+    const res: any = await request({
+      url: '/global-config',
+      method: 'GET',
+      quiet: true,
+      suppressErrorToast: true,
+    } as any);
+    const list = res?.data?.equipmentRecommendations;
+    equipmentList.value = Array.isArray(list) ? list : [];
+  } catch {
+    // 设备推荐是"锦上添花"的东西，取不到就不画，不能让交付页挂掉
+    equipmentList.value = [];
+  }
+}
+
+/** 有购买链接就跳转；没有就什么都不做（别弹"暂不支持"这种废话） */
+function openEquipment(item: { name: string; purchaseLink?: string | null }) {
+  if (!item.purchaseLink) return;
+  uni.navigateTo({
+    url: `/pages/webview/index?url=${encodeURIComponent(item.purchaseLink)}`,
+    fail: () => {
+      uni.showToast({ title: '链接暂时打不开', icon: 'none' });
+    },
+  });
+}
+
 const canBuySupplements = computed(() => {
   const list = content.value.supplements || [];
   if (list.length === 0) return false;
@@ -473,6 +557,8 @@ const goRecipe = () => {
 onLoad((options) => {
   orderId.value = options?.orderId ? decodeURIComponent(options.orderId) : '';
   load();
+  // 设备推荐与交付内容无关（全局配置），单独拉、失败不影响主体
+  void loadEquipment();
 });
 
 onPullDownRefresh(async () => {
@@ -692,5 +778,67 @@ onPullDownRefresh(async () => {
 
 .buy-supplements-btn::after {
   border: none;
+}
+
+/* ===== 制作设备推荐（2026-10-18 · 需求 2.4.2 ⑦）===== */
+.equipment-row-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+}
+
+.equipment-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 16rpx;
+  background: #fff;
+  border-radius: 16rpx;
+}
+
+.equipment-row__icon {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 12rpx;
+  background: #f4ebe0;
+  flex: 0 0 auto;
+}
+
+.equipment-row__icon--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.equipment-row__initial {
+  font-size: 28rpx;
+  color: #b45309;
+  font-weight: 700;
+}
+
+.equipment-row__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.equipment-row__name {
+  display: block;
+  font-size: 26rpx;
+  color: #3f3222;
+  font-weight: 700;
+}
+
+.equipment-row__reason {
+  display: block;
+  font-size: 21rpx;
+  color: #9c8b76;
+  margin-top: 4rpx;
+  line-height: 1.45;
+}
+
+.equipment-row__action {
+  font-size: 23rpx;
+  color: #b45309;
+  flex: 0 0 auto;
 }
 </style>

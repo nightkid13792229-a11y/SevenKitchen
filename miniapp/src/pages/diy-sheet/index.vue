@@ -231,8 +231,18 @@
 
     <!-- 4-8. 固定文案卡片 -->
     <view class="info-cards-grid">
-      <!-- 制作设备推荐 -->
-      <view v-if="false" class="info-card equipment-card" @tap="handleShowEquipmentList">
+      <!--
+        制作设备推荐（2026-10-18 重新打开）
+
+        附录 B #12：**功能做完了但被关掉**（`v-if="false"`），要重新打开。
+
+        决策依据 V56（2026-10-17）：老板说"也需要有制作设备推荐的板块"，
+        并且要求**交付页也加**。
+
+        数据来自 `/global-config` 的 `equipmentRecommendations`（全局配置，
+        不是每份食谱不同），内容由后台维护；没配时有一份默认清单兜底。
+      -->
+      <view class="info-card equipment-card" @tap="handleShowEquipmentList">
         <view class="card-title">
           <text class="title-text">制作设备推荐</text>
           <text class="view-more">查看详情 →</text>

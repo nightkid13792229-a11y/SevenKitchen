@@ -437,7 +437,22 @@ export class AdminCustomRecipeController {
    * Update order status
    */
   @Patch('orders/:orderId/status')
-  @ApiOperation({ summary: 'Update order status' })
+  /**
+   * ⚠️ **这个接口能力比名字大**：它能把订单改成 CANCELLED，也就是**取消订单**。
+   *
+   * 需求 2.8.7 的权限表写得很清楚：
+   *   确认收款 / 查看订单 / 处理售后 → 员工或管理员
+   *   **交付食谱 / 取消订单 / 改配置 → 仅管理员**
+   *
+   * 此前这里只有类级的 `AuthGuard + StaffGuard` —— 也就是说**员工能取消订单**。
+   * 与"交付"那个接口（有 `@UseGuards(AdminGuard)`）不一致。
+   *
+   * 代价：员工要改其它状态（比如从 PAID 推进到 IN_PROGRESS）也会被挡。
+   * 但"取消"是**不可逆且涉及退款**的动作，宁可让员工去找管理员，
+   * 也不能让它成为一个员工随手能点的按钮。
+   */
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Update order status（取消订单仅管理员）' })
   async updateStatus(
     @Req() req: any,
     @Param('orderId') orderId: string,

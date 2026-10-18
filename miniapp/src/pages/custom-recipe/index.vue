@@ -580,7 +580,7 @@ import {
   submitOrder,
   fetchNextDeliveryDate,
 } from '@/api/custom-recipe';
-import { onLoad, onShow } from '@dcloudio/uni-app';
+import { onHide, onLoad, onShow } from '@dcloudio/uni-app';
 import { getToken, request } from '@/utils/api';
 import { dogApi } from '@/api/dogs';
 import AllergyScanBlock from '@/components/custom-recipe/AllergyScanBlock.vue';
@@ -1706,6 +1706,12 @@ onShow(() => {
   }
   void loadPendingOrder();
 });
+
+/**
+ * 返回首页/切到别的 tab 时页面可能只是隐藏、不一定卸载。
+ * 在 onHide 里同步落一次草稿，保证“清空后马上返回”也不会丢。
+ */
+onHide(() => flushDraftNow());
 
 // 统一的建档入口（带来源埋点，建档成功后回到本页）
 const goToCreateDog = () => {

@@ -2055,8 +2055,9 @@ describe('custom recipe draft · 本地草稿与付款后同步', () => {
     expect(page).toContain('loadCustomRecipeDraft')
     expect(page).toContain('applyCustomRecipeDraft(draft)')
     expect(page).toContain('if (!draft) {')
-    // 换狗先落盘上一只狗的草稿
+    // 换狗、返回首页（onHide）都要先落盘草稿
     expect(page).toContain('flushDraftNow()')
+    expect(page).toContain('onHide(() => flushDraftNow())')
   })
 
   it('清空/编辑/删报告都会写本地草稿', () => {

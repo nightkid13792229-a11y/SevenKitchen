@@ -19,9 +19,26 @@
         <view class="hero-card__identity-inner">
           <image class="hero-card__avatar" :src="dogAvatarSrc" mode="aspectFill" />
           <view class="hero-card__name-block">
-            <text class="hero-card__title">{{ selectedDog ? (selectedDog.name || '狗狗') : '请选择狗狗' }}</text>
+            <!--
+              没选时把话说全（2026-10-18）。
+
+              ⚠️ **不新增说明块** —— 2026-10-05 老板明确说过
+              "不要那块「先选一下要给哪只狗狗定制」的说明，Banner 上的选择器本身就是引导"。
+
+              但只有三个字"请选择狗狗"时，养几十只狗的顾客会以为页面坏了。
+              所以在**同一个位置**把「有几只、点这里换」说出来，不占额外版面。
+            -->
+            <text class="hero-card__title">
+              {{
+                selectedDog
+                  ? selectedDog.name || '狗狗'
+                  : `请选择狗狗（共 ${dogOptions.length} 只）`
+              }}
+            </text>
             <text v-if="dogHeroLine" class="hero-card__line">{{ dogHeroLine }}</text>
-            <text class="hero-card__switch">切换 ▼</text>
+            <text class="hero-card__switch">
+              {{ selectedDog ? '切换 ▼' : '点这里选 ▼' }}
+            </text>
           </view>
         </view>
       </picker>
@@ -719,6 +736,7 @@ function openWeightGoalPlan() {
  * 提交按钮同理 —— 没有狗可提交，留着只会点出一句"请选择狗狗"。
  */
 const hasSelectedDog = computed(() => Boolean(formData.value.dogId));
+
 
 /**
  * 第二步先问的那一句：小家伙是否对部分食物过敏？（2026-10-05 老板要求）
@@ -1677,15 +1695,28 @@ const loadDogs = async () => {
       }));
 
       /**
-       * 只有一只狗就直接选中它。
+       * 默认选哪只狗（2026-10-18 按需求 2.3.8 补齐）。
        *
-       * 选择器搬进 Banner 之后，顾客在这一页看不到"请选择要定制的狗狗"这种提示了，
-       * 只养一只狗的人不该为了一个没有第二种选择的选项多操作一次 ——
-       * 之前漏掉这一步会让提交按钮一直灰着，而页面上找不到原因。
-       * 多只狗时不自动选：那才是真的需要顾客挑，替他挑错了就是给错狗定制。
+       * 需求原文：
+       *   | 多只狗 | 默认选**上次定制的那只**（一只狗直接自动选） |
+       *
+       * ⚠️ 此前**只处理了一只狗的情况**：多只狗时什么都不选。
+       * 而这一页几乎所有内容都是 `v-if="selectedDog"` ——
+       * 于是养了几十只狗的顾客进来看到的是**近乎空白的一页**，
+       * 只有一个"请选择狗狗"，根本不知道要先点它。
+       *
+       * 现在的优先级：
+       *   ① 只有一只狗 → 直接选它
+       *   ② 上次定制过 → 选那只狗（需求明确要求）
+       *   ③ 上次在别处选过 → 用本地记住的那只
+       *   ④ 都没有 → 不替顾客选，但**把"请先选一只狗狗"说得更明显**
        */
-      if (!formData.value.dogId && dogOptions.value.length === 1) {
-        onDogChange({ detail: { value: 0 } });
+      if (!formData.value.dogId) {
+        if (dogOptions.value.length === 1) {
+          onDogChange({ detail: { value: 0 } });
+        } else {
+          void selectDefaultDog(dogOptions.value);
+        }
       }
 
       // 无档案时不再弹 toast：页面上已有明确的空态与建档入口，避免重复打扰
@@ -1716,6 +1747,48 @@ const loadDogs = async () => {
     dogsLoading.value = false;
   }
 };
+
+/**
+ * 多只狗时选一个默认的（2026-10-18 · 需求 2.3.8）。
+ *
+ * 优先级：**上次定制的那只** → 本地记住的那只 → 都不选。
+ *
+ * 为什么第 ① 项要查订单而不是本地 storage：
+ * `uni.getStorageSync('dogId')` 记的是"上次在**任何页面**选过的那只"，
+ * 可能是健康管理页随手点的；而需求要的是"**上次定制**的那只"。
+ */
+async function selectDefaultDog(dogs: any[]) {
+  const trySelect = (dogId?: string | null) => {
+    const id = String(dogId || '').trim();
+    if (!id) return false;
+    const index = dogs.findIndex((dog) => String(dog.value || dog.id) === id);
+    if (index < 0) return false;
+    onDogChange({ detail: { value: index } });
+    return true;
+  };
+
+  // ① 上次定制的那只
+  if (getToken()) {
+    try {
+      const data = await fetchMyOrders({ page: 1, pageSize: 1 });
+      const lastDogId = data?.orders?.[0]?.dog?.id;
+      if (trySelect(lastDogId)) return;
+    } catch {
+      // 查不到就往下走 —— 这只是"替顾客少点一次"，失败不该影响页面
+    }
+  }
+
+  // ② 上次在别处选过的那只
+  if (trySelect(String(uni.getStorageSync('dogId') || ''))) return;
+
+  /**
+   * ③ 都没有：**不替顾客选**。
+   *
+   * 几十只狗里随便挑一只，等于替他把单下给了错的狗 ——
+   * 那比"没选"严重得多。所以留空，并让页面把"先选一只"说得更显眼
+   * （见 `needPickDog`）。
+   */
+}
 
 const onDogChange = (e: any) => {
   const index = e.detail.value;

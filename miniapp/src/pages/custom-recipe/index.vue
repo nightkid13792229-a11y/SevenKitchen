@@ -53,23 +53,9 @@
         </view>
       </view>
 
-      <!-- 生命阶段 / 体况评分 / 活动量（2026-10-05 老板要求挪进 Banner）：
-           这三项直接决定这单食谱的用量，顾客要在一眼之内核对完，
-           原先它们各占信息卡的一行，现在并进身份块下面。 -->
-      <view v-if="selectedDog" class="hero-card__facts">
-        <view class="hero-card__fact">
-          <text class="hero-card__fact-label">生命阶段</text>
-          <text class="hero-card__fact-value">{{ getDogLifeStageLabel(selectedDog) }}</text>
-        </view>
-        <view class="hero-card__fact">
-          <text class="hero-card__fact-label">体况评分</text>
-          <text class="hero-card__fact-value">{{ getBCSText(selectedDog.bcsScore) }}</text>
-        </view>
-        <view class="hero-card__fact">
-          <text class="hero-card__fact-label">活动量</text>
-          <text class="hero-card__fact-value">{{ getActivityLabel(selectedDog.activityLevel) }}</text>
-        </view>
-      </view>
+      <!-- 2026-10-18 老板验收时定：顶部不再显示生命阶段 / 体况评分 / 活动量。
+           体况与活动量改在下方「狗狗信息缺失，请先确认」块里确认，
+           生命阶段由生日自动推算，不在页面上重复。 -->
     </view>
 
     <!-- 待付款单提醒（2026-10-04 新增）。
@@ -128,30 +114,23 @@
       </view>
 
       <!-- 定制门槛：这几项必须由顾客亲自确认过。
-           老档案不追溯，因此在这里就地补确认 —— 只在"真的要用到"的时候问。 -->
+           老档案不追溯，因此在这里就地补确认 —— 只在"真的要用到"的时候问。
+
+           2026-10-18 老板验收时定：顶部不再重复这三项，
+           文案精简为「狗狗信息缺失，请先确认：」+「影响食谱的设计」。 -->
       <view v-if="gateBlocked" class="gate-card">
-        <text class="gate-card__title">开始定制前，请确认这几项</text>
-        <text class="gate-card__desc">
-          体况评分、活动量、每日餐数原先可能是系统按默认值填的，
-          需要你确认一下 —— 它们决定食谱的用量与制作单。
-        </text>
+        <text class="gate-card__title">狗狗信息缺失，请先确认：</text>
+        <text class="gate-card__desc">影响食谱的设计</text>
 
         <!-- 体况评分（阶段 C6）：已确认过就只读展示，未确认就地做 4 个动作题。
              不再让顾客估「几分」—— 与建档页保持同一套判据。 -->
         <view v-if="gateBcsAlreadyConfirmed" class="gate-row">
-          <text class="gate-row__label">体况评分</text>
-          <text class="gate-row__value gate-row__value--done">
-            {{ getBCSText(selectedDog.bcsScore) }} · 已确认
-          </text>
+          <text class="gate-row__label">体况评分<text class="gate-row__value gate-row__value--done">（{{ getBCSText(selectedDog.bcsScore) }} · 已确认）</text></text>
         </view>
 
         <view v-else class="gate-bcs">
           <view class="gate-row">
-            <text class="gate-row__label">体况评分</text>
-            <text
-              class="gate-row__value"
-              :class="{ 'gate-row__value--done': gateEffectiveBcs !== null }"
-            >{{ gateEffectiveBcs === null ? '待确认' : `${gateEffectiveBcs} 分 · ${gateBcsResultLabel}` }}</text>
+            <text class="gate-row__label">体况评分<text class="gate-row__value" :class="{ 'gate-row__value--done': gateEffectiveBcs !== null }">（{{ gateEffectiveBcs === null ? '待确认' : `${gateEffectiveBcs} 分 · ${gateBcsResultLabel}` }}）</text></text>
           </view>
           <text class="bcs-banner">回答以下问题，确认狗狗的体态健康！</text>
 
@@ -202,8 +181,6 @@
             <view class="gate-row__value">{{ gateDraft.mealsPerDay }} 餐/天</view>
           </picker>
         </view>
-        <!-- 老板定稿文案（U4）：餐数说"影响制作单的生成"，不说价格 -->
-        <text class="gate-row__hint">每日餐数影响制作单的生成，请确认</text>
 
         <button
           class="gate-confirm-btn"
@@ -2354,23 +2331,6 @@ const submitOrder = async () => {
 };
 
 // 辅助函数
-const getDogLifeStageLabel = (dog: any) => {
-  if (!dog.birthday) return '未知';
-
-  const birthday = new Date(dog.birthday);
-  const now = new Date();
-  const months = (now.getFullYear() - birthday.getFullYear()) * 12 +
-                 (now.getMonth() - birthday.getMonth());
-
-  if (months < 12) {
-    return '幼犬期';
-  } else if (months < 84) { // 7年
-    return '成犬期';
-  } else {
-    return '老年期';
-  }
-};
-
 const getBCSText = (bcsScore: number) => {
   if (!bcsScore) return '未评估';
 
@@ -2381,21 +2341,6 @@ const getBCSText = (bcsScore: number) => {
   } else {
     return `${bcsScore}/9 标准`;
   }
-};
-
-const getActivityLabel = (level: string) => {
-  // 2026-09-27 修复：原先只映射了 LOW/NORMAL/HIGH，
-  // 而生产里还有 RESTING（静养，245 只）与 WORKING（工作犬，4 只）——
-  // 这两档的顾客会在这里看到英文 "RESTING" / "WORKING"，完全看不懂。
-  // 文案与建档页保持一致，避免同一个概念两个页面两种说法。
-  const map: Record<string, string> = {
-    RESTING: '休息静养',
-    LOW: '城市日常',
-    NORMAL: '规律运动',
-    HIGH: '高活动',
-    WORKING: '工作犬',
-  };
-  return map[level] || '未评估';
 };
 </script>
 
@@ -2428,31 +2373,7 @@ const getActivityLabel = (level: string) => {
   display: block;
 }
 
-/* 生命阶段 / 体况评分 / 活动量：深色 Banner 里横排三格（2026-10-05 从信息卡挪来） */
-.hero-card__facts {
-  display: flex;
-  margin-top: 20rpx;
-  padding-top: 20rpx;
-  border-top: 1rpx solid rgba(243, 237, 221, 0.18);
-}
-
-.hero-card__fact {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6rpx;
-}
-
-.hero-card__fact-label {
-  font-size: 22rpx;
-  color: rgba(243, 237, 221, 0.62);
-}
-
-.hero-card__fact-value {
-  font-size: 26rpx;
-  color: #f3eddd;
-}
+/* 2026-10-18 老板验收时定：顶部不再显示生命阶段 / 体况评分 / 活动量，三格样式一并删除。 */
 
 .hero-card__identity-inner {
   display: flex;
@@ -2599,12 +2520,6 @@ const getActivityLabel = (level: string) => {
   color: #1e3a2f;
 }
 
-.gate-row__hint {
-  display: block;
-  margin-top: 12rpx;
-  font-size: 22rpx;
-  color: #8a6f3d;
-}
 /* 体况评分（阶段 C6）：未确认时就地做 4 个动作题，不再让顾客估分数 */
 .gate-bcs {
   margin-top: 20rpx;

@@ -233,27 +233,30 @@ describe('custom recipe auth gate', () => {
 })
 
 /**
- * 档案摘要里的活动量显示（2026-09-27）
+ * 活动量选项的中文文案（2026-09-27，2026-10-18 调整）
  *
- * 定制页会显示所选狗狗的活动量，但映射表只覆盖了 LOW/NORMAL/HIGH ——
- * 生产里还有 RESTING（静养，245 只）与 WORKING（工作犬，4 只），
- * 这两档的顾客会看到英文 "RESTING" / "WORKING"，完全看不懂。
+ * 定制页的确认门槛要选活动量，五个档位都必须有中文文案：
+ * 生产里除了 LOW/NORMAL/HIGH，还有 RESTING（静养）与 WORKING（工作犬）。
+ * 2026-10-18 顶部 Banner 不再显示活动量，选项收口到 gateActivityOptions。
  */
 describe('custom recipe activity level labels', () => {
   const submit = read(`${PAGE_DIR}/index.vue`)
 
   it('五个活动量档位都有中文文案', () => {
+    const options = submit.match(/const gateActivityOptions = \[[\s\S]*?\];/)?.[0] || ''
+    expect(options).not.toBe('')
     for (const level of ['RESTING', 'LOW', 'NORMAL', 'HIGH', 'WORKING']) {
-      expect(submit).toContain(`${level}:`)
+      expect(options).toContain(`value: '${level}'`)
     }
   })
 
-  it('不再把原始英文枚举当作兜底展示', () => {
-    // 兜底改成「未评估」，避免任何未知值直接漏成英文给顾客看
-    const labelFn = submit.match(/const getActivityLabel = \([\s\S]*?\n\};/)?.[0] || ''
-    expect(labelFn).not.toBe('')
-    expect(labelFn).not.toContain('return map[level] || level')
-    expect(labelFn).toContain('未评估')
+  it('活动量选项全部是显式中文，不靠原始枚举兜底', () => {
+    const options = submit.match(/const gateActivityOptions = \[[\s\S]*?\];/)?.[0] || ''
+    expect(options).not.toBe('')
+    expect(options).toContain('休息静养')
+    expect(options).toContain('工作犬')
+    // 不再保留"找不到就显示英文枚举"的兜底
+    expect(submit).not.toContain('map[level] || level')
   })
 })
 
@@ -278,7 +281,8 @@ describe('custom recipe profile gate', () => {
   })
 
   it('未确认时挡住提交，并就地给出补确认入口', () => {
-    expect(submit).toContain('开始定制前，请确认这几项')
+    expect(submit).toContain('狗狗信息缺失，请先确认：')
+    expect(submit).toContain('影响食谱的设计')
     expect(submit).toContain('确认并继续')
     expect(submit).toContain('confirmGate')
     // canSubmit 必须把门槛算进去
@@ -303,8 +307,9 @@ describe('custom recipe profile gate', () => {
     expect(confirmSource).toContain('selectedDog.value = {')
   })
 
-  it('餐数按老板定稿文案说明后果', () => {
-    expect(submit).toContain('每日餐数影响制作单的生成，请确认')
+  it('门槛说明只保留「影响食谱的设计」，不再单独解释餐数', () => {
+    expect(submit).toContain('影响食谱的设计')
+    expect(submit).not.toContain('每日餐数影响制作单的生成')
     // 不得写成"影响价格"
     expect(submit).not.toMatch(/<text[^>]*>[^<]*影响价格/)
   })
@@ -1398,15 +1403,14 @@ describe('定制页 · Banner 融入选狗器', () => {
     expect(page).toContain('const dogPickerIndex = computed(')
   })
 
-  it('Banner 里带一行 品种 · 月龄 · 体重，并含三项档案事实', () => {
+  it('Banner 只带一行 品种 · 月龄 · 体重，不再重复三项档案事实', () => {
     expect(template).toContain('{{ dogHeroLine }}')
     expect(page).toContain('const dogHeroLine = computed(')
-    // 2026-10-05 老板要求：删掉定位文案，并把生命阶段/体况评分/活动量挪进 Banner
     expect(template).not.toContain('告诉我们它的情况，我们来单独设计一道')
-    expect(template).toContain('hero-card__facts')
-    expect(template).toContain('生命阶段')
-    expect(template).toContain('体况评分')
-    expect(template).toContain('活动量')
+    // 2026-10-18 老板要求：顶部不再显示生命阶段/体况评分/活动量，
+    // 体况与活动量只在下方「狗狗信息缺失，请先确认」块里确认。
+    expect(template).not.toContain('hero-card__facts')
+    expect(template).not.toContain('hero-card__fact-label')
     // 头像与健康管理页同一套兜底（没上传就用默认头像）
     expect(page).toContain('resolveDogAvatarSrc')
     expect(template).toContain(':src="dogAvatarSrc"')

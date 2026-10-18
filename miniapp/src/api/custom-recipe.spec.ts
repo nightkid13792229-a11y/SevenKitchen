@@ -308,9 +308,18 @@ describe('定制食谱 API 层', () => {
     })
 
     it('未知色调与空值都落到中性样式（不崩、不显示错色）', () => {
-      expect(toneToClass(undefined)).toBe('neutral')
-      expect(toneToClass('')).toBe('neutral')
-      expect(toneToClass('某个将来的新色调')).toBe('neutral')
+      /**
+       * ⚠️ 2026-10-18 改：兜底值从 `neutral` 改成 `muted`。
+       *
+       * 组件里的 CSS 类名是 `.order-status-badge--muted` —— **没有 `--neutral`**。
+       * 所以原来兜底到 `neutral` 时，标签**匹配不到任何背景色**，
+       * 变成一行没有底色的裸文字（已取消那一档正好踩中）。
+       *
+       * 兜底的本意是"落到中性样式"，`muted` 才是那个真的存在的类。
+       */
+      expect(toneToClass(undefined)).toBe('muted')
+      expect(toneToClass('')).toBe('muted')
+      expect(toneToClass('某个将来的新色调')).toBe('muted')
     })
   })
 })

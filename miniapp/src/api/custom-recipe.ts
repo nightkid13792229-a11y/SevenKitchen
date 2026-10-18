@@ -563,8 +563,13 @@ export function toneToClass(tone: string | undefined): string {
       return 'success';
     case 'danger':
       return 'danger';
+    /**
+     * 2026-10-18 修：默认返回 `'neutral'`，但组件的 CSS 类名是 `--muted` ——
+     * 匹配不到任何背景色，**标签会变成没有底色的裸文字**。
+     * （已取消这一档正好踩中。）
+     */
     default:
-      return 'neutral';
+      return 'muted';
   }
 }
 

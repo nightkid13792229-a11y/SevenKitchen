@@ -115,11 +115,25 @@ export class CustomRecipeViewService {
       requireCustomerConfirm: input.requireCustomerConfirm,
     };
 
+    /**
+     * 「售后中」不是第 6 个主状态，而是「已交付」的**另一种说法**
+     * （2026-10-18 · 需求 2.6.1）。
+     *
+     * 数据上 `DELIVERED` 一直是 `DELIVERED`，区别在于**有没有未处理完的售后**。
+     * 所以这里做一次覆盖，而不是给状态机加一档 ——
+     * 加一档的话，"已交付"与"售后中"会互相覆盖，退回原来那个死胡同。
+     */
+    const aftersaleOpen =
+      input.status === 'DELIVERED' && Boolean(input.hasOpenAftersale)
+    const renderableMeta = aftersaleOpen
+      ? { label: '售后中', tone: 'danger' as RenderableTone }
+      : meta
+
     return {
       status: buildRenderableStatus({
         code: input.status,
-        label: meta.label,
-        tone: meta.tone,
+        label: renderableMeta.label,
+        tone: renderableMeta.tone,
         customerHint: buildCustomerHint({
           status: input.status,
           estimatedDeliveryDate,

@@ -101,10 +101,18 @@ export const OPTION_SET_DEFINITIONS: readonly OptionSetDefinition[] = [
         tone: 'warning',
         sortOrder: 10,
       },
-      { code: 'PAID', label: '已付款', tone: 'info', sortOrder: 20 },
+      // 2026-10-18 · 需求 2.6.4：已付款是**橙**，不是蓝
+      { code: 'PAID', label: '已付款', tone: 'progress', sortOrder: 20 },
+      /**
+       * 2026-10-18 · 需求 2.6.1：顾客看到的**只有 6 个说法**。
+       *
+       * `IN_PROGRESS` 在顾客眼里就是「已付款」——
+       * "制作中"是**内部进度**，不该成为顾客可见的第 7 个词。
+       * （进度条里仍然有"制作中"这个步骤名，那是两回事。）
+       */
       {
         code: 'IN_PROGRESS',
-        label: '制作中',
+        label: '已付款',
         tone: 'progress',
         sortOrder: 30,
       },
@@ -116,12 +124,14 @@ export const OPTION_SET_DEFINITIONS: readonly OptionSetDefinition[] = [
        * 忘了配也不会漏到顾客眼前（会自动补一行并在启动日志里 warn）。
        * 对照 2026-10-04 加「已取消」时，三个端漏了两处半。
        */
-      { code: 'COMPLETED', label: '已完成', tone: 'success', sortOrder: 50 },
+      // 2026-10-18 · 需求 2.6.4：已完成是**灰**（事情结束了，不需要再吸引注意）
+      { code: 'COMPLETED', label: '已完成', tone: 'info', sortOrder: 50 },
       /**
        * 2026-10-04 新增的这一档，当时三个端漏了两处半。
        * 现在它有唯一来源 —— 就是这一行。
        */
-      { code: 'CANCELLED', label: '已取消', tone: 'neutral', sortOrder: 60 },
+      // ⚠️ 用 muted 不用 neutral：组件的 CSS 类名是 `--muted`，`neutral` 匹配不到任何背景色
+      { code: 'CANCELLED', label: '已取消', tone: 'muted', sortOrder: 60 },
     ],
   },
 

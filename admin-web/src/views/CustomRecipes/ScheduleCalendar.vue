@@ -44,22 +44,18 @@
         <el-table-column label="星期" width="90">
           <template #default="{ row }">{{ weekdayLabel(row.weekday) }}</template>
         </el-table-column>
-        <el-table-column label="接单" width="110">
+        <!--
+          「接单」→「营业」（2026-10-18 · 需求 2.8.5）
+
+          接单不限量之后，"一天最多接几单"这个数**没有意义**了 ——
+          这个开关现在只回答一件事：**这天做不做**（周末单独打开 = 加班）。
+
+          `row.capacity` 仍留在表单状态里（只从界面移除，不删数据），
+          保存时原样带回 —— 跟配置页那 5 个字段一样的处理方式。
+        -->
+        <el-table-column label="营业" width="110">
           <template #default="{ row }">
             <el-switch v-model="row.isOpen" />
-          </template>
-        </el-table-column>
-        <el-table-column label="每天最多接几单" width="180">
-          <template #default="{ row }">
-            <el-input-number
-              v-model="row.capacity"
-              :min="1"
-              :max="200"
-              :disabled="!row.isOpen"
-              size="small"
-              controls-position="right"
-              style="width: 120px"
-            />
           </template>
         </el-table-column>
         <el-table-column label="每天最多交几份" width="180">
@@ -89,8 +85,8 @@
 
       <div class="rules-hint">
         留空表示用「食谱定制设置」里的全局值。
-        <strong>交付上限低于接单上限时，多接的单会交不出来</strong>
-        —— 建议交付上限不小于接单上限。
+        <strong>接单不限量</strong>，所以只看「每天最多交几份」——
+        那是你真正做不做得出来的上限。
       </div>
     </el-card>
 
@@ -131,8 +127,17 @@
         >
           <template v-if="cell.day">
             <span class="day-number">{{ dayNumber(cell.day.date) }}</span>
+            <!--
+              2026-10-18 · 需求 2.8.5：每天显示改成「交 X / 上限 Y」。
+              原来显示"接 X / 交 Y"两个数，要老板自己算剩余 ——
+              改后一眼看出这天还能不能再排。
+            -->
             <span class="day-info">
-              {{ cell.day.isOpen ? `剩 ${cell.day.remaining} 单` : '休息' }}
+              {{
+                cell.day.isOpen
+                  ? `交 ${cell.day.deliveryCount ?? 0} / ${cell.day.deliveryCapacity ?? 0}`
+                  : '休息'
+              }}
             </span>
           </template>
         </div>
@@ -151,10 +156,7 @@
               {{ activeDay.closedReason }}
             </span>
           </el-descriptions-item>
-          <el-descriptions-item label="接单">
-            {{ activeDay.bookedCount }} / {{ activeDay.capacity }}
-            （剩 {{ activeDay.remaining }}）
-          </el-descriptions-item>
+          <!-- 接单不限量，所以这里只看交付（2026-10-18 · 需求 2.8.5） -->
           <el-descriptions-item label="交付">
             {{ activeDay.deliveryCount }} / {{ activeDay.deliveryCapacity }}
             （剩 {{ activeDay.deliveryRemaining }}）

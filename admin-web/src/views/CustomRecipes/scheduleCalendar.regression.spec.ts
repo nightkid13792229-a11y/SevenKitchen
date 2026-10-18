@@ -32,7 +32,13 @@ describe('排期日历页 · 判定全在后端', () => {
   const apiCode = stripComments(apiSource)
 
   it('★ 不自己算剩余名额（后端已给 remaining）', () => {
-    expect(pageCode).toContain('activeDay.remaining')
+    /**
+     * ⚠️ 2026-10-18：需求 2.8.5 拿掉了「接单」维度（接单不限量），
+     * 所以 `activeDay.remaining` 那一行被删了 —— 但**意图没变**：
+     * 剩余名额必须用后端给的，不能在页面里做减法。
+     * 现在只剩交付这一套容量，断言盯 `deliveryRemaining`。
+     */
+    expect(pageCode).toContain('activeDay.deliveryRemaining')
     expect(pageCode).toContain('deliveryRemaining')
     /**
      * 不许在页面里做 `capacity - bookedCount` 这类减法。
@@ -74,9 +80,23 @@ describe('排期日历页 · 判定全在后端', () => {
     expect(pageCode).toContain('calendar?.days')
   })
 
-  it('两个容量分开显示（接单 / 交付是两件事）', () => {
-    expect(pageCode).toContain('每天最多接几单')
+  it('只剩「每天最多交几份」（2026-10-18 · 需求 2.8.5：接单不限量）', () => {
+    /**
+     * 原来这里断言"接单 / 交付两套容量分开显示"。
+     * 老板 2026-10-18 定：**接单不限量**，那个数没意义，从界面拿掉。
+     *
+     * ⚠️ 但 `row.capacity` 仍留在表单状态里（只从界面移除，不删数据）——
+     * 跟配置页那 5 个字段一样的处理方式。
+     */
     expect(pageCode).toContain('每天最多交几份')
+    expect(pageCode).not.toContain('每天最多接几单')
+    // 数据字段还在表单状态里（只从界面移除，不删数据）
+    expect(pageCode).toContain('capacity: rule.capacity ?? null')
+  })
+
+  it('每周规则的开关叫「营业」而不是「接单」', () => {
+    expect(pageCode).toContain('label="营业"')
+    expect(pageCode).not.toContain('label="接单"')
   })
 
   it('保存失败时显示后端给的原因（比如"周日的接单上限必须是 1~200"）', () => {

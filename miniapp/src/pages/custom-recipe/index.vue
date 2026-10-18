@@ -2115,6 +2115,38 @@ const removeDislikedIngredient = (index: number) => {
   formData.value.dislikedIngredients.splice(index, 1);
 };
 
+/**
+ * 付款前弹窗的内容（需求 2.3.6）。
+ *
+ * 三行，一屏能看完：
+ *   ① 给谁定制（狗名 + 品种 + 体重）—— 防止"给错狗下单"（家里有两三只的最容易错）
+ *   ② 交付日期 —— 后端给的，不是前端算的
+ *   ③ 这钱含什么 / 不含什么 / 能抵什么 —— 此前线上对此毫无解释
+ *
+ * ⚠️ 不写"今天几号"：顾客自己知道，写出来只占地方。
+ */
+function buildConfirmContent(): string {
+  const lines: string[] = [];
+  const dog = selectedDog.value;
+
+  if (dog) {
+    // `dog.value` 是这个页面里狗对象的 id（历史命名），不是值
+    const parts = [dog.name, dog.breed, dog.weightKg ? `${dog.weightKg}kg` : '']
+      .filter(Boolean)
+      .join(' · ');
+    if (parts) lines.push(`给 ${parts} 定制`);
+  }
+
+  if (estimatedDeliveryText.value) {
+    lines.push(estimatedDeliveryText.value.replace('预计 ', '预计 '));
+  }
+
+  lines.push('含营养师一对一设计，不含食材');
+  lines.push('付完可全额抵扣成品鲜食');
+
+  return lines.join('\n');
+}
+
 const submitOrder = async () => {
   if (!canSubmit.value) {
     // 提示要说清"还差什么"，不然按钮灰着顾客不知道原因
@@ -2129,6 +2161,16 @@ const submitOrder = async () => {
       title = '请先选择：减重、维持还是增重';
     } else if (hasFoodAllergy.value === null) {
       title = '请先回答：小家伙是否对部分食物过敏';
+    } else if (!formData.value.currentFoodMain) {
+      // 需求 2.3.7：说清差哪一项，不能只变灰不动
+      title = '还差：现在主要喂什么';
+    } else if (formData.value.changeReasons.length === 0) {
+      title = '还差：为什么想换';
+    } else if (
+      formData.value.changeReasons.includes('OTHER') &&
+      !formData.value.changeReasonOther.trim()
+    ) {
+      title = '选了「其他」，请补一句具体原因';
     }
 
     uni.showToast({ title, icon: 'none' });
@@ -2146,6 +2188,27 @@ const submitOrder = async () => {
    */
   if (submitting.value) return;
   submitting.value = true;
+
+  /**
+   * 付款前确认（2026-10-18 · 需求 2.3.6）
+   *
+   * **这是防误解的最后一道防线**：点下去就付 300，
+   * 这一下必须让顾客看清"给谁做、什么时候拿到、这钱含什么"。
+   *
+   * 刻意**不显示"今天几号"** —— 顾客自己知道，写出来只占地方。
+   */
+  const confirmed = await new Promise<boolean>((resolve) => {
+    uni.showModal({
+      title: '确认定制',
+      content: buildConfirmContent(),
+      confirmText: '确认支付',
+      cancelText: '再看看',
+      success: (res) => resolve(Boolean(res.confirm)),
+      fail: () => resolve(false),
+    });
+  });
+
+  if (!confirmed) return;
 
   try {
     /**

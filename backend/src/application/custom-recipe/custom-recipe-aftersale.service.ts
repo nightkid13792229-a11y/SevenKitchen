@@ -1,4 +1,4 @@
-import {
+import { Optional,
   BadRequestException,
   ForbiddenException,
   Injectable,
@@ -8,6 +8,7 @@ import { CustomRecipeStatus } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { CustomRecipeConfigService } from './custom-recipe-config.service';
 import { PlatformOptionsService } from '../platform-options/platform-options.service';
+import { CustomerMessageService } from '../message/customer-message.service';
 import { CUSTOM_RECIPE_AFTERSALE_TYPE_SET } from '../platform-options/option-sets.registry';
 import {
   ALLOWED_AFTERSALE_TRANSITIONS,
@@ -47,6 +48,14 @@ export class CustomRecipeAftersaleService {
     private readonly prisma: PrismaService,
     private readonly configService: CustomRecipeConfigService,
     private readonly platformOptions: PlatformOptionsService,
+    /**
+     * 站内消息（2026-10-18 · 需求 2.9）。
+     *
+     * `@Optional()`：这条依赖是**通知**，不是业务主链路 ——
+     * 发不出去也不该让"处理售后"失败。跟交付服务那边同一个处理。
+     */
+    @Optional()
+    private readonly customerMessages?: CustomerMessageService,
   ) {}
 
   /**
@@ -432,6 +441,33 @@ export class CustomRecipeAftersaleService {
           : {}),
       },
     });
+
+    /**
+     * 站内消息（2026-10-18 · 需求 2.9「要发的消息：交付通知、售后处理完成通知」）。
+     *
+     * 消息只存"一句摘要 + 一个指针"，点进去现查 ——
+     * 存副本的话，处理结果被改过之后旧消息会跟实际不一致。
+     *
+     * 发失败**不影响处理结果**：售后已经处理完了，通知是锦上添花。
+     */
+    const order = await this.prisma.customRecipeOrder.findUnique({
+      where: { id: row.orderId },
+      select: { customerId: true, orderId: true },
+    });
+    if (order) {
+      await this.customerMessages
+        ?.send({
+          customerId: order.customerId,
+          category: 'AFTERSALE',
+          title: '你的售后已处理完成',
+          body: note,
+          linkType: 'AFTERSALE',
+          // 指向订单：售后页是按订单查的
+          linkId: order.orderId,
+        })
+        .catch(() => false);
+    }
+
     return { status: 'RESOLVED' };
   }
 

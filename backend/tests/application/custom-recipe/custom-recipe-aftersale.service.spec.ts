@@ -57,6 +57,14 @@ function createService(options: {
   const prisma = {
     customRecipeOrder: {
       findFirst: jest.fn().mockResolvedValue(options.order ?? buildOrder()),
+      /**
+       * 2026-10-18：售后处理完成时要发一条站内消息（需求 2.9），
+       * 其中要按 id 查订单拿 customerId / orderId。
+       */
+      findUnique: jest.fn().mockResolvedValue({
+        customerId: 'customer-1',
+        orderId: 'CR202610180001',
+      }),
     },
     customRecipeDelivery: {
       findFirst: jest.fn().mockResolvedValue(
@@ -405,6 +413,16 @@ describe('CustomRecipeAftersaleService · 后台处理', () => {
         findMany: jest.fn().mockResolvedValue(options.rows ?? []),
         findUnique: jest.fn().mockResolvedValue(options.row ?? null),
         update: jest.fn().mockResolvedValue({}),
+      },
+      /**
+       * 2026-10-18：`resolve` 之后要发一条站内消息（需求 2.9），
+       * 先按 id 查订单拿 customerId / orderId。
+       */
+      customRecipeOrder: {
+        findUnique: jest.fn().mockResolvedValue({
+          customerId: 'customer-1',
+          orderId: 'CR202610180001',
+        }),
       },
     };
     const service = new CustomRecipeAftersaleService(

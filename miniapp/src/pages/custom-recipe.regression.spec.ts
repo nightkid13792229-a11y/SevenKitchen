@@ -429,9 +429,10 @@ describe('custom recipe page · 档案带出与目标口径', () => {
     expect(page).not.toContain('供参考，不会改动')
   })
 
-  it('体况建议只是建议，三个方向由顾客自己选', () => {
+  it('体态建议只是建议，三个方向由顾客自己选', () => {
     expect(page).toContain('bcsAdviceText')
-    expect(page).toContain('（9分制），我们建议')
+    expect(page).toContain('的体态')
+    expect(page).not.toContain('9分制')
     // 2026-10-04 老板要求：删掉句尾那句"这只是建议，最终由你决定。"
     expect(page).not.toContain('这只是建议，最终由你决定')
     // 2026-10-19：三个方向保留，顾客自己选；建议不再决定提交方向
@@ -1314,14 +1315,15 @@ describe('定制页 · 体重管理（2026-10-19）', () => {
     expect(planSource).toContain('syncGoalWithPlan()')
   })
 
-  it('计划入口文案保持大白话；体况建议按 2026-10-19 指定格式', () => {
+  it('计划入口文案保持大白话；体态建议不带评分术语', () => {
     /**
-     * 2026-10-19 老板明确要求建议里出现「体况评分（9分制）」，
-     * 这一条优先于 2026-10-04 的"尽量不用专业术语"泛化规则。
+     * 2026-10-19 晚些时候老板更正：9 分制是失误，建议改回大白话。
+     * 建议只写「体态偏胖/理想/偏瘦」，不出现 9 分制 / 体况评分。
      */
     expect(page).toContain('查看体重管理计划')
     expect(page).not.toContain('去制定体重管理计划')
-    expect(page).toContain('（9分制），我们建议')
+    expect(page).toContain('的体态')
+    expect(page).not.toContain('9分制')
     expect(page).not.toContain('理想体重')
   })
 })
@@ -1754,7 +1756,7 @@ describe('定制页 · 2026-10-05 第三批（4 条）', () => {
   it('① 建议文案放在三选一下方，选中狗即显示', () => {
     /**
      * 2026-10-19 老板定：建议放在三个方向按钮下方，格式
-     * 「狗狗名」的体况评分「X」（9分制），我们建议「方向」。
+     * 「狗狗名」的体态「偏胖/理想/偏瘦」，我们建议「方向」。
      * 它在 v-if="hasSelectedDog" 的板块里**不挂在任何问答分支下**。
      */
     const section = template.slice(
@@ -1763,11 +1765,12 @@ describe('定制页 · 2026-10-05 第三批（4 条）', () => {
     )
     expect(section).toContain('bcsAdviceText')
     expect(section.indexOf('goal-ask')).toBeLessThan(section.indexOf('advice-line'))
-    // 那句话里必须有狗狗名、体况评分本身与建议方向
+    // 那句话里必须有狗狗名、体态判断与建议方向；不带评分术语
     const advice = code.match(/const bcsAdviceText = computed\([\s\S]*?\n\}\);/)?.[0] || ''
-    expect(advice).toContain('的体况评分')
-    expect(advice).toContain('（9分制），我们建议')
+    expect(advice).toContain('的体态')
     expect(advice).toContain('我们建议')
+    expect(advice).not.toContain('体况评分')
+    expect(advice).not.toContain('9分制')
     // 建议那一行的显示条件只有"这句话有没有内容"——
     // 不挂"有没有计划""选没选方向"，狗狗一选定就能看到
     expect(section).toContain('<view v-if="bcsAdviceText" class="advice-line">')

@@ -230,7 +230,7 @@
       <!-- 2026-10-19 老板定稿：
            ① 三选一（减重/维持/增重），不再按体况限制选项，选择权交给家长
            ② 建议文案放在三选一下方：
-              「狗狗名」的体况评分「X」（9分制），我们建议「方向」
+              「狗狗名」的体态「偏胖/理想/偏瘦」，我们建议「方向」
            ③ 不再从定制页引导制定体重计划；
               只有已有进行中/维持期计划时才给一个查看入口 -->
       <view class="goal-group">
@@ -1301,10 +1301,10 @@ const showStatusSection = computed(
 );
 
 /**
- * 体况建议（2026-10-19 老板定稿）。
+ * 体态建议（2026-10-19 老板更正）。
  *
- * 格式：「狗狗名」的体况评分「X」（9分制），我们建议「方向」。
- * 只作为建议放在三选一下方；选哪个方向由家长自己定，不按体况限制。
+ * 格式：「狗狗名」的体态「偏胖/理想/偏瘦」，我们建议「方向」。
+ * 不用"体况评分 / 评分刻度"等专业术语；只作为建议放在三选一下方。
  */
 const bcsAdviceText = computed(() => {
   const dog = selectedDog.value;
@@ -1312,8 +1312,9 @@ const bcsAdviceText = computed(() => {
   if (!Number.isFinite(bcs) || bcs <= 0) return '';
 
   const name = String(dog?.name || '狗狗').trim() || '狗狗';
-  const direction = bcs >= 6 ? '减重' : bcs <= 3 ? '增重' : '维持';
-  return `${name}的体况评分${bcs}（9分制），我们建议${direction}。`;
+  if (bcs >= 6) return `${name}的体态偏胖，我们建议减重。`;
+  if (bcs <= 3) return `${name}的体态偏瘦，我们建议增重。`;
+  return `${name}的体态理想，我们建议维持。`;
 });
 
 const preferencePrefillHint = computed(() => {

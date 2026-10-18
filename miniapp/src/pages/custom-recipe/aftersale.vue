@@ -118,18 +118,19 @@
         <text class="word-count">{{ form.description.length }} / 1000</text>
 
         <!--
-          附件（2026-10-18 加）。
+          附件（2026-10-18；20:30 补上文档）
           老板："只上传照片吗？PDF和Word能不能上传呢？"
 
-          走后端专用接口 `/custom-recipe/upload-attachment`，它自带归属校验与大小上限。
-          **类型上目前只做图片** —— 微信的 `chooseMessageFile` 能选 PDF/Word，
-          但这条链路还要后端配合扩展白名单，单独一步做。
+          需求 2.5.7：**照片 + PDF + Word**，每条可预览 / 删除，可继续新增。
+
+          后端本来就接受 PDF（`getFileType` 有 pdf 分支，其它类型落到 OTHER 也不拒），
+          缺的只是前端只给了相册 —— 这里补一个「从微信里选文件」。
         -->
         <view class="attach-block">
           <view class="attach-head">
-            <text class="attach-title">照片（选填）</text>
+            <text class="attach-title">照片 / 文档（选填）</text>
             <text v-if="attachments.length" class="attach-count">
-              已传 {{ attachments.length }} 张
+              已传 {{ attachments.length }} 个
             </text>
           </view>
           <view class="attach-list">
@@ -144,9 +145,24 @@
             <view v-if="attachments.length < MAX_ATTACH" class="attach-add" @tap="pickAttach">
               <text class="attach-add-icon">＋</text>
             </view>
+            <!--
+              从微信里选文件（PDF / Word）。
+              微信只能从**聊天记录**里选文件，所以走 `chooseMessageFile`。
+            -->
+            <view
+              v-if="attachments.length < MAX_ATTACH"
+              class="attach-add attach-add--doc"
+              @tap="pickDocument"
+            >
+              <text class="attach-add-doc">文档</text>
+            </view>
           </view>
           <text class="attach-tip">
-            {{ uploading ? '上传中…' : '拍了便便、粮袋这类照片，比文字说得清' }}
+            {{
+              uploading
+                ? '上传中…'
+                : '照片直接拍；PDF / Word 化验单可先从微信「文件传输助手」发一下，再点「文档」选进来'
+            }}
           </text>
         </view>
 
@@ -231,7 +247,7 @@ const uploading = ref(false);
 async function pickAttach() {
   if (uploading.value) return;
   if (attachments.value.length >= MAX_ATTACH) {
-    uni.showToast({ title: `最多 ${MAX_ATTACH} 张`, icon: 'none' });
+    uni.showToast({ title: `最多 ${MAX_ATTACH} 个`, icon: 'none' });
     return;
   }
 
@@ -248,6 +264,56 @@ async function pickAttach() {
       });
     });
     filePath = chosen?.tempFilePaths?.[0] || '';
+  } catch {
+    // 顾客取消：静默返回
+    return;
+  }
+  if (!filePath) return;
+
+  uploading.value = true;
+  uni.showLoading({ title: '上传中…' });
+  try {
+    const { url } = await uploadAftersaleAttachment(orderId.value, filePath);
+    attachments.value = [...attachments.value, url];
+    uni.showToast({ title: '已上传', icon: 'none' });
+  } catch (error: any) {
+    uni.showToast({ title: error?.message || '上传失败，请重试', icon: 'none' });
+  } finally {
+    uploading.value = false;
+    uni.hideLoading();
+  }
+}
+
+/**
+ * 从微信里选文件（PDF / Word）—— 需求 2.5.7 要求「照片 + PDF + Word」。
+ *
+ * 为什么用 `chooseMessageFile` 而不是 `chooseImage`：
+ * 微信小程序的相册选择器**只能选图片**；要选 PDF/Word 必须走
+ * "从聊天记录里选文件"这条路（`uni.chooseMessageFile`）。
+ *
+ * 所以顾客的用法是：**先把化验单发到微信里（发给"文件传输助手"就行）**，
+ * 再回来从这里选。这点在提示文案里写清楚，否则他会以为坏了。
+ */
+async function pickDocument() {
+  if (uploading.value) return;
+  if (attachments.value.length >= MAX_ATTACH) {
+    uni.showToast({ title: `最多 ${MAX_ATTACH} 个`, icon: 'none' });
+    return;
+  }
+
+  let filePath = '';
+  try {
+    const chosen: any = await new Promise((resolve, reject) => {
+      uni.chooseMessageFile({
+        count: 1,
+        // PDF 与 Word（doc/docx）。微信的 type 只支持大类，具体扩展名靠后端判。
+        type: 'file',
+        extension: ['pdf', 'doc', 'docx'],
+        success: resolve,
+        fail: reject,
+      });
+    });
+    filePath = chosen?.tempFiles?.[0]?.path || '';
   } catch {
     // 顾客取消：静默返回
     return;
@@ -746,5 +812,18 @@ onLoad((options) => {
   font-size: 24rpx;
   color: #b91c1c;
   line-height: 1.5;
+}
+
+/* ===== 文档上传入口（2026-10-18 · 需求 2.5.7）===== */
+.attach-add--doc {
+  border-style: solid;
+  border-color: #e8dccb;
+  background: #fff;
+}
+
+.attach-add-doc {
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #8c7b66;
 }
 </style>

@@ -40,6 +40,14 @@
       >
         <!-- 订单时间和状态 -->
         <view class="order-header">
+          <!--
+            左侧色条（2026-10-18 · 需求 2.10）：光靠角标不够快 ——
+            顾客滑列表时先看到颜色，再看到字。
+          -->
+          <view
+            class="order-type-stripe"
+            :class="`order-type-stripe--${order._orderType || 'food'}`"
+          />
           <view class="order-header-left">
             <text class="order-time">{{
               formatShortDateTime(order.createdAt)
@@ -57,6 +65,11 @@
             >
               定制
             </text>
+            <!--
+              成品也要标（2026-10-18 · 需求 2.10：定制橙 / 成品绿 / 补剂紫）。
+              两种都标、只有一种不标，顾客反而会以为没标的那种是"默认"。
+            -->
+            <text v-else class="order-type-tag order-type-tag--food">成品</text>
           </view>
           <text
             class="order-status"
@@ -1644,6 +1657,28 @@ function formatAddress(address?: { regionText?: string }): string {
 }
 
 /* ===== 定制单（2026-10-18 并入三单合一）===== */
+.order-type-tag--food {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+/* 左侧色条：定制橙 / 成品绿 / 补剂紫（需求 2.10） */
+.order-type-stripe {
+  width: 6rpx;
+  align-self: stretch;
+  border-radius: 999rpx;
+  margin-right: 12rpx;
+  background: #2e7d32;
+}
+
+.order-type-stripe--custom {
+  background: #b45309;
+}
+
+.order-type-stripe--supplement {
+  background: #7c3aed;
+}
+
 .order-type-tag--custom {
   background: #fff1e3;
   color: #b45309;

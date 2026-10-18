@@ -107,12 +107,29 @@ describe('custom recipe customer flow', () => {
     expect(submit).toContain('submitting.value')
   })
 
-  it('exposes my custom recipe orders from the me page', () => {
+  it('定制订单并进「我的订单」，不再有独立入口（2026-10-18 · 需求 2.10）', () => {
+    /**
+     * ⚠️ 需求变了：2.10 要求**三种订单合并到一个入口**。
+     *
+     * 原来这里断言「我的」页有「我的定制订单」跳转。
+     * 定制单已经并进 `orders-list`（带类型筛选：全部/定制/成品/补剂），
+     * 所以那个独立入口**取消**了 —— 顾客不用再在两个列表之间来回切。
+     *
+     * **反向锁死**：不能又偷偷加回来。
+     */
+    /**
+     * ⚠️ **必须先剥注释** —— 这段代码的注释里本身就写着「我的定制订单」，
+     * 不剥的话断言立刻误报（本会话第五次踩这个坑）。
+     */
     const me = read('src/pages/me/index.vue')
+      .replace(/<!--[\s\S]*?-->/g, ' ')
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
 
-    expect(me).toContain('我的定制订单')
-    expect(me).toContain('@tap="goToCustomRecipeOrders"')
-    expect(me).toContain('/pages/custom-recipe/orders')
+    expect(me).not.toContain('我的定制订单')
+    expect(me).not.toContain('goToCustomRecipeOrders')
+    // 但「我的订单」这个唯一入口必须在
+    expect(me).toContain('goToOrders')
   })
 
   // ==================== 微信支付接入（2026-09-25） ====================

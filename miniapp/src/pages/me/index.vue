@@ -234,9 +234,15 @@
           <text class="function-text">食谱设计</text>
         </view>
 
-        <view class="function-item" @tap="goToCustomRecipeOrders">
-          <text class="function-text">我的定制订单</text>
-        </view>
+        <!--
+          2026-10-18 · 需求 2.10：**三种订单合并到一个入口**。
+
+          原来这里单独有一个「我的定制订单」—— 顾客要在「我的订单」和它之间来回切
+          才能看到自己全部的订单。定制单已经并进 `orders-list`（带类型筛选），
+          所以这个独立入口**取消**，只留一个「我的订单」。
+
+          想只看定制单：进「我的订单」→ 顶部选「定制」。
+        -->
 
         <view class="function-item" @tap="goToFeedback">
           <text class="function-text">建议反馈</text>
@@ -519,13 +525,6 @@ async function goToFavoriteRecipes() {
 async function goToRecipeDesigner() {
   uni.navigateTo({
     url: "/pages/recipe-designer/list",
-  });
-}
-
-// 我的定制订单（食谱定制）
-async function goToCustomRecipeOrders() {
-  uni.navigateTo({
-    url: "/pages/custom-recipe/orders",
   });
 }
 

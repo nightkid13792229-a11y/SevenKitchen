@@ -6718,6 +6718,35 @@ describe('RecipeDesignerService', () => {
       expect(prisma.recipeSeries.create).toHaveBeenCalled();
     });
 
+    it('未付款定制单的狗不能新建设计系列（2026-10-19）', async () => {
+      prisma.recipeSeries.count.mockResolvedValue(3);
+      prisma.dog.findFirst.mockResolvedValue({
+        id: 'dog-1',
+        ownerId: 'customer-1',
+        name: 'Star',
+        breedId: 'breed-1',
+        birthday: new Date('2021-06-01T00:00:00.000Z'),
+        lifeStageOverride: 'NONE',
+        activityLevel: 'LOW',
+      });
+      prisma.customRecipeOrder.findFirst.mockResolvedValue({
+        orderId: 'CR202610190001',
+      });
+
+      await expect(
+        service.createSeries(
+          { name: '未付款单先别设计', dogId: 'dog-1' } as any,
+          {
+            userId: 'user-old',
+            customerId: 'customer-1',
+            role: 'CUSTOMER',
+          } as any,
+        ),
+      ).rejects.toThrow(/还未付款/);
+
+      expect(prisma.recipeSeries.create).not.toHaveBeenCalled();
+    });
+
     it('requires ordinary customers to create recipe series for their own dog', async () => {
       prisma.dog.findFirst.mockResolvedValue(null);
       // W2：先过"有设计历史"那一关，才能测到后面的狗狗归属校验

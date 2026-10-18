@@ -2219,6 +2219,30 @@ export class RecipeDesignerService {
       }
       referenceDogId = referenceDog.id;
     }
+
+    /**
+     * 2026-10-19：未付款的定制订单禁止开始设计。
+     *
+     * 订单页的入口已禁用，但有人可以绕过界面直接调接口；
+     * 所以服务端再拦一次：这只狗有 PENDING_PAYMENT 的定制单时，
+     * 不给它新建设计系列。付款后（PAID/IN_PROGRESS）才能开始。
+     */
+    const designDogId = customerDog?.id || referenceDogId;
+    if (designDogId) {
+      const pendingOrder = await this.prisma.customRecipeOrder.findFirst({
+        where: {
+          dogId: designDogId,
+          status: CustomRecipeStatus.PENDING_PAYMENT,
+        },
+        select: { orderId: true },
+      });
+      if (pendingOrder) {
+        throw new BadRequestException(
+          `订单 ${pendingOrder.orderId} 还未付款，付款成功后才能开始设计`,
+        );
+      }
+    }
+
     const inferredLifeStage = customerDog
       ? mapDogProfileToSeriesLifeStage(customerDog)
       : null;

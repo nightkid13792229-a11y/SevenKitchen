@@ -416,46 +416,68 @@
       </view>
     </view>
 
-    <!-- 第三步：饮食偏好（可选）
-         老板口径：这里是口味，和健康信息无关；两项都可留空。 -->
+    <!--
+      第二步：它现在吃什么（必填）+ 最近肠胃（选填）
+      2026-10-18 按需求 2.3.4「第二段：补充（只问档案里没有的）」重做。
+
+      原来的「饮食偏好（爱吃的/忌口的）」按 2026-10-17 V6 决定**拿掉** ——
+      老板原话："饮食偏好这个板块我个人判断是一个低频的需求"。
+      而且生产上 4625 只狗填了 0 只，拿掉不丢信息。
+
+      换成这里两段，因为它们是**营养师真正需要的**：
+        · 现在喂的是什么粮 → 决定过渡方案怎么写（"第 1 周按 7:3 混原来的粮"）
+        · 最近肠胃怎么样 → 软便/便秘/呕吐是最常见的换粮诱因
+    -->
     <view v-if="hasSelectedDog" class="section">
       <view class="section-title">
-        <text class="step-number">3</text>
-        <text class="title-text">饮食偏好（可选）</text>
+        <text class="step-number">2</text>
+        <text class="title-text">它现在吃什么</text>
       </view>
-      <text v-if="preferencePrefillHint" class="preference-prefill-hint">{{ preferencePrefillHint }}</text>
 
-      <view class="preference-section">
-        <text class="preference-title">爱吃的食材（可选）</text>
-        <view class="tag-list">
-          <view
-            v-for="(ingredient, index) in formData.preferredIngredients"
-            :key="index"
-            class="tag-item editable"
-          >
-            <text>{{ingredient}}</text>
-            <text class="remove-btn" @tap.stop="removePreferredIngredient(index)">删除</text>
-          </view>
-          <view class="add-btn" @tap="addPreferredIngredient">
-            <text>+ 添加</text>
-          </view>
+      <view class="intake-block">
+        <text class="intake-question">现在主要喂什么<text class="intake-required">*</text></text>
+        <view class="intake-options">
+          <text
+            v-for="opt in currentFoodOptions"
+            :key="opt.code"
+            class="intake-option"
+            :class="{ 'intake-option--on': formData.currentFoodMain === opt.code }"
+            @tap="formData.currentFoodMain = opt.code"
+          >{{ opt.label }}</text>
         </view>
       </view>
 
-      <view class="preference-section">
-        <text class="preference-title">忌口的食材（可选）</text>
-        <view class="tag-list">
-          <view
-            v-for="(ingredient, index) in formData.dislikedIngredients"
-            :key="index"
-            class="tag-item editable"
-          >
-            <text>{{ingredient}}</text>
-            <text class="remove-btn" @tap.stop="removeDislikedIngredient(index)">删除</text>
-          </view>
-          <view class="add-btn" @tap="addDislikedIngredient">
-            <text>+ 添加</text>
-          </view>
+      <view class="intake-block">
+        <text class="intake-question">为什么想换<text class="intake-required">*</text></text>
+        <view class="intake-options">
+          <text
+            v-for="opt in changeReasonOptions"
+            :key="opt.code"
+            class="intake-option"
+            :class="{ 'intake-option--on': formData.changeReasons.includes(opt.code) }"
+            @tap="toggleChangeReason(opt.code)"
+          >{{ opt.label }}</text>
+        </view>
+        <!-- 选「其他」才出现输入框：不选就不占版面 -->
+        <input
+          v-if="formData.changeReasons.includes('OTHER')"
+          v-model="formData.changeReasonOther"
+          class="intake-input"
+          placeholder="说说具体是什么原因"
+          maxlength="120"
+        />
+      </view>
+
+      <view class="intake-block">
+        <text class="intake-question">最近肠胃怎么样（可选）</text>
+        <view class="intake-options">
+          <text
+            v-for="opt in stomachOptions"
+            :key="opt.code"
+            class="intake-option"
+            :class="{ 'intake-option--on': formData.stomachConditions.includes(opt.code) }"
+            @tap="toggleStomach(opt.code)"
+          >{{ opt.label }}</text>
         </view>
       </view>
     </view>
@@ -514,6 +536,25 @@
          disabled 必须带上 submitting：按钮文案是"下一步：支付 ¥300"，
          点一次就进入订阅弹窗，这期间再点一次会生成第二张待付款单。 -->
     <view v-if="hasSelectedDog" class="submit-section">
+      <!--
+        下单前告知（2026-10-18 · 需求 2.3.5）
+
+        线上此前对 ¥300 **没有任何解释**，按钮只写"下一步：支付 ¥300"，
+        顾客很可能以为含食材 —— 而说明只在付完钱之后才出现。
+
+        两条规则：
+          ① 底部条固定（跟着滚），滚到哪儿都看得见
+          ② **金额只出现一次** —— 按钮上已有 ¥300，上方不再单独显示金额
+      -->
+      <view class="pre-order-notice">
+        <text v-if="estimatedDeliveryText" class="pre-order-notice__date">
+          {{ estimatedDeliveryText }}
+        </text>
+        <text class="pre-order-notice__price">
+          定价含营养师一对一设计，不含食材；付完可全额抵扣成品鲜食。
+        </text>
+      </view>
+
       <button
         class="submit-btn"
         @tap="submitOrder"
@@ -526,11 +567,13 @@
 </template>
 
 <script setup lang="ts">
+import { useOptionSet } from '@/utils/option-set'
 import { ref, computed, onMounted } from 'vue';
 import {
   fetchMyOrders,
   fetchDogHealthSummary,
   submitOrder,
+  fetchNextDeliveryDate,
 } from '@/api/custom-recipe';
 import { onLoad, onShow } from '@dcloudio/uni-app';
 import { getToken, request } from '@/utils/api';
@@ -965,6 +1008,16 @@ const formData = ref({
   dogId: '',
   targetGoal: '',
   allergies: [] as string[],
+  /**
+   * 2026-10-18：需求 2.3.4「第二段：补充（只问档案里没有的）」。
+   *
+   * `currentFoodMain` 必填 —— 交付物要写「第 1 周按 7:3 混原来的粮」，
+   * 但"原来的粮"是什么营养师不知道，没有它过渡方案只能写套话。
+   */
+  currentFoodMain: '',
+  changeReasons: [] as string[],
+  changeReasonOther: '',
+  stomachConditions: [] as string[],
   preferredIngredients: [] as string[],
   dislikedIngredients: [] as string[],
   additionalNotes: '',
@@ -973,6 +1026,80 @@ const formData = ref({
   // 后端是**只增不删**：不会删掉档案里已有的记录。
   syncToHealthProfile: true,
 });
+
+/**
+ * 预估交付日期文案（2026-10-18 · 需求 2.3.5）
+ *
+ * 顾客提交**之前**就要看到"预计几号能收到" —— 此前对 ¥300 毫无解释。
+ *
+ * ⚠️ 日期**由后端给**（需求写死："前端不做日期推算"）。
+ * 拿不到就整行不显示 —— 宁可不写，也别写一个猜的日期骗人。
+ */
+const estimatedDeliveryText = ref('');
+const deliveryWorkDays = ref(0);
+
+async function loadEstimatedDelivery() {
+  try {
+    const result = await fetchNextDeliveryDate();
+    deliveryWorkDays.value = Number(result.deliveryWorkDays) || 0;
+    if (result.estimatedDeliveryDate) {
+      estimatedDeliveryText.value = `预计 ${formatDeliveryDate(
+        result.estimatedDeliveryDate,
+      )} 交付`;
+    }
+  } catch {
+    // 拿不到就不显示 —— 不编日期
+    estimatedDeliveryText.value = '';
+  }
+}
+
+/** `2026-10-20` → `10 月 20 日（周二）` */
+function formatDeliveryDate(value: string): string {
+  const parts = value.split('-').map(Number);
+  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return '';
+  const [year, month, day] = parts;
+  const date = new Date(year, month - 1, day);
+  const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+  return `${month} 月 ${day} 日（${weekdays[date.getDay()]}）`;
+}
+
+/**
+ * 需求 2.3.4 的三组选项（2026-10-18）。
+ *
+ * **都来自后端选项字典** —— 项目硬规矩：选项不写在前端。
+ * 加一种喂法（比如"冻干"）只要后台加一条，前端不用改。
+ */
+const {
+  items: currentFoodOptions,
+  ensure: ensureCurrentFoodOptions,
+} = useOptionSet('custom_recipe_current_food');
+const {
+  items: changeReasonOptions,
+  ensure: ensureChangeReasonOptions,
+} = useOptionSet('custom_recipe_change_reason');
+const { items: stomachOptions, ensure: ensureStomachOptions } = useOptionSet(
+  'custom_recipe_stomach',
+);
+
+/** 多选切换（为什么想换） */
+function toggleChangeReason(code: string) {
+  const list = formData.value.changeReasons;
+  formData.value.changeReasons = list.includes(code)
+    ? list.filter((item) => item !== code)
+    : [...list, code];
+  // 取消「其他」时把手填内容也清掉 —— 否则会留下一个看不见的旧值跟着提交
+  if (code === 'OTHER' && !formData.value.changeReasons.includes('OTHER')) {
+    formData.value.changeReasonOther = '';
+  }
+}
+
+/** 多选切换（肠胃情况） */
+function toggleStomach(code: string) {
+  const list = formData.value.stomachConditions;
+  formData.value.stomachConditions = list.includes(code)
+    ? list.filter((item) => item !== code)
+    : [...list, code];
+}
 
 /**
  * 档案已有信息（老板拍板的决策 3：定制页是档案的第二个填写入口）。
@@ -1208,6 +1335,22 @@ const canSubmit = computed(() => {
   if (!hasOpenPlan.value && weightGoalChoice.value === null) return false;
   // 第二步那一问必须答：答"没有"才能跳过录入界面，所以不能默认成没答
   if (hasFoodAllergy.value === null) return false;
+  /**
+   * 需求 2.3.4 的两项必填（2026-10-18）。
+   *
+   * 为什么卡在提交而不是只标个星号：
+   * 交付物要写"第 1 周按 7:3 混原来的粮" —— **没有这两项，营养师写不出过渡方案**，
+   * 交付出来的东西就是套话。宁可现在拦住，也别让顾客等三天拿到一份没法用的食谱。
+   */
+  if (!formData.value.currentFoodMain) return false;
+  if (formData.value.changeReasons.length === 0) return false;
+  // 选了「其他」就必须填原因 —— 否则营养师只看到"其他"两个字
+  if (
+    formData.value.changeReasons.includes('OTHER') &&
+    !formData.value.changeReasonOther.trim()
+  ) {
+    return false;
+  }
   return true;
 });
 
@@ -1289,8 +1432,12 @@ const healthPrefillHint = computed(() => {
  *
  * 原来写「提交定制订单 ¥300」：金额出现在"提交"这个词后面，顾客很容易理解成
  * "点下去就是付 300"。改成「下一步：支付 ¥300」，把"提交"和"付款"分成两步说清。
+ *
+ * 2026-10-18：按需求 2.3.5 改成「支付 ¥300」——
+ * 金额**只出现这一次**（上方告知条里不再重复写金额），
+ * 而"这钱包含什么"由上方那条说明负责，按钮只管"要付多少"。
  */
-const submitButtonText = '确认定制';
+const submitButtonText = '支付 ¥300';
 
 // ==================== 待付款单提醒 ====================
 
@@ -1784,6 +1931,12 @@ const commonAllergens = ref<string[]>([
 
 /** 标签清单优先用后端词表（后台可维护、按循证常见度排），失败就用上面的兜底 */
 onMounted(async () => {
+  // 2026-10-18：需求 2.3.4 的三组选项 + 2.3.5 的预估交付日期
+  void ensureCurrentFoodOptions();
+  void ensureChangeReasonOptions();
+  void ensureStomachOptions();
+  void loadEstimatedDelivery();
+
   try {
     const res: any = await dogApi.commonAllergens();
     if (res?.code !== 0) return;
@@ -3043,5 +3196,78 @@ const getActivityLabel = (level: string) => {
   margin-top: 10rpx;
   font-size: 22rpx;
   color: #6b7a70;
+}
+
+/* ===== 需求 2.3.4：它现在吃什么 / 肠胃（2026-10-18）===== */
+.intake-block {
+  margin-bottom: 28rpx;
+}
+
+.intake-block:last-child {
+  margin-bottom: 0;
+}
+
+.intake-question {
+  display: block;
+  font-size: 26rpx;
+  color: #3f3222;
+  font-weight: 700;
+  margin-bottom: 16rpx;
+}
+
+.intake-required {
+  color: #c2410c;
+  margin-left: 6rpx;
+}
+
+.intake-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+
+.intake-option {
+  padding: 12rpx 28rpx;
+  border-radius: 999rpx;
+  border: 2rpx solid #e8ded0;
+  background: #fff;
+  font-size: 25rpx;
+  color: #6e5f4b;
+}
+
+.intake-option--on {
+  border-color: #b45309;
+  background: #fff3e6;
+  color: #b45309;
+  font-weight: 700;
+}
+
+.intake-input {
+  margin-top: 16rpx;
+  padding: 16rpx 20rpx;
+  border-radius: 14rpx;
+  border: 2rpx solid #e8ded0;
+  background: #fffdf9;
+  font-size: 25rpx;
+}
+
+/* ===== 需求 2.3.5：下单前告知（2026-10-18）===== */
+.pre-order-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  padding: 0 8rpx 18rpx;
+}
+
+.pre-order-notice__date {
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #3f3222;
+}
+
+.pre-order-notice__price {
+  font-size: 22rpx;
+  color: #8c7b66;
+  line-height: 1.5;
 }
 </style>

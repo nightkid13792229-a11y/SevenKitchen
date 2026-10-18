@@ -588,6 +588,21 @@ export class CustomRecipeController {
   }
 
   /**
+   * 预估交付日期（2026-10-18 · 需求 2.3.5）
+   *
+   * ⚠️ 必须声明在 `@Get('orders/:orderId')` 之类的通配之前 ——
+   * 这条路径不会跟它们冲突（`next-delivery-date` 不是 `orders/...`），
+   * 但放在 `@Get('schedule')` 旁边保持"排期相关"聚在一起。
+   */
+  @Get('next-delivery-date')
+  @ApiOperation({ summary: '预估交付日期（下单前告知用，不占位）' })
+  async getNextDeliveryDate() {
+    return ApiResponseDto.success(
+      await this.customRecipeService.getEstimatedDeliveryDate(),
+    );
+  }
+
+  /**
    * Get available schedule
    */
   @Get('schedule')

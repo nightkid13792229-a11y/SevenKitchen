@@ -288,6 +288,30 @@ export async function cancelOrder(orderId: string): Promise<{
  * `options` 原样透传给后端（status / page / pageSize）——
  * 这一层不做过滤，过滤是后端的事。
  */
+/**
+ * 预估交付日期（2026-10-18 · 需求 2.3.5）
+ *
+ * 下单页要在提交**之前**告诉顾客几号能收到 ——
+ * 日期由**后端排单算法**给出，前端不做推算（需求写死）。
+ */
+export async function fetchNextDeliveryDate(): Promise<{
+  scheduledDate: string | null;
+  estimatedDeliveryDate: string | null;
+  deliveryWorkDays: number;
+}> {
+  const res = await request({
+    url: '/custom-recipe/next-delivery-date',
+    method: 'GET',
+  });
+  return (
+    res?.data || {
+      scheduledDate: null,
+      estimatedDeliveryDate: null,
+      deliveryWorkDays: 0,
+    }
+  );
+}
+
 export async function fetchMyOrders(options?: {
   status?: string;
   page?: number;

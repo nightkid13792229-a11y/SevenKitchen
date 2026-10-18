@@ -1852,6 +1852,49 @@ export class CustomRecipeService implements ICustomRecipeRepository {
    * excludeDays 用于跳过"刚在并发里抢输"的日子，避免反复撞同一天。
    * 这里只做"读"筛选，真正的占位由 tryBookSlotTx 的 CAS 决定胜负。
    */
+  /**
+   * 预估交付日期（2026-10-18 · 需求 2.3.5）
+   *
+   * 下单页要在提交**之前**告诉顾客"预计几号交付" —— 此前线上对 ¥300 没有任何解释，
+   * 顾客以为含食材，说明只在付完钱之后才出现。
+   *
+   * ## 为什么不在前端算
+   *
+   * 需求写死了：「交付日期由后端按排单算法算出，**前端不做日期推算**」。
+   * 前端算的话，跟真正下单时排到的那天可能不是同一天（并发占位），
+   * 顾客会觉得"说好的 20 号怎么变成 22 号"。
+   *
+   * ## 它只读不占位
+   *
+   * 只是查"下一个有空的日子"，**不锁位**。
+   * 真正确认是在下单事务里 `tryBookSlotTx` —— 那一步才算数。
+   */
+  async getEstimatedDeliveryDate(): Promise<{
+    scheduledDate: string | null;
+    estimatedDeliveryDate: string | null;
+    deliveryWorkDays: number;
+  }> {
+    const config = await this.configService.getConfig();
+    const next = await this.findNextAvailableDate(config.dailyCapacity);
+
+    if (!next) {
+      return {
+        scheduledDate: null,
+        estimatedDeliveryDate: null,
+        deliveryWorkDays: config.deliveryWorkDays,
+      };
+    }
+
+    const estimated = new Date(next);
+    estimated.setDate(estimated.getDate() + config.deliveryWorkDays);
+
+    return {
+      scheduledDate: TimezoneUtil.toShanghaiDateString(next),
+      estimatedDeliveryDate: TimezoneUtil.toShanghaiDateString(estimated),
+      deliveryWorkDays: config.deliveryWorkDays,
+    };
+  }
+
   private async findNextAvailableDate(
     capacity: number,
     excludeDays: Set<string> = new Set(),

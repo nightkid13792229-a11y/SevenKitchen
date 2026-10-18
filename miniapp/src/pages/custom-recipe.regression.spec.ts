@@ -452,30 +452,34 @@ describe('custom recipe page · 档案带出与目标口径', () => {
 describe('custom recipe page · 结构与知情同意', () => {
   const page = read(`${PAGE_DIR}/index.vue`)
 
-  it('页面顺序：体重管理 → 过敏信息 → 饮食偏好 → 备注（可选）', () => {
+  it('页面顺序：体重管理 → 过敏信息 → 它现在吃什么 → 备注（可选）', () => {
+    /**
+     * ⚠️ 2026-10-18 改：按需求 2.3.4 重做。
+     *
+     * 「饮食偏好（爱吃的/忌口的）」按 V6 决定**拿掉**（老板："低频"），
+     * 换成「它现在吃什么」—— 那是营养师真正需要的：
+     * 交付物要写"第 1 周按 7:3 混原来的粮"，而"原来的粮"是什么只有顾客知道。
+     */
     const goalIndex = page.indexOf('体重管理')
     const allergyIndex = page.indexOf('过敏信息')
-    const preferenceIndex = page.indexOf('饮食偏好（可选）')
+    const intakeIndex = page.indexOf('它现在吃什么')
     const notesIndex = page.indexOf('备注（可选）')
 
     expect(goalIndex).toBeGreaterThan(-1)
-    // 2026-10-04：原「1 选择狗狗」取消，其余步骤依次前移，
-    // 过敏信息独立成第 2 步（原来嵌在健康管理勾选里）
     expect(allergyIndex).toBeGreaterThan(goalIndex)
-    expect(preferenceIndex).toBeGreaterThan(allergyIndex)
-    // 备注独立成第 4 步，并且排在饮食偏好之后
-    expect(notesIndex).toBeGreaterThan(preferenceIndex)
-    /**
-     * 2026-10-05 老板要求：交付/抵扣整块删掉（确认页已有），
-     * 所以它不再参与页面顺序。
-     */
-    expect(page).not.toContain('delivery-section')
+    expect(intakeIndex).toBeGreaterThan(allergyIndex)
+    expect(notesIndex).toBeGreaterThan(intakeIndex)
+
+    // 饮食偏好必须彻底消失（不是藏起来）
+    expect(page).not.toContain('饮食偏好（可选）')
+    expect(page).not.toContain('爱吃的食材')
+    expect(page).not.toContain('忌口的食材')
   })
 
   it('「其他需求」不再留在体重管理卡片里', () => {
     const goalSection = page.slice(
       page.indexOf('体重管理'),
-      page.indexOf('饮食偏好（可选）'),
+      page.indexOf('它现在吃什么'),
     )
 
     expect(goalSection).not.toContain('其它需求')
@@ -484,10 +488,16 @@ describe('custom recipe page · 结构与知情同意', () => {
     expect(page).not.toContain('不会改变价格或热量计算')
   })
 
-  it('饮食偏好两项都标了"可选"（2026-10-05 改为爱吃 / 忌口）', () => {
-    expect(page).toContain('爱吃的食材（可选）')
-    expect(page).toContain('忌口的食材（可选）')
-    expect(page).toContain('饮食偏好（可选）')
+  it('「它现在吃什么」两项必填，「肠胃」选填（2026-10-18 · 需求 2.3.4）', () => {
+    expect(page).toContain('现在主要喂什么')
+    expect(page).toContain('为什么想换')
+    expect(page).toContain('intake-required')
+    expect(page).toContain('最近肠胃怎么样（可选）')
+    expect(page).toContain("useOptionSet('custom_recipe_current_food')")
+    expect(page).toContain("useOptionSet('custom_recipe_change_reason')")
+    // 这一组是跨行写法，断言用窄一点的片段
+    expect(page).toContain("'custom_recipe_stomach'")
+    expect(page).toContain("formData.changeReasons.includes('OTHER')")
   })
 
   it('补上了附件上传入口（此前字段有、界面没有）', () => {
@@ -1511,10 +1521,26 @@ describe('定制页 · 第二轮精简（2026-10-05）', () => {
     expect(read(`${PAGE_DIR}/success.vue`)).toContain('成品抵扣额度')
   })
 
-  it('提交按钮改为「确认定制」（它不做支付，只下单+订阅授权+跳下一步）', () => {
-    expect(code).toContain("const submitButtonText = '确认定制'")
-    expect(code).not.toContain('下一步：支付')
-    // 支付确实在后面那一步：提交里不能出现 requestPayment
+  it('提交按钮写「支付 ¥300」（2026-10-18 · 需求 2.3.5 覆盖 10-05 的「确认定制」）', () => {
+    /**
+     * ⚠️ 这是一次**需求覆盖**，不是放松守卫。
+     *
+     * 2026-10-05 的版本写「确认定制」，理由是"它不做支付，只下单+订阅授权+跳下一步"。
+     * 2026-10-17 需求 2.3.5 明确改成按钮文案 `支付 ¥300`，并且
+     * 「金额只出现一次」—— 上方告知条不重复写金额。
+     *
+     * **但原守卫真正想守的那件事没变**：按钮本身**不发起支付**，
+     * 支付在后面那一步（提交里不能出现 requestPayment）。
+     */
+    expect(code).toContain("const submitButtonText = '支付 ¥300'")
+    // 金额只在按钮上出现一次：告知条里不能再写 ¥300
+    const notice = code.slice(
+      code.indexOf('pre-order-notice'),
+      code.indexOf('submit-btn'),
+    )
+    expect(notice).not.toContain('¥300')
+    expect(notice).not.toContain('300 元')
+    // 支付确实在后面那一步
     const submit = code.slice(code.indexOf('const submitOrder'))
     expect(submit.slice(0, submit.indexOf('uni.redirectTo'))).not.toContain('requestPayment')
   })
@@ -1716,7 +1742,8 @@ describe('定制页 · 2026-10-05 第三批（4 条）', () => {
     const sections = [
       '<text class="title-text">体重管理</text>',
       '<text class="title-text">过敏信息</text>',
-      '<text class="title-text">饮食偏好（可选）</text>',
+      // 2026-10-18：「饮食偏好」换成「它现在吃什么」（需求 2.3.4）
+      '<text class="title-text">它现在吃什么</text>',
       '<text class="title-text">备注（可选）</text>',
     ]
     for (const title of sections) {

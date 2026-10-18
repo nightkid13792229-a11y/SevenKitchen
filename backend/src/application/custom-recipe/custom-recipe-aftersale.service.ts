@@ -8,6 +8,7 @@ import { CustomRecipeStatus } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { CustomRecipeConfigService } from './custom-recipe-config.service';
 import { PlatformOptionsService } from '../platform-options/platform-options.service';
+import { WechatService } from '../../infrastructure/wechat/wechat.service';
 import { CustomerMessageService } from '../message/customer-message.service';
 import { CUSTOM_RECIPE_AFTERSALE_TYPE_SET } from '../platform-options/option-sets.registry';
 import {
@@ -56,6 +57,9 @@ export class CustomRecipeAftersaleService {
      */
     @Optional()
     private readonly customerMessages?: CustomerMessageService,
+    /** 订阅消息（需求 2.5.8）—— 同样是可选依赖，发不出去不影响处理结果 */
+    @Optional()
+    private readonly wechatService?: WechatService,
   ) {}
 
   /**
@@ -467,8 +471,27 @@ export class CustomRecipeAftersaleService {
      */
     const order = await this.prisma.customRecipeOrder.findUnique({
       where: { id: row.orderId },
-      select: { customerId: true, orderId: true },
+      select: { customerId: true, orderId: true, customer: { select: { wechatOpenid: true } } },
     });
+    /**
+     * 订阅消息（需求 2.5.8：**订阅消息 + 站内消息**，两个渠道都要）。
+     *
+     * 微信是一次性订阅 —— 顾客在**提交售后**那一刻申请过，
+     * 正好接住这一条。他没申请过就发不出去，这时站内消息是唯一通道
+     * （这正是消息中心值得做的原因）。
+     *
+     * 发失败不影响处理结果。
+     */
+    if (order?.customer?.wechatOpenid) {
+      await this.wechatService
+        ?.sendCustomRecipeOrderNotification(
+          order.customer.wechatOpenid,
+          order.orderId,
+          'AFTERSALE_RESOLVED',
+        )
+        .catch(() => undefined);
+    }
+
     if (order) {
       await this.customerMessages
         ?.send({

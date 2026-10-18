@@ -723,6 +723,14 @@ export class WechatService {
       PAID: '已付款',
       IN_PROGRESS: '制作中',
       DELIVERED: '已交付',
+      /**
+       * 售后处理完成（2026-10-18 · 需求 2.5.8）。
+       *
+       * 这条要能发出去，**前提是顾客在提交售后时申请过一次订阅**
+       * （微信是一次性订阅：一次授权只能下发一条）。
+       * 所以小程序在"提交售后"那一刻申请，正好接住这一条。
+       */
+      AFTERSALE_RESOLVED: '售后已处理',
     };
 
     const statusText = statusTextMap[status] || status;

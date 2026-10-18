@@ -199,6 +199,7 @@ import {
   type AftersaleItem,
   type AftersaleTypeOption,
 } from '@/api/custom-recipe';
+import { requestCustomRecipeOrderSubscription } from '@/utils/custom-recipe-payment';
 
 /**
  * 售后页（2026-10-16，批次 2.5）
@@ -373,10 +374,27 @@ const load = async () => {
   }
 };
 
+/**
+ * 提交售后时申请一次订阅（2026-10-18 · 需求 2.5.8）。
+ *
+ * 为什么在这一刻申请：微信是**一次性订阅** —— 一次授权只能下发一条消息。
+ * 售后处理完成那一刻顾客不在小程序里，没法当时授权；
+ * 而**提售后这个动作**正好是他主动操作、最有理由接受通知的时刻。
+ *
+ * 复用下单那个封装（它自己会去取模板 ID、自己吞掉所有失败）——
+ * 不发通知也**不影响提交**，站内消息是兜底。
+ */
+async function requestAftersaleSubscription() {
+  await requestCustomRecipeOrderSubscription();
+}
+
 const handleSubmit = async () => {
   if (!canSubmit.value || submitting.value) return;
   submitting.value = true;
   try {
+    // 先申请订阅（点提交这个动作本身就授权了一次），再提交
+    await requestAftersaleSubscription();
+
     const result = await submitAftersale({
       orderId: orderId.value,
       type: form.type,

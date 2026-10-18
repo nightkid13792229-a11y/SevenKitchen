@@ -82,13 +82,14 @@
          这个最常见的正常状态下，它下面五个分支一条都不成立，
          只剩内边距与白底，看上去就是一条空白。所以整张卡改成按内容出现。 -->
     <view v-if="showStatusSection" class="section">
-      <!-- 体重管理计划（阶段 D1）：进行中就带出目标与当前能量。
-           计划才是顾客当下真正在执行的方案，定制时必须看得见 ——
-           否则他定的减重计划在定制页完全没有体现，等于白定。 -->
+      <!-- 体重管理计划（阶段 D1）：进行中/维持期/已暂停都带出。
+           计划是顾客当下真正在执行的方案，定制时必须看得见 ——
+           否则他定的减重计划在定制页完全没有体现，等于白定。
+           2026-10-19：暂停的计划只展示、不锁方向；状态由右侧 badge 说明。 -->
       <view v-if="selectedPlan" class="plan-banner">
         <view class="plan-banner__head">
           <text class="plan-banner__title">
-            {{ selectedPlan.direction === 'LOSS' ? '减重计划' : '增重计划' }}进行中
+            {{ selectedPlan.direction === 'LOSS' ? '减重计划' : '增重计划' }}
           </text>
           <text class="plan-banner__badge">{{ planStatusLabel }}</text>
         </view>
@@ -97,12 +98,14 @@
             目标体重 {{ selectedPlan.targetWeightKg }}kg
             <template v-if="selectedPlan.remainingKg > 0">（还差 {{ selectedPlan.remainingKg }}kg）</template>
           </text>
-          <text class="plan-banner__row">
+          <text v-if="selectedPlan.status !== 'PAUSED'" class="plan-banner__row">
             当前每日能量 {{ selectedPlan.currentKcal }} kcal
           </text>
         </view>
         <text class="plan-banner__hint">
-          下面的每日能量已经按这个计划算好了。
+          {{ selectedPlan.status === 'PAUSED'
+            ? '计划已暂停，期间按正常维持量喂；可在健康管理中恢复。'
+            : '下面的每日能量已经按这个计划算好了。' }}
         </text>
       </view>
 
@@ -224,29 +227,21 @@
         <text class="title-text">体重管理</text>
       </view>
 
-      <!-- 老板 2026-10-05（第三批）的要求：
-           ① 狗狗一选定就把**体况评分与我们的建议**摆出来，不等顾客先答什么
-           ② 「需要 / 不需要」两个按钮改成**三个方向**：减重 / 维持 / 增重
-           ③ 选「维持」→ 计划入口按钮置灰不可点；选「减重 / 增重」→
-              那个按钮带着方向进计划页
-           ④ 因此上一版那行"还是想给它定个目标？我还是想减重/增重"整段删掉
-              （方向已经由顾客自己选，不需要再绕一条"坚持"的路） -->
+      <!-- 2026-10-19 老板定稿：
+           ① 三选一（减重/维持/增重），不再按体况限制选项，选择权交给家长
+           ② 建议文案放在三选一下方：
+              「狗狗名」的体况评分「X」（9分制），我们建议「方向」
+           ③ 不再从定制页引导制定体重计划；
+              只有已有进行中/维持期计划时才给一个查看入口 -->
       <view class="goal-group">
-        <!-- ① 体况结论：狗狗一选定就显示（体况评分 + 我们建议的方向） -->
-        <view v-if="bcsAdviceText" class="advice-line">
-          <text class="advice-line__text">{{ bcsAdviceText }}</text>
-        </view>
-
-        <!-- 已经有进行中的计划：方向以计划为准，不再问三选一
-             （顾客本来就在管理体重，再让他选一遍等于否定他自己定过的东西） -->
+        <!-- 已有进行中/维持期计划：方向以计划为准，只给查看入口 -->
         <button
           v-if="hasOpenPlan"
           class="plan-entry-btn"
           @tap="goToWeightGoalPlan()"
-        >{{ planEntryButtonText }}</button>
+        >查看体重管理计划</button>
 
         <template v-else>
-          <!-- ② 三个方向 -->
           <view class="goal-ask">
             <text class="goal-ask__question">想帮它减重、维持，还是增重？</text>
             <view class="goal-ask__options">
@@ -254,27 +249,16 @@
                 v-for="option in weightGoalOptions"
                 :key="option.value"
                 class="goal-ask__option"
-                :class="{
-                  'goal-ask__option--on': weightGoalChoice === option.value,
-                  'goal-ask__option--off': blockedWeightGoalChoice === option.value,
-                }"
+                :class="{ 'goal-ask__option--on': weightGoalChoice === option.value }"
                 @tap="chooseWeightGoal(option.value)"
               >{{ option.label }}</text>
             </view>
-            <!-- 体况与方向打架时说明白：偏胖不给选增重、偏瘦不给选减重 -->
-            <text v-if="blockedWeightGoalReason" class="goal-ask__blocked">
-              {{ blockedWeightGoalReason }}
-            </text>
           </view>
 
-          <!-- ③ 计划入口：**只有选了减重/增重才出现**（2026-10-05 老板第三批要求）。
-               选"维持"时不显示这个按钮 —— 没有目标就没有计划可定，
-               与其摆一个点不了的灰按钮，不如不占版面；也不再写那句解释。 -->
-          <view
-            v-if="showPlanEntryButton"
-            class="plan-entry-btn"
-            @tap="openWeightGoalPlan()"
-          >{{ planEntryButtonText }}</view>
+          <!-- 建议只是建议：放在三选一下方，不限制顾客选哪个方向 -->
+          <view v-if="bcsAdviceText" class="advice-line">
+            <text class="advice-line__text">{{ bcsAdviceText }}</text>
+          </view>
         </template>
       </view>
     </view>
@@ -626,8 +610,9 @@ const dogsLoadFailed = ref(false);
 /**
  * 当前狗狗的体重管理计划（阶段 D1）。
  *
- * 进行中/in 维持期时才带出来 —— 计划才是顾客当下真正在执行的方案，
+ * 进行中/维持期/已暂停都带出来 —— 计划是顾客当下真正在执行的方案，
  * 定制页必须看得见，否则他定的减重计划在这里完全没有体现。
+ * 2026-10-19：暂停的计划只展示，不锁方向。
  */
 const selectedPlan = ref<WeightGoalPlanView | null>(null);
 const planStatusLabel = computed(() =>
@@ -637,15 +622,9 @@ const planStatusLabel = computed(() =>
 /**
  * 第一步的方向选择：减重 / 维持 / 增重（2026-10-05 老板第三批要求）。
  *
- * 取代了上一版的「需要 / 不需要」两问：
- *   · 选**维持** → 「去制定体重管理计划」置灰不可点（没有目标就没有计划可定）
- *   · 选**减重 / 增重** → 那个按钮带着方向进计划页
- *   · null = 还没选（提交按钮为灰）
- *
- * 为什么方向交回给顾客：老板明确要求"一个是减重，一个是维持，一个是增重"。
- * 与 2026-10-04"方向由系统定"的差别在于：那时顾客只看见结论、看不出自己能改，
- * 现在三个方向都摆在明面上，而**体况与方向打架时系统会挡住**
- * （偏胖不给选增重、偏瘦不给选减重，见 blockedWeightGoalChoice）。
+ * 2026-10-19 调整：不再按体况限制选项，选择权交给家长；
+ * 体况建议只作为建议显示（bcsAdviceText），不是限制。
+ * null = 还没选（提交按钮为灰）。
  */
 type WeightGoalChoice = 'LOSS' | 'MAINTAIN' | 'GAIN';
 
@@ -657,65 +636,10 @@ const weightGoalOptions: Array<{ value: WeightGoalChoice; label: string }> = [
   { value: 'GAIN', label: '增重' },
 ];
 
-/**
- * 体况与方向打架的那一项：偏胖不给选增重、偏瘦不给选减重。
- *
- * 为什么加这道挡（老板没要求，但必须挡）：这个方向会原样交给营养师，
- * 而给偏胖的狗出增重食谱、给偏瘦的狗出减重食谱都是反的。
- * 计划页那边的后端也只在"系统本来没建议"时才听顾客的方向，两边同一套口径。
- * 维持永远可选 —— 不想增减重是顾客的自由。
- */
-const blockedWeightGoalChoice = computed<WeightGoalChoice | ''>(() => {
-  const bcs = Number(selectedDog.value?.bcsScore);
-  if (!Number.isFinite(bcs) || bcs <= 0) return '';
-  if (bcs >= BCS_LOSS_THRESHOLD) return 'GAIN';
-  if (bcs <= BCS_GAIN_THRESHOLD) return 'LOSS';
-  return '';
-});
-
-const blockedWeightGoalReason = computed(() => {
-  if (blockedWeightGoalChoice.value === 'GAIN') {
-    return '它现在的体况偏胖，增重这一项先不给选；想增重请先咨询兽医。';
-  }
-  if (blockedWeightGoalChoice.value === 'LOSS') {
-    return '它现在的体况偏瘦，减重这一项先不给选；想减重请先咨询兽医。';
-  }
-  return '';
-});
-
-/** 选方向。选到被体况挡掉的那一项时就地说明，不静默失败 */
+/** 选方向：选了就重算交给营养师的目标；不再有体况限制 */
 function chooseWeightGoal(value: WeightGoalChoice) {
-  if (value === blockedWeightGoalChoice.value) {
-    uni.showToast({ title: blockedWeightGoalReason.value, icon: 'none', duration: 3000 });
-    return;
-  }
   weightGoalChoice.value = value;
   syncGoalWithPlan();
-}
-
-/**
- * 计划入口什么时候出现：**选了减重/增重**，或本来就有进行中的计划
- * （那时按钮是「查看体重管理计划」）。
- *
- * 选"维持"时不显示（2026-10-05 老板要求）：没有目标就没有计划可定，
- * 摆一个点不了的灰按钮 + 一句解释都是多余的版面。
- * 还没选方向时也不显示 —— 三个按钮就在上面，先选一个。
- */
-const showPlanEntryButton = computed(() => {
-  if (hasOpenPlan.value) return true;
-  return weightGoalChoice.value === 'LOSS' || weightGoalChoice.value === 'GAIN';
-});
-
-/** 计划入口：选了减重/增重就把方向带进计划页；有计划则进改目标那一版 */
-function openWeightGoalPlan() {
-  if (!showPlanEntryButton.value) return;
-  if (hasOpenPlan.value) {
-    goToWeightGoalPlan();
-    return;
-  }
-  if (weightGoalChoice.value === 'LOSS' || weightGoalChoice.value === 'GAIN') {
-    goToWeightGoalPlan(weightGoalChoice.value);
-  }
 }
 
 /**
@@ -844,22 +768,16 @@ function allergyReportPageText(report: Record<string, any>): string {
 }
 
 /**
- * 定制方向**由系统定，顾客不能选**（老板 2026-10-04 拍板）。
+ * 定制方向：计划（进行中/维持期）优先；否则用顾客三选一。
  *
- * 为什么把顾客那三个单选删掉：同一只狗的方向可以在这里被选成"增重"，
- * 而上面横幅还写着"减重计划进行中、还差 0.8kg"，两个值都会交给营养师。
- * 取值顺序固定为「计划 > 顾客选的方向」：
- *   ① 有计划（进行中/维持期）→ 计划说了算：减重计划 → LOSE_WEIGHT，
+ * 2026-10-19：不再按体况限制顾客的选择，选择权交给家长；
+ * 暂停的计划不锁方向（hasOpenPlan 不含 PAUSED），由顾客重新选。
+ * 取值顺序固定为「计划 > 顾客三选一」：
+ *   ① 进行中/维持期 → 计划说了算：减重计划 → LOSE_WEIGHT，
  *      增重计划 → GAIN_WEIGHT，维持期 → MAINTAIN
- *   ② 没有计划 → 按顾客在上面选的那一个方向（减重 / 维持 / 增重）
+ *   ② 其它（没有计划 / 已暂停）→ 按顾客选的方向
  *   ③ 还没选 → 空字符串（提交按钮为灰，见 canSubmit）
- *
- * 2026-10-05 第三批的变化：方向从"系统按体况推"改成"顾客自己选"（老板要求
- * 摆出减重/维持/增重三个按钮）。体况与方向打架的那些组合在下单前就被挡住
- * （blockedWeightGoalChoice），计划页那边的后端也只在"系统本来没建议"时听顾客。
  */
-const BCS_LOSS_THRESHOLD = 6;
-const BCS_GAIN_THRESHOLD = 3;
 /** BCS 4-5 是理想区间，按"维持"处理（后端在同样区间里不给增减重建议） */
 const BCS_MAINTAIN_GOAL = 'MAINTAIN';
 
@@ -880,10 +798,9 @@ function resolveTargetGoal(): string {
 }
 
 /**
- * 把表单里的方向对齐到「计划 > 体况」。
+ * 把表单里的方向对齐到「计划 > 顾客三选一」。
  *
- * 每次会影响方向的输入变化（选狗、读到计划、补确认完体况）后都要调一次；
- * 顾客改不了方向，所以这里不需要任何"锁住不让点"的界面逻辑。
+ * 每次会影响方向的输入变化（选狗、读到计划、补确认完体况）后都要调一次。
  */
 function syncGoalWithPlan() {
   formData.value.targetGoal = resolveTargetGoal();
@@ -901,7 +818,7 @@ async function loadSelectedPlan(dogId: string) {
     // 方向跟计划走，放在赋值之后、慢响应保护之内
     syncGoalWithPlan();
   } catch {
-    // 读不到计划不该挡住定制流程：方向退回按体况给（resolveTargetGoal 里那一层）
+    // 读不到计划不该挡住定制流程：方向退回让顾客自己选
     selectedPlan.value = null;
     syncGoalWithPlan();
   }
@@ -949,37 +866,26 @@ const dogHeroLine = computed(() => {
 });
 
 /**
- * 计划入口按钮：有计划时说"查看"，没有时说"去制定"（顾客才知道点进去会看到什么）。
+ * 计划是否锁方向：只有进行中 / 维持期。
  *
- * 后端 getCurrentPlan 只回三种状态：ACTIVE / PAUSED / MAINTENANCE
- * （终态不会回），所以"有计划"就是这三个之一 —— 已暂停的计划也算，
- * 说"去制定"会让顾客以为自己的计划没了。
+ * PAUSED 不算：暂停期间按正常维持量，这一单应由顾客重新选。
+ * 若把 PAUSED 算进来，resolveTargetGoal 算不出方向，提交按钮会卡死。
+ * 计划横幅仍会展示暂停计划（selectedPlan 不受影响）。
  */
 const hasOpenPlan = computed(() => {
   const plan = selectedPlan.value;
   if (!plan) return false;
-  return ['ACTIVE', 'PAUSED', 'MAINTENANCE'].includes(String(plan.status));
+  return ['ACTIVE', 'MAINTENANCE'].includes(String(plan.status));
 });
 
-const planEntryButtonText = computed(() =>
-  hasOpenPlan.value ? '查看体重管理计划' : '去制定体重管理计划',
-);
-
 /**
- * 体重管理计划页（已存在，参数名就是它 onLoad 里读的 dogId）。
+ * 打开体重管理计划页（只有已有进行中/维持期计划时才有入口）。
  *
- * mode 必须跟着"有没有计划"走：
- *   · 有计划 → adjust（看进度 / 改目标 / 改力度 / 取消）
- *   · 没计划 → 不传，该页默认进 create（系统建议 → 顾客调整 → 确认）
- * 为什么不一律用 create：有计划的狗再进 create，后端 createPlan 会直接抛
+ * mode=adjust：有计划的狗再走 create，后端 createPlan 会抛
  * 「这只狗狗已经有一个进行中的计划了」，顾客点了按钮只看到一句报错。
- * 读计划失败时按"没有计划"处理，与 resolveTargetGoal 的兜底保持一致。
- *
- * `direction`（2026-10-05 老板要求）：体况理想时系统本来不建议增减重，
- * 顾客点「我还是想减重 / 我还是想增重」才会带上它 —— 计划页据此向后端要
- * 一份"按顾客坚持的方向"算的建议，而不是撞上"不需要计划"那句空态。
+ * 暂停的计划不从定制页进；这个页面只提示可在健康管理中恢复。
  */
-const goToWeightGoalPlan = (direction?: 'LOSS' | 'GAIN') => {
+const goToWeightGoalPlan = () => {
   const dogId = formData.value.dogId;
   if (!dogId) {
     uni.showToast({ title: '请先选择要定制的狗狗', icon: 'none' });
@@ -988,9 +894,6 @@ const goToWeightGoalPlan = (direction?: 'LOSS' | 'GAIN') => {
   const query = [`dogId=${encodeURIComponent(dogId)}`];
   if (hasOpenPlan.value) {
     query.push('mode=adjust');
-  }
-  if (direction) {
-    query.push(`direction=${direction}`);
   }
   uni.navigateTo({
     url: `/pages/weight-goal-plan/index?${query.join('&')}`,
@@ -1398,25 +1301,19 @@ const showStatusSection = computed(
 );
 
 /**
- * 体况评分 → 建议。
+ * 体况建议（2026-10-19 老板定稿）。
  *
- * 2026-10-04 起这句话不只是"建议"：顾客那一组单选删掉之后，
- * 没有体重管理计划时方向就按这里同一套判据定（见 resolveTargetGoal），
- * 所以话里说的"建议减重/增重/维持"就是系统真正会提交的方向，不会自相矛盾。
- *
- * 2026-10-05 老板要求：体重管理卡片只保留这句提醒（下方热量块整块删掉）。
+ * 格式：「狗狗名」的体况评分「X」（9分制），我们建议「方向」。
+ * 只作为建议放在三选一下方；选哪个方向由家长自己定，不按体况限制。
  */
 const bcsAdviceText = computed(() => {
-  const bcs = Number(selectedDog.value?.bcsScore);
+  const dog = selectedDog.value;
+  const bcs = Number(dog?.bcsScore);
   if (!Number.isFinite(bcs) || bcs <= 0) return '';
 
-  if (bcs >= 6) {
-    return `按它目前的体况评分 ${bcs}/9（偏胖），我们建议：减重。`;
-  }
-  if (bcs <= 3) {
-    return `按它目前的体况评分 ${bcs}/9（偏瘦），我们建议：增重。`;
-  }
-  return `按它目前的体况评分 ${bcs}/9（理想），我们建议：维持。`;
+  const name = String(dog?.name || '狗狗').trim() || '狗狗';
+  const direction = bcs >= 6 ? '减重' : bcs <= 3 ? '增重' : '维持';
+  return `${name}的体况评分${bcs}（9分制），我们建议${direction}。`;
 });
 
 const preferencePrefillHint = computed(() => {
@@ -2749,23 +2646,6 @@ const getBCSText = (bcsScore: number) => {
   border: none;
 }
 
-/* 体况与方向打架时被挡掉的那一项：看着就是"不可选"，
-   点它会有 toast 说明原因（不静默失败） */
-.goal-ask__option--off {
-  color: #b9b3a3;
-  background: #f2f1ec;
-  border-color: #e6e3d8;
-}
-
-/* 体况结论与三选一打架时的说明（偏胖不给选增重 / 偏瘦不给选减重） */
-.goal-ask__blocked {
-  display: block;
-  margin-top: 12rpx;
-  font-size: 22rpx;
-  line-height: 1.5;
-  color: #a8622a;
-}
-
 /* ===== 体重管理那一问（2026-10-05 老板要求先问一句） ===== */
 .goal-ask {
   padding: 20rpx 22rpx;
@@ -2812,9 +2692,9 @@ const getBCSText = (bcsScore: number) => {
   color: var(--sk-ink-2, #6b6653);
 }
 
-/* ===== 体况建议 ===== */
+/* ===== 体况建议（2026-10-19 起放在三选一下方） ===== */
 .advice-line {
-  margin-bottom: 16rpx;
+  margin-top: 16rpx;
   padding: 16rpx 20rpx;
   border-radius: 14rpx;
   background: #f6efe0;

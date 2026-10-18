@@ -243,18 +243,28 @@ describe('CustomRecipeDeliveryService', () => {
       // 每天 259.7g × 14 天 = 3635.8g
       expect(snapshot.shopping.totalNetG).toBeCloseTo(3635.8, 0);
       expect(snapshot.shopping.lines).toHaveLength(2);
-      // 鸡胸肉占 70%：净 2545.1g，采购 2545.1 × 1.07 = 2723.3g
+      /**
+       * ⚠️ 2026-10-18：这条用例原来还断言 `chicken.purchaseG ≈ netG × 1.07`
+       * 和 `snapshot.shopping.lossRate ≈ 1.07` —— 那两个字段**已从快照删除**
+       * （需求 2.4.3：交付页不再展示采购量）。
+       *
+       * **损耗率本身的业务作用没有消失**，只是换了地方：
+       *   · 快照里 `netG` 是**净重**，本来就不含损耗
+       *   · 损耗只影响 `purchaseG`，而采购量已不在快照里
+       *   · 损耗真正还在用的地方是**生产投料**
+       *     （`production-ingredient-usage.ts`：投料量 = 净重 × 损耗率）
+       *
+       * 所以这里改成验"净重算对了"，并且**反向锁死**快照里不许再出现采购量。
+       */
       const chicken = snapshot.shopping.lines.find(
         (line: { name: string }) => line.name === '鸡胸肉',
       );
-      /**
-       * 容差给到 0.5 而不是 0.05：`purchaseG` 在计算时保留 1 位小数
-       * （2723.257 → 2723.2），与未取整的乘积差 0.057。
-       * 这是**取整本身造成的**，不是算错。
-       */
-      expect(chicken.purchaseG).toBeCloseTo(chicken.netG * 1.07, 0);
-      // 对外给的是系数（与库里一致）
-      expect(snapshot.shopping.lossRate).toBeCloseTo(1.07, 4);
+      expect(chicken.netG).toBeCloseTo(2545.1, 0);
+
+      // 采购量与损耗率不许再出现在快照里
+      expect(chicken).not.toHaveProperty('purchaseG');
+      expect(snapshot.shopping).not.toHaveProperty('totalPurchaseG');
+      expect(snapshot.shopping).not.toHaveProperty('lossRate');
     });
 
     it('★ 没传做几天时按 7 天算（与小程序 DIY 的默认值一致）', async () => {

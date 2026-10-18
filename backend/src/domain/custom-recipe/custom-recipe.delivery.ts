@@ -112,33 +112,30 @@ export interface SnapshotNutrition {
   energyDensityKcalPerKg: number | null;
   /** 核心营养（蛋白质/脂肪/灰分/水分/纤维/碳水…），键值对 */
   macros?: Record<string, number | null> | null;
-  /** 一句话白话结论 —— 顾客看不懂"每 1000kcal"那套术语 */
-  plainConclusion?: string | null;
 }
 
 export interface SnapshotShoppingLine {
   name: string;
   /** 净用量（克） */
   netG: number;
-  /**
-   * ⚠️ 2026-10-18 起**不再展示**（老板定：只给净用量，买多少顾客自己判断）。
-   *
-   * 仍保留的原因：交付快照是**冻结契约**，删字段会动到已交付数据的结构；
-   * 而且它跟 `netG` 一起被几个守卫测试引用。**当前没有任何界面消费它。**
-   * 若将来清理，记得连 `foodLossRate` / `supplementLossRate` 一起看。
-   */
-  purchaseG: number;
   /** 推荐商品（可空） */
   recommendedProductId?: string | null;
 }
 
+/**
+ * 采购清单（2026-10-18 起**不再含采购量与损耗**）
+ *
+ * 需求 2.4.3「要删的」明确写了：
+ *   `shopping.lines[].purchaseG` / `totalPurchaseG` / `lossRate` ——
+ *   交付页和 DIY 制作页都不再展示采购量。
+ *
+ * ⚠️ **老快照里这些字段还在**（冻结契约，不能改历史数据）。
+ * 类型上删掉之后，读老快照时多出来的键会被忽略 —— 无害。
+ * 新交付写出来的快照不再有它们。
+ */
 export interface SnapshotShopping {
   lines: SnapshotShoppingLine[];
   totalNetG: number;
-  /** @deprecated 2026-10-18 起不再展示，见 purchaseG */
-  totalPurchaseG: number;
-  /** 用的损耗率系数（1.07 = 损耗 7%） */
-  lossRate: number;
 }
 
 /**
@@ -235,10 +232,21 @@ export function buildDeliverySnapshot(
 ): DeliveryContentSnapshot {
   const feeding = input.feeding ?? {};
   const nutrition = input.nutrition ?? {};
+  /**
+   * ⚠️ **显式挑字段，不要 `...line` 展开。**
+   *
+   * 踩过：类型里删了 `purchaseG`，但 builder 用展开把上游对象里的
+   * `purchaseG` 原样带进了快照 —— **类型删了、运行时还在**，
+   * 测试一断言 `not.toHaveProperty('purchaseG')` 就露馅。
+   *
+   * 快照是**对外契约**：给什么就该写什么，不该让上游多出来的键漏进去。
+   */
   const lines = (input.shopping?.lines ?? []).map((line) => ({
-    ...line,
+    name: line.name,
     netG: round1(line.netG),
-    purchaseG: round1(line.purchaseG),
+    ...(line.recommendedProductId !== undefined
+      ? { recommendedProductId: line.recommendedProductId }
+      : {}),
   }));
 
   return {
@@ -265,17 +273,10 @@ export function buildDeliverySnapshot(
         nutrition.energyDensityKcalPerKg,
       ),
       macros: nutrition.macros ?? null,
-      plainConclusion: nutrition.plainConclusion ?? null,
     },
     shopping: {
       lines,
       totalNetG: round1(sum(lines.map((line) => line.netG))),
-      totalPurchaseG: round1(sum(lines.map((line) => line.purchaseG))),
-      /**
-       * 损耗率取不到时用 1（= 没有损耗）而不是 1.07 ——
-       * 宁可少留余量让人觉得买少了，也不要在没有依据时凭空加 7%。
-       */
-      lossRate: nullableNumber(input.shopping?.lossRate) ?? 1,
     },
     supplements: (input.supplements ?? []).map((item) => ({
       ...item,

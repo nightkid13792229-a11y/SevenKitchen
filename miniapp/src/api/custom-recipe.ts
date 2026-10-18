@@ -140,17 +140,19 @@ export interface DeliveryContent {
       energyDensityKcalPerKg: number | null;
       calciumPhosphorusRatio: number | null;
     } | null;
-    plainConclusion?: string | null;
   };
   shopping: {
     /**
-     * `purchaseG`（建议采购量）仍由后端返回，但**前端不再展示** ——
-     * 2026-10-18 老板定：只给净用量，买多少让顾客自己判断。
+     * 只有净用量（2026-10-18 · 需求 2.4.3）。
+     *
+     * `purchaseG` / `totalPurchaseG` / `lossRate` 已**从快照与类型里删除** ——
+     * 老板定的口径：只给净用量，买多少让顾客自己判断。
+     *
+     * ⚠️ 老快照里这几个字段还在（冻结契约），但**没有任何界面读它们**，
+     * 多出来的键会被忽略。
      */
-    lines: Array<{ name: string; netG: number; purchaseG?: number }>;
+    lines: Array<{ name: string; netG: number }>;
     totalNetG: number;
-    totalPurchaseG?: number;
-    lossRate: number;
   };
   supplements: Array<{
     name: string;

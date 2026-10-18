@@ -40,14 +40,18 @@ function input(overrides: Partial<BuildSnapshotInput> = {}): BuildSnapshotInput 
     nutrition: {
       standard: 'FEDIAF_2025',
       energyDensityKcalPerKg: 3620,
-      plainConclusion: '整体达标，蛋白质略高，适合减重期。',
+      /*
+       * 2026-10-18：删掉 `plainConclusion`（需求 2.4.3 明确要求从快照类型删）。
+       * 它在数据库里根本没有对应字段，交付时也从未传过值 —— 是个**死字段**。
+       * 合并后的那句话写在 `sellingPoint` 里。
+       */
     },
     shopping: {
+      // 2026-10-18 · 需求 2.4.3：采购量与损耗不再进快照，输入里也就不给了
       lines: [
-        { name: '鸡胸肉', netG: 320, purchaseG: 350 },
-        { name: '糙米', netG: 180, purchaseG: 200 },
+        { name: '鸡胸肉', netG: 320 },
+        { name: '糙米', netG: 180 },
       ],
-      lossRate: 1.07,
     },
     supplements: [
       { name: '鱼油', totalG: 14, perKgG: 3.1, brand: '某某牌', timing: '出锅前' },
@@ -98,11 +102,11 @@ describe('交付内容快照', () => {
           'standard',
           'energyDensityKcalPerKg',
           'macros',
-          'plainConclusion',
         ].sort(),
       );
       expect(Object.keys(snapshot.shopping).sort()).toEqual(
-        ['lines', 'totalNetG', 'totalPurchaseG', 'lossRate'].sort(),
+        // 2026-10-18 · 需求 2.4.3：采购量与损耗已从快照删除
+        ['lines', 'totalNetG'].sort(),
       );
     });
 
@@ -178,10 +182,9 @@ describe('交付内容快照', () => {
         input({
           shopping: {
             lines: [
-              { name: 'A', netG: 100.15, purchaseG: 110.34 },
-              { name: 'B', netG: 200.27, purchaseG: 220.66 },
+              { name: 'A', netG: 100.15 },
+              { name: 'B', netG: 200.27 },
             ],
-            lossRate: 1.07,
           },
         }),
       );
@@ -195,24 +198,26 @@ describe('交付内容快照', () => {
        *   看到测试红了先怀疑期望值。）
        */
       expect(snapshot.shopping.totalNetG).toBe(300.5);
-      expect(snapshot.shopping.totalPurchaseG).toBe(331);
     });
 
     it('没有明细时合计是 0（这里 0 是对的：确实一样都不用买）', () => {
       const snapshot = buildDeliverySnapshot(
-        input({ shopping: { lines: [], lossRate: 1.1 } }),
+        input({ shopping: { lines: [] } }),
       );
       expect(snapshot.shopping.totalNetG).toBe(0);
-      expect(snapshot.shopping.totalPurchaseG).toBe(0);
     });
 
-    it('★ 没有损耗率时用 1（不加余量），而不是偷偷用 1.07', () => {
-      const snapshot = buildDeliverySnapshot(
-        input({ shopping: { lines: [], lossRate: null } }),
-      );
-      // 宁可让人觉得"买少了"，也不要在没有依据时凭空加 7%
-      expect(snapshot.shopping.lossRate).toBe(1);
-    });
+    /**
+     * ⚠️ 2026-10-18：这条用例删掉了。
+     *
+     * 它锁的是「没有损耗率时快照里记 1，而不是偷偷用 1.07」——
+     * 但需求 2.4.3 已把 `lossRate` **从快照里删了**（交付页不再展示采购量，
+     * 损耗率也就没有消费方了）。
+     *
+     * 那条业务判断（"没有依据时不要凭空加 7%"）**没有消失**，
+     * 它现在落在 `custom-recipe.shopping.ts` 的 `lossRateToRatio` 里 ——
+     * 那才是真正算净用量/采购量的地方，快照只是把结果记下来。
+     */
   });
 
   describe('补充剂', () => {

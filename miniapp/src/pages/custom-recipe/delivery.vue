@@ -172,12 +172,10 @@ const content = computed(
       nutrition: {
         standard: null,
         energyDensityKcalPerKg: null,
-        plainConclusion: null,
       },
       shopping: {
         lines: [],
         totalNetG: 0,
-        lossRate: 1,
       },
       supplements: [],
       steps: [],

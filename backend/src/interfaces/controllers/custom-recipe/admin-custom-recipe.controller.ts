@@ -27,6 +27,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CustomRecipeService } from '../../../application/custom-recipe/custom-recipe.service';
 import { CustomRecipeDeliveryService } from '../../../application/custom-recipe/custom-recipe-delivery.service';
 import { CustomRecipeAftersaleService } from '../../../application/custom-recipe/custom-recipe-aftersale.service';
+import { PrismaService } from '../../../infrastructure/prisma.service';
 import { CustomRecipeViewService } from '../../../application/custom-recipe/custom-recipe-view.service';
 import {
   CustomRecipeConfigService,
@@ -89,6 +90,8 @@ export class AdminCustomRecipeController {
      * 「查看食谱」就消失"这一类 bug。
      */
     private readonly viewService: CustomRecipeViewService,
+    /** 只读查询（交付历史这类）走它，不必为一条列表在 service 里加方法 */
+    private readonly prisma: PrismaService,
   ) {}
 
   /**
@@ -241,6 +244,66 @@ export class AdminCustomRecipeController {
   /**
    * Get order detail (admin)
    */
+  /**
+   * 交付历史（2026-10-18 · 需求 2.8.6）
+   *
+   * ## 为什么单独一个接口
+   *
+   * 订单详情里的 `deliveries` 只取**最新那一版**（`take: 1` + `replacedByDeliveryId: null`）——
+   * 那是给"当前生效的交付"用的。
+   * 而"顾客说我收到的是旧版"这类问题时，要的是**全部版本**。
+   *
+   * ## 为什么必须能查
+   *
+   * 交付完**只是改一个状态**，此前没有任何地方能回答：
+   * 「这一单交过几版、每版什么时候、谁交的、通知发出去没有」。
+   * 顾客说"我收到的是旧版"时，**现在查不出来**。
+   *
+   * 只读，不改任何数据。
+   */
+  @Get('orders/:orderId/deliveries')
+  @ApiOperation({ summary: '交付历史（全部版本，含交付人与通知状态）' })
+  async getOrderDeliveries(@Param('orderId') orderId: string) {
+    const order = await this.prisma.customRecipeOrder.findFirst({
+      where: { OR: [{ orderId }, { id: orderId }] },
+      select: { id: true },
+    });
+
+    if (!order) {
+      throw new NotFoundException('订单不存在');
+    }
+
+    const rows = await this.prisma.customRecipeDelivery.findMany({
+      where: { orderId: order.id },
+      orderBy: { version: 'desc' },
+      select: {
+        id: true,
+        version: true,
+        recipeId: true,
+        recipeVersion: true,
+        deliveredBy: true,
+        deliveredAt: true,
+        notifyStatus: true,
+        notifiedAt: true,
+        confirmedAt: true,
+        revokedAt: true,
+        /**
+         * 最新一版 = 没有被别的版本替换掉。
+         * **不是在页面里算的** —— 那样页面就得知道"替换"是怎么表达的。
+         */
+        replacedByDeliveryId: true,
+      },
+    });
+
+    return ApiResponseDto.success({
+      items: rows.map((row: { replacedByDeliveryId: string | null; revokedAt: Date | null }) => ({
+        ...row,
+        /** 当前生效的那一版（页面直接用它标"当前版本"，不自己判断） */
+        isCurrent: row.replacedByDeliveryId === null && row.revokedAt === null,
+      })),
+    });
+  }
+
   @Get('orders/:orderId')
   @ApiOperation({ summary: 'Get order detail' })
   async getOrderDetail(@Req() req: any, @Param('orderId') orderId: string) {

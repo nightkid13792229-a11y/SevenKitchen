@@ -39,6 +39,40 @@
             <label>交付时间</label>
             <span>{{ formatDateTime(order.deliveredAt) }}</span>
           </div>
+          <!--
+            交付历史（2026-10-18 · 需求 2.8.6）
+
+            此前交付完**只是改一个状态**，没有任何地方能回答：
+            「这一单交过几版、每版什么时候、谁交的、通知发出去没有」。
+            顾客说"我收到的是旧版"时，**查不出来**。
+          -->
+          <div class="info-item delivery-history" v-if="deliveryHistory.length">
+            <label>交付历史</label>
+            <div class="delivery-history__list">
+              <div
+                v-for="item in deliveryHistory"
+                :key="item.id"
+                class="delivery-history__row"
+              >
+                <span class="delivery-history__version">
+                  第 {{ item.version }} 版
+                  <el-tag v-if="item.isCurrent" size="small" type="success">
+                    当前
+                  </el-tag>
+                </span>
+                <span class="delivery-history__time">
+                  {{ formatDateTime(item.deliveredAt) }}
+                </span>
+                <span class="delivery-history__by">
+                  交付人 {{ item.deliveredBy }}
+                </span>
+                <span class="delivery-history__notify">
+                  {{ notifyStatusText(item.notifyStatus) }}
+                </span>
+              </div>
+            </div>
+          </div>
+
           <div class="info-item" v-if="order.cancelledAt">
             <label>取消时间</label>
             <span>{{ formatDateTime(order.cancelledAt) }}</span>
@@ -624,7 +658,10 @@ import { computed, h, onMounted, reactive, ref, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance, FormRules } from 'element-plus';
 import { Document, Plus } from '@element-plus/icons-vue';
-import { customRecipeApi } from '@/api/customRecipe';
+import {
+  customRecipeApi,
+  type CustomRecipeDeliveryHistoryItem,
+} from '@/api/customRecipe';
 import type {
   CustomRecipeAttachment,
   CustomRecipeCandidate,
@@ -689,6 +726,9 @@ const loading = ref(false);
 const submitting = ref(false);
 const restoringCredit = ref(false);
 const order = ref<CustomRecipeOrderDetail | null>(null);
+
+/** 交付历史（2026-10-18 · 需求 2.8.6）—— 订单详情只带最新一版，这里要全部 */
+const deliveryHistory = ref<CustomRecipeDeliveryHistoryItem[]>([]);
 
 // ---------- 面板上的派生展示 ----------
 
@@ -962,11 +1002,40 @@ watch(
   },
 );
 
+/**
+ * 通知状态的中文（2026-10-18 · 需求 2.8.6「通知是否发出」）。
+ *
+ * ⚠️ **PENDING 要明确写成"未发出"**，不能写"待发送" ——
+ * 顾客没点过订阅授权时，订阅消息**永远发不出去**，
+ * 写"待发送"会让老板以为再等等就会发。
+ */
+function notifyStatusText(status: string | null): string {
+  switch (status) {
+    case 'SENT':
+      return '✓ 通知已发出';
+    case 'FAILED':
+      return '✗ 通知发送失败';
+    case 'SKIPPED':
+      return '— 未申请订阅，未发通知';
+    case 'PENDING':
+      return '— 通知未发出';
+    default:
+      return '— 无通知记录';
+  }
+}
+
 // 方法
 const loadOrderDetail = async () => {
   loading.value = true;
   try {
     order.value = await customRecipeApi.getOrderDetail(props.orderId);
+    // 交付历史单独拉（详情里只有最新一版）；失败不影响详情展示
+    try {
+      const history = await customRecipeApi.getOrderDeliveries(props.orderId);
+      deliveryHistory.value = history?.items ?? [];
+    } catch {
+      deliveryHistory.value = [];
+    }
     // 状态决定能不能交付（已付款/制作中/已交付），详情到手后再拉候选
     if (canDeliverCustomRecipe(order.value?.status)) {
       await loadRecipeCandidates();
@@ -1572,5 +1641,39 @@ h3 {
   font-size: 13px;
   color: #e6a23c;
   line-height: 1.6;
+}
+
+/* ===== 交付历史（2026-10-18 · 需求 2.8.6）===== */
+.delivery-history {
+  grid-column: 1 / -1;
+}
+
+.delivery-history__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.delivery-history__row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 13px;
+  color: #4b5563;
+}
+
+.delivery-history__version {
+  min-width: 110px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.delivery-history__time {
+  min-width: 150px;
+}
+
+.delivery-history__notify {
+  color: #6b7280;
 }
 </style>

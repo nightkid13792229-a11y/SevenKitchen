@@ -49,6 +49,23 @@ export interface CustomRecipeAttachment {
   uploadedAt?: string
 }
 
+/** 交付历史的一条（2026-10-18 · 需求 2.8.6） */
+export interface CustomRecipeDeliveryHistoryItem {
+  id: string
+  version: number
+  recipeId: string
+  recipeVersion: number | null
+  deliveredBy: string
+  deliveredAt: string
+  /** PENDING / SENT / SKIPPED / FAILED —— 通知是否发出去 */
+  notifyStatus: string | null
+  notifiedAt: string | null
+  confirmedAt: string | null
+  revokedAt: string | null
+  /** 当前生效的那一版（后端算的，页面不自己判断） */
+  isCurrent: boolean
+}
+
 export interface CustomRecipeOrderDetail {
   id?: string
   orderId: string
@@ -287,6 +304,17 @@ export const customRecipeApi = {
   /** 订单详情（含狗档案最新过敏、退款、各节点时间） */
   getOrderDetail: (orderId: string) =>
     api.get<CustomRecipeOrderDetail>(`${BASE}/orders/${orderId}`),
+
+  /**
+   * 交付历史（2026-10-18 · 需求 2.8.6）
+   *
+   * 订单详情里只有**最新那一版**；这里要的是**全部版本** ——
+   * 顾客说"我收到的是旧版"时，得能查出交过几版、谁交的、通知发没发。
+   */
+  getOrderDeliveries: (orderId: string) =>
+    api.get<{ items: CustomRecipeDeliveryHistoryItem[] }>(
+      `${BASE}/orders/${orderId}/deliveries`,
+    ),
 
   /** 确认收款（日常操作，客服/员工可用） */
   confirmPayment: (orderId: string) =>

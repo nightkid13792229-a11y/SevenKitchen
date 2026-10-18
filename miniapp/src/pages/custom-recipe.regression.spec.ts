@@ -1735,9 +1735,9 @@ describe('定制页 · 2026-10-05 第二批（6 条）', () => {
     expect(style).toContain('height: 60rpx')
     expect(style).toContain('border-radius: 999rpx')
     expect(style).not.toContain('height: 72rpx')
-    // 不被 flex 拉满整行；同一行右侧跟"一键清除所有过敏原"
+    // 不被 flex 拉满整行；上传区不再有“一键清除所有过敏原”
     expect(scan).toMatch(/\.allergy-scan__head \{[^}]*align-items: center/)
-    expect(scan).toContain('一键清除所有过敏原')
+    expect(scan).not.toContain('一键清除所有过敏原')
   })
 })
 
@@ -2044,6 +2044,12 @@ describe('订单列表按钮来自后端契约', () => {
 describe('custom recipe draft · 本地草稿与付款后同步', () => {
   const page = read('src/pages/custom-recipe/index.vue')
   const component = read('src/components/custom-recipe/AllergyScanBlock.vue')
+
+  it('草稿按登录用户 ID 隔离（兼容只存 user 对象的登录态）', () => {
+    expect(page).toContain('getStoredUser')
+    expect(page).toContain('user?.id')
+    expect(page).toContain("uni.getStorageSync('userId')")
+  })
 
   it('进入页面先读本地草稿；有草稿时不再用档案预填', () => {
     expect(page).toContain('loadCustomRecipeDraft')

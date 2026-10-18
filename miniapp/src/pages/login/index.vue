@@ -156,9 +156,15 @@ const handleWechatLogin = async () => {
     console.log("[Login] Backend response:", response);
 
     if (response.code === 0) {
-      const { token, user, isNewUser, role } = response.data;
+      const { token, user, userId, isNewUser, role } = response.data;
 
-      console.log("[Login] Extracted data:", { token, user, isNewUser, role });
+      console.log("[Login] Extracted data:", {
+        token,
+        user,
+        userId,
+        isNewUser,
+        role,
+      });
 
       if (!token) {
         throw new Error("后端未返回token");
@@ -168,6 +174,11 @@ const handleWechatLogin = async () => {
       setToken(token);
       try {
         uni.setStorageSync("user", user);
+        // 2026-10-19：本地草稿等按当前登录用户 ID 隔离；
+        // 登录响应顶层有 userId，但此前只存了 user 对象，导致 userId 一直为空。
+        if (userId) {
+          uni.setStorageSync("userId", userId);
+        }
       } catch (storageErr) {
         console.error("[Login] Failed to save user to storage:", storageErr);
         // 继续执行，不阻塞登录流程

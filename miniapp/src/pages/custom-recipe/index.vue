@@ -302,14 +302,7 @@
                顾客自己写、报告识别结果都进这一段；营养师在后台看原文。
                快捷标签和全局词表不再出现在顾客侧。 -->
           <view class="allergy-text">
-            <view class="allergy-text__head">
-              <text class="allergy-text__label">过敏食物（不能吃的）</text>
-              <text
-                v-if="formData.allergyText.trim() || formData.allergies.length > 0"
-                class="allergy-text__clear"
-                @tap="clearAllAllergies"
-              >清空</text>
-            </view>
+            <text class="allergy-text__label">过敏食物（不能吃的）</text>
             <textarea
               v-model="formData.allergyText"
               class="allergy-text__input"
@@ -320,12 +313,6 @@
             <text class="allergy-text__hint">
               多个用顿号分开；不确定的也可以写上。
             </text>
-          </view>
-
-          <!-- 一键清除之后给一条"撤销"：清的是这一单的过敏文本与已选记录 -->
-          <view v-if="clearedAllergiesBackup" class="allergy-cleared">
-            <text class="allergy-cleared__text">已清除这一单的过敏信息</text>
-            <text class="allergy-cleared__undo" @tap="undoClearAllergies">撤销</text>
           </view>
 
           <!-- 拍检测报告自动读（2026-10-04 从健康管理搬来）。
@@ -344,10 +331,10 @@
                所以在“历史报告”上面单独列一块，避免家长以为已经进档案了。 -->
           <view v-if="formData.reportDrafts.length > 0" class="allergy-reports allergy-reports--draft">
             <text class="allergy-reports__title">
-              本次上传的报告（未付款，暂存）
+              本次上传的报告
             </text>
             <text class="allergy-reports__hint">
-              付款成功后才会写入狗狗档案；现在还可以修改或删除。
+              点图片看大图；右上角的 × 可以删除这一张。
             </text>
             <view
               v-for="(report, index) in formData.reportDrafts"
@@ -366,6 +353,10 @@
                     mode="aspectFill"
                     @tap="previewAllergyReport(report)"
                   />
+                  <text
+                    class="allergy-reports__thumb-remove"
+                    @tap.stop="removeDraftReportImage(index, url)"
+                  >×</text>
                 </view>
               </view>
               <view class="allergy-reports__row">
@@ -375,15 +366,6 @@
                   </text>
                   <text class="allergy-reports__meta">{{ draftReportPageText(report) }}</text>
                 </view>
-                <text
-                  v-if="report.results.length > 0"
-                  class="allergy-reports__refill"
-                  @tap.stop="refillReportAllergens(report)"
-                >重新填入过敏食物</text>
-                <text
-                  class="allergy-reports__draft-remove"
-                  @tap.stop="removeDraftReport(index)"
-                >删除</text>
               </view>
             </view>
           </view>
@@ -431,11 +413,6 @@
                   </text>
                   <text class="allergy-reports__meta">{{ allergyReportPageText(report) }}</text>
                 </view>
-                <text
-                  v-if="Number(report.resultCount || 0) > 0"
-                  class="allergy-reports__refill"
-                  @tap.stop="refillReportAllergens(report)"
-                >重新填入过敏食物</text>
               </view>
             </view>
           </view>
@@ -617,6 +594,7 @@ import {
   resolvePaymentDeadlineAt,
 } from '@/utils/custom-recipe-order';
 import { navigateToDogCreate } from '@/utils/dog-profile-entry';
+import { getStoredUser } from '@/utils/account';
 import {
   clearCustomRecipeDraft,
   isCustomRecipeDraftExpired,
@@ -715,16 +693,6 @@ const hasSelectedDog = computed(() => Boolean(formData.value.dogId));
 const hasFoodAllergy = ref<boolean | null>(null);
 
 /**
- * "一键清除"之前的那一份过敏信息（撤销用）。
- *
- * 非空时页面上会出现一条「已清除这一单的过敏信息 · 撤销」。
- * 换狗或重新读档案时清空 —— 那份备份属于上一只狗/上一版档案。
- */
-const clearedAllergiesBackup = ref<{ allergies: string[]; text: string } | null>(
-  null,
-);
-
-/**
  * 从档案带出来的过敏文本（2026-10-19）。
  *
  * 只用于显示「这些是从档案带出的」提示；顾客改过之后提示仍然成立，
@@ -748,7 +716,6 @@ function answerFoodAllergy(hasAllergy: boolean) {
     // 不能只藏起来、提交时还带着；COS 文件同步清理。
     const drafts = [...formData.value.reportDrafts];
     formData.value.reportDrafts = [];
-    clearedAllergiesBackup.value = null;
     void cleanupDraftReportFiles(drafts);
   }
 }
@@ -766,46 +733,6 @@ const allergyReportPageCount = computed(() =>
     0,
   ),
 );
-
-/**
- * 清空这一单的过敏食物（2026-10-19：入口从上传区搬到文本框）。
- *
- * 清的是**这一单**：档案里的过敏记录一条都不动
- * （后端写档案是"只增不删"，这里也不会去调删除接口）。
- * 清之前先留一份，清错了能点「撤销」恢复。
- */
-function clearAllAllergies() {
-  if (!formData.value.allergyText.trim() && formData.value.allergies.length === 0) {
-    return;
-  }
-
-  uni.showModal({
-    title: '清空过敏食物？',
-    content: '会清空这一单已填写的过敏食物，档案里的记录不受影响。清空后可点「撤销」恢复。',
-    confirmText: '清空',
-    confirmColor: '#a8622a',
-    success: (res) => {
-      if (!res.confirm) return;
-      // 清之前先留一份：清错了能一键撤销
-      clearedAllergiesBackup.value = {
-        allergies: [...formData.value.allergies],
-        text: formData.value.allergyText,
-      };
-      formData.value.allergies = [];
-      formData.value.allergyText = '';
-      uni.showToast({ title: '已清空，可点「撤销」恢复', icon: 'none' });
-    },
-  });
-}
-
-/** 撤销"一键清除"：把清掉的那一份放回去 */
-function undoClearAllergies() {
-  if (!clearedAllergiesBackup.value) return;
-  formData.value.allergies = [...clearedAllergiesBackup.value.allergies];
-  formData.value.allergyText = clearedAllergiesBackup.value.text;
-  clearedAllergiesBackup.value = null;
-  uni.showToast({ title: '已恢复', icon: 'none' });
-}
 
 /**
  * 删除报告里**某一张**照片（2026-10-05 老板要求）。
@@ -867,21 +794,50 @@ function draftReportPageText(report: Record<string, any>): string {
   return parts.join(' · ');
 }
 
-/** 删除本次上传的某份报告草稿（含 COS 文件） */
-function removeDraftReport(index: number) {
-  const report = formData.value.reportDrafts[index];
+/**
+ * 删除本次上传报告里的**某一张**照片（2026-10-19 恢复老板熟悉的删除方式）。
+ *
+ * 和已入档案的历史报告一致：
+ *   · 还有别的照片 → 只把这一张从报告里去掉，并清理这张的 COS 文件
+ *   · 这是最后一张 → 整份草稿一起移除
+ * 已经填进文本框的过敏食物不受影响。
+ */
+function removeDraftReportImage(reportIndex: number, url: string) {
+  const report = formData.value.reportDrafts[reportIndex];
   if (!report) return;
 
+  const images = Array.isArray(report.attachments) ? report.attachments : [];
+  const imageIndex = images.indexOf(url);
+  if (imageIndex < 0) return;
+
+  const isLastImage = images.length <= 1;
+  const key = Array.isArray(report.attachmentKeys)
+    ? String(report.attachmentKeys[imageIndex] || '')
+    : '';
+
   uni.showModal({
-    title: '删除这份报告？',
-    content:
-      '这份报告还没付款，删除后原件也会一并清理；已经填进文本框的过敏食物不受影响。',
+    title: '删除这张照片？',
+    content: isLastImage
+      ? '这是这份报告的最后一张原件，删除后整份报告也会一并移除。已经填进文本框的过敏食物不受影响。'
+      : `这张照片会从报告原件里移除（还剩 ${images.length - 1} 张）。已经填进文本框的过敏食物不受影响。`,
     confirmText: '删除',
     confirmColor: '#a8622a',
     success: async (res) => {
       if (!res.confirm) return;
-      formData.value.reportDrafts.splice(index, 1);
-      await cleanupDraftReportFiles([report]);
+
+      if (isLastImage) {
+        formData.value.reportDrafts.splice(reportIndex, 1);
+        await cleanupDraftReportFiles([report]);
+      } else {
+        report.attachments = images.filter((item) => item !== url);
+        report.attachmentKeys = (report.attachmentKeys || []).filter(
+          (_, index) => index !== imageIndex,
+        );
+        if (key) {
+          await deleteDraftReportFileKeys([key]);
+        }
+      }
+
       uni.showToast({ title: '已删除', icon: 'none' });
     },
   });
@@ -1103,7 +1059,16 @@ const dogLoadToken = ref(0);
 let draftSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
 function getDraftCustomerId(): string {
-  return String(uni.getStorageSync('userId') || '').trim();
+  /**
+   * 2026-10-19 修：登录页此前只存 `user` 对象，没有单独存 `userId`，
+   * 所以 `uni.getStorageSync('userId')` 一直是空 —— 本地草稿从来没保存成功，
+   * 清空后返回再进来又从档案预填，看起来像清空白清了。
+   * 现在优先读 userId；老登录态从 user.id 兜底。
+   */
+  const direct = String(uni.getStorageSync('userId') || '').trim();
+  if (direct) return direct;
+  const user = getStoredUser();
+  return String(user?.id || user?.userId || '').trim();
 }
 
 function scheduleDraftSave() {
@@ -1154,7 +1119,6 @@ function resetOrderFormForDog(dogId: string) {
   };
   weightGoalChoice.value = null;
   hasFoodAllergy.value = null;
-  clearedAllergiesBackup.value = null;
   prefilledAllergyText.value = '';
 }
 
@@ -1170,16 +1134,25 @@ function applyCustomRecipeDraft(draft: ReturnType<typeof loadCustomRecipeDraft>)
 }
 
 /** 清掉草稿里已经上传到 COS、但最终没进订单的报告文件 */
+async function deleteDraftReportFileKeys(keys: string[]) {
+  for (const key of keys || []) {
+    const value = String(key || '').trim();
+    if (!value) continue;
+    await dogApi.deleteHealthAttachment('allergy', value).catch((error) => {
+      console.warn('[CustomRecipe] 清理草稿报告文件失败:', value, error);
+    });
+  }
+}
+
 async function cleanupDraftReportFiles(reports: CustomRecipeReportDraft[]) {
+  const keys: string[] = [];
   for (const report of reports || []) {
     for (const key of report?.attachmentKeys || []) {
       const value = String(key || '').trim();
-      if (!value) continue;
-      await dogApi.deleteHealthAttachment('allergy', value).catch((error) => {
-        console.warn('[CustomRecipe] 清理草稿报告文件失败:', value, error);
-      });
+      if (value) keys.push(value);
     }
   }
+  await deleteDraftReportFileKeys(keys);
 }
 
 // 任何输入变化都写本地草稿；页面关闭前再兜底一次
@@ -2272,18 +2245,6 @@ function onAllergensScanned(payload: { allergens?: string[] }) {
   });
 }
 
-/** 把已上传报告里记下的过敏食物重新填进文本框（2026-10-19） */
-function refillReportAllergens(report: Record<string, any>) {
-  const names = (Array.isArray(report?.results) ? report.results : [])
-    .map((item: any) => String(item?.allergen || '').trim())
-    .filter(Boolean);
-  if (names.length === 0) {
-    uni.showToast({ title: '这份报告没有可填入的过敏食物', icon: 'none' });
-    return;
-  }
-  onAllergensScanned({ allergens: names });
-}
-
 const ALLERGY_TEST_METHOD_LABELS: Record<string, string> = {
   SERUM: '血清检测',
   INTRADERMAL: '皮内试验',
@@ -3072,24 +3033,12 @@ const getBCSText = (bcsScore: number) => {
   margin-bottom: 16rpx;
 }
 
-.allergy-text__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12rpx;
-}
-
 .allergy-text__label {
   display: block;
+  margin-bottom: 12rpx;
   font-size: 26rpx;
   font-weight: 700;
   color: #3f3222;
-}
-
-.allergy-text__clear {
-  font-size: 24rpx;
-  color: #8a6b3f;
-  border-bottom: 1rpx solid #8a6b3f;
 }
 
 .allergy-text__input {
@@ -3213,14 +3162,6 @@ const getBCSText = (bcsScore: number) => {
   color: #8a6b3f;
 }
 
-/* 清空文本后，把已上传报告里的过敏食物重新填回来（2026-10-19） */
-.allergy-reports__refill {
-  flex: none;
-  font-size: 23rpx;
-  color: #8a6b3f;
-  border-bottom: 1rpx solid #8a6b3f;
-}
-
 /* 本次上传、还没付款的报告草稿 */
 .allergy-reports--draft {
   margin-top: 16rpx;
@@ -3228,32 +3169,6 @@ const getBCSText = (bcsScore: number) => {
   background: #fffdf6;
   border: 1rpx dashed #e8ded0;
   border-radius: 14rpx;
-}
-
-.allergy-reports__draft-remove {
-  flex: none;
-  font-size: 23rpx;
-  color: #a8622a;
-  border-bottom: 1rpx solid #a8622a;
-}
-
-/* 「已清除 N 项 · 撤销」：一键清除之后的反悔入口 */
-.allergy-cleared {
-  display: flex;
-  align-items: center;
-  gap: 16rpx;
-  margin-bottom: 16rpx;
-}
-
-.allergy-cleared__text {
-  font-size: 23rpx;
-  color: var(--sk-ink-3, #968f6d);
-}
-
-.allergy-cleared__undo {
-  font-size: 24rpx;
-  color: var(--sk-primary, #1e3a2f);
-  border-bottom: 1rpx solid var(--sk-primary, #1e3a2f);
 }
 
 /* 手动添加入口/常见标签已下线（2026-10-19 改为文本框） */

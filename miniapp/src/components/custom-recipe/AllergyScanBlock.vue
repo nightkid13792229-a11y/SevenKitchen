@@ -16,14 +16,6 @@
         :disabled="extracting"
         @tap="pickReport"
       >{{ extracting ? '识别中…' : '上传过敏检测报告' }}</button>
-      <!-- 一键清空这一单的过敏原（2026-10-05 老板要求）：
-           报告常常一次读出二三十项，想重来一遍时不该让家长逐个点掉。
-           清的是**这一单的选择**，档案里的记录不动（后端也是只增不删）。 -->
-      <text
-        v-if="showClearAll"
-        class="allergy-scan__clear"
-        @tap="requestClearAll"
-      >一键清除所有过敏原</text>
     </view>
 
     <!-- 候选确认卡（2026-10-05 改口径）：
@@ -114,31 +106,13 @@ import {
  */
 const props = defineProps<{
   dogId: string
-  /** 现在这一单有没有过敏原 —— 没有就不显示"一键清除"（清空按钮点了也没意义） */
-  hasAllergens?: boolean
 }>()
 
 const emit = defineEmits<{
   (event: 'scanned', value: { allergens: string[] }): void
   /** 2026-10-19：报告先作为“这一单的草稿”交给父页面，不直接写狗狗档案 */
   (event: 'draft', value: CustomRecipeReportDraft): void
-  /** 一键清除这一单的过敏原（由父页面清，它才是过敏原的主人） */
-  (event: 'clearAll'): void
 }>()
-
-const showClearAll = computed(() => props.hasAllergens === true)
-
-/** 清空是不可撤销的批量动作：先问一句再清 */
-function requestClearAll() {
-  uni.showModal({
-    title: '清除所有过敏原？',
-    content: '会清空这一单里已经选好的过敏原（档案里的记录不受影响）。',
-    confirmText: '清除',
-    success: (res) => {
-      if (res.confirm) emit('clearAll')
-    },
-  })
-}
 
 const extracting = ref(false)
 const candidates = ref<ScannedAllergen[]>([])
@@ -309,10 +283,9 @@ async function pickReport() {
       }
       urls.push(imageUrl)
       const key = String(uploaded?.key || '').trim()
-      if (key) {
-        keys.push(key)
-        attemptedKeys.push(key)
-      }
+      // keys 与 attachments 一一对应；没有 key 也占位，删除某张时索引才不串
+      keys.push(key)
+      if (key) attemptedKeys.push(key)
 
       const res: any = await dogApi.extractHealthReport({ imageUrl })
       const data = res?.data || {}
@@ -474,7 +447,6 @@ onUnmounted(() => {
 
 .allergy-scan__head {
   display: flex;
-  /* 上传按钮靠左，右边跟"一键清除"（老板 2026-10-05 要求改小） */
   align-items: center;
   gap: 16rpx;
 }
@@ -500,18 +472,6 @@ onUnmounted(() => {
 
 .allergy-scan__button::after {
   border: none;
-}
-
-/* 一键清除：跟上传按钮同一行的次要动作，做成小文字链 */
-.allergy-scan__clear {
-  flex: 0 0 auto;
-  padding: 0 20rpx;
-  height: 60rpx;
-  line-height: 60rpx;
-  font-size: 23rpx;
-  color: #a8622a;
-  border: 1rpx solid rgba(168, 98, 42, 0.45);
-  border-radius: 999rpx;
 }
 
 .allergy-scan__skipped {

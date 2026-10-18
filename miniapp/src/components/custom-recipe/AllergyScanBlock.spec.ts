@@ -142,7 +142,7 @@ describe('定制食谱 · 过敏录入', () => {
 /**
  * 2026-10-05 老板第五批：确认 / 取消 两个按钮的文案 + 一键清除过敏原。
  */
-describe('过敏报告 · 按钮文案与一键清除', () => {
+describe('过敏报告 · 按钮文案与删除方式', () => {
   const block = () =>
     readFileSync(
       resolve(process.cwd(), 'src/components/custom-recipe/AllergyScanBlock.vue'),
@@ -165,42 +165,38 @@ describe('过敏报告 · 按钮文案与一键清除', () => {
     expect(live).not.toContain('>都不是<')
   })
 
-  it('上传按钮右侧有「一键清除所有过敏原」，点了要弹窗确认', () => {
+  it('上传区只有上传按钮，不再有一键清除', () => {
     const source = block()
 
-    expect(source).toContain('一键清除所有过敏原')
-    // 与上传按钮同一行（head 里）
-    const head = source.slice(source.indexOf('allergy-scan__head'), source.indexOf('allergy-scan__candidates'))
-    expect(head).toContain('一键清除所有过敏原')
-    // 没有过敏原时不显示（点了也没意义）
-    expect(source).toContain('const showClearAll = computed')
-    expect(source).toContain('v-if="showClearAll"')
-    // 不可撤销的批量动作：先问一句
-    expect(source).toContain('清除所有过敏原？')
-    expect(source).toContain("emit('clearAll')")
+    expect(source).not.toContain('一键清除')
+    expect(source).not.toContain('showClearAll')
+    expect(source).not.toContain("emit('clearAll')")
+    // 上传按钮仍在
+    expect(source).toContain('上传过敏检测报告')
   })
 
-  it('清空入口在文本框上：点了确认，清的是这一单，档案不动', () => {
+  it('文本框不再有清空按钮；报告按预览图右上角的叉删除', () => {
     const source = page()
 
-    expect(source).toContain('@tap="clearAllAllergies"')
-    // 上传区不再有第二个清空入口
-    expect(source).not.toContain('@clear-all="clearAllAllergies"')
-    const clear = source.match(/function clearAllAllergies\(\)[\s\S]*?\n\}/)?.[0] || ''
-    expect(clear).toContain('formData.value.allergies = []')
-    expect(clear).toContain("formData.value.allergyText = ''")
-    // 不该去调删除档案里过敏记录的接口
-    expect(clear).not.toContain('remove')
+    expect(source).not.toContain('allergy-text__clear')
+    expect(source).not.toContain('clearAllAllergies')
+    expect(source).not.toContain('undoClearAllergies')
+    // 本次报告也用预览图右上角的叉
+    expect(source).toContain('removeDraftReportImage(index, url)')
+    expect(source).toContain('class="allergy-reports__thumb-remove"')
   })
 
-  it('清空后可从已上传报告重新填入过敏食物', () => {
+  it('报告预览右上角可只删一张；最后一张才整份移除', () => {
     const source = page()
 
-    expect(source).toContain('refillReportAllergens(report)')
-    const refill =
-      source.match(/function refillReportAllergens[\s\S]*?\n\}/)?.[0] || ''
-    expect(refill).toContain('report.results')
-    expect(refill).toContain('onAllergensScanned')
+    const fn =
+      source.match(/function removeDraftReportImage[\s\S]*?\n\}/)?.[0] || ''
+    expect(fn).toContain('const isLastImage = images.length <= 1')
+    expect(fn).toContain('formData.value.reportDrafts.splice(reportIndex, 1)')
+    expect(fn).toContain('report.attachments = images.filter')
+    expect(fn).toContain('deleteDraftReportFileKeys')
+    // 不再有“重新填入过敏食物”
+    expect(source).not.toContain('refillReportAllergens')
   })
 })
 
@@ -233,24 +229,6 @@ describe('过敏报告 · 第六批（提醒合并 / 单张删除 / 标签合并
     expect(filter).toContain('resolved.hasMethod')
     // 局部提醒（某处遮挡 / 某行看不清）不受影响
     expect(filter).toContain('return true')
-  })
-
-  it('一键清除之后能给"撤销"（老板问：清除了还想恢复怎么办）', () => {
-    const source = page()
-
-    expect(source).toContain('const clearedAllergiesBackup = ref<{ allergies: string[]; text: string } | null>')
-    const clear = source.match(/function clearAllAllergies\(\)[\s\S]*?\n\}/)?.[0] || ''
-    // 清之前先备份（文本 + 结构化数组）
-    expect(clear).toContain('clearedAllergiesBackup.value = {')
-    expect(clear).toContain('text: formData.value.allergyText')
-    const undo = source.match(/function undoClearAllergies\(\)[\s\S]*?\n\}/)?.[0] || ''
-    expect(undo).toContain('formData.value.allergies = [...clearedAllergiesBackup.value.allergies]')
-    expect(undo).toContain('formData.value.allergyText = clearedAllergiesBackup.value.text')
-    // 界面上要有撤销入口
-    expect(source).toContain('已清除这一单的过敏信息')
-    expect(source).toContain('@tap="undoClearAllergies"')
-    // 换狗时备份要清掉（那是上一只狗的）
-    expect(source).toContain('clearedAllergiesBackup.value = null')
   })
 
   it('每张缩略图右上角一个叉，只删那一张（最后一张才整份删）', () => {

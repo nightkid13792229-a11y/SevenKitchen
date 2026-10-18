@@ -259,6 +259,54 @@
             </div>
             <span v-else class="empty-text">无</span>
           </el-descriptions-item>
+          <el-descriptions-item label="本单上传的检测报告（随单草稿）">
+            <template v-if="order.allergyReportDrafts?.length">
+              <div
+                v-for="(draft, draftIndex) in order.allergyReportDrafts"
+                :key="`draft-${draftIndex}`"
+                class="report-draft-row"
+              >
+                <span class="report-draft-title">报告 {{ draftIndex + 1 }}</span>
+                <el-link
+                  v-for="(url, urlIndex) in draft.attachments || []"
+                  :key="`draft-${draftIndex}-${urlIndex}`"
+                  :href="url"
+                  target="_blank"
+                  type="primary"
+                  class="report-draft-link"
+                >原件 {{ urlIndex + 1 }}</el-link>
+                <span class="source-note">
+                  结论 {{ draft.results?.length || 0 }} 项
+                </span>
+              </div>
+            </template>
+            <span v-else class="empty-text">无</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="档案同步">
+            <template v-if="order.healthInfoSyncedAt">
+              <el-tag type="success" size="small">已同步</el-tag>
+              <span class="source-note">
+                {{ formatDate(order.healthInfoSyncedAt) }}
+              </span>
+            </template>
+            <template v-else-if="order.syncToHealthProfile === false">
+              <span class="empty-text">顾客未要求同步</span>
+            </template>
+            <template v-else-if="order.status === 'PENDING_PAYMENT'">
+              <span class="empty-text">付款成功后同步</span>
+            </template>
+            <template v-else>
+              <el-tag type="warning" size="small">待同步</el-tag>
+              <el-button
+                v-if="isAdmin"
+                type="primary"
+                link
+                size="small"
+                :loading="healthSyncing"
+                @click="retryHealthSync"
+              >重试</el-button>
+            </template>
+          </el-descriptions-item>
           <el-descriptions-item label="过敏史（下单时填写）">
             <el-tag
               v-for="(allergen, index) in order.allergies"
@@ -388,10 +436,14 @@
             v-if="order.dog?.id"
             type="success"
             plain
+            :disabled="!canStartDesign"
             @click="openInDesigner"
           >
             在设计器中设计
           </el-button>
+          <span v-if="order.dog?.id && !canStartDesign" class="design-gate-tip">
+            {{ order.status === 'PENDING_PAYMENT' ? '订单未付款，付款后才能开始设计' : '该订单已取消，不能开始设计' }}
+          </span>
           <!-- 取消会退款、会释放当天接单名额（每天只有 5 个），口径 2 定为仅管理员。
                已交付的单不允许取消（后端也会拒绝）。 -->
           <el-button
@@ -731,7 +783,19 @@ const loadIngredientOptions = async () => {
 const loading = ref(false);
 const submitting = ref(false);
 const restoringCredit = ref(false);
+const healthSyncing = ref(false);
 const order = ref<CustomRecipeOrderDetail | null>(null);
+
+/**
+ * 2026-10-19：未付款订单禁止开始设计。
+ *
+ * 只拦“待付款/已取消”；已付款（含制作中/已交付）仍可进入设计器，
+ * 售后改稿/重新交付还要用这个入口。
+ */
+const canStartDesign = computed(() => {
+  const status = String(order.value?.status || '');
+  return Boolean(status) && !['PENDING_PAYMENT', 'CANCELLED'].includes(status);
+});
 
 /** 交付历史（2026-10-18 · 需求 2.8.6）—— 订单详情只带最新一版，这里要全部 */
 const deliveryHistory = ref<CustomRecipeDeliveryHistoryItem[]>([]);
@@ -1070,6 +1134,26 @@ const confirmPayment = async () => {
   }
 };
 
+/** 付款后档案同步失败的重试（2026-10-19） */
+const retryHealthSync = async () => {
+  if (healthSyncing.value) return;
+  healthSyncing.value = true;
+  try {
+    const result: any = await customRecipeApi.syncHealth(order.value!.orderId);
+    const synced = result?.data?.synced ?? result?.synced;
+    if (synced === false) {
+      ElMessage.warning(result?.data?.reason || result?.reason || '档案暂未同步');
+    } else {
+      ElMessage.success('档案同步成功');
+    }
+    await loadOrderDetail();
+  } catch (error) {
+    toastApiError(error, '档案同步失败', (message) => ElMessage.error(message));
+  } finally {
+    healthSyncing.value = false;
+  }
+};
+
 /**
  * 跳到食谱设计器并带上这只狗。
  *
@@ -1080,6 +1164,10 @@ const openInDesigner = () => {
   const dogId = order.value?.dog?.id;
   if (!dogId) {
     ElMessage.warning('这笔订单没有关联的狗狗档案');
+    return;
+  }
+  if (!canStartDesign.value) {
+    ElMessage.warning('订单未付款，付款后才能开始设计');
     return;
   }
 
@@ -1636,6 +1724,31 @@ h3 {
   white-space: pre-wrap;
   line-height: 1.6;
   color: #303133;
+}
+
+/* 本单随单报告草稿（付款后转正式报告） */
+.report-draft-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.report-draft-title {
+  font-size: 13px;
+  color: #303133;
+}
+
+.report-draft-link {
+  font-size: 12px;
+}
+
+/* 未付款不能开始设计 */
+.design-gate-tip {
+  margin-left: 8px;
+  font-size: 12px;
+  color: #e6a23c;
 }
 
 .overdue-tag {

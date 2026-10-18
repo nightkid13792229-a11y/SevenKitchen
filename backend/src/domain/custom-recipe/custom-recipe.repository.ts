@@ -13,6 +13,21 @@ export interface CustomRecipeScheduleInfo {
   isPublicHoliday: boolean;
 }
 
+/** 本单上传的过敏检测报告草稿（付款后才转正式报告） */
+export interface AllergyReportDraftInput {
+  attachments?: string[];
+  attachmentKeys?: string[];
+  testDate?: string | null;
+  testMethod?: string | null;
+  ocrText?: string | null;
+  summary?: string | null;
+  results?: Array<{
+    allergen: string;
+    level?: string | null;
+    notes?: string | null;
+  }>;
+}
+
 export interface CreateCustomRecipeOrderDTO {
   customerId: string;
   dogId: string;
@@ -20,6 +35,8 @@ export interface CreateCustomRecipeOrderDTO {
   allergies: string[];
   /** 过敏原自由文本（2026-10-19）：订单快照，设计器显示原文 */
   allergyText?: string | null;
+  /** 本单上传的检测报告草稿；付款后才写狗狗档案 */
+  allergyReportDrafts?: AllergyReportDraftInput[];
   medicalConditions: string[];
   additionalNotes?: string;
   preferredIngredients: string[];

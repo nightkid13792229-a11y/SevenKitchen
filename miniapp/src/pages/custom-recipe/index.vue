@@ -337,7 +337,56 @@
             :key="formData.dogId"
             :dog-id="formData.dogId"
             @scanned="onAllergensScanned"
+            @draft="onAllergyReportDraft"
           />
+
+          <!-- 2026-10-19：本次上传的报告先存草稿，付款成功后才写狗狗档案。
+               所以在“历史报告”上面单独列一块，避免家长以为已经进档案了。 -->
+          <view v-if="formData.reportDrafts.length > 0" class="allergy-reports allergy-reports--draft">
+            <text class="allergy-reports__title">
+              本次上传的报告（未付款，暂存）
+            </text>
+            <text class="allergy-reports__hint">
+              付款成功后才会写入狗狗档案；现在还可以修改或删除。
+            </text>
+            <view
+              v-for="(report, index) in formData.reportDrafts"
+              :key="`draft-${index}`"
+              class="allergy-reports__item"
+            >
+              <view class="allergy-reports__thumbs">
+                <view
+                  v-for="url in report.attachments"
+                  :key="url"
+                  class="allergy-reports__thumb-wrap"
+                >
+                  <image
+                    class="allergy-reports__thumb"
+                    :src="url"
+                    mode="aspectFill"
+                    @tap="previewAllergyReport(report)"
+                  />
+                </view>
+              </view>
+              <view class="allergy-reports__row">
+                <view class="allergy-reports__main">
+                  <text class="allergy-reports__name">
+                    {{ report.testDate || '未填日期' }} · {{ reportTestMethodLabel(report.testMethod) }}
+                  </text>
+                  <text class="allergy-reports__meta">{{ draftReportPageText(report) }}</text>
+                </view>
+                <text
+                  v-if="report.results.length > 0"
+                  class="allergy-reports__refill"
+                  @tap.stop="refillReportAllergens(report)"
+                >重新填入过敏食物</text>
+                <text
+                  class="allergy-reports__draft-remove"
+                  @tap.stop="removeDraftReport(index)"
+                >删除</text>
+              </view>
+            </view>
+          </view>
 
           <!-- 已传过的检测报告：原件不再"读完就丢"，这里给**小预览窗口**
                （2026-10-05 老板要求：上传之后在上传按钮下方能看到报告照片）。
@@ -347,7 +396,7 @@
                已经记下的过敏信息不受影响 —— 后端也是这个语义）。 -->
           <view v-if="allergyReports.length > 0" class="allergy-reports">
             <text class="allergy-reports__title">
-              已上传的检测报告（{{ allergyReports.length }} 份 / {{ allergyReportPageCount }} 张）
+              档案里的历史报告（{{ allergyReports.length }} 份 / {{ allergyReportPageCount }} 张）
             </text>
             <view
               v-for="report in allergyReports"
@@ -547,7 +596,7 @@
 
 <script setup lang="ts">
 import { useOptionSet } from '@/utils/option-set'
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import {
   fetchMyOrders,
   fetchDogHealthSummary,
@@ -568,6 +617,13 @@ import {
   resolvePaymentDeadlineAt,
 } from '@/utils/custom-recipe-order';
 import { navigateToDogCreate } from '@/utils/dog-profile-entry';
+import {
+  clearCustomRecipeDraft,
+  isCustomRecipeDraftExpired,
+  loadCustomRecipeDraft,
+  saveCustomRecipeDraft,
+  type CustomRecipeReportDraft,
+} from '@/utils/custom-recipe-draft';
 import { resolveDogAvatarSrc } from '@/utils/dog-avatar';
 import {
   calculateDogAgeText,
@@ -688,7 +744,12 @@ function answerFoodAllergy(hasAllergy: boolean) {
   if (!hasAllergy) {
     formData.value.allergies = [];
     formData.value.allergyText = '';
+    // 答“没有”= 这一单不要任何过敏信息：本次上传的报告草稿也一起清掉，
+    // 不能只藏起来、提交时还带着；COS 文件同步清理。
+    const drafts = [...formData.value.reportDrafts];
+    formData.value.reportDrafts = [];
     clearedAllergiesBackup.value = null;
+    void cleanupDraftReportFiles(drafts);
   }
 }
 
@@ -795,6 +856,35 @@ function allergyReportPageText(report: Record<string, any>): string {
   const parts = [`${pages} 张照片`];
   if (results > 0) parts.push(`${results} 项结论`);
   return parts.join(' · ');
+}
+
+/** 草稿报告的“张数 / 结论数” */
+function draftReportPageText(report: Record<string, any>): string {
+  const pages = Array.isArray(report.attachments) ? report.attachments.length : 0;
+  const results = Array.isArray(report.results) ? report.results.length : 0;
+  const parts = [`${pages} 张照片`];
+  if (results > 0) parts.push(`${results} 项结论`);
+  return parts.join(' · ');
+}
+
+/** 删除本次上传的某份报告草稿（含 COS 文件） */
+function removeDraftReport(index: number) {
+  const report = formData.value.reportDrafts[index];
+  if (!report) return;
+
+  uni.showModal({
+    title: '删除这份报告？',
+    content:
+      '这份报告还没付款，删除后原件也会一并清理；已经填进文本框的过敏食物不受影响。',
+    confirmText: '删除',
+    confirmColor: '#a8622a',
+    success: async (res) => {
+      if (!res.confirm) return;
+      formData.value.reportDrafts.splice(index, 1);
+      await cleanupDraftReportFiles([report]);
+      uni.showToast({ title: '已删除', icon: 'none' });
+    },
+  });
 }
 
 /**
@@ -974,6 +1064,12 @@ const formData = ref({
    */
   allergyText: '',
   /**
+   * 本单上传的检测报告草稿（2026-10-19）。
+   *
+   * 付款前只在页面/订单里暂存；付款成功后才转成狗狗档案里的正式报告。
+   */
+  reportDrafts: [] as CustomRecipeReportDraft[],
+  /**
    * 2026-10-18：需求 2.3.4「第二段：补充（只问档案里没有的）」。
    *
    * `currentFoodMain` 必填 —— 交付物要写「第 1 周按 7:3 混原来的粮」，
@@ -987,10 +1083,112 @@ const formData = ref({
   dislikedIngredients: [] as string[],
   additionalNotes: '',
   attachmentUrls: [] as string[],
-  // 过敏信息一律写回狗狗档案（2026-10-04 老板要求"一定要存档"）。
-  // 后端是**只增不删**：不会删掉档案里已有的记录。
+  // 顾客是否要求这一单写回狗狗档案（2026-10-19：改为付款成功后才写）。
+  // 后端是**只增不删**，不会删掉档案里已有的记录。
   syncToHealthProfile: true,
 });
+
+/**
+ * 本地草稿（2026-10-19）。
+ *
+ * 老板确认：草稿先放手机本地。
+ * 进入页面时：有草稿读草稿（包括“清空后”的空草稿）；没草稿才从档案预填。
+ * 这样清空/修改/删报告在离开再回来时都还在，不会被档案旧值“复活”。
+ */
+const draftHydrating = ref(false);
+/** 订单已提交成功后不再写本地草稿（页面即将 redirect） */
+const draftDisabled = ref(false);
+/** 防止 A 狗的慢响应 finally 把 B 狗的草稿保存状态改掉 */
+const dogLoadToken = ref(0);
+let draftSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+function getDraftCustomerId(): string {
+  return String(uni.getStorageSync('userId') || '').trim();
+}
+
+function scheduleDraftSave() {
+  if (draftDisabled.value || draftHydrating.value || submitting.value) return;
+  if (draftSaveTimer) clearTimeout(draftSaveTimer);
+  draftSaveTimer = setTimeout(() => {
+    draftSaveTimer = null;
+    flushDraftNow();
+  }, 200);
+}
+
+function flushDraftNow() {
+  if (draftSaveTimer) {
+    clearTimeout(draftSaveTimer);
+    draftSaveTimer = null;
+  }
+  if (draftDisabled.value || draftHydrating.value || submitting.value) return;
+
+  const dogId = String(formData.value.dogId || '').trim();
+  const customerId = getDraftCustomerId();
+  if (!dogId || !customerId) return;
+
+  saveCustomRecipeDraft(customerId, dogId, {
+    form: JSON.parse(JSON.stringify(formData.value)),
+    hasFoodAllergy: hasFoodAllergy.value,
+    weightGoalChoice: weightGoalChoice.value,
+    prefilledAllergyText: prefilledAllergyText.value,
+  });
+}
+
+/** 换狗时把这一单的表单清成新狗的空表单（草稿按狗隔离） */
+function resetOrderFormForDog(dogId: string) {
+  formData.value = {
+    dogId,
+    targetGoal: '',
+    allergies: [],
+    allergyText: '',
+    reportDrafts: [],
+    currentFoodMain: '',
+    changeReasons: [],
+    changeReasonOther: '',
+    stomachConditions: [],
+    preferredIngredients: [],
+    dislikedIngredients: [],
+    additionalNotes: '',
+    attachmentUrls: [],
+    syncToHealthProfile: true,
+  };
+  weightGoalChoice.value = null;
+  hasFoodAllergy.value = null;
+  clearedAllergiesBackup.value = null;
+  prefilledAllergyText.value = '';
+}
+
+function applyCustomRecipeDraft(draft: ReturnType<typeof loadCustomRecipeDraft>) {
+  if (!draft?.form) return;
+  Object.assign(formData.value, draft.form, { dogId: draft.dogId });
+  if (!Array.isArray(formData.value.reportDrafts)) {
+    formData.value.reportDrafts = [];
+  }
+  hasFoodAllergy.value = draft.hasFoodAllergy;
+  weightGoalChoice.value = draft.weightGoalChoice;
+  prefilledAllergyText.value = draft.prefilledAllergyText || '';
+}
+
+/** 清掉草稿里已经上传到 COS、但最终没进订单的报告文件 */
+async function cleanupDraftReportFiles(reports: CustomRecipeReportDraft[]) {
+  for (const report of reports || []) {
+    for (const key of report?.attachmentKeys || []) {
+      const value = String(key || '').trim();
+      if (!value) continue;
+      await dogApi.deleteHealthAttachment('allergy', value).catch((error) => {
+        console.warn('[CustomRecipe] 清理草稿报告文件失败:', value, error);
+      });
+    }
+  }
+}
+
+// 任何输入变化都写本地草稿；页面关闭前再兜底一次
+watch(
+  [formData, hasFoodAllergy, weightGoalChoice, prefilledAllergyText],
+  () => scheduleDraftSave(),
+  { deep: true },
+);
+onUnmounted(() => flushDraftNow());
 
 /**
  * 预估交付日期文案（2026-10-18 · 需求 2.3.5）
@@ -1375,8 +1573,12 @@ const preferencePrefillHint = computed(() => {
  * 这句提示就成立。
  */
 const healthPrefillHint = computed(() => {
-  if (!prefilledAllergyText.value) return '';
-  if (!formData.value.allergyText.trim()) return '';
+  const prefilled = prefilledAllergyText.value.trim();
+  if (!prefilled) return '';
+  const current = formData.value.allergyText.trim();
+  if (!current) return '';
+  // 顾客把档案带来的内容整个换掉后，就不再说“从档案带出”
+  if (!current.includes(prefilled)) return '';
   return '已从档案带出过敏信息，可以直接修改或补充。';
 });
 
@@ -1742,6 +1944,8 @@ async function selectDefaultDog(dogs: any[]) {
 }
 
 const onDogChange = (e: any) => {
+  // 换狗前先把上一只狗的草稿落盘（防抖还没触发时尤其重要）
+  flushDraftNow();
   const index = e.detail.value;
   selectedDog.value = dogOptions.value[index];
   formData.value.dogId = selectedDog.value.value;
@@ -1797,22 +2001,36 @@ function mergeAllergyText(left: string, right: string): string {
 const loadDogArchiveInfo = async (dogId: string) => {
   if (!dogId) return;
 
+  const token = ++dogLoadToken.value;
+  draftHydrating.value = true;
+
   // ① 先清空上一只狗带出来的一切（含扫描出来的候选过敏原所在的报告列表）
-  formData.value.allergies = [];
-  formData.value.allergyText = '';
-  // "是否对食物过敏"这一问也要跟着换狗重置：上一只狗答过的答案
-  // 不能替新狗作答（答"没有"会把新狗的录入界面藏起来）
-  hasFoodAllergy.value = null;
-  // 撤销用的备份也属于上一只狗
-  clearedAllergiesBackup.value = null;
-  prefilledAllergyText.value = '';
-  // 口味同理：它也会写进新狗的单子，留着上一只狗的口味没有意义
-  formData.value.preferredIngredients = [];
-  formData.value.dislikedIngredients = [];
+  //    这一步必须在任何异步请求之前：读档案慢时也不能让上一只狗的医疗数据
+  //    留在新狗的表单里。草稿按“顾客 + 狗”隔离，换狗就是一张新单。
+  resetOrderFormForDog(dogId);
   healthSummary.value = null;
   allergyReports.value = [];
 
+  // 再读本地草稿：有草稿（包括“清空后的空草稿”）就以草稿为准
+  let draft: ReturnType<typeof loadCustomRecipeDraft> = null;
+  const customerId = getDraftCustomerId();
+  if (customerId) {
+    draft = loadCustomRecipeDraft(customerId, dogId);
+    if (draft && isCustomRecipeDraftExpired(draft)) {
+      await cleanupDraftReportFiles(draft.form?.reportDrafts || []);
+      clearCustomRecipeDraft(customerId, dogId);
+      draft = null;
+    }
+  }
+
+  // 草稿是这一单的当前输入；先恢复，后面的档案读取只补 gate/calc，不再覆盖它
+  if (draft) {
+    applyCustomRecipeDraft(draft);
+    formData.value.dogId = dogId;
+  }
+
   healthSummaryLoading.value = true;
+  let summaryLoaded = false;
   try {
     /** 同时取狗狗详情：它带回 calcResult（每日热量与克数），
      *  列表接口里没有这两个数，而"选了目标要给具体数字"需要它们。 */
@@ -1848,38 +2066,47 @@ const loadDogArchiveInfo = async (dogId: string) => {
      * 是**架构守卫**抓出来的：真机上 `res` 不存在会直接崩。
      */
     healthSummary.value = summary;
+    summaryLoaded = true;
 
-    const summaryAllergies = Array.isArray(summary.allergies)
-      ? [...summary.allergies]
-      : [];
-    formData.value.allergies = summaryAllergies;
-    // 2026-10-19：档案里的自由文本 + 结构化记录都带出来，合并成一段文本
-    const profileText = String(
-      detailRes?.data?.profile?.allergyFoods ||
-        selectedDog.value?.allergyFoods ||
-        '',
-    ).trim();
-    formData.value.allergyText = mergeAllergyText(
-      profileText,
-      summaryAllergies.join('、'),
-    );
-    prefilledAllergyText.value = formData.value.allergyText;
-    // 档案里已经有过敏信息 → 这一问默认答"有过敏"（本来就是事实，
-    // 让家长再答一遍反而是多一道题）；档案里没有就保持未答，等他选
-    if (formData.value.allergyText || summaryAllergies.length > 0) {
-      hasFoodAllergy.value = true;
+    if (!draft) {
+      const summaryAllergies = Array.isArray(summary.allergies)
+        ? [...summary.allergies]
+        : [];
+      formData.value.allergies = summaryAllergies;
+      // 2026-10-19：档案里的自由文本 + 结构化记录都带出来，合并成一段文本
+      const profileText = String(
+        detailRes?.data?.profile?.allergyFoods ||
+          selectedDog.value?.allergyFoods ||
+          '',
+      ).trim();
+      formData.value.allergyText = mergeAllergyText(
+        profileText,
+        summaryAllergies.join('、'),
+      );
+      prefilledAllergyText.value = formData.value.allergyText;
+      // 档案里已经有过敏信息 → 这一问默认答"有过敏"（本来就是事实，
+      // 让家长再答一遍反而是多一道题）；档案里没有就保持未答，等他选
+      if (formData.value.allergyText || summaryAllergies.length > 0) {
+        hasFoodAllergy.value = true;
+      }
+      // 过敏可能刚从档案带出来，方向要跟着它算的体况对齐一次
+      syncGoalWithPlan();
+      // 口味偏好：档案里的两个字段（2026-09-27 才在「健康管理」页有了入口）
+      formData.value.preferredIngredients = splitFoodText(summary.preferredFoods);
+      formData.value.dislikedIngredients = splitFoodText(summary.pickyFoods);
     }
-    // 过敏可能刚从档案带出来，方向要跟着它算的体况对齐一次
-    syncGoalWithPlan();
-    // 口味偏好：档案里的两个字段（2026-09-27 才在「健康管理」页有了入口）
-    formData.value.preferredIngredients = splitFoodText(summary.preferredFoods);
-    formData.value.dislikedIngredients = splitFoodText(summary.pickyFoods);
   } catch (error) {
-    // 读不到档案不能挡住定制：保持上面清空后的空状态，让顾客自己填
+    // 读不到档案不能挡住定制：保持草稿 / 清空后的状态，让顾客自己填
     console.warn('[CustomRecipe] 读取档案信息失败:', error);
     healthSummary.value = null;
   } finally {
+    if (token !== dogLoadToken.value) return;
     healthSummaryLoading.value = false;
+    draftHydrating.value = false;
+    // 读档案失败且没有草稿时不要落一份空草稿，否则下次进来也不会再从档案预填
+    if (summaryLoaded || draft) {
+      flushDraftNow();
+    }
   }
 };
 
@@ -1998,6 +2225,23 @@ async function loadAllergyReports(dogId: string) {
   }
 }
 
+/** 报告先作为这一单的草稿存下来（2026-10-19：付款后才写狗狗档案） */
+function onAllergyReportDraft(draft: CustomRecipeReportDraft) {
+  if (!draft) return;
+  formData.value.reportDrafts.push({
+    attachments: [...(draft.attachments || [])],
+    attachmentKeys: [...(draft.attachmentKeys || [])],
+    testDate: draft.testDate || null,
+    testMethod: draft.testMethod || 'UNKNOWN',
+    ocrText: draft.ocrText || null,
+    summary: draft.summary || null,
+    results: (draft.results || []).map((item) => ({
+      allergen: String(item?.allergen || '').trim(),
+      level: String(item?.level || 'UNKNOWN'),
+    })),
+  });
+}
+
 /** 扫描确认后的过敏原并进这一单的文本（去重，已在文本里的跳过） */
 function onAllergensScanned(payload: { allergens?: string[] }) {
   const list = Array.isArray(payload?.allergens) ? payload.allergens : [];
@@ -2026,8 +2270,6 @@ function onAllergensScanned(payload: { allergens?: string[] }) {
         : '这些过敏原已经在过敏文本里了',
     icon: 'none',
   });
-  // 报告存好了，列表刷新一下（"已上传的检测报告"要立刻看得到）
-  void loadAllergyReports(formData.value.dogId);
 }
 
 /** 把已上传报告里记下的过敏食物重新填进文本框（2026-10-19） */
@@ -2227,8 +2469,14 @@ const submitOrder = async () => {
      *
      * 载荷里**不含 scheduledDate**：排期由后端自动定，前端不传日期（2026-10-04）。
      */
+    /**
+     * `reportDrafts` 是页面/订单草稿字段，后端叫 `allergyReportDrafts`；
+     * 拆开传，避免把页面的临时字段名原样丢给后端校验。
+     */
+    const { reportDrafts, ...orderForm } = formData.value;
     const submitData = {
-      ...formData.value,
+      ...orderForm,
+      allergyReportDrafts: reportDrafts,
       syncToHealthProfile: true,
       needsHealthManagement:
         formData.value.allergies.length > 0 ||
@@ -2245,6 +2493,10 @@ const submitOrder = async () => {
     if (!orderId) {
       throw new Error('服务端未返回订单号');
     }
+
+    // 订单已生成：本地草稿的使命结束（付款前它只是草稿，付款后由后端写档案）
+    draftDisabled.value = true;
+    clearCustomRecipeDraft(getDraftCustomerId(), formData.value.dogId);
 
     const query = [
       `orderId=${encodeURIComponent(orderId)}`,
@@ -2967,6 +3219,22 @@ const getBCSText = (bcsScore: number) => {
   font-size: 23rpx;
   color: #8a6b3f;
   border-bottom: 1rpx solid #8a6b3f;
+}
+
+/* 本次上传、还没付款的报告草稿 */
+.allergy-reports--draft {
+  margin-top: 16rpx;
+  padding: 16rpx;
+  background: #fffdf6;
+  border: 1rpx dashed #e8ded0;
+  border-radius: 14rpx;
+}
+
+.allergy-reports__draft-remove {
+  flex: none;
+  font-size: 23rpx;
+  color: #a8622a;
+  border-bottom: 1rpx solid #a8622a;
 }
 
 /* 「已清除 N 项 · 撤销」：一键清除之后的反悔入口 */

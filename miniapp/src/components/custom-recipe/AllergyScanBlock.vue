@@ -82,8 +82,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
 import { dogApi } from '../../api/dogs'
+import type { CustomRecipeReportDraft } from '../../utils/custom-recipe-draft'
 import {
   SCAN_IMAGE_SIZE_TYPE,
   confirmBlurryScanImages,
@@ -105,11 +106,11 @@ import {
  *
  * 两件事一起做：
  *   ① 把名字 emit 给父页面（进这一单的过敏信息）
- *   ② 把**报告原件**存成一份检测报告实体，家长以后翻得出来
- *      （旧版"读完就把照片丢了"，等于白拍一张）
+ *   ② 把**报告原件 + 识别结果**作为“这一单的草稿” emit 给父页面
  *
- * 报告实体存到狗狗档案下 —— 这是家长刚刚亲手拍、亲手确认的，
- * 属于他自己的操作，不受"下单是否写回档案"那个开关影响。
+ * 2026-10-19 老板确认：付款前所有输入都是草稿，不能提前写狗狗档案。
+ * 所以组件不再调用 `allergyReports.create`；付款成功后由后端把草稿
+ * 转成正式的狗狗报告。取消/失败时组件负责清理已上传的 COS 文件。
  */
 const props = defineProps<{
   dogId: string
@@ -119,6 +120,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (event: 'scanned', value: { allergens: string[] }): void
+  /** 2026-10-19：报告先作为“这一单的草稿”交给父页面，不直接写狗狗档案 */
+  (event: 'draft', value: CustomRecipeReportDraft): void
   /** 一键清除这一单的过敏原（由父页面清，它才是过敏原的主人） */
   (event: 'clearAll'): void
 }>()
@@ -141,8 +144,10 @@ const extracting = ref(false)
 const candidates = ref<ScannedAllergen[]>([])
 const picked = ref<string[]>([])
 const warnings = ref<string[]>([])
-/** 这一份报告的原始图片地址（可能多页），确认时一起存进报告 */
+/** 这一份报告的原始图片地址（可能多页），确认时一起交给父页面存草稿 */
 const imageUrls = ref<string[]>([])
+/** 上传到 COS 的 key：取消/失败时用来清理文件；确认后交给父页面 */
+const imageKeys = ref<string[]>([])
 const testDate = ref('')
 const method = ref<'SERUM' | 'INTRADERMAL' | 'ELIMINATION' | 'OTHER' | 'UNKNOWN'>('UNKNOWN')
 const ocrText = ref('')
@@ -206,8 +211,35 @@ function normalizeMethod(value: unknown): typeof method.value {
     : 'UNKNOWN'
 }
 
+/** 删掉已经上传到 COS 的草稿文件（取消/失败时用，失败只记日志） */
+async function cleanupUploadedFiles(keys: string[]) {
+  for (const key of keys) {
+    const value = String(key || '').trim()
+    if (!value) continue
+    await dogApi.deleteHealthAttachment('allergy', value).catch((error) => {
+      console.warn('[AllergyScan] 清理报告草稿文件失败:', value, error)
+    })
+  }
+}
+
+/** 清空当前这一轮扫描（不碰已确认交给父页面的草稿） */
+function resetScanState() {
+  candidates.value = []
+  picked.value = []
+  warnings.value = []
+  imageUrls.value = []
+  imageKeys.value = []
+  testDate.value = ''
+  method.value = 'UNKNOWN'
+  ocrText.value = ''
+}
+
 async function pickReport() {
   if (extracting.value) return
+  if (candidates.value.length > 0 || imageUrls.value.length > 0) {
+    uni.showToast({ title: '请先确认或取消当前报告', icon: 'none' })
+    return
+  }
 
   let filePaths: string[] = []
   try {
@@ -252,9 +284,13 @@ async function pickReport() {
   extracting.value = true
   uni.showLoading({ title: '识别中…', mask: true })
 
+  /** 上传成功过的 key：中途失败时也要能清理（不能只靠 imageKeys，它要等循环结束才赋值） */
+  const attemptedKeys: string[] = []
+
   try {
     const collectedWarnings: string[] = []
     const urls: string[] = []
+    const keys: string[] = []
     /** 每一页的结果分开留：合并时要知道哪一页有判定区（见 allergy-candidates.ts） */
     const pages: ScannedAllergenPage[] = []
     let detectedDate = ''
@@ -272,6 +308,11 @@ async function pickReport() {
         throw new Error('上传失败，请重试')
       }
       urls.push(imageUrl)
+      const key = String(uploaded?.key || '').trim()
+      if (key) {
+        keys.push(key)
+        attemptedKeys.push(key)
+      }
 
       const res: any = await dogApi.extractHealthReport({ imageUrl })
       const data = res?.data || {}
@@ -316,6 +357,7 @@ async function pickReport() {
     }
 
     imageUrls.value = urls
+    imageKeys.value = keys
     testDate.value = detectedDate
     method.value = detectedMethod
     ocrText.value = texts.join('\n\n').slice(0, 20000)
@@ -331,6 +373,9 @@ async function pickReport() {
     uni.hideLoading()
 
     if (foodCandidates.value.length === 0) {
+      // 没有可确认的食物过敏原 = 这份报告不会进这一单，上传的文件要清掉
+      await cleanupUploadedFiles(keys)
+      resetScanState()
       uni.showToast({
         title:
           skipped.value.length > 0
@@ -345,6 +390,9 @@ async function pickReport() {
     uni.showToast({ title: '识别完成，请确认', icon: 'none' })
   } catch (error: any) {
     uni.hideLoading()
+    // 上传到一半失败：已经传上去的文件要清掉，别留在 COS
+    await cleanupUploadedFiles(attemptedKeys)
+    resetScanState()
     // 降级为手工填写：识别不可用不能挡住家长下单
     uni.showToast({
       title: error?.message || '识别失败，请手工添加过敏原',
@@ -365,58 +413,54 @@ function toggle(name: string) {
   picked.value.push(name)
 }
 
-function discard() {
-  candidates.value = []
-  picked.value = []
-  warnings.value = []
+async function discard() {
+  // 取消 = 这一份报告不要了：把已经上传到 COS 的文件一起清掉
+  await cleanupUploadedFiles(imageKeys.value)
+  resetScanState()
 }
 
-async function confirm() {
+function confirm() {
   if (picked.value.length === 0) return
 
   // 选中的这一批（带报告写的结论等级）
   const chosen = foodCandidates.value.filter((item) => isPicked(item.name))
 
-  // ① 报告原件存成一份检测报告实体（家长以后翻得出来）
-  if (props.dogId && imageUrls.value.length > 0) {
-    try {
-      await dogApi.allergyReports.create(props.dogId, {
-        testDate: testDate.value || null,
-        testMethod: method.value,
-        attachments: imageUrls.value,
-        ocrText: ocrText.value || null,
-        /**
-         * level 必须**照抄报告上写的**（2026-10-05 修复）。
-         *
-         * 老版本这里写死 'UNKNOWN'，后果不是"少一个标签"：
-         * 后端按 level 定可信度 —— 阳性 → 确诊（食谱彻底避开）、
-         * 其余 → 可疑。写死 UNKNOWN 等于把报告上写着"阳性"的确诊过敏
-         * 一律降级成"可疑"，食谱就不会严格避开它。老板第 4 条问的正是这个。
-         */
-        results: chosen.map((item) => ({ allergen: item.name, level: item.level })),
-        // 环境项写进报告摘要：原件里有，但不记成"过敏"
-        summary: skipped.value.length
-          ? `报告另有环境类过敏原 ${skipped.value.length} 项（${skippedNames.value}），与食谱无关，未记入过敏信息。`
-          : null,
-      })
-    } catch (error: any) {
-      /**
-       * 报告没存下不影响这一单（名字照样加进过敏信息），但**必须说出来**：
-       * 2026-10-05 真实事故 —— 服务端等级白名单没跟上，报告保存被 400 挡下，
-       * 家长只看到"缩略图一直没出现"，无从判断是没传成功还是页面坏了。
-       */
-      uni.showToast({
-        title: error?.message || '报告原件没存下来，过敏信息已记上',
-        icon: 'none',
-        duration: 3000,
-      })
-    }
+  /**
+   * 2026-10-19：报告**先作为这一单的草稿**交给父页面，不直接写狗狗档案。
+   *
+   * 原因：此刻顾客还没付款，报告可能被改、被删、整单被放弃；
+   * 付款成功后才由后端把草稿转成正式的狗狗报告。
+   * `imageKeys` 一起带过去 —— 未付款取消/超时时后端要靠它清理 COS 文件。
+   */
+  const draft: CustomRecipeReportDraft = {
+    attachments: [...imageUrls.value],
+    attachmentKeys: [...imageKeys.value],
+    testDate: testDate.value || null,
+    testMethod: method.value,
+    ocrText: ocrText.value || null,
+    // 环境项写进报告摘要：原件里有，但不记成"过敏"
+    summary: skipped.value.length
+      ? `报告另有环境类过敏原 ${skipped.value.length} 项（${skippedNames.value}），与食谱无关，未记入过敏信息。`
+      : null,
+    results: chosen.map((item) => ({
+      allergen: item.name,
+      level: item.level,
+    })),
   }
 
-  // ② 名字交给父页面（进这一单的过敏信息）
+  emit('draft', draft)
+  // 名字交给父页面（进这一单的过敏信息）
   emit('scanned', { allergens: [...picked.value] })
-  discard()
+  resetScanState()
 }
+
+onUnmounted(() => {
+  // 没确认就离开页面：上传的文件不能留在 COS
+  if (imageKeys.value.length > 0) {
+    void cleanupUploadedFiles(imageKeys.value)
+  }
+})
+
 </script>
 
 <style scoped lang="scss">

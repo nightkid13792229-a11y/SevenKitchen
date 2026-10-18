@@ -414,6 +414,26 @@ export class AdminCustomRecipeController {
       paymentConfirmedAt: new Date(),
     });
 
+    /**
+     * 2026-10-19：人工确认收款同样要在付款成功后写档案。
+     * 失败不影响“收款已确认”，把结果带回后台，供页面提示/重试。
+     */
+    let healthSync: { synced: boolean; reason?: string } = {
+      synced: false,
+      reason: '未执行',
+    };
+    try {
+      healthSync = await this.customRecipeService.syncPaidOrderToHealthProfile(
+        orderId,
+      );
+    } catch (error: any) {
+      healthSync = {
+        synced: false,
+        reason: error?.message || '档案同步失败，请稍后重试',
+      };
+      console.error('[AdminCustomRecipe] 确认收款后档案同步失败:', error);
+    }
+
     // Send WeChat notification
     if (order.customer?.wechatOpenid) {
       await this.wechatService
@@ -430,7 +450,23 @@ export class AdminCustomRecipeController {
     return ApiResponseDto.success({
       status: 'PAID',
       paymentConfirmedAt: new Date(),
+      healthSync,
     });
+  }
+
+  /**
+   * 重试“付款后写狗狗档案”（2026-10-19）。
+   *
+   * 支付成功但同步失败时，订单仍是已付款、healthInfoSyncedAt 为空；
+   * 后台可以点这个接口重试。幂等：已同步的直接返回。
+   */
+  @Post('orders/:orderId/sync-health')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: '重试把订单同步到狗狗档案' })
+  async retryHealthSync(@Param('orderId') orderId: string) {
+    const result =
+      await this.customRecipeService.syncPaidOrderToHealthProfile(orderId);
+    return ApiResponseDto.success(result);
   }
 
   /**

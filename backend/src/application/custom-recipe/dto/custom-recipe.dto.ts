@@ -11,9 +11,79 @@ import {
   IsBoolean,
   IsEnum,
   MaxLength,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { TargetGoal, CustomAttachmentType } from '@prisma/client';
+
+/**
+ * 本单上传的过敏检测报告草稿（2026-10-19）。
+ *
+ * 为什么放在订单而不是直接写狗狗档案：
+ * 定制页在上传报告时还没付款，不能因为一张最终可能被放弃的单
+ * 就改狗狗的医疗档案。付款成功后由后端统一转成正式报告。
+ */
+export class AllergyReportDraftResultDTO {
+  @ApiProperty({ description: '过敏原' })
+  @IsString()
+  @MaxLength(40)
+  allergen!: string;
+
+  @ApiPropertyOptional({ description: '报告结论等级' })
+  @IsOptional()
+  @IsString()
+  level?: string;
+
+  @ApiPropertyOptional({ description: '报告备注' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  notes?: string;
+}
+
+export class AllergyReportDraftDTO {
+  @ApiPropertyOptional({ description: '报告原件 URL（照片/文档）' })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  attachments?: string[];
+
+  @ApiPropertyOptional({ description: 'COS 文件 key，取消/超时清理用' })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  attachmentKeys?: string[];
+
+  @ApiPropertyOptional({ description: '检测日期 YYYY-MM-DD' })
+  @IsOptional()
+  @IsString()
+  testDate?: string;
+
+  @ApiPropertyOptional({ description: '检测方式' })
+  @IsOptional()
+  @IsString()
+  testMethod?: string;
+
+  @ApiPropertyOptional({ description: '报告 OCR 原文' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20000)
+  ocrText?: string;
+
+  @ApiPropertyOptional({ description: '报告摘要' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  summary?: string;
+
+  @ApiPropertyOptional({ description: '报告结论', type: [AllergyReportDraftResultDTO] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => AllergyReportDraftResultDTO)
+  results?: AllergyReportDraftResultDTO[];
+}
 
 export class SubmitCustomRecipeOrderDTO {
   @ApiProperty({ description: 'Dog ID' })
@@ -41,6 +111,16 @@ export class SubmitCustomRecipeOrderDTO {
   @IsString()
   @MaxLength(1000)
   allergyText?: string;
+
+  @ApiPropertyOptional({
+    description: '本单上传的检测报告草稿（付款后才写狗狗档案）',
+    type: [AllergyReportDraftDTO],
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => AllergyReportDraftDTO)
+  allergyReportDrafts?: AllergyReportDraftDTO[];
 
   @ApiPropertyOptional({ description: 'Medical conditions' })
   @IsOptional()
@@ -249,6 +329,8 @@ export class CustomRecipeOrderDetailResponseDTO extends CustomRecipeOrderRespons
   allergies!: string[];
   /** 过敏原自由文本（2026-10-19）：订单快照，老订单为 null */
   allergyText?: string | null;
+  /** 本单上传的检测报告草稿（付款后转正式报告） */
+  allergyReportDrafts?: AllergyReportDraftDTO[];
   medicalConditions!: string[];
   preferredIngredients!: string[];
   dislikedIngredients!: string[];

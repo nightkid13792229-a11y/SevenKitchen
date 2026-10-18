@@ -1016,8 +1016,8 @@ describe('custom recipe dog switch isolation · 换狗隔离医疗数据', () =>
   it('先清空再填充：清空必须发生在任何 await 之前', () => {
     expect(archiveSource).not.toBe('')
 
-    const clearAllergies = archiveSource.indexOf('formData.value.allergies = []')
-    // 疾病史不再录入（2026-10-04 老板要求删掉那一块），所以这里只清过敏
+    // 2026-10-19：清空整张表单（含过敏、报告草稿、口味）统一走 resetOrderFormForDog
+    const clearAllergies = archiveSource.indexOf('resetOrderFormForDog(dogId)')
     const firstAwait = archiveSource.indexOf('await ')
 
     expect(clearAllergies).toBeGreaterThan(-1)
@@ -1937,9 +1937,12 @@ describe('定制页 · 报告缩略图相关（第五批补丁）', () => {
   const page = read(`${PAGE_DIR}/index.vue`)
   const block = read('src/components/custom-recipe/AllergyScanBlock.vue')
 
-  it('报告保存失败不再静默：要提示家长"原件没存下来"', () => {
-    expect(block).not.toContain('// 报告存不下不影响这一单 —— 名字照样加进过敏信息\n    } catch {')
-    expect(block).toContain('报告原件没存下来，过敏信息已记上')
+  it('报告上传失败仍有提示（2026-10-19 起不再在上传时写狗狗档案）', () => {
+    // 报告现在只作为订单草稿，不再调用 allergyReports.create；
+    // 上传本身失败仍要明确提示，不能静默。
+    expect(block).not.toContain('dogApi.allergyReports.create')
+    expect(block).toContain('上传失败，请重试')
+    expect(block).toContain('识别失败，请手工添加过敏原')
   })
 
   it('有历史报告时默认答"有过敏"，别把预览一起藏起来', () => {
@@ -2032,3 +2035,51 @@ describe('订单列表按钮来自后端契约', () => {
     expect(source).toContain("label: '查看详情'");
   });
 });
+
+/**
+ * 2026-10-19：定制页本地草稿 + 付款后才写狗狗档案。
+ *
+ * 老板确认：草稿先放手机本地；付款后退款档案保留；未付款订单设计器禁止开始。
+ */
+describe('custom recipe draft · 本地草稿与付款后同步', () => {
+  const page = read('src/pages/custom-recipe/index.vue')
+  const component = read('src/components/custom-recipe/AllergyScanBlock.vue')
+
+  it('进入页面先读本地草稿；有草稿时不再用档案预填', () => {
+    expect(page).toContain('loadCustomRecipeDraft')
+    expect(page).toContain('applyCustomRecipeDraft(draft)')
+    expect(page).toContain('if (!draft) {')
+    // 换狗先落盘上一只狗的草稿
+    expect(page).toContain('flushDraftNow()')
+  })
+
+  it('清空/编辑/删报告都会写本地草稿', () => {
+    expect(page).toContain('saveCustomRecipeDraft')
+    expect(page).toContain('watch(')
+    expect(page).toContain('reportDrafts')
+    expect(page).toContain('draftDisabled')
+  })
+
+  it('提交发送 allergyReportDrafts，不把页面字段 reportDrafts 原样丢给后端', () => {
+    expect(page).toContain('const { reportDrafts, ...orderForm } = formData.value')
+    expect(page).toContain('allergyReportDrafts: reportDrafts')
+  })
+
+  it('提交成功后清掉本地草稿，避免返回时又出现', () => {
+    expect(page).toContain('clearCustomRecipeDraft(getDraftCustomerId(), formData.value.dogId)')
+    expect(page).toContain('draftDisabled.value = true')
+  })
+
+  it('报告先作为草稿交给父页面，不再上传即写狗狗档案', () => {
+    expect(component).not.toContain('dogApi.allergyReports.create')
+    expect(component).toContain("emit('draft', draft)")
+    expect(page).toContain('@draft="onAllergyReportDraft"')
+    expect(page).toContain('formData.value.reportDrafts.push')
+  })
+
+  it('答“没有过敏”会清报告草稿并清理 COS 文件', () => {
+    const answer = page.match(/function answerFoodAllergy[\s\S]*?\n\}/)?.[0] || ''
+    expect(answer).toContain('formData.value.reportDrafts = []')
+    expect(answer).toContain('cleanupDraftReportFiles')
+  })
+})

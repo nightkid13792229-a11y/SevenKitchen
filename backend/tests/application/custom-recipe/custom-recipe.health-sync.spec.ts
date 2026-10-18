@@ -5,16 +5,14 @@ import { PrismaService } from '../../../src/infrastructure/prisma.service';
 import { TencentCosService } from '../../../src/infrastructure/services/tencent-cos.service';
 
 /**
- * 定制单 → 狗狗健康档案 的同步（2026-09-27）
+ * 定制单 → 狗狗档案 的同步时点（2026-10-19 重做）
  *
- * 背景：这段同步曾经写坏了 —— `AllergyRecord` 只有 `allergen` / `notes`，
- * 代码却写入了 `allergenType` / `severity` / `discoveryDate` / `confirmedBy`
- * 四个**不存在的列**，Prisma 直接抛 `Unknown argument`，
- * **整个下单事务回滚**。而小程序端 `syncToHealthProfile` 恒为 true，
- * 等于"顾客只要填了一个过敏原，就永远提交不了定制单"（实测 500）。
+ * 老板确认：草稿先放手机本地；付款成功后才写狗狗档案；未付款订单设计器禁止开始。
  *
- * 这里用 mock 捕获真实的写入内容，断言**只写模型里真实存在的字段**，
- * 让这类"照着想象写字段名"的错误在跑测试时就被抓住。
+ * 这组测试锁住三件事：
+ *   1. **提交订单不再写档案** —— 只存订单快照；
+ *   2. 付款成功后才把文字/报告草稿/疾病/偏好写进档案；
+ *   3. 重复回调/重试不会重复建报告、重复写档案。
  */
 
 /** 与 prisma/schema.prisma 的 AllergyRecord 保持一致，改模型时这里也要同步 */
@@ -26,6 +24,10 @@ const ALLERGY_RECORD_FIELDS = new Set([
   'createdAt',
   'updatedAt',
   'attachments',
+  'certainty',
+  'source',
+  'reportId',
+  'observedAt',
 ]);
 
 /** 与 prisma/schema.prisma 的 MedicalRecord 保持一致 */
@@ -46,17 +48,17 @@ const MEDICAL_RECORD_FIELDS = new Set([
   'attachments',
 ]);
 
-describe('CustomRecipeService · 同步到狗狗健康档案', () => {
+describe('CustomRecipeService · 档案同步时点', () => {
   let service: CustomRecipeService;
 
   const allergyCreate = jest.fn();
+  const allergyUpdate = jest.fn();
   const medicalCreate = jest.fn();
+  const reportCreate = jest.fn();
 
   const mockPrismaService = {
-    // 提交定制单现在会先校验"这只狗是不是你的"
     dog: {
       findFirst: jest.fn().mockResolvedValue({ id: 'dog-1', ownerId: 'user-1' }),
-      // 2026-10-19：过敏自由文本合并要先读 allergyFoods，再按需 update
       findUnique: jest.fn(),
       update: jest.fn(),
     },
@@ -64,27 +66,36 @@ describe('CustomRecipeService · 同步到狗狗健康档案', () => {
       findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
-      /**
-       * 2026-10-04：下单改成"系统自动排期 + CAS 抢名额"，
-       * 排期行会先 createMany（skipDuplicates），再条件式 updateMany 占位。
-       */
       createMany: jest.fn(),
       updateMany: jest.fn(),
     },
     customRecipeOrder: {
-      // 生成订单号时会先查一次是否撞号（撞号要重试，而不是抛唯一约束错误）
       findUnique: jest.fn().mockResolvedValue(null),
       findFirst: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
     allergyRecord: {
       findFirst: jest.fn(),
+      findUnique: jest.fn(),
       create: allergyCreate,
+      update: allergyUpdate,
     },
     medicalRecord: {
       findFirst: jest.fn(),
       create: medicalCreate,
+    },
+    allergyReport: {
+      findUnique: jest.fn(),
+      create: reportCreate,
+    },
+    dogDietPreference: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      create: jest.fn(),
+    },
+    dogDietPreferenceChange: {
+      create: jest.fn(),
     },
     $transaction: jest.fn(),
   } as any;
@@ -94,7 +105,7 @@ describe('CustomRecipeService · 同步到狗狗健康档案', () => {
       providers: [
         CustomRecipeService,
         { provide: PrismaService, useValue: mockPrismaService },
-        { provide: TencentCosService, useValue: {} },
+        { provide: TencentCosService, useValue: { deleteImage: jest.fn() } },
         {
           provide: CustomRecipeConfigService,
           useValue: {
@@ -116,19 +127,18 @@ describe('CustomRecipeService · 同步到狗狗健康档案', () => {
     mockPrismaService.$transaction.mockImplementation(async (cb: any) =>
       cb(mockPrismaService),
     );
-    // 排期已存在且可约
     mockPrismaService.customRecipeSchedule.findUnique.mockResolvedValue({
       isAvailable: true,
       bookedCount: 0,
       capacity: 4,
     });
-    // CAS 占位成功（count: 1 才算抢到）
     mockPrismaService.customRecipeSchedule.updateMany.mockResolvedValue({
       count: 1,
     });
     mockPrismaService.customRecipeSchedule.createMany.mockResolvedValue({
       count: 0,
     });
+    mockPrismaService.customRecipeOrder.findUnique.mockResolvedValue(null);
     mockPrismaService.customRecipeOrder.create.mockResolvedValue({
       id: 'cr-uuid-1',
       orderId: 'CR1',
@@ -136,12 +146,21 @@ describe('CustomRecipeService · 同步到狗狗健康档案', () => {
       creditAmount: 300,
     });
     mockPrismaService.customRecipeOrder.update.mockResolvedValue({});
+    mockPrismaService.customRecipeOrder.updateMany.mockResolvedValue({ count: 1 });
     mockPrismaService.allergyRecord.findFirst.mockResolvedValue(null);
+    mockPrismaService.allergyRecord.findUnique.mockResolvedValue(null);
     mockPrismaService.medicalRecord.findFirst.mockResolvedValue(null);
-    mockPrismaService.dog.findUnique.mockResolvedValue({ allergyFoods: null });
+    mockPrismaService.dog.findUnique.mockResolvedValue({
+      allergyFoods: null,
+      preferredFoods: null,
+      pickyFoods: null,
+    });
     mockPrismaService.dog.update.mockResolvedValue({});
+    mockPrismaService.allergyReport.findUnique.mockResolvedValue(null);
     allergyCreate.mockResolvedValue({});
+    allergyUpdate.mockResolvedValue({});
     medicalCreate.mockResolvedValue({});
+    reportCreate.mockResolvedValue({ id: 'report-1' });
   });
 
   const submit = (overrides: Record<string, unknown> = {}) =>
@@ -152,6 +171,8 @@ describe('CustomRecipeService · 同步到狗狗健康档案', () => {
       scheduledDate: new Date('2026-11-10'),
       syncToHealthProfile: true,
       allergies: [],
+      allergyText: null,
+      allergyReportDrafts: [],
       medicalConditions: [],
       preferredIngredients: [],
       dislikedIngredients: [],
@@ -159,129 +180,203 @@ describe('CustomRecipeService · 同步到狗狗健康档案', () => {
       ...overrides,
     } as any);
 
-  it('⚠️ 过敏记录只写模型里真实存在的字段', async () => {
-    await submit({ allergies: ['鸡肉'] });
+  const paidOrder = (overrides: Record<string, unknown> = {}) => ({
+    id: 'cr-uuid-1',
+    orderId: 'CR1',
+    customerId: 'user-1',
+    dogId: 'dog-1',
+    status: 'PAID',
+    syncToHealthProfile: true,
+    healthInfoSyncedAt: null,
+    allergies: [],
+    allergyText: null,
+    allergyReportDrafts: [],
+    medicalConditions: [],
+    preferredIngredients: [],
+    dislikedIngredients: [],
+    ...overrides,
+  });
 
+  const prepareSync = (order: Record<string, unknown>) => {
+    mockPrismaService.customRecipeOrder.findFirst.mockResolvedValue({
+      id: order.id,
+      orderId: order.orderId,
+    });
+    mockPrismaService.customRecipeOrder.findUnique.mockResolvedValue(order);
+  };
+
+  it('提交订单只存快照，不写狗狗档案', async () => {
+    await submit({
+      allergies: ['鸡肉'],
+      allergyText: '鸡肉、牛肉',
+      allergyReportDrafts: [
+        {
+          attachments: ['https://cos.example/report.jpg'],
+          attachmentKeys: ['allergy-records/report.jpg'],
+          results: [{ allergen: '鸡肉', level: 'POSITIVE' }],
+        },
+      ],
+    });
+
+    expect(allergyCreate).not.toHaveBeenCalled();
+    expect(medicalCreate).not.toHaveBeenCalled();
+    expect(reportCreate).not.toHaveBeenCalled();
+    expect(mockPrismaService.dog.update).not.toHaveBeenCalled();
+    expect(mockPrismaService.customRecipeOrder.update).not.toHaveBeenCalled();
+
+    const data = mockPrismaService.customRecipeOrder.create.mock.calls[0][0].data;
+    expect(data.allergyText).toBe('鸡肉、牛肉');
+    expect(data.syncToHealthProfile).toBe(true);
+    expect(data.allergyReportDrafts).toHaveLength(1);
+    expect(data.healthInfoSyncedAt).toBeUndefined();
+  });
+
+  it('待付款订单不做档案同步', async () => {
+    const order = paidOrder({ status: 'PENDING_PAYMENT' });
+    prepareSync(order);
+
+    const result = await service.syncPaidOrderToHealthProfile('CR1');
+
+    expect(result.synced).toBe(false);
+    expect(result.reason).toContain('尚未付款');
+    expect(reportCreate).not.toHaveBeenCalled();
+    expect(allergyCreate).not.toHaveBeenCalled();
+    expect(mockPrismaService.dog.update).not.toHaveBeenCalled();
+  });
+
+  it('付款后：报告草稿转正式报告 + 文本合并 + 疾病/偏好写入', async () => {
+    const order = paidOrder({
+      allergyText: '鸡肉、牛肉',
+      medicalConditions: ['肠胃敏感'],
+      preferredIngredients: ['鸡肉'],
+      allergyReportDrafts: [
+        {
+          attachments: ['https://cos.example/report.jpg'],
+          attachmentKeys: ['allergy-records/report.jpg'],
+          testDate: '2026-10-01',
+          testMethod: 'SERUM',
+          ocrText: '鸡肉 阳性',
+          summary: '报告摘要',
+          results: [
+            { allergen: '鸡肉', level: 'POSITIVE' },
+            { allergen: '牛肉', level: 'NEGATIVE' },
+          ],
+        },
+      ],
+    });
+    prepareSync(order);
+
+    const result = await service.syncPaidOrderToHealthProfile('CR1');
+
+    expect(result.synced).toBe(true);
+    expect(reportCreate).toHaveBeenCalledTimes(1);
+    expect(reportCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          dogId: 'dog-1',
+          sourceKey: 'cr-uuid-1:0',
+          attachments: ['https://cos.example/report.jpg'],
+          testMethod: 'SERUM',
+        }),
+      }),
+    );
+    // 阳性写一条；阴性不记成过敏
     expect(allergyCreate).toHaveBeenCalledTimes(1);
+    expect(allergyCreate.mock.calls[0][0].data.allergen).toBe('鸡肉');
+    expect(allergyCreate.mock.calls[0][0].data.certainty).toBe('CONFIRMED');
+    expect(medicalCreate).toHaveBeenCalledTimes(1);
+    expect(medicalCreate.mock.calls[0][0].data.diagnosis).toBe('肠胃敏感');
+    expect(mockPrismaService.dog.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ allergyFoods: '鸡肉、牛肉' }),
+      }),
+    );
+    expect(mockPrismaService.customRecipeOrder.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'cr-uuid-1', healthInfoSyncedAt: null },
+        data: expect.objectContaining({ healthInfoSyncedAt: expect.any(Date) }),
+      }),
+    );
+  });
+
+  it('同步幂等：已同步过的订单直接返回，不再写', async () => {
+    const order = paidOrder({ healthInfoSyncedAt: new Date() });
+    prepareSync(order);
+
+    const result = await service.syncPaidOrderToHealthProfile('CR1');
+
+    expect(result.synced).toBe(true);
+    expect(reportCreate).not.toHaveBeenCalled();
+    expect(allergyCreate).not.toHaveBeenCalled();
+    expect(mockPrismaService.dog.update).not.toHaveBeenCalled();
+  });
+
+  it('syncToHealthProfile 关掉时不写档案', async () => {
+    const order = paidOrder({ syncToHealthProfile: false });
+    prepareSync(order);
+
+    const result = await service.syncPaidOrderToHealthProfile('CR1');
+
+    expect(result.synced).toBe(false);
+    expect(reportCreate).not.toHaveBeenCalled();
+    expect(allergyCreate).not.toHaveBeenCalled();
+    expect(mockPrismaService.dog.update).not.toHaveBeenCalled();
+  });
+
+  it('同一份报告草稿重试不会重复建报告', async () => {
+    const order = paidOrder({
+      allergyReportDrafts: [
+        {
+          attachments: ['https://cos.example/report.jpg'],
+          results: [{ allergen: '鸡肉', level: 'POSITIVE' }],
+        },
+      ],
+    });
+    prepareSync(order);
+    mockPrismaService.allergyReport.findUnique.mockResolvedValue({
+      id: 'existing-report',
+    });
+
+    const result = await service.syncPaidOrderToHealthProfile('CR1');
+
+    expect(result.synced).toBe(true);
+    expect(reportCreate).not.toHaveBeenCalled();
+    // 报告已存在，但文本仍会合并
+    expect(mockPrismaService.dog.update).not.toHaveBeenCalled();
+  });
+
+  it('⚠️ 付款同步只写 AllergyRecord 真实存在的字段', async () => {
+    const order = paidOrder({
+      allergyReportDrafts: [
+        {
+          results: [{ allergen: '鸡肉', level: 'POSITIVE' }],
+        },
+      ],
+    });
+    prepareSync(order);
+
+    await service.syncPaidOrderToHealthProfile('CR1');
+
     const data = allergyCreate.mock.calls[0][0].data;
     const unknown = Object.keys(data).filter(
       (key) => !ALLERGY_RECORD_FIELDS.has(key),
     );
-
-    // 写了不存在的列 → Prisma 会抛 Unknown argument → 整个下单事务回滚
     expect(unknown).toEqual([]);
-    expect(data.allergen).toBe('鸡肉');
-    expect(data.dogId).toBe('dog-1');
+    expect(data.source).toBe('REPORT');
+    expect(data.reportId).toBe('report-1');
   });
 
   it('⚠️ 疾病记录只写模型里真实存在的字段', async () => {
-    await submit({ medicalConditions: ['肠胃敏感'] });
+    const order = paidOrder({ medicalConditions: ['肠胃敏感'] });
+    prepareSync(order);
 
-    expect(medicalCreate).toHaveBeenCalledTimes(1);
+    await service.syncPaidOrderToHealthProfile('CR1');
+
     const data = medicalCreate.mock.calls[0][0].data;
     const unknown = Object.keys(data).filter(
       (key) => !MEDICAL_RECORD_FIELDS.has(key),
     );
-
     expect(unknown).toEqual([]);
     expect(data.diagnosis).toBe('肠胃敏感');
-  });
-
-  it('不再替顾客臆断严重程度等医学判断', async () => {
-    await submit({ allergies: ['鸡肉'] });
-
-    const data = allergyCreate.mock.calls[0][0].data;
-    // 模型里没有这些字段，也不该被硬编码进来
-    expect(data).not.toHaveProperty('severity');
-    expect(data).not.toHaveProperty('allergenType');
-    expect(data).not.toHaveProperty('discoveryDate');
-    expect(data).not.toHaveProperty('confirmedBy');
-    // 来源留痕放在 notes 里
-    expect(String(data.notes)).toContain('定制需求');
-  });
-
-  it('已存在的过敏原不重复写入', async () => {
-    mockPrismaService.allergyRecord.findFirst.mockResolvedValue({
-      id: 'existing',
-    });
-
-    await submit({ allergies: ['鸡肉'] });
-
-    expect(allergyCreate).not.toHaveBeenCalled();
-  });
-
-  it('同一批多个过敏原每个都写一条', async () => {
-    await submit({ allergies: ['鸡肉', '牛肉'] });
-
-    expect(allergyCreate).toHaveBeenCalledTimes(2);
-    expect(allergyCreate.mock.calls.map((c) => c[0].data.allergen)).toEqual([
-      '鸡肉',
-      '牛肉',
-    ]);
-  });
-
-  it('syncToHealthProfile 关掉时完全不碰档案', async () => {
-    await submit({ allergies: ['鸡肉'], syncToHealthProfile: false });
-
-    expect(allergyCreate).not.toHaveBeenCalled();
-    expect(medicalCreate).not.toHaveBeenCalled();
-  });
-
-  it('同步成功后会在订单上留同步时间', async () => {
-    await submit({ allergies: ['鸡肉'] });
-
-    expect(mockPrismaService.customRecipeOrder.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          healthInfoSyncedAt: expect.any(Date),
-        }),
-      }),
-    );
-  });
-
-  // ===== 2026-10-19：过敏自由文本（顾客文本 + 报告识别回填）=====
-
-  it('过敏自由文本写入订单快照', async () => {
-    await submit({ allergyText: '鸡肉、牛肉' });
-
-    const data = mockPrismaService.customRecipeOrder.create.mock.calls[0][0].data;
-    expect(data.allergyText).toBe('鸡肉、牛肉');
-  });
-
-  it('过敏自由文本并进 dog.allergyFoods（空档案直接写）', async () => {
-    await submit({ allergyText: '鸡肉、牛肉' });
-
-    expect(mockPrismaService.dog.update).toHaveBeenCalledWith({
-      where: { id: 'dog-1' },
-      data: { allergyFoods: '鸡肉、牛肉' },
-    });
-  });
-
-  it('已有过敏文本时合并，不覆盖旧内容', async () => {
-    mockPrismaService.dog.findUnique.mockResolvedValue({ allergyFoods: '鹿肉' });
-
-    await submit({ allergyText: '鸡肉、牛肉' });
-
-    expect(mockPrismaService.dog.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: { allergyFoods: '鹿肉；鸡肉、牛肉' },
-      }),
-    );
-  });
-
-  it('相同/包含的文本不重复追加', async () => {
-    mockPrismaService.dog.findUnique.mockResolvedValue({
-      allergyFoods: '鸡肉、牛肉',
-    });
-
-    await submit({ allergyText: '鸡肉' });
-
-    expect(mockPrismaService.dog.update).not.toHaveBeenCalled();
-  });
-
-  it('syncToHealthProfile 关掉时不合并过敏文本', async () => {
-    await submit({ allergyText: '鸡肉', syncToHealthProfile: false });
-
-    expect(mockPrismaService.dog.update).not.toHaveBeenCalled();
   });
 });

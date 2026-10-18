@@ -75,6 +75,20 @@ export interface CustomRecipeOrderDetail {
   allergies?: string[]
   /** 过敏自由文本快照（2026-10-19） */
   allergyText?: string | null
+  /** 本单上传的检测报告草稿（付款后转正式报告） */
+  allergyReportDrafts?: Array<{
+    attachments?: string[]
+    attachmentKeys?: string[]
+    testDate?: string | null
+    testMethod?: string | null
+    ocrText?: string | null
+    summary?: string | null
+    results?: Array<{ allergen: string; level?: string; notes?: string | null }>
+  }>
+  /** 付款后写狗狗档案的时间；null = 还没同步 */
+  healthInfoSyncedAt?: string | null
+  /** 顾客提交时是否要求写档案 */
+  syncToHealthProfile?: boolean
   medicalConditions?: string[]
   additionalNotes?: string | null
   preferredIngredients?: string[]
@@ -321,6 +335,10 @@ export const customRecipeApi = {
   /** 确认收款（日常操作，客服/员工可用） */
   confirmPayment: (orderId: string) =>
     api.patch(`${BASE}/orders/${orderId}/confirm-payment`),
+
+  /** 付款后档案同步失败时重试（2026-10-19） */
+  syncHealth: (orderId: string) =>
+    api.post(`${BASE}/orders/${orderId}/sync-health`),
 
   /** 流转状态：开始制作 / 取消（取消仅管理员，后端会再拦一次） */
   updateStatus: (orderId: string, status: string, reason?: string) =>

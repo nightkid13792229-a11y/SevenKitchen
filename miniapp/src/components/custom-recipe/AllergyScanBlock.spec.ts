@@ -82,7 +82,7 @@ describe('定制食谱 · 过敏录入', () => {
     expect(source).toContain('报告里读到的是环境类过敏原')
   })
 
-  it('报告写的结论等级要照抄进报告实体，不能写死 UNKNOWN（老板第 4 条）', () => {
+  it('报告写的结论等级要照抄进草稿，不能写死 UNKNOWN（老板第 4 条）', () => {
     const source = block()
     const util = readFileSync(
       resolve(process.cwd(), 'src/utils/allergy-candidates.ts'),
@@ -95,7 +95,8 @@ describe('定制食谱 · 过敏录入', () => {
      * 写死 UNKNOWN 等于把报告上写着"阳性"的确诊过敏降级成"可疑"。
      */
     expect(source).not.toContain("level: 'UNKNOWN' })")
-    expect(source).toContain('results: chosen.map((item) => ({ allergen: item.name, level: item.level }))')
+    expect(source).toContain('results: chosen.map((item) => ({')
+    expect(source).toContain('level: item.level')
     // 报告上写的阳性/弱阳性要显示出来，家长才知道哪几项最要紧
     expect(source).toContain('candidateLabel(item)')
     expect(util).toContain("POSITIVE: '阳性'")
@@ -109,11 +110,17 @@ describe('定制食谱 · 过敏录入', () => {
     expect(source).toContain('pages.push(')
   })
 
-  it('报告原件存成实体，家长以后翻得出来（不再"读完就丢"）', () => {
+  it('报告原件先作为草稿交给父页面（不直接写狗狗档案）', () => {
     const source = block()
 
-    expect(source).toContain('dogApi.allergyReports.create')
-    expect(source).toContain('attachments: imageUrls.value')
+    // 2026-10-19：付款前只存“这一单的草稿”，付款后才转正式报告
+    expect(source).not.toContain('dogApi.allergyReports.create')
+    expect(source).toContain("emit('draft', draft)")
+    expect(source).toContain('attachments: [...imageUrls.value]')
+    expect(source).toContain('attachmentKeys: [...imageKeys.value]')
+    // 取消/失败时要把已上传的 COS 文件清掉
+    expect(source).toContain('cleanupUploadedFiles')
+    expect(source).toContain("dogApi.deleteHealthAttachment('allergy'")
   })
 
   it('识别失败不挡下单：降级为手工添加', () => {

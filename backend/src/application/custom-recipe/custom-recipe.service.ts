@@ -37,6 +37,12 @@ import {
   CustomAttachmentType,
 } from '@prisma/client';
 import {
+  isNegativeLevel,
+  mapLevelToCertainty,
+  normalizeResults,
+  normalizeTestMethod,
+} from '../health/allergy-report.service';
+import {
   addWorkDays,
   isPublicHoliday,
   getPublicHolidaysForYear,
@@ -233,6 +239,8 @@ export class CustomRecipeService implements ICustomRecipeRepository {
             allergies: data.allergies || [],
             // 2026-10-19：顾客自由文本快照；老订单为 null
             allergyText: data.allergyText?.trim() || null,
+            // 本单报告草稿：付款前只存订单，不写狗狗档案
+            allergyReportDrafts: (data.allergyReportDrafts || []) as any,
             medicalConditions: data.medicalConditions || [],
             additionalNotes: data.additionalNotes,
             // 2026-10-18：需求 2.3.4 第二段（只问档案里没有的）
@@ -248,31 +256,14 @@ export class CustomRecipeService implements ICustomRecipeRepository {
             amount: config.feeAmount,
             creditAmount: config.creditAmount,
             status: CustomRecipeStatus.PENDING_PAYMENT,
+            /**
+             * 2026-10-19：提交订单时**不写狗狗档案**，只记下顾客的意愿。
+             * 真正写入放在付款成功后（syncPaidOrderToHealthProfile），
+             * 避免未付款/放弃的单把临时输入带进医疗档案。
+             */
+            syncToHealthProfile: data.syncToHealthProfile !== false,
           },
         });
-
-        // Sync to health profile if requested
-        if (data.syncToHealthProfile) {
-          await this.syncToHealthProfileTx(
-            tx,
-            data.dogId,
-            data.allergies || [],
-            data.medicalConditions || [],
-            // 2026-10-02 老板定：饮食偏好只在定制食谱时填 ——
-            // 那这里就必须**回写档案**，否则健康管理里的偏好会一直空着/陈旧，
-            // AI 健康分析与营养师侧读到的口味就是断源的。
-            {
-              preferredIngredients: data.preferredIngredients || [],
-              dislikedIngredients: data.dislikedIngredients || [],
-            },
-          );
-          // 2026-10-19：自由文本合并进狗狗档案（保留旧文本，不静默覆盖）
-          await this.mergeAllergyTextTx(tx, data.dogId, data.allergyText);
-          await tx.customRecipeOrder.update({
-            where: { id: order.id },
-            data: { healthInfoSyncedAt: new Date() },
-          });
-        }
 
         return order;
       });
@@ -551,7 +542,12 @@ export class CustomRecipeService implements ICustomRecipeRepository {
 
     const order = await this.prisma.customRecipeOrder.findUnique({
       where: { id: ref.id },
-      select: { id: true, status: true, scheduledDate: true },
+      select: {
+        id: true,
+        status: true,
+        scheduledDate: true,
+        allergyReportDrafts: true,
+      },
     });
 
     if (!order) {
@@ -626,6 +622,32 @@ export class CustomRecipeService implements ICustomRecipeRepository {
         });
       }
     });
+
+    /**
+     * 2026-10-19：任何路径把订单改成“已付款”，都要补一次档案同步。
+     * 主路径是微信回调/后台确认收款（它们已单独调用）；这里兜住
+     * 后台“改状态”直接改成 PAID 的情况。同步失败不影响状态变更。
+     */
+    if (status === CustomRecipeStatus.PAID) {
+      try {
+        await this.syncPaidOrderToHealthProfile(ref.id);
+      } catch (error: any) {
+        console.error(
+          '[CustomRecipe] 改状态为已付款后档案同步失败:',
+          error?.message ?? error,
+        );
+      }
+    }
+
+    // 未付款直接改成已取消：清理本单上传的报告草稿文件
+    if (
+      status === CustomRecipeStatus.CANCELLED &&
+      order.status === CustomRecipeStatus.PENDING_PAYMENT
+    ) {
+      await this.cleanupDraftReportAttachments(
+        (order as any).allergyReportDrafts,
+      );
+    }
   }
 
   /**
@@ -776,7 +798,31 @@ export class CustomRecipeService implements ICustomRecipeRepository {
         });
     }
 
-    return { order, alreadyPaid };
+    /**
+     * 2026-10-19：付款成功后才把这一单写进狗狗档案。
+     * 同步失败不能影响支付结果 —— 钱已经收了；留 healthInfoSyncedAt=null
+     * 供后台/后续重试。
+     */
+    let healthSync: { synced: boolean; reason?: string } = {
+      synced: false,
+      reason: '未执行',
+    };
+    if (order) {
+      try {
+        healthSync = await this.syncPaidOrderToHealthProfile(order.id);
+      } catch (error: any) {
+        healthSync = {
+          synced: false,
+          reason: error?.message || '档案同步失败，请稍后重试',
+        };
+        console.error(
+          '[CustomRecipe] 付款后档案同步失败:',
+          error?.message ?? error,
+        );
+      }
+    }
+
+    return { order, alreadyPaid, healthSync };
   }
 
   /**
@@ -793,7 +839,12 @@ export class CustomRecipeService implements ICustomRecipeRepository {
 
     const order = await this.prisma.customRecipeOrder.findUnique({
       where: { id: ref.id },
-      select: { id: true, status: true, scheduledDate: true },
+      select: {
+        id: true,
+        status: true,
+        scheduledDate: true,
+        allergyReportDrafts: true,
+      },
     });
 
     if (!order) {
@@ -837,6 +888,13 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       return { cancelled: true };
     });
 
+    // 2026-10-19：未付款就取消/超时关单 → 清理本单上传但没进档案的报告文件
+    if (result.cancelled) {
+      await this.cleanupDraftReportAttachments(
+        (order as any).allergyReportDrafts,
+      );
+    }
+
     return result;
   }
 
@@ -867,6 +925,7 @@ export class CustomRecipeService implements ICustomRecipeRepository {
         customerId: true,
         status: true,
         scheduledDate: true,
+        allergyReportDrafts: true,
       },
     });
 
@@ -937,6 +996,12 @@ export class CustomRecipeService implements ICustomRecipeRepository {
 
       return true;
     });
+
+    if (claimed && order.status === CustomRecipeStatus.PENDING_PAYMENT) {
+      await this.cleanupDraftReportAttachments(
+        (order as any).allergyReportDrafts,
+      );
+    }
 
     if (!claimed) {
       // 抢输说明它已被别处取消（定时关单/重复点击）：名额与退款都不能再动一次
@@ -2055,6 +2120,165 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   }
 
   /**
+   * 付款成功后，把这一单的**最终快照**写进狗狗档案（2026-10-19）。
+   *
+   * 为什么不在提交订单时写：
+   * 提交后还有“待付款”阶段，顾客可能放弃支付、取消或超时；
+   * 定制页里的文字/报告在付款前都只是草稿，不能提前改医疗档案。
+   *
+   * 幂等：`healthInfoSyncedAt` 已存在直接返回；报告草稿用
+   * `allergy_report.source_key = 订单ID:序号` 唯一键防重。
+   * 失败不回滚订单（钱已收），保留 `healthInfoSyncedAt = null` 供重试。
+   */
+  async syncPaidOrderToHealthProfile(
+    orderIdOrId: string,
+  ): Promise<{ synced: boolean; reason?: string }> {
+    const ref = await this.resolveOrderRef(orderIdOrId);
+    const order = await this.prisma.customRecipeOrder.findUnique({
+      where: { id: ref.id },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`定制订单不存在: ${orderIdOrId}`);
+    }
+
+    if (order.healthInfoSyncedAt) {
+      return { synced: true };
+    }
+
+    if (!order.syncToHealthProfile) {
+      return { synced: false, reason: '订单未要求同步档案' };
+    }
+
+    const syncable: CustomRecipeStatus[] = [
+      CustomRecipeStatus.PAID,
+      CustomRecipeStatus.IN_PROGRESS,
+      CustomRecipeStatus.DELIVERED,
+      CustomRecipeStatus.COMPLETED,
+    ];
+    if (!syncable.includes(order.status)) {
+      return { synced: false, reason: '订单尚未付款，不能写档案' };
+    }
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const drafts = Array.isArray(order.allergyReportDrafts)
+          ? (order.allergyReportDrafts as any[])
+          : [];
+
+        for (const [index, draft] of drafts.entries()) {
+          const sourceKey = `${order.id}:${index}`;
+          const existingReport = await tx.allergyReport.findUnique({
+            where: { sourceKey },
+            select: { id: true },
+          });
+          if (existingReport) continue;
+
+          const dateText = String(draft?.testDate || '').trim();
+          const parsedDate = /^\d{4}-\d{2}-\d{2}$/.test(dateText)
+            ? new Date(`${dateText}T00:00:00.000Z`)
+            : null;
+          const testDate =
+            parsedDate && !Number.isNaN(parsedDate.getTime())
+              ? parsedDate
+              : null;
+          const attachments = Array.isArray(draft?.attachments)
+            ? draft.attachments
+                .map((item: unknown) => String(item || '').trim())
+                .filter(Boolean)
+            : [];
+
+          const report = await tx.allergyReport.create({
+            data: {
+              dogId: order.dogId,
+              sourceKey,
+              testDate,
+              testMethod: normalizeTestMethod(draft?.testMethod),
+              summary: draft?.summary
+                ? String(draft.summary).trim().slice(0, 2000)
+                : null,
+              ocrText: draft?.ocrText
+                ? String(draft.ocrText).trim().slice(0, 20000)
+                : null,
+              attachments,
+            },
+          });
+
+          const results = normalizeResults(draft?.results);
+          for (const result of results) {
+            if (isNegativeLevel(result.level)) continue;
+
+            const allergen = String(result.allergen || '').trim().slice(0, 40);
+            if (!allergen) continue;
+
+            const existing = await tx.allergyRecord.findUnique({
+              where: {
+                dogId_allergen: { dogId: order.dogId, allergen },
+              },
+            });
+
+            if (existing) {
+              await tx.allergyRecord.update({
+                where: { id: existing.id },
+                data: {
+                  certainty: mapLevelToCertainty(result.level),
+                  reportId: existing.reportId ?? report.id,
+                  source: existing.source === 'OWNER' ? 'REPORT' : existing.source,
+                },
+              });
+              continue;
+            }
+
+            await tx.allergyRecord.create({
+              data: {
+                dogId: order.dogId,
+                allergen,
+                notes: result.notes,
+                certainty: mapLevelToCertainty(result.level),
+                source: 'REPORT',
+                reportId: report.id,
+              },
+            });
+          }
+        }
+
+        await this.syncToHealthProfileTx(
+          tx,
+          order.dogId,
+          order.allergies || [],
+          order.medicalConditions || [],
+          {
+            preferredIngredients: order.preferredIngredients || [],
+            dislikedIngredients: order.dislikedIngredients || [],
+          },
+        );
+        // 2026-10-19：自由文本合并进狗狗档案（保留旧文本，不静默覆盖）
+        await this.mergeAllergyTextTx(tx, order.dogId, order.allergyText);
+
+        await tx.customRecipeOrder.updateMany({
+          where: { id: order.id, healthInfoSyncedAt: null },
+          data: { healthInfoSyncedAt: new Date() },
+        });
+      });
+
+      return { synced: true };
+    } catch (error: any) {
+      /**
+       * 并发重试可能撞上 source_key 唯一键：
+       * 另一个请求已经建完报告并写入档案时，这里按“已同步”返回。
+       */
+      const latest = await this.prisma.customRecipeOrder.findUnique({
+        where: { id: ref.id },
+        select: { healthInfoSyncedAt: true },
+      });
+      if (latest?.healthInfoSyncedAt) {
+        return { synced: true };
+      }
+      throw error;
+    }
+  }
+
+  /**
    * Sync to health profile
    */
   async syncToHealthProfile(
@@ -2161,6 +2385,37 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       dietPreferences.preferredIngredients || [],
       dietPreferences.dislikedIngredients || [],
     );
+  }
+
+  /**
+   * 清理“未付款订单”里上传的报告草稿文件（2026-10-19）。
+   *
+   * 报告在付款前只存在订单草稿里；订单取消/超时后这些 COS 文件没有用了。
+   * 删除失败只记日志，不能挡住取消/退款。
+   */
+  private async cleanupDraftReportAttachments(drafts: unknown): Promise<void> {
+    if (!Array.isArray(drafts)) return;
+
+    const keys = new Set<string>();
+    for (const draft of drafts) {
+      const attachmentKeys = Array.isArray((draft as any)?.attachmentKeys)
+        ? (draft as any).attachmentKeys
+        : [];
+      for (const key of attachmentKeys) {
+        const value = String(key || '').trim();
+        if (value) keys.add(value);
+      }
+    }
+
+    for (const key of keys) {
+      await this.cosService.deleteImage(key).catch((error: any) => {
+        console.error(
+          '[CustomRecipe] 清理报告草稿文件失败:',
+          key,
+          error?.message ?? error,
+        );
+      });
+    }
   }
 
   /**

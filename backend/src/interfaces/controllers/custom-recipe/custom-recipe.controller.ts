@@ -74,6 +74,8 @@ export class CustomRecipeController {
       allergies: dto.allergies || [],
       // 2026-10-19：顾客自由文本（报告识别也回填到这里）
       allergyText: dto.allergyText ?? null,
+      // 本单报告草稿：付款前只存订单，不写狗狗档案
+      allergyReportDrafts: dto.allergyReportDrafts ?? [],
       medicalConditions: dto.medicalConditions || [],
       additionalNotes: dto.additionalNotes,
       // 2026-10-18：需求 2.3.4 第二段（只问档案里没有的）
@@ -335,6 +337,8 @@ export class CustomRecipeController {
       allergies: order.allergies,
       // 2026-10-19：自由文本原样返回（老订单为 null）
       allergyText: order.allergyText ?? null,
+      // 本单报告草稿（付款后转正式报告）
+      allergyReportDrafts: order.allergyReportDrafts ?? [],
       medicalConditions: order.medicalConditions,
       preferredIngredients: order.preferredIngredients,
       dislikedIngredients: order.dislikedIngredients,

@@ -99,6 +99,25 @@ describe('档案最新信息与来源标注（第 4 条）', () => {
     expect(orderDetail).toContain('order.allergyText')
   })
 
+  it('未付款订单禁止进入设计器：按钮禁用并说明原因', () => {
+    expect(orderDetail).toContain(':disabled="!canStartDesign"')
+    expect(orderDetail).toContain('订单未付款，付款后才能开始设计')
+    expect(orderDetail).toContain("!['PENDING_PAYMENT', 'CANCELLED'].includes(status)")
+    expect(orderDetail).toContain('if (!canStartDesign.value)')
+  })
+
+  it('付款后档案同步状态可见，失败可重试', () => {
+    expect(orderDetail).toContain('档案同步')
+    expect(orderDetail).toContain('healthInfoSyncedAt')
+    expect(orderDetail).toContain('retryHealthSync')
+    expect(orderDetail).toContain('付款成功后同步')
+  })
+
+  it('本单上传的报告草稿单独展示（不混进档案报告）', () => {
+    expect(orderDetail).toContain('本单上传的检测报告（随单草稿）')
+    expect(orderDetail).toContain('order.allergyReportDrafts')
+  })
+
   it('下单时填写的那份仍单独展示，两个口径不混在一起', () => {
     expect(orderDetail).toContain('过敏史（下单时填写）')
     expect(orderDetail).toContain('疾病史（下单时填写）')

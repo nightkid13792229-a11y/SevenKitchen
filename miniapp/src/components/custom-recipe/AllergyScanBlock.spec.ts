@@ -35,11 +35,19 @@ describe('定制食谱 · 过敏录入', () => {
     expect(source).not.toContain('addAllergen')
   })
 
+  it('只要求写过敏食物，不要求写吃了会怎样', () => {
+    const source = page()
+    expect(source).toContain('过敏食物（不能吃的）')
+    expect(source).toContain('例如：鸡肉、牛肉、鹿肉')
+    expect(source).not.toContain('吃了会怎样')
+    expect(source).not.toContain('营养师会核对')
+  })
+
   it('答"有过敏"必须留下文本才能提交', () => {
     const source = page()
     expect(source).toContain('hasFoodAllergy.value === true')
     expect(source).toContain('!formData.value.allergyText.trim()')
-    expect(source).toContain('还差：过敏原')
+    expect(source).toContain('还差：过敏食物')
   })
 
   it('答"没有过敏"会清掉已填文本，避免隐藏内容跟着提交', () => {
@@ -165,18 +173,27 @@ describe('过敏报告 · 按钮文案与一键清除', () => {
     expect(source).toContain("emit('clearAll')")
   })
 
-  it('清除的是这一单：由父页面清空，档案不动', () => {
+  it('清空入口在文本框上：点了确认，清的是这一单，档案不动', () => {
     const source = page()
 
-    expect(source).toContain('@clear-all="clearAllAllergies"')
-    expect(source).toContain(
-      ':has-allergens="Boolean(formData.allergyText.trim()) || formData.allergies.length > 0"',
-    )
+    expect(source).toContain('@tap="clearAllAllergies"')
+    // 上传区不再有第二个清空入口
+    expect(source).not.toContain('@clear-all="clearAllAllergies"')
     const clear = source.match(/function clearAllAllergies\(\)[\s\S]*?\n\}/)?.[0] || ''
     expect(clear).toContain('formData.value.allergies = []')
     expect(clear).toContain("formData.value.allergyText = ''")
     // 不该去调删除档案里过敏记录的接口
     expect(clear).not.toContain('remove')
+  })
+
+  it('清空后可从已上传报告重新填入过敏食物', () => {
+    const source = page()
+
+    expect(source).toContain('refillReportAllergens(report)')
+    const refill =
+      source.match(/function refillReportAllergens[\s\S]*?\n\}/)?.[0] || ''
+    expect(refill).toContain('report.results')
+    expect(refill).toContain('onAllergensScanned')
   })
 })
 

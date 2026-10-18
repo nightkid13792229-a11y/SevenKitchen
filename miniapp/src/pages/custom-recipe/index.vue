@@ -302,16 +302,23 @@
                顾客自己写、报告识别结果都进这一段；营养师在后台看原文。
                快捷标签和全局词表不再出现在顾客侧。 -->
           <view class="allergy-text">
-            <text class="allergy-text__label">过敏原 / 吃了会怎样</text>
+            <view class="allergy-text__head">
+              <text class="allergy-text__label">过敏食物（不能吃的）</text>
+              <text
+                v-if="formData.allergyText.trim() || formData.allergies.length > 0"
+                class="allergy-text__clear"
+                @tap="clearAllAllergies"
+              >清空</text>
+            </view>
             <textarea
               v-model="formData.allergyText"
               class="allergy-text__input"
-              placeholder="例如：鸡肉、牛肉；吃鸡胸会挠；不确定的也写上"
+              placeholder="例如：鸡肉、牛肉、鹿肉"
               maxlength="500"
               auto-height
             />
             <text class="allergy-text__hint">
-              只写不能吃的；多个用顿号分开。不确定的也写上，营养师会核对。
+              多个用顿号分开；不确定的也可以写上。
             </text>
           </view>
 
@@ -329,9 +336,7 @@
             v-if="formData.dogId"
             :key="formData.dogId"
             :dog-id="formData.dogId"
-            :has-allergens="Boolean(formData.allergyText.trim()) || formData.allergies.length > 0"
             @scanned="onAllergensScanned"
-            @clear-all="clearAllAllergies"
           />
 
           <!-- 已传过的检测报告：原件不再"读完就丢"，这里给**小预览窗口**
@@ -377,6 +382,11 @@
                   </text>
                   <text class="allergy-reports__meta">{{ allergyReportPageText(report) }}</text>
                 </view>
+                <text
+                  v-if="Number(report.resultCount || 0) > 0"
+                  class="allergy-reports__refill"
+                  @tap.stop="refillReportAllergens(report)"
+                >重新填入过敏食物</text>
               </view>
             </view>
           </view>
@@ -697,21 +707,34 @@ const allergyReportPageCount = computed(() =>
 );
 
 /**
- * 一键清除这一单的过敏原（2026-10-05 老板要求）。
+ * 清空这一单的过敏食物（2026-10-19：入口从上传区搬到文本框）。
  *
  * 清的是**这一单**：档案里的过敏记录一条都不动
  * （后端写档案是"只增不删"，这里也不会去调删除接口）。
- * 弹窗确认在组件那边（那是不可撤销的批量动作）。
+ * 清之前先留一份，清错了能点「撤销」恢复。
  */
 function clearAllAllergies() {
-  // 清之前先留一份：清错了能一键撤销（老板问"清除了还想恢复怎么办"）
-  clearedAllergiesBackup.value = {
-    allergies: [...formData.value.allergies],
-    text: formData.value.allergyText,
-  };
-  formData.value.allergies = [];
-  formData.value.allergyText = '';
-  uni.showToast({ title: '已清除，可点「撤销」恢复', icon: 'none' });
+  if (!formData.value.allergyText.trim() && formData.value.allergies.length === 0) {
+    return;
+  }
+
+  uni.showModal({
+    title: '清空过敏食物？',
+    content: '会清空这一单已填写的过敏食物，档案里的记录不受影响。清空后可点「撤销」恢复。',
+    confirmText: '清空',
+    confirmColor: '#a8622a',
+    success: (res) => {
+      if (!res.confirm) return;
+      // 清之前先留一份：清错了能一键撤销
+      clearedAllergiesBackup.value = {
+        allergies: [...formData.value.allergies],
+        text: formData.value.allergyText,
+      };
+      formData.value.allergies = [];
+      formData.value.allergyText = '';
+      uni.showToast({ title: '已清空，可点「撤销」恢复', icon: 'none' });
+    },
+  });
 }
 
 /** 撤销"一键清除"：把清掉的那一份放回去 */
@@ -2007,6 +2030,18 @@ function onAllergensScanned(payload: { allergens?: string[] }) {
   void loadAllergyReports(formData.value.dogId);
 }
 
+/** 把已上传报告里记下的过敏食物重新填进文本框（2026-10-19） */
+function refillReportAllergens(report: Record<string, any>) {
+  const names = (Array.isArray(report?.results) ? report.results : [])
+    .map((item: any) => String(item?.allergen || '').trim())
+    .filter(Boolean);
+  if (names.length === 0) {
+    uni.showToast({ title: '这份报告没有可填入的过敏食物', icon: 'none' });
+    return;
+  }
+  onAllergensScanned({ allergens: names });
+}
+
 const ALLERGY_TEST_METHOD_LABELS: Record<string, string> = {
   SERUM: '血清检测',
   INTRADERMAL: '皮内试验',
@@ -2116,7 +2151,7 @@ const submitOrder = async () => {
       hasFoodAllergy.value === true &&
       !formData.value.allergyText.trim()
     ) {
-      title = '还差：过敏原（吃了会怎样也写上）';
+      title = '还差：过敏食物';
     } else if (!formData.value.currentFoodMain) {
       // 需求 2.3.7：说清差哪一项，不能只变灰不动
       title = '还差：现在主要喂什么';
@@ -2785,12 +2820,24 @@ const getBCSText = (bcsScore: number) => {
   margin-bottom: 16rpx;
 }
 
+.allergy-text__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12rpx;
+}
+
 .allergy-text__label {
   display: block;
-  margin-bottom: 12rpx;
   font-size: 26rpx;
   font-weight: 700;
   color: #3f3222;
+}
+
+.allergy-text__clear {
+  font-size: 24rpx;
+  color: #8a6b3f;
+  border-bottom: 1rpx solid #8a6b3f;
 }
 
 .allergy-text__input {
@@ -2912,6 +2959,14 @@ const getBCSText = (bcsScore: number) => {
   flex: none;
   font-size: 24rpx;
   color: #8a6b3f;
+}
+
+/* 清空文本后，把已上传报告里的过敏食物重新填回来（2026-10-19） */
+.allergy-reports__refill {
+  flex: none;
+  font-size: 23rpx;
+  color: #8a6b3f;
+  border-bottom: 1rpx solid #8a6b3f;
 }
 
 /* 「已清除 N 项 · 撤销」：一键清除之后的反悔入口 */

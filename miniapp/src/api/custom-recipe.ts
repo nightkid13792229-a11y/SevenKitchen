@@ -467,15 +467,36 @@ export interface AftersaleTypeOption {
 }
 
 /** 取这张单的售后记录 */
-export async function fetchAftersales(orderId: string): Promise<AftersaleItem[]> {
+/** 售后配额（2026-10-18 · 需求 2.5.7「必须先显示两个数字」） */
+export interface AftersaleQuota {
+  windowDays: number;
+  /** 窗口还剩几天；null = 还没交付 */
+  windowDaysLeft: number | null;
+  freeRevisionCount: number;
+  freeRevisionsLeft: number;
+  usedCount: number;
+  /** 有没有还没处理完的 */
+  hasOpen: boolean;
+  /** 能不能提 —— **后端算的**，前端不判断 */
+  canSubmit: boolean;
+  /** 不能提的原因（顾客不用猜） */
+  reason: string | null;
+}
+
+export async function fetchAftersales(
+  orderId: string,
+): Promise<{ items: AftersaleItem[]; quota: AftersaleQuota | null }> {
   const res: any = await request({
     url: `/custom-recipe/orders/${encodeURIComponent(orderId)}/aftersale`,
     method: 'GET',
   });
   if (res?.code === 0 && res.data) {
-    return Array.isArray(res.data.items) ? res.data.items : [];
+    return {
+      items: Array.isArray(res.data.items) ? res.data.items : [],
+      quota: res.data.quota ?? null,
+    };
   }
-  return [];
+  return { items: [], quota: null };
 }
 
 /**

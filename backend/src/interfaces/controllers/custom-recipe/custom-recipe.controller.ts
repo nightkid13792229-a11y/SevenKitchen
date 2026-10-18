@@ -566,7 +566,20 @@ export class CustomRecipeController {
       orderId,
       req.user.userId,
     );
-    return ApiResponseDto.success({ items: list });
+    /**
+     * 配额一起返回（2026-10-18 · 需求 2.5.7）。
+     *
+     * 「**必须先显示两个数字**：窗口还剩几天、免费修改还剩几次 ——
+     *   不让顾客猜自己还能不能提。」
+     *
+     * 放在同一个响应里而不是另开一个接口：页面本来就只调这一次，
+     * 拆成两次会让"数字还没到、表单先出来"的中间态存在。
+     */
+    const quota = await this.aftersaleService.getQuota(
+      orderId,
+      req.user.userId,
+    );
+    return ApiResponseDto.success({ items: list, quota });
   }
 
   /**

@@ -67,6 +67,26 @@
       </view>
 
       <!-- 提交新的：已经有未处理完的就不显示表单（后端也会拦，这里省一次往返） -->
+      <!--
+        配额条（2026-10-18 · 需求 2.5.7）：**两个数字必须在最上面**。
+        顾客打开这一页的第一件事是"我还能不能提"，不是"填表"。
+      -->
+      <view v-if="quota" class="quota-bar">
+        <view v-if="quota.windowDaysLeft !== null" class="quota-item">
+          <text class="quota-value">{{ quota.windowDaysLeft }}</text>
+          <text class="quota-label">天窗口期</text>
+        </view>
+        <view class="quota-item">
+          <text class="quota-value">{{ quota.freeRevisionsLeft }}</text>
+          <text class="quota-label">次免费调整</text>
+        </view>
+      </view>
+
+      <!-- 不能提时说清楚为什么，顾客不用猜 -->
+      <view v-if="quota && !quota.canSubmit && quota.reason" class="quota-reason">
+        <text class="quota-reason-text">{{ quota.reason }}</text>
+      </view>
+
       <view v-if="canSubmitNew" class="section">
         <view class="section-title">遇到什么问题了？</view>
 
@@ -157,6 +177,7 @@ import {
   cancelAftersale,
   uploadAftersaleAttachment,
   fetchAftersales,
+  type AftersaleQuota,
   fetchAftersaleTypes,
   submitAftersale,
   type AftersaleItem,
@@ -181,6 +202,16 @@ import {
 const orderId = ref('');
 const loading = ref(true);
 const list = ref<AftersaleItem[]>([]);
+
+/**
+ * 售后配额（2026-10-18 · 需求 2.5.7）
+ *
+ * 需求写死了：「**必须先显示两个数字** —— 窗口还剩几天、免费修改还剩几次。
+ * **不让顾客猜自己还能不能提。**」
+ *
+ * 数字与"能不能提"都由**后端算**，这里只负责画。
+ */
+const quota = ref<AftersaleQuota | null>(null);
 const typeOptions = ref<AftersaleTypeOption[]>([]);
 const submitting = ref(false);
 const cancellingId = ref('');
@@ -260,11 +291,12 @@ const canSubmit = computed(
 const load = async () => {
   loading.value = true;
   try {
-    const [items, types] = await Promise.all([
+    const [result, types] = await Promise.all([
       fetchAftersales(orderId.value),
       fetchAftersaleTypes(),
     ]);
-    list.value = items;
+    list.value = result.items;
+    quota.value = result.quota;
     typeOptions.value = types;
     // 默认选中字典里标了 isDefault 的那个，没有就选第一个
     if (!form.type && types.length) {
@@ -672,6 +704,47 @@ onLoad((options) => {
   font-size: 20rpx;
   color: #b3a492;
   margin-top: 10rpx;
+  line-height: 1.5;
+}
+
+/* ===== 售后配额条（2026-10-18 · 需求 2.5.7）===== */
+.quota-bar {
+  display: flex;
+  gap: 24rpx;
+  padding: 22rpx 24rpx;
+  margin: 0 24rpx 20rpx;
+  background: #fffdf7;
+  border: 2rpx solid #f0e4d2;
+  border-radius: 18rpx;
+}
+
+.quota-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8rpx;
+}
+
+.quota-value {
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #b45309;
+}
+
+.quota-label {
+  font-size: 23rpx;
+  color: #8c7b66;
+}
+
+.quota-reason {
+  margin: 0 24rpx 20rpx;
+  padding: 16rpx 20rpx;
+  background: #fef2f2;
+  border-radius: 14rpx;
+}
+
+.quota-reason-text {
+  font-size: 24rpx;
+  color: #b91c1c;
   line-height: 1.5;
 }
 </style>

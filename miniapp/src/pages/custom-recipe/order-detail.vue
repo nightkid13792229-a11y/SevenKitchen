@@ -393,8 +393,8 @@ const loadOrderDetail = async () => {
      * 少一句话总比整页报错好。所以单独 try 一次。
      */
     try {
-      const aftersales = await fetchAftersales(orderId.value);
-      aftersaleCount.value = aftersales.length;
+      const result = await fetchAftersales(orderId.value);
+      aftersaleCount.value = result.items.length;
     } catch {
       aftersaleCount.value = 0;
     }

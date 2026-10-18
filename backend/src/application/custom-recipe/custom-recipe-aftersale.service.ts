@@ -127,6 +127,21 @@ export class CustomRecipeAftersaleService {
     }
 
     /**
+     * 免费次数校验（2026-10-18 · 需求 2.5.9「能提 2 次」）。
+     *
+     * ⚠️ 此前**完全没有这道校验** —— 顾客可以无限提，后台待办会一直涨。
+     *
+     * 撤回的不计数（2.5.9：「撤回算不算用掉 → 不算」）。
+     */
+    const quota = await this.getQuota(order.id, input.customerId);
+    if (quota.freeRevisionsLeft <= 0) {
+      throw new BadRequestException(
+        quota.reason ||
+          `免费调整次数已用完（共 ${quota.freeRevisionCount} 次），如需帮助请联系客服`,
+      );
+    }
+
+    /**
      * 同一条售后单不许重复提。
      *
      * 为什么拦：顾客提完没看到变化，很可能再提一次 ——
@@ -553,13 +568,114 @@ export class CustomRecipeAftersaleService {
 
   // ==================== 内部 ====================
 
+  /**
+   * 售后配额（2026-10-18 · 需求 2.5.7 / 2.5.9）
+   *
+   * ## 为什么必须给顾客看
+   *
+   * 需求 2.5.7 写死了：「**必须先显示两个数字** —— 窗口还剩几天、
+   * 免费修改还剩几次。**不让顾客猜自己还能不能提。**」
+   *
+   * ## 「按顾客提的次数算」而不是「按成功处理算」
+   *
+   * 2.5.3：次数「按顾客提了几次」算 —— 提了就算用掉，
+   * 哪怕最后我们驳回了也一样（否则会被无限刷）。
+   *
+   * ## 撤回**不算**
+   *
+   * 2.5.9：「撤回算不算用掉 → **不算**」。
+   * 撤回在数据里是把状态写成 `REJECTED` 且 `rejectReason = '顾客自行撤回'`，
+   * 所以统计时要把它排除掉。
+   */
+  async getQuota(orderIdOrId: string, customerId: string): Promise<{
+    windowDays: number;
+    windowDaysLeft: number | null;
+    freeRevisionCount: number;
+    freeRevisionsLeft: number;
+    usedCount: number;
+    hasOpen: boolean;
+    canSubmit: boolean;
+    /** 不能提时说清楚为什么（顾客不用猜） */
+    reason: string | null;
+  }> {
+    const order = await this.prisma.customRecipeOrder.findFirst({
+      where: { OR: [{ orderId: orderIdOrId }, { id: orderIdOrId }] },
+      select: {
+        id: true,
+        customerId: true,
+        status: true,
+        deliveredAt: true,
+      },
+    });
+    if (!order) {
+      throw new NotFoundException(`定制订单不存在: ${orderIdOrId}`);
+    }
+    if (order.customerId !== customerId) {
+      throw new ForbiddenException('无权访问此订单');
+    }
+
+    const config = await this.configService.getConfig();
+    const windowDays = await this.getWindowDays();
+    const freeRevisionCount = Number.isInteger(Number(config.freeRevisionCount))
+      ? Number(config.freeRevisionCount)
+      : 2;
+
+    const rows = await this.prisma.customRecipeAftersale.findMany({
+      where: { orderId: order.id },
+      select: { id: true, status: true, rejectReason: true, createdAt: true },
+    });
+
+    /** 撤回过的 (`rejectReason = '顾客自行撤回'`) 不计数 */
+    const withdrawn = (row: { rejectReason: string | null }) =>
+      (row.rejectReason || '').includes('撤回');
+    const usedCount = rows.filter((row) => !withdrawn(row)).length;
+    const freeRevisionsLeft = Math.max(0, freeRevisionCount - usedCount);
+
+    const hasOpen = rows.some((row) =>
+      ['PENDING', 'ACCEPTED', 'PROCESSING'].includes(row.status),
+    );
+
+    /** 窗口还剩几天（向上取整 —— "还剩 0 天"会让顾客以为今天就是最后期限） */
+    let windowDaysLeft: number | null = null;
+    if (order.deliveredAt && windowDays > 0) {
+      const closesAt = new Date(
+        order.deliveredAt.getTime() + windowDays * 24 * 60 * 60 * 1000,
+      );
+      const leftMs = closesAt.getTime() - Date.now();
+      windowDaysLeft = leftMs <= 0 ? 0 : Math.ceil(leftMs / (24 * 60 * 60 * 1000));
+    }
+
+    /** 能不能提 + 为什么不能（**后端算，前端不判断**） */
+    let reason: string | null = null;
+    if (!order.deliveredAt) {
+      reason = '这张订单还没有交付，暂时不能提售后';
+    } else if (windowDaysLeft !== null && windowDaysLeft <= 0) {
+      reason = `已超过售后受理期（交付后 ${windowDays} 天内），如需帮助请联系客服`;
+    } else if (hasOpen) {
+      reason = '你已经提交过售后，我们正在处理中';
+    } else if (freeRevisionsLeft <= 0) {
+      reason = `免费调整次数已用完（共 ${freeRevisionCount} 次），如需帮助请联系客服`;
+    }
+
+    return {
+      windowDays,
+      windowDaysLeft,
+      freeRevisionCount,
+      freeRevisionsLeft,
+      usedCount,
+      hasOpen,
+      canSubmit: reason === null,
+      reason,
+    };
+  }
+
   private async getWindowDays(): Promise<number> {
     try {
       const config = await this.configService.getConfig();
       const value = Number(config.aftersaleWindowDays);
-      return Number.isInteger(value) && value >= 0 ? value : 30;
+      return Number.isInteger(value) && value >= 0 ? value : 7;
     } catch {
-      return 30;
+      return 7;
     }
   }
 

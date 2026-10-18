@@ -24,3 +24,13 @@ declare module 'mammoth' {
     path?: string;
   }): Promise<MammothResult>;
 }
+
+declare module 'word-extractor' {
+  interface WordExtractorDocument {
+    getBody(): string;
+  }
+  class WordExtractor {
+    extract(input: Buffer | Uint8Array | string): Promise<WordExtractorDocument>;
+  }
+  export default WordExtractor;
+}

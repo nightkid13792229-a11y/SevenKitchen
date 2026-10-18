@@ -39,9 +39,9 @@ const ALLOWED_HEALTH_UPLOAD_MIME_TYPES = [
   'image/heic',
   'image/heif',
   'application/pdf',
-  // Word（2026-10-08）：只收新版 .docx；老版 .doc 读不了，
-  // 让顾客另存为 PDF 或 .docx（识别时会明确告诉他）
+  // Word：.docx（mammoth）与老版 .doc（word-extractor，2026-10-19）
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/msword',
 ];
 
 const ALLOWED_HEALTH_UPLOAD_EXTENSIONS = [
@@ -54,6 +54,7 @@ const ALLOWED_HEALTH_UPLOAD_EXTENSIONS = [
   '.heif',
   '.pdf',
   '.docx',
+  '.doc',
 ];
 
 function hasAllowedHealthUploadType(file: Express.Multer.File) {
@@ -113,7 +114,7 @@ export class HealthUploadController {
     // Validate file type (images + PDF)
     if (!hasAllowedHealthUploadType(file)) {
       throw new BadRequestException(
-        'Invalid file type. Only JPG, PNG, GIF, WEBP, HEIC, HEIF, PDF, and DOCX are allowed',
+        'Invalid file type. Only JPG, PNG, GIF, WEBP, HEIC, HEIF, PDF, DOC, and DOCX are allowed',
       );
     }
 

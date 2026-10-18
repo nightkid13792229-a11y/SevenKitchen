@@ -8,24 +8,18 @@
     <!-- 2026-10-05 老板要求：删掉按钮上方的标题与说明（含"拍一下自动读"），
          并把按钮文案改成「上传报告照片」；照片**只从相册选**，
          不调相机、也不弹"拍照/相册"选择器。
-         2026-10-19 增加：PDF / Word 文档（.docx）从微信聊天文件里选。
+         2026-10-19 增加：PDF / Word 文档（.doc / .docx）从微信聊天文件里选。
          同日再要求：这个按钮**改小** —— 它原先是占满一整行的大按钮，
          在一张表单里比"确认定制"还显眼；现在收成一个小圆角按钮靠左放。 -->
     <view class="allergy-scan__head">
       <button
         class="allergy-scan__button"
         :disabled="extracting"
-        @tap="pickReport"
-      >{{ extracting ? '识别中…' : '上传报告照片' }}</button>
-      <button
-        class="allergy-scan__button allergy-scan__button--ghost"
-        :disabled="extracting"
-        @tap="pickReportDocument"
-      >{{ extracting ? '识别中…' : '上传报告文档' }}</button>
+        @tap="pickReportEntry"
+      >{{ extracting ? '识别中…' : '上传过敏检测报告' }}</button>
     </view>
     <text class="allergy-scan__file-hint">
-      PDF / Word 文档，.docx 格式；请先从微信聊天里选（发给文件传输助手也行）；
-      老版 .doc 请另存为 PDF 或 .docx。
+      支持照片、PDF、Word 文档（.doc / .docx）；文档从微信聊天里选。
     </text>
 
     <!-- 候选确认卡（2026-10-05 改口径）：
@@ -244,6 +238,31 @@ function resetScanState() {
   ocrText.value = ''
 }
 
+/**
+ * 一个入口，底部抽屉再让用户选来源（2026-10-19 老板要求）。
+ *
+ * 不并排两个按钮：整块录入区只有一个「上传过敏检测报告」，
+ * 点开后用微信原生底部菜单选“照片 / PDF、Word 文档”。
+ */
+function pickReportEntry() {
+  if (extracting.value) return
+  if (candidates.value.length > 0 || imageUrls.value.length > 0) {
+    uni.showToast({ title: '请先确认或取消当前报告', icon: 'none' })
+    return
+  }
+
+  uni.showActionSheet({
+    itemList: ['照片（从相册选）', 'PDF / Word 文档（从微信聊天选）'],
+    success: (res) => {
+      if (res.tapIndex === 0) {
+        void pickReport()
+      } else if (res.tapIndex === 1) {
+        void pickReportDocument()
+      }
+    },
+  })
+}
+
 async function pickReport() {
   if (extracting.value) return
   if (candidates.value.length > 0 || imageUrls.value.length > 0) {
@@ -397,7 +416,7 @@ async function pickReport() {
 }
 
 /**
- * 从微信聊天里选一份 PDF / Word（.docx）报告 → 上传 → 识别。
+ * 从微信聊天里选一份 PDF / Word（.doc / .docx）报告 → 上传 → 识别。
  *
  * 微信只能从聊天记录选文件（`chooseMessageFile`），所以提示要先发到微信；
  * 一份文档作为一个附件，不走图片的多页累加。识别结果与图片共用确认卡。
@@ -424,7 +443,7 @@ function pickOneReportDocument(): Promise<{
     choose({
       count: 1,
       type: 'file',
-      extension: ['pdf', 'docx'],
+      extension: ['pdf', 'doc', 'docx'],
       success: (res: any) => {
         const file = (res?.tempFiles || [])[0] || {}
         resolve({
@@ -624,12 +643,6 @@ onUnmounted(() => {
 
 .allergy-scan__button::after {
   border: none;
-}
-
-.allergy-scan__button--ghost {
-  color: #8a6b3f;
-  background: transparent;
-  border: 1rpx solid rgba(138, 107, 63, 0.45);
 }
 
 .allergy-scan__file-hint {

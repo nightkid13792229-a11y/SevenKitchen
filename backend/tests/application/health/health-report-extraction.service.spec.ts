@@ -1270,14 +1270,7 @@ describe('文档（PDF / Word）识别', () => {
     ).rejects.toThrow(/拍照上传/)
   })
 
-  it('老版 .doc 直接说清楚怎么办（不硬啃）', async () => {
-    await expect(
-      docService.extractFromReport({
-        imageUrl: 'https://cdn/x',
-        originalFilename: '病历.doc',
-      }),
-    ).rejects.toThrow(/另存为 PDF 或 \.docx/)
-  })
+
 })
 
 /**

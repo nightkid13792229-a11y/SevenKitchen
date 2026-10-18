@@ -171,16 +171,19 @@ describe('过敏报告 · 按钮文案与删除方式', () => {
     expect(source).not.toContain('一键清除')
     expect(source).not.toContain('showClearAll')
     expect(source).not.toContain("emit('clearAll')")
-    // 两个上传入口仍在：照片 / PDF、Word 文档
-    expect(source).toContain('上传报告照片')
-    expect(source).toContain('上传报告文档')
+    // 只有一个入口；点开底部抽屉再分照片 / 文档
+    expect(source).toContain("'上传过敏检测报告'")
+    expect(source).toContain('pickReportEntry')
+    expect(source).toContain('uni.showActionSheet')
+    expect(source).toContain("'照片（从相册选）'")
+    expect(source).toContain("'PDF / Word 文档（从微信聊天选）'")
   })
 
   it('PDF/Word 文档：从微信聊天选，上传后走同一套识别与确认', () => {
     const source = block()
 
     expect(source).toContain('chooseMessageFile')
-    expect(source).toContain("extension: ['pdf', 'docx']")
+    expect(source).toContain("extension: ['pdf', 'doc', 'docx']")
     expect(source).toContain("dogApi.uploadHealthAttachment('allergy', picked.path)")
     expect(source).toContain('extractHealthReport({')
     expect(source).toContain('originalFilename: picked.name')

@@ -1836,7 +1836,8 @@ export class HealthReportExtractionService {
   /**
    * 从 PDF / Word 里把文字抽出来（2026-10-08）。
    *
-   * PDF 用 pdf-parse、Word(.docx) 用 mammoth —— 都是纯文本抽取，不做任何理解，
+   * PDF 用 pdf-parse、Word(.docx) 用 mammoth、Word(.doc) 用 word-extractor ——
+   * 都是纯文本抽取，不做任何理解，
    * 理解交给模型（与"OCR 认字 → 模型整理"那条路一个道理）。
    *
    * ⚠️ 实测：真实世界的 PDF（40 页指南）能抽出 25 万字 ✓；
@@ -1845,7 +1846,7 @@ export class HealthReportExtractionService {
    */
   private async extractDocumentText(
     url: string,
-    kind: 'pdf' | 'docx',
+    kind: 'pdf' | 'docx' | 'doc',
   ): Promise<string> {
     try {
       const response = await fetch(url);
@@ -1858,6 +1859,13 @@ export class HealthReportExtractionService {
         const pdfParse = (await import('pdf-parse')).default;
         const result = await pdfParse(buffer);
         return normalizeKeyword(String(result?.text || ''));
+      }
+
+      if (kind === 'doc') {
+        const WordExtractor = (await import('word-extractor')).default;
+        const extractor = new WordExtractor();
+        const document = await extractor.extract(buffer);
+        return normalizeKeyword(String(document?.getBody() || ''));
       }
 
       const mammoth = await import('mammoth');
@@ -1998,12 +2006,6 @@ export class HealthReportExtractionService {
       input.originalFilename,
     );
 
-    if (fileKind === 'doc') {
-      throw new BadRequestException(
-        '老版 .doc 读不了，请另存为 PDF 或 .docx 再上传（也可以直接拍照）',
-      );
-    }
-
     /**
      * ⚠️⚠️ 每日上限的**判定点**（2026-10-16 B5）—— 这是整个文件里最关键的一行。
      *
@@ -2021,7 +2023,7 @@ export class HealthReportExtractionService {
      */
     trace.quota = await this.healthExtractionQuota.assertWithinDailyLimit();
 
-    if (fileKind === 'pdf' || fileKind === 'docx') {
+    if (fileKind === 'pdf' || fileKind === 'docx' || fileKind === 'doc') {
       trace.phase = 'document';
       trace.model = config.model;
       trace.modelCalls += 1;

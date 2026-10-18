@@ -259,18 +259,6 @@ describe('识别 · 每日上限挡在调模型之前 + 成本日志', () => {
     expect(failLine).toContain('reason=未能识别到报告文字');
   });
 
-  it('额度是"调模型之前"占的：占到额度之后没调成模型，也照样算一次（不漏算）', async () => {
-    // 图片 URL 是老版 .doc → 本地就能拒掉，不该占额度
-    await expect(
-      service.extractFromReport({
-        imageUrl: 'https://cdn/report.doc',
-        originalFilename: 'report.doc',
-      }),
-    ).rejects.toThrow('.doc');
-
-    expect(quota.assertWithinDailyLimit).not.toHaveBeenCalled();
-  });
-
   it('一次识别**只占一次**额度（多占一次 = 上限提前一倍用完）', async () => {
     ocrProvider.recognizeImage.mockResolvedValue({ text: '疫苗本' });
     global.fetch = jest.fn().mockResolvedValue(

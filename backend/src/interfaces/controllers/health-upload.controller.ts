@@ -113,7 +113,7 @@ export class HealthUploadController {
     // Validate file type (images + PDF)
     if (!hasAllowedHealthUploadType(file)) {
       throw new BadRequestException(
-        'Invalid file type. Only JPG, PNG, GIF, WEBP, HEIC, HEIF, and PDF are allowed',
+        'Invalid file type. Only JPG, PNG, GIF, WEBP, HEIC, HEIF, PDF, and DOCX are allowed',
       );
     }
 

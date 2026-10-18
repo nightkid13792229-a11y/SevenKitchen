@@ -6,8 +6,9 @@
        记不记、记哪几项由家长定 —— 医疗信息不能让 AI 自己定（决策 5/9）。 -->
   <view class="allergy-scan">
     <!-- 2026-10-05 老板要求：删掉按钮上方的标题与说明（含"拍一下自动读"），
-         并把按钮文案改成「上传过敏检测报告」；同时**只支持从相册选照片**，
+         并把按钮文案改成「上传报告照片」；照片**只从相册选**，
          不调相机、也不弹"拍照/相册"选择器。
+         2026-10-19 增加：PDF / Word 文档（.docx）从微信聊天文件里选。
          同日再要求：这个按钮**改小** —— 它原先是占满一整行的大按钮，
          在一张表单里比"确认定制"还显眼；现在收成一个小圆角按钮靠左放。 -->
     <view class="allergy-scan__head">
@@ -15,8 +16,17 @@
         class="allergy-scan__button"
         :disabled="extracting"
         @tap="pickReport"
-      >{{ extracting ? '识别中…' : '上传过敏检测报告' }}</button>
+      >{{ extracting ? '识别中…' : '上传报告照片' }}</button>
+      <button
+        class="allergy-scan__button allergy-scan__button--ghost"
+        :disabled="extracting"
+        @tap="pickReportDocument"
+      >{{ extracting ? '识别中…' : '上传报告文档' }}</button>
     </view>
+    <text class="allergy-scan__file-hint">
+      PDF / Word 文档，.docx 格式；请先从微信聊天里选（发给文件传输助手也行）；
+      老版 .doc 请另存为 PDF 或 .docx。
+    </text>
 
     <!-- 候选确认卡（2026-10-05 改口径）：
          · 只列**食物类**过敏原 —— 报告里常同时有环境组（尘螨/花粉/霉菌），
@@ -142,6 +152,32 @@ const skippedNames = computed(() =>
 )
 
 const isPicked = (name: string) => picked.value.includes(name)
+
+/** 把一页/一份文档的识别结果转成候选（图片与文档共用） */
+function buildPageItems(data: any): ScannedAllergen[] {
+  const drafts = Array.isArray(data?.drafts) ? data.drafts : []
+  const items: ScannedAllergen[] = drafts
+    .map((item: any) => ({
+      name: String(item?.allergen || '').trim(),
+      level: normalizeLevel(item?.level),
+      group: normalizeGroup(item?.group),
+    }))
+    .filter((item: ScannedAllergen) => item.name)
+
+  if (items.length === 0 && Array.isArray(data?.allergies)) {
+    items.push(
+      ...data.allergies
+        .filter((item: unknown) => typeof item === 'string' && item.trim())
+        .map((item: string) => ({
+          name: item.trim(),
+          level: 'UNKNOWN' as const,
+          group: 'UNKNOWN' as const,
+        })),
+    )
+  }
+
+  return items
+}
 
 /**
  * 丢掉**被别的页推翻**的"整份都没有"式提醒（2026-10-05 老板实测）。
@@ -290,25 +326,8 @@ async function pickReport() {
       const res: any = await dogApi.extractHealthReport({ imageUrl })
       const data = res?.data || {}
 
-      // 优先用 drafts（带每项结论等级与分组），退回旧的 allergies 数组 ——
-      // 提示词换了不代表模型一定照做，两条路都得接住
-      const drafts = Array.isArray(data.drafts) ? data.drafts : []
-      const pageItems: ScannedAllergen[] = drafts
-        .map((item: any) => ({
-          name: String(item?.allergen || '').trim(),
-          level: normalizeLevel(item?.level),
-          group: normalizeGroup(item?.group),
-        }))
-        .filter((item: ScannedAllergen) => item.name)
-
-      if (pageItems.length === 0 && Array.isArray(data.allergies)) {
-        pageItems.push(
-          ...data.allergies
-            .filter((item: unknown) => typeof item === 'string' && item.trim())
-            .map((item: string) => ({ name: item.trim(), level: 'UNKNOWN', group: 'UNKNOWN' })),
-        )
-      }
-
+      // 优先用 drafts（带每项结论等级与分组），退回旧的 allergies 数组
+      const pageItems = buildPageItems(data)
       const meta = data.reportMeta || {}
       // 这一页有没有判定区：合并时判定页的等级说了算（见 allergy-candidates.ts）
       pages.push({ items: pageItems, hasVerdict: meta.hasVerdict === true })
@@ -369,6 +388,138 @@ async function pickReport() {
     // 降级为手工填写：识别不可用不能挡住家长下单
     uni.showToast({
       title: error?.message || '识别失败，请手工添加过敏原',
+      icon: 'none',
+      duration: 3000,
+    })
+  } finally {
+    extracting.value = false
+  }
+}
+
+/**
+ * 从微信聊天里选一份 PDF / Word（.docx）报告 → 上传 → 识别。
+ *
+ * 微信只能从聊天记录选文件（`chooseMessageFile`），所以提示要先发到微信；
+ * 一份文档作为一个附件，不走图片的多页累加。识别结果与图片共用确认卡。
+ */
+function pickOneReportDocument(): Promise<{
+  path: string
+  name: string
+  size: number
+}> {
+  return new Promise((resolve) => {
+    const choose = (uni as unknown as {
+      chooseMessageFile?: (options: any) => void
+    }).chooseMessageFile
+    if (typeof choose !== 'function') {
+      uni.showToast({
+        title: '请先把文件发到微信聊天（文件传输助手也行），再从聊天里选',
+        icon: 'none',
+        duration: 3000,
+      })
+      resolve({ path: '', name: '', size: 0 })
+      return
+    }
+
+    choose({
+      count: 1,
+      type: 'file',
+      extension: ['pdf', 'docx'],
+      success: (res: any) => {
+        const file = (res?.tempFiles || [])[0] || {}
+        resolve({
+          path: String(file.path || ''),
+          name: String(file.name || '检测报告'),
+          size: Number(file.size) || 0,
+        })
+      },
+      fail: () => resolve({ path: '', name: '', size: 0 }),
+    })
+  })
+}
+
+async function pickReportDocument() {
+  if (extracting.value) return
+  if (candidates.value.length > 0 || imageUrls.value.length > 0) {
+    uni.showToast({ title: '请先确认或取消当前报告', icon: 'none' })
+    return
+  }
+
+  const picked = await pickOneReportDocument()
+  if (!picked.path) return
+
+  if (picked.size > 10 * 1024 * 1024) {
+    uni.showToast({ title: '文件不能超过 10MB', icon: 'none' })
+    return
+  }
+
+  extracting.value = true
+  uni.showLoading({ title: '识别文档中…', mask: true })
+  const attemptedKeys: string[] = []
+
+  try {
+    const uploaded = await dogApi.uploadHealthAttachment('allergy', picked.path)
+    const fileUrl = String(uploaded?.url || '').trim()
+    const key = String(uploaded?.key || '').trim()
+    if (!fileUrl) {
+      throw new Error('文件上传失败，请重试')
+    }
+    if (key) attemptedKeys.push(key)
+
+    const res: any = await dogApi.extractHealthReport({
+      imageUrl: fileUrl,
+      originalFilename: picked.name,
+    })
+    const data = res?.data || {}
+    const items = buildPageItems(data)
+    const meta = data.reportMeta || {}
+    const pageDate = String(meta.testDate || '').trim()
+    const detectedDate = /^\d{4}-\d{2}-\d{2}$/.test(pageDate) ? pageDate : ''
+    const detectedMethod = normalizeMethod(meta.testMethod)
+    const pages: ScannedAllergenPage[] = [
+      { items, hasVerdict: meta.hasVerdict === true },
+    ]
+    const collectedWarnings = Array.isArray(data.warnings)
+      ? data.warnings.map((item: unknown) => String(item || '').trim())
+      : []
+
+    imageUrls.value = [fileUrl]
+    imageKeys.value = [key]
+    testDate.value = detectedDate
+    method.value = detectedMethod
+    ocrText.value = String(data.ocrText || '').trim().slice(0, 20000)
+    candidates.value = mergeAllergyCandidates(pages)
+    warnings.value = filterPageWarnings(collectedWarnings, pages, {
+      hasDate: Boolean(detectedDate),
+      hasMethod: detectedMethod !== 'UNKNOWN',
+    })
+    picked.value = foodCandidates.value.map((item) => item.name)
+
+    uni.hideLoading()
+
+    if (foodCandidates.value.length === 0) {
+      await cleanupUploadedFiles([key])
+      resetScanState()
+      uni.showToast({
+        title:
+          skipped.value.length > 0
+            ? '报告里只有环境类过敏原，请手工添加食物过敏原'
+            : '没识别到过敏原，请在下面手工添加',
+        icon: 'none',
+        duration: 3000,
+      })
+      return
+    }
+
+    uni.showToast({ title: '识别完成，请确认', icon: 'none' })
+  } catch (error: any) {
+    uni.hideLoading()
+    await cleanupUploadedFiles(attemptedKeys)
+    resetScanState()
+    uni.showToast({
+      title:
+        error?.message ||
+        '这份文档没读出来，可以换 PDF/Word 或改用拍照上传',
       icon: 'none',
       duration: 3000,
     })
@@ -448,6 +599,7 @@ onUnmounted(() => {
 .allergy-scan__head {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 16rpx;
 }
 
@@ -472,6 +624,20 @@ onUnmounted(() => {
 
 .allergy-scan__button::after {
   border: none;
+}
+
+.allergy-scan__button--ghost {
+  color: #8a6b3f;
+  background: transparent;
+  border: 1rpx solid rgba(138, 107, 63, 0.45);
+}
+
+.allergy-scan__file-hint {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #8a7a63;
 }
 
 .allergy-scan__skipped {

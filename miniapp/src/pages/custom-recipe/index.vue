@@ -348,11 +348,20 @@
                   class="allergy-reports__thumb-wrap"
                 >
                   <image
+                    v-if="isImageAttachment(url)"
                     class="allergy-reports__thumb"
                     :src="url"
                     mode="aspectFill"
                     @tap="previewAllergyReport(report)"
                   />
+                  <view
+                    v-else
+                    class="allergy-reports__doc"
+                    @tap="previewAllergyReport(report)"
+                  >
+                    <text class="allergy-reports__doc-badge">{{ attachmentFileLabel(url) }}</text>
+                    <text class="allergy-reports__doc-label">检测报告</text>
+                  </view>
                   <text
                     class="allergy-reports__thumb-remove"
                     @tap.stop="removeDraftReportImage(index, url)"
@@ -378,7 +387,7 @@
                已经记下的过敏信息不受影响 —— 后端也是这个语义）。 -->
           <view v-if="allergyReports.length > 0" class="allergy-reports">
             <text class="allergy-reports__title">
-              档案里的历史报告（{{ allergyReports.length }} 份 / {{ allergyReportPageCount }} 张）
+              档案里的历史报告（{{ allergyReports.length }} 份 / {{ allergyReportPageCount }} 个附件）
             </text>
             <view
               v-for="report in allergyReports"
@@ -395,11 +404,20 @@
                   class="allergy-reports__thumb-wrap"
                 >
                   <image
+                    v-if="isImageAttachment(url)"
                     class="allergy-reports__thumb"
                     :src="url"
                     mode="aspectFill"
                     @tap="previewAllergyReport(report)"
                   />
+                  <view
+                    v-else
+                    class="allergy-reports__doc"
+                    @tap="previewAllergyReport(report)"
+                  >
+                    <text class="allergy-reports__doc-badge">{{ attachmentFileLabel(url) }}</text>
+                    <text class="allergy-reports__doc-label">检测报告</text>
+                  </view>
                   <text
                     class="allergy-reports__thumb-remove"
                     @tap.stop="removeReportImage(report, url)"
@@ -777,19 +795,46 @@ function removeReportImage(report: Record<string, any>, url: string) {
   });
 }
 
+function attachmentExtension(url: unknown): string {
+  const path = String(url || '').split('?')[0].toLowerCase();
+  const dot = path.lastIndexOf('.');
+  return dot >= 0 ? path.slice(dot) : '';
+}
+
+function isImageAttachment(url: unknown): boolean {
+  return ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.heic', '.heif'].includes(
+    attachmentExtension(url),
+  );
+}
+
+function isDocumentAttachment(url: unknown): boolean {
+  return ['.pdf', '.doc', '.docx'].includes(attachmentExtension(url));
+}
+
+function attachmentFileLabel(url: unknown): string {
+  const path = String(url || '').split('?')[0].toLowerCase();
+  if (path.endsWith('.pdf')) return 'PDF';
+  if (path.endsWith('.doc') || path.endsWith('.docx')) return 'Word';
+  return '文件';
+}
+
 function allergyReportPageText(report: Record<string, any>): string {
-  const pages = Array.isArray(report.attachments) ? report.attachments.length : 0;
+  const attachments = Array.isArray(report.attachments) ? report.attachments : [];
+  const pages = attachments.length;
   const results = Number(report.resultCount || 0);
-  const parts = [`${pages} 张照片`];
+  const unit = attachments.some(isDocumentAttachment) ? '个文件' : '张照片';
+  const parts = [`${pages} ${unit}`];
   if (results > 0) parts.push(`${results} 项结论`);
   return parts.join(' · ');
 }
 
 /** 草稿报告的“张数 / 结论数” */
 function draftReportPageText(report: Record<string, any>): string {
-  const pages = Array.isArray(report.attachments) ? report.attachments.length : 0;
+  const attachments = Array.isArray(report.attachments) ? report.attachments : [];
+  const pages = attachments.length;
   const results = Array.isArray(report.results) ? report.results.length : 0;
-  const parts = [`${pages} 张照片`];
+  const unit = attachments.some(isDocumentAttachment) ? '个文件' : '张照片';
+  const parts = [`${pages} ${unit}`];
   if (results > 0) parts.push(`${results} 项结论`);
   return parts.join(' · ');
 }
@@ -2264,7 +2309,34 @@ function reportTestMethodLabel(value: unknown) {
 }
 
 /** 点开报告：预览原件（多页时一起给，可左右翻） */
-function previewAllergyReport(report: Record<string, any>) {
+async function openDocumentAttachment(url: string) {
+  uni.showLoading({ title: '打开中…' });
+  try {
+    const downloadRes: any = await new Promise((resolve, reject) => {
+      uni.downloadFile({ url, success: resolve, fail: reject });
+    });
+    if (downloadRes.statusCode !== 200 || !downloadRes.tempFilePath) {
+      throw new Error('文件下载失败');
+    }
+    await new Promise((resolve, reject) => {
+      uni.openDocument({
+        filePath: downloadRes.tempFilePath,
+        showMenu: true,
+        success: resolve,
+        fail: reject,
+      });
+    });
+    uni.hideLoading();
+  } catch (error: any) {
+    uni.hideLoading();
+    uni.showToast({
+      title: error?.message || '暂时无法打开该文件',
+      icon: 'none',
+    });
+  }
+}
+
+async function previewAllergyReport(report: Record<string, any>) {
   const urls = (Array.isArray(report?.attachments) ? report.attachments : [])
     .map((item: unknown) => String(item || '').trim())
     .filter(Boolean);
@@ -2272,7 +2344,14 @@ function previewAllergyReport(report: Record<string, any>) {
     uni.showToast({ title: '这份报告没有留存原件', icon: 'none' });
     return;
   }
-  uni.previewImage({ urls, current: urls[0] });
+
+  if (urls.every(isImageAttachment)) {
+    uni.previewImage({ urls, current: urls[0] });
+    return;
+  }
+
+  const documentUrl = urls.find(isDocumentAttachment) || urls[0];
+  await openDocumentAttachment(documentUrl);
 }
 
 
@@ -3103,6 +3182,31 @@ const getBCSText = (bcsScore: number) => {
   border-radius: 12rpx;
   background: #f2f1ec;
   border: 1rpx solid #e3e6d4;
+}
+
+/* PDF / Word 文档没有缩略图，用文档卡片代替 */
+.allergy-reports__doc {
+  width: 140rpx;
+  height: 140rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6rpx;
+  border-radius: 12rpx;
+  background: #f2f1ec;
+  border: 1rpx solid #e3e6d4;
+}
+
+.allergy-reports__doc-badge {
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #8a6b3f;
+}
+
+.allergy-reports__doc-label {
+  font-size: 20rpx;
+  color: #8a7a63;
 }
 
 .allergy-reports__row {

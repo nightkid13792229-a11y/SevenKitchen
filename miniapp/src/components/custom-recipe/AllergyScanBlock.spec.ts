@@ -171,8 +171,22 @@ describe('过敏报告 · 按钮文案与删除方式', () => {
     expect(source).not.toContain('一键清除')
     expect(source).not.toContain('showClearAll')
     expect(source).not.toContain("emit('clearAll')")
-    // 上传按钮仍在
-    expect(source).toContain('上传过敏检测报告')
+    // 两个上传入口仍在：照片 / PDF、Word 文档
+    expect(source).toContain('上传报告照片')
+    expect(source).toContain('上传报告文档')
+  })
+
+  it('PDF/Word 文档：从微信聊天选，上传后走同一套识别与确认', () => {
+    const source = block()
+
+    expect(source).toContain('chooseMessageFile')
+    expect(source).toContain("extension: ['pdf', 'docx']")
+    expect(source).toContain("dogApi.uploadHealthAttachment('allergy', picked.path)")
+    expect(source).toContain('extractHealthReport({')
+    expect(source).toContain('originalFilename: picked.name')
+    expect(source).toContain('buildPageItems(data)')
+    expect(source).toContain('10 * 1024 * 1024')
+    expect(source).not.toContain("'xlsx'")
   })
 
   it('文本框不再有清空按钮；报告按预览图右上角的叉删除', () => {

@@ -1553,13 +1553,18 @@ describe('定制页 · 第二轮精简（2026-10-05）', () => {
     expect(code).not.toContain('暂无过敏信息')
   })
 
-  it('检测报告按钮：无标题说明、文案改为上传过敏检测报告、只走相册', () => {
+  it('检测报告入口：照片走相册、PDF/Word 走微信聊天文件', () => {
     const scan = read('src/components/custom-recipe/AllergyScanBlock.vue')
     expect(scan).not.toContain('有检测报告？拍一下自动读')
     expect(scan).not.toContain('过敏原检测报告即可')
-    expect(scan).toContain("'上传过敏检测报告'")
+    expect(scan).toContain("'上传报告照片'")
+    expect(scan).toContain("'上传报告文档'")
     expect(scan).toMatch(/sourceType: \['album'\]/)
     expect(scan).not.toContain("'camera'")
+    expect(scan).toContain('chooseMessageFile')
+    expect(scan).toContain("extension: ['pdf', 'docx']")
+    // Excel 不在这条链路里
+    expect(scan).not.toContain("'xlsx'")
   })
 
   it('成品抵扣说明已随整块移出定制页（第 12 项与第 14 项冲突，以第 14 项为准）', () => {
@@ -1852,9 +1857,11 @@ describe('定制页 · 2026-10-05 第三批（4 条）', () => {
   })
 
   it('④ 已上传报告给"小预览窗口"；每张右上角一个叉，只删这一张', () => {
-    expect(template).toContain('{{ allergyReports.length }} 份 / {{ allergyReportPageCount }} 张')
-    // 预览窗口：报告原件的缩略图，点了看大图
+    expect(template).toContain('{{ allergyReports.length }} 份 / {{ allergyReportPageCount }} 个附件')
+    // 预览窗口：图片看大图；PDF/Word 显示文档卡片并打开
     expect(template).toContain('allergy-reports__thumb')
+    expect(template).toContain('allergy-reports__doc')
+    expect(template).toContain('isImageAttachment')
     expect(template).toContain('@tap="previewAllergyReport(report)"')
     // 2026-10-05 老板：不要"整份一起删"的按钮，改成每张缩略图右上角的叉
     expect(template).toContain('allergy-reports__thumb-remove')

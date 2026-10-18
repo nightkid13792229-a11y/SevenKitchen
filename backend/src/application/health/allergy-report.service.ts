@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { AllergyTestMethod } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma.service';
+import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import { AllergenVocabularyService } from './allergen-vocabulary.service';
 
 /**
@@ -125,6 +126,7 @@ export class AllergyReportService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly allergenVocabulary: AllergenVocabularyService,
+    private readonly cosService: TencentCosService,
   ) {}
 
   /** 报告列表（含每份报告的结论条数），按检测日期倒序 */
@@ -264,6 +266,12 @@ export class AllergyReportService {
       throw new NotFoundException('检测报告不存在');
     }
 
+    const previousAttachments = report.attachments ?? [];
+    const nextAttachments =
+      input.attachments === undefined
+        ? previousAttachments
+        : normalizeStringArray(input.attachments);
+
     await this.prisma.allergyReport.update({
       where: { id: reportId },
       data: {
@@ -282,11 +290,16 @@ export class AllergyReportService {
         ocrText:
           input.ocrText === undefined ? undefined : trimTo(input.ocrText, 20000),
         attachments:
-          input.attachments === undefined
-            ? undefined
-            : normalizeStringArray(input.attachments),
+          input.attachments === undefined ? undefined : nextAttachments,
       },
     });
+
+    // 2026-10-19：从报告里移除的附件，COS 文件也删掉，不留孤儿文件。
+    // 只删真正被移除的；删除失败只记日志，不挡顾客修改报告。
+    const removedAttachments = previousAttachments.filter(
+      (url) => !nextAttachments.includes(url),
+    );
+    await this.deleteAttachmentObjects(removedAttachments);
 
     return this.getOne(customerId, dogId, reportId);
   }
@@ -311,6 +324,10 @@ export class AllergyReportService {
     }
 
     await this.prisma.allergyReport.delete({ where: { id: reportId } });
+
+    // 2026-10-19：报告删除后，原件不再有任何引用，COS 文件一起清理。
+    // 过敏结论仍保留（依据没了，结论仍成立）；文件删除失败只记日志。
+    await this.deleteAttachmentObjects(report.attachments ?? []);
 
     return { deleted: true, keptAllergyRecords: true };
   }
@@ -339,6 +356,21 @@ export class AllergyReportService {
       allergens: report.results.map((result) => result.allergen),
       avoidedIngredientNames: profile.avoidedIngredientNames,
     };
+  }
+
+  /** 删除报告附件对应的 COS 文件（best-effort） */
+  private async deleteAttachmentObjects(urls: string[]) {
+    for (const url of urls) {
+      const value = String(url || '').trim();
+      if (!value) continue;
+      await this.cosService.deleteImageByUrl(value).catch((error: any) => {
+        console.error(
+          '[AllergyReport] 删除 COS 附件失败:',
+          value,
+          error?.message ?? error,
+        );
+      });
+    }
   }
 
   private async requireOwnedDog(customerId: string, dogId: string) {

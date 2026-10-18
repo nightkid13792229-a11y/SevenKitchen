@@ -1002,17 +1002,20 @@ const submitting = ref(false);
 const needLogin = ref(false);
 
 /**
- * Banner 标题：未登录 / 读取中 / 真的没有档案 / 有狗未选，各有各的说法。
+ * Banner 标题：未登录 / 读取中 / 读取失败 / 真的没有档案 / 有狗未选，各有各的说法。
  *
  * 2026-10-18 修：无狗时原先写死「请选择狗狗」，可这块点不动 ——
  * 明明没有狗可选，却摆一句"请选择"，和下方的建档引导打架。
  * 现在按状态给话：没登录说"登录后选择"，读取中说"正在读取"，
- * 真的 0 只狗说"还没有狗狗档案"，只有多只狗未选时才说"请选择（共 N 只）"。
+ * 读取失败说"没读出来"（不能写成"还没有档案"），真的 0 只狗才说"还没有狗狗档案"，
+ * 只有多只狗未选时才说"请选择（共 N 只）"。
  */
 const heroTitle = computed(() => {
   if (selectedDog.value) return selectedDog.value.name || '狗狗';
   if (needLogin.value) return '登录后选择狗狗';
   if (dogsLoading.value) return '正在读取狗狗档案…';
+  // 读取失败不能写成"还没有档案"——那正是这次要修的错误归因
+  if (dogsLoadFailed.value) return '狗狗档案没读出来';
   if (dogOptions.value.length === 0) return '还没有狗狗档案';
   return `请选择狗狗（共 ${dogOptions.value.length} 只）`;
 });

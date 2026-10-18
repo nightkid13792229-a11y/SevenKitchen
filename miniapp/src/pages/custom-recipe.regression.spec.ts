@@ -735,6 +735,9 @@ describe('custom recipe first paint · 首屏加载态', () => {
     expect(heroTitleSource).toContain("if (needLogin.value) return '登录后选择狗狗'")
     expect(heroTitleSource).toContain("if (dogsLoading.value) return '正在读取狗狗档案…'")
     expect(heroTitleSource).toContain(
+      "if (dogsLoadFailed.value) return '狗狗档案没读出来'",
+    )
+    expect(heroTitleSource).toContain(
       "if (dogOptions.value.length === 0) return '还没有狗狗档案'",
     )
     // 模板两处（多狗 picker / 单狗或空态）都改用 heroTitle

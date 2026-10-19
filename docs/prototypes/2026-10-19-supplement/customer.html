@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>预分装补剂 · 顾客端原型</title>
+  <link rel="stylesheet" href="./prototype.css" />
+  <style>body { padding-top: 74px; padding-bottom: 20px; }</style>
+</head>
+<body>
+
+<!-- ================= 制作单 ================= -->
+<section class="screen" id="c-sheet">
+  <div class="phone">
+    <div class="phone-status"><span>9:41</span><span class="dots">● ● ●</span></div>
+    <div class="phone-nav">
+      <button class="back" data-go="c-orders">←</button>
+      <span class="title">DIY 制作单</span>
+      <span class="right-slot">保存</span>
+    </div>
+    <div class="phone-body">
+      <div class="hero">
+        <div class="eyebrow">SevenKitchen · DIY</div>
+        <h2>小米红豆兔里脊火鸡胸</h2>
+        <p>嘟嘟 · 15kg · 每日 2 餐 · 共 7 天</p>
+        <div class="hero-foot">
+          <span>每餐 78g</span><span>每日 156g</span><span>总净重 1092g</span>
+        </div>
+      </div>
+
+      <div class="notice green mt12">
+        <strong>首次购买补剂后，这张制作单会冻结</strong><br />
+        冻结后，之后食谱改版也不影响这张单的食材、补剂和用量。
+      </div>
+
+      <div class="section-label">这顿饭的补剂</div>
+      <div class="card" style="border-color:#e6d7b8;background:linear-gradient(150deg,#fffaf0,#fffdf7)">
+        <div class="row-between">
+          <span class="badge gold">按用量分装</span>
+          <span class="badge green">可下单 6 种</span>
+        </div>
+        <h3 style="margin:12px 0 6px;font-size:18px;line-height:1.4">这顿饭缺的补剂，按用量分好，一次买齐</h3>
+        <p style="margin:0;color:#7d7868;font-size:12px;line-height:1.7">
+          每种补剂按用量装一小袋、贴标签、独立发货。<br />
+          不用买整瓶；用多少买多少，整单更省。
+        </p>
+        <div class="row mt12" style="gap:6px;flex-wrap:wrap">
+          <span class="badge green">精确配量</span>
+          <span class="badge green">不用买整瓶</span>
+          <span class="badge gold">一袋一用</span>
+        </div>
+        <button class="btn primary wide mt16" data-go="c-checkout">一键买齐本次补剂</button>
+        <div class="tiny muted" style="text-align:center;margin-top:8px">结算页看明细价；商品满 ¥99 免服务费</div>
+      </div>
+
+      <div class="section-label">补剂清单 · 共 8 种</div>
+      <div class="list-card">
+        <div class="list-row">
+          <div class="thumb">🌿</div>
+          <div class="main">
+            <div class="name">海藻粉 <span class="badge green">可下单</span></div>
+            <div class="desc">NOW FOODS · 227g/瓶 · 2.1g</div>
+          </div>
+          <div class="right"><div class="price">已选</div><div class="tiny muted">1 袋</div></div>
+        </div>
+        <div class="list-row">
+          <div class="thumb">🦴</div>
+          <div class="main">
+            <div class="name">柠檬酸钙粉 <span class="badge green">可下单</span></div>
+            <div class="desc">3.2g · 1 袋</div>
+          </div>
+          <div class="right"><div class="price">已选</div></div>
+        </div>
+        <div class="list-row">
+          <div class="thumb">💊</div>
+          <div class="main">
+            <div class="name">维生素 D3 <span class="badge green">可下单</span></div>
+            <div class="desc">5 粒 · 1 袋</div>
+          </div>
+          <div class="right"><div class="price">已选</div></div>
+        </div>
+        <div class="list-row">
+          <div class="thumb">🐟</div>
+          <div class="main">
+            <div class="name">鱼油胶囊 <span class="badge green">可下单</span></div>
+            <div class="desc">2 粒 · 1 袋 · 油性，效期更保守</div>
+          </div>
+          <div class="right"><div class="price">已选</div></div>
+        </div>
+        <div class="list-row">
+          <div class="thumb">🌾</div>
+          <div class="main">
+            <div class="name">洋车前子壳粉 <span class="badge green">可下单</span></div>
+            <div class="desc">2.5g · 1 袋</div>
+          </div>
+          <div class="right"><div class="price">已选</div></div>
+        </div>
+        <div class="list-row">
+          <div class="thumb">⚪</div>
+          <div class="main">
+            <div class="name">牛磺酸 <span class="badge green">可下单</span></div>
+            <div class="desc">500mg · 1 袋</div>
+          </div>
+          <div class="right"><div class="price">已选</div></div>
+        </div>
+        <div class="list-row" style="opacity:.55">
+          <div class="thumb">🌊</div>
+          <div class="main">
+            <div class="name">海带片 <span class="badge">暂不可买</span></div>
+            <div class="desc">缺货 · 到货后可单独补买</div>
+          </div>
+          <div class="right"><div class="price">—</div></div>
+        </div>
+        <div class="list-row" style="opacity:.55">
+          <div class="thumb">🥚</div>
+          <div class="main">
+            <div class="name">骨粉片 <span class="badge">暂不可买</span></div>
+            <div class="desc">尚未定价</div>
+          </div>
+          <div class="right"><div class="price">—</div></div>
+        </div>
+      </div>
+
+      <div class="notice mt12">
+        不想买补剂也没关系：制作单可以直接保存、照着做饭，不会产生订单或扣款。
+      </div>
+    </div>
+    <div class="bottom-bar">
+      <div class="price-box"><div class="label">补剂</div><div class="value" style="font-size:15px">6 种 · 6 袋</div></div>
+      <button class="btn" data-go="c-orders">保存</button>
+      <button class="btn primary" data-go="c-checkout">购买补剂</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 下单 ================= -->
+<section class="screen" id="c-checkout">
+  <div class="phone">
+    <div class="phone-status"><span>9:41</span><span class="dots">● ● ●</span></div>
+    <div class="phone-nav">
+      <button class="back" data-go="c-sheet">←</button>
+      <span class="title">确认补剂订单</span>
+      <span class="right-slot">明细</span>
+    </div>
+    <div class="phone-body">
+      <div class="card">
+        <div class="row-between">
+          <div>
+            <div class="small muted">收货地址</div>
+            <div class="bold" style="margin-top:4px">赵晨 · 138****8000</div>
+            <div class="small muted" style="margin-top:4px">上海市 徐汇区 漕溪北路 88 号 3 号楼 502</div>
+          </div>
+          <button class="btn small" data-go="c-address">修改</button>
+        </div>
+      </div>
+
+      <div class="card" style="border-color:#d8e4f0;background:#f7fbff">
+        <div class="row-between">
+          <div>
+            <div class="small muted">预计发货日期</div>
+            <div class="bold" style="font-size:18px;margin-top:4px">2026-10-19（周一）</div>
+          </div>
+          <span class="badge blue">确定日期</span>
+        </div>
+        <div class="tiny muted mt8">截单前付款当天发，之后下一个营业日；独立发货。</div>
+      </div>
+
+      <div class="section-label">本次补剂 · 已选 6 种</div>
+      <div class="list-card">
+        <div class="list-row">
+          <div class="check"><input type="checkbox" checked /></div>
+          <div class="thumb">🌿</div>
+          <div class="main">
+            <div class="name">海藻粉</div>
+            <div class="desc">2.1g / 袋 · 1 袋 · NOW FOODS</div>
+          </div>
+          <div class="right"><div class="price">¥12.80</div></div>
+        </div>
+        <div class="list-row">
+          <div class="check"><input type="checkbox" checked /></div>
+          <div class="thumb">🦴</div>
+          <div class="main"><div class="name">柠檬酸钙粉</div><div class="desc">3.2g / 袋 · 1 袋</div></div>
+          <div class="right"><div class="price">¥9.60</div></div>
+        </div>
+        <div class="list-row">
+          <div class="check"><input type="checkbox" checked /></div>
+          <div class="thumb">💊</div>
+          <div class="main"><div class="name">维生素 D3</div><div class="desc">5 粒 / 袋 · 1 袋</div></div>
+          <div class="right"><div class="price">¥6.40</div></div>
+        </div>
+        <div class="list-row">
+          <div class="check"><input type="checkbox" checked /></div>
+          <div class="thumb">🐟</div>
+          <div class="main"><div class="name">鱼油胶囊</div><div class="desc">2 粒 / 袋 · 1 袋</div></div>
+          <div class="right"><div class="price">¥18.90</div></div>
+        </div>
+        <div class="list-row">
+          <div class="check"><input type="checkbox" checked /></div>
+          <div class="thumb">🌾</div>
+          <div class="main"><div class="name">洋车前子壳粉</div><div class="desc">2.5g / 袋 · 1 袋</div></div>
+          <div class="right"><div class="price">¥7.20</div></div>
+        </div>
+        <div class="list-row">
+          <div class="check"><input type="checkbox" checked /></div>
+          <div class="thumb">⚪</div>
+          <div class="main"><div class="name">牛磺酸</div><div class="desc">500mg / 袋 · 1 袋</div></div>
+          <div class="right"><div class="price">¥31.50</div></div>
+        </div>
+        <div class="list-row" style="opacity:.55">
+          <div class="check"><input type="checkbox" disabled /></div>
+          <div class="thumb">🌊</div>
+          <div class="main"><div class="name">海带片</div><div class="desc">缺货 · 暂不可买</div></div>
+          <div class="right"><div class="price">—</div></div>
+        </div>
+        <div class="list-row" style="opacity:.55">
+          <div class="check"><input type="checkbox" disabled /></div>
+          <div class="thumb">🥚</div>
+          <div class="main"><div class="name">骨粉片</div><div class="desc">尚未定价</div></div>
+          <div class="right"><div class="price">—</div></div>
+        </div>
+      </div>
+
+      <div class="section-label">费用</div>
+      <div class="summary">
+        <div class="summary-line"><span>商品小计</span><strong>¥86.40</strong></div>
+        <div class="summary-line"><span>分装服务费</span><strong>¥10.00</strong></div>
+        <div class="summary-line"><span>运费（经济快递）</span><strong>¥6.00</strong></div>
+        <div class="summary-total">
+          <div>
+            <div class="small muted">合计</div>
+            <div class="per-day">每天约 ¥14.63 · 覆盖 7 天</div>
+          </div>
+          <div class="amount">¥102.40</div>
+        </div>
+        <div class="tiny muted mt8">
+          服务费含称重/数片、分装袋、干燥剂、标签、人工；商品满 ¥99 免服务费，满 ¥129 包邮。
+        </div>
+      </div>
+
+      <div class="notice mt12">
+        部分补剂暂不可买：海带片（缺货）、骨粉片（尚未定价）。可以先买能买的，缺的到货后再补。
+      </div>
+    </div>
+    <div class="bottom-bar">
+      <div class="price-box"><div class="label">合计</div><div class="value">¥102.40</div></div>
+      <button class="btn primary" data-go="c-pay-result" style="min-width:120px">提交订单</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 支付结果 ================= -->
+<section class="screen" id="c-pay-result">
+  <div class="phone">
+    <div class="phone-status"><span>9:41</span><span class="dots">● ● ●</span></div>
+    <div class="phone-nav"><button class="back" data-go="c-checkout">←</button><span class="title">支付结果</span><span class="right-slot"></span></div>
+    <div class="phone-body" style="text-align:center;padding-top:36px">
+      <div style="width:72px;height:72px;border-radius:50%;background:#e8f2eb;display:flex;align-items:center;justify-content:center;font-size:34px;margin:0 auto 14px">✓</div>
+      <h2 style="margin:0;font-size:22px">支付成功</h2>
+      <p class="muted small" style="margin:8px 0 0">订单号 SP20261019-003</p>
+      <div class="card mt16" style="text-align:left">
+        <div class="kv"><span class="k">实付</span><span class="v bold" style="font-size:18px;color:#b4553f">¥102.40</span></div>
+        <div class="kv"><span class="k">预计发货</span><span class="v bold">2026-10-19（周一）</span></div>
+        <div class="kv"><span class="k">配送</span><span class="v">经济快递 · 独立发货</span></div>
+        <div class="kv"><span class="k">收货</span><span class="v">赵晨 · 138****8000<br />上海市徐汇区漕溪北路 88 号 3 号楼 502</span></div>
+      </div>
+      <div class="notice green mt12" style="text-align:left">
+        我们会在 10 月 19 日分装发货；发货后会发站内消息和微信通知，可在订单详情看进度。
+      </div>
+      <button class="btn primary wide mt16" data-go="c-detail">查看订单</button>
+      <button class="btn wide mt8" data-go="c-orders">返回我的订单</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 我的订单 ================= -->
+<section class="screen" id="c-orders">
+  <div class="phone">
+    <div class="phone-status"><span>9:41</span><span class="dots">● ● ●</span></div>
+    <div class="phone-nav"><button class="back" data-go="c-sheet">←</button><span class="title">我的订单</span><span class="right-slot">筛选</span></div>
+    <div class="phone-body tight">
+      <div class="segmented mb12">
+        <span class="segment active">全部</span>
+        <span class="segment">鲜食</span>
+        <span class="segment">定制</span>
+        <span class="segment">补剂</span>
+      </div>
+      <div class="segmented mb12">
+        <span class="segment active">全部</span>
+        <span class="segment">待付款</span>
+        <span class="segment">处理中</span>
+        <span class="segment">待发货</span>
+        <span class="segment">已发货</span>
+        <span class="segment">已完成</span>
+        <span class="segment">售后中</span>
+      </div>
+
+      <div class="card" style="border-left:4px solid #d8bc85" data-go="c-detail">
+        <div class="row-between">
+          <div>
+            <span class="badge gold">补剂</span>
+            <span class="badge green" style="margin-left:6px">已分装 · 待发货</span>
+          </div>
+          <span class="tiny muted">SP20261019-003</span>
+        </div>
+        <div class="bold mt8" style="font-size:15px">补剂 6 种 · 6 袋</div>
+        <div class="small muted mt8">预计发货 2026-10-19（周一）</div>
+        <div class="row-between mt12">
+          <div><span class="bold" style="color:#b4553f;font-size:18px">¥102.40</span><span class="tiny muted"> · 含服务费/运费</span></div>
+          <button class="btn small primary" data-go="c-detail">查看详情</button>
+        </div>
+      </div>
+      <div class="card" style="border-left:4px solid #d8bc85" data-go="c-detail">
+        <div class="row-between">
+          <div>
+            <span class="badge gold">补剂</span>
+            <span class="badge green" style="margin-left:6px">已发货</span>
+            <span class="badge amber" style="margin-left:6px">售后中 · 退款待受理</span>
+          </div>
+          <span class="tiny muted">SP20261012-001</span>
+        </div>
+        <div class="bold mt8" style="font-size:15px">补剂 5 种 · 5 袋</div>
+        <div class="small muted mt8">售后：退款 · 待受理</div>
+        <div class="row-between mt12">
+          <div><span class="bold" style="color:#b4553f;font-size:18px">¥88.60</span></div>
+          <button class="btn small" data-go="c-detail">查看售后</button>
+        </div>
+      </div>
+
+      <div class="card" style="border-left:4px solid #3f6b56">
+        <div class="row-between">
+          <div><span class="badge green">鲜食</span><span class="badge green" style="margin-left:6px">已发货</span></div>
+          <span class="tiny muted">SK20261018-012</span>
+        </div>
+        <div class="bold mt8" style="font-size:15px">鲜食 14 袋 · 7 天</div>
+        <div class="small muted mt8">顺丰冷链 · 预计明天送达</div>
+      </div>
+
+      <div class="card" style="border-left:4px solid #3a6ea5">
+        <div class="row-between">
+          <div><span class="badge blue">定制</span><span class="badge green" style="margin-left:6px">已交付</span></div>
+          <span class="tiny muted">CR20261008-006</span>
+        </div>
+        <div class="bold mt8" style="font-size:15px">嘟嘟的专属食谱 v2</div>
+        <div class="small muted mt8">可查看交付页 · 7 天后自动完成</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 补剂订单详情 ================= -->
+<section class="screen" id="c-detail">
+  <div class="phone">
+    <div class="phone-status"><span>9:41</span><span class="dots">● ● ●</span></div>
+    <div class="phone-nav"><button class="back" data-go="c-orders">←</button><span class="title">补剂订单</span><span class="right-slot">客服</span></div>
+    <div class="phone-body">
+      <div class="card" style="background:linear-gradient(150deg,#1e3a2f,#2b5040);color:#f7f3e8;border:0">
+        <div class="row-between">
+          <span class="badge gold">已分装 · 待发货</span>
+          <span class="tiny" style="color:#cad6c9">SP20261019-003</span>
+        </div>
+        <div style="font-size:22px;font-weight:800;margin-top:12px">预计 10 月 19 日发货</div>
+        <div class="small" style="color:#d8dfd6;margin-top:6px">分装已完成；发货后会发站内消息和微信通知。</div>
+      </div>
+
+      <div class="section-label">进度</div>
+      <div class="card">
+        <div class="timeline">
+          <div class="timeline-item done"><div class="t">已付款</div><div class="d">2026-10-19 09:41</div></div>
+          <div class="timeline-item done"><div class="t">已排期 · 10 月 19 日发货</div><div class="d">截单前付款，排到当天</div></div>
+          <div class="timeline-item current"><div class="t">已分装 · 待发货</div><div class="d">2026-10-19 16:20 · 6 袋</div></div>
+          <div class="timeline-item"><div class="t">已发货</div><div class="d">待更新</div></div>
+          <div class="timeline-item"><div class="t">已完成</div><div class="d">发货后 10 天自动完成</div></div>
+        </div>
+      </div>
+
+      <div class="section-label">补剂明细</div>
+      <div class="list-card">
+        <div class="list-row"><div class="thumb">🌿</div><div class="main"><div class="name">海藻粉</div><div class="desc">2.1g / 袋 · 1 袋 · 分装日期 10-19 · 有效期至 2027-04-19</div></div><div class="right"><div class="price">¥12.80</div></div></div>
+        <div class="list-row"><div class="thumb">🦴</div><div class="main"><div class="name">柠檬酸钙粉</div><div class="desc">3.2g / 袋 · 1 袋 · 有效期至 2027-04-19</div></div><div class="right"><div class="price">¥9.60</div></div></div>
+        <div class="list-row"><div class="thumb">💊</div><div class="main"><div class="name">维生素 D3</div><div class="desc">5 粒 / 袋 · 1 袋 · 有效期至 2027-07-19</div></div><div class="right"><div class="price">¥6.40</div></div></div>
+        <div class="list-row"><div class="thumb">🐟</div><div class="main"><div class="name">鱼油胶囊</div><div class="desc">2 粒 / 袋 · 1 袋 · 有效期至 2027-04-19</div></div><div class="right"><div class="price">¥18.90</div></div></div>
+        <div class="list-row"><div class="thumb">🌾</div><div class="main"><div class="name">洋车前子壳粉</div><div class="desc">2.5g / 袋 · 1 袋 · 有效期至 2027-04-19</div></div><div class="right"><div class="price">¥7.20</div></div></div>
+        <div class="list-row"><div class="thumb">⚪</div><div class="main"><div class="name">牛磺酸</div><div class="desc">500mg / 袋 · 1 袋 · 有效期至 2027-07-19</div></div><div class="right"><div class="price">¥31.50</div></div></div>
+      </div>
+
+      <div class="section-label">收货地址</div>
+      <div class="card">
+        <div class="row-between">
+          <div>
+            <div class="bold">赵晨 · 138****8000</div>
+            <div class="small muted mt8">上海市 徐汇区 漕溪北路 88 号 3 号楼 502</div>
+            <div class="tiny muted mt8">未发货可自助修改；已发货后不可改。</div>
+          </div>
+          <button class="btn small" data-go="c-address">修改</button>
+        </div>
+      </div>
+
+      <div class="section-label">售后记录</div>
+      <div class="card">
+        <div class="row-between">
+          <div>
+            <span class="badge">本单暂无售后</span>
+            <div class="small mt8">7 天内如有破损/发错/量不对，可申请退款或免费补发，不用寄回。</div>
+          </div>
+          <button class="btn small" data-go="c-aftersale">申请</button>
+        </div>
+      </div>
+
+      <div class="notice mt12">
+        本单按 <a href="#c-snapshot" data-go="c-snapshot">2026-10-19 冻结的制作单快照</a> 生成；食谱改版不影响本单。
+      </div>
+    </div>
+    <div class="bottom-bar">
+      <button class="btn" data-go="c-snapshot">制作单快照</button>
+      <button class="btn" data-go="c-aftersale">申请售后</button>
+      <button class="btn primary" data-go="c-checkout">再次购买</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 售后申请 ================= -->
+<section class="screen" id="c-aftersale">
+  <div class="phone">
+    <div class="phone-status"><span>9:41</span><span class="dots">● ● ●</span></div>
+    <div class="phone-nav"><button class="back" data-go="c-detail">←</button><span class="title">申请售后</span><span class="right-slot"></span></div>
+    <div class="phone-body">
+      <div class="notice green">
+        <strong>7 天内，缺货/发错/破损/量不对</strong><br />
+        直接退款或免费补发，不用寄回。提交后管理员会尽快处理。<br />
+        <span class="tiny">订单 SP20261019-003 · 实付 ¥102.40</span>
+      </div>
+
+      <div class="section-label">我想要</div>
+      <div class="card">
+        <div class="list-row" style="padding-left:0;padding-right:0">
+          <div class="thumb">💸</div>
+          <div class="main"><div class="name">退款</div><div class="desc">原路退回；可全额或部分</div></div>
+          <span class="badge gold">已选</span>
+        </div>
+        <div class="list-row" style="padding-left:0;padding-right:0">
+          <div class="thumb">📦</div>
+          <div class="main"><div class="name">免费补发</div><div class="desc">重新分装一份寄给你</div></div>
+          <span class="badge">选择</span>
+        </div>
+        <div class="list-row" style="padding-left:0;padding-right:0">
+          <div class="thumb">💬</div>
+          <div class="main"><div class="name">其他问题</div><div class="desc">不会用 / 用量不对 / 其他</div></div>
+          <span class="badge">选择</span>
+        </div>
+      </div>
+
+      <div class="field mt16">
+        <label>发生了什么</label>
+        <textarea rows="4" placeholder="例如：鱼油胶囊到货时破了 2 粒，其他正常。">鱼油胶囊到货时破了 2 粒，其他正常。</textarea>
+      </div>
+
+      <div class="field">
+        <label>凭证（选填，破损/发错建议上传）</label>
+        <div class="photo-grid">
+          <div class="photo-add"><span style="font-size:20px">＋</span><span>上传</span></div>
+          <div class="photo-add" style="background:#f0ede2">IMG_01</div>
+        </div>
+      </div>
+
+      <div class="notice mt16">
+        提交后可在订单详情看进度；处理中会发站内消息和微信通知。
+      </div>
+    </div>
+    <div class="bottom-bar">
+      <div class="price-box"><div class="label">订单</div><div class="value" style="font-size:14px">SP20261019-003</div></div>
+      <button class="btn primary" style="min-width:140px" data-go="c-detail">提交申请</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 改地址 ================= -->
+<section class="screen" id="c-address">
+  <div class="phone">
+    <div class="phone-status"><span>9:41</span><span class="dots">● ● ●</span></div>
+    <div class="phone-nav"><button class="back" data-go="c-detail">←</button><span class="title">修改收货地址</span><span class="right-slot"></span></div>
+    <div class="phone-body">
+      <div class="notice">
+        订单 SP20261019-003 · 本单未发货，可以自助修改。<strong>已发货后不能修改</strong>，需要联系快递改派或客服。
+      </div>
+
+      <div class="card mt12">
+        <div class="field"><label>收件人</label><input value="赵晨" /></div>
+        <div class="field"><label>手机号</label><input value="138 0013 8000" /></div>
+        <div class="field"><label>所在地区</label><input value="上海市 徐汇区" /></div>
+        <div class="field"><label>详细地址</label><textarea rows="2">漕溪北路 88 号 3 号楼 502</textarea></div>
+        <label class="checkline mt12"><input type="checkbox" /> 同时设为默认地址</label>
+      </div>
+
+      <div class="notice mt12">
+        如果已经打印面单，修改地址后需要重新打印面单；系统会提示仓库。
+      </div>
+    </div>
+    <div class="bottom-bar">
+      <button class="btn primary wide" data-go="c-detail">保存地址</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 制作单快照 ================= -->
+<section class="screen" id="c-snapshot">
+  <div class="phone">
+    <div class="phone-status"><span>9:41</span><span class="dots">● ● ●</span></div>
+    <div class="phone-nav"><button class="back" data-go="c-detail">←</button><span class="title">制作单快照</span><span class="right-slot">分享</span></div>
+    <div class="phone-body">
+      <div class="hero">
+        <div class="eyebrow">冻结于 2026-10-19 · 食谱 v3</div>
+        <h2>小米红豆兔里脊火鸡胸</h2>
+        <p>嘟嘟 · 15kg · 每日 2 餐 · 共 7 天</p>
+        <div class="hero-foot"><span>每餐 78g</span><span>每日 156g</span><span>总净重 1092g</span></div>
+      </div>
+      <div class="notice green mt12">
+        这是下单时冻结的版本。之后食谱改版，这张单的食材、补剂和用量都不会变。
+      </div>
+
+      <div class="section-label">食材清单</div>
+      <div class="list-card">
+        <div class="list-row"><div class="main"><div class="name">小米</div><div class="desc">净用量 210g · 采购量 215g</div></div><div class="right"><div class="price">21%</div></div></div>
+        <div class="list-row"><div class="main"><div class="name">红豆</div><div class="desc">净用量 140g · 采购量 145g</div></div><div class="right"><div class="price">14%</div></div></div>
+        <div class="list-row"><div class="main"><div class="name">兔里脊</div><div class="desc">净用量 350g · 采购量 360g</div></div><div class="right"><div class="price">35%</div></div></div>
+        <div class="list-row"><div class="main"><div class="name">火鸡胸</div><div class="desc">净用量 300g · 采购量 310g</div></div><div class="right"><div class="price">30%</div></div></div>
+      </div>
+
+      <div class="section-label">补剂清单</div>
+      <div class="list-card">
+        <div class="list-row"><div class="main"><div class="name">海藻粉</div><div class="desc">2.1g / 袋 · 1 袋</div></div><div class="right"><div class="badge green">已买</div></div></div>
+        <div class="list-row"><div class="main"><div class="name">柠檬酸钙粉</div><div class="desc">3.2g / 袋 · 1 袋</div></div><div class="right"><div class="badge green">已买</div></div></div>
+        <div class="list-row"><div class="main"><div class="name">维生素 D3</div><div class="desc">5 粒 / 袋 · 1 袋</div></div><div class="right"><div class="badge green">已买</div></div></div>
+        <div class="list-row"><div class="main"><div class="name">鱼油胶囊</div><div class="desc">2 粒 / 袋 · 1 袋</div></div><div class="right"><div class="badge green">已买</div></div></div>
+        <div class="list-row"><div class="main"><div class="name">洋车前子壳粉</div><div class="desc">2.5g / 袋 · 1 袋</div></div><div class="right"><div class="badge green">已买</div></div></div>
+        <div class="list-row"><div class="main"><div class="name">牛磺酸</div><div class="desc">500mg / 袋 · 1 袋</div></div><div class="right"><div class="badge green">已买</div></div></div>
+        <div class="list-row"><div class="main"><div class="name">海带片</div><div class="desc">缺货 · 当时未买</div></div><div class="right"><div class="badge">未买</div></div></div>
+        <div class="list-row"><div class="main"><div class="name">骨粉片</div><div class="desc">尚未定价 · 当时未买</div></div><div class="right"><div class="badge">未买</div></div></div>
+      </div>
+
+      <div class="section-label">制作步骤</div>
+      <div class="card">
+        <div class="small" style="line-height:1.8">
+          1. 小米、红豆提前浸泡 2 小时。<br />
+          2. 兔里脊、火鸡胸切块，冷水下锅焯水。<br />
+          3. 所有食材加水煮熟，收汁到合适湿度。<br />
+          4. 放凉后按 78g/餐分装；补剂按袋加入。
+        </div>
+      </div>
+
+      <div class="notice mt12">
+        想要最新食谱？回到食谱页重新生成一张制作单；这张旧单会保留。
+      </div>
+    </div>
+    <div class="bottom-bar">
+      <button class="btn primary wide" data-go="c-checkout">按此制作单再次购买</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 我的 ================= -->
+<section class="screen" id="c-me">
+  <div class="phone">
+    <div class="phone-status"><span>9:41</span><span class="dots">● ● ●</span></div>
+    <div class="phone-nav"><button class="back" data-go="c-orders">←</button><span class="title">我的</span><span class="right-slot">设置</span></div>
+    <div class="phone-body">
+      <div class="card" style="display:flex;align-items:center;gap:12px">
+        <div class="thumb" style="width:54px;height:54px;font-size:24px">🐕</div>
+        <div class="grow">
+          <div class="bold" style="font-size:16px">赵晨</div>
+          <div class="small muted mt8">138****8000 · 已绑定</div>
+        </div>
+        <span class="badge green">普通顾客</span>
+      </div>
+
+      <div class="section-label">我的订单</div>
+      <div class="card">
+        <div class="row-between" data-go="c-orders">
+          <div>
+            <div class="bold" style="font-size:15px">我的订单 <span class="muted" style="font-weight:400">(12 笔)</span></div>
+            <div class="small muted mt8">鲜食 / 定制 / 补剂都在这里，用类型筛选</div>
+          </div>
+          <span class="muted">›</span>
+        </div>
+        <div class="divider"></div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;text-align:center">
+          <div><div class="bold">0</div><div class="tiny muted">待付款</div></div>
+          <div><div class="bold">2</div><div class="tiny muted">处理中</div></div>
+          <div><div class="bold" style="color:#b07a24">1</div><div class="tiny muted">待发货</div></div>
+          <div><div class="bold">1</div><div class="tiny muted">已发货</div></div>
+          <div><div class="bold" style="color:#b4553f">1</div><div class="tiny muted">售后中</div></div>
+        </div>
+        <div class="tiny muted mt12">只有这一个订单入口；角标只显示待办状态，已完成/已取消去订单页看。</div>
+      </div>
+
+      <div class="section-label">常用</div>
+      <div class="card" style="padding:0">
+        <div class="list-row" data-go="c-messages">
+          <div class="thumb">🔔</div>
+          <div class="main"><div class="name">消息</div><div class="desc">排期、发货、售后通知</div></div>
+          <div class="right"><span class="badge red">2</span></div>
+        </div>
+        <div class="list-row" data-go="c-address">
+          <div class="thumb">📍</div>
+          <div class="main"><div class="name">收货地址</div><div class="desc">下单时可改；未发货订单可自助改</div></div>
+          <div class="right"><span class="muted">3 个 ›</span></div>
+        </div>
+        <div class="list-row" data-go="c-sheet">
+          <div class="thumb">📋</div>
+          <div class="main"><div class="name">我的制作单</div><div class="desc">DIY 制作单不是订单，单独放这里</div></div>
+          <div class="right"><span class="muted">5 张 ›</span></div>
+        </div>
+        <div class="list-row">
+          <div class="thumb">💬</div>
+          <div class="main"><div class="name">客服与建议</div><div class="desc">售后找不到入口时，可直接找客服</div></div>
+          <div class="right"><span class="muted">›</span></div>
+        </div>
+      </div>
+
+      <div class="notice green mt12">
+        订单入口只有一个；补剂订单的售后、改地址、再次购买都在订单详情里。
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 消息中心 ================= -->
+<section class="screen" id="c-messages">
+  <div class="phone">
+    <div class="phone-status"><span>9:41</span><span class="dots">● ● ●</span></div>
+    <div class="phone-nav"><button class="back" data-go="c-me">←</button><span class="title">消息</span><span class="right-slot">全部已读</span></div>
+    <div class="phone-body tight">
+      <div class="segmented mb12">
+        <span class="segment active">全部</span>
+        <span class="segment">交付</span>
+        <span class="segment">售后</span>
+        <span class="segment">物流</span>
+        <span class="segment">系统</span>
+      </div>
+
+
+      <div class="card" style="border-left:4px solid #d8bc85" data-go="c-detail">
+        <div class="row-between">
+          <div><span class="badge amber">售后</span><span class="badge red" style="margin-left:6px">未读</span></div>
+          <span class="tiny muted">10-19 18:30</span>
+        </div>
+        <div class="bold mt8">售后申请已受理</div>
+        <div class="small muted mt8">SP20261012-001 的退款申请已受理，管理员会尽快处理；可在订单详情看进度。</div>
+      </div>
+
+      <div class="card" style="border-left:4px solid #d8bc85" data-go="c-detail">
+        <div class="row-between">
+          <div><span class="badge gold">物流</span><span class="badge red" style="margin-left:6px">未读</span></div>
+          <span class="tiny muted">10-19 17:20</span>
+        </div>
+        <div class="bold mt8">补剂订单已发货</div>
+        <div class="small muted mt8">SP20261019-003 已发货，快递单号 YT1234567890；可在订单详情看物流。</div>
+      </div>
+
+      <div class="card" style="border-left:4px solid #d8bc85" data-go="c-detail">
+        <div class="row-between">
+          <div><span class="badge gold">物流</span></div>
+          <span class="tiny muted">10-19 09:42</span>
+        </div>
+        <div class="bold mt8">已安排今天发货</div>
+        <div class="small muted mt8">SP20261019-003 预计 10-19 分装发货；发货后会再通知你。</div>
+      </div>
+
+      <div class="card" style="border-left:4px solid #3a6ea5">
+        <div class="row-between">
+          <div><span class="badge blue">交付</span></div>
+          <span class="tiny muted">10-15 14:10</span>
+        </div>
+        <div class="bold mt8">嘟嘟的专属食谱 v2 已交付</div>
+        <div class="small muted mt8">可去定制订单详情查看交付页；7 天后自动完成。</div>
+      </div>
+
+      <div class="card">
+        <div class="row-between">
+          <div><span class="badge">系统</span></div>
+          <span class="tiny muted">10-12 09:00</span>
+        </div>
+        <div class="bold mt8">补剂商城服务费说明</div>
+        <div class="small muted mt8">分装服务费 ¥10/单，商品满 ¥99 免；运费 ¥6，满 ¥129 包邮。</div>
+      </div>
+
+      <div class="notice mt12">
+        站内消息一定送得到；微信订阅消息只是提醒。未授权订阅也能在这里看到。
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 原型导航 -->
+<div class="proto-bar">
+  <button data-go="c-sheet">制作单</button>
+  <button data-go="c-checkout">下单</button>
+  <button data-go="c-pay-result">支付结果</button>
+  <button data-go="c-orders">我的订单</button>
+  <button data-go="c-detail">订单详情</button>
+  <button data-go="c-me">我的</button>
+  <button data-go="c-messages">消息</button>
+  <button data-go="c-aftersale">售后</button>
+  <button data-go="c-address">改地址</button>
+  <button data-go="c-snapshot">快照</button>
+</div>
+
+<script src="./prototype.js"></script>
+</body>
+</html>

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>预分装补剂 · 原型索引</title>
+  <link rel="stylesheet" href="./prototype.css" />
+  <style>
+    body { padding: 34px 22px 60px; }
+    .wrap { max-width: 1080px; margin: 0 auto; }
+    .hero-proto {
+      padding: 30px;
+      border-radius: 22px;
+      background: linear-gradient(150deg, #1e3a2f, #2b5040 60%, #3b604b);
+      color: #f7f3e8;
+      box-shadow: 0 18px 40px rgba(30, 46, 36, 0.18);
+    }
+    .hero-proto .eyebrow { color: #d8bc85; font-size: 11px; letter-spacing: .16em; }
+    .hero-proto h1 { margin: 10px 0 8px; font-size: 30px; }
+    .hero-proto p { margin: 0; color: #d8dfd6; font-size: 13px; line-height: 1.8; max-width: 720px; }
+    .hero-proto .meta { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 18px; font-size: 11px; color: #c7d3c7; }
+    .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 20px; }
+    .proto-card {
+      display: block;
+      text-decoration: none;
+      color: inherit;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 18px;
+      transition: box-shadow .15s ease;
+    }
+    .proto-card:hover { box-shadow: var(--shadow); }
+    .proto-card .icon { font-size: 26px; }
+    .proto-card h2 { margin: 10px 0 6px; font-size: 18px; }
+    .proto-card p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
+    .proto-card .tags { margin-top: 12px; display: flex; gap: 6px; flex-wrap: wrap; }
+    .section-title { margin: 28px 0 10px; font-size: 15px; font-weight: 800; }
+    .checklist { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .check-item { display: flex; gap: 8px; align-items: flex-start; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 12px; font-size: 12px; line-height: 1.6; }
+    .check-item .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green-3); margin-top: 5px; flex: 0 0 auto; }
+    .check-item .dot.gold { background: var(--gold); }
+    .check-item .dot.red { background: var(--red); }
+    @media (max-width: 760px) { .cards, .checklist { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero-proto">
+      <div class="eyebrow">SEVENKITCHEN · 2026-10-19</div>
+      <h1>预分装补剂 · 三端原型</h1>
+      <p>
+        DIY 制作单 → 一键买齐 → 制作单快照 → 排期/产能 → 分装/40×60 标签 → 发货/改地址 → 售后 → 再次购买。
+        原型覆盖顾客、后台、员工三端，以及 40×60mm 实物标签。
+      </p>
+      <div class="meta">
+        <span>需求 v2</span><span>生意模型</span><span>服务蓝图</span><span>数据为演示</span>
+      </div>
+      <div class="proto-note" style="margin-top:14px;background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.22);color:#e9efe6">
+        卡片会在新窗口打开。如果点击仍没反应：右键卡片 → 复制链接 → 粘贴到浏览器地址栏；
+        或用本地静态服务打开本目录（见 README 的“怎么打开”）。不是页面坏了。
+      </div>
+    </div>
+
+    <div class="cards">
+      <a class="proto-card" href="./customer.html" target="_blank" rel="noopener">
+        <div class="icon">🛒</div>
+        <h2>顾客端 · 10 屏</h2>
+        <p>制作单（含快照/不显示价格）、补剂下单、支付结果、我的订单、补剂详情、售后申请、自助改地址、制作单快照、我的、消息中心。</p>
+        <div class="tags"><span class="badge gold">快照</span><span class="badge green">改地址</span><span class="badge blue">再次购买</span><span class="badge amber">售后</span></div>
+      </a>
+
+      <a class="proto-card" href="./states.html" target="_blank" rel="noopener">
+        <div class="icon">🧩</div>
+        <h2>状态图 · 10 个异常态</h2>
+        <p>顾客空订单/全部不可售/待排期/售后驳回/退款中/加载失败；后台退款空态/看板失败；员工订单已取消。</p>
+        <div class="tags"><span class="badge green">空态</span><span class="badge amber">错误</span><span class="badge red">权限</span><span class="badge blue">部分失败</span></div>
+      </a>
+
+      <a class="proto-card" href="./admin.html" target="_blank" rel="noopener">
+        <div class="icon">🖥️</div>
+        <h2>后台 Web · 12 屏</h2>
+        <p>订单中心、补剂详情（排期/分装/强制/售后/地址审计/快照）、分装汇总、商城设置、包材配置、原料管理、库存管理、营业日历、售后视图、40×60 标签预览、退款管理、运营看板。</p>
+        <div class="tags"><span class="badge gold">订单中心</span><span class="badge green">30 单产能</span><span class="badge blue">包材</span><span class="badge red">缺料</span></div>
+      </a>
+
+      <a class="proto-card" href="./staff.html" target="_blank" rel="noopener">
+        <div class="icon">📱</div>
+        <h2>员工端 · 6 屏</h2>
+        <p>工作台（一个订单入口）、统一订单、补剂分装详情、分装汇总、定制只读、40×60 标签预览。员工看不到管理员动作。</p>
+        <div class="tags"><span class="badge green">一个入口</span><span class="badge gold">分装</span><span class="badge">定制只读</span></div>
+      </a>
+
+      <a class="proto-card" href="./label-40x60.html" target="_blank" rel="noopener">
+        <div class="icon">🏷️</div>
+        <h2>40×60 标签 · 3 版</h2>
+        <p>标准版、长品名压力测试、加量 3/3 版；可直接打印。标签上直接印用法/储存/原品/分装者/干燥剂提示。</p>
+        <div class="tags"><span class="badge gold">40×60mm</span><span class="badge green">一袋一张</span><span class="badge red">需修尺寸</span></div>
+      </a>
+    </div>
+
+    <div class="section-title">原型里必须能走通的 8 条线</div>
+    <div class="checklist">
+      <div class="check-item"><span class="dot gold"></span><div>顾客第一次买补剂 → 制作单冻结整张快照；食谱改版后再看旧单，食材/补剂/用量不变。</div></div>
+      <div class="check-item"><span class="dot gold"></span><div>制作单不显示价格；结算页显示商品明细 + 服务费 ¥10 + 运费 ¥6 + 合计 + 每天约 + 确定发货日。</div></div>
+      <div class="check-item"><span class="dot"></span><div>17:00 前付款当天发；之后/停发/满 30 单顺延；顾客只看到确定日期，不能自选更晚。</div></div>
+      <div class="check-item"><span class="dot"></span><div>员工只看/分装/发货；改期、强制分装、退款、补发只出现在管理员。</div></div>
+      <div class="check-item"><span class="dot red"></span><div>缺料允许排产但标红；员工不能强制；管理员强制要填原因并留痕。</div></div>
+      <div class="check-item"><span class="dot red"></span><div>未发货可自助改地址；已发货不可改；已打面单要提示重打。</div></div>
+      <div class="check-item"><span class="dot gold"></span><div>正常发货、延迟、排期、售后都发站内 + 订阅；未授权站内兜底。</div></div>
+      <div class="check-item"><span class="dot gold"></span><div>售后可多次；累计退款不超实付；每个 case 最多一张补发；原订单履约状态不变。</div></div>
+    </div>
+
+    <div class="proto-note mt16">
+      原型只表达业务与页面，不含真实接口/数据。技术方案、迁移、测试与上线在下一阶段。
+    </div>
+  </div>
+</body>
+</html>

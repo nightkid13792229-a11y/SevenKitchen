@@ -1,0 +1,1098 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>预分装补剂 · 后台原型</title>
+  <link rel="stylesheet" href="./prototype.css" />
+  <style>body { padding-top: 74px; }</style>
+</head>
+<body>
+
+<!-- ================= 订单中心 ================= -->
+<section class="screen" id="a-orders">
+  <div class="admin">
+    <aside class="sidebar">
+      <div class="logo">七号厨房后台</div>
+      <div class="nav-group">交易</div>
+      <div class="nav-item active"><span class="dot"></span>订单中心</div>
+      <div class="nav-group">补剂</div>
+      <div class="nav-item" data-go="a-settings">补剂商城设置</div>
+      <div class="nav-item" data-go="a-packaging">分装包材</div>
+      <div class="nav-item" data-go="a-materials">原料管理</div>
+      <div class="nav-item" data-go="a-inventory">库存管理</div>
+      <div class="nav-item" data-go="a-calendar">营业日历</div>
+      <div class="nav-group">支付</div>
+      <div class="nav-item">支付配置</div>
+      <div class="foot">原型 · 2026-10-19<br />数据为演示</div>
+    </aside>
+    <main class="admin-main">
+      <div class="admin-head">
+        <div>
+          <h1>订单中心</h1>
+          <div class="sub">鲜食 / 定制 / 补剂三类订单统一入口；补剂可按分装日、产能、缺料、售后筛选。</div>
+        </div>
+        <div class="admin-actions">
+          <button class="btn small" data-go="a-summary">今日分装汇总</button>
+          <button class="btn small" data-go="a-aftersale">售后视图 · 2</button>
+          <button class="btn small primary">导出</button>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <div class="field"><label>类型</label><select><option selected>全部</option><option>鲜食</option><option>定制</option><option>补剂</option></select></div>
+        <div class="field"><label>状态</label><select><option>全部</option><option>待付款</option><option>处理中</option><option>待发货</option><option>已发货</option><option>已完成</option><option>售后中</option></select></div>
+        <div class="field"><label>分装日</label><input placeholder="全部日期" /></div>
+        <div class="field grow"><label>搜索</label><input placeholder="订单号 / 顾客 / 手机号" /></div>
+        <label class="checkline" style="margin-top:16px"><input type="checkbox" /> 只看售后中</label>
+        <label class="checkline" style="margin-top:16px"><input type="checkbox" /> 只看缺料/逾期</label>
+        <button class="btn small primary" style="margin-top:16px">查询</button>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat"><div class="label">今日补剂订单</div><div class="value">18</div><div class="sub">产能 18 / 30</div></div>
+        <div class="stat"><div class="label">待分装</div><div class="value">11</div><div class="sub">其中缺料 2 单</div></div>
+        <div class="stat gold"><div class="label">待发货</div><div class="value">4</div><div class="sub">今日需交快递</div></div>
+        <div class="stat warn"><div class="label">售后待处理</div><div class="value">2</div><div class="sub">补剂 2 · 鲜食 0</div></div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>订单</th><th>类型</th><th>状态</th><th>顾客</th><th>商品</th><th>实付</th><th>分装日</th><th>产能/缺料</th><th>售后</th><th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="row-supplement">
+              <td><div class="cell-title">SP20261019-004</div><div class="cell-sub">10-19 10:12</div></td>
+              <td><span class="badge gold">补剂</span></td>
+              <td><span class="badge green">待分装</span></td>
+              <td><div class="cell-title">李雷</div><div class="cell-sub">138****2233</div></td>
+              <td><div>5 种 · 5 袋</div><div class="cell-sub">7 天量</div></td>
+              <td class="right">¥76.20</td>
+              <td><div>10-19</div><div class="cell-sub">18/30</div></td>
+              <td><span class="badge red">缺料 · 海藻粉</span></td>
+              <td><span class="badge">无</span></td>
+              <td><button class="btn small" data-go="a-detail">处理</button></td>
+            </tr>
+            <tr class="row-supplement">
+              <td><div class="cell-title">SP20261019-006</div><div class="cell-sub">10-19 11:05</div></td>
+              <td><span class="badge gold">补剂</span></td>
+              <td><span class="badge green">待分装</span></td>
+              <td><div class="cell-title">吴昊</div><div class="cell-sub">137****9911</div></td>
+              <td><div>1 种 · 1 袋</div><div class="cell-sub"><span class="badge amber">小单</span></div></td>
+              <td class="right">¥28.50</td>
+              <td><div>10-19</div><div class="cell-sub">18/30</div></td>
+              <td><span class="badge green">库存足</span></td>
+              <td><span class="badge">无</span></td>
+              <td><button class="btn small" data-go="a-detail">处理</button></td>
+            </tr>
+            <tr class="row-supplement">
+              <td><div class="cell-title">SP20261019-003</div><div class="cell-sub">10-19 09:41</div></td>
+              <td><span class="badge gold">补剂</span></td>
+              <td><span class="badge green">已分装 · 待发货</span></td>
+              <td><div class="cell-title">赵晨</div><div class="cell-sub">138****8000</div></td>
+              <td><div>6 种 · 6 袋</div><div class="cell-sub">7 天量</div></td>
+              <td class="right">¥102.40</td>
+              <td><div>10-19</div><div class="cell-sub">18/30</div></td>
+              <td><span class="badge green">库存足</span></td>
+              <td><span class="badge">无</span></td>
+              <td><button class="btn small" data-go="a-detail">处理</button></td>
+            </tr>
+            <tr class="row-supplement">
+              <td><div class="cell-title">SP20261012-001</div><div class="cell-sub">10-12 18:03</div></td>
+              <td><span class="badge gold">补剂</span></td>
+              <td><span class="badge green">已发货</span></td>
+              <td><div class="cell-title">张敏</div><div class="cell-sub">139****7788</div></td>
+              <td><div>5 种 · 5 袋</div><div class="cell-sub">14 天量</div></td>
+              <td class="right">¥88.60</td>
+              <td><div>10-13</div><div class="cell-sub">已发货</div></td>
+              <td><span class="badge">—</span></td>
+              <td><span class="badge amber">退款 · 待受理</span></td>
+              <td><button class="btn small" data-go="a-aftersale">售后</button></td>
+            </tr>
+            <tr class="row-food">
+              <td><div class="cell-title">SK20261018-012</div><div class="cell-sub">10-18 18:20</div></td>
+              <td><span class="badge green">鲜食</span></td>
+              <td><span class="badge green">已发货</span></td>
+              <td><div class="cell-title">王芳</div><div class="cell-sub">136****5566</div></td>
+              <td><div>14 袋 · 7 天</div></td>
+              <td class="right">¥468.00</td>
+              <td><div>—</div></td>
+              <td><span class="badge">—</span></td>
+              <td><span class="badge">无</span></td>
+              <td><button class="btn small">查看</button></td>
+            </tr>
+            <tr class="row-custom">
+              <td><div class="cell-title">CR20261008-006</div><div class="cell-sub">10-08 11:02</div></td>
+              <td><span class="badge blue">定制</span></td>
+              <td><span class="badge green">已交付</span></td>
+              <td><div class="cell-title">陈晨</div><div class="cell-sub">137****9900</div></td>
+              <td><div>专属食谱 v2</div></td>
+              <td class="right">¥300.00</td>
+              <td><div>—</div></td>
+              <td><span class="badge">—</span></td>
+              <td><span class="badge">无</span></td>
+              <td><button class="btn small">查看</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="proto-note mt16">
+        原型说明：补剂行显示分装日、产能占用、缺料/逾期、售后标签；操作统一回补剂详情页。鲜食/定制沿用原详情。
+      </div>
+    </main>
+  </div>
+</section>
+
+<!-- ================= 补剂订单详情 ================= -->
+<section class="screen" id="a-detail">
+  <div class="admin">
+    <aside class="sidebar">
+      <div class="logo">七号厨房后台</div>
+      <div class="nav-group">交易</div>
+      <div class="nav-item" data-go="a-orders"><span class="dot"></span>订单中心</div>
+      <div class="nav-group">补剂</div>
+      <div class="nav-item" data-go="a-settings">补剂商城设置</div>
+      <div class="nav-item" data-go="a-packaging">分装包材</div>
+      <div class="nav-item" data-go="a-materials">原料管理</div>
+      <div class="nav-item" data-go="a-inventory">库存管理</div>
+      <div class="nav-item" data-go="a-calendar">营业日历</div>
+      <div class="foot">原型 · 2026-10-19<br />数据为演示</div>
+    </aside>
+    <main class="admin-main">
+      <div class="admin-head">
+        <div>
+          <h1>SP20261019-004 <span class="badge green" style="vertical-align:middle">待分装</span></h1>
+          <div class="sub">李雷 · 138****2233 · 下单 10-19 10:12 · 7 天量 · 5 种 5 袋</div>
+        </div>
+        <div class="admin-actions">
+          <button class="btn small" data-go="a-orders">返回列表</button>
+          <button class="btn small" data-go="a-aftersale">售后记录</button>
+          <button class="btn small" data-go="a-summary">当天汇总</button>
+        </div>
+      </div>
+
+      <div class="panel-grid">
+        <div>
+          <div class="card">
+            <div class="card-title">分装日与产能 <span class="hint">补发单也占产能</span></div>
+            <div class="row-between">
+              <div>
+                <div class="label small muted">分装日 / 预计发货日</div>
+                <div style="font-size:22px;font-weight:800;margin-top:4px">2026-10-19（周一）</div>
+              </div>
+              <span class="badge blue">当天 18 / 30</span>
+            </div>
+            <div class="btn-row mt12">
+              <button class="btn small">改分装日</button>
+              <button class="btn small">查看营业日历</button>
+              <button class="btn small">打印面单</button>
+            </div>
+            <div class="tiny muted mt8">改期只能改到营业日；停发日需先去「营业日历」打开。管理员可超排，但会标红留痕。</div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">缺料预警 <span class="badge red">海藻粉缺 2.1g</span></div>
+            <div class="alert-row">
+              海藻粉：当日总需求 37.8g，可用 35.7g，缺口 2.1g。员工不能完成分装；管理员可强制完成并填原因。
+            </div>
+            <div class="btn-row mt12">
+              <button class="btn small">去补货</button>
+              <button class="btn small danger">强制完成分装</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">分装工单 <span class="hint">一袋一标签；加量按袋展开</span></div>
+            <div class="table-wrap" style="border:0;background:transparent">
+              <table style="min-width:620px">
+                <thead><tr><th>补剂</th><th>分装量</th><th>袋数</th><th>批号</th><th>原瓶到期日</th><th>标签效期</th></tr></thead>
+                <tbody>
+                  <tr><td>海藻粉</td><td>2.1g</td><td>1</td><td><input value="B2610-01" style="width:90px;padding:5px" /></td><td><input value="2028-06-30" style="width:110px;padding:5px" /></td><td>2027-04-19</td></tr>
+                  <tr><td>柠檬酸钙粉</td><td>3.2g</td><td>1</td><td><input placeholder="可选" style="width:90px;padding:5px" /></td><td><input value="2028-09-30" style="width:110px;padding:5px" /></td><td>2027-04-19</td></tr>
+                  <tr><td>维生素 D3</td><td>5 粒</td><td>1</td><td><input placeholder="可选" style="width:90px;padding:5px" /></td><td><input value="2028-12-31" style="width:110px;padding:5px" /></td><td>2027-07-19</td></tr>
+                  <tr><td>鱼油胶囊</td><td>2 粒</td><td>1</td><td><input placeholder="可选" style="width:90px;padding:5px" /></td><td><input value="2028-03-31" style="width:110px;padding:5px" /></td><td>2027-04-19</td></tr>
+                  <tr><td>牛磺酸</td><td>500mg</td><td>1</td><td><input placeholder="可选" style="width:90px;padding:5px" /></td><td><input value="2028-08-31" style="width:110px;padding:5px" /></td><td>2027-07-19</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="btn-row mt12">
+              <button class="btn small" disabled>完成分装（缺料，需强制）</button>
+              <button class="btn small">预览 40×60 标签</button>
+              <button class="btn small" data-go="a-label">打开标签页</button>
+            </div>
+            <div class="tiny muted mt8">标签效期 = min(原瓶到期日, 实际分装日 + 形态系数)；粉剂 6 个月，片剂/胶囊 9 个月，油性 6 个月。</div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">收货地址 <span class="hint">顾客可自助改；已发货不可改</span></div>
+            <div class="kv"><span class="k">收件人</span><span class="v">李雷 · 138****2233</span></div>
+            <div class="kv"><span class="k">地址</span><span class="v">上海市 浦东新区 世纪大道 100 号 2 号楼 1801</span></div>
+            <div class="kv"><span class="k">最近变更</span><span class="v">2026-10-19 11:02 · 顾客自助改 · 旧地址：世纪大道 88 号</span></div>
+          </div>
+        </div>
+
+        <div>
+          <div class="drawer">
+            <h3>订单金额</h3>
+            <div class="drawer-sub">下单快照；售后不改变订单履约状态</div>
+            <div class="kv"><span class="k">商品小计</span><span class="v">¥60.20</span></div>
+            <div class="kv"><span class="k">分装服务费</span><span class="v">¥10.00</span></div>
+            <div class="kv"><span class="k">运费</span><span class="v">¥6.00</span></div>
+            <div class="kv"><span class="k">实付</span><span class="v bold" style="color:#b4553f;font-size:18px">¥76.20</span></div>
+            <div class="kv"><span class="k">小单标记</span><span class="v"><span class="badge green">否（商品 ¥60.20）</span></span></div>
+          </div>
+
+          <div class="drawer mt16">
+            <h3>制作单快照</h3>
+            <div class="drawer-sub">首次下单补剂时冻结 · 食谱 v3</div>
+            <div class="kv"><span class="k">食谱</span><span class="v">小米红豆兔里脊火鸡胸</span></div>
+            <div class="kv"><span class="k">狗狗</span><span class="v">嘟嘟 · 15kg · 每日 2 餐</span></div>
+            <div class="kv"><span class="k">周期</span><span class="v">7 天 · 每餐 78g</span></div>
+            <div class="kv"><span class="k">冻结时间</span><span class="v">2026-10-19 10:12</span></div>
+            <button class="btn small wide mt12">查看完整快照</button>
+          </div>
+
+          <div class="drawer mt16">
+            <h3>售后记录</h3>
+            <div class="drawer-sub">同一订单可多次售后；同时只允许一条未完结</div>
+            <div class="kv"><span class="k">当前</span><span class="v"><span class="badge">无</span></span></div>
+            <div class="kv"><span class="k">历史</span><span class="v">无</span></div>
+            <button class="btn small wide mt12" data-go="a-aftersale">去售后视图</button>
+          </div>
+
+          <div class="drawer mt16">
+            <h3>通知</h3>
+            <div class="drawer-sub">站内必达；订阅已授权时同时发</div>
+            <div class="kv"><span class="k">排期确认</span><span class="v"><span class="badge green">已发</span></span></div>
+            <div class="kv"><span class="k">正常发货</span><span class="v"><span class="badge">待发</span></span></div>
+            <div class="kv"><span class="k">延迟</span><span class="v">—</span></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</section>
+
+<!-- ================= 分装汇总 ================= -->
+<section class="screen" id="a-summary">
+  <div class="admin">
+    <aside class="sidebar">
+      <div class="logo">七号厨房后台</div>
+      <div class="nav-group">交易</div>
+      <div class="nav-item" data-go="a-orders"><span class="dot"></span>订单中心</div>
+      <div class="nav-group">补剂</div>
+      <div class="nav-item" data-go="a-settings">补剂商城设置</div>
+      <div class="nav-item" data-go="a-packaging">分装包材</div>
+      <div class="nav-item" data-go="a-materials">原料管理</div>
+      <div class="nav-item" data-go="a-inventory">库存管理</div>
+      <div class="nav-item" data-go="a-calendar">营业日历</div>
+      <div class="foot">原型 · 2026-10-19<br />数据为演示</div>
+    </aside>
+    <main class="admin-main">
+      <div class="admin-head">
+        <div>
+          <h1>分装汇总 · 2026-10-19</h1>
+          <div class="sub">当天要备多少料、多少包材、哪些缺；不是作业单，不打印。</div>
+        </div>
+        <div class="admin-actions">
+          <input value="2026-10-19" style="padding:8px 10px;border:1px solid #e5e1d2;border-radius:10px" />
+          <button class="btn small">前一天</button>
+          <button class="btn small">后一天</button>
+          <button class="btn small primary" data-go="a-orders">看当天订单</button>
+        </div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat"><div class="label">当天订单</div><div class="value">18</div><div class="sub">产能 18 / 30</div></div>
+        <div class="stat"><div class="label">总袋数</div><div class="value">37</div><div class="sub">含补发 2 单</div></div>
+        <div class="stat gold"><div class="label">补剂品种</div><div class="value">9</div><div class="sub">其中 2 种缺料</div></div>
+        <div class="stat warn"><div class="label">缺料</div><div class="value">2</div><div class="sub">需补货/改期</div></div>
+      </div>
+
+      <div class="panel-grid equal">
+        <div class="card">
+          <div class="card-title">补剂总用量 <span class="hint">按分装单位汇总</span></div>
+          <div class="table-wrap" style="border:0">
+            <table style="min-width:420px">
+              <thead><tr><th>补剂</th><th>总用量</th><th>订单</th><th>库存/缺口</th></tr></thead>
+              <tbody>
+                <tr><td>海藻粉</td><td>37.8g</td><td>18</td><td><span class="badge red">缺 2.1g</span></td></tr>
+                <tr><td>柠檬酸钙粉</td><td>57.6g</td><td>18</td><td><span class="badge green">足</span></td></tr>
+                <tr><td>维生素 D3</td><td>90 粒</td><td>18</td><td><span class="badge green">足</span></td></tr>
+                <tr><td>鱼油胶囊</td><td>36 粒</td><td>18</td><td><span class="badge green">足</span></td></tr>
+                <tr><td>洋车前子壳粉</td><td>45g</td><td>15</td><td><span class="badge green">足</span></td></tr>
+                <tr><td>牛磺酸</td><td>9g</td><td>18</td><td><span class="badge green">足</span></td></tr>
+                <tr><td>骨粉片</td><td>—</td><td>0</td><td><span class="badge amber">未配置</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">包材需求 <span class="hint">只算需要，不扣库存</span></div>
+          <div class="table-wrap" style="border:0">
+            <table style="min-width:360px">
+              <thead><tr><th>包材</th><th>数量</th><th>说明</th></tr></thead>
+              <tbody>
+                <tr><td>6×8 铝箔袋</td><td>22</td><td>片剂/胶囊 + 小粉剂</td></tr>
+                <tr><td>8×11 铝箔袋</td><td>9</td><td>粉剂 10–40g</td></tr>
+                <tr><td>10×15 铝箔袋</td><td>6</td><td>粉剂 40–120g</td></tr>
+                <tr><td>13×18 铝箔袋</td><td>0</td><td>粉剂 &gt;120g</td></tr>
+                <tr><td>干燥剂</td><td>37</td><td>1 包/袋</td></tr>
+                <tr><td>40×60 标签</td><td>37</td><td>1 张/袋</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="notice mt12">包材未配置时这里显示“包材未配置”；本轮不扣包材库存。</div>
+        </div>
+      </div>
+
+      <div class="card mt16">
+        <div class="card-title">缺料明细</div>
+        <div class="alert-row">海藻粉：需求 37.8g，可用 35.7g，缺口 2.1g；涉及 2 张订单。建议补货或改期。</div>
+        <div class="alert-row mt8" style="background:#fdf5e5;border-color:#efe0bd;color:#8a6420">骨粉片：包材/补剂未配置，涉及 0 单；不影响当天。</div>
+      </div>
+
+      <div class="card mt16">
+        <div class="card-title">当天订单清单 <span class="hint">点进去处理；员工端同视图</span></div>
+        <div class="table-wrap" style="border:0">
+          <table style="min-width:720px">
+            <thead><tr><th>订单</th><th>顾客</th><th>袋数</th><th>状态</th><th>缺料</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr><td>SP20261019-004</td><td>李雷</td><td>5</td><td><span class="badge green">待分装</span></td><td><span class="badge red">海藻粉</span></td><td><button class="btn small" data-go="a-detail">处理</button></td></tr>
+              <tr><td>SP20261019-005</td><td>周洁</td><td>4</td><td><span class="badge green">待分装</span></td><td><span class="badge">—</span></td><td><button class="btn small" data-go="a-detail">处理</button></td></tr>
+              <tr><td>SP20261019-006</td><td>吴昊</td><td>3</td><td><span class="badge green">待分装</span></td><td><span class="badge">—</span></td><td><button class="btn small" data-go="a-detail">处理</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</section>
+
+<!-- ================= 商城设置 ================= -->
+<section class="screen" id="a-settings">
+  <div class="admin">
+    <aside class="sidebar">
+      <div class="logo">七号厨房后台</div>
+      <div class="nav-group">交易</div>
+      <div class="nav-item" data-go="a-orders"><span class="dot"></span>订单中心</div>
+      <div class="nav-group">补剂</div>
+      <div class="nav-item active" data-go="a-settings">补剂商城设置</div>
+      <div class="nav-item" data-go="a-packaging">分装包材</div>
+      <div class="nav-item" data-go="a-materials">原料管理</div>
+      <div class="nav-item" data-go="a-inventory">库存管理</div>
+      <div class="nav-item" data-go="a-calendar">营业日历</div>
+      <div class="foot">原型 · 2026-10-19<br />数据为演示</div>
+    </aside>
+    <main class="admin-main">
+      <div class="admin-head">
+        <div><h1>补剂商城设置</h1><div class="sub">价格、排期、产能、售后；改完立即生效，已有订单不重新报价。</div></div>
+        <div class="admin-actions"><button class="btn small primary">保存</button></div>
+      </div>
+
+      <div class="panel-grid equal">
+        <div class="card">
+          <div class="card-title">价格与门槛</div>
+          <div class="field"><label>加价倍率</label><input value="2.5" /><div class="help">商品毛利 = 1 − 1/倍率；2.5 倍 = 60%</div></div>
+          <div class="field"><label>分装服务费（元/单）</label><input value="10.00" /></div>
+          <div class="field"><label>免服务费门槛（商品满）</label><input value="99.00" /></div>
+          <div class="field"><label>运费（元/单）</label><input value="6.00" /></div>
+          <div class="field"><label>包邮门槛（商品满）</label><input value="129.00" /></div>
+          <div class="field"><label>最低商品金额</label><input value="0（不设）" disabled /><div class="help">本轮不设；小单后台标记，按周看贡献。</div></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">排期与产能</div>
+          <div class="field"><label>截单时间</label><input value="17:00" /><div class="help">Asia/Shanghai；截单前付款当天发，之后下一个营业日。</div></div>
+          <div class="field"><label>每日产能（单）</label><input value="30" /><div class="help">按订单数，补发单也算；超过顺延；管理员可超排留痕。</div></div>
+          <div class="field"><label>自动排期</label><select><option>开启</option><option>关闭</option></select></div>
+          <div class="field"><label>营业日</label><input value="周一至周六；周日休息" disabled /><button class="btn small mt8" data-go="a-calendar">去营业日历修改</button></div>
+        </div>
+      </div>
+
+      <div class="panel-grid equal mt16">
+        <div class="card">
+          <div class="card-title">售后与完成</div>
+          <div class="field"><label>售后窗口（发货后天数）</label><input value="7" /></div>
+          <div class="field"><label>自动完成（发货后天数）</label><input value="10" /></div>
+          <div class="field"><label>售后凭证</label><select><option>选填</option><option>破损/发错必填</option><option>必填</option></select></div>
+          <div class="field"><label>售后资金权限</label><input value="仅管理员" disabled /></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">分装包材 <span class="hint">哪些包材归补剂用</span></div>
+          <div class="notice">补剂袋、干燥剂、40×60 标签都必须在这里绑定；未配置时汇总会提示“包材未配置”。</div>
+          <div class="kv"><span class="k">6×8 铝箔袋</span><span class="v"><span class="badge green">已绑定</span></span></div>
+          <div class="kv"><span class="k">8×11 铝箔袋</span><span class="v"><span class="badge green">已绑定</span></span></div>
+          <div class="kv"><span class="k">10×15 铝箔袋</span><span class="v"><span class="badge green">已绑定</span></span></div>
+          <div class="kv"><span class="k">干燥剂</span><span class="v"><span class="badge green">已绑定</span></span></div>
+          <div class="kv"><span class="k">40×60 标签</span><span class="v"><span class="badge green">已绑定</span></span></div>
+          <button class="btn small wide mt12" data-go="a-packaging">去配置包材规则</button>
+        </div>
+      </div>
+
+      <div class="notice mt16">所有数字都是首发起点；跑 30–50 单后按真实成本/贡献率再调。</div>
+    </main>
+  </div>
+</section>
+
+<!-- ================= 包材配置 ================= -->
+<section class="screen" id="a-packaging">
+  <div class="admin">
+    <aside class="sidebar">
+      <div class="logo">七号厨房后台</div>
+      <div class="nav-group">交易</div>
+      <div class="nav-item" data-go="a-orders"><span class="dot"></span>订单中心</div>
+      <div class="nav-group">补剂</div>
+      <div class="nav-item" data-go="a-settings">补剂商城设置</div>
+      <div class="nav-item active" data-go="a-packaging">分装包材</div>
+      <div class="nav-item" data-go="a-materials">原料管理</div>
+      <div class="nav-item" data-go="a-inventory">库存管理</div>
+      <div class="nav-item" data-go="a-calendar">营业日历</div>
+      <div class="foot">原型 · 2026-10-19<br />数据为演示</div>
+    </aside>
+    <main class="admin-main">
+      <div class="admin-head">
+        <div><h1>分装包材规则</h1><div class="sub">绑定包材档案 + 形态/克重选袋；换规格不用改代码。</div></div>
+        <div class="admin-actions"><button class="btn small primary">新增规则</button><button class="btn small" data-go="a-settings">返回设置</button></div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>角色</th><th>包材档案</th><th>形态</th><th>分装量区间</th><th>优先级</th><th>状态</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr><td><span class="badge gold">袋子</span></td><td>6×8 铝箔袋</td><td>片剂 / 胶囊</td><td>不限</td><td>10</td><td><span class="badge green">启用</span></td><td><button class="btn small">编辑</button></td></tr>
+            <tr><td><span class="badge gold">袋子</span></td><td>6×8 铝箔袋</td><td>粉剂</td><td>≤10g</td><td>20</td><td><span class="badge green">启用</span></td><td><button class="btn small">编辑</button></td></tr>
+            <tr><td><span class="badge gold">袋子</span></td><td>8×11 铝箔袋</td><td>粉剂</td><td>10–40g</td><td>20</td><td><span class="badge green">启用</span></td><td><button class="btn small">编辑</button></td></tr>
+            <tr><td><span class="badge gold">袋子</span></td><td>10×15 铝箔袋</td><td>粉剂</td><td>40–120g</td><td>20</td><td><span class="badge green">启用</span></td><td><button class="btn small">编辑</button></td></tr>
+            <tr><td><span class="badge gold">袋子</span></td><td>13×18 铝箔袋</td><td>粉剂</td><td>&gt;120g</td><td>20</td><td><span class="badge green">启用</span></td><td><button class="btn small">编辑</button></td></tr>
+            <tr><td><span class="badge blue">干燥剂</span></td><td>食品级硅胶干燥剂 1g</td><td>—</td><td>1 包/袋</td><td>—</td><td><span class="badge green">启用</span></td><td><button class="btn small">编辑</button></td></tr>
+            <tr><td><span class="badge blue">标签</span></td><td>40×60 热敏标签纸</td><td>—</td><td>1 张/袋</td><td>—</td><td><span class="badge green">启用</span></td><td><button class="btn small">编辑</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="notice mt16">本轮只汇总包材需求，不扣包材库存；档案建在「原料管理」的 PACKAGING 类型下。</div>
+    </main>
+  </div>
+</section>
+
+<!-- ================= 营业日历 ================= -->
+<section class="screen" id="a-calendar">
+  <div class="admin">
+    <aside class="sidebar">
+      <div class="logo">七号厨房后台</div>
+      <div class="nav-group">交易</div>
+      <div class="nav-item" data-go="a-orders"><span class="dot"></span>订单中心</div>
+      <div class="nav-group">补剂</div>
+      <div class="nav-item" data-go="a-settings">补剂商城设置</div>
+      <div class="nav-item" data-go="a-packaging">分装包材</div>
+      <div class="nav-item" data-go="a-materials">原料管理</div>
+      <div class="nav-item" data-go="a-inventory">库存管理</div>
+      <div class="nav-item active" data-go="a-calendar">营业日历</div>
+      <div class="foot">原型 · 2026-10-19<br />数据为演示</div>
+    </aside>
+    <main class="admin-main">
+      <div class="admin-head">
+        <div><h1>营业日历</h1><div class="sub">公司统一休息日/公共假日；定制和补剂共用；定制交付产能仍留在定制模块。</div></div>
+        <div class="admin-actions"><button class="btn small">上个月</button><button class="btn small">2026 年 10 月</button><button class="btn small">下个月</button><button class="btn small primary">保存周规则</button></div>
+      </div>
+
+      <div class="panel-grid">
+        <div class="card">
+          <div class="card-title">每周规则</div>
+          <div class="table-wrap" style="border:0">
+            <table style="min-width:420px">
+              <thead><tr><th>星期</th><th>营业</th><th>定制交付上限</th><th>备注</th></tr></thead>
+              <tbody>
+                <tr><td>周一</td><td><input type="checkbox" checked /></td><td><input value="4" style="width:60px" /></td><td>—</td></tr>
+                <tr><td>周二</td><td><input type="checkbox" checked /></td><td><input value="4" style="width:60px" /></td><td>—</td></tr>
+                <tr><td>周三</td><td><input type="checkbox" checked /></td><td><input value="4" style="width:60px" /></td><td>—</td></tr>
+                <tr><td>周四</td><td><input type="checkbox" checked /></td><td><input value="4" style="width:60px" /></td><td>—</td></tr>
+                <tr><td>周五</td><td><input type="checkbox" checked /></td><td><input value="4" style="width:60px" /></td><td>—</td></tr>
+                <tr><td>周六</td><td><input type="checkbox" checked /></td><td><input value="2" style="width:60px" /></td><td>加班</td></tr>
+                <tr><td>周日</td><td><input type="checkbox" /></td><td><input value="0" style="width:60px" /></td><td>休息</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="notice mt12">补剂只看“营业/休息”；定制交付上限仍由定制模块使用。</div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">2026 年 10 月 <span class="hint">点某天单独覆盖</span></div>
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;font-size:11px">
+            <div class="muted">一</div><div class="muted">二</div><div class="muted">三</div><div class="muted">四</div><div class="muted">五</div><div class="muted">六</div><div class="muted">日</div>
+            <div></div><div></div><div></div>
+            <div class="card" style="padding:8px;text-align:center">1<br /><span class="badge red">假</span></div>
+            <div class="card" style="padding:8px;text-align:center">2<br /><span class="badge green">开</span></div>
+            <div class="card" style="padding:8px;text-align:center">3<br /><span class="badge green">开</span></div>
+            <div class="card" style="padding:8px;text-align:center">4<br /><span class="badge">休</span></div>
+            <div class="card" style="padding:8px;text-align:center">5<br /><span class="badge green">开</span></div>
+            <div class="card" style="padding:8px;text-align:center">6<br /><span class="badge green">开</span></div>
+            <div class="card" style="padding:8px;text-align:center">7<br /><span class="badge green">开</span></div>
+            <div class="card" style="padding:8px;text-align:center">8<br /><span class="badge green">开</span></div>
+            <div class="card" style="padding:8px;text-align:center">9<br /><span class="badge green">开</span></div>
+            <div class="card" style="padding:8px;text-align:center">10<br /><span class="badge green">开</span></div>
+            <div class="card" style="padding:8px;text-align:center">11<br /><span class="badge">休</span></div>
+            <div class="card" style="padding:8px;text-align:center">12<br /><span class="badge green">开</span></div>
+            <div class="card" style="padding:8px;text-align:center">13<br /><span class="badge green">开</span></div>
+            <div class="card" style="padding:8px;text-align:center">14<br /><span class="badge green">开</span></div>
+            <div class="card" style="padding:8px;text-align:center">15<br /><span class="badge green">开</span></div>
+            <div class="card" style="padding:8px;text-align:center">16<br /><span class="badge green">开</span></div>
+            <div class="card" style="padding:8px;text-align:center">17<br /><span class="badge green">开</span></div>
+            <div class="card" style="padding:8px;text-align:center">18<br /><span class="badge">休</span></div>
+            <div class="card" style="padding:8px;text-align:center;border-color:#d8bc85;background:#fffaf0">19<br /><span class="badge gold">今天</span></div>
+            <div class="card" style="padding:8px;text-align:center">20<br /><span class="badge green">开</span></div>
+            <div class="card" style="padding:8px;text-align:center">21<br /><span class="badge green">开</span></div>
+            <div class="card" style="padding:8px;text-align:center">22<br /><span class="badge green">开</span></div>
+            <div class="card" style="padding:8px;text-align:center">23<br /><span class="badge green">开</span></div>
+            <div class="card" style="padding:8px;text-align:center">24<br /><span class="badge red">停</span></div>
+            <div class="card" style="padding:8px;text-align:center">25<br /><span class="badge">休</span></div>
+            <div class="card" style="padding:8px;text-align:center">26<br /><span class="badge green">开</span></div>
+            <div class="card" style="padding:8px;text-align:center">27<br /><span class="badge green">开</span></div>
+            <div class="card" style="padding:8px;text-align:center">28<br /><span class="badge green">开</span></div>
+            <div class="card" style="padding:8px;text-align:center">29<br /><span class="badge green">开</span></div>
+            <div class="card" style="padding:8px;text-align:center">30<br /><span class="badge green">开</span></div>
+            <div class="card" style="padding:8px;text-align:center">31<br /><span class="badge green">开</span></div>
+          </div>
+          <div class="notice mt12">24 号临时停发：已有订单不会自动挪，订单中心会标红，管理员改期并通知顾客。</div>
+        </div>
+      </div>
+    </main>
+  </div>
+</section>
+
+<!-- ================= 售后视图 ================= -->
+<section class="screen" id="a-aftersale">
+  <div class="admin">
+    <aside class="sidebar">
+      <div class="logo">七号厨房后台</div>
+      <div class="nav-group">交易</div>
+      <div class="nav-item active" data-go="a-orders"><span class="dot"></span>订单中心</div>
+      <div class="nav-group">补剂</div>
+      <div class="nav-item" data-go="a-settings">补剂商城设置</div>
+      <div class="nav-item" data-go="a-packaging">分装包材</div>
+      <div class="nav-item" data-go="a-materials">原料管理</div>
+      <div class="nav-item" data-go="a-inventory">库存管理</div>
+      <div class="nav-item" data-go="a-calendar">营业日历</div>
+      <div class="foot">原型 · 2026-10-19<br />数据为演示</div>
+    </aside>
+    <main class="admin-main">
+      <div class="admin-head">
+        <div><h1>售后视图</h1><div class="sub">订单中心的“售后中”筛选；三类订单共用列表，补剂走新售后记录。</div></div>
+        <div class="admin-actions"><button class="btn small" data-go="a-orders">返回订单中心</button><button class="btn small primary">批量导出</button></div>
+      </div>
+
+      <div class="toolbar">
+        <div class="field"><label>类型</label><select><option selected>全部</option><option>补剂</option><option>鲜食</option><option>定制</option></select></div>
+        <div class="field"><label>状态</label><select><option selected>全部</option><option>待受理</option><option>处理中</option><option>已完成</option><option>已驳回</option></select></div>
+        <div class="field grow"><label>搜索</label><input placeholder="订单号 / 顾客 / 手机号" /></div>
+        <button class="btn small primary" style="margin-top:16px">查询</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>售后记录</th><th>订单</th><th>顾客</th><th>诉求</th><th>原因</th><th>金额</th><th>状态</th><th>申请时间</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr class="row-supplement">
+              <td>AS20261019-001</td>
+              <td>SP20261012-001</td>
+              <td><div class="cell-title">张敏</div><div class="cell-sub">139****7788</div></td>
+              <td><span class="badge gold">退款</span></td>
+              <td>鱼油胶囊破损 2 粒</td>
+              <td>¥18.90</td>
+              <td><span class="badge amber">待受理</span></td>
+              <td>10-19 18:20</td>
+              <td><button class="btn small primary">处理</button></td>
+            </tr>
+            <tr class="row-supplement">
+              <td>AS20261014-001</td>
+              <td>SP20261012-001</td>
+              <td><div class="cell-title">张敏</div><div class="cell-sub">139****7788</div></td>
+              <td><span class="badge gold">退款</span></td>
+              <td>缺量：洋车前子壳粉少 1 袋</td>
+              <td>¥7.20</td>
+              <td><span class="badge green">已完成</span></td>
+              <td>10-14 10:02</td>
+              <td><button class="btn small">查看</button></td>
+            </tr>
+            <tr class="row-food">
+              <td>AS20261017-002</td>
+              <td>SK20261015-009</td>
+              <td><div class="cell-title">王芳</div><div class="cell-sub">136****5566</div></td>
+              <td><span class="badge gold">退款</span></td>
+              <td>鲜食到货破损</td>
+              <td>¥68.00</td>
+              <td><span class="badge green">已完成</span></td>
+              <td>10-17 09:11</td>
+              <td><button class="btn small">查看</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="panel-grid equal mt16">
+        <div class="drawer">
+          <h3>处理售后 · AS20261019-001</h3>
+          <div class="drawer-sub">补剂 · 订单 SP20261012-001 · 顾客 张敏</div>
+          <div class="kv"><span class="k">诉求</span><span class="v">退款</span></div>
+          <div class="kv"><span class="k">原因</span><span class="v">鱼油胶囊破损 2 粒</span></div>
+          <div class="kv"><span class="k">凭证</span><span class="v">2 张（图片）</span></div>
+          <div class="kv"><span class="k">已退 / 可退</span><span class="v">¥7.20 / ¥81.40</span></div>
+          <div class="field mt12"><label>处理结论</label><select><option>退款</option><option>免费补发</option><option>仅登记</option><option>驳回</option></select></div>
+          <div class="field"><label>退款金额</label><input value="18.90" /></div>
+          <div class="field"><label>处理说明</label><textarea rows="2">鱼油破损，按部分退款处理；无需寄回。</textarea></div>
+          <div class="btn-row mt12"><button class="btn small">取消</button><button class="btn small primary">确认处理</button><button class="btn small">仅登记线下处理</button></div>
+        </div>
+        <div class="drawer">
+          <h3>售后历史</h3>
+          <div class="drawer-sub">同一订单可多次；同时只允许一条未完结</div>
+          <div class="timeline">
+            <div class="timeline-item done"><div class="t">退部分款 · 7.20</div><div class="d">2026-10-14 · 已完成 · 管理员</div></div>
+            <div class="timeline-item current"><div class="t">退款 · 18.90 · 待受理</div><div class="d">2026-10-19 18:20 · 顾客申请</div></div>
+          </div>
+          <div class="notice mt12">退款失败时状态保持“处理中”，显示失败原因，可重试；订单履约状态不变。</div>
+        </div>
+      </div>
+    </main>
+  </div>
+</section>
+
+<!-- ================= 标签预览 ================= -->
+<section class="screen" id="a-label">
+  <div class="admin">
+    <aside class="sidebar">
+      <div class="logo">七号厨房后台</div>
+      <div class="nav-group">交易</div>
+      <div class="nav-item" data-go="a-orders"><span class="dot"></span>订单中心</div>
+      <div class="nav-group">补剂</div>
+      <div class="nav-item" data-go="a-settings">补剂商城设置</div>
+      <div class="nav-item" data-go="a-packaging">分装包材</div>
+      <div class="nav-item" data-go="a-materials">原料管理</div>
+      <div class="nav-item" data-go="a-inventory">库存管理</div>
+      <div class="nav-item" data-go="a-calendar">营业日历</div>
+      <div class="foot">原型 · 2026-10-19<br />数据为演示</div>
+    </aside>
+    <main class="admin-main">
+      <div class="admin-head">
+        <div><h1>40×60 标签预览</h1><div class="sub">实际标签纸 40×60mm 竖版；一袋一张；用法/产品信息直接印在标签上。</div></div>
+        <div class="admin-actions"><button class="btn small" data-go="a-detail">返回订单</button><button class="btn small primary">打印标签</button></div>
+      </div>
+      <div class="label-stage">
+        <div class="label-40x60">
+          <div class="l-brand">赛文的食堂</div>
+          <div class="l-product">海藻粉</div>
+          <div class="l-amount">2.1g · 1/1</div>
+          <div class="l-divider"></div>
+          <div class="l-line">分装日期 2026-10-19</div>
+          <div class="l-expiry">有效期至 2027-04-19</div>
+          <div class="l-line">原品 NOW FOODS · 227g/瓶</div>
+          <div class="l-line">批号 B2610-01 · 订单 SP20261019-004</div>
+          <div class="l-usage">用法：按本次食谱用量添加；开封后密封防潮。储存：避光、密封、阴凉干燥。</div>
+          <div class="l-foot">分装者：赛文的食堂<br />分装小样，非直接食用；内含干燥剂，请勿食用。</div>
+        </div>
+        <div class="label-meta">
+          <h2>标签规格</h2>
+          <p>宽 40mm × 高 60mm 竖版；203dpi 热敏；1 袋 1 张。宽度只有 40mm，长品名/长提示会换行，必须用真实最长品名实测。</p>
+          <div class="kv"><span class="k">必印</span><span class="v">品名 / 分装量+袋序 / 分装日期 / 有效期 / 储存 / 原品 / 分装者 / 用法 / 干燥剂提示</span></div>
+          <div class="kv"><span class="k">可选</span><span class="v">批号 / 订单号（放不下时优先删）</span></div>
+          <div class="kv"><span class="k">不做</span><span class="v">二维码 / 纸质说明卡</span></div>
+          <div class="notice mt12">现有后端图 60×40、打印机 70×100，必须统一改 40×60；否则打印会拉伸/留白。</div>
+        </div>
+      </div>
+    </main>
+  </div>
+</section>
+
+<!-- ================= 退款管理 ================= -->
+<section class="screen" id="a-refunds">
+  <div class="admin">
+    <aside class="sidebar">
+      <div class="logo">七号厨房后台</div>
+      <div class="nav-group">概览</div>
+      <div class="nav-item" data-go="a-dashboard">运营看板</div>
+      <div class="nav-group">交易</div>
+      <div class="nav-item" data-go="a-orders"><span class="dot"></span>订单中心</div>
+      <div class="nav-group">补剂</div>
+      <div class="nav-item" data-go="a-settings">补剂商城设置</div>
+      <div class="nav-item" data-go="a-packaging">分装包材</div>
+      <div class="nav-item" data-go="a-materials">原料管理</div>
+      <div class="nav-item" data-go="a-inventory">库存管理</div>
+      <div class="nav-item" data-go="a-calendar">营业日历</div>
+      <div class="nav-group">财务</div>
+      <div class="nav-item active" data-go="a-refunds">退款管理</div>
+      <div class="nav-item">支付配置</div>
+      <div class="foot">原型 · 2026-10-19<br />数据为演示</div>
+    </aside>
+    <main class="admin-main">
+      <div class="admin-head">
+        <div><h1>退款管理</h1><div class="sub">退款是财务视图，不新增售后入口；处理动作仍回售后视图/补剂详情。补剂退款按笔记录，累计不超过实付。</div></div>
+        <div class="admin-actions"><button class="btn small" data-go="a-aftersale">去售后视图</button><button class="btn small primary">导出对账</button></div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat"><div class="label">今日退款</div><div class="value">1 笔</div><div class="sub">¥18.90</div></div>
+        <div class="stat gold"><div class="label">处理中</div><div class="value">1</div><div class="sub">微信退款结果未回</div></div>
+        <div class="stat warn"><div class="label">失败待处理</div><div class="value">1</div><div class="sub">需重试或线下处理</div></div>
+        <div class="stat"><div class="label">本月退款单占比</div><div class="value">2.1%</div><div class="sub">退款单 / 补剂订单</div></div>
+      </div>
+
+      <div class="toolbar">
+        <div class="field"><label>来源</label><select><option selected>全部</option><option>补剂</option><option>鲜食</option><option>定制</option></select></div>
+        <div class="field"><label>状态</label><select><option selected>全部</option><option>处理中</option><option>成功</option><option>失败</option></select></div>
+        <div class="field"><label>日期</label><input placeholder="全部日期" /></div>
+        <div class="field grow"><label>搜索</label><input placeholder="退款单号 / 订单号 / 顾客" /></div>
+        <button class="btn small primary" style="margin-top:16px">查询</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>退款单</th><th>订单</th><th>来源</th><th>顾客</th><th>金额</th><th>原因</th><th>状态</th><th>申请时间</th><th>完成时间</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr class="row-supplement">
+              <td>RF20261019-001</td>
+              <td>SP20261012-001</td>
+              <td><span class="badge gold">补剂</span></td>
+              <td><div class="cell-title">张敏</div><div class="cell-sub">139****7788</div></td>
+              <td class="right">¥18.90</td>
+              <td>鱼油胶囊破损 2 粒</td>
+              <td><span class="badge amber">处理中</span></td>
+              <td>10-19 18:25</td>
+              <td>—</td>
+              <td><button class="btn small">查看</button><button class="btn small" style="margin-left:4px">重试</button></td>
+            </tr>
+            <tr class="row-supplement">
+              <td>RF20261018-005</td>
+              <td>SP20261010-002</td>
+              <td><span class="badge gold">补剂</span></td>
+              <td><div class="cell-title">李雷</div><div class="cell-sub">138****2233</div></td>
+              <td class="right">¥12.60</td>
+              <td>发错货</td>
+              <td><span class="badge red">失败</span></td>
+              <td>10-18 11:00</td>
+              <td>—</td>
+              <td><button class="btn small">查看</button><button class="btn small" style="margin-left:4px">重试</button></td>
+            </tr>
+            <tr class="row-supplement">
+              <td>RF20261014-002</td>
+              <td>SP20261012-001</td>
+              <td><span class="badge gold">补剂</span></td>
+              <td><div class="cell-title">张敏</div><div class="cell-sub">139****7788</div></td>
+              <td class="right">¥7.20</td>
+              <td>缺量：洋车前子壳粉少 1 袋</td>
+              <td><span class="badge green">成功</span></td>
+              <td>10-14 10:03</td>
+              <td>10-14 10:05</td>
+              <td><button class="btn small">查看</button></td>
+            </tr>
+            <tr class="row-food">
+              <td>RF20261017-003</td>
+              <td>SK20261015-009</td>
+              <td><span class="badge green">鲜食</span></td>
+              <td><div class="cell-title">王芳</div><div class="cell-sub">136****5566</div></td>
+              <td class="right">¥68.00</td>
+              <td>鲜食到货破损</td>
+              <td><span class="badge green">成功</span></td>
+              <td>10-17 09:20</td>
+              <td>10-17 09:31</td>
+              <td><button class="btn small">查看</button></td>
+            </tr>
+            <tr class="row-custom">
+              <td>RF20261010-004</td>
+              <td>CR20261008-006</td>
+              <td><span class="badge blue">定制</span></td>
+              <td><div class="cell-title">陈晨</div><div class="cell-sub">137****9900</div></td>
+              <td class="right">¥300.00</td>
+              <td>取消定制</td>
+              <td><span class="badge green">成功</span></td>
+              <td>10-10 11:00</td>
+              <td>10-10 11:05</td>
+              <td><button class="btn small">查看</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="panel-grid equal mt16">
+        <div class="drawer">
+          <h3>退款详情 · RF20261019-001</h3>
+          <div class="drawer-sub">补剂 · 订单 SP20261012-001 · 售后记录 AS20261019-001</div>
+          <div class="kv"><span class="k">退款金额</span><span class="v bold" style="color:#b4553f;font-size:18px">¥18.90</span></div>
+          <div class="kv"><span class="k">订单实付</span><span class="v">¥88.60</span></div>
+          <div class="kv"><span class="k">历史已退</span><span class="v">¥7.20（RF20261014-002）</span></div>
+          <div class="kv"><span class="k">本次后退</span><span class="v">¥26.10 · 不超实付</span></div>
+          <div class="kv"><span class="k">微信退款单号</span><span class="v">RF20261019-001</span></div>
+          <div class="kv"><span class="k">状态</span><span class="v"><span class="badge amber">处理中</span></span></div>
+          <div class="notice mt12">重试只对“处理中/失败”开放；成功后自动回写售后记录为 RESOLVED，订单履约状态不变。</div>
+        </div>
+        <div class="drawer">
+          <h3>对账口径</h3>
+          <div class="drawer-sub">退款记录按笔，不覆盖；同一订单可多次</div>
+          <div class="kv"><span class="k">补剂退款</span><span class="v">按售后 case 逐笔记录</span></div>
+          <div class="kv"><span class="k">鲜食/定制退款</span><span class="v">沿用原退款记录；第二批迁移</span></div>
+          <div class="kv"><span class="k">累计校验</span><span class="v">成功退款合计 ≤ 实付</span></div>
+          <div class="kv"><span class="k">失败处理</span><span class="v">保留 PROCESSING；可重试或线下</span></div>
+          <div class="notice mt12">不新增“退款入口”；退款管理只做财务查看/重试/对账。</div>
+        </div>
+      </div>
+    </main>
+  </div>
+</section>
+
+<!-- ================= 运营看板 ================= -->
+<section class="screen" id="a-dashboard">
+  <div class="admin">
+    <aside class="sidebar">
+      <div class="logo">七号厨房后台</div>
+      <div class="nav-group">概览</div>
+      <div class="nav-item active" data-go="a-dashboard">运营看板</div>
+      <div class="nav-group">交易</div>
+      <div class="nav-item" data-go="a-orders"><span class="dot"></span>订单中心</div>
+      <div class="nav-group">补剂</div>
+      <div class="nav-item" data-go="a-settings">补剂商城设置</div>
+      <div class="nav-item" data-go="a-packaging">分装包材</div>
+      <div class="nav-item" data-go="a-materials">原料管理</div>
+      <div class="nav-item" data-go="a-inventory">库存管理</div>
+      <div class="nav-item" data-go="a-calendar">营业日历</div>
+      <div class="nav-group">财务</div>
+      <div class="nav-item" data-go="a-refunds">退款管理</div>
+      <div class="nav-item">支付配置</div>
+      <div class="foot">原型 · 2026-10-19<br />数据为演示</div>
+    </aside>
+    <main class="admin-main">
+      <div class="admin-head">
+        <div><h1>补剂运营看板</h1><div class="sub">只看补剂线；指标只读，告警可点进对应列表处理。</div></div>
+        <div class="admin-actions"><input value="2026-10-19" style="padding:8px 10px;border:1px solid #e5e1d2;border-radius:10px" /><button class="btn small">刷新</button><button class="btn small primary" data-go="a-orders">去订单中心</button></div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat"><div class="label">今日补剂订单</div><div class="value">18</div><div class="sub">产能 18 / 30</div></div>
+        <div class="stat gold"><div class="label">待排期</div><div class="value">0</div><div class="sub">排期失败 0</div></div>
+        <div class="stat warn"><div class="label">缺料</div><div class="value">2</div><div class="sub">海藻粉缺 2.1g</div></div>
+        <div class="stat warn"><div class="label">售后/退款待处理</div><div class="value">2</div><div class="sub">其中退款失败 1</div></div>
+      </div>
+
+      <div class="panel-grid equal">
+        <div class="card">
+          <div class="card-title">产能使用 <span class="hint">按订单数；补发单也算</span></div>
+          <div class="kv"><span class="k">今天 10-19</span><span class="v">18 / 30</span></div>
+          <div class="progress"><span style="width:60%"></span></div>
+          <div class="kv mt12"><span class="k">明天 10-20</span><span class="v">12 / 30</span></div>
+          <div class="progress"><span style="width:40%"></span></div>
+          <div class="kv mt12"><span class="k">后天 10-21</span><span class="v">5 / 30</span></div>
+          <div class="progress"><span style="width:17%"></span></div>
+          <div class="notice mt12">超过 30 单自动顺延；管理员可超排，但会标红留痕。</div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">告警</div>
+          <div class="alert-row">缺料 2 单：海藻粉缺口 2.1g，涉及 2 张订单。<button class="btn small" style="margin-left:auto" data-go="a-summary">去看汇总</button></div>
+          <div class="alert-row mt8" style="background:#fdf5e5;border-color:#efe0bd;color:#8a6420">退款失败 1 笔：RF20261018-005 微信退款返回失败，需重试。<button class="btn small" style="margin-left:auto" data-go="a-refunds">去退款管理</button></div>
+          <div class="alert-row mt8" style="background:#edf5ef;border-color:#d7e8db;color:#2b5040">售后超时 0 笔；排期失败 0 笔；当前无阻塞。</div>
+        </div>
+      </div>
+
+      <div class="panel-grid equal mt16">
+        <div class="card">
+          <div class="card-title">近 7 天订单</div>
+          <div style="display:flex;align-items:flex-end;gap:10px;height:140px;padding:8px 4px">
+            <div style="flex:1;text-align:center"><div style="height:52px;background:#3f6b56;border-radius:6px 6px 0 0"></div><div class="tiny muted mt8">10-13</div></div>
+            <div style="flex:1;text-align:center"><div style="height:66px;background:#3f6b56;border-radius:6px 6px 0 0"></div><div class="tiny muted mt8">10-14</div></div>
+            <div style="flex:1;text-align:center"><div style="height:44px;background:#3f6b56;border-radius:6px 6px 0 0"></div><div class="tiny muted mt8">10-15</div></div>
+            <div style="flex:1;text-align:center"><div style="height:78px;background:#3f6b56;border-radius:6px 6px 0 0"></div><div class="tiny muted mt8">10-16</div></div>
+            <div style="flex:1;text-align:center"><div style="height:60px;background:#3f6b56;border-radius:6px 6px 0 0"></div><div class="tiny muted mt8">10-17</div></div>
+            <div style="flex:1;text-align:center"><div style="height:72px;background:#3f6b56;border-radius:6px 6px 0 0"></div><div class="tiny muted mt8">10-18</div></div>
+            <div style="flex:1;text-align:center"><div style="height:90px;background:#d8bc85;border-radius:6px 6px 0 0"></div><div class="tiny muted mt8">10-19</div></div>
+          </div>
+          <div class="legend mt8"><span><i style="background:#3f6b56"></i>订单</span><span><i style="background:#d8bc85"></i>今天</span></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">经营指标</div>
+          <div class="kv"><span class="k">小单占比（商品 &lt;¥29）</span><span class="v">17% · 3 / 18</span></div>
+          <div class="kv"><span class="k">单均贡献率（7 天平均）</span><span class="v">41.2%</span></div>
+          <div class="kv"><span class="k">售后率（30 天）</span><span class="v">2.1%</span></div>
+          <div class="kv"><span class="k">准时发货率（30 天）</span><span class="v">97.4%</span></div>
+          <div class="kv"><span class="k">复购率（60 天）</span><span class="v">待积累</span></div>
+          <div class="notice mt12">单均贡献是平均目标，不是每单保证；小单单独标记，按周复盘。</div>
+          <div class="btn-row mt12"><button class="btn small" data-go="a-orders">订单中心</button><button class="btn small" data-go="a-summary">分装汇总</button><button class="btn small" data-go="a-aftersale">售后视图</button><button class="btn small" data-go="a-refunds">退款管理</button></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</section>
+
+<!-- ================= 原料管理 ================= -->
+<section class="screen" id="a-materials">
+  <div class="admin">
+    <aside class="sidebar">
+      <div class="logo">七号厨房后台</div>
+      <div class="nav-group">交易</div>
+      <div class="nav-item" data-go="a-orders"><span class="dot"></span>订单中心</div>
+      <div class="nav-group">补剂</div>
+      <div class="nav-item" data-go="a-settings">补剂商城设置</div>
+      <div class="nav-item" data-go="a-packaging">分装包材</div>
+      <div class="nav-item active" data-go="a-materials">原料管理</div>
+      <div class="nav-item" data-go="a-inventory">库存管理</div>
+      <div class="nav-item" data-go="a-calendar">营业日历</div>
+      <div class="nav-group">支付</div>
+      <div class="nav-item">支付配置</div>
+      <div class="foot">原型 · 2026-10-19<br />数据为演示</div>
+    </aside>
+    <main class="admin-main">
+      <div class="admin-head">
+        <div><h1>原料管理 · 包材档案</h1><div class="sub">只维护 `Ingredient(type=PACKAGING)` 的现有字段；不新建包材主表。包材库存本轮只做档案/汇总，不扣减。</div></div>
+        <div class="admin-actions"><button class="btn small" data-go="a-packaging">去分装包材</button><button class="btn small primary">新增包材</button></div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat"><div class="label">包材 SKU</div><div class="value">6</div><div class="sub">袋 4 / 干燥剂 1 / 标签纸 1</div></div>
+        <div class="stat gold"><div class="label">低库存</div><div class="value">1</div><div class="sub">13×18 袋低于安全库存</div></div>
+        <div class="stat"><div class="label">标签纸</div><div class="value">3 卷</div><div class="sub">40×60mm；约 900 张/卷</div></div>
+        <div class="stat warn"><div class="label">待配置选袋规则</div><div class="value">1</div><div class="sub">13×18 袋未绑定形态/区间</div></div>
+      </div>
+
+      <div class="toolbar">
+        <div class="field"><label>类型</label><select><option selected>包材</option><option>补剂原料</option><option>食材</option></select></div>
+        <div class="field"><label>用途</label><select><option selected>全部</option><option>袋</option><option>干燥剂</option><option>标签</option></select></div>
+        <div class="field grow"><label>搜索</label><input placeholder="名称 / 规格" /></div>
+        <button class="btn small primary" style="margin-top:16px">查询</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>名称</th><th>规格</th><th>单位</th><th>当前库存</th><th>安全库存</th><th>用途</th><th>状态</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr><td>6×8 铝箔袋</td><td>6×8cm + 底 3cm</td><td>个</td><td class="right">1,240</td><td class="right">500</td><td><span class="badge gold">袋</span></td><td><span class="badge green">正常</span></td><td><button class="btn small">编辑</button></td></tr>
+            <tr><td>8×11 铝箔袋</td><td>8×11cm + 底 3cm</td><td>个</td><td class="right">860</td><td class="right">400</td><td><span class="badge gold">袋</span></td><td><span class="badge green">正常</span></td><td><button class="btn small">编辑</button></td></tr>
+            <tr><td>10×15 铝箔袋</td><td>10×15cm + 底 3cm</td><td>个</td><td class="right">420</td><td class="right">200</td><td><span class="badge gold">袋</span></td><td><span class="badge green">正常</span></td><td><button class="btn small">编辑</button></td></tr>
+            <tr><td>13×18 铝箔袋</td><td>13×18cm + 底 4cm</td><td>个</td><td class="right">180</td><td class="right">200</td><td><span class="badge gold">袋</span></td><td><span class="badge amber">低库存</span></td><td><button class="btn small">编辑</button></td></tr>
+            <tr><td>1g 干燥剂</td><td>1g / 包</td><td>包</td><td class="right">2,000</td><td class="right">800</td><td><span class="badge blue">干燥剂</span></td><td><span class="badge green">正常</span></td><td><button class="btn small">编辑</button></td></tr>
+            <tr><td>40×60 标签纸</td><td>40×60mm / 卷</td><td>卷</td><td class="right">3</td><td class="right">2</td><td><span class="badge">标签</span></td><td><span class="badge green">正常</span></td><td><button class="btn small">编辑</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="panel-grid equal mt16">
+        <div class="drawer">
+          <h3>新增/编辑包材</h3>
+          <div class="drawer-sub">主数据：Ingredient(type=PACKAGING) · 不新增字段</div>
+          <div class="field"><label>名称</label><input placeholder="如 13×18 铝箔袋" /></div>
+          <div class="field"><label>规格</label><input placeholder="如 13×18cm + 底 4cm" /></div>
+          <div class="field"><label>单位 / 采购单位</label><input placeholder="个 / 包（100 个）" /></div>
+          <div class="field"><label>当前库存 / 安全库存</label><input placeholder="180 / 200" /></div>
+          <div class="field"><label>用途</label><select><option>袋</option><option>干燥剂</option><option>标签</option></select></div>
+          <div class="btn-row mt12"><button class="btn small">取消</button><button class="btn small primary">保存</button></div>
+        </div>
+        <div class="drawer">
+          <h3>边界</h3>
+          <div class="drawer-sub">包材主数据 vs 选袋规则</div>
+          <div class="kv"><span class="k">主数据</span><span class="v">名称/规格/单位/库存 → 本页</span></div>
+          <div class="kv"><span class="k">选袋规则</span><span class="v">形态/单位/区间/优先级 → 分装包材页</span></div>
+          <div class="kv"><span class="k">库存扣减</span><span class="v">本轮不做；只汇总需要多少</span></div>
+          <div class="notice mt12">不要在本页新增“补剂包材表”或“袋子规格字段”；用现有 Ingredient 字段。</div>
+        </div>
+      </div>
+    </main>
+  </div>
+</section>
+
+<!-- ================= 库存管理 ================= -->
+<section class="screen" id="a-inventory">
+  <div class="admin">
+    <aside class="sidebar">
+      <div class="logo">七号厨房后台</div>
+      <div class="nav-group">交易</div>
+      <div class="nav-item" data-go="a-orders"><span class="dot"></span>订单中心</div>
+      <div class="nav-group">补剂</div>
+      <div class="nav-item" data-go="a-settings">补剂商城设置</div>
+      <div class="nav-item" data-go="a-packaging">分装包材</div>
+      <div class="nav-item" data-go="a-materials">原料管理</div>
+      <div class="nav-item active" data-go="a-inventory">库存管理</div>
+      <div class="nav-item" data-go="a-calendar">营业日历</div>
+      <div class="nav-group">支付</div>
+      <div class="nav-item">支付配置</div>
+      <div class="foot">原型 · 2026-10-19<br />数据为演示</div>
+    </aside>
+    <main class="admin-main">
+      <div class="admin-head">
+        <div><h1>库存管理 · 补剂</h1><div class="sub">只看 `sourceType=SUPPLEMENT_PACK` 的占用/流水；鲜食生产（PRODUCTION）不混入。占用/扣减走现有 InventoryAllocation / InventoryLedgerEntry。</div></div>
+        <div class="admin-actions"><button class="btn small" data-go="a-summary">去分装汇总</button><button class="btn small primary">导出对账</button></div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat"><div class="label">在库补剂原料</div><div class="value">8</div><div class="sub">可售 SKU</div></div>
+        <div class="stat gold"><div class="label">今日预占</div><div class="value">6</div><div class="sub">18 单中 6 单有占用</div></div>
+        <div class="stat warn"><div class="label">缺料</div><div class="value">2</div><div class="sub">海藻粉缺口 2.1g</div></div>
+        <div class="stat"><div class="label">负库存</div><div class="value">0</div><div class="sub">强制分装会标红</div></div>
+      </div>
+
+      <div class="toolbar">
+        <div class="field"><label>视图</label><select><option selected>占用</option><option>流水</option></select></div>
+        <div class="field"><label>分装日</label><input value="2026-10-19" /></div>
+        <div class="field grow"><label>搜索</label><input placeholder="原料 / 订单号" /></div>
+        <button class="btn small primary" style="margin-top:16px">查询</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>原料</th><th>分装日</th><th>关联订单</th><th>预占</th><th>已耗用</th><th>状态</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr><td><div class="cell-title">海藻粉</div><div class="cell-sub">NOW FOODS · 227g/瓶</div></td><td>10-19</td><td>SP20261019-004</td><td class="right">10.5g</td><td class="right">0</td><td><span class="badge red">缺料</span></td><td><button class="btn small" data-go="a-detail">查看订单</button></td></tr>
+            <tr><td><div class="cell-title">柠檬酸钙粉</div><div class="cell-sub">3.2g / 袋</div></td><td>10-19</td><td>SP20261019-004</td><td class="right">16.0g</td><td class="right">0</td><td><span class="badge green">足</span></td><td><button class="btn small" data-go="a-detail">查看订单</button></td></tr>
+            <tr><td><div class="cell-title">海藻粉</div><div class="cell-sub">NOW FOODS · 227g/瓶</div></td><td>10-19</td><td>SP20261019-003</td><td class="right">12.6g</td><td class="right">12.6g</td><td><span class="badge">已耗用</span></td><td><button class="btn small" data-go="a-detail">查看订单</button></td></tr>
+            <tr><td><div class="cell-title">鱼油胶囊</div><div class="cell-sub">2 粒 / 袋</div></td><td>10-19</td><td>SP20261019-003</td><td class="right">12 粒</td><td class="right">12 粒</td><td><span class="badge">已耗用</span></td><td><button class="btn small" data-go="a-detail">查看订单</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="panel-grid equal mt16">
+        <div class="drawer">
+          <h3>库存详情 · 海藻粉</h3>
+          <div class="drawer-sub">SUPPLEMENT_PACK · 10-19</div>
+          <div class="kv"><span class="k">在库</span><span class="v">35.7g</span></div>
+          <div class="kv"><span class="k">已预占</span><span class="v">10.5g</span></div>
+          <div class="kv"><span class="k">当日需求</span><span class="v">37.8g</span></div>
+          <div class="kv"><span class="k">缺口（在库−需求）</span><span class="v" style="color:#b4553f">2.1g</span></div>
+          <div class="kv"><span class="k">可用（新单）</span><span class="v">25.2g</span></div>
+          <div class="notice mt12">缺口不阻塞已排订单；员工不能完成分装，管理员可强制并填原因；允许负库存留痕。</div>
+        </div>
+        <div class="drawer">
+          <h3>最近流水</h3>
+          <div class="drawer-sub">InventoryLedgerEntry · 只显示补剂来源</div>
+          <div class="timeline">
+            <div class="timeline-item done"><div class="t">海藻粉 −12.6g</div><div class="d">10-19 16:20 · SUPPLEMENT_PACK_CONSUMPTION · SP20261019-003</div></div>
+            <div class="timeline-item done"><div class="t">鱼油 −12 粒</div><div class="d">10-19 16:20 · SUPPLEMENT_PACK_CONSUMPTION · SP20261019-003</div></div>
+            <div class="timeline-item done"><div class="t">海藻粉 +100g</div><div class="d">10-19 09:10 · 采购入库 · 管理员</div></div>
+          </div>
+          <div class="notice mt12">不新建补剂库存表；鲜食流水按 PRODUCTION 过滤掉。</div>
+        </div>
+      </div>
+    </main>
+  </div>
+</section>
+
+<!-- 原型导航 -->
+<div class="proto-bar">
+  <button data-go="a-orders">订单中心</button>
+  <button data-go="a-detail">补剂详情</button>
+  <button data-go="a-summary">分装汇总</button>
+  <button data-go="a-settings">商城设置</button>
+  <button data-go="a-packaging">包材配置</button>
+  <button data-go="a-materials">原料管理</button>
+  <button data-go="a-inventory">库存管理</button>
+  <button data-go="a-calendar">营业日历</button>
+  <button data-go="a-aftersale">售后</button>
+  <button data-go="a-refunds">退款管理</button>
+  <button data-go="a-dashboard">运营看板</button>
+  <button data-go="a-label">40×60 标签</button>
+</div>
+
+<script src="./prototype.js"></script>
+</body>
+</html>

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>预分装补剂 · 40×60mm 标签原型</title>
+  <link rel="stylesheet" href="./prototype.css" />
+  <style>
+    body { padding: 28px 24px 80px; }
+    .label-sheet { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+    .label-col { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+    .label-caption { font-size: 12px; color: #7d7868; text-align: center; line-height: 1.6; }
+    @media print {
+      body { background: #fff; padding: 0; }
+      .no-print { display: none !important; }
+      .label-sheet { gap: 8mm; }
+      .label-40x60 { box-shadow: none; border: 0; page-break-inside: avoid; }
+      .label-caption { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="no-print" style="max-width:1100px;margin:0 auto 20px">
+    <h1 class="page-title">40×60mm 补剂标签原型</h1>
+    <p class="page-sub">
+      实际标签纸：宽 40mm × 高 60mm 竖版；203dpi 热敏；一袋一张。<br />
+      标签上直接印：品名、原品、分装量+袋序、分装日期、有效期、储存、分装者、用法、干燥剂提示。
+      不放二维码、不放纸质说明卡。
+    </p>
+    <div class="btn-row">
+      <button class="btn primary" data-print="1">打印这一版</button>
+      <a class="btn" href="./index.html">返回原型索引</a>
+    </div>
+    <div class="notice mt12">
+      ⚠️ 现有后端标签图是 60×40、小程序打印机传 70×100，和实际 40×60 不一致；代码实现时必须三处统一。
+      40mm 宽度下长品名/长提示会换行，下面用“最长品名”做压力测试。
+    </div>
+  </div>
+
+  <div class="label-sheet">
+    <div class="label-col">
+      <div class="label-40x60">
+        <div class="l-brand">赛文的食堂</div>
+        <div class="l-product">海藻粉</div>
+        <div class="l-amount">2.1g · 1/1</div>
+        <div class="l-divider"></div>
+        <div class="l-line">分装日期 2026-10-19</div>
+        <div class="l-expiry">有效期至 2027-04-19</div>
+        <div class="l-line">原品 NOW FOODS · 227g/瓶</div>
+        <div class="l-line">批号 B2610-01</div>
+        <div class="l-line">订单 SP20261019-004</div>
+        <div class="l-usage">用法：按本次食谱用量添加；开封后密封防潮。储存：避光、密封、阴凉干燥。</div>
+        <div class="l-foot">分装者：赛文的食堂<br />分装小样，非直接食用；内含干燥剂，请勿食用。</div>
+      </div>
+      <div class="label-caption">标准版 · 短品名<br />40×60mm（示意 8px/mm）</div>
+    </div>
+
+    <div class="label-col">
+      <div class="label-40x60">
+        <div class="l-brand">赛文的食堂</div>
+        <div class="l-product" style="font-size:18px">洋车前子壳粉</div>
+        <div class="l-amount" style="font-size:17px">2.5g · 1/1</div>
+        <div class="l-divider"></div>
+        <div class="l-line" style="font-size:11px">分装日期 2026-10-19</div>
+        <div class="l-expiry" style="font-size:14px">有效期至 2027-04-19</div>
+        <div class="l-line" style="font-size:11px">原品 NOW FOODS · Psyllium Husk · 340g/瓶</div>
+        <div class="l-line" style="font-size:11px">批号 B2610-02 · 订单 SP20261019-004</div>
+        <div class="l-usage" style="font-size:10px">用法：按本次食谱用量添加；开封后密封防潮，避免受潮结块。</div>
+        <div class="l-foot" style="font-size:8px">分装者：赛文的食堂<br />分装小样，非直接食用；内含干燥剂，请勿食用。</div>
+      </div>
+      <div class="label-caption">长品名压力测试<br />40×60mm</div>
+    </div>
+
+    <div class="label-col">
+      <div class="label-40x60" style="justify-content:flex-start">
+        <div class="l-brand">赛文的食堂</div>
+        <div class="l-product" style="font-size:18px">维生素 B 族复合胶囊</div>
+        <div class="l-amount" style="font-size:17px">1 粒 · 3/3</div>
+        <div class="l-divider"></div>
+        <div class="l-line" style="font-size:11px">分装日期 2026-10-19</div>
+        <div class="l-expiry" style="font-size:14px">有效期至 2027-07-19</div>
+        <div class="l-line" style="font-size:11px">原品 Jarrow Formulas · B-Right · 100 粒/瓶</div>
+        <div class="l-line" style="font-size:11px">批号 B2610-03</div>
+        <div class="l-usage" style="font-size:10px">用法：按本次食谱用量添加；开封后密封防潮。储存：避光、密封、阴凉干燥。</div>
+        <div class="l-foot" style="font-size:8px">分装者：赛文的食堂<br />分装小样，非直接食用；内含干燥剂，请勿食用。</div>
+      </div>
+      <div class="label-caption">加量 3 袋 · 第 3/3 袋<br />40×60mm</div>
+    </div>
+  </div>
+
+  <div class="no-print" style="max-width:1100px;margin:28px auto 0">
+    <div class="card">
+      <div class="card-title">标签字段优先级</div>
+      <div class="kv"><span class="k">必印</span><span class="v">品名 / 分装量+袋序 / 分装日期 / 有效期至 / 储存条件 / 原品（品牌·规格）/ 分装者 / 用法 / “分装小样，非直接食用” / “内含干燥剂，请勿食用”</span></div>
+      <div class="kv"><span class="k">可删</span><span class="v">批号、订单号（放不下时优先删；后台仍可查）</span></div>
+      <div class="kv"><span class="k">不做</span><span class="v">二维码、纸质说明卡</span></div>
+      <div class="kv"><span class="k">尺寸</span><span class="v">40mm × 60mm 竖版；203dpi；一袋一张</span></div>
+    </div>
+  </div>
+
+  <script src="./prototype.js"></script>
+</body>
+</html>

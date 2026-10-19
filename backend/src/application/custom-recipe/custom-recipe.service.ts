@@ -791,15 +791,8 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       }
     }
 
-    // 未付款直接改成已取消：清理本单上传的报告草稿文件
-    if (
-      status === CustomRecipeStatus.CANCELLED &&
-      order.status === CustomRecipeStatus.PENDING_PAYMENT
-    ) {
-      await this.cleanupDraftReportAttachments(
-        (order as any).allergyReportDrafts,
-      );
-    }
+    // 取消后保留报告原件：订单详情仍展示「本单资料」，
+    // 立刻删 COS 文件会让已取消订单的预览窗 404（2026-10-20 修）。
   }
 
   /**
@@ -1028,13 +1021,6 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       return { cancelled: true };
     });
 
-    // 2026-10-19：未付款就取消/超时关单 → 清理本单上传但没进档案的报告文件
-    if (result.cancelled) {
-      await this.cleanupDraftReportAttachments(
-        (order as any).allergyReportDrafts,
-      );
-    }
-
     return result;
   }
 
@@ -1136,12 +1122,6 @@ export class CustomRecipeService implements ICustomRecipeRepository {
 
       return true;
     });
-
-    if (claimed && order.status === CustomRecipeStatus.PENDING_PAYMENT) {
-      await this.cleanupDraftReportAttachments(
-        (order as any).allergyReportDrafts,
-      );
-    }
 
     if (!claimed) {
       // 抢输说明它已被别处取消（定时关单/重复点击）：名额与退款都不能再动一次
@@ -2539,37 +2519,6 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       dietPreferences.preferredIngredients || [],
       dietPreferences.dislikedIngredients || [],
     );
-  }
-
-  /**
-   * 清理“未付款订单”里上传的报告草稿文件（2026-10-19）。
-   *
-   * 报告在付款前只存在订单草稿里；订单取消/超时后这些 COS 文件没有用了。
-   * 删除失败只记日志，不能挡住取消/退款。
-   */
-  private async cleanupDraftReportAttachments(drafts: unknown): Promise<void> {
-    if (!Array.isArray(drafts)) return;
-
-    const keys = new Set<string>();
-    for (const draft of drafts) {
-      const attachmentKeys = Array.isArray((draft as any)?.attachmentKeys)
-        ? (draft as any).attachmentKeys
-        : [];
-      for (const key of attachmentKeys) {
-        const value = String(key || '').trim();
-        if (value) keys.add(value);
-      }
-    }
-
-    for (const key of keys) {
-      await this.cosService.deleteImage(key).catch((error: any) => {
-        console.error(
-          '[CustomRecipe] 清理报告草稿文件失败:',
-          key,
-          error?.message ?? error,
-        );
-      });
-    }
   }
 
   /**

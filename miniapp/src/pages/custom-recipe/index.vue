@@ -783,6 +783,21 @@ const hasFoodAllergy = ref<boolean | null>(null);
  */
 const prefilledAllergyText = ref('');
 
+/** 旧草稿/误点恢复：过敏文本为空时，从档案或已带出的文本补一次 */
+function fillAllergyFromArchiveIfEmpty() {
+  if (formData.value.allergyText.trim()) return;
+  const archiveText =
+    prefilledAllergyText.value.trim() ||
+    (Array.isArray(healthSummary.value?.allergies)
+      ? healthSummary.value!.allergies.join('、')
+      : '');
+  if (!archiveText) return;
+  formData.value.allergyText = archiveText;
+  if (Array.isArray(healthSummary.value?.allergies)) {
+    formData.value.allergies = [...healthSummary.value.allergies];
+  }
+}
+
 /** 答题。答"有"展开录入界面；答"没有"只留一句说明 */
 function answerFoodAllergy(hasAllergy: boolean) {
   hasFoodAllergy.value = hasAllergy;
@@ -793,6 +808,10 @@ function answerFoodAllergy(hasAllergy: boolean) {
    * 最终「没有过敏」时由订单确认页在提交 payload 里强制过滤，
    * 报告草稿也在订单创建成功后清理，而不是在这里销毁。
    */
+  if (hasAllergy) {
+    // 旧版本在切「没有过敏」时把文本清空过，切回来时补一次
+    fillAllergyFromArchiveIfEmpty();
+  }
 }
 
 /**
@@ -2261,7 +2280,6 @@ const loadDogArchiveInfo = async (dogId: string) => {
        */
       hasFoodAllergy.value === true &&
       !formData.value.allergyText.trim() &&
-      !prefilledAllergyText.value.trim() &&
       archiveAllergyText
     ) {
       formData.value.allergies = summaryAllergies;

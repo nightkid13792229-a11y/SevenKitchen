@@ -213,6 +213,13 @@ export class SubmitCustomRecipeOrderDTO {
   @IsString({ each: true })
   attachmentUrls?: string[];
 
+  /** 备注附件的 COS key，与 attachmentUrls 一一对应；落库时优先存 key */
+  @ApiPropertyOptional({ description: 'Attachment COS keys' })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  attachmentKeys?: string[];
+
   /**
    * 预约（开工）日期。
    *

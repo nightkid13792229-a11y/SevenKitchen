@@ -326,7 +326,13 @@ export class CustomRecipeService implements ICustomRecipeRepository {
             stomachOther: data.stomachOther || null,
             preferredIngredients: data.preferredIngredients || [],
             dislikedIngredients: data.dislikedIngredients || [],
-            attachments: data.attachmentUrls || [],
+            // 优先存 COS key：媒体代理 URL 的 token 只在当前进程有效，
+            // 重启后再拿旧代理 URL 读附件会 404。
+            attachments:
+              Array.isArray(data.attachmentKeys) &&
+              data.attachmentKeys.length > 0
+                ? data.attachmentKeys
+                : data.attachmentUrls || [],
             scheduledDate,
             estimatedDeliveryDate,
             amount: config.feeAmount,

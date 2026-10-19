@@ -334,13 +334,12 @@ async function submitConfirmedOrder() {
   uni.showLoading({ title: '提交中…' });
   try {
     await requestCustomRecipeOrderSubscription();
-    const {
-      reportDrafts,
-      attachmentKeys,
-      ...orderForm
-    } = form.value;
+    const { reportDrafts, ...orderForm } = form.value;
     const payload = {
       ...orderForm,
+      attachmentKeys: Array.isArray(form.value.attachmentKeys)
+        ? form.value.attachmentKeys
+        : [],
       allergyStatus:
         draft.value?.hasFoodAllergy === true
           ? 'HAS_ALLERGY'

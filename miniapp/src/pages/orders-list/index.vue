@@ -94,6 +94,7 @@
           </view>
           <view class="order-footer">
             <view class="order-footer-left">
+              <text class="amount-label">定制费:</text>
               <text class="order-amount"
                 >¥{{ formatAmountText(customOrderAmount(order)) }}</text
               >
@@ -205,8 +206,8 @@
           </view>
         </template>
 
-        <!-- 金额 -->
-        <view class="order-amount">
+        <!-- 金额：定制单已在上面的定制卡片里展示，避免出现 ¥0.00 的第二行 -->
+        <view v-if="order._orderType !== 'custom'" class="order-amount">
           <text class="amount-label">订单金额:</text>
           <text class="amount-value"
             >¥{{ formatAmount(order.totalAmount) }}</text
@@ -316,6 +317,11 @@ import {
   fetchMyOrders,
   type CustomRecipeOrderDetail,
 } from '@/api/custom-recipe';
+import { formatDate } from '@/utils/custom-recipe-order';
+import {
+  CUSTOM_RECIPE_GOAL_SET,
+  useOptionSet,
+} from '@/utils/option-set';
 import { requestWechatOrderPayment } from '../../utils/wechat-payment';
 import { confirmWechatReceiptBeforeInternalComplete } from '../../utils/wechat-confirm-receipt';
 import {
@@ -326,6 +332,10 @@ import {
   getAftersaleEntryLabel,
 } from '../../utils/order-aftersale';
 import CustomerServiceInlineButton from '../../components/CustomerServiceInlineButton.vue';
+
+const { ensure: ensureGoalOptions, labelOf: goalLabel } = useOptionSet(
+  CUSTOM_RECIPE_GOAL_SET,
+);
 
 // DEBUG flag for development logging
 const DEBUG = true;
@@ -642,7 +652,11 @@ async function fetchAllCustomOrders(): Promise<CustomOrderRow[]> {
   try {
     const data = await fetchMyOrders({ page: 1, pageSize: 50 });
     const list = (data?.orders || []) as CustomRecipeOrderDetail[];
-    return list.map((order) => ({ ...order, _orderType: 'custom' as const }));
+    return list.map((order) => ({
+      ...order,
+      id: order.orderId,
+      _orderType: 'custom' as const,
+    }));
   } catch (error) {
     console.warn('[OrdersList] 拉取定制单失败:', error);
     return [];
@@ -759,17 +773,20 @@ function viewOrder(orderId: string) {
  */
 function customOrderTitle(order: UnifiedOrder): string {
   const row = order as CustomOrderRow;
+  if (row.status === 'CANCELLED') return '已取消的定制食谱';
+  if (row.status === 'PENDING_PAYMENT') return '待付款的定制食谱';
   const name = (row.recipeName || '').trim();
   return name || '设计中的专属食谱';
 }
 
 function customOrderSubtitle(order: UnifiedOrder): string {
   const row = order as CustomOrderRow;
-  const goal = (row.targetGoal || '').trim();
-  const scheduled = (row.scheduledDate || '').trim();
   const parts: string[] = [];
-  if (goal) parts.push(`目标：${goal}`);
-  if (scheduled) parts.push(`交付日期 ${scheduled}`);
+  if (row.dogName) parts.push(row.dogName);
+  const goal = (row.targetGoal || '').trim();
+  if (goal) parts.push(`目标：${goalLabel(goal) || goal}`);
+  const delivery = row.estimatedDeliveryDate || row.scheduledDate;
+  if (delivery) parts.push(`预计交付 ${formatDate(delivery)}`);
   return parts.join(' · ');
 }
 

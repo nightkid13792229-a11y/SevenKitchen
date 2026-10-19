@@ -130,6 +130,22 @@
             <text v-for="(item, index) in order.allergies" :key="`a-${index}`" class="tag">{{ item }}</text>
           </view>
         </view>
+        <view class="tag-group" v-if="order.allergyStatus">
+          <text class="tag-label">过敏回答</text>
+          <text class="allergy-text">{{ allergyAnswerText }}</text>
+        </view>
+        <view class="tag-group" v-if="currentFoodText">
+          <text class="tag-label">现在主要喂什么</text>
+          <text class="allergy-text">{{ currentFoodText }}</text>
+        </view>
+        <view class="tag-group" v-if="changeReasonText">
+          <text class="tag-label">定制原因</text>
+          <text class="allergy-text">{{ changeReasonText }}</text>
+        </view>
+        <view class="tag-group" v-if="stomachText">
+          <text class="tag-label">最近肠胃</text>
+          <text class="allergy-text">{{ stomachText }}</text>
+        </view>
         <view class="tag-group" v-if="(order.preferredIngredients || []).length">
           <text class="tag-label">喜欢的食材</text>
           <view class="tag-list">
@@ -301,6 +317,13 @@ interface CustomRecipeOrderDetail {
   allergies?: string[];
   /** 过敏自由文本（2026-10-19） */
   allergyText?: string | null;
+  allergyStatus?: string | null;
+  currentFoodMain?: string | null;
+  currentFoodOther?: string | null;
+  changeReasons?: string[];
+  changeReasonOther?: string | null;
+  stomachConditions?: string[];
+  stomachOther?: string | null;
   medicalConditions?: string[];
   preferredIngredients?: string[];
   dislikedIngredients?: string[];
@@ -326,8 +349,11 @@ const needLogin = ref(false);
 const paymentTimeoutMinutes = ref(0);
 
 onLoad((options: any) => {
-  // 目标中文来自选项字典（状态那份早就在 onMounted 里加载了）
+  // 目标/饲喂历史中文来自选项字典
   ensureGoalOptions();
+  ensureCurrentFoodOptions();
+  ensureChangeReasonOptions();
+  ensureStomachOptions();
   ensureStatusOptions();
   orderId.value = options.orderId || '';
   void loadOrderDetail();
@@ -598,6 +624,12 @@ const cancelAction = computed(() => {
 const { ensure: ensureGoalOptions, labelOf: goalLabel } = useOptionSet(
   CUSTOM_RECIPE_GOAL_SET,
 );
+const { ensure: ensureCurrentFoodOptions, labelOf: currentFoodLabel } =
+  useOptionSet('custom_recipe_current_food');
+const { ensure: ensureChangeReasonOptions, labelOf: changeReasonLabel } =
+  useOptionSet('custom_recipe_change_reason');
+const { ensure: ensureStomachOptions, labelOf: stomachLabel } =
+  useOptionSet('custom_recipe_stomach');
 
 /**
  * 状态中文：**优先用后端渲染契约里的**（`renderable.status.label`），
@@ -612,6 +644,39 @@ const goalText = computed(() => {
   const goal = order.value.targetGoal;
   if (!goal) return '—';
   return goalLabel(goal) || '—';
+});
+
+const allergyAnswerText = computed(() => {
+  const status = String(order.value.allergyStatus || '');
+  if (status === 'HAS_ALLERGY') return '有过敏';
+  if (status === 'NO_ALLERGY') return '明确回答：没有过敏';
+  return '未回答';
+});
+
+const currentFoodText = computed(() => {
+  const code = String(order.value.currentFoodMain || '');
+  if (!code) return '';
+  const label = currentFoodLabel(code) || code;
+  const other = String(order.value.currentFoodOther || '').trim();
+  return other ? `${label}（${other}）` : label;
+});
+
+const changeReasonText = computed(() => {
+  const codes = order.value.changeReasons || [];
+  const other = String(order.value.changeReasonOther || '').trim();
+  if (codes.length === 0 && !other) return '';
+  return `${codes.map((code) => changeReasonLabel(code) || code).join('、')}${
+    other ? `（${other}）` : ''
+  }`;
+});
+
+const stomachText = computed(() => {
+  const codes = order.value.stomachConditions || [];
+  const other = String(order.value.stomachOther || '').trim();
+  if (codes.length === 0 && !other) return '';
+  return `${codes.map((code) => stomachLabel(code) || code).join('、')}${
+    other ? `（${other}）` : ''
+  }`;
 });
 
 /** 退款进度：识别不出来就整块不显示（退款不能靠猜） */
@@ -654,6 +719,12 @@ const hasRequirements = computed(() => {
       Boolean(value.allergyText) ||
       (value.preferredIngredients || []).length ||
       (value.dislikedIngredients || []).length ||
+      value.allergyStatus ||
+      value.currentFoodMain ||
+      (value.changeReasons || []).length ||
+      value.changeReasonOther ||
+      (value.stomachConditions || []).length ||
+      value.stomachOther ||
       value.additionalNotes,
   );
 });

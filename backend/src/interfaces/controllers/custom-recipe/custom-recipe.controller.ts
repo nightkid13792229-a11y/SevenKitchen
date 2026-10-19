@@ -212,6 +212,7 @@ export class CustomRecipeController {
          * 于是"查看定制食谱"必然 404 —— 生产上已交付的那一单就是这么坏的。
          */
         recipeId: order.recipe?.recipeId ?? null,
+        recipeName: order.recipe?.name ?? null,
         /**
          * 支付时限与退款进展（2026-10-04）。
          * 小程序据此显示"请在 X 分钟内支付"和"退款中 / 已退款 ¥XX"。
@@ -347,6 +348,14 @@ export class CustomRecipeController {
       allergies: order.allergies,
       // 2026-10-19：自由文本原样返回（老订单为 null）
       allergyText: order.allergyText ?? null,
+      allergyStatus: order.allergyStatus ?? null,
+      // 需求 2.3.4：顾客填的饲喂历史必须回给客户详情
+      currentFoodMain: order.currentFoodMain ?? null,
+      currentFoodOther: order.currentFoodOther ?? null,
+      changeReasons: order.changeReasons ?? [],
+      changeReasonOther: order.changeReasonOther ?? null,
+      stomachConditions: order.stomachConditions ?? [],
+      stomachOther: order.stomachOther ?? null,
       // 本单报告草稿（付款后转正式报告）
       allergyReportDrafts: order.allergyReportDrafts ?? [],
       medicalConditions: order.medicalConditions,

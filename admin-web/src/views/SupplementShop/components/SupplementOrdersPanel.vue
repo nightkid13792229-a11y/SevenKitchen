@@ -131,6 +131,15 @@
               发货
             </el-button>
             <el-button
+              v-if="row.status === 'SHIPPED'"
+              link
+              type="primary"
+              size="small"
+              @click="completeOrder(row)"
+            >
+              完成
+            </el-button>
+            <el-button
               v-if="['PACKED', 'SHIPPED', 'COMPLETED'].includes(row.status)"
               link
               type="primary"
@@ -753,6 +762,15 @@ async function submitPack() {
   } finally {
     submitting.value = false;
   }
+}
+
+async function completeOrder(order: SupplementOrder) {
+  await ElMessageBox.confirm('确认手动完成这张订单？售后仍按发货时间计算。', '完成订单', {
+    type: 'warning',
+  });
+  await supplementOrderApi.complete(order.id);
+  ElMessage.success('订单已完成');
+  await loadAll();
 }
 
 function openShip(order: SupplementOrder) {

@@ -333,6 +333,21 @@ export class AdminSupplementShopController {
     );
   }
 
+  @Post('orders/:id/complete')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: '管理员手动完成已发货订单' })
+  async completeOrder(
+    @Param('id') id: string,
+    @Req() request: { user?: { userId?: string } },
+  ) {
+    return ApiResponseDto.success(
+      await this.supplementOrderService.completeOrder(
+        id,
+        request.user?.userId ?? null,
+      ),
+    );
+  }
+
   @Patch('orders/:id/address')
   @UseGuards(AdminGuard)
   @ApiOperation({ summary: '管理员代改未发货收货地址（写原/新地址审计）' })

@@ -95,7 +95,9 @@ import type { PackingSummary } from '@/api/supplementPackaging'
 
 const loading = ref(false)
 const data = ref<PackingSummary | null>(null)
-const date = ref(new Date().toISOString().slice(0, 10))
+const date = ref(
+  `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`,
+)
 
 const shortageCount = computed(
   () => data.value?.ingredientTotals.filter((item) => item.shortage > 0).length ?? 0,

@@ -15,6 +15,7 @@
         <view v-if="order.status === 'PACKED'" class="notice">
           订单还没发货，只支持全额退款；退款成功后订单会取消，库存已消耗不释放。
         </view>
+        <view v-if="policyText" class="notice policy">{{ policyText }}</view>
       </view>
 
       <view class="card">
@@ -73,6 +74,7 @@ const submitting = ref(false)
 const requestType = ref<'REFUND' | 'RESHIP'>('REFUND')
 const reason = ref('')
 const amountText = ref('')
+const policyText = ref('')
 
 const types = computed(() => {
   const status = order.value?.status || ''
@@ -92,7 +94,13 @@ function money(value: number) {
 async function load() {
   loading.value = true
   try {
-    const res = await fetchSupplementOrderDetail(orderId.value)
+    const [res, policy] = await Promise.all([
+      fetchSupplementOrderDetail(orderId.value),
+      fetchSupplementPolicy().catch(() => ({ code: 0, data: null } as any)),
+    ])
+    if (policy.code === 0 && policy.data?.aftersalePolicy) {
+      policyText.value = `${policy.data.aftersalePolicy}（发货后 ${policy.data.aftersaleWindowDays} 天内可申请）`
+    }
     if (res.code === 0) order.value = res.data
     else uni.showToast({ title: res.message || '加载失败', icon: 'none' })
   } catch (error) {
@@ -159,6 +167,7 @@ onLoad((options: any) => {
 .label { color: #909399; }
 .value { color: #303133; }
 .notice { margin-top: 12rpx; padding: 14rpx; background: #fdf6ec; color: #b88230; border-radius: 8rpx; font-size: 24rpx; line-height: 1.6; }
+.policy { background: #f4f4f5; color: #606266; }
 .section-title { display: block; font-size: 28rpx; font-weight: 600; color: #303133; margin-bottom: 16rpx; }
 .type-row { display: flex; gap: 16rpx; }
 .type { flex: 1; border: 2rpx solid #e4e7ed; border-radius: 12rpx; padding: 18rpx 0; text-align: center; }

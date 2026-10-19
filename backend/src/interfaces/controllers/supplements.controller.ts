@@ -39,6 +39,18 @@ export class SupplementsController {
     return ApiResponseDto.success({ enabled: config.enabled });
   }
 
+  @Get('policy')
+  @UseGuards(AuthGuard)
+  @ApiSecurity('X-Customer-Id')
+  @ApiOperation({ summary: '补剂售后政策文案（后台可配）' })
+  async policy() {
+    const config = await this.supplementShopConfigService.getConfig();
+    return ApiResponseDto.success({
+      aftersalePolicy: config.aftersalePolicy,
+      aftersaleWindowDays: config.aftersaleWindowDays,
+    });
+  }
+
   @Post('quote')
   @UseGuards(AuthGuard)
   @HttpCode(HttpStatus.OK)

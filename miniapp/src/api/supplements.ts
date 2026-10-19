@@ -267,6 +267,14 @@ export interface SupplementAftersale {
   createdAt: string
 }
 
+/** 补剂售后政策 */
+export function fetchSupplementPolicy() {
+  return request<{ aftersalePolicy: string | null; aftersaleWindowDays: number }>({
+    url: '/supplements/policy',
+    method: 'GET'
+  })
+}
+
 /** 补剂订单关联的制作单快照 */
 export function fetchSupplementSnapshot(orderId: string) {
   return request<{

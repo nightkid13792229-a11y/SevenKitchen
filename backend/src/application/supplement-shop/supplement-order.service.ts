@@ -736,6 +736,37 @@ export class SupplementOrderService {
     return this.getOrderById(orderId);
   }
 
+  /** 管理员手动完成：仅 SHIPPED；正常情况仍由 10 天自动完成 */
+  async completeOrder(
+    orderId: string,
+    adminId: string | null,
+  ): Promise<SupplementOrderView> {
+    const order = await this.requireOrder(orderId);
+    this.assertStatus(order.status, ['SHIPPED'], '完成');
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.supplementOrder.update({
+        where: { id: orderId },
+        data: { status: 'COMPLETED', completedAt: now },
+      });
+      if (tx.supplementOrderEvent) {
+        await tx.supplementOrderEvent.create({
+          data: {
+            orderId,
+            type: 'COMPLETED',
+            fromValue: 'SHIPPED',
+            toValue: 'COMPLETED',
+            actorType: 'ADMIN',
+            actorId: adminId,
+            reason: '管理员手动完成',
+          },
+        });
+      }
+    });
+    await this.notificationService?.notify(orderId, 'COMPLETED');
+    return this.getOrderById(orderId);
+  }
+
   /** 发货：只有已完成分装的订单才能填单号；PACKED 有未完结退款时拒绝 */
   async shipOrder(
     orderId: string,

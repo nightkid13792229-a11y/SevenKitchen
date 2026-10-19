@@ -115,7 +115,13 @@ export function diffSupplementLaunchTargets(
 
 function normalize(value: unknown): unknown {
   if (value instanceof Date) return value.toISOString();
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed === '') return null;
+    const numeric = Number(trimmed);
+    if (Number.isFinite(numeric)) return Number(numeric.toFixed(2));
+    return trimmed;
+  }
   if (typeof value === 'number') return Number(value.toFixed(2));
-  if (value === '') return null;
   return value ?? null;
 }

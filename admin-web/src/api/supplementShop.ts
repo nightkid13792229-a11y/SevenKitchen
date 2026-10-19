@@ -437,6 +437,9 @@ export const supplementOrderApi = {
   cancel: (id: string, data: { reason?: string }): Promise<SupplementOrder> =>
     api.post(`/admin/supplement-shop/orders/${id}/cancel`, data),
 
+  complete: (id: string): Promise<SupplementOrder> =>
+    api.post(`/admin/supplement-shop/orders/${id}/complete`),
+
   updateAddress: (
     id: string,
     data: {

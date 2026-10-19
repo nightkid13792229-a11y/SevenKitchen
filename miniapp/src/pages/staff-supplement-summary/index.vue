@@ -57,7 +57,10 @@ import { onMounted, ref } from 'vue'
 import { request } from '../../utils/api'
 
 const loading = ref(false)
-const date = ref(new Date().toISOString().slice(0, 10))
+const now = new Date()
+const date = ref(
+  `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
+)
 const data = ref<any>(null)
 
 function roleLabel(role: string) {

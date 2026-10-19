@@ -587,10 +587,18 @@ async function submitConfirmedOrder(payAfterSubmit = true) {
     return;
   }
 
+  /**
+   * 必须在点击事件的同步调用栈里发起订阅授权，不能先 await 网络。
+   * 确认页加载时已经缓存了 orderNotifyTemplateId，这里直接传给 helper，
+   * helper 会同步调用 uni.requestSubscribeMessage 弹出授权窗。
+   */
+  const subscriptionRequest = requestCustomRecipeOrderSubscription(
+    String(config.value?.orderNotifyTemplateId || ''),
+  );
   submitting.value = true;
   uni.showLoading({ title: '提交中…' });
   try {
-    await requestCustomRecipeOrderSubscription();
+    await subscriptionRequest;
     const { reportDrafts, ...orderForm } = form.value;
     const isNoAllergy = draft.value?.hasFoodAllergy === false;
     const submittedAllergies = isNoAllergy

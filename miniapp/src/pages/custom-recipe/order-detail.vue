@@ -30,6 +30,26 @@
       </view>
 
       <!--
+        购买后补开交付提醒（2026-10-20）。
+        微信一次性订阅必须在用户点击的同步调用栈里申请；这里用页面加载时缓存的
+        模板 ID，给已付款但未授权的订单一个补开入口。
+      -->
+      <view v-if="canEnableDeliveryNotice" class="delivery-notice">
+        <view class="delivery-notice__copy">
+          <text class="delivery-notice__title">交付时想收到微信提醒？</text>
+          <text class="delivery-notice__desc">开启后，食谱交付时会在微信「服务通知」里提醒你。</text>
+        </view>
+        <button
+          class="delivery-notice__btn"
+          :loading="enablingDeliveryNotice"
+          :disabled="enablingDeliveryNotice"
+          @tap="enableDeliveryNotice"
+        >
+          开启提醒
+        </button>
+      </view>
+
+      <!--
         进度时间轴（2026-10-16）：
         节点集合与文案**由后端下发**，后台加一个内部环节时小程序不用发版。
         老后端不返回 progress 时整块不显示，页面照常可用。
@@ -349,7 +369,10 @@ import {
   findAction,
   toneToClass,
 } from '@/api/custom-recipe';
-import { runCustomRecipePayment } from '@/utils/custom-recipe-payment';
+import {
+  requestCustomRecipeOrderSubscription,
+  runCustomRecipePayment,
+} from '@/utils/custom-recipe-payment';
 import {
   buildPaymentTimeoutHint,
   describeCustomRecipeRefund,
@@ -423,6 +446,13 @@ const needLogin = ref(false);
 
 /** 支付超时分钟数（0 = 不自动关单），来自后台公开配置 */
 const paymentTimeoutMinutes = ref(0);
+/** 交付订阅消息模板 ID（页面加载时缓存，点击时同步申请） */
+const orderNotifyTemplateId = ref('');
+const enablingDeliveryNotice = ref(false);
+const canEnableDeliveryNotice = computed(() => {
+  const status = String(order.value?.status || '');
+  return status === 'PAID' || status === 'IN_PROGRESS';
+});
 
 onLoad((options: any) => {
   // 目标/饲喂历史中文来自选项字典
@@ -458,6 +488,9 @@ const loadPaymentTimeoutConfig = async () => {
      */
     const config = await fetchPublicConfig();
     paymentTimeoutMinutes.value = Number(config.paymentTimeoutMinutes) || 0;
+    orderNotifyTemplateId.value = String(
+      config.orderNotifyTemplateId || '',
+    ).trim();
   } catch (error) {
     console.warn('[CustomRecipe] 读取支付超时配置失败:', error);
   }
@@ -955,6 +988,25 @@ const canSelfCancel = computed(() => {
   const status = String(order.value.status || '');
   return status === 'PENDING_PAYMENT' || status === 'PAID';
 });
+
+async function enableDeliveryNotice() {
+  if (enablingDeliveryNotice.value) return;
+  const templateId = String(orderNotifyTemplateId.value || '').trim();
+  if (!templateId) {
+    uni.showToast({ title: '暂时无法申请，请稍后再试', icon: 'none' });
+    return;
+  }
+  enablingDeliveryNotice.value = true;
+  try {
+    const accepted = await requestCustomRecipeOrderSubscription(templateId);
+    uni.showToast({
+      title: accepted ? '已开启，交付时会提醒你' : '未开启，可以稍后再试',
+      icon: 'none',
+    });
+  } finally {
+    enablingDeliveryNotice.value = false;
+  }
+}
 
 const cancelling = ref(false);
 
@@ -1634,5 +1686,49 @@ onUnmounted(() => {
   font-size: 20rpx;
   line-height: 1.35;
   color: #8a7a63;
+}
+
+.delivery-notice {
+  margin: 0 24rpx 20rpx;
+  padding: 20rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  border-radius: 14rpx;
+  background: #f4f8ef;
+  border: 1rpx solid #dbe6d0;
+}
+
+.delivery-notice__copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.delivery-notice__title {
+  display: block;
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #2d4638;
+}
+
+.delivery-notice__desc {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 20rpx;
+  line-height: 1.5;
+  color: #7d8a72;
+}
+
+.delivery-notice__btn {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0 18rpx;
+  height: 56rpx;
+  line-height: 56rpx;
+  font-size: 22rpx;
+  color: #f6efe0;
+  background: #1e3a2f;
+  border-radius: 999rpx;
 }
 </style>

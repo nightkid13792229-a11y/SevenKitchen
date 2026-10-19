@@ -64,30 +64,39 @@ export function syncCustomRecipePayment(orderId: string) {
  * 模板 ID 由后台环境变量配置；未配置时直接跳过，不做无意义的失败调用。
  * 任何失败都不阻断下单或付款。
  */
-export async function requestCustomRecipeOrderSubscription(): Promise<void> {
+export async function requestCustomRecipeOrderSubscription(
+  templateIdOverride = '',
+): Promise<boolean> {
   try {
-    const res: any = await request({
-      url: '/custom-recipe-config',
-      method: 'GET',
-      quiet: true,
-      suppressErrorToast: true,
-    } as any);
+    /**
+     * 关键：确认页已经缓存了模板 ID，必须在用户点击的同一轮事件里
+     * **同步**调用 uni.requestSubscribeMessage。
+     * 如果先 await 网络请求再调用，微信会认为不是用户点击触发，
+     * 授权弹窗不会出现（2026-10-20 线上问题）。
+     */
+    let templateId = String(templateIdOverride || '').trim();
+    if (!templateId) {
+      const res: any = await request({
+        url: '/custom-recipe-config',
+        method: 'GET',
+        quiet: true,
+        suppressErrorToast: true,
+      } as any);
+      templateId = String(res?.data?.orderNotifyTemplateId ?? '').trim();
+    }
+    if (!templateId) return false;
 
-    const templateId = String(
-      res?.data?.orderNotifyTemplateId ?? '',
-    ).trim();
-    if (!templateId) return;
-
-    await new Promise<void>((resolve) => {
+    return await new Promise<boolean>((resolve) => {
       uni.requestSubscribeMessage({
         tmplIds: [templateId],
-        success: () => resolve(),
-        fail: () => resolve(),
-        complete: () => resolve(),
+        success: (res: any) => resolve(res?.[templateId] === 'accept'),
+        fail: () => resolve(false),
+        complete: () => undefined,
       });
     });
   } catch {
     // 拿不到订阅授权只影响收不收得到提醒，不影响下单/付款本身
+    return false;
   }
 }
 

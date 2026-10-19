@@ -941,9 +941,7 @@ describe('custom recipe duplicate submit guard · 防连点', () => {
 
     // 带分号定位真正的代码行：注释里也会提到这两个名字
     const flagIndex = submitSource.indexOf('submitting.value = true;')
-    const firstAwaitIndex = submitSource.indexOf(
-      'await requestCustomRecipeOrderSubscription();',
-    )
+    const firstAwaitIndex = submitSource.indexOf('await subscriptionRequest;')
 
     expect(flagIndex).toBeGreaterThan(-1)
     expect(firstAwaitIndex).toBeGreaterThan(-1)

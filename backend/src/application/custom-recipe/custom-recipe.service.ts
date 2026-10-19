@@ -2546,6 +2546,24 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   }
 
   /**
+   * 备注区附件的**草稿上传**（2026-10-19）。
+   *
+   * 备注附件在提交订单前就要能上传，而订单此时还不存在。
+   * 所以这里只把文件传到 `custom-recipe-attachments/` 并返回 url/key，
+   * **不建订单附件记录、不写狗狗档案**；提交时 URL 随订单保存。
+   */
+  async uploadDraftAttachment(
+    file: Express.Multer.File,
+  ): Promise<{ url: string; key: string }> {
+    const result = await this.cosService.uploadImage(
+      file,
+      file.originalname,
+      'custom-recipe-attachments',
+    );
+    return { url: result.url, key: result.key };
+  }
+
+  /**
    * Upload attachment
    */
   async uploadAttachment(file: Express.Multer.File, orderId: string) {

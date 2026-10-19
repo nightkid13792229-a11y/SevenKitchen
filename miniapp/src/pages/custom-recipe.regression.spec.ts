@@ -537,8 +537,8 @@ describe('custom recipe page · 结构与知情同意', () => {
   })
 
   it('补上了附件上传入口（此前字段有、界面没有）', () => {
-    expect(page).toContain('pickAttachment')
-    expect(page).toContain('uploadHealthAttachment')
+    expect(page).toContain('pickAttachmentEntry')
+    expect(page).toContain('uploadCustomRecipeDraftAttachment')
     expect(page).toContain('formData.value.attachmentUrls')
     /**
      * 2026-10-05 老板要求：删掉"上传资料（可选）"独立标题并进按钮文案、
@@ -549,8 +549,14 @@ describe('custom recipe page · 结构与知情同意', () => {
     expect(page).not.toContain('+ 上传照片')
     expect(page).not.toContain('还没有上传资料')
     expect(page).not.toContain('检测报告、化验单拍清楚即可')
-    expect(page).toContain('每次最多 {{ maxAttachmentCount }} 张')
+    expect(page).toContain('最多 {{ maxAttachmentCount }} 个附件')
     expect(page).toMatch(/count: 1,[\s\S]{0,200}sourceType: \['album'\]/)
+    // 2026-10-19：备注附件也支持 PDF/Word，从微信聊天选
+    expect(page).toContain('chooseMessageFile')
+    expect(page).toContain("extension: ['pdf', 'doc', 'docx']")
+    expect(page).toContain('attachment-grid')
+    expect(page).toContain('attachment-thumb-remove')
+    expect(page).toContain('openDocumentAttachment(url)')
   })
 })
 
@@ -1728,10 +1734,10 @@ describe('定制页 · 2026-10-05 第二批（6 条）', () => {
     expect(template).not.toContain('health-header')
   })
 
-  it('⑥ 「上传资料」改小，并与张数说明并排', () => {
+  it('⑥ 「上传资料」改小，并与附件数量说明并排', () => {
     const header = template.slice(
       template.indexOf('attachment-header'),
-      template.indexOf('attachment-list'),
+      template.indexOf('attachment-grid'),
     )
     // 张数说明与入口在同一个 flex 行里
     expect(header).toContain('attachment-hint')
@@ -2085,7 +2091,7 @@ describe('custom recipe draft · 本地草稿与付款后同步', () => {
   })
 
   it('提交发送 allergyReportDrafts，不把页面字段 reportDrafts 原样丢给后端', () => {
-    expect(page).toContain('const { reportDrafts, ...orderForm } = formData.value')
+    expect(page).toContain('const { reportDrafts, attachmentKeys, ...orderForm } = formData.value')
     expect(page).toContain('allergyReportDrafts: reportDrafts')
   })
 

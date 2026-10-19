@@ -546,21 +546,33 @@
            在一张表单里显得比提交还显眼。 -->
       <view class="attachment-section">
         <view class="attachment-header">
-          <text class="attachment-hint">每次最多 {{ maxAttachmentCount }} 张</text>
-          <text v-if="canAddAttachment" class="attachment-add" @tap="pickAttachment">
+          <text class="attachment-hint">最多 {{ maxAttachmentCount }} 个附件</text>
+          <text v-if="canAddAttachment" class="attachment-add" @tap="pickAttachmentEntry">
             {{ attachmentUploading ? '上传中…' : '上传资料（可选）' }}
           </text>
-          <text v-else class="attachment-limit">已传满 {{ maxAttachmentCount }} 张</text>
+          <text v-else class="attachment-limit">已传满 {{ maxAttachmentCount }} 个附件</text>
         </view>
-        <view v-if="formData.attachmentUrls.length > 0" class="attachment-list">
+        <view v-if="formData.attachmentUrls.length > 0" class="attachment-grid">
           <view
             v-for="(url, index) in formData.attachmentUrls"
             :key="url"
-            class="attachment-item"
+            class="attachment-thumb-wrap"
           >
-            <text class="attachment-name">资料 {{ index + 1 }}</text>
-            <text class="attachment-preview" @tap="previewAttachment(url)">预览</text>
-            <text class="attachment-remove" @tap.stop="removeAttachment(index)">删除</text>
+            <image
+              v-if="isImageAttachment(url)"
+              class="attachment-thumb"
+              :src="url"
+              mode="aspectFill"
+              @tap="previewAttachment(url)"
+            />
+            <view v-else class="attachment-doc" @tap="previewAttachment(url)">
+              <text class="attachment-doc-badge">{{ attachmentFileLabel(url) }}</text>
+              <text class="attachment-doc-label">资料</text>
+            </view>
+            <text
+              class="attachment-thumb-remove"
+              @tap.stop="removeAttachment(index)"
+            >×</text>
           </view>
         </view>
       </view>
@@ -617,6 +629,7 @@ import {
   fetchDogHealthSummary,
   submitOrder,
   fetchNextDeliveryDate,
+  uploadCustomRecipeDraftAttachment,
 } from '@/api/custom-recipe';
 import { onHide, onLoad, onShow } from '@dcloudio/uni-app';
 import { getToken, request } from '@/utils/api';
@@ -1106,6 +1119,8 @@ const formData = ref({
   dislikedIngredients: [] as string[],
   additionalNotes: '',
   attachmentUrls: [] as string[],
+  /** 与 attachmentUrls 一一对应的 COS key，用于删除时清理文件 */
+  attachmentKeys: [] as string[],
   // 顾客是否要求这一单写回狗狗档案（2026-10-19：改为付款成功后才写）。
   // 后端是**只增不删**，不会删掉档案里已有的记录。
   syncToHealthProfile: true,
@@ -1184,6 +1199,7 @@ function resetOrderFormForDog(dogId: string) {
     dislikedIngredients: [],
     additionalNotes: '',
     attachmentUrls: [],
+    attachmentKeys: [],
     syncToHealthProfile: true,
   };
   weightGoalChoice.value = null;
@@ -2132,6 +2148,7 @@ const loadDogArchiveInfo = async (dogId: string) => {
     draft = loadCustomRecipeDraft(customerId, dogId);
     if (draft && isCustomRecipeDraftExpired(draft)) {
       await cleanupDraftReportFiles(draft.form?.reportDrafts || []);
+      await deleteDraftReportFileKeys(draft.form?.attachmentKeys || []);
       clearCustomRecipeDraft(customerId, dogId);
       draft = null;
     }
@@ -2227,57 +2244,51 @@ const loadDogArchiveInfo = async (dogId: string) => {
 /**
  * 上传资料（可选）。
  *
- * 能力边界要说实话：这里走的是**相册/拍照**通道（uni.chooseImage），
- * 拿回来的 COS 地址放进订单的 attachmentUrls，营养师在后台订单详情里能看到。
- * 上传用的后端通道本身也收 PDF，但小程序端只能选图片、预览也只认图片
- * （uni.previewImage 打不开 PDF），所以页面上**只承诺照片** ——
- * 原来那句文案是在承诺一个这里做不到的能力。
+ * 2026-10-19：和过敏报告一样，一个入口 + 底部抽屉分「照片 / PDF、Word」；
+ * 但备注附件是**订单附件**，不做 AI 识别，也不写狗狗档案。
+ * 照片从相册选，文档从微信聊天选；文件名/类型只用于预览展示。
  */
-const pickAttachment = async () => {
+function pickAttachmentEntry() {
   if (attachmentUploading.value) return;
-
   if (formData.value.attachmentUrls.length >= maxAttachmentCount) {
-    uni.showToast({
-      title: `最多上传 ${maxAttachmentCount} 张照片`,
-      icon: 'none',
-    });
+    uni.showToast({ title: `最多上传 ${maxAttachmentCount} 个附件`, icon: 'none' });
     return;
   }
 
-  let filePath = '';
-  try {
-    const chosen: any = await new Promise((resolve, reject) => {
-      uni.chooseImage({
-        count: 1,
-        sizeType: ['compressed'],
-        /**
-         * 只从相册选（2026-10-05 老板要求：与过敏报告上传一致）。
-         * 只给一个来源时微信不再弹"拍照 / 从相册选择"的选择器。
-         */
-        sourceType: ['album'],
-        success: resolve,
-        fail: reject,
-      });
-    });
-    filePath = chosen?.tempFilePaths?.[0] || '';
-  } catch {
-    // 顾客取消选择：静默返回
-    return;
-  }
+  uni.showActionSheet({
+    itemList: ['照片（从相册选）', 'PDF / Word 文档（从微信聊天选）'],
+    success: (res) => {
+      if (res.tapIndex === 0) {
+        void pickAttachmentPhotos();
+      } else if (res.tapIndex === 1) {
+        void pickAttachmentDocument();
+      }
+    },
+  });
+}
 
+async function uploadNoteAttachment(filePath: string, size = 0) {
   if (!filePath) return;
+  if (size > 10 * 1024 * 1024) {
+    uni.showToast({ title: '文件不能超过 10MB', icon: 'none' });
+    return;
+  }
+  if (formData.value.attachmentUrls.length >= maxAttachmentCount) {
+    uni.showToast({ title: `最多上传 ${maxAttachmentCount} 个附件`, icon: 'none' });
+    return;
+  }
 
   attachmentUploading.value = true;
   uni.showLoading({ title: '上传中…' });
-
   try {
-    const uploaded = await dogApi.uploadHealthAttachment('allergy', filePath);
+    const uploaded = await uploadCustomRecipeDraftAttachment(filePath);
     const url = String(uploaded?.url || '').trim();
     if (!url) {
       throw new Error('上传失败，请重试');
     }
-
+    const key = String(uploaded?.key || '').trim();
     formData.value.attachmentUrls = [...formData.value.attachmentUrls, url];
+    formData.value.attachmentKeys = [...formData.value.attachmentKeys, key];
     uni.showToast({ title: '已上传', icon: 'none' });
   } catch (error: any) {
     uni.showToast({ title: error?.message || '上传失败，请重试', icon: 'none' });
@@ -2285,17 +2296,82 @@ const pickAttachment = async () => {
     attachmentUploading.value = false;
     uni.hideLoading();
   }
-};
+}
+
+async function pickAttachmentPhotos() {
+  let filePath = '';
+  try {
+    const chosen: any = await new Promise((resolve, reject) => {
+      uni.chooseImage({
+        count: 1,
+        sizeType: ['compressed'],
+        sourceType: ['album'],
+        success: resolve,
+        fail: reject,
+      });
+    });
+    filePath = chosen?.tempFilePaths?.[0] || '';
+  } catch {
+    return;
+  }
+  await uploadNoteAttachment(filePath);
+}
+
+async function pickAttachmentDocument() {
+  const choose = (uni as unknown as {
+    chooseMessageFile?: (options: any) => void;
+  }).chooseMessageFile;
+  if (typeof choose !== 'function') {
+    uni.showToast({
+      title: '请先把文件发到微信聊天（文件传输助手也行），再从聊天里选',
+      icon: 'none',
+      duration: 3000,
+    });
+    return;
+  }
+
+  const picked = await new Promise<{ path: string; name: string; size: number }>(
+    (resolve) => {
+      choose({
+        count: 1,
+        type: 'file',
+        extension: ['pdf', 'doc', 'docx'],
+        success: (res: any) => {
+          const file = (res?.tempFiles || [])[0] || {};
+          resolve({
+            path: String(file.path || ''),
+            name: String(file.name || '资料'),
+            size: Number(file.size) || 0,
+          });
+        },
+        fail: () => resolve({ path: '', name: '', size: 0 }),
+      });
+    },
+  );
+
+  await uploadNoteAttachment(picked.path, picked.size);
+}
 
 const removeAttachment = (index: number) => {
+  const url = formData.value.attachmentUrls[index];
+  if (!url) return;
+  const key = String(formData.value.attachmentKeys[index] || '').trim();
   formData.value.attachmentUrls.splice(index, 1);
+  formData.value.attachmentKeys.splice(index, 1);
+  if (key) {
+    void deleteDraftReportFileKeys([key]);
+  }
 };
 
-/** 预览：只可能是图片（选择通道就是相册/拍照），所以直接用 previewImage */
-const previewAttachment = (url: string) => {
+/** 预览：图片看大图；PDF/Word 用微信文档查看器打开 */
+async function previewAttachment(url: string) {
   if (!url) return;
-  uni.previewImage({ urls: [url] });
-};
+  if (isImageAttachment(url)) {
+    uni.previewImage({ urls: [url] });
+    return;
+  }
+  await openDocumentAttachment(url);
+}
 
 onMounted(() => {
   // 2026-10-18：需求 2.3.4 的三组选项 + 2.3.5 的预估交付日期
@@ -2619,7 +2695,7 @@ const submitOrder = async () => {
      * `reportDrafts` 是页面/订单草稿字段，后端叫 `allergyReportDrafts`；
      * 拆开传，避免把页面的临时字段名原样丢给后端校验。
      */
-    const { reportDrafts, ...orderForm } = formData.value;
+    const { reportDrafts, attachmentKeys, ...orderForm } = formData.value;
     const submitData = {
       ...orderForm,
       allergyReportDrafts: reportDrafts,
@@ -3161,40 +3237,63 @@ const getBCSText = (bcsScore: number) => {
   color: var(--sk-ink-3, #968f6d);
 }
 
-.attachment-list {
+.attachment-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
   margin-top: 14rpx;
 }
 
-.attachment-item {
-  display: flex;
-  align-items: center;
-  gap: 20rpx;
-  padding: 16rpx 20rpx;
-  margin-top: 10rpx;
-  border-radius: 14rpx;
-  background: #f7f9f1;
+.attachment-thumb-wrap {
+  position: relative;
+  width: 140rpx;
+  height: 140rpx;
+}
+
+.attachment-thumb {
+  width: 140rpx;
+  height: 140rpx;
+  border-radius: 12rpx;
+  background: #f2f1ec;
   border: 1rpx solid #e3e6d4;
 }
 
-.attachment-name {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 25rpx;
-  color: #26261f;
+.attachment-doc {
+  width: 140rpx;
+  height: 140rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6rpx;
+  border-radius: 12rpx;
+  background: #f2f1ec;
+  border: 1rpx solid #e3e6d4;
 }
 
-.attachment-preview,
-.attachment-remove {
-  flex: 0 0 auto;
-  font-size: 24rpx;
+.attachment-doc-badge {
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #8a6b3f;
 }
 
-.attachment-preview {
-  color: #1e3a2f;
+.attachment-doc-label {
+  font-size: 20rpx;
+  color: #8a7a63;
 }
 
-.attachment-remove {
-  color: #b08d4f;
+.attachment-thumb-remove {
+  position: absolute;
+  top: -10rpx;
+  right: -10rpx;
+  width: 40rpx;
+  height: 40rpx;
+  line-height: 36rpx;
+  text-align: center;
+  font-size: 30rpx;
+  color: #ffffff;
+  background: rgba(38, 38, 31, 0.72);
+  border-radius: 50%;
 }
 
 .attachment-empty {

@@ -665,6 +665,69 @@ export class CustomRecipeController {
   }
 
   /**
+   * 备注区附件的草稿上传（2026-10-19）。
+   *
+   * 订单还没创建，所以不挂订单、不做归属校验；只校验登录 + 大小 + 类型，
+   * 存到 `custom-recipe-attachments/`，返回 url/key。
+   * 提交订单时 URL 随 `attachmentUrls` 保存；不会写狗狗档案。
+   */
+  @Post('draft-attachments')
+  @ApiOperation({ summary: 'Upload a draft note attachment' })
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadDraftAttachment(
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('请选择文件');
+    }
+
+    const allowedMimes = new Set([
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'image/heic',
+      'image/heif',
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ]);
+    const allowedExtensions = [
+      '.jpg',
+      '.jpeg',
+      '.png',
+      '.gif',
+      '.webp',
+      '.heic',
+      '.heif',
+      '.pdf',
+      '.doc',
+      '.docx',
+    ];
+    const name = String(file.originalname || '').toLowerCase();
+    if (
+      !allowedMimes.has(file.mimetype) &&
+      !allowedExtensions.some((extension) => name.endsWith(extension))
+    ) {
+      throw new BadRequestException(
+        '仅支持 JPG、PNG、GIF、WEBP、HEIC、PDF、DOC、DOCX 文件',
+      );
+    }
+
+    const limits = await this.customRecipeService.getAttachmentLimits();
+    if (file.size > limits.maxSizeBytes) {
+      throw new BadRequestException(
+        `文件大小不能超过${limits.maxSizeMb}MB`,
+      );
+    }
+
+    const result =
+      await this.customRecipeService.uploadDraftAttachment(file);
+    return ApiResponseDto.success(result);
+  }
+
+  /**
    * Upload attachment
    */
   @Post('upload-attachment')

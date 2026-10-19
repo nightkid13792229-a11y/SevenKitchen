@@ -597,6 +597,45 @@ export function toneToClass(tone: string | undefined): string {
 }
 
 /**
+ * 上传备注区附件草稿（2026-10-19）。
+ *
+ * 订单还没创建，所以不传 orderId；后端只做登录/大小/类型校验，
+ * 存到定制订单附件目录，返回 url 和 COS key。
+ */
+export async function uploadCustomRecipeDraftAttachment(
+  filePath: string,
+): Promise<{ url: string; key: string }> {
+  return new Promise((resolve, reject) => {
+    const token = getToken();
+    uni.uploadFile({
+      url: `${getBaseUrl()}/custom-recipe/draft-attachments`,
+      filePath,
+      name: 'file',
+      header: { Authorization: token ? `Bearer ${token}` : '' },
+      success: (res) => {
+        try {
+          const parsed =
+            typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
+          if (parsed?.code !== 0) {
+            reject(new Error(parsed?.message || '上传失败'));
+            return;
+          }
+          const url = String(parsed?.data?.url || '').trim();
+          if (!url) {
+            reject(new Error('上传失败，请重试'));
+            return;
+          }
+          resolve({ url, key: String(parsed?.data?.key || '') });
+        } catch {
+          reject(new Error('上传失败，请重试'));
+        }
+      },
+      fail: () => reject(new Error('上传失败，请检查网络')),
+    });
+  });
+}
+
+/**
  * 上传售后附件（2026-10-18）。
  *
  * 走的是定制单**专用**的上传接口 `/custom-recipe/upload-attachment` ——

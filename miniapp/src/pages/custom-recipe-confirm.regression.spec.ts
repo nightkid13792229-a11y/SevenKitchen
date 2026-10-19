@@ -33,17 +33,20 @@ describe('定制页 → 订单确认页（2026-10-19 老板确认）', () => {
     expect(page).toContain('uni.pageScrollTo');
   });
 
-  it('确认页有只读汇总、返回修改和确认并支付', () => {
+  it('确认页有只读汇总、附件预览和确认并支付', () => {
     expect(pagesJson).toContain('"pages/custom-recipe/confirm"');
-    expect(confirm).toContain('给谁定制');
-    expect(confirm).toContain('定制方向');
-    expect(confirm).toContain('过敏信息');
-    expect(confirm).toContain('现在主要喂什么');
+    expect(confirm).toContain('定制对象');
+    expect(confirm).toContain('体重管理方向');
+    expect(confirm).toContain('过敏情况');
+    expect(confirm).toContain('目前主食');
     expect(confirm).toContain('定制原因');
-    expect(confirm).toContain('最近肠胃');
-    expect(confirm).toContain('返回修改');
+    expect(confirm).toContain('最近肠胃表现');
     expect(confirm).toContain('确认并支付');
-    expect(confirm).toContain('仅提交，稍后支付');
+    expect(confirm).toContain('reportAttachments');
+    expect(confirm).toContain('noteAttachments');
+    expect(confirm).toContain('previewConfirmAttachment');
+    expect(confirm).not.toContain('返回修改');
+    expect(confirm).not.toContain('仅提交，稍后支付');
     expect(confirm).toContain('预计');
   });
 

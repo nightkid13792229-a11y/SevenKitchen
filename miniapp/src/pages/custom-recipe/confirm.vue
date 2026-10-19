@@ -15,7 +15,7 @@
       <template v-if="!createdOrder">
       <view class="section hero-section">
         <view class="section-title">
-          <text class="title-text">给谁定制</text>
+          <text class="title-text">定制对象</text>
         </view>
         <view class="dog-card">
           <view class="dog-avatar">🐕</view>
@@ -32,15 +32,41 @@
         </view>
 
         <view class="info-row">
-          <text class="info-label">定制方向</text>
+          <text class="info-label">体重管理方向</text>
           <text class="info-value">{{ goalText }}</text>
         </view>
         <view class="info-row">
-          <text class="info-label">过敏信息</text>
+          <text class="info-label">过敏情况</text>
           <text class="info-value">{{ allergyDisplay }}</text>
         </view>
+        <view v-if="reportAttachments.length" class="preview-block">
+          <text class="preview-title">过敏检测报告（只读）</text>
+          <view class="preview-grid">
+            <view
+              v-for="attachment in reportAttachments"
+              :key="attachment.url"
+              class="preview-item"
+            >
+              <image
+                v-if="isImageAttachment(attachment.url)"
+                class="preview-image"
+                :src="attachment.url"
+                mode="aspectFill"
+                @tap="previewConfirmAttachment(attachment.url)"
+              />
+              <view
+                v-else
+                class="preview-doc"
+                @tap="previewConfirmAttachment(attachment.url)"
+              >
+                <text class="preview-doc-badge">{{ attachmentFileLabel(attachment.url) }}</text>
+                <text class="preview-doc-label">报告</text>
+              </view>
+            </view>
+          </view>
+        </view>
         <view class="info-row">
-          <text class="info-label">现在主要喂什么</text>
+          <text class="info-label">目前主食</text>
           <text class="info-value">{{ currentFoodText }}</text>
         </view>
         <view class="info-row">
@@ -48,7 +74,7 @@
           <text class="info-value">{{ changeReasonText }}</text>
         </view>
         <view class="info-row">
-          <text class="info-label">最近肠胃</text>
+          <text class="info-label">最近肠胃表现</text>
           <text class="info-value">{{ stomachText }}</text>
         </view>
         <view class="info-row">
@@ -56,8 +82,30 @@
           <text class="info-value">{{ notesText }}</text>
         </view>
         <view class="info-row">
-          <text class="info-label">资料</text>
+          <text class="info-label">附件</text>
           <text class="info-value">{{ attachmentText }}</text>
+        </view>
+        <view v-if="noteAttachments.length" class="preview-block">
+          <text class="preview-title">附件预览（只读）</text>
+          <view class="preview-grid">
+            <view
+              v-for="url in noteAttachments"
+              :key="url"
+              class="preview-item"
+            >
+              <image
+                v-if="isImageAttachment(url)"
+                class="preview-image"
+                :src="url"
+                mode="aspectFill"
+                @tap="previewConfirmAttachment(url)"
+              />
+              <view v-else class="preview-doc" @tap="previewConfirmAttachment(url)">
+                <text class="preview-doc-badge">{{ attachmentFileLabel(url) }}</text>
+                <text class="preview-doc-label">附件</text>
+              </view>
+            </view>
+          </view>
         </view>
       </view>
 
@@ -77,25 +125,13 @@
       <view class="bottom-space" />
 
       <view class="bottom-bar">
-        <view class="bottom-left">
-          <text class="bottom-price-label">定制费</text>
-          <text class="bottom-price">¥{{ feeText }}</text>
-        </view>
-        <view class="bottom-actions">
-          <button class="btn-back" @tap="backToCustom">返回修改</button>
-          <view class="submit-wrap">
-            <button
-              class="btn-submit"
-              :disabled="submitting"
-              @tap="submitConfirmedOrder(true)"
-            >
-              {{ submitting ? '提交中…' : `确认并支付 ¥${feeText}` }}
-            </button>
-            <text class="btn-later" @tap="submitConfirmedOrder(false)">
-              仅提交，稍后支付
-            </text>
-          </view>
-        </view>
+        <button
+          class="btn-submit"
+          :disabled="submitting"
+          @tap="submitConfirmedOrder(true)"
+        >
+          {{ submitting ? '提交中…' : `确认并支付 ¥${feeText}` }}
+        </button>
       </view>
       </template>
 
@@ -276,12 +312,34 @@ const allergyDisplay = computed(() => {
   return '未回答';
 });
 
-const reportCount = computed(() =>
-  draft.value?.hasFoodAllergy === false
-    ? 0
-    : Array.isArray(form.value.reportDrafts)
-      ? form.value.reportDrafts.length
-      : 0,
+const hasAllergyForDisplay = computed(
+  () => draft.value?.hasFoodAllergy === true,
+);
+
+const reportAttachments = computed<Array<{ url: string }>>(() => {
+  if (!hasAllergyForDisplay.value) return [];
+  const drafts = Array.isArray(form.value.reportDrafts)
+    ? form.value.reportDrafts
+    : [];
+  const seen = new Set<string>();
+  const result: Array<{ url: string }> = [];
+  for (const report of drafts) {
+    for (const url of Array.isArray(report?.attachments)
+      ? report.attachments
+      : []) {
+      const value = String(url || '').trim();
+      if (!value || seen.has(value)) continue;
+      seen.add(value);
+      result.push({ url: value });
+    }
+  }
+  return result;
+});
+
+const noteAttachments = computed<string[]>(() =>
+  Array.isArray(form.value.attachmentUrls)
+    ? form.value.attachmentUrls.filter(Boolean)
+    : [],
 );
 
 const currentFoodText = computed(() => {
@@ -318,15 +376,70 @@ const notesText = computed(
   () => String(form.value.additionalNotes || '').trim() || '无',
 );
 
-const attachmentText = computed(() => {
-  const count = Array.isArray(form.value.attachmentUrls)
-    ? form.value.attachmentUrls.length
-    : 0;
-  const attachments = count > 0 ? `附件 ${count} 个` : '无附件';
-  return reportCount.value > 0
-    ? `${attachments} · 检测报告 ${reportCount.value} 份`
-    : attachments;
-});
+const attachmentText = computed(() =>
+  noteAttachments.value.length > 0
+    ? `附件 ${noteAttachments.value.length} 个`
+    : '无附件',
+);
+
+function attachmentExtension(url: string): string {
+  const raw = String(url || '');
+  const extMatch = raw.match(/[?&]ext=([a-z0-9]+)/i);
+  if (extMatch) return `.${extMatch[1].toLowerCase()}`;
+  const clean = raw.split('?')[0].split('#')[0];
+  const index = clean.lastIndexOf('.');
+  return index >= 0 ? clean.slice(index).toLowerCase() : '';
+}
+
+function isImageAttachment(url: string): boolean {
+  return ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.heif'].includes(
+    attachmentExtension(url),
+  );
+}
+
+function attachmentFileLabel(url: string): string {
+  const ext = attachmentExtension(url);
+  if (ext === '.pdf') return 'PDF';
+  if (ext === '.doc' || ext === '.docx') return 'Word';
+  return '文件';
+}
+
+function previewConfirmAttachment(url: string) {
+  if (!url) return;
+  if (isImageAttachment(url)) {
+    uni.previewImage({
+      urls: [
+        ...reportAttachments.value.map((item) => item.url),
+        ...noteAttachments.value,
+      ].filter(isImageAttachment),
+    });
+    return;
+  }
+  if (!['.pdf', '.doc', '.docx'].includes(attachmentExtension(url))) {
+    uni.showToast({ title: '暂不支持预览这种文件', icon: 'none' });
+    return;
+  }
+  uni.showLoading({ title: '打开中…' });
+  uni.downloadFile({
+    url,
+    success: (res) => {
+      uni.hideLoading();
+      if (res.statusCode !== 200 || !res.tempFilePath) {
+        uni.showToast({ title: '文件下载失败', icon: 'none' });
+        return;
+      }
+      uni.openDocument({
+        filePath: res.tempFilePath,
+        showMenu: true,
+        fail: () => uni.showToast({ title: '文件打开失败', icon: 'none' }),
+      });
+    },
+    fail: () => {
+      uni.hideLoading();
+      uni.showToast({ title: '文件下载失败', icon: 'none' });
+    },
+  });
+}
 
 const feeText = computed(() => formatAmount(config.value?.feeAmount ?? 0));
 const creditText = computed(() => formatAmount(config.value?.creditAmount ?? 0));
@@ -471,7 +584,7 @@ function backToCustom() {
 
 function validateBeforeSubmit(): string {
   const data = form.value;
-  if (!data.dogId || !data.targetGoal) return '定制信息不完整，请返回修改';
+  if (!data.dogId || !data.targetGoal) return '定制信息不完整，请返回重新填写';
   if (draft.value?.hasFoodAllergy === null) return '请返回回答过敏问题';
   if (draft.value?.hasFoodAllergy === true && !String(data.allergyText || '').trim()) {
     return '请返回补充过敏食物';
@@ -838,8 +951,6 @@ onUnmounted(() => {
   bottom: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 20rpx;
   padding: 18rpx 24rpx calc(18rpx + env(safe-area-inset-bottom));
   background: #fbfcf7;
   border-top: 1rpx solid #e3e6d4;
@@ -885,7 +996,9 @@ onUnmounted(() => {
 }
 
 .btn-submit {
-  min-width: 200rpx;
+  flex: 1;
+  width: 100%;
+  min-width: 0;
   color: #ffffff;
   background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
   border: 1rpx solid #d8bc85;
@@ -1004,5 +1117,61 @@ onUnmounted(() => {
   color: #1e3a2f;
   background: #ffffff;
   border: 1rpx solid #cfd8c5;
+}
+
+.preview-block {
+  margin-top: 16rpx;
+  padding-top: 16rpx;
+  border-top: 1rpx solid #f0f1e9;
+}
+
+.preview-title {
+  display: block;
+  margin-bottom: 12rpx;
+  font-size: 22rpx;
+  color: #8a7a63;
+}
+
+.preview-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.preview-item {
+  width: 120rpx;
+  height: 120rpx;
+}
+
+.preview-image {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 10rpx;
+  background: #f2f1ec;
+  border: 1rpx solid #e3e6d4;
+}
+
+.preview-doc {
+  width: 120rpx;
+  height: 120rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4rpx;
+  border-radius: 10rpx;
+  background: #f2f1ec;
+  border: 1rpx solid #e3e6d4;
+}
+
+.preview-doc-badge {
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #8a6b3f;
+}
+
+.preview-doc-label {
+  font-size: 18rpx;
+  color: #8a7a63;
 }
 </style>

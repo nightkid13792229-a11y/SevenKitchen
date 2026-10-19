@@ -215,6 +215,24 @@ export class SupplementAftersaleService {
     );
   }
 
+  /** 旧后台「登记售后」适配：复用顾客校验，但标记来源 ADMIN */
+  async createForAdmin(
+    orderId: string,
+    dto: {
+      requestType: 'REFUND' | 'RESHIP' | 'OTHER';
+      reason: string;
+      amount?: number;
+    },
+  ): Promise<AftersaleCaseView> {
+    const order = await this.loadOrder(orderId);
+    const view = await this.createForCustomer(order.userId, orderId, dto);
+    await this.prisma.aftersaleCase.update({
+      where: { id: view.id },
+      data: { source: 'ADMIN' },
+    });
+    return view;
+  }
+
   async listCases(
     query: {
       status?: string;

@@ -332,9 +332,17 @@ export class AdminSupplementShopController {
     @Body() dto: RefundSupplementOrderDto,
     @Req() request: { user?: { userId?: string } },
   ) {
+    if (!this.supplementAftersaleService) {
+      throw new BadRequestException('售后记录服务未启用');
+    }
+    const view = await this.supplementAftersaleService.createForAdmin(id, {
+      requestType: 'REFUND',
+      reason: dto.reason,
+      amount: dto.amount,
+    });
     return ApiResponseDto.success(
-      await this.wechatPaymentService.createSupplementRefund({
-        orderId: id,
+      await this.wechatPaymentService.createSupplementRefundForCase({
+        caseId: view.id,
         amount: dto.amount,
         reason: dto.reason,
         adminId: request.user?.userId ?? null,
@@ -347,10 +355,23 @@ export class AdminSupplementShopController {
   async reshipOrder(
     @Param('id') id: string,
     @Body() dto: ReshipSupplementOrderDto,
+    @Req() request: { user?: { userId?: string } },
   ) {
-    return ApiResponseDto.success(
-      await this.supplementOrderService.reshipOrder(id, dto.reason),
+    if (!this.supplementAftersaleService) {
+      throw new BadRequestException('售后记录服务未启用');
+    }
+    const view = await this.supplementAftersaleService.createForAdmin(id, {
+      requestType: 'RESHIP',
+      reason: dto.reason,
+    });
+    const resolved = await this.supplementAftersaleService.resolve(
+      request.user?.userId ?? 'admin',
+      view.id,
+      { resolutionType: 'RESHIP', note: dto.reason },
     );
+    return ApiResponseDto.success({
+      reship: { orderNo: resolved.reshipOrderNo },
+    });
   }
 
   @Post('orders/:id/aftersale')
@@ -359,8 +380,15 @@ export class AdminSupplementShopController {
     @Param('id') id: string,
     @Body() dto: SupplementAftersaleDto,
   ) {
+    if (!this.supplementAftersaleService) {
+      throw new BadRequestException('售后记录服务未启用');
+    }
+    await this.supplementAftersaleService.createForAdmin(id, {
+      requestType: dto.type,
+      reason: dto.reason,
+    });
     return ApiResponseDto.success(
-      await this.supplementOrderService.markAftersale(id, dto),
+      await this.supplementOrderService.getOrderById(id),
     );
   }
 }

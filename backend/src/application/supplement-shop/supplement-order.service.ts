@@ -30,6 +30,7 @@ import {
 import type { IngredientPhysicalFormCode } from './supplement-catalog.service';
 import { SupplementSchedulingService } from './supplement-scheduling.service';
 import { SupplementInventoryService } from './supplement-inventory.service';
+import { SupplementSnapshotService } from './supplement-snapshot.service';
 
 /** 分装结果的有效期：取「原瓶到期日」与「分装日 + 效期系数」的较小值 */
 export function addMonths(date: Date, months: number): Date {
@@ -221,6 +222,8 @@ export class SupplementOrderService {
     private readonly schedulingService?: SupplementSchedulingService,
     @Optional()
     private readonly inventoryService?: SupplementInventoryService,
+    @Optional()
+    private readonly snapshotService?: SupplementSnapshotService,
   ) {}
 
   /**
@@ -340,6 +343,14 @@ export class SupplementOrderService {
         },
         select: { id: true },
       });
+
+      if (request.diySheetId) {
+        await this.snapshotService?.freezeForOrder(tx, {
+          orderId: created.id,
+          userId,
+          diySheetId: request.diySheetId,
+        });
+      }
 
       return created.id;
     });

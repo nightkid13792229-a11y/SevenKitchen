@@ -632,6 +632,8 @@ const currentNutritionInfo = ref<any>({})
 // 设备推荐相关状态
 const equipmentRecommendations = ref<any[]>([])
 const diySheetHeaderBgImageUrl = ref('')
+/** 当前制作单 id：首次买补剂时要带给后端冻结快照 */
+const currentDiySheetId = ref('')
 const showEquipmentList = ref(false)
 const currentEquipmentDetail = ref<any>(null)
 
@@ -1145,7 +1147,7 @@ function handleSupplementStatusRetry() {
  * 购买预分装补剂：把制作单上的补剂清单交给下单页。
  * 补剂行带用量，塞不进 URL，因此走本地存储传递。
  */
-function handleBuySupplements() {
+async function handleBuySupplements() {
   const lines = supplementItemsDetailed.value
     .filter((item: any) => item.ingredientId && Number(item.amount) > 0)
     .map((item: any) => ({
@@ -1164,6 +1166,14 @@ function handleBuySupplements() {
     return
   }
 
+  // 首次买补剂必须让后端有制作单可冻结；没有 id 时先保存一次
+  const diySheetId =
+    currentDiySheetId.value || (await autoSaveDiySheet())
+  if (!diySheetId) {
+    uni.showToast({ title: '制作单保存失败，请重试', icon: 'none' })
+    return
+  }
+
   saveSupplementPurchaseDraft({
     lines,
     recipeId: recipeId.value,
@@ -1171,7 +1181,8 @@ function handleBuySupplements() {
     dogId: dogId.value,
     dogName: dog.value && dog.value.name,
     // 用实际覆盖天数，而不是用户选的天数 —— 自定义分装下两者不一样
-    cycleDays: effectiveCycleDays.value
+    cycleDays: effectiveCycleDays.value,
+    diySheetId
   })
 
   uni.navigateTo({ url: '/pages/supplement-order/index' })
@@ -1244,9 +1255,9 @@ async function loadData() {
  * 自动保存制作单到数据库（用于评价权限验证）
  * 幂等操作：后端会检查是否已存在相同的 user+recipe+dog 组合
  */
-async function autoSaveDiySheet() {
+async function autoSaveDiySheet(): Promise<string> {
   try {
-    await request({
+    const res: any = await request({
       url: '/user/diy-sheets',
       method: 'POST',
       data: {
@@ -1261,9 +1272,14 @@ async function autoSaveDiySheet() {
         productionSteps: recipe.value.productionSteps
       }
     })
+    if (res.code === 0 && res.data?.id) {
+      currentDiySheetId.value = res.data.id
+      return res.data.id
+    }
   } catch {
-    // 静默失败，不影响页面显示
+    // 静默失败；购买时会再尝试一次
   }
+  return ''
 }
 
 async function loadRecipe() {
@@ -1767,6 +1783,7 @@ async function handleSave() {
     uni.hideLoading()
 
     if (res.code === 0) {
+      if (res.data?.id) currentDiySheetId.value = res.data.id
       // 告诉顾客去哪儿找：我的 → 我的制作单
       uni.showToast({
         title: '已保存到我的制作单',

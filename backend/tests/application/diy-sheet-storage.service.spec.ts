@@ -60,6 +60,57 @@ describe('DIYSheetStorageService package plans', () => {
     expect(result.packagePlan).toEqual(packagePlan);
   });
 
+  it('冻结后内容没变：复用旧单，不覆盖快照', async () => {
+    const prisma = createPrismaMock({
+      id: 'sheet-frozen',
+      recipeName: baseDto.recipeName,
+      dogName: '七七',
+      cycleDays: baseDto.cycleDays,
+      perMealG: baseDto.perMealG,
+      dailyIntakeG: baseDto.dailyIntakeG,
+      packagePlan: baseDto.packagePlan,
+      purchaseList: baseDto.purchaseList,
+      productionSteps: baseDto.productionSteps,
+      snapshot: { version: 1 },
+      snapshotAt: new Date('2026-10-19T00:00:00Z'),
+      recipeVersion: 3,
+      createdAt: new Date('2026-10-18T00:00:00Z'),
+      updatedAt: new Date('2026-10-18T00:00:00Z'),
+    });
+    const service = new DIYSheetStorageService(prisma);
+
+    const result = await service.create('user-1', baseDto);
+
+    expect(result.id).toBe('sheet-frozen');
+    expect(prisma.dIYSheet.update).not.toHaveBeenCalled();
+    expect(prisma.dIYSheet.create).not.toHaveBeenCalled();
+  });
+
+  it('冻结后内容变化：新建一张，不覆盖旧单', async () => {
+    const prisma = createPrismaMock({
+      id: 'sheet-frozen',
+      recipeName: baseDto.recipeName,
+      dogName: '七七',
+      cycleDays: 3,
+      perMealG: baseDto.perMealG,
+      dailyIntakeG: baseDto.dailyIntakeG,
+      packagePlan: baseDto.packagePlan,
+      purchaseList: baseDto.purchaseList,
+      productionSteps: baseDto.productionSteps,
+      snapshot: { version: 1 },
+      snapshotAt: new Date('2026-10-19T00:00:00Z'),
+      recipeVersion: 3,
+      createdAt: new Date('2026-10-18T00:00:00Z'),
+      updatedAt: new Date('2026-10-18T00:00:00Z'),
+    });
+    const service = new DIYSheetStorageService(prisma);
+
+    await service.create('user-1', baseDto);
+
+    expect(prisma.dIYSheet.create).toHaveBeenCalled();
+    expect(prisma.dIYSheet.update).not.toHaveBeenCalled();
+  });
+
   it('updates packagePlan on the idempotent user recipe dog record', async () => {
     const prisma = createPrismaMock({ id: 'sheet-1' });
     const service = new DIYSheetStorageService(prisma);

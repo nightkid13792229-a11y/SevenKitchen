@@ -159,6 +159,15 @@ export class DIYSheetResponseDto {
   @ApiPropertyOptional({ description: '制作流程' })
   productionSteps?: string;
 
+  @ApiPropertyOptional({ description: '首次买补剂时冻结的食谱版本' })
+  recipeVersion?: number | null;
+
+  @ApiPropertyOptional({ description: '整张制作单快照；null = 未冻结' })
+  snapshot?: Record<string, unknown> | null;
+
+  @ApiPropertyOptional({ description: '快照冻结时间' })
+  snapshotAt?: string | null;
+
   @ApiProperty({ description: '创建时间' })
   createdAt!: string;
 

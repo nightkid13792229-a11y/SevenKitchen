@@ -717,6 +717,8 @@ async function handleSubmit() {
       dogId: draft.value.dogId,
       dogName: draft.value.dogName,
       cycleDays: draft.value.cycleDays,
+      // 首次下单补剂时用它在后端冻结整张制作单
+      diySheetId: draft.value.diySheetId,
       // 加量份数：服务端会自己校验上限，越界会拒绝（前端算的只是展示用）
       portionMultiplier: portionMultiplier.value
     })

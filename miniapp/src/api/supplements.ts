@@ -146,6 +146,8 @@ export interface CreateSupplementOrderPayload {
   dogId?: string
   dogName?: string
   cycleDays?: number
+  /** 来源 DIY 制作单；首次下单补剂时后端用它冻结快照 */
+  diySheetId?: string
   /** 加量份数，1 = 不加量。服务端会按配置校验上限 */
   portionMultiplier?: number
   remark?: string
@@ -292,6 +294,8 @@ export interface SupplementPurchaseDraft {
   dogId?: string
   dogName?: string
   cycleDays?: number
+  /** 来源 DIY 制作单；首次下单补剂时后端用它冻结快照 */
+  diySheetId?: string
 }
 
 const DRAFT_STORAGE_KEY = 'supplementPurchaseDraft'

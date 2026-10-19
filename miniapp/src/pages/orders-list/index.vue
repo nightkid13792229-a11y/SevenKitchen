@@ -104,13 +104,19 @@
           </view>
           <view class="order-actions" @tap.stop>
             <button
-              v-if="order.status === 'PENDING_PAYMENT'"
+              v-if="order.status === 'PENDING_PAYMENT' && !isCustomPaymentExpired(order)"
               class="action-btn primary"
               :disabled="payingCustomId === order.orderId"
               @tap="payCustomFromList(order)"
             >
               {{ payingCustomId === order.orderId ? '调起支付中' : '继续支付' }}
             </button>
+            <text
+              v-if="order.status === 'PENDING_PAYMENT' && isCustomPaymentExpired(order)"
+              class="order-expired-text"
+            >
+              支付已超时，订单已关闭
+            </text>
             <button
               v-if="
                 order.status !== 'PENDING_PAYMENT' &&
@@ -324,7 +330,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { onShow, onLoad } from '@dcloudio/uni-app';
 import { request, getToken } from '../../utils/api';
 import {
@@ -344,7 +350,7 @@ import {
   findAction,
   type CustomRecipeOrderDetail,
 } from '@/api/custom-recipe';
-import { formatDate } from '@/utils/custom-recipe-order';
+import { formatDate, isPaymentExpired } from '@/utils/custom-recipe-order';
 import { runCustomRecipePayment } from '@/utils/custom-recipe-payment';
 import {
   CUSTOM_RECIPE_GOAL_SET,
@@ -486,6 +492,8 @@ const payingOrderId = ref('');
 const receivingOrderId = ref('');
 const payingSupplementId = ref('');
 const payingCustomId = ref('');
+const nowTick = ref(Date.now());
+let paymentClockTimer: ReturnType<typeof setInterval> | null = null;
 
 /**
  * 补剂自己的状态分色：金=待办、绿=正常、红=售后、灰=结束。
@@ -527,6 +535,9 @@ const emptyText = computed(() => {
 
 onMounted(async () => {
   ensureGoalOptions();
+  paymentClockTimer = setInterval(() => {
+    nowTick.value = Date.now();
+  }, 15000);
   loadOrders();
 });
 
@@ -1044,12 +1055,22 @@ function applyAftersale(order: FoodOrderRow) {
   });
 }
 
+function isCustomPaymentExpired(order: UnifiedOrder): boolean {
+  const row = order as CustomOrderRow;
+  return isPaymentExpired(row.paymentDeadlineAt ?? null, nowTick.value);
+}
+
 /**
  * 定制单列表的「继续支付」。
  * 订单列表原先只给成品/补剂支付按钮，定制待付款只能点进详情再付。
  */
 async function payCustomFromList(order: CustomOrderRow) {
   if (payingCustomId.value) return;
+  if (isCustomPaymentExpired(order)) {
+    uni.showToast({ title: '支付已超时，订单已关闭', icon: 'none' });
+    await loadOrders();
+    return;
+  }
   payingCustomId.value = order.orderId;
   try {
     const outcome = await runCustomRecipePayment(order.orderId);
@@ -1411,6 +1432,13 @@ function formatAddress(address?: { regionText?: string }): string {
   const regions = address.regionText.split(/\s+/);
   return regions[0] || address.regionText;
 }
+
+onUnmounted(() => {
+  if (paymentClockTimer) {
+    clearInterval(paymentClockTimer);
+    paymentClockTimer = null;
+  }
+});
 </script>
 
 <style scoped>

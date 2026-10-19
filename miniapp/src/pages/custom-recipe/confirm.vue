@@ -136,7 +136,10 @@
           </view>
         </view>
 
-        <view v-if="!postIsPaid && !postIsClosed" class="section submitted-pay">
+        <view
+          v-if="!postIsPaid && !postIsClosed && !postPaymentExpired"
+          class="section submitted-pay"
+        >
           <view class="submitted-pay-head">
             <text class="submitted-pay-title">还差最后一步：完成支付</text>
             <text v-if="postPaymentHint" class="submitted-pay-deadline">
@@ -156,6 +159,16 @@
           </text>
         </view>
 
+        <view
+          v-if="!postIsPaid && !postIsClosed && postPaymentExpired"
+          class="section submitted-expired"
+        >
+          <text class="submitted-pay-title">支付已超时</text>
+          <text class="submitted-pay-note">
+            订单正在关闭，不能再继续支付；可以返回定制页重新下单。
+          </text>
+        </view>
+
         <view class="submitted-actions">
           <button class="btn-secondary" @tap="viewCreatedOrder">查看订单详情</button>
           <button v-if="postIsClosed" class="btn-secondary" @tap="returnToCustom">返回定制页</button>
@@ -166,7 +179,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, onUnmounted } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import { dogApi } from '@/api/dogs';
 import {
@@ -191,6 +204,8 @@ import {
   buildPaymentTimeoutHint,
   formatAmount,
   formatDate,
+  isPaymentExpired,
+  resolvePaymentDeadlineAt,
 } from '@/utils/custom-recipe-order';
 import { CUSTOM_RECIPE_STATUS_SET } from '@/utils/option-set';
 
@@ -205,6 +220,8 @@ const submitting = ref(false);
 /** 订单创建后的页面状态：确认页合并支付页，不再跳提交成功页 */
 const createdOrder = ref<any>(null);
 const postPaying = ref(false);
+const nowTick = ref(Date.now());
+let paymentClockTimer: ReturnType<typeof setInterval> | null = null;
 /** 本次确认页的幂等键：网络超时重试时后端返回同一张订单 */
 const clientRequestId = ref('');
 
@@ -331,6 +348,17 @@ const postIsPaid = computed(() => postStatus.value === 'PAID');
 const postIsClosed = computed(() =>
   ['CANCELLED', 'CLOSED', 'REFUNDED'].includes(postStatus.value),
 );
+const postDeadline = computed(() =>
+  resolvePaymentDeadlineAt({
+    paymentDeadlineAt: createdOrder.value?.paymentDeadlineAt ?? null,
+    createdAt: createdOrder.value?.createdAt ?? null,
+    paymentTimeoutMinutes: Number(config.value?.paymentTimeoutMinutes) || 0,
+    now: nowTick.value,
+  }),
+);
+const postPaymentExpired = computed(() =>
+  isPaymentExpired(postDeadline.value, nowTick.value),
+);
 const postTitle = computed(() =>
   !createdOrder.value
     ? '确认订单'
@@ -338,14 +366,18 @@ const postTitle = computed(() =>
       ? '支付成功'
       : postIsClosed.value
         ? '订单已关闭'
-        : '订单已提交',
+        : postPaymentExpired.value
+          ? '支付已超时'
+          : '订单已提交',
 );
 const postDesc = computed(() =>
   postIsPaid.value
     ? '我们已收到付款，营养师会按排期开始设计。'
     : postIsClosed.value
       ? '这张订单已经关闭，可以返回定制页重新下单。'
-      : '订单已创建，完成支付后我们才会开始排期设计。',
+      : postPaymentExpired.value
+        ? '支付已超时，订单正在关闭，不能再继续支付。'
+        : '订单已创建，完成支付后我们才会开始排期设计。',
 );
 const postFeeText = computed(() =>
   formatAmount(createdOrder.value?.amount ?? config.value?.feeAmount ?? 0),
@@ -353,14 +385,17 @@ const postFeeText = computed(() =>
 const postDeliveryText = computed(() =>
   formatDate(createdOrder.value?.estimatedDeliveryDate, '排期中'),
 );
-const postStatusText = computed(
-  () => statusLabel(postStatus.value) || postStatus.value,
+const postStatusText = computed(() =>
+  postPaymentExpired.value && !postIsPaid.value && !postIsClosed.value
+    ? '支付超时'
+    : statusLabel(postStatus.value) || postStatus.value,
 );
 const postPaymentHint = computed(() =>
   buildPaymentTimeoutHint({
     paymentDeadlineAt: createdOrder.value?.paymentDeadlineAt ?? null,
     createdAt: createdOrder.value?.createdAt ?? null,
     paymentTimeoutMinutes: Number(config.value?.paymentTimeoutMinutes) || 0,
+    now: nowTick.value,
   }),
 );
 const postCreditText = computed(() =>
@@ -467,6 +502,10 @@ function validateBeforeSubmit(): string {
 
 async function payCreatedOrder() {
   if (postPaying.value) return;
+  if (postPaymentExpired.value) {
+    uni.showToast({ title: '支付已超时，订单已关闭', icon: 'none' });
+    return;
+  }
   const orderId = String(createdOrder.value?.orderId || '').trim();
   if (!orderId) return;
 
@@ -583,6 +622,9 @@ function returnToCustom() {
 }
 
 onLoad((options: any) => {
+  paymentClockTimer = setInterval(() => {
+    nowTick.value = Date.now();
+  }, 15000);
   dogId.value = String(options?.dogId || '').trim();
   clientRequestId.value = `cr-${Date.now().toString(36)}-${Math.random()
     .toString(36)
@@ -593,6 +635,13 @@ onLoad((options: any) => {
     return;
   }
   void loadConfirmData();
+});
+
+onUnmounted(() => {
+  if (paymentClockTimer) {
+    clearInterval(paymentClockTimer);
+    paymentClockTimer = null;
+  }
 });
 </script>
 
@@ -856,6 +905,11 @@ onLoad((options: any) => {
 
 .submitted-pay {
   border-color: #d8bc85;
+}
+
+.submitted-expired {
+  border-color: #e6c9b4;
+  background: #fdf7f0;
 }
 
 .submitted-pay-head {

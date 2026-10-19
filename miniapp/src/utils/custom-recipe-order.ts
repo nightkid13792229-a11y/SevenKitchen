@@ -183,6 +183,26 @@ export function resolvePaymentDeadlineAt(
 }
 
 /**
+ * 支付截止时间是否已经过去（2026-10-19）。
+ *
+ * 截止时间是业务规则，不等待后台定时关单；
+ * 页面到点就应隐藏支付入口/待付款提醒。
+ */
+export function isPaymentExpired(
+  deadlineAt: number | string | null | undefined,
+  now = Date.now(),
+): boolean {
+  if (deadlineAt === null || deadlineAt === undefined || deadlineAt === '') {
+    return false;
+  }
+  const timestamp =
+    typeof deadlineAt === 'number'
+      ? deadlineAt
+      : new Date(deadlineAt).getTime();
+  return Number.isFinite(timestamp) && timestamp <= now;
+}
+
+/**
  * 剩余时间文案（如「12 分钟」）。
  * 已过期返回空串 —— 由调用方决定怎么说"已经超时了"。
  */

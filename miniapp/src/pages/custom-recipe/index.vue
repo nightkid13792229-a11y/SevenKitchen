@@ -54,7 +54,7 @@
     <!-- 待付款单提醒（2026-10-04 新增）。
          口径是**不限制下单张数**（顾客养多只狗可以分别定制），所以这里只提醒
          "别忘了付这一单"，绝不做成"先付完才能再下单"的阻断。 -->
-    <view v-if="pendingOrder" class="pending-banner">
+    <view v-if="pendingOrder && !pendingOrderExpired" class="pending-banner">
       <view class="pending-banner__head">
         <text class="pending-banner__title">你有一张待付款的定制单</text>
         <text v-if="pendingOrderRemainingText" class="pending-banner__time">{{ pendingOrderRemainingText }}</text>
@@ -670,6 +670,7 @@ import { runCustomRecipePayment } from '@/utils/custom-recipe-payment';
 import {
   formatAmount,
   formatRemainingMinutes,
+  isPaymentExpired,
   resolvePaymentDeadlineAt,
 } from '@/utils/custom-recipe-order';
 import { navigateToDogCreate } from '@/utils/dog-profile-entry';
@@ -1279,7 +1280,13 @@ watch(
   () => scheduleDraftSave(),
   { deep: true },
 );
-onUnmounted(() => flushDraftNow());
+onUnmounted(() => {
+  if (paymentClockTimer) {
+    clearInterval(paymentClockTimer);
+    paymentClockTimer = null;
+  }
+  flushDraftNow();
+});
 
 /**
  * 需求 2.3.4 的三组选项（2026-10-18）。
@@ -1734,12 +1741,18 @@ const pendingOrder = ref<{ orderId: string; deadlineAt: number | null } | null>(
   null,
 );
 const pendingPaying = ref(false);
+/** 到点隐藏待付款提醒，不等后台定时关单 */
+const nowTick = ref(Date.now());
+let paymentClockTimer: ReturnType<typeof setInterval> | null = null;
+const pendingOrderExpired = computed(() =>
+  isPaymentExpired(pendingOrder.value?.deadlineAt ?? null, nowTick.value),
+);
 
 /** 剩余时间文案；拿不到截止时间就整段不显示，不猜 */
 const pendingOrderRemainingText = computed(() => {
   const deadlineAt = pendingOrder.value?.deadlineAt;
   if (!deadlineAt) return '';
-  const remaining = formatRemainingMinutes(deadlineAt, Date.now());
+  const remaining = formatRemainingMinutes(deadlineAt, nowTick.value);
   return remaining ? `还剩 ${remaining}` : '已超过支付时限';
 });
 
@@ -1802,6 +1815,13 @@ const loadPendingOrder = async () => {
 const continuePayPending = async () => {
   const orderId = pendingOrder.value?.orderId;
   if (!orderId || pendingPaying.value) return;
+
+  if (pendingOrderExpired.value) {
+    pendingOrder.value = null;
+    uni.showToast({ title: '支付已超时，订单已关闭', icon: 'none' });
+    void loadPendingOrder();
+    return;
+  }
 
   pendingPaying.value = true;
   try {
@@ -2405,6 +2425,10 @@ async function previewAttachment(url: string) {
 }
 
 onMounted(() => {
+  // 支付截止时间到点后，前端立即收起待付款入口，不依赖后台定时任务
+  paymentClockTimer = setInterval(() => {
+    nowTick.value = Date.now();
+  }, 15000);
   // 2026-10-18：需求 2.3.4 的三组选项
   void ensureCurrentFoodOptions();
   void ensureChangeReasonOptions();

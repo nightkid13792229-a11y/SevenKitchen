@@ -292,7 +292,7 @@
 
       <view class="action-bar">
         <button
-          v-if="order.status === 'PENDING_PAYMENT'"
+          v-if="order.status === 'PENDING_PAYMENT' && !paymentExpired"
           class="btn primary"
           :loading="paying"
           :disabled="paying"
@@ -300,6 +300,12 @@
         >
           立即付款
         </button>
+        <text
+          v-if="order.status === 'PENDING_PAYMENT' && paymentExpired"
+          class="action-disabled-reason"
+        >
+          支付已超时，订单正在关闭
+        </text>
         <!--
           自助取消（决策 12）：还没开始制作就能取消；
           已付款的会**全额原路退回微信**，不需要等客服。
@@ -331,7 +337,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, onUnmounted } from 'vue';
 import { onLoad, onPullDownRefresh } from '@dcloudio/uni-app';
 import { getToken } from '@/utils/api';
 import {
@@ -349,6 +355,8 @@ import {
   describeCustomRecipeRefund,
   formatAmount,
   formatDate,
+  isPaymentExpired,
+  resolvePaymentDeadlineAt,
 } from '@/utils/custom-recipe-order';
 import {
   CUSTOM_RECIPE_GOAL_SET,
@@ -407,6 +415,8 @@ const loading = ref(true);
 const loadFailed = ref(false);
 const paying = ref(false);
 const order = ref<CustomRecipeOrderDetail>({});
+const nowTick = ref(Date.now());
+let paymentClockTimer: ReturnType<typeof setInterval> | null = null;
 
 /** 登录已过期（401）：与"网络错误"分开表达，并给一个去登录的入口 */
 const needLogin = ref(false);
@@ -422,6 +432,9 @@ onLoad((options: any) => {
   ensureStomachOptions();
   ensureStatusOptions();
   orderId.value = options.orderId || '';
+  paymentClockTimer = setInterval(() => {
+    nowTick.value = Date.now();
+  }, 15000);
   void loadOrderDetail();
   void loadPaymentTimeoutConfig();
 });
@@ -755,7 +768,18 @@ const paymentHint = computed(() => {
     paymentDeadlineAt: order.value.paymentDeadlineAt ?? null,
     createdAt: order.value.createdAt ?? null,
     paymentTimeoutMinutes: paymentTimeoutMinutes.value,
+    now: nowTick.value,
   });
+});
+
+const paymentExpired = computed(() => {
+  if (order.value.status !== 'PENDING_PAYMENT') return false;
+  const deadline = resolvePaymentDeadlineAt({
+    paymentDeadlineAt: order.value.paymentDeadlineAt ?? null,
+    createdAt: order.value.createdAt ?? null,
+    paymentTimeoutMinutes: paymentTimeoutMinutes.value,
+  });
+  return isPaymentExpired(deadline, nowTick.value);
 });
 
 const creditTotal = computed(() => Number(order.value.creditAmount || 0));
@@ -884,6 +908,12 @@ const viewRecipe = () => {
 const goPay = async () => {
   if (paying.value) return;
 
+  if (paymentExpired.value) {
+    uni.showToast({ title: '支付已超时，订单已关闭', icon: 'none' });
+    await loadOrderDetail().catch(() => undefined);
+    return;
+  }
+
   const targetOrderId = order.value.orderId || orderId.value;
   if (!targetOrderId) return;
 
@@ -1011,6 +1041,13 @@ const cancelOrder = async () => {
 const goOrders = () => {
   uni.redirectTo({ url: '/pages/custom-recipe/orders' });
 };
+
+onUnmounted(() => {
+  if (paymentClockTimer) {
+    clearInterval(paymentClockTimer);
+    paymentClockTimer = null;
+  }
+});
 </script>
 
 <style scoped>

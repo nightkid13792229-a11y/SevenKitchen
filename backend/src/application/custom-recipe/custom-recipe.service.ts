@@ -35,6 +35,7 @@ import {
   CustomRecipeStatus,
   TargetGoal,
   CustomAttachmentType,
+  AllergyAnswerStatus,
 } from '@prisma/client';
 import {
   isNegativeLevel,
@@ -195,6 +196,57 @@ export class CustomRecipeService implements ICustomRecipeRepository {
    * ② **抢名额改 CAS**：原来先在事务外读余量、再无条件 booked_count + 1，
    *    两个并发请求会同时看到空位、同时 +1，每日上限形同虚设。
    */
+  /**
+   * 后端必填校验（2026-10-19 P0）。
+   *
+   * 前端校验不能作为唯一防线：旧版本小程序、接口直接调用都可能绕过。
+   * 这里返回中文错误，老客户端至少能看到“缺什么”，而不是生成信息不全的单。
+   */
+  private assertRequiredIntakeFields(data: CreateCustomRecipeOrderDTO): void {
+    if (!data.allergyStatus || data.allergyStatus === AllergyAnswerStatus.UNKNOWN) {
+      throw new BadRequestException('请先回答：狗狗是否对部分食物过敏');
+    }
+    if (
+      data.allergyStatus === AllergyAnswerStatus.HAS_ALLERGY &&
+      !(data.allergyText || '').trim() &&
+      (!Array.isArray(data.allergies) || data.allergies.length === 0)
+    ) {
+      throw new BadRequestException('请补充过敏食物');
+    }
+    if (
+      data.allergyStatus === AllergyAnswerStatus.NO_ALLERGY &&
+      ((data.allergyText || '').trim() ||
+        (Array.isArray(data.allergies) && data.allergies.length > 0))
+    ) {
+      throw new BadRequestException('回答“没有过敏”时请清空过敏食物');
+    }
+    if (!(data.currentFoodMain || '').trim()) {
+      throw new BadRequestException('请补充现在主要喂什么');
+    }
+    if (
+      data.currentFoodMain === 'OTHER' &&
+      !(data.currentFoodOther || '').trim()
+    ) {
+      throw new BadRequestException('请补充现在主要喂什么的说明');
+    }
+    if (!Array.isArray(data.changeReasons) || data.changeReasons.length === 0) {
+      throw new BadRequestException('请选择定制原因');
+    }
+    if (
+      data.changeReasons.includes('OTHER') &&
+      !(data.changeReasonOther || '').trim()
+    ) {
+      throw new BadRequestException('请补充定制原因的说明');
+    }
+    if (
+      Array.isArray(data.stomachConditions) &&
+      data.stomachConditions.includes('OTHER') &&
+      !(data.stomachOther || '').trim()
+    ) {
+      throw new BadRequestException('请补充肠胃情况的说明');
+    }
+  }
+
   async createOrder(data: CreateCustomRecipeOrderDTO): Promise<any> {
     // 定制费与可抵扣金额都从后台配置读取，并在下单这一刻**快照进订单**。
     // 之后后台调价只影响新提交的单，已提交的顾客额度不会被改。
@@ -202,6 +254,24 @@ export class CustomRecipeService implements ICustomRecipeRepository {
 
     // 先确认这只狗是他的，再谈别的
     await this.assertDogOwnership(data.customerId, data.dogId);
+
+    this.assertRequiredIntakeFields(data);
+
+    /**
+     * 幂等（2026-10-19 P0）：同一顾客 + 同一 clientRequestId 只生成一张订单。
+     * 网络超时后前端用同一个 key 重试，不能变成两张待付款单。
+     */
+    if (data.clientRequestId) {
+      const existing = await this.prisma.customRecipeOrder.findUnique({
+        where: {
+          customerId_clientRequestId: {
+            customerId: data.customerId,
+            clientRequestId: data.clientRequestId,
+          },
+        },
+      });
+      if (existing) return existing;
+    }
 
     const capacity = config.dailyCapacity;
     /** 抢输的日子记下来跳过，避免反复撞同一天 */
@@ -218,8 +288,10 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       // 连续这么多天都排不上：明确报错，不让顾客对着转圈猜
       if (!scheduledDate) break;
 
-      const created = await this.prisma.$transaction(async (tx) => {
-        const booked = await this.tryBookSlotTx(tx, scheduledDate, capacity);
+      let created;
+      try {
+        created = await this.prisma.$transaction(async (tx) => {
+          const booked = await this.tryBookSlotTx(tx, scheduledDate, capacity);
 
         // 并发下名额被别人抢走了：本次不写任何订单，交给外层换一天重试
         if (!booked) return null;
@@ -239,6 +311,8 @@ export class CustomRecipeService implements ICustomRecipeRepository {
             allergies: data.allergies || [],
             // 2026-10-19：顾客自由文本快照；老订单为 null
             allergyText: data.allergyText?.trim() || null,
+            allergyStatus: data.allergyStatus as AllergyAnswerStatus,
+            clientRequestId: data.clientRequestId || null,
             // 本单报告草稿：付款前只存订单，不写狗狗档案
             allergyReportDrafts: (data.allergyReportDrafts || []) as any,
             medicalConditions: data.medicalConditions || [],
@@ -268,7 +342,22 @@ export class CustomRecipeService implements ICustomRecipeRepository {
         });
 
         return order;
-      });
+        });
+      } catch (error) {
+        // 并发重试撞上 (customerId, clientRequestId) 唯一键：返回先创建的那张
+        if (data.clientRequestId && (error as any)?.code === 'P2002') {
+          const existing = await this.prisma.customRecipeOrder.findUnique({
+            where: {
+              customerId_clientRequestId: {
+                customerId: data.customerId,
+                clientRequestId: data.clientRequestId,
+              },
+            },
+          });
+          if (existing) return existing;
+        }
+        throw error;
+      }
 
       if (created) return created;
 
@@ -308,6 +397,54 @@ export class CustomRecipeService implements ICustomRecipeRepository {
    * 顾客端订单详情与后台详情都要读这些关联，之前没 include，
    * 调用方访问 order.dog.name 会直接抛 TypeError（500）。
    */
+  /**
+   * 把订单里的私有 COS 附件替换成短时签名 URL（2026-10-19 P0）。
+   *
+   * 只用于**读接口**；数据库里仍保留原始 URL/key，写操作不受影响。
+   * 覆盖：备注附件、订单附件记录、本单过敏报告草稿。
+   */
+  async signOrderMedia(order: any): Promise<any> {
+    if (!order) return order;
+    if (typeof (this.cosService as any).getSignedUrl !== 'function') {
+      return order;
+    }
+    const sign = (url: unknown) =>
+      this.cosService
+        .getSignedUrl(String(url || ''))
+        .catch(() => String(url || ''));
+
+    const attachments = Array.isArray(order.attachments)
+      ? await Promise.all(order.attachments.map((url: string) => sign(url)))
+      : order.attachments;
+    const attachmentRecords = Array.isArray(order.attachmentsRecords)
+      ? await Promise.all(
+          order.attachmentsRecords.map(async (record: any) => ({
+            ...record,
+            fileUrl: await sign(record?.fileUrl),
+          })),
+        )
+      : order.attachmentsRecords;
+    const drafts = Array.isArray(order.allergyReportDrafts)
+      ? await Promise.all(
+          order.allergyReportDrafts.map(async (draft: any) => ({
+            ...draft,
+            attachments: await Promise.all(
+              (Array.isArray(draft?.attachments) ? draft.attachments : []).map(
+                (url: string) => sign(url),
+              ),
+            ),
+          })),
+        )
+      : order.allergyReportDrafts;
+
+    return {
+      ...order,
+      attachments,
+      attachmentsRecords: attachmentRecords,
+      allergyReportDrafts: drafts,
+    };
+  }
+
   async getOrderByOrderId(orderId: string): Promise<any | null> {
     return await this.prisma.customRecipeOrder.findUnique({
       where: { orderId },
@@ -2558,9 +2695,13 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     const result = await this.cosService.uploadImage(
       file,
       file.originalname,
-      'custom-recipe-attachments',
+      'custom-recipe-sensitive-attachments',
     );
-    return { url: result.url, key: result.key };
+    // 私有目录：上传响应给短时签名 URL 供预览；数据库/订单后续用 key 重新签发
+    const signedUrl = await this.cosService
+      .getSignedUrl(result.key, 86400)
+      .catch(() => result.url);
+    return { url: signedUrl, key: result.key };
   }
 
   /**
@@ -2580,7 +2721,10 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       fileType: this.getFileType(file.originalname),
     });
 
-    return attachment;
+    const signedUrl = await this.cosService
+      .getSignedUrl(attachment.fileUrl, 86400)
+      .catch(() => attachment.fileUrl);
+    return { ...attachment, fileUrl: signedUrl };
   }
 
   private getFileType(filename: string): CustomAttachmentType {

@@ -77,6 +77,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref } from 'vue'
 import { dogApi } from '../../api/dogs'
+import { uploadCustomRecipeDraftAttachment } from '../../api/custom-recipe'
 import type { CustomRecipeReportDraft } from '../../utils/custom-recipe-draft'
 import {
   SCAN_IMAGE_SIZE_TYPE,
@@ -328,7 +329,7 @@ async function pickReport() {
         uni.showLoading({ title: `识别中 ${position + 1}/${filePaths.length}…`, mask: true })
       }
 
-      const uploaded = await dogApi.uploadHealthAttachment('allergy', filePath)
+      const uploaded = await uploadCustomRecipeDraftAttachment(filePath)
       const imageUrl = String(uploaded?.url || '').trim()
       if (!imageUrl) {
         throw new Error('上传失败，请重试')
@@ -474,7 +475,7 @@ async function pickReportDocument() {
   const attemptedKeys: string[] = []
 
   try {
-    const uploaded = await dogApi.uploadHealthAttachment('allergy', picked.path)
+    const uploaded = await uploadCustomRecipeDraftAttachment(picked.path)
     const fileUrl = String(uploaded?.url || '').trim()
     const key = String(uploaded?.key || '').trim()
     if (!fileUrl) {

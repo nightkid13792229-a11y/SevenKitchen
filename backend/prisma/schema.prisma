@@ -2441,6 +2441,11 @@ model CustomRecipeOrder {
   /// 设计器显示原文并由营养师 AI 辅助 + 人工核对。
   /// `allergies` 数组保留：老订单/结构化记录仍可读，新订单可为空。
   allergyText           String?                  @map("allergy_text") @db.VarChar(1000)
+  /// 顾客对「有没有过敏」的明确回答（2026-10-19 P0）。
+  /// 旧订单默认 UNKNOWN，不能把“空文本”误当成“明确没有过敏”。
+  allergyStatus         AllergyAnswerStatus      @default(UNKNOWN) @map("allergy_status")
+  /// 客户端提交幂等键（2026-10-19 P0）：网络重试时返回同一张订单。
+  clientRequestId       String?                  @map("client_request_id") @db.VarChar(64)
   /// ===== 2026-10-19 新增：本单上传的过敏检测报告草稿 =====
   ///
   /// 为什么放在订单：定制页在上传报告时还没有付款，
@@ -2549,6 +2554,7 @@ model CustomRecipeOrder {
   @@index([dogId])
   @@index([status])
   @@index([scheduledDate])
+  @@unique([customerId, clientRequestId])
   @@map("custom_recipe_order")
 }
 
@@ -3174,6 +3180,12 @@ enum ProcurementSkuPriceHistorySource {
   MANUAL
   REIMBURSEMENT
   ROLLBACK
+}
+
+enum AllergyAnswerStatus {
+  UNKNOWN
+  HAS_ALLERGY
+  NO_ALLERGY
 }
 
 enum TargetGoal {

@@ -55,6 +55,10 @@ export interface CreateCustomRecipeOrderDTO {
   needsHealthManagement?: boolean;
 
   // ===== 2026-10-18 新增：需求 2.3.4「第二段：补充」=====
+  /** 顾客对有没有过敏的明确回答（2026-10-19 P0） */
+  allergyStatus?: string | null;
+  /** 客户端提交幂等键 */
+  clientRequestId?: string | null;
   /** 目前在喂什么（code，必填）—— 决定过渡方案怎么写 */
   currentFoodMain?: string | null;
   /** 选「其他」时手填的当前食物 */

@@ -313,6 +313,12 @@ export class AdminCustomRecipeController {
       throw new NotFoundException('订单不存在');
     }
 
+    // 私有 COS 附件 → 短时签名 URL（2026-10-19 P0）
+    Object.assign(
+      order,
+      await this.customRecipeService.signOrderMedia(order),
+    );
+
     const hasAnyDelivery = (order.deliveries ?? []).length > 0;
 
     return ApiResponseDto.success({

@@ -79,6 +79,8 @@ export class CustomRecipeController {
       medicalConditions: dto.medicalConditions || [],
       additionalNotes: dto.additionalNotes,
       // 2026-10-18：需求 2.3.4 第二段（只问档案里没有的）
+      allergyStatus: dto.allergyStatus,
+      clientRequestId: dto.clientRequestId || null,
       currentFoodMain: dto.currentFoodMain || null,
       currentFoodOther: dto.currentFoodOther || null,
       changeReasons: Array.isArray(dto.changeReasons) ? dto.changeReasons : [],
@@ -307,6 +309,12 @@ export class CustomRecipeController {
     if (order.customerId !== userId) {
       throw new BadRequestException('无权访问此订单');
     }
+
+    // 私有 COS 附件 → 短时签名 URL（2026-10-19 P0）
+    Object.assign(
+      order,
+      await this.customRecipeService.signOrderMedia(order),
+    );
 
     /**
      * 当前有效的那一版交付（`replacedByDeliveryId = null`）。

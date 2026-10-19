@@ -41,6 +41,7 @@ describe('CustomRecipeController · 交付与编号口径', () => {
       getRequireCustomerConfirm: jest.fn().mockResolvedValue(true),
       getPaymentTimeoutMinutes: jest.fn().mockResolvedValue(30),
       getOrderByOrderId: jest.fn().mockResolvedValue(order),
+      signOrderMedia: jest.fn().mockImplementation(async (value: any) => value),
       updateOrder: jest.fn().mockResolvedValue({}),
       updateOrderStatus: jest.fn().mockResolvedValue(undefined),
       ['prisma']: prisma,
@@ -281,6 +282,7 @@ describe('CustomRecipeController · 顾客端编号口径', () => {
        * 控制器要向 service 取一次支付时限才能算出来。
        */
       getPaymentTimeoutMinutes: jest.fn().mockResolvedValue(30),
+      signOrderMedia: jest.fn().mockImplementation(async (value: any) => value),
       getOrderByOrderId: jest.fn().mockResolvedValue({
         orderId: 'CR202609280001',
         customerId: 'user-1',

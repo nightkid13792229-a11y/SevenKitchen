@@ -91,6 +91,8 @@ export interface CustomRecipeOrderDetail {
   syncToHealthProfile?: boolean
   medicalConditions?: string[]
   /** 需求 2.3.4：饲喂历史（2026-10-19 补「其他」手填） */
+  /** 顾客对有没有过敏的明确回答（2026-10-19 P0） */
+  allergyStatus?: string | null
   currentFoodMain?: string | null
   currentFoodOther?: string | null
   changeReasons?: string[]

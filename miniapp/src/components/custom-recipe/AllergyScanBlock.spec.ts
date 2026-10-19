@@ -184,7 +184,7 @@ describe('过敏报告 · 按钮文案与删除方式', () => {
 
     expect(source).toContain('chooseMessageFile')
     expect(source).toContain("extension: ['pdf', 'doc', 'docx']")
-    expect(source).toContain("dogApi.uploadHealthAttachment('allergy', picked.path)")
+    expect(source).toContain('uploadCustomRecipeDraftAttachment(picked.path)')
     expect(source).toContain('extractHealthReport({')
     expect(source).toContain('originalFilename: picked.name')
     expect(source).toContain('buildPageItems(data)')

@@ -46,8 +46,10 @@ describe('定制页 → 订单确认页（2026-10-19 老板确认）', () => {
     expect(confirm).toContain('预计');
   });
 
-  it('确认页读取本地草稿，提交时创建订单并进入支付页', () => {
+  it('确认页读取本地草稿，提交时带过敏回答与幂等键，创建订单并进入支付页', () => {
     expect(confirm).toContain('loadCustomRecipeDraft');
+    expect(confirm).toContain('allergyStatus');
+    expect(confirm).toContain('clientRequestId');
     expect(confirm).toContain('requestCustomRecipeOrderSubscription');
     expect(confirm).toContain('submitOrder(payload)');
     expect(confirm).toContain('clearCustomRecipeDraft');

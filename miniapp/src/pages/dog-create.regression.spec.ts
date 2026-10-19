@@ -309,7 +309,7 @@ describe('dog-create runtime regressions', () => {
       expect(source).not.toContain('uploadHealthAttachment')
       // 能力没有丢：上传 → 识别 两步在定制食谱的过敏录入块里
       // （2026-10-04 起过敏录入统一在定制食谱流程）
-      expect(scanBlock).toContain('dogApi.uploadHealthAttachment(')
+      expect(scanBlock).toContain('uploadCustomRecipeDraftAttachment(')
       expect(scanBlock).toContain('dogApi.extractHealthReport(')
     })
   })

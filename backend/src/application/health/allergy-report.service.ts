@@ -152,17 +152,19 @@ export class AllergyReportService {
     return {
       dogId,
       total: reports.length,
-      reports: reports.map((report) => ({
-        id: report.id,
-        testDate: toDateText(report.testDate),
-        testMethod: report.testMethod,
-        institution: report.institution,
-        summary: report.summary,
-        attachments: report.attachments ?? [],
-        resultCount: report.results.length,
-        results: report.results,
-        createdAt: report.createdAt.toISOString(),
-      })),
+      reports: await Promise.all(
+        reports.map(async (report) => ({
+          id: report.id,
+          testDate: toDateText(report.testDate),
+          testMethod: report.testMethod,
+          institution: report.institution,
+          summary: report.summary,
+          attachments: await this.signAttachments(report.attachments ?? []),
+          resultCount: report.results.length,
+          results: report.results,
+          createdAt: report.createdAt.toISOString(),
+        })),
+      ),
     };
   }
 
@@ -178,7 +180,33 @@ export class AllergyReportService {
       throw new NotFoundException('检测报告不存在');
     }
 
-    return report;
+    return {
+      ...report,
+      attachments: await this.signAttachments(report.attachments ?? []),
+    };
+  }
+
+  private attachmentKey(url: string): string {
+    if (typeof (this.cosService as any).extractKey === 'function') {
+      return this.cosService.extractKey(url);
+    }
+    try {
+      return new URL(url).pathname.replace(/^\/+/, '');
+    } catch {
+      return String(url || '').replace(/^\/+/, '');
+    }
+  }
+
+  /** 私有 COS 附件 → 短时签名 URL（2026-10-19 P0） */
+  private async signAttachments(urls: string[]): Promise<string[]> {
+    if (typeof (this.cosService as any).getSignedUrl !== 'function') {
+      return urls;
+    }
+    return Promise.all(
+      (urls || []).map((url) =>
+        this.cosService.getSignedUrl(url).catch(() => url),
+      ),
+    );
   }
 
   /**
@@ -296,8 +324,15 @@ export class AllergyReportService {
 
     // 2026-10-19：从报告里移除的附件，COS 文件也删掉，不留孤儿文件。
     // 只删真正被移除的；删除失败只记日志，不挡顾客修改报告。
+    /**
+     * 签名 URL 每次都不同，不能按整串 URL 比较（2026-10-19 P0）。
+     * 统一按 COS key 判断“哪些被移除”，避免误删所有附件。
+     */
+    const nextKeys = new Set(
+      nextAttachments.map((url) => this.attachmentKey(url)),
+    );
     const removedAttachments = previousAttachments.filter(
-      (url) => !nextAttachments.includes(url),
+      (url) => !nextKeys.has(this.attachmentKey(url)),
     );
     await this.deleteAttachmentObjects(removedAttachments);
 

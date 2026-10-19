@@ -279,6 +279,15 @@ export interface DogDesignInsight {
     medicalConditions: string[]
     preferredIngredients: string[]
     dislikedIngredients: string[]
+    /** 饲喂历史（2026-10-19 P0） */
+    currentFoodMain?: string | null
+    currentFoodOther?: string | null
+    changeReasons?: string[]
+    changeReasonOther?: string | null
+    stomachConditions?: string[]
+    stomachOther?: string | null
+    /** HAS_ALLERGY / NO_ALLERGY / UNKNOWN */
+    allergyStatus?: string | null
     createdAt: string | null
   } | null
   aiEnabled: boolean

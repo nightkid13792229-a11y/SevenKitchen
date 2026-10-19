@@ -113,6 +113,15 @@ export interface DogDesignInsight {
     medicalConditions: string[];
     preferredIngredients: string[];
     dislikedIngredients: string[];
+    /** 饲喂历史（2026-10-19 P0）：营养师设计过渡方案/配方时必须看到 */
+    currentFoodMain?: string | null;
+    currentFoodOther?: string | null;
+    changeReasons?: string[];
+    changeReasonOther?: string | null;
+    stomachConditions?: string[];
+    stomachOther?: string | null;
+    /** 顾客是否明确回答过敏（HAS_ALLERGY / NO_ALLERGY / UNKNOWN） */
+    allergyStatus?: string | null;
     createdAt: string | null;
   } | null;
 }

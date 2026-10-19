@@ -124,7 +124,6 @@ export class HealthUploadController {
         file.originalname,
         'allergy-records',
       );
-
       return ApiResponseDto.success(result);
     } catch (error) {
       console.error('[HealthUpload] Upload failed:', error);

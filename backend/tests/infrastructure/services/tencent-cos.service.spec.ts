@@ -61,3 +61,44 @@ describe('TencentCosService review image security', () => {
     }));
   });
 });
+
+describe('TencentCosService signed media access (2026-10-19 P0)', () => {
+  const config = {
+    get: jest.fn((key: string) =>
+      ({
+        COS_SECRET_ID: 'id',
+        COS_SECRET_KEY: 'key',
+        COS_BUCKET: 'bucket-123',
+        COS_REGION: 'ap-chengdu',
+      })[key],
+    ),
+  } as any;
+
+  it('extractKey 从 URL 中取 COS key', () => {
+    const service = new TencentCosService(config);
+    expect(
+      service.extractKey(
+        'https://cdn.example.com/allergy-records/a.jpg?sign=abc',
+      ),
+    ).toBe('allergy-records/a.jpg');
+    expect(service.extractKey('custom-recipe-sensitive-attachments/b.pdf')).toBe(
+      'custom-recipe-sensitive-attachments/b.pdf',
+    );
+  });
+
+  it('getSignedUrl 使用 Sign=true 生成短时地址', async () => {
+    const service = new TencentCosService(config);
+    const getObjectUrl = jest.fn((params: any, cb: any) =>
+      cb(null, { Url: `https://signed/${params.Key}` }),
+    );
+    jest.spyOn(service as any, 'createCosClient').mockReturnValue({ getObjectUrl });
+
+    await expect(
+      service.getSignedUrl('allergy-records/a.jpg'),
+    ).resolves.toBe('https://signed/allergy-records/a.jpg');
+    expect(getObjectUrl).toHaveBeenCalledWith(
+      expect.objectContaining({ Key: 'allergy-records/a.jpg', Sign: true }),
+      expect.any(Function),
+    );
+  });
+});

@@ -72,6 +72,15 @@ export interface AiWizardDogProfile {
     /** 顾客在订单里单独填的喜好/忌口（可能比档案更新） */
     preferredIngredients: string[];
     dislikedIngredients: string[];
+    /** 饲喂历史（2026-10-19 P0）：当前食物/换粮原因/肠胃 */
+    currentFoodMain?: string | null;
+    currentFoodOther?: string | null;
+    changeReasons?: string[];
+    changeReasonOther?: string | null;
+    stomachConditions?: string[];
+    stomachOther?: string | null;
+    /** HAS_ALLERGY / NO_ALLERGY / UNKNOWN */
+    allergyStatus?: string | null;
   } | null;
 }
 
@@ -259,7 +268,7 @@ function buildNutritionPlanSystemPrompt(): string {
     '你是一名资深宠物犬鲜食营养师，为宠物鲜食工作室的配方设计提供营养方案。',
     '你会收到一只犬的完整档案（性别、年龄、绝育、BCS、活动量、餐数、零食、目标热量、体重趋势、体检记录、病历等），以及一段「可引用的权威知识条目」。',
     '若提供了 userNotes（用户/营养师对既有方案的修改建议），请把该建议作为优先修订意见，在不违背犬档案与权威知识的基础上，据此优化/调整方案；若 userNotes 为空则按常规生成。',
-    'dog.customOrder 是顾客在「食谱定制」订单里**明确提出的要求**：targetGoal（LOSE_WEIGHT 减重 / MAINTAIN 维持 / GAIN_WEIGHT 增重）、needsHealthManagement（是否要按健康管理思路设计）、additionalNotes（顾客原话）、preferredIngredients / dislikedIngredients。',
+    'dog.customOrder 是顾客在「食谱定制」订单里**明确提出的要求**：targetGoal（LOSE_WEIGHT 减重 / MAINTAIN 维持 / GAIN_WEIGHT 增重）、needsHealthManagement（是否要按健康管理思路设计）、additionalNotes（顾客原话）、preferredIngredients / dislikedIngredients；以及饲喂历史 currentFoodMain/currentFoodOther（现在主要喂什么）、changeReasons/changeReasonOther（为什么换粮）、stomachConditions/stomachOther（最近肠胃）、allergyStatus（HAS_ALLERGY/NO_ALLERGY/UNKNOWN）。',
     '生成方案时必须落实 targetGoal：减重 → 在安全前提下把每日热量定在维持所需之下（caloriesBasis 里写清折减依据），并提高蛋白与纤维占比以保瘦体重与饱腹；增重 → 提高能量密度。禁止忽略顾客的目标；不得自行编造临床折减系数，需引用知识条目并标注。',    'additionalNotes 里若有具体忌口或工艺要求，一并落实并写进 precautions。',
     '请基于犬档案与知识条目，生成一份完整营养方案：',
     '- summary: string，1-2 句概括核心营养要点与设计方向。',
@@ -284,7 +293,7 @@ function buildIngredientRecommendationSystemPrompt(): string {
   return [
     '你是一名资深宠物犬鲜食营养师，负责在营养方案达成共识后推荐食材。',
     '你会收到：犬档案（含过敏/挑食/偏好）、已认可的营养方案（可能为空）、权威知识条目、历史设计食材汇总、最近90天实际吃过的食材、食谱结构框架模板名、当前配方明细（可能为空）。',
-    '注意 dog.customOrder：这是顾客在「食谱定制」订单里**明确提出的要求**（体重目标 targetGoal、是否需要健康管理 needsHealthManagement、备注 additionalNotes、订单里单独填的喜好与忌口）。',
+    '注意 dog.customOrder：这是顾客在「食谱定制」订单里**明确提出的要求**（体重目标 targetGoal、是否需要健康管理 needsHealthManagement、备注 additionalNotes、订单里单独填的喜好与忌口、饲喂历史 currentFood/changeReasons/stomachConditions、过敏回答状态 allergyStatus）。',
     'targetGoal 为 LOSE_WEIGHT / GAIN_WEIGHT 时，能量与配比必须按该方向调整（减重应控制能量密度、保证蛋白与纤维；增重应提高能量密度），并在 notes/warnings 里说明依据。',
     'additionalNotes 是顾客的原话，若有具体忌口或工艺要求要一并落实。',
     '请输出食材推荐：',

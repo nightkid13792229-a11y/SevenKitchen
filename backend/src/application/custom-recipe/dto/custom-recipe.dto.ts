@@ -15,7 +15,11 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { TargetGoal, CustomAttachmentType } from '@prisma/client';
+import {
+  TargetGoal,
+  CustomAttachmentType,
+  AllergyAnswerStatus,
+} from '@prisma/client';
 
 /**
  * 本单上传的过敏检测报告草稿（2026-10-19）。
@@ -141,6 +145,22 @@ export class SubmitCustomRecipeOrderDTO {
   @IsOptional()
   @IsString()
   currentFoodMain?: string;
+
+  @ApiPropertyOptional({
+    description: '顾客对有没有过敏的明确回答；后端会校验必填',
+    enum: AllergyAnswerStatus,
+  })
+  @IsOptional()
+  @IsEnum(AllergyAnswerStatus)
+  allergyStatus?: AllergyAnswerStatus;
+
+  @ApiPropertyOptional({
+    description: '客户端提交幂等键；同一顾客重复提交同一键返回同一张订单',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  clientRequestId?: string;
 
   @ApiPropertyOptional({ description: '选「其他」时手填的当前食物' })
   @IsOptional()

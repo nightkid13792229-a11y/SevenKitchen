@@ -238,6 +238,30 @@
               </span>
             </div>
             <div class="profile-item full">
+              <span class="label">过敏回答</span>
+              <span class="value" :class="{ empty: !insight.customRecipeOrder.allergyStatus || insight.customRecipeOrder.allergyStatus === 'UNKNOWN' }">
+                {{ allergyAnswerText() }}
+              </span>
+            </div>
+            <div class="profile-item full">
+              <span class="label">现在主要喂什么</span>
+              <span class="value" :class="{ empty: !insight.customRecipeOrder.currentFoodMain }">
+                {{ currentFoodText() }}
+              </span>
+            </div>
+            <div class="profile-item full">
+              <span class="label">定制原因</span>
+              <span class="value" :class="{ empty: !insight.customRecipeOrder.changeReasons?.length && !insight.customRecipeOrder.changeReasonOther }">
+                {{ changeReasonText() }}
+              </span>
+            </div>
+            <div class="profile-item full">
+              <span class="label">最近肠胃</span>
+              <span class="value" :class="{ empty: !insight.customRecipeOrder.stomachConditions?.length && !insight.customRecipeOrder.stomachOther }">
+                {{ stomachText() }}
+              </span>
+            </div>
+            <div class="profile-item full">
               <span class="label">订单里填的疾病</span>
               <span class="value" :class="{ empty: !insight.customRecipeOrder.medicalConditions.length }">
                 {{ insight.customRecipeOrder.medicalConditions.length ? insight.customRecipeOrder.medicalConditions.join('、') : '无' }}
@@ -386,11 +410,56 @@ const insight = ref<DogDesignInsight | null>(null)
 const { ensure: ensureGoalOptions, labelOf: goalLabel } = useOptionSet(
   CUSTOM_RECIPE_GOAL_SET,
 )
+const { ensure: ensureCurrentFoodOptions, labelOf: currentFoodLabel } =
+  useOptionSet('custom_recipe_current_food')
+const { ensure: ensureChangeReasonOptions, labelOf: changeReasonLabel } =
+  useOptionSet('custom_recipe_change_reason')
+const { ensure: ensureStomachOptions, labelOf: stomachLabel } =
+  useOptionSet('custom_recipe_stomach')
 
 function goalText(goal: string) {
   if (!goal) return ''
   // 后台查不到时如实显示原始码（看到原始码才知道后端加了新目标）
   return goalLabel(goal) || goal
+}
+
+function currentFoodText() {
+  const code = insight.value?.customRecipeOrder?.currentFoodMain
+  if (!code) return '无'
+  const label = currentFoodLabel(code) || code
+  const other = String(
+    insight.value?.customRecipeOrder?.currentFoodOther || '',
+  ).trim()
+  return other ? `${label}（${other}）` : label
+}
+
+function changeReasonText() {
+  const codes = insight.value?.customRecipeOrder?.changeReasons || []
+  const other = String(
+    insight.value?.customRecipeOrder?.changeReasonOther || '',
+  ).trim()
+  if (codes.length === 0 && !other) return '无'
+  return `${codes.map((code) => changeReasonLabel(code) || code).join('、')}${
+    other ? `（${other}）` : ''
+  }`
+}
+
+function stomachText() {
+  const codes = insight.value?.customRecipeOrder?.stomachConditions || []
+  const other = String(
+    insight.value?.customRecipeOrder?.stomachOther || '',
+  ).trim()
+  if (codes.length === 0 && !other) return '无'
+  return `${codes.map((code) => stomachLabel(code) || code).join('、')}${
+    other ? `（${other}）` : ''
+  }`
+}
+
+function allergyAnswerText() {
+  const status = insight.value?.customRecipeOrder?.allergyStatus
+  if (status === 'HAS_ALLERGY') return '有过敏'
+  if (status === 'NO_ALLERGY') return '明确回答：没有过敏'
+  return '未回答'
 }
 const editingNotes = ref(false)
 const savingNotes = ref(false)
@@ -704,8 +773,11 @@ async function saveNotes() {
   }
 }
 
-// 目标中文来自选项字典（不阻塞面板加载）
+// 中文来自选项字典（不阻塞面板加载）
 ensureGoalOptions()
+ensureCurrentFoodOptions()
+ensureChangeReasonOptions()
+ensureStomachOptions()
 
 watch(
   () => props.dogId,

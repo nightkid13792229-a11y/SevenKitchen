@@ -271,6 +271,11 @@
               档案里的过敏文本：{{ order.dog.allergyFoods }}
             </div>
           </el-descriptions-item>
+          <el-descriptions-item label="过敏回答（下单时填写）">
+            <span v-if="order.allergyStatus === 'HAS_ALLERGY'">有过敏</span>
+            <span v-else-if="order.allergyStatus === 'NO_ALLERGY'">明确回答：没有过敏</span>
+            <span v-else class="empty-text">未回答</span>
+          </el-descriptions-item>
           <el-descriptions-item label="过敏文本（下单时填写）">
             <div v-if="order.allergyText" class="allergy-text-block">
               {{ order.allergyText }}

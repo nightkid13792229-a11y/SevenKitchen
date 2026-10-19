@@ -101,6 +101,10 @@ export class TencentCosService {
             Region: this.region,
             Key: key,
             Body: fileBuffer,
+            // 敏感目录（过敏报告/定制附件）默认私有；读取时由后端签发短时 URL
+            ACL: folder === 'custom-recipe-sensitive-attachments'
+              ? 'private'
+              : 'public-read',
           },
           (err: any, data: any) => {
             if (err) {
@@ -196,6 +200,67 @@ export class TencentCosService {
     }
     const COS = require('cos-nodejs-sdk-v5');
     return new COS({ SecretId: this.secretId, SecretKey: this.secretKey });
+  }
+
+  /** 从 COS URL 提取 key；传入 key 时原样返回 */
+  extractKey(urlOrKey: string): string {
+    const value = String(urlOrKey || '').trim();
+    if (!value) return '';
+    if (!/^https?:\/\//i.test(value)) return value.replace(/^\/+/, '');
+    try {
+      return new URL(value).pathname.replace(/^\/+/, '');
+    } catch {
+      return '';
+    }
+  }
+
+  /**
+   * 生成短时签名 URL（2026-10-19 P0）。
+   *
+   * 敏感目录对象 ACL 为 private；前端 <image> 不能带 Authorization，
+   * 因此由后端在每次读取资源时签发 1 小时有效的 URL。
+   */
+  async getSignedUrl(urlOrKey: string, expiresSeconds = 3600): Promise<string> {
+    const key = this.extractKey(urlOrKey);
+    if (!key) return '';
+    if (!this.secretId || !this.secretKey || !this.bucket) return '';
+    const cos = this.createCosClient();
+    return new Promise<string>((resolve, reject) => {
+      cos.getObjectUrl(
+        {
+          Bucket: this.bucket,
+          Region: this.region,
+          Key: key,
+          Sign: true,
+          Expires: Math.max(60, Math.floor(expiresSeconds)),
+        },
+        (err: any, data: any) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve(String(data?.Url || ''));
+        },
+      );
+    });
+  }
+
+  /** 把历史对象补成私有（一次性运维脚本用） */
+  async makePrivate(urlOrKey: string): Promise<void> {
+    const key = this.extractKey(urlOrKey);
+    if (!key) return;
+    const cos = this.createCosClient();
+    await new Promise<void>((resolve, reject) => {
+      cos.putObjectAcl(
+        {
+          Bucket: this.bucket,
+          Region: this.region,
+          Key: key,
+          ACL: 'private',
+        },
+        (err: any) => (err ? reject(err) : resolve()),
+      );
+    });
   }
 
   private buildPublicUrl(key: string): string {

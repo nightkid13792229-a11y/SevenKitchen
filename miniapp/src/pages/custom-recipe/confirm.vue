@@ -119,6 +119,8 @@ const delivery = ref<any>(null);
 const loading = ref(true);
 const loadError = ref('');
 const submitting = ref(false);
+/** 本次确认页的幂等键：网络超时重试时后端返回同一张订单 */
+const clientRequestId = ref('');
 
 const { ensure: ensureCurrentFoodOptions, labelOf: currentFoodLabel } =
   useOptionSet('custom_recipe_current_food');
@@ -335,6 +337,13 @@ async function submitConfirmedOrder() {
     } = form.value;
     const payload = {
       ...orderForm,
+      allergyStatus:
+        draft.value?.hasFoodAllergy === true
+          ? 'HAS_ALLERGY'
+          : draft.value?.hasFoodAllergy === false
+            ? 'NO_ALLERGY'
+            : 'UNKNOWN',
+      clientRequestId: clientRequestId.value,
       allergyReportDrafts: Array.isArray(reportDrafts) ? reportDrafts : [],
       syncToHealthProfile: true,
       needsHealthManagement:
@@ -368,6 +377,9 @@ async function submitConfirmedOrder() {
 
 onLoad((options: any) => {
   dogId.value = String(options?.dogId || '').trim();
+  clientRequestId.value = `cr-${Date.now().toString(36)}-${Math.random()
+    .toString(36)
+    .slice(2, 12)}`;
   if (!dogId.value) {
     loadError.value = '缺少狗狗信息';
     loading.value = false;

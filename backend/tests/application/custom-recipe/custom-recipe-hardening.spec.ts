@@ -113,6 +113,9 @@ describe('CustomRecipeService · 链路加固', () => {
       scheduledDate: new Date('2099-06-01'),
       syncToHealthProfile: false,
       allergies: [],
+      allergyStatus: 'NO_ALLERGY',
+      currentFoodMain: 'DRY',
+      changeReasons: ['HEALTHIER'],
       medicalConditions: [],
       preferredIngredients: [],
       dislikedIngredients: [],
@@ -315,6 +318,37 @@ describe('CustomRecipeService · 链路加固', () => {
     expect(orderFindUnique).toHaveBeenCalledTimes(3);
     const created = orderCreate.mock.calls[0][0].data;
     expect(String(created.orderId)).toMatch(/^CR\d{12}$/);
+  });
+
+  // ---------- 8. 2026-10-19 P0：过敏回答 + 必填 + 幂等 ----------
+
+  it('没有明确回答过敏，后端拒绝创建订单', async () => {
+    await expect(submit({ allergyStatus: undefined })).rejects.toThrow(
+      '请先回答',
+    );
+    expect(orderCreate).not.toHaveBeenCalled();
+  });
+
+  it('缺当前食物/定制原因时，后端拒绝创建订单', async () => {
+    await expect(submit({ currentFoodMain: '' })).rejects.toThrow(
+      '现在主要喂什么',
+    );
+    await expect(submit({ changeReasons: [] })).rejects.toThrow('定制原因');
+    expect(orderCreate).not.toHaveBeenCalled();
+  });
+
+  it('同一个 clientRequestId 重试时返回已有订单，不重复创建', async () => {
+    const existing = {
+      id: 'cr-existing',
+      orderId: 'CR202610190001',
+      amount: 300,
+    };
+    orderFindUnique.mockResolvedValue(existing);
+
+    const result = await submit({ clientRequestId: 'req-1' });
+
+    expect(result).toBe(existing);
+    expect(orderCreate).not.toHaveBeenCalled();
   });
 
   // ---------- 7. 收入口径 ----------

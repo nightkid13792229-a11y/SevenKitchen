@@ -171,6 +171,9 @@ describe('CustomRecipeService · 档案同步时点', () => {
       scheduledDate: new Date('2026-11-10'),
       syncToHealthProfile: true,
       allergies: [],
+      allergyStatus: 'NO_ALLERGY',
+      currentFoodMain: 'DRY',
+      changeReasons: ['HEALTHIER'],
       allergyText: null,
       allergyReportDrafts: [],
       medicalConditions: [],
@@ -207,6 +210,7 @@ describe('CustomRecipeService · 档案同步时点', () => {
 
   it('提交订单只存快照，不写狗狗档案', async () => {
     await submit({
+      allergyStatus: 'HAS_ALLERGY',
       allergies: ['鸡肉'],
       allergyText: '鸡肉、牛肉',
       allergyReportDrafts: [

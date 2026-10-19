@@ -105,6 +105,12 @@ export class CreateSupplementOrderDto extends SupplementQuoteRequestDto {
 
   // cycleDays 已上移到 SupplementQuoteRequestDto（报价阶段就需要它算总天数）
 
+  @ApiPropertyOptional({ description: '再次购买的来源订单号' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  reorderFromOrderNo?: string;
+
   @ApiPropertyOptional({ description: '备注' })
   @IsOptional()
   @IsString()

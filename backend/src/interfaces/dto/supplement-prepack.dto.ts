@@ -170,6 +170,36 @@ export class OrderCenterQueryDto {
   pageSize?: number;
 }
 
+export class ListSupplementAftersalesQueryDto {
+  @ApiPropertyOptional({
+    enum: ['PENDING', 'PROCESSING', 'RESOLVED', 'REJECTED', 'CANCELLED'],
+  })
+  @IsOptional()
+  @IsIn(['PENDING', 'PROCESSING', 'RESOLVED', 'REJECTED', 'CANCELLED'])
+  status?: string;
+
+  @ApiPropertyOptional({ description: '售后单号 / 订单号' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  keyword?: string;
+
+  @ApiPropertyOptional({ default: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @ApiPropertyOptional({ default: 20 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  pageSize?: number;
+}
+
 export class SupplementRefundListQueryDto {
   @ApiPropertyOptional({ enum: ['PENDING', 'PROCESSING', 'SUCCESS', 'FAILED', 'ABNORMAL', 'CLOSED'] })
   @IsOptional()

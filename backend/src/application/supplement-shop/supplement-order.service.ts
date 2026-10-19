@@ -98,6 +98,7 @@ export interface CreateSupplementOrderRequest extends SupplementQuoteRequest {
   dogId?: string;
   dogName?: string;
   diySheetId?: string;
+  reorderFromOrderNo?: string;
   remark?: string;
 }
 
@@ -265,6 +266,16 @@ export class SupplementOrderService {
       );
     }
 
+    if (request.reorderFromOrderNo) {
+      const source = await this.prisma.supplementOrder.findUnique({
+        where: { orderNo: request.reorderFromOrderNo },
+        select: { id: true, userId: true },
+      });
+      if (!source || source.userId !== userId) {
+        throw new BadRequestException('再次购买的来源订单不存在');
+      }
+    }
+
     const address = await this.prisma.address.findUnique({
       where: { id: request.addressId },
     });
@@ -310,6 +321,7 @@ export class SupplementOrderService {
           dogName: request.dogName ?? null,
           diySheetId: request.diySheetId ?? null,
           cycleDays: request.cycleDays ?? null,
+          reorderFromOrderNo: request.reorderFromOrderNo ?? null,
           // 加量信息：份数取报价里已校验收敛过的值，总天数用报价算出来的那个
           // （它已经把 cycleDays 与份数乘好了，且受效期上限约束）。
           portionMultiplier: quote.portionMultiplier,
@@ -649,13 +661,19 @@ export class SupplementOrderService {
     return this.getOrderById(orderId);
   }
 
-  /** 发货：只有已完成分装的订单才能填单号 */
+  /** 发货：只有已完成分装的订单才能填单号；PACKED 有未完结退款时拒绝 */
   async shipOrder(
     orderId: string,
     dto: { trackingNumber: string; carrierCode?: string },
   ): Promise<SupplementOrderView> {
     const order = await this.requireOrder(orderId);
     this.assertStatus(order.status, ['PACKED'], '发货');
+
+    if (await this.hasOpenSupplementRefund(orderId)) {
+      throw new BadRequestException(
+        '该订单有未完结退款，不能发货；请先处理退款或驳回',
+      );
+    }
 
     const trackingNumber = (dto.trackingNumber || '').trim();
     if (!trackingNumber) {
@@ -672,7 +690,36 @@ export class SupplementOrderService {
       },
     });
 
+    // 补发单发货后，售后 case 自动 RESOLVED
+    try {
+      const caseRow = await (this.prisma as any).aftersaleCase?.findFirst?.({
+        where: { reshipOrderId: orderId, status: 'PROCESSING' },
+      });
+      if (caseRow?.id) {
+        await (this.prisma as any).aftersaleCase.update({
+          where: { id: caseRow.id },
+          data: { status: 'RESOLVED', resolvedAt: new Date() },
+        });
+      }
+    } catch {
+      // 售后回写失败不影响发货；后台可手工处理
+    }
+
     return this.getOrderById(orderId);
+  }
+
+  private async hasOpenSupplementRefund(orderId: string): Promise<boolean> {
+    const delegate = (this.prisma as any).aftersaleCase;
+    if (!delegate?.count) return false;
+    const count = await delegate.count({
+      where: {
+        orderType: 'SUPPLEMENT',
+        orderId,
+        requestType: 'REFUND',
+        status: { in: ['PENDING', 'PROCESSING'] },
+      },
+    });
+    return count > 0;
   }
 
   /** 取消订单（已发货的不能直接取消，要走售后） */
@@ -701,8 +748,12 @@ export class SupplementOrderService {
   async cancelOrder(
     orderId: string,
     dto: { reason?: string } = {},
+    customerId?: string,
   ): Promise<SupplementOrderView> {
     const order = await this.requireOrder(orderId);
+    if (customerId && order.userId !== customerId) {
+      throw new NotFoundException('补剂订单不存在');
+    }
     this.assertStatus(order.status, ['PENDING_PAYMENT', 'PAID'], '取消');
 
     await this.prisma.$transaction(async (tx) => {
@@ -718,6 +769,111 @@ export class SupplementOrderService {
     });
 
     return this.getOrderById(orderId);
+  }
+
+  /** 未发货自助改地址；已打面单提示重打 */
+  async updateAddress(
+    userId: string,
+    orderId: string,
+    dto: { addressId: string; setAsDefault?: boolean },
+  ): Promise<{ order: SupplementOrderView; needsReprint: boolean }> {
+    const order = await this.requireOrder(orderId);
+    if (order.userId !== userId) throw new NotFoundException('补剂订单不存在');
+    if (!['PENDING_PAYMENT', 'PAID', 'PACKED'].includes(order.status)) {
+      throw new BadRequestException('已发货订单不能修改地址，请联系客服/快递');
+    }
+
+    const address = await this.prisma.address.findUnique({
+      where: { id: dto.addressId },
+    });
+    if (!address || address.userId !== userId) {
+      throw new BadRequestException('收货地址不存在');
+    }
+    const region = (address.region || {}) as Record<string, unknown>;
+    const snapshot = {
+      addressId: address.id,
+      recipientName: address.recipientName,
+      phone: address.phone,
+      region: {
+        province: String(region.province ?? ''),
+        city: String(region.city ?? ''),
+        district: region.district ? String(region.district) : undefined,
+      },
+      detail: address.detail,
+    };
+
+    const needsReprint = order.status === 'PACKED';
+    await this.prisma.$transaction(async (tx) => {
+      await tx.supplementOrder.update({
+        where: { id: orderId },
+        data: { shippingAddressSnapshot: snapshot },
+      });
+      if (dto.setAsDefault) {
+        await tx.address.updateMany({
+          where: { userId },
+          data: { isDefault: false },
+        });
+        await tx.address.update({
+          where: { id: address.id },
+          data: { isDefault: true },
+        });
+      }
+      try {
+        await tx.supplementOrderEvent.create({
+          data: {
+            orderId,
+            type: 'ADDRESS_CHANGED',
+            actorType: 'CUSTOMER',
+            actorId: userId,
+            metadata: { needsReprint },
+          },
+        });
+      } catch {
+        // 事件失败不影响改地址
+      }
+    });
+
+    return {
+      order: await this.getOrderById(orderId),
+      needsReprint,
+    };
+  }
+
+  /** 再次购买：按原单/快照清单重新报价，不直接建单 */
+  async repurchase(userId: string, orderId: string) {
+    const order = await this.prisma.supplementOrder.findUnique({
+      where: { id: orderId },
+      include: { items: { orderBy: { createdAt: 'asc' } } },
+    });
+    if (!order || order.userId !== userId) {
+      throw new NotFoundException('补剂订单不存在');
+    }
+    if (order.items.length === 0) {
+      throw new BadRequestException('原订单没有可复购的补剂');
+    }
+
+    const lines: SupplementQuoteLineInput[] = order.items.map((item) => ({
+      ingredientId: item.ingredientId,
+      name: item.name,
+      unit: item.unit,
+      amount: item.requestedAmount,
+      unitCost: Number(item.unitCost),
+      physicalForm: (item.physicalForm ?? 'POWDER') as IngredientPhysicalFormCode,
+    }));
+    const { quote, unavailable, config } = await this.buildQuote({
+      lines,
+      cycleDays: order.cycleDays ?? undefined,
+      portionMultiplier: order.portionMultiplier ?? 1,
+    });
+
+    return {
+      quote,
+      unavailable,
+      enabled: config.enabled,
+      sourceOrderNo: order.orderNo,
+      sourceOrderId: order.id,
+      remark: order.remark,
+    };
   }
 
   /**
@@ -884,8 +1040,126 @@ export class SupplementOrderService {
   }
 
   /**
+   * 按售后 case 补发：每个 case 最多一张补发单。
+   * 原订单履约状态不变；case 由 PROCESSING 等到补发单发货后 RESOLVED。
+   */
+  async createReshipForCase(
+    caseId: string,
+    adminId: string,
+    reason: string,
+  ): Promise<SupplementOrderView> {
+    const caseRow = await this.prisma.aftersaleCase.findUnique({
+      where: { id: caseId },
+    });
+    if (!caseRow || caseRow.orderType !== 'SUPPLEMENT') {
+      throw new NotFoundException('售后记录不存在');
+    }
+    if (!['PENDING', 'PROCESSING'].includes(caseRow.status)) {
+      throw new BadRequestException('该售后已处理，不能重复补发');
+    }
+    if (caseRow.reshipOrderId) {
+      throw new BadRequestException(
+        `该售后已经补发过（补发单 ${caseRow.reshipOrderNo ?? ''}），不能重复补发`,
+      );
+    }
+
+    const original = await this.prisma.supplementOrder.findUnique({
+      where: { id: caseRow.orderId },
+      include: { items: { orderBy: { createdAt: 'asc' } } },
+    });
+    if (!original) throw new NotFoundException('补剂订单不存在');
+    if (!['SHIPPED', 'COMPLETED'].includes(original.status)) {
+      throw new BadRequestException('只有已发货/已完成的订单可以补发');
+    }
+
+    const reasonText = (reason || '').trim() || '免费补发';
+    const now = new Date();
+
+    const reshipId = await this.prisma.$transaction(async (tx) => {
+      const orderNo = await this.generateOrderNo(tx);
+      const created = await tx.supplementOrder.create({
+        data: {
+          orderNo,
+          userId: original.userId,
+          status: 'PAID',
+          bagCount: original.bagCount,
+          portionMultiplier: original.portionMultiplier,
+          totalDays: original.totalDays,
+          amountSupplement: 0,
+          amountServiceFee: 0,
+          amountPackaging: 0,
+          amountGoods: 0,
+          amountShipping: 0,
+          amountTotal: 0,
+          supplementCost: original.supplementCost,
+          shippingDescription: '免费补发，不收运费',
+          pricingSnapshot: (original.pricingSnapshot ??
+            undefined) as Prisma.InputJsonValue | undefined,
+          shippingAddressSnapshot:
+            original.shippingAddressSnapshot as Prisma.InputJsonValue,
+          recipeId: original.recipeId,
+          recipeName: original.recipeName,
+          dogId: original.dogId,
+          dogName: original.dogName,
+          diySheetId: original.diySheetId,
+          cycleDays: original.cycleDays,
+          remark: `免费补发（原单 ${original.orderNo}）：${reasonText}`,
+          paymentMethod: 'RESHIP',
+          paymentStatus: 'SUCCESS',
+          paidAt: now,
+          reshipFromOrderNo: original.orderNo,
+          items: {
+            create: original.items.map((item) => ({
+              ingredientId: item.ingredientId,
+              name: item.name,
+              brand: item.brand,
+              productModel: item.productModel,
+              physicalForm: item.physicalForm,
+              unit: item.unit,
+              requestedAmount: item.requestedAmount,
+              packedAmount: item.packedAmount,
+              unitCost: item.unitCost,
+              cost: item.cost,
+              price: 0,
+              bags: item.bags,
+              shelfLifeMonths: item.shelfLifeMonths,
+              storageCondition: item.storageCondition,
+            })),
+          },
+        },
+        select: { id: true, orderNo: true },
+      });
+
+      await tx.aftersaleCase.update({
+        where: { id: caseId },
+        data: {
+          status: 'PROCESSING',
+          resolutionType: 'RESHIP',
+          handlerId: adminId,
+          handlingNote: reasonText,
+          acceptedAt: caseRow.acceptedAt ?? now,
+          reshipOrderId: created.id,
+          reshipOrderNo: created.orderNo,
+        },
+      });
+
+      return created.id;
+    });
+
+    try {
+      await this.schedulingService?.scheduleOrder(reshipId, { type: 'SYSTEM' });
+    } catch {
+      // 排期失败会写 SCHEDULE_FAILED；补发单仍在待排期，由定时任务重试
+    }
+
+    return this.getOrderById(reshipId);
+  }
+
+  /**
    * 免费补发：按原单原样生成一张 0 元补发单，直接进入待分装。
    * 原单标记为售后中，并记录了补发关系，避免重复补发。
+   *
+   * @deprecated 新代码用 createReshipForCase；保留此方法给旧接口过渡。
    */
   async reshipOrder(
     orderId: string,

@@ -231,9 +231,11 @@ import { BusinessCalendarService } from './application/supplement-shop/business-
 import { SupplementSchedulingService } from './application/supplement-shop/supplement-scheduling.service';
 import { SupplementInventoryService } from './application/supplement-shop/supplement-inventory.service';
 import { SupplementSnapshotService } from './application/supplement-shop/supplement-snapshot.service';
+import { SupplementAftersaleService } from './application/supplement-shop/supplement-aftersale.service';
 import { SupplementOrderService } from './application/supplement-shop/supplement-order.service';
 import { SupplementsController } from './interfaces/controllers/supplements.controller';
 import { SupplementOrdersController } from './interfaces/controllers/supplement-orders.controller';
+import { SupplementAftersalesController } from './interfaces/controllers/supplement-aftersales.controller';
 import { IngredientSuggestionsController } from './interfaces/controllers/ingredient-suggestions.controller';
 import { NutritionCalculationController } from './interfaces/controllers/nutrition-calculation.controller';
 import { IngredientBatchReplaceController } from './interfaces/controllers/ingredient-batch-replace.controller';
@@ -409,6 +411,7 @@ validatePrismaConfig();
     PublicTastingPackController,
     SupplementsController,
     SupplementOrdersController,
+    SupplementAftersalesController,
     IngredientSuggestionsController,
     NutritionCalculationController,
     IngredientBatchReplaceController,
@@ -859,6 +862,7 @@ validatePrismaConfig();
     BusinessCalendarService,
     SupplementInventoryService,
     SupplementSnapshotService,
+    SupplementAftersaleService,
     SupplementSchedulingService,
     SupplementSchedulerService,
     SupplementOrderService,

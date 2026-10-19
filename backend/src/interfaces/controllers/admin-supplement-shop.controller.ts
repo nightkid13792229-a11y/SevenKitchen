@@ -28,7 +28,12 @@ import {
 import { SupplementOrderService } from '../../application/supplement-shop/supplement-order.service';
 import { SupplementLabelService } from '../../label/supplement-label.service';
 import { SupplementSchedulingService } from '../../application/supplement-shop/supplement-scheduling.service';
-import { ScheduleSupplementOrderDto } from '../dto/supplement-prepack.dto';
+import { SupplementAftersaleService } from '../../application/supplement-shop/supplement-aftersale.service';
+import {
+  ListSupplementAftersalesQueryDto,
+  ResolveAftersaleDto,
+  ScheduleSupplementOrderDto,
+} from '../dto/supplement-prepack.dto';
 import { TimezoneUtil } from '../../utils/timezone.util';
 import { WechatPaymentService } from '../../application/payment/wechat-payment.service';
 import {
@@ -64,6 +69,8 @@ export class AdminSupplementShopController {
     private readonly supplementLabelService: SupplementLabelService,
     @Optional()
     private readonly supplementSchedulingService?: SupplementSchedulingService,
+    @Optional()
+    private readonly supplementAftersaleService?: SupplementAftersaleService,
   ) {}
 
   // ---------- 上架清单 ----------
@@ -270,6 +277,37 @@ export class AdminSupplementShopController {
   ) {
     return ApiResponseDto.success(
       await this.supplementOrderService.cancelOrder(id, dto),
+    );
+  }
+
+  @Get('aftersales')
+  @ApiOperation({ summary: '补剂售后列表（员工只读）' })
+  async listAftersales(@Query() query: ListSupplementAftersalesQueryDto) {
+    if (!this.supplementAftersaleService) {
+      throw new BadRequestException('售后记录服务未启用');
+    }
+    return ApiResponseDto.success(
+      await this.supplementAftersaleService.listCases(query),
+    );
+  }
+
+  @Post('aftersales/:id/resolve')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: '处理售后：退款/补发/仅登记/驳回（管理员）' })
+  async resolveAftersale(
+    @Param('id') id: string,
+    @Body() dto: ResolveAftersaleDto,
+    @Req() request: { user?: { userId?: string } },
+  ) {
+    if (!this.supplementAftersaleService) {
+      throw new BadRequestException('售后记录服务未启用');
+    }
+    return ApiResponseDto.success(
+      await this.supplementAftersaleService.resolve(
+        request.user?.userId ?? 'admin',
+        id,
+        dto,
+      ),
     );
   }
 

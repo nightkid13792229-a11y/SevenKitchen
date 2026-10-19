@@ -18,9 +18,6 @@
         @tap="pickReportEntry"
       >{{ extracting ? '识别中…' : '上传过敏检测报告' }}</button>
     </view>
-    <text class="allergy-scan__file-hint">
-      支持照片、PDF、Word 文档（.doc / .docx）；文档从微信聊天里选。
-    </text>
 
     <!-- 候选确认卡（2026-10-05 改口径）：
          · 只列**食物类**过敏原 —— 报告里常同时有环境组（尘螨/花粉/霉菌），
@@ -643,14 +640,6 @@ onUnmounted(() => {
 
 .allergy-scan__button::after {
   border: none;
-}
-
-.allergy-scan__file-hint {
-  display: block;
-  margin-top: 10rpx;
-  font-size: 22rpx;
-  line-height: 1.5;
-  color: #8a7a63;
 }
 
 .allergy-scan__skipped {

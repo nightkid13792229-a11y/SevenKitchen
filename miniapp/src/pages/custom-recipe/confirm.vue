@@ -145,8 +145,12 @@ function getDraftCustomerId(): string {
 const dogName = computed(() => String(dog.value?.name || '狗狗'));
 const dogLine = computed(() => {
   const parts = [
-    dog.value?.breed,
-    dog.value?.weightKg ? `${dog.value.weightKg}kg` : '',
+    dog.value?.breedName || dog.value?.breed,
+    dog.value?.currentWeightKg
+      ? `${dog.value.currentWeightKg}kg`
+      : dog.value?.weightKg
+        ? `${dog.value.weightKg}kg`
+        : '',
   ].filter(Boolean);
   return parts.join(' · ') || '档案信息以定制页为准';
 });
@@ -264,7 +268,7 @@ async function loadConfirmData() {
       fetchPublicConfig(),
       fetchNextDeliveryDate(),
     ]);
-    dog.value = dogRes?.data || dogRes || null;
+    dog.value = dogRes?.data?.profile || dogRes?.data || dogRes || null;
     config.value = configRes;
     delivery.value = deliveryRes;
   } catch (error: any) {

@@ -17,6 +17,7 @@ import { StaffShippingController } from './interfaces/controllers/staff-shipping
 import { HealthRecordsController } from './interfaces/controllers/health-records.controller';
 import { HealthNotificationController } from './interfaces/controllers/health-notification.controller';
 import { HealthUploadController } from './interfaces/controllers/health-upload.controller';
+import { SensitiveMediaController } from './interfaces/controllers/sensitive-media.controller';
 import { HealthTimelineController } from './interfaces/controllers/health-timeline.controller';
 import { HealthShareController } from './interfaces/controllers/health-share.controller';
 import { SharedHealthController } from './interfaces/controllers/shared-health.controller';
@@ -377,6 +378,7 @@ validatePrismaConfig();
     AllergyTrialController,
     HealthAnalysisController,
     HealthUploadController,
+    SensitiveMediaController,
     GlobalConfigController,
     PublicGlobalConfigController,
     ShippingTemplateController,

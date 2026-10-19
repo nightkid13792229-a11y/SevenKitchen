@@ -405,13 +405,12 @@ export class CustomRecipeService implements ICustomRecipeRepository {
    */
   async signOrderMedia(order: any): Promise<any> {
     if (!order) return order;
-    if (typeof (this.cosService as any).getSignedUrl !== 'function') {
+    if (typeof (this.cosService as any).getSensitiveMediaUrl !== 'function') {
       return order;
     }
     const sign = (url: unknown) =>
-      this.cosService
-        .getSignedUrl(String(url || ''))
-        .catch(() => String(url || ''));
+      this.cosService.getSensitiveMediaUrl(String(url || '')) ||
+      String(url || '');
 
     const attachments = Array.isArray(order.attachments)
       ? await Promise.all(order.attachments.map((url: string) => sign(url)))
@@ -426,14 +425,15 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       : order.attachmentsRecords;
     const drafts = Array.isArray(order.allergyReportDrafts)
       ? await Promise.all(
-          order.allergyReportDrafts.map(async (draft: any) => ({
-            ...draft,
-            attachments: await Promise.all(
-              (Array.isArray(draft?.attachments) ? draft.attachments : []).map(
-                (url: string) => sign(url),
-              ),
-            ),
-          })),
+          order.allergyReportDrafts.map(async (draft: any) => {
+            const { attachmentKeys: _attachmentKeys, ...safeDraft } = draft;
+            return {
+              ...safeDraft,
+              attachments: (
+                Array.isArray(draft?.attachments) ? draft.attachments : []
+              ).map((url: string) => sign(url)),
+            };
+          }),
         )
       : order.allergyReportDrafts;
 
@@ -2698,9 +2698,8 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       'custom-recipe-sensitive-attachments',
     );
     // 私有目录：上传响应给短时签名 URL 供预览；数据库/订单后续用 key 重新签发
-    const signedUrl = await this.cosService
-      .getSignedUrl(result.key, 86400)
-      .catch(() => result.url);
+    const signedUrl =
+      this.cosService.getSensitiveMediaUrl(result.key, 86400) || result.url;
     return { url: signedUrl, key: result.key };
   }
 
@@ -2721,9 +2720,9 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       fileType: this.getFileType(file.originalname),
     });
 
-    const signedUrl = await this.cosService
-      .getSignedUrl(attachment.fileUrl, 86400)
-      .catch(() => attachment.fileUrl);
+    const signedUrl =
+      this.cosService.getSensitiveMediaUrl(attachment.fileUrl, 86400) ||
+      attachment.fileUrl;
     return { ...attachment, fileUrl: signedUrl };
   }
 

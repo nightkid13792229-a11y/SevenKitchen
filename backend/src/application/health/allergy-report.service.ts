@@ -199,13 +199,11 @@ export class AllergyReportService {
 
   /** 私有 COS 附件 → 短时签名 URL（2026-10-19 P0） */
   private async signAttachments(urls: string[]): Promise<string[]> {
-    if (typeof (this.cosService as any).getSignedUrl !== 'function') {
+    if (typeof (this.cosService as any).getSensitiveMediaUrl !== 'function') {
       return urls;
     }
-    return Promise.all(
-      (urls || []).map((url) =>
-        this.cosService.getSignedUrl(url).catch(() => url),
-      ),
+    return (urls || []).map(
+      (url) => this.cosService.getSensitiveMediaUrl(url) || url,
     );
   }
 

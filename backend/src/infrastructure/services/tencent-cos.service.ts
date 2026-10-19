@@ -26,6 +26,11 @@ export class TencentCosService {
   private readonly region: string;
   private readonly cdnDomain: string | undefined;
   private readonly imageAuditBizType: string | undefined;
+  /** 媒体代理 token → COS key（短期、进程内；只用于敏感附件读取） */
+  private readonly mediaTokens = new Map<
+    string,
+    { key: string; expiresAt: number }
+  >();
 
   constructor(private readonly configService: ConfigService) {
     this.secretId = this.configService.get<string>('COS_SECRET_ID') || '';
@@ -220,6 +225,73 @@ export class TencentCosService {
    * 敏感目录对象 ACL 为 private；前端 <image> 不能带 Authorization，
    * 因此由后端在每次读取资源时签发 1 小时有效的 URL。
    */
+  /**
+   * 敏感附件的对外 URL（2026-10-19 P0）。
+   *
+   * 不再把 COS key/签名直接交给前端：返回后端媒体代理的**不透明 token**，
+   * 代理再凭服务端 COS 凭证读取对象。这样前端拿不到 key，
+   * 不能绕过代理去拼 CDN 公共地址。
+   */
+  getSensitiveMediaUrl(urlOrKey: string, expiresSeconds = 3600): string {
+    const key = this.extractKey(urlOrKey);
+    if (!key) return '';
+    const token = crypto.randomBytes(24).toString('hex');
+    const now = Date.now();
+    for (const [existing, value] of this.mediaTokens) {
+      if (value.expiresAt <= now) this.mediaTokens.delete(existing);
+    }
+    this.mediaTokens.set(token, {
+      key,
+      expiresAt: now + Math.max(60, Math.floor(expiresSeconds)) * 1000,
+    });
+    const base = String(
+      process.env.PUBLIC_API_BASE_URL ||
+        process.env.API_PUBLIC_BASE_URL ||
+        'https://api.sevenkitchen.cloud',
+    ).replace(/\/+$/, '');
+    return `${base}/api/v1/media/sensitive/${token}`;
+  }
+
+  resolveMediaToken(token: string): string | null {
+    const entry = this.mediaTokens.get(String(token || ''));
+    if (!entry) return null;
+    if (entry.expiresAt <= Date.now()) {
+      this.mediaTokens.delete(String(token));
+      return null;
+    }
+    return entry.key;
+  }
+
+  /** 媒体代理读取 COS 对象（私有对象由服务端凭证读取） */
+  async getObjectBuffer(
+    urlOrKey: string,
+  ): Promise<{ buffer: Buffer; contentType: string }> {
+    const key = this.extractKey(urlOrKey);
+    if (!key) throw new BadRequestException('附件不存在');
+    const cos = this.createCosClient();
+    return new Promise((resolve, reject) => {
+      cos.getObject(
+        { Bucket: this.bucket, Region: this.region, Key: key },
+        (err: any, data: any) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          const body = data?.Body;
+          const buffer = Buffer.isBuffer(body)
+            ? body
+            : Buffer.from(body || '');
+          const contentType =
+            data?.ContentType ||
+            data?.headers?.['content-type'] ||
+            data?.headers?.['Content-Type'] ||
+            '';
+          resolve({ buffer, contentType });
+        },
+      );
+    });
+  }
+
   async getSignedUrl(urlOrKey: string, expiresSeconds = 3600): Promise<string> {
     const key = this.extractKey(urlOrKey);
     if (!key) return '';

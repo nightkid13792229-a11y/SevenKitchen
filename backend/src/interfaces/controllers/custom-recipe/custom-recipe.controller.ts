@@ -92,6 +92,7 @@ export class CustomRecipeController {
       preferredIngredients: dto.preferredIngredients || [],
       dislikedIngredients: dto.dislikedIngredients || [],
       attachmentUrls: dto.attachmentUrls || [],
+      attachmentKeys: dto.attachmentKeys || [],
       syncToHealthProfile: dto.syncToHealthProfile,
       needsHealthManagement: dto.needsHealthManagement === true,
     });

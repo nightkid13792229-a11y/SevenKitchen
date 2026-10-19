@@ -627,14 +627,13 @@
          ② 按钮只负责“确认信息 → 订单确认页”，这里不创建订单、不付款
          ③ 金额只出现一次：放在说明里，按钮不显示金额 -->
     <view v-if="hasSelectedDog" class="submit-section">
-      <view class="pre-order-notice">
-        <text class="pre-order-notice__price">
+      <button class="submit-btn" @tap="goToOrderConfirm">
+        <text class="submit-btn__label">
+          {{ navigatingToConfirm ? '正在进入…' : '确认信息' }}
+        </text>
+        <text class="submit-btn__fee">
           食谱定制费 {{ recipeConfig ? formatAmount(recipeConfig.feeAmount) : '—' }} 元/份，不含原料。
         </text>
-      </view>
-
-      <button class="submit-btn" @tap="goToOrderConfirm">
-        {{ navigatingToConfirm ? '正在进入…' : '确认信息' }}
       </button>
     </view>
   </view>
@@ -3598,16 +3597,34 @@ const getBCSText = (bcsScore: number) => {
 }
 
 .submit-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4rpx;
   width: 100%;
-  height: 92rpx;
-  line-height: 92rpx;
-  font-size: 32rpx;
+  height: 116rpx;
+  padding: 10rpx 0;
   font-weight: 700;
   color: var(--sk-gold-soft, #f6efe0);
   background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
   border: 1rpx solid var(--sk-gold-bright, #d8bc85);
   border-radius: 999rpx;
+  letter-spacing: 0;
+}
+
+.submit-btn__label {
+  font-size: 30rpx;
+  line-height: 1.2;
   letter-spacing: 1rpx;
+}
+
+.submit-btn__fee {
+  font-size: 20rpx;
+  line-height: 1.3;
+  font-weight: 400;
+  color: rgba(246, 239, 224, 0.78);
+  text-align: center;
 }
 
 .submit-btn[disabled] {
@@ -3719,19 +3736,4 @@ const getBCSText = (bcsScore: number) => {
 }
 
 /* ===== 需求 2.3.5：下单前告知（2026-10-18）===== */
-.pre-order-notice {
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-  padding: 0 8rpx 18rpx;
-}
-
-.pre-order-notice__price {
-  display: block;
-  width: 100%;
-  font-size: 22rpx;
-  color: #8c7b66;
-  line-height: 1.5;
-  text-align: center;
-}
 </style>

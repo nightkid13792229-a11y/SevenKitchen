@@ -641,7 +641,9 @@ function handleCustomerServiceEntry(options: Record<string, unknown> = {}) {
   if (csType === 'PRODUCT' && csProductId) {
     targetUrl = `/pages/recipe-detail/index?recipeId=${encodeURIComponent(csProductId)}`
   } else if ((csType === 'ORDER' || csType === 'AFTERSALE' || csType === 'REFUND') && csOrderId) {
-    targetUrl = `/pages/order-detail/index?id=${encodeURIComponent(csOrderId)}`
+    targetUrl = String(csOrderId).startsWith('CR')
+      ? `/pages/custom-recipe/order-detail?orderId=${encodeURIComponent(csOrderId)}`
+      : `/pages/order-detail/index?id=${encodeURIComponent(csOrderId)}`
   }
 
   if (!targetUrl) return

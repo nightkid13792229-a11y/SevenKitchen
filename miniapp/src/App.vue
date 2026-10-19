@@ -14,6 +14,15 @@ const CUSTOMER_SERVICE_PENDING_TARGET_KEY = "customer_service_pending_target";
 const CUSTOMER_SERVICE_PENDING_TARGET_MAX_AGE_MS = 10 * 60 * 1000;
 const CUSTOMER_SERVICE_PENDING_TARGET_COOLDOWN_MS = 8 * 1000;
 
+/**
+ * 冷启动的第一轮 onShow 不处理客服待跳转。
+ *
+ * 待跳转只应该用于"用户在 App 内向客服发消息 → 去微信聊天 → 返回小程序"
+ * 这个前后台切换场景。若冷启动也处理，历史遗留 target 会让用户
+ * "打开小程序 → 首页一闪 → 自动进订单页"（2026-10-20 线上问题）。
+ */
+let hasShownOnce = false;
+
 function getCurrentRouteWithQuery(): string {
   try {
     const pages = getCurrentPages();
@@ -28,6 +37,22 @@ function getCurrentRouteWithQuery(): string {
   } catch (error) {
     return "";
   }
+}
+
+/**
+ * 客服卡片历史数据里，定制订单也可能被写成通用订单详情路径
+ * （/pages/order-detail/index?id=CR...）。通用页只认商品订单，
+ * 打开就是空白；这里统一改到定制订单详情。
+ */
+function normalizeCustomerServiceTarget(url: string): string {
+  const raw = String(url || "").trim();
+  if (!raw) return "";
+  const [rawPath, rawQuery = ""] = raw.split("?");
+  if (rawPath !== "/pages/order-detail/index") return raw;
+  const match = rawQuery.match(/(?:^|&)id=([^&]+)/);
+  const orderId = match ? decodeURIComponent(match[1]) : "";
+  if (!String(orderId).startsWith('CR')) return raw;
+  return `/pages/custom-recipe/order-detail?orderId=${encodeURIComponent(orderId)}`;
 }
 
 function navigateCustomerServicePendingTarget() {
@@ -45,13 +70,22 @@ function navigateCustomerServicePendingTarget() {
       return;
     }
 
-    const targetUrl = String(pending.url || "");
-    if (!targetUrl || getCurrentRouteWithQuery() === targetUrl) return;
+    const targetUrl = normalizeCustomerServiceTarget(String(pending.url || ""));
+    if (!targetUrl) {
+      uni.removeStorageSync(CUSTOMER_SERVICE_PENDING_TARGET_KEY);
+      return;
+    }
+    if (getCurrentRouteWithQuery() === targetUrl) {
+      uni.removeStorageSync(CUSTOMER_SERVICE_PENDING_TARGET_KEY);
+      return;
+    }
 
-    uni.setStorageSync(CUSTOMER_SERVICE_PENDING_TARGET_KEY, {
-      ...pending,
-      lastHandledAt: now,
-    });
+    /**
+     * 一次性消费：读取后立刻删掉。
+     * 以前只更新 lastHandledAt、不删除，导致每次 onShow/冷启动都会再跳一次，
+     * 目标页失效时看起来就是"首页一闪 → 空白订单页"（2026-10-20 修）。
+     */
+    uni.removeStorageSync(CUSTOMER_SERVICE_PENDING_TARGET_KEY);
 
     setTimeout(() => {
       uni.navigateTo({
@@ -103,6 +137,12 @@ onLaunch(() => {
 });
 
 onShow(() => {
+  if (!hasShownOnce) {
+    hasShownOnce = true;
+    // 冷启动先丢弃上一次会话遗留的客服待跳转，避免自动跳空白页
+    uni.removeStorageSync(CUSTOMER_SERVICE_PENDING_TARGET_KEY);
+    return;
+  }
   navigateCustomerServicePendingTarget();
 
   // 这里原本会调用 promptPhoneBindingIfNeeded()：任何页面、每次从后台切回小程序，

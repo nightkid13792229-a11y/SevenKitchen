@@ -135,6 +135,10 @@ function buildCustomerServiceTargetUrl(context: CustomerServiceContext, fallback
     (context.sourceType === 'ORDER' || context.sourceType === 'AFTERSALE' || context.sourceType === 'REFUND') &&
     context.orderId
   ) {
+    // 定制订单号以 CR 开头，必须进定制订单详情；通用订单页会查不到而空白
+    if (String(context.orderId).startsWith('CR')) {
+      return `/pages/custom-recipe/order-detail?orderId=${encodeURIComponent(context.orderId)}`
+    }
     return `/pages/order-detail/index?id=${encodeURIComponent(context.orderId)}`
   }
 

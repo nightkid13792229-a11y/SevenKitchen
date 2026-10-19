@@ -215,12 +215,20 @@ export class SupplementAftersaleService {
     );
   }
 
-  async listCases(query: {
-    status?: string;
-    keyword?: string;
-    page?: number;
-    pageSize?: number;
-  }): Promise<{ items: AftersaleCaseView[]; total: number; page: number; pageSize: number }> {
+  async listCases(
+    query: {
+      status?: string;
+      keyword?: string;
+      page?: number;
+      pageSize?: number;
+    },
+    actor: { role?: string } = {},
+  ): Promise<{
+    items: AftersaleCaseView[];
+    total: number;
+    page: number;
+    pageSize: number;
+  }> {
     const page = Math.max(1, Number(query.page) || 1);
     const pageSize = Math.min(100, Math.max(1, Number(query.pageSize) || 20));
     const where: Prisma.AftersaleCaseWhereInput = {
@@ -244,7 +252,16 @@ export class SupplementAftersaleService {
       }),
       this.prisma.aftersaleCase.count({ where }),
     ]);
-    return { items: rows.map((row) => this.toView(row)), total, page, pageSize };
+    const items = rows.map((row) => this.toView(row));
+    if (actor.role === 'STAFF') {
+      // 员工不能看退款金额/退款流水；只保留处理所需的状态
+      for (const item of items) {
+        item.refundAmount = null;
+        item.refundOutNo = null;
+        item.refundId = null;
+      }
+    }
+    return { items, total, page, pageSize };
   }
 
   async listForOrder(

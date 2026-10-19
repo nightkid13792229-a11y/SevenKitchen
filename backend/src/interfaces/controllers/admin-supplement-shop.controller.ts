@@ -282,12 +282,17 @@ export class AdminSupplementShopController {
 
   @Get('aftersales')
   @ApiOperation({ summary: '补剂售后列表（员工只读）' })
-  async listAftersales(@Query() query: ListSupplementAftersalesQueryDto) {
+  async listAftersales(
+    @Query() query: ListSupplementAftersalesQueryDto,
+    @Req() request: { user?: { role?: string } },
+  ) {
     if (!this.supplementAftersaleService) {
       throw new BadRequestException('售后记录服务未启用');
     }
     return ApiResponseDto.success(
-      await this.supplementAftersaleService.listCases(query),
+      await this.supplementAftersaleService.listCases(query, {
+        role: request.user?.role,
+      }),
     );
   }
 

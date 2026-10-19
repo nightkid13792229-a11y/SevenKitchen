@@ -29,6 +29,10 @@
           <el-icon><Goods /></el-icon>
           <span>原料管理</span>
         </el-menu-item>
+        <el-menu-item index="/supplement-shop/dashboard">
+          <el-icon><List /></el-icon>
+          <span>补剂看板</span>
+        </el-menu-item>
         <el-menu-item index="/supplement-shop/catalog">
           <el-icon><FirstAidKit /></el-icon>
           <span>补剂上架清单</span>
@@ -37,9 +41,17 @@
           <el-icon><Box /></el-icon>
           <span>补剂订单</span>
         </el-menu-item>
+        <el-menu-item index="/supplement-shop/aftersales">
+          <el-icon><List /></el-icon>
+          <span>补剂售后</span>
+        </el-menu-item>
         <el-menu-item index="/supplement-shop/config">
           <el-icon><PriceTag /></el-icon>
           <span>补剂商城设置</span>
+        </el-menu-item>
+        <el-menu-item index="/order-center">
+          <el-icon><List /></el-icon>
+          <span>订单中心</span>
         </el-menu-item>
         <el-menu-item index="/tasting-pack/config">
           <el-icon><Dish /></el-icon>

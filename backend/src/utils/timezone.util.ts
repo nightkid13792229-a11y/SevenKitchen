@@ -88,6 +88,18 @@ export class TimezoneUtil {
     );
   }
 
+  /** 上海某一天的 00:00（返回 UTC 时刻；用于 createdAt 等 timestamp 范围） */
+  static startOfShanghaiDay(date: Date): Date {
+    return new Date(`${this.shanghaiDateKey(date)}T00:00:00+08:00`);
+  }
+
+  /** 上海某月 1 日 00:00（返回 UTC 时刻） */
+  static startOfShanghaiMonth(date: Date): Date {
+    return new Date(
+      `${this.shanghaiDateKey(date).slice(0, 7)}-01T00:00:00+08:00`,
+    );
+  }
+
   /** YYYY-MM-DD（上海日历日） */
   static shanghaiDateKey(input: Date): string {
     return this.toShanghaiDateOnly(input).toISOString().slice(0, 10);

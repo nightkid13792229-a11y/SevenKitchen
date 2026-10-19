@@ -22,6 +22,19 @@ describe('TimezoneUtil · 补剂 date-only', () => {
     expect(TimezoneUtil.weekday(TimezoneUtil.parseDateOnly('2026-10-18'))).toBe(0);
   });
 
+  it('上海当天 00:00 是 UTC 前一天 16:00', () => {
+    expect(
+      TimezoneUtil.startOfShanghaiDay(
+        TimezoneUtil.parseDateOnly('2026-10-20'),
+      ).toISOString(),
+    ).toBe('2026-10-19T16:00:00.000Z');
+    expect(
+      TimezoneUtil.startOfShanghaiMonth(
+        TimezoneUtil.parseDateOnly('2026-10-20'),
+      ).toISOString(),
+    ).toBe('2026-09-30T16:00:00.000Z');
+  });
+
   it('截单时间按上海分钟数判断', () => {
     expect(
       TimezoneUtil.isBeforeCutoff(

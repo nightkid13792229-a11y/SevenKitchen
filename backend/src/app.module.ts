@@ -232,10 +232,14 @@ import { SupplementSchedulingService } from './application/supplement-shop/suppl
 import { SupplementInventoryService } from './application/supplement-shop/supplement-inventory.service';
 import { SupplementSnapshotService } from './application/supplement-shop/supplement-snapshot.service';
 import { SupplementAftersaleService } from './application/supplement-shop/supplement-aftersale.service';
+import { OrderCenterService } from './application/order-center/order-center.service';
+import { SupplementDashboardService } from './application/supplement-shop/supplement-dashboard.service';
 import { SupplementOrderService } from './application/supplement-shop/supplement-order.service';
 import { SupplementsController } from './interfaces/controllers/supplements.controller';
 import { SupplementOrdersController } from './interfaces/controllers/supplement-orders.controller';
 import { SupplementAftersalesController } from './interfaces/controllers/supplement-aftersales.controller';
+import { OrderCenterController } from './interfaces/controllers/order-center.controller';
+import { SupplementDashboardController } from './interfaces/controllers/supplement-dashboard.controller';
 import { IngredientSuggestionsController } from './interfaces/controllers/ingredient-suggestions.controller';
 import { NutritionCalculationController } from './interfaces/controllers/nutrition-calculation.controller';
 import { IngredientBatchReplaceController } from './interfaces/controllers/ingredient-batch-replace.controller';
@@ -412,6 +416,8 @@ validatePrismaConfig();
     SupplementsController,
     SupplementOrdersController,
     SupplementAftersalesController,
+    OrderCenterController,
+    SupplementDashboardController,
     IngredientSuggestionsController,
     NutritionCalculationController,
     IngredientBatchReplaceController,
@@ -863,6 +869,8 @@ validatePrismaConfig();
     SupplementInventoryService,
     SupplementSnapshotService,
     SupplementAftersaleService,
+    OrderCenterService,
+    SupplementDashboardService,
     SupplementSchedulingService,
     SupplementSchedulerService,
     SupplementOrderService,

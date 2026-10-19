@@ -93,6 +93,24 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "补剂订单" },
       },
       {
+        path: "supplement-shop/dashboard",
+        name: "SupplementShopDashboard",
+        component: () => import("@/views/SupplementShop/Dashboard.vue"),
+        meta: { title: "补剂看板" },
+      },
+      {
+        path: "supplement-shop/aftersales",
+        name: "SupplementShopAftersales",
+        component: () => import("@/views/SupplementShop/Aftersales.vue"),
+        meta: { title: "补剂售后" },
+      },
+      {
+        path: "order-center",
+        name: "OrderCenter",
+        component: () => import("@/views/OrderCenter/index.vue"),
+        meta: { title: "订单中心" },
+      },
+      {
         path: "supplement-shop/orders/:id/labels",
         name: "SupplementShopLabelPrint",
         component: () => import("@/views/SupplementShop/LabelPrint.vue"),

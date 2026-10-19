@@ -164,6 +164,60 @@
         </view>
       </view>
 
+      <!-- 本单资料（2026-10-19）：报告草稿与备注附件 -->
+      <view class="section" v-if="hasUploadedMaterials">
+        <view class="section-title">本单资料</view>
+        <view
+          v-for="(report, reportIndex) in order.allergyReportDrafts || []"
+          :key="`report-${reportIndex}`"
+          v-show="(report.attachments || []).length"
+          class="material-group"
+        >
+          <text class="material-title">检测报告 {{ reportIndex + 1 }}</text>
+          <view class="material-thumbs">
+            <view
+              v-for="url in report.attachments || []"
+              :key="url"
+              class="material-thumb-wrap"
+            >
+              <image
+                v-if="isImageAttachment(url)"
+                class="material-thumb"
+                :src="url"
+                mode="aspectFill"
+                @tap="previewMaterial(url)"
+              />
+              <view v-else class="material-doc" @tap="previewMaterial(url)">
+                <text class="material-doc-badge">{{ attachmentFileLabel(url) }}</text>
+                <text class="material-doc-label">报告</text>
+              </view>
+            </view>
+          </view>
+        </view>
+        <view v-if="(order.attachments || []).length" class="material-group">
+          <text class="material-title">其它附件</text>
+          <view class="material-thumbs">
+            <view
+              v-for="url in order.attachments || []"
+              :key="url"
+              class="material-thumb-wrap"
+            >
+              <image
+                v-if="isImageAttachment(url)"
+                class="material-thumb"
+                :src="url"
+                mode="aspectFill"
+                @tap="previewMaterial(url)"
+              />
+              <view v-else class="material-doc" @tap="previewMaterial(url)">
+                <text class="material-doc-badge">{{ attachmentFileLabel(url) }}</text>
+                <text class="material-doc-label">资料</text>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+
       <!--
         交付卡片（2026-10-16 批次 2.4）
         后端只给"第几版、什么时候交的、包含哪几样"，**不含内容本体** ——
@@ -324,6 +378,15 @@ interface CustomRecipeOrderDetail {
   changeReasonOther?: string | null;
   stomachConditions?: string[];
   stomachOther?: string | null;
+  /** 本单报告草稿（付款后转档案） */
+  allergyReportDrafts?: Array<{
+    attachments?: string[];
+    testDate?: string | null;
+    testMethod?: string | null;
+    summary?: string | null;
+  }>;
+  /** 备注区其它附件 */
+  attachments?: string[];
   medicalConditions?: string[];
   preferredIngredients?: string[];
   dislikedIngredients?: string[];
@@ -728,6 +791,65 @@ const hasRequirements = computed(() => {
       value.additionalNotes,
   );
 });
+
+const hasUploadedMaterials = computed(() => {
+  const drafts = order.value.allergyReportDrafts || [];
+  return (
+    drafts.some((report) => (report.attachments || []).length > 0) ||
+    (order.value.attachments || []).length > 0
+  );
+});
+
+function attachmentExtension(url: string): string {
+  const clean = String(url || '').split('?')[0].split('#')[0];
+  const index = clean.lastIndexOf('.');
+  return index >= 0 ? clean.slice(index).toLowerCase() : '';
+}
+
+function isImageAttachment(url: string): boolean {
+  return ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.heif'].includes(
+    attachmentExtension(url),
+  );
+}
+
+function attachmentFileLabel(url: string): string {
+  const ext = attachmentExtension(url);
+  if (ext === '.pdf') return 'PDF';
+  if (ext === '.doc' || ext === '.docx') return 'Word';
+  return '文件';
+}
+
+function previewMaterial(url: string) {
+  if (!url) return;
+  if (isImageAttachment(url)) {
+    uni.previewImage({ urls: [url] });
+    return;
+  }
+  if (!['.pdf', '.doc', '.docx'].includes(attachmentExtension(url))) {
+    uni.showToast({ title: '暂不支持预览这种文件', icon: 'none' });
+    return;
+  }
+  uni.showLoading({ title: '打开中…' });
+  uni.downloadFile({
+    url,
+    success: (res) => {
+      uni.hideLoading();
+      if (res.statusCode !== 200 || !res.tempFilePath) {
+        uni.showToast({ title: '文件下载失败', icon: 'none' });
+        return;
+      }
+      uni.openDocument({
+        filePath: res.tempFilePath,
+        showMenu: true,
+        fail: () => uni.showToast({ title: '文件打开失败', icon: 'none' }),
+      });
+    },
+    fail: () => {
+      uni.hideLoading();
+      uni.showToast({ title: '文件下载失败', icon: 'none' });
+    },
+  });
+}
 
 const viewRecipe = () => {
   if (!order.value.recipeId) return;
@@ -1322,5 +1444,60 @@ const goOrders = () => {
   background: transparent;
   color: var(--sk-ink-2, #6b6653);
   border: 1rpx solid var(--sk-line, #e3e6d4);
+}
+
+/* 本单资料（2026-10-19） */
+.material-group {
+  margin-top: 16rpx;
+}
+
+.material-title {
+  display: block;
+  margin-bottom: 10rpx;
+  font-size: 24rpx;
+  color: #8a7a63;
+}
+
+.material-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.material-thumb-wrap {
+  width: 140rpx;
+  height: 140rpx;
+}
+
+.material-thumb {
+  width: 140rpx;
+  height: 140rpx;
+  border-radius: 12rpx;
+  background: #f2f1ec;
+  border: 1rpx solid #e3e6d4;
+}
+
+.material-doc {
+  width: 140rpx;
+  height: 140rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6rpx;
+  border-radius: 12rpx;
+  background: #f2f1ec;
+  border: 1rpx solid #e3e6d4;
+}
+
+.material-doc-badge {
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #8a6b3f;
+}
+
+.material-doc-label {
+  font-size: 20rpx;
+  color: #8a7a63;
 }
 </style>

@@ -95,7 +95,7 @@
           <view class="order-footer">
             <view class="order-footer-left">
               <text class="amount-label">定制费:</text>
-              <text class="order-amount"
+              <text class="custom-order-amount"
                 >¥{{ formatAmountText(customOrderAmount(order)) }}</text
               >
             </view>
@@ -1563,6 +1563,13 @@ function formatAddress(address?: { regionText?: string }): string {
 }
 
 .amount-value {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #b4553f;
+}
+
+.custom-order-amount {
+  margin-left: 8rpx;
   font-size: 32rpx;
   font-weight: bold;
   color: #b4553f;

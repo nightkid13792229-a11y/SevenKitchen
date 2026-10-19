@@ -48,6 +48,7 @@ describe('定制页 → 订单确认页（2026-10-19 老板确认）', () => {
     expect(confirm).not.toContain('返回修改');
     expect(confirm).not.toContain('仅提交，稍后支付');
     expect(confirm).toContain('delivery-note');
+    expect(confirm).toContain('（含）之前交付');
   });
 
   it('确认页创建订单后留在本页支付，不再跳提交成功页', () => {

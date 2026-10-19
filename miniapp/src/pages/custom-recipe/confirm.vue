@@ -81,10 +81,6 @@
           <text class="info-label">备注</text>
           <text class="info-value">{{ notesText }}</text>
         </view>
-        <view class="info-row">
-          <text class="info-label">附件</text>
-          <text class="info-value">{{ attachmentText }}</text>
-        </view>
         <view v-if="noteAttachments.length" class="preview-block">
           <text class="preview-title">附件预览（只读）</text>
           <view class="preview-grid">
@@ -304,12 +300,6 @@ const notesText = computed(
   () => String(form.value.additionalNotes || '').trim() || '无',
 );
 
-const attachmentText = computed(() =>
-  noteAttachments.value.length > 0
-    ? `附件 ${noteAttachments.value.length} 个`
-    : '无附件',
-);
-
 function attachmentExtension(url: string): string {
   const raw = String(url || '');
   const extMatch = raw.match(/[?&]ext=([a-z0-9]+)/i);
@@ -378,11 +368,8 @@ const deliveryText = computed(() => {
   if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) {
     return String(date);
   }
-  const [year, month, day] = parts;
-  const weekday = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][
-    new Date(year, month - 1, day).getDay()
-  ];
-  return `${month} 月 ${day} 日（${weekday}）`;
+  const [, month, day] = parts;
+  return `预计 ${month} 月 ${day} 日（含）之前交付`;
 });
 
 const postStatus = computed(() =>

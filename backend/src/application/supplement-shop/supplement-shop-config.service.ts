@@ -9,6 +9,10 @@
 
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
+import {
+  SUPPLEMENT_SHOP_CONFIG_DEFAULTS,
+  diffSupplementLaunchTargets,
+} from './supplement-shop-config.constants';
 
 export const SUPPLEMENT_SHOP_CONFIG_ID = 'singleton';
 
@@ -92,7 +96,10 @@ export class SupplementShopConfigService {
     }
 
     const created = await this.prisma.supplementShopConfig.create({
-      data: { id: SUPPLEMENT_SHOP_CONFIG_ID },
+      data: {
+        id: SUPPLEMENT_SHOP_CONFIG_ID,
+        ...SUPPLEMENT_SHOP_CONFIG_DEFAULTS,
+      },
     });
     return this.toDto(created);
   }
@@ -125,6 +132,17 @@ export class SupplementShopConfigService {
     });
 
     return this.toDto(updated);
+  }
+
+  async getConfigHealth(): Promise<{
+    isAligned: boolean;
+    diffs: ReturnType<typeof diffSupplementLaunchTargets>;
+  }> {
+    const config = await this.getConfig();
+    const diffs = diffSupplementLaunchTargets(
+      config as unknown as Record<string, unknown>,
+    );
+    return { isAligned: diffs.length === 0, diffs };
   }
 
   async isEnabled(): Promise<boolean> {

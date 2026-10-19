@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Optional,
   Injectable,
   Logger,
   NotFoundException,
@@ -14,6 +15,7 @@ import { OrderService } from '../order/order.service';
 import { OrderStatus } from '../../domain';
 import { WechatShippingUploadService } from '../shipping/wechat-shipping-upload.service';
 import { SupplementOrderService } from '../supplement-shop/supplement-order.service';
+import { SupplementNotificationService } from '../supplement-shop/supplement-notification.service';
 import { SupplementShopConfigService } from '../supplement-shop/supplement-shop-config.service';
 import { CustomRecipeService } from '../custom-recipe/custom-recipe.service';
 import { CustomRecipeConfigService } from '../custom-recipe/custom-recipe-config.service';
@@ -97,6 +99,8 @@ export class WechatPaymentService {
     private readonly supplementShopConfigService: SupplementShopConfigService,
     private readonly customRecipeService: CustomRecipeService,
     private readonly customRecipeConfigService: CustomRecipeConfigService,
+    @Optional()
+    private readonly supplementNotificationService?: SupplementNotificationService,
   ) {}
 
   async createJsapiPayment(
@@ -1771,6 +1775,8 @@ export class WechatPaymentService {
             await this.supplementOrderService.cancelOrder(
               caseRow.orderId,
               { reason: '未分装退款取消' },
+              undefined,
+              { type: 'SYSTEM' },
             );
           } catch (error) {
             this.logger.warn(
@@ -1780,6 +1786,10 @@ export class WechatPaymentService {
             );
           }
         }
+        await this.supplementNotificationService?.notify(
+          caseRow.orderId,
+          'REFUNDED',
+        );
       } else {
         await this.prisma.aftersaleCase.update({
           where: { id: caseRow.id },

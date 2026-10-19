@@ -183,6 +183,14 @@ function goToSupplementOrders() {
   uni.navigateTo({ url: '/pages/staff-supplement-orders/index' })
 }
 
+function goToSupplementSummary() {
+  uni.navigateTo({ url: '/pages/staff-supplement-summary/index' })
+}
+
+function goToSupplementAftersales() {
+  uni.navigateTo({ url: '/pages/staff-supplement-aftersales/index' })
+}
+
 const workbenchModules = computed<WorkbenchModule[]>(() => [
   {
     key: 'purchasing',
@@ -211,6 +219,18 @@ const workbenchModules = computed<WorkbenchModule[]>(() => [
     icon: '/static/ui-icons/supplement-orders.png',
     badgeKey: 'supplementOrders',
     onTap: goToSupplementOrders,
+  },
+  {
+    key: 'supplementSummary',
+    title: '分装备料',
+    icon: '/static/ui-icons/inventory.png',
+    onTap: goToSupplementSummary,
+  },
+  {
+    key: 'supplementAftersales',
+    title: '补剂售后',
+    icon: '/static/ui-icons/orders.png',
+    onTap: goToSupplementAftersales,
   },
   {
     key: 'customers',

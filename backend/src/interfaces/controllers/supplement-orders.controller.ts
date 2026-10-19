@@ -112,7 +112,10 @@ export class SupplementOrdersController {
       );
     }
     return ApiResponseDto.success(
-      await this.supplementOrderService.cancelOrder(id, dto, user.userId),
+      await this.supplementOrderService.cancelOrder(id, dto, user.userId, {
+        type: 'CUSTOMER',
+        id: user.userId,
+      }),
     );
   }
 
@@ -153,6 +156,18 @@ export class SupplementOrdersController {
   ) {
     return ApiResponseDto.success(
       await this.aftersaleService.createForCustomer(user.userId, id, dto),
+    );
+  }
+
+  @Get(':id/snapshot')
+  @ApiSecurity('X-Customer-Id')
+  @ApiOperation({ summary: '补剂订单关联的制作单快照' })
+  async getSnapshot(
+    @CurrentUser() user: RequestUser,
+    @Param('id') id: string,
+  ) {
+    return ApiResponseDto.success(
+      await this.supplementOrderService.getOrderSnapshot(id, user.userId),
     );
   }
 

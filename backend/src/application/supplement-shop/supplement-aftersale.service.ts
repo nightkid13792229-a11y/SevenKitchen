@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { randomBytes } from 'crypto';
@@ -9,6 +10,7 @@ import { PrismaService } from '../../infrastructure/prisma.service';
 import { TimezoneUtil } from '../../utils/timezone.util';
 import { SupplementOrderService } from './supplement-order.service';
 import { WechatPaymentService } from '../payment/wechat-payment.service';
+import { SupplementNotificationService } from './supplement-notification.service';
 
 type CaseRow = Prisma.AftersaleCaseGetPayload<{}>;
 
@@ -52,6 +54,8 @@ export class SupplementAftersaleService {
     private readonly prisma: PrismaService,
     private readonly supplementOrderService: SupplementOrderService,
     private readonly wechatPaymentService: WechatPaymentService,
+    @Optional()
+    private readonly notificationService?: SupplementNotificationService,
   ) {}
 
   async createForCustomer(
@@ -140,6 +144,7 @@ export class SupplementAftersaleService {
         });
         return row;
       });
+      await this.notificationService?.notify(order.id, 'AFTERSALE');
       return this.toView(created);
     } catch (error) {
       if (
@@ -391,6 +396,7 @@ export class SupplementAftersaleService {
         adminId,
         dto.note?.trim() || row.requestedReason,
       );
+      await this.notificationService?.notify(order.id, 'RESHIPPED');
       return this.toView(
         (await this.prisma.aftersaleCase.findUnique({
           where: { id: caseId },

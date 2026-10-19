@@ -35,6 +35,45 @@ export class UpdateSupplementAddressDto {
   setAsDefault?: boolean;
 }
 
+export class AdminUpdateSupplementAddressDto {
+  @ApiProperty({ description: '收件人' })
+  @IsString()
+  @MaxLength(50)
+  recipientName!: string;
+
+  @ApiProperty({ description: '手机号' })
+  @IsString()
+  @MaxLength(30)
+  phone!: string;
+
+  @ApiProperty({ description: '省' })
+  @IsString()
+  @MaxLength(50)
+  province!: string;
+
+  @ApiProperty({ description: '市' })
+  @IsString()
+  @MaxLength(50)
+  city!: string;
+
+  @ApiPropertyOptional({ description: '区/县' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  district?: string;
+
+  @ApiProperty({ description: '详细地址' })
+  @IsString()
+  @MaxLength(200)
+  detail!: string;
+
+  @ApiPropertyOptional({ description: '修改原因/操作说明' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  reason?: string;
+}
+
 export class ScheduleSupplementOrderDto {
   @ApiProperty({ description: '分装日（YYYY-MM-DD，上海日历日）' })
   @IsISO8601()

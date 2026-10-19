@@ -187,14 +187,6 @@ export const staffSupplementOrderApi = {
     });
   },
 
-  schedule(orderId: string, packingDate: string, reason?: string) {
-    return request<StaffSupplementOrder>({
-      url: `/admin/supplement-shop/orders/${orderId}/schedule`,
-      method: 'POST',
-      data: { packingDate, reason },
-    });
-  },
-
   confirmPayment(orderId: string, transactionId?: string) {
     return request<StaffSupplementOrder>({
       url: `/admin/supplement-shop/orders/${orderId}/confirm-payment`,

@@ -79,6 +79,7 @@ import { storeUnreadMessageCount } from '@/utils/unread-message-badge';
  *   AFTERSALE → 售后页
  *   ORDER     → 定制订单详情
  *   SHIPPING  → 物流信息页
+ *   SUPPLEMENT_ORDER → 补剂订单详情
  * 未知类型：只标已读，不跳转（宁可不动，也不要跳到错误页面）。
  */
 
@@ -210,6 +211,13 @@ async function openMessage(item: CustomerMessage) {
       return;
     case 'SHIPPING':
       uni.navigateTo({ url: '/pages/order-shipping-notice/index' });
+      return;
+    case 'SUPPLEMENT_ORDER':
+      if (id) {
+        uni.navigateTo({
+          url: `/pages/supplement-order-detail/index?orderId=${id}`,
+        });
+      }
       return;
     default:
       // 未知类型：只标已读，不跳 —— 宁可不动，也不要跳到错误页面

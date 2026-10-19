@@ -158,6 +158,12 @@
       }
     },
     {
+      "path": "pages/supplement-order-detail/index",
+      "style": {
+        "navigationBarTitleText": "补剂订单详情"
+      }
+    },
+    {
       "path": "pages/supplement-aftersale/index",
       "style": {
         "navigationBarTitleText": "补剂售后"
@@ -174,6 +180,18 @@
       "path": "pages/staff-workbench/index",
       "style": {
         "navigationBarTitleText": "工作台"
+      }
+    },
+    {
+      "path": "pages/staff-supplement-summary/index",
+      "style": {
+        "navigationBarTitleText": "分装汇总"
+      }
+    },
+    {
+      "path": "pages/staff-supplement-aftersales/index",
+      "style": {
+        "navigationBarTitleText": "补剂售后"
       }
     },
     {

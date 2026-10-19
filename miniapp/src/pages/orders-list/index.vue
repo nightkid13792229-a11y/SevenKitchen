@@ -180,6 +180,12 @@
             >
           </view>
 
+          <view class="order-address">
+            <text class="address-text">
+              预计发货 {{ order.packingDate || '待管理员排期' }}
+            </text>
+          </view>
+
           <!-- 补发单：0 元、免费补寄，必须让顾客一眼看出这不是新买的一单 -->
           <view v-if="order.reshipFromOrderId" class="order-address">
             <text class="address-text">本单为免费补发，不收任何费用</text>
@@ -258,6 +264,13 @@
             @tap="paySupplementFromList(order)"
           >
             {{ payingSupplementId === order.id ? '调起支付中' : '去支付' }}
+          </button>
+          <button
+            v-if="order._orderType === 'supplement'"
+            class="action-btn secondary"
+            @tap="viewSupplementDetail(order.id)"
+          >
+            查看详情
           </button>
 
           <!-- 鲜食：下面这套操作沿用原样，只按类型标记收窄适用范围 -->
@@ -845,12 +858,24 @@ function formatAmountText(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
+function viewSupplementDetail(id: string) {
+  uni.navigateTo({
+    url: `/pages/supplement-order-detail/index?orderId=${encodeURIComponent(id)}`,
+  })
+}
+
 function handleOrderTap(order: UnifiedOrder) {
   if (order._orderType === 'custom') {
     uni.navigateTo({
       url: `/pages/custom-recipe/order-detail?orderId=${encodeURIComponent(
         (order as CustomOrderRow).orderId,
       )}`,
+    });
+    return;
+  }
+  if (order._orderType === 'supplement') {
+    uni.navigateTo({
+      url: `/pages/supplement-order-detail/index?orderId=${encodeURIComponent(order.id)}`,
     });
     return;
   }

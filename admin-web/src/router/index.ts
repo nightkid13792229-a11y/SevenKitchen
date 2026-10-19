@@ -99,6 +99,18 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "补剂看板" },
       },
       {
+        path: "supplement-shop/packing-summary",
+        name: "SupplementShopPackingSummary",
+        component: () => import("@/views/SupplementShop/PackingSummary.vue"),
+        meta: { title: "分装汇总" },
+      },
+      {
+        path: "supplement-shop/packaging",
+        name: "SupplementShopPackaging",
+        component: () => import("@/views/SupplementShop/Packaging.vue"),
+        meta: { title: "补剂包材" },
+      },
+      {
         path: "supplement-shop/aftersales",
         name: "SupplementShopAftersales",
         component: () => import("@/views/SupplementShop/Aftersales.vue"),

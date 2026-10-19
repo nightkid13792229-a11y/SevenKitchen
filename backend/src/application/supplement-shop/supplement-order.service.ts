@@ -31,6 +31,8 @@ import type { IngredientPhysicalFormCode } from './supplement-catalog.service';
 import { SupplementSchedulingService } from './supplement-scheduling.service';
 import { SupplementInventoryService } from './supplement-inventory.service';
 import { SupplementSnapshotService } from './supplement-snapshot.service';
+import { SupplementNotificationService } from './supplement-notification.service';
+import { isSupplementUnitOneToOne } from './supplement-unit.util';
 
 /** 分装结果的有效期：取「原瓶到期日」与「分装日 + 效期系数」的较小值 */
 export function addMonths(date: Date, months: number): Date {
@@ -162,6 +164,8 @@ export interface SupplementOrderView {
   paymentMethod: string | null;
   paymentStatus: string | null;
   paidAt: string | null;
+  /** 分装日（预计发货日）；null = 待排期 */
+  packingDate: string | null;
   aftersaleType: string | null;
   aftersaleReason: string | null;
   refundStatus: string | null;
@@ -231,6 +235,8 @@ export class SupplementOrderService {
     private readonly inventoryService?: SupplementInventoryService,
     @Optional()
     private readonly snapshotService?: SupplementSnapshotService,
+    @Optional()
+    private readonly notificationService?: SupplementNotificationService,
   ) {}
 
   /**
@@ -367,6 +373,19 @@ export class SupplementOrderService {
           orderId: created.id,
           userId,
           diySheetId: request.diySheetId,
+        });
+      }
+
+      if (request.reorderFromOrderNo && tx.supplementOrderEvent) {
+        await tx.supplementOrderEvent.create({
+          data: {
+            orderId: created.id,
+            type: 'REORDERED',
+            actorType: 'CUSTOMER',
+            actorId: userId,
+            reason: `再次购买，来源 ${request.reorderFromOrderNo}`,
+            metadata: { sourceOrderNo: request.reorderFromOrderNo },
+          },
         });
       }
 
@@ -587,7 +606,10 @@ export class SupplementOrderService {
         batchNo?: string;
         sourceExpiryDate: string;
       }>;
+      force?: boolean;
+      forceReason?: string;
     },
+    actor: { type: 'STAFF' | 'ADMIN'; id?: string | null } = { type: 'STAFF' },
   ): Promise<SupplementOrderView> {
     const order = await this.prisma.supplementOrder.findUnique({
       where: { id: orderId },
@@ -651,7 +673,29 @@ export class SupplementOrderService {
       };
     });
 
+    const force = dto.force === true;
+    if (force && actor.type !== 'ADMIN') {
+      throw new BadRequestException('只有管理员可以强制分装');
+    }
+    if (force && !dto.forceReason?.trim()) {
+      throw new BadRequestException('强制分装必须填写原因');
+    }
+
     await this.prisma.$transaction(async (tx) => {
+      const shortages = this.inventoryService
+        ? await this.inventoryService.getShortages(tx, orderId)
+        : [];
+      if (shortages.length > 0 && !force) {
+        throw new BadRequestException(
+          `库存不足，不能完成分装：${shortages
+            .map(
+              (item) =>
+                `${item.name}需 ${item.required}，账面 ${item.onHand}，已占用 ${item.allocated}`,
+            )
+            .join('；')}。如确认缺料，请由管理员强制分装并填写原因。`,
+        );
+      }
+
       for (const row of planned) {
         await tx.supplementOrderItem.update({
           where: { id: row.itemId },
@@ -663,11 +707,30 @@ export class SupplementOrderService {
           },
         });
       }
-      await this.inventoryService?.consumeForOrder(tx, orderId);
+      await this.inventoryService?.consumeForOrder(tx, orderId, {
+        allowMissing: force,
+      });
       await tx.supplementOrder.update({
         where: { id: orderId },
         data: { status: 'PACKED' },
       });
+      if (tx.supplementOrderEvent) {
+        await tx.supplementOrderEvent.create({
+          data: {
+            orderId,
+            type: force ? 'FORCE_PACKED' : 'PACKED',
+            fromValue: order.status,
+            toValue: 'PACKED',
+            actorType: actor.type,
+            actorId: actor.id ?? null,
+            reason: force ? dto.forceReason!.trim() : null,
+            metadata:
+              force && shortages.length > 0
+                ? ({ shortages } as Prisma.InputJsonValue)
+                : undefined,
+          },
+        });
+      }
     });
 
     return this.getOrderById(orderId);
@@ -677,6 +740,9 @@ export class SupplementOrderService {
   async shipOrder(
     orderId: string,
     dto: { trackingNumber: string; carrierCode?: string },
+    actor: { type: 'STAFF' | 'ADMIN' | 'SYSTEM'; id?: string | null } = {
+      type: 'STAFF',
+    },
   ): Promise<SupplementOrderView> {
     const order = await this.requireOrder(orderId);
     this.assertStatus(order.status, ['PACKED'], '发货');
@@ -701,6 +767,24 @@ export class SupplementOrderService {
         shippedAt: new Date(),
       },
     });
+
+    try {
+      await this.prisma.supplementOrderEvent.create({
+        data: {
+          orderId,
+          type: 'SHIPPED',
+          fromValue: 'PACKED',
+          toValue: 'SHIPPED',
+          actorType: actor.type,
+          actorId: actor.id ?? null,
+          metadata: { trackingNumber, carrierCode: dto.carrierCode ?? null },
+        },
+      });
+    } catch {
+      // 审计失败不影响发货；日志/告警在后续统一接
+    }
+
+    await this.notificationService?.notify(orderId, 'SHIPPED');
 
     // 补发单发货后，售后 case 自动 RESOLVED
     try {
@@ -761,6 +845,9 @@ export class SupplementOrderService {
     orderId: string,
     dto: { reason?: string } = {},
     customerId?: string,
+    actor: { type: 'CUSTOMER' | 'ADMIN' | 'SYSTEM'; id?: string | null } = {
+      type: 'ADMIN',
+    },
   ): Promise<SupplementOrderView> {
     const order = await this.requireOrder(orderId);
     if (customerId && order.userId !== customerId) {
@@ -778,6 +865,19 @@ export class SupplementOrderService {
         },
       });
       await this.inventoryService?.releaseForOrder(tx, orderId);
+      if (tx.supplementOrderEvent) {
+        await tx.supplementOrderEvent.create({
+          data: {
+            orderId,
+            type: 'CANCELLED',
+            fromValue: order.status,
+            toValue: 'CANCELLED',
+            actorType: actor.type,
+            actorId: actor.id ?? null,
+            reason: dto.reason?.trim() || null,
+          },
+        });
+      }
     });
 
     return this.getOrderById(orderId);
@@ -815,6 +915,7 @@ export class SupplementOrderService {
     };
 
     const needsReprint = order.status === 'PACKED';
+    const oldAddress = order.shippingAddressSnapshot ?? null;
     await this.prisma.$transaction(async (tx) => {
       await tx.supplementOrder.update({
         where: { id: orderId },
@@ -837,7 +938,11 @@ export class SupplementOrderService {
             type: 'ADDRESS_CHANGED',
             actorType: 'CUSTOMER',
             actorId: userId,
-            metadata: { needsReprint },
+            metadata: {
+              needsReprint,
+              oldAddress,
+              newAddress: snapshot,
+            } as Prisma.InputJsonValue,
           },
         });
       } catch {
@@ -849,6 +954,106 @@ export class SupplementOrderService {
       order: await this.getOrderById(orderId),
       needsReprint,
     };
+  }
+
+  /** 补剂订单关联的制作单快照；旧单无快照时返回 null + 标记 */
+  async getOrderSnapshot(orderId: string, userId?: string) {
+    const order = await this.prisma.supplementOrder.findUnique({
+      where: { id: orderId },
+      select: { id: true, orderNo: true, userId: true, diySheetId: true },
+    });
+    if (!order) throw new NotFoundException('补剂订单不存在');
+    if (userId && order.userId !== userId) {
+      throw new NotFoundException('补剂订单不存在');
+    }
+    if (!order.diySheetId) {
+      return { orderNo: order.orderNo, snapshot: null, snapshotAt: null, legacy: true };
+    }
+    const sheet = await this.prisma.dIYSheet.findUnique({
+      where: { id: order.diySheetId },
+      select: {
+        id: true,
+        recipeVersion: true,
+        snapshot: true,
+        snapshotAt: true,
+      },
+    });
+    if (!sheet?.snapshot) {
+      return { orderNo: order.orderNo, snapshot: null, snapshotAt: null, legacy: true };
+    }
+    return {
+      orderNo: order.orderNo,
+      sheetId: sheet.id,
+      recipeVersion: sheet.recipeVersion,
+      snapshot: sheet.snapshot,
+      snapshotAt: sheet.snapshotAt?.toISOString() ?? null,
+      legacy: false,
+    };
+  }
+
+  /** 管理员代改地址：保留原/新快照，写 ADMIN 审计 */
+  async adminUpdateAddress(
+    orderId: string,
+    dto: {
+      recipientName: string;
+      phone: string;
+      province: string;
+      city: string;
+      district?: string;
+      detail: string;
+      reason?: string;
+    },
+    adminId: string | null,
+  ): Promise<{ order: SupplementOrderView; needsReprint: boolean }> {
+    const order = await this.requireOrder(orderId);
+    if (!['PENDING_PAYMENT', 'PAID', 'PACKED'].includes(order.status)) {
+      throw new BadRequestException('已发货订单不能修改地址');
+    }
+    const oldAddress = order.shippingAddressSnapshot ?? null;
+    const snapshot = {
+      addressId: null,
+      recipientName: dto.recipientName.trim(),
+      phone: dto.phone.trim(),
+      region: {
+        province: dto.province.trim(),
+        city: dto.city.trim(),
+        district: dto.district?.trim() || undefined,
+      },
+      detail: dto.detail.trim(),
+    };
+    if (
+      !snapshot.recipientName ||
+      !snapshot.phone ||
+      !snapshot.region.province ||
+      !snapshot.region.city ||
+      !snapshot.detail
+    ) {
+      throw new BadRequestException('收件人、手机号、省市和详细地址不能为空');
+    }
+    const needsReprint = order.status === 'PACKED';
+    await this.prisma.$transaction(async (tx) => {
+      await tx.supplementOrder.update({
+        where: { id: orderId },
+        data: { shippingAddressSnapshot: snapshot },
+      });
+      if (tx.supplementOrderEvent) {
+        await tx.supplementOrderEvent.create({
+          data: {
+            orderId,
+            type: 'ADDRESS_CHANGED',
+            actorType: 'ADMIN',
+            actorId: adminId,
+            reason: dto.reason?.trim() || null,
+            metadata: {
+              needsReprint,
+              oldAddress,
+              newAddress: snapshot,
+            } as Prisma.InputJsonValue,
+          },
+        });
+      }
+    });
+    return { order: await this.getOrderById(orderId), needsReprint };
   }
 
   /** 再次购买：按原单/快照清单重新报价，不直接建单 */
@@ -940,6 +1145,28 @@ export class SupplementOrderService {
 
     const config = await this.configService.getConfig();
 
+    let packerName = config.labelBrandName;
+    try {
+      const event = await (this.prisma as any).supplementOrderEvent?.findFirst?.({
+        where: {
+          orderId,
+          type: { in: ['PACKED', 'FORCE_PACKED'] },
+          actorId: { not: null },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { actorId: true },
+      });
+      if (event?.actorId) {
+        const actor = await this.prisma.user.findUnique({
+          where: { id: event.actorId },
+          select: { nickname: true },
+        });
+        if (actor?.nickname) packerName = actor.nickname;
+      }
+    } catch {
+      // 旧单/测试环境没有事件表时回退品牌名
+    }
+
     return {
       orderNo: order.orderNo,
       brandName: config.labelBrandName,
@@ -965,7 +1192,7 @@ export class SupplementOrderService {
             .join(' · '),
           sourceExpiryDate: this.toDateText(item.sourceExpiryDate),
           usageText: `每日 ${formatAmount(item.requestedAmount)}${item.unit}`,
-          packerName: config.labelBrandName || '赛文的食堂',
+          packerName,
           disclaimer: config.labelIncludeDesiccantNotice
             ? `${LABEL_DISCLAIMER}；${LABEL_DESICCANT_NOTICE}`
             : LABEL_DISCLAIMER,
@@ -1156,6 +1383,21 @@ export class SupplementOrderService {
           reshipOrderNo: created.orderNo,
         },
       });
+      if (tx.supplementOrderEvent) {
+        await tx.supplementOrderEvent.create({
+          data: {
+            orderId: original.id,
+            type: 'RESHIPPED',
+            actorType: 'ADMIN',
+            actorId: adminId,
+            reason: reasonText,
+            metadata: {
+              caseId,
+              reshipOrderNo: created.orderNo,
+            } as Prisma.InputJsonValue,
+          },
+        });
+      }
 
       return created.id;
     });
@@ -1485,6 +1727,15 @@ export class SupplementOrderService {
         (ingredient.purchaseUnit || '').trim() ||
         ingredient.baseUnit;
 
+      if (!isSupplementUnitOneToOne(displayUnit, ingredient.baseUnit)) {
+        unavailable.push({
+          ingredientId: ingredient.id,
+          name: ingredient.name,
+          reason: `展示单位「${displayUnit}」与库存单位 ${ingredient.baseUnit} 不能 1:1 换算`,
+        });
+        continue;
+      }
+
       const price = Number(ingredient.currentPricePerPurchaseUnit || 0);
       const ratio = Number(ingredient.purchaseToBaseRatio || 0);
 
@@ -1629,6 +1880,7 @@ export class SupplementOrderService {
     paymentMethod: string | null;
     paymentStatus: string | null;
     paidAt: Date | null;
+    packingDate: Date | null;
     aftersaleType: string | null;
     aftersaleReason: string | null;
     refundStatus: string | null;
@@ -1704,6 +1956,9 @@ export class SupplementOrderService {
       paymentMethod: row.paymentMethod,
       paymentStatus: row.paymentStatus,
       paidAt: row.paidAt ? row.paidAt.toISOString() : null,
+      packingDate: row.packingDate
+        ? row.packingDate.toISOString().slice(0, 10)
+        : null,
       aftersaleType: row.aftersaleType,
       aftersaleReason: row.aftersaleReason,
       refundStatus: redact ? null : row.refundStatus,

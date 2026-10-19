@@ -122,21 +122,12 @@
         </button>
       </view>
 
-      <!-- 分装日：已付款未分装时可设置/改期 -->
+      <!-- 分装日：员工只读，排期由管理员操作 -->
       <view v-if="order.status === 'PAID'" class="card">
         <view class="section-head">
           <text class="section-title">分装日</text>
-          <text class="section-sub">{{ order.packingDate || '未排期' }}</text>
+          <text class="section-sub">{{ order.packingDate || '待管理员排期' }}</text>
         </view>
-        <picker mode="date" :value="scheduleDate" @change="onScheduleDateChange">
-          <view class="schedule-picker">
-            <text>{{ scheduleDate || '选择分装日' }}</text>
-            <text class="schedule-arrow">›</text>
-          </view>
-        </picker>
-        <button class="secondary-btn" :disabled="submitting" @tap="handleSchedule">
-          保存分装日
-        </button>
       </view>
 
       <!-- 操作 -->
@@ -205,7 +196,6 @@ const submitting = ref(false)
 
 /** 每个补剂一条：同一补剂的多袋共用同一批号与原瓶到期日 */
 const packForm = reactive<Array<{ batchNo: string; sourceExpiryDate: string }>>([])
-const scheduleDate = ref('')
 
 const STATUS_TEXT: Record<SupplementOrderStatus, string> = {
   PENDING_PAYMENT: '待确认收款',
@@ -270,7 +260,6 @@ async function fetchOrder() {
     const res = await staffSupplementOrderApi.detail(orderId.value)
     if (res.code === 0 && res.data) {
       order.value = res.data
-      scheduleDate.value = res.data.packingDate ? res.data.packingDate.slice(0, 10) : ''
       syncPackForm()
     } else {
       uni.showToast({ title: res.message || '加载失败', icon: 'none' })
@@ -280,35 +269,6 @@ async function fetchOrder() {
     uni.showToast({ title: '加载失败', icon: 'none' })
   } finally {
     loading.value = false
-  }
-}
-
-function onScheduleDateChange(event: { detail: { value: string } }) {
-  scheduleDate.value = event.detail.value
-}
-
-async function handleSchedule() {
-  if (!scheduleDate.value) {
-    uni.showToast({ title: '请选择分装日', icon: 'none' })
-    return
-  }
-  submitting.value = true
-  try {
-    const res = await staffSupplementOrderApi.schedule(
-      orderId.value,
-      scheduleDate.value,
-    )
-    if (res.code === 0) {
-      uni.showToast({ title: '已排期', icon: 'success' })
-      await fetchOrder()
-    } else {
-      uni.showToast({ title: res.message || '排期失败', icon: 'none' })
-    }
-  } catch (error: any) {
-    console.error('[SupplementOrderDetail] 排期失败:', error)
-    uni.showToast({ title: error?.message || '排期失败', icon: 'none' })
-  } finally {
-    submitting.value = false
   }
 }
 

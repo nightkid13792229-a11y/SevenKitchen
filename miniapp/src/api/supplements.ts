@@ -129,6 +129,8 @@ export interface SupplementOrder {
   remark: string | null
   paymentStatus: string | null
   paidAt: string | null
+  /** 分装日（预计发货日）；null = 待排期 */
+  packingDate?: string | null
   aftersaleType: string | null
   aftersaleReason: string | null
   trackingNumber: string | null
@@ -252,9 +254,35 @@ export function createSupplementAftersale(
   })
 }
 
+export interface SupplementAftersale {
+  id: string
+  caseNo: string
+  status: string
+  requestType: string
+  requestedReason: string
+  refundAmount: number | null
+  refundStatus: string | null
+  reshipOrderNo: string | null
+  handlingNote: string | null
+  createdAt: string
+}
+
+/** 补剂订单关联的制作单快照 */
+export function fetchSupplementSnapshot(orderId: string) {
+  return request<{
+    orderNo: string
+    snapshot: any
+    snapshotAt: string | null
+    legacy: boolean
+  }>({
+    url: `/supplement-orders/${orderId}/snapshot`,
+    method: 'GET'
+  })
+}
+
 /** 补剂订单的售后记录 */
 export function fetchSupplementAftersales(orderId: string) {
-  return request({
+  return request<SupplementAftersale[]>({
     url: `/supplement-orders/${orderId}/aftersales`,
     method: 'GET'
   })

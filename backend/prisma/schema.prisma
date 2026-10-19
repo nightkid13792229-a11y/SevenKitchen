@@ -3919,9 +3919,9 @@ model SupplementShopConfig {
   enabled                   Boolean                      @default(false) @map("enabled")
 
   // ---- 定价 ----
-  markupMultiplier          Decimal                      @default(2.0) @map("markup_multiplier") @db.Decimal(6, 2)
+  markupMultiplier          Decimal                      @default(2.5) @map("markup_multiplier") @db.Decimal(6, 2)
   serviceFeeMode            SupplementServiceFeeMode     @default(PER_ORDER) @map("service_fee_mode")
-  serviceFeeAmount          Decimal                      @default(9.9) @map("service_fee_amount") @db.Decimal(10, 2)
+  serviceFeeAmount          Decimal                      @default(10.0) @map("service_fee_amount") @db.Decimal(10, 2)
   packagingFeePerBag        Decimal                      @default(0) @map("packaging_fee_per_bag") @db.Decimal(10, 2)
   priceRoundingMode         SupplementPriceRoundingMode  @default(CEIL_TO_0_1) @map("price_rounding_mode")
   minOrderAmount            Decimal                      @default(0) @map("min_order_amount") @db.Decimal(10, 2)
@@ -3956,9 +3956,9 @@ model SupplementShopConfig {
 
   // ---- 运费 ----
   shippingMode              SupplementShippingMode       @default(FLAT_RATE) @map("shipping_mode")
-  flatShippingFee           Decimal                      @default(8.0) @map("flat_shipping_fee") @db.Decimal(10, 2)
+  flatShippingFee           Decimal                      @default(6.0) @map("flat_shipping_fee") @db.Decimal(10, 2)
   shippingTemplateId        String?                      @map("shipping_template_id")
-  freeShippingThreshold     Decimal?                     @map("free_shipping_threshold") @db.Decimal(10, 2)
+  freeShippingThreshold     Decimal?                     @default(129.00) @map("free_shipping_threshold") @db.Decimal(10, 2)
 
   // ---- 分装有效期 ----
   powderShelfLifeMonths     Int                          @default(6) @map("powder_shelf_life_months")

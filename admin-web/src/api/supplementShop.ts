@@ -105,6 +105,9 @@ export const supplementShopApi = {
   ): Promise<SupplementShopConfig> =>
     api.put('/admin/supplement-shop/config', data),
 
+  getConfigHealth: (): Promise<SupplementConfigHealth> =>
+    api.get('/admin/supplement-shop/config/check'),
+
   /** 后台调参试算 */
   quotePreview: (data: {
     lines: SupplementQuoteLineInput[];
@@ -165,6 +168,18 @@ export interface SupplementShopConfig {
 export type UpdateSupplementShopConfigDto = Partial<
   Omit<SupplementShopConfig, 'updatedAt'>
 >;
+
+export interface SupplementConfigTargetDiff {
+  field: string;
+  label: string;
+  current: unknown;
+  target: unknown;
+}
+
+export interface SupplementConfigHealth {
+  isAligned: boolean;
+  diffs: SupplementConfigTargetDiff[];
+}
 
 export interface SupplementQuoteLineInput {
   ingredientId: string;
@@ -291,6 +306,8 @@ export interface SupplementOrder {
   remark: string | null;
   paymentStatus: string | null;
   paidAt: string | null;
+  /** 分装日/预计发货日；null = 待排期 */
+  packingDate?: string | null;
   paymentMethod: string | null;
   aftersaleType: string | null;
   aftersaleReason: string | null;
@@ -317,6 +334,8 @@ export interface SupplementOrderPage {
 
 export interface PackSupplementOrderDto {
   items: Array<{ itemId: string; batchNo?: string; sourceExpiryDate: string }>;
+  force?: boolean;
+  forceReason?: string;
 }
 
 export const SUPPLEMENT_ORDER_STATUS_LABELS: Record<string, string> = {
@@ -384,6 +403,19 @@ export const supplementOrderApi = {
   detail: (id: string): Promise<SupplementOrder> =>
     api.get(`/admin/supplement-shop/orders/${id}`),
 
+  schedule: (
+    id: string,
+    data: { packingDate: string; reason?: string; allowOverbook?: boolean },
+  ): Promise<SupplementOrder> =>
+    api.post(`/admin/supplement-shop/orders/${id}/schedule`, data),
+
+  getSnapshot: (id: string): Promise<{
+    orderNo: string;
+    snapshot: Record<string, unknown> | null;
+    snapshotAt: string | null;
+    legacy: boolean;
+  }> => api.get(`/admin/supplement-shop/orders/${id}/snapshot`),
+
   summary: (): Promise<Record<string, number>> =>
     api.get('/admin/supplement-shop/orders/summary'),
 
@@ -404,6 +436,20 @@ export const supplementOrderApi = {
 
   cancel: (id: string, data: { reason?: string }): Promise<SupplementOrder> =>
     api.post(`/admin/supplement-shop/orders/${id}/cancel`, data),
+
+  updateAddress: (
+    id: string,
+    data: {
+      recipientName: string;
+      phone: string;
+      province: string;
+      city: string;
+      district?: string;
+      detail: string;
+      reason?: string;
+    },
+  ): Promise<{ order: SupplementOrder; needsReprint: boolean }> =>
+    api.patch(`/admin/supplement-shop/orders/${id}/address`, data),
 
   aftersale: (
     id: string,

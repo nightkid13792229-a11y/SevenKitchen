@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma.service';
+import { toSupplementBaseQuantity } from './supplement-unit.util';
 
 type Tx = Prisma.TransactionClient;
 
@@ -133,6 +134,124 @@ export class SupplementInventoryService {
   }
 
   /**
+   * 分装前缺料检查：返回缺口（数量按 baseUnit）。
+   * 判断口径：实物账面 < 全部 ACTIVE 预占 = 缺料；当前订单的预占也算在内。
+   * 强制分装由调用方决定是否忽略。
+   */
+  async getShortages(
+    tx: Tx,
+    orderId: string,
+  ): Promise<
+    Array<{
+      ingredientId: string;
+      name: string;
+      required: number;
+      onHand: number;
+      allocated: number;
+    }>
+  > {
+    if (!this.enabled) return [];
+
+    const allocation = await tx.inventoryAllocation.findFirst({
+      where: {
+        status: 'ACTIVE',
+        sourceType: 'SUPPLEMENT_PACK',
+        sourceOrderIds: { has: orderId },
+      },
+      include: { lines: true },
+    });
+
+    let requiredByIngredient = new Map<string, number>();
+    if (allocation) {
+      for (const line of allocation.lines) {
+        requiredByIngredient.set(
+          line.ingredientId,
+          (requiredByIngredient.get(line.ingredientId) ?? 0) +
+            Number(line.quantityG),
+        );
+      }
+    } else {
+      const order = await tx.supplementOrder.findUnique({
+        where: { id: orderId },
+        select: {
+          items: {
+            select: {
+              ingredientId: true,
+              name: true,
+              unit: true,
+              packedAmount: true,
+              bags: true,
+            },
+          },
+        },
+      });
+      if (!order) return [];
+      const lines = await this.buildAllocationLines(tx, order.items);
+      requiredByIngredient = new Map(
+        lines.map((line) => [line.ingredientId, line.quantity]),
+      );
+    }
+
+    const ids = Array.from(requiredByIngredient.keys());
+    if (ids.length === 0) return [];
+
+    const [balances, allocatedRows, ingredients] = await Promise.all([
+      tx.inventoryLedgerEntry.groupBy({
+        by: ['ingredientId'],
+        where: { ingredientId: { in: ids } },
+        _sum: { deltaG: true },
+      }),
+      tx.inventoryAllocationLine.groupBy({
+        by: ['ingredientId'],
+        where: {
+          ingredientId: { in: ids },
+          allocation: { status: 'ACTIVE' },
+        },
+        _sum: { quantityG: true },
+      }),
+      tx.ingredient.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, name: true },
+      }),
+    ]);
+
+    const balanceMap = new Map(
+      balances.map((row) => [row.ingredientId, Number(row._sum.deltaG ?? 0)]),
+    );
+    const allocatedMap = new Map(
+      allocatedRows.map((row) => [
+        row.ingredientId,
+        Number(row._sum.quantityG ?? 0),
+      ]),
+    );
+    const nameMap = new Map(ingredients.map((row) => [row.id, row.name]));
+
+    const shortages: Array<{
+      ingredientId: string;
+      name: string;
+      required: number;
+      onHand: number;
+      allocated: number;
+    }> = [];
+    for (const [ingredientId, required] of requiredByIngredient) {
+      const onHand = balanceMap.get(ingredientId) ?? 0;
+      const allocated = allocatedMap.get(ingredientId) ?? required;
+      // 没有预占的强制路径：把本单需求也算进占用
+      const claimed = allocation ? allocated : allocated + required;
+      if (onHand < claimed) {
+        shortages.push({
+          ingredientId,
+          name: nameMap.get(ingredientId) ?? ingredientId,
+          required,
+          onHand,
+          allocated: claimed,
+        });
+      }
+    }
+    return shortages;
+  }
+
+  /**
    * 分装完成时扣减。
    * - 正常分装：必须有 ACTIVE allocation；没有就拒绝（防止静默不扣库存）。
    * - 强制分装：allowMissing=true，允许直接写 ledger，事件由调用方留痕。
@@ -192,33 +311,14 @@ export class SupplementInventoryService {
     });
   }
 
-  /** 单位 → baseUnit 1:1 数量；不支持时拒绝上架/分装，不猜密度 */
+  /** 单位 → baseUnit 1:1 数量；规则集中在 supplement-unit.util */
   async toBaseQuantity(
     unit: string,
     amount: number,
     baseUnit: string,
     ingredientName: string,
   ): Promise<number> {
-    const normalized = String(unit || '').trim().toLowerCase();
-    const base = String(baseUnit || '').toUpperCase();
-    const value = Number(amount);
-    if (!Number.isFinite(value) || value <= 0) {
-      throw new BadRequestException(`「${ingredientName}」数量必须大于 0`);
-    }
-
-    const isGram = ['g', '克', 'gram'].includes(normalized);
-    const isMl = ['ml', '毫升'].includes(normalized);
-    const isPcs = ['粒', '片', '个', '颗', '平勺', '勺', 'pcs'].includes(
-      normalized,
-    );
-
-    if (base === 'G' && isGram) return round3(value);
-    if (base === 'ML' && isMl) return round3(value);
-    if (base === 'PCS' && isPcs) return round3(value);
-
-    throw new BadRequestException(
-      `「${ingredientName}」的单位「${unit}」无法与库存基准单位 ${base} 1:1 对应；请先在原料档案修正`,
-    );
+    return toSupplementBaseQuantity(unit, amount, baseUnit, ingredientName);
   }
 
   private async buildAllocationLines(

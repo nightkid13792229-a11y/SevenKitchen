@@ -41,6 +41,14 @@
           <el-icon><Box /></el-icon>
           <span>补剂订单</span>
         </el-menu-item>
+        <el-menu-item index="/supplement-shop/packing-summary">
+          <el-icon><List /></el-icon>
+          <span>分装汇总</span>
+        </el-menu-item>
+        <el-menu-item index="/supplement-shop/packaging">
+          <el-icon><Box /></el-icon>
+          <span>补剂包材</span>
+        </el-menu-item>
         <el-menu-item index="/supplement-shop/aftersales">
           <el-icon><List /></el-icon>
           <span>补剂售后</span>

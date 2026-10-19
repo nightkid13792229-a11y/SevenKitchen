@@ -10,9 +10,9 @@ function buildRow(overrides: Record<string, unknown> = {}) {
   return {
     id: SUPPLEMENT_SHOP_CONFIG_ID,
     enabled: false,
-    markupMultiplier: 2,
+    markupMultiplier: 2.5,
     serviceFeeMode: 'PER_ORDER',
-    serviceFeeAmount: 9.9,
+    serviceFeeAmount: 10,
     packagingFeePerBag: 0,
     priceRoundingMode: 'CEIL_TO_0_1',
     minOrderAmount: 0,
@@ -27,9 +27,9 @@ function buildRow(overrides: Record<string, unknown> = {}) {
     autoCompleteDays: 10,
     freeServiceThreshold: '99.00',
     shippingMode: 'FLAT_RATE',
-    flatShippingFee: 8,
+    flatShippingFee: 6,
     shippingTemplateId: null,
-    freeShippingThreshold: null,
+    freeShippingThreshold: 129,
     powderShelfLifeMonths: 6,
     solidShelfLifeMonths: 9,
     oilShelfLifeMonths: 6,
@@ -74,9 +74,14 @@ describe('SupplementShopConfigService', () => {
     const config = await service.getConfig();
 
     expect(mockPrismaService.supplementShopConfig.create).toHaveBeenCalledWith({
-      data: { id: SUPPLEMENT_SHOP_CONFIG_ID },
+      data: expect.objectContaining({
+        id: SUPPLEMENT_SHOP_CONFIG_ID,
+        markupMultiplier: 2.5,
+        flatShippingFee: 6,
+        freeShippingThreshold: 129,
+      }),
     });
-    expect(config.markupMultiplier).toBe(2);
+    expect(config.markupMultiplier).toBe(2.5);
     expect(config.serviceFeeMode).toBe('PER_ORDER');
     expect(config.shippingMode).toBe('FLAT_RATE');
     expect(config.enabled).toBe(false);

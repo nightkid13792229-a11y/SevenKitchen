@@ -152,7 +152,7 @@
 
         v1 只在选项上写"1 份 / 2 份 / 3 份"，顾客要来回点才知道多少钱、哪档包邮。
         v2 把服务端算好的【金额 + 是否包邮】印在每个选项上，
-        "再加一份就免 8 块运费"变成零点击可见。
+        "再加一份就包邮"变成零点击可见。
         金额全部来自服务端（portionOptions），前端不做乘法。
 
         ⚠️ 这里**故意不显示"多少天量"**（2026-09-24 撤掉）。
@@ -208,19 +208,18 @@
           <text class="fee-value">¥{{ summary.supplementPrice.toFixed(2) }}</text>
         </view>
 
+        <!--
+          补剂商品小计：只算补剂商品，不含服务费/包材/运费。
+          份数选择器上显示的就是这个数（也是包邮门槛比的数）。
+        -->
+        <view class="fee-row fee-row-subtotal">
+          <text class="fee-label">补剂商品小计</text>
+          <text class="fee-value">¥{{ summary.goodsSubtotal.toFixed(2) }}</text>
+        </view>
+
         <view class="fee-row">
           <text class="fee-label">分装服务费</text>
           <text class="fee-value">¥{{ summary.serviceFee.toFixed(2) }}</text>
-        </view>
-
-        <!--
-          商品金额小计：把「补剂费 + 服务费」与「运费」分开。
-          份数选择器上显示的就是这个数（也是包邮门槛比的数），
-          不加这一行，用户对不上"选项上的价格"和"明细里的三项"。
-        -->
-        <view class="fee-row fee-row-subtotal">
-          <text class="fee-label">商品金额小计</text>
-          <text class="fee-value">¥{{ summary.goodsSubtotal.toFixed(2) }}</text>
         </view>
 
         <view class="fee-row">
@@ -356,7 +355,7 @@ const showPortionPicker = computed(
  *
  * 不显示"多少天量"：详见模板里那段注释，天数算不准，给了反而误导。
  *
- * 这样"再加一份就免 8 块运费"是零点击可见的，顾客不用来回点着试。
+ * 这样"再加一份就包邮"是零点击可见的，顾客不用来回点着试。
  * 服务端没返回选项时（老接口）自动退回"只有 1 份"，控件整体不展示。
  */
 const portionOptionCards = computed(() => {
@@ -367,10 +366,10 @@ const portionOptionCards = computed(() => {
   return list.map((opt) => ({
     multiplier: opt.multiplier,
     /**
-     * ⚠️ 这里显示的是**商品金额**（补剂费 + 分装服务费），不是含运费的合计。
+     * ⚠️ 这里显示的是**商品金额**（只含补剂商品，不含服务费/运费），不是含运费的合计。
      *
      * 为什么：包邮门槛比的就是商品金额。之前显示 total（含运费）会出现
-     * "选项上写着 ¥49.50、门槛 49，却没包邮" —— 因为那 ¥49.50 里含着 8 元运费，
+     * "选项上写着 ¥49.50、门槛 49，却没包邮" —— 因为那 ¥49.50 里含着运费，
      * 商品金额其实只有 ¥41.50。同一个数字里混着运费，门槛就没法读了。
      * 费用明细里加了「商品金额小计」一行，两处对得上。
      */
@@ -380,10 +379,10 @@ const portionOptionCards = computed(() => {
 })
 
 /**
- * 包邮门槛文案（「满49元包邮」）。
+ * 包邮门槛文案（「满 N 元包邮」）。
  *
  * 门槛取自服务端配置，后台改了这里跟着变 —— 不写死 49。
- * 整数就不显示小数，49 比 49.00 好看。
+ * 整数就不显示小数，门槛值比 49.00 好看。
  */
 const freeShippingThresholdText = computed(() => {
   const threshold = summary.value?.freeShippingThreshold

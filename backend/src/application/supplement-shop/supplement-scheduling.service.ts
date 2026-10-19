@@ -10,6 +10,7 @@ import { TimezoneUtil } from '../../utils/timezone.util';
 import { SupplementShopConfigService } from './supplement-shop-config.service';
 import { BusinessCalendarService } from './business-calendar.service';
 import { SupplementInventoryService } from './supplement-inventory.service';
+import { SupplementNotificationService } from './supplement-notification.service';
 
 export type SupplementActorType = 'CUSTOMER' | 'STAFF' | 'ADMIN' | 'SYSTEM';
 export interface SupplementActor {
@@ -40,6 +41,7 @@ export class SupplementSchedulingService {
     private readonly configService: SupplementShopConfigService,
     private readonly calendar: BusinessCalendarService,
     private readonly inventory?: SupplementInventoryService,
+    private readonly notification?: SupplementNotificationService,
   ) {}
 
   async resolvePackingDate(paidAt: Date, now = new Date()): Promise<Date> {
@@ -108,7 +110,9 @@ export class SupplementSchedulingService {
     const paidAt = order.paidAt ?? new Date();
     try {
       const packingDate = await this.resolvePackingDate(paidAt);
-      return await this.applySchedule(orderId, packingDate, actor, opts);
+      const applied = await this.applySchedule(orderId, packingDate, actor, opts);
+      await this.notification?.notify(orderId, 'SCHEDULED');
+      return applied;
     } catch (error) {
       await this.recordScheduleFailure(orderId, error, actor);
       throw error;
@@ -145,7 +149,15 @@ export class SupplementSchedulingService {
       );
     }
 
-    return this.applySchedule(orderId, dateOnly, actor, opts, order.packingDate);
+    const applied = await this.applySchedule(
+      orderId,
+      dateOnly,
+      actor,
+      opts,
+      order.packingDate,
+    );
+    await this.notification?.notify(orderId, 'RESCHEDULED');
+    return applied;
   }
 
   /**
@@ -188,7 +200,10 @@ export class SupplementSchedulingService {
         });
         return true;
       });
-      if (updated) completed += 1;
+      if (updated) {
+        completed += 1;
+        await this.notification?.notify(order.id, 'COMPLETED');
+      }
     }
     return completed;
   }

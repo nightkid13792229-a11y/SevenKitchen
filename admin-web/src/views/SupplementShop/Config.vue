@@ -16,6 +16,26 @@
       <span v-if="saveError" class="save-error">{{ saveError }}</span>
     </div>
 
+    <el-alert
+      v-if="targetDiffs.length > 0"
+      class="target-alert"
+      type="warning"
+      show-icon
+      :closable="false"
+    >
+      <template #title>
+        当前配置与首发目标有 {{ targetDiffs.length }} 项不一致
+      </template>
+      <div class="target-list">
+        <span v-for="diff in targetDiffs" :key="diff.field" class="target-item">
+          {{ diff.label }}：{{ formatTargetValue(diff.current) }} → {{ formatTargetValue(diff.target) }}
+        </span>
+      </div>
+      <el-button size="small" type="warning" plain @click="applyLaunchTargets">
+        填入首发目标（仍需保存）
+      </el-button>
+    </el-alert>
+
     <el-card shadow="never" v-loading="loading">
       <el-form :model="form" label-width="220px">
         <el-divider content-position="left">总开关</el-divider>
@@ -213,7 +233,7 @@
             :precision="2"
             style="width: 220px"
           />
-          <span class="form-tip">0 表示不限制。低于此金额只提示，不阻止下单</span>
+          <span class="form-tip">0 表示不限制；大于 0 时，低于此金额会阻止下单</span>
         </el-form-item>
 
         <el-divider content-position="left">运费</el-divider>
@@ -271,7 +291,7 @@
           <el-button link type="primary" style="margin-left: 12px" @click="form.freeShippingThreshold = null">
             清空（不包邮）
           </el-button>
-          <div class="form-tip block">商品金额（补剂费 + 服务费 + 包材费）达到该金额即免运费</div>
+          <div class="form-tip block">仅补剂商品小计（不含服务费/包材/运费）达到该金额即免运费</div>
         </el-form-item>
 
         <el-divider content-position="left">分装有效期</el-divider>
@@ -511,6 +531,7 @@ import {
   type SupplementQuote,
   type SupplementQuoteLineInput,
   type SupplementShopConfig,
+  type SupplementConfigTargetDiff,
 } from '@/api/supplementShop';
 import { shippingTemplateApi, type ShippingTemplate } from '@/api/shippingTemplates';
 
@@ -522,13 +543,14 @@ const quoting = ref(false);
 const quoteError = ref('');
 const quote = ref<SupplementQuote | null>(null);
 const shippingTemplates = ref<ShippingTemplate[]>([]);
+const targetDiffs = ref<SupplementConfigTargetDiff[]>([]);
 const quoteCatalog = ref<SupplementCatalogItem[]>([]);
 
 const form = ref<SupplementShopConfig>({
   enabled: false,
-  markupMultiplier: 2,
+  markupMultiplier: 2.5,
   serviceFeeMode: 'PER_ORDER',
-  serviceFeeAmount: 9.9,
+  serviceFeeAmount: 10,
   packagingFeePerBag: 0,
   priceRoundingMode: 'CEIL_TO_0_1',
   minOrderAmount: 0,
@@ -543,9 +565,9 @@ const form = ref<SupplementShopConfig>({
   autoCompleteDays: 10,
   freeServiceThreshold: 99,
   shippingMode: 'FLAT_RATE',
-  flatShippingFee: 8,
+  flatShippingFee: 6,
   shippingTemplateId: null,
-  freeShippingThreshold: null,
+  freeShippingThreshold: 129,
   powderShelfLifeMonths: 6,
   solidShelfLifeMonths: 9,
   oilShelfLifeMonths: 6,
@@ -565,14 +587,16 @@ const quoteLines = ref<
 async function load() {
   loading.value = true;
   try {
-    const [config, templates, catalog] = await Promise.all([
+    const [config, templates, catalog, health] = await Promise.all([
       supplementShopApi.getConfig(),
       shippingTemplateApi.list(),
       supplementShopApi.catalog(),
+      supplementShopApi.getConfigHealth(),
     ]);
     form.value = config;
     shippingTemplates.value = templates;
     quoteCatalog.value = catalog.items;
+    targetDiffs.value = health.diffs;
   } finally {
     loading.value = false;
   }
@@ -601,6 +625,20 @@ function addLine() {
     unitCost: 0,
     physicalForm: 'POWDER',
   });
+}
+
+function formatTargetValue(value: unknown) {
+  if (value === null || value === undefined || value === '') return '无'
+  if (typeof value === 'boolean') return value ? '开' : '关'
+  return String(value)
+}
+
+function applyLaunchTargets() {
+  for (const diff of targetDiffs.value) {
+    ;(form.value as any)[diff.field] = diff.target
+  }
+  targetDiffs.value = []
+  ElMessage.warning('已填入首发目标，请检查后点「保存配置」')
 }
 
 async function handleSave() {
@@ -637,6 +675,7 @@ async function handleSave() {
       labelIncludeDesiccantNotice: form.value.labelIncludeDesiccantNotice,
     });
     ElMessage.success('补剂商城配置已保存');
+    targetDiffs.value = (await supplementShopApi.getConfigHealth()).diffs;
   } catch (error: any) {
     // ⚠️ 这里原来没有 catch：接口一旦失败，按钮转完圈就恢复原样，
     // 用户看到的是"保存成功了但值没变"，完全无从排查。实测踩过这个坑
@@ -693,6 +732,19 @@ onMounted(load);
   font-weight: 600;
 }
 
+.target-alert {
+  margin-bottom: 16px;
+}
+.target-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 6px 0 10px;
+  font-size: 13px;
+}
+.target-item {
+  color: #8a5a00;
+}
 .page-desc {
   margin: 8px 0 0;
   font-size: 13px;

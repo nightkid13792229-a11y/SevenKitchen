@@ -232,6 +232,8 @@ import { SupplementSchedulingService } from './application/supplement-shop/suppl
 import { SupplementInventoryService } from './application/supplement-shop/supplement-inventory.service';
 import { SupplementSnapshotService } from './application/supplement-shop/supplement-snapshot.service';
 import { SupplementAftersaleService } from './application/supplement-shop/supplement-aftersale.service';
+import { SupplementPackagingService } from './application/supplement-shop/supplement-packaging.service';
+import { SupplementNotificationService } from './application/supplement-shop/supplement-notification.service';
 import { OrderCenterService } from './application/order-center/order-center.service';
 import { SupplementDashboardService } from './application/supplement-shop/supplement-dashboard.service';
 import { SupplementOrderService } from './application/supplement-shop/supplement-order.service';
@@ -869,6 +871,8 @@ validatePrismaConfig();
     SupplementInventoryService,
     SupplementSnapshotService,
     SupplementAftersaleService,
+    SupplementPackagingService,
+    SupplementNotificationService,
     OrderCenterService,
     SupplementDashboardService,
     SupplementSchedulingService,

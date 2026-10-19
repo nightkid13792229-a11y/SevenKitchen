@@ -13,6 +13,7 @@ import {
   IsInt,
   IsNumber,
   IsOptional,
+  IsBoolean,
   IsString,
   IsUUID,
   Max,
@@ -178,6 +179,19 @@ export class PackSupplementOrderDto {
   @ValidateNested({ each: true })
   @Type(() => SupplementPackItemDto)
   items!: SupplementPackItemDto[];
+
+  @ApiPropertyOptional({
+    description: '管理员强制分装（缺料时）；必须同时填 forceReason',
+  })
+  @IsOptional()
+  @IsBoolean()
+  force?: boolean;
+
+  @ApiPropertyOptional({ description: '强制分装原因（缺料/差异）' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  forceReason?: string;
 }
 
 export class ShipSupplementOrderDto {

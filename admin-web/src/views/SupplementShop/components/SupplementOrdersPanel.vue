@@ -95,6 +95,15 @@
               确认收款
             </el-button>
             <el-button
+              v-if="row.status === 'PAID'"
+              link
+              type="primary"
+              size="small"
+              @click="openSchedule(row)"
+            >
+              排期
+            </el-button>
+            <el-button
               v-if="['PAID', 'PACKING'].includes(row.status)"
               link
               type="primary"
@@ -102,6 +111,15 @@
               @click="openPack(row)"
             >
               分装工单
+            </el-button>
+            <el-button
+              v-if="['PENDING_PAYMENT', 'PAID', 'PACKED'].includes(row.status)"
+              link
+              type="primary"
+              size="small"
+              @click="openAddress(row)"
+            >
+              改地址
             </el-button>
             <el-button
               v-if="row.status === 'PACKED'"
@@ -121,6 +139,7 @@
             >
               打印标签
             </el-button>
+            <el-button link size="small" @click="openSnapshot(row)">快照</el-button>
             <el-button link size="small" @click="openDetail(row)">详情</el-button>
             <el-button
               v-if="['PENDING_PAYMENT', 'PAID'].includes(row.status)"
@@ -153,6 +172,71 @@
         @current-change="onPageChange"
       />
     </el-card>
+
+    <!-- 制作单快照 -->
+    <el-dialog v-model="snapshotVisible" title="制作单快照" width="680px">
+      <el-alert
+        v-if="snapshotData?.legacy"
+        type="info"
+        :closable="false"
+        show-icon
+        title="这张订单是旧单，没有冻结快照；只能看实时数据。"
+      />
+      <pre v-else class="snapshot-json">{{ formatSnapshot(snapshotData?.snapshot) }}</pre>
+    </el-dialog>
+
+    <!-- 管理员代改地址 -->
+    <el-dialog v-model="addressVisible" title="管理员代改收货地址" width="520px">
+      <el-alert
+        v-if="current?.status === 'PACKED'"
+        type="warning"
+        :closable="false"
+        show-icon
+        title="订单已分装：改地址后必须重新打印面单。"
+        class="address-alert"
+      />
+      <el-form label-width="90px">
+        <el-form-item label="收件人"><el-input v-model="addressForm.recipientName" /></el-form-item>
+        <el-form-item label="手机号"><el-input v-model="addressForm.phone" /></el-form-item>
+        <el-form-item label="省 / 市">
+          <el-input v-model="addressForm.province" placeholder="省" style="width: 46%" />
+          <el-input v-model="addressForm.city" placeholder="市" style="width: 46%; margin-left: 8px" />
+        </el-form-item>
+        <el-form-item label="区 / 县"><el-input v-model="addressForm.district" /></el-form-item>
+        <el-form-item label="详细地址"><el-input v-model="addressForm.detail" type="textarea" :rows="2" /></el-form-item>
+        <el-form-item label="原因"><el-input v-model="addressForm.reason" maxlength="500" /></el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="addressVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" @click="submitAddress">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 排期 -->
+    <el-dialog v-model="scheduleVisible" title="设置分装日" width="460px">
+      <el-form label-width="100px">
+        <el-form-item label="分装日">
+          <el-date-picker
+            v-model="scheduleForm.packingDate"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="选择营业日"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="允许超排">
+          <el-switch v-model="scheduleForm.allowOverbook" />
+          <div class="muted">超过每日产能时需说明原因，会写入审计事件。</div>
+        </el-form-item>
+        <el-form-item v-if="scheduleForm.allowOverbook" label="超排原因">
+          <el-input v-model="scheduleForm.reason" maxlength="200" placeholder="必填" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="scheduleVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" @click="submitSchedule">保存</el-button>
+      </template>
+    </el-dialog>
 
     <!-- 分装工单 -->
     <el-drawer v-model="packVisible" title="分装工单" size="760px">
@@ -213,6 +297,17 @@
             </template>
           </el-table-column>
         </el-table>
+
+        <div class="pack-force">
+          <el-checkbox v-model="forcePack">缺料强制分装（仅管理员，会留痕）</el-checkbox>
+          <el-input
+            v-if="forcePack"
+            v-model="forceReason"
+            maxlength="500"
+            placeholder="必填：缺料/差异原因"
+            style="margin-top: 8px"
+          />
+        </div>
 
         <div class="pack-actions">
           <el-button type="primary" :loading="submitting" @click="submitPack">
@@ -433,6 +528,26 @@ const total = ref(0);
 const current = ref<SupplementOrder | null>(null);
 const packVisible = ref(false);
 const packRows = ref<PackRow[]>([]);
+const forcePack = ref(false);
+const forceReason = ref('');
+const scheduleVisible = ref(false);
+const addressVisible = ref(false);
+const snapshotVisible = ref(false);
+const snapshotData = ref<any>(null);
+const addressForm = ref({
+  recipientName: '',
+  phone: '',
+  province: '',
+  city: '',
+  district: '',
+  detail: '',
+  reason: '',
+});
+const scheduleForm = ref({
+  packingDate: '',
+  allowOverbook: false,
+  reason: '',
+});
 const shipVisible = ref(false);
 const shipForm = ref({ trackingNumber: '', carrierCode: '' });
 const aftersaleVisible = ref(false);
@@ -506,7 +621,89 @@ function openPack(order: SupplementOrder) {
       ? item.sourceExpiryDate.slice(0, 10)
       : '',
   }));
+  forcePack.value = false;
+  forceReason.value = '';
   packVisible.value = true;
+}
+
+function openSchedule(order: SupplementOrder) {
+  current.value = order;
+  scheduleForm.value = {
+    packingDate: order.packingDate || '',
+    allowOverbook: false,
+    reason: '',
+  };
+  scheduleVisible.value = true;
+}
+
+async function openSnapshot(order: SupplementOrder) {
+  snapshotData.value = await supplementOrderApi.getSnapshot(order.id);
+  snapshotVisible.value = true;
+}
+
+function formatSnapshot(value: unknown) {
+  return value ? JSON.stringify(value, null, 2) : '无快照';
+}
+
+function openAddress(order: SupplementOrder) {
+  current.value = order;
+  const parts = String(order.receiverRegion || '').split(/\s+/).filter(Boolean);
+  addressForm.value = {
+    recipientName: order.receiverName || '',
+    phone: order.receiverPhone || '',
+    province: parts[0] || '',
+    city: parts[1] || '',
+    district: parts[2] || '',
+    detail: order.receiverDetail || '',
+    reason: '',
+  };
+  addressVisible.value = true;
+}
+
+async function submitAddress() {
+  if (!current.value) return;
+  const form = addressForm.value;
+  if (!form.recipientName.trim() || !form.phone.trim() || !form.province.trim() || !form.city.trim() || !form.detail.trim()) {
+    ElMessage.warning('收件人、手机号、省市和详细地址不能为空');
+    return;
+  }
+  submitting.value = true;
+  try {
+    const result = await supplementOrderApi.updateAddress(current.value.id, {
+      ...form,
+      reason: form.reason.trim() || undefined,
+    });
+    addressVisible.value = false;
+    ElMessage.success(result.needsReprint ? '地址已更新，请重新打印面单' : '地址已更新');
+    await loadAll();
+  } finally {
+    submitting.value = false;
+  }
+}
+
+async function submitSchedule() {
+  if (!current.value) return;
+  if (!scheduleForm.value.packingDate) {
+    ElMessage.warning('请选择分装日');
+    return;
+  }
+  if (scheduleForm.value.allowOverbook && !scheduleForm.value.reason.trim()) {
+    ElMessage.warning('超排必须填写原因');
+    return;
+  }
+  submitting.value = true;
+  try {
+    current.value = await supplementOrderApi.schedule(current.value.id, {
+      packingDate: scheduleForm.value.packingDate,
+      allowOverbook: scheduleForm.value.allowOverbook || undefined,
+      reason: scheduleForm.value.reason.trim() || undefined,
+    });
+    scheduleVisible.value = false;
+    ElMessage.success('分装日已更新');
+    await loadAll();
+  } finally {
+    submitting.value = false;
+  }
 }
 
 /** 打印标签是独立路由；嵌入标签页访问时带上来源，标签页的「返回」才知道要回到补剂标签 */
@@ -523,6 +720,11 @@ async function submitPack() {
     return;
   }
 
+  if (forcePack.value && !forceReason.value.trim()) {
+    ElMessage.warning('强制分装必须填写原因');
+    return;
+  }
+
   submitting.value = true;
   try {
     const updated = await supplementOrderApi.pack(current.value!.id, {
@@ -531,6 +733,8 @@ async function submitPack() {
         batchNo: row.batchNo.trim() || undefined,
         sourceExpiryDate: row.sourceExpiryDate,
       })),
+      force: forcePack.value || undefined,
+      forceReason: forcePack.value ? forceReason.value.trim() : undefined,
     });
     packVisible.value = false;
     current.value = updated;
@@ -734,6 +938,26 @@ onMounted(loadAll);
   margin-top: 8px;
 }
 
+.snapshot-json {
+  max-height: 60vh;
+  overflow: auto;
+  background: #f5f7fa;
+  padding: 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.address-alert {
+  margin-bottom: 12px;
+}
+.pack-force {
+  margin-top: 14px;
+  padding: 12px;
+  background: #fdf6ec;
+  border-radius: 6px;
+}
 .pack-actions {
   margin-top: 18px;
   display: flex;

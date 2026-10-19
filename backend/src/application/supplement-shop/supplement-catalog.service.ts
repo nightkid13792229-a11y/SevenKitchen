@@ -10,6 +10,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { IngredientType } from '../../domain/ingredient/enums';
 import { PrismaService } from '../../infrastructure/prisma.service';
+import { isSupplementUnitOneToOne } from './supplement-unit.util';
 
 /** 物理形态（与 prisma schema 的 IngredientPhysicalForm 对齐） */
 export type IngredientPhysicalFormCode = 'POWDER' | 'TABLET' | 'CAPSULE' | 'LIQUID';
@@ -21,6 +22,7 @@ export type SupplementCatalogIssueCode =
   | 'SHELF_LIFE_MISSING'
   | 'STORAGE_MISSING'
   | 'UNIT_INCONSISTENT'
+  | 'UNIT_INCOMPATIBLE'
   | 'DUPLICATE_NAME';
 
 export interface SupplementCatalogIssue {
@@ -439,6 +441,14 @@ export class SupplementCatalogService {
         code: 'LIQUID_UNSUPPORTED',
         level: 'ERROR',
         message: '液体补剂暂不支持分装，不应上架',
+      });
+    }
+
+    if (!isSupplementUnitOneToOne(displayUnit, ingredient.baseUnit)) {
+      issues.push({
+        code: 'UNIT_INCOMPATIBLE',
+        level: 'ERROR',
+        message: `展示单位「${displayUnit}」无法与库存基准单位 ${ingredient.baseUnit} 1:1 对应；请先修档案，禁止上架`,
       });
     }
 

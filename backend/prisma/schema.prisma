@@ -2464,12 +2464,16 @@ model CustomRecipeOrder {
   /// 那两个是"爱吃什么/不吃什么"（2026-10-17 已决定拿掉，属低频），
   /// 这里的 `currentFoodMain` 是"现在喂的是什么粮" —— 决定过渡方案，必填。
   currentFoodMain       String?                  @map("current_food_main") @db.VarChar(32)
+  /// 选「其他」时顾客手填的当前食物（2026-10-19）
+  currentFoodOther      String?                  @map("current_food_other") @db.VarChar(120)
   /// 为什么想换（多选，code 数组）
   changeReasons         String[]                 @default([]) @map("change_reasons")
   /// 选「其他」时顾客手填的原因
   changeReasonOther     String?                  @map("change_reason_other") @db.VarChar(120)
   /// 最近肠胃情况（多选，code 数组）：正常 / 软便 / 便秘 / 呕吐 / 换粮拉稀
   stomachConditions     String[]                 @default([]) @map("stomach_conditions")
+  /// 选「其他」时顾客手填的肠胃情况（2026-10-19）
+  stomachOther          String?                  @map("stomach_other") @db.VarChar(120)
 
   attachments           Json?                    @map("attachments")
   scheduledDate         DateTime                 @map("scheduled_date") @db.Date

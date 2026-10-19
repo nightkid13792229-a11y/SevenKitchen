@@ -171,15 +171,16 @@ export const OPTION_SET_DEFINITIONS: readonly OptionSetDefinition[] = [
     seed: [
       { code: 'DRY', label: '干粮', tone: 'info', sortOrder: 10 },
       { code: 'WET', label: '湿粮或罐头', tone: 'info', sortOrder: 20 },
-      { code: 'HOMEMADE', label: '自制', tone: 'info', sortOrder: 30 },
+      { code: 'HOMEMADE', label: '自制/商业鲜食', tone: 'info', sortOrder: 30 },
       { code: 'RAW', label: '生骨肉', tone: 'info', sortOrder: 40 },
       { code: 'MIXED', label: '混着喂', tone: 'info', sortOrder: 50 },
+      { code: 'OTHER', label: '其他', tone: 'info', sortOrder: 60 },
     ],
   },
 
   {
     code: 'custom_recipe_change_reason',
-    name: '为什么想换',
+    name: '定制原因',
     description: '定制页必填（多选）：直接决定配方方向',
     sourceType: 'DATA',
     seed: [
@@ -202,6 +203,7 @@ export const OPTION_SET_DEFINITIONS: readonly OptionSetDefinition[] = [
       { code: 'CONSTIPATION', label: '便秘', tone: 'warning', sortOrder: 30 },
       { code: 'VOMIT', label: '呕吐', tone: 'warning', sortOrder: 40 },
       { code: 'TRANSITION_DIARRHEA', label: '换粮拉稀', tone: 'warning', sortOrder: 50 },
+      { code: 'OTHER', label: '其他', tone: 'info', sortOrder: 60 },
     ],
   },
 

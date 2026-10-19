@@ -99,6 +99,15 @@ describe('档案最新信息与来源标注（第 4 条）', () => {
     expect(orderDetail).toContain('order.allergyText')
   })
 
+  it('订单详情展示饲喂历史（含「其他」手填）', () => {
+    expect(orderDetail).toContain('饲喂历史')
+    expect(orderDetail).toContain('currentFoodMain')
+    expect(orderDetail).toContain('currentFoodOther')
+    expect(orderDetail).toContain('changeReasonOther')
+    expect(orderDetail).toContain('stomachOther')
+    expect(orderDetail).toContain("custom_recipe_current_food")
+  })
+
   it('未付款订单禁止进入设计器：按钮禁用并说明原因', () => {
     expect(orderDetail).toContain(':disabled="!canStartDesign"')
     expect(orderDetail).toContain('订单未付款，付款后才能开始设计')

@@ -90,6 +90,13 @@ export interface CustomRecipeOrderDetail {
   /** 顾客提交时是否要求写档案 */
   syncToHealthProfile?: boolean
   medicalConditions?: string[]
+  /** 需求 2.3.4：饲喂历史（2026-10-19 补「其他」手填） */
+  currentFoodMain?: string | null
+  currentFoodOther?: string | null
+  changeReasons?: string[]
+  changeReasonOther?: string | null
+  stomachConditions?: string[]
+  stomachOther?: string | null
   additionalNotes?: string | null
   preferredIngredients?: string[]
   dislikedIngredients?: string[]

@@ -440,7 +440,7 @@
     </view>
 
     <!--
-      第二步：它现在吃什么（必填）+ 最近肠胃（选填）
+      第二步：饲喂历史（必填）+ 最近肠胃（选填）
       2026-10-18 按需求 2.3.4「第二段：补充（只问档案里没有的）」重做。
 
       原来的「饮食偏好（爱吃的/忌口的）」按 2026-10-17 V6 决定**拿掉** ——
@@ -454,7 +454,7 @@
     <view v-if="hasSelectedDog" class="section">
       <view class="section-title">
         <text class="step-number">2</text>
-        <text class="title-text">它现在吃什么</text>
+        <text class="title-text">饲喂历史</text>
       </view>
 
       <view class="intake-block">
@@ -465,13 +465,22 @@
             :key="opt.code"
             class="intake-option"
             :class="{ 'intake-option--on': formData.currentFoodMain === opt.code }"
-            @tap="formData.currentFoodMain = opt.code"
+            @tap="selectCurrentFood(opt.code)"
           >{{ opt.label }}</text>
         </view>
+        <input
+          v-if="formData.currentFoodMain === 'OTHER'"
+          v-model="formData.currentFoodOther"
+          class="intake-input"
+          :focus="currentFoodOtherFocused"
+          placeholder="请补充主要喂的是什么"
+          maxlength="120"
+          @blur="currentFoodOtherFocused = false"
+        />
       </view>
 
       <view class="intake-block">
-        <text class="intake-question">为什么想换<text class="intake-required">*</text></text>
+        <text class="intake-question">定制原因<text class="intake-required">*</text></text>
         <view class="intake-options">
           <text
             v-for="opt in changeReasonOptions"
@@ -486,8 +495,10 @@
           v-if="formData.changeReasons.includes('OTHER')"
           v-model="formData.changeReasonOther"
           class="intake-input"
+          :focus="changeReasonOtherFocused"
           placeholder="说说具体是什么原因"
           maxlength="120"
+          @blur="changeReasonOtherFocused = false"
         />
       </view>
 
@@ -502,6 +513,15 @@
             @tap="toggleStomach(opt.code)"
           >{{ opt.label }}</text>
         </view>
+        <input
+          v-if="formData.stomachConditions.includes('OTHER')"
+          v-model="formData.stomachOther"
+          class="intake-input"
+          :focus="stomachOtherFocused"
+          placeholder="请补充具体肠胃情况"
+          maxlength="120"
+          @blur="stomachOtherFocused = false"
+        />
       </view>
     </view>
 
@@ -591,7 +611,7 @@
 
 <script setup lang="ts">
 import { useOptionSet } from '@/utils/option-set'
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue';
 import {
   fetchMyOrders,
   fetchDogHealthSummary,
@@ -1077,9 +1097,11 @@ const formData = ref({
    * 但"原来的粮"是什么营养师不知道，没有它过渡方案只能写套话。
    */
   currentFoodMain: '',
+  currentFoodOther: '',
   changeReasons: [] as string[],
   changeReasonOther: '',
   stomachConditions: [] as string[],
+  stomachOther: '',
   preferredIngredients: [] as string[],
   dislikedIngredients: [] as string[],
   additionalNotes: '',
@@ -1153,9 +1175,11 @@ function resetOrderFormForDog(dogId: string) {
     allergyText: '',
     reportDrafts: [],
     currentFoodMain: '',
+    currentFoodOther: '',
     changeReasons: [],
     changeReasonOther: '',
     stomachConditions: [],
+    stomachOther: '',
     preferredIngredients: [],
     dislikedIngredients: [],
     additionalNotes: '',
@@ -1250,6 +1274,32 @@ function formatDeliveryDate(value: string): string {
  * **都来自后端选项字典** —— 项目硬规矩：选项不写在前端。
  * 加一种喂法（比如"冻干"）只要后台加一条，前端不用改。
  */
+/** 「其他」输入框的焦点（选中 Other 后自动弹出键盘，2026-10-19） */
+const currentFoodOtherFocused = ref(false);
+const changeReasonOtherFocused = ref(false);
+const stomachOtherFocused = ref(false);
+
+function focusCurrentFoodOther() {
+  currentFoodOtherFocused.value = false;
+  void nextTick(() => {
+    currentFoodOtherFocused.value = true;
+  });
+}
+
+function focusChangeReasonOther() {
+  changeReasonOtherFocused.value = false;
+  void nextTick(() => {
+    changeReasonOtherFocused.value = true;
+  });
+}
+
+function focusStomachOther() {
+  stomachOtherFocused.value = false;
+  void nextTick(() => {
+    stomachOtherFocused.value = true;
+  });
+}
+
 const {
   items: currentFoodOptions,
   ensure: ensureCurrentFoodOptions,
@@ -1262,24 +1312,52 @@ const { items: stomachOptions, ensure: ensureStomachOptions } = useOptionSet(
   'custom_recipe_stomach',
 );
 
-/** 多选切换（为什么想换） */
+/** 单选当前食物；选「其他」时自动聚焦输入框 */
+function selectCurrentFood(code: string) {
+  formData.value.currentFoodMain = code;
+  if (code === 'OTHER') {
+    focusCurrentFoodOther();
+    return;
+  }
+  formData.value.currentFoodOther = '';
+  currentFoodOtherFocused.value = false;
+}
+
+/** 多选切换（定制原因） */
 function toggleChangeReason(code: string) {
+  const selected = formData.value.changeReasons.includes(code);
   const list = formData.value.changeReasons;
-  formData.value.changeReasons = list.includes(code)
+  formData.value.changeReasons = selected
     ? list.filter((item) => item !== code)
     : [...list, code];
-  // 取消「其他」时把手填内容也清掉 —— 否则会留下一个看不见的旧值跟着提交
-  if (code === 'OTHER' && !formData.value.changeReasons.includes('OTHER')) {
-    formData.value.changeReasonOther = '';
+
+  if (code === 'OTHER') {
+    if (selected) {
+      // 取消「其他」时把手填内容也清掉，避免留下看不见的旧值跟着提交
+      formData.value.changeReasonOther = '';
+      changeReasonOtherFocused.value = false;
+    } else {
+      focusChangeReasonOther();
+    }
   }
 }
 
-/** 多选切换（肠胃情况） */
+/** 多选切换（肠胃情况）；选「其他」时自动聚焦输入框 */
 function toggleStomach(code: string) {
+  const selected = formData.value.stomachConditions.includes(code);
   const list = formData.value.stomachConditions;
-  formData.value.stomachConditions = list.includes(code)
+  formData.value.stomachConditions = selected
     ? list.filter((item) => item !== code)
     : [...list, code];
+
+  if (code === 'OTHER') {
+    if (selected) {
+      formData.value.stomachOther = '';
+      stomachOtherFocused.value = false;
+    } else {
+      focusStomachOther();
+    }
+  }
 }
 
 /**
@@ -1531,11 +1609,23 @@ const canSubmit = computed(() => {
    * 交付出来的东西就是套话。宁可现在拦住，也别让顾客等三天拿到一份没法用的食谱。
    */
   if (!formData.value.currentFoodMain) return false;
+  if (
+    formData.value.currentFoodMain === 'OTHER' &&
+    !formData.value.currentFoodOther.trim()
+  ) {
+    return false;
+  }
   if (formData.value.changeReasons.length === 0) return false;
   // 选了「其他」就必须填原因 —— 否则营养师只看到"其他"两个字
   if (
     formData.value.changeReasons.includes('OTHER') &&
     !formData.value.changeReasonOther.trim()
+  ) {
+    return false;
+  }
+  if (
+    formData.value.stomachConditions.includes('OTHER') &&
+    !formData.value.stomachOther.trim()
   ) {
     return false;
   }
@@ -2443,13 +2533,23 @@ const submitOrder = async () => {
     } else if (!formData.value.currentFoodMain) {
       // 需求 2.3.7：说清差哪一项，不能只变灰不动
       title = '还差：现在主要喂什么';
+    } else if (
+      formData.value.currentFoodMain === 'OTHER' &&
+      !formData.value.currentFoodOther.trim()
+    ) {
+      title = '还差：现在主要喂什么的补充说明';
     } else if (formData.value.changeReasons.length === 0) {
-      title = '还差：为什么想换';
+      title = '还差：定制原因';
     } else if (
       formData.value.changeReasons.includes('OTHER') &&
       !formData.value.changeReasonOther.trim()
     ) {
       title = '选了「其他」，请补一句具体原因';
+    } else if (
+      formData.value.stomachConditions.includes('OTHER') &&
+      !formData.value.stomachOther.trim()
+    ) {
+      title = '还差：肠胃情况的补充说明';
     }
 
     uni.showToast({ title, icon: 'none' });

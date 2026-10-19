@@ -245,9 +245,11 @@ export class CustomRecipeService implements ICustomRecipeRepository {
             additionalNotes: data.additionalNotes,
             // 2026-10-18：需求 2.3.4 第二段（只问档案里没有的）
             currentFoodMain: data.currentFoodMain || null,
+            currentFoodOther: data.currentFoodOther || null,
             changeReasons: data.changeReasons || [],
             changeReasonOther: data.changeReasonOther || null,
             stomachConditions: data.stomachConditions || [],
+            stomachOther: data.stomachOther || null,
             preferredIngredients: data.preferredIngredients || [],
             dislikedIngredients: data.dislikedIngredients || [],
             attachments: data.attachmentUrls || [],

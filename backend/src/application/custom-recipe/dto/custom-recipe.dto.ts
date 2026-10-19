@@ -142,6 +142,12 @@ export class SubmitCustomRecipeOrderDTO {
   @IsString()
   currentFoodMain?: string;
 
+  @ApiPropertyOptional({ description: '选「其他」时手填的当前食物' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  currentFoodOther?: string;
+
   @ApiPropertyOptional({
     description: '为什么想换（选项 code 数组，来自 custom_recipe_change_reason）',
   })
@@ -162,6 +168,12 @@ export class SubmitCustomRecipeOrderDTO {
   @IsArray()
   @IsString({ each: true })
   stomachConditions?: string[];
+
+  @ApiPropertyOptional({ description: '选「其他」时手填的肠胃情况' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  stomachOther?: string;
 
   @ApiPropertyOptional({ description: 'Preferred ingredients' })
   @IsOptional()

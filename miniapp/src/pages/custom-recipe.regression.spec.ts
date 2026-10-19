@@ -480,17 +480,17 @@ describe('custom recipe page · 档案带出与目标口径', () => {
 describe('custom recipe page · 结构与知情同意', () => {
   const page = read(`${PAGE_DIR}/index.vue`)
 
-  it('页面顺序：体重管理 → 过敏信息 → 它现在吃什么 → 备注（可选）', () => {
+  it('页面顺序：体重管理 → 过敏信息 → 饲喂历史 → 备注（可选）', () => {
     /**
      * ⚠️ 2026-10-18 改：按需求 2.3.4 重做。
      *
      * 「饮食偏好（爱吃的/忌口的）」按 V6 决定**拿掉**（老板："低频"），
-     * 换成「它现在吃什么」—— 那是营养师真正需要的：
+     * 换成「饲喂历史」—— 那是营养师真正需要的：
      * 交付物要写"第 1 周按 7:3 混原来的粮"，而"原来的粮"是什么只有顾客知道。
      */
     const goalIndex = page.indexOf('体重管理')
     const allergyIndex = page.indexOf('过敏信息')
-    const intakeIndex = page.indexOf('它现在吃什么')
+    const intakeIndex = page.indexOf('饲喂历史')
     const notesIndex = page.indexOf('备注（可选）')
 
     expect(goalIndex).toBeGreaterThan(-1)
@@ -507,7 +507,7 @@ describe('custom recipe page · 结构与知情同意', () => {
   it('「其他需求」不再留在体重管理卡片里', () => {
     const goalSection = page.slice(
       page.indexOf('体重管理'),
-      page.indexOf('它现在吃什么'),
+      page.indexOf('饲喂历史'),
     )
 
     expect(goalSection).not.toContain('其它需求')
@@ -516,9 +516,9 @@ describe('custom recipe page · 结构与知情同意', () => {
     expect(page).not.toContain('不会改变价格或热量计算')
   })
 
-  it('「它现在吃什么」两项必填，「肠胃」选填（2026-10-18 · 需求 2.3.4）', () => {
+  it('「饲喂历史」两项必填，「肠胃」选填（2026-10-18 · 需求 2.3.4）', () => {
     expect(page).toContain('现在主要喂什么')
-    expect(page).toContain('为什么想换')
+    expect(page).toContain('定制原因')
     expect(page).toContain('intake-required')
     expect(page).toContain('最近肠胃怎么样（可选）')
     expect(page).toContain("useOptionSet('custom_recipe_current_food')")
@@ -526,6 +526,14 @@ describe('custom recipe page · 结构与知情同意', () => {
     // 这一组是跨行写法，断言用窄一点的片段
     expect(page).toContain("'custom_recipe_stomach'")
     expect(page).toContain("formData.changeReasons.includes('OTHER')")
+    // 2026-10-19：三处「其他」都要能手填，并自动聚焦弹出键盘
+    expect(page).toContain('selectCurrentFood')
+    expect(page).toContain('formData.currentFoodOther')
+    expect(page).toContain('formData.stomachOther')
+    expect(page).toContain('focusChangeReasonOther')
+    expect(page).toContain(':focus="currentFoodOtherFocused"')
+    expect(page).toContain(':focus="changeReasonOtherFocused"')
+    expect(page).toContain(':focus="stomachOtherFocused"')
   })
 
   it('补上了附件上传入口（此前字段有、界面没有）', () => {
@@ -1787,8 +1795,8 @@ describe('定制页 · 2026-10-05 第三批（4 条）', () => {
     const sections = [
       '<text class="title-text">体重管理</text>',
       '<text class="title-text">过敏信息</text>',
-      // 2026-10-18：「饮食偏好」换成「它现在吃什么」（需求 2.3.4）
-      '<text class="title-text">它现在吃什么</text>',
+      // 2026-10-18：「饮食偏好」换成「饲喂历史」（需求 2.3.4）
+      '<text class="title-text">饲喂历史</text>',
       '<text class="title-text">备注（可选）</text>',
     ]
     for (const title of sections) {

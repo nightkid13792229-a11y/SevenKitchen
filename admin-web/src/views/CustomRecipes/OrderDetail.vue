@@ -185,6 +185,24 @@
 
         <el-divider />
 
+        <h3>饲喂历史</h3>
+        <div class="info-group">
+          <div class="info-item">
+            <label>现在主要喂什么</label>
+            <span>{{ currentFoodText }}</span>
+          </div>
+          <div class="info-item">
+            <label>定制原因</label>
+            <span>{{ changeReasonText }}</span>
+          </div>
+          <div class="info-item">
+            <label>最近肠胃情况</label>
+            <span>{{ stomachText }}</span>
+          </div>
+        </div>
+
+        <el-divider />
+
         <!-- 成品抵扣额度台账：客服在处理退款时按这里的数据决定要不要恢复额度 -->
         <h3>成品抵扣额度</h3>
         <div class="info-group">
@@ -817,6 +835,38 @@ const {
 const statusText = computed(() => statusLabel(order.value?.status));
 const statusTagType = computed(() => statusTone(order.value?.status) || undefined);
 
+/** 饲喂历史的中文也来自选项字典（2026-10-19） */
+const { ensure: ensureCurrentFoodOptions, labelOf: currentFoodLabel } =
+  useOptionSet('custom_recipe_current_food');
+const { ensure: ensureChangeReasonOptions, labelOf: changeReasonLabel } =
+  useOptionSet('custom_recipe_change_reason');
+const { ensure: ensureStomachOptions, labelOf: stomachLabel } =
+  useOptionSet('custom_recipe_stomach');
+
+const currentFoodText = computed(() => {
+  const code = order.value?.currentFoodMain;
+  if (!code) return '未填写';
+  const label = currentFoodLabel(code);
+  const other = String(order.value?.currentFoodOther || '').trim();
+  return other ? `${label}（${other}）` : label;
+});
+
+const changeReasonText = computed(() => {
+  const codes = order.value?.changeReasons || [];
+  const other = String(order.value?.changeReasonOther || '').trim();
+  if (codes.length === 0 && !other) return '未填写';
+  const labels = codes.map((code) => changeReasonLabel(code));
+  return `${labels.join('、')}${other ? `（${other}）` : ''}`;
+});
+
+const stomachText = computed(() => {
+  const codes = order.value?.stomachConditions || [];
+  const other = String(order.value?.stomachOther || '').trim();
+  if (codes.length === 0 && !other) return '未填写';
+  const labels = codes.map((code) => stomachLabel(code));
+  return `${labels.join('、')}${other ? `（${other}）` : ''}`;
+});
+
 /** 预计交付倒计时：超期的单要标红，已交付/已取消的不再催 */
 const deliveryInfo = computed(() =>
   getEstimatedDeliveryInfo(order.value?.estimatedDeliveryDate, order.value?.status),
@@ -1061,6 +1111,9 @@ onMounted(() => {
   // 状态与目标的中文都来自选项字典（与订单详情并行加载，不阻塞）
   ensureStatusOptions();
   ensureGoalOptions();
+  ensureCurrentFoodOptions();
+  ensureChangeReasonOptions();
+  ensureStomachOptions();
   loadOrderDetail();
   loadIngredientOptions();
 });

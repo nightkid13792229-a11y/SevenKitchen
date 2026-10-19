@@ -226,6 +226,15 @@ export function fetchSupplementOrders(params: {
 }
 
 /** 补剂订单详情 */
+/** 取消未分装补剂订单（PAID 会走全额退款 case） */
+export function cancelSupplementOrder(orderId: string, reason?: string) {
+  return request({
+    url: `/supplement-orders/${orderId}/cancel`,
+    method: 'POST',
+    data: reason ? { reason } : {}
+  })
+}
+
 /** 申请补剂售后 */
 export function createSupplementAftersale(
   orderId: string,

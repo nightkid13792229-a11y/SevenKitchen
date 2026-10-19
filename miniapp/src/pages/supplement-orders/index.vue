@@ -58,6 +58,11 @@
             <text class="pay-btn-text">{{ payingId === order.id ? '支付中…' : '去支付' }}</text>
           </button>
           <button
+            v-if="['PENDING_PAYMENT', 'PAID'].includes(order.status)"
+            class="secondary-btn"
+            @tap="handleCancel(order)"
+          >取消订单</button>
+          <button
             v-if="canChangeAddress(order.status)"
             class="secondary-btn"
             @tap="handleChangeAddress(order)"
@@ -174,6 +179,34 @@ function canChangeAddress(status: string) {
 
 function canApplyAftersale(status: string) {
   return ['PACKED', 'SHIPPED', 'COMPLETED'].includes(status)
+}
+
+function handleCancel(order: SupplementOrder) {
+  const isPaid = order.status === 'PAID'
+  uni.showModal({
+    title: isPaid ? '申请全额退款' : '取消订单',
+    content: isPaid
+      ? '订单已付款但还没分装。确认后发起全额原路退款，退款成功才会取消订单。'
+      : '确认取消这笔未付款订单？',
+    success: async (res) => {
+      if (!res.confirm) return
+      try {
+        const response = await cancelSupplementOrder(order.id, '顾客取消')
+        if (response.code === 0) {
+          uni.showToast({
+            title: isPaid ? '退款已提交' : '已取消',
+            icon: 'success'
+          })
+          await loadOrders(true)
+        } else {
+          uni.showToast({ title: response.message || '取消失败', icon: 'none' })
+        }
+      } catch (error: any) {
+        console.error('[SupplementOrders] 取消失败:', error)
+        uni.showToast({ title: error?.message || '取消失败', icon: 'none' })
+      }
+    }
+  })
 }
 
 function handleChangeAddress(order: SupplementOrder) {

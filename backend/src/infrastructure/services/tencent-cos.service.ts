@@ -559,7 +559,7 @@ export class TencentCosService {
    */
   private getFileExtension(filename: string): string {
     const ext = filename.split('.').pop()?.toLowerCase();
-    if (!ext || !['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'].includes(ext)) {
+    if (!ext || !['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'doc', 'docx', 'heic', 'heif'].includes(ext)) {
       return 'bin';
     }
     return ext;

@@ -141,6 +141,41 @@ describe('SupplementSchedulingService', () => {
     );
   });
 
+  it('排期事务内调用库存预占', async () => {
+    const inventory = { reserveForOrder: jest.fn().mockResolvedValue(undefined) };
+    const withInventory = new SupplementSchedulingService(
+      prisma,
+      configService,
+      calendar,
+      inventory as any,
+    );
+    prisma.supplementOrder.findUnique.mockResolvedValue({
+      id: 'o1',
+      status: 'PAID',
+      packingDate: null,
+    });
+    const tx = {
+      supplementOrder: {
+        count: jest.fn().mockResolvedValue(0),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      supplementOrderEvent: { create: jest.fn().mockResolvedValue({}) },
+    };
+    prisma.$transaction.mockImplementation(async (fn: any) => fn(tx));
+
+    await withInventory.rescheduleOrder(
+      'o1',
+      TimezoneUtil.parseDateOnly('2026-10-21'),
+      { type: 'ADMIN' },
+    );
+
+    expect(inventory.reserveForOrder).toHaveBeenCalledWith(
+      tx,
+      'o1',
+      TimezoneUtil.parseDateOnly('2026-10-21'),
+    );
+  });
+
   it('管理员改期：满员且未允许超排 → 拒绝', async () => {
     prisma.supplementOrder.findUnique.mockResolvedValue({
       id: 'o1',

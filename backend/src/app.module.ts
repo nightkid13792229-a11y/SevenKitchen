@@ -229,6 +229,7 @@ import { SupplementShopConfigService } from './application/supplement-shop/suppl
 import { SupplementPricingService } from './application/supplement-shop/supplement-pricing.service';
 import { BusinessCalendarService } from './application/supplement-shop/business-calendar.service';
 import { SupplementSchedulingService } from './application/supplement-shop/supplement-scheduling.service';
+import { SupplementInventoryService } from './application/supplement-shop/supplement-inventory.service';
 import { SupplementOrderService } from './application/supplement-shop/supplement-order.service';
 import { SupplementsController } from './interfaces/controllers/supplements.controller';
 import { SupplementOrdersController } from './interfaces/controllers/supplement-orders.controller';
@@ -855,6 +856,7 @@ validatePrismaConfig();
     },
     SupplementPricingService,
     BusinessCalendarService,
+    SupplementInventoryService,
     SupplementSchedulingService,
     SupplementSchedulerService,
     SupplementOrderService,

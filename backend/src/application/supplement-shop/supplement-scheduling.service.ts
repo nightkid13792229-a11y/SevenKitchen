@@ -9,6 +9,7 @@ import { PrismaService } from '../../infrastructure/prisma.service';
 import { TimezoneUtil } from '../../utils/timezone.util';
 import { SupplementShopConfigService } from './supplement-shop-config.service';
 import { BusinessCalendarService } from './business-calendar.service';
+import { SupplementInventoryService } from './supplement-inventory.service';
 
 export type SupplementActorType = 'CUSTOMER' | 'STAFF' | 'ADMIN' | 'SYSTEM';
 export interface SupplementActor {
@@ -38,6 +39,7 @@ export class SupplementSchedulingService {
     private readonly prisma: PrismaService,
     private readonly configService: SupplementShopConfigService,
     private readonly calendar: BusinessCalendarService,
+    private readonly inventory?: SupplementInventoryService,
   ) {}
 
   async resolvePackingDate(paidAt: Date, now = new Date()): Promise<Date> {
@@ -254,6 +256,8 @@ export class SupplementSchedulingService {
           if (updated.count !== 1) {
             throw new BadRequestException('订单状态已变化，排期未生效');
           }
+
+          await this.inventory?.reserveForOrder(tx, orderId, packingDate);
 
           await tx.supplementOrderEvent.create({
             data: {

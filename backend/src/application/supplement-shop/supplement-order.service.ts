@@ -29,6 +29,7 @@ import {
 } from './supplement-shop-config.service';
 import type { IngredientPhysicalFormCode } from './supplement-catalog.service';
 import { SupplementSchedulingService } from './supplement-scheduling.service';
+import { SupplementInventoryService } from './supplement-inventory.service';
 
 /** 分装结果的有效期：取「原瓶到期日」与「分装日 + 效期系数」的较小值 */
 export function addMonths(date: Date, months: number): Date {
@@ -218,6 +219,8 @@ export class SupplementOrderService {
     private readonly configService: SupplementShopConfigService,
     @Optional()
     private readonly schedulingService?: SupplementSchedulingService,
+    @Optional()
+    private readonly inventoryService?: SupplementInventoryService,
   ) {}
 
   /**
@@ -625,6 +628,7 @@ export class SupplementOrderService {
           },
         });
       }
+      await this.inventoryService?.consumeForOrder(tx, orderId);
       await tx.supplementOrder.update({
         where: { id: orderId },
         data: { status: 'PACKED' },
@@ -690,13 +694,16 @@ export class SupplementOrderService {
     const order = await this.requireOrder(orderId);
     this.assertStatus(order.status, ['PENDING_PAYMENT', 'PAID'], '取消');
 
-    await this.prisma.supplementOrder.update({
-      where: { id: orderId },
-      data: {
-        status: 'CANCELLED',
-        cancelledAt: new Date(),
-        cancellationReason: dto.reason?.trim() || '后台取消',
-      },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.supplementOrder.update({
+        where: { id: orderId },
+        data: {
+          status: 'CANCELLED',
+          cancelledAt: new Date(),
+          cancellationReason: dto.reason?.trim() || '后台取消',
+        },
+      });
+      await this.inventoryService?.releaseForOrder(tx, orderId);
     });
 
     return this.getOrderById(orderId);

@@ -637,6 +637,7 @@ consumeForOrder(tx, orderId, actor): Promise<void>;
 - `InventorySourceType` 新增值后，更新 `resolveSourceLabel` 的 `Record` 映射，否则 `tsc` 会报穷举缺失。
 - **事务边界**：新增 `reserveForOrder(tx, ...)` / `consumeForOrder(tx, ...)` 的 `Prisma.TransactionClient` 版本；不要在外层事务里调用会自己开 `$transaction` 的旧方法——Prisma 嵌套事务会另开连接，不是原子操作。把现有 `createAllocationForOrderDemand` / `consumeAllocationsForOrderIds` 拆出 `*InTx` 私有实现，public 方法只负责包事务。
 - 库存不足不阻止排期；分装时员工不能完成；管理员强制。
+- 预占开关 `SUPPLEMENT_INVENTORY_RESERVATION_ENABLED` **默认关闭**；先部署/迁移、回填已排订单占用，再显式开启。
 - 预占开关开启但没有 ACTIVE allocation 时：正常分装拒绝并告警；管理员强制可分装，但必须补写 ledger 并事件留痕。不能静默不扣库存。
 
 ### 7.5 `SupplementSnapshotService`

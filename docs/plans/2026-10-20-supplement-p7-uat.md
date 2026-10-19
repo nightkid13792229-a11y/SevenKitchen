@@ -9,7 +9,7 @@
 | 后端源码类型检查 | `npx tsc --noEmit -p tsconfig.build.json` 通过 |
 | 补剂相关单测 | 17 个 suite / 193 个用例全部通过（定价、排期、库存、快照、售后、订单中心、看板、标签、员工脱敏） |
 | admin-web 构建 | `npm run build` 通过 |
-| miniapp 构建 | `npm run build:mp-weixin` 通过，产物 `miniapp/dist/build/mp-weixin` |
+| miniapp 构建 | `npm run build:mp-weixin` 通过；体验版 `2026.10.20.3` 已上传，产物 `miniapp/dist/build/mp-weixin` |
 | 本地补剂 migration | 已执行 `20261020110000_supplement_prepack_v2` 并标记 applied；本地库还有 15 个历史 migration 未应用，与本轮无关，未强行 `migrate dev` |
 | 生产 migration 状态 | 191 个 migration 已全部应用；本轮新增 1 个，部署时只会新增这一条 |
 | 库存回填 dry-run | `candidates=0/0`（本地库当前没有 PAID 且已排期的补剂单） |

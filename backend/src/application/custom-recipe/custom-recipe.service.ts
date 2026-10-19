@@ -47,7 +47,6 @@ import {
   addWorkDays,
   isPublicHoliday,
   getPublicHolidaysForYear,
-  parseYYYYMMDD,
 } from '../../utils/date-helpers';
 import { TimezoneUtil } from '../../utils/timezone.util';
 import { WechatService } from '../../infrastructure/wechat/wechat.service';
@@ -2071,7 +2070,15 @@ export class CustomRecipeService implements ICustomRecipeRepository {
    * 服务器时区一变就会整体偏一天（历史上就踩过 0-8 点下单写成昨天）。
    */
   private getScheduleStartDate(): Date {
-    return parseYYYYMMDD(TimezoneUtil.toShanghaiDateString(new Date()));
+    /**
+     * DATE 列按 UTC 零点存（Prisma @db.Date 取 UTC 日期部分）。
+     * 这里必须显式构造 UTC 零点；用 new Date(y,m,d)（服务器本地零点）
+     * 会被写成前一天，进而把预计交付也算早一天（2026-10-19 生产问题）。
+     */
+    const [year, month, day] = TimezoneUtil.toShanghaiDateString(new Date())
+      .split('-')
+      .map(Number);
+    return new Date(Date.UTC(year, month - 1, day));
   }
 
   /** 日期游标 +1 天（按 UTC 毫秒推进，避开夏令时/时区把日期挪走） */
@@ -2121,8 +2128,7 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       };
     }
 
-    const estimated = new Date(next);
-    estimated.setDate(estimated.getDate() + config.deliveryWorkDays);
+    const estimated = await addWorkDays(next, config.deliveryWorkDays);
 
     return {
       scheduledDate: TimezoneUtil.toShanghaiDateString(next),
@@ -2144,6 +2150,13 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       const key = TimezoneUtil.toShanghaiDateString(cursor);
 
       if (key >= todayKey && !excludeDays.has(key)) {
+        // 周末不接单；不能只靠 addWorkDays 跳周末，否则排期日可能落在周六/周日
+        const weekday = cursor.getUTCDay();
+        if (weekday === 0 || weekday === 6) {
+          cursor = this.addOneDay(cursor);
+          continue;
+        }
+
         const holiday = await isPublicHoliday(cursor);
 
         if (!holiday) {

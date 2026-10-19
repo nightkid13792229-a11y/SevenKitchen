@@ -47,7 +47,7 @@ describe('定制页 → 订单确认页（2026-10-19 老板确认）', () => {
     expect(confirm).toContain('previewConfirmAttachment');
     expect(confirm).not.toContain('返回修改');
     expect(confirm).not.toContain('仅提交，稍后支付');
-    expect(confirm).toContain('预计');
+    expect(confirm).toContain('delivery-note');
   });
 
   it('确认页创建订单后留在本页支付，不再跳提交成功页', () => {
@@ -64,12 +64,14 @@ describe('定制页 → 订单确认页（2026-10-19 老板确认）', () => {
     expect(confirm).not.toContain('uni.reLaunch({');
   });
 
-  it('定制页不显示预计交付和抵扣；确认页显示交付与可抵扣金额', () => {
+  it('定制页不显示交付和抵扣；确认页交付只给日期和查看说明', () => {
     expect(page).not.toContain('pre-order-notice__date');
     expect(page).not.toContain('付完可全额抵扣');
-    expect(confirm).toContain('预计');
-    expect(confirm).toContain('当前可抵扣');
-    expect(confirm).toContain('creditText');
+    expect(confirm).toContain('title-text">交付</text>');
+    expect(confirm).toContain('delivery-note');
+    expect(confirm).toContain('我的订单');
+    expect(confirm).not.toContain('当前可抵扣');
+    expect(confirm).not.toContain('creditText');
   });
 
   it('附件预览窗上方不再显示“点图片看大图”说明', () => {

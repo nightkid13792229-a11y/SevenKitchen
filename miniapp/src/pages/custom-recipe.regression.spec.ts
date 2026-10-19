@@ -937,7 +937,7 @@ describe('custom recipe duplicate submit guard · 防连点', () => {
 
   it('submitting 必须在订阅弹窗（第一个 await）之前置位', () => {
     const submitSource =
-      submit.match(/async function submitConfirmedOrder\([\s\S]*?\n}\n\nfunction viewCreatedOrder/)?.[0] || ''
+      submit.match(/async function submitConfirmedOrder\([\s\S]*?\n}\n\nonLoad/)?.[0] || ''
 
     expect(submitSource).not.toBe('')
 
@@ -959,7 +959,7 @@ describe('custom recipe duplicate submit guard · 防连点', () => {
 
   it('失败要复位 submitting，否则改完内容再也提交不了', () => {
     const submitSource =
-      submit.match(/async function submitConfirmedOrder\([\s\S]*?\n}\n\nfunction viewCreatedOrder/)?.[0] || ''
+      submit.match(/async function submitConfirmedOrder\([\s\S]*?\n}\n\nonLoad/)?.[0] || ''
 
     expect(submitSource).toContain('finally')
     expect(submitSource).toContain('submitting.value = false')
@@ -967,7 +967,7 @@ describe('custom recipe duplicate submit guard · 防连点', () => {
 
   it('成功后留在确认页切换到支付状态，不再跳提交成功页', () => {
     const submitSource =
-      submit.match(/async function submitConfirmedOrder\([\s\S]*?\n}\n\nfunction viewCreatedOrder/)?.[0] || ''
+      submit.match(/async function submitConfirmedOrder\([\s\S]*?\n}\n\nonLoad/)?.[0] || ''
 
     expect(submitSource).toContain('createdOrder.value =')
     expect(submitSource).toContain('payCreatedOrder')

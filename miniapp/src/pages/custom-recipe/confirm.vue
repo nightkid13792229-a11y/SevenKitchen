@@ -111,15 +111,14 @@
 
       <view class="section">
         <view class="section-title">
-          <text class="title-text">交付与费用</text>
+          <text class="title-text">交付</text>
         </view>
-        <view class="delivery-card">
-          <text class="delivery-label">预计交付</text>
+        <view class="delivery-card delivery-card--single">
           <text class="delivery-value">{{ deliveryText }}</text>
         </view>
-        <view class="price-note">
-          定价含营养师一对一设计，不含食材；付完可全额抵扣成品鲜食，当前可抵扣 ¥{{ creditText }}。
-        </view>
+        <text class="delivery-note">
+          支付成功后营养师开始设计。交付后可在「我的订单 → 定制订单 → 查看详情」查看电子食谱，也会收到站内消息提醒。
+        </text>
       </view>
 
       <view class="bottom-space" />
@@ -135,92 +134,20 @@
       </view>
       </template>
 
-      <view v-else class="submitted-state">
-        <view class="submitted-hero">
-          <view class="submitted-icon">{{ postIsPaid ? '✓' : postIsClosed ? '!' : '✓' }}</view>
-          <text class="submitted-title">{{ postTitle }}</text>
-          <text class="submitted-desc">{{ postDesc }}</text>
-        </view>
-
-        <view class="section">
-          <view class="section-title">
-            <text class="title-text">订单信息</text>
-          </view>
-          <view class="info-row">
-            <text class="info-label">订单编号</text>
-            <text class="info-value">{{ createdOrder.orderId }}</text>
-          </view>
-          <view class="info-row">
-            <text class="info-label">定制对象</text>
-            <text class="info-value">{{ dogName }}</text>
-          </view>
-          <view class="info-row">
-            <text class="info-label">定制费</text>
-            <text class="info-value">¥{{ postFeeText }}</text>
-          </view>
-          <view class="info-row">
-            <text class="info-label">预计交付</text>
-            <text class="info-value">{{ postDeliveryText }}</text>
-          </view>
-          <view class="info-row">
-            <text class="info-label">当前状态</text>
-            <text class="info-value">{{ postStatusText }}</text>
-          </view>
-          <view v-if="postCreditText" class="info-row">
-            <text class="info-label">{{ postIsPaid ? '成品抵扣' : '支付后抵扣' }}</text>
-            <text class="info-value">¥{{ postCreditText }}</text>
-          </view>
-        </view>
-
-        <view
-          v-if="!postIsPaid && !postIsClosed && !postPaymentExpired"
-          class="section submitted-pay"
-        >
-          <view class="submitted-pay-head">
-            <text class="submitted-pay-title">还差最后一步：完成支付</text>
-            <text v-if="postPaymentHint" class="submitted-pay-deadline">
-              {{ postPaymentHint }}
-            </text>
-          </view>
-          <button
-            class="pay-btn"
-            :loading="postPaying"
-            :disabled="postPaying"
-            @tap="payCreatedOrder"
-          >
-            立即微信支付 ¥{{ postFeeText }}
-          </button>
-          <text class="submitted-pay-note">
-            支付成功后我们才会开始排期设计；支付取消不影响这张订单，可以稍后继续支付。
-          </text>
-        </view>
-
-        <view
-          v-if="!postIsPaid && !postIsClosed && postPaymentExpired"
-          class="section submitted-expired"
-        >
-          <text class="submitted-pay-title">支付已超时</text>
-          <text class="submitted-pay-note">
-            订单正在关闭，不能再继续支付；可以返回定制页重新下单。
-          </text>
-        </view>
-
-        <view class="submitted-actions">
-          <button class="btn-secondary" @tap="viewCreatedOrder">查看订单详情</button>
-          <button v-if="postIsClosed" class="btn-secondary" @tap="returnToCustom">返回定制页</button>
-        </view>
+      <view v-else class="state-card">
+        <text class="state-title">正在发起支付…</text>
+        <text class="state-desc">订单已创建，马上打开微信支付</text>
       </view>
     </template>
   </view>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, onUnmounted } from 'vue';
+import { computed, ref, onUnmounted } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import { dogApi } from '@/api/dogs';
 import {
   fetchNextDeliveryDate,
-  fetchOrderDetail,
   fetchPublicConfig,
   submitOrder,
 } from '@/api/custom-recipe';
@@ -442,20 +369,19 @@ function previewConfirmAttachment(url: string) {
 }
 
 const feeText = computed(() => formatAmount(config.value?.feeAmount ?? 0));
-const creditText = computed(() => formatAmount(config.value?.creditAmount ?? 0));
 
 const deliveryText = computed(() => {
   const date = delivery.value?.estimatedDeliveryDate;
-  if (!date) return '以付款页确认时间为准';
+  if (!date) return '排期中';
   const parts = String(date).split('-').map(Number);
   if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) {
-    return `预计 ${date} 交付`;
+    return String(date);
   }
   const [year, month, day] = parts;
   const weekday = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][
     new Date(year, month - 1, day).getDay()
   ];
-  return `预计 ${month} 月 ${day} 日（${weekday}）交付`;
+  return `${month} 月 ${day} 日（${weekday}）`;
 });
 
 const postStatus = computed(() =>
@@ -519,15 +445,6 @@ const postCreditText = computed(() =>
   createdOrder.value?.creditAmount
     ? formatAmount(createdOrder.value.creditAmount)
     : '',
-);
-
-// 页面标题跟着状态走：确认 → 订单已提交 → 支付成功/已关闭
-watch(
-  postTitle,
-  (title) => {
-    uni.setNavigationBarTitle({ title });
-  },
-  { immediate: false },
 );
 
 async function loadConfirmData() {
@@ -619,10 +536,6 @@ function validateBeforeSubmit(): string {
 
 async function payCreatedOrder() {
   if (postPaying.value) return;
-  if (postPaymentExpired.value) {
-    uni.showToast({ title: '支付已超时，订单已关闭', icon: 'none' });
-    return;
-  }
   const orderId = String(createdOrder.value?.orderId || '').trim();
   if (!orderId) return;
 
@@ -632,32 +545,14 @@ async function payCreatedOrder() {
 
     if (outcome === 'PAID') {
       uni.showToast({ title: '支付成功', icon: 'success' });
-      const detail = await fetchOrderDetail(orderId).catch(() => null);
-      createdOrder.value = detail || {
-        ...(createdOrder.value || {}),
-        orderId,
-        status: 'PAID',
-      };
-      return;
-    }
-
-    if (outcome === 'CLOSED') {
-      createdOrder.value = {
-        ...(createdOrder.value || {}),
-        orderId,
-        status: 'CLOSED',
-      };
+    } else if (outcome === 'CLOSED') {
       uni.showToast({ title: '订单已关闭，请重新下单', icon: 'none' });
-      return;
-    }
-
-    if (outcome === 'CANCELLED') {
+    } else if (outcome === 'CANCELLED') {
       uni.showToast({ title: '已取消支付，可继续支付', icon: 'none' });
-      return;
+    } else {
+      // 不做人工收款兜底；支付通道不可用时让顾客在订单详情稍后重试
+      uni.showToast({ title: '微信支付暂不可用，请稍后重试', icon: 'none' });
     }
-
-    // 不再提供人工收款兜底；支付通道不可用就让顾客稍后重试。
-    uni.showToast({ title: '微信支付暂不可用，请稍后重试', icon: 'none' });
   } catch (error: any) {
     uni.showToast({
       title: error?.message || '支付失败，请稍后重试',
@@ -665,7 +560,17 @@ async function payCreatedOrder() {
     });
   } finally {
     postPaying.value = false;
+    // 不再保留“订单已提交信息页”：创建订单/支付结束后统一进订单详情
+    redirectToCreatedOrder();
   }
+}
+
+function redirectToCreatedOrder() {
+  const orderId = String(createdOrder.value?.orderId || '').trim();
+  if (!orderId) return;
+  uni.redirectTo({
+    url: `/pages/custom-recipe/order-detail?orderId=${encodeURIComponent(orderId)}`,
+  });
 }
 
 /** 最终选择「没有过敏」：订单创建成功后清理临时报告文件，避免孤儿文件 */
@@ -758,18 +663,6 @@ async function submitConfirmedOrder(payAfterSubmit = true) {
     submitting.value = false;
     uni.hideLoading();
   }
-}
-
-function viewCreatedOrder() {
-  const orderId = String(createdOrder.value?.orderId || '').trim();
-  if (!orderId) return;
-  uni.redirectTo({
-    url: `/pages/custom-recipe/order-detail?orderId=${encodeURIComponent(orderId)}`,
-  });
-}
-
-function returnToCustom() {
-  uni.redirectTo({ url: '/pages/custom-recipe/index' });
 }
 
 onLoad((options: any) => {
@@ -920,6 +813,18 @@ onUnmounted(() => {
   padding: 22rpx 20rpx;
   border-radius: 14rpx;
   background: #f7f9f1;
+}
+
+.delivery-card--single {
+  justify-content: center;
+}
+
+.delivery-note {
+  display: block;
+  margin-top: 14rpx;
+  font-size: 22rpx;
+  line-height: 1.6;
+  color: #8a7a63;
 }
 
 .delivery-label {

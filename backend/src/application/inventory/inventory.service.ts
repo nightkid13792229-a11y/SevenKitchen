@@ -1387,6 +1387,7 @@ export class InventoryService {
       [InventorySourceType.MANUAL_ADJUSTMENT]: '手工调整',
       [InventorySourceType.STOCKTAKE]: '盘点差异',
       [InventorySourceType.PRODUCTION_ALLOCATION_CONSUMPTION]: '生产领用',
+      [InventorySourceType.SUPPLEMENT_PACK_CONSUMPTION]: '补剂分装扣减',
       [InventorySourceType.PRODUCTION_SURPLUS]: '生产余量入库',
     };
     return labelMap[sourceType];

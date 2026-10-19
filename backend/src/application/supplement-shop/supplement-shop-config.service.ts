@@ -38,6 +38,18 @@ export interface SupplementShopConfigDto {
   maxTotalDays: number;
   /** 补剂订单支付超时（分钟）；0 = 不自动关单。与鲜食订单独立 */
   paymentTimeoutMinutes: number;
+  /** 截单时间 HH:mm（Asia/Shanghai） */
+  dailyCutoffTime: string;
+  /** 每日分装订单数上限（补发单也计入） */
+  dailyPackingCapacity: number;
+  /** 自动排期开关 */
+  autoScheduleEnabled: boolean;
+  /** 售后窗口（发货后天数） */
+  aftersaleWindowDays: number;
+  /** 发货后自动完成天数 */
+  autoCompleteDays: number;
+  /** 商品满多少免服务费；null/0 = 不启用 */
+  freeServiceThreshold: number | null;
   shippingMode: SupplementShippingMode;
   flatShippingFee: number;
   shippingTemplateId: string | null;
@@ -185,6 +197,39 @@ export class SupplementShopConfigService {
       throw new BadRequestException('标签品牌名不能超过 100 个字');
     }
 
+    if (dto.dailyCutoffTime !== undefined) {
+      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(dto.dailyCutoffTime.trim())) {
+        throw new BadRequestException('截单时间必须是 HH:mm（00:00–23:59）');
+      }
+    }
+
+    if (dto.dailyPackingCapacity !== undefined) {
+      const value = dto.dailyPackingCapacity;
+      if (!Number.isInteger(value) || value < 1 || value > 500) {
+        throw new BadRequestException('每日分装订单上限必须是 1~500 的整数');
+      }
+    }
+
+    if (dto.aftersaleWindowDays !== undefined) {
+      const value = dto.aftersaleWindowDays;
+      if (!Number.isInteger(value) || value < 0 || value > 365) {
+        throw new BadRequestException('售后窗口必须是 0~365 的整数（天）');
+      }
+    }
+
+    if (dto.autoCompleteDays !== undefined) {
+      const value = dto.autoCompleteDays;
+      if (!Number.isInteger(value) || value < 0 || value > 365) {
+        throw new BadRequestException('自动完成天数必须是 0~365 的整数（天）');
+      }
+    }
+
+    if (dto.freeServiceThreshold !== undefined && dto.freeServiceThreshold !== null) {
+      if (!Number.isFinite(dto.freeServiceThreshold) || dto.freeServiceThreshold < 0) {
+        throw new BadRequestException('免服务费门槛不能为负数');
+      }
+    }
+
     if (dto.minRemainingShelfLifeDays !== undefined) {
       const value = dto.minRemainingShelfLifeDays;
       if (!Number.isInteger(value) || value < 0 || value > 3650) {
@@ -253,6 +298,24 @@ export class SupplementShopConfigService {
       ...(dto.paymentTimeoutMinutes !== undefined && {
         paymentTimeoutMinutes: dto.paymentTimeoutMinutes,
       }),
+      ...(dto.dailyCutoffTime !== undefined && {
+        dailyCutoffTime: dto.dailyCutoffTime.trim(),
+      }),
+      ...(dto.dailyPackingCapacity !== undefined && {
+        dailyPackingCapacity: dto.dailyPackingCapacity,
+      }),
+      ...(dto.autoScheduleEnabled !== undefined && {
+        autoScheduleEnabled: dto.autoScheduleEnabled,
+      }),
+      ...(dto.aftersaleWindowDays !== undefined && {
+        aftersaleWindowDays: dto.aftersaleWindowDays,
+      }),
+      ...(dto.autoCompleteDays !== undefined && {
+        autoCompleteDays: dto.autoCompleteDays,
+      }),
+      ...(dto.freeServiceThreshold !== undefined && {
+        freeServiceThreshold: dto.freeServiceThreshold,
+      }),
       ...(dto.shippingMode !== undefined && { shippingMode: dto.shippingMode }),
       ...(dto.flatShippingFee !== undefined && {
         flatShippingFee: dto.flatShippingFee,
@@ -299,6 +362,12 @@ export class SupplementShopConfigService {
     maxPortionMultiplier: number;
     maxTotalDays: number;
     paymentTimeoutMinutes: number;
+    dailyCutoffTime: string;
+    dailyPackingCapacity: number;
+    autoScheduleEnabled: boolean;
+    aftersaleWindowDays: number;
+    autoCompleteDays: number;
+    freeServiceThreshold: unknown;
     shippingMode: string;
     flatShippingFee: unknown;
     shippingTemplateId: string | null;
@@ -324,6 +393,16 @@ export class SupplementShopConfigService {
       maxPortionMultiplier: Number(row.maxPortionMultiplier),
       maxTotalDays: Number(row.maxTotalDays),
       paymentTimeoutMinutes: Number(row.paymentTimeoutMinutes),
+      dailyCutoffTime: row.dailyCutoffTime,
+      dailyPackingCapacity: Number(row.dailyPackingCapacity),
+      autoScheduleEnabled: row.autoScheduleEnabled,
+      aftersaleWindowDays: Number(row.aftersaleWindowDays),
+      autoCompleteDays: Number(row.autoCompleteDays),
+      freeServiceThreshold:
+        row.freeServiceThreshold === null ||
+        row.freeServiceThreshold === undefined
+          ? null
+          : Number(row.freeServiceThreshold),
       shippingMode: row.shippingMode as SupplementShippingMode,
       flatShippingFee: Number(row.flatShippingFee),
       shippingTemplateId: row.shippingTemplateId,

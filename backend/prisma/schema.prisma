@@ -965,6 +965,7 @@ model Ingredient {
   procurementSkus               ProcurementSku[]
   procurementSkuPriceHistories  ProcurementSkuPriceHistory[]
   allergenTags                  IngredientAllergenTag[]
+  supplementPackagingRules      SupplementPackagingRule[]
 
   @@unique([name, brand, productModel])
   @@index([type])
@@ -1214,6 +1215,8 @@ model InventoryAllocation {
   id             String                    @id @default(uuid()) @map("id")
   targetDate     DateTime                  @map("target_date")
   status         InventoryAllocationStatus @default(ACTIVE) @map("status")
+  /// 来源类型：鲜食生产 / 补剂分装；防止两条业务串库存
+  sourceType     InventoryAllocationSourceType @default(PRODUCTION) @map("source_type")
   purchaseListId String?                   @map("purchase_list_id")
   sourceOrderIds String[]                  @default([]) @map("source_order_ids")
   createdById    String?                   @map("created_by_id")
@@ -1225,6 +1228,7 @@ model InventoryAllocation {
 
   @@index([targetDate])
   @@index([status])
+  @@index([sourceType, status])
   @@index([purchaseListId])
   @@map("inventory_allocation")
 }
@@ -2114,6 +2118,10 @@ model DIYSheet {
   packagePlan     Json?    @map("package_plan")
   purchaseList    Json     @map("purchase_list")
   productionSteps String?  @map("production_steps")
+  /// 首次下单补剂时冻结：食谱版本 / 整张制作单快照 / 冻结时间
+  recipeVersion   Int?     @map("recipe_version")
+  snapshot        Json?    @map("snapshot")
+  snapshotAt      DateTime? @map("snapshot_at")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -3057,7 +3065,14 @@ enum InventorySourceType {
   MANUAL_ADJUSTMENT
   STOCKTAKE
   PRODUCTION_ALLOCATION_CONSUMPTION
+  SUPPLEMENT_PACK_CONSUMPTION
   PRODUCTION_SURPLUS
+}
+
+/// 库存占用来源：鲜食生产 / 补剂分装
+enum InventoryAllocationSourceType {
+  PRODUCTION
+  SUPPLEMENT_PACK
 }
 
 enum InventoryAdjustmentMode {
@@ -3925,6 +3940,20 @@ model SupplementShopConfig {
   /// 0 表示不自动关单。
   paymentTimeoutMinutes     Int                          @default(30) @map("payment_timeout_minutes")
 
+  // ---- 排期 / 产能 / 售后（2026-10-20）----
+  /// 截单时间 HH:mm（Asia/Shanghai）
+  dailyCutoffTime           String                       @default("17:00") @map("daily_cutoff_time") @db.VarChar(5)
+  /// 每天最多排多少单（按订单数，补发单也计入）
+  dailyPackingCapacity      Int                          @default(30) @map("daily_packing_capacity")
+  /// 自动排期开关（异常时可关闭，改人工排期）
+  autoScheduleEnabled       Boolean                      @default(true) @map("auto_schedule_enabled")
+  /// 售后窗口（发货后天数）
+  aftersaleWindowDays       Int                          @default(7) @map("aftersale_window_days")
+  /// 发货后自动完成天数
+  autoCompleteDays          Int                          @default(10) @map("auto_complete_days")
+  /// 商品满多少免分装服务费；null/0 = 不启用
+  freeServiceThreshold      Decimal?                     @default(99.00) @map("free_service_threshold") @db.Decimal(10, 2)
+
   // ---- 运费 ----
   shippingMode              SupplementShippingMode       @default(FLAT_RATE) @map("shipping_mode")
   flatShippingFee           Decimal                      @default(8.0) @map("flat_shipping_fee") @db.Decimal(10, 2)
@@ -4269,6 +4298,67 @@ enum SupplementOrderStatus {
   AFTERSALE
 }
 
+/// 分装日来源：自动排期 / 管理员改期
+enum SupplementPackingDateSource {
+  AUTO
+  ADMIN
+}
+
+/// 补剂订单事件类型（只追加）
+enum SupplementOrderEventType {
+  SCHEDULED
+  RESCHEDULED
+  PACKED
+  FORCE_PACKED
+  SHIPPED
+  COMPLETED
+  CANCELLED
+  ADDRESS_CHANGED
+  REORDERED
+  AFTERSALE_CREATED
+  REFUNDED
+  RESHIPPED
+  SCHEDULE_FAILED
+}
+
+/// 售后记录关联的订单类型（通用表，本轮只写补剂）
+enum AftersaleOrderType {
+  FOOD
+  CUSTOM_RECIPE
+  SUPPLEMENT
+}
+
+/// 售后记录状态
+enum AftersaleCaseStatus {
+  PENDING
+  PROCESSING
+  RESOLVED
+  REJECTED
+  CANCELLED
+}
+
+/// 顾客申请的售后诉求
+enum AftersaleRequestType {
+  REFUND
+  RESHIP
+  OTHER
+}
+
+/// 管理员处理结论
+enum AftersaleResolutionType {
+  REFUND
+  RESHIP
+  REGISTER_ONLY
+  REJECT
+}
+
+/// 补剂包材角色
+enum SupplementPackagingRole {
+  POUCH
+  DESICCANT
+  LABEL
+}
+
 /// 补剂订单（独立于鲜食订单，见 docs/plans/2026-09-18-supplement-shop-design.md）
 /// 金额与配置在创建时快照，之后不随「补剂商城设置」变化。
 model SupplementOrder {
@@ -4311,6 +4401,14 @@ model SupplementOrder {
   cycleDays                 Int?                  @map("cycle_days")
   remark                    String?               @db.VarChar(500)
 
+  // ---- 排期（2026-10-20）----
+  /// 分装日 / 预计发货日（日期，UTC 零点代表上海日历日）
+  packingDate               DateTime?             @map("packing_date") @db.Date
+  /// 当前分装日来源；历史改期进 supplement_order_event
+  packingDateSource         SupplementPackingDateSource @default(AUTO) @map("packing_date_source")
+  /// 再次购买的来源订单号
+  reorderFromOrderNo        String?               @map("reorder_from_order_no") @db.VarChar(32)
+
   // ---- 支付 ----
   paymentMethod             String?               @map("payment_method") @db.VarChar(20)
   paymentStatus             String?               @map("payment_status") @db.VarChar(20)
@@ -4347,9 +4445,12 @@ model SupplementOrder {
 
   user                      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   items                     SupplementOrderItem[]
+  events                    SupplementOrderEvent[]
 
   @@index([userId, createdAt])
   @@index([status, createdAt])
+  @@index([packingDate, status])
+  @@index([reorderFromOrderNo])
   @@map("supplement_order")
 }
 
@@ -4393,6 +4494,90 @@ model SupplementOrderItem {
 
   @@index([orderId])
   @@map("supplement_order_item")
+}
+
+/// 补剂订单事件（只追加）：排期/改期/分装/强制/发货/取消/改地址/复购/售后关联
+model SupplementOrderEvent {
+  id         String                   @id @default(uuid()) @map("id")
+  orderId    String                   @map("order_id")
+  type       SupplementOrderEventType @map("type")
+  fromValue  String?                  @map("from_value") @db.VarChar(64)
+  toValue    String?                  @map("to_value") @db.VarChar(64)
+  /// CUSTOMER / STAFF / ADMIN / SYSTEM
+  actorType  String                   @map("actor_type") @db.VarChar(20)
+  actorId    String?                  @map("actor_id")
+  reason     String?                  @map("reason") @db.VarChar(500)
+  metadata   Json?                    @map("metadata")
+  createdAt  DateTime                 @default(now()) @map("created_at")
+
+  order      SupplementOrder          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt])
+  @@index([type, createdAt])
+  @@map("supplement_order_event")
+}
+
+/// 通用售后记录（2026-10-20）。本轮只写补剂；鲜食/定制第二批迁移。
+///
+/// 多态关联 orderType + orderId（不加外键），应用层校验归属与订单类型。
+/// 同一订单同时只允许一条未完结售后 —— 由 migration 里的部分唯一索引兜底。
+model AftersaleCase {
+  id                String                    @id @default(uuid()) @map("id")
+  caseNo            String                    @unique @map("case_no") @db.VarChar(32)
+  orderType         AftersaleOrderType        @map("order_type")
+  orderId           String                    @map("order_id") @db.VarChar(36)
+  orderNo           String?                   @map("order_no") @db.VarChar(32)
+  customerId        String                    @map("customer_id")
+  status            AftersaleCaseStatus       @default(PENDING) @map("status")
+  requestType       AftersaleRequestType      @map("request_type")
+  requestedReason   String                    @map("requested_reason") @db.VarChar(500)
+  requestedPhotos   String[]                  @default([]) @map("requested_photos")
+  /// CUSTOMER / ADMIN / MIGRATION
+  source            String                    @default("CUSTOMER") @map("source") @db.VarChar(20)
+  handlerId         String?                   @map("handler_id")
+  handlingNote      String?                   @map("handling_note") @db.VarChar(1000)
+  resolutionType    AftersaleResolutionType?  @map("resolution_type")
+  refundAmount      Decimal?                  @map("refund_amount") @db.Decimal(10, 2)
+  refundStatus      String?                   @map("refund_status") @db.VarChar(20)
+  refundOutNo       String?                   @unique @map("refund_out_no") @db.VarChar(64)
+  refundId          String?                   @map("refund_id") @db.VarChar(64)
+  refundRequestedAt DateTime?                 @map("refund_requested_at")
+  refundedAt        DateTime?                 @map("refunded_at")
+  reshipOrderId     String?                   @map("reship_order_id") @db.VarChar(36)
+  reshipOrderNo     String?                   @map("reship_order_no") @db.VarChar(32)
+  acceptedAt        DateTime?                 @map("accepted_at")
+  resolvedAt        DateTime?                 @map("resolved_at")
+  rejectedAt        DateTime?                 @map("rejected_at")
+  createdAt         DateTime                  @default(now()) @map("created_at")
+  updatedAt         DateTime                  @updatedAt @map("updated_at")
+
+  @@index([orderType, orderId])
+  @@index([customerId, createdAt])
+  @@index([status, createdAt])
+  @@map("aftersale_case")
+}
+
+/// 补剂包材规则：绑定包材档案 + 形态/单位/区间选袋
+model SupplementPackagingRule {
+  id            String                   @id @default(uuid()) @map("id")
+  role          SupplementPackagingRole  @map("role")
+  ingredientId  String                   @map("ingredient_id")
+  physicalForm  IngredientPhysicalForm?  @map("physical_form")
+  /// 单位匹配（g / 平勺 / 片 / 粒…）；null = 任意单位
+  unitPattern   String?                  @map("unit_pattern") @db.VarChar(20)
+  minAmount     Float?                   @map("min_amount")
+  maxAmount     Float?                   @map("max_amount")
+  priority      Int                      @default(0) @map("priority")
+  enabled       Boolean                  @default(true) @map("enabled")
+  note          String?                  @db.VarChar(200)
+  createdAt     DateTime                 @default(now()) @map("created_at")
+  updatedAt     DateTime                 @updatedAt @map("updated_at")
+
+  ingredient    Ingredient               @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+
+  @@index([role, enabled, priority])
+  @@index([ingredientId])
+  @@map("supplement_packaging_rule")
 }
 
 /// 站内消息（2026-10-18 · 老板定）

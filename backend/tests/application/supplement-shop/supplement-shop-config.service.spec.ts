@@ -19,6 +19,13 @@ function buildRow(overrides: Record<string, unknown> = {}) {
     roundUpUsage: true,
     maxPortionMultiplier: 3,
     maxTotalDays: 90,
+    paymentTimeoutMinutes: 30,
+    dailyCutoffTime: '17:00',
+    dailyPackingCapacity: 30,
+    autoScheduleEnabled: true,
+    aftersaleWindowDays: 7,
+    autoCompleteDays: 10,
+    freeServiceThreshold: '99.00',
     shippingMode: 'FLAT_RATE',
     flatShippingFee: 8,
     shippingTemplateId: null,
@@ -73,6 +80,12 @@ describe('SupplementShopConfigService', () => {
     expect(config.serviceFeeMode).toBe('PER_ORDER');
     expect(config.shippingMode).toBe('FLAT_RATE');
     expect(config.enabled).toBe(false);
+    expect(config.dailyCutoffTime).toBe('17:00');
+    expect(config.dailyPackingCapacity).toBe(30);
+    expect(config.autoScheduleEnabled).toBe(true);
+    expect(config.aftersaleWindowDays).toBe(7);
+    expect(config.autoCompleteDays).toBe(10);
+    expect(config.freeServiceThreshold).toBe(99);
   });
 
   it('已存在时直接返回，并把 Decimal 转成 number', async () => {
@@ -101,6 +114,36 @@ describe('SupplementShopConfigService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
     await expect(
       service.updateConfig({ markupMultiplier: Number.NaN }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('截单时间必须是合法的 HH:mm', async () => {
+    await expect(
+      service.updateConfig({ dailyCutoffTime: '25:00' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.updateConfig({ dailyCutoffTime: '9:00' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    mockPrismaService.supplementShopConfig.upsert.mockResolvedValue(
+      buildRow({ dailyCutoffTime: '17:00' }),
+    );
+    await expect(
+      service.updateConfig({ dailyCutoffTime: '17:00' }),
+    ).resolves.toBeDefined();
+  });
+
+  it('产能/售后/自动完成必须是合理整数', async () => {
+    await expect(
+      service.updateConfig({ dailyPackingCapacity: 0 }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.updateConfig({ dailyPackingCapacity: 501 }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.updateConfig({ aftersaleWindowDays: -1 }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.updateConfig({ autoCompleteDays: 366 }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 

@@ -62,6 +62,7 @@ import { FinanceReportService } from './application/finance/finance-report.servi
 import { ExpenseTemplateService } from './application/finance/expense-template.service';
 import { FinanceSchedulerService } from './application/scheduler/finance-scheduler.service';
 import { OrderSchedulerService } from './application/scheduler/order-scheduler.service';
+import { SupplementSchedulerService } from './application/scheduler/supplement-scheduler.service';
 import { LabelModule } from './label/label.module';
 import {
   DogService,
@@ -226,6 +227,8 @@ import {
 import { SupplementCatalogService } from './application/supplement-shop/supplement-catalog.service';
 import { SupplementShopConfigService } from './application/supplement-shop/supplement-shop-config.service';
 import { SupplementPricingService } from './application/supplement-shop/supplement-pricing.service';
+import { BusinessCalendarService } from './application/supplement-shop/business-calendar.service';
+import { SupplementSchedulingService } from './application/supplement-shop/supplement-scheduling.service';
 import { SupplementOrderService } from './application/supplement-shop/supplement-order.service';
 import { SupplementsController } from './interfaces/controllers/supplements.controller';
 import { SupplementOrdersController } from './interfaces/controllers/supplement-orders.controller';
@@ -851,6 +854,9 @@ validatePrismaConfig();
       useExisting: PurchasingService,
     },
     SupplementPricingService,
+    BusinessCalendarService,
+    SupplementSchedulingService,
+    SupplementSchedulerService,
     SupplementOrderService,
     NutrientMappingAuditService,
     IngredientReadinessService,

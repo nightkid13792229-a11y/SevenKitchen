@@ -1082,7 +1082,7 @@ PENDING_PAYMENT --取消/超时--> CANCELLED
 PAID --取消--> CANCELLED
 ```
 
-- 不使用 `PACKING`（旧数据按 PAID）；`packOrder` 的守卫从 `['PAID','PACKING']` 改为只允许 `PAID`。
+- 不使用 `PACKING`（旧数据按 PAID）；`packOrder` 保留 `PAID + PACKING` 兼容旧数据，但新代码不再写 `PACKING`。
 - 售后不改订单状态；`AFTERSALE` 仅旧数据。
 - 退款/补发不影响履约状态。
 

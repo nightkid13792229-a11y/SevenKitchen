@@ -304,6 +304,7 @@ describe('WechatPaymentService · 补剂订单支付', () => {
           out_trade_no: MERCHANT_ORDER_NO,
           trade_state: status,
           transaction_id: 'wx-txn-999',
+          success_time: '2026-10-19T10:00:00+08:00',
           amount: { total: totalFen, payer_total: totalFen },
         }),
       };
@@ -315,7 +316,11 @@ describe('WechatPaymentService · 补剂订单支付', () => {
       expect(result).toEqual({ handled: true, tradeState: 'SUCCESS' });
       expect(
         mockSupplementOrderService.confirmPaymentFromWechat,
-      ).toHaveBeenCalledWith('order-uuid-1', 'wx-txn-999');
+      ).toHaveBeenCalledWith(
+        'order-uuid-1',
+        'wx-txn-999',
+        new Date('2026-10-19T10:00:00+08:00'),
+      );
       // 不应碰到鲜食订单
       expect(mockPrismaService.order.findUnique).not.toHaveBeenCalled();
     });
@@ -357,6 +362,7 @@ describe('WechatPaymentService · 补剂订单支付', () => {
           JSON.stringify({
             trade_state: 'SUCCESS',
             transaction_id: 'wx-txn-sync',
+            success_time: '2026-10-19T10:00:00+08:00',
             amount: { total: 3160 },
           }),
       } as never);
@@ -369,7 +375,11 @@ describe('WechatPaymentService · 补剂订单支付', () => {
       expect(result.paid).toBe(true);
       expect(
         mockSupplementOrderService.confirmPaymentFromWechat,
-      ).toHaveBeenCalledWith('order-uuid-1', 'wx-txn-sync');
+      ).toHaveBeenCalledWith(
+        'order-uuid-1',
+        'wx-txn-sync',
+        new Date('2026-10-19T10:00:00+08:00'),
+      );
     });
 
     it('还没付就原样返回', async () => {

@@ -64,8 +64,10 @@ export interface SupplementPortionOption {
   multiplier: number;
   /** 覆盖的总天数；没有 cycleDays 时为 null */
   totalDays: number | null;
-  /** 订单金额（补剂费 + 服务费 + 包材费，不含运费） */
+  /** 商品小计（只含补剂商品；不含服务费/包材/运费） */
   goodsSubtotal: number;
+  /** 本档是否免服务费 */
+  serviceFeeWaived: boolean;
   shippingFee: number;
   total: number;
   freeShipping: boolean;
@@ -83,8 +85,17 @@ export interface SupplementQuote {
   supplementCost: number;
   supplementPrice: number;
   serviceFee: number;
+  /** 免服务费前的原始服务费（用于展示“原 ¥10 → 免”） */
+  serviceFeeBeforeWaiver: number;
+  /** 本单是否免服务费 */
+  serviceFeeWaived: boolean;
+  /** 免服务费门槛；null/0 = 不启用 */
+  freeServiceThreshold: number | null;
   packagingFee: number;
+  /** 商品小计（只含补剂商品；不含服务费/包材/运费） */
   goodsSubtotal: number;
+  /** 与 goodsSubtotal 同值，新字段名更明确 */
+  goodsAmount: number;
   shippingFee: number;
   shippingDescription: string;
   freeShipping: boolean;
@@ -308,6 +319,7 @@ export class SupplementPricingService {
         multiplier: m,
         totalDays: quote.totalDays,
         goodsSubtotal: quote.goodsSubtotal,
+        serviceFeeWaived: quote.serviceFeeWaived,
         shippingFee: quote.shippingFee,
         total: quote.total,
         freeShipping: quote.freeShipping,
@@ -396,18 +408,25 @@ export class SupplementPricingService {
       lines.reduce((sum, line) => sum + line.price, 0),
     );
 
-    const serviceFee =
+    const configuredServiceFee =
       config.serviceFeeMode === 'PER_ORDER'
         ? roundPrice(config.serviceFeeAmount, 'NONE')
         : roundPrice(config.serviceFeeAmount * bagCount, 'NONE');
+    const freeServiceThreshold = config.freeServiceThreshold ?? null;
+    const serviceFeeWaived =
+      freeServiceThreshold !== null &&
+      freeServiceThreshold > 0 &&
+      supplementPrice >= freeServiceThreshold;
+    const serviceFee = serviceFeeWaived ? 0 : configuredServiceFee;
     const packagingFee = roundPrice(
       config.packagingFeePerBag * bagCount,
       'NONE',
     );
 
-    const goodsSubtotal = guardFloat(
-      supplementPrice + serviceFee + packagingFee,
-    );
+    // 商品小计只算补剂商品。服务费/包材/运费不进“商品金额”，
+    // 否则“满 ¥99 免服务费 / 满 ¥129 包邮”会被服务费自己凑上去。
+    const goodsAmount = guardFloat(supplementPrice);
+    const goodsSubtotal = goodsAmount;
 
     /**
      * 运费与费用透明化（2026-09-24，**翻转** 2026-09-22 的口径）
@@ -424,16 +443,17 @@ export class SupplementPricingService {
      * 费用明细摆出来，反而让加量的价值变得可计算：用户能亲眼看到
      * "服务费和运费不随份数变"。
      *
-     * 计费规则：
-     *   - 商品金额（补剂费 + 服务费 + 包材费）达到 freeShippingThreshold 即包邮；
-     *   - 未达到则按 flatShippingFee（或按重量模板）收取。
+     * 计费规则（2026-10-20 修正）：
+     *   - 商品小计（只含补剂商品）达到 freeShippingThreshold 即包邮；
+     *   - 商品小计达到 freeServiceThreshold 即免服务费；
+     *   - 未达到则按 flatShippingFee / 配置服务费收取。
      *
-     * ⚠️ 门槛比对的是 goodsSubtotal，也就是**含服务费**的订单金额 ——
-     *    与用户在小程序上看到的"合计（不含运费）"一致，避免两处口径不一样。
+     * ⚠️ 门槛只按商品小计算，不把服务费/包材/运费算进去；
+     *    否则服务费会帮顾客“凑单”，门槛失真。
      */
     const threshold = config.freeShippingThreshold;
     const freeShipping =
-      threshold !== null && threshold > 0 && goodsSubtotal >= threshold;
+      threshold !== null && threshold > 0 && goodsAmount >= threshold;
     const shippingFee = freeShipping ? 0 : roundPrice(shipping.fee, 'NONE');
 
     const shippingDescription = freeShipping
@@ -444,7 +464,9 @@ export class SupplementPricingService {
         ? shipping.description
         : '包邮';
 
-    const total = guardFloat(goodsSubtotal + shippingFee);
+    const total = guardFloat(
+      goodsAmount + serviceFee + packagingFee + shippingFee,
+    );
     const totalDays =
       cycleDays === null ? null : cycleDays * effectiveMultiplier;
     // 每天成本：界面靠它讲清楚"多买几份，每天更便宜"。四舍五入到分。
@@ -453,9 +475,9 @@ export class SupplementPricingService {
         ? null
         : Math.round((total / totalDays) * 100) / 100;
 
-    if (config.minOrderAmount > 0 && goodsSubtotal < config.minOrderAmount) {
+    if (config.minOrderAmount > 0 && goodsAmount < config.minOrderAmount) {
       warnings.push(
-        `商品金额 ${goodsSubtotal.toFixed(2)} 元未达最低起送 ${config.minOrderAmount.toFixed(2)} 元`,
+        `商品金额 ${goodsAmount.toFixed(2)} 元未达最低起送 ${config.minOrderAmount.toFixed(2)} 元`,
       );
     }
 
@@ -465,8 +487,12 @@ export class SupplementPricingService {
       supplementCost,
       supplementPrice,
       serviceFee,
+      serviceFeeBeforeWaiver: configuredServiceFee,
+      serviceFeeWaived,
+      freeServiceThreshold,
       packagingFee,
       goodsSubtotal,
+      goodsAmount,
       shippingFee,
       shippingDescription,
       freeShipping,

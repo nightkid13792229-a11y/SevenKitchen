@@ -140,6 +140,69 @@
           </span>
         </el-form-item>
 
+        <el-divider content-position="left">排期 / 产能 / 售后</el-divider>
+
+        <el-form-item label="截单时间">
+          <el-input
+            v-model="form.dailyCutoffTime"
+            placeholder="HH:mm，如 17:00"
+            style="width: 220px"
+          />
+          <span class="form-tip">Asia/Shanghai；截单前付款当天发，之后顺延到下一个营业日</span>
+        </el-form-item>
+
+        <el-form-item label="每日分装订单上限">
+          <el-input-number
+            v-model="form.dailyPackingCapacity"
+            :min="1"
+            :max="500"
+            :step="1"
+            style="width: 220px"
+          />
+          <span class="form-tip">按订单数；补发单也计入。超过自动顺延，管理员可超排留痕</span>
+        </el-form-item>
+
+        <el-form-item label="自动排期">
+          <el-switch v-model="form.autoScheduleEnabled" />
+          <span class="form-tip">关闭后新付款订单进入“待排期”，由管理员手工改期</span>
+        </el-form-item>
+
+        <el-form-item label="售后窗口">
+          <el-input-number
+            v-model="form.aftersaleWindowDays"
+            :min="0"
+            :max="365"
+            :step="1"
+            style="width: 220px"
+          />
+          <span class="form-tip">发货后多少天可申请售后；PACKED 未发货按分装时间起算</span>
+        </el-form-item>
+
+        <el-form-item label="自动完成">
+          <el-input-number
+            v-model="form.autoCompleteDays"
+            :min="0"
+            :max="365"
+            :step="1"
+            style="width: 220px"
+          />
+          <span class="form-tip">发货后多少天自动完成；建议比售后窗口多 3 天</span>
+        </el-form-item>
+
+        <el-form-item label="免服务费门槛">
+          <el-input-number
+            v-model="form.freeServiceThreshold"
+            :min="0"
+            :step="10"
+            :precision="2"
+            style="width: 220px"
+          />
+          <el-button link type="primary" style="margin-left: 12px" @click="form.freeServiceThreshold = null">
+            不设门槛
+          </el-button>
+          <span class="form-tip">商品小计达到此金额免服务费；null/0 = 不启用</span>
+        </el-form-item>
+
         <el-divider content-position="left">起送</el-divider>
 
         <el-form-item label="最低起送金额">
@@ -473,6 +536,12 @@ const form = ref<SupplementShopConfig>({
   maxPortionMultiplier: 3,
   maxTotalDays: 90,
   paymentTimeoutMinutes: 30,
+  dailyCutoffTime: '17:00',
+  dailyPackingCapacity: 30,
+  autoScheduleEnabled: true,
+  aftersaleWindowDays: 7,
+  autoCompleteDays: 10,
+  freeServiceThreshold: 99,
   shippingMode: 'FLAT_RATE',
   flatShippingFee: 8,
   shippingTemplateId: null,
@@ -549,6 +618,12 @@ async function handleSave() {
       maxPortionMultiplier: form.value.maxPortionMultiplier,
       maxTotalDays: form.value.maxTotalDays,
       paymentTimeoutMinutes: form.value.paymentTimeoutMinutes,
+      dailyCutoffTime: form.value.dailyCutoffTime,
+      dailyPackingCapacity: form.value.dailyPackingCapacity,
+      autoScheduleEnabled: form.value.autoScheduleEnabled,
+      aftersaleWindowDays: form.value.aftersaleWindowDays,
+      autoCompleteDays: form.value.autoCompleteDays,
+      freeServiceThreshold: form.value.freeServiceThreshold,
       shippingMode: form.value.shippingMode,
       flatShippingFee: form.value.flatShippingFee,
       shippingTemplateId: form.value.shippingTemplateId,

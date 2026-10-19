@@ -25,6 +25,13 @@ function buildConfig(
     roundUpUsage: true,
     maxPortionMultiplier: 3,
     maxTotalDays: 90,
+    paymentTimeoutMinutes: 30,
+    dailyCutoffTime: '17:00',
+    dailyPackingCapacity: 30,
+    autoScheduleEnabled: true,
+    aftersaleWindowDays: 7,
+    autoCompleteDays: 10,
+    freeServiceThreshold: 99,
     shippingMode: 'FLAT_RATE',
     flatShippingFee: 8,
     shippingTemplateId: null,
@@ -209,11 +216,13 @@ describe('SupplementPricingService', () => {
 
       expect(quote.bagCount).toBe(3);
       expect(quote.serviceFee).toBe(9.9);
-      expect(quote.goodsSubtotal).toBeCloseTo(1.7 + 12 + 15.2 + 9.9, 2);
+      expect(quote.goodsSubtotal).toBeCloseTo(1.7 + 12 + 15.2, 2);
+      expect(quote.goodsAmount).toBeCloseTo(1.7 + 12 + 15.2, 2);
+      expect(quote.serviceFeeWaived).toBe(false);
       // 2026-09-24：运费照收并展示。默认 buildConfig 没设包邮门槛 → 收运费
       expect(quote.freeShipping).toBe(false);
       expect(quote.shippingFee).toBe(8);
-      expect(quote.total).toBeCloseTo(38.8 + 8, 2);
+      expect(quote.total).toBeCloseTo(1.7 + 12 + 15.2 + 9.9 + 8, 2);
       expect(quote.warnings).toEqual([]);
     });
 
@@ -242,41 +251,59 @@ describe('SupplementPricingService', () => {
 
       expect(quote.freeShipping).toBe(false);
       expect(quote.shippingFee).toBe(8);
-      expect(quote.total).toBeCloseTo(quote.goodsSubtotal + 8, 2);
+      expect(quote.total).toBeCloseTo(
+        quote.goodsSubtotal + quote.serviceFee + 8,
+        2,
+      );
       expect(quote.shippingDescription).toContain('一口价');
     });
 
     it('达到包邮门槛时免运费，合计不再加运费', () => {
       const quote = service.calculateQuote(
-        buildConfig({ freeShippingThreshold: 30 }),
+        buildConfig({ freeShippingThreshold: 28.8 }),
         lines,
         { fee: 8, description: '补剂一口价运费 8.00 元' },
       );
 
       expect(quote.freeShipping).toBe(true);
       expect(quote.shippingFee).toBe(0);
-      expect(quote.total).toBeCloseTo(quote.goodsSubtotal, 2);
+      expect(quote.total).toBeCloseTo(
+        quote.goodsSubtotal + quote.serviceFee,
+        2,
+      );
       expect(quote.shippingDescription).toContain('包邮');
     });
 
-    it('门槛比对的是含服务费的订单金额（与界面口径一致）', () => {
-      // lines 的补剂售价合计约 28.9，加服务费 9.9 后约 38.8。
-      // 门槛设 38 → 已达标包邮；设 40 → 未达标要收运费。
+    it('门槛只按商品小计算，不把服务费算进去', () => {
+      // lines 的补剂商品小计约 28.9；服务费 9.9 不应帮它凑到 30。
       const justMet = service.calculateQuote(
-        buildConfig({ freeShippingThreshold: 38 }),
+        buildConfig({ freeShippingThreshold: 28.8 }),
         lines,
         { fee: 8, description: '一口价' },
       );
       const notMet = service.calculateQuote(
-        buildConfig({ freeShippingThreshold: 40 }),
+        buildConfig({ freeShippingThreshold: 29 }),
         lines,
         { fee: 8, description: '一口价' },
       );
 
-      expect(justMet.goodsSubtotal).toBeGreaterThanOrEqual(38);
+      expect(justMet.goodsSubtotal).toBeGreaterThanOrEqual(28.8);
       expect(justMet.freeShipping).toBe(true);
-      expect(notMet.goodsSubtotal).toBeLessThan(40);
+      expect(notMet.goodsSubtotal).toBeLessThan(29);
       expect(notMet.freeShipping).toBe(false);
+    });
+
+    it('商品满免服务费门槛时服务费为 0，并记录免前金额', () => {
+      const quote = service.calculateQuote(
+        buildConfig({ freeServiceThreshold: 28.8 }),
+        lines,
+        { fee: 8, description: '一口价' },
+      );
+
+      expect(quote.serviceFeeWaived).toBe(true);
+      expect(quote.serviceFee).toBe(0);
+      expect(quote.serviceFeeBeforeWaiver).toBe(9.9);
+      expect(quote.goodsSubtotal).toBeCloseTo(28.9, 1);
     });
 
     it('没设包邮门槛时一律收运费', () => {
@@ -366,7 +393,10 @@ describe('SupplementPricingService', () => {
 
       // 2026-09-24 起运费向客户收取（唯一补剂仅 1.7 元货款，远不到包邮门槛）
       expect(quote.shippingFee).toBe(6);
-      expect(quote.total).toBeCloseTo(quote.goodsSubtotal + 6, 2);
+      expect(quote.total).toBeCloseTo(
+        quote.goodsSubtotal + quote.serviceFee + 6,
+        2,
+      );
       expect(mockShippingService.calculateShippingFeePreview).not.toHaveBeenCalled();
     });
 
@@ -620,7 +650,10 @@ describe('SupplementPricingService', () => {
         expect(q.portionOptions[2].freeShipping).toBe(true);
         // 包邮那一档的运费必须是 0，否则选项上会显示"包邮"却仍加钱
         expect(q.portionOptions[2].shippingFee).toBe(0);
-        expect(q.portionOptions[2].total).toBeCloseTo(q.portionOptions[2].goodsSubtotal, 2);
+        expect(q.portionOptions[2].total).toBeCloseTo(
+          q.portionOptions[2].goodsSubtotal + q.serviceFee,
+          2,
+        );
       });
 
       it('只有一档可选时也返回一条选项，界面据此决定是否展示控件', () => {

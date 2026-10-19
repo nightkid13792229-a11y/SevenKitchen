@@ -858,6 +858,7 @@ export class WechatPaymentService {
     const data = await this.callWechatPay<{
       trade_state?: string;
       transaction_id?: string;
+      success_time?: string;
       amount?: { total?: number };
     }>(
       'GET',
@@ -883,6 +884,7 @@ export class WechatPaymentService {
     const updated = await this.supplementOrderService.confirmPaymentFromWechat(
       order.id,
       String(data.transaction_id || ''),
+      this.parseWechatTime(data.success_time),
     );
     return { status: updated.status, paid: true, tradeState };
   }
@@ -929,6 +931,7 @@ export class WechatPaymentService {
     await this.supplementOrderService.confirmPaymentFromWechat(
       order.id,
       String(decrypted.transaction_id || ''),
+      this.parseWechatTime(decrypted.success_time),
     );
 
     return { handled: true, tradeState };
@@ -1145,6 +1148,7 @@ export class WechatPaymentService {
     const data = await this.callWechatPay<{
       trade_state?: string;
       transaction_id?: string;
+      success_time?: string;
       amount?: { total?: number };
     }>(
       'GET',

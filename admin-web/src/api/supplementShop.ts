@@ -136,6 +136,18 @@ export interface SupplementShopConfig {
   maxTotalDays: number;
   /** 补剂订单支付超时（分钟）；0 = 不自动关单。与鲜食订单独立 */
   paymentTimeoutMinutes: number;
+  /** 截单时间 HH:mm（Asia/Shanghai） */
+  dailyCutoffTime: string;
+  /** 每日分装订单数上限（补发单也计入） */
+  dailyPackingCapacity: number;
+  /** 自动排期开关 */
+  autoScheduleEnabled: boolean;
+  /** 售后窗口（发货后天数） */
+  aftersaleWindowDays: number;
+  /** 发货后自动完成天数 */
+  autoCompleteDays: number;
+  /** 商品满多少免服务费；null/0 = 不启用 */
+  freeServiceThreshold: number | null;
   shippingMode: SupplementShippingMode;
   flatShippingFee: number;
   shippingTemplateId: string | null;

@@ -72,7 +72,7 @@
 | SC-14 | 快照 recipe/dog 与订单不一致 | 拒绝下单，不能冻结错单 |
 | SC-15 | 快照 JSON 可能超 200KB | 截断非必填长文本 + 告警，不丢核心字段 |
 | SC-16 | 退款回调先查旧订单字段，新 case 可能找不到 | 先查 `AftersaleCase.refundOutNo`，再回退旧 `SupplementOrder.refundOutNo` |
-| SC-17 | `packOrder` 仍允许 `PACKING` | 改为只允许 `PAID`；`PACKING` 只旧数据兼容 |
+| SC-17 | `packOrder` 仍允许 `PACKING` | 保留 `PAID/PACKING` 兼容旧数据；新代码不写 `PACKING` |
 | SC-18 | 现有后台旧接口 `/aftersale` `/refund` `/reship` 会断 | 过渡版本保留薄适配器，后台切新接口后删除 |
 | SC-19 | 员工详情复用 admin `getOrderById` 会带金额 | 新增 staff DTO，不用原接口原样返回 |
 | SC-20 | `CustomerMessage.linkType` 类型没有 `SUPPLEMENT_ORDER` | 补类型 union；跳转校验归属 |

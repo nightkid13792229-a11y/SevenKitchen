@@ -11,6 +11,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma.service';
@@ -27,6 +28,7 @@ import {
   type SupplementShopConfigDto,
 } from './supplement-shop-config.service';
 import type { IngredientPhysicalFormCode } from './supplement-catalog.service';
+import { SupplementSchedulingService } from './supplement-scheduling.service';
 
 /** 分装结果的有效期：取「原瓶到期日」与「分装日 + 效期系数」的较小值 */
 export function addMonths(date: Date, months: number): Date {
@@ -214,6 +216,8 @@ export class SupplementOrderService {
     private readonly prisma: PrismaService,
     private readonly pricingService: SupplementPricingService,
     private readonly configService: SupplementShopConfigService,
+    @Optional()
+    private readonly schedulingService?: SupplementSchedulingService,
   ) {}
 
   /**
@@ -477,6 +481,7 @@ export class SupplementOrderService {
       },
     });
 
+    await this.scheduleAfterPayment(orderId);
     return this.getOrderById(orderId);
   }
 
@@ -487,11 +492,13 @@ export class SupplementOrderService {
   async confirmPaymentFromWechat(
     orderId: string,
     transactionId: string,
+    successTime?: Date | null,
   ): Promise<SupplementOrderView> {
     const order = await this.requireOrder(orderId);
 
-    // 微信可能重复回调，已付款的直接返回，不报错也不重复写
+    // 微信可能重复回调：已付款但仍未排期时，补一次排期；不重复写收款
     if (order.status === 'PAID') {
+      await this.scheduleAfterPayment(orderId);
       return this.getOrderById(orderId);
     }
 
@@ -504,11 +511,26 @@ export class SupplementOrderService {
         paymentMethod: 'WECHAT_PAY',
         paymentStatus: 'SUCCESS',
         transactionId: transactionId || null,
-        paidAt: new Date(),
+        // 用微信 success_time，而不是回调到达时间；拿不到才用当前时间
+        paidAt: successTime ?? new Date(),
       },
     });
 
+    await this.scheduleAfterPayment(orderId);
     return this.getOrderById(orderId);
+  }
+
+  /**
+   * 排期是支付后的后续动作：失败不能把已确认的收款回滚。
+   * 失败时排期服务会写 SCHEDULE_FAILED，定时任务会重试。
+   */
+  private async scheduleAfterPayment(orderId: string): Promise<void> {
+    if (!this.schedulingService) return;
+    try {
+      await this.schedulingService.scheduleOrder(orderId, { type: 'SYSTEM' });
+    } catch {
+      // 排期服务已记录事件；这里只保证支付确认成功
+    }
   }
 
   /**
@@ -1228,9 +1250,12 @@ export class SupplementOrderService {
 
   private buildPricingSnapshot(config: SupplementShopConfigDto) {
     return {
+      // 2 = 商品小计只算补剂商品；服务费/包邮门槛都按商品小计
+      pricingVersion: 2,
       markupMultiplier: config.markupMultiplier,
       serviceFeeMode: config.serviceFeeMode,
       serviceFeeAmount: config.serviceFeeAmount,
+      freeServiceThreshold: config.freeServiceThreshold,
       packagingFeePerBag: config.packagingFeePerBag,
       priceRoundingMode: config.priceRoundingMode,
       roundUpUsage: config.roundUpUsage,
@@ -1240,6 +1265,11 @@ export class SupplementOrderService {
       freeShippingThreshold: config.freeShippingThreshold,
       powderShelfLifeMonths: config.powderShelfLifeMonths,
       solidShelfLifeMonths: config.solidShelfLifeMonths,
+      oilShelfLifeMonths: config.oilShelfLifeMonths,
+      dailyCutoffTime: config.dailyCutoffTime,
+      dailyPackingCapacity: config.dailyPackingCapacity,
+      aftersaleWindowDays: config.aftersaleWindowDays,
+      autoCompleteDays: config.autoCompleteDays,
     } as unknown as Prisma.InputJsonValue;
   }
 

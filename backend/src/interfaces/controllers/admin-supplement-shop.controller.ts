@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -9,6 +10,7 @@ import {
   Query,
   Req,
   UseGuards,
+  Optional,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
@@ -25,6 +27,9 @@ import {
 } from '../../application/supplement-shop/supplement-pricing.service';
 import { SupplementOrderService } from '../../application/supplement-shop/supplement-order.service';
 import { SupplementLabelService } from '../../label/supplement-label.service';
+import { SupplementSchedulingService } from '../../application/supplement-shop/supplement-scheduling.service';
+import { ScheduleSupplementOrderDto } from '../dto/supplement-prepack.dto';
+import { TimezoneUtil } from '../../utils/timezone.util';
 import { WechatPaymentService } from '../../application/payment/wechat-payment.service';
 import {
   CancelSupplementOrderDto,
@@ -38,7 +43,7 @@ import {
 } from '../dto/supplement-shop.dto';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { AuthGuard } from '../auth/auth.guard';
-import { StaffGuard } from '../guards/role.guard';
+import { AdminGuard, StaffGuard } from '../guards/role.guard';
 
 /**
  * 补剂商城 · 后台
@@ -57,6 +62,8 @@ export class AdminSupplementShopController {
     private readonly supplementOrderService: SupplementOrderService,
     private readonly wechatPaymentService: WechatPaymentService,
     private readonly supplementLabelService: SupplementLabelService,
+    @Optional()
+    private readonly supplementSchedulingService?: SupplementSchedulingService,
   ) {}
 
   // ---------- 上架清单 ----------
@@ -203,6 +210,33 @@ export class AdminSupplementShopController {
   ) {
     return ApiResponseDto.success(
       await this.supplementOrderService.confirmPayment(id, dto),
+    );
+  }
+
+  @Post('orders/:id/schedule')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: '管理员改分装日（只允许已付款未分装）' })
+  async scheduleOrder(
+    @Param('id') id: string,
+    @Body() dto: ScheduleSupplementOrderDto,
+  ) {
+    if (!this.supplementSchedulingService) {
+      throw new BadRequestException('排期服务未启用');
+    }
+    let packingDate: Date;
+    try {
+      packingDate = TimezoneUtil.parseDateOnly(dto.packingDate);
+    } catch {
+      throw new BadRequestException('分装日必须是 YYYY-MM-DD');
+    }
+    await this.supplementSchedulingService.rescheduleOrder(
+      id,
+      packingDate,
+      { type: 'ADMIN' },
+      { allowOverbook: dto.allowOverbook, reason: dto.reason },
+    );
+    return ApiResponseDto.success(
+      await this.supplementOrderService.getOrderById(id),
     );
   }
 

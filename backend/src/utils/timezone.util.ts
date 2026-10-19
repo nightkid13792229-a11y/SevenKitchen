@@ -72,4 +72,65 @@ export class TimezoneUtil {
     const now = new Date();
     return new Date(now.getTime() + 8 * 60 * 60 * 1000);
   }
+
+  /**
+   * 把任意时间转成“上海日历日”的 date-only（UTC 零点）。
+   * 用于 @db.Date 字段：数据库里存 UTC 零点，语义是上海那一天。
+   */
+  static toShanghaiDateOnly(input: Date): Date {
+    const shanghai = new Date(input.getTime() + 8 * 60 * 60 * 1000);
+    return new Date(
+      Date.UTC(
+        shanghai.getUTCFullYear(),
+        shanghai.getUTCMonth(),
+        shanghai.getUTCDate(),
+      ),
+    );
+  }
+
+  /** YYYY-MM-DD（上海日历日） */
+  static shanghaiDateKey(input: Date): string {
+    return this.toShanghaiDateOnly(input).toISOString().slice(0, 10);
+  }
+
+  /** 解析 YYYY-MM-DD 为 date-only（UTC 零点）；非法格式抛错 */
+  static parseDateOnly(input: string): Date {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec((input || '').trim());
+    if (!match) throw new Error('日期必须是 YYYY-MM-DD');
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    if (
+      date.getUTCFullYear() !== year ||
+      date.getUTCMonth() !== month - 1 ||
+      date.getUTCDate() !== day
+    ) {
+      throw new Error('日期不合法');
+    }
+    return date;
+  }
+
+  static addDays(dateOnly: Date, days: number): Date {
+    return new Date(dateOnly.getTime() + days * 24 * 60 * 60 * 1000);
+  }
+
+  /** 0 = 周日 … 6 = 周六；date-only 必须用 UTC 方法，避免本地时区偏移 */
+  static weekday(dateOnly: Date): number {
+    return dateOnly.getUTCDay();
+  }
+
+  /** 上海时间当天第几分钟（0–1439） */
+  static minutesOfDayInShanghai(input: Date): number {
+    const shanghai = new Date(input.getTime() + 8 * 60 * 60 * 1000);
+    return shanghai.getUTCHours() * 60 + shanghai.getUTCMinutes();
+  }
+
+  /** 是否早于截单时间 HH:mm（HH:mm 非法时抛错） */
+  static isBeforeCutoff(input: Date, cutoff: string): boolean {
+    const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec((cutoff || '').trim());
+    if (!match) throw new Error('截单时间必须是 HH:mm');
+    const cutoffMinutes = Number(match[1]) * 60 + Number(match[2]);
+    return this.minutesOfDayInShanghai(input) < cutoffMinutes;
+  }
 }

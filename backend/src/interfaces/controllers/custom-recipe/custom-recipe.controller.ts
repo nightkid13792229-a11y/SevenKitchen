@@ -362,7 +362,17 @@ export class CustomRecipeController {
       preferredIngredients: order.preferredIngredients,
       dislikedIngredients: order.dislikedIngredients,
       additionalNotes: order.additionalNotes,
-      attachments: order.attachmentsRecords ?? order.attachments ?? [],
+      /**
+       * 顾客端只需要 URL 字符串。
+       * 优先用订单上的 attachmentUrls（备注区上传），
+       * 没有时才从后台附件记录里取 fileUrl。
+       */
+      attachments:
+        Array.isArray(order.attachments) && order.attachments.length > 0
+          ? order.attachments
+          : (order.attachmentsRecords ?? []).map(
+              (record: any) => record.fileUrl,
+            ),
       createdAt: order.createdAt,
       /**
        * 支付时限 + 退款/取消进展（2026-10-04）。

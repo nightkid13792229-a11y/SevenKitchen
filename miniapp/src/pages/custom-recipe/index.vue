@@ -842,7 +842,10 @@ function removeReportImage(report: Record<string, any>, url: string) {
 }
 
 function attachmentExtension(url: unknown): string {
-  const path = String(url || '').split('?')[0].toLowerCase();
+  const raw = String(url || '');
+  const extMatch = raw.match(/[?&]ext=([a-z0-9]+)/i);
+  if (extMatch) return `.${extMatch[1].toLowerCase()}`;
+  const path = raw.split('?')[0].split('#')[0].toLowerCase();
   const dot = path.lastIndexOf('.');
   return dot >= 0 ? path.slice(dot) : '';
 }
@@ -858,9 +861,9 @@ function isDocumentAttachment(url: unknown): boolean {
 }
 
 function attachmentFileLabel(url: unknown): string {
-  const path = String(url || '').split('?')[0].toLowerCase();
-  if (path.endsWith('.pdf')) return 'PDF';
-  if (path.endsWith('.doc') || path.endsWith('.docx')) return 'Word';
+  const ext = attachmentExtension(url);
+  if (ext === '.pdf') return 'PDF';
+  if (ext === '.doc' || ext === '.docx') return 'Word';
   return '文件';
 }
 

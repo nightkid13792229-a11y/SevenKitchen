@@ -249,7 +249,12 @@ export class TencentCosService {
         process.env.API_PUBLIC_BASE_URL ||
         'https://api.sevenkitchen.cloud',
     ).replace(/\/+$/, '');
-    return `${base}/api/v1/media/sensitive/${token}`;
+    // URL 本身不带扩展名，前端无法判断图片/PDF/Word；把扩展名作为 query 传出去
+    const ext = key.split('.').pop()?.toLowerCase() || '';
+    const extQuery = /^[a-z0-9]{1,8}$/.test(ext)
+      ? `?ext=${encodeURIComponent(ext)}`
+      : '';
+    return `${base}/api/v1/media/sensitive/${token}${extQuery}`;
   }
 
   resolveMediaToken(token: string): string | null {

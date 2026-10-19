@@ -800,10 +800,13 @@ const hasUploadedMaterials = computed(() => {
   );
 });
 
-function attachmentExtension(url: string): string {
-  const clean = String(url || '').split('?')[0].split('#')[0];
-  const index = clean.lastIndexOf('.');
-  return index >= 0 ? clean.slice(index).toLowerCase() : '';
+function attachmentExtension(url: unknown): string {
+  const raw = String(url || '');
+  const extMatch = raw.match(/[?&]ext=([a-z0-9]+)/i);
+  if (extMatch) return `.${extMatch[1].toLowerCase()}`;
+  const path = raw.split('?')[0].split('#')[0].toLowerCase();
+  const dot = path.lastIndexOf('.');
+  return dot >= 0 ? path.slice(dot) : '';
 }
 
 function isImageAttachment(url: string): boolean {

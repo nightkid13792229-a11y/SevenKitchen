@@ -845,15 +845,13 @@ describe('custom recipe scheduling · 系统自动排期', () => {
 describe('custom recipe payment copy · 下一步付款与时限', () => {
   const submit = read(`${PAGE_DIR}/index.vue`)
 
-  it('按钮是「下一步：确认订单」，费用说明放在按钮内文字下方', () => {
+  it('按钮是「确认订单」，不再显示费用小字', () => {
     const code = stripComments(submit)
-    expect(code).toContain('下一步：确认订单')
+    expect(code).toContain('确认订单')
     expect(code).not.toContain('submitButtonText')
     expect(code).not.toContain('下一步：支付')
-    // 金额仍来自后台配置，作为按钮的第二行小字，不再单独占一块版面
-    expect(code).toContain('feeAmount')
-    expect(code).toContain('食谱定制费')
-    expect(code).toContain('submit-btn__fee')
+    expect(code).not.toContain('食谱定制费')
+    expect(code).not.toContain('submit-btn__fee')
     expect(code).not.toContain('pre-order-notice')
   })
 
@@ -1596,15 +1594,15 @@ describe('定制页 · 第二轮精简（2026-10-05）', () => {
     expect(read(`${PAGE_DIR}/success.vue`)).toContain('成品抵扣额度')
   })
 
-  it('提交按钮写「下一步：确认订单」，费用小字在按钮文案下方（2026-10-19 老板确认）', () => {
+  it('提交按钮写「确认订单」，不再带费用小字（2026-10-19 老板确认）', () => {
     /**
-     * 定制页按钮不是支付按钮，而是「下一步：确认订单」；
-     * 费用说明作为按钮内的第二行小字，避免单独占一块版面。
+     * 定制页按钮不是支付按钮，而是「确认订单」；
+     * 费用说明和小字均已移除，金额只在确认页支付按钮上展示。
      */
-    expect(code).toContain('下一步：确认订单')
+    expect(code).toContain('确认订单')
     expect(code).not.toContain('支付 ¥300')
-    expect(code).toContain('submit-btn__fee')
-    expect(code).toContain('食谱定制费')
+    expect(code).not.toContain('submit-btn__fee')
+    expect(code).not.toContain('食谱定制费')
     // 支付/下单确实在后面：定制页只跳确认页
     expect(code).toContain('goToOrderConfirm')
     expect(code).not.toContain('requestPayment')

@@ -2716,6 +2716,24 @@ export class CustomRecipeService implements ICustomRecipeRepository {
    * 所以这里只把文件传到 `custom-recipe-attachments/` 并返回 url/key，
    * **不建订单附件记录、不写狗狗档案**；提交时 URL 随订单保存。
    */
+  /**
+   * 给本地草稿里已上传的附件重新签发预览 URL。
+   *
+   * 媒体代理 token 只在当前进程有效，后端重启后旧 URL 会 404；
+   * 前端手里有 COS key，刷新页面时用这个接口换新 URL。
+   */
+  async signDraftAttachmentKeys(
+    keys: string[],
+  ): Promise<Array<{ key: string; url: string }>> {
+    return (keys || [])
+      .map((key) => String(key || '').trim())
+      .filter((key) => key.startsWith('custom-recipe-sensitive-attachments/'))
+      .map((key) => ({
+        key,
+        url: this.cosService.getSensitiveMediaUrl(key, 86400) || '',
+      }));
+  }
+
   async uploadDraftAttachment(
     file: Express.Multer.File,
   ): Promise<{ url: string; key: string }> {

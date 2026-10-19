@@ -159,6 +159,7 @@ import {
   loadCustomRecipeDraft,
   type CustomRecipeDraft,
 } from '@/utils/custom-recipe-draft';
+import { refreshCustomRecipeDraftMedia } from '@/utils/custom-recipe-media';
 import {
   requestCustomRecipeOrderSubscription,
   runCustomRecipePayment,
@@ -468,6 +469,8 @@ async function loadConfirmData() {
     return;
   }
   draft.value = loaded;
+  // 旧本地草稿里的媒体代理 URL 可能已随后端重启失效，先按 key 刷新
+  await refreshCustomRecipeDraftMedia(loaded.form);
   void ensureCurrentFoodOptions();
   void ensureChangeReasonOptions();
   void ensureStomachOptions();

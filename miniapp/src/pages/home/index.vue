@@ -99,7 +99,12 @@
         <text class="custom-recipe-desc">为毛孩子定制个性化专属食谱</text>
       </view>
       <view class="custom-recipe-action">
-        <text class="custom-recipe-action-text">去定制</text>
+        <view class="custom-recipe-action-copy">
+          <text class="custom-recipe-action-text">去定制</text>
+          <text v-if="customRecipeFeeText" class="custom-recipe-action-fee">
+            {{ customRecipeFeeText }}/份
+          </text>
+        </view>
         <text class="custom-recipe-arrow">›</text>
       </view>
     </view>
@@ -386,6 +391,8 @@ import { fetchTastingPacks } from '../../api/tastingPack'
 import { onLoad, onShow, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
 import { request, getToken } from '../../utils/api'
 import { fetchUnreadMessageCount } from '@/api/messages'
+import { fetchPublicConfig } from '@/api/custom-recipe'
+import { formatAmount } from '@/utils/custom-recipe-order'
 import { storeUnreadMessageCount } from '@/utils/unread-message-badge'
 import { getRecipeCoverImageUrl, isKnownStaleRecipeCoverUrl, normalizeImageUrl } from '../../utils/config'
 import { resolveDogProfileEntryRoute } from '../../utils/dog-profile-form'
@@ -465,6 +472,23 @@ const RECIPE_COVER_ORIGINAL_ONLY_STORAGE_KEY = 'home_recipe_cover_original_only_
 const dogs = ref<any[]>([])
 
 // 食谱数据
+const customRecipeFee = ref<number | null>(null)
+const customRecipeFeeText = computed(() =>
+  customRecipeFee.value !== null
+    ? `¥${formatAmount(customRecipeFee.value)}`
+    : '',
+)
+
+async function loadCustomRecipeFee() {
+  try {
+    const config = await fetchPublicConfig()
+    const fee = Number(config?.feeAmount)
+    if (Number.isFinite(fee) && fee > 0) customRecipeFee.value = fee
+  } catch {
+    // 首页价格拿不到不阻塞其它内容；不显示即可
+  }
+}
+
 const recipes = ref<Recipe[]>([])
 const loading = ref(false)
 const hasMore = ref(true)
@@ -642,6 +666,7 @@ onMounted(() => {
   checkLoginStatus()
   loadRecipeCoverOriginalOnlyMap()
   loadHomeHeaderBackground()
+  void loadCustomRecipeFee()
   // 检查是否已关闭过Banner（当天有效）
   const bannerClosed = uni.getStorageSync('loginBannerClosed')
   const bannerClosedDate = uni.getStorageSync('loginBannerClosedDate')
@@ -2029,10 +2054,24 @@ defineOptions({
   border-radius: 999rpx;
 }
 
+.custom-recipe-action-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rpx;
+}
+
 .custom-recipe-action-text {
   font-size: 26rpx;
   font-weight: 700;
   color: #f3eddd;
+}
+
+.custom-recipe-action-fee {
+  font-size: 18rpx;
+  line-height: 1.3;
+  color: rgba(246, 239, 224, 0.78);
+  white-space: nowrap;
 }
 
 .custom-recipe-arrow {

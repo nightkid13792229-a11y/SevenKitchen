@@ -641,16 +641,18 @@
          ① 按钮不默认置灰：随时可点，点击后才校验；缺什么提示并滚到对应板块
          ② 按钮只负责“确认信息 → 订单确认页”，这里不创建订单、不付款
          ③ 金额只出现一次：放在说明里，按钮不显示金额 -->
-    <view v-if="hasSelectedDog" class="submit-section">
-      <button class="submit-btn" @tap="goToOrderConfirm">
-        <text class="submit-btn__label">
-          {{ navigatingToConfirm ? '正在进入…' : '下一步：确认订单' }}
-        </text>
-        <text class="submit-btn__fee">
-          食谱定制费 {{ recipeConfig ? formatAmount(recipeConfig.feeAmount) : '—' }} 元/份，不含原料。
-        </text>
-      </button>
-    </view>
+    <!--
+      用 cover-view 而不是普通 view/button：
+      微信的 textarea 是原生组件，滚动到固定栏下方时会盖在普通 fixed 元素上，
+      导致底栏和按钮看起来半透明。cover-view 才能真正压在原生输入框之上。
+    -->
+    <cover-view v-if="hasSelectedDog" class="submit-section">
+      <cover-view class="submit-btn" @tap="goToOrderConfirm">
+        <cover-view class="submit-btn__label">
+          {{ navigatingToConfirm ? '正在进入…' : '确认订单' }}
+        </cover-view>
+      </cover-view>
+    </cover-view>
   </view>
 </template>
 
@@ -682,6 +684,7 @@ import {
   saveCustomRecipeDraft,
   type CustomRecipeReportDraft,
 } from '@/utils/custom-recipe-draft';
+import { refreshCustomRecipeDraftMedia } from '@/utils/custom-recipe-media';
 import { resolveDogAvatarSrc } from '@/utils/dog-avatar';
 import {
   calculateDogAgeText,
@@ -2201,6 +2204,8 @@ const loadDogArchiveInfo = async (dogId: string) => {
   if (draft) {
     applyCustomRecipeDraft(draft);
     formData.value.dogId = dogId;
+    // 后端重启后旧媒体 token 会失效；用草稿里的 key 换新预览 URL
+    await refreshCustomRecipeDraftMedia(formData.value);
   }
 
   healthSummaryLoading.value = true;
@@ -3724,20 +3729,18 @@ const getBCSText = (bcsScore: number) => {
 }
 
 .submit-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4rpx;
+  display: block;
   width: 100%;
-  height: 116rpx;
-  padding: 10rpx 0;
+  height: 88rpx;
+  line-height: 88rpx;
+  padding: 0;
   font-weight: 700;
   color: var(--sk-gold-soft, #f6efe0);
-  background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
+  background: #1e3a2f;
   border: 1rpx solid var(--sk-gold-bright, #d8bc85);
   border-radius: 999rpx;
   letter-spacing: 0;
+  text-align: center;
 }
 
 .submit-btn__label {
@@ -3746,13 +3749,7 @@ const getBCSText = (bcsScore: number) => {
   letter-spacing: 1rpx;
 }
 
-.submit-btn__fee {
-  font-size: 20rpx;
-  line-height: 1.3;
-  font-weight: 400;
-  color: rgba(246, 239, 224, 0.78);
-  text-align: center;
-}
+
 
 .submit-btn[disabled] {
   color: #cfd4c8;

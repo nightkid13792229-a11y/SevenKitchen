@@ -757,6 +757,28 @@ export class CustomRecipeController {
   }
 
   /**
+   * 重新签发本地草稿附件的预览 URL（2026-10-19）。
+   *
+   * 媒体代理 token 是进程内的，后端重启/多实例后旧 URL 会失效；
+   * 小程序草稿里保存了 COS key，打开页面时可用这个接口刷新。
+   */
+  @Post('draft-attachments/sign')
+  @ApiOperation({ summary: 'Refresh draft attachment preview URLs' })
+  async signDraftAttachmentUrls(
+    @Body() body: { keys?: string[] },
+  ) {
+    const keys = Array.isArray(body?.keys)
+      ? body.keys.map((key) => String(key || '').trim()).filter(Boolean)
+      : [];
+    if (keys.length > 30) {
+      throw new BadRequestException('附件数量异常');
+    }
+    return ApiResponseDto.success(
+      await this.customRecipeService.signDraftAttachmentKeys(keys),
+    );
+  }
+
+  /**
    * Upload attachment
    */
   @Post('upload-attachment')

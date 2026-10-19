@@ -599,6 +599,26 @@ export function toneToClass(tone: string | undefined): string {
 }
 
 /**
+ * 刷新本地草稿附件的预览 URL（2026-10-19）。
+ *
+ * 媒体代理 token 只存在后端进程内，重启后旧 URL 会 404；
+ * 草稿里有 COS key，打开页面时用这个接口换新 token。
+ */
+export async function refreshCustomRecipeDraftAttachmentUrls(
+  keys: string[],
+): Promise<Array<{ key: string; url: string }>> {
+  if (!Array.isArray(keys) || keys.length === 0) return [];
+  const res = await request({
+    url: '/custom-recipe/draft-attachments/sign',
+    method: 'POST',
+    data: { keys },
+    quiet: true,
+    suppressErrorToast: true,
+  });
+  return Array.isArray(res?.data) ? res.data : [];
+}
+
+/**
  * 上传备注区附件草稿（2026-10-19）。
  *
  * 订单还没创建，所以不传 orderId；后端只做登录/大小/类型校验，

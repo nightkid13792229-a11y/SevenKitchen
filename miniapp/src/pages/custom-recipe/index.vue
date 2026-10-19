@@ -648,9 +648,7 @@
     -->
     <cover-view v-if="hasSelectedDog" class="submit-section">
       <cover-view class="submit-btn" @tap="goToOrderConfirm">
-        <cover-view class="submit-btn__label">
-          {{ navigatingToConfirm ? '正在进入…' : '确认订单' }}
-        </cover-view>
+        {{ navigatingToConfirm ? '正在进入…' : '确认订单' }}
       </cover-view>
     </cover-view>
   </view>
@@ -3732,21 +3730,17 @@ const getBCSText = (bcsScore: number) => {
   display: block;
   width: 100%;
   height: 88rpx;
-  line-height: 88rpx;
+  line-height: 86rpx;
   padding: 0;
+  box-sizing: border-box;
+  font-size: 30rpx;
   font-weight: 700;
   color: var(--sk-gold-soft, #f6efe0);
   background: #1e3a2f;
   border: 1rpx solid var(--sk-gold-bright, #d8bc85);
   border-radius: 999rpx;
-  letter-spacing: 0;
-  text-align: center;
-}
-
-.submit-btn__label {
-  font-size: 30rpx;
-  line-height: 1.2;
   letter-spacing: 1rpx;
+  text-align: center;
 }
 
 

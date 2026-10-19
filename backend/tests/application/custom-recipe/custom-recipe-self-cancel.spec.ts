@@ -235,7 +235,7 @@ describe('CustomRecipeService · 顾客自助取消', () => {
     expect(args.where.bookedCount).toEqual({ gt: 0 });
   });
 
-  it('顾客自己付款成功时也会发通知，且回调重试不会重复发', async () => {
+  it('付款成功不再发 PAID 订阅消息，把唯一一次订阅留给交付通知', async () => {
     mockPrismaService.customRecipeOrder.updateMany.mockResolvedValue({
       count: 1,
     });
@@ -248,11 +248,7 @@ describe('CustomRecipeService · 顾客自助取消', () => {
 
     await service.confirmPaymentFromWechat('CR202609280001', 'tx-1');
 
-    expect(notification).toHaveBeenCalledWith(
-      'openid-1',
-      'CR202609280001',
-      'PAID',
-    );
+    expect(notification).not.toHaveBeenCalled();
   });
 
   it('已经付过款的重复回调不再发通知', async () => {

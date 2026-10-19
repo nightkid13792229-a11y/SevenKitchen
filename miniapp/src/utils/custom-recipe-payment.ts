@@ -96,10 +96,9 @@ export async function runCustomRecipePayment(
 ): Promise<CustomRecipePayOutcome> {
   let payParams: CustomRecipePayParams | null = null;
 
-  // 付款前再申请一次订阅（用于「已付款」那条通知）。
-  // 必须在这个位置：订阅申请要由用户点击触发，而这里正是「立即付款」的点击处理里。
-  await requestCustomRecipeOrderSubscription();
-
+  // 不在付款前再申请一次订阅：顾客提交订单时已经申请过一次，
+  // 这一张一次性订阅专门留给「已交付」通知。再申请一次会多一个弹窗/等待，
+  // 且付款时的「已付款」通知会消耗掉唯一一次订阅，导致交付时收不到。
   try {
     const payRes = await payCustomRecipeOrder(orderId);
     if (payRes.code !== 0 || !payRes.data) {

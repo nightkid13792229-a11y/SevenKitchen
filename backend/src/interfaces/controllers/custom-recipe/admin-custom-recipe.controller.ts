@@ -440,18 +440,8 @@ export class AdminCustomRecipeController {
       console.error('[AdminCustomRecipe] 确认收款后档案同步失败:', error);
     }
 
-    // Send WeChat notification
-    if (order.customer?.wechatOpenid) {
-      await this.wechatService
-        .sendCustomRecipeOrderNotification(
-          order.customer.wechatOpenid,
-          order.orderId,
-          'PAID',
-        )
-        .catch((error) => {
-          console.error('Failed to send WeChat notification:', error);
-        });
-    }
+    // 微信一次性订阅留给「已交付」通知，这里不再发「已付款」，
+    // 否则会消耗顾客提交订单时唯一的一次订阅授权。
 
     return ApiResponseDto.success({
       status: 'PAID',

@@ -931,25 +931,13 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     const alreadyPaid = result.count === 0;
 
     /**
-     * 顾客实际付款成功（微信回调走到这里）时也发一条通知。
-     * 只在"这次真的把状态推进了"时发，避免回调重试重复打扰。
+     * 微信订阅消息是一次性的，一次授权只能发一条。
+     *
+     * 顾客在提交定制订单时只申请了一次订阅，这次授权**专门留给「已交付」**；
+     * 这里不能再发「已付款」，否则会把唯一一次订阅消耗掉，
+     * 真正交付时顾客反而收不到通知。
+     * 付款成功在订单详情/站内消息里仍然可见。
      */
-    if (!alreadyPaid && order?.customer?.wechatOpenid && this.wechatService) {
-      await this.wechatService
-        .sendCustomRecipeOrderNotification(
-          order.customer.wechatOpenid,
-          order.orderId,
-          'PAID',
-        )
-        .catch((error: any) => {
-          // 通知失败不能影响支付结果落库
-          console.error(
-            '[CustomRecipe] 支付成功通知发送失败:',
-            error?.message ?? error,
-          );
-        });
-    }
-
     /**
      * 2026-10-19：付款成功后才把这一单写进狗狗档案。
      * 同步失败不能影响支付结果 —— 钱已经收了；留 healthInfoSyncedAt=null

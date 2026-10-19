@@ -6,10 +6,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  */
 
 /**
- * 付款流程会先拉一次公开配置（申请订阅消息授权）。
- * 为了不让这条请求打乱各用例的响应队列，这里用一个包装器：
- *   · `/custom-recipe-config` 由包装器直接应答（未配置模板 → 跳过订阅申请）
- *   · 其它请求转给 innerRequest，测试仍按顺序喂响应
+ * 订阅授权只在提交订单时申请一次，留给「已交付」通知；
+ * 付款流程本身不再请求配置/订阅，因此请求队列直接喂支付与同步接口。
  */
 const innerRequest = vi.fn()
 
@@ -29,7 +27,6 @@ let requestPaymentImpl: (options: any) => void = () => {}
 
 ;(globalThis as any).uni = {
   requestPayment: (options: any) => requestPaymentImpl(options),
-  // 付款前会申请一次订阅授权（订阅一次只能发一条通知，所以付款时补申请）
   requestSubscribeMessage: (options: any) => options?.complete?.(),
 }
 

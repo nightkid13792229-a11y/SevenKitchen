@@ -95,14 +95,13 @@ describe('定制订单 · 取消退款与通知守卫', () => {
     expect(order).toContain('restoreCredit({');
   });
 
-  it('顾客付款成功时也发通知（原先只有客服点按钮才发）', () => {
+  it('付款成功不再发订阅消息，把唯一一次订阅留给已交付通知', () => {
     const service = backend(
       'src/application/custom-recipe/custom-recipe.service.ts',
     );
 
-    expect(service).toContain("sendCustomRecipeOrderNotification(");
-    expect(service).toContain("'PAID'");
-    expect(service).toContain('if (!alreadyPaid');
+    expect(service).not.toContain('sendCustomRecipeOrderNotification(');
+    expect(service).toContain('唯一一次订阅');
   });
 
   it('公开配置会把订阅模板 ID 带给小程序（未配置则为 null）', () => {
@@ -155,18 +154,18 @@ describe('定制订单 · 取消退款与通知守卫', () => {
     expect(stateResolver).toContain('CustomRecipeStatus.PENDING_PAYMENT');
 
     /**
-     * 订阅授权要在**两个时刻**各申请一次：
-     * 微信的订阅消息"订阅一次只能下发一条"，而我们会在「已付款」和「已交付」
-     * 两个时刻各发一条。只申请一次的话第二条会被微信以 43101 拒掉。
+     * 订阅只申请一次，并留给「已交付」：
+     * 微信的一次性订阅一次授权只能下发一条，付款时再申请会多一个弹窗/等待，
+     * 且「已付款」会消耗掉唯一一次订阅，导致交付通知发不出去。
      */
     const paymentUtil = miniapp('src/utils/custom-recipe-payment.ts');
 
-    // 2026-10-19：提交从定制页挪到订单确认页，但「提交时申请一次」的意图不变
+    // 提交订单时申请一次（2026-10-19 从定制页挪到订单确认页）
     expect(confirmPage).toContain('requestCustomRecipeOrderSubscription');
     expect(paymentUtil).toContain('export async function requestCustomRecipeOrderSubscription');
     expect(paymentUtil).toContain('uni.requestSubscribeMessage');
-    // 付款前再申请一次（用户点击「立即付款」的那一刻）
-    expect(paymentUtil).toContain('await requestCustomRecipeOrderSubscription();');
+    // 付款前不再申请第二次
+    expect(paymentUtil).not.toContain('await requestCustomRecipeOrderSubscription();');
     // 没配模板就不做无意义的失败调用
     expect(paymentUtil).toContain('if (!templateId) return;');
   });

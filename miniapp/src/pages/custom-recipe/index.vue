@@ -221,6 +221,9 @@
 
     <!-- 第一步：体重管理（2026-10-05 老板要求：标题由"定制目标"改为"体重管理"，
          并删掉标题下方重复的"体重管理"四个字） -->
+    <view v-if="hasSelectedDog" class="required-legend">
+      带 <text class="intake-required">*</text> 的为必填项，未标 * 的为选填
+    </view>
     <view v-if="hasSelectedDog" id="custom-weight" class="section">
       <view class="section-title">
         <text class="step-number">1</text>
@@ -243,7 +246,7 @@
 
         <template v-else>
           <view class="goal-ask">
-            <text class="goal-ask__question">想帮它减重、维持，还是增重？</text>
+            <text class="goal-ask__question">想帮它减重、维持，还是增重？<text class="intake-required">*</text></text>
             <view class="goal-ask__options">
               <text
                 v-for="option in weightGoalOptions"
@@ -279,7 +282,7 @@
 
       <view class="health-item">
         <view class="goal-ask">
-          <text class="goal-ask__question">小家伙是否对部分食物过敏？</text>
+          <text class="goal-ask__question">小家伙是否对部分食物过敏？<text class="intake-required">*</text></text>
           <view class="goal-ask__options">
             <text
               class="goal-ask__option"
@@ -302,7 +305,7 @@
                顾客自己写、报告识别结果都进这一段；营养师在后台看原文。
                快捷标签和全局词表不再出现在顾客侧。 -->
           <view class="allergy-text">
-            <text class="allergy-text__label">过敏食物（不能吃的）</text>
+            <text class="allergy-text__label">过敏食物（不能吃的）<text class="intake-required">*</text></text>
             <textarea
               v-model="formData.allergyText"
               class="allergy-text__input"
@@ -507,6 +510,10 @@
             @tap="selectCurrentFood(opt.code)"
           >{{ opt.label }}</text>
         </view>
+        <text
+          v-if="formData.currentFoodMain === 'OTHER'"
+          class="intake-other-label"
+        >补充说明<text class="intake-required">*</text></text>
         <input
           v-if="formData.currentFoodMain === 'OTHER'"
           v-model="formData.currentFoodOther"
@@ -530,6 +537,10 @@
           >{{ opt.label }}</text>
         </view>
         <!-- 选「其他」才出现输入框：不选就不占版面 -->
+        <text
+          v-if="formData.changeReasons.includes('OTHER')"
+          class="intake-other-label"
+        >补充说明<text class="intake-required">*</text></text>
         <input
           v-if="formData.changeReasons.includes('OTHER')"
           v-model="formData.changeReasonOther"
@@ -552,6 +563,10 @@
             @tap="toggleStomach(opt.code)"
           >{{ opt.label }}</text>
         </view>
+        <text
+          v-if="formData.stomachConditions.includes('OTHER')"
+          class="intake-other-label"
+        >补充说明<text class="intake-required">*</text></text>
         <input
           v-if="formData.stomachConditions.includes('OTHER')"
           v-model="formData.stomachOther"
@@ -2204,21 +2219,23 @@ const loadDogArchiveInfo = async (dogId: string) => {
     healthSummaryLoadFailed.value = false;
     summaryLoaded = true;
 
+    const summaryAllergies = Array.isArray(summary.allergies)
+      ? [...summary.allergies]
+      : [];
+    // 2026-10-19：档案里的自由文本 + 结构化记录都带出来，合并成一段文本
+    const profileText = String(
+      detailRes?.data?.profile?.allergyFoods ||
+        selectedDog.value?.allergyFoods ||
+        '',
+    ).trim();
+    const archiveAllergyText = mergeAllergyText(
+      profileText,
+      summaryAllergies.join('、'),
+    );
+
     if (!draft) {
-      const summaryAllergies = Array.isArray(summary.allergies)
-        ? [...summary.allergies]
-        : [];
       formData.value.allergies = summaryAllergies;
-      // 2026-10-19：档案里的自由文本 + 结构化记录都带出来，合并成一段文本
-      const profileText = String(
-        detailRes?.data?.profile?.allergyFoods ||
-          selectedDog.value?.allergyFoods ||
-          '',
-      ).trim();
-      formData.value.allergyText = mergeAllergyText(
-        profileText,
-        summaryAllergies.join('、'),
-      );
+      formData.value.allergyText = archiveAllergyText;
       prefilledAllergyText.value = formData.value.allergyText;
       // 档案里已经有过敏信息 → 这一问默认答"有过敏"（本来就是事实，
       // 让家长再答一遍反而是多一道题）；档案里没有就保持未答，等他选
@@ -2230,6 +2247,21 @@ const loadDogArchiveInfo = async (dogId: string) => {
       // 口味偏好：档案里的两个字段（2026-09-27 才在「健康管理」页有了入口）
       formData.value.preferredIngredients = splitFoodText(summary.preferredFoods);
       formData.value.dislikedIngredients = splitFoodText(summary.pickyFoods);
+    } else if (
+      /**
+       * 旧版本/旧草稿自愈（2026-10-19）：
+       * 草稿里已经选了「有过敏」，但过敏食物为空，也没有“从档案带出”的记录，
+       * 而档案里实际有过敏记录 —— 这通常是旧版草稿留下的半空状态。
+       * 只在“文本确实为空、且用户没有从档案带出过”时补，绝不覆盖用户自己填的内容。
+       */
+      hasFoodAllergy.value === true &&
+      !formData.value.allergyText.trim() &&
+      !prefilledAllergyText.value.trim() &&
+      archiveAllergyText
+    ) {
+      formData.value.allergies = summaryAllergies;
+      formData.value.allergyText = archiveAllergyText;
+      prefilledAllergyText.value = archiveAllergyText;
     }
   } catch (error) {
     // 读不到档案不能挡住定制：保持草稿 / 清空后的状态，让顾客自己填
@@ -3715,6 +3747,20 @@ const getBCSText = (bcsScore: number) => {
   color: #3f3222;
   font-weight: 700;
   margin-bottom: 16rpx;
+}
+
+.required-legend {
+  margin: 0 24rpx 12rpx;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #8a7a63;
+}
+
+.intake-other-label {
+  display: block;
+  margin: 14rpx 0 8rpx;
+  font-size: 22rpx;
+  color: #6b6653;
 }
 
 .intake-required {

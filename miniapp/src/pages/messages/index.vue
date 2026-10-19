@@ -8,21 +8,6 @@
     </view>
 
     <template v-else>
-      <!--
-        四档筛选（老板 2026-10-18 定）：
-        全部 / 交付 / 售后 / 物流。
-        顾客来消息中心只有这几种心思 —— "食谱到了吗""售后怎么样""货到哪了"。
-      -->
-      <view class="filter-bar">
-        <text
-          v-for="tab in TABS"
-          :key="tab.key"
-          class="filter-tab"
-          :class="{ 'filter-tab--active': activeTab === tab.key }"
-          @tap="switchTab(tab.key)"
-        >{{ tab.label }}</text>
-      </view>
-
       <view v-if="unreadCount > 0" class="read-all-bar">
         <text class="read-all-text">{{ unreadCount }} 条未读</text>
         <text class="read-all-action" @tap="handleReadAll">全部已读</text>
@@ -97,19 +82,11 @@ import { storeUnreadMessageCount } from '@/utils/unread-message-badge';
  * 未知类型：只标已读，不跳转（宁可不动，也不要跳到错误页面）。
  */
 
-const TABS = [
-  { key: 'ALL', label: '全部' },
-  { key: 'DELIVERY', label: '交付' },
-  { key: 'AFTERSALE', label: '售后' },
-  { key: 'SHIPPING', label: '物流' },
-] as const;
-
 const PAGE_SIZE = 20;
 
 const hasToken = ref(false);
 const loading = ref(true);
 const messages = ref<CustomerMessage[]>([]);
-const activeTab = ref<string>('ALL');
 const unreadCount = ref(0);
 const offset = ref(0);
 const hasMore = ref(false);
@@ -170,9 +147,7 @@ async function loadFirstPage() {
   }
   loading.value = true;
   try {
-    const category = activeTab.value === 'ALL' ? null : activeTab.value;
     const result = await fetchMessages({
-      category,
       limit: PAGE_SIZE,
       offset: 0,
     });
@@ -187,24 +162,13 @@ async function loadFirstPage() {
 
 async function loadMore() {
   if (!hasMore.value) return;
-  const category = activeTab.value === 'ALL' ? null : activeTab.value;
   const result = await fetchMessages({
-    category,
     limit: PAGE_SIZE,
     offset: offset.value,
   });
   messages.value = [...messages.value, ...result.items];
   hasMore.value = result.hasMore;
   offset.value = messages.value.length;
-}
-
-function switchTab(key: string) {
-  if (activeTab.value === key) return;
-  activeTab.value = key;
-  messages.value = [];
-  offset.value = 0;
-  hasMore.value = false;
-  void loadFirstPage();
 }
 
 /**
@@ -325,30 +289,6 @@ onPullDownRefresh(async () => {
   border-radius: 16rpx;
   padding: 0 60rpx;
   line-height: 72rpx;
-}
-
-.filter-bar {
-  display: flex;
-  gap: 12rpx;
-  padding: 20rpx 24rpx 12rpx;
-}
-
-.filter-tab {
-  flex: 1;
-  text-align: center;
-  font-size: 25rpx;
-  color: #6e5f4b;
-  background: #fff;
-  border: 2rpx solid #ede0d0;
-  border-radius: 16rpx;
-  padding: 14rpx 0;
-}
-
-.filter-tab--active {
-  background: #fff1e3;
-  border-color: #e5c9a3;
-  color: #b45309;
-  font-weight: 700;
 }
 
 .read-all-bar {

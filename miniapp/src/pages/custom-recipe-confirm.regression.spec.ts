@@ -55,6 +55,18 @@ describe('定制页 → 订单确认页（2026-10-19 老板确认）', () => {
     expect(confirm).toContain('/pages/custom-recipe/success?');
   });
 
+  it('定制页不显示预计交付和抵扣；确认页显示交付与可抵扣金额', () => {
+    expect(page).not.toContain('pre-order-notice__date');
+    expect(page).not.toContain('付完可全额抵扣');
+    expect(confirm).toContain('预计');
+    expect(confirm).toContain('当前可抵扣');
+    expect(confirm).toContain('creditText');
+  });
+
+  it('附件预览窗上方不再显示“点图片看大图”说明', () => {
+    expect(page).not.toContain('点图片看大图；右上角的 × 可以删除这一张。');
+  });
+
   it('健康档案只读块：空态/最近就诊/最近体检/去补填/返回刷新', () => {
     expect(page).toContain('id="custom-health"');
     expect(page).toContain('没有任何就诊和体检记录');

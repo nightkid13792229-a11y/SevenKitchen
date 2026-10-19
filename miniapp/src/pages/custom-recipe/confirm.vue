@@ -69,7 +69,7 @@
           <text class="delivery-value">{{ deliveryText }}</text>
         </view>
         <view class="price-note">
-          定价含营养师一对一设计，不含食材；付完可全额抵扣成品鲜食。
+          定价含营养师一对一设计，不含食材；付完可全额抵扣成品鲜食，当前可抵扣 ¥{{ creditText }}。
         </view>
       </view>
 
@@ -214,6 +214,7 @@ const attachmentText = computed(() => {
 });
 
 const feeText = computed(() => formatAmount(config.value?.feeAmount ?? 0));
+const creditText = computed(() => formatAmount(config.value?.creditAmount ?? 0));
 
 const deliveryText = computed(() => {
   const date = delivery.value?.estimatedDeliveryDate;

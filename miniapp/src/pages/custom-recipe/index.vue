@@ -335,9 +335,6 @@
             <text class="allergy-reports__title">
               本次上传的报告
             </text>
-            <text class="allergy-reports__hint">
-              点图片看大图；右上角的 × 可以删除这一张。
-            </text>
             <view
               v-for="(report, index) in formData.reportDrafts"
               :key="`draft-${index}`"
@@ -620,14 +617,10 @@
       </view>
     </view>
 
-    <!-- 交付与抵扣这一整块**已删除**（老板 2026-10-05 拍板）。
-         两个原因：
-           ① 提交前这里显示的"预计交付"是前端按"今天 + N 个工作日"估的参考值，
-              **不含节假日**，国庆期间必然偏早（实测页面显示 10/8，后端实际排到 10/10）
-              —— 与确认页给的权威日期打架，不如不显示；
-           ② 确认页（提交成功页）已经完整显示「预计交付」与「成品抵扣额度 + 说明」，
-              这一块本来就是重复的。
-         权威日期与抵扣，顾客提交后在确认页看到。 -->
+    <!-- 2026-10-19 老板确认：
+         预计交付日期只在订单确认页展示，定制页不再显示；
+         成品抵扣说明也只放在订单确认页。
+         定制页底部只保留定制费说明（不提抵扣）和「确认信息」按钮。 -->
 
     <!-- 底部确认条（2026-10-19 老板确认）
          ① 按钮不默认置灰：随时可点，点击后才校验；缺什么提示并滚到对应板块
@@ -635,12 +628,9 @@
          ③ 金额只出现一次：放在说明里，按钮不显示金额 -->
     <view v-if="hasSelectedDog" class="submit-section">
       <view class="pre-order-notice">
-        <text v-if="estimatedDeliveryText" class="pre-order-notice__date">
-          {{ estimatedDeliveryText }}
-        </text>
         <text class="pre-order-notice__price">
           <text v-if="recipeConfig">定制费 ¥{{ formatAmount(recipeConfig.feeAmount) }} · </text>
-          定价含营养师一对一设计，不含食材；付完可全额抵扣成品鲜食。
+          定价含营养师一对一设计，不含食材。
         </text>
       </view>
 
@@ -657,7 +647,6 @@ import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue';
 import {
   fetchMyOrders,
   fetchDogHealthSummary,
-  fetchNextDeliveryDate,
   uploadCustomRecipeDraftAttachment,
 } from '@/api/custom-recipe';
 import { onHide, onLoad, onShow } from '@dcloudio/uni-app';
@@ -1272,42 +1261,6 @@ watch(
   { deep: true },
 );
 onUnmounted(() => flushDraftNow());
-
-/**
- * 预估交付日期文案（2026-10-18 · 需求 2.3.5）
- *
- * 顾客提交**之前**就要看到"预计几号能收到" —— 此前对 ¥300 毫无解释。
- *
- * ⚠️ 日期**由后端给**（需求写死："前端不做日期推算"）。
- * 拿不到就整行不显示 —— 宁可不写，也别写一个猜的日期骗人。
- */
-const estimatedDeliveryText = ref('');
-const deliveryWorkDays = ref(0);
-
-async function loadEstimatedDelivery() {
-  try {
-    const result = await fetchNextDeliveryDate();
-    deliveryWorkDays.value = Number(result.deliveryWorkDays) || 0;
-    if (result.estimatedDeliveryDate) {
-      estimatedDeliveryText.value = `预计 ${formatDeliveryDate(
-        result.estimatedDeliveryDate,
-      )} 交付`;
-    }
-  } catch {
-    // 拿不到就不显示 —— 不编日期
-    estimatedDeliveryText.value = '';
-  }
-}
-
-/** `2026-10-20` → `10 月 20 日（周二）` */
-function formatDeliveryDate(value: string): string {
-  const parts = value.split('-').map(Number);
-  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return '';
-  const [year, month, day] = parts;
-  const date = new Date(year, month - 1, day);
-  const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-  return `${month} 月 ${day} 日（${weekdays[date.getDay()]}）`;
-}
 
 /**
  * 需求 2.3.4 的三组选项（2026-10-18）。
@@ -2411,11 +2364,10 @@ async function previewAttachment(url: string) {
 }
 
 onMounted(() => {
-  // 2026-10-18：需求 2.3.4 的三组选项 + 2.3.5 的预估交付日期
+  // 2026-10-18：需求 2.3.4 的三组选项
   void ensureCurrentFoodOptions();
   void ensureChangeReasonOptions();
   void ensureStomachOptions();
-  void loadEstimatedDelivery();
 });
 
 /**
@@ -3425,16 +3377,6 @@ const getBCSText = (bcsScore: number) => {
   color: #8a7a63;
 }
 
-/* "多页照片合并成一份"的说明：老板反馈"传了两份只显示一份"，
-   把规则写出来，家长才不会以为另一张丢了 */
-.allergy-reports__hint {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 22rpx;
-  line-height: 1.5;
-  color: #a09a7d;
-}
-
 /* 报告的小预览窗口（2026-10-05 老板要求）：点开看大图，右侧可删（弹窗确认） */
 .allergy-reports__thumbs {
   display: flex;
@@ -3783,12 +3725,6 @@ const getBCSText = (bcsScore: number) => {
   flex-direction: column;
   gap: 8rpx;
   padding: 0 8rpx 18rpx;
-}
-
-.pre-order-notice__date {
-  font-size: 26rpx;
-  font-weight: 700;
-  color: #3f3222;
 }
 
 .pre-order-notice__price {

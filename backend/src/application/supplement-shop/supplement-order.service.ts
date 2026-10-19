@@ -142,6 +142,8 @@ export interface SupplementOrderView {
   amountGoods: number;
   amountShipping: number;
   amountTotal: number;
+  /** 员工端：金额字段已被后端脱敏，前端不要展示金额区 */
+  amountsRedacted?: boolean;
   shippingDescription: string | null;
   receiverName: string;
   receiverPhone: string;
@@ -192,6 +194,10 @@ export interface SupplementLabel {
   storageCondition: string;
   sourceProduct: string;
   sourceExpiryDate: string;
+  /** 标签「用法」：按制作单的每日用量生成 */
+  usageText: string;
+  /** 标签「分装者」：第一版用品牌名，后续可接操作人 */
+  packerName: string;
   disclaimer: string;
 }
 
@@ -414,6 +420,7 @@ export class SupplementOrderService {
   /** 后台：所有补剂订单 */
   async listAllOrders(
     query: ListSupplementOrdersQuery = {},
+    actor: { role?: string } = {},
   ): Promise<{ items: SupplementOrderView[]; total: number; page: number; pageSize: number }> {
     const { skip, take, page, pageSize } = this.normalizePaging(query);
     const keyword = (query.keyword || '').trim();
@@ -452,14 +459,19 @@ export class SupplementOrderService {
     ]);
 
     return {
-      items: rows.map((row) => this.toOrderView(row)),
+      items: rows.map((row) =>
+        this.toOrderView(row, actor.role === 'STAFF'),
+      ),
       total,
       page,
       pageSize,
     };
   }
 
-  async getOrderById(orderId: string): Promise<SupplementOrderView> {
+  async getOrderById(
+    orderId: string,
+    actor: { role?: string } = {},
+  ): Promise<SupplementOrderView> {
     const order = await this.prisma.supplementOrder.findUnique({
       where: { id: orderId },
       include: { items: { orderBy: { createdAt: 'asc' } } },
@@ -467,7 +479,7 @@ export class SupplementOrderService {
     if (!order) {
       throw new NotFoundException(`补剂订单不存在: ${orderId}`);
     }
-    return this.toOrderView(order);
+    return this.toOrderView(order, actor.role === 'STAFF');
   }
 
   // ---------------- 后台：收款 / 分装 / 发货 / 售后 ----------------
@@ -952,6 +964,8 @@ export class SupplementOrderService {
             .filter(Boolean)
             .join(' · '),
           sourceExpiryDate: this.toDateText(item.sourceExpiryDate),
+          usageText: `每日 ${formatAmount(item.requestedAmount)}${item.unit}`,
+          packerName: config.labelBrandName || '赛文的食堂',
           disclaimer: config.labelIncludeDesiccantNotice
             ? `${LABEL_DISCLAIMER}；${LABEL_DESICCANT_NOTICE}`
             : LABEL_DISCLAIMER,
@@ -1590,7 +1604,8 @@ export class SupplementOrderService {
     return { page, pageSize, skip: (page - 1) * pageSize, take: pageSize };
   }
 
-  private toOrderView(row: {
+  private toOrderView(
+    row: {
     id: string;
     orderNo: string;
     status: string;
@@ -1648,7 +1663,9 @@ export class SupplementOrderService {
       packedExpiryDate: Date | null;
       packedAt: Date | null;
     }>;
-  }): SupplementOrderView {
+  },
+  redact = false,
+  ): SupplementOrderView {
     const address = (row.shippingAddressSnapshot || {}) as {
       recipientName?: string;
       phone?: string;
@@ -1662,12 +1679,13 @@ export class SupplementOrderService {
       orderNo: row.orderNo,
       status: row.status,
       bagCount: row.bagCount,
-      amountSupplement: Number(row.amountSupplement),
-      amountServiceFee: Number(row.amountServiceFee),
-      amountPackaging: Number(row.amountPackaging),
-      amountGoods: Number(row.amountGoods),
-      amountShipping: Number(row.amountShipping),
-      amountTotal: Number(row.amountTotal),
+      amountSupplement: redact ? 0 : Number(row.amountSupplement),
+      amountServiceFee: redact ? 0 : Number(row.amountServiceFee),
+      amountPackaging: redact ? 0 : Number(row.amountPackaging),
+      amountGoods: redact ? 0 : Number(row.amountGoods),
+      amountShipping: redact ? 0 : Number(row.amountShipping),
+      amountTotal: redact ? 0 : Number(row.amountTotal),
+      amountsRedacted: redact || undefined,
       shippingDescription: row.shippingDescription,
       receiverName: address.recipientName ?? '',
       receiverPhone: address.phone ?? '',
@@ -1688,14 +1706,15 @@ export class SupplementOrderService {
       paidAt: row.paidAt ? row.paidAt.toISOString() : null,
       aftersaleType: row.aftersaleType,
       aftersaleReason: row.aftersaleReason,
-      refundStatus: row.refundStatus,
-      refundAmount:
-        row.refundAmount === null || row.refundAmount === undefined
+      refundStatus: redact ? null : row.refundStatus,
+      refundAmount: redact
+        ? null
+        : row.refundAmount === null || row.refundAmount === undefined
           ? null
           : Number(row.refundAmount),
-      refundOutNo: row.refundOutNo,
-      refundId: row.refundId,
-      refundReason: row.refundReason,
+      refundOutNo: redact ? null : row.refundOutNo,
+      refundId: redact ? null : row.refundId,
+      refundReason: redact ? null : row.refundReason,
       refundedAt: row.refundedAt ? row.refundedAt.toISOString() : null,
       reshipFromOrderNo: row.reshipFromOrderNo,
       trackingNumber: row.trackingNumber,
@@ -1712,9 +1731,9 @@ export class SupplementOrderService {
         unit: item.unit,
         requestedAmount: item.requestedAmount,
         packedAmount: item.packedAmount,
-        unitCost: Number(item.unitCost),
-        cost: Number(item.cost),
-        price: Number(item.price),
+        unitCost: redact ? 0 : Number(item.unitCost),
+        cost: redact ? 0 : Number(item.cost),
+        price: redact ? 0 : Number(item.price),
         bags: item.bags,
         shelfLifeMonths: item.shelfLifeMonths,
         storageCondition: item.storageCondition,

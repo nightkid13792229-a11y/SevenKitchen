@@ -5,7 +5,7 @@ import * as path from 'path';
 import type { SupplementLabel } from '../application/supplement-shop/supplement-order.service';
 
 /**
- * 补剂分装标签（60×40mm）图片渲染。
+ * 补剂分装标签（40×60mm 竖版）图片渲染。
  *
  * 为什么不复用 LabelService：鲜食标签是 70×100mm 的另一套版式（食谱名 / 原料表 /
  * 营养成分 / 烹饪建议），两者的画布尺寸、字号、行距都是各自贴纸打样定死的。
@@ -28,10 +28,10 @@ function mmToPx(mm: number): number {
 }
 
 /**
- * 标签几何（毫米）。60×40mm 按 8px/mm 正好落在 480×320px。
+ * 标签几何（毫米）。40×60mm 按 8px/mm 正好落在 320×480px。
  */
 export const SUPPLEMENT_LABEL_LAYOUT = {
-  canvas: { widthMm: 60, heightMm: 40 },
+  canvas: { widthMm: 40, heightMm: 60 },
   margin: {
     leftMm: 2,
     rightMm: 2,
@@ -74,7 +74,10 @@ const LINE_ADVANCE_MM = {
   expiry: 3.75,
   batchOrder: 3.25,
   source: 3.1,
-  disclaimer: 3.15,
+  storage: 3.0,
+  usage: 3.0,
+  packer: 3.0,
+  disclaimer: 3.05,
 } as const;
 
 /** 各处字号（mm 高度），同样来自打样图 */
@@ -86,7 +89,10 @@ const FONT_SIZE_MM = {
   expiry: 3.0,
   batchOrder: 2.2,
   source: 2.3,
-  disclaimer: 2.1,
+  storage: 2.1,
+  usage: 2.1,
+  packer: 2.0,
+  disclaimer: 2.0,
 } as const;
 
 /**
@@ -167,6 +173,15 @@ export function buildSupplementLabelLines(
     advanceMm: LINE_ADVANCE_MM.expiry,
   });
 
+  // 储存条件：顾客收货后最常回看的一行
+  lines.push({
+    text: `储存 ${label.storageCondition}`,
+    fontSizeMm: FONT_SIZE_MM.storage,
+    bold: false,
+    align: 'left',
+    advanceMm: LINE_ADVANCE_MM.storage,
+  });
+
   // 第 7 行：批号 + 订单号。批号是选填的，为空时只留订单号，
   // 不能出现「批号 」这种后面什么都没有的空标签。
   const batchNo = (label.batchNo ?? '').trim();
@@ -191,7 +206,22 @@ export function buildSupplementLabelLines(
     });
   }
 
-  // 第 9 行：安全提示。文案偏长，渲染时按可用宽度自动换行。
+  lines.push({
+    text: `用法 ${label.usageText}`,
+    fontSizeMm: FONT_SIZE_MM.usage,
+    bold: false,
+    align: 'left',
+    advanceMm: LINE_ADVANCE_MM.usage,
+  });
+  lines.push({
+    text: `分装者 ${label.packerName}`,
+    fontSizeMm: FONT_SIZE_MM.packer,
+    bold: false,
+    align: 'left',
+    advanceMm: LINE_ADVANCE_MM.packer,
+  });
+
+  // 安全提示。文案偏长，渲染时按可用宽度自动换行。
   const disclaimer = (label.disclaimer ?? '').trim();
   if (disclaimer) {
     lines.push({

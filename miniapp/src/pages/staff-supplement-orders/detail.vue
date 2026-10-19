@@ -122,30 +122,21 @@
         </button>
       </view>
 
-      <!-- 金额 -->
-      <view class="card">
-        <view class="info-row">
-          <text class="info-label">补剂费</text>
-          <text class="info-value">¥{{ order.amountSupplement.toFixed(2) }}</text>
+      <!-- 分装日：已付款未分装时可设置/改期 -->
+      <view v-if="order.status === 'PAID'" class="card">
+        <view class="section-head">
+          <text class="section-title">分装日</text>
+          <text class="section-sub">{{ order.packingDate || '未排期' }}</text>
         </view>
-        <view class="info-row">
-          <text class="info-label">分装服务费</text>
-          <text class="info-value">¥{{ order.amountServiceFee.toFixed(2) }}</text>
-        </view>
-        <view v-if="order.amountPackaging > 0" class="info-row">
-          <text class="info-label">包材费</text>
-          <text class="info-value">¥{{ order.amountPackaging.toFixed(2) }}</text>
-        </view>
-        <view class="info-row">
-          <text class="info-label">运费</text>
-          <text class="info-value">
-            {{ order.amountShipping > 0 ? `¥${order.amountShipping.toFixed(2)}` : '包邮' }}
-          </text>
-        </view>
-        <view class="info-row info-row--total">
-          <text class="info-label">合计</text>
-          <text class="total-value">¥{{ order.amountTotal.toFixed(2) }}</text>
-        </view>
+        <picker mode="date" :value="scheduleDate" @change="onScheduleDateChange">
+          <view class="schedule-picker">
+            <text>{{ scheduleDate || '选择分装日' }}</text>
+            <text class="schedule-arrow">›</text>
+          </view>
+        </picker>
+        <button class="secondary-btn" :disabled="submitting" @tap="handleSchedule">
+          保存分装日
+        </button>
       </view>
 
       <!-- 操作 -->
@@ -214,6 +205,7 @@ const submitting = ref(false)
 
 /** 每个补剂一条：同一补剂的多袋共用同一批号与原瓶到期日 */
 const packForm = reactive<Array<{ batchNo: string; sourceExpiryDate: string }>>([])
+const scheduleDate = ref('')
 
 const STATUS_TEXT: Record<SupplementOrderStatus, string> = {
   PENDING_PAYMENT: '待确认收款',
@@ -278,6 +270,7 @@ async function fetchOrder() {
     const res = await staffSupplementOrderApi.detail(orderId.value)
     if (res.code === 0 && res.data) {
       order.value = res.data
+      scheduleDate.value = res.data.packingDate ? res.data.packingDate.slice(0, 10) : ''
       syncPackForm()
     } else {
       uni.showToast({ title: res.message || '加载失败', icon: 'none' })
@@ -287,6 +280,35 @@ async function fetchOrder() {
     uni.showToast({ title: '加载失败', icon: 'none' })
   } finally {
     loading.value = false
+  }
+}
+
+function onScheduleDateChange(event: { detail: { value: string } }) {
+  scheduleDate.value = event.detail.value
+}
+
+async function handleSchedule() {
+  if (!scheduleDate.value) {
+    uni.showToast({ title: '请选择分装日', icon: 'none' })
+    return
+  }
+  submitting.value = true
+  try {
+    const res = await staffSupplementOrderApi.schedule(
+      orderId.value,
+      scheduleDate.value,
+    )
+    if (res.code === 0) {
+      uni.showToast({ title: '已排期', icon: 'success' })
+      await fetchOrder()
+    } else {
+      uni.showToast({ title: res.message || '排期失败', icon: 'none' })
+    }
+  } catch (error: any) {
+    console.error('[SupplementOrderDetail] 排期失败:', error)
+    uni.showToast({ title: error?.message || '排期失败', icon: 'none' })
+  } finally {
+    submitting.value = false
   }
 }
 
@@ -687,6 +709,25 @@ onLoad((options) => {
   color: #26261f;
 }
 
+.schedule-picker {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 22rpx 24rpx;
+  background: #f5f7fa;
+  border-radius: 10rpx;
+  color: #303133;
+  font-size: 28rpx;
+  margin-bottom: 16rpx;
+}
+.schedule-arrow { color: #c0c4cc; font-size: 34rpx; }
+.secondary-btn {
+  margin-top: 12rpx;
+  background: #ecf5ff;
+  color: #409eff;
+  border-radius: 40rpx;
+  font-size: 28rpx;
+}
 .primary-btn {
   margin-top: 24rpx;
   height: 88rpx;

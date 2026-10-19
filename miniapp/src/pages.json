@@ -158,6 +158,12 @@
       }
     },
     {
+      "path": "pages/supplement-aftersale/index",
+      "style": {
+        "navigationBarTitleText": "补剂售后"
+      }
+    },
+    {
       "path": "pages/supplement-orders/index",
       "style": {
         "navigationBarTitleText": "我的补剂订单",

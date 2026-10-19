@@ -101,7 +101,7 @@
         </view>
 
         <view class="card-foot">
-          <text class="amount">¥{{ order.amountTotal.toFixed(2) }}</text>
+          <text class="amount">共 {{ order.bagCount }} 袋</text>
           <text class="next-action">{{ nextActionText(order.status) }}</text>
         </view>
       </view>

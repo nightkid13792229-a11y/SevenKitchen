@@ -186,14 +186,14 @@ describe('AdminSupplementShopController · 分装标签图片', () => {
     });
   });
 
-  it('图片是 60×40mm（203dpi 下 480×320px）的 PNG', async () => {
+  it('图片是 40×60mm（203dpi 下 320×480px）的 PNG', async () => {
     packAll(new Date('2026-09-18T02:00:00Z'));
 
     const response = await controller.getOrderLabelImages('order-1');
     const imageBase64 = response.data?.labels[0].imageBase64 ?? '';
     const image = await loadImage(Buffer.from(imageBase64, 'base64'));
 
-    expect(image.width).toBe(480);
-    expect(image.height).toBe(320);
+    expect(image.width).toBe(320);
+    expect(image.height).toBe(480);
   });
 });

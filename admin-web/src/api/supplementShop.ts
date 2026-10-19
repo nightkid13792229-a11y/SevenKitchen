@@ -360,6 +360,8 @@ export interface SupplementLabel {
   storageCondition: string;
   sourceProduct: string;
   sourceExpiryDate: string;
+  usageText?: string;
+  packerName?: string;
   disclaimer: string;
 }
 

@@ -159,8 +159,8 @@ import {
 
 const CANVAS_ID = 'labelCanvas'
 // 尺寸只影响离屏画布，实际纸张 70×100mm 由 jcing-printer 传给 SDK
-const CANVAS_WIDTH = 560
-const CANVAS_HEIGHT = 800
+const CANVAS_WIDTH = 320
+const CANVAS_HEIGHT = 480
 
 /**
  * getCurrentInstance() 只在 setup 的同步阶段有效，异步回调里再取就是 null。

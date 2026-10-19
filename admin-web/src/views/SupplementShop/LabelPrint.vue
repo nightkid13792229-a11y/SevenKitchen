@@ -6,7 +6,7 @@
         <p class="page-desc">
           订单 <strong>{{ data?.orderNo || '—' }}</strong> ·
           共 <strong>{{ data?.labels.length || 0 }}</strong> 张标签。
-          点「打印标签」后用浏览器打印，A4 标签纸每页 21 张（3 列 × 7 行，60×40mm）。
+          点「打印标签」后用浏览器打印，A4 标签纸每页 20 张（5 列 × 4 行，40×60mm）。
         </p>
       </div>
       <div class="toolbar-actions">
@@ -56,6 +56,14 @@
         <div v-if="label.sourceProduct" class="label-row">
           <span class="label-key">原品</span>
           <span class="label-value">{{ label.sourceProduct }}</span>
+        </div>
+        <div v-if="label.usageText" class="label-row">
+          <span class="label-key">用法</span>
+          <span class="label-value">{{ label.usageText }}</span>
+        </div>
+        <div v-if="label.packerName" class="label-row">
+          <span class="label-key">分装者</span>
+          <span class="label-value">{{ label.packerName }}</span>
         </div>
         <div v-if="label.sourceExpiryDate" class="label-row">
           <span class="label-key">原瓶效期</span>
@@ -165,10 +173,10 @@ onMounted(load);
   min-height: 120px;
 }
 
-/* 60mm × 40mm 单张标签，A4 每页 3 列 × 7 行 */
+/* 40mm × 60mm 竖版单张标签，A4 每页 5 列 × 4 行 */
 .label-card {
-  width: 60mm;
-  height: 40mm;
+  width: 40mm;
+  height: 60mm;
   box-sizing: border-box;
   padding: 2mm 2.5mm;
   background: #ffffff;
@@ -288,9 +296,9 @@ onMounted(load);
   }
 
   .label-card {
-    /* 60×40mm 精确尺寸，网格对齐 A4 标签纸 */
-    width: 60mm;
-    height: 40mm;
+    /* 40×60mm 精确尺寸，网格对齐 A4 标签纸 */
+    width: 40mm;
+    height: 60mm;
     border: none;
     page-break-inside: avoid;
     break-inside: avoid;

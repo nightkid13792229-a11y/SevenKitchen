@@ -161,17 +161,27 @@ export class AdminSupplementShopController {
 
   @Get('orders')
   @ApiOperation({ summary: '补剂订单列表（状态 / 关键词筛选）' })
-  async listOrders(@Query() query: ListSupplementOrdersQueryDto) {
+  async listOrders(
+    @Query() query: ListSupplementOrdersQueryDto,
+    @Req() request: { user?: { role?: string } },
+  ) {
     return ApiResponseDto.success(
-      await this.supplementOrderService.listAllOrders(query),
+      await this.supplementOrderService.listAllOrders(query, {
+        role: request.user?.role,
+      }),
     );
   }
 
   @Get('orders/:id')
   @ApiOperation({ summary: '补剂订单详情（分装工单）' })
-  async getOrder(@Param('id') id: string) {
+  async getOrder(
+    @Param('id') id: string,
+    @Req() request: { user?: { role?: string } },
+  ) {
     return ApiResponseDto.success(
-      await this.supplementOrderService.getOrderById(id),
+      await this.supplementOrderService.getOrderById(id, {
+        role: request.user?.role,
+      }),
     );
   }
 
@@ -221,8 +231,7 @@ export class AdminSupplementShopController {
   }
 
   @Post('orders/:id/schedule')
-  @UseGuards(AdminGuard)
-  @ApiOperation({ summary: '管理员改分装日（只允许已付款未分装）' })
+  @ApiOperation({ summary: '员工/管理员改分装日（只允许已付款未分装）' })
   async scheduleOrder(
     @Param('id') id: string,
     @Body() dto: ScheduleSupplementOrderDto,

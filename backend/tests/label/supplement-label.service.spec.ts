@@ -30,6 +30,8 @@ function createLabel(
     storageCondition: '避光、密封、阴凉干燥处保存',
     sourceProduct: 'NOW FOODS · 227g/瓶',
     sourceExpiryDate: '2027-06-18',
+    usageText: '每日 23平勺',
+    packerName: '赛文的食堂',
     disclaimer: '分装小样，非直接食用；内含干燥剂，请勿食用',
     ...overrides,
   };
@@ -73,7 +75,7 @@ async function measureInk(imageBase64: string) {
 }
 
 describe('补剂分装标签 · 文案拼装', () => {
-  it('按打样版式给出九行：前三行居中加粗，其余左对齐', () => {
+  it('按打样版式给出完整字段：前三行居中加粗，其余左对齐', () => {
     const lines = buildSupplementLabelLines(
       createLabel(),
       'SP20260918-004',
@@ -86,8 +88,11 @@ describe('补剂分装标签 · 文案拼装', () => {
       '23平勺',
       '分装日期 2026-09-18',
       '有效期至 2027-03-18',
+      '储存 避光、密封、阴凉干燥处保存',
       '批号 B2609-01   订单 SP20260918-004',
       '原品 NOW FOODS · 227g/瓶',
+      '用法 每日 23平勺',
+      '分装者 赛文的食堂',
       '分装小样，非直接食用；内含干燥剂，请勿食用',
     ]);
 
@@ -100,9 +105,12 @@ describe('补剂分装标签 · 文案拼装', () => {
     expect(lines[4]).toMatchObject({ fontSizeMm: 2.4, bold: false, align: 'left' });
     // 有效期是最关键的安全信息：必须比同段的其它行更大更粗
     expect(lines[5]).toMatchObject({ fontSizeMm: 3.0, bold: true, align: 'left' });
-    expect(lines[6]).toMatchObject({ fontSizeMm: 2.2, bold: false, align: 'left' });
-    expect(lines[7]).toMatchObject({ fontSizeMm: 2.3, bold: false, align: 'left' });
-    expect(lines[8]).toMatchObject({ fontSizeMm: 2.1, bold: false, align: 'left' });
+    expect(lines[6]).toMatchObject({ fontSizeMm: 2.1, bold: false, align: 'left' });
+    expect(lines[7]).toMatchObject({ fontSizeMm: 2.2, bold: false, align: 'left' });
+    expect(lines[8]).toMatchObject({ fontSizeMm: 2.3, bold: false, align: 'left' });
+    expect(lines[9]).toMatchObject({ fontSizeMm: 2.1, bold: false, align: 'left' });
+    expect(lines[10]).toMatchObject({ fontSizeMm: 2.0, bold: false, align: 'left' });
+    expect(lines[11]).toMatchObject({ fontSizeMm: 2.0, bold: false, align: 'left' });
   });
 
   it('只有一袋时不写「1/1」，加量后才带「第几袋 / 共几袋」', () => {
@@ -158,7 +166,7 @@ describe('补剂分装标签 · 文案拼装', () => {
     );
 
     expect(textsOf(lines).join('|')).not.toContain('原品');
-    expect(lines).toHaveLength(8);
+    expect(lines).toHaveLength(11);
   });
 
   it('品牌名缺失时不留一条空白占位行', () => {
@@ -174,7 +182,7 @@ describe('补剂分装标签 · 文案拼装', () => {
 });
 
 describe('补剂分装标签 · 图片渲染', () => {
-  it('按 203dpi 的既有换算渲染出 60×40mm（480×320px）的 PNG', async () => {
+  it('按 203dpi 的既有换算渲染出 40×60mm（320×480px）的 PNG', async () => {
     const service = new SupplementLabelService();
     const imageBase64 = service.generateLabelImage(
       createLabel(),
@@ -194,8 +202,8 @@ describe('补剂分装标签 · 图片渲染', () => {
     ).toBe('89504e470d0a1a0a');
 
     const ink = await measureInk(imageBase64);
-    expect(ink.width).toBe(480);
-    expect(ink.height).toBe(320);
+    expect(ink.width).toBe(320);
+    expect(ink.height).toBe(480);
     expect(ink.inkCount).toBeGreaterThan(0);
   });
 
@@ -225,10 +233,9 @@ describe('补剂分装标签 · 图片渲染', () => {
     );
 
     const ink = await measureInk(imageBase64);
-    // 热敏打印机底部边缘打不出来：字形底部必须落在 36mm 以上
-    expect(ink.maxY + 1).toBeLessThanOrEqual(mmToPx(36));
-    // 留白至少要够 4mm，不能只留「基线的 4mm」
-    expect(40 - (ink.maxY + 1) / MM_TO_PX).toBeGreaterThanOrEqual(4);
+    // 40×60 竖版：字形底部必须落在 56mm 以上（底部 4mm 安全区）
+    expect(ink.maxY + 1).toBeLessThanOrEqual(mmToPx(56));
+    expect(60 - (ink.maxY + 1) / MM_TO_PX).toBeGreaterThanOrEqual(4);
   });
 
   it('警示语长到装不下时，宁可少画也不压进安全区', async () => {
@@ -243,7 +250,7 @@ describe('补剂分装标签 · 图片渲染', () => {
     );
 
     const ink = await measureInk(imageBase64);
-    expect(ink.maxY + 1).toBeLessThanOrEqual(mmToPx(36));
+    expect(ink.maxY + 1).toBeLessThanOrEqual(mmToPx(56));
   });
 
   it('文字不会画出左右 2mm 边距之外', async () => {
@@ -286,7 +293,7 @@ describe('补剂分装标签 · 图片渲染', () => {
     }
 
     expect(rowMinX).toBe(mmToPx(2));
-    expect(rowMaxX).toBe(mmToPx(58) - 1);
+    expect(rowMaxX).toBe(mmToPx(38) - 1);
     expect(ink.inkCount).toBeGreaterThan(0);
   });
 });

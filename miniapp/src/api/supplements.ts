@@ -226,6 +226,51 @@ export function fetchSupplementOrders(params: {
 }
 
 /** 补剂订单详情 */
+/** 申请补剂售后 */
+export function createSupplementAftersale(
+  orderId: string,
+  payload: {
+    requestType: 'REFUND' | 'RESHIP' | 'OTHER'
+    reason: string
+    photos?: string[]
+    amount?: number
+  }
+) {
+  return request({
+    url: `/supplement-orders/${orderId}/aftersales`,
+    method: 'POST',
+    data: payload
+  })
+}
+
+/** 补剂订单的售后记录 */
+export function fetchSupplementAftersales(orderId: string) {
+  return request({
+    url: `/supplement-orders/${orderId}/aftersales`,
+    method: 'GET'
+  })
+}
+
+/** 未发货改地址 */
+export function updateSupplementAddress(
+  orderId: string,
+  payload: { addressId: string; setAsDefault?: boolean }
+) {
+  return request({
+    url: `/supplement-orders/${orderId}/address`,
+    method: 'PATCH',
+    data: payload
+  })
+}
+
+/** 再次购买报价（不直接建单） */
+export function repurchaseSupplementOrder(orderId: string) {
+  return request({
+    url: `/supplement-orders/${orderId}/repurchase`,
+    method: 'POST'
+  })
+}
+
 export function fetchSupplementOrderDetail(id: string) {
   return request<SupplementOrder>({
     url: `/supplement-orders/${id}`,

@@ -48,14 +48,30 @@
           </text>
         </view>
 
-        <view v-if="order.status === 'PENDING_PAYMENT'" class="order-actions">
+        <view class="order-actions">
           <button
+            v-if="order.status === 'PENDING_PAYMENT'"
             class="pay-btn"
             :disabled="payingId === order.id"
             @tap="handlePay(order)"
           >
             <text class="pay-btn-text">{{ payingId === order.id ? '支付中…' : '去支付' }}</text>
           </button>
+          <button
+            v-if="canChangeAddress(order.status)"
+            class="secondary-btn"
+            @tap="handleChangeAddress(order)"
+          >改地址</button>
+          <button
+            v-if="canApplyAftersale(order.status)"
+            class="secondary-btn"
+            @tap="goAftersale(order)"
+          >申请售后</button>
+          <button
+            v-if="order.status !== 'CANCELLED'"
+            class="secondary-btn"
+            @tap="handleRepurchase(order)"
+          >再次购买</button>
         </view>
       </view>
 
@@ -149,6 +165,86 @@ async function loadOrders(reset = false) {
     loading.value = false
   }
 }
+
+const pendingAddressOrderId = ref('')
+
+function canChangeAddress(status: string) {
+  return ['PENDING_PAYMENT', 'PAID', 'PACKED'].includes(status)
+}
+
+function canApplyAftersale(status: string) {
+  return ['PACKED', 'SHIPPED', 'COMPLETED'].includes(status)
+}
+
+function handleChangeAddress(order: SupplementOrder) {
+  pendingAddressOrderId.value = order.id
+  uni.navigateTo({ url: '/pages/address-list/index?mode=select' })
+}
+
+function handleRepurchase(order: SupplementOrder) {
+  const lines = (order.items || [])
+    .filter((item) => item.ingredientId && Number(item.requestedAmount) > 0)
+    .map((item) => ({
+      ingredientId: item.ingredientId,
+      amount: Number(item.requestedAmount),
+      name: item.name,
+      unit: item.unit,
+      specText: [item.brand, item.productModel].filter(Boolean).join(' / ')
+    }))
+  if (lines.length === 0) {
+    uni.showToast({ title: '原订单没有可复购的补剂', icon: 'none' })
+    return
+  }
+  saveSupplementPurchaseDraft({
+    lines,
+    recipeId: order.recipeId || undefined,
+    recipeName: order.recipeName || undefined,
+    dogId: order.dogId || undefined,
+    dogName: order.dogName || undefined,
+    cycleDays: order.cycleDays || undefined
+  })
+  uni.navigateTo({ url: '/pages/supplement-order/index' })
+}
+
+function goAftersale(order: SupplementOrder) {
+  uni.navigateTo({
+    url: `/pages/supplement-aftersale/index?orderId=${encodeURIComponent(order.id)}`
+  })
+}
+
+async function onAddressSelected(payload: { addressId?: string }) {
+  const orderId = pendingAddressOrderId.value
+  pendingAddressOrderId.value = ''
+  if (!orderId || !payload?.addressId) return
+  try {
+    const res = await updateSupplementAddress(orderId, {
+      addressId: payload.addressId
+    })
+    if (res.code !== 0) {
+      uni.showToast({ title: res.message || '改地址失败', icon: 'none' })
+      return
+    }
+    const needsReprint = Boolean(res.data?.needsReprint)
+    uni.showModal({
+      title: needsReprint ? '地址已更新' : '地址已更新',
+      content: needsReprint
+        ? '标签已打印，地址已改；请重新打印面单，避免发错。'
+        : '下次发货会使用新地址。',
+      showCancel: false
+    })
+    await loadOrders(true)
+  } catch (error: any) {
+    console.error('[SupplementOrders] 改地址失败:', error)
+    uni.showToast({ title: error?.message || '改地址失败', icon: 'none' })
+  }
+}
+
+onLoad(() => {
+  uni.$on('address-selected', onAddressSelected)
+})
+onUnload(() => {
+  uni.$off('address-selected', onAddressSelected)
+})
 
 async function handlePay(order: SupplementOrder) {
   payingId.value = order.id
@@ -382,6 +478,16 @@ onReachBottom(() => {
   padding-top: 16rpx;
 }
 
+.secondary-btn {
+  margin-left: 16rpx;
+  padding: 0 28rpx;
+  height: 64rpx;
+  line-height: 64rpx;
+  font-size: 26rpx;
+  color: #409eff;
+  background: #ecf5ff;
+  border-radius: 32rpx;
+}
 .pay-btn {
   min-width: 180rpx;
   height: 64rpx;

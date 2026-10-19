@@ -63,6 +63,8 @@ export interface StaffSupplementOrder {
   paymentMethod: string | null;
   paymentStatus: string | null;
   paidAt: string | null;
+  /** 分装日（YYYY-MM-DD）；null = 未排期 */
+  packingDate: string | null;
   aftersaleType: string | null;
   aftersaleReason: string | null;
   refundStatus: string | null;
@@ -182,6 +184,14 @@ export const staffSupplementOrderApi = {
       url: `/admin/supplement-shop/orders/${orderId}/labels/images`,
       method: 'GET',
       suppressErrorToast: true,
+    });
+  },
+
+  schedule(orderId: string, packingDate: string, reason?: string) {
+    return request<StaffSupplementOrder>({
+      url: `/admin/supplement-shop/orders/${orderId}/schedule`,
+      method: 'POST',
+      data: { packingDate, reason },
     });
   },
 

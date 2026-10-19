@@ -13,8 +13,8 @@
 import JCAPI from './jcing-sdk/JCAPI';
 
 const PRINTER_STORAGE_KEY = 'jc_printer_info';
-const LABEL_PAPER_WIDTH_MM = 70;
-const LABEL_PAPER_HEIGHT_MM = 100;
+const LABEL_PAPER_WIDTH_MM = 40;
+const LABEL_PAPER_HEIGHT_MM = 60;
 
 // 初始化SDK: 设置编译平台为uniapp（必须在SDK使用前调用）
 JCAPI.setBuildPlatform('uniapp');

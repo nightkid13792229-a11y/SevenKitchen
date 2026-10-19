@@ -1821,13 +1821,6 @@ const continuePayPending = async () => {
       await loadPendingOrder();
       return;
     }
-    if (outcome === 'MANUAL') {
-      // 支付通道不可用：去提交成功页看客服收款方式，保证这单能被付掉
-      uni.navigateTo({
-        url: `/pages/custom-recipe/success?orderId=${encodeURIComponent(orderId)}`,
-      });
-      return;
-    }
     uni.showToast({ title: '支付未完成，可稍后重试', icon: 'none' });
   } finally {
     pendingPaying.value = false;

@@ -908,12 +908,6 @@ const goPay = async () => {
       return;
     }
 
-    if (outcome === 'MANUAL') {
-      uni.navigateTo({
-        url: `/pages/custom-recipe/success?orderId=${encodeURIComponent(targetOrderId)}`,
-      });
-      return;
-    }
 
     uni.showToast({ title: '支付未完成，可稍后重试', icon: 'none' });
   } finally {

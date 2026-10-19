@@ -33,7 +33,8 @@ describe('custom recipe customer flow', () => {
     const pagesJson = read('src/pages.json')
 
     expect(pagesJson).toContain('pages/custom-recipe/index')
-    expect(pagesJson).toContain('pages/custom-recipe/success')
+    expect(pagesJson).not.toContain('pages/custom-recipe/success')
+    expect(pagesJson).toContain('pages/custom-recipe/confirm')
     expect(pagesJson).toContain('pages/custom-recipe/orders')
     expect(pagesJson).toContain('pages/custom-recipe/order-detail')
   })
@@ -144,24 +145,17 @@ describe('custom recipe customer flow', () => {
     }
   })
 
-  it('keeps the manual customer-service fallback when online pay is unavailable', () => {
-    // 支付通道没配好时必须能降级为人工收款，否则订单收不到钱
-    const success = read(`${PAGE_DIR}/success.vue`)
+  it('does not fall back to manual collection when online pay is unavailable', () => {
+    // 2026-10-19 老板确认：不做人工收款兜底，支付通道不可用时只提示稍后重试。
+    const confirm = read(`${PAGE_DIR}/confirm.vue`)
     const orders = read(`${PAGE_DIR}/orders.vue`)
     const detail = read(`${PAGE_DIR}/order-detail.vue`)
 
-    for (const source of [success, orders, detail]) {
-      expect(source).toContain("'MANUAL'")
+    for (const source of [confirm, orders, detail]) {
+      expect(source).not.toContain('请联系客服完成付款')
+      expect(source).not.toContain('success?orderId=')
     }
-
-    /**
-     * 2026-09-28：兜底入口从"让顾客加个人微信号"改成**企业微信客服**
-     * （小程序已接入，后台 corp_id / open_kfid 均已配置）。
-     * 降级能力本身必须保留，只是通道换了。
-     */
-    expect(success).toContain('CustomerServiceInlineButton')
-    expect(success).toContain('请联系客服完成付款')
-    // 订单列表页联系客服也走同一条通道
+    // 企业微信客服仍用于订单咨询，但不能被拿来收定制费
     expect(orders).toContain('openCustomerServiceChat')
   })
 
@@ -940,7 +934,7 @@ describe('custom recipe duplicate submit guard · 防连点', () => {
 
   it('submitting 必须在订阅弹窗（第一个 await）之前置位', () => {
     const submitSource =
-      submit.match(/async function submitConfirmedOrder\(\)[\s\S]*?\n\}/)?.[0] || ''
+      submit.match(/async function submitConfirmedOrder\([\s\S]*?\n}\n\nfunction viewCreatedOrder/)?.[0] || ''
 
     expect(submitSource).not.toBe('')
 
@@ -956,24 +950,25 @@ describe('custom recipe duplicate submit guard · 防连点', () => {
   })
 
   it('按钮不默认置灰，靠 submitting 守卫防重复', () => {
-    expect(submit).toContain('{{ submitting ? \'提交中…\' : \'提交订单\' }}')
+    expect(submit).toContain('{{ submitting ? \'提交中…\' : `确认并支付 ¥${feeText}` }}')
     expect(submit).toContain('if (submitting.value) return;')
   })
 
   it('失败要复位 submitting，否则改完内容再也提交不了', () => {
     const submitSource =
-      submit.match(/async function submitConfirmedOrder\(\)[\s\S]*?\n\}/)?.[0] || ''
+      submit.match(/async function submitConfirmedOrder\([\s\S]*?\n}\n\nfunction viewCreatedOrder/)?.[0] || ''
 
     expect(submitSource).toContain('finally')
     expect(submitSource).toContain('submitting.value = false')
   })
 
-  it('成功后用 reLaunch 清掉定制页/确认页，返回键不可能再交一单', () => {
+  it('成功后留在确认页切换到支付状态，不再跳提交成功页', () => {
     const submitSource =
-      submit.match(/async function submitConfirmedOrder\(\)[\s\S]*?\n\}/)?.[0] || ''
+      submit.match(/async function submitConfirmedOrder\([\s\S]*?\n}\n\nfunction viewCreatedOrder/)?.[0] || ''
 
-    expect(submitSource).toContain('uni.reLaunch({')
-    expect(submitSource).not.toContain('uni.navigateTo({')
+    expect(submitSource).toContain('createdOrder.value =')
+    expect(submitSource).toContain('payCreatedOrder')
+    expect(submitSource).not.toContain('uni.reLaunch({')
   })
 })
 
@@ -2091,9 +2086,11 @@ describe('custom recipe draft · 本地草稿与付款后同步', () => {
     expect(confirm).toContain('allergyReportDrafts: Array.isArray(reportDrafts)')
   })
 
-  it('订单确认页提交成功后清掉本地草稿，避免返回时又出现', () => {
+  it('订单确认页提交成功后清掉本地草稿，并在本页进入支付状态', () => {
     expect(confirm).toContain('clearCustomRecipeDraft(getDraftCustomerId(), dogId.value)')
-    expect(confirm).toContain('uni.reLaunch({')
+    expect(confirm).toContain('createdOrder.value =')
+    expect(confirm).toContain('payCreatedOrder')
+    expect(confirm).not.toContain('uni.reLaunch({')
   })
 
   it('报告先作为草稿交给父页面，不再上传即写狗狗档案', () => {

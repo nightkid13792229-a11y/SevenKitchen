@@ -12,6 +12,7 @@
     </view>
 
     <template v-else>
+      <template v-if="!createdOrder">
       <view class="section hero-section">
         <view class="section-title">
           <text class="title-text">给谁定制</text>
@@ -82,9 +83,82 @@
         </view>
         <view class="bottom-actions">
           <button class="btn-back" @tap="backToCustom">返回修改</button>
-          <button class="btn-submit" @tap="submitConfirmedOrder">
-            {{ submitting ? '提交中…' : '提交订单' }}
+          <view class="submit-wrap">
+            <button
+              class="btn-submit"
+              :disabled="submitting"
+              @tap="submitConfirmedOrder(true)"
+            >
+              {{ submitting ? '提交中…' : `确认并支付 ¥${feeText}` }}
+            </button>
+            <text class="btn-later" @tap="submitConfirmedOrder(false)">
+              仅提交，稍后支付
+            </text>
+          </view>
+        </view>
+      </view>
+      </template>
+
+      <view v-else class="submitted-state">
+        <view class="submitted-hero">
+          <view class="submitted-icon">{{ postIsPaid ? '✓' : postIsClosed ? '!' : '✓' }}</view>
+          <text class="submitted-title">{{ postTitle }}</text>
+          <text class="submitted-desc">{{ postDesc }}</text>
+        </view>
+
+        <view class="section">
+          <view class="section-title">
+            <text class="title-text">订单信息</text>
+          </view>
+          <view class="info-row">
+            <text class="info-label">订单编号</text>
+            <text class="info-value">{{ createdOrder.orderId }}</text>
+          </view>
+          <view class="info-row">
+            <text class="info-label">定制对象</text>
+            <text class="info-value">{{ dogName }}</text>
+          </view>
+          <view class="info-row">
+            <text class="info-label">定制费</text>
+            <text class="info-value">¥{{ postFeeText }}</text>
+          </view>
+          <view class="info-row">
+            <text class="info-label">预计交付</text>
+            <text class="info-value">{{ postDeliveryText }}</text>
+          </view>
+          <view class="info-row">
+            <text class="info-label">当前状态</text>
+            <text class="info-value">{{ postStatusText }}</text>
+          </view>
+          <view v-if="postCreditText" class="info-row">
+            <text class="info-label">{{ postIsPaid ? '成品抵扣' : '支付后抵扣' }}</text>
+            <text class="info-value">¥{{ postCreditText }}</text>
+          </view>
+        </view>
+
+        <view v-if="!postIsPaid && !postIsClosed" class="section submitted-pay">
+          <view class="submitted-pay-head">
+            <text class="submitted-pay-title">还差最后一步：完成支付</text>
+            <text v-if="postPaymentHint" class="submitted-pay-deadline">
+              {{ postPaymentHint }}
+            </text>
+          </view>
+          <button
+            class="pay-btn"
+            :loading="postPaying"
+            :disabled="postPaying"
+            @tap="payCreatedOrder"
+          >
+            立即微信支付 ¥{{ postFeeText }}
           </button>
+          <text class="submitted-pay-note">
+            支付成功后我们才会开始排期设计；支付取消不影响这张订单，可以稍后继续支付。
+          </text>
+        </view>
+
+        <view class="submitted-actions">
+          <button class="btn-secondary" @tap="viewCreatedOrder">查看订单详情</button>
+          <button v-if="postIsClosed" class="btn-secondary" @tap="returnToCustom">返回定制页</button>
         </view>
       </view>
     </template>
@@ -92,11 +166,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import { dogApi } from '@/api/dogs';
 import {
   fetchNextDeliveryDate,
+  fetchOrderDetail,
   fetchPublicConfig,
   submitOrder,
 } from '@/api/custom-recipe';
@@ -108,8 +183,16 @@ import {
   loadCustomRecipeDraft,
   type CustomRecipeDraft,
 } from '@/utils/custom-recipe-draft';
-import { requestCustomRecipeOrderSubscription } from '@/utils/custom-recipe-payment';
-import { formatAmount } from '@/utils/custom-recipe-order';
+import {
+  requestCustomRecipeOrderSubscription,
+  runCustomRecipePayment,
+} from '@/utils/custom-recipe-payment';
+import {
+  buildPaymentTimeoutHint,
+  formatAmount,
+  formatDate,
+} from '@/utils/custom-recipe-order';
+import { CUSTOM_RECIPE_STATUS_SET } from '@/utils/option-set';
 
 const dogId = ref('');
 const draft = ref<CustomRecipeDraft | null>(null);
@@ -119,6 +202,9 @@ const delivery = ref<any>(null);
 const loading = ref(true);
 const loadError = ref('');
 const submitting = ref(false);
+/** 订单创建后的页面状态：确认页合并支付页，不再跳提交成功页 */
+const createdOrder = ref<any>(null);
+const postPaying = ref(false);
 /** 本次确认页的幂等键：网络超时重试时后端返回同一张订单 */
 const clientRequestId = ref('');
 
@@ -130,6 +216,8 @@ const { ensure: ensureStomachOptions, labelOf: stomachLabel } =
   useOptionSet('custom_recipe_stomach');
 const { ensure: ensureGoalOptions, labelOf: goalLabel } =
   useOptionSet('custom_recipe_goal');
+const { ensure: ensureStatusOptions, labelOf: statusLabel } =
+  useOptionSet(CUSTOM_RECIPE_STATUS_SET);
 
 const form = computed<Record<string, any>>(
   () => (draft.value?.form || {}) as Record<string, any>,
@@ -236,6 +324,60 @@ const deliveryText = computed(() => {
   return `预计 ${month} 月 ${day} 日（${weekday}）交付`;
 });
 
+const postStatus = computed(() =>
+  String(createdOrder.value?.status || 'PENDING_PAYMENT'),
+);
+const postIsPaid = computed(() => postStatus.value === 'PAID');
+const postIsClosed = computed(() =>
+  ['CANCELLED', 'CLOSED', 'REFUNDED'].includes(postStatus.value),
+);
+const postTitle = computed(() =>
+  !createdOrder.value
+    ? '确认订单'
+    : postIsPaid.value
+      ? '支付成功'
+      : postIsClosed.value
+        ? '订单已关闭'
+        : '订单已提交',
+);
+const postDesc = computed(() =>
+  postIsPaid.value
+    ? '我们已收到付款，营养师会按排期开始设计。'
+    : postIsClosed.value
+      ? '这张订单已经关闭，可以返回定制页重新下单。'
+      : '订单已创建，完成支付后我们才会开始排期设计。',
+);
+const postFeeText = computed(() =>
+  formatAmount(createdOrder.value?.amount ?? config.value?.feeAmount ?? 0),
+);
+const postDeliveryText = computed(() =>
+  formatDate(createdOrder.value?.estimatedDeliveryDate, '排期中'),
+);
+const postStatusText = computed(
+  () => statusLabel(postStatus.value) || postStatus.value,
+);
+const postPaymentHint = computed(() =>
+  buildPaymentTimeoutHint({
+    paymentDeadlineAt: createdOrder.value?.paymentDeadlineAt ?? null,
+    createdAt: createdOrder.value?.createdAt ?? null,
+    paymentTimeoutMinutes: Number(config.value?.paymentTimeoutMinutes) || 0,
+  }),
+);
+const postCreditText = computed(() =>
+  createdOrder.value?.creditAmount
+    ? formatAmount(createdOrder.value.creditAmount)
+    : '',
+);
+
+// 页面标题跟着状态走：确认 → 订单已提交 → 支付成功/已关闭
+watch(
+  postTitle,
+  (title) => {
+    uni.setNavigationBarTitle({ title });
+  },
+  { immediate: false },
+);
+
 async function loadConfirmData() {
   loading.value = true;
   loadError.value = '';
@@ -261,6 +403,7 @@ async function loadConfirmData() {
   void ensureChangeReasonOptions();
   void ensureStomachOptions();
   void ensureGoalOptions();
+  void ensureStatusOptions();
 
   try {
     const [dogRes, configRes, deliveryRes] = await Promise.all([
@@ -322,7 +465,54 @@ function validateBeforeSubmit(): string {
   return '';
 }
 
-async function submitConfirmedOrder() {
+async function payCreatedOrder() {
+  if (postPaying.value) return;
+  const orderId = String(createdOrder.value?.orderId || '').trim();
+  if (!orderId) return;
+
+  postPaying.value = true;
+  try {
+    const outcome = await runCustomRecipePayment(orderId);
+
+    if (outcome === 'PAID') {
+      uni.showToast({ title: '支付成功', icon: 'success' });
+      const detail = await fetchOrderDetail(orderId).catch(() => null);
+      createdOrder.value = detail || {
+        ...(createdOrder.value || {}),
+        orderId,
+        status: 'PAID',
+      };
+      return;
+    }
+
+    if (outcome === 'CLOSED') {
+      createdOrder.value = {
+        ...(createdOrder.value || {}),
+        orderId,
+        status: 'CLOSED',
+      };
+      uni.showToast({ title: '订单已关闭，请重新下单', icon: 'none' });
+      return;
+    }
+
+    if (outcome === 'CANCELLED') {
+      uni.showToast({ title: '已取消支付，可继续支付', icon: 'none' });
+      return;
+    }
+
+    // 不再提供人工收款兜底；支付通道不可用就让顾客稍后重试。
+    uni.showToast({ title: '微信支付暂不可用，请稍后重试', icon: 'none' });
+  } catch (error: any) {
+    uni.showToast({
+      title: error?.message || '支付失败，请稍后重试',
+      icon: 'none',
+    });
+  } finally {
+    postPaying.value = false;
+  }
+}
+
+async function submitConfirmedOrder(payAfterSubmit = true) {
   if (submitting.value) return;
   const invalid = validateBeforeSubmit();
   if (invalid) {
@@ -358,15 +548,17 @@ async function submitConfirmedOrder() {
     if (!orderId) throw new Error('服务端未返回订单号');
 
     clearCustomRecipeDraft(getDraftCustomerId(), dogId.value);
-    const query = [
-      `orderId=${encodeURIComponent(orderId)}`,
-      `amount=${encodeURIComponent(String(created.amount ?? ''))}`,
-      `creditAmount=${encodeURIComponent(String(created.creditAmount ?? ''))}`,
-    ];
-    // 确认页已经完成任务，用 reLaunch 清掉定制页/确认页，避免返回后重复下单
-    uni.reLaunch({
-      url: `/pages/custom-recipe/success?${query.join('&')}`,
-    });
+    createdOrder.value = {
+      ...created,
+      orderId,
+      status: created?.status || 'PENDING_PAYMENT',
+    };
+    // 先关 loading，再拉起微信支付；否则支付弹窗会被遮罩/loading 干扰。
+    uni.hideLoading();
+    submitting.value = false;
+    if (payAfterSubmit) {
+      await payCreatedOrder();
+    }
   } catch (error: any) {
     uni.showToast({
       title: error?.message || '提交失败，请稍后重试',
@@ -376,6 +568,18 @@ async function submitConfirmedOrder() {
     submitting.value = false;
     uni.hideLoading();
   }
+}
+
+function viewCreatedOrder() {
+  const orderId = String(createdOrder.value?.orderId || '').trim();
+  if (!orderId) return;
+  uni.redirectTo({
+    url: `/pages/custom-recipe/order-detail?orderId=${encodeURIComponent(orderId)}`,
+  });
+}
+
+function returnToCustom() {
+  uni.redirectTo({ url: '/pages/custom-recipe/index' });
 }
 
 onLoad((options: any) => {
@@ -598,5 +802,115 @@ onLoad((options: any) => {
   color: #ffffff;
   background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
   border: 1rpx solid #d8bc85;
+}
+
+.submit-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4rpx;
+}
+
+.btn-later {
+  font-size: 20rpx;
+  line-height: 1.3;
+  color: #8a7a63;
+}
+
+/* 确认页合并后的订单已提交/支付状态 */
+.submitted-state {
+  padding-bottom: 40rpx;
+}
+
+.submitted-hero {
+  padding: 48rpx 28rpx 36rpx;
+  text-align: center;
+}
+
+.submitted-icon {
+  width: 76rpx;
+  height: 76rpx;
+  line-height: 76rpx;
+  margin: 0 auto 18rpx;
+  border-radius: 50%;
+  background: #e7f0e9;
+  color: #1e3a2f;
+  font-size: 38rpx;
+  font-weight: 700;
+}
+
+.submitted-title {
+  display: block;
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+}
+
+.submitted-desc {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #8a7a63;
+}
+
+.submitted-pay {
+  border-color: #d8bc85;
+}
+
+.submitted-pay-head {
+  margin-bottom: 18rpx;
+}
+
+.submitted-pay-title {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+}
+
+.submitted-pay-deadline {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #a8622a;
+}
+
+.pay-btn {
+  width: 100%;
+  height: 84rpx;
+  line-height: 84rpx;
+  border-radius: 999rpx;
+  color: #ffffff;
+  font-size: 28rpx;
+  font-weight: 700;
+  background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
+  border: 1rpx solid #d8bc85;
+}
+
+.submitted-pay-note {
+  display: block;
+  margin-top: 14rpx;
+  font-size: 21rpx;
+  line-height: 1.55;
+  color: #8a7a63;
+}
+
+.submitted-actions {
+  display: flex;
+  justify-content: center;
+  gap: 18rpx;
+  margin-top: 8rpx;
+}
+
+.btn-secondary {
+  height: 70rpx;
+  line-height: 70rpx;
+  padding: 0 28rpx;
+  border-radius: 999rpx;
+  font-size: 24rpx;
+  color: #1e3a2f;
+  background: #ffffff;
+  border: 1rpx solid #cfd8c5;
 }
 </style>

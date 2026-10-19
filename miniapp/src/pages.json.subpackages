@@ -140,12 +140,6 @@
       }
     },
     {
-      "path": "pages/custom-recipe/success",
-      "style": {
-        "navigationBarTitleText": "提交成功"
-      }
-    },
-    {
       "path": "pages/custom-recipe/orders",
       "style": {
         "navigationBarTitleText": "我的定制订单",

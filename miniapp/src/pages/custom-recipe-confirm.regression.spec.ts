@@ -33,7 +33,7 @@ describe('定制页 → 订单确认页（2026-10-19 老板确认）', () => {
     expect(page).toContain('uni.pageScrollTo');
   });
 
-  it('确认页有只读汇总、返回修改和提交订单', () => {
+  it('确认页有只读汇总、返回修改和确认并支付', () => {
     expect(pagesJson).toContain('"pages/custom-recipe/confirm"');
     expect(confirm).toContain('给谁定制');
     expect(confirm).toContain('定制方向');
@@ -42,19 +42,23 @@ describe('定制页 → 订单确认页（2026-10-19 老板确认）', () => {
     expect(confirm).toContain('定制原因');
     expect(confirm).toContain('最近肠胃');
     expect(confirm).toContain('返回修改');
-    expect(confirm).toContain('提交订单');
+    expect(confirm).toContain('确认并支付');
+    expect(confirm).toContain('仅提交，稍后支付');
     expect(confirm).toContain('预计');
   });
 
-  it('确认页读取本地草稿，提交时带过敏回答与幂等键，创建订单并进入支付页', () => {
+  it('确认页创建订单后留在本页支付，不再跳提交成功页', () => {
     expect(confirm).toContain('loadCustomRecipeDraft');
     expect(confirm).toContain('allergyStatus');
     expect(confirm).toContain('clientRequestId');
     expect(confirm).toContain('requestCustomRecipeOrderSubscription');
     expect(confirm).toContain('submitOrder(payload)');
     expect(confirm).toContain('clearCustomRecipeDraft');
-    expect(confirm).toContain('uni.reLaunch({');
-    expect(confirm).toContain('/pages/custom-recipe/success?');
+    expect(confirm).toContain('createdOrder');
+    expect(confirm).toContain('runCustomRecipePayment');
+    expect(confirm).toContain('payCreatedOrder');
+    expect(confirm).not.toContain('/pages/custom-recipe/success?');
+    expect(confirm).not.toContain('uni.reLaunch({');
   });
 
   it('定制页不显示预计交付和抵扣；确认页显示交付与可抵扣金额', () => {

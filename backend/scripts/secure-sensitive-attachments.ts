@@ -66,12 +66,19 @@ async function main(): Promise<void> {
     select: { attachments: true, allergyReportDrafts: true },
   });
   for (const order of orders) {
-    for (const url of order.attachments || []) urls.add(url);
+    for (const url of (order.attachments as string[]) || []) {
+      if (typeof url === 'string') urls.add(url);
+    }
     const drafts = Array.isArray(order.allergyReportDrafts)
       ? (order.allergyReportDrafts as any[])
       : [];
     for (const draft of drafts) {
-      for (const url of draft?.attachments || []) urls.add(url);
+      const attachments = Array.isArray(draft?.attachments)
+        ? draft.attachments
+        : [];
+      for (const url of attachments) {
+        if (typeof url === 'string') urls.add(url);
+      }
     }
   }
 

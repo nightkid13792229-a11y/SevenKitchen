@@ -426,12 +426,20 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     const drafts = Array.isArray(order.allergyReportDrafts)
       ? await Promise.all(
           order.allergyReportDrafts.map(async (draft: any) => {
-            const { attachmentKeys: _attachmentKeys, ...safeDraft } = draft;
+            const {
+              attachmentKeys,
+              ...safeDraft
+            } = draft;
+            const keys = Array.isArray(attachmentKeys) ? attachmentKeys : [];
             return {
               ...safeDraft,
               attachments: (
                 Array.isArray(draft?.attachments) ? draft.attachments : []
-              ).map((url: string) => sign(url)),
+              ).map((url: string, index: number) =>
+                // 前端上传后存的是媒体代理 URL，不是 COS key；
+                // attachmentKeys 才是可重新签发的原始 key。
+                sign(keys[index] || url),
+              ),
             };
           }),
         )

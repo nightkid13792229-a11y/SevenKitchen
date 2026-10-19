@@ -213,7 +213,14 @@ export class TencentCosService {
     if (!value) return '';
     if (!/^https?:\/\//i.test(value)) return value.replace(/^\/+/, '');
     try {
-      return new URL(value).pathname.replace(/^\/+/, '');
+      const path = new URL(value).pathname.replace(/^\/+/, '');
+      // 已经是本后端的媒体代理 URL：把 token 还原成 COS key 再重新签发，
+      // 否则会把代理路径误当成 COS key。
+      const proxy = path.match(/^api\/v1\/media\/sensitive\/([^/]+)$/);
+      if (proxy) {
+        return this.resolveMediaToken(proxy[1]) || '';
+      }
+      return path;
     } catch {
       return '';
     }

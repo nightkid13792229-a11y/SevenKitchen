@@ -855,7 +855,7 @@ describe('custom recipe payment copy · 下一步付款与时限', () => {
     expect(code).not.toContain('下一步：支付')
     // 金额仍来自后台配置，放在说明里而不是按钮上
     expect(code).toContain('feeAmount')
-    expect(code).toContain('定制费 ¥')
+    expect(code).toContain('食谱定制费')
   })
 
   it('提交按钮下面不再写支付时限；也不重复一块"下一步：支付"', () => {
@@ -1607,7 +1607,7 @@ describe('定制页 · 第二轮精简（2026-10-05）', () => {
       code.indexOf('pre-order-notice'),
       code.indexOf('submit-btn'),
     )
-    expect(notice).toContain('定制费 ¥')
+    expect(notice).toContain('食谱定制费')
     // 支付/下单确实在后面：定制页只跳确认页
     expect(code).toContain('goToOrderConfirm')
     expect(code).not.toContain('requestPayment')

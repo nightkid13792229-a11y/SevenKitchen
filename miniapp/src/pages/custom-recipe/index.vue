@@ -629,8 +629,7 @@
     <view v-if="hasSelectedDog" class="submit-section">
       <view class="pre-order-notice">
         <text class="pre-order-notice__price">
-          <text v-if="recipeConfig">定制费 ¥{{ formatAmount(recipeConfig.feeAmount) }} · </text>
-          定价含营养师一对一设计，不含食材。
+          食谱定制费 {{ recipeConfig ? formatAmount(recipeConfig.feeAmount) : '—' }} 元/份，不含原料。
         </text>
       </view>
 
@@ -3728,8 +3727,11 @@ const getBCSText = (bcsScore: number) => {
 }
 
 .pre-order-notice__price {
+  display: block;
+  width: 100%;
   font-size: 22rpx;
   color: #8c7b66;
   line-height: 1.5;
+  text-align: center;
 }
 </style>

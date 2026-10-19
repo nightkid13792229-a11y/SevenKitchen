@@ -2654,6 +2654,15 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     return {
       allergies: allergies.map((a) => a.allergen),
       medicalConditions: medicalRecords.map((m) => m.diagnosis),
+      /**
+       * 需求 2.3.3「健康档案」只读块：最近就诊要显示「日期 + 诊断」。
+       * 原来的 medicalConditions 只有诊断名，页面无法显示日期（2026-10-19）。
+       */
+      recentVisits: medicalRecords.map((m) => ({
+        id: m.id,
+        visitDate: m.visitDate,
+        diagnosis: m.diagnosis,
+      })),
       recentCheckups: checkups,
       weightTrend: weightRecords,
       vaccines: vaccines.map((v) => ({

@@ -102,7 +102,7 @@ describe('custom recipe customer flow', () => {
   })
 
   it('guards against duplicate submissions of the paid order', () => {
-    const submit = read(`${PAGE_DIR}/index.vue`)
+    const submit = read(`${PAGE_DIR}/confirm.vue`)
 
     expect(submit).toContain('submitting.value')
   })
@@ -226,8 +226,8 @@ describe('custom recipe auth gate', () => {
   })
 
   it('does not invite a guest to submit an order', () => {
-    // 未登录时提交按钮必然是灰的，此时的提示不能是"请选择狗狗和定制目标"
-    expect(submit).toContain("title = '请先登录'")
+    // 未登录时提示不能是"请选择狗狗和定制目标"
+    expect(submit).toContain("title: '请先登录'")
     expect(submit).toContain('needLogin.value')
   })
 })
@@ -285,10 +285,9 @@ describe('custom recipe profile gate', () => {
     expect(submit).toContain('影响食谱的设计')
     expect(submit).toContain('确认并继续')
     expect(submit).toContain('confirmGate')
-    // canSubmit 必须把门槛算进去
-    const canSubmitSource =
-      submit.match(/const canSubmit = computed\(\(\) => \{[\s\S]*?\n\}\);/)?.[0] || ''
-    expect(canSubmitSource).toContain('gateBlocked')
+    // 提交校验必须把门槛算进去，并定位到门槛卡片
+    expect(submit).toContain("selector: '#custom-status'")
+    expect(submit).toContain('gateBlocked')
   })
 
   it('补确认时才带上确认标记（这就是门槛的判据）', () => {
@@ -572,10 +571,11 @@ describe('custom recipe page · 结构与知情同意', () => {
  */
 describe('定制页 · 过敏存档与知情同意下线', () => {
   const page = read(`${PAGE_DIR}/index.vue`)
+  const confirm = read(`${PAGE_DIR}/confirm.vue`)
 
-  it('syncToHealthProfile 恒为 true，不再受任何勾选控制', () => {
+  it('订单确认页提交时 syncToHealthProfile 恒为 true，不再受任何勾选控制', () => {
     const submitSource =
-      page.match(/const submitData = \{[\s\S]*?\n    \};/)?.[0] || ''
+      confirm.match(/const payload = \{[\s\S]*?\n    \};/)?.[0] || ''
 
     expect(submitSource).not.toBe('')
     expect(submitSource).toContain('syncToHealthProfile: true')
@@ -586,10 +586,10 @@ describe('定制页 · 过敏存档与知情同意下线', () => {
     expect(page).toMatch(/syncToHealthProfile: true,/)
   })
 
-  it('needsHealthManagement 按"这一单有没有填过敏"推导', () => {
-    expect(page).toContain('needsHealthManagement:');
-    expect(page).toContain('formData.value.allergies.length > 0 ||');
-    expect(page).toContain('Boolean(formData.value.allergyText.trim())');
+  it('订单确认页的 needsHealthManagement 按"这一单有没有填过敏"推导', () => {
+    expect(confirm).toContain('needsHealthManagement:');
+    expect(confirm).toContain('orderForm.allergies');
+    expect(confirm).toContain('orderForm.allergyText');
     // 疾病史已不再录入，不能拿它当依据
     expect(page).not.toContain('medicalConditions')
   })
@@ -607,14 +607,14 @@ describe('定制页 · 过敏存档与知情同意下线', () => {
     }
   })
 
-  it('canSubmit 里没有同意判断，但仍按门槛判定', () => {
-    const canSubmitSource =
-      page.match(/const canSubmit = computed\(\(\) => \{[\s\S]*?\n\}\);/)?.[0] || ''
+  it('提交校验里没有同意判断，但仍按门槛判定', () => {
+    const validationSource =
+      page.match(/function validateCustomRecipeForm\(\)[\s\S]*?\n\}/)?.[0] || ''
 
-    expect(canSubmitSource).not.toBe('')
-    expect(canSubmitSource).toContain('gateBlocked')
-    expect(canSubmitSource).not.toContain('healthInfoConsent')
-    expect(canSubmitSource).not.toContain('willWriteBackToProfile')
+    expect(validationSource).not.toBe('')
+    expect(validationSource).toContain('gateBlocked')
+    expect(validationSource).not.toContain('healthInfoConsent')
+    expect(validationSource).not.toContain('willWriteBackToProfile')
   })
 })
 
@@ -848,12 +848,14 @@ describe('custom recipe scheduling · 系统自动排期', () => {
 describe('custom recipe payment copy · 下一步付款与时限', () => {
   const submit = read(`${PAGE_DIR}/index.vue`)
 
-  it('按钮讲清"下一步：支付"，金额仍来自后台配置', () => {
-    expect(submit).toContain('下一步：支付')
-    expect(submit).toContain('submitButtonText')
-    // 旧按钮文案（容易被理解成已付款）必须消失
-    expect(submit).not.toContain('提交定制订单 {{ feeLabel }}')
-    expect(submit).toContain('feeAmount')
+  it('按钮是「确认信息」，金额只在上方说明里出现', () => {
+    const code = stripComments(submit)
+    expect(code).toContain('确认信息')
+    expect(code).not.toContain('submitButtonText')
+    expect(code).not.toContain('下一步：支付')
+    // 金额仍来自后台配置，放在说明里而不是按钮上
+    expect(code).toContain('feeAmount')
+    expect(code).toContain('定制费 ¥')
   })
 
   it('提交按钮下面不再写支付时限；也不重复一块"下一步：支付"', () => {
@@ -932,11 +934,11 @@ describe('custom recipe payment copy · 下一步付款与时限', () => {
  * 两次都会越过那道判断各下一单 —— 两张待付款订单。
  */
 describe('custom recipe duplicate submit guard · 防连点', () => {
-  const submit = read(`${PAGE_DIR}/index.vue`)
+  const submit = read(`${PAGE_DIR}/confirm.vue`)
 
   it('submitting 必须在订阅弹窗（第一个 await）之前置位', () => {
     const submitSource =
-      submit.match(/const submitOrder = async \(\) => \{[\s\S]*?\n\};/)?.[0] || ''
+      submit.match(/async function submitConfirmedOrder\(\)[\s\S]*?\n\}/)?.[0] || ''
 
     expect(submitSource).not.toBe('')
 
@@ -951,23 +953,24 @@ describe('custom recipe duplicate submit guard · 防连点', () => {
     expect(flagIndex).toBeLessThan(firstAwaitIndex)
   })
 
-  it('按钮 disabled 带上 submitting，双击在界面层就被挡住', () => {
-    expect(submit).toMatch(/:disabled="!canSubmit \|\| submitting"/)
+  it('按钮不默认置灰，靠 submitting 守卫防重复', () => {
+    expect(submit).toContain('{{ submitting ? \'提交中…\' : \'提交订单\' }}')
+    expect(submit).toContain('if (submitting.value) return;')
   })
 
   it('失败要复位 submitting，否则改完内容再也提交不了', () => {
     const submitSource =
-      submit.match(/const submitOrder = async \(\) => \{[\s\S]*?\n\};/)?.[0] || ''
+      submit.match(/async function submitConfirmedOrder\(\)[\s\S]*?\n\}/)?.[0] || ''
 
     expect(submitSource).toContain('finally')
     expect(submitSource).toContain('submitting.value = false')
   })
 
-  it('成功后用 redirectTo 作废表单，返回键不可能再交一单', () => {
+  it('成功后用 reLaunch 清掉定制页/确认页，返回键不可能再交一单', () => {
     const submitSource =
-      submit.match(/const submitOrder = async \(\) => \{[\s\S]*?\n\};/)?.[0] || ''
+      submit.match(/async function submitConfirmedOrder\(\)[\s\S]*?\n\}/)?.[0] || ''
 
-    expect(submitSource).toContain('uni.redirectTo({')
+    expect(submitSource).toContain('uni.reLaunch({')
     expect(submitSource).not.toContain('uni.navigateTo({')
   })
 })
@@ -1003,12 +1006,12 @@ describe('custom recipe pending payment reminder · 待付款提醒', () => {
     expect(submit).toContain('runCustomRecipePayment(')
   })
 
-  it('只提醒不阻断：提交条件里没有"有待付款单就不许下单"', () => {
-    const canSubmitSource =
-      submit.match(/const canSubmit = computed\(\(\) => \{[\s\S]*?\n\}\);/)?.[0] || ''
+  it('只提醒不阻断：提交校验里没有"有待付款单就不许下单"', () => {
+    const validationSource =
+      submit.match(/function validateCustomRecipeForm\(\)[\s\S]*?\n\}/)?.[0] || ''
 
-    expect(canSubmitSource).not.toBe('')
-    expect(canSubmitSource).not.toContain('pendingOrder')
+    expect(validationSource).not.toBe('')
+    expect(validationSource).not.toContain('pendingOrder')
     // 页面也要讲清"张数不限"，否则顾客不敢再下单
     expect(submit).toContain('定制张数不限')
   })
@@ -1503,8 +1506,8 @@ describe('定制页 · 交付说明与支付块', () => {
     expect(page).not.toContain('pay-next-title')
     expect(page).not.toContain('pay-next-desc')
     expect(page).not.toContain('提交后请在提交成功页')
-    // 底部固定栏的按钮仍在（文案已改为"确认定制"）
-    expect(page).toContain('submitButtonText')
+    // 底部固定栏的按钮仍在（文案已改为"确认信息"）
+    expect(page).toContain('@tap="goToOrderConfirm"')
   })
 })
 
@@ -1593,28 +1596,21 @@ describe('定制页 · 第二轮精简（2026-10-05）', () => {
     expect(read(`${PAGE_DIR}/success.vue`)).toContain('成品抵扣额度')
   })
 
-  it('提交按钮写「支付 ¥300」（2026-10-18 · 需求 2.3.5 覆盖 10-05 的「确认定制」）', () => {
+  it('提交按钮写「确认信息」，金额放在说明里（2026-10-19 老板确认）', () => {
     /**
-     * ⚠️ 这是一次**需求覆盖**，不是放松守卫。
-     *
-     * 2026-10-05 的版本写「确认定制」，理由是"它不做支付，只下单+订阅授权+跳下一步"。
-     * 2026-10-17 需求 2.3.5 明确改成按钮文案 `支付 ¥300`，并且
-     * 「金额只出现一次」—— 上方告知条不重复写金额。
-     *
-     * **但原守卫真正想守的那件事没变**：按钮本身**不发起支付**，
-     * 支付在后面那一步（提交里不能出现 requestPayment）。
+     * 2026-10-19 老板确认：定制页按钮不是支付按钮，而是「确认信息」；
+     * 金额只在说明里出现，点击后进入订单确认页，由确认页提交订单。
      */
-    expect(code).toContain("const submitButtonText = '支付 ¥300'")
-    // 金额只在按钮上出现一次：告知条里不能再写 ¥300
+    expect(code).toContain('确认信息')
+    expect(code).not.toContain('支付 ¥300')
     const notice = code.slice(
       code.indexOf('pre-order-notice'),
       code.indexOf('submit-btn'),
     )
-    expect(notice).not.toContain('¥300')
-    expect(notice).not.toContain('300 元')
-    // 支付确实在后面那一步
-    const submit = code.slice(code.indexOf('const submitOrder'))
-    expect(submit.slice(0, submit.indexOf('uni.redirectTo'))).not.toContain('requestPayment')
+    expect(notice).toContain('定制费 ¥')
+    // 支付/下单确实在后面：定制页只跳确认页
+    expect(code).toContain('goToOrderConfirm')
+    expect(code).not.toContain('requestPayment')
   })
 })
 
@@ -2066,6 +2062,7 @@ describe('订单列表按钮来自后端契约', () => {
  */
 describe('custom recipe draft · 本地草稿与付款后同步', () => {
   const page = read('src/pages/custom-recipe/index.vue')
+  const confirm = read('src/pages/custom-recipe/confirm.vue')
   const component = read('src/components/custom-recipe/AllergyScanBlock.vue')
 
   it('草稿按登录用户 ID 隔离（兼容只存 user 对象的登录态）', () => {
@@ -2090,14 +2087,14 @@ describe('custom recipe draft · 本地草稿与付款后同步', () => {
     expect(page).toContain('draftDisabled')
   })
 
-  it('提交发送 allergyReportDrafts，不把页面字段 reportDrafts 原样丢给后端', () => {
-    expect(page).toContain('const { reportDrafts, attachmentKeys, ...orderForm } = formData.value')
-    expect(page).toContain('allergyReportDrafts: reportDrafts')
+  it('订单确认页发送 allergyReportDrafts，不把页面字段 reportDrafts 原样丢给后端', () => {
+    expect(confirm).toContain('reportDrafts,')
+    expect(confirm).toContain('allergyReportDrafts: Array.isArray(reportDrafts)')
   })
 
-  it('提交成功后清掉本地草稿，避免返回时又出现', () => {
-    expect(page).toContain('clearCustomRecipeDraft(getDraftCustomerId(), formData.value.dogId)')
-    expect(page).toContain('draftDisabled.value = true')
+  it('订单确认页提交成功后清掉本地草稿，避免返回时又出现', () => {
+    expect(confirm).toContain('clearCustomRecipeDraft(getDraftCustomerId(), dogId.value)')
+    expect(confirm).toContain('uni.reLaunch({')
   })
 
   it('报告先作为草稿交给父页面，不再上传即写狗狗档案', () => {

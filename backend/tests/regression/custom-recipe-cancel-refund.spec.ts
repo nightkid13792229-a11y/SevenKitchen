@@ -117,7 +117,7 @@ describe('定制订单 · 取消退款与通知守卫', () => {
 
   it('小程序：订单页可自助取消；提交时申请订阅授权', () => {
     const detailPage = miniapp('src/pages/custom-recipe/order-detail.vue');
-    const indexPage = miniapp('src/pages/custom-recipe/index.vue');
+    const confirmPage = miniapp('src/pages/custom-recipe/confirm.vue');
 
     /**
      * 取消入口。
@@ -161,7 +161,8 @@ describe('定制订单 · 取消退款与通知守卫', () => {
      */
     const paymentUtil = miniapp('src/utils/custom-recipe-payment.ts');
 
-    expect(indexPage).toContain('requestCustomRecipeOrderSubscription');
+    // 2026-10-19：提交从定制页挪到订单确认页，但「提交时申请一次」的意图不变
+    expect(confirmPage).toContain('requestCustomRecipeOrderSubscription');
     expect(paymentUtil).toContain('export async function requestCustomRecipeOrderSubscription');
     expect(paymentUtil).toContain('uni.requestSubscribeMessage');
     // 付款前再申请一次（用户点击「立即付款」的那一刻）

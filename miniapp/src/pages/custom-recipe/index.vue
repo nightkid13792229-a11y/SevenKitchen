@@ -6,7 +6,7 @@
 
          多只狗时整块用 <picker> 包住（连头像一起可点），只有一只时不包：
          点了也只会弹出同一个选项，白让顾客以为有得换（健康管理页同一套口径）。 -->
-    <view class="hero-card">
+    <view id="custom-dog" class="hero-card">
       <picker
         v-if="dogOptions.length > 1"
         class="hero-card__identity"
@@ -81,7 +81,7 @@
          根因就是这张卡**常驻**渲染 —— 在"已登录 + 有档案 + 门槛已确认 + 没有计划"
          这个最常见的正常状态下，它下面五个分支一条都不成立，
          只剩内边距与白底，看上去就是一条空白。所以整张卡改成按内容出现。 -->
-    <view v-if="showStatusSection" class="section">
+    <view v-if="showStatusSection" id="custom-status" class="section">
       <!-- 体重管理计划（阶段 D1）：进行中/维持期/已暂停都带出。
            计划是顾客当下真正在执行的方案，定制时必须看得见 ——
            否则他定的减重计划在定制页完全没有体现，等于白定。
@@ -221,7 +221,7 @@
 
     <!-- 第一步：体重管理（2026-10-05 老板要求：标题由"定制目标"改为"体重管理"，
          并删掉标题下方重复的"体重管理"四个字） -->
-    <view v-if="hasSelectedDog" class="section">
+    <view v-if="hasSelectedDog" id="custom-weight" class="section">
       <view class="section-title">
         <text class="step-number">1</text>
         <text class="title-text">体重管理</text>
@@ -271,7 +271,7 @@
          2026-10-05 老板要求：先问一句「小家伙是否对部分食物过敏？」——
          不过敏的狗狗家长直接跳过，不必面对一整块用不上的录入界面。
          （标题上的「（可选）」后来按老板要求去掉了；答"没有"下面也不再多写说明。） -->
-    <view v-if="hasSelectedDog" class="section">
+    <view v-if="hasSelectedDog" id="custom-allergy" class="section">
       <view class="section-title">
         <text class="step-number">2</text>
         <text class="title-text">过敏信息</text>
@@ -309,6 +309,8 @@
               placeholder="例如：鸡肉、牛肉、鹿肉"
               maxlength="500"
               auto-height
+              :focus="allergyTextFocused"
+              @blur="allergyTextFocused = false"
             />
             <text class="allergy-text__hint">
               多个用顿号分开；不确定的也可以写上。
@@ -439,8 +441,48 @@
       </view>
     </view>
 
+    <!-- 第三步：健康档案（只读确认，2026-10-19 补需求 2.3.3）
+         不在这里录入，也不在这里逐条打勾；顾客只需要确认“是不是最近这一次”，
+         不对就点整块去健康管理补填/修改。 -->
+    <view v-if="hasSelectedDog" id="custom-health" class="section">
+      <view class="section-title">
+        <text class="step-number">3</text>
+        <text class="title-text">健康档案</text>
+      </view>
+
+      <view class="health-archive" @tap="goToHealthProfile">
+        <view v-if="healthSummaryLoading" class="health-archive__empty-row">
+          <text class="health-archive__text">正在读取健康档案…</text>
+        </view>
+        <view v-else-if="healthSummaryLoadFailed" class="health-archive__empty-row">
+          <text class="health-archive__text">健康档案暂时读取失败</text>
+          <text class="health-archive__link">去健康管理查看 ›</text>
+        </view>
+        <template v-else-if="recentVisit || recentCheckup">
+          <view v-if="recentVisit" class="health-archive__row">
+            <text class="health-archive__label">最近就诊</text>
+            <text class="health-archive__text">
+              {{ formatHealthRecordDate(recentVisit.visitDate) }} {{ recentVisit.diagnosis }}
+            </text>
+            <text class="health-archive__arrow">›</text>
+          </view>
+          <view v-if="recentCheckup" class="health-archive__row">
+            <text class="health-archive__label">最近体检</text>
+            <text class="health-archive__text">
+              {{ formatHealthRecordDate(recentCheckup.checkupDate) }} {{ recentCheckup.checkupType }}
+            </text>
+            <text class="health-archive__arrow">›</text>
+          </view>
+        </template>
+        <view v-else class="health-archive__empty-row">
+          <text class="health-archive__text">没有任何就诊和体检记录</text>
+          <text class="health-archive__link">去补填 ›</text>
+        </view>
+      </view>
+    </view>
+
     <!--
-      第二步：饲喂历史（必填）+ 最近肠胃（选填）
+      第四步：饲喂历史（必填）+ 最近肠胃（选填）
       2026-10-18 按需求 2.3.4「第二段：补充（只问档案里没有的）」重做。
 
       原来的「饮食偏好（爱吃的/忌口的）」按 2026-10-17 V6 决定**拿掉** ——
@@ -451,9 +493,9 @@
         · 现在喂的是什么粮 → 决定过渡方案怎么写（"第 1 周按 7:3 混原来的粮"）
         · 最近肠胃怎么样 → 软便/便秘/呕吐是最常见的换粮诱因
     -->
-    <view v-if="hasSelectedDog" class="section">
+    <view v-if="hasSelectedDog" id="custom-intake" class="section">
       <view class="section-title">
-        <text class="step-number">2</text>
+        <text class="step-number">4</text>
         <text class="title-text">饲喂历史</text>
       </view>
 
@@ -528,9 +570,9 @@
     <!-- 第四步：备注（可选）
          老板口径：这是给营养师看的备注，不影响价格与热量计算，
          所以从"定制目标"里独立出来，放在饮食偏好之后。 -->
-    <view v-if="hasSelectedDog" class="section">
+    <view v-if="hasSelectedDog" id="custom-notes" class="section">
       <view class="section-title">
-        <text class="step-number">4</text>
+        <text class="step-number">5</text>
         <text class="title-text">备注（可选）</text>
       </view>
       <textarea
@@ -587,35 +629,23 @@
               这一块本来就是重复的。
          权威日期与抵扣，顾客提交后在确认页看到。 -->
 
-    <!-- 提交按钮
-         disabled 必须带上 submitting：按钮文案是"下一步：支付 ¥300"，
-         点一次就进入订阅弹窗，这期间再点一次会生成第二张待付款单。 -->
+    <!-- 底部确认条（2026-10-19 老板确认）
+         ① 按钮不默认置灰：随时可点，点击后才校验；缺什么提示并滚到对应板块
+         ② 按钮只负责“确认信息 → 订单确认页”，这里不创建订单、不付款
+         ③ 金额只出现一次：放在说明里，按钮不显示金额 -->
     <view v-if="hasSelectedDog" class="submit-section">
-      <!--
-        下单前告知（2026-10-18 · 需求 2.3.5）
-
-        线上此前对 ¥300 **没有任何解释**，按钮只写"下一步：支付 ¥300"，
-        顾客很可能以为含食材 —— 而说明只在付完钱之后才出现。
-
-        两条规则：
-          ① 底部条固定（跟着滚），滚到哪儿都看得见
-          ② **金额只出现一次** —— 按钮上已有 ¥300，上方不再单独显示金额
-      -->
       <view class="pre-order-notice">
         <text v-if="estimatedDeliveryText" class="pre-order-notice__date">
           {{ estimatedDeliveryText }}
         </text>
         <text class="pre-order-notice__price">
+          <text v-if="recipeConfig">定制费 ¥{{ formatAmount(recipeConfig.feeAmount) }} · </text>
           定价含营养师一对一设计，不含食材；付完可全额抵扣成品鲜食。
         </text>
       </view>
 
-      <button
-        class="submit-btn"
-        @tap="submitOrder"
-        :disabled="!canSubmit || submitting"
-      >
-        {{ submitting ? '提交中…' : submitButtonText }}
+      <button class="submit-btn" @tap="goToOrderConfirm">
+        {{ navigatingToConfirm ? '正在进入…' : '确认信息' }}
       </button>
     </view>
   </view>
@@ -627,7 +657,6 @@ import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue';
 import {
   fetchMyOrders,
   fetchDogHealthSummary,
-  submitOrder,
   fetchNextDeliveryDate,
   uploadCustomRecipeDraftAttachment,
 } from '@/api/custom-recipe';
@@ -635,10 +664,7 @@ import { onHide, onLoad, onShow } from '@dcloudio/uni-app';
 import { getToken, request } from '@/utils/api';
 import { dogApi } from '@/api/dogs';
 import AllergyScanBlock from '@/components/custom-recipe/AllergyScanBlock.vue';
-import {
-  requestCustomRecipeOrderSubscription,
-  runCustomRecipePayment,
-} from '@/utils/custom-recipe-payment';
+import { runCustomRecipePayment } from '@/utils/custom-recipe-payment';
 import {
   formatAmount,
   formatRemainingMinutes,
@@ -930,7 +956,7 @@ function removeDraftReportImage(reportIndex: number, url: string) {
  *   ① 进行中/维持期 → 计划说了算：减重计划 → LOSE_WEIGHT，
  *      增重计划 → GAIN_WEIGHT，维持期 → MAINTAIN
  *   ② 其它（没有计划 / 已暂停）→ 按顾客选的方向
- *   ③ 还没选 → 空字符串（提交按钮为灰，见 canSubmit）
+ *   ③ 还没选 → 空字符串（确认时由校验拦住）
  */
 /** BCS 4-5 是理想区间，按"维持"处理（后端在同样区间里不给增减重建议） */
 const BCS_MAINTAIN_GOAL = 'MAINTAIN';
@@ -947,7 +973,7 @@ function resolveTargetGoal(): string {
   if (weightGoalChoice.value === 'LOSS') return 'LOSE_WEIGHT';
   if (weightGoalChoice.value === 'GAIN') return 'GAIN_WEIGHT';
   if (weightGoalChoice.value === 'MAINTAIN') return BCS_MAINTAIN_GOAL;
-  // 还没选：不给方向（canSubmit 会挡住提交，并提示先选一个）
+  // 还没选：不给方向（确认时校验会提示先选一个）
   return '';
 }
 
@@ -1054,7 +1080,6 @@ const goToWeightGoalPlan = () => {
   });
 };
 
-const submitting = ref(false);
 /** 未登录标记：与"已登录但还没有狗狗档案"是两个不同的状态，提示语和下一步动作都不一样 */
 const needLogin = ref(false);
 
@@ -1154,7 +1179,7 @@ function getDraftCustomerId(): string {
 }
 
 function scheduleDraftSave() {
-  if (draftDisabled.value || draftHydrating.value || submitting.value) return;
+  if (draftDisabled.value || draftHydrating.value) return;
   if (draftSaveTimer) clearTimeout(draftSaveTimer);
   draftSaveTimer = setTimeout(() => {
     draftSaveTimer = null;
@@ -1167,7 +1192,7 @@ function flushDraftNow() {
     clearTimeout(draftSaveTimer);
     draftSaveTimer = null;
   }
-  if (draftDisabled.value || draftHydrating.value || submitting.value) return;
+  if (draftDisabled.value || draftHydrating.value) return;
 
   const dogId = String(formData.value.dogId || '').trim();
   const customerId = getDraftCustomerId();
@@ -1384,6 +1409,59 @@ function toggleStomach(code: string) {
  */
 const healthSummary = ref<any>(null);
 const healthSummaryLoading = ref(false);
+const healthSummaryLoadFailed = ref(false);
+
+/** 健康档案只读块：只取最近一条，不展示状态（需求 2.3.3） */
+const recentVisit = computed(() => {
+  const visits = healthSummary.value?.recentVisits;
+  return Array.isArray(visits) && visits.length > 0 ? visits[0] : null;
+});
+const recentCheckup = computed(() => {
+  const checkups = healthSummary.value?.recentCheckups;
+  return Array.isArray(checkups) && checkups.length > 0 ? checkups[0] : null;
+});
+
+/** 健康档案日期按 09-20 显示（文档示例口径） */
+function formatHealthRecordDate(value: unknown): string {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) {
+    const match = text.match(/^\d{4}-(\d{2})-(\d{2})/);
+    return match ? `${match[1]}-${match[2]}` : text;
+  }
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${month}-${day}`;
+}
+
+/** 打开健康管理补填/修改；返回时 onShow 只刷新这一块，不动草稿 */
+function goToHealthProfile() {
+  const dogId = String(formData.value.dogId || '').trim();
+  if (!dogId) return;
+  uni.navigateTo({
+    url: `/pages/dog-profile-health/index?dogId=${encodeURIComponent(dogId)}&from=custom_recipe`,
+  });
+}
+
+/** 只刷新健康汇总，不重置表单/草稿（需求 2.3.8） */
+async function refreshHealthSummary(dogId: string) {
+  if (!dogId) return;
+  try {
+    const summary = await fetchDogHealthSummary(dogId);
+    if (!summary) return;
+    if (String(formData.value.dogId || '') !== dogId) return;
+    healthSummary.value = summary;
+    healthSummaryLoadFailed.value = false;
+  } catch (error) {
+    // 刷新失败保留旧内容；没有旧内容时提示读取失败，不冒充“没有记录”
+    console.warn('[CustomRecipe] 刷新健康档案失败:', error);
+    if (!healthSummary.value) healthSummaryLoadFailed.value = true;
+  }
+}
+
+/** 过敏文本输入框焦点（校验失败时定位用） */
+const allergyTextFocused = ref(false);
 
 /** 附件上传中 */
 const attachmentUploading = ref(false);
@@ -1603,51 +1681,6 @@ const confirmGate = async () => {
   }
 };
 
-const canSubmit = computed(() => {
-  if (!formData.value.dogId || !formData.value.targetGoal) return false;
-  if (gateBlocked.value) return false;
-  // 第一步那个方向必须选（有计划时不用选，方向由计划定）
-  if (!hasOpenPlan.value && weightGoalChoice.value === null) return false;
-  // 第二步那一问必须答：答"没有"才能跳过录入界面，所以不能默认成没答
-  if (hasFoodAllergy.value === null) return false;
-  // 2026-10-19：答"有过敏"必须留下文本，否则营养师没有任何依据
-  if (
-    hasFoodAllergy.value === true &&
-    !formData.value.allergyText.trim()
-  ) {
-    return false;
-  }
-  /**
-   * 需求 2.3.4 的两项必填（2026-10-18）。
-   *
-   * 为什么卡在提交而不是只标个星号：
-   * 交付物要写"第 1 周按 7:3 混原来的粮" —— **没有这两项，营养师写不出过渡方案**，
-   * 交付出来的东西就是套话。宁可现在拦住，也别让顾客等三天拿到一份没法用的食谱。
-   */
-  if (!formData.value.currentFoodMain) return false;
-  if (
-    formData.value.currentFoodMain === 'OTHER' &&
-    !formData.value.currentFoodOther.trim()
-  ) {
-    return false;
-  }
-  if (formData.value.changeReasons.length === 0) return false;
-  // 选了「其他」就必须填原因 —— 否则营养师只看到"其他"两个字
-  if (
-    formData.value.changeReasons.includes('OTHER') &&
-    !formData.value.changeReasonOther.trim()
-  ) {
-    return false;
-  }
-  if (
-    formData.value.stomachConditions.includes('OTHER') &&
-    !formData.value.stomachOther.trim()
-  ) {
-    return false;
-  }
-  return true;
-});
-
 /**
  * 「状态区」这一整张卡要不要出现（2026-10-05 老板指出的白块）。
  *
@@ -1717,8 +1750,6 @@ const healthPrefillHint = computed(() => {
  * 金额**只出现这一次**（上方告知条里不再重复写金额），
  * 而"这钱包含什么"由上方那条说明负责，按钮只管"要付多少"。
  */
-const submitButtonText = '支付 ¥300';
-
 // ==================== 待付款单提醒 ====================
 
 /**
@@ -1856,6 +1887,10 @@ onShow(() => {
     void loadDogs();
   }
   void loadPendingOrder();
+  // 从健康管理补填回来：只刷新健康档案块，不覆盖顾客已填的草稿（需求 2.3.8）
+  if (formData.value.dogId) {
+    void refreshHealthSummary(formData.value.dogId);
+  }
 });
 
 /**
@@ -2197,6 +2232,7 @@ const loadDogArchiveInfo = async (dogId: string) => {
      * 是**架构守卫**抓出来的：真机上 `res` 不存在会直接崩。
      */
     healthSummary.value = summary;
+    healthSummaryLoadFailed.value = false;
     summaryLoaded = true;
 
     if (!draft) {
@@ -2230,6 +2266,7 @@ const loadDogArchiveInfo = async (dogId: string) => {
     // 读不到档案不能挡住定制：保持草稿 / 清空后的状态，让顾客自己填
     console.warn('[CustomRecipe] 读取档案信息失败:', error);
     healthSummary.value = null;
+    healthSummaryLoadFailed.value = true;
   } finally {
     if (token !== dogLoadToken.value) return;
     healthSummaryLoading.value = false;
@@ -2555,197 +2592,188 @@ const removeDislikedIngredient = (index: number) => {
   formData.value.dislikedIngredients.splice(index, 1);
 };
 
-/**
- * 付款前弹窗的内容（需求 2.3.6）。
- *
- * 三行，一屏能看完：
- *   ① 给谁定制（狗名 + 品种 + 体重）—— 防止"给错狗下单"（家里有两三只的最容易错）
- *   ② 交付日期 —— 后端给的，不是前端算的
- *   ③ 这钱含什么 / 不含什么 / 能抵什么 —— 此前线上对此毫无解释
- *
- * ⚠️ 不写"今天几号"：顾客自己知道，写出来只占地方。
- */
-function buildConfirmContent(): string {
-  const lines: string[] = [];
-  const dog = selectedDog.value;
+type IntakeValidationFocus =
+  | 'allergy'
+  | 'currentFoodOther'
+  | 'changeReasonOther'
+  | 'stomachOther'
+  | null;
 
-  if (dog) {
-    // `dog.value` 是这个页面里狗对象的 id（历史命名），不是值
-    const parts = [dog.name, dog.breed, dog.weightKg ? `${dog.weightKg}kg` : '']
-      .filter(Boolean)
-      .join(' · ');
-    if (parts) lines.push(`给 ${parts} 定制`);
-  }
-
-  if (estimatedDeliveryText.value) {
-    lines.push(estimatedDeliveryText.value.replace('预计 ', '预计 '));
-  }
-
-  lines.push('含营养师一对一设计，不含食材');
-  lines.push('付完可全额抵扣成品鲜食');
-
-  return lines.join('\n');
+interface CustomRecipeValidationResult {
+  valid: boolean;
+  title?: string;
+  selector?: string;
+  focus?: IntakeValidationFocus;
 }
 
-const submitOrder = async () => {
-  if (!canSubmit.value) {
-    // 提示要说清"还差什么"，不然按钮灰着顾客不知道原因
-    let title = '请选择要定制的狗狗';
-    if (needLogin.value) {
-      // 未登录时提示"请选择狗狗和定制目标"是误导：顾客根本没得选
-      title = '请先登录';
-    } else if (gateBlocked.value) {
-      title = '请先确认上面的体况评分、活动量与每日餐数';
-    } else if (!hasOpenPlan.value && weightGoalChoice.value === null) {
-      // 第一步那个方向没选：按钮灰着要说清差哪一步
-      title = '请先选择：减重、维持还是增重';
-    } else if (hasFoodAllergy.value === null) {
-      title = '请先回答：小家伙是否对部分食物过敏';
-    } else if (
-      hasFoodAllergy.value === true &&
-      !formData.value.allergyText.trim()
-    ) {
-      title = '还差：过敏食物';
-    } else if (!formData.value.currentFoodMain) {
-      // 需求 2.3.7：说清差哪一项，不能只变灰不动
-      title = '还差：现在主要喂什么';
-    } else if (
-      formData.value.currentFoodMain === 'OTHER' &&
-      !formData.value.currentFoodOther.trim()
-    ) {
-      title = '还差：现在主要喂什么的补充说明';
-    } else if (formData.value.changeReasons.length === 0) {
-      title = '还差：定制原因';
-    } else if (
-      formData.value.changeReasons.includes('OTHER') &&
-      !formData.value.changeReasonOther.trim()
-    ) {
-      title = '选了「其他」，请补一句具体原因';
-    } else if (
-      formData.value.stomachConditions.includes('OTHER') &&
-      !formData.value.stomachOther.trim()
-    ) {
-      title = '还差：肠胃情况的补充说明';
-    }
+/** 防重复进入确认页；不是“未填完就置灰”，按钮始终可点。 */
+const navigatingToConfirm = ref(false);
 
-    uni.showToast({ title, icon: 'none' });
+/**
+ * 提交前校验（2026-10-19 老板确认）。
+ *
+ * 按钮不置灰：点了才校验。缺什么返回“提示 + 要滚到的板块 + 要聚焦的输入框”，
+ * 不再只弹一句“请完善信息”。
+ */
+function validateCustomRecipeForm(): CustomRecipeValidationResult {
+  if (!hasSelectedDog.value) {
+    return { valid: false, title: '请选择要定制的狗狗', selector: '#custom-dog' };
+  }
+  if (needLogin.value) {
+    return { valid: false, title: '请先登录', selector: '#custom-dog' };
+  }
+  if (gateBlocked.value) {
+    return {
+      valid: false,
+      title: '请先确认上面的体况评分、活动量与每日餐数',
+      selector: '#custom-status',
+    };
+  }
+  if (!hasOpenPlan.value && weightGoalChoice.value === null) {
+    return {
+      valid: false,
+      title: '请先选择：减重、维持还是增重',
+      selector: '#custom-weight',
+    };
+  }
+  if (!formData.value.targetGoal) {
+    return {
+      valid: false,
+      title: '请先选择：减重、维持还是增重',
+      selector: '#custom-weight',
+    };
+  }
+  if (hasFoodAllergy.value === null) {
+    return {
+      valid: false,
+      title: '请先回答：小家伙是否对部分食物过敏',
+      selector: '#custom-allergy',
+    };
+  }
+  if (
+    hasFoodAllergy.value === true &&
+    !formData.value.allergyText.trim()
+  ) {
+    return {
+      valid: false,
+      title: '还差：过敏食物',
+      selector: '#custom-allergy',
+      focus: 'allergy',
+    };
+  }
+  if (!formData.value.currentFoodMain) {
+    return {
+      valid: false,
+      title: '还差：现在主要喂什么',
+      selector: '#custom-intake',
+    };
+  }
+  if (
+    formData.value.currentFoodMain === 'OTHER' &&
+    !formData.value.currentFoodOther.trim()
+  ) {
+    return {
+      valid: false,
+      title: '还差：现在主要喂什么的补充说明',
+      selector: '#custom-intake',
+      focus: 'currentFoodOther',
+    };
+  }
+  if (formData.value.changeReasons.length === 0) {
+    return {
+      valid: false,
+      title: '还差：定制原因',
+      selector: '#custom-intake',
+    };
+  }
+  if (
+    formData.value.changeReasons.includes('OTHER') &&
+    !formData.value.changeReasonOther.trim()
+  ) {
+    return {
+      valid: false,
+      title: '选了「其他」，请补一句具体原因',
+      selector: '#custom-intake',
+      focus: 'changeReasonOther',
+    };
+  }
+  if (
+    formData.value.stomachConditions.includes('OTHER') &&
+    !formData.value.stomachOther.trim()
+  ) {
+    return {
+      valid: false,
+      title: '还差：肠胃情况的补充说明',
+      selector: '#custom-intake',
+      focus: 'stomachOther',
+    };
+  }
+  return { valid: true };
+}
+
+function scrollToCustomSection(selector?: string) {
+  if (!selector) return;
+  uni.pageScrollTo({ selector, duration: 300 });
+}
+
+function focusValidationTarget(focus?: IntakeValidationFocus) {
+  if (!focus) return;
+  void nextTick(() => {
+    if (focus === 'allergy') {
+      allergyTextFocused.value = false;
+      void nextTick(() => {
+        allergyTextFocused.value = true;
+      });
+      return;
+    }
+    if (focus === 'currentFoodOther') {
+      focusCurrentFoodOther();
+      return;
+    }
+    if (focus === 'changeReasonOther') {
+      focusChangeReasonOther();
+      return;
+    }
+    if (focus === 'stomachOther') {
+      focusStomachOther();
+    }
+  });
+}
+
+/**
+ * 自定义页按钮：只校验并进入订单确认页，**不创建订单、不付款**。
+ * 订单确认页的「提交订单」才真正下单（2026-10-19 老板确认）。
+ */
+function goToOrderConfirm() {
+  if (navigatingToConfirm.value) return;
+  if (draftHydrating.value) {
+    uni.showToast({ title: '正在读取档案，请稍候', icon: 'none' });
+    return;
+  }
+  const result = validateCustomRecipeForm();
+  if (!result.valid) {
+    uni.showToast({ title: result.title || '请先完善信息', icon: 'none' });
+    scrollToCustomSection(result.selector);
+    focusValidationTarget(result.focus);
     return;
   }
 
-  /**
-   * 防重复提交（2026-10-04 修复）。
-   *
-   * 这单是付费单，重复提交会生成两张待付款订单。
-   * 关键点是 submitting **必须在任何 await 之前置位**：原先它放在
-   * `await requestCustomRecipeOrderSubscription()` **之后**，而订阅授权会弹微信
-   * 系统弹窗，顾客等得不耐烦时再点一次，两次都会越过那道判断各下一单。
-   * 按钮的 :disabled 也一起带上 submitting，双击在界面层就被挡住。
-   */
-  if (submitting.value) return;
-  submitting.value = true;
-
-  /**
-   * 付款前确认（2026-10-18 · 需求 2.3.6）
-   *
-   * **这是防误解的最后一道防线**：点下去就付 300，
-   * 这一下必须让顾客看清"给谁做、什么时候拿到、这钱含什么"。
-   *
-   * 刻意**不显示"今天几号"** —— 顾客自己知道，写出来只占地方。
-   */
-  const confirmed = await new Promise<boolean>((resolve) => {
-    uni.showModal({
-      title: '确认定制',
-      content: buildConfirmContent(),
-      confirmText: '确认支付',
-      cancelText: '再看看',
-      success: (res) => resolve(Boolean(res.confirm)),
-      fail: () => resolve(false),
-    });
-  });
-
-  if (!confirmed) return;
-
-  try {
-    /**
-     * 申请订阅消息（2026-09-28）。
-     *
-     * 微信的一次性订阅消息必须由用户点击触发申请，所以放在"点提交"这一刻；
-     * 这次订阅用于「已交付」那条通知（付款那条在点「立即付款」时另申请一次，
-     * 因为订阅一次只能下发一条）。
-     * 它自己吞掉所有失败，不会挡住下单。
-     */
-    await requestCustomRecipeOrderSubscription();
-
-    uni.showLoading({ title: '提交中...' });
-
-    /**
-     * 提交载荷。
-     *
-     * 2026-09-28 修复：原先勾了「需要健康管理」会把 targetGoal **改写成
-     * HEALTH_SUPPORT**，于是「减重 + 需要健康管理」这种组合会把减重目标丢掉。
-     * 现在定制页上已经没有这个勾选框，两者彻底分开传：
-     *   · targetGoal            —— 系统按「计划 > 体况」定的方向（顾客不选）
-     *   · needsHealthManagement —— 按"这一单有没有填过敏"推导
-     *   · syncToHealthProfile   —— 恒为 true（老板 2026-10-04：过敏一定要存档；
-     *                              后端只增不删，不会动档案里已有的记录）
-     *
-     * 载荷里**不含 scheduledDate**：排期由后端自动定，前端不传日期（2026-10-04）。
-     */
-    /**
-     * `reportDrafts` 是页面/订单草稿字段，后端叫 `allergyReportDrafts`；
-     * 拆开传，避免把页面的临时字段名原样丢给后端校验。
-     */
-    const { reportDrafts, attachmentKeys, ...orderForm } = formData.value;
-    const submitData = {
-      ...orderForm,
-      allergyReportDrafts: reportDrafts,
-      syncToHealthProfile: true,
-      needsHealthManagement:
-        formData.value.allergies.length > 0 ||
-        Boolean(formData.value.allergyText.trim()),
-    };
-
-    // 统一走 request()：只有 code === 0 才会 resolve，
-    // 非 0 会 reject 并带上服务端 message，不会再出现"下单成功却提示网络错误"。
-    const created = await submitOrder(submitData);
-
-    uni.hideLoading();
-
-    const orderId = created?.orderId;
-    if (!orderId) {
-      throw new Error('服务端未返回订单号');
-    }
-
-    // 订单已生成：本地草稿的使命结束（付款前它只是草稿，付款后由后端写档案）
-    draftDisabled.value = true;
-    clearCustomRecipeDraft(getDraftCustomerId(), formData.value.dogId);
-
-    const query = [
-      `orderId=${encodeURIComponent(orderId)}`,
-      `amount=${encodeURIComponent(String(created.amount ?? ''))}`,
-      `creditAmount=${encodeURIComponent(String(created.creditAmount ?? ''))}`,
-    ];
-    /**
-     * 用 redirectTo 而不是 navigateTo（2026-10-04）。
-     *
-     * 下单已经成功，这一页的表单就必须作废：navigateTo 会把定制页留在栈里，
-     * 顾客返回一次就又能点一次提交，等于白白多出一张待付款单。
-     * redirectTo 用成功页替换掉本页，返回键回到首页，表单不可能被重复提交。
-     */
-    uni.redirectTo({
-      url: `/pages/custom-recipe/success?${query.join('&')}`,
-    });
-  } catch (error: any) {
-    uni.hideLoading();
-    uni.showToast({
-      title: error?.message || '提交失败，请稍后重试',
-      icon: 'none',
-    });
-  } finally {
-    // 失败要复位，否则顾客改完内容再也提交不了
-    submitting.value = false;
+  const dogId = String(formData.value.dogId || '').trim();
+  if (!dogId) {
+    uni.showToast({ title: '请选择要定制的狗狗', icon: 'none' });
+    return;
   }
-};
+
+  // 确认页会读本地草稿；先把当前输入落盘，避免竞态
+  flushDraftNow();
+  navigatingToConfirm.value = true;
+  uni.navigateTo({
+    url: `/pages/custom-recipe/confirm?dogId=${encodeURIComponent(dogId)}`,
+    complete: () => {
+      navigatingToConfirm.value = false;
+    },
+  });
+}
 
 // 辅助函数
 const getBCSText = (bcsScore: number) => {
@@ -3301,6 +3329,45 @@ const getBCSText = (bcsScore: number) => {
   margin-top: 12rpx;
   font-size: 23rpx;
   color: #968f6d;
+}
+
+.health-archive {
+  padding: 18rpx 20rpx;
+  border-radius: 14rpx;
+  background: #f7f9f1;
+  border: 1rpx solid #e3e6d4;
+}
+
+.health-archive__row,
+.health-archive__empty-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  min-height: 48rpx;
+}
+
+.health-archive__row + .health-archive__row {
+  margin-top: 12rpx;
+}
+
+.health-archive__label {
+  flex: 0 0 auto;
+  font-size: 24rpx;
+  color: #8a7a63;
+}
+
+.health-archive__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 26rpx;
+  color: #26261f;
+}
+
+.health-archive__arrow,
+.health-archive__link {
+  flex: 0 0 auto;
+  font-size: 26rpx;
+  color: var(--sk-gold, #b08d4f);
 }
 
 .health-item {

@@ -238,6 +238,12 @@
       }
     },
     {
+      "path": "pages/custom-recipe/confirm",
+      "style": {
+        "navigationBarTitleText": "确认订单"
+      }
+    },
+    {
       "path": "pages/custom-recipe/success",
       "style": {
         "navigationBarTitleText": "提交成功"

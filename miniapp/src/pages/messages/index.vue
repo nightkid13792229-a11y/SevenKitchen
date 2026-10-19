@@ -76,6 +76,7 @@ import {
   markMessageRead,
   type CustomerMessage,
 } from '@/api/messages';
+import { storeUnreadMessageCount } from '@/utils/unread-message-badge';
 
 /**
  * 消息中心（2026-10-18 新建）
@@ -157,7 +158,9 @@ function formatTime(iso: string): string {
 
 async function refreshUnread() {
   if (!hasToken.value) return;
-  unreadCount.value = await fetchUnreadMessageCount();
+  unreadCount.value = storeUnreadMessageCount(
+    await fetchUnreadMessageCount(),
+  );
 }
 
 async function loadFirstPage() {
@@ -212,7 +215,9 @@ function switchTab(key: string) {
 async function openMessage(item: CustomerMessage) {
   if (!item.read) {
     item.read = true;
-    unreadCount.value = Math.max(0, unreadCount.value - 1);
+    unreadCount.value = storeUnreadMessageCount(
+      Math.max(0, unreadCount.value - 1),
+    );
     void markMessageRead(item.id).catch(() => false);
   }
 
@@ -252,7 +257,7 @@ async function handleReadAll() {
   const changed = await markAllMessagesRead().catch(() => 0);
   if (changed >= 0) {
     messages.value = messages.value.map((item) => ({ ...item, read: true }));
-    unreadCount.value = 0;
+    unreadCount.value = storeUnreadMessageCount(0);
   }
 }
 

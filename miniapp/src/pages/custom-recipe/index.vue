@@ -686,6 +686,9 @@ import {
 // 状态定义
 const dogOptions = ref<any[]>([]);
 const selectedDog = ref<any>(null);
+/** 「再次定制」带进来的狗：首次加载后优先选中它 */
+const preferredDogId = ref('');
+let preferredDogApplied = false;
 
 /**
  * 狗狗档案是否还在读。
@@ -1825,7 +1828,9 @@ const viewPendingOrder = () => {
 };
 
 // 生命周期
-onLoad(() => {
+onLoad((options: any) => {
+  const dogId = String(options?.dogId || '').trim();
+  if (dogId) preferredDogId.value = dogId;
   loadDogs();
   void ensureRecipeConfig();
 });
@@ -1972,6 +1977,16 @@ const loadDogs = async () => {
        *   ③ 上次在别处选过 → 用本地记住的那只
        *   ④ 都没有 → 不替顾客选，但**把"请先选一只狗狗"说得更明显**
        */
+      if (!preferredDogApplied && preferredDogId.value) {
+        const index = dogOptions.value.findIndex(
+          (dog) => String(dog.value || dog.id) === preferredDogId.value,
+        );
+        if (index >= 0) {
+          preferredDogApplied = true;
+          onDogChange({ detail: { value: index } });
+        }
+      }
+
       if (!formData.value.dogId) {
         if (dogOptions.value.length === 1) {
           onDogChange({ detail: { value: 0 } });

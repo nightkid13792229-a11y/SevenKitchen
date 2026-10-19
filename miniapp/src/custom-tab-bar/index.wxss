@@ -61,3 +61,27 @@
   border-radius: 0 0 999rpx 999rpx;
   background: linear-gradient(90deg, #d8bc85, #b08d4f);
 }
+
+/* 「我的」未读红点 */
+.icon-wrap {
+  position: relative;
+  width: 52rpx;
+  height: 52rpx;
+}
+
+.icon-wrap .icon {
+  width: 52rpx;
+  height: 52rpx;
+}
+
+.tab-dot {
+  position: absolute;
+  top: -2rpx;
+  right: -4rpx;
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 50%;
+  background: #d93f3f;
+  border: 2rpx solid #f9faf2;
+  box-sizing: content-box;
+}

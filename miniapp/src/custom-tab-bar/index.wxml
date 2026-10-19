@@ -29,7 +29,10 @@
     data-index="{{isStaff ? 2 : 1}}"
     bindtap="switchTab"
   >
-    <image class="icon" src="{{(isStaff && selected === 2) || (!isStaff && selected === 1) ? list[1].selectedIconPath : list[1].iconPath}}" mode="aspectFit" />
+    <view class="icon-wrap">
+      <image class="icon" src="{{(isStaff && selected === 2) || (!isStaff && selected === 1) ? list[1].selectedIconPath : list[1].iconPath}}" mode="aspectFit" />
+      <view wx:if="{{unreadCount > 0}}" class="tab-dot"></view>
+    </view>
     <text class="text">我的</text>
   </view>
 </view>

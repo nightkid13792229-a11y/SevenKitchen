@@ -68,6 +68,8 @@ export interface RenderableOrderView {
 /** 定制订单详情（只列页面用得到的字段） */
 export interface CustomRecipeOrderDetail {
   orderId: string;
+  dogId?: string;
+  dogName?: string;
   status: string;
   /** 后端下发的可渲染形态；老后端不返回 */
   renderable?: RenderableOrderView | null;

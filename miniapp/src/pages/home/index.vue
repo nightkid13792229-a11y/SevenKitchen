@@ -15,21 +15,7 @@
     </view>
 
     <!-- 顶部欢迎区 -->
-    <view class="header-section" :style="headerSectionStyle">
-      <!--
-        消息铃铛（2026-10-18）。
-        消息中心的第二个入口 —— 「我的」里有一个，这里放一个更容易被看到。
-        有未读时显示红点；未登录不显示（点了也没内容）。
-      -->
-      <view
-        v-if="isLoggedIn"
-        class="message-bell"
-        @tap="goToMessages"
-      >
-        <text class="message-bell-icon">🔔</text>
-        <view v-if="unreadMessageCount > 0" class="message-bell-dot" />
-      </view>
-    </view>
+    <view class="header-section" :style="headerSectionStyle" />
 
     <!-- 快捷功能入口 -->
     <view class="quick-actions">
@@ -400,6 +386,7 @@ import { fetchTastingPacks } from '../../api/tastingPack'
 import { onLoad, onShow, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
 import { request, getToken } from '../../utils/api'
 import { fetchUnreadMessageCount } from '@/api/messages'
+import { storeUnreadMessageCount } from '@/utils/unread-message-badge'
 import { getRecipeCoverImageUrl, isKnownStaleRecipeCoverUrl, normalizeImageUrl } from '../../utils/config'
 import { resolveDogProfileEntryRoute } from '../../utils/dog-profile-form'
 import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
@@ -592,17 +579,19 @@ const headerSectionStyle = computed(() => {
  * 未读消息数（2026-10-18）。
  * 失败静默给 0 —— 红点拿不到不该打扰顾客。
  */
-const unreadMessageCount = ref(0)
 async function refreshUnreadMessages() {
   if (!getToken()) {
-    unreadMessageCount.value = 0
+    storeUnreadMessageCount(0)
+    refreshCurrentTabBar()
     return
   }
-  unreadMessageCount.value = await fetchUnreadMessageCount()
-}
-
-function goToMessages() {
-  uni.navigateTo({ url: '/pages/messages/index' })
+  try {
+    storeUnreadMessageCount(await fetchUnreadMessageCount())
+  } catch {
+    storeUnreadMessageCount(0)
+  }
+  // 首页是打开 App 的第一站；拿到未读数后要让自定义 tabBar 立刻显示/隐藏红点
+  refreshCurrentTabBar()
 }
 
 // 检查登录状态
@@ -2701,36 +2690,4 @@ defineOptions({
   flex-shrink: 0;
 }
 
-/* ===== 消息铃铛（2026-10-18）===== */
-.header-section {
-  position: relative;
-}
-
-.message-bell {
-  position: absolute;
-  right: 28rpx;
-  /* 状态栏大约 44px，铃铛压在导航栏那一行 */
-  top: 96rpx;
-  width: 60rpx;
-  height: 60rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.message-bell-icon {
-  font-size: 34rpx;
-}
-
-.message-bell-dot {
-  position: absolute;
-  top: 8rpx;
-  right: 10rpx;
-  width: 14rpx;
-  height: 14rpx;
-  border-radius: 50%;
-  background: #d93f3f;
-  /* 白描边：放在深色/图片背景上也看得出来 */
-  border: 2rpx solid #fff;
-}
 </style>

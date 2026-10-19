@@ -191,6 +191,7 @@ export class CustomRecipeController {
     return ApiResponseDto.success({
       orders: orders.map((order, index) => ({
         orderId: order.orderId,
+        dogId: order.dogId,
         dogName: order.dog?.name ?? '',
         targetGoal: order.targetGoal,
         needsHealthManagement: Boolean(order.needsHealthManagement),

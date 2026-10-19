@@ -44,14 +44,15 @@
             左侧色条（2026-10-18 · 需求 2.10）：光靠角标不够快 ——
             顾客滑列表时先看到颜色，再看到字。
           -->
-          <view
-            class="order-type-stripe"
-            :class="`order-type-stripe--${order._orderType || 'food'}`"
-          />
-          <view class="order-header-left">
-            <text class="order-time">{{
-              formatShortDateTime(order.createdAt)
-            }}</text>
+          <view class="order-header-main">
+            <view
+              class="order-type-stripe"
+              :class="`order-type-stripe--${order._orderType || 'food'}`"
+            />
+            <view class="order-header-left">
+              <text class="order-time">{{
+                formatShortDateTime(order.createdAt)
+              }}</text>
             <!-- 两类订单混在一个列表里，靠这个标签让顾客一眼知道是哪一类 -->
             <text
               v-if="order._orderType === 'supplement'"
@@ -69,7 +70,8 @@
               成品也要标（2026-10-18 · 需求 2.10：定制橙 / 成品绿 / 补剂紫）。
               两种都标、只有一种不标，顾客反而会以为没标的那种是"默认"。
             -->
-            <text v-else class="order-type-tag order-type-tag--food">成品</text>
+              <text v-else class="order-type-tag order-type-tag--food">成品</text>
+            </view>
           </view>
           <text
             class="order-status"
@@ -99,9 +101,33 @@
                 >¥{{ formatAmountText(customOrderAmount(order)) }}</text
               >
             </view>
-            <view class="order-footer-right">
-              <text class="order-detail-btn">查看详情 ›</text>
-            </view>
+          </view>
+          <view class="order-actions" @tap.stop>
+            <button
+              v-if="order.status === 'PENDING_PAYMENT'"
+              class="action-btn primary"
+              :disabled="payingCustomId === order.orderId"
+              @tap="payCustomFromList(order)"
+            >
+              {{ payingCustomId === order.orderId ? '调起支付中' : '继续支付' }}
+            </button>
+            <button
+              v-if="
+                order.status !== 'PENDING_PAYMENT' &&
+                customAftersaleAction(order)?.enabled
+              "
+              class="action-btn secondary"
+              @tap="applyCustomAftersale(order)"
+            >
+              申请售后
+            </button>
+            <button
+              v-if="order.status !== 'PENDING_PAYMENT'"
+              class="action-btn secondary"
+              @tap="reCustomize(order)"
+            >
+              再次定制
+            </button>
           </view>
         </template>
 
@@ -315,9 +341,11 @@ import { formatShortDateTime } from '../../utils/date';
 // 定制单（2026-10-18 并入三单合一）
 import {
   fetchMyOrders,
+  findAction,
   type CustomRecipeOrderDetail,
 } from '@/api/custom-recipe';
 import { formatDate } from '@/utils/custom-recipe-order';
+import { runCustomRecipePayment } from '@/utils/custom-recipe-payment';
 import {
   CUSTOM_RECIPE_GOAL_SET,
   useOptionSet,
@@ -347,6 +375,8 @@ const SUPPLEMENT_ORDER_MAX_PAGES = 20;
 
 interface Order {
   id: string;
+  /** 定制单的业务编号（跨类型模板里用于支付按钮） */
+  orderId?: string;
   status: string;
   /** 订单类型：FRESH_FOOD / CUSTOM_SERVICE / TASTING_PACK */
   type?: string;
@@ -455,6 +485,7 @@ const viewAllOrders = ref(false); // 是否查看所有订单（从工作台进�
 const payingOrderId = ref('');
 const receivingOrderId = ref('');
 const payingSupplementId = ref('');
+const payingCustomId = ref('');
 
 /**
  * 补剂自己的状态分色：金=待办、绿=正常、红=售后、灰=结束。
@@ -1013,6 +1044,56 @@ function applyAftersale(order: FoodOrderRow) {
   });
 }
 
+/**
+ * 定制单列表的「继续支付」。
+ * 订单列表原先只给成品/补剂支付按钮，定制待付款只能点进详情再付。
+ */
+async function payCustomFromList(order: CustomOrderRow) {
+  if (payingCustomId.value) return;
+  payingCustomId.value = order.orderId;
+  try {
+    const outcome = await runCustomRecipePayment(order.orderId);
+    if (outcome === 'PAID') {
+      uni.showToast({ title: '支付成功', icon: 'success' });
+    } else if (outcome === 'CANCELLED') {
+      uni.showToast({ title: '已取消支付，可稍后再付', icon: 'none' });
+    } else if (outcome === 'CLOSED') {
+      uni.showToast({ title: '订单已关闭，请重新定制', icon: 'none' });
+    }
+    await loadOrders();
+  } catch (error: any) {
+    uni.showToast({
+      title: error?.message || '支付失败，请稍后重试',
+      icon: 'none',
+    });
+  } finally {
+    payingCustomId.value = '';
+  }
+}
+
+function customAftersaleAction(order: UnifiedOrder) {
+  return findAction(
+    (order as CustomOrderRow).renderable,
+    'APPLY_AFTERSALE',
+  );
+}
+
+function applyCustomAftersale(order: UnifiedOrder) {
+  uni.navigateTo({
+    url: `/pages/custom-recipe/aftersale?orderId=${encodeURIComponent(
+      (order as CustomOrderRow).orderId,
+    )}`,
+  });
+}
+
+function reCustomize(order: UnifiedOrder) {
+  const row = order as CustomOrderRow;
+  const query = row.dogId
+    ? `?dogId=${encodeURIComponent(String(row.dogId))}`
+    : '';
+  uni.navigateTo({ url: `/pages/custom-recipe/index${query}` });
+}
+
 function getRepurchasePackageCount(item: Order['firstItem']): number {
   const packageCount = Number(item?.packageCount);
   if (Number.isFinite(packageCount) && packageCount > 0) {
@@ -1407,6 +1488,12 @@ function formatAddress(address?: { regionText?: string }): string {
   margin-bottom: 16rpx;
   padding-bottom: 16rpx;
   border-bottom: 1rpx solid #eef1e2;
+}
+
+.order-header-main {
+  display: flex;
+  align-items: center;
+  min-width: 0;
 }
 
 .order-time {

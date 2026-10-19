@@ -300,6 +300,7 @@ import { getToken, clearToken, request } from "../../utils/api";
 import { resolveUserAvatarSrc } from "../../utils/user-profile";
 import { refreshCurrentTabBar } from '../../utils/tabbar';
 import { fetchUnreadMessageCount } from '@/api/messages';
+import { storeUnreadMessageCount } from '@/utils/unread-message-badge';
 import { navigateToDogCreate } from '../../utils/dog-profile-entry';
 import { useRecipeDesignerEntry } from '../../utils/recipe-designer-entry';
 import {
@@ -484,10 +485,14 @@ function goToDogCreate() {
 const unreadMessageCount = ref(0)
 async function refreshUnreadMessages() {
   if (!uni.getStorageSync('token')) {
-    unreadMessageCount.value = 0
+    unreadMessageCount.value = storeUnreadMessageCount(0)
+    refreshCurrentTabBar()
     return
   }
-  unreadMessageCount.value = await fetchUnreadMessageCount()
+  unreadMessageCount.value = storeUnreadMessageCount(
+    await fetchUnreadMessageCount(),
+  )
+  refreshCurrentTabBar()
 }
 
 function goToMessages() {

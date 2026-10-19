@@ -36,31 +36,29 @@
       -->
       <view v-if="progressSteps.length" class="section progress-section">
         <view class="section-title">进度</view>
-        <view class="progress-list">
+        <view class="progress-track">
           <view
-            v-for="(step, index) in progressSteps"
+            v-for="step in progressSteps"
             :key="step.code"
-            class="progress-item"
+            class="progress-node"
             :class="{
-              'progress-item--done': step.done,
-              'progress-item--active': step.active,
+              'progress-node--done': step.done,
+              'progress-node--active': step.active,
             }"
           >
-            <view class="progress-marker">
-              <text class="progress-dot">{{ step.done ? '✓' : '' }}</text>
-              <view v-if="index < progressSteps.length - 1" class="progress-line" />
-            </view>
-            <view class="progress-body">
-              <text class="progress-label">{{ step.label }}</text>
-              <text v-if="step.note" class="progress-note">{{ step.note }}</text>
-            </view>
+            <view class="progress-node__dot">{{ step.done ? '✓' : '' }}</view>
+            <text class="progress-node__label">{{ step.label }}</text>
+            <text
+              v-if="step.note && (step.done || step.active)"
+              class="progress-node__note"
+            >{{ step.note }}</text>
           </view>
         </view>
       </view>
 
       <!-- 退款进度：顾客自助取消后钱去哪了，不能让他自己去猜 -->
       <view v-if="refund" class="refund-card" :class="`refund-card--${refund.tone}`">
-        <text class="refund-card__title">退款</text>
+        <text class="refund-card__title">退款金额</text>
         <text class="refund-card__text">{{ refund.text }}</text>
         <text v-if="refund.tone === 'processing'" class="refund-card__note">
           退款由微信原路退回，到账时间以微信为准，通常 1-3 个工作日。
@@ -70,7 +68,7 @@
         </text>
       </view>
 
-      <view class="section" v-if="creditRemaining > 0 || creditTotal > 0">
+      <view class="section" v-if="creditVisible">
         <view class="section-title">成品抵扣额度</view>
         <view class="info-row">
           <text class="label">额度总额</text>
@@ -102,9 +100,13 @@
           <text class="value">¥{{ formatAmount(order.amount) }}</text>
         </view>
         <!-- 排期由系统自动定（顾客不选日期），这里只展示后端排好的结果 -->
-        <view class="info-row">
+        <view class="info-row" v-if="order.status !== 'CANCELLED'">
           <text class="label">预计交付</text>
           <text class="value">{{ formatDate(order.estimatedDeliveryDate, '排期中') }}</text>
+        </view>
+        <view class="info-row" v-else-if="order.cancelledAt">
+          <text class="label">取消时间</text>
+          <text class="value">{{ formatDate(order.cancelledAt, '已取消') }}</text>
         </view>
         <view class="info-row">
           <text class="label">提交时间</text>
@@ -397,6 +399,7 @@ interface CustomRecipeOrderDetail {
   refundStatus?: string | null;
   refundAmount?: number | null;
   refundedAt?: string | null;
+  cancelledAt?: string | null;
 }
 
 const orderId = ref('');
@@ -757,6 +760,18 @@ const paymentHint = computed(() => {
 
 const creditTotal = computed(() => Number(order.value.creditAmount || 0));
 const creditUsed = computed(() => Number(order.value.creditUsed || 0));
+
+/**
+ * 额度只在实际可用的订单状态下展示（2026-10-19）。
+ * 已取消/待付款订单即使有快照金额，也不能拿这个额度去下成品单。
+ */
+const creditVisible = computed(() => {
+  const status = String(order.value.status || '');
+  return (
+    ['PAID', 'IN_PROGRESS', 'DELIVERED'].includes(status) &&
+    (creditRemaining.value > 0 || creditTotal.value > 0)
+  );
+});
 
 /**
  * 可抵扣余额（2026-10-16 批次 5.2）。
@@ -1501,6 +1516,92 @@ const goOrders = () => {
 
 .material-doc-label {
   font-size: 20rpx;
+  color: #8a7a63;
+}
+
+/* 进度条：横版（2026-10-19）。旧纵版样式已不再使用。 */
+.progress-track {
+  display: flex;
+  align-items: flex-start;
+  padding: 10rpx 0 2rpx;
+}
+
+.progress-node {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+
+.progress-node::after {
+  content: '';
+  position: absolute;
+  top: 15rpx;
+  left: 50%;
+  right: -50%;
+  height: 2rpx;
+  background: #e3e6d4;
+}
+
+.progress-node:last-child::after {
+  display: none;
+}
+
+.progress-node--done::after {
+  background: #6fb3a0;
+}
+
+.progress-node__dot {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30rpx;
+  height: 30rpx;
+  margin: 0 auto;
+  border-radius: 50%;
+  border: 1rpx solid #d8d8c8;
+  background: #f2f1ec;
+  font-size: 18rpx;
+  color: #8a7a63;
+  box-sizing: border-box;
+}
+
+.progress-node--done .progress-node__dot {
+  border-color: #6fb3a0;
+  background: #6fb3a0;
+  color: #fff;
+}
+
+.progress-node--active .progress-node__dot {
+  border-color: #d8bc85;
+  background: #d8bc85;
+  color: #1e3a2f;
+  box-shadow: 0 0 0 6rpx rgba(216, 188, 133, 0.2);
+}
+
+.progress-node__label {
+  display: block;
+  margin-top: 10rpx;
+  padding: 0 4rpx;
+  font-size: 24rpx;
+  line-height: 1.3;
+  color: #5f5a4c;
+}
+
+.progress-node--done .progress-node__label,
+.progress-node--active .progress-node__label {
+  color: #1e3a2f;
+  font-weight: 600;
+}
+
+.progress-node__note {
+  display: block;
+  margin-top: 4rpx;
+  padding: 0 4rpx;
+  font-size: 20rpx;
+  line-height: 1.35;
   color: #8a7a63;
 }
 </style>

@@ -2,6 +2,7 @@ Component({
   data: {
     selected: 0,
     isStaff: false,
+    unreadCount: 0,
     list: [
       {
         pagePath: "/pages/home/index",
@@ -134,6 +135,29 @@ Component({
       }
     },
 
+    /**
+     * 读取「我的」红点缓存。
+     * 首页/我的/消息页拿到未读数后写入 storage，tabBar 在 show/refresh 时读取。
+     */
+    refreshUnreadCount() {
+      try {
+        if (!wx.getStorageSync('token')) {
+          if (this.data.unreadCount !== 0) this.setData({ unreadCount: 0 });
+          return;
+        }
+        const value = Number(wx.getStorageSync('unread_message_count'));
+        const count = Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+        if (this.data.unreadCount !== count) {
+          this.setData({ unreadCount: count });
+        }
+      } catch (error) {
+        console.error('[TabBar] Failed to read unread count:', error);
+        if (this.data.unreadCount !== 0) {
+          this.setData({ unreadCount: 0 });
+        }
+      }
+    },
+
     switchTab(e) {
       const data = e.currentTarget.dataset;
       const url = data.path;
@@ -166,6 +190,7 @@ Component({
     refresh() {
       this.checkUserRole();
       this.updateSelectedByCurrentPage();
+      this.refreshUnreadCount();
     }
   }
 });

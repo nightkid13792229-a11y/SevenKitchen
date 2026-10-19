@@ -42,6 +42,8 @@ export interface CreateCustomRecipeOrderDTO {
   preferredIngredients: string[];
   dislikedIngredients: string[];
   attachmentUrls?: string[];
+  /** 备注附件 COS key，与 attachmentUrls 一一对应 */
+  attachmentKeys?: string[];
   /**
    * 预约（开工）日期。
    *

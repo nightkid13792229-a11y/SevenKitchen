@@ -11,9 +11,9 @@ describe('定制页 → 订单确认页（2026-10-19 老板确认）', () => {
   const confirm = read(`${PAGE_DIR}/confirm.vue`);
   const pagesJson = read('src/pages.json');
 
-  it('定制页按钮是「确认信息」，可点校验后只跳确认页，不在这里下单', () => {
+  it('定制页按钮是「下一步：确认订单」，可点校验后只跳确认页，不在这里下单', () => {
     expect(page).toContain('@tap="goToOrderConfirm"');
-    expect(page).toContain('确认信息');
+    expect(page).toContain('下一步：确认订单');
     expect(page).not.toContain('submitOrder(');
     expect(page).not.toContain('requestCustomRecipeOrderSubscription');
     // 金额仍在说明里，按钮不显示金额

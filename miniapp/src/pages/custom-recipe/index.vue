@@ -644,7 +644,7 @@
     <view v-if="hasSelectedDog" class="submit-section">
       <button class="submit-btn" @tap="goToOrderConfirm">
         <text class="submit-btn__label">
-          {{ navigatingToConfirm ? '正在进入…' : '确认信息' }}
+          {{ navigatingToConfirm ? '正在进入…' : '下一步：确认订单' }}
         </text>
         <text class="submit-btn__fee">
           食谱定制费 {{ recipeConfig ? formatAmount(recipeConfig.feeAmount) : '—' }} 元/份，不含原料。
@@ -787,20 +787,12 @@ const prefilledAllergyText = ref('');
 function answerFoodAllergy(hasAllergy: boolean) {
   hasFoodAllergy.value = hasAllergy;
   /**
-   * 2026-10-19：答「没有」时清掉这一单的过敏文本/数组。
+   * 2026-10-19：只切换选择，不清空文本/报告。
    *
-   * 否则顾客先填了再改成"没有"，隐藏的文本仍会跟着订单提交，
-   * 营养师会看到一份"顾客说没有过敏、却带着过敏原"的单子。
+   * 顾客可能误点，清空后再点回「有过敏」就丢内容；
+   * 最终「没有过敏」时由订单确认页在提交 payload 里强制过滤，
+   * 报告草稿也在订单创建成功后清理，而不是在这里销毁。
    */
-  if (!hasAllergy) {
-    formData.value.allergies = [];
-    formData.value.allergyText = '';
-    // 答“没有”= 这一单不要任何过敏信息：本次上传的报告草稿也一起清掉，
-    // 不能只藏起来、提交时还带着；COS 文件同步清理。
-    const drafts = [...formData.value.reportDrafts];
-    formData.value.reportDrafts = [];
-    void cleanupDraftReportFiles(drafts);
-  }
 }
 
 /**

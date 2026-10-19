@@ -842,9 +842,9 @@ describe('custom recipe scheduling · 系统自动排期', () => {
 describe('custom recipe payment copy · 下一步付款与时限', () => {
   const submit = read(`${PAGE_DIR}/index.vue`)
 
-  it('按钮是「确认信息」，费用说明放在按钮内文字下方', () => {
+  it('按钮是「下一步：确认订单」，费用说明放在按钮内文字下方', () => {
     const code = stripComments(submit)
-    expect(code).toContain('确认信息')
+    expect(code).toContain('下一步：确认订单')
     expect(code).not.toContain('submitButtonText')
     expect(code).not.toContain('下一步：支付')
     // 金额仍来自后台配置，作为按钮的第二行小字，不再单独占一块版面
@@ -1503,7 +1503,7 @@ describe('定制页 · 交付说明与支付块', () => {
     expect(page).not.toContain('pay-next-title')
     expect(page).not.toContain('pay-next-desc')
     expect(page).not.toContain('提交后请在提交成功页')
-    // 底部固定栏的按钮仍在（文案已改为"确认信息"）
+    // 底部固定栏的按钮仍在（文案已改为"下一步：确认订单"）
     expect(page).toContain('@tap="goToOrderConfirm"')
   })
 })
@@ -1593,12 +1593,12 @@ describe('定制页 · 第二轮精简（2026-10-05）', () => {
     expect(read(`${PAGE_DIR}/success.vue`)).toContain('成品抵扣额度')
   })
 
-  it('提交按钮写「确认信息」，费用小字在按钮文案下方（2026-10-19 老板确认）', () => {
+  it('提交按钮写「下一步：确认订单」，费用小字在按钮文案下方（2026-10-19 老板确认）', () => {
     /**
-     * 定制页按钮不是支付按钮，而是「确认信息」；
+     * 定制页按钮不是支付按钮，而是「下一步：确认订单」；
      * 费用说明作为按钮内的第二行小字，避免单独占一块版面。
      */
-    expect(code).toContain('确认信息')
+    expect(code).toContain('下一步：确认订单')
     expect(code).not.toContain('支付 ¥300')
     expect(code).toContain('submit-btn__fee')
     expect(code).toContain('食谱定制费')
@@ -2083,7 +2083,7 @@ describe('custom recipe draft · 本地草稿与付款后同步', () => {
 
   it('订单确认页发送 allergyReportDrafts，不把页面字段 reportDrafts 原样丢给后端', () => {
     expect(confirm).toContain('reportDrafts,')
-    expect(confirm).toContain('allergyReportDrafts: Array.isArray(reportDrafts)')
+    expect(confirm).toContain('allergyReportDrafts: submittedReportDrafts')
   })
 
   it('订单确认页提交成功后清掉本地草稿，并在本页进入支付状态', () => {
@@ -2100,9 +2100,15 @@ describe('custom recipe draft · 本地草稿与付款后同步', () => {
     expect(page).toContain('formData.value.reportDrafts.push')
   })
 
-  it('答“没有过敏”会清报告草稿并清理 COS 文件', () => {
+  it('答“没有过敏”只隐藏，不清空草稿；提交时再过滤过敏数据', () => {
     const answer = page.match(/function answerFoodAllergy[\s\S]*?\n\}/)?.[0] || ''
-    expect(answer).toContain('formData.value.reportDrafts = []')
-    expect(answer).toContain('cleanupDraftReportFiles')
+    expect(answer).not.toContain('formData.value.reportDrafts = []')
+    expect(answer).not.toContain('cleanupDraftReportFiles')
+
+    const confirmSource = read(`${PAGE_DIR}/confirm.vue`)
+    expect(confirmSource).toContain('isNoAllergy')
+    expect(confirmSource).toContain('submittedAllergies = isNoAllergy')
+    expect(confirmSource).toContain('submittedAllergyText = isNoAllergy')
+    expect(confirmSource).toContain('submittedReportDrafts =')
   })
 })

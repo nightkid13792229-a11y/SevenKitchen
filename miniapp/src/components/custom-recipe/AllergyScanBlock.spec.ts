@@ -50,11 +50,18 @@ describe('定制食谱 · 过敏录入', () => {
     expect(source).toContain('还差：过敏食物')
   })
 
-  it('答"没有过敏"会清掉已填文本，避免隐藏内容跟着提交', () => {
+  it('答"没有过敏"不销毁已填文本，提交时由确认页过滤', () => {
     const source = page()
     const answer = source.match(/function answerFoodAllergy[\s\S]*?\n\}/)?.[0] || ''
-    expect(answer).toContain('formData.value.allergies = []')
-    expect(answer).toContain("formData.value.allergyText = ''")
+    expect(answer).not.toContain('formData.value.allergies = []')
+    expect(answer).not.toContain("formData.value.allergyText = ''")
+
+    const confirm = readFileSync(
+      resolve(process.cwd(), 'src/pages/custom-recipe/confirm.vue'),
+      'utf-8',
+    )
+    expect(confirm).toContain('isNoAllergy')
+    expect(confirm).toContain('submittedAllergyText = isNoAllergy')
   })
 
   it('识别结果要家长确认才生效，不是 AI 自己写进档案', () => {

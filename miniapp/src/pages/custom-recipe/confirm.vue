@@ -277,7 +277,11 @@ const allergyDisplay = computed(() => {
 });
 
 const reportCount = computed(() =>
-  Array.isArray(form.value.reportDrafts) ? form.value.reportDrafts.length : 0,
+  draft.value?.hasFoodAllergy === false
+    ? 0
+    : Array.isArray(form.value.reportDrafts)
+      ? form.value.reportDrafts.length
+      : 0,
 );
 
 const currentFoodText = computed(() => {
@@ -551,6 +555,22 @@ async function payCreatedOrder() {
   }
 }
 
+/** 最终选择「没有过敏」：订单创建成功后清理临时报告文件，避免孤儿文件 */
+async function cleanupDiscardedAllergyReports(reports: any[]) {
+  const keys: string[] = [];
+  for (const report of reports || []) {
+    for (const key of report?.attachmentKeys || []) {
+      const value = String(key || '').trim();
+      if (value) keys.push(value);
+    }
+  }
+  for (const key of keys) {
+    await dogApi.deleteHealthAttachment('allergy', key).catch((error) => {
+      console.warn('[CustomRecipe] 清理被排除的过敏报告失败:', key, error);
+    });
+  }
+}
+
 async function submitConfirmedOrder(payAfterSubmit = true) {
   if (submitting.value) return;
   const invalid = validateBeforeSubmit();
@@ -564,8 +584,22 @@ async function submitConfirmedOrder(payAfterSubmit = true) {
   try {
     await requestCustomRecipeOrderSubscription();
     const { reportDrafts, ...orderForm } = form.value;
+    const isNoAllergy = draft.value?.hasFoodAllergy === false;
+    const submittedAllergies = isNoAllergy
+      ? []
+      : Array.isArray(orderForm.allergies)
+        ? orderForm.allergies
+        : [];
+    const submittedAllergyText = isNoAllergy
+      ? ''
+      : String(orderForm.allergyText || '');
+    const submittedReportDrafts =
+      isNoAllergy || !Array.isArray(reportDrafts) ? [] : reportDrafts;
     const payload = {
       ...orderForm,
+      // 最终选择「没有过敏」：无论草稿里还留着什么，都不提交任何过敏数据
+      allergies: submittedAllergies,
+      allergyText: submittedAllergyText,
       attachmentKeys: Array.isArray(form.value.attachmentKeys)
         ? form.value.attachmentKeys
         : [],
@@ -576,17 +610,21 @@ async function submitConfirmedOrder(payAfterSubmit = true) {
             ? 'NO_ALLERGY'
             : 'UNKNOWN',
       clientRequestId: clientRequestId.value,
-      allergyReportDrafts: Array.isArray(reportDrafts) ? reportDrafts : [],
+      allergyReportDrafts: submittedReportDrafts,
       syncToHealthProfile: true,
       needsHealthManagement:
-        (Array.isArray(orderForm.allergies) && orderForm.allergies.length > 0) ||
-        Boolean(String(orderForm.allergyText || '').trim()),
+        !isNoAllergy &&
+        (submittedAllergies.length > 0 ||
+          Boolean(submittedAllergyText.trim())),
     };
     const created = await submitOrder(payload);
     const orderId = String(created?.orderId || '').trim();
     if (!orderId) throw new Error('服务端未返回订单号');
 
     clearCustomRecipeDraft(getDraftCustomerId(), dogId.value);
+    if (isNoAllergy && Array.isArray(reportDrafts) && reportDrafts.length) {
+      void cleanupDiscardedAllergyReports(reportDrafts);
+    }
     createdOrder.value = {
       ...created,
       orderId,

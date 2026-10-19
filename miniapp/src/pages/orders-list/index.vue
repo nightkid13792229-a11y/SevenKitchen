@@ -495,6 +495,7 @@ const emptyText = computed(() => {
 });
 
 onMounted(async () => {
+  ensureGoalOptions();
   loadOrders();
 });
 

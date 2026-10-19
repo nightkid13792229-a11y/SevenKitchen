@@ -543,7 +543,10 @@ describe('custom recipe page · 结构与知情同意', () => {
     expect(page).not.toContain('还没有上传资料')
     expect(page).not.toContain('检测报告、化验单拍清楚即可')
     expect(page).toContain('最多 {{ maxAttachmentCount }} 个附件')
-    expect(page).toMatch(/count: 1,[\s\S]{0,200}sourceType: \['album'\]/)
+    expect(page).toContain('count: Math.min(remaining, 9)')
+    expect(page).toContain("sourceType: ['album']")
+    expect(page).toContain('uploadNoteAttachments(files)')
+    expect(page).not.toContain('count: 1,\n        sizeType')
     // 2026-10-19：备注附件也支持 PDF/Word，从微信聊天选
     expect(page).toContain('chooseMessageFile')
     expect(page).toContain("extension: ['pdf', 'doc', 'docx']")

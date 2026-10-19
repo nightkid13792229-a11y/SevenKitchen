@@ -2328,54 +2328,97 @@ function pickAttachmentEntry() {
   });
 }
 
-async function uploadNoteAttachment(filePath: string, size = 0) {
-  if (!filePath) return;
-  if (size > 10 * 1024 * 1024) {
-    uni.showToast({ title: '文件不能超过 10MB', icon: 'none' });
-    return;
-  }
-  if (formData.value.attachmentUrls.length >= maxAttachmentCount) {
+/**
+ * 批量上传备注附件。
+ *
+ * 微信一次可以选多张/多个文件；服务端仍是一文件一接口，
+ * 所以这里按顺序上传，总数仍受 maxAttachmentCount 限制。
+ */
+async function uploadNoteAttachments(
+  files: Array<{ path: string; size?: number }>,
+) {
+  if (!files.length) return;
+  const remaining = maxAttachmentCount - formData.value.attachmentUrls.length;
+  if (remaining <= 0) {
     uni.showToast({ title: `最多上传 ${maxAttachmentCount} 个附件`, icon: 'none' });
     return;
   }
 
+  const accepted = files.filter((file) => Boolean(file.path)).slice(0, remaining);
+  if (!accepted.length) return;
+
   attachmentUploading.value = true;
+  let success = 0;
+  let failed = 0;
+  let tooLarge = 0;
+
   uni.showLoading({ title: '上传中…' });
   try {
-    const uploaded = await uploadCustomRecipeDraftAttachment(filePath);
-    const url = String(uploaded?.url || '').trim();
-    if (!url) {
-      throw new Error('上传失败，请重试');
+    for (const file of accepted) {
+      if (Number(file.size) > 10 * 1024 * 1024) {
+        tooLarge += 1;
+        continue;
+      }
+      try {
+        const uploaded = await uploadCustomRecipeDraftAttachment(file.path);
+        const url = String(uploaded?.url || '').trim();
+        if (!url) throw new Error('上传失败，请重试');
+        const key = String(uploaded?.key || '').trim();
+        formData.value.attachmentUrls = [...formData.value.attachmentUrls, url];
+        formData.value.attachmentKeys = [...formData.value.attachmentKeys, key];
+        success += 1;
+      } catch (error) {
+        console.warn('[CustomRecipe] 备注附件上传失败:', error);
+        failed += 1;
+      }
     }
-    const key = String(uploaded?.key || '').trim();
-    formData.value.attachmentUrls = [...formData.value.attachmentUrls, url];
-    formData.value.attachmentKeys = [...formData.value.attachmentKeys, key];
-    uni.showToast({ title: '已上传', icon: 'none' });
-  } catch (error: any) {
-    uni.showToast({ title: error?.message || '上传失败，请重试', icon: 'none' });
   } finally {
     attachmentUploading.value = false;
     uni.hideLoading();
   }
+
+  if (failed || tooLarge) {
+    const parts = [];
+    if (success) parts.push(`已上传 ${success} 个`);
+    if (failed) parts.push(`${failed} 个上传失败`);
+    if (tooLarge) parts.push(`${tooLarge} 个超过 10MB`);
+    uni.showToast({ title: parts.join('，'), icon: 'none', duration: 3000 });
+  } else if (success > 0) {
+    uni.showToast({ title: `已上传 ${success} 个`, icon: 'none' });
+  }
 }
 
 async function pickAttachmentPhotos() {
-  let filePath = '';
+  const remaining = maxAttachmentCount - formData.value.attachmentUrls.length;
+  if (remaining <= 0) {
+    uni.showToast({ title: `最多上传 ${maxAttachmentCount} 个附件`, icon: 'none' });
+    return;
+  }
+
+  let chosen: any = null;
   try {
-    const chosen: any = await new Promise((resolve, reject) => {
+    chosen = await new Promise((resolve, reject) => {
       uni.chooseImage({
-        count: 1,
+        // 一次最多选到剩余名额（微信相册单次上限 9）
+        count: Math.min(remaining, 9),
         sizeType: ['compressed'],
         sourceType: ['album'],
         success: resolve,
         fail: reject,
       });
     });
-    filePath = chosen?.tempFilePaths?.[0] || '';
   } catch {
     return;
   }
-  await uploadNoteAttachment(filePath);
+
+  const paths: string[] = Array.isArray(chosen?.tempFilePaths)
+    ? chosen.tempFilePaths
+    : [];
+  const files = paths.map((path, index) => ({
+    path,
+    size: Number(chosen?.tempFiles?.[index]?.size) || 0,
+  }));
+  await uploadNoteAttachments(files);
 }
 
 async function pickAttachmentDocument() {
@@ -2391,26 +2434,33 @@ async function pickAttachmentDocument() {
     return;
   }
 
-  const picked = await new Promise<{ path: string; name: string; size: number }>(
+  const remaining = maxAttachmentCount - formData.value.attachmentUrls.length;
+  if (remaining <= 0) {
+    uni.showToast({ title: `最多上传 ${maxAttachmentCount} 个附件`, icon: 'none' });
+    return;
+  }
+
+  const picked = await new Promise<Array<{ path: string; size: number }>>(
     (resolve) => {
       choose({
-        count: 1,
+        count: remaining,
         type: 'file',
         extension: ['pdf', 'doc', 'docx'],
         success: (res: any) => {
-          const file = (res?.tempFiles || [])[0] || {};
-          resolve({
-            path: String(file.path || ''),
-            name: String(file.name || '资料'),
-            size: Number(file.size) || 0,
-          });
+          const files = (res?.tempFiles || [])
+            .map((file: any) => ({
+              path: String(file.path || ''),
+              size: Number(file.size) || 0,
+            }))
+            .filter((file: { path: string }) => Boolean(file.path));
+          resolve(files);
         },
-        fail: () => resolve({ path: '', name: '', size: 0 }),
+        fail: () => resolve([]),
       });
     },
   );
 
-  await uploadNoteAttachment(picked.path, picked.size);
+  await uploadNoteAttachments(picked);
 }
 
 const removeAttachment = (index: number) => {

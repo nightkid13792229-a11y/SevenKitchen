@@ -474,6 +474,266 @@ export class CustomRecipeDeliveryService {
   }
 
   /**
+   * 按选中份重新交付（多份购买 · 第三阶段售后，2026-10-21）。
+   *
+   * ## 与 `deliverBatch` / `deliver` 的分工
+   *
+   *   · `deliverBatch()` 只做首次整批交付；
+   *   · `deliver()` 仍走老的单份交付表，供老订单 / 老页面使用；
+   *   · 这个方法只服务**多份订单的售后改稿**：顾客只对其中几份不满意，
+   *     营养师改完那几份后，只刷新那几份的内容，其余份原样带过去。
+   *
+   * ## 为什么新批次仍然包含**全部**份
+   *
+   * 批次表达的是「这一单这一版交付了哪几份」。如果只写被选中的 2 份，
+   * 顾客下次打开订单会看到「买了 3 份只剩 2 份」，售后记录指向的旧明细
+   * 也会从最新批次里消失。所以新批次 = 最新批次的全集：
+   *   · 选中的份 → 用**当前食谱**重新生成快照；
+   *   · 未选中的份 → 原样复制旧批次的快照 / 交付物 / 喂食参数 / 食谱版本。
+   *
+   * ## 通知不在这里发
+   *
+   * 与 `deliverBatch` 同一口径：批次只标记 `notifyStatus = PENDING`，
+   * 由控制器决定发几条、发什么。服务层不依赖消息渠道是否可用。
+   */
+  async redeliverBatchItems(input: {
+    orderIdOrId: string;
+    /** 要重新生成快照的交付明细 id（`CustomRecipeDeliveryItem.id`） */
+    deliveryItemIds: string[];
+    deliveredBy: string;
+    /** 便于测试注入 */
+    now?: Date;
+  }): Promise<{
+    orderId: string;
+    batchId: string;
+    version: number;
+    deliveredAt: Date;
+    autoCompleteAt: Date | null;
+    /** 新批次一共几份（含未选中的复制项） */
+    recipeCount: number;
+    /** 本次刷新了快照的那几份（旧的交付明细 id，按入参顺序） */
+    selectedItemIds: string[];
+    /** 选中份的摘要 —— 控制器用它取第一份的业务编号发通知 */
+    selectedRecipes: Array<{
+      deliveryItemId: string;
+      /** 食谱业务编号（不是主键） */
+      recipeId: string;
+      recipeName: string;
+      itemCodes: string[];
+    }>;
+    /** 订单上兼容老页面的 `recipeId`（新批次第一份的主键） */
+    legacyRecipeId: string;
+  }> {
+    const now = input.now ?? new Date();
+    const order = await this.resolveOrder(input.orderIdOrId);
+
+    /**
+     * 只允许**已经交付过**的订单（DELIVERED / COMPLETED）。
+     *
+     * 为什么不能直接复用 `assertBatchDeliverable`：那个守卫显式拒绝
+     * DELIVERED / COMPLETED —— 它是给首次整批交付用的，重新交付正是从
+     * 这两个状态出发。这里反过来：先挡掉还没交付的状态，再让状态机兜底。
+     */
+    this.assertBatchRedeliverable(order.status);
+
+    const selectedIds = this.resolveRedeliverItemIds(input.deliveryItemIds);
+
+    /** 最新批次 = 版本号最高的一批；重新交付基于它派生下一版 */
+    const latestBatch = await this.prisma.customRecipeDeliveryBatch.findFirst({
+      where: { orderId: order.id },
+      orderBy: { version: 'desc' },
+      select: {
+        id: true,
+        version: true,
+        items: {
+          select: {
+            id: true,
+            recipeId: true,
+            recipeVersion: true,
+            contentSnapshot: true,
+            items: true,
+            feedingParams: true,
+          },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        },
+      },
+    });
+
+    if (!latestBatch) {
+      throw new BadRequestException(
+        '这张订单还没有多份交付批次，不能按份重新交付',
+      );
+    }
+    if (latestBatch.items.length === 0) {
+      throw new BadRequestException(
+        '这张订单的交付批次没有明细，无法重新交付，请联系技术处理',
+      );
+    }
+
+    /**
+     * 选中的必须是**最新批次**里的明细。
+     *
+     * 不能用 `findMany({ id: { in } })` 反查：那会把别的订单、或本单更早
+     * 批次里的明细也放进来 —— 顾客已经看过的旧版本不该被售后重刷。
+     */
+    const latestById = new Map(
+      latestBatch.items.map((item) => [item.id, item]),
+    );
+    const unknownIds = selectedIds.filter((id) => !latestById.has(id));
+    if (unknownIds.length > 0) {
+      throw new BadRequestException(
+        '选中的食谱不在本次交付里，请刷新页面后重新选择',
+      );
+    }
+
+    const dog = await this.resolveDogForSnapshot(order.dogId);
+
+    /**
+     * 只给选中的份重新生成快照。
+     *
+     * 走的是与首次交付**完全同一条** `buildSnapshot` 路径：喂食量、采购量、
+     * 营养数据都在后端重算，不允许前端传一份"新快照"上来。
+     */
+    const refreshed = new Map<
+      string,
+      {
+        recipeId: string;
+        recipeName: string;
+        recipeVersion: number;
+        snapshot: DeliveryContentSnapshot;
+        itemCodes: string[];
+      }
+    >();
+
+    await Promise.all(
+      selectedIds.map(async (deliveryItemId) => {
+        const item = latestById.get(deliveryItemId)!;
+        const recipe = await this.resolveRecipe(item.recipeId, order);
+        const snapshot = await this.buildSnapshot({
+          order,
+          recipe,
+          dog,
+          now,
+          cycleDays: null,
+        });
+        const itemCodes = await this.configuredItemCodes(snapshot);
+
+        refreshed.set(deliveryItemId, {
+          recipeId: recipe.recipeId,
+          recipeName: recipe.name,
+          recipeVersion: recipe.version,
+          snapshot,
+          itemCodes,
+        });
+      }),
+    );
+
+    /**
+     * 新批次的明细 = 最新批次的**全集**，顺序保持不变。
+     * 选中的用刚生成的快照；未选中的逐字段复制，一个都不重算。
+     */
+    const preparedItems = latestBatch.items.map((item) => {
+      const fresh = refreshed.get(item.id);
+      if (fresh) {
+        return {
+          recipeId: item.recipeId,
+          recipeVersion: fresh.recipeVersion,
+          contentSnapshot: fresh.snapshot as unknown as Prisma.InputJsonValue,
+          items: fresh.itemCodes as unknown as Prisma.InputJsonValue,
+          feedingParams:
+            fresh.snapshot.feeding as unknown as Prisma.InputJsonValue,
+        };
+      }
+
+      return {
+        recipeId: item.recipeId,
+        recipeVersion: item.recipeVersion,
+        contentSnapshot: toInputJson(item.contentSnapshot),
+        items: toInputJson(item.items),
+        /**
+         * `feedingParams` 可空：库里是 SQL NULL 就继续写 NULL，
+         * 不要写成 JSON `null`（读出来会从"没算"变成"算了个空"）。
+         */
+        feedingParams:
+          item.feedingParams === null
+            ? Prisma.DbNull
+            : (item.feedingParams as Prisma.InputJsonValue),
+      };
+    });
+
+    /** 自动完成闹钟与首次交付同源：now + 售后窗口天数 */
+    const autoCompleteDays = await this.getAutoCompleteDays();
+    const autoCompleteAt =
+      autoCompleteDays > 0
+        ? new Date(now.getTime() + autoCompleteDays * 24 * 60 * 60 * 1000)
+        : null;
+
+    /** 版本号 = 最新批次 + 1（不是 count + 1：批次只增不删，两者等价但语义更直白） */
+    const version = latestBatch.version + 1;
+    /**
+     * 老字段兼容：取**新批次第一份**，与 `deliverBatch` 同一口径。
+     * 老页面 / 老接口只认这一列，它代表"这张单的那份食谱"，不代表只有一份。
+     */
+    const legacyRecipeId = latestBatch.items[0].recipeId;
+
+    return this.prisma.$transaction(async (tx) => {
+      const batch = await tx.customRecipeDeliveryBatch.create({
+        data: {
+          orderId: order.id,
+          version,
+          deliveredBy: input.deliveredBy,
+          deliveredAt: now,
+          /** 只标记待通知；发几条、发什么由控制器决定 */
+          notifyStatus: 'PENDING',
+        },
+      });
+
+      await tx.customRecipeDeliveryItem.createMany({
+        data: preparedItems.map((item) => ({
+          batchId: batch.id,
+          ...item,
+        })),
+      });
+
+      /**
+       * 与老 `deliver()` / `deliverBatch()` 一样走状态机时间戳：
+       * `deliveredAt` 由 `timestampFieldFor` 决定，避免这里手写字段名。
+       */
+      const timestampField = timestampFieldFor(CustomRecipeStatus.DELIVERED);
+      await tx.customRecipeOrder.update({
+        where: { id: order.id },
+        data: {
+          status: CustomRecipeStatus.DELIVERED,
+          recipeId: legacyRecipeId,
+          ...(timestampField ? { [timestampField]: now } : {}),
+          autoCompleteAt,
+        },
+      });
+
+      return {
+        orderId: order.orderId,
+        batchId: batch.id,
+        version,
+        deliveredAt: now,
+        autoCompleteAt,
+        recipeCount: preparedItems.length,
+        selectedItemIds: selectedIds,
+        /** 摘要按**入参顺序**给：通知要落在顾客刚选的第一份上 */
+        selectedRecipes: selectedIds.map((deliveryItemId) => {
+          const fresh = refreshed.get(deliveryItemId)!;
+          return {
+            deliveryItemId,
+            recipeId: fresh.recipeId,
+            recipeName: fresh.recipeName,
+            itemCodes: fresh.itemCodes,
+          };
+        }),
+        legacyRecipeId,
+      };
+    });
+  }
+
+  /**
    * 顾客确认收到。
    *
    * 幂等：重复点不会报错，也不会把时间刷新成第二次点的时间
@@ -697,6 +957,80 @@ export class CustomRecipeDeliveryService {
               : '该订单当前状态不能批量交付',
       );
     }
+  }
+
+  /**
+   * 按份重新交付的状态守卫：只允许**已经交付过**的订单。
+   *
+   * DELIVERED / COMPLETED 都放过：售后改稿后重交正是从这两处出发
+   * （`COMPLETED → DELIVERED` 是状态机里专门为售后回退保留的一条）。
+   *
+   * 其余状态先让状态机判定 —— 但注意 `PAID / IN_PROGRESS → DELIVERED`
+   * 在状态机里是**合法的首次交付**，这个方法却必须拒绝：没有已交付批次
+   * 就谈不上"按选中份重交"。所以状态机放行之后还要显式补一刀。
+   */
+  private assertBatchRedeliverable(status: CustomRecipeStatus): void {
+    if (
+      status === CustomRecipeStatus.DELIVERED ||
+      status === CustomRecipeStatus.COMPLETED
+    ) {
+      return;
+    }
+
+    try {
+      assertTransition(status, CustomRecipeStatus.DELIVERED);
+    } catch (error) {
+      throw new BadRequestException(
+        status === CustomRecipeStatus.PENDING_PAYMENT
+          ? '该订单还没确认收款，不能交付'
+          : status === CustomRecipeStatus.CANCELLED
+            ? '该订单已取消，不能交付'
+            : error instanceof Error
+              ? error.message
+              : '该订单当前状态不能重新交付',
+      );
+    }
+
+    throw new BadRequestException(
+      '该订单还没有交付过，没有可以按份重新交付的食谱',
+    );
+  }
+
+  /**
+   * 解析「要重交哪几份」。
+   *
+   * 与售后提交时的 `parseDeliveryItemIds` 不同：售后允许"没传 = 整单"，
+   * 这里**必须明确选**至少一份 —— 不选就不知道要刷新哪份快照。
+   * 重复 id 也直接拒绝（售后那边是去重），否则同一份会被生成两次快照，
+   * 落库时撞 `@@unique([batchId, recipeId])`。
+   */
+  private resolveRedeliverItemIds(raw: unknown): string[] {
+    if (!Array.isArray(raw) || raw.length === 0) {
+      throw new BadRequestException(
+        '请选择要重新交付的食谱（deliveryItemIds 不能为空）',
+      );
+    }
+    if (raw.length > MAX_REDELIVER_ITEM_COUNT) {
+      throw new BadRequestException(
+        `一次最多重新交付 ${MAX_REDELIVER_ITEM_COUNT} 份食谱`,
+      );
+    }
+
+    const ids = raw.map((value) =>
+      typeof value === 'string' ? value.trim() : '',
+    );
+    if (ids.some((id) => id.length === 0)) {
+      throw new BadRequestException(
+        'deliveryItemIds 必须是非空字符串数组，请重新选择要调整的食谱',
+      );
+    }
+    if (new Set(ids).size !== ids.length) {
+      throw new BadRequestException(
+        '同一份食谱不能重复选择，请检查后再提交',
+      );
+    }
+
+    return ids;
   }
 
   /**
@@ -1142,6 +1476,30 @@ export class CustomRecipeDeliveryService {
  * 否则同一道食谱在两个入口会算出不同的采购量。
  */
 const DEFAULT_CYCLE_DAYS = 7;
+
+/**
+ * 一次重新交付最多刷新几份。
+ *
+ * 与后台「批量交付」的业务硬上限**同一个数**（`MAX_BATCH_RECIPE_QUANTITY = 5`）。
+ * 服务层也要有一份：控制器可以被绕过（内部调用 / 将来的定时任务），
+ * 上限不能只写在 HTTP 层。
+ */
+const MAX_REDELIVER_ITEM_COUNT = 5;
+
+/**
+ * 复制旧批次的 JSON 字段到新批次。
+ *
+ * 库里 `contentSnapshot` / `items` 都是非空 Json 列，但历史数据里可能存过
+ * JSON `null`。直接透传 `null` 会被 Prisma 当成"没给值"而报错，
+ * 所以显式换成 `Prisma.JsonNull`（写 JSON null，不是 SQL NULL）。
+ */
+function toInputJson(
+  value: Prisma.JsonValue,
+): Prisma.InputJsonValue | typeof Prisma.JsonNull {
+  return value === null
+    ? Prisma.JsonNull
+    : (value as Prisma.InputJsonValue);
+}
 
 function positiveOrNull(value: number | null | undefined): number | null {
   if (value === null || value === undefined) return null;

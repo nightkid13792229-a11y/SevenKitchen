@@ -762,6 +762,63 @@ export class AdminCustomRecipeController {
   }
 
   /**
+   * 按选中份重新交付（2026-10-21 · 多份售后改稿）。
+   *
+   * 后台售后详情里，处理人看到「涉及哪几份食谱」后，只重交被选中的份：
+   * `redeliverBatchItems` 会生成新批次，未选中的份原样复制，其他份不动。
+   *
+   * 通知仍然只发**一条**：顾客买的是「一次交付」，按份发 N 条会像多笔订单；
+   * 链接用**第一份被选中的食谱**业务编号 —— 那是这次真正改过的那份。
+   */
+  @Post('orders/:orderId/redeliver-batch')
+  @UseGuards(AdminGuard)
+  @ApiOperation({
+    summary: 'Redeliver selected items of a multi-recipe order',
+  })
+  async redeliverBatch(
+    @Req() req: any,
+    @Param('orderId') orderId: string,
+    @Body('deliveryItemIds') rawDeliveryItemIds: unknown,
+  ) {
+    const deliveryItemIds = this.resolveRedeliverDeliveryItemIds(
+      rawDeliveryItemIds,
+    );
+
+    const result = await this.deliveryService.redeliverBatchItems({
+      orderIdOrId: orderId,
+      deliveryItemIds,
+      deliveredBy: this.currentOperatorId(req),
+    });
+
+    /**
+     * 与批量交付同一个兜底：交付事务已经完成，不能因为一条消息
+     * 或一次 openid 查询失败就给后台回 500。
+     */
+    try {
+      // 用 service 回的业务订单号查：路由也接受主键，主键查不到 openid
+      const order = await this.customRecipeService.getOrderByOrderId(
+        result.orderId,
+      );
+      const openid = order?.customer?.wechatOpenid;
+      if (openid && this.wechatService) {
+        await this.wechatService.sendCustomRecipeOrderNotification(
+          openid,
+          result.orderId,
+          'DELIVERED',
+          result.selectedRecipes[0]?.recipeId,
+        );
+      }
+    } catch (error) {
+      console.error('[CustomRecipe] 按份重新交付通知发送失败:', error);
+    }
+
+    return ApiResponseDto.success({
+      ...result,
+      status: 'DELIVERED',
+    });
+  }
+
+  /**
    * 批量交付入参：必须是非空字符串数组，且不超过业务硬上限 5 份。
    *
    * 份数是否等于订单的 `recipeQuantity` 由 `deliverBatch` 判断 ——
@@ -782,6 +839,34 @@ export class AdminCustomRecipeController {
     if (ids.some((id) => id.length === 0)) {
       throw new BadRequestException(
         'recipeIds 必须是非空字符串数组，请为每一份选择食谱',
+      );
+    }
+    return ids;
+  }
+
+  /**
+   * 按份重新交付入参：必须是非空字符串数组，且不超过业务硬上限 5 份。
+   *
+   * 份数是否都在**最新批次**里、有没有重复，由 `redeliverBatchItems`
+   * 拿到批次明细后判断 —— 控制器看不到批次，复制一套规则只会让两处口径分叉。
+   */
+  private resolveRedeliverDeliveryItemIds(raw: unknown): string[] {
+    if (!Array.isArray(raw) || raw.length === 0) {
+      throw new BadRequestException(
+        '请选择要重新交付的食谱（deliveryItemIds 不能为空）',
+      );
+    }
+    if (raw.length > MAX_BATCH_RECIPE_QUANTITY) {
+      throw new BadRequestException(
+        `一次最多重新交付 ${MAX_BATCH_RECIPE_QUANTITY} 份食谱`,
+      );
+    }
+    const ids = raw.map((value) =>
+      typeof value === 'string' ? value.trim() : '',
+    );
+    if (ids.some((id) => id.length === 0)) {
+      throw new BadRequestException(
+        'deliveryItemIds 必须是非空字符串数组，请选择要调整的食谱',
       );
     }
     return ids;

@@ -23,6 +23,7 @@ import {
   CustomAttachmentType,
   AllergyAnswerStatus,
 } from '@prisma/client';
+import { MAX_MULTI_RECIPE_QUANTITY } from '../custom-recipe-config.service';
 
 /**
  * 本单上传的过敏检测报告草稿（2026-10-19）。
@@ -260,14 +261,14 @@ export class SubmitCustomRecipeOrderDTO {
    * 前端传来的价格不能作为支付依据。
    */
   @ApiPropertyOptional({
-    description: '份数（1–5，默认 1）',
+    description: `份数（1–${MAX_MULTI_RECIPE_QUANTITY}，默认 1）`,
     minimum: 1,
-    maximum: 5,
+    maximum: MAX_MULTI_RECIPE_QUANTITY,
   })
   @IsOptional()
   @IsInt()
   @Min(1)
-  @Max(5)
+  @Max(MAX_MULTI_RECIPE_QUANTITY)
   recipeQuantity?: number;
 
   /**

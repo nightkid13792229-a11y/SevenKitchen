@@ -224,6 +224,53 @@ describe('CustomRecipeService · 多份下单与价格快照', () => {
       }),
     ).rejects.toThrow('肉类');
 
+    // 去掉首尾空格后仍是同一个肉，也必须按重复拒绝
+    await expect(
+      submit({
+        recipeQuantity: 2,
+        requestedProteinCodes: ['CHICKEN', ' CHICKEN '],
+      }),
+    ).rejects.toThrow('肉类');
+
+    expect(orderCreate).not.toHaveBeenCalled();
+  });
+
+  it('肉类偏好落库前去掉首尾空格', async () => {
+    const order = await submit({
+      recipeQuantity: 2,
+      requestedProteinCodes: ['  CHICKEN  ', ' BEEF '],
+    });
+
+    expect(order.requestedProteinCodes).toEqual(['CHICKEN', 'BEEF']);
+    expect(orderCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          requestedProteinCodes: ['CHICKEN', 'BEEF'],
+        }),
+      }),
+    );
+  });
+
+  it('同一 clientRequestId 的重试在开关/最多份数变化后仍返回原订单', async () => {
+    const existing = {
+      id: 'cr-uuid-1',
+      orderId: 'CR202610200001',
+      amount: 828,
+      recipeQuantity: 3,
+      status: 'PENDING_PAYMENT',
+    };
+    orderFindUnique.mockResolvedValue(existing);
+    // 重试之前后台改了配置：开关关掉、最多份数调低
+    config.multiRecipeEnabled = false;
+    config.maxRecipeQuantity = 1;
+
+    const order = await submit({
+      recipeQuantity: 3,
+      requestedProteinCodes: ['CHICKEN', 'BEEF', 'SALMON'],
+      clientRequestId: 'retry-key-1',
+    });
+
+    expect(order).toBe(existing);
     expect(orderCreate).not.toHaveBeenCalled();
   });
 

@@ -333,23 +333,18 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     this.assertRequiredIntakeFields(data);
 
     /**
-     * 多份（2026-10-20 第一阶段）：份数、开关、肉类选择全部在服务端校验。
-     * 前端选择器只是体验层，接口直调也必须挡住 6 份、0 份和重复肉类。
+     * 份数语法校验（整数 1–5）放在幂等之前：后面的排期和落库都依赖它，
+     * 而且它是**请求本身的合法性**，不随后台配置变化。
+     * 开关、肉类与报价则放在幂等返回之后（见下）。
      */
     const recipeQuantity = this.resolveRecipeQuantity(data.recipeQuantity);
-
-    if (recipeQuantity > 1 && config.multiRecipeEnabled !== true) {
-      throw new BadRequestException('多份购买暂未开放，请选择 1 份');
-    }
-
-    const requestedProteinCodes = this.resolveRequestedProteinCodes(
-      data.requestedProteinCodes,
-      recipeQuantity,
-    );
 
     /**
      * 幂等（2026-10-19 P0）：同一顾客 + 同一 clientRequestId 只生成一张订单。
      * 网络超时后前端用同一个 key 重试，不能变成两张待付款单。
+     *
+     * 必须排在开关/最多份数/报价校验之前：重试可能发生在后台改配置之后，
+     * 此时应原样返回已创建的订单，而不是被新配置打回去。
      */
     if (data.clientRequestId) {
       const existing = await this.prisma.customRecipeOrder.findUnique({
@@ -364,10 +359,22 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     }
 
     /**
+     * 多份（2026-10-20 第一阶段）：开关、肉类选择、报价全部在幂等返回之后校验。
+     * 前端选择器只是体验层，接口直调也必须挡住开关关闭、重复肉类和坏配置。
+     */
+    if (recipeQuantity > 1 && config.multiRecipeEnabled !== true) {
+      throw new BadRequestException('多份购买暂未开放，请选择 1 份');
+    }
+
+    const requestedProteinCodes = this.resolveRequestedProteinCodes(
+      data.requestedProteinCodes,
+      recipeQuantity,
+    );
+
+    /**
      * 权威报价（2026-10-20）：整单金额只算一次，写进订单快照。
      *
-     * 放在幂等返回之后：配置后来被改坏/调价，不能用新报价改写老订单，
-     * 也不该让同一个 key 的重试因为配置变化而失败。
+     * 同样放在幂等返回之后：配置后来被改坏/调价，不能用新报价改写老订单。
      */
     const quote = this.pricingService.quote(recipeQuantity, config);
 

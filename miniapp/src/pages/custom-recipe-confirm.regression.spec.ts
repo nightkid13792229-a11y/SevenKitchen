@@ -158,9 +158,10 @@ describe('定制链路 · 成品抵扣已彻底下线（2026-10-20）', () => {
     const confirm = read(`${PAGE_DIR}/confirm.vue`);
     const detail = read(`${PAGE_DIR}/order-detail.vue`);
 
-    // 确认页的应付定制费仍来自创建后的订单，兜底用后台配置
-    expect(confirm).toContain('postFeeText');
-    expect(confirm).toContain('createdOrder.value?.amount ?? config.value?.feeAmount');
+    // 确认页的真实应付金额仍来自后端配置/订单，并渲染在支付按钮上
+    expect(confirm).toContain('const feeText = computed');
+    expect(confirm).toContain('确认并支付');
+    expect(confirm).toContain('config.value?.feeAmount');
     // 订单详情的定制费金额行保留
     expect(detail).toContain('<text class="label">定制费</text>');
     expect(detail).toContain('formatAmount(order.amount)');

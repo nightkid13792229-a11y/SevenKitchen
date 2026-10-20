@@ -137,6 +137,9 @@ export class SupplementSnapshotService {
             recipeId: recipe.recipeId,
             version: recipe.version,
             name: recipe.name,
+            nutritionStandard: recipe.nutritionStandard ?? null,
+            productionLossRate: recipe.productionLossRate ?? null,
+            nutritionDetailedData: recipe.nutritionDetailedData ?? null,
             items: recipe.items.map((item) => ({
               ingredientId: item.ingredientId,
               name: item.ingredient?.name ?? null,

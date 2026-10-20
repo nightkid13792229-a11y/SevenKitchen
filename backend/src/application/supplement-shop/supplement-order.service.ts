@@ -146,6 +146,9 @@ export interface SupplementOrderView {
   amountTotal: number;
   /** 员工端：金额字段已被后端脱敏，前端不要展示金额区 */
   amountsRedacted?: boolean;
+  /** 是否有未完结补剂售后（新 case，不依赖订单旧 aftersaleType） */
+  hasOpenAftersale?: boolean;
+  openAftersaleLabel?: string | null;
   shippingDescription: string | null;
   receiverName: string;
   receiverPhone: string;
@@ -416,12 +419,10 @@ export class SupplementOrderService {
       this.prisma.supplementOrder.count({ where }),
     ]);
 
-    return {
-      items: rows.map((row) => this.toOrderView(row)),
-      total,
-      page,
-      pageSize,
-    };
+    const items = await this.decorateOpenAftersale(
+      rows.map((row) => this.toOrderView(row)),
+    );
+    return { items, total, page, pageSize };
   }
 
   async getOrder(userId: string, orderId: string): Promise<SupplementOrderView> {
@@ -433,7 +434,8 @@ export class SupplementOrderService {
     if (!order) {
       throw new NotFoundException(`补剂订单不存在: ${orderId}`);
     }
-    return this.toOrderView(order);
+    const [view] = await this.decorateOpenAftersale([this.toOrderView(order)]);
+    return view;
   }
 
   /** 后台：所有补剂订单 */
@@ -477,14 +479,10 @@ export class SupplementOrderService {
       this.prisma.supplementOrder.count({ where }),
     ]);
 
-    return {
-      items: rows.map((row) =>
-        this.toOrderView(row, actor.role === 'STAFF'),
-      ),
-      total,
-      page,
-      pageSize,
-    };
+    const items = await this.decorateOpenAftersale(
+      rows.map((row) => this.toOrderView(row, actor.role === 'STAFF')),
+    );
+    return { items, total, page, pageSize };
   }
 
   async getOrderById(
@@ -498,7 +496,10 @@ export class SupplementOrderService {
     if (!order) {
       throw new NotFoundException(`补剂订单不存在: ${orderId}`);
     }
-    return this.toOrderView(order, actor.role === 'STAFF');
+    const [view] = await this.decorateOpenAftersale([
+      this.toOrderView(order, actor.role === 'STAFF'),
+    ]);
+    return view;
   }
 
   // ---------------- 后台：收款 / 分装 / 发货 / 售后 ----------------
@@ -682,6 +683,20 @@ export class SupplementOrderService {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      // 条件更新先抢订单：并发分装第二次会拿到 count=0
+      if (typeof (tx.supplementOrder as any).updateMany === 'function') {
+        const claimed = await tx.supplementOrder.updateMany({
+          where: {
+            id: orderId,
+            status: { in: ['PAID', 'PACKING'] },
+          },
+          data: { status: 'PACKED' },
+        });
+        if (claimed.count !== 1) {
+          throw new BadRequestException('订单已被其他人处理，请刷新后再试');
+        }
+      }
+
       const shortages = this.inventoryService
         ? await this.inventoryService.getShortages(tx, orderId)
         : [];
@@ -710,10 +725,12 @@ export class SupplementOrderService {
       await this.inventoryService?.consumeForOrder(tx, orderId, {
         allowMissing: force,
       });
-      await tx.supplementOrder.update({
-        where: { id: orderId },
-        data: { status: 'PACKED' },
-      });
+      if (typeof (tx.supplementOrder as any).updateMany !== 'function') {
+        await tx.supplementOrder.update({
+          where: { id: orderId },
+          data: { status: 'PACKED' },
+        });
+      }
       if (tx.supplementOrderEvent) {
         await tx.supplementOrderEvent.create({
           data: {
@@ -884,7 +901,15 @@ export class SupplementOrderService {
     if (customerId && order.userId !== customerId) {
       throw new NotFoundException('补剂订单不存在');
     }
-    this.assertStatus(order.status, ['PENDING_PAYMENT', 'PAID'], '取消');
+    // PAID 必须走售后全额退款；只有退款成功后的 SYSTEM 内部收尾可以直接取消
+    this.assertStatus(
+      order.status,
+      actor.type === 'SYSTEM' ||
+      (order.reshipFromOrderNo && Number(order.amountTotal) === 0)
+        ? ['PENDING_PAYMENT', 'PAID']
+        : ['PENDING_PAYMENT'],
+      '取消',
+    );
 
     await this.prisma.$transaction(async (tx) => {
       await tx.supplementOrder.update({
@@ -896,6 +921,27 @@ export class SupplementOrderService {
         },
       });
       await this.inventoryService?.releaseForOrder(tx, orderId);
+      // 取消补发单：把售后 case 放回 PROCESSING 并解除补发单绑定，允许重新补发
+      if (order.reshipFromOrderNo) {
+        const original = await tx.supplementOrder.findUnique({
+          where: { orderNo: order.reshipFromOrderNo },
+          select: { id: true },
+        });
+        if (original) {
+          await tx.aftersaleCase.updateMany({
+            where: {
+              orderType: 'SUPPLEMENT',
+              orderId: original.id,
+              reshipOrderId: orderId,
+            },
+            data: {
+              status: 'PROCESSING',
+              reshipOrderId: null,
+              reshipOrderNo: null,
+            },
+          });
+        }
+      }
       if (tx.supplementOrderEvent) {
         await tx.supplementOrderEvent.create({
           data: {
@@ -1214,7 +1260,9 @@ export class SupplementOrderService {
           // packedAmount 是**每袋**的量（加量乘的是成本，不是量），
           // 所以同一补剂的每一袋标签写同一个数。
           amountText: `${formatAmount(item.packedAmount)}${item.unit}`,
-          packedDate: this.toDateText(item.packedAt),
+          packedDate: item.packedAt
+            ? TimezoneUtil.shanghaiDateKey(item.packedAt)
+            : '',
           expiryDate: this.toDateText(item.packedExpiryDate),
           batchNo: item.batchNo,
           storageCondition: item.storageCondition || DEFAULT_STORAGE_CONDITION,
@@ -1884,6 +1932,36 @@ export class SupplementOrderService {
       Math.max(1, Number(query.pageSize) || DEFAULT_PAGE_SIZE),
     );
     return { page, pageSize, skip: (page - 1) * pageSize, take: pageSize };
+  }
+
+  private async decorateOpenAftersale(
+    views: SupplementOrderView[],
+  ): Promise<SupplementOrderView[]> {
+    const ids = views.map((view) => view.id);
+    if (ids.length === 0) return views;
+    try {
+      const cases = await (this.prisma as any).aftersaleCase?.findMany?.({
+        where: {
+          orderType: 'SUPPLEMENT',
+          orderId: { in: ids },
+          status: { in: ['PENDING', 'PROCESSING'] },
+        },
+        select: { orderId: true, requestType: true },
+      });
+      if (!cases?.length) return views;
+      const byOrder = new Map<string, string>();
+      for (const item of cases) byOrder.set(item.orderId, item.requestType);
+      for (const view of views) {
+        const requestType = byOrder.get(view.id);
+        if (requestType) {
+          view.hasOpenAftersale = true;
+          view.openAftersaleLabel = requestType === 'REFUND' ? '退款中' : '售后中';
+        }
+      }
+    } catch {
+      // 旧库/测试环境没有 case 表时不影响订单读取
+    }
+    return views;
   }
 
   private toOrderView(

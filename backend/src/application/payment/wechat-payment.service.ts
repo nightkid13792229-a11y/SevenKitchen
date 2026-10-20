@@ -1470,6 +1470,8 @@ export class WechatPaymentService {
     amount?: number;
     reason: string;
     adminId?: string | null;
+    /** 由调用方预先占位时传入；否则从 caseNo 确定性生成 */
+    outRefundNo?: string | null;
   }): Promise<{
     outRefundNo: string | null;
     refundId: string | null;
@@ -1552,30 +1554,99 @@ export class WechatPaymentService {
     }
 
     const reason = (input.reason || caseRow.requestedReason || '售后退款').trim();
-    const outRefundNo =
+    const deterministicOutRefundNo =
+      input.outRefundNo ||
       caseRow.refundOutNo ||
       this.toSupplementCaseOutRefundNo(caseRow.caseNo);
 
-    const response = await this.callWechatPay<{
-      refund_id?: string;
-      status?: string;
-      message?: string;
-    }>(
-      'POST',
-      '/v3/refund/domestic/refunds',
-      {
-        out_trade_no: order.orderNo,
-        out_refund_no: outRefundNo,
-        reason: reason.slice(0, 80),
-        notify_url: config.refundNotifyUrl || config.notifyUrl,
-        amount: {
-          refund: this.toFen(amount),
-          total: this.toFen(paid),
-          currency: 'CNY',
+    // 并发闸门：同一 case 只能有一个请求拿到退款调用权。
+    // 已失败的 case 允许用同一个 outRefundNo 重试；PENDING/PROCESSING/SUCCESS 直接复用。
+    let outRefundNo = deterministicOutRefundNo;
+    if (!caseRow.refundOutNo) {
+      const claimed = await this.prisma.aftersaleCase.updateMany({
+        where: {
+          id: caseRow.id,
+          refundOutNo: null,
+          status: { in: ['PENDING', 'PROCESSING'] },
         },
-      },
-      config,
-    );
+        data: {
+          status: 'PROCESSING',
+          resolutionType: 'REFUND',
+          handlerId: input.adminId ?? caseRow.handlerId,
+          refundAmount: amount,
+          refundStatus: 'PENDING',
+          refundOutNo: outRefundNo,
+          refundRequestedAt: new Date(),
+        },
+      });
+      if (claimed.count !== 1) {
+        const latest = await this.prisma.aftersaleCase.findUnique({
+          where: { id: caseRow.id },
+        });
+        const latestStatus = String(latest?.refundStatus || '').toUpperCase();
+        if (
+          latest &&
+          ['PENDING', 'PROCESSING', 'SUCCESS'].includes(latestStatus)
+        ) {
+          return {
+            outRefundNo: latest.refundOutNo,
+            refundId: latest.refundId,
+            status: latestStatus,
+            amount: this.toMoneyNumber(latest.refundAmount),
+            reused: true,
+          };
+        }
+        throw new BadRequestException('退款正在处理中，请稍后刷新');
+      }
+    } else if (currentStatus === 'FAILED') {
+      const retried = await this.prisma.aftersaleCase.updateMany({
+        where: { id: caseRow.id, refundStatus: 'FAILED' },
+        data: { refundStatus: 'PENDING', refundRequestedAt: new Date() },
+      });
+      if (retried.count !== 1) {
+        throw new BadRequestException('退款正在处理中，请稍后刷新');
+      }
+      outRefundNo = caseRow.refundOutNo;
+    } else {
+      throw new BadRequestException('退款单已占用，不能重复发起');
+    }
+
+    let response: { refund_id?: string; status?: string; message?: string };
+    try {
+      response = await this.callWechatPay<{
+        refund_id?: string;
+        status?: string;
+        message?: string;
+      }>(
+        'POST',
+        '/v3/refund/domestic/refunds',
+        {
+          out_trade_no: order.orderNo,
+          out_refund_no: outRefundNo,
+          reason: reason.slice(0, 80),
+          notify_url: config.refundNotifyUrl || config.notifyUrl,
+          amount: {
+            refund: this.toFen(amount),
+            total: this.toFen(paid),
+            currency: 'CNY',
+          },
+        },
+        config,
+      );
+    } catch (error) {
+      await this.prisma.aftersaleCase.update({
+        where: { id: caseRow.id },
+        data: {
+          status: 'PROCESSING',
+          refundStatus: 'FAILED',
+          handlingNote: String((error as Error)?.message || '退款接口失败').slice(
+            0,
+            1000,
+          ),
+        },
+      });
+      throw error;
+    }
 
     const status = String(response.status || 'PROCESSING').toUpperCase();
     await this.prisma.aftersaleCase.update({
@@ -1591,6 +1662,14 @@ export class WechatPaymentService {
         refundRequestedAt: new Date(),
       },
     });
+    if (status === 'SUCCESS') {
+      await this.finalizeSupplementCaseRefundSuccess(
+        caseRow,
+        response.refund_id ?? null,
+        null,
+      );
+    }
+
     try {
       await this.prisma.supplementOrderEvent.create({
         data: {
@@ -1714,6 +1793,71 @@ export class WechatPaymentService {
     };
   }
 
+  /** 退款成功统一收尾：case RESOLVED；PAID/PACKED 订单取消；通知 */
+  private async finalizeSupplementCaseRefundSuccess(
+    caseRow: { id: string; orderId: string; refundId: string | null },
+    refundId: string | null,
+    successTime: Date | null,
+  ): Promise<string | null> {
+    const orderStatus = await this.prisma.$transaction(async (tx) => {
+      await tx.aftersaleCase.update({
+        where: { id: caseRow.id },
+        data: {
+          status: 'RESOLVED',
+          refundStatus: 'SUCCESS',
+          refundId: refundId ?? caseRow.refundId,
+          refundedAt: successTime ?? new Date(),
+          resolvedAt: successTime ?? new Date(),
+        },
+      });
+      const order = await tx.supplementOrder.findUnique({
+        where: { id: caseRow.orderId },
+      });
+      if (order?.status === 'PACKED') {
+        await tx.supplementOrder.update({
+          where: { id: order.id },
+          data: {
+            status: 'CANCELLED',
+            cancelledAt: successTime ?? new Date(),
+            cancellationReason: '未发货全额退款',
+          },
+        });
+      }
+      await tx.supplementOrderEvent.create({
+        data: {
+          orderId: caseRow.orderId,
+          type: 'REFUNDED',
+          actorType: 'SYSTEM',
+          reason: '微信退款成功',
+          metadata: { caseId: caseRow.id, refundId },
+        },
+      });
+      return order?.status ?? null;
+    });
+
+    if (orderStatus === 'PAID') {
+      try {
+        await this.supplementOrderService.cancelOrder(
+          caseRow.orderId,
+          { reason: '未分装退款取消' },
+          undefined,
+          { type: 'SYSTEM' },
+        );
+      } catch (error) {
+        this.logger.warn(
+          `Supplement PAID cancel after refund failed: order=${caseRow.orderId}: ${
+            (error as Error).message
+          }`,
+        );
+      }
+    }
+    await this.supplementNotificationService?.notify(
+      caseRow.orderId,
+      'REFUNDED',
+    );
+    return orderStatus;
+  }
+
   /** 微信退款回调中的补剂订单分支 */
   private async handleSupplementRefundNotify(
     decrypted: Record<string, unknown>,
@@ -1733,62 +1877,16 @@ export class WechatPaymentService {
     });
     if (caseRow) {
       if (refundStatus === 'SUCCESS') {
-        const orderStatus = await this.prisma.$transaction(async (tx) => {
-          await tx.aftersaleCase.update({
-            where: { id: caseRow.id },
-            data: {
-              status: 'RESOLVED',
-              refundStatus,
-              refundId: refundId ?? caseRow.refundId,
-              refundedAt: successTime ?? new Date(),
-              resolvedAt: successTime ?? new Date(),
-            },
-          });
-          const order = await tx.supplementOrder.findUnique({
-            where: { id: caseRow.orderId },
-          });
-          if (order?.status === 'PACKED') {
-            await tx.supplementOrder.update({
-              where: { id: order.id },
-              data: {
-                status: 'CANCELLED',
-                cancelledAt: successTime ?? new Date(),
-                cancellationReason: '未发货全额退款',
-              },
-            });
-          }
-          await tx.supplementOrderEvent.create({
-            data: {
-              orderId: caseRow.orderId,
-              type: 'REFUNDED',
-              actorType: 'SYSTEM',
-              reason: '微信退款成功',
-              metadata: { caseId: caseRow.id, refundId },
-            },
-          });
-          return order?.status ?? null;
-        });
-
-        // PAID 未分装取消：退款成功后才取消订单并释放库存
-        if (orderStatus === 'PAID') {
-          try {
-            await this.supplementOrderService.cancelOrder(
-              caseRow.orderId,
-              { reason: '未分装退款取消' },
-              undefined,
-              { type: 'SYSTEM' },
-            );
-          } catch (error) {
-            this.logger.warn(
-              `Supplement PAID cancel after refund failed: order=${caseRow.orderId}: ${
-                (error as Error).message
-              }`,
-            );
-          }
+        if (
+          caseRow.status === 'RESOLVED' &&
+          String(caseRow.refundStatus || '').toUpperCase() === 'SUCCESS'
+        ) {
+          return { handled: true, refundStatus };
         }
-        await this.supplementNotificationService?.notify(
-          caseRow.orderId,
-          'REFUNDED',
+        await this.finalizeSupplementCaseRefundSuccess(
+          caseRow,
+          refundId,
+          successTime,
         );
       } else {
         await this.prisma.aftersaleCase.update({
@@ -1833,13 +1931,9 @@ export class WechatPaymentService {
   }
 
   private toSupplementCaseOutRefundNo(caseNo: string) {
-    const suffix = new Date()
-      .toISOString()
-      .replace(/\D/g, '')
-      .slice(0, 14);
-    const random = randomBytes(2).toString('hex').toUpperCase();
-    const compact = caseNo.replace(/[^0-9A-Za-z]/g, '').slice(0, 40);
-    return `RFSP${compact}${suffix}${random}`;
+    // 确定性编号：同一售后 case 无论重试多少次都是同一个 out_refund_no
+    const compact = caseNo.replace(/[^0-9A-Za-z]/g, '').slice(0, 48);
+    return `RFSP${compact}`;
   }
 
   private async getRuntimePaymentConfig(): Promise<RuntimePaymentConfig> {

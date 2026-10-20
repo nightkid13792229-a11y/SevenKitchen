@@ -161,6 +161,56 @@ describe('WechatPaymentService · 补剂订单支付', () => {
     jest.restoreAllMocks();
   });
 
+  describe('售后按 case 退款', () => {
+    it('同一 case 已处理中时复用退款单，不重复调用微信', async () => {
+      mockPrismaService.aftersaleCase = {
+        findUnique: jest.fn(),
+        updateMany: jest.fn(),
+        update: jest.fn().mockResolvedValue({}),
+        findMany: jest.fn().mockResolvedValue([]),
+      };
+      mockPrismaService.supplementOrderEvent = {
+        create: jest.fn().mockResolvedValue({}),
+      };
+      mockPrismaService.supplementOrder.findUnique.mockResolvedValue({
+        id: 'order-1',
+        orderNo: 'SP20261020-001',
+        amountTotal: 31.6,
+        paymentMethod: 'WECHAT_PAY',
+        status: 'PAID',
+      });
+      mockPrismaService.paymentConfig.upsert.mockResolvedValue(
+        buildPaymentConfig({ allowRefund: true }),
+      );
+      mockPrismaService.aftersaleCase.findUnique.mockResolvedValue({
+        id: 'c1',
+        caseNo: 'AS20261020ABC',
+        orderType: 'SUPPLEMENT',
+        orderId: 'order-1',
+        status: 'PROCESSING',
+        refundStatus: 'PROCESSING',
+        refundOutNo: 'RFSPAS20261020ABC',
+        refundAmount: 31.6,
+        refundId: 'r1',
+        requestedReason: '退款',
+        handlerId: null,
+      });
+
+      const pay = jest
+        .spyOn(service as any, 'callWechatPay')
+        .mockResolvedValue({ refund_id: 'r1', status: 'PROCESSING' });
+
+      const result = await service.createSupplementRefundForCase({
+        caseId: 'c1',
+        amount: 31.6,
+        reason: '退款',
+      });
+
+      expect(result.reused).toBe(true);
+      expect(pay).not.toHaveBeenCalled();
+    });
+  });
+
   describe('支付超时与鲜食解耦（2026-09-24）', () => {
     it('补剂订单用「补剂商城设置」的超时，不用支付配置里的共享值', async () => {
       jest.spyOn(global, 'fetch' as never).mockResolvedValue({

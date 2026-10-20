@@ -148,10 +148,12 @@ async function load() {
     const [detail, cases, snapshotRes] = await Promise.all([
       fetchSupplementOrderDetail(orderId.value),
       fetchSupplementAftersales(orderId.value).catch(() => ({ code: 0, data: [] } as any)),
+      fetchSupplementSnapshot(orderId.value).catch(() => ({ code: 0, data: null } as any)),
     ])
     if (detail.code === 0) order.value = detail.data
     else uni.showToast({ title: detail.message || '加载失败', icon: 'none' })
     if (cases.code === 0) aftersales.value = cases.data || []
+    if (snapshotRes.code === 0) snapshot.value = snapshotRes.data
   } finally {
     loading.value = false
   }
@@ -241,6 +243,8 @@ function repurchase() {
     dogId: order.value.dogId || undefined,
     dogName: order.value.dogName || undefined,
     cycleDays: order.value.cycleDays || undefined,
+    portionMultiplier: order.value.portionMultiplier || 1,
+    reorderFromOrderNo: order.value.orderNo,
   })
   uni.navigateTo({ url: '/pages/supplement-order/index' })
 }

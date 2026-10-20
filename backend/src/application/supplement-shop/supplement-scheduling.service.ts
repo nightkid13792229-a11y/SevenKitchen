@@ -78,6 +78,26 @@ export class SupplementSchedulingService {
     );
   }
 
+  /** 顾客下单前的预计分装/发货日（不占用产能，只读） */
+  async previewPackingDate(now = new Date()): Promise<{
+    packingDate: string | null;
+    autoScheduleEnabled: boolean;
+  }> {
+    const config = await this.configService.getConfig();
+    if (!config.autoScheduleEnabled) {
+      return { packingDate: null, autoScheduleEnabled: false };
+    }
+    try {
+      const date = await this.resolvePackingDate(now, now);
+      return {
+        packingDate: TimezoneUtil.shanghaiDateKey(date),
+        autoScheduleEnabled: true,
+      };
+    } catch {
+      return { packingDate: null, autoScheduleEnabled: true };
+    }
+  }
+
   async countOrdersForDate(dateOnly: Date): Promise<number> {
     return this.prisma.supplementOrder.count({
       where: {

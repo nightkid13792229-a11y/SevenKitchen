@@ -131,6 +131,8 @@ export interface SupplementOrder {
   paidAt: string | null
   /** 分装日（预计发货日）；null = 待排期 */
   packingDate?: string | null
+  hasOpenAftersale?: boolean
+  openAftersaleLabel?: string | null
   aftersaleType: string | null
   aftersaleReason: string | null
   trackingNumber: string | null
@@ -267,6 +269,14 @@ export interface SupplementAftersale {
   createdAt: string
 }
 
+/** 下单前预计分装/发货日 */
+export function fetchSupplementPackingDate() {
+  return request<{ packingDate: string | null; autoScheduleEnabled: boolean }>({
+    url: '/supplements/packing-date',
+    method: 'GET'
+  })
+}
+
 /** 补剂售后政策 */
 export function fetchSupplementPolicy() {
   return request<{ aftersalePolicy: string | null; aftersaleWindowDays: number }>({
@@ -386,6 +396,10 @@ export interface SupplementPurchaseDraft {
   cycleDays?: number
   /** 来源 DIY 制作单；首次下单补剂时后端用它冻结快照 */
   diySheetId?: string
+  /** 复购时沿用原单份数 */
+  portionMultiplier?: number
+  /** 复购来源订单号，用于后端审计 */
+  reorderFromOrderNo?: string
 }
 
 const DRAFT_STORAGE_KEY = 'supplementPurchaseDraft'

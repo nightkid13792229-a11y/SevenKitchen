@@ -364,6 +364,14 @@ describe('补剂订单 · 分装发货售后', () => {
       expect(store.cancellationReason).toBe('用户改需求');
     });
 
+    it('已付款订单不能直接取消，必须走退款', async () => {
+      store.status = 'PAID';
+
+      await expect(
+        service.cancelOrder('order-1', { reason: '后台误点' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
     it('已发货的订单不能直接取消，要走售后', async () => {
       store.status = 'SHIPPED';
 

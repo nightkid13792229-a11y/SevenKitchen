@@ -88,6 +88,18 @@ describe('OrderCenterService', () => {
     expect(supplement?.aftersaleLabel).toBe('退款中');
   });
 
+  it('按顾客姓名搜索时把用户 ID 放进 OR，而不是和订单号 AND', async () => {
+    await service.list({ pageSize: 20, keyword: '张三' });
+
+    const where = prisma.order.findMany.mock.calls[0][0].where;
+    expect(where.OR).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ customerId: { in: ['u1'] } }),
+      ]),
+    );
+    expect(where.customerId).toBeUndefined();
+  });
+
   it('只查补剂时不会碰鲜食/定制查询', async () => {
     const result = await service.list({
       type: 'SUPPLEMENT',

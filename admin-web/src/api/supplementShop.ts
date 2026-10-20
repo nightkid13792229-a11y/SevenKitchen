@@ -308,6 +308,8 @@ export interface SupplementOrder {
   paidAt: string | null;
   /** 分装日/预计发货日；null = 待排期 */
   packingDate?: string | null;
+  hasOpenAftersale?: boolean;
+  openAftersaleLabel?: string | null;
   paymentMethod: string | null;
   aftersaleType: string | null;
   aftersaleReason: string | null;
@@ -456,7 +458,7 @@ export const supplementOrderApi = {
 
   aftersale: (
     id: string,
-    data: { type: 'REFUND' | 'RESHIP'; reason: string },
+    data: { type: 'REFUND' | 'RESHIP' | 'OTHER'; reason: string },
   ): Promise<SupplementOrder> =>
     api.post(`/admin/supplement-shop/orders/${id}/aftersale`, data),
 

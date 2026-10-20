@@ -157,7 +157,7 @@
               size="small"
               @click="handleCancel(row)"
             >
-              取消
+              {{ row.status === 'PAID' ? '取消并退款' : '取消' }}
             </el-button>
             <el-button
               v-if="!['CANCELLED', 'AFTERSALE'].includes(row.status)"
@@ -435,7 +435,10 @@
           <el-descriptions-item label="支付方式">
             {{ formatPaymentMethod(current.paymentMethod) }}
           </el-descriptions-item>
-          <el-descriptions-item v-if="current.aftersaleType" label="售后">
+          <el-descriptions-item v-if="current.hasOpenAftersale" label="售后">
+            <el-tag type="warning" size="small">{{ current.openAftersaleLabel || '售后中' }}</el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item v-if="current.aftersaleType" label="旧售后">
             {{ current.aftersaleType === 'REFUND' ? '退款' : '免费补发' }} ·
             {{ current.aftersaleReason }}
           </el-descriptions-item>
@@ -480,7 +483,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   REFUND_STATUS_LABELS,
@@ -513,6 +516,7 @@ const props = withDefaults(defineProps<{ embedded?: boolean }>(), {
   embedded: false,
 });
 
+const route = useRoute();
 const router = useRouter();
 
 const statusTabs = [
@@ -528,8 +532,9 @@ const loading = ref(false);
 const submitting = ref(false);
 const orders = ref<SupplementOrder[]>([]);
 const counts = ref<Record<string, number>>({});
-const activeStatus = ref('PAID');
-const keyword = ref('');
+const initialKeyword = String(route.query.keyword || '').trim();
+const activeStatus = ref(initialKeyword ? '' : 'PAID');
+const keyword = ref(initialKeyword);
 const page = ref(1);
 const pageSize = ref(20);
 const total = ref(0);
@@ -816,14 +821,21 @@ async function handleConfirmPayment(order: SupplementOrder) {
 }
 
 async function handleCancel(order: SupplementOrder) {
+  const isPaid = order.status === 'PAID';
   try {
-    const { value } = await ElMessageBox.prompt('请填写取消原因', '取消订单', {
-      inputPlaceholder: '例如：用户改需求',
-      confirmButtonText: '确认取消',
-      cancelButtonText: '返回',
-    });
+    const { value } = await ElMessageBox.prompt(
+      isPaid
+        ? '已付款订单会发起全额退款；退款成功后才取消订单。请填写原因'
+        : '请填写取消原因',
+      isPaid ? '取消并退款' : '取消订单',
+      {
+        inputPlaceholder: '例如：用户改需求',
+        confirmButtonText: isPaid ? '发起退款' : '确认取消',
+        cancelButtonText: '返回',
+      },
+    );
     await supplementOrderApi.cancel(order.id, { reason: value });
-    ElMessage.success('订单已取消');
+    ElMessage.success(isPaid ? '退款已发起' : '订单已取消');
     await loadAll();
   } catch {
     /* 用户取消操作 */
@@ -860,7 +872,7 @@ async function submitAftersale() {
       const result = await supplementOrderApi.reship(orderId, { reason });
       ElMessage.success(`已生成补发单 ${result.reship.orderNo}（0 元，待分装）`);
     } else {
-      await supplementOrderApi.aftersale(orderId, { type: 'REFUND', reason });
+      await supplementOrderApi.aftersale(orderId, { type: 'OTHER', reason });
       ElMessage.success('已登记售后');
     }
 

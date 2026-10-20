@@ -233,6 +233,13 @@
           <text class="fee-value fee-value-total">¥{{ summary.total.toFixed(2) }}</text>
         </view>
 
+        <view class="delivery-row">
+          <text class="fee-label">预计发货</text>
+          <text class="delivery-value">
+            {{ estimatedPackingDate || (autoScheduleEnabled ? '待排期' : '待管理员排期') }}
+          </text>
+        </view>
+
       </view>
 
       <!--
@@ -281,6 +288,8 @@ import { request } from '../../utils/api'
 import {
   clearSupplementPurchaseDraft,
   createSupplementOrder,
+  fetchSupplementOrderDetail,
+  fetchSupplementPackingDate,
   quoteSupplements,
   readSupplementPurchaseDraft,
   type SupplementOrder,
@@ -334,6 +343,8 @@ const submitting = ref(false)
  * 界面只负责照着渲染，不自己拍脑袋。
  */
 const portionMultiplier = ref(1)
+const estimatedPackingDate = ref('')
+const autoScheduleEnabled = ref(true)
 
 /** 制作单覆盖的天数：加量要靠它算总天数与每天成本 */
 const cycleDays = computed(() => Number(draft.value?.cycleDays) || 0)
@@ -470,6 +481,9 @@ onLoad(() => {
       specText: line.specText || ''
     }))
     selectedIds.value = draft.value.lines.map((line) => line.ingredientId)
+    if (Number(draft.value.portionMultiplier) > 1) {
+      portionMultiplier.value = Math.floor(Number(draft.value.portionMultiplier))
+    }
     void initialize()
   } else {
     initializing.value = false
@@ -489,7 +503,18 @@ onUnload(() => {
 async function initialize() {
   initializing.value = true
   try {
-    await Promise.all([loadAddresses(), refreshQuote()])
+    await Promise.all([
+      loadAddresses(),
+      refreshQuote(),
+      fetchSupplementPackingDate()
+        .then((res) => {
+          if (res.code === 0) {
+            estimatedPackingDate.value = res.data?.packingDate || ''
+            autoScheduleEnabled.value = res.data?.autoScheduleEnabled !== false
+          }
+        })
+        .catch(() => {}),
+    ])
   } finally {
     initializing.value = false
   }
@@ -658,7 +683,14 @@ async function settlePayment(order: SupplementOrder) {
   const outcome = await runSupplementPayment(order.id)
 
   if (outcome === 'PAID') {
-    showPaidModal(order)
+    let latest = order
+    try {
+      const detail = await fetchSupplementOrderDetail(order.id)
+      if (detail.code === 0) latest = detail.data
+    } catch {
+      // 拿不到最新排期就用下单时对象兜底
+    }
+    showPaidModal(latest)
     return
   }
 
@@ -669,11 +701,11 @@ async function settlePayment(order: SupplementOrder) {
 function showPaidModal(order: SupplementOrder) {
   uni.showModal({
     title: '支付成功',
-    content: `订单号 ${order.orderNo}\n合计 ¥${order.amountTotal.toFixed(2)}\n\n我们会尽快分装发货。`,
+    content: `订单号 ${order.orderNo}\n合计 ¥${order.amountTotal.toFixed(2)}\n预计发货 ${order.packingDate || '待管理员排期'}\n\n我们会尽快分装发货。`,
     showCancel: false,
     confirmText: '查看订单',
     success: () => {
-      uni.redirectTo({ url: '/pages/supplement-orders/index' })
+      uni.redirectTo({ url: `/pages/supplement-order-detail/index?orderId=${encodeURIComponent(order.id)}` })
     }
   })
 }
@@ -681,11 +713,11 @@ function showPaidModal(order: SupplementOrder) {
 function showManualConfirmModal(order: SupplementOrder, prefix = '') {
   uni.showModal({
     title: '订单已提交',
-    content: `${prefix}订单号 ${order.orderNo}\n合计 ¥${order.amountTotal.toFixed(2)}\n\n我们会尽快与你确认收款，随后分装发货。`,
+    content: `${prefix}订单号 ${order.orderNo}\n合计 ¥${order.amountTotal.toFixed(2)}\n预计发货 ${order.packingDate || '待管理员排期'}\n\n我们会尽快与你确认收款，随后分装发货。`,
     showCancel: false,
     confirmText: '查看订单',
     success: () => {
-      uni.redirectTo({ url: '/pages/supplement-orders/index' })
+      uni.redirectTo({ url: `/pages/supplement-order-detail/index?orderId=${encodeURIComponent(order.id)}` })
     }
   })
 }
@@ -719,7 +751,9 @@ async function handleSubmit() {
       // 首次下单补剂时用它在后端冻结整张制作单
       diySheetId: draft.value.diySheetId,
       // 加量份数：服务端会自己校验上限，越界会拒绝（前端算的只是展示用）
-      portionMultiplier: portionMultiplier.value
+      portionMultiplier: portionMultiplier.value,
+      // 复购来源：后端写 REORDERED 事件，便于追溯
+      reorderFromOrderNo: draft.value.reorderFromOrderNo
     })
 
     if (res.code !== 0) {
@@ -985,6 +1019,19 @@ async function handleSubmit() {
   font-weight: 600;
 }
 
+.delivery-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 14rpx;
+  padding-top: 14rpx;
+  border-top: 1rpx solid #eee;
+  font-size: 25rpx;
+}
+.delivery-value {
+  color: #1e3a2f;
+  font-weight: 600;
+}
 .fee-row-total {
   margin-top: 12rpx;
   padding-top: 18rpx;

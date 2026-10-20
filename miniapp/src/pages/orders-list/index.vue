@@ -172,12 +172,12 @@
             >
           </view>
 
-          <view v-if="order.aftersaleType" class="order-address">
-            <text class="address-text"
-              >售后 {{ getAftersaleLabel(order.aftersaleType) }}{{
+          <view v-if="order.aftersaleType || order.hasOpenAftersale" class="order-address">
+            <text class="address-text">
+              售后 {{ order.hasOpenAftersale ? (order.openAftersaleLabel || '售后中') : getAftersaleLabel(order.aftersaleType) }}{{
                 order.aftersaleReason ? ' · ' + order.aftersaleReason : ''
-              }}</text
-            >
+              }}
+            </text>
           </view>
 
           <view class="order-address">

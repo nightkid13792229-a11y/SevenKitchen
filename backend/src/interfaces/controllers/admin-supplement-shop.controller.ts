@@ -250,7 +250,8 @@ export class AdminSupplementShopController {
   }
 
   @Post('orders/:id/confirm-payment')
-  @ApiOperation({ summary: '人工确认收款（微信支付接通前使用）' })
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: '人工确认收款（仅管理员，微信支付接通前使用）' })
   async confirmPayment(
     @Param('id') id: string,
     @Body() dto: ConfirmSupplementPaymentDto,
@@ -373,6 +374,20 @@ export class AdminSupplementShopController {
     @Body() dto: CancelSupplementOrderDto,
     @Req() request: { user?: { userId?: string } },
   ) {
+    const order = await this.supplementOrderService.getOrderById(id);
+    if (order.status === 'PAID' && order.paymentMethod !== 'RESHIP') {
+      if (!this.supplementAftersaleService) {
+        throw new BadRequestException('售后记录服务未启用');
+      }
+      return ApiResponseDto.success(
+        await this.supplementAftersaleService.cancelPaidOrder(
+          null,
+          id,
+          dto.reason,
+          { type: 'ADMIN', id: request.user?.userId ?? null },
+        ),
+      );
+    }
     return ApiResponseDto.success(
       await this.supplementOrderService.cancelOrder(id, dto, undefined, {
         type: 'ADMIN',

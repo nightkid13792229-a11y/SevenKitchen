@@ -247,9 +247,9 @@ export class ReshipSupplementOrderDto {
 }
 
 export class SupplementAftersaleDto {
-  @ApiProperty({ description: '售后类型', enum: ['REFUND', 'RESHIP'] })
-  @IsIn(['REFUND', 'RESHIP'])
-  type!: 'REFUND' | 'RESHIP';
+  @ApiProperty({ description: '售后类型', enum: ['REFUND', 'RESHIP', 'OTHER'] })
+  @IsIn(['REFUND', 'RESHIP', 'OTHER'])
+  type!: 'REFUND' | 'RESHIP' | 'OTHER';
 
   @ApiProperty({ description: '售后原因（缺货 / 发错 / 破损 / 量不对 / 用户取消…）' })
   @IsString()

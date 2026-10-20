@@ -162,18 +162,53 @@ export class SupplementAftersaleService {
    * 退款失败时订单仍 PAID，packOrder 会被未完结退款拦住，可重试。
    */
   async cancelPaidOrder(
-    userId: string,
+    userId: string | null,
     orderId: string,
     reason?: string,
+    actor: { type: 'CUSTOMER' | 'ADMIN'; id?: string | null } = {
+      type: 'CUSTOMER',
+      id: userId,
+    },
   ): Promise<AftersaleCaseView> {
     const order = await this.loadOrder(orderId);
-    if (order.userId !== userId) throw new NotFoundException('补剂订单不存在');
+    if (userId && order.userId !== userId) {
+      throw new NotFoundException('补剂订单不存在');
+    }
+    if (!userId && actor.type !== 'ADMIN') {
+      throw new NotFoundException('补剂订单不存在');
+    }
     if (order.status !== 'PAID') {
       throw new BadRequestException('只有已付款未分装的订单可以走取消退款');
     }
     if (order.paymentMethod !== 'WECHAT_PAY') {
       throw new BadRequestException('该订单不是微信支付，请联系客服线下退款');
     }
+
+    // 退款接口失败后 case 会保留 PROCESSING + FAILED；顾客重试时复用同一 case/退款单
+    const failedCase = await this.prisma.aftersaleCase.findFirst({
+      where: {
+        orderType: 'SUPPLEMENT',
+        orderId: order.id,
+        requestType: 'REFUND',
+        status: 'PROCESSING',
+        refundStatus: 'FAILED',
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (failedCase) {
+      await this.wechatPaymentService.createSupplementRefundForCase({
+        caseId: failedCase.id,
+        amount: Number(failedCase.refundAmount ?? order.amountTotal),
+        reason: reason?.trim() || failedCase.requestedReason,
+        adminId: null,
+      });
+      return this.toView(
+        (await this.prisma.aftersaleCase.findUnique({
+          where: { id: failedCase.id },
+        }))!,
+      );
+    }
+
     await this.assertNoOpenCase(order.id);
 
     const paid = Number(order.amountTotal);
@@ -190,7 +225,7 @@ export class SupplementAftersaleService {
           requestType: 'REFUND',
           requestedReason: reason?.trim() || '未分装取消',
           requestedPhotos: [],
-          source: 'CUSTOMER',
+          source: actor.type === 'ADMIN' ? 'ADMIN' : 'CUSTOMER',
           refundAmount: paid,
         },
       });
@@ -198,8 +233,8 @@ export class SupplementAftersaleService {
         data: {
           orderId: order.id,
           type: 'AFTERSALE_CREATED',
-          actorType: 'CUSTOMER',
-          actorId: userId,
+          actorType: actor.type,
+          actorId: actor.id ?? userId,
           reason: reason?.trim() || '未分装取消',
           metadata: { caseId: row.id, requestType: 'REFUND' },
         },
@@ -211,7 +246,7 @@ export class SupplementAftersaleService {
       caseId: created.id,
       amount: paid,
       reason: reason?.trim() || '未分装取消',
-      adminId: null,
+      adminId: actor.type === 'ADMIN' ? actor.id ?? null : null,
     });
     return this.toView(
       (await this.prisma.aftersaleCase.findUnique({
@@ -282,6 +317,8 @@ export class SupplementAftersaleService {
         item.refundAmount = null;
         item.refundOutNo = null;
         item.refundId = null;
+        item.handlingNote = null;
+        item.refundedAt = null;
       }
     }
     return { items, total, page, pageSize };

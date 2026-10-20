@@ -95,14 +95,14 @@ export class OrderCenterService {
               ...(query.status
                 ? { status: { in: this.foodStatuses(query.status) as never[] } }
                 : {}),
-              ...(keywordUserIds && keywordUserIds.length > 0
-                ? { customerId: { in: keywordUserIds } }
-                : {}),
               ...(query.keyword
                 ? {
                     OR: [
                       { orderNo: { contains: query.keyword, mode: 'insensitive' } },
                       { id: { contains: query.keyword, mode: 'insensitive' } },
+                      ...(keywordUserIds && keywordUserIds.length > 0
+                        ? [{ customerId: { in: keywordUserIds } }]
+                        : []),
                     ],
                   }
                 : {}),
@@ -133,14 +133,14 @@ export class OrderCenterService {
               ...(query.status
                 ? { status: { in: this.customStatuses(query.status) as never[] } }
                 : {}),
-              ...(keywordUserIds && keywordUserIds.length > 0
-                ? { customerId: { in: keywordUserIds } }
-                : {}),
               ...(query.keyword
                 ? {
                     OR: [
                       { orderId: { contains: query.keyword, mode: 'insensitive' } },
                       { id: { contains: query.keyword, mode: 'insensitive' } },
+                      ...(keywordUserIds && keywordUserIds.length > 0
+                        ? [{ customerId: { in: keywordUserIds } }]
+                        : []),
                     ],
                   }
                 : {}),
@@ -170,14 +170,14 @@ export class OrderCenterService {
               ...(query.status
                 ? { status: { in: this.supplementStatuses(query.status) as never[] } }
                 : {}),
-              ...(keywordUserIds && keywordUserIds.length > 0
-                ? { userId: { in: keywordUserIds } }
-                : {}),
               ...(query.keyword
                 ? {
                     OR: [
                       { orderNo: { contains: query.keyword, mode: 'insensitive' } },
                       { id: { contains: query.keyword, mode: 'insensitive' } },
+                      ...(keywordUserIds && keywordUserIds.length > 0
+                        ? [{ userId: { in: keywordUserIds } }]
+                        : []),
                     ],
                   }
                 : {}),
@@ -583,9 +583,6 @@ export class OrderCenterService {
       ...(query.status
         ? { status: { in: this.foodStatuses(query.status) as never[] } }
         : {}),
-      ...(userIds && userIds.length > 0
-        ? { customerId: { in: userIds } }
-        : {}),
       ...(query.keyword
         ? {
             OR: [
@@ -601,6 +598,9 @@ export class OrderCenterService {
                   mode: 'insensitive' as const,
                 },
               },
+              ...(userIds && userIds.length > 0
+                ? [{ customerId: { in: userIds } }]
+                : []),
             ],
           }
         : {}),
@@ -617,9 +617,6 @@ export class OrderCenterService {
       ...(query.status
         ? { status: { in: this.customStatuses(query.status) as never[] } }
         : {}),
-      ...(userIds && userIds.length > 0
-        ? { customerId: { in: userIds } }
-        : {}),
       ...(query.keyword
         ? {
             OR: [
@@ -635,6 +632,9 @@ export class OrderCenterService {
                   mode: 'insensitive' as const,
                 },
               },
+              ...(userIds && userIds.length > 0
+                ? [{ customerId: { in: userIds } }]
+                : []),
             ],
           }
         : {}),
@@ -654,9 +654,6 @@ export class OrderCenterService {
       ...(query.status
         ? { status: { in: this.supplementStatuses(query.status) as never[] } }
         : {}),
-      ...(userIds && userIds.length > 0
-        ? { userId: { in: userIds } }
-        : {}),
       ...(query.keyword
         ? {
             OR: [
@@ -672,6 +669,9 @@ export class OrderCenterService {
                   mode: 'insensitive' as const,
                 },
               },
+              ...(userIds && userIds.length > 0
+                ? [{ userId: { in: userIds } }]
+                : []),
             ],
           }
         : {}),

@@ -33,10 +33,12 @@
           <text class="line-value">{{ order.carrierCode || '' }} {{ order.trackingNumber }}</text>
         </view>
 
-        <view v-if="order.aftersaleType" class="order-line">
+        <view v-if="order.aftersaleType || order.hasOpenAftersale" class="order-line">
           <text class="line-label">售后</text>
           <text class="line-value warn">
-            {{ order.aftersaleType === 'REFUND' ? '退款' : '免费补发' }} · {{ order.aftersaleReason }}
+            {{ order.hasOpenAftersale ? (order.openAftersaleLabel || '售后中') : (order.aftersaleType === 'REFUND' ? '退款' : '免费补发') }}{{
+              order.aftersaleReason ? ' · ' + order.aftersaleReason : ''
+            }}
           </text>
         </view>
 
@@ -234,7 +236,9 @@ function handleRepurchase(order: SupplementOrder) {
     recipeName: order.recipeName || undefined,
     dogId: order.dogId || undefined,
     dogName: order.dogName || undefined,
-    cycleDays: order.cycleDays || undefined
+    cycleDays: order.cycleDays || undefined,
+    portionMultiplier: order.portionMultiplier || 1,
+    reorderFromOrderNo: order.orderNo
   })
   uni.navigateTo({ url: '/pages/supplement-order/index' })
 }

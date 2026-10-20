@@ -88,6 +88,61 @@
       </view>
 
       <view v-if="canSubmitNew" class="section">
+        <!--
+          多份订单 · 按份售后（2026-10-21 · 第二阶段 Task 6）
+          先选要调整哪一份（可多选），每一份选中后再写自己的说明。
+          老订单没有 batchItems，整块不显示，下面的表单与以前一模一样。
+        -->
+        <view v-if="isBatchOrder" class="recipe-pick">
+          <view class="section-title">选择要调整的食谱</view>
+          <text class="recipe-pick__note">
+            可以只选一份，也可以多选；勾选后可以分别写清这一份要改什么。
+          </text>
+
+          <view
+            v-for="item in batchItems"
+            :key="item.deliveryItemId"
+            class="recipe-option"
+            :class="{ 'recipe-option--picked': isRecipeSelected(item.deliveryItemId) }"
+          >
+            <view
+              class="recipe-option__head"
+              @tap="toggleRecipeSelection(item.deliveryItemId)"
+            >
+              <view
+                class="recipe-checkbox"
+                :class="{ 'recipe-checkbox--checked': isRecipeSelected(item.deliveryItemId) }"
+              >
+                <text
+                  v-if="isRecipeSelected(item.deliveryItemId)"
+                  class="recipe-checkbox__tick"
+                >✓</text>
+              </view>
+              <text class="recipe-option__name">
+                {{ item.recipeName || '未命名食谱' }}
+              </text>
+            </view>
+
+            <textarea
+              v-if="isRecipeSelected(item.deliveryItemId)"
+              class="recipe-option__input"
+              :value="recipeTexts[item.deliveryItemId]"
+              placeholder="这一份想怎么调整？（选填，比如「鸡肉换成鸭肉」）"
+              :maxlength="500"
+              auto-height
+              @input="handleRecipeTextInput(item.deliveryItemId, $event)"
+            />
+          </view>
+
+          <!-- 行内错误：不让顾客对着一动不动的按钮猜为什么 -->
+          <text v-if="batchSelectionError" class="form-error">
+            {{ batchSelectionError }}
+          </text>
+          <text class="recipe-pick__tip">
+            一次提交只算 1 次调整，不按份数叠加。
+          </text>
+        </view>
+
         <view class="section-title">遇到什么问题了？</view>
 
         <view class="type-list">
@@ -175,7 +230,7 @@
           提交
         </button>
         <text v-if="!canSubmit && !submitting" class="hint">
-          选个类型、写一句具体情况就能提交
+          {{ submitHint }}
         </text>
       </view>
 
@@ -193,12 +248,21 @@ import {
   cancelAftersale,
   uploadAftersaleAttachment,
   fetchAftersales,
+  fetchOrderDetail,
   type AftersaleQuota,
+  type DeliveryBatchItemSummary,
   fetchAftersaleTypes,
   submitAftersale,
   type AftersaleItem,
   type AftersaleTypeOption,
 } from '@/api/custom-recipe';
+import {
+  buildAftersaleSelectionPayload,
+  preselectAftersaleDeliveryItemIds,
+  resolveAftersaleBatchItems,
+  toggleAftersaleDeliveryItem,
+  validateAftersaleBatchSelection,
+} from '@/utils/custom-recipe-aftersale';
 import { requestCustomRecipeOrderSubscription } from '@/utils/custom-recipe-payment';
 
 /**
@@ -219,6 +283,71 @@ import { requestCustomRecipeOrderSubscription } from '@/utils/custom-recipe-paym
 const orderId = ref('');
 const loading = ref(true);
 const list = ref<AftersaleItem[]>([]);
+
+/**
+ * 多份订单的按份售后（2026-10-21 · 第二阶段 Task 6）。
+ *
+ * · `recipeId` 是可选的入口参数：从某张食谱卡片点进来时带上，默认选中那一份；
+ * · `batchItems` 来自订单详情的 `deliveryBatch.items`，老订单为空；
+ * · `selectedItemIds` 存的是**交付明细主键**（`deliveryItemId`），
+ *   不是业务编号 `recipeId` —— 后端按前者认"这一条说的是哪一份"；
+ * · `recipeTexts` 按 `deliveryItemId` 存每一份自己的说明。
+ */
+const recipeId = ref('');
+const batchItems = ref<DeliveryBatchItemSummary[]>([]);
+const selectedItemIds = ref<string[]>([]);
+const recipeTexts = reactive<Record<string, string>>({});
+
+/** 有没有批次明细 —— 没有就完全走原来的整单售后 */
+const isBatchOrder = computed(() => batchItems.value.length > 0);
+
+const isRecipeSelected = (deliveryItemId: string) =>
+  selectedItemIds.value.includes(deliveryItemId);
+
+const toggleRecipeSelection = (deliveryItemId: string) => {
+  selectedItemIds.value = toggleAftersaleDeliveryItem(
+    selectedItemIds.value,
+    deliveryItemId,
+  );
+};
+
+/** 每一份自己的说明（不用动态 v-model，避免小程序端对象下标绑定踩坑） */
+function handleRecipeTextInput(deliveryItemId: string, event: any) {
+  const value = event?.detail?.value ?? event?.target?.value ?? '';
+  recipeTexts[deliveryItemId] = String(value);
+}
+
+function resetRecipeSelection() {
+  selectedItemIds.value = [];
+  for (const key of Object.keys(recipeTexts)) {
+    recipeTexts[key] = '';
+  }
+}
+
+/**
+ * 把订单详情里的批次明细装进页面。
+ *
+ * 默认只勾选链接带过来的那一份（没有链接参数就一份都不选）——
+ * 具体规则在 `preselectAftersaleDeliveryItemIds` 里，页面不自己 find。
+ */
+function applyBatchItems(
+  batch: { items?: DeliveryBatchItemSummary[] | null } | null | undefined,
+) {
+  const items = resolveAftersaleBatchItems(batch);
+  batchItems.value = items;
+
+  for (const key of Object.keys(recipeTexts)) {
+    delete recipeTexts[key];
+  }
+  for (const item of items) {
+    recipeTexts[item.deliveryItemId] = '';
+  }
+
+  selectedItemIds.value = preselectAftersaleDeliveryItemIds(
+    items,
+    recipeId.value,
+  );
+}
 
 /**
  * 售后配额（2026-10-18 · 需求 2.5.7）
@@ -351,16 +480,50 @@ const canSubmitNew = computed(
   () => !list.value.some((item) => item.canCancel),
 );
 
+/**
+ * 批次订单一份都没选时的行内错误；老订单恒为空。
+ *
+ * 这里只校验"表单填没填完"，**不做任何配额计算** ——
+ * 窗口、免费次数、能不能提全部以后端为准。
+ */
+const batchSelectionError = computed(() =>
+  validateAftersaleBatchSelection({
+    isBatch: isBatchOrder.value,
+    selectedIds: selectedItemIds.value,
+  }),
+);
+
 const canSubmit = computed(
-  () => Boolean(form.type) && form.description.trim().length > 0,
+  () =>
+    Boolean(form.type) &&
+    form.description.trim().length > 0 &&
+    !batchSelectionError.value,
+);
+
+/** 提交按钮下面的提示：批次订单先提醒选食谱 */
+const submitHint = computed(() =>
+  batchSelectionError.value
+    ? '先勾选要调整的食谱'
+    : '选个类型、写一句具体情况就能提交',
 );
 
 const load = async () => {
   loading.value = true;
   try {
-    const [result, types] = await Promise.all([
+    const [result, types, detail] = await Promise.all([
       fetchAftersales(orderId.value),
       fetchAftersaleTypes(),
+      /**
+       * 订单详情只用来判断"这一单是不是多份交付"。
+       *
+       * 失败**不能拖垮售后页**：老订单本来就不需要批次；
+       * 多份订单读不到批次时退回整单售后 —— 提交仍由后端校验，
+       * 页面不自己编一份批次出来。
+       */
+      fetchOrderDetail(orderId.value).catch((error) => {
+        console.warn('[CustomRecipe] 读取订单交付批次失败:', error);
+        return null;
+      }),
     ]);
     list.value = result.items;
     quota.value = result.quota;
@@ -369,6 +532,7 @@ const load = async () => {
     if (!form.type && types.length) {
       form.type = types[0].code;
     }
+    applyBatchItems(detail?.deliveryBatch ?? null);
   } finally {
     loading.value = false;
   }
@@ -395,12 +559,26 @@ const handleSubmit = async () => {
     // 先申请订阅（点提交这个动作本身就授权了一次），再提交
     await requestAftersaleSubscription();
 
+    /**
+     * 多份订单：带上"选了哪几份 / 每份要改什么"。
+     * 老订单（没有批次）返回空值，请求形状与以前完全一致。
+     */
+    const { deliveryItemIds, recipeRequests } =
+      buildAftersaleSelectionPayload({
+        isBatch: isBatchOrder.value,
+        selectedIds: selectedItemIds.value,
+        texts: recipeTexts,
+      });
+
     const result = await submitAftersale({
       orderId: orderId.value,
       type: form.type,
       description: form.description.trim(),
       // 附件（2026-10-18）：接口早就支持了，之前只是没传
       photos: attachments.value,
+      // 老订单这里是 undefined，API 层不会把键写进请求
+      deliveryItemIds,
+      recipeRequests,
     });
 
     if (!result.ok) {
@@ -416,6 +594,7 @@ const handleSubmit = async () => {
     uni.showToast({ title: '已提交，我们会尽快看', icon: 'none' });
     form.description = '';
     await load();
+    resetRecipeSelection();
   } catch (error) {
     uni.showToast({
       title: (error as Error)?.message || '提交失败，请重试',
@@ -455,6 +634,10 @@ const handleCancel = async (item: AftersaleItem) => {
 
 onLoad((options) => {
   orderId.value = options?.orderId ? decodeURIComponent(options.orderId) : '';
+  // 可选：从某份食谱卡片进来时指定默认勾选哪一份
+  recipeId.value = options?.recipeId
+    ? decodeURIComponent(options.recipeId)
+    : '';
   load();
 });
 </script>
@@ -491,6 +674,96 @@ onLoad((options) => {
   font-size: 30rpx;
   font-weight: 600;
   color: #d8bc85;
+}
+
+/* ===== 多份订单 · 按份售后（2026-10-21 · 第二阶段 Task 6）===== */
+.recipe-pick {
+  padding-bottom: 24rpx;
+  margin-bottom: 24rpx;
+  border-bottom: 1rpx solid rgba(216, 188, 133, 0.18);
+}
+
+.recipe-pick__note {
+  display: block;
+  margin: -8rpx 0 18rpx;
+  font-size: 22rpx;
+  line-height: 1.6;
+  color: rgba(244, 236, 216, 0.55);
+}
+
+.recipe-option {
+  margin-bottom: 14rpx;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1rpx solid rgba(216, 188, 133, 0.2);
+  border-radius: 20rpx;
+  overflow: hidden;
+}
+
+.recipe-option--picked {
+  border-color: #d8bc85;
+  background: rgba(216, 188, 133, 0.12);
+}
+
+.recipe-option__head {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 20rpx 22rpx;
+}
+
+.recipe-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36rpx;
+  height: 36rpx;
+  flex-shrink: 0;
+  border: 2rpx solid rgba(216, 188, 133, 0.6);
+  border-radius: 8rpx;
+}
+
+.recipe-checkbox--checked {
+  background: #d8bc85;
+  border-color: #d8bc85;
+}
+
+.recipe-checkbox__tick {
+  font-size: 22rpx;
+  font-weight: 700;
+  line-height: 1;
+  color: #1e3a2f;
+}
+
+.recipe-option__name {
+  flex: 1;
+  font-size: 27rpx;
+  color: #f4ecd8;
+}
+
+.recipe-option__input {
+  width: 100%;
+  min-height: 120rpx;
+  padding: 0 22rpx 20rpx;
+  font-size: 25rpx;
+  line-height: 1.6;
+  color: #f4ecd8;
+  box-sizing: border-box;
+}
+
+.recipe-pick__tip {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 21rpx;
+  color: rgba(244, 236, 216, 0.45);
+}
+
+/* 行内校验错误：必须看得见 */
+.form-error {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #f0a3a3;
 }
 
 .aftersale-head {

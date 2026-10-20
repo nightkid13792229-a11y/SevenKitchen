@@ -275,9 +275,23 @@
             <text class="delivery-time">
               交付于 {{ formatDeliveryTime(deliveryBatch.deliveredAt) }}
             </text>
-            <button class="recipe-btn" @tap="viewBatchDelivery(item)">
-              进入食谱
-            </button>
+            <view class="batch-recipe__actions">
+              <button class="recipe-btn" @tap="viewBatchDelivery(item)">
+                进入食谱
+              </button>
+              <!--
+                按份售后（2026-10-21 · 第二阶段 Task 6）：
+                只在这一份允许提售后时出现；点进去默认勾选这一份，
+                顾客还可以在表单里追加其他份。
+              -->
+              <button
+                v-if="aftersaleAction && aftersaleAction.enabled"
+                class="recipe-btn batch-recipe__adjust"
+                @tap="viewBatchAftersale(item)"
+              >
+                继续调整
+              </button>
+            </view>
           </view>
         </view>
 
@@ -432,6 +446,7 @@ import {
   type DeliverySummary,
 } from '@/api/custom-recipe';
 import { buildDeliveryDetailUrl } from '@/utils/custom-recipe-delivery';
+import { buildAftersaleUrl } from '@/utils/custom-recipe-aftersale';
 import {
   requestCustomRecipeOrderSubscription,
   runCustomRecipePayment,
@@ -767,7 +782,19 @@ const aftersaleCount = ref(0);
 
 const viewAftersale = () => {
   uni.navigateTo({
-    url: `/pages/custom-recipe/aftersale?orderId=${encodeURIComponent(orderId.value)}`,
+    url: buildAftersaleUrl(orderId.value),
+  });
+};
+
+/**
+ * 从多份交付中的某一份进售后（2026-10-21 · 第二阶段 Task 6）。
+ *
+ * 必须带上这一份的业务编号 `recipeId`，售后页据此默认勾选它；
+ * 顾客仍然可以在表单里追加其他份。路由拼接统一走 helper。
+ */
+const viewBatchAftersale = (item: DeliveryBatchItemSummary) => {
+  uni.navigateTo({
+    url: buildAftersaleUrl(orderId.value, item.recipeId),
   });
 };
 
@@ -1231,11 +1258,24 @@ onUnmounted(() => {
   color: rgba(38, 38, 31, 0.5);
 }
 
-.batch-recipe__body .recipe-btn {
+.batch-recipe__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
   margin-top: auto;
+}
+
+.batch-recipe__actions .recipe-btn {
   height: 64rpx;
   line-height: 64rpx;
   font-size: 24rpx;
+}
+
+/* 「继续调整」与「进入食谱」区分开，但仍是这一张卡片里的次级动作 */
+.batch-recipe__adjust {
+  color: #1e3a2f;
+  background: transparent;
+  border: 1rpx solid rgba(176, 141, 79, 0.55);
 }
 
 .delivery-head {

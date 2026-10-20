@@ -605,6 +605,17 @@ export interface AftersaleItem {
   };
 }
 
+/**
+ * 每份交付各自的诉求说明（2026-10-21 · 多份订单按份售后）。
+ *
+ * `deliveryItemId` 是交付明细主键（不是业务编号 `recipeId`）——
+ * 后端按这个字段判断"这一条说的是哪一份"。
+ */
+export interface AftersaleRecipeRequest {
+  deliveryItemId: string;
+  description: string;
+}
+
 /** 售后类型选项（来自选项字典） */
 export interface AftersaleTypeOption {
   code: string;
@@ -674,6 +685,13 @@ export async function submitAftersale(input: {
   type: string;
   description: string;
   photos?: string[];
+  /**
+   * 多份订单可选：这次要调整哪几份（`CustomRecipeDeliveryItem.id`）。
+   * 不传 = 整单售后（老行为）；传了就必须非空且属于最新批次。
+   */
+  deliveryItemIds?: string[];
+  /** 每份各自的诉求说明（可选；缺省时只发选中的 id） */
+  recipeRequests?: AftersaleRecipeRequest[];
 }): Promise<{ ok: boolean; message?: string; typeLabel?: string }> {
   const res: any = await request({
     url: `/custom-recipe/orders/${encodeURIComponent(input.orderId)}/aftersale`,
@@ -682,6 +700,13 @@ export async function submitAftersale(input: {
       type: input.type,
       description: input.description,
       photos: input.photos ?? [],
+      // 老订单不传这两个键，请求形状与以前完全一致
+      ...(input.deliveryItemIds !== undefined
+        ? { deliveryItemIds: input.deliveryItemIds }
+        : {}),
+      ...(input.recipeRequests !== undefined
+        ? { recipeRequests: input.recipeRequests }
+        : {}),
     },
   });
   if (res?.code === 0) {

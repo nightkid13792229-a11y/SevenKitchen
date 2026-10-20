@@ -227,6 +227,9 @@ describe('定制订单响应 · 不再下发抵扣余额', () => {
       {} as any,
       {} as any,
       {} as any,
+      // 2026-10-20：报价接口新增的两个依赖，本用例只测下单响应
+      {} as any,
+      {} as any,
     );
 
     const response = await controller.submitOrder(

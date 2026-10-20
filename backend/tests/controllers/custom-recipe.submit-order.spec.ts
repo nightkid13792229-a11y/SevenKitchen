@@ -11,6 +11,8 @@ import { WechatPaymentService } from '../../src/application/payment/wechat-payme
 import { CustomRecipeViewService } from '../../src/application/custom-recipe/custom-recipe-view.service';
 import { CustomRecipeDeliveryService } from '../../src/application/custom-recipe/custom-recipe-delivery.service';
 import { CustomRecipeAftersaleService } from '../../src/application/custom-recipe/custom-recipe-aftersale.service';
+import { CustomRecipeConfigService } from '../../src/application/custom-recipe/custom-recipe-config.service';
+import { CustomRecipePricingService } from '../../src/application/custom-recipe/custom-recipe-pricing.service';
 import { AuthGuard } from '../../src/interfaces/auth/auth.guard';
 
 /**
@@ -56,6 +58,9 @@ describe('CustomRecipeController · 多份下单 DTO', () => {
         { provide: CustomRecipeViewService, useValue: {} },
         { provide: CustomRecipeDeliveryService, useValue: {} },
         { provide: CustomRecipeAftersaleService, useValue: {} },
+        // 2026-10-20：控制器新增了报价接口依赖，本文件只测下单，给空实现即可
+        { provide: CustomRecipeConfigService, useValue: {} },
+        CustomRecipePricingService,
       ],
     })
       .overrideGuard(AuthGuard)

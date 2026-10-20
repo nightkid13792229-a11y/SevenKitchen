@@ -323,6 +323,11 @@ describe('CustomRecipeController · 顾客端编号口径', () => {
       customRecipeService as any,
       {} as any,
       viewService as any,
+      // 2026-10-20：报价接口新增的两个依赖，本文件用不到
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
     );
 
     return { controller, viewService };

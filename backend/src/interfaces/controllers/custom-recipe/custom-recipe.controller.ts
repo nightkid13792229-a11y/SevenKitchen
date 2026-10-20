@@ -27,6 +27,7 @@ import { CustomRecipeAftersaleService } from '../../../application/custom-recipe
 import { CustomRecipeViewService } from '../../../application/custom-recipe/custom-recipe-view.service';
 import { MiniProgramCodeService } from '../../../application/wechat/mini-program-code.service';
 import { CustomRecipeConfigService } from '../../../application/custom-recipe/custom-recipe-config.service';
+import { CustomRecipePricingService } from '../../../application/custom-recipe/custom-recipe-pricing.service';
 import { WechatPaymentService } from '../../../application/payment/wechat-payment.service';
 import { SubmitCustomRecipeOrderDTO } from '../../../application/custom-recipe/dto/custom-recipe.dto';
 import { AuthGuard } from '../../auth/auth.guard';
@@ -57,6 +58,9 @@ export class CustomRecipeController {
     private readonly deliveryService: CustomRecipeDeliveryService,
     /** 售后（批次 2.5）：顾客提交、查看进度、撤回 */
     private readonly aftersaleService: CustomRecipeAftersaleService,
+    /** 多份购买（2026-10-20）：报价必须由服务端权威计算 */
+    private readonly customRecipeConfigService: CustomRecipeConfigService,
+    private readonly customRecipePricingService: CustomRecipePricingService,
   ) {}
 
   /**
@@ -230,6 +234,27 @@ export class CustomRecipeController {
       page,
       pageSize,
     });
+  }
+
+  /**
+   * 多份定制报价（2026-10-20 多份购买 · 第一阶段）
+   *
+   * 金额只能由后端算：小程序确认页展示的 900 / 72 / 828 必须与这里一致，
+   * 下单时服务端还会用同一个 `CustomRecipePricingService` 再算一遍并快照。
+   *
+   * ⚠️ 必须排在 `orders/:orderId` 这类通配路由之前。`quote` 本身是静态段，
+   * 但今后若有人加 `@Get(':id')` 之类的通配，声明顺序错了就会被吞掉。
+   * 登录守卫沿用控制器上的 `@UseGuards(AuthGuard)`，报价不对未登录用户开放。
+   */
+  @Get('quote')
+  @ApiOperation({ summary: 'Quote multi recipe order' })
+  async quote(@Query('quantity') quantity?: string) {
+    const config = await this.customRecipeConfigService.getConfig();
+    const parsed = this.parseQuoteQuantity(quantity, config.maxRecipeQuantity);
+
+    return ApiResponseDto.success(
+      this.customRecipePricingService.quote(parsed, config),
+    );
   }
 
   /**
@@ -893,6 +918,35 @@ export class CustomRecipeController {
     if (value === null || value === undefined) return null;
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  /**
+   * 严格解析报价份数：只接受十进制整数字符串。
+   *
+   * 不能直接用 Number()：`Number('')` / `Number(undefined)` 会得到 0/NaN，
+   * `Number('1e0')`、`Number('0x3')` 又会把各种写法放进来。报价参数只应
+   * 接受 `1`、`2`、`3` 这样的数字串；缺参、小数、科学计数法、数组统一 400。
+   * 上限取**后台当前配置**（最多 5），而不是永远写死 5。
+   */
+  private parseQuoteQuantity(
+    raw: string | undefined,
+    maxQuantity: number,
+  ): number {
+    const message = `份数必须是 1~${maxQuantity} 的整数`;
+
+    if (typeof raw !== 'string' || !/^\d+$/.test(raw.trim())) {
+      throw new BadRequestException(message);
+    }
+
+    const quantity = Number(raw.trim());
+    if (
+      !Number.isSafeInteger(quantity) ||
+      quantity < 1 ||
+      quantity > maxQuantity
+    ) {
+      throw new BadRequestException(message);
+    }
+    return quantity;
   }
 }
 

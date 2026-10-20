@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-20-multi-recipe-order-design.md`
 
-**Prerequisite:** 成品抵扣取消（设计文档 5.4）必须在多份价格开发前完成，或与 Task 1 同一批次清理。本计划不再新增任何抵扣字段或抵扣展示。
+**Prerequisite:** 成品抵扣取消（设计文档 5.4）已完成并部署，生产库已无 credit/deduction 字段；本计划不再新增任何抵扣字段或抵扣展示。
 
 ## Global Constraints
 
@@ -147,8 +147,12 @@ Run:
 
 ```bash
 cd backend
-npx prisma migrate dev --name multi_recipe_pricing
+# 当前仓库的 migrate dev 会因旧 shadow-DB enum migration 失败；
+# 用 migrate diff 生成 SQL，再将 migration 放入 migrations 目录，最后 migrate deploy。
+npx prisma migrate diff --from-schema-datamodel <HEAD-schema> --to-schema-datamodel prisma/schema.prisma --script
+# 把输出保存为 backend/prisma/migrations/<timestamp>_multi_recipe_pricing/migration.sql
 npx prisma generate
+npx prisma migrate deploy
 ```
 
 - [ ] **Step 4: Update config DTO/defaults/read-write mapping**
@@ -158,7 +162,7 @@ In `custom-recipe-config.service.ts`:
 - Extend `CustomRecipeConfigDto` and `PublicCustomRecipeConfigDto`.
 - Add defaults in `toDto`/`toWriteData` fallback.
 - Do not expose `dailyDesignMinutes`, `minutesPerRecipe`, or discount tiers in public config until the customer UI needs them; public config needs `multiRecipeEnabled`, `maxRecipeQuantity`, `multiRecipeDiscounts`.
-- Keep `maxRecipeQuantity` fixed at 5 even if row is malformed.
+- Keep `maxRecipeQuantity` within 1–5; if the row is malformed, fall back to 5.
 
 - [ ] **Step 5: Run tests**
 

@@ -224,11 +224,87 @@
       </view>
 
       <!--
-        交付卡片（2026-10-16 批次 2.4）
+        多份交付（2026-10-21 · 第二阶段 Task 4）
+        一张订单一次交付 N 份，每份一张卡片。后端只给摘要（不含快照），
+        点「进入食谱」才拉那一份的内容。确认收到仍是**整单一次**。
+      -->
+      <view class="section delivery-card" v-if="deliveryBatch">
+        <view class="delivery-head">
+          <text class="section-title">你的专属食谱</text>
+          <text v-if="deliveryBatch.version > 1" class="delivery-version">
+            第 {{ deliveryBatch.version }} 版
+          </text>
+        </view>
+        <text class="batch-summary">
+          本次共交付 {{ deliveryBatch.items.length }} 份
+        </text>
+
+        <view
+          v-for="(item, index) in deliveryBatch.items"
+          :key="item.deliveryItemId"
+          class="batch-recipe"
+        >
+          <image
+            v-if="item.recipeCoverImageUrl"
+            class="batch-recipe__cover"
+            :src="item.recipeCoverImageUrl"
+            mode="aspectFill"
+          />
+          <view
+            v-else
+            class="batch-recipe__cover batch-recipe__cover--fallback"
+          >
+            <text class="batch-recipe__cover-initial">
+              {{ (item.recipeName || '食').slice(0, 1) }}
+            </text>
+          </view>
+
+          <view class="batch-recipe__body">
+            <text class="batch-recipe__name">
+              {{ item.recipeName || `第 ${index + 1} 份食谱` }}
+            </text>
+            <view class="delivery-items">
+              <text
+                v-for="code in item.itemCodes"
+                :key="code"
+                class="delivery-item"
+              >
+                {{ deliveryItemLabel(code) }}
+              </text>
+            </view>
+            <text class="delivery-time">
+              交付于 {{ formatDeliveryTime(deliveryBatch.deliveredAt) }}
+            </text>
+            <button class="recipe-btn" @tap="viewBatchDelivery(item)">
+              进入食谱
+            </button>
+          </view>
+        </view>
+
+        <!-- 确认收到：整单一次，不按份重复；文案与可用性仍由后端下发 -->
+        <button
+          v-if="confirmAction"
+          class="recipe-btn"
+          :loading="confirming"
+          :disabled="confirming || !confirmAction.enabled"
+          @tap="handleConfirmReceipt"
+        >
+          {{ confirmAction.label }}
+        </button>
+        <text
+          v-if="confirmAction && !confirmAction.enabled && confirmAction.disabledReason"
+          class="action-disabled-reason"
+        >
+          {{ confirmAction.disabledReason }}
+        </text>
+      </view>
+
+      <!--
+        交付卡片（2026-10-16 批次 2.4）—— 老单份订单保持原样。
         后端只给"第几版、什么时候交的、包含哪几样"，**不含内容本体** ——
         点进去才拉那几十 KB 的快照。这样订单页每次打开都不会被拖慢。
       -->
-      <view class="section delivery-card" v-if="delivery">
+      <view class="section delivery-card" v-if="!deliveryBatch && delivery">
         <view class="delivery-head">
           <text class="section-title">你的专属食谱</text>
           <text v-if="delivery.version > 1" class="delivery-version">
@@ -351,7 +427,11 @@ import {
   fetchPublicConfig,
   findAction,
   toneToClass,
+  type DeliveryBatchItemSummary,
+  type DeliveryBatchSummary,
+  type DeliverySummary,
 } from '@/api/custom-recipe';
+import { buildDeliveryDetailUrl } from '@/utils/custom-recipe-delivery';
 import {
   requestCustomRecipeOrderSubscription,
   runCustomRecipePayment,
@@ -411,6 +491,10 @@ interface CustomRecipeOrderDetail {
   refundAmount?: number | null;
   refundedAt?: string | null;
   cancelledAt?: string | null;
+  /** 交付摘要（老单份）；多份订单为 null */
+  delivery?: DeliverySummary | null;
+  /** 多份交付摘要（2026-10-21）；老订单为 null / 不返回 */
+  deliveryBatch?: DeliveryBatchSummary | null;
 }
 
 const orderId = ref('');
@@ -596,6 +680,14 @@ const progressSteps = computed(() => order.value.renderable?.progress?.timeline 
  */
 const delivery = computed(() => order.value.delivery ?? null);
 
+/**
+ * 多份交付摘要（2026-10-21）。
+ *
+ * 多份订单整批交付没有老的单份 `delivery`，只有这一份；
+ * 老订单这个字段为 null，继续走下面的单份卡片。
+ */
+const deliveryBatch = computed(() => order.value.deliveryBatch ?? null);
+
 /** 「确认收到」这个动作 —— 文案与可用性全部由后端下发 */
 const confirmAction = computed(() =>
   findAction(order.value.renderable, 'CONFIRM_RECEIPT'),
@@ -679,10 +771,22 @@ const viewAftersale = () => {
   });
 };
 
-/** 打开交付内容页 */
+/** 打开交付内容页（老单份交付） */
 const viewDelivery = () => {
   uni.navigateTo({
-    url: `/pages/custom-recipe/delivery?orderId=${encodeURIComponent(orderId.value)}`,
+    url: buildDeliveryDetailUrl(orderId.value),
+  });
+};
+
+/**
+ * 打开多份交付中的某一份（2026-10-21）。
+ *
+ * 必须带上这一份的业务编号 `recipeId`；否则交付页会默认显示第一份，
+ * 顾客点第二张卡却看到第一份的内容。
+ */
+const viewBatchDelivery = (item: DeliveryBatchItemSummary) => {
+  uni.navigateTo({
+    url: buildDeliveryDetailUrl(orderId.value, item.recipeId),
   });
 };
 
@@ -1056,6 +1160,82 @@ onUnmounted(() => {
 /* ===== 交付卡片（2026-10-16 批次 2.4）===== */
 .delivery-card {
   border: 1rpx solid rgba(216, 188, 133, 0.4);
+}
+
+/* ===== 多份交付卡片（2026-10-21 · 第二阶段 Task 4）===== */
+.batch-summary {
+  display: block;
+  margin: 4rpx 0 20rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #1e3a2f;
+}
+
+.batch-recipe {
+  display: flex;
+  gap: 20rpx;
+  padding: 20rpx;
+  margin-bottom: 18rpx;
+  background: rgba(216, 188, 133, 0.08);
+  border: 1rpx solid rgba(216, 188, 133, 0.28);
+  border-radius: 20rpx;
+}
+
+.batch-recipe__cover {
+  width: 180rpx;
+  height: 180rpx;
+  flex-shrink: 0;
+  border-radius: 16rpx;
+  background: #f1ead9;
+}
+
+.batch-recipe__cover--fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(145deg, #24483a, #16261f 62%, #0e1a15);
+}
+
+.batch-recipe__cover-initial {
+  font-size: 56rpx;
+  font-weight: 700;
+  color: #f4ecd8;
+}
+
+.batch-recipe__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.batch-recipe__name {
+  display: block;
+  margin-bottom: 12rpx;
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #26261f;
+}
+
+.batch-recipe__body .delivery-items {
+  margin-top: 0;
+}
+
+.batch-recipe__body .delivery-item {
+  color: #5c4b2e;
+  background: rgba(216, 188, 133, 0.2);
+}
+
+.batch-recipe__body .delivery-time {
+  margin-bottom: 14rpx;
+  color: rgba(38, 38, 31, 0.5);
+}
+
+.batch-recipe__body .recipe-btn {
+  margin-top: auto;
+  height: 64rpx;
+  line-height: 64rpx;
+  font-size: 24rpx;
 }
 
 .delivery-head {

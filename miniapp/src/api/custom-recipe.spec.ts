@@ -349,6 +349,52 @@ describe('定制食谱 API 层', () => {
       const arg = mockedRequest.mock.calls[0][0] as { url: string }
       expect(arg.url).toBe('/custom-recipe/orders/CR1/delivery')
     })
+
+    it('★ 多份批次原样返回（batchId + N 份 items），不压成单份', async () => {
+      mockedRequest.mockResolvedValue({
+        code: 0,
+        data: {
+          batchId: 'batch-1',
+          version: 1,
+          deliveredAt: '2026-10-21T02:00:00.000Z',
+          confirmedAt: null,
+          itemCodes: ['RECIPE', 'SHOPPING_SOP'],
+          items: [
+            {
+              id: 'item-1',
+              recipeId: 'R1',
+              recipeName: '鸡肉南瓜',
+              itemCodes: ['RECIPE'],
+              content: { recipe: { name: '鸡肉南瓜' } },
+            },
+            {
+              id: 'item-2',
+              recipeId: 'R2',
+              recipeName: '鸭肉西兰花',
+              itemCodes: ['RECIPE'],
+              content: { recipe: { name: '鸭肉西兰花' } },
+            },
+          ],
+        },
+      } as never)
+
+      const delivery: any = await fetchDelivery('CR1')
+
+      expect(delivery.batchId).toBe('batch-1')
+      expect(delivery.items).toHaveLength(2)
+      expect(delivery.items[1].recipeId).toBe('R2')
+    })
+
+    it('★ 带 recipeId 时拼进查询串（页面按份选择，后端可忽略）', async () => {
+      mockedRequest.mockResolvedValue({ code: 0, data: {} } as never)
+
+      await fetchDelivery('CR1', 2, 'CR1759100000002')
+
+      const arg = mockedRequest.mock.calls[0][0] as { url: string }
+      expect(arg.url).toBe(
+        '/custom-recipe/orders/CR1/delivery?version=2&recipeId=CR1759100000002',
+      )
+    })
   })
 
   describe('confirmReceipt', () => {

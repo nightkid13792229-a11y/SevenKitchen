@@ -139,7 +139,6 @@ async function main() {
   );
   if (detail) {
     showRenderable(detail.renderable);
-    say('  可抵扣余额', detail.creditRemaining ?? '(没给 —— 页面会显示 ¥0)');
     say('  目标', detail.targetGoal ?? '(未设)');
   }
 

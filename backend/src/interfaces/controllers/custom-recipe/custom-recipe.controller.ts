@@ -116,7 +116,6 @@ export class CustomRecipeController {
        * 这个字段此前还把环境变量缺失时的兜底值当成真号显示给顾客。
        */
       amount: Number(order.amount),
-      creditAmount: Number(order.creditAmount),
     });
   }
 
@@ -199,12 +198,6 @@ export class CustomRecipeController {
         estimatedDeliveryDate: order.estimatedDeliveryDate,
         status: order.status,
         amount: Number(order.amount),
-        creditAmount: Number(order.creditAmount),
-        creditUsed: Number(order.creditUsed),
-        creditRemaining: Math.max(
-          0,
-          Number(order.creditAmount) - Number(order.creditUsed),
-        ),
         /**
          * 交付后的食谱，给小程序的是**业务编号**（Recipe.recipeId）。
          *
@@ -337,12 +330,6 @@ export class CustomRecipeController {
       estimatedDeliveryDate: order.estimatedDeliveryDate,
       status: order.status,
       amount: Number(order.amount),
-      creditAmount: Number(order.creditAmount),
-      creditUsed: Number(order.creditUsed),
-      creditRemaining: Math.max(
-        0,
-        Number(order.creditAmount) - Number(order.creditUsed),
-      ),
       // 同上：给小程序必须回业务编号，否则"查看定制食谱"打不开
       recipeId: order.recipe?.recipeId ?? null,
       recipeName: order.recipe?.name ?? null,
@@ -910,7 +897,7 @@ export class CustomRecipeController {
  * 食谱定制的公开配置（无需登录）
  *
  * 首页入口卡与定制页在未登录时就要显示价格，所以这部分必须公开。
- * 只暴露顾客看得懂的三项：定制费、可抵扣金额、交付周期。
+ * 只暴露顾客看得懂的两项：定制费、交付周期。
  * 接单上限等内部产能参数不对外。
  */
 @ApiTags('custom-recipe')
@@ -951,7 +938,7 @@ export class PublicCustomRecipeConfigController {
   }
 
   @Get()
-  @ApiOperation({ summary: '读取食谱定制的公开配置（定制费 / 可抵扣金额 / 交付周期）' })
+  @ApiOperation({ summary: '读取食谱定制的公开配置（定制费 / 交付周期）' })
   async getPublicConfig() {
     return ApiResponseDto.success(
       await this.customRecipeConfigService.getPublicConfig(),

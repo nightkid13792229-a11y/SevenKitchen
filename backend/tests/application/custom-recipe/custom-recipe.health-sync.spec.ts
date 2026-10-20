@@ -111,7 +111,6 @@ describe('CustomRecipeService · 档案同步时点', () => {
           useValue: {
             getConfig: jest.fn().mockResolvedValue({
               feeAmount: 300,
-              creditAmount: 300,
               deliveryWorkDays: 3,
               dailyCapacity: 4,
               paymentTimeoutMinutes: 30,
@@ -143,7 +142,6 @@ describe('CustomRecipeService · 档案同步时点', () => {
       id: 'cr-uuid-1',
       orderId: 'CR1',
       amount: 300,
-      creditAmount: 300,
     });
     mockPrismaService.customRecipeOrder.update.mockResolvedValue({});
     mockPrismaService.customRecipeOrder.updateMany.mockResolvedValue({ count: 1 });

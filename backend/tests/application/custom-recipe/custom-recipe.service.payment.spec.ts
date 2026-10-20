@@ -31,7 +31,6 @@ describe('CustomRecipeService · 支付与关单', () => {
   const mockConfigService = {
     getConfig: jest.fn().mockResolvedValue({
       feeAmount: 300,
-      creditAmount: 300,
       deliveryWorkDays: 3,
       dailyCapacity: 4,
       paymentTimeoutMinutes: 30,

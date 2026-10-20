@@ -13,9 +13,8 @@ import { CustomRecipeStatus } from '@prisma/client';
  *   2. 后台改状态是裸写：不校验流转、取消不释放当天名额、取消时间从不记录
  *   3. 节假日校验可绕过（第一次被拒时反而写下了"这不是假期"）
  *   4. 过去日期可以约
- *   5. 抵扣额度在食谱升版后静默失效
- *   6. 订单号撞号直接 500（unique 列但无重试）
- *   7. 收入口径只算"已交付"，已付款/制作中的钱不算
+ *   5. 订单号撞号直接 500（unique 列但无重试）
+ *   6. 收入口径只算"已交付"，已付款/制作中的钱不算
  */
 describe('CustomRecipeService · 链路加固', () => {
   let service: CustomRecipeService;
@@ -64,7 +63,6 @@ describe('CustomRecipeService · 链路加固', () => {
           useValue: {
             getConfig: jest.fn().mockResolvedValue({
               feeAmount: 300,
-              creditAmount: 150,
               deliveryWorkDays: 3,
               dailyCapacity: 5,
               paymentTimeoutMinutes: 30,
@@ -93,7 +91,6 @@ describe('CustomRecipeService · 链路加固', () => {
       id: 'cr-uuid-1',
       orderId: 'CR202609280001',
       amount: 300,
-      creditAmount: 150,
     });
     orderUpdate.mockResolvedValue({});
     // resolveOrderRef 走的是 findFirst（业务单号 → 主键）
@@ -275,37 +272,7 @@ describe('CustomRecipeService · 链路加固', () => {
     expect(scheduleCreate).not.toHaveBeenCalled();
   });
 
-  // ---------- 5. 抵扣额度 ----------
-
-  it('食谱升版后抵扣额度依然可用（原先只匹配"最新版"主键）', async () => {
-    // 订单里存的是**交付那一刻**那一版的主键（v1）
-    mockPrismaService.recipe.findMany.mockResolvedValue([
-      { id: 'recipe-pk-v1' },
-      { id: 'recipe-pk-v2' },
-    ]);
-    mockPrismaService.customRecipeOrder.findFirst.mockResolvedValue({
-      id: 'cr-uuid-1',
-      orderId: 'CR202609280001',
-      creditAmount: 150,
-      creditUsed: 0,
-    });
-
-    const credit = await service.findUsableCredit({
-      customerId: 'user-1',
-      recipeId: 'CR-RECIPE-BIZ',
-    });
-
-    expect(credit).not.toBeNull();
-    expect(credit?.remaining).toBe(150);
-    // 候选里必须同时包含所有版本的主键和业务编号
-    const where = mockPrismaService.customRecipeOrder.findFirst.mock.calls[0][0]
-      .where;
-    expect(where.recipeId.in).toEqual(
-      expect.arrayContaining(['recipe-pk-v1', 'recipe-pk-v2', 'CR-RECIPE-BIZ']),
-    );
-  });
-
-  // ---------- 6. 订单号 ----------
+  // ---------- 5. 订单号 ----------
 
   it('订单号撞号时会重试，而不是把唯一约束错误抛给顾客', async () => {
     orderFindUnique

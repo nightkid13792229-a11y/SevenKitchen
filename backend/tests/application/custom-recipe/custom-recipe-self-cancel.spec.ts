@@ -44,7 +44,6 @@ describe('CustomRecipeService · 顾客自助取消', () => {
           useValue: {
             getConfig: jest.fn().mockResolvedValue({
               feeAmount: 300,
-              creditAmount: 150,
               deliveryWorkDays: 3,
               dailyCapacity: 5,
               paymentTimeoutMinutes: 30,

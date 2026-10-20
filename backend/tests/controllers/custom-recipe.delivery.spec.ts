@@ -267,8 +267,6 @@ describe('CustomRecipeController · 顾客端编号口径', () => {
             targetGoal: 'MAINTAIN',
             status: 'DELIVERED',
             amount: 300,
-            creditAmount: 150,
-            creditUsed: 0,
             // 订单存的是食谱主键，业务编号在关联对象上
             recipeId: 'recipe-pk-1',
             recipe: { id: 'recipe-pk-1', recipeId: 'CR1759000000000' },
@@ -288,8 +286,6 @@ describe('CustomRecipeController · 顾客端编号口径', () => {
         customerId: 'user-1',
         status: 'DELIVERED',
         amount: 300,
-        creditAmount: 150,
-        creditUsed: 0,
         recipeId: 'recipe-pk-1',
         recipe: {
           id: 'recipe-pk-1',
@@ -366,8 +362,6 @@ describe('CustomRecipeController · 顾客端编号口径', () => {
             targetGoal: 'MAINTAIN',
             status: 'PAID',
             amount: 300,
-            creditAmount: 150,
-            creditUsed: 0,
             recipeId: null,
             recipe: null,
             createdAt: new Date('2026-09-28'),

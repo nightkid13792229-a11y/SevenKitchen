@@ -2,10 +2,10 @@ import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 
 /**
- * 食谱定制（付费 + 抵扣）数据库结构的守卫测试
+ * 食谱定制（付费）数据库结构的守卫测试
  *
  * 背景（2026-09-25）：工作目录里有并行开发会话，`prisma/schema.prisma` 是共享文件，
- * 本项目实测被**整体覆盖过一次** —— 「食谱定制设置」的定义连同定制单上的额度字段
+ * 本项目实测被**整体覆盖过一次** —— 「食谱定制设置」的定义连同定制单字段
  * 一起消失，而数据库里表和列都还在，于是 schema 与库产生漂移。
  *
  * 单测跑不通数据库，但可以守住"定义必须还在"。任何一次覆盖都会在这里立刻红掉，
@@ -32,9 +32,8 @@ describe('食谱定制 · 数据库结构守卫', () => {
     const block = modelBlock(schema, 'CustomRecipeConfig');
 
     expect(block).toMatch(/feeAmount\s+Decimal\s+@default\(300\)\s+@map\("fee_amount"\)/);
-    expect(block).toMatch(
-      /creditAmount\s+Decimal\s+@default\(300\)\s+@map\("credit_amount"\)/,
-    );
+    // 2026-10-20：可抵扣金额已整体删除，不得再回到 schema
+    expect(block).not.toContain('creditAmount');
     expect(block).toMatch(
       /deliveryWorkDays\s+Int\s+@default\(3\)\s+@map\("delivery_work_days"\)/,
     );
@@ -112,16 +111,12 @@ describe('食谱定制 · 数据库结构守卫', () => {
     expect(sql).not.toMatch(/DROP COLUMN/i);
   });
 
-  it('定制单保留额度台账与支付/关单字段', () => {
+  it('定制单保留支付/关单字段，且不再有额度台账', () => {
     const block = modelBlock(schema, 'CustomRecipeOrder');
 
-    // 提交时快照的可抵扣金额 + 已用额度
-    expect(block).toMatch(
-      /creditAmount\s+Decimal\s+@default\(300\)\s+@map\("credit_amount"\)/,
-    );
-    expect(block).toMatch(
-      /creditUsed\s+Decimal\s+@default\(0\)\s+@map\("credit_used"\)/,
-    );
+    // 2026-10-20：可抵扣金额与已用额度整体删除
+    expect(block).not.toContain('creditAmount');
+    expect(block).not.toContain('creditUsed');
     // 微信支付交易号 + 关单留痕
     expect(block).toMatch(
       /paymentTransactionId\s+String\?\s+@map\("payment_transaction_id"\)/,
@@ -161,13 +156,14 @@ describe('食谱定制 · 数据库结构守卫', () => {
     ).toBe(true);
   });
 
-  it('migration 里确实写了额度与支付字段（不能只有 schema 没有库变更）', () => {
+  it('migration 里确实写了配置与支付字段（不能只有 schema 没有库变更）', () => {
     const configSql = readProjectFile(
       'prisma/migrations/20260925120000_add_custom_recipe_config/migration.sql',
     );
     expect(configSql).toContain('custom_recipe_config');
-    expect(configSql).toContain('credit_amount');
-    expect(configSql).toContain('credit_used');
+    expect(configSql).toContain('fee_amount');
+    // 历史 migration 曾经加过 credit_amount / credit_used，后来由
+    // 20261020230000_remove_custom_recipe_credit 删掉（见移除守卫测试）。
 
     const paymentSql = readProjectFile(
       'prisma/migrations/20260925235900_add_custom_recipe_payment_fields/migration.sql',

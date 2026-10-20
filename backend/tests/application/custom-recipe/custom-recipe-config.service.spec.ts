@@ -10,7 +10,6 @@ function buildRow(overrides: Record<string, unknown> = {}) {
   return {
     id: CUSTOM_RECIPE_CONFIG_ID,
     feeAmount: 300,
-    creditAmount: 300,
     deliveryWorkDays: 3,
     dailyCapacity: 4,
     paymentTimeoutMinutes: 30,
@@ -77,7 +76,8 @@ describe('CustomRecipeConfigService', () => {
         data: { id: CUSTOM_RECIPE_CONFIG_ID },
       });
       expect(config.feeAmount).toBe(300);
-      expect(config.creditAmount).toBe(300);
+      // 2026-10-20：可抵扣金额整体删除，配置里不得再出现
+      expect(config).not.toHaveProperty('creditAmount');
       expect(config.deliveryWorkDays).toBe(3);
       expect(config.dailyCapacity).toBe(4);
       expect(config.paymentTimeoutMinutes).toBe(30);
@@ -85,27 +85,25 @@ describe('CustomRecipeConfigService', () => {
 
     it('coerces Prisma Decimal values to numbers', async () => {
       mockPrismaService.customRecipeConfig.findUnique.mockResolvedValue(
-        buildRow({ feeAmount: '300.5', creditAmount: '199.9' }),
+        buildRow({ feeAmount: '300.5' }),
       );
 
       const config = await service.getConfig();
 
       expect(config.feeAmount).toBe(300.5);
-      expect(config.creditAmount).toBe(199.9);
     });
   });
 
   describe('getPublicConfig', () => {
     it('only exposes the fields the mini program needs', async () => {
       mockPrismaService.customRecipeConfig.findUnique.mockResolvedValue(
-        buildRow({ feeAmount: 300, creditAmount: 200, dailyCapacity: 7 }),
+        buildRow({ feeAmount: 300, dailyCapacity: 7 }),
       );
 
       const config = await service.getPublicConfig();
 
       expect(config).toEqual({
         feeAmount: 300,
-        creditAmount: 200,
         deliveryWorkDays: 3,
         /**
          * 2026-10-04：支付时限改为**对外公开**。
@@ -144,6 +142,8 @@ describe('CustomRecipeConfigService', () => {
        * 而不是悄悄把产能/成本参数发出去。
        */
       for (const internal of [
+        // 2026-10-20：定制费抵扣已取消，公开配置里也不该再有
+        'creditAmount',
         'dailyCapacity',
         'dailyDeliveryCapacity',
         'productionLossRate',
@@ -160,69 +160,13 @@ describe('CustomRecipeConfigService', () => {
   });
 
   describe('updateConfig', () => {
-    it('rejects a credit amount above the fee', async () => {
-      mockPrismaService.customRecipeConfig.findUnique.mockResolvedValue(
-        buildRow({ feeAmount: 300, creditAmount: 300 }),
-      );
-
-      await expect(
-        service.updateConfig({ creditAmount: 500 }),
-      ).rejects.toBeInstanceOf(BadRequestException);
-      expect(mockPrismaService.customRecipeConfig.upsert).not.toHaveBeenCalled();
-    });
-
-    it('compares the credit against the fee submitted in the same request', async () => {
-      // 同一次提交里把定制费降到 100、可抵扣仍写 300 —— 必须被拒，
-      // 只拿单边比较会漏判这一种。
-      mockPrismaService.customRecipeConfig.findUnique.mockResolvedValue(
-        buildRow({ feeAmount: 300, creditAmount: 300 }),
-      );
-
-      await expect(
-        service.updateConfig({ feeAmount: 100, creditAmount: 300 }),
-      ).rejects.toBeInstanceOf(BadRequestException);
-    });
-
-    it('allows lowering both the fee and the credit together', async () => {
-      mockPrismaService.customRecipeConfig.findUnique.mockResolvedValue(
-        buildRow({ feeAmount: 300, creditAmount: 300 }),
-      );
-      mockPrismaService.customRecipeConfig.upsert.mockResolvedValue(
-        buildRow({ feeAmount: 100, creditAmount: 0 }),
-      );
-
-      const config = await service.updateConfig({
-        feeAmount: 100,
-        creditAmount: 0,
-      });
-
-      expect(config.feeAmount).toBe(100);
-      expect(config.creditAmount).toBe(0);
-    });
-
-    it('accepts credit equal to the fee', async () => {
-      mockPrismaService.customRecipeConfig.findUnique.mockResolvedValue(
-        buildRow({ feeAmount: 300, creditAmount: 300 }),
-      );
-      mockPrismaService.customRecipeConfig.upsert.mockResolvedValue(
-        buildRow({ feeAmount: 399, creditAmount: 399 }),
-      );
-
-      await expect(
-        service.updateConfig({ feeAmount: 399, creditAmount: 399 }),
-      ).resolves.toMatchObject({ feeAmount: 399, creditAmount: 399 });
-    });
-
-    it('rejects a negative fee or credit', async () => {
+    it('rejects a negative fee', async () => {
       mockPrismaService.customRecipeConfig.findUnique.mockResolvedValue(
         buildRow(),
       );
 
       await expect(
         service.updateConfig({ feeAmount: -1 }),
-      ).rejects.toBeInstanceOf(BadRequestException);
-      await expect(
-        service.updateConfig({ creditAmount: -1 }),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 

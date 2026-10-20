@@ -17,15 +17,6 @@ model Order {
   amountProduct                Decimal                     @map("amount_product")
   amountShipping               Decimal                     @map("amount_shipping")
   amountTotal                  Decimal                     @map("amount_total")
-  /// 本单使用的「定制费抵扣」金额（元）。
-  ///
-  /// 口径：**已含在（净）amount_product 里**，不参与任何算术 ——
-  /// 记录它只是为了展示"这单抵了多少"与审计，订单金额校验规则保持
-  /// `amount_total = amount_product + amount_shipping` 不变。
-  creditAmountApplied          Decimal                     @default(0) @map("credit_amount_applied") @db.Decimal(10, 2)
-  /// 抵扣来源的定制订单（CustomRecipeOrder.id）。
-  /// 刻意**不加唯一约束**：额度支持余额结转，同一张定制单可以抵多张成品单。
-  customRecipeCreditOrderId    String?                     @map("custom_recipe_credit_order_id")
   totalAmount                  Decimal?                    @map("total_amount")
   pricingBreakdownSnapshot     Json?                       @map("pricing_breakdown_snapshot")
   shippingAddressSnapshot      Json?                       @map("shipping_address_snapshot")
@@ -2492,11 +2483,6 @@ model CustomRecipeOrder {
   scheduledDate         DateTime                 @map("scheduled_date") @db.Date
   estimatedDeliveryDate DateTime?                @map("estimated_delivery_date") @db.Date
   amount                Decimal                  @default(299) @db.Decimal(10, 2)
-  /// 提交时快照下来的「可抵扣金额」（元）。
-  /// 后台调价只影响之后的单，已提交的订单按当时快照执行。
-  creditAmount          Decimal                  @default(300) @map("credit_amount") @db.Decimal(10, 2)
-  /// 已经用掉的抵扣额度（元）。剩余额度 = credit_amount - credit_used。
-  creditUsed            Decimal                  @default(0) @map("credit_used") @db.Decimal(10, 2)
   status                CustomRecipeStatus       @default(PENDING_PAYMENT) @map("status")
   /// 内部子阶段（2026-10-16 批次 1.2）。
   ///
@@ -2606,18 +2592,11 @@ model CustomRecipeAttachment {
 /// 刻意与鲜食的 GlobalConfig、补剂的 SupplementShopConfig 解耦：
 /// 定制是独立产品线（顶层设计 v4 产品线 ③），它的价格与产能参数
 /// 不该和别的生意共用一个值，否则"调一边影响另一边"。
-///
-/// 关键解耦点：**定制费**与**可抵扣金额**是两个独立参数 ——
-/// 顾客付多少钱、其中多少钱能抵成品货款，由业务在后台分开定。
 model CustomRecipeConfig {
   id String @id @default("singleton") @map("id")
 
   /// 定制费（元）：顾客提交定制单时支付的金额
   feeAmount Decimal @default(300) @map("fee_amount") @db.Decimal(10, 2)
-
-  /// 可抵扣金额（元）：定制费中可用于抵扣成品货款的额度。
-  /// 不得超过定制费（后台校验）；0 表示定制费纯粹是服务费，不抵货款。
-  creditAmount Decimal @default(300) @map("credit_amount") @db.Decimal(10, 2)
 
   /// 交付周期（工作日）：从预约日起算，遇公众假期顺延
   deliveryWorkDays Int @default(3) @map("delivery_work_days")

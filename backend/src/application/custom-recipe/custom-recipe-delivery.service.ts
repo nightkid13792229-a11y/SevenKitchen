@@ -461,7 +461,7 @@ export class CustomRecipeDeliveryService {
 
     /**
      * 一道定制食谱只能挂在**一张**定制单上（`recipe_id` 是唯一约束）。
-     * 复用会让两单共用一份产出，而 ¥150 抵扣额度是绑在那道食谱上的。
+     * 复用会让两单共用一份产出，交付记录也就分不清属于哪一单。
      */
     const occupied = await this.prisma.customRecipeOrder.findFirst({
       where: { recipeId: recipe.id, id: { not: order.id } },

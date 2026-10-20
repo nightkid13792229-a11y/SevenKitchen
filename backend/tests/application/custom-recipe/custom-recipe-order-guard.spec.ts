@@ -81,7 +81,6 @@ describe('CustomRecipeService · 自动排期与名额抢占', () => {
           useValue: {
             getConfig: jest.fn().mockResolvedValue({
               feeAmount: 300,
-              creditAmount: 150,
               deliveryWorkDays: 3,
               dailyCapacity: 5,
               paymentTimeoutMinutes: 30,

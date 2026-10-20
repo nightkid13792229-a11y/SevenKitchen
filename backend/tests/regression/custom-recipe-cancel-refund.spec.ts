@@ -6,7 +6,6 @@ import { resolve } from 'node:path';
  *
  * 老板拍板的决策 12 + Q2 + 通知中文化：
  *   · 顾客自助取消 + 全额原路退款（不需要客服先确认）
- *   · 关单/退款后自动把抵扣额度还回去
  *   · 通知在"顾客真的付了钱"和"交付"两个时刻都要发
  */
 describe('定制订单 · 取消退款与通知守卫', () => {
@@ -83,16 +82,6 @@ describe('定制订单 · 取消退款与通知守卫', () => {
     // 支付时用的是 CustomRecipeOrder.orderId（CR 开头），退款必须一致
     expect(payment).toContain('out_trade_no: order.orderId');
     expect(payment).toContain('customRecipeOrder.update');
-  });
-
-  it('成品单关单时自动把定制费抵扣额度还回去', () => {
-    const order = backend('src/application/order/order.service.ts');
-
-    expect(order).toContain('restoreCustomRecipeCreditIfNeeded');
-    expect(order).toContain('creditAmountApplied: true');
-    expect(order).toContain('customRecipeCreditOrderId: true');
-    // 幂等：交给 restoreCredit 的 CAS
-    expect(order).toContain('restoreCredit({');
   });
 
   it('付款成功不再发订阅消息，把唯一一次订阅留给已交付通知', () => {

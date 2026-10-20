@@ -56,7 +56,7 @@ import {
 /**
  * 权限口径（老板 2026-10-04 口径 2）：
  *   · **客服/员工**可以做日常：看订单、确认收款、开始制作、上传附件；
- *   · **仅管理员**：食谱定制设置、恢复抵扣额度、交付食谱（含重新交付）、取消订单、排期批量设置。
+ *   · **仅管理员**：食谱定制设置、交付食谱（含重新交付）、取消订单、排期批量设置。
  *
  * 此前整个控制器只放开 ADMIN，而后台菜单对所有登录者可见 ——
  * 员工看得见菜单、点进去任何操作都 403，只能找管理员。
@@ -85,7 +85,7 @@ export class AdminCustomRecipeController {
      * 后台视角的渲染契约（批次 5.5）。
      *
      * `buildStaffView` 从批次 2 就写好了（接单/去设计/交付/重新交付/
-     * 取消/处理售后/恢复抵扣/联系客户 全都算得出），但**一直没人调用** ——
+     * 取消/处理售后/联系客户 全都算得出），但**一直没人调用** ——
      * 于是后台页面只能自己写死状态判断，也就有了"订单一变已完成、
      * 「查看食谱」就消失"这一类 bug。
      */
@@ -110,7 +110,7 @@ export class AdminCustomRecipeController {
   // ---------- 食谱定制设置 ----------
 
   /**
-   * 读取食谱定制配置（定制费 / 可抵扣金额 / 交付周期 / 接单上限 / 支付超时）
+   * 读取食谱定制配置（定制费 / 交付周期 / 接单上限 / 支付超时）
    */
   @Get('config')
   /** 设置类接口保持仅管理员：单价与产能参数不该由客服改（口径 2） */
@@ -125,8 +125,8 @@ export class AdminCustomRecipeController {
   /**
    * 更新食谱定制配置
    *
-   * 只影响**之后提交**的订单：定制费与可抵扣金额在下单时已快照进订单，
-   * 改价不会动到已提交/已付款顾客的额度。
+   * 只影响**之后提交**的订单：定制费在下单时已快照进订单，
+   * 改价不会动到已提交/已付款顾客的金额。
    */
   @Put('config')
   /** 改价格与产能只允许管理员（口径 2） */
@@ -186,12 +186,6 @@ export class AdminCustomRecipeController {
       orders: orders.map((order, index) => ({
         ...order,
         amount: Number(order.amount),
-        creditAmount: Number(order.creditAmount),
-        creditUsed: Number(order.creditUsed),
-        creditRemaining: Math.max(
-          0,
-          Number(order.creditAmount) - Number(order.creditUsed),
-        ),
         renderable: renderables[index],
       })),
       total,
@@ -201,43 +195,6 @@ export class AdminCustomRecipeController {
         dateFrom: dateFrom ? new Date(dateFrom) : undefined,
         dateTo: dateTo ? new Date(dateTo) : undefined,
       }),
-    });
-  }
-
-  /**
-   * 恢复抵扣额度（人工处理退款时使用）
-   *
-   * 顾客用了定制费抵扣成品货款之后又退款，已用掉的额度需要还回去。
-   * 本次退款走后台人工，所以这里也是人工按钮，不做自动恢复。
-   * 不传 amount 表示"把已用的全部还回去"。
-   */
-  @Post('orders/:orderId/restore-credit')
-  /** 恢复抵扣额度等于把顾客的钱还回去，仅管理员（口径 2） */
-  @UseGuards(AdminGuard)
-  @ApiOperation({ summary: '恢复定制抵扣额度' })
-  async restoreCredit(
-    @Param('orderId') orderId: string,
-    @Body('amount') amount?: number | string | null,
-  ) {
-    const parsedAmount =
-      amount === undefined || amount === null || amount === ''
-        ? undefined
-        : Number(amount);
-
-    if (parsedAmount !== undefined && !Number.isFinite(parsedAmount)) {
-      throw new BadRequestException('恢复金额必须是数字');
-    }
-
-    const result = await this.customRecipeService.restoreCredit({
-      orderIdOrId: orderId,
-      amount: parsedAmount,
-    });
-
-    const summary = await this.customRecipeService.getCreditSummary(orderId);
-
-    return ApiResponseDto.success({
-      ...summary,
-      restored: result.restored,
     });
   }
 
@@ -324,12 +281,6 @@ export class AdminCustomRecipeController {
     return ApiResponseDto.success({
       ...order,
       amount: Number(order.amount),
-      creditAmount: Number(order.creditAmount),
-      creditUsed: Number(order.creditUsed),
-      creditRemaining: Math.max(
-        0,
-        Number(order.creditAmount) - Number(order.creditUsed),
-      ),
       /**
        * ★ 后台视角的渲染契约（批次 5.5）。
        *

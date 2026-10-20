@@ -530,7 +530,7 @@ git commit -m "feat: configure multi recipe discounts and design capacity"
 - Modify: `miniapp/src/pages/custom-recipe-confirm.regression.spec.ts`
 
 **Interfaces:**
-- `fetchMultiRecipeQuote(quantity: number): Promise<CustomRecipeQuote>`
+- `fetchCustomRecipeQuote(quantity: number): Promise<CustomRecipeQuote>`
 - Confirm page local state `recipeQuantity = ref(1)`, `quote = ref<CustomRecipeQuote | null>(null)`.
 - Submit payload adds `recipeQuantity`.
 - UI hidden unless `config.multiRecipeEnabled === true`; when false only quantity 1 and no selector.
@@ -545,7 +545,7 @@ Add to `custom-recipe-confirm.regression.spec.ts`:
 it('多份开关关闭时不显示份数选择器', () => {
   expect(confirm).toContain('multiRecipeEnabled');
   expect(confirm).toContain('recipeQuantity');
-  expect(confirm).toContain('fetchMultiRecipeQuote');
+  expect(confirm).toContain('fetchCustomRecipeQuote');
   expect(confirm).toContain('payableAmount');
 });
 
@@ -563,7 +563,7 @@ Expected: FAIL.
 
 - [ ] **Step 3: Implement API and utility**
 
-Add `fetchMultiRecipeQuote` using `GET /custom-recipe/quote?quantity=...`. Return shape:
+Add `fetchCustomRecipeQuote` using `GET /custom-recipe/quote?quantity=...`. Return shape:
 
 ```ts
 export interface CustomRecipeQuote {

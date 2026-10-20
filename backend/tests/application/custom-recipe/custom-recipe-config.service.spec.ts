@@ -512,15 +512,73 @@ describe('CustomRecipeConfigService', () => {
     it('优惠档位读出时按份数升序排列', async () => {
       mockPrismaService.customRecipeConfig.findUnique.mockResolvedValue(
         buildRow({
-          multiRecipeDiscounts: [tier(4, 0.1), tier(2, 0.05)],
+          multiRecipeDiscounts: [
+            tier(5, 0.12),
+            tier(2, 0.05),
+            tier(4, 0.1),
+            tier(3, 0.08),
+          ],
         }),
       );
 
       const config = await service.getConfig();
 
       expect(config.multiRecipeDiscounts.map((item) => item.quantity)).toEqual([
-        2, 4,
+        2, 3, 4, 5,
       ]);
+    });
+
+    it('库里档位不齐（如只有 2、4 份）时退默认四档', async () => {
+      const incompleteSets: unknown[] = [
+        [tier(2, 0.05), tier(4, 0.1)],
+        [tier(2, 0.05), tier(3, 0.08), tier(4, 0.1)],
+        [tier(3, 0.08), tier(4, 0.1), tier(5, 0.12)],
+      ];
+
+      for (const incomplete of incompleteSets) {
+        mockPrismaService.customRecipeConfig.findUnique.mockResolvedValue(
+          buildRow({ multiRecipeDiscounts: incomplete }),
+        );
+        await expect(service.getConfig()).resolves.toMatchObject({
+          multiRecipeDiscounts: DEFAULT_MULTI_RECIPE_DISCOUNTS,
+        });
+      }
+    });
+
+    it('库里档位重复或折扣下降时退默认四档', async () => {
+      const brokenSets: unknown[] = [
+        // 2 份重复（四档份数都出现了，但 2 份有两档）
+        [
+          tier(2, 0.05),
+          tier(2, 0.06),
+          tier(3, 0.08),
+          tier(4, 0.1),
+          tier(5, 0.12),
+        ],
+        // 2 份 12% → 3 份 5%，折扣下降
+        [tier(2, 0.12), tier(3, 0.05), tier(4, 0.1), tier(5, 0.12)],
+      ];
+
+      for (const broken of brokenSets) {
+        mockPrismaService.customRecipeConfig.findUnique.mockResolvedValue(
+          buildRow({ multiRecipeDiscounts: broken }),
+        );
+        await expect(service.getConfig()).resolves.toMatchObject({
+          multiRecipeDiscounts: DEFAULT_MULTI_RECIPE_DISCOUNTS,
+        });
+      }
+    });
+
+    it('库里设计工时非法时退 480/96', async () => {
+      for (const bad of [0, -1, 1.5, Number.NaN, null, 'abc']) {
+        mockPrismaService.customRecipeConfig.findUnique.mockResolvedValue(
+          buildRow({ dailyDesignMinutes: bad, minutesPerRecipe: bad }),
+        );
+        await expect(service.getConfig()).resolves.toMatchObject({
+          dailyDesignMinutes: 480,
+          minutesPerRecipe: 96,
+        });
+      }
     });
 
     it('maxRecipeQuantity 只接受 1~5 的整数', async () => {
@@ -582,17 +640,54 @@ describe('CustomRecipeConfigService', () => {
     });
 
     it('非法优惠档位一律拒绝（重复份数 / 折扣下降 / 超 20% / 0 折 / 1 份）', async () => {
+      const fullSet = [
+        tier(2, 0.05),
+        tier(3, 0.08),
+        tier(4, 0.1),
+        tier(5, 0.12),
+      ];
       const cases: Array<[string, unknown]> = [
-        ['重复份数', [tier(2, 0.05), tier(2, 0.08)]],
-        ['折扣下降', [tier(2, 0.12), tier(3, 0.05)]],
-        ['超过 20%', [tier(2, 0.21)]],
-        ['折扣为 0', [tier(2, 0)]],
-        ['1 份不允许折扣', [tier(1, 0.05)]],
-        ['6 份超过硬上限', [tier(6, 0.05)]],
-        ['份数必须是整数', [tier(2.5, 0.05)]],
+        // 四档齐全，但 2 份重复
+        ['重复份数', [...fullSet, tier(2, 0.06)]],
+        // 四档齐全，但 2 份 12% → 3 份 5%，折扣下降
+        ['折扣下降', [tier(2, 0.12), tier(3, 0.05), tier(4, 0.1), tier(5, 0.12)]],
+        [
+          '超过 20%',
+          [tier(2, 0.21), tier(3, 0.08), tier(4, 0.1), tier(5, 0.12)],
+        ],
+        ['折扣为 0', [tier(2, 0), tier(3, 0.08), tier(4, 0.1), tier(5, 0.12)]],
+        [
+          '1 份不允许折扣',
+          [
+            tier(1, 0.05),
+            tier(2, 0.05),
+            tier(3, 0.08),
+            tier(4, 0.1),
+            tier(5, 0.12),
+          ],
+        ],
+        [
+          '6 份超过硬上限',
+          [
+            tier(2, 0.05),
+            tier(3, 0.08),
+            tier(4, 0.1),
+            tier(5, 0.12),
+            tier(6, 0.12),
+          ],
+        ],
+        [
+          '份数必须是整数',
+          [tier(2.5, 0.05), tier(3, 0.08), tier(4, 0.1), tier(5, 0.12)],
+        ],
         [
           '折扣率必须是数字',
-          [{ quantity: 2, discountRate: '0.05', label: '2 份' }],
+          [
+            { quantity: 2, discountRate: '0.05', label: '2 份' },
+            tier(3, 0.08),
+            tier(4, 0.1),
+            tier(5, 0.12),
+          ],
         ],
       ];
 
@@ -605,16 +700,33 @@ describe('CustomRecipeConfigService', () => {
       }
     });
 
-    it('档位不必四档齐全，但份数必须升序、折扣不能降低（可以持平）', async () => {
-      await expect(
-        service.updateConfig({
-          multiRecipeDiscounts: [tier(2, 0.05), tier(4, 0.1)],
-        }),
-      ).resolves.toBeDefined();
+    it('优惠档位必须四档齐全（2/3/4/5），缺任何一档都拒绝保存', async () => {
+      const cases: Array<[string, unknown]> = [
+        ['空数组', []],
+        ['只有 2、4 两份', [tier(2, 0.05), tier(4, 0.1)]],
+        ['只有 2、3 两份', [tier(2, 0.05), tier(3, 0.05)]],
+        ['缺 5 份', [tier(2, 0.05), tier(3, 0.08), tier(4, 0.1)]],
+        ['缺 2 份', [tier(3, 0.08), tier(4, 0.1), tier(5, 0.12)]],
+      ];
 
+      for (const [reason, discounts] of cases) {
+        await expect(
+          service.updateConfig({
+            multiRecipeDiscounts: discounts as never,
+          }),
+        ).rejects.toThrow(/优惠配置不合法/);
+      }
+    });
+
+    it('折扣可以持平（份数越高不能降低，但允许相同）', async () => {
       await expect(
         service.updateConfig({
-          multiRecipeDiscounts: [tier(2, 0.05), tier(3, 0.05)],
+          multiRecipeDiscounts: [
+            tier(2, 0.05),
+            tier(3, 0.05),
+            tier(4, 0.05),
+            tier(5, 0.05),
+          ],
         }),
       ).resolves.toBeDefined();
     });
@@ -635,4 +747,3 @@ describe('CustomRecipeConfigService', () => {
 function tier(quantity: number, discountRate: number, label = `${quantity} 份`) {
   return { quantity, discountRate, label };
 }
-

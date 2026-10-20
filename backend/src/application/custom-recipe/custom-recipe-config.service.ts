@@ -80,6 +80,13 @@ export const MAX_MULTI_RECIPE_QUANTITY = 5;
 export const DEFAULT_MAX_RECIPE_QUANTITY = 5;
 /** 最高折扣：20%。后台不能配置超过这个值 */
 export const MAX_MULTI_RECIPE_DISCOUNT_RATE = 0.2;
+/**
+ * 优惠档位必须覆盖的份数：2/3/4/5 四档齐全。
+ *
+ * 计划 Review Focus 明确要求「缺少档位时，后台保存必须失败」——
+ * 少一档会让某个份数静默变成"无优惠"，顾客看到的价格与预期不符。
+ */
+const REQUIRED_MULTI_RECIPE_DISCOUNT_QUANTITIES = [2, 3, 4, 5];
 /** 每日设计工时默认 480 分钟（8 小时） */
 export const DEFAULT_DAILY_DESIGN_MINUTES = 480;
 /** 每份食谱默认设计工时 96 分钟（1.6 小时） */
@@ -577,6 +584,7 @@ export class CustomRecipeConfigService {
    * 多份优惠档位校验（设计文档 6.3）。
    *
    * 规则：
+   *   · 2–5 份四档必须齐全（缺档位时某个份数会静默变成"无优惠"）；
    *   · 只能配置 2–5 份（1 份不允许折扣）；
    *   · 份数不能重复；
    *   · 份数越高，折扣不能降低（可以持平）；
@@ -585,8 +593,8 @@ export class CustomRecipeConfigService {
    * 错误统一带「优惠配置不合法」前缀：后台保存失败时，运营一眼能看出
    * 是优惠配置的问题，而不是笼统的 400。
    *
-   * 允许空数组：语义是"恢复默认四档"，落库时会被替换成默认档位
-   * （见 toWriteData），这样读取侧永远不会出现"配了空 = 全无优惠"的歧义。
+   * 空数组在保存时直接拒绝（四档全缺）。读取侧对存量 `[]` 另有兜底，
+   * 见 normalizeMultiRecipeDiscounts。
    */
   private assertValidMultiRecipeDiscounts(value: unknown): void {
     if (!Array.isArray(value)) {
@@ -656,6 +664,18 @@ export class CustomRecipeConfigService {
           `优惠配置不合法：${quantity} 份的展示文案必须是字符串`,
         );
       }
+    }
+
+    // 四档必须齐全：2/3/4/5 缺任何一档都拒绝保存
+    const missing = REQUIRED_MULTI_RECIPE_DISCOUNT_QUANTITIES.filter(
+      (quantity) => !seen.has(quantity),
+    );
+    if (missing.length > 0) {
+      throw new BadRequestException(
+        `优惠配置不合法：优惠档位必须覆盖 2/3/4/5 份，缺少 ${missing.join(
+          '、',
+        )} 份`,
+      );
     }
   }
 
@@ -731,15 +751,12 @@ export class CustomRecipeConfigService {
       }),
       ...(dto.multiRecipeDiscounts !== undefined && {
         /**
-         * 空数组语义 = 恢复默认四档（不能落成 `[]`，否则读取侧还要再兜一次，
-         * 后台保存后回显也会跟用户填的对不上）。
-         * 非空时按份数排序后落库，保证读出来的顺序稳定。
+         * 校验已保证四档齐全（2/3/4/5）；这里按份数排序后落库，
+         * 保证读出来的顺序稳定。
          */
-        multiRecipeDiscounts: (dto.multiRecipeDiscounts.length === 0
-          ? cloneDefaultDiscountTiers()
-          : [...dto.multiRecipeDiscounts]
-              .sort((a, b) => a.quantity - b.quantity)
-              .map((tier) => ({ ...tier }))) as unknown as Prisma.InputJsonValue,
+        multiRecipeDiscounts: ([...dto.multiRecipeDiscounts]
+          .sort((a, b) => a.quantity - b.quantity)
+          .map((tier) => ({ ...tier }))) as unknown as Prisma.InputJsonValue,
       }),
       ...(dto.dailyDesignMinutes !== undefined && {
         dailyDesignMinutes: dto.dailyDesignMinutes,
@@ -869,6 +886,7 @@ export class CustomRecipeConfigService {
    *
    * 坏配置不能进报价（否则可能出现"折扣下降"或负金额），统一退默认四档：
    *   · 空数组 / 缺字段 → 默认档位（迁移后的存量行就是 `[]`）；
+   *   · 档位不齐（如只有 2、4 份）→ 默认档位（缺档位等于某个份数无优惠）；
    *   · 任一档不合法 → 整体退默认，不保留"看起来还行"的部分。
    */
   private normalizeMultiRecipeDiscounts(
@@ -913,6 +931,14 @@ export class CustomRecipeConfigService {
       }
       seen.add(tier.quantity);
       previousRate = tier.discountRate;
+    }
+
+    // 四档不齐也视为坏配置：缺失档位会让对应份数静默变成"无优惠"
+    const missing = REQUIRED_MULTI_RECIPE_DISCOUNT_QUANTITIES.filter(
+      (quantity) => !seen.has(quantity),
+    );
+    if (missing.length > 0) {
+      return cloneDefaultDiscountTiers();
     }
 
     return tiers;

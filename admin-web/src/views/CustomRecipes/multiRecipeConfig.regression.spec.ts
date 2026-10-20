@@ -20,6 +20,7 @@ import {
   calcDailyDesignCapacity,
   discountRateToPercent,
   percentToDiscountRate,
+  resolveMultiRecipeDiscountRows,
   validateMultiRecipeConfig,
   type MultiRecipeConfigInput,
 } from '@/utils/customRecipe'
@@ -81,8 +82,11 @@ describe('多份购买配置页 · 字段与文案', () => {
     expect(page).toContain('discountRatePercent')
     expect(page).toContain('percentToDiscountRate')
     expect(page).toContain('discountRate: percentToDiscountRate')
-    expect(page).toContain('buildMultiRecipeDiscountRows')
     expect(page).toContain('customRecipeApi.updateConfig(payload)')
+  })
+
+  it('保存前调用与后端同规则的 validateMultiRecipeConfig', () => {
+    expect(page).toContain('validateMultiRecipeConfig(form)')
   })
 
   it('展示由工时推导的每日设计产能，而不是让人手填', () => {
@@ -92,8 +96,16 @@ describe('多份购买配置页 · 字段与文案', () => {
 
   it('单笔最多份数允许 1–5 编辑并说明硬上限', () => {
     expect(page).toContain('form.maxRecipeQuantity')
-    expect(page).toContain(':max="5"')
+    expect(page).toContain(':max="MAX_MULTI_RECIPE_QUANTITY"')
     expect(page).toContain('业务硬上限')
+  })
+
+  it('多份购买开关默认锁定，第二阶段完成前不能误开', () => {
+    // 当前只完成价格与配置；多份设计/交付还没做，后台不允许开启
+    expect(page).toContain(':disabled="!form.multiRecipeEnabled"')
+    expect(page).toContain(
+      '多份设计与交付完成后才可开启；当前仅完成价格与配置',
+    )
   })
 })
 
@@ -173,6 +185,45 @@ describe('读取配置：后端小数 → 页面百分比', () => {
         makeConfig({ multiRecipeDiscounts: rows }),
       ),
     ).toBeNull()
+  })
+
+  it('只有补默认/丢坏数据时才标记 normalized，完整四档不误报', () => {
+    const completeBackendRows = [
+      { quantity: 2, discountRate: 0.05, label: '2 份享 95 折' },
+      { quantity: 3, discountRate: 0.08, label: '3 份享 92 折' },
+      { quantity: 4, discountRate: 0.1, label: '4 份享 9 折' },
+      { quantity: 5, discountRate: 0.12, label: '5 份享 88 折' },
+    ]
+
+    const complete = resolveMultiRecipeDiscountRows(completeBackendRows)
+    expect(complete.normalized).toBe(false)
+    expect(complete.rows.map((row) => row.quantity)).toEqual([2, 3, 4, 5])
+
+    expect(resolveMultiRecipeDiscountRows([]).normalized).toBe(true)
+    expect(resolveMultiRecipeDiscountRows(null).normalized).toBe(true)
+    expect(
+      resolveMultiRecipeDiscountRows([completeBackendRows[0]]).normalized,
+    ).toBe(true)
+    expect(
+      resolveMultiRecipeDiscountRows([
+        ...completeBackendRows,
+        // 重复档位：会丢一条，必须提示
+        { quantity: 5, discountRate: 0.12, label: '又一条 5 份' },
+      ]).normalized,
+    ).toBe(true)
+    expect(
+      resolveMultiRecipeDiscountRows(
+        completeBackendRows.map((row) =>
+          row.quantity === 4 ? { ...row, discountRate: 0 } : row,
+        ),
+      ).normalized,
+    ).toBe(true)
+  })
+
+  it('页面在需要补档位时给出明确提示，而不是静默归一化', () => {
+    expect(page).toContain('resolveMultiRecipeDiscountRows')
+    expect(page).toContain('读取到的多份优惠档位不完整或含非法值')
+    expect(page).toContain('已用默认四档补齐')
   })
 })
 

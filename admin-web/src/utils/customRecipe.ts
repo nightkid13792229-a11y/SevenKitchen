@@ -378,26 +378,44 @@ export function discountRateToPercent(rate: number): number {
   return Math.round(Number(rate) * 10000) / 100
 }
 
+/** 页面行 + 是否发生过补默认/丢坏数据的标记 */
+export interface MultiRecipeDiscountRowsResolution {
+  rows: MultiRecipeDiscountTierInput[]
+  /**
+   * true = 后端数据缺失/非法/重复，页面已用默认档位补齐或丢掉坏行。
+   * 页面据此给运营明确提示，不能静默归一化。
+   */
+  normalized: boolean
+}
+
 /**
- * 把后端返回的档位（小数）转成页面行（百分比）。
+ * 把后端返回的档位（小数）转成页面行（百分比），并报告是否做过归一化。
  *
  * 无论后端返回什么，页面永远输出 2/3/4/5 四行：
- *   · 空数组 / 缺档位 → 对应行用默认档位补上；
- *   · 坏数据（份数越界、折扣非法）→ 该行用默认值；
+ *   · 空数组 / 缺档位 → 对应行用默认档位补上，normalized = true；
+ *   · 坏数据（份数越界、折扣非法、文案不是字符串、重复档位）→
+ *     丢弃/覆盖并置 normalized = true；
+ *   · 四档完整且合法 → normalized = false（页面不提示）。
  * 这样运营打开页面看到的就是一份**能直接存回去**的完整配置，
- * 不会出现"少一档、一保存就被拒"的死循环。
+ * 不会出现"少一档、一保存就被拒"的死循环，也不会在数据被改动时毫不知情。
  */
-export function buildMultiRecipeDiscountRows(
+export function resolveMultiRecipeDiscountRows(
   raw: unknown,
-): MultiRecipeDiscountTierInput[] {
+): MultiRecipeDiscountRowsResolution {
   const fromBackend = new Map<
     number,
     { discountRate: number; label: string }
   >()
+  let normalized = false
 
-  if (Array.isArray(raw)) {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    normalized = true
+  } else {
     for (const item of raw) {
-      if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        normalized = true
+        continue
+      }
       const {
         quantity,
         discountRate,
@@ -410,6 +428,7 @@ export function buildMultiRecipeDiscountRows(
         quantity < 2 ||
         quantity > MAX_MULTI_RECIPE_QUANTITY
       ) {
+        normalized = true
         continue
       }
       if (
@@ -418,7 +437,15 @@ export function buildMultiRecipeDiscountRows(
         discountRate <= 0 ||
         discountRate > MAX_MULTI_RECIPE_DISCOUNT_PERCENT / 100
       ) {
+        normalized = true
         continue
+      }
+      if (typeof label !== 'string') {
+        normalized = true
+      }
+      if (fromBackend.has(quantity)) {
+        // 重复档位：保留最后一条，但必须提示运营
+        normalized = true
       }
 
       fromBackend.set(quantity, {
@@ -428,8 +455,9 @@ export function buildMultiRecipeDiscountRows(
     }
   }
 
-  return REQUIRED_MULTI_RECIPE_DISCOUNT_QUANTITIES.map((quantity) => {
+  const rows = REQUIRED_MULTI_RECIPE_DISCOUNT_QUANTITIES.map((quantity) => {
     const found = fromBackend.get(quantity)
+    if (!found) normalized = true
     const fallback = DEFAULT_MULTI_RECIPE_DISCOUNT_TIERS.find(
       (tier) => tier.quantity === quantity,
     )!
@@ -441,6 +469,19 @@ export function buildMultiRecipeDiscountRows(
       label: found ? found.label : fallback.label,
     }
   })
+
+  return { rows, normalized }
+}
+
+/**
+ * 兼容旧调用：只要行，不要 normalized 标记。
+ * 页面在读取配置时必须用 resolveMultiRecipeDiscountRows，才能把
+ * "补过默认档位"这件事告诉运营。
+ */
+export function buildMultiRecipeDiscountRows(
+  raw: unknown,
+): MultiRecipeDiscountTierInput[] {
+  return resolveMultiRecipeDiscountRows(raw).rows
 }
 
 /**

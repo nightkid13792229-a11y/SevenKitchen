@@ -93,9 +93,18 @@
         />
 
         <el-form-item label="多份购买">
-          <el-switch v-model="form.multiRecipeEnabled" />
+          <!--
+            ⚠️ 2026-10-20 阶段性门禁：第一阶段只完成「价格与配置」，
+            多份设计/交付还没做。开关默认关闭且不允许在这里打开，
+            避免运营误开后顾客能下多份、后台却交付不了。
+            只有后端已经是 true 时才可操作（用于紧急关闭），false 时锁定。
+          -->
+          <el-switch
+            v-model="form.multiRecipeEnabled"
+            :disabled="!form.multiRecipeEnabled"
+          />
           <span class="form-tip">
-            关闭时顾客只能下 1 份；开启后可在 1–{{ form.maxRecipeQuantity }} 份之间选择
+            多份设计与交付完成后才可开启；当前仅完成价格与配置，开关暂时锁定，避免误开
           </span>
         </el-form-item>
 
@@ -103,7 +112,7 @@
           <el-input-number
             v-model="form.maxRecipeQuantity"
             :min="1"
-            :max="5"
+            :max="MAX_MULTI_RECIPE_QUANTITY"
             :precision="0"
             style="width: 200px"
           />
@@ -120,6 +129,15 @@
               show-icon
               title="2/3/4/5 份四档必须齐全"
               description="缺任何一档都不能保存；份数越高折扣不能降低；单档折扣最高 20%。1 份不参与优惠，折扣按整单计算。"
+            />
+
+            <el-alert
+              v-if="multiRecipeLoadWarning"
+              type="warning"
+              :closable="false"
+              show-icon
+              :title="multiRecipeLoadWarning"
+              class="multi-recipe-error"
             />
 
             <el-alert
@@ -412,9 +430,11 @@ import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole';
 import { getApiErrorMessage, toastApiError } from '@/utils/apiError';
 import {
   DEFAULT_MULTI_RECIPE_DISCOUNT_TIERS,
+  MAX_MULTI_RECIPE_QUANTITY,
   buildMultiRecipeDiscountRows,
   calcDailyDesignCapacity,
   percentToDiscountRate,
+  resolveMultiRecipeDiscountRows,
   validateMultiRecipeConfig,
 } from '@/utils/customRecipe';
 
@@ -426,6 +446,11 @@ const saving = ref(false);
 const saveError = ref('');
 /** 多份购买区的独立报错：显示在优惠表格上方，不用回顶部找 */
 const multiRecipeError = ref('');
+/**
+ * 读取配置时对优惠档位做了补齐/丢弃的提示。
+ * 只有后端数据确实不完整或含非法值时才出现，完整四档时必须是空串。
+ */
+const multiRecipeLoadWarning = ref('');
 const updatedAt = ref('');
 
 /**
@@ -474,7 +499,7 @@ const form = reactive({
   // ===== 2026-10-20 多份购买 · 第一阶段 =====
   // 折扣在页面上按**百分比**编辑（5 = 5%），保存时才换成后端要的小数（0.05）
   multiRecipeEnabled: false,
-  maxRecipeQuantity: 5,
+  maxRecipeQuantity: MAX_MULTI_RECIPE_QUANTITY,
   multiRecipeDiscounts: buildMultiRecipeDiscountRows(
     DEFAULT_MULTI_RECIPE_DISCOUNT_TIERS,
   ),
@@ -488,6 +513,21 @@ const dailyDesignCapacity = computed(() =>
 );
 
 /**
+ * 把后端返回的优惠档位应用到页面。
+ *
+ * 如果后端数据缺档位/含非法值/重复，resolveMultiRecipeDiscountRows 会补默认
+ * 或丢坏行；这里必须把「补过」这件事显示给运营，不能静默归一化。
+ * 后端数据完整时 warning 清空，不打扰人。
+ */
+const applyBackendDiscountRows = (raw: unknown) => {
+  const resolution = resolveMultiRecipeDiscountRows(raw);
+  form.multiRecipeDiscounts = resolution.rows;
+  multiRecipeLoadWarning.value = resolution.normalized
+    ? '读取到的多份优惠档位不完整或含非法值，已用默认四档补齐；请核对每一档后再保存。'
+    : '';
+};
+
+/**
  * 交付物候选项从**选项字典**读，不在这里写死。
  *
  * 这一页本身就是在拆"前端各写一份清单"的问题，
@@ -499,6 +539,7 @@ const loadConfig = async () => {
   loading.value = true;
   saveError.value = '';
   multiRecipeError.value = '';
+  multiRecipeLoadWarning.value = '';
   try {
     const data = await customRecipeApi.getConfig();
     form.feeAmount = Number(data?.feeAmount ?? 300);
@@ -528,12 +569,12 @@ const loadConfig = async () => {
     form.orderNoPrefix = data?.orderNoPrefix ?? 'CR';
 
     // ===== 2026-10-20 多份购买 =====
-    // 后端存的是小数（0.05），页面显示百分比（5）；缺档位时补默认四档
+    // 后端存的是小数（0.05），页面显示百分比（5）；缺档位时补默认四档并提示
     form.multiRecipeEnabled = Boolean(data?.multiRecipeEnabled ?? false);
-    form.maxRecipeQuantity = Number(data?.maxRecipeQuantity ?? 5);
-    form.multiRecipeDiscounts = buildMultiRecipeDiscountRows(
-      data?.multiRecipeDiscounts,
+    form.maxRecipeQuantity = Number(
+      data?.maxRecipeQuantity ?? MAX_MULTI_RECIPE_QUANTITY,
     );
+    applyBackendDiscountRows(data?.multiRecipeDiscounts);
     form.dailyDesignMinutes = Number(data?.dailyDesignMinutes ?? 480);
     form.minutesPerRecipe = Number(data?.minutesPerRecipe ?? 96);
 
@@ -606,9 +647,7 @@ const handleSave = async () => {
     if (data) {
       form.multiRecipeEnabled = Boolean(data.multiRecipeEnabled);
       form.maxRecipeQuantity = Number(data.maxRecipeQuantity);
-      form.multiRecipeDiscounts = buildMultiRecipeDiscountRows(
-        data.multiRecipeDiscounts,
-      );
+      applyBackendDiscountRows(data.multiRecipeDiscounts);
       form.dailyDesignMinutes = Number(data.dailyDesignMinutes);
       form.minutesPerRecipe = Number(data.minutesPerRecipe);
     }

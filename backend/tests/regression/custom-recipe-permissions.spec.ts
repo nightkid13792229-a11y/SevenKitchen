@@ -33,6 +33,12 @@ describe('后台定制食谱 · 权限', () => {
     )
   })
 
+  it('★ 多份批量交付仅管理员', () => {
+    expect(blockAfter("@Post('orders/:orderId/deliver-batch')")).toContain(
+      'AdminGuard',
+    )
+  })
+
   it('★ 改配置仅管理员', () => {
     expect(blockAfter("@Put('config')")).toContain('AdminGuard')
   })

@@ -86,7 +86,7 @@ export const CUSTOM_RECIPE_ACTIONS = {
   APPLY_AFTERSALE: 'APPLY_AFTERSALE',
   /** 查看定制食谱（交付物） */
   VIEW_DELIVERY: 'VIEW_DELIVERY',
-  /** 去订购成品（用定制费抵扣） */
+  /** 去订购成品 */
   ORDER_FINISHED_FOOD: 'ORDER_FINISHED_FOOD',
 
   /**
@@ -110,8 +110,6 @@ export const CUSTOM_RECIPE_ACTIONS = {
   CANCEL_ADMIN: 'CANCEL_ADMIN',
   /** 后台：处理售后 */
   RESOLVE_AFTERSALE: 'RESOLVE_AFTERSALE',
-  /** 后台：恢复抵扣额度 */
-  RESTORE_CREDIT: 'RESTORE_CREDIT',
 } as const;
 
 export type CustomRecipeActionCode =
@@ -392,22 +390,6 @@ export function resolveStaffActions(
       label: '处理售后',
       enabled: true,
       style: 'primary',
-    });
-  }
-
-  // ---- 恢复抵扣额度（仅管理员；已经用掉额度时才需要）----
-  if (
-    isAdmin &&
-    (ctx.status === CustomRecipeStatus.DELIVERED ||
-      ctx.status === CustomRecipeStatus.COMPLETED)
-  ) {
-    actions.push({
-      code: CUSTOM_RECIPE_ACTIONS.RESTORE_CREDIT,
-      label: '恢复抵扣额度',
-      enabled: true,
-      confirmText: '用于人工退款场景：恢复后顾客可以再次使用这部分额度抵扣。确定吗？',
-      danger: true,
-      style: 'line',
     });
   }
 

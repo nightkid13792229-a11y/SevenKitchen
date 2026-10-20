@@ -16,7 +16,9 @@ vi.mock('../utils/api', async () => {
 import {
   cancelOrder,
   confirmReceipt,
+  fetchCustomRecipeQuote,
   fetchDelivery,
+  fetchNextDeliveryDate,
   fetchOrderDetail,
   fetchPublicConfig,
   findAction,
@@ -126,23 +128,39 @@ describe('定制食谱 API 层', () => {
   })
 
   describe('fetchPublicConfig', () => {
-    it('成功时返回设置本体', async () => {
+    it('成功时返回设置本体，且不再包含成品抵扣字段', async () => {
       mockedRequest.mockResolvedValue({
         code: 0,
-        data: { feeAmount: 300, creditAmount: 150, deliveryWorkDays: 3 },
+        data: {
+          feeAmount: 300,
+          deliveryWorkDays: 3,
+          multiRecipeEnabled: true,
+          maxRecipeQuantity: 4,
+          multiRecipeDiscounts: [
+            { quantity: 2, discountRate: 0.05, label: '2 份享 95 折' },
+          ],
+        },
       } as never)
 
       const config = await fetchPublicConfig()
 
       expect(config?.feeAmount).toBe(300)
-      expect(config?.creditAmount).toBe(150)
+      expect(config?.deliveryWorkDays).toBe(3)
+      // 2026-10-20 多份购买：确认页需要开关、上限和优惠档位
+      expect(config?.multiRecipeEnabled).toBe(true)
+      expect(config?.maxRecipeQuantity).toBe(4)
+      expect(config?.multiRecipeDiscounts).toEqual([
+        { quantity: 2, discountRate: 0.05, label: '2 份享 95 折' },
+      ])
+      // 2026-10-20：抵扣机制已取消，类型里不再有 creditAmount
+      expect(config).not.toHaveProperty('creditAmount')
     })
 
     it('★ 失败时**抛错**，而不是静默返回默认值', async () => {
       mockedRequest.mockRejectedValue(new Error('network') as never)
 
       /**
-       * 这里的默认值包含**定制费与可抵扣金额**。
+       * 失败时的兜底会直接变成顾客看到的价格。
        * 后台把定制费改成 500，接口一挂却显示默认的 300 ——
        * 顾客会照着错的价格下单。所以宁可报"加载失败"。
        */
@@ -156,6 +174,95 @@ describe('定制食谱 API 层', () => {
       } as never)
 
       await expect(fetchPublicConfig()).rejects.toThrow('配置读取失败')
+    })
+  })
+
+  describe('fetchNextDeliveryDate', () => {
+    it('带 quantity 时把份数拼进查询串，让后端按 N 份算交期', async () => {
+      mockedRequest.mockResolvedValue({
+        code: 0,
+        data: {
+          quantity: 3,
+          scheduledDate: '2026-10-19',
+          estimatedDeliveryDate: '2026-10-21',
+          deliveryWorkDays: 2,
+        },
+      } as never)
+
+      const delivery = await fetchNextDeliveryDate(3)
+
+      expect(delivery.estimatedDeliveryDate).toBe('2026-10-21')
+      const arg = mockedRequest.mock.calls[0][0] as {
+        url: string
+        method: string
+      }
+      expect(arg.url).toBe('/custom-recipe/next-delivery-date?quantity=3')
+      expect(arg.method).toBe('GET')
+    })
+
+    it('不传 quantity 时保持原来的无查询串调用（单份行为不变）', async () => {
+      mockedRequest.mockResolvedValue({
+        code: 0,
+        data: {
+          scheduledDate: '2026-10-19',
+          estimatedDeliveryDate: '2026-10-20',
+          deliveryWorkDays: 1,
+        },
+      } as never)
+
+      await fetchNextDeliveryDate()
+
+      const arg = mockedRequest.mock.calls[0][0] as { url: string }
+      expect(arg.url).toBe('/custom-recipe/next-delivery-date')
+    })
+
+    it('份数不合法时发请求前就拒绝', async () => {
+      await expect(fetchNextDeliveryDate(0)).rejects.toThrow('份数不正确')
+      await expect(fetchNextDeliveryDate(1.5)).rejects.toThrow('份数不正确')
+      expect(mockedRequest).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('fetchCustomRecipeQuote', () => {
+    it('用 GET /custom-recipe/quote?quantity=N 取后端权威报价', async () => {
+      mockedRequest.mockResolvedValue({
+        code: 0,
+        data: {
+          quantity: 3,
+          unitAmount: 300,
+          originalAmount: 900,
+          discountRate: 0.08,
+          discountAmount: 72,
+          payableAmount: 828,
+        },
+      } as never)
+
+      const quote = await fetchCustomRecipeQuote(3)
+
+      expect(quote.payableAmount).toBe(828)
+      const arg = mockedRequest.mock.calls[0][0] as {
+        url: string
+        method: string
+      }
+      expect(arg.url).toBe('/custom-recipe/quote?quantity=3')
+      expect(arg.method).toBe('GET')
+    })
+
+    it('后端拒绝时抛错，不自己算一个价格兜底', async () => {
+      mockedRequest.mockResolvedValue({
+        code: 400,
+        message: '多份购买暂未开放，请选择 1 份',
+      } as never)
+
+      await expect(fetchCustomRecipeQuote(2)).rejects.toThrow(
+        '多份购买暂未开放',
+      )
+    })
+
+    it('份数不合法时发请求前就拒绝', async () => {
+      await expect(fetchCustomRecipeQuote(0)).rejects.toThrow('份数不正确')
+      await expect(fetchCustomRecipeQuote(1.5)).rejects.toThrow('份数不正确')
+      expect(mockedRequest).not.toHaveBeenCalled()
     })
   })
 
@@ -241,6 +348,52 @@ describe('定制食谱 API 层', () => {
 
       const arg = mockedRequest.mock.calls[0][0] as { url: string }
       expect(arg.url).toBe('/custom-recipe/orders/CR1/delivery')
+    })
+
+    it('★ 多份批次原样返回（batchId + N 份 items），不压成单份', async () => {
+      mockedRequest.mockResolvedValue({
+        code: 0,
+        data: {
+          batchId: 'batch-1',
+          version: 1,
+          deliveredAt: '2026-10-21T02:00:00.000Z',
+          confirmedAt: null,
+          itemCodes: ['RECIPE', 'SHOPPING_SOP'],
+          items: [
+            {
+              id: 'item-1',
+              recipeId: 'R1',
+              recipeName: '鸡肉南瓜',
+              itemCodes: ['RECIPE'],
+              content: { recipe: { name: '鸡肉南瓜' } },
+            },
+            {
+              id: 'item-2',
+              recipeId: 'R2',
+              recipeName: '鸭肉西兰花',
+              itemCodes: ['RECIPE'],
+              content: { recipe: { name: '鸭肉西兰花' } },
+            },
+          ],
+        },
+      } as never)
+
+      const delivery: any = await fetchDelivery('CR1')
+
+      expect(delivery.batchId).toBe('batch-1')
+      expect(delivery.items).toHaveLength(2)
+      expect(delivery.items[1].recipeId).toBe('R2')
+    })
+
+    it('★ 带 recipeId 时拼进查询串（页面按份选择，后端可忽略）', async () => {
+      mockedRequest.mockResolvedValue({ code: 0, data: {} } as never)
+
+      await fetchDelivery('CR1', 2, 'CR1759100000002')
+
+      const arg = mockedRequest.mock.calls[0][0] as { url: string }
+      expect(arg.url).toBe(
+        '/custom-recipe/orders/CR1/delivery?version=2&recipeId=CR1759100000002',
+      )
     })
   })
 

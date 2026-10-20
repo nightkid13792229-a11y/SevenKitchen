@@ -83,13 +83,14 @@ describe('custom recipe customer flow', () => {
     }
   })
 
-  it('keeps the fee and credit amount driven by the backend config', () => {
+  it('keeps the fee and delivery work days driven by the backend config', () => {
     const submit = read(`${PAGE_DIR}/index.vue`)
 
     expect(submit).toContain("url: '/custom-recipe-config'")
     expect(submit).toContain('feeAmount')
-    expect(submit).toContain('creditAmount')
     expect(submit).toContain('deliveryWorkDays')
+    // 2026-10-20：成品抵扣下线，页面不再读这个字段
+    expect(submit).not.toContain('creditAmount')
     // 定制费不得再写死在页面里
     expect(submit).not.toContain('提交定制订单 ¥299')
   })
@@ -948,8 +949,10 @@ describe('custom recipe duplicate submit guard · 防连点', () => {
     expect(flagIndex).toBeLessThan(firstAwaitIndex)
   })
 
-  it('按钮不默认置灰，靠 submitting 守卫防重复', () => {
-    expect(submit).toContain('{{ submitting ? \'提交中…\' : `确认并支付 ¥${feeText}` }}')
+  it('按钮文案跟随当前支付金额，并保留 submitting 守卫防重复', () => {
+    // 2026-10-20：多份打开时按钮金额来自后端报价，单份仍用配置里的定制费
+    expect(submit).toContain('{{ payButtonText }}')
+    expect(submit).toContain(':disabled="!canSubmit"')
     expect(submit).toContain('if (submitting.value) return;')
   })
 
@@ -1479,11 +1482,14 @@ describe('定制页 · Banner 融入选狗器', () => {
 describe('定制页 · 交付说明与支付块', () => {
   const page = read(`${PAGE_DIR}/index.vue`)
 
-  it('交付与抵扣整块已删（改由确认页展示）', () => {
+  it('交付与抵扣整块已删（定制页只保留定制费）', () => {
     /**
      * 2026-10-05 老板决定：定制页不再显示"预计交付 + 成品抵扣"。
      * 两个理由：① 提交前那个日期是前端估的、不含节假日，会与后端权威日期打架；
      * ② 确认页（提交成功页）本来就完整显示这两项。
+     *
+     * 2026-10-20：成品抵扣整体下线，成功页也不再展示额度；
+     * 预计交付仍在确认页与成功页展示。
      */
     expect(page).not.toContain('deliveryHint')
     expect(page).not.toContain('deliveryNote')
@@ -1491,10 +1497,10 @@ describe('定制页 · 交付说明与支付块', () => {
     // 文案断言要用去注释后的源码（删块说明的注释里会提到这两项）
     expect(stripComments(page)).not.toContain('预计交付')
     expect(stripComments(page)).not.toContain('成品抵扣')
-    // 确认页确实还在展示这两项（否则顾客就再也看不到了）
+    // 预计交付仍然由确认页/成功页展示
     const success = read(`${PAGE_DIR}/success.vue`)
     expect(success).toContain('预计交付')
-    expect(success).toContain('成品抵扣额度')
+    expect(success).not.toContain('成品抵扣额度')
   })
 
   it('pay-next-info 整块已删，底部固定栏保留', () => {
@@ -1582,14 +1588,16 @@ describe('定制页 · 第二轮精简（2026-10-05）', () => {
     expect(scan).not.toContain("'xlsx'")
   })
 
-  it('成品抵扣说明已随整块移出定制页（第 12 项与第 14 项冲突，以第 14 项为准）', () => {
+  it('成品抵扣说明已彻底下线（2026-10-20）', () => {
     /**
      * 老板 2026-10-05 先要求改抵扣文案（第 12 项），随后又问"整块能不能删"（第 14 项）
-     * 并选定**整块删掉**。所以定制页不再有这句文案，
-     * 抵扣由确认页展示（那里有额度 + 完整说明）。
+     * 并选定**整块删掉**。2026-10-20 又把抵扣机制整体取消：
+     * 定制页、确认页、成功页都不再出现任何抵扣说明。
      */
     expect(page).not.toContain('可用作抵扣该食谱的鲜食成品费用')
-    expect(read(`${PAGE_DIR}/success.vue`)).toContain('成品抵扣额度')
+    expect(read(`${PAGE_DIR}/success.vue`)).not.toContain('成品抵扣额度')
+    expect(read(`${PAGE_DIR}/confirm.vue`)).not.toContain('成品抵扣')
+    expect(read(`${PAGE_DIR}/order-detail.vue`)).not.toContain('成品抵扣')
   })
 
   it('提交按钮写「确认订单」，不再带费用小字（2026-10-19 老板确认）', () => {

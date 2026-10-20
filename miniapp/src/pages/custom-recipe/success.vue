@@ -45,13 +45,6 @@
         </view>
       </view>
 
-      <!-- 抵扣额度：后台把可抵扣金额设为 0 时整块不出现 -->
-      <view v-if="creditAmountText" class="credit-card">
-        <text class="credit-title">成品抵扣额度</text>
-        <text class="credit-amount">{{creditAmountText}}</text>
-        <text class="credit-desc">从这道定制食谱下成品单时可抵扣货款，没用完的额度可以下次继续用</text>
-      </view>
-
       <view class="payment-info">
         <!-- 标题按订单状态变：待付款才说"下一步：支付"，金额仍来自后台配置；
              已付款/已取消还说"下一步：支付"会让顾客以为要再付一次 -->
@@ -127,9 +120,6 @@ interface CustomRecipeOrderDetail {
   estimatedDeliveryDate?: string | null;
   status?: string;
   amount?: number;
-  creditAmount?: number;
-  creditUsed?: number;
-  creditRemaining?: number;
   recipeId?: string | null;
   createdAt?: string | null;
   /** 后端新增：支付截止时间（ISO，可能为 null） */
@@ -151,7 +141,6 @@ const {
 
 // 提交页带过来的金额，作为详情接口返回前的兜底展示
 const initialAmount = ref<number | null>(null);
-const initialCreditAmount = ref<number | null>(null);
 
 /**
  * 支付超时分钟数（0 = 不自动关单）。
@@ -168,10 +157,6 @@ onLoad((options: any) => {
   if (options.amount !== undefined && options.amount !== '') {
     const parsed = Number(options.amount);
     if (Number.isFinite(parsed)) initialAmount.value = parsed;
-  }
-  if (options.creditAmount !== undefined && options.creditAmount !== '') {
-    const parsed = Number(options.creditAmount);
-    if (Number.isFinite(parsed)) initialCreditAmount.value = parsed;
   }
 
   void loadOrderDetail();
@@ -252,17 +237,6 @@ const paymentHint = computed(() =>
     paymentTimeoutMinutes: paymentTimeoutMinutes.value,
   }),
 );
-
-const creditAmountText = computed(() => {
-  const remaining =
-    orderInfo.value.creditRemaining ??
-    (orderInfo.value.creditAmount !== undefined
-      ? Number(orderInfo.value.creditAmount) - Number(orderInfo.value.creditUsed || 0)
-      : initialCreditAmount.value);
-  if (remaining === null || remaining === undefined) return '';
-  const amount = Number(remaining);
-  return amount > 0 ? `¥${formatAmount(amount)}` : '';
-});
 
 // ==================== 支付 ====================
 
@@ -475,37 +449,6 @@ const goHome = () => {
   text-align: right;
   font-weight: 600;
   color: var(--sk-ink, #26261f);
-}
-
-/* ---------- 抵扣额度 ---------- */
-.credit-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 36rpx 32rpx;
-  margin-bottom: 24rpx;
-  background: var(--sk-gold-soft, #f6efe0);
-  border: 1rpx solid rgba(176, 141, 79, 0.45);
-  border-radius: var(--sk-radius-card, 28rpx);
-}
-
-.credit-title {
-  font-size: 26rpx;
-  color: var(--sk-ink-2, #6b6653);
-}
-
-.credit-amount {
-  margin: 10rpx 0 14rpx;
-  font-size: 56rpx;
-  font-weight: 700;
-  color: var(--sk-gold, #b08d4f);
-}
-
-.credit-desc {
-  font-size: 24rpx;
-  line-height: 1.6;
-  color: var(--sk-ink-2, #6b6653);
-  text-align: center;
 }
 
 /* ---------- 付款 ---------- */

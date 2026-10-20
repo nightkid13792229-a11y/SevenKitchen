@@ -81,7 +81,6 @@ import {
   buildTastingPackOrderSnapshot,
   TASTING_PACK_SNAPSHOT_KIND,
 } from '../tasting-pack/tasting-pack-snapshot';
-import { CustomRecipeService } from '../custom-recipe/custom-recipe.service';
 
 // Re-export for convenience
 export { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY };
@@ -327,13 +326,6 @@ export class OrderService {
     private readonly tastingPackService?: TastingPackService,
     @Optional()
     private readonly tastingPackStockService?: TastingPackStockService,
-    /**
-     * 定制费抵扣成品货款（产品线 ③）。
-     * 用 @Optional 注入：额度台账缺失时下单照常，只是不做抵扣，
-     * 不让一个可选能力把主下单链路绑死。
-     */
-    @Optional()
-    private readonly customRecipeService?: CustomRecipeService,
     /**
      * 体重管理计划（阶段 D3）。
      *
@@ -844,86 +836,6 @@ export class OrderService {
 
   private roundMoney(value: number): number {
     return Math.round((value + Number.EPSILON) * 100) / 100;
-  }
-
-  // ==================== 定制费抵扣成品货款 ====================
-
-  /**
-   * 计算这单能用掉多少「定制费抵扣」。
-   *
-   * 已确认的业务口径（**2026-10-18 按 V1 修正**）：
-   *   - **抵的是"最终总费用"，含运费** —— 09-25 那个"只抵货款"已被 V1 推翻
-   *   - 额度绑定它产出的那道定制食谱（拿别的食谱抵不了）
-   *   - 余额结转：总额不够就只抵剩下的，余额留到下次
-   *   - **金额端拆成两段减**（先货款、后运费），
-   *     以保证 `货款 + 运费 = 总额` 这条校验规则不变，
-   *     退款/结算/财务报表都不用改
-   *
-   * 返回 null 表示这单没有可用抵扣。
-   */
-  private async resolveCustomRecipeCredit(params: {
-    customerId?: string;
-    recipeId?: string;
-    /** 货款（不含运费） */
-    amountProduct: number;
-    /** 运费；抵扣抵完货款后还能继续抵它（V1 口径） */
-    amountShipping?: number;
-  }): Promise<{
-    customRecipeOrderId: string;
-    applied: number;
-    originalProductAmount: number;
-  } | null> {
-    if (!this.customRecipeService) return null;
-    if (!params.customerId || !params.recipeId) return null;
-    if (!Number.isFinite(params.amountProduct) || params.amountProduct <= 0) {
-      return null;
-    }
-
-    const credit = await this.customRecipeService.findUsableCredit({
-      customerId: params.customerId,
-      recipeId: params.recipeId,
-    });
-    if (!credit || credit.remaining <= 0) return null;
-
-    /**
-     * 能抵多少 = min(剩余额度, 货款 + 运费)。
-     *
-     * ⚠️ 2026-10-18 前这里只取 `amountProduct` —— 运费不参与，
-     * 于是"满 300 的额度抵一张 20 元运费的订单"时，运费永远抵不掉，
-     * 跟 V1 的"减免最终总费用"对不上。
-     */
-    const creditCap = this.roundMoney(
-      Math.max(0, params.amountProduct) + Math.max(0, params.amountShipping ?? 0),
-    );
-    const applied = this.roundMoney(Math.min(credit.remaining, creditCap));
-    if (applied <= 0) return null;
-
-    return {
-      customRecipeOrderId: credit.customRecipeOrderId,
-      applied,
-      originalProductAmount: this.roundMoney(params.amountProduct),
-    };
-  }
-
-  /**
-   * 从价格快照里读出**报价时已经算好**的抵扣。
-   *
-   * 下单阶段一律以快照为准、不重新计算：顾客看到多少就付多少，
-   * 也避免"下单瞬间后台改了可抵扣金额"导致页面价与实付价不一致。
-   */
-  private readCustomRecipeCreditFromSnapshot(
-    pricingResult: any,
-  ): { customRecipeOrderId: string; applied: number } | null {
-    const applied = Number(pricingResult?.creditAmountApplied ?? 0);
-    const customRecipeOrderId = pricingResult?.customRecipeCreditOrderId;
-
-    if (!customRecipeOrderId) return null;
-    if (!Number.isFinite(applied) || applied <= 0) return null;
-
-    return {
-      customRecipeOrderId: String(customRecipeOrderId),
-      applied: this.roundMoney(applied),
-    };
   }
 
   /**
@@ -1534,71 +1446,17 @@ export class OrderService {
       addressId, // ✅ 修复：使用从快照中获取的addressId
     );
 
-    // 12. 扣减定制费抵扣额度
-    //
-    // 顺序刻意是"先扣额度、再落订单"：额度扣不动就不该生成一张打过折的订单，
-    // 否则等于白送。反过来如果落单失败，下面会把额度还回去，不留悬空扣减。
-    const creditFromSnapshot = this.readCustomRecipeCreditFromSnapshot(
-      pricingResult,
-    );
-    let consumedCredit: { consumed: number; remaining: number } | null = null;
+    // 12. 保存订单
+    await this.orderRepository.save(order);
 
-    if (creditFromSnapshot && this.customRecipeService) {
-      consumedCredit = await this.customRecipeService.consumeCredit({
-        orderIdOrId: creditFromSnapshot.customRecipeOrderId,
-        amount: creditFromSnapshot.applied,
-      });
-    }
-
-    try {
-      // 13. 保存订单
-      await this.orderRepository.save(order);
-
-      // 13.1 把抵扣明细写到订单上（仅用于展示与审计，不参与金额计算）
-      if (
-        creditFromSnapshot &&
-        consumedCredit &&
-        consumedCredit.consumed > 0
-      ) {
-        await this.prisma.order.update({
-          where: { id: orderId },
-          data: {
-            creditAmountApplied: consumedCredit.consumed,
-            customRecipeCreditOrderId: creditFromSnapshot.customRecipeOrderId,
-          },
-        });
-      }
-    } catch (error) {
-      // 落单失败：把刚扣掉的额度还回去，别让顾客白丢额度
-      if (
-        creditFromSnapshot &&
-        consumedCredit &&
-        consumedCredit.consumed > 0 &&
-        this.customRecipeService
-      ) {
-        await this.customRecipeService
-          .restoreCredit({
-            orderIdOrId: creditFromSnapshot.customRecipeOrderId,
-            amount: consumedCredit.consumed,
-          })
-          .catch((restoreError) => {
-            console.error(
-              '[CreateOrderFromSnapshot] 落单失败后归还抵扣额度也失败，需人工核对:',
-              restoreError,
-            );
-          });
-      }
-      throw error;
-    }
-
-    // 14. 标记快照已使用
+    // 13. 标记快照已使用
     await this.pricingSnapshotRepository.markAsUsed(snapshotId);
     console.log(
       '[CreateOrderFromSnapshot] Snapshot marked as used:',
       snapshotId,
     );
 
-    // 15. 记录状态转换
+    // 14. 记录状态转换
     await this.logStatusTransition(
       order,
       OrderStatus.INIT,
@@ -2345,12 +2203,6 @@ export class OrderService {
     amountShipping: number;
     amountTotal: number;
     snapshotId?: string; // ✅ 新增：快照ID
-    /** 本单用掉的定制费抵扣（元）。已含在 amountProduct 里 */
-    creditAmountApplied?: number;
-    /** 抵扣前的原始货款（元），用于展示"原价 − 抵扣" */
-    creditOriginalProductAmount?: number;
-    /** 抵扣来源定制单 id */
-    customRecipeCreditOrderId?: string;
     pricingBreakdown?: {
       costIngredients: number;
       costPackaging: number;
@@ -2568,102 +2420,23 @@ export class OrderService {
     });
 
     /**
-     * 定制费抵扣成品货款。
-     *
-     * DIY 制作单只是免费的算量工具、不产生订单，因此不参与抵扣。
-     * 查询失败一律降级为"本单不抵扣"，绝不让一个可选的优惠动作拦住报价。
+     * 定制费抵扣成品货款已于 2026-10-20 整体取消：
+     * 报价就是货款 + 运费，不再计算、记录或返回任何抵扣字段。
      */
-    const customRecipeCredit = isDiySheetPreview
-      ? null
-      : await this.resolveCustomRecipeCredit({
-          customerId: dto.customerId,
-          recipeId: itemDto.recipeId,
-          amountProduct: pricing.productPrice,
-          // V1：抵的是最终总费用，所以要把运费一起算进可抵上限
-          amountShipping: shippingFee,
-        }).catch((error) => {
-          console.error(
-            '[PreviewPricing] 定制抵扣查询失败，按不抵扣处理:',
-            error,
-          );
-          return null;
-        });
-
-    /**
-     * 抵扣口径（2026-10-18 按 V1 改）。
-     *
-     * ## 改之前是错的
-     *
-     * 旧注释写着「只抵货款，不抵运费」—— 那是 **09-25 的决定**，
-     * 已被 2026-10-17 的 **V1 推翻**。老板原话：
-     *
-     *   "不要做复杂了，就是抵扣额度可以用于减免用户最终在成品订单中支付的总费用"
-     *
-     * 也就是**含运费**。
-     *
-     * ## 怎么拆才不破坏账
-     *
-     * 订单的金额校验规则是 `货款 + 运费 = 总额`，退款/结算/报表都按这个读。
-     * 所以不能直接把运费清零，而是把抵扣额**先抵货款、抵不完再抵运费**：
-     *
-     * ```
-     * 抵货款 = min(抵扣额, 货款)
-     * 抵运费 = 抵扣额 - 抵货款        ← 只有货款抵完了才动运费
-     * ```
-     *
-     * 这样 `净货款 + 净运费 = 净总额` 仍然成立，下游一处都不用改。
-     */
-    /**
-     * ⚠️ **再夹一次上限**，不能只依赖 resolver 那边。
-     *
-     * resolver 已经 cap 到「货款 + 运费」，但这两处是**分开两段代码**——
-     * 将来谁改了其中一处（比如加了"最多抵 X%"），另一处就会算出负运费。
-     * 金额算错是**不可回滚的**（顾客已经付了钱），所以这里再兜一次。
-     */
-    const maxApplicable = this.roundMoney(
-      Math.max(0, pricing.productPrice) + Math.max(0, shippingFee),
-    );
-    const safeApplied = customRecipeCredit
-      ? Math.min(Math.max(0, customRecipeCredit.applied), maxApplicable)
-      : 0;
-
-    const creditAppliedToProduct = customRecipeCredit
-      ? Math.min(safeApplied, pricing.productPrice)
-      : 0;
-    const creditAppliedToShipping = customRecipeCredit
-      ? this.roundMoney(safeApplied - creditAppliedToProduct)
-      : 0;
-
-    const netProductAmount = this.roundMoney(
-      pricing.productPrice - creditAppliedToProduct,
-    );
-    const netShippingAmount = this.roundMoney(shippingFee - creditAppliedToShipping);
+    const amountProduct = this.roundMoney(pricing.productPrice);
+    const amountShipping = this.roundMoney(shippingFee);
 
     const pricingResult = {
-      amountProduct: netProductAmount,
-      amountShipping: netShippingAmount,
-      amountTotal: this.roundMoney(netProductAmount + netShippingAmount),
-      // 抵扣元数据：金额本身已经含在（净）金额里，这些只用于展示与审计
-      ...(customRecipeCredit
-        ? {
-            creditAmountApplied: this.roundMoney(safeApplied),
-            /** 其中抵在货款上的部分（2026-10-18 拆分，供对账用） */
-            creditAppliedToProduct: this.roundMoney(creditAppliedToProduct),
-            /** 其中抵在运费上的部分（V1：抵扣含运费） */
-            creditAppliedToShipping: this.roundMoney(creditAppliedToShipping),
-            creditOriginalProductAmount:
-              customRecipeCredit.originalProductAmount,
-            customRecipeCreditOrderId: customRecipeCredit.customRecipeOrderId,
-          }
-        : {}),
+      amountProduct,
+      amountShipping,
+      amountTotal: this.roundMoney(amountProduct + amountShipping),
       pricingBreakdown: {
         costIngredients: pricing.costIngredients,
         costPackaging: pricing.costPackaging,
         costLabor: pricing.costLabor,
         costOverhead: pricing.costOverhead,
         totalProductCost: pricing.totalProductCost,
-        // ⚠️ 这里是**成本口径的原始货款**，不做抵扣：
-        // 成本与毛利的解释必须保持原样，抵扣只是"少收了顾客多少钱"。
+        // 成本口径的原始货款：成本与毛利按它解释，不能被售价口径改写
         productPrice: pricing.productPrice,
         weightPackagingG: pricing.weightPackagingG,
         ingredientDetails: pricing.ingredientDetails,
@@ -3024,58 +2797,7 @@ export class OrderService {
     // 否则货被占着却没人买，库存会越用越少
     await this.releaseTastingPackStockIfNeeded(savedOrder, reason);
 
-    // 这单如果抵扣过定制费，关单后要把额度还回去
-    await this.restoreCustomRecipeCreditIfNeeded(savedOrder, reason);
-
     return savedOrder;
-  }
-
-  /**
-   * 关单时把用掉的定制费抵扣额度还回去（2026-09-28）。
-   *
-   * 真实缺陷：顾客用定制食谱下成品单时抵扣了定制费，一旦这单取消或退款，
-   * 额度**不会自动回来** —— 只有后台详情页一个手动的「恢复额度」按钮。
-   * 顾客是看不见那个按钮的，等于钱被吞了。
-   *
-   * 幂等性交给 CustomRecipeService.restoreCredit 的 CAS（按 creditUsed 扣减），
-   * 重复调用不会多还。
-   */
-  private async restoreCustomRecipeCreditIfNeeded(
-    order: Order,
-    reason: string,
-  ): Promise<void> {
-    if (!this.customRecipeService) return;
-
-    try {
-      const snapshot = await this.prisma.order.findUnique({
-        where: { id: order.id },
-        select: {
-          creditAmountApplied: true,
-          customRecipeCreditOrderId: true,
-        },
-      });
-
-      const customOrderId = snapshot?.customRecipeCreditOrderId;
-      const applied = Number(snapshot?.creditAmountApplied ?? 0);
-
-      if (!customOrderId || !Number.isFinite(applied) || applied <= 0) {
-        return;
-      }
-
-      const result = await this.customRecipeService.restoreCredit({
-        orderIdOrId: String(customOrderId),
-        amount: applied,
-      });
-
-      this.logger.log(
-        `[CustomRecipeCredit] 订单 ${order.id} 关闭，退回抵扣额度 ${result?.restored ?? 0}`,
-      );
-    } catch (error: any) {
-      // 退回失败不能影响关单，但必须留痕 —— 否则顾客的钱静默消失
-      this.logger.error(
-        `[CustomRecipeCredit] 订单 ${order.id} 关闭时退回抵扣额度失败：${error?.message}`,
-      );
-    }
   }
 
   /**

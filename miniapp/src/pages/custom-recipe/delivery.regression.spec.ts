@@ -217,8 +217,18 @@ describe('交付内容页 · 只渲染不计算', () => {
   });
 
   it('★ 两页之间能互相跳转（拆了页不等于要顾客自己找路）', () => {
-    expect(source).toContain('delivery-shopping');
-    expect(shoppingSource).toContain('pages/custom-recipe/delivery');
+    /**
+     * 2026-10-21 多份交付：跳转路径统一由 `utils/custom-recipe-delivery.ts`
+     * 拼接（要带 recipeId），页面里只剩 helper 调用 —— 所以路径断言
+     * 从两页源码移到 helper 源码，意图不变。
+     */
+    const helperSource = stripComments(
+      read('src/utils/custom-recipe-delivery.ts'),
+    );
+    expect(source).toContain('buildDeliveryShoppingUrl');
+    expect(shoppingSource).toContain('buildDeliveryDetailUrl');
+    expect(helperSource).toContain('/pages/custom-recipe/delivery-shopping');
+    expect(helperSource).toContain('/pages/custom-recipe/delivery');
     /**
      * 回第 1 页用 `redirectTo` 而不是 `navigateTo` ——
      * 后者会叠成"列表 → 食谱 → 采购 → 食谱"三层，

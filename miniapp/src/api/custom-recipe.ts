@@ -76,10 +76,6 @@ export interface CustomRecipeOrderDetail {
   targetGoal?: string | null;
   scheduledDate?: string | null;
   amount?: number | null;
-  creditAmount?: number | null;
-  creditUsed?: number | null;
-  /** 后端算好的抵扣余额；**前端不要再自己相减** */
-  creditRemaining?: number | null;
   recipeId?: string | null;
   recipeName?: string | null;
   recipeCoverImageUrl?: string | null;
@@ -92,6 +88,13 @@ export interface CustomRecipeOrderDetail {
   deliveredAt?: string | null;
   /** 交付摘要（批次 2.4）；未交付时为 null */
   delivery?: DeliverySummary | null;
+  /**
+   * 多份交付摘要（2026-10-21）。
+   *
+   * 多份订单整批交付**不写**老的单份交付表，所以这类订单 `delivery` 是 null，
+   * 信息只在这里；老订单没有批次，这个字段为 null / 不返回。
+   */
+  deliveryBatch?: DeliveryBatchSummary | null;
   [key: string]: unknown;
 }
 
@@ -200,10 +203,87 @@ export interface DeliverySummary {
   autoCompleteAt?: string | null;
 }
 
+/**
+ * 多份交付摘要中的一份（订单详情用，**不含内容快照**）。
+ *
+ * `recipeId` 是**业务编号**（CR 开头），不是数据库主键 —— 路由、DIY、
+ * 售后都用它。`deliveryItemId` 是交付明细主键，后续按份售后会用到。
+ */
+export interface DeliveryBatchItemSummary {
+  deliveryItemId: string;
+  recipeId: string | null;
+  recipeName: string | null;
+  recipeCoverImageUrl: string | null;
+  itemCodes: string[];
+}
+
+/**
+ * 多份交付摘要（订单详情用）。
+ *
+ * 一次整批交付 = 一个批次 + N 份明细；`items` 的顺序由后端按交付顺序给出。
+ */
+export interface DeliveryBatchSummary {
+  id: string;
+  version: number;
+  deliveredAt: string;
+  confirmedAt?: string | null;
+  autoCompleteAt?: string | null;
+  items: DeliveryBatchItemSummary[];
+}
+
+/**
+ * 多份交付内容中的一份（交付内容接口用）。
+ *
+ * `content` 是这份食谱交付时冻结的完整快照，结构同 `DeliveryContent`。
+ */
+export interface DeliveryBatchContentItem {
+  id: string;
+  recipeId: string | null;
+  recipeName: string | null;
+  recipeCoverImageUrl: string | null;
+  itemCodes: string[];
+  content: DeliveryContent;
+}
+
+/**
+ * 多份交付内容响应（2026-10-21）。
+ *
+ * 与老的单份 `OrderDelivery` 形状**刻意不同**：有 `batchId` 就表示这是
+ * 一次整批交付，页面按 `items` 选份渲染。老订单仍然返回 `OrderDelivery`，
+ * 两个形状共同组成 `fetchDelivery` 的联合返回类型。
+ */
+export interface DeliveryBatchContent {
+  batchId: string;
+  version: number;
+  deliveredAt: string;
+  confirmedAt?: string | null;
+  /** 批次级交付物并集；判断"这一份有没有采购单"要用 `items[].itemCodes` */
+  itemCodes: string[];
+  items: DeliveryBatchContentItem[];
+}
+
+/** 多份优惠档位（2–5 份；1 份不折扣） */
+export interface MultiRecipeDiscountTier {
+  quantity: number;
+  /** 0.05 = 5% off */
+  discountRate: number;
+  /** 后台配置的展示文案，如「3 份享 92 折」 */
+  label: string;
+}
+
+/** 后端权威报价：确认页只展示，提交订单时服务端会再算一遍 */
+export interface CustomRecipeQuote {
+  quantity: number;
+  unitAmount: number;
+  originalAmount: number;
+  discountRate: number;
+  discountAmount: number;
+  payableAmount: number;
+}
+
 /** 定制设置里顾客需要知道的几个（公开子集） */
 export interface PublicCustomRecipeConfig {
   feeAmount: number;
-  creditAmount: number;
   deliveryWorkDays: number;
   paymentTimeoutMinutes: number;
   orderNotifyTemplateId?: string | null;
@@ -213,6 +293,12 @@ export interface PublicCustomRecipeConfig {
   aftersaleWindowDays?: number;
   freeRevisionCount?: number;
   freeRevisionWindowDays?: number;
+  /** 多份购买开关：关闭时确认页只允许 1 份，也不显示份数选择器 */
+  multiRecipeEnabled: boolean;
+  /** 最多可选份数：1–5，后台可在 1–5 之间调低 */
+  maxRecipeQuantity: number;
+  /** 优惠档位：确认页据此展示优惠说明 */
+  multiRecipeDiscounts: MultiRecipeDiscountTier[];
 }
 
 /**
@@ -238,7 +324,7 @@ export async function fetchOrderDetail(
  * ⚠️ **失败时抛错，不要静默返回 null。**
  *
  * 第一版我写的是"失败就返回 null，页面用默认值显示，不白屏"，
- * 被自己的测试拦下了 —— 因为这里的默认值包含**定制费与可抵扣金额**：
+ * 被自己的测试拦下了 —— 因为这里的默认值就是**定制费**：
  * 后台把定制费改成 500，而接口一挂，顾客看到的是默认的 300 并照着下单。
  * **显示一个错误的价格，比显示"加载失败"糟糕得多。**
  *
@@ -253,6 +339,36 @@ export async function fetchPublicConfig(): Promise<PublicCustomRecipeConfig> {
     return res.data as PublicCustomRecipeConfig;
   }
   throw new Error(res?.message || '读取定制设置失败');
+}
+
+/**
+ * 取多份定制报价（2026-10-20 多份购买 · 第一阶段）。
+ *
+ * ⚠️ **只展示、不自行计算。**
+ * 原价、优惠、应付、每份均价都以这里返回的 `payableAmount` 等字段为准；
+ * 下单时后端还会用同一套报价逻辑重算并写快照。前端数学只能用于展示，
+ * 绝不能拿它兜底支付金额 —— 否则配置一改，页面金额和订单金额就会分叉。
+ *
+ * 报价失败时如实抛错，由页面显示「重试」并挡住提交，
+ * 不允许退回用 `feeAmount × quantity` 猜一个价格。
+ */
+export async function fetchCustomRecipeQuote(
+  quantity: number,
+): Promise<CustomRecipeQuote> {
+  if (!Number.isInteger(quantity) || quantity < 1) {
+    throw new Error('份数不正确');
+  }
+  const res: any = await request({
+    // quantity 已在上面校验为整数，直接拼查询串
+    url: `/custom-recipe/quote?quantity=${quantity}`,
+    method: 'GET',
+    quiet: true,
+    suppressErrorToast: true,
+  });
+  if (res?.code === 0 && res.data) {
+    return res.data as CustomRecipeQuote;
+  }
+  throw new Error(res?.message || '读取报价失败');
 }
 
 /**
@@ -297,14 +413,24 @@ export async function cancelOrder(orderId: string): Promise<{
  *
  * 下单页要在提交**之前**告诉顾客几号能收到 ——
  * 日期由**后端排单算法**给出，前端不做推算（需求写死）。
+ *
+ * 2026-10-21：带 quantity 时让后端按 N 份算（要找到剩余产能 ≥ N 的日期，
+ * 并按设计工时往后推）；不传时仍是原来的单份调用。
  */
-export async function fetchNextDeliveryDate(): Promise<{
+export async function fetchNextDeliveryDate(quantity?: number): Promise<{
+  quantity?: number;
   scheduledDate: string | null;
   estimatedDeliveryDate: string | null;
   deliveryWorkDays: number;
 }> {
+  if (quantity !== undefined && (!Number.isInteger(quantity) || quantity < 1)) {
+    throw new Error('份数不正确');
+  }
   const res = await request({
-    url: '/custom-recipe/next-delivery-date',
+    url:
+      quantity === undefined
+        ? '/custom-recipe/next-delivery-date'
+        : `/custom-recipe/next-delivery-date?quantity=${quantity}`,
     method: 'GET',
   });
   return (
@@ -378,20 +504,39 @@ export async function submitOrder(
  * 还没交付时后端回 404，这里返回 null ——
  * 页面据此显示"还没交付"，而不是报错（"还没交"是正常状态，不是故障）。
  *
+ * ## 两种响应形状（2026-10-21 多份交付）
+ *
+ *   · 老订单：`OrderDelivery`（`id` + 单份 `content`），字段与以前完全一致；
+ *   · 多份订单：`DeliveryBatchContent`（`batchId` + `items[]`，N 份快照）。
+ *
+ * 页面用 `resolveDeliverySelection` 统一处理两种形状，不在这里压成单份 ——
+ * 批次信息（共几份）在交付页还要用。
+ *
  * `version` 用于回看历史版本（重新交付之后）。
+ * `recipeId` 会拼进查询串，供后端将来按份收窄；当前后端返回整批，
+ * 页面仍需按 recipeId 选择（规则见 `utils/custom-recipe-delivery.ts`）。
  */
 export async function fetchDelivery(
   orderId: string,
   version?: number,
-): Promise<OrderDelivery | null> {
+  recipeId?: string,
+): Promise<OrderDelivery | DeliveryBatchContent | null> {
   try {
+    const params: string[] = [];
+    if (version) params.push(`version=${version}`);
+    const wantedRecipeId = String(recipeId ?? '').trim();
+    if (wantedRecipeId) {
+      params.push(`recipeId=${encodeURIComponent(wantedRecipeId)}`);
+    }
+    const query = params.length ? `?${params.join('&')}` : '';
+
     const res: any = await request({
-      url: `/custom-recipe/orders/${encodeURIComponent(orderId)}/delivery${
-        version ? `?version=${version}` : ''
-      }`,
+      url: `/custom-recipe/orders/${encodeURIComponent(orderId)}/delivery${query}`,
       method: 'GET',
     });
-    if (res?.code === 0 && res.data) return res.data as OrderDelivery;
+    if (res?.code === 0 && res.data) {
+      return res.data as OrderDelivery | DeliveryBatchContent;
+    }
     return null;
   } catch (error) {
     /**
@@ -458,6 +603,17 @@ export interface AftersaleItem {
       note?: string | null;
     }>;
   };
+}
+
+/**
+ * 每份交付各自的诉求说明（2026-10-21 · 多份订单按份售后）。
+ *
+ * `deliveryItemId` 是交付明细主键（不是业务编号 `recipeId`）——
+ * 后端按这个字段判断"这一条说的是哪一份"。
+ */
+export interface AftersaleRecipeRequest {
+  deliveryItemId: string;
+  description: string;
 }
 
 /** 售后类型选项（来自选项字典） */
@@ -529,6 +685,13 @@ export async function submitAftersale(input: {
   type: string;
   description: string;
   photos?: string[];
+  /**
+   * 多份订单可选：这次要调整哪几份（`CustomRecipeDeliveryItem.id`）。
+   * 不传 = 整单售后（老行为）；传了就必须非空且属于最新批次。
+   */
+  deliveryItemIds?: string[];
+  /** 每份各自的诉求说明（可选；缺省时只发选中的 id） */
+  recipeRequests?: AftersaleRecipeRequest[];
 }): Promise<{ ok: boolean; message?: string; typeLabel?: string }> {
   const res: any = await request({
     url: `/custom-recipe/orders/${encodeURIComponent(input.orderId)}/aftersale`,
@@ -537,6 +700,13 @@ export async function submitAftersale(input: {
       type: input.type,
       description: input.description,
       photos: input.photos ?? [],
+      // 老订单不传这两个键，请求形状与以前完全一致
+      ...(input.deliveryItemIds !== undefined
+        ? { deliveryItemIds: input.deliveryItemIds }
+        : {}),
+      ...(input.recipeRequests !== undefined
+        ? { recipeRequests: input.recipeRequests }
+        : {}),
     },
   });
   if (res?.code === 0) {

@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CustomRecipeService } from '../../../src/application/custom-recipe/custom-recipe.service';
 import { CustomRecipeConfigService } from '../../../src/application/custom-recipe/custom-recipe-config.service';
+import { CustomRecipePricingService } from '../../../src/application/custom-recipe/custom-recipe-pricing.service';
 import { PrismaService } from '../../../src/infrastructure/prisma.service';
 import { TencentCosService } from '../../../src/infrastructure/services/tencent-cos.service';
 import { WechatService } from '../../../src/infrastructure/wechat/wechat.service';
@@ -37,6 +38,7 @@ describe('CustomRecipeService · 顾客自助取消', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CustomRecipeService,
+        CustomRecipePricingService,
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: TencentCosService, useValue: {} },
         {
@@ -44,7 +46,6 @@ describe('CustomRecipeService · 顾客自助取消', () => {
           useValue: {
             getConfig: jest.fn().mockResolvedValue({
               feeAmount: 300,
-              creditAmount: 150,
               deliveryWorkDays: 3,
               dailyCapacity: 5,
               paymentTimeoutMinutes: 30,
@@ -231,8 +232,8 @@ describe('CustomRecipeService · 顾客自助取消', () => {
 
     const args = scheduleUpdateMany.mock.calls[0][0];
     expect(args.data.bookedCount).toEqual({ decrement: 1 });
-    // 下限保护：不能让 booked_count 变成负数
-    expect(args.where.bookedCount).toEqual({ gt: 0 });
+    // 下限保护：不能让 booked_count 变成负数（1 份订单按 gte:1 释放）
+    expect(args.where.bookedCount).toEqual({ gte: 1 });
   });
 
   it('付款成功不再发 PAID 订阅消息，把唯一一次订阅留给交付通知', async () => {

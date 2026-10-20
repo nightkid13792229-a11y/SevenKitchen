@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import {
   CustomRecipeConfigService,
   CUSTOM_RECIPE_CONFIG_ID,
+  DEFAULT_MULTI_RECIPE_DISCOUNTS,
 } from '../../../src/application/custom-recipe/custom-recipe-config.service';
 import { PrismaService } from '../../../src/infrastructure/prisma.service';
 
@@ -10,7 +11,6 @@ function buildRow(overrides: Record<string, unknown> = {}) {
   return {
     id: CUSTOM_RECIPE_CONFIG_ID,
     feeAmount: 300,
-    creditAmount: 300,
     deliveryWorkDays: 3,
     dailyCapacity: 4,
     paymentTimeoutMinutes: 30,
@@ -35,6 +35,12 @@ function buildRow(overrides: Record<string, unknown> = {}) {
     scheduleLookaheadDays: 45,
     slotRetryTimes: 5,
     orderNoPrefix: 'CR',
+    // ===== 2026-10-20 多份购买 =====
+    multiRecipeEnabled: false,
+    maxRecipeQuantity: 5,
+    multiRecipeDiscounts: DEFAULT_MULTI_RECIPE_DISCOUNTS,
+    dailyDesignMinutes: 480,
+    minutesPerRecipe: 96,
     createdAt: new Date('2026-09-25T00:00:00Z'),
     updatedAt: new Date('2026-09-25T00:00:00Z'),
     ...overrides,
@@ -77,7 +83,8 @@ describe('CustomRecipeConfigService', () => {
         data: { id: CUSTOM_RECIPE_CONFIG_ID },
       });
       expect(config.feeAmount).toBe(300);
-      expect(config.creditAmount).toBe(300);
+      // 2026-10-20：可抵扣金额整体删除，配置里不得再出现
+      expect(config).not.toHaveProperty('creditAmount');
       expect(config.deliveryWorkDays).toBe(3);
       expect(config.dailyCapacity).toBe(4);
       expect(config.paymentTimeoutMinutes).toBe(30);
@@ -85,27 +92,25 @@ describe('CustomRecipeConfigService', () => {
 
     it('coerces Prisma Decimal values to numbers', async () => {
       mockPrismaService.customRecipeConfig.findUnique.mockResolvedValue(
-        buildRow({ feeAmount: '300.5', creditAmount: '199.9' }),
+        buildRow({ feeAmount: '300.5' }),
       );
 
       const config = await service.getConfig();
 
       expect(config.feeAmount).toBe(300.5);
-      expect(config.creditAmount).toBe(199.9);
     });
   });
 
   describe('getPublicConfig', () => {
     it('only exposes the fields the mini program needs', async () => {
       mockPrismaService.customRecipeConfig.findUnique.mockResolvedValue(
-        buildRow({ feeAmount: 300, creditAmount: 200, dailyCapacity: 7 }),
+        buildRow({ feeAmount: 300, dailyCapacity: 7 }),
       );
 
       const config = await service.getPublicConfig();
 
       expect(config).toEqual({
         feeAmount: 300,
-        creditAmount: 200,
         deliveryWorkDays: 3,
         /**
          * 2026-10-04：支付时限改为**对外公开**。
@@ -136,6 +141,19 @@ describe('CustomRecipeConfigService', () => {
         aftersaleWindowDays: 7, // 顾客要知道还能不能提售后（2026-10-18：30→7）
         freeRevisionCount: 2, // 售后页要写明免费改几次（2026-10-18：1→2）
         freeRevisionWindowDays: 7, // 以及几天内有效
+
+        /**
+         * 2026-10-20 多份购买：小程序确认页要据此决定是否显示份数选择器、
+         * 最多能选几份、以及展示哪几档优惠文案。
+         */
+        multiRecipeEnabled: false,
+        maxRecipeQuantity: 5,
+        multiRecipeDiscounts: [
+          { quantity: 2, discountRate: 0.05, label: '2 份享 95 折' },
+          { quantity: 3, discountRate: 0.08, label: '3 份享 92 折' },
+          { quantity: 4, discountRate: 0.1, label: '4 份享 9 折' },
+          { quantity: 5, discountRate: 0.12, label: '5 份享 88 折' },
+        ],
       });
 
       /**
@@ -144,6 +162,8 @@ describe('CustomRecipeConfigService', () => {
        * 而不是悄悄把产能/成本参数发出去。
        */
       for (const internal of [
+        // 2026-10-20：定制费抵扣已取消，公开配置里也不该再有
+        'creditAmount',
         'dailyCapacity',
         'dailyDeliveryCapacity',
         'productionLossRate',
@@ -153,6 +173,9 @@ describe('CustomRecipeConfigService', () => {
         'scheduleLookaheadDays',
         'slotRetryTimes',
         'orderNoPrefix',
+        // 设计工时是内部产能参数，顾客不需要知道
+        'dailyDesignMinutes',
+        'minutesPerRecipe',
       ]) {
         expect(config).not.toHaveProperty(internal);
       }
@@ -160,69 +183,13 @@ describe('CustomRecipeConfigService', () => {
   });
 
   describe('updateConfig', () => {
-    it('rejects a credit amount above the fee', async () => {
-      mockPrismaService.customRecipeConfig.findUnique.mockResolvedValue(
-        buildRow({ feeAmount: 300, creditAmount: 300 }),
-      );
-
-      await expect(
-        service.updateConfig({ creditAmount: 500 }),
-      ).rejects.toBeInstanceOf(BadRequestException);
-      expect(mockPrismaService.customRecipeConfig.upsert).not.toHaveBeenCalled();
-    });
-
-    it('compares the credit against the fee submitted in the same request', async () => {
-      // 同一次提交里把定制费降到 100、可抵扣仍写 300 —— 必须被拒，
-      // 只拿单边比较会漏判这一种。
-      mockPrismaService.customRecipeConfig.findUnique.mockResolvedValue(
-        buildRow({ feeAmount: 300, creditAmount: 300 }),
-      );
-
-      await expect(
-        service.updateConfig({ feeAmount: 100, creditAmount: 300 }),
-      ).rejects.toBeInstanceOf(BadRequestException);
-    });
-
-    it('allows lowering both the fee and the credit together', async () => {
-      mockPrismaService.customRecipeConfig.findUnique.mockResolvedValue(
-        buildRow({ feeAmount: 300, creditAmount: 300 }),
-      );
-      mockPrismaService.customRecipeConfig.upsert.mockResolvedValue(
-        buildRow({ feeAmount: 100, creditAmount: 0 }),
-      );
-
-      const config = await service.updateConfig({
-        feeAmount: 100,
-        creditAmount: 0,
-      });
-
-      expect(config.feeAmount).toBe(100);
-      expect(config.creditAmount).toBe(0);
-    });
-
-    it('accepts credit equal to the fee', async () => {
-      mockPrismaService.customRecipeConfig.findUnique.mockResolvedValue(
-        buildRow({ feeAmount: 300, creditAmount: 300 }),
-      );
-      mockPrismaService.customRecipeConfig.upsert.mockResolvedValue(
-        buildRow({ feeAmount: 399, creditAmount: 399 }),
-      );
-
-      await expect(
-        service.updateConfig({ feeAmount: 399, creditAmount: 399 }),
-      ).resolves.toMatchObject({ feeAmount: 399, creditAmount: 399 });
-    });
-
-    it('rejects a negative fee or credit', async () => {
+    it('rejects a negative fee', async () => {
       mockPrismaService.customRecipeConfig.findUnique.mockResolvedValue(
         buildRow(),
       );
 
       await expect(
         service.updateConfig({ feeAmount: -1 }),
-      ).rejects.toBeInstanceOf(BadRequestException);
-      await expect(
-        service.updateConfig({ creditAmount: -1 }),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
@@ -447,4 +414,336 @@ describe('CustomRecipeConfigService', () => {
       ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
+
+  /**
+   * 2026-10-20 多份购买（第一阶段：价格与配置）。
+   *
+   * 这一层只负责**把配置读对、写对、挡掉坏值**；折扣金额的计算在
+   * `CustomRecipePricingService`（Task 2）里。所以这里只断言默认值、
+   * 兜底值和保存校验，不涉及任何金额。
+   */
+  describe('多份购买与设计工时（2026-10-20）', () => {
+    beforeEach(() => {
+      mockPrismaService.customRecipeConfig.findUnique.mockResolvedValue(
+        buildRow(),
+      );
+      mockPrismaService.customRecipeConfig.upsert.mockImplementation(
+        async ({ update }: { update: Record<string, unknown> }) => ({
+          ...buildRow(),
+          ...update,
+        }),
+      );
+    });
+
+    it('多份配置默认关闭，最多 5 份，默认优惠档位可读', async () => {
+      const config = await service.getConfig();
+      expect(config.multiRecipeEnabled).toBe(false);
+      expect(config.maxRecipeQuantity).toBe(5);
+      expect(config.multiRecipeDiscounts).toEqual([
+        { quantity: 2, discountRate: 0.05, label: '2 份享 95 折' },
+        { quantity: 3, discountRate: 0.08, label: '3 份享 92 折' },
+        { quantity: 4, discountRate: 0.1, label: '4 份享 9 折' },
+        { quantity: 5, discountRate: 0.12, label: '5 份享 88 折' },
+      ]);
+      expect(config.dailyDesignMinutes).toBe(480);
+      expect(config.minutesPerRecipe).toBe(96);
+    });
+
+    it('老配置行缺少新字段时退兜底值，不返回 undefined/NaN', async () => {
+      mockPrismaService.customRecipeConfig.findUnique.mockResolvedValue(
+        buildRow({
+          multiRecipeEnabled: undefined,
+          maxRecipeQuantity: undefined,
+          multiRecipeDiscounts: undefined,
+          dailyDesignMinutes: undefined,
+          minutesPerRecipe: undefined,
+        }),
+      );
+
+      const config = await service.getConfig();
+
+      expect(config.multiRecipeEnabled).toBe(false);
+      expect(config.maxRecipeQuantity).toBe(5);
+      expect(config.multiRecipeDiscounts).toEqual(
+        DEFAULT_MULTI_RECIPE_DISCOUNTS,
+      );
+      expect(config.dailyDesignMinutes).toBe(480);
+      expect(config.minutesPerRecipe).toBe(96);
+    });
+
+    it('库里 maxRecipeQuantity 是坏值时退 5，合法值原样读出', async () => {
+      for (const bad of [0, 6, 99, 2.5, Number.NaN, 'abc', null]) {
+        mockPrismaService.customRecipeConfig.findUnique.mockResolvedValue(
+          buildRow({ maxRecipeQuantity: bad }),
+        );
+        await expect(service.getConfig()).resolves.toMatchObject({
+          maxRecipeQuantity: 5,
+        });
+      }
+
+      mockPrismaService.customRecipeConfig.findUnique.mockResolvedValue(
+        buildRow({ maxRecipeQuantity: 3 }),
+      );
+      await expect(service.getConfig()).resolves.toMatchObject({
+        maxRecipeQuantity: 3,
+      });
+    });
+
+    it('库里优惠档位损坏或为空时退默认档位（坏配置不能进报价）', async () => {
+      const brokenValues: unknown[] = [
+        'not-json',
+        { quantity: 2 },
+        [{ quantity: 1, discountRate: 0.05, label: '1 份' }],
+        [{ quantity: 2, discountRate: 0.5, label: '2 份' }],
+        [{ quantity: 2, discountRate: -0.05, label: '2 份' }],
+        [],
+      ];
+
+      for (const broken of brokenValues) {
+        mockPrismaService.customRecipeConfig.findUnique.mockResolvedValue(
+          buildRow({ multiRecipeDiscounts: broken }),
+        );
+        await expect(service.getConfig()).resolves.toMatchObject({
+          multiRecipeDiscounts: DEFAULT_MULTI_RECIPE_DISCOUNTS,
+        });
+      }
+    });
+
+    it('优惠档位读出时按份数升序排列', async () => {
+      mockPrismaService.customRecipeConfig.findUnique.mockResolvedValue(
+        buildRow({
+          multiRecipeDiscounts: [
+            tier(5, 0.12),
+            tier(2, 0.05),
+            tier(4, 0.1),
+            tier(3, 0.08),
+          ],
+        }),
+      );
+
+      const config = await service.getConfig();
+
+      expect(config.multiRecipeDiscounts.map((item) => item.quantity)).toEqual([
+        2, 3, 4, 5,
+      ]);
+    });
+
+    it('库里档位不齐（如只有 2、4 份）时退默认四档', async () => {
+      const incompleteSets: unknown[] = [
+        [tier(2, 0.05), tier(4, 0.1)],
+        [tier(2, 0.05), tier(3, 0.08), tier(4, 0.1)],
+        [tier(3, 0.08), tier(4, 0.1), tier(5, 0.12)],
+      ];
+
+      for (const incomplete of incompleteSets) {
+        mockPrismaService.customRecipeConfig.findUnique.mockResolvedValue(
+          buildRow({ multiRecipeDiscounts: incomplete }),
+        );
+        await expect(service.getConfig()).resolves.toMatchObject({
+          multiRecipeDiscounts: DEFAULT_MULTI_RECIPE_DISCOUNTS,
+        });
+      }
+    });
+
+    it('库里档位重复或折扣下降时退默认四档', async () => {
+      const brokenSets: unknown[] = [
+        // 2 份重复（四档份数都出现了，但 2 份有两档）
+        [
+          tier(2, 0.05),
+          tier(2, 0.06),
+          tier(3, 0.08),
+          tier(4, 0.1),
+          tier(5, 0.12),
+        ],
+        // 2 份 12% → 3 份 5%，折扣下降
+        [tier(2, 0.12), tier(3, 0.05), tier(4, 0.1), tier(5, 0.12)],
+      ];
+
+      for (const broken of brokenSets) {
+        mockPrismaService.customRecipeConfig.findUnique.mockResolvedValue(
+          buildRow({ multiRecipeDiscounts: broken }),
+        );
+        await expect(service.getConfig()).resolves.toMatchObject({
+          multiRecipeDiscounts: DEFAULT_MULTI_RECIPE_DISCOUNTS,
+        });
+      }
+    });
+
+    it('库里设计工时非法时退 480/96', async () => {
+      for (const bad of [0, -1, 1.5, Number.NaN, null, 'abc']) {
+        mockPrismaService.customRecipeConfig.findUnique.mockResolvedValue(
+          buildRow({ dailyDesignMinutes: bad, minutesPerRecipe: bad }),
+        );
+        await expect(service.getConfig()).resolves.toMatchObject({
+          dailyDesignMinutes: 480,
+          minutesPerRecipe: 96,
+        });
+      }
+    });
+
+    it('maxRecipeQuantity 只接受 1~5 的整数', async () => {
+      for (const bad of [0, 6, -1, 1.5, 5.0001]) {
+        await expect(
+          service.updateConfig({ maxRecipeQuantity: bad }),
+        ).rejects.toThrow(/最多份数/);
+      }
+
+      await expect(
+        service.updateConfig({ maxRecipeQuantity: 3 }),
+      ).resolves.toMatchObject({ maxRecipeQuantity: 3 });
+    });
+
+    it('多份开关只接受布尔值', async () => {
+      await expect(
+        service.updateConfig({
+          multiRecipeEnabled: 'yes' as unknown as boolean,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('保存时五个多份/设计工时字段都写回数据库', async () => {
+      const tiers = [
+        tier(2, 0.04, '2 份享 96 折'),
+        tier(3, 0.06, '3 份享 94 折'),
+        tier(4, 0.08, '4 份享 92 折'),
+        tier(5, 0.1, '5 份享 9 折'),
+      ];
+
+      const saved = await service.updateConfig({
+        multiRecipeEnabled: true,
+        maxRecipeQuantity: 4,
+        multiRecipeDiscounts: tiers,
+        dailyDesignMinutes: 360,
+        minutesPerRecipe: 90,
+      });
+
+      expect(
+        mockPrismaService.customRecipeConfig.upsert,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({
+            multiRecipeEnabled: true,
+            maxRecipeQuantity: 4,
+            multiRecipeDiscounts: tiers,
+            dailyDesignMinutes: 360,
+            minutesPerRecipe: 90,
+          }),
+        }),
+      );
+      expect(saved).toMatchObject({
+        multiRecipeEnabled: true,
+        maxRecipeQuantity: 4,
+        multiRecipeDiscounts: tiers,
+        dailyDesignMinutes: 360,
+        minutesPerRecipe: 90,
+      });
+    });
+
+    it('非法优惠档位一律拒绝（重复份数 / 折扣下降 / 超 20% / 0 折 / 1 份）', async () => {
+      const fullSet = [
+        tier(2, 0.05),
+        tier(3, 0.08),
+        tier(4, 0.1),
+        tier(5, 0.12),
+      ];
+      const cases: Array<[string, unknown]> = [
+        // 四档齐全，但 2 份重复
+        ['重复份数', [...fullSet, tier(2, 0.06)]],
+        // 四档齐全，但 2 份 12% → 3 份 5%，折扣下降
+        ['折扣下降', [tier(2, 0.12), tier(3, 0.05), tier(4, 0.1), tier(5, 0.12)]],
+        [
+          '超过 20%',
+          [tier(2, 0.21), tier(3, 0.08), tier(4, 0.1), tier(5, 0.12)],
+        ],
+        ['折扣为 0', [tier(2, 0), tier(3, 0.08), tier(4, 0.1), tier(5, 0.12)]],
+        [
+          '1 份不允许折扣',
+          [
+            tier(1, 0.05),
+            tier(2, 0.05),
+            tier(3, 0.08),
+            tier(4, 0.1),
+            tier(5, 0.12),
+          ],
+        ],
+        [
+          '6 份超过硬上限',
+          [
+            tier(2, 0.05),
+            tier(3, 0.08),
+            tier(4, 0.1),
+            tier(5, 0.12),
+            tier(6, 0.12),
+          ],
+        ],
+        [
+          '份数必须是整数',
+          [tier(2.5, 0.05), tier(3, 0.08), tier(4, 0.1), tier(5, 0.12)],
+        ],
+        [
+          '折扣率必须是数字',
+          [
+            { quantity: 2, discountRate: '0.05', label: '2 份' },
+            tier(3, 0.08),
+            tier(4, 0.1),
+            tier(5, 0.12),
+          ],
+        ],
+      ];
+
+      for (const [reason, discounts] of cases) {
+        await expect(
+          service.updateConfig({
+            multiRecipeDiscounts: discounts as never,
+          }),
+        ).rejects.toThrow(/优惠配置不合法/);
+      }
+    });
+
+    it('优惠档位必须四档齐全（2/3/4/5），缺任何一档都拒绝保存', async () => {
+      const cases: Array<[string, unknown]> = [
+        ['空数组', []],
+        ['只有 2、4 两份', [tier(2, 0.05), tier(4, 0.1)]],
+        ['只有 2、3 两份', [tier(2, 0.05), tier(3, 0.05)]],
+        ['缺 5 份', [tier(2, 0.05), tier(3, 0.08), tier(4, 0.1)]],
+        ['缺 2 份', [tier(3, 0.08), tier(4, 0.1), tier(5, 0.12)]],
+      ];
+
+      for (const [reason, discounts] of cases) {
+        await expect(
+          service.updateConfig({
+            multiRecipeDiscounts: discounts as never,
+          }),
+        ).rejects.toThrow(/优惠配置不合法/);
+      }
+    });
+
+    it('折扣可以持平（份数越高不能降低，但允许相同）', async () => {
+      await expect(
+        service.updateConfig({
+          multiRecipeDiscounts: [
+            tier(2, 0.05),
+            tier(3, 0.05),
+            tier(4, 0.05),
+            tier(5, 0.05),
+          ],
+        }),
+      ).resolves.toBeDefined();
+    });
+
+    it('设计工时必须是正整数', async () => {
+      for (const bad of [0, -1, 1.5, Number.NaN]) {
+        await expect(
+          service.updateConfig({ dailyDesignMinutes: bad }),
+        ).rejects.toThrow(/每日设计工时/);
+        await expect(
+          service.updateConfig({ minutesPerRecipe: bad }),
+        ).rejects.toThrow(/每份设计工时/);
+      }
+    });
+  });
 });
+
+function tier(quantity: number, discountRate: number, label = `${quantity} 份`) {
+  return { quantity, discountRate, label };
+}

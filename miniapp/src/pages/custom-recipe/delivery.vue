@@ -4,7 +4,7 @@
       <text class="state-text">加载中...</text>
     </view>
 
-    <view v-else-if="!delivery" class="state-block">
+    <view v-else-if="!resolved" class="state-block">
       <text class="state-title">还没有交付内容</text>
       <text class="state-text">营养师交付后会在这里显示，并给你发通知</text>
       <button class="state-btn" @tap="goBack">返回</button>
@@ -24,11 +24,16 @@
         跟定稿原型差了四块，而且食材表多了一列制备方法。
       -->
       <RecipeCover
-        :cover-image-url="content.recipe.coverImageUrl"
-        :title="content.recipe.name"
+        :cover-image-url="resolved.recipeCoverImageUrl"
+        :title="resolved.recipeName || content.recipe.name"
         :subtitles="coverSubtitles"
-        :badge="`第 ${delivery.version} 版 · ${formatTime(delivery.deliveredAt)} 交付`"
+        :badge="`第 ${resolved.version} 版 · ${formatTime(resolved.deliveredAt)} 交付`"
       />
+
+      <!-- 多份订单：说明本次共几份、现在看的是第几份（单份订单不显示） -->
+      <view v-if="batchNote" class="batch-note">
+        <text class="batch-note-text">{{ batchNote }}</text>
+      </view>
 
       <!-- 一句话：默认两行，点开看全文 -->
       <view v-if="sellingPointText" class="oneline" @tap="sellingPointOpen = !sellingPointOpen">
@@ -114,7 +119,7 @@
       老板 2026-10-18 审原型时指出"这边没给入口，顾客进不去第 2 页"——
       原来那个按钮在页面最底部，要滚到底才看得到。
     -->
-    <view v-if="delivery" class="bottom-bar">
+    <view v-if="resolved" class="bottom-bar">
       <view class="bottom-bar__inner">
         <view v-if="deliveryDateText" class="bottom-bar__date">
           <text class="bottom-bar__date-text">{{ deliveryDateText }}</text>
@@ -128,7 +133,13 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { onLoad, onPullDownRefresh } from '@dcloudio/uni-app';
-import { fetchDelivery, type OrderDelivery } from '@/api/custom-recipe';
+import { fetchDelivery } from '@/api/custom-recipe';
+import {
+  buildDeliveryShoppingUrl,
+  deliveryBatchCountText,
+  resolveDeliverySelection,
+  type CustomRecipeDeliveryResponse,
+} from '@/utils/custom-recipe-delivery';
 import RecipeCover from '@/components/recipe/RecipeCover.vue';
 import RecipeNutritionCard from '@/components/recipe/RecipeNutritionCard.vue';
 import RecipeIngredientRatioTable from '@/components/recipe/RecipeIngredientRatioTable.vue';
@@ -155,12 +166,23 @@ import RecipeIngredientRatioTable from '@/components/recipe/RecipeIngredientRati
  */
 
 const orderId = ref('');
+const recipeId = ref('');
 const loading = ref(true);
-const delivery = ref<OrderDelivery | null>(null);
+const delivery = ref<CustomRecipeDeliveryResponse | null>(null);
+
+/**
+ * 多份交付里选中的那一份。
+ *
+ * 老单份交付也会被收敛成同一个形状（`content` / `version` 原样保留），
+ * 所以下面模板不需要再分两套。
+ */
+const resolved = computed(() =>
+  resolveDeliverySelection(delivery.value, recipeId.value),
+);
 
 const content = computed(
   () =>
-    delivery.value?.content ?? {
+    resolved.value?.content ?? {
       schemaVersion: 1,
       recipe: { recipeId: '', name: '', items: [] },
       feeding: {
@@ -183,6 +205,15 @@ const content = computed(
       generatedAt: '',
     },
 );
+
+/** 多份订单在封面下说明「共几份、当前第几份」；单份订单不显示 */
+const batchNote = computed(() => {
+  const current = resolved.value;
+  if (!current?.isBatch) return '';
+  return `${deliveryBatchCountText(current.batchSize)} · 当前查看第 ${
+    current.selectedIndex + 1
+  } 份`;
+});
 
 /** 食材与补充剂分开渲染（补充剂单独一块，不与食材混） */
 /**
@@ -286,7 +317,11 @@ const formatTime = (iso: string) => {
 const load = async () => {
   loading.value = true;
   try {
-    delivery.value = await fetchDelivery(orderId.value);
+    delivery.value = await fetchDelivery(
+      orderId.value,
+      undefined,
+      recipeId.value,
+    );
   } finally {
     loading.value = false;
   }
@@ -294,15 +329,31 @@ const load = async () => {
 
 const goBack = () => uni.navigateBack();
 
-/** 去第 2 页「采购与制作」。带上 orderId，那一页自己再取一次内容 */
+/**
+ * 去第 2 页「采购与制作」。
+ *
+ * 必须把这一份的 `recipeId` 带过去；否则第 2 页会默认显示批次第一份，
+ * 顾客在第 1 页看的是鸭肉、翻页却变成鸡肉。老单份订单不带这个参数。
+ */
 const goShopping = () => {
+  /**
+   * 老单份订单不带 recipeId —— 保持原来的链接形状；
+   * 多份批次才需要把"看的是哪一份"传下去。
+   */
+  const selectedRecipeId = resolved.value?.recipeId ?? recipeId.value;
+  const routeRecipeId = resolved.value?.isBatch
+    ? selectedRecipeId
+    : undefined;
   uni.navigateTo({
-    url: `/pages/custom-recipe/delivery-shopping?orderId=${encodeURIComponent(orderId.value)}`,
+    url: buildDeliveryShoppingUrl(orderId.value, routeRecipeId),
   });
 };
 
 onLoad((options) => {
   orderId.value = options?.orderId ? decodeURIComponent(options.orderId) : '';
+  recipeId.value = options?.recipeId
+    ? decodeURIComponent(options.recipeId)
+    : '';
   load();
 });
 
@@ -348,6 +399,20 @@ onPullDownRefresh(async () => {
 
 
 
+
+/* ===== 多份交付：本次共 N 份 / 当前第几份（2026-10-21）===== */
+.batch-note {
+  margin: 18rpx 0 24rpx;
+  padding: 16rpx 24rpx;
+  background: rgba(216, 188, 133, 0.12);
+  border: 1rpx solid rgba(216, 188, 133, 0.28);
+  border-radius: 999rpx;
+}
+
+.batch-note-text {
+  font-size: 24rpx;
+  color: #d8bc85;
+}
 
 .section {
   padding: 28rpx 32rpx;

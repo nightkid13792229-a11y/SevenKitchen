@@ -213,11 +213,10 @@ describe('状态文案只有一份字典（第 6 条）', () => {
 })
 
 describe('敏感按钮按角色显示（口径 2，第 7 条）', () => {
-  it('交付 / 取消 / 恢复额度都由 isAdmin 控制，非管理员看到说明', () => {
+  it('交付 / 取消都由 isAdmin 控制，非管理员看到说明', () => {
     expect(orderDetail).toContain('const isAdmin = useIsAdmin();')
     expect(orderDetail).toContain("{{ ADMIN_ONLY_TIP }}：交付食谱（含重新交付）会给顾客发通知，只有管理员能做")
     expect(orderDetail).toContain("v-if=\"isAdmin && order.status !== 'DELIVERED' && order.status !== 'CANCELLED'\"")
-    expect(orderDetail).toContain('{{ ADMIN_ONLY_TIP }}：恢复抵扣额度')
   })
 
   it('设置页入口对客服置灰并写明原因，而不是让人点了吃 403', () => {
@@ -258,7 +257,6 @@ describe('接口调用统一收在 api 层（铁律 2）', () => {
     expect(customRecipeApiSource).toContain('`${BASE}/orders/${orderId}/recipe-candidates`')
     expect(customRecipeApiSource).toContain('`${BASE}/orders/${orderId}/deliver-recipe`')
     expect(customRecipeApiSource).toContain('`${BASE}/orders/${orderId}/create-recipe`')
-    expect(customRecipeApiSource).toContain('`${BASE}/orders/${orderId}/restore-credit`')
     expect(customRecipeApiSource).toContain('`${BASE}/orders/${orderId}/confirm-payment`')
   })
 })

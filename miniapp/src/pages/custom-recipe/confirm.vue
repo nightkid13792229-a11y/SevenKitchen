@@ -105,6 +105,79 @@
         </view>
       </view>
 
+      <view v-if="multiRecipeEnabled" class="section multi-section">
+        <view class="section-title">
+          <text class="title-text">配方份数</text>
+          <text class="section-hint">最多 {{ maxRecipeQuantity }} 份</text>
+        </view>
+        <text class="multi-question">需要几份不同配方的食谱？</text>
+        <view class="stepper">
+          <view
+            class="step-btn"
+            :class="{ 'step-btn--disabled': recipeQuantity <= 1 }"
+            @tap="changeRecipeQuantity(-1)"
+            >−</view
+          >
+          <text class="step-value">{{ recipeQuantity }}</text>
+          <view
+            class="step-btn"
+            :class="{ 'step-btn--disabled': recipeQuantity >= maxRecipeQuantity }"
+            @tap="changeRecipeQuantity(1)"
+            >＋</view
+          >
+          <text class="step-hint">默认 1 份，每份配方独立设计</text>
+        </view>
+
+        <view class="protein-block">
+          <text class="protein-title">指定主蛋白</text>
+          <view class="protein-mode-row">
+            <view
+              class="protein-mode"
+              :class="{ 'protein-mode--on': proteinMode === 'DIETITIAN' }"
+              @tap="selectProteinMode('DIETITIAN')"
+            >
+              <text class="protein-mode-label">营养师配</text>
+            </view>
+            <view
+              class="protein-mode"
+              :class="{ 'protein-mode--on': proteinMode === 'SELF' }"
+              @tap="selectProteinMode('SELF')"
+            >
+              <text class="protein-mode-label">自己选</text>
+            </view>
+          </view>
+
+          <text v-if="proteinMode === 'DIETITIAN'" class="protein-hint">
+            由营养师根据狗狗档案，搭配 {{ recipeQuantity }} 种不同主蛋白。
+          </text>
+          <template v-else>
+            <text class="protein-hint">
+              请选择 {{ recipeQuantity }} 种不同的肉，已选
+              {{ selectedProteinCodes.length }} 种。
+            </text>
+            <view class="protein-options">
+              <view
+                v-for="option in proteinOptions"
+                :key="option.code"
+                class="protein-option"
+                :class="{
+                  'protein-option--on': selectedProteinCodes.includes(option.code),
+                  'protein-option--disabled':
+                    proteinSelectionFull &&
+                    !selectedProteinCodes.includes(option.code),
+                }"
+                @tap="toggleProtein(option.code)"
+              >
+                <text class="protein-option-label">{{ option.label }}</text>
+              </view>
+            </view>
+            <text v-if="proteinSelectionError" class="protein-error">
+              {{ proteinSelectionError }}
+            </text>
+          </template>
+        </view>
+      </view>
+
       <view class="section">
         <view class="section-title">
           <text class="title-text">交付</text>
@@ -117,15 +190,54 @@
         </text>
       </view>
 
+      <view v-if="multiRecipeEnabled" class="section price-section">
+        <view class="section-title">
+          <text class="title-text">价格明细</text>
+        </view>
+        <template v-if="currentQuote">
+          <view class="price-row">
+            <text class="price-label">原价</text>
+            <text class="price-value"
+              >¥{{ formatAmount(currentQuote.originalAmount) }}</text
+            >
+          </view>
+          <text class="price-sub">
+            ¥{{ formatAmount(currentQuote.unitAmount) }} / 份 ×
+            {{ currentQuote.quantity }} 份
+          </text>
+          <view class="price-row">
+            <text class="price-label">多份优惠</text>
+            <text class="price-value price-value--discount">{{ discountText }}</text>
+          </view>
+          <view class="price-row price-row--total">
+            <text class="price-label">应付金额</text>
+            <text class="price-value price-value--total">¥{{ payableText }}</text>
+          </view>
+          <view class="price-row">
+            <text class="price-label">每份均价</text>
+            <text class="price-value">¥{{ perRecipeAverageText }}</text>
+          </view>
+        </template>
+        <view v-else-if="quoteLoading" class="price-state">
+          <text class="price-state-text">正在计算价格…</text>
+        </view>
+        <view v-else class="price-state price-state--error">
+          <text class="price-state-text">
+            {{ quoteError || '价格读取失败，请重试' }}
+          </text>
+          <button class="retry-btn" @tap="retryQuote">重试</button>
+        </view>
+      </view>
+
       <view class="bottom-space" />
 
       <view class="bottom-bar">
         <button
           class="btn-submit"
-          :disabled="submitting"
+          :disabled="!canSubmit"
           @tap="submitConfirmedOrder(true)"
         >
-          {{ submitting ? '提交中…' : `确认并支付 ¥${feeText}` }}
+          {{ payButtonText }}
         </button>
       </view>
       </template>
@@ -143,10 +255,23 @@ import { computed, ref, onUnmounted } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import { dogApi } from '@/api/dogs';
 import {
+  fetchCustomRecipeQuote,
   fetchNextDeliveryDate,
   fetchPublicConfig,
   submitOrder,
+  type CustomRecipeQuote,
 } from '@/api/custom-recipe';
+import {
+  PROTEIN_OPTIONS,
+  formatDiscountRate,
+  getProteinSelectionError,
+  perRecipeAverage,
+  resolveMaxRecipeQuantity,
+  resolveRequestedProteinCodes,
+  toggleProteinCode,
+  trimProteinCodesForQuantity,
+  type ProteinChoiceMode,
+} from '@/utils/custom-recipe-pricing';
 import { useOptionSet } from '@/utils/option-set';
 import { getStoredUser } from '@/utils/account';
 import {
@@ -184,6 +309,26 @@ const nowTick = ref(Date.now());
 let paymentClockTimer: ReturnType<typeof setInterval> | null = null;
 /** 本次确认页的幂等键：网络超时重试时后端返回同一张订单 */
 const clientRequestId = ref('');
+
+/** 多份购买：开关关闭时整块隐藏，份数固定 1，保持原单份流程 */
+const multiRecipeEnabled = computed(
+  () => config.value?.multiRecipeEnabled === true,
+);
+const maxRecipeQuantity = ref(5);
+const recipeQuantity = ref(1);
+const proteinMode = ref<ProteinChoiceMode>('DIETITIAN');
+const selectedProteinCodes = ref<string[]>([]);
+const proteinOptions = PROTEIN_OPTIONS;
+/** 后端权威报价；只展示，不参与金额计算 */
+const quote = ref<CustomRecipeQuote | null>(null);
+const quoteLoading = ref(false);
+const quoteError = ref('');
+/** 只接受最后一次请求的结果，避免快速点 ± 时旧报价覆盖新报价 */
+let quoteRequestSeq = 0;
+/** 交付日期同样只认最后一次请求：份数快速变化时旧响应不能写回 */
+const deliveryLoading = ref(false);
+const deliveryError = ref('');
+let deliveryRequestSeq = 0;
 
 const { ensure: ensureCurrentFoodOptions, labelOf: currentFoodLabel } =
   useOptionSet('custom_recipe_current_food');
@@ -361,7 +506,72 @@ function previewConfirmAttachment(url: string) {
 
 const feeText = computed(() => formatAmount(config.value?.feeAmount ?? 0));
 
+const currentQuote = computed<CustomRecipeQuote | null>(() => {
+  const value = quote.value;
+  if (!value) return null;
+  // 份数刚变、新报价还没回来时不沿用旧份数的金额
+  return Number(value.quantity) === recipeQuantity.value ? value : null;
+});
+
+const proteinSelectionFull = computed(
+  () => selectedProteinCodes.value.length >= recipeQuantity.value,
+);
+
+const proteinSelectionError = computed(() =>
+  multiRecipeEnabled.value
+    ? getProteinSelectionError(
+        proteinMode.value,
+        selectedProteinCodes.value,
+        recipeQuantity.value,
+      )
+    : '',
+);
+
+const quoteReady = computed(
+  () =>
+    !multiRecipeEnabled.value ||
+    (Boolean(currentQuote.value) && !quoteLoading.value && !quoteError.value),
+);
+
+const canSubmit = computed(
+  () =>
+    !submitting.value &&
+    quoteReady.value &&
+    !proteinSelectionError.value,
+);
+
+const payableText = computed(() => {
+  if (!multiRecipeEnabled.value) return feeText.value;
+  return currentQuote.value
+    ? formatAmount(currentQuote.value.payableAmount)
+    : '--';
+});
+
+const perRecipeAverageText = computed(() =>
+  currentQuote.value
+    ? formatAmount(perRecipeAverage(currentQuote.value))
+    : '--',
+);
+
+const discountText = computed(() => {
+  const current = currentQuote.value;
+  if (!current) return '--';
+  if (current.discountAmount <= 0) return '无';
+  return `-¥${formatAmount(current.discountAmount)}（${formatDiscountRate(
+    current.discountRate,
+  )}）`;
+});
+
+const payButtonText = computed(() => {
+  if (submitting.value) return '提交中…';
+  if (!multiRecipeEnabled.value) return `确认并支付 ¥${feeText.value}`;
+  if (!currentQuote.value) return '确认并支付';
+  return `确认并支付 ¥${formatAmount(currentQuote.value.payableAmount)}`;
+});
+
 const deliveryText = computed(() => {
+  if (deliveryLoading.value) return '正在按份数计算交付日期…';
+  if (deliveryError.value) return '交付日期读取失败，下单后以订单为准';
   const date = delivery.value?.estimatedDeliveryDate;
   if (!date) return '排期中';
   const parts = String(date).split('-').map(Number);
@@ -429,11 +639,124 @@ const postPaymentHint = computed(() =>
     now: nowTick.value,
   }),
 );
-const postCreditText = computed(() =>
-  createdOrder.value?.creditAmount
-    ? formatAmount(createdOrder.value.creditAmount)
-    : '',
-);
+
+/**
+ * 取后端报价。
+ *
+ * 报价失败时**不退回前端数学**：清空 quote、记下错误，由页面显示重试并挡住支付。
+ * 用自增序号只认最后一次请求，快速点 ± 时旧响应不会覆盖新份数。
+ */
+async function loadQuote(quantity: number) {
+  const normalized = Math.max(1, Math.floor(Number(quantity) || 1));
+  const sequence = ++quoteRequestSeq;
+  quoteLoading.value = true;
+  quoteError.value = '';
+  quote.value = null;
+  try {
+    const result = await fetchCustomRecipeQuote(normalized);
+    if (sequence !== quoteRequestSeq) return;
+    if (!result || Number(result.quantity) !== normalized) {
+      throw new Error('报价与当前份数不一致，请重试');
+    }
+    quote.value = result;
+  } catch (error: any) {
+    if (sequence !== quoteRequestSeq) return;
+    quoteError.value = error?.message || '价格读取失败，请重试';
+  } finally {
+    if (sequence === quoteRequestSeq) {
+      quoteLoading.value = false;
+    }
+  }
+}
+
+function retryQuote() {
+  void loadQuote(recipeQuantity.value);
+}
+
+/**
+ * 按份数重取交付日期。
+ *
+ * 交期和价格一样由后端算：份数一变就要重新问，且**只认最后一次响应** ——
+ * 快速从 1 点到 5 时，1 份的旧响应晚到不能把 5 份的日期盖回去。
+ */
+async function loadDeliveryDate(quantity?: number) {
+  const sequence = ++deliveryRequestSeq;
+  deliveryLoading.value = true;
+  deliveryError.value = '';
+  try {
+    const result = await fetchNextDeliveryDate(quantity);
+    if (sequence !== deliveryRequestSeq) return;
+    delivery.value = result;
+  } catch (error: any) {
+    if (sequence !== deliveryRequestSeq) return;
+    // 旧日期的份数已经不对了，宁可显示"以订单为准"也不能留住错日期
+    delivery.value = null;
+    deliveryError.value = error?.message || '交付日期读取失败';
+  } finally {
+    if (sequence === deliveryRequestSeq) {
+      deliveryLoading.value = false;
+    }
+  }
+}
+
+/**
+ * 改份数：先裁掉多出来的肉类，再重新报价，并重新算交期。
+ *
+ * 只裁「超出新份数」的部分；确实裁掉了才提示，避免顾客以为自己点错了。
+ */
+function changeRecipeQuantity(delta: number) {
+  const next = Math.min(
+    maxRecipeQuantity.value,
+    Math.max(1, recipeQuantity.value + delta),
+  );
+  if (next === recipeQuantity.value) return;
+
+  const trimmed = trimProteinCodesForQuantity(
+    selectedProteinCodes.value,
+    next,
+  );
+  recipeQuantity.value = next;
+  selectedProteinCodes.value = trimmed.codes;
+  if (trimmed.dropped > 0) {
+    uni.showToast({
+      title: `已减少份数，取消 ${trimmed.dropped} 种肉类，请重新选择`,
+      icon: 'none',
+    });
+  } else if (proteinMode.value === 'SELF' && trimmed.codes.length < next) {
+    uni.showToast({
+      title: `请再选 ${next - trimmed.codes.length} 种主蛋白`,
+      icon: 'none',
+    });
+  }
+  void loadQuote(next);
+  void loadDeliveryDate(next);
+}
+
+function selectProteinMode(mode: ProteinChoiceMode) {
+  if (proteinMode.value === mode) return;
+  proteinMode.value = mode;
+  // 交给营养师就不再携带任何肉类偏好；切回自己选时重新选
+  if (mode === 'DIETITIAN') {
+    selectedProteinCodes.value = [];
+  }
+}
+
+function toggleProtein(code: string) {
+  if (proteinMode.value !== 'SELF') return;
+  const result = toggleProteinCode(
+    selectedProteinCodes.value,
+    code,
+    recipeQuantity.value,
+  );
+  if (result.limitReached) {
+    uni.showToast({
+      title: `最多选择 ${recipeQuantity.value} 种，先取消一种再换`,
+      icon: 'none',
+    });
+    return;
+  }
+  selectedProteinCodes.value = result.codes;
+}
 
 async function loadConfirmData() {
   loading.value = true;
@@ -473,6 +796,27 @@ async function loadConfirmData() {
     dog.value = dogRes?.data?.profile || dogRes?.data || dogRes || null;
     config.value = configRes;
     delivery.value = deliveryRes;
+
+    /**
+     * 多份开关只认 `=== true`：后端默认关闭，关闭时份数固定 1、整块隐藏，
+     * 保持原来的单份确认页不动。打开时才初始化步进器并取 1 份报价。
+     */
+    if (configRes?.multiRecipeEnabled === true) {
+      maxRecipeQuantity.value = resolveMaxRecipeQuantity(
+        configRes.maxRecipeQuantity,
+      );
+      recipeQuantity.value = 1;
+      void loadQuote(1);
+    } else {
+      maxRecipeQuantity.value = 1;
+      recipeQuantity.value = 1;
+      proteinMode.value = 'DIETITIAN';
+      selectedProteinCodes.value = [];
+      quote.value = null;
+      quoteError.value = '';
+      quoteLoading.value = false;
+      quoteRequestSeq += 1;
+    }
   } catch (error: any) {
     loadError.value = error?.message || '读取确认信息失败，请返回重试';
   } finally {
@@ -588,6 +932,22 @@ async function submitConfirmedOrder(payAfterSubmit = true) {
   }
 
   /**
+   * 多份：金额必须来自**最新一份**后端报价；报价没回来或失败时挡住提交。
+   * 这里宁可让顾客多点一次重试，也不能用前端算出来的金额去支付。
+   */
+  if (!quoteReady.value) {
+    uni.showToast({
+      title: quoteError.value || '价格还未确认，请重试',
+      icon: 'none',
+    });
+    return;
+  }
+  if (proteinSelectionError.value) {
+    uni.showToast({ title: proteinSelectionError.value, icon: 'none' });
+    return;
+  }
+
+  /**
    * 必须在点击事件的同步调用栈里发起订阅授权，不能先 await 网络。
    * 确认页加载时已经缓存了 orderNotifyTemplateId，这里直接传给 helper，
    * helper 会同步调用 uni.requestSubscribeMessage 弹出授权窗。
@@ -632,6 +992,15 @@ async function submitConfirmedOrder(payAfterSubmit = true) {
         !isNoAllergy &&
         (submittedAllergies.length > 0 ||
           Boolean(submittedAllergyText.trim())),
+      // 多份关闭时强制 1 份；自己选才带肉类，营养师配一律空数组
+      recipeQuantity: multiRecipeEnabled.value ? recipeQuantity.value : 1,
+      requestedProteinCodes: multiRecipeEnabled.value
+        ? resolveRequestedProteinCodes(
+            proteinMode.value,
+            selectedProteinCodes.value,
+            recipeQuantity.value,
+          )
+        : [],
     };
     const created = await submitOrder(payload);
     const orderId = String(created?.orderId || '').trim();
@@ -680,6 +1049,9 @@ onLoad((options: any) => {
 });
 
 onUnmounted(() => {
+  // 页面已离开，晚到的报价/交期响应不再写回
+  quoteRequestSeq += 1;
+  deliveryRequestSeq += 1;
   if (paymentClockTimer) {
     clearInterval(paymentClockTimer);
     paymentClockTimer = null;
@@ -834,6 +1206,231 @@ onUnmounted(() => {
   font-size: 28rpx;
   font-weight: 700;
   color: #1e3a2f;
+}
+
+/* ===== 多份：配方份数 / 指定主蛋白 ===== */
+.section-hint {
+  margin-left: auto;
+  font-size: 22rpx;
+  color: #8a7a63;
+}
+
+.multi-question {
+  display: block;
+  margin-bottom: 16rpx;
+  font-size: 24rpx;
+  color: #8a7a63;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+}
+
+.step-btn {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 34rpx;
+  color: #1e3a2f;
+  background: #eef3e8;
+}
+
+.step-btn--disabled {
+  opacity: 0.35;
+}
+
+.step-value {
+  min-width: 44rpx;
+  text-align: center;
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+}
+
+.step-hint {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #8a7a63;
+}
+
+.protein-block {
+  margin-top: 24rpx;
+  padding-top: 22rpx;
+  border-top: 1rpx solid #f0f1e9;
+}
+
+.protein-title {
+  display: block;
+  margin-bottom: 14rpx;
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #26261f;
+}
+
+.protein-mode-row {
+  display: flex;
+  gap: 14rpx;
+}
+
+.protein-mode {
+  flex: 1;
+  padding: 16rpx 0;
+  border-radius: 12rpx;
+  text-align: center;
+  background: #f7f8f2;
+  border: 1rpx solid #e3e6d4;
+}
+
+.protein-mode--on {
+  background: #1e3a2f;
+  border-color: #1e3a2f;
+}
+
+.protein-mode-label {
+  font-size: 25rpx;
+  color: #6b6653;
+}
+
+.protein-mode--on .protein-mode-label {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.protein-hint {
+  display: block;
+  margin-top: 14rpx;
+  font-size: 22rpx;
+  line-height: 1.6;
+  color: #8a7a63;
+}
+
+.protein-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: 14rpx;
+}
+
+.protein-option {
+  min-width: 104rpx;
+  padding: 14rpx 22rpx;
+  border-radius: 999rpx;
+  text-align: center;
+  background: #ffffff;
+  border: 1rpx solid #d8d9c9;
+  box-sizing: border-box;
+}
+
+.protein-option--on {
+  background: #1e3a2f;
+  border-color: #1e3a2f;
+}
+
+.protein-option--disabled {
+  opacity: 0.4;
+}
+
+.protein-option-label {
+  font-size: 25rpx;
+  color: #4d4a3d;
+}
+
+.protein-option--on .protein-option-label {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.protein-error {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #b45309;
+}
+
+/* ===== 多份：价格明细 ===== */
+.price-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24rpx;
+  padding: 12rpx 0;
+  border-top: 1rpx solid #f0f1e9;
+}
+
+.price-row:first-of-type {
+  border-top: none;
+}
+
+.price-label {
+  font-size: 24rpx;
+  color: #8a7a63;
+}
+
+.price-value {
+  font-size: 26rpx;
+  color: #26261f;
+}
+
+.price-value--discount {
+  color: #a8622a;
+}
+
+.price-row--total {
+  margin-top: 6rpx;
+  padding-top: 18rpx;
+  border-top: 1rpx solid #e3e6d4;
+}
+
+.price-value--total {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+}
+
+.price-sub {
+  display: block;
+  margin: -4rpx 0 10rpx;
+  text-align: right;
+  font-size: 21rpx;
+  color: #a29a88;
+}
+
+.price-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14rpx;
+  padding: 22rpx 0 8rpx;
+}
+
+.price-state-text {
+  font-size: 23rpx;
+  line-height: 1.6;
+  color: #8a7a63;
+  text-align: center;
+}
+
+.price-state--error .price-state-text {
+  color: #b45309;
+}
+
+.retry-btn {
+  height: 58rpx;
+  line-height: 58rpx;
+  padding: 0 30rpx;
+  border-radius: 999rpx;
+  font-size: 23rpx;
+  color: #1e3a2f;
+  background: #ffffff;
+  border: 1rpx solid #cfd8c5;
 }
 
 .price-note {

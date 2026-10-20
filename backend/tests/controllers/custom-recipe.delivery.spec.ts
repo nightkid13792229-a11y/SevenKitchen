@@ -267,8 +267,6 @@ describe('CustomRecipeController · 顾客端编号口径', () => {
             targetGoal: 'MAINTAIN',
             status: 'DELIVERED',
             amount: 300,
-            creditAmount: 150,
-            creditUsed: 0,
             // 订单存的是食谱主键，业务编号在关联对象上
             recipeId: 'recipe-pk-1',
             recipe: { id: 'recipe-pk-1', recipeId: 'CR1759000000000' },
@@ -284,12 +282,11 @@ describe('CustomRecipeController · 顾客端编号口径', () => {
       getPaymentTimeoutMinutes: jest.fn().mockResolvedValue(30),
       signOrderMedia: jest.fn().mockImplementation(async (value: any) => value),
       getOrderByOrderId: jest.fn().mockResolvedValue({
+        id: 'order-pk-1',
         orderId: 'CR202609280001',
         customerId: 'user-1',
         status: 'DELIVERED',
         amount: 300,
-        creditAmount: 150,
-        creditUsed: 0,
         recipeId: 'recipe-pk-1',
         recipe: {
           id: 'recipe-pk-1',
@@ -306,6 +303,14 @@ describe('CustomRecipeController · 顾客端编号口径', () => {
         createdAt: new Date('2026-09-28'),
       }),
       ['prisma']: { dog: { findFirst: jest.fn() } },
+    };
+
+    /**
+     * 2026-10-21：订单详情会额外查一次多份交付批次（老订单返回 null）。
+     * 本文件只测编号口径，给最小替身即可。
+     */
+    const deliveryService = {
+      findLatestBatchForOrder: jest.fn().mockResolvedValue(null),
     };
 
     /**
@@ -327,9 +332,14 @@ describe('CustomRecipeController · 顾客端编号口径', () => {
       customRecipeService as any,
       {} as any,
       viewService as any,
+      deliveryService as any,
+      // 2026-10-20：报价接口新增的两个依赖，本文件用不到
+      {} as any,
+      {} as any,
+      {} as any,
     );
 
-    return { controller, viewService };
+    return { controller, viewService, deliveryService };
   }
 
   // 控制器第一个参数是 @Req()，它读的是 req.user
@@ -366,8 +376,6 @@ describe('CustomRecipeController · 顾客端编号口径', () => {
             targetGoal: 'MAINTAIN',
             status: 'PAID',
             amount: 300,
-            creditAmount: 150,
-            creditUsed: 0,
             recipeId: null,
             recipe: null,
             createdAt: new Date('2026-09-28'),

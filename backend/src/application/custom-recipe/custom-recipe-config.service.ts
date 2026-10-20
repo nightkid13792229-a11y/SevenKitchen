@@ -1,26 +1,22 @@
 /**
  * 食谱定制配置 Application Service
  *
- * 单例配置：定制费、可抵扣金额、交付工作日数、每日接单上限、支付超时。
+ * 单例配置：定制费、交付工作日数、每日接单上限、支付超时。
  *
  * 为什么单独一张表（而不是并进 GlobalConfig）：
  * 定制是独立产品线（顶层设计 v4 产品线 ③），它的价格与产能参数不该和
  * 鲜食、补剂共用一个值 —— 否则调一边会影响另一边。
  * 与 SupplementShopConfig 的做法保持一致。
- *
- * 关键解耦点：**定制费**（feeAmount）与**可抵扣金额**（creditAmount）
- * 是两个独立参数：顾客付多少钱、其中多少钱能抵成品货款，由业务分开定。
  */
 
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma.service';
 
 export const CUSTOM_RECIPE_CONFIG_ID = 'singleton';
 
 /** 定制费默认 ¥300 */
 export const DEFAULT_CUSTOM_RECIPE_FEE = 300;
-/** 可抵扣金额默认 ¥300（与定制费一致，即"定制免费"口径） */
-export const DEFAULT_CUSTOM_RECIPE_CREDIT = 300;
 /** 交付周期默认 3 个工作日 */
 export const DEFAULT_CUSTOM_RECIPE_WORK_DAYS = 3;
 /** 每日接单上限默认 4 单 */
@@ -74,11 +70,60 @@ export const DEFAULT_CUSTOM_RECIPE_SLOT_RETRY_TIMES = 5;
 /** 定制单业务编号前缀 */
 export const DEFAULT_CUSTOM_RECIPE_ORDER_NO_PREFIX = 'CR';
 
+// ===== 2026-10-20 多份购买 · 第一阶段：价格与配置 =====
+
+/** 多份购买开关默认关闭：第二阶段（多份设计/一次性交付）上线前不得开启 */
+export const DEFAULT_MULTI_RECIPE_ENABLED = false;
+/** 单笔最多份数的业务硬上限：后台只能调低，不能配到 5 以上 */
+export const MAX_MULTI_RECIPE_QUANTITY = 5;
+/** 单笔最多份数默认值（也是存量/坏值时的兜底值） */
+export const DEFAULT_MAX_RECIPE_QUANTITY = 5;
+/** 最高折扣：20%。后台不能配置超过这个值 */
+export const MAX_MULTI_RECIPE_DISCOUNT_RATE = 0.2;
+/**
+ * 优惠档位必须覆盖的份数：2/3/4/5 四档齐全。
+ *
+ * 计划 Review Focus 明确要求「缺少档位时，后台保存必须失败」——
+ * 少一档会让某个份数静默变成"无优惠"，顾客看到的价格与预期不符。
+ */
+const REQUIRED_MULTI_RECIPE_DISCOUNT_QUANTITIES = [2, 3, 4, 5];
+/** 每日设计工时默认 480 分钟（8 小时） */
+export const DEFAULT_DAILY_DESIGN_MINUTES = 480;
+/** 每份食谱默认设计工时 96 分钟（1.6 小时） */
+export const DEFAULT_MINUTES_PER_RECIPE = 96;
+
+/** 多份优惠的一档：quantity 份享 discountRate 的整单折扣 */
+export interface MultiRecipeDiscountTier {
+  quantity: number;
+  discountRate: number;
+  label: string;
+}
+
+/**
+ * 默认多份优惠档位（老板 2026-10-20 定）。
+ *
+ * 为什么放在代码里而不是只靠数据库默认值：
+ *   · 迁移后存量配置行的 `multi_recipe_discounts` 是 `[]`，
+ *     **必须能读出默认四档**，否则顾客看到"多份无优惠"；
+ *   · 后台页面、报价、配置读取的默认值必须是同一份数据，
+ *     不能三处各写一遍。
+ */
+export const DEFAULT_MULTI_RECIPE_DISCOUNTS: readonly MultiRecipeDiscountTier[] =
+  [
+    { quantity: 2, discountRate: 0.05, label: '2 份享 95 折' },
+    { quantity: 3, discountRate: 0.08, label: '3 份享 92 折' },
+    { quantity: 4, discountRate: 0.1, label: '4 份享 9 折' },
+    { quantity: 5, discountRate: 0.12, label: '5 份享 88 折' },
+  ];
+
+/** 复制默认档位，避免调用方改到共享常量 */
+function cloneDefaultDiscountTiers(): MultiRecipeDiscountTier[] {
+  return DEFAULT_MULTI_RECIPE_DISCOUNTS.map((tier) => ({ ...tier }));
+}
+
 export interface CustomRecipeConfigDto {
   /** 定制费（元） */
   feeAmount: number;
-  /** 定制费中可用于抵扣成品货款的金额（元），不超过定制费 */
-  creditAmount: number;
   /** 交付周期（工作日） */
   deliveryWorkDays: number;
   /** 每日接单上限 */
@@ -126,13 +171,24 @@ export interface CustomRecipeConfigDto {
   /** 业务编号前缀 */
   orderNoPrefix: string;
 
+  // ===== 2026-10-20 多份购买 · 第一阶段 =====
+  /** 是否启用多份购买（默认关闭，第二阶段前不得开启） */
+  multiRecipeEnabled: boolean;
+  /** 单笔最多份数：1–5，5 是业务硬上限 */
+  maxRecipeQuantity: number;
+  /** 多份优惠档位（2–5 份；1 份不折扣） */
+  multiRecipeDiscounts: MultiRecipeDiscountTier[];
+  /** 每日设计工时（分钟），用于计算每日产能 */
+  dailyDesignMinutes: number;
+  /** 每份食谱默认设计工时（分钟），用于计算交付日期 */
+  minutesPerRecipe: number;
+
   updatedAt: string | null;
 }
 
 /** 对外公开的部分（小程序在未登录时也要能看到价格） */
 export interface PublicCustomRecipeConfigDto {
   feeAmount: number;
-  creditAmount: number;
   deliveryWorkDays: number;
   /** 售后单超多少小时要提醒（顾客侧用来显示"我们多久内响应"）· 2026-10-18 */
   aftersaleOverdueHours: number;
@@ -165,6 +221,16 @@ export interface PublicCustomRecipeConfigDto {
   /** 免费调整次数与时间窗 —— 售后页要写明 */
   freeRevisionCount: number;
   freeRevisionWindowDays: number;
+
+  // ===== 2026-10-20 多份购买 =====
+  //
+  // 只放顾客下单需要的三项；设计工时是内部产能参数，不进公开白名单。
+  /** 多份购买开关：决定小程序是否显示份数选择器 */
+  multiRecipeEnabled: boolean;
+  /** 最多可选份数：小程序步进器的上限 */
+  maxRecipeQuantity: number;
+  /** 优惠档位：确认页展示"几份享几折"的文案 */
+  multiRecipeDiscounts: MultiRecipeDiscountTier[];
 }
 
 export type UpdateCustomRecipeConfigDto = Partial<
@@ -196,7 +262,6 @@ export class CustomRecipeConfigService {
     const config = await this.getConfig();
     return {
       feeAmount: config.feeAmount,
-      creditAmount: config.creditAmount,
       deliveryWorkDays: config.deliveryWorkDays,
       /**
        * 支付时限要给到小程序（2026-10-04）：顾客必须知道"多久不付会被自动取消"，
@@ -227,6 +292,14 @@ export class CustomRecipeConfigService {
       messageCenterEnabled: config.messageCenterEnabled,
       freeRevisionCount: config.freeRevisionCount,
       freeRevisionWindowDays: config.freeRevisionWindowDays,
+      /**
+       * 2026-10-20 多份购买：小程序确认页据此决定
+       * 「是否显示份数选择器 / 最多几份 / 展示哪几档优惠」。
+       * 设计工时（dailyDesignMinutes / minutesPerRecipe）是内部参数，不公开。
+       */
+      multiRecipeEnabled: config.multiRecipeEnabled,
+      maxRecipeQuantity: config.maxRecipeQuantity,
+      multiRecipeDiscounts: config.multiRecipeDiscounts,
     };
   }
 
@@ -247,9 +320,6 @@ export class CustomRecipeConfigService {
 
   /**
    * 校验规则。
-   *
-   * 抵扣上限必须基于**改完之后**的定制费判断：
-   * 后台可能同时提交 feeAmount 与 creditAmount，只拿单边比较会漏判。
    */
   private assertValid(
     dto: UpdateCustomRecipeConfigDto,
@@ -264,35 +334,19 @@ export class CustomRecipeConfigService {
       }
     }
 
-    if (dto.creditAmount !== undefined) {
-      if (!Number.isFinite(dto.creditAmount) || dto.creditAmount < 0) {
-        throw new BadRequestException('可抵扣金额不能为负数');
-      }
-    }
-
     const nextFee = dto.feeAmount ?? current.feeAmount;
-    const nextCredit = dto.creditAmount ?? current.creditAmount;
 
     /**
      * 2026-10-04：定制费为 0 时**顾客根本付不了款** ——
      * 微信下单接口要求金额 ≥ 1 分，订单只会卡在"待付款"，30 分钟后被自动取消。
      * 与其让顾客撞上这个死路，不如不让后台保存这个值。
-     * 真要做"定制免费"，把可抵扣金额调到与定制费相同即可。
      *
      * 这里判的是 nextFee（含库里已有的历史值），所以即使某天线上已经是 0，
      * 下一次保存也必须先把它改回正数才能过。
      */
     if (nextFee === 0) {
       throw new BadRequestException(
-        '定制费不能为 0：为 0 时顾客无法发起微信支付，订单只会超时被取消。' +
-          '若要做活动，请把「可抵扣金额」调到与定制费相同（等于定制免费）',
-      );
-    }
-
-    if (nextCredit > nextFee) {
-      throw new BadRequestException(
-        `可抵扣金额（¥${nextCredit}）不能超过定制费（¥${nextFee}）；` +
-          '如果要做促销，请把定制费一并调高',
+        '定制费不能为 0：为 0 时顾客无法发起微信支付，订单只会超时被取消。',
       );
     }
 
@@ -476,14 +530,158 @@ export class CustomRecipeConfigService {
         );
       }
     }
+
+    // ===== 2026-10-20 多份购买 =====
+
+    if (
+      dto.multiRecipeEnabled !== undefined &&
+      typeof dto.multiRecipeEnabled !== 'boolean'
+    ) {
+      throw new BadRequestException('多份购买开关必须是布尔值');
+    }
+
+    if (dto.maxRecipeQuantity !== undefined) {
+      const value = dto.maxRecipeQuantity;
+      /**
+       * 5 是**业务硬上限**，不是"建议值"：设计文档要求后台只能在 1–5
+       * 之间调低当前上限，永远不能配到 6。
+       */
+      if (
+        !Number.isInteger(value) ||
+        value < 1 ||
+        value > MAX_MULTI_RECIPE_QUANTITY
+      ) {
+        throw new BadRequestException(
+          `最多份数必须是 1~${MAX_MULTI_RECIPE_QUANTITY} 的整数（业务硬上限为 ${MAX_MULTI_RECIPE_QUANTITY}）`,
+        );
+      }
+    }
+
+    if (dto.multiRecipeDiscounts !== undefined) {
+      this.assertValidMultiRecipeDiscounts(dto.multiRecipeDiscounts);
+    }
+
+    if (dto.dailyDesignMinutes !== undefined) {
+      const value = dto.dailyDesignMinutes;
+      if (!Number.isInteger(value) || value < 1) {
+        throw new BadRequestException(
+          '每日设计工时必须是大于 0 的整数（分钟）',
+        );
+      }
+    }
+
+    if (dto.minutesPerRecipe !== undefined) {
+      const value = dto.minutesPerRecipe;
+      if (!Number.isInteger(value) || value < 1) {
+        throw new BadRequestException(
+          '每份设计工时必须是大于 0 的整数（分钟）',
+        );
+      }
+    }
+  }
+
+  /**
+   * 多份优惠档位校验（设计文档 6.3）。
+   *
+   * 规则：
+   *   · 2–5 份四档必须齐全（缺档位时某个份数会静默变成"无优惠"）；
+   *   · 只能配置 2–5 份（1 份不允许折扣）；
+   *   · 份数不能重复；
+   *   · 份数越高，折扣不能降低（可以持平）；
+   *   · 每档折扣 > 0 且 ≤ 20%。
+   *
+   * 错误统一带「优惠配置不合法」前缀：后台保存失败时，运营一眼能看出
+   * 是优惠配置的问题，而不是笼统的 400。
+   *
+   * 空数组在保存时直接拒绝（四档全缺）。读取侧对存量 `[]` 另有兜底，
+   * 见 normalizeMultiRecipeDiscounts。
+   */
+  private assertValidMultiRecipeDiscounts(value: unknown): void {
+    if (!Array.isArray(value)) {
+      throw new BadRequestException('优惠配置不合法：优惠档位必须是数组');
+    }
+
+    const tiers = value.map((item) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        throw new BadRequestException(
+          '优惠配置不合法：每一档优惠必须是一个对象',
+        );
+      }
+      return item as Record<string, unknown>;
+    });
+
+    // 先按份数排序再校验"不能降低"，否则后台换一下行的顺序就会被误判
+    tiers.sort((a, b) => Number(a.quantity) - Number(b.quantity));
+
+    const seen = new Set<number>();
+    let previousRate = -Infinity;
+
+    for (const tier of tiers) {
+      const quantity = tier.quantity;
+      const discountRate = tier.discountRate;
+      const label = tier.label;
+
+      if (
+        typeof quantity !== 'number' ||
+        !Number.isInteger(quantity) ||
+        quantity < 2 ||
+        quantity > MAX_MULTI_RECIPE_QUANTITY
+      ) {
+        throw new BadRequestException(
+          `优惠配置不合法：优惠份数必须是 2~${MAX_MULTI_RECIPE_QUANTITY} 的整数`,
+        );
+      }
+
+      if (seen.has(quantity)) {
+        throw new BadRequestException(
+          `优惠配置不合法：${quantity} 份的优惠档位重复了`,
+        );
+      }
+      seen.add(quantity);
+
+      if (
+        typeof discountRate !== 'number' ||
+        !Number.isFinite(discountRate) ||
+        discountRate <= 0 ||
+        discountRate > MAX_MULTI_RECIPE_DISCOUNT_RATE
+      ) {
+        throw new BadRequestException(
+          `优惠配置不合法：${quantity} 份的折扣率必须大于 0 且不超过 ${
+            MAX_MULTI_RECIPE_DISCOUNT_RATE * 100
+          }%`,
+        );
+      }
+
+      if (discountRate < previousRate) {
+        throw new BadRequestException(
+          `优惠配置不合法：份数越高折扣不能降低（${quantity} 份的折扣低于上一档）`,
+        );
+      }
+      previousRate = discountRate;
+
+      if (typeof label !== 'string') {
+        throw new BadRequestException(
+          `优惠配置不合法：${quantity} 份的展示文案必须是字符串`,
+        );
+      }
+    }
+
+    // 四档必须齐全：2/3/4/5 缺任何一档都拒绝保存
+    const missing = REQUIRED_MULTI_RECIPE_DISCOUNT_QUANTITIES.filter(
+      (quantity) => !seen.has(quantity),
+    );
+    if (missing.length > 0) {
+      throw new BadRequestException(
+        `优惠配置不合法：优惠档位必须覆盖 2/3/4/5 份，缺少 ${missing.join(
+          '、',
+        )} 份`,
+      );
+    }
   }
 
   private toWriteData(dto: UpdateCustomRecipeConfigDto) {
     return {
       ...(dto.feeAmount !== undefined && { feeAmount: dto.feeAmount }),
-      ...(dto.creditAmount !== undefined && {
-        creditAmount: dto.creditAmount,
-      }),
       ...(dto.deliveryWorkDays !== undefined && {
         deliveryWorkDays: dto.deliveryWorkDays,
       }),
@@ -543,12 +741,34 @@ export class CustomRecipeConfigService {
       ...(dto.orderNoPrefix !== undefined && {
         orderNoPrefix: dto.orderNoPrefix,
       }),
+
+      // ===== 2026-10-20 多份购买 =====
+      ...(dto.multiRecipeEnabled !== undefined && {
+        multiRecipeEnabled: dto.multiRecipeEnabled,
+      }),
+      ...(dto.maxRecipeQuantity !== undefined && {
+        maxRecipeQuantity: dto.maxRecipeQuantity,
+      }),
+      ...(dto.multiRecipeDiscounts !== undefined && {
+        /**
+         * 校验已保证四档齐全（2/3/4/5）；这里按份数排序后落库，
+         * 保证读出来的顺序稳定。
+         */
+        multiRecipeDiscounts: ([...dto.multiRecipeDiscounts]
+          .sort((a, b) => a.quantity - b.quantity)
+          .map((tier) => ({ ...tier }))) as unknown as Prisma.InputJsonValue,
+      }),
+      ...(dto.dailyDesignMinutes !== undefined && {
+        dailyDesignMinutes: dto.dailyDesignMinutes,
+      }),
+      ...(dto.minutesPerRecipe !== undefined && {
+        minutesPerRecipe: dto.minutesPerRecipe,
+      }),
     };
   }
 
   private toDto(row: {
     feeAmount: unknown;
-    creditAmount: unknown;
     deliveryWorkDays: number;
     dailyCapacity: number;
     paymentTimeoutMinutes: number;
@@ -571,11 +791,16 @@ export class CustomRecipeConfigService {
     scheduleLookaheadDays: number;
     slotRetryTimes: number;
     orderNoPrefix: string;
+    // ===== 2026-10-20 多份购买 =====
+    multiRecipeEnabled: boolean;
+    maxRecipeQuantity: number;
+    multiRecipeDiscounts: unknown;
+    dailyDesignMinutes: number;
+    minutesPerRecipe: number;
     updatedAt: Date | null;
   }): CustomRecipeConfigDto {
     return {
       feeAmount: Number(row.feeAmount),
-      creditAmount: Number(row.creditAmount),
       deliveryWorkDays: Number(row.deliveryWorkDays),
       dailyCapacity: Number(row.dailyCapacity),
       paymentTimeoutMinutes: Number(row.paymentTimeoutMinutes),
@@ -605,7 +830,125 @@ export class CustomRecipeConfigService {
       slotRetryTimes: Number(row.slotRetryTimes),
       orderNoPrefix: row.orderNoPrefix,
 
+      // ===== 2026-10-20 多份购买 =====
+      multiRecipeEnabled:
+        typeof row.multiRecipeEnabled === 'boolean'
+          ? row.multiRecipeEnabled
+          : DEFAULT_MULTI_RECIPE_ENABLED,
+      maxRecipeQuantity: this.normalizeMaxRecipeQuantity(
+        row.maxRecipeQuantity,
+      ),
+      multiRecipeDiscounts: this.normalizeMultiRecipeDiscounts(
+        row.multiRecipeDiscounts,
+      ),
+      dailyDesignMinutes: this.normalizePositiveMinutes(
+        row.dailyDesignMinutes,
+        DEFAULT_DAILY_DESIGN_MINUTES,
+      ),
+      minutesPerRecipe: this.normalizePositiveMinutes(
+        row.minutesPerRecipe,
+        DEFAULT_MINUTES_PER_RECIPE,
+      ),
+
       updatedAt: row.updatedAt ? row.updatedAt.toISOString() : null,
     };
+  }
+
+  /**
+   * 读取时把「最多份数」夹回合法范围。
+   *
+   * 为什么读取也要兜底：配置行可能是迁移前的（字段不存在）、人工改过的，
+   * 或将来被别的脚本写坏的。报价/下单会直接吃这个值 ——
+   * 一个 0 会让"最多 0 份"，一个 99 会放过 6 份订单，都必须退 5。
+   */
+  private normalizeMaxRecipeQuantity(value: unknown): number {
+    if (
+      typeof value !== 'number' ||
+      !Number.isInteger(value) ||
+      value < 1 ||
+      value > MAX_MULTI_RECIPE_QUANTITY
+    ) {
+      return DEFAULT_MAX_RECIPE_QUANTITY;
+    }
+    return value;
+  }
+
+  /** 设计工时（分钟）读取兜底：0/负数/非整数都退默认值 */
+  private normalizePositiveMinutes(value: unknown, fallback: number): number {
+    if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
+      return fallback;
+    }
+    return value;
+  }
+
+  /**
+   * 读取时校验优惠档位。
+   *
+   * 坏配置不能进报价（否则可能出现"折扣下降"或负金额），统一退默认四档：
+   *   · 空数组 / 缺字段 → 默认档位（迁移后的存量行就是 `[]`）；
+   *   · 档位不齐（如只有 2、4 份）→ 默认档位（缺档位等于某个份数无优惠）；
+   *   · 任一档不合法 → 整体退默认，不保留"看起来还行"的部分。
+   */
+  private normalizeMultiRecipeDiscounts(
+    value: unknown,
+  ): MultiRecipeDiscountTier[] {
+    const parsed = typeof value === 'string' ? this.parseJson(value) : value;
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      return cloneDefaultDiscountTiers();
+    }
+
+    const tiers: MultiRecipeDiscountTier[] = [];
+
+    for (const item of parsed) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        return cloneDefaultDiscountTiers();
+      }
+      const { quantity, discountRate, label } = item as Record<string, unknown>;
+      if (
+        typeof quantity !== 'number' ||
+        !Number.isInteger(quantity) ||
+        quantity < 2 ||
+        quantity > MAX_MULTI_RECIPE_QUANTITY ||
+        typeof discountRate !== 'number' ||
+        !Number.isFinite(discountRate) ||
+        discountRate <= 0 ||
+        discountRate > MAX_MULTI_RECIPE_DISCOUNT_RATE ||
+        typeof label !== 'string'
+      ) {
+        return cloneDefaultDiscountTiers();
+      }
+      tiers.push({ quantity, discountRate, label });
+    }
+
+    // 排序后再判"折扣不能降低"，库里顺序不影响结果
+    tiers.sort((a, b) => a.quantity - b.quantity);
+
+    const seen = new Set<number>();
+    let previousRate = -Infinity;
+    for (const tier of tiers) {
+      if (seen.has(tier.quantity) || tier.discountRate < previousRate) {
+        return cloneDefaultDiscountTiers();
+      }
+      seen.add(tier.quantity);
+      previousRate = tier.discountRate;
+    }
+
+    // 四档不齐也视为坏配置：缺失档位会让对应份数静默变成"无优惠"
+    const missing = REQUIRED_MULTI_RECIPE_DISCOUNT_QUANTITIES.filter(
+      (quantity) => !seen.has(quantity),
+    );
+    if (missing.length > 0) {
+      return cloneDefaultDiscountTiers();
+    }
+
+    return tiers;
+  }
+
+  private parseJson(value: string): unknown {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return null;
+    }
   }
 }

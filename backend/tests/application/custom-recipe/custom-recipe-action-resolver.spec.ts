@@ -133,11 +133,6 @@ describe('动作解析器', () => {
           why: '售后改稿后要能**重新交付** —— 已完成是最需要它的时候',
         },
         {
-          code: 'RESTORE_CREDIT',
-          status: 'COMPLETED',
-          why: '恢复抵扣额度，只有管理员看得到',
-        },
-        {
           code: 'CONTACT_SERVICE',
           status: 'IN_PROGRESS',
           why: '联系客户',
@@ -322,7 +317,7 @@ describe('动作解析器', () => {
       expect(aftersale?.disabledReason).toContain('正在处理中');
     });
 
-    it('已交付/已完成：出现「用这份食谱订购成品」（抵扣入口）', () => {
+    it('已交付/已完成：出现「用这份食谱订购成品」', () => {
       for (const status of [
         CustomRecipeStatus.DELIVERED,
         CustomRecipeStatus.COMPLETED,

@@ -17,15 +17,6 @@ model Order {
   amountProduct                Decimal                     @map("amount_product")
   amountShipping               Decimal                     @map("amount_shipping")
   amountTotal                  Decimal                     @map("amount_total")
-  /// 本单使用的「定制费抵扣」金额（元）。
-  ///
-  /// 口径：**已含在（净）amount_product 里**，不参与任何算术 ——
-  /// 记录它只是为了展示"这单抵了多少"与审计，订单金额校验规则保持
-  /// `amount_total = amount_product + amount_shipping` 不变。
-  creditAmountApplied          Decimal                     @default(0) @map("credit_amount_applied") @db.Decimal(10, 2)
-  /// 抵扣来源的定制订单（CustomRecipeOrder.id）。
-  /// 刻意**不加唯一约束**：额度支持余额结转，同一张定制单可以抵多张成品单。
-  customRecipeCreditOrderId    String?                     @map("custom_recipe_credit_order_id")
   totalAmount                  Decimal?                    @map("total_amount")
   pricingBreakdownSnapshot     Json?                       @map("pricing_breakdown_snapshot")
   shippingAddressSnapshot      Json?                       @map("shipping_address_snapshot")
@@ -664,6 +655,8 @@ model Recipe {
   /// 一道食谱**只能交付给一张定制单**（`custom_recipe_order.recipe_id` 是唯一约束），
   /// 但同一张单可以多次交付同一道（重新交付会产生新版本）。
   deliveries             CustomRecipeDelivery[]
+  /// 多份交付批次里的明细（2026-10-21 新增）
+  deliveryItems          CustomRecipeDeliveryItem[]
   series                 RecipeSeries?               @relation(fields: [seriesId], references: [id])
   healthTagAssignments   RecipeHealthTagAssignment[]
   items                  RecipeItem[]
@@ -2492,11 +2485,27 @@ model CustomRecipeOrder {
   scheduledDate         DateTime                 @map("scheduled_date") @db.Date
   estimatedDeliveryDate DateTime?                @map("estimated_delivery_date") @db.Date
   amount                Decimal                  @default(299) @db.Decimal(10, 2)
-  /// 提交时快照下来的「可抵扣金额」（元）。
-  /// 后台调价只影响之后的单，已提交的订单按当时快照执行。
-  creditAmount          Decimal                  @default(300) @map("credit_amount") @db.Decimal(10, 2)
-  /// 已经用掉的抵扣额度（元）。剩余额度 = credit_amount - credit_used。
-  creditUsed            Decimal                  @default(0) @map("credit_used") @db.Decimal(10, 2)
+
+  // ===== 2026-10-20 多份购买 · 第一阶段：价格与配置 =====
+  //
+  // 这些字段是**下单瞬间的价格快照**：之后后台调价/改优惠档位，
+  // 已创建订单的金额与折扣不受影响。老订单份数视为 1、金额不变。
+
+  /// 本单份数（1–5）；老订单默认 1
+  recipeQuantity         Int      @default(1) @map("recipe_quantity")
+  /// 顾客选择的主蛋白轮换偏好（code 数组）；空数组 = 由营养师搭配
+  requestedProteinCodes  String[] @default([]) @map("requested_protein_codes")
+  /// 下单时的每份单价（元）
+  unitAmount             Decimal  @default(300) @map("unit_amount") @db.Decimal(10, 2)
+  /// 原价 = 单价 × 份数（元）
+  originalAmount         Decimal  @default(300) @map("original_amount") @db.Decimal(10, 2)
+  /// 整单折扣率（0.05 = 5%）
+  discountRate           Decimal  @default(0) @map("discount_rate") @db.Decimal(5, 4)
+  /// 优惠金额（元）
+  discountAmount         Decimal  @default(0) @map("discount_amount") @db.Decimal(10, 2)
+  /// 报价快照（份数、单价、折扣率、优惠、应付、档位文案等）
+  pricingSnapshot        Json?    @map("pricing_snapshot")
+
   status                CustomRecipeStatus       @default(PENDING_PAYMENT) @map("status")
   /// 内部子阶段（2026-10-16 批次 1.2）。
   ///
@@ -2553,6 +2562,8 @@ model CustomRecipeOrder {
   updatedAt             DateTime                 @updatedAt @map("updated_at")
   attachmentsRecords    CustomRecipeAttachment[]
   deliveries            CustomRecipeDelivery[]
+  /// 多份交付批次（2026-10-21 新增）
+  deliveryBatches       CustomRecipeDeliveryBatch[]
   aftersales            CustomRecipeAftersale[]
   customer              User                     @relation("CustomRecipeOrderCustomer", fields: [customerId], references: [id], onDelete: Cascade)
   dog                   Dog                      @relation("CustomRecipeOrderDog", fields: [dogId], references: [id], onDelete: Cascade)
@@ -2606,18 +2617,11 @@ model CustomRecipeAttachment {
 /// 刻意与鲜食的 GlobalConfig、补剂的 SupplementShopConfig 解耦：
 /// 定制是独立产品线（顶层设计 v4 产品线 ③），它的价格与产能参数
 /// 不该和别的生意共用一个值，否则"调一边影响另一边"。
-///
-/// 关键解耦点：**定制费**与**可抵扣金额**是两个独立参数 ——
-/// 顾客付多少钱、其中多少钱能抵成品货款，由业务在后台分开定。
 model CustomRecipeConfig {
   id String @id @default("singleton") @map("id")
 
   /// 定制费（元）：顾客提交定制单时支付的金额
   feeAmount Decimal @default(300) @map("fee_amount") @db.Decimal(10, 2)
-
-  /// 可抵扣金额（元）：定制费中可用于抵扣成品货款的额度。
-  /// 不得超过定制费（后台校验）；0 表示定制费纯粹是服务费，不抵货款。
-  creditAmount Decimal @default(300) @map("credit_amount") @db.Decimal(10, 2)
 
   /// 交付周期（工作日）：从预约日起算，遇公众假期顺延
   deliveryWorkDays Int @default(3) @map("delivery_work_days")
@@ -2685,6 +2689,25 @@ model CustomRecipeConfig {
   slotRetryTimes        Int     @default(5) @map("slot_retry_times")
   /// 定制单业务编号前缀（原先写死 'CR'）
   orderNoPrefix         String  @default("CR") @map("order_no_prefix") @db.VarChar(8)
+
+  // ===== 2026-10-20 多份购买 · 第一阶段：价格与配置 =====
+  //
+  // 多份购买开关**默认关闭**，第二阶段（多份设计/一次性交付）完成前不得开启。
+  // 关闭时创建 quantity > 1 的订单必须报错 —— 不能只靠前端隐藏入口。
+
+  /// 是否启用多份购买（默认关闭）
+  multiRecipeEnabled    Boolean @default(false) @map("multi_recipe_enabled")
+  /// 单笔最多份数：业务硬上限固定为 5，后台只能在该范围内调低
+  maxRecipeQuantity     Int     @default(5) @map("max_recipe_quantity")
+  /// 多份优惠档位：Array<{ quantity: number; discountRate: number; label: string }>
+  ///
+  /// 默认 [] 只是列默认值；读取时若为空/损坏会退代码里的默认四档
+  /// （2 份 5%、3 份 8%、4 份 10%、5 份 12%），见 CustomRecipeConfigService。
+  multiRecipeDiscounts  Json    @default("[]") @map("multi_recipe_discounts")
+  /// 每日设计工时（分钟）：默认 480 分钟 = 8 小时
+  dailyDesignMinutes    Int     @default(480) @map("daily_design_minutes")
+  /// 每份食谱默认设计工时（分钟）：默认 96 分钟 = 1.6 小时
+  minutesPerRecipe      Int     @default(96) @map("minutes_per_recipe")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -2754,13 +2777,96 @@ model CustomRecipeDelivery {
   @@map("custom_recipe_delivery")
 }
 
+/// 多份交付批次（2026-10-21，多份购买第二阶段）。
+///
+/// 为什么在 `CustomRecipeDelivery` 之外**再加**一层：
+///   · 老表一条记录 = 一道食谱，表达不了「这一单一次性交了 N 份」；
+///   · 多份订单必须**整批**交付，批次是「同一时刻交出去的 N 份」的边界；
+///   · 老表保留不动 —— 老订单、老页面、以后的重新交付仍走它。
+///
+/// 一个订单可以有多个批次（为将来的重新交付预留），当前只做首次交付。
+model CustomRecipeDeliveryBatch {
+  id           String    @id @default(uuid()) @map("id")
+  orderId      String    @map("order_id")
+  /// 第几次交付，从 1 开始；同一订单内唯一
+  version      Int
+  deliveredBy  String    @map("delivered_by")
+  deliveredAt  DateTime  @default(now()) @map("delivered_at")
+
+  /// 通知状态：PENDING / SENT / FAILED（通知由后续控制器 / 定时任务处理）
+  notifyStatus String?   @map("notify_status") @db.VarChar(20)
+  notifiedAt   DateTime? @map("notified_at")
+
+  /// 顾客确认收到（2026-10-21 · 多份交付顾客侧切片）
+  ///
+  /// 与老的单份交付表 `custom_recipe_delivery` 同一口径：确认一次整批，
+  /// `confirmedAt` 是售后窗口 / 自动完成的起算依据，重复确认**不刷新**它。
+  confirmedAt  DateTime? @map("confirmed_at")
+  /// CUSTOMER（顾客主动确认）/ AUTO（超期自动完成）
+  confirmChannel String? @map("confirm_channel") @db.VarChar(20)
+
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  order        CustomRecipeOrder          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  items        CustomRecipeDeliveryItem[]
+  /// 针对这一批提出的售后（2026-10-21 · 多份交付售后）
+  aftersales   CustomRecipeAftersale[]
+
+  @@unique([orderId, version])
+  @@index([orderId])
+  @@index([deliveredAt])
+  @@map("custom_recipe_delivery_batch")
+}
+
+/// 批次里的一份交付内容（每条 = 一道食谱 + 这份自己的内容快照）。
+///
+/// 为什么快照放在明细而不是批次：每份食谱的食材、喂食量、采购量都不同，
+/// 共用一份快照等于「只交了一份，却告诉顾客交了两份」。
+model CustomRecipeDeliveryItem {
+  id              String   @id @default(uuid()) @map("id")
+  batchId         String   @map("batch_id")
+  recipeId        String   @map("recipe_id")
+  recipeVersion   Int      @map("recipe_version")
+  /// 交付时刻冻结的内容快照（与 `CustomRecipeDelivery.contentSnapshot` 同结构）
+  contentSnapshot Json     @map("content_snapshot")
+  /// 这一版包含哪些交付物（取值来自选项集 custom_recipe_delivery_item）
+  items           Json     @default("[]")
+  /// 营养师给定的喂食参数（几餐 / 每餐多少 / 做几天）
+  feedingParams   Json?    @map("feeding_params")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  batch           CustomRecipeDeliveryBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  recipe          Recipe                    @relation(fields: [recipeId], references: [id])
+
+  @@unique([batchId, recipeId])
+  @@index([batchId])
+  @@index([recipeId])
+  @@map("custom_recipe_delivery_item")
+}
+
 /// 售后单。**独立于订单状态** —— 否则"已交付"与"售后中"会互相覆盖，
 /// 跟现状 `DELIVERED` 是终态一样僵。
 model CustomRecipeAftersale {
   id            String   @id @default(uuid()) @map("id")
   orderId       String   @map("order_id")
-  /// 针对哪一版交付提出的（可空：交付前也可能提）
+  /// 针对哪一版交付提出的（可空：交付前也可能提；多份订单用 `deliveryBatchId`）
   deliveryId    String?  @map("delivery_id")
+  /// 针对哪一批交付提出的（2026-10-21 · 多份交付售后）。
+  ///
+  /// 多份订单整批交付**不写老的单份交付表**，只写批次表；所以这类售后
+  /// `deliveryId` 为空、`deliveryBatchId` 有值。老订单反过来，两者互斥。
+  deliveryBatchId String? @map("delivery_batch_id")
+  /// 这次要调整哪几份（`CustomRecipeDeliveryItem.id`）。
+  ///
+  /// 存 id 而不是食谱 id：同一道食谱将来可能重新交付多次，
+  /// 售后针对的是**当时交付的那一份**，不是食谱本身。
+  deliveryItemIds String[] @default([]) @map("delivery_item_ids")
+  /// 每份各自的诉求说明：[{ deliveryItemId, description }]
+  ///
+  /// 可空：老版本小程序 / 只写一句共用说明时没有这个。
+  /// 共用说明仍在 `description`，这个字段只是把它细到每一份。
+  recipeRequests Json?  @map("recipe_requests")
   /// 类型 —— 取值来自选项集 `custom_recipe_aftersale_type`
   type          String   @map("type") @db.VarChar(48)
   status        CustomRecipeAftersaleStatus @default(PENDING)
@@ -2780,10 +2886,12 @@ model CustomRecipeAftersale {
 
   order         CustomRecipeOrder     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   delivery      CustomRecipeDelivery? @relation(fields: [deliveryId], references: [id])
+  deliveryBatch CustomRecipeDeliveryBatch? @relation(fields: [deliveryBatchId], references: [id], onDelete: SetNull)
 
   @@index([orderId])
   @@index([status])
   @@index([handlerId])
+  @@index([deliveryBatchId])
   @@map("custom_recipe_aftersale")
 }
 

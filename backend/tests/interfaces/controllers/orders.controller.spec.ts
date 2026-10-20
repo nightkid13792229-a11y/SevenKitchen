@@ -709,6 +709,18 @@ describe('OrdersController (e2e)', () => {
       expect(response.body.data).toHaveProperty('id');
       expect(typeof response.body.data.id).toBe('string');
       expect(response.body.data.id.length).toBeGreaterThan(0);
+
+      // 2026-10-20：定制费抵扣整体删除 —— 普通成品订单不得再带任何抵扣字段
+      expect(response.body.data).not.toHaveProperty('creditAmountApplied');
+      expect(response.body.data).not.toHaveProperty(
+        'creditOriginalProductAmount',
+      );
+      expect(response.body.data).not.toHaveProperty(
+        'customRecipeCreditOrderId',
+      );
+      expect(response.body.data).not.toHaveProperty('creditAmount');
+      expect(response.body.data).not.toHaveProperty('creditUsed');
+      expect(response.body.data).not.toHaveProperty('creditRemaining');
     });
 
     it('should return detailed field-level errors for invalid item fields', async () => {

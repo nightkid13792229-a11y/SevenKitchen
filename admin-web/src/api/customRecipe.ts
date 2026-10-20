@@ -70,6 +70,8 @@ export interface CustomRecipeOrderDetail {
   id?: string
   orderId: string
   status: string
+  /** 本单购买/应交付的份数；老订单没有这个字段，后端按 1 份处理（2026-10-21） */
+  recipeQuantity?: number
   targetGoal?: string
   /** 下单当时顾客手填的过敏（快照，不会随档案更新） */
   allergies?: string[]
@@ -105,9 +107,6 @@ export interface CustomRecipeOrderDetail {
   scheduledDate?: string
   estimatedDeliveryDate?: string | null
   amount?: number
-  creditAmount?: number
-  creditUsed?: number
-  creditRemaining?: number
   createdAt?: string
   paymentConfirmedAt?: string | null
   /** 微信支付交易号，客服对账/排查用 */
@@ -160,6 +159,50 @@ export interface DeliverRecipeResult {
   deliveredAt: string
 }
 
+/** 多份订单一次性交付的返回摘要 */
+export interface DeliverBatchResult {
+  orderId: string
+  batchId: string
+  version: number
+  deliveredAt: string
+  autoCompleteAt?: string | null
+  recipeCount: number
+  recipes: Array<{
+    recipeId: string
+    recipeName: string
+    itemCodes: string[]
+  }>
+  legacyRecipeId?: string
+  status: string
+}
+
+/**
+ * 按选中份重新交付的返回摘要（2026-10-21 · 多份售后改稿）
+ *
+ * `recipeCount` 是新批次的总份数（含未选中的复制项）；
+ * `selectedRecipes` 才是这次真正刷新过的份 —— 页面报数用它，
+ * 不能用 `recipeCount` 说"重交了 N 份"，那会把没动的份也算进去。
+ */
+export interface RedeliverBatchResult {
+  orderId: string
+  batchId: string
+  version: number
+  deliveredAt: string
+  autoCompleteAt?: string | null
+  recipeCount: number
+  /** 本次刷新了快照的交付明细 id（旧批次里的 id，按入参顺序） */
+  selectedItemIds: string[]
+  selectedRecipes: Array<{
+    deliveryItemId: string
+    /** 食谱业务编号（CR…），不是主键 */
+    recipeId: string
+    recipeName: string
+    itemCodes: string[]
+  }>
+  legacyRecipeId?: string
+  status: string
+}
+
 export interface CustomRecipeOrderListResult {
   orders: CustomRecipeOrderDetail[]
   total: number
@@ -177,9 +220,18 @@ export interface CustomRecipeStatistics {
   pendingAftersale: number
 }
 
+/** 多份优惠的一档：quantity 份享 discountRate 的整单折扣 */
+export interface MultiRecipeDiscountTier {
+  /** 份数：2–5（1 份不折扣） */
+  quantity: number
+  /** 整单折扣率，**小数**形式：0.05 = 5% */
+  discountRate: number
+  /** 顾客端展示文案，如「2 份享 95 折」 */
+  label: string
+}
+
 export interface CustomRecipeConfig {
   feeAmount: number
-  creditAmount: number
   deliveryWorkDays: number
   dailyCapacity: number
   paymentTimeoutMinutes: number
@@ -224,6 +276,18 @@ export interface CustomRecipeConfig {
   /** 业务编号前缀 */
   orderNoPrefix: string
 
+  // ===== 2026-10-20 多份购买 · 第一阶段 =====
+  /** 是否启用多份购买（默认关闭；关闭时只能下 1 份） */
+  multiRecipeEnabled: boolean
+  /** 单笔最多份数：1–5，5 是业务硬上限 */
+  maxRecipeQuantity: number
+  /** 多份优惠档位（2–5 份四档必须齐全；1 份不折扣） */
+  multiRecipeDiscounts: MultiRecipeDiscountTier[]
+  /** 每日设计工时（分钟），用于推算每日产能 */
+  dailyDesignMinutes: number
+  /** 每份食谱默认设计工时（分钟），用于推算交付日期 */
+  minutesPerRecipe: number
+
   updatedAt?: string
 }
 
@@ -262,6 +326,19 @@ export interface ResolvedDay {
 
 // ===== 售后处理（2026-10-16 批次 3.1）=====
 
+/** 多份售后里被选中的一份交付明细（后端已把 id 翻成食谱名） */
+export interface AdminAftersaleSelectedRecipe {
+  deliveryItemId: string;
+  recipeId: string | null;
+  recipeName: string | null;
+}
+
+/** 多份售后里这一份自己的诉求说明 */
+export interface AdminAftersaleRecipeRequest {
+  deliveryItemId: string;
+  description: string;
+}
+
 /** 后台待办里的一条售后 */
 export interface AdminAftersaleItem {
   id: string;
@@ -279,6 +356,14 @@ export interface AdminAftersaleItem {
   createdAt: string;
   acceptedAt?: string | null;
   resolvedAt?: string | null;
+  /** 多份售后针对哪一批交付；老的单份售后为 null */
+  deliveryBatchId: string | null;
+  /** 多份售后选中了哪几份（顺序即展示顺序）；老订单为空数组 */
+  deliveryItemIds: string[];
+  /** 每份各自的诉求说明；只有共用说明时为空数组 */
+  recipeRequests: AdminAftersaleRecipeRequest[];
+  /** 选中的每一份对应的食谱；明细被删时可能缺项，以 deliveryItemIds 为准 */
+  items: AdminAftersaleSelectedRecipe[];
   /** 等了多久 —— 客服一眼看出哪条催得急（后端算的） */
   hoursWaiting: number;
   /** 是不是"催得急"（标红）—— 阈值由后端定，前端不判断 */
@@ -371,13 +456,35 @@ export const customRecipeApi = {
       recipeId,
     }),
 
+  /**
+   * 多份订单一次性交付（2026-10-21 · 多份履约第二阶段）。
+   *
+   * 只用于**首次交付**，且 recipeIds 必须恰好等于订单的 recipeQuantity：
+   * 后端会在一个事务里写批次 + 每份快照，少交/多交/重复都会 400。
+   * 单份订单仍走上面的 deliverRecipe，不要混用。
+   */
+  deliverBatch: (orderId: string, recipeIds: string[]) =>
+    api.post<DeliverBatchResult>(
+      `${BASE}/orders/${orderId}/deliver-batch`,
+      { recipeIds },
+    ),
+
+  /**
+   * 按选中份重新交付（2026-10-21 · 多份售后改稿）。
+   *
+   * 只服务**多份订单的售后改稿**：只刷新 `deliveryItemIds` 这几份的快照，
+   * 其余份原样带进新批次。首次交付走 `deliverBatch`，单份订单仍走
+   * `deliverRecipe`，三者不要混用。
+   */
+  redeliverBatch: (orderId: string, deliveryItemIds: string[]) =>
+    api.post<RedeliverBatchResult>(
+      `${BASE}/orders/${orderId}/redeliver-batch`,
+      { deliveryItemIds },
+    ),
+
   /** 手工创建食谱并交付（兜底通道，正常动线应走设计器 + 一键交付） */
   createRecipe: (orderId: string, payload: CreateCustomRecipePayload) =>
     api.post(`${BASE}/orders/${orderId}/create-recipe`, payload),
-
-  /** 恢复定制抵扣额度（人工退款时使用，仅管理员） */
-  restoreCredit: (orderId: string, amount?: number) =>
-    api.post(`${BASE}/orders/${orderId}/restore-credit`, { amount }),
 
   /** 删除订单附件 */
   deleteAttachment: (attachmentId: string) =>

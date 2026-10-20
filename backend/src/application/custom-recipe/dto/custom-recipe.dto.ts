@@ -10,7 +10,10 @@ import {
   IsDateString,
   IsBoolean,
   IsEnum,
+  IsInt,
+  Max,
   MaxLength,
+  Min,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -20,6 +23,7 @@ import {
   CustomAttachmentType,
   AllergyAnswerStatus,
 } from '@prisma/client';
+import { MAX_MULTI_RECIPE_QUANTITY } from '../custom-recipe-config.service';
 
 /**
  * 本单上传的过敏检测报告草稿（2026-10-19）。
@@ -247,6 +251,40 @@ export class SubmitCustomRecipeOrderDTO {
   @IsOptional()
   @IsBoolean()
   needsHealthManagement?: boolean;
+
+  // ===== 2026-10-20 多份购买 · 第一阶段 =====
+
+  /**
+   * 本单份数（1–5），不传按 1 份处理。
+   *
+   * 金额、折扣一律由后端重新报价，DTO 里**不接收任何金额字段** ——
+   * 前端传来的价格不能作为支付依据。
+   */
+  @ApiPropertyOptional({
+    description: `份数（1–${MAX_MULTI_RECIPE_QUANTITY}，默认 1）`,
+    minimum: 1,
+    maximum: MAX_MULTI_RECIPE_QUANTITY,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(MAX_MULTI_RECIPE_QUANTITY)
+  recipeQuantity?: number;
+
+  /**
+   * 顾客希望轮换的主蛋白 code；留空表示交给营养师搭配。
+   *
+   * 只做「数量 = 份数、不重复、不为空」的选择器校验；
+   * 是否与过敏冲突由营养师人工把关（设计文档第 10 节）。
+   */
+  @ApiPropertyOptional({
+    description: '希望轮换的主蛋白 code 数组（可留空）',
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  requestedProteinCodes?: string[];
 }
 
 export class UpdateOrderStatusDTO {

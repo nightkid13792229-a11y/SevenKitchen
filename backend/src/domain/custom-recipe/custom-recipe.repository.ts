@@ -73,6 +73,12 @@ export interface CreateCustomRecipeOrderDTO {
   stomachConditions?: string[];
   /** 选「其他」时手填的肠胃情况 */
   stomachOther?: string | null;
+
+  // ===== 2026-10-20 多份购买 · 第一阶段 =====
+  /** 本单份数：1–5，默认 1（老版本小程序不传） */
+  recipeQuantity?: number;
+  /** 顾客希望轮换的主蛋白 code；留空表示交给营养师搭配 */
+  requestedProteinCodes?: string[];
 }
 
 export interface UpdateCustomRecipeOrderDTO {

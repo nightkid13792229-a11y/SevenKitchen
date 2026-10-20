@@ -15,7 +15,7 @@ import { PrismaService } from '../../../src/infrastructure/prisma.service';
  *   ① **隐私边界** —— 绝不能把别人家狗的定制食谱交付出去
  *      （2026-09-28 专门修过，那次的教训不能再犯）
  *   ② **一道食谱只能一张单** —— 复用会让两单共用一份产出，
- *      而 ¥150 抵扣额度是绑在那道食谱上的
+ *      交付记录也就分不清属于哪一单
  *   ③ **交付 = 冻结** —— 快照必须落库，且喂食量由**后端**算，不是前端传的
  */
 
@@ -512,6 +512,13 @@ describe('CustomRecipeDeliveryService', () => {
         },
         customRecipeDelivery: {
           findFirst: jest.fn().mockResolvedValue(options.delivery ?? null),
+        },
+        /**
+         * 2026-10-21：确认收到会先看有没有多份交付批次。
+         * 老单份路径的用例统一返回 null（= 没有批次），走原来的逻辑。
+         */
+        customRecipeDeliveryBatch: {
+          findFirst: jest.fn().mockResolvedValue(null),
         },
         $transaction: jest
           .fn()

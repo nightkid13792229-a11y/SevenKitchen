@@ -1,4 +1,5 @@
 import { CustomRecipeService } from 'src/application/custom-recipe/custom-recipe.service';
+import { CustomRecipePricingService } from 'src/application/custom-recipe/custom-recipe-pricing.service';
 
 describe('CustomRecipeService · 健康档案汇总', () => {
   it('最近就诊带日期和诊断，供定制页只读确认块使用', async () => {
@@ -30,6 +31,7 @@ describe('CustomRecipeService · 健康档案汇总', () => {
       prisma,
       {} as any,
       {} as any,
+      new CustomRecipePricingService(),
     );
 
     const summary: any = await service.getDogHealthSummary('dog-1');

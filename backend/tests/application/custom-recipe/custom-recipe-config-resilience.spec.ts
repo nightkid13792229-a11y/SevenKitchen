@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CustomRecipeService } from '../../../src/application/custom-recipe/custom-recipe.service';
 import { CustomRecipeConfigService } from '../../../src/application/custom-recipe/custom-recipe-config.service';
+import { CustomRecipePricingService } from '../../../src/application/custom-recipe/custom-recipe-pricing.service';
 import { PrismaService } from '../../../src/infrastructure/prisma.service';
 import { TencentCosService } from '../../../src/infrastructure/services/tencent-cos.service';
 
@@ -26,6 +27,7 @@ function buildService(config: unknown): Promise<CustomRecipeService> {
   const module: TestingModule = Test.createTestingModule({
     providers: [
       CustomRecipeService,
+      CustomRecipePricingService,
       { provide: PrismaService, useValue: {} },
       { provide: TencentCosService, useValue: {} },
       {
@@ -89,6 +91,7 @@ describe('配置读取 · 健壮性（批次 1.4）', () => {
       const module = await Test.createTestingModule({
         providers: [
           CustomRecipeService,
+          CustomRecipePricingService,
           { provide: PrismaService, useValue: {} },
           { provide: TencentCosService, useValue: {} },
           {

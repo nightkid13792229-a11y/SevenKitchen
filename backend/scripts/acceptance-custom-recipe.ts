@@ -224,14 +224,12 @@ async function main() {
         scheduledDate: new Date('2026-10-16'),
         status: CustomRecipeStatus.PENDING_PAYMENT,
         amount: 300,
-        creditAmount: 300,
-        creditUsed: 0,
       },
     });
     let view = await customerView(orderNo);
     say('订单号', orderNo);
     say('顾客看到的状态', view?.status);
-    say('定制费', '¥300（其中 ¥300 可抵扣成品）');
+    say('定制费', '¥300');
 
     step('② 付款');
     await prisma.customRecipeOrder.update({

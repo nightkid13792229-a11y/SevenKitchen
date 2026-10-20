@@ -4,7 +4,7 @@
       <text class="state-text">加载中...</text>
     </view>
 
-    <view v-else-if="!delivery" class="state-block">
+    <view v-else-if="!resolved" class="state-block">
       <text class="state-title">还没有交付内容</text>
       <text class="state-text">营养师交付后会在这里显示，并给你发通知</text>
       <button class="state-btn" @tap="goBack">返回</button>
@@ -26,7 +26,12 @@
       <view class="hero">
         <text class="hero-title">采购与制作</text>
         <text class="hero-sub">
-          {{ content.recipe.name }} · 第 {{ delivery.version }} 版
+          {{ resolved.recipeName || content.recipe.name }} · 第
+          {{ resolved.version }} 版
+        </text>
+        <text v-if="resolved.isBatch" class="hero-batch">
+          本次共交付 {{ resolved.batchSize }} 份 · 当前第
+          {{ resolved.selectedIndex + 1 }} 份
         </text>
       </view>
 
@@ -196,7 +201,12 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { onLoad, onPullDownRefresh } from '@dcloudio/uni-app';
-import { fetchDelivery, type OrderDelivery } from '@/api/custom-recipe';
+import { fetchDelivery } from '@/api/custom-recipe';
+import {
+  buildDeliveryDetailUrl,
+  resolveDeliverySelection,
+  type CustomRecipeDeliveryResponse,
+} from '@/utils/custom-recipe-delivery';
 import RecipeIngredientUsageTable from '@/components/recipe/RecipeIngredientUsageTable.vue';
 import { PrintCanvasBuilder } from '@/utils/print-canvas';
 import { drawDeliverySheet } from '@/utils/delivery-print';
@@ -205,12 +215,24 @@ import { getBaseUrl } from '@/utils/config';
 import { request } from '@/utils/api';
 
 const orderId = ref('');
+const recipeId = ref('');
 const loading = ref(true);
-const delivery = ref<OrderDelivery | null>(null);
+const delivery = ref<CustomRecipeDeliveryResponse | null>(null);
+
+/**
+ * 本次要采购/制作的那一份。
+ *
+ * 多份订单按 `recipeId` 选；老单份交付原样收敛，`content` 不变。
+ * 第 2 页的清单必须和第 1 页看的是同一份 —— 否则顾客会照着鸭肉的
+ * 采购单去做鸡肉。
+ */
+const resolved = computed(() =>
+  resolveDeliverySelection(delivery.value, recipeId.value),
+);
 
 const content = computed(
   () =>
-    delivery.value?.content ?? {
+    resolved.value?.content ?? {
       schemaVersion: 1,
       recipe: { recipeId: '', name: '', items: [] },
       feeding: {
@@ -425,7 +447,7 @@ const waitForCanvasResize = () =>
 
 /** 交付日期 → 「2026-10-16」。纯格式化，不涉及业务判断 */
 const deliveredAtText = computed(() => {
-  const iso = delivery.value?.deliveredAt;
+  const iso = resolved.value?.deliveredAt;
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
@@ -433,7 +455,7 @@ const deliveredAtText = computed(() => {
 });
 
 const saveAsImage = async () => {
-  if (!delivery.value) return;
+  if (!resolved.value) return;
   generating.value = true;
   uni.showLoading({ title: '生成中...', mask: true });
   try {
@@ -486,9 +508,9 @@ const saveAsImage = async () => {
 
     const sheetInput = () => ({
       content: content.value,
-      version: delivery.value?.version,
+      version: resolved.value?.version,
       deliveredAtText: deliveredAtText.value,
-      dogName: delivery.value?.dogName ?? null,
+      dogName: (delivery.value as any)?.dogName ?? null,
       qrCodePath,
     });
 
@@ -533,7 +555,11 @@ const saveAsImage = async () => {
 const load = async () => {
   loading.value = true;
   try {
-    delivery.value = await fetchDelivery(orderId.value);
+    delivery.value = await fetchDelivery(
+      orderId.value,
+      undefined,
+      recipeId.value,
+    );
   } finally {
     loading.value = false;
   }
@@ -547,15 +573,28 @@ const goBack = () => uni.navigateBack();
  * 用 `redirectTo` 而不是 `navigateTo`：这一页是从第 1 页跳过来的，
  * 再 navigateTo 会叠成三层（列表 → 食谱 → 采购 → 食谱），
  * 顾客连按返回要按好几次才回得到订单。
+ *
+ * 多份订单必须把 `recipeId` 带回去，否则会退回批次第一份。
  */
 const goRecipe = () => {
+  /**
+   * 老单份订单不带 recipeId —— 保持原来的链接形状；
+   * 多份批次才需要把"看的是哪一份"带回去。
+   */
+  const selectedRecipeId = resolved.value?.recipeId ?? recipeId.value;
+  const routeRecipeId = resolved.value?.isBatch
+    ? selectedRecipeId
+    : undefined;
   uni.redirectTo({
-    url: `/pages/custom-recipe/delivery?orderId=${encodeURIComponent(orderId.value)}`,
+    url: buildDeliveryDetailUrl(orderId.value, routeRecipeId),
   });
 };
 
 onLoad((options) => {
   orderId.value = options?.orderId ? decodeURIComponent(options.orderId) : '';
+  recipeId.value = options?.recipeId
+    ? decodeURIComponent(options.recipeId)
+    : '';
   load();
   // 设备推荐与交付内容无关（全局配置），单独拉、失败不影响主体
   void loadEquipment();
@@ -618,6 +657,13 @@ onPullDownRefresh(async () => {
   margin-top: 8rpx;
   font-size: 24rpx;
   color: rgba(244, 236, 216, 0.55);
+}
+
+.hero-batch {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #d8bc85;
 }
 
 .section {

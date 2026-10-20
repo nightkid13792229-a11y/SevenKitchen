@@ -27,6 +27,7 @@ import { CustomRecipeAftersaleService } from '../../../application/custom-recipe
 import { CustomRecipeViewService } from '../../../application/custom-recipe/custom-recipe-view.service';
 import { MiniProgramCodeService } from '../../../application/wechat/mini-program-code.service';
 import { CustomRecipeConfigService } from '../../../application/custom-recipe/custom-recipe-config.service';
+import { CustomRecipePricingService } from '../../../application/custom-recipe/custom-recipe-pricing.service';
 import { WechatPaymentService } from '../../../application/payment/wechat-payment.service';
 import { SubmitCustomRecipeOrderDTO } from '../../../application/custom-recipe/dto/custom-recipe.dto';
 import { AuthGuard } from '../../auth/auth.guard';
@@ -57,6 +58,9 @@ export class CustomRecipeController {
     private readonly deliveryService: CustomRecipeDeliveryService,
     /** 售后（批次 2.5）：顾客提交、查看进度、撤回 */
     private readonly aftersaleService: CustomRecipeAftersaleService,
+    /** 多份购买（2026-10-20）：报价必须由服务端权威计算 */
+    private readonly customRecipeConfigService: CustomRecipeConfigService,
+    private readonly customRecipePricingService: CustomRecipePricingService,
   ) {}
 
   /**
@@ -95,6 +99,9 @@ export class CustomRecipeController {
       attachmentKeys: dto.attachmentKeys || [],
       syncToHealthProfile: dto.syncToHealthProfile,
       needsHealthManagement: dto.needsHealthManagement === true,
+      // 2026-10-20 多份购买：份数与肉类偏好只做透传，金额一律由服务端报价
+      recipeQuantity: dto.recipeQuantity,
+      requestedProteinCodes: dto.requestedProteinCodes,
     });
 
     return ApiResponseDto.success({
@@ -116,7 +123,6 @@ export class CustomRecipeController {
        * 这个字段此前还把环境变量缺失时的兜底值当成真号显示给顾客。
        */
       amount: Number(order.amount),
-      creditAmount: Number(order.creditAmount),
     });
   }
 
@@ -199,12 +205,6 @@ export class CustomRecipeController {
         estimatedDeliveryDate: order.estimatedDeliveryDate,
         status: order.status,
         amount: Number(order.amount),
-        creditAmount: Number(order.creditAmount),
-        creditUsed: Number(order.creditUsed),
-        creditRemaining: Math.max(
-          0,
-          Number(order.creditAmount) - Number(order.creditUsed),
-        ),
         /**
          * 交付后的食谱，给小程序的是**业务编号**（Recipe.recipeId）。
          *
@@ -234,6 +234,37 @@ export class CustomRecipeController {
       page,
       pageSize,
     });
+  }
+
+  /**
+   * 多份定制报价（2026-10-20 多份购买 · 第一阶段）
+   *
+   * 金额只能由后端算：小程序确认页展示的 900 / 72 / 828 必须与这里一致，
+   * 下单时服务端还会用同一个 `CustomRecipePricingService` 再算一遍并快照。
+   *
+   * ⚠️ 必须排在 `orders/:orderId` 这类通配路由之前。`quote` 本身是静态段，
+   * 但今后若有人加 `@Get(':id')` 之类的通配，声明顺序错了就会被吞掉。
+   * 登录守卫沿用控制器上的 `@UseGuards(AuthGuard)`，报价不对未登录用户开放。
+   */
+  @Get('quote')
+  @ApiOperation({ summary: 'Quote multi recipe order' })
+  async quote(@Query('quantity') quantity?: string) {
+    const config = await this.customRecipeConfigService.getConfig();
+    const parsed = this.parseQuoteQuantity(quantity, config.maxRecipeQuantity);
+
+    /**
+     * 开关关闭时连报价也不能给多份价格（2026-10-20 复核）。
+     *
+     * 与下单侧同一条规则：前端隐藏选择器只是体验层，接口直调也必须挡住。
+     * 1 份不受影响 —— 单份订单在开关关闭时仍然正常卖。
+     */
+    if (parsed > 1 && config.multiRecipeEnabled !== true) {
+      throw new BadRequestException('多份购买暂未开放，请选择 1 份');
+    }
+
+    return ApiResponseDto.success(
+      this.customRecipePricingService.quote(parsed, config),
+    );
   }
 
   /**
@@ -327,6 +358,27 @@ export class CustomRecipeController {
      */
     const currentDelivery = (order.deliveries ?? [])[0] ?? null;
 
+    /**
+     * 多份交付批次（2026-10-21 · 顾客交付切片）。
+     *
+     * 多份订单整批交付走的是批次表，**不写老的单份交付表** ——
+     * 所以 `delivery` 对这类订单是 null，信息必须从 `deliveryBatch` 取。
+     * 老订单没有批次 → null，`delivery` 字段与以前完全一致。
+     */
+    const deliveryBatch = await this.deliveryService.findLatestBatchForOrder(
+      order.id,
+    );
+
+    /**
+     * 「有没有交付」要把批次算进来：只认老交付表的话，多份订单交付后
+     * 顾客看不到「查看定制食谱」，也点不到「确认收到」。
+     */
+    const hasAnyDelivery = Boolean(currentDelivery || deliveryBatch);
+    const hasUnconfirmedDelivery = Boolean(
+      (currentDelivery && !currentDelivery.confirmedAt) ||
+      (deliveryBatch && !deliveryBatch.confirmedAt),
+    );
+
     return ApiResponseDto.success({
       orderId: order.orderId,
       dogId: order.dogId,
@@ -337,12 +389,6 @@ export class CustomRecipeController {
       estimatedDeliveryDate: order.estimatedDeliveryDate,
       status: order.status,
       amount: Number(order.amount),
-      creditAmount: Number(order.creditAmount),
-      creditUsed: Number(order.creditUsed),
-      creditRemaining: Math.max(
-        0,
-        Number(order.creditAmount) - Number(order.creditUsed),
-      ),
       // 同上：给小程序必须回业务编号，否则"查看定制食谱"打不开
       recipeId: order.recipe?.recipeId ?? null,
       recipeName: order.recipe?.name ?? null,
@@ -414,6 +460,31 @@ export class CustomRecipeController {
         : null,
 
       /**
+       * 多份交付摘要（2026-10-21）—— 同样是**不含快照本体**的列表。
+       *
+       * 形状与老的 `delivery` 刻意不同：
+       *   · 老字段保持原样（老小程序 / 老订单不受影响）；
+       *   · 新字段用 `items` 表达 N 份，每份带自己的交付物清单；
+       *   · `recipeId` 给的是**业务编号**，前端拿它打开食谱详情 / DIY。
+       */
+      deliveryBatch: deliveryBatch
+        ? {
+            id: deliveryBatch.id,
+            version: deliveryBatch.version,
+            deliveredAt: deliveryBatch.deliveredAt,
+            confirmedAt: deliveryBatch.confirmedAt,
+            autoCompleteAt: order.autoCompleteAt ?? null,
+            items: (deliveryBatch.items ?? []).map((item) => ({
+              deliveryItemId: item.id,
+              recipeId: item.recipe?.recipeId ?? null,
+              recipeName: item.recipe?.name ?? null,
+              recipeCoverImageUrl: item.recipe?.coverImageUrl ?? null,
+              itemCodes: Array.isArray(item.items) ? item.items : [],
+            })),
+          }
+        : null,
+
+      /**
        * 渲染契约三件套（2026-10-16 批次 1.5）。
        *
        * 状态中文、能不能点、为什么不能点、进度时间轴 —— 全在这里，
@@ -439,14 +510,11 @@ export class CustomRecipeController {
         refundAmount: this.toNullableNumber(order.refundAmount),
         /**
          * 批次 2.4：改成看**真的交付记录**，不再拿"订单上挂了食谱"顶替。
-         *
-         * 两者的区别在重新交付与撤回时会体现出来：食谱挂着不等于顾客
-         * 手里有一版可看的内容（撤回后食谱还在，但交付记录已经失效）。
+         * 2026-10-21：多份订单的交付在批次表里，也要算进来 ——
+         * 否则整批交付后顾客既看不到「查看定制食谱」也点不到「确认收到」。
          */
-        hasAnyDelivery: Boolean(currentDelivery),
-        hasUnconfirmedDelivery: Boolean(
-          currentDelivery && !currentDelivery.confirmedAt,
-        ),
+        hasAnyDelivery,
+        hasUnconfirmedDelivery,
         /**
          * 售后窗口从**交付时间**起算，不是下单时间。
          *
@@ -497,12 +565,58 @@ export class CustomRecipeController {
     }
 
     const parsedVersion = version ? Number(version) : null;
+    const versionFilter =
+      parsedVersion !== null && Number.isInteger(parsedVersion)
+        ? parsedVersion
+        : null;
+
+    /**
+     * 多份交付批次（2026-10-21）：整批交付的订单没有老的单份交付记录，
+     * 先看批次；有批次就返回 N 份各自的内容快照。
+     *
+     * 返回形状与老接口**不同**（`batchId` + `items`），但路径与鉴权一致：
+     * 前端拿到 `batchId` 就知道这是多份交付，按 `items` 渲染 N 张卡片。
+     */
+    const batch = await this.deliveryService.findBatchForCustomer({
+      orderId: order.id,
+      version: versionFilter,
+    });
+
+    if (batch) {
+      return ApiResponseDto.success({
+        batchId: batch.id,
+        version: batch.version,
+        deliveredAt: batch.deliveredAt,
+        confirmedAt: batch.confirmedAt,
+        /**
+         * 批次级交付物 = 各份的**并集**（去重、保持出现顺序）。
+         *
+         * 每份自己还有 `items[].itemCodes` —— 前端要判断"这一份有没有采购单"
+         * 必须用份级字段；批次级只表示"整批里出现过哪些交付物"。
+         */
+        itemCodes: Array.from(
+          new Set(
+            (batch.items ?? []).flatMap((item) =>
+              Array.isArray(item.items) ? item.items : [],
+            ),
+          ),
+        ),
+        items: (batch.items ?? []).map((item) => ({
+          /** 交付明细 id —— 售后指定"哪一份"时要用它 */
+          id: item.id,
+          recipeId: item.recipe?.recipeId ?? null,
+          recipeName: item.recipe?.name ?? null,
+          recipeCoverImageUrl: item.recipe?.coverImageUrl ?? null,
+          itemCodes: Array.isArray(item.items) ? item.items : [],
+          /** 内容快照：前端照着渲染，不做任何加工 */
+          content: item.contentSnapshot,
+        })),
+      });
+    }
+
     const delivery = await this.deliveryService.findForCustomer({
       orderId: order.id,
-      version:
-        parsedVersion !== null && Number.isInteger(parsedVersion)
-          ? parsedVersion
-          : null,
+      version: versionFilter,
     });
 
     if (!delivery) {
@@ -531,6 +645,10 @@ export class CustomRecipeController {
    *
    * 幂等：重复点不报错，也**不刷新确认时间** ——
    * 那个时间是售后窗口的起算依据，不能被第二次点击改掉。
+   *
+   * 2026-10-21：多份订单整批交付只有批次、没有老的单份交付记录；
+   * 由 `deliveryService.confirmReceipt` 先判批次 —— 一次确认代表 N 份全收到，
+   * 接口形状（confirmed / alreadyConfirmed）保持原样。
    */
   @Post('orders/:orderId/confirm-receipt')
   @ApiOperation({ summary: 'Customer confirms receipt of the delivery' })
@@ -574,6 +692,13 @@ export class CustomRecipeController {
     @Body('type') type: string,
     @Body('description') description: string,
     @Body('photos') photos?: string[],
+    /**
+     * 多份订单可选：涉及哪几份 / 每份的诉求说明（2026-10-21）。
+     * 原样交给服务层校验 —— 归属批次、非空说明都由那里统一判断，
+     * 控制器不复制一套规则（否则两处口径迟早不一致）。
+     */
+    @Body('deliveryItemIds') deliveryItemIds?: string[],
+    @Body('recipeRequests') recipeRequests?: unknown,
   ) {
     const userId = req.user.userId;
 
@@ -587,6 +712,8 @@ export class CustomRecipeController {
       type,
       description,
       photos: Array.isArray(photos) ? photos : [],
+      deliveryItemIds,
+      recipeRequests,
     });
 
     return ApiResponseDto.success(result);
@@ -642,15 +769,30 @@ export class CustomRecipeController {
   /**
    * 预估交付日期（2026-10-18 · 需求 2.3.5）
    *
+   * 2026-10-21：接受 `quantity`，按份数返回交期（N 份要找剩余产能 ≥ N 的日期，
+   * 并按设计工时往后推）。不传时仍按 1 份，老版本小程序不用改。
+   *
+   * 多份开关关闭时 >1 与报价接口同一条规则：接口直调也不能绕开。
+   *
    * ⚠️ 必须声明在 `@Get('orders/:orderId')` 之类的通配之前 ——
    * 这条路径不会跟它们冲突（`next-delivery-date` 不是 `orders/...`），
    * 但放在 `@Get('schedule')` 旁边保持"排期相关"聚在一起。
    */
   @Get('next-delivery-date')
   @ApiOperation({ summary: '预估交付日期（下单前告知用，不占位）' })
-  async getNextDeliveryDate() {
+  async getNextDeliveryDate(@Query('quantity') quantity?: string) {
+    const config = await this.customRecipeConfigService.getConfig();
+    const parsed =
+      quantity === undefined
+        ? 1
+        : this.parseQuoteQuantity(quantity, config.maxRecipeQuantity);
+
+    if (parsed > 1 && config.multiRecipeEnabled !== true) {
+      throw new BadRequestException('多份购买暂未开放，请选择 1 份');
+    }
+
     return ApiResponseDto.success(
-      await this.customRecipeService.getEstimatedDeliveryDate(),
+      await this.customRecipeService.getEstimatedDeliveryDate(parsed),
     );
   }
 
@@ -904,13 +1046,42 @@ export class CustomRecipeController {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
   }
+
+  /**
+   * 严格解析报价份数：只接受十进制整数字符串。
+   *
+   * 不能直接用 Number()：`Number('')` / `Number(undefined)` 会得到 0/NaN，
+   * `Number('1e0')`、`Number('0x3')` 又会把各种写法放进来。报价参数只应
+   * 接受 `1`、`2`、`3` 这样的数字串；缺参、小数、科学计数法、数组统一 400。
+   * 上限取**后台当前配置**（最多 5），而不是永远写死 5。
+   */
+  private parseQuoteQuantity(
+    raw: string | undefined,
+    maxQuantity: number,
+  ): number {
+    const message = `份数必须是 1~${maxQuantity} 的整数`;
+
+    if (typeof raw !== 'string' || !/^\d+$/.test(raw.trim())) {
+      throw new BadRequestException(message);
+    }
+
+    const quantity = Number(raw.trim());
+    if (
+      !Number.isSafeInteger(quantity) ||
+      quantity < 1 ||
+      quantity > maxQuantity
+    ) {
+      throw new BadRequestException(message);
+    }
+    return quantity;
+  }
 }
 
 /**
  * 食谱定制的公开配置（无需登录）
  *
  * 首页入口卡与定制页在未登录时就要显示价格，所以这部分必须公开。
- * 只暴露顾客看得懂的三项：定制费、可抵扣金额、交付周期。
+ * 只暴露顾客看得懂的两项：定制费、交付周期。
  * 接单上限等内部产能参数不对外。
  */
 @ApiTags('custom-recipe')
@@ -951,7 +1122,7 @@ export class PublicCustomRecipeConfigController {
   }
 
   @Get()
-  @ApiOperation({ summary: '读取食谱定制的公开配置（定制费 / 可抵扣金额 / 交付周期）' })
+  @ApiOperation({ summary: '读取食谱定制的公开配置（定制费 / 交付周期）' })
   async getPublicConfig() {
     return ApiResponseDto.success(
       await this.customRecipeConfigService.getPublicConfig(),

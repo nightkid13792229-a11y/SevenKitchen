@@ -4,8 +4,7 @@
       <div>
         <h2>食谱定制设置</h2>
         <p class="page-desc">
-          定制费与<strong>可抵扣金额</strong>是两个独立参数：顾客付多少钱、其中多少钱能抵成品货款，
-          在这里分开配置，<strong>不用改代码</strong>。交付周期与每日接单上限也从这里调。
+          定制费、交付周期与每日接单上限在这里配置，<strong>不用改代码</strong>。
         </p>
       </div>
       <div class="header-actions">
@@ -39,7 +38,7 @@
       show-icon
       class="snapshot-alert"
       title="需要管理员权限"
-      description="食谱定制设置（定制费 / 可抵扣金额 / 交付周期 / 接单上限）只允许管理员修改，当前账号只能查看。"
+      description="食谱定制设置（定制费 / 交付周期 / 接单上限）只允许管理员修改，当前账号只能查看。"
     />
 
     <el-alert
@@ -48,7 +47,7 @@
       show-icon
       class="snapshot-alert"
       title="改价只影响之后提交的订单"
-      description="顾客提交定制单时，当时的定制费与可抵扣金额会快照进订单。已经提交或已付款的顾客，额度不会被后台调价改动。"
+      description="顾客提交定制单时，当时的定制费会快照进订单。已经提交或已付款的顾客，金额不会被后台调价改动。"
     />
 
     <el-card shadow="never" v-loading="loading">
@@ -63,24 +62,8 @@
             :step="10"
             :precision="2"
             style="width: 200px"
-            @change="handleFeeChange"
           />
           <span class="form-tip">顾客提交定制单时支付的金额</span>
-        </el-form-item>
-
-        <el-form-item label="可抵扣金额（元）">
-          <el-input-number
-            v-model="form.creditAmount"
-            :min="0"
-            :max="form.feeAmount"
-            :step="10"
-            :precision="2"
-            style="width: 200px"
-          />
-          <span class="form-tip">
-            定制费中可用于抵扣成品货款的额度，<strong>不得超过定制费</strong>。
-            设为 0 表示定制费不抵货款；设为与定制费相同表示"定制免费"。
-          </span>
         </el-form-item>
 
         <el-divider content-position="left">产能与交付</el-divider>
@@ -97,6 +80,142 @@
           <span class="form-tip">从预约日起算，遇公众假期自动顺延</span>
         </el-form-item>
 
+
+        <el-divider content-position="left">多份购买</el-divider>
+
+        <el-alert
+          type="info"
+          :closable="false"
+          show-icon
+          class="snapshot-alert"
+          title="只影响之后提交的订单"
+          description="多份购买开关、优惠档位与设计工时的改动只影响之后提交的订单；已提交或已付款的订单按下单当时的订单快照，金额与产能不会被改动。"
+        />
+
+        <el-form-item label="多份购买">
+          <!--
+            ⚠️ 2026-10-20 阶段性门禁：第一阶段只完成「价格与配置」，
+            多份设计/交付还没做。开关默认关闭且不允许在这里打开，
+            避免运营误开后顾客能下多份、后台却交付不了。
+            只有后端已经是 true 时才可操作（用于紧急关闭），false 时锁定。
+          -->
+          <el-switch
+            v-model="form.multiRecipeEnabled"
+            :disabled="!form.multiRecipeEnabled"
+          />
+          <span class="form-tip">
+            多份设计与交付完成后才可开启；当前仅完成价格与配置，开关暂时锁定，避免误开
+          </span>
+        </el-form-item>
+
+        <el-form-item label="单笔最多份数">
+          <el-input-number
+            v-model="form.maxRecipeQuantity"
+            :min="1"
+            :max="MAX_MULTI_RECIPE_QUANTITY"
+            :precision="0"
+            style="width: 200px"
+          />
+          <span class="form-tip">
+            最多 5 份（业务硬上限）：只能在这个范围内调低，不能配到 6 份
+          </span>
+        </el-form-item>
+
+        <el-form-item label="多份优惠">
+          <div class="multi-recipe-discount">
+            <el-alert
+              type="warning"
+              :closable="false"
+              show-icon
+              title="2/3/4/5 份四档必须齐全"
+              description="缺任何一档都不能保存；份数越高折扣不能降低；单档折扣最高 20%。1 份不参与优惠，折扣按整单计算。"
+            />
+
+            <el-alert
+              v-if="multiRecipeLoadWarning"
+              type="warning"
+              :closable="false"
+              show-icon
+              :title="multiRecipeLoadWarning"
+              class="multi-recipe-error"
+            />
+
+            <el-alert
+              v-if="multiRecipeError"
+              type="error"
+              :closable="false"
+              show-icon
+              :title="multiRecipeError"
+              class="multi-recipe-error"
+            />
+
+            <table class="discount-table">
+              <thead>
+                <tr>
+                  <th>份数</th>
+                  <th>折扣率（%）</th>
+                  <th>顾客看到的文案</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="tier in form.multiRecipeDiscounts" :key="tier.quantity">
+                  <td>{{ tier.quantity }} 份</td>
+                  <td>
+                    <el-input-number
+                      v-model="tier.discountRatePercent"
+                      :min="0.01"
+                      :max="20"
+                      :step="0.5"
+                      :precision="2"
+                      style="width: 150px"
+                    />
+                    <span class="form-tip">%（5 = 95 折）</span>
+                  </td>
+                  <td>
+                    <el-input
+                      v-model="tier.label"
+                      maxlength="30"
+                      show-word-limit
+                      style="width: 280px"
+                    />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </el-form-item>
+
+        <el-form-item label="每份设计工时">
+          <el-input-number
+            v-model="form.minutesPerRecipe"
+            :min="1"
+            :max="10080"
+            :precision="0"
+            style="width: 200px"
+          />
+          <span class="form-tip">分钟/份；用于推算交付日期</span>
+        </el-form-item>
+
+        <el-form-item label="每日设计工时">
+          <el-input-number
+            v-model="form.dailyDesignMinutes"
+            :min="1"
+            :max="10080"
+            :precision="0"
+            style="width: 200px"
+          />
+          <span class="form-tip">
+            分钟/天；按当前配置每天最多设计
+            <strong class="capacity-value">{{ dailyDesignCapacity }}</strong>
+            份（floor(dailyDesignMinutes / minutesPerRecipe)）
+          </span>
+          <span
+            v-if="dailyDesignCapacity < form.maxRecipeQuantity"
+            class="form-tip capacity-warning"
+          >
+            低于单笔最多 {{ form.maxRecipeQuantity }} 份：顾客一次买满时需要跨天设计
+          </span>
+        </el-form-item>
 
         <el-divider content-position="left">支付</el-divider>
 
@@ -303,12 +422,21 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { customRecipeApi } from '@/api/customRecipe';
 import { platformOptionsApi } from '@/api/platformOptions';
 import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole';
 import { getApiErrorMessage, toastApiError } from '@/utils/apiError';
+import {
+  DEFAULT_MULTI_RECIPE_DISCOUNT_TIERS,
+  MAX_MULTI_RECIPE_QUANTITY,
+  buildMultiRecipeDiscountRows,
+  calcDailyDesignCapacity,
+  percentToDiscountRate,
+  resolveMultiRecipeDiscountRows,
+  validateMultiRecipeConfig,
+} from '@/utils/customRecipe';
 
 /** 口径 2：这套参数（单价与产能）只允许管理员改，客服可以看 */
 const isAdmin = useIsAdmin();
@@ -316,6 +444,13 @@ const isAdmin = useIsAdmin();
 const loading = ref(false);
 const saving = ref(false);
 const saveError = ref('');
+/** 多份购买区的独立报错：显示在优惠表格上方，不用回顶部找 */
+const multiRecipeError = ref('');
+/**
+ * 读取配置时对优惠档位做了补齐/丢弃的提示。
+ * 只有后端数据确实不完整或含非法值时才出现，完整四档时必须是空串。
+ */
+const multiRecipeLoadWarning = ref('');
 const updatedAt = ref('');
 
 /**
@@ -336,7 +471,6 @@ const updatedAt = ref('');
  */
 const form = reactive({
   feeAmount: 300,
-  creditAmount: 300,
   deliveryWorkDays: 3,
   dailyCapacity: 4,
   paymentTimeoutMinutes: 30,
@@ -361,7 +495,37 @@ const form = reactive({
   scheduleLookaheadDays: 45,
   slotRetryTimes: 5,
   orderNoPrefix: 'CR',
+
+  // ===== 2026-10-20 多份购买 · 第一阶段 =====
+  // 折扣在页面上按**百分比**编辑（5 = 5%），保存时才换成后端要的小数（0.05）
+  multiRecipeEnabled: false,
+  maxRecipeQuantity: MAX_MULTI_RECIPE_QUANTITY,
+  multiRecipeDiscounts: buildMultiRecipeDiscountRows(
+    DEFAULT_MULTI_RECIPE_DISCOUNT_TIERS,
+  ),
+  dailyDesignMinutes: 480,
+  minutesPerRecipe: 96,
 });
+
+/** 每天最多能设计几份：floor(每日设计工时 / 每份设计工时)，只做展示 */
+const dailyDesignCapacity = computed(() =>
+  calcDailyDesignCapacity(form.dailyDesignMinutes, form.minutesPerRecipe),
+);
+
+/**
+ * 把后端返回的优惠档位应用到页面。
+ *
+ * 如果后端数据缺档位/含非法值/重复，resolveMultiRecipeDiscountRows 会补默认
+ * 或丢坏行；这里必须把「补过」这件事显示给运营，不能静默归一化。
+ * 后端数据完整时 warning 清空，不打扰人。
+ */
+const applyBackendDiscountRows = (raw: unknown) => {
+  const resolution = resolveMultiRecipeDiscountRows(raw);
+  form.multiRecipeDiscounts = resolution.rows;
+  multiRecipeLoadWarning.value = resolution.normalized
+    ? '读取到的多份优惠档位不完整或含非法值，已用默认四档补齐；请核对每一档后再保存。'
+    : '';
+};
 
 /**
  * 交付物候选项从**选项字典**读，不在这里写死。
@@ -371,25 +535,14 @@ const form = reactive({
  */
 const deliveryItemOptions = ref<Array<{ code: string; label: string }>>([]);
 
-/**
- * 定制费调低时，可抵扣金额必须跟着降下来 ——
- * 否则保存会被后端拒绝（抵扣不得超过定制费），
- * 用户只会看到"保存失败"，却不知道是哪个字段的问题。
- */
-const handleFeeChange = (value: number | undefined) => {
-  const fee = Number(value || 0);
-  if (form.creditAmount > fee) {
-    form.creditAmount = fee;
-  }
-};
-
 const loadConfig = async () => {
   loading.value = true;
   saveError.value = '';
+  multiRecipeError.value = '';
+  multiRecipeLoadWarning.value = '';
   try {
     const data = await customRecipeApi.getConfig();
     form.feeAmount = Number(data?.feeAmount ?? 300);
-    form.creditAmount = Number(data?.creditAmount ?? 300);
     form.deliveryWorkDays = Number(data?.deliveryWorkDays ?? 3);
     form.dailyCapacity = Number(data?.dailyCapacity ?? 4);
     form.paymentTimeoutMinutes = Number(data?.paymentTimeoutMinutes ?? 30);
@@ -415,6 +568,16 @@ const loadConfig = async () => {
     form.slotRetryTimes = Number(data?.slotRetryTimes ?? 5);
     form.orderNoPrefix = data?.orderNoPrefix ?? 'CR';
 
+    // ===== 2026-10-20 多份购买 =====
+    // 后端存的是小数（0.05），页面显示百分比（5）；缺档位时补默认四档并提示
+    form.multiRecipeEnabled = Boolean(data?.multiRecipeEnabled ?? false);
+    form.maxRecipeQuantity = Number(
+      data?.maxRecipeQuantity ?? MAX_MULTI_RECIPE_QUANTITY,
+    );
+    applyBackendDiscountRows(data?.multiRecipeDiscounts);
+    form.dailyDesignMinutes = Number(data?.dailyDesignMinutes ?? 480);
+    form.minutesPerRecipe = Number(data?.minutesPerRecipe ?? 96);
+
     updatedAt.value = data?.updatedAt
       ? new Date(data.updatedAt).toLocaleString()
       : '';
@@ -436,11 +599,6 @@ const handleSave = async () => {
     return;
   }
 
-  if (form.creditAmount > form.feeAmount) {
-    saveError.value = '可抵扣金额不能超过定制费';
-    return;
-  }
-
   /**
    * 这两条后端也会拦（并且是权威），在前端先判一次只是为了
    * 让用户不用等一次往返才知道哪里填错了。
@@ -454,17 +612,57 @@ const handleSave = async () => {
     return;
   }
 
+  /**
+   * 多份优惠与设计工时：规则与后端 assertValidMultiRecipeDiscounts 一致。
+   * 后端仍是权威；这里先判一次，运营不用等一次往返才知道哪一档填错了。
+   */
+  const multiRecipeValidationError = validateMultiRecipeConfig(form);
+  if (multiRecipeValidationError) {
+    multiRecipeError.value = multiRecipeValidationError;
+    saveError.value = multiRecipeValidationError;
+    return;
+  }
+  multiRecipeError.value = '';
+
   saving.value = true;
   try {
-    const data = await customRecipeApi.updateConfig({ ...form });
+    /**
+     * ⚠️ 关键映射：页面按百分比编辑（5），后端要小数（0.05）。
+     * 直接传 5 会被后端当成 500% 拒绝；这里统一换算后再提交。
+     */
+    const payload = {
+      ...form,
+      multiRecipeDiscounts: [...form.multiRecipeDiscounts]
+        .sort((a, b) => a.quantity - b.quantity)
+        .map((tier) => ({
+          quantity: tier.quantity,
+          discountRate: percentToDiscountRate(tier.discountRatePercent),
+          label: tier.label,
+        })),
+    };
+    const data = await customRecipeApi.updateConfig(payload);
     ElMessage.success('配置已保存，新提交的订单立即生效');
+
+    // 用后端返回的权威值刷新多份区域，避免页面继续显示未归一化的旧值
+    if (data) {
+      form.multiRecipeEnabled = Boolean(data.multiRecipeEnabled);
+      form.maxRecipeQuantity = Number(data.maxRecipeQuantity);
+      applyBackendDiscountRows(data.multiRecipeDiscounts);
+      form.dailyDesignMinutes = Number(data.dailyDesignMinutes);
+      form.minutesPerRecipe = Number(data.minutesPerRecipe);
+    }
     updatedAt.value = data?.updatedAt
       ? new Date(data.updatedAt).toLocaleString()
       : '';
   } catch (error) {
     // 保存失败必须在按钮旁显式显示：否则用户只看到按钮转圈、值没变，
     // 以为是自己没点保存。toastApiError 负责"后端原因优先、不重复弹同一句"。
-    saveError.value = getApiErrorMessage(error, '保存失败，请重试');
+    const message = getApiErrorMessage(error, '保存失败，请重试');
+    saveError.value = message;
+    // 优惠/工时的后端报错同时显示在表格上方，不用回页面顶部找
+    if (/优惠配置|设计工时|份数/.test(message)) {
+      multiRecipeError.value = message;
+    }
     toastApiError(error, '保存失败，请重试', (message) => ElMessage.error(message));
   } finally {
     saving.value = false;
@@ -539,6 +737,47 @@ onMounted(() => {
   font-size: 13px;
   line-height: 1.6;
   color: #909399;
+}
+
+/* ===== 2026-10-20 多份购买 ===== */
+.multi-recipe-discount {
+  width: 100%;
+}
+
+.multi-recipe-error {
+  margin-top: 8px;
+}
+
+.discount-table {
+  width: 100%;
+  max-width: 720px;
+  margin-top: 12px;
+  border-collapse: collapse;
+}
+
+.discount-table th,
+.discount-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #ebeef5;
+  text-align: left;
+  font-size: 13px;
+  vertical-align: middle;
+}
+
+.discount-table th {
+  font-weight: 500;
+  color: #6b7280;
+  background: #fafafa;
+}
+
+.capacity-value {
+  margin: 0 2px;
+  font-size: 15px;
+  color: #409eff;
+}
+
+.capacity-warning {
+  color: #e6a23c;
 }
 
 .updated-at {

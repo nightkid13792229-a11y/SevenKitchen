@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CustomRecipeService } from '../../../src/application/custom-recipe/custom-recipe.service';
 import { CustomRecipeConfigService } from '../../../src/application/custom-recipe/custom-recipe-config.service';
+import { CustomRecipePricingService } from '../../../src/application/custom-recipe/custom-recipe-pricing.service';
 import { PrismaService } from '../../../src/infrastructure/prisma.service';
 import { TencentCosService } from '../../../src/infrastructure/services/tencent-cos.service';
 
@@ -31,7 +32,6 @@ describe('CustomRecipeService · 支付与关单', () => {
   const mockConfigService = {
     getConfig: jest.fn().mockResolvedValue({
       feeAmount: 300,
-      creditAmount: 300,
       deliveryWorkDays: 3,
       dailyCapacity: 4,
       paymentTimeoutMinutes: 30,
@@ -42,6 +42,7 @@ describe('CustomRecipeService · 支付与关单', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CustomRecipeService,
+        CustomRecipePricingService,
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: TencentCosService, useValue: {} },
         { provide: CustomRecipeConfigService, useValue: mockConfigService },
@@ -148,7 +149,7 @@ describe('CustomRecipeService · 支付与关单', () => {
           where: expect.objectContaining({
             date: new Date('2026-10-12'),
             // 下限保护：并发/重复关单不能让 booked_count 变负数
-            bookedCount: { gt: 0 },
+            bookedCount: { gte: 1 },
           }),
           data: { bookedCount: { decrement: 1 } },
         }),

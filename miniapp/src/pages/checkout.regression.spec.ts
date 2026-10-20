@@ -109,4 +109,16 @@ describe('checkout direct-buy storage contract', () => {
       expect(block).toContain('border-radius: 40rpx;')
     })
   })
+
+  it('does not render the removed custom-recipe credit deduction', () => {
+    // 2026-10-20：定制费抵扣取消，结算页不再有抵扣明细
+    expect(source).not.toContain('creditAmountApplied')
+    expect(source).not.toContain('creditOriginalProductAmount')
+    expect(source).not.toContain('定制费抵扣')
+    expect(source).not.toContain('price-credit')
+    // 只删抵扣：支付金额与运费说明仍在
+    expect(source).toContain('price-value-large')
+    expect(source).toContain('totalAmount')
+    expect(source).toContain('已含冷链配送费')
+  })
 })

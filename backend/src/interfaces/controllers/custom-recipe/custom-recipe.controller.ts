@@ -358,6 +358,27 @@ export class CustomRecipeController {
      */
     const currentDelivery = (order.deliveries ?? [])[0] ?? null;
 
+    /**
+     * 多份交付批次（2026-10-21 · 顾客交付切片）。
+     *
+     * 多份订单整批交付走的是批次表，**不写老的单份交付表** ——
+     * 所以 `delivery` 对这类订单是 null，信息必须从 `deliveryBatch` 取。
+     * 老订单没有批次 → null，`delivery` 字段与以前完全一致。
+     */
+    const deliveryBatch = await this.deliveryService.findLatestBatchForOrder(
+      order.id,
+    );
+
+    /**
+     * 「有没有交付」要把批次算进来：只认老交付表的话，多份订单交付后
+     * 顾客看不到「查看定制食谱」，也点不到「确认收到」。
+     */
+    const hasAnyDelivery = Boolean(currentDelivery || deliveryBatch);
+    const hasUnconfirmedDelivery = Boolean(
+      (currentDelivery && !currentDelivery.confirmedAt) ||
+      (deliveryBatch && !deliveryBatch.confirmedAt),
+    );
+
     return ApiResponseDto.success({
       orderId: order.orderId,
       dogId: order.dogId,
@@ -439,6 +460,31 @@ export class CustomRecipeController {
         : null,
 
       /**
+       * 多份交付摘要（2026-10-21）—— 同样是**不含快照本体**的列表。
+       *
+       * 形状与老的 `delivery` 刻意不同：
+       *   · 老字段保持原样（老小程序 / 老订单不受影响）；
+       *   · 新字段用 `items` 表达 N 份，每份带自己的交付物清单；
+       *   · `recipeId` 给的是**业务编号**，前端拿它打开食谱详情 / DIY。
+       */
+      deliveryBatch: deliveryBatch
+        ? {
+            id: deliveryBatch.id,
+            version: deliveryBatch.version,
+            deliveredAt: deliveryBatch.deliveredAt,
+            confirmedAt: deliveryBatch.confirmedAt,
+            autoCompleteAt: order.autoCompleteAt ?? null,
+            items: (deliveryBatch.items ?? []).map((item) => ({
+              deliveryItemId: item.id,
+              recipeId: item.recipe?.recipeId ?? null,
+              recipeName: item.recipe?.name ?? null,
+              recipeCoverImageUrl: item.recipe?.coverImageUrl ?? null,
+              itemCodes: Array.isArray(item.items) ? item.items : [],
+            })),
+          }
+        : null,
+
+      /**
        * 渲染契约三件套（2026-10-16 批次 1.5）。
        *
        * 状态中文、能不能点、为什么不能点、进度时间轴 —— 全在这里，
@@ -464,14 +510,11 @@ export class CustomRecipeController {
         refundAmount: this.toNullableNumber(order.refundAmount),
         /**
          * 批次 2.4：改成看**真的交付记录**，不再拿"订单上挂了食谱"顶替。
-         *
-         * 两者的区别在重新交付与撤回时会体现出来：食谱挂着不等于顾客
-         * 手里有一版可看的内容（撤回后食谱还在，但交付记录已经失效）。
+         * 2026-10-21：多份订单的交付在批次表里，也要算进来 ——
+         * 否则整批交付后顾客既看不到「查看定制食谱」也点不到「确认收到」。
          */
-        hasAnyDelivery: Boolean(currentDelivery),
-        hasUnconfirmedDelivery: Boolean(
-          currentDelivery && !currentDelivery.confirmedAt,
-        ),
+        hasAnyDelivery,
+        hasUnconfirmedDelivery,
         /**
          * 售后窗口从**交付时间**起算，不是下单时间。
          *
@@ -522,12 +565,58 @@ export class CustomRecipeController {
     }
 
     const parsedVersion = version ? Number(version) : null;
+    const versionFilter =
+      parsedVersion !== null && Number.isInteger(parsedVersion)
+        ? parsedVersion
+        : null;
+
+    /**
+     * 多份交付批次（2026-10-21）：整批交付的订单没有老的单份交付记录，
+     * 先看批次；有批次就返回 N 份各自的内容快照。
+     *
+     * 返回形状与老接口**不同**（`batchId` + `items`），但路径与鉴权一致：
+     * 前端拿到 `batchId` 就知道这是多份交付，按 `items` 渲染 N 张卡片。
+     */
+    const batch = await this.deliveryService.findBatchForCustomer({
+      orderId: order.id,
+      version: versionFilter,
+    });
+
+    if (batch) {
+      return ApiResponseDto.success({
+        batchId: batch.id,
+        version: batch.version,
+        deliveredAt: batch.deliveredAt,
+        confirmedAt: batch.confirmedAt,
+        /**
+         * 批次级交付物 = 各份的**并集**（去重、保持出现顺序）。
+         *
+         * 每份自己还有 `items[].itemCodes` —— 前端要判断"这一份有没有采购单"
+         * 必须用份级字段；批次级只表示"整批里出现过哪些交付物"。
+         */
+        itemCodes: Array.from(
+          new Set(
+            (batch.items ?? []).flatMap((item) =>
+              Array.isArray(item.items) ? item.items : [],
+            ),
+          ),
+        ),
+        items: (batch.items ?? []).map((item) => ({
+          /** 交付明细 id —— 售后指定"哪一份"时要用它 */
+          id: item.id,
+          recipeId: item.recipe?.recipeId ?? null,
+          recipeName: item.recipe?.name ?? null,
+          recipeCoverImageUrl: item.recipe?.coverImageUrl ?? null,
+          itemCodes: Array.isArray(item.items) ? item.items : [],
+          /** 内容快照：前端照着渲染，不做任何加工 */
+          content: item.contentSnapshot,
+        })),
+      });
+    }
+
     const delivery = await this.deliveryService.findForCustomer({
       orderId: order.id,
-      version:
-        parsedVersion !== null && Number.isInteger(parsedVersion)
-          ? parsedVersion
-          : null,
+      version: versionFilter,
     });
 
     if (!delivery) {
@@ -556,6 +645,10 @@ export class CustomRecipeController {
    *
    * 幂等：重复点不报错，也**不刷新确认时间** ——
    * 那个时间是售后窗口的起算依据，不能被第二次点击改掉。
+   *
+   * 2026-10-21：多份订单整批交付只有批次、没有老的单份交付记录；
+   * 由 `deliveryService.confirmReceipt` 先判批次 —— 一次确认代表 N 份全收到，
+   * 接口形状（confirmed / alreadyConfirmed）保持原样。
    */
   @Post('orders/:orderId/confirm-receipt')
   @ApiOperation({ summary: 'Customer confirms receipt of the delivery' })

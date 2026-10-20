@@ -293,5 +293,29 @@ describe('食谱定制 · 数据库结构守卫', () => {
       // 老表一个字都不改
       expect(sql).not.toMatch(/ALTER TABLE "custom_recipe_delivery"/i);
     });
+
+    it('批次上有顾客确认字段，与老的单份交付表同口径', () => {
+      const batch = modelBlock(schema, 'CustomRecipeDeliveryBatch');
+      expect(batch).toMatch(
+        /confirmedAt\s+DateTime\?\s+@map\("confirmed_at"\)/,
+      );
+      expect(batch).toMatch(
+        /confirmChannel\s+String\?\s+@map\("confirm_channel"\)\s+@db\.VarChar\(20\)/,
+      );
+    });
+
+    it('确认字段的迁移只给批次表加列（可回滚，不碰老表）', () => {
+      const sql = readProjectFile(
+        'prisma/migrations/20261021010000_multi_recipe_delivery_batch_confirm/migration.sql',
+      );
+      expect(sql).toMatch(
+        /ALTER TABLE "custom_recipe_delivery_batch" ADD COLUMN\s+"confirm_channel" VARCHAR\(20\)/,
+      );
+      expect(sql).toMatch(/ADD COLUMN\s+"confirmed_at" TIMESTAMP\(3\)/);
+      expect(sql).not.toMatch(/DROP TABLE/i);
+      expect(sql).not.toMatch(/DROP COLUMN/i);
+      // 老的单份交付表已经有同名字段，不能重复加
+      expect(sql).not.toMatch(/ALTER TABLE "custom_recipe_delivery"/i);
+    });
   });
 });

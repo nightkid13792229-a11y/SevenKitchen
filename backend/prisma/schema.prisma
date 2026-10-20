@@ -2797,6 +2797,14 @@ model CustomRecipeDeliveryBatch {
   notifyStatus String?   @map("notify_status") @db.VarChar(20)
   notifiedAt   DateTime? @map("notified_at")
 
+  /// 顾客确认收到（2026-10-21 · 多份交付顾客侧切片）
+  ///
+  /// 与老的单份交付表 `custom_recipe_delivery` 同一口径：确认一次整批，
+  /// `confirmedAt` 是售后窗口 / 自动完成的起算依据，重复确认**不刷新**它。
+  confirmedAt  DateTime? @map("confirmed_at")
+  /// CUSTOMER（顾客主动确认）/ AUTO（超期自动完成）
+  confirmChannel String? @map("confirm_channel") @db.VarChar(20)
+
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 

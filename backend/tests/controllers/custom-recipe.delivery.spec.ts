@@ -282,6 +282,7 @@ describe('CustomRecipeController · 顾客端编号口径', () => {
       getPaymentTimeoutMinutes: jest.fn().mockResolvedValue(30),
       signOrderMedia: jest.fn().mockImplementation(async (value: any) => value),
       getOrderByOrderId: jest.fn().mockResolvedValue({
+        id: 'order-pk-1',
         orderId: 'CR202609280001',
         customerId: 'user-1',
         status: 'DELIVERED',
@@ -305,6 +306,14 @@ describe('CustomRecipeController · 顾客端编号口径', () => {
     };
 
     /**
+     * 2026-10-21：订单详情会额外查一次多份交付批次（老订单返回 null）。
+     * 本文件只测编号口径，给最小替身即可。
+     */
+    const deliveryService = {
+      findLatestBatchForOrder: jest.fn().mockResolvedValue(null),
+    };
+
+    /**
      * 第三个参数是 2026-10-16（批次 1.5）加的视图服务 ——
      * 它负责组装 `renderable` 三件套（状态中文 / 动作 / 进度）。
      * 本文件测的是"业务编号回得对不对"，所以给它一个最小替身即可；
@@ -323,14 +332,14 @@ describe('CustomRecipeController · 顾客端编号口径', () => {
       customRecipeService as any,
       {} as any,
       viewService as any,
+      deliveryService as any,
       // 2026-10-20：报价接口新增的两个依赖，本文件用不到
-      {} as any,
       {} as any,
       {} as any,
       {} as any,
     );
 
-    return { controller, viewService };
+    return { controller, viewService, deliveryService };
   }
 
   // 控制器第一个参数是 @Req()，它读的是 req.user

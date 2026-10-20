@@ -513,6 +513,13 @@ describe('CustomRecipeDeliveryService', () => {
         customRecipeDelivery: {
           findFirst: jest.fn().mockResolvedValue(options.delivery ?? null),
         },
+        /**
+         * 2026-10-21：确认收到会先看有没有多份交付批次。
+         * 老单份路径的用例统一返回 null（= 没有批次），走原来的逻辑。
+         */
+        customRecipeDeliveryBatch: {
+          findFirst: jest.fn().mockResolvedValue(null),
+        },
         $transaction: jest
           .fn()
           .mockImplementation(async (fn: any) => fn(txProxy)),

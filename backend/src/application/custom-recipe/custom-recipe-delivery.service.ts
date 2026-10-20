@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CustomRecipeStatus } from '@prisma/client';
+import { CustomRecipeStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { CustomRecipeConfigService } from './custom-recipe-config.service';
 import { Optional } from '@nestjs/common';
@@ -478,6 +478,13 @@ export class CustomRecipeDeliveryService {
    *
    * 幂等：重复点不会报错，也不会把时间刷新成第二次点的时间
    * （"什么时候确认的"是售后窗口的起算依据，不能被刷新）。
+   *
+   * ## 多份批次（2026-10-21）
+   *
+   * 多份订单整批交付时**不写老的单份交付表**，所以不能先找老记录 ——
+   * 那会让多份订单的确认收到直接 404。这里先看有没有交付批次：
+   * 有就确认**整批**（一次确认代表 N 份全部收到），没有才走老的单份路径。
+   * `deliveryId` 是多份功能之前就有的入参，传了它仍按老路径处理。
    */
   async confirmReceipt(input: {
     orderIdOrId: string;
@@ -487,6 +494,36 @@ export class CustomRecipeDeliveryService {
   }): Promise<{ confirmed: boolean; alreadyConfirmed: boolean }> {
     const now = input.now ?? new Date();
     const order = await this.resolveOrder(input.orderIdOrId);
+
+    if (!input.deliveryId) {
+      const batch = await this.prisma.customRecipeDeliveryBatch.findFirst({
+        where: { orderId: order.id },
+        orderBy: { version: 'desc' },
+        select: { id: true, confirmedAt: true },
+      });
+
+      if (batch) {
+        if (batch.confirmedAt) {
+          return { confirmed: true, alreadyConfirmed: true };
+        }
+
+        this.assertOrderConfirmable(order.status);
+
+        return this.prisma.$transaction(async (tx) => {
+          await tx.customRecipeDeliveryBatch.update({
+            where: { id: batch.id },
+            data: {
+              confirmedAt: now,
+              confirmChannel: input.channel ?? 'CUSTOMER',
+            },
+          });
+
+          await this.markOrderCompleted(tx, order.id, now);
+
+          return { confirmed: true, alreadyConfirmed: false };
+        });
+      }
+    }
 
     const delivery = input.deliveryId
       ? await this.prisma.customRecipeDelivery.findFirst({
@@ -505,17 +542,7 @@ export class CustomRecipeDeliveryService {
       return { confirmed: true, alreadyConfirmed: true };
     }
 
-    if (order.status === CustomRecipeStatus.CANCELLED) {
-      throw new BadRequestException('订单已取消，不需要确认收到');
-    }
-
-    try {
-      assertTransition(order.status, CustomRecipeStatus.COMPLETED);
-    } catch (error) {
-      throw new BadRequestException(
-        error instanceof Error ? error.message : '当前状态不能确认收到',
-      );
-    }
+    this.assertOrderConfirmable(order.status);
 
     return this.prisma.$transaction(async (tx) => {
       await tx.customRecipeDelivery.update({
@@ -526,16 +553,7 @@ export class CustomRecipeDeliveryService {
         },
       });
 
-      const timestampField = timestampFieldFor(CustomRecipeStatus.COMPLETED);
-      await tx.customRecipeOrder.update({
-        where: { id: order.id },
-        data: {
-          status: CustomRecipeStatus.COMPLETED,
-          ...(timestampField ? { [timestampField]: now } : {}),
-          /** 完成后清掉闹钟，免得定时任务一直扫到这张单 */
-          autoCompleteAt: null,
-        },
-      });
+      await this.markOrderCompleted(tx, order.id, now);
 
       return { confirmed: true, alreadyConfirmed: false };
     });
@@ -569,6 +587,74 @@ export class CustomRecipeDeliveryService {
     return this.prisma.customRecipeDelivery.findFirst({
       where: { orderId: input.orderId, replacedByDeliveryId: null },
       orderBy: { version: 'desc' },
+    });
+  }
+
+  /**
+   * 订单详情用：取某订单**最新交付批次**的摘要（2026-10-21 · 顾客交付切片）。
+   *
+   * 与 `findBatchForCustomer` 的区别：**不取内容快照** ——
+   * 快照几十 KB，而详情页只需要「交了哪几份、各叫什么、包含哪些交付物」。
+   * 老订单没有批次，返回 null，调用方保持原来的 `delivery` 字段不变。
+   */
+  async findLatestBatchForOrder(orderId: string) {
+    return this.prisma.customRecipeDeliveryBatch.findFirst({
+      where: { orderId },
+      orderBy: { version: 'desc' },
+      select: {
+        id: true,
+        version: true,
+        deliveredAt: true,
+        confirmedAt: true,
+        items: {
+          select: {
+            id: true,
+            items: true,
+            recipe: {
+              select: { recipeId: true, name: true, coverImageUrl: true },
+            },
+          },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        },
+      },
+    });
+  }
+
+  /**
+   * 顾客视角取交付批次内容（含每份快照 · 2026-10-21）。
+   *
+   * 只有多份整批交付的订单才有批次；老订单返回 null，
+   * 调用方回落到 `findForCustomer` 的单份响应 —— **老接口形状一个字都不变**。
+   *
+   * `version` 与老接口同义：不传取最新一批，传了取指定批次（当前只会有第 1 批）。
+   */
+  async findBatchForCustomer(input: {
+    orderId: string;
+    version?: number | null;
+  }) {
+    return this.prisma.customRecipeDeliveryBatch.findFirst({
+      where: {
+        orderId: input.orderId,
+        ...(input.version ? { version: input.version } : {}),
+      },
+      orderBy: { version: 'desc' },
+      select: {
+        id: true,
+        version: true,
+        deliveredAt: true,
+        confirmedAt: true,
+        items: {
+          select: {
+            id: true,
+            items: true,
+            contentSnapshot: true,
+            recipe: {
+              select: { recipeId: true, name: true, coverImageUrl: true },
+            },
+          },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        },
+      },
     });
   }
 
@@ -611,6 +697,49 @@ export class CustomRecipeDeliveryService {
               : '该订单当前状态不能批量交付',
       );
     }
+  }
+
+  /**
+   * 确认收到的状态守卫（老单份交付 / 多份批次**共用同一套口径**）。
+   *
+   * 抽出来是多份切片的顺手收益：批次路径若不先过这一步，
+   * 就会出现「老订单按状态机拦、多份订单什么状态都能确认」的分叉。
+   */
+  private assertOrderConfirmable(status: CustomRecipeStatus): void {
+    if (status === CustomRecipeStatus.CANCELLED) {
+      throw new BadRequestException('订单已取消，不需要确认收到');
+    }
+
+    try {
+      assertTransition(status, CustomRecipeStatus.COMPLETED);
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : '当前状态不能确认收到',
+      );
+    }
+  }
+
+  /**
+   * 确认收到 = 订单转「已完成」并清掉自动完成闹钟。
+   *
+   * 老单份与多份批次共用这一段，避免两处各写一遍状态写入
+   * （GD-01 源码守卫按 `customRecipeOrder.update` 计数，重复写会直接超基线）。
+   */
+  private async markOrderCompleted(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+    now: Date,
+  ): Promise<void> {
+    const timestampField = timestampFieldFor(CustomRecipeStatus.COMPLETED);
+    await tx.customRecipeOrder.update({
+      where: { id: orderId },
+      data: {
+        status: CustomRecipeStatus.COMPLETED,
+        ...(timestampField ? { [timestampField]: now } : {}),
+        /** 完成后清掉闹钟，免得定时任务一直扫到这张单 */
+        autoCompleteAt: null,
+      },
+    });
   }
 
   private async resolveOrder(orderIdOrId: string) {

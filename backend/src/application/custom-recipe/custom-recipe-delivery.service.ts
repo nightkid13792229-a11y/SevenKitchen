@@ -258,6 +258,168 @@ export class CustomRecipeDeliveryService {
   }
 
   /**
+   * 一次性交付 N 份食谱（多份购买 · 第二阶段，2026-10-21）。
+   *
+   * 与 `deliver()` 的分工：
+   *   · `deliver()` 仍走老的单份交付表，供老订单 / 老页面 / 重新交付使用；
+   *   · `deliverBatch()` 只做**首次整批交付**：把 N 份食谱连同各自的内容快照
+   *     写进 `CustomRecipeDeliveryBatch` + `CustomRecipeDeliveryItem`。
+   *
+   * 为什么整批必须在一个事务里：少一份都不行 —— 批次头建了、明细只写了一半，
+   * 顾客会看到「买了 5 份只收到 2 份」。事务保证要么全有、要么全无。
+   *
+   * 订单上的 `recipeId` 只写**第一份**：它是老页面 / 老接口仍在读的兼容字段，
+   * 不代表「这张单只有一份」。
+   */
+  async deliverBatch(input: {
+    orderIdOrId: string;
+    recipeIds: string[];
+    deliveredBy: string;
+    /** 便于测试注入 */
+    now?: Date;
+  }): Promise<{
+    orderId: string;
+    batchId: string;
+    version: number;
+    deliveredAt: Date;
+    recipeCount: number;
+    recipes: Array<{
+      recipeId: string;
+      recipeName: string;
+      itemCodes: string[];
+    }>;
+    legacyRecipeId: string;
+  }> {
+    const now = input.now ?? new Date();
+    const order = await this.resolveOrder(input.orderIdOrId);
+
+    /**
+     * 只允许首次交付。重新交付（DELIVERED / COMPLETED）暂不做 ——
+     * 一张多份订单要重新交付时，涉及「替换哪几份、旧批次怎么标记」，
+     * 那是下一个切片的事，不能在这里顺手放开。
+     */
+    this.assertBatchDeliverable(order.status);
+
+    const expectedCount = order.recipeQuantity ?? 1;
+    const requestedIds = Array.isArray(input.recipeIds) ? input.recipeIds : [];
+
+    if (requestedIds.length !== expectedCount) {
+      throw new BadRequestException(
+        `本单需要交付 ${expectedCount} 份食谱，实际提供了 ${requestedIds.length} 份；` +
+          '多份订单必须一次性交齐，不能少交也不能多交',
+      );
+    }
+
+    if (new Set(requestedIds).size !== requestedIds.length) {
+      throw new BadRequestException(
+        '同一道食谱不能在一个批次里重复交付，请为每一份选择不同的食谱',
+      );
+    }
+
+    /**
+     * 逐份取食谱并校验归属：复用 `resolveRecipe`，守住
+     * 「只能是这张订单的顾客 + 狗狗的私密食谱」这条边界。
+     */
+    const recipes = await Promise.all(
+      requestedIds.map((recipeIdOrBizId) =>
+        this.resolveRecipe(recipeIdOrBizId, order),
+      ),
+    );
+
+    /**
+     * 同一道食谱可能用「业务 id」和「主键」各传一次 —— 两个字符串不同，
+     * 但落库是同一道食谱。这里按解析后的主键再查一次重。
+     */
+    if (new Set(recipes.map((recipe) => recipe.id)).size !== recipes.length) {
+      throw new BadRequestException(
+        '同一道食谱不能在一个批次里重复交付，请为每一份选择不同的食谱',
+      );
+    }
+
+    const dog = await this.resolveDogForSnapshot(order.dogId);
+
+    /** 每份各自生成快照 —— 共用一个就等于「只交了一份，却告诉顾客交了两份」 */
+    const prepared = await Promise.all(
+      recipes.map(async (recipe) => {
+        const snapshot = await this.buildSnapshot({
+          order,
+          recipe,
+          dog,
+          now,
+          cycleDays: null,
+        });
+        return {
+          recipe,
+          snapshot,
+          itemCodes: await this.configuredItemCodes(snapshot),
+        };
+      }),
+    );
+
+    return this.prisma.$transaction(async (tx) => {
+      /** 版本号 = 该订单已有批次数 + 1；唯一索引兜底防并发重号 */
+      const existingCount = await tx.customRecipeDeliveryBatch.count({
+        where: { orderId: order.id },
+      });
+      const version = existingCount + 1;
+
+      const batch = await tx.customRecipeDeliveryBatch.create({
+        data: {
+          orderId: order.id,
+          version,
+          deliveredBy: input.deliveredBy,
+          deliveredAt: now,
+          /**
+           * 只标记「待通知」，**不在这里发**：
+           * 通知渠道与文案由后续控制器 / 定时任务决定，
+           * 交付动作本身不该依赖消息服务是否可用。
+           */
+          notifyStatus: 'PENDING',
+        },
+      });
+
+      await tx.customRecipeDeliveryItem.createMany({
+        data: prepared.map(({ recipe, snapshot, itemCodes }) => ({
+          batchId: batch.id,
+          recipeId: recipe.id,
+          recipeVersion: recipe.version,
+          contentSnapshot: snapshot as unknown as object,
+          items: itemCodes,
+          feedingParams: snapshot.feeding as unknown as object,
+        })),
+      });
+
+      /**
+       * 老字段兼容：只写第一份。
+       * 尚未改造的后台 / 顾客端仍从 `order.recipeId` 取「那份食谱」；
+       * 不写会让它们显示空，而多份又放不下（老外键只有一列）。
+       */
+      await tx.customRecipeOrder.update({
+        where: { id: order.id },
+        data: {
+          status: CustomRecipeStatus.DELIVERED,
+          deliveredAt: now,
+          recipeId: recipes[0].id,
+        },
+      });
+
+      return {
+        orderId: order.orderId,
+        batchId: batch.id,
+        version,
+        deliveredAt: now,
+        recipeCount: prepared.length,
+        recipes: prepared.map(({ recipe, itemCodes }) => ({
+          recipeId: recipe.recipeId,
+          recipeName: recipe.name,
+          itemCodes,
+        })),
+        legacyRecipeId: recipes[0].id,
+      };
+    });
+  }
+
+  /**
    * 顾客确认收到。
    *
    * 幂等：重复点不会报错，也不会把时间刷新成第二次点的时间
@@ -367,6 +529,36 @@ export class CustomRecipeDeliveryService {
 
   // ==================== 内部 ====================
 
+  /**
+   * 批量交付的状态守卫：只允许首次交付。
+   *
+   * 先挡住「已经交付过」——`assertTransition` 允许 `DELIVERED → DELIVERED`
+   * （老的重新交付要用），而多份批次的重新交付还没实现；
+   * 再让状态机判定这次流转是否合法，最后把领域层的英文错误翻成人话。
+   */
+  private assertBatchDeliverable(status: CustomRecipeStatus): void {
+    if (
+      status === CustomRecipeStatus.DELIVERED ||
+      status === CustomRecipeStatus.COMPLETED
+    ) {
+      throw new BadRequestException('该订单已经交付过，暂不支持重新交付');
+    }
+
+    try {
+      assertTransition(status, CustomRecipeStatus.DELIVERED);
+    } catch (error) {
+      throw new BadRequestException(
+        status === CustomRecipeStatus.PENDING_PAYMENT
+          ? '该订单还没确认收款，不能交付'
+          : status === CustomRecipeStatus.CANCELLED
+            ? '该订单已取消，不能交付'
+            : error instanceof Error
+              ? error.message
+              : '该订单当前状态不能批量交付',
+      );
+    }
+  }
+
   private async resolveOrder(orderIdOrId: string) {
     const order = await this.prisma.customRecipeOrder.findFirst({
       where: { OR: [{ orderId: orderIdOrId }, { id: orderIdOrId }] },
@@ -377,6 +569,8 @@ export class CustomRecipeDeliveryService {
         dogId: true,
         status: true,
         recipeId: true,
+        /** 多份订单的应交付份数；老订单在库里默认 1（2026-10-21） */
+        recipeQuantity: true,
       },
     });
     if (!order) {

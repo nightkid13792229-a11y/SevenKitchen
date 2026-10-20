@@ -251,4 +251,47 @@ describe('食谱定制 · 数据库结构守卫', () => {
       expect(sql).not.toMatch(/ALTER COLUMN/i);
     });
   });
+
+  describe('多份交付批次（2026-10-21 · 第二阶段地基）', () => {
+    it('批次与明细两张表都在，明细每份都有自己的快照', () => {
+      const batch = modelBlock(schema, 'CustomRecipeDeliveryBatch');
+      expect(batch).toMatch(/@@unique\(\[orderId, version\]\)/);
+      expect(batch).toMatch(/@@map\("custom_recipe_delivery_batch"\)/);
+      expect(batch).toMatch(/items\s+CustomRecipeDeliveryItem\[\]/);
+
+      const item = modelBlock(schema, 'CustomRecipeDeliveryItem');
+      expect(item).toMatch(
+        /contentSnapshot\s+Json\s+@map\("content_snapshot"\)/,
+      );
+      expect(item).toMatch(/recipeVersion\s+Int\s+@map\("recipe_version"\)/);
+      expect(item).toMatch(/@@unique\(\[batchId, recipeId\]\)/);
+      expect(item).toMatch(/@@map\("custom_recipe_delivery_item"\)/);
+      // 与老交付表一致：食谱被交付过就不许删（不是 CASCADE）
+      expect(item).not.toMatch(/recipe\s+Recipe[^\n]*onDelete: Cascade/);
+    });
+
+    it('订单与食谱都挂上了新关系', () => {
+      expect(modelBlock(schema, 'CustomRecipeOrder')).toMatch(
+        /deliveryBatches\s+CustomRecipeDeliveryBatch\[\]/,
+      );
+      expect(modelBlock(schema, 'Recipe')).toMatch(
+        /deliveryItems\s+CustomRecipeDeliveryItem\[\]/,
+      );
+    });
+
+    it('迁移只新增两张表，不动老的单份交付表', () => {
+      const sql = readProjectFile(
+        'prisma/migrations/20261021003000_multi_recipe_delivery_batch/migration.sql',
+      );
+      expect(sql).toMatch(/CREATE TABLE "custom_recipe_delivery_batch"/);
+      expect(sql).toMatch(/CREATE TABLE "custom_recipe_delivery_item"/);
+      // 批次随订单删、明细随批次删；食谱被交付过则不许删
+      expect(sql).toMatch(/ON DELETE CASCADE/);
+      expect(sql).toMatch(/ON DELETE RESTRICT/);
+      expect(sql).not.toMatch(/DROP TABLE/i);
+      expect(sql).not.toMatch(/DROP COLUMN/i);
+      // 老表一个字都不改
+      expect(sql).not.toMatch(/ALTER TABLE "custom_recipe_delivery"/i);
+    });
+  });
 });

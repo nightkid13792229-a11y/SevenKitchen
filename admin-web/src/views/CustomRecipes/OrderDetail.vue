@@ -203,42 +203,6 @@
 
         <el-divider />
 
-        <!-- 成品抵扣额度台账：客服在处理退款时按这里的数据决定要不要恢复额度 -->
-        <h3>成品抵扣额度</h3>
-        <div class="info-group">
-          <div class="info-item">
-            <label>额度总额</label>
-            <span>¥{{ Number(order.creditAmount || 0) }}</span>
-          </div>
-          <div class="info-item">
-            <label>已抵扣</label>
-            <span>¥{{ Number(order.creditUsed || 0) }}</span>
-          </div>
-          <div class="info-item">
-            <label>剩余可用</label>
-            <span class="credit-remaining">¥{{ Number(order.creditRemaining || 0) }}</span>
-          </div>
-        </div>
-        <div class="credit-actions">
-          <!-- 恢复额度等于把顾客的钱还回去，口径 2 定为仅管理员；
-               客服看不到按钮，但要知道"这事不归我点"，所以留一句说明 -->
-          <el-button
-            v-if="isAdmin"
-            size="small"
-            :disabled="Number(order.creditUsed || 0) <= 0"
-            :loading="restoringCredit"
-            @click="restoreCredit"
-          >
-            恢复额度
-          </el-button>
-          <span v-else class="admin-only-tip">{{ ADMIN_ONLY_TIP }}：恢复抵扣额度</span>
-          <span class="credit-tip">
-            顾客用了抵扣后退款时点这里，把已用额度还回去；只影响额度，不改订单金额
-          </span>
-        </div>
-
-        <el-divider />
-
         <h3>健康信息</h3>
 
         <!-- 下单后顾客在健康档案里补了过敏，订单上的快照不会跟着变；
@@ -778,7 +742,7 @@ const props = defineProps<{
 
 const emit = defineEmits(['refresh', 'close']);
 
-/** 口径 2：交付 / 取消 / 恢复额度只允许管理员，前端按角色隐藏敏感按钮 */
+/** 口径 2：交付 / 取消只允许管理员，前端按角色隐藏敏感按钮 */
 const isAdmin = useIsAdmin();
 
 /**
@@ -805,7 +769,6 @@ const loadIngredientOptions = async () => {
 // 状态
 const loading = ref(false);
 const submitting = ref(false);
-const restoringCredit = ref(false);
 const healthSyncing = ref(false);
 const order = ref<CustomRecipeOrderDetail | null>(null);
 
@@ -1281,47 +1244,6 @@ const startProcessing = async () => {
   }
 };
 
-/**
- * 恢复成品抵扣额度（人工处理退款时使用，仅管理员）。
- *
- * 只把"已用额度"还回去，**不改任何订单金额** ——
- * 退款金额本身仍然走既有的退款流程。
- */
-const restoreCredit = async () => {
-  const used = Number(order.value?.creditUsed || 0);
-  if (used <= 0) return;
-
-  try {
-    const { value } = await ElMessageBox.prompt(
-      `本单已抵扣 ¥${used}。把已用额度全部还回去？（只影响额度，不改订单金额）`,
-      '恢复抵扣额度',
-      {
-        confirmButtonText: '恢复',
-        cancelButtonText: '取消',
-        inputValue: String(used),
-        inputPattern: /^\d+(\.\d{1,2})?$/,
-        inputErrorMessage: '请输入不小于 0 的数字，最多两位小数',
-      },
-    );
-
-    restoringCredit.value = true;
-    const result: any = await customRecipeApi.restoreCredit(
-      order.value!.orderId,
-      Number(value),
-    );
-
-    ElMessage.success(
-      `已恢复 ¥${result?.restored ?? 0}，剩余可用 ¥${result?.creditRemaining ?? 0}`,
-    );
-    emit('refresh');
-    await loadOrderDetail();
-  } catch (error) {
-    toastApiError(error, '恢复额度失败', (message) => ElMessage.error(message));
-  } finally {
-    restoringCredit.value = false;
-  }
-};
-
 const contactCustomer = () => {
   const wechat = order.value?.customer?.wechatOpenid;
   const phone = order.value?.customer?.phone;
@@ -1574,24 +1496,6 @@ h3 {
   font-size: 13px;
   word-break: break-all;
   text-align: right;
-}
-
-.info-item .credit-remaining {
-  color: #b08d4f;
-  font-weight: bold;
-}
-
-.credit-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 12px;
-}
-
-.credit-tip {
-  font-size: 13px;
-  color: #909399;
-  line-height: 1.6;
 }
 
 .tags {

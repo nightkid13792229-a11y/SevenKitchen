@@ -6,7 +6,7 @@
            所以入口不消失而是置灰并说明原因，客服才不会以为是系统坏了 -->
       <el-tooltip
         v-if="isAdmin"
-        content="定制费 / 可抵扣金额 / 交付周期 / 接单上限"
+        content="定制费 / 交付周期 / 接单上限"
         placement="bottom"
       >
         <el-button @click="goToConfig">食谱定制设置</el-button>
@@ -169,13 +169,6 @@
             ¥{{ row.amount }}
           </template>
         </el-table-column>
-        <el-table-column label="可抵扣余额" width="110">
-          <template #default="{ row }">
-            <span :class="{ 'credit-remaining': Number(row.creditRemaining) > 0 }">
-              ¥{{ Number(row.creditRemaining || 0) }}
-            </span>
-          </template>
-        </el-table-column>
         <el-table-column label="创建时间" width="160">
           <template #default="{ row }">
             {{ formatDateTime(row.createdAt) }}
@@ -287,7 +280,7 @@ const {
 /** 口径 2：只有管理员能改食谱定制设置，入口对客服置灰 */
 const isAdmin = useIsAdmin();
 
-/** 跳到独立的「食谱定制设置」页（定制费 / 可抵扣金额 / 交付周期 / 接单上限） */
+/** 跳到独立的「食谱定制设置」页（定制费 / 交付周期 / 接单上限） */
 const goToConfig = () => {
   router.push('/custom-recipes/config');
 };
@@ -451,7 +444,6 @@ const runRowAction = (row: CustomRecipeOrderDetail, action: RowAction) => {
     case 'DELIVER':
     case 'DESIGN':
     case 'RESOLVE_AFTERSALE':
-    case 'RESTORE_CREDIT':
       /**
        * 这几个都要在详情页做 —— 列表里没有足够上下文。
        * 尤其「交付」：得先看到喂食量与采购清单才好确认交出去的是对的。
@@ -537,11 +529,6 @@ const getGoalText = (goal: string) => {
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 20px;
-}
-
-.credit-remaining {
-  color: #b08d4f;
-  font-weight: 600;
 }
 
 .page-header h1 {

@@ -105,9 +105,6 @@ export interface CustomRecipeOrderDetail {
   scheduledDate?: string
   estimatedDeliveryDate?: string | null
   amount?: number
-  creditAmount?: number
-  creditUsed?: number
-  creditRemaining?: number
   createdAt?: string
   paymentConfirmedAt?: string | null
   /** 微信支付交易号，客服对账/排查用 */
@@ -179,7 +176,6 @@ export interface CustomRecipeStatistics {
 
 export interface CustomRecipeConfig {
   feeAmount: number
-  creditAmount: number
   deliveryWorkDays: number
   dailyCapacity: number
   paymentTimeoutMinutes: number
@@ -374,10 +370,6 @@ export const customRecipeApi = {
   /** 手工创建食谱并交付（兜底通道，正常动线应走设计器 + 一键交付） */
   createRecipe: (orderId: string, payload: CreateCustomRecipePayload) =>
     api.post(`${BASE}/orders/${orderId}/create-recipe`, payload),
-
-  /** 恢复定制抵扣额度（人工退款时使用，仅管理员） */
-  restoreCredit: (orderId: string, amount?: number) =>
-    api.post(`${BASE}/orders/${orderId}/restore-credit`, { amount }),
 
   /** 删除订单附件 */
   deleteAttachment: (attachmentId: string) =>

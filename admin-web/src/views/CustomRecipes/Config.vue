@@ -4,8 +4,7 @@
       <div>
         <h2>食谱定制设置</h2>
         <p class="page-desc">
-          定制费与<strong>可抵扣金额</strong>是两个独立参数：顾客付多少钱、其中多少钱能抵成品货款，
-          在这里分开配置，<strong>不用改代码</strong>。交付周期与每日接单上限也从这里调。
+          定制费、交付周期与每日接单上限在这里配置，<strong>不用改代码</strong>。
         </p>
       </div>
       <div class="header-actions">
@@ -39,7 +38,7 @@
       show-icon
       class="snapshot-alert"
       title="需要管理员权限"
-      description="食谱定制设置（定制费 / 可抵扣金额 / 交付周期 / 接单上限）只允许管理员修改，当前账号只能查看。"
+      description="食谱定制设置（定制费 / 交付周期 / 接单上限）只允许管理员修改，当前账号只能查看。"
     />
 
     <el-alert
@@ -48,7 +47,7 @@
       show-icon
       class="snapshot-alert"
       title="改价只影响之后提交的订单"
-      description="顾客提交定制单时，当时的定制费与可抵扣金额会快照进订单。已经提交或已付款的顾客，额度不会被后台调价改动。"
+      description="顾客提交定制单时，当时的定制费会快照进订单。已经提交或已付款的顾客，金额不会被后台调价改动。"
     />
 
     <el-card shadow="never" v-loading="loading">
@@ -63,24 +62,8 @@
             :step="10"
             :precision="2"
             style="width: 200px"
-            @change="handleFeeChange"
           />
           <span class="form-tip">顾客提交定制单时支付的金额</span>
-        </el-form-item>
-
-        <el-form-item label="可抵扣金额（元）">
-          <el-input-number
-            v-model="form.creditAmount"
-            :min="0"
-            :max="form.feeAmount"
-            :step="10"
-            :precision="2"
-            style="width: 200px"
-          />
-          <span class="form-tip">
-            定制费中可用于抵扣成品货款的额度，<strong>不得超过定制费</strong>。
-            设为 0 表示定制费不抵货款；设为与定制费相同表示"定制免费"。
-          </span>
         </el-form-item>
 
         <el-divider content-position="left">产能与交付</el-divider>
@@ -336,7 +319,6 @@ const updatedAt = ref('');
  */
 const form = reactive({
   feeAmount: 300,
-  creditAmount: 300,
   deliveryWorkDays: 3,
   dailyCapacity: 4,
   paymentTimeoutMinutes: 30,
@@ -371,25 +353,12 @@ const form = reactive({
  */
 const deliveryItemOptions = ref<Array<{ code: string; label: string }>>([]);
 
-/**
- * 定制费调低时，可抵扣金额必须跟着降下来 ——
- * 否则保存会被后端拒绝（抵扣不得超过定制费），
- * 用户只会看到"保存失败"，却不知道是哪个字段的问题。
- */
-const handleFeeChange = (value: number | undefined) => {
-  const fee = Number(value || 0);
-  if (form.creditAmount > fee) {
-    form.creditAmount = fee;
-  }
-};
-
 const loadConfig = async () => {
   loading.value = true;
   saveError.value = '';
   try {
     const data = await customRecipeApi.getConfig();
     form.feeAmount = Number(data?.feeAmount ?? 300);
-    form.creditAmount = Number(data?.creditAmount ?? 300);
     form.deliveryWorkDays = Number(data?.deliveryWorkDays ?? 3);
     form.dailyCapacity = Number(data?.dailyCapacity ?? 4);
     form.paymentTimeoutMinutes = Number(data?.paymentTimeoutMinutes ?? 30);
@@ -433,11 +402,6 @@ const handleSave = async () => {
   if (!isAdmin.value) {
     // 后端 AdminGuard 也会拦，这里先给出人话
     saveError.value = `${ADMIN_ONLY_TIP}：修改食谱定制设置`;
-    return;
-  }
-
-  if (form.creditAmount > form.feeAmount) {
-    saveError.value = '可抵扣金额不能超过定制费';
     return;
   }
 

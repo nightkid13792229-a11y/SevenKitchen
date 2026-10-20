@@ -48,6 +48,7 @@
 - Modify: `backend/src/application/custom-recipe/custom-recipe.service.ts` — 创建订单时使用报价并写快照。
 - Modify: `backend/src/application/custom-recipe/dto/custom-recipe.dto.ts` — 接收份数。
 - Modify: `backend/src/interfaces/controllers/custom-recipe/custom-recipe.controller.ts` — 报价接口。
+- Modify: `backend/src/app.module.ts` — 注册 `CustomRecipePricingService`。
 - Modify: `backend/src/interfaces/controllers/custom-recipe/admin-custom-recipe.controller.ts` — 配置保存复用校验。
 - Tests:
   - Create: `backend/tests/application/custom-recipe/custom-recipe-pricing.service.spec.ts`
@@ -238,6 +239,8 @@ Expected: FAIL because service/module does not exist.
 
 Create `CustomRecipePricingService` with:
 
+- Register it as a provider in `backend/src/app.module.ts` and import it where `CustomRecipeService` and the customer controller are provided;
+
 - validate quantity integer 1..5;
 - sort tiers by quantity;
 - reject quantities outside 2..5, duplicate quantities, decreasing rates, rate < 0, rate > 0.20;
@@ -272,7 +275,7 @@ Expected: PASS.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add backend/src/application/custom-recipe/custom-recipe-pricing.service.ts backend/src/application/custom-recipe/custom-recipe-config.service.ts backend/tests/application/custom-recipe/custom-recipe-pricing.service.spec.ts
+git add backend/src/application/custom-recipe/custom-recipe-pricing.service.ts backend/src/application/custom-recipe/custom-recipe-config.service.ts backend/src/app.module.ts backend/tests/application/custom-recipe/custom-recipe-pricing.service.spec.ts
 git commit -m "feat: add authoritative multi recipe pricing"
 ```
 
@@ -427,7 +430,7 @@ async quote(@Query('quantity') quantity: string) {
 }
 ```
 
-Wire `CustomRecipePricingService` into the controller module. Reject non-finite/non-integer quantity with 400.
+Inject `CustomRecipePricingService` into the customer controller. Reject non-finite/non-integer quantity with 400.
 
 - [ ] **Step 4: Run tests**
 

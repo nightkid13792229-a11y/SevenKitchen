@@ -174,6 +174,16 @@ export interface CustomRecipeStatistics {
   pendingAftersale: number
 }
 
+/** 多份优惠的一档：quantity 份享 discountRate 的整单折扣 */
+export interface MultiRecipeDiscountTier {
+  /** 份数：2–5（1 份不折扣） */
+  quantity: number
+  /** 整单折扣率，**小数**形式：0.05 = 5% */
+  discountRate: number
+  /** 顾客端展示文案，如「2 份享 95 折」 */
+  label: string
+}
+
 export interface CustomRecipeConfig {
   feeAmount: number
   deliveryWorkDays: number
@@ -219,6 +229,18 @@ export interface CustomRecipeConfig {
   slotRetryTimes: number
   /** 业务编号前缀 */
   orderNoPrefix: string
+
+  // ===== 2026-10-20 多份购买 · 第一阶段 =====
+  /** 是否启用多份购买（默认关闭；关闭时只能下 1 份） */
+  multiRecipeEnabled: boolean
+  /** 单笔最多份数：1–5，5 是业务硬上限 */
+  maxRecipeQuantity: number
+  /** 多份优惠档位（2–5 份四档必须齐全；1 份不折扣） */
+  multiRecipeDiscounts: MultiRecipeDiscountTier[]
+  /** 每日设计工时（分钟），用于推算每日产能 */
+  dailyDesignMinutes: number
+  /** 每份食谱默认设计工时（分钟），用于推算交付日期 */
+  minutesPerRecipe: number
 
   updatedAt?: string
 }

@@ -176,6 +176,33 @@ export interface DeliverBatchResult {
   status: string
 }
 
+/**
+ * 按选中份重新交付的返回摘要（2026-10-21 · 多份售后改稿）
+ *
+ * `recipeCount` 是新批次的总份数（含未选中的复制项）；
+ * `selectedRecipes` 才是这次真正刷新过的份 —— 页面报数用它，
+ * 不能用 `recipeCount` 说"重交了 N 份"，那会把没动的份也算进去。
+ */
+export interface RedeliverBatchResult {
+  orderId: string
+  batchId: string
+  version: number
+  deliveredAt: string
+  autoCompleteAt?: string | null
+  recipeCount: number
+  /** 本次刷新了快照的交付明细 id（旧批次里的 id，按入参顺序） */
+  selectedItemIds: string[]
+  selectedRecipes: Array<{
+    deliveryItemId: string
+    /** 食谱业务编号（CR…），不是主键 */
+    recipeId: string
+    recipeName: string
+    itemCodes: string[]
+  }>
+  legacyRecipeId?: string
+  status: string
+}
+
 export interface CustomRecipeOrderListResult {
   orders: CustomRecipeOrderDetail[]
   total: number
@@ -440,6 +467,19 @@ export const customRecipeApi = {
     api.post<DeliverBatchResult>(
       `${BASE}/orders/${orderId}/deliver-batch`,
       { recipeIds },
+    ),
+
+  /**
+   * 按选中份重新交付（2026-10-21 · 多份售后改稿）。
+   *
+   * 只服务**多份订单的售后改稿**：只刷新 `deliveryItemIds` 这几份的快照，
+   * 其余份原样带进新批次。首次交付走 `deliverBatch`，单份订单仍走
+   * `deliverRecipe`，三者不要混用。
+   */
+  redeliverBatch: (orderId: string, deliveryItemIds: string[]) =>
+    api.post<RedeliverBatchResult>(
+      `${BASE}/orders/${orderId}/redeliver-batch`,
+      { deliveryItemIds },
     ),
 
   /** 手工创建食谱并交付（兜底通道，正常动线应走设计器 + 一键交付） */

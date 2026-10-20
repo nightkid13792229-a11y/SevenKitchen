@@ -103,8 +103,8 @@ describe('售后待办页 · 顺序与动作都由后端定', () => {
  * 顾客现在可以一次选中几份食谱提售后，每份写自己的诉求。
  * 后台此前只显示一条共用说明 —— 客服看不出「要改的是鸡肉南瓜还是鸭肉西兰花」。
  *
- * 本期只做**展示**：按选中份数、食谱名、逐份说明渲染；
- * 老的单份售后一个字都不变。重新交付选中份等后端接口，不在本期做。
+ * 展示部分：按选中份数、食谱名、逐份说明渲染；老的单份售后一个字都不变。
+ * 重新交付选中份在下一期接（见文末），这里先锁住展示口径。
  */
 describe('售后待办页 · 多份售后只做展示', () => {
   const pageCode = stripComments(page)
@@ -134,8 +134,73 @@ describe('售后待办页 · 多份售后只做展示', () => {
     expect(pageCode).toContain('v-if="batchRecipesOf(item).length"')
   })
 
-  it('★ 本期只做展示，不接「重新交付选中份」（后端还没好）', () => {
-    expect(pageCode).not.toContain('deliverBatch')
-    expect(pageCode).not.toContain('deliverRecipe')
+  it('★ 重新交付选中份只走按份接口，不再复用首次交付 / 单份交付', () => {
+    expect(pageCode).toContain('customRecipeApi.redeliverBatch(')
+    expect(pageCode).not.toContain('customRecipeApi.deliverBatch(')
+    expect(pageCode).not.toContain('customRecipeApi.deliverRecipe(')
+  })
+})
+
+/**
+ * 按选中份重新交付（2026-10-21 · 多份售后改稿）
+ *
+ * 顾客只对其中几份不满意时，处理人改完那几份后只重交选中的份：
+ *   · 按钮只出现在多份售后卡上（有选中明细 + 订单号），老的单份售后没有；
+ *   · 点击后先确认，对话框必须列出这次要重交的食谱名；
+ *   · 只调一次 `redeliver-batch`，成功后刷新列表；
+ *   · 后端拒绝的原因留在卡片上，运行期间按钮不能重复点。
+ *
+ * 页面在 node 环境挂不起来（vitest 无 jsdom），所以接线用源码断言锁住；
+ * "什么时候显示 / 发什么载荷" 由 `customRecipeAftersale` 的纯函数单测覆盖。
+ */
+describe('售后待办页 · 按选中份重新交付', () => {
+  const pageCode = stripComments(page)
+  const apiCode = stripComments(apiSource)
+
+  it('★ API 层声明 redeliver-batch，载荷是 deliveryItemIds', () => {
+    expect(apiCode).toContain('redeliverBatch:')
+    expect(apiCode).toContain(
+      '`${BASE}/orders/${orderId}/redeliver-batch`',
+    )
+    expect(apiCode).toContain('{ deliveryItemIds }')
+    // 后端返回新批次与本次真正刷新的份，页面用它报"已重交几份"
+    expect(apiCode).toContain('selectedItemIds: string[]')
+    expect(apiCode).toContain('selectedRecipes:')
+  })
+
+  it('★ 按钮只在多份售后卡上显示（有选中明细 + 订单号）', () => {
+    expect(pageCode).toContain('v-if="canRedeliverAftersaleBatch(item)"')
+    expect(pageCode).toContain('按选中份重新交付')
+    // 判断交给纯函数，页面不自己拼 `item.deliveryItemIds.length` 这类条件
+    expect(pageCode).not.toContain('item.deliveryItemIds.length')
+  })
+
+  it('★ 点击后先确认，对话框列出选中的食谱名', () => {
+    expect(pageCode).toContain('ElMessageBox.confirm(')
+    expect(pageCode).toContain('确认按选中份重新交付')
+    expect(pageCode).toContain('batchRecipesOf(item)')
+    expect(pageCode).toContain('recipeNames')
+  })
+
+  it('★ 只调一次 redeliver-batch，载荷来自选中的明细', () => {
+    expect(pageCode).toContain(
+      'const deliveryItemIds = resolveAftersaleRedeliverItemIds(item)',
+    )
+    expect(pageCode.match(/customRecipeApi\.redeliverBatch\(/g)).toHaveLength(1)
+    expect(pageCode).toContain('item.orderId,')
+    expect(pageCode).toContain('deliveryItemIds,')
+    // 成功后刷新列表，顾客侧/售后状态才会跟着变
+    expect(pageCode).toContain('await load()')
+  })
+
+  it('★ 运行期间按钮 loading + disabled，不能重复提交', () => {
+    expect(pageCode).toContain(':loading="redeliveringId === item.id"')
+    expect(pageCode).toContain(':disabled="Boolean(redeliveringId)"')
+  })
+
+  it('★ 后端拒绝时把具体原因留在卡片上（不是只弹一个 toast）', () => {
+    expect(pageCode).toContain('redeliverErrors[item.id]')
+    expect(pageCode).toContain('getApiErrorMessage(')
+    expect(pageCode).toContain('const message = getApiErrorMessage(')
   })
 })

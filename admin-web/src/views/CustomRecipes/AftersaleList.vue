@@ -112,10 +112,30 @@
         >
           {{ action.label }}
         </el-button>
+        <!--
+          多份售后改稿（2026-10-21）：只重交顾客选中的那几份。
+          老的单份售后没有 deliveryItemIds，按钮不显示 ——
+          判断收在 canRedeliverAftersaleBatch 里，页面不自己拼条件。
+        -->
+        <el-button
+          v-if="canRedeliverAftersaleBatch(item)"
+          type="primary"
+          plain
+          :loading="redeliveringId === item.id"
+          :disabled="Boolean(redeliveringId)"
+          @click="redeliverSelectedRecipes(item)"
+        >
+          按选中份重新交付
+        </el-button>
         <el-button link type="primary" @click="goToOrder(item.orderId)">
           看订单
         </el-button>
       </div>
+      <!-- 后端拒绝的原因留在卡片上，员工不用去猜为什么没交成 -->
+      <p
+        v-if="redeliverErrors[item.id]"
+        class="redeliver-error"
+      >{{ redeliverErrors[item.id] }}</p>
     </el-card>
 
     <!--
@@ -178,10 +198,14 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue';
+import { h, onMounted, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { customRecipeApi, type AdminAftersaleItem } from '@/api/customRecipe';
-import { buildAftersaleRecipeDetails } from '@/utils/customRecipeAftersale';
+import {
+  buildAftersaleRecipeDetails,
+  canRedeliverAftersaleBatch,
+  resolveAftersaleRedeliverItemIds,
+} from '@/utils/customRecipeAftersale';
 import { getApiErrorMessage, toastApiError } from '@/utils/apiError';
 
 /**
@@ -202,6 +226,11 @@ const items = ref<AdminAftersaleItem[]>([]);
 const includeClosed = ref(false);
 const actingId = ref('');
 const submitting = ref(false);
+
+/** 正在按选中份重新交付的售后 id；同一时间只允许一笔，避免重复提交 */
+const redeliveringId = ref('');
+/** 每张卡片自己的重新交付失败原因（后端原话），刷新或重试时清掉 */
+const redeliverErrors = reactive<Record<string, string>>({});
 
 const resolveVisible = ref(false);
 const rejectVisible = ref(false);
@@ -256,6 +285,78 @@ const formatWaiting = (hours: number) => {
  */
 const batchRecipesOf = (item: AdminAftersaleItem) =>
   buildAftersaleRecipeDetails(item);
+
+/**
+ * 按选中份重新交付（2026-10-21 · 多份售后改稿）。
+ *
+ * 与订单详情里的「一次性交付」分工：
+ *   · 那个是**首次**交付整批（`deliver-batch`）；
+ *   · 这里是售后改稿后只重交**顾客选中的那几份**（`redeliver-batch`）。
+ *
+ * 后端会在新批次里保留未选中的份，所以对话框要说清"只刷新选中的份"，
+ * 否则处理人会以为把整单都换了。成功后重新拉列表：售后状态可能跟着变。
+ */
+const redeliverSelectedRecipes = async (item: AdminAftersaleItem) => {
+  if (!canRedeliverAftersaleBatch(item)) return;
+
+  const deliveryItemIds = resolveAftersaleRedeliverItemIds(item);
+  const selectedItemIds = new Set(deliveryItemIds);
+  const recipeNames = batchRecipesOf(item)
+    .filter((recipe) => selectedItemIds.has(recipe.deliveryItemId))
+    .map((recipe) => `《${recipe.recipeName}》`);
+
+  try {
+    await ElMessageBox.confirm(
+      h('div', [
+        h('p', `将按选中的 ${deliveryItemIds.length} 份食谱重新交付：`),
+        h('p', recipeNames.join('、')),
+        h(
+          'p',
+          '只刷新选中的份，其余份保持原样；顾客会收到一条新的交付通知。',
+        ),
+      ]),
+      '确认按选中份重新交付',
+      {
+        confirmButtonText: '确认重新交付',
+        cancelButtonText: '再想想',
+        type: 'warning',
+      },
+    );
+  } catch {
+    // 点「再想想」不是失败，不能弹红色报错
+    return;
+  }
+
+  redeliveringId.value = item.id;
+  delete redeliverErrors[item.id];
+
+  try {
+    // 一次请求提交全部选中份：后端在一个事务里生成新批次
+    const result = await customRecipeApi.redeliverBatch(
+      item.orderId,
+      deliveryItemIds,
+    );
+
+    const redeliveredCount =
+      result?.selectedRecipes?.length ?? deliveryItemIds.length;
+    ElMessage.success(
+      `已按选中的 ${redeliveredCount} 份重新交付，顾客会收到一条新通知`,
+    );
+    await load();
+  } catch (error) {
+    // 后端会说清原因（比如"这张订单还没有多份交付批次"），留在卡片上
+    const message = getApiErrorMessage(
+      error,
+      '按选中份重新交付失败，请重试',
+    );
+    redeliverErrors[item.id] = message;
+    toastApiError(error, '按选中份重新交付失败，请重试', (toastMessage) =>
+      ElMessage.error(toastMessage),
+    );
+  } finally {
+    redeliveringId.value = '';
+  }
+};
 
 const handleAction = async (
   item: AdminAftersaleItem,
@@ -468,5 +569,13 @@ onMounted(load);
   gap: 8px;
   padding-top: 12px;
   border-top: 1px solid var(--el-border-color-lighter);
+}
+
+/* 按选中份重新交付失败：把后端原因留在卡片上，而不是只闪一下 toast */
+.redeliver-error {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--el-color-danger);
 }
 </style>

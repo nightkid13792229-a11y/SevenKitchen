@@ -4,7 +4,7 @@ import { Optional,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CustomRecipeStatus } from '@prisma/client';
+import { CustomRecipeStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { CustomRecipeConfigService } from './custom-recipe-config.service';
 import { PlatformOptionsService } from '../platform-options/platform-options.service';
@@ -20,6 +20,19 @@ import {
   describeAftersaleProgress,
   isAftersaleOpen,
 } from '../../domain/custom-recipe/custom-recipe.aftersale';
+
+/** 每份交付各自的诉求说明（存 `CustomRecipeAftersale.recipeRequests`） */
+export interface CustomRecipeAftersaleRecipeRequest {
+  deliveryItemId: string;
+  description: string;
+}
+
+/** 响应里"这次涉及哪几份"的统一形状（顾客端与后台共用） */
+export interface CustomRecipeAftersaleSelectedItem {
+  deliveryItemId: string;
+  recipeId: string | null;
+  recipeName: string | null;
+}
 
 /**
  * 定制食谱 · 售后（2026-10-16，批次 2.5）
@@ -42,6 +55,10 @@ import {
  * **三、窗口从交付时间起算。** 天数取配置 `aftersale_window_days`。
  * 超窗口不允许**新提**，但**已提的照常处理到底** ——
  * 不能因为窗口到了就把人家等着回复的售后单扔掉。
+ *
+ * **四、多份订单按批次辨认真实交付（2026-10-21）。**
+ * 整批交付只写批次表、不写老的单份交付表，所以这类售后 `deliveryId` 为空，
+ * 改指向 `deliveryBatchId`；窗口也从批次交付时间起算。
  */
 @Injectable()
 export class CustomRecipeAftersaleService {
@@ -71,6 +88,13 @@ export class CustomRecipeAftersaleService {
     type: string;
     description: string;
     photos?: string[];
+    /**
+     * 多份订单可选：这次要调整哪几份（`CustomRecipeDeliveryItem.id`）。
+     * 不传 = 整单售后（老行为）；传了就必须都属于最新批次，且不能为空数组。
+     */
+    deliveryItemIds?: string[] | null;
+    /** 每份各自的诉求说明 `[{ deliveryItemId, description }]`（可选） */
+    recipeRequests?: unknown;
     now?: Date;
   }): Promise<{
     id: string;
@@ -78,6 +102,9 @@ export class CustomRecipeAftersaleService {
     typeLabel: string;
     status: string;
     statusLabel: string;
+    deliveryBatchId: string | null;
+    deliveryItemIds: string[];
+    recipeRequests: CustomRecipeAftersaleRecipeRequest[];
   }> {
     const now = input.now ?? new Date();
 
@@ -104,24 +131,126 @@ export class CustomRecipeAftersaleService {
       throw new BadRequestException('订单已取消，不需要提售后');
     }
 
-    const currentDelivery = await this.prisma.customRecipeDelivery.findFirst({
-      where: { orderId: order.id, replacedByDeliveryId: null },
+    /**
+     * 先解析"选了哪几份"，但真正的归属校验要等拿到批次明细之后 ——
+     * 多份订单的交付在批次表里，不在老的单份交付表。
+     */
+    const selection = this.parseDeliveryItemIds(input.deliveryItemIds);
+    const requestShape = this.parseRecipeRequestsShape(input.recipeRequests);
+
+    /**
+     * 多份订单：最新批次就是这次售后针对的交付。
+     *
+     * 窗口从 `batch.deliveredAt` 起算（与顾客看到的"交付时间"同一个值）；
+     * 老订单没有批次，仍走下面的单份交付路径，响应与以前完全一致。
+     */
+    const latestBatch = await this.prisma.customRecipeDeliveryBatch.findFirst({
+      where: { orderId: order.id },
       orderBy: { version: 'desc' },
-      select: { id: true, deliveredAt: true },
+      select: {
+        id: true,
+        deliveredAt: true,
+        items: { select: { id: true } },
+      },
     });
 
-    if (!currentDelivery) {
-      throw new BadRequestException('这张订单还没有交付，暂时不能提售后');
+    let deliveryId: string | null = null;
+    let deliveryBatchId: string | null = null;
+    let deliveryItemIds: string[] = [];
+    let recipeRequests: CustomRecipeAftersaleRecipeRequest[] = [];
+    let deliveredAt: Date | null = null;
+
+    if (latestBatch) {
+      deliveryBatchId = latestBatch.id;
+      deliveredAt = latestBatch.deliveredAt;
+
+      const batchItemIds = new Set(
+        (latestBatch.items ?? []).map((item) => item.id),
+      );
+
+      /**
+       * 选了就必须是**这一批里的**。传空数组视为"一份都没选" ——
+       * 那等于表单没填完，不能落库成一条什么都不知道的售后，
+       * 所以显式报错，而不是悄悄当成整单。
+       */
+      if (selection.provided && selection.ids.length === 0) {
+        throw new BadRequestException('请至少选择一份要调整的食谱');
+      }
+      if (selection.ids.some((id) => !batchItemIds.has(id))) {
+        throw new BadRequestException(
+          '选中的食谱不在本次交付里，请刷新页面后重新选择',
+        );
+      }
+
+      const selectedSet = new Set(selection.ids);
+      for (const raw of requestShape) {
+        const itemId = String(raw.deliveryItemId ?? '').trim();
+        const requestDescription = String(raw.description ?? '').trim();
+
+        if (!itemId) {
+          throw new BadRequestException('每条调整说明要指明针对哪一份食谱');
+        }
+        if (!requestDescription) {
+          throw new BadRequestException('请为选中的每一份食谱说明要调整什么');
+        }
+        if (!batchItemIds.has(itemId)) {
+          throw new BadRequestException(
+            '诉求对应的食谱不在本次交付里，请刷新页面后重新选择',
+          );
+        }
+        /** 有"涉及食谱"选择器时，逐份说明不能跑到选择范围之外 */
+        if (selection.provided && !selectedSet.has(itemId)) {
+          throw new BadRequestException(
+            '诉求对应的食谱不在本次选中的范围内，请重新勾选',
+          );
+        }
+
+        recipeRequests.push({
+          deliveryItemId: itemId,
+          description: requestDescription,
+        });
+      }
+
+      /**
+       * 只传了逐份说明、没传"涉及食谱"时，说明里提到的那几份就是选中范围。
+       * 两个都没传 → 整单售后，`deliveryItemIds` 留空（老行为）。
+       */
+      deliveryItemIds = selection.provided
+        ? selection.ids
+        : Array.from(new Set(recipeRequests.map((item) => item.deliveryItemId)));
+    } else {
+      /**
+       * 老的单份交付路径**一个字都不改**：没批次时行为与以前一致。
+       * 只额外挡住"给单份订单指定了批次明细"这种明显用错的调用，
+       * 避免静默丢掉顾客的选择。
+       */
+      if (selection.ids.length > 0 || requestShape.length > 0) {
+        throw new BadRequestException(
+          '这张订单不是多份交付，不能指定具体食谱',
+        );
+      }
+
+      const currentDelivery = await this.prisma.customRecipeDelivery.findFirst({
+        where: { orderId: order.id, replacedByDeliveryId: null },
+        orderBy: { version: 'desc' },
+        select: { id: true, deliveredAt: true },
+      });
+
+      if (!currentDelivery) {
+        throw new BadRequestException('这张订单还没有交付，暂时不能提售后');
+      }
+
+      deliveryId = currentDelivery.id;
+      deliveredAt = currentDelivery.deliveredAt;
     }
 
     /**
      * 窗口校验。超窗口**不允许新提**，但见下方：已提的照常处理到底。
      */
     const windowDays = await this.getWindowDays();
-    if (windowDays > 0) {
+    if (windowDays > 0 && deliveredAt) {
       const closesAt = new Date(
-        currentDelivery.deliveredAt.getTime() +
-          windowDays * 24 * 60 * 60 * 1000,
+        deliveredAt.getTime() + windowDays * 24 * 60 * 60 * 1000,
       );
       if (now.getTime() > closesAt.getTime()) {
         throw new BadRequestException(
@@ -175,7 +304,16 @@ export class CustomRecipeAftersaleService {
     const created = await this.prisma.customRecipeAftersale.create({
       data: {
         orderId: order.id,
-        deliveryId: currentDelivery.id,
+        deliveryId,
+        deliveryBatchId,
+        deliveryItemIds,
+        /** 没有逐份说明时不写这一列（保持 NULL = 老口径只有一句共用说明） */
+        ...(recipeRequests.length > 0
+          ? {
+              recipeRequests:
+                recipeRequests as unknown as Prisma.InputJsonValue,
+            }
+          : {}),
         type: input.type,
         description: trimmed,
         photos: input.photos ?? [],
@@ -188,6 +326,10 @@ export class CustomRecipeAftersaleService {
       typeLabel,
       status: created.status,
       statusLabel: CUSTOM_RECIPE_AFTERSALE_STATUS_LABELS[created.status],
+      /** 多份订单：这次售后针对哪一批 / 哪几份（老订单均为空） */
+      deliveryBatchId: created.deliveryBatchId ?? null,
+      deliveryItemIds: created.deliveryItemIds ?? [],
+      recipeRequests,
     };
   }
 
@@ -215,6 +357,8 @@ export class CustomRecipeAftersaleService {
     });
 
     const labels = await this.typeLabels();
+    /** 这次售后涉及哪几份（多份订单才有；老订单为空数组） */
+    const itemMap = await this.resolveSelectedItems(rows);
 
     return rows.map((row) => ({
       id: row.id,
@@ -243,6 +387,11 @@ export class CustomRecipeAftersaleService {
         acceptedAt: row.acceptedAt,
         resolvedAt: row.resolvedAt,
       }),
+      /**
+       * 多份售后：针对哪一批、选了哪几份、每份说了什么（2026-10-21）。
+       * 老订单这几项为空，字段仍然存在，前端不用分支判空对象。
+       */
+      ...this.describeSelection(row, itemMap),
     }));
   }
 
@@ -347,6 +496,7 @@ export class CustomRecipeAftersaleService {
     });
 
     const labels = await this.typeLabels();
+    const itemMap = await this.resolveSelectedItems(rows);
 
     return rows
       .map((row) => {
@@ -376,6 +526,13 @@ export class CustomRecipeAftersaleService {
           hoursWaiting: urgency.hoursWaiting,
           /** 是不是"催得急"（后台标红）—— 阈值由后端定，前端不判断 */
           isUrgent: urgency.isUrgent,
+          /**
+           * 涉及哪几份食谱（2026-10-21 多份售后）。
+           *
+           * 后台必须一眼看出「这次要改的是鸡肉南瓜还是鸭肉西兰花」——
+           * 只给明细 id 等于让客服自己去库里翻。老订单为空数组。
+           */
+          ...this.describeSelection(row, itemMap),
           /** 后台能做什么（与顾客侧渲染契约同一套思路） */
           actions: this.staffActions(row.status),
         };
@@ -689,6 +846,138 @@ export class CustomRecipeAftersaleService {
       hasOpen,
       canSubmit: reason === null,
       reason,
+    };
+  }
+
+  /**
+   * 解析"涉及食谱"入参。
+   *
+   * `provided` 与 `ids` 分开：调用方要区分「没传」和「传了空数组」——
+   * 没传 = 整单售后（老行为），传了空 = 表单没填完，应当报错。
+   */
+  private parseDeliveryItemIds(value: unknown): {
+    provided: boolean;
+    ids: string[];
+  } {
+    if (value === undefined || value === null) {
+      return { provided: false, ids: [] };
+    }
+    if (!Array.isArray(value)) {
+      throw new BadRequestException('deliveryItemIds 必须是数组');
+    }
+    const ids = Array.from(
+      new Set(
+        value
+          .map((item) => String(item ?? '').trim())
+          .filter((item): item is string => item.length > 0),
+      ),
+    );
+    return { provided: true, ids };
+  }
+
+  /**
+   * 解析逐份说明的**形状**（是不是数组、每项是不是对象）。
+   * 内容校验（非空说明、属于本次交付）要拿到批次明细后再做。
+   */
+  private parseRecipeRequestsShape(value: unknown): Array<{
+    deliveryItemId: unknown;
+    description: unknown;
+  }> {
+    if (value === undefined || value === null) return [];
+    if (!Array.isArray(value)) {
+      throw new BadRequestException('recipeRequests 必须是数组');
+    }
+    return value.map((entry) => {
+      if (!entry || typeof entry !== 'object') {
+        throw new BadRequestException('每条调整说明的格式不正确');
+      }
+      const record = entry as Record<string, unknown>;
+      return {
+        deliveryItemId: record.deliveryItemId,
+        description: record.description,
+      };
+    });
+  }
+
+  /** 读出库里存的逐份说明（历史数据可能是 null / 脏数据，读时兜底） */
+  private readRecipeRequests(
+    value: unknown,
+  ): CustomRecipeAftersaleRecipeRequest[] {
+    if (!Array.isArray(value)) return [];
+    return value.flatMap((entry) => {
+      if (!entry || typeof entry !== 'object') return [];
+      const record = entry as Record<string, unknown>;
+      const deliveryItemId = String(record.deliveryItemId ?? '').trim();
+      const description = String(record.description ?? '').trim();
+      if (!deliveryItemId || !description) return [];
+      return [{ deliveryItemId, description }];
+    });
+  }
+
+  /**
+   * 把售后单里存的批次明细 id 翻成**能显示的名字**（顾客端 / 后台共用）。
+   *
+   * 只查一次：一批售后可能选了多份，逐条查会把列表页拖成 N+1。
+   * 已删除的交付明细在结果里自然缺失，调用方用 `deliveryItemIds` 仍能看到原选择。
+   */
+  private async resolveSelectedItems(
+    rows: Array<{ deliveryItemIds?: string[] | null }>,
+  ): Promise<Map<string, CustomRecipeAftersaleSelectedItem>> {
+    const ids = Array.from(
+      new Set(
+        rows.flatMap((row) =>
+          Array.isArray(row.deliveryItemIds) ? row.deliveryItemIds : [],
+        ),
+      ),
+    ).filter((id): id is string => Boolean(id));
+
+    const map = new Map<string, CustomRecipeAftersaleSelectedItem>();
+    if (ids.length === 0) return map;
+
+    const items = await this.prisma.customRecipeDeliveryItem.findMany({
+      where: { id: { in: ids } },
+      select: {
+        id: true,
+        recipe: { select: { recipeId: true, name: true } },
+      },
+    });
+
+    for (const item of items) {
+      map.set(item.id, {
+        deliveryItemId: item.id,
+        recipeId: item.recipe?.recipeId ?? null,
+        recipeName: item.recipe?.name ?? null,
+      });
+    }
+    return map;
+  }
+
+  /** 一条售后单对外的"涉及哪几份"字段（顾客端与后台同一套） */
+  private describeSelection(
+    row: {
+      deliveryBatchId?: string | null;
+      deliveryItemIds?: string[] | null;
+      recipeRequests?: unknown;
+    },
+    itemMap: Map<string, CustomRecipeAftersaleSelectedItem>,
+  ): {
+    deliveryBatchId: string | null;
+    deliveryItemIds: string[];
+    items: CustomRecipeAftersaleSelectedItem[];
+    recipeRequests: CustomRecipeAftersaleRecipeRequest[];
+  } {
+    const deliveryItemIds = Array.isArray(row.deliveryItemIds)
+      ? row.deliveryItemIds
+      : [];
+    return {
+      deliveryBatchId: row.deliveryBatchId ?? null,
+      deliveryItemIds,
+      items: deliveryItemIds
+        .map((id) => itemMap.get(id))
+        .filter((item): item is CustomRecipeAftersaleSelectedItem =>
+          Boolean(item),
+        ),
+      recipeRequests: this.readRecipeRequests(row.recipeRequests),
     };
   }
 

@@ -47,12 +47,28 @@ function buildAftersale(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/** 多份订单的最新交付批次（create 只看 id / deliveredAt / items.id） */
+function buildBatch(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'batch-1',
+    version: 1,
+    deliveredAt: new Date('2026-10-10T10:00:00+08:00'),
+    items: [{ id: 'item-1' }, { id: 'item-2' }, { id: 'item-3' }],
+    ...overrides,
+  };
+}
+
 function createService(options: {
   order?: unknown;
   delivery?: unknown;
   openAftersale?: unknown;
   rows?: unknown[];
   windowDays?: number;
+  freeRevisionCount?: number;
+  /** 多份订单：最新批次（含 items）；不传 = 老的单份交付 */
+  batch?: unknown;
+  /** 批次明细（用于把 deliveryItemIds 翻成名字） */
+  batchItems?: unknown[];
 } = {}) {
   const prisma = {
     customRecipeOrder: {
@@ -73,6 +89,16 @@ function createService(options: {
           : { id: 'delivery-1', deliveredAt: new Date('2026-10-10T10:00:00+08:00') },
       ),
     },
+    /**
+     * 2026-10-21 多份售后：create 先看有没有交付批次。
+     * 默认 null = 老订单，走原来的单份交付路径。
+     */
+    customRecipeDeliveryBatch: {
+      findFirst: jest.fn().mockResolvedValue(options.batch ?? null),
+    },
+    customRecipeDeliveryItem: {
+      findMany: jest.fn().mockResolvedValue(options.batchItems ?? []),
+    },
     customRecipeAftersale: {
       findFirst: jest.fn().mockResolvedValue(options.openAftersale ?? null),
       findMany: jest.fn().mockResolvedValue(options.rows ?? []),
@@ -89,6 +115,7 @@ function createService(options: {
   const configService = {
     getConfig: jest.fn().mockResolvedValue({
       aftersaleWindowDays: options.windowDays ?? 30,
+      freeRevisionCount: options.freeRevisionCount ?? 2,
     }),
   };
 
@@ -257,6 +284,337 @@ describe('CustomRecipeAftersaleService · 提交售后', () => {
   });
 });
 
+describe('CustomRecipeAftersaleService · 多份批次售后（2026-10-21）', () => {
+  const baseInput = {
+    orderIdOrId: 'CR202610160001',
+    customerId: 'customer-1',
+    type: 'ADJUST_RECIPE',
+    description: '整体说明：两份都不太适应',
+    now: new Date('2026-10-15T10:00:00+08:00'),
+  };
+
+  it('★ 勾选 2 份 + 各自说明：存批次 / 明细 id / 逐份说明，deliveryId 保持 null', async () => {
+    const { service, prisma } = createService({ batch: buildBatch() });
+
+    const result = await service.create({
+      ...baseInput,
+      deliveryItemIds: ['item-1', 'item-2'],
+      recipeRequests: [
+        { deliveryItemId: 'item-1', description: '  鸡肉南瓜太油  ' },
+        { deliveryItemId: 'item-2', description: '鸭肉西兰花吃完软便' },
+      ],
+    });
+
+    const data = (prisma.customRecipeAftersale.create as jest.Mock).mock
+      .calls[0][0].data;
+
+    // 多份订单的交付在批次表里 —— 售后也必须指向批次，而不是老的单份交付
+    expect(data.deliveryBatchId).toBe('batch-1');
+    expect(data.deliveryId).toBeNull();
+    expect(data.deliveryItemIds).toEqual(['item-1', 'item-2']);
+    expect(data.recipeRequests).toEqual([
+      { deliveryItemId: 'item-1', description: '鸡肉南瓜太油' },
+      { deliveryItemId: 'item-2', description: '鸭肉西兰花吃完软便' },
+    ]);
+    // 共用说明仍按老字段保存（老页面 / 后台详情还在读它）
+    expect(data.description).toBe('整体说明：两份都不太适应');
+
+    expect(result.deliveryBatchId).toBe('batch-1');
+    expect(result.deliveryItemIds).toEqual(['item-1', 'item-2']);
+    expect(result.recipeRequests).toHaveLength(2);
+
+    // 有批次时不该再去看老的单份交付表
+    expect(prisma.customRecipeDelivery.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('只传逐份说明、不传「涉及食谱」：说明里提到的几份就是选中范围', async () => {
+    const { service, prisma } = createService({ batch: buildBatch() });
+
+    await service.create({
+      ...baseInput,
+      recipeRequests: [
+        { deliveryItemId: 'item-2', description: '这一份想换肉' },
+      ],
+    });
+
+    const data = (prisma.customRecipeAftersale.create as jest.Mock).mock
+      .calls[0][0].data;
+    expect(data.deliveryItemIds).toEqual(['item-2']);
+  });
+
+  it('★ 别人的多份订单：归属校验先挡住，连批次都不查', async () => {
+    const { service, prisma } = createService({ batch: buildBatch() });
+
+    await expect(
+      service.create({
+        ...baseInput,
+        customerId: 'customer-别人',
+        deliveryItemIds: ['item-1'],
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(prisma.customRecipeDeliveryBatch.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('★ 传了空的选择：报错，而不是悄悄当成整单售后', async () => {
+    const { service } = createService({ batch: buildBatch() });
+
+    await expect(
+      service.create({ ...baseInput, deliveryItemIds: [] }),
+    ).rejects.toThrow(/至少选择一份/);
+  });
+
+  it('★ 选了不属于这批的明细（别的订单 / 旧批次）：拒绝', async () => {
+    const { service, prisma } = createService({ batch: buildBatch() });
+
+    await expect(
+      service.create({
+        ...baseInput,
+        deliveryItemIds: ['item-other-order'],
+      }),
+    ).rejects.toThrow(/不在本次交付/);
+
+    expect(prisma.customRecipeAftersale.create).not.toHaveBeenCalled();
+  });
+
+  it('★ 逐份说明指向没勾选的那份：拒绝（避免后台看到互相矛盾的选择）', async () => {
+    const { service } = createService({ batch: buildBatch() });
+
+    await expect(
+      service.create({
+        ...baseInput,
+        deliveryItemIds: ['item-1'],
+        recipeRequests: [
+          { deliveryItemId: 'item-2', description: '这一份也想改' },
+        ],
+      }),
+    ).rejects.toThrow(/不在本次选中的范围/);
+  });
+
+  it('★ 逐份说明不能为空（每份都要说清想改什么）', async () => {
+    const { service } = createService({ batch: buildBatch() });
+
+    await expect(
+      service.create({
+        ...baseInput,
+        deliveryItemIds: ['item-1'],
+        recipeRequests: [{ deliveryItemId: 'item-1', description: '   ' }],
+      }),
+    ).rejects.toThrow(/每一份食谱说明要调整什么/);
+  });
+
+  it('逐份说明必须指明是哪一份', async () => {
+    const { service } = createService({ batch: buildBatch() });
+
+    await expect(
+      service.create({
+        ...baseInput,
+        recipeRequests: [{ description: '忘了选哪一份' }],
+      }),
+    ).rejects.toThrow(/指明针对哪一份/);
+  });
+
+  describe('★ 窗口仍从交付时间起算，但批次订单看批次时间', () => {
+    it('订单上的 deliveredAt 很旧、批次是新的：仍可提', async () => {
+      const { service } = createService({
+        batch: buildBatch({
+          deliveredAt: new Date('2026-10-10T10:00:00+08:00'),
+        }),
+        order: buildOrder({ deliveredAt: new Date('2026-09-01T10:00:00+08:00') }),
+        windowDays: 30,
+      });
+
+      await expect(
+        service.create({ ...baseInput, deliveryItemIds: ['item-1'] }),
+      ).resolves.toBeDefined();
+    });
+
+    it('批次已经超过窗口：拒绝（即使订单上的时间很新）', async () => {
+      const { service } = createService({
+        batch: buildBatch({
+          deliveredAt: new Date('2026-09-01T10:00:00+08:00'),
+        }),
+        order: buildOrder({ deliveredAt: new Date('2026-10-10T10:00:00+08:00') }),
+        windowDays: 30,
+      });
+
+      await expect(
+        service.create({ ...baseInput, deliveryItemIds: ['item-1'] }),
+      ).rejects.toThrow(/超过售后受理期/);
+    });
+  });
+
+  it('★ 一次提交只占 1 次免费调整：勾了 2 份也是 1 条售后单', async () => {
+    const { service, prisma } = createService({
+      batch: buildBatch(),
+      rows: [{ status: 'RESOLVED' }],
+      freeRevisionCount: 2,
+    });
+
+    await service.create({
+      ...baseInput,
+      deliveryItemIds: ['item-1', 'item-2'],
+    });
+
+    // 只写一条售后单（不是一份一条）
+    expect(prisma.customRecipeAftersale.create).toHaveBeenCalledTimes(1);
+
+    // 配额按售后单条数算：提过 1 次 → 还剩 1 次，与勾了几份无关
+    const quota = await service.getQuota('CR202610160001', 'customer-1');
+    expect(quota.usedCount).toBe(1);
+    expect(quota.freeRevisionsLeft).toBe(1);
+  });
+
+  it('次数用完时照旧拒绝（勾几份都不能绕过配额）', async () => {
+    const { service } = createService({
+      batch: buildBatch(),
+      rows: [{ status: 'RESOLVED' }],
+      freeRevisionCount: 1,
+    });
+
+    await expect(
+      service.create({
+        ...baseInput,
+        deliveryItemIds: ['item-1', 'item-2'],
+      }),
+    ).rejects.toThrow(/免费调整次数已用完/);
+  });
+
+  it('★ 老订单（没有批次）行为不变：仍写 deliveryId，新字段为空', async () => {
+    const { service, prisma } = createService();
+
+    await service.create(baseInput);
+
+    const data = (prisma.customRecipeAftersale.create as jest.Mock).mock
+      .calls[0][0].data;
+    expect(data.deliveryId).toBe('delivery-1');
+    expect(data.deliveryBatchId).toBeNull();
+    expect(data.deliveryItemIds).toEqual([]);
+    expect(data.recipeRequests).toBeUndefined();
+  });
+
+  it('老订单传了批次明细：明确拒绝，不静默丢掉顾客的选择', async () => {
+    const { service } = createService();
+
+    await expect(
+      service.create({ ...baseInput, deliveryItemIds: ['item-1'] }),
+    ).rejects.toThrow(/不是多份交付/);
+  });
+});
+
+describe('CustomRecipeAftersaleService · 响应带出「涉及哪几份」', () => {
+  const batchAftersale = () =>
+    buildAftersale({
+      deliveryId: null,
+      deliveryBatchId: 'batch-1',
+      deliveryItemIds: ['item-1', 'item-2'],
+      recipeRequests: [
+        { deliveryItemId: 'item-1', description: '太油了' },
+        { deliveryItemId: 'item-2', description: '想换成鸭肉' },
+      ],
+    });
+
+  const batchItems = () => [
+    { id: 'item-1', recipe: { recipeId: 'CR1759100000001', name: '鸡肉南瓜' } },
+    { id: 'item-2', recipe: { recipeId: 'CR1759100000002', name: '鸭肉西兰花' } },
+  ];
+
+  it('★ 顾客侧：批次 id / 明细 id / 食谱名字 / 逐份说明都返回（可直接渲染）', async () => {
+    const { service } = createService({
+      rows: [batchAftersale()],
+      batchItems: batchItems(),
+    });
+
+    const list = await service.listForCustomer(
+      'CR202610160001',
+      'customer-1',
+    );
+
+    expect(list[0].deliveryBatchId).toBe('batch-1');
+    expect(list[0].deliveryItemIds).toEqual(['item-1', 'item-2']);
+    expect(list[0].items).toEqual([
+      {
+        deliveryItemId: 'item-1',
+        recipeId: 'CR1759100000001',
+        recipeName: '鸡肉南瓜',
+      },
+      {
+        deliveryItemId: 'item-2',
+        recipeId: 'CR1759100000002',
+        recipeName: '鸭肉西兰花',
+      },
+    ]);
+    expect(list[0].recipeRequests).toEqual([
+      { deliveryItemId: 'item-1', description: '太油了' },
+      { deliveryItemId: 'item-2', description: '想换成鸭肉' },
+    ]);
+  });
+
+  it('★ 后台待办：同样带出涉事食谱，客服不用自己去库里翻 id', async () => {
+    const { service } = (() => {
+      const prisma = {
+        customRecipeDeliveryItem: {
+          findMany: jest.fn().mockResolvedValue(batchItems()),
+        },
+        customRecipeAftersale: {
+          findMany: jest.fn().mockResolvedValue([
+            {
+              ...batchAftersale(),
+              order: {
+                orderId: 'CR202610160001',
+                customerId: 'customer-1',
+                status: 'COMPLETED',
+                dog: { name: '豆豆' },
+                customer: { nickname: '张三', phone: '138' },
+              },
+            },
+          ]),
+        },
+        customRecipeOrder: { findUnique: jest.fn() },
+      };
+      const service = new CustomRecipeAftersaleService(
+        prisma as unknown as PrismaService,
+        { getConfig: jest.fn() } as unknown as CustomRecipeConfigService,
+        {
+          listSet: jest
+            .fn()
+            .mockResolvedValue([{ code: 'ADJUST_RECIPE', label: '调整食谱' }]),
+        } as unknown as PlatformOptionsService,
+      );
+      return { service, prisma };
+    })();
+
+    const list = await service.listForStaff();
+
+    expect(list[0].deliveryBatchId).toBe('batch-1');
+    expect(list[0].deliveryItemIds).toEqual(['item-1', 'item-2']);
+    expect(list[0].items.map((item: any) => item.recipeName)).toEqual([
+      '鸡肉南瓜',
+      '鸭肉西兰花',
+    ]);
+    expect(list[0].recipeRequests).toHaveLength(2);
+  });
+
+  it('老订单：新字段是空数组 / null，字段本身仍然存在（前端不用判 undefined）', async () => {
+    const { service, prisma } = createService({
+      rows: [buildAftersale()],
+    });
+    (prisma.customRecipeDeliveryItem.findMany as jest.Mock).mockClear();
+
+    const list = await service.listForCustomer(
+      'CR202610160001',
+      'customer-1',
+    );
+
+    expect(list[0].deliveryBatchId).toBeNull();
+    expect(list[0].deliveryItemIds).toEqual([]);
+    expect(list[0].items).toEqual([]);
+    expect(list[0].recipeRequests).toEqual([]);
+    // 没选任何明细时不该白查一次明细表
+    expect(prisma.customRecipeDeliveryItem.findMany).not.toHaveBeenCalled();
+  });
+});
+
 describe('CustomRecipeAftersaleService · 顾客查看', () => {
   it('★ 返回的是能直接渲染的形态：中文、进度、能不能撤回都算好', async () => {
     const { service } = createService({
@@ -407,8 +765,13 @@ describe('CustomRecipeAftersaleService · 后台处理', () => {
   function createForStaff(options: {
     rows?: unknown[];
     row?: unknown;
+    /** 把 deliveryItemIds 翻成食谱名字（多份售后） */
+    batchItems?: unknown[];
   } = {}) {
     const prisma = {
+      customRecipeDeliveryItem: {
+        findMany: jest.fn().mockResolvedValue(options.batchItems ?? []),
+      },
       customRecipeAftersale: {
         findMany: jest.fn().mockResolvedValue(options.rows ?? []),
         findUnique: jest.fn().mockResolvedValue(options.row ?? null),

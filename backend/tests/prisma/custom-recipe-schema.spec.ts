@@ -318,4 +318,53 @@ describe('食谱定制 · 数据库结构守卫', () => {
       expect(sql).not.toMatch(/ALTER TABLE "custom_recipe_delivery"/i);
     });
   });
+
+  describe('多份售后（2026-10-21 · 第二阶段 Task 6）', () => {
+    it('售后单能指向批次 / 明细，并保存逐份说明', () => {
+      const aftersale = modelBlock(schema, 'CustomRecipeAftersale');
+
+      expect(aftersale).toMatch(
+        /deliveryBatchId\s+String\?\s+@map\("delivery_batch_id"\)/,
+      );
+      expect(aftersale).toMatch(
+        /deliveryItemIds\s+String\[\]\s+@default\(\[\]\)\s+@map\("delivery_item_ids"\)/,
+      );
+      expect(aftersale).toMatch(
+        /recipeRequests\s+Json\?\s+@map\("recipe_requests"\)/,
+      );
+      expect(aftersale).toMatch(
+        /deliveryBatch\s+CustomRecipeDeliveryBatch\?\s+@relation/,
+      );
+      // 老的单份交付关系必须还在 —— 老订单仍走它
+      expect(aftersale).toMatch(
+        /delivery\s+CustomRecipeDelivery\?\s+@relation/,
+      );
+    });
+
+    it('批次上挂反向关系，便于按批次查售后', () => {
+      expect(modelBlock(schema, 'CustomRecipeDeliveryBatch')).toMatch(
+        /aftersales\s+CustomRecipeAftersale\[\]/,
+      );
+    });
+
+    it('迁移只给售后表加列，老的单份交付表一个字都不改', () => {
+      const sql = readProjectFile(
+        'prisma/migrations/20261021020000_multi_recipe_aftersale_batch/migration.sql',
+      );
+
+      expect(sql).toMatch(
+        /ALTER TABLE "custom_recipe_aftersale" ADD COLUMN\s+"delivery_batch_id" TEXT/,
+      );
+      expect(sql).toMatch(
+        /ADD COLUMN\s+"delivery_item_ids" TEXT\[\] DEFAULT ARRAY\[\]::TEXT\[\]/,
+      );
+      expect(sql).toMatch(/ADD COLUMN\s+"recipe_requests" JSONB/);
+      // 批次被删时只断开关联，不能连带删掉售后单
+      expect(sql).toMatch(/ON DELETE SET NULL/);
+      expect(sql).not.toMatch(/DROP TABLE/i);
+      expect(sql).not.toMatch(/DROP COLUMN/i);
+      expect(sql).not.toMatch(/ALTER COLUMN/i);
+      expect(sql).not.toMatch(/ALTER TABLE "custom_recipe_delivery"/i);
+    });
+  });
 });

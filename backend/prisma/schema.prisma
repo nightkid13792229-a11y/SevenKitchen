@@ -2810,6 +2810,8 @@ model CustomRecipeDeliveryBatch {
 
   order        CustomRecipeOrder          @relation(fields: [orderId], references: [id], onDelete: Cascade)
   items        CustomRecipeDeliveryItem[]
+  /// 针对这一批提出的售后（2026-10-21 · 多份交付售后）
+  aftersales   CustomRecipeAftersale[]
 
   @@unique([orderId, version])
   @@index([orderId])
@@ -2848,8 +2850,23 @@ model CustomRecipeDeliveryItem {
 model CustomRecipeAftersale {
   id            String   @id @default(uuid()) @map("id")
   orderId       String   @map("order_id")
-  /// 针对哪一版交付提出的（可空：交付前也可能提）
+  /// 针对哪一版交付提出的（可空：交付前也可能提；多份订单用 `deliveryBatchId`）
   deliveryId    String?  @map("delivery_id")
+  /// 针对哪一批交付提出的（2026-10-21 · 多份交付售后）。
+  ///
+  /// 多份订单整批交付**不写老的单份交付表**，只写批次表；所以这类售后
+  /// `deliveryId` 为空、`deliveryBatchId` 有值。老订单反过来，两者互斥。
+  deliveryBatchId String? @map("delivery_batch_id")
+  /// 这次要调整哪几份（`CustomRecipeDeliveryItem.id`）。
+  ///
+  /// 存 id 而不是食谱 id：同一道食谱将来可能重新交付多次，
+  /// 售后针对的是**当时交付的那一份**，不是食谱本身。
+  deliveryItemIds String[] @default([]) @map("delivery_item_ids")
+  /// 每份各自的诉求说明：[{ deliveryItemId, description }]
+  ///
+  /// 可空：老版本小程序 / 只写一句共用说明时没有这个。
+  /// 共用说明仍在 `description`，这个字段只是把它细到每一份。
+  recipeRequests Json?  @map("recipe_requests")
   /// 类型 —— 取值来自选项集 `custom_recipe_aftersale_type`
   type          String   @map("type") @db.VarChar(48)
   status        CustomRecipeAftersaleStatus @default(PENDING)
@@ -2869,10 +2886,12 @@ model CustomRecipeAftersale {
 
   order         CustomRecipeOrder     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   delivery      CustomRecipeDelivery? @relation(fields: [deliveryId], references: [id])
+  deliveryBatch CustomRecipeDeliveryBatch? @relation(fields: [deliveryBatchId], references: [id], onDelete: SetNull)
 
   @@index([orderId])
   @@index([status])
   @@index([handlerId])
+  @@index([deliveryBatchId])
   @@map("custom_recipe_aftersale")
 }
 

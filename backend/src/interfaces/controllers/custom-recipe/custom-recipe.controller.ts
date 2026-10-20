@@ -692,6 +692,13 @@ export class CustomRecipeController {
     @Body('type') type: string,
     @Body('description') description: string,
     @Body('photos') photos?: string[],
+    /**
+     * 多份订单可选：涉及哪几份 / 每份的诉求说明（2026-10-21）。
+     * 原样交给服务层校验 —— 归属批次、非空说明都由那里统一判断，
+     * 控制器不复制一套规则（否则两处口径迟早不一致）。
+     */
+    @Body('deliveryItemIds') deliveryItemIds?: string[],
+    @Body('recipeRequests') recipeRequests?: unknown,
   ) {
     const userId = req.user.userId;
 
@@ -705,6 +712,8 @@ export class CustomRecipeController {
       type,
       description,
       photos: Array.isArray(photos) ? photos : [],
+      deliveryItemIds,
+      recipeRequests,
     });
 
     return ApiResponseDto.success(result);

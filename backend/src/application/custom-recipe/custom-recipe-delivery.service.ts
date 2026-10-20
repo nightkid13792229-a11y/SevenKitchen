@@ -282,6 +282,8 @@ export class CustomRecipeDeliveryService {
     batchId: string;
     version: number;
     deliveredAt: Date;
+    /** 自动完成闹钟：now + 售后窗口天数（与老 deliver 同源） */
+    autoCompleteAt: Date | null;
     recipeCount: number;
     recipes: Array<{
       recipeId: string;
@@ -301,6 +303,15 @@ export class CustomRecipeDeliveryService {
     this.assertBatchDeliverable(order.status);
 
     const expectedCount = order.recipeQuantity ?? 1;
+    /**
+     * 份数是从库里读的；万一数据损坏成 0 / 负数，不能让它走到
+     * `recipes[0].id` 那里炸成 TypeError —— 给一句能定位问题的 400。
+     */
+    if (!Number.isInteger(expectedCount) || expectedCount <= 0) {
+      throw new BadRequestException(
+        `该订单的份数配置异常（${expectedCount}），无法交付；请检查订单数据`,
+      );
+    }
     const requestedIds = Array.isArray(input.recipeIds) ? input.recipeIds : [];
 
     if (requestedIds.length !== expectedCount) {
@@ -336,6 +347,35 @@ export class CustomRecipeDeliveryService {
       );
     }
 
+    /**
+     * ★ 一道食谱只能对应一张定制单（N 份都要查）。
+     *
+     * `resolveRecipe` 里的占用检查看的是 `custom_recipe_order.recipe_id` ——
+     * 但那一列只记得住第一份。第二份及以后是通过批次明细交付的，老检查看不到，
+     * 不补这一查就会把同一道食谱重复卖给两张单。
+     *
+     * 不加全局唯一约束：重新交付（同单新版本）是合法需求，约束会把它挡死。
+     */
+    const occupiedItem = await this.prisma.customRecipeDeliveryItem.findFirst({
+      where: {
+        recipeId: { in: recipes.map((recipe) => recipe.id) },
+        batch: { orderId: { not: order.id } },
+      },
+      select: {
+        recipeId: true,
+        recipe: { select: { name: true } },
+        batch: { select: { orderId: true } },
+      },
+    });
+
+    if (occupiedItem) {
+      throw new BadRequestException(
+        `食谱「${occupiedItem.recipe?.name ?? occupiedItem.recipeId}」` +
+          `已经交付给另一张定制单（${occupiedItem.batch?.orderId ?? '未知订单'}），` +
+          '一道定制食谱只能对应一张定制单，不能重复交付',
+      );
+    }
+
     const dog = await this.resolveDogForSnapshot(order.dogId);
 
     /** 每份各自生成快照 —— 共用一个就等于「只交了一份，却告诉顾客交了两份」 */
@@ -355,6 +395,18 @@ export class CustomRecipeDeliveryService {
         };
       }),
     );
+
+    /**
+     * 自动完成闹钟 —— 与老 `deliver()` **同一个来源**（售后窗口天数）。
+     *
+     * 不设的话，多份订单交付后会永远停在 DELIVERED：顾客不点「确认收到」
+     * 就没人把它推到 COMPLETED，售后窗口也永远不会关闭。
+     */
+    const autoCompleteDays = await this.getAutoCompleteDays();
+    const autoCompleteAt =
+      autoCompleteDays > 0
+        ? new Date(now.getTime() + autoCompleteDays * 24 * 60 * 60 * 1000)
+        : null;
 
     return this.prisma.$transaction(async (tx) => {
       /** 版本号 = 该订单已有批次数 + 1；唯一索引兜底防并发重号 */
@@ -400,6 +452,7 @@ export class CustomRecipeDeliveryService {
           status: CustomRecipeStatus.DELIVERED,
           deliveredAt: now,
           recipeId: recipes[0].id,
+          autoCompleteAt,
         },
       });
 
@@ -408,6 +461,7 @@ export class CustomRecipeDeliveryService {
         batchId: batch.id,
         version,
         deliveredAt: now,
+        autoCompleteAt,
         recipeCount: prepared.length,
         recipes: prepared.map(({ recipe, itemCodes }) => ({
           recipeId: recipe.recipeId,

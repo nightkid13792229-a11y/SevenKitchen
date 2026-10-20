@@ -78,6 +78,10 @@ function createService(options: {
   recipes?: Array<Record<string, unknown>>;
   existingBatchCount?: number;
   config?: Record<string, unknown>;
+  /** 模拟「这道食谱已经出现在另一张订单的批次里」 */
+  occupiedDeliveryItem?: unknown;
+  /** 模拟「这道食谱已经被另一张订单的旧 recipeId 占用」 */
+  occupiedOrder?: { recipeId: string; orderId: string };
 }) {
   const recipes = options.recipes ?? [buildRecipe(1), buildRecipe(2)];
 
@@ -131,6 +135,9 @@ function createService(options: {
       create: jest.fn(),
     },
     customRecipeDeliveryItem: {
+      findFirst: jest
+        .fn()
+        .mockResolvedValue(options.occupiedDeliveryItem ?? null),
       createMany: jest.fn(),
     },
     $transaction: jest.fn().mockImplementation(async (fn: any) => fn(txProxy)),
@@ -153,7 +160,15 @@ function createService(options: {
   // 第一次是查订单；之后是 resolveRecipe 里的「是否已被别的单占用」
   orderFindFirst
     .mockResolvedValueOnce(options.order ?? buildOrder())
-    .mockResolvedValue(null);
+    .mockImplementation(async ({ where }: any) => {
+      if (
+        options.occupiedOrder &&
+        where?.recipeId === options.occupiedOrder.recipeId
+      ) {
+        return options.occupiedOrder;
+      }
+      return null;
+    });
 
   return { service, prisma, txProxy, recipeFindFirst, orderFindFirst };
 }
@@ -180,6 +195,10 @@ describe('CustomRecipeDeliveryService · 批量交付（多份）', () => {
         legacyRecipeId: 'recipe-pk-1',
       });
       expect(result.deliveredAt).toEqual(now);
+      // 自动完成闹钟 = now + 售后窗口 3 天（与老 deliver 同源）
+      expect(result.autoCompleteAt?.toISOString()).toBe(
+        new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+      );
       expect(result.recipes.map((recipe) => recipe.recipeId)).toEqual([
         'CR1759100000001',
         'CR1759100000002',
@@ -238,7 +257,59 @@ describe('CustomRecipeDeliveryService · 批量交付（多份）', () => {
         status: CustomRecipeStatus.DELIVERED,
         deliveredAt: now,
         recipeId: 'recipe-pk-1',
+        autoCompleteAt: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000),
       });
+    });
+
+    it('★ 自动完成闹钟读的是售后窗口配置，不是写死的天数', async () => {
+      const now = new Date('2026-10-21T10:00:00+08:00');
+      const { service, txProxy } = createService({
+        config: { aftersaleWindowDays: 5 },
+      });
+
+      const result = await service.deliverBatch({
+        orderIdOrId: 'CR202610210001',
+        recipeIds: ['CR1759100000001', 'CR1759100000002'],
+        deliveredBy: 'admin-1',
+        now,
+      });
+
+      const expected = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
+      expect(result.autoCompleteAt).toEqual(expected);
+      const orderUpdate = (txProxy.customRecipeOrder.update as jest.Mock).mock
+        .calls[0][0];
+      expect(orderUpdate.data.autoCompleteAt).toEqual(expected);
+    });
+
+    it.each([3, 4])('★ %i 份：全部快照落库，订单写第一份', async (quantity) => {
+      const recipes = Array.from({ length: quantity }, (_, index) =>
+        buildRecipe(index + 1),
+      );
+      const { service, txProxy } = createService({
+        order: buildOrder({ recipeQuantity: quantity }),
+        recipes,
+      });
+
+      const result = await service.deliverBatch({
+        orderIdOrId: 'CR202610210001',
+        recipeIds: recipes.map((recipe) => recipe.recipeId as string),
+        deliveredBy: 'admin-1',
+      });
+
+      expect(result.recipeCount).toBe(quantity);
+      expect(result.recipes).toHaveLength(quantity);
+
+      const itemsCreate = (
+        txProxy.customRecipeDeliveryItem.createMany as jest.Mock
+      ).mock.calls[0][0];
+      expect(itemsCreate.data).toHaveLength(quantity);
+      expect(itemsCreate.data.map((item: any) => item.recipeId)).toEqual(
+        recipes.map((recipe) => recipe.id),
+      );
+
+      const orderUpdate = (txProxy.customRecipeOrder.update as jest.Mock).mock
+        .calls[0][0];
+      expect(orderUpdate.data.recipeId).toBe(recipes[0].id);
     });
 
     it('★ 5 份：全部快照都落库，不能只交其中一部分', async () => {
@@ -336,6 +407,25 @@ describe('CustomRecipeDeliveryService · 批量交付（多份）', () => {
         }),
       ).rejects.toThrow(/需要交付 1 份/);
     });
+
+    it.each([0, -1])(
+      '订单份数数据损坏（recipeQuantity = %i）→ 400 而不是 TypeError',
+      async (quantity) => {
+        const { service, prisma } = createService({
+          order: buildOrder({ recipeQuantity: quantity }),
+        });
+
+        await expect(
+          service.deliverBatch({
+            orderIdOrId: 'CR202610210001',
+            recipeIds: [],
+            deliveredBy: 'admin-1',
+          }),
+        ).rejects.toThrow(/份数配置异常/);
+
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe('食谱不能重复', () => {
@@ -402,6 +492,55 @@ describe('CustomRecipeDeliveryService · 批量交付（多份）', () => {
           deliveredBy: 'admin-1',
         }),
       ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  describe('★ 一道食谱只能对应一张定制单（N 份都要查，不只看第一份）', () => {
+    it('第二份已经出现在另一张订单的交付批次里 → 400，且不建批次', async () => {
+      const { service, prisma, txProxy } = createService({
+        occupiedDeliveryItem: {
+          recipeId: 'recipe-pk-2',
+          recipe: { name: '多份食谱 2' },
+          batch: { orderId: 'CR202610010009' },
+        },
+      });
+
+      await expect(
+        service.deliverBatch({
+          orderIdOrId: 'CR202610210001',
+          recipeIds: ['CR1759100000001', 'CR1759100000002'],
+          deliveredBy: 'admin-1',
+        }),
+      ).rejects.toThrow(/已经交付给另一张定制单（CR202610010009）/);
+
+      expect(prisma.customRecipeDeliveryItem.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            recipeId: { in: ['recipe-pk-1', 'recipe-pk-2'] },
+          }),
+        }),
+      );
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(txProxy.customRecipeDeliveryBatch.create).not.toHaveBeenCalled();
+    });
+
+    it('第二份被另一张订单的旧 recipeId 占用 → 400', async () => {
+      const { service, prisma } = createService({
+        occupiedOrder: {
+          recipeId: 'recipe-pk-2',
+          orderId: 'CR202610010009',
+        },
+      });
+
+      await expect(
+        service.deliverBatch({
+          orderIdOrId: 'CR202610210001',
+          recipeIds: ['CR1759100000001', 'CR1759100000002'],
+          deliveredBy: 'admin-1',
+        }),
+      ).rejects.toThrow(/已经交付给另一张定制单（CR202610010009）/);
+
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
   });
 

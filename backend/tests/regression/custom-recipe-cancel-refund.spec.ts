@@ -61,7 +61,7 @@ describe('定制订单 · 取消退款与通知守卫', () => {
     expect(service).toContain('把取消回滚');
     // 回滚要把名额重新占上，否则"取消了又回滚"会白吃一个名额
     expect(service).toMatch(
-      /把取消回滚[\s\S]{0,2000}bookedCount: \{ increment: 1 \}/,
+      /把取消回滚[\s\S]{0,2000}bookedCount: \{ increment: quantity \}/,
     );
   });
 

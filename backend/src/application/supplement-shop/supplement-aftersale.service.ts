@@ -454,6 +454,19 @@ export class SupplementAftersaleService {
         rejectedAt: dto.resolutionType === 'REJECT' ? now : null,
       },
     });
+    if (dto.resolutionType === 'REJECT') {
+      await this.notificationService?.notify(
+        order.id,
+        'AFTERSALE_REJECTED',
+        dto.rejectReason?.trim() || dto.note?.trim(),
+      );
+    } else if (dto.resolutionType === 'REGISTER_ONLY') {
+      await this.notificationService?.notify(
+        order.id,
+        'AFTERSALE_RESOLVED',
+        dto.note?.trim(),
+      );
+    }
     return this.toView(updated);
   }
 

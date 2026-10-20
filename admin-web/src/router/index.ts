@@ -247,8 +247,7 @@ const routes: RouteRecordRaw[] = [
       },
       {
         path: "orders",
-        name: "Orders",
-        component: () => import("@/views/Orders/index.vue"),
+        redirect: "/order-center?type=FOOD",
         meta: { title: "订单管理" },
       },
       {
@@ -259,8 +258,7 @@ const routes: RouteRecordRaw[] = [
       },
       {
         path: "aftersale",
-        name: "AftersaleManagement",
-        component: () => import("@/views/Aftersale/AftersaleManagement.vue"),
+        redirect: "/order-center?aftersale=1",
         meta: { title: "售后工单" },
       },
       {

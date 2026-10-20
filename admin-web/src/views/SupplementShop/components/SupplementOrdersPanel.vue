@@ -160,6 +160,15 @@
               {{ row.status === 'PAID' ? '取消并退款' : '取消' }}
             </el-button>
             <el-button
+              v-if="['PAID', 'PACKED'].includes(row.status)"
+              link
+              type="info"
+              size="small"
+              @click="handleNotifyDelay(row)"
+            >
+              延迟通知
+            </el-button>
+            <el-button
               v-if="!['CANCELLED', 'AFTERSALE'].includes(row.status)"
               link
               type="warning"
@@ -846,6 +855,25 @@ function openAftersale(order: SupplementOrder) {
   current.value = order;
   aftersaleForm.value = { type: 'REFUND', reason: '', amount: undefined };
   aftersaleVisible.value = true;
+}
+
+async function handleNotifyDelay(order: SupplementOrder) {
+  try {
+    const { value } = await ElMessageBox.prompt(
+      '会同时发站内消息和订阅消息，告诉顾客发货需要延后。',
+      '延迟发货通知',
+      {
+        inputPlaceholder: '例如：原料到货延迟，预计晚 1 天',
+        confirmButtonText: '发送通知',
+        cancelButtonText: '返回',
+      },
+    );
+    await supplementOrderApi.notifyDelay(order.id, value || '');
+    ElMessage.success('延迟通知已发送');
+    await loadAll();
+  } catch {
+    /* 用户取消 */
+  }
 }
 
 async function submitAftersale() {

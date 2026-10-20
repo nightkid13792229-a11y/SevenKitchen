@@ -128,7 +128,7 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { orderCenterApi } from '@/api/orderCenter'
 import type {
   OrderCenterItem,
@@ -144,12 +144,16 @@ const total = ref(0)
 const counts = reactive({ FOOD: 0, CUSTOM_RECIPE: 0, SUPPLEMENT: 0 })
 const dateRange = ref<[string, string] | null>(null)
 
+const route = useRoute();
+const initialType = String(route.query.type || '');
 const query = reactive<OrderCenterQuery>({
-  type: undefined,
+  type: ['FOOD', 'CUSTOM_RECIPE', 'SUPPLEMENT'].includes(initialType)
+    ? (initialType as OrderCenterType)
+    : undefined,
   status: undefined,
   dateField: 'created',
   keyword: '',
-  aftersale: false,
+  aftersale: String(route.query.aftersale || '') === '1',
   page: 1,
   pageSize: 20,
 })

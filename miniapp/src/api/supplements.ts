@@ -269,6 +269,51 @@ export interface SupplementAftersale {
   createdAt: string
 }
 
+/** 补剂订阅消息模板（后端按环境变量返回，未配置为 null） */
+export function fetchSupplementSubscribeTemplates() {
+  return request<{
+    scheduled: string | null
+    shipped: string | null
+    delay: string | null
+    aftersale: string | null
+  }>({
+    url: '/supplements/subscribe-templates',
+    method: 'GET'
+  })
+}
+
+let cachedSubscribeIds: string[] | null = null
+
+/** 页面加载时预取模板；提交时才能同步调用 wx.requestSubscribeMessage */
+export async function prefetchSupplementSubscriptions(): Promise<void> {
+  try {
+    const res = await fetchSupplementSubscribeTemplates()
+    if (res.code !== 0) return
+    cachedSubscribeIds = Array.from(
+      new Set(
+        [res.data?.scheduled, res.data?.shipped, res.data?.aftersale].filter(
+          (item): item is string => Boolean(item)
+        )
+      )
+    ).slice(0, 3)
+  } catch {
+    cachedSubscribeIds = null
+  }
+}
+
+/** 在用户点击提交时请求订阅授权；失败/未配置不阻断下单 */
+export async function requestSupplementSubscriptions(): Promise<void> {
+  const ids = cachedSubscribeIds
+  if (!ids || ids.length === 0 || typeof wx === 'undefined' || !wx.requestSubscribeMessage) return
+  await new Promise<void>((resolve) => {
+    wx.requestSubscribeMessage({
+      tmplIds: ids,
+      success: () => resolve(),
+      fail: () => resolve()
+    })
+  })
+}
+
 /** 下单前预计分装/发货日 */
 export function fetchSupplementPackingDate() {
   return request<{ packingDate: string | null; autoScheduleEnabled: boolean }>({

@@ -173,6 +173,15 @@ export const staffSupplementOrderApi = {
     });
   },
 
+  /** 记录标签已打印/补打，只写审计事件，不动库存 */
+  recordLabelsPrinted(orderId: string, labelIds: string[]) {
+    return request<{ printCount: number; reprint: boolean }>({
+      url: `/admin/supplement-shop/orders/${orderId}/labels/printed`,
+      method: 'POST',
+      data: { labelIds },
+    });
+  },
+
   /**
    * 标签图片：预览和打印都走它，保证"屏幕上看到的就是打出来的那张"。
    *

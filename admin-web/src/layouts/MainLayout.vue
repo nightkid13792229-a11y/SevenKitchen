@@ -37,10 +37,6 @@
           <el-icon><FirstAidKit /></el-icon>
           <span>补剂上架清单</span>
         </el-menu-item>
-        <el-menu-item index="/supplement-shop/orders">
-          <el-icon><Box /></el-icon>
-          <span>补剂订单</span>
-        </el-menu-item>
         <el-menu-item index="/supplement-shop/packing-summary">
           <el-icon><List /></el-icon>
           <span>分装汇总</span>
@@ -112,35 +108,15 @@
           <el-icon><Star /></el-icon>
           <span>评价管理</span>
         </el-menu-item>
-        <el-menu-item index="/orders">
-          <el-icon><List /></el-icon>
-          <span>订单管理</span>
-        </el-menu-item>
-        <el-menu-item index="/aftersale">
-          <el-icon><List /></el-icon>
-          <span>售后工单</span>
-        </el-menu-item>
         <el-menu-item index="/refunds">
           <el-icon><Money /></el-icon>
           <span>退款管理</span>
-        </el-menu-item>
-        <el-menu-item index="/custom-recipes">
-          <el-icon><EditPen /></el-icon>
-          <span>定制食谱订单</span>
         </el-menu-item>
         <el-menu-item index="/custom-recipes/schedule">
 
           <el-icon><Calendar /></el-icon>
 
           <span>排期日历</span>
-
-        </el-menu-item>
-
-        <el-menu-item index="/custom-recipes/aftersales">
-
-          <el-icon><Bell /></el-icon>
-
-          <span>售后待办</span>
 
         </el-menu-item>
 

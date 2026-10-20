@@ -253,6 +253,22 @@ describe('补剂分装标签 · 图片渲染', () => {
     expect(ink.maxY + 1).toBeLessThanOrEqual(mmToPx(56));
   });
 
+  it('长品名不会被静默丢掉：缩字号/截断后仍在安全区内', async () => {
+    const service = new SupplementLabelService();
+    const imageBase64 = service.generateLabelImage(
+      createLabel({
+        productName:
+          '高浓度复合海洋磷脂深海鱼油软胶囊与南极磷虾油复配营养补充剂',
+      }),
+      'SP20260918-004',
+      '赛文的食堂',
+    );
+
+    const ink = await measureInk(imageBase64);
+    expect(ink.inkCount).toBeGreaterThan(0);
+    expect(ink.maxY + 1).toBeLessThanOrEqual(mmToPx(56));
+  });
+
   it('文字不会画出左右 2mm 边距之外', async () => {
     const service = new SupplementLabelService();
     const imageBase64 = service.generateLabelImage(

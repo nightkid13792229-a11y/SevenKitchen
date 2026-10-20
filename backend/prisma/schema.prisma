@@ -4427,6 +4427,7 @@ enum SupplementOrderEventType {
   REFUNDED
   RESHIPPED
   SCHEDULE_FAILED
+  LABEL_PRINTED
 }
 
 /// 售后记录关联的订单类型（通用表，本轮只写补剂）

@@ -449,6 +449,18 @@ function ensurePrinter(): boolean {
   return false
 }
 
+async function recordPrinted(indexes: number[]) {
+  const ids = indexes
+    .map((index) => labels.value[index]?.labelId)
+    .filter((value): value is string => Boolean(value))
+  if (ids.length === 0) return
+  try {
+    await staffSupplementOrderApi.recordLabelsPrinted(orderId.value, ids)
+  } catch {
+    // 留痕失败不影响已经打出来的纸
+  }
+}
+
 function handlePrintAll() {
   if (printing.value || labels.value.length === 0) return
   if (!ensurePrinter()) return
@@ -501,6 +513,7 @@ async function runPrintQueue(indexes: number[]) {
     }
 
     uni.hideLoading()
+    await recordPrinted(indexes)
     uni.showToast({ title: `已打印 ${indexes.length} 张`, icon: 'success' })
   } finally {
     printing.value = false
@@ -523,6 +536,7 @@ async function runSingleReprint(index: number) {
       return
     }
     uni.hideLoading()
+    await recordPrinted([index])
     uni.showToast({ title: `第 ${index + 1} 张已补打`, icon: 'success' })
   } finally {
     printing.value = false

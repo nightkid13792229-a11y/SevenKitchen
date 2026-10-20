@@ -441,6 +441,9 @@ export const supplementOrderApi = {
 
   complete: (id: string): Promise<SupplementOrder> =>
     api.post(`/admin/supplement-shop/orders/${id}/complete`),
+  notifyDelay: (id: string, reason: string): Promise<void> =>
+    api.post(`/admin/supplement-shop/orders/${id}/notify-delay`, { reason }),
+
 
   updateAddress: (
     id: string,
@@ -464,6 +467,14 @@ export const supplementOrderApi = {
 
   labels: (id: string): Promise<SupplementOrderLabels> =>
     api.get(`/admin/supplement-shop/orders/${id}/labels`),
+  recordLabelsPrinted: (
+    id: string,
+    labelIds: string[],
+  ): Promise<{ printCount: number; reprint: boolean }> =>
+    api.post(`/admin/supplement-shop/orders/${id}/labels/printed`, {
+      labelIds,
+    }),
+
 
   /** 线上退款（微信原路退回，同时登记售后） */
   refund: (

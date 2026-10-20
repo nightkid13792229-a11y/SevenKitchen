@@ -31,6 +31,7 @@ import { SupplementOrderService } from '../../application/supplement-shop/supple
 import { SupplementLabelService } from '../../label/supplement-label.service';
 import { SupplementSchedulingService } from '../../application/supplement-shop/supplement-scheduling.service';
 import { SupplementAftersaleService } from '../../application/supplement-shop/supplement-aftersale.service';
+import { SupplementNotificationService } from '../../application/supplement-shop/supplement-notification.service';
 import {
   SupplementPackagingService,
   type UpsertPackagingRuleInput,
@@ -80,6 +81,8 @@ export class AdminSupplementShopController {
     private readonly supplementAftersaleService?: SupplementAftersaleService,
     @Optional()
     private readonly supplementPackagingService?: SupplementPackagingService,
+    @Optional()
+    private readonly supplementNotificationService?: SupplementNotificationService,
   ) {}
 
   // ---------- 上架清单 ----------
@@ -220,6 +223,25 @@ export class AdminSupplementShopController {
   async getOrderLabels(@Param('id') id: string) {
     return ApiResponseDto.success(
       await this.supplementOrderService.getOrderLabels(id),
+    );
+  }
+
+  @Post('orders/:id/labels/printed')
+  @ApiOperation({ summary: '记录标签已打印/补打（员工可用，不改库存）' })
+  async recordLabelsPrinted(
+    @Param('id') id: string,
+    @Body() dto: { labelIds?: string[] },
+    @Req() request: { user?: { userId?: string; role?: string } },
+  ) {
+    return ApiResponseDto.success(
+      await this.supplementOrderService.recordLabelsPrinted(
+        id,
+        Array.isArray(dto.labelIds) ? dto.labelIds : [],
+        {
+          type: request.user?.role === 'ADMIN' ? 'ADMIN' : 'STAFF',
+          id: request.user?.userId ?? null,
+        },
+      ),
     );
   }
 
@@ -393,6 +415,21 @@ export class AdminSupplementShopController {
         type: 'ADMIN',
         id: request.user?.userId ?? null,
       }),
+    );
+  }
+
+  @Post('orders/:id/notify-delay')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: '发送补剂延迟发货通知（站内 + 订阅）' })
+  async notifyDelay(
+    @Param('id') id: string,
+    @Body() dto: { reason?: string },
+  ) {
+    if (!this.supplementNotificationService) {
+      throw new BadRequestException('通知服务未启用');
+    }
+    return ApiResponseDto.success(
+      await this.supplementNotificationService.notifyDelay(id, dto.reason),
     );
   }
 

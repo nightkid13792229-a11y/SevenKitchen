@@ -326,32 +326,59 @@ export class SupplementLabelService {
         return;
       }
 
-      const fontPx = mmToPx(line.fontSizeMm);
+      let fontPx = mmToPx(line.fontSizeMm);
       ctx.font = line.bold
         ? `bold ${fontPx}px "${BOLD_FONT_FAMILY}"`
         : `${fontPx}px "${REGULAR_FONT_FAMILY}"`;
       ctx.textAlign = line.align === 'center' ? 'center' : 'left';
       const textX = line.align === 'center' ? width / 2 : contentLeft;
 
-      const descentPx = Math.ceil(fontPx * DESCENT_RATIO);
+      let descentPx = Math.ceil(fontPx * DESCENT_RATIO);
       // 续行用更紧的行距，见 WRAPPED_LINE_HEIGHT_RATIO 的说明
-      const wrappedAdvancePx = Math.min(
+      let wrappedAdvancePx = Math.min(
         advancePx,
         mmToPx(line.fontSizeMm * WRAPPED_LINE_HEIGHT_RATIO),
       );
+      let segments = this.wrapTextByWidth(ctx, line.text, contentWidth);
 
-      this.wrapTextByWidth(ctx, line.text, contentWidth).forEach(
-        (segment, index) => {
-          const segmentBaselineY = firstBaselineY + index * wrappedAdvancePx;
-          // 换行后装不下时，先保证字不越界：超出的行宁可不画，
-          // 也不能压进底部安全区（那里打印出来会被裁掉）。
-          if (segmentBaselineY + descentPx > safeBottomY) {
-            return;
-          }
-          ctx.fillText(segment, textX, segmentBaselineY);
-          baselineY = segmentBaselineY;
-        },
-      );
+      // 长品名/长免责声明：先缩小字号，再截断，绝不静默丢掉整行
+      const fits = () =>
+        firstBaselineY +
+          (segments.length - 1) * wrappedAdvancePx +
+          descentPx <=
+        safeBottomY;
+      const minFontPx = Math.max(10, Math.floor(mmToPx(line.fontSizeMm) * 0.6));
+      while (!fits() && fontPx > minFontPx) {
+        fontPx = Math.max(minFontPx, Math.floor(fontPx * 0.9));
+        ctx.font = line.bold
+          ? `bold ${fontPx}px "${BOLD_FONT_FAMILY}"`
+          : `${fontPx}px "${REGULAR_FONT_FAMILY}"`;
+        descentPx = Math.ceil(fontPx * DESCENT_RATIO);
+        wrappedAdvancePx = Math.min(
+          advancePx,
+          Math.ceil(fontPx * WRAPPED_LINE_HEIGHT_RATIO),
+        );
+        segments = this.wrapTextByWidth(ctx, line.text, contentWidth);
+      }
+      if (!fits()) {
+        const maxSegments = Math.max(
+          1,
+          Math.floor(
+            (safeBottomY - firstBaselineY - descentPx) /
+              Math.max(1, wrappedAdvancePx),
+          ) + 1,
+        );
+        segments = segments.slice(0, maxSegments);
+        segments[segments.length - 1] =
+          `${segments[segments.length - 1].slice(0, -1)}…`;
+      }
+
+      segments.forEach((segment, index) => {
+        const segmentBaselineY = firstBaselineY + index * wrappedAdvancePx;
+        if (segmentBaselineY + descentPx > safeBottomY) return;
+        ctx.fillText(segment, textX, segmentBaselineY);
+        baselineY = segmentBaselineY;
+      });
     });
 
     const buffer = canvas.toBuffer('image/png');

@@ -290,6 +290,8 @@ import {
   createSupplementOrder,
   fetchSupplementOrderDetail,
   fetchSupplementPackingDate,
+  prefetchSupplementSubscriptions,
+  requestSupplementSubscriptions,
   quoteSupplements,
   readSupplementPurchaseDraft,
   type SupplementOrder,
@@ -514,6 +516,7 @@ async function initialize() {
           }
         })
         .catch(() => {}),
+      prefetchSupplementSubscriptions(),
     ])
   } finally {
     initializing.value = false
@@ -737,6 +740,7 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
+    await requestSupplementSubscriptions()
     const res = await createSupplementOrder({
       addressId: selectedAddressId.value,
       lines: selectedLines.value.map((line) => ({

@@ -111,11 +111,22 @@ async function load() {
   }
 }
 
-function handlePrint() {
+async function handlePrint() {
   if (!data.value || data.value.labels.length === 0) {
     ElMessage.warning('没有可打印的标签');
     return;
   }
+  const orderId = String(route.params.id);
+  const labelIds = data.value.labels.map((label) => label.labelId);
+  const onAfterPrint = async () => {
+    window.removeEventListener('afterprint', onAfterPrint);
+    try {
+      await supplementOrderApi.recordLabelsPrinted(orderId, labelIds);
+    } catch {
+      // 留痕失败不影响已经打印的纸
+    }
+  };
+  window.addEventListener('afterprint', onAfterPrint);
   window.print();
 }
 
@@ -123,7 +134,7 @@ function goBack() {
   // 从「订单管理 → 补剂订单」标签进来的，要退回那个标签页；
   // 否则用户会落到另一条菜单路径上，得自己重新找一遍订单。
   if (route.query.from === 'orders') {
-    router.push({ path: '/orders', query: { tab: 'supplement' } });
+    router.push({ path: '/supplement-shop/orders' });
     return;
   }
   router.push('/supplement-shop/orders');

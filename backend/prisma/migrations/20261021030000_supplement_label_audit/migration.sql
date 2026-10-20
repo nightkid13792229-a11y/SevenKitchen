@@ -1,0 +1,1 @@
+ALTER TYPE "SupplementOrderEventType" ADD VALUE IF NOT EXISTS 'LABEL_PRINTED';

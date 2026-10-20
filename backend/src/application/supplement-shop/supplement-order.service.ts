@@ -1207,6 +1207,40 @@ export class SupplementOrderService {
    * 分装标签数据。
    * 一个补剂一袋，一袋一张标签；效期在分装环节已算好，未分装不允许打印。
    */
+  /** 标签补打留痕；同一张多次打印会累计 printCount */
+  async recordLabelsPrinted(
+    orderId: string,
+    labelIds: string[],
+    actor: { type: 'STAFF' | 'ADMIN'; id?: string | null } = { type: 'STAFF' },
+  ): Promise<{ printCount: number; reprint: boolean }> {
+    const order = await this.prisma.supplementOrder.findUnique({
+      where: { id: orderId },
+      select: { id: true },
+    });
+    if (!order) throw new NotFoundException('补剂订单不存在');
+
+    const previous = await this.prisma.supplementOrderEvent.count({
+      where: { orderId, type: 'LABEL_PRINTED' },
+    });
+    const cleanIds = Array.from(new Set(labelIds.filter(Boolean))).slice(0, 100);
+    await this.prisma.supplementOrderEvent.create({
+      data: {
+        orderId,
+        type: 'LABEL_PRINTED',
+        actorType: actor.type,
+        actorId: actor.id ?? null,
+        reason: previous > 0 ? '标签补打' : '标签打印',
+        metadata: {
+          labelIds: cleanIds,
+          labelCount: cleanIds.length,
+          printCount: previous + 1,
+          reprint: previous > 0,
+        },
+      },
+    });
+    return { printCount: previous + 1, reprint: previous > 0 };
+  }
+
   async getOrderLabels(orderId: string): Promise<SupplementOrderLabels> {
     const order = await this.prisma.supplementOrder.findUnique({
       where: { id: orderId },

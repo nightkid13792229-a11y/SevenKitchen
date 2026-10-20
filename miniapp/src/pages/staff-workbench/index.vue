@@ -183,6 +183,10 @@ function goToSupplementOrders() {
   uni.navigateTo({ url: '/pages/staff-supplement-orders/index' })
 }
 
+function goToOrderCenter() {
+  uni.navigateTo({ url: '/pages/staff-order-center/index' })
+}
+
 function goToSupplementSummary() {
   uni.navigateTo({ url: '/pages/staff-supplement-summary/index' })
 }
@@ -207,18 +211,11 @@ const workbenchModules = computed<WorkbenchModule[]>(() => [
     onTap: goToProduction,
   },
   {
-    key: 'orders',
-    title: '订单管理',
+    key: 'orderCenter',
+    title: '订单中心',
     icon: '/static/ui-icons/orders.png',
     badgeKey: 'orders',
-    onTap: viewTodayOrders,
-  },
-  {
-    key: 'supplementOrders',
-    title: '补剂订单',
-    icon: '/static/ui-icons/supplement-orders.png',
-    badgeKey: 'supplementOrders',
-    onTap: goToSupplementOrders,
+    onTap: goToOrderCenter,
   },
   {
     key: 'supplementSummary',

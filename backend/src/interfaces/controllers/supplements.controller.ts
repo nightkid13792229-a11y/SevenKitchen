@@ -18,6 +18,7 @@ import { ApiOperation, ApiSecurity, ApiTags } from '@nestjs/swagger';
 import { SupplementOrderService } from '../../application/supplement-shop/supplement-order.service';
 import { SupplementShopConfigService } from '../../application/supplement-shop/supplement-shop-config.service';
 import { SupplementSchedulingService } from '../../application/supplement-shop/supplement-scheduling.service';
+import { SupplementNotificationService } from '../../application/supplement-shop/supplement-notification.service';
 import { SupplementQuoteRequestDto } from '../dto/supplement-shop.dto';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { AuthGuard } from '../auth/auth.guard';
@@ -30,6 +31,7 @@ export class SupplementsController {
     private readonly supplementOrderService: SupplementOrderService,
     private readonly supplementShopConfigService: SupplementShopConfigService,
     private readonly supplementSchedulingService: SupplementSchedulingService,
+    private readonly supplementNotificationService: SupplementNotificationService,
   ) {}
 
   @Get('shop-status')
@@ -48,6 +50,16 @@ export class SupplementsController {
   async packingDate() {
     return ApiResponseDto.success(
       await this.supplementSchedulingService.previewPackingDate(),
+    );
+  }
+
+  @Get('subscribe-templates')
+  @UseGuards(AuthGuard)
+  @ApiSecurity('X-Customer-Id')
+  @ApiOperation({ summary: '补剂订阅消息模板 ID（供小程序 requestSubscribeMessage）' })
+  async subscribeTemplates() {
+    return ApiResponseDto.success(
+      this.supplementNotificationService.getTemplateIds(),
     );
   }
 

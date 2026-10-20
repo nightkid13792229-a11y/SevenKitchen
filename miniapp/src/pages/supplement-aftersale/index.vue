@@ -63,6 +63,8 @@ import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import {
   createSupplementAftersale,
+  prefetchSupplementSubscriptions,
+  requestSupplementSubscriptions,
   fetchSupplementOrderDetail,
   type SupplementOrder,
 } from '../../api/supplements'
@@ -97,6 +99,7 @@ async function load() {
     const [res, policy] = await Promise.all([
       fetchSupplementOrderDetail(orderId.value),
       fetchSupplementPolicy().catch(() => ({ code: 0, data: null } as any)),
+      prefetchSupplementSubscriptions(),
     ])
     if (policy.code === 0 && policy.data?.aftersalePolicy) {
       policyText.value = `${policy.data.aftersalePolicy}（发货后 ${policy.data.aftersaleWindowDays} 天内可申请）`
@@ -130,6 +133,7 @@ async function submit() {
 
   submitting.value = true
   try {
+    await requestSupplementSubscriptions()
     const res = await createSupplementAftersale(order.value.id, {
       requestType: requestType.value,
       reason: reason.value.trim(),

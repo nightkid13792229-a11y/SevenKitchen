@@ -2483,6 +2483,27 @@ model CustomRecipeOrder {
   scheduledDate         DateTime                 @map("scheduled_date") @db.Date
   estimatedDeliveryDate DateTime?                @map("estimated_delivery_date") @db.Date
   amount                Decimal                  @default(299) @db.Decimal(10, 2)
+
+  // ===== 2026-10-20 多份购买 · 第一阶段：价格与配置 =====
+  //
+  // 这些字段是**下单瞬间的价格快照**：之后后台调价/改优惠档位，
+  // 已创建订单的金额与折扣不受影响。老订单份数视为 1、金额不变。
+
+  /// 本单份数（1–5）；老订单默认 1
+  recipeQuantity         Int      @default(1) @map("recipe_quantity")
+  /// 顾客选择的主蛋白轮换偏好（code 数组）；空数组 = 由营养师搭配
+  requestedProteinCodes  String[] @default([]) @map("requested_protein_codes")
+  /// 下单时的每份单价（元）
+  unitAmount             Decimal  @default(300) @map("unit_amount") @db.Decimal(10, 2)
+  /// 原价 = 单价 × 份数（元）
+  originalAmount         Decimal  @default(300) @map("original_amount") @db.Decimal(10, 2)
+  /// 整单折扣率（0.05 = 5%）
+  discountRate           Decimal  @default(0) @map("discount_rate") @db.Decimal(5, 4)
+  /// 优惠金额（元）
+  discountAmount         Decimal  @default(0) @map("discount_amount") @db.Decimal(10, 2)
+  /// 报价快照（份数、单价、折扣率、优惠、应付、档位文案等）
+  pricingSnapshot        Json?    @map("pricing_snapshot")
+
   status                CustomRecipeStatus       @default(PENDING_PAYMENT) @map("status")
   /// 内部子阶段（2026-10-16 批次 1.2）。
   ///
@@ -2664,6 +2685,25 @@ model CustomRecipeConfig {
   slotRetryTimes        Int     @default(5) @map("slot_retry_times")
   /// 定制单业务编号前缀（原先写死 'CR'）
   orderNoPrefix         String  @default("CR") @map("order_no_prefix") @db.VarChar(8)
+
+  // ===== 2026-10-20 多份购买 · 第一阶段：价格与配置 =====
+  //
+  // 多份购买开关**默认关闭**，第二阶段（多份设计/一次性交付）完成前不得开启。
+  // 关闭时创建 quantity > 1 的订单必须报错 —— 不能只靠前端隐藏入口。
+
+  /// 是否启用多份购买（默认关闭）
+  multiRecipeEnabled    Boolean @default(false) @map("multi_recipe_enabled")
+  /// 单笔最多份数：业务硬上限固定为 5，后台只能在该范围内调低
+  maxRecipeQuantity     Int     @default(5) @map("max_recipe_quantity")
+  /// 多份优惠档位：Array<{ quantity: number; discountRate: number; label: string }>
+  ///
+  /// 默认 [] 只是列默认值；读取时若为空/损坏会退代码里的默认四档
+  /// （2 份 5%、3 份 8%、4 份 10%、5 份 12%），见 CustomRecipeConfigService。
+  multiRecipeDiscounts  Json    @default("[]") @map("multi_recipe_discounts")
+  /// 每日设计工时（分钟）：默认 480 分钟 = 8 小时
+  dailyDesignMinutes    Int     @default(480) @map("daily_design_minutes")
+  /// 每份食谱默认设计工时（分钟）：默认 96 分钟 = 1.6 小时
+  minutesPerRecipe      Int     @default(96) @map("minutes_per_recipe")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

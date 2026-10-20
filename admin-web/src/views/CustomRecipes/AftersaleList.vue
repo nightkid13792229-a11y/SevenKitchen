@@ -66,6 +66,28 @@
           <span v-if="item.customerPhone">{{ item.customerPhone }}</span>
         </div>
         <div class="description">{{ item.description }}</div>
+        <!--
+          多份售后（2026-10-21）：涉及哪几份、每份要改什么。
+          老订单没有按份选择，整块不显示，仍只看上面那条共用说明。
+        -->
+        <div v-if="batchRecipesOf(item).length" class="batch-recipes">
+          <div class="batch-recipes-title">
+            涉及 {{ batchRecipesOf(item).length }} 份食谱
+          </div>
+          <div
+            v-for="recipe in batchRecipesOf(item)"
+            :key="recipe.deliveryItemId"
+            class="batch-recipe"
+          >
+            <el-tag size="small" effect="plain">
+              {{ recipe.recipeName }}
+            </el-tag>
+            <span
+              v-if="recipe.requestDescription"
+              class="batch-recipe-request"
+            >{{ recipe.requestDescription }}</span>
+          </div>
+        </div>
         <div v-if="item.photos && item.photos.length" class="photos">
           <el-image
             v-for="(photo, index) in item.photos"
@@ -159,6 +181,7 @@
 import { onMounted, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { customRecipeApi, type AdminAftersaleItem } from '@/api/customRecipe';
+import { buildAftersaleRecipeDetails } from '@/utils/customRecipeAftersale';
 import { getApiErrorMessage, toastApiError } from '@/utils/apiError';
 
 /**
@@ -224,6 +247,15 @@ const formatWaiting = (hours: number) => {
   if (hours < 24) return `${Math.floor(hours)} 小时`;
   return `${Math.floor(hours / 24)} 天`;
 };
+
+/**
+ * 多份售后：把选中的每份摊平成「食谱名 + 这一份的诉求」。
+ *
+ * 老订单没有按份选择时返回空数组，页面整块不渲染 ——
+ * 保持原来只显示一条共用说明的样子。
+ */
+const batchRecipesOf = (item: AdminAftersaleItem) =>
+  buildAftersaleRecipeDetails(item);
 
 const handleAction = async (
   item: AdminAftersaleItem,
@@ -390,6 +422,32 @@ onMounted(load);
 .description {
   margin-bottom: 12px;
   line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+/* 多份售后：选中了哪几份、每份要改什么 */
+.batch-recipes {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--el-fill-color-lighter);
+}
+
+.batch-recipes-title {
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.batch-recipe {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 6px;
+  line-height: 1.6;
+}
+
+.batch-recipe-request {
+  color: var(--el-text-color-regular);
   white-space: pre-wrap;
 }
 

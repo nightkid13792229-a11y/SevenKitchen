@@ -299,6 +299,19 @@ export interface ResolvedDay {
 
 // ===== 售后处理（2026-10-16 批次 3.1）=====
 
+/** 多份售后里被选中的一份交付明细（后端已把 id 翻成食谱名） */
+export interface AdminAftersaleSelectedRecipe {
+  deliveryItemId: string;
+  recipeId: string | null;
+  recipeName: string | null;
+}
+
+/** 多份售后里这一份自己的诉求说明 */
+export interface AdminAftersaleRecipeRequest {
+  deliveryItemId: string;
+  description: string;
+}
+
 /** 后台待办里的一条售后 */
 export interface AdminAftersaleItem {
   id: string;
@@ -316,6 +329,14 @@ export interface AdminAftersaleItem {
   createdAt: string;
   acceptedAt?: string | null;
   resolvedAt?: string | null;
+  /** 多份售后针对哪一批交付；老的单份售后为 null */
+  deliveryBatchId: string | null;
+  /** 多份售后选中了哪几份（顺序即展示顺序）；老订单为空数组 */
+  deliveryItemIds: string[];
+  /** 每份各自的诉求说明；只有共用说明时为空数组 */
+  recipeRequests: AdminAftersaleRecipeRequest[];
+  /** 选中的每一份对应的食谱；明细被删时可能缺项，以 deliveryItemIds 为准 */
+  items: AdminAftersaleSelectedRecipe[];
   /** 等了多久 —— 客服一眼看出哪条催得急（后端算的） */
   hoursWaiting: number;
   /** 是不是"催得急"（标红）—— 阈值由后端定，前端不判断 */

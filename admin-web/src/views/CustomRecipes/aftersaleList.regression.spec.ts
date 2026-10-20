@@ -96,3 +96,46 @@ describe('售后待办页 · 顺序与动作都由后端定', () => {
     expect(apiCode).toContain('/reject')
   })
 })
+
+/**
+ * 多份售后（2026-10-21）
+ *
+ * 顾客现在可以一次选中几份食谱提售后，每份写自己的诉求。
+ * 后台此前只显示一条共用说明 —— 客服看不出「要改的是鸡肉南瓜还是鸭肉西兰花」。
+ *
+ * 本期只做**展示**：按选中份数、食谱名、逐份说明渲染；
+ * 老的单份售后一个字都不变。重新交付选中份等后端接口，不在本期做。
+ */
+describe('售后待办页 · 多份售后只做展示', () => {
+  const pageCode = stripComments(page)
+  const apiCode = stripComments(apiSource)
+
+  it('★ API 类型补齐后端返回的批次 / 明细 / 逐份说明 / 食谱名', () => {
+    expect(apiCode).toContain('deliveryBatchId: string | null')
+    expect(apiCode).toContain('deliveryItemIds: string[]')
+    expect(apiCode).toContain('recipeRequests: AdminAftersaleRecipeRequest[]')
+    expect(apiCode).toContain('items: AdminAftersaleSelectedRecipe[]')
+    expect(apiCode).toContain('recipeId: string | null')
+    expect(apiCode).toContain('recipeName: string | null')
+  })
+
+  it('★ 多份售后显示「涉及 N 份食谱」、食谱名与每份的说明', () => {
+    expect(pageCode).toContain('涉及')
+    expect(pageCode).toContain('份食谱')
+    expect(pageCode).toContain('batchRecipesOf(item).length')
+    expect(pageCode).toContain('v-for="recipe in batchRecipesOf(item)"')
+    expect(pageCode).toContain('recipe.recipeName')
+    expect(pageCode).toContain('recipe.requestDescription')
+  })
+
+  it('老的单份售后保持原样：仍显示那条共用说明，不出现空的多份块', () => {
+    expect(pageCode).toContain('{{ item.description }}')
+    // 没有选中明细（空数组 / 老订单）时整块不渲染，不会冒出「涉及 0 份」
+    expect(pageCode).toContain('v-if="batchRecipesOf(item).length"')
+  })
+
+  it('★ 本期只做展示，不接「重新交付选中份」（后端还没好）', () => {
+    expect(pageCode).not.toContain('deliverBatch')
+    expect(pageCode).not.toContain('deliverRecipe')
+  })
+})

@@ -16,6 +16,7 @@ vi.mock('../utils/api', async () => {
 import {
   cancelOrder,
   confirmReceipt,
+  fetchCustomRecipeQuote,
   fetchDelivery,
   fetchOrderDetail,
   fetchPublicConfig,
@@ -129,13 +130,27 @@ describe('定制食谱 API 层', () => {
     it('成功时返回设置本体，且不再包含成品抵扣字段', async () => {
       mockedRequest.mockResolvedValue({
         code: 0,
-        data: { feeAmount: 300, deliveryWorkDays: 3 },
+        data: {
+          feeAmount: 300,
+          deliveryWorkDays: 3,
+          multiRecipeEnabled: true,
+          maxRecipeQuantity: 4,
+          multiRecipeDiscounts: [
+            { quantity: 2, discountRate: 0.05, label: '2 份享 95 折' },
+          ],
+        },
       } as never)
 
       const config = await fetchPublicConfig()
 
       expect(config?.feeAmount).toBe(300)
       expect(config?.deliveryWorkDays).toBe(3)
+      // 2026-10-20 多份购买：确认页需要开关、上限和优惠档位
+      expect(config?.multiRecipeEnabled).toBe(true)
+      expect(config?.maxRecipeQuantity).toBe(4)
+      expect(config?.multiRecipeDiscounts).toEqual([
+        { quantity: 2, discountRate: 0.05, label: '2 份享 95 折' },
+      ])
       // 2026-10-20：抵扣机制已取消，类型里不再有 creditAmount
       expect(config).not.toHaveProperty('creditAmount')
     })
@@ -158,6 +173,49 @@ describe('定制食谱 API 层', () => {
       } as never)
 
       await expect(fetchPublicConfig()).rejects.toThrow('配置读取失败')
+    })
+  })
+
+  describe('fetchCustomRecipeQuote', () => {
+    it('用 GET /custom-recipe/quote?quantity=N 取后端权威报价', async () => {
+      mockedRequest.mockResolvedValue({
+        code: 0,
+        data: {
+          quantity: 3,
+          unitAmount: 300,
+          originalAmount: 900,
+          discountRate: 0.08,
+          discountAmount: 72,
+          payableAmount: 828,
+        },
+      } as never)
+
+      const quote = await fetchCustomRecipeQuote(3)
+
+      expect(quote.payableAmount).toBe(828)
+      const arg = mockedRequest.mock.calls[0][0] as {
+        url: string
+        method: string
+      }
+      expect(arg.url).toBe('/custom-recipe/quote?quantity=3')
+      expect(arg.method).toBe('GET')
+    })
+
+    it('后端拒绝时抛错，不自己算一个价格兜底', async () => {
+      mockedRequest.mockResolvedValue({
+        code: 400,
+        message: '多份购买暂未开放，请选择 1 份',
+      } as never)
+
+      await expect(fetchCustomRecipeQuote(2)).rejects.toThrow(
+        '多份购买暂未开放',
+      )
+    })
+
+    it('份数不合法时发请求前就拒绝', async () => {
+      await expect(fetchCustomRecipeQuote(0)).rejects.toThrow('份数不正确')
+      await expect(fetchCustomRecipeQuote(1.5)).rejects.toThrow('份数不正确')
+      expect(mockedRequest).not.toHaveBeenCalled()
     })
   })
 

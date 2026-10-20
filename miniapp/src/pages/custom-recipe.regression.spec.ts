@@ -949,8 +949,10 @@ describe('custom recipe duplicate submit guard · 防连点', () => {
     expect(flagIndex).toBeLessThan(firstAwaitIndex)
   })
 
-  it('按钮不默认置灰，靠 submitting 守卫防重复', () => {
-    expect(submit).toContain('{{ submitting ? \'提交中…\' : `确认并支付 ¥${feeText}` }}')
+  it('按钮文案跟随当前支付金额，并保留 submitting 守卫防重复', () => {
+    // 2026-10-20：多份打开时按钮金额来自后端报价，单份仍用配置里的定制费
+    expect(submit).toContain('{{ payButtonText }}')
+    expect(submit).toContain(':disabled="!canSubmit"')
     expect(submit).toContain('if (submitting.value) return;')
   })
 

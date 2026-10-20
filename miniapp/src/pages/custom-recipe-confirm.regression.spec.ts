@@ -107,6 +107,103 @@ describe('定制页 → 订单确认页（2026-10-19 老板确认）', () => {
 });
 
 /**
+ * 多份购买 · 确认页（2026-10-20 第一阶段）。
+ *
+ * 份数选择、主蛋白选择和价格明细都**只在后端开关打开时出现**；
+ * 金额只展示后端报价，开关关闭时仍是原来的单份确认页。
+ */
+describe('多份购买 · 确认页（2026-10-20）', () => {
+  const confirm = read(`${PAGE_DIR}/confirm.vue`);
+  const api = read('src/api/custom-recipe.ts');
+  const helper = read('src/utils/custom-recipe-pricing.ts');
+
+  it('公开配置类型带上多份开关、上限和优惠档位', () => {
+    expect(api).toContain('multiRecipeEnabled');
+    expect(api).toContain('maxRecipeQuantity');
+    expect(api).toContain('multiRecipeDiscounts');
+    expect(api).toContain('payableAmount');
+  });
+
+  it('报价走 GET /custom-recipe/quote?quantity=N，不用前端价格兜底', () => {
+    expect(api).toContain('export async function fetchCustomRecipeQuote');
+    expect(api).toContain('/custom-recipe/quote?quantity=');
+    expect(confirm).toContain('fetchCustomRecipeQuote');
+  });
+
+  it('配方份数只在开关为 true 时显示，关闭时强制 1 份', () => {
+    expect(confirm).toContain('v-if="multiRecipeEnabled"');
+    expect(confirm).toContain('配方份数');
+    expect(confirm).toContain('最多 {{ maxRecipeQuantity }} 份');
+    expect(confirm).toContain('changeRecipeQuantity');
+    expect(confirm).toContain(
+      'recipeQuantity: multiRecipeEnabled.value ? recipeQuantity.value : 1',
+    );
+  });
+
+  it('指定主蛋白有营养师配/自己选，自己选只给六种肉、不含鱼', () => {
+    expect(confirm).toContain('指定主蛋白');
+    expect(confirm).toContain('营养师配');
+    expect(confirm).toContain('自己选');
+    expect(confirm).toContain('proteinOptions');
+    expect(confirm).toContain('toggleProtein');
+
+    for (const code of [
+      'CHICKEN',
+      'DUCK',
+      'PORK',
+      'BEEF',
+      'TURKEY',
+      'RABBIT',
+    ]) {
+      expect(helper).toContain(`code: '${code}'`);
+    }
+    expect(helper).not.toContain('FISH');
+  });
+
+  it('价格明细展示原价、多份优惠、应付、每份均价，并挡住不完整选择', () => {
+    expect(confirm).toContain('价格明细');
+    expect(confirm).toContain('原价');
+    expect(confirm).toContain('多份优惠');
+    expect(confirm).toContain('应付金额');
+    expect(confirm).toContain('每份均价');
+    expect(confirm).toContain(
+      'formatAmount(currentQuote.value.payableAmount)',
+    );
+    expect(confirm).toContain('perRecipeAverage');
+    expect(confirm).toContain('proteinSelectionError');
+    expect(confirm).toContain(':disabled="!canSubmit"');
+  });
+
+  it('报价失败时显示重试并挡住提交', () => {
+    expect(confirm).toContain('quoteError');
+    expect(confirm).toContain('retryQuote');
+    expect(confirm).toContain('price-state--error');
+    expect(confirm).toContain('if (!quoteReady.value)');
+  });
+
+  it('新增的多份价格区不出现任何抵扣说法', () => {
+    const code = stripComments(`${confirm}\n${helper}\n${api}`);
+    for (const word of ['可抵扣', '成品抵扣', '抵扣']) {
+      expect(code).not.toContain(word);
+    }
+  });
+
+  it('提交 payload 带份数和肉类偏好；营养师配传空数组', () => {
+    const submit =
+      confirm.match(
+        /async function submitConfirmedOrder\([\s\S]*?\n}\n\nonLoad/,
+      )?.[0] || '';
+
+    expect(submit).toContain('recipeQuantity:');
+    expect(submit).toContain('requestedProteinCodes:');
+    expect(submit).toContain('resolveRequestedProteinCodes');
+    expect(submit).toContain(': [],');
+    expect(submit).toContain('quoteReady.value');
+    expect(submit).toContain('proteinSelectionError.value');
+  });
+});
+
+/**
  * 成品抵扣彻底下线（2026-10-20）。
  *
  * 老板决定取消「定制费可抵扣成品货款」：后端已删字段、接口和台账，

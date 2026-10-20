@@ -196,6 +196,25 @@ export interface DeliverySummary {
   autoCompleteAt?: string | null;
 }
 
+/** 多份优惠档位（2–5 份；1 份不折扣） */
+export interface MultiRecipeDiscountTier {
+  quantity: number;
+  /** 0.05 = 5% off */
+  discountRate: number;
+  /** 后台配置的展示文案，如「3 份享 92 折」 */
+  label: string;
+}
+
+/** 后端权威报价：确认页只展示，提交订单时服务端会再算一遍 */
+export interface CustomRecipeQuote {
+  quantity: number;
+  unitAmount: number;
+  originalAmount: number;
+  discountRate: number;
+  discountAmount: number;
+  payableAmount: number;
+}
+
 /** 定制设置里顾客需要知道的几个（公开子集） */
 export interface PublicCustomRecipeConfig {
   feeAmount: number;
@@ -208,6 +227,12 @@ export interface PublicCustomRecipeConfig {
   aftersaleWindowDays?: number;
   freeRevisionCount?: number;
   freeRevisionWindowDays?: number;
+  /** 多份购买开关：关闭时确认页只允许 1 份，也不显示份数选择器 */
+  multiRecipeEnabled: boolean;
+  /** 最多可选份数：1–5，后台可在 1–5 之间调低 */
+  maxRecipeQuantity: number;
+  /** 优惠档位：确认页据此展示优惠说明 */
+  multiRecipeDiscounts: MultiRecipeDiscountTier[];
 }
 
 /**
@@ -248,6 +273,36 @@ export async function fetchPublicConfig(): Promise<PublicCustomRecipeConfig> {
     return res.data as PublicCustomRecipeConfig;
   }
   throw new Error(res?.message || '读取定制设置失败');
+}
+
+/**
+ * 取多份定制报价（2026-10-20 多份购买 · 第一阶段）。
+ *
+ * ⚠️ **只展示、不自行计算。**
+ * 原价、优惠、应付、每份均价都以这里返回的 `payableAmount` 等字段为准；
+ * 下单时后端还会用同一套报价逻辑重算并写快照。前端数学只能用于展示，
+ * 绝不能拿它兜底支付金额 —— 否则配置一改，页面金额和订单金额就会分叉。
+ *
+ * 报价失败时如实抛错，由页面显示「重试」并挡住提交，
+ * 不允许退回用 `feeAmount × quantity` 猜一个价格。
+ */
+export async function fetchCustomRecipeQuote(
+  quantity: number,
+): Promise<CustomRecipeQuote> {
+  if (!Number.isInteger(quantity) || quantity < 1) {
+    throw new Error('份数不正确');
+  }
+  const res: any = await request({
+    // quantity 已在上面校验为整数，直接拼查询串
+    url: `/custom-recipe/quote?quantity=${quantity}`,
+    method: 'GET',
+    quiet: true,
+    suppressErrorToast: true,
+  });
+  if (res?.code === 0 && res.data) {
+    return res.data as CustomRecipeQuote;
+  }
+  throw new Error(res?.message || '读取报价失败');
 }
 
 /**

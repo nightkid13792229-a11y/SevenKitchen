@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CustomRecipeService } from '../../../src/application/custom-recipe/custom-recipe.service';
 import { CustomRecipeConfigService } from '../../../src/application/custom-recipe/custom-recipe-config.service';
+import { CustomRecipePricingService } from '../../../src/application/custom-recipe/custom-recipe-pricing.service';
 import { PrismaService } from '../../../src/infrastructure/prisma.service';
 import { TencentCosService } from '../../../src/infrastructure/services/tencent-cos.service';
 import { WechatService } from '../../../src/infrastructure/wechat/wechat.service';
@@ -37,6 +38,7 @@ describe('CustomRecipeService · 顾客自助取消', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CustomRecipeService,
+        CustomRecipePricingService,
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: TencentCosService, useValue: {} },
         {

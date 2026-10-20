@@ -18,7 +18,11 @@ import {
   CreateCustomRecipeOrderDTO,
   UpdateCustomRecipeOrderDTO,
 } from '../../domain/custom-recipe/custom-recipe.repository';
-import { CustomRecipeConfigService } from './custom-recipe-config.service';
+import {
+  CustomRecipeConfigService,
+  MAX_MULTI_RECIPE_QUANTITY,
+} from './custom-recipe-config.service';
+import { CustomRecipePricingService } from './custom-recipe-pricing.service';
 import {
   assertTransition,
   suggestSubStage,
@@ -57,6 +61,13 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     private readonly prisma: PrismaService,
     private readonly cosService: TencentCosService,
     private readonly configService: CustomRecipeConfigService,
+    /**
+     * 多份权威报价（2026-10-20）。
+     *
+     * 下单金额**只能**来自这里：服务端算完再把单价/原价/折扣/应付
+     * 快照进订单，前端传来的金额一律不采信。
+     */
+    private readonly pricingService: CustomRecipePricingService,
     /**
      * 微信订阅消息（2026-09-28）。
      *
@@ -246,6 +257,71 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     }
   }
 
+  /**
+   * 份数（2026-10-20 多份购买 · 第一阶段）。
+   *
+   * 老版本小程序不传这个字段，按 1 份处理——不能因为新增多份能力
+   * 就让存量单变成"份数缺失"而下不了单。
+   */
+  private resolveRecipeQuantity(raw: number | undefined | null): number {
+    if (raw === undefined || raw === null) return 1;
+
+    if (
+      !Number.isInteger(raw) ||
+      raw < 1 ||
+      raw > MAX_MULTI_RECIPE_QUANTITY
+    ) {
+      throw new BadRequestException(
+        `份数必须是 1~${MAX_MULTI_RECIPE_QUANTITY} 的整数`,
+      );
+    }
+
+    return raw;
+  }
+
+  /**
+   * 顾客选择的主蛋白（2026-10-20 多份购买 · 第一阶段）。
+   *
+   * 规则见设计文档 4.2/10：
+   *   · 不选（空数组）= 交给营养师搭配；
+   *   · 一旦选了，数量必须恰好等于份数；
+   *   · 同一种肉不能重复；
+   *   · 空字符串无效。
+   *
+   * 这里**不校验**肉类与过敏是否冲突：过敏安全由营养师结合档案人工判断，
+   * 选中的肉也不是绕过过敏检查的授权（设计文档第 10 节）。
+   */
+  private resolveRequestedProteinCodes(
+    raw: string[] | undefined | null,
+    quantity: number,
+  ): string[] {
+    if (raw === undefined || raw === null) return [];
+
+    if (!Array.isArray(raw)) {
+      throw new BadRequestException('肉类偏好必须是数组');
+    }
+
+    const codes: string[] = [];
+    for (const code of raw) {
+      if (typeof code !== 'string' || !code.trim()) {
+        throw new BadRequestException('肉类选项不能为空');
+      }
+      codes.push(code.trim());
+    }
+
+    if (new Set(codes).size !== codes.length) {
+      throw new BadRequestException('肉类不能重复选择');
+    }
+
+    if (codes.length !== 0 && codes.length !== quantity) {
+      throw new BadRequestException(
+        `请选择 ${quantity} 种肉类，或留空让营养师搭配`,
+      );
+    }
+
+    return codes;
+  }
+
   async createOrder(data: CreateCustomRecipeOrderDTO): Promise<any> {
     // 定制费从后台配置读取，并在下单这一刻**快照进订单**。
     // 之后后台调价只影响新提交的单，已提交的订单金额不会被改。
@@ -255,6 +331,21 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     await this.assertDogOwnership(data.customerId, data.dogId);
 
     this.assertRequiredIntakeFields(data);
+
+    /**
+     * 多份（2026-10-20 第一阶段）：份数、开关、肉类选择全部在服务端校验。
+     * 前端选择器只是体验层，接口直调也必须挡住 6 份、0 份和重复肉类。
+     */
+    const recipeQuantity = this.resolveRecipeQuantity(data.recipeQuantity);
+
+    if (recipeQuantity > 1 && config.multiRecipeEnabled !== true) {
+      throw new BadRequestException('多份购买暂未开放，请选择 1 份');
+    }
+
+    const requestedProteinCodes = this.resolveRequestedProteinCodes(
+      data.requestedProteinCodes,
+      recipeQuantity,
+    );
 
     /**
      * 幂等（2026-10-19 P0）：同一顾客 + 同一 clientRequestId 只生成一张订单。
@@ -271,6 +362,14 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       });
       if (existing) return existing;
     }
+
+    /**
+     * 权威报价（2026-10-20）：整单金额只算一次，写进订单快照。
+     *
+     * 放在幂等返回之后：配置后来被改坏/调价，不能用新报价改写老订单，
+     * 也不该让同一个 key 的重试因为配置变化而失败。
+     */
+    const quote = this.pricingService.quote(recipeQuantity, config);
 
     const capacity = config.dailyCapacity;
     /** 抢输的日子记下来跳过，避免反复撞同一天 */
@@ -334,7 +433,27 @@ export class CustomRecipeService implements ICustomRecipeRepository {
                 : data.attachmentUrls || [],
             scheduledDate,
             estimatedDeliveryDate,
-            amount: config.feeAmount,
+            /**
+             * 2026-10-20 多份购买：份数、肉类偏好、价格快照。
+             *
+             * amount 只认 quote.payableAmount —— data 里即使带了
+             * amount / unitAmount / payableAmount，这里也一律不读。
+             */
+            recipeQuantity,
+            requestedProteinCodes,
+            unitAmount: quote.unitAmount,
+            originalAmount: quote.originalAmount,
+            discountRate: quote.discountRate,
+            discountAmount: quote.discountAmount,
+            pricingSnapshot: {
+              quantity: quote.quantity,
+              unitAmount: quote.unitAmount,
+              originalAmount: quote.originalAmount,
+              discountRate: quote.discountRate,
+              discountAmount: quote.discountAmount,
+              payableAmount: quote.payableAmount,
+            },
+            amount: quote.payableAmount,
             status: CustomRecipeStatus.PENDING_PAYMENT,
             /**
              * 2026-10-19：提交订单时**不写狗狗档案**，只记下顾客的意愿。

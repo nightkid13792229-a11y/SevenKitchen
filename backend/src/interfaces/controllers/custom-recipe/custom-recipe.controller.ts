@@ -95,6 +95,9 @@ export class CustomRecipeController {
       attachmentKeys: dto.attachmentKeys || [],
       syncToHealthProfile: dto.syncToHealthProfile,
       needsHealthManagement: dto.needsHealthManagement === true,
+      // 2026-10-20 多份购买：份数与肉类偏好只做透传，金额一律由服务端报价
+      recipeQuantity: dto.recipeQuantity,
+      requestedProteinCodes: dto.requestedProteinCodes,
     });
 
     return ApiResponseDto.success({

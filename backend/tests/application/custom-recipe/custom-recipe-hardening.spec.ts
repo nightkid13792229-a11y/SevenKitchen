@@ -1,6 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CustomRecipeService } from '../../../src/application/custom-recipe/custom-recipe.service';
-import { CustomRecipeConfigService } from '../../../src/application/custom-recipe/custom-recipe-config.service';
+import {
+  CustomRecipeConfigService,
+  DEFAULT_MULTI_RECIPE_DISCOUNTS,
+} from '../../../src/application/custom-recipe/custom-recipe-config.service';
+import { CustomRecipePricingService } from '../../../src/application/custom-recipe/custom-recipe-pricing.service';
 import { PrismaService } from '../../../src/infrastructure/prisma.service';
 import { TencentCosService } from '../../../src/infrastructure/services/tencent-cos.service';
 import { CustomRecipeStatus } from '@prisma/client';
@@ -56,6 +60,7 @@ describe('CustomRecipeService · 链路加固', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CustomRecipeService,
+        CustomRecipePricingService,
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: TencentCosService, useValue: {} },
         {
@@ -66,6 +71,11 @@ describe('CustomRecipeService · 链路加固', () => {
               deliveryWorkDays: 3,
               dailyCapacity: 5,
               paymentTimeoutMinutes: 30,
+              multiRecipeEnabled: false,
+              maxRecipeQuantity: 5,
+              multiRecipeDiscounts: DEFAULT_MULTI_RECIPE_DISCOUNTS.map(
+                (tier) => ({ ...tier }),
+              ),
             }),
           },
         },

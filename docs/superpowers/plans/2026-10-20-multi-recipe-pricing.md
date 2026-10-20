@@ -4,11 +4,13 @@
 
 **Goal:** 在不改变现有单份订单行为的前提下，为定制订单增加 1–5 份的服务端权威报价、价格快照和确认页份数选择；多份开关保持关闭，交付能力由下一阶段实现。
 
-**Architecture:** 新增独立 `CustomRecipePricingService` 负责折扣、抵扣和金额计算；配置与优惠档位仍由 `CustomRecipeConfigService` 提供；`createOrder` 只接受后端计算结果。小程序确认页只展示后端报价，不自行计算最终金额。所有多份能力由 `multiRecipeEnabled` 开关挡住，默认关闭。
+**Architecture:** 新增独立 `CustomRecipePricingService` 负责折扣和金额计算；配置与优惠档位仍由 `CustomRecipeConfigService` 提供；`createOrder` 只接受后端计算结果。小程序确认页只展示后端报价，不自行计算最终金额。所有多份能力由 `multiRecipeEnabled` 开关挡住，默认关闭。
 
 **Tech Stack:** NestJS、Prisma/PostgreSQL、Jest、Vue 3、uni-app、Vitest、admin-web Vue 3。
 
 **Spec:** `docs/superpowers/specs/2026-10-20-multi-recipe-order-design.md`
+
+**Prerequisite:** 成品抵扣取消（设计文档 5.4）必须在多份价格开发前完成，或与 Task 1 同一批次清理。本计划不再新增任何抵扣字段或抵扣展示。
 
 ## Global Constraints
 
@@ -16,12 +18,12 @@
 - 1 份不允许折扣。
 - 默认优惠档位：2 份 5%、3 份 8%、4 份 10%、5 份 12%。
 - 最高折扣 20%，后台不能配置超过。
-- 每份抵扣默认 150 元；抵扣总额 = 每份抵扣 × 份数。
 - 份数越高，折扣率不能降低。
 - 所有金额必须由后端计算；前端传金额一律不采信。
-- 价格、折扣、原价、应付、抵扣必须在提交订单时快照。
-- 老订单份数视为 1，金额和抵扣不变。
+- 价格、折扣、原价、应付必须在提交订单时快照。
+- 老订单份数视为 1，金额不变。
 - 多份购买开关默认关闭；关闭时创建 quantity > 1 的订单必须报错。
+- 本期不新增任何成品抵扣字段、接口或展示。
 - 本期不做多份设计、多份交付、指定食谱售后；这些属于后续计划。
 - 不做每份单独备注；备注仍共用一份。
 - 后端测试用 `npx jest <path> --runInBand`；小程序测试用 `npx vitest run <path>`；admin-web 构建用 `npm run build`。
@@ -32,7 +34,7 @@
 - 优惠配置出现重复份数、折扣下降、超过 20% 或缺少档位时，后台保存必须失败；报价不能静默使用坏配置。
 - 金额舍入错误：900 × 8% 必须得到 72 优惠、828 应付，不能出现 827.99 或 828.01。
 - `multiRecipeEnabled=false` 时，任何 quantity > 1 的请求都必须被拒绝，不能只靠前端隐藏。
-- 老订单、单份订单的金额、抵扣和状态不能被新逻辑改变。
+- 老订单、单份订单的金额和状态不能被新逻辑改变。
 - 前端展示金额与后端创建订单金额不一致时，支付金额必须以创建订单返回的 amount 为准。
 - 订单创建后配置被修改，不能影响已创建订单的快照。
 
@@ -191,8 +193,6 @@ export interface CustomRecipeQuote {
   discountRate: number;
   discountAmount: number;
   payableAmount: number;
-  creditPerRecipe: number;
-  creditAmount: number;
 }
 
 quote(quantity: number, config: CustomRecipeConfigDto): CustomRecipeQuote;
@@ -204,12 +204,12 @@ Create `custom-recipe-pricing.service.spec.ts` with exact cases:
 
 ```ts
 it.each([
-  [1, 300, 0, 0, 300, 150],
-  [2, 300, 0.05, 30, 570, 300],
-  [3, 300, 0.08, 72, 828, 450],
-  [4, 300, 0.10, 120, 1080, 600],
-  [5, 300, 0.12, 180, 1320, 750],
-])('quantity %i', (quantity, unit, rate, discount, payable, credit) => {
+  [1, 300, 0, 0, 300],
+  [2, 300, 0.05, 30, 570],
+  [3, 300, 0.08, 72, 828],
+  [4, 300, 0.10, 120, 1080],
+  [5, 300, 0.12, 180, 1320],
+])('quantity %i', (quantity, unit, rate, discount, payable) => {
   const quote = service.quote(quantity, config);
   expect(quote).toMatchObject({
     quantity,
@@ -217,7 +217,6 @@ it.each([
     discountRate: rate,
     discountAmount: discount,
     payableAmount: payable,
-    creditAmount: credit,
   });
 });
 
@@ -248,8 +247,6 @@ Create `CustomRecipePricingService` with:
 - `originalAmount = unitAmount * quantity`;
 - `discountAmount = round2(originalAmount * discountRate)`;
 - `payableAmount = round2(originalAmount - discountAmount)`;
-- `creditPerRecipe = config.creditAmount`;
-- `creditAmount = round2(creditPerRecipe * quantity)`;
 - ensure numeric values are finite and non-negative;
 - return the quote object.
 
@@ -259,7 +256,7 @@ Use `Decimal`-free number math but round at each public amount with `Math.round(
 
 In `CustomRecipeConfigService.assertValid`:
 
-- `maxRecipeQuantity` must equal 5;
+- `maxRecipeQuantity` must be an integer 1–5; 5 is the absolute cap;
 - discount tiers must be arrays with integer quantities 2–5;
 - no duplicate quantity;
 - nondecreasing rates by quantity;
@@ -311,17 +308,16 @@ requestedProteinCodes?: string[];
   - if `requestedProteinCodes.length` is not 0 or `quantity`, throw;
   - if selected, length must equal quantity and all codes must be unique;
   - call quote;
-  - store `recipeQuantity`, `requestedProteinCodes`, `unitAmount`, `originalAmount`, `discountRate`, `discountAmount`, `pricingSnapshot`, `amount = quote.payableAmount`, `creditAmount = quote.creditAmount`.
+  - store `recipeQuantity`, `requestedProteinCodes`, `unitAmount`, `originalAmount`, `discountRate`, `discountAmount`, `pricingSnapshot`, `amount = quote.payableAmount`.
 
 - [ ] **Step 1: Write failing order tests**
 
 Add tests:
 
 ```ts
-it('creates a 3-recipe order with 8% discount and 450 credit', async () => {
+it('creates a 3-recipe order with 8% discount', async () => {
   const order = await service.createOrder({ ...baseDto, recipeQuantity: 3 });
   expect(order.amount).toEqual(828);
-  expect(order.creditAmount).toEqual(450);
   expect(order.recipeQuantity).toEqual(3);
   expect(order.pricingSnapshot).toMatchObject({
     quantity: 3,
@@ -400,7 +396,6 @@ it('returns 828 payable for quantity 3', async () => {
     .set('Authorization', `Bearer ${token}`)
     .expect(200);
   expect(res.body.data.payableAmount).toBe(828);
-  expect(res.body.data.creditAmount).toBe(450);
 });
 
 it('rejects quantity 6', async () => {
@@ -462,7 +457,7 @@ git commit -m "feat: expose multi recipe quote API"
   - `minutesPerRecipe: number`
 - UI table rows for 2–5 份；editable rate and label.
 - Save sends rates as decimals (0.05), not percent strings.
-- UI shows read-only max 5 and derived daily capacity (`floor(dailyDesignMinutes / minutesPerRecipe)`).
+- UI allows editing current max 1–5 and shows derived daily capacity (`floor(dailyDesignMinutes / minutesPerRecipe)`).
 
 - [ ] **Step 1: Write failing regression test**
 
@@ -535,7 +530,7 @@ git commit -m "feat: configure multi recipe discounts and design capacity"
 - Confirm page local state `recipeQuantity = ref(1)`, `quote = ref<CustomRecipeQuote | null>(null)`.
 - Submit payload adds `recipeQuantity`.
 - UI hidden unless `config.multiRecipeEnabled === true`; when false only quantity 1 and no selector.
-- Price block shows original, discount, payable, per-recipe average, credit.
+- Price block shows original, discount, payable, and per-recipe average.
 - The payment button amount uses `quote.payableAmount` when quote exists.
 
 - [ ] **Step 1: Write failing regression test**
@@ -574,8 +569,6 @@ export interface CustomRecipeQuote {
   discountRate: number;
   discountAmount: number;
   payableAmount: number;
-  creditPerRecipe: number;
-  creditAmount: number;
 }
 ```
 

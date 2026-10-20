@@ -35,6 +35,8 @@ describe('CustomRecipeController · 多份报价接口', () => {
   const baseConfig = {
     feeAmount: 300,
     maxRecipeQuantity: 5,
+    // 多份报价用例默认打开开关；关闭场景在下面单独覆盖
+    multiRecipeEnabled: true,
     multiRecipeDiscounts: DEFAULT_MULTI_RECIPE_DISCOUNTS.map((item) => ({
       ...item,
     })),
@@ -95,6 +97,58 @@ describe('CustomRecipeController · 多份报价接口', () => {
       discountRate: 0.08,
       discountAmount: 72,
       payableAmount: 828,
+    });
+  });
+
+  it('5 份返回 1500 原价、180 优惠、12% 折扣与 1320 应付', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/custom-recipe/quote?quantity=5')
+      .set('Authorization', 'Bearer test-token')
+      .expect(200);
+
+    expect(res.body.code).toBe(0);
+    expect(res.body.data).toEqual({
+      quantity: 5,
+      unitAmount: 300,
+      originalAmount: 1500,
+      discountRate: 0.12,
+      discountAmount: 180,
+      payableAmount: 1320,
+    });
+  });
+
+  it('多份开关关闭时 quantity > 1 返回 400，不返回折扣报价', async () => {
+    getConfig.mockResolvedValue({
+      ...baseConfig,
+      multiRecipeEnabled: false,
+    });
+
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/custom-recipe/quote?quantity=5')
+      .set('Authorization', 'Bearer test-token')
+      .expect(400);
+
+    expect(JSON.stringify(res.body)).toContain('多份购买暂未开放');
+  });
+
+  it('多份开关关闭时 1 份仍可正常报价且没有折扣', async () => {
+    getConfig.mockResolvedValue({
+      ...baseConfig,
+      multiRecipeEnabled: false,
+    });
+
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/custom-recipe/quote?quantity=1')
+      .set('Authorization', 'Bearer test-token')
+      .expect(200);
+
+    expect(res.body.data).toEqual({
+      quantity: 1,
+      unitAmount: 300,
+      originalAmount: 300,
+      discountRate: 0,
+      discountAmount: 0,
+      payableAmount: 300,
     });
   });
 

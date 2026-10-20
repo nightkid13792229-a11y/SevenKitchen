@@ -252,6 +252,16 @@ export class CustomRecipeController {
     const config = await this.customRecipeConfigService.getConfig();
     const parsed = this.parseQuoteQuantity(quantity, config.maxRecipeQuantity);
 
+    /**
+     * 开关关闭时连报价也不能给多份价格（2026-10-20 复核）。
+     *
+     * 与下单侧同一条规则：前端隐藏选择器只是体验层，接口直调也必须挡住。
+     * 1 份不受影响 —— 单份订单在开关关闭时仍然正常卖。
+     */
+    if (parsed > 1 && config.multiRecipeEnabled !== true) {
+      throw new BadRequestException('多份购买暂未开放，请选择 1 份');
+    }
+
     return ApiResponseDto.success(
       this.customRecipePricingService.quote(parsed, config),
     );

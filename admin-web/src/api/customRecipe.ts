@@ -70,6 +70,8 @@ export interface CustomRecipeOrderDetail {
   id?: string
   orderId: string
   status: string
+  /** 本单购买/应交付的份数；老订单没有这个字段，后端按 1 份处理（2026-10-21） */
+  recipeQuantity?: number
   targetGoal?: string
   /** 下单当时顾客手填的过敏（快照，不会随档案更新） */
   allergies?: string[]
@@ -155,6 +157,23 @@ export interface DeliverRecipeResult {
   redelivered: boolean
   status: string
   deliveredAt: string
+}
+
+/** 多份订单一次性交付的返回摘要 */
+export interface DeliverBatchResult {
+  orderId: string
+  batchId: string
+  version: number
+  deliveredAt: string
+  autoCompleteAt?: string | null
+  recipeCount: number
+  recipes: Array<{
+    recipeId: string
+    recipeName: string
+    itemCodes: string[]
+  }>
+  legacyRecipeId?: string
+  status: string
 }
 
 export interface CustomRecipeOrderListResult {
@@ -388,6 +407,19 @@ export const customRecipeApi = {
     api.post<DeliverRecipeResult>(`${BASE}/orders/${orderId}/deliver-recipe`, {
       recipeId,
     }),
+
+  /**
+   * 多份订单一次性交付（2026-10-21 · 多份履约第二阶段）。
+   *
+   * 只用于**首次交付**，且 recipeIds 必须恰好等于订单的 recipeQuantity：
+   * 后端会在一个事务里写批次 + 每份快照，少交/多交/重复都会 400。
+   * 单份订单仍走上面的 deliverRecipe，不要混用。
+   */
+  deliverBatch: (orderId: string, recipeIds: string[]) =>
+    api.post<DeliverBatchResult>(
+      `${BASE}/orders/${orderId}/deliver-batch`,
+      { recipeIds },
+    ),
 
   /** 手工创建食谱并交付（兜底通道，正常动线应走设计器 + 一键交付） */
   createRecipe: (orderId: string, payload: CreateCustomRecipePayload) =>

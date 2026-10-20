@@ -457,15 +457,59 @@
              设计器里做好的食谱直接挂到订单上，不必把名称、营养、食材、步骤
              手工重抄进下面结构完全不同的表单里。 -->
         <div class="recipe-delivery-block">
-          <h3>{{ isRedelivery ? '重新交付食谱' : '从已设计好的食谱交付' }}</h3>
-          <p class="section-desc">
-            这里只列出「{{ order.dog?.name || '这只狗' }}」的私密定制食谱（该顾客 + 该狗狗）。
-            选中一条点交付即可，顾客会收到通知。
-          </p>
+          <!-- 1 份订单保持原来的单份交付；N 份订单必须一次交齐（2026-10-21） -->
+          <template v-if="isMultiRecipeOrder">
+            <h3>一次性交付 {{ multiRecipeQuantity }} 份食谱</h3>
+            <p class="section-desc">
+              本单购买了 {{ multiRecipeQuantity }} 份，这里列出「{{ order.dog?.name || '这只狗' }}」的全部私密定制候选。
+              勾选恰好 {{ multiRecipeQuantity }} 份后一次性交付，顾客会收到一条通知。
+            </p>
+
+            <div class="multi-recipe-progress">
+              <span class="multi-recipe-progress__designed">{{ multiRecipeProgressText }}</span>
+              <span class="multi-recipe-progress__selected">
+                已选 {{ selectedBatchRecipeIds.length }} / {{ multiRecipeQuantity }} 份
+              </span>
+            </div>
+            <p v-if="candidates.length < multiRecipeQuantity" class="delivery-warning">
+              候选食谱还差 {{ multiRecipeQuantity - candidates.length }} 份才能交齐；
+              请先在设计器里补满这 {{ multiRecipeQuantity }} 份。
+            </p>
+          </template>
+          <template v-else>
+            <h3>{{ isRedelivery ? '重新交付食谱' : '从已设计好的食谱交付' }}</h3>
+            <p class="section-desc">
+              这里只列出「{{ order.dog?.name || '这只狗' }}」的私密定制食谱（该顾客 + 该狗狗）。
+              选中一条点交付即可，顾客会收到通知。
+            </p>
+          </template>
 
           <div v-loading="candidatesLoading" class="candidate-list">
+            <!-- 多份订单：多选；勾满 N 份后其余候选禁用，但已勾选的仍可取消 -->
+            <el-checkbox-group
+              v-if="isMultiRecipeOrder && candidates.length"
+              v-model="selectedBatchRecipeIds"
+              class="candidate-group"
+            >
+              <el-checkbox
+                v-for="candidate in candidates"
+                :key="candidate.recipeId"
+                :value="candidate.recipeId"
+                :disabled="!isBatchRecipeSelectable(candidate.recipeId)"
+                class="candidate-item"
+              >
+                <span class="candidate-name">{{ candidate.name }}</span>
+                <span class="candidate-meta">
+                  v{{ candidate.version }} · 更新于 {{ formatDateTime(candidate.updatedAt) }}
+                </span>
+                <el-tag v-if="candidate.linkedToThisOrder" type="success" size="small">
+                  当前已挂
+                </el-tag>
+              </el-checkbox>
+            </el-checkbox-group>
+
             <el-radio-group
-              v-if="candidates.length"
+              v-if="!isMultiRecipeOrder && candidates.length"
               v-model="selectedCandidateId"
               class="candidate-group"
             >
@@ -487,7 +531,7 @@
 
             <!-- 空态要说清"下一步做什么"，只显示"暂无数据"员工只能来问开发 -->
             <el-empty
-              v-else-if="!candidatesLoading"
+              v-if="!candidatesLoading && !candidates.length"
               :image-size="70"
               description="这只狗还没有已发布的定制食谱，请先在设计器里设计并发布"
             >
@@ -498,21 +542,43 @@
           </div>
 
           <div class="delivery-actions">
-            <el-button
-              v-if="isAdmin"
-              type="primary"
-              :disabled="!selectedCandidateId"
-              :loading="delivering"
-              @click="deliverSelectedRecipe"
-            >
-              {{ isRedelivery ? '重新交付' : '交付到订单' }}
-            </el-button>
-            <span v-else class="admin-only-tip">
-              {{ ADMIN_ONLY_TIP }}：交付食谱（含重新交付）会给顾客发通知，只有管理员能做
-            </span>
+            <template v-if="isMultiRecipeOrder">
+              <el-button
+                v-if="isAdmin"
+                type="primary"
+                :disabled="!canSubmitBatchDelivery"
+                :loading="batchDelivering"
+                @click="deliverBatchRecipes"
+              >
+                一次性交付 {{ multiRecipeQuantity }} 份
+              </el-button>
+              <span v-else class="admin-only-tip">
+                {{ ADMIN_ONLY_TIP }}：一次性交付多份食谱会给顾客发通知，只有管理员能做
+              </span>
+            </template>
+            <template v-else>
+              <el-button
+                v-if="isAdmin"
+                type="primary"
+                :disabled="!selectedCandidateId"
+                :loading="delivering"
+                @click="deliverSelectedRecipe"
+              >
+                {{ isRedelivery ? '重新交付' : '交付到订单' }}
+              </el-button>
+              <span v-else class="admin-only-tip">
+                {{ ADMIN_ONLY_TIP }}：交付食谱（含重新交付）会给顾客发通知，只有管理员能做
+              </span>
+            </template>
           </div>
-          <p v-if="isRedelivery" class="delivery-warning">
+          <p v-if="isMultiRecipeOrder && isRedelivery" class="delivery-warning">
+            该订单已经交付过，暂不支持批量重新交付；如需调整请走售后流程。
+          </p>
+          <p v-if="!isMultiRecipeOrder && isRedelivery" class="delivery-warning">
             重新交付会替换当前交付的食谱，并再次给顾客发送通知。
+          </p>
+          <p v-if="batchDeliverError" class="delivery-error">
+            {{ batchDeliverError }}
           </p>
         </div>
 
@@ -716,10 +782,15 @@ import { ingredientApi } from '@/api/ingredients';
 import { recipeApi } from '@/api/recipes';
 import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole';
 import {
+  buildMultiRecipeProgressText,
   canDeliverCustomRecipe,
+  canSubmitBatchDelivery as isBatchDeliveryReady,
   getCustomRecipeRefundStatusText,
+  isBatchRecipeSelectable as canSelectBatchRecipe,
   isCustomRecipeRedelivery,
   isCustomRecipeRefundSucceeded,
+  isMultiRecipeOrderQuantity,
+  normalizeRecipeQuantity,
 } from '@/constants/customRecipeOrder';
 import {
   CUSTOM_RECIPE_GOAL_SET,
@@ -733,7 +804,11 @@ import {
   getAllergyCertaintyText,
   getEstimatedDeliveryInfo,
 } from '@/utils/customRecipe';
-import { toastApiError } from '@/utils/apiError';
+import {
+  getApiErrorMessage,
+  isUserCancel,
+  toastApiError,
+} from '@/utils/apiError';
 import { validateElementForm } from '@/utils/elementFormValidation';
 
 const props = defineProps<{
@@ -909,12 +984,59 @@ const selectedCandidate = computed(
     null,
 );
 
+/**
+ * 多份订单的批量交付（2026-10-21 · 多份履约第二阶段）。
+ *
+ * 与单份交付是两条路：
+ *   · 1 份订单继续沿用 `selectedCandidateId` + `deliverRecipe`；
+ *   · N 份订单必须勾满 N 份，再调一次 `deliver-batch`。
+ * 份数判断全部收在 `constants/customRecipeOrder.ts` 的纯函数里，
+ * 页面只负责绑定状态，避免"按钮禁用一个规则、函数里又写另一个"。
+ */
+const selectedBatchRecipeIds = ref<string[]>([]);
+const batchDelivering = ref(false);
+const batchDeliverError = ref('');
+
+const multiRecipeQuantity = computed(() =>
+  normalizeRecipeQuantity(order.value?.recipeQuantity),
+);
+const isMultiRecipeOrder = computed(() =>
+  isMultiRecipeOrderQuantity(order.value?.recipeQuantity),
+);
+const multiRecipeProgressText = computed(() =>
+  buildMultiRecipeProgressText(
+    multiRecipeQuantity.value,
+    candidates.value.length,
+  ),
+);
+const canSubmitBatchDelivery = computed(() =>
+  isBatchDeliveryReady(
+    selectedBatchRecipeIds.value.length,
+    multiRecipeQuantity.value,
+  ),
+);
+
+/** 勾满 N 份后，未勾选的候选要禁用；已勾选的始终可点（能取消） */
+const isBatchRecipeSelectable = (recipeId: string) =>
+  canSelectBatchRecipe(
+    recipeId,
+    selectedBatchRecipeIds.value,
+    multiRecipeQuantity.value,
+  );
+
 const loadRecipeCandidates = async () => {
   if (!props.orderId) return;
   candidatesLoading.value = true;
   try {
     const list = await customRecipeApi.listRecipeCandidates(props.orderId);
     candidates.value = Array.isArray(list) ? list : [];
+
+    // 批量勾选只保留仍在本单候选里的：切订单/刷新后不能让上一单的 id 混进来
+    selectedBatchRecipeIds.value = isMultiRecipeOrder.value
+      ? selectedBatchRecipeIds.value.filter((recipeId) =>
+          candidates.value.some((item) => item.recipeId === recipeId),
+        )
+      : [];
 
     // 选中的那条不在新列表里时重新决定默认值：
     // 首次交付默认选最新的一条（少点一次）；重新交付默认不预选 ——
@@ -996,6 +1118,84 @@ const deliverSelectedRecipe = async () => {
     delivering.value = false;
   }
 };
+
+/**
+ * 一次性交付 N 份（多份订单首次交付）。
+ *
+ * 只调一次 `deliver-batch`：后端在一个事务里写整批，少交/多交都会被拒绝。
+ * 份数不对时**先不发请求**，把具体差几份写在页面上 —— 员工不用去猜按钮为什么灰。
+ */
+const deliverBatchRecipes = async () => {
+  const orderId = order.value?.orderId;
+  if (!orderId) return;
+
+  const total = multiRecipeQuantity.value;
+  const recipeIds = [...selectedBatchRecipeIds.value];
+
+  if (!isBatchDeliveryReady(recipeIds.length, total)) {
+    batchDeliverError.value =
+      `本单需要交付 ${total} 份食谱，当前已选 ${recipeIds.length} 份；` +
+      `请勾满 ${total} 份再提交`;
+    ElMessage.warning(batchDeliverError.value);
+    return;
+  }
+
+  const dogName = order.value?.dog?.name || '这只狗';
+  const amount = Number(order.value?.amount || 0);
+  const selectedNames = candidates.value
+    .filter((item) => recipeIds.includes(item.recipeId))
+    .map((item) => `《${item.name}》`)
+    .join('、');
+
+  try {
+    await ElMessageBox.confirm(
+      h('div', [
+        h('p', `将把以下 ${total} 份食谱一次性交付给「${dogName}」：`),
+        h('p', selectedNames),
+        h('p', `订单号：${orderId}　金额：¥${amount}`),
+        h('p', '交付后会给顾客发送一条通知，订单转为「已交付」。'),
+      ]),
+      `确认一次性交付 ${total} 份`,
+      {
+        confirmButtonText: `确认交付 ${total} 份`,
+        cancelButtonText: '再想想',
+      },
+    );
+
+    batchDelivering.value = true;
+    batchDeliverError.value = '';
+
+    const result = await customRecipeApi.deliverBatch(orderId, recipeIds);
+
+    ElMessage.success(
+      `已一次性交付 ${result?.recipeCount ?? total} 份食谱，顾客会收到一条通知`,
+    );
+
+    selectedBatchRecipeIds.value = [];
+    await loadOrderDetail();
+    emit('refresh');
+  } catch (error) {
+    // 点「再想想」不是失败，不能留下红色报错
+    if (isUserCancel(error)) return;
+
+    // 后端拒绝原因（份数不符 / 食谱不属于本单 / 已交付）原样留在页面上，
+    // 同时交给统一 toast 处理；网络类错误也有可读的兜底文案。
+    batchDeliverError.value = getApiErrorMessage(
+      error,
+      '批量交付失败，请重试',
+    );
+    toastApiError(error, '批量交付失败，请重试', (message) =>
+      ElMessage.error(message),
+    );
+  } finally {
+    batchDelivering.value = false;
+  }
+};
+
+// 改了勾选就清掉上一次的报错，避免「份数不对」一直挂在页面上
+watch(selectedBatchRecipeIds, () => {
+  batchDeliverError.value = '';
+});
 
 // ---------- 手工创建食谱 ----------
 
@@ -1118,6 +1318,7 @@ function notifyStatusText(status: string | null): string {
 // 方法
 const loadOrderDetail = async () => {
   loading.value = true;
+  batchDeliverError.value = '';
   try {
     order.value = await customRecipeApi.getOrderDetail(props.orderId);
     // 交付历史单独拉（详情里只有最新一版）；失败不影响详情展示
@@ -1614,7 +1815,8 @@ h3 {
   width: 100%;
 }
 
-.candidate-group :deep(.el-radio) {
+.candidate-group :deep(.el-radio),
+.candidate-group :deep(.el-checkbox) {
   display: flex;
   align-items: center;
   width: 100%;
@@ -1625,12 +1827,32 @@ h3 {
   border-radius: 6px;
 }
 
-.candidate-group :deep(.el-radio__label) {
+.candidate-group :deep(.el-radio__label),
+.candidate-group :deep(.el-checkbox__label) {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
   font-size: 14px;
+}
+
+.multi-recipe-progress {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #606266;
+}
+
+.multi-recipe-progress__designed {
+  font-weight: 600;
+  color: #303133;
+}
+
+.multi-recipe-progress__selected {
+  color: #409eff;
 }
 
 .candidate-name {
@@ -1653,6 +1875,13 @@ h3 {
   margin: 10px 0 0;
   font-size: 13px;
   color: #e6a23c;
+  line-height: 1.6;
+}
+
+.delivery-error {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: #f56c6c;
   line-height: 1.6;
 }
 

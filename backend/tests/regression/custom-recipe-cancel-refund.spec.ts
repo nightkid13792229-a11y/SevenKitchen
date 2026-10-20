@@ -156,6 +156,6 @@ describe('定制订单 · 取消退款与通知守卫', () => {
     // 付款前不再申请第二次
     expect(paymentUtil).not.toContain('await requestCustomRecipeOrderSubscription();');
     // 没配模板就不做无意义的失败调用
-    expect(paymentUtil).toContain('if (!templateId) return;');
+    expect(paymentUtil).toContain('if (!templateId) return false;');
   });
 });

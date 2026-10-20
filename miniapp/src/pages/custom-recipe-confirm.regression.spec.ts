@@ -4,6 +4,19 @@ import { describe, expect, it } from 'vitest';
 
 const read = (path: string) =>
   readFileSync(resolve(process.cwd(), path), 'utf-8');
+
+/**
+ * 去掉注释后的源码。
+ *
+ * 删除类断言必须用它：说明"删掉了什么"的注释里往往把旧文案原样写回来，
+ * 否则断言会被自己的注释误伤。
+ */
+const stripComments = (src: string) =>
+  src
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+
 const PAGE_DIR = 'src/pages/custom-recipe';
 
 describe('定制页 → 订单确认页（2026-10-19 老板确认）', () => {
@@ -90,5 +103,70 @@ describe('定制页 → 订单确认页（2026-10-19 老板确认）', () => {
     expect(page).toContain('from=custom_recipe');
     // 不展示治疗中/已康复
     expect(page).not.toContain('recentVisit.status');
+  });
+});
+
+/**
+ * 成品抵扣彻底下线（2026-10-20）。
+ *
+ * 老板决定取消「定制费可抵扣成品货款」：后端已删字段、接口和台账，
+ * 小程序这边不能留下任何还在读旧字段或还在讲抵扣的界面。
+ * 只删抵扣，定制费金额、支付、交付、订单详情都保持原样。
+ */
+describe('定制链路 · 成品抵扣已彻底下线（2026-10-20）', () => {
+  const CREDIT_WORDS = ['可抵扣', '成品抵扣', '定制费抵扣'];
+  const CREDIT_FIELDS = [
+    'creditAmount',
+    'creditUsed',
+    'creditRemaining',
+    'creditAmountApplied',
+    'creditOriginalProductAmount',
+    'customRecipeCreditOrderId',
+  ];
+
+  const assertNoCredit = (name: string, source: string) => {
+    const code = stripComments(source);
+    for (const word of CREDIT_WORDS) {
+      expect(code, `${name} 不应再出现「${word}」`).not.toContain(word);
+    }
+    for (const field of CREDIT_FIELDS) {
+      expect(code, `${name} 不应再出现字段 ${field}`).not.toContain(field);
+    }
+  };
+
+  it('确认页 / 定制订单详情 / 定制页 / 定制订单列表 不再出现抵扣文案与字段', () => {
+    const sources: Array<[string, string]> = [
+      ['确认页', read(`${PAGE_DIR}/confirm.vue`)],
+      ['定制订单详情', read(`${PAGE_DIR}/order-detail.vue`)],
+      ['定制页', read(`${PAGE_DIR}/index.vue`)],
+      ['定制订单列表', read(`${PAGE_DIR}/orders.vue`)],
+    ];
+
+    for (const [name, source] of sources) assertNoCredit(name, source);
+  });
+
+  it('首页定制入口与 API 类型也不再提到抵扣', () => {
+    assertNoCredit('首页', read('src/pages/home/index.vue'));
+    assertNoCredit('定制 API 类型', read('src/api/custom-recipe.ts'));
+  });
+
+  it('已下线的提交成功页也清掉了抵扣块', () => {
+    assertNoCredit('提交成功页', read(`${PAGE_DIR}/success.vue`));
+  });
+
+  it('只删抵扣：定制费与交付信息仍在', () => {
+    const confirm = read(`${PAGE_DIR}/confirm.vue`);
+    const detail = read(`${PAGE_DIR}/order-detail.vue`);
+
+    // 确认页的应付定制费仍来自创建后的订单，兜底用后台配置
+    expect(confirm).toContain('postFeeText');
+    expect(confirm).toContain('createdOrder.value?.amount ?? config.value?.feeAmount');
+    // 订单详情的定制费金额行保留
+    expect(detail).toContain('<text class="label">定制费</text>');
+    expect(detail).toContain('formatAmount(order.amount)');
+    // 交付日期与查看食谱（「用这份食谱订购成品」的入口）保留
+    expect(detail).toContain('estimatedDeliveryDate');
+    expect(detail).toContain('const viewRecipe = () =>');
+    expect(detail).toContain("url: `/pages/recipe-detail/index?id=");
   });
 });

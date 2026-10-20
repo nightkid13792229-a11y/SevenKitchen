@@ -429,11 +429,6 @@ const postPaymentHint = computed(() =>
     now: nowTick.value,
   }),
 );
-const postCreditText = computed(() =>
-  createdOrder.value?.creditAmount
-    ? formatAmount(createdOrder.value.creditAmount)
-    : '',
-);
 
 async function loadConfirmData() {
   loading.value = true;

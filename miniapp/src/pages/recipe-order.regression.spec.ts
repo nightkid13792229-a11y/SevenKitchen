@@ -594,4 +594,15 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).not.toContain('formatPackageSpecMealHint');
     expect(templateSource).not.toContain('package-spec-meal-hint');
   });
+
+  it('does not render the removed custom-recipe credit deduction', () => {
+    // 2026-10-20：定制费抵扣取消，订购页底栏不再有抵扣金额
+    expect(source).not.toContain('creditAmountApplied');
+    expect(source).not.toContain('customRecipeCreditApplied');
+    expect(source).not.toContain('已用定制费抵扣');
+    expect(source).not.toContain('bottom-credit');
+    // 只删抵扣：底栏总价与规格摘要仍在
+    expect(templateSource).toContain('bottom-total');
+    expect(source).toContain('amountTotal');
+  });
 });

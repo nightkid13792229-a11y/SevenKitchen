@@ -509,11 +509,6 @@
         <view class="bottom-estimate">
           <text class="bottom-price-per-package">{{ bottomPricePerPackageText }}</text>
         </view>
-        <view v-if="customRecipeCreditApplied > 0" class="bottom-credit">
-          <text class="bottom-credit-text">
-            已用定制费抵扣 −¥{{ customRecipeCreditApplied.toFixed(2) }}
-          </text>
-        </view>
       </view>
       <button
         class="btn-buy-now"
@@ -635,9 +630,6 @@ interface PricePreview {
   amountProduct: number
   amountShipping: number
   amountTotal: number
-  /** 定制费抵扣（元）：已含在（净）amountProduct 里，只用于展示 */
-  creditAmountApplied?: number
-  creditOriginalProductAmount?: number
   pricingBreakdown?: {
     costIngredients: number
     costPackaging: number
@@ -1120,10 +1112,6 @@ const averagePricePerPackage = computed(() => {
 })
 const isSinglePackageSpec = computed(() => normalizedPackagePlan.value.length === 1)
 
-// 定制费抵扣：金额已含在总价里，这里只把"省了多少"讲出来
-const customRecipeCreditApplied = computed(
-  () => pricePreview.value?.creditAmountApplied || 0,
-)
 const bottomPriceTitle = computed(() => {
   if (!selectedDogId.value) return '请选择狗狗'
   if (packagePlanValidationMessage.value) return '分装需调整'
@@ -3124,15 +3112,6 @@ onShow(() => {
   flex-direction: column;
   align-items: flex-end;
   gap: 2rpx;
-}
-
-.bottom-credit {
-  margin-top: 4rpx;
-}
-
-.bottom-credit-text {
-  font-size: 22rpx;
-  color: #b08d4f;
 }
 
 .bottom-price-per-package {

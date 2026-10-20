@@ -633,9 +633,8 @@
     </view>
 
     <!-- 2026-10-19 老板确认：
-         预计交付日期只在订单确认页展示，定制页不再显示；
-         成品抵扣说明也只放在订单确认页。
-         定制页底部只保留定制费说明（不提抵扣）和「确认信息」按钮。 -->
+         预计交付日期只在订单确认页展示，定制页不再显示。
+         定制页底部只保留定制费说明和「确认信息」按钮。 -->
 
     <!-- 底部确认条（2026-10-19 老板确认）
          ① 按钮不默认置灰：随时可点，点击后才校验；缺什么提示并滚到对应板块
@@ -1471,10 +1470,9 @@ const canAddAttachment = computed(
     formData.value.attachmentUrls.length < maxAttachmentCount,
 );
 
-// 后台「食谱定制设置」的公开部分（定制费 / 可抵扣金额 / 交付工作日数）
+// 后台「食谱定制设置」的公开部分（定制费 / 交付工作日数）
 const recipeConfig = ref<{
   feeAmount: number;
-  creditAmount: number;
   deliveryWorkDays: number;
   /**
    * 支付超时分钟数（0 = 不自动关单）。
@@ -1942,7 +1940,6 @@ const loadRecipeConfig = async () => {
     if (res.code === 0 && res.data) {
       recipeConfig.value = {
         feeAmount: Number(res.data.feeAmount) || 0,
-        creditAmount: Number(res.data.creditAmount) || 0,
         deliveryWorkDays: Number(res.data.deliveryWorkDays) || 0,
         // 支付超时（0 = 不自动关单）。接口还没下发时按 0 处理：
         // 页面会跳过时限文案，而不是自己编一个默认超时出来。
@@ -3642,15 +3639,6 @@ const getBCSText = (bcsScore: number) => {
   font-size: 28rpx;
   color: var(--sk-ink-2, #6b6653);
 }
-
-/* ---------- 交付与抵扣 ---------- */
-
-
-
-
-
-
-
 
 /* ---------- 待付款单提醒（首页顶部） ---------- */
 .pending-banner {

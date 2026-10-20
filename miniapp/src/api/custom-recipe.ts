@@ -76,10 +76,6 @@ export interface CustomRecipeOrderDetail {
   targetGoal?: string | null;
   scheduledDate?: string | null;
   amount?: number | null;
-  creditAmount?: number | null;
-  creditUsed?: number | null;
-  /** 后端算好的抵扣余额；**前端不要再自己相减** */
-  creditRemaining?: number | null;
   recipeId?: string | null;
   recipeName?: string | null;
   recipeCoverImageUrl?: string | null;
@@ -203,7 +199,6 @@ export interface DeliverySummary {
 /** 定制设置里顾客需要知道的几个（公开子集） */
 export interface PublicCustomRecipeConfig {
   feeAmount: number;
-  creditAmount: number;
   deliveryWorkDays: number;
   paymentTimeoutMinutes: number;
   orderNotifyTemplateId?: string | null;
@@ -238,7 +233,7 @@ export async function fetchOrderDetail(
  * ⚠️ **失败时抛错，不要静默返回 null。**
  *
  * 第一版我写的是"失败就返回 null，页面用默认值显示，不白屏"，
- * 被自己的测试拦下了 —— 因为这里的默认值包含**定制费与可抵扣金额**：
+ * 被自己的测试拦下了 —— 因为这里的默认值就是**定制费**：
  * 后台把定制费改成 500，而接口一挂，顾客看到的是默认的 300 并照着下单。
  * **显示一个错误的价格，比显示"加载失败"糟糕得多。**
  *

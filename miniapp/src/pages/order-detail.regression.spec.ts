@@ -321,4 +321,23 @@ describe('order detail runtime regressions', () => {
     // 保留复制单号入口
     expect(source).toContain('copyTrackingNumber')
   })
+
+  it('does not render the removed custom-recipe credit deduction', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/order-detail/index.vue'),
+      'utf-8',
+    )
+
+    // 2026-10-20：定制费抵扣取消，订单详情不再有抵扣明细
+    expect(source).not.toContain('creditAmountApplied')
+    expect(source).not.toContain('creditOriginalProductAmount')
+    expect(source).not.toContain('定制费抵扣')
+    expect(source).not.toContain('credit-original')
+    expect(source).not.toContain('credit-applied')
+    // 只删抵扣：订单金额行仍在
+    expect(source).toContain('订单金额:')
+    expect(source).toContain(
+      'formatAmount(order.amountTotal || order.totalAmount)',
+    )
+  })
 })

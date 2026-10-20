@@ -88,23 +88,6 @@
         </text>
       </view>
 
-      <view class="section" v-if="creditVisible">
-        <view class="section-title">成品抵扣额度</view>
-        <view class="info-row">
-          <text class="label">额度总额</text>
-          <text class="value">¥{{ formatAmount(creditTotal) }}</text>
-        </view>
-        <view class="info-row">
-          <text class="label">已抵扣</text>
-          <text class="value">¥{{ formatAmount(creditUsed) }}</text>
-        </view>
-        <view class="info-row">
-          <text class="label">剩余可用</text>
-          <text class="value highlight">¥{{ formatAmount(creditRemaining) }}</text>
-        </view>
-        <text class="section-note">从这道定制食谱下成品单时可抵扣货款，没用完的额度可以下次继续用</text>
-      </view>
-
       <view class="section">
         <view class="section-title">定制信息</view>
         <view class="info-row">
@@ -396,9 +379,6 @@ interface CustomRecipeOrderDetail {
   estimatedDeliveryDate?: string | null;
   status?: string;
   amount?: number;
-  creditAmount?: number;
-  creditUsed?: number;
-  creditRemaining?: number;
   recipeId?: string | null;
   recipeName?: string | null;
   allergies?: string[];
@@ -814,37 +794,6 @@ const paymentExpired = computed(() => {
   });
   return isPaymentExpired(deadline, nowTick.value);
 });
-
-const creditTotal = computed(() => Number(order.value.creditAmount || 0));
-const creditUsed = computed(() => Number(order.value.creditUsed || 0));
-
-/**
- * 额度只在实际可用的订单状态下展示（2026-10-19）。
- * 已取消/待付款订单即使有快照金额，也不能拿这个额度去下成品单。
- */
-const creditVisible = computed(() => {
-  const status = String(order.value.status || '');
-  return (
-    ['PAID', 'IN_PROGRESS', 'DELIVERED'].includes(status) &&
-    (creditRemaining.value > 0 || creditTotal.value > 0)
-  );
-});
-
-/**
- * 可抵扣余额（2026-10-16 批次 5.2）。
- *
- * ⚠️ **直接取后端给的值，不在前端相减。**
- *
- * 以前这里留了一段兜底：`creditRemaining ?? (creditAmount - creditUsed)`。
- * 后端两个接口（订单列表与详情）**本来就会返回这个值**，
- * 所以那段兜底是死代码；而留着它的代价是：
- * 万一余额的算法变了（比如要考虑退款回冲），前端这份相减会**悄悄算错**，
- * 而且没人会想起来还有第二处。
- *
- * 老板的要求是「所有的计算交给后端，前端只负责渲染」——
- * 这一处就是那句话的直接体现。
- */
-const creditRemaining = computed(() => Number(order.value.creditRemaining ?? 0));
 
 const hasRequirements = computed(() => {
   const value = order.value;

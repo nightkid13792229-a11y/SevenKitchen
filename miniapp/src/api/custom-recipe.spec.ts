@@ -126,23 +126,25 @@ describe('定制食谱 API 层', () => {
   })
 
   describe('fetchPublicConfig', () => {
-    it('成功时返回设置本体', async () => {
+    it('成功时返回设置本体，且不再包含成品抵扣字段', async () => {
       mockedRequest.mockResolvedValue({
         code: 0,
-        data: { feeAmount: 300, creditAmount: 150, deliveryWorkDays: 3 },
+        data: { feeAmount: 300, deliveryWorkDays: 3 },
       } as never)
 
       const config = await fetchPublicConfig()
 
       expect(config?.feeAmount).toBe(300)
-      expect(config?.creditAmount).toBe(150)
+      expect(config?.deliveryWorkDays).toBe(3)
+      // 2026-10-20：抵扣机制已取消，类型里不再有 creditAmount
+      expect(config).not.toHaveProperty('creditAmount')
     })
 
     it('★ 失败时**抛错**，而不是静默返回默认值', async () => {
       mockedRequest.mockRejectedValue(new Error('network') as never)
 
       /**
-       * 这里的默认值包含**定制费与可抵扣金额**。
+       * 失败时的兜底会直接变成顾客看到的价格。
        * 后台把定制费改成 500，接口一挂却显示默认的 300 ——
        * 顾客会照着错的价格下单。所以宁可报"加载失败"。
        */

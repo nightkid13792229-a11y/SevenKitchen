@@ -46,10 +46,6 @@
             <text class="label">预计交付：</text>
             <text class="value">{{formatDate(order.estimatedDeliveryDate, '排期中')}}</text>
           </view>
-          <view class="info-row" v-if="creditRemainingOf(order) > 0">
-            <text class="label">可抵扣：</text>
-            <text class="value credit">¥{{creditRemainingOf(order)}}</text>
-          </view>
           <!-- 退款进度：顾客自助取消后钱去哪了，必须在这里看得到 -->
           <view class="info-row" v-if="refundTextOf(order)">
             <text class="label">退款：</text>
@@ -139,9 +135,6 @@ interface CustomRecipeOrderItem {
   estimatedDeliveryDate?: string | null;
   status?: string;
   amount?: number;
-  creditAmount?: number;
-  creditUsed?: number;
-  creditRemaining?: number;
   recipeId?: string | null;
   createdAt?: string | null;
   /** 后端新增：支付截止时间 / 退款进度 */
@@ -469,15 +462,6 @@ const paymentHintOf = (order: CustomRecipeOrderItem): string =>
     createdAt: order.createdAt ?? null,
     paymentTimeoutMinutes: paymentTimeoutMinutes.value,
   });
-
-/**
- * 可抵扣余额（2026-10-16 批次 5.2）。
- *
- * **直接取后端给的值，不在前端相减** —— 理由见订单详情页同名字段的注释。
- */
-function creditRemainingOf(order: CustomRecipeOrderItem): number {
-  return Number(order.creditRemaining ?? 0);
-}
 </script>
 
 <style scoped>
@@ -584,11 +568,6 @@ function creditRemainingOf(order: CustomRecipeOrderItem): number {
 .value {
   flex: 1;
   color: var(--sk-ink, #26261f);
-}
-
-.value.credit {
-  font-weight: 700;
-  color: var(--sk-gold, #b08d4f);
 }
 
 /* 退款到账=好消息用墨绿；退款未成功要显眼到顾客会去找客服 */

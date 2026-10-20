@@ -56,6 +56,7 @@ import { CustomRecipeSchedulerService } from './application/scheduler/custom-rec
 import { SharedPhotosController } from './interfaces/controllers/shared-photos.controller';
 import { CustomRecipeService } from './application/custom-recipe/custom-recipe.service';
 import { CustomRecipeConfigService } from './application/custom-recipe/custom-recipe-config.service';
+import { CustomRecipePricingService } from './application/custom-recipe/custom-recipe-pricing.service';
 import { FinanceAlertService } from './application/finance/finance-alert.service';
 import { ExpenseBillService } from './application/finance/expense-bill.service';
 import { FinanceReportService } from './application/finance/finance-report.service';
@@ -814,6 +815,7 @@ validatePrismaConfig();
     // Custom Recipe Service
     CustomRecipeService,
     CustomRecipeConfigService,
+    CustomRecipePricingService,
     // Nutrition Food Service (Recipe Designer)
     NutritionFoodService,
     SupplementLabelExtractionService,

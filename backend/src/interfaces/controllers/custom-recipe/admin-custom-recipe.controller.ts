@@ -700,6 +700,93 @@ export class AdminCustomRecipeController {
     });
   }
 
+  /**
+   * 一次性交付多份食谱（2026-10-21 · 多份购买第二阶段）。
+   *
+   * 与 `deliver-recipe` 的分工：
+   *   · 单份订单仍走 `deliver-recipe`（老的交付记录与重新交付都在那边）；
+   *   · 多份订单首次交付走这里：N 份必须一次交齐，由 `deliverBatch`
+   *     在一个事务里写批次 + 每份快照。
+   *
+   * 通知只发**一条**：顾客买的是「一次交付」，按份发 N 条会像多笔订单；
+   * 链接用第一份食谱的业务编号（老通知模板只能带一个食谱入口）。
+   */
+  @Post('orders/:orderId/deliver-batch')
+  @UseGuards(AdminGuard)
+  @ApiOperation({
+    summary: 'Deliver all recipes of a multi-recipe order at once',
+  })
+  async deliverBatch(
+    @Req() req: any,
+    @Param('orderId') orderId: string,
+    @Body('recipeIds') rawRecipeIds: unknown,
+  ) {
+    const recipeIds = this.resolveBatchRecipeIds(rawRecipeIds);
+
+    const result = await this.deliveryService.deliverBatch({
+      orderIdOrId: orderId,
+      recipeIds,
+      deliveredBy: this.currentOperatorId(req),
+    });
+
+    /**
+     * 交付通知只发一次，失败不影响交付结果（事务已经完成）。
+     * 用第一份的业务编号做落地页 —— 微信模板只带得动一个食谱入口，
+     * 顾客从那里能回到订单看到整批 N 份。
+     *
+     * 整个通知块（含查询 openid）都兜住：交付已经成功，
+     * 不能因为一条消息或一次查询失败就给后台回 500。
+     */
+    try {
+      // 用 service 回的业务订单号查：路由也接受主键，主键查不到 openid
+      const order = await this.customRecipeService.getOrderByOrderId(
+        result.orderId,
+      );
+      const openid = order?.customer?.wechatOpenid;
+      if (openid && this.wechatService) {
+        await this.wechatService.sendCustomRecipeOrderNotification(
+          openid,
+          result.orderId,
+          'DELIVERED',
+          result.recipes[0]?.recipeId,
+        );
+      }
+    } catch (error) {
+      console.error('[CustomRecipe] 批量交付通知发送失败:', error);
+    }
+
+    return ApiResponseDto.success({
+      ...result,
+      status: 'DELIVERED',
+    });
+  }
+
+  /**
+   * 批量交付入参：必须是非空字符串数组，且不超过业务硬上限 5 份。
+   *
+   * 份数是否等于订单的 `recipeQuantity` 由 `deliverBatch` 判断 ——
+   * 那件事需要先查订单，放在 service 里做才不会两边口径各写一遍。
+   */
+  private resolveBatchRecipeIds(raw: unknown): string[] {
+    if (!Array.isArray(raw) || raw.length === 0) {
+      throw new BadRequestException('请选择要交付的食谱（recipeIds 不能为空）');
+    }
+    if (raw.length > MAX_BATCH_RECIPE_QUANTITY) {
+      throw new BadRequestException(
+        `一次最多交付 ${MAX_BATCH_RECIPE_QUANTITY} 份食谱`,
+      );
+    }
+    const ids = raw.map((value) =>
+      typeof value === 'string' ? value.trim() : '',
+    );
+    if (ids.some((id) => id.length === 0)) {
+      throw new BadRequestException(
+        'recipeIds 必须是非空字符串数组，请为每一份选择食谱',
+      );
+    }
+    return ids;
+  }
+
   // ---------- 售后处理（批次 3.1）----------
 
   /**
@@ -1023,3 +1110,11 @@ export class AdminCustomRecipeController {
     return ApiResponseDto.success(attachment);
   }
 }
+
+/**
+ * 多份购买的业务硬上限（spec 2.2：一张订单最多 5 份）。
+ *
+ * 后台配置可以调低，但不能调高到 6 —— 这里再挡一次，
+ * 免得有人绕过配置直接调接口交 6 份。
+ */
+const MAX_BATCH_RECIPE_QUANTITY = 5;

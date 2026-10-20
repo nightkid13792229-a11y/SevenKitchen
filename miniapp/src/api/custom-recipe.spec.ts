@@ -18,6 +18,7 @@ import {
   confirmReceipt,
   fetchCustomRecipeQuote,
   fetchDelivery,
+  fetchNextDeliveryDate,
   fetchOrderDetail,
   fetchPublicConfig,
   findAction,
@@ -173,6 +174,52 @@ describe('定制食谱 API 层', () => {
       } as never)
 
       await expect(fetchPublicConfig()).rejects.toThrow('配置读取失败')
+    })
+  })
+
+  describe('fetchNextDeliveryDate', () => {
+    it('带 quantity 时把份数拼进查询串，让后端按 N 份算交期', async () => {
+      mockedRequest.mockResolvedValue({
+        code: 0,
+        data: {
+          quantity: 3,
+          scheduledDate: '2026-10-19',
+          estimatedDeliveryDate: '2026-10-21',
+          deliveryWorkDays: 2,
+        },
+      } as never)
+
+      const delivery = await fetchNextDeliveryDate(3)
+
+      expect(delivery.estimatedDeliveryDate).toBe('2026-10-21')
+      const arg = mockedRequest.mock.calls[0][0] as {
+        url: string
+        method: string
+      }
+      expect(arg.url).toBe('/custom-recipe/next-delivery-date?quantity=3')
+      expect(arg.method).toBe('GET')
+    })
+
+    it('不传 quantity 时保持原来的无查询串调用（单份行为不变）', async () => {
+      mockedRequest.mockResolvedValue({
+        code: 0,
+        data: {
+          scheduledDate: '2026-10-19',
+          estimatedDeliveryDate: '2026-10-20',
+          deliveryWorkDays: 1,
+        },
+      } as never)
+
+      await fetchNextDeliveryDate()
+
+      const arg = mockedRequest.mock.calls[0][0] as { url: string }
+      expect(arg.url).toBe('/custom-recipe/next-delivery-date')
+    })
+
+    it('份数不合法时发请求前就拒绝', async () => {
+      await expect(fetchNextDeliveryDate(0)).rejects.toThrow('份数不正确')
+      await expect(fetchNextDeliveryDate(1.5)).rejects.toThrow('份数不正确')
+      expect(mockedRequest).not.toHaveBeenCalled()
     })
   })
 

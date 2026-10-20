@@ -20,6 +20,7 @@ import {
 } from '../../domain/custom-recipe/custom-recipe.repository';
 import {
   CustomRecipeConfigService,
+  DEFAULT_CUSTOM_RECIPE_WORK_DAYS,
   MAX_MULTI_RECIPE_QUANTITY,
 } from './custom-recipe-config.service';
 import { CustomRecipePricingService } from './custom-recipe-pricing.service';
@@ -133,6 +134,47 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   }
 
   /**
+   * 按份数计算交付需要的工作日（2026-10-21 第二阶段地基）。
+   *
+   * 规则（设计文档 6.4 / 8）：
+   *   totalWorkDays = ceil(基础工作日 + (份数 - 1) × 每份工时 / 每日工时)
+   *   最少 1 个工作日。
+   *
+   * 基础工作日来自后台 `deliveryWorkDays`（老板可调到 1 天）；
+   * 多出来的部分是「同一交付批次里多设计几份」的产能占用。
+   * 只算工作日，周末和公众假期由 `addWorkDays` 跳过。
+   */
+  calculateDeliveryWorkDays(
+    quantity: number,
+    config: {
+      deliveryWorkDays: number;
+      dailyDesignMinutes: number;
+      minutesPerRecipe: number;
+    },
+  ): number {
+    const normalizedQuantity =
+      Number.isInteger(quantity) && quantity > 0 ? quantity : 1;
+
+    const rawBase = Number(config.deliveryWorkDays);
+    const baseWorkDays =
+      Number.isFinite(rawBase) && rawBase >= 0
+        ? rawBase
+        : DEFAULT_CUSTOM_RECIPE_WORK_DAYS;
+
+    const dailyDesignMinutes = Number(config.dailyDesignMinutes);
+    const minutesPerRecipe = Number(config.minutesPerRecipe);
+    const extraWorkDays =
+      Number.isFinite(dailyDesignMinutes) &&
+      dailyDesignMinutes > 0 &&
+      Number.isFinite(minutesPerRecipe) &&
+      minutesPerRecipe >= 0
+        ? ((normalizedQuantity - 1) * minutesPerRecipe) / dailyDesignMinutes
+        : 0;
+
+    return Math.max(1, Math.ceil(baseWorkDays + extraWorkDays));
+  }
+
+  /**
    * Calculate estimated delivery date (配置的工作日数，遇公众假期顺延)
    */
   private async calculateDeliveryDate(
@@ -140,6 +182,36 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     workDays: number,
   ): Promise<Date> {
     return await addWorkDays(scheduledDate, workDays);
+  }
+
+  /**
+   * 已落库订单的份数（兼容老订单）。
+   *
+   * 2026-10-20 之前的订单没有 recipeQuantity，Prisma 默认值也会给 1；
+   * 这里再兜一层，避免历史数据/脏数据让释放名额时漏掉或释放成负数。
+   */
+  private resolveStoredRecipeQuantity(value: unknown): number {
+    const quantity = Number(value);
+    return Number.isInteger(quantity) && quantity > 0 ? quantity : 1;
+  }
+
+  /**
+   * 释放一天里被一张订单占掉的产能（取消/超时/后台改状态共用）。
+   *
+   * 必须按订单份数释放：一张 3 份订单只还 1 个名额，那天仍然少 2 个。
+   * 条件带上 `gte`，重复取消或脏数据不会把 bookedCount 减成负数。
+   */
+  private async releaseScheduleCapacity(
+    tx: any,
+    scheduledDate: Date,
+    rawQuantity: unknown,
+  ): Promise<number> {
+    const quantity = this.resolveStoredRecipeQuantity(rawQuantity);
+    await tx.customRecipeSchedule.updateMany({
+      where: { date: scheduledDate, bookedCount: { gte: quantity } },
+      data: { bookedCount: { decrement: quantity } },
+    });
+    return quantity;
   }
 
   /**
@@ -379,6 +451,11 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     const quote = this.pricingService.quote(recipeQuantity, config);
 
     const capacity = config.dailyCapacity;
+    /** 一张 N 份订单要占 N 个设计名额，不能只占 1 个 */
+    const deliveryWorkDays = this.calculateDeliveryWorkDays(
+      recipeQuantity,
+      config,
+    );
     /** 抢输的日子记下来跳过，避免反复撞同一天 */
     const takenDays = new Set<string>();
     /** 最多换几天重试（原写死 5，2026-10-16 起从配置读） */
@@ -388,6 +465,7 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       const scheduledDate = await this.findNextAvailableDate(
         capacity,
         takenDays,
+        recipeQuantity,
       );
 
       // 连续这么多天都排不上：明确报错，不让顾客对着转圈猜
@@ -396,14 +474,19 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       let created;
       try {
         created = await this.prisma.$transaction(async (tx) => {
-          const booked = await this.tryBookSlotTx(tx, scheduledDate, capacity);
+          const booked = await this.tryBookSlotTx(
+            tx,
+            scheduledDate,
+            capacity,
+            recipeQuantity,
+          );
 
         // 并发下名额被别人抢走了：本次不写任何订单，交给外层换一天重试
         if (!booked) return null;
 
         const estimatedDeliveryDate = await this.calculateDeliveryDate(
           scheduledDate,
-          config.deliveryWorkDays,
+          deliveryWorkDays,
         );
 
         const order = await tx.customRecipeOrder.create({
@@ -823,6 +906,7 @@ export class CustomRecipeService implements ICustomRecipeRepository {
         id: true,
         status: true,
         scheduledDate: true,
+        recipeQuantity: true,
         allergyReportDrafts: true,
       },
     });
@@ -891,12 +975,13 @@ export class CustomRecipeService implements ICustomRecipeRepository {
         },
       });
 
-      // 取消要把名额还回去，否则这一天就白占了（每日上限只有 5 单）
+      // 取消要把名额还回去，否则这一天就白占了（按订单份数释放）
       if (status === CustomRecipeStatus.CANCELLED) {
-        await tx.customRecipeSchedule.updateMany({
-          where: { date: order.scheduledDate, bookedCount: { gt: 0 } },
-          data: { bookedCount: { decrement: 1 } },
-        });
+        await this.releaseScheduleCapacity(
+          tx,
+          order.scheduledDate,
+          order.recipeQuantity,
+        );
       }
     });
 
@@ -1101,6 +1186,7 @@ export class CustomRecipeService implements ICustomRecipeRepository {
         id: true,
         status: true,
         scheduledDate: true,
+        recipeQuantity: true,
         allergyReportDrafts: true,
       },
     });
@@ -1137,11 +1223,12 @@ export class CustomRecipeService implements ICustomRecipeRepository {
         return { cancelled: false };
       }
 
-      // 名额下限保护：重复关单不能让 booked_count 变成负数
-      await tx.customRecipeSchedule.updateMany({
-        where: { date: order.scheduledDate, bookedCount: { gt: 0 } },
-        data: { bookedCount: { decrement: 1 } },
-      });
+      // 按订单份数释放，并保护 booked_count 不变负
+      await this.releaseScheduleCapacity(
+        tx,
+        order.scheduledDate,
+        order.recipeQuantity,
+      );
 
       return { cancelled: true };
     });
@@ -1176,6 +1263,7 @@ export class CustomRecipeService implements ICustomRecipeRepository {
         customerId: true,
         status: true,
         scheduledDate: true,
+        recipeQuantity: true,
         allergyReportDrafts: true,
       },
     });
@@ -1239,11 +1327,12 @@ export class CustomRecipeService implements ICustomRecipeRepository {
 
       if (updated.count === 0) return false;
 
-      // 释放当天名额（每日上限只有 5 单）
-      await tx.customRecipeSchedule.updateMany({
-        where: { date: order.scheduledDate, bookedCount: { gt: 0 } },
-        data: { bookedCount: { decrement: 1 } },
-      });
+      // 按订单份数释放当天名额
+      await this.releaseScheduleCapacity(
+        tx,
+        order.scheduledDate,
+        order.recipeQuantity,
+      );
 
       return true;
     });
@@ -1282,10 +1371,13 @@ export class CustomRecipeService implements ICustomRecipeRepository {
             },
           });
 
-          // 名额也还回去：取消时释放了，回滚就得重新占上
+          // 名额也还回去：取消时释放了，回滚就得按同一份数重新占上
+          const quantity = this.resolveStoredRecipeQuantity(
+            order.recipeQuantity,
+          );
           await tx.customRecipeSchedule.updateMany({
             where: { date: order.scheduledDate },
-            data: { bookedCount: { increment: 1 } },
+            data: { bookedCount: { increment: quantity } },
           });
         });
 
@@ -1947,15 +2039,6 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   }
 
   /**
-   * 找出下一个能接单的日子（2026-10-04 拍板的口径 1）。
-   *
-   * 老板决定：**日期由系统排，顾客不选**。从今天起往后找第一个
-   * "不是公众假期、且没被约满"的日子，满了就顺延到下一天。
-   *
-   * excludeDays 用于跳过"刚在并发里抢输"的日子，避免反复撞同一天。
-   * 这里只做"读"筛选，真正的占位由 tryBookSlotTx 的 CAS 决定胜负。
-   */
-  /**
    * 预估交付日期（2026-10-18 · 需求 2.3.5）
    *
    * 下单页要在提交**之前**告诉顾客"预计几号交付" —— 此前线上对 ¥300 没有任何解释，
@@ -1971,36 +2054,79 @@ export class CustomRecipeService implements ICustomRecipeRepository {
    *
    * 只是查"下一个有空的日子"，**不锁位**。
    * 真正确认是在下单事务里 `tryBookSlotTx` —— 那一步才算数。
+   *
+   * 2026-10-21：接受 quantity —— N 份要找到**剩余产能 ≥ N** 的那一天，
+   * 并按份数把交期往后推，不能拿 1 份的日期糊弄 5 份订单。
    */
-  async getEstimatedDeliveryDate(): Promise<{
+  async getEstimatedDeliveryDate(quantity = 1): Promise<{
+    quantity: number;
     scheduledDate: string | null;
     estimatedDeliveryDate: string | null;
     deliveryWorkDays: number;
   }> {
     const config = await this.configService.getConfig();
-    const next = await this.findNextAvailableDate(config.dailyCapacity);
+    const normalizedQuantity = this.resolveDeliveryQuantity(quantity, config);
+    const deliveryWorkDays = this.calculateDeliveryWorkDays(
+      normalizedQuantity,
+      config,
+    );
+    const next = await this.findNextAvailableDate(
+      config.dailyCapacity,
+      new Set(),
+      normalizedQuantity,
+    );
 
     if (!next) {
       return {
+        quantity: normalizedQuantity,
         scheduledDate: null,
         estimatedDeliveryDate: null,
-        deliveryWorkDays: config.deliveryWorkDays,
+        deliveryWorkDays,
       };
     }
 
-    const estimated = await addWorkDays(next, config.deliveryWorkDays);
+    const estimated = await addWorkDays(next, deliveryWorkDays);
 
     return {
+      quantity: normalizedQuantity,
       scheduledDate: TimezoneUtil.toShanghaiDateString(next),
       estimatedDeliveryDate: TimezoneUtil.toShanghaiDateString(estimated),
-      deliveryWorkDays: config.deliveryWorkDays,
+      deliveryWorkDays,
     };
+  }
+
+  /**
+   * 预估/报价接口的份数校验：1..后台当前最多份数。
+   *
+   * 控制器已经解析过一遍，这里再校验是为了防住服务内部调用
+   * 和以后新增的入口绕过 HTTP 层。
+   */
+  private resolveDeliveryQuantity(
+    raw: number,
+    config: { maxRecipeQuantity: number },
+  ): number {
+    const configuredMax = Number(config.maxRecipeQuantity);
+    const maxQuantity =
+      Number.isInteger(configuredMax) &&
+      configuredMax >= 1 &&
+      configuredMax <= MAX_MULTI_RECIPE_QUANTITY
+        ? configuredMax
+        : MAX_MULTI_RECIPE_QUANTITY;
+
+    if (!Number.isInteger(raw) || raw < 1 || raw > maxQuantity) {
+      throw new BadRequestException(
+        `份数必须是 1~${maxQuantity} 的整数`,
+      );
+    }
+    return raw;
   }
 
   private async findNextAvailableDate(
     capacity: number,
     excludeDays: Set<string> = new Set(),
+    units = 1,
   ): Promise<Date | null> {
+    const unitsToBook = Number.isInteger(units) && units > 0 ? units : 1;
     const todayKey = TimezoneUtil.toShanghaiDateString(new Date());
     let cursor = this.getScheduleStartDate();
     /** 往前找多少天（原写死 45，2026-10-16 起从配置读） */
@@ -2028,9 +2154,15 @@ export class CustomRecipeService implements ICustomRecipeRepository {
           const bookable = schedule
             ? schedule.isAvailable && !schedule.isPublicHoliday
             : true;
+          /**
+           * 必须一次留出 N 个名额。
+           * 原判断是 `bookedCount < capacity` —— 只剩 1 个空位也会把 5 份订单排进去，
+           * 结果就是超卖；多份订单必须找"剩余 ≥ N"的整天。
+           */
           const hasRoom = schedule
-            ? schedule.bookedCount < (schedule.capacity ?? capacity)
-            : true;
+            ? schedule.bookedCount + unitsToBook <=
+              (schedule.capacity ?? capacity)
+            : unitsToBook <= capacity;
 
           if (bookable && hasRoom) {
             return cursor;
@@ -2045,17 +2177,19 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   }
 
   /**
-   * 事务内**条件式**抢一个排期名额（CAS）。
+   * 事务内**条件式**抢 N 个排期名额（CAS）。
    *
    * 抢得到返回 true，抢不到返回 false（调用方换一天重试）。
    * 关键在最后那步 updateMany 带着"读到的 bookedCount 原值"做条件 ——
-   * 两个并发请求里只有一个能把原值改成原值 +1，另一个 count 为 0 自然落败。
+   * 两个并发请求里只有一个能把原值改成原值 +N，另一个 count 为 0 自然落败。
    */
   private async tryBookSlotTx(
     tx: any,
     date: Date,
     capacity: number,
+    units = 1,
   ): Promise<boolean> {
+    const unitsToBook = Number.isInteger(units) && units > 0 ? units : 1;
     const existing = await tx.customRecipeSchedule.findUnique({
       where: { date },
     });
@@ -2085,7 +2219,10 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       return false;
     }
 
-    if (schedule.bookedCount >= (schedule.capacity ?? capacity)) {
+    if (
+      schedule.bookedCount + unitsToBook >
+      (schedule.capacity ?? capacity)
+    ) {
       return false;
     }
 
@@ -2096,7 +2233,7 @@ export class CustomRecipeService implements ICustomRecipeRepository {
         isAvailable: true,
         isPublicHoliday: false,
       },
-      data: { bookedCount: { increment: 1 } },
+      data: { bookedCount: { increment: unitsToBook } },
     });
 
     return updated.count === 1;
@@ -2105,11 +2242,12 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   /**
    * Release a slot
    */
-  async releaseSlot(date: Date): Promise<void> {
-    await this.prisma.customRecipeSchedule.update({
-      where: { date },
+  async releaseSlot(date: Date, quantity = 1): Promise<void> {
+    const units = this.resolveStoredRecipeQuantity(quantity);
+    await this.prisma.customRecipeSchedule.updateMany({
+      where: { date, bookedCount: { gte: units } },
       data: {
-        bookedCount: { decrement: 1 },
+        bookedCount: { decrement: units },
       },
     });
   }

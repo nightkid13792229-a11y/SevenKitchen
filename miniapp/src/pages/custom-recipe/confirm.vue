@@ -325,6 +325,10 @@ const quoteLoading = ref(false);
 const quoteError = ref('');
 /** 只接受最后一次请求的结果，避免快速点 ± 时旧报价覆盖新报价 */
 let quoteRequestSeq = 0;
+/** 交付日期同样只认最后一次请求：份数快速变化时旧响应不能写回 */
+const deliveryLoading = ref(false);
+const deliveryError = ref('');
+let deliveryRequestSeq = 0;
 
 const { ensure: ensureCurrentFoodOptions, labelOf: currentFoodLabel } =
   useOptionSet('custom_recipe_current_food');
@@ -566,6 +570,8 @@ const payButtonText = computed(() => {
 });
 
 const deliveryText = computed(() => {
+  if (deliveryLoading.value) return '正在按份数计算交付日期…';
+  if (deliveryError.value) return '交付日期读取失败，下单后以订单为准';
   const date = delivery.value?.estimatedDeliveryDate;
   if (!date) return '排期中';
   const parts = String(date).split('-').map(Number);
@@ -668,7 +674,33 @@ function retryQuote() {
 }
 
 /**
- * 改份数：先裁掉多出来的肉类，再重新报价。
+ * 按份数重取交付日期。
+ *
+ * 交期和价格一样由后端算：份数一变就要重新问，且**只认最后一次响应** ——
+ * 快速从 1 点到 5 时，1 份的旧响应晚到不能把 5 份的日期盖回去。
+ */
+async function loadDeliveryDate(quantity?: number) {
+  const sequence = ++deliveryRequestSeq;
+  deliveryLoading.value = true;
+  deliveryError.value = '';
+  try {
+    const result = await fetchNextDeliveryDate(quantity);
+    if (sequence !== deliveryRequestSeq) return;
+    delivery.value = result;
+  } catch (error: any) {
+    if (sequence !== deliveryRequestSeq) return;
+    // 旧日期的份数已经不对了，宁可显示"以订单为准"也不能留住错日期
+    delivery.value = null;
+    deliveryError.value = error?.message || '交付日期读取失败';
+  } finally {
+    if (sequence === deliveryRequestSeq) {
+      deliveryLoading.value = false;
+    }
+  }
+}
+
+/**
+ * 改份数：先裁掉多出来的肉类，再重新报价，并重新算交期。
  *
  * 只裁「超出新份数」的部分；确实裁掉了才提示，避免顾客以为自己点错了。
  */
@@ -697,6 +729,7 @@ function changeRecipeQuantity(delta: number) {
     });
   }
   void loadQuote(next);
+  void loadDeliveryDate(next);
 }
 
 function selectProteinMode(mode: ProteinChoiceMode) {
@@ -1016,8 +1049,9 @@ onLoad((options: any) => {
 });
 
 onUnmounted(() => {
-  // 页面已离开，晚到的报价响应不再写回
+  // 页面已离开，晚到的报价/交期响应不再写回
   quoteRequestSeq += 1;
+  deliveryRequestSeq += 1;
   if (paymentClockTimer) {
     clearInterval(paymentClockTimer);
     paymentClockTimer = null;

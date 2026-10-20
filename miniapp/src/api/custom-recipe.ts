@@ -347,14 +347,24 @@ export async function cancelOrder(orderId: string): Promise<{
  *
  * 下单页要在提交**之前**告诉顾客几号能收到 ——
  * 日期由**后端排单算法**给出，前端不做推算（需求写死）。
+ *
+ * 2026-10-21：带 quantity 时让后端按 N 份算（要找到剩余产能 ≥ N 的日期，
+ * 并按设计工时往后推）；不传时仍是原来的单份调用。
  */
-export async function fetchNextDeliveryDate(): Promise<{
+export async function fetchNextDeliveryDate(quantity?: number): Promise<{
+  quantity?: number;
   scheduledDate: string | null;
   estimatedDeliveryDate: string | null;
   deliveryWorkDays: number;
 }> {
+  if (quantity !== undefined && (!Number.isInteger(quantity) || quantity < 1)) {
+    throw new Error('份数不正确');
+  }
   const res = await request({
-    url: '/custom-recipe/next-delivery-date',
+    url:
+      quantity === undefined
+        ? '/custom-recipe/next-delivery-date'
+        : `/custom-recipe/next-delivery-date?quantity=${quantity}`,
     method: 'GET',
   });
   return (

@@ -210,8 +210,8 @@ describe('CustomRecipeService · 链路加固', () => {
     expect(scheduleUpdateMany).toHaveBeenCalledTimes(1);
     const releaseArgs = scheduleUpdateMany.mock.calls[0][0];
     expect(releaseArgs.data.bookedCount).toEqual({ decrement: 1 });
-    // 名额下限保护：不能让 booked_count 变成负数
-    expect(releaseArgs.where.bookedCount).toEqual({ gt: 0 });
+    // 名额下限保护：不能让 booked_count 变成负数（1 份订单按 gte:1 释放）
+    expect(releaseArgs.where.bookedCount).toEqual({ gte: 1 });
   });
 
   it('改成「制作中」会补记开始时间（这一列以前从来没被写过）', async () => {

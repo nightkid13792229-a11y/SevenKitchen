@@ -667,15 +667,30 @@ export class CustomRecipeController {
   /**
    * 预估交付日期（2026-10-18 · 需求 2.3.5）
    *
+   * 2026-10-21：接受 `quantity`，按份数返回交期（N 份要找剩余产能 ≥ N 的日期，
+   * 并按设计工时往后推）。不传时仍按 1 份，老版本小程序不用改。
+   *
+   * 多份开关关闭时 >1 与报价接口同一条规则：接口直调也不能绕开。
+   *
    * ⚠️ 必须声明在 `@Get('orders/:orderId')` 之类的通配之前 ——
    * 这条路径不会跟它们冲突（`next-delivery-date` 不是 `orders/...`），
    * 但放在 `@Get('schedule')` 旁边保持"排期相关"聚在一起。
    */
   @Get('next-delivery-date')
   @ApiOperation({ summary: '预估交付日期（下单前告知用，不占位）' })
-  async getNextDeliveryDate() {
+  async getNextDeliveryDate(@Query('quantity') quantity?: string) {
+    const config = await this.customRecipeConfigService.getConfig();
+    const parsed =
+      quantity === undefined
+        ? 1
+        : this.parseQuoteQuantity(quantity, config.maxRecipeQuantity);
+
+    if (parsed > 1 && config.multiRecipeEnabled !== true) {
+      throw new BadRequestException('多份购买暂未开放，请选择 1 份');
+    }
+
     return ApiResponseDto.success(
-      await this.customRecipeService.getEstimatedDeliveryDate(),
+      await this.customRecipeService.getEstimatedDeliveryDate(parsed),
     );
   }
 

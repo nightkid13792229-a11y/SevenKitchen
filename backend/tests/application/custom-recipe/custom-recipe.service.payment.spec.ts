@@ -149,7 +149,7 @@ describe('CustomRecipeService · 支付与关单', () => {
           where: expect.objectContaining({
             date: new Date('2026-10-12'),
             // 下限保护：并发/重复关单不能让 booked_count 变负数
-            bookedCount: { gt: 0 },
+            bookedCount: { gte: 1 },
           }),
           data: { bookedCount: { decrement: 1 } },
         }),

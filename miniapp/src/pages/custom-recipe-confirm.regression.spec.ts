@@ -181,6 +181,22 @@ describe('多份购买 · 确认页（2026-10-20）', () => {
     expect(confirm).toContain('if (!quoteReady.value)');
   });
 
+  it('份数变化时按新份数重取交付日期，晚到的旧响应不覆盖新份数', () => {
+    expect(api).toContain(
+      'export async function fetchNextDeliveryDate(quantity?: number)',
+    );
+    expect(api).toContain('/custom-recipe/next-delivery-date?quantity=');
+
+    const loadDelivery =
+      confirm.match(/async function loadDeliveryDate\([\s\S]*?\n}\n/)?.[0] ||
+      '';
+    expect(loadDelivery).toContain('++deliveryRequestSeq');
+    expect(loadDelivery).toContain('sequence !== deliveryRequestSeq');
+    expect(loadDelivery).toContain('fetchNextDeliveryDate(');
+    expect(confirm).toContain('void loadDeliveryDate(next)');
+    expect(confirm).toContain('deliveryRequestSeq += 1');
+  });
+
   it('新增的多份价格区不出现任何抵扣说法', () => {
     const code = stripComments(`${confirm}\n${helper}\n${api}`);
     for (const word of ['可抵扣', '成品抵扣', '抵扣']) {

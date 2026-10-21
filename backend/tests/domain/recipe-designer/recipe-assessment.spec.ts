@@ -208,6 +208,8 @@ describe('recipe designer assessment', () => {
       48.276,
       3,
     );
+    expect(result.macroMetrics.solubleFiber.total).toBe(0);
+    expect(result.macroMetrics.insolubleFiber.total).toBe(0);
     expect(result.macroMetrics.fiber.total).toBe(2);
     expect(result.macroMetrics.fiber.per1000Kcal).toBeCloseTo(1.493, 3);
     expect(result.macroMetrics.fiber.dryMatterPercent).toBeCloseTo(0.69, 3);
@@ -232,6 +234,20 @@ describe('recipe designer assessment', () => {
       }),
     ]);
     expect(result.normalizedToKg).toBe(false);
+  });
+
+  it('computes soluble and insoluble fiber totals separately', () => {
+    const input = makeInput();
+    const macros = input.items[0].nutritionProfile!.macros as any;
+    macros.solubleFiber = 1.5;
+    macros.insolubleFiber = 2.5;
+
+    const result = assessRecipeDraft(input);
+
+    expect(result.macroMetrics.solubleFiber.total).toBeCloseTo(6, 6);
+    expect(result.macroMetrics.insolubleFiber.total).toBeCloseTo(10, 6);
+    expect(result.macroMetrics.solubleFiber.dryMatterPercent).not.toBeNull();
+    expect(result.macroMetrics.insolubleFiber.dryMatterPercent).not.toBeNull();
   });
 
   it('keeps per-energy assessment stable when the same recipe is doubled', () => {

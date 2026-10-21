@@ -47,6 +47,8 @@ export type AssessedMacroMetricKey =
   | 'crudeFat'
   | 'carbohydrate'
   | 'fiber'
+  | 'solubleFiber'
+  | 'insolubleFiber'
   | 'ash'
   | 'moisture'
   | 'energyDensity';
@@ -186,6 +188,8 @@ const MACRO_METRIC_FIELD_PATHS = {
   crudeFat: 'macros.crudeFat',
   carbohydrate: 'macros.carbohydrate',
   fiber: 'macros.fiber',
+  solubleFiber: 'macros.solubleFiber',
+  insolubleFiber: 'macros.insolubleFiber',
   ash: 'macros.ash',
   moisture: 'macros.moisture',
 } as const satisfies Record<

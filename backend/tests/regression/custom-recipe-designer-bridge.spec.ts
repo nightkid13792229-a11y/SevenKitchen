@@ -75,8 +75,8 @@ describe('定制订单 → 设计器 / AI 通路', () => {
     const detail = admin('src/views/CustomRecipes/OrderDetail.vue');
 
     expect(detail).toContain('openInDesigner');
-    expect(detail).toContain('/recipe-designer?dogId=');
-    expect(detail).toContain('在设计器中设计');
+    expect(detail).toContain('/order-design/');
+    expect(detail).toContain('进入本单工作台');
   });
 
   it('设计器接受 ?dogId= 并预填参考爱犬', () => {

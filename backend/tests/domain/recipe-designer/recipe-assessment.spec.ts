@@ -510,7 +510,7 @@ describe('recipe designer assessment', () => {
       excess: 0,
       missingData: 0,
     });
-    expect(result.groupedEntries).toHaveLength(1);
+    expect(result.groupedEntries).toHaveLength(3);
     expect(result.groupedEntries[0]).toMatchObject({
       nutrientKey: 'crudeProtein',
       label: '粗蛋白',
@@ -522,6 +522,14 @@ describe('recipe designer assessment', () => {
       'PER_1000_KCAL_ME',
       'PER_MJ_ME',
       'PER_100G_DRY_MATTER',
+    ]);
+    expect(result.groupedEntries.slice(1).map((entry) => ({
+      key: entry.nutrientKey,
+      status: entry.status,
+      contributors: entry.contributors?.length ?? 0,
+    }))).toEqual([
+      { key: 'solubleFiber', status: 'INFO', contributors: 2 },
+      { key: 'insolubleFiber', status: 'INFO', contributors: 2 },
     ]);
     expect(result.summary).toEqual({
       compliant: 1,
@@ -937,6 +945,8 @@ describe('recipe designer assessment', () => {
 
       expect(result.groupedEntries.map((entry) => entry.nutrientKey)).toEqual([
         expectedNutrientKey,
+        'solubleFiber',
+        'insolubleFiber',
       ]);
       expect(result.entries.map((entry) => entry.nutrientKey)).toEqual([
         expectedNutrientKey,

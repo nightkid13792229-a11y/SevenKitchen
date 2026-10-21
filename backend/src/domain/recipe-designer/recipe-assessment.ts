@@ -197,6 +197,32 @@ const MACRO_METRIC_FIELD_PATHS = {
   string
 >;
 
+/** 纤维细分只做参考展示，不参与 FEDIAF 达标/不足判断。 */
+const FIBER_SUBTYPE_TARGETS: FediafAssessmentTarget[] = [
+  {
+    nutrientKey: 'solubleFiber',
+    label: '可溶性纤维',
+    category: 'MACRO',
+    expressionBasis: 'PER_1000_KCAL_ME',
+    unit: 'g',
+    minValue: null,
+    maxValue: null,
+    excludeFromAttention: true,
+    fieldPaths: ['macros.solubleFiber'],
+  },
+  {
+    nutrientKey: 'insolubleFiber',
+    label: '不可溶性纤维',
+    category: 'MACRO',
+    expressionBasis: 'PER_1000_KCAL_ME',
+    unit: 'g',
+    minValue: null,
+    maxValue: null,
+    excludeFromAttention: true,
+    fieldPaths: ['macros.insolubleFiber'],
+  },
+];
+
 const OMEGA_6_FIELD_PATHS = [
   'fattyAcids.linoleicAcid',
   'fattyAcids.arachidonicAcid',
@@ -267,12 +293,30 @@ export function assessRecipeDraft(
     totalWeightG,
     moistureTotal,
   );
-  const entries = appendOmegaFattyAcidRatioEntry(
+  const baseEntries = appendOmegaFattyAcidRatioEntry(
     standardEntries,
     input.items,
   );
-  const groupedEntries = groupAssessmentEntries(entries);
-  const summary = summarizeEntries(groupedEntries);
+  const entries = baseEntries;
+  const fiberSubtypeEntries = FIBER_SUBTYPE_TARGETS.map((target) =>
+    assessTarget(
+      target,
+      input.items,
+      energyTotal,
+      moistureTotal,
+      dryMatterG,
+    ),
+  );
+  const baseGroupedEntries = groupAssessmentEntries(entries);
+  const groupedEntries: GroupedAssessmentEntry[] = [
+    ...baseGroupedEntries,
+    ...fiberSubtypeEntries.map((entry) => ({
+      ...entry,
+      details: [entry],
+      detailCount: 1,
+    })),
+  ];
+  const summary = summarizeEntries(baseGroupedEntries);
   const rawSummary = summarizeEntries(entries);
 
   return {

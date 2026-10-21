@@ -21,176 +21,225 @@
       class="page-alert"
     />
 
-    <!-- 第一步：顾客 -->
+    <!-- 第一步：顾客与狗狗（合并选择） -->
     <el-card shadow="never" class="section-card">
       <template #header>
         <div class="section-header">
           <span class="step-badge">1</span>
-          <span class="section-title">选择顾客</span>
-          <span class="section-hint">先认人再认狗：同名顾客/同名狗必须靠手机号区分</span>
+          <span class="section-title">选择顾客与狗狗</span>
+          <span class="section-hint">
+            一张卡片同时选顾客和狗；内部账号会二次确认
+          </span>
         </div>
       </template>
+
+      <!-- 顶部已选身份：顾客 + 狗狗；「重新选择」整体重置 -->
+      <div v-if="selectedIdentity" class="selected-identity">
+        <div class="selected-identity__body">
+          <div class="selected-identity__row">
+            <span class="selected-identity__label">当前顾客</span>
+            <span class="selected-identity__name">{{ selectedIdentity.customerName }}</span>
+            <span class="selected-identity__phone">{{ selectedIdentity.customerPhone }}</span>
+            <el-tag
+              v-if="selectedIdentity.isInternal"
+              size="small"
+              type="danger"
+              effect="dark"
+            >
+              {{ INTERNAL_CUSTOMER_ACCOUNT_BADGE }}
+            </el-tag>
+            <el-tag v-else size="small" type="success" effect="plain">真实顾客</el-tag>
+          </div>
+          <div class="selected-identity__row">
+            <template v-if="selectedIdentity.dogId">
+              <span class="selected-identity__label">已选狗狗</span>
+              <span class="selected-identity__name">{{ selectedIdentity.dogName }}</span>
+              <span class="selected-identity__meta">
+                {{ selectedIdentity.dogBreedName }} · {{ selectedIdentity.dogAgeText }} ·
+                {{ selectedIdentity.dogWeightText }}
+              </span>
+            </template>
+            <span v-else class="selected-identity__empty">
+              还没有选择狗狗，请在下方选择或新建
+            </span>
+          </div>
+          <div v-if="selectedIdentity.isInternal" class="selected-identity__warn">
+            这是内部账号，不是真实顾客，仅用于测试。
+          </div>
+        </div>
+        <el-button plain @click="resetSelection">重新选择</el-button>
+      </div>
 
       <el-radio-group v-model="customerMode" class="mode-row" @change="handleCustomerModeChange">
         <el-radio-button value="EXISTING">已有账号顾客</el-radio-button>
         <el-radio-button value="GUEST">代客客户（无账号）</el-radio-button>
       </el-radio-group>
 
-      <div v-if="customerMode === 'EXISTING'" class="search-row">
-        <el-input
-          v-model="existingKeyword"
-          clearable
-          placeholder="姓名 / 手机号 / 狗名"
-          class="search-input"
-          @keyup.enter="searchExistingCustomers"
-        />
-        <el-button type="primary" :loading="existingSearching" @click="searchExistingCustomers">
-          搜索顾客
-        </el-button>
-      </div>
+      <template v-if="customerMode === 'EXISTING'">
+        <div class="search-row">
+          <el-input
+            v-model="existingKeyword"
+            clearable
+            placeholder="姓名 / 手机号 / 狗名"
+            class="search-input"
+            @keyup.enter="searchExistingCustomers"
+          />
+          <el-button type="primary" :loading="existingSearching" @click="searchExistingCustomers">
+            搜索顾客
+          </el-button>
+          <el-checkbox
+            v-model="includeInternal"
+            :disabled="!isAdmin"
+            @change="handleIncludeInternalChange"
+          >
+            包含内部账号（仅管理员）
+          </el-checkbox>
+        </div>
 
-      <div v-else class="search-row">
-        <el-input
-          v-model="guestKeyword"
-          clearable
-          placeholder="姓名 / 手机号 / 微信"
-          class="search-input"
-          @keyup.enter="searchGuestCustomers"
-        />
-        <el-button type="primary" :loading="guestSearching" @click="searchGuestCustomers">
-          搜索代客客户
-        </el-button>
-        <el-button :disabled="!isAdmin" @click="openGuestDialog">新建代客客户</el-button>
-      </div>
-
-      <div v-if="customerMode === 'EXISTING' && existingResults.length > 0" class="result-list">
         <div
-          v-for="item in existingResults"
-          :key="item.id"
-          class="customer-option"
-          :class="{ 'customer-option--on': selectedCustomer?.id === item.id }"
-          @click="selectExistingCustomer(item)"
+          v-if="existingSearched && !existingSearching && existingResults.length === 0"
+          class="empty-hint"
         >
-          <div class="customer-main">
-            {{ item.nickname || '未命名顾客' }}
-            <el-tag size="small" type="success" effect="plain">已有账号</el-tag>
-          </div>
-          <div class="customer-meta">
-            手机号：{{ item.phone || '未填写' }} · {{ item.dogs?.length || 0 }} 只狗
+          没有匹配的顾客。可以切换到「代客客户（无账号）」新建档案。
+        </div>
+
+        <div v-if="existingResults.length > 0" class="result-list">
+          <div
+            v-for="card in existingResults"
+            :key="card.customerId"
+            class="customer-option"
+            :class="{ 'customer-option--on': selectedCustomer?.id === card.customerId }"
+          >
+            <div class="customer-main">
+              {{ card.name }}
+              <el-tag
+                size="small"
+                :type="card.isInternal ? 'danger' : 'success'"
+                effect="plain"
+              >
+                {{ card.isInternal ? INTERNAL_CUSTOMER_ACCOUNT_BADGE : '真实顾客' }}
+              </el-tag>
+            </div>
+            <div class="customer-meta">
+              手机号：{{ card.phone || '未填写' }} · {{ card.dogs.length }} 只狗
+            </div>
+            <div v-if="card.dogs.length > 0" class="result-dogs">
+              <div
+                v-for="dog in card.dogs"
+                :key="dog.id"
+                class="result-dog"
+                :class="{ 'result-dog--on': form.dogId === dog.id }"
+                @click="selectCustomerDog(card, dog)"
+              >
+                <span class="result-dog__name">🐶 {{ dog.name }}</span>
+                <span class="result-dog__meta">
+                  {{ dog.breedName || '品种未填写' }} · {{ dog.ageText }} · {{ dog.weightText }}
+                </span>
+                <el-tag v-if="form.dogId === dog.id" size="small" type="primary">已选择</el-tag>
+              </div>
+            </div>
+            <div v-else class="empty-hint small">这位顾客还没有狗狗档案</div>
           </div>
         </div>
-      </div>
+      </template>
 
-      <div v-if="customerMode === 'GUEST' && guestResults.length > 0" class="result-list">
-        <div
-          v-for="item in guestResults"
-          :key="item.id"
-          class="customer-option"
-          :class="{ 'customer-option--on': selectedCustomer?.id === item.id }"
-          @click="selectGuestCustomer(item)"
-        >
-          <div class="customer-main">
-            {{ item.name || '未命名顾客' }}
-            <el-tag size="small" type="warning" effect="plain">代客客户</el-tag>
-          </div>
-          <div class="customer-meta">
-            手机号：{{ item.phone || '未填写' }} · {{ item.dogCount }} 只狗
-            <span v-if="item.wechat"> · 微信：{{ item.wechat }}</span>
+      <template v-else>
+        <div class="search-row">
+          <el-input
+            v-model="guestKeyword"
+            clearable
+            placeholder="姓名 / 手机号 / 微信"
+            class="search-input"
+            @keyup.enter="searchGuestCustomers"
+          />
+          <el-button type="primary" :loading="guestSearching" @click="searchGuestCustomers">
+            搜索代客客户
+          </el-button>
+          <el-button :disabled="!isAdmin" @click="openGuestDialog">新建代客客户</el-button>
+        </div>
+
+        <div v-if="guestResults.length > 0" class="result-list">
+          <div
+            v-for="item in guestResults"
+            :key="item.id"
+            class="customer-option"
+            :class="{ 'customer-option--on': selectedCustomer?.id === item.id }"
+            @click="selectGuestCustomer(item)"
+          >
+            <div class="customer-main">
+              {{ item.name || '未命名顾客' }}
+              <el-tag size="small" type="warning" effect="plain">代客客户</el-tag>
+            </div>
+            <div class="customer-meta">
+              手机号：{{ item.phone || '未填写' }} · {{ item.dogCount }} 只狗
+              <span v-if="item.wechat"> · 微信：{{ item.wechat }}</span>
+            </div>
           </div>
         </div>
-      </div>
 
-      <el-descriptions v-if="selectedCustomer" :column="3" border class="selected-customer">
-        <el-descriptions-item label="顾客">
-          {{ selectedCustomer.name }}
-          <el-tag size="small" :type="isGuestSelected ? 'warning' : 'success'" effect="plain">
-            {{ isGuestSelected ? '代客客户' : '已有账号' }}
-          </el-tag>
-        </el-descriptions-item>
-        <el-descriptions-item label="手机号">
-          {{ selectedCustomer.phone || '未填写' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="狗狗数量">
-          {{ selectedCustomer.dogCount }}
-        </el-descriptions-item>
-      </el-descriptions>
+        <template v-if="isGuestSelected">
+          <div class="owner-banner">
+            <span>当前顾客：{{ ownerSummary }}</span>
+            <el-button
+              type="primary"
+              plain
+              :disabled="!isAdmin"
+              @click="openDogDialog"
+            >
+              新建狗狗档案
+            </el-button>
+          </div>
+
+          <div v-loading="dogsLoading" class="dog-area">
+            <el-alert
+              v-if="dogsError"
+              type="error"
+              :title="dogsError"
+              :closable="false"
+              show-icon
+              class="page-alert"
+            >
+              <template #default>
+                <el-button link type="primary" @click="loadDogs">重新加载</el-button>
+              </template>
+            </el-alert>
+            <div v-else-if="dogs.length > 0" class="dog-grid">
+              <div
+                v-for="dog in dogs"
+                :key="dog.id"
+                class="dog-card"
+                :class="{ 'dog-card--on': form.dogId === dog.id }"
+                @click="selectGuestDog(dog)"
+              >
+                <el-avatar :size="52" :src="dog.avatarUrl || undefined" class="dog-avatar">
+                  🐶
+                </el-avatar>
+                <div class="dog-body">
+                  <div class="dog-name">{{ dog.name }}</div>
+                  <div class="dog-meta">
+                    {{ dog.breedName || dog.customBreedName || '品种未填写' }} ·
+                    {{ ageText(dog.birthday) }} ·
+                    {{ weightText(dog.currentWeightKg) }}
+                  </div>
+                  <div class="dog-owner">主人：{{ ownerSummary }}</div>
+                </div>
+                <el-tag v-if="form.dogId === dog.id" size="small" type="primary">已选择</el-tag>
+              </div>
+            </div>
+            <el-empty
+              v-else
+              description="这位代客客户还没有狗狗，请先新建档案"
+            />
+          </div>
+        </template>
+      </template>
     </el-card>
 
-    <!-- 第二步：狗狗 -->
+    <!-- 第二步：定制需求 -->
     <el-card shadow="never" class="section-card">
       <template #header>
         <div class="section-header">
           <span class="step-badge">2</span>
-          <span class="section-title">选择狗狗</span>
-          <span class="section-hint">按 dog.id 选择；卡片同时显示主人姓名与手机号</span>
-        </div>
-      </template>
-
-      <div v-if="!selectedCustomer" class="empty-hint">请先在上一步选择顾客</div>
-
-      <template v-else>
-        <div class="owner-banner">
-          <span>当前顾客：{{ ownerSummary }}</span>
-          <el-button
-            v-if="isGuestSelected"
-            type="primary"
-            plain
-            :disabled="!isAdmin"
-            @click="openDogDialog"
-          >
-            新建狗狗档案
-          </el-button>
-        </div>
-
-        <div v-loading="dogsLoading" class="dog-area">
-          <el-alert
-            v-if="dogsError"
-            type="error"
-            :title="dogsError"
-            :closable="false"
-            show-icon
-            class="page-alert"
-          >
-            <template #default>
-              <el-button link type="primary" @click="loadDogs">重新加载</el-button>
-            </template>
-          </el-alert>
-          <div v-else-if="dogs.length > 0" class="dog-grid">
-            <div
-              v-for="dog in dogs"
-              :key="dog.id"
-              class="dog-card"
-              :class="{ 'dog-card--on': form.dogId === dog.id }"
-              @click="selectDog(dog)"
-            >
-              <el-avatar :size="52" :src="dog.avatarUrl || undefined" class="dog-avatar">
-                🐶
-              </el-avatar>
-              <div class="dog-body">
-                <div class="dog-name">{{ dog.name }}</div>
-                <div class="dog-meta">
-                  {{ dog.breedName || dog.customBreedName || '品种未填写' }} ·
-                  {{ ageText(dog.birthday) }} ·
-                  {{ weightText(dog.currentWeightKg) }}
-                </div>
-                <div class="dog-owner">主人：{{ ownerSummary }}</div>
-              </div>
-              <el-tag v-if="form.dogId === dog.id" size="small" type="primary">已选择</el-tag>
-            </div>
-          </div>
-          <el-empty
-            v-else
-            :description="isGuestSelected ? '这位代客客户还没有狗狗，请先新建档案' : '这位顾客还没有狗狗档案'"
-          />
-        </div>
-      </template>
-    </el-card>
-
-    <!-- 第三步：定制需求 -->
-    <el-card shadow="never" class="section-card">
-      <template #header>
-        <div class="section-header">
-          <span class="step-badge">3</span>
           <span class="section-title">定制需求</span>
           <span class="section-hint">与顾客自助单同一套问卷，带 * 为必填</span>
         </div>
@@ -331,11 +380,11 @@
       </el-form>
     </el-card>
 
-    <!-- 第四步：报价与收款 -->
+    <!-- 第三步：报价与收款 -->
     <el-card shadow="never" class="section-card">
       <template #header>
         <div class="section-header">
-          <span class="step-badge">4</span>
+          <span class="step-badge">3</span>
           <span class="section-title">报价与收款</span>
           <span class="section-hint">应付金额只从服务端报价读取，页面不自行计算</span>
         </div>
@@ -608,7 +657,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { customRecipeApi } from '@/api/customRecipe'
 import type {
@@ -616,7 +665,6 @@ import type {
   CustomRecipeIntakeOptionSets,
   CustomRecipeQuote,
   GuestCustomerSearchItem,
-  StaffCustomerSearchItem,
 } from '@/api/customRecipe'
 import { dogApi } from '@/api/dogs'
 import {
@@ -628,24 +676,34 @@ import {
   LifeStageLabels,
   LifeStageOverride,
   MIXED_BREED_VIRTUAL_ID,
-  calculateAge,
 } from '@/types/dog'
 import type { DogBreed, DogProfile } from '@/types/dog'
 import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole'
 import { getApiErrorMessage, toastApiError } from '@/utils/apiError'
+import { INTERNAL_CUSTOMER_ACCOUNT_BADGE } from '@/utils/customerRole'
 import {
   ASSISTED_PAYMENT_CHANNELS,
   ASSISTED_TARGET_GOAL_CODES,
   PROTEIN_OPTIONS,
   buildAssistedOrderPayload,
+  buildCustomerDogCards,
+  buildSelectedIdentity,
   collectAssistedOrderIssues,
   describeCustomer,
   formatDiscountRate,
+  formatDogAge,
+  formatDogWeight,
   formatMoney,
   getPaymentValidationError,
+  requiresInternalConfirmation,
   shouldSyncActualAmount,
 } from '@/utils/assistedOrder'
-import type { AssistedOrderFormState, ProteinChoiceMode } from '@/utils/assistedOrder'
+import type {
+  AssistedCustomerDogCard,
+  AssistedDogSummary,
+  AssistedOrderFormState,
+  ProteinChoiceMode,
+} from '@/utils/assistedOrder'
 
 type CustomerMode = 'EXISTING' | 'GUEST'
 type CustomerSource = 'EXISTING' | 'GUEST'
@@ -655,6 +713,8 @@ interface SelectedCustomer {
   name: string
   phone: string | null
   source: CustomerSource
+  role: string
+  isInternal: boolean
   dogCount: number
 }
 
@@ -664,11 +724,15 @@ const isAdmin = useIsAdmin()
 const customerMode = ref<CustomerMode>('EXISTING')
 const existingKeyword = ref('')
 const guestKeyword = ref('')
-const existingResults = ref<StaffCustomerSearchItem[]>([])
+const existingResults = ref<AssistedCustomerDogCard[]>([])
 const guestResults = ref<GuestCustomerSearchItem[]>([])
 const existingSearching = ref(false)
+const existingSearched = ref(false)
 const guestSearching = ref(false)
+/** 内部账号开关：默认关闭，只有管理员能用；打开后才搜 ADMIN / STAFF */
+const includeInternal = ref(false)
 const selectedCustomer = ref<SelectedCustomer | null>(null)
+const selectedDog = ref<AssistedDogSummary | null>(null)
 
 const dogs = ref<DogProfile[]>([])
 const dogsLoading = ref(false)
@@ -678,6 +742,17 @@ const breeds = ref<DogBreed[]>([])
 const isGuestSelected = computed(() => selectedCustomer.value?.source === 'GUEST')
 const ownerSummary = computed(() =>
   describeCustomer(selectedCustomer.value?.name, selectedCustomer.value?.phone),
+)
+/**
+ * 顶部已选身份卡：顾客 + 狗狗一起展示。
+ *
+ * 只在选中顾客后出现；狗狗还没选（代客客户刚建档）时也显示顾客，
+ * 提示继续选狗，不能让员工以为「点了顾客就等于选完」。
+ */
+const selectedIdentity = computed(() =>
+  selectedCustomer.value
+    ? buildSelectedIdentity(selectedCustomer.value, selectedDog.value)
+    : null,
 )
 
 const configLoaded = ref(false)
@@ -783,24 +858,38 @@ const canSubmit = computed(
     quote.value !== null,
 )
 
-// ===== 顾客搜索 =====
+// ===== 顾客与狗狗合并搜索 =====
 
 async function searchExistingCustomers() {
   const keyword = existingKeyword.value.trim()
   if (!keyword) {
     existingResults.value = []
+    existingSearched.value = false
     ElMessage.warning('请输入姓名、手机号或狗名后再搜索')
     return
   }
 
   existingSearching.value = true
   try {
-    existingResults.value = await customRecipeApi.searchStaffCustomers(keyword)
+    const result = await customRecipeApi.searchAssistedCustomerDogs(
+      keyword,
+      includeInternal.value,
+    )
+    existingResults.value = buildCustomerDogCards(result?.items ?? [])
+    existingSearched.value = true
   } catch (error) {
     existingResults.value = []
+    existingSearched.value = true
     toastApiError(error, '搜索顾客失败', (message) => ElMessage.error(message))
   } finally {
     existingSearching.value = false
+  }
+}
+
+/** 打开/关闭内部账号后，如果已经有关键词就立即重搜，避免结果与开关不一致 */
+function handleIncludeInternalChange() {
+  if (existingKeyword.value.trim()) {
+    void searchExistingCustomers()
   }
 }
 
@@ -819,18 +908,44 @@ async function searchGuestCustomers() {
   }
 }
 
-function selectExistingCustomer(item: StaffCustomerSearchItem) {
-  const name = String(item.nickname || '').trim() || '未命名顾客'
-  selectedCustomer.value = {
-    id: item.id,
-    name,
-    phone: item.phone || null,
-    source: 'EXISTING',
-    dogCount: item.dogs?.length || 0,
+/**
+ * 点一只狗 = 同时选中它的主人和它自己。
+ *
+ * 内部账号（ADMIN / STAFF）在库里也是 User，搜索打开开关就能选到；
+ * 但那不是真实顾客，必须弹窗确认，取消则什么都不改。
+ */
+async function selectCustomerDog(
+  card: AssistedCustomerDogCard,
+  dog: AssistedDogSummary,
+) {
+  if (requiresInternalConfirmation(card)) {
+    try {
+      await ElMessageBox.confirm(
+        '这是内部账号，不是真实顾客，仅用于测试？',
+        '内部账号确认',
+        {
+          confirmButtonText: '继续（仅用于测试）',
+          cancelButtonText: '取消',
+          type: 'warning',
+        },
+      )
+    } catch {
+      return
+    }
   }
-  form.customerId = item.id
-  form.dogId = ''
-  void loadDogs()
+
+  selectedCustomer.value = {
+    id: card.customerId,
+    name: card.name,
+    phone: card.phone,
+    source: 'EXISTING',
+    role: card.role,
+    isInternal: card.isInternal,
+    dogCount: card.dogs.length,
+  }
+  selectedDog.value = { ...dog }
+  form.customerId = card.customerId
+  form.dogId = dog.id
 }
 
 function selectGuestCustomer(item: GuestCustomerSearchItem) {
@@ -839,15 +954,19 @@ function selectGuestCustomer(item: GuestCustomerSearchItem) {
     name: item.name || '未命名顾客',
     phone: item.phone || null,
     source: 'GUEST',
+    role: 'CUSTOMER',
+    isInternal: false,
     dogCount: Number(item.dogCount) || 0,
   }
+  selectedDog.value = null
   form.customerId = item.id
   form.dogId = ''
   void loadDogs()
 }
 
-function clearSelectedCustomer() {
+function resetSelection() {
   selectedCustomer.value = null
+  selectedDog.value = null
   form.customerId = ''
   form.dogId = ''
   dogs.value = []
@@ -858,11 +977,11 @@ function handleCustomerModeChange() {
   const expected: CustomerSource =
     customerMode.value === 'EXISTING' ? 'EXISTING' : 'GUEST'
   if (selectedCustomer.value && selectedCustomer.value.source !== expected) {
-    clearSelectedCustomer()
+    resetSelection()
   }
 }
 
-// ===== 狗狗 =====
+// ===== 代客客户的狗狗（无账号顾客才需要单独建档）=====
 
 async function loadDogs() {
   const customer = selectedCustomer.value
@@ -876,8 +995,12 @@ async function loadDogs() {
   try {
     const result = await customRecipeApi.listCustomerDogs(customer.id)
     dogs.value = Array.isArray(result?.data) ? result.data : []
-    if (!dogs.value.some((dog) => dog.id === form.dogId)) {
+    const matched = dogs.value.find((dog) => dog.id === form.dogId)
+    if (matched) {
+      selectGuestDog(matched)
+    } else {
       form.dogId = ''
+      selectedDog.value = null
     }
     customer.dogCount = dogs.value.length
   } catch (error) {
@@ -889,20 +1012,24 @@ async function loadDogs() {
   }
 }
 
-function selectDog(dog: DogProfile) {
+function selectGuestDog(dog: DogProfile) {
   // 只认 dog.id：狗名可能重复，绝不能按名字匹配
+  selectedDog.value = {
+    id: dog.id,
+    name: dog.name,
+    breedName: dog.breedName || dog.customBreedName || null,
+    ageText: formatDogAge(dog.birthday),
+    weightText: formatDogWeight(dog.currentWeightKg),
+  }
   form.dogId = dog.id
 }
 
 function ageText(birthday?: string | null) {
-  if (!birthday) return '年龄未填'
-  const text = calculateAge(birthday)
-  return text || '年龄未填'
+  return formatDogAge(birthday)
 }
 
 function weightText(weight?: number | null) {
-  const value = Number(weight)
-  return Number.isFinite(value) && value > 0 ? `${value.toFixed(1)} kg` : '体重未填'
+  return formatDogWeight(weight)
 }
 
 // ===== 选项字典 / 报价 =====
@@ -1043,8 +1170,11 @@ async function submitGuestCustomer() {
       name: item.name,
       phone: item.phone ?? null,
       source: 'GUEST',
+      role: 'CUSTOMER',
+      isInternal: false,
       dogCount: 0,
     }
+    selectedDog.value = null
     form.customerId = item.id
     form.dogId = ''
     dogs.value = []
@@ -1142,8 +1272,9 @@ async function submitGuestDog() {
     })
     dogDialogVisible.value = false
     await loadDogs()
-    if (dogs.value.some((dog) => dog.id === result.dogId)) {
-      form.dogId = result.dogId
+    const created = dogs.value.find((dog) => dog.id === result.dogId)
+    if (created) {
+      selectGuestDog(created)
     }
     ElMessage.success('狗狗档案已创建，已自动选中')
   } catch (error) {
@@ -1317,8 +1448,84 @@ onMounted(async () => {
   margin-top: 4px;
   line-height: 1.5;
 }
-.selected-customer {
-  margin-top: 14px;
+.selected-identity {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #b3d8ff;
+  background: #ecf5ff;
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+.selected-identity__body {
+  flex: 1;
+  min-width: 0;
+}
+.selected-identity__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  line-height: 1.8;
+}
+.selected-identity__label {
+  color: #909399;
+  font-size: 12px;
+}
+.selected-identity__name {
+  color: #303133;
+  font-weight: 600;
+}
+.selected-identity__phone,
+.selected-identity__meta {
+  color: #606266;
+  font-size: 13px;
+}
+.selected-identity__empty {
+  color: #e6a23c;
+  font-size: 13px;
+}
+.selected-identity__warn {
+  color: #f56c6c;
+  font-size: 12px;
+  margin-top: 2px;
+}
+.result-dogs {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+.result-dog {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  padding: 8px 10px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.result-dog:hover {
+  border-color: #409eff;
+  background: #f5f9ff;
+}
+.result-dog--on {
+  border-color: #409eff;
+  background: #d9ecff;
+}
+.result-dog__name {
+  font-weight: 600;
+  color: #303133;
+}
+.result-dog__meta {
+  color: #606266;
+  font-size: 12px;
+}
+.empty-hint.small {
+  padding: 6px 0;
+  font-size: 12px;
 }
 .owner-banner {
   display: flex;

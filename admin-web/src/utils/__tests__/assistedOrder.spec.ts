@@ -4,13 +4,22 @@ import {
   ASSISTED_TARGET_GOAL_CODES,
   PROTEIN_OPTIONS,
   buildAssistedOrderPayload,
+  buildCustomerDogCards,
+  buildSelectedIdentity,
   collectAssistedOrderIssues,
   describeCustomer,
   formatDiscountRate,
+  formatDogAge,
+  formatDogWeight,
   formatMoney,
   getPaymentValidationError,
+  isInternalCustomer,
+  requiresInternalConfirmation,
   shouldSyncActualAmount,
 } from '@/utils/assistedOrder'
+import type {
+  AssistedCustomerDogSearchItem,
+} from '@/api/customRecipe'
 import type { AssistedOrderFormState } from '@/utils/assistedOrder'
 
 /**
@@ -352,5 +361,177 @@ describe('线下收款渠道', () => {
       'RABBIT',
     ])
     expect(PROTEIN_OPTIONS.map((item) => item.code)).not.toContain('FISH')
+  })
+})
+
+describe('顾客 + 狗狗合并结果（2026-10-21）', () => {
+  const items: AssistedCustomerDogSearchItem[] = [
+    {
+      id: 'customer-1',
+      name: '王女士',
+      phone: '13800138000',
+      role: 'CUSTOMER',
+      isInternal: false,
+      dogs: [
+        {
+          id: 'dog-1',
+          name: 'Seven',
+          breedName: '柯基',
+          birthday: '2023-01-01',
+          ageText: null,
+          currentWeightKg: 11.2,
+        },
+        {
+          id: 'dog-2',
+          name: '面包',
+          breedName: null,
+          birthday: null,
+          ageText: null,
+          currentWeightKg: null,
+        },
+      ],
+    },
+    {
+      id: 'admin-1',
+      name: '内部测试号',
+      phone: null,
+      role: 'ADMIN',
+      isInternal: true,
+      dogs: [],
+    },
+  ]
+
+  it('★ 每个顾客的狗狗全部保留，不能只留关键词命中的那只', () => {
+    const cards = buildCustomerDogCards(items)
+
+    expect(cards).toHaveLength(2)
+    expect(cards[0]!.dogs.map((dog) => dog.name)).toEqual(['Seven', '面包'])
+    expect(cards[0]!.dogs[0]).toMatchObject({
+      id: 'dog-1',
+      name: 'Seven',
+      breedName: '柯基',
+      weightText: '11.2 kg',
+    })
+  })
+
+  it('★ 补齐空姓名/空品种/年龄体重占位，不把空值丢给模板', () => {
+    const cards = buildCustomerDogCards([
+      {
+        id: 'c2',
+        name: null,
+        phone: null,
+        role: '',
+        isInternal: false,
+        dogs: [
+          {
+            id: 'd9',
+            name: '',
+            breedName: null,
+            birthday: null,
+            ageText: null,
+            currentWeightKg: null,
+          },
+        ],
+      },
+    ])
+
+    expect(cards[0]).toMatchObject({
+      name: '未命名顾客',
+      role: 'CUSTOMER',
+      isInternal: false,
+    })
+    expect(cards[0]!.dogs[0]).toMatchObject({
+      name: '未命名狗狗',
+      breedName: null,
+      ageText: '年龄未填',
+      weightText: '体重未填',
+    })
+  })
+
+  it('★ 后端给了 ageText 就直接用；没给才按生日算', () => {
+    const cards = buildCustomerDogCards([
+      {
+        ...items[0]!,
+        dogs: [
+          {
+            id: 'dog-1',
+            name: 'Seven',
+            breedName: '柯基',
+            birthday: '2023-01-01',
+            ageText: '3岁2个月',
+            currentWeightKg: 11.2,
+          },
+        ],
+      },
+    ])
+
+    expect(cards[0]!.dogs[0]!.ageText).toBe('3岁2个月')
+    expect(formatDogAge('')).toBe('年龄未填')
+    expect(formatDogAge('2023-01-01')).toMatch(/岁|个月|天/)
+    expect(formatDogWeight(0)).toBe('体重未填')
+  })
+
+  it('★ 内部账号由 isInternal / role 判定，普通顾客不会被误标', () => {
+    const cards = buildCustomerDogCards(items)
+
+    expect(cards[0]!.isInternal).toBe(false)
+    expect(cards[1]!.isInternal).toBe(true)
+    expect(isInternalCustomer({ role: 'STAFF' })).toBe(true)
+    expect(isInternalCustomer({ role: 'ADMIN', isInternal: false })).toBe(false)
+    expect(isInternalCustomer({ role: 'CUSTOMER' })).toBe(false)
+    expect(isInternalCustomer({ role: '' })).toBe(false)
+  })
+
+  it('★ 只有内部账号的卡片需要二次确认', () => {
+    const cards = buildCustomerDogCards(items)
+
+    expect(requiresInternalConfirmation(cards[0]!)).toBe(false)
+    expect(requiresInternalConfirmation(cards[1]!)).toBe(true)
+    expect(requiresInternalConfirmation({})).toBe(false)
+  })
+})
+
+describe('已选身份卡', () => {
+  it('★ 同时带出顾客姓名/手机号与狗狗品种/年龄/体重', () => {
+    const identity = buildSelectedIdentity(
+      {
+        id: 'customer-1',
+        name: '王女士',
+        phone: '13800138000',
+        role: 'CUSTOMER',
+        isInternal: false,
+      },
+      {
+        id: 'dog-1',
+        name: 'Seven',
+        breedName: '柯基',
+        ageText: '3岁',
+        weightText: '11.2 kg',
+      },
+    )
+
+    expect(identity).toMatchObject({
+      customerId: 'customer-1',
+      customerName: '王女士',
+      customerPhone: '13800138000',
+      isInternal: false,
+      dogId: 'dog-1',
+      dogName: 'Seven',
+      dogBreedName: '柯基',
+      dogAgeText: '3岁',
+      dogWeightText: '11.2 kg',
+    })
+  })
+
+  it('★ 内部账号保留标记，供身份卡显示警示', () => {
+    const identity = buildSelectedIdentity(
+      { id: 'admin-1', name: '老板测试号', phone: null, role: 'ADMIN' },
+      null,
+    )
+
+    expect(identity.isInternal).toBe(true)
+    expect(identity.customerPhone).toBe('未填写手机号')
+    expect(identity.dogId).toBeNull()
+    expect(identity.dogName).toBe('')
   })
 })

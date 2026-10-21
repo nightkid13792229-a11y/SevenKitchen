@@ -7,9 +7,12 @@
  */
 
 import type {
+  AssistedCustomerDogSearchItem,
   AssistedPaymentChannel,
   CreateAssistedOrderPayload,
 } from '@/api/customRecipe'
+import { calculateAge } from '@/types/dog'
+import { isInternalCustomerRole } from '@/utils/customerRole'
 
 /** 代客单可登记的线下渠道。刻意不含微信在线支付：线下单不能走微信退款。 */
 export const ASSISTED_PAYMENT_CHANNELS: ReadonlyArray<{
@@ -115,6 +118,151 @@ export function describeCustomer(name: unknown, phone: unknown): string {
   const safeName = String(name ?? '').trim() || '未命名顾客'
   const safePhone = String(phone ?? '').trim() || '无手机号'
   return `${safeName}（${safePhone}）`
+}
+
+// ===== 代客下单：顾客 + 狗狗合并选择（2026-10-21）=====
+
+/** 合并搜索卡片里的一只狗（年龄/体重已经格式化成页面文案） */
+export interface AssistedDogSummary {
+  id: string
+  name: string
+  breedName: string | null
+  ageText: string
+  weightText: string
+}
+
+/**
+ * 合并搜索卡片：一位顾客 + 他的全部狗狗。
+ *
+ * 点狗即同时选中顾客和狗，页面不再有独立的「选择狗狗」步骤。
+ */
+export interface AssistedCustomerDogCard {
+  customerId: string
+  name: string
+  phone: string | null
+  role: string
+  isInternal: boolean
+  dogs: AssistedDogSummary[]
+}
+
+/** 已选身份：顶部身份卡展示的顾客 + 狗狗 */
+export interface AssistedSelectedIdentity {
+  customerId: string
+  customerName: string
+  customerPhone: string
+  role: string
+  isInternal: boolean
+  dogId: string | null
+  dogName: string
+  dogBreedName: string
+  dogAgeText: string
+  dogWeightText: string
+}
+
+/** 生日 → 年龄文案（与订单详情同一口径；没填显示「年龄未填」） */
+export function formatDogAge(birthday: unknown): string {
+  const value = String(birthday ?? '').trim()
+  if (!value) return '年龄未填'
+  return calculateAge(value) || '年龄未填'
+}
+
+/** 体重 → 「12.3 kg」（无效值显示「体重未填」） */
+export function formatDogWeight(weight: unknown): string {
+  const value = Number(weight)
+  return Number.isFinite(value) && value > 0
+    ? `${value.toFixed(1)} kg`
+    : '体重未填'
+}
+
+/** 判断一个搜索项是否内部账号：优先后端下发的 isInternal */
+export function isInternalCustomer(item: {
+  role?: unknown
+  isInternal?: unknown
+}): boolean {
+  if (typeof item.isInternal === 'boolean') return item.isInternal
+  return isInternalCustomerRole(item.role)
+}
+
+/**
+ * 后端合并搜索结果 → 页面卡片。
+ *
+ * 这里只做**归一化与展示文案**：补齐空姓名/空角色、没有 ageText 时按生日算、
+ * 体重统一格式。不能在这里过滤狗狗 —— 关键词只命中一只时，
+ * 员工仍要能看到这位顾客的其它狗。
+ */
+export function buildCustomerDogCards(
+  items: AssistedCustomerDogSearchItem[] | null | undefined,
+): AssistedCustomerDogCard[] {
+  return (items ?? []).map((item) => {
+    const role = String(item.role ?? '').trim().toUpperCase() || 'CUSTOMER'
+    return {
+      customerId: item.id,
+      name: String(item.name ?? '').trim() || '未命名顾客',
+      phone: item.phone ?? null,
+      role,
+      isInternal: isInternalCustomer({ role, isInternal: item.isInternal }),
+      dogs: (item.dogs ?? []).map((dog) => ({
+        id: dog.id,
+        name: String(dog.name ?? '').trim() || '未命名狗狗',
+        breedName: dog.breedName ?? null,
+        ageText:
+          String(dog.ageText ?? '').trim() || formatDogAge(dog.birthday),
+        weightText: formatDogWeight(dog.currentWeightKg),
+      })),
+    }
+  })
+}
+
+/**
+ * 内部账号选中前必须二次确认。
+ *
+ * 只认后端/卡片上的 isInternal；普通顾客不弹窗，避免把正常下单也拦住。
+ */
+export function requiresInternalConfirmation(card: {
+  isInternal?: boolean
+}): boolean {
+  return card?.isInternal === true
+}
+
+/**
+ * 顶部「已选身份」卡的数据。
+ *
+ * 顾客一定有；狗狗可能还没选（代客客户刚建档时），此时 dog 传 null，
+ * 页面显示「请选择或新建狗狗」。
+ */
+export function buildSelectedIdentity(
+  customer: {
+    id?: string
+    name?: unknown
+    phone?: unknown
+    role?: unknown
+    isInternal?: unknown
+  },
+  dog?: {
+    id?: string
+    name?: unknown
+    breedName?: unknown
+    ageText?: unknown
+    weightText?: unknown
+  } | null,
+): AssistedSelectedIdentity {
+  const role = String(customer.role ?? '').trim().toUpperCase() || 'CUSTOMER'
+  const isInternal = isInternalCustomer({
+    role,
+    isInternal: customer.isInternal,
+  })
+  return {
+    customerId: String(customer.id ?? ''),
+    customerName: String(customer.name ?? '').trim() || '未命名顾客',
+    customerPhone: String(customer.phone ?? '').trim() || '未填写手机号',
+    role,
+    isInternal,
+    dogId: dog?.id ? String(dog.id) : null,
+    dogName: String(dog?.name ?? '').trim(),
+    dogBreedName: String(dog?.breedName ?? '').trim() || '品种未填写',
+    dogAgeText: String(dog?.ageText ?? '').trim() || '年龄未填',
+    dogWeightText: String(dog?.weightText ?? '').trim() || '体重未填',
+  }
 }
 
 /**

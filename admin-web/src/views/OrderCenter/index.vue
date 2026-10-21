@@ -95,7 +95,18 @@
         </el-table-column>
         <el-table-column label="顾客" min-width="130">
           <template #default="{ row }">
-            <div>{{ row.customerName || '—' }}</div>
+            <div>
+              {{ row.customerName || '—' }}
+              <el-tag
+                v-if="isInternalCustomerRole(row.customerRole)"
+                size="small"
+                type="danger"
+                effect="plain"
+                class="internal-tag"
+              >
+                {{ INTERNAL_CUSTOMER_BADGE }}
+              </el-tag>
+            </div>
             <div class="muted">{{ row.customerPhone || '' }}</div>
           </template>
         </el-table-column>
@@ -171,6 +182,10 @@ import type {
 } from '@/api/orderCenter'
 import OrderDetail from '@/views/CustomRecipes/OrderDetail.vue'
 import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole'
+import {
+  INTERNAL_CUSTOMER_BADGE,
+  isInternalCustomerRole,
+} from '@/utils/customerRole'
 
 const router = useRouter()
 /** 代客下单会创建订单并登记线下收款，后端仅管理员可用 */
@@ -390,6 +405,7 @@ watch(
 .counts { display: flex; gap: 14px; color: #606266; font-size: 13px; }
 .filter-form { margin-top: 12px; }
 .muted { color: #909399; font-size: 12px; }
+.internal-tag { margin-left: 4px; }
 .aftersale-tag { margin-left: 4px; }
 .pager { display: flex; justify-content: flex-end; margin-top: 14px; }
 </style>

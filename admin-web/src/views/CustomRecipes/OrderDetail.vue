@@ -183,7 +183,18 @@
         <div class="info-group">
           <div class="info-item">
             <label>姓名</label>
-            <span>{{ order.customer?.nickname }}</span>
+            <span>
+              {{ order.customer?.nickname }}
+              <el-tag
+                v-if="isInternalCustomer"
+                size="small"
+                type="danger"
+                effect="plain"
+                class="internal-customer-tag"
+              >
+                {{ INTERNAL_CUSTOMER_BADGE }}
+              </el-tag>
+            </span>
           </div>
           <div class="info-item">
             <label>微信</label>
@@ -705,6 +716,10 @@ import {
   isUserCancel,
   toastApiError,
 } from '@/utils/apiError';
+import {
+  INTERNAL_CUSTOMER_BADGE,
+  isInternalCustomerRole,
+} from '@/utils/customerRole';
 
 const props = defineProps<{
   orderId: string;
@@ -768,6 +783,11 @@ const {
 
 const statusText = computed(() => statusLabel(order.value?.status));
 const statusTagType = computed(() => statusTone(order.value?.status) || undefined);
+
+/** 内部账号（老板/员工）下的测试单，后台要能和真实顾客单一眼区分 */
+const isInternalCustomer = computed(() =>
+  isInternalCustomerRole(order.value?.customer?.role),
+);
 
 /** 预计交付倒计时：超期的单要标红，已交付/已取消的不再催 */
 const deliveryInfo = computed(() =>
@@ -1727,6 +1747,10 @@ h3 {
 
 .info-item span {
   color: #333;
+}
+
+.internal-customer-tag {
+  margin-left: 6px;
 }
 
 .info-item .amount {

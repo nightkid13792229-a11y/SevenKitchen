@@ -168,20 +168,39 @@
             name="history"
             :title="`历史订单食谱（${historyRecipes.length}）`"
           >
-            <div v-if="historyRecipes.length === 0" class="empty-tip">
+            <div v-if="historyRecipes.length === 0 && sameOrderRecipes.length === 0" class="empty-tip">
               暂无历史订单食谱
             </div>
             <div v-else class="history-recipe-list">
-              <div
-                v-for="item in historyRecipes"
-                :key="`${item.kind}-${item.id}`"
-                class="history-recipe-row history-recipe-row--clickable"
-                @click="openHistoryRecipe(item)"
-              >
-                <div class="history-recipe-name">{{ item.name }}</div>
-                <div class="history-recipe-meta">
-                  <el-tag size="small" effect="plain">{{ historyKindLabel(item.kind) }}</el-tag>
-                  <span>{{ formatInsightDate(item.date) || '日期未知' }}</span>
+              <div v-if="sameOrderRecipes.length > 0" class="history-subsection">
+                <div class="history-subsection-title">本单其他食谱</div>
+                <div
+                  v-for="item in sameOrderRecipes"
+                  :key="`same-order-${item.id}`"
+                  class="history-recipe-row history-recipe-row--clickable"
+                  @click="openHistoryRecipe(item)"
+                >
+                  <div class="history-recipe-name">{{ item.name }}</div>
+                  <div class="history-recipe-meta">
+                    <el-tag size="small" type="success" effect="plain">本单</el-tag>
+                    <span>{{ historyOrderStatusLabel(item.status) }}</span>
+                    <span>{{ formatInsightDate(item.date) || '日期未知' }}</span>
+                  </div>
+                </div>
+              </div>
+              <div v-if="historyRecipes.length > 0" class="history-subsection">
+                <div v-if="sameOrderRecipes.length > 0" class="history-subsection-title">历史订单</div>
+                <div
+                  v-for="item in historyRecipes"
+                  :key="`${item.kind}-${item.id}`"
+                  class="history-recipe-row history-recipe-row--clickable"
+                  @click="openHistoryRecipe(item)"
+                >
+                  <div class="history-recipe-name">{{ item.name }}</div>
+                  <div class="history-recipe-meta">
+                    <el-tag size="small" effect="plain">{{ historyKindLabel(item.kind) }}</el-tag>
+                    <span>{{ formatInsightDate(item.date) || '日期未知' }}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -487,8 +506,21 @@ const historyRecipes = computed(() =>
   (insight.value?.historyRecipes || []).filter((item) => item?.name)
 )
 
-const historyKindLabel = (kind: string) =>
-  kind === 'FINISHED' ? '成品鲜食' : '定制食谱'
+const sameOrderRecipes = computed(() =>
+  (insight.value?.sameOrderRecipes || []).filter((item) => item?.name)
+)
+
+const historyKindLabel = (kind: string) => {
+  if (kind === 'FINISHED') return '成品鲜食'
+  if (kind === 'ORDER') return '本单'
+  return '定制食谱'
+}
+
+const historyOrderStatusLabel = (status: string) => {
+  if (status === 'READY') return '已就绪'
+  if (status === 'DELIVERED') return '已交付'
+  return '编辑中'
+}
 
 const historyDialogVisible = ref(false)
 const historySelection = ref<DogDesignInsight['historyRecipes'][number] | null>(null)
@@ -739,7 +771,8 @@ async function loadInsight() {
   try {
     insight.value = await recipeDesignerApi.getDogDesignInsight(
       props.dogId,
-      recentDays.value
+      recentDays.value,
+      props.draftId
     )
   } catch {
     insight.value = null
@@ -1191,5 +1224,17 @@ defineExpose({ loadInsight })
   margin-left: auto;
   width: 88px;
   flex-shrink: 0;
+}
+
+.history-subsection + .history-subsection {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed #ebeef5;
+}
+.history-subsection-title {
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #909399;
 }
 </style>

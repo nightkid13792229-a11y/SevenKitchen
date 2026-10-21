@@ -199,9 +199,16 @@ export const recipeDesignerApi = {
   },
 
   // 爱犬洞察 + AI 建议
-  getDogDesignInsight: (dogId: string, recentDays?: number): Promise<DogDesignInsight> =>
+  getDogDesignInsight: (
+    dogId: string,
+    recentDays?: number,
+    draftId?: string
+  ): Promise<DogDesignInsight> =>
     api.get(`/recipe-designer/dogs/${dogId}/design-insight`, {
-      params: recentDays ? { recentDays } : undefined,
+      params: {
+        ...(recentDays ? { recentDays } : {}),
+        ...(draftId ? { draftId } : {}),
+      },
     }),
   updateDogDesignNotes: (dogId: string, data: UpdateDogDesignNotesPayload): Promise<unknown> =>
     api.patch(`/recipe-designer/dogs/${dogId}/design-notes`, data),

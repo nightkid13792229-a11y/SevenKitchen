@@ -307,3 +307,20 @@ describe('设计器 · 爱犬信息命名 / 附件预览 / 历史食谱（2026-1
     expect(template).not.toContain('recipeSnapshot')
   })
 })
+
+describe('爱犬指导面板 · 本单其他食谱（2026-10-22）', () => {
+  it('从编辑器带上 draftId，并在历史板块顶部单独分组', () => {
+    expect(script).toContain('props.draftId')
+    expect(script).toContain('sameOrderRecipes')
+    expect(script).toContain('historyOrderStatusLabel')
+    expect(template).toContain('sameOrderRecipes.length > 0')
+    expect(template).toContain('本单其他食谱')
+    expect(template).toContain('本单')
+    expect(template).toContain('openHistoryRecipe(item)')
+  })
+
+  it('类型包含 ORDER 来源，且不会把本单食谱混进历史数组', () => {
+    expect(typeSource).toContain("'FINISHED' | 'CUSTOM' | 'ORDER'")
+    expect(typeSource).toContain('sameOrderRecipes:')
+  })
+})

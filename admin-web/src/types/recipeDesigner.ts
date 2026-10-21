@@ -287,7 +287,22 @@ export interface DogDesignInsight {
   historyRecipes: Array<{
     id: string
     name: string
-    kind: 'FINISHED' | 'CUSTOM'
+    kind: 'FINISHED' | 'CUSTOM' | 'ORDER'
+    date: string | null
+    status: string
+    ingredients: Array<{ name: string; amount: string }>
+    macros: Array<{
+      name: string
+      dryMatter: string
+      energyPercent: string
+      weightPercent: string
+    }>
+  }>
+  /** 当前订单内、除当前草稿外的其他食谱（2026-10-22） */
+  sameOrderRecipes: Array<{
+    id: string
+    name: string
+    kind: 'FINISHED' | 'CUSTOM' | 'ORDER'
     date: string | null
     status: string
     ingredients: Array<{ name: string; amount: string }>

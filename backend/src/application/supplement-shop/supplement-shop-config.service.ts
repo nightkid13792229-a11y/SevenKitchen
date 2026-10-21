@@ -63,6 +63,10 @@ export interface SupplementShopConfigDto {
   oilShelfLifeMonths: number;
   minRemainingShelfLifeDays: number;
   aftersalePolicy: string | null;
+  wechatTemplateScheduled: string | null;
+  wechatTemplateShipped: string | null;
+  wechatTemplateDelay: string | null;
+  wechatTemplateAftersale: string | null;
   labelBrandName: string;
   labelIncludeDesiccantNotice: boolean;
   updatedAt: string | null;
@@ -208,6 +212,18 @@ export class SupplementShopConfigService {
       if (value === undefined) continue;
       if (!Number.isInteger(value) || value <= 0 || value > 60) {
         throw new BadRequestException(`${label}必须是 1~60 的整数（月）`);
+      }
+    }
+
+    for (const [key, label] of [
+      ['wechatTemplateScheduled', '排期模板 ID'],
+      ['wechatTemplateShipped', '发货模板 ID'],
+      ['wechatTemplateDelay', '延迟模板 ID'],
+      ['wechatTemplateAftersale', '售后模板 ID'],
+    ] as const) {
+      const value = dto[key];
+      if (value !== undefined && value !== null && String(value).trim().length > 100) {
+        throw new BadRequestException(`${label}不能超过 100 个字符`);
       }
     }
 
@@ -359,6 +375,18 @@ export class SupplementShopConfigService {
       ...(dto.aftersalePolicy !== undefined && {
         aftersalePolicy: dto.aftersalePolicy?.trim() || null,
       }),
+      ...(dto.wechatTemplateScheduled !== undefined && {
+        wechatTemplateScheduled: dto.wechatTemplateScheduled?.trim() || null,
+      }),
+      ...(dto.wechatTemplateShipped !== undefined && {
+        wechatTemplateShipped: dto.wechatTemplateShipped?.trim() || null,
+      }),
+      ...(dto.wechatTemplateDelay !== undefined && {
+        wechatTemplateDelay: dto.wechatTemplateDelay?.trim() || null,
+      }),
+      ...(dto.wechatTemplateAftersale !== undefined && {
+        wechatTemplateAftersale: dto.wechatTemplateAftersale?.trim() || null,
+      }),
       ...(dto.labelBrandName !== undefined && {
         labelBrandName: dto.labelBrandName.trim() || DEFAULT_LABEL_BRAND_NAME,
       }),
@@ -395,6 +423,10 @@ export class SupplementShopConfigService {
     oilShelfLifeMonths: number;
     minRemainingShelfLifeDays: number;
     aftersalePolicy: string | null;
+    wechatTemplateScheduled: string | null;
+    wechatTemplateShipped: string | null;
+    wechatTemplateDelay: string | null;
+    wechatTemplateAftersale: string | null;
     labelBrandName: string;
     labelIncludeDesiccantNotice: boolean;
     updatedAt: Date;
@@ -434,6 +466,10 @@ export class SupplementShopConfigService {
       oilShelfLifeMonths: row.oilShelfLifeMonths,
       minRemainingShelfLifeDays: row.minRemainingShelfLifeDays,
       aftersalePolicy: row.aftersalePolicy,
+      wechatTemplateScheduled: row.wechatTemplateScheduled,
+      wechatTemplateShipped: row.wechatTemplateShipped,
+      wechatTemplateDelay: row.wechatTemplateDelay,
+      wechatTemplateAftersale: row.wechatTemplateAftersale,
       labelBrandName: row.labelBrandName || DEFAULT_LABEL_BRAND_NAME,
       labelIncludeDesiccantNotice: row.labelIncludeDesiccantNotice,
       updatedAt: row.updatedAt ? row.updatedAt.toISOString() : null,

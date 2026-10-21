@@ -59,6 +59,16 @@
             <text class="aftersale-sub">{{ item.caseNo }} · {{ aftersaleStatus(item.status) }}</text>
           </view>
           <text v-if="item.refundAmount !== null" class="aftersale-amount">¥{{ money(item.refundAmount) }}</text>
+          <view v-if="item.requestedPhotos?.length" class="aftersale-photos">
+            <image
+              v-for="photo in item.requestedPhotos"
+              :key="photo"
+              :src="photo"
+              mode="aspectFill"
+              class="aftersale-photo"
+              @tap="previewPhotos(item.requestedPhotos, photo)"
+            />
+          </view>
         </view>
       </view>
 
@@ -140,6 +150,10 @@ function aftersaleStatus(value: string) {
       CANCELLED: '已撤回',
     } as Record<string, string>
   )[value] || value
+}
+
+function previewPhotos(photos: string[], current: string) {
+  uni.previewImage({ urls: photos, current })
 }
 
 async function load() {
@@ -281,6 +295,8 @@ onUnload(() => uni.$off('address-selected', onAddressSelected))
 .aftersale-row { display: flex; justify-content: space-between; padding: 12rpx 0; border-bottom: 1rpx solid #f2f2f2; }
 .aftersale-reason { display: block; font-size: 26rpx; }
 .aftersale-sub { display: block; color: #909399; font-size: 22rpx; margin-top: 4rpx; }
+.aftersale-photos { display: flex; gap: 8rpx; margin-top: 8rpx; }
+.aftersale-photo { width: 92rpx; height: 92rpx; border-radius: 8rpx; }
 .aftersale-amount { font-size: 26rpx; color: #b88230; }
 .actions { display: flex; flex-wrap: wrap; gap: 16rpx; margin-top: 10rpx; }
 .primary-btn, .ghost-btn { flex: 1; min-width: 220rpx; border-radius: 44rpx; font-size: 28rpx; }

@@ -4078,6 +4078,13 @@ model SupplementShopConfig {
   // ---- 售后 ----
   aftersalePolicy           String?                      @map("aftersale_policy") @db.VarChar(200)
 
+  // ---- 微信订阅消息模板 ----
+  /// 后台可填；空则回退环境变量 WECHAT_TEMPLATE_SUPPLEMENT_*
+  wechatTemplateScheduled    String? @map("wechat_template_scheduled") @db.VarChar(100)
+  wechatTemplateShipped      String? @map("wechat_template_shipped") @db.VarChar(100)
+  wechatTemplateDelay        String? @map("wechat_template_delay") @db.VarChar(100)
+  wechatTemplateAftersale    String? @map("wechat_template_aftersale") @db.VarChar(100)
+
   // ---- 分装标签 ----
   /// 标签上显示的品牌名（同时作为分装者）
   labelBrandName            String                       @default("赛文的食堂") @map("label_brand_name") @db.VarChar(100)

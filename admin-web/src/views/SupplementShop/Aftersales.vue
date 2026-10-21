@@ -100,6 +100,18 @@
         <div><strong>{{ selected.caseNo }}</strong> · {{ selected.orderNo }}</div>
         <div class="muted">{{ requestLabel(selected.requestType) }}：{{ selected.requestedReason }}</div>
         <div v-if="selected.refundAmount !== null" class="muted">申请退款 ¥{{ formatMoney(selected.refundAmount) }}</div>
+        <div v-if="selected.requestedPhotos?.length" class="photos">
+          <el-image
+            v-for="(photo, index) in selected.requestedPhotos"
+            :key="photo"
+            :src="photo"
+            :preview-src-list="selected.requestedPhotos"
+            :initial-index="index"
+            fit="cover"
+            class="photo"
+            preview-teleported
+          />
+        </div>
       </div>
 
       <el-form label-width="90px" class="resolve-form">
@@ -281,5 +293,7 @@ onMounted(load)
 .muted { color: #909399; font-size: 12px; }
 .pager { display: flex; justify-content: flex-end; margin-top: 14px; }
 .case-brief { padding: 10px 12px; margin-bottom: 14px; background: #f5f7fa; border-radius: 6px; line-height: 1.8; }
+.photos { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.photo { width: 72px; height: 72px; border-radius: 6px; }
 .hint { color: #909399; font-size: 12px; line-height: 1.5; }
 </style>

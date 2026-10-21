@@ -45,6 +45,18 @@
         <text class="counter">{{ reason.length }}/500</text>
       </view>
 
+      <view class="card">
+        <text class="section-title">凭证图片（选填，最多 6 张）</text>
+        <view class="photo-grid">
+          <view v-for="(photo, index) in photos" :key="photo" class="photo-item">
+            <image :src="photo" mode="aspectFill" class="photo" />
+            <text class="photo-remove" @tap="removePhoto(index)">×</text>
+          </view>
+          <view v-if="photos.length < 6" class="photo-add" @tap="choosePhoto">＋</view>
+        </view>
+        <text class="hint">可拍瓶身、快递面单、破损处；提交后会随售后单一起给客服看。</text>
+      </view>
+
       <view v-if="requestType === 'REFUND' && order.status !== 'PACKED'" class="card">
         <text class="section-title">退款金额</text>
         <input v-model="amountText" class="input" type="digit" placeholder="不填 = 全额退款" />
@@ -61,6 +73,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
+import { getBaseUrl } from '../../utils/config'
+import { getToken } from '../../utils/api'
 import {
   createSupplementAftersale,
   prefetchSupplementSubscriptions,
@@ -73,10 +87,11 @@ const orderId = ref('')
 const order = ref<SupplementOrder | null>(null)
 const loading = ref(false)
 const submitting = ref(false)
-const requestType = ref<'REFUND' | 'RESHIP'>('REFUND')
+const requestType = ref<'REFUND' | 'RESHIP' | 'OTHER'>('REFUND')
 const reason = ref('')
 const amountText = ref('')
 const policyText = ref('')
+const photos = ref<string[]>([])
 
 const types = computed(() => {
   const status = order.value?.status || ''
@@ -86,6 +101,7 @@ const types = computed(() => {
   if (['SHIPPED', 'COMPLETED'].includes(status)) {
     list.push({ value: 'RESHIP', label: '免费补发', icon: '📦' })
   }
+  list.push({ value: 'OTHER', label: '其他问题', icon: '💬' })
   return list
 })
 
@@ -114,6 +130,44 @@ async function load() {
   }
 }
 
+function choosePhoto() {
+  uni.chooseImage({
+    count: 6 - photos.value.length,
+    success: (res) => {
+      photos.value.push(...(res.tempFilePaths || []))
+    },
+  })
+}
+
+function removePhoto(index: number) {
+  photos.value.splice(index, 1)
+}
+
+function uploadPhoto(filePath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const token = getToken()
+    uni.uploadFile({
+      url: `${getBaseUrl()}/supplement-orders/${encodeURIComponent(orderId.value)}/aftersale-photos`,
+      filePath,
+      name: 'files',
+      header: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      success: (res) => {
+        try {
+          const body = JSON.parse(res.data)
+          const url = body?.data?.photos?.[0]?.url
+          if (res.statusCode === 200 && body.code === 0 && url) resolve(url)
+          else reject(new Error(body?.message || '图片上传失败'))
+        } catch {
+          reject(new Error('图片上传失败'))
+        }
+      },
+      fail: () => reject(new Error('图片上传失败')),
+    })
+  })
+}
+
 async function submit() {
   if (!order.value) return
   if (!reason.value.trim()) {
@@ -134,9 +188,14 @@ async function submit() {
   submitting.value = true
   try {
     await requestSupplementSubscriptions()
+    const uploadedPhotos: string[] = []
+    for (const path of photos.value) {
+      uploadedPhotos.push(await uploadPhoto(path))
+    }
     const res = await createSupplementAftersale(order.value.id, {
       requestType: requestType.value,
       reason: reason.value.trim(),
+      photos: uploadedPhotos,
       amount,
     })
     if (res.code === 0) {
@@ -182,6 +241,11 @@ onLoad((options: any) => {
 .counter { display: block; text-align: right; color: #c0c4cc; font-size: 22rpx; }
 .input { height: 72rpx; border: 2rpx solid #e4e7ed; border-radius: 8rpx; padding: 0 16rpx; font-size: 28rpx; }
 .hint { display: block; margin-top: 10rpx; color: #909399; font-size: 23rpx; }
+.photo-grid { display: flex; flex-wrap: wrap; gap: 14rpx; }
+.photo-item { position: relative; width: 150rpx; height: 150rpx; border-radius: 10rpx; overflow: hidden; }
+.photo { width: 100%; height: 100%; }
+.photo-remove { position: absolute; top: 0; right: 0; width: 40rpx; height: 40rpx; line-height: 36rpx; text-align: center; background: rgba(0,0,0,0.55); color: #fff; font-size: 30rpx; }
+.photo-add { width: 150rpx; height: 150rpx; border: 2rpx dashed #c0c4cc; border-radius: 10rpx; display: flex; align-items: center; justify-content: center; color: #909399; font-size: 46rpx; }
 .submit { margin-top: 30rpx; background: #409eff; color: #fff; border-radius: 44rpx; font-size: 30rpx; }
 .submit[disabled] { opacity: 0.6; }
 </style>

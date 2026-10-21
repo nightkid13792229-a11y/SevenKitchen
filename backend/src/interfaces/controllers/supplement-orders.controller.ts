@@ -4,6 +4,7 @@
  */
 
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -13,10 +14,13 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFiles,
   UseGuards,
+  UseInterceptors,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiOperation, ApiSecurity, ApiTags } from '@nestjs/swagger';
 import { SupplementOrderService } from '../../application/supplement-shop/supplement-order.service';
 import { WechatPaymentService } from '../../application/payment/wechat-payment.service';
@@ -31,6 +35,7 @@ import {
 } from '../dto/supplement-prepack.dto';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { AuthGuard, CurrentUser } from '../auth';
+import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import type { RequestUser } from '../auth';
 
 @ApiTags('Supplement Orders')
@@ -42,6 +47,7 @@ export class SupplementOrdersController {
     private readonly supplementOrderService: SupplementOrderService,
     private readonly wechatPaymentService: WechatPaymentService,
     private readonly aftersaleService: SupplementAftersaleService,
+    private readonly cosService: TencentCosService,
   ) {}
 
   @Post()
@@ -157,6 +163,41 @@ export class SupplementOrdersController {
     return ApiResponseDto.success(
       await this.aftersaleService.createForCustomer(user.userId, id, dto),
     );
+  }
+
+  @Post(':id/aftersale-photos')
+  @ApiSecurity('X-Customer-Id')
+  @ApiOperation({ summary: '上传补剂售后凭证照片（最多 6 张，需订单归属）' })
+  @UseInterceptors(FilesInterceptor('files', 6))
+  async uploadAftersalePhotos(
+    @CurrentUser() user: RequestUser,
+    @Param('id') id: string,
+    @UploadedFiles() files: Express.Multer.File[],
+  ) {
+    await this.supplementOrderService.getOrder(user.userId, id);
+    if (!files?.length) throw new BadRequestException('请选择要上传的照片');
+    if (files.length > 6) {
+      throw new BadRequestException('最多只能上传 6 张凭证照片');
+    }
+    const allowed = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
+    for (const file of files) {
+      if (file.size > 10 * 1024 * 1024) {
+        throw new BadRequestException('每张照片大小不能超过 10MB');
+      }
+      if (!allowed.includes(file.mimetype)) {
+        throw new BadRequestException('只支持 JPG、PNG、WEBP 格式的照片');
+      }
+    }
+    const photos = await Promise.all(
+      files.map((file) =>
+        this.cosService.uploadImage(
+          file,
+          file.originalname,
+          `supplement-aftersale-photos/${id}`,
+        ),
+      ),
+    );
+    return ApiResponseDto.success({ photos });
   }
 
   @Get(':id/snapshot')

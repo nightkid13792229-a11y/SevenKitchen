@@ -59,7 +59,7 @@ export class SupplementsController {
   @ApiOperation({ summary: '补剂订阅消息模板 ID（供小程序 requestSubscribeMessage）' })
   async subscribeTemplates() {
     return ApiResponseDto.success(
-      this.supplementNotificationService.getTemplateIds(),
+      await this.supplementNotificationService.getTemplateIds(),
     );
   }
 

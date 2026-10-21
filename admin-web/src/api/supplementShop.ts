@@ -160,6 +160,10 @@ export interface SupplementShopConfig {
   oilShelfLifeMonths: number;
   minRemainingShelfLifeDays: number;
   aftersalePolicy: string | null;
+  wechatTemplateScheduled: string | null;
+  wechatTemplateShipped: string | null;
+  wechatTemplateDelay: string | null;
+  wechatTemplateAftersale: string | null;
   labelBrandName: string;
   labelIncludeDesiccantNotice: boolean;
   updatedAt: string | null;

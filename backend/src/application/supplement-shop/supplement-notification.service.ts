@@ -29,14 +29,42 @@ export class SupplementNotificationService {
     @Optional() private readonly wechatService?: WechatService,
   ) {}
 
-  /** 小程序 requestSubscribeMessage 需要的模板 ID（未配置的项为 null） */
-  getTemplateIds(): Record<string, string | null> {
+  /** 小程序 requestSubscribeMessage 需要的模板 ID（后台配置优先，未配置的项为 null） */
+  async getTemplateIds(): Promise<{
+    scheduled: string | null;
+    shipped: string | null;
+    delay: string | null;
+    aftersale: string | null;
+  }> {
+    const config = await this.prisma.supplementShopConfig
+      .findUnique({
+        where: { id: 'singleton' },
+        select: {
+          wechatTemplateScheduled: true,
+          wechatTemplateShipped: true,
+          wechatTemplateDelay: true,
+          wechatTemplateAftersale: true,
+        },
+      })
+      .catch(() => null);
     const order = (process.env.WECHAT_TEMPLATE_SUPPLEMENT_ORDER || '').trim();
     return {
-      scheduled: (process.env.WECHAT_TEMPLATE_SUPPLEMENT_SCHEDULED || order || '').trim() || null,
-      shipped: (process.env.WECHAT_TEMPLATE_SUPPLEMENT_SHIPPED || order || '').trim() || null,
-      delay: (process.env.WECHAT_TEMPLATE_SUPPLEMENT_DELAY || order || '').trim() || null,
-      aftersale: (process.env.WECHAT_TEMPLATE_SUPPLEMENT_AFTERSALE || order || '').trim() || null,
+      scheduled:
+        (config?.wechatTemplateScheduled || '').trim() ||
+        (process.env.WECHAT_TEMPLATE_SUPPLEMENT_SCHEDULED || order || '').trim() ||
+        null,
+      shipped:
+        (config?.wechatTemplateShipped || '').trim() ||
+        (process.env.WECHAT_TEMPLATE_SUPPLEMENT_SHIPPED || order || '').trim() ||
+        null,
+      delay:
+        (config?.wechatTemplateDelay || '').trim() ||
+        (process.env.WECHAT_TEMPLATE_SUPPLEMENT_DELAY || order || '').trim() ||
+        null,
+      aftersale:
+        (config?.wechatTemplateAftersale || '').trim() ||
+        (process.env.WECHAT_TEMPLATE_SUPPLEMENT_AFTERSALE || order || '').trim() ||
+        null,
     };
   }
 
@@ -78,7 +106,8 @@ export class SupplementNotificationService {
       );
     }
 
-    await this.sendSubscription(order, content);
+    const templates = await this.getTemplateIds();
+    await this.sendSubscription(order, content, templates);
   }
 
   private buildContent(
@@ -170,29 +199,38 @@ export class SupplementNotificationService {
     await this.notify(orderId, 'DELAY', reason?.trim() || undefined);
   }
 
-  private templateForNotice(content: {
-    category: string;
-    title: string;
-    body: string;
-  }): string {
-    const order = (process.env.WECHAT_TEMPLATE_SUPPLEMENT_ORDER || '').trim();
+  private templateForNotice(
+    content: { category: string; title: string; body: string },
+    templates: {
+      scheduled: string | null;
+      shipped: string | null;
+      delay: string | null;
+      aftersale: string | null;
+    },
+  ): string {
     if (content.title.includes('发货时间') || content.title.includes('延后')) {
-      return (process.env.WECHAT_TEMPLATE_SUPPLEMENT_DELAY || order || '').trim();
+      return templates.delay || '';
     }
     if (content.category === 'AFTERSALE') {
-      return (process.env.WECHAT_TEMPLATE_SUPPLEMENT_AFTERSALE || order || '').trim();
+      return templates.aftersale || '';
     }
-    if (content.title.includes('发货')) {
-      return (process.env.WECHAT_TEMPLATE_SUPPLEMENT_SHIPPED || order || '').trim();
+    if (content.title.includes('发货') || content.title.includes('完成')) {
+      return templates.shipped || '';
     }
-    return (process.env.WECHAT_TEMPLATE_SUPPLEMENT_SCHEDULED || order || '').trim();
+    return templates.scheduled || '';
   }
 
   private async sendSubscription(
     order: { id: string; orderNo: string; userId: string },
     content: { category: string; title: string; body: string },
+    templates: {
+      scheduled: string | null;
+      shipped: string | null;
+      delay: string | null;
+      aftersale: string | null;
+    },
   ): Promise<void> {
-    const templateId = this.templateForNotice(content);
+    const templateId = this.templateForNotice(content, templates);
     if (!templateId || !this.wechatService) return;
 
     try {

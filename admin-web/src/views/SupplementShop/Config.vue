@@ -348,6 +348,27 @@
           <span class="form-tip">天。原瓶剩余保质期低于此值的补剂不允许上架</span>
         </el-form-item>
 
+        <el-divider content-position="left">微信订阅消息</el-divider>
+        <el-alert
+          type="info"
+          :closable="false"
+          show-icon
+          class="form-tip block"
+          title="模板 ID 在微信公众平台「订阅消息」里创建；填完保存后小程序下单/售后时会请求授权。留空则回退服务器环境变量。"
+        />
+        <el-form-item label="排期模板 ID">
+          <el-input v-model="form.wechatTemplateScheduled" maxlength="100" placeholder="例如：xxxxxxxxxxxxxxxxxxxxxxxx" style="width: 360px" />
+        </el-form-item>
+        <el-form-item label="发货模板 ID">
+          <el-input v-model="form.wechatTemplateShipped" maxlength="100" placeholder="例如：xxxxxxxxxxxxxxxxxxxxxxxx" style="width: 360px" />
+        </el-form-item>
+        <el-form-item label="延迟模板 ID">
+          <el-input v-model="form.wechatTemplateDelay" maxlength="100" placeholder="例如：xxxxxxxxxxxxxxxxxxxxxxxx" style="width: 360px" />
+        </el-form-item>
+        <el-form-item label="售后模板 ID">
+          <el-input v-model="form.wechatTemplateAftersale" maxlength="100" placeholder="例如：xxxxxxxxxxxxxxxxxxxxxxxx" style="width: 360px" />
+        </el-form-item>
+
         <el-divider content-position="left">分装标签</el-divider>
         <el-form-item label="标签品牌名">
           <el-input
@@ -573,6 +594,10 @@ const form = ref<SupplementShopConfig>({
   oilShelfLifeMonths: 6,
   minRemainingShelfLifeDays: 90,
   aftersalePolicy: null,
+  wechatTemplateScheduled: null,
+  wechatTemplateShipped: null,
+  wechatTemplateDelay: null,
+  wechatTemplateAftersale: null,
   labelBrandName: '赛文的食堂',
   labelIncludeDesiccantNotice: true,
   updatedAt: null,
@@ -671,6 +696,10 @@ async function handleSave() {
       oilShelfLifeMonths: form.value.oilShelfLifeMonths,
       minRemainingShelfLifeDays: form.value.minRemainingShelfLifeDays,
       aftersalePolicy: form.value.aftersalePolicy,
+      wechatTemplateScheduled: form.value.wechatTemplateScheduled,
+      wechatTemplateShipped: form.value.wechatTemplateShipped,
+      wechatTemplateDelay: form.value.wechatTemplateDelay,
+      wechatTemplateAftersale: form.value.wechatTemplateAftersale,
       labelBrandName: form.value.labelBrandName,
       labelIncludeDesiccantNotice: form.value.labelIncludeDesiccantNotice,
     });

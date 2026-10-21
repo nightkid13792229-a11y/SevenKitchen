@@ -262,6 +262,7 @@ export interface SupplementAftersale {
   status: string
   requestType: string
   requestedReason: string
+  requestedPhotos?: string[]
   refundAmount: number | null
   refundStatus: string | null
   reshipOrderNo: string | null

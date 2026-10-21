@@ -147,7 +147,7 @@ describe('设计资料收口：订单抽屉不展开健康明细（2026-10-21）
   })
 
   it('过敏 / 疾病仍用两端比对，差异说清楚（提醒不能变成一句空话）', () => {
-    expect(cleanDetail).toContain('compareDogProfileAllergies(order.value?.dog, order.value?.allergies)')
+    expect(cleanDetail).toContain('compareDogProfileAllergies(order.value?.dog, [')
     expect(cleanDetail).toContain('compareDogProfileMedicalConditions(')
     expect(cleanDetail).toContain('档案里有、下单时没写')
     expect(cleanDetail).toContain('下单时写了、档案里没有')

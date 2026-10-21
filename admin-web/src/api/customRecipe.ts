@@ -126,6 +126,24 @@ export interface CustomRecipeOrderDetail {
   refundStatus?: string | null
   refundAmount?: number | null
   refundedAt?: string | null
+  /**
+   * 订单来源与线下收款（2026-10-21 · 代客定制食谱订单 Task 5）
+   *
+   * `paymentChannel` 非 WECHAT_ONLINE 或 `orderSource=ASSISTED` 且已确认收款时，
+   * 取消/退款必须走「线下退款并取消」，**不能**调微信原路退款。
+   */
+  orderSource?: string | null
+  paymentChannel?: string | null
+  externalPaymentRef?: string | null
+  actualPaidAmount?: number | null
+  priceOverrideReason?: string | null
+  /** 线下退款登记（手工退现金/转账，不调用微信退款） */
+  refundChannel?: string | null
+  offlineRefundedAt?: string | null
+  offlineRefundAmount?: number | null
+  offlineRefundMethod?: string | null
+  offlineRefundNote?: string | null
+  offlineRefundByStaffId?: string | null
   recipeId?: string | null
   customer?: {
     id?: string
@@ -159,6 +177,41 @@ export interface CustomRecipeRefundResult {
   outRefundNo: string | null
   refundId: string | null
   reused: boolean
+}
+
+/** 线下退款方式（与后端 `OFFLINE_REFUND_METHODS` 同一套取值） */
+export type OfflineRefundMethod =
+  | 'OFFLINE_WECHAT'
+  | 'OFFLINE_ALIPAY'
+  | 'OTHER'
+
+/** POST /admin/custom-recipe/orders/:orderId/offline-refund 的请求体 */
+export interface OfflineRefundPayload {
+  /** 实际退给顾客的金额（元），不能超过实收金额 */
+  amount: number
+  method: OfflineRefundMethod
+  /** 转账流水号/说明，可选 */
+  note?: string
+}
+
+/**
+ * 线下退款登记的结果（2026-10-21 · Task 5）。
+ *
+ * 这是**手工退款**的登记：钱由管理员在线下退回顾客，
+ * 系统只记录金额/方式/操作人/时间，并取消订单、释放名额 —— 全程不调用微信退款。
+ */
+export interface OfflineRefundResult {
+  orderId: string
+  status: string
+  refundChannel: string
+  amount: number
+  method: string
+  note: string | null
+  offlineRefundedAt: string
+  cancelledAt: string
+  cancellationReason: string
+  releasedCapacity: number
+  operatorId: string
 }
 
 /** 可以交付到这张订单的候选食谱（只含"这位顾客 + 这只狗"的私密定制食谱） */
@@ -684,6 +737,21 @@ export const customRecipeApi = {
     api.post<CustomRecipeRefundResult>(`${BASE}/orders/${orderId}/refund`, {
       reason,
     }),
+
+  /**
+   * 线下退款并取消（2026-10-21 · 代客定制食谱订单 Task 5）· 仅管理员。
+   *
+   * 代客单是**线下收款**，微信里没有这笔支付 —— 这个接口只登记
+   * 「金额/方式/备注/操作人/时间」，取消订单并释放名额，**不调用微信退款**。
+   *
+   * 线上单不要用这里：后端会 400，页面也把线上单的入口保留为原来的
+   * 「取消订单 / 补退款」。
+   */
+  registerOfflineRefund: (orderId: string, payload: OfflineRefundPayload) =>
+    api.post<OfflineRefundResult>(
+      `${BASE}/orders/${orderId}/offline-refund`,
+      payload,
+    ),
 
   /**
    * 可交付的食谱候选。

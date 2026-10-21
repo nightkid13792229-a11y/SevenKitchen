@@ -282,7 +282,15 @@ describe('敏感按钮按角色显示（口径 2，第 7 条）', () => {
   it('交付 / 取消都由 isAdmin 控制，非管理员看到说明', () => {
     expect(orderDetail).toContain('const isAdmin = useIsAdmin();')
     expect(orderDetail).toContain("{{ ADMIN_ONLY_TIP }}：交付食谱（含重新交付）会给顾客发通知，只有管理员能做")
-    expect(orderDetail).toContain("v-if=\"isAdmin && order.status !== 'DELIVERED' && order.status !== 'CANCELLED'\"")
+    /**
+     * 2026-10-21（代客订单 Task 5）：取消按钮的条件从模板里的字面量
+     * 收成 `canCancelOrder` —— 线下收款单必须排除（否则会误调微信退款），
+     * 判定放在计算属性里，模板只绑定结果。
+     */
+    expect(orderDetail).toContain('v-if="canCancelOrder"')
+    expect(orderDetail).toContain(
+      'isAdmin.value && isCancellableStatus.value && !isOfflinePaidOrder.value',
+    )
   })
 
   it('设置页入口对客服置灰并写明原因，而不是让人点了吃 403', () => {

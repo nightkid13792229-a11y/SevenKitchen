@@ -208,10 +208,22 @@ export function canManualRefundCustomRecipeOrder(order: {
   status?: string | null
   paymentConfirmedAt?: string | Date | null
   refundStatus?: string | null
+  /** 线下收款单不能走微信补退款（2026-10-21 · Task 5） */
+  paymentChannel?: string | null
+  orderSource?: string | null
 }): boolean {
   const status = String(order?.status || '').toUpperCase()
   if (status !== 'CANCELLED') return false
   if (!order?.paymentConfirmedAt) return false
+
+  /**
+   * ★ 线下收款单没有微信退款可补（2026-10-21 · 代客订单 Task 5）。
+   *
+   * 代客单的钱是线下收的，`refundStatus` 永远不会有值；
+   * 若在这里放行，管理员点「补退款」会去调微信退款 —— 微信里没有这笔支付。
+   * 线下单的入口是「线下退款并取消」。
+   */
+  if (isOfflinePaidCustomRecipeOrder(order)) return false
 
   const refund = String(order?.refundStatus || '').toUpperCase()
   /**
@@ -219,4 +231,115 @@ export function canManualRefundCustomRecipeOrder(order: {
    * 文案也映射成同一句「退款处理中」。漏掉 PENDING 会多给一个无意义的按钮。
    */
   return !['SUCCESS', 'PROCESSING', 'PENDING'].includes(refund)
+}
+
+// ===== 线下收款 / 线下退款（2026-10-21 · 代客定制食谱订单 Task 5）=====
+
+/**
+ * 线下收款渠道。钱没有进微信支付 ⇒ **绝不能**走微信原路退款。
+ *
+ * 与后端 `domain/custom-recipe/custom-recipe.refund.ts` 同一套取值。
+ */
+export const CUSTOM_RECIPE_OFFLINE_PAYMENT_CHANNELS = [
+  'OFFLINE_WECHAT',
+  'OFFLINE_ALIPAY',
+  'OTHER',
+] as const
+
+/** 收款渠道中文（后台订单详情展示用） */
+export const CUSTOM_RECIPE_PAYMENT_CHANNEL_TEXT: Record<string, string> = {
+  WECHAT_ONLINE: '微信在线支付',
+  OFFLINE_WECHAT: '线下微信收款',
+  OFFLINE_ALIPAY: '线下支付宝收款',
+  OTHER: '线下其他方式收款',
+}
+
+export function getCustomRecipePaymentChannelText(
+  channel?: string | null,
+): string {
+  const key = String(channel || '').toUpperCase()
+  if (!key) return '未记录'
+  return CUSTOM_RECIPE_PAYMENT_CHANNEL_TEXT[key] || key
+}
+
+/**
+ * 线下退款方式选项。
+ *
+ * 与收款渠道一一对应；**不含微信在线** —— 这个弹窗是"手工退钱"的登记，
+ * 不是微信原路退款。现金退款暂归到「其他」。
+ */
+export const CUSTOM_RECIPE_OFFLINE_REFUND_METHOD_OPTIONS = [
+  { value: 'OFFLINE_WECHAT', label: '线下微信退款' },
+  { value: 'OFFLINE_ALIPAY', label: '线下支付宝退款' },
+  { value: 'OTHER', label: '其他线下方式退款' },
+] as const
+
+export type CustomRecipeOfflineRefundMethod =
+  (typeof CUSTOM_RECIPE_OFFLINE_REFUND_METHOD_OPTIONS)[number]['value']
+
+export function getCustomRecipeOfflineRefundMethodText(
+  method?: string | null,
+): string {
+  const key = String(method || '').toUpperCase()
+  if (!key) return '未记录'
+  return (
+    CUSTOM_RECIPE_OFFLINE_REFUND_METHOD_OPTIONS.find(
+      (item) => item.value === key,
+    )?.label || key
+  )
+}
+
+/**
+ * 这张单的钱是不是**线下**收的（⇒ 不能调微信退款）。
+ *
+ * 两条命中任一即可，与后端判定完全一致：
+ *   1. `paymentChannel` 是 OFFLINE_WECHAT / OFFLINE_ALIPAY / OTHER；
+ *   2. `orderSource = ASSISTED` 且 `paymentConfirmedAt` 有值
+ *      （代客单的钱只可能线下收；即使历史数据漏了渠道也不能当线上单）。
+ *
+ * 老的自助单 `paymentChannel` 为 null，仍按线上处理 —— 不能把正常退款挡掉。
+ */
+export function isOfflinePaidCustomRecipeOrder(order: {
+  paymentChannel?: string | null
+  orderSource?: string | null
+  paymentConfirmedAt?: string | Date | null
+}): boolean {
+  const channel = String(order?.paymentChannel || '').toUpperCase()
+  if (
+    (CUSTOM_RECIPE_OFFLINE_PAYMENT_CHANNELS as readonly string[]).includes(
+      channel,
+    )
+  ) {
+    return true
+  }
+
+  const source = String(order?.orderSource || '').toUpperCase()
+  return source === 'ASSISTED' && Boolean(order?.paymentConfirmedAt)
+}
+
+/**
+ * 是否显示「线下退款并取消」（2026-10-21 · Task 5）。
+ *
+ * 条件：
+ *   · 线下已收款（否则没有退款可登记）；
+ *   · 状态仍可取消（PENDING_PAYMENT/PAID/IN_PROGRESS；已交付要走售后）；
+ *   · 还没取消、也没登记过线下退款（避免重复退款）。
+ *
+ * 管理员身份由页面另外判断（与「补退款」同一口径）。
+ */
+export function canOfflineRefundCustomRecipeOrder(order: {
+  status?: string | null
+  paymentConfirmedAt?: string | Date | null
+  paymentChannel?: string | null
+  orderSource?: string | null
+  offlineRefundedAt?: string | null
+  cancelledAt?: string | null
+}): boolean {
+  if (!order?.paymentConfirmedAt) return false
+  if (!isOfflinePaidCustomRecipeOrder(order)) return false
+
+  const status = String(order?.status || '').toUpperCase()
+  if (!['PENDING_PAYMENT', 'PAID', 'IN_PROGRESS'].includes(status)) return false
+
+  return !order?.offlineRefundedAt && !order?.cancelledAt
 }

@@ -4,6 +4,7 @@ import {
   clearCustomRecipeDraft,
   isCustomRecipeDraftExpired,
   loadCustomRecipeDraft,
+  markCustomRecipeDraftSubmitted,
   retainCustomRecipeChoicesAfterPayment,
   saveCustomRecipeDraft,
 } from './custom-recipe-draft'
@@ -134,5 +135,35 @@ describe('custom-recipe-draft', () => {
     expect(draft?.form.attachmentUrls).toEqual([])
     expect(draft?.form.attachmentKeys).toEqual([])
     expect(draft?.hasFoodAllergy).toBe(true)
+  })
+
+  it('记录草稿对应的订单号，普通保存不会把订单号冲掉', () => {
+    saveCustomRecipeDraft('customer-a', 'dog-1', {
+      form,
+      hasFoodAllergy: true,
+      weightGoalChoice: null,
+      prefilledAllergyText: '',
+    })
+    markCustomRecipeDraftSubmitted('customer-a', 'dog-1', 'CR123')
+    saveCustomRecipeDraft('customer-a', 'dog-1', {
+      form: { ...form, allergyText: '新内容' },
+      hasFoodAllergy: true,
+      weightGoalChoice: null,
+      prefilledAllergyText: '',
+    })
+
+    expect(loadCustomRecipeDraft('customer-a', 'dog-1')?.lastOrderId).toBe('CR123')
+  })
+
+  it('付款后清理选择的 lastOrderId，避免反复按旧单判断', () => {
+    saveCustomRecipeDraft('customer-a', 'dog-1', {
+      form,
+      hasFoodAllergy: true,
+      weightGoalChoice: null,
+      prefilledAllergyText: '',
+    })
+    markCustomRecipeDraftSubmitted('customer-a', 'dog-1', 'CR123')
+    retainCustomRecipeChoicesAfterPayment('customer-a', 'dog-1')
+    expect(loadCustomRecipeDraft('customer-a', 'dog-1')?.lastOrderId).toBeNull()
   })
 })

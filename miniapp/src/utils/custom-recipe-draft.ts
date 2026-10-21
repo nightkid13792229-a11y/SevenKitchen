@@ -29,6 +29,8 @@ export interface CustomRecipeDraft {
   hasFoodAllergy: boolean | null
   weightGoalChoice: 'LOSS' | 'GAIN' | 'MAINTAIN' | null
   prefilledAllergyText: string
+  /** 最近一次由这份草稿创建的订单；用于付款后清理报告/附件草稿 */
+  lastOrderId: string | null
 }
 
 const STORAGE_KEY = 'custom_recipe_drafts'
@@ -81,19 +83,26 @@ function normalizeDraft(value: any): CustomRecipeDraft | null {
     hasFoodAllergy,
     weightGoalChoice,
     prefilledAllergyText: String(value.prefilledAllergyText || ''),
+    lastOrderId: value.lastOrderId ? String(value.lastOrderId) : null,
   }
 }
 
 export function saveCustomRecipeDraft(
   customerId: string,
   dogId: string,
-  draft: Omit<CustomRecipeDraft, 'dogId' | 'updatedAt'> & { updatedAt?: number },
+  draft: Omit<CustomRecipeDraft, 'dogId' | 'updatedAt' | 'lastOrderId'> & {
+    lastOrderId?: string | null
+    updatedAt?: number
+  },
 ): void {
   if (!customerId || !dogId) return
   const current = readDraftMap()
+  const previous = normalizeDraft(current[buildKey(customerId, dogId)])
   const normalized = normalizeDraft({
     ...draft,
     dogId,
+    // 普通自动保存不携带订单号时，不能把已记录的订单号冲掉
+    lastOrderId: (draft as any).lastOrderId ?? previous?.lastOrderId ?? null,
     updatedAt: draft.updatedAt || Date.now(),
   })
   if (!normalized) return
@@ -156,7 +165,28 @@ export function retainCustomRecipeChoicesAfterPayment(
   current[key] = {
     ...draft,
     form,
+    lastOrderId: null,
     // 重新记为最近使用，避免刚付完款就因 7 天过期被清
+    updatedAt: Date.now(),
+  }
+  writeDraftMap(current)
+}
+
+
+/** 订单创建成功后记住订单号，供下次进入时判断是否已付款 */
+export function markCustomRecipeDraftSubmitted(
+  customerId: string,
+  dogId: string,
+  orderId: string,
+): void {
+  if (!customerId || !dogId || !orderId) return
+  const current = readDraftMap()
+  const key = buildKey(customerId, dogId)
+  const draft = normalizeDraft(current[key])
+  if (!draft) return
+  current[key] = {
+    ...draft,
+    lastOrderId: orderId,
     updatedAt: Date.now(),
   }
   writeDraftMap(current)

@@ -277,6 +277,7 @@ import { getStoredUser } from '@/utils/account';
 import {
   isCustomRecipeDraftExpired,
   loadCustomRecipeDraft,
+  markCustomRecipeDraftSubmitted,
   retainCustomRecipeChoicesAfterPayment,
   type CustomRecipeDraft,
 } from '@/utils/custom-recipe-draft';
@@ -1010,6 +1011,11 @@ async function submitConfirmedOrder(payAfterSubmit = true) {
     const created = await submitOrder(payload);
     const orderId = String(created?.orderId || '').trim();
     if (!orderId) throw new Error('服务端未返回订单号');
+    markCustomRecipeDraftSubmitted(
+      getDraftCustomerId(),
+      dogId.value,
+      orderId,
+    );
 
     /**
      * 2026-10-21：订单创建成功后**不再立刻清本地草稿**。

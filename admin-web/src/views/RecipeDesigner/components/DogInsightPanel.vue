@@ -175,7 +175,8 @@
               <div
                 v-for="item in historyRecipes"
                 :key="`${item.kind}-${item.id}`"
-                class="history-recipe-row"
+                class="history-recipe-row history-recipe-row--clickable"
+                @click="openHistoryRecipe(item)"
               >
                 <div class="history-recipe-name">{{ item.name }}</div>
                 <div class="history-recipe-meta">
@@ -251,6 +252,55 @@
         <el-button type="primary" :loading="savingDog" @click="saveDog">保存</el-button>
       </template>
     </el-dialog>
+    <el-dialog
+      v-model="historyDialogVisible"
+      :title="historySelection?.name || '历史食谱'"
+      width="720px"
+      append-to-body
+      destroy-on-close
+    >
+      <template v-if="historySelection">
+        <div class="history-dialog-meta">
+          <el-tag size="small" effect="plain">{{ historyKindLabel(historySelection.kind) }}</el-tag>
+          <span>{{ formatInsightDate(historySelection.date) || '日期未知' }}</span>
+        </div>
+        <div class="history-dialog-grid">
+          <div>
+            <h4>原料清单</h4>
+            <div v-if="historySelection.ingredients.length === 0" class="empty-tip">暂无原料明细</div>
+            <ul v-else class="history-ingredient-list">
+              <li v-for="item in historySelection.ingredients" :key="`${item.name}-${item.amount}`">
+                <span>{{ item.name }}</span>
+                <span>{{ item.amount }}</span>
+              </li>
+            </ul>
+          </div>
+          <div>
+            <h4>宏量营养素</h4>
+            <div v-if="historySelection.macros.length === 0" class="empty-tip">暂无宏量营养数据</div>
+            <table v-else class="history-macro-table">
+              <thead>
+                <tr>
+                  <th>项目</th>
+                  <th>占干物质</th>
+                  <th>占热量</th>
+                  <th>占配方</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in historySelection.macros" :key="row.name">
+                  <td>{{ row.name }}</td>
+                  <td>{{ row.dryMatter }}</td>
+                  <td>{{ row.energyPercent }}</td>
+                  <td>{{ row.weightPercent }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </template>
+    </el-dialog>
+
     <el-dialog
       v-model="attachmentDialogVisible"
       :title="attachmentTitle"
@@ -440,6 +490,14 @@ const historyRecipes = computed(() =>
 const historyKindLabel = (kind: string) =>
   kind === 'FINISHED' ? '成品鲜食' : '定制食谱'
 
+const historyDialogVisible = ref(false)
+const historySelection = ref<DogDesignInsight['historyRecipes'][number] | null>(null)
+
+function openHistoryRecipe(item: DogDesignInsight['historyRecipes'][number]) {
+  historySelection.value = item
+  historyDialogVisible.value = true
+}
+
 const healthFacts = computed(() =>
   buildLatestHealthFacts({
     latestMedicalRecord: insight.value?.latestMedicalRecord,
@@ -538,9 +596,20 @@ const attachmentTitle = ref('')
 const attachmentKind = ref<'image' | 'pdf' | 'other'>('other')
 
 function detectAttachmentKind(url: string): 'image' | 'pdf' | 'other' {
-  const path = (String(url || '').split('?')[0] || '').toLowerCase()
-  if (/\.pdf$/.test(path)) return 'pdf'
-  if (/\.(png|jpe?g|webp|gif|bmp|svg)$/.test(path)) return 'image'
+  const value = String(url || '').trim()
+  // 媒体代理为了保护 COS key，URL 路径不含扩展名，扩展名放在 ?ext=jpg 里。
+  let ext = ''
+  try {
+    ext = String(new URL(value).searchParams.get('ext') || '').toLowerCase()
+  } catch {
+    ext = ''
+  }
+  if (!ext) {
+    const path = (value.split('?')[0] || '').toLowerCase()
+    ext = (path.match(/\.([a-z0-9]+)$/)?.[1] || '').toLowerCase()
+  }
+  if (ext === 'pdf') return 'pdf'
+  if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'svg'].includes(ext)) return 'image'
   return 'other'
 }
 
@@ -805,6 +874,90 @@ defineExpose({ loadInsight })
   word-break: break-word;
 }
 
+
+
+.history-recipe-row--clickable {
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.history-recipe-row--clickable:hover {
+  border-color: var(--el-color-primary);
+  background: #f5f8ff;
+}
+
+.history-dialog-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  color: #909399;
+  font-size: 12px;
+}
+
+.history-dialog-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.history-dialog-grid h4 {
+  margin: 0 0 10px;
+  color: #303133;
+  font-size: 14px;
+}
+
+.history-ingredient-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.history-ingredient-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 10px;
+  border-bottom: 1px solid #f2f3f5;
+  color: #606266;
+  font-size: 12px;
+}
+
+.history-ingredient-list li:last-child {
+  border-bottom: 0;
+}
+
+.history-ingredient-list li span:last-child {
+  color: #909399;
+  white-space: nowrap;
+}
+
+.history-macro-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #ebeef5;
+  font-size: 12px;
+}
+
+.history-macro-table th,
+.history-macro-table td {
+  padding: 7px 8px;
+  border-bottom: 1px solid #f2f3f5;
+  text-align: left;
+}
+
+.history-macro-table th {
+  color: #909399;
+  font-weight: 500;
+  background: #fafafa;
+}
+
+.history-macro-table tr:last-child td {
+  border-bottom: 0;
+}
 
 .history-recipe-list {
   display: flex;

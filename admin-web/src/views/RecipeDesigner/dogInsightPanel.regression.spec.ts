@@ -305,6 +305,5 @@ describe('设计器 · 爱犬信息命名 / 附件预览 / 历史食谱（2026-1
     expect(template).toContain('historyRecipes')
     expect(template).toContain('historyKindLabel')
     expect(template).not.toContain('recipeSnapshot')
-    expect(template).not.toContain('ingredients')
   })
 })

@@ -290,6 +290,13 @@ export interface DogDesignInsight {
     kind: 'FINISHED' | 'CUSTOM'
     date: string | null
     status: string
+    ingredients: Array<{ name: string; amount: string }>
+    macros: Array<{
+      name: string
+      dryMatter: string
+      energyPercent: string
+      weightPercent: string
+    }>
   }>
   designHistory: {
     designCount: number

@@ -71,7 +71,15 @@
       >
         <el-table-column label="补剂" min-width="230" fixed>
           <template #default="{ row }">
-            <div class="cell-title">{{ row.name }}</div>
+            <el-button
+              link
+              type="primary"
+              class="ingredient-name-link"
+              title="点击编辑标准原料"
+              @click="openIngredientEditor(row)"
+            >
+              {{ row.name }}
+            </el-button>
             <div class="cell-sub">{{ row.brand || '无品牌' }} · {{ row.productModel || '无规格' }}</div>
           </template>
         </el-table-column>
@@ -220,6 +228,23 @@
         </el-table-column>
       </el-table>
     </el-card>
+
+    <el-dialog
+      v-model="ingredientDialogVisible"
+      title="编辑标准原料"
+      width="800px"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <div v-loading="ingredientDialogLoading || ingredientSaving">
+        <IngredientFormComponent
+          v-if="editingIngredient"
+          :ingredient="editingIngredient"
+          @submit="handleIngredientSubmit"
+          @cancel="closeIngredientEditor"
+        />
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -234,6 +259,9 @@ import {
   type SupplementCatalogSummary,
   type UpdateSupplementCatalogItemDto,
 } from '@/api/supplementShop';
+import { ingredientApi } from '@/api/ingredients';
+import type { Ingredient, IngredientForm } from '@/types/ingredient';
+import IngredientFormComponent from '@/views/Ingredients/IngredientForm.vue';
 
 const loading = ref(false);
 const applying = ref(false);
@@ -253,6 +281,43 @@ const filter = ref<'ALL' | 'BLOCKED' | 'ENABLED' | 'READY' | 'USED' | 'PRODUCIBL
   'ALL',
 );
 const savingIds = ref(new Set<string>());
+const ingredientDialogVisible = ref(false);
+const ingredientDialogLoading = ref(false);
+const ingredientSaving = ref(false);
+const editingIngredient = ref<Ingredient | IngredientForm>();
+
+async function openIngredientEditor(row: SupplementCatalogItem) {
+  ingredientDialogLoading.value = true;
+  try {
+    const detail = await ingredientApi.getDetail(row.id);
+    editingIngredient.value = detail;
+    ingredientDialogVisible.value = true;
+  } catch (error: any) {
+    ElMessage.error(error?.message || '获取标准原料详情失败');
+  } finally {
+    ingredientDialogLoading.value = false;
+  }
+}
+
+function closeIngredientEditor() {
+  ingredientDialogVisible.value = false;
+  editingIngredient.value = undefined;
+}
+
+async function handleIngredientSubmit(data: IngredientForm) {
+  if (!data.id) return;
+  ingredientSaving.value = true;
+  try {
+    await ingredientApi.update(data.id, data);
+    ElMessage.success('标准原料已更新');
+    closeIngredientEditor();
+    await load();
+  } catch (error: any) {
+    ElMessage.error(error?.message || '保存标准原料失败');
+  } finally {
+    ingredientSaving.value = false;
+  }
+}
 
 function formLabel(code: string | null): string {
   if (!code) return '—';

@@ -196,6 +196,25 @@ model User {
   status                  UserStatus           @default(ACTIVE) @map("status")
   wechatUnionid           String?              @unique @map("wechat_unionid") @db.VarChar(100)
   password                String?              @map("password") @db.VarChar(255)
+
+  // ===== 2026-10-21 代客客户（Task 1：Schema）=====
+  //
+  // 无账号顾客必须建**独立**的代客客户，不能把狗和订单挂在老板/员工账号下：
+  //   · 挂错账号 → 狗狗归属错、不同顾客的狗混在一起；
+  //   · 代客客户没有 openid/password，不能自己登录，只能由员工在后台服务。
+  // 存量用户与小程序注册用户默认 false，行为不变。
+
+  /// 是否为代客客户（员工代建）
+  isGuest                 Boolean              @default(false) @map("is_guest")
+  /// 代客联系人姓名
+  guestContactName        String?              @map("guest_contact_name") @db.VarChar(50)
+  /// 代客联系电话
+  guestContactPhone       String?              @map("guest_contact_phone") @db.VarChar(20)
+  /// 代客联系微信（微信号 / 企微标识）
+  guestContactWechat      String?              @map("guest_contact_wechat") @db.VarChar(100)
+  /// 谁创建的代客客户（后台员工 user.id）；仅留痕，不做外键
+  guestCreatedByStaffId   String?              @map("guest_created_by_staff_id")
+
   addresses               Address[]
   customRecipeOrders      CustomRecipeOrder[]  @relation("CustomRecipeOrderCustomer")
   customerMessages        CustomerMessage[]    @relation("CustomerMessage")
@@ -2513,6 +2532,17 @@ model CustomRecipeOrder {
   /// 报价快照（份数、单价、折扣率、优惠、应付、档位文案等）
   pricingSnapshot        Json?    @map("pricing_snapshot")
 
+  // ===== 2026-10-21 代客下单（Task 1）=====
+  //
+  // 代客单与自助单共用这一张表；下游报价/排期/设计/交付/售后不分叉。
+
+  /// 订单来源：SELF 顾客自助 / ASSISTED 员工代客下单
+  orderSource           CustomRecipeOrderSource @default(SELF) @map("order_source")
+  /// 代客下单的操作人（后台员工/管理员 user.id）；仅留痕，不做外键
+  createdByStaffId      String?                 @map("created_by_staff_id")
+  /// 是否为**无账号**代客客户下的单（有账号的顾客为 false）
+  assistedForGuest      Boolean                 @default(false) @map("assisted_for_guest")
+
   status                CustomRecipeStatus       @default(PENDING_PAYMENT) @map("status")
   /// 内部子阶段（2026-10-16 批次 1.2）。
   ///
@@ -2523,6 +2553,22 @@ model CustomRecipeOrder {
   paymentConfirmedAt    DateTime?                @map("payment_confirmed_at")
   /// 微信支付交易号（对账/客服排查用）
   paymentTransactionId  String?                  @map("payment_transaction_id")
+
+  // ===== 2026-10-21 收款渠道与实收（Task 1）=====
+  //
+  // `amount` 永远是**服务端报价**；线下实收另存 `actualPaidAmount`，
+  // 两者不一致时必须留 `priceOverrideReason`，否则对账/退款口径会错。
+
+  /// 收款渠道：WECHAT_ONLINE / OFFLINE_WECHAT / OFFLINE_ALIPAY / OTHER。
+  /// null = 上线前的老订单。线下渠道不得调用微信原路退款。
+  paymentChannel        String?                  @map("payment_channel") @db.VarChar(30)
+  /// 线下微信/支付宝流水号或备注；可选，不强制每单录入
+  externalPaymentRef    String?                  @map("external_payment_ref") @db.VarChar(100)
+  /// 实际收到的金额（元）；与服务端报价 `amount` 分开存，供线下对账
+  actualPaidAmount      Decimal?                 @map("actual_paid_amount") @db.Decimal(10, 2)
+  /// 实收与系统报价不一致时，管理员必须填写的原因
+  priceOverrideReason   String?                  @map("price_override_reason") @db.VarChar(200)
+
   inProgressAt          DateTime?                @map("in_progress_at")
   deliveredAt           DateTime?                @map("delivered_at")
   /// 关单时间与原因（超时自动关单 / 人工关闭）
@@ -2558,6 +2604,10 @@ model CustomRecipeOrder {
 
   /// 线上退款（顾客自助取消 → 微信原路退回）。2026-09-28 新增：
   /// 决策 12 要求"还没开始制作就能取消并全额退款"，此前完全没有退款通道。
+  ///
+  /// 2026-10-21：加 `refundChannel` 区分原路退回与线下登记 ——
+  /// 线下已收款单**不能**调微信退款，只能由管理员登记。
+  refundChannel         String?                  @map("refund_channel") @db.VarChar(30)
   refundStatus          String?                  @map("refund_status") @db.VarChar(20)
   refundAmount          Decimal?                 @map("refund_amount") @db.Decimal(10, 2)
   refundOutNo           String?                  @map("refund_out_no") @db.VarChar(64)
@@ -2565,12 +2615,30 @@ model CustomRecipeOrder {
   refundReason          String?                  @map("refund_reason") @db.VarChar(200)
   refundedAt            DateTime?                @map("refunded_at")
 
+  // ===== 2026-10-21 线下退款登记（Task 1）=====
+  //
+  // 线下收款没有微信退款单可对账，只能把「谁、什么时候、退了多少、
+  // 用什么方式、备注什么」留在订单上。这些字段与线上退款字段互不覆盖。
+
+  /// 线下实际退款时间
+  offlineRefundedAt     DateTime?                @map("offline_refunded_at")
+  /// 线下实际退款金额（元）
+  offlineRefundAmount   Decimal?                 @map("offline_refund_amount") @db.Decimal(10, 2)
+  /// 线下退款方式：OFFLINE_WECHAT / OFFLINE_ALIPAY / CASH / OTHER
+  offlineRefundMethod   String?                  @map("offline_refund_method") @db.VarChar(30)
+  /// 线下退款备注
+  offlineRefundNote     String?                  @map("offline_refund_note") @db.VarChar(200)
+  /// 登记线下退款的员工（后台 user.id）；仅留痕，不做外键
+  offlineRefundByStaffId String?                 @map("offline_refund_by_staff_id")
+
   createdAt             DateTime                 @default(now()) @map("created_at")
   updatedAt             DateTime                 @updatedAt @map("updated_at")
   attachmentsRecords    CustomRecipeAttachment[]
   deliveries            CustomRecipeDelivery[]
   /// 多份交付批次（2026-10-21 新增）
   deliveryBatches       CustomRecipeDeliveryBatch[]
+  /// 只读交付分享链接（2026-10-21 新增，无账号代客客户用）
+  deliveryShares        CustomRecipeDeliveryShare[]
   aftersales            CustomRecipeAftersale[]
   customer              User                     @relation("CustomRecipeOrderCustomer", fields: [customerId], references: [id], onDelete: Cascade)
   dog                   Dog                      @relation("CustomRecipeOrderDog", fields: [dogId], references: [id], onDelete: Cascade)
@@ -2818,6 +2886,8 @@ model CustomRecipeDeliveryBatch {
   items        CustomRecipeDeliveryItem[]
   /// 针对这一批提出的售后（2026-10-21 · 多份交付售后）
   aftersales   CustomRecipeAftersale[]
+  /// 只读交付分享链接（2026-10-21 新增）
+  deliveryShares CustomRecipeDeliveryShare[]
 
   @@unique([orderId, version])
   @@index([orderId])
@@ -2849,6 +2919,42 @@ model CustomRecipeDeliveryItem {
   @@index([batchId])
   @@index([recipeId])
   @@map("custom_recipe_delivery_item")
+}
+
+/// 只读交付分享链接（2026-10-21 · 代客定制订单 Task 1）。
+///
+/// 为什么需要：
+///   · 无账号代客客户没有小程序入口，但交付内容（N 份食谱 / 喂食 / 采购 /
+///     制作单 / 售后联系方式）**归顾客所有**，必须能通过微信/企微发给他；
+///   · 不能枚举订单：分享只凭高熵 `token` 访问，不暴露订单号、手机号、
+///     openid 或其他顾客的任何信息。
+///
+/// 过期语义：
+///   · `expiresAt` 为 **null = 不自动过期**（默认）。交付内容长期属于顾客，
+///     只有管理员主动撤销才失效；需要临时链接时再写具体时间。
+///   · `revokedAt` 非空即失效，撤销后旧 token 必须 404，可重新生成。
+model CustomRecipeDeliveryShare {
+  id               String    @id @default(uuid()) @map("id")
+  /// 对外唯一凭据；高熵随机串，绝不能用订单号/自增 id
+  token            String    @unique @map("token") @db.VarChar(64)
+  orderId          String    @map("order_id")
+  /// 生成分享时指向的交付批次；尚未交付/批次清理后可为空，按订单记着
+  deliveryBatchId  String?   @map("delivery_batch_id")
+  /// null = 不自动过期（默认）
+  expiresAt        DateTime? @map("expires_at")
+  /// 管理员撤销时间；非空即失效
+  revokedAt        DateTime? @map("revoked_at")
+  /// 谁生成的链接（后台员工/管理员 user.id）；仅留痕，不做外键
+  createdByStaffId String    @map("created_by_staff_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  order            CustomRecipeOrder           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  /// 批次被清理时只断链，不删分享记录（订单还在就仍可重新指向最新批次）
+  batch            CustomRecipeDeliveryBatch?  @relation(fields: [deliveryBatchId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([deliveryBatchId])
+  @@map("custom_recipe_delivery_share")
 }
 
 /// 售后单。**独立于订单状态** —— 否则"已交付"与"售后中"会互相覆盖，
@@ -3322,6 +3428,18 @@ enum TargetGoal {
   GAIN_WEIGHT
   LOSE_WEIGHT
   HEALTH_SUPPORT
+}
+
+/// 定制订单来源（2026-10-21 · 代客定制订单）。
+///
+/// 为什么不新建第二套订单表：代客单的报价、排期、设计、交付、售后
+/// 与自助单**完全一致**，第二套表只会让状态机与页面分叉。
+/// 这里只负责区分「谁下的单」，下游流程共用。
+enum CustomRecipeOrderSource {
+  /// 顾客在小程序自助下单（历史订单全部落这个值）
+  SELF
+  /// 员工/管理员在后台代顾客下单，线下收款需要可追溯
+  ASSISTED
 }
 
 enum CustomRecipeStatus {

@@ -30,7 +30,7 @@
       </el-card>
       <el-card shadow="never" class="summary-card highlight-ok">
         <div class="summary-value">{{ summary.readyToSell }}</div>
-        <div class="summary-label">可直接售卖</div>
+        <div class="summary-label">档案可售卖（不含库存）</div>
       </el-card>
       <el-card shadow="never" class="summary-card highlight-error">
         <div class="summary-value">{{ summary.blockedByError }}</div>
@@ -54,7 +54,7 @@
           <el-option label="全部补剂" value="ALL" />
           <el-option label="有阻断性问题" value="BLOCKED" />
           <el-option label="已上架" value="ENABLED" />
-          <el-option label="可直接售卖" value="READY" />
+          <el-option label="档案可售卖（不含库存）" value="READY" />
           <el-option label="被食谱引用过" value="USED" />
           <el-option label="可用于生产" value="PRODUCIBLE" />
         </el-select>

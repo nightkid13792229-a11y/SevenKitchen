@@ -16,7 +16,15 @@
         <el-table-column label="角色" width="100">
           <template #default="{ row }">{{ roleLabel(row.role) }}</template>
         </el-table-column>
-        <el-table-column prop="ingredientName" label="包材" min-width="160" />
+        <el-table-column label="包材" min-width="200">
+          <template #default="{ row }">
+            <div>{{ row.ingredientName }}</div>
+            <div class="spec-text">
+              {{ row.ingredientSpec || '未填规格' }}
+              <span v-if="row.ingredientBrand"> · {{ row.ingredientBrand }}</span>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column label="形态" width="100">
           <template #default="{ row }">{{ row.physicalForm || '任意' }}</template>
         </el-table-column>
@@ -59,7 +67,7 @@
             <el-option
               v-for="item in ingredients"
               :key="item.id"
-              :label="`${item.name}（${item.purchaseUnit}）`"
+              :label="`${item.name}${item.productModel ? ` · ${item.productModel}` : ''}${item.brand ? ` · ${item.brand}` : ''}（${item.purchaseUnit}）`"
               :value="item.id"
             />
           </el-select>
@@ -198,4 +206,5 @@ onMounted(load)
 .page-header h2 { margin: 0; font-size: 20px; }
 .page-desc { margin: 6px 0 0; color: #909399; font-size: 13px; max-width: 760px; }
 .hint { color: #909399; font-size: 12px; margin-top: 4px; }
+.spec-text { margin-top: 2px; color: #909399; font-size: 12px; }
 </style>

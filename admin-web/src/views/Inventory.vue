@@ -37,6 +37,16 @@
       <el-tabs v-model="activeTab" class="inventory-tabs">
         <el-tab-pane label="库存总览" name="overview">
           <div class="tab-toolbar">
+            <el-select
+              v-model="typeFilter"
+              clearable
+              placeholder="全部原料类型"
+              style="width: 180px"
+            >
+              <el-option label="食材" value="FOOD" />
+              <el-option label="营养补充剂" value="SUPPLEMENT" />
+              <el-option label="包装材料" value="PACKAGING" />
+            </el-select>
             <el-switch
               v-model="onlyWarnings"
               active-text="仅看预警"
@@ -417,6 +427,7 @@ const priceDialogVisible = ref(false)
 const adjustmentDialogVisible = ref(false)
 const stocktakeDialogVisible = ref(false)
 const onlyWarnings = ref(false)
+const typeFilter = ref('')
 const submittingAdjustment = ref(false)
 const submittingStocktake = ref(false)
 
@@ -449,11 +460,15 @@ const stocktakeForm = reactive({
 })
 
 const displayInventory = computed(() => {
+  let rows = inventory.value
+  if (typeFilter.value) {
+    rows = rows.filter((item) => item.type === typeFilter.value)
+  }
   if (!onlyWarnings.value) {
-    return inventory.value
+    return rows
   }
 
-  return inventory.value.filter((item) =>
+  return rows.filter((item) =>
     item.stockStatus === 'NEEDS_REPLENISHMENT' || item.stockStatus === 'LOW_STOCK'
   )
 })

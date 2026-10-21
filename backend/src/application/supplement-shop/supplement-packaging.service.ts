@@ -15,6 +15,9 @@ export interface PackagingRuleDto {
   role: PackagingRoleCode;
   ingredientId: string;
   ingredientName: string;
+  /** 包材规格/型号，用于区分同名不同尺寸的袋/标签 */
+  ingredientSpec: string | null;
+  ingredientBrand: string | null;
   physicalForm: string | null;
   unitPattern: string | null;
   minAmount: number | null;
@@ -52,7 +55,9 @@ export class SupplementPackagingService {
 
   async listRules(): Promise<PackagingRuleDto[]> {
     const rows = await this.prisma.supplementPackagingRule.findMany({
-      include: { ingredient: { select: { name: true } } },
+      include: {
+        ingredient: { select: { name: true, brand: true, productModel: true } },
+      },
       orderBy: [{ role: 'asc' }, { priority: 'desc' }, { createdAt: 'asc' }],
     });
     return rows.map((row) => this.toDto(row));
@@ -64,6 +69,8 @@ export class SupplementPackagingService {
       select: {
         id: true,
         name: true,
+        brand: true,
+        productModel: true,
         baseUnit: true,
         unitDisplayLabel: true,
         purchaseUnit: true,
@@ -116,11 +123,15 @@ export class SupplementPackagingService {
       ? await this.prisma.supplementPackagingRule.update({
           where: { id: input.id },
           data,
-          include: { ingredient: { select: { name: true } } },
+          include: {
+        ingredient: { select: { name: true, brand: true, productModel: true } },
+      },
         })
       : await this.prisma.supplementPackagingRule.create({
           data,
-          include: { ingredient: { select: { name: true } } },
+          include: {
+        ingredient: { select: { name: true, brand: true, productModel: true } },
+      },
         });
     return this.toDto(row as any);
   }
@@ -169,7 +180,9 @@ export class SupplementPackagingService {
 
     const rules = await this.prisma.supplementPackagingRule.findMany({
       where: { enabled: true },
-      include: { ingredient: { select: { name: true } } },
+      include: {
+        ingredient: { select: { name: true, brand: true, productModel: true } },
+      },
       orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
     });
 
@@ -334,13 +347,15 @@ export class SupplementPackagingService {
     priority: number;
     enabled: boolean;
     note: string | null;
-    ingredient: { name: string };
+    ingredient: { name: string; brand: string | null; productModel: string | null };
   }): PackagingRuleDto {
     return {
       id: row.id,
       role: row.role as PackagingRoleCode,
       ingredientId: row.ingredientId,
       ingredientName: row.ingredient.name,
+      ingredientSpec: row.ingredient.productModel,
+      ingredientBrand: row.ingredient.brand,
       physicalForm: row.physicalForm,
       unitPattern: row.unitPattern,
       minAmount: row.minAmount,

@@ -19,6 +19,8 @@ export interface PackagingRule {
 export interface PackagingIngredient {
   id: string
   name: string
+  brand: string | null
+  productModel: string | null
   baseUnit: string
   unitDisplayLabel: string | null
   purchaseUnit: string

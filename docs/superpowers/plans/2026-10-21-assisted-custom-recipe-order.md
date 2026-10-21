@@ -71,7 +71,7 @@ git commit -m "docs: record self-service custom recipe acceptance"
 **Interfaces:**
 - Produces:
   - `enum CustomRecipeOrderSource { SELF ASSISTED }`
-  - `CustomRecipeOrder.orderSource`, `createdByStaffId`, `paymentChannel`, `externalPaymentRef`, `actualPaidAmount`, `assistedForGuest`
+  - `CustomRecipeOrder.orderSource`, `createdByStaffId`, `paymentChannel`, `externalPaymentRef?`, `actualPaidAmount`, `priceOverrideReason?`, `assistedForGuest`
   - `CustomRecipeOrder.refundChannel`, `offlineRefundedAt`, `offlineRefundAmount`, `offlineRefundMethod`, `offlineRefundNote`, `offlineRefundByStaffId`
   - `User.isGuest`, `guestContactName`, `guestContactPhone`, `guestContactWechat`, `guestCreatedByStaffId`
   - `CustomRecipeDeliveryShare`（token、orderId、batchId、expiresAt?、revokedAt、createdByStaffId）
@@ -185,7 +185,8 @@ git commit -m "feat: add assisted guest customers and dogs"
         collected: boolean;
         channel: 'OFFLINE_WECHAT' | 'OFFLINE_ALIPAY' | 'OTHER';
         amount: number;
-        externalRef?: string;
+        externalRef?: string | null;
+        overrideReason?: string | null;
       };
     }
     ```

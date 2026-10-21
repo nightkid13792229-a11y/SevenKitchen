@@ -2374,11 +2374,26 @@ export class CustomRecipeService implements ICustomRecipeRepository {
             parsedDate && !Number.isNaN(parsedDate.getTime())
               ? parsedDate
               : null;
-          const attachments = Array.isArray(draft?.attachments)
-            ? draft.attachments
+          /**
+           * 2026-10-21：附件必须存 **COS key**，不能存媒体代理 URL。
+           *
+           * 代理 URL 的 token 只活在后端内存里，服务重启后正式报告的预览
+           * 就变成“有张数、没图片”。草稿里已经有 attachmentKeys，
+           * 转换时优先用它；只有老草稿没有 keys 时才退回 URL。
+           */
+          const attachmentKeys = Array.isArray(draft?.attachmentKeys)
+            ? draft.attachmentKeys
                 .map((item: unknown) => String(item || '').trim())
                 .filter(Boolean)
             : [];
+          const attachments =
+            attachmentKeys.length > 0
+              ? attachmentKeys
+              : Array.isArray(draft?.attachments)
+                ? draft.attachments
+                    .map((item: unknown) => String(item || '').trim())
+                    .filter(Boolean)
+                : [];
 
           const report = await tx.allergyReport.create({
             data: {

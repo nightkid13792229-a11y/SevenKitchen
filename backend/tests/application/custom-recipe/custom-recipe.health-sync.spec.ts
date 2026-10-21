@@ -223,7 +223,7 @@ describe('CustomRecipeService · 档案同步时点', () => {
       allergyText: '鸡肉、牛肉',
       allergyReportDrafts: [
         {
-          attachments: ['https://cos.example/report.jpg'],
+          attachments: ['allergy-records/report.jpg'],
           attachmentKeys: ['allergy-records/report.jpg'],
           results: [{ allergen: '鸡肉', level: 'POSITIVE' }],
         },
@@ -287,7 +287,7 @@ describe('CustomRecipeService · 档案同步时点', () => {
         data: expect.objectContaining({
           dogId: 'dog-1',
           sourceKey: 'cr-uuid-1:0',
-          attachments: ['https://cos.example/report.jpg'],
+          attachments: ['allergy-records/report.jpg'],
           testMethod: 'SERUM',
         }),
       }),

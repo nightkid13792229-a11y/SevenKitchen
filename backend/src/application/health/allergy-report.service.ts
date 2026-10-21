@@ -159,7 +159,10 @@ export class AllergyReportService {
           testMethod: report.testMethod,
           institution: report.institution,
           summary: report.summary,
-          attachments: await this.signAttachments(report.attachments ?? []),
+          attachments: await this.signAttachments(
+            report.attachments ?? [],
+            report.sourceKey,
+          ),
           resultCount: report.results.length,
           results: report.results,
           createdAt: report.createdAt.toISOString(),
@@ -182,7 +185,10 @@ export class AllergyReportService {
 
     return {
       ...report,
-      attachments: await this.signAttachments(report.attachments ?? []),
+      attachments: await this.signAttachments(
+        report.attachments ?? [],
+        report.sourceKey,
+      ),
     };
   }
 
@@ -197,14 +203,72 @@ export class AllergyReportService {
     }
   }
 
-  /** 私有 COS 附件 → 短时签名 URL（2026-10-19 P0） */
-  private async signAttachments(urls: string[]): Promise<string[]> {
+  /**
+   * 报告附件 → 可重新签发的短时 URL。
+   *
+   * 2026-10-21 修：历史报告（付款后由订单草稿转正式报告）曾经把**媒体代理 URL**
+   * 存进 `attachments`。代理 token 只存在于当前后端进程，服务重启/过期后
+   * 旧 URL 必然 404；但报告张数仍从数组长度来，于是出现“显示 2 个附件、
+   * 预览全是空白”。现在：
+   *   · 新写入的附件优先生成 COS key；
+   *   · 历史行如果还有 sourceKey（`订单主键:草稿序号`），从订单草稿的
+   *     `attachmentKeys` 取回原始 key 再签发，不依赖已失效的 token；
+   *   · 实在找不到 key 才退回原 URL（旧公开 URL 仍能直接打开）。
+   */
+  private async signAttachments(
+    urls: string[],
+    sourceKey?: string | null,
+  ): Promise<string[]> {
+    const legacyKeys = await this.resolveSourceAttachmentKeys(sourceKey);
+    const values = legacyKeys.length > 0 ? legacyKeys : urls;
     if (typeof (this.cosService as any).getSensitiveMediaUrl !== 'function') {
-      return urls;
+      return values;
     }
-    return (urls || []).map(
+    return (values || []).map(
       (url) => this.cosService.getSensitiveMediaUrl(url) || url,
     );
+  }
+
+  /** 从付款时留下的订单草稿里恢复原始 COS key（历史报告修复用） */
+  private async resolveSourceAttachmentKeys(
+    sourceKey?: string | null,
+  ): Promise<string[]> {
+    if (!sourceKey) return [];
+    const [orderId, indexText] = String(sourceKey).split(':');
+    const index = Number(indexText);
+    if (!orderId || !Number.isInteger(index) || index < 0) return [];
+
+    const order = await this.prisma.customRecipeOrder.findUnique({
+      where: { id: orderId },
+      select: { allergyReportDrafts: true },
+    });
+    const drafts = Array.isArray(order?.allergyReportDrafts)
+      ? order!.allergyReportDrafts
+      : [];
+    const draft = drafts[index] as any;
+    const keys = Array.isArray(draft?.attachmentKeys)
+      ? draft.attachmentKeys
+          .map((item: unknown) => String(item || '').trim())
+          .filter(Boolean)
+      : [];
+    return keys;
+  }
+
+  /**
+   * 新建/修改报告时把代理 URL 换成 COS key。
+   *
+   * 代理 token 还活着时 extractKey 能还原 key；这样下次读取可以重新签发。
+   * 非代理 URL（旧公开 COS 地址、已是 key）原样保留。
+   */
+  private normalizeAttachmentStorage(urls: string[]): string[] {
+    return (urls || [])
+      .map((item) => String(item || '').trim())
+      .filter(Boolean)
+      .map((url) => {
+        if (!url.includes('/api/v1/media/sensitive/')) return url;
+        const key = this.attachmentKey(url);
+        return key || url;
+      });
   }
 
   /**
@@ -229,7 +293,9 @@ export class AllergyReportService {
           institution: trimTo(input.institution, 120),
           summary: trimTo(input.summary, 2000),
           ocrText: trimTo(input.ocrText, 20000),
-          attachments: normalizeStringArray(input.attachments),
+          attachments: this.normalizeAttachmentStorage(
+            normalizeStringArray(input.attachments),
+          ),
         },
       });
 
@@ -316,7 +382,9 @@ export class AllergyReportService {
         ocrText:
           input.ocrText === undefined ? undefined : trimTo(input.ocrText, 20000),
         attachments:
-          input.attachments === undefined ? undefined : nextAttachments,
+          input.attachments === undefined
+            ? undefined
+            : this.normalizeAttachmentStorage(nextAttachments),
       },
     });
 

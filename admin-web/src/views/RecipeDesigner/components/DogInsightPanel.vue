@@ -3,328 +3,184 @@
     <div v-if="loading" v-loading="true" class="panel-loading" />
 
     <template v-else-if="insight">
+      <!--
+        只陈述档案 / 订单 / 健康记录里的事实。
+        这里不判断过敏可信度、不提示配方里是否含某过敏原、不给替换建议。
+      -->
       <div class="panel-section dog-profile">
         <div class="section-title">
-          <span>🐶 {{ insight.dog.name }} 的档案</span>
+          <span>🐶 {{ insight.dog.name }}</span>
           <el-tag v-if="insight.dog.lifeStageLabel" size="small" effect="plain">
             {{ insight.dog.lifeStageLabel }}
           </el-tag>
         </div>
         <div class="profile-actions">
-          <el-button size="small" text type="primary" @click="openDogPicker">更换</el-button>
-        </div>
-        <div class="profile-grid">
-          <div class="profile-item">
-            <span class="label">性别</span>
-            <span class="value">{{ genderText }}</span>
-          </div>
-          <div class="profile-item">
-            <span class="label">年龄</span>
-            <span class="value">{{ ageText }}</span>
-          </div>
-          <div class="profile-item">
-            <span class="label">绝育状态</span>
-            <span class="value">{{ neuteredText }}</span>
-          </div>
-          <div class="profile-item">
-            <span class="label">品种</span>
-            <span class="value">{{ insight.dog.breedName || '未知' }}</span>
-          </div>
-          <div class="profile-item">
-            <span class="label">体重</span>
-            <span class="value">{{ insight.dog.currentWeightKg }} kg</span>
-          </div>
-          <div class="profile-item">
-            <span class="label">体况评分</span>
-            <span class="value">{{ bcsText }}</span>
-          </div>
-          <div class="profile-item">
-            <span class="label">活动量</span>
-            <span class="value">{{ activityText }}</span>
-          </div>
-          <div class="profile-item">
-            <span class="label">每日餐数</span>
-            <span class="value">{{ mealsText }}</span>
-          </div>
-          <div class="profile-item">
-            <span class="label">零食摄入</span>
-            <span class="value">{{ treatText }}</span>
-          </div>
-        </div>
-        <div class="energy-card">
-          <span class="energy-label">每日目标能量</span>
-          <span class="energy-value">{{ energyText }}</span>
-          <span v-if="energyPerDayG" class="energy-detail">≈ {{ energyPerDayG }} g/天</span>
-        </div>
-        <div class="profile-divider">饮食与健康</div>
-
-        <!--
-          过敏与忌口（2026-10-04 第四期重做）。
-          老板原话："我在食谱设计器中，如果要为某只狗狗设计食谱的话，
-          我需要了解这只狗狗对哪些食物过敏。"
-
-          改造前这里只有两行文字（旧文本字段 + 结构化记录的名字列表），
-          营养师看不出"这条是报告确诊的、还是顾客随手记的"——
-          而这两者处理方式完全不同：确诊必须完全避开，
-          可疑要先和顾客确认。现在按可信度分三档，
-          并把"配方里有没有踩到"直接在标签上标出来。
-        -->
-        <div class="allergy-panel">
-          <div class="allergy-panel__head">
-            <span class="allergy-panel__title">过敏与忌口</span>
-            <el-tag
-              v-if="allergenWarningLevel"
-              size="small"
-              :type="allergenWarningLevel === 'CONFIRMED' ? 'danger' : 'warning'"
-              effect="dark"
-            >
-              {{ allergenWarningLevel === 'CONFIRMED' ? '配方命中确诊过敏原' : '配方含可疑过敏原' }}
-            </el-tag>
-          </div>
-
-          <div v-if="allergyGroups.confirmed.length" class="allergy-tier allergy-tier--confirmed">
-            <div class="allergy-tier__head">
-              <span class="allergy-tier__label">确诊过敏 · 配方必须完全避开</span>
-            </div>
-            <div class="allergy-tier__tags">
-              <el-tag
-                v-for="item in allergyGroups.confirmed"
-                :key="item.allergen"
-                size="small"
-                type="danger"
-                :effect="isAllergenInRecipe(item) ? 'dark' : 'light'"
-              >
-                {{ item.allergen }}{{ isAllergenInRecipe(item) ? '（配方里有）' : '' }}
-              </el-tag>
-            </div>
-          </div>
-
-          <div v-if="allergyGroups.cautioned.length" class="allergy-tier allergy-tier--cautioned">
-            <div class="allergy-tier__head">
-              <span class="allergy-tier__label">可疑 / 待排查 · 建议避开，请与顾客确认</span>
-            </div>
-            <div class="allergy-tier__tags">
-              <el-tag
-                v-for="item in allergyGroups.cautioned"
-                :key="item.allergen"
-                size="small"
-                type="warning"
-                :effect="isAllergenInRecipe(item) ? 'dark' : 'light'"
-              >
-                {{ item.allergen }}{{ isAllergenInRecipe(item) ? '（配方里有）' : '' }}
-              </el-tag>
-            </div>
-          </div>
-
-          <div v-if="allergyGroups.ruledOut.length" class="allergy-tier allergy-tier--ruled-out">
-            <div class="allergy-tier__head">
-              <span class="allergy-tier__label">已排除 · 排查过，不过敏</span>
-            </div>
-            <div class="allergy-tier__tags">
-              <el-tag
-                v-for="item in allergyGroups.ruledOut"
-                :key="item.allergen"
-                size="small"
-                type="success"
-                effect="plain"
-              >{{ item.allergen }}</el-tag>
-            </div>
-          </div>
-
-          <div class="allergy-tier allergy-tier--note">
-            <div class="allergy-tier__head">
-              <span class="allergy-tier__label">档案里的过敏文本 · 会与上面的记录合并生效</span>
-            </div>
-            <div class="allergy-tier__text">{{ insight.dog.allergyFoods || '无' }}</div>
-          </div>
-
-          <div v-if="!hasAnyAllergy" class="allergy-panel__empty">
-            这只狗没有记录任何过敏。有过敏史的话，让顾客在小程序
-            「健康管理 → 过敏」里记一条，或在下方补充。
-          </div>
-        </div>
-
-        <div class="profile-grid">
-          <div class="profile-item full">
-            <span class="label">挑食</span>
-            <span class="value" :class="{ empty: !insight.dog.pickyFoods }">
-              {{ insight.dog.pickyFoods || '无记录' }}
-            </span>
-          </div>
-          <div class="profile-item full">
-            <span class="label">偏好食材</span>
-            <span class="value" :class="{ empty: !insight.dog.preferredFoods }">
-              {{ insight.dog.preferredFoods || '无记录' }}
-            </span>
-          </div>
-          <div class="profile-item full">
-            <span class="label">健康史</span>
-            <span class="value" :class="{ empty: !insight.dog.medicalHistory }">
-              {{ insight.dog.medicalHistory || '无记录' }}
-            </span>
-          </div>
-        </div>
-
-
-        <div class="notes-actions">
-          <el-button size="small" text type="primary" @click="editingNotes = !editingNotes">
-            {{ editingNotes ? '收起' : '编辑备注' }}
+          <el-button size="small" text type="primary" @click="openDogPicker">
+            更换参考爱犬
           </el-button>
-        </div>
-        <div v-if="editingNotes" class="notes-editor">
-          <el-input
-            v-model="notesForm.allergyFoods"
-            type="textarea"
-            :rows="2"
-            placeholder="过敏食材（逗号分隔）"
-          />
-          <el-input
-            v-model="notesForm.pickyFoods"
-            type="textarea"
-            :rows="2"
-            placeholder="挑食记录"
-          />
-          <el-input
-            v-model="notesForm.preferredFoods"
-            type="textarea"
-            :rows="2"
-            placeholder="偏好食材"
-          />
-          <el-input
-            v-model="notesForm.medicalHistory"
-            type="textarea"
-            :rows="2"
-            placeholder="健康史 / 注意事项"
-          />
-          <div class="notes-actions">
-            <el-button size="small" type="primary" :loading="savingNotes" @click="saveNotes">
-              保存到爱犬档案
-            </el-button>
-          </div>
-        </div>
-      </div>
-
-      <!-- 顾客的定制需求（2026-09-28）
-           顾客在「食谱定制」里明确提出的要求。此前设计器完全看不到，
-           营养师只能靠客服转述，"参考顾客填写的信息来设计"并不成立。 -->
-      <div v-if="insight.customRecipeOrder" class="panel-section dog-profile">
-        <div class="section-title">
-          <span>📋 顾客的定制需求</span>
-          <el-tag size="small" type="warning" effect="plain">
-            {{ insight.customRecipeOrder.orderId }}
-          </el-tag>
-        </div>
-        <div class="profile-grid">
-            <div class="profile-item">
-              <span class="label">体重目标</span>
-              <span class="value">{{ goalText(insight.customRecipeOrder.targetGoal) }}</span>
-            </div>
-            <div class="profile-item">
-              <span class="label">健康管理</span>
-              <span class="value" :class="{ empty: !insight.customRecipeOrder.needsHealthManagement }">
-                {{ insight.customRecipeOrder.needsHealthManagement ? '需要' : '未勾选' }}
-              </span>
-            </div>
-            <div class="profile-item full">
-              <span class="label">订单里填的过敏文本</span>
-              <span class="value allergy-text-value" :class="{ empty: !insight.customRecipeOrder.allergyText }">
-                {{ insight.customRecipeOrder.allergyText || '无' }}
-              </span>
-            </div>
-            <div class="profile-item full">
-              <span class="label">订单里填的过敏</span>
-              <span class="value" :class="{ empty: !insight.customRecipeOrder.allergies.length }">
-                {{ insight.customRecipeOrder.allergies.length ? insight.customRecipeOrder.allergies.join('、') : '无' }}
-              </span>
-            </div>
-            <div class="profile-item full">
-              <span class="label">过敏回答</span>
-              <span class="value" :class="{ empty: !insight.customRecipeOrder.allergyStatus || insight.customRecipeOrder.allergyStatus === 'UNKNOWN' }">
-                {{ allergyAnswerText() }}
-              </span>
-            </div>
-            <div class="profile-item full">
-              <span class="label">现在主要喂什么</span>
-              <span class="value" :class="{ empty: !insight.customRecipeOrder.currentFoodMain }">
-                {{ currentFoodText() }}
-              </span>
-            </div>
-            <div class="profile-item full">
-              <span class="label">定制原因</span>
-              <span class="value" :class="{ empty: !insight.customRecipeOrder.changeReasons?.length && !insight.customRecipeOrder.changeReasonOther }">
-                {{ changeReasonText() }}
-              </span>
-            </div>
-            <div class="profile-item full">
-              <span class="label">最近肠胃</span>
-              <span class="value" :class="{ empty: !insight.customRecipeOrder.stomachConditions?.length && !insight.customRecipeOrder.stomachOther }">
-                {{ stomachText() }}
-              </span>
-            </div>
-            <div class="profile-item full">
-              <span class="label">订单里填的疾病</span>
-              <span class="value" :class="{ empty: !insight.customRecipeOrder.medicalConditions.length }">
-                {{ insight.customRecipeOrder.medicalConditions.length ? insight.customRecipeOrder.medicalConditions.join('、') : '无' }}
-              </span>
-            </div>
-            <div class="profile-item full">
-              <span class="label">订单里填的喜好</span>
-              <span class="value" :class="{ empty: !insight.customRecipeOrder.preferredIngredients.length }">
-                {{ insight.customRecipeOrder.preferredIngredients.length ? insight.customRecipeOrder.preferredIngredients.join('、') : '无' }}
-              </span>
-            </div>
-            <div class="profile-item full">
-              <span class="label">订单里填的忌口</span>
-              <span class="value" :class="{ empty: !insight.customRecipeOrder.dislikedIngredients.length }">
-                {{ insight.customRecipeOrder.dislikedIngredients.length ? insight.customRecipeOrder.dislikedIngredients.join('、') : '无' }}
-              </span>
-            </div>
-            <div class="profile-item full">
-              <span class="label">顾客备注</span>
-              <span class="value" :class="{ empty: !insight.customRecipeOrder.additionalNotes }">
-                {{ insight.customRecipeOrder.additionalNotes || '无' }}
-              </span>
-            </div>
         </div>
       </div>
 
       <div class="panel-section">
-        <div class="section-title">
-          <span>🍽️ 最近 {{ recentDays }} 天吃过的食材（{{ recentEaten.length }} 种）</span>
-          <el-tooltip content="该犬名下订单已进入冷冻/发货/完成的食谱中使用的食材（按标准原料统计，不含补剂）" placement="top">
-            <el-icon class="ai-tip"><QuestionFilled /></el-icon>
-          </el-tooltip>
-          <el-select
-            v-model="recentDays"
-            size="small"
-            class="recent-days-select"
-            @change="handleRecentDaysChange"
-          >
-            <el-option v-for="d in RECENT_DAYS_OPTIONS" :key="d" :label="`${d} 天`" :value="d" />
-          </el-select>
-        </div>
-        <div v-if="collisionCount > 0" class="collision-tip">
-          <span class="collision-warning">⚠ 有 {{ collisionCount }} 种与当前配方重合，建议替换</span>
-        </div>
-        <div v-if="recentEaten.length === 0" class="empty-tip">
-          最近 {{ recentDays }} 天暂无已下单的食谱食材
-        </div>
-        <div v-else class="ingredient-cloud">
-          <el-tag
-            v-for="row in recentEaten"
-            :key="row.ingredientId"
-            size="small"
-            :type="collisionIds.has(row.ingredientId) ? 'danger' : 'success'"
-            :effect="collisionIds.has(row.ingredientId) ? 'light' : 'plain'"
-            class="ingredient-chip"
-            :title="`最近 ${relativeTimeText(row.lastUsedAt)} 用过 ${row.count} 次`"
-          >
-            {{ row.name }}<span class="chip-count">×{{ row.count }}</span>
-            <span class="chip-time">{{ relativeTimeText(row.lastUsedAt) }}</span>
-          </el-tag>
-        </div>
+        <div class="section-title">主蛋白</div>
+        <div class="fact-primary">{{ proteinText }}</div>
       </div>
 
+      <div class="panel-section">
+        <div class="section-title">
+          <span>本单需求</span>
+          <el-tag v-if="insight.customRecipeOrder" size="small" effect="plain">
+            {{ insight.customRecipeOrder.orderId }}
+          </el-tag>
+        </div>
+        <template v-if="insight.customRecipeOrder">
+          <div class="fact-row">
+            <span class="fact-label">肠胃情况</span>
+            <span class="fact-value">{{ stomachText }}</span>
+          </div>
+          <div v-if="currentFoodText" class="fact-row fact-row--secondary">
+            <span class="fact-label">现在主要喂</span>
+            <span class="fact-value">{{ currentFoodText }}</span>
+          </div>
+          <div v-if="changeReasonText" class="fact-row fact-row--secondary">
+            <span class="fact-label">定制原因</span>
+            <span class="fact-value">{{ changeReasonText }}</span>
+          </div>
+        </template>
+        <div v-else class="empty-tip">暂无本单定制需求</div>
+      </div>
+
+      <div class="panel-section">
+        <div class="section-title">过敏信息</div>
+        <div v-if="allergyFacts.allergens.length" class="allergy-list">
+          <el-tag
+            v-for="item in allergyFacts.allergens"
+            :key="item.text"
+            size="small"
+            effect="plain"
+            class="allergy-chip"
+          >
+            {{ item.text }}
+            <span class="allergy-chip__source">{{ sourceLabel(item.sources) }}</span>
+          </el-tag>
+        </div>
+        <div v-if="allergyFacts.orderText" class="fact-row">
+          <span class="fact-label">本单填写</span>
+          <span class="fact-value fact-value--block">{{ allergyFacts.orderText }}</span>
+        </div>
+        <div v-if="!allergyFacts.hasAny" class="empty-tip">无过敏记录</div>
+      </div>
+
+      <div v-if="insight.customRecipeOrder" class="panel-section">
+        <div class="section-title">顾客额外备注</div>
+        <div class="fact-value fact-value--block">{{ additionalNotes || '无' }}</div>
+      </div>
+
+      <div class="panel-section panel-section--collapse">
+        <el-collapse v-model="openSections">
+          <el-collapse-item name="health" title="就诊 / 体检">
+            <div v-if="!healthFacts.hasAny" class="empty-tip">暂无就诊 / 体检记录</div>
+            <div v-if="healthFacts.medical" class="record-block">
+              <div class="record-head">
+                <span class="record-title">最近就诊</span>
+                <span class="record-date">{{ healthFacts.medical.date }}</span>
+              </div>
+              <div class="record-line">诊断：{{ healthFacts.medical.diagnosis }}</div>
+            </div>
+            <div v-if="healthFacts.checkup" class="record-block">
+              <div class="record-head">
+                <span class="record-title">最近体检</span>
+                <span class="record-date">{{ healthFacts.checkup.date }}</span>
+              </div>
+              <div class="record-line">结论：{{ healthFacts.checkup.findings }}</div>
+            </div>
+          </el-collapse-item>
+
+          <el-collapse-item name="profile" title="基础档案">
+            <div class="profile-grid">
+              <div class="profile-item">
+                <span class="label">性别</span>
+                <span class="value">{{ genderText }}</span>
+              </div>
+              <div class="profile-item">
+                <span class="label">年龄</span>
+                <span class="value">{{ ageText }}</span>
+              </div>
+              <div class="profile-item">
+                <span class="label">绝育状态</span>
+                <span class="value">{{ neuteredText }}</span>
+              </div>
+              <div class="profile-item">
+                <span class="label">品种</span>
+                <span class="value">{{ insight.dog.breedName || '未知' }}</span>
+              </div>
+              <div class="profile-item">
+                <span class="label">体重</span>
+                <span class="value">{{ weightText }}</span>
+              </div>
+              <div class="profile-item">
+                <span class="label">体况评分</span>
+                <span class="value">{{ bcsText }}</span>
+              </div>
+              <div class="profile-item">
+                <span class="label">活动量</span>
+                <span class="value">{{ activityText }}</span>
+              </div>
+              <div class="profile-item">
+                <span class="label">每日餐数</span>
+                <span class="value">{{ mealsText }}</span>
+              </div>
+              <div class="profile-item">
+                <span class="label">零食摄入</span>
+                <span class="value">{{ treatText }}</span>
+              </div>
+            </div>
+            <div class="energy-card">
+              <span class="energy-label">每日目标能量</span>
+              <span class="energy-value">{{ energyText }}</span>
+              <span v-if="energyPerDayG" class="energy-detail">≈ {{ energyPerDayG }} g/天</span>
+            </div>
+          </el-collapse-item>
+
+          <el-collapse-item
+            name="recent"
+            :title="`最近 ${recentDays} 天吃过的食材（${recentEaten.length} 种）`"
+          >
+            <div class="recent-toolbar">
+              <el-tooltip
+                content="该犬名下订单已进入冷冻/发货/完成的食谱中使用的食材（按标准原料统计，不含补剂）"
+                placement="top"
+              >
+                <el-icon class="ai-tip"><QuestionFilled /></el-icon>
+              </el-tooltip>
+              <el-select
+                v-model="recentDays"
+                size="small"
+                class="recent-days-select"
+                @change="handleRecentDaysChange"
+              >
+                <el-option v-for="d in RECENT_DAYS_OPTIONS" :key="d" :label="`${d} 天`" :value="d" />
+              </el-select>
+            </div>
+            <div v-if="recentEaten.length === 0" class="empty-tip">
+              最近 {{ recentDays }} 天暂无已下单的食谱食材
+            </div>
+            <div v-else class="ingredient-cloud">
+              <el-tag
+                v-for="row in recentEaten"
+                :key="row.ingredientId"
+                size="small"
+                effect="plain"
+                class="ingredient-chip"
+                :title="`最近 ${relativeTimeText(row.lastUsedAt)} 用过 ${row.count} 次`"
+              >
+                {{ row.name }}<span class="chip-count">×{{ row.count }}</span>
+                <span class="chip-time">{{ relativeTimeText(row.lastUsedAt) }}</span>
+              </el-tag>
+            </div>
+          </el-collapse-item>
+        </el-collapse>
+      </div>
     </template>
 
     <div v-else class="empty-tip">
@@ -355,14 +211,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { QuestionFilled } from '@element-plus/icons-vue'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
-import {
-  CUSTOM_RECIPE_GOAL_SET,
-  useOptionSet,
-} from '@/composables/useOptionSet'
+import { useOptionSet } from '@/composables/useOptionSet'
 import { dogApi } from '@/api/dogs'
 import {
   ActivityLevelLabels,
@@ -372,7 +225,14 @@ import {
   TreatLevelLabels,
   type DogProfile
 } from '@/types/dog'
-import type { DogDesignInsight, UpdateDogDesignNotesPayload } from '@/types/recipeDesigner'
+import type { DogDesignInsight } from '@/types/recipeDesigner'
+import {
+  buildAllergyFacts,
+  buildLatestHealthFacts,
+  formatAllergySources,
+  formatRequestedProteins,
+  type AllergyFactSource,
+} from '@/utils/recipeDesigner/dogInsight'
 
 const props = defineProps<{
   dogId?: string | null
@@ -380,17 +240,6 @@ const props = defineProps<{
   seriesId?: string
   /** 当前配方能量密度（kcal/kg），用于把每日目标能量换算成饭量克数 */
   energyDensityKcalPerKg?: number | null
-  /** 当前配方已使用的标准原料 ID（食材类），用于与历史食材对比提醒 */
-  currentIngredientIds?: string[]
-  /**
-   * 当前配方已使用食材的**名称**（2026-10-04 第四期）。
-   *
-   * 用于在过敏面板上标出"配方里有"。
-   * 注意这只是**提示**：真正的拦截在后端的避雷闸门
-   * （那边走过敏原词表查表，能识别「鸡胸」属于「鸡肉」，
-   *   这里的字符串比对做不到）。所以这里漏报不会漏掉保护。
-   */
-  currentIngredientNames?: string[]
 }>()
 
 const emit = defineEmits<{
@@ -400,16 +249,8 @@ const emit = defineEmits<{
 const loading = ref(false)
 const insight = ref<DogDesignInsight | null>(null)
 
-/**
- * 顾客体重目标的中文文案来自**选项字典**（2026-10-16 批次 5.1）。
- *
- * 此前这里是三份写死 map 中的一份（另两份在订单列表与订单详情），
- * 共 12 处 —— "与顾客端、后台订单页保持一致" 靠的是**注释里的约定**，
- * 而不是机制。后端加一个目标时，改一处漏两处是必然的。
- */
-const { ensure: ensureGoalOptions, labelOf: goalLabel } = useOptionSet(
-  CUSTOM_RECIPE_GOAL_SET,
-)
+/* ---------- 本单需求：中文只从选项字典取 ---------- */
+
 const { ensure: ensureCurrentFoodOptions, labelOf: currentFoodLabel } =
   useOptionSet('custom_recipe_current_food')
 const { ensure: ensureChangeReasonOptions, labelOf: changeReasonLabel } =
@@ -417,56 +258,73 @@ const { ensure: ensureChangeReasonOptions, labelOf: changeReasonLabel } =
 const { ensure: ensureStomachOptions, labelOf: stomachLabel } =
   useOptionSet('custom_recipe_stomach')
 
-function goalText(goal: string) {
-  if (!goal) return ''
-  // 后台查不到时如实显示原始码（看到原始码才知道后端加了新目标）
-  return goalLabel(goal) || goal
-}
-
-function currentFoodText() {
-  const code = insight.value?.customRecipeOrder?.currentFoodMain
-  if (!code) return '无'
-  const label = currentFoodLabel(code) || code
-  const other = String(
-    insight.value?.customRecipeOrder?.currentFoodOther || '',
-  ).trim()
-  return other ? `${label}（${other}）` : label
-}
-
-function changeReasonText() {
-  const codes = insight.value?.customRecipeOrder?.changeReasons || []
-  const other = String(
-    insight.value?.customRecipeOrder?.changeReasonOther || '',
-  ).trim()
-  if (codes.length === 0 && !other) return '无'
-  return `${codes.map((code) => changeReasonLabel(code) || code).join('、')}${
-    other ? `（${other}）` : ''
-  }`
-}
+/** 主蛋白：顾客选了就显示选的，没选就是由营养师搭配 */
+const proteinText = computed(() =>
+  formatRequestedProteins(insight.value?.customRecipeOrder?.requestedProteinCodes)
+)
 
 function stomachText() {
   const codes = insight.value?.customRecipeOrder?.stomachConditions || []
-  const other = String(
-    insight.value?.customRecipeOrder?.stomachOther || '',
-  ).trim()
+  const other = String(insight.value?.customRecipeOrder?.stomachOther || '').trim()
   if (codes.length === 0 && !other) return '无'
   return `${codes.map((code) => stomachLabel(code) || code).join('、')}${
     other ? `（${other}）` : ''
   }`
 }
 
-function allergyAnswerText() {
-  const status = insight.value?.customRecipeOrder?.allergyStatus
-  if (status === 'HAS_ALLERGY') return '有过敏'
-  if (status === 'NO_ALLERGY') return '明确回答：没有过敏'
-  return '未回答'
+/** 只有订单里真的填了才显示；没有就整行不出现 */
+function currentFoodText() {
+  const order = insight.value?.customRecipeOrder
+  if (!order) return ''
+  const code = order.currentFoodMain
+  const other = String(order.currentFoodOther || '').trim()
+  if (!code && !other) return ''
+  const label = code ? currentFoodLabel(code) || code : ''
+  if (label && other) return `${label}（${other}）`
+  return label || other
 }
-const editingNotes = ref(false)
-const savingNotes = ref(false)
-const notesForm = reactive<UpdateDogDesignNotesPayload>({})
 
+/** 只有订单里真的填了才显示；没有就整行不出现 */
+function changeReasonText() {
+  const order = insight.value?.customRecipeOrder
+  if (!order) return ''
+  const codes = order.changeReasons || []
+  const other = String(order.changeReasonOther || '').trim()
+  if (codes.length === 0 && !other) return ''
+  return `${codes.map((code) => changeReasonLabel(code) || code).join('、')}${
+    other ? `（${other}）` : ''
+  }`
+}
 
-/* ---------- 设计档案展示辅助 ---------- */
+const additionalNotes = computed(() =>
+  String(insight.value?.customRecipeOrder?.additionalNotes || '').trim()
+)
+
+/* ---------- 过敏信息：合并去重，不判断 ---------- */
+
+const allergyFacts = computed(() =>
+  buildAllergyFacts({
+    allergyDetail: insight.value?.dog?.allergyDetail,
+    structuredAllergies: insight.value?.dog?.structuredAllergies,
+    orderAllergies: insight.value?.customRecipeOrder?.allergies,
+    orderAllergyText: insight.value?.customRecipeOrder?.allergyText,
+  })
+)
+
+function sourceLabel(sources: readonly AllergyFactSource[]) {
+  return formatAllergySources(sources)
+}
+
+/* ---------- 最近一次就诊 / 体检 ---------- */
+
+const healthFacts = computed(() =>
+  buildLatestHealthFacts({
+    latestMedicalRecord: insight.value?.latestMedicalRecord,
+    latestCheckupRecord: insight.value?.latestCheckupRecord,
+  })
+)
+
+/* ---------- 基础档案展示辅助 ---------- */
 
 const genderText = computed(() => {
   const gender = insight.value?.dog.gender
@@ -487,6 +345,12 @@ const neuteredText = computed(() => {
   const value = insight.value?.dog.isNeutered
   if (value == null) return '未填写'
   return value ? '已绝育' : '未绝育'
+})
+
+const weightText = computed(() => {
+  const kg = insight.value?.dog.currentWeightKg
+  if (kg == null || kg <= 0) return '未填写'
+  return `${kg} kg`
 })
 
 const bcsText = computed(() => {
@@ -543,6 +407,9 @@ const RECENT_DAYS_OPTIONS = [30, 60, 90, 180] as const
 /** 当前选中的时间窗口（天），默认 90 */
 const recentDays = ref<number>(90)
 
+/** 三个折叠区默认全部收起（基础档案 / 就诊体检 / 最近食材） */
+const openSections = ref<string[]>([])
+
 function handleRecentDaysChange() {
   void loadInsight()
 }
@@ -550,89 +417,6 @@ function handleRecentDaysChange() {
 const recentEaten = computed(
   () => insight.value?.designHistory.recentEatenIngredients ?? []
 )
-
-/** 当前配方使用的标准原料 ID 集合 */
-const currentIngredientIdSet = computed(
-  () => new Set(props.currentIngredientIds ?? [])
-)
-
-const collisionIds = computed(
-  () =>
-    new Set(
-      recentEaten.value
-        .filter((row) => currentIngredientIdSet.value.has(row.ingredientId))
-        .map((row) => row.ingredientId)
-    )
-)
-
-/**
- * 过敏分档（2026-10-04 第四期）。
- *
- * 老板原话："我在食谱设计器中，如果要为某只狗狗设计食谱的话，
- * 我需要了解这只狗狗对哪些食物过敏。"
- *
- * 分档不是装饰 —— 三档的处理方式完全不同：
- *   确诊   → 配方必须完全避开
- *   可疑   → 建议避开，先和顾客确认
- *   已排除 → 排查过、不过敏，可以正常用（这条以前根本看不到）
- * 外加员工备注那一份（会与顾客记录合并生效）。
- */
-const allergyGroups = computed(() => {
-  const detail = insight.value?.dog?.allergyDetail ?? []
-
-  // 后端没返回明细时退回只有名字的列表，界面不空着
-  const fallback = (insight.value?.dog?.structuredAllergies ?? []).map(
-    (allergen) => ({ allergen, certainty: 'SUSPECTED', source: 'OWNER' })
-  )
-  const source = detail.length > 0 ? detail : fallback
-
-  const bucket = (keys: string[]) =>
-    source.filter((item) =>
-      keys.includes(String(item.certainty || 'SUSPECTED').toUpperCase())
-    )
-
-  return {
-    confirmed: bucket(['CONFIRMED']),
-    cautioned: bucket(['SUSPECTED', 'TO_VERIFY']),
-    ruledOut: bucket(['RULED_OUT']),
-  }
-})
-
-const hasAnyAllergy = computed(
-  () =>
-    allergyGroups.value.confirmed.length > 0 ||
-    allergyGroups.value.cautioned.length > 0 ||
-    allergyGroups.value.ruledOut.length > 0 ||
-    Boolean(insight.value?.dog?.allergyFoods)
-)
-
-/**
- * 配方里有没有踩到这条过敏原。
- *
- * 用**名字包含**做提示，只用于面板高亮 ——
- * 真正的拦截在后端（推荐/配方的避雷闸门走过敏原词表查表，
- * 那一层能识别「鸡胸」属于「鸡肉」，这里的字符串比对做不到）。
- * 所以这里漏报不会漏掉保护，只是少一处视觉提示；
- * 反过来多报也只是一次人工确认，方向是安全的。
- */
-function isAllergenInRecipe(item: { allergen: string }): boolean {
-  const names = props.currentIngredientNames ?? []
-  if (names.length === 0) return false
-  const keyword = String(item.allergen || '').replace(/\s+/g, '')
-  if (!keyword) return false
-  return names.some((name) =>
-    String(name || '').replace(/\s+/g, '').includes(keyword)
-  )
-}
-
-/** 配方命中的最严重那一档（给面板顶部的红条用） */
-const allergenWarningLevel = computed(() => {
-  if (allergyGroups.value.confirmed.some(isAllergenInRecipe)) return 'CONFIRMED'
-  if (allergyGroups.value.cautioned.some(isAllergenInRecipe)) return 'SUSPECTED'
-  return ''
-})
-
-const collisionCount = computed(() => collisionIds.value.size)
 
 /** ISO 时间 → 相对时间文案（X 天前 / X 个月前） */
 function relativeTimeText(iso: string | null): string {
@@ -744,10 +528,6 @@ async function loadInsight() {
       props.dogId,
       recentDays.value
     )
-    notesForm.allergyFoods = insight.value.dog.allergyFoods ?? ''
-    notesForm.pickyFoods = insight.value.dog.pickyFoods ?? ''
-    notesForm.preferredFoods = insight.value.dog.preferredFoods ?? ''
-    notesForm.medicalHistory = insight.value.dog.medicalHistory ?? ''
   } catch {
     insight.value = null
   } finally {
@@ -755,26 +535,7 @@ async function loadInsight() {
   }
 }
 
-async function saveNotes() {
-  if (!props.dogId) return
-  savingNotes.value = true
-  try {
-    const payload: UpdateDogDesignNotesPayload = {}
-    if (notesForm.allergyFoods !== undefined) payload.allergyFoods = notesForm.allergyFoods?.trim() || null
-    if (notesForm.pickyFoods !== undefined) payload.pickyFoods = notesForm.pickyFoods?.trim() || null
-    if (notesForm.preferredFoods !== undefined) payload.preferredFoods = notesForm.preferredFoods?.trim() || null
-    if (notesForm.medicalHistory !== undefined) payload.medicalHistory = notesForm.medicalHistory?.trim() || null
-    await recipeDesignerApi.updateDogDesignNotes(props.dogId, payload)
-    ElMessage.success('备注已保存到爱犬档案')
-    editingNotes.value = false
-    await loadInsight()
-  } finally {
-    savingNotes.value = false
-  }
-}
-
 // 中文来自选项字典（不阻塞面板加载）
-ensureGoalOptions()
 ensureCurrentFoodOptions()
 ensureChangeReasonOptions()
 ensureStomachOptions()
@@ -817,9 +578,12 @@ defineExpose({ loadInsight })
   color: #c0c4cc;
   cursor: help;
 }
-/* 「更换」按钮：位于狗狗姓名下方 */
+.dog-profile .section-title {
+  margin-bottom: 4px;
+}
+/* 「更换参考爱犬」按钮：位于狗狗姓名下方 */
 .profile-actions {
-  margin: -4px 0 2px;
+  margin: 0 0 2px;
   display: flex;
   justify-content: flex-start;
 }
@@ -827,56 +591,103 @@ defineExpose({ loadInsight })
   padding: 0;
   height: auto;
 }
-/* 过敏与忌口面板（2026-10-04 第四期） */
-.allergy-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid #ebeef5;
-  border-radius: 6px;
-  background: #fafafa;
-}
-.allergy-panel__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.allergy-panel__title {
-  font-size: 13px;
+.fact-primary {
+  font-size: 15px;
   font-weight: 600;
   color: #303133;
+  line-height: 1.5;
+  word-break: break-all;
 }
-.allergy-panel__empty {
-  font-size: 12px;
-  color: #c0c4cc;
-  line-height: 1.6;
-}
-.allergy-tier {
+.fact-row {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
+  margin-top: 6px;
 }
-.allergy-tier__label {
+.fact-row--secondary .fact-label,
+.fact-row--secondary .fact-value {
+  color: #909399;
+}
+.fact-label {
   font-size: 11px;
   color: #909399;
 }
-.allergy-tier--confirmed .allergy-tier__label {
-  color: #f56c6c;
+.fact-value {
+  font-size: 13px;
+  color: #303133;
+  word-break: break-all;
+  white-space: pre-wrap;
 }
-.allergy-tier--cautioned .allergy-tier__label {
-  color: #e6a23c;
+.fact-value--block {
+  padding: 6px 8px;
+  background: #fafafa;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  line-height: 1.6;
 }
-.allergy-tier__tags {
+/* 过敏信息：只列事实与来源，不分档、不标风险 */
+.allergy-list {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
-.allergy-tier__text {
+.allergy-chip {
+  max-width: 100%;
+}
+.allergy-chip__source {
+  margin-left: 5px;
+  font-size: 10px;
+  opacity: 0.65;
+}
+/* 就诊 / 体检：只显示最近一条的日期 + 结论 */
+.record-block {
+  padding: 8px 0;
+  border-bottom: 1px dashed #ebeef5;
+}
+.record-block:last-child {
+  border-bottom: none;
+}
+.record-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.record-title {
   font-size: 12px;
-  color: #606266;
-  word-break: break-all;
+  font-weight: 600;
+  color: #303133;
+}
+.record-date {
+  font-size: 11px;
+  color: #909399;
+}
+.record-line {
+  font-size: 13px;
+  color: #303133;
+  line-height: 1.6;
   white-space: pre-wrap;
+  word-break: break-all;
+}
+.panel-section--collapse {
+  padding-top: 4px;
+}
+.panel-section--collapse :deep(.el-collapse) {
+  border-top: none;
+  border-bottom: none;
+}
+.panel-section--collapse :deep(.el-collapse-item__header) {
+  font-size: 13px;
+  font-weight: 600;
+  color: #303133;
+  border-bottom: 1px dashed #ebeef5;
+}
+.panel-section--collapse :deep(.el-collapse-item__wrap) {
+  border-bottom: none;
+}
+.panel-section--collapse :deep(.el-collapse-item__content) {
+  padding-bottom: 8px;
 }
 .profile-grid {
   display: grid;
@@ -888,9 +699,6 @@ defineExpose({ loadInsight })
   flex-direction: column;
   gap: 2px;
 }
-.profile-item.full {
-  grid-column: 1 / -1;
-}
 .profile-item .label {
   font-size: 11px;
   color: #909399;
@@ -901,18 +709,7 @@ defineExpose({ loadInsight })
   word-break: break-all;
   white-space: pre-wrap;
 }
-.profile-item .value.empty {
-  color: #c0c4cc;
-}
-/* 2026-10-19：订单里的过敏自由文本，原文展示、可换行 */
-.allergy-text-value {
-  padding: 6px 8px;
-  background: #fafafa;
-  border: 1px solid #ebeef5;
-  border-radius: 4px;
-  line-height: 1.6;
-}
-/* 每日目标能量卡片 */
+/* 每日目标能量卡片（信息展示，不是风险提示） */
 .energy-card {
   display: flex;
   align-items: baseline;
@@ -935,30 +732,6 @@ defineExpose({ loadInsight })
 .energy-detail {
   font-size: 12px;
   color: #909399;
-}
-/* 饮食与健康分隔 */
-.profile-divider {
-  margin-top: 12px;
-  padding-bottom: 6px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #909399;
-  border-bottom: 1px dashed #ebeef5;
-}
-.profile-divider + .profile-grid {
-  margin-top: 8px;
-}
-.notes-actions {
-  margin-top: 8px;
-  display: flex;
-  justify-content: flex-end;
-  gap: 4px;
-}
-.notes-editor {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 8px;
 }
 .empty-tip {
   font-size: 12px;
@@ -989,62 +762,15 @@ defineExpose({ loadInsight })
   font-size: 10px;
   opacity: 0.6;
 }
-/* 与当前配方重合提醒 */
-.collision-tip {
+.recent-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin-bottom: 8px;
-}
-.collision-warning {
-  font-size: 12px;
-  font-weight: 600;
-  color: #f56c6c;
 }
 .recent-days-select {
   margin-left: auto;
   width: 88px;
   flex-shrink: 0;
-}
-.ai-result {
-  font-size: 12px;
-}
-.ai-summary {
-  background: #f0f9eb;
-  border-radius: 6px;
-  padding: 8px 10px;
-  color: #529b2e;
-  margin-bottom: 8px;
-}
-.ai-warnings {
-  margin-bottom: 8px;
-}
-.ai-warning {
-  color: #e6a23c;
-  font-size: 12px;
-  padding: 2px 0;
-}
-.ai-block {
-  margin-bottom: 8px;
-}
-.ai-block-title {
-  font-weight: 600;
-  color: #409eff;
-  margin-bottom: 4px;
-}
-.ai-block-title.avoid {
-  color: #f56c6c;
-}
-.ai-row {
-  display: flex;
-  gap: 8px;
-  padding: 2px 0;
-}
-.ai-name {
-  flex-shrink: 0;
-  font-weight: 500;
-}
-.ai-reason {
-  color: #606266;
-}
-.ai-footer {
-  text-align: right;
 }
 </style>

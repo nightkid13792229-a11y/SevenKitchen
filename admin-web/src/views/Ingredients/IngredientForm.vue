@@ -3127,6 +3127,26 @@ const handleSubmit = async () => {
     // 基础验证
     await formRef.value.validate()
 
+    // 库存阈值必须满足后端领域规则，避免提交后只看到 500
+    if (
+      formData.safetyStock !== null &&
+      formData.safetyStock !== undefined &&
+      formData.reorderPoint !== null &&
+      formData.reorderPoint !== undefined &&
+      formData.reorderPoint < formData.safetyStock
+    ) {
+      throw new Error('补货点必须大于或等于安全库存')
+    }
+    if (
+      formData.reorderPoint !== null &&
+      formData.reorderPoint !== undefined &&
+      formData.targetStock !== null &&
+      formData.targetStock !== undefined &&
+      formData.targetStock < formData.reorderPoint
+    ) {
+      throw new Error('目标库存必须大于或等于补货点')
+    }
+
     // 类型特定属性验证
     if (formData.type === IngredientType.FOOD) {
       // 食材验证

@@ -11,17 +11,19 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { Response } from 'express';
+import { ValidationError } from '../../domain/common/errors';
 import { ApiResponseDto } from '../dto/common/response.dto';
 
-@Catch(BadRequestException)
+@Catch(BadRequestException, ValidationError)
 export class BadRequestExceptionFilter implements ExceptionFilter {
-  catch(exception: BadRequestException, host: ArgumentsHost) {
+  catch(exception: BadRequestException | ValidationError, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const message = exception.message || 'Bad Request';
 
     // Extract validation error message if available
-    const exceptionResponse = exception.getResponse();
+    const exceptionResponse =
+      exception instanceof BadRequestException ? exception.getResponse() : null;
     let errorMessage = message;
 
     if (

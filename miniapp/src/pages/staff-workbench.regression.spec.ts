@@ -8,7 +8,6 @@ const iconNames = [
   'purchasing',
   'production',
   'orders',
-  'supplement-orders',
   'customers',
   'inventory',
   'recipes',
@@ -38,17 +37,18 @@ describe('staff workbench compact icon grid', () => {
     expect(source).not.toContain('shippingCount')
   })
 
-  it('uses the nine approved icon modules in the required order', () => {
+  it('uses the approved icon modules in the required order', () => {
     const moduleConfig = source.match(/const workbenchModules[\s\S]*?\n\]\)/)?.[0] || ''
 
-    // 2026-09-25：补剂订单独立成一个入口，紧跟在「订单管理」之后。
-    // 两者的作业方式差别太大（鲜食是生产+冷链，补剂是分装+贴标），
-    // 混在一个列表里现场容易看串，所以是并列而不是合并。
+    // 2026-10-21：鲜食 / 定制 / 补剂收口到「订单中心」一个入口；
+    // 补剂侧再拆出「分装备料」与「补剂售后」两个现场高频动作。
+    // 旧的「订单管理」「补剂订单」两个并列入口随之撤掉。
     expect([...moduleConfig.matchAll(/title: '([^']+)'/g)].map((match) => match[1])).toEqual([
       '采购管理',
       '生产管理',
-      '订单管理',
-      '补剂订单',
+      '订单中心',
+      '分装备料',
+      '补剂售后',
       '客户与狗狗',
       '库存管理',
       '食谱管理',
@@ -59,7 +59,6 @@ describe('staff workbench compact icon grid', () => {
       'purchasing',
       'production',
       'orders',
-      'supplementOrders',
       'inventory',
       'reimbursement',
     ]) {
@@ -68,15 +67,19 @@ describe('staff workbench compact icon grid', () => {
     expect(source).toContain('badgeCount(module.badgeKey)')
   })
 
-  it('补剂订单入口指向已注册的页面，且角标键与后端返回一致', () => {
+  it('订单中心入口已注册，补剂订单从订单中心仍能进详情', () => {
     const pagesConfig = JSON.parse(
       readFileSync(resolve(__dirname, '../pages.json'), 'utf8'),
     )
+    const orderCenterSource = readFileSync(
+      resolve(__dirname, 'staff-order-center/index.vue'),
+      'utf8',
+    )
 
-    expect(source).toContain("url: '/pages/staff-supplement-orders/index'")
-    // 角标来自 /staff/workbench/summary 的 badges 映射，键名必须对得上，
-    // 对不上就是"永远显示 0"这种静默失效
-    expect(source).toContain("badgeKey: 'supplementOrders'")
+    expect(source).toContain("url: '/pages/staff-order-center/index'")
+    expect(source).toContain("badgeKey: 'orders'")
+    expect(orderCenterSource).toContain("item.type === 'SUPPLEMENT'")
+    expect(orderCenterSource).toContain('/pages/staff-supplement-orders/detail?id=')
 
     // 分包在 pages.json 里是 root + path 分开写的，解析出来断言，别整串匹配
     const subPackage = pagesConfig.subPackages.find(

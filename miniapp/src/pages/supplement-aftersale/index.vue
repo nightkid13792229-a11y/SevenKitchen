@@ -80,6 +80,7 @@ import {
   prefetchSupplementSubscriptions,
   requestSupplementSubscriptions,
   fetchSupplementOrderDetail,
+  fetchSupplementPolicy,
   type SupplementOrder,
 } from '../../api/supplements'
 

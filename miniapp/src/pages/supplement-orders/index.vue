@@ -105,10 +105,19 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { onPullDownRefresh, onReachBottom, onShow } from '@dcloudio/uni-app'
 import {
+  onLoad,
+  onPullDownRefresh,
+  onReachBottom,
+  onShow,
+  onUnload,
+} from '@dcloudio/uni-app'
+import {
+  cancelSupplementOrder,
   fetchSupplementOrders,
+  saveSupplementPurchaseDraft,
   SUPPLEMENT_ORDER_STATUS_LABELS,
+  updateSupplementAddress,
   type SupplementOrder
 } from '../../api/supplements'
 import { runSupplementPayment } from '../../utils/supplement-payment'

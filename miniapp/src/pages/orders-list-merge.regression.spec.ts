@@ -100,12 +100,18 @@ describe('我的订单合并补剂订单', () => {
     expect(meTemplate).toContain('我的制作单')
   })
 
-  it('补剂订单页仍可从购买结果页进入，不算死页面', () => {
-    // 合并的是顾客入口；下单成功后的「查看订单」还指向这个页面，所以先不删
+  it('补剂下单结果直达补剂订单详情页，统一列表仍能查看补剂订单', () => {
+    // 2026-10-21：结果页从"补剂订单列表"改到"补剂订单详情"，两条支付成功路径都要跟上。
+    // 顾客的补剂订单列表入口已并入「我的订单」，但详情页仍是下单后的落点。
     const purchaseSource = readPage('src/pages/supplement-order/index.vue')
-    expect(purchaseSource).toContain("uni.redirectTo({ url: '/pages/supplement-orders/index' })")
+    const redirectCount = [
+      ...purchaseSource.matchAll(/uni\.redirectTo\(\{ url: `\/pages\/supplement-order-detail\/index\?orderId=/g),
+    ].length
+    expect(redirectCount).toBe(2)
 
     const pagesJson = readPage('src/pages.json')
-    expect(pagesJson).toContain('pages/supplement-orders/index')
+    expect(pagesJson).toContain('pages/supplement-order-detail/index')
+    // 合并后的「我的订单」仍要拉补剂订单
+    expect(source).toContain('fetchSupplementOrders(')
   })
 })

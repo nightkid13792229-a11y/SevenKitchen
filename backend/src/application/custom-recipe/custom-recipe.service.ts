@@ -1351,21 +1351,49 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     }
 
     /**
-     * ② 已付款的再退款。退款失败就**把取消回滚**，
+     * ② 已付款但还没交付的再退款。退款失败就**把取消回滚**，
      * 避免"取消了钱没退"这种最糟的结果。
+     *
+     * 2026-10-21 修：原来只认 `PAID`，制作中（IN_PROGRESS）取消**不退钱**。
+     * 但 IN_PROGRESS 同样是"钱已收、货未交"，V39 又明确允许顾客在这个阶段
+     * 自助取消 —— 不退就是白拿顾客的钱。生产单 CR202610201196 即此情况。
      *
      * 回滚是安全的：CANCELLED 是终态，我们刚认领成功，期间不会有别的流程改动它。
      */
-    if (order.status === CustomRecipeStatus.PAID) {
+    const refundableBeforeDelivery =
+      order.status === CustomRecipeStatus.PAID ||
+      order.status === CustomRecipeStatus.IN_PROGRESS;
+
+    if (refundableBeforeDelivery) {
       try {
         const result = await refund(order.orderId, reason);
         refundStatus = result?.status ?? null;
+
+        /**
+         * 微信可能**不抛错、但返回失败状态**（CLOSED / ABNORMAL）。
+         * 只认「成功 / 处理中 / 待处理」；其它状态按失败处理，
+         * 走下面的回滚 —— 不能留下"单取消了、钱没退"。
+         */
+        const normalizedStatus = String(refundStatus || '').toUpperCase();
+        if (
+          normalizedStatus &&
+          !['SUCCESS', 'PROCESSING', 'PENDING'].includes(normalizedStatus)
+        ) {
+          throw new BadRequestException(
+            `退款未成功（${normalizedStatus}），取消已回滚；请到微信商户平台核查后再试`,
+          );
+        }
       } catch (error) {
         await this.prisma.$transaction(async (tx) => {
           await tx.customRecipeOrder.updateMany({
             where: { id: order.id, status: CustomRecipeStatus.CANCELLED },
             data: {
-              status: CustomRecipeStatus.PAID,
+              /**
+               * 回到**取消前的真实状态**（PAID 或 IN_PROGRESS），不能写死 PAID：
+               * 把制作中的单回滚成已付款，等于凭空抹掉"已开始制作"，
+               * 后台工作台与顾客页都会显示错误进度。
+               */
+              status: order.status,
               cancelledAt: null,
               cancellationReason: null,
             },

@@ -194,16 +194,20 @@ describe('supplement purchase regressions', () => {
       expect(source).not.toMatch(/priceLabel:\s*`¥\$\{opt\.total/)
     })
 
-    it('费用明细把「商品金额小计」与「运费」分层，跟份数选择器对得上', () => {
-      // 没有这一行，用户无法把"选项上的价格"和"明细里的三项"对应起来
+    it('费用明细把「补剂商品小计」与「运费」分层，跟份数选择器对得上', () => {
+      // 没有这一行，用户无法把"选项上的价格"和"明细里的三项"对应起来。
+      // 2026-10-20 改成「补剂商品小计」：这一行只算补剂商品，
+      // 分装服务费已单独成行，不再并进小计。
       expect(template).toContain('fee-row-subtotal')
-      expect(template).toContain('商品金额小计')
+      expect(template).toContain('补剂商品小计')
       expect(template).toContain('summary.goodsSubtotal')
       // 小计必须在运费之前
-      expect(template.indexOf('fee-row-subtotal')).toBeLessThan(template.indexOf('>运费<'))
+      expect(template.indexOf('fee-row-subtotal')).toBeLessThan(
+        template.indexOf('<text class="fee-label">运费</text>'),
+      )
     })
 
-    it('费用明细要读出三层：明细项 < 商品金额小计 < 合计', () => {
+    it('费用明细要读出三层：明细项 < 补剂商品小计 < 合计', () => {
       // 五个数字平铺在一起时，用户分不清哪个是哪个 —— 必须靠视觉层次区分
       // ① 小计：浅色底带 + 墨绿加粗
       const sub = source.slice(

@@ -114,7 +114,12 @@ import {
 import { SearchGovernanceService } from '../search-governance/search-governance.service';
 import { LifeStage as RecipeLifeStage } from '../../domain/recipe/enums';
 import { alignPreparationMethodBasis } from '../../domain/recipe-designer/preparation-basis';
-import { CustomRecipeConfigService } from '../custom-recipe/custom-recipe-config.service';
+import {
+  DEFAULT_PRODUCTION_LOSS_RATE,
+  MAX_PRODUCTION_LOSS_RATE,
+  MIN_PRODUCTION_LOSS_RATE,
+  GlobalConfigService,
+} from '../config/global-config.service';
 import {
   ORDERED_RECIPE_SERIES_LIFE_STAGES,
   RECIPE_SERIES_BUSINESS_STATUS_LABELS,
@@ -346,7 +351,6 @@ const INTERNAL_RECIPE_DESIGNER_CREATOR_IDS = [
   RECIPE_DESIGNER_BACKFILL_USER_ID,
   RECIPE_SERIES_BACKFILL_USER_ID,
 ];
-const PUBLISHED_RECIPE_PRODUCTION_LOSS_RATE = 1.05;
 const PUBLISHED_RECIPE_BATCH_LABOR_HOURS = 2;
 const DESIGN_RECIPE_VERSION_CREATE_MAX_ATTEMPTS = 3;
 const DESIGN_RECIPE_ITEM_ORDER_MAX_ATTEMPTS = 3;
@@ -1298,42 +1302,54 @@ export class RecipeDesignerService {
     @Optional()
     private readonly allergenVocabulary?: AllergenVocabularyService,
     /**
-     * 定制食谱配置（2026-10-16 批次 5.7）。
+     * 全局配置（2026-10-21）。
      *
-     * 只为取一个值：**生产损耗率**。此前这个文件里写死 1.05，
-     * 而后台订单页建食谱那处写死 1.07 —— 同一道食谱从哪个入口发布，
-     * 顾客要买的量差 2%。
+     * 只为取一个值：**内部生产损耗系数**。此前这个文件读
+     * `CustomRecipeConfig.productionLossRate`，现在统一读
+     * `GlobalConfig.productionLossRate` —— 后台「全局配置 → 生产配置」可改。
      *
-     * 配置字段 `CustomRecipeConfig.productionLossRate` **本来就是为统一它加的**
-     * （schema 里写着"此前它们散落在代码里写死…值不一样"），
-     * 只是两处写死的值一直没改成读它。所以这不是"要拍板的口径"，
-     * 是一个没做完的重构。
+     * 只影响**新建**食谱；已有 `Recipe.productionLossRate` 与交付快照
+     * 保持原值，不在发布/更新时回写。
      *
      * 同样放在参数表**最后**并 @Optional（与上面 `allergenVocabulary` 同样的理由：
      * 既有测试按位置调用构造函数，插在中间会让它们错位）。
      */
     @Optional()
-    private readonly customRecipeConfig?: CustomRecipeConfigService,
+    private readonly globalConfigService?: GlobalConfigService,
   ) {}
 
   /**
-   * 生产损耗率（系数）。读配置，读不到时回落到原来的 1.05。
+   * 内部生产损耗系数（≥1 的系数，1.07 = 多买 7%）。
    *
-   * 回落值刻意保留 1.05 而不是改成 1.07：**这个文件的既有行为不动** ——
-   * 配置正常时两边一致（都走配置），配置异常时各自保持原样，
-   * 不会因为"修一个不一致"而悄悄改掉这条路径上的数值。
+   * 读 `GlobalConfig`；读不到 / 值不合法时回落到 **1.07**。
+   *
+   * 这里原先的落回值是 1.05（设计器发布路径的旧写死值）。2026-10-21
+   * 统一到全局配置后，落回值也统一成 1.07 —— 与后台手工建食谱、
+   * 小程序 DIY 展示的 7% 一致。这只影响“配置读不到”的异常情况，
+   * 不改变任何已有食谱的数值。
    */
   private async resolveProductionLossRate(): Promise<number> {
     try {
-      const config = await this.customRecipeConfig?.getConfig();
+      const config = await this.globalConfigService?.getGlobalConfig();
       const value = Number(config?.productionLossRate);
-      if (Number.isFinite(value) && value >= 1) {
+      if (
+        Number.isFinite(value) &&
+        value >= MIN_PRODUCTION_LOSS_RATE &&
+        value <= MAX_PRODUCTION_LOSS_RATE
+      ) {
         return value;
       }
+      console.warn(
+        '[RecipeDesigner] 全局配置里的生产损耗率不合法，按 1.07 处理：',
+        config?.productionLossRate,
+      );
     } catch (error) {
-      console.warn('[RecipeDesigner] 读取生产损耗率失败，按 1.05 处理：', error);
+      console.warn(
+        '[RecipeDesigner] 读取生产损耗率失败，按 1.07 处理：',
+        error,
+      );
     }
-    return PUBLISHED_RECIPE_PRODUCTION_LOSS_RATE;
+    return DEFAULT_PRODUCTION_LOSS_RATE;
   }
 
   private async listInternalRecipeDesignerUserIds() {

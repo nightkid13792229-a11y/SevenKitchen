@@ -14,7 +14,10 @@ import { CustomRecipeStatus } from '@prisma/client';
  *      "查看定制食谱"在**生产上已实测 404**。
  */
 describe('CustomRecipeController · 交付与编号口径', () => {
-  function createAdminController(orderOverrides: Record<string, unknown> = {}) {
+  function createAdminController(
+    orderOverrides: Record<string, unknown> = {},
+    globalConfigService?: any,
+  ) {
     const order = {
       id: 'cr-uuid-1',
       orderId: 'CR202609280001',
@@ -30,8 +33,14 @@ describe('CustomRecipeController · 交付与编号口径', () => {
       version: 1,
     });
     const recipeItemCreateMany = jest.fn().mockResolvedValue({});
+    const recipeUpdate = jest.fn().mockResolvedValue({});
+    const recipeUpdateMany = jest.fn().mockResolvedValue({ count: 0 });
     const prisma = {
-      recipe: { create: recipeCreate },
+      recipe: {
+        create: recipeCreate,
+        update: recipeUpdate,
+        updateMany: recipeUpdateMany,
+      },
       recipeItem: { createMany: recipeItemCreateMany },
     };
 
@@ -66,11 +75,18 @@ describe('CustomRecipeController · 交付与编号口径', () => {
       {} as any,
       wechatService as any,
       wechatPaymentService as any,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      globalConfigService,
     );
 
     return {
       controller,
       recipeCreate,
+      recipeUpdate,
+      recipeUpdateMany,
       customRecipeService,
       wechatService,
       wechatPaymentService,
@@ -102,6 +118,65 @@ describe('CustomRecipeController · 交付与编号口径', () => {
     // 不写 customerOwnerId 的话，主人自己也打不开
     expect(data.customerOwnerId).toBe('user-1');
     expect(data.customOrderId).toBe('cr-uuid-1');
+  });
+
+  it('★ 新建食谱的生产损耗率读全局配置（不再读 CustomRecipeConfig）', async () => {
+    const globalConfigService = {
+      getGlobalConfig: jest
+        .fn()
+        .mockResolvedValue({ productionLossRate: 1.13 }),
+    };
+    const { controller, recipeCreate } = createAdminController(
+      {},
+      globalConfigService,
+    );
+
+    await controller.createRecipe('CR202609280001', dto);
+
+    expect(globalConfigService.getGlobalConfig).toHaveBeenCalledTimes(1);
+    expect(recipeCreate.mock.calls[0][0].data.productionLossRate).toBe(1.13);
+  });
+
+  it('全局配置缺失 / 值不合法 / 读取抛错 → 回落 1.07', async () => {
+    const configs = [
+      undefined,
+      {
+        getGlobalConfig: jest
+          .fn()
+          .mockResolvedValue({ productionLossRate: 0.9 }),
+      },
+      {
+        getGlobalConfig: jest
+          .fn()
+          .mockRejectedValue(new Error('数据库连接失败')),
+      },
+    ];
+
+    for (const globalConfigService of configs) {
+      const { controller, recipeCreate } = createAdminController(
+        {},
+        globalConfigService,
+      );
+
+      await controller.createRecipe('CR202609280001', dto);
+
+      expect(recipeCreate.mock.calls[0][0].data.productionLossRate).toBe(1.07);
+    }
+  });
+
+  it('★ 新建食谱只写新行，不回写已有食谱（迁移不回溯改数）', async () => {
+    const globalConfigService = {
+      getGlobalConfig: jest
+        .fn()
+        .mockResolvedValue({ productionLossRate: 1.13 }),
+    };
+    const { controller, recipeUpdate, recipeUpdateMany } =
+      createAdminController({}, globalConfigService);
+
+    await controller.createRecipe('CR202609280001', dto);
+
+    expect(recipeUpdate).not.toHaveBeenCalled();
+    expect(recipeUpdateMany).not.toHaveBeenCalled();
   });
 
   it('营养标准用后台选的，而不是永远写死', async () => {
@@ -208,6 +283,123 @@ describe('CustomRecipeController · 交付与编号口径', () => {
     );
 
     expect(wechatPaymentService.createCustomRecipeRefund).not.toHaveBeenCalled();
+  });
+
+  /**
+   * 2026-10-21 修：制作中（IN_PROGRESS）同样是"钱已收、货未交"。
+   *
+   * 原来只认 PAID，于是后台取消制作中的单**不退款** ——
+   * 生产单 CR202610201196 有 paymentConfirmedAt / paymentTransactionId，
+   * 取消后 refundStatus 仍为 null。
+   */
+  it('★ 取消一张制作中的订单也会先原路退款，再改状态', async () => {
+    const { controller, wechatPaymentService, customRecipeService } =
+      createAdminController({
+        status: CustomRecipeStatus.IN_PROGRESS,
+        // 生产单 CR202610201196 的证据形态：钱已确认，状态在制作中
+        paymentConfirmedAt: new Date('2026-10-20T08:00:00.000Z'),
+        paymentTransactionId: 'wx-tx-20261020',
+      });
+
+    await controller.updateStatus(
+      adminReq,
+      'CR202609280001',
+      CustomRecipeStatus.CANCELLED as any,
+      '顾客要求取消',
+    );
+
+    expect(wechatPaymentService.createCustomRecipeRefund).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: 'CR202609280001' }),
+    );
+    // 必须先退款成功，再取消；顺序反了就会出现"取消了钱没退"
+    expect(
+      wechatPaymentService.createCustomRecipeRefund.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      customRecipeService.updateOrderStatus.mock.invocationCallOrder[0],
+    );
+    expect(customRecipeService.updateOrderStatus).toHaveBeenCalledWith(
+      'CR202609280001',
+      CustomRecipeStatus.CANCELLED,
+      { reason: '顾客要求取消' },
+    );
+  });
+
+  it('★ 退款失败时后台取消不生效（订单保持原状）', async () => {
+    const { controller, wechatPaymentService, customRecipeService } =
+      createAdminController({ status: CustomRecipeStatus.IN_PROGRESS });
+
+    wechatPaymentService.createCustomRecipeRefund.mockRejectedValueOnce(
+      new Error('线上退款未启用'),
+    );
+
+    await expect(
+      controller.updateStatus(
+        adminReq,
+        'CR202609280001',
+        CustomRecipeStatus.CANCELLED as any,
+      ),
+    ).rejects.toThrow('线上退款未启用');
+
+    expect(customRecipeService.updateOrderStatus).not.toHaveBeenCalled();
+  });
+
+  it('★ 退款返回失败状态（ABNORMAL）时同样不取消订单', async () => {
+    const { controller, wechatPaymentService, customRecipeService } =
+      createAdminController({ status: CustomRecipeStatus.IN_PROGRESS });
+
+    // 微信可能是"不抛错但返回失败状态"，不能当成功
+    wechatPaymentService.createCustomRecipeRefund.mockResolvedValueOnce({
+      status: 'ABNORMAL',
+    });
+
+    await expect(
+      controller.updateStatus(
+        adminReq,
+        'CR202609280001',
+        CustomRecipeStatus.CANCELLED as any,
+      ),
+    ).rejects.toThrow('退款未成功');
+
+    expect(customRecipeService.updateOrderStatus).not.toHaveBeenCalled();
+  });
+
+  it('★ 状态仍停在待付款但已有付款确认时间：也退款（防止状态漂移漏退）', async () => {
+    const { controller, wechatPaymentService } = createAdminController({
+      status: CustomRecipeStatus.PENDING_PAYMENT,
+      paymentConfirmedAt: new Date('2026-10-20T08:00:00.000Z'),
+    });
+
+    await controller.updateStatus(
+      adminReq,
+      'CR202609280001',
+      CustomRecipeStatus.CANCELLED as any,
+    );
+
+    expect(wechatPaymentService.createCustomRecipeRefund).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: 'CR202609280001' }),
+    );
+  });
+
+  it('已交付/已完成的单取消不触发退款（口径不变）', async () => {
+    for (const status of [
+      CustomRecipeStatus.DELIVERED,
+      CustomRecipeStatus.COMPLETED,
+    ]) {
+      const { controller, wechatPaymentService } = createAdminController({
+        status,
+        paymentConfirmedAt: new Date('2026-10-20T08:00:00.000Z'),
+      });
+
+      await controller.updateStatus(
+        adminReq,
+        'CR202609280001',
+        CustomRecipeStatus.CANCELLED as any,
+      );
+
+      expect(
+        wechatPaymentService.createCustomRecipeRefund,
+      ).not.toHaveBeenCalled();
+    }
   });
 
   it('非法状态值返回业务错误（400），而不是透传给数据库变成 500', async () => {

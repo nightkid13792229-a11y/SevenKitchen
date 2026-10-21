@@ -19,6 +19,36 @@ import { TencentCosService } from '../../infrastructure/services/tencent-cos.ser
 export const DEFAULT_HEALTH_EXTRACTION_DAILY_LIMIT = 500;
 
 /**
+ * 内部生产损耗系数的兜底值（2026-10-21）。
+ *
+ * 与 `CustomRecipeConfig` 历史上用的默认值一致（1.07 = 损耗 7%）：
+ * 迁移只换“从哪里读”，**不改变任何既有数值**。
+ */
+export const DEFAULT_PRODUCTION_LOSS_RATE = 1.07;
+/** 损耗率是 ≥1 的系数：小于 1 等于“做出来比投料还多”，物理上不成立 */
+export const MIN_PRODUCTION_LOSS_RATE = 1;
+/** 上限 2 是防呆：超过 100% 的损耗只可能是填错了 */
+export const MAX_PRODUCTION_LOSS_RATE = 2;
+
+/**
+ * 把任意来源的损耗率归一化成可用的系数。
+ *
+ * 读库与写库共用这一条：库里的值可能是 Decimal、字符串、null，
+ * 也可能被人手工改坏。非法时一律回落到 1.07 —— **绝不把荒谬值写进新食谱**。
+ */
+export function normalizeProductionLossRate(value: unknown): number {
+  const parsed = Number(value);
+  if (
+    !Number.isFinite(parsed) ||
+    parsed < MIN_PRODUCTION_LOSS_RATE ||
+    parsed > MAX_PRODUCTION_LOSS_RATE
+  ) {
+    return DEFAULT_PRODUCTION_LOSS_RATE;
+  }
+  return parsed;
+}
+
+/**
  * 疫苗板块开关的对外形状（B4）。
  *
  * 只给小程序这两样 —— 开关状态 + 一句人话说明。
@@ -65,6 +95,9 @@ export class GlobalConfigService {
         config.targetBatchUtilization.toString(),
       ),
       supplementLossRate: parseFloat(config.supplementLossRate.toString()),
+      productionLossRate: normalizeProductionLossRate(
+        config.productionLossRate,
+      ),
       autoDeductInventoryOnProduction:
         (config as any).autoDeductInventoryOnProduction ?? false,
       defaultProductLabelId: config.defaultProductLabelId,
@@ -160,6 +193,8 @@ export class GlobalConfigService {
       overheadCostPerKg: number;
       targetBatchUtilization: number;
       supplementLossRate: number;
+      /** 内部生产损耗系数（1–2，1.07 = 损耗 7%）；只影响之后新建的食谱 */
+      productionLossRate: number;
       autoDeductInventoryOnProduction: boolean;
       defaultVacuumBagId: string | null;
       defaultProductLabelId: string | null;
@@ -208,6 +243,19 @@ export class GlobalConfigService {
       updateData.targetBatchUtilization = dto.targetBatchUtilization;
     if (dto.supplementLossRate !== undefined)
       updateData.supplementLossRate = dto.supplementLossRate;
+    if (dto.productionLossRate !== undefined) {
+      const value = Number(dto.productionLossRate);
+      if (
+        !Number.isFinite(value) ||
+        value < MIN_PRODUCTION_LOSS_RATE ||
+        value > MAX_PRODUCTION_LOSS_RATE
+      ) {
+        throw new BadRequestException(
+          '内部生产损耗系数必须是 1~2 的系数（1.07 表示损耗 7%）',
+        );
+      }
+      updateData.productionLossRate = value;
+    }
     if (dto.defaultProductLabelId !== undefined)
       updateData.defaultProductLabelId = dto.defaultProductLabelId;
     if (dto.defaultIcePackId !== undefined)
@@ -305,6 +353,9 @@ export class GlobalConfigService {
         config.targetBatchUtilization.toString(),
       ),
       supplementLossRate: parseFloat(config.supplementLossRate.toString()),
+      productionLossRate: normalizeProductionLossRate(
+        config.productionLossRate,
+      ),
       autoDeductInventoryOnProduction:
         (config as any).autoDeductInventoryOnProduction ?? false,
       defaultProductLabelId: config.defaultProductLabelId,
@@ -344,6 +395,7 @@ export class GlobalConfigService {
       overheadCostPerKg: 2.0,
       targetBatchUtilization: 0.8,
       supplementLossRate: 1.05,
+      productionLossRate: DEFAULT_PRODUCTION_LOSS_RATE,
       defaultProductLabelId: null,
       defaultIcePackId: null,
       defaultShippingTemplateId: null,

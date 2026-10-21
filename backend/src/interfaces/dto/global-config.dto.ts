@@ -51,6 +51,18 @@ export class UpdateGlobalConfigDto {
   @Min(1)
   supplementLossRate?: number;
 
+  /**
+   * 内部生产损耗系数（1–2 的系数，1.07 = 损耗 7%）。
+   *
+   * 只用于**新建**定制食谱时写进 `Recipe.productionLossRate`；
+   * 已有食谱与交付快照保持原值，不会被这个值回溯改写。
+   */
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(2)
+  productionLossRate?: number;
+
   @IsOptional()
   @IsString()
   defaultProductLabelId?: string | null;

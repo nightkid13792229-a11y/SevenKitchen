@@ -23,15 +23,6 @@
     </div>
 
     <el-alert
-      type="warning"
-      :closable="false"
-      show-icon
-      class="snapshot-alert"
-      title="⚠️ 生产损耗率有两个值，待确认"
-      description="设计器发布路径目前写死 1.05（损耗 5%），后台手工建食谱用 1.07（损耗 7%），而小程序 DIY 制作单按 7% 告诉顾客。同一条食谱走不同入口会算出不同的采购量。改这里不会影响那两处写死的值 —— 需要先确认统一成哪个。"
-    />
-
-    <el-alert
       v-if="!isAdmin"
       type="warning"
       :closable="false"
@@ -94,17 +85,15 @@
 
         <el-form-item label="多份购买">
           <!--
-            ⚠️ 2026-10-20 阶段性门禁：第一阶段只完成「价格与配置」，
-            多份设计/交付还没做。开关默认关闭且不允许在这里打开，
-            避免运营误开后顾客能下多份、后台却交付不了。
-            只有后端已经是 true 时才可操作（用于紧急关闭），false 时锁定。
+            2026-10-21：多份设计/交付/售后已打通，开关不再硬锁；
+            开启前仍要二次确认，避免运营误点。
           -->
           <el-switch
             v-model="form.multiRecipeEnabled"
-            :disabled="!form.multiRecipeEnabled"
+            @change="handleMultiRecipeToggle"
           />
           <span class="form-tip">
-            多份设计与交付完成后才可开启；当前仅完成价格与配置，开关暂时锁定，避免误开
+            开启前请确认小程序正式版已经审核通过；开启并保存后顾客才会看到份数选择
           </span>
         </el-form-item>
 
@@ -374,25 +363,6 @@
           <span class="form-tip">后台手工建定制食谱时的默认值</span>
         </el-form-item>
 
-
-        <el-form-item label="生产损耗率">
-          <el-input-number
-            v-model="form.productionLossRate"
-            :min="1"
-            :max="2"
-            :step="0.01"
-            :precision="2"
-            style="width: 200px"
-          />
-          <span class="form-tip">
-            1.07 表示损耗 7%。
-            <strong>注意：设计器发布路径目前仍写死 1.05，改这里不会影响它</strong>
-            —— 两处口径不一致待确认，见下方提示
-          </span>
-        </el-form-item>
-
-
-
         <el-form-item label="占位重试次数">
           <el-input-number
             v-model="form.slotRetryTimes"
@@ -423,7 +393,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { customRecipeApi } from '@/api/customRecipe';
 import { platformOptionsApi } from '@/api/platformOptions';
 import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole';
@@ -466,8 +436,9 @@ const updatedAt = ref('');
  * 保存时原样带回，数据库里的旧值不受影响。
  * 如果哪天要彻底删列，走 migration，别靠"表单不再传"来实现。
  *
- * 注意：**「生产损耗率」不在此列**。它一度被我误判为可删，
- * 实际是"新食谱的默认生产损耗率"，生产模块靠它算投料量。**已保留**。
+ * 注意：**「生产损耗率」已整体迁走**（2026-10-21）。内部生产损耗系数现在在
+ * 「全局配置 → 生产配置」编辑，新建食谱只读 `GlobalConfig`；这里不再保留该字段，
+ * 保存时也不会再传它。`CustomRecipeConfig` 的旧列保留只为兼容旧数据/回滚，不删。
  */
 const form = reactive({
   feeAmount: 300,
@@ -490,7 +461,6 @@ const form = reactive({
   attachmentMaxSizeMb: 10,
   defaultNutritionStandard: 'FEDIAF_2025',
   defaultEnergyDensityKcalPerKg: 3200,
-  productionLossRate: 1.07,
   defaultLaborHours: 2,
   scheduleLookaheadDays: 45,
   slotRetryTimes: 5,
@@ -562,7 +532,7 @@ const loadConfig = async () => {
     form.defaultEnergyDensityKcalPerKg = Number(
       data?.defaultEnergyDensityKcalPerKg ?? 3200,
     );
-    form.productionLossRate = Number(data?.productionLossRate ?? 1.07);
+    // 生产损耗率不在这里读写：已迁到「全局配置 → 生产配置」
     form.defaultLaborHours = Number(data?.defaultLaborHours ?? 2);
     form.scheduleLookaheadDays = Number(data?.scheduleLookaheadDays ?? 45);
     form.slotRetryTimes = Number(data?.slotRetryTimes ?? 5);
@@ -587,6 +557,29 @@ const loadConfig = async () => {
     console.error(error);
   } finally {
     loading.value = false;
+  }
+};
+
+/**
+ * 多份购买开关二次确认（2026-10-21）。
+ *
+ * 设计/交付/售后已打通，运营需要在正式版审核通过后开启。
+ * 但这是会影响顾客下单方式的开关，先确认一次；取消则立即退回关闭。
+ */
+const handleMultiRecipeToggle = async (value: boolean | string | number) => {
+  if (!value) return;
+  try {
+    await ElMessageBox.confirm(
+      '开启后，顾客在确认页会看到「配方份数」，可以选择 1–5 份并按多份优惠下单。请确认小程序正式版已经审核通过。',
+      '开启多份购买',
+      {
+        confirmButtonText: '确认开启',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    );
+  } catch {
+    form.multiRecipeEnabled = false;
   }
 };
 

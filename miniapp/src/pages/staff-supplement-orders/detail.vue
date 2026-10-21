@@ -132,7 +132,14 @@
 
       <!-- 操作 -->
       <view class="action-bar">
-
+        <button
+          v-if="order.status === 'PENDING_PAYMENT'"
+          class="primary-btn"
+          :disabled="submitting"
+          @tap="handleConfirmPayment"
+        >
+          确认收款
+        </button>
 
         <button
           v-if="order.status === 'PACKED'"
@@ -159,7 +166,14 @@
           重新打印标签
         </button>
 
-
+        <button
+          v-if="order.status === 'PENDING_PAYMENT'"
+          class="secondary-btn"
+          :disabled="submitting"
+          @tap="handleCancel"
+        >
+          取消订单
+        </button>
       </view>
     </template>
   </view>
@@ -258,6 +272,31 @@ async function fetchOrder() {
   }
 }
 
+function handleConfirmPayment() {
+  uni.showModal({
+    title: '确认收款',
+    content: '确认已收到这笔款项？确认后订单进入待分装。',
+    success: async (res) => {
+      if (!res.confirm) return
+      submitting.value = true
+      try {
+        const response = await staffSupplementOrderApi.confirmPayment(orderId.value)
+        if (response.code === 0) {
+          uni.showToast({ title: '已确认收款', icon: 'success' })
+          await fetchOrder()
+        } else {
+          uni.showToast({ title: response.message || '操作失败', icon: 'none' })
+        }
+      } catch (error) {
+        console.error('[SupplementOrderDetail] 确认收款失败:', error)
+        uni.showToast({ title: '操作失败', icon: 'none' })
+      } finally {
+        submitting.value = false
+      }
+    },
+  })
+}
+
 function handlePack() {
   const items = (order.value?.items || []).map((item, index) => ({
     itemId: item.id,
@@ -327,6 +366,39 @@ function handleShip() {
       }
     },
   })
+}
+
+function handleCancel() {
+  uni.showModal({
+    title: '取消订单',
+    content: '确认取消这张补剂订单？',
+    success: async (res) => {
+      if (!res.confirm) return
+      submitting.value = true
+      try {
+        const response = await staffSupplementOrderApi.cancel(orderId.value)
+        if (response.code === 0) {
+          uni.showToast({ title: '已取消', icon: 'success' })
+          await fetchOrder()
+        } else {
+          uni.showToast({ title: response.message || '取消失败', icon: 'none' })
+        }
+      } catch (error) {
+        console.error('[SupplementOrderDetail] 取消失败:', error)
+        uni.showToast({ title: '取消失败', icon: 'none' })
+      } finally {
+        submitting.value = false
+      }
+    },
+  })
+}
+
+function goToLabels() {
+  uni.navigateTo({ url: `/pages/staff-supplement-orders/labels?id=${orderId.value}` })
+}
+
+function goBack() {
+  uni.navigateBack()
 }
 
 onLoad((options) => {

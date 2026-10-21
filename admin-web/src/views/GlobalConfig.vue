@@ -105,6 +105,19 @@
           <span class="form-tip">例如: 1.05 表示5%损耗</span>
         </el-form-item>
 
+        <el-form-item label="内部生产损耗系数" prop="productionLossRate">
+          <el-input-number
+            v-model="form.productionLossRate"
+            :min="1"
+            :max="2"
+            :step="0.01"
+            :precision="3"
+            :controls="true"
+            style="width: 300px"
+          />
+          <span class="form-tip">1.07 = 7% 损耗；用于投料/成本/补剂计算</span>
+        </el-form-item>
+
         <el-divider content-position="left">生产与库存</el-divider>
 
         <el-form-item label="完工自动扣减原料库存">
@@ -568,6 +581,7 @@ const form = ref<GlobalConfig>({
   overheadCostPerKg: 2.0,
   targetBatchUtilization: 0.8,
   supplementLossRate: 1.05,
+  productionLossRate: 1.07,
   ingredientPriceAutoApproveThreshold: 0.08,
   defaultProductLabelId: null,
   defaultIcePackId: null,
@@ -609,6 +623,10 @@ const rules: FormRules = {
     { required: true, message: '请输入补充剂损耗率', trigger: 'blur' },
     { type: 'number', min: 1, message: '不能小于1', trigger: 'blur' },
   ],
+  productionLossRate: [
+    { required: true, message: '请输入内部生产损耗系数', trigger: 'blur' },
+    { type: 'number', min: 1, max: 2, message: '范围1-2之间', trigger: 'blur' },
+  ],
   minOrderWeightG: [
     { required: true, message: '请输入最小订单重量', trigger: 'blur' },
     { type: 'number', min: 100, message: '不能小于100克', trigger: 'blur' },
@@ -624,7 +642,12 @@ const loadConfig = async () => {
   loading.value = true
   try {
     const data = await globalConfigApi.get()
-    form.value = data
+    // 内部生产损耗系数：老后端还没有这个字段时按 1.07 兜底，避免输入框空着
+    form.value = {
+      ...form.value,
+      ...data,
+      productionLossRate: Number(data?.productionLossRate ?? 1.07),
+    }
   } catch (error) {
     ElMessage.error('加载配置失败')
     console.error(error)

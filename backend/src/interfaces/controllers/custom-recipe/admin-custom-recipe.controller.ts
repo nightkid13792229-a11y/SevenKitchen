@@ -20,6 +20,7 @@ import {
   BadRequestException,
   ForbiddenException,
   NotFoundException,
+  Optional,
   Req,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -28,6 +29,12 @@ import { CustomRecipeService } from '../../../application/custom-recipe/custom-r
 import { CustomRecipeDeliveryService } from '../../../application/custom-recipe/custom-recipe-delivery.service';
 import { CustomRecipeAftersaleService } from '../../../application/custom-recipe/custom-recipe-aftersale.service';
 import { PrismaService } from '../../../infrastructure/prisma.service';
+import {
+  DEFAULT_PRODUCTION_LOSS_RATE,
+  MAX_PRODUCTION_LOSS_RATE,
+  MIN_PRODUCTION_LOSS_RATE,
+  GlobalConfigService,
+} from '../../../application/config/global-config.service';
 import { CustomRecipeViewService } from '../../../application/custom-recipe/custom-recipe-view.service';
 import {
   CustomRecipeConfigService,
@@ -41,6 +48,7 @@ import { AdminGuard } from '../auth/admin.guard';
 import { StaffGuard } from '../../guards/role.guard';
 import { AuthGuard } from '../../auth/auth.guard';
 import { CustomRecipeStatus } from '@prisma/client';
+import { canTransition } from '../../../domain/custom-recipe/custom-recipe.state';
 import { WechatService } from '../../../infrastructure/wechat/wechat.service';
 import { WechatPaymentService } from '../../../application/payment/wechat-payment.service';
 import { ApiResponseDto } from '../../dto/common/response.dto';
@@ -92,6 +100,16 @@ export class AdminCustomRecipeController {
     private readonly viewService: CustomRecipeViewService,
     /** 只读查询（交付历史这类）走它，不必为一条列表在 service 里加方法 */
     private readonly prisma: PrismaService,
+    /**
+     * 全局配置（2026-10-21）：只用来读「内部生产损耗系数」。
+     *
+     * 这个值原先在 `CustomRecipeConfig.productionLossRate`，现迁到
+     * `GlobalConfig.productionLossRate`。放参数表**最后**并 `@Optional`：
+     * 既有测试按位置构造控制器，插在中间会让它们全部错位；
+     * DI 没接上时 resolveProductionLossRate 会回落到 1.07。
+     */
+    @Optional()
+    private readonly globalConfigService?: GlobalConfigService,
   ) {}
 
   /**
@@ -305,29 +323,36 @@ export class AdminCustomRecipeController {
   }
 
   /**
-   * 生产损耗率（系数，1.07 = 多买 7%）。
+   * 内部生产损耗系数（≥1 的系数，1.07 = 多买 7%）。
    *
-   * 读配置；读不到时回落到 `1.07` —— 那是 `schema.prisma` 里
-   * `CustomRecipeConfig.productionLossRate` 的默认值。
+   * 2026-10-21 起读 `GlobalConfig.productionLossRate`，不再读
+   * `CustomRecipeConfig.productionLossRate` —— 后者已废弃但保留列，
+   * 只为兼容旧数据/回滚。
    *
-   * 刻意**不静默回落**：配置读不到说明有问题，日志里留一行，
-   * 免得"值变了但没人知道为什么"。
+   * 只影响**新建**食谱：写进 `Recipe.productionLossRate` 的初始值。
+   * 已有食谱的该字段与交付快照保持原值，这里不回溯修改。
+   *
+   * 读不到 / 值不合法 → 回落到 1.07，并在日志里留一行。
    */
   private async resolveProductionLossRate(): Promise<number> {
     try {
-      const config = await this.customRecipeConfigService.getConfig();
+      const config = await this.globalConfigService?.getGlobalConfig();
       const value = Number(config?.productionLossRate);
-      if (Number.isFinite(value) && value >= 1) {
+      if (
+        Number.isFinite(value) &&
+        value >= MIN_PRODUCTION_LOSS_RATE &&
+        value <= MAX_PRODUCTION_LOSS_RATE
+      ) {
         return value;
       }
       console.warn(
-        '[CustomRecipe] 配置里的生产损耗率不合法，按 1.07 处理：',
+        '[CustomRecipe] 全局配置里的生产损耗率不合法，按 1.07 处理：',
         config?.productionLossRate,
       );
     } catch (error) {
       console.warn('[CustomRecipe] 读取生产损耗率失败，按 1.07 处理：', error);
     }
-    return 1.07;
+    return DEFAULT_PRODUCTION_LOSS_RATE;
   }
 
   /**
@@ -464,11 +489,21 @@ export class AdminCustomRecipeController {
     }
 
     /**
-     * 取消一张**已付款**的定制单要先原路退款（老板 2026-10-04 口径 3）。
+     * 取消一张**已付款但还没交付**的定制单要先原路退款（老板 2026-10-04 口径 3）。
      *
      * 此前后台取消只释放当天名额、既不退款也不提示，钱留在我们账上，
      * 往往要等顾客来问才发现。退款失败就不取消 ——
      * 宁可保持原状，也不要出现"取消了钱没退"。
+     *
+     * 2026-10-21 修：原来只认 `PAID`，**制作中（IN_PROGRESS）被漏掉**。
+     * 生产单 CR202610201196 有 paymentConfirmedAt / paymentTransactionId，
+     * 后台取消后 refundStatus 仍为 null —— 钱收了、单取消了、没人退。
+     * "已付款"不会因为开始制作而消失，所以退款条件应是
+     * **已收款且还没交付**，而不是某一个状态。
+     *
+     * 兜底 `paymentConfirmedAt`：状态可能因异常流程停在待付款，但钱已确认到账；
+     * 只要这张单**还能取消**（交付/完成都不在可取消之列），就不能漏退。
+     * 正常未付款的待付款单没有 paymentConfirmedAt，行为不变。
      */
     if (status === CustomRecipeStatus.CANCELLED) {
       const order = await this.customRecipeService.getOrderByOrderId(orderId);
@@ -477,11 +512,37 @@ export class AdminCustomRecipeController {
         throw new NotFoundException('订单不存在');
       }
 
-      if (order.status === CustomRecipeStatus.PAID) {
-        await this.wechatPaymentService.createCustomRecipeRefund({
-          orderId: order.orderId,
-          reason: (reason || '').trim() || '后台取消定制订单',
-        });
+      const shouldRefund =
+        order.status === CustomRecipeStatus.PAID ||
+        order.status === CustomRecipeStatus.IN_PROGRESS ||
+        (Boolean(order.paymentConfirmedAt) &&
+          canTransition(order.status, CustomRecipeStatus.CANCELLED));
+
+      if (shouldRefund) {
+        /**
+         * 必须先退再取消：这个 await 抛错时下面的 `updateOrderStatus` 不会执行，
+         * 订单保持原状，管理员可以在微信商户平台核查后重试。
+         */
+        const refund =
+          await this.wechatPaymentService.createCustomRecipeRefund({
+            orderId: order.orderId,
+            reason: (reason || '').trim() || '后台取消定制订单',
+          });
+
+        /**
+         * 微信也可能**不抛错、但返回一个失败状态**（CLOSED / ABNORMAL）。
+         * 只认「成功 / 处理中 / 待处理」；其它状态同样不能取消 ——
+         * 否则又会回到"单取消了、钱没退"。
+         */
+        const refundStatus = String(refund?.status || '').toUpperCase();
+        if (
+          refundStatus &&
+          !['SUCCESS', 'PROCESSING', 'PENDING'].includes(refundStatus)
+        ) {
+          throw new BadRequestException(
+            `退款未成功（${refundStatus}），订单保持原状；请到微信商户平台核查后再试`,
+          );
+        }
       }
     }
 
@@ -491,6 +552,77 @@ export class AdminCustomRecipeController {
     });
 
     return ApiResponseDto.success({ status });
+  }
+
+  /**
+   * 手工补退款（2026-10-21 · 生产单 CR202610201196 的一刀）。
+   *
+   * ## 为什么需要它
+   *
+   * 退款此前只挂在两条路径上：顾客自助取消、后台取消。
+   * 生产单 CR202610201196 在**修复前**被取消（当时取消制作中的单不退钱），
+   * 结果 `status=CANCELLED`、`refundStatus=null`、钱已收 ——
+   * 而这时**没有任何入口能把钱退回去**：订单已取消，取消按钮也不见了。
+   *
+   * 这个接口只做一件事：对一张**已经取消**的已付款单补发起一次原路退款。
+   * 不改订单状态、不释放名额、不发通知 —— 那些在取消时已经做过了。
+   *
+   * ## 为什么这里不拦状态
+   *
+   * 任务口径是"已取消但没退成钱"的历史单，但控制器不写死 `CANCELLED`：
+   * ① 生产上真出过的另一种形态是**状态漂移**（例如停在 PAID 但已退款失败），
+   *    把它挡在门外只会逼人改数据库；
+   * ② 真正不能退的是"没收到钱"，那一条下面已经拦了；
+   * ③ 重复退款由 `createCustomRecipeRefund` 自己幂等（成功/处理中直接复用），
+   *    这里再写一份状态白名单只会形成第二套口径。
+   *
+   * 仅管理员：退款是资金动作，与"取消订单"同级。
+   */
+  @Post('orders/:orderId/refund')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: '手工补退款（仅管理员，已付款的已取消单）' })
+  async refundOrder(
+    @Param('orderId') orderId: string,
+    @Body('reason') reason?: string,
+  ) {
+    const order = await this.customRecipeService.getOrderByOrderId(orderId);
+
+    if (!order) {
+      throw new NotFoundException('订单不存在');
+    }
+
+    /**
+     * 没收到钱的单不能退。
+     *
+     * 与 `createCustomRecipeRefund` 里那条"该定制订单尚未支付"是同一条口径，
+     * 提前在这里拦一次，为的是**返回 400 与可读原因**，而不是把
+     * "能否退款"的知识留给前端去猜。
+     */
+    if (!order.paymentConfirmedAt && !order.paymentTransactionId) {
+      throw new BadRequestException('该定制订单尚未支付，无需退款');
+    }
+
+    /**
+     * 退款失败（未开启线上退款、微信报错）**原样抛出去**：
+     * 页面必须看到"钱没退成"的真实原因，绝不能吞掉后回一个成功。
+     */
+    const refund = await this.wechatPaymentService.createCustomRecipeRefund({
+      orderId: order.orderId,
+      reason: String(reason ?? '').trim() || '后台手工补退款',
+    });
+
+    /**
+     * 已经退成功/处理中的单，helper 会原样复用同一条退款记录（`reused: true`），
+     * 不会重复打款 —— 把 `reused` 一并回给页面，点击后能说清"这笔早就退过了"。
+     */
+    return ApiResponseDto.success({
+      orderId: order.orderId,
+      status: refund.status,
+      amount: refund.amount,
+      outRefundNo: refund.outRefundNo,
+      refundId: refund.refundId,
+      reused: refund.reused,
+    });
   }
 
   /**
@@ -505,22 +637,21 @@ export class AdminCustomRecipeController {
     @Body() dto: CreateRecipeDTO,
   ) {
     /**
-     * 生产损耗率读**配置**，不再写死（2026-10-16 批次 5.7）。
+     * 内部生产损耗系数读**全局配置**（2026-10-21 从 CustomRecipeConfig 迁来）。
      *
      * ## 这里原来写死 1.07，而设计器那边写死 1.05
      *
      * 后果：**同一道食谱，从哪个入口发布，顾客要买的量差 2%**。
      * 而采购量就是按这个值算的 —— 顾客照着买，多买少买都不对。
      *
-     * ## 为什么现在能自己定下来了
+     * ## 现在两个入口读同一个值
      *
-     * `CustomRecipeConfig.productionLossRate` 这个字段**本来就是为了统一它才加的**
-     * （schema 里写着："此前它们散落在代码里写死 —— 有的还写死在两处且值不一样"）。
-     * 也就是说这不是一个"要老板拍板的口径"，而是**一个没做完的重构**：
-     * 字段加了，两处写死的值没改成读它。
+     * `GlobalConfig.productionLossRate` 是唯一来源：后台「全局配置 → 生产配置」
+     * 改完即时生效，两边自然一致。CustomRecipeConfig 里的同名列已废弃，
+     * 只为兼容旧数据/回滚保留，不再参与新建食谱。
      *
-     * 改成读配置之后：① 两边自然一致；② 老板能在后台设置页直接改，
-     * 不用改代码。
+     * ⚠️ 只影响新建的食谱；已有 `Recipe.productionLossRate` 与交付快照
+     * 一律保持原值（迁移不回溯改数）。
      */
     const lossRate = await this.resolveProductionLossRate();
 

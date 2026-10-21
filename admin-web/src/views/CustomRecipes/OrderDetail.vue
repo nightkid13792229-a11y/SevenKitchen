@@ -1067,6 +1067,12 @@ const openInDesigner = async () => {
   }
 
   const orderId = order.value!.orderId;
+  /**
+   * 必须在点击的同步栈里先开空窗口。
+   * 下面要 await 改订单状态；等完再 window.open，浏览器会把它当成
+   * 非用户触发的弹窗直接拦掉，按钮看起来"点了没反应"。
+   */
+  const designerWindow = window.open('', '_blank');
   openingDesigner.value = true;
   try {
     if (order.value?.status === 'PAID') {
@@ -1077,8 +1083,13 @@ const openInDesigner = async () => {
     }
 
     const url = `/recipe-designer?dogId=${encodeURIComponent(String(dogId))}&orderId=${encodeURIComponent(orderId)}&openCreate=1`;
-    window.open(url, '_blank');
+    if (designerWindow) {
+      designerWindow.location.href = url;
+    } else {
+      window.open(url, '_blank');
+    }
   } catch (error) {
+    designerWindow?.close();
     toastApiError(error, '转入制作失败', (message) => ElMessage.error(message));
   } finally {
     openingDesigner.value = false;

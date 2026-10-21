@@ -8024,9 +8024,43 @@ export class RecipeDesignerService {
         stomachConditions: true,
         stomachOther: true,
         allergyStatus: true,
+        /** 多份购买 / 主蛋白偏好（2026-10-21）：设计器要按份数与顾客选的蛋白来设计 */
+        recipeQuantity: true,
+        requestedProteinCodes: true,
         createdAt: true,
       },
     });
+
+    /**
+     * 最近一次就诊 / 体检（2026-10-21）。
+     *
+     * 只取一条、只选结论字段：设计器不需要全部记录，更不该把
+     * `lab_values` 这类原始化验数值带到前端。按日期倒序取第一条即最新。
+     */
+    const [medicalRecords, checkupRecords] = await Promise.all([
+      this.prisma.medicalRecord.findMany({
+        where: { dogId },
+        orderBy: { visitDate: 'desc' },
+        take: 1,
+        select: {
+          visitDate: true,
+          diagnosis: true,
+          status: true,
+          chiefComplaint: true,
+          exams: true,
+        },
+      }),
+      this.prisma.checkupRecord.findMany({
+        where: { dogId },
+        orderBy: { checkupDate: 'desc' },
+        take: 1,
+        select: {
+          checkupDate: true,
+          checkupType: true,
+          findings: true,
+        },
+      }),
+    ]);
 
     const insight = buildDogDesignInsight({
       dog: dogForLifeStage,
@@ -8034,6 +8068,8 @@ export class RecipeDesignerService {
       orderItems,
       recentEatenOrderItems,
       lifeStageLabel,
+      medicalRecords,
+      checkupRecords,
       customRecipeOrder: customOrder
         ? {
             orderId: customOrder.orderId,
@@ -8053,6 +8089,8 @@ export class RecipeDesignerService {
             stomachConditions: customOrder.stomachConditions ?? [],
             stomachOther: customOrder.stomachOther ?? null,
             allergyStatus: customOrder.allergyStatus ?? null,
+            recipeQuantity: customOrder.recipeQuantity ?? 1,
+            requestedProteinCodes: customOrder.requestedProteinCodes ?? [],
             createdAt: customOrder.createdAt
               ? customOrder.createdAt.toISOString()
               : null,

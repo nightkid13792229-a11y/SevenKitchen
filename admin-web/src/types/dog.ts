@@ -101,6 +101,8 @@ export interface DogProfile {
   ownerNickname?: string | null
   /** 归属客户手机号（/admin/dogs 返回） */
   ownerPhone?: string | null
+  /** 狗狗头像；后台列表暂未返回时页面用占位图 */
+  avatarUrl?: string | null
   birthday: string // ISO 8601 date string
   gender: DogGender
   isNeutered: boolean

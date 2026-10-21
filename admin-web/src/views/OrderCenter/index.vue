@@ -7,6 +7,18 @@
           三类订单统一视图，只读；点订单号去对应详情。售后单独筛选，不占状态。
         </p>
       </div>
+      <div class="header-actions">
+        <el-tooltip
+          v-if="isAdmin"
+          content="为已有账号顾客或无账号代客客户代下定制食谱订单（线下收款）"
+          placement="bottom"
+        >
+          <el-button type="primary" @click="openAssistedOrder">代客下单</el-button>
+        </el-tooltip>
+        <el-tooltip v-else :content="`${ADMIN_ONLY_TIP}：代客下单`" placement="bottom">
+          <span><el-button type="primary" disabled>代客下单</el-button></span>
+        </el-tooltip>
+      </div>
     </div>
 
     <el-card shadow="never" class="filter-card">
@@ -158,8 +170,11 @@ import type {
   UnifiedStatusGroup,
 } from '@/api/orderCenter'
 import OrderDetail from '@/views/CustomRecipes/OrderDetail.vue'
+import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole'
 
 const router = useRouter()
+/** 代客下单会创建订单并登记线下收款，后端仅管理员可用 */
+const isAdmin = useIsAdmin()
 const loading = ref(false)
 const items = ref<OrderCenterItem[]>([])
 const total = ref(0)
@@ -335,6 +350,12 @@ function openOrder(row: OrderCenterItem) {
   router.push({ path: '/supplement-shop/orders', query: { keyword: row.orderNo } })
 }
 
+/** 去代客下单页（仅管理员；按钮对其他人置灰并说明原因） */
+function openAssistedOrder() {
+  if (!isAdmin.value) return
+  router.push('/custom-recipes/assisted-order')
+}
+
 onMounted(async () => {
   // 深链要在列表加载完成后打开，避免抽屉先闪一下再被列表刷新打断
   try {
@@ -362,6 +383,7 @@ watch(
 .order-center { padding: 16px; }
 .page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
 .page-header h2 { margin: 0; font-size: 20px; }
+.header-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .subtitle { margin: 6px 0 0; color: #909399; font-size: 13px; }
 .filter-card { margin-bottom: 12px; }
 .type-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }

@@ -178,3 +178,45 @@ export function isCustomRecipeRefundSucceeded(
 ): boolean {
   return String(status || '').toUpperCase() === 'SUCCESS'
 }
+
+/**
+ * 是否显示「补退款」入口（2026-10-21）。
+ *
+ * ## 为什么需要一个人工补退按钮
+ *
+ * 退款原先只挂在「取消」这一条路径上。2026-10-21 修复之前，
+ * **制作中的单取消不退钱**：生产单 CR202610201196 被取消后
+ * `refundStatus` 仍为 null，钱已收、单已取消。
+ * 而此时「取消订单」按钮已经随着订单取消消失了 ——
+ * 后台**没有任何入口**能把钱退回去。
+ *
+ * ## 判定条件（三条缺一不可）
+ *
+ * 1. **已取消** —— 未取消的单走「取消订单」，那里会先退款再取消；
+ * 2. **已确认收款** —— 没收到钱的单退什么？后端也会再拦一次（400）；
+ * 3. **退款还没成/还没在退** —— SUCCESS 说明钱已退回；PROCESSING / PENDING
+ *    说明微信正在处理，再点一次只会拿到同一条记录（helper 幂等），
+ *    对客服只会造成"到底退了几次"的困惑。
+ *
+ * 失败/异常（ABNORMAL / CLOSED / FAILED）则**要显示**：
+ * 那正是需要人工补退或到商户平台核查的情况。
+ *
+ * 判断收在这里（纯函数），页面只绑定 `v-if` —— 与状态文案同样的理由：
+ * 判定散在模板里，改一处就会漏一处。
+ */
+export function canManualRefundCustomRecipeOrder(order: {
+  status?: string | null
+  paymentConfirmedAt?: string | Date | null
+  refundStatus?: string | null
+}): boolean {
+  const status = String(order?.status || '').toUpperCase()
+  if (status !== 'CANCELLED') return false
+  if (!order?.paymentConfirmedAt) return false
+
+  const refund = String(order?.refundStatus || '').toUpperCase()
+  /**
+   * PENDING 与 PROCESSING 都是"已在退款中"（后端 `isRefundInFlight` 同口径），
+   * 文案也映射成同一句「退款处理中」。漏掉 PENDING 会多给一个无意义的按钮。
+   */
+  return !['SUCCESS', 'PROCESSING', 'PENDING'].includes(refund)
+}

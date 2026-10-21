@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   canDeliverCustomRecipe,
+  canManualRefundCustomRecipeOrder,
   getCustomRecipeRefundStatusText,
   isCustomRecipeOrderOpen,
   isCustomRecipeRedelivery,
@@ -99,5 +100,79 @@ describe('退款状态文案', () => {
     expect(isCustomRecipeRefundSucceeded('SUCCESS')).toBe(true)
     expect(isCustomRecipeRefundSucceeded('PROCESSING')).toBe(false)
     expect(isCustomRecipeRefundSucceeded(null)).toBe(false)
+  })
+})
+
+/**
+ * 「补退款」入口的显示条件（2026-10-21）。
+ *
+ * 生产单 CR202610201196：修复前取消"制作中"的单不退钱，
+ * 取消后 refundStatus=null；而取消按钮已随订单取消消失 ——
+ * 这是后台唯一能把钱退回去的入口，所以显示条件必须钉死：
+ * 该显示的一定要显示，不该显示的（没付款 / 已在退 / 已退成）不能多给。
+ */
+describe('「补退款」入口显示条件', () => {
+  /** 生产单 CR202610201196 的真实形态 */
+  const legacyCancelledPaidOrder = {
+    status: 'CANCELLED',
+    paymentConfirmedAt: '2026-10-20T08:00:00.000Z',
+    refundStatus: null,
+  }
+
+  it('★ 已取消 + 已收款 + 从未退款（生产单形态）→ 显示', () => {
+    expect(canManualRefundCustomRecipeOrder(legacyCancelledPaidOrder)).toBe(true)
+  })
+
+  it('退款失败 / 异常 / 关闭 → 显示（这正是需要补退或核查的）', () => {
+    for (const refundStatus of ['FAILED', 'ABNORMAL', 'CLOSED']) {
+      expect(
+        canManualRefundCustomRecipeOrder({
+          ...legacyCancelledPaidOrder,
+          refundStatus,
+        }),
+      ).toBe(true)
+    }
+  })
+
+  it('退款已成功 / 处理中 / 待处理 → 不显示（不能重复打款）', () => {
+    for (const refundStatus of ['SUCCESS', 'PROCESSING', 'PENDING']) {
+      expect(
+        canManualRefundCustomRecipeOrder({
+          ...legacyCancelledPaidOrder,
+          refundStatus,
+        }),
+      ).toBe(false)
+    }
+  })
+
+  it('没有付款确认的老单 → 不显示（本来就没收到钱）', () => {
+    expect(
+      canManualRefundCustomRecipeOrder({
+        ...legacyCancelledPaidOrder,
+        paymentConfirmedAt: null,
+      }),
+    ).toBe(false)
+  })
+
+  it('订单没取消 → 不显示（未取消的单走「取消订单」，那里会先退款）', () => {
+    for (const status of ['PAID', 'IN_PROGRESS', 'DELIVERED', 'COMPLETED']) {
+      expect(
+        canManualRefundCustomRecipeOrder({
+          ...legacyCancelledPaidOrder,
+          status,
+        }),
+      ).toBe(false)
+    }
+  })
+
+  it('大小写与空值不敏感，缺字段按不显示处理', () => {
+    expect(
+      canManualRefundCustomRecipeOrder({
+        status: 'cancelled',
+        paymentConfirmedAt: new Date('2026-10-20T08:00:00.000Z'),
+        refundStatus: 'failed',
+      }),
+    ).toBe(true)
+    expect(canManualRefundCustomRecipeOrder({})).toBe(false)
   })
 })

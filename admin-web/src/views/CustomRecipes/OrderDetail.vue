@@ -447,6 +447,21 @@
           >
             {{ ADMIN_ONLY_TIP }}：取消订单
           </span>
+          <!-- 补退款（2026-10-21）：取消时该退而没退成的历史单。
+               订单取消后「取消订单」按钮就没了，没有这个入口就再也退不了钱。
+               仅在"已取消 + 已收款 + 退款未成功/未处理中"时出现，仅管理员可见。 -->
+          <el-button
+            v-if="canManualRefund"
+            type="warning"
+            plain
+            :loading="manualRefunding"
+            @click="manualRefund"
+          >
+            补退款
+          </el-button>
+          <span v-if="canManualRefund" class="manual-refund-tip">
+            该单已取消但退款未完成，点这里补发起原路退款
+          </span>
           <el-button @click="contactCustomer">联系客户</el-button>
         </div>
       </div>
@@ -784,6 +799,7 @@ import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole';
 import {
   buildMultiRecipeProgressText,
   canDeliverCustomRecipe,
+  canManualRefundCustomRecipeOrder,
   canSubmitBatchDelivery as isBatchDeliveryReady,
   getCustomRecipeRefundStatusText,
   isBatchRecipeSelectable as canSelectBatchRecipe,
@@ -845,6 +861,8 @@ const loadIngredientOptions = async () => {
 const loading = ref(false);
 const submitting = ref(false);
 const healthSyncing = ref(false);
+/** 手工补退款进行中（防止连点重复提交） */
+const manualRefunding = ref(false);
 const order = ref<CustomRecipeOrderDetail | null>(null);
 
 /**
@@ -925,6 +943,27 @@ const hasRefundInfo = computed(
   () =>
     Boolean(order.value?.refundStatus) ||
     (order.value?.refundAmount !== null && order.value?.refundAmount !== undefined),
+);
+
+/**
+ * 「补退款」入口（2026-10-21）。
+ *
+ * 只服务"已取消、钱已收、退款没成"的历史单 —— 例如生产单 CR202610201196：
+ * 取消时只认 PAID，制作中的单没退钱，之后订单已取消，取消按钮消失，
+ * 后台就再没有任何退款入口了。
+ *
+ * 判定条件收在 `canManualRefundCustomRecipeOrder` 纯函数里
+ * （已取消 + 有付款确认 + 退款不是成功/处理中），页面不自己拼状态。
+ * 再加 `isAdmin`：接口仅管理员，员工看不到这个按钮，也不用点完吃 403。
+ */
+const canManualRefund = computed(
+  () =>
+    isAdmin.value &&
+    canManualRefundCustomRecipeOrder({
+      status: order.value?.status,
+      paymentConfirmedAt: order.value?.paymentConfirmedAt,
+      refundStatus: order.value?.refundStatus,
+    }),
 );
 
 /** 下单时填写的过敏 vs 档案最新：两份口径不同，必须分开显示并提示差异 */
@@ -1432,6 +1471,66 @@ const cancelOrder = async () => {
   }
 };
 
+/**
+ * 手工补退款（2026-10-21）。
+ *
+ * 生产单 CR202610201196：修复前取消"制作中"的单不退钱，
+ * 取消后 `refundStatus` 仍为 null；而订单已取消，取消按钮也没了。
+ * 这个动作就是给这类单补发起一次微信原路退款。
+ *
+ * 只对管理员可见（`canManualRefund` 里已判过），后端还有 AdminGuard。
+ * 退款是否重复由后端幂等处理：已成功/处理中的会回 `reused=true`，
+ * 页面据此说"这笔早就退过了"，而不是假装又退了一笔。
+ */
+const manualRefund = async () => {
+  if (manualRefunding.value) return;
+
+  const total = Number(order.value?.amount);
+  const amountText = Number.isFinite(total) && total > 0 ? `¥${total}` : '订单金额';
+
+  try {
+    const { value } = await ElMessageBox.prompt(
+      `该订单已取消，但退款尚未完成。确认向微信发起${amountText}的原路退款？钱会退回顾客的付款账户。`,
+      '补退款',
+      {
+        confirmButtonText: '确认退款',
+        cancelButtonText: '再想想',
+        inputPlaceholder: '补退款原因（会记录在订单里）',
+        inputValue: '客服补退款',
+      },
+    );
+
+    manualRefunding.value = true;
+    const result = await customRecipeApi.refundOrder(
+      order.value!.orderId,
+      value || '客服补退款',
+    );
+
+    const status = String(result?.status || '').toUpperCase();
+    const statusText =
+      getCustomRecipeRefundStatusText(status) || status || '已提交';
+
+    if (result?.reused) {
+      ElMessage.success(`这笔退款此前已发起，当前状态：${statusText}`);
+    } else if (['SUCCESS', 'PROCESSING', 'PENDING'].includes(status)) {
+      ElMessage.success(`补退款已发起：${statusText}`);
+    } else {
+      /**
+       * ABNORMAL / CLOSED / FAILED：钱还没退成，**不能报成功**。
+       * 后台能做的下一步是去微信商户平台核查，所以提示要指到那里。
+       */
+      ElMessage.warning(`退款状态：${statusText}，请到微信商户平台核查后再答复顾客`);
+    }
+
+    emit('refresh');
+    await loadOrderDetail();
+  } catch (error) {
+    toastApiError(error, '补退款失败', (message) => ElMessage.error(message));
+  } finally {
+    manualRefunding.value = false;
+  }
+};
+
 const startProcessing = async () => {
   try {
     await ElMessageBox.confirm('开始制作该订单？', '开始制作');
@@ -1888,6 +1987,13 @@ h3 {
 .admin-only-tip {
   font-size: 13px;
   color: #909399;
+  line-height: 1.6;
+}
+
+/* 补退款（2026-10-21）：已取消但钱没退成时给管理员的提示 */
+.manual-refund-tip {
+  font-size: 13px;
+  color: #e6a23c;
   line-height: 1.6;
 }
 

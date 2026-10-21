@@ -138,6 +138,22 @@ export interface CustomRecipeOrderDetail {
   attachmentsRecords?: CustomRecipeAttachment[]
 }
 
+/**
+ * 手工补退款的结果（2026-10-21）
+ *
+ * `reused=true` 表示这张单**早就退过**（或微信还在处理），
+ * 后端幂等复用了同一条退款记录，没有重复打款 —— 页面据此换措辞。
+ */
+export interface CustomRecipeRefundResult {
+  orderId: string
+  /** PENDING / PROCESSING / SUCCESS / ABNORMAL / CLOSED / FAILED */
+  status: string
+  amount: number | null
+  outRefundNo: string | null
+  refundId: string | null
+  reused: boolean
+}
+
 /** 可以交付到这张订单的候选食谱（只含"这位顾客 + 这只狗"的私密定制食谱） */
 export interface CustomRecipeCandidate {
   /** 业务编号（CR 开头），交付接口收这个值 */
@@ -437,6 +453,20 @@ export const customRecipeApi = {
   /** 流转状态：开始制作 / 取消（取消仅管理员，后端会再拦一次） */
   updateStatus: (orderId: string, status: string, reason?: string) =>
     api.patch(`${BASE}/orders/${orderId}/status`, { status, reason }),
+
+  /**
+   * 手工补退款（2026-10-21 · 仅管理员，后端会再拦一次）
+   *
+   * 只给"已取消、钱已收、退款没成"的历史单用 —— 那时的「取消订单」
+   * 按钮已经消失，没有别的入口能把钱退回去。生产单 CR202610201196 即此情况。
+   *
+   * 后端幂等：已成功/处理中会直接复用原退款记录（`reused=true`），
+   * 不会重复打款；没收到钱的单返回 400。
+   */
+  refundOrder: (orderId: string, reason?: string) =>
+    api.post<CustomRecipeRefundResult>(`${BASE}/orders/${orderId}/refund`, {
+      reason,
+    }),
 
   /**
    * 可交付的食谱候选。

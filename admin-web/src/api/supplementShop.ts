@@ -246,6 +246,7 @@ export const ISSUE_LABELS: Record<string, string> = {
   NO_PRICE: '无进货价',
   FORM_MISSING: '缺形态',
   LIQUID_UNSUPPORTED: '液体不支持',
+  UNIT_INCOMPATIBLE: '单位不可换算',
   SHELF_LIFE_MISSING: '缺保质期',
   STORAGE_MISSING: '缺储存条件',
   UNIT_INCONSISTENT: '单位不一致',

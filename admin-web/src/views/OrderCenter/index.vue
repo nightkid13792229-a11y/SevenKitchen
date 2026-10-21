@@ -156,7 +156,7 @@
     <el-drawer
       v-model="customDrawerVisible"
       title="定制订单详情"
-      size="70%"
+      size="60%"
       direction="rtl"
       destroy-on-close
     >

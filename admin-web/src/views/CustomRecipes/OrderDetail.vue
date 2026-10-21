@@ -356,23 +356,6 @@
           >
             确认付款
           </el-button>
-          <!-- 一键进食谱设计器（2026-09-28）：带着这只狗进去，
-               设计器里会显示顾客的定制需求（目标/备注/订单里填的过敏与忌口），
-               营养师不必再手工新建系列、自己搜狗。
-               2026-10-21：打开设计器即代表进入制作；PAID 单会先改成制作中。 -->
-          <el-button
-            v-if="order.dog?.id"
-            type="success"
-            plain
-            :disabled="!canStartDesign || openingDesigner"
-            :loading="openingDesigner"
-            @click="openInDesigner"
-          >
-            {{ openingDesigner ? '正在转入制作…' : '在设计器中设计' }}
-          </el-button>
-          <span v-if="order.dog?.id && !canStartDesign" class="design-gate-tip">
-            {{ order.status === 'PENDING_PAYMENT' ? '订单未付款，付款后才能开始设计' : '该订单已取消，不能开始设计' }}
-          </span>
           <!--
             线下收款单（2026-10-21 · 代客定制食谱订单 Task 5）。
 
@@ -423,11 +406,10 @@
           <span v-if="canManualRefund" class="manual-refund-tip">
             该单已取消但退款未完成，点这里补发起原路退款
           </span>
-          <el-button @click="contactCustomer">联系客户</el-button>
         </div>
       </div>
 
-      <!-- 右侧：交付已设计好的食谱 -->
+      <!-- 交付：接在订单信息下方（单列布局） -->
       <div class="recipe-creation-section" v-if="canDeliver">
         <!-- 一键交付（2026-10-04 第 1、2 条）：
              设计器里做好的食谱直接挂到订单上，不再在订单页手工抄一份。 -->
@@ -1585,16 +1567,6 @@ const manualRefund = async () => {
   } finally {
     manualRefunding.value = false;
   }
-};
-
-const contactCustomer = () => {
-  const wechat = order.value?.customer?.wechatOpenid;
-  const phone = order.value?.customer?.phone;
-
-  ElMessageBox.alert(
-    `微信：${maskOpenid(wechat)}\n手机：${phone || '未填写'}`,
-    '客户联系方式'
-  );
 };
 
 const viewRecipeFull = () => {

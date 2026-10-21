@@ -168,7 +168,6 @@ describe('订单抽屉的复制、脱敏与年龄（2026-10-21）', () => {
   it('★ openid 脱敏展示，联系客户弹窗也不回显完整值', () => {
     expect(cleanDetail).toContain('maskOpenid')
     expect(cleanDetail).toContain('maskOpenid(order.customer?.wechatOpenid)')
-    expect(cleanDetail).toContain('maskOpenid(wechat)')
     expect(cleanDetail).not.toContain('{{ order.customer?.wechatOpenid')
   })
 

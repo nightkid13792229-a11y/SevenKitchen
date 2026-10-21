@@ -120,6 +120,11 @@
 
         </el-menu-item>
 
+        <el-menu-item index="/custom-recipes/aftersales">
+          <el-icon><List /></el-icon>
+          <span>售后待办</span>
+        </el-menu-item>
+
         <el-menu-item index="/custom-recipes/config">
           <el-icon><Setting /></el-icon>
           <span>食谱定制设置</span>

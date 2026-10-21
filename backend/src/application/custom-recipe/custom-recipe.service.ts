@@ -759,6 +759,11 @@ export class CustomRecipeService implements ICustomRecipeRepository {
             id: true,
             nickname: true,
             phone: true,
+            /**
+             * 角色（2026-10-21）：后台订单详情据此标「内部测试」。
+             * 内部测试账号下的订单不是真实顾客单，不能让运营误当成真实业绩。
+             */
+            role: true,
             wechatOpenid: true,
           },
         },

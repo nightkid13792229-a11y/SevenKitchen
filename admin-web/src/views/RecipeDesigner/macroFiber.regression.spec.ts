@@ -23,12 +23,11 @@ describe('宏量营养 · 可溶性 / 不可溶性纤维（2026-10-22）', () =>
     expect(macro).toContain("name: '不可溶性纤维'")
   })
 
-  it('营养评估的宏量营养组内展示纤维细分', () => {
+  it('营养评估的宏量营养组直接渲染后端返回的纤维细分行', () => {
     const assessment = stripComments(assessmentSource)
-    expect(assessment).toContain('fiberBreakdown')
-    expect(assessment).toContain('纤维细分')
-    expect(assessment).toContain("group.key === 'MACRO'")
-    expect(assessment).toContain("key: 'solubleFiber', label: '可溶性纤维'")
-    expect(assessment).toContain("key: 'insolubleFiber', label: '不可溶性纤维'")
+    expect(assessment).toContain('v-for="row in group.rows"')
+    expect(assessment).toContain('openDetail(row)')
+    expect(assessment).toContain('contributors')
+    expect(assessment).not.toContain('fiberBreakdown')
   })
 })

@@ -15,7 +15,7 @@
         <span v-if="draft?.seriesLifeStage" class="stage-tag">
           {{ stageLabel }}
         </span>
-        <el-dropdown v-if="draft" trigger="click" @command="handleSwitchStage">
+        <el-dropdown v-if="draft && !orderId" trigger="click" @command="handleSwitchStage">
           <el-button size="small" class="stage-switch-btn" :loading="switchingStage">
             切换阶段<el-icon class="el-icon--right"><ArrowDown /></el-icon>
           </el-button>
@@ -64,12 +64,63 @@
           {{ saveStatusText }}
         </span>
         <el-button
+          v-if="!orderId"
           type="primary"
           :disabled="!draft || items.length === 0"
           @click="goPublish"
         >
           发布配方
         </el-button>
+      </div>
+    </div>
+
+    <!--
+      本单设计模式（2026-10-22）：
+      从订单设计工作台进入的草稿锁定本单狗狗，草稿本身不直接发布到橱窗；
+      管理员在这里把这一份「加入本单待提交」，N 份齐了再回工作台一次性交付。
+    -->
+    <div v-if="orderId" class="order-design-banner">
+      <div class="order-design-banner__info">
+        <span class="order-design-banner__badge">本单设计</span>
+        <span class="order-design-banner__order">订单 {{ orderId }}</span>
+        <span v-if="orderDesignWorkspace?.dogName" class="order-design-banner__dog">
+          · {{ orderDesignWorkspace.dogName }}
+        </span>
+        <span>· 本单 {{ orderDesignWorkspace?.quantity ?? 0 }} 份</span>
+        <span>· 已就绪 {{ orderDesignWorkspace?.readyCount ?? 0 }} / {{ orderDesignWorkspace?.quantity ?? 0 }} 份</span>
+        <el-tag
+          v-if="currentOrderSlot"
+          size="small"
+          :type="orderDesignStatusTagType(currentOrderSlot.status)"
+          effect="plain"
+        >
+          {{ orderDesignStatusLabel(currentOrderSlot.status) }}
+        </el-tag>
+      </div>
+      <div class="order-design-banner__actions">
+        <template v-if="isAdmin">
+          <el-button
+            type="success"
+            size="small"
+            :loading="stagingReady"
+            :disabled="!designId || currentOrderSlot?.status === 'DELIVERED'"
+            @click="stageOrderDesign"
+          >
+            加入本单待提交
+          </el-button>
+        </template>
+        <span v-else class="order-design-banner__lock">
+          {{ ADMIN_ONLY_TIP }}：加入本单待提交
+        </span>
+        <el-button size="small" text @click="backToOrderWorkspace">
+          返回本单工作台
+        </el-button>
+      </div>
+      <div
+        v-if="currentOrderSlot?.stageWarning"
+        class="order-design-banner__warning"
+      >
+        {{ currentOrderSlot.stageWarning }}（只提示，不影响加入待提交）
       </div>
     </div>
 
@@ -225,6 +276,16 @@ import { ArrowDown, ArrowLeft, CircleCheckFilled, Delete, EditPen, Loading, Rank
 import draggable from 'vuedraggable'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import type { CreateRecipeSeriesStageDraftPayload } from '@/api/recipeDesigner'
+import { orderRecipeDesignApi } from '@/api/orderRecipeDesign'
+import type {
+  OrderDesignWorkspace,
+  OrderDesignWorkspaceSlot
+} from '@/types/orderRecipeDesign'
+import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole'
+import {
+  orderDesignStatusLabel,
+  orderDesignStatusTagType
+} from '@/utils/orderRecipeDesign'
 import {
   FEDIAF_DOG_SCENARIO_LABELS,
   type DesignRecipeDraftDetail,
@@ -259,6 +320,33 @@ const route = useRoute()
 const router = useRouter()
 const draftId = route.params.draftId as string
 const seriesId = route.params.seriesId as string
+// 从「订单设计工作台」进入时带上的本单上下文（2026-10-22）
+const orderId = String(route.query.orderId || '').trim()
+const designId = String(route.query.designId || '').trim()
+const isAdmin = useIsAdmin()
+const orderDesignWorkspace = ref<OrderDesignWorkspace | null>(null)
+const stagingReady = ref(false)
+
+const currentOrderSlot = computed<OrderDesignWorkspaceSlot | null>(() => {
+  if (!designId || !orderDesignWorkspace.value) return null
+  return (
+    orderDesignWorkspace.value.slots.find(
+      (slot) => slot.designId === designId
+    ) ?? null
+  )
+})
+
+async function loadOrderDesignWorkspace() {
+  if (!orderId) return
+  try {
+    orderDesignWorkspace.value =
+      await orderRecipeDesignApi.getWorkspace(orderId)
+  } catch {
+    // 本单进度拉不到不影响编辑；页面至少还能锁定狗狗继续设计
+    orderDesignWorkspace.value = null
+  }
+}
+
 // 进入已发布草稿会自动跳转到修订版，此后用 currentDraftId 跟随最新草稿
 const currentDraftId = ref(draftId)
 
@@ -729,9 +817,10 @@ async function loadDraft(targetDraftId?: string) {
         if (revision?.id && revision.id !== detail.id) {
           ElMessage.info('已创建可编辑修订版本')
           currentDraftId.value = revision.id
-          router.replace(
-            `/recipe-designer/series/${detail.seriesId ?? seriesId}/drafts/${revision.id}`
-          )
+          router.replace({
+            path: `/recipe-designer/series/${detail.seriesId ?? seriesId}/drafts/${revision.id}`,
+            query: route.query
+          })
           detail = revision
         } else {
           currentDraftId.value = revision?.id ?? detail.id
@@ -787,7 +876,10 @@ async function handleSwitchStage(scenario: string) {
     }
     const next = await recipeDesignerApi.createSeriesStageDraft(seriesId, payload)
     currentDraftId.value = next.id
-    router.replace(`/recipe-designer/series/${seriesId}/drafts/${next.id}`)
+    router.replace({
+      path: `/recipe-designer/series/${seriesId}/drafts/${next.id}`,
+      query: route.query
+    })
     await loadDraft(next.id)
     ElMessage.success(`已切换到「${targetLabel}」`)
   } catch {
@@ -971,11 +1063,78 @@ async function handleReorder() {
   enqueue({ kind: 'batchOrder', order })
 }
 
+/**
+ * 把当前草稿「加入本单待提交」（仅管理员）。
+ *
+ * 先把保存队列里还没落盘的权重/排序刷完：ready 接口读的是服务器上的草稿，
+ * 本地还没保存的修改不会跟着进去。
+ */
+async function stageOrderDesign() {
+  if (!isAdmin.value) {
+    ElMessage.warning(ADMIN_ONLY_TIP)
+    return
+  }
+  if (!orderId || !designId) {
+    ElMessage.warning('请从本单设计工作台打开这份设计后再加入待提交')
+    return
+  }
+  if (!draft.value) return
+
+  try {
+    await ElMessageBox.confirm(
+      `确认把「${seriesDisplayName.value}」加入本单待提交吗？\n加入后顾客还看不到；管理员最终提交时才会一次性交付。`,
+      '加入本单待提交',
+      {
+        type: 'warning',
+        confirmButtonText: '加入待提交',
+        cancelButtonText: '取消'
+      }
+    )
+  } catch {
+    return
+  }
+
+  stagingReady.value = true
+  try {
+    await flushNow()
+    if (hasPending() || saveStatus.value === 'error') {
+      ElMessage.warning('还有改动尚未保存成功，请稍候再试')
+      return
+    }
+    const result = await orderRecipeDesignApi.markReady(orderId, designId)
+    const total = orderDesignWorkspace.value?.quantity ?? 0
+    ElMessage.success(
+      total > 0
+        ? `已加入本单待提交（${result.readyCount} / ${total} 份）`
+        : '已加入本单待提交'
+    )
+    await loadOrderDesignWorkspace()
+    await router.push(`/order-design/${encodeURIComponent(orderId)}`)
+  } catch {
+    // 错误提示由 API 拦截器统一处理
+  } finally {
+    stagingReady.value = false
+  }
+}
+
+function backToOrderWorkspace() {
+  if (!orderId) return
+  router.push(`/order-design/${encodeURIComponent(orderId)}`)
+}
+
 function goPublish() {
+  if (orderId) {
+    ElMessage.warning('本单设计请用「加入本单待提交」，由管理员最终提交交付')
+    return
+  }
   router.push(`/recipe-designer/drafts/${currentDraftId.value}/publish`)
 }
 
 function goBack() {
+  if (orderId) {
+    backToOrderWorkspace()
+    return
+  }
   router.push('/recipe-designer')
 }
 
@@ -1008,6 +1167,7 @@ onMounted(() => {
   registerBeforeUnload()
   window.addEventListener('keydown', handleKeydown)
   void loadDraft()
+  void loadOrderDesignWorkspace()
 })
 
 onBeforeUnmount(() => {
@@ -1037,6 +1197,49 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid #e4e7ed;
   background: #fff;
   flex-shrink: 0;
+}
+.order-design-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 8px 16px;
+  background: #f0f9eb;
+  border-bottom: 1px solid #e1f3d8;
+  font-size: 12px;
+  color: #606266;
+  flex-shrink: 0;
+}
+.order-design-banner__info {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.order-design-banner__badge {
+  background: #67c23a;
+  color: #fff;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-weight: 600;
+}
+.order-design-banner__order {
+  font-weight: 600;
+  color: #303133;
+}
+.order-design-banner__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.order-design-banner__lock {
+  color: #909399;
+}
+.order-design-banner__warning {
+  flex-basis: 100%;
+  color: #e6a23c;
+  line-height: 1.6;
 }
 .header-info {
   flex: 1;

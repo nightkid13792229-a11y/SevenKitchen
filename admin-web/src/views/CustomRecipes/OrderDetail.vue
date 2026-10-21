@@ -387,11 +387,50 @@
               :disabled="!canStartDesign || openingDesigner"
               @click="openInDesigner"
             >
-              在设计器中设计
+              {{ designEntryLabel }}
             </el-button>
+            <span
+              v-if="legacyOrderWithoutDesignSlots"
+              class="design-workspace-note"
+            >
+              本单还没有本单设计记录（老订单）：进入「{{ designEntryLabel }}」可为本单新建 N 份设计；
+              下方旧候选交付仍然可用。
+            </span>
           </div>
-          <!-- 1 份订单保持原来的单份交付；N 份订单必须一次交齐（2026-10-21） -->
-          <template v-if="isMultiRecipeOrder">
+
+          <!--
+            订单绑定食谱设计（2026-10-22）：
+            有槽位的新流程单只显示工作台入口；旧候选交付只在没有槽位的老订单上出现。
+          -->
+          <el-alert
+            v-if="hasOrderDesignSlots"
+            class="order-design-alert"
+            type="info"
+            :closable="false"
+            show-icon
+          >
+            <template #title>本单已进入「订单设计」流程</template>
+            <div>
+              本单 {{ designWorkspace?.quantity ?? 0 }} 份<span
+                v-if="designDeliveredCount > 0"
+              >，已交付 {{ designDeliveredCount }} 份</span><span
+                v-else
+              >，已就绪 {{ designWorkspace?.readyCount ?? 0 }} 份</span>；
+              请进入本单设计工作台逐份「加入本单待提交」，N 份齐了由管理员最终提交交付。
+            </div>
+            <el-button
+              class="order-design-alert__action"
+              link
+              type="primary"
+              @click="openInDesigner"
+            >
+              进入本单工作台
+            </el-button>
+          </el-alert>
+
+          <template v-else>
+            <!-- 1 份订单保持原来的单份交付；N 份订单必须一次交齐（2026-10-21） -->
+            <template v-if="isMultiRecipeOrder">
             <h3>一次性交付 {{ multiRecipeQuantity }} 份食谱</h3>
             <p class="section-desc">
               本单购买了 {{ multiRecipeQuantity }} 份，这里列出「{{ order.dog?.name || '这只狗' }}」的全部私密定制候选。
@@ -466,7 +505,7 @@
             <el-empty
               v-if="!candidatesLoading && !candidates.length"
               :image-size="70"
-              description="这只狗还没有已发布的定制食谱，请先点上方「在设计器中设计」"
+              description="这只狗还没有已发布的定制食谱，请先点上方「开始设计」"
             />
           </div>
 
@@ -509,6 +548,7 @@
           <p v-if="batchDeliverError" class="delivery-error">
             {{ batchDeliverError }}
           </p>
+          </template>
         </div>
 
       </div>
@@ -634,6 +674,8 @@ import type {
   CustomRecipeOrderDetail,
 } from '@/api/customRecipe';
 import { dogApi } from '@/api/dogs';
+import { orderRecipeDesignApi } from '@/api/orderRecipeDesign';
+import type { OrderDesignWorkspace } from '@/types/orderRecipeDesign';
 import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole';
 import {
   CUSTOM_RECIPE_OFFLINE_REFUND_METHOD_OPTIONS,
@@ -715,6 +757,33 @@ const canStartDesign = computed(() => {
   const status = String(order.value?.status || '');
   return Boolean(status) && !['PENDING_PAYMENT', 'CANCELLED'].includes(status);
 });
+
+/**
+ * 订单绑定食谱设计（2026-10-22 · Task 5）。
+ *
+ * 有设计槽位的订单必须去 `/order-design/:orderId` 工作台完成 N 份并最终提交；
+ * 没有任何槽位的老订单仍然保留下方旧的候选交付流程。
+ */
+const designWorkspace = ref<OrderDesignWorkspace | null>(null);
+const designWorkspaceLoading = ref(false);
+const hasOrderDesignSlots = computed(
+  () => (designWorkspace.value?.slots.length ?? 0) > 0,
+);
+const designEntryLabel = computed(() =>
+  hasOrderDesignSlots.value ? '继续设计' : '开始设计',
+);
+const designDeliveredCount = computed(
+  () =>
+    designWorkspace.value?.slots.filter((slot) => slot.status === 'DELIVERED')
+      .length ?? 0,
+);
+/** 制作中的老订单还没有本单设计记录：提示旧交付入口仍可用。 */
+const legacyOrderWithoutDesignSlots = computed(
+  () =>
+    String(order.value?.status || '') === 'IN_PROGRESS' &&
+    !designWorkspaceLoading.value &&
+    !hasOrderDesignSlots.value,
+);
 
 /** 交付历史（2026-10-18 · 需求 2.8.6）—— 订单详情只带最新一版，这里要全部 */
 const deliveryHistory = ref<CustomRecipeDeliveryHistoryItem[]>([]);
@@ -1206,6 +1275,22 @@ const loadDogBreedName = async (dogId?: string) => {
   }
 };
 
+const loadDesignWorkspace = async () => {
+  designWorkspace.value = null;
+  if (!props.orderId) return;
+  designWorkspaceLoading.value = true;
+  try {
+    designWorkspace.value = await orderRecipeDesignApi.getWorkspace(
+      props.orderId,
+    );
+  } catch {
+    // 工作台接口失败时仍保留旧交付入口，不能把订单页整块弄没
+    designWorkspace.value = null;
+  } finally {
+    designWorkspaceLoading.value = false;
+  }
+};
+
 const loadOrderDetail = async () => {
   loading.value = true;
   batchDeliverError.value = '';
@@ -1221,8 +1306,11 @@ const loadOrderDetail = async () => {
     }
     // 状态决定能不能交付（已付款/制作中/已交付），详情到手后再拉候选
     if (canDeliverCustomRecipe(order.value?.status)) {
+      // 先看本单有没有「订单设计」槽位：有槽位就走新工作台，没有才保留旧交付
+      await loadDesignWorkspace();
       await loadRecipeCandidates();
     } else {
+      designWorkspace.value = null;
       candidates.value = [];
       selectedCandidateId.value = '';
     }
@@ -1248,12 +1336,12 @@ const confirmPayment = async () => {
 };
 
 /**
- * 跳到食谱设计器并带上这只狗。
+ * 打开「本单食谱设计」工作台（2026-10-22 起改入口）。
  *
- * 设计器会预填"参考爱犬"并直接打开创建对话框；
- * 进去之后「爱犬指导」面板会显示这笔定制订单的顾客需求。
+ * 以前是带 dogId 跳旧设计器再让员工手工新建系列；现在每单 N 份各有独立槽位，
+ * 工作台里从模板/空白新建、逐份加入待提交、管理员最终一次交付。
  *
- * 2026-10-21：打开设计器即代表进入制作 ——
+ * 2026-10-21：打开即代表进入制作 ——
  * 已付款（PAID）的单先改成 IN_PROGRESS，成功后才开窗口；
  * 改状态失败就留在订单页并报错，不能让人以为已经在做了。
  */
@@ -1286,7 +1374,7 @@ const openInDesigner = async () => {
       emit('refresh');
     }
 
-    const url = `/recipe-designer?dogId=${encodeURIComponent(String(dogId))}&orderId=${encodeURIComponent(orderId)}&openCreate=1`;
+    const url = `/order-design/${encodeURIComponent(orderId)}`;
     if (designerWindow) {
       designerWindow.location.href = url;
     } else {
@@ -1637,6 +1725,22 @@ const getGoalText = (goal?: string) => {
   font-size: 15px;
   font-weight: 600;
   color: #303133;
+}
+
+.design-workspace-note {
+  flex: 1;
+  text-align: right;
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.6;
+}
+
+.order-design-alert {
+  margin-bottom: 12px;
+}
+
+.order-design-alert__action {
+  margin-top: 4px;
 }
 
 .order-info-section,

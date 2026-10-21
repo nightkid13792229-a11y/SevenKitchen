@@ -55,10 +55,10 @@ describe('一键交付与重新交付（第 1、2 条）', () => {
     expect(orderDetail).toContain("emit('refresh');")
   })
 
-  it('候选为空时给出可执行的空态，并保留「在设计器中设计」入口', () => {
-    expect(orderDetail).toContain('description="这只狗还没有已发布的定制食谱，请先点上方「在设计器中设计」"')
+  it('候选为空时给出可执行的空态，并保留「开始设计」入口', () => {
+    expect(orderDetail).toContain('description="这只狗还没有已发布的定制食谱，请先点上方「开始设计」"')
     expect(orderDetail).toContain('@click="openInDesigner"')
-    expect(orderDetail).toContain('在设计器中设计')
+    expect(orderDetail).toContain('{{ designEntryLabel }}')
   })
 
   it('重新交付要二次确认，并写清"替换 + 再次通知"（口径 4）', () => {
@@ -117,7 +117,8 @@ describe('设计资料收口：订单抽屉不展开健康明细（2026-10-21）
 
   it('★ 设计入口只保留在交付板块顶部', () => {
     expect(cleanDetail).toContain('delivery-toolbar')
-    expect(cleanDetail).toContain('在设计器中设计')
+    expect(cleanDetail).toContain('{{ designEntryLabel }}')
+    expect(cleanDetail).toContain('开始设计')
     expect(cleanDetail).not.toContain('designSummary')
     expect(cleanDetail).not.toContain('打开食谱设计器')
     expect(cleanDetail).not.toContain('查看健康档案')

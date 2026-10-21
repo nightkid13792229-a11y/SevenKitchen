@@ -195,6 +195,14 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "配方编辑" },
       },
       {
+        // 订单绑定食谱设计工作台（2026-10-22）：一份订单 N 个独立槽位，
+        // 全部加入待提交后由管理员一次性交付。
+        path: "order-design/:orderId",
+        name: "OrderDesignWorkspace",
+        component: () => import("@/views/RecipeDesigner/OrderDesignWorkspace.vue"),
+        meta: { title: "本单食谱设计" },
+      },
+      {
         path: "recipe-designer/drafts/:draftId/publish",
         name: "RecipeDesignerPublish",
         component: () => import("@/views/RecipeDesigner/Publish.vue"),

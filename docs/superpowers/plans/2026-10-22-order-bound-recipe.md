@@ -112,7 +112,7 @@
   - do not mutate source;
   - enforce capacity `readyCount < order.recipeQuantity`;
   - same template reuse allowed.
-- Stage:
+- Stage (`POST .../ready`) requires ADMIN, because it uses the existing private-publish path; staff can design/save but cannot stage.
   - publish private custom recipe via existing private snapshot path/service;
   - ensure it is private/not delivered/not notified;
   - write READY slot;

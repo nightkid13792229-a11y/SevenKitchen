@@ -145,7 +145,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="油性" width="110" align="center">
+        <el-table-column label="内容物油性" width="130" align="center">
           <template #default="{ row }">
             <el-switch
               :model-value="row.isOilBased"

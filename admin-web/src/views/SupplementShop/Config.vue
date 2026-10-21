@@ -319,7 +319,7 @@
             个月
           </span>
           <span class="inline-field">
-            油性软胶囊
+            油性内容物（软胶囊）
             <el-input-number
               v-model="form.oilShelfLifeMonths"
               :min="1"
@@ -331,7 +331,7 @@
           </span>
           <div class="form-tip block">
             鱼油、鱼肝油这类油性内容物最易氧化酸败，取更保守的一档。
-            在「补剂上架清单」里把对应补剂的「油性」开关打开即可生效。
+            在「补剂上架清单」里把对应补剂的「内容物油性」开关打开即可生效。
             <br />
             实际标签效期还会与「原瓶剩余保质期」取小：分装有效期 = min(原瓶到期日, 分装日 + 上面这个月数)
           </div>

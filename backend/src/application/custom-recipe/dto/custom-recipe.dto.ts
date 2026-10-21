@@ -11,6 +11,10 @@ import {
   IsBoolean,
   IsEnum,
   IsInt,
+  IsIn,
+  IsNotEmpty,
+  IsNumber,
+  IsObject,
   Max,
   MaxLength,
   Min,
@@ -423,4 +427,165 @@ export class CustomRecipeOrderDetailResponseDTO extends CustomRecipeOrderRespons
   paymentConfirmedAt?: string;
   inProgressAt?: string;
   deliveredAt?: string;
+}
+
+// ===== 2026-10-21 代客下单（Task 3）=====
+
+/**
+ * 代客单的线下收款信息。
+ *
+ * 渠道**不允许** `WECHAT_ONLINE`：代客单的钱是线下收的，
+ * 记成微信支付会让取消/退款误走微信原路退回。
+ */
+export class AssistedOrderPaymentDTO {
+  @ApiProperty({ description: '是否已收款：true 直接建已付款单' })
+  @IsBoolean()
+  collected!: boolean;
+
+  @ApiProperty({
+    description: '线下收款渠道（不含 WECHAT_ONLINE）',
+    enum: ['OFFLINE_WECHAT', 'OFFLINE_ALIPAY', 'OTHER'],
+  })
+  @IsIn(['OFFLINE_WECHAT', 'OFFLINE_ALIPAY', 'OTHER'])
+  channel!: string;
+
+  @ApiProperty({ description: '实际收到的金额（元）' })
+  @IsNumber()
+  @Min(0)
+  amount!: number;
+
+  @ApiPropertyOptional({
+    description: '线下微信/支付宝流水号或备注（可选）',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  externalRef?: string | null;
+
+  @ApiPropertyOptional({
+    description: '实收与系统报价不一致时的原因（不一致必填）',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  overrideReason?: string | null;
+}
+
+/**
+ * 后台代客下单入参（POST /api/v1/admin/custom-recipe/orders/assisted）。
+ *
+ * 与顾客自助单的区别只在「谁下的单 / 钱怎么收」；
+ * 需求问卷字段保持一致，避免设计器收到一张信息不全的单。
+ */
+export class CreateAssistedOrderDTO {
+  @ApiProperty({ description: '顾客 ID（可以是 isGuest 代客客户）' })
+  @IsString()
+  @IsNotEmpty()
+  customerId!: string;
+
+  @ApiProperty({ description: '狗狗 ID（必须属于该顾客）' })
+  @IsString()
+  @IsNotEmpty()
+  dogId!: string;
+
+  @ApiProperty({ description: '定制目标', enum: TargetGoal })
+  @IsEnum(TargetGoal)
+  targetGoal!: TargetGoal;
+
+  @ApiProperty({ description: '本单份数（1–5）' })
+  @IsInt()
+  @Min(1)
+  @Max(MAX_MULTI_RECIPE_QUANTITY)
+  recipeQuantity!: number;
+
+  @ApiPropertyOptional({
+    description: '主蛋白偏好（不选=营养师搭配；选了数量必须等于份数）',
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  requestedProteinCodes?: string[];
+
+  @ApiPropertyOptional({ description: '过敏食物（结构化，可为空）' })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  allergies?: string[];
+
+  @ApiPropertyOptional({ description: '过敏原自由文本' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  allergyText?: string | null;
+
+  @ApiProperty({
+    description: '顾客对有没有过敏的明确回答（必填）',
+    enum: AllergyAnswerStatus,
+  })
+  @IsEnum(AllergyAnswerStatus)
+  allergyStatus!: AllergyAnswerStatus;
+
+  @ApiPropertyOptional({ description: '目前在喂什么（选项 code）' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  currentFoodMain?: string | null;
+
+  @ApiPropertyOptional({ description: '选「其他」时手填的当前食物' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  currentFoodOther?: string | null;
+
+  @ApiPropertyOptional({ description: '为什么想换（选项 code 数组）' })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  changeReasons?: string[];
+
+  @ApiPropertyOptional({ description: '最近肠胃情况（选项 code 数组）' })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  stomachConditions?: string[];
+
+  @ApiPropertyOptional({ description: '补充说明' })
+  @IsOptional()
+  @IsString()
+  additionalNotes?: string | null;
+
+  @ApiPropertyOptional({
+    description: '本单过敏报告草稿（付款后写狗狗档案）',
+    type: [AllergyReportDraftDTO],
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => AllergyReportDraftDTO)
+  allergyReportDrafts?: AllergyReportDraftDTO[];
+
+  @ApiPropertyOptional({ description: '本单附件 COS key（优先于 URL 落库）' })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  attachmentKeys?: string[];
+
+  @ApiPropertyOptional({ description: '本单附件 URL（兼容旧客户端）' })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  attachmentUrls?: string[];
+
+  @ApiProperty({ description: '线下收款信息', type: AssistedOrderPaymentDTO })
+  @IsObject()
+  @ValidateNested()
+  @Type(() => AssistedOrderPaymentDTO)
+  payment!: AssistedOrderPaymentDTO;
+
+  @ApiPropertyOptional({ description: '是否付款后写狗狗档案（默认 true）' })
+  @IsOptional()
+  @IsBoolean()
+  syncToHealthProfile?: boolean;
 }

@@ -59,6 +59,7 @@ import { CustomRecipeService } from './application/custom-recipe/custom-recipe.s
 import { CustomRecipeConfigService } from './application/custom-recipe/custom-recipe-config.service';
 import { CustomRecipePricingService } from './application/custom-recipe/custom-recipe-pricing.service';
 import { GuestCustomerService } from './application/custom-recipe/guest-customer.service';
+import { AssistedOrderService } from './application/custom-recipe/assisted-order.service';
 import { FinanceAlertService } from './application/finance/finance-alert.service';
 import { ExpenseBillService } from './application/finance/expense-bill.service';
 import { FinanceReportService } from './application/finance/finance-report.service';
@@ -821,6 +822,8 @@ validatePrismaConfig();
     CustomRecipePricingService,
     // 代客客户（无账号顾客）：建客户 / 建狗 / 搜索
     GuestCustomerService,
+    // 代客下单（2026-10-21 Task 3）：复用报价/排期/订单表，线下收款只登记
+    AssistedOrderService,
     // Nutrition Food Service (Recipe Designer)
     NutritionFoodService,
     SupplementLabelExtractionService,

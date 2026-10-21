@@ -5581,8 +5581,13 @@ export class RecipeDesignerService {
       batchLaborHours: PUBLISHED_RECIPE_BATCH_LABOR_HOURS,
       applicableLifeStages: this.resolvePublishedLifeStages(draft),
       targetHealthTags: draft.targetHealthTags,
+      /**
+       * 私密定制食谱也要带完整 `report`。
+       * 此前只写 legacy nutrients，导致小程序营养报告页只读
+       * `nutritionDetailedData.report`，除能量密度外整页算不出来。
+       */
       nutritionDetailedData: this.toJsonValue(
-        this.buildPrivateRecipeSnapshotNutritionData(draft),
+        await this.buildPrivateSnapshotNutritionData(draft),
       ),
       nutritionStandard: draft.nutritionStandard ?? 'FEDIAF_2025',
       description: draft.notes,
@@ -6282,6 +6287,24 @@ export class RecipeDesignerService {
       return null;
     }
     return Math.round((weight / total) * 10000) / 100;
+  }
+
+  /**
+   * 私密快照优先写完整报告；目标表临时不可用/测试桩缺数据时回退旧结构，
+   * 保证加入待提交不会因为报告生成失败而整体失败。
+   */
+  private async buildPrivateSnapshotNutritionData(
+    draft: DesignRecipeWithItems,
+  ) {
+    try {
+      return await this.buildPublishedNutritionDetailedDataForDraft(draft);
+    } catch (error) {
+      this.logger.warn(
+        '私密食谱营养报告生成失败，回退 legacy nutritionDetailedData',
+        error instanceof Error ? error.message : String(error),
+      );
+      return this.buildPrivateRecipeSnapshotNutritionData(draft);
+    }
   }
 
   private buildPrivateRecipeSnapshotNutritionData(

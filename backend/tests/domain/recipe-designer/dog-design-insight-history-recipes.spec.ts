@@ -1,6 +1,7 @@
 import {
   buildDogDesignInsight,
   buildDogHistoryRecipes,
+  buildSameOrderHistoryRecipes,
 } from '../../../src/domain/recipe-designer/dog-design-insight';
 
 /**
@@ -481,5 +482,106 @@ describe('DogDesignInsight · 历史食谱清单', () => {
         macros: [],
       },
     ]);
+  });
+});
+
+describe('DogDesignInsight · 本单其他食谱（2026-10-22）', () => {
+  it('READY 用私密食谱营养报告，EDITING 回退到草稿原料', () => {
+    const result = buildSameOrderHistoryRecipes([
+      {
+        id: 'slot-ready',
+        name: 'Foxy定制 · 第一份',
+        status: 'READY',
+        updatedAt: '2026-10-22T03:00:00.000Z',
+        recipe: {
+          name: 'Foxy定制 · 第一份',
+          nutritionDetailedData: {
+            report: {
+              ingredientRows: [{ ingredientName: '鸡胸肉', amountLabel: '120g' }],
+              macroRows: [
+                {
+                  name: '粗蛋白',
+                  dryMatterLabel: '52.3%',
+                  energyPercentLabel: '38.1%',
+                  weightPercentLabel: '12.4%',
+                },
+              ],
+            },
+          },
+          items: [{ exampleWeight: 120, ingredient: { name: '鸡胸肉' } }],
+        },
+        designItems: [{ name: '西兰花', weightG: 30 }],
+      },
+      {
+        id: 'slot-editing',
+        name: 'Foxy定制 · 第二份',
+        status: 'EDITING',
+        updatedAt: '2026-10-22T02:00:00.000Z',
+        recipe: null,
+        designItems: [
+          { name: '火鸡胸', weightG: 100 },
+          { name: '南瓜', weightG: 50 },
+        ],
+      },
+    ]);
+
+    expect(result).toEqual([
+      {
+        id: 'slot-ready',
+        name: 'Foxy定制 · 第一份',
+        kind: 'ORDER',
+        date: '2026-10-22T03:00:00.000Z',
+        status: 'READY',
+        ingredients: [{ name: '鸡胸肉', amount: '120g' }],
+        macros: [
+          {
+            name: '粗蛋白',
+            dryMatter: '52.3%',
+            energyPercent: '38.1%',
+            weightPercent: '12.4%',
+          },
+        ],
+      },
+      {
+        id: 'slot-editing',
+        name: 'Foxy定制 · 第二份',
+        kind: 'ORDER',
+        date: '2026-10-22T02:00:00.000Z',
+        status: 'EDITING',
+        ingredients: [
+          { name: '火鸡胸', amount: '100g' },
+          { name: '南瓜', amount: '50g' },
+        ],
+        macros: [],
+      },
+    ]);
+    expect(JSON.stringify(result)).not.toContain('nutritionDetailedData');
+  });
+
+  it('洞察同时返回历史食谱和本单其他食谱，互不覆盖', () => {
+    const insight = buildDogDesignInsight({
+      dog: { id: 'dog-1', name: 'Foxy' },
+      seriesList: [],
+      orderItems: [],
+      lifeStageLabel: '成犬期',
+      customRecipeOrders: [],
+      sameOrderRecipes: [
+        {
+          id: 'slot-1',
+          name: '本单第一份',
+          status: 'READY',
+          updatedAt: '2026-10-22T03:00:00.000Z',
+          designItems: [{ name: '鸡胸肉', weightG: 100 }],
+        },
+      ],
+    });
+
+    expect(insight.historyRecipes).toEqual([]);
+    expect(insight.sameOrderRecipes).toHaveLength(1);
+    expect(insight.sameOrderRecipes[0]).toMatchObject({
+      kind: 'ORDER',
+      name: '本单第一份',
+      ingredients: [{ name: '鸡胸肉', amount: '100g' }],
+    });
   });
 });

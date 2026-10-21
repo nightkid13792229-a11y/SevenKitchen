@@ -15,6 +15,7 @@ import {
   IngredientType,
   NutritionFoodCategory,
   NutritionFoodStatus,
+  OrderRecipeDesignStatus,
   Prisma,
   RecipeDesignMode,
   RecipeSeriesBusinessStatus,
@@ -8224,6 +8225,7 @@ export class RecipeDesignerService {
     dogId: string,
     access: RecipeDesignerAccessInput,
     recentDays?: string,
+    draftId?: string,
   ) {
     const context = normalizeRecipeDesignerAccessContext(access);
     if (!isInternalRecipeDesignerRole(context)) {
@@ -8439,6 +8441,114 @@ export class RecipeDesignerService {
       }),
     ]);
 
+    /**
+     * 本单其他食谱（2026-10-22）。
+     *
+     * 只有从编辑器带上 draftId 时才查：先定位当前草稿所属订单，
+     * 再取该订单内其他 EDITING / READY 槽位。这样第二份设计时
+     * 不用回工作台就能看到第一份的原料与宏量。
+     * 不查顾客信息、订单备注等无关字段。
+     */
+    let sameOrderRecipes:
+      | Array<{
+          id: string;
+          name: string;
+          status: string;
+          updatedAt: Date | null;
+          recipe: {
+            name: string | null;
+            nutritionDetailedData: unknown;
+            items: Array<{
+              exampleWeight: number | null;
+              ingredient: { name: string | null } | null;
+            }>;
+          } | null;
+          designItems: Array<{ name: string; weightG: number }>;
+        }>
+      | null = null;
+    if (draftId) {
+      const currentDraft = await this.prisma.designRecipe.findUnique({
+        where: { id: draftId },
+        select: {
+          series: { select: { orderId: true } },
+        },
+      });
+      const currentOrderId = currentDraft?.series?.orderId ?? null;
+      if (currentOrderId) {
+        const slots = await this.prisma.orderRecipeDesign.findMany({
+          where: {
+            orderId: currentOrderId,
+            designDraftId: { not: draftId },
+            status: {
+              in: [
+                OrderRecipeDesignStatus.EDITING,
+                OrderRecipeDesignStatus.READY,
+              ],
+            },
+          },
+          orderBy: { updatedAt: 'desc' },
+          select: {
+            id: true,
+            status: true,
+            updatedAt: true,
+            designDraft: {
+              select: {
+                name: true,
+                updatedAt: true,
+                items: {
+                  select: {
+                    weightG: true,
+                    ingredient: { select: { name: true } },
+                    nutritionFood: {
+                      select: { name: true, displayNameZh: true },
+                    },
+                  },
+                },
+              },
+            },
+            recipe: {
+              select: {
+                name: true,
+                nutritionDetailedData: true,
+                items: {
+                  select: {
+                    exampleWeight: true,
+                    ingredient: { select: { name: true } },
+                  },
+                },
+              },
+            },
+          },
+        });
+        sameOrderRecipes = slots.map((slot) => ({
+          id: slot.id,
+          name:
+            slot.recipe?.name?.trim() ||
+            slot.designDraft?.name?.trim() ||
+            '本单食谱',
+          status: slot.status,
+          updatedAt: slot.designDraft?.updatedAt ?? slot.updatedAt,
+          recipe: slot.recipe
+            ? {
+                name: slot.recipe.name,
+                nutritionDetailedData: slot.recipe.nutritionDetailedData,
+                items: slot.recipe.items,
+              }
+            : null,
+          designItems: (slot.designDraft?.items ?? [])
+            .map((item) => ({
+              name:
+                item.ingredient?.name?.trim() ||
+                item.nutritionFood?.displayNameZh?.trim() ||
+                item.nutritionFood?.name?.trim() ||
+                '',
+              weightG: Number(item.weightG ?? 0),
+            }))
+            .filter((item) => Boolean(item.name)),
+        }));
+      }
+    }
+
     const insight = buildDogDesignInsight({
       dog: dogForLifeStage,
       seriesList,
@@ -8448,6 +8558,7 @@ export class RecipeDesignerService {
       medicalRecords,
       checkupRecords,
       customRecipeOrders: customRecipeHistoryOrders,
+      sameOrderRecipes,
       customRecipeOrder: customOrder
         ? {
             orderId: customOrder.orderId,

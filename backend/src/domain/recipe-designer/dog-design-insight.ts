@@ -30,7 +30,7 @@ export interface DogOrderSummary {
 }
 
 /** 历史食谱来源：FINISHED = 已完成的鲜食订单；CUSTOM = 已关联正式食谱的定制单 */
-export type DogHistoryRecipeKind = 'FINISHED' | 'CUSTOM';
+export type DogHistoryRecipeKind = 'FINISHED' | 'CUSTOM' | 'ORDER';
 
 /** 历史食谱里的一道原料（2026-10-22）：只给展示用的名字与用量文案 */
 export interface DogHistoryRecipeIngredient {
@@ -173,6 +173,11 @@ export interface DogDesignInsight {
    * 每项带归一化后的原料/宏量明细；订单快照原始结构不外带。
    */
   historyRecipes: DogHistoryRecipe[];
+  /**
+   * 当前订单内、除当前草稿外的其他食谱（2026-10-22）。
+   * 营养师设计第 2 份时不必回工作台即可参考第 1 份的原料与宏量。
+   */
+  sameOrderRecipes: DogHistoryRecipe[];
   /**
    * 最近一次就诊 / 体检（2026-10-21）。
    *
@@ -753,6 +758,65 @@ function normalizeHistoryRecipeDetails(input: {
   };
 }
 
+/** 本单其他槽位的原始数据（2026-10-22）。 */
+export interface SameOrderRecipeInput {
+  id: string;
+  name: string;
+  status: string;
+  updatedAt?: string | Date | null;
+  recipe?: {
+    name?: string | null;
+    nutritionDetailedData?: unknown;
+    items?: InsightCustomRecipeItemLike[] | null;
+  } | null;
+  designItems?: Array<{ name: string; weightG: number }> | null;
+}
+
+/**
+ * 本单其他食谱：只给当前订单内、除当前草稿外的 EDITING / READY 槽位。
+ * READY 优先用私密食谱的营养报告；编辑中草稿回退到原料+克重。
+ * 不读取顾客/订单隐私字段。
+ */
+export function buildSameOrderHistoryRecipes(
+  entries: readonly SameOrderRecipeInput[] | null | undefined,
+): DogHistoryRecipe[] {
+  const recipes: DogHistoryRecipe[] = [];
+  for (const entry of entries ?? []) {
+    const name = firstString(entry.recipe?.name, entry.name);
+    if (!name) continue;
+    const recipeDetails = normalizeHistoryRecipeDetails({
+      nutritionDetailedData: entry.recipe?.nutritionDetailedData,
+      fallbackIngredients: normalizeHistoryCustomRecipeIngredients(
+        entry.recipe?.items,
+      ),
+    });
+    const designIngredients = (entry.designItems ?? [])
+      .map((item) => ({
+        name: firstString(item.name),
+        amount: formatHistoryWeightAmount(item.weightG),
+      }))
+      .filter((item) => item.name)
+      .map((item) => ({ name: item.name, amount: item.amount }));
+    recipes.push({
+      id: entry.id,
+      name,
+      kind: 'ORDER',
+      date: toIsoString(entry.updatedAt),
+      status: firstString(entry.status),
+      ingredients:
+        recipeDetails.ingredients.length > 0
+          ? recipeDetails.ingredients
+          : designIngredients,
+      macros: recipeDetails.macros,
+    });
+  }
+  return recipes.sort(
+    (left, right) =>
+      (right.date ?? '').localeCompare(left.date ?? '') ||
+      left.name.localeCompare(right.name),
+  );
+}
+
 /**
  * 这只狗历史食谱清单（2026-10-22）。
  *
@@ -926,6 +990,8 @@ export function buildDogDesignInsight(input: {
    * 用于顶层 `historyRecipes`。
    */
   customRecipeOrders?: readonly InsightCustomRecipeOrderLike[] | null;
+  /** 当前订单其他食谱；由编辑器传入 draftId 时注入 */
+  sameOrderRecipes?: readonly SameOrderRecipeInput[] | null;
 }): DogDesignInsight {
   const dog = input.dog;
   const breedName = firstString(
@@ -989,6 +1055,7 @@ export function buildDogDesignInsight(input: {
       input.orderItems,
       input.customRecipeOrders,
     ),
+    sameOrderRecipes: buildSameOrderHistoryRecipes(input.sameOrderRecipes),
     latestMedicalRecord,
     latestCheckupRecord,
     customRecipeOrder: input.customRecipeOrder

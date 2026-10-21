@@ -744,11 +744,13 @@ export class RecipeDesignerController {
     @Param('dogId') dogId: string,
     @CurrentUser() user: RequestUser,
     @Query('recentDays') recentDays?: string,
+    @Query('draftId') draftId?: string,
   ): Promise<ApiResponseDto<any>> {
     const result = await this.recipeDesignerService.getDogDesignInsight(
       dogId,
       toRecipeDesignerAccessContext(user),
       recentDays,
+      draftId,
     );
     return ApiResponseDto.success(result);
   }

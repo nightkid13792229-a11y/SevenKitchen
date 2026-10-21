@@ -67,6 +67,104 @@ import {
 import { TimezoneUtil } from '../../utils/timezone.util';
 import { WechatService } from '../../infrastructure/wechat/wechat.service';
 
+/**
+ * 定制订单过敏文本 → 结构化档案的**保守**拆分规则（2026-10-21）。
+ *
+ * `custom_recipe_order.allergy_text` 是顾客原话，至少有两种形态：
+ *   · 能直接归档的单一过敏原（“鸡肉、牛肉”“鸭、猪”）；
+ *   · 报告结论 / 完整句子（“弱阳性：* 鸡肉”“对粗粮过敏”“胡萝卜不消化”）。
+ *
+ * 这里只放行第一种。拿不准的一律不写进 allergy_record，
+ * 宁可让顾客或营养师人工确认，也不制造一条假过敏原。
+ */
+const ALLERGY_TEXT_SEPARATORS = /[,，、;；\n\r]/;
+
+/** 否定 / 占位说法：它们不是过敏原，不能写成记录 */
+const ALLERGY_TEXT_PLACEHOLDERS = new Set([
+  '无',
+  '没有',
+  '暂无',
+  '不清楚',
+  '正常吃',
+  '不过敏',
+  '无过敏',
+  '没有过敏',
+  '暂无过敏',
+  '无过敏原',
+  '没有过敏原',
+  '暂无过敏原',
+  '未发现',
+  '没发现',
+  '没有发现',
+  '暂未发现',
+  '暂时没有发现',
+  '未知',
+  '不详',
+  '正常',
+  '正常饮食',
+  '正常喂食',
+  '无异常',
+  '没有异常',
+  '无特殊',
+]);
+
+/** 出现这些标记说明是报告原文或整句描述，不能当作单一过敏原 */
+const ALLERGY_TEXT_AMBIGUOUS_MARKERS = [
+  '*',
+  '＊',
+  '阳性',
+  '阴性',
+  '报告',
+  '检测',
+  '过敏',
+  '不耐受',
+  '消化',
+];
+
+/** 超过这个长度的“词”更可能是句子，不自动归档 */
+const ALLERGY_TEXT_MAX_TOKEN_LENGTH = 20;
+
+/**
+ * 从订单过敏文本里提取**可以安全归档**的单一过敏原。
+ *
+ * 规则与迁移清单保持一致：
+ *   · 按中英文逗号/顿号/分号/换行拆分，trim 后保留原始大小写；
+ *   · 去掉空值、否定/占位说法；
+ *   · 去掉过长、带引号/报告标记、含空白或医学判断词的 token；
+ *   · 同一个文本内按大小写不敏感去重。
+ */
+export function extractSimpleAllergyTokens(
+  allergyText?: string | null,
+): string[] {
+  const raw = String(allergyText || '');
+  if (!raw.trim()) return [];
+
+  const seen = new Set<string>();
+  const tokens: string[] = [];
+
+  for (const part of raw.split(ALLERGY_TEXT_SEPARATORS)) {
+    const token = part.trim();
+    if (!token) continue;
+
+    const key = token.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    if (ALLERGY_TEXT_PLACEHOLDERS.has(token)) continue;
+    if (token.length > ALLERGY_TEXT_MAX_TOKEN_LENGTH) continue;
+    if (/\s/.test(token)) continue;
+    if (
+      ALLERGY_TEXT_AMBIGUOUS_MARKERS.some((marker) => token.includes(marker))
+    ) {
+      continue;
+    }
+
+    tokens.push(token);
+  }
+
+  return tokens;
+}
+
 @Injectable()
 export class CustomRecipeService implements ICustomRecipeRepository {
   constructor(
@@ -2763,8 +2861,9 @@ export class CustomRecipeService implements ICustomRecipeRepository {
             dislikedIngredients: order.dislikedIngredients || [],
           },
         );
-        // 2026-10-19：自由文本合并进狗狗档案（保留旧文本，不静默覆盖）
-        await this.mergeAllergyTextTx(tx, order.dogId, order.allergyText);
+        // 2026-10-21：不再把订单文本写进旧字段 dog.allergyFoods；
+        // 自由文本里能明确判断为单一过敏原的词，补进结构化 allergy_record。
+        await this.syncSimpleAllergyTextTx(tx, order.dogId, order.allergyText);
 
         await tx.customRecipeOrder.updateMany({
           where: { id: order.id, healthInfoSyncedAt: null },
@@ -2899,41 +2998,41 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   }
 
   /**
-   * 把顾客填的过敏自由文本合并进 `dog.allergyFoods`（2026-10-19）。
+   * 把订单过敏文本里**简单、无歧义**的过敏原补进结构化档案（2026-10-21）。
    *
-   * 合并而不是覆盖：旧文本可能是员工备注或历史记录，
-   * 不能因为这一单没提到就丢掉。用「；」分隔；已被包含时不重复追加。
+   * 背景：顾客侧已改为一个自由文本框，订单快照保留原文
+   * （`custom_recipe_order.allergy_text`），但 `dog.allergyFoods`
+   * 是旧文本字段，新订单不再写入。为避免顾客填的简单文本
+   * （“鸭、猪”）完全到不了档案，这里做一次保守转换：
+   *   · 只收单一过敏原，报告原文/整句描述一律跳过；
+   *   · 与订单数组、报告结论、档案已有记录重复的不再建；
+   *   · 同一段文本内忽略大小写去重；
+   *   · 来源记 OWNER、可信度记 SUSPECTED，notes 标明同步日期，方便回溯。
    */
-  private async mergeAllergyTextTx(
+  private async syncSimpleAllergyTextTx(
     tx: any,
     dogId: string,
     allergyText?: string | null,
   ): Promise<void> {
-    const incoming = String(allergyText || '').trim();
-    if (!incoming) return;
+    const tokens = extractSimpleAllergyTokens(allergyText);
+    if (tokens.length === 0) return;
 
-    const dog = await tx.dog.findUnique({
-      where: { id: dogId },
-      select: { allergyFoods: true },
-    });
-    if (!dog) return;
+    const syncDate = TimezoneUtil.toShanghaiDateString(new Date());
+    for (const allergen of tokens) {
+      const existing = await tx.allergyRecord.findFirst({
+        where: { dogId, allergen },
+        select: { id: true },
+      });
+      if (existing) continue;
 
-    const existing = String(dog.allergyFoods || '').trim();
-    let next = existing;
-    if (!existing) {
-      next = incoming;
-    } else if (existing.includes(incoming)) {
-      next = existing;
-    } else if (incoming.includes(existing)) {
-      next = incoming;
-    } else {
-      next = `${existing}；${incoming}`;
-    }
-
-    if (next !== existing) {
-      await tx.dog.update({
-        where: { id: dogId },
-        data: { allergyFoods: next },
+      await tx.allergyRecord.create({
+        data: {
+          dogId,
+          allergen,
+          notes: `从定制订单过敏文本同步（${syncDate}）`,
+          certainty: 'SUSPECTED',
+          source: 'OWNER',
+        },
       });
     }
   }

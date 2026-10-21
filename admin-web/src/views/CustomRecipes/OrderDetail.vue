@@ -1,6 +1,17 @@
 <template>
   <div class="order-detail" v-loading="loading">
     <div v-if="order" class="detail-container">
+        <el-alert
+          v-if="allergyComparison.changed || medicalComparison.changed"
+          type="warning"
+          :closable="false"
+          show-icon
+          class="profile-updated-alert"
+          title="下单后档案有更新，请按最新信息设计"
+          :description="profileUpdateDetail"
+        />
+
+
       <!-- 左侧：订单信息 -->
       <div class="order-info-section">
         <h3>订单信息</h3>
@@ -138,8 +149,9 @@
             </div>
           </div>
           <p v-if="offlineRefundCap > 0" class="offline-refund-tip">
-            这是线下收款订单：钱不在微信支付里，取消时不能走微信原路退款。
-            请管理员先把款退回顾客，再用「线下退款并取消」登记（手工退款，不会调用微信退款）。
+            这是线下收款订单，退款不走微信原路退回。
+            平时无需处理；如果顾客提出退款，请先在线下把款退回，再用「线下退款并取消」登记。
+            系统只登记这笔线下退款，不会自动调用微信退款。
           </p>
           <p v-else class="offline-refund-tip">
             这是 0 元赠送单，没有实收金额，也没有款可退；取消时直接点「取消赠送订单」即可，不会调用微信退款。
@@ -267,54 +279,6 @@
 
         <el-divider />
 
-        <!--
-          设计资料（2026-10-21 收口）
-
-          健康、饲喂与饮食相关的明细不再铺在订单抽屉里：
-          这些资料属于设计判断，统一去食谱设计器侧栏看，避免订单页变成第二份档案。
-          这里只保留「有没有记录」的结论、入口，以及最重要的「下单后档案有更新」提醒。
-        -->
-        <h3>设计资料</h3>
-
-        <el-alert
-          v-if="allergyComparison.changed || medicalComparison.changed"
-          type="warning"
-          :closable="false"
-          show-icon
-          class="profile-updated-alert"
-          title="下单后档案有更新，请按最新信息设计"
-          :description="profileUpdateDetail"
-        />
-
-        <div class="design-summary">
-          <p class="design-summary__text">{{ designSummary }}</p>
-          <div class="design-links">
-            <el-button
-              v-if="order.dog?.id"
-              link
-              type="primary"
-              :loading="openingDesigner"
-              :disabled="!canStartDesign || openingDesigner"
-              @click="openInDesigner"
-            >
-              打开食谱设计器
-            </el-button>
-            <el-button
-              v-if="order.dog?.id"
-              link
-              type="primary"
-              @click="openHealthProfile"
-            >
-              查看健康档案
-            </el-button>
-          </div>
-          <p class="source-note">
-            完整的健康与饮食资料，请在食谱设计器侧栏查看。
-          </p>
-        </div>
-
-        <el-divider />
-
         <h3>订单备注</h3>
         <div v-if="order.additionalNotes" class="notes-section">
           <p>{{ order.additionalNotes }}</p>
@@ -355,23 +319,6 @@
           >
             确认付款
           </el-button>
-          <!-- 一键进食谱设计器（2026-09-28）：带着这只狗进去，
-               设计器里会显示顾客的定制需求（目标/备注/订单里填的过敏与忌口），
-               营养师不必再手工新建系列、自己搜狗。
-               2026-10-21：打开设计器即代表进入制作；PAID 单会先改成制作中。 -->
-          <el-button
-            v-if="order.dog?.id"
-            type="success"
-            plain
-            :disabled="!canStartDesign || openingDesigner"
-            :loading="openingDesigner"
-            @click="openInDesigner"
-          >
-            {{ openingDesigner ? '正在转入制作…' : '在设计器中设计' }}
-          </el-button>
-          <span v-if="order.dog?.id && !canStartDesign" class="design-gate-tip">
-            {{ order.status === 'PENDING_PAYMENT' ? '订单未付款，付款后才能开始设计' : '该订单已取消，不能开始设计' }}
-          </span>
           <!--
             线下收款单（2026-10-21 · 代客定制食谱订单 Task 5）。
 
@@ -389,7 +336,7 @@
             线下退款并取消
           </el-button>
           <span v-if="canOfflineRefund" class="offline-refund-tip">
-            手工退款登记：请先线下把款退给顾客，系统不会调用微信退款
+            仅在顾客提出退款时使用：先线下退款，再登记；不会调用微信退款
           </span>
           <!-- 取消会退款、会释放当天接单名额（每天只有 5 个），口径 2 定为仅管理员。
                已交付的单不允许取消（后端也会拒绝）。线下单走上面的线下退款入口。 -->
@@ -422,15 +369,27 @@
           <span v-if="canManualRefund" class="manual-refund-tip">
             该单已取消但退款未完成，点这里补发起原路退款
           </span>
-          <el-button @click="contactCustomer">联系客户</el-button>
         </div>
       </div>
 
-      <!-- 右侧：交付已设计好的食谱 -->
+      <!-- 交付：接在订单信息下方（单列布局） -->
       <div class="recipe-creation-section" v-if="canDeliver">
         <!-- 一键交付（2026-10-04 第 1、2 条）：
              设计器里做好的食谱直接挂到订单上，不再在订单页手工抄一份。 -->
         <div class="recipe-delivery-block">
+          <div class="delivery-toolbar">
+            <span class="delivery-toolbar__label">食谱设计</span>
+            <el-button
+              v-if="order.dog?.id"
+              type="success"
+              plain
+              :loading="openingDesigner"
+              :disabled="!canStartDesign || openingDesigner"
+              @click="openInDesigner"
+            >
+              在设计器中设计
+            </el-button>
+          </div>
           <!-- 1 份订单保持原来的单份交付；N 份订单必须一次交齐（2026-10-21） -->
           <template v-if="isMultiRecipeOrder">
             <h3>一次性交付 {{ multiRecipeQuantity }} 份食谱</h3>
@@ -507,19 +466,8 @@
             <el-empty
               v-if="!candidatesLoading && !candidates.length"
               :image-size="70"
-              description="这只狗还没有已发布的定制食谱，请先在设计器里设计并发布"
-            >
-              <el-button
-                v-if="order.dog?.id"
-                type="success"
-                plain
-                :loading="openingDesigner"
-                :disabled="openingDesigner"
-                @click="openInDesigner"
-              >
-                在设计器中设计
-              </el-button>
-            </el-empty>
+              description="这只狗还没有已发布的定制食谱，请先点上方「在设计器中设计」"
+            />
           </div>
 
           <div class="delivery-actions">
@@ -619,7 +567,7 @@
         :closable="false"
         show-icon
         title="这是手工退款，不会调用微信退款"
-        description="请先在线下（微信/支付宝/现金）把款退给顾客，再在这里登记。登记后订单会变为「已取消」并释放当天接单名额。"
+        description="仅在顾客提出退款时使用：请先在线下（微信/支付宝/现金）把款退给顾客，再在这里登记。登记后订单会变为「已取消」并释放当天接单名额。"
       />
 
       <el-form label-width="90px" class="offline-refund-form">
@@ -969,46 +917,6 @@ const profileUpdateDetail = computed(() => {
   );
 
   return parts.join('；');
-});
-
-/**
- * 「设计资料」只给结论，不展开明细。
- *
- * 明细统一去食谱设计器侧栏看：订单抽屉负责订单/顾客/交付/售后，
- * 健康与饲喂信息只在这里提示「有没有」，避免同一份档案维护两处。
- */
-const hasAllergyRecord = computed(
-  () =>
-    Boolean(order.value?.dog?.allergyRecords?.length) ||
-    Boolean(String(order.value?.dog?.allergyFoods || '').trim()) ||
-    Boolean(order.value?.allergies?.length) ||
-    Boolean(String(order.value?.allergyText || '').trim()) ||
-    order.value?.allergyStatus === 'HAS_ALLERGY',
-);
-
-const hasMedicalRecord = computed(
-  () =>
-    Boolean(String(order.value?.dog?.medicalHistory || '').trim()) ||
-    Boolean(order.value?.medicalConditions?.length),
-);
-
-const hasFeedingOrDietRecord = computed(
-  () =>
-    Boolean(order.value?.currentFoodMain) ||
-    Boolean(order.value?.changeReasons?.length) ||
-    Boolean(order.value?.stomachConditions?.length) ||
-    Boolean(order.value?.preferredIngredients?.length) ||
-    Boolean(order.value?.dislikedIngredients?.length),
-);
-
-const designSummary = computed(() => {
-  const parts: string[] = [];
-  if (hasAllergyRecord.value) parts.push('有过敏记录');
-  if (hasMedicalRecord.value) parts.push('有疾病史记录');
-  if (hasFeedingOrDietRecord.value) parts.push('有饲喂/饮食记录');
-  return parts.length > 0
-    ? `${parts.join('、')}，请在设计器查看`
-    : '暂无特殊健康记录，可打开设计器查看完整档案';
 });
 
 // ---------- 一键交付 ----------
@@ -1392,13 +1300,6 @@ const openInDesigner = async () => {
   }
 };
 
-/** 设计资料明细在狗狗健康档案里；订单抽屉只保留入口 */
-const openHealthProfile = () => {
-  const dogId = order.value?.dog?.id;
-  if (!dogId) return;
-  window.open(`/dogs/${encodeURIComponent(String(dogId))}/health`, '_blank');
-};
-
 /**
  * 取消订单。
  *
@@ -1586,16 +1487,6 @@ const manualRefund = async () => {
   }
 };
 
-const contactCustomer = () => {
-  const wechat = order.value?.customer?.wechatOpenid;
-  const phone = order.value?.customer?.phone;
-
-  ElMessageBox.alert(
-    `微信：${maskOpenid(wechat)}\n手机：${phone || '未填写'}`,
-    '客户联系方式'
-  );
-};
-
 const viewRecipeFull = () => {
   window.open(`/recipes/${order.value?.recipeId}`, '_blank');
 };
@@ -1732,6 +1623,20 @@ const getGoalText = (goal?: string) => {
 /* 交付区接在订单信息下方，不再单独占右栏；订单详情只保留一条纵向阅读路径 */
 .recipe-creation-section {
   margin-top: 16px;
+}
+
+.delivery-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.delivery-toolbar__label {
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
 }
 
 .order-info-section,

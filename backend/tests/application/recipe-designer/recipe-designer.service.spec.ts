@@ -5,6 +5,7 @@ import { RecipeDesignerService } from '../../../src/application/recipe-designer/
 import { AiDesignSuggestionService } from '../../../src/application/recipe-designer/ai-design-suggestion.service';
 import { SearchGovernanceService } from '../../../src/application/search-governance/search-governance.service';
 import { PrismaService } from '../../../src/infrastructure/prisma.service';
+import { TencentCosService } from '../../../src/infrastructure/services/tencent-cos.service';
 
 describe('RecipeDesignerService', () => {
   let service: RecipeDesignerService;
@@ -9884,11 +9885,13 @@ describe('RecipeDesignerService', () => {
         status: 'TREATING',
         chiefComplaint: '腹痛',
         exams: '血常规',
+        attachments: [],
       });
       expect(result.latestCheckupRecord).toEqual({
         checkupDate: '2026-07-15T00:00:00.000Z',
         checkupType: '年度体检',
         findings: '轻度贫血',
+        attachments: [],
       });
 
       // 按日期倒序只取一条，且不查化验原始数值
@@ -9902,6 +9905,7 @@ describe('RecipeDesignerService', () => {
           status: true,
           chiefComplaint: true,
           exams: true,
+          attachments: true,
         },
       });
       expect(prisma.checkupRecord.findMany).toHaveBeenCalledWith({
@@ -9912,6 +9916,7 @@ describe('RecipeDesignerService', () => {
           checkupDate: true,
           checkupType: true,
           findings: true,
+          attachments: true,
         },
       });
       expect(result.latestMedicalRecord).not.toHaveProperty('labValues');
@@ -9926,6 +9931,170 @@ describe('RecipeDesignerService', () => {
 
       expect(result.latestMedicalRecord).toBeNull();
       expect(result.latestCheckupRecord).toBeNull();
+    });
+
+    it('signs latest record and custom order attachments with COS', async () => {
+      const cos = {
+        getSensitiveMediaUrl: jest.fn((value: string) => `signed:${value}`),
+      };
+      const moduleRef = await Test.createTestingModule({
+        providers: [
+          RecipeDesignerService,
+          { provide: PrismaService, useValue: prisma },
+          { provide: 'FediafTargetProvider', useValue: targetProvider },
+          { provide: SearchGovernanceService, useValue: searchGovernance },
+          { provide: AiDesignSuggestionService, useValue: aiDesignSuggestion },
+          { provide: TencentCosService, useValue: cos },
+        ],
+      }).compile();
+      const insightService = moduleRef.get(RecipeDesignerService);
+
+      prisma.medicalRecord.findMany.mockResolvedValueOnce([
+        {
+          visitDate: new Date('2026-08-02T00:00:00.000Z'),
+          diagnosis: '胰腺炎',
+          status: 'TREATING',
+          chiefComplaint: '腹痛',
+          exams: '血常规',
+          attachments: [
+            'medical-record/report-a.jpg',
+            'https://cos.example.com/medical-record/report-b.pdf',
+          ],
+          // 即使数据库列里有原始数值，也不能出现在洞察里
+          labValues: 'CREA 2.1 mg/dL',
+          vitals: '体温 39.1℃',
+        },
+      ]);
+      prisma.checkupRecord.findMany.mockResolvedValueOnce([
+        {
+          checkupDate: new Date('2026-07-15T00:00:00.000Z'),
+          checkupType: '年度体检',
+          findings: '轻度贫血',
+          attachments: ['checkup-record/annual-report.jpg'],
+          labValues: 'ALT 80 U/L',
+        },
+      ]);
+      prisma.customRecipeOrder.findFirst.mockResolvedValueOnce({
+        orderId: 'CR202610220001',
+        status: 'PAID',
+        targetGoal: 'MAINTAIN',
+        needsHealthManagement: false,
+        additionalNotes: null,
+        allergies: [],
+        allergyText: null,
+        medicalConditions: [],
+        preferredIngredients: [],
+        dislikedIngredients: [],
+        currentFoodMain: null,
+        currentFoodOther: null,
+        changeReasons: [],
+        changeReasonOther: null,
+        stomachConditions: [],
+        stomachOther: null,
+        allergyStatus: 'UNKNOWN',
+        recipeQuantity: 1,
+        requestedProteinCodes: [],
+        attachments: [
+          'custom-recipe-attachments/order-a.jpg',
+          'https://cos.example.com/custom-recipe-attachments/order-b.pdf',
+        ],
+        createdAt: new Date('2026-10-22T00:00:00.000Z'),
+      });
+
+      const result = await (insightService as any).getDogDesignInsight(
+        'dog-1',
+        staffAccess,
+      );
+
+      expect(result.latestMedicalRecord.attachments).toEqual([
+        'signed:medical-record/report-a.jpg',
+        'signed:https://cos.example.com/medical-record/report-b.pdf',
+      ]);
+      expect(result.latestCheckupRecord.attachments).toEqual([
+        'signed:checkup-record/annual-report.jpg',
+      ]);
+      expect(result.customRecipeOrder.attachments).toEqual([
+        'signed:custom-recipe-attachments/order-a.jpg',
+        'signed:https://cos.example.com/custom-recipe-attachments/order-b.pdf',
+      ]);
+      expect(cos.getSensitiveMediaUrl).toHaveBeenCalledWith(
+        'medical-record/report-a.jpg',
+      );
+      expect(cos.getSensitiveMediaUrl).toHaveBeenCalledWith(
+        'checkup-record/annual-report.jpg',
+      );
+      expect(cos.getSensitiveMediaUrl).toHaveBeenCalledWith(
+        'custom-recipe-attachments/order-a.jpg',
+      );
+      // 定制单查询只读附件字段，不改原有条件
+      expect(prisma.customRecipeOrder.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { dogId: 'dog-1', status: { not: 'CANCELLED' } },
+          select: expect.objectContaining({ attachments: true }),
+        }),
+      );
+      // 没有把化验原始数值带出来
+      expect(result.latestMedicalRecord).not.toHaveProperty('labValues');
+      expect(result.latestMedicalRecord).not.toHaveProperty('vitals');
+      expect(result.latestCheckupRecord).not.toHaveProperty('labValues');
+      expect(JSON.stringify(result.latestMedicalRecord)).not.toContain('CREA');
+      expect(JSON.stringify(result.latestCheckupRecord)).not.toContain('ALT');
+    });
+
+    it('keeps original attachment values when COS is unavailable', async () => {
+      prisma.medicalRecord.findMany.mockResolvedValueOnce([
+        {
+          visitDate: new Date('2026-08-02T00:00:00.000Z'),
+          diagnosis: '胰腺炎',
+          status: 'TREATING',
+          attachments: ['medical-record/report-a.jpg'],
+        },
+      ]);
+      prisma.checkupRecord.findMany.mockResolvedValueOnce([
+        {
+          checkupDate: new Date('2026-07-15T00:00:00.000Z'),
+          checkupType: '年度体检',
+          attachments: ['https://cdn.example.com/checkup-record/report.pdf'],
+        },
+      ]);
+      prisma.customRecipeOrder.findFirst.mockResolvedValueOnce({
+        orderId: 'CR202610220002',
+        status: 'PAID',
+        targetGoal: 'MAINTAIN',
+        needsHealthManagement: false,
+        additionalNotes: null,
+        allergies: [],
+        allergyText: null,
+        medicalConditions: [],
+        preferredIngredients: [],
+        dislikedIngredients: [],
+        currentFoodMain: null,
+        currentFoodOther: null,
+        changeReasons: [],
+        changeReasonOther: null,
+        stomachConditions: [],
+        stomachOther: null,
+        allergyStatus: 'UNKNOWN',
+        recipeQuantity: 1,
+        requestedProteinCodes: [],
+        attachments: ['custom-recipe-attachments/order-a.jpg'],
+        createdAt: new Date('2026-10-22T00:00:00.000Z'),
+      });
+
+      const result = await (service as any).getDogDesignInsight(
+        'dog-1',
+        staffAccess,
+      );
+
+      expect(result.latestMedicalRecord.attachments).toEqual([
+        'medical-record/report-a.jpg',
+      ]);
+      expect(result.latestCheckupRecord.attachments).toEqual([
+        'https://cdn.example.com/checkup-record/report.pdf',
+      ]);
+      expect(result.customRecipeOrder.attachments).toEqual([
+        'custom-recipe-attachments/order-a.jpg',
+      ]);
     });
 
     it('rejects dog insight for customer role', async () => {

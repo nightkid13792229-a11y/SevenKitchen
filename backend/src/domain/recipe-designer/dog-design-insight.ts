@@ -43,6 +43,14 @@ export interface DogLatestMedicalRecord {
   status: string;
   chiefComplaint?: string;
   exams?: string;
+  /**
+   * 这次就诊的附件（2026-10-22）。
+   *
+   * 化验单/检查报告常以图片或 PDF 存在记录里，营养师要能点开看原件。
+   * 这里给的是**最新一条**记录的附件原始值（COS key / URL），
+   * 由服务层换成短时签名 URL；无附件时为 `[]`。
+   */
+  attachments: string[];
 }
 
 /**
@@ -54,6 +62,8 @@ export interface DogLatestCheckupRecord {
   checkupDate: string;
   checkupType: string;
   findings?: string;
+  /** 这次体检的附件（2026-10-22）：仅最新一条，服务层换签名 URL。 */
+  attachments: string[];
 }
 
 export interface DogDesignInsight {
@@ -163,6 +173,13 @@ export interface DogDesignInsight {
     /** 顾客选择的主蛋白轮换 code（空数组 = 由营养师搭配） */
     requestedProteinCodes: string[];
     createdAt: string | null;
+    /**
+     * 顾客在本单上传的附件（2026-10-22）。
+     *
+     * 库里的 `attachments` 是 JSON（COS key / URL 数组），这里归一化成
+     * 字符串数组；服务层再换成短时签名 URL。无附件时为 `[]`。
+     */
+    attachments: string[];
   } | null;
 }
 
@@ -272,6 +289,8 @@ interface InsightMedicalRecordLike {
   status?: string | null;
   chiefComplaint?: string | null;
   exams?: string | null;
+  /** 附件原文（COS key / URL）；即使多传也不会带出 labValues / vitals */
+  attachments?: string[] | null;
 }
 
 /**
@@ -282,6 +301,8 @@ interface InsightCheckupRecordLike {
   checkupDate?: string | Date | null;
   checkupType?: string | null;
   findings?: string | null;
+  /** 附件原文（COS key / URL）；即使多传也不会带出 labValues */
+  attachments?: string[] | null;
 }
 
 function calcAgeMonths(birthday?: string | Date | null): number | null {
@@ -312,6 +333,21 @@ function toValidDate(value: string | Date | null | undefined): Date | null {
 
 function toIsoString(value: string | Date | null | undefined): string | null {
   return toValidDate(value)?.toISOString() ?? null;
+}
+
+/**
+ * 附件列表归一化（2026-10-22）。
+ *
+ * 定制单的 `attachments` 是 JSON 列，历史数据可能是 null / 非数组 /
+ * 混入非字符串；这里只保留非空字符串，保证输出永远是 `string[]`。
+ * 保留原始顺序（展示顺序与顾客上传顺序一致）。
+ */
+export function normalizeInsightAttachments(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim())
+    .filter((item) => Boolean(item));
 }
 
 /**
@@ -350,6 +386,7 @@ function buildLatestMedicalRecord(
     status: firstString(record.status),
     ...(chiefComplaint ? { chiefComplaint } : {}),
     ...(exams ? { exams } : {}),
+    attachments: normalizeInsightAttachments(record.attachments),
   };
 }
 
@@ -364,6 +401,7 @@ function buildLatestCheckupRecord(
     checkupDate,
     checkupType: firstString(record.checkupType),
     ...(findings ? { findings } : {}),
+    attachments: normalizeInsightAttachments(record.attachments),
   };
 }
 
@@ -613,6 +651,13 @@ export function buildDogDesignInsight(input: {
     orderSummary: aggregateDogOrderSummary(input.orderItems),
     latestMedicalRecord,
     latestCheckupRecord,
-    customRecipeOrder: input.customRecipeOrder ?? null,
+    customRecipeOrder: input.customRecipeOrder
+      ? {
+          ...input.customRecipeOrder,
+          attachments: normalizeInsightAttachments(
+            input.customRecipeOrder.attachments,
+          ),
+        }
+      : null,
   };
 }

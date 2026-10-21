@@ -137,9 +137,12 @@
               <span>{{ order.externalPaymentRef }}</span>
             </div>
           </div>
-          <p class="offline-refund-tip">
+          <p v-if="offlineRefundCap > 0" class="offline-refund-tip">
             这是线下收款订单：钱不在微信支付里，取消时不能走微信原路退款。
             请管理员先把款退回顾客，再用「线下退款并取消」登记（手工退款，不会调用微信退款）。
+          </p>
+          <p v-else class="offline-refund-tip">
+            这是 0 元赠送单，没有实收金额，也没有款可退；取消时直接点「取消赠送订单」即可，不会调用微信退款。
           </p>
         </template>
 
@@ -710,6 +713,7 @@ import {
   compareDogProfileAllergies,
   compareDogProfileMedicalConditions,
   getEstimatedDeliveryInfo,
+  parseAllergyText,
 } from '@/utils/customRecipe';
 import {
   getApiErrorMessage,
@@ -925,7 +929,10 @@ const canCancelOrder = computed(
 
 /** 下单时填写的过敏 vs 档案最新：两份口径不同，必须分开显示并提示差异 */
 const allergyComparison = computed(() =>
-  compareDogProfileAllergies(order.value?.dog, order.value?.allergies),
+  compareDogProfileAllergies(order.value?.dog, [
+    ...(order.value?.allergies || []),
+    ...parseAllergyText(order.value?.allergyText),
+  ]),
 );
 
 /**
@@ -1719,9 +1726,12 @@ const getGoalText = (goal?: string) => {
 }
 
 .detail-container {
-  display: grid;
-  grid-template-columns: 1fr 1.5fr;
-  gap: 30px;
+  display: block;
+}
+
+/* 交付区接在订单信息下方，不再单独占右栏；订单详情只保留一条纵向阅读路径 */
+.recipe-creation-section {
+  margin-top: 16px;
 }
 
 .order-info-section,

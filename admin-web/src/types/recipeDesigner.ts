@@ -194,6 +194,7 @@ export interface DogLatestMedicalRecord {
   status: string
   chiefComplaint?: string
   exams?: string
+  attachments: string[]
 }
 
 /**
@@ -205,6 +206,7 @@ export interface DogLatestCheckupRecord {
   checkupDate: string
   checkupType: string
   findings?: string
+  attachments: string[]
 }
 
 /**
@@ -332,6 +334,8 @@ export interface DogDesignInsight {
     stomachOther?: string | null
     /** HAS_ALLERGY / NO_ALLERGY / UNKNOWN */
     allergyStatus?: string | null
+    /** 顾客随单上传的附件（后端签名 URL） */
+    attachments: string[]
     /** 本单份数（1–5，老订单为 1；2026-10-21） */
     recipeQuantity: number
     /** 顾客选择的主蛋白 code（空数组 = 由营养师搭配；2026-10-21） */

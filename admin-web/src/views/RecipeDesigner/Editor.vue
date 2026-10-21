@@ -189,6 +189,7 @@
             :dog-id="referenceDogId"
             :draft-id="draft?.id"
             :series-id="seriesId"
+            :lock-reference-dog="Boolean(route.query.orderId)"
             :energy-density-kcal-per-kg="assessment?.energyDensityKcalPerKg ?? null"
             @dog-changed="(dogId: string | null) => (referenceDogId = dogId)"
           />

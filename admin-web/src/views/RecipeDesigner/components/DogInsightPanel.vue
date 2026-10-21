@@ -14,10 +14,21 @@
             {{ insight.dog.lifeStageLabel }}
           </el-tag>
         </div>
-        <div class="profile-actions">
-          <el-button size="small" text type="primary" @click="openDogPicker">
+        <div class="dog-summary">{{ profileSummary }}</div>
+        <div class="dog-header-meta">
+          <span v-if="insight.customRecipeOrder" class="dog-order-no">
+            本单 {{ insight.customRecipeOrder.orderId }}
+          </span>
+          <el-button
+            v-if="!lockReferenceDog"
+            size="small"
+            text
+            type="primary"
+            @click="openDogPicker"
+          >
             更换参考爱犬
           </el-button>
+          <span v-else class="dog-lock-tip">本单已绑定该犬，不能更换</span>
         </div>
       </div>
 
@@ -27,22 +38,17 @@
       </div>
 
       <div class="panel-section">
-        <div class="section-title">
-          <span>本单需求</span>
-          <el-tag v-if="insight.customRecipeOrder" size="small" effect="plain">
-            {{ insight.customRecipeOrder.orderId }}
-          </el-tag>
-        </div>
+        <div class="section-title">本单需求</div>
         <template v-if="insight.customRecipeOrder">
-          <div class="fact-row">
+          <div class="fact-row fact-row--stacked">
             <span class="fact-label">肠胃情况</span>
             <span class="fact-value">{{ stomachText }}</span>
           </div>
-          <div v-if="currentFoodText" class="fact-row fact-row--secondary">
+          <div v-if="currentFoodText" class="fact-row fact-row--stacked fact-row--secondary">
             <span class="fact-label">现在主要喂</span>
             <span class="fact-value">{{ currentFoodText }}</span>
           </div>
-          <div v-if="changeReasonText" class="fact-row fact-row--secondary">
+          <div v-if="changeReasonText" class="fact-row fact-row--stacked fact-row--secondary">
             <span class="fact-label">定制原因</span>
             <span class="fact-value">{{ changeReasonText }}</span>
           </div>
@@ -74,6 +80,20 @@
       <div v-if="insight.customRecipeOrder" class="panel-section">
         <div class="section-title">顾客额外备注</div>
         <div class="fact-value fact-value--block">{{ additionalNotes || '无' }}</div>
+        <div v-if="orderAttachments.length" class="order-attachments">
+          <span class="fact-label">顾客随单附件</span>
+          <div class="attachment-links">
+            <a
+              v-for="(url, index) in orderAttachments"
+              :key="url"
+              :href="url"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              附件 {{ index + 1 }}
+            </a>
+          </div>
+        </div>
       </div>
 
       <div class="panel-section panel-section--collapse">
@@ -86,6 +106,17 @@
                 <span class="record-date">{{ healthFacts.medical.date }}</span>
               </div>
               <div class="record-line">诊断：{{ healthFacts.medical.diagnosis }}</div>
+              <div v-if="healthFacts.medical.attachments.length" class="attachment-links">
+                <a
+                  v-for="(url, index) in healthFacts.medical.attachments"
+                  :key="url"
+                  :href="url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  查看就诊附件 {{ index + 1 }}
+                </a>
+              </div>
             </div>
             <div v-if="healthFacts.checkup" class="record-block">
               <div class="record-head">
@@ -93,34 +124,25 @@
                 <span class="record-date">{{ healthFacts.checkup.date }}</span>
               </div>
               <div class="record-line">结论：{{ healthFacts.checkup.findings }}</div>
+              <div v-if="healthFacts.checkup.attachments.length" class="attachment-links">
+                <a
+                  v-for="(url, index) in healthFacts.checkup.attachments"
+                  :key="url"
+                  :href="url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  查看体检附件 {{ index + 1 }}
+                </a>
+              </div>
             </div>
           </el-collapse-item>
 
           <el-collapse-item name="profile" title="基础档案">
             <div class="profile-grid">
               <div class="profile-item">
-                <span class="label">性别</span>
-                <span class="value">{{ genderText }}</span>
-              </div>
-              <div class="profile-item">
-                <span class="label">年龄</span>
-                <span class="value">{{ ageText }}</span>
-              </div>
-              <div class="profile-item">
                 <span class="label">绝育状态</span>
                 <span class="value">{{ neuteredText }}</span>
-              </div>
-              <div class="profile-item">
-                <span class="label">品种</span>
-                <span class="value">{{ insight.dog.breedName || '未知' }}</span>
-              </div>
-              <div class="profile-item">
-                <span class="label">体重</span>
-                <span class="value">{{ weightText }}</span>
-              </div>
-              <div class="profile-item">
-                <span class="label">体况评分</span>
-                <span class="value">{{ bcsText }}</span>
               </div>
               <div class="profile-item">
                 <span class="label">活动量</span>
@@ -238,6 +260,7 @@ const props = defineProps<{
   dogId?: string | null
   draftId?: string
   seriesId?: string
+  lockReferenceDog?: boolean
   /** 当前配方能量密度（kcal/kg），用于把每日目标能量换算成饭量克数 */
   energyDensityKcalPerKg?: number | null
 }>()
@@ -261,6 +284,27 @@ const { ensure: ensureStomachOptions, labelOf: stomachLabel } =
 /** 主蛋白：顾客选了就显示选的，没选就是由营养师搭配 */
 const proteinText = computed(() =>
   formatRequestedProteins(insight.value?.customRecipeOrder?.requestedProteinCodes)
+)
+const profileSummary = computed(() =>
+  [
+    insight.value?.dog.breedName || '未知品种',
+    genderText.value,
+    ageText.value,
+    weightText.value,
+    bcsText.value,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+)
+
+const orderAttachments = computed(() =>
+  Array.from(
+    new Set(
+      (insight.value?.customRecipeOrder?.attachments || [])
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+    )
+  )
 )
 
 const stomachText = computed(() => {
@@ -636,6 +680,70 @@ defineExpose({ loadInsight })
   word-break: break-all;
   white-space: pre-wrap;
 }
+.dog-summary {
+  margin-top: 4px;
+  color: #606266;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.dog-header-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  min-height: 24px;
+}
+
+.dog-order-no {
+  color: #909399;
+  font-size: 11px;
+}
+
+.dog-lock-tip {
+  color: #909399;
+  font-size: 11px;
+  text-align: right;
+}
+
+.fact-row--stacked {
+  display: block;
+}
+
+.fact-row--stacked .fact-label {
+  display: block;
+  margin-bottom: 3px;
+}
+
+.fact-row--stacked .fact-value {
+  display: block;
+  text-align: left;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.order-attachments {
+  margin-top: 8px;
+}
+
+.attachment-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.attachment-links a {
+  color: var(--el-color-primary);
+  text-decoration: none;
+}
+
+.attachment-links a:hover {
+  text-decoration: underline;
+}
+
 .fact-value--block {
   padding: 6px 8px;
   background: #fafafa;

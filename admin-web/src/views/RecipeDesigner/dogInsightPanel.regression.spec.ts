@@ -147,14 +147,10 @@ describe('爱犬指导面板 · fact-only 布局', () => {
     expect(template).not.toContain('default-expanded-names')
   })
 
-  it('基础档案保留原有事实字段，并在折叠区内', () => {
+  it('基础档案摘要进入顶部，详细字段保留在折叠区', () => {
+    expect(template).toContain('profileSummary')
     for (const label of [
-      '性别',
-      '年龄',
       '绝育状态',
-      '品种',
-      '体重',
-      '体况评分',
       '活动量',
       '每日餐数',
       '零食摄入',

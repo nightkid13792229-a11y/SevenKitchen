@@ -290,6 +290,9 @@ const multiOrderProgress = ref<{
   designed: number
 } | null>(null)
 
+/** 从定制单进入时，后续跳编辑器也要带上 orderId，用来锁定参考爱犬 */
+const entryOrderId = ref('')
+
 const loading = ref(false)
 const loadingMore = ref(false)
 const creating = ref(false)
@@ -529,7 +532,7 @@ async function createSeries() {
     // 创建成功后直接进入默认阶段（第一个有草稿的阶段）编辑器
     const targetDraftId = card?.initialDraftId || card?.stages.find((s) => s.draftId)?.draftId
     if (targetDraftId) {
-      router.push(`/recipe-designer/series/${card.id}/drafts/${targetDraftId}`)
+      router.push(draftRoute(card.id, targetDraftId))
     } else {
       await loadSeries(true)
     }
@@ -551,14 +554,14 @@ async function openStage(card: RecipeDesignerSeriesCard, stage: RecipeDesignerSe
           scenario: stage.scenario
         })
         if (draft?.id) {
-          router.push(`/recipe-designer/series/${card.id}/drafts/${draft.id}`)
+          router.push(draftRoute(card.id, draft.id))
           return
         }
       }
     } catch {
       // 查询失败则直接进入原草稿
     }
-    router.push(`/recipe-designer/series/${card.id}/drafts/${stage.draftId}`)
+    router.push(draftRoute(card.id, stage.draftId))
     return
   }
   try {
@@ -566,7 +569,7 @@ async function openStage(card: RecipeDesignerSeriesCard, stage: RecipeDesignerSe
       scenario: stage.scenario
     })
     if (draft?.id) {
-      router.push(`/recipe-designer/series/${card.id}/drafts/${draft.id}`)
+      router.push(draftRoute(card.id, draft.id))
     } else {
       ElMessage.warning('阶段草稿创建失败，请重试')
     }
@@ -701,7 +704,7 @@ async function confirmCopyItems() {
     ElMessage.success('已复制原料')
     copyItemsDialogVisible.value = false
     if (targetDraftId) {
-      router.push(`/recipe-designer/series/${card.id}/drafts/${targetDraftId}`)
+      router.push(draftRoute(card.id, targetDraftId))
     }
   } catch {
     // 拦截器已提示
@@ -717,9 +720,17 @@ async function confirmCopyItems() {
  * 2026-09-28：此前设计器与定制订单之间**没有任何通路**，
  * 营养师只能手工新建系列、再自己搜出那只狗，"参考顾客信息设计"无从谈起。
  */
+function draftRoute(seriesId: string, draftId: string) {
+  const base = `/recipe-designer/series/${seriesId}/drafts/${draftId}`
+  return entryOrderId.value
+    ? `${base}?orderId=${encodeURIComponent(entryOrderId.value)}`
+    : base
+}
+
 async function applyEntryQuery() {
   const dogId = String(route.query.dogId || '').trim()
   const orderId = String(route.query.orderId || '').trim()
+  entryOrderId.value = orderId
   if (!dogId) return
 
   createForm.referenceDogId = dogId

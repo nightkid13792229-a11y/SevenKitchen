@@ -182,6 +182,44 @@ export interface DraftAssessmentInputs {
 }
 
 /**
+ * 最近一次就诊（GET /recipe-designer/dogs/:dogId/design-insight）。
+ *
+ * 2026-10-21 后端只返回**结论字段**：原始化验数值（`labValues` / `vitals`）
+ * 既不查询也不返回，设计面板也不应展示。
+ */
+export interface DogLatestMedicalRecord {
+  /** ISO 时间字符串 */
+  visitDate: string
+  diagnosis: string
+  status: string
+  chiefComplaint?: string
+  exams?: string
+}
+
+/**
+ * 最近一次体检（GET /recipe-designer/dogs/:dogId/design-insight）。
+ * 同样只有结论字段，不包含原始化验数值。
+ */
+export interface DogLatestCheckupRecord {
+  /** ISO 时间字符串 */
+  checkupDate: string
+  checkupType: string
+  findings?: string
+}
+
+/**
+ * 结构化过敏明细（2026-10-04）。
+ *
+ * 设计面板只把它当作「档案里记了哪些过敏原」，不展示可信度、
+ * 也不据此推断风险 —— 判断留给营养师。
+ */
+export interface DogStructuredAllergy {
+  allergen: string
+  certainty: string
+  source: string
+}
+
+/**
  * 爱犬设计洞察（GET /recipe-designer/dogs/:dogId/design-insight）
  */
 export interface DogDesignInsight {
@@ -223,21 +261,26 @@ export interface DogDesignInsight {
      */
     structuredAllergies: string[]
     /**
-     * 带可信度的过敏明细（2026-10-04 第四期）。
+     * 带来源与可信度的过敏明细（2026-10-04 第四期）。
      *
-     * `structuredAllergies` 只有名字，营养师看不出"这条是报告确诊的、
-     * 还是顾客随手记的"。而这两者处理方式完全不同：
-     *   确诊 → 配方必须完全避开；可疑 → 建议避开并和顾客确认。
+     * 设计面板只读取 `allergen`（事实），不再展示 certainty，
+     * 也不再把记录分成确诊 / 可疑 / 已排除几档。
      */
-    allergyDetail?: Array<{
-      allergen: string
-      certainty: string
-      source: string
-    }>
+    allergyDetail?: DogStructuredAllergy[]
     pickyFoods: string | null
     preferredFoods: string | null
     medicalHistory: string | null
   }
+  /**
+   * 最近一次就诊（2026-10-21）：只有日期与诊断等结论字段。
+   * 没有记录时后端返回 null。
+   */
+  latestMedicalRecord: DogLatestMedicalRecord | null
+  /**
+   * 最近一次体检（2026-10-21）：只有日期、类型与结论。
+   * 没有记录时后端返回 null。
+   */
+  latestCheckupRecord: DogLatestCheckupRecord | null
   designHistory: {
     designCount: number
     seriesNames: string[]
@@ -264,8 +307,9 @@ export interface DogDesignInsight {
   /**
    * 顾客最近一笔「食谱定制」订单里填的内容（2026-09-28 新增）。
    *
-   * 营养师在设计时终于能看到：顾客要减重还是增重、勾没勾健康管理、
-   * 备注说了什么、订单里单独填的过敏/疾病/喜好。
+   * 设计面板只呈现事实：主蛋白、肠胃情况、当前饲喂、定制原因、
+   * 过敏原文与额外备注；目标/健康管理/疾病/喜好等字段仍由后端返回，
+   * 但面板不再据此做判断或给建议。
    */
   customRecipeOrder: {
     orderId: string
@@ -288,6 +332,10 @@ export interface DogDesignInsight {
     stomachOther?: string | null
     /** HAS_ALLERGY / NO_ALLERGY / UNKNOWN */
     allergyStatus?: string | null
+    /** 本单份数（1–5，老订单为 1；2026-10-21） */
+    recipeQuantity: number
+    /** 顾客选择的主蛋白 code（空数组 = 由营养师搭配；2026-10-21） */
+    requestedProteinCodes: string[]
     createdAt: string | null
   } | null
   aiEnabled: boolean

@@ -607,7 +607,7 @@ const handleMultiRecipeToggle = async (value: boolean | string | number) => {
       },
     );
   } catch {
-    form.value.multiRecipeEnabled = false;
+    form.multiRecipeEnabled = false;
   }
 };
 

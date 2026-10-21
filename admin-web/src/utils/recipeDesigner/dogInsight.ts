@@ -82,8 +82,6 @@ export interface AllergyFact {
 export interface DogAllergyFacts {
   /** 档案 + 本单的结构化过敏，已按归一化名称去重 */
   allergens: AllergyFact[]
-  /** 档案里的旧过敏文本（原文，不拆分） */
-  profileText: string
   /** 本单手填的过敏原文 */
   orderText: string
   hasAny: boolean
@@ -98,7 +96,7 @@ function textOf(value: unknown): string {
  *
  * - 档案：`allergyDetail[].allergen` + `structuredAllergies`，去重；
  * - 本单：`orderAllergies`，与档案重复时合并来源，不重复显示；
- * - 两段自由文本（`allergyFoods` / `allergyText`）原样保留，交给页面标注来源。
+ * - 订单自由文本（`allergyText`）原样保留；旧档案文本已停止读取。
  */
 export function buildAllergyFacts(input: AllergyFactsInput = {}): DogAllergyFacts {
   const allergens: AllergyFact[] = []
@@ -131,14 +129,12 @@ export function buildAllergyFacts(input: AllergyFactsInput = {}): DogAllergyFact
     push(item, 'ORDER')
   }
 
-  const profileText = textOf(input.allergyFoods)
   const orderText = textOf(input.orderAllergyText)
 
   return {
     allergens,
-    profileText,
     orderText,
-    hasAny: allergens.length > 0 || Boolean(profileText) || Boolean(orderText),
+    hasAny: allergens.length > 0 || Boolean(orderText),
   }
 }
 

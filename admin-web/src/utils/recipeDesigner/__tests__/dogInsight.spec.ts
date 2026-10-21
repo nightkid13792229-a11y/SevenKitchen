@@ -63,7 +63,7 @@ describe('过敏信息合并（fact-only）', () => {
       { text: '鱼肉', sources: ['PROFILE'] },
       { text: '鸭肉', sources: ['ORDER'] },
     ])
-    expect(facts.profileText).toBe('鸡胸肉、鸡蛋')
+    expect('profileText' in facts).toBe(false)
     expect(facts.orderText).toBe('三文鱼')
     expect(facts.hasAny).toBe(true)
   })
@@ -80,7 +80,6 @@ describe('过敏信息合并（fact-only）', () => {
       'allergens',
       'hasAny',
       'orderText',
-      'profileText',
     ])
     const serialized = JSON.stringify(facts)
     expect(serialized).not.toContain('certainty')
@@ -93,7 +92,6 @@ describe('过敏信息合并（fact-only）', () => {
   it('完全没有过敏时 hasAny 为 false', () => {
     const facts = buildAllergyFacts({})
     expect(facts.allergens).toEqual([])
-    expect(facts.profileText).toBe('')
     expect(facts.orderText).toBe('')
     expect(facts.hasAny).toBe(false)
   })

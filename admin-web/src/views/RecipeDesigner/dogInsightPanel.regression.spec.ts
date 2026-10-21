@@ -90,7 +90,7 @@ describe('爱犬指导面板 · fact-only 布局', () => {
   it('过敏信息合并展示，不再分档、不再标配方命中', () => {
     expect(template).toContain('allergyFacts.allergens')
     expect(script).toContain('buildAllergyFacts(')
-    expect(template).toContain('档案过敏文本')
+    expect(template).not.toContain('档案过敏文本')
     expect(template).toContain('本单填写')
 
     for (const removed of [

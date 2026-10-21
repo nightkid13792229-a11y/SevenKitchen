@@ -2268,17 +2268,9 @@ const loadDogArchiveInfo = async (dogId: string) => {
     const summaryAllergies = Array.isArray(summary.allergies)
       ? [...summary.allergies]
       : [];
-    // 2026-10-21：优先读结构化过敏记录；只有完全没有记录时，
-    // 才回退到旧过敏文本，避免把同一批过敏原在文本里再显示一遍。
-    const profileText = String(
-      detailRes?.data?.profile?.allergyFoods ||
-        selectedDog.value?.allergyFoods ||
-        '',
-    ).trim();
-    const archiveAllergyText =
-      summaryAllergies.length > 0
-        ? summaryAllergies.join('、')
-        : profileText;
+    // 2026-10-21：只读结构化过敏记录。
+    // 旧过敏文本已停止写入，且混有“无/花粉/1”等非过敏内容，不能再作为预填来源。
+    const archiveAllergyText = summaryAllergies.join('、');
 
     if (!draft) {
       formData.value.allergies = summaryAllergies;

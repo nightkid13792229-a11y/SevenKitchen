@@ -64,10 +64,6 @@
             <span class="allergy-chip__source">{{ sourceLabel(item.sources) }}</span>
           </el-tag>
         </div>
-        <div v-if="allergyFacts.profileText" class="fact-row">
-          <span class="fact-label">档案过敏文本</span>
-          <span class="fact-value fact-value--block">{{ allergyFacts.profileText }}</span>
-        </div>
         <div v-if="allergyFacts.orderText" class="fact-row">
           <span class="fact-label">本单填写</span>
           <span class="fact-value fact-value--block">{{ allergyFacts.orderText }}</span>
@@ -310,7 +306,6 @@ const allergyFacts = computed(() =>
   buildAllergyFacts({
     allergyDetail: insight.value?.dog?.allergyDetail,
     structuredAllergies: insight.value?.dog?.structuredAllergies,
-    allergyFoods: insight.value?.dog?.allergyFoods,
     orderAllergies: insight.value?.customRecipeOrder?.allergies,
     orderAllergyText: insight.value?.customRecipeOrder?.allergyText,
   })

@@ -182,11 +182,31 @@
 
         <el-card shadow="never" class="section">
           <template #header>发布设置</template>
+          <el-alert
+            v-if="seriesNameIsTemporary"
+            type="warning"
+            :closable="false"
+            show-icon
+            title="当前系列名称仍是临时名称，发布前请先改名"
+            class="alert"
+          >
+            <template #default>
+              发布名会自动跟随系列名。点击「改名」填写正式名称后，才能发布。
+            </template>
+          </el-alert>
           <el-form label-width="96px" class="publish-form">
             <el-form-item label="发布名称">
               <template v-if="draft?.seriesId">
                 <div class="publish-name-row">
                   <el-input :model-value="seriesDisplayName" readonly class="publish-name-input" />
+                  <el-tag
+                    v-if="seriesNameIsTemporary"
+                    size="small"
+                    type="warning"
+                    effect="plain"
+                  >
+                    临时名称
+                  </el-tag>
                   <el-button size="small" text type="primary" @click="openRenameDialog">改名</el-button>
                 </div>
               </template>
@@ -240,6 +260,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import type { DesignRecipeDraftDetail } from '@/types/recipeDesigner'
+import { isTemporarySeriesName } from '@/utils/recipeDesigner/seriesName'
 import { useUserStore } from '@/store/user'
 import { buildPublishNutritionReport } from './publishReport'
 
@@ -269,6 +290,11 @@ const effectivePublishName = computed(() => {
   return publishForm.name.trim() || draft.value?.name || ''
 })
 
+/** 临时名称只适用于系列草稿；非系列草稿仍走手填发布名 */
+const seriesNameIsTemporary = computed(
+  () => Boolean(draft.value?.seriesId) && isTemporarySeriesName(seriesDisplayName.value)
+)
+
 const renameDialogVisible = ref(false)
 const renameForm = reactive({ name: '' })
 const renaming = ref(false)
@@ -282,6 +308,10 @@ async function confirmRename() {
   const name = renameForm.name.trim()
   if (!name) {
     ElMessage.warning('请填写系列名称')
+    return
+  }
+  if (isTemporarySeriesName(name)) {
+    ElMessage.warning('请填写正式系列名称（不能以「未命名」开头）')
     return
   }
   if (!draft.value?.seriesId) {
@@ -445,6 +475,11 @@ async function load() {
 async function confirmPublish() {
   if (!isAdmin.value) {
     ElMessage.warning('仅管理员可发布食谱')
+    return
+  }
+  if (seriesNameIsTemporary.value) {
+    ElMessage.warning('当前系列名称仍是临时名称，请先改名后再发布')
+    openRenameDialog()
     return
   }
   if (publishRequiresReview.value && !publishForm.reviewNote.trim()) {

@@ -101,7 +101,17 @@
       <div v-loading="loading" class="series-grid">
         <div v-for="card in series" :key="card.id" class="series-card">
           <div class="series-card-head">
-            <div class="series-name">{{ card.name }}</div>
+            <div class="series-name-wrap">
+              <span class="series-name">{{ card.name }}</span>
+              <el-tag
+                v-if="isTemporarySeriesName(card.name)"
+                size="small"
+                type="warning"
+                effect="plain"
+              >
+                待改名
+              </el-tag>
+            </div>
             <el-tag
               size="small"
               :type="card.businessStatus === 'PUBLIC' ? 'success' : card.businessStatus === 'PRIVATE_CUSTOM' ? 'warning' : 'info'"
@@ -166,9 +176,6 @@
     <!-- 新建系列 -->
     <el-dialog v-model="createDialogVisible" title="新建设计系列" width="520px" @closed="resetCreateForm">
       <el-form label-width="96px">
-        <el-form-item label="系列名称" required>
-          <el-input v-model="createForm.name" placeholder="例如：旺财 12 月定制鲜食" maxlength="60" show-word-limit />
-        </el-form-item>
         <el-form-item label="参考爱犬">
           <el-select
             v-model="createForm.referenceDogId"
@@ -179,6 +186,7 @@
             :remote-method="searchDogs"
             :loading="dogLoading"
             style="width: 100%"
+            @change="handleReferenceDogChange"
           >
             <el-option
               v-for="dog in dogOptions"
@@ -198,8 +206,12 @@
               :value="key"
             />
           </el-select>
+          <div class="form-tip">选择参考爱犬后，会自动按它的生命阶段带出默认阶段；仍可在这里手动修改。</div>
         </el-form-item>
       </el-form>
+      <div class="form-tip create-name-tip">
+        创建时会自动生成临时名称（如「未命名系列 · 10-21 22:15」），可稍后在列表、编辑页或发布页改名。
+      </div>
       <template #footer>
         <el-button @click="createDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="creating" @click="createSeries">创建</el-button>
@@ -252,6 +264,11 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { MoreFilled, Plus, Search } from '@element-plus/icons-vue'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import { resolveCopySourceStages } from '@/utils/recipeDesigner/copySourceStages'
+import { resolveDogScenarioFromDetail } from '@/utils/recipeDesigner/dogScenario'
+import {
+  buildTemporarySeriesName,
+  isTemporarySeriesName
+} from '@/utils/recipeDesigner/seriesName'
 import { dogApi } from '@/api/dogs'
 import { customRecipeApi } from '@/api/customRecipe'
 import type { DogProfile } from '@/types/dog'
@@ -288,8 +305,7 @@ let seriesObserver: IntersectionObserver | null = null
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 const createDialogVisible = ref(false)
-const createForm = reactive<{ name: string; referenceDogId?: string; scenario?: FediafDogScenario }>({
-  name: '',
+const createForm = reactive<{ referenceDogId?: string; scenario?: FediafDogScenario }>({
   referenceDogId: undefined,
   scenario: undefined
 })
@@ -309,6 +325,8 @@ const duplicatingStage = ref(false)
 
 const dogOptions = ref<DogProfile[]>([])
 const dogLoading = ref(false)
+/** 参考爱犬详情请求序号：只接受最后一次请求的结果，避免快速切换时旧结果覆盖新犬 */
+let referenceDogRequestSeq = 0
 
 function formatTime(value?: string): string {
   if (!value) return '—'
@@ -356,6 +374,51 @@ async function searchDogs(keyword: string) {
   } finally {
     dogLoading.value = false
   }
+}
+
+function addDogOption(profile: DogProfile | null | undefined) {
+  if (!profile?.id) return
+  const index = dogOptions.value.findIndex((dog) => dog.id === profile.id)
+  if (index >= 0) {
+    dogOptions.value = dogOptions.value.map((dog, dogIndex) =>
+      dogIndex === index ? { ...dog, ...profile } : dog
+    )
+  } else {
+    dogOptions.value = [profile, ...dogOptions.value]
+  }
+}
+
+/**
+ * 按参考爱犬档案自动带出「默认阶段」。
+ *
+ * 只在能明确推断时写入；缺生命阶段/周龄/活动量时保持 undefined，不猜。
+ * 请求期间如果营养师手动改过默认阶段，则尊重手动选择，不让异步结果覆盖。
+ */
+async function autoFillScenarioFromDog(dogId: string) {
+  const requestId = ++referenceDogRequestSeq
+  const scenarioBefore = createForm.scenario
+  try {
+    const res: any = await dogApi.getDetail(dogId)
+    if (requestId !== referenceDogRequestSeq) return
+    const detail = res?.data ?? res
+    addDogOption((detail?.profile ?? null) as DogProfile | null)
+    const scenario = resolveDogScenarioFromDetail(detail)
+    if (createForm.scenario !== scenarioBefore) return
+    createForm.scenario = scenario
+  } catch {
+    if (requestId !== referenceDogRequestSeq) return
+    if (createForm.scenario === scenarioBefore) createForm.scenario = undefined
+  }
+}
+
+function handleReferenceDogChange(dogId?: string) {
+  const id = String(dogId || '').trim()
+  if (!id) {
+    // 清空参考犬：保留当前默认阶段，营养师仍可手动选择
+    referenceDogRequestSeq += 1
+    return
+  }
+  void autoFillScenarioFromDog(id)
 }
 
 async function loadSeries(reset = true) {
@@ -430,7 +493,7 @@ const emptyDescription = computed(() =>
 )
 
 function openCreateDialog() {
-  createForm.name = ''
+  referenceDogRequestSeq += 1
   createForm.referenceDogId = undefined
   createForm.scenario = undefined
   createDialogVisible.value = true
@@ -438,17 +501,16 @@ function openCreateDialog() {
 }
 
 function resetCreateForm() {
-  createForm.name = ''
+  referenceDogRequestSeq += 1
   createForm.referenceDogId = undefined
   createForm.scenario = undefined
 }
 
 async function createSeries() {
-  const name = createForm.name.trim()
-  if (!name) {
-    ElMessage.warning('请填写系列名称')
-    return
-  }
+  const referenceDog = dogOptions.value.find((dog) => dog.id === createForm.referenceDogId)
+  // 系列名不再要求营养师在创建时填写：先落一个带「未命名」前缀的临时名称，
+  // 发布前会在 Publish.vue 强制改名（后端 CreateRecipeSeriesDto.name 仍必填）。
+  const name = buildTemporarySeriesName({ dogName: referenceDog?.name })
   // 参考爱犬为可选项（2026-10-14 修正）。
   //
   // 背景：产品线系列是面向所有用户的，不绑定某只具体的狗，因此这里不能强制必选。
@@ -664,6 +726,9 @@ async function applyEntryQuery() {
   createDialogVisible.value = true
 
   await searchDogs('')
+  // 参考爱犬可能不在前 50 条里：详情接口同时负责把犬补进下拉选项，
+  // 并按它的生命阶段自动带出默认阶段（推断不出来时保持为空）。
+  await autoFillScenarioFromDog(dogId)
 
   /**
    * 从订单进来时带上本单份数与已设计数量。
@@ -685,20 +750,6 @@ async function applyEntryQuery() {
       }
     } catch {
       multiOrderProgress.value = null
-    }
-  }
-
-  // 目标狗可能不在前 50 条里：单独取一次详情补进选项，
-  // 否则下拉框里会显示成一个没有名字的空选项。
-  if (!dogOptions.value.some((dog) => dog.id === dogId)) {
-    try {
-      const res: any = await dogApi.getDetail(dogId)
-      const profile = res?.data?.profile ?? res?.profile ?? null
-      if (profile?.id) {
-        dogOptions.value = [profile as DogProfile, ...dogOptions.value]
-      }
-    } catch {
-      // 取不到详情也不阻断：referenceDogId 已经填上了
     }
   }
 }
@@ -867,6 +918,15 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
 }
+.series-name-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.series-name-wrap .el-tag {
+  flex-shrink: 0;
+}
 .series-name {
   font-weight: 600;
   font-size: 15px;
@@ -976,5 +1036,9 @@ onBeforeUnmount(() => {
   color: #909399;
   line-height: 1.5;
   margin-top: 4px;
+}
+.create-name-tip {
+  margin-left: 96px;
+  margin-bottom: 8px;
 }
 </style>

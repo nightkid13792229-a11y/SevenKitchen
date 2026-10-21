@@ -29,6 +29,8 @@ describe('DogDesignInsight · 顾客的定制需求', () => {
     medicalConditions: ['肠胃敏感'],
     preferredIngredients: ['三文鱼'],
     dislikedIngredients: ['胡萝卜'],
+    recipeQuantity: 3,
+    requestedProteinCodes: ['BEEF', 'CHICKEN'],
     createdAt: '2026-09-28T00:00:00.000Z',
   };
 
@@ -58,6 +60,12 @@ describe('DogDesignInsight · 顾客的定制需求', () => {
     expect(insight.customRecipeOrder?.medicalConditions).toEqual(['肠胃敏感']);
     expect(insight.customRecipeOrder?.preferredIngredients).toEqual(['三文鱼']);
     expect(insight.customRecipeOrder?.dislikedIngredients).toEqual(['胡萝卜']);
+    // 多份购买 / 主蛋白偏好：营养师要按份数与顾客选的蛋白来设计
+    expect(insight.customRecipeOrder?.recipeQuantity).toBe(3);
+    expect(insight.customRecipeOrder?.requestedProteinCodes).toEqual([
+      'BEEF',
+      'CHICKEN',
+    ]);
   });
 
   it('没有定制单时是 null，而不是空对象（前端据此决定要不要渲染）', () => {

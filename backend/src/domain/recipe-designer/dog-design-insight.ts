@@ -29,6 +29,33 @@ export interface DogOrderSummary {
   customRecipeCount: number;
 }
 
+/**
+ * 最近一次就诊（2026-10-21）。
+ *
+ * 营养师设计时要看的是「什么时候、诊断是什么、现在什么状态、当时主诉/做了哪些检查」，
+ * 而不是化验单里几十项原始数值 —— 所以这里**只暴露结论字段**，
+ * `labValues` / `vitals` 等原始数据既不查询也不返回。
+ */
+export interface DogLatestMedicalRecord {
+  /** ISO 时间字符串 */
+  visitDate: string;
+  diagnosis: string;
+  status: string;
+  chiefComplaint?: string;
+  exams?: string;
+}
+
+/**
+ * 最近一次体检（2026-10-21）。
+ * 同样只给结论，`labValues` 等原始化验数值不进入设计洞察。
+ */
+export interface DogLatestCheckupRecord {
+  /** ISO 时间字符串 */
+  checkupDate: string;
+  checkupType: string;
+  findings?: string;
+}
+
 export interface DogDesignInsight {
   dog: {
     id: string;
@@ -89,6 +116,15 @@ export interface DogDesignInsight {
   designHistory: DogDesignHistorySummary;
   orderSummary: DogOrderSummary;
   /**
+   * 最近一次就诊 / 体检（2026-10-21）。
+   *
+   * 此前设计器只能看到档案里的旧文本病史，看不到健康档案里的实际记录。
+   * 现在各给**最近一条**，不返回全部记录列表（设计面板只需要一个参照点，
+   * 全量列表既没人看，也会把化验原始数值带出去）。
+   */
+  latestMedicalRecord: DogLatestMedicalRecord | null;
+  latestCheckupRecord: DogLatestCheckupRecord | null;
+  /**
    * 顾客最近一笔「食谱定制」订单里填的内容。
    *
    * 2026-09-28 新增（老板确认的第 4 条）：此前设计器**完全看不到**这笔订单 ——
@@ -122,6 +158,10 @@ export interface DogDesignInsight {
     stomachOther?: string | null;
     /** 顾客是否明确回答过敏（HAS_ALLERGY / NO_ALLERGY / UNKNOWN） */
     allergyStatus?: string | null;
+    /** 本单份数（1–5，老订单为 1） */
+    recipeQuantity: number;
+    /** 顾客选择的主蛋白轮换 code（空数组 = 由营养师搭配） */
+    requestedProteinCodes: string[];
     createdAt: string | null;
   } | null;
 }
@@ -222,6 +262,28 @@ interface InsightDogLike {
   medicalHistory?: string | null;
 }
 
+/**
+ * 就诊记录（只取设计需要的结论字段）。
+ * 传进来的对象即使带 `labValues` / `vitals` 也不会被读取或输出。
+ */
+interface InsightMedicalRecordLike {
+  visitDate?: string | Date | null;
+  diagnosis?: string | null;
+  status?: string | null;
+  chiefComplaint?: string | null;
+  exams?: string | null;
+}
+
+/**
+ * 体检记录（只取设计需要的结论字段）。
+ * `labValues` 等原始化验数值不会进入洞察结果。
+ */
+interface InsightCheckupRecordLike {
+  checkupDate?: string | Date | null;
+  checkupType?: string | null;
+  findings?: string | null;
+}
+
 function calcAgeMonths(birthday?: string | Date | null): number | null {
   if (!birthday) return null;
   const birth = new Date(birthday);
@@ -242,10 +304,67 @@ function firstString(...values: unknown[]): string {
   return '';
 }
 
-function toIsoString(value: string | Date | null | undefined): string | null {
+function toValidDate(value: string | Date | null | undefined): Date | null {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function toIsoString(value: string | Date | null | undefined): string | null {
+  return toValidDate(value)?.toISOString() ?? null;
+}
+
+/**
+ * 从多条记录中按日期取最新一条。
+ *
+ * 服务层查询已经按日期倒序并只取 1 条，这里再兜一次底：
+ * 纯函数不依赖调用方的排序，即使传入多条或乱序，也只输出最新一条。
+ */
+function pickLatestByDate<T>(
+  records: readonly T[] | null | undefined,
+  getDate: (record: T) => string | Date | null | undefined,
+): T | null {
+  let latest: T | null = null;
+  let latestTime = Number.NEGATIVE_INFINITY;
+  for (const record of records ?? []) {
+    const time = toValidDate(getDate(record))?.getTime();
+    if (time === undefined || time <= latestTime) continue;
+    latest = record;
+    latestTime = time;
+  }
+  return latest;
+}
+
+function buildLatestMedicalRecord(
+  record: InsightMedicalRecordLike | null,
+): DogLatestMedicalRecord | null {
+  if (!record) return null;
+  const visitDate = toIsoString(record.visitDate);
+  // 没有有效日期的记录无法判断"最近"，也不该出现在洞察里
+  if (!visitDate) return null;
+  const chiefComplaint = firstString(record.chiefComplaint);
+  const exams = firstString(record.exams);
+  return {
+    visitDate,
+    diagnosis: firstString(record.diagnosis),
+    status: firstString(record.status),
+    ...(chiefComplaint ? { chiefComplaint } : {}),
+    ...(exams ? { exams } : {}),
+  };
+}
+
+function buildLatestCheckupRecord(
+  record: InsightCheckupRecordLike | null,
+): DogLatestCheckupRecord | null {
+  if (!record) return null;
+  const checkupDate = toIsoString(record.checkupDate);
+  if (!checkupDate) return null;
+  const findings = firstString(record.findings);
+  return {
+    checkupDate,
+    checkupType: firstString(record.checkupType),
+    ...(findings ? { findings } : {}),
+  };
 }
 
 export function resolveInsightItemName(
@@ -421,6 +540,16 @@ export function buildDogDesignInsight(input: {
   /** 已按 90 天窗口与订单状态（≥ FREEZING）过滤的订单，用于「最近吃过的食材」 */
   recentEatenOrderItems?: InsightOrderItemLike[];
   lifeStageLabel: string | null;
+  /**
+   * 该狗的就诊记录。可传多条（或乱序），内部按 visitDate 取最新一条；
+   * 输出只给 `latestMedicalRecord`，不返回列表。
+   */
+  medicalRecords?: InsightMedicalRecordLike[];
+  /**
+   * 该狗的体检记录。可传多条（或乱序），内部按 checkupDate 取最新一条；
+   * 输出只给 `latestCheckupRecord`，不返回列表。
+   */
+  checkupRecords?: InsightCheckupRecordLike[];
   /** 最近一笔「食谱定制」订单（没有则 null，或省略） */
   customRecipeOrder?: DogDesignInsight['customRecipeOrder'];
 }): DogDesignInsight {
@@ -429,6 +558,12 @@ export function buildDogDesignInsight(input: {
     dog.customBreedName,
     dog.breed?.name,
   ) || null;
+  const latestMedicalRecord = buildLatestMedicalRecord(
+    pickLatestByDate(input.medicalRecords, (record) => record.visitDate),
+  );
+  const latestCheckupRecord = buildLatestCheckupRecord(
+    pickLatestByDate(input.checkupRecords, (record) => record.checkupDate),
+  );
 
   return {
     dog: {
@@ -476,6 +611,8 @@ export function buildDogDesignInsight(input: {
       ),
     },
     orderSummary: aggregateDogOrderSummary(input.orderItems),
+    latestMedicalRecord,
+    latestCheckupRecord,
     customRecipeOrder: input.customRecipeOrder ?? null,
   };
 }

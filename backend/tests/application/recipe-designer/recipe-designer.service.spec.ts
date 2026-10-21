@@ -27,6 +27,13 @@ describe('RecipeDesignerService', () => {
       findFirst: jest.fn().mockResolvedValue(null),
       findMany: jest.fn().mockResolvedValue([]),
     },
+    // 2026-10-21：设计器洞察会读最近一次就诊 / 体检（只取一条结论）
+    medicalRecord: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    checkupRecord: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     orderItem: {
       findMany: jest.fn(),
     },
@@ -9696,6 +9703,9 @@ describe('RecipeDesignerService', () => {
       });
       prisma.recipeSeries.findMany.mockResolvedValue([]);
       prisma.orderItem.findMany.mockResolvedValue([]);
+      prisma.customRecipeOrder.findFirst.mockResolvedValue(null);
+      prisma.medicalRecord.findMany.mockResolvedValue([]);
+      prisma.checkupRecord.findMany.mockResolvedValue([]);
       aiDesignSuggestion.isAvailable.mockResolvedValue(true);
       aiDesignSuggestion.generate.mockResolvedValue({
         summary: '测试建议',
@@ -9796,6 +9806,126 @@ describe('RecipeDesignerService', () => {
       expect(prisma.dogBreed.findUnique).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: 'breed-1' } }),
       );
+    });
+
+    it('forwards the order quantity and requested protein codes', async () => {
+      prisma.customRecipeOrder.findFirst.mockResolvedValueOnce({
+        orderId: 'CR202610210001',
+        status: 'PAID',
+        targetGoal: 'MAINTAIN',
+        needsHealthManagement: false,
+        additionalNotes: null,
+        allergies: [],
+        allergyText: null,
+        medicalConditions: [],
+        preferredIngredients: [],
+        dislikedIngredients: [],
+        currentFoodMain: null,
+        currentFoodOther: null,
+        changeReasons: [],
+        changeReasonOther: null,
+        stomachConditions: [],
+        stomachOther: null,
+        allergyStatus: 'UNKNOWN',
+        recipeQuantity: 3,
+        requestedProteinCodes: ['BEEF', 'CHICKEN'],
+        createdAt: new Date('2026-10-21T00:00:00.000Z'),
+      });
+
+      const result = await (service as any).getDogDesignInsight(
+        'dog-1',
+        staffAccess,
+      );
+
+      expect(result.customRecipeOrder.recipeQuantity).toBe(3);
+      expect(result.customRecipeOrder.requestedProteinCodes).toEqual([
+        'BEEF',
+        'CHICKEN',
+      ]);
+      // 原有的定制需求字段不受影响
+      expect(result.customRecipeOrder.orderId).toBe('CR202610210001');
+      expect(result.customRecipeOrder.allergies).toEqual([]);
+      expect(prisma.customRecipeOrder.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          select: expect.objectContaining({
+            recipeQuantity: true,
+            requestedProteinCodes: true,
+          }),
+        }),
+      );
+    });
+
+    it('returns only the latest medical and checkup records without raw lab values', async () => {
+      prisma.medicalRecord.findMany.mockResolvedValueOnce([
+        {
+          visitDate: new Date('2026-08-02T00:00:00.000Z'),
+          diagnosis: '胰腺炎',
+          status: 'TREATING',
+          chiefComplaint: '腹痛',
+          exams: '血常规',
+        },
+      ]);
+      prisma.checkupRecord.findMany.mockResolvedValueOnce([
+        {
+          checkupDate: new Date('2026-07-15T00:00:00.000Z'),
+          checkupType: '年度体检',
+          findings: '轻度贫血',
+        },
+      ]);
+
+      const result = await (service as any).getDogDesignInsight(
+        'dog-1',
+        staffAccess,
+      );
+
+      expect(result.latestMedicalRecord).toEqual({
+        visitDate: '2026-08-02T00:00:00.000Z',
+        diagnosis: '胰腺炎',
+        status: 'TREATING',
+        chiefComplaint: '腹痛',
+        exams: '血常规',
+      });
+      expect(result.latestCheckupRecord).toEqual({
+        checkupDate: '2026-07-15T00:00:00.000Z',
+        checkupType: '年度体检',
+        findings: '轻度贫血',
+      });
+
+      // 按日期倒序只取一条，且不查化验原始数值
+      expect(prisma.medicalRecord.findMany).toHaveBeenCalledWith({
+        where: { dogId: 'dog-1' },
+        orderBy: { visitDate: 'desc' },
+        take: 1,
+        select: {
+          visitDate: true,
+          diagnosis: true,
+          status: true,
+          chiefComplaint: true,
+          exams: true,
+        },
+      });
+      expect(prisma.checkupRecord.findMany).toHaveBeenCalledWith({
+        where: { dogId: 'dog-1' },
+        orderBy: { checkupDate: 'desc' },
+        take: 1,
+        select: {
+          checkupDate: true,
+          checkupType: true,
+          findings: true,
+        },
+      });
+      expect(result.latestMedicalRecord).not.toHaveProperty('labValues');
+      expect(result.latestCheckupRecord).not.toHaveProperty('labValues');
+    });
+
+    it('returns null medical and checkup records when the dog has none', async () => {
+      const result = await (service as any).getDogDesignInsight(
+        'dog-1',
+        staffAccess,
+      );
+
+      expect(result.latestMedicalRecord).toBeNull();
+      expect(result.latestCheckupRecord).toBeNull();
     });
 
     it('rejects dog insight for customer role', async () => {

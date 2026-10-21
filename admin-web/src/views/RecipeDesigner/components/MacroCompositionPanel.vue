@@ -38,6 +38,8 @@ const MACRO_DETAIL_DEFINITIONS = [
   { key: 'crudeFat', name: '粗脂肪', energyFactor: 8.5 },
   { key: 'carbohydrate', name: '净碳水', energyFactor: 3.5 },
   { key: 'fiber', name: '膳食纤维', energyFactor: 0 },
+  { key: 'solubleFiber', name: '可溶性纤维', energyFactor: 0 },
+  { key: 'insolubleFiber', name: '不可溶性纤维', energyFactor: 0 },
   { key: 'ash', name: '灰分', energyFactor: 0 },
   { key: 'moisture', name: '水分', energyFactor: 0 }
 ] as const

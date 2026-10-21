@@ -80,6 +80,21 @@
               <div v-else class="bar-line bar-none">{{ row.noneText }}</div>
             </div>
           </div>
+            <div
+              v-if="group.key === 'MACRO' && fiberBreakdown.length"
+              class="fiber-breakdown"
+            >
+              <div class="fiber-breakdown-title">纤维细分</div>
+              <div
+                v-for="row in fiberBreakdown"
+                :key="row.key"
+                class="fiber-breakdown-row"
+              >
+                <span class="fiber-breakdown-label">{{ row.label }}</span>
+                <span class="fiber-breakdown-value">{{ row.value }}</span>
+              </div>
+            </div>
+
         </div>
       </div>
     </template>
@@ -469,6 +484,27 @@ function buildBar(entry: GroupedAssessmentEntry) {
     basisLabel: basisLabel(entry),
   })
 }
+
+const fiberBreakdown = computed(() => {
+  const a = props.assessment
+  if (!a) return []
+  const definitions = [
+    { key: 'solubleFiber', label: '可溶性纤维' },
+    { key: 'insolubleFiber', label: '不可溶性纤维' }
+  ] as const
+  return definitions.map(({ key, label }) => {
+    const metric = a.macroMetrics?.[key]
+    const total = metric?.total
+    if (total == null) return { key, label, value: '—' }
+    const weightPct =
+      a.totalWeightG > 0 ? (total * 100) / a.totalWeightG : null
+    const dryPct = metric?.dryMatterPercent
+    const parts = [`${total.toFixed(1)} g`]
+    if (weightPct != null) parts.push(`占配方 ${weightPct.toFixed(1)}%`)
+    if (dryPct != null) parts.push(`占干物质 ${dryPct.toFixed(1)}%`)
+    return { key, label, value: parts.join(' · ') }
+  })
+})
 
 const displayGroups = computed<DisplayGroup[]>(() => {
   const assessment = props.assessment
@@ -1481,5 +1517,34 @@ function openDetail(row: DisplayRow) {
 .nutrient-picker .load-more {
   text-align: center;
   padding: 4px 0;
+}
+
+.fiber-breakdown {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  background: #fafafa;
+}
+.fiber-breakdown-title {
+  color: #909399;
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.fiber-breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: #606266;
+  line-height: 1.6;
+}
+.fiber-breakdown-label {
+  color: #909399;
+  white-space: nowrap;
+}
+.fiber-breakdown-value {
+  text-align: right;
 }
 </style>

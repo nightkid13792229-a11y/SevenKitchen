@@ -154,6 +154,8 @@ export type AssessedMacroMetricKey =
   | 'crudeFat'
   | 'carbohydrate'
   | 'fiber'
+  | 'solubleFiber'
+  | 'insolubleFiber'
   | 'ash'
   | 'moisture'
   | 'energyDensity';

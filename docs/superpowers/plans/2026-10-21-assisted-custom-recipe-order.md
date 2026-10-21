@@ -16,7 +16,7 @@
 - 无账号顾客必须建独立代客客户，不能挂在老板个人账号下。
 - 线下收款只登记，不调用微信支付/退款；只有 `WECHAT_ONLINE` 自助单走原路退款。
 - 代客单仍受 1–5 份、报价、排期、开关约束。
-- 分享链接只读、短期、可撤销，不暴露其他顾客/订单。
+- 分享链接只读、**默认不自动过期**、可撤销，不暴露其他顾客/订单。
 - 多份开关默认关闭；本计划不改变生产开关。
 - 所有金额以服务端报价为准；实际线下收款另存 `actualPaidAmount`。
 
@@ -25,7 +25,7 @@
 - 线下已收款单取消时误调微信退款。
 - 无账号顾客的狗被写进员工/老板账号。
 - 代客订单被错误展示给其他顾客。
-- 分享 token 被枚举、长期有效或撤销后仍可访问。
+- 分享 token 被枚举、撤销后仍可访问。
 - 实际收款金额与订单应付金额不一致时，报表/退款口径错误。
 - 同一顾客/狗重复创建代客订单。
 
@@ -74,7 +74,7 @@ git commit -m "docs: record self-service custom recipe acceptance"
   - `CustomRecipeOrder.orderSource`, `createdByStaffId`, `paymentChannel`, `externalPaymentRef`, `actualPaidAmount`, `assistedForGuest`
   - `CustomRecipeOrder.refundChannel`, `offlineRefundedAt`, `offlineRefundAmount`, `offlineRefundMethod`, `offlineRefundNote`, `offlineRefundByStaffId`
   - `User.isGuest`, `guestContactName`, `guestContactPhone`, `guestContactWechat`, `guestCreatedByStaffId`
-  - `CustomRecipeDeliveryShare`（token、orderId、batchId、expiresAt、revokedAt、createdByStaffId）
+  - `CustomRecipeDeliveryShare`（token、orderId、batchId、expiresAt?、revokedAt、createdByStaffId）
 
 - [ ] **Step 1: 写 schema 守卫测试**
 
@@ -320,14 +320,14 @@ git commit -m "feat: support offline assisted refunds"
 
 **Interfaces:**
 - Produces:
-  - `POST /api/v1/admin/custom-recipe/orders/:orderId/delivery-share` → `{ url, expiresAt }`
-  - `GET /api/v1/public/custom-recipe/delivery-share/:token` → 只读批次内容；过期/撤销 404
-  - token 至少 32 字节随机；默认 7 天；管理员可撤销。
+  - `POST /api/v1/admin/custom-recipe/orders/:orderId/delivery-share` → `{ url, expiresAt: null }`
+  - `GET /api/v1/public/custom-recipe/delivery-share/:token` → 只读批次内容；撤销/无效 404
+  - token 至少 32 字节随机；**不自动过期**；管理员可撤销/重新生成。
 - 分享页可先用后端返回的只读 HTML/JSON；不暴露顾客手机号、其他订单。
 
 - [ ] **Step 1: 写 failing tests**
 
-覆盖：生成、访问、过期、撤销、错误 token、只含本单 N 份内容、不含手机号/openid。
+覆盖：生成、访问、**30 天后仍可访问**、撤销后 404、错误 token、只含本单 N 份内容、不含手机号/openid。
 
 - [ ] **Step 2: 实现 service/controller**
 
@@ -335,7 +335,7 @@ git commit -m "feat: support offline assisted refunds"
 
 - [ ] **Step 3: 写 admin 测试与按钮**
 
-代客/无账号订单详情出现「复制交付链接」；复制成功后提示有效期；撤销按钮。
+代客/无账号订单详情出现「复制交付链接」；复制成功后提示“长期有效，可随时撤销”；撤销/重新生成按钮。
 
 - [ ] **Step 4: 运行测试并提交**
 
@@ -386,4 +386,4 @@ git commit -m "docs: record assisted custom recipe acceptance"
 - Spec coverage: 代客客户、线下收款、代客下单、分享、售后、退款均有任务。
 - Type consistency: `orderSource`、`paymentChannel`、`actualPaidAmount`、`assistedForGuest`、`delivery-share` 命名统一。
 - Review Focus: 微信退款误调、账号归属、token 泄漏、金额不一致、重复订单均已在任务测试中落点。
-- 未纳入本计划：代客客户以后注册小程序的自动认领；建议单独做。
+- 未纳入本计划：历史订单认领（已确认不做）。

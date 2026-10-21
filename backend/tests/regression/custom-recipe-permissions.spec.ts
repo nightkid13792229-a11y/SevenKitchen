@@ -55,6 +55,17 @@ describe('后台定制食谱 · 权限', () => {
     expect(block).toContain('AdminGuard')
   })
 
+  it('★ 手工补退款仅管理员（已取消的已付款单）', () => {
+    /**
+     * 2026-10-21：生产单 CR202610201196 取消时漏退，需要一个补退入口。
+     * 退款是资金动作，与取消订单同级 —— 只有管理员能点。
+     */
+    const block = blockAfter("@Post('orders/:orderId/refund')")
+    expect(block).toContain('AdminGuard')
+    // 必须走既有退款 helper（幂等/原路退回都在里面），不能自己另发退款
+    expect(block).toContain('createCustomRecipeRefund')
+  })
+
   it('处理售后 **不**要求管理员（员工能做）', () => {
     const block = blockAfter("@Post('aftersales/:id/resolve')")
     expect(block).not.toContain('AdminGuard')

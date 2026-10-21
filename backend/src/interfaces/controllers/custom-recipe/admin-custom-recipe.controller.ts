@@ -531,6 +531,77 @@ export class AdminCustomRecipeController {
   }
 
   /**
+   * 手工补退款（2026-10-21 · 生产单 CR202610201196 的一刀）。
+   *
+   * ## 为什么需要它
+   *
+   * 退款此前只挂在两条路径上：顾客自助取消、后台取消。
+   * 生产单 CR202610201196 在**修复前**被取消（当时取消制作中的单不退钱），
+   * 结果 `status=CANCELLED`、`refundStatus=null`、钱已收 ——
+   * 而这时**没有任何入口能把钱退回去**：订单已取消，取消按钮也不见了。
+   *
+   * 这个接口只做一件事：对一张**已经取消**的已付款单补发起一次原路退款。
+   * 不改订单状态、不释放名额、不发通知 —— 那些在取消时已经做过了。
+   *
+   * ## 为什么这里不拦状态
+   *
+   * 任务口径是"已取消但没退成钱"的历史单，但控制器不写死 `CANCELLED`：
+   * ① 生产上真出过的另一种形态是**状态漂移**（例如停在 PAID 但已退款失败），
+   *    把它挡在门外只会逼人改数据库；
+   * ② 真正不能退的是"没收到钱"，那一条下面已经拦了；
+   * ③ 重复退款由 `createCustomRecipeRefund` 自己幂等（成功/处理中直接复用），
+   *    这里再写一份状态白名单只会形成第二套口径。
+   *
+   * 仅管理员：退款是资金动作，与"取消订单"同级。
+   */
+  @Post('orders/:orderId/refund')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: '手工补退款（仅管理员，已付款的已取消单）' })
+  async refundOrder(
+    @Param('orderId') orderId: string,
+    @Body('reason') reason?: string,
+  ) {
+    const order = await this.customRecipeService.getOrderByOrderId(orderId);
+
+    if (!order) {
+      throw new NotFoundException('订单不存在');
+    }
+
+    /**
+     * 没收到钱的单不能退。
+     *
+     * 与 `createCustomRecipeRefund` 里那条"该定制订单尚未支付"是同一条口径，
+     * 提前在这里拦一次，为的是**返回 400 与可读原因**，而不是把
+     * "能否退款"的知识留给前端去猜。
+     */
+    if (!order.paymentConfirmedAt && !order.paymentTransactionId) {
+      throw new BadRequestException('该定制订单尚未支付，无需退款');
+    }
+
+    /**
+     * 退款失败（未开启线上退款、微信报错）**原样抛出去**：
+     * 页面必须看到"钱没退成"的真实原因，绝不能吞掉后回一个成功。
+     */
+    const refund = await this.wechatPaymentService.createCustomRecipeRefund({
+      orderId: order.orderId,
+      reason: String(reason ?? '').trim() || '后台手工补退款',
+    });
+
+    /**
+     * 已经退成功/处理中的单，helper 会原样复用同一条退款记录（`reused: true`），
+     * 不会重复打款 —— 把 `reused` 一并回给页面，点击后能说清"这笔早就退过了"。
+     */
+    return ApiResponseDto.success({
+      orderId: order.orderId,
+      status: refund.status,
+      amount: refund.amount,
+      outRefundNo: refund.outRefundNo,
+      refundId: refund.refundId,
+      reused: refund.reused,
+    });
+  }
+
+  /**
    * Create recipe and deliver
    */
   @Post('orders/:orderId/create-recipe')

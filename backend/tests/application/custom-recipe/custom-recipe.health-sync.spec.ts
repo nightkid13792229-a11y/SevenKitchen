@@ -155,8 +155,27 @@ describe('CustomRecipeService · 档案同步时点', () => {
     });
     mockPrismaService.customRecipeOrder.update.mockResolvedValue({});
     mockPrismaService.customRecipeOrder.updateMany.mockResolvedValue({ count: 1 });
-    mockPrismaService.allergyRecord.findFirst.mockResolvedValue(null);
     mockPrismaService.allergyRecord.findUnique.mockResolvedValue(null);
+    /**
+     * 事务内模拟「已经写进去的记录能被后续查询看到」。
+     * 付款同步会先写报告/数组记录，再从自由文本补简单过敏原；
+     * 如果这里永远返回 null，测试就看不到去重效果。
+     */
+    const createdAllergyRecords: Array<{
+      dogId: string;
+      allergen: string;
+    }> = [];
+    mockPrismaService.allergyRecord.findFirst.mockImplementation(
+      async ({ where }: any) => {
+        const allergen = String(where?.allergen || '').trim();
+        const found = createdAllergyRecords.find(
+          (record) =>
+            record.dogId === where?.dogId &&
+            record.allergen.toLowerCase() === allergen.toLowerCase(),
+        );
+        return found ? { id: `created-${found.allergen}` } : null;
+      },
+    );
     mockPrismaService.medicalRecord.findFirst.mockResolvedValue(null);
     mockPrismaService.dog.findUnique.mockResolvedValue({
       allergyFoods: null,
@@ -165,7 +184,13 @@ describe('CustomRecipeService · 档案同步时点', () => {
     });
     mockPrismaService.dog.update.mockResolvedValue({});
     mockPrismaService.allergyReport.findUnique.mockResolvedValue(null);
-    allergyCreate.mockResolvedValue({});
+    allergyCreate.mockImplementation(async ({ data }: any) => {
+      createdAllergyRecords.push({
+        dogId: data.dogId,
+        allergen: data.allergen,
+      });
+      return {};
+    });
     allergyUpdate.mockResolvedValue({});
     medicalCreate.mockResolvedValue({});
     reportCreate.mockResolvedValue({ id: 'report-1' });
@@ -256,7 +281,7 @@ describe('CustomRecipeService · 档案同步时点', () => {
     expect(mockPrismaService.dog.update).not.toHaveBeenCalled();
   });
 
-  it('付款后：报告草稿转正式报告 + 文本合并 + 疾病/偏好写入', async () => {
+  it('付款后：报告草稿转正式报告 + 过敏文本归档 + 疾病/偏好写入', async () => {
     const order = paidOrder({
       allergyText: '鸡肉、牛肉',
       medicalConditions: ['肠胃敏感'],
@@ -292,23 +317,183 @@ describe('CustomRecipeService · 档案同步时点', () => {
         }),
       }),
     );
-    // 阳性写一条；阴性不记成过敏
-    expect(allergyCreate).toHaveBeenCalledTimes(1);
-    expect(allergyCreate.mock.calls[0][0].data.allergen).toBe('鸡肉');
+    /**
+     * 阳性写一条；阴性不记成过敏。
+     * 文本里的「鸡肉」与报告记录重复，只补「牛肉」—— 共两条。
+     */
+    expect(allergyCreate).toHaveBeenCalledTimes(2);
+    expect(allergyCreate.mock.calls.map(([arg]) => arg.data.allergen)).toEqual([
+      '鸡肉',
+      '牛肉',
+    ]);
     expect(allergyCreate.mock.calls[0][0].data.certainty).toBe('CONFIRMED');
-    expect(medicalCreate).toHaveBeenCalledTimes(1);
-    expect(medicalCreate.mock.calls[0][0].data.diagnosis).toBe('肠胃敏感');
-    expect(mockPrismaService.dog.update).toHaveBeenCalledWith(
+    expect(allergyCreate.mock.calls[0][0].data.source).toBe('REPORT');
+
+    const textRecord = allergyCreate.mock.calls[1][0].data;
+    expect(textRecord).toEqual(
       expect.objectContaining({
-        data: expect.objectContaining({ allergyFoods: '鸡肉、牛肉' }),
+        dogId: 'dog-1',
+        allergen: '牛肉',
+        source: 'OWNER',
+        certainty: 'SUSPECTED',
+        notes: expect.stringMatching(
+          /^从定制订单过敏文本同步（\d{4}-\d{2}-\d{2}）$/,
+        ),
       }),
     );
+    expect(medicalCreate).toHaveBeenCalledTimes(1);
+    expect(medicalCreate.mock.calls[0][0].data.diagnosis).toBe('肠胃敏感');
+    // 饮食偏好照旧写入；但不再把订单文本写进旧字段 allergyFoods
+    expect(mockPrismaService.dog.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ preferredFoods: '鸡肉' }),
+      }),
+    );
+    for (const [updateArgs] of mockPrismaService.dog.update.mock.calls) {
+      expect(updateArgs.data).not.toHaveProperty('allergyFoods');
+    }
     expect(mockPrismaService.customRecipeOrder.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'cr-uuid-1', healthInfoSyncedAt: null },
         data: expect.objectContaining({ healthInfoSyncedAt: expect.any(Date) }),
       }),
     );
+  });
+
+  it('纯文本 鸡肉、牛肉 建两条过敏记录，不写旧字段 allergyFoods', async () => {
+    const order = paidOrder({ allergyText: '鸡肉、牛肉' });
+    prepareSync(order);
+
+    const result = await service.syncPaidOrderToHealthProfile('CR1');
+
+    expect(result.synced).toBe(true);
+    expect(allergyCreate).toHaveBeenCalledTimes(2);
+    const records = allergyCreate.mock.calls.map(([arg]) => arg.data);
+    expect(records.map((record) => record.allergen)).toEqual(['鸡肉', '牛肉']);
+    for (const record of records) {
+      expect(record).toEqual(
+        expect.objectContaining({
+          dogId: 'dog-1',
+          source: 'OWNER',
+          certainty: 'SUSPECTED',
+          notes: expect.stringMatching(
+            /^从定制订单过敏文本同步（\d{4}-\d{2}-\d{2}）$/,
+          ),
+        }),
+      );
+      expect(record).not.toHaveProperty('allergyFoods');
+    }
+    // 没有饮食偏好时，旧文本字段这条写路径不应再碰 dog 表
+    expect(mockPrismaService.dog.update).not.toHaveBeenCalled();
+  });
+
+  it('简单文本 鸭、猪 也能建档', async () => {
+    const order = paidOrder({ allergyText: '鸭、猪' });
+    prepareSync(order);
+
+    await service.syncPaidOrderToHealthProfile('CR1');
+
+    expect(allergyCreate).toHaveBeenCalledTimes(2);
+    expect(allergyCreate.mock.calls.map(([arg]) => arg.data.allergen)).toEqual([
+      '鸭',
+      '猪',
+    ]);
+  });
+
+  it('中英文逗号/分号/换行都能拆分，并去掉首尾空白', async () => {
+    const order = paidOrder({
+      allergyText: ' 鸡肉 , 牛肉，鸭;猪；鱼\n虾\r蛋 ',
+    });
+    prepareSync(order);
+
+    await service.syncPaidOrderToHealthProfile('CR1');
+
+    expect(allergyCreate.mock.calls.map(([arg]) => arg.data.allergen)).toEqual([
+      '鸡肉',
+      '牛肉',
+      '鸭',
+      '猪',
+      '鱼',
+      '虾',
+      '蛋',
+    ]);
+  });
+
+  it('文本内重复过敏原忽略大小写，只建一条并保留首次写法', async () => {
+    const order = paidOrder({ allergyText: 'Chicken、chicken、CHICKEN' });
+    prepareSync(order);
+
+    await service.syncPaidOrderToHealthProfile('CR1');
+
+    expect(allergyCreate).toHaveBeenCalledTimes(1);
+    expect(allergyCreate.mock.calls[0][0].data.allergen).toBe('Chicken');
+  });
+
+  it.each(['无', '没有', '暂无', '不清楚', '正常吃', '不过敏'])(
+    '占位说法「%s」不建档',
+    async (allergyText) => {
+      const order = paidOrder({ allergyText });
+      prepareSync(order);
+
+      await service.syncPaidOrderToHealthProfile('CR1');
+
+      expect(allergyCreate).not.toHaveBeenCalled();
+      expect(mockPrismaService.dog.update).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['弱阳性：* 鸡肉'],
+    ['对粗粮过敏'],
+    ['胡萝卜不消化'],
+    ['过敏原检测报告：鸡肉'],
+    ['chicken breast'],
+    ['a'.repeat(21)],
+  ])('报告/句子型文本「%s」不建档', async (allergyText) => {
+    const order = paidOrder({ allergyText });
+    prepareSync(order);
+
+    await service.syncPaidOrderToHealthProfile('CR1');
+
+    expect(allergyCreate).not.toHaveBeenCalled();
+    expect(mockPrismaService.dog.update).not.toHaveBeenCalled();
+  });
+
+  it('档案已有同名单一过敏原时不重复建档', async () => {
+    mockPrismaService.allergyRecord.findFirst.mockImplementation(
+      async ({ where }: any) =>
+        String(where?.allergen || '').trim() === '牛肉'
+          ? { id: 'existing-beef' }
+          : null,
+    );
+    const order = paidOrder({ allergyText: '鸡肉、牛肉' });
+    prepareSync(order);
+
+    await service.syncPaidOrderToHealthProfile('CR1');
+
+    expect(allergyCreate).toHaveBeenCalledTimes(1);
+    expect(allergyCreate.mock.calls[0][0].data.allergen).toBe('鸡肉');
+  });
+
+  it('数组和文本都同步：重复项只建一条，简单文本补进档案', async () => {
+    const order = paidOrder({
+      allergies: ['鸡肉'],
+      allergyText: '鸡肉、牛肉',
+    });
+    prepareSync(order);
+
+    await service.syncPaidOrderToHealthProfile('CR1');
+
+    expect(allergyCreate).toHaveBeenCalledTimes(2);
+    expect(allergyCreate.mock.calls.map(([arg]) => arg.data.allergen)).toEqual([
+      '鸡肉',
+      '牛肉',
+    ]);
+    expect(allergyCreate.mock.calls[0][0].data.notes).toBe(
+      '顾客提交定制需求时填写',
+    );
+    expect(allergyCreate.mock.calls[1][0].data.source).toBe('OWNER');
+    expect(allergyCreate.mock.calls[1][0].data.certainty).toBe('SUSPECTED');
   });
 
   it('同步幂等：已同步过的订单直接返回，不再写', async () => {
@@ -353,7 +538,8 @@ describe('CustomRecipeService · 档案同步时点', () => {
 
     expect(result.synced).toBe(true);
     expect(reportCreate).not.toHaveBeenCalled();
-    // 报告已存在，但文本仍会合并
+    expect(allergyCreate).not.toHaveBeenCalled();
+    // 报告已存在时不再重复建记录；也不再写狗狗旧文本字段
     expect(mockPrismaService.dog.update).not.toHaveBeenCalled();
   });
 

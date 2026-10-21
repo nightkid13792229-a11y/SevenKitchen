@@ -227,7 +227,7 @@ export class AssistedOrderService {
 
     const quote = this.pricingService.quote(recipeQuantity, config);
 
-    // 4) 收款口径：应付取报价，实收另算；不一致必须有原因
+    // 4) 收款口径：应付取报价，实收另算（允许 0 元赠送）；不一致必须有原因
     const payment = this.resolvePayment(input?.payment, quote.payableAmount);
 
     const collectedAt = payment.collected ? new Date() : null;
@@ -478,9 +478,6 @@ export class AssistedOrderService {
     const amount = round2(raw.amount);
     if (amount < 0) {
       throw new BadRequestException('实收金额不能为负数');
-    }
-    if (raw.collected && amount <= 0) {
-      throw new BadRequestException('已收款时实收金额必须大于 0');
     }
 
     const externalRef = this.normalizeOptional(raw.externalRef);

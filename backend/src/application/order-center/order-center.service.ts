@@ -32,6 +32,8 @@ export interface OrderCenterItem {
   customerId: string;
   customerName: string | null;
   customerPhone: string | null;
+  /** 顾客账号角色（CUSTOMER / STAFF / ADMIN）；后台据此标「内部测试」 */
+  customerRole: string | null;
   statusGroup: UnifiedStatusGroup;
   rawStatus: string;
   statusLabel: string;
@@ -239,7 +241,7 @@ export class OrderCenterService {
     const users = userIds.length
       ? await this.prisma.user.findMany({
           where: { id: { in: userIds } },
-          select: { id: true, nickname: true, phone: true },
+          select: { id: true, nickname: true, phone: true, role: true },
         })
       : [];
     const userMap = new Map(users.map((user) => [user.id, user]));
@@ -461,6 +463,7 @@ export class OrderCenterService {
       customerId: input.userId,
       customerName: user?.nickname ?? address.recipientName ?? null,
       customerPhone: user?.phone ?? address.phone ?? null,
+      customerRole: user?.role ?? null,
       statusGroup: input.group,
       rawStatus: input.rawStatus,
       statusLabel: GROUP_LABELS[input.group],

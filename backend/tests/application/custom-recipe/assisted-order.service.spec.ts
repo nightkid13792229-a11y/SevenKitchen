@@ -415,4 +415,30 @@ describe('AssistedOrderService', () => {
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
+
+  it('★ 0 元赠送：已收款但实收 0，必须填原因；订单金额/实收/快照正确', async () => {
+    const result = await submit({
+      payment: {
+        collected: true,
+        channel: 'OFFLINE_WECHAT',
+        amount: 0,
+        externalRef: null,
+        overrideReason: '赠送老客户',
+      },
+    });
+
+    expect(result).toMatchObject({
+      status: CustomRecipeStatus.PAID,
+      amount: 0,
+      actualPaidAmount: 0,
+      paymentChannel: 'OFFLINE_WECHAT',
+    });
+    expect(writtenData).toMatchObject({
+      amount: 0,
+      actualPaidAmount: 0,
+      priceOverrideReason: '赠送老客户',
+      status: CustomRecipeStatus.PAID,
+      pricingSnapshot: expect.objectContaining({ payableAmount: 538.2 }),
+    });
+  });
 });

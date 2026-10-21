@@ -149,6 +149,8 @@ export interface CustomRecipeOrderDetail {
     id?: string
     nickname?: string
     phone?: string | null
+    /** CUSTOMER / STAFF / ADMIN；非 CUSTOMER 在后台标「内部测试」 */
+    role?: string | null
     wechatOpenid?: string | null
   } | null
   dog?: CustomRecipeDogProfile | null
@@ -561,6 +563,39 @@ export interface StaffCustomerSearchItem {
   dogs: StaffCustomerSearchDog[]
 }
 
+/**
+ * 代客下单合并搜索（`/admin/custom-recipe/customer-dog-search`）的狗狗摘要。
+ *
+ * 后端一次返回顾客**全部**狗狗：关键词可能只命中其中一只，
+ * 但页面要把这位顾客的狗都列出来给员工选。
+ */
+export interface AssistedCustomerDogSearchDog {
+  id: string
+  name: string
+  breedName?: string | null
+  birthday?: string | null
+  /** 后端算好的年龄文案（没填生日为 null） */
+  ageText?: string | null
+  currentWeightKg?: number | null
+}
+
+/**
+ * 代客下单合并搜索结果。
+ *
+ * 一张卡片同时代表「顾客 + 他的全部狗狗」，点狗即同时选中顾客与狗。
+ * 默认只返回真实顾客；`includeInternal=true` 时才有 ADMIN / STAFF。
+ */
+export interface AssistedCustomerDogSearchItem {
+  id: string
+  name: string | null
+  phone?: string | null
+  /** CUSTOMER / STAFF / ADMIN */
+  role: string
+  /** 非 CUSTOMER 即内部账号（仅用于测试单，页面需二次确认） */
+  isInternal: boolean
+  dogs: AssistedCustomerDogSearchDog[]
+}
+
 /** 代客客户（无账号顾客）搜索项 */
 export interface GuestCustomerSearchItem {
   id: string
@@ -635,11 +670,33 @@ export const customRecipeApi = {
    *
    * 返回结果带狗狗，但狗名不能作为唯一识别依据 —— 页面必须同时显示
    * 主人昵称/手机号，选狗用 dog.id。
+   *
+   * @deprecated 代客下单已改用 `searchAssistedCustomerDogs`（合并搜索）；
+   * 员工端接口本身不变，仍供其它客服/补剂流程使用。
    */
   searchStaffCustomers: (keyword: string) =>
     api.get<StaffCustomerSearchItem[]>(
       '/staff/customer-service/customers/search',
       { params: { keyword } },
+    ),
+
+  /**
+   * 代客下单：顾客 + 狗狗合并搜索（仅管理员）。
+   *
+   * 与员工端搜索的区别：
+   *   · 默认只搜真实顾客，打开开关才带出 ADMIN / STAFF（内部测试单）；
+   *   · 返回 `role` / `isInternal`，页面能明确标出内部账号；
+   *   · 每个顾客返回全部狗狗，点一张卡片即可同时选中顾客和狗。
+   */
+  searchAssistedCustomerDogs: (keyword: string, includeInternal = false) =>
+    api.get<{ items: AssistedCustomerDogSearchItem[] }>(
+      `${BASE}/customer-dog-search`,
+      {
+        params: {
+          keyword,
+          includeInternal: includeInternal ? 'true' : 'false',
+        },
+      },
     ),
 
   /** 搜索代客客户（无账号；只返回 isGuest=true） */

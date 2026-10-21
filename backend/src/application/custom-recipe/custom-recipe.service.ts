@@ -759,6 +759,11 @@ export class CustomRecipeService implements ICustomRecipeRepository {
             id: true,
             nickname: true,
             phone: true,
+            /**
+             * 角色（2026-10-21）：后台订单详情据此标「内部测试」。
+             * 内部测试账号下的订单不是真实顾客单，不能让运营误当成真实业绩。
+             */
+            role: true,
             wechatOpenid: true,
           },
         },
@@ -1325,6 +1330,8 @@ export class CustomRecipeService implements ICustomRecipeRepository {
         paymentChannel: true,
         orderSource: true,
         paymentConfirmedAt: true,
+        amount: true,
+        actualPaidAmount: true,
       },
     });
 
@@ -1377,7 +1384,11 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       order.status === CustomRecipeStatus.PAID ||
       order.status === CustomRecipeStatus.IN_PROGRESS;
 
-    if (hasCollectedPayment && isOfflinePaidCustomRecipeOrder(order)) {
+    const isOfflineOrder = isOfflinePaidCustomRecipeOrder(order);
+    const offlinePaidAmount = Math.round(
+      resolveOfflineRefundCap(order as any) * 100,
+    ) / 100;
+    if (hasCollectedPayment && isOfflineOrder && offlinePaidAmount > 0) {
       throw new BadRequestException('线下收款订单请联系客服处理退款');
     }
 

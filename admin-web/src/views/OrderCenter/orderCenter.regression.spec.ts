@@ -93,6 +93,21 @@ describe('订单中心 · 定制状态显示原始状态', () => {
   })
 })
 
+describe('订单中心 · 内部测试账号标记（2026-10-21）', () => {
+  const clean = stripComments(page)
+
+  it('★ 顾客列用后端 customerRole 判断是否内部账号', () => {
+    expect(clean).toContain('isInternalCustomerRole(row.customerRole)')
+    expect(clean).toContain('INTERNAL_CUSTOMER_BADGE')
+    expect(clean).toContain('internal-tag')
+  })
+
+  it('★ 只有非 CUSTOMER 才打标，判断集中在工具函数', () => {
+    expect(clean).not.toContain("row.customerRole !== 'CUSTOMER'")
+    expect(clean).toContain("from '@/utils/customerRole'")
+  })
+})
+
 describe('路由与售后入口（2026-10-21）', () => {
   const cleanRouter = stripComments(routerSource)
   const cleanAftersale = stripComments(aftersalePage)

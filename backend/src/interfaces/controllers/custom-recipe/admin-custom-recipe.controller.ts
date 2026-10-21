@@ -54,7 +54,7 @@ import { isOfflinePaidCustomRecipeOrder } from '../../../domain/custom-recipe/cu
 import { AdminGuard } from '../auth/admin.guard';
 import { StaffGuard } from '../../guards/role.guard';
 import { AuthGuard } from '../../auth/auth.guard';
-import { CustomRecipeStatus } from '@prisma/client';
+import { CustomRecipeStatus, UserRole } from '@prisma/client';
 import { canTransition } from '../../../domain/custom-recipe/custom-recipe.state';
 import { WechatService } from '../../../infrastructure/wechat/wechat.service';
 import { WechatPaymentService } from '../../../application/payment/wechat-payment.service';
@@ -170,6 +170,137 @@ export class AdminCustomRecipeController {
     return ApiResponseDto.success(
       await this.customRecipeConfigService.updateConfig(dto),
     );
+  }
+
+  /**
+   * 代客下单：顾客 + 狗狗合并搜索（2026-10-21 · 仅管理员）。
+   *
+   * ## 为什么不再复用员工端那个搜索接口
+   *
+   * `/staff/customer-service/customers/search` 写死了 `role: CUSTOMER`、
+   * 不返回角色、且只给 20 条 —— 它服务的补剂/客服流程不能被改。
+   * 代客下单需要**一个结果卡片同时选顾客和狗**，还要能识别内部测试账号，
+   * 所以单独开一条只读接口，返回角色与完整狗狗列表。
+   *
+   * - 默认只搜真实顾客（CUSTOMER）；
+   * - `includeInternal=true` 才把 ADMIN / STAFF 一起带出来（仅用于测试单）；
+   * - 匹配顾客昵称、手机号、狗狗名字；
+   * - 每个顾客**返回全部狗狗**，不按关键词截断（否则同名狗会漏选）；
+   * - 最多 30 条，按 `updatedAt` 倒序。
+   */
+  @Get('customer-dog-search')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: '顾客与狗狗合并搜索（代客下单，仅管理员）' })
+  async searchCustomerDog(
+    @Query('keyword') rawKeyword?: string,
+    @Query('includeInternal') rawIncludeInternal?: string,
+  ) {
+    const keyword = String(rawKeyword ?? '').trim();
+    if (!keyword) {
+      return ApiResponseDto.success({ items: [] });
+    }
+
+    const includeInternal = ['true', '1'].includes(
+      String(rawIncludeInternal ?? '').trim().toLowerCase(),
+    );
+    const roles: UserRole[] = includeInternal
+      ? [UserRole.CUSTOMER, UserRole.ADMIN, UserRole.STAFF]
+      : [UserRole.CUSTOMER];
+
+    const customers = await this.prisma.user.findMany({
+      where: {
+        role: { in: roles },
+        OR: [
+          { phone: { contains: keyword } },
+          { nickname: { contains: keyword, mode: 'insensitive' } },
+          {
+            dogs: {
+              some: { name: { contains: keyword, mode: 'insensitive' } },
+            },
+          },
+        ],
+      },
+      select: {
+        id: true,
+        nickname: true,
+        phone: true,
+        role: true,
+        dogs: {
+          select: {
+            id: true,
+            name: true,
+            breedId: true,
+            customBreedName: true,
+            birthday: true,
+            currentWeightKg: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 30,
+    });
+
+    const breedIds = Array.from(
+      new Set(
+        customers
+          .flatMap((customer) => customer.dogs.map((dog) => dog.breedId))
+          .filter(Boolean),
+      ),
+    );
+    const breeds = breedIds.length
+      ? await this.prisma.dogBreed.findMany({
+          where: { id: { in: breedIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const breedMap = new Map(breeds.map((breed) => [breed.id, breed.name]));
+
+    return ApiResponseDto.success({
+      items: customers.map((customer) => ({
+        id: customer.id,
+        name: customer.nickname,
+        phone: customer.phone,
+        role: customer.role,
+        isInternal: customer.role !== UserRole.CUSTOMER,
+        dogs: customer.dogs.map((dog) => ({
+          id: dog.id,
+          name: dog.name,
+          breedName:
+            dog.customBreedName || breedMap.get(dog.breedId) || null,
+          birthday: dog.birthday,
+          ageText: this.dogAgeText(dog.birthday),
+          currentWeightKg: dog.currentWeightKg,
+        })),
+      })),
+    });
+  }
+
+  /**
+   * 生日 → 「2岁3个月 / 5个月 / 12天」。
+   *
+   * 后台搜索结果直接展示，不必让页面为每个顾客再算一遍；
+   * 口径与 admin-web `calculateAge` 保持一致。没填生日返回 null，
+   * 页面显示「年龄未填」。
+   */
+  private dogAgeText(birthday: Date | null | undefined): string | null {
+    if (!birthday) return null;
+    const birth = new Date(birthday);
+    if (Number.isNaN(birth.getTime())) return null;
+
+    const days = Math.floor(
+      (Date.now() - birth.getTime()) / (1000 * 60 * 60 * 24),
+    );
+    if (!Number.isFinite(days) || days < 0) return null;
+
+    const months = Math.floor(days / 30.44);
+    const years = Math.floor(days / 365.25);
+    if (years >= 1) {
+      const restMonths = months - years * 12;
+      return restMonths > 0 ? `${years}岁${restMonths}个月` : `${years}岁`;
+    }
+    if (months >= 1) return `${months}个月`;
+    return `${days}天`;
   }
 
   /**
@@ -618,11 +749,21 @@ export class AdminCustomRecipeController {
         Boolean(order.paymentConfirmedAt) ||
         order.status === CustomRecipeStatus.PAID ||
         order.status === CustomRecipeStatus.IN_PROGRESS;
+      const offlinePaidAmount =
+        this.toNullableNumber(order.actualPaidAmount) ??
+        this.toNullableNumber(order.amount) ??
+        0;
+      const isOfflineOrder = isOfflinePaidCustomRecipeOrder(order);
 
+      /**
+       * 线下单有实收金额：必须先登记线下退款，不能直接取消。
+       * 0 元赠送单没有款可退，允许直接取消（不调用微信退款）。
+       */
       if (
         order.status !== CustomRecipeStatus.CANCELLED &&
         hasCollectedPayment &&
-        isOfflinePaidCustomRecipeOrder(order)
+        isOfflineOrder &&
+        offlinePaidAmount > 0
       ) {
         throw new BadRequestException(
           '线下收款订单不能直接取消：请使用「线下退款并取消」登记线下退款（系统不会调用微信退款）',
@@ -630,10 +771,11 @@ export class AdminCustomRecipeController {
       }
 
       const shouldRefund =
-        order.status === CustomRecipeStatus.PAID ||
-        order.status === CustomRecipeStatus.IN_PROGRESS ||
-        (Boolean(order.paymentConfirmedAt) &&
-          canTransition(order.status, CustomRecipeStatus.CANCELLED));
+        !isOfflineOrder &&
+        (order.status === CustomRecipeStatus.PAID ||
+          order.status === CustomRecipeStatus.IN_PROGRESS ||
+          (Boolean(order.paymentConfirmedAt) &&
+            canTransition(order.status, CustomRecipeStatus.CANCELLED)));
 
       if (shouldRefund) {
         /**

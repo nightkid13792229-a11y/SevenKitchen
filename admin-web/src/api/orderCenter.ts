@@ -29,6 +29,8 @@ export interface OrderCenterItem {
   customerId: string
   customerName: string | null
   customerPhone: string | null
+  /** 顾客账号角色（CUSTOMER / STAFF / ADMIN）；非 CUSTOMER 显示「内部测试」 */
+  customerRole: string | null
   statusGroup: UnifiedStatusGroup
   rawStatus: string
   statusLabel: string

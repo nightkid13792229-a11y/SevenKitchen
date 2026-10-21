@@ -183,7 +183,18 @@
         <div class="info-group">
           <div class="info-item">
             <label>姓名</label>
-            <span>{{ order.customer?.nickname }}</span>
+            <span>
+              {{ order.customer?.nickname }}
+              <el-tag
+                v-if="isInternalCustomer"
+                size="small"
+                type="danger"
+                effect="plain"
+                class="internal-customer-tag"
+              >
+                {{ INTERNAL_CUSTOMER_BADGE }}
+              </el-tag>
+            </span>
           </div>
           <div class="info-item">
             <label>微信</label>
@@ -385,7 +396,7 @@
             plain
             @click="cancelOrder"
           >
-            取消订单
+            {{ cancelOrderLabel }}
           </el-button>
           <span
             v-else-if="!isAdmin && isCancellableStatus"
@@ -705,6 +716,10 @@ import {
   isUserCancel,
   toastApiError,
 } from '@/utils/apiError';
+import {
+  INTERNAL_CUSTOMER_BADGE,
+  isInternalCustomerRole,
+} from '@/utils/customerRole';
 
 const props = defineProps<{
   orderId: string;
@@ -768,6 +783,11 @@ const {
 
 const statusText = computed(() => statusLabel(order.value?.status));
 const statusTagType = computed(() => statusTone(order.value?.status) || undefined);
+
+/** 内部账号（老板/员工）下的测试单，后台要能和真实顾客单一眼区分 */
+const isInternalCustomer = computed(() =>
+  isInternalCustomerRole(order.value?.customer?.role),
+);
 
 /** 预计交付倒计时：超期的单要标红，已交付/已取消的不再催 */
 const deliveryInfo = computed(() =>
@@ -883,6 +903,12 @@ const isCancellableStatus = computed(() => {
   return Boolean(status) && !['DELIVERED', 'CANCELLED'].includes(status);
 });
 
+const cancelOrderLabel = computed(() =>
+  isOfflinePaidOrder.value && offlineRefundCap.value <= 0
+    ? '取消赠送订单'
+    : '取消订单',
+);
+
 /**
  * 「取消订单」按钮：线上单保持原样；线下单交给「线下退款并取消」。
  *
@@ -890,7 +916,11 @@ const isCancellableStatus = computed(() => {
  */
 const canCancelOrder = computed(
   () =>
-    isAdmin.value && isCancellableStatus.value && !isOfflinePaidOrder.value,
+    isAdmin.value &&
+    isCancellableStatus.value &&
+    // 线下单有实收金额时必须走「线下退款并取消」；
+    // 0 元赠送单没有款可退，允许直接取消。
+    (!isOfflinePaidOrder.value || offlineRefundCap.value <= 0),
 );
 
 /** 下单时填写的过敏 vs 档案最新：两份口径不同，必须分开显示并提示差异 */
@@ -1727,6 +1757,10 @@ h3 {
 
 .info-item span {
   color: #333;
+}
+
+.internal-customer-tag {
+  margin-left: 6px;
 }
 
 .info-item .amount {

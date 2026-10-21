@@ -55,7 +55,7 @@ describe('OrderCenterService', () => {
     prisma.supplementOrder.count.mockResolvedValue(1);
     prisma.aftersaleCase.findMany.mockResolvedValue([]);
     prisma.user.findMany.mockResolvedValue([
-      { id: 'u1', nickname: '张三', phone: '13800000000' },
+      { id: 'u1', nickname: '张三', phone: '13800000000', role: 'CUSTOMER' },
     ]);
     service = new OrderCenterService(prisma);
   });
@@ -108,5 +108,41 @@ describe('OrderCenterService', () => {
     expect(result.items).toHaveLength(1);
     expect(prisma.order.findMany).not.toHaveBeenCalled();
     expect(prisma.customRecipeOrder.findMany).not.toHaveBeenCalled();
+  });
+
+  it('★ 每条订单都带 customerRole，内部账号可被后台标记', async () => {
+    const result = await service.list({ pageSize: 20 });
+
+    expect(result.items.length).toBeGreaterThan(0);
+    expect(result.items.every((item) => item.customerRole === 'CUSTOMER')).toBe(
+      true,
+    );
+    expect(prisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({ role: true }),
+      }),
+    );
+  });
+
+  it('★ 内部账号的订单映射为内部角色，不丢字段', async () => {
+    prisma.user.findMany.mockResolvedValue([
+      { id: 'u1', nickname: '内部测试号', phone: '13900000000', role: 'ADMIN' },
+    ]);
+
+    const result = await service.list({ pageSize: 20 });
+
+    expect(result.items).toHaveLength(2);
+    for (const item of result.items) {
+      expect(item.customerName).toBe('内部测试号');
+      expect(item.customerRole).toBe('ADMIN');
+    }
+  });
+
+  it('用户记录查不到时 customerRole 为 null，而不是报错', async () => {
+    prisma.user.findMany.mockResolvedValue([]);
+
+    const result = await service.list({ pageSize: 20 });
+
+    expect(result.items.every((item) => item.customerRole === null)).toBe(true);
   });
 });

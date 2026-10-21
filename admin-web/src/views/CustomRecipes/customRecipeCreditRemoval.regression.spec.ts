@@ -98,7 +98,9 @@ describe('定制抵扣下线：定制订单详情', () => {
   it('交付 / 取消等原有能力还在（只删抵扣，不误删订单动线）', () => {
     expect(orderDetailSource).toContain('customRecipeApi.deliverRecipe')
     expect(orderDetailSource).toContain('customRecipeApi.updateStatus')
-    expect(orderDetailSource).toContain('饲喂历史')
+    // 2026-10-21：详细饲喂历史收进设计器，订单抽屉保留紧凑的「设计资料」入口
+    expect(orderDetailSource).toContain('设计资料')
+    expect(orderDetailSource).toContain('openInDesigner')
   })
 })
 

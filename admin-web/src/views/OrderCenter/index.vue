@@ -14,12 +14,12 @@
         <el-radio-group v-model="query.type" @change="handleSearch">
           <el-radio-button :value="undefined">全部</el-radio-button>
           <el-radio-button value="FOOD">鲜食</el-radio-button>
-          <el-radio-button value="CUSTOM_RECIPE">定制食谱</el-radio-button>
+          <el-radio-button value="CUSTOM_RECIPE">食谱定制</el-radio-button>
           <el-radio-button value="SUPPLEMENT">补剂</el-radio-button>
         </el-radio-group>
         <div class="counts">
           <span>鲜食 {{ counts.FOOD }}</span>
-          <span>定制 {{ counts.CUSTOM_RECIPE }}</span>
+          <span>食谱定制 {{ counts.CUSTOM_RECIPE }}</span>
           <span>补剂 {{ counts.SUPPLEMENT }}</span>
         </div>
       </div>
@@ -69,8 +69,11 @@
       <el-table v-loading="loading" :data="items" row-key="id" stripe>
         <el-table-column label="类型" width="92">
           <template #default="{ row }">
-            <el-tag size="small" effect="plain">{{ typeLabel(row.type) }}</el-tag>
-            <div v-if="row.subtypeLabel" class="muted">{{ row.subtypeLabel }}</div>
+            <el-tag size="small" effect="plain" :type="typeTagType(row.type)">
+              {{ typeLabel(row.type) }}
+            </el-tag>
+            <!-- 定制 / 补剂的 subtype 与类型名重复，只保留鲜食的「试吃装 / 定制服务」 -->
+            <div v-if="showSubtype(row)" class="muted">{{ row.subtypeLabel }}</div>
           </template>
         </el-table-column>
         <el-table-column label="订单号" min-width="180">
@@ -86,7 +89,9 @@
         </el-table-column>
         <el-table-column label="状态" width="120">
           <template #default="{ row }">
-            <el-tag :type="statusTagType(row.statusGroup)" size="small">{{ row.statusLabel }}</el-tag>
+            <el-tag :type="statusTagTypeForRow(row)" size="small">
+              {{ displayStatusLabel(row) }}
+            </el-tag>
             <el-tag v-if="row.hasOpenAftersale" type="warning" size="small" class="aftersale-tag">
               {{ row.aftersaleLabel || '售后中' }}
             </el-tag>
@@ -123,11 +128,27 @@
         />
       </div>
     </el-card>
+
+    <!-- 定制订单详情：从订单中心直接打开，不再跳独立的定制单列表页 -->
+    <el-drawer
+      v-model="customDrawerVisible"
+      title="定制订单详情"
+      size="70%"
+      direction="rtl"
+      destroy-on-close
+    >
+      <OrderDetail
+        v-if="customDrawerVisible && customDrawerOrderId"
+        :order-id="customDrawerOrderId"
+        @refresh="load"
+        @close="customDrawerVisible = false"
+      />
+    </el-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { orderCenterApi } from '@/api/orderCenter'
 import type {
@@ -136,6 +157,7 @@ import type {
   OrderCenterType,
   UnifiedStatusGroup,
 } from '@/api/orderCenter'
+import OrderDetail from '@/views/CustomRecipes/OrderDetail.vue'
 
 const router = useRouter()
 const loading = ref(false)
@@ -144,8 +166,14 @@ const total = ref(0)
 const counts = reactive({ FOOD: 0, CUSTOM_RECIPE: 0, SUPPLEMENT: 0 })
 const dateRange = ref<[string, string] | null>(null)
 
+/** 定制订单详情抽屉（2026-10-21 合并入口） */
+const customDrawerVisible = ref(false)
+const customDrawerOrderId = ref('')
+
 const route = useRoute();
 const initialType = String(route.query.type || '');
+/** 深链 /order-center?type=CUSTOM_RECIPE&orderId=CR...：列表加载完后自动开抽屉 */
+const initialOrderId = String(route.query.orderId || '').trim();
 const query = reactive<OrderCenterQuery>({
   type: ['FOOD', 'CUSTOM_RECIPE', 'SUPPLEMENT'].includes(initialType)
     ? (initialType as OrderCenterType)
@@ -168,8 +196,47 @@ const statusOptions: Array<{ label: string; value: UnifiedStatusGroup }> = [
   { label: '已取消', value: 'CANCELLED' },
 ]
 
+/**
+ * 定制单在订单中心显示**自己的原始状态**，不并到「处理中」。
+ *
+ * 订单中心的统一状态组只是拿来筛选（PAID / IN_PROGRESS 都算处理中），
+ * 但运营看这张表时要能直接分辨「已付款」「制作中」「已交付」。
+ */
+const CUSTOM_RAW_STATUS_LABELS: Record<string, string> = {
+  PENDING_PAYMENT: '待付款',
+  PAID: '已付款',
+  IN_PROGRESS: '制作中',
+  DELIVERED: '已交付',
+  COMPLETED: '已完成',
+  CANCELLED: '已取消',
+}
+
 function typeLabel(type: OrderCenterType) {
-  return type === 'FOOD' ? '鲜食' : type === 'CUSTOM_RECIPE' ? '定制' : '补剂'
+  if (type === 'FOOD') return '鲜食'
+  if (type === 'CUSTOM_RECIPE') return '食谱定制'
+  return '补剂'
+}
+
+/**
+ * 三类订单用不同颜色的类型标签，扫一眼就能区分。
+ * 空字符串是 Element Plus 的默认蓝色，这里给鲜食 / 定制 / 补剂分别用绿 / 橙 / 蓝。
+ */
+function typeTagType(type: OrderCenterType) {
+  if (type === 'FOOD') return 'success'
+  if (type === 'CUSTOM_RECIPE') return 'warning'
+  return 'primary'
+}
+
+/** 定制 / 补剂后端的 subtypeLabel 与类型名重复，只展示鲜食的有意义子类型 */
+function showSubtype(row: OrderCenterItem) {
+  return row.type === 'FOOD' && Boolean(row.subtypeLabel)
+}
+
+function displayStatusLabel(row: OrderCenterItem) {
+  if (row.type === 'CUSTOM_RECIPE') {
+    return CUSTOM_RAW_STATUS_LABELS[String(row.rawStatus || '').toUpperCase()] || row.statusLabel
+  }
+  return row.statusLabel
 }
 
 function statusTagType(status: UnifiedStatusGroup) {
@@ -178,6 +245,28 @@ function statusTagType(status: UnifiedStatusGroup) {
   if (status === 'TO_SHIP' || status === 'PENDING_PAYMENT') return 'warning'
   if (status === 'IN_PROGRESS') return 'primary'
   return ''
+}
+
+/** 定制单按原始状态上色；其余订单仍用统一状态组 */
+function statusTagTypeForRow(row: OrderCenterItem) {
+  if (row.type === 'CUSTOM_RECIPE') {
+    switch (String(row.rawStatus || '').toUpperCase()) {
+      case 'PAID':
+        return 'warning'
+      case 'DELIVERED':
+        return 'success'
+      case 'COMPLETED':
+      case 'CANCELLED':
+        return 'info'
+      case 'PENDING_PAYMENT':
+        return 'warning'
+      case 'IN_PROGRESS':
+        return 'primary'
+      default:
+        return statusTagType(row.statusGroup)
+    }
+  }
+  return statusTagType(row.statusGroup)
 }
 
 function formatMoney(value: number) {
@@ -226,19 +315,47 @@ function handleReset() {
   load()
 }
 
+function openCustomOrder(orderId: string) {
+  const id = String(orderId || '').trim()
+  if (!id) return
+  customDrawerOrderId.value = id
+  customDrawerVisible.value = true
+}
+
 function openOrder(row: OrderCenterItem) {
   if (row.type === 'FOOD') {
     router.push(`/orders/${row.id}`)
     return
   }
   if (row.type === 'CUSTOM_RECIPE') {
-    router.push({ path: '/custom-recipes', query: { keyword: row.orderNo } })
+    // 定制订单统一在订单中心里看，不再跳独立列表页
+    openCustomOrder(row.orderNo)
     return
   }
   router.push({ path: '/supplement-shop/orders', query: { keyword: row.orderNo } })
 }
 
-onMounted(load)
+onMounted(async () => {
+  // 深链要在列表加载完成后打开，避免抽屉先闪一下再被列表刷新打断
+  try {
+    await load()
+  } finally {
+    if (initialOrderId && (!query.type || query.type === 'CUSTOM_RECIPE')) {
+      openCustomOrder(initialOrderId)
+    }
+  }
+})
+
+// 已经在订单中心时再跳到深链，组件会被复用、onMounted 不会再跑，这里兜住
+watch(
+  () => route.query.orderId,
+  (value) => {
+    const id = String(value || '').trim()
+    if (!id) return
+    if (query.type && query.type !== 'CUSTOM_RECIPE') return
+    openCustomOrder(id)
+  },
+)
 </script>
 
 <style scoped>

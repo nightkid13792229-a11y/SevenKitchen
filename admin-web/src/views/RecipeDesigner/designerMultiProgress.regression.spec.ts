@@ -4,7 +4,8 @@ import orderDetail from '@/views/CustomRecipes/OrderDetail.vue?raw'
 
 describe('设计器 · 多份订单进度', () => {
   it('从订单进入设计器时带上 orderId', () => {
-    expect(orderDetail).toContain('orderId=${encodeURIComponent(order.value!.orderId)}')
+    expect(orderDetail).toContain('orderId=${encodeURIComponent(orderId)}')
+    expect(orderDetail).toContain('&openCreate=1')
   })
 
   it('显示共 N 份、已设计 X 份', () => {

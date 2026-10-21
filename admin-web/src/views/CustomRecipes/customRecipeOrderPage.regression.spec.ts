@@ -15,11 +15,20 @@ import orderList from '@/views/CustomRecipes/OrderList.vue?raw'
 import config from '@/views/CustomRecipes/Config.vue?raw'
 import customRecipeApiSource from '@/api/customRecipe.ts?raw'
 
+/** 剥注释后再断言「已移除」——注释里可能还引用旧 UI（本项目栽过多次） */
+function stripComments(source: string): string {
+  return source
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
+}
+
 /**
- * 定制单后台改造的接线回归（2026-10-04）。
+ * 定制单后台改造的接线回归。
  *
- * 对应老板的八条：一键交付 / 重新交付 / 手工表单校验 / 档案最新信息 /
- * 退款与时效 / 状态文案统一 / 按钮按角色显示 / 报错要具体。
+ * 2026-10-21 起：手工创建与「开始制作」按钮已移除，健康/饲喂明细收口到
+ * 设计器侧栏；这里锁住一键交付、退款时效、状态字典、角色与报错，
+ * 以及新的订单抽屉行为（复制、脱敏、年龄、PAID→IN_PROGRESS）。
  */
 describe('一键交付与重新交付（第 1、2 条）', () => {
   it('已付款/制作中/已交付都出现交付区，状态判断走白名单', () => {
@@ -63,88 +72,145 @@ describe('一键交付与重新交付（第 1、2 条）', () => {
   })
 })
 
-describe('手工创建表单的校验与二次确认（第 3 条）', () => {
-  it('表单挂上 rules，名称 / 能量密度 / 食材都有必填校验', () => {
-    expect(orderDetail).toContain(':rules="recipeFormRules"')
-    expect(orderDetail).toContain('prop="name"')
-    expect(orderDetail).toContain('prop="energyDensityKcalPerKg"')
-    expect(orderDetail).toContain('prop="items"')
-    expect(orderDetail).toContain('请填写食谱名称，顾客收到的通知里会显示它')
-    expect(orderDetail).toContain('至少添加一个食材，否则这不算一份食谱')
+describe('手工创建食谱已收口（2026-10-21）', () => {
+  const cleanDetail = stripComments(orderDetail)
+
+  it('手工创建 UI、校验与提交处理全部移除', () => {
+    for (const token of [
+      '手工创建定制食谱',
+      'recipeFormRules',
+      'submitRecipe',
+      'resetRecipeForm',
+      'handleCoverUpload',
+      'createRecipe(order.value!.orderId',
+      '提交食谱并交付',
+    ]) {
+      expect(cleanDetail).not.toContain(token)
+    }
   })
 
-  it('每一行食材也必须选食材、占比大于 0（否则提交会撞外键 500）', () => {
-    expect(orderDetail).toContain('行还没选食材')
-    expect(orderDetail).toContain('行的占比必须大于 0')
+  it('「开始制作」按钮与处理函数移除（打开设计器即开始制作）', () => {
+    expect(cleanDetail).not.toContain('@click="startProcessing"')
+    expect(cleanDetail).not.toContain('const startProcessing')
+    expect(cleanDetail).not.toContain('已开始制作')
   })
 
-  it('校验不通过就不提交，且提示缺什么', () => {
-    expect(orderDetail).toContain('if (!(await validateElementForm(recipeFormRef.value))) {')
-    expect(orderDetail).toContain("ElMessage.warning('请先补全：食谱名称、能量密度、至少一个食材');")
-  })
-
-  it('提交前的确认框写清狗名、订单号、金额（防串单）', () => {
-    expect(orderDetail).toContain('把手工填写的《${recipeForm.name.trim()}》交付给「${dogName}」？')
-    expect(orderDetail).toContain('订单号：${orderNo}　金额：¥${amount}')
+  it('交付仍收敛到设计器里已发布的候选食谱，不退回手工表单', () => {
+    expect(cleanDetail).toContain('customRecipeApi.listRecipeCandidates(props.orderId)')
+    expect(cleanDetail).toContain('customRecipeApi.deliverRecipe')
+    expect(cleanDetail).toContain('customRecipeApi.deliverBatch')
   })
 })
 
-describe('档案最新信息与来源标注（第 4 条）', () => {
-  it('档案最新的过敏（结构化记录 + 设计备注）单独展示', () => {
-    expect(orderDetail).toContain('过敏（档案最新）')
-    expect(orderDetail).toContain('v-for="(record, index) in order.dog.allergyRecords"')
-    expect(orderDetail).toContain('档案里的过敏文本：{{ order.dog.allergyFoods }}')
-    // 2026-10-19：订单里的自由文本快照单独展示
-    expect(orderDetail).toContain('过敏文本（下单时填写）')
-    expect(orderDetail).toContain('order.allergyText')
+describe('设计资料收口：订单抽屉不展开健康明细（2026-10-21）', () => {
+  const cleanDetail = stripComments(orderDetail)
+
+  it('★ 保留「下单后档案有更新」提醒，并放在设计资料区里', () => {
+    const design = cleanDetail.indexOf('设计资料')
+    const alert = cleanDetail.indexOf('下单后档案有更新，请按最新信息设计')
+    const notes = cleanDetail.indexOf('订单备注')
+    expect(design).toBeGreaterThan(-1)
+    expect(alert).toBeGreaterThan(design)
+    expect(notes).toBeGreaterThan(alert)
+    expect(cleanDetail).toContain('profileUpdateDetail')
+    expect(cleanDetail).toContain('v-if="allergyComparison.changed || medicalComparison.changed"')
   })
 
-  it('订单详情展示饲喂历史（含「其他」手填）', () => {
-    expect(orderDetail).toContain('饲喂历史')
-    expect(orderDetail).toContain('currentFoodMain')
-    expect(orderDetail).toContain('currentFoodOther')
-    expect(orderDetail).toContain('changeReasonOther')
-    expect(orderDetail).toContain('stomachOther')
-    expect(orderDetail).toContain("custom_recipe_current_food")
+  it('★ 只留紧凑摘要与设计器 / 健康档案入口', () => {
+    expect(cleanDetail).toContain('designSummary')
+    expect(cleanDetail).toContain('有过敏记录')
+    expect(cleanDetail).toContain('请在设计器查看')
+    expect(cleanDetail).toContain('打开食谱设计器')
+    expect(cleanDetail).toContain('查看健康档案')
+    expect(cleanDetail).toContain('@click="openHealthProfile"')
   })
 
-  it('未付款订单禁止进入设计器：按钮禁用并说明原因', () => {
-    expect(orderDetail).toContain(':disabled="!canStartDesign"')
-    expect(orderDetail).toContain('订单未付款，付款后才能开始设计')
-    expect(orderDetail).toContain("!['PENDING_PAYMENT', 'CANCELLED'].includes(status)")
-    expect(orderDetail).toContain('if (!canStartDesign.value)')
+  it('★ 详细医疗 / 饲喂 / 饮食字段不再铺进订单抽屉', () => {
+    for (const token of [
+      '过敏（档案最新）',
+      '过敏回答（下单时填写）',
+      '过敏文本（下单时填写）',
+      '本单上传的检测报告（随单草稿）',
+      '档案同步',
+      '过敏史（下单时填写）',
+      '疾病史（档案最新）',
+      '疾病史（下单时填写）',
+      '现在主要喂什么',
+      '最近肠胃情况',
+      '喜欢的食材',
+      '不吃的食材',
+      'order.dog?.allergyRecords',
+      'medicalComparison.profileConditions',
+    ]) {
+      expect(cleanDetail).not.toContain(token)
+    }
   })
 
-  it('付款后档案同步状态可见，失败可重试', () => {
-    expect(orderDetail).toContain('档案同步')
-    expect(orderDetail).toContain('healthInfoSyncedAt')
-    expect(orderDetail).toContain('retryHealthSync')
-    expect(orderDetail).toContain('付款成功后同步')
+  it('过敏 / 疾病仍用两端比对，差异说清楚（提醒不能变成一句空话）', () => {
+    expect(cleanDetail).toContain('compareDogProfileAllergies(order.value?.dog, order.value?.allergies)')
+    expect(cleanDetail).toContain('compareDogProfileMedicalConditions(')
+    expect(cleanDetail).toContain('档案里有、下单时没写')
+    expect(cleanDetail).toContain('下单时写了、档案里没有')
+  })
+})
+
+describe('订单抽屉的复制、脱敏与年龄（2026-10-21）', () => {
+  const cleanDetail = stripComments(orderDetail)
+
+  it('★ 订单号与手机旁有复制按钮，Clipboard API 失败时有兜底', () => {
+    expect(cleanDetail).toContain('@click="copyOrderNo"')
+    expect(cleanDetail).toContain('@click="copyPhone"')
+    expect(cleanDetail).toContain('navigator.clipboard')
+    expect(cleanDetail).toContain('fallbackCopyText')
+    expect(cleanDetail).toContain("document.execCommand('copy')")
   })
 
-  it('本单上传的报告草稿单独展示（不混进档案报告）', () => {
-    expect(orderDetail).toContain('本单上传的检测报告（随单草稿）')
-    expect(orderDetail).toContain('order.allergyReportDrafts')
+  it('★ openid 脱敏展示，联系客户弹窗也不回显完整值', () => {
+    expect(cleanDetail).toContain('maskOpenid')
+    expect(cleanDetail).toContain('maskOpenid(order.customer?.wechatOpenid)')
+    expect(cleanDetail).toContain('maskOpenid(wechat)')
+    expect(cleanDetail).not.toContain('{{ order.customer?.wechatOpenid')
   })
 
-  it('下单时填写的那份仍单独展示，两个口径不混在一起', () => {
-    expect(orderDetail).toContain('过敏史（下单时填写）')
-    expect(orderDetail).toContain('疾病史（下单时填写）')
+  it('★ 未满一岁显示月份，满一岁显示年 + 月', () => {
+    expect(cleanDetail).toContain('if (months < 12) return `${months}个月`')
+    expect(cleanDetail).toContain('`${years}岁${restMonths}个月`')
+  })
+})
+
+describe('未付款禁止进入设计器；PAID 单先转制作中（2026-10-21）', () => {
+  const cleanDetail = stripComments(orderDetail)
+  const start = cleanDetail.indexOf('const openInDesigner')
+  const end = cleanDetail.indexOf('/** 设计资料明细', start)
+  const block = cleanDetail.slice(start, end > start ? end : start + 3000)
+
+  it('按钮在未付款 / 已取消时禁用，并说明原因', () => {
+    expect(cleanDetail).toContain(':disabled="!canStartDesign || openingDesigner"')
+    expect(cleanDetail).toContain(':loading="openingDesigner"')
+    expect(cleanDetail).toContain("!['PENDING_PAYMENT', 'CANCELLED'].includes(status)")
+    expect(cleanDetail).toContain('订单未付款，付款后才能开始设计')
   })
 
-  it('两份不一致时提示"下单后档案有更新，请按最新信息设计"', () => {
-    expect(orderDetail).toContain('compareDogProfileAllergies(order.value?.dog, order.value?.allergies)')
-    // 2026-10-04：疾病史也纳入同一条提示，任一不一致就提醒
-    expect(orderDetail).toContain('v-if="allergyComparison.changed || medicalComparison.changed"')
-    expect(orderDetail).toContain('title="下单后档案有更新，请按最新信息设计"')
-    // 提示里要写清差在哪一条，不能只给一个笼统警告
-    expect(orderDetail).toContain('profileUpdateDetail')
+  it('★ PAID 单先 await 改 IN_PROGRESS，成功后才打开设计器', () => {
+    expect(block).toContain("if (order.value?.status === 'PAID')")
+    expect(block).toContain("await customRecipeApi.updateStatus(orderId, 'IN_PROGRESS')")
+    expect(block.indexOf('await customRecipeApi.updateStatus')).toBeLessThan(
+      block.indexOf('window.open(url'),
+    )
   })
 
-  it('疾病史同样分「档案最新」与「下单时填写」两份（2026-10-04 补）', () => {
-    expect(orderDetail).toContain('疾病史（档案最新）')
-    expect(orderDetail).toContain('compareDogProfileMedicalConditions(')
-    expect(orderDetail).toContain('medicalComparison.profileConditions')
+  it('★ 改状态失败就报错、不打开设计器，并解除 loading', () => {
+    expect(block).toContain("toastApiError(error, '转入制作失败'")
+    expect(block).toContain('openingDesigner.value = false')
+    // catch 里不能继续 window.open
+    const catchStart = block.indexOf('} catch (error) {')
+    const catchBlock = block.slice(catchStart, block.indexOf('} finally', catchStart))
+    expect(catchBlock).not.toContain('window.open')
+  })
+
+  it('★ 防重复点击：进行中直接 return，并禁用按钮', () => {
+    expect(block).toContain('if (openingDesigner.value) return')
+    expect(cleanDetail).toContain(':disabled="!canStartDesign || openingDesigner"')
   })
 })
 

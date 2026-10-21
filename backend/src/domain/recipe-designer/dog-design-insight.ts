@@ -29,6 +29,26 @@ export interface DogOrderSummary {
   customRecipeCount: number;
 }
 
+/** 历史食谱来源：FINISHED = 已完成的鲜食订单；CUSTOM = 已关联正式食谱的定制单 */
+export type DogHistoryRecipeKind = 'FINISHED' | 'CUSTOM';
+
+/**
+ * 这只狗实际用过的食谱（2026-10-22）。
+ *
+ * 只给设计器需要的身份信息：**不暴露订单快照里的食材明细**。
+ * 同一份食谱（按食谱身份，老快照按名字）在同一来源下只保留最近一次使用。
+ */
+export interface DogHistoryRecipe {
+  /** 食谱身份：鲜食取快照里的公开食谱 id（缺失时回退订单明细 id），定制取关联 Recipe.id */
+  id: string;
+  name: string;
+  kind: DogHistoryRecipeKind;
+  /** 最近一次使用时间（ISO）；订单没有可用日期时为 null */
+  date: string | null;
+  /** 使用该食谱时的订单状态 */
+  status: string;
+}
+
 /**
  * 最近一次就诊（2026-10-21）。
  *
@@ -126,6 +146,14 @@ export interface DogDesignInsight {
   designHistory: DogDesignHistorySummary;
   orderSummary: DogOrderSummary;
   /**
+   * 这只狗历史上实际用过的食谱（2026-10-22）。
+   *
+   * 来源：已完成的鲜食订单明细快照 + 已关联正式食谱的定制单；
+   * 已取消订单不算，空食谱名不展示。按最近使用时间倒序，同一份食谱只出现一次。
+   * 只返回身份字段，订单快照里的食材/营养明细不外带。
+   */
+  historyRecipes: DogHistoryRecipe[];
+  /**
    * 最近一次就诊 / 体检（2026-10-21）。
    *
    * 此前设计器只能看到档案里的旧文本病史，看不到健康档案里的实际记录。
@@ -218,6 +246,22 @@ interface InsightOrderItemLike {
     completedAt?: string | Date | null;
     paidAt?: string | Date | null;
     createdAt?: string | Date | null;
+  } | null;
+}
+
+/**
+ * 定制单（历史食谱用）：只有**已关联正式食谱**的记录才有食谱可展示。
+ * 其它问卷/报价字段不读取，避免把整单内容带进洞察。
+ */
+interface InsightCustomRecipeOrderLike {
+  id?: string | null;
+  status?: string | null;
+  createdAt?: string | Date | null;
+  deliveredAt?: string | Date | null;
+  recipe?: {
+    id?: string | null;
+    recipeId?: string | null;
+    name?: string | null;
   } | null;
 }
 
@@ -522,6 +566,124 @@ export function aggregateDogOrderSummary(
   };
 }
 
+/** 快照 JSON 只在是普通对象时才读取（历史数据可能为 null / 数组 / 字符串） */
+function resolveSnapshotRecord(
+  snapshot: unknown,
+): Record<string, unknown> | null {
+  if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) {
+    return null;
+  }
+  return snapshot as Record<string, unknown>;
+}
+
+/** 快照里的食谱名：现行快照是 name，老数据可能是 recipeTitle / recipeName / title */
+function resolveSnapshotRecipeName(record: Record<string, unknown>): string {
+  return firstString(
+    record.recipeTitle,
+    record.recipeName,
+    record.name,
+    record.title,
+  );
+}
+
+function isCancelledOrderStatus(status: string | null | undefined): boolean {
+  return firstString(status).toUpperCase() === 'CANCELLED';
+}
+
+/** 新记录的日期更晚（或旧记录没有日期）时才替换，保证「保留最近一次使用」 */
+function isLaterUsage(
+  candidate: string | null,
+  current: string | null,
+): boolean {
+  if (!candidate) return false;
+  if (!current) return true;
+  return candidate > current;
+}
+
+/**
+ * 这只狗历史食谱清单（2026-10-22）。
+ *
+ * 数据来源：
+ *  - `orderItems`：鲜食订单明细（已完成/已发货等均可），食谱名取自 `recipeSnapshot`；
+ *  - `customRecipeOrders`：已关联正式 `Recipe` 的定制单。
+ *
+ * 规则：
+ *  - 已取消订单不算「用过」，空食谱名不展示；
+ *  - 去重键 = 食谱身份（快照/Recipe id，缺失时退回名字）+ 来源，保留最近一次使用；
+ *  - 按使用时间倒序，没有日期的排最后。
+ *
+ * 输出只含身份字段，**不返回快照里的食材/营养明细**。
+ */
+export function buildDogHistoryRecipes(
+  orderItems?: readonly InsightOrderItemLike[] | null,
+  customRecipeOrders?: readonly InsightCustomRecipeOrderLike[] | null,
+): DogHistoryRecipe[] {
+  const byKey = new Map<string, DogHistoryRecipe>();
+
+  const add = (entry: DogHistoryRecipe, identity: string) => {
+    const key = `${entry.kind}|${
+      identity || `name:${entry.name.toLowerCase()}`
+    }`;
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, entry);
+      return;
+    }
+    if (isLaterUsage(entry.date, existing.date)) {
+      byKey.set(key, entry);
+    }
+  };
+
+  for (const item of orderItems ?? []) {
+    if (isCancelledOrderStatus(item.order?.status)) continue;
+    const snapshot = resolveSnapshotRecord(item.recipeSnapshot);
+    if (!snapshot) continue;
+    const name = resolveSnapshotRecipeName(snapshot);
+    if (!name) continue;
+    const snapshotId = firstString(
+      snapshot.id,
+      snapshot.recipeId,
+      snapshot.recipe_id,
+    );
+    add(
+      {
+        id: snapshotId || firstString(item.id) || name,
+        name,
+        kind: 'FINISHED',
+        date: toIsoString(item.order?.paidAt ?? item.order?.createdAt),
+        status: firstString(item.order?.status),
+      },
+      snapshotId,
+    );
+  }
+
+  for (const order of customRecipeOrders ?? []) {
+    if (isCancelledOrderStatus(order.status)) continue;
+    const recipe = order.recipe;
+    const name = firstString(recipe?.name);
+    if (!name) continue;
+    const recipeId = firstString(recipe?.id, recipe?.recipeId);
+    add(
+      {
+        id: recipeId || firstString(order.id) || name,
+        name,
+        kind: 'CUSTOM',
+        // 交付时间才是「真正用上」的时间；还没交付则退回下单时间
+        date: toIsoString(order.deliveredAt ?? order.createdAt),
+        status: firstString(order.status),
+      },
+      recipeId,
+    );
+  }
+
+  return Array.from(byKey.values()).sort(
+    (left, right) =>
+      (right.date ?? '').localeCompare(left.date ?? '') ||
+      left.name.localeCompare(right.name) ||
+      left.kind.localeCompare(right.kind),
+  );
+}
+
 /**
  * 按「标准原料」聚合订单快照中的食材（排除补剂/包材），用于「最近吃过的食材」展示。
  * 调用方需先按 90 天窗口和订单状态（≥ FREEZING）过滤 orderItems。
@@ -590,6 +752,11 @@ export function buildDogDesignInsight(input: {
   checkupRecords?: InsightCheckupRecordLike[];
   /** 最近一笔「食谱定制」订单（没有则 null，或省略） */
   customRecipeOrder?: DogDesignInsight['customRecipeOrder'];
+  /**
+   * 该狗所有「已关联正式食谱」的定制单（不过滤取消的也没关系，builder 会排除）。
+   * 用于顶层 `historyRecipes`。
+   */
+  customRecipeOrders?: readonly InsightCustomRecipeOrderLike[] | null;
 }): DogDesignInsight {
   const dog = input.dog;
   const breedName = firstString(
@@ -649,6 +816,10 @@ export function buildDogDesignInsight(input: {
       ),
     },
     orderSummary: aggregateDogOrderSummary(input.orderItems),
+    historyRecipes: buildDogHistoryRecipes(
+      input.orderItems,
+      input.customRecipeOrders,
+    ),
     latestMedicalRecord,
     latestCheckupRecord,
     customRecipeOrder: input.customRecipeOrder

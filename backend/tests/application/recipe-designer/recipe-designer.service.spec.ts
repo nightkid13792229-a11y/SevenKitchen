@@ -9705,6 +9705,7 @@ describe('RecipeDesignerService', () => {
       prisma.recipeSeries.findMany.mockResolvedValue([]);
       prisma.orderItem.findMany.mockResolvedValue([]);
       prisma.customRecipeOrder.findFirst.mockResolvedValue(null);
+      prisma.customRecipeOrder.findMany.mockResolvedValue([]);
       prisma.medicalRecord.findMany.mockResolvedValue([]);
       prisma.checkupRecord.findMany.mockResolvedValue([]);
       aiDesignSuggestion.isAvailable.mockResolvedValue(true);
@@ -9807,6 +9808,77 @@ describe('RecipeDesignerService', () => {
       expect(prisma.dogBreed.findUnique).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: 'breed-1' } }),
       );
+    });
+
+    it('exposes history recipes from finished orders and linked custom orders', async () => {
+      prisma.orderItem.findMany.mockResolvedValue([
+        {
+          id: 'oi-1',
+          dogId: 'dog-1',
+          recipeSnapshot: { id: 'recipe-1', name: '鸡肉南瓜鲜食' },
+          order: {
+            status: 'COMPLETED',
+            paidAt: new Date('2026-09-01T01:00:00.000Z'),
+            createdAt: new Date('2026-09-01T02:00:00.000Z'),
+          },
+        },
+        {
+          id: 'oi-cancelled',
+          dogId: 'dog-1',
+          recipeSnapshot: { id: 'recipe-x', name: '被取消的鲜食' },
+          order: {
+            status: 'CANCELLED',
+            createdAt: new Date('2026-08-01T00:00:00.000Z'),
+          },
+        },
+      ]);
+      prisma.customRecipeOrder.findMany.mockResolvedValue([
+        {
+          id: 'cro-1',
+          status: 'DELIVERED',
+          createdAt: new Date('2026-10-01T00:00:00.000Z'),
+          deliveredAt: new Date('2026-10-05T00:00:00.000Z'),
+          recipe: { id: 'recipe-9', name: '定制鲜食 A' },
+        },
+      ]);
+
+      const result = await (service as any).getDogDesignInsight(
+        'dog-1',
+        staffAccess,
+      );
+
+      expect(result.historyRecipes).toEqual([
+        {
+          id: 'recipe-9',
+          name: '定制鲜食 A',
+          kind: 'CUSTOM',
+          date: '2026-10-05T00:00:00.000Z',
+          status: 'DELIVERED',
+        },
+        {
+          id: 'recipe-1',
+          name: '鸡肉南瓜鲜食',
+          kind: 'FINISHED',
+          date: '2026-09-01T01:00:00.000Z',
+          status: 'COMPLETED',
+        },
+      ]);
+      // 定制单只查已关联正式食谱、未取消的记录，且只取身份字段
+      expect(prisma.customRecipeOrder.findMany).toHaveBeenCalledWith({
+        where: {
+          dogId: 'dog-1',
+          status: { not: 'CANCELLED' },
+          recipeId: { not: null },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          status: true,
+          createdAt: true,
+          deliveredAt: true,
+          recipe: { select: { id: true, name: true } },
+        },
+      });
     });
 
     it('forwards the order quantity and requested protein codes', async () => {

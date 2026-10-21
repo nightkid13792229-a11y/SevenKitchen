@@ -7987,6 +7987,30 @@ export class RecipeDesignerService {
       },
     });
 
+    /**
+     * 历史食谱清单里的定制单（2026-10-22）。
+     *
+     * 只取**已关联正式食谱**（`recipeId` 非空）且未取消的定制单：
+     * 没有关联食谱的单一律没有食谱可展示。只选身份字段，
+     * 问卷答案/附件等整单内容不进入洞察。
+     */
+    const customRecipeHistoryOrders =
+      await this.prisma.customRecipeOrder.findMany({
+        where: {
+          dogId,
+          status: { not: CustomRecipeStatus.CANCELLED },
+          recipeId: { not: null },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          status: true,
+          createdAt: true,
+          deliveredAt: true,
+          recipe: { select: { id: true, name: true } },
+        },
+      });
+
     // 「最近吃过的食材」：订单至少推进到冷冻中（FREEZING），且最近 N 天内实际食用
     const recentWindowStart = new Date(
       Date.now() - windowDays * 24 * 60 * 60 * 1000,
@@ -8091,6 +8115,7 @@ export class RecipeDesignerService {
       lifeStageLabel,
       medicalRecords,
       checkupRecords,
+      customRecipeOrders: customRecipeHistoryOrders,
       customRecipeOrder: customOrder
         ? {
             orderId: customOrder.orderId,

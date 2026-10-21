@@ -1432,7 +1432,7 @@ const openInDesigner = () => {
     return;
   }
 
-  const url = `/recipe-designer?dogId=${encodeURIComponent(String(dogId))}&openCreate=1`;
+  const url = `/recipe-designer?dogId=${encodeURIComponent(String(dogId))}&orderId=${encodeURIComponent(order.value!.orderId)}&openCreate=1`;
   window.open(url, '_blank');
 };
 

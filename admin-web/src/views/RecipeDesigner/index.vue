@@ -20,6 +20,28 @@
       但**全 admin-web 没有任何页面调用它** —— 属于"能力已建、UI 从未接线"。
       过敏信息直接影响配方能不能用，这条提醒必须真的出现在营养师眼前。
     -->
+    <!--
+      从定制订单进来时显示本单进度（2026-10-21）：
+      营养师必须知道“这单要设计几份、已经设计了几份”，
+      不能只看到一只狗就猜。
+    -->
+    <el-alert
+      v-if="multiOrderProgress"
+      class="multi-order-progress-alert"
+      type="info"
+      :closable="false"
+      show-icon
+    >
+      <template #title>
+        本单共 {{ multiOrderProgress.quantity }} 份，已设计 {{ multiOrderProgress.designed }} 份
+      </template>
+      <div class="multi-order-progress-note">
+        {{ multiOrderProgress.quantity - multiOrderProgress.designed > 0
+          ? `还差 ${multiOrderProgress.quantity - multiOrderProgress.designed} 份，设计完成后回订单页一次性交付。`
+          : '已设计齐全，可以回订单页一次性交付。' }}
+      </div>
+    </el-alert>
+
     <el-alert
       v-if="healthUpdates.length > 0"
       class="health-update-alert"
@@ -231,6 +253,7 @@ import { MoreFilled, Plus, Search } from '@element-plus/icons-vue'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import { resolveCopySourceStages } from '@/utils/recipeDesigner/copySourceStages'
 import { dogApi } from '@/api/dogs'
+import { customRecipeApi } from '@/api/customRecipe'
 import type { DogProfile } from '@/types/dog'
 import {
   FEDIAF_DOG_SCENARIO_LABELS,
@@ -242,6 +265,13 @@ import {
 
 const router = useRouter()
 const route = useRoute()
+
+/** 从定制订单进入时的“共 N 份 / 已设计 X 份”进度 */
+const multiOrderProgress = ref<{
+  orderId: string
+  quantity: number
+  designed: number
+} | null>(null)
 
 const loading = ref(false)
 const loadingMore = ref(false)
@@ -627,12 +657,36 @@ async function confirmCopyItems() {
  */
 async function applyEntryQuery() {
   const dogId = String(route.query.dogId || '').trim()
+  const orderId = String(route.query.orderId || '').trim()
   if (!dogId) return
 
   createForm.referenceDogId = dogId
   createDialogVisible.value = true
 
   await searchDogs('')
+
+  /**
+   * 从订单进来时带上本单份数与已设计数量。
+   *
+   * 数量以订单为准，已设计数量以“可交付候选”接口为准；
+   * 两个接口失败都不影响设计器主流程，最多是不显示这条提示。
+   */
+  if (orderId) {
+    try {
+      const [order, candidates] = await Promise.all([
+        customRecipeApi.getOrderDetail(orderId),
+        customRecipeApi.listRecipeCandidates(orderId),
+      ])
+      const quantity = Number((order as any)?.recipeQuantity ?? 1)
+      multiOrderProgress.value = {
+        orderId,
+        quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
+        designed: Array.isArray(candidates) ? candidates.length : 0,
+      }
+    } catch {
+      multiOrderProgress.value = null
+    }
+  }
 
   // 目标狗可能不在前 50 条里：单独取一次详情补进选项，
   // 否则下拉框里会显示成一个没有名字的空选项。
@@ -706,6 +760,17 @@ onBeforeUnmount(() => {
 })</script>
 
 <style scoped>
+.multi-order-progress-alert {
+  margin-bottom: 16px;
+}
+
+.multi-order-progress-note {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #606266;
+}
+
+
 /* 健康信息变更提醒（2026-10-04 第四期） */
 .health-update-alert {
   margin-bottom: 16px;

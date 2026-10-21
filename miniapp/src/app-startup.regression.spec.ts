@@ -19,6 +19,15 @@ describe('app startup regressions', () => {
     expect(homePage?.style?.navigationBarTitleText).toBe('赛文的食堂')
   })
 
+  it('launches on the home page, not an internal order-center page', () => {
+    const pagesJson = JSON.parse(
+      readFileSync(resolve(process.cwd(), 'src/pages.json'), 'utf-8'),
+    ) as { pages: Array<{ path: string }> }
+
+    expect(pagesJson.pages[0]?.path).toBe('pages/home/index')
+    expect(pagesJson.pages[0]?.path).not.toBe('pages/staff-order-center/index')
+  })
+
   it('avoids verbose startup logging and caches runtime platform checks', () => {
     const appSource = readFileSync(
       resolve(process.cwd(), 'src/App.vue'),

@@ -1,12 +1,6 @@
 {
   "pages": [
     {
-      "path": "pages/staff-order-center/index",
-      "style": {
-        "navigationBarTitleText": "订单中心"
-      }
-    },
-    {
       "path": "pages/home/index",
       "style": {
         "navigationBarTitleText": "赛文的食堂",
@@ -14,6 +8,12 @@
         "navigationBarTextStyle": "white",
         "backgroundColor": "#1E3A2F",
         "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/staff-order-center/index",
+      "style": {
+        "navigationBarTitleText": "订单中心"
       }
     },
     {

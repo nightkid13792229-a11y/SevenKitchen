@@ -234,3 +234,26 @@ describe('设计器 · 爱犬面板接线', () => {
     expect(editor).toContain('@dog-changed=')
   })
 })
+
+describe('设计器 · 爱犬面板渲染回归（2026-10-22）', () => {
+  it('本单文案使用 computed 值，不能把函数源码渲染到页面', () => {
+    const panel = stripComments(panelSource)
+    expect(panel).toContain('const stomachText = computed(')
+    expect(panel).toContain('const currentFoodText = computed(')
+    expect(panel).toContain('const changeReasonText = computed(')
+    expect(panel).not.toContain('function stomachText()')
+    expect(panel).not.toContain('function currentFoodText()')
+    expect(panel).not.toContain('function changeReasonText()')
+    expect(panel).toContain('{{ stomachText }}')
+    expect(panel).toContain('{{ currentFoodText }}')
+    expect(panel).toContain('{{ changeReasonText }}')
+  })
+
+  it('订单过敏原文已被档案过敏原覆盖时不再重复显示', () => {
+    const panel = stripComments(panelSource)
+    expect(panel).toContain('orderAllergyTextExtra')
+    expect(panel).toContain('allergyFacts.value.orderText')
+    expect(panel).toContain('tokens.some((item) => !covered.has(item.toLowerCase()))')
+    expect(panel).toContain('{{ orderAllergyTextExtra }}')
+  })
+})

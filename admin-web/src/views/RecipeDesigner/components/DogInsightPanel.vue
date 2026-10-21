@@ -64,9 +64,9 @@
             <span class="allergy-chip__source">{{ sourceLabel(item.sources) }}</span>
           </el-tag>
         </div>
-        <div v-if="allergyFacts.orderText" class="fact-row">
+        <div v-if="orderAllergyTextExtra" class="fact-row">
           <span class="fact-label">本单填写</span>
-          <span class="fact-value fact-value--block">{{ allergyFacts.orderText }}</span>
+          <span class="fact-value fact-value--block">{{ orderAllergyTextExtra }}</span>
         </div>
         <div v-if="!allergyFacts.hasAny" class="empty-tip">无过敏记录</div>
       </div>
@@ -263,17 +263,17 @@ const proteinText = computed(() =>
   formatRequestedProteins(insight.value?.customRecipeOrder?.requestedProteinCodes)
 )
 
-function stomachText() {
+const stomachText = computed(() => {
   const codes = insight.value?.customRecipeOrder?.stomachConditions || []
   const other = String(insight.value?.customRecipeOrder?.stomachOther || '').trim()
   if (codes.length === 0 && !other) return '无'
   return `${codes.map((code) => stomachLabel(code) || code).join('、')}${
     other ? `（${other}）` : ''
   }`
-}
+})
 
 /** 只有订单里真的填了才显示；没有就整行不出现 */
-function currentFoodText() {
+const currentFoodText = computed(() => {
   const order = insight.value?.customRecipeOrder
   if (!order) return ''
   const code = order.currentFoodMain
@@ -282,10 +282,10 @@ function currentFoodText() {
   const label = code ? currentFoodLabel(code) || code : ''
   if (label && other) return `${label}（${other}）`
   return label || other
-}
+})
 
 /** 只有订单里真的填了才显示；没有就整行不出现 */
-function changeReasonText() {
+const changeReasonText = computed(() => {
   const order = insight.value?.customRecipeOrder
   if (!order) return ''
   const codes = order.changeReasons || []
@@ -294,7 +294,7 @@ function changeReasonText() {
   return `${codes.map((code) => changeReasonLabel(code) || code).join('、')}${
     other ? `（${other}）` : ''
   }`
-}
+})
 
 const additionalNotes = computed(() =>
   String(insight.value?.customRecipeOrder?.additionalNotes || '').trim()
@@ -314,6 +314,24 @@ const allergyFacts = computed(() =>
 function sourceLabel(sources: readonly AllergyFactSource[]) {
   return formatAllergySources(sources)
 }
+/**
+ * 本单过敏原文只在“确实提供了新信息”时显示。
+ * 例如档案已有鸭/猪，订单原文也是鸭、猪，就不再重复列一行。
+ */
+const orderAllergyTextExtra = computed(() => {
+  const raw = allergyFacts.value.orderText
+  if (!raw) return ''
+  const covered = new Set(
+    allergyFacts.value.allergens.map((item) => item.text.trim().toLowerCase())
+  )
+  const tokens = raw
+    .split(/[、,，;；\n\r]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+  if (tokens.length === 0) return ''
+  return tokens.some((item) => !covered.has(item.toLowerCase())) ? raw : ''
+})
+
 
 /* ---------- 最近一次就诊 / 体检 ---------- */
 

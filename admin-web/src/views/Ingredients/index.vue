@@ -140,6 +140,18 @@
         <el-table-column type="selection" width="55" />
         <el-table-column prop="name" label="原料名称" width="180" />
 
+        <el-table-column label="品牌" width="130">
+          <template #default="{ row }">
+            <span :class="{ 'cell-empty': !row.brand }">{{ row.brand || '-' }}</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="规格" min-width="180" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span :class="{ 'cell-empty': !row.productModel }">{{ row.productModel || '-' }}</span>
+          </template>
+        </el-table-column>
+
         <el-table-column prop="type" label="类型" width="100">
           <template #default="{ row }">
             <el-tag :type="getTypeTagType(row.type)">
@@ -1127,5 +1139,8 @@ onMounted(() => {
   font-size: 14px;
   text-align: center;
   padding: 20px 0;
+}
+.cell-empty {
+  color: #c0c4cc;
 }
 </style>

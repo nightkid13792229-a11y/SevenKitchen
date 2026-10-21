@@ -4494,7 +4494,8 @@ describe('RecipeDesignerService', () => {
     const createData = prisma.recipe.create.mock.calls[0][0].data;
     expect(createData.status).toBe('DRAFT');
     expect(createData.designSource).toBe('Setar');
-    expect(createData.productionLossRate).toBe(1.05);
+    // 2026-10-21：配置没注入时统一回落到全局默认 1.07（原先是设计器旧写死值 1.05）
+    expect(createData.productionLossRate).toBe(1.07);
     expect(createData.batchLaborHours).toBe(2);
     expect(createData.applicableLifeStages).toEqual(['REPRODUCTION']);
     expect(createData.healthTagAssignments).toEqual({

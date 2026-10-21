@@ -14,7 +14,10 @@ import { CustomRecipeStatus } from '@prisma/client';
  *      "查看定制食谱"在**生产上已实测 404**。
  */
 describe('CustomRecipeController · 交付与编号口径', () => {
-  function createAdminController(orderOverrides: Record<string, unknown> = {}) {
+  function createAdminController(
+    orderOverrides: Record<string, unknown> = {},
+    globalConfigService?: any,
+  ) {
     const order = {
       id: 'cr-uuid-1',
       orderId: 'CR202609280001',
@@ -30,8 +33,14 @@ describe('CustomRecipeController · 交付与编号口径', () => {
       version: 1,
     });
     const recipeItemCreateMany = jest.fn().mockResolvedValue({});
+    const recipeUpdate = jest.fn().mockResolvedValue({});
+    const recipeUpdateMany = jest.fn().mockResolvedValue({ count: 0 });
     const prisma = {
-      recipe: { create: recipeCreate },
+      recipe: {
+        create: recipeCreate,
+        update: recipeUpdate,
+        updateMany: recipeUpdateMany,
+      },
       recipeItem: { createMany: recipeItemCreateMany },
     };
 
@@ -66,11 +75,18 @@ describe('CustomRecipeController · 交付与编号口径', () => {
       {} as any,
       wechatService as any,
       wechatPaymentService as any,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      globalConfigService,
     );
 
     return {
       controller,
       recipeCreate,
+      recipeUpdate,
+      recipeUpdateMany,
       customRecipeService,
       wechatService,
       wechatPaymentService,
@@ -102,6 +118,65 @@ describe('CustomRecipeController · 交付与编号口径', () => {
     // 不写 customerOwnerId 的话，主人自己也打不开
     expect(data.customerOwnerId).toBe('user-1');
     expect(data.customOrderId).toBe('cr-uuid-1');
+  });
+
+  it('★ 新建食谱的生产损耗率读全局配置（不再读 CustomRecipeConfig）', async () => {
+    const globalConfigService = {
+      getGlobalConfig: jest
+        .fn()
+        .mockResolvedValue({ productionLossRate: 1.13 }),
+    };
+    const { controller, recipeCreate } = createAdminController(
+      {},
+      globalConfigService,
+    );
+
+    await controller.createRecipe('CR202609280001', dto);
+
+    expect(globalConfigService.getGlobalConfig).toHaveBeenCalledTimes(1);
+    expect(recipeCreate.mock.calls[0][0].data.productionLossRate).toBe(1.13);
+  });
+
+  it('全局配置缺失 / 值不合法 / 读取抛错 → 回落 1.07', async () => {
+    const configs = [
+      undefined,
+      {
+        getGlobalConfig: jest
+          .fn()
+          .mockResolvedValue({ productionLossRate: 0.9 }),
+      },
+      {
+        getGlobalConfig: jest
+          .fn()
+          .mockRejectedValue(new Error('数据库连接失败')),
+      },
+    ];
+
+    for (const globalConfigService of configs) {
+      const { controller, recipeCreate } = createAdminController(
+        {},
+        globalConfigService,
+      );
+
+      await controller.createRecipe('CR202609280001', dto);
+
+      expect(recipeCreate.mock.calls[0][0].data.productionLossRate).toBe(1.07);
+    }
+  });
+
+  it('★ 新建食谱只写新行，不回写已有食谱（迁移不回溯改数）', async () => {
+    const globalConfigService = {
+      getGlobalConfig: jest
+        .fn()
+        .mockResolvedValue({ productionLossRate: 1.13 }),
+    };
+    const { controller, recipeUpdate, recipeUpdateMany } =
+      createAdminController({}, globalConfigService);
+
+    await controller.createRecipe('CR202609280001', dto);
+
+    expect(recipeUpdate).not.toHaveBeenCalled();
+    expect(recipeUpdateMany).not.toHaveBeenCalled();
   });
 
   it('营养标准用后台选的，而不是永远写死', async () => {

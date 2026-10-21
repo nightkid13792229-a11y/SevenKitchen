@@ -54,11 +54,12 @@ export const DEFAULT_CUSTOM_RECIPE_NUTRITION_STANDARD = 'FEDIAF_2025';
 /** 默认能量密度 kcal/kg */
 export const DEFAULT_CUSTOM_RECIPE_ENERGY_DENSITY_KCAL_PER_KG = 3200;
 /**
- * 生产损耗率默认值。
+ * @deprecated 已废弃（2026-10-21）：内部生产损耗系数已迁到
+ * `GlobalConfig.productionLossRate`（见 `global-config.service.ts`）。
  *
- * ⚠️ **口径冲突未决**：设计器发布路径用 1.05、后台手工建食谱用 1.07、
- * 小程序 DIY 按 7% 展示给顾客。这里取 1.07（与顾客看到的 7% 一致），
- * 但**尚未改动那两处写死的取值** —— 改取值会改变生产用料，需老板拍板。
+ * 这个常量与 `CustomRecipeConfig.productionLossRate` 列保留只为兼容
+ * 旧数据/旧部署/回滚，**不再用于新建食谱**。新代码请用
+ * `DEFAULT_PRODUCTION_LOSS_RATE`。
  */
 export const DEFAULT_CUSTOM_RECIPE_PRODUCTION_LOSS_RATE = 1.07;
 /** 默认工时（小时） */
@@ -160,7 +161,11 @@ export interface CustomRecipeConfigDto {
   defaultNutritionStandard: string;
   /** 默认能量密度 kcal/kg */
   defaultEnergyDensityKcalPerKg: number;
-  /** 生产损耗率（⚠️ 口径冲突未决，见常量注释） */
+  /**
+   * @deprecated 已废弃（2026-10-21）：新建食谱改读
+   * `GlobalConfig.productionLossRate`。这个字段仍会读写以兼容旧数据，
+   * 但后台页面已不再编辑它。
+   */
   productionLossRate: number;
   /** 默认工时（小时） */
   defaultLaborHours: number;
@@ -485,6 +490,11 @@ export class CustomRecipeConfigService {
     if (dto.productionLossRate !== undefined) {
       const value = dto.productionLossRate;
       /**
+       * @deprecated 兼容旧接口（2026-10-21）。
+       *
+       * 新建食谱已改读 `GlobalConfig.productionLossRate`；这里保留校验与写入，
+       * 只是让旧版后台/旧部署继续能安全保存，不再作为新食谱的来源。
+       *
        * 损耗率是 ≥1 的**系数**（1.07 = 损耗 7%）。
        * 必须 ≥1：小于 1 意味着"做出来比投料还多"，物理上不成立。
        * 上限 2 是防呆：超过 100% 的损耗只可能是填错了。
@@ -726,6 +736,7 @@ export class CustomRecipeConfigService {
       ...(dto.defaultEnergyDensityKcalPerKg !== undefined && {
         defaultEnergyDensityKcalPerKg: dto.defaultEnergyDensityKcalPerKg,
       }),
+      // @deprecated 兼容旧接口：新食谱已改读 GlobalConfig.productionLossRate
       ...(dto.productionLossRate !== undefined && {
         productionLossRate: dto.productionLossRate,
       }),

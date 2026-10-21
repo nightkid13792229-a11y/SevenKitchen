@@ -20,6 +20,7 @@ import {
   BadRequestException,
   ForbiddenException,
   NotFoundException,
+  Optional,
   Req,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -28,6 +29,12 @@ import { CustomRecipeService } from '../../../application/custom-recipe/custom-r
 import { CustomRecipeDeliveryService } from '../../../application/custom-recipe/custom-recipe-delivery.service';
 import { CustomRecipeAftersaleService } from '../../../application/custom-recipe/custom-recipe-aftersale.service';
 import { PrismaService } from '../../../infrastructure/prisma.service';
+import {
+  DEFAULT_PRODUCTION_LOSS_RATE,
+  MAX_PRODUCTION_LOSS_RATE,
+  MIN_PRODUCTION_LOSS_RATE,
+  GlobalConfigService,
+} from '../../../application/config/global-config.service';
 import { CustomRecipeViewService } from '../../../application/custom-recipe/custom-recipe-view.service';
 import {
   CustomRecipeConfigService,
@@ -93,6 +100,16 @@ export class AdminCustomRecipeController {
     private readonly viewService: CustomRecipeViewService,
     /** 只读查询（交付历史这类）走它，不必为一条列表在 service 里加方法 */
     private readonly prisma: PrismaService,
+    /**
+     * 全局配置（2026-10-21）：只用来读「内部生产损耗系数」。
+     *
+     * 这个值原先在 `CustomRecipeConfig.productionLossRate`，现迁到
+     * `GlobalConfig.productionLossRate`。放参数表**最后**并 `@Optional`：
+     * 既有测试按位置构造控制器，插在中间会让它们全部错位；
+     * DI 没接上时 resolveProductionLossRate 会回落到 1.07。
+     */
+    @Optional()
+    private readonly globalConfigService?: GlobalConfigService,
   ) {}
 
   /**
@@ -306,29 +323,36 @@ export class AdminCustomRecipeController {
   }
 
   /**
-   * 生产损耗率（系数，1.07 = 多买 7%）。
+   * 内部生产损耗系数（≥1 的系数，1.07 = 多买 7%）。
    *
-   * 读配置；读不到时回落到 `1.07` —— 那是 `schema.prisma` 里
-   * `CustomRecipeConfig.productionLossRate` 的默认值。
+   * 2026-10-21 起读 `GlobalConfig.productionLossRate`，不再读
+   * `CustomRecipeConfig.productionLossRate` —— 后者已废弃但保留列，
+   * 只为兼容旧数据/回滚。
    *
-   * 刻意**不静默回落**：配置读不到说明有问题，日志里留一行，
-   * 免得"值变了但没人知道为什么"。
+   * 只影响**新建**食谱：写进 `Recipe.productionLossRate` 的初始值。
+   * 已有食谱的该字段与交付快照保持原值，这里不回溯修改。
+   *
+   * 读不到 / 值不合法 → 回落到 1.07，并在日志里留一行。
    */
   private async resolveProductionLossRate(): Promise<number> {
     try {
-      const config = await this.customRecipeConfigService.getConfig();
+      const config = await this.globalConfigService?.getGlobalConfig();
       const value = Number(config?.productionLossRate);
-      if (Number.isFinite(value) && value >= 1) {
+      if (
+        Number.isFinite(value) &&
+        value >= MIN_PRODUCTION_LOSS_RATE &&
+        value <= MAX_PRODUCTION_LOSS_RATE
+      ) {
         return value;
       }
       console.warn(
-        '[CustomRecipe] 配置里的生产损耗率不合法，按 1.07 处理：',
+        '[CustomRecipe] 全局配置里的生产损耗率不合法，按 1.07 处理：',
         config?.productionLossRate,
       );
     } catch (error) {
       console.warn('[CustomRecipe] 读取生产损耗率失败，按 1.07 处理：', error);
     }
-    return 1.07;
+    return DEFAULT_PRODUCTION_LOSS_RATE;
   }
 
   /**
@@ -613,22 +637,21 @@ export class AdminCustomRecipeController {
     @Body() dto: CreateRecipeDTO,
   ) {
     /**
-     * 生产损耗率读**配置**，不再写死（2026-10-16 批次 5.7）。
+     * 内部生产损耗系数读**全局配置**（2026-10-21 从 CustomRecipeConfig 迁来）。
      *
      * ## 这里原来写死 1.07，而设计器那边写死 1.05
      *
      * 后果：**同一道食谱，从哪个入口发布，顾客要买的量差 2%**。
      * 而采购量就是按这个值算的 —— 顾客照着买，多买少买都不对。
      *
-     * ## 为什么现在能自己定下来了
+     * ## 现在两个入口读同一个值
      *
-     * `CustomRecipeConfig.productionLossRate` 这个字段**本来就是为了统一它才加的**
-     * （schema 里写着："此前它们散落在代码里写死 —— 有的还写死在两处且值不一样"）。
-     * 也就是说这不是一个"要老板拍板的口径"，而是**一个没做完的重构**：
-     * 字段加了，两处写死的值没改成读它。
+     * `GlobalConfig.productionLossRate` 是唯一来源：后台「全局配置 → 生产配置」
+     * 改完即时生效，两边自然一致。CustomRecipeConfig 里的同名列已废弃，
+     * 只为兼容旧数据/回滚保留，不再参与新建食谱。
      *
-     * 改成读配置之后：① 两边自然一致；② 老板能在后台设置页直接改，
-     * 不用改代码。
+     * ⚠️ 只影响新建的食谱；已有 `Recipe.productionLossRate` 与交付快照
+     * 一律保持原值（迁移不回溯改数）。
      */
     const lossRate = await this.resolveProductionLossRate();
 

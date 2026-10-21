@@ -100,12 +100,12 @@ describe('多份购买配置页 · 字段与文案', () => {
     expect(page).toContain('业务硬上限')
   })
 
-  it('多份购买开关默认锁定，第二阶段完成前不能误开', () => {
-    // 当前只完成价格与配置；多份设计/交付还没做，后台不允许开启
-    expect(page).toContain(':disabled="!form.multiRecipeEnabled"')
-    expect(page).toContain(
-      '多份设计与交付完成后才可开启；当前仅完成价格与配置',
-    )
+  it('多份购买开关可开启，但必须二次确认', () => {
+    // 多份设计/交付/售后已打通；开关不再硬锁，但开启前要确认
+    expect(page).not.toContain(':disabled="!form.multiRecipeEnabled"')
+    expect(page).toContain('@change="handleMultiRecipeToggle"')
+    expect(page).toContain('确认小程序正式版已经审核通过')
+    expect(page).toContain('ElMessageBox.confirm')
   })
 })
 

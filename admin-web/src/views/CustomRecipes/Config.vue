@@ -94,17 +94,15 @@
 
         <el-form-item label="多份购买">
           <!--
-            ⚠️ 2026-10-20 阶段性门禁：第一阶段只完成「价格与配置」，
-            多份设计/交付还没做。开关默认关闭且不允许在这里打开，
-            避免运营误开后顾客能下多份、后台却交付不了。
-            只有后端已经是 true 时才可操作（用于紧急关闭），false 时锁定。
+            2026-10-21：多份设计/交付/售后已打通，开关不再硬锁；
+            开启前仍要二次确认，避免运营误点。
           -->
           <el-switch
             v-model="form.multiRecipeEnabled"
-            :disabled="!form.multiRecipeEnabled"
+            @change="handleMultiRecipeToggle"
           />
           <span class="form-tip">
-            多份设计与交付完成后才可开启；当前仅完成价格与配置，开关暂时锁定，避免误开
+            开启前请确认小程序正式版已经审核通过；开启并保存后顾客才会看到份数选择
           </span>
         </el-form-item>
 
@@ -423,7 +421,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { customRecipeApi } from '@/api/customRecipe';
 import { platformOptionsApi } from '@/api/platformOptions';
 import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole';
@@ -587,6 +585,29 @@ const loadConfig = async () => {
     console.error(error);
   } finally {
     loading.value = false;
+  }
+};
+
+/**
+ * 多份购买开关二次确认（2026-10-21）。
+ *
+ * 设计/交付/售后已打通，运营需要在正式版审核通过后开启。
+ * 但这是会影响顾客下单方式的开关，先确认一次；取消则立即退回关闭。
+ */
+const handleMultiRecipeToggle = async (value: boolean | string | number) => {
+  if (!value) return;
+  try {
+    await ElMessageBox.confirm(
+      '开启后，顾客在确认页会看到「配方份数」，可以选择 1–5 份并按多份优惠下单。请确认小程序正式版已经审核通过。',
+      '开启多份购买',
+      {
+        confirmButtonText: '确认开启',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    );
+  } catch {
+    form.value.multiRecipeEnabled = false;
   }
 };
 

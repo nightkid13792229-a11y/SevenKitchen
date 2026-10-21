@@ -187,7 +187,7 @@ async function submit() {
 
   submitting.value = true
   try {
-    await requestSupplementSubscriptions()
+    await requestSupplementSubscriptions(['aftersale'])
     const uploadedPhotos: string[] = []
     for (const path of photos.value) {
       uploadedPhotos.push(await uploadPhoto(path))

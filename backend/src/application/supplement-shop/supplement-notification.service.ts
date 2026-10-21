@@ -107,7 +107,7 @@ export class SupplementNotificationService {
     }
 
     const templates = await this.getTemplateIds();
-    await this.sendSubscription(order, content, templates);
+    await this.sendSubscription(order, content, templates, type);
   }
 
   private buildContent(
@@ -200,28 +200,106 @@ export class SupplementNotificationService {
   }
 
   private templateForNotice(
-    content: { category: string; title: string; body: string },
+    _content: { category: string; title: string; body: string },
     templates: {
       scheduled: string | null;
       shipped: string | null;
       delay: string | null;
       aftersale: string | null;
     },
+    type: SupplementNoticeType,
   ): string {
-    if (content.title.includes('发货时间') || content.title.includes('延后')) {
-      return templates.delay || '';
-    }
-    if (content.category === 'AFTERSALE') {
+    if (type === 'DELAY') return templates.delay || '';
+    if (type === 'SHIPPED' || type === 'COMPLETED') return templates.shipped || '';
+    if (
+      type === 'AFTERSALE' ||
+      type === 'REFUNDED' ||
+      type === 'RESHIPPED' ||
+      type === 'AFTERSALE_REJECTED' ||
+      type === 'AFTERSALE_RESOLVED'
+    ) {
       return templates.aftersale || '';
-    }
-    if (content.title.includes('发货') || content.title.includes('完成')) {
-      return templates.shipped || '';
     }
     return templates.scheduled || '';
   }
 
+  /**
+   * 按各模板选中的关键词拼 data。
+   * 模板是在微信公众平台按固定关键词顺序创建的：
+   * - 养宠日历提醒：宠物名称 thing1 / 提醒类型 thing2 / 计划时间 time3 / 备注 thing4
+   * - 订单完成通知：订单编号 character_string1 / 订单状态 phrase2 / 温馨提示 thing3
+   * - 发货提醒：商品信息 thing1 / 快递公司 phrase2 / 快递单号 character_string3 / 发货时间 time4 / 备注 thing5
+   * - 订单售后通知：商品名称 thing1 / 售后类型 thing2 / 处理结果 thing3 / 订单编号 character_string4 / 备注 thing5
+   */
+  private buildSubscriptionData(
+    order: {
+      orderNo: string;
+      packingDate: Date | null;
+      trackingNumber: string | null;
+      carrierCode: string | null;
+    },
+    content: { title: string; body: string },
+    type: SupplementNoticeType,
+  ): Record<string, { value: string }> {
+    const date = order.packingDate
+      ? new Date(order.packingDate).toISOString().slice(0, 16).replace('T', ' ')
+      : '待排期';
+    if (type === 'SCHEDULED' || type === 'RESCHEDULED') {
+      return {
+        thing1: { value: '补剂订单' },
+        thing2: { value: type === 'SCHEDULED' ? '预计发货' : '发货调整' },
+        time3: { value: date },
+        thing4: { value: content.body.slice(0, 20) },
+      };
+    }
+    if (type === 'DELAY') {
+      return {
+        character_string1: { value: order.orderNo.slice(0, 32) },
+        phrase2: { value: '延迟发货' },
+        thing3: { value: content.body.slice(0, 20) },
+      };
+    }
+    if (type === 'SHIPPED' || type === 'COMPLETED') {
+      return {
+        thing1: { value: '补剂订单' },
+        phrase2: { value: (order.carrierCode || '快递').slice(0, 5) },
+        character_string3: { value: (order.trackingNumber || '待更新').slice(0, 32) },
+        time4: { value: date },
+        thing5: { value: content.body.slice(0, 20) },
+      };
+    }
+    return {
+      thing1: { value: '补剂订单' },
+      thing2: { value: this.aftersaleTypeLabel(type) },
+      thing3: { value: this.aftersaleResultLabel(type) },
+      character_string4: { value: order.orderNo.slice(0, 32) },
+      thing5: { value: content.body.slice(0, 20) },
+    };
+  }
+
+  private aftersaleTypeLabel(type: SupplementNoticeType): string {
+    if (type === 'REFUNDED') return '退款';
+    if (type === 'RESHIPPED') return '补发';
+    return '售后';
+  }
+
+  private aftersaleResultLabel(type: SupplementNoticeType): string {
+    if (type === 'REFUNDED') return '已退款';
+    if (type === 'RESHIPPED') return '已补发';
+    if (type === 'AFTERSALE_REJECTED') return '已驳回';
+    if (type === 'AFTERSALE_RESOLVED') return '已处理';
+    return '处理中';
+  }
+
   private async sendSubscription(
-    order: { id: string; orderNo: string; userId: string },
+    order: {
+      id: string;
+      orderNo: string;
+      userId: string;
+      packingDate: Date | null;
+      trackingNumber: string | null;
+      carrierCode: string | null;
+    },
     content: { category: string; title: string; body: string },
     templates: {
       scheduled: string | null;
@@ -229,8 +307,9 @@ export class SupplementNotificationService {
       delay: string | null;
       aftersale: string | null;
     },
+    type: SupplementNoticeType,
   ): Promise<void> {
-    const templateId = this.templateForNotice(content, templates);
+    const templateId = this.templateForNotice(content, templates, type);
     if (!templateId || !this.wechatService) return;
 
     try {
@@ -243,10 +322,7 @@ export class SupplementNotificationService {
         touser: user.wechatOpenid,
         template_id: templateId,
         page: `pages/supplement-order-detail/index?orderId=${order.id}`,
-        data: {
-          thing1: { value: content.title.slice(0, 20) },
-          thing2: { value: content.body.slice(0, 20) },
-        },
+        data: this.buildSubscriptionData(order, content, type),
       });
     } catch (error) {
       this.logger.log(

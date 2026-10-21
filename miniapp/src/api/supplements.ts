@@ -283,29 +283,44 @@ export function fetchSupplementSubscribeTemplates() {
   })
 }
 
-let cachedSubscribeIds: string[] | null = null
+type SupplementSubscribeKind = 'scheduled' | 'shipped' | 'delay' | 'aftersale'
+type SupplementSubscribeTemplates = Record<SupplementSubscribeKind, string | null>
+
+let cachedSubscribeTemplates: SupplementSubscribeTemplates | null = null
 
 /** 页面加载时预取模板；提交时才能同步调用 wx.requestSubscribeMessage */
 export async function prefetchSupplementSubscriptions(): Promise<void> {
   try {
     const res = await fetchSupplementSubscribeTemplates()
     if (res.code !== 0) return
-    cachedSubscribeIds = Array.from(
-      new Set(
-        [res.data?.scheduled, res.data?.shipped, res.data?.aftersale].filter(
-          (item): item is string => Boolean(item)
-        )
-      )
-    ).slice(0, 3)
+    cachedSubscribeTemplates = {
+      scheduled: res.data?.scheduled || null,
+      shipped: res.data?.shipped || null,
+      delay: res.data?.delay || null,
+      aftersale: res.data?.aftersale || null
+    }
   } catch {
-    cachedSubscribeIds = null
+    cachedSubscribeTemplates = null
   }
 }
 
-/** 在用户点击提交时请求订阅授权；失败/未配置不阻断下单 */
-export async function requestSupplementSubscriptions(): Promise<void> {
-  const ids = cachedSubscribeIds
-  if (!ids || ids.length === 0 || typeof wx === 'undefined' || !wx.requestSubscribeMessage) return
+/**
+ * 在用户点击提交时请求订阅授权。
+ * 微信一次最多 3 个模板：下单要排期/发货/延迟，售后单独请求售后模板。
+ */
+export async function requestSupplementSubscriptions(
+  kinds: SupplementSubscribeKind[] = ['scheduled', 'shipped', 'delay']
+): Promise<void> {
+  const ids = cachedSubscribeTemplates
+    ? Array.from(
+        new Set(
+          kinds
+            .map((kind) => cachedSubscribeTemplates?.[kind])
+            .filter((item): item is string => Boolean(item))
+        )
+      ).slice(0, 3)
+    : []
+  if (ids.length === 0 || typeof wx === 'undefined' || !wx.requestSubscribeMessage) return
   await new Promise<void>((resolve) => {
     wx.requestSubscribeMessage({
       tmplIds: ids,

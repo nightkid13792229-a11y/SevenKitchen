@@ -23,6 +23,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { RecipeDesignerService } from '../../application/recipe-designer/recipe-designer.service';
+import { OrderRecipeTemplateService } from '../../application/recipe-designer/order-recipe-template.service';
 import { SupplementLabelExtractionService } from '../../application/recipe-designer/supplement-label-extraction.service';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import { AuthGuard, CurrentUser, type RequestUser } from '../auth';
@@ -42,6 +43,7 @@ import {
   DeleteRecipeSeriesDto,
   ListRecipeDesignerIngredientOptionsDto,
   ListRecipeDesignerSeriesDto,
+  ListRecipeTemplatesDto,
   PublishRecipeDesignDraftDto,
   RenameRecipeSeriesDto,
   ReorderRecipeDesignItemsDto,
@@ -118,6 +120,7 @@ export class RecipeDesignerController {
     private readonly recipeDesignerService: RecipeDesignerService,
     private readonly cosService: TencentCosService,
     private readonly supplementLabelExtractionService: SupplementLabelExtractionService,
+    private readonly orderRecipeTemplateService: OrderRecipeTemplateService,
   ) {}
 
   @Get('ingredient-options')
@@ -130,6 +133,49 @@ export class RecipeDesignerController {
     const options =
       await this.recipeDesignerService.listIngredientOptions(query);
     return ApiResponseDto.success(options);
+  }
+
+  /**
+   * 订单绑定食谱设计 · 模板搜索（2026-10-22）。
+   *
+   * 只允许内部设计角色（STAFF / ADMIN）访问：模板范围包含其他狗狗的
+   * 私密定制食谱，顾客侧永远不可见。
+   */
+  @Get('recipe-templates')
+  @UseGuards(StaffGuard)
+  @ApiOperation({
+    summary: 'Search recipes usable as order-bound recipe design templates',
+  })
+  async listRecipeTemplates(
+    @Query() query: ListRecipeTemplatesDto,
+  ): Promise<ApiResponseDto<any>> {
+    const templates = await this.orderRecipeTemplateService.searchTemplates({
+      keyword: query.keyword,
+      kind: query.kind ?? 'ALL',
+    });
+    return ApiResponseDto.success(templates);
+  }
+
+  /**
+   * 订单绑定食谱设计 · 模板阶段比较（2026-10-22）。
+   *
+   * 只做提示，不阻断：阶段不一致或模板未标注阶段时返回 warning。
+   */
+  @Get('orders/:orderId/design-template-stage')
+  @UseGuards(StaffGuard)
+  @ApiOperation({
+    summary: 'Compare an order dog life stage with a template recipe',
+  })
+  async getOrderDesignTemplateStage(
+    @Param('orderId') orderId: string,
+    @Query('sourceRecipeId') sourceRecipeId: string,
+  ): Promise<ApiResponseDto<any>> {
+    const comparison =
+      await this.orderRecipeTemplateService.compareOrderTemplateStage(
+        orderId,
+        sourceRecipeId,
+      );
+    return ApiResponseDto.success(comparison);
   }
 
   @Post('supplement-options')

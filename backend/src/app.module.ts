@@ -258,6 +258,7 @@ import { NutrientMappingAuditService } from './application/nutrition-calculation
 import { NutritionUnitNormalizerService } from './application/nutrition-calculation/nutrition-unit-normalizer.service';
 import { NutritionStandardService } from './application/nutrition-standard/nutrition-standard.service';
 import { RecipeDesignerService } from './application/recipe-designer/recipe-designer.service';
+import { OrderRecipeTemplateService } from './application/recipe-designer/order-recipe-template.service';
 import { AiDesignSuggestionService } from './application/recipe-designer/ai-design-suggestion.service';
 import { RecipeCopywritingService } from './application/recipe-designer/recipe-copywriting.service';
 import { KnowledgeBaseService } from './application/recipe-designer/knowledge-base.service';
@@ -895,6 +896,7 @@ validatePrismaConfig();
     IngredientBatchReplaceService,
     NutritionStandardService,
     RecipeDesignerService,
+    OrderRecipeTemplateService,
     {
       provide: FEDIAF_TARGET_PROVIDER,
       useClass: PrismaFediafTargetProvider,

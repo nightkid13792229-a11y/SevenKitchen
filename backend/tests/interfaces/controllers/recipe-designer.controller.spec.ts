@@ -4,11 +4,12 @@ import { validate } from 'class-validator';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { RecipeDesignerService } from '../../../src/application/recipe-designer/recipe-designer.service';
+import { OrderRecipeTemplateService } from '../../../src/application/recipe-designer/order-recipe-template.service';
 import { SupplementLabelExtractionService } from '../../../src/application/recipe-designer/supplement-label-extraction.service';
 import { TencentCosService } from '../../../src/infrastructure/services/tencent-cos.service';
 import { AuthGuard, JwtAuthService } from '../../../src/interfaces/auth';
 import { RecipeDesignerController } from '../../../src/interfaces/controllers/recipe-designer.controller';
-import { UpdateRecipeDesignItemOrderDto } from '../../../src/interfaces/dto/recipe-designer/recipe-designer.dto';
+import { UpdateRecipeDesignItemOrderDto, ListRecipeTemplatesDto } from '../../../src/interfaces/dto/recipe-designer/recipe-designer.dto';
 import { StaffGuard } from '../../../src/interfaces/guards/role.guard';
 
 describe('RecipeDesignerController authorization', () => {
@@ -19,6 +20,23 @@ describe('RecipeDesignerController authorization', () => {
     );
 
     expect(guards).toEqual([AuthGuard]);
+  });
+
+  it('keeps order template search and stage comparison staff-only', () => {
+    const source = readFileSync(
+      resolve(
+        process.cwd(),
+        'src/interfaces/controllers/recipe-designer.controller.ts',
+      ),
+      'utf8',
+    );
+
+    expect(source).toMatch(
+      /@Get\('recipe-templates'\)\s+@UseGuards\(StaffGuard\)/,
+    );
+    expect(source).toMatch(
+      /@Get\('orders\/:orderId\/design-template-stage'\)\s+@UseGuards\(StaffGuard\)/,
+    );
   });
 
   it('keeps supplement maintenance and revision routes staff-only', () => {
@@ -121,6 +139,19 @@ describe('RecipeDesignerController authorization', () => {
       expect.objectContaining({ property: 'itemIds' }),
     ]);
   });
+
+  it('accepts only ALL/CATALOG/CUSTOM template kinds', async () => {
+    const valid = new ListRecipeTemplatesDto();
+    valid.keyword = '鸡肉';
+    valid.kind = 'CUSTOM';
+    const invalid = new ListRecipeTemplatesDto();
+    (invalid as any).kind = 'DRAFT';
+
+    await expect(validate(valid)).resolves.toEqual([]);
+    await expect(validate(invalid)).resolves.toEqual([
+      expect.objectContaining({ property: 'kind' }),
+    ]);
+  });
 });
 
 describe('RecipeDesignerController', () => {
@@ -158,6 +189,10 @@ describe('RecipeDesignerController', () => {
   const supplementLabelExtractionService = {
     extractFromImage: jest.fn(),
   };
+  const orderRecipeTemplateService = {
+    searchTemplates: jest.fn(),
+    compareOrderTemplateStage: jest.fn(),
+  };
 
   const currentUser = {
     userId: 'staff-1',
@@ -176,6 +211,10 @@ describe('RecipeDesignerController', () => {
           useValue: supplementLabelExtractionService,
         },
         {
+          provide: OrderRecipeTemplateService,
+          useValue: orderRecipeTemplateService,
+        },
+        {
           provide: AuthGuard,
           useValue: { canActivate: jest.fn().mockReturnValue(true) },
         },
@@ -192,6 +231,40 @@ describe('RecipeDesignerController', () => {
 
     controller = moduleRef.get(RecipeDesignerController);
     jest.clearAllMocks();
+  });
+
+  it('delegates order template search and stage comparison to the template service', async () => {
+    orderRecipeTemplateService.searchTemplates.mockResolvedValue([
+      { recipeId: 'recipe-1' },
+    ]);
+    orderRecipeTemplateService.compareOrderTemplateStage.mockResolvedValue({
+      matches: false,
+      templateStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+      dogStage: 'HIGH_ACTIVITY_ADULT',
+      warning: '阶段不一致',
+    });
+
+    await expect(
+      controller.listRecipeTemplates({ keyword: '鸡肉', kind: 'CATALOG' }),
+    ).resolves.toEqual(
+      expect.objectContaining({ code: 0, data: [{ recipeId: 'recipe-1' }] }),
+    );
+    await expect(
+      controller.getOrderDesignTemplateStage('CR20261022001', 'recipe-1'),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        code: 0,
+        data: expect.objectContaining({ matches: false }),
+      }),
+    );
+
+    expect(orderRecipeTemplateService.searchTemplates).toHaveBeenCalledWith({
+      keyword: '鸡肉',
+      kind: 'CATALOG',
+    });
+    expect(
+      orderRecipeTemplateService.compareOrderTemplateStage,
+    ).toHaveBeenCalledWith('CR20261022001', 'recipe-1');
   });
 
   it('delegates draft CRUD with CurrentUser ids', async () => {

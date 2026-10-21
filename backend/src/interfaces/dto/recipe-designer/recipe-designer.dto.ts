@@ -52,6 +52,21 @@ export const RECIPE_DESIGNER_SERIES_STAGE_STATUSES = [
 export type RecipeDesignerSeriesStageStatus =
   (typeof RECIPE_DESIGNER_SERIES_STAGE_STATUSES)[number];
 
+/** 订单设计模板来源：橱窗食谱 / 私密定制食谱 / 两者都要。 */
+export const RECIPE_TEMPLATE_KINDS = ['ALL', 'CATALOG', 'CUSTOM'] as const;
+
+export type RecipeTemplateKind = (typeof RECIPE_TEMPLATE_KINDS)[number];
+
+export class ListRecipeTemplatesDto {
+  @IsOptional()
+  @IsString()
+  keyword?: string;
+
+  @IsOptional()
+  @IsIn(RECIPE_TEMPLATE_KINDS)
+  kind?: RecipeTemplateKind;
+}
+
 export class ListRecipeDesignerSeriesDto {
   @IsOptional()
   @IsIn(RECIPE_DESIGNER_SERIES_STATUS_FILTERS)

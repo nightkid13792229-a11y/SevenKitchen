@@ -596,6 +596,8 @@ type RecipeSeriesWorkbenchRecord = {
   referenceDogId?: string | null;
   /** 设计上下文（2026-10-22）：订单绑定系列不进入产品线列表 */
   designMode?: string | null;
+  orderId?: string | null;
+  orderQuantity?: number | null;
   deletedAt?: Date | null;
   updatedAt?: Date | string | null;
   designs: Array<{
@@ -2170,21 +2172,23 @@ export class RecipeDesignerService {
     const hasMore = usePagination && series.length > pageSize;
     const visibleSeries = hasMore ? series.slice(0, pageSize) : series;
     /**
-     * 2026-10-22：订单绑定系列只从订单设计工作台进入，不应铺满产品线列表。
+     * 列表上下文（2026-10-22）：
+     *  · CATALOG：产品线设计（默认，保持原行为）；
+     *  · ORDER：订单绑定设计，单独入口展示，不混入产品线。
      * 历史系列 `designMode` 为空，按 CATALOG 处理（与数据库默认值一致）。
      */
-    const catalogSeries = visibleSeries.filter(
+    const designMode = query.designMode ?? RecipeDesignMode.CATALOG;
+    const modeSeries = visibleSeries.filter(
       (record) =>
-        (record.designMode ?? RecipeDesignMode.CATALOG) ===
-        RecipeDesignMode.CATALOG,
+        (record.designMode ?? RecipeDesignMode.CATALOG) === designMode,
     );
 
     if (!isInternalRecipeDesignerRole(context)) {
       const dogNameById = await this.loadCustomerDogNameMapForSeries(
-        catalogSeries,
+        modeSeries,
         context,
       );
-      const items = catalogSeries.map((record) =>
+      const items = modeSeries.map((record) =>
         this.buildCustomerSeriesCard(
           record,
           dogNameById,
@@ -2196,8 +2200,8 @@ export class RecipeDesignerService {
     }
 
     const referenceDogNameById =
-      await this.loadReferenceDogNameMapForSeries(catalogSeries);
-    const cards = catalogSeries.map((record) => {
+      await this.loadReferenceDogNameMapForSeries(modeSeries);
+    const cards = modeSeries.map((record) => {
       const referenceDogIds = [
         record.referenceDogId,
         ...record.recipes.map((recipe) => recipe.referenceDogId),
@@ -2218,6 +2222,40 @@ export class RecipeDesignerService {
       );
     });
     const items = this.filterSeriesWorkbenchCards(cards, query.status);
+    if (designMode === RecipeDesignMode.ORDER) {
+      const orderIds = Array.from(
+        new Set(modeSeries.map((record) => record.orderId).filter(Boolean)),
+      ) as string[];
+      const orders = orderIds.length
+        ? await this.prisma.customRecipeOrder.findMany({
+            where: { id: { in: orderIds } },
+            select: {
+              id: true,
+              orderId: true,
+              status: true,
+              recipeQuantity: true,
+              dog: { select: { name: true } },
+            },
+          })
+        : [];
+      const orderById = new Map(orders.map((order) => [order.id, order]));
+      const seriesById = new Map(modeSeries.map((record) => [record.id, record]));
+      const orderItems = items.map((card) => {
+        const order = orderById.get(seriesById.get(card.id)?.orderId ?? '');
+        return {
+          ...card,
+          designMode,
+          orderNo: order?.orderId ?? null,
+          orderStatus: order?.status ?? null,
+          orderQuantity: order?.recipeQuantity ?? null,
+          orderDogName: order?.dog?.name ?? card.referenceDogName ?? null,
+        };
+      });
+      return usePagination
+        ? { items: orderItems, page, pageSize, hasMore }
+        : orderItems;
+    }
+
     return usePagination ? { items, page, pageSize, hasMore } : items;
   }
 

@@ -38,6 +38,8 @@ export const RECIPE_DESIGNER_SERIES_STATUS_FILTERS = [
   'PRIVATE_CUSTOM',
 ] as const;
 
+export const RECIPE_DESIGNER_DESIGN_MODES = ['CATALOG', 'ORDER'] as const;
+
 export type RecipeDesignerSeriesStatusFilter =
   (typeof RECIPE_DESIGNER_SERIES_STATUS_FILTERS)[number];
 
@@ -85,6 +87,11 @@ export class ListRecipeDesignerSeriesDto {
   @IsOptional()
   @IsIn(RECIPE_DESIGNER_SERIES_STATUS_FILTERS)
   status?: RecipeDesignerSeriesStatusFilter;
+
+  /** 列表上下文：默认产品线；ORDER = 订单定制食谱 */
+  @IsOptional()
+  @IsIn(RECIPE_DESIGNER_DESIGN_MODES)
+  designMode?: (typeof RECIPE_DESIGNER_DESIGN_MODES)[number];
 
   @IsOptional()
   @IsString()

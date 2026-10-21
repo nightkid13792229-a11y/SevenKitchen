@@ -7221,6 +7221,49 @@ describe('RecipeDesignerService', () => {
       expect(query.where).not.toHaveProperty('OR');
     });
 
+    it('lists order-bound series separately with order metadata', async () => {
+      prisma.recipeSeries.findMany.mockResolvedValue([
+        seriesRecord({
+          id: 'series-order',
+          designMode: 'ORDER',
+          orderId: 'order-uuid-1',
+          orderQuantity: 2,
+          createdBy: 'staff-1',
+        }),
+        seriesRecord({
+          id: 'series-catalog',
+          designMode: 'CATALOG',
+          createdBy: 'staff-1',
+        }),
+      ]);
+      prisma.customRecipeOrder.findMany.mockResolvedValue([
+        {
+          id: 'order-uuid-1',
+          orderId: 'CR202610211480',
+          status: 'DELIVERED',
+          recipeQuantity: 2,
+          dog: { name: 'Foxy' },
+        },
+      ]);
+
+      const cards = await service.listSeries(
+        { userId: 'staff-1', role: 'STAFF' },
+        { designMode: 'ORDER' },
+      );
+
+      expect(cards).toHaveLength(1);
+      expect(cards[0]).toEqual(
+        expect.objectContaining({
+          id: 'series-order',
+          designMode: 'ORDER',
+          orderNo: 'CR202610211480',
+          orderStatus: 'DELIVERED',
+          orderQuantity: 2,
+          orderDogName: 'Foxy',
+        }),
+      );
+    });
+
     it('uses compact recipe fields for the series workbench list', async () => {
       prisma.recipeSeries.findMany.mockResolvedValue([
         seriesRecord({

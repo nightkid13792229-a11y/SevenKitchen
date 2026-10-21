@@ -253,3 +253,30 @@ describe('设计器 · 爱犬面板渲染回归（2026-10-22）', () => {
     expect(panel).toContain('{{ orderAllergyTextExtra }}')
   })
 })
+
+describe('设计器 · 爱犬面板头部与附件（2026-10-22）', () => {
+  const panel = stripComments(panelSource)
+  const template = templateOf(panel)
+  const editor = stripComments(editorSource)
+
+  it('从订单进入时锁定参考爱犬，并展示本单号', () => {
+    expect(template).toContain('lockReferenceDog')
+    expect(template).toContain('本单已绑定该犬，不能更换')
+    expect(template).toContain('insight.customRecipeOrder.orderId')
+    const editor = stripComments(editorSource)
+    expect(editor).toContain(':lock-reference-dog="Boolean(route.query.orderId)"')
+  })
+
+  it('顾客随单附件与最近就诊/体检附件都有入口', () => {
+    expect(template).toContain('顾客随单附件')
+    expect(template).toContain('orderAttachments')
+    expect(template).toContain('查看就诊附件')
+    expect(template).toContain('查看体检附件')
+  })
+
+  it('基础档案摘要进入顶部，详情折叠', () => {
+    expect(template).toContain('profileSummary')
+    expect(template).toContain('dog-summary')
+    expect(template).toContain('name="profile"')
+  })
+})

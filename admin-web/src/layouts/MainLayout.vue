@@ -112,11 +112,6 @@
           <el-icon><Money /></el-icon>
           <span>退款管理</span>
         </el-menu-item>
-        <el-menu-item index="/custom-recipes">
-          <el-icon><List /></el-icon>
-          <span>定制食谱订单</span>
-        </el-menu-item>
-
         <el-menu-item index="/custom-recipes/schedule">
 
           <el-icon><Calendar /></el-icon>

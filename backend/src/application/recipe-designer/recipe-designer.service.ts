@@ -7567,6 +7567,14 @@ export class RecipeDesignerService {
   ): ClientDesignRecipeAssessmentResult {
     const clientResult: Partial<DesignRecipeAssessmentResult> = { ...result };
     delete clientResult.entries;
+    /**
+     * 列表只需要每个营养素一行；contributors（每项最多 20 个原料）
+     * 和 details（每种口径的完整副本）会让一次响应膨胀到数百 KB。
+     * 点击某一行时再通过 assessContributors 单独取。
+     */
+    clientResult.groupedEntries = result.groupedEntries.map(
+      ({ contributors: _contributors, details: _details, ...entry }) => entry,
+    ) as DesignRecipeAssessmentResult['groupedEntries'];
     return {
       ...clientResult,
       removableSupplementWarnings,

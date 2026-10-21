@@ -352,6 +352,8 @@ const currentDraftId = ref(draftId)
 
 const draft = ref<DesignRecipeDraftDetail | null>(null)
 const items = ref<DesignerItem[]>([])
+/** 原料对象内部字段变更的修订号；watch 必须显式读它，否则改开关不会触发评估 */
+const itemsRevision = ref(0)
 const initialLoading = ref(true)
 /** 切换生命阶段中 */
 const switchingStage = ref(false)
@@ -430,7 +432,7 @@ const {
  * 真去做深度监听反而会在批量操作时触发很多次。
  */
 watch(
-  () => [draft.value?.id, draft.value?.fediafDogScenario, items.value] as const,
+  () => [draft.value?.id, draft.value?.fediafDogScenario, items.value, itemsRevision.value] as const,
   ([draftId, scenario]) => {
     if (!draftId || !scenario) return
     scheduleAssessment(scenario, draftId, items.value)
@@ -625,6 +627,7 @@ function applyUpdateField(item: DesignerItem, field: 'weightG' | 'preparationMet
   if (field === 'weightG') item.weightG = Number(value ?? 0)
   else if (field === 'preparationMethod') item.preparationMethod = (value as string | undefined) ?? undefined
   else item.includeInAssessment = Boolean(value)
+  itemsRevision.value += 1
 }
 
 function buildUpdateData(field: 'weightG' | 'preparationMethod' | 'includeInAssessment', value: unknown) {
@@ -985,6 +988,7 @@ function onWeightChange(item: DesignerItem, value: number | undefined) {
   if (!Number.isFinite(weightG) || weightG < 0) return
   const before = item.weightG
   item.weightG = weightG
+  itemsRevision.value += 1
   recordHistory({
     type: 'update',
     itemId: item.id,
@@ -992,7 +996,7 @@ function onWeightChange(item: DesignerItem, value: number | undefined) {
     before,
     after: weightG
   })
-  // 本地即时生效（computed 自动重算评估），防抖保存
+  // 本地即时生效（修订号触发重新评估），防抖保存
   enqueue({
     kind: 'updateItem',
     itemId: item.id,
@@ -1004,6 +1008,7 @@ function onToggleInclude(item: DesignerItem, value: boolean) {
   const after = value
   const before = !after
   item.includeInAssessment = after
+  itemsRevision.value += 1
   recordHistory({
     type: 'update',
     itemId: item.id,
@@ -1024,6 +1029,7 @@ async function applyItemWeight(itemId: string, weightG: number): Promise<void> {
   if (!item) return
   const before = item.weightG
   item.weightG = weightG
+  itemsRevision.value += 1
   recordHistory({
     type: 'update',
     itemId,

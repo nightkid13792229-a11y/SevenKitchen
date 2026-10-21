@@ -22,6 +22,9 @@ import {
   NotFoundException,
   Optional,
   Req,
+  ServiceUnavailableException,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -41,9 +44,11 @@ import {
   type UpdateCustomRecipeConfigDto,
 } from '../../../application/custom-recipe/custom-recipe-config.service';
 import {
+  CreateAssistedOrderDTO,
   CreateRecipeDTO,
   UpdateScheduleDTO,
 } from '../../../application/custom-recipe/dto/custom-recipe.dto';
+import { AssistedOrderService } from '../../../application/custom-recipe/assisted-order.service';
 import { AdminGuard } from '../auth/admin.guard';
 import { StaffGuard } from '../../guards/role.guard';
 import { AuthGuard } from '../../auth/auth.guard';
@@ -110,6 +115,15 @@ export class AdminCustomRecipeController {
      */
     @Optional()
     private readonly globalConfigService?: GlobalConfigService,
+    /**
+     * 代客下单（2026-10-21 · Task 3）。
+     *
+     * 同样放参数表**最后**并 `@Optional`：既有测试按构造签名提供依赖，
+     * 插在中间会让它们全部错位。DI 没接上时只有代客下单路由不可用，
+     * 其余后台功能不受影响（见 `createAssistedOrder` 的守卫）。
+     */
+    @Optional()
+    private readonly assistedOrderService?: AssistedOrderService,
   ) {}
 
   /**
@@ -214,6 +228,66 @@ export class AdminCustomRecipeController {
         dateTo: dateTo ? new Date(dateTo) : undefined,
       }),
     });
+  }
+
+  /**
+   * 后台代客下单（2026-10-21 · 代客定制食谱订单 Task 3）。
+   *
+   * ⚠️ 路由必须放在 `orders/:orderId` 这一类**参数路由之前**：
+   * 否则 `orders/assisted` 会被 `orders/:orderId` 先匹配走（Express 按声明顺序）。
+   *
+   * 仅管理员：这个接口会创建订单并登记线下收款，属于收钱动作。
+   * 需求问卷字段与顾客自助单一致；金额一律由服务端报价，前端传什么不算数。
+   * 线下收款只登记，**不调用任何微信支付/退款**。
+   */
+  @Post('orders/assisted')
+  @UseGuards(AdminGuard)
+  /**
+   * 只给这一条路由加校验管道（transform 让嵌套 payment 被真正校验）：
+   * 不给整个控制器加，避免改变既有接口的校验行为。
+   */
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  @ApiOperation({ summary: '代客创建定制订单（线下收款，仅管理员）' })
+  async createAssistedOrder(
+    @Req() req: any,
+    @Body() dto: CreateAssistedOrderDTO,
+  ) {
+    if (!this.assistedOrderService) {
+      // 正常情况下 DI 一定会注入；这里只防"模块漏注册"时给出可读错误
+      throw new ServiceUnavailableException('代客下单服务暂不可用');
+    }
+
+    const result = await this.assistedOrderService.create(
+      {
+        customerId: dto.customerId,
+        dogId: dto.dogId,
+        targetGoal: dto.targetGoal,
+        recipeQuantity: dto.recipeQuantity,
+        requestedProteinCodes: dto.requestedProteinCodes,
+        allergies: dto.allergies,
+        allergyText: dto.allergyText,
+        allergyStatus: dto.allergyStatus,
+        currentFoodMain: dto.currentFoodMain,
+        currentFoodOther: dto.currentFoodOther,
+        changeReasons: dto.changeReasons,
+        stomachConditions: dto.stomachConditions,
+        additionalNotes: dto.additionalNotes,
+        allergyReportDrafts: dto.allergyReportDrafts,
+        attachmentKeys: dto.attachmentKeys,
+        attachmentUrls: dto.attachmentUrls,
+        payment: {
+          collected: dto.payment.collected,
+          channel: dto.payment.channel,
+          amount: dto.payment.amount,
+          externalRef: dto.payment.externalRef,
+          overrideReason: dto.payment.overrideReason,
+        },
+        syncToHealthProfile: dto.syncToHealthProfile,
+      },
+      this.currentOperatorId(req),
+    );
+
+    return ApiResponseDto.success(result);
   }
 
   /**

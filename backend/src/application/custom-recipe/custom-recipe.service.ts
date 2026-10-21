@@ -22,6 +22,7 @@ import {
   CustomRecipeConfigService,
   DEFAULT_CUSTOM_RECIPE_WORK_DAYS,
   MAX_MULTI_RECIPE_QUANTITY,
+  type CustomRecipeConfigDto,
 } from './custom-recipe-config.service';
 import { CustomRecipePricingService } from './custom-recipe-pricing.service';
 import {
@@ -362,8 +363,12 @@ export class CustomRecipeService implements ICustomRecipeRepository {
    *
    * 这里**不校验**肉类与过敏是否冲突：过敏安全由营养师结合档案人工判断，
    * 选中的肉也不是绕过过敏检查的授权（设计文档第 10 节）。
+   *
+   * 2026-10-21 由 private 改为 public：后台代客下单（AssistedOrderService）
+   * 必须和自助单用**同一套规则**（数量等于份数、不重复、不选=营养师搭配），
+   * 否则接口直调可以绕过前台把 2 份单塞成 1 种肉或重复肉。
    */
-  private resolveRequestedProteinCodes(
+  resolveRequestedProteinCodes(
     raw: string[] | undefined | null,
     quantity: number,
   ): string[] {
@@ -392,6 +397,92 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     }
 
     return codes;
+  }
+
+  /**
+   * 在最近的可用日期排一张订单（自助单 / 代客单共用 · 2026-10-21）。
+   *
+   * 为什么抽出来：后台代客下单（AssistedOrderService）必须和顾客自助单
+   * **完全同一套**容量、份数、假期与并发抢占逻辑。再写一遍的话，两边迟早
+   * 分叉 —— 最危险的是「一边按份数占名额、另一边只占 1 个」，直接超卖。
+   *
+   * 调用方只提供要写进订单的业务字段；订单号、排期日、预计交付日由这里
+   * 统一生成，抢名额与落库在同一个事务里，抢不到就换下一天重试。
+   *
+   * @param recipeQuantity 本单份数（1–5）：一张 N 份单要占 N 个设计名额
+   * @param config 本次下单使用的配置快照（报价与排期必须来自同一份配置）
+   * @param buildData 生成订单业务字段；不得覆盖 orderId / scheduledDate /
+   *                  estimatedDeliveryDate（这三个由本方法写入）
+   */
+  async createOrderAtNextAvailableSlot(
+    recipeQuantity: number,
+    config: CustomRecipeConfigDto,
+    buildData: (slot: {
+      scheduledDate: Date;
+      estimatedDeliveryDate: Date;
+    }) => Record<string, any>,
+  ): Promise<any> {
+    const capacity = config.dailyCapacity;
+    /** 一张 N 份订单要占 N 个设计名额，不能只占 1 个 */
+    const deliveryWorkDays = this.calculateDeliveryWorkDays(
+      recipeQuantity,
+      config,
+    );
+    /** 抢输的日子记下来跳过，避免反复撞同一天 */
+    const takenDays = new Set<string>();
+    /** 最多换几天重试（原写死 5，2026-10-16 起从配置读） */
+    const maxAttempts = await this.resolveSlotRetryTimes();
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const scheduledDate = await this.findNextAvailableDate(
+        capacity,
+        takenDays,
+        recipeQuantity,
+      );
+
+      // 连续这么多天都排不上：明确报错，不让顾客对着转圈猜
+      if (!scheduledDate) break;
+
+      const created = await this.prisma.$transaction(async (tx) => {
+        const booked = await this.tryBookSlotTx(
+          tx,
+          scheduledDate,
+          capacity,
+          recipeQuantity,
+        );
+
+        // 并发下名额被别人抢走了：本次不写任何订单，交给外层换一天重试
+        if (!booked) return null;
+
+        const estimatedDeliveryDate = await this.calculateDeliveryDate(
+          scheduledDate,
+          deliveryWorkDays,
+        );
+
+        const orderId = await this.generateUniqueOrderId();
+
+        return tx.customRecipeOrder.create({
+          /**
+           * buildData 是调用方提供的业务字段（自助单/代客单各一套），
+           * 这里只统一补订单号与排期。Prisma 的 CreateInput 联合类型
+           * 无法从 Record<string, any> 推断关联字段，故在此收口为 any；
+           * 字段合法性由两边调用方的类型与测试保证。
+           */
+          data: {
+            ...buildData({ scheduledDate, estimatedDeliveryDate }),
+            orderId,
+            scheduledDate,
+            estimatedDeliveryDate,
+          } as any,
+        });
+      });
+
+      if (created) return created;
+
+      takenDays.add(TimezoneUtil.toShanghaiDateString(scheduledDate));
+    }
+
+    throw new ConflictException('近期定制名额已满，请稍后再试或联系客服');
   }
 
   async createOrder(data: CreateCustomRecipeOrderDTO): Promise<any> {
@@ -450,134 +541,85 @@ export class CustomRecipeService implements ICustomRecipeRepository {
      */
     const quote = this.pricingService.quote(recipeQuantity, config);
 
-    const capacity = config.dailyCapacity;
-    /** 一张 N 份订单要占 N 个设计名额，不能只占 1 个 */
-    const deliveryWorkDays = this.calculateDeliveryWorkDays(
-      recipeQuantity,
-      config,
-    );
-    /** 抢输的日子记下来跳过，避免反复撞同一天 */
-    const takenDays = new Set<string>();
-    /** 最多换几天重试（原写死 5，2026-10-16 起从配置读） */
-    const maxAttempts = await this.resolveSlotRetryTimes();
-
-    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      const scheduledDate = await this.findNextAvailableDate(
-        capacity,
-        takenDays,
+    try {
+      return await this.createOrderAtNextAvailableSlot(
         recipeQuantity,
-      );
-
-      // 连续这么多天都排不上：明确报错，不让顾客对着转圈猜
-      if (!scheduledDate) break;
-
-      let created;
-      try {
-        created = await this.prisma.$transaction(async (tx) => {
-          const booked = await this.tryBookSlotTx(
-            tx,
-            scheduledDate,
-            capacity,
-            recipeQuantity,
-          );
-
-        // 并发下名额被别人抢走了：本次不写任何订单，交给外层换一天重试
-        if (!booked) return null;
-
-        const estimatedDeliveryDate = await this.calculateDeliveryDate(
-          scheduledDate,
-          deliveryWorkDays,
-        );
-
-        const order = await tx.customRecipeOrder.create({
-          data: {
-            orderId: await this.generateUniqueOrderId(),
-            customerId: data.customerId,
-            dogId: data.dogId,
-            targetGoal: data.targetGoal,
-            needsHealthManagement: data.needsHealthManagement === true,
-            allergies: data.allergies || [],
-            // 2026-10-19：顾客自由文本快照；老订单为 null
-            allergyText: data.allergyText?.trim() || null,
-            allergyStatus: data.allergyStatus as AllergyAnswerStatus,
-            clientRequestId: data.clientRequestId || null,
-            // 本单报告草稿：付款前只存订单，不写狗狗档案
-            allergyReportDrafts: (data.allergyReportDrafts || []) as any,
-            medicalConditions: data.medicalConditions || [],
-            additionalNotes: data.additionalNotes,
-            // 2026-10-18：需求 2.3.4 第二段（只问档案里没有的）
-            currentFoodMain: data.currentFoodMain || null,
-            currentFoodOther: data.currentFoodOther || null,
-            changeReasons: data.changeReasons || [],
-            changeReasonOther: data.changeReasonOther || null,
-            stomachConditions: data.stomachConditions || [],
-            stomachOther: data.stomachOther || null,
-            preferredIngredients: data.preferredIngredients || [],
-            dislikedIngredients: data.dislikedIngredients || [],
-            // 优先存 COS key：媒体代理 URL 的 token 只在当前进程有效，
-            // 重启后再拿旧代理 URL 读附件会 404。
-            attachments:
-              Array.isArray(data.attachmentKeys) &&
-              data.attachmentKeys.length > 0
-                ? data.attachmentKeys
-                : data.attachmentUrls || [],
-            scheduledDate,
-            estimatedDeliveryDate,
-            /**
-             * 2026-10-20 多份购买：份数、肉类偏好、价格快照。
-             *
-             * amount 只认 quote.payableAmount —— data 里即使带了
-             * amount / unitAmount / payableAmount，这里也一律不读。
-             */
-            recipeQuantity,
-            requestedProteinCodes,
+        config,
+        ({ scheduledDate, estimatedDeliveryDate }) => ({
+          customerId: data.customerId,
+          dogId: data.dogId,
+          targetGoal: data.targetGoal,
+          needsHealthManagement: data.needsHealthManagement === true,
+          allergies: data.allergies || [],
+          // 2026-10-19：顾客自由文本快照；老订单为 null
+          allergyText: data.allergyText?.trim() || null,
+          allergyStatus: data.allergyStatus as AllergyAnswerStatus,
+          clientRequestId: data.clientRequestId || null,
+          // 本单报告草稿：付款前只存订单，不写狗狗档案
+          allergyReportDrafts: (data.allergyReportDrafts || []) as any,
+          medicalConditions: data.medicalConditions || [],
+          additionalNotes: data.additionalNotes,
+          // 2026-10-18：需求 2.3.4 第二段（只问档案里没有的）
+          currentFoodMain: data.currentFoodMain || null,
+          currentFoodOther: data.currentFoodOther || null,
+          changeReasons: data.changeReasons || [],
+          changeReasonOther: data.changeReasonOther || null,
+          stomachConditions: data.stomachConditions || [],
+          stomachOther: data.stomachOther || null,
+          preferredIngredients: data.preferredIngredients || [],
+          dislikedIngredients: data.dislikedIngredients || [],
+          // 优先存 COS key：媒体代理 URL 的 token 只在当前进程有效，
+          // 重启后再拿旧代理 URL 读附件会 404。
+          attachments:
+            Array.isArray(data.attachmentKeys) &&
+            data.attachmentKeys.length > 0
+              ? data.attachmentKeys
+              : data.attachmentUrls || [],
+          /**
+           * 2026-10-20 多份购买：份数、肉类偏好、价格快照。
+           *
+           * amount 只认 quote.payableAmount —— data 里即使带了
+           * amount / unitAmount / payableAmount，这里也一律不读。
+           */
+          recipeQuantity,
+          requestedProteinCodes,
+          unitAmount: quote.unitAmount,
+          originalAmount: quote.originalAmount,
+          discountRate: quote.discountRate,
+          discountAmount: quote.discountAmount,
+          pricingSnapshot: {
+            quantity: quote.quantity,
             unitAmount: quote.unitAmount,
             originalAmount: quote.originalAmount,
             discountRate: quote.discountRate,
             discountAmount: quote.discountAmount,
-            pricingSnapshot: {
-              quantity: quote.quantity,
-              unitAmount: quote.unitAmount,
-              originalAmount: quote.originalAmount,
-              discountRate: quote.discountRate,
-              discountAmount: quote.discountAmount,
-              payableAmount: quote.payableAmount,
+            payableAmount: quote.payableAmount,
+          },
+          amount: quote.payableAmount,
+          status: CustomRecipeStatus.PENDING_PAYMENT,
+          /**
+           * 2026-10-19：提交订单时**不写狗狗档案**，只记下顾客的意愿。
+           * 真正写入放在付款成功后（syncPaidOrderToHealthProfile），
+           * 避免未付款/放弃的单把临时输入带进医疗档案。
+           */
+          syncToHealthProfile: data.syncToHealthProfile !== false,
+        }),
+      );
+    } catch (error) {
+      // 并发重试撞上 (customerId, clientRequestId) 唯一键：返回先创建的那张
+      if (data.clientRequestId && (error as any)?.code === 'P2002') {
+        const existing = await this.prisma.customRecipeOrder.findUnique({
+          where: {
+            customerId_clientRequestId: {
+              customerId: data.customerId,
+              clientRequestId: data.clientRequestId,
             },
-            amount: quote.payableAmount,
-            status: CustomRecipeStatus.PENDING_PAYMENT,
-            /**
-             * 2026-10-19：提交订单时**不写狗狗档案**，只记下顾客的意愿。
-             * 真正写入放在付款成功后（syncPaidOrderToHealthProfile），
-             * 避免未付款/放弃的单把临时输入带进医疗档案。
-             */
-            syncToHealthProfile: data.syncToHealthProfile !== false,
           },
         });
-
-        return order;
-        });
-      } catch (error) {
-        // 并发重试撞上 (customerId, clientRequestId) 唯一键：返回先创建的那张
-        if (data.clientRequestId && (error as any)?.code === 'P2002') {
-          const existing = await this.prisma.customRecipeOrder.findUnique({
-            where: {
-              customerId_clientRequestId: {
-                customerId: data.customerId,
-                clientRequestId: data.clientRequestId,
-              },
-            },
-          });
-          if (existing) return existing;
-        }
-        throw error;
+        if (existing) return existing;
       }
-
-      if (created) return created;
-
-      takenDays.add(TimezoneUtil.toShanghaiDateString(scheduledDate));
+      throw error;
     }
-
-    throw new ConflictException('近期定制名额已满，请稍后再试或联系客服');
   }
 
   /**

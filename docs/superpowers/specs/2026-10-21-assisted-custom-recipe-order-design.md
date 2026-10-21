@@ -40,6 +40,8 @@
 - `paymentChannel`：`WECHAT_ONLINE` / `OFFLINE_WECHAT` / `OFFLINE_ALIPAY` / `OTHER`。
 - `externalPaymentRef`：线下微信/支付宝流水号或备注。
 - `actualPaidAmount`：实际收到的金额；用于线下对账。
+- `externalPaymentRef`：线下流水号，**可选**，不要求每单都录。
+- `priceOverrideReason`：实际收款与系统报价不同时，管理员必须填写的原因。
 - `assistedForGuest`：是否为无账号代客客户下的单。
 
 订单状态、报价、设计、交付、售后仍共用现有 `CustomRecipeOrder` / `CustomRecipeDeliveryBatch` / `CustomRecipeAftersale`。
@@ -73,6 +75,9 @@
 
 1. **已收款代客单**：创建订单时直接写 `PAID`、`paymentConfirmedAt`、`paymentChannel`、`externalPaymentRef`、`actualPaidAmount`。
 2. **待收款代客单**：先建 `PENDING_PAYMENT`；后台确认收款后改为 `PAID`，同时写收款字段。无账号顾客不能自己在线支付。
+
+线下收款金额允许与系统报价不同（管理员手动填写实际收款并记录原因）；订单的应收/退款以实际收款为准，报价快照仍保留系统报价。
+线下流水号可选，不强制每单录入。
 
 线下收款单：
 

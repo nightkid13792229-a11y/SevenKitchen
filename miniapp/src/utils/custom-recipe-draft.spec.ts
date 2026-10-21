@@ -4,6 +4,7 @@ import {
   clearCustomRecipeDraft,
   isCustomRecipeDraftExpired,
   loadCustomRecipeDraft,
+  retainCustomRecipeChoicesAfterPayment,
   saveCustomRecipeDraft,
 } from './custom-recipe-draft'
 
@@ -108,5 +109,30 @@ describe('custom-recipe-draft', () => {
         now,
       ),
     ).toBe(false)
+  })
+
+  it('付款后保留上次选择，但清掉上一单报告和附件草稿', () => {
+    saveCustomRecipeDraft('customer-a', 'dog-1', {
+      form: {
+        ...form,
+        targetGoal: 'LOSS',
+        currentFoodMain: 'DRY',
+        attachmentUrls: ['https://cos.example/attachment.jpg'],
+        attachmentKeys: ['custom-recipe-sensitive-attachments/attachment.jpg'],
+      },
+      hasFoodAllergy: true,
+      weightGoalChoice: 'LOSS',
+      prefilledAllergyText: '鸡肉',
+    })
+
+    retainCustomRecipeChoicesAfterPayment('customer-a', 'dog-1')
+
+    const draft = loadCustomRecipeDraft('customer-a', 'dog-1')
+    expect(draft?.form.targetGoal).toBe('LOSS')
+    expect(draft?.form.currentFoodMain).toBe('DRY')
+    expect(draft?.form.reportDrafts).toEqual([])
+    expect(draft?.form.attachmentUrls).toEqual([])
+    expect(draft?.form.attachmentKeys).toEqual([])
+    expect(draft?.hasFoodAllergy).toBe(true)
   })
 })

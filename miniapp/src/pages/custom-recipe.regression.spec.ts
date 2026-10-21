@@ -2093,8 +2093,11 @@ describe('custom recipe draft · 本地草稿与付款后同步', () => {
     expect(confirm).toContain('allergyReportDrafts: submittedReportDrafts')
   })
 
-  it('订单确认页提交成功后清掉本地草稿，并在本页进入支付状态', () => {
-    expect(confirm).toContain('clearCustomRecipeDraft(getDraftCustomerId(), dogId.value)')
+  it('订单确认页创建订单后保留草稿，付款成功才清理上一单报告/附件', () => {
+    expect(confirm).not.toContain(
+      'clearCustomRecipeDraft(getDraftCustomerId(), dogId.value)',
+    )
+    expect(confirm).toContain('retainCustomRecipeChoicesAfterPayment(')
     expect(confirm).toContain('createdOrder.value =')
     expect(confirm).toContain('payCreatedOrder')
     expect(confirm).not.toContain('uni.reLaunch({')

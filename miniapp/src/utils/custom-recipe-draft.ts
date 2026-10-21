@@ -126,3 +126,38 @@ export function isCustomRecipeDraftExpired(
   if (!draft) return false
   return draft.updatedAt <= 0 || now - draft.updatedAt > CUSTOM_RECIPE_DRAFT_TTL_MS
 }
+
+/**
+ * 已付款后保留“下次还能用”的选择，但清掉只属于上一单的报告/附件草稿。
+ *
+ * 2026-10-21 老板确认：已付款的顾客下一次也应看到上次的选择，
+ * 不要重复填；但报告已经在狗狗档案里，不能再把上一单的报告原件
+ * 复制成新单的草稿（会重复入库、重复占用文件）。
+ *
+ * 保留：目标方向、当前食物、换粮原因、肠胃情况、偏好/忌口、备注、
+ *       过敏文本、体重方向、是否同步档案。
+ * 清掉：reportDrafts、attachmentUrls、attachmentKeys。
+ */
+export function retainCustomRecipeChoicesAfterPayment(
+  customerId: string,
+  dogId: string,
+): void {
+  if (!customerId || !dogId) return
+  const current = readDraftMap()
+  const key = buildKey(customerId, dogId)
+  const draft = normalizeDraft(current[key])
+  if (!draft) return
+
+  const form = { ...draft.form }
+  form.reportDrafts = []
+  form.attachmentUrls = []
+  form.attachmentKeys = []
+
+  current[key] = {
+    ...draft,
+    form,
+    // 重新记为最近使用，避免刚付完款就因 7 天过期被清
+    updatedAt: Date.now(),
+  }
+  writeDraftMap(current)
+}

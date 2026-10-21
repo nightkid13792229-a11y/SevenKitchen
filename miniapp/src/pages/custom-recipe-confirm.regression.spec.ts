@@ -70,7 +70,7 @@ describe('定制页 → 订单确认页（2026-10-19 老板确认）', () => {
     expect(confirm).toContain('clientRequestId');
     expect(confirm).toContain('requestCustomRecipeOrderSubscription');
     expect(confirm).toContain('submitOrder(payload)');
-    expect(confirm).toContain('clearCustomRecipeDraft');
+    expect(confirm).toContain('retainCustomRecipeChoicesAfterPayment');
     expect(confirm).toContain('createdOrder');
     expect(confirm).toContain('runCustomRecipePayment');
     expect(confirm).toContain('payCreatedOrder');

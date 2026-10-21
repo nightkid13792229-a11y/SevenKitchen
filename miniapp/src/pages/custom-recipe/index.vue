@@ -678,6 +678,7 @@ import {
   clearCustomRecipeDraft,
   isCustomRecipeDraftExpired,
   loadCustomRecipeDraft,
+  retainCustomRecipeChoicesAfterPayment,
   saveCustomRecipeDraft,
   type CustomRecipeReportDraft,
 } from '@/utils/custom-recipe-draft';
@@ -1838,6 +1839,14 @@ const continuePayPending = async () => {
     const outcome = await runCustomRecipePayment(orderId);
 
     if (outcome === 'PAID') {
+      /**
+       * 2026-10-21：付款成功才清草稿。
+       * 未付款/取消支付时保留，下次进入可以继续接着填。
+       */
+      retainCustomRecipeChoicesAfterPayment(
+        getDraftCustomerId(),
+        formData.value.dogId,
+      );
       uni.showToast({ title: '支付成功', icon: 'success' });
       await loadPendingOrder();
       return;

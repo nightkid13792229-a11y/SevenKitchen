@@ -44,6 +44,7 @@ import { AdminPurchasingController } from './interfaces/controllers/admin-purcha
 import { StaffProductionController } from './interfaces/controllers/staff-production.controller';
 import { CustomRecipeController, PublicCustomRecipeConfigController } from './interfaces/controllers/custom-recipe/custom-recipe.controller';
 import { AdminCustomRecipeController } from './interfaces/controllers/custom-recipe/admin-custom-recipe.controller';
+import { AdminGuestCustomerController } from './interfaces/controllers/custom-recipe/admin-guest-customer.controller';
 import { PlatformOptionsController } from './interfaces/controllers/platform-options.controller';
 import { CustomerMessageController } from './interfaces/controllers/customer-message.controller';
 import { CustomerMessageService } from './application/message/customer-message.service';
@@ -57,6 +58,7 @@ import { SharedPhotosController } from './interfaces/controllers/shared-photos.c
 import { CustomRecipeService } from './application/custom-recipe/custom-recipe.service';
 import { CustomRecipeConfigService } from './application/custom-recipe/custom-recipe-config.service';
 import { CustomRecipePricingService } from './application/custom-recipe/custom-recipe-pricing.service';
+import { GuestCustomerService } from './application/custom-recipe/guest-customer.service';
 import { FinanceAlertService } from './application/finance/finance-alert.service';
 import { ExpenseBillService } from './application/finance/expense-bill.service';
 import { FinanceReportService } from './application/finance/finance-report.service';
@@ -405,6 +407,7 @@ validatePrismaConfig();
     CustomRecipeController,
     PublicCustomRecipeConfigController,
     AdminCustomRecipeController,
+    AdminGuestCustomerController,
     SharedPhotosController,
     NutritionFoodController,
     NutritionGovernanceController,
@@ -816,6 +819,8 @@ validatePrismaConfig();
     CustomRecipeService,
     CustomRecipeConfigService,
     CustomRecipePricingService,
+    // 代客客户（无账号顾客）：建客户 / 建狗 / 搜索
+    GuestCustomerService,
     // Nutrition Food Service (Recipe Designer)
     NutritionFoodService,
     SupplementLabelExtractionService,

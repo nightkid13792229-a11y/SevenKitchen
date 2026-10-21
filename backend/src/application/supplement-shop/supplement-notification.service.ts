@@ -82,6 +82,7 @@ export class SupplementNotificationService {
         packingDate: true,
         trackingNumber: true,
         carrierCode: true,
+        shippedAt: true,
       },
     });
     if (!order) return;
@@ -237,13 +238,17 @@ export class SupplementNotificationService {
       packingDate: Date | null;
       trackingNumber: string | null;
       carrierCode: string | null;
+      shippedAt?: Date | null;
     },
     content: { title: string; body: string },
     type: SupplementNoticeType,
   ): Record<string, { value: string }> {
     const date = order.packingDate
-      ? new Date(order.packingDate).toISOString().slice(0, 16).replace('T', ' ')
+      ? `${new Date(order.packingDate).toISOString().slice(0, 16).replace('T', ' ')}:00`
       : '待排期';
+    const shippedAt = order.shippedAt
+      ? `${new Date(order.shippedAt).toISOString().slice(0, 16).replace('T', ' ')}:00`
+      : date;
     if (type === 'SCHEDULED' || type === 'RESCHEDULED') {
       return {
         thing1: { value: '补剂订单' },
@@ -264,7 +269,7 @@ export class SupplementNotificationService {
         thing1: { value: '补剂订单' },
         phrase2: { value: (order.carrierCode || '快递').slice(0, 5) },
         character_string3: { value: (order.trackingNumber || '待更新').slice(0, 32) },
-        time4: { value: date },
+        time4: { value: shippedAt },
         thing5: { value: content.body.slice(0, 20) },
       };
     }
@@ -299,6 +304,7 @@ export class SupplementNotificationService {
       packingDate: Date | null;
       trackingNumber: string | null;
       carrierCode: string | null;
+      shippedAt?: Date | null;
     },
     content: { category: string; title: string; body: string },
     templates: {

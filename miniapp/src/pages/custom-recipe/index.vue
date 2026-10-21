@@ -2178,24 +2178,6 @@ function splitFoodText(raw: unknown): string[] {
 }
 
 /**
- * 合并档案文本与档案里的结构化过敏原（2026-10-19）。
- *
- * 档案可能同时有：
- *   · allergyFoods —— 以前/员工写的自由文本
- *   · allergies —— 结构化记录（老数据/概览页添加）
- * 两者都要给顾客看到；相同的部分不重复拼。
- */
-function mergeAllergyText(left: string, right: string): string {
-  const a = String(left || '').trim();
-  const b = String(right || '').trim();
-  if (!a) return b;
-  if (!b) return a;
-  if (a.includes(b)) return a;
-  if (b.includes(a)) return b;
-  return `${a}；${b}`;
-}
-
-/**
  * 带出档案已有信息（决策 3）。
  *
  * 只**预填**，不覆盖顾客已经改过的东西：
@@ -2286,16 +2268,17 @@ const loadDogArchiveInfo = async (dogId: string) => {
     const summaryAllergies = Array.isArray(summary.allergies)
       ? [...summary.allergies]
       : [];
-    // 2026-10-19：档案里的自由文本 + 结构化记录都带出来，合并成一段文本
+    // 2026-10-21：优先读结构化过敏记录；只有完全没有记录时，
+    // 才回退到旧过敏文本，避免把同一批过敏原在文本里再显示一遍。
     const profileText = String(
       detailRes?.data?.profile?.allergyFoods ||
         selectedDog.value?.allergyFoods ||
         '',
     ).trim();
-    const archiveAllergyText = mergeAllergyText(
-      profileText,
-      summaryAllergies.join('、'),
-    );
+    const archiveAllergyText =
+      summaryAllergies.length > 0
+        ? summaryAllergies.join('、')
+        : profileText;
 
     if (!draft) {
       formData.value.allergies = summaryAllergies;

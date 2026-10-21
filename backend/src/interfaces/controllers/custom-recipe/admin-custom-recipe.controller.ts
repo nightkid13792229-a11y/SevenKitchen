@@ -749,11 +749,21 @@ export class AdminCustomRecipeController {
         Boolean(order.paymentConfirmedAt) ||
         order.status === CustomRecipeStatus.PAID ||
         order.status === CustomRecipeStatus.IN_PROGRESS;
+      const offlinePaidAmount =
+        this.toNullableNumber(order.actualPaidAmount) ??
+        this.toNullableNumber(order.amount) ??
+        0;
+      const isOfflineOrder = isOfflinePaidCustomRecipeOrder(order);
 
+      /**
+       * 线下单有实收金额：必须先登记线下退款，不能直接取消。
+       * 0 元赠送单没有款可退，允许直接取消（不调用微信退款）。
+       */
       if (
         order.status !== CustomRecipeStatus.CANCELLED &&
         hasCollectedPayment &&
-        isOfflinePaidCustomRecipeOrder(order)
+        isOfflineOrder &&
+        offlinePaidAmount > 0
       ) {
         throw new BadRequestException(
           '线下收款订单不能直接取消：请使用「线下退款并取消」登记线下退款（系统不会调用微信退款）',
@@ -761,10 +771,11 @@ export class AdminCustomRecipeController {
       }
 
       const shouldRefund =
-        order.status === CustomRecipeStatus.PAID ||
-        order.status === CustomRecipeStatus.IN_PROGRESS ||
-        (Boolean(order.paymentConfirmedAt) &&
-          canTransition(order.status, CustomRecipeStatus.CANCELLED));
+        !isOfflineOrder &&
+        (order.status === CustomRecipeStatus.PAID ||
+          order.status === CustomRecipeStatus.IN_PROGRESS ||
+          (Boolean(order.paymentConfirmedAt) &&
+            canTransition(order.status, CustomRecipeStatus.CANCELLED)));
 
       if (shouldRefund) {
         /**

@@ -396,7 +396,7 @@
             plain
             @click="cancelOrder"
           >
-            取消订单
+            {{ cancelOrderLabel }}
           </el-button>
           <span
             v-else-if="!isAdmin && isCancellableStatus"
@@ -903,6 +903,12 @@ const isCancellableStatus = computed(() => {
   return Boolean(status) && !['DELIVERED', 'CANCELLED'].includes(status);
 });
 
+const cancelOrderLabel = computed(() =>
+  isOfflinePaidOrder.value && offlineRefundCap.value <= 0
+    ? '取消赠送订单'
+    : '取消订单',
+);
+
 /**
  * 「取消订单」按钮：线上单保持原样；线下单交给「线下退款并取消」。
  *
@@ -910,7 +916,11 @@ const isCancellableStatus = computed(() => {
  */
 const canCancelOrder = computed(
   () =>
-    isAdmin.value && isCancellableStatus.value && !isOfflinePaidOrder.value,
+    isAdmin.value &&
+    isCancellableStatus.value &&
+    // 线下单有实收金额时必须走「线下退款并取消」；
+    // 0 元赠送单没有款可退，允许直接取消。
+    (!isOfflinePaidOrder.value || offlineRefundCap.value <= 0),
 );
 
 /** 下单时填写的过敏 vs 档案最新：两份口径不同，必须分开显示并提示差异 */

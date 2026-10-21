@@ -305,7 +305,6 @@ export function getPaymentValidationError(input: {
   const amount = Number(input.amount)
   if (!Number.isFinite(amount)) return '请输入实收金额'
   if (amount < 0) return '实收金额不能为负数'
-  if (input.collected && amount <= 0) return '已收款时实收金额必须大于 0'
 
   const differs =
     Math.round(amount * 100) !== Math.round(input.payableAmount * 100)

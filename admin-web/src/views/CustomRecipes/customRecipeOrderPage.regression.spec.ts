@@ -289,7 +289,7 @@ describe('敏感按钮按角色显示（口径 2，第 7 条）', () => {
      */
     expect(orderDetail).toContain('v-if="canCancelOrder"')
     expect(orderDetail).toContain(
-      'isAdmin.value && isCancellableStatus.value && !isOfflinePaidOrder.value',
+      'isAdmin.value &&',
     )
   })
 

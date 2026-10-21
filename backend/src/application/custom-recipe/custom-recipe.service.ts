@@ -1330,6 +1330,8 @@ export class CustomRecipeService implements ICustomRecipeRepository {
         paymentChannel: true,
         orderSource: true,
         paymentConfirmedAt: true,
+        amount: true,
+        actualPaidAmount: true,
       },
     });
 
@@ -1382,7 +1384,11 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       order.status === CustomRecipeStatus.PAID ||
       order.status === CustomRecipeStatus.IN_PROGRESS;
 
-    if (hasCollectedPayment && isOfflinePaidCustomRecipeOrder(order)) {
+    const isOfflineOrder = isOfflinePaidCustomRecipeOrder(order);
+    const offlinePaidAmount = Math.round(
+      resolveOfflineRefundCap(order as any) * 100,
+    ) / 100;
+    if (hasCollectedPayment && isOfflineOrder && offlinePaidAmount > 0) {
       throw new BadRequestException('线下收款订单请联系客服处理退款');
     }
 

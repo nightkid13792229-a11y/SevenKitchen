@@ -126,15 +126,24 @@ describe('实收差异原因', () => {
     ).toBeNull()
   })
 
-  it('已收款时实收必须大于 0，负数一律拒绝', () => {
+  it('0 元赠送允许（需填写差异原因），负数拒绝', () => {
     expect(
       getPaymentValidationError({
         collected: true,
         amount: 0,
-        payableAmount: 0,
+        payableAmount: 538.2,
+        overrideReason: '赠送老客户',
+      }),
+    ).toBeNull()
+
+    expect(
+      getPaymentValidationError({
+        collected: true,
+        amount: 0,
+        payableAmount: 538.2,
         overrideReason: '',
       }),
-    ).toBe('已收款时实收金额必须大于 0')
+    ).toBe('实收金额与系统报价不一致时，必须填写原因')
 
     expect(
       getPaymentValidationError({

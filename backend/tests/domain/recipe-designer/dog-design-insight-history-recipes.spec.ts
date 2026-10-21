@@ -12,7 +12,7 @@ import {
  * 已取消订单不算“用过”，空名字不展示；同一份食谱多次出现只保留最近一次。
  */
 describe('DogDesignInsight · 历史食谱清单', () => {
-  it('把已完成鲜食订单的食谱快照映射成历史记录', () => {
+  it('把已完成鲜食订单的食谱快照映射成历史记录，并归一化营养明细', () => {
     const result = buildDogHistoryRecipes(
       [
         {
@@ -21,6 +21,22 @@ describe('DogDesignInsight · 历史食谱清单', () => {
             id: 'recipe-1',
             version: 2,
             name: '鸡肉南瓜鲜食',
+            nutrition_detailed_data: {
+              report: {
+                ingredientRows: [
+                  { ingredientName: ' 鸡胸肉 ', amountLabel: ' 120g ' },
+                  { ingredientName: '南瓜', amountLabel: '80g' },
+                ],
+                macroRows: [
+                  {
+                    name: ' 蛋白质 ',
+                    dryMatterLabel: ' 52.3% ',
+                    energyPercentLabel: '38.1%',
+                    weightPercentLabel: '12.4%',
+                  },
+                ],
+              },
+            },
             items: [{ ingredient_id: 'ing-1', name: '鸡胸肉' }],
           },
           order: {
@@ -49,6 +65,18 @@ describe('DogDesignInsight · 历史食谱清单', () => {
         kind: 'FINISHED',
         date: '2026-09-01T01:00:00.000Z',
         status: 'COMPLETED',
+        ingredients: [
+          { name: '鸡胸肉', amount: '120g' },
+          { name: '南瓜', amount: '80g' },
+        ],
+        macros: [
+          {
+            name: '蛋白质',
+            dryMatter: '52.3%',
+            energyPercent: '38.1%',
+            weightPercent: '12.4%',
+          },
+        ],
       },
       {
         id: 'oi-2',
@@ -56,11 +84,52 @@ describe('DogDesignInsight · 历史食谱清单', () => {
         kind: 'FINISHED',
         date: '2026-08-05T00:00:00.000Z',
         status: 'SHIPPED',
+        ingredients: [],
+        macros: [],
       },
     ]);
-    // 不把快照里的食材明细带出来
-    expect(JSON.stringify(result)).not.toContain('鸡胸肉');
-    expect(JSON.stringify(result)).not.toContain('items');
+    // 只返回归一化明细，不把快照/营养报告的原始结构带出来
+    expect(JSON.stringify(result)).not.toContain('nutrition_detailed_data');
+    expect(JSON.stringify(result)).not.toContain('ingredientRows');
+    expect(JSON.stringify(result)).not.toContain('macroRows');
+    expect(JSON.stringify(result)).not.toContain('example_weight');
+    expect(JSON.stringify(result)).not.toContain('recipeSnapshot');
+    expect(Object.keys(result[0]).sort()).toEqual([
+      'date',
+      'id',
+      'ingredients',
+      'kind',
+      'macros',
+      'name',
+      'status',
+    ]);
+  });
+
+  it('营养报告缺失时，鲜食明细回退到快照 items 并带示例重量', () => {
+    const result = buildDogHistoryRecipes(
+      [
+        {
+          id: 'oi-1',
+          recipeSnapshot: {
+            id: 'recipe-1',
+            name: '牛肉鲜食',
+            items: [
+              { ingredient_id: 'ing-1', name: '牛肉', example_weight: 150 },
+              { ingredient_id: 'ing-2', name: '南瓜' },
+            ],
+          },
+          order: { status: 'COMPLETED', createdAt: '2026-09-01T00:00:00.000Z' },
+        },
+      ],
+      [],
+    );
+
+    expect(result[0].ingredients).toEqual([
+      { name: '牛肉', amount: '150g' },
+      { name: '南瓜', amount: '' },
+    ]);
+    // 宏量没有其它数据源，缺失就是空数组
+    expect(result[0].macros).toEqual([]);
   });
 
   it('把关联了正式食谱的定制单映射成历史记录，优先用交付时间', () => {
@@ -72,14 +141,42 @@ describe('DogDesignInsight · 历史食谱清单', () => {
           status: 'DELIVERED',
           createdAt: '2026-10-01T00:00:00.000Z',
           deliveredAt: '2026-10-05T00:00:00.000Z',
-          recipe: { id: 'recipe-9', name: '定制鲜食 A' },
+          recipe: {
+            id: 'recipe-9',
+            name: '定制鲜食 A',
+            nutritionDetailedData: {
+              report: {
+                ingredientRows: [
+                  { ingredientName: '鸭肉', amountLabel: '100g' },
+                ],
+                macroRows: [
+                  {
+                    name: '脂肪',
+                    dryMatterLabel: '24.0%',
+                    energyPercentLabel: '41.5%',
+                    weightPercentLabel: '8.2%',
+                  },
+                ],
+              },
+            },
+            items: [{ exampleWeight: 100, ingredient: { name: '鸭肉' } }],
+          },
         },
         {
           id: 'cro-2',
           status: 'COMPLETED',
           createdAt: '2026-09-20T00:00:00.000Z',
           deliveredAt: null,
-          recipe: { id: 'recipe-10', name: '定制鲜食 B' },
+          recipe: {
+            id: 'recipe-10',
+            name: '定制鲜食 B',
+            // 无营养报告时回退食谱项
+            nutritionDetailedData: null,
+            items: [
+              { exampleWeight: 90, ingredient: { name: ' 火鸡肉 ' } },
+              { exampleWeight: null, ingredient: { name: '红薯' } },
+            ],
+          },
         },
       ],
     );
@@ -91,6 +188,15 @@ describe('DogDesignInsight · 历史食谱清单', () => {
         kind: 'CUSTOM',
         date: '2026-10-05T00:00:00.000Z',
         status: 'DELIVERED',
+        ingredients: [{ name: '鸭肉', amount: '100g' }],
+        macros: [
+          {
+            name: '脂肪',
+            dryMatter: '24.0%',
+            energyPercent: '41.5%',
+            weightPercent: '8.2%',
+          },
+        ],
       },
       {
         id: 'recipe-10',
@@ -98,6 +204,11 @@ describe('DogDesignInsight · 历史食谱清单', () => {
         kind: 'CUSTOM',
         date: '2026-09-20T00:00:00.000Z',
         status: 'COMPLETED',
+        ingredients: [
+          { name: '火鸡肉', amount: '90g' },
+          { name: '红薯', amount: '' },
+        ],
+        macros: [],
       },
     ]);
   });
@@ -184,12 +295,30 @@ describe('DogDesignInsight · 历史食谱清单', () => {
     expect(result[result.length - 1].date).toBeNull();
   });
 
-  it('同一份食谱（按身份或名字）只保留最近一次使用，且鲜食与定制分开去重', () => {
+  it('同一份食谱（按身份或名字）只保留最近一次使用，明细跟随保留的那一次', () => {
     const result = buildDogHistoryRecipes(
       [
         {
           id: 'oi-1',
-          recipeSnapshot: { id: 'recipe-1', name: '鸡肉鲜食' },
+          recipeSnapshot: {
+            id: 'recipe-1',
+            name: '鸡肉鲜食',
+            nutrition_detailed_data: {
+              report: {
+                ingredientRows: [
+                  { ingredientName: '旧配方鸡肉', amountLabel: '100g' },
+                ],
+                macroRows: [
+                  {
+                    name: '蛋白质',
+                    dryMatterLabel: '50.0%',
+                    energyPercentLabel: '40.0%',
+                    weightPercentLabel: '10.0%',
+                  },
+                ],
+              },
+            },
+          },
           order: {
             status: 'COMPLETED',
             paidAt: '2026-08-01T00:00:00.000Z',
@@ -198,7 +327,26 @@ describe('DogDesignInsight · 历史食谱清单', () => {
         },
         {
           id: 'oi-2',
-          recipeSnapshot: { id: 'recipe-1', version: 3, name: '鸡肉鲜食' },
+          recipeSnapshot: {
+            id: 'recipe-1',
+            version: 3,
+            name: '鸡肉鲜食',
+            nutrition_detailed_data: {
+              report: {
+                ingredientRows: [
+                  { ingredientName: '新配方鸡肉', amountLabel: '120g' },
+                ],
+                macroRows: [
+                  {
+                    name: '蛋白质',
+                    dryMatterLabel: '55.0%',
+                    energyPercentLabel: '42.0%',
+                    weightPercentLabel: '11.0%',
+                  },
+                ],
+              },
+            },
+          },
           order: {
             status: 'SHIPPED',
             paidAt: '2026-09-15T00:00:00.000Z',
@@ -227,13 +375,23 @@ describe('DogDesignInsight · 历史食谱清单', () => {
           id: 'cro-1',
           status: 'DELIVERED',
           createdAt: '2026-09-01T00:00:00.000Z',
-          recipe: { id: 'recipe-1', name: '鸡肉鲜食' },
+          recipe: {
+            id: 'recipe-1',
+            name: '鸡肉鲜食',
+            items: [{ exampleWeight: 80, ingredient: { name: '旧定制鸡肉' } }],
+          },
         },
         {
           id: 'cro-2',
           status: 'COMPLETED',
           createdAt: '2026-10-01T00:00:00.000Z',
-          recipe: { id: 'recipe-1', name: '鸡肉鲜食' },
+          recipe: {
+            id: 'recipe-1',
+            name: '鸡肉鲜食',
+            items: [
+              { exampleWeight: 130, ingredient: { name: '新定制鸡肉' } },
+            ],
+          },
         },
       ],
     );
@@ -245,6 +403,8 @@ describe('DogDesignInsight · 历史食谱清单', () => {
         kind: 'CUSTOM',
         date: '2026-10-01T00:00:00.000Z',
         status: 'COMPLETED',
+        ingredients: [{ name: '新定制鸡肉', amount: '130g' }],
+        macros: [],
       },
       {
         id: 'recipe-1',
@@ -252,6 +412,15 @@ describe('DogDesignInsight · 历史食谱清单', () => {
         kind: 'FINISHED',
         date: '2026-09-15T00:00:00.000Z',
         status: 'SHIPPED',
+        ingredients: [{ name: '新配方鸡肉', amount: '120g' }],
+        macros: [
+          {
+            name: '蛋白质',
+            dryMatter: '55.0%',
+            energyPercent: '42.0%',
+            weightPercent: '11.0%',
+          },
+        ],
       },
       {
         id: 'oi-4',
@@ -259,6 +428,8 @@ describe('DogDesignInsight · 历史食谱清单', () => {
         kind: 'FINISHED',
         date: '2026-07-20T00:00:00.000Z',
         status: 'COMPLETED',
+        ingredients: [],
+        macros: [],
       },
     ]);
   });
@@ -297,6 +468,8 @@ describe('DogDesignInsight · 历史食谱清单', () => {
         kind: 'CUSTOM',
         date: '2026-10-01T00:00:00.000Z',
         status: 'COMPLETED',
+        ingredients: [],
+        macros: [],
       },
       {
         id: 'recipe-1',
@@ -304,6 +477,8 @@ describe('DogDesignInsight · 历史食谱清单', () => {
         kind: 'FINISHED',
         date: '2026-09-01T00:00:00.000Z',
         status: 'COMPLETED',
+        ingredients: [],
+        macros: [],
       },
     ]);
   });

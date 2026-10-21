@@ -32,11 +32,27 @@ export interface DogOrderSummary {
 /** 历史食谱来源：FINISHED = 已完成的鲜食订单；CUSTOM = 已关联正式食谱的定制单 */
 export type DogHistoryRecipeKind = 'FINISHED' | 'CUSTOM';
 
+/** 历史食谱里的一道原料（2026-10-22）：只给展示用的名字与用量文案 */
+export interface DogHistoryRecipeIngredient {
+  name: string;
+  amount: string;
+}
+
+/** 历史食谱里的一项宏量营养（2026-10-22）：三项文案都可能缺失，缺失时为 '' */
+export interface DogHistoryRecipeMacro {
+  name: string;
+  dryMatter: string;
+  energyPercent: string;
+  weightPercent: string;
+}
+
 /**
  * 这只狗实际用过的食谱（2026-10-22）。
  *
- * 只给设计器需要的身份信息：**不暴露订单快照里的食材明细**。
- * 同一份食谱（按食谱身份，老快照按名字）在同一来源下只保留最近一次使用。
+ * 身份字段 + **归一化后的原料/宏量营养明细**；订单快照、
+ * `nutrition_detailed_data` 等原始结构本身不对外返回。
+ * 同一份食谱（按食谱身份，老快照按名字）在同一来源下只保留最近一次使用，
+ * 明细也跟随保留的那一次（不做跨次合并）。
  */
 export interface DogHistoryRecipe {
   /** 食谱身份：鲜食取快照里的公开食谱 id（缺失时回退订单明细 id），定制取关联 Recipe.id */
@@ -47,6 +63,10 @@ export interface DogHistoryRecipe {
   date: string | null;
   /** 使用该食谱时的订单状态 */
   status: string;
+  /** 原料明细；没有可用营养报告时回退快照/食谱项，仍没有则为 [] */
+  ingredients: DogHistoryRecipeIngredient[];
+  /** 宏量营养明细；没有营养报告时为 [] */
+  macros: DogHistoryRecipeMacro[];
 }
 
 /**
@@ -150,7 +170,7 @@ export interface DogDesignInsight {
    *
    * 来源：已完成的鲜食订单明细快照 + 已关联正式食谱的定制单；
    * 已取消订单不算，空食谱名不展示。按最近使用时间倒序，同一份食谱只出现一次。
-   * 只返回身份字段，订单快照里的食材/营养明细不外带。
+   * 每项带归一化后的原料/宏量明细；订单快照原始结构不外带。
    */
   historyRecipes: DogHistoryRecipe[];
   /**
@@ -262,7 +282,16 @@ interface InsightCustomRecipeOrderLike {
     id?: string | null;
     recipeId?: string | null;
     name?: string | null;
+    /** 与订单快照同一份营养报告结构（camelCase 字段） */
+    nutritionDetailedData?: unknown;
+    /** 无营养报告时回退到食谱项：exampleWeight + ingredient.name */
+    items?: InsightCustomRecipeItemLike[] | null;
   } | null;
+}
+
+interface InsightCustomRecipeItemLike {
+  exampleWeight?: unknown;
+  ingredient?: { name?: string | null } | null;
 }
 
 /**
@@ -287,6 +316,8 @@ interface InsightSnapshotItemLike {
   ingredient_id?: unknown;
   name?: unknown;
   ingredient_type?: unknown;
+  /** 示例重量（克）；无营养报告时用它兜底展示用量 */
+  example_weight?: unknown;
 }
 
 interface InsightSnapshotLike {
@@ -600,6 +631,128 @@ function isLaterUsage(
   return candidate > current;
 }
 
+/** 历史食谱的归一化明细（只保留展示字段，原始报告结构不外带） */
+interface HistoryRecipeDetails {
+  ingredients: DogHistoryRecipeIngredient[];
+  macros: DogHistoryRecipeMacro[];
+}
+
+/**
+ * 营养报告里的原料行 → `{ name, amount }`。
+ * 空名字的行没有展示意义，直接跳过；用量缺失给 ''。
+ */
+function normalizeHistoryReportIngredients(
+  value: unknown,
+): DogHistoryRecipeIngredient[] {
+  if (!Array.isArray(value)) return [];
+  const rows: DogHistoryRecipeIngredient[] = [];
+  for (const row of value) {
+    const record = resolveSnapshotRecord(row);
+    if (!record) continue;
+    const name = firstString(record.ingredientName);
+    if (!name) continue;
+    rows.push({ name, amount: firstString(record.amountLabel) });
+  }
+  return rows;
+}
+
+/** 营养报告里的宏量行 → `{ name, dryMatter, energyPercent, weightPercent }` */
+function normalizeHistoryReportMacros(
+  value: unknown,
+): DogHistoryRecipeMacro[] {
+  if (!Array.isArray(value)) return [];
+  const rows: DogHistoryRecipeMacro[] = [];
+  for (const row of value) {
+    const record = resolveSnapshotRecord(row);
+    if (!record) continue;
+    const name = firstString(record.name);
+    if (!name) continue;
+    rows.push({
+      name,
+      dryMatter: firstString(record.dryMatterLabel),
+      energyPercent: firstString(record.energyPercentLabel),
+      weightPercent: firstString(record.weightPercentLabel),
+    });
+  }
+  return rows;
+}
+
+/** 示例重量 → `${weight}g`；非数字/缺失给 '' */
+function formatHistoryWeightAmount(value: unknown): string {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? `${value}g` : '';
+  }
+  if (typeof value === 'string') {
+    const text = value.trim();
+    if (!text) return '';
+    const numeric = Number(text);
+    return Number.isFinite(numeric) ? `${numeric}g` : '';
+  }
+  return '';
+}
+
+/** 快照 `items` 兜底：name + example_weight */
+function normalizeHistorySnapshotIngredients(
+  value: unknown,
+): DogHistoryRecipeIngredient[] {
+  if (!Array.isArray(value)) return [];
+  const rows: DogHistoryRecipeIngredient[] = [];
+  for (const item of value) {
+    const record = resolveSnapshotRecord(item);
+    if (!record) continue;
+    const name = firstString(record.name);
+    if (!name) continue;
+    rows.push({
+      name,
+      amount: formatHistoryWeightAmount(record.example_weight),
+    });
+  }
+  return rows;
+}
+
+/** 定制单关联 `Recipe.items` 兜底：ingredient.name + exampleWeight */
+function normalizeHistoryCustomRecipeIngredients(
+  value: unknown,
+): DogHistoryRecipeIngredient[] {
+  if (!Array.isArray(value)) return [];
+  const rows: DogHistoryRecipeIngredient[] = [];
+  for (const item of value) {
+    const record = resolveSnapshotRecord(item);
+    if (!record) continue;
+    const ingredient = resolveSnapshotRecord(record.ingredient);
+    const name = firstString(ingredient?.name);
+    if (!name) continue;
+    rows.push({
+      name,
+      amount: formatHistoryWeightAmount(record.exampleWeight),
+    });
+  }
+  return rows;
+}
+
+/**
+ * 归一化一份历史食谱明细。
+ *
+ * 优先读营养报告（`report.ingredientRows` / `report.macroRows`）；
+ * 原料行缺失/全为空名字时回退到调用方给的 items 兜底，
+ * 宏量没有其它数据源，缺失就是 []。
+ */
+function normalizeHistoryRecipeDetails(input: {
+  nutritionDetailedData: unknown;
+  fallbackIngredients: DogHistoryRecipeIngredient[];
+}): HistoryRecipeDetails {
+  const nutrition = resolveSnapshotRecord(input.nutritionDetailedData);
+  const report = resolveSnapshotRecord(nutrition?.report);
+  const ingredients = normalizeHistoryReportIngredients(
+    report?.ingredientRows,
+  );
+  return {
+    ingredients:
+      ingredients.length > 0 ? ingredients : input.fallbackIngredients,
+    macros: normalizeHistoryReportMacros(report?.macroRows),
+  };
+}
+
 /**
  * 这只狗历史食谱清单（2026-10-22）。
  *
@@ -610,9 +763,11 @@ function isLaterUsage(
  * 规则：
  *  - 已取消订单不算「用过」，空食谱名不展示；
  *  - 去重键 = 食谱身份（快照/Recipe id，缺失时退回名字）+ 来源，保留最近一次使用；
+ *    明细跟随被保留的那一次，不跨次合并；
  *  - 按使用时间倒序，没有日期的排最后。
  *
- * 输出只含身份字段，**不返回快照里的食材/营养明细**。
+ * 输出只含身份字段 + 归一化后的原料/宏量明细；
+ * 快照与 `nutrition_detailed_data` 的原始结构不对外返回。
  */
 export function buildDogHistoryRecipes(
   orderItems?: readonly InsightOrderItemLike[] | null,
@@ -645,6 +800,10 @@ export function buildDogHistoryRecipes(
       snapshot.recipeId,
       snapshot.recipe_id,
     );
+    const details = normalizeHistoryRecipeDetails({
+      nutritionDetailedData: snapshot.nutrition_detailed_data,
+      fallbackIngredients: normalizeHistorySnapshotIngredients(snapshot.items),
+    });
     add(
       {
         id: snapshotId || firstString(item.id) || name,
@@ -652,6 +811,8 @@ export function buildDogHistoryRecipes(
         kind: 'FINISHED',
         date: toIsoString(item.order?.paidAt ?? item.order?.createdAt),
         status: firstString(item.order?.status),
+        ingredients: details.ingredients,
+        macros: details.macros,
       },
       snapshotId,
     );
@@ -663,6 +824,12 @@ export function buildDogHistoryRecipes(
     const name = firstString(recipe?.name);
     if (!name) continue;
     const recipeId = firstString(recipe?.id, recipe?.recipeId);
+    const details = normalizeHistoryRecipeDetails({
+      nutritionDetailedData: recipe?.nutritionDetailedData,
+      fallbackIngredients: normalizeHistoryCustomRecipeIngredients(
+        recipe?.items,
+      ),
+    });
     add(
       {
         id: recipeId || firstString(order.id) || name,
@@ -671,6 +838,8 @@ export function buildDogHistoryRecipes(
         // 交付时间才是「真正用上」的时间；还没交付则退回下单时间
         date: toIsoString(order.deliveredAt ?? order.createdAt),
         status: firstString(order.status),
+        ingredients: details.ingredients,
+        macros: details.macros,
       },
       recipeId,
     );

@@ -9810,12 +9810,31 @@ describe('RecipeDesignerService', () => {
       );
     });
 
-    it('exposes history recipes from finished orders and linked custom orders', async () => {
+    it('exposes history recipes with details from finished orders and linked custom orders', async () => {
       prisma.orderItem.findMany.mockResolvedValue([
         {
           id: 'oi-1',
           dogId: 'dog-1',
-          recipeSnapshot: { id: 'recipe-1', name: '鸡肉南瓜鲜食' },
+          recipeSnapshot: {
+            id: 'recipe-1',
+            name: '鸡肉南瓜鲜食',
+            nutrition_detailed_data: {
+              report: {
+                ingredientRows: [
+                  { ingredientName: '鸡胸肉', amountLabel: '120g' },
+                ],
+                macroRows: [
+                  {
+                    name: '蛋白质',
+                    dryMatterLabel: '52.3%',
+                    energyPercentLabel: '38.1%',
+                    weightPercentLabel: '12.4%',
+                  },
+                ],
+              },
+            },
+            items: [{ name: '鸡胸肉', example_weight: 120 }],
+          },
           order: {
             status: 'COMPLETED',
             paidAt: new Date('2026-09-01T01:00:00.000Z'),
@@ -9838,7 +9857,26 @@ describe('RecipeDesignerService', () => {
           status: 'DELIVERED',
           createdAt: new Date('2026-10-01T00:00:00.000Z'),
           deliveredAt: new Date('2026-10-05T00:00:00.000Z'),
-          recipe: { id: 'recipe-9', name: '定制鲜食 A' },
+          recipe: {
+            id: 'recipe-9',
+            name: '定制鲜食 A',
+            nutritionDetailedData: {
+              report: {
+                ingredientRows: [
+                  { ingredientName: '鸭肉', amountLabel: '100g' },
+                ],
+                macroRows: [
+                  {
+                    name: '脂肪',
+                    dryMatterLabel: '24.0%',
+                    energyPercentLabel: '41.5%',
+                    weightPercentLabel: '8.2%',
+                  },
+                ],
+              },
+            },
+            items: [{ exampleWeight: 100, ingredient: { name: '鸭肉' } }],
+          },
         },
       ]);
 
@@ -9854,6 +9892,15 @@ describe('RecipeDesignerService', () => {
           kind: 'CUSTOM',
           date: '2026-10-05T00:00:00.000Z',
           status: 'DELIVERED',
+          ingredients: [{ name: '鸭肉', amount: '100g' }],
+          macros: [
+            {
+              name: '脂肪',
+              dryMatter: '24.0%',
+              energyPercent: '41.5%',
+              weightPercent: '8.2%',
+            },
+          ],
         },
         {
           id: 'recipe-1',
@@ -9861,9 +9908,25 @@ describe('RecipeDesignerService', () => {
           kind: 'FINISHED',
           date: '2026-09-01T01:00:00.000Z',
           status: 'COMPLETED',
+          ingredients: [{ name: '鸡胸肉', amount: '120g' }],
+          macros: [
+            {
+              name: '蛋白质',
+              dryMatter: '52.3%',
+              energyPercent: '38.1%',
+              weightPercent: '12.4%',
+            },
+          ],
         },
       ]);
-      // 定制单只查已关联正式食谱、未取消的记录，且只取身份字段
+      // 不把快照/营养报告的原始结构泄漏给调用方
+      expect(JSON.stringify(result.historyRecipes)).not.toContain(
+        'nutrition_detailed_data',
+      );
+      expect(JSON.stringify(result.historyRecipes)).not.toContain(
+        'ingredientRows',
+      );
+      // 定制单只查已关联正式食谱、未取消的记录，并带上明细所需字段
       expect(prisma.customRecipeOrder.findMany).toHaveBeenCalledWith({
         where: {
           dogId: 'dog-1',
@@ -9876,7 +9939,19 @@ describe('RecipeDesignerService', () => {
           status: true,
           createdAt: true,
           deliveredAt: true,
-          recipe: { select: { id: true, name: true } },
+          recipe: {
+            select: {
+              id: true,
+              name: true,
+              nutritionDetailedData: true,
+              items: {
+                select: {
+                  exampleWeight: true,
+                  ingredient: { select: { name: true } },
+                },
+              },
+            },
+          },
         },
       });
     });

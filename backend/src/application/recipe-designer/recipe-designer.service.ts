@@ -7991,7 +7991,8 @@ export class RecipeDesignerService {
      * 历史食谱清单里的定制单（2026-10-22）。
      *
      * 只取**已关联正式食谱**（`recipeId` 非空）且未取消的定制单：
-     * 没有关联食谱的单一律没有食谱可展示。只选身份字段，
+     * 没有关联食谱的单一律没有食谱可展示。除身份字段外，
+     * 一并取营养报告与食谱项（名称/示例重量），供 builder 归一化明细；
      * 问卷答案/附件等整单内容不进入洞察。
      */
     const customRecipeHistoryOrders =
@@ -8007,7 +8008,19 @@ export class RecipeDesignerService {
           status: true,
           createdAt: true,
           deliveredAt: true,
-          recipe: { select: { id: true, name: true } },
+          recipe: {
+            select: {
+              id: true,
+              name: true,
+              nutritionDetailedData: true,
+              items: {
+                select: {
+                  exampleWeight: true,
+                  ingredient: { select: { name: true } },
+                },
+              },
+            },
+          },
         },
       });
 

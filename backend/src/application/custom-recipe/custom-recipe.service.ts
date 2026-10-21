@@ -659,8 +659,15 @@ export class CustomRecipeService implements ICustomRecipeRepository {
           targetGoal: data.targetGoal,
           needsHealthManagement: data.needsHealthManagement === true,
           allergies: data.allergies || [],
-          // 2026-10-19：顾客自由文本快照；老订单为 null
-          allergyText: data.allergyText?.trim() || null,
+          /**
+           * 2026-10-21：订单只保留一份过敏快照。
+           * 有结构化数组时不再同时保存自由文本，避免同一批过敏原双写；
+           * 只有顾客没有结构化数组时，才保留文本兜底。
+           */
+          allergyText:
+            (data.allergies || []).length > 0
+              ? null
+              : data.allergyText?.trim() || null,
           allergyStatus: data.allergyStatus as AllergyAnswerStatus,
           clientRequestId: data.clientRequestId || null,
           // 本单报告草稿：付款前只存订单，不写狗狗档案

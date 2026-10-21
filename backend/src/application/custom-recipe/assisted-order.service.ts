@@ -246,7 +246,11 @@ export class AssistedOrderService {
          */
         needsHealthManagement: false,
         allergies,
-        allergyText: this.normalizeOptional(input.allergyText),
+        // 与自助单一致：有结构化数组时不再同时写文本快照
+        allergyText:
+          allergies.length > 0
+            ? null
+            : this.normalizeOptional(input.allergyText),
         allergyStatus: input.allergyStatus,
         // 代客单没有顾客端幂等键；同一顾客重复下单由人工判断
         clientRequestId: null,

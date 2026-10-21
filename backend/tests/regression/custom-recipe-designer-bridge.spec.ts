@@ -94,15 +94,18 @@ describe('定制订单 → 设计器 / AI 通路', () => {
     );
     const types = admin('src/types/recipeDesigner.ts');
 
-    expect(panel).toContain('顾客的定制需求');
-    expect(panel).toContain('insight.customRecipeOrder');
-    expect(panel).toContain('体重目标');
-    expect(panel).toContain('订单里填的忌口');
-    expect(panel).toContain('顾客备注');
+    expect(panel).toContain('主蛋白');
+    expect(panel).toContain('本单需求');
+    expect(panel).toContain('过敏信息');
+    expect(panel).toContain('顾客额外备注');
+    expect(panel).toContain('latestMedicalRecord');
+    expect(panel).not.toContain('顾客的定制需求');
+    expect(panel).not.toContain('订单里填的忌口');
 
     // 类型上必须有这个字段，否则面板拿不到数据
     expect(types).toContain('customRecipeOrder: {');
-    expect(types).toContain('needsHealthManagement: boolean');
+    expect(types).toContain('requestedProteinCodes: string[]');
+    expect(types).toContain('latestMedicalRecord');
   });
 
   /**

@@ -262,10 +262,23 @@ describe('CustomRecipeService · 档案同步时点', () => {
     expect(mockPrismaService.customRecipeOrder.update).not.toHaveBeenCalled();
 
     const data = mockPrismaService.customRecipeOrder.create.mock.calls[0][0].data;
-    expect(data.allergyText).toBe('鸡肉、牛肉');
+    // 有结构化数组时不再同时保存文本，避免双写
+    expect(data.allergyText).toBeNull();
     expect(data.syncToHealthProfile).toBe(true);
     expect(data.allergyReportDrafts).toHaveLength(1);
     expect(data.healthInfoSyncedAt).toBeUndefined();
+  });
+
+  it('只有文本、没有结构化数组时，保留文本快照', async () => {
+    await submit({
+      allergyStatus: 'HAS_ALLERGY',
+      allergies: [],
+      allergyText: '鸭、猪',
+    });
+
+    const data = mockPrismaService.customRecipeOrder.create.mock.calls[0][0].data;
+    expect(data.allergies).toEqual([]);
+    expect(data.allergyText).toBe('鸭、猪');
   });
 
   it('待付款订单不做档案同步', async () => {

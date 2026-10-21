@@ -203,4 +203,9 @@ describe('售后待办页 · 按选中份重新交付', () => {
     expect(pageCode).toContain('getApiErrorMessage(')
     expect(pageCode).toContain('const message = getApiErrorMessage(')
   })
+
+  it('侧边栏可直接进入定制食谱订单', () => {
+    expect(layoutSource).toContain('index="/custom-recipes"')
+    expect(layoutSource).toContain('定制食谱订单')
+  })
 })

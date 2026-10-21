@@ -210,6 +210,123 @@ describe('CustomRecipeController · 交付与编号口径', () => {
     expect(wechatPaymentService.createCustomRecipeRefund).not.toHaveBeenCalled();
   });
 
+  /**
+   * 2026-10-21 修：制作中（IN_PROGRESS）同样是"钱已收、货未交"。
+   *
+   * 原来只认 PAID，于是后台取消制作中的单**不退款** ——
+   * 生产单 CR202610201196 有 paymentConfirmedAt / paymentTransactionId，
+   * 取消后 refundStatus 仍为 null。
+   */
+  it('★ 取消一张制作中的订单也会先原路退款，再改状态', async () => {
+    const { controller, wechatPaymentService, customRecipeService } =
+      createAdminController({
+        status: CustomRecipeStatus.IN_PROGRESS,
+        // 生产单 CR202610201196 的证据形态：钱已确认，状态在制作中
+        paymentConfirmedAt: new Date('2026-10-20T08:00:00.000Z'),
+        paymentTransactionId: 'wx-tx-20261020',
+      });
+
+    await controller.updateStatus(
+      adminReq,
+      'CR202609280001',
+      CustomRecipeStatus.CANCELLED as any,
+      '顾客要求取消',
+    );
+
+    expect(wechatPaymentService.createCustomRecipeRefund).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: 'CR202609280001' }),
+    );
+    // 必须先退款成功，再取消；顺序反了就会出现"取消了钱没退"
+    expect(
+      wechatPaymentService.createCustomRecipeRefund.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      customRecipeService.updateOrderStatus.mock.invocationCallOrder[0],
+    );
+    expect(customRecipeService.updateOrderStatus).toHaveBeenCalledWith(
+      'CR202609280001',
+      CustomRecipeStatus.CANCELLED,
+      { reason: '顾客要求取消' },
+    );
+  });
+
+  it('★ 退款失败时后台取消不生效（订单保持原状）', async () => {
+    const { controller, wechatPaymentService, customRecipeService } =
+      createAdminController({ status: CustomRecipeStatus.IN_PROGRESS });
+
+    wechatPaymentService.createCustomRecipeRefund.mockRejectedValueOnce(
+      new Error('线上退款未启用'),
+    );
+
+    await expect(
+      controller.updateStatus(
+        adminReq,
+        'CR202609280001',
+        CustomRecipeStatus.CANCELLED as any,
+      ),
+    ).rejects.toThrow('线上退款未启用');
+
+    expect(customRecipeService.updateOrderStatus).not.toHaveBeenCalled();
+  });
+
+  it('★ 退款返回失败状态（ABNORMAL）时同样不取消订单', async () => {
+    const { controller, wechatPaymentService, customRecipeService } =
+      createAdminController({ status: CustomRecipeStatus.IN_PROGRESS });
+
+    // 微信可能是"不抛错但返回失败状态"，不能当成功
+    wechatPaymentService.createCustomRecipeRefund.mockResolvedValueOnce({
+      status: 'ABNORMAL',
+    });
+
+    await expect(
+      controller.updateStatus(
+        adminReq,
+        'CR202609280001',
+        CustomRecipeStatus.CANCELLED as any,
+      ),
+    ).rejects.toThrow('退款未成功');
+
+    expect(customRecipeService.updateOrderStatus).not.toHaveBeenCalled();
+  });
+
+  it('★ 状态仍停在待付款但已有付款确认时间：也退款（防止状态漂移漏退）', async () => {
+    const { controller, wechatPaymentService } = createAdminController({
+      status: CustomRecipeStatus.PENDING_PAYMENT,
+      paymentConfirmedAt: new Date('2026-10-20T08:00:00.000Z'),
+    });
+
+    await controller.updateStatus(
+      adminReq,
+      'CR202609280001',
+      CustomRecipeStatus.CANCELLED as any,
+    );
+
+    expect(wechatPaymentService.createCustomRecipeRefund).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: 'CR202609280001' }),
+    );
+  });
+
+  it('已交付/已完成的单取消不触发退款（口径不变）', async () => {
+    for (const status of [
+      CustomRecipeStatus.DELIVERED,
+      CustomRecipeStatus.COMPLETED,
+    ]) {
+      const { controller, wechatPaymentService } = createAdminController({
+        status,
+        paymentConfirmedAt: new Date('2026-10-20T08:00:00.000Z'),
+      });
+
+      await controller.updateStatus(
+        adminReq,
+        'CR202609280001',
+        CustomRecipeStatus.CANCELLED as any,
+      );
+
+      expect(
+        wechatPaymentService.createCustomRecipeRefund,
+      ).not.toHaveBeenCalled();
+    }
+  });
+
   it('非法状态值返回业务错误（400），而不是透传给数据库变成 500', async () => {
     const { controller, customRecipeService } = createAdminController();
 

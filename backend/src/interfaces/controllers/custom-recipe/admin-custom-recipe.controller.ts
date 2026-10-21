@@ -41,6 +41,7 @@ import { AdminGuard } from '../auth/admin.guard';
 import { StaffGuard } from '../../guards/role.guard';
 import { AuthGuard } from '../../auth/auth.guard';
 import { CustomRecipeStatus } from '@prisma/client';
+import { canTransition } from '../../../domain/custom-recipe/custom-recipe.state';
 import { WechatService } from '../../../infrastructure/wechat/wechat.service';
 import { WechatPaymentService } from '../../../application/payment/wechat-payment.service';
 import { ApiResponseDto } from '../../dto/common/response.dto';
@@ -464,11 +465,21 @@ export class AdminCustomRecipeController {
     }
 
     /**
-     * 取消一张**已付款**的定制单要先原路退款（老板 2026-10-04 口径 3）。
+     * 取消一张**已付款但还没交付**的定制单要先原路退款（老板 2026-10-04 口径 3）。
      *
      * 此前后台取消只释放当天名额、既不退款也不提示，钱留在我们账上，
      * 往往要等顾客来问才发现。退款失败就不取消 ——
      * 宁可保持原状，也不要出现"取消了钱没退"。
+     *
+     * 2026-10-21 修：原来只认 `PAID`，**制作中（IN_PROGRESS）被漏掉**。
+     * 生产单 CR202610201196 有 paymentConfirmedAt / paymentTransactionId，
+     * 后台取消后 refundStatus 仍为 null —— 钱收了、单取消了、没人退。
+     * "已付款"不会因为开始制作而消失，所以退款条件应是
+     * **已收款且还没交付**，而不是某一个状态。
+     *
+     * 兜底 `paymentConfirmedAt`：状态可能因异常流程停在待付款，但钱已确认到账；
+     * 只要这张单**还能取消**（交付/完成都不在可取消之列），就不能漏退。
+     * 正常未付款的待付款单没有 paymentConfirmedAt，行为不变。
      */
     if (status === CustomRecipeStatus.CANCELLED) {
       const order = await this.customRecipeService.getOrderByOrderId(orderId);
@@ -477,11 +488,37 @@ export class AdminCustomRecipeController {
         throw new NotFoundException('订单不存在');
       }
 
-      if (order.status === CustomRecipeStatus.PAID) {
-        await this.wechatPaymentService.createCustomRecipeRefund({
-          orderId: order.orderId,
-          reason: (reason || '').trim() || '后台取消定制订单',
-        });
+      const shouldRefund =
+        order.status === CustomRecipeStatus.PAID ||
+        order.status === CustomRecipeStatus.IN_PROGRESS ||
+        (Boolean(order.paymentConfirmedAt) &&
+          canTransition(order.status, CustomRecipeStatus.CANCELLED));
+
+      if (shouldRefund) {
+        /**
+         * 必须先退再取消：这个 await 抛错时下面的 `updateOrderStatus` 不会执行，
+         * 订单保持原状，管理员可以在微信商户平台核查后重试。
+         */
+        const refund =
+          await this.wechatPaymentService.createCustomRecipeRefund({
+            orderId: order.orderId,
+            reason: (reason || '').trim() || '后台取消定制订单',
+          });
+
+        /**
+         * 微信也可能**不抛错、但返回一个失败状态**（CLOSED / ABNORMAL）。
+         * 只认「成功 / 处理中 / 待处理」；其它状态同样不能取消 ——
+         * 否则又会回到"单取消了、钱没退"。
+         */
+        const refundStatus = String(refund?.status || '').toUpperCase();
+        if (
+          refundStatus &&
+          !['SUCCESS', 'PROCESSING', 'PENDING'].includes(refundStatus)
+        ) {
+          throw new BadRequestException(
+            `退款未成功（${refundStatus}），订单保持原状；请到微信商户平台核查后再试`,
+          );
+        }
       }
     }
 

@@ -170,8 +170,11 @@ describe('CustomRecipeService · 顾客自助取消', () => {
    * 制作中仍然**没交付**，顾客就该能退。
    *
    * 代价（可能已买食材）是老板明确接受的。
+   *
+   * 2026-10-21 补：制作中取消**也必须退款**。原来只认 PAID，
+   * 于是 V39 允许取消之后，制作中的单取消成了"单没了、钱不退"。
    */
-  it('★ 制作中也能自助取消（V39：只要没交付就能退）', async () => {
+  it('★ 制作中也能自助取消，并且必须退款（V39 + 2026-10-21 修复）', async () => {
     orderFindUnique.mockResolvedValue({
       id: 'cr-uuid-1',
       orderId: 'CR202609280001',
@@ -185,7 +188,125 @@ describe('CustomRecipeService · 顾客自助取消', () => {
       'user-1',
       refundOk,
     );
+
+    expect(refundOk).toHaveBeenCalledWith(
+      'CR202609280001',
+      '顾客取消定制订单',
+    );
     expect(result.cancelled).toBe(true);
+    expect(result.refundStatus).toBe('SUCCESS');
+
+    // CAS 认领必须锁住"制作中"，否则取消的可能是别的状态
+    const claim = mockPrismaService.customRecipeOrder.updateMany.mock
+      .calls[0][0];
+    expect(claim.where.status).toBe(CustomRecipeStatus.IN_PROGRESS);
+  });
+
+  /**
+   * 2026-10-21：退款失败要回滚到**取消前的状态**。
+   *
+   * 原来回滚写死 PAID —— 制作中的单取消失败后会变成"已付款"，
+   * 后台工作台/顾客页的进度都被抹掉了。
+   */
+  it('★ 制作中取消退款失败：回滚到 IN_PROGRESS（不是 PAID）并重新占名额', async () => {
+    orderFindUnique.mockResolvedValue({
+      id: 'cr-uuid-1',
+      orderId: 'CR202609280001',
+      customerId: 'user-1',
+      status: CustomRecipeStatus.IN_PROGRESS,
+      scheduledDate: new Date('2099-06-01'),
+      recipeQuantity: 2,
+    });
+
+    const refundFail = jest
+      .fn()
+      .mockRejectedValue(new Error('退款通道故障'));
+
+    await expect(
+      service.cancelOrderByCustomer(
+        'CR202609280001',
+        'user-1',
+        refundFail,
+      ),
+    ).rejects.toThrow('退款通道故障');
+
+    const rollback = mockPrismaService.customRecipeOrder.updateMany.mock.calls.find(
+      (call: any[]) => call[0]?.data?.status === CustomRecipeStatus.IN_PROGRESS,
+    );
+    expect(rollback).toBeTruthy();
+    // 只回滚我们刚认领的那次取消
+    expect(rollback[0].where).toEqual({
+      id: 'cr-uuid-1',
+      status: CustomRecipeStatus.CANCELLED,
+    });
+
+    // 名额按同一份数（2 份）还回去
+    const rebooked = scheduleUpdateMany.mock.calls.find(
+      (call: any[]) => call[0]?.data?.bookedCount?.increment === 2,
+    );
+    expect(rebooked).toBeTruthy();
+  });
+
+  it('★ 制作中退款返回失败状态（ABNORMAL）：同样回滚到 IN_PROGRESS', async () => {
+    orderFindUnique.mockResolvedValue({
+      id: 'cr-uuid-1',
+      orderId: 'CR202609280001',
+      customerId: 'user-1',
+      status: CustomRecipeStatus.IN_PROGRESS,
+      scheduledDate: new Date('2099-06-01'),
+      recipeQuantity: 1,
+    });
+
+    // 微信可能"不抛错但返回失败状态"，不能当成功
+    const refundAbnormal = jest.fn().mockResolvedValue({
+      status: 'ABNORMAL',
+    });
+
+    await expect(
+      service.cancelOrderByCustomer(
+        'CR202609280001',
+        'user-1',
+        refundAbnormal,
+      ),
+    ).rejects.toThrow('退款未成功');
+
+    const rollback = mockPrismaService.customRecipeOrder.updateMany.mock.calls.find(
+      (call: any[]) => call[0]?.data?.status === CustomRecipeStatus.IN_PROGRESS,
+    );
+    expect(rollback).toBeTruthy();
+
+    const rebooked = scheduleUpdateMany.mock.calls.find(
+      (call: any[]) => call[0]?.data?.bookedCount?.increment === 1,
+    );
+    expect(rebooked).toBeTruthy();
+  });
+
+  it('已付款（PAID）取消退款失败：仍回滚到 PAID，行为不变', async () => {
+    orderFindUnique.mockResolvedValue({
+      id: 'cr-uuid-1',
+      orderId: 'CR202609280001',
+      customerId: 'user-1',
+      status: CustomRecipeStatus.PAID,
+      scheduledDate: new Date('2099-06-01'),
+      recipeQuantity: 1,
+    });
+
+    const refundFail = jest
+      .fn()
+      .mockRejectedValue(new Error('线上退款未启用'));
+
+    await expect(
+      service.cancelOrderByCustomer(
+        'CR202609280001',
+        'user-1',
+        refundFail,
+      ),
+    ).rejects.toThrow('线上退款未启用');
+
+    const rollback = mockPrismaService.customRecipeOrder.updateMany.mock.calls.find(
+      (call: any[]) => call[0]?.data?.status === CustomRecipeStatus.PAID,
+    );
+    expect(rollback).toBeTruthy();
   });
 
   it('★ 已交付的单不能取消（要转售后）', async () => {

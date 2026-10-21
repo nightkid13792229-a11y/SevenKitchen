@@ -275,9 +275,10 @@ import {
 import { useOptionSet } from '@/utils/option-set';
 import { getStoredUser } from '@/utils/account';
 import {
-  clearCustomRecipeDraft,
   isCustomRecipeDraftExpired,
   loadCustomRecipeDraft,
+  markCustomRecipeDraftSubmitted,
+  retainCustomRecipeChoicesAfterPayment,
   type CustomRecipeDraft,
 } from '@/utils/custom-recipe-draft';
 import { refreshCustomRecipeDraftMedia } from '@/utils/custom-recipe-media';
@@ -878,6 +879,11 @@ async function payCreatedOrder() {
     const outcome = await runCustomRecipePayment(orderId);
 
     if (outcome === 'PAID') {
+      // 已付款：报告已进档案；保留上次的选择，但清掉上一单的报告/附件草稿
+      retainCustomRecipeChoicesAfterPayment(
+        getDraftCustomerId(),
+        dogId.value,
+      );
       uni.showToast({ title: '支付成功', icon: 'success' });
     } else if (outcome === 'CLOSED') {
       uni.showToast({ title: '订单已关闭，请重新下单', icon: 'none' });
@@ -1005,8 +1011,17 @@ async function submitConfirmedOrder(payAfterSubmit = true) {
     const created = await submitOrder(payload);
     const orderId = String(created?.orderId || '').trim();
     if (!orderId) throw new Error('服务端未返回订单号');
+    markCustomRecipeDraftSubmitted(
+      getDraftCustomerId(),
+      dogId.value,
+      orderId,
+    );
 
-    clearCustomRecipeDraft(getDraftCustomerId(), dogId.value);
+    /**
+     * 2026-10-21：订单创建成功后**不再立刻清本地草稿**。
+     * 顾客可能只是创建了待付款单、最后没付；下次进入定制页应恢复上次填写，
+     * 而不是从空白重填。草稿只在支付成功时清（见 payCreatedOrder）。
+     */
     if (isNoAllergy && Array.isArray(reportDrafts) && reportDrafts.length) {
       void cleanupDiscardedAllergyReports(reportDrafts);
     }

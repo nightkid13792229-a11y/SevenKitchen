@@ -370,9 +370,10 @@ const routes: RouteRecordRaw[] = [
       },
       {
         path: "custom-recipes",
-        name: "CustomRecipes",
-        component: () => import("@/views/CustomRecipes/OrderList.vue"),
-        meta: { title: "定制食谱订单" },
+        // 定制订单已合并到订单中心（2026-10-21）；旧地址保留跳转，避免书签/群链接失效。
+        // OrderList.vue 暂时保留但不再可路由（测试仍会 import 它）。
+        redirect: "/order-center?type=CUSTOM_RECIPE",
+        meta: { title: "食谱定制订单" },
       },
       {
         path: "custom-recipes/schedule",

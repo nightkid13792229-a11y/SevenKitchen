@@ -34,7 +34,7 @@ describe('后台 · 手工补退款入口', () => {
 
   it('★ 点下去先二次确认，说明钱会原路退回，并且不能报成成功', () => {
     const start = orderDetail.indexOf('const manualRefund = async')
-    const end = orderDetail.indexOf('const startProcessing = async')
+    const end = orderDetail.indexOf('const contactCustomer =')
     expect(start).toBeGreaterThan(-1)
     const block = orderDetail.slice(start, end > start ? end : start + 3000)
 
@@ -48,7 +48,7 @@ describe('后台 · 手工补退款入口', () => {
 
   it('★ 接口调用带订单号与原因（原因可省略，页面给默认值）', () => {
     const start = orderDetail.indexOf('const manualRefund = async')
-    const end = orderDetail.indexOf('const startProcessing = async')
+    const end = orderDetail.indexOf('const contactCustomer =')
     const block = orderDetail.slice(start, end > start ? end : start + 3000)
 
     expect(block).toContain('customRecipeApi.refundOrder(')
@@ -58,7 +58,7 @@ describe('后台 · 手工补退款入口', () => {
 
   it('★ 回显退款结果状态，并刷新详情（退款块/按钮随之更新）', () => {
     const start = orderDetail.indexOf('const manualRefund = async')
-    const end = orderDetail.indexOf('const startProcessing = async')
+    const end = orderDetail.indexOf('const contactCustomer =')
     const block = orderDetail.slice(start, end > start ? end : start + 3000)
 
     expect(block).toContain('getCustomRecipeRefundStatusText(status)')

@@ -55,12 +55,23 @@ export function resolveMaxRecipeQuantity(value: unknown): number {
   );
 }
 
-/** 折扣率 0.08 →「8%」；没有优惠时返回「无优惠」 */
+/**
+ * 折扣率 → 中国顾客熟悉的「几折」。
+ *
+ * 0.10 → 9折；0.15 → 85折；0.20 → 8折；0.05 → 95折。
+ * 后台优惠文案用的是「9折 / 85折 / 8折」，这里保持同一口径，
+ * 不再显示「10%」这种顾客需要自己换算的写法。
+ * 没有优惠时返回「无优惠」。
+ */
 export function formatDiscountRate(rate: unknown): string {
   const value = Number(rate ?? 0);
   if (!Number.isFinite(value) || value <= 0) return '无优惠';
-  const percent = Math.round(value * 1000) / 10;
-  return `${Number.isInteger(percent) ? percent : percent.toFixed(1)}%`;
+
+  const discount = Math.round((1 - value) * 1000) / 10;
+  const text = Number.isInteger(discount)
+    ? String(discount).replace(/(?<=^\d)0$/, '')
+    : String(discount);
+  return `${text}折`;
 }
 
 /**

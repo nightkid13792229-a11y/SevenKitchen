@@ -438,7 +438,9 @@ const submitReject = async () => {
 };
 
 const goToOrder = (orderId: string) => {
-  window.open(`/custom-recipes/${encodeURIComponent(orderId)}`, '_self');
+  // 定制订单详情已收进订单中心抽屉，售后直接深链到对应订单
+  const target = `/order-center?type=CUSTOM_RECIPE&orderId=${encodeURIComponent(orderId)}`;
+  window.open(target, '_self');
 };
 
 onMounted(load);

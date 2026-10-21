@@ -43,10 +43,12 @@ describe('多份定制报价展示', () => {
   });
 
   it('折扣率按百分比展示，0 不说成 0%', () => {
-    expect(formatDiscountRate(0.05)).toBe('5%');
-    expect(formatDiscountRate(0.08)).toBe('8%');
-    expect(formatDiscountRate(0.1)).toBe('10%');
-    expect(formatDiscountRate(0.125)).toBe('12.5%');
+    expect(formatDiscountRate(0.05)).toBe('95折');
+    expect(formatDiscountRate(0.08)).toBe('92折');
+    expect(formatDiscountRate(0.1)).toBe('9折');
+    expect(formatDiscountRate(0.125)).toBe('87.5折');
+    expect(formatDiscountRate(0.15)).toBe('85折');
+    expect(formatDiscountRate(0.2)).toBe('8折');
     expect(formatDiscountRate(0)).toBe('无优惠');
     expect(formatDiscountRate(undefined)).toBe('无优惠');
   });

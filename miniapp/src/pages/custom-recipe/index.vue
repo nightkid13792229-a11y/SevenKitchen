@@ -659,6 +659,7 @@ import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue';
 import {
   fetchMyOrders,
   fetchDogHealthSummary,
+  fetchOrderDetail,
   uploadCustomRecipeDraftAttachment,
 } from '@/api/custom-recipe';
 import { onHide, onLoad, onShow } from '@dcloudio/uni-app';
@@ -678,6 +679,7 @@ import {
   clearCustomRecipeDraft,
   isCustomRecipeDraftExpired,
   loadCustomRecipeDraft,
+  retainCustomRecipeChoicesAfterPayment,
   saveCustomRecipeDraft,
   type CustomRecipeReportDraft,
 } from '@/utils/custom-recipe-draft';
@@ -1250,6 +1252,34 @@ function resetOrderFormForDog(dogId: string) {
   weightGoalChoice.value = null;
   hasFoodAllergy.value = null;
   prefilledAllergyText.value = '';
+}
+
+/**
+ * 草稿对应的订单如果已经付款（可能在订单详情/列表支付的），
+ * 就把上一单的报告/附件草稿清掉，只保留选择项。
+ *
+ * 订单还没付/已取消时不动草稿，仍可继续修改或重新提交。
+ */
+async function reconcileDraftWithSubmittedOrder(
+  draft: ReturnType<typeof loadCustomRecipeDraft>,
+) {
+  const orderId = draft?.lastOrderId;
+  if (!draft || !orderId) return;
+  try {
+    const order = await fetchOrderDetail(orderId);
+    const paidStatuses = ['PAID', 'IN_PROGRESS', 'DELIVERED', 'COMPLETED'];
+    if (order && paidStatuses.includes(String(order.status))) {
+      retainCustomRecipeChoicesAfterPayment(
+        getDraftCustomerId(),
+        draft.dogId,
+      );
+      formData.value.reportDrafts = [];
+      formData.value.attachmentUrls = [];
+      formData.value.attachmentKeys = [];
+    }
+  } catch {
+    // 订单状态读不到时保留草稿；下次再判断，不阻断填写
+  }
 }
 
 function applyCustomRecipeDraft(draft: ReturnType<typeof loadCustomRecipeDraft>) {
@@ -1838,6 +1868,14 @@ const continuePayPending = async () => {
     const outcome = await runCustomRecipePayment(orderId);
 
     if (outcome === 'PAID') {
+      /**
+       * 2026-10-21：付款成功才清草稿。
+       * 未付款/取消支付时保留，下次进入可以继续接着填。
+       */
+      retainCustomRecipeChoicesAfterPayment(
+        getDraftCustomerId(),
+        formData.value.dogId,
+      );
       uni.showToast({ title: '支付成功', icon: 'success' });
       await loadPendingOrder();
       return;
@@ -2201,6 +2239,8 @@ const loadDogArchiveInfo = async (dogId: string) => {
     formData.value.dogId = dogId;
     // 后端重启后旧媒体 token 会失效；用草稿里的 key 换新预览 URL
     await refreshCustomRecipeDraftMedia(formData.value);
+    // 如果上一张单已经付过款，清掉上一单报告/附件，只保留选择项
+    await reconcileDraftWithSubmittedOrder(draft);
   }
 
   healthSummaryLoading.value = true;

@@ -15,7 +15,7 @@
       <!-- 未设置参考爱犬 -->
       <div v-if="!dogId" class="ai-empty">
         <el-icon><WarningFilled /></el-icon>
-        <span>未设置参考爱犬，无法生成 AI 设计建议。请在「爱犬指导」中先设置参考爱犬。</span>
+        <span>未设置参考爱犬，无法生成 AI 设计建议。请在「爱犬信息」中先设置参考爱犬。</span>
       </div>
 
       <!-- 设置了爱犬但 AI 未启用 -->

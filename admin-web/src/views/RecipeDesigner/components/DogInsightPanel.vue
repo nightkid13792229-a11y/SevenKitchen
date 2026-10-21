@@ -14,10 +14,21 @@
             {{ insight.dog.lifeStageLabel }}
           </el-tag>
         </div>
-        <div class="profile-actions">
-          <el-button size="small" text type="primary" @click="openDogPicker">
+        <div class="dog-summary">{{ profileSummary }}</div>
+        <div class="dog-header-meta">
+          <span v-if="insight.customRecipeOrder" class="dog-order-no">
+            本单 {{ insight.customRecipeOrder.orderId }}
+          </span>
+          <el-button
+            v-if="!lockReferenceDog"
+            size="small"
+            text
+            type="primary"
+            @click="openDogPicker"
+          >
             更换参考爱犬
           </el-button>
+          <span v-else class="dog-lock-tip">本单已绑定该犬，不能更换</span>
         </div>
       </div>
 
@@ -27,22 +38,17 @@
       </div>
 
       <div class="panel-section">
-        <div class="section-title">
-          <span>本单需求</span>
-          <el-tag v-if="insight.customRecipeOrder" size="small" effect="plain">
-            {{ insight.customRecipeOrder.orderId }}
-          </el-tag>
-        </div>
+        <div class="section-title">本单需求</div>
         <template v-if="insight.customRecipeOrder">
-          <div class="fact-row">
+          <div class="fact-row fact-row--stacked">
             <span class="fact-label">肠胃情况</span>
             <span class="fact-value">{{ stomachText }}</span>
           </div>
-          <div v-if="currentFoodText" class="fact-row fact-row--secondary">
+          <div v-if="currentFoodText" class="fact-row fact-row--stacked fact-row--secondary">
             <span class="fact-label">现在主要喂</span>
             <span class="fact-value">{{ currentFoodText }}</span>
           </div>
-          <div v-if="changeReasonText" class="fact-row fact-row--secondary">
+          <div v-if="changeReasonText" class="fact-row fact-row--stacked fact-row--secondary">
             <span class="fact-label">定制原因</span>
             <span class="fact-value">{{ changeReasonText }}</span>
           </div>
@@ -64,9 +70,9 @@
             <span class="allergy-chip__source">{{ sourceLabel(item.sources) }}</span>
           </el-tag>
         </div>
-        <div v-if="allergyFacts.orderText" class="fact-row">
+        <div v-if="orderAllergyTextExtra" class="fact-row">
           <span class="fact-label">本单填写</span>
-          <span class="fact-value fact-value--block">{{ allergyFacts.orderText }}</span>
+          <span class="fact-value fact-value--block">{{ orderAllergyTextExtra }}</span>
         </div>
         <div v-if="!allergyFacts.hasAny" class="empty-tip">无过敏记录</div>
       </div>
@@ -74,6 +80,20 @@
       <div v-if="insight.customRecipeOrder" class="panel-section">
         <div class="section-title">顾客额外备注</div>
         <div class="fact-value fact-value--block">{{ additionalNotes || '无' }}</div>
+        <div v-if="orderAttachments.length" class="order-attachments">
+          <span class="fact-label">顾客随单附件</span>
+          <div class="attachment-links">
+            <button
+              v-for="(url, index) in orderAttachments"
+              :key="url"
+              type="button"
+              class="attachment-link"
+              @click="openAttachment(url, `顾客附件 ${index + 1}`)"
+            >
+              附件 {{ index + 1 }}
+            </button>
+          </div>
+        </div>
       </div>
 
       <div class="panel-section panel-section--collapse">
@@ -86,6 +106,17 @@
                 <span class="record-date">{{ healthFacts.medical.date }}</span>
               </div>
               <div class="record-line">诊断：{{ healthFacts.medical.diagnosis }}</div>
+              <div v-if="healthFacts.medical.attachments.length" class="attachment-links">
+                <button
+                  v-for="(url, index) in healthFacts.medical.attachments"
+                  :key="url"
+                  type="button"
+                  class="attachment-link"
+                  @click="openAttachment(url, `就诊附件 ${index + 1}`)"
+                >
+                  查看就诊附件 {{ index + 1 }}
+                </button>
+              </div>
             </div>
             <div v-if="healthFacts.checkup" class="record-block">
               <div class="record-head">
@@ -93,34 +124,25 @@
                 <span class="record-date">{{ healthFacts.checkup.date }}</span>
               </div>
               <div class="record-line">结论：{{ healthFacts.checkup.findings }}</div>
+              <div v-if="healthFacts.checkup.attachments.length" class="attachment-links">
+                <button
+                  v-for="(url, index) in healthFacts.checkup.attachments"
+                  :key="url"
+                  type="button"
+                  class="attachment-link"
+                  @click="openAttachment(url, `体检附件 ${index + 1}`)"
+                >
+                  查看体检附件 {{ index + 1 }}
+                </button>
+              </div>
             </div>
           </el-collapse-item>
 
           <el-collapse-item name="profile" title="基础档案">
             <div class="profile-grid">
               <div class="profile-item">
-                <span class="label">性别</span>
-                <span class="value">{{ genderText }}</span>
-              </div>
-              <div class="profile-item">
-                <span class="label">年龄</span>
-                <span class="value">{{ ageText }}</span>
-              </div>
-              <div class="profile-item">
                 <span class="label">绝育状态</span>
                 <span class="value">{{ neuteredText }}</span>
-              </div>
-              <div class="profile-item">
-                <span class="label">品种</span>
-                <span class="value">{{ insight.dog.breedName || '未知' }}</span>
-              </div>
-              <div class="profile-item">
-                <span class="label">体重</span>
-                <span class="value">{{ weightText }}</span>
-              </div>
-              <div class="profile-item">
-                <span class="label">体况评分</span>
-                <span class="value">{{ bcsText }}</span>
               </div>
               <div class="profile-item">
                 <span class="label">活动量</span>
@@ -139,6 +161,29 @@
               <span class="energy-label">每日目标能量</span>
               <span class="energy-value">{{ energyText }}</span>
               <span v-if="energyPerDayG" class="energy-detail">≈ {{ energyPerDayG }} g/天</span>
+            </div>
+          </el-collapse-item>
+
+          <el-collapse-item
+            name="history"
+            :title="`历史订单食谱（${historyRecipes.length}）`"
+          >
+            <div v-if="historyRecipes.length === 0" class="empty-tip">
+              暂无历史订单食谱
+            </div>
+            <div v-else class="history-recipe-list">
+              <div
+                v-for="item in historyRecipes"
+                :key="`${item.kind}-${item.id}`"
+                class="history-recipe-row history-recipe-row--clickable"
+                @click="openHistoryRecipe(item)"
+              >
+                <div class="history-recipe-name">{{ item.name }}</div>
+                <div class="history-recipe-meta">
+                  <el-tag size="small" effect="plain">{{ historyKindLabel(item.kind) }}</el-tag>
+                  <span>{{ formatInsightDate(item.date) || '日期未知' }}</span>
+                </div>
+              </div>
             </div>
           </el-collapse-item>
 
@@ -207,6 +252,86 @@
         <el-button type="primary" :loading="savingDog" @click="saveDog">保存</el-button>
       </template>
     </el-dialog>
+    <el-dialog
+      v-model="historyDialogVisible"
+      :title="historySelection?.name || '历史食谱'"
+      width="720px"
+      append-to-body
+      destroy-on-close
+    >
+      <template v-if="historySelection">
+        <div class="history-dialog-meta">
+          <el-tag size="small" effect="plain">{{ historyKindLabel(historySelection.kind) }}</el-tag>
+          <span>{{ formatInsightDate(historySelection.date) || '日期未知' }}</span>
+        </div>
+        <div class="history-dialog-grid">
+          <div>
+            <h4>原料清单</h4>
+            <div v-if="historySelection.ingredients.length === 0" class="empty-tip">暂无原料明细</div>
+            <ul v-else class="history-ingredient-list">
+              <li v-for="item in historySelection.ingredients" :key="`${item.name}-${item.amount}`">
+                <span>{{ item.name }}</span>
+                <span>{{ item.amount }}</span>
+              </li>
+            </ul>
+          </div>
+          <div>
+            <h4>宏量营养素</h4>
+            <div v-if="historySelection.macros.length === 0" class="empty-tip">暂无宏量营养数据</div>
+            <table v-else class="history-macro-table">
+              <thead>
+                <tr>
+                  <th>项目</th>
+                  <th>占干物质</th>
+                  <th>占热量</th>
+                  <th>占配方</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in historySelection.macros" :key="row.name">
+                  <td>{{ row.name }}</td>
+                  <td>{{ row.dryMatter }}</td>
+                  <td>{{ row.energyPercent }}</td>
+                  <td>{{ row.weightPercent }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="attachmentDialogVisible"
+      :title="attachmentTitle"
+      width="860px"
+      append-to-body
+      destroy-on-close
+      class="attachment-preview-dialog"
+    >
+      <div class="attachment-preview-body">
+        <el-image
+          v-if="attachmentKind === 'image'"
+          :src="attachmentUrl"
+          :preview-src-list="[attachmentUrl]"
+          fit="contain"
+          class="attachment-preview-image"
+        />
+        <iframe
+          v-else-if="attachmentKind === 'pdf'"
+          :src="attachmentUrl"
+          class="attachment-preview-pdf"
+          title="附件预览"
+        />
+        <div v-else class="attachment-preview-fallback">
+          <p>该文件类型暂不支持内嵌预览。</p>
+          <el-button type="primary" plain tag="a" :href="attachmentUrl" target="_blank" rel="noopener noreferrer">
+            在新窗口打开
+          </el-button>
+        </div>
+      </div>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -230,6 +355,7 @@ import {
   buildAllergyFacts,
   buildLatestHealthFacts,
   formatAllergySources,
+  formatInsightDate,
   formatRequestedProteins,
   type AllergyFactSource,
 } from '@/utils/recipeDesigner/dogInsight'
@@ -238,6 +364,7 @@ const props = defineProps<{
   dogId?: string | null
   draftId?: string
   seriesId?: string
+  lockReferenceDog?: boolean
   /** 当前配方能量密度（kcal/kg），用于把每日目标能量换算成饭量克数 */
   energyDensityKcalPerKg?: number | null
 }>()
@@ -262,18 +389,39 @@ const { ensure: ensureStomachOptions, labelOf: stomachLabel } =
 const proteinText = computed(() =>
   formatRequestedProteins(insight.value?.customRecipeOrder?.requestedProteinCodes)
 )
+const profileSummary = computed(() =>
+  [
+    insight.value?.dog.breedName || '未知品种',
+    genderText.value,
+    ageText.value,
+    weightText.value,
+    bcsText.value,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+)
 
-function stomachText() {
+const orderAttachments = computed(() =>
+  Array.from(
+    new Set(
+      (insight.value?.customRecipeOrder?.attachments || [])
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+    )
+  )
+)
+
+const stomachText = computed(() => {
   const codes = insight.value?.customRecipeOrder?.stomachConditions || []
   const other = String(insight.value?.customRecipeOrder?.stomachOther || '').trim()
   if (codes.length === 0 && !other) return '无'
   return `${codes.map((code) => stomachLabel(code) || code).join('、')}${
     other ? `（${other}）` : ''
   }`
-}
+})
 
 /** 只有订单里真的填了才显示；没有就整行不出现 */
-function currentFoodText() {
+const currentFoodText = computed(() => {
   const order = insight.value?.customRecipeOrder
   if (!order) return ''
   const code = order.currentFoodMain
@@ -282,10 +430,10 @@ function currentFoodText() {
   const label = code ? currentFoodLabel(code) || code : ''
   if (label && other) return `${label}（${other}）`
   return label || other
-}
+})
 
 /** 只有订单里真的填了才显示；没有就整行不出现 */
-function changeReasonText() {
+const changeReasonText = computed(() => {
   const order = insight.value?.customRecipeOrder
   if (!order) return ''
   const codes = order.changeReasons || []
@@ -294,7 +442,7 @@ function changeReasonText() {
   return `${codes.map((code) => changeReasonLabel(code) || code).join('、')}${
     other ? `（${other}）` : ''
   }`
-}
+})
 
 const additionalNotes = computed(() =>
   String(insight.value?.customRecipeOrder?.additionalNotes || '').trim()
@@ -314,8 +462,41 @@ const allergyFacts = computed(() =>
 function sourceLabel(sources: readonly AllergyFactSource[]) {
   return formatAllergySources(sources)
 }
+/**
+ * 本单过敏原文只在“确实提供了新信息”时显示。
+ * 例如档案已有鸭/猪，订单原文也是鸭、猪，就不再重复列一行。
+ */
+const orderAllergyTextExtra = computed(() => {
+  const raw = allergyFacts.value.orderText
+  if (!raw) return ''
+  const covered = new Set(
+    allergyFacts.value.allergens.map((item) => item.text.trim().toLowerCase())
+  )
+  const tokens = raw
+    .split(/[、,，;；\n\r]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+  if (tokens.length === 0) return ''
+  return tokens.some((item) => !covered.has(item.toLowerCase())) ? raw : ''
+})
+
 
 /* ---------- 最近一次就诊 / 体检 ---------- */
+
+const historyRecipes = computed(() =>
+  (insight.value?.historyRecipes || []).filter((item) => item?.name)
+)
+
+const historyKindLabel = (kind: string) =>
+  kind === 'FINISHED' ? '成品鲜食' : '定制食谱'
+
+const historyDialogVisible = ref(false)
+const historySelection = ref<DogDesignInsight['historyRecipes'][number] | null>(null)
+
+function openHistoryRecipe(item: DogDesignInsight['historyRecipes'][number]) {
+  historySelection.value = item
+  historyDialogVisible.value = true
+}
 
 const healthFacts = computed(() =>
   buildLatestHealthFacts({
@@ -409,6 +590,38 @@ const recentDays = ref<number>(90)
 
 /** 三个折叠区默认全部收起（基础档案 / 就诊体检 / 最近食材） */
 const openSections = ref<string[]>([])
+const attachmentDialogVisible = ref(false)
+const attachmentUrl = ref('')
+const attachmentTitle = ref('')
+const attachmentKind = ref<'image' | 'pdf' | 'other'>('other')
+
+function detectAttachmentKind(url: string): 'image' | 'pdf' | 'other' {
+  const value = String(url || '').trim()
+  // 媒体代理为了保护 COS key，URL 路径不含扩展名，扩展名放在 ?ext=jpg 里。
+  let ext = ''
+  try {
+    ext = String(new URL(value).searchParams.get('ext') || '').toLowerCase()
+  } catch {
+    ext = ''
+  }
+  if (!ext) {
+    const path = (value.split('?')[0] || '').toLowerCase()
+    ext = (path.match(/\.([a-z0-9]+)$/)?.[1] || '').toLowerCase()
+  }
+  if (ext === 'pdf') return 'pdf'
+  if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'svg'].includes(ext)) return 'image'
+  return 'other'
+}
+
+function openAttachment(url: string, title: string) {
+  const value = String(url || '').trim()
+  if (!value) return
+  attachmentUrl.value = value
+  attachmentTitle.value = title
+  attachmentKind.value = detectAttachmentKind(value)
+  attachmentDialogVisible.value = true
+}
+
 
 function handleRecentDaysChange() {
   void loadInsight()
@@ -618,6 +831,212 @@ defineExpose({ loadInsight })
   word-break: break-all;
   white-space: pre-wrap;
 }
+.dog-summary {
+  margin-top: 4px;
+  color: #606266;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.dog-header-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  min-height: 24px;
+}
+
+.dog-order-no {
+  color: #909399;
+  font-size: 11px;
+}
+
+.dog-lock-tip {
+  color: #909399;
+  font-size: 11px;
+  text-align: right;
+}
+
+.fact-row--stacked {
+  display: block;
+}
+
+.fact-row--stacked .fact-label {
+  display: block;
+  margin-bottom: 3px;
+}
+
+.fact-row--stacked .fact-value {
+  display: block;
+  text-align: left;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+
+
+.history-recipe-row--clickable {
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.history-recipe-row--clickable:hover {
+  border-color: var(--el-color-primary);
+  background: #f5f8ff;
+}
+
+.history-dialog-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  color: #909399;
+  font-size: 12px;
+}
+
+.history-dialog-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.history-dialog-grid h4 {
+  margin: 0 0 10px;
+  color: #303133;
+  font-size: 14px;
+}
+
+.history-ingredient-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.history-ingredient-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 10px;
+  border-bottom: 1px solid #f2f3f5;
+  color: #606266;
+  font-size: 12px;
+}
+
+.history-ingredient-list li:last-child {
+  border-bottom: 0;
+}
+
+.history-ingredient-list li span:last-child {
+  color: #909399;
+  white-space: nowrap;
+}
+
+.history-macro-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #ebeef5;
+  font-size: 12px;
+}
+
+.history-macro-table th,
+.history-macro-table td {
+  padding: 7px 8px;
+  border-bottom: 1px solid #f2f3f5;
+  text-align: left;
+}
+
+.history-macro-table th {
+  color: #909399;
+  font-weight: 500;
+  background: #fafafa;
+}
+
+.history-macro-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.history-recipe-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-recipe-row {
+  padding: 8px 10px;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  background: #fafafa;
+}
+
+.history-recipe-name {
+  color: #303133;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.history-recipe-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  color: #909399;
+  font-size: 11px;
+}
+
+.order-attachments {
+  margin-top: 8px;
+}
+
+.attachment-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.attachment-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--el-color-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.attachment-link:hover {
+  text-decoration: underline;
+}
+
+.attachment-preview-body {
+  min-height: 240px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.attachment-preview-image {
+  max-width: 100%;
+  max-height: 68vh;
+}
+
+.attachment-preview-pdf {
+  width: 100%;
+  height: 68vh;
+  border: 0;
+}
+
+.attachment-preview-fallback {
+  text-align: center;
+  color: #606266;
+}
+
 .fact-value--block {
   padding: 6px 8px;
   background: #fafafa;

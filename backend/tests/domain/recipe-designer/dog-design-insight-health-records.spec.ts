@@ -51,6 +51,7 @@ describe('DogDesignInsight · 最近就诊与体检', () => {
       status: 'TREATING',
       chiefComplaint: '腹痛',
       exams: '血常规 / 腹部B超',
+      attachments: [],
     });
     // 不返回全量列表
     expect(insight).not.toHaveProperty('medicalRecords');
@@ -76,6 +77,7 @@ describe('DogDesignInsight · 最近就诊与体检', () => {
       checkupDate: '2026-07-15T00:00:00.000Z',
       checkupType: '术前检查',
       findings: '轻度贫血',
+      attachments: [],
     });
     expect(insight).not.toHaveProperty('checkupRecords');
   });
@@ -147,5 +149,77 @@ describe('DogDesignInsight · 最近就诊与体检', () => {
     expect(insight.latestMedicalRecord).not.toHaveProperty('chiefComplaint');
     expect(insight.latestMedicalRecord).not.toHaveProperty('exams');
     expect(insight.latestCheckupRecord).not.toHaveProperty('findings');
+  });
+
+  it('只带最新一条记录的附件，并保留原始 key / URL（签名交给服务层）', () => {
+    const insight = build({
+      medicalRecords: [
+        {
+          visitDate: '2026-03-10T00:00:00.000Z',
+          diagnosis: '肠胃炎',
+          status: 'RECOVERED',
+          attachments: ['medical-record/old-report.jpg'],
+        },
+        {
+          visitDate: '2026-08-02T00:00:00.000Z',
+          diagnosis: '胰腺炎',
+          status: 'TREATING',
+          attachments: [
+            'medical-record/report-a.jpg',
+            ' https://cdn.example.com/medical-record/report-b.pdf ',
+            '',
+            null,
+          ] as any,
+        },
+      ],
+      checkupRecords: [
+        {
+          checkupDate: '2025-12-01T00:00:00.000Z',
+          checkupType: '年度体检',
+          attachments: ['checkup-record/old-report.jpg'],
+        },
+        {
+          checkupDate: '2026-07-15T00:00:00.000Z',
+          checkupType: '术前检查',
+          attachments: ['checkup-record/annual-report.jpg'],
+        },
+      ],
+    });
+
+    expect(insight.latestMedicalRecord?.attachments).toEqual([
+      'medical-record/report-a.jpg',
+      'https://cdn.example.com/medical-record/report-b.pdf',
+    ]);
+    expect(insight.latestCheckupRecord?.attachments).toEqual([
+      'checkup-record/annual-report.jpg',
+    ]);
+    // 旧记录的附件不能混进来
+    expect(JSON.stringify(insight.latestMedicalRecord)).not.toContain(
+      'old-report',
+    );
+    expect(JSON.stringify(insight.latestCheckupRecord)).not.toContain(
+      'old-report',
+    );
+  });
+
+  it('记录没有附件时返回空数组（前端可直接 .length / map）', () => {
+    const insight = build({
+      medicalRecords: [
+        {
+          visitDate: '2026-08-02T00:00:00.000Z',
+          diagnosis: '胰腺炎',
+          status: 'TREATING',
+        },
+      ],
+      checkupRecords: [
+        {
+          checkupDate: '2026-07-15T00:00:00.000Z',
+          checkupType: '年度体检',
+        },
+      ],
+    });
+
+    expect(insight.latestMedicalRecord?.attachments).toEqual([]);
+    expect(insight.latestCheckupRecord?.attachments).toEqual([]);
   });
 });

@@ -500,11 +500,6 @@
             <text class="allergy-tags__label">过敏原</text>
             <text class="allergy-tags__add" @tap="addAllergyFromOverview">+ 添加</text>
           </view>
-          <!-- 2026-10-19：定制页改为自由文本，这里把原文显示出来 -->
-          <view v-if="form.allergyFoods" class="allergy-tags__text">
-            <text class="allergy-tags__text-label">定制页 / 档案里的过敏文本</text>
-            <text class="allergy-tags__text-value">{{ form.allergyFoods }}</text>
-          </view>
           <view v-if="allergyNames.length > 0" class="allergy-tags__list">
             <view
               v-for="(name, index) in allergyNames"
@@ -518,7 +513,7 @@
               >×</text>
             </view>
           </view>
-          <text v-else-if="!form.allergyFoods" class="allergy-tags__empty">
+          <text v-if="allergyNames.length === 0" class="allergy-tags__empty">
             还没记过敏原。知道对什么过敏就在这里加一条；也可以在定制食谱里拍检测报告自动读。
           </text>
         </view>

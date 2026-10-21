@@ -136,10 +136,12 @@ describe('最近一次就诊 / 体检（fact-only）', () => {
     expect(facts.medical).toEqual({
       date: '2026-10-20',
       diagnosis: '急性肠胃炎',
+      attachments: [],
     })
     expect(facts.checkup).toEqual({
       date: '2026-09-30',
       findings: '未见明显异常',
+      attachments: [],
     })
     expect(facts.hasAny).toBe(true)
 
@@ -168,8 +170,16 @@ describe('最近一次就诊 / 体检（fact-only）', () => {
       latestMedicalRecord: { visitDate: 'not-a-date', diagnosis: '' },
       latestCheckupRecord: { checkupDate: '', findings: '  ' },
     })
-    expect(facts.medical).toEqual({ date: '日期未知', diagnosis: '未记录诊断' })
-    expect(facts.checkup).toEqual({ date: '日期未知', findings: '未记录结论' })
+    expect(facts.medical).toEqual({
+      date: '日期未知',
+      diagnosis: '未记录诊断',
+      attachments: [],
+    })
+    expect(facts.checkup).toEqual({
+      date: '日期未知',
+      findings: '未记录结论',
+      attachments: [],
+    })
   })
 
   it('ISO 日期按日历日截取，避免时区把日期挪一天', () => {

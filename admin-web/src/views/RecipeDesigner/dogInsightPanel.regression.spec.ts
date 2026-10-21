@@ -147,14 +147,10 @@ describe('爱犬指导面板 · fact-only 布局', () => {
     expect(template).not.toContain('default-expanded-names')
   })
 
-  it('基础档案保留原有事实字段，并在折叠区内', () => {
+  it('基础档案摘要进入顶部，详细字段保留在折叠区', () => {
+    expect(template).toContain('profileSummary')
     for (const label of [
-      '性别',
-      '年龄',
       '绝育状态',
-      '品种',
-      '体重',
-      '体况评分',
       '活动量',
       '每日餐数',
       '零食摄入',
@@ -232,5 +228,82 @@ describe('设计器 · 爱犬面板接线', () => {
     expect(editor).toContain('<DogInsightPanel')
     expect(editor).toContain(':dog-id="referenceDogId"')
     expect(editor).toContain('@dog-changed=')
+  })
+})
+
+describe('设计器 · 爱犬面板渲染回归（2026-10-22）', () => {
+  it('本单文案使用 computed 值，不能把函数源码渲染到页面', () => {
+    const panel = stripComments(panelSource)
+    expect(panel).toContain('const stomachText = computed(')
+    expect(panel).toContain('const currentFoodText = computed(')
+    expect(panel).toContain('const changeReasonText = computed(')
+    expect(panel).not.toContain('function stomachText()')
+    expect(panel).not.toContain('function currentFoodText()')
+    expect(panel).not.toContain('function changeReasonText()')
+    expect(panel).toContain('{{ stomachText }}')
+    expect(panel).toContain('{{ currentFoodText }}')
+    expect(panel).toContain('{{ changeReasonText }}')
+  })
+
+  it('订单过敏原文已被档案过敏原覆盖时不再重复显示', () => {
+    const panel = stripComments(panelSource)
+    expect(panel).toContain('orderAllergyTextExtra')
+    expect(panel).toContain('allergyFacts.value.orderText')
+    expect(panel).toContain('tokens.some((item) => !covered.has(item.toLowerCase()))')
+    expect(panel).toContain('{{ orderAllergyTextExtra }}')
+  })
+})
+
+describe('设计器 · 爱犬面板头部与附件（2026-10-22）', () => {
+  const panel = stripComments(panelSource)
+  const template = templateOf(panel)
+  const editor = stripComments(editorSource)
+
+  it('从订单进入时锁定参考爱犬，并展示本单号', () => {
+    expect(template).toContain('lockReferenceDog')
+    expect(template).toContain('本单已绑定该犬，不能更换')
+    expect(template).toContain('insight.customRecipeOrder.orderId')
+    const editor = stripComments(editorSource)
+    expect(editor).toContain(':lock-reference-dog="Boolean(route.query.orderId)"')
+  })
+
+  it('顾客随单附件与最近就诊/体检附件都有入口', () => {
+    expect(template).toContain('顾客随单附件')
+    expect(template).toContain('orderAttachments')
+    expect(template).toContain('查看就诊附件')
+    expect(template).toContain('查看体检附件')
+  })
+
+  it('基础档案摘要进入顶部，详情折叠', () => {
+    expect(template).toContain('profileSummary')
+    expect(template).toContain('dog-summary')
+    expect(template).toContain('name="profile"')
+  })
+})
+
+describe('设计器 · 爱犬信息命名 / 附件预览 / 历史食谱（2026-10-22）', () => {
+  it('面板标题改为「爱犬信息」', () => {
+    const editor = stripComments(editorSource)
+    expect(editor).toContain('<div class="pane-title">爱犬信息</div>')
+    expect(editor).not.toContain('<div class="pane-title">爱犬指导</div>')
+  })
+
+  it('附件在当前页弹窗预览，不再新开标签页', () => {
+    const panel = stripComments(panelSource)
+    const template = templateOf(panel)
+    expect(panel).toContain('attachment-preview-dialog')
+    expect(panel).toContain('openAttachment(url')
+    expect(panel).toContain('attachment-preview-pdf')
+    expect(panel).toContain('attachment-preview-image')
+    expect(template).not.toContain(':href="url"')
+  })
+
+  it('历史订单食谱只展示名称、类型、日期', () => {
+    const panel = stripComments(panelSource)
+    const template = templateOf(panel)
+    expect(template).toContain('历史订单食谱')
+    expect(template).toContain('historyRecipes')
+    expect(template).toContain('historyKindLabel')
+    expect(template).not.toContain('recipeSnapshot')
   })
 })

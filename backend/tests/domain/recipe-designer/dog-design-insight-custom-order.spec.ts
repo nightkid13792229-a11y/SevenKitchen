@@ -68,6 +68,33 @@ describe('DogDesignInsight · 顾客的定制需求', () => {
     ]);
   });
 
+  it('把定制单附件归一化为字符串数组（签名交给服务层）', () => {
+    const insight = build({
+      ...customOrder,
+      // 库里是 JSON 列：历史数据可能混入空串 / null / 非字符串
+      attachments: [
+        'custom-recipe-attachments/order-a.jpg',
+        ' https://cdn.example.com/custom-recipe-attachments/order-b.pdf ',
+        '',
+        null,
+        42,
+      ],
+    });
+
+    expect(insight.customRecipeOrder?.attachments).toEqual([
+      'custom-recipe-attachments/order-a.jpg',
+      'https://cdn.example.com/custom-recipe-attachments/order-b.pdf',
+    ]);
+  });
+
+  it('定制单没有附件时返回空数组', () => {
+    expect(build(customOrder).customRecipeOrder?.attachments).toEqual([]);
+    expect(
+      build({ ...customOrder, attachments: null }).customRecipeOrder
+        ?.attachments,
+    ).toEqual([]);
+  });
+
   it('没有定制单时是 null，而不是空对象（前端据此决定要不要渲染）', () => {
     expect(build(undefined).customRecipeOrder).toBeNull();
     expect(build(null).customRecipeOrder).toBeNull();

@@ -56,6 +56,7 @@ import type {
   FediafDogScenarioCode,
 } from '../../domain/recipe-designer/types';
 import { PrismaService } from '../../infrastructure/prisma.service';
+import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import type {
   AddRecipeDesignItemDto,
   CopyRecipeSeriesStageIngredientsDto,
@@ -79,7 +80,11 @@ import {
   FEDIAF_TARGET_PROVIDER,
   type FediafTargetProvider,
 } from './fediaf-target-provider';
-import { buildDogDesignInsight } from '../../domain/recipe-designer/dog-design-insight';
+import {
+  buildDogDesignInsight,
+  normalizeInsightAttachments,
+  type DogDesignInsight,
+} from '../../domain/recipe-designer/dog-design-insight';
 import {
   collectAllergyKeywords,
   formatAllergyKeywordsForAi,
@@ -1316,6 +1321,16 @@ export class RecipeDesignerService {
      */
     @Optional()
     private readonly globalConfigService?: GlobalConfigService,
+    /**
+     * COS 服务（2026-10-22）。
+     *
+     * 只用于给设计洞察里的就诊/体检/定制单**附件**换短时签名 URL。
+     * 同样放在参数表**最后**并 @Optional：既有测试（以及
+     * `production-loss-rate.spec.ts`）按位置构造服务，插在中间会全部错位；
+     * 本地未配置 COS 时保持原样返回，不影响任何既有字段。
+     */
+    @Optional()
+    private readonly cosService?: TencentCosService,
   ) {}
 
   /**
@@ -7972,6 +7987,43 @@ export class RecipeDesignerService {
       },
     });
 
+    /**
+     * 历史食谱清单里的定制单（2026-10-22）。
+     *
+     * 只取**已关联正式食谱**（`recipeId` 非空）且未取消的定制单：
+     * 没有关联食谱的单一律没有食谱可展示。除身份字段外，
+     * 一并取营养报告与食谱项（名称/示例重量），供 builder 归一化明细；
+     * 问卷答案/附件等整单内容不进入洞察。
+     */
+    const customRecipeHistoryOrders =
+      await this.prisma.customRecipeOrder.findMany({
+        where: {
+          dogId,
+          status: { not: CustomRecipeStatus.CANCELLED },
+          recipeId: { not: null },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          status: true,
+          createdAt: true,
+          deliveredAt: true,
+          recipe: {
+            select: {
+              id: true,
+              name: true,
+              nutritionDetailedData: true,
+              items: {
+                select: {
+                  exampleWeight: true,
+                  ingredient: { select: { name: true } },
+                },
+              },
+            },
+          },
+        },
+      });
+
     // 「最近吃过的食材」：订单至少推进到冷冻中（FREEZING），且最近 N 天内实际食用
     const recentWindowStart = new Date(
       Date.now() - windowDays * 24 * 60 * 60 * 1000,
@@ -8027,6 +8079,8 @@ export class RecipeDesignerService {
         /** 多份购买 / 主蛋白偏好（2026-10-21）：设计器要按份数与顾客选的蛋白来设计 */
         recipeQuantity: true,
         requestedProteinCodes: true,
+        /** 顾客在本单上传的附件（2026-10-22）：只读，服务层换签名 URL */
+        attachments: true,
         createdAt: true,
       },
     });
@@ -8048,6 +8102,8 @@ export class RecipeDesignerService {
           status: true,
           chiefComplaint: true,
           exams: true,
+          /** 附件（2026-10-22）：只取最新一条的附件，化验原始数值仍不查询 */
+          attachments: true,
         },
       }),
       this.prisma.checkupRecord.findMany({
@@ -8058,6 +8114,8 @@ export class RecipeDesignerService {
           checkupDate: true,
           checkupType: true,
           findings: true,
+          /** 附件（2026-10-22）：只取最新一条的附件，labValues 仍不查询 */
+          attachments: true,
         },
       }),
     ]);
@@ -8070,6 +8128,7 @@ export class RecipeDesignerService {
       lifeStageLabel,
       medicalRecords,
       checkupRecords,
+      customRecipeOrders: customRecipeHistoryOrders,
       customRecipeOrder: customOrder
         ? {
             orderId: customOrder.orderId,
@@ -8091,6 +8150,7 @@ export class RecipeDesignerService {
             allergyStatus: customOrder.allergyStatus ?? null,
             recipeQuantity: customOrder.recipeQuantity ?? 1,
             requestedProteinCodes: customOrder.requestedProteinCodes ?? [],
+            attachments: normalizeInsightAttachments(customOrder.attachments),
             createdAt: customOrder.createdAt
               ? customOrder.createdAt.toISOString()
               : null,
@@ -8101,7 +8161,49 @@ export class RecipeDesignerService {
     const aiEnabled =
       ((await this.aiDesignSuggestionService?.isAvailable()) ?? false) === true;
 
-    return { ...insight, aiEnabled };
+    return { ...this.signInsightAttachments(insight), aiEnabled };
+  }
+
+  /**
+   * 设计洞察里的附件 → 短时签名 URL（2026-10-22）。
+   *
+   * 库里存的是 COS key（老数据可能是公开 URL）。就诊/体检/定制单附件
+   * 属于敏感资料，前端不能拿 key 去拼公共地址，所以统一由服务端签发。
+   *
+   * 未注入 COS（本地/测试/未配置）时**原样返回**；签发失败（返回空串）
+   * 也回退原值 —— 旧公开 URL 至少还能直接打开，不能因为签名失败把附件弄丢。
+   * 只处理**最新一条**就诊/体检与最近一笔定制单，不动其它字段。
+   */
+  private signInsightAttachments(insight: DogDesignInsight): DogDesignInsight {
+    const cosService = this.cosService;
+    if (!cosService || typeof cosService.getSensitiveMediaUrl !== 'function') {
+      return insight;
+    }
+    const sign = (value: string) =>
+      cosService.getSensitiveMediaUrl(value) || value;
+    const signList = (values: string[]) => values.map(sign);
+
+    return {
+      ...insight,
+      latestMedicalRecord: insight.latestMedicalRecord
+        ? {
+            ...insight.latestMedicalRecord,
+            attachments: signList(insight.latestMedicalRecord.attachments),
+          }
+        : null,
+      latestCheckupRecord: insight.latestCheckupRecord
+        ? {
+            ...insight.latestCheckupRecord,
+            attachments: signList(insight.latestCheckupRecord.attachments),
+          }
+        : null,
+      customRecipeOrder: insight.customRecipeOrder
+        ? {
+            ...insight.customRecipeOrder,
+            attachments: signList(insight.customRecipeOrder.attachments),
+          }
+        : null,
+    };
   }
 
   async updateDogDesignNotes(

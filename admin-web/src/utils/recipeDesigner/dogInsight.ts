@@ -153,23 +153,27 @@ export interface LatestMedicalRecordLike {
   status?: string | null
   chiefComplaint?: string | null
   exams?: string | null
+  attachments?: string[] | null
 }
 
 export interface LatestCheckupRecordLike {
   checkupDate?: string | Date | null
   checkupType?: string | null
   findings?: string | null
+  attachments?: string[] | null
 }
 
 export interface LatestMedicalFact {
   /** YYYY-MM-DD；日期无法解析时为「日期未知」 */
   date: string
   diagnosis: string
+  attachments: string[]
 }
 
 export interface LatestCheckupFact {
   date: string
   findings: string
+  attachments: string[]
 }
 
 export interface DogLatestHealthFacts {
@@ -209,6 +213,16 @@ export function formatInsightDate(
  * 后端已经把「最近」筛好了，这里不再排序，也不读取 `status` /
  * `chiefComplaint` / `exams` / 任何化验数值 —— 面板只显示日期 + 诊断/结论。
  */
+function cleanAttachmentList(value?: string[] | null): string[] {
+  return Array.from(
+    new Set(
+      (Array.isArray(value) ? value : [])
+        .map((item) => textOf(item))
+        .filter(Boolean)
+    )
+  )
+}
+
 export function buildLatestHealthFacts(input: {
   latestMedicalRecord?: LatestMedicalRecordLike | null
   latestCheckupRecord?: LatestCheckupRecordLike | null
@@ -220,6 +234,7 @@ export function buildLatestHealthFacts(input: {
     ? {
         date: formatInsightDate(medicalRecord.visitDate) || '日期未知',
         diagnosis: textOf(medicalRecord.diagnosis) || '未记录诊断',
+        attachments: cleanAttachmentList(medicalRecord.attachments),
       }
     : null
 
@@ -227,6 +242,7 @@ export function buildLatestHealthFacts(input: {
     ? {
         date: formatInsightDate(checkupRecord.checkupDate) || '日期未知',
         findings: textOf(checkupRecord.findings) || '未记录结论',
+        attachments: cleanAttachmentList(checkupRecord.attachments),
       }
     : null
 

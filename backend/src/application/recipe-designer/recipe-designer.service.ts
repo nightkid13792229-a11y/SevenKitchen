@@ -5568,7 +5568,12 @@ export class RecipeDesignerService {
       displayName?: string | null;
     },
   ) {
-    const itemCreates = this.buildPrivateRecipeSnapshotItemCreateData(draft);
+    const privateSupplementTargetMap =
+      this.buildPrivateSnapshotSupplementTargetMap(draft);
+    const itemCreates = this.buildPrivateRecipeSnapshotItemCreateData(
+      draft,
+      privateSupplementTargetMap,
+    );
     const customOrderId = options.customOrderId;
     const baseData = {
       name: this.resolvePrivateRecipeSnapshotDisplayName(
@@ -6245,13 +6250,20 @@ export class RecipeDesignerService {
 
   private buildPrivateRecipeSnapshotItemCreateData(
     draft: DesignRecipeWithItems,
+    privateSupplementTargetMap?: Map<
+      string,
+      PublishedSupplementNutrientTarget[]
+    >,
   ) {
     return draft.items
       .filter((item) => this.isItemIncludedInAssessment(item))
       .map((item) => {
-        const supplementTargets = this.normalizeDesignSupplementTargets(
-          item.supplementTargets,
-        );
+        const publishedTargets = privateSupplementTargetMap?.get(item.id) ?? [];
+        const primaryTarget = publishedTargets[0];
+        const supplementTargets =
+          publishedTargets.length > 0
+            ? (this.buildPublishedSupplementTargets(publishedTargets) ?? [])
+            : this.normalizeDesignSupplementTargets(item.supplementTargets);
         return {
           ingredientId: this.resolveIngredientId(item),
           nutritionFoodId: item.nutritionFoodId,
@@ -6262,8 +6274,10 @@ export class RecipeDesignerService {
             item,
             draft.totalWeightG,
           ),
-          nutrientTargetKey: item.nutrientTargetKey,
-          nutrientTargetValue: item.nutrientTargetValue,
+          nutrientTargetKey:
+            primaryTarget?.nutrientTargetKey ?? item.nutrientTargetKey,
+          nutrientTargetValue:
+            primaryTarget?.nutrientTargetValue ?? item.nutrientTargetValue,
           ...(supplementTargets.length > 0
             ? { supplementTargets: this.toJsonValue(supplementTargets) }
             : {}),
@@ -6271,6 +6285,77 @@ export class RecipeDesignerService {
           exampleWeight: item.weightG,
         };
       });
+  }
+
+  /**
+   * 私密快照也要有“每 kg 食材添加量”。
+   *
+   * 编辑器的补剂目标可能为空（特别是从模板复制/售后改稿生成的草稿）。
+   * 为空时按补剂档案里第一个有值的营养字段反推，避免小程序详情页整列 `-`。
+   */
+  private buildPrivateSnapshotSupplementTargetMap(
+    draft: DesignRecipeWithItems,
+  ): Map<string, PublishedSupplementNutrientTarget[]> {
+    const result = new Map<string, PublishedSupplementNutrientTarget[]>();
+    if (draft.totalWeightG <= 0) return result;
+
+    for (const item of draft.items) {
+      if (
+        !this.isItemIncludedInAssessment(item) ||
+        this.resolveIngredientType(item) !== IngredientType.SUPPLEMENT
+      ) {
+        continue;
+      }
+
+      const explicit = this.normalizeDesignSupplementTargets(
+        item.supplementTargets,
+      );
+      if (explicit.length > 0) {
+        result.set(
+          item.id,
+          explicit
+            .filter(
+              (target) =>
+                typeof target.targetValue === 'number' &&
+                Number.isFinite(target.targetValue) &&
+                target.targetValue > 0,
+            )
+            .map((target) => ({
+              nutrientTargetKey: target.nutrientTargetKey,
+              nutrientTargetValue: target.targetValue as number,
+              fieldPath: target.fieldPath,
+              label: target.label,
+              unit: target.unit,
+            })),
+        );
+        continue;
+      }
+
+      const profile = this.toAssessmentNutritionProfile(item);
+      for (const field of listSupplementTargetFields()) {
+        const read = readProfileFieldAmount(
+          profile,
+          field.fieldPath,
+          item.weightG,
+        );
+        if (read.missing || read.amount === null || read.amount <= 0) continue;
+        const value = this.roundPublishedSupplementTargetValue(
+          (read.amount / draft.totalWeightG) * 1000,
+        );
+        if (!Number.isFinite(value) || value <= 0) continue;
+        result.set(item.id, [
+          {
+            nutrientTargetKey: field.fieldKey,
+            nutrientTargetValue: value,
+            fieldPath: field.fieldPath,
+            label: field.label,
+            unit: field.unit,
+          },
+        ]);
+        break;
+      }
+    }
+    return result;
   }
 
   private resolvePrivateRecipeItemRatio(

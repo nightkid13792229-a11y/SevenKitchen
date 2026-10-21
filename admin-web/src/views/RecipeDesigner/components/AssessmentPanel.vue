@@ -86,7 +86,7 @@
     </template>
 
     <el-dialog v-model="detailVisible" :title="detailTitle" width="540px" class="contrib-dialog" append-to-body>
-      <div v-if="activeEntry" class="detail-summary">
+      <div v-if="activeEntry" v-loading="detailLoading" class="detail-summary">
         <div class="detail-row">
           <span>当前含量</span>
           <b>{{ detailCurrentText }}</b>
@@ -257,6 +257,10 @@ const props = defineProps<{
   scenario?: FediafDogScenario
   /** 弹窗内修改原料用量：由编辑器实现（本地生效 + 保存队列） */
   onUpdateItemWeight?: (itemId: string, weightG: number) => Promise<void> | void
+  /** 点击营养素后才加载原料贡献明细（列表响应已不再携带） */
+  loadContributors?: (
+    nutrientKey: string
+  ) => Promise<AssessmentNutrientContributor[]>
 }>()
 
 const emit = defineEmits<{
@@ -544,6 +548,7 @@ function toggleGroup(key: string) {
 /* ============ 点击弹窗：原料贡献明细 ============ */
 
 const detailVisible = ref(false)
+const detailLoading = ref(false)
 const activeEntry = ref<GroupedAssessmentEntry | null>(null)
 
 const detailTitle = computed(() => {
@@ -940,10 +945,24 @@ async function handleSmartAdd(option: RecipeDesignerIngredientOption) {
   nutrientPickerVisible.value = false
 }
 
-function openDetail(row: DisplayRow) {
+async function openDetail(row: DisplayRow) {
   activeEntry.value = row.entry
   clearWeightDrafts()
   detailVisible.value = true
+  if (row.entry.contributors?.length || !props.loadContributors) return
+  detailLoading.value = true
+  try {
+    const contributors = await props.loadContributors(row.entry.nutrientKey)
+    if (activeEntry.value?.nutrientKey !== row.entry.nutrientKey) return
+    activeEntry.value = {
+      ...activeEntry.value,
+      contributors
+    }
+  } catch {
+    // 明细加载失败不影响列表；弹窗保留空状态
+  } finally {
+    detailLoading.value = false
+  }
 }
 </script>
 

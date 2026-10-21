@@ -720,6 +720,30 @@ export class RecipeDesignerController {
     return ApiResponseDto.success(result);
   }
 
+  @Post('assess-contributors')
+  @ApiOperation({
+    summary: 'Return ingredient contributors for one assessed nutrient',
+  })
+  async assessContributors(
+    @Body()
+    body: {
+      scenario: string;
+      nutrientKey: string;
+      items: Array<{
+        id: string;
+        name: string;
+        ingredientType?: string | null;
+        weightG: number;
+        nutritionProfile?: unknown;
+      }>;
+    },
+  ) {
+    const result = await this.recipeDesignerService.assessContributors(
+      body ?? { scenario: '', nutrientKey: '', items: [] },
+    );
+    return ApiResponseDto.success(result);
+  }
+
   @Get('drafts/:id/assessment-inputs')
   @ApiOperation({
     summary: 'Return local assessment inputs (targets + item profiles) for a design draft',

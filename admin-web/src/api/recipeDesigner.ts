@@ -157,6 +157,19 @@ export const recipeDesignerApi = {
   }): Promise<Record<string, unknown>> =>
     api.post('/recipe-designer/assess-items', payload),
 
+  assessContributors: (payload: {
+    scenario: string
+    nutrientKey: string
+    items: Array<{
+      id: string
+      name: string
+      ingredientType?: string | null
+      weightG: number
+      nutritionProfile?: unknown
+    }>
+  }): Promise<{ nutrientKey: string; contributors: Array<Record<string, unknown>> }> =>
+    api.post('/recipe-designer/assess-contributors', payload),
+
   assessDraft: (draftId: string): Promise<unknown> =>
     api.post(`/recipe-designer/drafts/${draftId}/assess`),
   publishDraft: (draftId: string, data?: PublishDesignRecipePayload): Promise<unknown> =>

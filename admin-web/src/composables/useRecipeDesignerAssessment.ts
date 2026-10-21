@@ -21,7 +21,7 @@
  * 这样既满足"计算在后端"，又不会把卡顿带回来。
  */
 import { ref, shallowRef } from 'vue'
-import type { DesignRecipeAssessmentResult } from '@/utils/recipeDesigner/assessmentTypes'
+import type { AssessmentNutrientContributor, DesignRecipeAssessmentResult } from '@/utils/recipeDesigner/assessmentTypes'
 import type { NutritionProfile } from '@/utils/recipeDesigner/nutritionProfileTypes'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import type {
@@ -250,6 +250,28 @@ export function useRecipeDesignerAssessment() {
     }
   }
 
+  /**
+   * 点开单个营养素时才取贡献明细（2026-10-22）。
+   * 列表响应不再携带全部 contributors，避免每次编辑传输数百 KB。
+   */
+  async function loadContributors(
+    scenario: FediafDogScenario,
+    draftId: string,
+    items: DesignerItem[],
+    nutrientKey: string
+  ): Promise<AssessmentNutrientContributor[]> {
+    const engineItems = buildEngineItems(draftId, items).filter(
+      (item) => item.weightG > 0
+    )
+    if (engineItems.length === 0) return []
+    const result = await recipeDesignerApi.assessContributors({
+      scenario: String(scenario),
+      nutrientKey,
+      items: engineItems
+    })
+    return (result.contributors ?? []) as unknown as AssessmentNutrientContributor[]
+  }
+
   /** 离开编辑器时清掉待执行的防抖任务（免得对着已销毁的组件写状态） */
   function dispose(): void {
     if (debounceTimer) clearTimeout(debounceTimer)
@@ -268,6 +290,7 @@ export function useRecipeDesignerAssessment() {
     assessError,
     schedule,
     compute,
+    loadContributors,
     dispose
   }
 }

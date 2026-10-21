@@ -5203,6 +5203,51 @@ export class RecipeDesignerService {
     return this.toClientAssessmentResult(result) as never;
   }
 
+  /**
+   * 点开某个营养素时才取原料贡献明细（2026-10-22）。
+   *
+   * `/assess-items` 不再返回全部 contributors；否则 20 个原料 × 几十项
+   * 会让每次编辑的响应达到数百 KB。这里只重算一次并返回被点开的那一项。
+   */
+  async assessContributors(input: {
+    scenario: string;
+    nutrientKey: string;
+    items: Array<{
+      id: string;
+      name: string;
+      ingredientType?: string | null;
+      weightG: number;
+      nutritionProfile?: unknown;
+    }>;
+  }): Promise<{
+    nutrientKey: string;
+    contributors: NonNullable<
+      DesignRecipeAssessmentResult['groupedEntries'][number]['contributors']
+    >;
+  }> {
+    const scenario = String(input.scenario || '').trim();
+    const nutrientKey = String(input.nutrientKey || '').trim();
+    if (!scenario || !nutrientKey) {
+      throw new BadRequestException('缺少 scenario 或 nutrientKey');
+    }
+    if (!Array.isArray(input.items) || input.items.length === 0) {
+      throw new BadRequestException('配方里还没有原料，暂时无法评估');
+    }
+    const targets = await this.targetProvider.getTargets(scenario as never);
+    const result = assessRecipeDraft({
+      scenario: scenario as never,
+      items: input.items as never,
+      targets,
+    } as never);
+    const group = result.groupedEntries.find(
+      (entry) => entry.nutrientKey === nutrientKey,
+    );
+    return {
+      nutrientKey,
+      contributors: group?.contributors ?? [],
+    };
+  }
+
   async assessDraft(
     id: string,
     access: RecipeDesignerAccessInput,

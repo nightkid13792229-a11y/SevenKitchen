@@ -227,6 +227,7 @@
             :loading-inputs="assessmentLoading"
             :scenario="draft?.fediafDogScenario"
             :on-update-item-weight="applyItemWeight"
+            :load-contributors="loadAssessmentContributors"
             @add-ingredient="handleAddOption"
           />
         </div>
@@ -407,6 +408,7 @@ const {
   assessError,
   schedule: scheduleAssessment,
   compute: computeAssessment,
+  loadContributors: loadContributorsFromApi,
   dispose: disposeAssessment
 } = useRecipeDesignerAssessment()
 const {
@@ -419,6 +421,16 @@ const {
   cancelBatchOrders,
   cancelItemOps
 } = useDesignerSaveQueue()
+
+async function loadAssessmentContributors(nutrientKey: string) {
+  if (!draft.value) return []
+  return loadContributorsFromApi(
+    draft.value.fediafDogScenario,
+    draft.value.id,
+    items.value,
+    nutrientKey
+  )
+}
 
 /**
  * 营养评估（2026-10-16 批次 5.3 改成**后端算**）

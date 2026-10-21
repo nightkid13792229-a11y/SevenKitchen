@@ -56,7 +56,7 @@ describe('一键交付与重新交付（第 1、2 条）', () => {
   })
 
   it('候选为空时给出可执行的空态，并保留「在设计器中设计」入口', () => {
-    expect(orderDetail).toContain('description="这只狗还没有已发布的定制食谱，请先在设计器里设计并发布"')
+    expect(orderDetail).toContain('description="这只狗还没有已发布的定制食谱，请先点上方「在设计器中设计」"')
     expect(orderDetail).toContain('@click="openInDesigner"')
     expect(orderDetail).toContain('在设计器中设计')
   })
@@ -105,24 +105,22 @@ describe('手工创建食谱已收口（2026-10-21）', () => {
 describe('设计资料收口：订单抽屉不展开健康明细（2026-10-21）', () => {
   const cleanDetail = stripComments(orderDetail)
 
-  it('★ 保留「下单后档案有更新」提醒，并放在设计资料区里', () => {
-    const design = cleanDetail.indexOf('设计资料')
+  it('★ 「下单后档案有更新」提醒移到订单顶部，不再有设计资料区', () => {
     const alert = cleanDetail.indexOf('下单后档案有更新，请按最新信息设计')
-    const notes = cleanDetail.indexOf('订单备注')
-    expect(design).toBeGreaterThan(-1)
-    expect(alert).toBeGreaterThan(design)
-    expect(notes).toBeGreaterThan(alert)
+    const orderInfo = cleanDetail.indexOf('订单信息')
+    expect(alert).toBeGreaterThan(-1)
+    expect(orderInfo).toBeGreaterThan(alert)
     expect(cleanDetail).toContain('profileUpdateDetail')
     expect(cleanDetail).toContain('v-if="allergyComparison.changed || medicalComparison.changed"')
+    expect(cleanDetail).not.toContain('设计资料')
   })
 
-  it('★ 只留紧凑摘要与设计器 / 健康档案入口', () => {
-    expect(cleanDetail).toContain('designSummary')
-    expect(cleanDetail).toContain('有过敏记录')
-    expect(cleanDetail).toContain('请在设计器查看')
-    expect(cleanDetail).toContain('打开食谱设计器')
-    expect(cleanDetail).toContain('查看健康档案')
-    expect(cleanDetail).toContain('@click="openHealthProfile"')
+  it('★ 设计入口只保留在交付板块顶部', () => {
+    expect(cleanDetail).toContain('delivery-toolbar')
+    expect(cleanDetail).toContain('在设计器中设计')
+    expect(cleanDetail).not.toContain('designSummary')
+    expect(cleanDetail).not.toContain('打开食谱设计器')
+    expect(cleanDetail).not.toContain('查看健康档案')
   })
 
   it('★ 详细医疗 / 饲喂 / 饮食字段不再铺进订单抽屉', () => {
@@ -180,7 +178,7 @@ describe('订单抽屉的复制、脱敏与年龄（2026-10-21）', () => {
 describe('未付款禁止进入设计器；PAID 单先转制作中（2026-10-21）', () => {
   const cleanDetail = stripComments(orderDetail)
   const start = cleanDetail.indexOf('const openInDesigner')
-  const end = cleanDetail.indexOf('/** 设计资料明细', start)
+  const end = cleanDetail.indexOf('const cancelOrder', start)
   const block = cleanDetail.slice(start, end > start ? end : start + 3000)
 
   it('按钮在未付款 / 已取消时禁用，并说明原因', () => {

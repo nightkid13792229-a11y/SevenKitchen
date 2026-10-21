@@ -4,6 +4,7 @@ import { validate } from 'class-validator';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { RecipeDesignerService } from '../../../src/application/recipe-designer/recipe-designer.service';
+import { OrderRecipeDesignService } from '../../../src/application/recipe-designer/order-recipe-design.service';
 import { OrderRecipeTemplateService } from '../../../src/application/recipe-designer/order-recipe-template.service';
 import { SupplementLabelExtractionService } from '../../../src/application/recipe-designer/supplement-label-extraction.service';
 import { TencentCosService } from '../../../src/infrastructure/services/tencent-cos.service';
@@ -213,6 +214,16 @@ describe('RecipeDesignerController', () => {
         {
           provide: OrderRecipeTemplateService,
           useValue: orderRecipeTemplateService,
+        },
+        {
+          provide: OrderRecipeDesignService,
+          useValue: {
+            getWorkspace: jest.fn(),
+            createFromTemplate: jest.fn(),
+            createBlank: jest.fn(),
+            stageDraft: jest.fn(),
+            removeSlot: jest.fn(),
+          },
         },
         {
           provide: AuthGuard,

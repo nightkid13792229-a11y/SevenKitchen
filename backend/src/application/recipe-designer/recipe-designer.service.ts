@@ -16,6 +16,7 @@ import {
   NutritionFoodCategory,
   NutritionFoodStatus,
   Prisma,
+  RecipeDesignMode,
   RecipeSeriesBusinessStatus,
   RecipeStatus,
   RecipeSeriesStatus,
@@ -592,6 +593,8 @@ type RecipeSeriesWorkbenchRecord = {
   createdBy?: string | null;
   customerDogId?: string | null;
   referenceDogId?: string | null;
+  /** 设计上下文（2026-10-22）：订单绑定系列不进入产品线列表 */
+  designMode?: string | null;
   deletedAt?: Date | null;
   updatedAt?: Date | string | null;
   designs: Array<{
@@ -2165,13 +2168,22 @@ export class RecipeDesignerService {
 
     const hasMore = usePagination && series.length > pageSize;
     const visibleSeries = hasMore ? series.slice(0, pageSize) : series;
+    /**
+     * 2026-10-22：订单绑定系列只从订单设计工作台进入，不应铺满产品线列表。
+     * 历史系列 `designMode` 为空，按 CATALOG 处理（与数据库默认值一致）。
+     */
+    const catalogSeries = visibleSeries.filter(
+      (record) =>
+        (record.designMode ?? RecipeDesignMode.CATALOG) ===
+        RecipeDesignMode.CATALOG,
+    );
 
     if (!isInternalRecipeDesignerRole(context)) {
       const dogNameById = await this.loadCustomerDogNameMapForSeries(
-        visibleSeries,
+        catalogSeries,
         context,
       );
-      const items = visibleSeries.map((record) =>
+      const items = catalogSeries.map((record) =>
         this.buildCustomerSeriesCard(
           record,
           dogNameById,
@@ -2182,10 +2194,9 @@ export class RecipeDesignerService {
       return usePagination ? { items, page, pageSize, hasMore } : items;
     }
 
-    const referenceDogNameById = await this.loadReferenceDogNameMapForSeries(
-      visibleSeries,
-    );
-    const cards = visibleSeries.map((record) => {
+    const referenceDogNameById =
+      await this.loadReferenceDogNameMapForSeries(catalogSeries);
+    const cards = catalogSeries.map((record) => {
       const referenceDogIds = [
         record.referenceDogId,
         ...record.recipes.map((recipe) => recipe.referenceDogId),
@@ -2365,6 +2376,222 @@ export class RecipeDesignerService {
     }
 
     throw new BadRequestException('配方系列创建失败，请重试');
+  }
+
+  /**
+   * 订单绑定食谱设计 · 创建一个槽位的系列 / 草稿（2026-10-22 · Task 3）。
+   *
+   * 约定（与设计文档 §6.2 一致）：**一份 = 一个独立系列 + 一个草稿**。
+   *  · 系列写死 `designMode=ORDER`、`orderId`、`orderQuantity`，
+   *    `referenceDogId` / `customerDogId` 都锁定为订单狗狗；
+   *  · 从模板创建时复用 `createCopiedSeriesDesignFromRecipe` 做原料映射，
+   *    不复制原食谱的顾客、订单或交付关系，原食谱不做任何修改；
+   *  · 空白草稿只建系列和空设计，不复制原料。
+   *
+   * 容量、订单状态、阶段提示由 `OrderRecipeDesignService` 负责；
+   * 本方法只负责「建系列 + 建草稿」这一件事。
+   */
+  async createOrderBoundSeriesDesign(input: {
+    /** `custom_recipe_order.id`（uuid，不是对外订单号） */
+    customOrderId: string;
+    dogId: string;
+    dogName: string;
+    orderQuantity: number;
+    createdBy: string;
+    name?: string;
+    sourceRecipeId?: string | null;
+    /** 模板未标注阶段时的兜底阶段（通常是订单狗狗的当前阶段） */
+    defaultLifeStage?: string | null;
+  }): Promise<{
+    seriesId: string;
+    draftId: string;
+    name: string;
+    sourceRecipeId: string | null;
+    sourceRecipeVersion: number | null;
+    sourceKind: 'CATALOG' | 'CUSTOM' | null;
+  }> {
+    const sourceRecipeId = input.sourceRecipeId?.trim() || null;
+
+    for (
+      let attempt = 1;
+      attempt <= DESIGN_RECIPE_VERSION_CREATE_MAX_ATTEMPTS;
+      attempt++
+    ) {
+      try {
+        return await this.prisma.$transaction(
+          async (tx) => {
+            let template: RecipeSeriesCopyableRecipe | null = null;
+            let sourceKind: 'CATALOG' | 'CUSTOM' | null = null;
+            let templateName = '';
+
+            if (sourceRecipeId) {
+              const recipe = await tx.recipe.findUnique({
+                where: { id: sourceRecipeId },
+                include: {
+                  items: { orderBy: { sortOrder: 'asc' } },
+                },
+              });
+              if (!recipe) {
+                throw new NotFoundException('模板食谱不存在');
+              }
+              if (
+                recipe.status !== RecipeStatus.PUBLIC &&
+                recipe.status !== RecipeStatus.PRIVATE_CUSTOM
+              ) {
+                throw new BadRequestException(
+                  '模板食谱不可用，请选择已上架或私密定制食谱',
+                );
+              }
+              sourceKind =
+                recipe.status === RecipeStatus.PUBLIC ? 'CATALOG' : 'CUSTOM';
+              templateName = recipe.name;
+              template = {
+                ...recipe,
+                seriesLifeStage: this.resolveOrderTemplateLifeStage(
+                  recipe,
+                  input.defaultLifeStage,
+                ),
+              } as unknown as RecipeSeriesCopyableRecipe;
+            }
+
+            const name = (
+              input.name?.trim() ||
+              `${input.dogName}定制 · ${templateName || '新食谱'}`
+            ).slice(0, 200);
+            if (!name) {
+              throw new BadRequestException('请填写食谱名称');
+            }
+
+            const series = await tx.recipeSeries.create({
+              data: {
+                name,
+                status: RecipeSeriesStatus.ACTIVE,
+                createdBy: input.createdBy,
+                designMode: RecipeDesignMode.ORDER,
+                orderId: input.customOrderId,
+                orderQuantity: input.orderQuantity,
+                customerDogId: input.dogId,
+                referenceDogId: input.dogId,
+              },
+            });
+
+            const version = await this.allocateNextDesignRecipeVersion(
+              tx,
+              name,
+            );
+
+            let draft: DesignRecipeWithItems;
+            if (template) {
+              draft = await this.createCopiedSeriesDesignFromRecipe(
+                tx,
+                template,
+                series.id,
+                name,
+                version,
+                input.createdBy,
+                input.dogId,
+              );
+            } else {
+              const blankLifeStage = this.resolveOrderTemplateLifeStage(
+                null,
+                input.defaultLifeStage,
+              );
+              draft = (await tx.designRecipe.create({
+                data: {
+                  name,
+                  version,
+                  status: DesignRecipeStatus.DRAFT,
+                  fediafDogScenario:
+                    mapSeriesLifeStageToScenario(blankLifeStage),
+                  nutritionStandard: 'FEDIAF_2025',
+                  targetHealthTags: [],
+                  applicableLifeStages: [blankLifeStage],
+                  createdBy: input.createdBy,
+                  seriesId: series.id,
+                  seriesLifeStage: blankLifeStage,
+                  customerDogId: input.dogId,
+                } as Prisma.DesignRecipeUncheckedCreateInput,
+                include: DESIGN_RECIPE_INCLUDE,
+              })) as unknown as DesignRecipeWithItems;
+            }
+
+            return {
+              seriesId: series.id,
+              draftId: draft.id,
+              name,
+              sourceRecipeId,
+              sourceRecipeVersion: template?.version ?? null,
+              sourceKind,
+            };
+          },
+          {
+            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+          },
+        );
+      } catch (error) {
+        if (
+          attempt < DESIGN_RECIPE_VERSION_CREATE_MAX_ATTEMPTS &&
+          this.isRetryableSeriesDraftCreateError(error)
+        ) {
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    throw new BadRequestException('订单设计草稿创建失败，请重试');
+  }
+
+  /**
+   * 订单设计槽位创建失败时的回滚：删掉刚建的草稿与系列。
+   *
+   * 用 `deleteMany` 避免并发重试时二次删除抛错；调用方只在
+   * `OrderRecipeDesign` 记录还没写成功时调用，因此不会有外键引用。
+   */
+  async deleteOrderBoundSeriesDesign(
+    seriesId: string,
+    draftId: string,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.designRecipeItem.deleteMany({
+        where: { designRecipeId: draftId },
+      });
+      await tx.designRecipe.deleteMany({ where: { id: draftId } });
+      await tx.recipeSeries.deleteMany({ where: { id: seriesId } });
+    });
+  }
+
+  /**
+   * 解析模板食谱应复制进订单草稿的生命阶段：
+   * 模板自己的 `seriesLifeStage` > 模板 `applicableLifeStages` >
+   * 订单狗狗当前阶段 > 普通成年犬兜底。
+   *
+   * 阶段只用于草稿的初始场景，与订单狗狗不一致时由调用方提示（不阻断）。
+   */
+  private resolveOrderTemplateLifeStage(
+    recipe: {
+      seriesLifeStage?: string | null;
+      applicableLifeStages?: unknown;
+    } | null,
+    fallback?: string | null,
+  ): RecipeSeriesLifeStage {
+    const candidates: unknown[] = [];
+    if (recipe) {
+      candidates.push(recipe.seriesLifeStage);
+      if (Array.isArray(recipe.applicableLifeStages)) {
+        candidates.push(...recipe.applicableLifeStages);
+      }
+    }
+    candidates.push(fallback);
+
+    const orderedStages = ORDERED_RECIPE_SERIES_LIFE_STAGES as string[];
+    for (const candidate of candidates) {
+      if (typeof candidate === 'string' && orderedStages.includes(candidate)) {
+        return candidate as RecipeSeriesLifeStage;
+      }
+    }
+
+    return RecipeLifeStage.HIGH_ACTIVITY_ADULT;
   }
 
   async duplicateSeries(seriesId: string, access: RecipeDesignerAccessInput) {
@@ -5151,7 +5378,6 @@ export class RecipeDesignerService {
       throw new BadRequestException(readiness.disabledReason);
     }
 
-    const itemCreates = this.buildPrivateRecipeSnapshotItemCreateData(draft);
     const customerOwnerId = isInternalRecipeDesignerRole(context)
       ? draft.createdBy
       : getRecipeDesignerCustomerOwnerId(context);
@@ -5162,8 +5388,78 @@ export class RecipeDesignerService {
     const customOrderId = await this.resolveCustomRecipeOrderIdForDog(
       draft.customerDogId,
     );
+    const recipe = await this.createOrUpdatePrivateRecipeSnapshot(draft, {
+      customerOwnerId,
+      customOrderId,
+    });
+
+    const page =
+      dto.target === 'DIY'
+        ? '/pages/recipe-diy/index'
+        : '/pages/recipe-order/index';
+    const response = {
+      recipeId: recipe.recipeId,
+      dogId: draft.customerDogId,
+      targetUrl: `${page}?recipeId=${recipe.recipeId}&dogId=${draft.customerDogId}`,
+    };
+    return readiness.nutritionWarning
+      ? { ...response, nutritionWarning: readiness.nutritionWarning }
+      : response;
+  }
+
+  /**
+   * 订单绑定设计 · 加入待提交时生成私密食谱快照（2026-10-22 · Task 3）。
+   *
+   * 复用与 `createPrivateRecipeSnapshot` 完全相同的快照构建逻辑（营养数据、
+   * 原料明细、比例、制备方式都走同一套），差异只有三点：
+   *  · 归属人固定为订单顾客（不是操作员工），狗狗固定为订单狗狗；
+   *  · **不写 `customOrderId`** —— 一张订单有 N 份，最终批量交付时统一挂接；
+   *  · 只生成私密食谱，不交付、不发通知。
+   */
+  async publishOrderDesignSlot(input: {
+    draftId: string;
+    customerId: string;
+    dogId: string;
+    /** 操作人（管理员），仅留痕；本方法不写操作人字段 */
+    operatorId: string;
+  }): Promise<{ recipeRowId: string; recipeId: string }> {
+    const draft = await this.loadDraft(input.draftId);
+    if (draft.customerDogId && draft.customerDogId !== input.dogId) {
+      throw new BadRequestException('设计草稿与订单狗狗不一致');
+    }
+
+    const readiness = this.getCustomerDraftSnapshotReadiness({
+      ...draft,
+      customerDogId: draft.customerDogId ?? input.dogId,
+    });
+    if (!readiness.canCreateSnapshot) {
+      throw new BadRequestException(readiness.disabledReason);
+    }
+
+    const recipe = await this.createOrUpdatePrivateRecipeSnapshot(draft, {
+      customerOwnerId: input.customerId,
+      customOrderId: null,
+      displayName: draft.name,
+    });
+
+    return { recipeRowId: recipe.id, recipeId: recipe.recipeId };
+  }
+
+  private async createOrUpdatePrivateRecipeSnapshot(
+    draft: DesignRecipeWithItems,
+    options: {
+      customerOwnerId: string | null;
+      customOrderId: string | null;
+      displayName?: string | null;
+    },
+  ) {
+    const itemCreates = this.buildPrivateRecipeSnapshotItemCreateData(draft);
+    const customOrderId = options.customOrderId;
     const baseData = {
-      name: this.resolvePrivateRecipeSnapshotDisplayName(draft),
+      name: this.resolvePrivateRecipeSnapshotDisplayName(
+        draft,
+        options.displayName,
+      ),
       status: RecipeStatus.PRIVATE_CUSTOM,
       energyDensityKcalPerKg: Number(draft.energyDensityKcalPerKg),
       productionLossRate: await this.resolveProductionLossRate(),
@@ -5183,7 +5479,7 @@ export class RecipeDesignerService {
       ...(draft.seriesLifeStage
         ? { seriesLifeStage: draft.seriesLifeStage }
         : {}),
-      customerOwnerId,
+      customerOwnerId: options.customerOwnerId,
       customerDogId: draft.customerDogId,
       sourceDesignRecipeId: draft.id,
       items: {
@@ -5195,7 +5491,7 @@ export class RecipeDesignerService {
       where: { sourceDesignRecipeId: draft.id },
       select: { id: true, recipeId: true, version: true },
     });
-    const recipe = existing
+    return existing
       ? await this.prisma.recipe.update({
           where: { id: existing.id },
           data: {
@@ -5213,24 +5509,16 @@ export class RecipeDesignerService {
             ...baseData,
           },
         });
-
-    const page =
-      dto.target === 'DIY'
-        ? '/pages/recipe-diy/index'
-        : '/pages/recipe-order/index';
-    const response = {
-      recipeId: recipe.recipeId,
-      dogId: draft.customerDogId,
-      targetUrl: `${page}?recipeId=${recipe.recipeId}&dogId=${draft.customerDogId}`,
-    };
-    return readiness.nutritionWarning
-      ? { ...response, nutritionWarning: readiness.nutritionWarning }
-      : response;
   }
 
   private resolvePrivateRecipeSnapshotDisplayName(
     draft: DesignRecipeWithItems,
+    preferredName?: string | null,
   ): string {
+    const preferred = preferredName?.trim();
+    if (preferred) {
+      return preferred;
+    }
     const seriesName = draft.series?.name?.trim();
     const draftName = draft.name?.trim();
     return seriesName || draftName || '私属食谱';
@@ -8255,13 +8543,17 @@ export class RecipeDesignerService {
 
     const series = await this.prisma.recipeSeries.findUnique({
       where: { id: seriesId },
-      select: { id: true, createdBy: true },
+      select: { id: true, createdBy: true, designMode: true },
     });
     if (!series || series.createdBy === null) {
       throw new NotFoundException('食谱系列不存在');
     }
     if (!(await this.isSeriesAccessibleByContext(series, context))) {
       throw new NotFoundException('食谱系列不存在');
+    }
+    // 2026-10-22：订单绑定系列的参考爱犬 = 订单狗狗，从创建那一刻就锁定。
+    if (series.designMode === RecipeDesignMode.ORDER) {
+      throw new BadRequestException('本单已绑定爱犬，不能更换参考爱犬');
     }
 
     if (referenceDogId) {

@@ -23,6 +23,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { RecipeDesignerService } from '../../application/recipe-designer/recipe-designer.service';
+import { OrderRecipeDesignService } from '../../application/recipe-designer/order-recipe-design.service';
 import { OrderRecipeTemplateService } from '../../application/recipe-designer/order-recipe-template.service';
 import { SupplementLabelExtractionService } from '../../application/recipe-designer/supplement-label-extraction.service';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
@@ -34,6 +35,7 @@ import {
   AiNutritionPlanAcceptDto,
   AiNutritionPlanGenerateDto,
   BatchReorderDesignItemsDto,
+  CreateOrderDesignFromTemplateDto,
   CreatePrivateRecipeSnapshotDto,
   CopyRecipeSeriesStageIngredientsDto,
   CreateRecipeDesignerSupplementOptionDto,
@@ -121,6 +123,7 @@ export class RecipeDesignerController {
     private readonly cosService: TencentCosService,
     private readonly supplementLabelExtractionService: SupplementLabelExtractionService,
     private readonly orderRecipeTemplateService: OrderRecipeTemplateService,
+    private readonly orderRecipeDesignService: OrderRecipeDesignService,
   ) {}
 
   @Get('ingredient-options')
@@ -176,6 +179,109 @@ export class RecipeDesignerController {
         sourceRecipeId,
       );
     return ApiResponseDto.success(comparison);
+  }
+
+  // ==================== 订单绑定食谱设计 · 工作台（2026-10-22 · Task 3） ====================
+
+  /**
+   * 订单设计工作台：订单 / 狗狗 / 份数 / 已就绪份数 + 槽位列表。
+   *
+   * 只给内部设计角色（StaffGuard）看；顾客侧永远不可见。
+   */
+  @Get('orders/:orderId/workspace')
+  @UseGuards(StaffGuard)
+  @ApiOperation({
+    summary: 'Get the order-bound recipe design workspace',
+  })
+  async getOrderDesignWorkspace(
+    @Param('orderId') orderId: string,
+  ): Promise<ApiResponseDto<any>> {
+    const workspace =
+      await this.orderRecipeDesignService.getWorkspace(orderId);
+    return ApiResponseDto.success(workspace);
+  }
+
+  /**
+   * 从已有食谱模板创建一个订单绑定草稿。
+   *
+   * 复制模板原料；参考爱犬锁定为订单狗狗；阶段不一致只提示。
+   */
+  @Post('orders/:orderId/designs/from-template')
+  @UseGuards(StaffGuard)
+  @ApiOperation({
+    summary: 'Create an order-bound design draft from a template recipe',
+  })
+  async createOrderDesignFromTemplate(
+    @Param('orderId') orderId: string,
+    @Body() dto: CreateOrderDesignFromTemplateDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const design = await this.orderRecipeDesignService.createFromTemplate(
+      orderId,
+      { sourceRecipeId: dto.sourceRecipeId, name: dto.name },
+      user.userId,
+    );
+    return ApiResponseDto.success(design);
+  }
+
+  /** 创建一个空白订单绑定草稿（同一订单 N 份各自独立）。 */
+  @Post('orders/:orderId/designs/blank')
+  @UseGuards(StaffGuard)
+  @ApiOperation({
+    summary: 'Create a blank order-bound design draft',
+  })
+  async createBlankOrderDesign(
+    @Param('orderId') orderId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const design = await this.orderRecipeDesignService.createBlank(
+      orderId,
+      user.userId,
+    );
+    return ApiResponseDto.success(design);
+  }
+
+  /**
+   * 加入本单待提交仓库（生成私密食谱，不交付、不通知）。
+   *
+   * 权限沿用现有发布治理：员工可编辑，但只有管理员能操作「加入待提交」。
+   */
+  @Post('orders/:orderId/designs/:designId/ready')
+  @UseGuards(StaffGuard)
+  @Roles('ADMIN')
+  @ApiOperation({
+    summary: 'Stage an order-bound design draft as ready for final delivery',
+  })
+  async stageOrderDesign(
+    @Param('orderId') orderId: string,
+    @Param('designId') designId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const staged = await this.orderRecipeDesignService.stageDraft(
+      orderId,
+      designId,
+      user.userId,
+    );
+    return ApiResponseDto.success(staged);
+  }
+
+  /** 移除一个尚未最终交付的槽位（EDITING / READY）。 */
+  @Delete('orders/:orderId/designs/:designId')
+  @UseGuards(StaffGuard)
+  @ApiOperation({
+    summary: 'Remove an order-bound design slot',
+  })
+  async removeOrderDesign(
+    @Param('orderId') orderId: string,
+    @Param('designId') designId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    await this.orderRecipeDesignService.removeSlot(
+      orderId,
+      designId,
+      user.userId,
+    );
+    return ApiResponseDto.success(null);
   }
 
   @Post('supplement-options')

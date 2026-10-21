@@ -1170,8 +1170,11 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   /**
    * 把「对外订单号」或「uuid」统一解析成真实主键。
    * 两个都查是为了兼容既有调用方，避免再次踩到"传了友好单号却按主键查"的坑。
+   *
+   * 2026-10-22：订单绑定食谱设计（Task 3）也复用这个口径解析订单，
+   * 因此从 private 放开为 public，避免各处自己写一套「单号还是主键」的判断。
    */
-  private async resolveOrderRef(
+  async resolveOrderRef(
     orderIdOrId: string,
   ): Promise<{ id: string; orderId: string }> {
     const record = await this.prisma.customRecipeOrder.findFirst({

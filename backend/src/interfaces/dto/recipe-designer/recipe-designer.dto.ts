@@ -67,6 +67,20 @@ export class ListRecipeTemplatesDto {
   kind?: RecipeTemplateKind;
 }
 
+/**
+ * 订单绑定食谱设计（2026-10-22 · Task 3）：从已有食谱模板创建订单草稿。
+ */
+export class CreateOrderDesignFromTemplateDto {
+  /** 模板食谱版本行主键 `recipe.id` */
+  @IsString()
+  sourceRecipeId!: string;
+
+  /** 可选自定义名称；不填则用「{狗名}定制 · {模板名}」 */
+  @IsOptional()
+  @IsString()
+  name?: string;
+}
+
 export class ListRecipeDesignerSeriesDto {
   @IsOptional()
   @IsIn(RECIPE_DESIGNER_SERIES_STATUS_FILTERS)

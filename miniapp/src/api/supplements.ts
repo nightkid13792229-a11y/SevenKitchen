@@ -74,6 +74,8 @@ export interface SupplementQuoteResponse {
   quote: SupplementQuote
   unavailable: SupplementUnavailableLine[]
   enabled: boolean
+  /** 库存软提示；不阻止下单 */
+  inventoryWarnings?: string[]
 }
 
 export interface SupplementOrderItem {

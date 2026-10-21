@@ -71,6 +71,8 @@ export class InMemoryIngredientRepository implements IngredientRepository {
       data.reorderPoint ?? existing.reorderPoint,
       data.targetStock ?? existing.targetStock,
       data.properties ?? existing.properties,
+      existing.nutritionProfile,
+      existing.supplementRetailEnabled,
     );
 
     this.ingredients.set(id, updated);
@@ -109,6 +111,8 @@ export class InMemoryIngredientRepository implements IngredientRepository {
       existing.reorderPoint,
       existing.targetStock,
       existing.properties,
+      existing.nutritionProfile,
+      existing.supplementRetailEnabled,
     );
 
     this.ingredients.set(id, updated);
@@ -147,6 +151,8 @@ export class InMemoryIngredientRepository implements IngredientRepository {
       existing.reorderPoint,
       existing.targetStock,
       existing.properties,
+      existing.nutritionProfile,
+      existing.supplementRetailEnabled,
     );
 
     this.ingredients.set(id, updated);

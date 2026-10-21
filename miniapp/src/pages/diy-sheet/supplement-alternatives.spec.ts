@@ -137,6 +137,39 @@ describe('supplement alternatives helpers', () => {
     expect(options[0].brand).toBe('西红柿')
   })
 
+  it('filters production-only supplements even when DIY recommendation is enabled', () => {
+    const options = buildSupplementCandidateOptions(
+      {
+        ingredientId: 'supp-default',
+        name: '生产专用骨粉',
+        properties: {}
+      },
+      {
+        ingredient: {
+          id: 'supp-default',
+          diyEnabled: true,
+          supplementRetailEnabled: false,
+          properties: {}
+        },
+        supplementAlternatives: [
+          {
+            ingredientId: 'supp-retail',
+            ingredientName: '可售骨粉',
+            ingredient: {
+              id: 'supp-retail',
+              name: '可售骨粉',
+              diyEnabled: true,
+              supplementRetailEnabled: true,
+              properties: {}
+            }
+          }
+        ]
+      }
+    )
+
+    expect(options.map((item) => item.ingredientId)).toEqual(['supp-retail'])
+  });
+
   it('returns no recommendation options when every supplement candidate disables diy recommendations', () => {
     const options = buildSupplementCandidateOptions(
       {

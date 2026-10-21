@@ -165,7 +165,10 @@
               <text class="header-item dosage-col">添加总量</text>
             </view>
             <view v-for="(item, idx) in supplementItemsDetailed" :key="'supp-' + idx" class="table-row supplement-table">
-              <text class="row-item product-col">{{ item.name }}</text>
+              <view class="row-item product-col">
+                <text>{{ item.name }}</text>
+                <text v-if="item.purchasable === false" class="production-only-tag">仅生产，不可购买</text>
+              </view>
               <view
                 v-if="item.hasSpecDetail"
                 class="row-item brand-col recommend-choice"
@@ -191,6 +194,9 @@
                 {{ item.amountStr }}
               </text>
             </view>
+          </view>
+          <view v-if="supplementItemsDetailed.some((item: any) => item.purchasable === false)" class="production-only-note">
+            <text>部分补剂仅用于生产，不会进入补剂购买单。</text>
           </view>
         </view>
 
@@ -772,7 +778,9 @@ const makingPurchaseFacts = computed(() => [
 
 /** 底部固定栏是否展示「购买预分装补剂」 */
 const canBuySupplements = computed(
-  () => supplementShopEnabled.value && supplementItemsDetailed.value.length > 0
+  () =>
+    supplementShopEnabled.value &&
+    supplementItemsDetailed.value.some((item: any) => item.purchasable !== false)
 )
 
 const ingredientDetails = computed(() => {
@@ -969,6 +977,8 @@ const supplementItemsDetailed = computed(() => {
         item.properties?.active_nutrients,
       nutrition_profile_snapshot: selectedRp?.nutritionProfile || item.nutrition_profile_snapshot,
       type: item.type,                                              // 类型标识
+      // 仅生产用补剂仍显示在制作单里，但不进入补剂购买草稿
+      purchasable: item.supplementRetailEnabled !== false,
       properties: {
         ...(item.properties || {}),
         ...((selectedRp?.activeNutrients || selectedRp?.properties?.active_nutrients)
@@ -1149,7 +1159,10 @@ function handleSupplementStatusRetry() {
  */
 async function handleBuySupplements() {
   const lines = supplementItemsDetailed.value
-    .filter((item: any) => item.ingredientId && Number(item.amount) > 0)
+    .filter(
+      (item: any) =>
+        item.ingredientId && Number(item.amount) > 0 && item.purchasable !== false
+    )
     .map((item: any) => ({
       ingredientId: item.ingredientId,
       amount: Number(item.amount),
@@ -2479,6 +2492,23 @@ onShareTimeline(() => {
   color: #8a8375;
 }
 
+.production-only-tag {
+  display: inline-block;
+  margin-left: 8rpx;
+  padding: 2rpx 8rpx;
+  border-radius: 6rpx;
+  background: #f4f4f5;
+  color: #909399;
+  font-size: 20rpx;
+}
+.production-only-note {
+  padding: 12rpx 16rpx;
+  color: #b88230;
+  background: #fdf6ec;
+  border-radius: 8rpx;
+  font-size: 22rpx;
+  margin-top: 10rpx;
+}
 .supplement-table .product-col {
   flex: 1;
   justify-content: center;

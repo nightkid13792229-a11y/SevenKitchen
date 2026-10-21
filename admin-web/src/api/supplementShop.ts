@@ -314,6 +314,7 @@ export interface SupplementOrder {
   packingDate?: string | null;
   hasOpenAftersale?: boolean;
   openAftersaleLabel?: string | null;
+  inventoryWarnings?: string[];
   paymentMethod: string | null;
   aftersaleType: string | null;
   aftersaleReason: string | null;

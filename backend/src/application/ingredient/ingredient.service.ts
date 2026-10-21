@@ -207,6 +207,7 @@ export class IngredientService {
       dto.targetStock ?? null,
       normalizedProperties,
       normalizedProfile,
+      false,
     );
 
     return this.ingredientRepository.save(ingredient, dto.tagIds);
@@ -309,6 +310,7 @@ export class IngredientService {
       dto.targetStock !== undefined ? dto.targetStock : existing.targetStock,
       nextProperties,
       nextNutritionProfile,
+      existing.supplementRetailEnabled,
     );
 
     // Update tag associations if provided

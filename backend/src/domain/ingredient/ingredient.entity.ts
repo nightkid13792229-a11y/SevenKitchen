@@ -48,6 +48,8 @@ export class Ingredient {
     public readonly targetStock: number | null,
     public readonly properties: IngredientProperties,
     public readonly nutritionProfile: NutritionProfile | null = null,
+    /** 是否允许在补剂商城对外售卖；仅生产用的补剂为 false */
+    public readonly supplementRetailEnabled: boolean = false,
   ) {
     this.validateInvariants();
   }

@@ -763,6 +763,14 @@ async function submitPack() {
     current.value = updated;
     await loadAll();
 
+    if (updated.inventoryWarnings?.length) {
+      await ElMessageBox.alert(
+        `分装已完成，但库存提示如下（不阻断）：\n\n${updated.inventoryWarnings.join('\n')}`,
+        '库存提示',
+        { type: 'warning', confirmButtonText: '继续' },
+      ).catch(() => undefined);
+    }
+
     try {
       await ElMessageBox.confirm(
         '分装完成！现在打印分装标签贴到每一袋上吗？',

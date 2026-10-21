@@ -198,6 +198,12 @@
         费用摆出来，用户才能亲眼看到"服务费和运费不随份数变"，
         从而自己算出加量更划算 —— 明细本身成了加量的说服力。
       -->
+      <view v-if="inventoryWarnings.length" class="section inventory-warning-card">
+        <text class="inventory-warning-title">库存提示（不阻止下单）</text>
+        <text v-for="warning in inventoryWarnings" :key="warning" class="inventory-warning-line">· {{ warning }}</text>
+        <text class="inventory-warning-note">库存尚未完成验收，最终以分装时实物为准；如不足我们会联系你处理。</text>
+      </view>
+
       <view v-if="summary && !quoteFailed" class="section fee-card">
         <view class="section-title">
           <text class="title-text">费用明细</text>
@@ -347,6 +353,7 @@ const submitting = ref(false)
 const portionMultiplier = ref(1)
 const estimatedPackingDate = ref('')
 const autoScheduleEnabled = ref(true)
+const inventoryWarnings = ref<string[]>([])
 
 /** 制作单覆盖的天数：加量要靠它算总天数与每天成本 */
 const cycleDays = computed(() => Number(draft.value?.cycleDays) || 0)
@@ -631,6 +638,7 @@ async function refreshSummaryOnly() {
     })
     if (res.code === 0) {
       summary.value = res.data.quote
+      inventoryWarnings.value = res.data.inventoryWarnings || []
       // 服务端可能因为效期上限把份数收敛下来（比如换了更长的制作单），
       // 界面要跟着回到合法值，不能停在一个后端不认的档位上。
       const allowed = Math.max(1, res.data.quote.maxPortionMultiplier ?? 1)

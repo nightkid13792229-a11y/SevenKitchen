@@ -40,6 +40,7 @@ export interface StaffSupplementOrderItem {
 
 export interface StaffSupplementOrder {
   id: string;
+  inventoryWarnings?: string[];
   orderNo: string;
   status: SupplementOrderStatus;
   bagCount: number;

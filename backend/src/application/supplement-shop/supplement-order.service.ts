@@ -32,7 +32,10 @@ import { SupplementSchedulingService } from './supplement-scheduling.service';
 import { SupplementInventoryService } from './supplement-inventory.service';
 import { SupplementSnapshotService } from './supplement-snapshot.service';
 import { SupplementNotificationService } from './supplement-notification.service';
-import { isSupplementUnitOneToOne } from './supplement-unit.util';
+import {
+  isSupplementUnitOneToOne,
+  toSupplementBaseQuantity,
+} from './supplement-unit.util';
 
 /** 分装结果的有效期：取「原瓶到期日」与「分装日 + 效期系数」的较小值 */
 export function addMonths(date: Date, months: number): Date {
@@ -109,6 +112,8 @@ export interface SupplementQuoteResponse {
   /** 用户提交但当前不可购买的补剂（已下架 / 非补剂 / 无价） */
   unavailable: Array<{ ingredientId: string; name: string; reason: string }>;
   enabled: boolean;
+  /** 库存系统验收前的软提示；不阻止下单 */
+  inventoryWarnings: string[];
 }
 
 export interface SupplementOrderItemView {
@@ -149,6 +154,8 @@ export interface SupplementOrderView {
   /** 是否有未完结补剂售后（新 case，不依赖订单旧 aftersaleType） */
   hasOpenAftersale?: boolean;
   openAftersaleLabel?: string | null;
+  /** 库存系统验收前的软提示：本次分装缺料，但不阻断 */
+  inventoryWarnings?: string[];
   shippingDescription: string | null;
   receiverName: string;
   receiverPhone: string;
@@ -250,7 +257,12 @@ export class SupplementOrderService {
     request: SupplementQuoteRequest,
   ): Promise<SupplementQuoteResponse> {
     const { quote, unavailable, config } = await this.buildQuote(request);
-    return { quote, unavailable, enabled: config.enabled };
+    return {
+      quote,
+      unavailable,
+      enabled: config.enabled,
+      inventoryWarnings: await this.buildInventoryWarnings(quote),
+    };
   }
 
   /** 创建补剂订单（价格服务端重算，不信任客户端传来的金额） */
@@ -682,6 +694,7 @@ export class SupplementOrderService {
       throw new BadRequestException('强制分装必须填写原因');
     }
 
+    let inventoryWarnings: string[] = [];
     await this.prisma.$transaction(async (tx) => {
       // 条件更新先抢订单：并发分装第二次会拿到 count=0
       if (typeof (tx.supplementOrder as any).updateMany === 'function') {
@@ -700,16 +713,12 @@ export class SupplementOrderService {
       const shortages = this.inventoryService
         ? await this.inventoryService.getShortages(tx, orderId)
         : [];
-      if (shortages.length > 0 && !force) {
-        throw new BadRequestException(
-          `库存不足，不能完成分装：${shortages
-            .map(
-              (item) =>
-                `${item.name}需 ${item.required}，账面 ${item.onHand}，已占用 ${item.allocated}`,
-            )
-            .join('；')}。如确认缺料，请由管理员强制分装并填写原因。`,
-        );
-      }
+      // 库存系统尚未验收：缺料只提示，不阻断分装。
+      // 管理员“强制分装”仍保留，用于语义上的显式确认/留痕。
+      inventoryWarnings = shortages.map(
+        (item) =>
+          `${item.name}需 ${item.required}，账面 ${item.onHand}，已占用 ${item.allocated}`,
+      );
 
       for (const row of planned) {
         await tx.supplementOrderItem.update({
@@ -723,7 +732,8 @@ export class SupplementOrderService {
         });
       }
       await this.inventoryService?.consumeForOrder(tx, orderId, {
-        allowMissing: force,
+        // 当前阶段不因库存/预占缺失阻断分装；缺料在响应和事件中提示
+        allowMissing: true,
       });
       if (typeof (tx.supplementOrder as any).updateMany !== 'function') {
         await tx.supplementOrder.update({
@@ -742,15 +752,23 @@ export class SupplementOrderService {
             actorId: actor.id ?? null,
             reason: force ? dto.forceReason!.trim() : null,
             metadata:
-              force && shortages.length > 0
-                ? ({ shortages } as Prisma.InputJsonValue)
+              shortages.length > 0
+                ? ({
+                    shortages,
+                    inventoryWarnings: true,
+                    forced: force,
+                  } as Prisma.InputJsonValue)
                 : undefined,
           },
         });
       }
     });
 
-    return this.getOrderById(orderId);
+    const view = await this.getOrderById(orderId);
+    if (inventoryWarnings.length > 0) {
+      view.inventoryWarnings = inventoryWarnings;
+    }
+    return view;
   }
 
   /** 管理员手动完成：仅 SHIPPED；正常情况仍由 10 天自动完成 */
@@ -1754,6 +1772,60 @@ export class SupplementOrderService {
       ingredientId,
       amount,
     }));
+  }
+
+  /**
+   * 库存软提示（不阻断）：库存系统尚未验收，只在报价页告诉顾客
+   * 当前账面可能不够，最终以分装时实物为准。
+   */
+  private async buildInventoryWarnings(
+    quote: SupplementQuote,
+  ): Promise<string[]> {
+    if (process.env.SUPPLEMENT_INVENTORY_RESERVATION_ENABLED !== 'true') {
+      return [];
+    }
+    const lines = quote.lines || [];
+    if (lines.length === 0) return [];
+    const ids = Array.from(new Set(lines.map((line) => line.ingredientId)));
+    const ingredients = await this.prisma.ingredient.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true, baseUnit: true },
+    });
+    const byId = new Map(ingredients.map((item) => [item.id, item]));
+    const balances = await this.prisma.inventoryLedgerEntry.groupBy({
+      by: ['ingredientId'],
+      where: { ingredientId: { in: ids } },
+      _sum: { deltaG: true },
+    });
+    const balanceMap = new Map(
+      balances.map((row) => [
+        row.ingredientId,
+        Number(row._sum.deltaG ?? 0),
+      ]),
+    );
+    const warnings: string[] = [];
+    for (const line of lines) {
+      const ingredient = byId.get(line.ingredientId);
+      if (!ingredient) continue;
+      let required: number;
+      try {
+        required = await toSupplementBaseQuantity(
+          line.unit,
+          Number(line.packedAmount) * Math.max(1, Number(line.bags) || 1),
+          ingredient.baseUnit,
+          ingredient.name,
+        );
+      } catch {
+        continue;
+      }
+      const onHand = balanceMap.get(line.ingredientId) ?? 0;
+      if (onHand < required) {
+        warnings.push(
+          `${line.name}账面 ${onHand}${ingredient.baseUnit}，本单约需 ${required}${ingredient.baseUnit}`,
+        );
+      }
+    }
+    return warnings;
   }
 
   /** 把 ingredientId 解析成可售的补剂行；不可售的单独返回原因 */

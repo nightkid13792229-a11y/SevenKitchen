@@ -262,6 +262,7 @@ export class PrismaIngredientRepository implements IngredientRepository {
       record.targetStock,
       record.properties,
       normalizeNutritionProfileForRead(record.nutritionProfile ?? null),
+      record.supplementRetailEnabled ?? false,
     );
   }
 }

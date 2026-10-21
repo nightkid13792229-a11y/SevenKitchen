@@ -322,7 +322,15 @@ function handlePack() {
       try {
         const response = await staffSupplementOrderApi.pack(orderId.value, items)
         if (response.code === 0) {
-          uni.showToast({ title: '分装完成', icon: 'success' })
+          if (response.data?.inventoryWarnings?.length) {
+            uni.showModal({
+              title: '库存提示',
+              content: `分装已完成，但库存不足（不阻断）：\n${response.data.inventoryWarnings.join('\n')}`,
+              showCancel: false,
+            })
+          } else {
+            uni.showToast({ title: '分装完成', icon: 'success' })
+          }
           await fetchOrder()
         } else {
           uni.showToast({ title: response.message || '提交失败', icon: 'none' })

@@ -190,6 +190,7 @@ export class OrderSourcePlanService {
       ingredient.targetStock,
       properties,
       ingredient.nutritionProfile,
+      ingredient.supplementRetailEnabled,
     ) as SourcePlanIngredient;
 
     cloned.procurementSkuId = sku.id;

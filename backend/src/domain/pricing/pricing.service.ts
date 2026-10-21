@@ -262,6 +262,8 @@ export interface IngredientCostItem {
   nutrientTargetKey?: string; // 营养素名称（补剂用）
   nutrientTargetValue?: number; // 营养目标值（补剂用）
   supplementTargets?: SupplementTarget[];
+  /** 仅生产用的补剂不在商城售卖，DIY 页面据此过滤购买入口 */
+  supplementRetailEnabled?: boolean;
 }
 
 export interface PackagingPerPackConsumables {
@@ -1038,6 +1040,7 @@ export class PricingService {
               nutrientTargetKey: item.nutrientTargetKey || undefined,
               nutrientTargetValue: item.nutrientTargetValue || undefined,
               supplementTargets: targets,
+              supplementRetailEnabled: ingredient.supplementRetailEnabled,
             };
           } catch (error) {
             targetCalculationError = error;
@@ -1083,6 +1086,7 @@ export class PricingService {
             nutrientTargetKey: item.nutrientTargetKey || undefined,
             nutrientTargetValue: item.nutrientTargetValue || undefined,
             supplementTargets: targets,
+            supplementRetailEnabled: ingredient.supplementRetailEnabled,
           };
         }
 

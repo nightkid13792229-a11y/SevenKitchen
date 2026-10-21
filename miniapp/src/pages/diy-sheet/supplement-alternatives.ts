@@ -8,6 +8,7 @@ export interface SupplementOption {
   ingredientId: string;
   name: string;
   diyEnabled?: boolean;
+  supplementRetailEnabled?: boolean;
   brand?: string;
   productModel?: string;
   purchaseChannel?: string;
@@ -22,7 +23,11 @@ export interface SupplementOption {
 }
 
 function isDiyRecommendationEnabled(candidate: any): boolean {
-  return candidate?.diyEnabled !== false;
+  // DIY 推荐同时要求“允许推荐”和“允许对外售卖”；仅生产用补剂不能进入购买入口
+  return (
+    candidate?.diyEnabled !== false &&
+    candidate?.supplementRetailEnabled !== false
+  );
 }
 
 export function getSupplementSelectionKey(item: {
@@ -45,6 +50,9 @@ export function buildSupplementCandidateOptions(
       ingredientId: baseItem.ingredientId,
       name: baseItem.name,
       diyEnabled: defaultIngredient?.diyEnabled ?? baseItem.diyEnabled,
+      supplementRetailEnabled:
+        defaultIngredient?.supplementRetailEnabled ??
+        baseItem.supplementRetailEnabled,
       brand: baseItem.brand,
       productModel: baseItem.productModel,
       purchaseChannel: baseItem.purchaseChannel,
@@ -86,6 +94,7 @@ export function buildSupplementCandidateOptions(
       ingredientId: ingredient.id,
       name: ingredient.name || alternative.ingredientName,
       diyEnabled: ingredient.diyEnabled,
+      supplementRetailEnabled: ingredient.supplementRetailEnabled,
       brand: ingredient.brand,
       productModel: ingredient.productModel,
       purchaseChannel: ingredient.purchaseChannel,

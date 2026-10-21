@@ -28,6 +28,7 @@ import {
   AllergyAnswerStatus,
 } from '@prisma/client';
 import { MAX_MULTI_RECIPE_QUANTITY } from '../custom-recipe-config.service';
+import { OFFLINE_REFUND_METHODS } from '../../../domain/custom-recipe/custom-recipe.refund';
 
 /**
  * 本单上传的过敏检测报告草稿（2026-10-19）。
@@ -588,4 +589,39 @@ export class CreateAssistedOrderDTO {
   @IsOptional()
   @IsBoolean()
   syncToHealthProfile?: boolean;
+}
+
+// ===== 2026-10-21 线下退款登记（Task 5）=====
+
+/**
+ * 线下退款并取消入参
+ * （`POST /api/v1/admin/custom-recipe/orders/:orderId/offline-refund`）。
+ *
+ * 为什么只有三个字段：代客单的钱是线下收的，没有微信退款单可对账，
+ * 能留下证据的就只有「退了多少、怎么退的、备注」。
+ * 操作人与时间由服务端记录，页面传什么都不算数。
+ *
+ * ⚠️ 这里的 `amount` 上限（实收金额）在 service 里校验 —— DTO 不知道订单上收了多少钱。
+ */
+export class RegisterOfflineRefundDTO {
+  @ApiProperty({ description: '线下实际退款金额（元），不能超过实收金额' })
+  @IsNumber()
+  @Min(0.01)
+  amount!: number;
+
+  @ApiProperty({
+    description: '线下退款方式',
+    enum: [...OFFLINE_REFUND_METHODS],
+  })
+  @IsIn([...OFFLINE_REFUND_METHODS])
+  method!: string;
+
+  @ApiPropertyOptional({
+    description: '线下退款备注（转账流水号/说明，可选）',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  note?: string | null;
 }

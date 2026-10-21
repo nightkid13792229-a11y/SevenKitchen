@@ -8,6 +8,13 @@
  */
 
 import api from './index'
+import type {
+  ActivityLevel,
+  DogGender,
+  DogProfile,
+  DogSizeCategory,
+  LifeStageOverride,
+} from '@/types/dog'
 
 /** 狗档案里的过敏原记录（来自检测报告 / 主人观察 / 员工录入 / 排查计划） */
 export interface CustomRecipeDogAllergyRecord {
@@ -119,6 +126,24 @@ export interface CustomRecipeOrderDetail {
   refundStatus?: string | null
   refundAmount?: number | null
   refundedAt?: string | null
+  /**
+   * 订单来源与线下收款（2026-10-21 · 代客定制食谱订单 Task 5）
+   *
+   * `paymentChannel` 非 WECHAT_ONLINE 或 `orderSource=ASSISTED` 且已确认收款时，
+   * 取消/退款必须走「线下退款并取消」，**不能**调微信原路退款。
+   */
+  orderSource?: string | null
+  paymentChannel?: string | null
+  externalPaymentRef?: string | null
+  actualPaidAmount?: number | null
+  priceOverrideReason?: string | null
+  /** 线下退款登记（手工退现金/转账，不调用微信退款） */
+  refundChannel?: string | null
+  offlineRefundedAt?: string | null
+  offlineRefundAmount?: number | null
+  offlineRefundMethod?: string | null
+  offlineRefundNote?: string | null
+  offlineRefundByStaffId?: string | null
   recipeId?: string | null
   customer?: {
     id?: string
@@ -152,6 +177,41 @@ export interface CustomRecipeRefundResult {
   outRefundNo: string | null
   refundId: string | null
   reused: boolean
+}
+
+/** 线下退款方式（与后端 `OFFLINE_REFUND_METHODS` 同一套取值） */
+export type OfflineRefundMethod =
+  | 'OFFLINE_WECHAT'
+  | 'OFFLINE_ALIPAY'
+  | 'OTHER'
+
+/** POST /admin/custom-recipe/orders/:orderId/offline-refund 的请求体 */
+export interface OfflineRefundPayload {
+  /** 实际退给顾客的金额（元），不能超过实收金额 */
+  amount: number
+  method: OfflineRefundMethod
+  /** 转账流水号/说明，可选 */
+  note?: string
+}
+
+/**
+ * 线下退款登记的结果（2026-10-21 · Task 5）。
+ *
+ * 这是**手工退款**的登记：钱由管理员在线下退回顾客，
+ * 系统只记录金额/方式/操作人/时间，并取消订单、释放名额 —— 全程不调用微信退款。
+ */
+export interface OfflineRefundResult {
+  orderId: string
+  status: string
+  refundChannel: string
+  amount: number
+  method: string
+  note: string | null
+  offlineRefundedAt: string
+  cancelledAt: string
+  cancellationReason: string
+  releasedCapacity: number
+  operatorId: string
 }
 
 /** 可以交付到这张订单的候选食谱（只含"这位顾客 + 这只狗"的私密定制食谱） */
@@ -418,6 +478,143 @@ export interface CreateCustomRecipePayload {
   productionSteps?: string
 }
 
+// ===== 代客下单（2026-10-21 · Task 4）=====
+
+/** 服务端权威报价（与订单价格快照一一对应） */
+export interface CustomRecipeQuote {
+  quantity: number
+  unitAmount: number
+  originalAmount: number
+  discountRate: number
+  discountAmount: number
+  payableAmount: number
+}
+
+/** 代客单可登记的线下收款渠道（不含微信在线支付） */
+export type AssistedPaymentChannel =
+  | 'OFFLINE_WECHAT'
+  | 'OFFLINE_ALIPAY'
+  | 'OTHER'
+
+export type AssistedAllergyStatus = 'HAS_ALLERGY' | 'NO_ALLERGY'
+
+export interface AssistedOrderPayment {
+  collected: boolean
+  channel: AssistedPaymentChannel
+  amount: number
+  externalRef?: string | null
+  overrideReason?: string | null
+}
+
+/** POST /admin/custom-recipe/orders/assisted 的请求体 */
+export interface CreateAssistedOrderPayload {
+  customerId: string
+  dogId: string
+  targetGoal: string
+  recipeQuantity: number
+  requestedProteinCodes?: string[]
+  allergies?: string[]
+  allergyText?: string | null
+  allergyStatus: AssistedAllergyStatus
+  currentFoodMain?: string | null
+  currentFoodOther?: string | null
+  changeReasons?: string[]
+  stomachConditions?: string[]
+  additionalNotes?: string | null
+  payment: AssistedOrderPayment
+}
+
+/** 代客下单成功后的摘要 */
+export interface AssistedOrderResult {
+  id: string
+  /** 业务编号（CR 开头），成功页跳订单中心用这个 */
+  orderId: string
+  status: string
+  amount: number
+  actualPaidAmount: number | null
+  paymentChannel: string | null
+  recipeQuantity: number
+  assistedForGuest: boolean
+  healthSync?: { synced: boolean; reason?: string }
+}
+
+/** 员工端客户搜索返回的狗狗摘要 */
+export interface StaffCustomerSearchDog {
+  id: string
+  name: string
+  breedName?: string | null
+  currentWeightKg?: number | null
+  mealsPerDay?: number | null
+}
+
+/**
+ * 员工端客户搜索（`/staff/customer-service/customers/search`）。
+ *
+ * 已有账号顾客走这个接口；结果里同时带狗狗，便于直接选狗。
+ * 狗名可能重名，页面必须同时展示主人昵称/手机号，不能只凭名字识别。
+ */
+export interface StaffCustomerSearchItem {
+  id: string
+  nickname?: string | null
+  phone?: string | null
+  avatarUrl?: string | null
+  dogs: StaffCustomerSearchDog[]
+}
+
+/** 代客客户（无账号顾客）搜索项 */
+export interface GuestCustomerSearchItem {
+  id: string
+  name: string
+  phone?: string | null
+  wechat?: string | null
+  dogCount: number
+}
+
+export interface CreateGuestCustomerPayload {
+  name: string
+  phone?: string
+  wechat?: string
+  note?: string
+}
+
+/**
+ * 给代客客户建狗。
+ *
+ * 字段与顾客端建档一致；`ownerId` 由后端按 `customerId` 强制指定，
+ * 页面不要也不能传，避免把狗写到员工/老板账号下。
+ */
+export interface CreateGuestDogPayload {
+  name: string
+  breedId: string
+  customBreedName?: string | null
+  birthday: string
+  gender: DogGender
+  isNeutered: boolean
+  currentWeightKg: number
+  bcsScore: number
+  activityLevel: ActivityLevel
+  lifeStageOverride: LifeStageOverride
+  sizeClassOverride?: DogSizeCategory | null
+  mealsPerDay?: number
+  medicalHistory?: string | null
+  allergyFoods?: string | null
+  pickyFoods?: string | null
+}
+
+/** `/admin/dogs` 按主人筛选的返回 */
+export interface AdminDogListResult {
+  data: DogProfile[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+/** 定制需求选项集（来自平台选项字典 `/options?sets=...`） */
+export type CustomRecipeIntakeOptionSets = Record<
+  string,
+  Array<{ code: string; label: string; tone?: string | null }>
+>
+
 const BASE = '/admin/custom-recipe'
 
 export const customRecipeApi = {
@@ -430,6 +627,75 @@ export const customRecipeApi = {
     dateFrom?: string
     dateTo?: string
   }) => api.get<CustomRecipeOrderListResult>(`${BASE}/orders`, { params }),
+
+  // ---------- 代客下单（2026-10-21 · Task 4）----------
+
+  /**
+   * 搜索**已有账号**顾客（复用员工端客户搜索）。
+   *
+   * 返回结果带狗狗，但狗名不能作为唯一识别依据 —— 页面必须同时显示
+   * 主人昵称/手机号，选狗用 dog.id。
+   */
+  searchStaffCustomers: (keyword: string) =>
+    api.get<StaffCustomerSearchItem[]>(
+      '/staff/customer-service/customers/search',
+      { params: { keyword } },
+    ),
+
+  /** 搜索代客客户（无账号；只返回 isGuest=true） */
+  searchGuestCustomers: (keyword?: string) =>
+    api.get<{ items: GuestCustomerSearchItem[] }>(`${BASE}/guest-customers`, {
+      params: { keyword },
+    }),
+
+  /** 新建代客客户（仅管理员） */
+  createGuestCustomer: (payload: CreateGuestCustomerPayload) =>
+    api.post<{ customerId: string }>(`${BASE}/guest-customers`, payload),
+
+  /** 给代客客户建狗（仅管理员；ownerId 由后端强制为代客客户） */
+  createGuestDog: (customerId: string, payload: CreateGuestDogPayload) =>
+    api.post<{ dogId: string }>(
+      `${BASE}/guest-customers/${encodeURIComponent(customerId)}/dogs`,
+      payload,
+    ),
+
+  /** 按主人列出狗狗档案（生日/品种/体重用于页面展示与消歧） */
+  listCustomerDogs: (ownerId: string) =>
+    api.get<AdminDogListResult>('/admin/dogs', {
+      params: { ownerId, pageSize: 100 },
+    }),
+
+  /**
+   * 服务端权威报价（按份数）。
+   *
+   * 金额只认这个接口；页面不得用 feeAmount × quantity 自行计算。
+   */
+  getQuote: (quantity: number) =>
+    api.get<CustomRecipeQuote>('/custom-recipe/quote', {
+      params: { quantity },
+    }),
+
+  /**
+   * 定制需求选项集。
+   *
+   * 标签来自平台选项字典，页面不写死中文；目标/当前食物/定制原因/肠胃
+   * 四个选项集一次取回。
+   */
+  getIntakeOptionSets: async (): Promise<CustomRecipeIntakeOptionSets> => {
+    const data = (await api.get(
+      '/options?sets=custom_recipe_goal,custom_recipe_current_food,custom_recipe_change_reason,custom_recipe_stomach',
+    )) as { sets?: CustomRecipeIntakeOptionSets }
+    return data?.sets ?? {}
+  },
+
+  /**
+   * 后台代客下单（仅管理员）。
+   *
+   * 服务端会重新校验顾客/狗归属、份数、开关并重新报价；页面传的价格
+   * 不作为依据。线下收款只登记，不调用微信支付。
+   */
+  createAssistedOrder: (payload: CreateAssistedOrderPayload) =>
+    api.post<AssistedOrderResult>(`${BASE}/orders/assisted`, payload),
 
   /** 订单详情（含狗档案最新过敏、退款、各节点时间） */
   getOrderDetail: (orderId: string) =>
@@ -471,6 +737,21 @@ export const customRecipeApi = {
     api.post<CustomRecipeRefundResult>(`${BASE}/orders/${orderId}/refund`, {
       reason,
     }),
+
+  /**
+   * 线下退款并取消（2026-10-21 · 代客定制食谱订单 Task 5）· 仅管理员。
+   *
+   * 代客单是**线下收款**，微信里没有这笔支付 —— 这个接口只登记
+   * 「金额/方式/备注/操作人/时间」，取消订单并释放名额，**不调用微信退款**。
+   *
+   * 线上单不要用这里：后端会 400，页面也把线上单的入口保留为原来的
+   * 「取消订单 / 补退款」。
+   */
+  registerOfflineRefund: (orderId: string, payload: OfflineRefundPayload) =>
+    api.post<OfflineRefundResult>(
+      `${BASE}/orders/${orderId}/offline-refund`,
+      payload,
+    ),
 
   /**
    * 可交付的食谱候选。

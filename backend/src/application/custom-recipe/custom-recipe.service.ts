@@ -27,9 +27,19 @@ import {
 import { CustomRecipePricingService } from './custom-recipe-pricing.service';
 import {
   assertTransition,
+  canTransition,
   suggestSubStage,
   timestampFieldFor,
 } from '../../domain/custom-recipe/custom-recipe.state';
+import {
+  OFFLINE_REFUND_CHANNEL,
+  OFFLINE_REFUND_METHODS,
+  buildOfflineRefundCancellationReason,
+  isOfflinePaidCustomRecipeOrder,
+  isValidOfflineRefundMethod,
+  normalizePaymentChannel,
+  resolveOfflineRefundCap,
+} from '../../domain/custom-recipe/custom-recipe.refund';
 import {
   defaultWeekdayRules,
   resolveDay,
@@ -1307,6 +1317,14 @@ export class CustomRecipeService implements ICustomRecipeRepository {
         scheduledDate: true,
         recipeQuantity: true,
         allergyReportDrafts: true,
+        /**
+         * 退款分流要用的三个字段（2026-10-21 · Task 5）。
+         *
+         * 代客单是线下收款、状态同样是 PAID；不看这三个字段就会去调微信退款。
+         */
+        paymentChannel: true,
+        orderSource: true,
+        paymentConfirmedAt: true,
       },
     });
 
@@ -1343,6 +1361,24 @@ export class CustomRecipeService implements ICustomRecipeRepository {
           ? '订单已交付，不能取消；如果有问题请提交售后'
           : '该订单当前状态无法取消',
       );
+    }
+
+    /**
+     * ★ 线下收款订单**不能**由顾客自助取消（2026-10-21 · Task 5）。
+     *
+     * 钱是线下收的，微信里没有这笔交易 —— 这里如果继续走下面的原路退款，
+     * 要么退款失败、要么退错钱。而又**不能悄悄取消不退钱**，
+     * 所以明确拒绝并让顾客联系客服，由管理员登记线下退款。
+     *
+     * 只拦"已经收到钱"的单：未付款的待付款单取消不涉及退款，行为不变。
+     */
+    const hasCollectedPayment =
+      Boolean(order.paymentConfirmedAt) ||
+      order.status === CustomRecipeStatus.PAID ||
+      order.status === CustomRecipeStatus.IN_PROGRESS;
+
+    if (hasCollectedPayment && isOfflinePaidCustomRecipeOrder(order)) {
+      throw new BadRequestException('线下收款订单请联系客服处理退款');
     }
 
     let refundStatus: string | null = null;
@@ -1456,6 +1492,221 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     }
 
     return { cancelled: true, refundStatus };
+  }
+
+  /**
+   * 线下退款登记 + 取消订单（2026-10-21 · 代客定制食谱订单 Task 5）。
+   *
+   * ## 为什么不能复用「取消订单」
+   *
+   * 后台取消原来的动作是"先调微信退款，再改状态"。代客单的钱**不在微信支付**里，
+   * 调用退款只会失败（或更糟：如果商户侧有同单号交易会退错钱）。
+   * 而线下退款也没有微信退款单可对账，所以只能把
+   * 「谁、什么时候、退了多少、怎么退、备注什么」留在订单上。
+   *
+   * ## 一个事务里做完三件事
+   *
+   * ① 写线下退款登记字段 + `refundChannel=OFFLINE`；
+   * ② 状态改 `CANCELLED`（记取消时间/原因）；
+   * ③ 按订单份数释放当天接单名额（复用 `releaseScheduleCapacity`，
+   *    它保证 `bookedCount` 不会被减成负数）。
+   *
+   * ## 幂等
+   *
+   * 用**条件更新**认领这次登记：只有"此刻仍未取消、未登记过线下退款"才写得进去。
+   * 连点两次/两个管理员同时点，只有一方成功，另一方拿到 400 ——
+   * 不会重复释放名额，也不会把两条退款记录叠在一起。
+   *
+   * 金额上限是**实收金额**（`actualPaidAmount`，缺失时退回订单金额）：
+   * 线下实收可能与系统报价不同，退款口径必须跟实收走。
+   */
+  async registerOfflineRefund(
+    orderIdOrId: string,
+    input: { amount: number; method: string; note?: string | null },
+    operatorId: string,
+  ): Promise<{
+    orderId: string;
+    status: string;
+    refundChannel: string;
+    amount: number;
+    method: string;
+    note: string | null;
+    offlineRefundedAt: Date;
+    cancelledAt: Date;
+    cancellationReason: string;
+    releasedCapacity: number;
+    operatorId: string;
+  }> {
+    const ref = await this.resolveOrderRef(orderIdOrId);
+
+    const order = await this.prisma.customRecipeOrder.findUnique({
+      where: { id: ref.id },
+      select: {
+        id: true,
+        orderId: true,
+        status: true,
+        scheduledDate: true,
+        recipeQuantity: true,
+        amount: true,
+        actualPaidAmount: true,
+        paymentConfirmedAt: true,
+        paymentChannel: true,
+        orderSource: true,
+        offlineRefundedAt: true,
+        cancelledAt: true,
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`定制订单不存在: ${orderIdOrId}`);
+    }
+
+    /**
+     * 没收到钱的单没有"退款"可登记。
+     *
+     * 线下单的收款凭据就是 `paymentConfirmedAt`；`paymentTransactionId` 是微信
+     * 交易号，不适用于线下，所以这里只看前者。
+     */
+    if (!order.paymentConfirmedAt) {
+      throw new BadRequestException('该订单尚未确认收款，不能登记线下退款');
+    }
+
+    /**
+     * 线上单必须走微信原路退款。允许它在这里登记线下退款，等于给一条
+     * **绕过微信退款**的后门 —— 钱退没退、退多少都无法对账。
+     */
+    if (!isOfflinePaidCustomRecipeOrder(order)) {
+      throw new BadRequestException(
+        '该订单不是线下收款订单，请使用微信原路退款',
+      );
+    }
+
+    const method = normalizePaymentChannel(input.method);
+    if (!isValidOfflineRefundMethod(method)) {
+      throw new BadRequestException(
+        `退款方式不合法，可选：${OFFLINE_REFUND_METHODS.join(' / ')}`,
+      );
+    }
+
+    const rawAmount = Number(input.amount);
+    if (!Number.isFinite(rawAmount) || rawAmount <= 0) {
+      throw new BadRequestException('退款金额必须大于 0');
+    }
+
+    // 金额列是 Decimal(10,2)：先按分取整，避免 0.001 这类值绕过 >0 校验
+    const amount = Math.round(rawAmount * 100) / 100;
+    if (amount <= 0) {
+      throw new BadRequestException('退款金额必须大于 0');
+    }
+
+    const cap = Math.round(resolveOfflineRefundCap(order) * 100) / 100;
+    if (cap <= 0) {
+      throw new BadRequestException('该订单没有可退的实收金额');
+    }
+    if (amount > cap) {
+      throw new BadRequestException(
+        `退款金额不能超过实收金额 ¥${cap.toFixed(2)}`,
+      );
+    }
+
+    /**
+     * 幂等前置检查：已取消 / 已登记过线下退款的单直接拒绝。
+     *
+     * 真正防并发的是下面事务里的 CAS；这个前置检查只是让常见情况
+     * 不必白跑一次事务、错误信息也更直接。
+     */
+    if (
+      order.offlineRefundedAt ||
+      order.cancelledAt ||
+      order.status === CustomRecipeStatus.CANCELLED
+    ) {
+      throw new BadRequestException(
+        '该订单已取消或已登记线下退款，不能重复登记',
+      );
+    }
+
+    /**
+     * 已交付/已完成的单必须走售后，不能借"线下退款"把订单撤销 ——
+     * 否则顾客已经拿到食谱，订单却被关掉，售后与对账都失去依据。
+     */
+    if (!canTransition(order.status, CustomRecipeStatus.CANCELLED)) {
+      throw new BadRequestException(
+        order.status === CustomRecipeStatus.DELIVERED ||
+          order.status === CustomRecipeStatus.COMPLETED
+          ? '订单已交付，不能取消；如有问题请提交售后'
+          : `当前状态（${order.status}）不能取消`,
+      );
+    }
+
+    const note = String(input.note ?? '').trim() || null;
+    const now = new Date();
+    const cancellationReason = buildOfflineRefundCancellationReason({
+      amount,
+      method,
+      note,
+    });
+
+    const releasedCapacity = await this.prisma.$transaction(async (tx) => {
+      /**
+       * CAS 认领：带 `offlineRefundedAt: null / cancelledAt: null` 且状态仍可取消
+       * 的条件更新，只有仍处于"未退未取消"的那一方能写成。抢输返回 count=0，
+       * 绝不能顺手再释放一次名额。
+       *
+       * 状态用白名单（而不是 `not CANCELLED`）：如果在我们读完订单之后
+       * 恰好被推进到「已交付」，这里必须抢输 —— 不能给已交付的单退款并撤销。
+       */
+      const updated = await tx.customRecipeOrder.updateMany({
+        where: {
+          id: order.id,
+          status: {
+            in: [
+              CustomRecipeStatus.PENDING_PAYMENT,
+              CustomRecipeStatus.PAID,
+              CustomRecipeStatus.IN_PROGRESS,
+            ],
+          },
+          offlineRefundedAt: null,
+          cancelledAt: null,
+        },
+        data: {
+          status: CustomRecipeStatus.CANCELLED,
+          cancelledAt: now,
+          cancellationReason,
+          refundChannel: OFFLINE_REFUND_CHANNEL,
+          offlineRefundedAt: now,
+          offlineRefundAmount: amount,
+          offlineRefundMethod: method,
+          offlineRefundNote: note,
+          offlineRefundByStaffId: operatorId,
+        },
+      });
+
+      if (updated.count === 0) {
+        throw new BadRequestException(
+          '该订单已取消或已登记线下退款，不能重复登记',
+        );
+      }
+
+      return await this.releaseScheduleCapacity(
+        tx,
+        order.scheduledDate,
+        order.recipeQuantity,
+      );
+    });
+
+    return {
+      orderId: order.orderId,
+      status: CustomRecipeStatus.CANCELLED,
+      refundChannel: OFFLINE_REFUND_CHANNEL,
+      amount,
+      method,
+      note,
+      offlineRefundedAt: now,
+      cancelledAt: now,
+      cancellationReason,
+      releasedCapacity,
+      operatorId,
+    };
   }
 
   /**

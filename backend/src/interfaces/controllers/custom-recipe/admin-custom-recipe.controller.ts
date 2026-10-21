@@ -46,9 +46,11 @@ import {
 import {
   CreateAssistedOrderDTO,
   CreateRecipeDTO,
+  RegisterOfflineRefundDTO,
   UpdateScheduleDTO,
 } from '../../../application/custom-recipe/dto/custom-recipe.dto';
 import { AssistedOrderService } from '../../../application/custom-recipe/assisted-order.service';
+import { isOfflinePaidCustomRecipeOrder } from '../../../domain/custom-recipe/custom-recipe.refund';
 import { AdminGuard } from '../auth/admin.guard';
 import { StaffGuard } from '../../guards/role.guard';
 import { AuthGuard } from '../../auth/auth.guard';
@@ -374,6 +376,12 @@ export class AdminCustomRecipeController {
       ...order,
       amount: Number(order.amount),
       /**
+       * 线下收/退款金额是 Prisma Decimal，JSON 里默认会变成字符串。
+       * 页面要直接拿它做金额比较与默认值，这里统一成 number | null。
+       */
+      actualPaidAmount: this.toNullableNumber(order.actualPaidAmount),
+      offlineRefundAmount: this.toNullableNumber(order.offlineRefundAmount),
+      /**
        * ★ 后台视角的渲染契约（批次 5.5）。
        *
        * 后台页面此前自己用 `status === 'XXX'` 决定显示哪些按钮 ——
@@ -439,6 +447,13 @@ export class AdminCustomRecipeController {
     return String(req?.user?.role ?? '').toUpperCase() === 'ADMIN'
       ? 'ADMIN'
       : 'STAFF';
+  }
+
+  /** Prisma Decimal / 字符串金额 → number | null，供页面直接使用 */
+  private toNullableNumber(value: unknown): number | null {
+    if (value === null || value === undefined) return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
   }
 
   /**
@@ -586,6 +601,34 @@ export class AdminCustomRecipeController {
         throw new NotFoundException('订单不存在');
       }
 
+      /**
+       * ★ 线下收款单不能走这条「取消订单」（2026-10-21 · Task 5）。
+       *
+       * 这个接口原来的口径是"已经收到钱就先调微信原路退款，再取消"。
+       * 代客单是线下收款、状态同样是 PAID，但微信里没有这笔交易 ——
+       * 调退款只会失败，极端情况下还会退错钱。
+       *
+       * 所以线下单必须改走 `POST orders/:orderId/offline-refund`：
+       * 管理员在那里登记"谁/何时/退多少/怎么退"，系统不碰微信。
+       * 这里直接 400，绝不允许"取消了钱没处理"。
+       *
+       * 只拦"已经收到钱"的单：未付款的待付款单取消不涉及退款（行为不变）。
+       */
+      const hasCollectedPayment =
+        Boolean(order.paymentConfirmedAt) ||
+        order.status === CustomRecipeStatus.PAID ||
+        order.status === CustomRecipeStatus.IN_PROGRESS;
+
+      if (
+        order.status !== CustomRecipeStatus.CANCELLED &&
+        hasCollectedPayment &&
+        isOfflinePaidCustomRecipeOrder(order)
+      ) {
+        throw new BadRequestException(
+          '线下收款订单不能直接取消：请使用「线下退款并取消」登记线下退款（系统不会调用微信退款）',
+        );
+      }
+
       const shouldRefund =
         order.status === CustomRecipeStatus.PAID ||
         order.status === CustomRecipeStatus.IN_PROGRESS ||
@@ -626,6 +669,46 @@ export class AdminCustomRecipeController {
     });
 
     return ApiResponseDto.success({ status });
+  }
+
+  /**
+   * 线下退款并取消（2026-10-21 · 代客定制食谱订单 Task 5）。
+   *
+   * 代客单的钱是**线下**收的（微信转账/支付宝/现金），订单却没有微信退款单可对账。
+   * 这个接口只做两件事：
+   *   ① 把「金额 / 方式 / 操作人 / 时间 / 备注」登记到订单上（`offlineRefund*`）；
+   *   ② 取消订单并释放当天接单名额（service 里一个事务完成）。
+   *
+   * **绝不调用微信退款** —— 微信里根本没有这笔支付。
+   *
+   * 仅管理员：退款是资金动作，与「取消订单」同级。
+   * 校验：
+   *   · 必须已确认收款（`paymentConfirmedAt`）；
+   *   · 必须是线下收款单（线上单请走原来的微信原路退款）；
+   *   · 金额 > 0 且不超过实收金额；
+   *   · 已取消 / 已登记过线下退款的单拒绝重复登记（service 里 CAS 认领）。
+   */
+  @Post('orders/:orderId/offline-refund')
+  @UseGuards(AdminGuard)
+  /** 只给这一条路由加校验管道：不改变既有接口的校验行为 */
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  @ApiOperation({ summary: '线下退款并取消（仅管理员，不调用微信退款）' })
+  async registerOfflineRefund(
+    @Req() req: any,
+    @Param('orderId') orderId: string,
+    @Body() dto: RegisterOfflineRefundDTO,
+  ) {
+    const result = await this.customRecipeService.registerOfflineRefund(
+      orderId,
+      {
+        amount: dto.amount,
+        method: dto.method,
+        note: dto.note,
+      },
+      this.currentOperatorId(req),
+    );
+
+    return ApiResponseDto.success(result);
   }
 
   /**
@@ -674,6 +757,18 @@ export class AdminCustomRecipeController {
      */
     if (!order.paymentConfirmedAt && !order.paymentTransactionId) {
       throw new BadRequestException('该定制订单尚未支付，无需退款');
+    }
+
+    /**
+     * ★ 线下收款单不能走微信原路退款（2026-10-21 · Task 5）。
+     *
+     * 页面已把线下单的「补退款」换成「线下退款并取消」，但接口必须自己再拦一次：
+     * 直接调接口（或旧页面缓存）不能绕过去调微信退款。
+     */
+    if (isOfflinePaidCustomRecipeOrder(order)) {
+      throw new BadRequestException(
+        '线下收款订单不能走微信原路退款，请在订单详情使用「线下退款并取消」登记线下退款',
+      );
     }
 
     /**

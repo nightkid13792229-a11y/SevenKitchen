@@ -110,6 +110,73 @@
           </p>
         </template>
 
+        <!--
+          线下收款（2026-10-21 · 代客定制食谱订单 Task 5）。
+
+          代客单的钱是线下收的（微信转账/支付宝/现金），但订单同样是 PAID。
+          微信里没有这笔支付，所以取消**不能**走原路退款 —— 页面必须说清楚，
+          否则客服会以为点「取消订单」就能把钱退回去。
+        -->
+        <template v-if="isOfflinePaidOrder">
+          <el-divider />
+          <h3>线下收款</h3>
+          <div class="info-group">
+            <div class="info-item">
+              <label>收款方式</label>
+              <span>{{ paymentChannelText }}</span>
+            </div>
+            <div
+              class="info-item"
+              v-if="order.actualPaidAmount !== null && order.actualPaidAmount !== undefined"
+            >
+              <label>实收金额</label>
+              <span class="amount">¥{{ Number(order.actualPaidAmount).toFixed(2) }}</span>
+            </div>
+            <div class="info-item" v-if="order.externalPaymentRef">
+              <label>收款备注</label>
+              <span>{{ order.externalPaymentRef }}</span>
+            </div>
+          </div>
+          <p class="offline-refund-tip">
+            这是线下收款订单：钱不在微信支付里，取消时不能走微信原路退款。
+            请管理员先把款退回顾客，再用「线下退款并取消」登记（手工退款，不会调用微信退款）。
+          </p>
+        </template>
+
+        <!-- 线下退款登记记录：谁、什么时候、退了多少、怎么退、备注什么 -->
+        <template v-if="hasOfflineRefundInfo">
+          <el-divider />
+          <h3>线下退款登记</h3>
+          <div class="info-group">
+            <div class="info-item">
+              <label>退款方式</label>
+              <span>{{ offlineRefundMethodText }}</span>
+            </div>
+            <div
+              class="info-item"
+              v-if="order.offlineRefundAmount !== null && order.offlineRefundAmount !== undefined"
+            >
+              <label>退款金额</label>
+              <span class="amount">¥{{ Number(order.offlineRefundAmount).toFixed(2) }}</span>
+            </div>
+            <div class="info-item" v-if="order.offlineRefundedAt">
+              <label>登记时间</label>
+              <span>{{ formatDateTime(order.offlineRefundedAt) }}</span>
+            </div>
+            <div class="info-item" v-if="order.offlineRefundByStaffId">
+              <label>操作人</label>
+              <span class="mono">{{ order.offlineRefundByStaffId }}</span>
+            </div>
+            <div class="info-item" v-if="order.offlineRefundNote">
+              <label>备注</label>
+              <span>{{ order.offlineRefundNote }}</span>
+            </div>
+          </div>
+          <p class="offline-refund-tip">
+            这是手工退款登记，系统没有调用微信退款；如对金额有疑问请核对线下转账记录。
+          </p>
+        </template>
+
         <el-divider />
 
         <h3>客户信息</h3>
@@ -291,10 +358,29 @@
           <span v-if="order.dog?.id && !canStartDesign" class="design-gate-tip">
             {{ order.status === 'PENDING_PAYMENT' ? '订单未付款，付款后才能开始设计' : '该订单已取消，不能开始设计' }}
           </span>
-          <!-- 取消会退款、会释放当天接单名额（每天只有 5 个），口径 2 定为仅管理员。
-               已交付的单不允许取消（后端也会拒绝）。 -->
+          <!--
+            线下收款单（2026-10-21 · 代客定制食谱订单 Task 5）。
+
+            钱是线下收的，微信里没有这笔支付 —— 原来的「取消订单」会误调微信退款。
+            线下单改为「线下退款并取消」：管理员先线下把款退回顾客，
+            再在弹窗里登记金额/方式/备注；系统只登记，不调用微信退款。
+          -->
           <el-button
-            v-if="isAdmin && order.status !== 'DELIVERED' && order.status !== 'CANCELLED'"
+            v-if="canOfflineRefund"
+            type="danger"
+            plain
+            :loading="offlineRefunding"
+            @click="openOfflineRefundDialog"
+          >
+            线下退款并取消
+          </el-button>
+          <span v-if="canOfflineRefund" class="offline-refund-tip">
+            手工退款登记：请先线下把款退给顾客，系统不会调用微信退款
+          </span>
+          <!-- 取消会退款、会释放当天接单名额（每天只有 5 个），口径 2 定为仅管理员。
+               已交付的单不允许取消（后端也会拒绝）。线下单走上面的线下退款入口。 -->
+          <el-button
+            v-if="canCancelOrder"
             type="danger"
             plain
             @click="cancelOrder"
@@ -302,10 +388,10 @@
             取消订单
           </el-button>
           <span
-            v-else-if="!isAdmin && order.status !== 'DELIVERED' && order.status !== 'CANCELLED'"
+            v-else-if="!isAdmin && isCancellableStatus"
             class="admin-only-tip"
           >
-            {{ ADMIN_ONLY_TIP }}：取消订单
+            {{ ADMIN_ONLY_TIP }}：{{ isOfflinePaidOrder ? '线下退款并取消' : '取消订单' }}
           </span>
           <!-- 补退款（2026-10-21）：取消时该退而没退成的历史单。
                订单取消后「取消订单」按钮就没了，没有这个入口就再也退不了钱。
@@ -500,6 +586,74 @@
         </div>
       </div>
     </div>
+
+    <!--
+      线下退款并取消（2026-10-21 · 代客定制食谱订单 Task 5）。
+
+      这是**手工退款**：钱由管理员在线下退回顾客，系统只登记
+      「退了多少、怎么退、谁操作的」，然后取消订单并释放名额。
+      **不调用微信退款** —— 线下收款在微信里没有交易可退。
+    -->
+    <el-dialog
+      v-model="offlineRefundDialogVisible"
+      title="线下退款并取消"
+      width="520px"
+      :close-on-click-modal="false"
+    >
+      <el-alert
+        type="warning"
+        :closable="false"
+        show-icon
+        title="这是手工退款，不会调用微信退款"
+        description="请先在线下（微信/支付宝/现金）把款退给顾客，再在这里登记。登记后订单会变为「已取消」并释放当天接单名额。"
+      />
+
+      <el-form label-width="90px" class="offline-refund-form">
+        <el-form-item label="退款金额">
+          <div class="offline-refund-amount">
+            <el-input-number
+              v-model="offlineRefundForm.amount"
+              :min="0.01"
+              :max="offlineRefundCap"
+              :precision="2"
+              :step="10"
+            />
+            <span class="offline-refund-cap">
+              最多可退实收 ¥{{ offlineRefundCap.toFixed(2) }}
+            </span>
+          </div>
+        </el-form-item>
+        <el-form-item label="退款方式">
+          <el-select v-model="offlineRefundForm.method" placeholder="请选择退款方式">
+            <el-option
+              v-for="item in CUSTOM_RECIPE_OFFLINE_REFUND_METHOD_OPTIONS"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input
+            v-model="offlineRefundForm.note"
+            maxlength="200"
+            show-word-limit
+            placeholder="例如：微信转账退回，流水号 xxx（可选）"
+          />
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="offlineRefundDialogVisible = false">再想想</el-button>
+        <el-button
+          type="danger"
+          :loading="offlineRefunding"
+          @click="submitOfflineRefund"
+        >
+          确认已线下退款并取消
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -510,6 +664,7 @@ import { Document } from '@element-plus/icons-vue';
 import {
   customRecipeApi,
   type CustomRecipeDeliveryHistoryItem,
+  type OfflineRefundMethod,
 } from '@/api/customRecipe';
 import type {
   CustomRecipeAttachment,
@@ -519,15 +674,20 @@ import type {
 import { dogApi } from '@/api/dogs';
 import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole';
 import {
+  CUSTOM_RECIPE_OFFLINE_REFUND_METHOD_OPTIONS,
   buildMultiRecipeProgressText,
   canDeliverCustomRecipe,
   canManualRefundCustomRecipeOrder,
+  canOfflineRefundCustomRecipeOrder,
   canSubmitBatchDelivery as isBatchDeliveryReady,
+  getCustomRecipeOfflineRefundMethodText,
+  getCustomRecipePaymentChannelText,
   getCustomRecipeRefundStatusText,
   isBatchRecipeSelectable as canSelectBatchRecipe,
   isCustomRecipeRedelivery,
   isCustomRecipeRefundSucceeded,
   isMultiRecipeOrderQuantity,
+  isOfflinePaidCustomRecipeOrder,
   normalizeRecipeQuantity,
 } from '@/constants/customRecipeOrder';
 import {
@@ -561,6 +721,19 @@ const loading = ref(false);
 const openingDesigner = ref(false);
 /** 手工补退款进行中（防止连点重复提交） */
 const manualRefunding = ref(false);
+/** 线下退款登记进行中（防止连点重复提交） */
+const offlineRefunding = ref(false);
+/** 「线下退款并取消」弹窗 */
+const offlineRefundDialogVisible = ref(false);
+const offlineRefundForm = ref<{
+  amount: number;
+  method: string;
+  note: string;
+}>({
+  amount: 0,
+  method: 'OFFLINE_WECHAT',
+  note: '',
+});
 const order = ref<CustomRecipeOrderDetail | null>(null);
 /** 品种不在订单详情返回里，用狗狗档案补齐；失败不影响订单展示 */
 const dogBreedName = ref('');
@@ -631,7 +804,93 @@ const canManualRefund = computed(
       status: order.value?.status,
       paymentConfirmedAt: order.value?.paymentConfirmedAt,
       refundStatus: order.value?.refundStatus,
+      // 线下单没有微信退款可补，入口是「线下退款并取消」
+      paymentChannel: order.value?.paymentChannel,
+      orderSource: order.value?.orderSource,
     }),
+);
+
+// ===== 线下收款 / 线下退款（2026-10-21 · 代客定制食谱订单 Task 5）=====
+
+/**
+ * 这张单的钱是不是线下收的。
+ *
+ * 判定与后端同一个口径（`isOfflinePaidCustomRecipeOrder`）：
+ * 线下渠道，或代客单已确认收款。是线下单就**绝不能**再显示
+ * 「取消订单 / 补退款」这两个会调微信退款的入口。
+ */
+const isOfflinePaidOrder = computed(() =>
+  isOfflinePaidCustomRecipeOrder({
+    paymentChannel: order.value?.paymentChannel,
+    orderSource: order.value?.orderSource,
+    paymentConfirmedAt: order.value?.paymentConfirmedAt,
+  }),
+);
+
+const paymentChannelText = computed(() =>
+  getCustomRecipePaymentChannelText(order.value?.paymentChannel),
+);
+
+/** 线下退款的登记记录（有登记过才显示那一块） */
+const hasOfflineRefundInfo = computed(
+  () =>
+    Boolean(order.value?.offlineRefundedAt) ||
+    (order.value?.offlineRefundAmount !== null &&
+      order.value?.offlineRefundAmount !== undefined),
+);
+
+const offlineRefundMethodText = computed(() =>
+  getCustomRecipeOfflineRefundMethodText(order.value?.offlineRefundMethod),
+);
+
+/**
+ * 线下退款上限：**实收多少最多退多少**。
+ *
+ * 订单 `amount` 是系统报价；线下实收记在 `actualPaidAmount`。
+ * 实收缺失时退回报价（老数据），绝不返回负数 —— 弹窗默认值也用它。
+ */
+const offlineRefundCap = computed(() => {
+  const actual = Number(order.value?.actualPaidAmount);
+  if (Number.isFinite(actual) && actual > 0) return actual;
+  const quoted = Number(order.value?.amount);
+  return Number.isFinite(quoted) && quoted > 0 ? quoted : 0;
+});
+
+/**
+ * 是否显示「线下退款并取消」。
+ *
+ * 线下已收款 + 还能取消（未交付/未取消/未登记过）+ 管理员。
+ * 员工看不到这个按钮，也不用点完吃 403（后端还有 AdminGuard）。
+ */
+const canOfflineRefund = computed(
+  () =>
+    isAdmin.value &&
+    // 没有可退金额时不给入口：弹窗的金额下限是 0.01，开了也提交不了
+    offlineRefundCap.value > 0 &&
+    canOfflineRefundCustomRecipeOrder({
+      status: order.value?.status,
+      paymentConfirmedAt: order.value?.paymentConfirmedAt,
+      paymentChannel: order.value?.paymentChannel,
+      orderSource: order.value?.orderSource,
+      offlineRefundedAt: order.value?.offlineRefundedAt,
+      cancelledAt: order.value?.cancelledAt,
+    }),
+);
+
+/** 是否还能取消（与原来按钮条件一致：已交付/已取消不再显示） */
+const isCancellableStatus = computed(() => {
+  const status = String(order.value?.status || '');
+  return Boolean(status) && !['DELIVERED', 'CANCELLED'].includes(status);
+});
+
+/**
+ * 「取消订单」按钮：线上单保持原样；线下单交给「线下退款并取消」。
+ *
+ * 线下单若还显示这个按钮，后端虽然会 400 挡住，但页面等于给了错误入口。
+ */
+const canCancelOrder = computed(
+  () =>
+    isAdmin.value && isCancellableStatus.value && !isOfflinePaidOrder.value,
 );
 
 /** 下单时填写的过敏 vs 档案最新：两份口径不同，必须分开显示并提示差异 */
@@ -1115,6 +1374,19 @@ const openHealthProfile = () => {
  * 该动作仅管理员（口径 2）。
  */
 const cancelOrder = async () => {
+  /**
+   * 线下收款单不能走这里（2026-10-21 · 代客订单 Task 5）。
+   *
+   * 按钮已换成「线下退款并取消」，这里再兜一层：
+   * 旧页面缓存/误触都不能让线下单去调微信原路退款。
+   */
+  if (isOfflinePaidOrder.value) {
+    ElMessage.warning(
+      '线下收款订单请使用「线下退款并取消」登记，系统不会调用微信退款',
+    );
+    return;
+  }
+
   try {
     const { value } = await ElMessageBox.prompt(
       order.value!.status === 'PENDING_PAYMENT'
@@ -1135,6 +1407,85 @@ const cancelOrder = async () => {
     await loadOrderDetail();
   } catch (error) {
     toastApiError(error, '取消失败', (message) => ElMessage.error(message));
+  }
+};
+
+/**
+ * 线下退款默认方式：优先跟收款方式一致（线上微信收的就线下微信退）。
+ *
+ * 收款渠道缺失/异常时回落到线下微信 —— 绝不能回落到 WECHAT_ONLINE，
+ * 那会让"退款方式"看起来像原路退回。
+ */
+const resolveDefaultOfflineRefundMethod = (): string => {
+  const channel = String(order.value?.paymentChannel || '').toUpperCase();
+  if (['OFFLINE_WECHAT', 'OFFLINE_ALIPAY', 'OTHER'].includes(channel)) {
+    return channel;
+  }
+  return 'OFFLINE_WECHAT';
+};
+
+/**
+ * 打开「线下退款并取消」弹窗（2026-10-21 · 代客定制食谱订单 Task 5）。
+ *
+ * 金额默认 = 实收金额（`actualPaidAmount`，缺失时用订单金额），
+ * 方式默认 = 原收款方式。管理员核对后可以改小（部分退款），但不能超过实收。
+ */
+const openOfflineRefundDialog = () => {
+  offlineRefundForm.value = {
+    amount: offlineRefundCap.value,
+    method: resolveDefaultOfflineRefundMethod(),
+    note: '',
+  };
+  offlineRefundDialogVisible.value = true;
+};
+
+/**
+ * 提交线下退款登记。
+ *
+ * 这是**手工退款**：钱已经由管理员在线下退给顾客，这里只是登记并取消订单。
+ * 系统不会调用微信退款 —— 线下收款在微信里没有交易可退。
+ *
+ * 失败原样提示（未确认收款 / 金额超过实收 / 已经取消或登记过），
+ * 绝不把失败吞成成功。
+ */
+const submitOfflineRefund = async () => {
+  if (offlineRefunding.value) return;
+
+  const amount = Number(offlineRefundForm.value.amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    ElMessage.warning('退款金额必须大于 0');
+    return;
+  }
+  if (offlineRefundCap.value > 0 && amount > offlineRefundCap.value) {
+    ElMessage.warning(
+      `退款金额不能超过实收金额 ¥${offlineRefundCap.value.toFixed(2)}`,
+    );
+    return;
+  }
+
+  try {
+    offlineRefunding.value = true;
+    const result = await customRecipeApi.registerOfflineRefund(
+      order.value!.orderId,
+      {
+        amount,
+        method: offlineRefundForm.value.method as OfflineRefundMethod,
+        note: offlineRefundForm.value.note.trim() || undefined,
+      },
+    );
+
+    offlineRefundDialogVisible.value = false;
+    ElMessage.success(
+      `已登记线下退款 ¥${Number(result?.amount ?? amount).toFixed(2)}，订单已取消`,
+    );
+    emit('refresh');
+    await loadOrderDetail();
+  } catch (error) {
+    toastApiError(error, '线下退款登记失败', (message) =>
+      ElMessage.error(message),
+    );
+  } finally {
+    offlineRefunding.value = false;
   }
 };
 
@@ -1572,6 +1923,31 @@ h3 {
   font-size: 13px;
   color: #e6a23c;
   line-height: 1.6;
+}
+
+/* ---------- 线下退款（2026-10-21 · 代客订单 Task 5）---------- */
+
+.offline-refund-tip {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: #e6a23c;
+  line-height: 1.6;
+}
+
+.offline-refund-form {
+  margin-top: 16px;
+}
+
+.offline-refund-amount {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.offline-refund-cap {
+  font-size: 13px;
+  color: #909399;
 }
 
 /* ---------- 档案更新提示与时效 ---------- */

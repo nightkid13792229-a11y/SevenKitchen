@@ -369,6 +369,12 @@ const routes: RouteRecordRaw[] = [
         ],
       },
       {
+        path: "custom-recipes/assisted-order",
+        name: "CustomRecipeAssistedOrder",
+        component: () => import("@/views/CustomRecipes/AssistedOrderCreate.vue"),
+        meta: { title: "代客下单" },
+      },
+      {
         path: "custom-recipes",
         // 定制订单已合并到订单中心（2026-10-21）；旧地址保留跳转，避免书签/群链接失效。
         // OrderList.vue 暂时保留但不再可路由（测试仍会 import 它）。

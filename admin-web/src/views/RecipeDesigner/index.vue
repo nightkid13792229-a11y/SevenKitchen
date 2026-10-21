@@ -6,7 +6,14 @@
         <p class="subtitle">为爱犬档案定制鲜食配方系列，配餐员设计、管理员审核发布</p>
       </div>
       <div class="header-actions">
-        <el-button type="primary" :icon="Plus" @click="openCreateDialog">新建设计系列</el-button>
+        <el-button
+          v-if="designModeFilter === 'CATALOG'"
+          type="primary"
+          :icon="Plus"
+          @click="openCreateDialog"
+        >
+          新建设计系列
+        </el-button>
       </div>
     </div>
 
@@ -85,6 +92,10 @@
                 <el-icon><Search /></el-icon>
               </template>
             </el-input>
+            <el-radio-group v-model="designModeFilter" size="small" @change="onDesignModeChange">
+              <el-radio-button value="CATALOG">产品线食谱</el-radio-button>
+              <el-radio-button value="ORDER">订单定制食谱</el-radio-button>
+            </el-radio-group>
             <el-radio-group v-model="statusFilter" size="small" @change="onStatusFilterChange">
               <el-radio-button :value="undefined">全部</el-radio-button>
               <el-radio-button value="DRAFT">草稿</el-radio-button>
@@ -126,6 +137,13 @@
             </span>
             <span class="updated-at">更新于 {{ formatTime(card.updatedAt) }}</span>
           </div>
+          <div v-if="designModeFilter === 'ORDER'" class="order-meta">
+            <el-tag size="small" type="success" effect="plain">订单定制</el-tag>
+            <span v-if="card.orderNo">订单 {{ card.orderNo }}</span>
+            <span v-if="card.orderDogName">🐶 {{ card.orderDogName }}</span>
+            <span v-if="card.orderQuantity">共 {{ card.orderQuantity }} 份</span>
+            <span v-if="card.orderStatus">· {{ orderStatusLabel(card.orderStatus) }}</span>
+          </div>
 
           <div class="stage-grid">
             <div
@@ -158,7 +176,7 @@
             </div>
           </div>
 
-          <div class="series-card-actions">
+          <div v-if="designModeFilter === 'CATALOG'" class="series-card-actions">
             <el-button size="small" text @click="handleCardCommand('duplicate', card)">复制系列</el-button>
             <el-button size="small" text @click="handleCardCommand('rename', card)">重命名</el-button>
             <el-button size="small" text type="danger" @click="handleCardCommand('delete', card)">删除系列</el-button>
@@ -298,6 +316,7 @@ const loadingMore = ref(false)
 const creating = ref(false)
 const renaming = ref(false)
 const series = ref<RecipeDesignerSeriesCard[]>([])
+const designModeFilter = ref<'CATALOG' | 'ORDER'>('CATALOG')
 const statusFilter = ref<RecipeDesignerSeriesStatusFilter | undefined>(undefined)
 const searchKeyword = ref('')
 const seriesPage = ref(1)
@@ -435,6 +454,7 @@ async function loadSeries(reset = true) {
   }
   try {
     const res = await recipeDesignerApi.listSeries({
+      designMode: designModeFilter.value,
       status: statusFilter.value,
       search: searchKeyword.value.trim() || undefined,
       page: reset ? 1 : seriesPage.value + 1,
@@ -477,7 +497,26 @@ function teardownSeriesObserver() {
 }
 
 /** 状态筛选变化：重置到第一页重新加载 */
+function orderStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    PENDING_PAYMENT: '待付款',
+    PAID: '已付款',
+    IN_PROGRESS: '制作中',
+    DELIVERED: '已交付',
+    COMPLETED: '已完成',
+    CANCELLED: '已取消',
+    AFTERSALE: '售后中'
+  }
+  return labels[status] ?? status
+}
+
 function onStatusFilterChange() {
+  void loadSeries(true)
+}
+
+/** 切换产品线 / 订单定制：回到第一页并清空状态筛选，避免两种上下文混用 */
+function onDesignModeChange() {
+  statusFilter.value = undefined
   void loadSeries(true)
 }
 
@@ -489,11 +528,16 @@ watch(searchKeyword, () => {
   }, 300)
 })
 
-const emptyDescription = computed(() =>
-  searchKeyword.value.trim()
+const emptyDescription = computed(() => {
+  if (designModeFilter.value === 'ORDER') {
+    return searchKeyword.value.trim()
+      ? `没有找到包含「${searchKeyword.value.trim()}」的订单定制系列`
+      : '还没有订单定制系列；请从订单设计工作台创建设计'
+  }
+  return searchKeyword.value.trim()
     ? `没有找到名称、原料或爱犬包含「${searchKeyword.value.trim()}」的设计系列`
     : '还没有设计系列，点击右上角「新建设计系列」开始'
-)
+})
 
 function openCreateDialog() {
   referenceDogRequestSeq += 1
@@ -544,6 +588,9 @@ async function createSeries() {
 }
 
 async function openStage(card: RecipeDesignerSeriesCard, stage: RecipeDesignerSeriesStage) {
+  // 订单定制列表进入时，把业务订单号带进编辑器：锁狗、显示本单进度。
+  entryOrderId.value =
+    designModeFilter.value === 'ORDER' && card.orderNo ? card.orderNo : ''
   if (stage.draftId) {
     // 已有草稿：若草稿为空且该阶段有已发布配方，走后端"自动带入已发布原料"，
     // 避免进入历史遗留的空草稿；否则直接进入该草稿（已发布草稿由编辑器自动创建修订版）
@@ -1051,5 +1098,15 @@ onBeforeUnmount(() => {
 .create-name-tip {
   margin-left: 96px;
   margin-bottom: 8px;
+}
+
+.order-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 4px;
+  font-size: 12px;
+  color: #606266;
 }
 </style>

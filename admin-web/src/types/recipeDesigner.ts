@@ -53,6 +53,13 @@ export interface RecipeDesignerSeriesCard {
   stages: RecipeDesignerSeriesStage[]
   /** 默认阶段（第一个有草稿的阶段）的草稿 ID，用于创建后进入编辑器 */
   initialDraftId?: string | null
+  /** 列表上下文：CATALOG = 产品线；ORDER = 订单定制 */
+  designMode?: 'CATALOG' | 'ORDER'
+  /** 订单定制列表附加信息 */
+  orderNo?: string | null
+  orderStatus?: string | null
+  orderQuantity?: number | null
+  orderDogName?: string | null
 }
 
 export interface CreateRecipeSeriesPayload {

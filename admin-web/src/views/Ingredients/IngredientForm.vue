@@ -466,6 +466,13 @@
               label="产品图片"
             >
               <div class="supplement-image-panel">
+                <input
+                  ref="supplementImageInput"
+                  type="file"
+                  accept="image/*"
+                  class="supplement-image-input"
+                  @change="handleSupplementImageFileChange"
+                />
                 <div
                   v-if="supplementProperties.image_url"
                   class="supplement-image-preview-card"
@@ -478,21 +485,9 @@
                     class="supplement-image-preview"
                   />
                   <div class="supplement-image-actions">
-                    <el-upload
-                      v-if="props.ingredient?.id"
-                      :show-file-list="false"
-                      accept="image/*"
-                      :before-upload="handleSupplementImageUpload"
-                      :disabled="supplementImageUploading"
-                    >
-                      <el-button :loading="supplementImageUploading"
-                        >替换图片</el-button
-                      >
-                    </el-upload>
                     <el-button
-                      v-else
                       :loading="supplementImageUploading"
-                      @click="notifySupplementImageRequiresSavedIngredient"
+                      @click="triggerSupplementImagePicker"
                     >
                       替换图片
                     </el-button>
@@ -500,7 +495,7 @@
                       type="danger"
                       plain
                       :loading="supplementImageUploading"
-                      @click="props.ingredient?.id ? handleRemoveSupplementImage() : notifySupplementImageRequiresSavedIngredient()"
+                      @click="handleRemoveSupplementImage"
                     >
                       删除图片
                     </el-button>
@@ -511,24 +506,10 @@
                     推荐上传 1:1 方图，系统会自动裁切并用于小程序 DIY
                     制作单推荐弹窗展示。
                   </div>
-                  <el-upload
-                    v-if="props.ingredient?.id"
-                    :show-file-list="false"
-                    accept="image/*"
-                    :before-upload="handleSupplementImageUpload"
-                    :disabled="supplementImageUploading"
-                  >
-                    <el-button
-                      type="primary"
-                      :loading="supplementImageUploading"
-                      >上传图片</el-button
-                    >
-                  </el-upload>
                   <el-button
-                    v-else
                     type="primary"
                     :loading="supplementImageUploading"
-                    @click="notifySupplementImageRequiresSavedIngredient"
+                    @click="triggerSupplementImagePicker"
                   >
                     上传图片
                   </el-button>
@@ -536,7 +517,7 @@
                 <div class="hint-text">
                   建议原图清晰、主体居中，推荐尺寸 1200 × 1200。
                   <span v-if="!props.ingredient?.id"
-                    >请先保存补剂原料，再上传产品图片。</span
+                    >选好图片后，保存原料即可生效。</span
                   >
                 </div>
               </div>
@@ -1581,6 +1562,7 @@ const supplementProperties = reactive<SupplementProperties>(
     : getDefaultSupplementProperties(),
 )
 const supplementImageUploading = ref(false)
+const supplementImageInput = ref<HTMLInputElement | null>(null)
 const persistedSupplementProperties = ref<SupplementProperties>(
   props.ingredient?.type === IngredientType.SUPPLEMENT
     ? {
@@ -1802,51 +1784,65 @@ async function deleteIngredientDiyImageByUrl(imageUrl?: string | null) {
   await ingredientApi.deleteIngredientDiyImage(key)
 }
 
-const handleSupplementImageUpload: UploadProps['beforeUpload'] = async (
-  rawFile,
-) => {
-  if (!props.ingredient?.id) {
-    notifySupplementImageRequiresSavedIngredient()
-    return false
-  }
+function triggerSupplementImagePicker() {
+  if (supplementImageUploading.value) return
+  supplementImageInput.value?.click()
+}
 
+async function handleSupplementImageFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  // 允许连续选择同一张图片
+  input.value = ''
+  if (!file) return
+  await handleSupplementImageUpload(file)
+}
+
+async function handleSupplementImageUpload(rawFile: File) {
   if (!rawFile.type.startsWith('image/')) {
     ElMessage.error('请上传图片文件')
-    return false
+    return
   }
 
   if (rawFile.size > 10 * 1024 * 1024) {
     ElMessage.error('图片大小不能超过 10MB')
-    return false
+    return
   }
 
+  const isPersisted = !!props.ingredient?.id
   supplementImageUploading.value = true
 
   try {
     const previousImageUrl = supplementProperties.image_url || null
-    const croppedFile = await cropImageFileToSquare(rawFile as File)
+    const croppedFile = await cropImageFileToSquare(rawFile)
     const uploaded = await ingredientApi.uploadIngredientDiyImage(croppedFile)
     supplementProperties.image_url = uploaded.url
-    await persistSupplementImageUrl(uploaded.url)
 
-    if (previousImageUrl && previousImageUrl !== uploaded.url) {
-      try {
-        await deleteIngredientDiyImageByUrl(previousImageUrl)
-      } catch (deleteError) {
-        console.error(
-          'Failed to delete previous supplement DIY image:',
-          deleteError,
-        )
-        ElMessage.warning('新图片已上传，但旧图片删除失败，请稍后重试')
+    if (isPersisted) {
+      await persistSupplementImageUrl(uploaded.url)
+
+      // 只有已保存的原料才删旧图；新增/复制新增时旧图属于来源原料
+      if (previousImageUrl && previousImageUrl !== uploaded.url) {
+        try {
+          await deleteIngredientDiyImageByUrl(previousImageUrl)
+        } catch (deleteError) {
+          console.error(
+            'Failed to delete previous supplement DIY image:',
+            deleteError,
+          )
+          ElMessage.warning('新图片已上传，但旧图片删除失败，请稍后重试')
+        }
       }
+      ElMessage.success('图片已上传并裁切为 1:1 方图')
+    } else {
+      ElMessage.success('图片已选好，裁切为 1:1 方图；保存原料后生效')
     }
-
-    ElMessage.success('图片已上传并裁切为 1:1 方图')
   } catch (error: any) {
     const latestImageUrl = supplementProperties.image_url || null
     supplementProperties.image_url =
       persistedSupplementProperties.value.image_url || null
     if (
+      isPersisted &&
       latestImageUrl &&
       latestImageUrl !== persistedSupplementProperties.value.image_url
     ) {
@@ -1864,12 +1860,16 @@ const handleSupplementImageUpload: UploadProps['beforeUpload'] = async (
   } finally {
     supplementImageUploading.value = false
   }
-
-  return false
 }
 
 async function handleRemoveSupplementImage() {
   if (!supplementProperties.image_url) {
+    return
+  }
+
+  // 新增/复制新增时，图片尚未保存到数据库，直接清掉表单里的预览即可
+  if (!props.ingredient?.id) {
+    supplementProperties.image_url = null
     return
   }
 

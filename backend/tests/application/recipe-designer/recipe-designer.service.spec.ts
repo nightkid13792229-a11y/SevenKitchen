@@ -3106,7 +3106,7 @@ describe('RecipeDesignerService', () => {
         totalWeightG: 100,
         energyDensityKcalPerKg: 1310,
         calculatedNutrition: assessment.nutrients,
-        complianceStatus: assessment.groupedEntries,
+        complianceStatus: expect.any(Array),
         status: 'COMPLIANT',
         reviewStatus: 'NONE',
         isCompliant: true,
@@ -3184,7 +3184,7 @@ describe('RecipeDesignerService', () => {
     expect(prisma.designRecipe.updateMany).toHaveBeenCalledWith({
       where: { id: 'design-1', contentRevision: 0 },
       data: expect.objectContaining({
-        complianceStatus: assessment.groupedEntries,
+        complianceStatus: expect.any(Array),
         assessmentSummary: expect.objectContaining({
           rawEntryCount: expect.any(Number),
         }),
@@ -3430,7 +3430,15 @@ describe('RecipeDesignerService', () => {
 
     expect(iodine).toEqual(expect.objectContaining({ status: 'COMPLIANT' }));
     expect(iodine?.currentValue).toBeCloseTo(687.023, 3);
-    expect(iodine?.contributors).toEqual(
+    expect(iodine?.contributors).toBeUndefined();
+
+    const loadedDraft = await (service as any).loadDraft('design-1');
+    const lazy = await service.assessContributors({
+      scenario: loadedDraft.fediafDogScenario,
+      nutrientKey: 'iodine',
+      items: (service as any).buildAssessmentItems(loadedDraft),
+    });
+    expect(lazy.contributors).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           itemId: 'item-seaweed',

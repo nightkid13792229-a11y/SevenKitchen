@@ -283,6 +283,14 @@ export interface DogDesignInsight {
    * 没有记录时后端返回 null。
    */
   latestCheckupRecord: DogLatestCheckupRecord | null
+  /** 这只狗实际使用过的食谱：成品鲜食订单 + 已关联食谱的定制订单 */
+  historyRecipes: Array<{
+    id: string
+    name: string
+    kind: 'FINISHED' | 'CUSTOM'
+    date: string | null
+    status: string
+  }>
   designHistory: {
     designCount: number
     seriesNames: string[]

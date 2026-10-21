@@ -83,15 +83,15 @@
         <div v-if="orderAttachments.length" class="order-attachments">
           <span class="fact-label">顾客随单附件</span>
           <div class="attachment-links">
-            <a
+            <button
               v-for="(url, index) in orderAttachments"
               :key="url"
-              :href="url"
-              target="_blank"
-              rel="noopener noreferrer"
+              type="button"
+              class="attachment-link"
+              @click="openAttachment(url, `顾客附件 ${index + 1}`)"
             >
               附件 {{ index + 1 }}
-            </a>
+            </button>
           </div>
         </div>
       </div>
@@ -107,15 +107,15 @@
               </div>
               <div class="record-line">诊断：{{ healthFacts.medical.diagnosis }}</div>
               <div v-if="healthFacts.medical.attachments.length" class="attachment-links">
-                <a
+                <button
                   v-for="(url, index) in healthFacts.medical.attachments"
                   :key="url"
-                  :href="url"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  type="button"
+                  class="attachment-link"
+                  @click="openAttachment(url, `就诊附件 ${index + 1}`)"
                 >
                   查看就诊附件 {{ index + 1 }}
-                </a>
+                </button>
               </div>
             </div>
             <div v-if="healthFacts.checkup" class="record-block">
@@ -125,15 +125,15 @@
               </div>
               <div class="record-line">结论：{{ healthFacts.checkup.findings }}</div>
               <div v-if="healthFacts.checkup.attachments.length" class="attachment-links">
-                <a
+                <button
                   v-for="(url, index) in healthFacts.checkup.attachments"
                   :key="url"
-                  :href="url"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  type="button"
+                  class="attachment-link"
+                  @click="openAttachment(url, `体检附件 ${index + 1}`)"
                 >
                   查看体检附件 {{ index + 1 }}
-                </a>
+                </button>
               </div>
             </div>
           </el-collapse-item>
@@ -161,6 +161,28 @@
               <span class="energy-label">每日目标能量</span>
               <span class="energy-value">{{ energyText }}</span>
               <span v-if="energyPerDayG" class="energy-detail">≈ {{ energyPerDayG }} g/天</span>
+            </div>
+          </el-collapse-item>
+
+          <el-collapse-item
+            name="history"
+            :title="`历史订单食谱（${historyRecipes.length}）`"
+          >
+            <div v-if="historyRecipes.length === 0" class="empty-tip">
+              暂无历史订单食谱
+            </div>
+            <div v-else class="history-recipe-list">
+              <div
+                v-for="item in historyRecipes"
+                :key="`${item.kind}-${item.id}`"
+                class="history-recipe-row"
+              >
+                <div class="history-recipe-name">{{ item.name }}</div>
+                <div class="history-recipe-meta">
+                  <el-tag size="small" effect="plain">{{ historyKindLabel(item.kind) }}</el-tag>
+                  <span>{{ formatInsightDate(item.date) || '日期未知' }}</span>
+                </div>
+              </div>
             </div>
           </el-collapse-item>
 
@@ -229,6 +251,37 @@
         <el-button type="primary" :loading="savingDog" @click="saveDog">保存</el-button>
       </template>
     </el-dialog>
+    <el-dialog
+      v-model="attachmentDialogVisible"
+      :title="attachmentTitle"
+      width="860px"
+      append-to-body
+      destroy-on-close
+      class="attachment-preview-dialog"
+    >
+      <div class="attachment-preview-body">
+        <el-image
+          v-if="attachmentKind === 'image'"
+          :src="attachmentUrl"
+          :preview-src-list="[attachmentUrl]"
+          fit="contain"
+          class="attachment-preview-image"
+        />
+        <iframe
+          v-else-if="attachmentKind === 'pdf'"
+          :src="attachmentUrl"
+          class="attachment-preview-pdf"
+          title="附件预览"
+        />
+        <div v-else class="attachment-preview-fallback">
+          <p>该文件类型暂不支持内嵌预览。</p>
+          <el-button type="primary" plain tag="a" :href="attachmentUrl" target="_blank" rel="noopener noreferrer">
+            在新窗口打开
+          </el-button>
+        </div>
+      </div>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -252,6 +305,7 @@ import {
   buildAllergyFacts,
   buildLatestHealthFacts,
   formatAllergySources,
+  formatInsightDate,
   formatRequestedProteins,
   type AllergyFactSource,
 } from '@/utils/recipeDesigner/dogInsight'
@@ -379,6 +433,13 @@ const orderAllergyTextExtra = computed(() => {
 
 /* ---------- 最近一次就诊 / 体检 ---------- */
 
+const historyRecipes = computed(() =>
+  (insight.value?.historyRecipes || []).filter((item) => item?.name)
+)
+
+const historyKindLabel = (kind: string) =>
+  kind === 'FINISHED' ? '成品鲜食' : '定制食谱'
+
 const healthFacts = computed(() =>
   buildLatestHealthFacts({
     latestMedicalRecord: insight.value?.latestMedicalRecord,
@@ -471,6 +532,27 @@ const recentDays = ref<number>(90)
 
 /** 三个折叠区默认全部收起（基础档案 / 就诊体检 / 最近食材） */
 const openSections = ref<string[]>([])
+const attachmentDialogVisible = ref(false)
+const attachmentUrl = ref('')
+const attachmentTitle = ref('')
+const attachmentKind = ref<'image' | 'pdf' | 'other'>('other')
+
+function detectAttachmentKind(url: string): 'image' | 'pdf' | 'other' {
+  const path = (String(url || '').split('?')[0] || '').toLowerCase()
+  if (/\.pdf$/.test(path)) return 'pdf'
+  if (/\.(png|jpe?g|webp|gif|bmp|svg)$/.test(path)) return 'image'
+  return 'other'
+}
+
+function openAttachment(url: string, title: string) {
+  const value = String(url || '').trim()
+  if (!value) return
+  attachmentUrl.value = value
+  attachmentTitle.value = title
+  attachmentKind.value = detectAttachmentKind(value)
+  attachmentDialogVisible.value = true
+}
+
 
 function handleRecentDaysChange() {
   void loadInsight()
@@ -723,6 +805,37 @@ defineExpose({ loadInsight })
   word-break: break-word;
 }
 
+
+.history-recipe-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-recipe-row {
+  padding: 8px 10px;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  background: #fafafa;
+}
+
+.history-recipe-name {
+  color: #303133;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.history-recipe-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  color: #909399;
+  font-size: 11px;
+}
+
 .order-attachments {
   margin-top: 8px;
 }
@@ -735,13 +848,40 @@ defineExpose({ loadInsight })
   font-size: 12px;
 }
 
-.attachment-links a {
+.attachment-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--el-color-primary);
-  text-decoration: none;
+  font: inherit;
+  cursor: pointer;
 }
 
-.attachment-links a:hover {
+.attachment-link:hover {
   text-decoration: underline;
+}
+
+.attachment-preview-body {
+  min-height: 240px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.attachment-preview-image {
+  max-width: 100%;
+  max-height: 68vh;
+}
+
+.attachment-preview-pdf {
+  width: 100%;
+  height: 68vh;
+  border: 0;
+}
+
+.attachment-preview-fallback {
+  text-align: center;
+  color: #606266;
 }
 
 .fact-value--block {

@@ -181,9 +181,9 @@
         </div>
       </div>
 
-      <!-- 最右：爱犬指导 -->
+      <!-- 最右：爱犬信息 -->
       <div class="pane pane-dog">
-        <div class="pane-title">爱犬指导</div>
+        <div class="pane-title">爱犬信息</div>
         <div class="dog-pane">
           <DogInsightPanel
             :dog-id="referenceDogId"
@@ -1091,8 +1091,8 @@ onBeforeUnmount(() => {
   display: flex;
   min-height: 0;
   /* 2026-10-14 修正：原为 overflow: hidden。
-     五栏固定宽度合计约 1500px（原料库 250 + 配方明细 ≥320 + 仪表盘 300 + 营养评估 330 + 爱犬指导 300），
-     在窄于该宽度的窗口里，hidden 会把右侧三栏（仪表盘 / 营养评估 / 爱犬指导）整个裁掉，
+     五栏固定宽度合计约 1500px（原料库 250 + 配方明细 ≥320 + 仪表盘 300 + 营养评估 330 + 爱犬信息 300），
+     在窄于该宽度的窗口里，hidden 会把右侧三栏（仪表盘 / 营养评估 / 爱犬信息）整个裁掉，
      且没有任何滚动入口 —— 看起来就像"内容没加载出来"，实际是被裁切。
      改为横向可滚动：窄窗口下用户能滚到右侧各栏，宽窗口下不出现滚动条，布局不变。 */
   overflow-x: auto;

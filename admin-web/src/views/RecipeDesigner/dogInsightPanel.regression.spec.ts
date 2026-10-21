@@ -280,3 +280,31 @@ describe('设计器 · 爱犬面板头部与附件（2026-10-22）', () => {
     expect(template).toContain('name="profile"')
   })
 })
+
+describe('设计器 · 爱犬信息命名 / 附件预览 / 历史食谱（2026-10-22）', () => {
+  it('面板标题改为「爱犬信息」', () => {
+    const editor = stripComments(editorSource)
+    expect(editor).toContain('<div class="pane-title">爱犬信息</div>')
+    expect(editor).not.toContain('<div class="pane-title">爱犬指导</div>')
+  })
+
+  it('附件在当前页弹窗预览，不再新开标签页', () => {
+    const panel = stripComments(panelSource)
+    const template = templateOf(panel)
+    expect(panel).toContain('attachment-preview-dialog')
+    expect(panel).toContain('openAttachment(url')
+    expect(panel).toContain('attachment-preview-pdf')
+    expect(panel).toContain('attachment-preview-image')
+    expect(template).not.toContain(':href="url"')
+  })
+
+  it('历史订单食谱只展示名称、类型、日期', () => {
+    const panel = stripComments(panelSource)
+    const template = templateOf(panel)
+    expect(template).toContain('历史订单食谱')
+    expect(template).toContain('historyRecipes')
+    expect(template).toContain('historyKindLabel')
+    expect(template).not.toContain('recipeSnapshot')
+    expect(template).not.toContain('ingredients')
+  })
+})

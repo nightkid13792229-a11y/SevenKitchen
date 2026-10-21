@@ -195,7 +195,7 @@
               :value="dog.id"
             />
           </el-select>
-          <div class="form-tip">可选的参考爱犬：进入配方编辑页后，可随时在「爱犬指导」面板设置或更换；该犬档案与 AI 建议仅作设计参考，发布后与犬解耦</div>
+          <div class="form-tip">可选的参考爱犬：进入配方编辑页后，可随时在「爱犬信息」面板设置或更换；该犬档案与 AI 建议仅作设计参考，发布后与犬解耦</div>
         </el-form-item>
         <el-form-item label="默认阶段">
           <el-select v-model="createForm.scenario" clearable placeholder="默认：普通成年犬（110ME）" style="width: 100%">

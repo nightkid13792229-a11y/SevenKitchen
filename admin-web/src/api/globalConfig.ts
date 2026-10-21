@@ -17,6 +17,12 @@ export interface GlobalConfig {
   overheadCostPerKg: number;
   targetBatchUtilization: number;
   supplementLossRate: number;
+  /**
+   * 内部生产损耗系数（1–2 的系数，1.07 = 损耗 7%）。
+   *
+   * 只用于新建定制食谱时写进食谱；已有食谱与交付快照保持原值。
+   */
+  productionLossRate: number;
   ingredientPriceAutoApproveThreshold: number;
   defaultProductLabelId: string | null;
   defaultIcePackId: string | null;

@@ -281,7 +281,11 @@ export interface CustomRecipeConfig {
   defaultNutritionStandard: string
   /** 默认能量密度 kcal/kg */
   defaultEnergyDensityKcalPerKg: number
-  /** 生产损耗率（1.07 = 损耗 7%） */
+  /**
+   * @deprecated 已废弃（2026-10-21）：内部生产损耗系数改在
+   * 「全局配置 → 生产配置」编辑，新建食谱读 GlobalConfig。
+   * 后端仍会返回这一列（兼容旧数据/回滚），但页面不再展示或保存它。
+   */
   productionLossRate: number
   /** 默认工时（小时） */
   defaultLaborHours: number

@@ -5428,19 +5428,50 @@ export class RecipeDesignerService {
       throw new BadRequestException('设计草稿与订单狗狗不一致');
     }
 
+    /**
+     * 模板复制出来的草稿 `energyDensityKcalPerKg` 初始为 null；编辑器里的评估
+     * 是异步回写的，保存队列又可能改 contentRevision，导致回写被跳过。
+     * 加入待提交是服务端动作，不能相信这个可能为空的缓存值：
+     * 缺失时用当前原料重新评估一次，并把结果写回草稿。
+     */
+    let publishableDraft = draft;
+    if (!(Number(draft.energyDensityKcalPerKg) > 0)) {
+      const targets = await this.targetProvider.getTargets(
+        draft.fediafDogScenario,
+      );
+      const assessment = await this.assessLoadedDraft(draft, targets);
+      if (assessment.energyDensityKcalPerKg === null) {
+        throw new BadRequestException('缺少能量数据，暂时无法进入下一步');
+      }
+      const energyDensityKcalPerKg = assessment.energyDensityKcalPerKg;
+      const totalWeightG = assessment.totalWeightG;
+      publishableDraft = {
+        ...draft,
+        energyDensityKcalPerKg,
+        totalWeightG,
+      };
+      await this.prisma.designRecipe.update({
+        where: { id: draft.id },
+        data: { energyDensityKcalPerKg, totalWeightG },
+      });
+    }
+
     const readiness = this.getCustomerDraftSnapshotReadiness({
-      ...draft,
-      customerDogId: draft.customerDogId ?? input.dogId,
+      ...publishableDraft,
+      customerDogId: publishableDraft.customerDogId ?? input.dogId,
     });
     if (!readiness.canCreateSnapshot) {
       throw new BadRequestException(readiness.disabledReason);
     }
 
-    const recipe = await this.createOrUpdatePrivateRecipeSnapshot(draft, {
-      customerOwnerId: input.customerId,
-      customOrderId: null,
-      displayName: draft.name,
-    });
+    const recipe = await this.createOrUpdatePrivateRecipeSnapshot(
+      publishableDraft,
+      {
+        customerOwnerId: input.customerId,
+        customOrderId: null,
+        displayName: publishableDraft.name,
+      },
+    );
 
     return { recipeRowId: recipe.id, recipeId: recipe.recipeId };
   }

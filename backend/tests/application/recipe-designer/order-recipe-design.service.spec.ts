@@ -1058,6 +1058,7 @@ describe('RecipeDesignerService · publishOrderDesignSlot', () => {
   const prisma = {
     designRecipe: {
       findUnique: jest.fn(),
+      update: jest.fn(),
     },
     recipe: {
       findFirst: jest.fn(),
@@ -1228,6 +1229,31 @@ describe('RecipeDesignerService · publishOrderDesignSlot', () => {
     expect(prisma.recipe.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'recipe-row-1' } }),
     );
+  });
+
+  it('recomputes energy when the stored draft has null energy density', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      buildDraft({ energyDensityKcalPerKg: null, totalWeightG: 154.55 }),
+    );
+    targetProvider.getTargets.mockResolvedValue([]);
+    prisma.designRecipe.update.mockResolvedValue({});
+    jest
+      .spyOn(service as any, 'assessLoadedDraft')
+      .mockResolvedValue({ energyDensityKcalPerKg: 1130, totalWeightG: 154.55 });
+
+    await service.publishOrderDesignSlot({
+      draftId: 'draft-1',
+      customerId: 'customer-1',
+      dogId: 'dog-1',
+      operatorId: 'admin-1',
+    });
+
+    const createCall = prisma.recipe.create.mock.calls[0][0];
+    expect(createCall.data.energyDensityKcalPerKg).toBe(1130);
+    expect(prisma.designRecipe.update).toHaveBeenCalledWith({
+      where: { id: 'draft-1' },
+      data: { energyDensityKcalPerKg: 1130, totalWeightG: 154.55 },
+    });
   });
 
   it('refuses a draft bound to another dog', async () => {

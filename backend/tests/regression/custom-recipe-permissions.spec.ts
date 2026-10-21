@@ -19,6 +19,14 @@ describe('后台定制食谱 · 权限', () => {
     'utf8',
   )
 
+  const orderDesignSubmitSource = readFileSync(
+    join(
+      __dirname,
+      '../../src/interfaces/controllers/custom-recipe/order-design-submit.controller.ts',
+    ),
+    'utf8',
+  )
+
   /** 取某个路由装饰器之后、下一个路由之前的那一段 */
   function blockAfter(route: string): string {
     const start = source.indexOf(route)
@@ -35,6 +43,16 @@ describe('后台定制食谱 · 权限', () => {
 
   it('★ 多份批量交付仅管理员', () => {
     expect(blockAfter("@Post('orders/:orderId/deliver-batch')")).toContain(
+      'AdminGuard',
+    )
+  })
+
+  it('★ 订单设计最终提交仅管理员（2026-10-22 · Task 4）', () => {
+    const start = orderDesignSubmitSource.indexOf(
+      "@Post('orders/:orderId/submit-designs')",
+    )
+    expect(start).toBeGreaterThan(-1)
+    expect(orderDesignSubmitSource.slice(start, start + 300)).toContain(
       'AdminGuard',
     )
   })

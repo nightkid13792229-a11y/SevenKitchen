@@ -44,6 +44,7 @@ import { AdminPurchasingController } from './interfaces/controllers/admin-purcha
 import { StaffProductionController } from './interfaces/controllers/staff-production.controller';
 import { CustomRecipeController, PublicCustomRecipeConfigController } from './interfaces/controllers/custom-recipe/custom-recipe.controller';
 import { AdminCustomRecipeController } from './interfaces/controllers/custom-recipe/admin-custom-recipe.controller';
+import { OrderDesignSubmitController } from './interfaces/controllers/custom-recipe/order-design-submit.controller';
 import { AdminGuestCustomerController } from './interfaces/controllers/custom-recipe/admin-guest-customer.controller';
 import { PlatformOptionsController } from './interfaces/controllers/platform-options.controller';
 import { CustomerMessageController } from './interfaces/controllers/customer-message.controller';
@@ -51,6 +52,7 @@ import { CustomerMessageService } from './application/message/customer-message.s
 import { AdminPlatformOptionsController } from './interfaces/controllers/admin-platform-options.controller';
 import { PlatformOptionsService } from './application/platform-options/platform-options.service';
 import { CustomRecipeViewService } from './application/custom-recipe/custom-recipe-view.service';
+import { OrderDesignSubmitService } from './application/custom-recipe/order-design-submit.service';
 import { CustomRecipeDeliveryService } from './application/custom-recipe/custom-recipe-delivery.service';
 import { CustomRecipeAftersaleService } from './application/custom-recipe/custom-recipe-aftersale.service';
 import { CustomRecipeSchedulerService } from './application/scheduler/custom-recipe-scheduler.service';
@@ -410,6 +412,7 @@ validatePrismaConfig();
     CustomRecipeController,
     PublicCustomRecipeConfigController,
     AdminCustomRecipeController,
+    OrderDesignSubmitController,
     AdminGuestCustomerController,
     SharedPhotosController,
     NutritionFoodController,
@@ -454,6 +457,7 @@ validatePrismaConfig();
     PlatformOptionsService,
     CustomRecipeViewService,
     CustomRecipeDeliveryService,
+    OrderDesignSubmitService,
     CustomRecipeAftersaleService,
     CustomRecipeSchedulerService,
     DogService,

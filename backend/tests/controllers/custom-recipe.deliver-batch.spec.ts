@@ -12,6 +12,7 @@ import { CustomRecipeConfigService } from '../../src/application/custom-recipe/c
 import { CustomRecipeDeliveryService } from '../../src/application/custom-recipe/custom-recipe-delivery.service';
 import { CustomRecipeAftersaleService } from '../../src/application/custom-recipe/custom-recipe-aftersale.service';
 import { CustomRecipeViewService } from '../../src/application/custom-recipe/custom-recipe-view.service';
+import { OrderDesignSubmitService } from '../../src/application/custom-recipe/order-design-submit.service';
 import { WechatPaymentService } from '../../src/application/payment/wechat-payment.service';
 import { PrismaService } from '../../src/infrastructure/prisma.service';
 import { WechatService } from '../../src/infrastructure/wechat/wechat.service';
@@ -34,9 +35,10 @@ describe('AdminCustomRecipeController · 批量交付接口', () => {
     '/api/v1/admin/custom-recipe/orders/CR202610210001/deliver-batch';
 
   let app: INestApplication;
-  let deliveryService: { deliverBatch: jest.Mock };
+  let deliveryService: { deliverBatch: jest.Mock; deliver: jest.Mock };
   let customRecipeService: { getOrderByOrderId: jest.Mock };
   let wechatService: { sendCustomRecipeOrderNotification: jest.Mock };
+  let legacyGuard: { assertLegacyDeliveryAllowed: jest.Mock };
 
   const batchResult = () => ({
     orderId: 'CR202610210001',
@@ -61,7 +63,8 @@ describe('AdminCustomRecipeController · 批量交付接口', () => {
   });
 
   beforeAll(async () => {
-    deliveryService = { deliverBatch: jest.fn() };
+    deliveryService = { deliverBatch: jest.fn(), deliver: jest.fn() };
+    legacyGuard = { assertLegacyDeliveryAllowed: jest.fn() };
     customRecipeService = {
       getOrderByOrderId: jest.fn().mockResolvedValue({
         orderId: 'CR202610210001',
@@ -84,6 +87,7 @@ describe('AdminCustomRecipeController · 批量交付接口', () => {
         { provide: CustomRecipeDeliveryService, useValue: deliveryService },
         { provide: CustomRecipeAftersaleService, useValue: {} },
         { provide: CustomRecipeViewService, useValue: {} },
+        { provide: OrderDesignSubmitService, useValue: legacyGuard },
         { provide: PrismaService, useValue: {} },
       ],
     })
@@ -120,6 +124,8 @@ describe('AdminCustomRecipeController · 批量交付接口', () => {
 
   beforeEach(() => {
     deliveryService.deliverBatch.mockReset().mockResolvedValue(batchResult());
+    deliveryService.deliver.mockReset();
+    legacyGuard.assertLegacyDeliveryAllowed.mockReset();
     customRecipeService.getOrderByOrderId.mockClear();
     wechatService.sendCustomRecipeOrderNotification
       .mockReset()
@@ -147,6 +153,10 @@ describe('AdminCustomRecipeController · 批量交付接口', () => {
     });
     expect(res.body.data.recipes).toHaveLength(2);
 
+    // 老订单（没有设计槽位）照旧走订单页交付：先过拦截检查再交付
+    expect(legacyGuard.assertLegacyDeliveryAllowed).toHaveBeenCalledWith(
+      'CR202610210001',
+    );
     expect(deliveryService.deliverBatch).toHaveBeenCalledTimes(1);
     expect(deliveryService.deliverBatch).toHaveBeenCalledWith({
       orderIdOrId: 'CR202610210001',
@@ -247,5 +257,85 @@ describe('AdminCustomRecipeController · 批量交付接口', () => {
       wechatService.sendCustomRecipeOrderNotification,
     ).not.toHaveBeenCalled();
     errorSpy.mockRestore();
+  });
+
+  describe('新版订单设计流程 · 旧交付入口不得绕行', () => {
+    const newFlowMessage =
+      '该订单已使用新版「订单设计」流程，请到订单设计工作台点击「提交设计」整批提交（POST /api/v1/admin/custom-recipe/orders/CR202610210001/submit-designs）';
+
+    it('★ deliver-batch 被 400 拦截，并明确指向 submit-designs', async () => {
+      legacyGuard.assertLegacyDeliveryAllowed.mockRejectedValueOnce(
+        new BadRequestException(newFlowMessage),
+      );
+
+      const res = await post({ recipeIds: ['r1', 'r2'] }).expect(400);
+
+      expect(JSON.stringify(res.body)).toContain('submit-designs');
+      expect(JSON.stringify(res.body)).toContain('提交设计');
+      expect(deliveryService.deliverBatch).not.toHaveBeenCalled();
+      expect(
+        wechatService.sendCustomRecipeOrderNotification,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('★ deliver-recipe 同样被 400 拦截，不能从订单页单份交付', async () => {
+      legacyGuard.assertLegacyDeliveryAllowed.mockRejectedValueOnce(
+        new BadRequestException(newFlowMessage),
+      );
+
+      const res = await request(app.getHttpServer())
+        .post(
+          '/api/v1/admin/custom-recipe/orders/CR202610210001/deliver-recipe',
+        )
+        .set('Authorization', 'Bearer test-token')
+        .set('x-test-role', 'ADMIN')
+        .send({ recipeId: 'r1' })
+        .expect(400);
+
+      expect(JSON.stringify(res.body)).toContain('submit-designs');
+      expect(deliveryService.deliver).not.toHaveBeenCalled();
+      expect(
+        wechatService.sendCustomRecipeOrderNotification,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('老订单（无设计槽位）的 deliver-recipe 保持原有交付行为', async () => {
+      deliveryService.deliver.mockResolvedValueOnce({
+        orderId: 'CR202610210001',
+        recipeBizId: 'CR1759100000001',
+        recipeName: '鸡肉南瓜',
+        version: 1,
+        redelivered: false,
+        deliveryId: 'delivery-1',
+        autoCompleteAt: null,
+        itemCodes: ['RECIPE'],
+      });
+
+      const res = await request(app.getHttpServer())
+        .post(
+          '/api/v1/admin/custom-recipe/orders/CR202610210001/deliver-recipe',
+        )
+        .set('Authorization', 'Bearer test-token')
+        .set('x-test-role', 'ADMIN')
+        .send({ recipeId: 'r1' })
+        .expect(201);
+
+      expect(res.body.data).toMatchObject({
+        orderId: 'CR202610210001',
+        recipeBizId: 'CR1759100000001',
+        status: 'DELIVERED',
+      });
+      expect(legacyGuard.assertLegacyDeliveryAllowed).toHaveBeenCalledWith(
+        'CR202610210001',
+      );
+      expect(deliveryService.deliver).toHaveBeenCalledWith({
+        orderIdOrId: 'CR202610210001',
+        recipeIdOrBizId: 'r1',
+        deliveredBy: 'admin-1',
+      });
+      expect(
+        wechatService.sendCustomRecipeOrderNotification,
+      ).toHaveBeenCalledTimes(1);
+    });
   });
 });

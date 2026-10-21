@@ -50,6 +50,7 @@ import {
   UpdateScheduleDTO,
 } from '../../../application/custom-recipe/dto/custom-recipe.dto';
 import { AssistedOrderService } from '../../../application/custom-recipe/assisted-order.service';
+import { OrderDesignSubmitService } from '../../../application/custom-recipe/order-design-submit.service';
 import { isOfflinePaidCustomRecipeOrder } from '../../../domain/custom-recipe/custom-recipe.refund';
 import { AdminGuard } from '../auth/admin.guard';
 import { StaffGuard } from '../../guards/role.guard';
@@ -126,6 +127,18 @@ export class AdminCustomRecipeController {
      */
     @Optional()
     private readonly assistedOrderService?: AssistedOrderService,
+    /**
+     * 订单设计最终提交（2026-10-22 · Task 4）。
+     *
+     * 旧交付入口（`deliver-recipe` / `deliver-batch`）在交付前要问它一句：
+     * 这张单是不是走新版「订单设计」流程？是的话必须回工作台整批提交。
+     *
+     * 同样放参数表**最后**并 `@Optional`：既有测试按位置构造控制器，
+     * 插在中间会让它们全部错位。DI 没接上时旧交付入口拒绝服务（宁可报错，
+     * 也不能放过绕过 N 份整批交付的路径）。
+     */
+    @Optional()
+    private readonly orderDesignSubmitService?: OrderDesignSubmitService,
   ) {}
 
   /**
@@ -1084,6 +1097,27 @@ export class AdminCustomRecipeController {
   }
 
   /**
+   * 新版「订单设计」流程的订单不能从订单页绕行单份交付。
+   *
+   * 工作台里 N 份设计逐份「加入待提交」后，必须由管理员在
+   * `POST /orders/:orderId/submit-designs` 一次性交齐；否则客服可以从这里
+   * 先交一份，顾客收到的就是不完整的一批。
+   *
+   * 没有设计槽位的老订单不受影响，行为与以前完全一致。
+   */
+  private async assertLegacyDeliveryAllowed(
+    orderIdOrId: string,
+  ): Promise<void> {
+    if (!this.orderDesignSubmitService) {
+      // 正常情况下 DI 一定注入；这里只防"模块漏注册"时把绕行入口放开
+      throw new ServiceUnavailableException('订单设计提交服务暂不可用');
+    }
+    await this.orderDesignSubmitService.assertLegacyDeliveryAllowed(
+      orderIdOrId,
+    );
+  }
+
+  /**
    * 把已设计好的食谱交付到订单（含口径 4 的「重新交付」）。
    *
    * 与手工交付共用同一套结果口径：订单转已交付 + 给顾客发订阅消息（带业务编号）。
@@ -1101,6 +1135,9 @@ export class AdminCustomRecipeController {
     if (!target) {
       throw new BadRequestException('请选择要交付的食谱');
     }
+
+    // 新流程订单必须回工作台整批提交，不能在这里单份交付（Task 4）
+    await this.assertLegacyDeliveryAllowed(orderId);
 
     /**
      * 2026-10-16（批次 2.1）：改走**交付服务**。
@@ -1164,6 +1201,9 @@ export class AdminCustomRecipeController {
     @Body('recipeIds') rawRecipeIds: unknown,
   ) {
     const recipeIds = this.resolveBatchRecipeIds(rawRecipeIds);
+
+    // 新流程订单必须回工作台整批提交，不能在这里绕行交付（Task 4）
+    await this.assertLegacyDeliveryAllowed(orderId);
 
     const result = await this.deliveryService.deliverBatch({
       orderIdOrId: orderId,

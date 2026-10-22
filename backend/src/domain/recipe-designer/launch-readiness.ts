@@ -56,9 +56,7 @@ export type LaunchReadinessBlockerCode =
   | 'PRODUCTION_STEPS_REQUIRED'
   | 'COVER_IMAGE_REQUIRED'
   | 'COVER_TITLE_REQUIRED'
-  | 'DESCRIPTION_REQUIRED'
   | 'SELLING_POINT_REQUIRED'
-  | 'APPLICABLE_LIFE_STAGES_REQUIRED'
   | 'ORDER_ID_REQUIRED'
   | 'ORDER_QUANTITY_INVALID'
   | 'CUSTOMER_DOG_REQUIRED';
@@ -379,34 +377,17 @@ export const buildDraftLaunchReadiness = (
       });
     }
   } else {
-    /** 产品线上架文案：描述 / 卖点 / 适用生命阶段是硬条件。 */
-    if (!normalizeText(presentation.description)) {
-      blockers.push({
-        code: 'DESCRIPTION_REQUIRED',
-        scope: 'CATALOG',
-        message: '请填写食谱详情描述',
-        field: 'description',
-      });
-    }
+    /**
+     * 产品线上架文案：只要求卖点。
+     * 详情描述已停用（2026-10-22）；适用生命阶段由系列阶段统一决定，
+     * 不在产品线资料里重复录入。
+     */
     if (!normalizeText(presentation.sellingPoint)) {
       blockers.push({
         code: 'SELLING_POINT_REQUIRED',
         scope: 'CATALOG',
         message: '请填写一句话卖点（最多 200 个字符）',
         field: 'sellingPoint',
-      });
-    }
-    const applicableLifeStages = Array.isArray(presentation.applicableLifeStages)
-      ? presentation.applicableLifeStages.filter((stage) =>
-          normalizeText(stage),
-        )
-      : [];
-    if (applicableLifeStages.length === 0) {
-      blockers.push({
-        code: 'APPLICABLE_LIFE_STAGES_REQUIRED',
-        scope: 'CATALOG',
-        message: '请至少选择一个适用生命阶段',
-        field: 'applicableLifeStages',
       });
     }
   }

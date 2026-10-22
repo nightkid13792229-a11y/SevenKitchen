@@ -259,17 +259,6 @@
             </div>
           </el-form-item>
 
-          <el-form-item label="食谱描述">
-            <el-input
-              v-model="form.description"
-              type="textarea"
-              :rows="4"
-              placeholder="请输入食谱描述"
-              maxlength="500"
-              show-word-limit
-            />
-          </el-form-item>
-
           <el-form-item label="设计来源">
             <!-- View mode: display as text -->
             <div v-if="isReadOnly" style="padding: 0 11px; color: #606266;">

@@ -134,19 +134,9 @@ describe('buildDraftLaunchReadiness · presentation and design branch', () => {
     expect(readiness.blockers).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: 'DESCRIPTION_REQUIRED',
-          scope: 'CATALOG',
-          field: 'description',
-        }),
-        expect.objectContaining({
           code: 'SELLING_POINT_REQUIRED',
           scope: 'CATALOG',
           field: 'sellingPoint',
-        }),
-        expect.objectContaining({
-          code: 'APPLICABLE_LIFE_STAGES_REQUIRED',
-          scope: 'CATALOG',
-          field: 'applicableLifeStages',
         }),
       ]),
     );

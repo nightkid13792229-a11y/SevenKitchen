@@ -88,7 +88,8 @@ describe('产品展示 · 面板', () => {
 
   it('产品线分支有描述 / 卖点 / 生命阶段 / 健康标签，标签值是 id', () => {
     expect(panel).toContain('<template v-if="isCatalog">')
-    expect(panel).toContain('v-model="form.description"')
+    expect(panel).not.toContain('v-model="form.description"')
+    expect(panel).not.toContain('适用生命阶段')
     expect(panel).toContain('v-model="form.sellingPoint"')
     expect(panel).toContain('v-model="form.applicableLifeStages"')
     expect(panel).toContain('v-model="form.targetHealthTags"')

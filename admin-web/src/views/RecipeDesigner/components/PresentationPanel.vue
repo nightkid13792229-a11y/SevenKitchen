@@ -65,17 +65,6 @@
 
         <!-- 产品线：上架文案 + 目标人群 -->
         <template v-if="isCatalog">
-          <el-form-item label="详情描述" required>
-            <el-input
-              v-model="form.description"
-              type="textarea"
-              :rows="4"
-              :maxlength="RECIPE_PRESENTATION_LIMITS.description"
-              show-word-limit
-              placeholder="介绍这道食谱的原料、做法与适用场景"
-            />
-          </el-form-item>
-
           <el-form-item label="一句话卖点" required>
             <el-input
               v-model="form.sellingPoint"
@@ -83,24 +72,6 @@
               show-word-limit
               placeholder="例如：鲜肉低敏，日常维持"
             />
-          </el-form-item>
-
-          <el-form-item label="适用生命阶段" required>
-            <el-select
-              v-model="form.applicableLifeStages"
-              multiple
-              collapse-tags
-              collapse-tags-tooltip
-              placeholder="至少选择一个人生阶段"
-              class="presentation-select"
-            >
-              <el-option
-                v-for="option in lifeStageOptions"
-                :key="option.value"
-                :label="option.label"
-                :value="option.value"
-              />
-            </el-select>
           </el-form-item>
 
           <el-form-item label="目标健康标签">

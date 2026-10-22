@@ -104,19 +104,19 @@ export function buildLaunchSummaryRows(
   return [
     {
       key: 'itemCount',
-      label: '参与评估原料',
-      value: `${summary.itemCount} 种`,
+      label: '参与评估项',
+      value: `${summary.itemCount} 项`,
       tone: 'default'
     },
     {
-      key: 'totalWeightG',
-      label: '总重量',
-      value: formatLaunchWeightG(summary.totalWeightG),
+      key: 'foodItemCount',
+      label: '参与评估食材',
+      value: `${summary.foodItemCount} 种`,
       tone: 'default'
     },
     {
       key: 'energyDensityKcalPerKg',
-      label: '能量密度',
+      label: '能量密度（每kg成品）',
       value: formatLaunchEnergyDensity(summary.energyDensityKcalPerKg),
       tone: 'default'
     },

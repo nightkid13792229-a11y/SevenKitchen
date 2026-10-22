@@ -161,8 +161,10 @@ export type LaunchReadinessWarning =
 
 /** 上线检查概要：与发布 / 加入待提交使用同一份数字 */
 export interface DraftLaunchReadinessSummary {
-  /** 参与评估的原料数 */
+  /** 参与评估的原料项总数（含食材与补剂） */
   itemCount: number
+  /** 参与评估的食材种类数（不含补剂） */
+  foodItemCount: number
   totalWeightG: number
   energyDensityKcalPerKg: number | null
   /** 参与评估的补剂数 */

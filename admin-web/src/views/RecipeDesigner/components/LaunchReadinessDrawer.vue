@@ -1,5 +1,5 @@
 <template>
-  <el-drawer v-model="visible" size="640px" destroy-on-close>
+  <el-drawer v-model="visible" size="760px" destroy-on-close :before-close="handleBeforeClose">
     <template #header>
       <div class="launch-readiness__heading">
         <div class="launch-readiness__heading-text">
@@ -126,6 +126,35 @@
         </section>
 
         <section class="launch-readiness__section">
+          <el-collapse v-model="stepsExpanded" class="launch-readiness__steps">
+            <el-collapse-item name="steps">
+              <template #title>
+                <div class="launch-readiness__steps-title">
+                  <span>制作步骤</span>
+                  <el-tag
+                    size="small"
+                    :type="readiness.summary.stepCount > 0 ? 'success' : 'danger'"
+                    effect="plain"
+                  >
+                    {{ readiness.summary.stepCount > 0
+                      ? `${readiness.summary.stepCount} 步`
+                      : '未设置' }}
+                  </el-tag>
+                  <span class="launch-readiness__steps-hint">
+                    直接在这里编辑、保存，不需要再打开另一个弹窗
+                  </span>
+                </div>
+              </template>
+              <ProductionStepsEditor
+                :draft-id="draftId"
+                @saved="handleStepsSaved"
+                @dirty-change="(value: boolean) => (stepsDirty = value)"
+              />
+            </el-collapse-item>
+          </el-collapse>
+        </section>
+
+        <section class="launch-readiness__section">
           <div class="launch-readiness__section-title">
             阻断项
             <span class="launch-readiness__count">{{ readiness.blockers.length }}</span>
@@ -221,6 +250,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { ElMessageBox } from 'element-plus'
 import {
   CircleCheckFilled,
   CircleCloseFilled,
@@ -228,6 +258,7 @@ import {
   WarningFilled
 } from '@element-plus/icons-vue'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
+import ProductionStepsEditor from './ProductionStepsEditor.vue'
 import type { DraftLaunchReadiness } from '@/types/recipeDesigner'
 import {
   buildLaunchSummaryRows,
@@ -256,6 +287,8 @@ const visible = computed({
 const loading = ref(false)
 const error = ref('')
 const readiness = ref<DraftLaunchReadiness | null>(null)
+const stepsExpanded = ref<string[]>([])
+const stepsDirty = ref(false)
 
 /** 只认最后一次请求，避免关闭 / 重复刷新时的旧响应覆盖新状态 */
 let requestSeq = 0
@@ -278,6 +311,9 @@ async function loadReadiness(): Promise<void> {
     const result = await recipeDesignerApi.getDraftLaunchReadiness(props.draftId)
     if (seq !== requestSeq) return
     readiness.value = result
+    if (result.summary.stepCount === 0) {
+      stepsExpanded.value = ['steps']
+    }
   } catch {
     if (seq !== requestSeq) return
     // 错误提示已由 API 拦截器统一弹出，这里只保留可重试的内联状态
@@ -287,6 +323,33 @@ async function loadReadiness(): Promise<void> {
     if (seq === requestSeq) {
       loading.value = false
     }
+  }
+}
+
+async function handleStepsSaved(): Promise<void> {
+  stepsDirty.value = false
+  await loadReadiness()
+}
+
+async function handleBeforeClose(done: () => void): Promise<void> {
+  if (!stepsDirty.value) {
+    done()
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      '制作步骤还有未保存的修改，关闭会丢失这些修改。确定关闭吗？',
+      '制作步骤未保存',
+      {
+        type: 'warning',
+        confirmButtonText: '放弃修改并关闭',
+        cancelButtonText: '继续编辑'
+      }
+    )
+    stepsDirty.value = false
+    done()
+  } catch {
+    // 留在抽屉里继续编辑
   }
 }
 
@@ -548,6 +611,30 @@ watch(
   border-top: 1px solid #ebeef5;
   font-size: 12px;
   line-height: 1.6;
+  color: #909399;
+}
+
+.launch-readiness__steps {
+  border-top: 1px solid #ebeef5;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.launch-readiness__steps-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.launch-readiness__steps-title > span:first-child {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.launch-readiness__steps-hint {
+  font-size: 12px;
+  font-weight: 400;
   color: #909399;
 }
 </style>

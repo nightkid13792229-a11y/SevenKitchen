@@ -15,6 +15,7 @@ import type { DraftLaunchReadinessSummary } from '@/types/recipeDesigner'
 
 const summary: DraftLaunchReadinessSummary = {
   itemCount: 6,
+  foodItemCount: 4,
   totalWeightG: 1250,
   energyDensityKcalPerKg: 4321.6,
   supplementCount: 2,
@@ -37,20 +38,20 @@ describe('上线检查 · 概要展示', () => {
     expect(formatLaunchEnergyDensity(4321.6)).toBe('4322 kcal/kg')
   })
 
-  it('概要六项覆盖原料 / 重量 / 能量 / 补剂 / 步骤 / 报告', () => {
+  it('概要六项覆盖评估项 / 食材 / 能量 / 补剂 / 步骤 / 报告', () => {
     const rows = buildLaunchSummaryRows(summary)
 
     expect(rows.map((row) => row.label)).toEqual([
-      '参与评估原料',
-      '总重量',
-      '能量密度',
+      '参与评估项',
+      '参与评估食材',
+      '能量密度（每kg成品）',
       '参与评估补剂',
       '制作步骤',
       '完整营养报告'
     ])
     expect(rows.map((row) => row.value)).toEqual([
-      '6 种',
-      '1.25 kg',
+      '6 项',
+      '4 种',
       '4322 kcal/kg',
       '2 种',
       '4 步',

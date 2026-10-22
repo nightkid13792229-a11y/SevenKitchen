@@ -40,6 +40,7 @@ describe('上线检查 · API 与类型契约', () => {
 
     for (const field of [
       'itemCount: number',
+      'foodItemCount: number',
       'totalWeightG: number',
       'energyDensityKcalPerKg: number | null',
       'supplementCount: number',
@@ -96,9 +97,9 @@ describe('上线检查抽屉 · 加载 / 刷新 / 状态', () => {
     expect(drawer).toContain('{{ row.value }}')
 
     for (const label of [
-      '参与评估原料',
-      '总重量',
-      '能量密度',
+      '参与评估项',
+      '参与评估食材',
+      '能量密度（每kg成品）',
       '参与评估补剂',
       '制作步骤',
       '完整营养报告'

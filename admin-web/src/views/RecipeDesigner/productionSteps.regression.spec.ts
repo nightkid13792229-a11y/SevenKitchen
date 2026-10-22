@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import editorSource from '@/views/RecipeDesigner/Editor.vue?raw'
+import launchReadinessSource from '@/views/RecipeDesigner/components/LaunchReadinessDrawer.vue?raw'
 import productionStepsEditorSource from '@/views/RecipeDesigner/components/ProductionStepsEditor.vue?raw'
 import designerApiSource from '@/api/recipeDesigner.ts?raw'
 import designerTypesSource from '@/types/recipeDesigner.ts?raw'
@@ -23,6 +24,7 @@ function clean(source: string) {
 describe('设计器 · 制作步骤编辑器（2026-10-22 · Task 7）', () => {
   const component = clean(productionStepsEditorSource)
   const editor = clean(editorSource)
+  const launchDrawer = clean(launchReadinessSource)
 
   it('按草稿加载步骤，保存走 PATCH production-steps', () => {
     expect(component).toContain('recipeDesignerApi.getDraftProductionSteps')
@@ -90,15 +92,15 @@ describe('设计器 · 制作步骤编辑器（2026-10-22 · Task 7）', () => {
     expect(component).not.toContain('自动转换旧版')
   })
 
-  it('编辑器内以抽屉/分区打开，不离开页面，且保留补剂与预处理 UI', () => {
-    expect(editor).toContain('ProductionStepsEditor')
-    expect(editor).toContain('productionStepsDrawerVisible')
-    expect(editor).toContain('el-drawer')
-    expect(editor).toContain('制作步骤')
-    expect(editor).toContain(':draft-id="draft.id"')
-    expect(editor).toContain(':legacy-steps="legacyProductionStepsText"')
-    expect(editor).toContain('@dirty-change')
-    expect(editor).toContain('制作步骤还有未保存的修改')
+  it('制作步骤已并入上线检查抽屉，不离开页面，且保留补剂与预处理 UI', () => {
+    expect(launchDrawer).toContain('ProductionStepsEditor')
+    expect(launchDrawer).toContain(':draft-id="draftId"')
+    expect(launchDrawer).toContain('@saved="handleStepsSaved"')
+    expect(launchDrawer).toContain('@dirty-change')
+    expect(launchDrawer).toContain('制作步骤还有未保存的修改')
+    // 设计器不再保留第二个制作步骤入口
+    expect(editor).not.toContain('productionStepsDrawerVisible')
+    expect(editor).not.toContain('制作步骤{{ productionStepsDirty')
     // 不新增路由跳转，制作步骤留在当前设计器页面
     expect(editor).not.toContain("router.push('/recipe-designer/steps")
     // 原有补剂目标与原料预处理 UI 不得被替换

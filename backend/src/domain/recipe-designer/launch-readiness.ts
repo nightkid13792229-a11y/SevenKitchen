@@ -61,8 +61,10 @@ export type LaunchReadinessWarning =
   LaunchReadinessIssue<LaunchReadinessWarningCode>;
 
 export interface DraftLaunchReadinessSummary {
-  /** 参与评估的原料数 */
+  /** 参与评估的原料项总数（含食材与补剂） */
   itemCount: number;
+  /** 参与评估的食材种类数（不含补剂） */
+  foodItemCount: number;
   totalWeightG: number;
   energyDensityKcalPerKg: number | null;
   /** 参与评估的补剂数 */
@@ -171,6 +173,7 @@ export const buildDraftLaunchReadiness = (
   const supplementCount = includedItems.filter(
     (item) => item.isSupplement,
   ).length;
+  const foodItemCount = includedItems.length - supplementCount;
 
   if (!normalizeText(input.name)) {
     blockers.push({
@@ -305,6 +308,7 @@ export const buildDraftLaunchReadiness = (
     warnings,
     summary: {
       itemCount: includedItems.length,
+      foodItemCount,
       totalWeightG: assessment?.totalWeightG ?? 0,
       energyDensityKcalPerKg: assessment?.energyDensityKcalPerKg ?? null,
       supplementCount,

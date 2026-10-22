@@ -7523,20 +7523,56 @@ export class RecipeDesignerService {
       }
     }
 
+    const launchItems: Array<{
+      id: string;
+      name: string;
+      included: boolean;
+      isSupplement: boolean;
+      preparationMethod?: string | null;
+      preparationNote?: string | null;
+      supplementTargets?: unknown;
+    }> = [];
+    for (const item of draft.items) {
+      const isSupplement =
+        this.resolveIngredientType(item) === IngredientType.SUPPLEMENT;
+      let supplementTargets: unknown = item.supplementTargets;
+      if (isSupplement && assessment && assessment.totalWeightG > 0) {
+        try {
+          const definitions =
+            this.requireSupplementTargetService().validateTargets(
+              this.toAssessmentNutritionProfile(item),
+              item.supplementTargets,
+            );
+          if (definitions.length > 0) {
+            supplementTargets =
+              this.requireSupplementTargetService().computeTargets(
+                this.toAssessmentNutritionProfile(item),
+                definitions,
+                item.weightG,
+                assessment.totalWeightG,
+              );
+          }
+        } catch (error) {
+          this.logger.warn(`launch-readiness supplement target compute failed for ${item.id}: ${error instanceof Error ? error.message : String(error)}`);
+          // 保留原值，让共享门槛按缺失/无效目标给出明确阻断。
+        }
+      }
+      launchItems.push({
+        id: item.id,
+        name: this.resolveIngredientDisplayName(item),
+        included: this.isItemIncludedInAssessment(item),
+        isSupplement,
+        preparationMethod: item.preparationMethod,
+        preparationNote: item.preparationNote,
+        supplementTargets,
+      });
+    }
+
     const readiness = buildDraftLaunchReadiness({
       draftId: draft.id,
       designMode: draft.series?.designMode ?? RecipeDesignMode.CATALOG,
       name: options.name ?? draft.series?.name ?? draft.name,
-      items: draft.items.map((item) => ({
-        id: item.id,
-        name: this.resolveIngredientDisplayName(item),
-        included: this.isItemIncludedInAssessment(item),
-        isSupplement:
-          this.resolveIngredientType(item) === IngredientType.SUPPLEMENT,
-        preparationMethod: item.preparationMethod,
-        preparationNote: item.preparationNote,
-        supplementTargets: item.supplementTargets,
-      })),
+      items: launchItems,
       productionStepCount: this.readDraftProductionSteps(
         draft.productionStepsJson,
       ).length,

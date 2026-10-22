@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { RecipeDesignerService } from '../../../src/application/recipe-designer/recipe-designer.service';
+import { SupplementTargetService } from '../../../src/application/recipe-designer/supplement-target.service';
 import type { PrismaService } from '../../../src/infrastructure/prisma.service';
 
 /**
@@ -242,6 +243,7 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
   } as any;
 
   const targetProvider = { getTargets: jest.fn() };
+  const supplementTargetService = new SupplementTargetService(prisma as PrismaService);
   const searchGovernance = {
     expandQuery: jest.fn(),
     recordSearchEvent: jest.fn(),
@@ -261,7 +263,7 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
       undefined,
       undefined,
       undefined,
-      undefined,
+      supplementTargetService,
     );
     jest.clearAllMocks();
 
@@ -437,11 +439,12 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
         }),
       ],
     });
-    expect(zero.blockers).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ code: 'SUPPLEMENT_TARGETS_REQUIRED' }),
-      ]),
-    );
+    // 目标值缓存为 0 时，只要目标字段定义有效，门槛会按当前配方重算，不误阻断。
+    expect(
+      zero.blockers.some(
+        (blocker) => blocker.code === 'SUPPLEMENT_TARGETS_REQUIRED',
+      ),
+    ).toBe(false);
 
     // 历史/接口层的 targetValue 与 targetValuePerKg 是同一含义，都认。
     const aliased = await readinessFor({
@@ -464,6 +467,25 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
         (blocker) => blocker.code === 'SUPPLEMENT_TARGETS_REQUIRED',
       ),
     ).toBe(false);
+
+    // 页面显示的浓度是前端按当前配方算的；保存时 targetValue 可能还是 null。
+    // 门槛必须按当前档案和用量重算，不能误判成「没有目标」。
+    const computedFromDefinitions = await readinessFor({
+      items: [
+        foodItem(),
+        supplementItem({
+          supplementTargets: [
+            {
+              fieldPath: 'minerals.calcium',
+              label: '钙',
+              unit: 'mg',
+              targetValue: null,
+            },
+          ],
+        }),
+      ],
+    });
+    expect(computedFromDefinitions.ready).toBe(true);
   });
 
   it('requires a preparation method on every included item (note alone is not enough)', async () => {

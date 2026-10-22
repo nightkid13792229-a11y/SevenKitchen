@@ -46,12 +46,6 @@
           :disabled="!canRedo"
           @click="redo"
         >重做</el-button>
-        <el-button
-          text
-          :type="productionStepsDrawerVisible ? 'primary' : 'default'"
-          :disabled="!draft"
-          @click="productionStepsDrawerVisible = true"
-        >制作步骤{{ productionStepsDirty ? ' · 未保存' : '' }}</el-button>
         <!--
           上线检查：产品线（CATALOG）与本单设计（ORDER）共用同一套发布 /
           加入待提交门槛；订单分支专属检查暂未接入。
@@ -385,29 +379,6 @@
     />
 
     <!--
-      制作步骤（2026-10-22 · Task 7）：整份食谱级别的结构化步骤。
-      用抽屉在当前设计器页面内编辑，不跳走；与每行原料的「原料预处理」分开维护。
-    -->
-    <el-drawer
-      v-model="productionStepsDrawerVisible"
-      title="制作步骤"
-      size="720px"
-      destroy-on-close
-      :before-close="handleProductionStepsDrawerClose"
-      @closed="productionStepsDirty = false"
-    >
-      <ProductionStepsEditor
-        v-if="draft"
-        :draft-id="draft.id"
-        :legacy-steps="legacyProductionStepsText"
-        @dirty-change="(value: boolean) => (productionStepsDirty = value)"
-      />
-      <div v-else class="production-steps-drawer-empty">
-        草稿加载完成后即可编辑制作步骤
-      </div>
-    </el-drawer>
-
-    <!--
       上线检查（2026-10-22）：读取后端共享发布门槛（发布 / 加入待提交同一套判断）。
       产品线与本单设计都可用；只在当前页打开抽屉，不跳转路由。
     -->
@@ -457,7 +428,6 @@ import DogInsightPanel from './components/DogInsightPanel.vue'
 import AiDesignSuggestionPanel from './components/AiDesignSuggestionPanel.vue'
 import SupplementTargetDialog from './components/SupplementTargetDialog.vue'
 import PreparationMethodManagerDialog from './components/PreparationMethodManagerDialog.vue'
-import ProductionStepsEditor from './components/ProductionStepsEditor.vue'
 import LaunchReadinessDrawer from './components/LaunchReadinessDrawer.vue'
 import type { DesignRecipeAssessmentResult } from '@/utils/recipeDesigner/assessmentTypes'
 import {
@@ -707,9 +677,6 @@ async function refreshInputsKeepingScroll() {
 const referenceDogId = ref<string | null>(null)
 const aiPanelVisible = ref(false)
 
-/** 制作步骤抽屉（2026-10-22 · Task 7）：在当前设计器页面内编辑，不离开页面 */
-const productionStepsDrawerVisible = ref(false)
-const productionStepsDirty = ref(false)
 /**
  * 上线检查抽屉：产品线与本单设计共用同一套后端门槛。
  * 打开前先把待保存修改落盘，避免检查读到上一次保存的版本。
@@ -1326,8 +1293,13 @@ async function confirmSupplementTargets(
       supplementTargetDialog.value = null
       ElMessage.success('补剂目标营养素已更新')
     }
-  } catch {
-    // 后端校验失败时保留弹窗，方便调整目标后重试
+  } catch (error) {
+    // 后端校验失败时保留弹窗，并明确告知失败原因，避免只改到本地显示。
+    ElMessage.error(
+      error instanceof Error && error.message
+        ? error.message
+        : '补剂目标保存失败，请重试'
+    )
   } finally {
     supplementDialogSaving.value = false
   }
@@ -1791,35 +1763,12 @@ function goBack() {
   router.push('/recipe-designer')
 }
 
-/** 关闭制作步骤抽屉：有未保存修改时先确认，避免静默丢失编辑 */
-async function handleProductionStepsDrawerClose(done: () => void) {
-  if (!productionStepsDirty.value) {
-    done()
-    return
-  }
-  try {
-    await ElMessageBox.confirm(
-      '制作步骤还有未保存的修改，关闭抽屉会丢失这些修改。确定关闭吗？',
-      '制作步骤未保存',
-      {
-        type: 'warning',
-        confirmButtonText: '放弃修改并关闭',
-        cancelButtonText: '继续编辑'
-      }
-    )
-    productionStepsDirty.value = false
-    done()
-  } catch {
-    // 留在抽屉里继续编辑
-  }
-}
-
 let beforeUnloadRegistered = false
 function registerBeforeUnload() {
   if (beforeUnloadRegistered) return
   beforeUnloadRegistered = true
   window.addEventListener('beforeunload', (event) => {
-    if (hasPending() || productionStepsDirty.value) {
+    if (hasPending()) {
       event.preventDefault()
       event.returnValue = ''
     }

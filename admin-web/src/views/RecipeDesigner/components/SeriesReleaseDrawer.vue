@@ -114,6 +114,13 @@
           <div class="series-release__section-title">
             阶段清单
             <span class="series-release__count">{{ progress.label }}</span>
+            <el-button
+              v-if="readiness"
+              link
+              type="primary"
+              size="small"
+              @click="toggleAllStages"
+            >{{ allStagesSelected ? '清空必做' : '全选必做' }}</el-button>
           </div>
           <el-checkbox-group
             v-model="form.requiredLifeStages"
@@ -131,18 +138,11 @@
               <el-checkbox
                 :value="stage.stageCode"
                 class="series-release__stage-check"
-              >
-                必填
-              </el-checkbox>
+                :title="`把「${stage.label}」设为必做阶段`"
+              />
               <div class="series-release__stage-main">
                 <div class="series-release__stage-name">
                   {{ stage.label }}
-                  <el-tag
-                    v-if="form.requiredLifeStages.includes(stage.stageCode)"
-                    size="small"
-                    type="primary"
-                    effect="plain"
-                  >必填</el-tag>
                 </div>
                 <div class="series-release__stage-hint">
                   {{ seriesReleaseStageHint(stage) }}
@@ -156,8 +156,11 @@
               >
                 {{ seriesReleaseStageStatusLabel(stage.status) }}
               </el-tag>
-              <span class="series-release__stage-version">
-                最新 {{ formatSeriesReleaseStageVersion(stage) }}
+              <span
+                v-if="stage.status !== 'EMPTY'"
+                class="series-release__stage-version"
+              >
+                {{ formatSeriesReleaseStageVersion(stage) }}
               </span>
             </div>
           </el-checkbox-group>
@@ -493,6 +496,21 @@ let formHydrated = false
 const dirty = computed(() =>
   isSeriesReleaseFormDirty(form, baseline.value)
 )
+
+const allStagesSelected = computed(() => {
+  const stages = readiness.value?.stages ?? []
+  return (
+    stages.length > 0 &&
+    stages.every((stage) => form.requiredLifeStages.includes(stage.stageCode))
+  )
+})
+
+function toggleAllStages(): void {
+  const stages = readiness.value?.stages ?? []
+  form.requiredLifeStages = allStagesSelected.value
+    ? []
+    : stages.map((stage) => stage.stageCode)
+}
 
 const progress = computed(() => seriesReleaseProgress(readiness.value))
 

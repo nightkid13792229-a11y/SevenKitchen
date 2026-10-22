@@ -64,12 +64,6 @@
           :type="aiPanelVisible ? 'primary' : 'default'"
           @click="aiPanelVisible = !aiPanelVisible"
         >🤖 AI 设计建议</el-button>
-        <el-button
-          v-if="canRevert"
-          text
-          :loading="reverting"
-          @click="handleRevert"
-        >恢复正式版</el-button>
         <span class="save-status" :class="saveStatus">
           <el-icon v-if="saveStatus === 'saving'"><Loading /></el-icon>
           <el-icon v-else-if="saveStatus === 'error'"><WarningFilled /></el-icon>

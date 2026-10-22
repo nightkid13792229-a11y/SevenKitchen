@@ -2108,7 +2108,7 @@ describe('RecipeService', () => {
         coverImageUrl: 'https://static.example.com/cover.jpg',
         coverTitle: '封面标题',
         description: '后台补充描述',
-        productionSteps: '1. 处理原料',
+        productionSteps: null,
         salesCount: 0,
         diyGenCount: 0,
         likeCount: 0,
@@ -2128,7 +2128,7 @@ describe('RecipeService', () => {
         coverImageUrl: 'https://static.example.com/cover.jpg',
         coverTitle: '封面标题',
         description: '后台补充描述',
-        productionSteps: '1. 处理原料',
+        productionSteps: null,
         nutritionDetailedData: {
           protein_dm_pct: 1,
           fat_dm_pct: 1,
@@ -2148,6 +2148,68 @@ describe('RecipeService', () => {
           .nutritionDetailedData,
       ).toBeUndefined();
       expect(result.nutritionDetailedData).toEqual(nutritionDetailedData);
+    });
+
+    it('拒绝旧编辑页修改制作步骤', async () => {
+      const existingRecipe = {
+        id: 'recipe-row-id',
+        recipeId: 'recipe-series-id',
+        version: 1,
+        status: RecipeStatus.DRAFT,
+        productionSteps: null,
+        items: [],
+      };
+      mockPrismaService.recipe.findUnique.mockResolvedValue(existingRecipe);
+
+      await expect(
+        service.updateRecipe('recipe-row-id', {
+          description: '正常资料仍可改',
+          productionSteps: '旧页面偷偷改步骤',
+        }),
+      ).rejects.toThrow('制作步骤已由食谱设计器管理');
+    });
+
+    it('拒绝旧编辑页修改已有补剂目标', async () => {
+      const existingRecipe = {
+        id: 'recipe-row-id',
+        recipeId: 'recipe-series-id',
+        version: 1,
+        status: RecipeStatus.DRAFT,
+        productionSteps: null,
+        items: [
+          {
+            ingredientId: 'supplement-1',
+            supplementTargets: [
+              {
+                fieldPath: 'minerals.zinc',
+                label: '锌',
+                unit: 'mg',
+                targetValuePerKg: 30,
+              },
+            ],
+          },
+        ],
+      };
+      mockPrismaService.recipe.findUnique.mockResolvedValue(existingRecipe);
+
+      await expect(
+        service.updateRecipe('recipe-row-id', {
+          items: [
+            {
+              ingredientId: 'supplement-1',
+              exampleWeight: 1,
+              supplementTargets: [
+                {
+                  fieldPath: 'minerals.zinc',
+                  label: '锌',
+                  unit: 'mg',
+                  targetValuePerKg: 99,
+                },
+              ],
+            },
+          ],
+        }),
+      ).rejects.toThrow('补剂目标已由食谱设计器管理');
     });
   });
 });

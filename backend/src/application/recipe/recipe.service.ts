@@ -359,6 +359,90 @@ export class RecipeService {
   }
 
   /**
+   * 补剂目标和制作步骤由食谱设计器管理（2026-10-22）。
+   * 旧食谱编辑页仍可改封面/描述/上下架等资料，但不能覆盖这两个字段。
+   */
+  private assertDesignerManagedFieldsUnchanged(
+    existing: {
+      productionSteps: string | null;
+      items: Array<{
+        ingredientId: string;
+        supplementTargets: unknown;
+      }>;
+    },
+    dto: Record<string, any>,
+  ): void {
+    if (Object.prototype.hasOwnProperty.call(dto, 'productionSteps')) {
+      const next = dto.productionSteps ?? null;
+      const current = existing.productionSteps ?? null;
+      if (next !== current) {
+        throw new BadRequestException(
+          '制作步骤已由食谱设计器管理，旧编辑页不能修改，请到设计器中编辑。',
+        );
+      }
+    }
+
+    if (!Array.isArray(dto.items)) {
+      return;
+    }
+
+    // 历史目标可能只有 nutrientTargetKey/Value，尚未形成数组；这类记录先不拦，
+    // 避免旧页面连封面/描述都无法保存。已有数组目标的记录严格只读。
+    const existingByIngredient = new Map<string, Array<{ supplementTargets: unknown }>>();
+    for (const item of existing.items) {
+      const list = existingByIngredient.get(item.ingredientId) ?? [];
+      list.push(item);
+      existingByIngredient.set(item.ingredientId, list);
+    }
+    const seen = new Map<string, number>();
+    for (const item of dto.items) {
+      if (!Array.isArray(item?.supplementTargets)) {
+        continue;
+      }
+      const ingredientId = String(item.ingredientId ?? '');
+      const index = seen.get(ingredientId) ?? 0;
+      seen.set(ingredientId, index + 1);
+      const current = existingByIngredient.get(ingredientId)?.[index];
+      if (!current) {
+        continue;
+      }
+      const currentTargets = this.normalizeSupplementTargets(
+        current.supplementTargets,
+      );
+      if (!Array.isArray(currentTargets) || currentTargets.length === 0) {
+        continue;
+      }
+      if (
+        this.stableSupplementTargets(currentTargets) !==
+        this.stableSupplementTargets(item.supplementTargets)
+      ) {
+        throw new BadRequestException(
+          '补剂目标已由食谱设计器管理，旧编辑页不能修改，请到设计器中编辑。',
+        );
+      }
+    }
+  }
+
+  private stableSupplementTargets(targets: unknown[]): string {
+    return JSON.stringify(
+      [...targets]
+        .map((target) => {
+          const record = target as Record<string, unknown>;
+          return {
+            fieldPath: String(record.fieldPath ?? ''),
+            targetValuePerKg: Number(record.targetValuePerKg ?? 0),
+            unit: String(record.unit ?? ''),
+          };
+        })
+        .sort((a, b) =>
+          `${a.fieldPath}|${a.unit}|${a.targetValuePerKg}`.localeCompare(
+            `${b.fieldPath}|${b.unit}|${b.targetValuePerKg}`,
+          ),
+        ),
+    );
+  }
+
+  /**
    * Helper: Check if recipe items have changed (ingredient name, ratio, or usage amount)
    */
   private haveRecipeItemsChanged(
@@ -1447,6 +1531,9 @@ export class RecipeService {
               },
             },
           },
+          orderBy: {
+            sortOrder: 'asc',
+          },
         },
       },
     });
@@ -1488,6 +1575,8 @@ export class RecipeService {
       targetHealthTags,
       (dto as any).nutritionDetailedData ?? existing.nutritionDetailedData,
     );
+
+    this.assertDesignerManagedFieldsUnchanged(existing, dto);
 
     await this.validateSupplementAlternativeItems(dto.items);
     const resolvedItems = await this.resolveRecipeItemNutritionFoodIds(

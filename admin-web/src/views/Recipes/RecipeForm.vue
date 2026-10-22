@@ -735,10 +735,14 @@
               v-model="form.productionSteps"
               type="textarea"
               :rows="6"
+              :disabled="isEdit"
               placeholder="请输入烹饪步骤"
               maxlength="2000"
               show-word-limit
             />
+            <div v-if="isEdit" class="designer-managed-hint">
+              制作步骤已由「食谱设计器」管理，此处只读；请在设计器中修改。
+            </div>
           </el-form-item>
         </div>
 
@@ -938,6 +942,7 @@
                   v-model="target.fieldPath"
                   placeholder="选择营养字段"
                   filterable
+                  :disabled="isEdit"
                   class="supplement-target-field"
                   @change="handleSupplementTargetFieldChange(target)"
                 >
@@ -956,6 +961,7 @@
                   :min="0"
                   :precision="2"
                   :step="10"
+                  :disabled="isEdit"
                   placeholder="目标值"
                   class="supplement-target-value"
                 />
@@ -964,11 +970,15 @@
                   :icon="Delete"
                   link
                   type="danger"
+                  :disabled="isEdit"
                   class="supplement-target-remove"
                   @click="removeSupplementTarget(targetIndex)"
                 />
               </div>
-              <el-button :icon="Plus" @click="addSupplementTarget">添加目标</el-button>
+              <el-button :icon="Plus" :disabled="isEdit" @click="addSupplementTarget">添加目标</el-button>
+              <div v-if="isEdit" class="designer-managed-hint">
+                补剂目标已由「食谱设计器」管理，此处只读；请在设计器中修改。
+              </div>
             </div>
           </el-form-item>
 
@@ -3881,5 +3891,12 @@ onMounted(async () => {
 
 .ai-cover-preview {
   margin-top: 12px;
+}
+
+.designer-managed-hint {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #e6a23c;
 }
 </style>

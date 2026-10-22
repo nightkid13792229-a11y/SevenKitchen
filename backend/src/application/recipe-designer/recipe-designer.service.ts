@@ -451,6 +451,11 @@ type DesignRecipeWithItems = {
   notes: string | null;
   /** 结构化制作步骤（JSON 数组）；历史草稿可能为 null */
   productionStepsJson?: unknown;
+  /** 最近一次持久化的营养报告（发布口径 report 对象）；未生成过为 null */
+  nutritionReportJson?: unknown;
+  /** 生成报告时的 contentRevision；与当前值不同即表示报告过期 */
+  nutritionReportRevision?: number | null;
+  nutritionReportGeneratedAt?: Date | null;
   createdBy: string;
   publishedAt: Date | null;
   publishedRecipeId: string | null;
@@ -477,6 +482,19 @@ type DesignRecipeWithItems = {
   createdAt?: Date;
   updatedAt?: Date;
   items: DesignRecipeItemWithFood[];
+};
+
+/** 草稿营养报告的读写响应（POST 生成 / GET 读取共用同一契约）。 */
+type DraftNutritionReportSnapshot = {
+  draftId: string;
+  /** ISO 时间；从未生成过为 null */
+  generatedAt: string | null;
+  /** 报告对应的内容版本；从未生成过为 null */
+  revision: number | null;
+  /** 已保存报告是否落后于当前 contentRevision */
+  stale: boolean;
+  /** 发布口径的 report 对象；从未生成过为 null */
+  report: unknown;
 };
 
 type DesignRecipeItemWithFood = {
@@ -4523,6 +4541,93 @@ export class RecipeDesignerService {
   }
 
   /**
+   * 生成并持久化草稿的最新营养报告（2026-10-22 · 持久化营养报告）。
+   *
+   * 权限与草稿详情完全一致（复用 getDraft）。报告数据取发布口径的
+   * `buildPublishedNutritionDetailedDataForDraft(...).report`，并记录生成时的
+   * contentRevision；之后任何内容保存都会让 contentRevision +1，GET 据此标记过期。
+   *
+   * 生成失败统一转成 400：这是「当前草稿算不出报告」的业务问题，不是 500。
+   * 写库失败不包在这里，仍按原始错误抛出。
+   */
+  async generateDraftNutritionReport(
+    id: string,
+    access: RecipeDesignerAccessInput,
+  ): Promise<DraftNutritionReportSnapshot> {
+    const draft = await this.getDraft(id, access);
+
+    let report: unknown;
+    try {
+      const assessment = await this.assessLoadedDraft(draft);
+      const detailedData =
+        await this.buildPublishedNutritionDetailedDataForDraft(
+          draft,
+          assessment,
+        );
+      if (!detailedData.report) {
+        throw new Error('报告内容为空');
+      }
+      report = detailedData.report;
+    } catch (error) {
+      throw new BadRequestException(
+        `完整营养报告生成失败：${this.resolveLaunchReadinessErrorMessage(error)}`,
+      );
+    }
+
+    const generatedAt = new Date();
+    // 与 GET 读回的内容保持完全一致（JSON 序列化会去掉 undefined 字段）。
+    const persistedReport = this.toJsonValue(report);
+    await this.prisma.designRecipe.update({
+      where: { id: draft.id },
+      data: {
+        nutritionReportJson: persistedReport,
+        nutritionReportRevision: draft.contentRevision,
+        nutritionReportGeneratedAt: generatedAt,
+      },
+    });
+
+    return {
+      draftId: draft.id,
+      generatedAt: generatedAt.toISOString(),
+      revision: draft.contentRevision,
+      stale: false,
+      report: persistedReport,
+    };
+  }
+
+  /**
+   * 读取最近一次持久化的营养报告。
+   *
+   * 没有报告时返回 200 + `report: null`（而不是 404）：草稿还没点「生成报告」
+   * 是正常状态，前端不必把 404 当成错误分支处理。`stale` 只比较报告生成时的
+   * revision 与当前 contentRevision，不自动重新生成。
+   */
+  async getDraftNutritionReport(
+    id: string,
+    access: RecipeDesignerAccessInput,
+  ): Promise<DraftNutritionReportSnapshot> {
+    const draft = await this.getDraft(id, access);
+    const report = draft.nutritionReportJson;
+    if (report === null || report === undefined) {
+      return {
+        draftId: draft.id,
+        generatedAt: null,
+        revision: null,
+        stale: false,
+        report: null,
+      };
+    }
+
+    return {
+      draftId: draft.id,
+      generatedAt: draft.nutritionReportGeneratedAt?.toISOString() ?? null,
+      revision: draft.nutritionReportRevision ?? null,
+      stale: draft.nutritionReportRevision !== draft.contentRevision,
+      report,
+    };
+  }
+
+  /**
    * 读取草稿的结构化制作步骤（2026-10-22 · Task 4）。
    *
    * 单独开一个 GET 的原因是 Task 7 的设计器需要轻量刷新步骤区，
@@ -7570,6 +7675,14 @@ export class RecipeDesignerService {
       });
     }
 
+    // 已保存报告只读取、不自动生成；revision 与当前 contentRevision 不一致即过期。
+    const reportGenerated =
+      draft.nutritionReportJson !== null &&
+      draft.nutritionReportJson !== undefined;
+    const reportStale =
+      reportGenerated &&
+      (draft.nutritionReportRevision ?? null) !== draft.contentRevision;
+
     const readiness = buildDraftLaunchReadiness({
       draftId: draft.id,
       designMode: draft.series?.designMode ?? RecipeDesignMode.CATALOG,
@@ -7583,6 +7696,8 @@ export class RecipeDesignerService {
         : null,
       assessmentError,
       reportAvailable,
+      reportGenerated,
+      reportStale,
       reportError,
     });
 

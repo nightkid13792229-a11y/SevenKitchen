@@ -513,6 +513,38 @@ export class RecipeDesignerController {
     return ApiResponseDto.success(readiness);
   }
 
+  @Post('drafts/:id/nutrition-report')
+  @ApiOperation({
+    summary: 'Generate and persist the latest nutrition report of a draft',
+  })
+  async generateDraftNutritionReport(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const report =
+      await this.recipeDesignerService.generateDraftNutritionReport(
+        id,
+        toRecipeDesignerAccessContext(user),
+      );
+    return ApiResponseDto.success(report);
+  }
+
+  @Get('drafts/:id/nutrition-report')
+  @ApiOperation({
+    summary:
+      'Get the latest persisted nutrition report (200 with report:null when none)',
+  })
+  async getDraftNutritionReport(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const report = await this.recipeDesignerService.getDraftNutritionReport(
+      id,
+      toRecipeDesignerAccessContext(user),
+    );
+    return ApiResponseDto.success(report);
+  }
+
   @Get('drafts/:id/production-steps')
   @ApiOperation({ summary: 'Get structured production steps of a draft' })
   async getDraftProductionSteps(

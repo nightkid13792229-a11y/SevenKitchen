@@ -71,8 +71,12 @@ export interface DraftLaunchReadinessSummary {
   supplementCount: number;
   /** 有效制作步骤数 */
   stepCount: number;
-  /** 完整营养报告是否可生成 */
+  /** 完整营养报告是否可生成（本次实时构建，不落库） */
   reportAvailable: boolean;
+  /** 草稿上是否已保存过营养报告（不自动生成） */
+  reportGenerated: boolean;
+  /** 已保存报告是否基于旧 contentRevision（无报告时为 false） */
+  reportStale: boolean;
 }
 
 export interface DraftLaunchReadiness {
@@ -125,6 +129,8 @@ export interface BuildDraftLaunchReadinessInput {
   assessment: LaunchReadinessAssessmentSnapshot | null;
   assessmentError?: string | null;
   reportAvailable: boolean;
+  reportGenerated?: boolean;
+  reportStale?: boolean;
   reportError?: string | null;
 }
 
@@ -320,6 +326,9 @@ export const buildDraftLaunchReadiness = (
       supplementCount,
       stepCount: Math.max(0, input.productionStepCount),
       reportAvailable: input.reportAvailable,
+      reportGenerated: input.reportGenerated ?? false,
+      // 没有保存过报告就谈不上过期；有报告时由调用方按 revision 判断。
+      reportStale: Boolean(input.reportGenerated && input.reportStale),
     },
   };
 };

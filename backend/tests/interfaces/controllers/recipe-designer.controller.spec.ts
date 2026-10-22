@@ -112,6 +112,19 @@ describe('RecipeDesignerController authorization', () => {
     expect(source).toMatch(/@Get\('drafts\/:id\/launch-readiness'\)/);
   });
 
+  it('exposes nutrition report generation and read routes to draft viewers', () => {
+    const source = readFileSync(
+      resolve(
+        process.cwd(),
+        'src/interfaces/controllers/recipe-designer.controller.ts',
+      ),
+      'utf8',
+    );
+
+    expect(source).toMatch(/@Post\('drafts\/:id\/nutrition-report'\)/);
+    expect(source).toMatch(/@Get\('drafts\/:id\/nutrition-report'\)/);
+  });
+
   it('exposes private recipe snapshot creation to authenticated users without StaffGuard', () => {
     const source = readFileSync(
       resolve(
@@ -175,6 +188,8 @@ describe('RecipeDesignerController', () => {
     listDrafts: jest.fn(),
     getDraft: jest.fn(),
     getDraftLaunchReadiness: jest.fn(),
+    generateDraftNutritionReport: jest.fn(),
+    getDraftNutritionReport: jest.fn(),
     createDraft: jest.fn(),
     listSeries: jest.fn(),
     createSeries: jest.fn(),
@@ -361,6 +376,41 @@ describe('RecipeDesignerController', () => {
       },
     );
     expect(service.deleteDraft).toHaveBeenCalledWith('design-1', {
+      userId: 'staff-1',
+      role: 'STAFF',
+    });
+  });
+
+  it('delegates nutrition report generation and reads with CurrentUser ids', async () => {
+    const report = {
+      draftId: 'design-1',
+      generatedAt: '2026-10-22T10:00:00.000Z',
+      revision: 3,
+      stale: false,
+      report: { ingredientRows: [] },
+    };
+    service.generateDraftNutritionReport.mockResolvedValue(report);
+    service.getDraftNutritionReport.mockResolvedValue(report);
+
+    await expect(
+      controller.generateDraftNutritionReport('design-1', currentUser),
+    ).resolves.toEqual(
+      expect.objectContaining({ code: 0, data: report }),
+    );
+    await expect(
+      controller.getDraftNutritionReport('design-1', currentUser),
+    ).resolves.toEqual(
+      expect.objectContaining({ code: 0, data: report }),
+    );
+
+    expect(service.generateDraftNutritionReport).toHaveBeenCalledWith(
+      'design-1',
+      {
+        userId: 'staff-1',
+        role: 'STAFF',
+      },
+    );
+    expect(service.getDraftNutritionReport).toHaveBeenCalledWith('design-1', {
       userId: 'staff-1',
       role: 'STAFF',
     });

@@ -576,6 +576,48 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
     );
   });
 
+  it('summarizes persisted report state without generating a report on readiness', async () => {
+    const readiness = await readinessFor({ nutritionReportJson: null });
+
+    expect(readiness.summary).toMatchObject({
+      reportAvailable: true,
+      reportGenerated: false,
+      reportStale: false,
+    });
+    expect(prisma.designRecipe.update).not.toHaveBeenCalled();
+  });
+
+  it('marks a persisted report stale when contentRevision advanced', async () => {
+    const readiness = await readinessFor({
+      contentRevision: 4,
+      nutritionReportJson: { ingredientRows: [] },
+      nutritionReportRevision: 3,
+      nutritionReportGeneratedAt: new Date('2026-10-22T09:00:00.000Z'),
+    });
+
+    expect(readiness.summary).toMatchObject({
+      reportAvailable: true,
+      reportGenerated: true,
+      reportStale: true,
+    });
+    expect(prisma.designRecipe.update).not.toHaveBeenCalled();
+  });
+
+  it('keeps a persisted report fresh when revision matches contentRevision', async () => {
+    const readiness = await readinessFor({
+      contentRevision: 4,
+      nutritionReportJson: { ingredientRows: [] },
+      nutritionReportRevision: 4,
+      nutritionReportGeneratedAt: new Date('2026-10-22T09:00:00.000Z'),
+    });
+
+    expect(readiness.summary).toMatchObject({
+      reportAvailable: true,
+      reportGenerated: true,
+      reportStale: false,
+    });
+  });
+
   it('enforces the same gate in publishDraft before creating a recipe', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       designDraft({ productionStepsJson: [] }),

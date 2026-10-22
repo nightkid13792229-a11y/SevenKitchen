@@ -3949,6 +3949,12 @@ model DesignRecipe {
   notes                  String?                       @map("notes")
   /// 结构化的制作步骤（顺序流程：操作说明 + 可选时间/温度/设备）
   productionStepsJson    Json?                         @map("production_steps_json")
+  /// 最近一次持久化的完整营养报告（发布口径的 report 对象）
+  nutritionReportJson    Json?                         @map("nutrition_report_json")
+  /// 报告生成时草稿的 contentRevision（与当前值不一致即视为过期）
+  nutritionReportRevision Int?                         @map("nutrition_report_revision")
+  /// 报告生成时间
+  nutritionReportGeneratedAt DateTime?                 @map("nutrition_report_generated_at")
   createdBy              String                        @map("created_by")
   publishedAt            DateTime?                     @map("published_at")
   publishedRecipeId      String?                       @map("published_recipe_id")

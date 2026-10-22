@@ -654,6 +654,19 @@ describe('OrderRecipeDesignService', () => {
         service.stageDraft('CR202610220001', 'design-1', 'admin-1'),
       ).rejects.toThrow(BadRequestException);
     });
+
+    it('does not mark the slot READY when the shared launch gate blocks the draft', async () => {
+      prisma.orderRecipeDesign.findUnique.mockResolvedValue(buildSlot());
+      recipeDesignerService.publishOrderDesignSlot.mockRejectedValue(
+        new BadRequestException('请至少填写一个制作步骤'),
+      );
+
+      await expect(
+        service.stageDraft('CR202610220001', 'design-1', 'admin-1'),
+      ).rejects.toThrow('请至少填写一个制作步骤');
+
+      expect(prisma.orderRecipeDesign.update).not.toHaveBeenCalled();
+    });
   });
 
   describe('removeSlot', () => {
@@ -1109,7 +1122,17 @@ describe('RecipeDesignerService · publishOrderDesignSlot', () => {
         id: 'series-1',
         name: 'Foxy定制 · 鸡肉南瓜',
         referenceDogId: 'dog-1',
+        designMode: 'ORDER',
       },
+      productionStepsJson: [
+        {
+          sortOrder: 1,
+          instruction: '食材称重后蒸熟',
+          durationMinutes: null,
+          temperatureC: null,
+          equipment: null,
+        },
+      ],
       isCompliant: true,
       reviewStatus: 'NONE',
       reviewNote: null,
@@ -1133,7 +1156,22 @@ describe('RecipeDesignerService · publishOrderDesignSlot', () => {
           nutritionFood: {
             id: 'nf-1',
             name: '鸡胸肉',
-            nutritionData: {},
+            nutritionData: {
+              meta: { rawBasisType: 'PER_100_G' },
+              macros: {
+                energyKcal: 120,
+                moisture: 70,
+                crudeProtein: 20,
+                crudeFat: 3,
+                ash: 1,
+                fiber: 0,
+              },
+              minerals: {},
+              vitamins: {},
+              fattyAcids: {},
+              aminoAcids: {},
+              customItems: [],
+            },
             mappings: [],
           },
         },
@@ -1163,6 +1201,7 @@ describe('RecipeDesignerService · publishOrderDesignSlot', () => {
       recipeId: 'draft-1',
       version: 1,
     });
+    targetProvider.getTargets.mockResolvedValue([]);
   });
 
   it('creates a PRIVATE_CUSTOM recipe for the order customer without attaching customOrderId', async () => {
@@ -1237,13 +1276,9 @@ describe('RecipeDesignerService · publishOrderDesignSlot', () => {
 
   it('recomputes energy when the stored draft has null energy density', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
-      buildDraft({ energyDensityKcalPerKg: null, totalWeightG: 154.55 }),
+      buildDraft({ energyDensityKcalPerKg: null }),
     );
-    targetProvider.getTargets.mockResolvedValue([]);
     prisma.designRecipe.update.mockResolvedValue({});
-    jest
-      .spyOn(service as any, 'assessLoadedDraft')
-      .mockResolvedValue({ energyDensityKcalPerKg: 1130, totalWeightG: 154.55 });
 
     await service.publishOrderDesignSlot({
       draftId: 'draft-1',
@@ -1253,10 +1288,10 @@ describe('RecipeDesignerService · publishOrderDesignSlot', () => {
     });
 
     const createCall = prisma.recipe.create.mock.calls[0][0];
-    expect(createCall.data.energyDensityKcalPerKg).toBe(1130);
+    expect(createCall.data.energyDensityKcalPerKg).toBe(1310);
     expect(prisma.designRecipe.update).toHaveBeenCalledWith({
       where: { id: 'draft-1' },
-      data: { energyDensityKcalPerKg: 1130, totalWeightG: 154.55 },
+      data: { energyDensityKcalPerKg: 1310, totalWeightG: 1000 },
     });
   });
 

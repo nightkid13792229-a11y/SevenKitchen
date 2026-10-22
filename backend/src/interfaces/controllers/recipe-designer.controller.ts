@@ -496,6 +496,23 @@ export class RecipeDesignerController {
     return ApiResponseDto.success(draft);
   }
 
+  @Get('drafts/:id/launch-readiness')
+  @ApiOperation({
+    summary:
+      'Evaluate the shared launch gate (publish / order stage) of a draft',
+  })
+  async getDraftLaunchReadiness(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const readiness =
+      await this.recipeDesignerService.getDraftLaunchReadiness(
+        id,
+        toRecipeDesignerAccessContext(user),
+      );
+    return ApiResponseDto.success(readiness);
+  }
+
   @Get('drafts/:id/production-steps')
   @ApiOperation({ summary: 'Get structured production steps of a draft' })
   async getDraftProductionSteps(

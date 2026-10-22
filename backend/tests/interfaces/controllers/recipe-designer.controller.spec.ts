@@ -100,6 +100,18 @@ describe('RecipeDesignerController authorization', () => {
     expect(source).toMatch(/@Get\('drafts\/:id'\)/);
   });
 
+  it('exposes the shared launch readiness preview route', () => {
+    const source = readFileSync(
+      resolve(
+        process.cwd(),
+        'src/interfaces/controllers/recipe-designer.controller.ts',
+      ),
+      'utf8',
+    );
+
+    expect(source).toMatch(/@Get\('drafts\/:id\/launch-readiness'\)/);
+  });
+
   it('exposes private recipe snapshot creation to authenticated users without StaffGuard', () => {
     const source = readFileSync(
       resolve(
@@ -162,6 +174,7 @@ describe('RecipeDesignerController', () => {
     listIngredientOptions: jest.fn(),
     listDrafts: jest.fn(),
     getDraft: jest.fn(),
+    getDraftLaunchReadiness: jest.fn(),
     createDraft: jest.fn(),
     listSeries: jest.fn(),
     createSeries: jest.fn(),
@@ -281,6 +294,12 @@ describe('RecipeDesignerController', () => {
   it('delegates draft CRUD with CurrentUser ids', async () => {
     service.listDrafts.mockResolvedValue([{ id: 'design-1' }]);
     service.getDraft.mockResolvedValue({ id: 'design-1' });
+    service.getDraftLaunchReadiness.mockResolvedValue({
+      draftId: 'design-1',
+      ready: true,
+      blockers: [],
+      warnings: [],
+    });
     service.createDraft.mockResolvedValue({ id: 'design-2' });
     service.updateDraft.mockResolvedValue({ id: 'design-1', name: 'new' });
     service.deleteDraft.mockResolvedValue({ id: 'design-1' });
@@ -292,6 +311,14 @@ describe('RecipeDesignerController', () => {
       (controller as any).getDraft('design-1', currentUser),
     ).resolves.toEqual(
       expect.objectContaining({ code: 0, data: { id: 'design-1' } }),
+    );
+    await expect(
+      controller.getDraftLaunchReadiness('design-1', currentUser),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        code: 0,
+        data: expect.objectContaining({ draftId: 'design-1', ready: true }),
+      }),
     );
     await expect(
       controller.createDraft(
@@ -311,6 +338,10 @@ describe('RecipeDesignerController', () => {
       role: 'STAFF',
     });
     expect(service.getDraft).toHaveBeenCalledWith('design-1', {
+      userId: 'staff-1',
+      role: 'STAFF',
+    });
+    expect(service.getDraftLaunchReadiness).toHaveBeenCalledWith('design-1', {
       userId: 'staff-1',
       role: 'STAFF',
     });

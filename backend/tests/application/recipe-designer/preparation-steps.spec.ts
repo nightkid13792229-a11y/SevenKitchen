@@ -717,7 +717,7 @@ describe('原料预处理与结构化制作步骤（Task 4）', () => {
             preparationSource: 'AUTO',
           }),
         ],
-        { productionStepsJson: null },
+        { productionStepsJson: VALID_STEPS },
       );
 
       await service.publishDraft(
@@ -728,7 +728,7 @@ describe('原料预处理与结构化制作步骤（Task 4）', () => {
 
       const createData = prisma.recipe.create.mock.calls[0][0].data;
       expect(createData.items.create[0].preparationSource).toBe('AUTO');
-      expect(createData.productionStepsJson).toBe(Prisma.DbNull);
+      expect(createData.productionStepsJson).toEqual(VALID_STEPS);
       expect(createData).not.toHaveProperty('productionSteps');
     });
 

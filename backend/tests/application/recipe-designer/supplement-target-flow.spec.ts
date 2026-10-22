@@ -11,7 +11,7 @@ import { PrismaService } from '../../../src/infrastructure/prisma.service';
  * - 纤维素粉默认目标 → 膳食纤维 19.67 g/kg；
  * - 鱼肝油默认目标 → 维生素 A / D；
  * - 没有默认目标、也没有显式目标 → 400（不再按缺口推断）；
- * - add / update / publish / 私密快照都只认显式或默认目标；
+ * - add / update 会把显式或默认目标解析后持久化，发布门槛只认已持久化的 supplementTargets；
  * - 未知/空/为 0 的目标拒绝，不静默丢弃；
  * - 发布与私密快照保持 `{fieldPath,label,targetValuePerKg,unit}` 负载结构。
  */
@@ -70,7 +70,7 @@ function foodItem(overrides: Record<string, unknown> = {}) {
     weightG: 4900,
     includeInAssessment: true,
     ratioPercent: null,
-    preparationMethod: null,
+    preparationMethod: '蒸熟',
     nutrientTargetKey: null,
     nutrientTargetValue: null,
     supplementTargets: null,
@@ -112,7 +112,7 @@ function fiberSupplementItem(overrides: Record<string, unknown> = {}) {
     weightG: 100,
     includeInAssessment: true,
     ratioPercent: null,
-    preparationMethod: null,
+    preparationMethod: '直接添加',
     nutrientTargetKey: null,
     nutrientTargetValue: null,
     supplementTargets: null,
@@ -160,6 +160,16 @@ function designDraft(overrides: Record<string, unknown> = {}) {
     targetHealthTags: [],
     applicableLifeStages: [],
     notes: null,
+    // 发布门槛要求至少一个有效制作步骤
+    productionStepsJson: [
+      {
+        sortOrder: 1,
+        instruction: '食材称重后混合',
+        durationMinutes: null,
+        temperatureC: null,
+        equipment: null,
+      },
+    ],
     createdBy: 'staff-1',
     isCompliant: true,
     reviewStatus: 'NONE',
@@ -642,7 +652,12 @@ describe('补剂显式目标设计器流程（Task 3）', () => {
         foodItem(),
         fiberSupplementItem({
           supplementTargets: [
-            { fieldPath: 'macros.fiber', label: '膳食纤维', unit: 'g' },
+            {
+              fieldPath: 'macros.fiber',
+              label: '膳食纤维',
+              unit: 'g',
+              targetValuePerKg: 20,
+            },
           ],
         }),
       ]);
@@ -674,7 +689,7 @@ describe('补剂显式目标设计器流程（Task 3）', () => {
       );
     });
 
-    it('publishes from the nutrition profile default targets when no explicit target exists', async () => {
+    it('hard-blocks publishing when only nutrition profile default targets exist', async () => {
       mockPublishDraft([foodItem(), fiberSupplementItem()]);
       prisma.nutritionFood.findUnique.mockResolvedValue({
         id: 'food-fiber',
@@ -685,24 +700,22 @@ describe('补剂显式目标设计器流程（Task 3）', () => {
         ],
       });
 
-      await service.publishDraft(
-        'design-1',
-        { name: '纤维补剂食谱', reviewNote: '默认目标发布回归' },
-        ADMIN_ACCESS,
+      // 发布门槛只认补剂项上已经持久化的 supplementTargets；
+      // 默认目标应在 add/update 时落库，而不是发布时现推。
+      await expect(
+        service.publishDraft(
+          'design-1',
+          { name: '纤维补剂食谱', reviewNote: '默认目标发布回归' },
+          ADMIN_ACCESS,
+        ),
+      ).rejects.toThrow(
+        new BadRequestException(
+          '补剂「纤维素粉」未填写有效的补剂目标：需要至少一条包含 fieldPath 且每 kg 目标值大于 0 的 supplementTargets',
+        ),
       );
 
-      const createData = prisma.recipe.create.mock.calls[0][0].data;
-      const publishedSupplement = createData.items.create.find(
-        (item: any) => item.ingredientId === 'ingredient-fiber',
-      );
-      expect(publishedSupplement.supplementTargets).toEqual([
-        {
-          fieldPath: 'macros.fiber',
-          label: '膳食纤维',
-          targetValuePerKg: 20,
-          unit: 'g',
-        },
-      ]);
+      expect(prisma.recipe.create).not.toHaveBeenCalled();
+      expect(prisma.designRecipePublishSnapshot.create).not.toHaveBeenCalled();
     });
 
     it('hard-blocks publishing a supplement without explicit or default targets', async () => {
@@ -722,7 +735,7 @@ describe('补剂显式目标设计器流程（Task 3）', () => {
         ),
       ).rejects.toThrow(
         new BadRequestException(
-          '补剂原料「纤维素粉」缺少营养目标：请在添加时选择目标营养素，或为该补剂的营养档案配置默认目标',
+          '补剂「纤维素粉」未填写有效的补剂目标：需要至少一条包含 fieldPath 且每 kg 目标值大于 0 的 supplementTargets',
         ),
       );
 

@@ -176,6 +176,16 @@ describe('RecipeDesignerService', () => {
       targetHealthTags: [],
       applicableLifeStages: [],
       notes: null,
+      // 发布门槛要求至少一个有效制作步骤；单测默认给一条，专门测步骤的用例自行覆盖。
+      productionStepsJson: [
+        {
+          sortOrder: 1,
+          instruction: '食材称重后按顺序混合',
+          durationMinutes: null,
+          temperatureC: null,
+          equipment: null,
+        },
+      ],
       createdBy: 'staff-1',
       isCompliant: false,
       reviewStatus: 'NONE',
@@ -1846,7 +1856,12 @@ describe('RecipeDesignerService', () => {
       where: { id: 'design-low-energy' },
       include: expect.objectContaining({
         series: {
-          select: { id: true, name: true, referenceDogId: true },
+          select: {
+            id: true,
+            name: true,
+            referenceDogId: true,
+            designMode: true,
+          },
         },
       }),
     });
@@ -3616,7 +3631,7 @@ describe('RecipeDesignerService', () => {
         adminAccess,
       ),
     ).rejects.toThrow(
-      new BadRequestException('缺少能量数据，无法发布正式食谱'),
+      new BadRequestException('能量密度缺失或为 0，无法生成完整营养报告'),
     );
     expect(prisma.recipe.create).not.toHaveBeenCalled();
   });
@@ -3747,6 +3762,7 @@ describe('RecipeDesignerService', () => {
                 fieldPath: 'minerals.calcium',
                 label: '钙',
                 unit: 'mg',
+                targetValuePerKg: 1000,
               },
             ],
             nutritionFood: {
@@ -4802,44 +4818,29 @@ describe('RecipeDesignerService', () => {
     ]);
   });
 
-  it('fills missing preparation methods from ingredient history when publishing old designer drafts', async () => {
+  it('blocks publishing old designer drafts whose included item has no preparation method', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({
         isCompliant: true,
         items: [item({ preparationMethod: null })],
       }),
     );
-    prisma.recipeItem.findMany.mockResolvedValue([
-      {
-        ingredientId: 'ingredient-1',
-        preparationMethod: '去皮、煮熟',
-        recipe: { updatedAt: new Date('2026-05-26T08:00:00.000Z') },
-      },
-    ]);
     targetProvider.getTargets.mockResolvedValue(compliantTargets());
-    prisma.designRecipe.update.mockResolvedValue(
-      draft({ status: 'PUBLISHED' }),
-    );
-    prisma.recipe.create.mockResolvedValue({
-      id: 'recipe-row-1',
-      recipeId: 'design-1',
-      version: 1,
-    });
-    prisma.designRecipePublishSnapshot.create.mockResolvedValue({
-      id: 'snapshot-1',
-    });
 
-    await service.publishDraft(
-      'design-1',
-      { name: '历史制备食谱' },
-      adminAccess,
+    // 预处理方式是硬性要求；preparationNote 不能替代，也不再发布时静默补默认值。
+    await expect(
+      service.publishDraft(
+        'design-1',
+        { name: '历史制备食谱' },
+        adminAccess,
+      ),
+    ).rejects.toThrow(
+      new BadRequestException(
+        '食材「鸡胸肉」未填写预处理方式，不能发布或加入待提交',
+      ),
     );
 
-    expect(prisma.recipe.create.mock.calls[0][0].data.items.create[0]).toEqual(
-      expect.objectContaining({
-        preparationMethod: '去皮、煮熟',
-      }),
-    );
+    expect(prisma.recipe.create).not.toHaveBeenCalled();
   });
 
   it('falls back to calcium and phosphorus totals when publishing calcium-phosphorus ratio', async () => {
@@ -4933,6 +4934,7 @@ describe('RecipeDesignerService', () => {
                 fieldPath: 'minerals.calcium',
                 label: '钙',
                 unit: 'mg',
+                targetValuePerKg: 1000,
               },
             ],
             nutritionFood: {
@@ -5048,6 +5050,7 @@ describe('RecipeDesignerService', () => {
                 fieldPath: 'vitamins.choline',
                 label: '胆碱',
                 unit: 'mg',
+                targetValuePerKg: 1000,
               },
             ],
             ingredient: cholineSupplement,
@@ -5229,6 +5232,7 @@ describe('RecipeDesignerService', () => {
                 fieldPath: 'minerals.calcium',
                 label: '钙',
                 unit: 'mg',
+                targetValuePerKg: 1000,
               },
             ],
             nutritionFood: {
@@ -5275,6 +5279,7 @@ describe('RecipeDesignerService', () => {
                 fieldPath: 'minerals.iodine',
                 label: '碘',
                 unit: 'μg',
+                targetValuePerKg: 1000,
               },
             ],
             nutritionFood: {
@@ -5410,11 +5415,13 @@ describe('RecipeDesignerService', () => {
                 fieldPath: 'minerals.calcium',
                 label: '钙',
                 unit: 'mg',
+                targetValuePerKg: 1000,
               },
               {
                 fieldPath: 'minerals.zinc',
                 label: '锌',
                 unit: 'mg',
+                targetValuePerKg: 1000,
               },
             ],
             nutritionFood: {
@@ -5596,7 +5603,7 @@ describe('RecipeDesignerService', () => {
       ),
     ).rejects.toThrow(
       new BadRequestException(
-        '补剂原料「鸡蛋壳粉」缺少营养目标：请在添加时选择目标营养素，或为该补剂的营养档案配置默认目标',
+        '补剂「鸡蛋壳粉」未填写有效的补剂目标：需要至少一条包含 fieldPath 且每 kg 目标值大于 0 的 supplementTargets',
       ),
     );
 
@@ -5672,7 +5679,7 @@ describe('RecipeDesignerService', () => {
       ),
     ).rejects.toThrow(
       new BadRequestException(
-        '补剂原料「洋车前子壳粉」缺少营养目标：请在添加时选择目标营养素，或为该补剂的营养档案配置默认目标',
+        '补剂「洋车前子壳粉」未填写有效的补剂目标：需要至少一条包含 fieldPath 且每 kg 目标值大于 0 的 supplementTargets',
       ),
     );
 
@@ -5680,7 +5687,7 @@ describe('RecipeDesignerService', () => {
     expect(prisma.designRecipePublishSnapshot.create).not.toHaveBeenCalled();
   });
 
-  it('publishes a library-added B-vitamin supplement from its nutrition profile default targets', async () => {
+  it('publishes a library-added B-vitamin supplement with persisted supplement targets', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({
         isCompliant: true,
@@ -5717,6 +5724,33 @@ describe('RecipeDesignerService', () => {
               purchaseUnit: 'g',
               properties: null,
             },
+            // 发布门槛要求补剂已持久化显式目标；这些目标由营养档案默认目标生成。
+            supplementTargets: [
+              {
+                fieldPath: 'vitamins.vitaminB1',
+                label: '维生素 B1',
+                unit: 'mg',
+                targetValuePerKg: 1,
+              },
+              {
+                fieldPath: 'vitamins.vitaminB2',
+                label: '维生素 B2',
+                unit: 'mg',
+                targetValuePerKg: 1,
+              },
+              {
+                fieldPath: 'vitamins.vitaminB6',
+                label: '维生素 B6',
+                unit: 'mg',
+                targetValuePerKg: 1,
+              },
+              {
+                fieldPath: 'vitamins.vitaminB12',
+                label: '维生素 B12',
+                unit: 'μg',
+                targetValuePerKg: 1,
+              },
+            ],
             nutritionFood: {
               id: 'food-supplement-yeast',
               name: '营养酵母粉',
@@ -5896,6 +5930,7 @@ describe('RecipeDesignerService', () => {
                 fieldPath: 'minerals.calcium',
                 label: '钙',
                 unit: 'mg',
+                targetValuePerKg: 1000,
               },
             ],
             ingredient: {
@@ -5954,7 +5989,7 @@ describe('RecipeDesignerService', () => {
     expect(prisma.recipe.create).not.toHaveBeenCalled();
   });
 
-  it('publishes historical supplements from legacy single-target fields instead of re-inferring by removal', async () => {
+  it('blocks historical supplements that only have legacy single-target fields', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({
         isCompliant: true,
@@ -6028,30 +6063,20 @@ describe('RecipeDesignerService', () => {
       id: 'snapshot-1',
     });
 
-    await service.publishDraft(
-      'design-1',
-      { name: '旧字段目标食谱', reviewNote: '历史单目标字段兼容' },
-      adminAccess,
+    // 历史单目标字段（nutrientTargetKey/Value）不再被当作有效 supplementTargets；
+    // 门槛要求逐项保存 fieldPath + 每 kg 目标值，不做任何推断。
+    await expect(
+      service.publishDraft(
+        'design-1',
+        { name: '旧字段目标食谱', reviewNote: '历史单目标字段兼容' },
+        adminAccess,
+      ),
+    ).rejects.toThrow(
+      new BadRequestException(
+        '补剂「鸡蛋壳粉」未填写有效的补剂目标：需要至少一条包含 fieldPath 且每 kg 目标值大于 0 的 supplementTargets',
+      ),
     );
-
-    const createData = prisma.recipe.create.mock.calls[0][0].data;
-    const supplementItem = createData.items.create.find(
-      (createdItem: any) => createdItem.ingredientId === 'supplement-calcium',
-    );
-    const expectedTargetValue = roundTargetValue((380 / 101) * 1000);
-
-    expect(supplementItem).toEqual(
-      expect.objectContaining({
-        nutrientTargetKey: 'calcium',
-        nutrientTargetValue: expectedTargetValue,
-        supplementTargets: [
-          expect.objectContaining({
-            fieldPath: 'minerals.calcium',
-            targetValuePerKg: expectedTargetValue,
-          }),
-        ],
-      }),
-    );
+    expect(prisma.recipe.create).not.toHaveBeenCalled();
   });
 
   it('rejects publishing without a final recipe name', async () => {

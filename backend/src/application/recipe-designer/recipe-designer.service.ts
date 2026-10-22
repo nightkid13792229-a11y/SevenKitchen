@@ -53,6 +53,11 @@ import {
   type AssessmentDataGap,
   type DesignRecipeAssessmentResult,
 } from '../../domain/recipe-designer/recipe-assessment';
+import {
+  buildDraftLaunchReadiness,
+  type DraftLaunchReadiness,
+  type LaunchReadinessAssessmentSnapshot,
+} from '../../domain/recipe-designer/launch-readiness';
 import type {
   AssessmentEntry,
   AssessmentExpressionBasis,
@@ -172,6 +177,8 @@ const DESIGN_RECIPE_INCLUDE = {
       id: true,
       name: true,
       referenceDogId: true,
+      // 发布门槛需要区分产品线（CATALOG）与订单绑定（ORDER）设计
+      designMode: true,
     },
   },
   items: {
@@ -457,6 +464,7 @@ type DesignRecipeWithItems = {
     id: string;
     name: string;
     referenceDogId?: string | null;
+    designMode?: string | null;
   } | null;
   isCompliant: boolean;
   reviewStatus: string;
@@ -4497,6 +4505,24 @@ export class RecipeDesignerService {
   }
 
   /**
+   * 发布 / 加入待提交前的统一门槛预览。
+   *
+   * 权限与草稿详情完全一致（复用 `getDraft`），后台编辑器可以在保存后刷新
+   * 同一份 blockers / warnings，而不必先尝试发布再解析报错。
+   *
+   * 报告生成失败**不会**让这个接口抛错：它会变成 blockers 里的一条，
+   * 让后台能看到具体原因。
+   */
+  async getDraftLaunchReadiness(
+    id: string,
+    access: RecipeDesignerAccessInput,
+  ): Promise<DraftLaunchReadiness> {
+    const draft = await this.getDraft(id, access);
+    const { readiness } = await this.evaluateDraftLaunchReadiness(draft);
+    return readiness;
+  }
+
+  /**
    * 读取草稿的结构化制作步骤（2026-10-22 · Task 4）。
    *
    * 单独开一个 GET 的原因是 Task 7 的设计器需要轻量刷新步骤区，
@@ -5730,21 +5756,28 @@ export class RecipeDesignerService {
     }
 
     /**
+     * 与产品线发布共用同一套门槛：报告能不能生成、补剂目标、
+     * 预处理方式、制作步骤等都在这里统一判断。
+     */
+    const { readiness: launchReadiness, assessment } =
+      await this.evaluateDraftLaunchReadiness(draft);
+    this.assertLaunchReadinessReady(launchReadiness);
+    if (!assessment) {
+      throw new BadRequestException('配方评估未完成，无法进入下一步');
+    }
+
+    /**
      * 模板复制出来的草稿 `energyDensityKcalPerKg` 初始为 null；编辑器里的评估
      * 是异步回写的，保存队列又可能改 contentRevision，导致回写被跳过。
      * 加入待提交是服务端动作，不能相信这个可能为空的缓存值：
-     * 缺失时用当前原料重新评估一次，并把结果写回草稿。
+     * 缺失时用当前评估结果补上，并写回草稿。
      */
     let publishableDraft = draft;
     if (!(Number(draft.energyDensityKcalPerKg) > 0)) {
-      const targets = await this.targetProvider.getTargets(
-        draft.fediafDogScenario,
-      );
-      const assessment = await this.assessLoadedDraft(draft, targets);
-      if (assessment.energyDensityKcalPerKg === null) {
+      const energyDensityKcalPerKg = assessment.energyDensityKcalPerKg;
+      if (!(Number(energyDensityKcalPerKg) > 0)) {
         throw new BadRequestException('缺少能量数据，暂时无法进入下一步');
       }
-      const energyDensityKcalPerKg = assessment.energyDensityKcalPerKg;
       const totalWeightG = assessment.totalWeightG;
       publishableDraft = {
         ...draft,
@@ -5757,12 +5790,13 @@ export class RecipeDesignerService {
       });
     }
 
-    const readiness = this.getCustomerDraftSnapshotReadiness({
+    // 保持原有顾客 / 狗狗校验：门槛不替代「草稿必须已绑定这只狗」等业务规则。
+    const snapshotReadiness = this.getCustomerDraftSnapshotReadiness({
       ...publishableDraft,
       customerDogId: publishableDraft.customerDogId ?? input.dogId,
     });
-    if (!readiness.canCreateSnapshot) {
-      throw new BadRequestException(readiness.disabledReason);
+    if (!snapshotReadiness.canCreateSnapshot) {
+      throw new BadRequestException(snapshotReadiness.disabledReason);
     }
 
     const recipe = await this.createOrUpdatePrivateRecipeSnapshot(
@@ -5902,10 +5936,15 @@ export class RecipeDesignerService {
 
     await this.assertRevisionHasPublishableChanges(draft, recipeName);
 
-    const targets = await this.targetProvider.getTargets(
-      draft.fediafDogScenario,
-    );
-    const assessment = await this.assessLoadedDraft(draft, targets);
+    /**
+     * 统一发布门槛（与订单「加入待提交」共用）：
+     * 名称 / 参与评估的原料 / 总重量 / 能量密度 / 完整报告 /
+     * 补剂目标 / 预处理方式 / 制作步骤。
+     * 评估未完全合规只是 warning，审核说明仍由下面单独强制。
+     */
+    const assessment = await this.assertDraftLaunchReady(draft, {
+      name: recipeName,
+    });
 
     if (assessment.energyDensityKcalPerKg === null) {
       throw new BadRequestException('缺少能量数据，无法发布正式食谱');
@@ -7415,19 +7454,151 @@ export class RecipeDesignerService {
     };
   }
 
+  /**
+   * 构建完整营养报告。
+   *
+   * `assessment` 可选：发布门槛在同一次请求里已经算过评估时直接传进来，
+   * 避免为了检查「报告能不能生成」再跑一遍评估。**不跨请求缓存**，
+   * 因此草稿修改后不会拿到旧报告。
+   */
   async buildPublishedNutritionDetailedDataForDraft(
     draft: DesignRecipeWithItems,
+    assessment?: DesignRecipeAssessmentResult,
   ) {
-    const targets = await this.targetProvider.getTargets(
-      draft.fediafDogScenario,
-    );
-    const assessment = await this.assessLoadedDraft(draft, targets);
+    const resolvedAssessment =
+      assessment ?? (await this.assessLoadedDraft(draft));
 
-    if (assessment.energyDensityKcalPerKg === null) {
+    if (resolvedAssessment.energyDensityKcalPerKg === null) {
       throw new BadRequestException('缺少能量数据，无法生成营养报告');
     }
 
-    return this.buildPublishedNutritionDetailedData(draft, assessment);
+    return this.buildPublishedNutritionDetailedData(
+      draft,
+      resolvedAssessment,
+    );
+  }
+
+  /**
+   * 计算「发布正式食谱 / 加入订单待提交」的统一门槛。
+   *
+   * 返回 readiness 和本次使用的评估结果：发布逻辑可以直接复用 assessment，
+   * 避免重复计算；报告构建也用同一份评估（仅本次调用内复用，不跨请求缓存）。
+   */
+  async evaluateDraftLaunchReadiness(
+    draft: DesignRecipeWithItems,
+    options: { name?: string | null } = {},
+  ): Promise<{
+    readiness: DraftLaunchReadiness;
+    assessment: DesignRecipeAssessmentResult | null;
+  }> {
+    let assessment: DesignRecipeAssessmentResult | null = null;
+    let assessmentError: string | null = null;
+    try {
+      assessment = await this.assessLoadedDraft(draft);
+    } catch (error) {
+      assessmentError = this.resolveLaunchReadinessErrorMessage(error);
+      this.logger.warn(
+        `草稿 ${draft.id} 评估失败，发布门槛按未评估处理：${assessmentError}`,
+      );
+    }
+
+    /**
+     * 报告能不能建出来是硬条件；构建失败只记成 blocker，
+     * 绝不让 GET 预览接口 500。评估都失败时不再重复尝试报告。
+     */
+    let reportAvailable = false;
+    let reportError: string | null = null;
+    if (assessment) {
+      try {
+        await this.buildPublishedNutritionDetailedDataForDraft(
+          draft,
+          assessment,
+        );
+        reportAvailable = true;
+      } catch (error) {
+        reportError = this.resolveLaunchReadinessErrorMessage(error);
+        this.logger.warn(
+          `草稿 ${draft.id} 完整营养报告生成失败：${reportError}`,
+        );
+      }
+    }
+
+    const readiness = buildDraftLaunchReadiness({
+      draftId: draft.id,
+      designMode: draft.series?.designMode ?? RecipeDesignMode.CATALOG,
+      name: options.name ?? draft.series?.name ?? draft.name,
+      items: draft.items.map((item) => ({
+        id: item.id,
+        name: this.resolveIngredientDisplayName(item),
+        included: this.isItemIncludedInAssessment(item),
+        isSupplement:
+          this.resolveIngredientType(item) === IngredientType.SUPPLEMENT,
+        preparationMethod: item.preparationMethod,
+        preparationNote: item.preparationNote,
+        supplementTargets: item.supplementTargets,
+      })),
+      productionStepCount: this.readDraftProductionSteps(
+        draft.productionStepsJson,
+      ).length,
+      assessment: assessment
+        ? this.toLaunchReadinessAssessmentSnapshot(assessment)
+        : null,
+      assessmentError,
+      reportAvailable,
+      reportError,
+    });
+
+    return { readiness, assessment };
+  }
+
+  /**
+   * 强制门槛：有阻断项时抛 BadRequest（消息用「；」拼接所有 blockers）。
+   * 返回本次评估结果，发布逻辑直接复用。
+   */
+  async assertDraftLaunchReady(
+    draft: DesignRecipeWithItems,
+    options: { name?: string | null } = {},
+  ): Promise<DesignRecipeAssessmentResult> {
+    const { readiness, assessment } =
+      await this.evaluateDraftLaunchReadiness(draft, options);
+    this.assertLaunchReadinessReady(readiness);
+    if (!assessment) {
+      // ready=true 时不会出现；防御性兜底，避免调用方拿到 null 继续写库。
+      throw new BadRequestException('配方评估未完成，无法继续');
+    }
+    return assessment;
+  }
+
+  private assertLaunchReadinessReady(readiness: DraftLaunchReadiness): void {
+    if (readiness.ready) {
+      return;
+    }
+    throw new BadRequestException(
+      readiness.blockers.map((blocker) => blocker.message).join('；'),
+    );
+  }
+
+  private toLaunchReadinessAssessmentSnapshot(
+    assessment: DesignRecipeAssessmentResult,
+  ): LaunchReadinessAssessmentSnapshot {
+    return {
+      totalWeightG: assessment.totalWeightG,
+      energyDensityKcalPerKg: assessment.energyDensityKcalPerKg,
+      overallStatus: assessment.overallStatus,
+      deficientCount: assessment.summary.deficient,
+      excessCount: assessment.summary.excess,
+      missingDataCount: assessment.summary.missingData,
+      dataGaps: assessment.dataGaps.map((gap) => ({
+        itemId: gap.itemId,
+        itemName: gap.itemName,
+        fieldPath: gap.fieldPath,
+        fieldLabel: gap.fieldLabel,
+      })),
+    };
+  }
+
+  private resolveLaunchReadinessErrorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
   }
 
   private buildPublishedNutritionReport(

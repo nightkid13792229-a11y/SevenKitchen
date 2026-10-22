@@ -74,6 +74,18 @@ describe('classifyCookingMethod', () => {
     expect(classifyCookingMethod('hard-boiled')).toBe('BOILED');
   });
 
+  it('covers cooking-method stems in veto keywords', () => {
+    expect(classifyCookingMethod('boiled then pan-fry')).toBe('FRIED');
+    expect(classifyCookingMethod('boiled then grill')).toBe('GRILLED');
+    expect(classifyCookingMethod('steamed then broil')).toBe('GRILLED');
+    expect(classifyCookingMethod('水煮后炸')).toBe('FRIED');
+  });
+
+  it('recognizes Chinese boiled and steamed wording', () => {
+    expect(classifyCookingMethod('清蒸鱼')).toBe('STEAMED');
+    expect(classifyCookingMethod('煮鸡胸')).toBe('BOILED');
+  });
+
   it('classifies fried sources to FRIED', () => {
     expect(classifyCookingMethod('fried')).toBe('FRIED');
     expect(classifyCookingMethod('pan-fried')).toBe('FRIED');
@@ -121,6 +133,32 @@ describe('isCookedSourceAcceptable', () => {
         false,
       );
     }
+  });
+
+  it('rejects stemmed veto sources but accepts Chinese gentle wording', () => {
+    const vetoedSources = [
+      'boiled then pan-fry',
+      'boiled then grill',
+      'steamed then broil',
+      '水煮后炸',
+    ];
+
+    for (const source of vetoedSources) {
+      expect(isCookedSourceAcceptable(classifyCookingMethod(source))).toBe(
+        false,
+      );
+    }
+
+    expect(isCookedSourceAcceptable(classifyCookingMethod('清蒸鱼'))).toBe(
+      true,
+    );
+    expect(isCookedSourceAcceptable(classifyCookingMethod('煮鸡胸'))).toBe(
+      true,
+    );
+    // 否决优先的回归：中文“蒸”加入后，蒸し焼き 仍必须判为烤
+    expect(isCookedSourceAcceptable(classifyCookingMethod('蒸し焼き'))).toBe(
+      false,
+    );
   });
 });
 

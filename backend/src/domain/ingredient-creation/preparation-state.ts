@@ -50,12 +50,36 @@ type CookingMethodKeyword = string | RegExp;
 /**
  * 否决项：烤 / 煎。必须先扫这一组——同一段原文里既提到水煮 / 蒸又提到烤 / 煎时，
  * 以烤 / 煎为准（如 `蒸し焼き`、`boiled & fried`），否则熟食来源会被误放行。
+ *
+ * 英文覆盖词干（`grill/grilling`、`pan-fry`、`deep-frying` 等），
+ * 中文 / 日文覆盖 `焼`、`烤`、`炸`、`フライ` 等写法；否决项宁多勿漏。
  */
 const VETOED_COOKING_METHOD_KEYWORDS: ReadonlyArray<
   readonly [CookingMethod, readonly CookingMethodKeyword[]]
 > = [
-  ['GRILLED', [/\bbroiled\b/, /\bgrilled\b/, /\broast(?:ed)?\b/, '焼き', '烤']],
-  ['FRIED', [/\bfried\b/, '揚げ', '煎']],
+  [
+    'GRILLED',
+    [
+      /\bgrill(?:ed|ing|s)?\b/,
+      /\bbroil(?:ed|ing|s)?\b/,
+      /\broast(?:ed|ing)?\b/,
+      '焼き',
+      '焼',
+      '烤',
+    ],
+  ],
+  [
+    'FRIED',
+    [
+      /\bpan[-\s]?fr(?:y|ied|ying)\b/,
+      /\bdeep[-\s]?fr(?:y|ied|ying)\b/,
+      /\bfr(?:y|ied|ying)\b/,
+      '炸',
+      'フライ',
+      '揚げ',
+      '煎',
+    ],
+  ],
 ];
 
 /**
@@ -63,12 +87,13 @@ const VETOED_COOKING_METHOD_KEYWORDS: ReadonlyArray<
  *
  * 拉丁关键词用词边界匹配（`parboiled`、`unfried` 不算）；
  * `par-boiled` 的 `par-` 是「半煮」，用负向断言排除，`hard-boiled` 仍能命中。
+ * 中文 / 日文补单字 `煮`、`蒸`（覆盖 `煮鸡胸`、`清蒸鱼` 这类来源原文）。
  */
 const GENTLE_COOKING_METHOD_KEYWORDS: ReadonlyArray<
   readonly [CookingMethod, readonly CookingMethodKeyword[]]
 > = [
-  ['BOILED', [/(?<!par[-\s])\bboiled\b/, 'ゆで', '茹で', '水煮']],
-  ['STEAMED', [/\bsteam(?:ed)?\b/, '蒸し']],
+  ['BOILED', [/(?<!par[-\s])\bboiled\b/, '煮', '水煮', 'ゆで', '茹で']],
+  ['STEAMED', [/\bsteam(?:ed)?\b/, '蒸', '蒸し']],
 ];
 
 function containsCookingKeyword(

@@ -366,6 +366,49 @@ export class UpdateRecipeDesignDraftDto {
   notes?: string | null;
 }
 
+/** 产品展示字段长度限制（与数据库 VarChar 定义保持一致）。 */
+export const RECIPE_PRESENTATION_LIMITS = {
+  coverTitle: 20,
+  sellingPoint: 200,
+  description: 4000,
+} as const;
+
+/**
+ * 草稿产品展示（2026-10-22）。
+ *
+ * 全部字段可选，patch semantics：没传的字段保持原值，显式 null 表示清空。
+ * 长度限制在这里拦住明显超限的请求，服务端保存时再统一 +1 contentRevision。
+ */
+export class UpdateRecipeDesignPresentationDto {
+  @IsOptional()
+  @IsString()
+  coverImageUrl?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(RECIPE_PRESENTATION_LIMITS.coverTitle)
+  coverTitle?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(RECIPE_PRESENTATION_LIMITS.description)
+  description?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(RECIPE_PRESENTATION_LIMITS.sellingPoint)
+  sellingPoint?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  detailImages?: string[] | null;
+
+  @IsOptional()
+  @IsString()
+  videoUrl?: string | null;
+}
+
 /**
  * 补剂目标营养素（2026-10-22 · Task 3）。
  *

@@ -3947,6 +3947,18 @@ model DesignRecipe {
   targetHealthTags       String[]                      @default([]) @map("target_health_tags")
   applicableLifeStages   String[]                      @default([]) @map("applicable_life_stages")
   notes                  String?                       @map("notes")
+  /// 产品展示：封面图（发布 / 加入待提交前必填）
+  coverImageUrl          String?                       @map("cover_image_url")
+  /// 产品展示：封面标题（最多 20 个字符）
+  coverTitle             String?                       @map("cover_title") @db.VarChar(20)
+  /// 产品展示：详情描述
+  description            String?                       @map("description")
+  /// 产品展示：一句话卖点（合规文案，最多 200 个字符）
+  sellingPoint           String?                       @map("selling_point") @db.VarChar(200)
+  /// 产品展示：详情图 URL 数组
+  detailImages           Json?                         @map("detail_images")
+  /// 产品展示：视频 URL
+  videoUrl               String?                       @map("video_url")
   /// 结构化的制作步骤（顺序流程：操作说明 + 可选时间/温度/设备）
   productionStepsJson    Json?                         @map("production_steps_json")
   /// 最近一次持久化的完整营养报告（发布口径的 report 对象）

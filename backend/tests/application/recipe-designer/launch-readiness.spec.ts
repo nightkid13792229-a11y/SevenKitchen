@@ -147,9 +147,15 @@ function designDraft(overrides: Record<string, unknown> = {}) {
     nutritionStandard: 'FEDIAF_2025',
     energyDensityKcalPerKg: 955,
     totalWeightG: 100,
-    targetHealthTags: [],
-    applicableLifeStages: [],
+    targetHealthTags: ['JOINT'],
+    applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
     notes: null,
+    coverImageUrl: 'https://img.example.com/cover.jpg',
+    coverTitle: '鸡肉成犬',
+    description: '鲜鸡肉为主料，适合成犬日常维持。',
+    sellingPoint: '鲜肉低敏，日常维持',
+    detailImages: ['https://img.example.com/detail.jpg'],
+    videoUrl: null,
     productionStepsJson: [
       {
         sortOrder: 1,
@@ -180,6 +186,8 @@ function designDraft(overrides: Record<string, unknown> = {}) {
       name: '鸡肉成犬配方',
       referenceDogId: 'dog-1',
       designMode: 'CATALOG',
+      orderId: null,
+      orderQuantity: null,
     },
     items: [foodItem()],
     ...overrides,
@@ -299,6 +307,8 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
         name: '鸡肉成犬配方',
         referenceDogId: 'dog-1',
         designMode: 'ORDER',
+        orderId: 'order-1',
+        orderQuantity: 2,
       },
       items: [foodItem(), supplementItem()],
     });
@@ -576,6 +586,131 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
     );
   });
 
+  it('blocks catalog drafts without presentation or catalog copy', async () => {
+    const readiness = await readinessFor({
+      coverImageUrl: null,
+      coverTitle: '   ',
+      description: null,
+      sellingPoint: '',
+      applicableLifeStages: [],
+      targetHealthTags: [],
+    });
+
+    expect(readiness.ready).toBe(false);
+    expect(readiness.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'COVER_IMAGE_REQUIRED',
+          scope: 'PRESENTATION',
+          field: 'coverImageUrl',
+        }),
+        expect.objectContaining({
+          code: 'COVER_TITLE_REQUIRED',
+          scope: 'PRESENTATION',
+          field: 'coverTitle',
+        }),
+        expect.objectContaining({
+          code: 'DESCRIPTION_REQUIRED',
+          scope: 'CATALOG',
+          field: 'description',
+        }),
+        expect.objectContaining({
+          code: 'SELLING_POINT_REQUIRED',
+          scope: 'CATALOG',
+          field: 'sellingPoint',
+        }),
+        expect.objectContaining({
+          code: 'APPLICABLE_LIFE_STAGES_REQUIRED',
+          scope: 'CATALOG',
+          field: 'applicableLifeStages',
+        }),
+      ]),
+    );
+    expect(readiness.warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'TARGET_HEALTH_TAGS_MISSING',
+          scope: 'CATALOG',
+          field: 'targetHealthTags',
+        }),
+      ]),
+    );
+  });
+
+  it('blocks order designs without order context but does not require catalog copy', async () => {
+    const readiness = await readinessFor({
+      description: null,
+      sellingPoint: null,
+      applicableLifeStages: [],
+      customerDogId: null,
+      series: {
+        id: 'series-1',
+        name: '鸡肉成犬配方',
+        referenceDogId: null,
+        designMode: 'ORDER',
+        orderId: '   ',
+        orderQuantity: 0,
+      },
+    });
+
+    expect(readiness.ready).toBe(false);
+    expect(readiness.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'ORDER_ID_REQUIRED',
+          scope: 'ORDER',
+          field: 'series.orderId',
+        }),
+        expect.objectContaining({
+          code: 'ORDER_QUANTITY_INVALID',
+          scope: 'ORDER',
+          field: 'series.orderQuantity',
+        }),
+        expect.objectContaining({
+          code: 'CUSTOMER_DOG_REQUIRED',
+          scope: 'ORDER',
+          field: 'customerDogId',
+        }),
+      ]),
+    );
+    expect(
+      readiness.blockers.some((blocker) => blocker.scope === 'CATALOG'),
+    ).toBe(false);
+  });
+
+  it('keeps common warning codes unique when catalog checks add a warning', async () => {
+    targetProvider.getTargets.mockResolvedValue([
+      {
+        nutrientKey: 'calcium',
+        label: '钙',
+        category: 'MINERAL',
+        expressionBasis: 'PER_1000_KCAL_ME',
+        unit: 'mg',
+        minValue: 99999,
+        maxValue: null,
+        fieldPaths: ['minerals.calcium'],
+      },
+    ]);
+
+    const readiness = await readinessFor({ targetHealthTags: [] });
+
+    const warningCodes = readiness.warnings.map((warning) => warning.code);
+    expect(new Set(warningCodes).size).toBe(warningCodes.length);
+    expect(readiness.warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'REVIEW_REQUIRED', scope: 'COMMON' }),
+        expect.objectContaining({
+          code: 'NUTRIENT_OUT_OF_RANGE',
+          scope: 'COMMON',
+        }),
+        expect.objectContaining({
+          code: 'TARGET_HEALTH_TAGS_MISSING',
+          scope: 'CATALOG',
+        }),
+      ]),
+    );
+  });
+
   it('summarizes persisted report state without generating a report on readiness', async () => {
     const readiness = await readinessFor({ nutritionReportJson: null });
 
@@ -631,6 +766,19 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
     expect(prisma.designRecipePublishSnapshot.create).not.toHaveBeenCalled();
   });
 
+  it('enforces presentation blockers in publishDraft before creating a recipe', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      designDraft({ coverImageUrl: null, coverTitle: null }),
+    );
+
+    await expect(
+      service.publishDraft('draft-1', { name: '鸡肉成犬配方' }, ADMIN_ACCESS),
+    ).rejects.toThrow('请上传封面图后再发布或加入待提交');
+
+    expect(prisma.recipe.create).not.toHaveBeenCalled();
+    expect(prisma.designRecipePublishSnapshot.create).not.toHaveBeenCalled();
+  });
+
   it('enforces report failure in publishDraft as a blocker', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(designDraft());
     jest
@@ -653,6 +801,8 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
           name: '鸡肉成犬配方',
           referenceDogId: 'dog-1',
           designMode: 'ORDER',
+          orderId: 'order-1',
+          orderQuantity: 2,
         },
       }),
     );

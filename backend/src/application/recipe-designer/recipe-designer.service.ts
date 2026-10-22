@@ -84,10 +84,14 @@ import type {
   ReorderRecipeDesignItemsDto,
   UpdateDogDesignNotesDto,
   UpdateRecipeDesignDraftDto,
+  UpdateRecipeDesignPresentationDto,
   UpdateRecipeDesignItemDto,
   UpdateRecipeProductionStepsDto,
 } from '../../interfaces/dto/recipe-designer/recipe-designer.dto';
-import { RECIPE_PREPARATION_NOTE_MAX_LENGTH } from '../../interfaces/dto/recipe-designer/recipe-designer.dto';
+import {
+  RECIPE_PREPARATION_NOTE_MAX_LENGTH,
+  RECIPE_PRESENTATION_LIMITS,
+} from '../../interfaces/dto/recipe-designer/recipe-designer.dto';
 import {
   readProductionSteps,
   validateProductionSteps,
@@ -177,8 +181,11 @@ const DESIGN_RECIPE_INCLUDE = {
       id: true,
       name: true,
       referenceDogId: true,
-      // 发布门槛需要区分产品线（CATALOG）与订单绑定（ORDER）设计
+      // 发布门槛需要区分产品线（CATALOG）与订单绑定（ORDER）设计，
+      // 订单分支还要核对系列上的订单号 / 本单份数。
       designMode: true,
+      orderId: true,
+      orderQuantity: true,
     },
   },
   items: {
@@ -219,6 +226,18 @@ const DESIGN_RECIPE_INCLUDE = {
     orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }],
   },
 };
+
+/** 产品展示保存只回传这些字段，避免把整份草稿（含原料明细）再塞回响应。 */
+const DRAFT_PRESENTATION_SELECT = {
+  id: true,
+  contentRevision: true,
+  coverImageUrl: true,
+  coverTitle: true,
+  description: true,
+  sellingPoint: true,
+  detailImages: true,
+  videoUrl: true,
+} satisfies Prisma.DesignRecipeSelect;
 
 const DESIGN_RECIPE_ITEM_CLIENT_INGREDIENT_SELECT = {
   id: true,
@@ -292,6 +311,12 @@ const DESIGN_RECIPE_LIST_SELECT = {
   targetHealthTags: true,
   applicableLifeStages: true,
   notes: true,
+  coverImageUrl: true,
+  coverTitle: true,
+  description: true,
+  sellingPoint: true,
+  detailImages: true,
+  videoUrl: true,
   createdBy: true,
   publishedAt: true,
   publishedRecipeId: true,
@@ -449,6 +474,18 @@ type DesignRecipeWithItems = {
   targetHealthTags: string[];
   applicableLifeStages: string[];
   notes: string | null;
+  /** 产品展示：封面图（发布 / 加入待提交前必填） */
+  coverImageUrl?: string | null;
+  /** 产品展示：封面标题（最多 20 个字符） */
+  coverTitle?: string | null;
+  /** 产品展示：详情描述 */
+  description?: string | null;
+  /** 产品展示：一句话卖点（最多 200 个字符） */
+  sellingPoint?: string | null;
+  /** 产品展示：详情图 URL 数组 */
+  detailImages?: Prisma.JsonValue | null;
+  /** 产品展示：视频 URL */
+  videoUrl?: string | null;
   /** 结构化制作步骤（JSON 数组）；历史草稿可能为 null */
   productionStepsJson?: unknown;
   /** 最近一次持久化的营养报告（发布口径 report 对象）；未生成过为 null */
@@ -470,6 +507,9 @@ type DesignRecipeWithItems = {
     name: string;
     referenceDogId?: string | null;
     designMode?: string | null;
+    /** 订单设计上下文（产品线设计为 null） */
+    orderId?: string | null;
+    orderQuantity?: number | null;
   } | null;
   isCompliant: boolean;
   reviewStatus: string;
@@ -495,6 +535,18 @@ type DraftNutritionReportSnapshot = {
   stale: boolean;
   /** 发布口径的 report 对象；从未生成过为 null */
   report: unknown;
+};
+
+/** PATCH 产品展示后的响应：只含展示字段 + 新的内容版本。 */
+type DraftPresentationSnapshot = {
+  draftId: string;
+  contentRevision: number;
+  coverImageUrl: string | null;
+  coverTitle: string | null;
+  description: string | null;
+  sellingPoint: string | null;
+  detailImages: Prisma.JsonValue | null;
+  videoUrl: string | null;
 };
 
 type DesignRecipeItemWithFood = {
@@ -4904,6 +4956,141 @@ export class RecipeDesignerService {
     });
   }
 
+  /**
+   * 保存草稿的产品展示素材（2026-10-22）。
+   *
+   * - 权限与草稿详情完全一致（复用 `getDraft`）：顾客只能改自己的草稿，
+   *   内部员工之间可以互相维护；
+   * - patch semantics：只有请求里出现的字段才写库，显式 null 表示清空；
+   * - 任意展示字段变化都让 contentRevision +1，已持久化营养报告随即过期；
+   * - 只回传展示字段与新的 contentRevision，前端不必再拉整份草稿。
+   */
+  async updateDraftPresentation(
+    id: string,
+    dto: UpdateRecipeDesignPresentationDto,
+    access: RecipeDesignerAccessInput,
+  ): Promise<DraftPresentationSnapshot> {
+    const draft = await this.getDraft(id, access);
+    this.validateDraftPresentation(dto);
+
+    const data: Prisma.DesignRecipeUpdateInput = {};
+    if (dto.coverImageUrl !== undefined) {
+      data.coverImageUrl = dto.coverImageUrl;
+    }
+    if (dto.coverTitle !== undefined) {
+      data.coverTitle = dto.coverTitle;
+    }
+    if (dto.description !== undefined) {
+      data.description = dto.description;
+    }
+    if (dto.sellingPoint !== undefined) {
+      data.sellingPoint = dto.sellingPoint;
+    }
+    if (dto.detailImages !== undefined) {
+      data.detailImages =
+        dto.detailImages === null
+          ? Prisma.DbNull
+          : this.toJsonValue(dto.detailImages);
+    }
+    if (dto.videoUrl !== undefined) {
+      data.videoUrl = dto.videoUrl;
+    }
+
+    // 空 patch 不产生新版本，避免无意义地让报告过期。
+    if (Object.keys(data).length === 0) {
+      return this.toDraftPresentationSnapshot(draft);
+    }
+
+    const updated = await this.prisma.designRecipe.update({
+      where: { id: draft.id },
+      data: {
+        ...data,
+        contentRevision: { increment: 1 },
+      },
+      select: DRAFT_PRESENTATION_SELECT,
+    });
+
+    return this.toDraftPresentationSnapshot(updated);
+  }
+
+  /**
+   * DTO 已经拦过一轮；这里再校验一次是因为服务方法也可能被内部调用，
+   * 不能把超长文本或非字符串数组直接写进库（VarChar 会抛数据库错误）。
+   */
+  private validateDraftPresentation(
+    dto: UpdateRecipeDesignPresentationDto,
+  ): void {
+    if (
+      dto.coverImageUrl !== undefined &&
+      dto.coverImageUrl !== null &&
+      typeof dto.coverImageUrl !== 'string'
+    ) {
+      throw new BadRequestException('封面图地址必须是字符串');
+    }
+    if (
+      dto.videoUrl !== undefined &&
+      dto.videoUrl !== null &&
+      typeof dto.videoUrl !== 'string'
+    ) {
+      throw new BadRequestException('视频地址必须是字符串');
+    }
+    if (
+      typeof dto.coverTitle === 'string' &&
+      dto.coverTitle.length > RECIPE_PRESENTATION_LIMITS.coverTitle
+    ) {
+      throw new BadRequestException(
+        `封面标题不能超过${RECIPE_PRESENTATION_LIMITS.coverTitle}个字符`,
+      );
+    }
+    if (
+      typeof dto.sellingPoint === 'string' &&
+      dto.sellingPoint.length > RECIPE_PRESENTATION_LIMITS.sellingPoint
+    ) {
+      throw new BadRequestException(
+        `一句话卖点不能超过${RECIPE_PRESENTATION_LIMITS.sellingPoint}个字符`,
+      );
+    }
+    if (
+      typeof dto.description === 'string' &&
+      dto.description.length > RECIPE_PRESENTATION_LIMITS.description
+    ) {
+      throw new BadRequestException(
+        `详情描述不能超过${RECIPE_PRESENTATION_LIMITS.description}个字符`,
+      );
+    }
+    if (dto.detailImages !== undefined && dto.detailImages !== null) {
+      const images: unknown[] = dto.detailImages;
+      if (
+        !Array.isArray(images) ||
+        images.some((image) => typeof image !== 'string')
+      ) {
+        throw new BadRequestException('详情图必须是字符串数组');
+      }
+    }
+  }
+
+  private toDraftPresentationSnapshot(draft: {
+    id: string;
+    contentRevision: number;
+    coverImageUrl?: string | null;
+    coverTitle?: string | null;
+    description?: string | null;
+    sellingPoint?: string | null;
+    detailImages?: Prisma.JsonValue | null;
+    videoUrl?: string | null;
+  }): DraftPresentationSnapshot {
+    return {
+      draftId: draft.id,
+      contentRevision: draft.contentRevision,
+      coverImageUrl: draft.coverImageUrl ?? null,
+      coverTitle: draft.coverTitle ?? null,
+      description: draft.description ?? null,
+      sellingPoint: draft.sellingPoint ?? null,
+      detailImages: draft.detailImages ?? null,
+      videoUrl: draft.videoUrl ?? null,
+    };
+  }
+
   async deleteDraft(id: string, access: RecipeDesignerAccessInput) {
     const context = normalizeRecipeDesignerAccessContext(access);
     const draft = await this.prisma.designRecipe.findUnique({
@@ -7699,6 +7886,19 @@ export class RecipeDesignerService {
       reportGenerated,
       reportStale,
       reportError,
+      presentation: {
+        coverImageUrl: draft.coverImageUrl,
+        coverTitle: draft.coverTitle,
+        description: draft.description,
+        sellingPoint: draft.sellingPoint,
+        applicableLifeStages: draft.applicableLifeStages,
+        targetHealthTags: draft.targetHealthTags,
+      },
+      order: {
+        orderId: draft.series?.orderId,
+        orderQuantity: draft.series?.orderQuantity,
+        customerDogId: draft.customerDogId,
+      },
     });
 
     return { readiness, assessment };

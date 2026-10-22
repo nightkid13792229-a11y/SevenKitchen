@@ -157,9 +157,15 @@ function designDraft(overrides: Record<string, unknown> = {}) {
     nutritionStandard: 'FEDIAF_2025',
     totalWeightG: 5000,
     energyDensityKcalPerKg: 1176,
-    targetHealthTags: [],
-    applicableLifeStages: [],
+    targetHealthTags: ['JOINT'],
+    applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
     notes: null,
+    coverImageUrl: 'https://img.example.com/cover.jpg',
+    coverTitle: '纤维补剂食谱',
+    description: '纤维补剂展示描述',
+    sellingPoint: '膳食纤维补充',
+    detailImages: ['https://img.example.com/detail.jpg'],
+    videoUrl: null,
     // 发布门槛要求至少一个有效制作步骤
     productionStepsJson: [
       {

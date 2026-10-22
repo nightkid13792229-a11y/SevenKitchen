@@ -28,7 +28,21 @@
  *    `preparationNote` 只是补充说明，不能替代预处理方式。
  *  · **制作步骤**：结构化步骤里至少有一条有效步骤，否则不能发布 / 加入待提交。
  *  · **评估未完全合规**：只是提醒（发布时仍需审核说明），不是硬阻断。
+ *
+ * 产品展示与设计分支（2026-10-22）：
+ *  · 产品线（CATALOG）与订单绑定（ORDER）都必须先完成产品展示：
+ *    封面图 + 封面标题；
+ *  · CATALOG 额外要求描述 / 一句话卖点 / 适用生命阶段，目标健康标签只提醒；
+ *  · ORDER 额外要求系列上的订单号 / 本单份数，以及草稿绑定的顾客爱犬；
+ *  · 公共营养提醒只出现一次（scope=COMMON），分支检查不得重复添加。
  */
+
+/** 问题归属：公共门槛 / 产品展示 / 产品线分支 / 订单分支 */
+export type LaunchReadinessScope =
+  | 'COMMON'
+  | 'PRESENTATION'
+  | 'CATALOG'
+  | 'ORDER';
 
 export type LaunchReadinessBlockerCode =
   | 'NAME_REQUIRED'
@@ -39,16 +53,27 @@ export type LaunchReadinessBlockerCode =
   | 'NUTRITION_REPORT_UNAVAILABLE'
   | 'SUPPLEMENT_TARGETS_REQUIRED'
   | 'PREPARATION_METHOD_REQUIRED'
-  | 'PRODUCTION_STEPS_REQUIRED';
+  | 'PRODUCTION_STEPS_REQUIRED'
+  | 'COVER_IMAGE_REQUIRED'
+  | 'COVER_TITLE_REQUIRED'
+  | 'DESCRIPTION_REQUIRED'
+  | 'SELLING_POINT_REQUIRED'
+  | 'APPLICABLE_LIFE_STAGES_REQUIRED'
+  | 'ORDER_ID_REQUIRED'
+  | 'ORDER_QUANTITY_INVALID'
+  | 'CUSTOMER_DOG_REQUIRED';
 
 export type LaunchReadinessWarningCode =
   | 'REVIEW_REQUIRED'
   | 'MISSING_NUTRITION_DATA'
-  | 'NUTRIENT_OUT_OF_RANGE';
+  | 'NUTRIENT_OUT_OF_RANGE'
+  | 'TARGET_HEALTH_TAGS_MISSING';
 
 export interface LaunchReadinessIssue<TCode extends string = string> {
   code: TCode;
   message: string;
+  /** 问题归属；旧客户端可忽略，后台可据此分组展示 */
+  scope?: LaunchReadinessScope;
   /** 相关原料项 id（整份草稿级别的问题没有这个字段） */
   itemId?: string;
   /** 相关字段路径 / 字段名（便于后台定位） */
@@ -123,6 +148,23 @@ export interface LaunchReadinessAssessmentSnapshot {
   }>;
 }
 
+/** 草稿上的产品展示字段（发布 / 加入待提交前统一检查）。 */
+export interface LaunchReadinessPresentationInput {
+  coverImageUrl?: string | null;
+  coverTitle?: string | null;
+  description?: string | null;
+  sellingPoint?: string | null;
+  applicableLifeStages?: string[] | null;
+  targetHealthTags?: string[] | null;
+}
+
+/** 订单分支上下文：订单号 / 本单份数在系列上，顾客爱犬在草稿上。 */
+export interface LaunchReadinessOrderInput {
+  orderId?: string | null;
+  orderQuantity?: number | null;
+  customerDogId?: string | null;
+}
+
 export interface BuildDraftLaunchReadinessInput {
   draftId: string;
   designMode: string;
@@ -136,6 +178,8 @@ export interface BuildDraftLaunchReadinessInput {
   reportGenerated?: boolean;
   reportStale?: boolean;
   reportError?: string | null;
+  presentation?: LaunchReadinessPresentationInput | null;
+  order?: LaunchReadinessOrderInput | null;
 }
 
 const normalizeText = (value: unknown): string =>
@@ -194,6 +238,7 @@ export const buildDraftLaunchReadiness = (
   if (!normalizeText(input.name)) {
     blockers.push({
       code: 'NAME_REQUIRED',
+      scope: 'COMMON',
       message: '请填写食谱名称（系列名称或草稿名称）',
       field: 'name',
     });
@@ -202,6 +247,7 @@ export const buildDraftLaunchReadiness = (
   if (includedItems.length === 0) {
     blockers.push({
       code: 'NO_INCLUDED_ITEMS',
+      scope: 'COMMON',
       message: '请至少添加一个参与评估的食材',
       field: 'items',
     });
@@ -211,6 +257,7 @@ export const buildDraftLaunchReadiness = (
     if (!hasPreparationMethod(item.preparationMethod)) {
       blockers.push({
         code: 'PREPARATION_METHOD_REQUIRED',
+        scope: 'COMMON',
         message: `食材「${item.name}」未填写预处理方式，不能发布或加入待提交`,
         itemId: item.id,
         field: 'preparationMethod',
@@ -223,6 +270,7 @@ export const buildDraftLaunchReadiness = (
     ) {
       blockers.push({
         code: 'SUPPLEMENT_TARGETS_REQUIRED',
+        scope: 'COMMON',
         message: `补剂「${item.name}」未填写有效的补剂目标：需要至少一条包含 fieldPath 且每 kg 目标值大于 0 的 supplementTargets`,
         itemId: item.id,
         field: 'supplementTargets',
@@ -234,6 +282,7 @@ export const buildDraftLaunchReadiness = (
   if (!assessment) {
     blockers.push({
       code: 'ASSESSMENT_UNAVAILABLE',
+      scope: 'COMMON',
       message: `配方评估未完成，无法判断是否可发布${
         input.assessmentError ? `：${input.assessmentError}` : ''
       }`,
@@ -243,6 +292,7 @@ export const buildDraftLaunchReadiness = (
     if (!isPositiveFiniteNumber(assessment.totalWeightG)) {
       blockers.push({
         code: 'TOTAL_WEIGHT_INVALID',
+        scope: 'COMMON',
         message: '配方总重量必须大于 0，请先确认各食材用量',
         field: 'totalWeightG',
       });
@@ -252,6 +302,7 @@ export const buildDraftLaunchReadiness = (
     if (!isPositiveFiniteNumber(energyDensity)) {
       blockers.push({
         code: 'ENERGY_DENSITY_INVALID',
+        scope: 'COMMON',
         message: '能量密度缺失或为 0，无法生成完整营养报告',
         field: 'energyDensityKcalPerKg',
       });
@@ -259,6 +310,7 @@ export const buildDraftLaunchReadiness = (
       // 能量算得出来、报告却构建失败：这是真正的报告阻断，需要人工排查。
       blockers.push({
         code: 'NUTRITION_REPORT_UNAVAILABLE',
+        scope: 'COMMON',
         message: `完整营养报告生成失败${
           input.reportError ? `：${input.reportError}` : ''
         }`,
@@ -270,15 +322,100 @@ export const buildDraftLaunchReadiness = (
   if (input.productionStepCount <= 0) {
     blockers.push({
       code: 'PRODUCTION_STEPS_REQUIRED',
+      scope: 'COMMON',
       message: '请至少填写一个制作步骤',
       field: 'productionStepsJson',
     });
+  }
+
+  /**
+   * 产品展示：产品线与订单绑定都要求封面图 + 封面标题。
+   * 只读草稿上已保存的值，不替用户生成或猜测。
+   */
+  const presentation = input.presentation ?? {};
+  if (!normalizeText(presentation.coverImageUrl)) {
+    blockers.push({
+      code: 'COVER_IMAGE_REQUIRED',
+      scope: 'PRESENTATION',
+      message: '请上传封面图后再发布或加入待提交',
+      field: 'coverImageUrl',
+    });
+  }
+  if (!normalizeText(presentation.coverTitle)) {
+    blockers.push({
+      code: 'COVER_TITLE_REQUIRED',
+      scope: 'PRESENTATION',
+      message: '请填写封面标题（最多 20 个字符）',
+      field: 'coverTitle',
+    });
+  }
+
+  const isOrderDesign = input.designMode === 'ORDER';
+  if (isOrderDesign) {
+    /** 订单绑定设计：必须能追溯到订单、本单份数与顾客爱犬。 */
+    const order = input.order ?? {};
+    if (!normalizeText(order.orderId)) {
+      blockers.push({
+        code: 'ORDER_ID_REQUIRED',
+        scope: 'ORDER',
+        message: '订单设计未绑定订单，请从订单重新打开设计',
+        field: 'series.orderId',
+      });
+    }
+    if (!isPositiveFiniteNumber(order.orderQuantity)) {
+      blockers.push({
+        code: 'ORDER_QUANTITY_INVALID',
+        scope: 'ORDER',
+        message: '订单份数缺失或无效，请重新打开订单设计',
+        field: 'series.orderQuantity',
+      });
+    }
+    if (!normalizeText(order.customerDogId)) {
+      blockers.push({
+        code: 'CUSTOMER_DOG_REQUIRED',
+        scope: 'ORDER',
+        message: '订单设计未绑定顾客爱犬，请从订单重新打开设计',
+        field: 'customerDogId',
+      });
+    }
+  } else {
+    /** 产品线上架文案：描述 / 卖点 / 适用生命阶段是硬条件。 */
+    if (!normalizeText(presentation.description)) {
+      blockers.push({
+        code: 'DESCRIPTION_REQUIRED',
+        scope: 'CATALOG',
+        message: '请填写食谱详情描述',
+        field: 'description',
+      });
+    }
+    if (!normalizeText(presentation.sellingPoint)) {
+      blockers.push({
+        code: 'SELLING_POINT_REQUIRED',
+        scope: 'CATALOG',
+        message: '请填写一句话卖点（最多 200 个字符）',
+        field: 'sellingPoint',
+      });
+    }
+    const applicableLifeStages = Array.isArray(presentation.applicableLifeStages)
+      ? presentation.applicableLifeStages.filter((stage) =>
+          normalizeText(stage),
+        )
+      : [];
+    if (applicableLifeStages.length === 0) {
+      blockers.push({
+        code: 'APPLICABLE_LIFE_STAGES_REQUIRED',
+        scope: 'CATALOG',
+        message: '请至少选择一个适用生命阶段',
+        field: 'applicableLifeStages',
+      });
+    }
   }
 
   if (assessment) {
     if (assessment.overallStatus !== 'COMPLIANT') {
       warnings.push({
         code: 'REVIEW_REQUIRED',
+        scope: 'COMMON',
         message:
           input.designMode === 'ORDER'
             ? `配方评估未完全合规（${assessment.overallStatus}），请复核后再加入待提交`
@@ -295,6 +432,7 @@ export const buildDraftLaunchReadiness = (
       ];
       warnings.push({
         code: 'MISSING_NUTRITION_DATA',
+        scope: 'COMMON',
         message: `有 ${assessment.missingDataCount} 项营养数据缺失${
           gapLabels.length > 0
             ? `（${gapLabels.slice(0, 3).join('、')}${
@@ -310,8 +448,27 @@ export const buildDraftLaunchReadiness = (
     if (outOfRangeCount > 0) {
       warnings.push({
         code: 'NUTRIENT_OUT_OF_RANGE',
+        scope: 'COMMON',
         message: `有 ${assessment.deficientCount} 项营养不足、${assessment.excessCount} 项超标；报告仍可生成，发布前请复核`,
         field: 'nutrition',
+      });
+    }
+  }
+
+  /**
+   * 产品线健康标签只提醒：没有标签仍可上线，但顾客无法按健康需求筛到它。
+   * 订单定制不面向货架筛选，不提示这一项。
+   */
+  if (!isOrderDesign) {
+    const targetHealthTags = Array.isArray(presentation.targetHealthTags)
+      ? presentation.targetHealthTags.filter((tag) => normalizeText(tag))
+      : [];
+    if (targetHealthTags.length === 0) {
+      warnings.push({
+        code: 'TARGET_HEALTH_TAGS_MISSING',
+        scope: 'CATALOG',
+        message: '未设置目标健康标签，上线后顾客无法按健康需求筛选到这道食谱',
+        field: 'targetHealthTags',
       });
     }
   }

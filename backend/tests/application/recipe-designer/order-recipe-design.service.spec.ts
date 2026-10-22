@@ -1109,6 +1109,12 @@ describe('RecipeDesignerService · publishOrderDesignSlot', () => {
       targetHealthTags: [],
       applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
       notes: null,
+      coverImageUrl: 'https://img.example.com/cover.jpg',
+      coverTitle: 'Foxy定制',
+      description: '订单定制展示描述',
+      sellingPoint: '为本单定制',
+      detailImages: ['https://img.example.com/detail.jpg'],
+      videoUrl: null,
       createdBy: 'staff-1',
       publishedAt: null,
       publishedRecipeId: null,
@@ -1123,6 +1129,8 @@ describe('RecipeDesignerService · publishOrderDesignSlot', () => {
         name: 'Foxy定制 · 鸡肉南瓜',
         referenceDogId: 'dog-1',
         designMode: 'ORDER',
+        orderId: 'order-1',
+        orderQuantity: 2,
       },
       productionStepsJson: [
         {

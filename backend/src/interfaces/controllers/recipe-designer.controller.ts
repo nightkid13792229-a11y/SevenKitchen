@@ -53,6 +53,7 @@ import {
   UpdateDogDesignNotesDto,
   UpdateRecipeDesignItemOrderDto,
   UpdateRecipeDesignDraftDto,
+  UpdateRecipeDesignPresentationDto,
   UpdateRecipeDesignItemDto,
   UpdateRecipeProductionStepsDto,
 } from '../dto/recipe-designer/recipe-designer.dto';
@@ -494,6 +495,24 @@ export class RecipeDesignerController {
       toRecipeDesignerAccessContext(user),
     );
     return ApiResponseDto.success(draft);
+  }
+
+  @Patch('drafts/:id/presentation')
+  @ApiOperation({
+    summary: 'Patch the product presentation fields of a draft',
+  })
+  async updateDraftPresentation(
+    @Param('id') id: string,
+    @Body() dto: UpdateRecipeDesignPresentationDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const presentation =
+      await this.recipeDesignerService.updateDraftPresentation(
+        id,
+        dto,
+        toRecipeDesignerAccessContext(user),
+      );
+    return ApiResponseDto.success(presentation);
   }
 
   @Get('drafts/:id/launch-readiness')

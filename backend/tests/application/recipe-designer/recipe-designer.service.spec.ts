@@ -174,8 +174,15 @@ describe('RecipeDesignerService', () => {
       totalWeightG: 0,
       energyDensityKcalPerKg: 0,
       targetHealthTags: [],
-      applicableLifeStages: [],
+      applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
       notes: null,
+      // 产品展示与产品线分支的发布门槛默认满足；专门测门槛的用例自行覆盖。
+      coverImageUrl: 'https://img.example.com/cover.jpg',
+      coverTitle: '成犬鸡肉',
+      description: '成犬鸡肉配方展示描述',
+      sellingPoint: '鲜肉低敏',
+      detailImages: ['https://img.example.com/detail.jpg'],
+      videoUrl: null,
       // 发布门槛要求至少一个有效制作步骤；单测默认给一条，专门测步骤的用例自行覆盖。
       productionStepsJson: [
         {
@@ -1861,6 +1868,8 @@ describe('RecipeDesignerService', () => {
             name: true,
             referenceDogId: true,
             designMode: true,
+            orderId: true,
+            orderQuantity: true,
           },
         },
       }),
@@ -4477,7 +4486,8 @@ describe('RecipeDesignerService', () => {
       prisma.designRecipe.findUnique.mockResolvedValue(
         draft({
           fediafDogScenario: scenario,
-          applicableLifeStages: [],
+          // 产品线上架必须先选适用生命阶段；这里直接用它锁定发布口径。
+          applicableLifeStages: expectedLifeStages,
           isCompliant: true,
           items: [item()],
         }),
@@ -4514,7 +4524,7 @@ describe('RecipeDesignerService', () => {
       draft({
         fediafDogScenario: 'REPRODUCTION',
         targetHealthTags: ['tag-skin', 'tag-weight'],
-        applicableLifeStages: [],
+        applicableLifeStages: ['REPRODUCTION'],
         isCompliant: true,
         items: [item()],
       }),

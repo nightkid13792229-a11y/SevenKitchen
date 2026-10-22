@@ -93,7 +93,7 @@
           先选要调整哪一份（可多选），每一份选中后再写自己的说明。
           老订单没有 batchItems，整块不显示，下面的表单与以前一模一样。
         -->
-        <view v-if="isBatchOrder" class="recipe-pick">
+        <view v-if="batchItems.length > 1" class="recipe-pick">
           <view class="section-title">选择要调整的食谱</view>
           <text class="recipe-pick__note">
             可以只选一份，也可以多选；勾选后可以分别写清这一份要改什么。
@@ -134,10 +134,6 @@
             />
           </view>
 
-          <!-- 行内错误：不让顾客对着一动不动的按钮猜为什么 -->
-          <text v-if="batchSelectionError" class="form-error">
-            {{ batchSelectionError }}
-          </text>
           <text class="recipe-pick__tip">
             一次提交只算 1 次调整，不按份数叠加。
           </text>
@@ -234,9 +230,6 @@
         </text>
       </view>
 
-      <view v-else-if="list.length" class="section done-note">
-        <text>你已经提交过售后，我们正在处理。有新情况可以直接联系客服补充。</text>
-      </view>
     </template>
   </view>
 </template>
@@ -343,10 +336,17 @@ function applyBatchItems(
     recipeTexts[item.deliveryItemId] = '';
   }
 
-  selectedItemIds.value = preselectAftersaleDeliveryItemIds(
+  const preselected = preselectAftersaleDeliveryItemIds(
     items,
     recipeId.value,
   );
+  // 只有一份时没有"选哪份"的问题，直接选中，少一步操作。
+  selectedItemIds.value =
+    preselected.length > 0
+      ? preselected
+      : items.length === 1
+        ? [items[0].deliveryItemId]
+        : [];
 }
 
 /**
@@ -999,7 +999,7 @@ onLoad((options) => {
   flex: 1;
   font-size: 24rpx;
   font-weight: 700;
-  color: #3f3222;
+  color: #e7d3a5;
 }
 
 .attach-count {

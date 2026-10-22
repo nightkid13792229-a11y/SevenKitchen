@@ -125,6 +125,9 @@ function createService(options: {
     recipe: {
       findFirst: recipeFindFirst,
     },
+    preparationMethod: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     dog: {
       findUnique: jest
         .fn()

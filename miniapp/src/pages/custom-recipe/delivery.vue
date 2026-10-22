@@ -209,7 +209,7 @@ const content = computed(
 /** 多份订单在封面下说明「共几份、当前第几份」；单份订单不显示 */
 const batchNote = computed(() => {
   const current = resolved.value;
-  if (!current?.isBatch) return '';
+  if (!current?.isBatch || current.batchSize <= 1) return '';
   return `${deliveryBatchCountText(current.batchSize)} · 当前查看第 ${
     current.selectedIndex + 1
   } 份`;
@@ -366,7 +366,7 @@ onPullDownRefresh(async () => {
 <style scoped>
 .delivery-page {
   min-height: 100vh;
-  padding: 24rpx;
+  padding: 24rpx 24rpx calc(180rpx + env(safe-area-inset-bottom));
   background: #16261f;
 }
 
@@ -614,6 +614,7 @@ onPullDownRefresh(async () => {
   left: 0;
   right: 0;
   bottom: 0;
+  z-index: 50;
   padding: 16rpx 24rpx calc(16rpx + constant(safe-area-inset-bottom));
   padding-bottom: calc(16rpx + env(safe-area-inset-bottom));
   background: linear-gradient(180deg, rgba(22, 38, 31, 0), #16261f 34%);

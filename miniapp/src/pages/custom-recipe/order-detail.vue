@@ -68,12 +68,11 @@
           >
             <view class="progress-node__dot">{{ step.done ? '✓' : '' }}</view>
             <text class="progress-node__label">{{ step.label }}</text>
-            <text
-              v-if="step.note && (step.done || step.active)"
-              class="progress-node__note"
-            >{{ step.note }}</text>
           </view>
         </view>
+        <text v-if="activeProgressNote" class="progress-note">
+          {{ activeProgressNote }}
+        </text>
       </view>
 
       <!-- 退款进度：顾客自助取消后钱去哪了，不能让他自己去猜 -->
@@ -235,7 +234,10 @@
             第 {{ deliveryBatch.version }} 版
           </text>
         </view>
-        <text class="batch-summary">
+        <text
+          v-if="deliveryBatch.items.length > 1"
+          class="batch-summary"
+        >
           本次共交付 {{ deliveryBatch.items.length }} 份
         </text>
 
@@ -408,7 +410,7 @@
           前端在判断业务。老后端不返回 renderable 时回退到原来的判断。
         -->
         <button
-          v-if="cancelAction"
+          v-if="cancelAction?.enabled"
           class="btn secondary"
           :loading="cancelling"
           :disabled="cancelling || paying || !cancelAction.enabled"
@@ -416,13 +418,6 @@
         >
           {{ cancelAction.label }}
         </button>
-        <!-- 不能点时把原因说出来：一个点不动又不说话的按钮，顾客只会以为系统坏了 -->
-        <text
-          v-if="cancelAction && !cancelAction.enabled && cancelAction.disabledReason"
-          class="action-disabled-reason"
-        >
-          {{ cancelAction.disabledReason }}
-        </text>
         <button class="btn secondary" @tap="goOrders">返回定制订单</button>
       </view>
     </template>
@@ -687,6 +682,17 @@ const statusTone = computed(() => toneToClass(order.value.renderable?.status?.to
  * （编出来的会和真实进度不一致，比不显示更糟）。
  */
 const progressSteps = computed(() => order.value.renderable?.progress?.timeline || []);
+
+/** 进度说明只显示一条，避免五个节点各塞一段长文案互相挤压。 */
+const activeProgressNote = computed(() => {
+  const active = progressSteps.value.find((step) => step.active && step.note);
+  if (active?.note) return active.note;
+  return (
+    [...progressSteps.value]
+      .reverse()
+      .find((step) => step.done && step.note)?.note || ''
+  );
+});
 
 /**
  * 交付摘要（来自订单详情，不含内容本体）。
@@ -1687,6 +1693,7 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   bottom: 0;
+  z-index: 50;
   display: flex;
   gap: 20rpx;
   padding: 20rpx 24rpx calc(20rpx + env(safe-area-inset-bottom));
@@ -1697,12 +1704,17 @@ onUnmounted(() => {
 
 .btn {
   flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   height: 88rpx;
-  line-height: 88rpx;
+  line-height: 1.2;
+  padding: 0 12rpx;
   font-size: 30rpx;
   font-weight: 600;
   border: none;
   border-radius: 999rpx;
+  box-sizing: border-box;
 }
 
 .btn.primary {
@@ -1848,13 +1860,15 @@ onUnmounted(() => {
   font-weight: 600;
 }
 
-.progress-node__note {
+.progress-note {
   display: block;
-  margin-top: 4rpx;
-  padding: 0 4rpx;
-  font-size: 20rpx;
-  line-height: 1.35;
-  color: #8a7a63;
+  margin-top: 16rpx;
+  padding: 12rpx 16rpx;
+  border-radius: 10rpx;
+  background: #f4f2e9;
+  font-size: 21rpx;
+  line-height: 1.5;
+  color: #6b6653;
 }
 
 .delivery-notice {

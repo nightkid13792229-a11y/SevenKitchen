@@ -1,9 +1,5 @@
 <template>
   <view class="orders-page">
-    <view class="page-header">
-      <text class="page-title">我的定制订单</text>
-    </view>
-
     <scroll-view scroll-y class="orders-list">
       <view v-if="loading && orders.length === 0" class="empty-state">
         <text class="empty-text">加载中...</text>
@@ -72,7 +68,7 @@
         -->
         <view class="order-footer">
           <button
-            v-for="action in actionsOf(order)"
+            v-for="action in actionsOf(order).filter((entry) => entry.enabled)"
             :key="action.code"
             class="action-btn"
             :class="actionClassOf(action)"
@@ -487,8 +483,8 @@ const paymentHintOf = (order: CustomRecipeOrderItem): string =>
 }
 
 .orders-list {
-  padding: 0 24rpx 40rpx;
-  height: calc(100vh - 130rpx);
+  padding: 24rpx 24rpx 40rpx;
+  height: calc(100vh - 24rpx);
   box-sizing: border-box;
 }
 
@@ -561,7 +557,9 @@ const paymentHintOf = (order: CustomRecipeOrderItem): string =>
 }
 
 .label {
-  width: 130rpx;
+  width: 160rpx;
+  flex-shrink: 0;
+  white-space: nowrap;
   color: var(--sk-ink-2, #6b6653);
 }
 
@@ -595,6 +593,7 @@ const paymentHintOf = (order: CustomRecipeOrderItem): string =>
 
 .order-footer {
   display: flex;
+  flex-wrap: wrap;
   gap: 16rpx;
   margin-top: 24rpx;
   padding-top: 22rpx;
@@ -602,12 +601,22 @@ const paymentHintOf = (order: CustomRecipeOrderItem): string =>
 }
 
 .action-btn {
-  flex: 1;
+  flex: 1 1 calc(50% - 8rpx);
+  min-width: 0;
   height: 76rpx;
   line-height: 76rpx;
-  font-size: 27rpx;
+  padding: 0 12rpx;
+  font-size: 25rpx;
   font-weight: 600;
   border-radius: 999rpx;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.action-btn.primary {
+  flex-basis: 100%;
+  order: -1;
 }
 
 /* 主操作：深墨绿 + 金边（与首页主动作一致） */

@@ -116,7 +116,8 @@ describe('售后页 · 选择要调整的食谱', () => {
 
   it('★ 没有批次时仍走原来的整单表单，不显示份选择', () => {
     expect(source).toContain('isBatchOrder');
-    expect(source).toMatch(/v-if="isBatchOrder"/);
+    // 单份订单自动选中，不再渲染"选哪一份"区块；多份才显示。
+    expect(source).toContain('v-if="batchItems.length > 1"');
     expect(source).toContain('canSubmitNew');
   });
 

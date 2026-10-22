@@ -29,7 +29,7 @@
           {{ resolved.recipeName || content.recipe.name }} · 第
           {{ resolved.version }} 版
         </text>
-        <text v-if="resolved.isBatch" class="hero-batch">
+        <text v-if="resolved.isBatch && resolved.batchSize > 1" class="hero-batch">
           本次共交付 {{ resolved.batchSize }} 份 · 当前第
           {{ resolved.selectedIndex + 1 }} 份
         </text>

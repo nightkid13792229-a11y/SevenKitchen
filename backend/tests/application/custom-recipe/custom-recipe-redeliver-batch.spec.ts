@@ -237,6 +237,7 @@ function createService(options: {
     },
     customRecipeDelivery: legacyDelivery,
     recipe: { findFirst: recipeFindFirst },
+    preparationMethod: { findMany: jest.fn().mockResolvedValue([]) },
     dog: { findUnique: dogFindUnique },
     $transaction: jest.fn().mockImplementation(async (fn: any) => fn(txProxy)),
   };

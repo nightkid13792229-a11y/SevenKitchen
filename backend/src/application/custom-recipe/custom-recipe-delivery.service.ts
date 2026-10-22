@@ -1245,11 +1245,36 @@ export class CustomRecipeDeliveryService {
   }): Promise<DeliveryContentSnapshot> {
     const energyDensity = Number(input.recipe.energyDensityKcalPerKg);
 
+    /**
+     * 制备方法在 RecipeItem 里存的是字典 id；交付快照给顾客看的是名称。
+     * 不解析的话，采购页「制备方法」列会直接显示 UUID。
+     */
+    const preparationIds = [
+      ...new Set(
+        input.recipe.items
+          .map((item) => item.preparationMethod)
+          .filter((value): value is string => Boolean(value)),
+      ),
+    ];
+    const preparationNameMap = new Map<string, string>();
+    if (preparationIds.length > 0) {
+      const methods = await this.prisma.preparationMethod.findMany({
+        where: { id: { in: preparationIds } },
+        select: { id: true, name: true },
+      });
+      for (const method of methods) {
+        preparationNameMap.set(method.id, method.name);
+      }
+    }
+
     const items: SnapshotRecipeItem[] = input.recipe.items.map((item) => ({
       name: item.ingredient?.name ?? '未知食材',
       // 2026-10-18：补剂/食材 id 进快照，第 2 页的购买入口要用它建下单行
       ingredientId: item.ingredient?.id ?? null,
-      preparation: item.preparationMethod ?? null,
+      preparation: item.preparationMethod
+        ? preparationNameMap.get(item.preparationMethod) ??
+          item.preparationMethod
+        : null,
       ratioPercent:
         item.ratioPercent === null ? null : Number(item.ratioPercent),
       weightG:

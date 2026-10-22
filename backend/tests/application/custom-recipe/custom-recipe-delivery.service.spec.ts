@@ -98,6 +98,9 @@ function createService(options: {
     recipe: {
       findFirst: jest.fn().mockResolvedValue(options.recipe ?? buildRecipe()),
     },
+    preparationMethod: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     dog: {
       /**
        * ⚠️ 这里**不能**用 `options.dog ?? 默认值` —— `??` 会把显式传进来的

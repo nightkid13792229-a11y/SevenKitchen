@@ -162,7 +162,51 @@
                 <span class="item-type-tag" :class="itemTypeTagClass(element)">{{ itemTypeLabel(element) }}</span>
                 <div class="item-main">
                   <div class="item-name">{{ itemDisplayName(element) }}</div>
-                  <div class="item-meta">{{ itemProfileName(element) }}</div>
+                  <div class="item-meta">
+                    <span class="item-profile-name">{{ itemProfileName(element) }}</span>
+                    <span class="item-preparation-inline">
+                      <span class="preparation-label" title="原料预处理">预处理</span>
+                      <el-select
+                        :model-value="element.preparationMethod || ''"
+                        class="preparation-method-select"
+                        size="small"
+                        filterable
+                        allow-create
+                        default-first-option
+                        clearable
+                        placeholder="选择或输入"
+                        @change="(value: string | undefined) => onPreparationMethodChange(element, value)"
+                      >
+                        <el-option
+                          v-for="option in preparationMethodOptions"
+                          :key="option.id"
+                          :label="option.name"
+                          :value="option.id"
+                        />
+                      </el-select>
+                      <el-input
+                        :model-value="element.preparationNote || ''"
+                        class="preparation-note-input"
+                        size="small"
+                        maxlength="500"
+                        placeholder="补充说明（可选）"
+                        @change="(value: string) => onPreparationNoteChange(element, value)"
+                      />
+                      <el-tag
+                        v-if="element.preparationSource"
+                        size="small"
+                        :type="element.preparationSource === 'MANUAL' ? 'warning' : 'info'"
+                        effect="plain"
+                      >
+                        {{ element.preparationSource === 'MANUAL' ? '人工' : '自动' }}
+                      </el-tag>
+                      <span v-else class="preparation-source-empty">未设置</span>
+                      <span
+                        v-if="itemPreparationHint(element)"
+                        class="item-preparation-hint"
+                      >{{ itemPreparationHint(element) }}</span>
+                    </span>
+                  </div>
                 </div>
                 <div class="item-controls">
                   <div class="weight-editor">
@@ -222,53 +266,6 @@
                     type="primary"
                     @click="openSupplementTargetEditor(element)"
                   >修改目标</el-button>
-                </div>
-
-                <!--
-                  原料预处理（2026-10-22）：按原料维护，进入制作前处理信息，
-                  与整份食谱的「制作步骤」分开；不从历史食谱自动复制。
-                -->
-                <div class="item-preparation-row">
-                  <div class="preparation-label">原料预处理</div>
-                  <el-select
-                    :model-value="element.preparationMethod || ''"
-                    class="preparation-method-select"
-                    size="small"
-                    filterable
-                    allow-create
-                    default-first-option
-                    clearable
-                    placeholder="选择或输入预处理方式"
-                    @change="(value: string | undefined) => onPreparationMethodChange(element, value)"
-                  >
-                    <el-option
-                      v-for="option in preparationMethodOptions"
-                      :key="option.id"
-                      :label="option.name"
-                      :value="option.id"
-                    />
-                  </el-select>
-                  <el-input
-                    :model-value="element.preparationNote || ''"
-                    class="preparation-note-input"
-                    size="small"
-                    maxlength="500"
-                    placeholder="预处理补充说明（可选）"
-                    @change="(value: string) => onPreparationNoteChange(element, value)"
-                  />
-                  <el-tag
-                    v-if="element.preparationSource"
-                    size="small"
-                    :type="element.preparationSource === 'MANUAL' ? 'warning' : 'info'"
-                    effect="plain"
-                  >
-                    {{ element.preparationSource === 'MANUAL' ? '人工' : '自动' }}
-                  </el-tag>
-                  <span v-else class="preparation-source-empty">未设置</span>
-                  <span
-                    v-if="itemPreparationHint(element)"
-                    class="item-preparation-hint"
-                  >{{ itemPreparationHint(element) }}</span>
                 </div>
               </div>
             </template>
@@ -2005,15 +2002,13 @@ onBeforeUnmount(() => {
   font-size: 11px;
   color: #f56c6c;
 }
-.item-preparation-row {
-  flex-basis: 100%;
-  display: flex;
+.item-preparation-inline {
+  display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  margin-top: 2px;
-  padding: 5px 0 0 22px;
-  border-top: 1px dashed #ebeef5;
+  gap: 6px;
+  margin-left: 8px;
+  max-width: calc(100% - 8px);
 }
 .preparation-label {
   flex-shrink: 0;
@@ -2021,11 +2016,11 @@ onBeforeUnmount(() => {
   color: #909399;
 }
 .preparation-method-select {
-  width: 180px;
+  width: 128px;
 }
 .preparation-note-input {
-  flex: 1 1 160px;
-  max-width: 280px;
+  width: 150px;
+  max-width: 100%;
 }
 .preparation-source-empty {
   font-size: 11px;
@@ -2045,12 +2040,20 @@ onBeforeUnmount(() => {
   color: #e6a23c;
 }
 .item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
   margin-top: 2px;
   font-size: 11px;
   color: #909399;
+  min-width: 0;
+}
+.item-profile-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 100%;
 }
 /* 用量 + 占比 + 开关/删除：作为一个整体参与换行，
    本栏够宽时整组贴在原料名右侧（原来的一行布局），

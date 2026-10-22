@@ -77,6 +77,16 @@
         </div>
 
         <el-alert
+          v-if="!hasDerivedCandidates"
+          class="target-combination-hint"
+          type="info"
+          :closable="false"
+          show-icon
+          title="当前档案没有可用的组合字段"
+          description="系统只把已定义的派生字段作为组合目标（例如 EPA + DHA）；维生素 B2、B6、B12 这类没有组合定义时，请分别选择为多个目标。"
+        />
+
+        <el-alert
           v-if="selectedTargets.length === 0"
           class="target-validation"
           type="warning"
@@ -167,6 +177,10 @@ const hasProfile = computed(() => Boolean(props.profile));
 
 const candidates = computed(() =>
   listSupplementTargetFieldCandidates(props.profile),
+);
+
+const hasDerivedCandidates = computed(() =>
+  candidates.value.some((candidate) => candidate.source === "DERIVED"),
 );
 
 const candidateByFieldPath = computed(
@@ -303,5 +317,9 @@ function confirm() {
   font-size: 12px;
   line-height: 1.6;
   color: #e6a23c;
+}
+
+.target-combination-hint {
+  margin-top: 2px;
 }
 </style>

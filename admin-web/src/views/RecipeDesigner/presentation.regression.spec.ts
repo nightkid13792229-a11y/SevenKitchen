@@ -150,10 +150,11 @@ describe('上线检查抽屉 · 产品展示与分支分组', () => {
 describe('编辑器 · 分支按钮', () => {
   const editor = clean(editorSource)
 
-  it('产品线入仓动作上线检查抽屉，订单按钮保留「加入本单待提交」', () => {
+  it('产品线入仓与订单待提交都在上线检查抽屉', () => {
+    const drawer = clean(drawerSource)
     expect(editor).not.toContain('保存到系列仓库')
     expect(editor).not.toContain('发布到产品线')
-    expect(editor).toContain('加入本单待提交')
-    expect(editor).toContain('@click="stageOrderDesign"')
+    expect(drawer).toContain('加入本单待提交')
+    expect(drawer).toContain('canStageOrder')
   })
 })

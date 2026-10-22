@@ -330,6 +330,21 @@
         </section>
 
         <div
+          v-if="readiness.designMode === 'ORDER'"
+          class="launch-readiness__publish"
+        >
+          <div class="launch-readiness__publish-hint">
+            加入后顾客还看不到；管理员最终提交时才会一次性交付。
+          </div>
+          <el-button
+            type="success"
+            :loading="staging"
+            :disabled="!canStageOrder"
+            @click="stageOrder"
+          >加入本单待提交</el-button>
+        </div>
+
+        <div
           v-if="readiness.designMode !== 'ORDER'"
           class="launch-readiness__publish"
         >
@@ -375,6 +390,7 @@ import {
 } from '@element-plus/icons-vue'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import { useUserStore } from '@/store/user'
+import { orderRecipeDesignApi } from '@/api/orderRecipeDesign'
 import ProductionStepsEditor from './ProductionStepsEditor.vue'
 import NutritionReportDrawer from './NutritionReportDrawer.vue'
 import PresentationPanel from './PresentationPanel.vue'
@@ -399,11 +415,14 @@ const props = defineProps<{
   modelValue: boolean
   draftId: string
   draftName?: string
+  orderId?: string
+  designId?: string
 }>()
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
   (e: 'published'): void
+  (e: 'staged'): void
 }>()
 
 const visible = computed({
@@ -417,6 +436,7 @@ const readiness = ref<DraftLaunchReadiness | null>(null)
 const stepsExpanded = ref<string[]>([])
 const stepsDirty = ref(false)
 const publishing = ref(false)
+const staging = ref(false)
 const userStore = useUserStore()
 const isAdmin = computed(() => userStore.userInfo?.role === 'ADMIN')
 const presentationDirty = ref(false)
@@ -440,6 +460,16 @@ const reportAction = computed(() =>
   readiness.value
     ? resolveNutritionReportAction(readiness.value.summary)
     : null
+)
+
+const canStageOrder = computed(
+  () =>
+    Boolean(readiness.value?.ready) &&
+    !presentationDirty.value &&
+    !stepsDirty.value &&
+    !staging.value &&
+    isAdmin.value &&
+    Boolean(props.orderId && props.designId)
 )
 
 const canPublishStage = computed(
@@ -564,6 +594,33 @@ async function openNutritionReport(): Promise<void> {
 
 async function retryNutritionReport(): Promise<void> {
   await openNutritionReport()
+}
+
+async function stageOrder(): Promise<void> {
+  if (!readiness.value || readiness.value.designMode !== 'ORDER') return
+  if (!canStageOrder.value || !props.orderId || !props.designId) {
+    ElMessage.warning('上线检查未通过或本单信息不完整，暂时不能加入待提交')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确认把「${props.draftName || '当前设计'}」加入本单待提交吗？加入后顾客还看不到，管理员最终提交时才交付。`,
+      '加入本单待提交',
+      { type: 'warning', confirmButtonText: '加入待提交', cancelButtonText: '取消' }
+    )
+  } catch {
+    return
+  }
+  staging.value = true
+  try {
+    await orderRecipeDesignApi.markReady(props.orderId, props.designId)
+    ElMessage.success('已加入本单待提交')
+    emit('staged')
+  } catch {
+    // API 拦截器提示
+  } finally {
+    staging.value = false
+  }
 }
 
 async function publishStageToWarehouse(): Promise<void> {

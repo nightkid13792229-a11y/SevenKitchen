@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import editor from '@/views/RecipeDesigner/Editor.vue?raw'
+import drawer from '@/views/RecipeDesigner/components/LaunchReadinessDrawer.vue?raw'
 import orderDetail from '@/views/CustomRecipes/OrderDetail.vue?raw'
 import workspace from '@/views/RecipeDesigner/OrderDesignWorkspace.vue?raw'
 
@@ -36,12 +37,12 @@ describe('编辑器 · 本单设计横幅', () => {
 describe('编辑器 · 管理员加入本单待提交', () => {
   const source = clean(editor)
 
-  it('只有管理员有「加入本单待提交」按钮，员工看到原因', () => {
-    expect(source).toContain('useIsAdmin')
+  it('「加入本单待提交」在上线检查抽屉中，管理员才可操作', () => {
+    const readinessDrawer = clean(drawer)
+    expect(readinessDrawer).toContain('加入本单待提交')
+    expect(readinessDrawer).toContain('canStageOrder')
+    expect(readinessDrawer).toContain('isAdmin')
     expect(source).toContain('ADMIN_ONLY_TIP')
-    expect(source).toContain('加入本单待提交')
-    expect(source).toContain('@click="stageOrderDesign"')
-    expect(source).toContain('v-if="isAdmin"')
   })
 
   it('点击先保存未落盘的修改，再调用 ready 接口', () => {

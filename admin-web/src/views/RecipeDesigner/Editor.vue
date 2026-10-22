@@ -97,18 +97,7 @@
         </el-tag>
       </div>
       <div class="order-design-banner__actions">
-        <template v-if="isAdmin">
-          <el-button
-            type="success"
-            size="small"
-            :loading="stagingReady"
-            :disabled="!designId || currentOrderSlot?.status === 'DELIVERED'"
-            @click="stageOrderDesign"
-          >
-            加入本单待提交
-          </el-button>
-        </template>
-        <span v-else class="order-design-banner__lock">
+        <span v-if="!isAdmin" class="order-design-banner__lock">
           {{ ADMIN_ONLY_TIP }}：加入本单待提交
         </span>
         <el-button size="small" text @click="backToOrderWorkspace">
@@ -372,7 +361,10 @@
       v-model="launchReadinessVisible"
       :draft-id="currentDraftId"
       :draft-name="draft?.series?.name || draft?.name || ''"
+      :order-id="orderId"
+      :design-id="designId"
       @published="handleStagePublished"
+      @staged="handleOrderStaged"
     />
   </div>
 </template>
@@ -1744,6 +1736,14 @@ async function openLaunchReadiness() {
 function backToOrderWorkspace() {
   if (!orderId) return
   router.push(`/order-design/${encodeURIComponent(orderId)}`)
+}
+
+async function handleOrderStaged() {
+  launchReadinessVisible.value = false
+  await loadOrderDesignWorkspace()
+  if (orderId) {
+    await router.push(`/order-design/${encodeURIComponent(orderId)}`)
+  }
 }
 
 function handleStagePublished() {

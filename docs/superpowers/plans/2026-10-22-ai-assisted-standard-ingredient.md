@@ -425,7 +425,7 @@ git commit -m "feat(ingredient-creation): transactional commit with pending prof
 **Files:**
 - Create: `backend/src/interfaces/controllers/ingredient-creation.controller.ts`
 - Create: `backend/src/interfaces/dto/ingredient-creation/*.dto.ts`
-- Modify: `backend/src/application/ingredient-creation/ingredient-creation.module.ts`、`backend/src/app.module.ts`
+- Modify: `backend/src/app.module.ts`（注册控制器；本仓库 PrismaService 没有独立模块、也没有 export，不建 feature module）
 - Test: `backend/tests/interfaces/controllers/ingredient-creation.controller.spec.ts`
 
 **Interfaces:**

@@ -1,14 +1,28 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type {
   IngredientCreationDraft as PrismaIngredientCreationDraft,
-  Prisma,
+  IngredientType,
 } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import type {
   CreationStep,
   IngredientCreationDraft,
   IngredientCreationDraftPayload,
+  ProposalSnapshot,
+  ProposalSnapshotKind,
 } from './ingredient-creation.types';
+
+/** `$queryRaw` 返回的是数据库原始行（snake_case），需要映射回服务结构。 */
+type RawDraftRow = {
+  id: string;
+  name: string;
+  type: IngredientType;
+  step: string;
+  payload: IngredientCreationDraftPayload | null;
+  created_by: string;
+  created_at: Date;
+  updated_at: Date;
+};
 
 /**
  * 向导草稿服务。
@@ -53,37 +67,77 @@ export class IngredientCreationDraftService {
   /**
    * 保存某一站：推进当前站点，并把本站的 payload 片段浅合并进去。
    *
-   * 读和写放在同一个事务里 —— 后到的站点不能基于旧 payload 覆盖前面站点的结果。
+   * 合并由**一条 UPDATE** 在库内完成（`payload || $1::jsonb`），不做「先读后写」——
+   * 默认隔离级别是 READ COMMITTED，读改写会让两个并发 patch 互相覆盖。
    */
   async patch(
     id: string,
     step: CreationStep,
     payload: Partial<IngredientCreationDraftPayload>,
   ): Promise<IngredientCreationDraft> {
-    return this.prisma.$transaction(async (tx) => {
-      const existing = await tx.ingredientCreationDraft.findUnique({
-        where: { id },
-      });
-      if (!existing) {
-        throw new NotFoundException(`Ingredient creation draft ${id} not found`);
-      }
+    const rows = await this.prisma.$queryRaw<RawDraftRow[]>`
+      UPDATE "ingredient_creation_draft"
+      SET payload = payload || ${JSON.stringify(payload)}::jsonb,
+          step = ${step},
+          updated_at = now()
+      WHERE id = ${id}
+      RETURNING *
+    `;
 
-      const mergedPayload: IngredientCreationDraftPayload = {
-        ...((existing.payload as IngredientCreationDraftPayload | null) ?? {}),
-        ...payload,
-      };
+    const row = rows[0];
+    if (!row) {
+      throw new NotFoundException(`Ingredient creation draft ${id} not found`);
+    }
 
-      const updated = await tx.ingredientCreationDraft.update({
-        where: { id },
-        data: {
-          step,
-          // Prisma 的 Json 输入类型不允许带 undefined 的接口，序列化后行为与 JSONB 一致
-          payload: mergedPayload as unknown as Prisma.InputJsonValue,
-        },
-      });
+    return this.mapRawDraft(row);
+  }
 
-      return this.toView(updated);
-    });
+  /**
+   * 追加快照 AI 本轮给出的提案（设计文档第六节「AI 提案快照」）。
+   *
+   * 只追加、不覆盖：`proposalHistory` 在库内用 `||` 拼接，读改写会丢掉并发写入的快照。
+   */
+  async appendProposal(
+    draftId: string,
+    proposal: Record<string, unknown>,
+    kind: ProposalSnapshotKind,
+  ): Promise<void> {
+    const entry: ProposalSnapshot = {
+      ...proposal,
+      kind,
+      createdAt: new Date().toISOString(),
+    };
+
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      UPDATE "ingredient_creation_draft"
+      SET payload = jsonb_set(
+            payload,
+            '{proposalHistory}',
+            coalesce(payload->'proposalHistory', '[]'::jsonb) || ${JSON.stringify([entry])}::jsonb
+          ),
+          updated_at = now()
+      WHERE id = ${draftId}
+      RETURNING id
+    `;
+
+    if (rows.length === 0) {
+      throw new NotFoundException(
+        `Ingredient creation draft ${draftId} not found`,
+      );
+    }
+  }
+
+  private mapRawDraft(row: RawDraftRow): IngredientCreationDraft {
+    return {
+      id: row.id,
+      name: row.name,
+      type: row.type,
+      step: row.step as CreationStep,
+      payload: row.payload ?? {},
+      createdBy: row.created_by,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
   }
 
   private toView(

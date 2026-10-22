@@ -130,6 +130,20 @@ export interface FinalCheckResult {
   warnings: CheckItem[];
 }
 
+/** AI 提案快照的站点。 */
+export type ProposalSnapshotKind = 'INTAKE' | 'CANDIDATES' | 'MERGE' | 'CHECK';
+
+/**
+ * AI 提案快照：每次 AI 出方案存一份（设计文档第六节）。
+ *
+ * 与「最新 payload」并存，用于事后审查，以及将来统计每站的提案采纳率 / 改动率。
+ */
+export interface ProposalSnapshot {
+  kind: ProposalSnapshotKind;
+  createdAt: string;
+  [key: string]: unknown;
+}
+
 /**
  * 草稿里累积的六站数据。`patch` 只做浅合并，每次只传本站需要更新的键。
  */
@@ -141,6 +155,8 @@ export interface IngredientCreationDraftPayload {
   checks?: FinalCheckResult;
   ingredient?: IngredientDraft;
   verify?: { exceptions: ExceptionRecord[] };
+  /** AI 提案历史：只追加、不覆盖（appendProposal） */
+  proposalHistory?: ProposalSnapshot[];
 }
 
 /**

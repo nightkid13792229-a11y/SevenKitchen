@@ -71,6 +71,7 @@ import type {
   CreateRecipeSeriesStageDraftDto,
   DeleteRecipeSeriesDto,
   RecipeDesignerSeriesStatusFilter,
+  RecipePreparationSource,
   ListRecipeDesignerIngredientOptionsDto,
   ListRecipeDesignerSeriesDto,
   PublishRecipeDesignDraftDto,
@@ -79,7 +80,14 @@ import type {
   UpdateDogDesignNotesDto,
   UpdateRecipeDesignDraftDto,
   UpdateRecipeDesignItemDto,
+  UpdateRecipeProductionStepsDto,
 } from '../../interfaces/dto/recipe-designer/recipe-designer.dto';
+import { RECIPE_PREPARATION_NOTE_MAX_LENGTH } from '../../interfaces/dto/recipe-designer/recipe-designer.dto';
+import {
+  readProductionSteps,
+  validateProductionSteps,
+  type ProductionStep,
+} from '../../domain/recipe-designer/production-steps';
 import {
   FEDIAF_TARGET_PROVIDER,
   type FediafTargetProvider,
@@ -225,6 +233,8 @@ const DESIGN_RECIPE_ITEM_CLIENT_SELECT = {
   includeInAssessment: true,
   ratioPercent: true,
   preparationMethod: true,
+  preparationNote: true,
+  preparationSource: true,
   nutrientTargetKey: true,
   nutrientTargetValue: true,
   sortOrder: true,
@@ -296,6 +306,8 @@ const DESIGN_RECIPE_LIST_SELECT = {
       includeInAssessment: true,
       ratioPercent: true,
       preparationMethod: true,
+      preparationNote: true,
+      preparationSource: true,
       nutrientTargetKey: true,
       nutrientTargetValue: true,
       supplementTargets: true,
@@ -430,6 +442,8 @@ type DesignRecipeWithItems = {
   targetHealthTags: string[];
   applicableLifeStages: string[];
   notes: string | null;
+  /** 结构化制作步骤（JSON 数组）；历史草稿可能为 null */
+  productionStepsJson?: unknown;
   createdBy: string;
   publishedAt: Date | null;
   publishedRecipeId: string | null;
@@ -465,6 +479,8 @@ type DesignRecipeItemWithFood = {
   includeInAssessment: boolean;
   ratioPercent: number | null;
   preparationMethod: string | null;
+  preparationNote?: string | null;
+  preparationSource?: string | null;
   nutrientTargetKey: string | null;
   nutrientTargetValue: number | null;
   supplementTargets?: unknown;
@@ -655,6 +671,8 @@ type RecipeSeriesCopyableRecipeItem = {
   exampleWeight?: number | null;
   ratioPercent?: number | null;
   preparationMethod?: string | null;
+  preparationNote?: string | null;
+  preparationSource?: string | null;
   nutrientTargetKey?: string | null;
   nutrientTargetValue?: number | null;
   supplementTargets?: unknown;
@@ -3640,6 +3658,12 @@ export class RecipeDesignerService {
         preparationMethod: this.sanitizeCopiedPreparationMethod(
           item.preparationMethod,
         ),
+        preparationNote: this.normalizeStoredPreparationNote(
+          item.preparationNote,
+        ),
+        preparationSource: this.normalizeStoredPreparationSource(
+          item.preparationSource,
+        ),
         nutrientTargetKey: item.nutrientTargetKey ?? null,
         nutrientTargetValue: item.nutrientTargetValue ?? null,
         ...(supplementTargets.length > 0
@@ -3730,6 +3754,12 @@ export class RecipeDesignerService {
       includeInAssessment: item.includeInAssessment,
       ratioPercent: item.ratioPercent,
       preparationMethod: item.preparationMethod,
+      preparationNote: this.normalizeStoredPreparationNote(
+        item.preparationNote,
+      ),
+      preparationSource: this.normalizeStoredPreparationSource(
+        item.preparationSource,
+      ),
       nutrientTargetKey: item.nutrientTargetKey,
       nutrientTargetValue: item.nutrientTargetValue,
       ...(supplementTargets.length > 0
@@ -3828,6 +3858,12 @@ export class RecipeDesignerService {
         ratioPercent: item.ratioPercent ?? null,
         preparationMethod: this.sanitizeCopiedPreparationMethod(
           item.preparationMethod,
+        ),
+        preparationNote: this.normalizeStoredPreparationNote(
+          item.preparationNote,
+        ),
+        preparationSource: this.normalizeStoredPreparationSource(
+          item.preparationSource,
         ),
         nutrientTargetKey: item.nutrientTargetKey ?? null,
         nutrientTargetValue: item.nutrientTargetValue ?? null,
@@ -4460,6 +4496,51 @@ export class RecipeDesignerService {
     return this.withPreparationMethodLabels(draft);
   }
 
+  /**
+   * 读取草稿的结构化制作步骤（2026-10-22 · Task 4）。
+   *
+   * 单独开一个 GET 的原因是 Task 7 的设计器需要轻量刷新步骤区，
+   * 不必整份草稿重新拉一遍；权限与草稿详情完全一致（复用 getDraft）。
+   */
+  async getDraftProductionSteps(
+    id: string,
+    access: RecipeDesignerAccessInput,
+  ): Promise<{ draftId: string; productionSteps: ProductionStep[] }> {
+    const draft = await this.getDraft(id, access);
+    return {
+      draftId: draft.id,
+      productionSteps: this.readDraftProductionSteps(draft.productionStepsJson),
+    };
+  }
+
+  /**
+   * 覆盖保存草稿的结构化制作步骤（2026-10-22 · Task 4）。
+   *
+   * 整数组覆盖而不是逐条增删：排序在客户端完成，服务端只校验唯一/升序，
+   * 避免并发编辑时产生重复 sortOrder。空数组表示清空步骤。
+   */
+  async updateDraftProductionSteps(
+    id: string,
+    dto: UpdateRecipeProductionStepsDto,
+    access: RecipeDesignerAccessInput,
+  ): Promise<{ draftId: string; productionSteps: ProductionStep[] }> {
+    const context = normalizeRecipeDesignerAccessContext(access);
+    const draft = await this.assertDraftEditableByUser(id, context);
+    const productionSteps = this.validateDraftProductionSteps(dto?.steps);
+
+    await this.prisma.designRecipe.update({
+      where: { id: draft.id },
+      data: {
+        ...(productionSteps.length > 0
+          ? { productionStepsJson: this.toJsonValue(productionSteps) }
+          : { productionStepsJson: Prisma.DbNull }),
+        contentRevision: { increment: 1 },
+      },
+    });
+
+    return { draftId: draft.id, productionSteps };
+  }
+
   private buildDesignRecipeWorkbenchCards(
     drafts: DesignRecipeWithItems[],
   ): DesignRecipeWorkbenchCard[] {
@@ -4762,6 +4843,9 @@ export class RecipeDesignerService {
       where: { name: revisionName },
       _max: { version: true },
     });
+    const revisionProductionSteps = this.readDraftProductionSteps(
+      source.productionStepsJson,
+    );
 
     return this.prisma.designRecipe.create({
       data: {
@@ -4773,6 +4857,9 @@ export class RecipeDesignerService {
         targetHealthTags: source.targetHealthTags,
         applicableLifeStages: source.applicableLifeStages,
         notes: source.notes,
+        ...(revisionProductionSteps.length > 0
+          ? { productionStepsJson: this.toJsonValue(revisionProductionSteps) }
+          : {}),
         createdBy: context.userId,
         totalWeightG: source.totalWeightG ?? 0,
         energyDensityKcalPerKg: null,
@@ -4803,6 +4890,12 @@ export class RecipeDesignerService {
               includeInAssessment: item.includeInAssessment,
               ratioPercent: item.ratioPercent,
               preparationMethod: item.preparationMethod,
+              preparationNote: this.normalizeStoredPreparationNote(
+                item.preparationNote,
+              ),
+              preparationSource: this.normalizeStoredPreparationSource(
+                item.preparationSource,
+              ),
               nutrientTargetKey: item.nutrientTargetKey,
               nutrientTargetValue: item.nutrientTargetValue,
               ...(supplementTargets.length > 0
@@ -4872,6 +4965,9 @@ export class RecipeDesignerService {
     if (!baseline) {
       throw new BadRequestException('没有可撤回到的正式版本');
     }
+    const baselineProductionSteps = this.readDraftProductionSteps(
+      baseline.productionStepsJson,
+    );
 
     const reverted = await this.prisma.$transaction(async (tx) => {
       await tx.designRecipeItem.deleteMany({
@@ -4889,6 +4985,10 @@ export class RecipeDesignerService {
           targetHealthTags: baseline.targetHealthTags,
           applicableLifeStages: baseline.applicableLifeStages,
           notes: baseline.notes,
+          productionStepsJson:
+            baselineProductionSteps.length > 0
+              ? this.toJsonValue(baselineProductionSteps)
+              : Prisma.DbNull,
           totalWeightG: baseline.totalWeightG,
           energyDensityKcalPerKg: baseline.energyDensityKcalPerKg,
           calculatedNutrition: this.toJsonValue(baseline.calculatedNutrition),
@@ -4927,11 +5027,18 @@ export class RecipeDesignerService {
     const context = normalizeRecipeDesignerAccessContext(access);
     const draft = await this.assertDraftEditableByUser(designRecipeId, context);
     const ingredientId = await this.resolveDesignItemIngredientId(dto);
-    const preparationMethod = await this.resolveDesignItemPreparationMethod(
-      dto.preparationMethod,
-      ingredientId,
-      dto.nutritionFoodId,
-    );
+    const resolvedPreparationMethod =
+      await this.resolveDesignItemPreparationMethod(
+        dto.preparationMethod,
+        ingredientId,
+        dto.nutritionFoodId,
+      );
+    const preparationData = this.buildPreparationCreateData({
+      explicitMethod: dto.preparationMethod,
+      explicitNote: dto.preparationNote,
+      explicitSource: this.parsePreparationSourceInput(dto.preparationSource),
+      resolvedMethod: resolvedPreparationMethod,
+    });
     const shouldPersistNutrientTarget =
       await this.isIngredientIdSupplement(ingredientId);
     /**
@@ -4966,7 +5073,7 @@ export class RecipeDesignerService {
       ingredientId,
       nutritionFoodId: dto.nutritionFoodId,
       weightG: dto.weightG,
-      preparationMethod,
+      ...preparationData,
       ...(shouldPersistNutrientTarget
         ? {
             nutrientTargetKey: supplementTargets[0]?.nutrientTargetKey ?? null,
@@ -5085,11 +5192,26 @@ export class RecipeDesignerService {
       }
     }
 
+    const changesPreparation =
+      dto.preparationMethod !== undefined ||
+      dto.preparationNote !== undefined ||
+      dto.preparationSource !== undefined;
+    const preparationData = changesPreparation
+      ? this.buildPreparationUpdateData({
+          explicitMethod: dto.preparationMethod,
+          explicitNote: dto.preparationNote,
+          explicitSource: this.parsePreparationSourceInput(
+            dto.preparationSource,
+          ),
+          currentMethod: draft.preparationMethod,
+          currentNote: draft.preparationNote,
+          currentSource: draft.preparationSource,
+        })
+      : {};
+
     const data = {
       ...(dto.weightG !== undefined ? { weightG: dto.weightG } : {}),
-      ...(dto.preparationMethod !== undefined
-        ? { preparationMethod: dto.preparationMethod }
-        : {}),
+      ...preparationData,
       ...(dto.nutrientTargetKey !== undefined
         ? { nutrientTargetKey: dto.nutrientTargetKey }
         : {}),
@@ -5670,6 +5792,13 @@ export class RecipeDesignerService {
       privateSupplementTargetMap,
     );
     const customOrderId = options.customOrderId;
+    /**
+     * 私密食谱同样持久化结构化步骤；legacy `Recipe.productionSteps` 不动，
+     * 以免把新结构写进旧字符串字段（交付快照 v2 也不在本任务范围）。
+     */
+    const productionStepsData = this.buildProductionStepsSnapshotData(
+      draft.productionStepsJson,
+    );
     const baseData = {
       name: this.resolvePrivateRecipeSnapshotDisplayName(
         draft,
@@ -5691,6 +5820,7 @@ export class RecipeDesignerService {
       ),
       nutritionStandard: draft.nutritionStandard ?? 'FEDIAF_2025',
       description: draft.notes,
+      ...productionStepsData,
       designSource: RECIPE_DESIGNER_PUBLISHED_SOURCE,
       isCustomRecipe: true,
       // 挂不上订单就不写，保留原有链路（老食谱的挂单关系也不会被清掉）
@@ -5813,6 +5943,13 @@ export class RecipeDesignerService {
       publishTarget,
     );
     const publishedSeriesLifeStage = this.resolveDraftSeriesLifeStage(draft);
+    /**
+     * 结构化制作步骤随发布一起落库；legacy `Recipe.productionSteps` 字符串
+     * 保持原样（这里既不读也不写它），避免把新结构硬塞进旧字段。
+     */
+    const productionStepsData = this.buildProductionStepsSnapshotData(
+      draft.productionStepsJson,
+    );
 
     return this.prisma.$transaction(async (tx) => {
       const recipe = await tx.recipe.create({
@@ -5831,6 +5968,7 @@ export class RecipeDesignerService {
           ),
           nutritionStandard: 'FEDIAF_2025',
           description: draft.notes,
+          ...productionStepsData,
           designSource: RECIPE_DESIGNER_PUBLISHED_SOURCE,
           isCustomRecipe: false,
           ...(draft.series?.referenceDogId
@@ -6018,6 +6156,9 @@ export class RecipeDesignerService {
         draft.applicableLifeStages,
       ),
       notes: this.normalizeComparableText(draft.notes),
+      productionStepsJson: JSON.stringify(
+        this.readDraftProductionSteps(draft.productionStepsJson),
+      ),
       items: this.buildPublishableItemSignature(draft),
     };
   }
@@ -6030,6 +6171,8 @@ export class RecipeDesignerService {
         nutritionFoodId: item.nutritionFoodId,
         weightG: this.normalizeComparableNumber(item.weightG),
         preparationMethod: this.normalizeComparableText(item.preparationMethod),
+        preparationNote: this.normalizeComparableText(item.preparationNote),
+        preparationSource: this.normalizeComparableText(item.preparationSource),
         nutrientTargetKey: this.normalizeComparableText(item.nutrientTargetKey),
         nutrientTargetValue: this.normalizeComparableNumber(
           item.nutrientTargetValue,
@@ -6048,6 +6191,8 @@ export class RecipeDesignerService {
             left.ingredientId.localeCompare(right.ingredientId),
             left.nutritionFoodId.localeCompare(right.nutritionFoodId),
             left.preparationMethod.localeCompare(right.preparationMethod),
+            left.preparationNote.localeCompare(right.preparationNote),
+            left.preparationSource.localeCompare(right.preparationSource),
             left.nutrientTargetKey.localeCompare(right.nutrientTargetKey),
             left.supplementTargets.localeCompare(right.supplementTargets),
           ].find((result) => result !== 0) ?? 0
@@ -6370,6 +6515,11 @@ export class RecipeDesignerService {
           preparationMethod: this.normalizePreparationMethod(
             item.preparationMethod,
           ),
+          ...this.resolveSnapshotPreparation({
+            note: item.preparationNote,
+            source: item.preparationSource,
+            usedAutomaticFallback: false,
+          }),
           ratioPercent: this.resolvePrivateRecipeItemRatio(
             item,
             draft.totalWeightG,
@@ -6510,18 +6660,28 @@ export class RecipeDesignerService {
             : {}),
         }
       : {};
+    const explicitPreparationMethod = this.normalizePreparationMethod(
+      item.preparationMethod,
+    );
+    const preparationMethod =
+      explicitPreparationMethod ??
+      alignPreparationMethodBasis(
+        defaultPreparationMethod,
+        item.nutritionFood?.preparationState ?? null,
+      );
 
     return {
       ingredientId,
       // 设计器里选定的营养档案（决定生/熟等状态）必须随发布一起落库，
       // 否则正式食谱只能靠后台保存时回填默认档案，导致生熟状态被改写。
       nutritionFoodId: this.resolvePublishedNutritionFoodId(item, ingredientId),
-      preparationMethod:
-        this.normalizePreparationMethod(item.preparationMethod) ??
-        alignPreparationMethodBasis(
-          defaultPreparationMethod,
-          item.nutritionFood?.preparationState ?? null,
-        ),
+      preparationMethod,
+      ...this.resolveSnapshotPreparation({
+        note: item.preparationNote,
+        source: item.preparationSource,
+        usedAutomaticFallback:
+          !explicitPreparationMethod && Boolean(preparationMethod),
+      }),
       ratioPercent: isSupplement
         ? null
         : (publishedFoodRatioMap.get(item.id) ??
@@ -7790,6 +7950,9 @@ export class RecipeDesignerService {
       },
     });
 
+    if (!draft) {
+      throw new NotFoundException(`Design recipe ${id} not found`);
+    }
     await this.assertEditableDraft(draft, id, context);
     return draft;
   }
@@ -7802,6 +7965,10 @@ export class RecipeDesignerService {
       where: { id: itemId },
       select: {
         id: true,
+        // 预处理更新需要在同一次查询里带回当前值，避免再把 AUTO 误翻成 MANUAL
+        preparationMethod: true,
+        preparationNote: true,
+        preparationSource: true,
         designRecipe: {
           select: {
             id: true,
@@ -7824,7 +7991,12 @@ export class RecipeDesignerService {
       notFoundMessage: `Design recipe item ${itemId} not found`,
     });
 
-    return item.designRecipe;
+    return {
+      ...item.designRecipe,
+      preparationMethod: item.preparationMethod,
+      preparationNote: item.preparationNote,
+      preparationSource: item.preparationSource,
+    };
   }
 
   private async assertEditableDraft(
@@ -8121,6 +8293,175 @@ export class RecipeDesignerService {
 
   private normalizePreparationMethod(value: string | null | undefined) {
     return normalizePreparationMethodHistoryText(value) ?? null;
+  }
+
+  /**
+   * 预处理补充说明（2026-10-22 · Task 4）。
+   *
+   * 写入路径严格限制 500 字符（DTO 也会拦一次，服务层保证内部调用不越界）；
+   * 存量数据读取/复制用 `normalizeStoredPreparationNote`，只截断不抛错。
+   */
+  private normalizePreparationNote(value: string | null | undefined) {
+    const trimmed = value?.trim();
+    if (!trimmed) {
+      return null;
+    }
+    if (trimmed.length > RECIPE_PREPARATION_NOTE_MAX_LENGTH) {
+      throw new BadRequestException(
+        `原料预处理补充说明不能超过 ${RECIPE_PREPARATION_NOTE_MAX_LENGTH} 个字符`,
+      );
+    }
+    return trimmed;
+  }
+
+  private normalizeStoredPreparationNote(value: string | null | undefined) {
+    const trimmed = value?.trim();
+    return trimmed
+      ? trimmed.slice(0, RECIPE_PREPARATION_NOTE_MAX_LENGTH)
+      : null;
+  }
+
+  private parsePreparationSourceInput(
+    value: RecipePreparationSource | null | undefined,
+  ): RecipePreparationSource | null | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+    if (value === null) {
+      return null;
+    }
+    if (value === 'AUTO' || value === 'MANUAL') {
+      return value;
+    }
+    throw new BadRequestException('原料预处理来源只能是 AUTO 或 MANUAL');
+  }
+
+  private normalizeStoredPreparationSource(
+    value: unknown,
+  ): RecipePreparationSource | null {
+    return value === 'AUTO' || value === 'MANUAL' ? value : null;
+  }
+
+  /**
+   * 新增原料时的预处理默认来源：
+   * - 显式填写了 method 或补充说明 → MANUAL（调用方显式传 AUTO 时尊重调用方）；
+   * - 只有系统按原料历史/档案自动解析出的 method → AUTO；
+   * - 什么都没有 → null。
+   */
+  private buildPreparationCreateData(input: {
+    explicitMethod: string | null | undefined;
+    explicitNote: string | null | undefined;
+    explicitSource: RecipePreparationSource | null | undefined;
+    resolvedMethod: string | null;
+  }) {
+    const explicitMethod = this.normalizePreparationMethod(
+      input.explicitMethod,
+    );
+    const method = this.normalizePreparationMethod(input.resolvedMethod);
+    const note = this.normalizePreparationNote(input.explicitNote);
+    const hasExplicitContent = Boolean(explicitMethod) || Boolean(note);
+    const preparationSource = hasExplicitContent
+      ? (input.explicitSource ?? 'MANUAL')
+      : method
+        ? (input.explicitSource ?? 'AUTO')
+        : null;
+
+    return {
+      preparationMethod: method,
+      preparationNote: note,
+      preparationSource,
+    };
+  }
+
+  /**
+   * 修改原料时的预处理字段（2026-10-22 · Task 4）。
+   *
+   * 只有传了 method / note / source 才写这几列；保存队列回传未修改的旧值时
+   * 不把 AUTO 误翻成 MANUAL（内容没变就保留原来源）。
+   */
+  private buildPreparationUpdateData(input: {
+    explicitMethod: string | null | undefined;
+    explicitNote: string | null | undefined;
+    explicitSource: RecipePreparationSource | null | undefined;
+    currentMethod: string | null | undefined;
+    currentNote: string | null | undefined;
+    currentSource: string | null | undefined;
+  }) {
+    const currentMethod = this.normalizePreparationMethod(input.currentMethod);
+    const currentNote = this.normalizeStoredPreparationNote(input.currentNote);
+    const nextMethod =
+      input.explicitMethod !== undefined
+        ? this.normalizePreparationMethod(input.explicitMethod)
+        : currentMethod;
+    const nextNote =
+      input.explicitNote !== undefined
+        ? this.normalizePreparationNote(input.explicitNote)
+        : currentNote;
+    const contentChanged =
+      nextMethod !== currentMethod || nextNote !== currentNote;
+
+    let preparationSource: RecipePreparationSource | null;
+    if (input.explicitSource !== undefined) {
+      preparationSource = input.explicitSource;
+    } else if (contentChanged) {
+      preparationSource = nextMethod || nextNote ? 'MANUAL' : null;
+    } else {
+      preparationSource = this.normalizeStoredPreparationSource(
+        input.currentSource,
+      );
+    }
+
+    return {
+      preparationMethod: nextMethod,
+      preparationNote: nextNote,
+      preparationSource,
+    };
+  }
+
+  /** 发布/私密快照写库前的预处理字段（保留显式来源，自动兜底标 AUTO）。 */
+  private resolveSnapshotPreparation(input: {
+    note: string | null | undefined;
+    source: string | null | undefined;
+    usedAutomaticFallback: boolean;
+  }) {
+    return {
+      preparationNote: this.normalizeStoredPreparationNote(input.note),
+      preparationSource:
+        this.normalizeStoredPreparationSource(input.source) ??
+        (input.usedAutomaticFallback ? 'AUTO' : null),
+    };
+  }
+
+  /** 制作步骤读取（GET / 私有快照展示）：坏条目丢弃，避免脏数据锁死编辑器。 */
+  private readDraftProductionSteps(value: unknown): ProductionStep[] {
+    return readProductionSteps(value);
+  }
+
+  /** 制作步骤写入（PATCH / 发布 / 私密快照）：任何一条不合法都 400。 */
+  private validateDraftProductionSteps(
+    value: unknown,
+    options: { allowEmpty?: boolean } = {},
+  ): ProductionStep[] {
+    if (options.allowEmpty && (value === null || value === undefined)) {
+      return [];
+    }
+    const result = validateProductionSteps(value);
+    if (!result.ok) {
+      throw new BadRequestException(result.error);
+    }
+    return result.steps;
+  }
+
+  private buildProductionStepsSnapshotData(value: unknown): {
+    productionStepsJson: Prisma.InputJsonValue | typeof Prisma.DbNull;
+  } {
+    const steps = this.validateDraftProductionSteps(value, {
+      allowEmpty: true,
+    });
+    return {
+      productionStepsJson:
+        steps.length > 0 ? this.toJsonValue(steps) : Prisma.DbNull,
+    };
   }
 
   private async resolveDefaultPreparationMethodForIngredient(

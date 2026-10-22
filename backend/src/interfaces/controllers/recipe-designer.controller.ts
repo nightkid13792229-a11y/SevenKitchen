@@ -54,6 +54,7 @@ import {
   UpdateRecipeDesignItemOrderDto,
   UpdateRecipeDesignDraftDto,
   UpdateRecipeDesignItemDto,
+  UpdateRecipeProductionStepsDto,
 } from '../dto/recipe-designer/recipe-designer.dto';
 import { Roles, StaffGuard } from '../guards/role.guard';
 
@@ -493,6 +494,34 @@ export class RecipeDesignerController {
       toRecipeDesignerAccessContext(user),
     );
     return ApiResponseDto.success(draft);
+  }
+
+  @Get('drafts/:id/production-steps')
+  @ApiOperation({ summary: 'Get structured production steps of a draft' })
+  async getDraftProductionSteps(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.recipeDesignerService.getDraftProductionSteps(
+      id,
+      toRecipeDesignerAccessContext(user),
+    );
+    return ApiResponseDto.success(result);
+  }
+
+  @Patch('drafts/:id/production-steps')
+  @ApiOperation({ summary: 'Replace structured production steps of a draft' })
+  async updateDraftProductionSteps(
+    @Param('id') id: string,
+    @Body() dto: UpdateRecipeProductionStepsDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.recipeDesignerService.updateDraftProductionSteps(
+      id,
+      dto,
+      toRecipeDesignerAccessContext(user),
+    );
+    return ApiResponseDto.success(result);
   }
 
   @Post('drafts/:id/private-recipe-snapshot')

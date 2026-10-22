@@ -1,17 +1,21 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   ArrayMinSize,
   IsArray,
   IsBoolean,
   IsIn,
+  IsInt,
   IsNumber,
   IsObject,
   IsOptional,
   IsString,
   Max,
+  MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
+import { PRODUCTION_STEP_LIMITS } from '../../../domain/recipe-designer/production-steps';
 
 export const RECIPE_DESIGNER_SCENARIOS = [
   'EARLY_GROWTH_REPRODUCTION',
@@ -388,6 +392,14 @@ export class RecipeDesignSupplementTargetDto {
   targetValuePerKg?: number;
 }
 
+/** 原料预处理来源：AUTO = 系统默认带出；MANUAL = 人工修改。 */
+export const RECIPE_PREPARATION_SOURCES = ['AUTO', 'MANUAL'] as const;
+
+export type RecipePreparationSource =
+  (typeof RECIPE_PREPARATION_SOURCES)[number];
+
+export const RECIPE_PREPARATION_NOTE_MAX_LENGTH = 500;
+
 export class AddRecipeDesignItemDto {
   @IsOptional()
   @IsString()
@@ -404,6 +416,15 @@ export class AddRecipeDesignItemDto {
   @IsOptional()
   @IsString()
   preparationMethod?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(RECIPE_PREPARATION_NOTE_MAX_LENGTH)
+  preparationNote?: string;
+
+  @IsOptional()
+  @IsIn(RECIPE_PREPARATION_SOURCES)
+  preparationSource?: RecipePreparationSource;
 
   @IsOptional()
   @IsString()
@@ -440,6 +461,15 @@ export class UpdateRecipeDesignItemDto {
   @IsOptional()
   @IsString()
   preparationMethod?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(RECIPE_PREPARATION_NOTE_MAX_LENGTH)
+  preparationNote?: string | null;
+
+  @IsOptional()
+  @IsIn(RECIPE_PREPARATION_SOURCES)
+  preparationSource?: RecipePreparationSource | null;
 
   @IsOptional()
   @IsString()
@@ -488,6 +518,51 @@ export class UpdateRecipeDesignItemOrderDto {
   @IsArray()
   @IsString({ each: true })
   itemIds!: string[];
+}
+
+/**
+ * 结构化制作步骤（2026-10-22 · Task 4）。
+ *
+ * `sortOrder` 从 1 开始、同一草稿内唯一，数组按升序提交；
+ * 操作说明必填，时间/温度/设备可选。
+ */
+export class RecipeProductionStepDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(PRODUCTION_STEP_LIMITS.minSortOrder)
+  @Max(PRODUCTION_STEP_LIMITS.maxSortOrder)
+  sortOrder!: number;
+
+  @IsString()
+  @MaxLength(PRODUCTION_STEP_LIMITS.maxInstructionLength)
+  instruction!: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(PRODUCTION_STEP_LIMITS.maxDurationMinutes)
+  durationMinutes?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(PRODUCTION_STEP_LIMITS.minTemperatureC)
+  @Max(PRODUCTION_STEP_LIMITS.maxTemperatureC)
+  temperatureC?: number | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(PRODUCTION_STEP_LIMITS.maxEquipmentLength)
+  equipment?: string | null;
+}
+
+export class UpdateRecipeProductionStepsDto {
+  @IsArray()
+  @ArrayMaxSize(PRODUCTION_STEP_LIMITS.maxSteps)
+  @ValidateNested({ each: true })
+  @Type(() => RecipeProductionStepDto)
+  steps!: RecipeProductionStepDto[];
 }
 
 export class PublishRecipeDesignDraftDto {

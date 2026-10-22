@@ -17,7 +17,6 @@ import type {
   IngredientDraft,
   MergePlan,
   NutritionEvidenceEntry,
-  ProfileDraft,
 } from '../../../application/ingredient-creation/ingredient-creation.types';
 import type { PreparationState } from '../../../domain/ingredient-creation/preparation-state';
 import type { CoverageCategory } from '../../../domain/ingredient-creation/state-coverage';
@@ -26,6 +25,7 @@ import {
   CREATION_STEPS,
   PREPARATION_STATES,
 } from './ingredient-creation.constants';
+import { NutritionEvidenceEntryDto } from './nutrition-evidence-entry.dto';
 
 /**
  * 起手口径卡的可 patch 片段。
@@ -87,6 +87,32 @@ export class UpdateDraftIntakeDto {
   suggestedStates?: PreparationState[];
 }
 
+/** ③ 一份已建好的营养档案（终检的覆盖判断与提交共用同一形状）。 */
+export class UpdateDraftProfileDto {
+  @ApiProperty({ description: '生还是熟', enum: PREPARATION_STATES })
+  @IsIn(PREPARATION_STATES)
+  preparationState!: PreparationState;
+
+  @ApiProperty({ description: '该档案的来源记录 id' })
+  @IsString()
+  @IsNotEmpty()
+  sourceRecordId!: string;
+
+  @ApiProperty({
+    description: '证据账本',
+    type: () => [NutritionEvidenceEntryDto],
+  })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => NutritionEvidenceEntryDto)
+  entries!: NutritionEvidenceEntryDto[];
+
+  @ApiPropertyOptional({ description: '备注', nullable: true })
+  @IsOptional()
+  @IsString()
+  notes?: string | null;
+}
+
 /**
  * 草稿 payload 的可写入键。
  *
@@ -115,16 +141,16 @@ export class UpdateDraftPayloadDto {
   @IsArray()
   evidence?: NutritionEvidenceEntry[];
 
-  /**
-   * 已建好的营养档案。终检的「生熟覆盖」需要知道哪些状态已经有档案；
-   * 共享的 `IngredientCreationDraftPayload` 类型尚未包含这个键（见交付报告），
-   * 先在 DTO 层允许它落草稿，避免终检只能看到当前缝合方案的那一份。
-   */
-  @ApiPropertyOptional({ description: '已建好的营养档案', isArray: true })
+  /** 已建好的营养档案：终检据此判断哪些生熟状态已经有档案。 */
+  @ApiPropertyOptional({
+    description: '已建好的营养档案',
+    type: () => [UpdateDraftProfileDto],
+  })
   @IsOptional()
   @IsArray()
-  @IsObject({ each: true })
-  profiles?: ProfileDraft[];
+  @ValidateNested({ each: true })
+  @Type(() => UpdateDraftProfileDto)
+  profiles?: UpdateDraftProfileDto[];
 
   @ApiPropertyOptional({ description: '终检结果' })
   @IsOptional()

@@ -14,16 +14,14 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import type {
-  IngredientDraft,
-  NutritionEvidenceEntry,
-} from '../../../application/ingredient-creation/ingredient-creation.types';
+import type { IngredientDraft } from '../../../application/ingredient-creation/ingredient-creation.types';
 import type { PreparationState } from '../../../domain/ingredient-creation/preparation-state';
 import {
   BASE_UNITS,
   INGREDIENT_TYPES,
   PREPARATION_STATES,
 } from './ingredient-creation.constants';
+import { NutritionEvidenceEntryDto } from './nutrition-evidence-entry.dto';
 
 /** ⑤ 标准原料预填值。 */
 export class CommitIngredientDto {
@@ -67,10 +65,14 @@ export class CommitProfileDto {
   @IsNotEmpty()
   sourceRecordId!: string;
 
-  @ApiProperty({ description: '证据账本', isArray: true })
+  @ApiProperty({
+    description: '证据账本',
+    type: () => [NutritionEvidenceEntryDto],
+  })
   @IsArray()
-  @IsObject({ each: true })
-  entries!: NutritionEvidenceEntry[];
+  @ValidateNested({ each: true })
+  @Type(() => NutritionEvidenceEntryDto)
+  entries!: NutritionEvidenceEntryDto[];
 
   @ApiPropertyOptional({ description: '备注', nullable: true })
   @IsOptional()

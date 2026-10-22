@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   INestApplication,
   NotFoundException,
   ValidationPipe,
@@ -6,27 +7,19 @@ import {
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { IngredientCreationCandidateService } from '../../../src/application/ingredient-creation/ingredient-creation-candidate.service';
+import { IngredientCreationCheckService } from '../../../src/application/ingredient-creation/ingredient-creation-check.service';
 import { IngredientCreationCommitService } from '../../../src/application/ingredient-creation/ingredient-creation-commit.service';
 import { IngredientCreationDraftService } from '../../../src/application/ingredient-creation/ingredient-creation-draft.service';
+import { IngredientCreationMergeService } from '../../../src/application/ingredient-creation/ingredient-creation-merge.service';
 import type {
   FinalCheckResult,
   IngredientCreationDraft,
   MergePlan,
 } from '../../../src/application/ingredient-creation/ingredient-creation.types';
-import { runFinalCheck } from '../../../src/domain/ingredient-creation/final-check';
-import { PrismaService } from '../../../src/infrastructure/prisma.service';
 import { JwtAuthService } from '../../../src/interfaces/auth/jwt.service';
 import { AuthGuard } from '../../../src/interfaces/auth/auth.guard';
 import { IngredientCreationController } from '../../../src/interfaces/controllers/ingredient-creation.controller';
 import { AdminGuard } from '../../../src/interfaces/guards/role.guard';
-
-jest.mock('../../../src/domain/ingredient-creation/final-check', () => ({
-  runFinalCheck: jest.fn(),
-}));
-
-const runFinalCheckMock = runFinalCheck as jest.MockedFunction<
-  typeof runFinalCheck
->;
 
 const BASE_PATH = '/api/v1/admin/ingredient-creation';
 const ADMIN_TOKEN = 'admin-token';
@@ -79,15 +72,40 @@ const evidenceEntry = {
   confirmedAt: null,
 };
 
+const commitBody = {
+  ingredient: {
+    name: '鸡肝',
+    type: 'FOOD',
+    baseUnit: 'G',
+    unitDisplayLabel: '克',
+    cfctClass: '畜肉类',
+    edibleYieldRate: 0.95,
+  },
+  profiles: [
+    {
+      preparationState: 'RAW',
+      sourceRecordId: 'src-primary',
+      entries: [evidenceEntry],
+      notes: null,
+    },
+    {
+      preparationState: 'COOKED',
+      sourceRecordId: 'src-cooked',
+      entries: [{ ...evidenceEntry, sourceRecordId: 'src-cooked' }],
+      notes: null,
+    },
+  ],
+  primaryProfileIndex: 0,
+};
+
 describe('IngredientCreationController', () => {
   let app: INestApplication;
   let controller: IngredientCreationController;
   let draftService: ServiceMock;
   let candidateService: ServiceMock;
+  let mergeService: ServiceMock;
+  let checkService: ServiceMock;
   let commitService: ServiceMock;
-  let prisma: {
-    nutritionSourceRecord: { findMany: jest.Mock };
-  };
   let jwtAuthService: { validateToken: jest.Mock };
 
   beforeEach(async () => {
@@ -95,18 +113,20 @@ describe('IngredientCreationController', () => {
       create: jest.fn(),
       get: jest.fn(),
       patch: jest.fn(),
-      appendProposal: jest.fn(),
     };
     candidateService = {
       findCandidates: jest.fn(),
     };
+    mergeService = {
+      createMergePlan: jest.fn(),
+      resolveConflict: jest.fn(),
+    };
+    checkService = {
+      runCheck: jest.fn(),
+      assertCommitAllowed: jest.fn(),
+    };
     commitService = {
       commit: jest.fn(),
-    };
-    prisma = {
-      nutritionSourceRecord: {
-        findMany: jest.fn().mockResolvedValue([]),
-      },
     };
     jwtAuthService = {
       validateToken: jest.fn().mockReturnValue({
@@ -115,7 +135,6 @@ describe('IngredientCreationController', () => {
         role: 'ADMIN',
       }),
     };
-    runFinalCheckMock.mockReset();
 
     const moduleRef: TestingModule = await Test.createTestingModule({
       controllers: [IngredientCreationController],
@@ -125,8 +144,9 @@ describe('IngredientCreationController', () => {
           provide: IngredientCreationCandidateService,
           useValue: candidateService,
         },
+        { provide: IngredientCreationMergeService, useValue: mergeService },
+        { provide: IngredientCreationCheckService, useValue: checkService },
         { provide: IngredientCreationCommitService, useValue: commitService },
-        { provide: PrismaService, useValue: prisma },
         { provide: JwtAuthService, useValue: jwtAuthService },
         AuthGuard,
         AdminGuard,
@@ -210,7 +230,7 @@ describe('IngredientCreationController', () => {
         .expect(404);
     });
 
-    it('PATCH drafts/:id 剥掉 payload.proposalHistory，服务收到的 payload 没有该键', async () => {
+    it('PATCH drafts/:id 剥掉 payload.proposalHistory，保留 profiles', async () => {
       draftService.patch.mockResolvedValue(
         createDraft({
           step: 'PROFILE',
@@ -240,7 +260,7 @@ describe('IngredientCreationController', () => {
               {
                 preparationState: 'RAW',
                 sourceRecordId: 'src-primary',
-                entries: [],
+                entries: [evidenceEntry],
                 notes: null,
               },
             ],
@@ -268,6 +288,25 @@ describe('IngredientCreationController', () => {
         .send({
           step: 'PROFILE',
           payload: { intake: { category: 'NOT_A_CATEGORY' } },
+        })
+        .expect(400);
+
+      expect(draftService.patch).not.toHaveBeenCalled();
+    });
+
+    it('PATCH drafts/:id 的 profiles 形状非法 → 400', async () => {
+      await authorizedPatch('/drafts/draft-1')
+        .send({
+          step: 'PROFILE',
+          payload: {
+            profiles: [
+              {
+                preparationState: 'FRIED',
+                sourceRecordId: 'src-primary',
+                entries: [evidenceEntry],
+              },
+            ],
+          },
         })
         .expect(400);
 
@@ -325,27 +364,8 @@ describe('IngredientCreationController', () => {
   });
 
   describe('merge', () => {
-    it('把 normalizedNutrition 适配成 SourceNutrition 并返回 MergePlan', async () => {
-      draftService.get.mockResolvedValue(createDraft());
-      draftService.patch.mockResolvedValue(createDraft());
-      prisma.nutritionSourceRecord.findMany.mockResolvedValue([
-        {
-          id: 'src-primary',
-          sourceType: 'USDA',
-          normalizedNutrition: {
-            meta: { rawBasisType: 'PER_100_G', sampleState: 'RAW' },
-            macros: { crudeProtein: 20 },
-          },
-        },
-        {
-          id: 'src-supplemental',
-          sourceType: 'CNF',
-          normalizedNutrition: {
-            meta: { rawBasisType: 'PER_100_G' },
-            macros: { crudeFat: 5 },
-          },
-        },
-      ]);
+    it('merge 只转发给缝合服务一次', async () => {
+      mergeService.createMergePlan.mockResolvedValue(mergePlan);
 
       const response = await authorizedPost('/drafts/draft-1/merge')
         .send({
@@ -354,122 +374,54 @@ describe('IngredientCreationController', () => {
         })
         .expect(201);
 
-      const plan = response.body.data as MergePlan;
-      expect(plan.primarySourceRecordId).toBe('src-primary');
-      const protein = plan.rows.find(
-        (row) => row.fieldPath === 'macros.crudeProtein',
-      );
-      const fat = plan.rows.find((row) => row.fieldPath === 'macros.crudeFat');
-      expect(protein).toMatchObject({ status: 'DIRECT', value: 20 });
-      expect(fat).toMatchObject({ status: 'FILLED', value: 5 });
-      expect(draftService.patch).toHaveBeenCalledWith('draft-1', 'SOURCES', {
-        mergePlan: plan,
+      expect(mergeService.createMergePlan).toHaveBeenCalledTimes(1);
+      expect(mergeService.createMergePlan).toHaveBeenCalledWith('draft-1', {
+        primarySourceRecordId: 'src-primary',
+        supplementalSourceRecordIds: ['src-supplemental'],
       });
+      expect(response.body.data).toEqual(mergePlan);
     });
 
-    it('merge/resolve 的领域层普通 Error 映射成 400', async () => {
-      draftService.get.mockResolvedValue(
-        createDraft({ payload: { mergePlan } }),
-      );
+    it('merge/resolve 只转发人工裁决，不碰提案历史', async () => {
+      const resolved: MergePlan = { ...mergePlan, conflicts: [] };
+      mergeService.resolveConflict.mockResolvedValue(resolved);
 
       const response = await authorizedPost('/drafts/draft-1/merge/resolve')
         .send({ fieldPath: 'minerals.iron', sourceRecordId: 'src-primary' })
-        .expect(400);
+        .expect(201);
 
-      expect(response.body.message).toContain('No unresolved conflict');
+      expect(mergeService.resolveConflict).toHaveBeenCalledTimes(1);
+      expect(mergeService.resolveConflict).toHaveBeenCalledWith('draft-1', {
+        fieldPath: 'minerals.iron',
+        sourceRecordId: 'src-primary',
+      });
       expect(draftService.patch).not.toHaveBeenCalled();
+      expect(response.body.data).toEqual(resolved);
     });
   });
 
   describe('check', () => {
-    it('只调用一次 runFinalCheck，不在控制器里重算', async () => {
-      draftService.get.mockResolvedValue(
-        createDraft({
-          payload: {
-            intake: {
-              name: '鸡肝',
-              nameEn: 'Chicken liver',
-              aliases: [],
-              confusables: [],
-              category: 'MEAT_ORGAN',
-              requiredStates: ['RAW'],
-              suggestedStates: ['COOKED'],
-            },
-            profiles: [
-              { preparationState: 'RAW' },
-              { preparationState: 'COOKED' },
-            ],
-            mergePlan,
-          } as never,
-        }),
-      );
-      prisma.nutritionSourceRecord.findMany.mockResolvedValue([
-        {
-          id: 'src-primary',
-          sourceType: 'USDA',
-          normalizedNutrition: {
-            meta: { rawBasisType: 'PER_100_G', sampleState: 'RAW' },
-            macros: { crudeProtein: 20 },
-          },
-        },
-      ]);
-      const checkResult: FinalCheckResult = {
+    it('check 只调用终检服务一次', async () => {
+      const result: FinalCheckResult = {
         blocking: [],
         exceptionable: [],
         warnings: [],
       };
-      runFinalCheckMock.mockReturnValue(checkResult);
+      checkService.runCheck.mockResolvedValue(result);
 
       const response = await authorizedPost('/drafts/draft-1/check').expect(
         201,
       );
 
-      expect(runFinalCheckMock).toHaveBeenCalledTimes(1);
-      expect(draftService.get).toHaveBeenCalledTimes(1);
-      expect(response.body.data).toEqual(checkResult);
-
-      const input = runFinalCheckMock.mock.calls[0][0];
-      expect(input.entries).toHaveLength(1);
-      expect(input.entries[0]).toMatchObject({
-        fieldPath: 'macros.crudeProtein',
-        finalValue: 20,
-        unit: 'g',
-      });
-      expect(input.coverage).toEqual({
-        required: ['RAW'],
-        present: ['RAW', 'COOKED'],
-      });
+      expect(checkService.runCheck).toHaveBeenCalledTimes(1);
+      expect(checkService.runCheck).toHaveBeenCalledWith('draft-1');
+      expect(response.body.data).toEqual(result);
     });
   });
 
   describe('commit', () => {
-    const commitBody = {
-      ingredient: {
-        name: '鸡肝',
-        type: 'FOOD',
-        baseUnit: 'G',
-        unitDisplayLabel: '克',
-        cfctClass: '畜肉类',
-        edibleYieldRate: 0.95,
-      },
-      profiles: [
-        {
-          preparationState: 'RAW',
-          sourceRecordId: 'src-primary',
-          entries: [evidenceEntry],
-          notes: null,
-        },
-        {
-          preparationState: 'COOKED',
-          sourceRecordId: 'src-cooked',
-          entries: [{ ...evidenceEntry, sourceRecordId: 'src-cooked' }],
-          notes: null,
-        },
-      ],
-      primaryProfileIndex: 0,
-    };
-
-    it('只调用一次 commit 服务，并传 userId', async () => {
+    it('先做提交前置检查，再调用 commit 服务一次', async () => {
+      checkService.assertCommitAllowed.mockResolvedValue(undefined);
       commitService.commit.mockResolvedValue({
         ingredientId: 'ing-1',
         nutritionFoodIds: ['nf-1', 'nf-2'],
@@ -480,7 +432,13 @@ describe('IngredientCreationController', () => {
         .send(commitBody)
         .expect(201);
 
+      expect(checkService.assertCommitAllowed).toHaveBeenCalledTimes(1);
+      expect(checkService.assertCommitAllowed).toHaveBeenCalledWith('draft-1');
       expect(commitService.commit).toHaveBeenCalledTimes(1);
+      expect(
+        checkService.assertCommitAllowed.mock.invocationCallOrder[0],
+      ).toBeLessThan(commitService.commit.mock.invocationCallOrder[0]);
+
       const input = commitService.commit.mock.calls[0][0];
       expect(input).toMatchObject({
         draftId: 'draft-1',
@@ -501,7 +459,24 @@ describe('IngredientCreationController', () => {
       });
     });
 
-    it('同一 preparationState 出现两份 → 400，且不调用 commit 服务', async () => {
+    it('终检有 blocking 时 commit 服务一次都不调用', async () => {
+      const blocking = [{ code: 'UNIT_NOT_ALLOWED', message: '单位不合法' }];
+      checkService.assertCommitAllowed.mockRejectedValue(
+        new BadRequestException({
+          message: '终检存在阻断项，不能提交',
+          blocking,
+        }),
+      );
+
+      const response = await authorizedPost('/drafts/draft-1/commit')
+        .send(commitBody)
+        .expect(400);
+
+      expect(commitService.commit).not.toHaveBeenCalled();
+      expect(response.body.blocking).toEqual(blocking);
+    });
+
+    it('同一 preparationState 出现两份 → 400，且不调用任何服务', async () => {
       const duplicatedBody = {
         ...commitBody,
         profiles: [
@@ -514,6 +489,7 @@ describe('IngredientCreationController', () => {
         .send(duplicatedBody)
         .expect(400);
 
+      expect(checkService.assertCommitAllowed).not.toHaveBeenCalled();
       expect(commitService.commit).not.toHaveBeenCalled();
     });
 
@@ -539,6 +515,85 @@ describe('IngredientCreationController', () => {
 
       expect(commitService.commit).not.toHaveBeenCalled();
     });
+
+    it('entry 的 finalValue 是字符串 → 400，不做隐式转换', async () => {
+      await authorizedPost('/drafts/draft-1/commit')
+        .send({
+          ...commitBody,
+          profiles: [
+            {
+              ...commitBody.profiles[0],
+              entries: [{ ...evidenceEntry, finalValue: '20.4' }],
+            },
+          ],
+        })
+        .expect(400);
+
+      expect(commitService.commit).not.toHaveBeenCalled();
+    });
+
+    it('entry 的 fieldPath 不是字符串 → 400', async () => {
+      await authorizedPost('/drafts/draft-1/commit')
+        .send({
+          ...commitBody,
+          profiles: [
+            {
+              ...commitBody.profiles[0],
+              entries: [{ ...evidenceEntry, fieldPath: 123 }],
+            },
+          ],
+        })
+        .expect(400);
+
+      expect(commitService.commit).not.toHaveBeenCalled();
+    });
+
+    it('缺失字段用 null 仍然放行', async () => {
+      checkService.assertCommitAllowed.mockResolvedValue(undefined);
+      commitService.commit.mockResolvedValue({
+        ingredientId: 'ing-1',
+        nutritionFoodIds: ['nf-1'],
+        auditId: 'audit-1',
+      });
+
+      const nullEntry = {
+        fieldPath: 'macros.crudeProtein',
+        finalValue: null,
+        unit: 'g',
+        status: 'DIRECT',
+        sourceRecordId: null,
+        sourceValue: null,
+        sourceUnit: null,
+        formula: null,
+        confirmedBy: null,
+        confirmedAt: null,
+      };
+
+      await authorizedPost('/drafts/draft-1/commit')
+        .send({
+          ingredient: commitBody.ingredient,
+          profiles: [
+            {
+              preparationState: 'RAW',
+              sourceRecordId: 'src-primary',
+              entries: [nullEntry],
+              notes: null,
+            },
+          ],
+          primaryProfileIndex: 0,
+        })
+        .expect(201);
+
+      expect(commitService.commit).toHaveBeenCalledTimes(1);
+      expect(
+        commitService.commit.mock.calls[0][0].profiles[0].entries[0],
+      ).toMatchObject({
+        finalValue: null,
+        sourceRecordId: null,
+        sourceValue: null,
+        sourceUnit: null,
+      });
+    });
   });
 
   // 控制器方法可以直接调用（绕过管道）时也要剥掉 proposalHistory —— 服务层兜底之外的显式防线。
@@ -557,36 +612,5 @@ describe('IngredientCreationController', () => {
 
     const payload = draftService.patch.mock.calls[0][2];
     expect(payload).not.toHaveProperty('proposalHistory');
-  });
-
-  // 第二道防线在服务层：即便有人绕过 HTTP/管道直接调 patch，也不能覆盖 AI 提案历史。
-  it('草稿服务 patch 的兜底也会剥掉 proposalHistory', async () => {
-    const rawQuery = jest.fn().mockResolvedValue([]);
-    const service = new IngredientCreationDraftService({
-      $queryRaw: rawQuery,
-    } as never);
-
-    await expect(
-      service.patch('draft-1', 'PROFILE', {
-        intake: {
-          name: '鸡肝',
-          nameEn: 'Chicken liver',
-          aliases: [],
-          confusables: [],
-          category: 'MEAT_ORGAN',
-          requiredStates: ['RAW'],
-          suggestedStates: ['COOKED'],
-        },
-        proposalHistory: [
-          { kind: 'MERGE', createdAt: '2026-10-22T00:00:00.000Z' },
-        ],
-      } as never),
-    ).rejects.toBeInstanceOf(NotFoundException);
-
-    const serializedPayload = JSON.parse(rawQuery.mock.calls[0][1] as string);
-    expect(serializedPayload).not.toHaveProperty('proposalHistory');
-    expect(serializedPayload).toMatchObject({
-      intake: { name: '鸡肝', category: 'MEAT_ORGAN' },
-    });
   });
 });

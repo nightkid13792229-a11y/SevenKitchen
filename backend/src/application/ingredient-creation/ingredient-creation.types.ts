@@ -218,6 +218,8 @@ export interface IngredientCreationDraftPayload {
   candidates?: CandidateRow[];
   mergePlan?: MergePlan;
   evidence?: NutritionEvidenceEntry[];
+  /** ③ 已建好的营养档案；终检的「生熟覆盖」要用它判断哪些状态已经有了。 */
+  profiles?: ProfileDraft[];
   checks?: FinalCheckResult;
   ingredient?: IngredientDraft;
   verify?: { exceptions: ExceptionRecord[] };

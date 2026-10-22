@@ -232,6 +232,24 @@ describe('IngredientCreationDraftService', () => {
     ]);
   });
 
+  it('patch 兜底剥掉 proposalHistory，不允许覆盖 AI 提案历史', async () => {
+    const created = await service.create({
+      name: '鸡肝',
+      type: 'FOOD',
+      createdBy: 'u1',
+    });
+
+    await service.patch(created.id, 'PROFILE', {
+      proposalHistory: [{ kind: 'MERGE', createdAt: '2026-10-22T00:00:00Z' }],
+    });
+
+    const [, serializedPayload] = prisma.$queryRaw.mock.calls[0];
+    expect(JSON.parse(serializedPayload as string)).toEqual({});
+
+    const fresh = await service.get(created.id);
+    expect(fresh.payload.proposalHistory).toBeUndefined();
+  });
+
   it('appendProposal 找不到草稿时抛 NotFoundException', async () => {
     await expect(
       service.appendProposal('missing-draft', {}, 'INTAKE'),

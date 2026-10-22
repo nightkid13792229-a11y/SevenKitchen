@@ -260,6 +260,7 @@ import { NutrientMappingAuditService } from './application/nutrition-calculation
 import { NutritionUnitNormalizerService } from './application/nutrition-calculation/nutrition-unit-normalizer.service';
 import { NutritionStandardService } from './application/nutrition-standard/nutrition-standard.service';
 import { RecipeDesignerService } from './application/recipe-designer/recipe-designer.service';
+import { SupplementTargetService } from './application/recipe-designer/supplement-target.service';
 import { OrderRecipeDesignService } from './application/recipe-designer/order-recipe-design.service';
 import { OrderRecipeTemplateService } from './application/recipe-designer/order-recipe-template.service';
 import { AiDesignSuggestionService } from './application/recipe-designer/ai-design-suggestion.service';
@@ -901,6 +902,7 @@ validatePrismaConfig();
     IngredientBatchReplaceService,
     NutritionStandardService,
     RecipeDesignerService,
+    SupplementTargetService,
     OrderRecipeDesignService,
     OrderRecipeTemplateService,
     {

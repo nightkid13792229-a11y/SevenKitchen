@@ -362,6 +362,32 @@ export class UpdateRecipeDesignDraftDto {
   notes?: string | null;
 }
 
+/**
+ * 补剂目标营养素（2026-10-22 · Task 3）。
+ *
+ * 一个目标永远只对应一个 `fieldPath`；组合用派生字段（如 `derived.epaDha`）。
+ * `targetValuePerKg` 是服务端算出的添加浓度缓存，客户端可回传但不会被信任，
+ * 服务端始终按当前配方重新计算。
+ */
+export class RecipeDesignSupplementTargetDto {
+  @IsOptional()
+  @IsString()
+  fieldPath?: string;
+
+  @IsOptional()
+  @IsString()
+  label?: string;
+
+  @IsOptional()
+  @IsString()
+  unit?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  targetValuePerKg?: number;
+}
+
 export class AddRecipeDesignItemDto {
   @IsOptional()
   @IsString()
@@ -390,8 +416,9 @@ export class AddRecipeDesignItemDto {
 
   @IsOptional()
   @IsArray()
-  @IsObject({ each: true })
-  supplementTargets?: Array<Record<string, unknown>>;
+  @ValidateNested({ each: true })
+  @Type(() => RecipeDesignSupplementTargetDto)
+  supplementTargets?: RecipeDesignSupplementTargetDto[];
 
   @IsOptional()
   @Type(() => Number)
@@ -425,8 +452,9 @@ export class UpdateRecipeDesignItemDto {
 
   @IsOptional()
   @IsArray()
-  @IsObject({ each: true })
-  supplementTargets?: Array<Record<string, unknown>> | null;
+  @ValidateNested({ each: true })
+  @Type(() => RecipeDesignSupplementTargetDto)
+  supplementTargets?: RecipeDesignSupplementTargetDto[] | null;
 
   @IsOptional()
   @Type(() => Number)

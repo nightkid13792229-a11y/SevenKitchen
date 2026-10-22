@@ -25,8 +25,8 @@ describe('NutritionFoodService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    searchGovernance.expandQuery.mockImplementation(async (_domain, rawQuery) =>
-      rawQuery ? [rawQuery] : [],
+    searchGovernance.expandQuery.mockImplementation(
+      async (_domain, rawQuery) => (rawQuery ? [rawQuery] : []),
     );
     searchGovernance.recordSearchEvent.mockResolvedValue({ id: 'query-log-1' });
     service = new NutritionFoodService(prisma, searchGovernance as any);
@@ -70,7 +70,9 @@ describe('NutritionFoodService', () => {
   });
 
   it('falls back to the original nutrition food search when search governance fails', async () => {
-    searchGovernance.expandQuery.mockRejectedValue(new Error('alias unavailable'));
+    searchGovernance.expandQuery.mockRejectedValue(
+      new Error('alias unavailable'),
+    );
     prisma.nutritionFood.count.mockResolvedValue(0);
     prisma.nutritionFood.findMany.mockResolvedValue([]);
 
@@ -105,8 +107,9 @@ describe('NutritionFoodService', () => {
     await service.findAll({ search: '西蓝花', page: 1, pageSize: 20 });
 
     const where = prisma.nutritionFood.count.mock.calls[0][0].where;
-    const searchedNames = where.OR.filter((condition: any) => condition.name)
-      .map((condition: any) => condition.name.contains);
+    const searchedNames = where.OR.filter(
+      (condition: any) => condition.name,
+    ).map((condition: any) => condition.name.contains);
     expect(searchedNames).toEqual([
       '西蓝花',
       'alias-1',
@@ -200,6 +203,73 @@ describe('NutritionFoodService', () => {
         displayNameZh: '三文鱼，大西洋，养殖，生',
         displayNameZhSource: 'MANUAL',
         displayNameZhReviewedBy: 'staff-1',
+      }),
+    );
+  });
+
+  it('persists supplement default targets on create and update', async () => {
+    prisma.nutritionFood.findFirst.mockResolvedValue(null);
+    prisma.nutritionFood.create.mockImplementation(async (args: any) => ({
+      id: 'food-1',
+      version: 1,
+      status: 'PENDING',
+      createdAt: new Date('2026-05-18T00:00:00.000Z'),
+      updatedAt: new Date('2026-05-18T00:00:00.000Z'),
+      mappings: [],
+      ...args.data,
+    }));
+
+    await service.create(
+      {
+        name: '纤维素粉',
+        category: NutritionFoodCategory.OTHER,
+        dataSource: 'MANUAL',
+        nutritionData: {},
+        defaultSupplementTargets: [
+          { fieldPath: 'macros.fiber', label: '膳食纤维', unit: 'g' },
+        ],
+      } as any,
+      'staff-1',
+    );
+
+    expect(prisma.nutritionFood.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        defaultSupplementTargets: [
+          { fieldPath: 'macros.fiber', label: '膳食纤维', unit: 'g' },
+        ],
+      }),
+      include: { mappings: true },
+    });
+
+    prisma.nutritionFood.findUnique.mockResolvedValue({ id: 'food-1' });
+    prisma.nutritionFood.update.mockImplementation(async (args: any) => ({
+      id: 'food-1',
+      version: 1,
+      status: 'VERIFIED',
+      nutritionData: {},
+      createdAt: new Date('2026-05-18T00:00:00.000Z'),
+      updatedAt: new Date('2026-05-18T00:00:00.000Z'),
+      mappings: [],
+      ...args.data,
+    }));
+
+    await (service as any).update(
+      'food-1',
+      {
+        defaultSupplementTargets: [
+          { fieldPath: 'vitamins.vitaminA', label: '维生素 A', unit: 'IU' },
+        ],
+      },
+      'staff-1',
+    );
+
+    expect(prisma.nutritionFood.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          defaultSupplementTargets: [
+            { fieldPath: 'vitamins.vitaminA', label: '维生素 A', unit: 'IU' },
+          ],
+        }),
       }),
     );
   });

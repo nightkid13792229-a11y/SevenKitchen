@@ -253,6 +253,9 @@ export class NutritionFoodService {
         ediblePortionLabel: dto.ediblePortionLabel,
         processingLabel: dto.processingLabel,
         nutritionData: dto.nutritionData as any,
+        ...(dto.defaultSupplementTargets !== undefined && {
+          defaultSupplementTargets: dto.defaultSupplementTargets as any,
+        }),
         notes: dto.notes,
         createdBy: userId,
         status: NutritionFoodStatus.PENDING,
@@ -301,6 +304,9 @@ export class NutritionFoodService {
         }),
         ...(dto.nutritionData !== undefined && {
           nutritionData: dto.nutritionData as any,
+        }),
+        ...(dto.defaultSupplementTargets !== undefined && {
+          defaultSupplementTargets: dto.defaultSupplementTargets as any,
         }),
         ...(dto.notes !== undefined && { notes: dto.notes }),
       },
@@ -836,6 +842,8 @@ export class NutritionFoodService {
       version: item.version,
       status: item.status,
       nutritionData: item.nutritionData,
+      defaultSupplementTargets:
+        (item.defaultSupplementTargets as any) ?? undefined,
       notes: item.notes ?? undefined,
       createdBy: item.createdBy ?? undefined,
       verifiedBy: item.verifiedBy ?? undefined,

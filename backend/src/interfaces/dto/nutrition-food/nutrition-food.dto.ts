@@ -4,6 +4,7 @@
  */
 
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
   IsString,
   IsOptional,
@@ -14,8 +15,30 @@ import {
   Min,
   Max,
   IsArray,
+  ValidateNested,
 } from 'class-validator';
 import { NutritionFoodCategory, NutritionFoodStatus } from '@prisma/client';
+
+/**
+ * 补剂营养档案的默认目标营养素（2026-10-22）。
+ *
+ * 只作为设计器「添加补剂」时的初始值；食谱内修改目标不反写档案。
+ */
+export class NutritionSupplementTargetDto {
+  @ApiProperty({ description: '目标营养素字段，如 macros.fiber' })
+  @IsString()
+  fieldPath!: string;
+
+  @ApiPropertyOptional({ description: '展示名称' })
+  @IsOptional()
+  @IsString()
+  label?: string;
+
+  @ApiPropertyOptional({ description: '展示单位' })
+  @IsOptional()
+  @IsString()
+  unit?: string;
+}
 
 // === 创建请求 ===
 
@@ -71,6 +94,16 @@ export class CreateNutritionFoodDto {
   @IsObject()
   nutritionData!: Record<string, number>;
 
+  @ApiPropertyOptional({
+    description: '补剂默认目标营养素（仅补剂档案使用）',
+    type: [NutritionSupplementTargetDto],
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => NutritionSupplementTargetDto)
+  defaultSupplementTargets?: NutritionSupplementTargetDto[];
+
   @ApiPropertyOptional({ description: '备注' })
   @IsOptional()
   @IsString()
@@ -119,6 +152,16 @@ export class UpdateNutritionFoodDto {
   @IsOptional()
   @IsObject()
   nutritionData?: Record<string, number>;
+
+  @ApiPropertyOptional({
+    description: '补剂默认目标营养素，空数组表示清空',
+    type: [NutritionSupplementTargetDto],
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => NutritionSupplementTargetDto)
+  defaultSupplementTargets?: NutritionSupplementTargetDto[];
 
   @ApiPropertyOptional({ description: '备注' })
   @IsOptional()
@@ -251,6 +294,12 @@ export class NutritionFoodResponseDto {
 
   @ApiProperty()
   nutritionData!: Record<string, any>;
+
+  @ApiPropertyOptional({
+    description: '补剂默认目标营养素',
+    type: [NutritionSupplementTargetDto],
+  })
+  defaultSupplementTargets?: NutritionSupplementTargetDto[];
 
   @ApiPropertyOptional()
   notes?: string;

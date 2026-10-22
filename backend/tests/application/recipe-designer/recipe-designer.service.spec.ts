@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { Test } from '@nestjs/testing';
 import { RecipeDesignerService } from '../../../src/application/recipe-designer/recipe-designer.service';
 import { AiDesignSuggestionService } from '../../../src/application/recipe-designer/ai-design-suggestion.service';
+import { SupplementTargetService } from '../../../src/application/recipe-designer/supplement-target.service';
 import { SearchGovernanceService } from '../../../src/application/search-governance/search-governance.service';
 import { PrismaService } from '../../../src/infrastructure/prisma.service';
 import { TencentCosService } from '../../../src/infrastructure/services/tencent-cos.service';
@@ -118,10 +119,16 @@ describe('RecipeDesignerService', () => {
   };
   const adminAccess = { userId: 'admin-1', role: 'ADMIN' };
 
+  /** 补剂添加浓度按每 kg 保留 2 位小数（与 SupplementTargetService 一致） */
+  function roundTargetValue(value: number) {
+    return Math.round((value + Number.EPSILON) * 100) / 100;
+  }
+
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         RecipeDesignerService,
+        SupplementTargetService,
         { provide: PrismaService, useValue: prisma },
         { provide: 'FediafTargetProvider', useValue: targetProvider },
         { provide: SearchGovernanceService, useValue: searchGovernance },
@@ -1672,7 +1679,11 @@ describe('RecipeDesignerService', () => {
 
   it('rejects draft metadata edits on a customer-owned draft', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
-      draft({ id: 'design-customer', createdBy: 'customer-1', status: 'DRAFT' }),
+      draft({
+        id: 'design-customer',
+        createdBy: 'customer-1',
+        status: 'DRAFT',
+      }),
     );
 
     await expect(
@@ -2054,9 +2065,9 @@ describe('RecipeDesignerService', () => {
       item({ id: 'item-other' }),
     );
 
-    await expect(
-      service.removeItem('item-other', 'staff-1'),
-    ).resolves.toEqual(expect.objectContaining({ id: 'item-other' }));
+    await expect(service.removeItem('item-other', 'staff-1')).resolves.toEqual(
+      expect.objectContaining({ id: 'item-other' }),
+    );
 
     expect(prisma.designRecipeItem.delete).toHaveBeenCalledWith({
       where: { id: 'item-other' },
@@ -2066,9 +2077,10 @@ describe('RecipeDesignerService', () => {
   it('treats removing an already deleted item as success (idempotent retry)', async () => {
     prisma.designRecipeItem.findUnique.mockResolvedValue(null);
 
-    await expect(
-      service.removeItem('item-gone', 'staff-1'),
-    ).resolves.toEqual({ id: 'item-gone', alreadyRemoved: true });
+    await expect(service.removeItem('item-gone', 'staff-1')).resolves.toEqual({
+      id: 'item-gone',
+      alreadyRemoved: true,
+    });
 
     expect(prisma.designRecipeItem.delete).not.toHaveBeenCalled();
   });
@@ -4031,7 +4043,10 @@ describe('RecipeDesignerService', () => {
     );
 
     const publishedItems = prisma.recipe.create.mock.calls[0][0].data.items
-      .create as Array<{ ingredientId: string; nutritionFoodId: string | null }>;
+      .create as Array<{
+      ingredientId: string;
+      nutritionFoodId: string | null;
+    }>;
 
     expect(publishedItems).toEqual([
       expect.objectContaining({
@@ -4971,7 +4986,7 @@ describe('RecipeDesignerService', () => {
     const supplementItem = createData.items.create.find(
       (createdItem: any) => createdItem.ingredientId === 'supplement-calcium',
     );
-    const expectedTargetValue = Math.round((1080 / 417) * 1000);
+    const expectedTargetValue = roundTargetValue((1080 / 417) * 1000);
 
     expect(supplementItem).toEqual(
       expect.objectContaining({
@@ -5098,13 +5113,13 @@ describe('RecipeDesignerService', () => {
     expect(supplementItem).toEqual(
       expect.objectContaining({
         nutrientTargetKey: 'choline',
-        nutrientTargetValue: Math.round((10 / 101) * 1000),
+        nutrientTargetValue: roundTargetValue((10 / 101) * 1000),
         supplementTargets: [
           expect.objectContaining({
             fieldPath: 'vitamins.choline',
             label: '胆碱',
             unit: 'mg',
-            targetValuePerKg: Math.round((10 / 101) * 1000),
+            targetValuePerKg: roundTargetValue((10 / 101) * 1000),
           }),
         ],
       }),
@@ -5344,13 +5359,17 @@ describe('RecipeDesignerService', () => {
       label: '钙',
       unit: 'mg',
     });
-    expect(calciumTarget.targetValuePerKg).toBe(Math.round((380 / 102) * 1000));
+    expect(calciumTarget.targetValuePerKg).toBe(
+      roundTargetValue((380 / 102) * 1000),
+    );
     expect(iodineTarget).toMatchObject({
       fieldPath: 'minerals.iodine',
       label: '碘',
       unit: 'μg',
     });
-    expect(iodineTarget.targetValuePerKg).toBe(Math.round((300 / 102) * 1000));
+    expect(iodineTarget.targetValuePerKg).toBe(
+      roundTargetValue((300 / 102) * 1000),
+    );
   });
 
   it('publishes every explicit target for a multi-nutrient supplement', async () => {
@@ -5478,23 +5497,23 @@ describe('RecipeDesignerService', () => {
           fieldPath: 'minerals.calcium',
           label: '钙',
           unit: 'mg',
-          targetValuePerKg: Math.round((10 / 101) * 1000),
+          targetValuePerKg: roundTargetValue((10 / 101) * 1000),
         }),
         expect.objectContaining({
           fieldPath: 'minerals.zinc',
           label: '锌',
           unit: 'mg',
-          targetValuePerKg: Math.round((30 / 101) * 1000),
+          targetValuePerKg: roundTargetValue((30 / 101) * 1000),
         }),
       ]),
     );
     expect(supplementItem).toMatchObject({
       nutrientTargetKey: 'zinc',
-      nutrientTargetValue: Math.round((30 / 101) * 1000),
+      nutrientTargetValue: roundTargetValue((30 / 101) * 1000),
     });
   });
 
-  it('publishes a missing supplement target when removing the supplement creates one nutrient deficiency', async () => {
+  it('rejects publishing a supplement that has neither explicit nor default targets (no deficiency inference)', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({
         isCompliant: true,
@@ -5516,6 +5535,7 @@ describe('RecipeDesignerService', () => {
           item({
             id: 'supplement-item-1',
             ingredientId: 'supplement-calcium',
+            nutritionFoodId: 'food-supplement-calcium',
             weightG: 1,
             nutrientTargetKey: null,
             nutrientTargetValue: null,
@@ -5556,47 +5576,35 @@ describe('RecipeDesignerService', () => {
       }),
     );
     targetProvider.getTargets.mockResolvedValue(compliantTargets());
-    prisma.designRecipe.update.mockResolvedValue(
-      draft({ status: 'PUBLISHED' }),
-    );
-    prisma.recipe.create.mockResolvedValue({
-      id: 'recipe-row-1',
-      recipeId: 'design-1',
-      version: 1,
+    // 营养档案没有默认目标：必须硬阻断，不能按“移除后是否出现缺口”反推成钙
+    prisma.nutritionFood.findUnique.mockResolvedValue({
+      id: 'food-supplement-calcium',
+      name: '鸡蛋壳粉',
+      nutritionData: {
+        meta: { rawBasisType: 'PER_100_G' },
+        macros: { energyKcal: 0 },
+        minerals: { calcium: 38000 },
+      },
+      defaultSupplementTargets: null,
     });
-    prisma.designRecipePublishSnapshot.create.mockResolvedValue({
-      id: 'snapshot-1',
-    });
 
-    await service.publishDraft(
-      'design-1',
-      { name: '补剂目标自动归因食谱', reviewNote: '补剂目标自动归因回归测试' },
-      adminAccess,
+    await expect(
+      service.publishDraft(
+        'design-1',
+        { name: '补剂目标缺失食谱', reviewNote: '补剂缺少营养目标' },
+        adminAccess,
+      ),
+    ).rejects.toThrow(
+      new BadRequestException(
+        '补剂原料「鸡蛋壳粉」缺少营养目标：请在添加时选择目标营养素，或为该补剂的营养档案配置默认目标',
+      ),
     );
 
-    const createData = prisma.recipe.create.mock.calls[0][0].data;
-    const supplementItem = createData.items.create.find(
-      (createdItem: any) => createdItem.ingredientId === 'supplement-calcium',
-    );
-    const expectedTargetValue = Math.round((380 / 101) * 1000);
-
-    expect(supplementItem).toEqual(
-      expect.objectContaining({
-        nutrientTargetKey: 'calcium',
-        nutrientTargetValue: expectedTargetValue,
-        supplementTargets: [
-          expect.objectContaining({
-            fieldPath: 'minerals.calcium',
-            label: '钙',
-            unit: 'mg',
-            targetValuePerKg: expectedTargetValue,
-          }),
-        ],
-      }),
-    );
+    expect(prisma.recipe.create).not.toHaveBeenCalled();
+    expect(prisma.designRecipePublishSnapshot.create).not.toHaveBeenCalled();
   });
 
-  it('rejects publishing when a missing supplement target cannot be attributed to one nutrient gap', async () => {
+  it('rejects publishing a functional supplement (fiber) without any target instead of inferring one', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({
         isCompliant: true,
@@ -5605,6 +5613,7 @@ describe('RecipeDesignerService', () => {
           item({
             id: 'supplement-fiber-item',
             ingredientId: 'supplement-fiber',
+            nutritionFoodId: 'food-supplement-fiber',
             weightG: 1,
             nutrientTargetKey: null,
             nutrientTargetValue: null,
@@ -5645,6 +5654,15 @@ describe('RecipeDesignerService', () => {
       }),
     );
     targetProvider.getTargets.mockResolvedValue(compliantTargets());
+    prisma.nutritionFood.findUnique.mockResolvedValue({
+      id: 'food-supplement-fiber',
+      name: '洋车前子壳粉',
+      nutritionData: {
+        meta: { rawBasisType: 'PER_100_G' },
+        macros: { energyKcal: 0, fiber: 80 },
+      },
+      defaultSupplementTargets: null,
+    });
 
     await expect(
       service.publishDraft(
@@ -5654,7 +5672,7 @@ describe('RecipeDesignerService', () => {
       ),
     ).rejects.toThrow(
       new BadRequestException(
-        '补剂原料「洋车前子壳粉」缺少营养目标，请在食谱编辑器中从营养评估项添加补剂后再发布',
+        '补剂原料「洋车前子壳粉」缺少营养目标：请在添加时选择目标营养素，或为该补剂的营养档案配置默认目标',
       ),
     );
 
@@ -5662,7 +5680,7 @@ describe('RecipeDesignerService', () => {
     expect(prisma.designRecipePublishSnapshot.create).not.toHaveBeenCalled();
   });
 
-  it('publishes a library-added B-vitamin supplement without explicit targets via contribution fallback', async () => {
+  it('publishes a library-added B-vitamin supplement from its nutrition profile default targets', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({
         isCompliant: true,
@@ -5687,6 +5705,7 @@ describe('RecipeDesignerService', () => {
           item({
             id: 'supplement-yeast',
             ingredientId: 'supplement-yeast',
+            nutritionFoodId: 'food-supplement-yeast',
             weightG: 5,
             nutrientTargetKey: null,
             nutrientTargetValue: null,
@@ -5774,6 +5793,30 @@ describe('RecipeDesignerService', () => {
         fieldPaths: ['vitamins.vitaminB12'],
       },
     ]);
+    prisma.nutritionFood.findUnique.mockResolvedValue({
+      id: 'food-supplement-yeast',
+      name: '营养酵母粉',
+      nutritionData: {
+        meta: { rawBasisType: 'PER_1_G' },
+        macros: { energyKcal: 0, crudeProtein: 0.5 },
+        minerals: {},
+        vitamins: {
+          vitaminB1: 0.6,
+          vitaminB2: 0.6,
+          vitaminB6: 0.7,
+          vitaminB12: 2,
+        },
+        fattyAcids: {},
+        aminoAcids: {},
+        customItems: [],
+      },
+      defaultSupplementTargets: [
+        { fieldPath: 'vitamins.vitaminB1', label: '维生素 B1', unit: 'mg' },
+        { fieldPath: 'vitamins.vitaminB2', label: '维生素 B2', unit: 'mg' },
+        { fieldPath: 'vitamins.vitaminB6', label: '维生素 B6', unit: 'mg' },
+        { fieldPath: 'vitamins.vitaminB12', label: '维生素 B12', unit: 'μg' },
+      ],
+    });
     prisma.designRecipe.update.mockResolvedValue(
       draft({ status: 'PUBLISHED' }),
     );
@@ -5788,7 +5831,7 @@ describe('RecipeDesignerService', () => {
 
     await service.publishDraft(
       'design-1',
-      { name: '营养酵母粉配方', reviewNote: '补剂目标贡献兜底回归测试' },
+      { name: '营养酵母粉配方', reviewNote: '补剂默认目标回归测试' },
       adminAccess,
     );
 
@@ -5799,7 +5842,7 @@ describe('RecipeDesignerService', () => {
 
     expect(supplementItem).toMatchObject({
       nutrientTargetKey: 'vitaminB12',
-      nutrientTargetValue: 95,
+      nutrientTargetValue: roundTargetValue((10 / 105) * 1000),
     });
     expect(supplementItem.supplementTargets).toEqual(
       expect.arrayContaining([
@@ -5807,25 +5850,25 @@ describe('RecipeDesignerService', () => {
           fieldPath: 'vitamins.vitaminB12',
           label: '维生素 B12',
           unit: 'μg',
-          targetValuePerKg: 95,
+          targetValuePerKg: roundTargetValue((10 / 105) * 1000),
         }),
         expect.objectContaining({
           fieldPath: 'vitamins.vitaminB6',
           label: '维生素 B6',
           unit: 'mg',
-          targetValuePerKg: 33,
+          targetValuePerKg: roundTargetValue((3.5 / 105) * 1000),
         }),
         expect.objectContaining({
           fieldPath: 'vitamins.vitaminB1',
           label: '维生素 B1',
           unit: 'mg',
-          targetValuePerKg: 29,
+          targetValuePerKg: roundTargetValue((3 / 105) * 1000),
         }),
         expect.objectContaining({
           fieldPath: 'vitamins.vitaminB2',
           label: '维生素 B2',
           unit: 'mg',
-          targetValuePerKg: 29,
+          targetValuePerKg: roundTargetValue((3 / 105) * 1000),
         }),
       ]),
     );
@@ -5904,14 +5947,14 @@ describe('RecipeDesignerService', () => {
       ),
     ).rejects.toThrow(
       new BadRequestException(
-        '补剂原料「鸡蛋壳粉」的营养档案缺少钙数据，无法生成营养目标',
+        '营养档案中「钙」（minerals.calcium）为空或为 0，不能作为补剂目标',
       ),
     );
 
     expect(prisma.recipe.create).not.toHaveBeenCalled();
   });
 
-  it('uses removal attribution instead of trusting legacy nutrient target fields during publish', async () => {
+  it('publishes historical supplements from legacy single-target fields instead of re-inferring by removal', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({
         isCompliant: true,
@@ -5934,7 +5977,7 @@ describe('RecipeDesignerService', () => {
             id: 'supplement-item-1',
             ingredientId: 'supplement-calcium',
             weightG: 1,
-            nutrientTargetKey: 'magnesium',
+            nutrientTargetKey: 'calcium',
             nutrientTargetValue: 999,
             ingredient: {
               id: 'supplement-calcium',
@@ -5987,7 +6030,7 @@ describe('RecipeDesignerService', () => {
 
     await service.publishDraft(
       'design-1',
-      { name: '旧字段目标食谱', reviewNote: '旧字段按缺口归因' },
+      { name: '旧字段目标食谱', reviewNote: '历史单目标字段兼容' },
       adminAccess,
     );
 
@@ -5995,7 +6038,7 @@ describe('RecipeDesignerService', () => {
     const supplementItem = createData.items.create.find(
       (createdItem: any) => createdItem.ingredientId === 'supplement-calcium',
     );
-    const expectedTargetValue = Math.round((380 / 101) * 1000);
+    const expectedTargetValue = roundTargetValue((380 / 101) * 1000);
 
     expect(supplementItem).toEqual(
       expect.objectContaining({
@@ -7049,8 +7092,14 @@ describe('RecipeDesignerService', () => {
       const ingredientMatcher = {
         some: {
           OR: [
-            { ingredient: { name: { contains: '三文鱼', mode: 'insensitive' } } },
-            { nutritionFood: { name: { contains: '三文鱼', mode: 'insensitive' } } },
+            {
+              ingredient: { name: { contains: '三文鱼', mode: 'insensitive' } },
+            },
+            {
+              nutritionFood: {
+                name: { contains: '三文鱼', mode: 'insensitive' },
+              },
+            },
           ],
         },
       };
@@ -7072,9 +7121,7 @@ describe('RecipeDesignerService', () => {
       prisma.recipeSeries.findMany.mockResolvedValue([
         seriesRecord({ id: 'series-search', createdBy: 'staff-1' }),
       ]);
-      prisma.dog.findMany.mockResolvedValue([
-        { id: 'dog-9', name: '旺财' },
-      ]);
+      prisma.dog.findMany.mockResolvedValue([{ id: 'dog-9', name: '旺财' }]);
 
       await service.listSeries(
         { userId: 'staff-1', role: 'STAFF' },
@@ -7110,15 +7157,11 @@ describe('RecipeDesignerService', () => {
       prisma.recipeSeries.findMany.mockResolvedValue([
         seriesRecord({ id: 'series-search', createdBy: 'staff-1' }),
       ]);
-      prisma.dog.findMany.mockResolvedValue([
-        { id: 'dog-9', name: '旺财' },
-      ]);
+      prisma.dog.findMany.mockResolvedValue([{ id: 'dog-9', name: '旺财' }]);
       prisma.orderItem.findMany.mockResolvedValue([
         { recipeSnapshot: { id: 'recipe-abc' } },
       ]);
-      prisma.dIYSheet.findMany.mockResolvedValue([
-        { recipeId: 'recipe-def' },
-      ]);
+      prisma.dIYSheet.findMany.mockResolvedValue([{ recipeId: 'recipe-def' }]);
 
       await service.listSeries(
         { userId: 'staff-1', role: 'STAFF' },
@@ -7153,9 +7196,7 @@ describe('RecipeDesignerService', () => {
           referenceDogId: 'dog-9',
         }),
       ]);
-      prisma.dog.findMany.mockResolvedValue([
-        { id: 'dog-9', name: '旺财' },
-      ]);
+      prisma.dog.findMany.mockResolvedValue([{ id: 'dog-9', name: '旺财' }]);
 
       const cards = await service.listSeries({
         userId: 'staff-1',

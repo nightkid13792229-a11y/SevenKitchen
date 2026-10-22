@@ -25,6 +25,7 @@ import {
 } from '@prisma/client';
 import { nutritionDataToNutritionProfile } from '../nutrition-standard/nutrient-value-resolver';
 import {
+  findAnyNutritionField,
   findNutritionField,
   getNutritionProfileFieldValue,
   listSupplementTargetFields,
@@ -38,10 +39,12 @@ import {
   createEmptyNutritionProfile,
   normalizeNutritionProfile,
 } from '../../domain/ingredient/nutrition-profile.utils';
-import type { NutritionProfile } from '../../domain/ingredient/types';
+import type {
+  NutritionProfile,
+  SupplementTarget,
+} from '../../domain/ingredient/types';
 import {
   getProfileEffectiveWeightG,
-  readProfileFieldAmount,
   readProfileValuePer100g,
 } from '../../domain/recipe-designer/nutrition-profile-reader';
 import { buildFoodWeightRatioMap } from '../../domain/recipe/food-ratio-normalization';
@@ -50,7 +53,6 @@ import {
   type AssessmentDataGap,
   type DesignRecipeAssessmentResult,
 } from '../../domain/recipe-designer/recipe-assessment';
-import { inferSupplementTargetsByRemoval } from '../../domain/recipe-designer/supplement-target-inference';
 import type {
   AssessmentEntry,
   AssessmentExpressionBasis,
@@ -102,6 +104,10 @@ import {
   type AiWizardDogProfile,
   type AiWizardDraftSummary,
 } from './recipe-ai-wizard.service';
+import {
+  SupplementTargetService,
+  type SupplementTargetDefinition,
+} from './supplement-target.service';
 import type {
   IngredientRecommendationResult,
   NutritionPlanResult,
@@ -1337,6 +1343,18 @@ export class RecipeDesignerService {
      */
     @Optional()
     private readonly cosService?: TencentCosService,
+    /**
+     * 显式补剂目标解析（2026-10-22 · Task 3）。
+     *
+     * 补剂的目标营养素不再按「移除后是否出现缺口」反向推断：添加/修改时由
+     * 营养师显式选择（或带出营养档案默认目标），发布/私密快照时只认这份
+     * 显式定义，解析不到就直接 400 阻断。
+     *
+     * 同样放在参数表**最后**并 @Optional：既有测试按位置调用构造函数，
+     * 插在中间会让它们错位；模块里已显式注册该 provider。
+     */
+    @Optional()
+    private readonly supplementTargetService?: SupplementTargetService,
   ) {}
 
   /**
@@ -2239,7 +2257,9 @@ export class RecipeDesignerService {
           })
         : [];
       const orderById = new Map(orders.map((order) => [order.id, order]));
-      const seriesById = new Map(modeSeries.map((record) => [record.id, record]));
+      const seriesById = new Map(
+        modeSeries.map((record) => [record.id, record]),
+      );
       const orderItems = items.map((card) => {
         const order = orderById.get(seriesById.get(card.id)?.orderId ?? '');
         return {
@@ -4905,7 +4925,7 @@ export class RecipeDesignerService {
     access: RecipeDesignerAccessInput,
   ) {
     const context = normalizeRecipeDesignerAccessContext(access);
-    await this.assertDraftEditableByUser(designRecipeId, context);
+    const draft = await this.assertDraftEditableByUser(designRecipeId, context);
     const ingredientId = await this.resolveDesignItemIngredientId(dto);
     const preparationMethod = await this.resolveDesignItemPreparationMethod(
       dto.preparationMethod,
@@ -4914,12 +4934,21 @@ export class RecipeDesignerService {
     );
     const shouldPersistNutrientTarget =
       await this.isIngredientIdSupplement(ingredientId);
+    /**
+     * 补剂必须显式给出目标营养素（或由营养档案默认目标带出）。
+     * 没有任何目标时直接 400，绝不按「移除后缺口」反向推断 ——
+     * 纤维素粉这类功能性补剂永远不会造成缺口。
+     */
     const supplementTargets = shouldPersistNutrientTarget
-      ? this.normalizeDesignSupplementTargets(
-          dto.supplementTargets,
-          dto.nutrientTargetKey,
-          dto.nutrientTargetValue,
-        )
+      ? await this.resolveDesignSupplementTargetsForWrite({
+          nutritionFoodId: dto.nutritionFoodId,
+          explicitTargets: dto.supplementTargets,
+          legacyTargetKey: dto.nutrientTargetKey,
+          legacyTargetValue: dto.nutrientTargetValue,
+          weightG: dto.weightG,
+          includeInAssessment: dto.includeInAssessment ?? true,
+          baseTotalWeightG: draft?.totalWeightG,
+        })
       : [];
 
     // 未显式指定排序时，自动排到当前草稿明细末尾，避免新增项 sort_order 全部为 0 导致顺序冲突
@@ -4940,11 +4969,9 @@ export class RecipeDesignerService {
       preparationMethod,
       ...(shouldPersistNutrientTarget
         ? {
-            nutrientTargetKey: dto.nutrientTargetKey ?? null,
-            nutrientTargetValue: dto.nutrientTargetValue ?? null,
-            ...(supplementTargets.length > 0
-              ? { supplementTargets: this.toJsonValue(supplementTargets) }
-              : {}),
+            nutrientTargetKey: supplementTargets[0]?.nutrientTargetKey ?? null,
+            nutrientTargetValue: supplementTargets[0]?.targetValue ?? null,
+            supplementTargets: this.toJsonValue(supplementTargets),
           }
         : {}),
       sortOrder,
@@ -4973,16 +5000,90 @@ export class RecipeDesignerService {
   ) {
     const context = normalizeRecipeDesignerAccessContext(access);
     const draft = await this.assertItemEditableByUser(itemId, context);
-    const supplementTargets =
-      dto.supplementTargets !== undefined
-        ? this.normalizeDesignSupplementTargets(dto.supplementTargets)
-        : dto.nutrientTargetKey !== undefined
-          ? this.normalizeDesignSupplementTargets(
-              undefined,
-              dto.nutrientTargetKey,
-              dto.nutrientTargetValue,
-            )
-          : undefined;
+    const changesSupplementTargets =
+      dto.supplementTargets !== undefined ||
+      dto.nutrientTargetKey !== undefined;
+    let supplementTargets: DesignSupplementTarget[] | undefined;
+    let supplementTargetData: {
+      nutrientTargetKey?: string | null;
+      nutrientTargetValue?: number | null;
+      supplementTargets?: Prisma.InputJsonValue;
+    } = {};
+
+    if (changesSupplementTargets) {
+      const item = await this.prisma.designRecipeItem.findUnique({
+        where: { id: itemId },
+        select: {
+          id: true,
+          ingredientId: true,
+          nutritionFoodId: true,
+          weightG: true,
+          includeInAssessment: true,
+          ingredient: { select: { type: true } },
+          nutritionFood: {
+            select: {
+              id: true,
+              name: true,
+              nutritionData: true,
+              mappings: {
+                select: {
+                  ingredientId: true,
+                  isPrimary: true,
+                  ingredient: { select: { type: true } },
+                },
+              },
+            },
+          },
+        },
+      });
+      if (!item) {
+        throw new NotFoundException(`Design recipe item ${itemId} not found`);
+      }
+
+      const isSupplementItem =
+        item.ingredient?.type === IngredientType.SUPPLEMENT ||
+        (item.ingredient?.type !== IngredientType.FOOD &&
+          this.resolveIngredientType(
+            item as unknown as DesignRecipeItemWithFood,
+          ) === IngredientType.SUPPLEMENT);
+
+      if (isSupplementItem) {
+        /**
+         * 补剂目标允许改，但不允许「改成空」或塞进未知字段：
+         * 空数组 / null / 未知 fieldPath / 档案里为 0 的字段一律 400，
+         * 不能静默丢弃后让补剂变成无目标状态。
+         */
+        const explicitTargets =
+          dto.supplementTargets !== undefined
+            ? dto.supplementTargets
+            : this.buildLegacySupplementTargetPayload(
+                dto.nutrientTargetKey,
+                dto.nutrientTargetValue,
+              );
+        if (
+          explicitTargets === null ||
+          (Array.isArray(explicitTargets) && explicitTargets.length === 0)
+        ) {
+          throw new BadRequestException(
+            '补剂必须至少保留一个目标营养素，不能清空目标',
+          );
+        }
+
+        supplementTargets = await this.resolveDesignSupplementTargetsForWrite({
+          nutritionFoodId: item.nutritionFoodId ?? '',
+          explicitTargets,
+          weightG: dto.weightG ?? item.weightG,
+          includeInAssessment:
+            dto.includeInAssessment ?? item.includeInAssessment,
+          baseTotalWeightG: draft?.totalWeightG,
+        });
+        supplementTargetData = {
+          nutrientTargetKey: supplementTargets[0]?.nutrientTargetKey ?? null,
+          nutrientTargetValue: supplementTargets[0]?.targetValue ?? null,
+          supplementTargets: this.toJsonValue(supplementTargets),
+        };
+      }
+    }
 
     const data = {
       ...(dto.weightG !== undefined ? { weightG: dto.weightG } : {}),
@@ -4995,14 +5096,8 @@ export class RecipeDesignerService {
       ...(dto.nutrientTargetValue !== undefined
         ? { nutrientTargetValue: dto.nutrientTargetValue }
         : {}),
-      ...(supplementTargets !== undefined
-        ? {
-            supplementTargets:
-              supplementTargets.length > 0
-                ? this.toJsonValue(supplementTargets)
-                : null,
-          }
-        : {}),
+      // 补剂目标定义与计算值一起写回（覆盖上面的 legacy 单目标字段）
+      ...supplementTargetData,
       ...(dto.sortOrder !== undefined ? { sortOrder: dto.sortOrder } : {}),
       ...(dto.includeInAssessment !== undefined
         ? { includeInAssessment: dto.includeInAssessment }
@@ -5569,7 +5664,7 @@ export class RecipeDesignerService {
     },
   ) {
     const privateSupplementTargetMap =
-      this.buildPrivateSnapshotSupplementTargetMap(draft);
+      await this.buildPrivateSnapshotSupplementTargetMap(draft);
     const itemCreates = this.buildPrivateRecipeSnapshotItemCreateData(
       draft,
       privateSupplementTargetMap,
@@ -5705,10 +5800,9 @@ export class RecipeDesignerService {
       await this.loadDefaultPreparationMethodMap(
         ingredientItems.map(({ ingredientId }) => ingredientId),
       );
-    const supplementTargetMap = this.buildPublishedSupplementTargetMap(
+    const supplementTargetMap = await this.buildPublishedSupplementTargetMap(
       draft,
       assessment,
-      targets,
     );
     const healthTagAssignments = this.buildPublishedHealthTagAssignments(
       draft.targetHealthTags,
@@ -6250,7 +6344,7 @@ export class RecipeDesignerService {
 
   private buildPrivateRecipeSnapshotItemCreateData(
     draft: DesignRecipeWithItems,
-    privateSupplementTargetMap?: Map<
+    privateSupplementTargetMap: Map<
       string,
       PublishedSupplementNutrientTarget[]
     >,
@@ -6258,12 +6352,18 @@ export class RecipeDesignerService {
     return draft.items
       .filter((item) => this.isItemIncludedInAssessment(item))
       .map((item) => {
-        const publishedTargets = privateSupplementTargetMap?.get(item.id) ?? [];
+        const isSupplement =
+          this.resolveIngredientType(item) === IngredientType.SUPPLEMENT;
+        const publishedTargets = privateSupplementTargetMap.get(item.id) ?? [];
+        if (isSupplement && publishedTargets.length === 0) {
+          // 私密快照同样硬阻断：没有目标就不允许生成，避免小程序详情页静默显示 `-`
+          throw new BadRequestException(
+            this.buildMissingSupplementTargetMessage(item),
+          );
+        }
         const primaryTarget = publishedTargets[0];
         const supplementTargets =
-          publishedTargets.length > 0
-            ? (this.buildPublishedSupplementTargets(publishedTargets) ?? [])
-            : this.normalizeDesignSupplementTargets(item.supplementTargets);
+          this.buildPublishedSupplementTargets(publishedTargets);
         return {
           ingredientId: this.resolveIngredientId(item),
           nutritionFoodId: item.nutritionFoodId,
@@ -6274,11 +6374,13 @@ export class RecipeDesignerService {
             item,
             draft.totalWeightG,
           ),
-          nutrientTargetKey:
-            primaryTarget?.nutrientTargetKey ?? item.nutrientTargetKey,
-          nutrientTargetValue:
-            primaryTarget?.nutrientTargetValue ?? item.nutrientTargetValue,
-          ...(supplementTargets.length > 0
+          nutrientTargetKey: isSupplement
+            ? (primaryTarget?.nutrientTargetKey ?? null)
+            : item.nutrientTargetKey,
+          nutrientTargetValue: isSupplement
+            ? (primaryTarget?.nutrientTargetValue ?? null)
+            : item.nutrientTargetValue,
+          ...(supplementTargets
             ? { supplementTargets: this.toJsonValue(supplementTargets) }
             : {}),
           sortOrder: item.sortOrder,
@@ -6288,14 +6390,15 @@ export class RecipeDesignerService {
   }
 
   /**
-   * 私密快照也要有“每 kg 食材添加量”。
+   * 私密快照的补剂目标（2026-10-22 · Task 3）。
    *
-   * 编辑器的补剂目标可能为空（特别是从模板复制/售后改稿生成的草稿）。
-   * 为空时按补剂档案里第一个有值的营养字段反推，避免小程序详情页整列 `-`。
+   * 只认显式目标 / 营养档案默认目标，并按当前配方总重量重算每 kg 添加浓度。
+   * 不再按「档案里第一个有值的营养字段」兜底 —— 那会把功能性补剂的目标
+   * 悄悄换成别的营养素；没有目标时直接 400 阻断。
    */
-  private buildPrivateSnapshotSupplementTargetMap(
+  private async buildPrivateSnapshotSupplementTargetMap(
     draft: DesignRecipeWithItems,
-  ): Map<string, PublishedSupplementNutrientTarget[]> {
+  ): Promise<Map<string, PublishedSupplementNutrientTarget[]>> {
     const result = new Map<string, PublishedSupplementNutrientTarget[]>();
     if (draft.totalWeightG <= 0) return result;
 
@@ -6307,53 +6410,24 @@ export class RecipeDesignerService {
         continue;
       }
 
-      const explicit = this.normalizeDesignSupplementTargets(
-        item.supplementTargets,
-      );
-      if (explicit.length > 0) {
-        result.set(
-          item.id,
-          explicit
-            .filter(
-              (target) =>
-                typeof target.targetValue === 'number' &&
-                Number.isFinite(target.targetValue) &&
-                target.targetValue > 0,
-            )
-            .map((target) => ({
-              nutrientTargetKey: target.nutrientTargetKey,
-              nutrientTargetValue: target.targetValue as number,
-              fieldPath: target.fieldPath,
-              label: target.label,
-              unit: target.unit,
-            })),
+      const definitions =
+        await this.resolveDesignSupplementTargetDefinitions(item);
+      if (definitions.length === 0) {
+        throw new BadRequestException(
+          this.buildMissingSupplementTargetMessage(item),
         );
-        continue;
       }
 
-      const profile = this.toAssessmentNutritionProfile(item);
-      for (const field of listSupplementTargetFields()) {
-        const read = readProfileFieldAmount(
-          profile,
-          field.fieldPath,
-          item.weightG,
-        );
-        if (read.missing || read.amount === null || read.amount <= 0) continue;
-        const value = this.roundPublishedSupplementTargetValue(
-          (read.amount / draft.totalWeightG) * 1000,
-        );
-        if (!Number.isFinite(value) || value <= 0) continue;
-        result.set(item.id, [
-          {
-            nutrientTargetKey: field.fieldKey,
-            nutrientTargetValue: value,
-            fieldPath: field.fieldPath,
-            label: field.label,
-            unit: field.unit,
-          },
-        ]);
-        break;
-      }
+      const computed = this.requireSupplementTargetService().computeTargets(
+        this.toAssessmentNutritionProfile(item),
+        definitions,
+        item.weightG,
+        draft.totalWeightG,
+      );
+      result.set(
+        item.id,
+        computed.map((target) => this.toPublishedSupplementTarget(target)),
+      );
     }
     return result;
   }
@@ -6509,42 +6583,40 @@ export class RecipeDesignerService {
       return null;
     }
 
-    return resolvedTargets
-      .map((target) => {
-        const targetKey = target.nutrientTargetKey?.trim();
-        const targetValue = Number(target.nutrientTargetValue);
-        if (!targetKey || !Number.isFinite(targetValue) || targetValue <= 0) {
-          return null;
-        }
-
-        const targetField =
-          target.fieldPath && target.label && target.unit
-            ? {
-                fieldPath: target.fieldPath,
-                label: target.label,
-                unit: target.unit,
-              }
-            : this.resolveSupplementTargetField(targetKey);
-        if (!targetField) {
-          return null;
-        }
-
-        return {
-          fieldPath: targetField.fieldPath,
-          label: targetField.label,
-          targetValuePerKg: targetValue,
-          unit: targetField.unit,
-        };
-      })
-      .filter(
-        (target): target is NonNullable<typeof target> => target !== null,
+    return resolvedTargets.map((target) => {
+      const targetField = this.resolveAnySupplementTargetField(
+        target.fieldPath ?? target.nutrientTargetKey ?? '',
       );
+      if (!targetField) {
+        throw new BadRequestException(
+          `补剂目标营养素 ${target.fieldPath ?? target.nutrientTargetKey ?? ''} 不在营养字段目录中，无法生成发布数据`,
+        );
+      }
+
+      const targetValue = Number(target.nutrientTargetValue);
+      if (!Number.isFinite(targetValue) || targetValue <= 0) {
+        throw new BadRequestException(
+          `补剂目标「${targetField.label}」的添加浓度无效，无法生成发布数据`,
+        );
+      }
+
+      return {
+        fieldPath: targetField.fieldPath,
+        label: targetField.label,
+        targetValuePerKg: targetValue,
+        unit: targetField.unit,
+      };
+    });
   }
 
-  private buildPublishedSupplementTargetMap(
+  /**
+   * TODO(2026-10-22 · historical supplement targets): 历史已发布
+   * `RecipeItem.supplementTargets` 的重算与差异清单不在本次接线范围，
+   * 这里只负责把新发布的补剂目标按当前公式算对；历史重算走单独任务。
+   */
+  private async buildPublishedSupplementTargetMap(
     draft: DesignRecipeWithItems,
     assessment: DesignRecipeAssessmentResult,
-    targets: FediafAssessmentTarget[],
   ) {
     const result = new Map<string, PublishedSupplementNutrientTarget[]>();
 
@@ -6558,51 +6630,44 @@ export class RecipeDesignerService {
 
       result.set(
         item.id,
-        this.resolveExplicitPublishedSupplementTargets(
-          item,
-          draft,
-          assessment,
-          targets,
-        ),
+        await this.resolvePublishedSupplementTargetsForItem(item, assessment),
       );
     }
 
     return result;
   }
 
-  private resolveExplicitPublishedSupplementTargets(
+  /**
+   * 发布时的补剂目标：显式定义优先，其次营养档案默认目标，最后硬阻断。
+   * 不再按「移除补剂后是否出现营养缺口」反向推断。
+   */
+  private async resolvePublishedSupplementTargetsForItem(
     item: DesignRecipeItemWithFood,
-    draft: DesignRecipeWithItems,
     assessment: DesignRecipeAssessmentResult,
-    targets: FediafAssessmentTarget[],
-  ): PublishedSupplementNutrientTarget[] {
+  ): Promise<PublishedSupplementNutrientTarget[]> {
     if (assessment.totalWeightG <= 0) {
       throw new BadRequestException(
         `补剂原料「${this.resolveIngredientDisplayName(item)}」无法在总重量为 0 的配方中生成营养目标`,
       );
     }
 
-    let designTargets = this.normalizeDesignSupplementTargets(
-      item.supplementTargets,
-    );
-    if (designTargets.length === 0) {
-      designTargets = this.inferDesignSupplementTargetsByRemoval(
-        item,
-        draft,
-        assessment,
-        targets,
-      );
-    }
-    if (designTargets.length === 0) {
+    const definitions =
+      await this.resolveDesignSupplementTargetDefinitions(item);
+    if (definitions.length === 0) {
       throw new BadRequestException(
-        `补剂原料「${this.resolveIngredientDisplayName(item)}」缺少营养目标，请在食谱编辑器中从营养评估项添加补剂后再发布`,
+        this.buildMissingSupplementTargetMessage(item),
       );
     }
 
-    return designTargets
-      .map((target) =>
-        this.resolveExplicitPublishedSupplementTarget(item, target, assessment),
-      )
+    const computed = this.requireSupplementTargetService().computeTargets(
+      this.toAssessmentNutritionProfile(item),
+      definitions,
+      item.weightG,
+      assessment.totalWeightG,
+    );
+
+    return computed
+      .map((target) => this.toPublishedSupplementTarget(target))
       .sort((left, right) => {
         if (right.nutrientTargetValue !== left.nutrientTargetValue) {
           return right.nutrientTargetValue - left.nutrientTargetValue;
@@ -6611,79 +6676,271 @@ export class RecipeDesignerService {
       });
   }
 
-  private inferDesignSupplementTargetsByRemoval(
-    item: DesignRecipeItemWithFood,
-    draft: DesignRecipeWithItems,
-    assessment: DesignRecipeAssessmentResult,
-    targets: FediafAssessmentTarget[],
-  ): DesignSupplementTarget[] {
-    return inferSupplementTargetsByRemoval({
-      itemId: item.id,
-      itemName: this.resolveIngredientDisplayName(item),
-      itemNutritionProfile: this.toAssessmentNutritionProfile(item),
-      itemWeightG: item.weightG,
-      totalRecipeWeightG: assessment.totalWeightG,
-      fullAssessment: assessment,
-      assessmentWithoutItem: assessRecipeDraft({
-        scenario: draft.fediafDogScenario,
-        targets,
-        items: this.buildAssessmentItems(draft, item.id),
-      }),
-    }).map((target) => ({
-      nutrientTargetKey: target.fieldKey,
-      fieldPath: target.fieldPath,
-      label: target.label,
-      unit: target.unit,
-      targetValue: null,
-      expressionBasis: null,
-    }));
+  /**
+   * 读取一条设计项上的补剂目标定义（不含计算值）：
+   * - 已保存的显式目标（含历史 legacy 单目标字段）；
+   * - 没有显式目标时，回落到营养档案默认目标；
+   * - 都没有时返回空数组，由调用方决定报错文案。
+   *
+   * 显式数组里出现未知/重复字段时直接 400，不静默丢掉再改用默认值。
+   */
+  private async resolveDesignSupplementTargetDefinitions(item: {
+    supplementTargets?: unknown;
+    nutrientTargetKey?: string | null;
+    nutrientTargetValue?: number | null;
+    nutritionFoodId?: string | null;
+    nutritionFood?: { name?: string | null } | null;
+    ingredient?: { name?: string | null } | null;
+  }): Promise<DesignSupplementTarget[]> {
+    const rawTargets = Array.isArray(item.supplementTargets)
+      ? item.supplementTargets
+      : [];
+    const normalized = this.normalizeDesignSupplementTargets(
+      item.supplementTargets,
+      item.nutrientTargetKey,
+      item.nutrientTargetValue,
+    );
+
+    if (rawTargets.length > 0) {
+      if (normalized.length !== rawTargets.length) {
+        throw new BadRequestException(
+          `补剂原料「${this.resolveSupplementItemLabel(item)}」的营养目标包含无法识别的字段或重复项，请重新选择目标营养素`,
+        );
+      }
+      return normalized;
+    }
+
+    if (normalized.length > 0) {
+      return normalized;
+    }
+
+    const nutritionFoodId = item.nutritionFoodId?.trim();
+    if (!nutritionFoodId) {
+      return [];
+    }
+
+    const defaults =
+      await this.requireSupplementTargetService().resolveDefaultTargets(
+        nutritionFoodId,
+      );
+    return defaults.map((definition) =>
+      this.toDesignSupplementTarget(definition, null),
+    );
   }
 
-  private resolveExplicitPublishedSupplementTarget(
-    item: DesignRecipeItemWithFood,
-    target: DesignSupplementTarget,
-    assessment: DesignRecipeAssessmentResult,
+  /**
+   * 新增/修改补剂项时解析并校验目标定义，总重量已知时一并算出每 kg 添加浓度。
+   *
+   * 这里对**新写入**的目标更严格：
+   * - `fieldPath` 必须精确命中营养字段目录（或派生字段目录）；
+   * - 空字段、未知字段、档案里为 0 的字段、重复字段全部 400；
+   * - 不传显式目标时只认营养档案默认目标，绝不做缺口推断。
+   */
+  private async resolveDesignSupplementTargetsForWrite(input: {
+    nutritionFoodId: string | null | undefined;
+    explicitTargets?: unknown;
+    legacyTargetKey?: string | null;
+    legacyTargetValue?: number | null;
+    weightG: number;
+    includeInAssessment: boolean;
+    /**
+     * 草稿当前已知的配方总重量（上一次评估结果）。
+     * 未知时只落目标定义，不写计算值。
+     */
+    baseTotalWeightG?: number | null;
+  }): Promise<DesignSupplementTarget[]> {
+    const nutritionFoodId = input.nutritionFoodId?.trim();
+    if (!nutritionFoodId) {
+      throw new BadRequestException('补剂缺少营养档案，无法校验目标营养素');
+    }
+
+    const nutritionFood = await this.prisma.nutritionFood.findUnique({
+      where: { id: nutritionFoodId },
+      select: {
+        id: true,
+        name: true,
+        nutritionData: true,
+        defaultSupplementTargets: true,
+      },
+    });
+    if (!nutritionFood) {
+      throw new BadRequestException(
+        `营养档案 ${nutritionFoodId} 不存在，无法校验补剂目标`,
+      );
+    }
+
+    const profile = this.toNutritionProfile(nutritionFood.nutritionData);
+    const targetService = this.requireSupplementTargetService();
+
+    let definitions: SupplementTargetDefinition[];
+    if (input.explicitTargets !== undefined) {
+      if (input.explicitTargets === null) {
+        throw new BadRequestException(
+          '补剂必须至少保留一个目标营养素，不能清空目标',
+        );
+      }
+      definitions = targetService.validateTargets(
+        profile,
+        input.explicitTargets,
+      );
+    } else if (
+      input.legacyTargetKey !== undefined &&
+      input.legacyTargetKey !== null
+    ) {
+      const legacyField = this.resolveSupplementTargetField(
+        input.legacyTargetKey,
+      );
+      if (!legacyField) {
+        throw new BadRequestException(
+          `补剂目标营养素 ${input.legacyTargetKey} 不在营养字段目录中`,
+        );
+      }
+      definitions = targetService.validateTargets(profile, [
+        { fieldPath: legacyField.fieldPath },
+      ]);
+    } else {
+      const defaults =
+        await targetService.resolveDefaultTargets(nutritionFoodId);
+      definitions = targetService.validateTargets(profile, defaults);
+    }
+
+    if (definitions.length === 0) {
+      throw new BadRequestException(
+        this.buildMissingSupplementTargetMessage({
+          ingredient: null,
+          nutritionFood,
+        }),
+      );
+    }
+
+    const totalWeightG = this.resolveSupplementTargetTotalWeightG(input);
+    if (
+      totalWeightG === null ||
+      !(totalWeightG > 0) ||
+      !(Number(input.weightG) > 0)
+    ) {
+      // 总重量还未知（新建草稿/尚未评估）时只落目标定义，浓度等评估后再算
+      return definitions.map((definition) =>
+        this.toDesignSupplementTarget(definition, null),
+      );
+    }
+
+    const computed = targetService.computeTargets(
+      profile,
+      definitions,
+      input.weightG,
+      totalWeightG,
+    );
+    return computed.map((target) =>
+      this.toDesignSupplementTarget(target, target.targetValuePerKg),
+    );
+  }
+
+  private resolveSupplementTargetTotalWeightG(input: {
+    includeInAssessment: boolean;
+    baseTotalWeightG?: number | null;
+  }): number | null {
+    if (!input.includeInAssessment) {
+      return null;
+    }
+
+    /**
+     * 分母使用草稿当前已知的配方总重量（上一次评估结果）。
+     * 新增/改重量后前端会再评估一次并刷新缓存；这里不自行叠加重量，
+     * 避免把「已知总重」误当成「尚未包含新原料的总重」重复计数。
+     */
+    const baseTotalWeightG = Number(input.baseTotalWeightG);
+    if (!Number.isFinite(baseTotalWeightG) || baseTotalWeightG <= 0) {
+      return null;
+    }
+
+    return baseTotalWeightG;
+  }
+
+  private toDesignSupplementTarget(
+    definition: SupplementTargetDefinition,
+    targetValue: number | null,
+  ): DesignSupplementTarget {
+    return {
+      nutrientTargetKey: this.resolveFieldKeyFromPath(definition.fieldPath),
+      fieldPath: definition.fieldPath,
+      label: definition.label,
+      unit: definition.unit,
+      targetValue,
+      expressionBasis: null,
+    };
+  }
+
+  private toPublishedSupplementTarget(
+    target: SupplementTarget,
   ): PublishedSupplementNutrientTarget {
-    const targetField = this.resolveSupplementTargetField(target.fieldPath);
+    const targetField = this.resolveAnySupplementTargetField(target.fieldPath);
     if (!targetField) {
       throw new BadRequestException(
-        `补剂原料「${this.resolveIngredientDisplayName(item)}」的营养目标 ${target.fieldPath} 不在可发布字段中`,
-      );
-    }
-
-    const amountRead = readProfileFieldAmount(
-      this.toAssessmentNutritionProfile(item),
-      targetField.fieldPath,
-      item.weightG,
-    );
-    const contributionAmount = Number(amountRead.amount);
-    if (amountRead.missing || !Number.isFinite(contributionAmount)) {
-      throw new BadRequestException(
-        `补剂原料「${this.resolveIngredientDisplayName(item)}」的营养档案缺少${targetField.label}数据，无法生成营养目标`,
-      );
-    }
-    if (contributionAmount <= 0) {
-      throw new BadRequestException(
-        `补剂原料「${this.resolveIngredientDisplayName(item)}」的营养档案中${targetField.label}含量为 0，无法生成营养目标`,
-      );
-    }
-
-    const nutrientTargetValue = this.roundPublishedSupplementTargetValue(
-      (contributionAmount / assessment.totalWeightG) * 1000,
-    );
-    if (!Number.isFinite(nutrientTargetValue) || nutrientTargetValue <= 0) {
-      throw new BadRequestException(
-        `补剂原料「${this.resolveIngredientDisplayName(item)}」的${targetField.label}目标值无效，无法发布`,
+        `补剂目标营养素 ${target.fieldPath} 不在营养字段目录中，无法生成发布数据`,
       );
     }
 
     return {
-      nutrientTargetKey: target.nutrientTargetKey || targetField.fieldKey,
-      nutrientTargetValue,
+      nutrientTargetKey: targetField.fieldKey,
+      nutrientTargetValue: target.targetValuePerKg,
       fieldPath: targetField.fieldPath,
       label: targetField.label,
       unit: targetField.unit,
     };
+  }
+
+  private requireSupplementTargetService(): SupplementTargetService {
+    if (!this.supplementTargetService) {
+      throw new BadRequestException(
+        '补剂目标服务未配置，无法保存或发布补剂目标',
+      );
+    }
+    return this.supplementTargetService;
+  }
+
+  private buildMissingSupplementTargetMessage(item: {
+    ingredient?: { name?: string | null } | null;
+    nutritionFood?: { name?: string | null } | null;
+    nutritionFoodId?: string | null;
+  }): string {
+    return `补剂原料「${this.resolveSupplementItemLabel(item)}」缺少营养目标：请在添加时选择目标营养素，或为该补剂的营养档案配置默认目标`;
+  }
+
+  private resolveSupplementItemLabel(item: {
+    ingredient?: { name?: string | null } | null;
+    nutritionFood?: { name?: string | null } | null;
+    nutritionFoodId?: string | null;
+  }): string {
+    return (
+      this.normalizeOptionalTargetText(item.ingredient?.name) ??
+      this.normalizeOptionalTargetText(item.nutritionFood?.name) ??
+      this.normalizeOptionalTargetText(item.nutritionFoodId) ??
+      '未知补剂'
+    );
+  }
+
+  private buildLegacySupplementTargetPayload(
+    targetKey: string | null | undefined,
+    targetValue: number | null | undefined,
+  ): Array<Record<string, unknown>> | null {
+    if (targetKey === undefined || targetKey === null) {
+      return null;
+    }
+    const normalizedKey = this.normalizeOptionalTargetText(targetKey);
+    if (!normalizedKey) {
+      throw new BadRequestException('补剂目标的营养素字段不能为空');
+    }
+    return [
+      {
+        fieldPath: this.resolveSupplementTargetField(normalizedKey)?.fieldPath,
+        nutrientTargetKey: normalizedKey,
+        targetValuePerKg:
+          typeof targetValue === 'number' && Number.isFinite(targetValue)
+            ? targetValue
+            : undefined,
+      },
+    ];
   }
 
   private buildRemovableSupplementWarnings(
@@ -6785,7 +7042,7 @@ export class RecipeDesignerService {
       if (!targetKey) {
         continue;
       }
-      const targetField = this.resolveSupplementTargetField(targetKey);
+      const targetField = this.resolveAnySupplementTargetField(targetKey);
       if (!targetField) {
         continue;
       }
@@ -6808,7 +7065,7 @@ export class RecipeDesignerService {
     }
 
     if (normalizedTargets.length === 0 && legacyTargetKey) {
-      const targetField = this.resolveSupplementTargetField(legacyTargetKey);
+      const targetField = this.resolveAnySupplementTargetField(legacyTargetKey);
       if (targetField) {
         normalizedTargets.push({
           nutrientTargetKey: targetField.fieldKey,
@@ -6882,10 +7139,6 @@ export class RecipeDesignerService {
     return Number.isFinite(numericValue) ? numericValue : null;
   }
 
-  private roundPublishedSupplementTargetValue(value: number) {
-    return Math.round(value);
-  }
-
   private isAssessmentRatioEntry(entry: {
     category?: string;
     expressionBasis?: string;
@@ -6900,6 +7153,41 @@ export class RecipeDesignerService {
 
   private resolveSupplementTargetField(targetKey: string) {
     return resolveSupplementTargetFieldReference(targetKey);
+  }
+
+  /**
+   * 先按完整营养字段目录（含 `derived.*`）解析 fieldPath，
+   * 再回落到历史遗留的短 key / 中文别名（`calcium`、`钙` 等）。
+   */
+  private resolveAnySupplementTargetField(targetKey: string): {
+    fieldPath: string;
+    fieldKey: string;
+    label: string;
+    unit: string;
+  } | null {
+    const normalizedKey = this.normalizeOptionalTargetText(targetKey);
+    if (!normalizedKey) {
+      return null;
+    }
+
+    const direct = findAnyNutritionField(normalizedKey);
+    if (direct) {
+      return {
+        fieldPath: direct.fieldPath,
+        fieldKey: this.resolveFieldKeyFromPath(direct.fieldPath),
+        label: direct.label,
+        unit: direct.unit,
+      };
+    }
+
+    return this.resolveSupplementTargetField(normalizedKey) ?? null;
+  }
+
+  private resolveFieldKeyFromPath(fieldPath: string): string {
+    const separatorIndex = fieldPath.indexOf('.');
+    return separatorIndex >= 0
+      ? fieldPath.slice(separatorIndex + 1)
+      : fieldPath;
   }
 
   private buildPublishedHealthTagAssignments(targetHealthTags: string[]) {
@@ -7063,8 +7351,8 @@ export class RecipeDesignerService {
     }
 
     const key = String(
-      (item as { nutrientTargetKey?: unknown } | undefined)?.nutrientTargetKey ??
-        '',
+      (item as { nutrientTargetKey?: unknown } | undefined)
+        ?.nutrientTargetKey ?? '',
     ).trim();
     const value = this.readFiniteNumber(
       (item as { nutrientTargetValue?: unknown } | undefined)
@@ -7497,6 +7785,8 @@ export class RecipeDesignerService {
         publishedAt: true,
         seriesId: true,
         seriesLifeStage: true,
+        // 补剂目标浓度缓存需要知道当前配方总重量（未知时留空）
+        totalWeightG: true,
       },
     });
 
@@ -7519,6 +7809,7 @@ export class RecipeDesignerService {
             status: true,
             publishedRecipeId: true,
             publishedAt: true,
+            totalWeightG: true,
           },
         },
       },
@@ -8648,23 +8939,21 @@ export class RecipeDesignerService {
      * 不用回工作台就能看到第一份的原料与宏量。
      * 不查顾客信息、订单备注等无关字段。
      */
-    let sameOrderRecipes:
-      | Array<{
-          id: string;
-          name: string;
-          status: string;
-          updatedAt: Date | null;
-          recipe: {
-            name: string | null;
-            nutritionDetailedData: unknown;
-            items: Array<{
-              exampleWeight: number | null;
-              ingredient: { name: string | null } | null;
-            }>;
-          } | null;
-          designItems: Array<{ name: string; weightG: number }>;
-        }>
-      | null = null;
+    let sameOrderRecipes: Array<{
+      id: string;
+      name: string;
+      status: string;
+      updatedAt: Date | null;
+      recipe: {
+        name: string | null;
+        nutritionDetailedData: unknown;
+        items: Array<{
+          exampleWeight: number | null;
+          ingredient: { name: string | null } | null;
+        }>;
+      } | null;
+      designItems: Array<{ name: string; weightG: number }>;
+    }> | null = null;
     if (draftId) {
       const currentDraft = await this.prisma.designRecipe.findUnique({
         where: { id: draftId },
@@ -9513,9 +9802,7 @@ export class RecipeDesignerService {
         ? {
             orderId: customerOrder.orderId,
             targetGoal: customerOrder.targetGoal,
-            needsHealthManagement: Boolean(
-              customerOrder.needsHealthManagement,
-            ),
+            needsHealthManagement: Boolean(customerOrder.needsHealthManagement),
             additionalNotes: customerOrder.additionalNotes ?? null,
             preferredIngredients: customerOrder.preferredIngredients ?? [],
             dislikedIngredients: customerOrder.dislikedIngredients ?? [],
@@ -10186,21 +10473,32 @@ export function deriveKnowledgeTags(profile: {
  * 容错：字段缺失、类型不对、混进非字符串，一律忽略而不是抛错 ——
  * 这是纠错用的辅助数据，不该因为它长得不对就让配方设计整个失败。
  */
-export function parseHealthTagOverrides(
-  value: unknown,
-): { added: string[]; removed: string[] } {
-  const source = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
+export function parseHealthTagOverrides(value: unknown): {
+  added: string[];
+  removed: string[];
+} {
+  const source = (value && typeof value === 'object' ? value : {}) as Record<
+    string,
+    unknown
+  >;
   const toStringList = (input: unknown): string[] => {
     if (!Array.isArray(input)) return [];
     return Array.from(
       new Set(
         input
-          .map((item) => String(item ?? '').trim().toLowerCase())
+          .map((item) =>
+            String(item ?? '')
+              .trim()
+              .toLowerCase(),
+          )
           .filter(Boolean),
       ),
     ).slice(0, 40);
   };
-  return { added: toStringList(source.added), removed: toStringList(source.removed) };
+  return {
+    added: toStringList(source.added),
+    removed: toStringList(source.removed),
+  };
 }
 
 /** 由标签推导食谱结构框架模板名 */

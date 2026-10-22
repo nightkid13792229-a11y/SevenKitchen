@@ -152,7 +152,8 @@ expect(normalizePreparationState('raw')).toBe('RAW');
 expect(normalizePreparationState('Cooked')).toBe('COOKED');
 expect(normalizePreparationState('')).toBeNull();
 expect(classifyCookingMethod('boiled, drained')).toBe('BOILED');
-expect(classifyCookingMethod('ゆで')).toBe('STEAMED'); // 日文“茹で”按温和烹饪归蒸/煮
+expect(classifyCookingMethod('ゆで')).toBe('BOILED'); // 日文“茹で”＝水煮
+expect(classifyCookingMethod('蒸し')).toBe('STEAMED');
 expect(classifyCookingMethod('broiled')).toBe('GRILLED');
 expect(classifyCookingMethod('pan-fried')).toBe('FRIED');
 expect(isCookedSourceAcceptable('GRILLED')).toBe(false);

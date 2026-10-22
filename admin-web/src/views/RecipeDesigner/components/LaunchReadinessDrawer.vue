@@ -117,7 +117,20 @@
               :key="row.key"
               :label="row.label"
             >
+              <div
+                v-if="row.key === 'reportAvailable'"
+                class="launch-readiness__report-action"
+              >
+                <el-button
+                  size="small"
+                  type="primary"
+                  plain
+                  :loading="reportLoading"
+                  @click="openNutritionReport"
+                >{{ reportAction ? reportAction.label : row.value }}</el-button>
+              </div>
               <span
+                v-else
                 class="launch-readiness__summary-value"
                 :class="[
                   `is-${row.tone}`,
@@ -128,26 +141,6 @@
               >{{ row.value }}</span>
             </el-descriptions-item>
           </el-descriptions>
-        </section>
-
-        <section class="launch-readiness__section">
-          <div class="launch-readiness__section-title">
-            已通过
-            <span class="launch-readiness__count">{{ passedChecks.length }}</span>
-          </div>
-          <div v-if="passedChecks.length" class="launch-readiness__passed">
-            <div
-              v-for="check in passedChecks"
-              :key="check.code"
-              class="launch-passed"
-            >
-              <el-icon class="is-success"><CircleCheckFilled /></el-icon>
-              <span>{{ check.label }}</span>
-            </div>
-          </div>
-          <div v-else class="launch-readiness__clear">
-            暂无已通过项
-          </div>
         </section>
 
         <section class="launch-readiness__section">
@@ -177,6 +170,26 @@
               />
             </el-collapse-item>
           </el-collapse>
+        </section>
+
+        <section class="launch-readiness__section">
+          <div class="launch-readiness__section-title">
+            已通过
+            <span class="launch-readiness__count">{{ passedChecks.length }}</span>
+          </div>
+          <div v-if="passedChecks.length" class="launch-readiness__passed">
+            <div
+              v-for="check in passedChecks"
+              :key="check.code"
+              class="launch-passed"
+            >
+              <el-icon class="is-success"><CircleCheckFilled /></el-icon>
+              <span>{{ check.label }}</span>
+            </div>
+          </div>
+          <div v-else class="launch-readiness__clear">
+            暂无已通过项
+          </div>
         </section>
 
         <section class="launch-readiness__section">
@@ -271,6 +284,18 @@
       </div>
     </div>
   </el-drawer>
+
+  <!--
+    营养报告（2026-10-22）：在上线检查里生成 / 查看，不跳转路由。
+    报告由后端按发布口径生成并持久化，这里只负责展示与过期提示。
+  -->
+  <NutritionReportDrawer
+    v-model="reportDrawerVisible"
+    :snapshot="reportSnapshot"
+    :loading="reportLoading"
+    :error="reportError"
+    @retry="retryNutritionReport"
+  />
 </template>
 
 <script setup lang="ts">
@@ -284,7 +309,11 @@ import {
 } from '@element-plus/icons-vue'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import ProductionStepsEditor from './ProductionStepsEditor.vue'
-import type { DraftLaunchReadiness } from '@/types/recipeDesigner'
+import NutritionReportDrawer from './NutritionReportDrawer.vue'
+import type {
+  DraftLaunchReadiness,
+  DraftNutritionReportEnvelope
+} from '@/types/recipeDesigner'
 import {
   buildLaunchSummaryRows,
   launchIssueFieldLabel,
@@ -294,6 +323,7 @@ import {
   launchReadinessStatusLabel,
   launchReadinessStatusSummary
 } from '@/utils/recipeDesigner/launchReadiness'
+import { resolveNutritionReportAction } from '@/utils/recipeDesigner/nutritionReport'
 
 const props = defineProps<{
   modelValue: boolean
@@ -315,11 +345,25 @@ const readiness = ref<DraftLaunchReadiness | null>(null)
 const stepsExpanded = ref<string[]>([])
 const stepsDirty = ref(false)
 
+const reportDrawerVisible = ref(false)
+const reportSnapshot = ref<DraftNutritionReportEnvelope | null>(null)
+const reportLoading = ref(false)
+const reportError = ref('')
+
 /** 只认最后一次请求，避免关闭 / 重复刷新时的旧响应覆盖新状态 */
 let requestSeq = 0
+/** 营养报告独立计数，生成 / 查看失败时不干扰上线检查本身 */
+let reportRequestSeq = 0
 
 const summaryRows = computed(() =>
   readiness.value ? buildLaunchSummaryRows(readiness.value.summary) : []
+)
+
+/** 概要里的「完整营养报告」不是纯文本，而是按报告状态给出的动作 */
+const reportAction = computed(() =>
+  readiness.value
+    ? resolveNutritionReportAction(readiness.value.summary)
+    : null
 )
 
 const passedChecks = computed(() => {
@@ -378,6 +422,52 @@ async function handleStepsSaved(): Promise<void> {
   await loadReadiness()
 }
 
+/**
+ * 打开营养报告：
+ *  - 已保存且未过期 → GET 读回，直接查看；
+ *  - 没生成过 / 已过期 → POST 生成，成功后刷新上线检查概要。
+ *
+ * 生成失败（后端 400）与读取失败都留在报告抽屉里重试，不关闭上线检查。
+ */
+async function openNutritionReport(): Promise<void> {
+  if (!props.draftId || !readiness.value) return
+
+  const action = resolveNutritionReportAction(readiness.value.summary)
+  const needsGenerate = action.kind !== 'view'
+  const seq = ++reportRequestSeq
+
+  reportSnapshot.value = null
+  reportError.value = ''
+  reportLoading.value = true
+  reportDrawerVisible.value = true
+
+  try {
+    const snapshot = needsGenerate
+      ? await recipeDesignerApi.generateDraftNutritionReport(props.draftId)
+      : await recipeDesignerApi.getDraftNutritionReport(props.draftId)
+    if (seq !== reportRequestSeq) return
+    reportSnapshot.value = snapshot
+    if (needsGenerate) {
+      // 生成后 revision 变了：重新拉上线检查，概要里的动作会切成「查看营养报告」
+      await loadReadiness()
+    }
+  } catch {
+    if (seq !== reportRequestSeq) return
+    // 错误提示已由 API 拦截器统一弹出，这里只保留可重试的内联状态
+    reportError.value = needsGenerate
+      ? '营养报告生成失败，请稍后重试'
+      : '营养报告加载失败，请稍后重试'
+  } finally {
+    if (seq === reportRequestSeq) {
+      reportLoading.value = false
+    }
+  }
+}
+
+async function retryNutritionReport(): Promise<void> {
+  await openNutritionReport()
+}
+
 async function handleBeforeClose(done: () => void): Promise<void> {
   if (!stepsDirty.value) {
     done()
@@ -407,10 +497,17 @@ watch(
       // 关闭后到达的响应不再写回，避免下次打开先闪一眼旧结果
       requestSeq += 1
       loading.value = false
+      reportRequestSeq += 1
+      reportDrawerVisible.value = false
+      reportLoading.value = false
+      reportSnapshot.value = null
+      reportError.value = ''
       return
     }
     readiness.value = null
     error.value = ''
+    reportSnapshot.value = null
+    reportError.value = ''
     if (!draftId) {
       error.value = '缺少草稿 id，无法执行上线检查'
       return
@@ -579,6 +676,13 @@ watch(
 .launch-readiness__summary-value.is-danger {
   color: #f56c6c;
   font-weight: 600;
+}
+
+.launch-readiness__report-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
 }
 
 .launch-readiness__issues {

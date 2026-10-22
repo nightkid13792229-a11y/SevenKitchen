@@ -20,7 +20,9 @@ const summary: DraftLaunchReadinessSummary = {
   energyDensityKcalPerKg: 4321.6,
   supplementCount: 2,
   stepCount: 4,
-  reportAvailable: true
+  reportAvailable: true,
+  reportGenerated: false,
+  reportStale: false
 }
 
 describe('上线检查 · 概要展示', () => {

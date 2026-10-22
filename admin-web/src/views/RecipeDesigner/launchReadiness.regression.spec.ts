@@ -188,8 +188,10 @@ describe('编辑器 · 上线检查入口', () => {
     expect(editor).toContain(':draft-id="currentDraftId"')
   })
 
-  it('没保存成功的修改会提示检查可能不是最新，而不是静默打开', () => {
-    expect(editor).toContain('还有改动尚未保存成功')
-    expect(editor).toContain('本次上线检查基于服务器上已保存的版本')
+  it('没保存成功的修改会阻止打开，并提示等保存完成后再试', () => {
+    expect(editor).toContain('还有改动尚未保存成功，已停止本次上线检查')
+    expect(editor).toContain('请等待保存完成后再试')
+    // 2409580d 起不再「带旧数据继续打开」，而是直接停止
+    expect(editor).not.toContain('本次上线检查基于服务器上已保存的版本')
   })
 })

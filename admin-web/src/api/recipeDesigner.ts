@@ -13,6 +13,7 @@ import type {
   DogDesignInsight,
   DraftAssessmentInputs,
   DraftLaunchReadiness,
+  DraftNutritionReportEnvelope,
   FediafDogScenario,
   IngredientOptionListResponse,
   IngredientRecommendationResult,
@@ -147,6 +148,18 @@ export const recipeDesignerApi = {
    */
   getDraftLaunchReadiness: (draftId: string): Promise<DraftLaunchReadiness> =>
     api.get(`/recipe-designer/drafts/${draftId}/launch-readiness`),
+  /**
+   * 读取草稿最近一次持久化的营养报告（发布口径）。
+   * 没有报告时后端返回 200 + `report: null`，不是错误。
+   */
+  getDraftNutritionReport: (draftId: string): Promise<DraftNutritionReportEnvelope> =>
+    api.get(`/recipe-designer/drafts/${draftId}/nutrition-report`),
+  /**
+   * 生成并持久化草稿的最新营养报告；生成失败后端返回 400。
+   * 成功后草稿的 contentRevision 即报告版本，之后修改草稿会让报告过期。
+   */
+  generateDraftNutritionReport: (draftId: string): Promise<DraftNutritionReportEnvelope> =>
+    api.post(`/recipe-designer/drafts/${draftId}/nutrition-report`),
   /** 整组覆盖保存制作步骤；空数组表示清空 */
   updateDraftProductionSteps: (
     draftId: string,

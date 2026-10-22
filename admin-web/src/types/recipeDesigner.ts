@@ -171,8 +171,81 @@ export interface DraftLaunchReadinessSummary {
   supplementCount: number
   /** 有效制作步骤数 */
   stepCount: number
-  /** 完整营养报告是否可生成 */
+  /** 完整营养报告是否可生成（本次实时构建，不落库） */
   reportAvailable: boolean
+  /** 草稿上是否已保存过营养报告（不自动生成） */
+  reportGenerated: boolean
+  /** 已保存报告是否基于旧内容版本（没有报告时为 false） */
+  reportStale: boolean
+}
+
+/**
+ * 草稿持久化营养报告（2026-10-22）。
+ *
+ * 报告内容与发布口径完全一致：原料清单 / 宏量营养分析 / 能量密度 /
+ * 四类营养素分区。与后端 `buildPublishedNutritionReport` 对齐，
+ * 前端只负责展示，不重新计算。
+ */
+export interface DraftNutritionReportIngredientRow {
+  ingredientName: string
+  /** 用量：食材为克数，补剂为粒 / 片等实际计量单位 */
+  amountLabel: string
+  weightPercentLabel: string
+}
+
+export interface DraftNutritionReportMacroRow {
+  key: string
+  name: string
+  weightPercentLabel: string
+  dryMatterLabel: string
+  energyPercentLabel: string
+}
+
+export interface DraftNutritionReportEnergyDensityRow {
+  label: string
+  value: string
+}
+
+export interface DraftNutritionReportNutrientRow {
+  key: string
+  name: string
+  unit: string
+  minLabel: string
+  maxLabel: string
+  currentLabel: string
+  dryMatterLabel: string
+  /** COMPLIANT / DEFICIENT / EXCESS / MISSING_DATA 等 */
+  status?: string
+}
+
+export interface DraftNutritionReportNutrientSection {
+  key: string
+  title: string
+  dryMatterHeader: string
+  rows: DraftNutritionReportNutrientRow[]
+}
+
+export interface DraftNutritionReport {
+  ingredientRows: DraftNutritionReportIngredientRow[]
+  macroRows: DraftNutritionReportMacroRow[]
+  energyDensityRows: DraftNutritionReportEnergyDensityRow[]
+  nutrientSections: Record<string, DraftNutritionReportNutrientSection>
+}
+
+/**
+ * GET / POST `/recipe-designer/drafts/:id/nutrition-report` 共用响应。
+ *
+ * 从没生成过报告时 GET 返回 200 + `report: null`；
+ * `stale` 表示报告生成后草稿又被修改过，需要重新生成。
+ */
+export interface DraftNutritionReportEnvelope {
+  draftId: string
+  /** ISO 时间；从未生成过为 null */
+  generatedAt: string | null
+  /** 报告对应的内容版本；从未生成过为 null */
+  revision: number | null
+  stale: boolean
+  report: DraftNutritionReport | null
 }
 
 /** GET /recipe-designer/drafts/:id/launch-readiness */

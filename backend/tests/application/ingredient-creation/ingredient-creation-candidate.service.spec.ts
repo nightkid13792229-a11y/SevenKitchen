@@ -278,6 +278,38 @@ describe('IngredientCreationCandidateService', () => {
       );
     });
 
+    it('做法认不出的熟词条保留、排在可接受做法之后，并标 COOKING_METHOD_UNKNOWN', async () => {
+      const { service } = await createService([
+        chickenLiverFixture({
+          id: 'boiled',
+          foodName: 'Chicken liver, boiled',
+          sampleState: 'COOKED',
+        }),
+        chickenLiverFixture({
+          id: 'method-unknown',
+          foodName: 'Chicken liver, cooked, simmered',
+          sampleState: 'COOKED',
+        }),
+      ]);
+
+      const result = await service.findCandidates({
+        name: '鸡肝',
+        nameEn: 'Chicken liver',
+        state: 'COOKED',
+      });
+
+      expect(candidateIds(result)).toEqual(['boiled', 'method-unknown']);
+
+      const unknownMethod = result.candidates.find(
+        (candidate) => candidate.sourceRecordId === 'method-unknown',
+      );
+      expect(unknownMethod?.cookingMethod).toBeNull();
+      expect(unknownMethod?.notes).toContain('COOKING_METHOD_UNKNOWN');
+      expect(result.candidates[0].notes).not.toContain(
+        'COOKING_METHOD_UNKNOWN',
+      );
+    });
+
     it('被排除条数只数名字对得上、因烤/煎被排除的词条', async () => {
       const fixtures: SourceRecordFixture[] = [
         chickenLiverFixture({
@@ -553,6 +585,46 @@ describe('IngredientCreationCandidateService', () => {
           result.candidates[index].matchScore,
         );
       }
+    });
+
+    it('limit 生效，截断前的排序是确定的', async () => {
+      const { service } = await createService([
+        chickenLiverFixture({
+          id: 'alpha',
+          foodName: 'Chicken liver, alpha',
+          sampleState: 'COOKED',
+          values: {
+            'macros.crudeProtein': 20,
+            'macros.crudeFat': 5,
+            'minerals.calcium': 12,
+          },
+        }),
+        chickenLiverFixture({
+          id: 'beta',
+          foodName: 'Chicken liver, beta',
+          sampleState: 'COOKED',
+          values: { 'macros.crudeProtein': 20 },
+        }),
+        chickenLiverFixture({
+          id: 'gamma',
+          foodName: 'Chicken liver, gamma',
+          sampleState: 'COOKED',
+          values: { 'macros.crudeProtein': 20, 'macros.crudeFat': 5 },
+        }),
+      ]);
+
+      const limited = await service.findCandidates(
+        { name: '鸡肝', nameEn: 'Chicken liver', state: 'COOKED' },
+        2,
+      );
+      expect(candidateIds(limited)).toEqual(['alpha', 'gamma']);
+      expect(limited.coverage.candidateCount).toBe(2);
+
+      const all = await service.findCandidates(
+        { name: '鸡肝', nameEn: 'Chicken liver', state: 'COOKED' },
+        10,
+      );
+      expect(candidateIds(all)).toEqual(['alpha', 'gamma', 'beta']);
     });
 
     it('只查启用状态的食品来源词条', async () => {

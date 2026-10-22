@@ -56,8 +56,8 @@ const DIFFERENT_PART_SCORE = 0.25;
  */
 const GENTLE_COOKED_METHOD_WEIGHT = 0.05;
 
-/** 一次最多返回多少条候选，避免「牛肉」这类宽泛名字把接口和页面撑爆。 */
-const MAX_CANDIDATE_ROWS = 50;
+/** 候选默认返回条数，避免「牛肉」这类宽泛名字把接口和页面撑爆。 */
+const DEFAULT_CANDIDATE_LIMIT = 50;
 
 /** `nutrition_source_record` 里检索候选时需要的列。 */
 interface SourceRecordMeta {
@@ -420,6 +420,15 @@ function measureCoverage(profile: unknown): {
   };
 }
 
+/** 调用方传的 limit 收紧成非负整数；非法值回落到默认值。 */
+function normalizeCandidateLimit(limit: number): number {
+  if (!Number.isFinite(limit)) {
+    return DEFAULT_CANDIDATE_LIMIT;
+  }
+
+  return Math.max(0, Math.floor(limit));
+}
+
 function toCandidateRow(candidate: ScoredCandidate): CandidateRow {
   return {
     sourceRecordId: candidate.record.id,
@@ -498,14 +507,21 @@ function buildEmptyResult(state: PreparationState): CandidateSearchResult {
  * 生熟与做法策略（设计文档决定 #4，2026-10-22）：
  * - 生查询不返回熟词条；熟查询不回退到生词条（熟档案不得由生档案推算）；
  * - 熟查询里烤 / 煎不进候选，水煮 / 蒸排在其它可接受做法前面；
- * - 状态推导不出来就 `preparationState = null` 并标 `STATE_UNKNOWN`，不猜、不丢。
+ * - 状态推导不出来就 `preparationState = null` 并标 `STATE_UNKNOWN`，不猜、不丢；
+ * - 熟查询里认不出做法（如 `simmered`）的词条保留，但排在可接受做法之后，
+ *   并标 `COOKING_METHOD_UNKNOWN`，由人来判断能不能用。
  */
 @Injectable()
 export class IngredientCreationCandidateService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * @param limit 最多返回多少条候选（默认 50）；截断前已按匹配分、
+   * 状态一致、覆盖率、词条名排好序，同样的库状态下结果确定。
+   */
   async findCandidates(
     input: FindCandidatesInput,
+    limit: number = DEFAULT_CANDIDATE_LIMIT,
   ): Promise<CandidateSearchResult> {
     const query = buildQueryAnalysis(input);
     if (query.names.length === 0) {
@@ -595,6 +611,9 @@ export class IngredientCreationCandidateService {
       }
       if (cookingMethod !== null) {
         notes.push(`COOKING_METHOD_${cookingMethod}`);
+      } else if (input.state === 'COOKED') {
+        // 熟查询里认不出做法：保留候选但打标，页面要让人自己判断。
+        notes.push('COOKING_METHOD_UNKNOWN');
       }
 
       const matchScore =
@@ -620,7 +639,7 @@ export class IngredientCreationCandidateService {
 
     const rows = scored
       .sort(compareScoredCandidates)
-      .slice(0, MAX_CANDIDATE_ROWS)
+      .slice(0, normalizeCandidateLimit(limit))
       .map((candidate) => toCandidateRow(candidate));
 
     return {

@@ -22,7 +22,7 @@
       </template>
     </el-result>
 
-    <template v-else-if="draft">
+    <template v-else-if="!loading">
       <nav class="creation-steps" aria-label="创建步骤">
         <button
           v-for="(item, index) in stepList"
@@ -47,7 +47,15 @@
       </nav>
 
       <el-card class="creation-body" shadow="never">
-        <component :is="currentStepComponent" @next="handleStepNext" />
+        <component
+          :is="currentStepComponent"
+          :key="draft?.id ?? 'new-draft'"
+          ref="stepRef"
+          :draft="draft"
+          :saving="saving"
+          @next="handleStepNext"
+          @can-next="handleStepCanNext"
+        />
       </el-card>
 
       <footer class="creation-footer">
@@ -60,7 +68,7 @@
         </span>
         <el-button
           type="primary"
-          :disabled="!canGoNext || saving"
+          :disabled="!canGoNext || saving || !stepCanProceed"
           @click="handleNext"
         >
           下一步
@@ -94,10 +102,12 @@ import StepSources from './StepSources.vue'
 import { nextStep, stepIndex, stepList } from './stepState'
 
 /**
- * 起手站还没输入名字，而后端 `POST drafts` 要求 name 非空，
- * 所以先落一个工作名；正式原料名以 ⑤ 与提交时的字段为准。
+ * 各 Step 组件可选暴露 `submit()`：底部「下一步」优先调它，
+ * 让组件自己校验并带上本站 payload（例如 ① 站的 intake）。
  */
-const DRAFT_WORKING_NAME = '未命名原料'
+interface CreationStepExpose {
+  submit?: () => void
+}
 
 const stepComponents: Record<CreationStep, Component> = {
   INTAKE: StepIntake,
@@ -115,6 +125,13 @@ const draft = ref<IngredientCreationDraft | null>(null)
 const activeStep = ref<CreationStep>('INTAKE')
 /** 已到达过的最远一站：进度条只允许点回这里及更早的站。 */
 const maxReachableIndex = ref(0)
+/**
+ * 当前 Step 组件是否放行「下一步」。各站通过 `can-next` 事件上报；
+ * 默认放行，避免尚未接 `can-next` 的站位在未来任务里被误禁用。
+ */
+const stepCanProceed = ref(true)
+/** 当前 Step 组件实例；底部「下一步」优先调它暴露的 `submit()`。 */
+const stepRef = ref<CreationStepExpose | null>(null)
 const loading = ref(true)
 const saving = ref(false)
 const loadError = ref('')
@@ -134,24 +151,25 @@ function applyDraft(loaded: IngredientCreationDraft) {
   const index = stepIndex(loaded.step)
   activeStep.value = index >= 0 ? loaded.step : 'INTAKE'
   maxReachableIndex.value = Math.max(index, 0)
+  // 换站后由新组件自己上报；先放行，避免新组件还没挂载就被旧状态卡住。
+  stepCanProceed.value = true
 }
 
 /**
- * 进页面没有 draftId 时先建草稿，再把 draftId 补进地址栏，
- * 这样刷新或从别处打开同一地址都能回到这份草稿。
+ * 进页面没有 draftId 时不建草稿：① 站还没输入名字，后端的 name 必填。
+ * 草稿延迟到第一次点「下一步」、拿到真实名字后再创建。
  */
 async function bootstrap() {
   loading.value = true
   loadError.value = ''
+  draft.value = null
+  stepRef.value = null
   try {
-    let draftId = readRouteDraftId()
+    const draftId = readRouteDraftId()
     if (!draftId) {
-      const created = await ingredientCreationApi.createDraft(DRAFT_WORKING_NAME)
-      draftId = created.draftId
-      await router.replace({
-        name: 'IngredientCreation',
-        params: { draftId }
-      })
+      activeStep.value = 'INTAKE'
+      maxReachableIndex.value = 0
+      return
     }
 
     applyDraft(await ingredientCreationApi.getDraft(draftId))
@@ -159,9 +177,9 @@ async function bootstrap() {
     draft.value = null
     loadError.value = getApiErrorMessage(
       error,
-      '无法创建或读取草稿，请稍后重试'
+      '无法读取草稿，请稍后重试'
     )
-    if (shouldToastApiError(error, '无法创建或读取草稿')) {
+    if (shouldToastApiError(error, '无法读取草稿')) {
       ElMessage.error(loadError.value)
     }
   } finally {
@@ -173,16 +191,35 @@ async function persistStep(
   target: CreationStep,
   payload: Partial<IngredientCreationDraftPayload>
 ) {
-  const current = draft.value
-  if (!current || saving.value) {
+  if (saving.value) {
     return
   }
 
   saving.value = true
   const previousMax = maxReachableIndex.value
   try {
+    let draftId = draft.value?.id ?? readRouteDraftId()
+
+    if (!draftId) {
+      // 延迟创建：后端要求 name 非空，所以必须等到 ① 站拿到真实名字。
+      const name = payload.intake?.name?.trim()
+      if (!name) {
+        ElMessage.warning('请先填写原料名称')
+        return
+      }
+
+      const created = await ingredientCreationApi.createDraft(name)
+      draftId = created.draftId
+      await router.replace({
+        name: 'IngredientCreation',
+        params: { draftId }
+      })
+      // 先把新草稿拉回本地，后续站点与刷新都能按地址栏里的 draftId 恢复。
+      applyDraft(await ingredientCreationApi.getDraft(draftId))
+    }
+
     const updated = await ingredientCreationApi.patchDraft(
-      current.id,
+      draftId,
       target,
       payload
     )
@@ -208,14 +245,33 @@ async function advance(
   await persistStep(target, payload)
 }
 
-/** 底部「下一步」：只负责推进站点；各站自己的保存逻辑通过 `next` 事件带 payload。 */
+/**
+ * 底部「下一步」：组件暴露了 `submit()` 就交给组件校验并带 payload，
+ * 否则只推进站点（尚未接入校验的占位站）。
+ */
 function handleNext() {
+  if (stepRef.value?.submit) {
+    stepRef.value.submit()
+    return
+  }
   void advance(nextStep(activeStep.value))
 }
 
 /** 各 Step 组件发出的「下一步」：可携带本站 payload，由壳统一落库。 */
 function handleStepNext(payload?: Partial<IngredientCreationDraftPayload>) {
   void advance(nextStep(activeStep.value), payload ?? {})
+}
+
+/** 各 Step 组件上报当前是否允许进入下一站（冲突未裁决等）。 */
+function handleStepCanNext(value: boolean) {
+  stepCanProceed.value = value
+}
+
+/** 换站时清掉上一步组件的实例与放行状态，由新组件挂载后自己上报。 */
+function switchStep(step: CreationStep) {
+  stepRef.value = null
+  stepCanProceed.value = true
+  activeStep.value = step
 }
 
 function handlePrevious() {
@@ -225,7 +281,7 @@ function handlePrevious() {
   }
   const previous = stepList[index - 1]
   if (previous) {
-    activeStep.value = previous.step
+    switchStep(previous.step)
   }
 }
 
@@ -235,7 +291,7 @@ function goToStep(index: number) {
   }
   const target = stepList[index]
   if (target) {
-    activeStep.value = target.step
+    switchStep(target.step)
   }
 }
 

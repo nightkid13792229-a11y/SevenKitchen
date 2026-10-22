@@ -85,6 +85,11 @@ export class UpdateDraftIntakeDto {
   @IsArray()
   @IsIn(PREPARATION_STATES, { each: true })
   suggestedStates?: PreparationState[];
+
+  @ApiPropertyOptional({ description: '备注', nullable: true })
+  @IsOptional()
+  @IsString()
+  notes?: string | null;
 }
 
 /** ③ 一份已建好的营养档案（终检的覆盖判断与提交共用同一形状）。 */

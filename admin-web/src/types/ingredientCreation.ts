@@ -42,6 +42,8 @@ export interface IntakeCard {
   category: CoverageCategory
   requiredStates: PreparationState[]
   suggestedStates: PreparationState[]
+  /** ① 起手页的备注（可选）；随草稿保存，供创建记录与后续核查。 */
+  notes?: string | null
 }
 
 /**

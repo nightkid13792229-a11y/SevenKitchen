@@ -283,6 +283,56 @@ describe('IngredientCreationController', () => {
       expect(response.body.data.step).toBe('PROFILE');
     });
 
+    it('PATCH drafts/:id 保留 intake.notes，不被 whitelist 剥掉', async () => {
+      draftService.patch.mockResolvedValue(
+        createDraft({
+          step: 'SOURCES',
+          payload: {
+            intake: {
+              name: '鸡肝',
+              nameEn: 'Chicken liver',
+              aliases: [],
+              confusables: [],
+              category: 'MEAT_ORGAN',
+              requiredStates: ['RAW'],
+              suggestedStates: ['COOKED'],
+              notes: '用户原话',
+            },
+          },
+        }),
+      );
+
+      await authorizedPatch('/drafts/draft-1')
+        .send({
+          step: 'SOURCES',
+          payload: {
+            intake: {
+              name: '鸡肝',
+              nameEn: 'Chicken liver',
+              category: 'MEAT_ORGAN',
+              requiredStates: ['RAW'],
+              suggestedStates: ['COOKED'],
+              notes: '用户原话',
+            },
+          },
+        })
+        .expect(200);
+
+      expect(draftService.patch).toHaveBeenCalledTimes(1);
+      const [, step, payload] = draftService.patch.mock.calls[0];
+      expect(step).toBe('SOURCES');
+      // 备注是 ① 站的人工输入，必须原样落到草稿 payload；whitelist 一旦漏声明
+      // 就会静默剥掉，页面上看不出任何报错，事后也查不到用户写了什么。
+      expect(payload).toMatchObject({
+        intake: {
+          name: '鸡肝',
+          nameEn: 'Chicken liver',
+          category: 'MEAT_ORGAN',
+          notes: '用户原话',
+        },
+      });
+    });
+
     it('PATCH drafts/:id 非法 category → 400', async () => {
       await authorizedPatch('/drafts/draft-1')
         .send({

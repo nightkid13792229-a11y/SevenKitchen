@@ -219,6 +219,22 @@ export const recipeDesignerApi = {
     payload: UpdateDesignRecipeProductionStepsPayload,
   ): Promise<DesignRecipeProductionStepsResult> =>
     api.patch(`/recipe-designer/drafts/${draftId}/production-steps`, payload),
+  /** 售后改稿：重新打开已交付的一份设计 */
+  reopenAftersaleDesign: (
+    aftersaleId: string,
+    deliveryItemId?: string
+  ): Promise<{
+    orderId: string
+    orderUuid: string
+    designId: string
+    seriesId: string
+    draftId: string
+    deliveryItemId: string
+  }> =>
+    api.post(`/recipe-designer/aftersales/${aftersaleId}/reopen-design`, {
+      deliveryItemId
+    }),
+
   createRevisionDraft: (draftId: string): Promise<unknown> =>
     api.post(`/recipe-designer/drafts/${draftId}/revisions`),
   revertDraftToLatestOfficial: (draftId: string): Promise<unknown> =>

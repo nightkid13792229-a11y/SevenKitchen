@@ -56,8 +56,15 @@ describe('OrderRecipeDesignService', () => {
       findUnique: jest.fn(),
       update: jest.fn(),
     },
+    customRecipeAftersale: {
+      findUnique: jest.fn(),
+    },
+    customRecipeDeliveryItem: {
+      findUnique: jest.fn(),
+    },
     orderRecipeDesign: {
       findMany: jest.fn(),
+      findFirst: jest.fn(),
       findUnique: jest.fn(),
       count: jest.fn(),
       create: jest.fn(),
@@ -486,6 +493,69 @@ describe('OrderRecipeDesignService', () => {
       expect(
         recipeDesignerService.publishOrderDesignSlot,
       ).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('reopenForAftersale', () => {
+    it('把已交付的对应槽位改回 EDITING，并返回设计器上下文', async () => {
+      prisma.customRecipeAftersale.findUnique.mockResolvedValue({
+        id: 'aftersale-1',
+        orderId: 'order-uuid',
+        status: 'ACCEPTED',
+        deliveryItemIds: ['delivery-item-1'],
+        order: {
+          id: 'order-uuid',
+          orderId: 'CR202610220001',
+          status: 'DELIVERED',
+        },
+      });
+      prisma.customRecipeDeliveryItem.findUnique.mockResolvedValue({
+        id: 'delivery-item-1',
+        batchId: 'batch-1',
+        recipeId: 'recipe-row-1',
+      });
+      prisma.orderRecipeDesign.findFirst.mockResolvedValue({
+        id: 'design-1',
+        seriesId: 'series-1',
+        designDraftId: 'draft-1',
+        recipeId: 'recipe-row-1',
+        status: 'DELIVERED',
+      });
+
+      const result = await service.reopenForAftersale({
+        aftersaleId: 'aftersale-1',
+        operatorId: 'admin-1',
+      });
+
+      expect(result).toMatchObject({
+        orderId: 'CR202610220001',
+        orderUuid: 'order-uuid',
+        designId: 'design-1',
+        seriesId: 'series-1',
+        draftId: 'draft-1',
+        deliveryItemId: 'delivery-item-1',
+      });
+      expect(prisma.orderRecipeDesign.update).toHaveBeenCalledWith({
+        where: { id: 'design-1' },
+        data: { status: 'EDITING' },
+      });
+    });
+
+    it('售后未受理时拒绝改稿', async () => {
+      prisma.customRecipeAftersale.findUnique.mockResolvedValue({
+        id: 'aftersale-1',
+        orderId: 'order-uuid',
+        status: 'PENDING',
+        deliveryItemIds: ['delivery-item-1'],
+        order: { id: 'order-uuid', orderId: 'CR202610220001' },
+      });
+
+      await expect(
+        service.reopenForAftersale({
+          aftersaleId: 'aftersale-1',
+          operatorId: 'admin-1',
+        }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 

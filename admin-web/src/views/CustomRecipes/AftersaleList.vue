@@ -86,6 +86,15 @@
               v-if="recipe.requestDescription"
               class="batch-recipe-request"
             >{{ recipe.requestDescription }}</span>
+            <el-button
+              v-if="isAdmin"
+              size="small"
+              link
+              type="primary"
+              :loading="reopeningId === item.id"
+              :disabled="Boolean(reopeningId)"
+              @click="editAftersaleRecipe(item, recipe.deliveryItemId)"
+            >修改食谱</el-button>
           </div>
         </div>
         <div v-if="item.photos && item.photos.length" class="photos">
@@ -201,12 +210,15 @@
 import { h, onMounted, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { customRecipeApi, type AdminAftersaleItem } from '@/api/customRecipe';
+import { recipeDesignerApi } from '@/api/recipeDesigner';
+import { useIsAdmin } from '@/composables/useAdminRole';
 import {
   buildAftersaleRecipeDetails,
   canRedeliverAftersaleBatch,
   resolveAftersaleRedeliverItemIds,
 } from '@/utils/customRecipeAftersale';
 import { getApiErrorMessage, toastApiError } from '@/utils/apiError';
+import { useRouter } from 'vue-router';
 
 /**
  * 售后待办（2026-10-16，批次 3.1）
@@ -222,6 +234,8 @@ import { getApiErrorMessage, toastApiError } from '@/utils/apiError';
  */
 
 const loading = ref(false);
+const router = useRouter();
+const isAdmin = useIsAdmin();
 const items = ref<AdminAftersaleItem[]>([]);
 const includeClosed = ref(false);
 const actingId = ref('');
@@ -229,6 +243,7 @@ const submitting = ref(false);
 
 /** 正在按选中份重新交付的售后 id；同一时间只允许一笔，避免重复提交 */
 const redeliveringId = ref('');
+const reopeningId = ref('');
 /** 每张卡片自己的重新交付失败原因（后端原话），刷新或重试时清掉 */
 const redeliverErrors = reactive<Record<string, string>>({});
 
@@ -296,6 +311,38 @@ const batchRecipesOf = (item: AdminAftersaleItem) =>
  * 后端会在新批次里保留未选中的份，所以对话框要说清"只刷新选中的份"，
  * 否则处理人会以为把整单都换了。成功后重新拉列表：售后状态可能跟着变。
  */
+/**
+ * 售后改稿：重新打开已交付的某一份设计，直接进入设计器。
+ * 改完并「加入本单待提交」后，再回本页按选中份重新交付。
+ */
+const editAftersaleRecipe = async (
+  item: AdminAftersaleItem,
+  deliveryItemId: string,
+) => {
+  if (!isAdmin.value || reopeningId.value) return;
+  reopeningId.value = item.id;
+  try {
+    const result = await recipeDesignerApi.reopenAftersaleDesign(
+      item.id,
+      deliveryItemId,
+    );
+    await router.push({
+      path: `/recipe-designer/series/${result.seriesId}/drafts/${result.draftId}`,
+      query: {
+        orderId: result.orderId,
+        designId: result.designId,
+        aftersaleId: item.id,
+      },
+    });
+  } catch (error) {
+    toastApiError(error, '打开售后改稿失败，请重试', (message) =>
+      ElMessage.error(message),
+    );
+  } finally {
+    reopeningId.value = '';
+  }
+};
+
 const redeliverSelectedRecipes = async (item: AdminAftersaleItem) => {
   if (!canRedeliverAftersaleBatch(item)) return;
 

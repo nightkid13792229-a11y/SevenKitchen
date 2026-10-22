@@ -264,13 +264,99 @@ export class OrderRecipeDesignService {
    * 幂等：槽位已经是 READY 且草稿此后没有修改时，直接返回原结果，
    * 不重复生成版本、不重复发任何通知。
    */
+  /**
+   * 售后改稿：重新打开已交付订单里的某一份设计。
+   *
+   * 只把对应 OrderRecipeDesign 从 DELIVERED 改回 EDITING；
+   * 设计草稿 / 私密食谱保持原记录，重新入仓时沿用同一份草稿，
+   * 私密食谱版本会递增，交付明细仍指向同一 recipe 行。
+   */
+  async reopenForAftersale(input: {
+    aftersaleId: string;
+    deliveryItemId?: string | null;
+    operatorId: string;
+  }): Promise<{
+    orderId: string;
+    orderUuid: string;
+    designId: string;
+    seriesId: string;
+    draftId: string;
+    deliveryItemId: string;
+  }> {
+    const aftersale = await this.prisma.customRecipeAftersale.findUnique({
+      where: { id: input.aftersaleId },
+      include: {
+        order: {
+          select: {
+            id: true,
+            orderId: true,
+            status: true,
+          },
+        },
+      },
+    });
+    if (!aftersale) {
+      throw new NotFoundException('售后单不存在');
+    }
+    if (!['ACCEPTED', 'PROCESSING'].includes(aftersale.status)) {
+      throw new BadRequestException('请先受理售后，再修改食谱');
+    }
+
+    const deliveryItemIds = Array.isArray(aftersale.deliveryItemIds)
+      ? aftersale.deliveryItemIds
+      : [];
+    const selectedDeliveryItemId = String(
+      input.deliveryItemId ?? deliveryItemIds[0] ?? '',
+    ).trim();
+    if (!selectedDeliveryItemId || !deliveryItemIds.includes(selectedDeliveryItemId)) {
+      throw new BadRequestException('请选择本次售后要修改的那一份食谱');
+    }
+
+    const deliveryItem = await this.prisma.customRecipeDeliveryItem.findUnique({
+      where: { id: selectedDeliveryItemId },
+      select: { id: true, batchId: true, recipeId: true },
+    });
+    if (!deliveryItem) {
+      throw new NotFoundException('交付明细不存在');
+    }
+    const slot = await this.prisma.orderRecipeDesign.findFirst({
+      where: {
+        orderId: aftersale.order.id,
+        recipeId: deliveryItem.recipeId,
+      },
+      select: {
+        id: true,
+        seriesId: true,
+        designDraftId: true,
+        recipeId: true,
+        status: true,
+      },
+    });
+    if (!slot) {
+      throw new NotFoundException('找不到这份交付对应的设计槽位');
+    }
+
+    await this.prisma.orderRecipeDesign.update({
+      where: { id: slot.id },
+      data: { status: OrderRecipeDesignStatus.EDITING },
+    });
+
+    return {
+      orderId: aftersale.order.orderId,
+      orderUuid: aftersale.order.id,
+      designId: slot.id,
+      seriesId: slot.seriesId,
+      draftId: slot.designDraftId,
+      deliveryItemId: selectedDeliveryItemId,
+    };
+  }
+
   async stageDraft(
     orderId: string,
     designId: string,
     operatorId: string,
   ): Promise<StageOrderDesignResult> {
     const order = await this.resolveOrder(orderId);
-    this.assertOrderAllowsDesign(order);
 
     const slot = await this.prisma.orderRecipeDesign.findUnique({
       where: { id: designId },
@@ -279,6 +365,10 @@ export class OrderRecipeDesignService {
       },
     });
     const normalizedSlot = this.assertSlotBelongsToOrder(slot, order.id);
+    // 售后改稿：已交付订单只有在槽位被明确改回 EDITING 后才允许重新入仓。
+    if (normalizedSlot.status !== OrderRecipeDesignStatus.EDITING) {
+      this.assertOrderAllowsDesign(order);
+    }
     if (normalizedSlot.status === OrderRecipeDesignStatus.DELIVERED) {
       throw new BadRequestException('该份食谱已交付，不能重复加入待提交');
     }

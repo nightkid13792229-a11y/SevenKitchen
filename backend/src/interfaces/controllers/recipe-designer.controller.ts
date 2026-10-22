@@ -268,6 +268,29 @@ export class RecipeDesignerController {
   }
 
   /** 移除一个尚未最终交付的槽位（EDITING / READY）。 */
+  /**
+   * 售后改稿：把已交付的这一份重新打开为可编辑槽位。
+   * 只有管理员能操作，且售后必须已受理 / 处理中。
+   */
+  @Post('aftersales/:aftersaleId/reopen-design')
+  @UseGuards(StaffGuard)
+  @Roles('ADMIN')
+  @ApiOperation({
+    summary: 'Reopen a delivered design for aftersale revision',
+  })
+  async reopenAftersaleDesign(
+    @Param('aftersaleId') aftersaleId: string,
+    @Body('deliveryItemId') deliveryItemId: string | undefined,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.orderRecipeDesignService.reopenForAftersale({
+      aftersaleId,
+      deliveryItemId,
+      operatorId: user.userId,
+    });
+    return ApiResponseDto.success(result);
+  }
+
   @Delete('orders/:orderId/designs/:designId')
   @UseGuards(StaffGuard)
   @ApiOperation({

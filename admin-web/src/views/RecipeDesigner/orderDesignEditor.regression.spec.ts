@@ -63,7 +63,7 @@ describe('编辑器 · 管理员加入本单待提交', () => {
   })
 
   it('本单设计模式不提供目录发布入口，避免绕过待提交', () => {
-    expect(source).toContain('v-if="!orderId"')
+    expect(source).not.toContain('保存到系列仓库')
     expect(source).toContain("if (orderId) {")
   })
 })

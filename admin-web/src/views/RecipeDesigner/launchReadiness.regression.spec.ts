@@ -179,12 +179,12 @@ describe('编辑器 · 上线检查入口', () => {
     expect(editor).toContain('公共门槛 + 展示资料 + 分支条件')
   })
 
-  it('产品线分支按钮使用「保存到系列仓库」，本单分支保留「加入本单待提交」', () => {
-    expect(editor).toContain('保存到系列仓库')
-    expect(editor).not.toContain('发布到产品线')
+  it('产品线入仓动作已移入上线检查抽屉，不再在编辑器头部', () => {
+    const drawer = clean(drawerSource)
+    expect(drawer).toContain('保存到系列仓库')
+    expect(editor).not.toContain('保存到系列仓库')
+    expect(drawer).not.toContain('发布到产品线')
     expect(editor).toContain('加入本单待提交')
-    // 按钮文案只改标签，不改变既有 goPublish 行为
-    expect(editor).toContain('@click="goPublish"')
   })
 
   it('打开前先刷保存队列，再打开抽屉；不跳转路由', () => {

@@ -76,15 +76,6 @@
           <el-icon v-else><CircleCheckFilled /></el-icon>
           {{ saveStatusText }}
         </span>
-        <el-button
-          v-if="!orderId"
-          type="primary"
-          :disabled="!draft || items.length === 0"
-          title="产品线分支：保存到系列仓库（整条系列发布由管理员在列表页操作）"
-          @click="goPublish"
-        >
-          保存到系列仓库
-        </el-button>
       </div>
     </div>
 
@@ -386,6 +377,8 @@
     <LaunchReadinessDrawer
       v-model="launchReadinessVisible"
       :draft-id="currentDraftId"
+      :draft-name="draft?.series?.name || draft?.name || ''"
+      @published="handleStagePublished"
     />
   </div>
 </template>
@@ -1757,6 +1750,11 @@ async function openLaunchReadiness() {
 function backToOrderWorkspace() {
   if (!orderId) return
   router.push(`/order-design/${encodeURIComponent(orderId)}`)
+}
+
+function handleStagePublished() {
+  launchReadinessVisible.value = false
+  router.push('/recipe-designer')
 }
 
 function goPublish() {

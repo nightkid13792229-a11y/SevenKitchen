@@ -143,9 +143,8 @@ describe('食谱设计器列表 · 系列发布入口', () => {
 describe('编辑器 · 产品线主按钮', () => {
   const editor = clean(editorSource)
 
-  it('按钮文案改为「保存到系列仓库」，行为仍是 goPublish', () => {
-    expect(editor).toContain('保存到系列仓库')
+  it('单阶段入仓动作移入上线检查，编辑器头部不再直接入仓', () => {
+    expect(editor).not.toContain('保存到系列仓库')
     expect(editor).not.toContain('发布到产品线')
-    expect(editor).toContain('@click="goPublish"')
   })
 })

@@ -143,8 +143,11 @@
           </el-descriptions>
         </section>
 
-        <section class="launch-readiness__section">
-          <div class="launch-readiness__section-title">产品展示</div>
+        <section
+          v-if="readiness.designMode === 'ORDER'"
+          class="launch-readiness__section"
+        >
+          <div class="launch-readiness__section-title">订单展示</div>
           <PresentationPanel
             :draft-id="draftId"
             :design-mode="readiness.designMode"
@@ -326,6 +329,21 @@
           </div>
         </section>
 
+        <div
+          v-if="readiness.designMode !== 'ORDER'"
+          class="launch-readiness__publish"
+        >
+          <div class="launch-readiness__publish-hint">
+            单阶段入仓不会直接上橱窗；系列齐套后到系列卡片统一发布。
+          </div>
+          <el-button
+            type="primary"
+            :loading="publishing"
+            :disabled="!canPublishStage"
+            @click="publishStageToWarehouse"
+          >保存到系列仓库</el-button>
+        </div>
+
         <p class="launch-readiness__footer-note">
           检查的是服务器上已保存的版本；刚修改过的内容请等保存完成后再点「刷新检查」。
         </p>
@@ -348,7 +366,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   CircleCheckFilled,
   CircleCloseFilled,
@@ -356,6 +374,7 @@ import {
   WarningFilled
 } from '@element-plus/icons-vue'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
+import { useUserStore } from '@/store/user'
 import ProductionStepsEditor from './ProductionStepsEditor.vue'
 import NutritionReportDrawer from './NutritionReportDrawer.vue'
 import PresentationPanel from './PresentationPanel.vue'
@@ -379,10 +398,12 @@ import { resolveNutritionReportAction } from '@/utils/recipeDesigner/nutritionRe
 const props = defineProps<{
   modelValue: boolean
   draftId: string
+  draftName?: string
 }>()
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
+  (e: 'published'): void
 }>()
 
 const visible = computed({
@@ -395,6 +416,9 @@ const error = ref('')
 const readiness = ref<DraftLaunchReadiness | null>(null)
 const stepsExpanded = ref<string[]>([])
 const stepsDirty = ref(false)
+const publishing = ref(false)
+const userStore = useUserStore()
+const isAdmin = computed(() => userStore.userInfo?.role === 'ADMIN')
 const presentationDirty = ref(false)
 
 const reportDrawerVisible = ref(false)
@@ -416,6 +440,15 @@ const reportAction = computed(() =>
   readiness.value
     ? resolveNutritionReportAction(readiness.value.summary)
     : null
+)
+
+const canPublishStage = computed(
+  () =>
+    Boolean(readiness.value?.ready) &&
+    !presentationDirty.value &&
+    !stepsDirty.value &&
+    !publishing.value &&
+    isAdmin.value
 )
 
 const passedChecks = computed(() =>
@@ -531,6 +564,61 @@ async function openNutritionReport(): Promise<void> {
 
 async function retryNutritionReport(): Promise<void> {
   await openNutritionReport()
+}
+
+async function publishStageToWarehouse(): Promise<void> {
+  if (!readiness.value || readiness.value.designMode === 'ORDER') return
+  if (!readiness.value.ready) {
+    ElMessage.warning('上线检查未通过，暂时不能入仓')
+    return
+  }
+  if (!isAdmin.value) {
+    ElMessage.warning('仅管理员可以保存到系列仓库')
+    return
+  }
+  const name = String(props.draftName ?? '').trim()
+  if (!name) {
+    ElMessage.warning('请先填写系列名称')
+    return
+  }
+  let reviewNote: string | undefined
+  if (readiness.value.warnings.some((item) => item.code === 'REVIEW_REQUIRED')) {
+    try {
+      const result = await ElMessageBox.prompt('配方未完全合规，请填写审核说明', '审核说明', {
+        confirmButtonText: '继续入仓',
+        cancelButtonText: '取消',
+        inputType: 'textarea',
+        inputValidator: (value) => Boolean(String(value ?? '').trim()) || '审核说明不能为空'
+      })
+      reviewNote = String(result.value ?? '').trim()
+    } catch {
+      return
+    }
+  } else {
+    try {
+      await ElMessageBox.confirm(
+        '确认把当前生命阶段保存到系列仓库？保存后不会直接上橱窗，需等系列齐套后统一发布。',
+        '保存到系列仓库',
+        {
+          type: 'info',
+          confirmButtonText: '确认入仓',
+          cancelButtonText: '取消'
+        }
+      )
+    } catch {
+      return
+    }
+  }
+  publishing.value = true
+  try {
+    await recipeDesignerApi.publishDraft(props.draftId, { name, reviewNote })
+    ElMessage.success('已保存到系列仓库，等待系列齐套')
+    emit('published')
+  } catch {
+    // API 拦截器已提示
+  } finally {
+    publishing.value = false
+  }
 }
 
 async function handleBeforeClose(done: () => void): Promise<void> {
@@ -914,5 +1002,22 @@ watch(
 
 .launch-passed__scope {
   margin-left: auto;
+}
+
+.launch-readiness__publish {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.launch-readiness__publish-hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #909399;
 }
 </style>

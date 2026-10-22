@@ -251,7 +251,9 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
   } as any;
 
   const targetProvider = { getTargets: jest.fn() };
-  const supplementTargetService = new SupplementTargetService(prisma as PrismaService);
+  const supplementTargetService = new SupplementTargetService(
+    prisma as PrismaService,
+  );
   const searchGovernance = {
     expandQuery: jest.fn(),
     recordSearchEvent: jest.fn(),
@@ -586,7 +588,7 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
     );
   });
 
-  it('blocks catalog drafts without presentation or catalog copy', async () => {
+  it('keeps catalog stage drafts ready without series-level presentation', async () => {
     const readiness = await readinessFor({
       coverImageUrl: null,
       coverTitle: '   ',
@@ -594,6 +596,39 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
       sellingPoint: '',
       applicableLifeStages: [],
       targetHealthTags: [],
+    });
+
+    // 2026-10-22 两阶段发布：产品线阶段只写系列仓库（Recipe.status=DRAFT），
+    // 封面 / 标题 / 卖点等展示资料在系列层级维护，整系列发布时才检查。
+    expect(readiness.ready).toBe(true);
+    expect(readiness.blockers).toEqual([]);
+    expect(
+      readiness.blockers.filter(
+        (blocker) =>
+          blocker.scope === 'PRESENTATION' || blocker.scope === 'CATALOG',
+      ),
+    ).toEqual([]);
+    expect(
+      readiness.warnings.some(
+        (warning) => warning.code === 'TARGET_HEALTH_TAGS_MISSING',
+      ),
+    ).toBe(false);
+  });
+
+  it('still blocks order stage drafts without cover image or title', async () => {
+    const readiness = await readinessFor({
+      coverImageUrl: null,
+      coverTitle: '   ',
+      description: null,
+      sellingPoint: null,
+      series: {
+        id: 'series-1',
+        name: '鸡肉成犬配方',
+        referenceDogId: 'dog-1',
+        designMode: 'ORDER',
+        orderId: 'order-1',
+        orderQuantity: 2,
+      },
     });
 
     expect(readiness.ready).toBe(false);
@@ -609,22 +644,13 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
           scope: 'PRESENTATION',
           field: 'coverTitle',
         }),
-        expect.objectContaining({
-          code: 'SELLING_POINT_REQUIRED',
-          scope: 'CATALOG',
-          field: 'sellingPoint',
-        }),
       ]),
     );
-    expect(readiness.warnings).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: 'TARGET_HEALTH_TAGS_MISSING',
-          scope: 'CATALOG',
-          field: 'targetHealthTags',
-        }),
-      ]),
-    );
+    expect(
+      readiness.blockers.some(
+        (blocker) => blocker.code === 'SELLING_POINT_REQUIRED',
+      ),
+    ).toBe(false);
   });
 
   it('blocks order designs without order context but does not require catalog copy', async () => {
@@ -668,7 +694,7 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
     ).toBe(false);
   });
 
-  it('keeps common warning codes unique when catalog checks add a warning', async () => {
+  it('keeps warning codes unique when the assessment adds common warnings', async () => {
     targetProvider.getTargets.mockResolvedValue([
       {
         nutrientKey: 'calcium',
@@ -693,12 +719,10 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
           code: 'NUTRIENT_OUT_OF_RANGE',
           scope: 'COMMON',
         }),
-        expect.objectContaining({
-          code: 'TARGET_HEALTH_TAGS_MISSING',
-          scope: 'CATALOG',
-        }),
       ]),
     );
+    // 产品线的健康标签提醒已随展示检查上移到系列发布门槛。
+    expect(warningCodes).not.toContain('TARGET_HEALTH_TAGS_MISSING');
   });
 
   it('summarizes persisted report state without generating a report on readiness', async () => {
@@ -756,9 +780,49 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
     expect(prisma.designRecipePublishSnapshot.create).not.toHaveBeenCalled();
   });
 
-  it('enforces presentation blockers in publishDraft before creating a recipe', async () => {
+  it('publishes catalog stage drafts to the series warehouse without cover or selling point', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
-      designDraft({ coverImageUrl: null, coverTitle: null }),
+      designDraft({
+        coverImageUrl: null,
+        coverTitle: null,
+        description: null,
+        sellingPoint: null,
+        targetHealthTags: [],
+      }),
+    );
+
+    await service.publishDraft(
+      'draft-1',
+      { name: '鸡肉成犬配方' },
+      ADMIN_ACCESS,
+    );
+
+    // 阶段发布只写 Recipe.status=DRAFT；展示资料由整系列发布统一写入。
+    expect(prisma.recipe.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        status: 'DRAFT',
+        coverImageUrl: null,
+        coverTitle: null,
+        sellingPoint: null,
+      }),
+    });
+    expect(prisma.designRecipePublishSnapshot.create).toHaveBeenCalled();
+  });
+
+  it('still requires cover image for order designs in publishDraft', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      designDraft({
+        coverImageUrl: null,
+        coverTitle: null,
+        series: {
+          id: 'series-1',
+          name: '鸡肉成犬配方',
+          referenceDogId: 'dog-1',
+          designMode: 'ORDER',
+          orderId: 'order-1',
+          orderQuantity: 2,
+        },
+      }),
     );
 
     await expect(

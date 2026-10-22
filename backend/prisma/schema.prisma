@@ -720,6 +720,20 @@ model RecipeSeries {
   designMode     RecipeDesignMode           @default(CATALOG) @map("design_mode")
   orderId        String?                    @map("order_id")
   orderQuantity  Int?                       @map("order_quantity")
+  /// ===== 2026-10-22 产品线分阶段发布 =====
+  ///
+  /// 阶段设计只以 `Recipe.status=DRAFT` 写入系列仓库；只有当
+  /// `requiredLifeStages` 全部就绪、且系列级产品展示资料齐全时，
+  /// 才能由管理员把**整个系列**一次性发布（所有阶段 Recipe → PUBLIC，
+  /// 系列 businessStatus → PUBLIC）。
+  ///
+  /// 展示资料因此上移到系列层级：同一系列的各个生命阶段共用一套
+  /// 封面图 / 封面标题 / 一句话卖点 / 目标健康标签，发布时复制到每条 Recipe。
+  requiredLifeStages String[] @default([]) @map("required_life_stages")
+  coverImageUrl      String?  @map("cover_image_url")
+  coverTitle         String?  @map("cover_title") @db.VarChar(20)
+  sellingPoint       String?  @map("selling_point") @db.VarChar(200)
+  targetHealthTags   String[] @default([]) @map("target_health_tags")
   createdAt      DateTime                   @default(now()) @map("created_at")
   updatedAt      DateTime                   @updatedAt @map("updated_at")
   recipes        Recipe[]

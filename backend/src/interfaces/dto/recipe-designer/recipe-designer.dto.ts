@@ -16,6 +16,15 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { PRODUCTION_STEP_LIMITS } from '../../../domain/recipe-designer/production-steps';
+import { ORDERED_RECIPE_SERIES_LIFE_STAGES } from '../../../domain/recipe/recipe-series';
+
+/**
+ * 产品线分阶段发布允许配置的生命阶段代码（2026-10-22）。
+ * 与设计器阶段、`RecipeSeriesLifeStage` 完全一致，避免前端自造代码。
+ */
+export const RECIPE_SERIES_RELEASE_STAGE_CODES = [
+  ...ORDERED_RECIPE_SERIES_LIFE_STAGES,
+];
 
 export const RECIPE_DESIGNER_SCENARIOS = [
   'EARLY_GROWTH_REPRODUCTION',
@@ -407,6 +416,44 @@ export class UpdateRecipeDesignPresentationDto {
   @IsOptional()
   @IsString()
   videoUrl?: string | null;
+}
+
+/**
+ * 产品线发布设置（2026-10-22 · 两阶段发布）。
+ *
+ * 阶段设计只以 `Recipe.status=DRAFT` 存入系列仓库；展示资料与必填阶段
+ * 统一在系列上维护，保存后由 `release-readiness` 重新评估。
+ *
+ * 全部字段可选（patch semantics）：没传的字段保持原值，显式 null 表示清空。
+ */
+export class UpdateRecipeSeriesReleaseSettingsDto {
+  /** 必填生命阶段；按系统固定顺序保存，非法代码直接 400 */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(RECIPE_SERIES_RELEASE_STAGE_CODES.length)
+  @IsString({ each: true })
+  requiredLifeStages?: string[];
+
+  @IsOptional()
+  @IsString()
+  coverImageUrl?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(RECIPE_PRESENTATION_LIMITS.coverTitle)
+  coverTitle?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(RECIPE_PRESENTATION_LIMITS.sellingPoint)
+  sellingPoint?: string | null;
+
+  /** 目标健康标签（健康标签 id）；为空时只提醒，不阻断发布 */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsString({ each: true })
+  targetHealthTags?: string[];
 }
 
 /**

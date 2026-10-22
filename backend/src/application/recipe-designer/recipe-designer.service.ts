@@ -22,6 +22,7 @@ import {
   RecipeStatus,
   RecipeSeriesStatus,
   UserRole,
+  type RecipeSeries,
 } from '@prisma/client';
 import { nutritionDataToNutritionProfile } from '../nutrition-standard/nutrient-value-resolver';
 import {
@@ -58,6 +59,12 @@ import {
   type DraftLaunchReadiness,
   type LaunchReadinessAssessmentSnapshot,
 } from '../../domain/recipe-designer/launch-readiness';
+import {
+  buildSeriesReleaseReadiness,
+  type SeriesReleaseReadiness,
+  type SeriesReleaseStageSnapshot,
+  type SeriesReleaseStageStatus,
+} from '../../domain/recipe-designer/series-release-readiness';
 import type {
   AssessmentEntry,
   AssessmentExpressionBasis,
@@ -87,6 +94,7 @@ import type {
   UpdateRecipeDesignPresentationDto,
   UpdateRecipeDesignItemDto,
   UpdateRecipeProductionStepsDto,
+  UpdateRecipeSeriesReleaseSettingsDto,
 } from '../../interfaces/dto/recipe-designer/recipe-designer.dto';
 import {
   RECIPE_PREPARATION_NOTE_MAX_LENGTH,
@@ -238,6 +246,62 @@ const DRAFT_PRESENTATION_SELECT = {
   detailImages: true,
   videoUrl: true,
 } satisfies Prisma.DesignRecipeSelect;
+
+/** 系列分阶段发布：只需要阶段仓库所需的最小字段。 */
+const SERIES_RELEASE_RECIPE_SELECT = {
+  id: true,
+  recipeId: true,
+  version: true,
+  status: true,
+  seriesLifeStage: true,
+  applicableLifeStages: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.RecipeSelect;
+
+const SERIES_RELEASE_DESIGN_SELECT = {
+  id: true,
+  seriesLifeStage: true,
+  status: true,
+  publishedRecipeId: true,
+  publishedAt: true,
+  updatedAt: true,
+} satisfies Prisma.DesignRecipeSelect;
+
+type SeriesReleaseRecipeRecord = Prisma.RecipeGetPayload<{
+  select: typeof SERIES_RELEASE_RECIPE_SELECT;
+}>;
+
+type SeriesReleaseDesignRecord = Prisma.DesignRecipeGetPayload<{
+  select: typeof SERIES_RELEASE_DESIGN_SELECT;
+}>;
+
+/** 系列发布设置响应：不返回整条系列，避免把内部字段泄给前端。 */
+type SeriesReleaseSettingsSnapshot = {
+  seriesId: string;
+  name: string;
+  designMode: string;
+  businessStatus: string;
+  requiredLifeStages: string[];
+  coverImageUrl: string | null;
+  coverTitle: string | null;
+  sellingPoint: string | null;
+  targetHealthTags: string[];
+  updatedAt: Date;
+};
+
+type SeriesReleaseResult = {
+  seriesId: string;
+  name: string;
+  businessStatus: string;
+  requiredLifeStages: string[];
+  releasedStageCodes: string[];
+  /** 本次从 DRAFT 变成 PUBLIC 的食谱行数 */
+  publishedRecipeCount: number;
+  /** 本次实际写入（含已公开行刷新展示资料）的食谱行数 */
+  updatedRecipeCount: number;
+  releasedAt: Date;
+};
 
 const DESIGN_RECIPE_ITEM_CLIENT_INGREDIENT_SELECT = {
   id: true,
@@ -4091,6 +4155,439 @@ export class RecipeDesignerService {
     });
   }
 
+  /**
+   * ===== 产品线整系列发布（2026-10-22 · 两阶段发布）=====
+   *
+   * 两阶段口径：
+   *  1. **阶段入库**：`publishDraft` 把某个生命阶段的设计写成
+   *     `Recipe.status=DRAFT`（系列仓库），此时产品线不对外可见；
+   *  2. **整系列发布**：`requiredLifeStages` 全部就绪 + 系列展示资料齐全后，
+   *     管理员调用 `releaseSeries` 一次性把整个系列发布。
+   *
+   * 展示资料（封面图 / 封面标题 / 卖点 / 目标健康标签）因此挂在**系列**上，
+   * 不再要求每个阶段草稿各填一份。
+   */
+  async getSeriesReleaseReadiness(
+    seriesId: string,
+    access: RecipeDesignerAccessInput,
+  ): Promise<SeriesReleaseReadiness> {
+    const context = normalizeRecipeDesignerAccessContext(access);
+    const series = await this.loadCatalogSeriesForRelease(seriesId, context);
+    const sources = await this.loadSeriesReleaseStageSources(seriesId);
+    return this.buildSeriesReleaseReadinessForSeries(series, sources);
+  }
+
+  /**
+   * 保存产品线发布设置（阶段清单 + 系列级展示资料）。
+   *
+   * - 只有内部员工可维护（产品线资料不是顾客自助内容）；
+   * - patch semantics：只写请求里出现的字段，显式 null 表示清空；
+   * - 系列没有 contentRevision，不产生版本号；保存后由发布门槛重新评估。
+   */
+  async updateSeriesReleaseSettings(
+    seriesId: string,
+    dto: UpdateRecipeSeriesReleaseSettingsDto,
+    access: RecipeDesignerAccessInput,
+  ): Promise<SeriesReleaseSettingsSnapshot> {
+    const context = normalizeRecipeDesignerAccessContext(access);
+    if (!isInternalRecipeDesignerRole(context)) {
+      throw new BadRequestException('只有员工可以维护产品线发布设置');
+    }
+
+    const series = await this.loadCatalogSeriesForRelease(seriesId, context);
+
+    const data: Prisma.RecipeSeriesUpdateInput = {};
+    if (dto.requiredLifeStages !== undefined) {
+      data.requiredLifeStages = this.normalizeSeriesReleaseRequiredStages(
+        dto.requiredLifeStages,
+      );
+    }
+    if (dto.coverImageUrl !== undefined) {
+      data.coverImageUrl = this.normalizeSeriesReleaseText(
+        dto.coverImageUrl,
+        '封面图地址',
+      );
+    }
+    if (dto.coverTitle !== undefined) {
+      data.coverTitle = this.normalizeSeriesReleaseText(
+        dto.coverTitle,
+        '封面标题',
+        RECIPE_PRESENTATION_LIMITS.coverTitle,
+      );
+    }
+    if (dto.sellingPoint !== undefined) {
+      data.sellingPoint = this.normalizeSeriesReleaseText(
+        dto.sellingPoint,
+        '一句话卖点',
+        RECIPE_PRESENTATION_LIMITS.sellingPoint,
+      );
+    }
+    if (dto.targetHealthTags !== undefined) {
+      data.targetHealthTags = this.normalizeSeriesReleaseStringList(
+        dto.targetHealthTags,
+        '目标健康标签',
+      );
+    }
+
+    // 空 patch 不写库，也不刷新 updatedAt。
+    if (Object.keys(data).length === 0) {
+      return this.toSeriesReleaseSettingsSnapshot(series);
+    }
+
+    const updated = await this.prisma.recipeSeries.update({
+      where: { id: seriesId },
+      data,
+    });
+    return this.toSeriesReleaseSettingsSnapshot(updated);
+  }
+
+  /**
+   * 发布整条产品线（管理员）。
+   *
+   * 先按同一份门槛断言就绪，再在一个事务里：
+   *  · 该系列**所有阶段**的 `Recipe`（DRAFT / PUBLIC）→ `PUBLIC`；
+   *    —— 不只必填阶段：未勾选但已经设计好的阶段如果留在 DRAFT，
+   *       就是顾客永远看不到的「隐藏草稿」，所以一起发布；
+   *       只有设计稿、从未写进系列仓库的阶段没有 `Recipe` 可发，保持原状，
+   *       后台仍能在 readiness.stages 里看到它的 DRAFT 状态；
+   *  · 系列展示资料复制到每条 `Recipe`（目标健康标签为空时保留食谱原值，
+   *    因为空标签只是提醒，不应清掉阶段发布时已有的标签）；
+   *  · 系列 `businessStatus` → `PUBLIC`。
+   */
+  async releaseSeries(
+    seriesId: string,
+    access: RecipeDesignerAccessInput,
+  ): Promise<SeriesReleaseResult> {
+    const context = normalizeRecipeDesignerAccessContext(access);
+    if (context.role !== UserRole.ADMIN) {
+      throw new BadRequestException('只有管理员可以发布产品线');
+    }
+
+    const series = await this.loadCatalogSeriesForRelease(seriesId, context);
+    const sources = await this.loadSeriesReleaseStageSources(seriesId);
+    const readiness = this.buildSeriesReleaseReadinessForSeries(
+      series,
+      sources,
+    );
+    if (!readiness.ready) {
+      throw new BadRequestException(
+        readiness.blockers.map((blocker) => blocker.message).join('；'),
+      );
+    }
+
+    const presentation = readiness.presentation;
+    const seriesTargetHealthTags = presentation.targetHealthTags;
+    const recipeUpdateData: Prisma.RecipeUpdateManyMutationInput = {
+      status: RecipeStatus.PUBLIC,
+      coverImageUrl: presentation.coverImageUrl,
+      coverTitle: presentation.coverTitle,
+      sellingPoint: presentation.sellingPoint,
+      ...(seriesTargetHealthTags.length > 0
+        ? { targetHealthTags: this.toJsonValue(seriesTargetHealthTags) }
+        : {}),
+    };
+    // 已公开行只刷新展示资料，不计入「新发布」。
+    const publishedRecipeCount = sources.recipes.filter(
+      (recipe) => recipe.status === RecipeStatus.DRAFT,
+    ).length;
+    const releasedStageCodes = readiness.stages
+      .filter((stage) => stage.status === 'READY' || stage.status === 'PUBLIC')
+      .map((stage) => stage.stageCode);
+
+    return this.prisma.$transaction(async (tx) => {
+      const updatedRecipes = await tx.recipe.updateMany({
+        where: {
+          seriesId,
+          status: { in: [RecipeStatus.DRAFT, RecipeStatus.PUBLIC] },
+        },
+        data: recipeUpdateData,
+      });
+
+      const updatedSeries = await tx.recipeSeries.update({
+        where: { id: seriesId },
+        data: { businessStatus: RecipeSeriesBusinessStatus.PUBLIC },
+      });
+
+      return {
+        seriesId,
+        name: updatedSeries.name,
+        businessStatus: updatedSeries.businessStatus,
+        requiredLifeStages: readiness.requiredLifeStages,
+        releasedStageCodes,
+        publishedRecipeCount,
+        updatedRecipeCount: updatedRecipes.count,
+        releasedAt: updatedSeries.updatedAt,
+      };
+    });
+  }
+
+  /**
+   * 发布相关接口共用的系列加载：
+   * 只允许 ACTIVE、未删除、当前用户有权限的**产品线（CATALOG）**系列。
+   * 订单设计系列走订单交付流程，这里直接 400。
+   */
+  private async loadCatalogSeriesForRelease(
+    seriesId: string,
+    context: RecipeDesignerAccessContext,
+  ): Promise<RecipeSeries> {
+    const series = await this.prisma.recipeSeries.findUnique({
+      where: { id: seriesId },
+    });
+    if (
+      !series ||
+      series.status !== RecipeSeriesStatus.ACTIVE ||
+      series.deletedAt ||
+      !(await this.isSeriesAccessibleByContext(series, context))
+    ) {
+      throw new NotFoundException(`Recipe series ${seriesId} not found`);
+    }
+
+    if (series.designMode === RecipeDesignMode.ORDER) {
+      throw new BadRequestException(
+        '订单定制系列不适用产品线分阶段发布，请从订单设计流程交付',
+      );
+    }
+
+    return series;
+  }
+
+  private async loadSeriesReleaseStageSources(seriesId: string) {
+    const [recipes, designs] = await Promise.all([
+      this.prisma.recipe.findMany({
+        where: {
+          seriesId,
+          status: { in: [RecipeStatus.DRAFT, RecipeStatus.PUBLIC] },
+        },
+        select: SERIES_RELEASE_RECIPE_SELECT,
+        orderBy: [{ version: 'desc' }, { createdAt: 'desc' }],
+      }),
+      this.prisma.designRecipe.findMany({
+        where: { seriesId },
+        select: SERIES_RELEASE_DESIGN_SELECT,
+        orderBy: { updatedAt: 'desc' },
+      }),
+    ]);
+
+    return { recipes, designs };
+  }
+
+  private buildSeriesReleaseReadinessForSeries(
+    series: Pick<
+      RecipeSeries,
+      | 'id'
+      | 'designMode'
+      | 'requiredLifeStages'
+      | 'coverImageUrl'
+      | 'coverTitle'
+      | 'sellingPoint'
+      | 'targetHealthTags'
+    >,
+    sources: {
+      recipes: SeriesReleaseRecipeRecord[];
+      designs: SeriesReleaseDesignRecord[];
+    },
+  ): SeriesReleaseReadiness {
+    return buildSeriesReleaseReadiness({
+      seriesId: series.id,
+      designMode: series.designMode ?? RecipeDesignMode.CATALOG,
+      requiredLifeStages: series.requiredLifeStages,
+      presentation: {
+        coverImageUrl: series.coverImageUrl,
+        coverTitle: series.coverTitle,
+        sellingPoint: series.sellingPoint,
+        targetHealthTags: series.targetHealthTags,
+      },
+      stages: this.buildSeriesReleaseStageSnapshots(
+        sources.recipes,
+        sources.designs,
+      ),
+    });
+  }
+
+  /**
+   * 逐阶段整理系列仓库现状：
+   *  · EMPTY  → 既没有设计稿，也没有阶段食谱；
+   *  · DRAFT  → 只有设计稿，还没写进系列仓库；
+   *  · READY  → 已有 `Recipe.status=DRAFT`，可随系列发布；
+   *  · PUBLIC → 已有 `Recipe.status=PUBLIC`。
+   */
+  private buildSeriesReleaseStageSnapshots(
+    recipes: SeriesReleaseRecipeRecord[],
+    designs: SeriesReleaseDesignRecord[],
+  ): SeriesReleaseStageSnapshot[] {
+    return ORDERED_RECIPE_SERIES_LIFE_STAGES.map((lifeStage) => {
+      const stageRecipes = recipes.filter(
+        (recipe) => this.resolveSeriesReleaseRecipeStage(recipe) === lifeStage,
+      );
+      const publishedRecipe = this.pickLatestSeriesReleaseRecipe(
+        stageRecipes.filter((recipe) => recipe.status === RecipeStatus.PUBLIC),
+      );
+      const warehouseDraftRecipe = this.pickLatestSeriesReleaseRecipe(
+        stageRecipes.filter((recipe) => recipe.status === RecipeStatus.DRAFT),
+      );
+      const latestRecipe =
+        this.pickLatestSeriesReleaseRecipe(stageRecipes) ?? null;
+      const stageDesigns = designs.filter(
+        (design) => design.seriesLifeStage === lifeStage,
+      );
+      // 可编辑草稿 = 还没发布、没归档的设计稿；后台用它的 id 直接打开编辑器。
+      const editableDesign = stageDesigns.find(
+        (design) =>
+          design.status !== DesignRecipeStatus.PUBLISHED &&
+          design.status !== DesignRecipeStatus.ARCHIVED &&
+          !design.publishedRecipeId &&
+          !design.publishedAt,
+      );
+
+      const status: SeriesReleaseStageStatus = publishedRecipe
+        ? 'PUBLIC'
+        : warehouseDraftRecipe
+          ? 'READY'
+          : stageDesigns.length > 0
+            ? 'DRAFT'
+            : 'EMPTY';
+
+      return {
+        stageCode: lifeStage,
+        label: SERIES_LIFE_STAGE_LABELS[lifeStage],
+        status,
+        latestRecipeId: latestRecipe?.recipeId ?? null,
+        latestRecipeVersion: latestRecipe?.version ?? null,
+        designDraftId: editableDesign?.id ?? null,
+      };
+    });
+  }
+
+  /**
+   * 阶段食谱归属：优先 `seriesLifeStage`；历史导入数据可能只有
+   * `applicableLifeStages`，此时取第一个合法阶段，避免整阶段被判成 EMPTY。
+   */
+  private resolveSeriesReleaseRecipeStage(
+    recipe: Pick<
+      SeriesReleaseRecipeRecord,
+      'seriesLifeStage' | 'applicableLifeStages'
+    >,
+  ): RecipeSeriesLifeStage | null {
+    const orderedStages = ORDERED_RECIPE_SERIES_LIFE_STAGES as string[];
+    const direct = recipe.seriesLifeStage;
+    if (direct && orderedStages.includes(direct)) {
+      return direct as RecipeSeriesLifeStage;
+    }
+
+    const applicable = Array.isArray(recipe.applicableLifeStages)
+      ? recipe.applicableLifeStages
+      : [];
+    const matched = applicable.find(
+      (stage): stage is string =>
+        typeof stage === 'string' && orderedStages.includes(stage),
+    );
+    return (matched as RecipeSeriesLifeStage | undefined) ?? null;
+  }
+
+  private pickLatestSeriesReleaseRecipe<
+    T extends Pick<SeriesReleaseRecipeRecord, 'version' | 'updatedAt'>,
+  >(recipes: T[]): T | null {
+    if (recipes.length === 0) {
+      return null;
+    }
+    return [...recipes].sort((left, right) => {
+      const byVersion = (right.version ?? 0) - (left.version ?? 0);
+      if (byVersion !== 0) {
+        return byVersion;
+      }
+      return this.getUpdatedTime(right) - this.getUpdatedTime(left);
+    })[0];
+  }
+
+  private toSeriesReleaseSettingsSnapshot(series: {
+    id: string;
+    name: string;
+    designMode?: RecipeDesignMode | string | null;
+    businessStatus?: RecipeSeriesBusinessStatus | string | null;
+    requiredLifeStages?: string[] | null;
+    coverImageUrl?: string | null;
+    coverTitle?: string | null;
+    sellingPoint?: string | null;
+    targetHealthTags?: string[] | null;
+    updatedAt: Date;
+  }): SeriesReleaseSettingsSnapshot {
+    return {
+      seriesId: series.id,
+      name: series.name,
+      designMode: series.designMode ?? RecipeDesignMode.CATALOG,
+      businessStatus: series.businessStatus ?? RecipeSeriesBusinessStatus.DRAFT,
+      requiredLifeStages: [
+        ...new Set(this.normalizeRecipeStringArray(series.requiredLifeStages)),
+      ],
+      coverImageUrl: series.coverImageUrl ?? null,
+      coverTitle: series.coverTitle ?? null,
+      sellingPoint: series.sellingPoint ?? null,
+      targetHealthTags: [
+        ...new Set(this.normalizeRecipeStringArray(series.targetHealthTags)),
+      ],
+      updatedAt: series.updatedAt,
+    };
+  }
+
+  /** 必需生命阶段：只接受合法阶段代码，去重后按系统固定顺序保存。 */
+  private normalizeSeriesReleaseRequiredStages(value: unknown): string[] {
+    const stages = this.normalizeSeriesReleaseStringList(value, '必需生命阶段');
+    const validStageCodes = new Set<string>(
+      ORDERED_RECIPE_SERIES_LIFE_STAGES as string[],
+    );
+    const invalidStages = stages.filter((stage) => !validStageCodes.has(stage));
+    if (invalidStages.length > 0) {
+      throw new BadRequestException(
+        `无效的生命阶段代码：${invalidStages.join('、')}`,
+      );
+    }
+    return (ORDERED_RECIPE_SERIES_LIFE_STAGES as string[]).filter((stage) =>
+      stages.includes(stage),
+    );
+  }
+
+  /**
+   * 发布设置里的文本字段：trim 后空串按 null 保存，
+   * 长度按数据库 VarChar 限制在服务层再校验一次（DTO 之外还有内部调用）。
+   */
+  private normalizeSeriesReleaseText(
+    value: unknown,
+    label: string,
+    maxLength?: number,
+  ): string | null {
+    if (value === null || value === undefined) {
+      return null;
+    }
+    if (typeof value !== 'string') {
+      throw new BadRequestException(`${label}必须是字符串`);
+    }
+    const text = value.trim();
+    if (maxLength !== undefined && text.length > maxLength) {
+      throw new BadRequestException(`${label}不能超过${maxLength}个字符`);
+    }
+    return text.length > 0 ? text : null;
+  }
+
+  private normalizeSeriesReleaseStringList(
+    value: unknown,
+    label: string,
+  ): string[] {
+    if (!Array.isArray(value)) {
+      throw new BadRequestException(`${label}必须是字符串数组`);
+    }
+    const entries: string[] = [];
+    for (const entry of value) {
+      if (typeof entry !== 'string') {
+        throw new BadRequestException(`${label}必须是字符串数组`);
+      }
+      const text = entry.trim();
+      if (text && !entries.includes(text)) {
+        entries.push(text);
+      }
+    }
+    return entries;
+  }
+
   private buildSeriesWorkbenchCard(
     series: RecipeSeriesWorkbenchRecord,
     _userId: string,
@@ -6315,15 +6812,13 @@ export class RecipeDesignerService {
           // 设计器里维护的产品展示资料优先于历史版本继承值
           coverImageUrl:
             draft.coverImageUrl ?? inheritance.media?.coverImageUrl ?? null,
-          coverTitle:
-            draft.coverTitle ?? inheritance.media?.coverTitle ?? null,
+          coverTitle: draft.coverTitle ?? inheritance.media?.coverTitle ?? null,
           description: draft.description ?? draft.notes,
           sellingPoint: draft.sellingPoint ?? null,
           detailImages: this.toJsonValue(
             draft.detailImages ?? inheritance.media?.detailImages ?? null,
           ),
-          videoUrl:
-            draft.videoUrl ?? inheritance.media?.videoUrl ?? null,
+          videoUrl: draft.videoUrl ?? inheritance.media?.videoUrl ?? null,
           ...this.buildPublishedRecipeOperationalCreateData(
             inheritance.previousVersion,
           ),
@@ -7780,10 +8275,7 @@ export class RecipeDesignerService {
       throw new BadRequestException('缺少能量数据，无法生成营养报告');
     }
 
-    return this.buildPublishedNutritionDetailedData(
-      draft,
-      resolvedAssessment,
-    );
+    return this.buildPublishedNutritionDetailedData(draft, resolvedAssessment);
   }
 
   /**
@@ -7862,7 +8354,9 @@ export class RecipeDesignerService {
               );
           }
         } catch (error) {
-          this.logger.warn(`launch-readiness supplement target compute failed for ${item.id}: ${error instanceof Error ? error.message : String(error)}`);
+          this.logger.warn(
+            `launch-readiness supplement target compute failed for ${item.id}: ${error instanceof Error ? error.message : String(error)}`,
+          );
           // 保留原值，让共享门槛按缺失/无效目标给出明确阻断。
         }
       }
@@ -7886,9 +8380,19 @@ export class RecipeDesignerService {
       reportGenerated &&
       (draft.nutritionReportRevision ?? null) !== draft.contentRevision;
 
+    const designMode = draft.series?.designMode ?? RecipeDesignMode.CATALOG;
+    /**
+     * 产品展示检查只对订单设计在阶段级生效（2026-10-22 两阶段发布）：
+     *  · CATALOG 阶段草稿只写入系列仓库（Recipe.status=DRAFT），
+     *    封面图 / 封面标题 / 卖点等资料在系列层级维护，整系列发布时统一检查；
+     *  · ORDER 设计仍要在「加入待提交」前完成展示。
+     */
+    const requirePresentation = designMode === RecipeDesignMode.ORDER;
+
     const readiness = buildDraftLaunchReadiness({
       draftId: draft.id,
-      designMode: draft.series?.designMode ?? RecipeDesignMode.CATALOG,
+      designMode,
+      requirePresentation,
       name: options.name ?? draft.series?.name ?? draft.name,
       items: launchItems,
       productionStepCount: this.readDraftProductionSteps(
@@ -7928,8 +8432,10 @@ export class RecipeDesignerService {
     draft: DesignRecipeWithItems,
     options: { name?: string | null } = {},
   ): Promise<DesignRecipeAssessmentResult> {
-    const { readiness, assessment } =
-      await this.evaluateDraftLaunchReadiness(draft, options);
+    const { readiness, assessment } = await this.evaluateDraftLaunchReadiness(
+      draft,
+      options,
+    );
     this.assertLaunchReadinessReady(readiness);
     if (!assessment) {
       // ready=true 时不会出现；防御性兜底，避免调用方拿到 null 继续写库。

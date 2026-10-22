@@ -30,9 +30,11 @@
  *  · **评估未完全合规**：只是提醒（发布时仍需审核说明），不是硬阻断。
  *
  * 产品展示与设计分支（2026-10-22）：
- *  · 产品线（CATALOG）与订单绑定（ORDER）都必须先完成产品展示：
- *    封面图 + 封面标题；
- *  · CATALOG 额外要求描述 / 一句话卖点 / 适用生命阶段，目标健康标签只提醒；
+ *  · 订单绑定（ORDER）必须先完成产品展示：封面图 + 封面标题；
+ *  · 产品线（CATALOG）的阶段草稿只以 `Recipe.status=DRAFT` 存入系列仓库，
+ *    封面图 / 封面标题 / 卖点等**展示资料已上移到系列层级**，由整系列发布
+ *    （`series-release-readiness.ts`）统一检查 —— 阶段发布不再要求；
+ *    因此调用方对 CATALOG 传 `requirePresentation=false`；
  *  · ORDER 额外要求系列上的订单号 / 本单份数，以及草稿绑定的顾客爱犬；
  *  · 公共营养提醒只出现一次（scope=COMMON），分支检查不得重复添加。
  */
@@ -178,6 +180,14 @@ export interface BuildDraftLaunchReadinessInput {
   reportError?: string | null;
   presentation?: LaunchReadinessPresentationInput | null;
   order?: LaunchReadinessOrderInput | null;
+  /**
+   * 是否校验产品展示字段（封面图 / 封面标题 / 产品线卖点 / 健康标签提醒）。
+   *
+   * 默认 `true`（保持历史行为）。产品线（CATALOG）阶段发布传 `false`：
+   * 展示资料在系列层级统一维护，整系列发布时才检查；
+   * 订单（ORDER）设计必须传 `true` —— 阶段草稿进入「待提交」前就要有封面。
+   */
+  requirePresentation?: boolean;
 }
 
 const normalizeText = (value: unknown): string =>
@@ -327,11 +337,15 @@ export const buildDraftLaunchReadiness = (
   }
 
   /**
-   * 产品展示：产品线与订单绑定都要求封面图 + 封面标题。
+   * 产品展示：订单绑定要求封面图 + 封面标题。
    * 只读草稿上已保存的值，不替用户生成或猜测。
+   *
+   * 产品线（CATALOG）由调用方传 `requirePresentation=false` 跳过：
+   * 展示资料已上移到系列层级，阶段发布时不再重复要求。
    */
+  const requirePresentation = input.requirePresentation !== false;
   const presentation = input.presentation ?? {};
-  if (!normalizeText(presentation.coverImageUrl)) {
+  if (requirePresentation && !normalizeText(presentation.coverImageUrl)) {
     blockers.push({
       code: 'COVER_IMAGE_REQUIRED',
       scope: 'PRESENTATION',
@@ -339,7 +353,7 @@ export const buildDraftLaunchReadiness = (
       field: 'coverImageUrl',
     });
   }
-  if (!normalizeText(presentation.coverTitle)) {
+  if (requirePresentation && !normalizeText(presentation.coverTitle)) {
     blockers.push({
       code: 'COVER_TITLE_REQUIRED',
       scope: 'PRESENTATION',
@@ -376,7 +390,7 @@ export const buildDraftLaunchReadiness = (
         field: 'customerDogId',
       });
     }
-  } else {
+  } else if (requirePresentation) {
     /**
      * 产品线上架文案：只要求卖点。
      * 详情描述已停用（2026-10-22）；适用生命阶段由系列阶段统一决定，
@@ -439,8 +453,9 @@ export const buildDraftLaunchReadiness = (
   /**
    * 产品线健康标签只提醒：没有标签仍可上线，但顾客无法按健康需求筛到它。
    * 订单定制不面向货架筛选，不提示这一项。
+   * 展示检查关闭时（CATALOG 阶段发布）同样不提示 —— 整系列发布时才检查。
    */
-  if (!isOrderDesign) {
+  if (requirePresentation && !isOrderDesign) {
     const targetHealthTags = Array.isArray(presentation.targetHealthTags)
       ? presentation.targetHealthTags.filter((tag) => normalizeText(tag))
       : [];

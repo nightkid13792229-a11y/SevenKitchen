@@ -14,6 +14,7 @@ import type {
   DraftAssessmentInputs,
   DraftLaunchReadiness,
   DraftNutritionReportEnvelope,
+  DraftPresentationSnapshot,
   FediafDogScenario,
   IngredientOptionListResponse,
   IngredientRecommendationResult,
@@ -23,12 +24,18 @@ import type {
   RecipeDesignerSeriesCard,
   RecipeDesignerSeriesStatusFilter,
   RecipeReviewResult,
+  SeriesReleaseReadiness,
+  SeriesReleaseResult,
+  SeriesReleaseSettingsSnapshot,
   SopResult,
   SupplementLabelExtractionDraft,
   SupplementNutritionBasisType,
   SupplementUsageUnit,
+  UpdateDesignRecipeDraftPayload,
   UpdateDesignRecipeProductionStepsPayload,
-  UpdateDogDesignNotesPayload
+  UpdateDogDesignNotesPayload,
+  UpdateDraftPresentationPayload,
+  UpdateRecipeSeriesReleaseSettingsPayload
 } from '@/types/recipeDesigner'
 
 export interface RecipeDesignerSeriesListQuery {
@@ -135,10 +142,47 @@ export const recipeDesignerApi = {
     api.post(`/recipe-designer/series/${seriesId}/stage-drafts`, data),
   setReferenceDog: (seriesId: string, referenceDogId: string | null): Promise<unknown> =>
     api.patch(`/recipe-designer/series/${seriesId}/reference-dog`, { referenceDogId }),
+  /**
+   * 整系列发布门槛：逐阶段状态 + 阻断项 / 提醒项。
+   *
+   * 只对产品线（CATALOG）系列有效；订单定制系列后端返回 400。
+   * 每次打开抽屉、保存设置、发布后都应重新拉取，前端不自行判定能不能发。
+   */
+  getSeriesReleaseReadiness: (seriesId: string): Promise<SeriesReleaseReadiness> =>
+    api.get(`/recipe-designer/series/${seriesId}/release-readiness`),
+  /** 保存系列级发布设置（必填阶段 + 系列展示资料），patch semantics */
+  updateSeriesReleaseSettings: (
+    seriesId: string,
+    data: UpdateRecipeSeriesReleaseSettingsPayload,
+  ): Promise<SeriesReleaseSettingsSnapshot> =>
+    api.patch(`/recipe-designer/series/${seriesId}/release-settings`, data),
+  /** 发布整条产品线（仅管理员；后端会再次校验门槛与角色） */
+  releaseSeries: (seriesId: string): Promise<SeriesReleaseResult> =>
+    api.post(`/recipe-designer/series/${seriesId}/release`),
 
   // 草稿
   getDraft: (draftId: string): Promise<DesignRecipeDraftDetail> =>
     api.get(`/recipe-designer/drafts/${draftId}`),
+  /**
+   * 更新草稿基础字段（适用生命阶段 / 目标健康标签等）。
+   *
+   * 适用生命阶段与目标健康标签不在产品展示 PATCH 的字段范围内，
+   * 产品线分支保存展示资料时需要调用这个既有接口。
+   */
+  updateDraft: (
+    draftId: string,
+    data: UpdateDesignRecipeDraftPayload,
+  ): Promise<DesignRecipeDraftDetail> =>
+    api.patch(`/recipe-designer/drafts/${draftId}`, data),
+  /**
+   * 按 patch semantics 保存产品展示字段（封面 / 文案）。
+   * 显式 null 表示清空；响应只包含展示字段与新的 contentRevision。
+   */
+  updateDraftPresentation: (
+    draftId: string,
+    data: UpdateDraftPresentationPayload,
+  ): Promise<DraftPresentationSnapshot> =>
+    api.patch(`/recipe-designer/drafts/${draftId}/presentation`, data),
   /** 读取草稿的结构化制作步骤（Task 7：轻量刷新步骤区，不重拉整份草稿） */
   getDraftProductionSteps: (draftId: string): Promise<DesignRecipeProductionStepsResult> =>
     api.get(`/recipe-designer/drafts/${draftId}/production-steps`),

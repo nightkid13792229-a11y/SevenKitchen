@@ -56,6 +56,7 @@ import {
   UpdateRecipeDesignPresentationDto,
   UpdateRecipeDesignItemDto,
   UpdateRecipeProductionStepsDto,
+  UpdateRecipeSeriesReleaseSettingsDto,
 } from '../dto/recipe-designer/recipe-designer.dto';
 import { Roles, StaffGuard } from '../guards/role.guard';
 
@@ -198,8 +199,7 @@ export class RecipeDesignerController {
   async getOrderDesignWorkspace(
     @Param('orderId') orderId: string,
   ): Promise<ApiResponseDto<any>> {
-    const workspace =
-      await this.orderRecipeDesignService.getWorkspace(orderId);
+    const workspace = await this.orderRecipeDesignService.getWorkspace(orderId);
     return ApiResponseDto.success(workspace);
   }
 
@@ -422,6 +422,66 @@ export class RecipeDesignerController {
     return ApiResponseDto.success(series);
   }
 
+  /**
+   * 产品线整系列发布（2026-10-22 · 两阶段发布）。
+   *
+   * 阶段发布只把配方写进系列仓库（Recipe.status=DRAFT）；
+   * 这里返回「整系列能不能发布」的阻断项 / 提醒项，供后台发布弹窗直接展示。
+   * 订单定制系列不适用，服务层返回 400。
+   */
+  @Get('series/:seriesId/release-readiness')
+  @ApiOperation({
+    summary: 'Get staged release readiness of a recipe series (CATALOG only)',
+  })
+  async getSeriesReleaseReadiness(
+    @Param('seriesId') seriesId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const readiness =
+      await this.recipeDesignerService.getSeriesReleaseReadiness(
+        seriesId,
+        toRecipeDesignerAccessContext(user),
+      );
+    return ApiResponseDto.success(readiness);
+  }
+
+  @Patch('series/:seriesId/release-settings')
+  @UseGuards(StaffGuard)
+  @ApiOperation({
+    summary: 'Patch required life stages and presentation of a recipe series',
+  })
+  async updateSeriesReleaseSettings(
+    @Param('seriesId') seriesId: string,
+    @Body() dto: UpdateRecipeSeriesReleaseSettingsDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const settings =
+      await this.recipeDesignerService.updateSeriesReleaseSettings(
+        seriesId,
+        dto,
+        toRecipeDesignerAccessContext(user),
+      );
+    return ApiResponseDto.success(settings);
+  }
+
+  @Post('series/:seriesId/release')
+  @UseGuards(StaffGuard)
+  @Roles('ADMIN')
+  @ApiOperation({
+    summary:
+      'Release a whole recipe series after all required stages are ready',
+  })
+  async releaseSeries(
+    @Param('seriesId') seriesId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.recipeDesignerService.releaseSeries(
+      seriesId,
+      toRecipeDesignerAccessContext(user),
+    );
+    return ApiResponseDto.success(result);
+  }
+
   @Post('series/:seriesId/stage-drafts')
   @ApiOperation({ summary: 'Create or reuse a recipe series stage draft' })
   async createSeriesStageDraft(
@@ -524,11 +584,10 @@ export class RecipeDesignerController {
     @Param('id') id: string,
     @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<any>> {
-    const readiness =
-      await this.recipeDesignerService.getDraftLaunchReadiness(
-        id,
-        toRecipeDesignerAccessContext(user),
-      );
+    const readiness = await this.recipeDesignerService.getDraftLaunchReadiness(
+      id,
+      toRecipeDesignerAccessContext(user),
+    );
     return ApiResponseDto.success(readiness);
   }
 
@@ -758,7 +817,8 @@ export class RecipeDesignerController {
   @Post('drafts/:id/revert-to-latest-official')
   @UseGuards(StaffGuard)
   @ApiOperation({
-    summary: 'Revert an editable series stage draft to the latest official version',
+    summary:
+      'Revert an editable series stage draft to the latest official version',
   })
   async revertDraftToLatestOfficial(
     @Param('id') id: string,
@@ -843,7 +903,8 @@ export class RecipeDesignerController {
 
   @Get('drafts/:id/assessment-inputs')
   @ApiOperation({
-    summary: 'Return local assessment inputs (targets + item profiles) for a design draft',
+    summary:
+      'Return local assessment inputs (targets + item profiles) for a design draft',
   })
   async getDraftAssessmentInputs(
     @Param('id') id: string,
@@ -859,7 +920,8 @@ export class RecipeDesignerController {
   @Get('dogs/:dogId/design-insight')
   @UseGuards(StaffGuard)
   @ApiOperation({
-    summary: 'Return a dog dietary profile, design history ingredient summary and order summary',
+    summary:
+      'Return a dog dietary profile, design history ingredient summary and order summary',
   })
   async getDogDesignInsight(
     @Param('dogId') dogId: string,
@@ -879,7 +941,8 @@ export class RecipeDesignerController {
   @Patch('dogs/:dogId/design-notes')
   @UseGuards(StaffGuard)
   @ApiOperation({
-    summary: 'Maintain dog dietary design notes (allergies / picky / preferred / medical history)',
+    summary:
+      'Maintain dog dietary design notes (allergies / picky / preferred / medical history)',
   })
   async updateDogDesignNotes(
     @Param('dogId') dogId: string,
@@ -897,7 +960,8 @@ export class RecipeDesignerController {
   @Post('dogs/:dogId/design-insight/ai-suggest')
   @UseGuards(StaffGuard)
   @ApiOperation({
-    summary: 'Generate AI recipe design suggestions from a dog profile and design history',
+    summary:
+      'Generate AI recipe design suggestions from a dog profile and design history',
   })
   async generateAiDesignSuggestions(
     @Param('dogId') dogId: string,
@@ -918,7 +982,8 @@ export class RecipeDesignerController {
   @Post('dogs/:dogId/design-insight/ai-nutrition-plan')
   @UseGuards(StaffGuard)
   @ApiOperation({
-    summary: 'Step 1: generate a nutrition plan with knowledge citations for a dog',
+    summary:
+      'Step 1: generate a nutrition plan with knowledge citations for a dog',
   })
   async generateAiNutritionPlan(
     @Param('dogId') dogId: string,
@@ -957,7 +1022,8 @@ export class RecipeDesignerController {
   @Post('drafts/:draftId/ai/ingredient-recommendation')
   @UseGuards(StaffGuard)
   @ApiOperation({
-    summary: 'Step 2: recommend ingredients based on the accepted nutrition plan',
+    summary:
+      'Step 2: recommend ingredients based on the accepted nutrition plan',
   })
   async generateAiIngredientRecommendation(
     @Param('draftId') draftId: string,
@@ -975,7 +1041,8 @@ export class RecipeDesignerController {
   @Post('drafts/:draftId/ai/review')
   @UseGuards(StaffGuard)
   @ApiOperation({
-    summary: 'Step 3: review the recipe against the plan, framework and diversity',
+    summary:
+      'Step 3: review the recipe against the plan, framework and diversity',
   })
   async reviewAiRecipe(
     @Param('draftId') draftId: string,
@@ -1009,7 +1076,8 @@ export class RecipeDesignerController {
   @Get('drafts/:draftId/ai-design-data')
   @UseGuards(StaffGuard)
   @ApiOperation({
-    summary: 'Read persisted AI design data (plan / recommendations / reviews / SOP) of a draft',
+    summary:
+      'Read persisted AI design data (plan / recommendations / reviews / SOP) of a draft',
   })
   async getAiDesignData(
     @Param('draftId') draftId: string,
@@ -1025,7 +1093,8 @@ export class RecipeDesignerController {
   @Patch('series/:seriesId/reference-dog')
   @UseGuards(StaffGuard)
   @ApiOperation({
-    summary: 'Set or clear the reference dog of an internal recipe design series',
+    summary:
+      'Set or clear the reference dog of an internal recipe design series',
   })
   async setSeriesReferenceDog(
     @Param('seriesId') seriesId: string,
@@ -1058,7 +1127,8 @@ export class RecipeDesignerController {
 
   @Get('customer-access')
   @ApiOperation({
-    summary: 'Return whether the current customer has recipe design history (entry visibility)',
+    summary:
+      'Return whether the current customer has recipe design history (entry visibility)',
   })
   async getCustomerDesignerAccess(
     @CurrentUser() user: RequestUser,

@@ -97,7 +97,7 @@ describe('设计器 · 制作步骤编辑器（2026-10-22 · Task 7）', () => {
     expect(launchDrawer).toContain(':draft-id="draftId"')
     expect(launchDrawer).toContain('@saved="handleStepsSaved"')
     expect(launchDrawer).toContain('@dirty-change')
-    expect(launchDrawer).toContain('制作步骤还有未保存的修改')
+    expect(launchDrawer).toContain('还有未保存的修改')
     // 设计器不再保留第二个制作步骤入口
     expect(editor).not.toContain('productionStepsDrawerVisible')
     expect(editor).not.toContain('制作步骤{{ productionStepsDirty')

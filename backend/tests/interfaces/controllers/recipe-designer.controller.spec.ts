@@ -13,6 +13,7 @@ import { RecipeDesignerController } from '../../../src/interfaces/controllers/re
 import {
   UpdateRecipeDesignItemOrderDto,
   UpdateRecipeDesignPresentationDto,
+  UpdateRecipeSeriesReleaseSettingsDto,
   ListRecipeTemplatesDto,
 } from '../../../src/interfaces/dto/recipe-designer/recipe-designer.dto';
 import { StaffGuard } from '../../../src/interfaces/guards/role.guard';
@@ -159,6 +160,70 @@ describe('RecipeDesignerController authorization', () => {
     await expect(validate(nulls)).resolves.toEqual([]);
   });
 
+  it('exposes staged series release routes with the designer access/admin patterns', () => {
+    const source = readFileSync(
+      resolve(
+        process.cwd(),
+        'src/interfaces/controllers/recipe-designer.controller.ts',
+      ),
+      'utf8',
+    );
+
+    // 就绪度预览与草稿预览一致：登录即可，服务层按系列权限返回 404
+    expect(source).toMatch(/@Get\('series\/:seriesId\/release-readiness'\)/);
+    const readinessRoute = source.match(
+      /@Get\('series\/:seriesId\/release-readiness'\)([\s\S]*?)async getSeriesReleaseReadiness/,
+    );
+    expect(readinessRoute).not.toBeNull();
+    expect(readinessRoute?.[1] ?? '').not.toContain('@UseGuards(StaffGuard)');
+
+    expect(source).toMatch(
+      /@Patch\('series\/:seriesId\/release-settings'\)\s+@UseGuards\(StaffGuard\)/,
+    );
+    expect(source).toMatch(
+      /@Post\('series\/:seriesId\/release'\)\s+@UseGuards\(StaffGuard\)\s+@Roles\('ADMIN'\)/,
+    );
+  });
+
+  it('validates series release settings limits and life stage arrays', async () => {
+    const valid = new UpdateRecipeSeriesReleaseSettingsDto();
+    valid.requiredLifeStages = ['PUPPY_UNDER_14_WEEKS', 'HIGH_ACTIVITY_ADULT'];
+    valid.coverImageUrl = 'https://img.example.com/cover.jpg';
+    valid.coverTitle = '鸡'.repeat(20);
+    valid.sellingPoint = '卖'.repeat(200);
+    valid.targetHealthTags = ['JOINT'];
+    await expect(validate(valid)).resolves.toEqual([]);
+
+    const tooLong = new UpdateRecipeSeriesReleaseSettingsDto();
+    tooLong.coverTitle = '鸡'.repeat(21);
+    tooLong.sellingPoint = '卖'.repeat(201);
+    (tooLong as any).requiredLifeStages = [
+      'PUPPY_UNDER_14_WEEKS',
+      'PUPPY_14_WEEKS_PLUS',
+      'HIGH_ACTIVITY_ADULT',
+      'LOW_ACTIVITY_ADULT_OR_SENIOR',
+      'REPRODUCTION',
+      'ADULT',
+    ];
+    (tooLong as any).targetHealthTags = [123];
+
+    const errors = await validate(tooLong);
+    expect(errors.map((error) => error.property)).toEqual(
+      expect.arrayContaining([
+        'coverTitle',
+        'sellingPoint',
+        'requiredLifeStages',
+        'targetHealthTags',
+      ]),
+    );
+
+    const nulls = new UpdateRecipeSeriesReleaseSettingsDto();
+    nulls.coverImageUrl = null;
+    nulls.coverTitle = null;
+    nulls.sellingPoint = null;
+    await expect(validate(nulls)).resolves.toEqual([]);
+  });
+
   it('exposes nutrition report generation and read routes to draft viewers', () => {
     const source = readFileSync(
       resolve(
@@ -247,6 +312,9 @@ describe('RecipeDesignerController', () => {
     createSeriesStageDraft: jest.fn(),
     duplicateSeriesStage: jest.fn(),
     copySeriesStageIngredients: jest.fn(),
+    getSeriesReleaseReadiness: jest.fn(),
+    updateSeriesReleaseSettings: jest.fn(),
+    releaseSeries: jest.fn(),
     updateDraft: jest.fn(),
     deleteDraft: jest.fn(),
     addItem: jest.fn(),
@@ -470,14 +538,10 @@ describe('RecipeDesignerController', () => {
 
     await expect(
       controller.generateDraftNutritionReport('design-1', currentUser),
-    ).resolves.toEqual(
-      expect.objectContaining({ code: 0, data: report }),
-    );
+    ).resolves.toEqual(expect.objectContaining({ code: 0, data: report }));
     await expect(
       controller.getDraftNutritionReport('design-1', currentUser),
-    ).resolves.toEqual(
-      expect.objectContaining({ code: 0, data: report }),
-    );
+    ).resolves.toEqual(expect.objectContaining({ code: 0, data: report }));
 
     expect(service.generateDraftNutritionReport).toHaveBeenCalledWith(
       'design-1',
@@ -641,6 +705,59 @@ describe('RecipeDesignerController', () => {
         role: 'STAFF',
       },
     );
+  });
+
+  it('delegates staged series release readiness, settings and release', async () => {
+    service.getSeriesReleaseReadiness.mockResolvedValue({
+      seriesId: 'series-1',
+      ready: false,
+      blockers: [],
+      warnings: [],
+    });
+    service.updateSeriesReleaseSettings.mockResolvedValue({
+      seriesId: 'series-1',
+      requiredLifeStages: ['HIGH_ACTIVITY_ADULT'],
+    });
+    service.releaseSeries.mockResolvedValue({
+      seriesId: 'series-1',
+      businessStatus: 'PUBLIC',
+    });
+
+    await expect(
+      controller.getSeriesReleaseReadiness('series-1', currentUser),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        code: 0,
+        data: expect.objectContaining({ seriesId: 'series-1' }),
+      }),
+    );
+    await expect(
+      controller.updateSeriesReleaseSettings(
+        'series-1',
+        { requiredLifeStages: ['HIGH_ACTIVITY_ADULT'] },
+        currentUser,
+      ),
+    ).resolves.toEqual(expect.objectContaining({ code: 0 }));
+    await expect(
+      controller.releaseSeries('series-1', currentUser),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        code: 0,
+        data: expect.objectContaining({ businessStatus: 'PUBLIC' }),
+      }),
+    );
+
+    const access = { userId: 'staff-1', role: 'STAFF' };
+    expect(service.getSeriesReleaseReadiness).toHaveBeenCalledWith(
+      'series-1',
+      access,
+    );
+    expect(service.updateSeriesReleaseSettings).toHaveBeenCalledWith(
+      'series-1',
+      { requiredLifeStages: ['HIGH_ACTIVITY_ADULT'] },
+      access,
+    );
+    expect(service.releaseSeries).toHaveBeenCalledWith('series-1', access);
   });
 
   it('delegates recipe designer series status filters to the service', async () => {

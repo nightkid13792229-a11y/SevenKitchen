@@ -47,8 +47,8 @@
           @click="redo"
         >重做</el-button>
         <!--
-          上线检查：产品线（CATALOG）与本单设计（ORDER）共用同一套发布 /
-          加入待提交门槛；订单分支专属检查暂未接入。
+          上线检查：产品线（CATALOG）与本单设计（ORDER）共用公共门槛，
+          并分别检查展示资料与各自的分支条件（产品线文案 / 订单信息）。
         -->
         <el-button
           text
@@ -56,7 +56,7 @@
           :icon="CircleCheck"
           :disabled="!draft"
           :loading="launchCheckOpening"
-          title="产品线与本单设计共用同一套上线门槛；订单分支专属检查暂未接入"
+          title="公共门槛 + 展示资料 + 分支条件（产品线文案或订单信息）"
           @click="openLaunchReadiness"
         >上线检查</el-button>
         <el-button
@@ -64,26 +64,12 @@
           :type="aiPanelVisible ? 'primary' : 'default'"
           @click="aiPanelVisible = !aiPanelVisible"
         >🤖 AI 设计建议</el-button>
-        <el-button
-          v-if="canRevert"
-          text
-          :loading="reverting"
-          @click="handleRevert"
-        >恢复正式版</el-button>
         <span class="save-status" :class="saveStatus">
           <el-icon v-if="saveStatus === 'saving'"><Loading /></el-icon>
           <el-icon v-else-if="saveStatus === 'error'"><WarningFilled /></el-icon>
           <el-icon v-else><CircleCheckFilled /></el-icon>
           {{ saveStatusText }}
         </span>
-        <el-button
-          v-if="!orderId"
-          type="primary"
-          :disabled="!draft || items.length === 0"
-          @click="goPublish"
-        >
-          发布配方
-        </el-button>
       </div>
     </div>
 
@@ -385,6 +371,8 @@
     <LaunchReadinessDrawer
       v-model="launchReadinessVisible"
       :draft-id="currentDraftId"
+      :draft-name="draft?.series?.name || draft?.name || ''"
+      @published="handleStagePublished"
     />
   </div>
 </template>
@@ -1728,7 +1716,7 @@ function waitForSaveIdle(timeoutMs = 5000): Promise<void> {
  * 打开「上线检查」抽屉（产品线 / 本单设计都可用）。
  *
  * 不跳转路由：检查结果在抽屉里看；先把未落盘修改刷完，避免读到旧版本。
- * 本单设计与产品线共用同一套后端门槛，订单分支专属检查暂未接入。
+ * 公共门槛 + 产品展示对两种设计都生效，分支条件按设计模式各自检查。
  */
 async function openLaunchReadiness() {
   if (!draft.value) {
@@ -1756,6 +1744,11 @@ async function openLaunchReadiness() {
 function backToOrderWorkspace() {
   if (!orderId) return
   router.push(`/order-design/${encodeURIComponent(orderId)}`)
+}
+
+function handleStagePublished() {
+  launchReadinessVisible.value = false
+  router.push('/recipe-designer')
 }
 
 function goPublish() {

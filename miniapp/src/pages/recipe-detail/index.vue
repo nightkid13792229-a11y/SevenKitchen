@@ -112,9 +112,6 @@
         @open-selector="openLifeStageSelector"
       />
 
-      <text v-if="recipe.description" class="recipe-description">
-        {{ recipe.description }}
-      </text>
     </view>
 
     <!-- 食谱配方：主料与营养补充剂分表展示（口径不同，避免同一列混用） -->
@@ -412,9 +409,6 @@
           <view class="life-stage-version-option-main">
             <text class="life-stage-version-option-title">
               {{ version.label || getLifeStageLabel(version.lifeStage) }}
-            </text>
-            <text v-if="version.description" class="life-stage-version-option-copy">
-              {{ version.description }}
             </text>
           </view>
           <view class="life-stage-version-option-side">

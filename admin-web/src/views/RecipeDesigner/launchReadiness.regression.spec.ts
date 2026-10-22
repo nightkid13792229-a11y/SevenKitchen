@@ -108,8 +108,11 @@ describe('上线检查抽屉 · 加载 / 刷新 / 状态', () => {
     }
   })
 
-  it('阻断项展示 itemId / field 定位提示和原始 code', () => {
-    expect(drawer).toContain('v-for="(blocker, index) in readiness.blockers"')
+  it('阻断项按 共用 / 展示资料 / 产品线 分组，并保留 itemId / field 定位', () => {
+    expect(drawer).toContain('v-for="group in blockerGroups"')
+    expect(drawer).toContain('v-for="(blocker, index) in group.issues"')
+    expect(drawer).toContain('groupLaunchReadinessIssues(')
+    expect(drawer).toContain('{{ group.label }}')
     expect(drawer).toContain('launchIssueFieldLabel(blocker.field)')
     expect(drawer).toContain('launchIssueItemLabel(blocker.itemId)')
     expect(drawer).toContain(':title="blocker.field"')
@@ -117,12 +120,20 @@ describe('上线检查抽屉 · 加载 / 刷新 / 状态', () => {
     expect(drawer).toContain('{{ blocker.code }}')
   })
 
-  it('提醒项独立展示，不与阻断混在一起', () => {
-    expect(drawer).toContain('v-for="(warning, index) in readiness.warnings"')
+  it('提醒项独立展示并按归属分组，不与阻断混在一起', () => {
+    expect(drawer).toContain('v-for="group in warningGroups"')
+    expect(drawer).toContain('v-for="(warning, index) in group.issues"')
     expect(drawer).toContain('launchIssueFieldLabel(warning.field)')
     expect(drawer).toContain('launchIssueItemLabel(warning.itemId)')
     expect(drawer).toContain('{{ warning.code }}')
     expect(drawer).toContain('提醒项')
+  })
+
+  it('已通过清单使用共享 helper，并带归属标签', () => {
+    expect(drawer).toContain('buildLaunchPassedChecks(readiness.value)')
+    expect(drawer).toContain('v-for="check in passedChecks"')
+    expect(drawer).toContain('{{ check.label }}')
+    expect(drawer).toContain('{{ check.scopeLabel }}')
   })
 
   it('加载失败展示内联错误与重试按钮，并防止旧响应覆盖', () => {
@@ -134,11 +145,11 @@ describe('上线检查抽屉 · 加载 / 刷新 / 状态', () => {
     expect(drawer).toContain('if (seq !== requestSeq) return')
   })
 
-  it('模式说明明确订单与产品线共用共享门槛、订单分支专属检查暂未接入', () => {
+  it('模式说明分别解释产品线与订单的分支检查', () => {
     expect(drawer).toContain('launchReadinessModeNote(readiness.designMode)')
-    expect(clean(helperSource)).toContain('共用同一套上线门槛')
-    expect(clean(helperSource)).toContain('订单分支专属检查')
-    expect(clean(helperSource)).toContain('暂未接入')
+    expect(clean(helperSource)).toContain('公共门槛 + 展示资料')
+    expect(clean(helperSource)).toContain('订单信息')
+    expect(clean(helperSource)).toContain('上架文案')
   })
 })
 
@@ -164,9 +175,16 @@ describe('编辑器 · 上线检查入口', () => {
     expect(buttonTag).not.toContain('v-if="orderId"')
   })
 
-  it('按钮 title 说明共享门槛与订单分支专属检查尚未接入', () => {
-    expect(editor).toContain('产品线与本单设计共用同一套上线门槛')
-    expect(editor).toContain('订单分支专属检查暂未接入')
+  it('按钮 title 说明公共门槛 / 展示资料 / 分支条件', () => {
+    expect(editor).toContain('公共门槛 + 展示资料 + 分支条件')
+  })
+
+  it('产品线入仓动作已移入上线检查抽屉，不再在编辑器头部', () => {
+    const drawer = clean(drawerSource)
+    expect(drawer).toContain('保存到系列仓库')
+    expect(editor).not.toContain('保存到系列仓库')
+    expect(drawer).not.toContain('发布到产品线')
+    expect(editor).toContain('加入本单待提交')
   })
 
   it('打开前先刷保存队列，再打开抽屉；不跳转路由', () => {

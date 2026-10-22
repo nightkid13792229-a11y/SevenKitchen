@@ -125,6 +125,60 @@ export interface UpdateDesignRecipeProductionStepsPayload {
 export type DesignRecipeDesignMode = 'CATALOG' | 'ORDER'
 
 /**
+ * PATCH `/recipe-designer/drafts/:id/presentation`
+ *
+ * patch semantics：只传需要修改的字段；显式 null 表示清空。
+ * `detailImages` / `videoUrl` 也在接口里，但当前后台 UI 暂不编辑，
+ * 保存时不会主动覆盖已存在的值。
+ */
+export interface UpdateDraftPresentationPayload {
+  coverImageUrl?: string | null
+  coverTitle?: string | null
+  description?: string | null
+  sellingPoint?: string | null
+  detailImages?: string[] | null
+  videoUrl?: string | null
+}
+
+/** 产品展示 PATCH 的响应：只有展示字段 + 新的内容版本 */
+export interface DraftPresentationSnapshot {
+  draftId: string
+  contentRevision: number
+  coverImageUrl: string | null
+  coverTitle: string | null
+  description: string | null
+  sellingPoint: string | null
+  detailImages: string[] | null
+  videoUrl: string | null
+}
+
+/**
+ * PATCH `/recipe-designer/drafts/:id`
+ *
+ * 适用生命阶段 / 目标健康标签沿用既有草稿更新接口；
+ * 它们不在产品展示 PATCH 的字段范围内。
+ */
+export interface UpdateDesignRecipeDraftPayload {
+  name?: string
+  scenario?: FediafDogScenario
+  targetHealthTags?: string[]
+  applicableLifeStages?: string[]
+  notes?: string | null
+}
+
+/**
+ * 上线检查问题归属，与后端 `LaunchReadinessScope` 对齐。
+ *
+ * COMMON = 公共门槛；PRESENTATION = 产品展示；CATALOG = 产品线分支；
+ * ORDER = 订单分支。旧响应没有 scope 时按 COMMON 处理。
+ */
+export type LaunchReadinessScope =
+  | 'COMMON'
+  | 'PRESENTATION'
+  | 'CATALOG'
+  | 'ORDER'
+
+/**
  * 上线检查（共享发布门槛）阻断项，与后端
  * `backend/src/domain/recipe-designer/launch-readiness.ts` 对齐。
  */
@@ -138,16 +192,27 @@ export type LaunchReadinessBlockerCode =
   | 'SUPPLEMENT_TARGETS_REQUIRED'
   | 'PREPARATION_METHOD_REQUIRED'
   | 'PRODUCTION_STEPS_REQUIRED'
+  | 'COVER_IMAGE_REQUIRED'
+  | 'COVER_TITLE_REQUIRED'
+  | 'DESCRIPTION_REQUIRED'
+  | 'SELLING_POINT_REQUIRED'
+  | 'APPLICABLE_LIFE_STAGES_REQUIRED'
+  | 'ORDER_ID_REQUIRED'
+  | 'ORDER_QUANTITY_INVALID'
+  | 'CUSTOMER_DOG_REQUIRED'
 
 /** 上线检查提醒项（只提示，不阻断） */
 export type LaunchReadinessWarningCode =
   | 'REVIEW_REQUIRED'
   | 'MISSING_NUTRITION_DATA'
   | 'NUTRIENT_OUT_OF_RANGE'
+  | 'TARGET_HEALTH_TAGS_MISSING'
 
 export interface LaunchReadinessIssue<TCode extends string = string> {
   code: TCode
   message: string
+  /** 问题归属；旧响应没有这个字段时按 COMMON 处理 */
+  scope?: LaunchReadinessScope
   /** 相关原料项 id（整份草稿级别的问题没有这个字段） */
   itemId?: string
   /** 相关字段路径 / 字段名（便于后台定位） */
@@ -260,6 +325,129 @@ export interface DraftLaunchReadiness {
   summary: DraftLaunchReadinessSummary
 }
 
+/**
+ * 产品线整系列分阶段发布（2026-10-22）。
+ *
+ * 与后端 `backend/src/domain/recipe-designer/series-release-readiness.ts` 对齐：
+ *  · EMPTY  该阶段既没有设计稿，也没有阶段食谱；
+ *  · DRAFT  有设计稿，但还没保存进系列仓库；
+ *  · READY  系列仓库里已有该阶段 DRAFT，可随系列一起发布；
+ *  · PUBLIC 系列仓库里已有该阶段 PUBLIC，已经发布。
+ */
+export type SeriesReleaseStageStatus = 'EMPTY' | 'DRAFT' | 'READY' | 'PUBLIC'
+
+/** 发布问题归属：系列级设置 / 产品展示 / 单个生命阶段 */
+export type SeriesReleaseIssueScope = 'SERIES' | 'PRESENTATION' | 'STAGE'
+
+export type SeriesReleaseBlockerCode =
+  | 'REQUIRED_LIFE_STAGES_EMPTY'
+  | 'REQUIRED_LIFE_STAGE_UNKNOWN'
+  | 'REQUIRED_STAGE_NOT_READY'
+  | 'COVER_IMAGE_REQUIRED'
+  | 'COVER_TITLE_REQUIRED'
+  | 'SELLING_POINT_REQUIRED'
+
+export type SeriesReleaseWarningCode = 'TARGET_HEALTH_TAGS_MISSING'
+
+export interface SeriesReleaseIssue<TCode extends string = string> {
+  code: TCode
+  message: string
+  scope: SeriesReleaseIssueScope
+  /** 相关字段名，便于后台定位到具体输入框 */
+  field?: string
+  /** 相关生命阶段（SERIES / PRESENTATION 级问题没有这个字段） */
+  stageCode?: string
+}
+
+export type SeriesReleaseBlocker = SeriesReleaseIssue<SeriesReleaseBlockerCode>
+export type SeriesReleaseWarning = SeriesReleaseIssue<SeriesReleaseWarningCode>
+
+/** 一个生命阶段在系列仓库里的现状 */
+export interface SeriesReleaseStageReadiness {
+  stageCode: string
+  label: string
+  status: SeriesReleaseStageStatus
+  /** 该阶段最新一条系列仓库食谱（优先 PUBLIC，其次 DRAFT）的业务 id */
+  latestRecipeId?: string | null
+  latestRecipeVersion?: number | null
+  /** 该阶段当前可编辑的设计草稿 id（没有草稿时为 null） */
+  designDraftId?: string | null
+  /** 是否在 requiredLifeStages 里 */
+  required: boolean
+}
+
+/** 系列级产品展示资料（发布时复制到每条阶段食谱） */
+export interface SeriesReleasePresentation {
+  coverImageUrl: string | null
+  coverTitle: string | null
+  sellingPoint: string | null
+  targetHealthTags: string[]
+}
+
+/** GET /recipe-designer/series/:seriesId/release-readiness */
+export interface SeriesReleaseReadiness {
+  seriesId: string
+  designMode: string
+  ready: boolean
+  requiredLifeStages: string[]
+  /** 必填阶段（按阶段顺序，只包含配置里的阶段） */
+  requiredStages: SeriesReleaseStageReadiness[]
+  /** 全量阶段（便于后台展示「其它已设计阶段」） */
+  stages: SeriesReleaseStageReadiness[]
+  presentation: SeriesReleasePresentation
+  blockers: SeriesReleaseBlocker[]
+  warnings: SeriesReleaseWarning[]
+  summary: {
+    requiredStageCount: number
+    readyStageCount: number
+    publishedStageCount: number
+    designedStageCount: number
+  }
+}
+
+/**
+ * PATCH `/recipe-designer/series/:seriesId/release-settings`
+ *
+ * patch semantics：只传需要修改的字段；显式 null 表示清空。
+ */
+export interface UpdateRecipeSeriesReleaseSettingsPayload {
+  /** 必填生命阶段；后端按系统固定顺序保存，非法代码直接 400 */
+  requiredLifeStages?: string[]
+  coverImageUrl?: string | null
+  coverTitle?: string | null
+  sellingPoint?: string | null
+  /** 目标健康标签（健康标签 id） */
+  targetHealthTags?: string[]
+}
+
+/** 发布设置保存后的响应（只返回系列发布相关字段） */
+export interface SeriesReleaseSettingsSnapshot {
+  seriesId: string
+  name: string
+  designMode: string
+  businessStatus: string
+  requiredLifeStages: string[]
+  coverImageUrl: string | null
+  coverTitle: string | null
+  sellingPoint: string | null
+  targetHealthTags: string[]
+  updatedAt: string
+}
+
+/** POST /recipe-designer/series/:seriesId/release */
+export interface SeriesReleaseResult {
+  seriesId: string
+  name: string
+  businessStatus: string
+  requiredLifeStages: string[]
+  releasedStageCodes: string[]
+  /** 本次从 DRAFT 变成 PUBLIC 的食谱行数 */
+  publishedRecipeCount: number
+  /** 本次实际写入（含已公开行刷新展示资料）的食谱行数 */
+  updatedRecipeCount: number
+  releasedAt: string
+}
+
 /** 原料预处理来源：AUTO = 系统带出；MANUAL = 人工修改 */
 export type DesignerPreparationSource = 'AUTO' | 'MANUAL'
 
@@ -337,6 +525,19 @@ export interface DesignRecipeDraftDetail {
   targetHealthTags: string[]
   applicableLifeStages: string[]
   notes?: string | null
+  /**
+   * 产品展示（2026-10-22）：公布到产品线 / 加入本单待提交前统一要求。
+   * 旧草稿这些字段可能不存在，统一按 null 处理。
+   */
+  coverImageUrl?: string | null
+  coverTitle?: string | null
+  description?: string | null
+  sellingPoint?: string | null
+  /** 详情图 URL 数组（后端存 JSON，读取时做数组归一化） */
+  detailImages?: string[] | null
+  videoUrl?: string | null
+  /** 订单设计绑定的顾客爱犬（产品线设计为 null） */
+  customerDogId?: string | null
   createdBy?: string
   isCompliant?: boolean
   assessmentSummary?: any
@@ -346,6 +547,11 @@ export interface DesignRecipeDraftDetail {
     id: string
     name: string
     referenceDogId?: string | null
+    /** 系列设计模式；历史系列缺省按产品线处理 */
+    designMode?: DesignRecipeDesignMode | null
+    /** 订单设计上下文（产品线系列为 null） */
+    orderId?: string | null
+    orderQuantity?: number | null
   } | null
   items: DesignerItem[]
   /** 可选烹饪方式（后端真实列表） */

@@ -2080,8 +2080,8 @@ describe('recipe designer publish nutrition report', () => {
       energyPercentLabel: '58.3%',
     })
     expect(report.energyDensityRows).toEqual([
-      { label: '每公斤配方', value: '1200 kcal/kg' },
       { label: '每公斤干物质', value: '3000 kcal/kg DM' },
+      { label: '每公斤配方', value: '1200 kcal/kg' },
     ])
     expect(report.nutrientSections.minerals.rows[0]).toMatchObject({
       name: '钙',

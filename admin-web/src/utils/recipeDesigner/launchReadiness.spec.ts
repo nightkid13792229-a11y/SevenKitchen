@@ -1,17 +1,25 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildLaunchPassedChecks,
   buildLaunchSummaryRows,
   formatLaunchEnergyDensity,
   formatLaunchWeightG,
+  groupLaunchReadinessIssues,
   launchIssueFieldLabel,
   launchIssueItemLabel,
   launchIssueLocationHint,
   launchReadinessModeLabel,
   launchReadinessModeNote,
+  launchReadinessScopeLabel,
+  launchReadinessScopesForDesign,
   launchReadinessStatusLabel,
-  launchReadinessStatusSummary
+  launchReadinessStatusSummary,
+  resolveLaunchIssueScope
 } from './launchReadiness'
-import type { DraftLaunchReadinessSummary } from '@/types/recipeDesigner'
+import type {
+  DraftLaunchReadiness,
+  DraftLaunchReadinessSummary
+} from '@/types/recipeDesigner'
 
 const summary: DraftLaunchReadinessSummary = {
   itemCount: 6,
@@ -124,15 +132,16 @@ describe('上线检查 · 状态与模式文案', () => {
     expect(launchReadinessModeLabel('order')).toBe('本单设计')
   })
 
-  it('订单模式明确说明共享门槛，并提示订单分支专属检查尚未接入', () => {
+  it('订单与产品线分别说明各自的分支检查', () => {
     const orderNote = launchReadinessModeNote('ORDER')
-    expect(orderNote).toContain('共用同一套上线门槛')
-    expect(orderNote).toContain('订单分支专属检查')
-    expect(orderNote).toContain('暂未接入')
+    expect(orderNote).toContain('展示资料')
+    expect(orderNote).toContain('订单信息')
+    expect(orderNote).toContain('产品线上架文案不参与本单检查')
 
     const catalogNote = launchReadinessModeNote('CATALOG')
-    expect(catalogNote).toContain('产品线')
-    expect(catalogNote).toContain('订单分支专属检查')
+    expect(catalogNote).toContain('展示资料')
+    expect(catalogNote).toContain('上架文案')
+    expect(catalogNote).toContain('订单信息不参与产品线检查')
   })
 })
 
@@ -161,5 +170,156 @@ describe('上线检查 · 阻断定位提示', () => {
     ).toBe('补剂目标 · 原料 #abcdef12')
     expect(launchIssueLocationHint({ field: 'name' })).toBe('名称')
     expect(launchIssueLocationHint({})).toBe('')
+  })
+})
+
+function readinessFixture(
+  overrides: Partial<DraftLaunchReadiness> = {}
+): DraftLaunchReadiness {
+  return {
+    draftId: 'draft-1',
+    designMode: 'CATALOG',
+    ready: true,
+    blockers: [],
+    warnings: [],
+    summary,
+    ...overrides
+  }
+}
+
+describe('上线检查 · 问题归属与分组', () => {
+  it('缺少 scope 的旧响应按共用处理，未知值也不丢问题', () => {
+    expect(resolveLaunchIssueScope(undefined)).toBe('COMMON')
+    expect(resolveLaunchIssueScope(null)).toBe('COMMON')
+    expect(resolveLaunchIssueScope('presentation')).toBe('PRESENTATION')
+    expect(resolveLaunchIssueScope('CATALOG')).toBe('CATALOG')
+    expect(resolveLaunchIssueScope('SOMETHING_NEW')).toBe('COMMON')
+    expect(launchReadinessScopeLabel('ORDER')).toBe('订单')
+    expect(launchReadinessScopeLabel(undefined)).toBe('共用')
+  })
+
+  it('产品线与订单只展示各自分支的检查项', () => {
+    expect(launchReadinessScopesForDesign('CATALOG')).toEqual([
+      'COMMON',
+      'PRESENTATION',
+      'CATALOG'
+    ])
+    expect(launchReadinessScopesForDesign('ORDER')).toEqual([
+      'COMMON',
+      'PRESENTATION',
+      'ORDER'
+    ])
+    // 历史缺省按产品线
+    expect(launchReadinessScopesForDesign(null)).toEqual([
+      'COMMON',
+      'PRESENTATION',
+      'CATALOG'
+    ])
+  })
+
+  it('阻断项按 共用 / 展示资料 / 产品线 分组，过滤掉订单分支项', () => {
+    const groups = groupLaunchReadinessIssues(
+      [
+        { code: 'NAME_REQUIRED', message: '名称', scope: 'COMMON' },
+        { code: 'COVER_IMAGE_REQUIRED', message: '封面', scope: 'PRESENTATION' },
+        { code: 'DESCRIPTION_REQUIRED', message: '描述', scope: 'CATALOG' },
+        { code: 'ORDER_ID_REQUIRED', message: '订单', scope: 'ORDER' },
+        { code: 'LEGACY_CODE', message: '旧问题' }
+      ],
+      'CATALOG'
+    )
+
+    expect(groups.map((group) => group.label)).toEqual([
+      '共用',
+      '展示资料',
+      '产品线'
+    ])
+    expect(groups.map((group) => group.issues.length)).toEqual([2, 1, 1])
+    expect(groups[0]?.issues.map((issue) => issue.code)).toEqual([
+      'NAME_REQUIRED',
+      'LEGACY_CODE'
+    ])
+  })
+
+  it('订单设计只展示订单分支项，不把产品线文案混进来', () => {
+    const groups = groupLaunchReadinessIssues(
+      [
+        { code: 'COVER_TITLE_REQUIRED', message: '标题', scope: 'PRESENTATION' },
+        { code: 'SELLING_POINT_REQUIRED', message: '卖点', scope: 'CATALOG' },
+        { code: 'CUSTOMER_DOG_REQUIRED', message: '爱犬', scope: 'ORDER' }
+      ],
+      'ORDER'
+    )
+
+    expect(groups.map((group) => group.label)).toEqual(['展示资料', '订单'])
+    expect(
+      groups.flatMap((group) => group.issues.map((issue) => issue.code))
+    ).toEqual(['COVER_TITLE_REQUIRED', 'CUSTOMER_DOG_REQUIRED'])
+  })
+})
+
+describe('上线检查 · 已通过清单', () => {
+  it('产品线包含展示资料与上架文案，不出现订单项', () => {
+    const checks = buildLaunchPassedChecks(
+      readinessFixture({
+        blockers: [
+          { code: 'COVER_IMAGE_REQUIRED', message: '封面', scope: 'PRESENTATION' },
+          { code: 'DESCRIPTION_REQUIRED', message: '描述', scope: 'CATALOG' }
+        ],
+        warnings: [
+          {
+            code: 'TARGET_HEALTH_TAGS_MISSING',
+            message: '标签',
+            scope: 'CATALOG'
+          }
+        ]
+      })
+    )
+    const codes = checks.map((check) => check.code)
+
+    expect(checks.find((check) => check.code === 'COVER_IMAGE_REQUIRED')).toBeUndefined()
+    expect(checks.find((check) => check.code === 'DESCRIPTION_REQUIRED')).toBeUndefined()
+    expect(
+      checks.find((check) => check.code === 'TARGET_HEALTH_TAGS_MISSING')
+    ).toBeUndefined()
+    expect(codes).toEqual(
+      expect.arrayContaining([
+        'COVER_TITLE_REQUIRED',
+        'SELLING_POINT_REQUIRED',
+        'APPLICABLE_LIFE_STAGES_REQUIRED'
+      ])
+    )
+    expect(codes).not.toEqual(
+      expect.arrayContaining(['ORDER_ID_REQUIRED'])
+    )
+    expect(checks.find((check) => check.code === 'COVER_TITLE_REQUIRED')).toMatchObject({
+      label: '封面标题已填写',
+      scope: 'PRESENTATION',
+      scopeLabel: '展示资料'
+    })
+  })
+
+  it('订单设计包含订单信息，不检查产品线上架文案', () => {
+    const checks = buildLaunchPassedChecks(
+      readinessFixture({
+        designMode: 'ORDER',
+        blockers: [
+          { code: 'ORDER_QUANTITY_INVALID', message: '份数', scope: 'ORDER' }
+        ]
+      })
+    )
+    const codes = checks.map((check) => check.code)
+
+    expect(codes).toEqual(
+      expect.arrayContaining([
+        'COVER_IMAGE_REQUIRED',
+        'COVER_TITLE_REQUIRED',
+        'ORDER_ID_REQUIRED',
+        'CUSTOMER_DOG_REQUIRED'
+      ])
+    )
+    expect(codes).not.toContain('ORDER_QUANTITY_INVALID')
+    expect(codes).not.toContain('DESCRIPTION_REQUIRED')
+    expect(codes).not.toContain('TARGET_HEALTH_TAGS_MISSING')
   })
 })

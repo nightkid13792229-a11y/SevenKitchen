@@ -2,7 +2,7 @@
   <div class="recipe-designer-list">
     <div class="page-header">
       <div>
-        <h2>食谱设计器</h2>
+        <h2>食谱列表 &amp; 设计</h2>
         <p class="subtitle">为爱犬档案定制鲜食配方系列，配餐员设计、管理员审核发布</p>
       </div>
       <div class="header-actions">
@@ -176,7 +176,17 @@
             </div>
           </div>
 
+          <div v-if="designModeFilter === 'CATALOG'" class="release-progress">
+            <el-tag size="small" type="info" effect="plain">
+              已发布 {{ stageProgressLabel(card) }} 阶段
+            </el-tag>
+            <span class="release-progress-hint">
+              未发布的阶段可在「系列发布」里查看
+            </span>
+          </div>
+
           <div v-if="designModeFilter === 'CATALOG'" class="series-card-actions">
+            <el-button size="small" text type="primary" @click="openSeriesReleaseDrawer(card)">系列发布</el-button>
             <el-button size="small" text @click="handleCardCommand('duplicate', card)">复制系列</el-button>
             <el-button size="small" text @click="handleCardCommand('rename', card)">重命名</el-button>
             <el-button size="small" text type="danger" @click="handleCardCommand('delete', card)">删除系列</el-button>
@@ -272,6 +282,18 @@
         <el-button type="primary" :loading="copyingItems" @click="confirmCopyItems">复制并打开</el-button>
       </template>
     </el-dialog>
+
+    <!--
+      系列发布（2026-10-22 · 两阶段发布）：
+      阶段设计先保存进系列仓库，整条系列就绪后由管理员在这里一次性发布。
+      卡片上的「系列发布」只负责打开抽屉，能不能发布由 release-readiness 决定。
+    -->
+    <SeriesReleaseDrawer
+      v-model="releaseDrawerVisible"
+      :series-id="releaseDrawerSeriesId"
+      :series-name="releaseDrawerSeriesName"
+      @released="handleSeriesReleased"
+    />
   </div>
 </template>
 
@@ -290,6 +312,7 @@ import {
 import { dogApi } from '@/api/dogs'
 import { customRecipeApi } from '@/api/customRecipe'
 import type { DogProfile } from '@/types/dog'
+import SeriesReleaseDrawer from './components/SeriesReleaseDrawer.vue'
 import {
   FEDIAF_DOG_SCENARIO_LABELS,
   type FediafDogScenario,
@@ -334,6 +357,11 @@ const createForm = reactive<{ referenceDogId?: string; scenario?: FediafDogScena
 
 const renameDialogVisible = ref(false)
 const renameForm = reactive<{ id: string; name: string }>({ id: '', name: '' })
+
+// 系列发布（阶段设计先入系列仓库，整条系列就绪后一次性发布）
+const releaseDrawerVisible = ref(false)
+const releaseDrawerSeriesId = ref('')
+const releaseDrawerSeriesName = ref('')
 
 // 跨阶段复制原料
 const copyItemsDialogVisible = ref(false)
@@ -380,6 +408,27 @@ function stageCellClass(stage: RecipeDesignerSeriesStage): Record<string, boolea
   if (stage.recipeId) return { 'stage-cell-published': true }
   if (stage.draftId) return { 'stage-cell-drafted': true }
   return { 'stage-cell-blank': true }
+}
+
+/**
+ * 卡片上的阶段进度：只用列表接口已经返回的数据，不额外为每张卡片拉 readiness。
+ * 精确的必填阶段就绪数（READY + PUBLIC）由抽屉打开后按后端门槛展示。
+ */
+function stageProgressLabel(card: RecipeDesignerSeriesCard): string {
+  const total = Array.isArray(card.stages) ? card.stages.length : 0
+  const published = Number(card.publishedStageCount) || 0
+  return `${Math.min(published, total)}/${total}`
+}
+
+function openSeriesReleaseDrawer(card: RecipeDesignerSeriesCard): void {
+  releaseDrawerSeriesId.value = card.id
+  releaseDrawerSeriesName.value = card.name
+  releaseDrawerVisible.value = true
+}
+
+/** 发布成功后刷新列表：卡片状态与阶段进度立即反映整系列已发布 */
+async function handleSeriesReleased(): Promise<void> {
+  await loadSeries(true)
 }
 
 function dogLabel(dog: DogProfile): string {
@@ -1088,6 +1137,18 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
   align-items: center;
   gap: 6px;
+}
+.release-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: #909399;
+}
+.release-progress-hint {
+  font-size: 12px;
+  color: #c0c4cc;
 }
 .form-tip {
   font-size: 12px;

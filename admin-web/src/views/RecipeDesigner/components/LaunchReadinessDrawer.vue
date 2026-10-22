@@ -143,6 +143,19 @@
           </el-descriptions>
         </section>
 
+        <section
+          v-if="readiness.designMode === 'ORDER'"
+          class="launch-readiness__section"
+        >
+          <div class="launch-readiness__section-title">订单展示</div>
+          <PresentationPanel
+            :draft-id="draftId"
+            :design-mode="readiness.designMode"
+            @saved="handlePresentationSaved"
+            @dirty-change="(value: boolean) => (presentationDirty = value)"
+          />
+        </section>
+
         <section class="launch-readiness__section">
           <el-collapse v-model="stepsExpanded" class="launch-readiness__steps">
             <el-collapse-item name="steps">
@@ -185,6 +198,12 @@
             >
               <el-icon class="is-success"><CircleCheckFilled /></el-icon>
               <span>{{ check.label }}</span>
+              <el-tag
+                size="small"
+                type="info"
+                effect="plain"
+                class="launch-passed__scope"
+              >{{ check.scopeLabel }}</el-tag>
             </div>
           </div>
           <div v-else class="launch-readiness__clear">
@@ -199,33 +218,47 @@
           </div>
           <div
             v-if="readiness.blockers.length"
-            class="launch-readiness__issues"
+            class="launch-readiness__groups"
           >
             <div
-              v-for="(blocker, index) in readiness.blockers"
-              :key="`${blocker.code}-${blocker.itemId || index}`"
-              class="launch-issue launch-issue--blocker"
+              v-for="group in blockerGroups"
+              :key="`blocker-group-${group.scope}`"
+              class="launch-readiness__group"
             >
-              <div class="launch-issue__message">
-                <el-icon class="launch-issue__icon"><CircleCloseFilled /></el-icon>
-                <span>{{ blocker.message }}</span>
+              <div class="launch-readiness__group-title">
+                <el-tag size="small" effect="plain">{{ group.label }}</el-tag>
+                <span class="launch-readiness__group-count">
+                  {{ group.issues.length }} 项
+                </span>
               </div>
-              <div class="launch-issue__hints">
-                <el-tag
-                  v-if="launchIssueFieldLabel(blocker.field)"
-                  size="small"
-                  type="danger"
-                  effect="plain"
-                  :title="blocker.field"
-                >字段：{{ launchIssueFieldLabel(blocker.field) }}</el-tag>
-                <el-tag
-                  v-if="launchIssueItemLabel(blocker.itemId)"
-                  size="small"
-                  type="info"
-                  effect="plain"
-                  :title="blocker.itemId"
-                >{{ launchIssueItemLabel(blocker.itemId) }}</el-tag>
-                <span class="launch-issue__code">{{ blocker.code }}</span>
+              <div class="launch-readiness__issues">
+                <div
+                  v-for="(blocker, index) in group.issues"
+                  :key="`${blocker.code}-${blocker.itemId || index}`"
+                  class="launch-issue launch-issue--blocker"
+                >
+                  <div class="launch-issue__message">
+                    <el-icon class="launch-issue__icon"><CircleCloseFilled /></el-icon>
+                    <span>{{ blocker.message }}</span>
+                  </div>
+                  <div class="launch-issue__hints">
+                    <el-tag
+                      v-if="launchIssueFieldLabel(blocker.field)"
+                      size="small"
+                      type="danger"
+                      effect="plain"
+                      :title="blocker.field"
+                    >字段：{{ launchIssueFieldLabel(blocker.field) }}</el-tag>
+                    <el-tag
+                      v-if="launchIssueItemLabel(blocker.itemId)"
+                      size="small"
+                      type="info"
+                      effect="plain"
+                      :title="blocker.itemId"
+                    >{{ launchIssueItemLabel(blocker.itemId) }}</el-tag>
+                    <span class="launch-issue__code">{{ blocker.code }}</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -242,33 +275,51 @@
           </div>
           <div
             v-if="readiness.warnings.length"
-            class="launch-readiness__issues"
+            class="launch-readiness__groups"
           >
             <div
-              v-for="(warning, index) in readiness.warnings"
-              :key="`${warning.code}-${warning.itemId || index}`"
-              class="launch-issue launch-issue--warning"
+              v-for="group in warningGroups"
+              :key="`warning-group-${group.scope}`"
+              class="launch-readiness__group"
             >
-              <div class="launch-issue__message">
-                <el-icon class="launch-issue__icon"><WarningFilled /></el-icon>
-                <span>{{ warning.message }}</span>
-              </div>
-              <div class="launch-issue__hints">
+              <div class="launch-readiness__group-title">
                 <el-tag
-                  v-if="launchIssueFieldLabel(warning.field)"
                   size="small"
                   type="warning"
                   effect="plain"
-                  :title="warning.field"
-                >字段：{{ launchIssueFieldLabel(warning.field) }}</el-tag>
-                <el-tag
-                  v-if="launchIssueItemLabel(warning.itemId)"
-                  size="small"
-                  type="info"
-                  effect="plain"
-                  :title="warning.itemId"
-                >{{ launchIssueItemLabel(warning.itemId) }}</el-tag>
-                <span class="launch-issue__code">{{ warning.code }}</span>
+                >{{ group.label }}</el-tag>
+                <span class="launch-readiness__group-count">
+                  {{ group.issues.length }} 项
+                </span>
+              </div>
+              <div class="launch-readiness__issues">
+                <div
+                  v-for="(warning, index) in group.issues"
+                  :key="`${warning.code}-${warning.itemId || index}`"
+                  class="launch-issue launch-issue--warning"
+                >
+                  <div class="launch-issue__message">
+                    <el-icon class="launch-issue__icon"><WarningFilled /></el-icon>
+                    <span>{{ warning.message }}</span>
+                  </div>
+                  <div class="launch-issue__hints">
+                    <el-tag
+                      v-if="launchIssueFieldLabel(warning.field)"
+                      size="small"
+                      type="warning"
+                      effect="plain"
+                      :title="warning.field"
+                    >字段：{{ launchIssueFieldLabel(warning.field) }}</el-tag>
+                    <el-tag
+                      v-if="launchIssueItemLabel(warning.itemId)"
+                      size="small"
+                      type="info"
+                      effect="plain"
+                      :title="warning.itemId"
+                    >{{ launchIssueItemLabel(warning.itemId) }}</el-tag>
+                    <span class="launch-issue__code">{{ warning.code }}</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -277,6 +328,21 @@
             没有提醒项
           </div>
         </section>
+
+        <div
+          v-if="readiness.designMode !== 'ORDER'"
+          class="launch-readiness__publish"
+        >
+          <div class="launch-readiness__publish-hint">
+            单阶段入仓不会直接上橱窗；系列齐套后到系列卡片统一发布。
+          </div>
+          <el-button
+            type="primary"
+            :loading="publishing"
+            :disabled="!canPublishStage"
+            @click="publishStageToWarehouse"
+          >保存到系列仓库</el-button>
+        </div>
 
         <p class="launch-readiness__footer-note">
           检查的是服务器上已保存的版本；刚修改过的内容请等保存完成后再点「刷新检查」。
@@ -300,7 +366,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   CircleCheckFilled,
   CircleCloseFilled,
@@ -308,14 +374,18 @@ import {
   WarningFilled
 } from '@element-plus/icons-vue'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
+import { useUserStore } from '@/store/user'
 import ProductionStepsEditor from './ProductionStepsEditor.vue'
 import NutritionReportDrawer from './NutritionReportDrawer.vue'
+import PresentationPanel from './PresentationPanel.vue'
 import type {
   DraftLaunchReadiness,
   DraftNutritionReportEnvelope
 } from '@/types/recipeDesigner'
 import {
+  buildLaunchPassedChecks,
   buildLaunchSummaryRows,
+  groupLaunchReadinessIssues,
   launchIssueFieldLabel,
   launchIssueItemLabel,
   launchReadinessModeLabel,
@@ -328,10 +398,12 @@ import { resolveNutritionReportAction } from '@/utils/recipeDesigner/nutritionRe
 const props = defineProps<{
   modelValue: boolean
   draftId: string
+  draftName?: string
 }>()
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
+  (e: 'published'): void
 }>()
 
 const visible = computed({
@@ -344,6 +416,10 @@ const error = ref('')
 const readiness = ref<DraftLaunchReadiness | null>(null)
 const stepsExpanded = ref<string[]>([])
 const stepsDirty = ref(false)
+const publishing = ref(false)
+const userStore = useUserStore()
+const isAdmin = computed(() => userStore.userInfo?.role === 'ADMIN')
+const presentationDirty = ref(false)
 
 const reportDrawerVisible = ref(false)
 const reportSnapshot = ref<DraftNutritionReportEnvelope | null>(null)
@@ -366,21 +442,37 @@ const reportAction = computed(() =>
     : null
 )
 
-const passedChecks = computed(() => {
-  if (!readiness.value) return []
-  const blockerCodes = new Set<string>(readiness.value.blockers.map((item) => item.code))
-  const checks = [
-    { code: 'NAME_REQUIRED', label: '食谱名称已填写' },
-    { code: 'NO_INCLUDED_ITEMS', label: '已有参与评估的原料' },
-    { code: 'TOTAL_WEIGHT_INVALID', label: '配方总重量正常' },
-    { code: 'ENERGY_DENSITY_INVALID', label: '能量密度正常' },
-    { code: 'NUTRITION_REPORT_UNAVAILABLE', label: '完整营养报告可生成' },
-    { code: 'SUPPLEMENT_TARGETS_REQUIRED', label: '补剂目标完整' },
-    { code: 'PREPARATION_METHOD_REQUIRED', label: '原料预处理完整' },
-    { code: 'PRODUCTION_STEPS_REQUIRED', label: '制作步骤已填写' }
-  ]
-  return checks.filter((check) => !blockerCodes.has(check.code))
-})
+const canPublishStage = computed(
+  () =>
+    Boolean(readiness.value?.ready) &&
+    !presentationDirty.value &&
+    !stepsDirty.value &&
+    !publishing.value &&
+    isAdmin.value
+)
+
+const passedChecks = computed(() =>
+  readiness.value ? buildLaunchPassedChecks(readiness.value) : []
+)
+
+/** 阻断 / 提醒都按归属分组：共用 / 展示资料 / 产品线或订单 */
+const blockerGroups = computed(() =>
+  readiness.value
+    ? groupLaunchReadinessIssues(
+        readiness.value.blockers,
+        readiness.value.designMode
+      )
+    : []
+)
+
+const warningGroups = computed(() =>
+  readiness.value
+    ? groupLaunchReadinessIssues(
+        readiness.value.warnings,
+        readiness.value.designMode
+      )
+    : []
+)
 
 async function loadReadiness(): Promise<void> {
   if (!props.draftId) {
@@ -419,6 +511,12 @@ function onSummaryRowClick(key: string): void {
 
 async function handleStepsSaved(): Promise<void> {
   stepsDirty.value = false
+  await loadReadiness()
+}
+
+/** 展示资料保存成功后立即重拉上线检查，阻断项 / 已通过项同步更新 */
+async function handlePresentationSaved(): Promise<void> {
+  presentationDirty.value = false
   await loadReadiness()
 }
 
@@ -468,15 +566,75 @@ async function retryNutritionReport(): Promise<void> {
   await openNutritionReport()
 }
 
+async function publishStageToWarehouse(): Promise<void> {
+  if (!readiness.value || readiness.value.designMode === 'ORDER') return
+  if (!readiness.value.ready) {
+    ElMessage.warning('上线检查未通过，暂时不能入仓')
+    return
+  }
+  if (!isAdmin.value) {
+    ElMessage.warning('仅管理员可以保存到系列仓库')
+    return
+  }
+  const name = String(props.draftName ?? '').trim()
+  if (!name) {
+    ElMessage.warning('请先填写系列名称')
+    return
+  }
+  let reviewNote: string | undefined
+  if (readiness.value.warnings.some((item) => item.code === 'REVIEW_REQUIRED')) {
+    try {
+      const result = await ElMessageBox.prompt('配方未完全合规，请填写审核说明', '审核说明', {
+        confirmButtonText: '继续入仓',
+        cancelButtonText: '取消',
+        inputType: 'textarea',
+        inputValidator: (value) => Boolean(String(value ?? '').trim()) || '审核说明不能为空'
+      })
+      reviewNote = String(result.value ?? '').trim()
+    } catch {
+      return
+    }
+  } else {
+    try {
+      await ElMessageBox.confirm(
+        '确认把当前生命阶段保存到系列仓库？保存后不会直接上橱窗，需等系列齐套后统一发布。',
+        '保存到系列仓库',
+        {
+          type: 'info',
+          confirmButtonText: '确认入仓',
+          cancelButtonText: '取消'
+        }
+      )
+    } catch {
+      return
+    }
+  }
+  publishing.value = true
+  try {
+    await recipeDesignerApi.publishDraft(props.draftId, { name, reviewNote })
+    ElMessage.success('已保存到系列仓库，等待系列齐套')
+    emit('published')
+  } catch {
+    // API 拦截器已提示
+  } finally {
+    publishing.value = false
+  }
+}
+
 async function handleBeforeClose(done: () => void): Promise<void> {
-  if (!stepsDirty.value) {
+  if (!stepsDirty.value && !presentationDirty.value) {
     done()
     return
   }
+
+  const dirtySections = [
+    presentationDirty.value ? '产品展示' : '',
+    stepsDirty.value ? '制作步骤' : ''
+  ].filter(Boolean)
   try {
     await ElMessageBox.confirm(
-      '制作步骤还有未保存的修改，关闭会丢失这些修改。确定关闭吗？',
-      '制作步骤未保存',
+      `${dirtySections.join('、')}还有未保存的修改，关闭会丢失这些修改。确定关闭吗？`,
+      '有未保存的修改',
       {
         type: 'warning',
         confirmButtonText: '放弃修改并关闭',
@@ -484,6 +642,7 @@ async function handleBeforeClose(done: () => void): Promise<void> {
       }
     )
     stepsDirty.value = false
+    presentationDirty.value = false
     done()
   } catch {
     // 留在抽屉里继续编辑
@@ -497,6 +656,8 @@ watch(
       // 关闭后到达的响应不再写回，避免下次打开先闪一眼旧结果
       requestSeq += 1
       loading.value = false
+      stepsDirty.value = false
+      presentationDirty.value = false
       reportRequestSeq += 1
       reportDrawerVisible.value = false
       reportLoading.value = false
@@ -506,6 +667,8 @@ watch(
     }
     readiness.value = null
     error.value = ''
+    stepsDirty.value = false
+    presentationDirty.value = false
     reportSnapshot.value = null
     reportError.value = ''
     if (!draftId) {
@@ -691,6 +854,29 @@ watch(
   gap: 8px;
 }
 
+.launch-readiness__groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.launch-readiness__group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.launch-readiness__group-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.launch-readiness__group-count {
+  font-size: 12px;
+  color: #909399;
+}
+
 .launch-issue {
   border: 1px solid #e4e7ed;
   border-radius: 8px;
@@ -812,5 +998,26 @@ watch(
 
 .launch-passed .is-success {
   color: #67c23a;
+}
+
+.launch-passed__scope {
+  margin-left: auto;
+}
+
+.launch-readiness__publish {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.launch-readiness__publish-hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #909399;
 }
 </style>

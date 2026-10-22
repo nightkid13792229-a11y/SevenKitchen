@@ -103,6 +103,7 @@ export class UpdateDraftProfileDto {
     type: () => [NutritionEvidenceEntryDto],
   })
   @IsArray()
+  @IsObject({ each: true })
   @ValidateNested({ each: true })
   @Type(() => NutritionEvidenceEntryDto)
   entries!: NutritionEvidenceEntryDto[];
@@ -148,6 +149,7 @@ export class UpdateDraftPayloadDto {
   })
   @IsOptional()
   @IsArray()
+  @IsObject({ each: true })
   @ValidateNested({ each: true })
   @Type(() => UpdateDraftProfileDto)
   profiles?: UpdateDraftProfileDto[];

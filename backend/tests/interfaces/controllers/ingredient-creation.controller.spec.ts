@@ -548,6 +548,22 @@ describe('IngredientCreationController', () => {
       expect(commitService.commit).not.toHaveBeenCalled();
     });
 
+    it('entry 是 null → 400，不落 500', async () => {
+      await authorizedPost('/drafts/draft-1/commit')
+        .send({
+          ...commitBody,
+          profiles: [
+            {
+              ...commitBody.profiles[0],
+              entries: [null],
+            },
+          ],
+        })
+        .expect(400);
+
+      expect(commitService.commit).not.toHaveBeenCalled();
+    });
+
     it('缺失字段用 null 仍然放行', async () => {
       checkService.assertCommitAllowed.mockResolvedValue(undefined);
       commitService.commit.mockResolvedValue({

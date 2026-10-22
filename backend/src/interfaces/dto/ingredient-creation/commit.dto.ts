@@ -70,6 +70,7 @@ export class CommitProfileDto {
     type: () => [NutritionEvidenceEntryDto],
   })
   @IsArray()
+  @IsObject({ each: true })
   @ValidateNested({ each: true })
   @Type(() => NutritionEvidenceEntryDto)
   entries!: NutritionEvidenceEntryDto[];
@@ -94,6 +95,7 @@ export class CommitIngredientCreationDto {
   })
   @IsArray()
   @ArrayNotEmpty()
+  @IsObject({ each: true })
   @ValidateNested({ each: true })
   @Type(() => CommitProfileDto)
   // 生一份、熟一份，各最多一份：重复状态会让配方选择器出现两条同名档案。

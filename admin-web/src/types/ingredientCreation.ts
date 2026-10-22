@@ -220,6 +220,20 @@ export interface IngredientCreationDraft {
   updatedAt: string
 }
 
+/**
+ * 「我的未完成草稿」列表项。
+ *
+ * 后端为避免 payload 过大，只返回这几个摘要字段；
+ * `intake.nameEn` 在 payload 里没有时整个为 null。
+ */
+export interface IngredientCreationDraftSummary {
+  draftId: string
+  name: string
+  step: CreationStep
+  updatedAt: string
+  intake: { nameEn: string } | null
+}
+
 /** `POST drafts` 的返回值。 */
 export interface CreateDraftResult {
   draftId: string

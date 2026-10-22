@@ -28,6 +28,7 @@ import type {
   FinalCheckResult,
   IngredientCreationDraft,
   IngredientCreationDraftPayload,
+  IngredientCreationDraftSummary,
   MergePlan,
 } from '../../application/ingredient-creation/ingredient-creation.types';
 import { AuthGuard, CurrentUser } from '../auth';
@@ -85,6 +86,17 @@ export class IngredientCreationController {
   ): Promise<ApiResponseDto<IngredientCreationAuditView>> {
     const audit = await this.auditService.getByIngredientId(ingredientId);
     return new ApiResponseDto(0, 'Success', audit);
+  }
+
+  @Get('drafts')
+  @ApiOperation({
+    summary: '列出当前登录人未完成草稿（按最近编辑倒序，最多 20 条）',
+  })
+  async listDrafts(
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<IngredientCreationDraftSummary[]>> {
+    const drafts = await this.draftService.listUnfinished(user.userId);
+    return new ApiResponseDto(0, 'Success', drafts);
   }
 
   @Post('drafts')

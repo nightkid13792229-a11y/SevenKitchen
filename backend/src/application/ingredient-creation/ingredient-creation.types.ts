@@ -242,3 +242,18 @@ export type IngredientCreationDraft = Omit<
   step: CreationStep;
   payload: IngredientCreationDraftPayload;
 };
+
+/**
+ * 「我的未完成草稿」列表项。
+ *
+ * 只带列表要显示的小字段——**绝不返回整份 payload**（里面可能有候选、
+ * 缝合方案与提案历史，动辄上百 KB）。
+ */
+export interface IngredientCreationDraftSummary {
+  draftId: string;
+  name: string;
+  step: CreationStep;
+  updatedAt: Date;
+  /** ① 站的英文名；payload 里没有时整个为 null。 */
+  intake: { nameEn: string } | null;
+}

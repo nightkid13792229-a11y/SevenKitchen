@@ -42,6 +42,18 @@ function createPrismaMock() {
     updated_at: row.updatedAt,
   });
 
+  const readIntakeNameEn = (payload: unknown): string | null => {
+    if (!payload || typeof payload !== 'object') {
+      return null;
+    }
+    const intake = (payload as Record<string, unknown>).intake;
+    if (!intake || typeof intake !== 'object') {
+      return null;
+    }
+    const nameEn = (intake as Record<string, unknown>).nameEn;
+    return typeof nameEn === 'string' ? nameEn : null;
+  };
+
   const client: any = {
     ingredientCreationDraft: {
       create: jest.fn(async ({ data }: any) => {
@@ -53,8 +65,8 @@ function createPrismaMock() {
           step: data.step,
           payload: clone(data.payload ?? {}),
           createdBy: data.createdBy,
-          createdAt: now,
-          updatedAt: now,
+          createdAt: data.createdAt ?? now,
+          updatedAt: data.updatedAt ?? now,
         };
         rows.set(row.id, row);
         return clone(row);
@@ -66,6 +78,23 @@ function createPrismaMock() {
     },
     $queryRaw: jest.fn(async (strings: TemplateStringsArray, ...values: any[]) => {
       const sql = strings.join('?');
+
+      // 未完成草稿列表：只查摘要列 + payload 里的 intake.nameEn，不取整份 payload。
+      if (sql.includes('intake_name_en')) {
+        const createdBy = values[0] as string;
+        const limit = Number(values[1]);
+        return [...rows.values()]
+          .filter((row) => row.createdBy === createdBy && row.step !== 'COMMIT')
+          .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+          .slice(0, limit)
+          .map((row) => ({
+            id: row.id,
+            name: row.name,
+            step: row.step,
+            updated_at: row.updatedAt,
+            intake_name_en: readIntakeNameEn(row.payload),
+          }));
+      }
 
       if (sql.includes('proposalHistory')) {
         const entries = JSON.parse(values[0] as string) as unknown[];
@@ -119,6 +148,33 @@ describe('IngredientCreationDraftService', () => {
 
     service = moduleRef.get(IngredientCreationDraftService);
   });
+
+  /**
+   * 直接经 Prisma 假实现落一行草稿，方便构造「别人的 / 已提交 / 不同更新时间」
+   * 这些列表场景；走 create 而不是改 Map，保持与真实写入同一入口。
+   */
+  async function seedDraft(overrides: {
+    id: string;
+    name?: string;
+    step?: string;
+    createdBy?: string;
+    createdAt?: Date;
+    updatedAt?: Date;
+    payload?: Record<string, unknown>;
+  }) {
+    await prisma.ingredientCreationDraft.create({
+      data: {
+        id: overrides.id,
+        name: overrides.name ?? '鸡肝',
+        type: 'FOOD',
+        step: overrides.step ?? 'INTAKE',
+        payload: overrides.payload ?? {},
+        createdBy: overrides.createdBy ?? 'u1',
+        createdAt: overrides.createdAt,
+        updatedAt: overrides.updatedAt,
+      },
+    });
+  }
 
   it('create 落一条 INTAKE 草稿，并按 name 原样保存', async () => {
     const draft = await service.create({
@@ -260,5 +316,101 @@ describe('IngredientCreationDraftService', () => {
     await expect(service.get('missing-draft')).rejects.toBeInstanceOf(
       NotFoundException,
     );
+  });
+
+  describe('listUnfinished', () => {
+    it('只返回当前登录人的未完成草稿', async () => {
+      await seedDraft({ id: 'mine', createdBy: 'u1' });
+      await seedDraft({ id: 'someone-else', createdBy: 'u2' });
+
+      const list = await service.listUnfinished('u1');
+
+      expect(list.map((item) => item.draftId)).toEqual(['mine']);
+    });
+
+    it('已提交（COMMIT）的草稿不出现在列表里', async () => {
+      await seedDraft({ id: 'unfinished', step: 'SOURCES' });
+      await seedDraft({ id: 'committed', step: 'COMMIT' });
+
+      const list = await service.listUnfinished('u1');
+
+      expect(list.map((item) => item.draftId)).toEqual(['unfinished']);
+    });
+
+    it('按 updatedAt 倒序返回', async () => {
+      await seedDraft({
+        id: 'old',
+        updatedAt: new Date('2026-10-20T00:00:00.000Z'),
+      });
+      await seedDraft({
+        id: 'newest',
+        updatedAt: new Date('2026-10-22T00:00:00.000Z'),
+      });
+      await seedDraft({
+        id: 'middle',
+        updatedAt: new Date('2026-10-21T00:00:00.000Z'),
+      });
+
+      const list = await service.listUnfinished('u1');
+
+      expect(list.map((item) => item.draftId)).toEqual([
+        'newest',
+        'middle',
+        'old',
+      ]);
+    });
+
+    it('列表只返回摘要字段与 intake.nameEn，不返回整份 payload', async () => {
+      const updatedAt = new Date('2026-10-22T03:04:05.000Z');
+      await seedDraft({
+        id: 'draft-summary',
+        name: '鸡肝',
+        step: 'PROFILE',
+        updatedAt,
+        payload: {
+          intake: { nameEn: 'Chicken liver', aliases: ['鸡肝'] },
+          proposalHistory: [{ kind: 'MERGE', createdAt: '2026-10-22' }],
+        },
+      });
+
+      const [item] = await service.listUnfinished('u1');
+
+      expect(item).toEqual({
+        draftId: 'draft-summary',
+        name: '鸡肝',
+        step: 'PROFILE',
+        updatedAt,
+        intake: { nameEn: 'Chicken liver' },
+      });
+      expect(item).not.toHaveProperty('payload');
+    });
+
+    it('payload 里没有 intake.nameEn 时 intake 返回 null', async () => {
+      await seedDraft({ id: 'no-intake', payload: {} });
+
+      const [item] = await service.listUnfinished('u1');
+
+      expect(item?.intake).toBeNull();
+    });
+
+    it('查询按登录人过滤、排除 COMMIT、倒序且默认最多 20 条', async () => {
+      for (let index = 0; index < 25; index += 1) {
+        await seedDraft({
+          id: `draft-${index}`,
+          updatedAt: new Date(2026, 0, 1, 0, 0, index),
+        });
+      }
+
+      const list = await service.listUnfinished('u1');
+
+      expect(list).toHaveLength(20);
+      const [strings, ...params] = prisma.$queryRaw.mock.calls[0];
+      const sql = (strings as string[]).join('?');
+      expect(sql).toContain('created_by =');
+      expect(sql).toContain("step <> 'COMMIT'");
+      expect(sql).toContain('ORDER BY updated_at DESC');
+      expect(sql).toContain('LIMIT');
+      expect(params).toEqual(['u1', 20]);
+    });
   });
 });

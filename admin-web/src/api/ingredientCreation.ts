@@ -17,6 +17,7 @@ import type {
   IngredientCreationAudit,
   IngredientCreationDraft,
   IngredientCreationDraftPayload,
+  IngredientCreationDraftSummary,
   MergePlan,
   CreationStep,
   ResolveMergeConflictInput
@@ -28,6 +29,10 @@ export const ingredientCreationApi = {
   /** 起手：创建一条 `step = INTAKE` 的空草稿 */
   createDraft: (name: string): Promise<CreateDraftResult> =>
     api.post(`${BASE}/drafts`, { name }),
+
+  /** 列出当前登录人未完成的草稿（按最近编辑倒序，最多 20 条，不含 payload） */
+  listDrafts: (): Promise<IngredientCreationDraftSummary[]> =>
+    api.get(`${BASE}/drafts`),
 
   /** 读取草稿（刷新后按 draftId 恢复向导） */
   getDraft: (id: string): Promise<IngredientCreationDraft> =>

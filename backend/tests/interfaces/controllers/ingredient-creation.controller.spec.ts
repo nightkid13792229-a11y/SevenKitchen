@@ -115,6 +115,7 @@ describe('IngredientCreationController', () => {
       create: jest.fn(),
       get: jest.fn(),
       patch: jest.fn(),
+      listUnfinished: jest.fn(),
     };
     candidateService = {
       findCandidates: jest.fn(),
@@ -205,6 +206,41 @@ describe('IngredientCreationController', () => {
   });
 
   describe('drafts', () => {
+    it('GET drafts 返回当前登录人的未完成草稿摘要', async () => {
+      const updatedAt = new Date('2026-10-22T03:04:05.000Z');
+      draftService.listUnfinished.mockResolvedValue([
+        {
+          draftId: 'draft-1',
+          name: '鸡肝',
+          step: 'SOURCES',
+          updatedAt,
+          intake: { nameEn: 'Chicken liver' },
+        },
+      ]);
+
+      const response = await http()
+        .get(`${BASE_PATH}/drafts`)
+        .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
+        .expect(200);
+
+      expect(draftService.listUnfinished).toHaveBeenCalledWith('admin-1');
+      expect(response.body.data).toEqual([
+        {
+          draftId: 'draft-1',
+          name: '鸡肝',
+          step: 'SOURCES',
+          updatedAt: updatedAt.toISOString(),
+          intake: { nameEn: 'Chicken liver' },
+        },
+      ]);
+    });
+
+    it('GET drafts 未带令牌 → 401', async () => {
+      await http().get(`${BASE_PATH}/drafts`).expect(401);
+
+      expect(draftService.listUnfinished).not.toHaveBeenCalled();
+    });
+
     it('POST drafts 返回 draftId 与 step=INTAKE', async () => {
       draftService.create.mockResolvedValue(
         createDraft({ step: 'INTAKE', payload: {} }),

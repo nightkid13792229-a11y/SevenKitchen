@@ -305,7 +305,7 @@ async function handleBackToList() {
   if (maxReachableIndex.value > 0) {
     try {
       await ElMessageBox.confirm(
-        '草稿已自动保存在服务器，但当前版本还没有草稿列表入口，离开后将无法从列表回到这一份。确定离开？',
+        '草稿会自动保存在服务器。离开后仍可在原料列表的「继续未完成」里找回这一份。确定离开？',
         '离开 AI 新建？',
         {
           type: 'warning',

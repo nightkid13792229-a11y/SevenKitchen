@@ -8,6 +8,7 @@ import type {
   CreationStep,
   IngredientCreationDraft,
   IngredientCreationDraftPayload,
+  IngredientCreationDraftSummary,
   ProposalSnapshot,
   ProposalSnapshotKind,
 } from './ingredient-creation.types';
@@ -23,6 +24,18 @@ type RawDraftRow = {
   created_at: Date;
   updated_at: Date;
 };
+
+/** 列表只取摘要列；payload 在库内用 JSON 路径取出 `intake.nameEn`。 */
+type RawDraftSummaryRow = {
+  id: string;
+  name: string;
+  step: string;
+  updated_at: Date;
+  intake_name_en: string | null;
+};
+
+/** 未完成草稿列表默认最多返回 20 条，避免下拉里堆一屏。 */
+const DRAFT_LIST_LIMIT = 20;
 
 /**
  * 向导草稿服务。
@@ -51,6 +64,41 @@ export class IngredientCreationDraftService {
     });
 
     return this.toView(draft);
+  }
+
+  /**
+   * 列出当前登录人的未完成草稿（`step != COMMIT`），按最近编辑倒序。
+   *
+   * 用一条 SQL 只查摘要列，并在库内取出 `payload->'intake'->>'nameEn'`：
+   * 草稿 payload 可能很大（候选、缝合方案、提案历史），列表绝不能把它整份带回来。
+   */
+  async listUnfinished(
+    createdBy: string,
+    limit: number = DRAFT_LIST_LIMIT,
+  ): Promise<IngredientCreationDraftSummary[]> {
+    const rows = await this.prisma.$queryRaw<RawDraftSummaryRow[]>`
+      SELECT id,
+             name,
+             step,
+             updated_at,
+             payload->'intake'->>'nameEn' AS intake_name_en
+      FROM "ingredient_creation_draft"
+      WHERE created_by = ${createdBy}
+        AND step <> 'COMMIT'
+      ORDER BY updated_at DESC
+      LIMIT ${limit}
+    `;
+
+    return rows.map((row) => ({
+      draftId: row.id,
+      name: row.name,
+      step: row.step as CreationStep,
+      updatedAt: row.updated_at,
+      intake:
+        typeof row.intake_name_en === 'string' && row.intake_name_en.length > 0
+          ? { nameEn: row.intake_name_en }
+          : null,
+    }));
   }
 
   async get(id: string): Promise<IngredientCreationDraft> {

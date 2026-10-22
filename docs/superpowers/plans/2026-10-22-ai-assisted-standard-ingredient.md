@@ -51,6 +51,7 @@
 | 10 | 前端：① 起手 与 ② 营养依据 两站 | `StepIntake.vue`、`StepSources.vue` |
 | 11 | 前端：③④⑤⑥ 四站 | 其余 Step 组件 |
 | 12 | 确认可用 与 记账查看 | 验证按钮 + 审计抽屉 |
+| 13 | 线上白名单兜底检索 | `IngredientCreationOnlineService` |
 
 ---
 
@@ -59,6 +60,7 @@
 **Files:**
 - Modify: `backend/prisma/schema.prisma`
 - Create: `backend/prisma/migrations/20261023090000_ingredient_creation_draft/migration.sql`
+- Create: `backend/src/domain/ingredient-creation/preparation-state.ts`（本任务只放类型，Task 2 补函数）
 - Create: `backend/src/application/ingredient-creation/ingredient-creation.types.ts`
 - Create: `backend/src/application/ingredient-creation/ingredient-creation-draft.service.ts`
 - Create: `backend/src/application/ingredient-creation/ingredient-creation.module.ts`
@@ -69,6 +71,7 @@
 - Produces:
   - `type CreationStep = 'INTAKE' | 'SOURCES' | 'PROFILE' | 'CHECK' | 'INGREDIENT' | 'COMMIT'`
   - `interface IngredientCreationDraftPayload { intake?: IntakeCard; candidates?: CandidateRow[]; mergePlan?: MergePlan; evidence?: NutritionEvidenceEntry[]; checks?: FinalCheckResult; ingredient?: IngredientDraft; verify?: { exceptions: ExceptionRecord[] } }`
+  - `domain/ingredient-creation/preparation-state.ts` 先只导出 `type PreparationState = 'RAW' | 'COOKED'`（Task 2 在同一文件补全归一与分类函数，不新建文件）。
   - 共享类型（都放在 `ingredient-creation.types.ts`，后续任务直接 import）：
     ```ts
     interface IntakeCard { name: string; nameEn: string | null; aliases: string[]; confusables: string[]; category: 'MEAT_ORGAN' | 'STARCHY_VEGETABLE' | 'OTHER'; requiredStates: PreparationState[]; suggestedStates: PreparationState[] }
@@ -130,7 +133,7 @@ git commit -m "feat(ingredient-creation): draft and audit models with draft serv
 ### Task 2: 状态归一与做法分类
 
 **Files:**
-- Create: `backend/src/domain/ingredient-creation/preparation-state.ts`
+- Modify: `backend/src/domain/ingredient-creation/preparation-state.ts`（Task 1 已建，只有类型）
 - Test: `backend/tests/domain/ingredient-creation/preparation-state.spec.ts`
 
 **Interfaces:**

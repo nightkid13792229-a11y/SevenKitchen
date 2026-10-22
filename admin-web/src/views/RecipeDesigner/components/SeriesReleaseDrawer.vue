@@ -144,7 +144,10 @@
                 <div class="series-release__stage-name">
                   {{ stage.label }}
                 </div>
-                <div class="series-release__stage-hint">
+                <div
+                  v-if="stage.status !== 'EMPTY'"
+                  class="series-release__stage-hint"
+                >
                   {{ seriesReleaseStageHint(stage) }}
                 </div>
               </div>
@@ -936,20 +939,27 @@ watch(
 .series-release__stage-main {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.45;
 }
 
 .series-release__stage-name {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 13px;
   font-weight: 600;
+  line-height: 1.45;
   color: #303133;
 }
 
 .series-release__stage-hint {
-  margin-top: 2px;
+  display: block;
+  margin: 0;
   font-size: 12px;
+  line-height: 1.45;
   color: #909399;
 }
 

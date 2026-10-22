@@ -27,6 +27,7 @@ import type {
   SeriesReleaseReadiness,
   SeriesReleaseResult,
   SeriesReleaseSettingsSnapshot,
+  SeriesUnpublishResult,
   SopResult,
   SupplementLabelExtractionDraft,
   SupplementNutritionBasisType,
@@ -159,6 +160,14 @@ export const recipeDesignerApi = {
   /** 发布整条产品线（仅管理员；后端会再次校验门槛与角色） */
   releaseSeries: (seriesId: string): Promise<SeriesReleaseResult> =>
     api.post(`/recipe-designer/series/${seriesId}/release`),
+  /**
+   * 下架整条产品线（仅管理员）。
+   *
+   * 只把 PUBLIC 食谱改回 DRAFT 并把系列状态设为 DRAFT；设计稿 / 版本历史保留，
+   * 之后还能重新发布。后端复用发布接口的系列校验（订单系列 400、不可见 404）。
+   */
+  unpublishSeries: (seriesId: string): Promise<SeriesUnpublishResult> =>
+    api.post(`/recipe-designer/series/${seriesId}/unpublish`),
 
   // 草稿
   getDraft: (draftId: string): Promise<DesignRecipeDraftDetail> =>

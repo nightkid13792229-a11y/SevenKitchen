@@ -43,6 +43,16 @@ export interface RecipeDesignerSeriesCard {
   name: string
   businessStatus?: RecipeDesignerSeriesStatusFilter
   businessStatusLabel?: string
+  /**
+   * 工作台卡片可选的发布状态扩展字段（2026-10-22 重新发布）。
+   *
+   * 列表接口目前**不返回**这些字段；卡片只在后端补上时展示待更新数量，
+   * 前端不为了显示这个数字额外给每张卡片拉一次 readiness。
+   */
+  releaseState?: SeriesReleaseState
+  hasPendingUpdates?: boolean
+  pendingStageCodes?: string[]
+  pendingStageCount?: number
   referenceDogId?: string | null
   /** 参考爱犬名称（后端工作台卡片附带，用于搜索定位展示） */
   referenceDogName?: string | null
@@ -336,6 +346,17 @@ export interface DraftLaunchReadiness {
  */
 export type SeriesReleaseStageStatus = 'EMPTY' | 'DRAFT' | 'READY' | 'PUBLIC'
 
+/**
+ * 整条产品线的展示状态（2026-10-22 重新发布）。
+ *
+ * 由后端按系列 businessStatus + 各阶段待更新情况推导，只影响**按钮文案与提示**，
+ * 不参与能不能发布的判断：NEEDS_UPDATE 的系列只要没有阻断项就可以直接重新发布。
+ */
+export type SeriesReleaseState =
+  | 'UNPUBLISHED'
+  | 'PUBLISHED'
+  | 'NEEDS_UPDATE'
+
 /** 发布问题归属：系列级设置 / 产品展示 / 单个生命阶段 */
 export type SeriesReleaseIssueScope = 'SERIES' | 'PRESENTATION' | 'STAGE'
 
@@ -369,7 +390,12 @@ export interface SeriesReleaseStageReadiness {
   status: SeriesReleaseStageStatus
   /** 该阶段最新一条系列仓库食谱（优先 PUBLIC，其次 DRAFT）的业务 id */
   latestRecipeId?: string | null
+  /** 该阶段最新一版食谱行的版本号（不区分 DRAFT / PUBLIC） */
   latestRecipeVersion?: number | null
+  /** 该阶段最近一次 PUBLIC 的版本号（从未发布过为 null） */
+  publishedRecipeVersion?: number | null
+  /** 是否有比已发布版本更新的 DRAFT 等待发布 */
+  hasPendingUpdate?: boolean
   /** 该阶段当前可编辑的设计草稿 id（没有草稿时为 null） */
   designDraftId?: string | null
   /** 是否在 requiredLifeStages 里 */
@@ -388,6 +414,10 @@ export interface SeriesReleasePresentation {
 export interface SeriesReleaseReadiness {
   seriesId: string
   designMode: string
+  /** 系列业务状态 DRAFT | PUBLIC | PRIVATE_CUSTOM */
+  businessStatus: string
+  /** 整条系列的展示状态：未上线 / 已上线（最新）/ 待重新发布 */
+  releaseState: SeriesReleaseState
   ready: boolean
   requiredLifeStages: string[]
   /** 必填阶段（按阶段顺序，只包含配置里的阶段） */
@@ -397,11 +427,17 @@ export interface SeriesReleaseReadiness {
   presentation: SeriesReleasePresentation
   blockers: SeriesReleaseBlocker[]
   warnings: SeriesReleaseWarning[]
+  /** 是否存在「已发布过、但又有更新草稿」的阶段 */
+  hasPendingUpdates: boolean
+  /** 有待更新草稿的阶段代码（按阶段顺序） */
+  pendingStageCodes: string[]
   summary: {
     requiredStageCount: number
     readyStageCount: number
     publishedStageCount: number
     designedStageCount: number
+    /** 有待更新草稿的阶段数 */
+    pendingStageCount: number
   }
 }
 
@@ -446,6 +482,24 @@ export interface SeriesReleaseResult {
   /** 本次实际写入（含已公开行刷新展示资料）的食谱行数 */
   updatedRecipeCount: number
   releasedAt: string
+}
+
+/**
+ * POST `/recipe-designer/series/:seriesId/unpublish`（仅管理员）
+ *
+ * 只把该系列所有 PUBLIC 食谱行改回 DRAFT，并把系列 businessStatus 设为 DRAFT；
+ * 设计稿、版本历史、发布记录全部保留，之后仍可重新发布。
+ */
+export interface SeriesUnpublishResult {
+  seriesId: string
+  name: string
+  businessStatus: string
+  releaseState: SeriesReleaseState
+  /** 本次从 PUBLIC 变成 DRAFT 的食谱行数 */
+  unpublishedRecipeCount: number
+  /** 下架后仍为 PUBLIC 的食谱行数（事务内应恒为 0） */
+  remainingPublicRecipeCount: number
+  unpublishedAt: string
 }
 
 /** 原料预处理来源：AUTO = 系统带出；MANUAL = 人工修改 */

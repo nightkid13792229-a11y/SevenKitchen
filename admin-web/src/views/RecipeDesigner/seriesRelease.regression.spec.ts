@@ -4,6 +4,7 @@ import indexSource from '@/views/RecipeDesigner/index.vue?raw'
 import editorSource from '@/views/RecipeDesigner/Editor.vue?raw'
 import apiSource from '@/api/recipeDesigner.ts?raw'
 import typeSource from '@/types/recipeDesigner.ts?raw'
+import utilsSource from '@/utils/recipeDesigner/seriesRelease.ts?raw'
 
 function clean(source: string) {
   return source
@@ -26,6 +27,16 @@ describe('系列发布 · API 与类型契约', () => {
     expect(apiSource).toContain(
       '`/recipe-designer/series/${seriesId}/release`'
     )
+  })
+
+  it('下架接口与后端 POST /series/:id/unpublish 一致', () => {
+    expect(apiSource).toContain('unpublishSeries')
+    expect(apiSource).toContain(
+      '`/recipe-designer/series/${seriesId}/unpublish`'
+    )
+    expect(typeSource).toContain('SeriesUnpublishResult')
+    expect(typeSource).toContain('unpublishedRecipeCount')
+    expect(typeSource).toContain('remainingPublicRecipeCount')
   })
 
   it('类型覆盖四档阶段状态、问题归属与设置 payload', () => {
@@ -52,6 +63,30 @@ describe('系列发布 · API 与类型契约', () => {
     expect(typeSource).toContain('requiredStages: SeriesReleaseStageReadiness[]')
     expect(typeSource).toContain('blockers: SeriesReleaseBlocker[]')
     expect(typeSource).toContain('warnings: SeriesReleaseWarning[]')
+  })
+
+  it('类型覆盖重新发布 / 下架新增字段', () => {
+    expect(typeSource).toContain(
+      "export type SeriesReleaseState ="
+    )
+    for (const state of [
+      "'UNPUBLISHED'",
+      "'PUBLISHED'",
+      "'NEEDS_UPDATE'"
+    ]) {
+      expect(typeSource).toContain(state)
+    }
+    for (const field of [
+      'businessStatus: string',
+      'releaseState: SeriesReleaseState',
+      'hasPendingUpdates: boolean',
+      'pendingStageCodes: string[]',
+      'pendingStageCount: number',
+      'publishedRecipeVersion?: number | null',
+      'hasPendingUpdate?: boolean'
+    ]) {
+      expect(typeSource).toContain(field)
+    }
   })
 })
 
@@ -98,11 +133,54 @@ describe('系列发布抽屉', () => {
     expect(drawer).toContain('useIsAdmin')
     expect(drawer).toContain('isAdmin')
     expect(drawer).toContain('ADMIN_ONLY_TIP')
-    expect(drawer).toContain('v-if="isAdmin && readiness.ready"')
-    expect(drawer).toContain(':disabled="dirty"')
+    expect(drawer).toContain(
+      'v-if="isAdmin && readiness.ready && releaseActionAvailable"'
+    )
+    expect(drawer).toContain(':disabled="dirty || unpublishing"')
     expect(drawer).toContain('recipeDesignerApi.releaseSeries(')
-    expect(drawer).toContain('发布整条产品线')
+    expect(drawer).toContain('releaseActionLabel')
     expect(drawer).toContain("emit('released', result)")
+  })
+
+  it('头部 / 概览展示 未上线 / 待重新发布 / 已上线（最新）', () => {
+    expect(drawer).toContain('releaseStateLabel')
+    expect(drawer).toContain('releaseStateTagType')
+    expect(drawer).toContain('seriesReleaseStateLabel(')
+    expect(drawer).toContain('resolveSeriesReleaseState(')
+    expect(drawer).toContain('pendingStageCount')
+    expect(drawer).toContain('resolveSeriesReleasePendingStageCount(')
+    expect(drawer).toContain('待更新 {{ pendingStageCount }} 个阶段')
+  })
+
+  it('阶段清单展示「有更新」与最新 / 已发布版本', () => {
+    expect(drawer).toContain('isSeriesReleaseStagePendingUpdate(stage)')
+    expect(drawer).toContain('有更新')
+    expect(drawer).toContain('formatSeriesReleaseStageVersion(stage)')
+    expect(drawer).toContain('seriesReleaseStageHint(stage)')
+  })
+
+  it('发布按钮文案随状态切换，已上线（最新）不显示', () => {
+    expect(utilsSource).toContain("UNPUBLISHED: '未上线'")
+    expect(utilsSource).toContain("NEEDS_UPDATE: '待重新发布'")
+    expect(utilsSource).toContain("PUBLISHED: '已上线（最新）'")
+    expect(utilsSource).toContain("'发布系列'")
+    expect(utilsSource).toContain("'重新发布系列'")
+    expect(drawer).toContain('isSeriesReleasePrimaryActionAvailable(')
+    expect(drawer).toContain('seriesReleasePrimaryActionLabel(')
+  })
+
+  it('管理员可下架已上线 / 待重新发布系列，确认后调用下架接口', () => {
+    expect(drawer).toContain('canUnpublishSeries(')
+    expect(drawer).toContain('v-if="isAdmin && canUnpublish"')
+    expect(drawer).toContain('下架整个系列')
+    expect(drawer).toContain('recipeDesignerApi.unpublishSeries(')
+    expect(drawer).toContain("emit('updated', result)")
+    // 下架后重新拉门槛，保证抽屉里「未上线」状态与列表一致
+    const unpublishFn = drawer.slice(
+      drawer.indexOf('async function handleUnpublish'),
+      drawer.indexOf('async function handleBeforeClose')
+    )
+    expect(unpublishFn).toContain('await loadReadiness(')
   })
 })
 
@@ -128,6 +206,20 @@ describe('食谱设计器列表 · 系列发布入口', () => {
       index.indexOf('}', index.indexOf('async function handleSeriesReleased'))
     )
     expect(releasedFn).toContain('await loadSeries(true)')
+  })
+
+  it('卡片入口按 businessStatus 切换文案，有数据时才显示待更新数量', () => {
+    expect(index).toContain('seriesReleaseEntryLabel(card)')
+    expect(index).toContain("card.businessStatus === 'PUBLIC'")
+    expect(index).toContain('cardPendingStageCount(card)')
+    expect(index).toContain('hasCardPendingUpdates(card)')
+    expect(index).toContain('待重新发布')
+    expect(index).toContain('@updated="handleSeriesUpdated"')
+    const updatedFn = index.slice(
+      index.indexOf('async function handleSeriesUpdated'),
+      index.indexOf('async function handleSeriesUpdated') + 200
+    )
+    expect(updatedFn).toContain('await loadSeries(true)')
   })
 
   it('不破坏现有阶段打开 / 复制 / 重命名 / 删除', () => {

@@ -3,21 +3,33 @@ import type { SeriesReleaseReadiness } from '@/types/recipeDesigner'
 import {
   buildSeriesReleaseForm,
   buildSeriesReleaseSettingsPatch,
+  canUnpublishSeries,
   cloneSeriesReleaseForm,
   formatSeriesReleaseLatestVersion,
   formatSeriesReleaseStageVersion,
   groupSeriesReleaseIssues,
   isSeriesReleaseFormDirty,
+  isSeriesReleasePrimaryActionAvailable,
+  isSeriesReleaseStagePendingUpdate,
+  resolveSeriesReleasePendingStageCount,
+  resolveSeriesReleaseState,
+  seriesReleasePrimaryActionLabel,
   seriesReleaseProgress,
   seriesReleaseStageHint,
   seriesReleaseStageStatusLabel,
-  seriesReleaseStageTagType
+  seriesReleaseStageTagType,
+  seriesReleaseStateLabel,
+  seriesReleaseStateTagType
 } from './seriesRelease'
 
 const readiness: SeriesReleaseReadiness = {
   seriesId: 'series-1',
   designMode: 'CATALOG',
+  businessStatus: 'PUBLIC',
+  releaseState: 'NEEDS_UPDATE',
   ready: false,
+  hasPendingUpdates: true,
+  pendingStageCodes: ['HIGH_ACTIVITY_ADULT'],
   requiredLifeStages: [
     'PUPPY_UNDER_14_WEEKS',
     'HIGH_ACTIVITY_ADULT'
@@ -30,6 +42,8 @@ const readiness: SeriesReleaseReadiness = {
       status: 'READY',
       latestRecipeId: 'recipe-1',
       latestRecipeVersion: 3,
+      publishedRecipeVersion: null,
+      hasPendingUpdate: false,
       designDraftId: 'draft-1',
       required: true
     },
@@ -39,6 +53,8 @@ const readiness: SeriesReleaseReadiness = {
       status: 'EMPTY',
       latestRecipeId: null,
       latestRecipeVersion: null,
+      publishedRecipeVersion: null,
+      hasPendingUpdate: false,
       designDraftId: null,
       required: false
     },
@@ -48,6 +64,8 @@ const readiness: SeriesReleaseReadiness = {
       status: 'PUBLIC',
       latestRecipeId: 'recipe-2',
       latestRecipeVersion: 5,
+      publishedRecipeVersion: 4,
+      hasPendingUpdate: true,
       designDraftId: null,
       required: true
     }
@@ -84,7 +102,8 @@ const readiness: SeriesReleaseReadiness = {
     requiredStageCount: 5,
     readyStageCount: 3,
     publishedStageCount: 2,
-    designedStageCount: 4
+    designedStageCount: 4,
+    pendingStageCount: 1
   }
 }
 
@@ -176,7 +195,8 @@ describe('seriesRelease 进度与版本', () => {
           requiredStageCount: 0,
           readyStageCount: 0,
           publishedStageCount: 0,
-          designedStageCount: 0
+          designedStageCount: 0,
+          pendingStageCount: 0
         }
       })
     ).toEqual({
@@ -187,11 +207,27 @@ describe('seriesRelease 进度与版本', () => {
     })
   })
 
-  it('单阶段版本号缺失时显示「暂无阶段食谱」', () => {
-    expect(formatSeriesReleaseStageVersion(readiness.stages[0]!)).toBe('v3')
+  it('单阶段版本号同时展示最新与已发布版本', () => {
+    expect(formatSeriesReleaseStageVersion(readiness.stages[0]!)).toBe(
+      '最新 v3 · 未发布'
+    )
     expect(formatSeriesReleaseStageVersion(readiness.stages[1]!)).toBe(
       '暂无阶段食谱'
     )
+    // 旧 PUBLIC v4 + 新 DRAFT v5 → 明确告诉后台「有更新」
+    expect(formatSeriesReleaseStageVersion(readiness.stages[2]!)).toBe(
+      '最新 v5 · 已发布 v4'
+    )
+  })
+
+  it('没有更新时只显示最新版本，避免重复文案', () => {
+    expect(
+      formatSeriesReleaseStageVersion({
+        latestRecipeVersion: 6,
+        publishedRecipeVersion: 6,
+        hasPendingUpdate: false
+      })
+    ).toBe('最新 v6')
   })
 
   it('系列最新版本取阶段版本最大值', () => {
@@ -228,5 +264,151 @@ describe('seriesRelease 状态 / 问题分组', () => {
     ])
     expect(groups.map((group) => group.label)).toEqual(['展示资料', '生命阶段'])
     expect(groups[1]?.issues[0]?.stageCode).toBe('PUPPY_14_WEEKS_PLUS')
+  })
+})
+
+describe('seriesRelease 重新发布 / 下架', () => {
+  it('三档系列状态有中文与对应标签色', () => {
+    expect(seriesReleaseStateLabel('UNPUBLISHED')).toBe('未上线')
+    expect(seriesReleaseStateLabel('NEEDS_UPDATE')).toBe('待重新发布')
+    expect(seriesReleaseStateLabel('PUBLISHED')).toBe('已上线（最新）')
+
+    expect(seriesReleaseStateTagType('UNPUBLISHED')).toBe('info')
+    expect(seriesReleaseStateTagType('NEEDS_UPDATE')).toBe('warning')
+    expect(seriesReleaseStateTagType('PUBLISHED')).toBe('success')
+  })
+
+  it('优先采用后端 releaseState', () => {
+    expect(resolveSeriesReleaseState(readiness)).toBe('NEEDS_UPDATE')
+    expect(
+      resolveSeriesReleaseState({
+        ...readiness,
+        releaseState: 'PUBLISHED',
+        hasPendingUpdates: false
+      })
+    ).toBe('PUBLISHED')
+  })
+
+  it('旧后端没有 releaseState 时按 businessStatus + 版本号兜底推断', () => {
+    expect(
+      resolveSeriesReleaseState({
+        ...readiness,
+        releaseState: undefined,
+        businessStatus: 'DRAFT',
+        hasPendingUpdates: undefined,
+        summary: { pendingStageCount: undefined }
+      })
+    ).toBe('UNPUBLISHED')
+
+    // PUBLIC + 旧 v4 / 新 v5 → 待重新发布
+    expect(
+      resolveSeriesReleaseState({
+        ...readiness,
+        releaseState: undefined,
+        hasPendingUpdates: undefined,
+        summary: { pendingStageCount: undefined }
+      })
+    ).toBe('NEEDS_UPDATE')
+
+    // PUBLIC 但所有阶段都已最新 → 已上线（最新）
+    expect(
+      resolveSeriesReleaseState({
+        businessStatus: 'PUBLIC',
+        stages: [
+          { latestRecipeVersion: 5, publishedRecipeVersion: 5 },
+          { latestRecipeVersion: 2, publishedRecipeVersion: 2 }
+        ],
+        summary: { pendingStageCount: undefined }
+      })
+    ).toBe('PUBLISHED')
+  })
+
+  it('待更新阶段数优先用 summary，缺失时按阶段兜底', () => {
+    expect(resolveSeriesReleasePendingStageCount(readiness)).toBe(1)
+    expect(
+      resolveSeriesReleasePendingStageCount({
+        stages: [
+          {
+            latestRecipeVersion: 5,
+            publishedRecipeVersion: 4,
+            hasPendingUpdate: true
+          },
+          { latestRecipeVersion: 2, publishedRecipeVersion: 2 }
+        ]
+      })
+    ).toBe(1)
+    expect(resolveSeriesReleasePendingStageCount(null)).toBe(0)
+  })
+
+  it('阶段是否待更新：后端标记优先，否则按版本号比较', () => {
+    expect(
+      isSeriesReleaseStagePendingUpdate({
+        latestRecipeVersion: 5,
+        publishedRecipeVersion: 4
+      })
+    ).toBe(true)
+    expect(
+      isSeriesReleaseStagePendingUpdate({
+        latestRecipeVersion: 4,
+        publishedRecipeVersion: 4
+      })
+    ).toBe(false)
+    expect(
+      isSeriesReleaseStagePendingUpdate({ hasPendingUpdate: true })
+    ).toBe(true)
+    expect(isSeriesReleaseStagePendingUpdate(null)).toBe(false)
+  })
+
+  it('主按钮文案随状态切换：发布系列 / 重新发布系列', () => {
+    expect(
+      seriesReleasePrimaryActionLabel({ releaseState: 'UNPUBLISHED' })
+    ).toBe('发布系列')
+    expect(
+      seriesReleasePrimaryActionLabel({ releaseState: 'NEEDS_UPDATE' })
+    ).toBe('重新发布系列')
+    expect(
+      seriesReleasePrimaryActionLabel({ releaseState: 'PUBLISHED' })
+    ).toBe('重新发布系列')
+  })
+
+  it('已上线（最新）且没有待更新时隐藏主按钮', () => {
+    expect(
+      isSeriesReleasePrimaryActionAvailable({
+        ready: false,
+        releaseState: 'NEEDS_UPDATE'
+      })
+    ).toBe(false)
+    expect(
+      isSeriesReleasePrimaryActionAvailable({
+        ready: true,
+        releaseState: 'UNPUBLISHED'
+      })
+    ).toBe(true)
+    expect(
+      isSeriesReleasePrimaryActionAvailable({
+        ready: true,
+        releaseState: 'NEEDS_UPDATE'
+      })
+    ).toBe(true)
+    expect(
+      isSeriesReleasePrimaryActionAvailable({
+        ready: true,
+        releaseState: 'PUBLISHED'
+      })
+    ).toBe(false)
+  })
+
+  it('只有已上线 / 待重新发布的系列可以下架', () => {
+    expect(canUnpublishSeries({ releaseState: 'UNPUBLISHED' })).toBe(false)
+    expect(canUnpublishSeries({ releaseState: 'PUBLISHED' })).toBe(true)
+    expect(canUnpublishSeries({ releaseState: 'NEEDS_UPDATE' })).toBe(true)
+    expect(canUnpublishSeries(null)).toBe(false)
+  })
+
+  it('待更新阶段的说明会提示需要重新发布', () => {
+    const hint = seriesReleaseStageHint(readiness.stages[2]!)
+    expect(hint).toContain('待重新发布')
+    expect(hint).toContain('v4')
+    expect(hint).toContain('v5')
   })
 })

@@ -15,6 +15,7 @@ import type {
   SeriesReleaseReadiness,
   SeriesReleaseStageReadiness,
   SeriesReleaseStageStatus,
+  SeriesReleaseState,
   UpdateRecipeSeriesReleaseSettingsPayload
 } from '@/types/recipeDesigner'
 
@@ -79,8 +80,18 @@ export function seriesReleaseStageTagType(
 
 /** 阶段状态的一句话说明，帮助营养师知道下一步做什么 */
 export function seriesReleaseStageHint(
-  stage: Pick<SeriesReleaseStageReadiness, 'status'>
+  stage: Pick<SeriesReleaseStageReadiness, 'status'> & SeriesReleaseStageUpdateView
 ): string {
+  if (isSeriesReleaseStagePendingUpdate(stage)) {
+    const latest = normalizeSeriesReleaseVersion(stage.latestRecipeVersion)
+    const published = normalizeSeriesReleaseVersion(
+      stage.publishedRecipeVersion
+    )
+    if (latest !== null && published !== null) {
+      return `已发布 v${published}，最新 v${latest} 待重新发布`
+    }
+    return '有更新草稿等待重新发布'
+  }
   switch (stage.status) {
     case 'EMPTY':
       return '还没有设计稿或阶段食谱'
@@ -89,10 +100,165 @@ export function seriesReleaseStageHint(
     case 'READY':
       return '已保存进系列仓库，可随系列发布'
     case 'PUBLIC':
-      return '已发布，发布时会刷新展示资料'
+      return '已发布，重新发布时会刷新展示资料'
     default:
       return ''
   }
+}
+
+/* ------------------------------------------------------------------ *
+ * 重新发布 / 下架（2026-10-22）
+ *
+ * 后端 readiness 新增 releaseState / hasPendingUpdate 等字段；
+ * 下面的函数对**旧后端响应**也做兜底（字段缺失时按 businessStatus +
+ * 版本号推断），这样前端可以先上线，不依赖后端同一次部署。
+ * ------------------------------------------------------------------ */
+
+export const SERIES_RELEASE_STATES: SeriesReleaseState[] = [
+  'UNPUBLISHED',
+  'PUBLISHED',
+  'NEEDS_UPDATE'
+]
+
+/** 系列展示状态中文：未上线 / 待重新发布 / 已上线（最新） */
+export const SERIES_RELEASE_STATE_LABELS: Record<SeriesReleaseState, string> = {
+  UNPUBLISHED: '未上线',
+  PUBLISHED: '已上线（最新）',
+  NEEDS_UPDATE: '待重新发布'
+}
+
+/** 判断待更新 / 推导系列状态时需要的最小字段集合 */
+export interface SeriesReleaseStageUpdateView {
+  latestRecipeVersion?: number | null
+  publishedRecipeVersion?: number | null
+  hasPendingUpdate?: boolean | null
+}
+
+export type SeriesReleaseStateSource = {
+  releaseState?: SeriesReleaseState | string | null
+  businessStatus?: string | null
+  hasPendingUpdates?: boolean | null
+  stages?: SeriesReleaseStageUpdateView[] | null
+  summary?: { pendingStageCount?: number | null } | null
+}
+
+/** 版本号只认正整数；缺失 / 非法统一按 null（展示为「暂无」） */
+export function normalizeSeriesReleaseVersion(value: unknown): number | null {
+  const version = Number(value)
+  if (!Number.isFinite(version) || version <= 0) return null
+  return Math.trunc(version)
+}
+
+/**
+ * 该阶段是否有一版更新的草稿等待发布。
+ *
+ * 后端已算好 `hasPendingUpdate` 时直接采用；旧后端没有这个字段，
+ * 用 `latestRecipeVersion > publishedRecipeVersion` 兜底（与后端口径一致）。
+ */
+export function isSeriesReleaseStagePendingUpdate(
+  stage: SeriesReleaseStageUpdateView | null | undefined
+): boolean {
+  if (stage?.hasPendingUpdate === true) return true
+  const latest = normalizeSeriesReleaseVersion(stage?.latestRecipeVersion)
+  const published = normalizeSeriesReleaseVersion(
+    stage?.publishedRecipeVersion
+  )
+  if (latest === null || published === null) return false
+  return latest > published
+}
+
+/** 待更新阶段数：优先用后端 summary，缺失时按阶段列表兜底 */
+export function resolveSeriesReleasePendingStageCount(
+  readiness: SeriesReleaseStateSource | null | undefined
+): number {
+  const fromSummary = Number(readiness?.summary?.pendingStageCount)
+  if (Number.isFinite(fromSummary) && fromSummary >= 0) {
+    return Math.trunc(fromSummary)
+  }
+  return (readiness?.stages ?? []).filter(isSeriesReleaseStagePendingUpdate)
+    .length
+}
+
+/**
+ * 整条系列的展示状态。
+ *
+ * 优先用后端 `releaseState`；旧后端没有时按 businessStatus + 待更新阶段推断：
+ *  · 不是 PUBLIC          → UNPUBLISHED
+ *  · PUBLIC 且有更新草稿  → NEEDS_UPDATE
+ *  · PUBLIC 且全部最新    → PUBLISHED
+ */
+export function resolveSeriesReleaseState(
+  readiness: SeriesReleaseStateSource | null | undefined
+): SeriesReleaseState {
+  const raw = String(readiness?.releaseState ?? '')
+    .trim()
+    .toUpperCase()
+  if (SERIES_RELEASE_STATES.includes(raw as SeriesReleaseState)) {
+    return raw as SeriesReleaseState
+  }
+
+  const businessStatus = String(readiness?.businessStatus ?? '')
+    .trim()
+    .toUpperCase()
+  const hasPendingUpdates =
+    readiness?.hasPendingUpdates === true ||
+    resolveSeriesReleasePendingStageCount(readiness) > 0
+
+  if (businessStatus !== 'PUBLIC') return 'UNPUBLISHED'
+  return hasPendingUpdates ? 'NEEDS_UPDATE' : 'PUBLISHED'
+}
+
+export function seriesReleaseStateLabel(
+  state: SeriesReleaseState | string
+): string {
+  return (
+    SERIES_RELEASE_STATE_LABELS[state as SeriesReleaseState] ?? String(state || '')
+  )
+}
+
+/** 未上线=灰、已上线（最新）=绿、待重新发布=橙 */
+export function seriesReleaseStateTagType(
+  state: SeriesReleaseState | string
+): SeriesReleaseStageTagType {
+  switch (state) {
+    case 'PUBLISHED':
+      return 'success'
+    case 'NEEDS_UPDATE':
+      return 'warning'
+    default:
+      return 'info'
+  }
+}
+
+/** 主按钮文案：第一次发布叫「发布系列」，已上线过叫「重新发布系列」 */
+export function seriesReleasePrimaryActionLabel(
+  readiness: SeriesReleaseStateSource | null | undefined
+): string {
+  return resolveSeriesReleaseState(readiness) === 'UNPUBLISHED'
+    ? '发布系列'
+    : '重新发布系列'
+}
+
+/**
+ * 主按钮是否展示：门槛就绪、且**已上线（最新）**时没有可发的版本，直接隐藏。
+ *
+ * 待重新发布（NEEDS_UPDATE）仍要展示，因为最新草稿还没发给顾客。
+ */
+export function isSeriesReleasePrimaryActionAvailable(
+  readiness:
+    | (SeriesReleaseStateSource & { ready?: boolean | null })
+    | null
+    | undefined
+): boolean {
+  if (readiness?.ready !== true) return false
+  return resolveSeriesReleaseState(readiness) !== 'PUBLISHED'
+}
+
+/** 下架按钮是否展示：只有「已上线（最新）」或「待重新发布」的系列才能下架 */
+export function canUnpublishSeries(
+  readiness: SeriesReleaseStateSource | null | undefined
+): boolean {
+  return resolveSeriesReleaseState(readiness) !== 'UNPUBLISHED'
 }
 
 /** readiness → 发布设置表单（文本统一 trim，数组归一） */
@@ -249,13 +415,27 @@ export function seriesReleaseProgress(
   }
 }
 
-/** 单个阶段最新版本号 */
+/**
+ * 单个阶段的版本号文案：同时区分「最新版本」和「已发布版本」。
+ *
+ *  · 没有阶段食谱           → 暂无阶段食谱
+ *  · 从未发布过             → 最新 v3 · 未发布
+ *  · 有更新草稿             → 最新 v4 · 已发布 v3
+ *  · 已发布且没有更新草稿   → 最新 v3
+ */
 export function formatSeriesReleaseStageVersion(
-  stage: Pick<SeriesReleaseStageReadiness, 'latestRecipeVersion'>
+  stage: SeriesReleaseStageUpdateView
 ): string {
-  const version = Number(stage.latestRecipeVersion)
-  if (!Number.isFinite(version) || version <= 0) return '暂无阶段食谱'
-  return `v${version}`
+  const latest = normalizeSeriesReleaseVersion(stage.latestRecipeVersion)
+  const published = normalizeSeriesReleaseVersion(
+    stage.publishedRecipeVersion
+  )
+  if (latest === null) return '暂无阶段食谱'
+  if (published === null) return `最新 v${latest} · 未发布`
+  if (isSeriesReleaseStagePendingUpdate(stage)) {
+    return `最新 v${latest} · 已发布 v${published}`
+  }
+  return `最新 v${latest}`
 }
 
 /** 整个系列最新一条阶段食谱的版本号 */
@@ -263,8 +443,8 @@ export function formatSeriesReleaseLatestVersion(
   readiness: Pick<SeriesReleaseReadiness, 'stages'> | null | undefined
 ): string {
   const versions = (readiness?.stages ?? [])
-    .map((stage) => Number(stage.latestRecipeVersion))
-    .filter((version) => Number.isFinite(version) && version > 0)
+    .map((stage) => normalizeSeriesReleaseVersion(stage.latestRecipeVersion))
+    .filter((version): version is number => version !== null)
   if (versions.length === 0) return '暂无阶段食谱'
   return `v${Math.max(...versions)}`
 }

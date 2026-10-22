@@ -180,13 +180,29 @@
             <el-tag size="small" type="info" effect="plain">
               已发布 {{ stageProgressLabel(card) }} 阶段
             </el-tag>
+            <el-tag
+              v-if="cardPendingStageCount(card) > 0"
+              size="small"
+              type="warning"
+              effect="plain"
+            >
+              待重新发布 {{ cardPendingStageCount(card) }} 个阶段
+            </el-tag>
+            <el-tag
+              v-else-if="hasCardPendingUpdates(card)"
+              size="small"
+              type="warning"
+              effect="plain"
+            >
+              待重新发布
+            </el-tag>
             <span class="release-progress-hint">
               未发布的阶段可在「系列发布」里查看
             </span>
           </div>
 
           <div v-if="designModeFilter === 'CATALOG'" class="series-card-actions">
-            <el-button size="small" text type="primary" @click="openSeriesReleaseDrawer(card)">系列发布</el-button>
+            <el-button size="small" text type="primary" @click="openSeriesReleaseDrawer(card)">{{ seriesReleaseEntryLabel(card) }}</el-button>
             <el-button size="small" text @click="handleCardCommand('duplicate', card)">复制系列</el-button>
             <el-button size="small" text @click="handleCardCommand('rename', card)">重命名</el-button>
             <el-button size="small" text type="danger" @click="handleCardCommand('delete', card)">删除系列</el-button>
@@ -293,6 +309,7 @@
       :series-id="releaseDrawerSeriesId"
       :series-name="releaseDrawerSeriesName"
       @released="handleSeriesReleased"
+      @updated="handleSeriesUpdated"
     />
   </div>
 </template>
@@ -420,6 +437,34 @@ function stageProgressLabel(card: RecipeDesignerSeriesCard): string {
   return `${Math.min(published, total)}/${total}`
 }
 
+/**
+ * 卡片上的待更新阶段数（2026-10-22）。
+ *
+ * 列表接口目前不返回这些字段，所以**只在卡片真有数据时**才展示；
+ * 前端不为了这个数字给每张卡片额外拉一次 readiness。
+ */
+function cardPendingStageCount(card: RecipeDesignerSeriesCard): number {
+  const count = Number(card.pendingStageCount)
+  if (Number.isFinite(count) && count > 0) return Math.trunc(count)
+  if (Array.isArray(card.pendingStageCodes)) return card.pendingStageCodes.length
+  return 0
+}
+
+function hasCardPendingUpdates(card: RecipeDesignerSeriesCard): boolean {
+  return (
+    card.releaseState === 'NEEDS_UPDATE' ||
+    card.hasPendingUpdates === true ||
+    cardPendingStageCount(card) > 0
+  )
+}
+
+/** 卡片入口文案：已上线过的系列叫「重新发布系列」，其余叫「系列发布」 */
+function seriesReleaseEntryLabel(card: RecipeDesignerSeriesCard): string {
+  return hasCardPendingUpdates(card) || card.businessStatus === 'PUBLIC'
+    ? '重新发布系列'
+    : '系列发布'
+}
+
 function openSeriesReleaseDrawer(card: RecipeDesignerSeriesCard): void {
   releaseDrawerSeriesId.value = card.id
   releaseDrawerSeriesName.value = card.name
@@ -428,6 +473,11 @@ function openSeriesReleaseDrawer(card: RecipeDesignerSeriesCard): void {
 
 /** 发布成功后刷新列表：卡片状态与阶段进度立即反映整系列已发布 */
 async function handleSeriesReleased(): Promise<void> {
+  await loadSeries(true)
+}
+
+/** 下架 / 系列状态变化后刷新列表，卡片入口文案与进度同步更新 */
+async function handleSeriesUpdated(): Promise<void> {
   await loadSeries(true)
 }
 

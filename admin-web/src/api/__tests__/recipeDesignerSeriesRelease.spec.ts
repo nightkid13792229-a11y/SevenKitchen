@@ -14,7 +14,11 @@ import { recipeDesignerApi } from '@/api/recipeDesigner'
 const readiness = {
   seriesId: 'series-1',
   designMode: 'CATALOG',
+  businessStatus: 'PUBLIC',
+  releaseState: 'NEEDS_UPDATE',
   ready: true,
+  hasPendingUpdates: true,
+  pendingStageCodes: ['PUPPY_UNDER_14_WEEKS'],
   requiredLifeStages: ['PUPPY_UNDER_14_WEEKS'],
   requiredStages: [],
   stages: [],
@@ -29,8 +33,9 @@ const readiness = {
   summary: {
     requiredStageCount: 1,
     readyStageCount: 1,
-    publishedStageCount: 0,
-    designedStageCount: 1
+    publishedStageCount: 1,
+    designedStageCount: 1,
+    pendingStageCount: 1
   }
 }
 
@@ -56,6 +61,16 @@ const releaseResult = {
   publishedRecipeCount: 1,
   updatedRecipeCount: 1,
   releasedAt: '2026-10-22T12:05:00.000Z'
+}
+
+const unpublishResult = {
+  seriesId: 'series-1',
+  name: '幼犬鸡肉',
+  businessStatus: 'DRAFT',
+  releaseState: 'UNPUBLISHED',
+  unpublishedRecipeCount: 1,
+  remainingPublicRecipeCount: 0,
+  unpublishedAt: '2026-10-22T12:10:00.000Z'
 }
 
 describe('系列发布 API', () => {
@@ -106,5 +121,17 @@ describe('系列发布 API', () => {
       '/recipe-designer/series/series-1/release'
     )
     expect(result).toBe(releaseResult)
+  })
+
+  it('下架走 POST /recipe-designer/series/:id/unpublish', async () => {
+    transport.post.mockResolvedValue(unpublishResult)
+
+    const result = await recipeDesignerApi.unpublishSeries('series-1')
+
+    expect(transport.post).toHaveBeenCalledWith(
+      '/recipe-designer/series/series-1/unpublish'
+    )
+    expect(result).toBe(unpublishResult)
+    expect(result.releaseState).toBe('UNPUBLISHED')
   })
 })

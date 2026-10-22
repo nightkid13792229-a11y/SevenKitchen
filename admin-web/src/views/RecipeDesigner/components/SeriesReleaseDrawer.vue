@@ -16,14 +16,18 @@
         <el-tag v-if="loading" size="small" type="info" effect="dark">
           检查中…
         </el-tag>
-        <el-tag
-          v-else-if="readiness"
-          size="small"
-          :type="readiness.ready ? 'success' : 'danger'"
-          effect="dark"
-        >
-          {{ readiness.ready ? '可发布' : '未就绪' }}
-        </el-tag>
+        <template v-else-if="readiness">
+          <el-tag size="small" :type="releaseStateTagType" effect="dark">
+            {{ releaseStateLabel }}
+          </el-tag>
+          <el-tag
+            size="small"
+            :type="readiness.ready ? 'success' : 'danger'"
+            effect="dark"
+          >
+            {{ readiness.ready ? '可发布' : '未就绪' }}
+          </el-tag>
+        </template>
         <el-tag v-else-if="error" size="small" type="danger" effect="dark">
           检查失败
         </el-tag>
@@ -93,12 +97,23 @@
           </el-icon>
           <div class="series-release__overview-text">
             <div class="series-release__overview-title">
-              {{ readiness.ready ? '满足发布条件' : '还不能发布' }}
+              <el-tag
+                size="small"
+                :type="releaseStateTagType"
+                effect="dark"
+                class="series-release__state-tag"
+              >
+                {{ releaseStateLabel }}
+              </el-tag>
+              <span>{{ readiness.ready ? '满足发布条件' : '还不能发布' }}</span>
             </div>
             <div class="series-release__overview-sub">
               必填阶段 {{ progress.label }} · 已发布
-              {{ readiness.summary.publishedStageCount }} 个阶段 · 阻断
-              {{ readiness.blockers.length }} 项 · 提醒
+              {{ readiness.summary.publishedStageCount }} 个阶段
+              <template v-if="pendingStageCount > 0">
+                · 待更新 {{ pendingStageCount }} 个阶段
+              </template>
+              · 阻断 {{ readiness.blockers.length }} 项 · 提醒
               {{ readiness.warnings.length }} 项
             </div>
             <el-progress
@@ -114,6 +129,12 @@
           <div class="series-release__section-title">
             阶段清单
             <span class="series-release__count">{{ progress.label }}</span>
+            <span
+              v-if="pendingStageCount > 0"
+              class="series-release__count series-release__count--pending"
+            >
+              待更新 {{ pendingStageCount }} 个阶段
+            </span>
             <el-button
               v-if="readiness"
               link
@@ -132,7 +153,8 @@
               class="series-release__stage"
               :class="{
                 'is-required': form.requiredLifeStages.includes(stage.stageCode),
-                'is-ready': stage.status === 'READY' || stage.status === 'PUBLIC'
+                'is-ready': stage.status === 'READY' || stage.status === 'PUBLIC',
+                'is-pending': isSeriesReleaseStagePendingUpdate(stage)
               }"
             >
               <el-checkbox
@@ -152,6 +174,15 @@
                 </div>
               </div>
               <el-tag
+                v-if="isSeriesReleaseStagePendingUpdate(stage)"
+                class="series-release__stage-pending"
+                type="warning"
+                size="small"
+                effect="dark"
+              >
+                有更新
+              </el-tag>
+              <el-tag
                 :type="seriesReleaseStageTagType(stage.status)"
                 size="small"
                 effect="plain"
@@ -170,6 +201,7 @@
           <div class="series-release__hint">
             勾选必须一起发布的阶段；只有达到「待发布」或「已发布」的阶段才算就绪。
             未勾选但已经保存进系列仓库的阶段也会一并发布，避免留下顾客看不到的隐藏草稿。
+            已发布阶段出现「有更新」时，重新发布只会把每个阶段的最新一版发给顾客。
           </div>
         </section>
 
@@ -396,20 +428,38 @@
           <template v-else-if="!readiness.ready">
             还有 {{ readiness.blockers.length }} 项阻断，全部解决后才能发布整条产品线
           </template>
+          <template v-else-if="releaseState === 'PUBLISHED'">
+            系列已上线，所有阶段都是最新版本，无需重新发布
+          </template>
+          <template v-else-if="pendingStageCount > 0">
+            有 {{ pendingStageCount }} 个阶段存在更新草稿，重新发布后顾客才能看到最新版本
+          </template>
           <template v-else>
             发布后顾客即可看到整条产品线，共
             {{ readiness.summary.readyStageCount }} 个必填阶段就绪
           </template>
         </span>
-        <el-button
-          v-if="isAdmin && readiness.ready"
-          type="success"
-          :loading="releasing"
-          :disabled="dirty"
-          @click="handleRelease"
-        >
-          发布整条产品线
-        </el-button>
+        <div class="series-release__footer-actions">
+          <el-button
+            v-if="isAdmin && canUnpublish"
+            type="danger"
+            plain
+            :loading="unpublishing"
+            :disabled="unpublishing || releasing"
+            @click="handleUnpublish"
+          >
+            下架整个系列
+          </el-button>
+          <el-button
+            v-if="isAdmin && readiness.ready && releaseActionAvailable"
+            type="success"
+            :loading="releasing"
+            :disabled="dirty || unpublishing"
+            @click="handleRelease"
+          >
+            {{ releaseActionLabel }}
+          </el-button>
+        </div>
       </div>
     </template>
   </el-drawer>
@@ -440,6 +490,7 @@ import {
 import {
   buildSeriesReleaseForm,
   buildSeriesReleaseSettingsPatch,
+  canUnpublishSeries,
   cloneSeriesReleaseForm,
   emptySeriesReleaseForm,
   formatSeriesReleaseLatestVersion,
@@ -447,15 +498,23 @@ import {
   groupSeriesReleaseIssues,
   hasSeriesReleaseSettingsPatch,
   isSeriesReleaseFormDirty,
+  isSeriesReleasePrimaryActionAvailable,
+  isSeriesReleaseStagePendingUpdate,
+  resolveSeriesReleasePendingStageCount,
+  resolveSeriesReleaseState,
+  seriesReleasePrimaryActionLabel,
   seriesReleaseProgress,
   seriesReleaseStageHint,
   seriesReleaseStageStatusLabel,
   seriesReleaseStageTagType,
+  seriesReleaseStateLabel,
+  seriesReleaseStateTagType,
   type SeriesReleaseForm
 } from '@/utils/recipeDesigner/seriesRelease'
 import type {
   SeriesReleaseReadiness,
-  SeriesReleaseResult
+  SeriesReleaseResult,
+  SeriesUnpublishResult
 } from '@/types/recipeDesigner'
 
 const props = defineProps<{
@@ -467,6 +526,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
   (e: 'released', result: SeriesReleaseResult): void
+  /** 整系列下架 / 状态变化后通知父级刷新列表与卡片 */
+  (e: 'updated', result: SeriesUnpublishResult): void
 }>()
 
 const visible = computed({
@@ -481,6 +542,7 @@ const loading = ref(false)
 const saving = ref(false)
 const uploading = ref(false)
 const releasing = ref(false)
+const unpublishing = ref(false)
 const error = ref('')
 
 const healthTags = ref<RecipeHealthTag[]>([])
@@ -524,6 +586,29 @@ const progressStatus = computed<'success' | undefined>(() =>
 const latestVersion = computed(() =>
   formatSeriesReleaseLatestVersion(readiness.value)
 )
+
+/** 未上线 / 待重新发布 / 已上线（最新） */
+const releaseState = computed(() => resolveSeriesReleaseState(readiness.value))
+const releaseStateLabel = computed(() =>
+  seriesReleaseStateLabel(releaseState.value)
+)
+const releaseStateTagType = computed(() =>
+  seriesReleaseStateTagType(releaseState.value)
+)
+/** 有更新草稿、等待重新发布的阶段数 */
+const pendingStageCount = computed(() =>
+  resolveSeriesReleasePendingStageCount(readiness.value)
+)
+/** 主按钮文案：发布系列 / 重新发布系列 */
+const releaseActionLabel = computed(() =>
+  seriesReleasePrimaryActionLabel(readiness.value)
+)
+/** 已上线且没有待更新版本时没有可发的，隐藏主按钮 */
+const releaseActionAvailable = computed(() =>
+  isSeriesReleasePrimaryActionAvailable(readiness.value)
+)
+/** 已上线 / 待重新发布都可以整系列下架 */
+const canUnpublish = computed(() => canUnpublishSeries(readiness.value))
 
 const blockerGroups = computed(() =>
   groupSeriesReleaseIssues(readiness.value?.blockers ?? [])
@@ -676,16 +761,23 @@ async function handleRelease(): Promise<void> {
     return
   }
 
+  const isRepublish =
+    resolveSeriesReleaseState(readiness.value) !== 'UNPUBLISHED'
+  const pendingCount = resolveSeriesReleasePendingStageCount(readiness.value)
+  const seriesName = props.seriesName || readiness.value.seriesId
+  const actionLabel = isRepublish ? '重新发布' : '发布'
+  const message = isRepublish
+    ? pendingCount > 0
+      ? `将把「${seriesName}」这 ${pendingCount} 个阶段的更新版本重新发布给顾客，发布后立即生效。确定重新发布吗？`
+      : `将重新发布「${seriesName}」并刷新顾客看到的展示资料，发布后立即生效。确定重新发布吗？`
+    : `将把「${seriesName}」的全部阶段食谱一次性发布给顾客，发布后立即生效。确定发布吗？`
+
   try {
-    await ElMessageBox.confirm(
-      `将把「${props.seriesName || readiness.value.seriesId}」的全部阶段食谱一次性发布给顾客，发布后立即生效。确定发布吗？`,
-      '发布整条产品线',
-      {
-        type: 'warning',
-        confirmButtonText: '发布',
-        cancelButtonText: '取消'
-      }
-    )
+    await ElMessageBox.confirm(message, `${actionLabel}系列`, {
+      type: 'warning',
+      confirmButtonText: actionLabel,
+      cancelButtonText: '取消'
+    })
   } catch {
     return
   }
@@ -694,7 +786,7 @@ async function handleRelease(): Promise<void> {
   try {
     const result = await recipeDesignerApi.releaseSeries(props.seriesId)
     ElMessage.success(
-      `产品线已发布，共更新 ${result.updatedRecipeCount} 条阶段食谱`
+      `系列已${actionLabel}，共更新 ${result.updatedRecipeCount} 条阶段食谱`
     )
     emit('released', result)
     visible.value = false
@@ -702,6 +794,54 @@ async function handleRelease(): Promise<void> {
     // 错误提示由 API 拦截器统一处理；抽屉保持打开，方便按提示修正
   } finally {
     releasing.value = false
+  }
+}
+
+/**
+ * 整系列下架（管理员）。
+ *
+ * 后端只把 PUBLIC 食谱改回 DRAFT、系列状态设为 DRAFT，设计稿和历史版本都保留，
+ * 所以下架后仍可重新发布。下架成功后刷新门槛并通知列表刷新。
+ */
+async function handleUnpublish(): Promise<void> {
+  if (!isAdmin.value) {
+    ElMessage.warning(ADMIN_ONLY_TIP)
+    return
+  }
+  if (!props.seriesId || !readiness.value || unpublishing.value) return
+  if (!canUnpublish.value) {
+    ElMessage.info('系列还没上线，不需要下架')
+    return
+  }
+
+  const seriesName = props.seriesName || readiness.value.seriesId
+  try {
+    await ElMessageBox.confirm(
+      `下架后顾客将立即看不到「${seriesName}」，所有已发布阶段食谱会变回草稿；设计稿和历史版本都会保留，之后仍可重新发布。确定下架整个系列吗？`,
+      '下架整个系列',
+      {
+        type: 'warning',
+        confirmButtonText: '确认下架',
+        cancelButtonText: '取消'
+      }
+    )
+  } catch {
+    return
+  }
+
+  unpublishing.value = true
+  try {
+    const result = await recipeDesignerApi.unpublishSeries(props.seriesId)
+    ElMessage.success(
+      `系列已下架，共下架 ${result.unpublishedRecipeCount} 条阶段食谱`
+    )
+    emit('updated', result)
+    // 保留抽屉让管理员看到「未上线」状态；有未保存设置时不覆盖编辑
+    await loadReadiness(!dirty.value)
+  } catch {
+    // 错误提示由 API 拦截器统一处理
+  } finally {
+    unpublishing.value = false
   }
 }
 
@@ -737,6 +877,8 @@ watch(
       loading.value = false
       saving.value = false
       uploading.value = false
+      releasing.value = false
+      unpublishing.value = false
       error.value = ''
       return
     }
@@ -864,9 +1006,16 @@ watch(
 }
 
 .series-release__overview-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 15px;
   font-weight: 600;
   color: #303133;
+}
+
+.series-release__state-tag {
+  flex-shrink: 0;
 }
 
 .series-release__overview-sub {
@@ -902,6 +1051,10 @@ watch(
   color: #909399;
 }
 
+.series-release__count--pending {
+  color: #e6a23c;
+}
+
 .series-release__stages {
   display: flex;
   flex-direction: column;
@@ -925,6 +1078,14 @@ watch(
 
 .series-release__stage.is-ready {
   border-left: 3px solid #67c23a;
+}
+
+.series-release__stage.is-pending {
+  border-left: 3px solid #e6a23c;
+}
+
+.series-release__stage-pending {
+  flex-shrink: 0;
 }
 
 .series-release__stage-check {
@@ -1156,6 +1317,13 @@ watch(
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+}
+
+.series-release__footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .series-release__footer-text {

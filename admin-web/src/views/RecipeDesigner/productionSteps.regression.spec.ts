@@ -106,7 +106,7 @@ describe('设计器 · 制作步骤编辑器（2026-10-22 · Task 7）', () => {
     expect(editor).toContain('itemSupplementTargetViews')
     expect(editor).toContain('原料预处理')
     expect(editor).toContain('onPreparationMethodChange')
-    expect(editor).toContain('onPreparationNoteChange')
+    expect(editor).toContain('PreparationMethodManagerDialog')
   })
 
   it('类型与 API 载荷命名和路由契约一致', () => {

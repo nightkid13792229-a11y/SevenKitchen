@@ -113,7 +113,7 @@
           <div class="custom-title">默认补剂目标营养素</div>
           <div class="custom-desc">
             从本档案已填写且大于 0 的字段中选择；添加该补剂时会自动带出。
-            组合目标（如 EPA + DHA）请选择派生字段，一个目标对应一个字段。
+            每个目标对应一个独立营养字段，可多选。
           </div>
         </div>
         <el-tag
@@ -339,10 +339,7 @@ import {
   getIngredientNutritionUnitPrecision,
   getIngredientNutritionUnitStep,
 } from "@/utils/ingredientNutritionUnits";
-import {
-  DERIVED_NUTRITION_FIELD_CATALOG,
-  NUTRITION_FIELD_CATALOG,
-} from "@/utils/recipeDesigner/nutritionFieldCatalog";
+import { NUTRITION_FIELD_CATALOG } from "@/utils/recipeDesigner/nutritionFieldCatalog";
 import {
   normalizeSupplementTargetDefinitions,
   resolveSupplementTargetDefinition,
@@ -408,8 +405,8 @@ function formatTargetValue(value: number): string {
 }
 
 /**
- * 只列出当前档案中「已填写且大于 0」的字段，并补上 SUM 派生字段。
- * 比例类派生字段不是添加浓度，不参与选择。
+ * 只列出当前档案中「已填写且大于 0」的直接字段。
+ * 不再提供派生字段；历史默认目标仍可被归一化并提示为失效项。
  */
 const supplementTargetOptions = computed<SupplementTargetOption[]>(() => {
   if (!isSupplementProfile.value) {
@@ -433,43 +430,6 @@ const supplementTargetOptions = computed<SupplementTargetOption[]>(() => {
       unit: field.unit,
       valueText: `档案值 ${formatTargetValue(value)} ${field.unit}`,
     });
-  }
-
-  for (const derived of DERIVED_NUTRITION_FIELD_CATALOG) {
-    if (derived.formula !== "SUM") {
-      continue;
-    }
-
-    let total = 0;
-    let complete = true;
-    for (const sourceFieldPath of derived.sourceFieldPaths) {
-      const sourceField = NUTRITION_FIELD_CATALOG.find(
-        (field) => field.fieldPath === sourceFieldPath,
-      );
-      if (!sourceField) {
-        complete = false;
-        break;
-      }
-      const tabValues = formValue[sourceField.tabKey] as Record<
-        string,
-        number | null | undefined
-      >;
-      const value = tabValues?.[sourceField.fieldKey];
-      if (typeof value !== "number" || !Number.isFinite(value)) {
-        complete = false;
-        break;
-      }
-      total += value;
-    }
-
-    if (complete && total > 0) {
-      options.push({
-        fieldPath: derived.fieldPath,
-        label: derived.label,
-        unit: derived.unit,
-        valueText: `组合合计 ${formatTargetValue(total)} ${derived.unit}`,
-      });
-    }
   }
 
   return options;

@@ -39,29 +39,45 @@ describe('补剂目标营养素 · 营养字段选择', () => {
       .toContain('90')
   })
 
-  it('包含派生组合字段（EPA + DHA），且只有在来源字段齐全时才出现', () => {
-    const partialProfile = buildProfile((draft) => {
-      draft.fattyAcids.epa = 100
-    })
-    expect(
-      listSupplementTargetFieldCandidates(partialProfile).some(
-        (candidate) => candidate.fieldPath === 'derived.epaDha'
-      )
-    ).toBe(false)
-
+  it('只提供独立营养字段，即使来源字段齐全也不提供派生组合字段', () => {
     const completeProfile = buildProfile((draft) => {
       draft.fattyAcids.epa = 100
       draft.fattyAcids.dha = 200
     })
-    const derivedCandidate = listSupplementTargetFieldCandidates(
-      completeProfile
-    ).find((candidate) => candidate.fieldPath === 'derived.epaDha')
+    const candidates = listSupplementTargetFieldCandidates(completeProfile)
 
-    expect(derivedCandidate).toBeTruthy()
-    expect(derivedCandidate?.label).toBe('EPA + DHA')
-    expect(derivedCandidate?.unit).toBe('mg')
-    expect(derivedCandidate?.value).toBe(300)
-    expect(derivedCandidate?.source).toBe('DERIVED')
+    expect(candidates.map((candidate) => candidate.fieldPath)).toEqual(
+      expect.arrayContaining(['fattyAcids.epa', 'fattyAcids.dha'])
+    )
+    expect(
+      candidates.some((candidate) => candidate.fieldPath.startsWith('derived.'))
+    ).toBe(false)
+    expect(
+      candidates.some((candidate) => candidate.fieldPath === 'derived.epaDha')
+    ).toBe(false)
+  })
+
+  it('历史派生目标仍可解析与计算，保证后端旧数据兼容', () => {
+    const profile = buildProfile((draft) => {
+      draft.fattyAcids.epa = 100
+      draft.fattyAcids.dha = 200
+    })
+
+    expect(resolveSupplementTargetDefinition('derived.epaDha')).toEqual({
+      fieldPath: 'derived.epaDha',
+      label: 'EPA + DHA',
+      unit: 'mg'
+    })
+    expect(
+      readDefaultSupplementTargets({
+        defaultSupplementTargets: [
+          { fieldPath: 'derived.epaDha', label: 'EPA + DHA', unit: 'mg' }
+        ]
+      })
+    ).toEqual([{ fieldPath: 'derived.epaDha', label: 'EPA + DHA', unit: 'mg' }])
+    expect(
+      computeSupplementTargetConcentration(profile, 'derived.epaDha', 10, 500)
+    ).toBe(60)
   })
 
   it('兼容历史扁平字段表：档案里有值时仍能选出目标', () => {
@@ -104,7 +120,7 @@ describe('补剂目标营养素 · 营养字段选择', () => {
     expect(normalizeSupplementTargetDefinitions(defaults)).toHaveLength(2)
   })
 
-  it('可以把评估指标 key 解析成 fieldPath，供智能添加预选', () => {
+  it('可以把评估指标 key 解析成 fieldPath（派生仅用于历史数据兼容）', () => {
     expect(resolveSupplementTargetFieldPath('calcium')).toBe(
       'minerals.calcium'
     )

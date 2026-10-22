@@ -1,7 +1,12 @@
 /**
- * 补剂目标营养素工具（2026-10-22）。
+ * 补剂目标营养素工具（2026-10-22，2026-10-22 二次收敛）。
  *
- * 目标定义永远只对应一个 `fieldPath`；组合（如 EPA+DHA）使用派生字段。
+ * 选择器只提供直接营养字段：一个目标对应一个独立 `fieldPath`，
+ * 不再把 `derived.*` 派生字段作为可选项。
+ *
+ * 历史草稿 / 营养档案里已经保存的派生字段目标仍按原口径归一化、展示与计算，
+ * 保证与后端既有数据兼容；后端字段目录与校验不做改动。
+ *
  * 添加浓度 = 补剂提供的目标营养素总量 ÷ 配方总重量（g）× 1000。
  *
  * 这里不做任何「移除补剂后是否出现缺口」的推断：纤维素粉这类功能性补剂
@@ -27,11 +32,9 @@ export interface SupplementTargetDefinition {
   unit: string
 }
 
-/** 营养档案里可作为补剂目标的非空字段 */
+/** 营养档案里可作为补剂目标的非空直接字段 */
 export interface SupplementTargetFieldCandidate extends SupplementTargetDefinition {
-  source: 'FIELD' | 'DERIVED'
-  quantityKind: string
-  /** 档案中的当前数值（派生字段为组合求和值） */
+  /** 档案中的当前数值 */
   value: number
   /** 供选择器展示的提示文案 */
   valueText: string
@@ -108,29 +111,12 @@ function readDirectFieldValue(
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
-function readDerivedFieldValue(
-  profile: NutritionProfileV2,
-  fieldPath: string,
-): number | null {
-  const derived = DERIVED_NUTRITION_FIELD_CATALOG.find(
-    (candidate) => candidate.fieldPath === fieldPath,
-  )
-  if (!derived || derived.formula !== 'SUM') {
-    return null
-  }
-
-  let total = 0
-  for (const sourceFieldPath of derived.sourceFieldPaths) {
-    const value = readDirectFieldValue(profile, sourceFieldPath)
-    if (value === null) {
-      return null
-    }
-    total += value
-  }
-  return total
-}
-
-/** 补剂目标允许使用的所有字段（直接字段 + 派生字段） */
+/**
+ * 解析目标字段定义。
+ *
+ * 直接字段用于新增选择；派生字段仅用于兼容历史草稿 / 默认目标，
+ * 不再出现在候选列表里。
+ */
 export function resolveSupplementTargetDefinition(
   fieldPath: string | null | undefined,
 ): SupplementTargetDefinition | null {
@@ -214,10 +200,10 @@ export function readDefaultSupplementTargets(
 }
 
 /**
- * 列出营养档案中「已填写且大于 0」的字段，供默认目标 / 添加补剂时选择。
+ * 列出营养档案中「已填写且大于 0」的直接字段，供默认目标 / 添加补剂时选择。
  *
- * 组合字段（如 derived.epaDha）只有在来源字段齐全且合计大于 0 时才出现；
- * 比例类派生字段（钙磷比）不是「添加浓度」，不参与补剂目标选择。
+ * 只返回独立营养字段，不返回 `derived.*` 派生字段，也不返回比例类派生字段。
+ * 历史目标里的派生字段仍可由 `resolveSupplementTargetDefinition` 解析。
  */
 export function listSupplementTargetFieldCandidates(
   profile: unknown,
@@ -238,29 +224,8 @@ export function listSupplementTargetFieldCandidates(
       fieldPath: field.fieldPath,
       label: field.label,
       unit: field.unit,
-      source: 'FIELD',
-      quantityKind: field.quantityKind,
       value,
       valueText: `档案值 ${formatNumber(value)} ${field.unit}`,
-    })
-  }
-
-  for (const derived of DERIVED_NUTRITION_FIELD_CATALOG) {
-    if (derived.formula !== 'SUM') {
-      continue
-    }
-    const value = readDerivedFieldValue(normalized, derived.fieldPath)
-    if (value === null || !isPositiveFiniteNumber(value)) {
-      continue
-    }
-    candidates.push({
-      fieldPath: derived.fieldPath,
-      label: derived.label,
-      unit: derived.unit,
-      source: 'DERIVED',
-      quantityKind: derived.quantityKind,
-      value,
-      valueText: `组合合计 ${formatNumber(value)} ${derived.unit}`,
     })
   }
 
@@ -277,7 +242,9 @@ function normalizeLookupKey(value: string | null | undefined): string {
 /**
  * 把评估指标 key（如 epaDha / calcium）解析成补剂目标 fieldPath。
  *
- * 用于「从营养评估面板智能添加补剂」时预选当前营养素。
+ * 用于「从营养评估面板智能添加补剂」时预选当前营养素，以及兼容历史
+ * `nutrientTargetKey`。派生字段只用于兼容历史数据，新增选择时调用方
+ * 仍需用候选列表过滤。
  * 解析不出来时返回 null，调用方要求用户手动选择，不猜。
  */
 export function resolveSupplementTargetFieldPath(
@@ -315,8 +282,8 @@ export function resolveSupplementTargetFieldPath(
 /**
  * 读取补剂在 `weightG` 用量下提供的目标营养素总量。
  *
- * 派生组合字段按来源字段逐个读取后求和；任一来源字段缺失即视为缺数据，
- * 不按 0 静默处理。
+ * 直接字段按字段读取；历史派生字段（如 derived.epaDha）按来源字段
+ * 逐个读取后求和，任一来源字段缺失即视为缺数据，不按 0 静默处理。
  */
 export function readSupplementTargetAmount(
   profile: unknown,

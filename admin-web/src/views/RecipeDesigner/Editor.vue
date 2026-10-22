@@ -164,51 +164,55 @@
                   <div class="item-name">{{ itemDisplayName(element) }}</div>
                   <div class="item-meta">
                     <span class="item-profile-name">{{ itemProfileName(element) }}</span>
-                    <span class="item-preparation-inline">
-                      <span class="preparation-label" title="原料预处理">预处理</span>
-                      <el-select
-                        :model-value="element.preparationMethod || ''"
-                        class="preparation-method-select"
-                        size="small"
-                        filterable
-                        allow-create
-                        default-first-option
-                        clearable
-                        placeholder="选择或输入"
-                        @change="(value: string | undefined) => onPreparationMethodChange(element, value)"
-                      >
-                        <el-option
-                          v-for="option in preparationMethodOptions"
-                          :key="option.id"
-                          :label="option.name"
-                          :value="option.id"
-                        />
-                      </el-select>
-                      <el-input
-                        :model-value="element.preparationNote || ''"
-                        class="preparation-note-input"
-                        size="small"
-                        maxlength="500"
-                        placeholder="补充说明（可选）"
-                        @change="(value: string) => onPreparationNoteChange(element, value)"
-                      />
-                      <el-tag
-                        v-if="element.preparationSource"
-                        size="small"
-                        :type="element.preparationSource === 'MANUAL' ? 'warning' : 'info'"
-                        effect="plain"
-                      >
-                        {{ element.preparationSource === 'MANUAL' ? '人工' : '自动' }}
-                      </el-tag>
-                      <span v-else class="preparation-source-empty">未设置</span>
-                      <span
-                        v-if="itemPreparationHint(element)"
-                        class="item-preparation-hint"
-                      >{{ itemPreparationHint(element) }}</span>
-                    </span>
                   </div>
                 </div>
+                <!--
+                  预处理方式与重量 / 占比 / 开关 / 删除同排（2026-10-22）：
+                  名称和营养档案留在左侧；名称下面不再放预处理控件。
+                  Tab 顺序只保留每行的重量输入：其余控件显式 tabindex=-1
+                  （ElSelect / ElSwitch 均支持 tabindex prop，ElButton 透传原生属性）。
+                -->
                 <div class="item-controls">
+                  <div class="item-preparation-inline">
+                    <span class="preparation-label" title="原料预处理">预处理</span>
+                    <el-select
+                      :model-value="element.preparationMethod || ''"
+                      class="preparation-method-select"
+                      size="small"
+                      filterable
+                      allow-create
+                      default-first-option
+                      clearable
+                      :tabindex="-1"
+                      placeholder="选择或输入"
+                      @change="(value: string | undefined) => onPreparationMethodChange(element, value)"
+                    >
+                      <el-option
+                        v-for="option in preparationMethodOptions"
+                        :key="option.id"
+                        :label="option.name"
+                        :value="option.id"
+                      />
+                    </el-select>
+                    <el-button
+                      class="preparation-manage-btn"
+                      size="small"
+                      text
+                      :icon="Setting"
+                      :tabindex="-1"
+                      title="管理预处理方式"
+                      @click="openPreparationMethodManager"
+                    >管理</el-button>
+                    <el-tag
+                      v-if="element.preparationSource"
+                      size="small"
+                      :type="element.preparationSource === 'MANUAL' ? 'warning' : 'info'"
+                      effect="plain"
+                    >
+                      {{ element.preparationSource === 'MANUAL' ? '人工' : '自动' }}
+                    </el-tag>
+                    <span v-else class="preparation-source-empty">未设置</span>
+                  </div>
                   <div class="weight-editor">
                     <el-input-number
                       :model-value="element.weightG"
@@ -228,6 +232,7 @@
                     <el-switch
                       :model-value="element.includeInAssessment !== false"
                       size="small"
+                      :tabindex="-1"
                       @change="(value: string | number | boolean) => onToggleInclude(element, Boolean(value))"
                     />
                     <el-button
@@ -235,10 +240,15 @@
                       text
                       type="danger"
                       :icon="Delete"
+                      :tabindex="-1"
                       @click="handleRemoveItem(element)"
                     />
                   </div>
                 </div>
+                <span
+                  v-if="itemPreparationHint(element)"
+                  class="item-preparation-hint"
+                >{{ itemPreparationHint(element) }}</span>
 
                 <!--
                   补剂目标营养素 + 当前实际添加浓度（2026-10-22）：
@@ -264,6 +274,7 @@
                     size="small"
                     text
                     type="primary"
+                    :tabindex="-1"
                     @click="openSupplementTargetEditor(element)"
                   >修改目标</el-button>
                 </div>
@@ -352,6 +363,15 @@
     />
 
     <!--
+      预处理方式字典管理（2026-10-22）：在编辑器内以弹窗维护，
+      管理完立即刷新当前草稿的预处理选项，不跳走页面。
+    -->
+    <PreparationMethodManagerDialog
+      v-model="preparationMethodManagerVisible"
+      @changed="onPreparationMethodsChanged"
+    />
+
+    <!--
       制作步骤（2026-10-22 · Task 7）：整份食谱级别的结构化步骤。
       用抽屉在当前设计器页面内编辑，不跳走；与每行原料的「原料预处理」分开维护。
     -->
@@ -380,10 +400,11 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown, ArrowLeft, CircleCheckFilled, Delete, EditPen, Loading, Rank, RefreshLeft, RefreshRight, WarningFilled } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowLeft, CircleCheckFilled, Delete, EditPen, Loading, Rank, RefreshLeft, RefreshRight, Setting, WarningFilled } from '@element-plus/icons-vue'
 import draggable from 'vuedraggable'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import type { CreateRecipeSeriesStageDraftPayload } from '@/api/recipeDesigner'
+import type { PreparationMethod } from '@/api/preparationMethods'
 import { nutritionFoodApi, type NutritionFoodDetail } from '@/api/ingredients'
 import { orderRecipeDesignApi } from '@/api/orderRecipeDesign'
 import type {
@@ -413,6 +434,7 @@ import MacroCompositionPanel from './components/MacroCompositionPanel.vue'
 import DogInsightPanel from './components/DogInsightPanel.vue'
 import AiDesignSuggestionPanel from './components/AiDesignSuggestionPanel.vue'
 import SupplementTargetDialog from './components/SupplementTargetDialog.vue'
+import PreparationMethodManagerDialog from './components/PreparationMethodManagerDialog.vue'
 import ProductionStepsEditor from './components/ProductionStepsEditor.vue'
 import type { DesignRecipeAssessmentResult } from '@/utils/recipeDesigner/assessmentTypes'
 import {
@@ -986,6 +1008,50 @@ const preparationMethodOptions = computed(
   () => draft.value?.preparationMethodOptions ?? []
 )
 
+/** 预处理方式字典管理弹窗（在编辑器内打开，不跳转页面） */
+const preparationMethodManagerVisible = ref(false)
+
+function openPreparationMethodManager() {
+  preparationMethodManagerVisible.value = true
+}
+
+/**
+ * 字典增删改后刷新当前草稿的预处理选项。
+ *
+ * 以接口返回的最新列表为准（删除立即生效）；同时把当前行里已经选用、
+ * 但字典中暂时不存在的值（手填 / 刚被删除）合并回选项，避免下拉框
+ * 把预处理方式显示成裸 id。
+ */
+function onPreparationMethodsChanged(methods: PreparationMethod[]) {
+  const optionById = new Map<string, { id: string; name: string }>()
+
+  for (const method of methods) {
+    const id = String(method.id ?? '').trim()
+    const name = String(method.name ?? '').trim()
+    if (!id || !name) continue
+    optionById.set(id, { id, name })
+  }
+
+  for (const item of items.value) {
+    const method = String(item.preparationMethod ?? '').trim()
+    if (!method) continue
+
+    const option = optionById.get(method)
+    if (option) {
+      item.preparationMethodLabel = option.name
+    } else {
+      optionById.set(method, {
+        id: method,
+        name: String(item.preparationMethodLabel || method)
+      })
+    }
+  }
+
+  if (draft.value) {
+    draft.value.preparationMethodOptions = [...optionById.values()]
+  }
+}
+
 /**
  * 修改原料预处理方式：可从字典选择，也允许手填。
  * 只把改动写回该原料；不从历史食谱自动复制默认值。
@@ -1008,22 +1074,6 @@ function onPreparationMethodChange(
     kind: 'updateItem',
     itemId: item.id,
     data: { preparationMethod: nextMethod }
-  })
-}
-
-/** 修改预处理补充说明（最多 500 字，与后端限制一致） */
-function onPreparationNoteChange(item: DesignerItem, value: string) {
-  const nextNote = String(value ?? '').trim().slice(0, 500) || null
-  const currentNote = String(item.preparationNote ?? '').trim() || null
-  if (nextNote === currentNote) return
-
-  item.preparationNote = nextNote
-  item.preparationSource = nextNote || item.preparationMethod ? 'MANUAL' : null
-  itemsRevision.value += 1
-  enqueue({
-    kind: 'updateItem',
-    itemId: item.id,
-    data: { preparationNote: nextNote }
   })
 }
 
@@ -1160,7 +1210,9 @@ async function openSupplementTargetAddDialog(
         if (!initialTargets.some((target) => target.fieldPath === definition.fieldPath)) {
           initialTargets.push(definition)
         }
-      } else {
+      } else if (!smartFieldPath.startsWith('derived.')) {
+        // 派生字段只用于兼容历史目标，不再作为新目标候选；派生类评估指标
+        // 不强行预选，交给营养师在独立字段里选择。
         ElMessage.warning(
           `「${definition.label}」在「${detail.name}」营养档案中为空或为 0，请改选其他目标营养素`
         )
@@ -2007,8 +2059,7 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  margin-left: 8px;
-  max-width: calc(100% - 8px);
+  min-width: 0;
 }
 .preparation-label {
   flex-shrink: 0;
@@ -2016,11 +2067,11 @@ onBeforeUnmount(() => {
   color: #909399;
 }
 .preparation-method-select {
-  width: 128px;
+  width: 118px;
 }
-.preparation-note-input {
-  width: 150px;
-  max-width: 100%;
+.preparation-manage-btn {
+  flex-shrink: 0;
+  padding: 0 4px;
 }
 .preparation-source-empty {
   font-size: 11px;
@@ -2028,6 +2079,7 @@ onBeforeUnmount(() => {
 }
 .item-preparation-hint {
   flex-basis: 100%;
+  padding-left: 22px;
   font-size: 11px;
   line-height: 1.5;
   color: #e6a23c;
@@ -2055,14 +2107,17 @@ onBeforeUnmount(() => {
   white-space: nowrap;
   max-width: 100%;
 }
-/* 用量 + 占比 + 开关/删除：作为一个整体参与换行，
-   本栏够宽时整组贴在原料名右侧（原来的一行布局），
-   窄到放不下时整组一起落到下一行，不会散成两行。 */
+/* 预处理 + 用量 + 占比 + 开关/删除：作为一个整体参与换行。
+   本栏够宽时整组贴在原料名右侧；窄到放不下时整组落到下一行，
+   并允许控件组内部继续换行，避免横向溢出。 */
 .item-controls {
   display: flex;
   align-items: center;
   gap: 5px;
   flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 100%;
 }
 /* 用量编辑 */
 .weight-editor {

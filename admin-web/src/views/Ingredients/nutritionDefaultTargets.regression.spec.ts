@@ -25,14 +25,15 @@ describe('营养档案 · 默认补剂目标营养素', () => {
     )
   })
 
-  it('从营养字段目录选择，支持多选并包含派生组合字段', () => {
+  it('只从独立营养字段选择，支持多选且不再提供派生组合字段', () => {
     expect(editor).toContain('NUTRITION_FIELD_CATALOG')
-    expect(editor).toContain('DERIVED_NUTRITION_FIELD_CATALOG')
+    expect(editor).not.toContain('DERIVED_NUTRITION_FIELD_CATALOG')
+    expect(editor).not.toContain('derived.formula')
+    expect(editor).not.toContain('组合')
+    expect(editor).not.toContain('派生字段')
     expect(editor).toContain('v-model="selectedTargetFieldPaths"')
     expect(editor).toContain('multiple')
     expect(editor).toContain('filterable')
-    expect(editor).toContain('derived.formula !== "SUM"')
-    expect(editor).toContain('组合合计')
   })
 
   it('只允许非空且大于 0 的字段，并防止重复目标', () => {

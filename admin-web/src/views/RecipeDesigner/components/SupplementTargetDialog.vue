@@ -57,9 +57,6 @@
               <span class="target-option-label">{{ option.label }}</span>
               <span class="target-option-meta">
                 {{ option.valueText }}
-                <template v-if="option.source === 'DERIVED'">
-                  · 组合字段
-                </template>
               </span>
             </div>
           </el-option>
@@ -77,16 +74,6 @@
         </div>
 
         <el-alert
-          v-if="!hasDerivedCandidates"
-          class="target-combination-hint"
-          type="info"
-          :closable="false"
-          show-icon
-          title="当前档案没有可用的组合字段"
-          description="系统只把已定义的派生字段作为组合目标（例如 EPA + DHA）；维生素 B2、B6、B12 这类没有组合定义时，请分别选择为多个目标。"
-        />
-
-        <el-alert
           v-if="selectedTargets.length === 0"
           class="target-validation"
           type="warning"
@@ -102,7 +89,7 @@
           :closable="false"
           show-icon
           :title="`已选择 ${selectedTargets.length} 个目标营养素`"
-          description="一个目标对应一个营养素字段；组合目标（如 EPA + DHA）请选择派生字段。"
+          description="每个目标对应一个独立营养字段；如需约束多个营养素，请分别选择。"
         />
 
         <div v-if="ignoredInitialCount > 0" class="ignored-hint">
@@ -177,10 +164,6 @@ const hasProfile = computed(() => Boolean(props.profile));
 
 const candidates = computed(() =>
   listSupplementTargetFieldCandidates(props.profile),
-);
-
-const hasDerivedCandidates = computed(() =>
-  candidates.value.some((candidate) => candidate.source === "DERIVED"),
 );
 
 const candidateByFieldPath = computed(
@@ -317,9 +300,5 @@ function confirm() {
   font-size: 12px;
   line-height: 1.6;
   color: #e6a23c;
-}
-
-.target-combination-hint {
-  margin-top: 2px;
 }
 </style>

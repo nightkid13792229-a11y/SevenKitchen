@@ -137,6 +137,9 @@ describe('RecipeDesignerService · staged series release', () => {
 
       expect(readiness.ready).toBe(false);
       expect(readiness.designMode).toBe('CATALOG');
+      expect(readiness.businessStatus).toBe('DRAFT');
+      expect(readiness.releaseState).toBe('UNPUBLISHED');
+      expect(readiness.hasPendingUpdates).toBe(false);
       expect(readiness.requiredLifeStages).toEqual(['HIGH_ACTIVITY_ADULT']);
       expect(readiness.requiredStages).toEqual([
         expect.objectContaining({
@@ -212,6 +215,7 @@ describe('RecipeDesignerService · staged series release', () => {
         requiredStageCount: 2,
         readyStageCount: 1,
         designedStageCount: 2,
+        pendingStageCount: 0,
       });
       expect(readiness.blockers).toEqual([
         expect.objectContaining({
@@ -261,7 +265,93 @@ describe('RecipeDesignerService · staged series release', () => {
       });
       expect(stageOf(readiness, 'LOW_ACTIVITY_ADULT_OR_SENIOR')).toMatchObject({
         status: 'PUBLIC',
+        publishedRecipeVersion: 1,
+        hasPendingUpdate: false,
       });
+      expect(readiness.releaseState).toBe('UNPUBLISHED');
+    });
+
+    it('detects a newer DRAFT version behind the published stage (pending update)', async () => {
+      prisma.recipeSeries.findUnique.mockResolvedValue(
+        seriesRecord({
+          businessStatus: 'PUBLIC',
+          requiredLifeStages: ['HIGH_ACTIVITY_ADULT'],
+        }),
+      );
+      prisma.recipe.findMany.mockResolvedValue([
+        recipeRecord({
+          id: 'recipe-row-adult-v1',
+          recipeId: 'recipe-adult',
+          version: 1,
+          status: 'PUBLIC',
+        }),
+        recipeRecord({
+          id: 'recipe-row-adult-v2',
+          recipeId: 'recipe-adult',
+          version: 2,
+          status: 'DRAFT',
+        }),
+      ]);
+
+      const readiness = await service.getSeriesReleaseReadiness(
+        'series-1',
+        ADMIN_ACCESS,
+      );
+
+      // 旧 PUBLIC 还在，阶段状态仍是 PUBLIC；但已经有一版更新的 DRAFT。
+      expect(stageOf(readiness, 'HIGH_ACTIVITY_ADULT')).toMatchObject({
+        status: 'PUBLIC',
+        latestRecipeId: 'recipe-adult',
+        latestRecipeVersion: 2,
+        publishedRecipeVersion: 1,
+        hasPendingUpdate: true,
+      });
+      expect(readiness).toMatchObject({
+        businessStatus: 'PUBLIC',
+        releaseState: 'NEEDS_UPDATE',
+        hasPendingUpdates: true,
+        pendingStageCodes: ['HIGH_ACTIVITY_ADULT'],
+        // 待更新不阻断重新发布
+        ready: true,
+      });
+      expect(readiness.summary.pendingStageCount).toBe(1);
+      expect(readiness.blockers).toEqual([]);
+    });
+
+    it('reports PUBLISHED when the series and every stage are fully released', async () => {
+      prisma.recipeSeries.findUnique.mockResolvedValue(
+        seriesRecord({
+          businessStatus: 'PUBLIC',
+          requiredLifeStages: ['HIGH_ACTIVITY_ADULT'],
+        }),
+      );
+      prisma.recipe.findMany.mockResolvedValue([
+        recipeRecord({
+          id: 'recipe-row-adult-v2',
+          recipeId: 'recipe-adult',
+          version: 2,
+          status: 'PUBLIC',
+        }),
+      ]);
+
+      const readiness = await service.getSeriesReleaseReadiness(
+        'series-1',
+        ADMIN_ACCESS,
+      );
+
+      expect(readiness).toMatchObject({
+        businessStatus: 'PUBLIC',
+        releaseState: 'PUBLISHED',
+        hasPendingUpdates: false,
+        pendingStageCodes: [],
+      });
+      expect(stageOf(readiness, 'HIGH_ACTIVITY_ADULT')).toMatchObject({
+        status: 'PUBLIC',
+        latestRecipeVersion: 2,
+        publishedRecipeVersion: 2,
+        hasPendingUpdate: false,
+      });
+      expect(readiness.summary.pendingStageCount).toBe(0);
     });
 
     it('blocks missing presentation and warns on empty health tags', async () => {
@@ -490,6 +580,9 @@ describe('RecipeDesignerService · staged series release', () => {
 
       expect(prisma.recipe.updateMany).toHaveBeenCalledWith({
         where: {
+          id: {
+            in: ['recipe-row-adult', 'recipe-row-senior', 'recipe-row-repro'],
+          },
           seriesId: 'series-1',
           status: { in: ['DRAFT', 'PUBLIC'] },
         },
@@ -520,6 +613,86 @@ describe('RecipeDesignerService · staged series release', () => {
         ],
         publishedRecipeCount: 3,
         updatedRecipeCount: 3,
+      });
+    });
+
+    it('re-releases only the latest DRAFT and leaves the old PUBLIC version untouched', async () => {
+      prisma.recipeSeries.findUnique.mockResolvedValue(
+        seriesRecord({
+          businessStatus: 'PUBLIC',
+          requiredLifeStages: ['HIGH_ACTIVITY_ADULT'],
+        }),
+      );
+      prisma.recipe.findMany.mockResolvedValue([
+        recipeRecord({
+          id: 'recipe-row-adult-v1',
+          recipeId: 'recipe-adult',
+          version: 1,
+          status: 'PUBLIC',
+        }),
+        recipeRecord({
+          id: 'recipe-row-adult-v2',
+          recipeId: 'recipe-adult',
+          version: 2,
+          status: 'DRAFT',
+        }),
+      ]);
+      prisma.recipe.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await service.releaseSeries('series-1', ADMIN_ACCESS);
+
+      expect(prisma.recipe.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: { in: ['recipe-row-adult-v2'] },
+          seriesId: 'series-1',
+          status: { in: ['DRAFT', 'PUBLIC'] },
+        },
+        data: expect.objectContaining({ status: 'PUBLIC' }),
+      });
+      const targetedIds = prisma.recipe.updateMany.mock.calls[0][0].where.id.in;
+      expect(targetedIds).not.toContain('recipe-row-adult-v1');
+      expect(result).toMatchObject({
+        businessStatus: 'PUBLIC',
+        publishedRecipeCount: 1,
+        updatedRecipeCount: 1,
+      });
+    });
+
+    it('refreshes the latest version of an already published stage without republishing older rows', async () => {
+      prisma.recipeSeries.findUnique.mockResolvedValue(
+        seriesRecord({
+          businessStatus: 'PUBLIC',
+          requiredLifeStages: ['HIGH_ACTIVITY_ADULT'],
+        }),
+      );
+      prisma.recipe.findMany.mockResolvedValue([
+        recipeRecord({
+          id: 'recipe-row-adult-v1',
+          recipeId: 'recipe-adult',
+          version: 1,
+          status: 'PUBLIC',
+        }),
+        recipeRecord({
+          id: 'recipe-row-adult-v2',
+          recipeId: 'recipe-adult',
+          version: 2,
+          status: 'PUBLIC',
+        }),
+      ]);
+      prisma.recipe.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await service.releaseSeries('series-1', ADMIN_ACCESS);
+
+      expect(prisma.recipe.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: { in: ['recipe-row-adult-v2'] },
+          }),
+        }),
+      );
+      expect(result).toMatchObject({
+        publishedRecipeCount: 0,
+        updatedRecipeCount: 1,
       });
     });
 
@@ -564,6 +737,85 @@ describe('RecipeDesignerService · staged series release', () => {
       await expect(
         service.releaseSeries('series-1', STAFF_ACCESS),
       ).rejects.toThrow('只有管理员可以发布产品线');
+
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('unpublishSeries', () => {
+    it('flips every PUBLIC recipe to DRAFT and returns counts/status', async () => {
+      prisma.recipeSeries.findUnique.mockResolvedValue(
+        seriesRecord({ businessStatus: 'PUBLIC' }),
+      );
+      prisma.recipe.updateMany.mockResolvedValue({ count: 2 });
+
+      const result = await service.unpublishSeries('series-1', ADMIN_ACCESS);
+
+      expect(prisma.recipe.updateMany).toHaveBeenCalledWith({
+        where: { seriesId: 'series-1', status: 'PUBLIC' },
+        data: { status: 'DRAFT' },
+      });
+      expect(prisma.recipeSeries.update).toHaveBeenCalledWith({
+        where: { id: 'series-1' },
+        data: { businessStatus: 'DRAFT' },
+      });
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(result).toMatchObject({
+        seriesId: 'series-1',
+        businessStatus: 'DRAFT',
+        releaseState: 'UNPUBLISHED',
+        unpublishedRecipeCount: 2,
+        remainingPublicRecipeCount: 0,
+      });
+      expect(result.unpublishedAt).toBeInstanceOf(Date);
+      // 下架只改状态，不碰设计稿 / 历史。
+      expect(prisma.designRecipe.findMany).not.toHaveBeenCalled();
+    });
+
+    it('is idempotent when the series already has no PUBLIC recipe', async () => {
+      prisma.recipe.updateMany.mockResolvedValue({ count: 0 });
+
+      const result = await service.unpublishSeries('series-1', ADMIN_ACCESS);
+
+      expect(result).toMatchObject({
+        businessStatus: 'DRAFT',
+        unpublishedRecipeCount: 0,
+      });
+    });
+
+    it('lets only admins unpublish the series', async () => {
+      await expect(
+        service.unpublishSeries('series-1', STAFF_ACCESS),
+      ).rejects.toThrow('只有管理员可以下架产品线');
+
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.recipe.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('rejects order-bound series with a clear message', async () => {
+      prisma.recipeSeries.findUnique.mockResolvedValue(
+        seriesRecord({ designMode: 'ORDER', orderId: 'order-1' }),
+      );
+
+      await expect(
+        service.unpublishSeries('series-1', ADMIN_ACCESS),
+      ).rejects.toThrow(
+        new BadRequestException(
+          '订单定制系列不适用产品线分阶段发布，请从订单设计流程交付',
+        ),
+      );
+
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('hides series the current user cannot access', async () => {
+      prisma.recipeSeries.findUnique.mockResolvedValue(
+        seriesRecord({ createdBy: 'someone-else' }),
+      );
+
+      await expect(
+        service.unpublishSeries('series-1', ADMIN_ACCESS),
+      ).rejects.toThrow(NotFoundException);
 
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });

@@ -482,6 +482,30 @@ export class RecipeDesignerController {
     return ApiResponseDto.success(result);
   }
 
+  /**
+   * 整系列下架（2026-10-22 · 重新发布）。
+   *
+   * 只把该系列所有 PUBLIC 食谱行改回 DRAFT，并把系列 businessStatus 设为
+   * DRAFT；设计稿、版本历史都保留，所以之后还能重新发布。
+   * 订单定制系列不适用，服务层复用发布接口的权限/系列校验（400 / 404）。
+   */
+  @Post('series/:seriesId/unpublish')
+  @UseGuards(StaffGuard)
+  @Roles('ADMIN')
+  @ApiOperation({
+    summary: 'Unpublish a whole recipe series (PUBLIC -> DRAFT)',
+  })
+  async unpublishSeries(
+    @Param('seriesId') seriesId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.recipeDesignerService.unpublishSeries(
+      seriesId,
+      toRecipeDesignerAccessContext(user),
+    );
+    return ApiResponseDto.success(result);
+  }
+
   @Post('series/:seriesId/stage-drafts')
   @ApiOperation({ summary: 'Create or reuse a recipe series stage draft' })
   async createSeriesStageDraft(

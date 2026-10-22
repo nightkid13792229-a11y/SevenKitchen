@@ -183,6 +183,10 @@ describe('RecipeDesignerController authorization', () => {
     expect(source).toMatch(
       /@Post\('series\/:seriesId\/release'\)\s+@UseGuards\(StaffGuard\)\s+@Roles\('ADMIN'\)/,
     );
+    // 下架与发布使用同一套权限：StaffGuard + ADMIN
+    expect(source).toMatch(
+      /@Post\('series\/:seriesId\/unpublish'\)\s+@UseGuards\(StaffGuard\)\s+@Roles\('ADMIN'\)/,
+    );
   });
 
   it('validates series release settings limits and life stage arrays', async () => {
@@ -315,6 +319,7 @@ describe('RecipeDesignerController', () => {
     getSeriesReleaseReadiness: jest.fn(),
     updateSeriesReleaseSettings: jest.fn(),
     releaseSeries: jest.fn(),
+    unpublishSeries: jest.fn(),
     updateDraft: jest.fn(),
     deleteDraft: jest.fn(),
     addItem: jest.fn(),
@@ -758,6 +763,35 @@ describe('RecipeDesignerController', () => {
       access,
     );
     expect(service.releaseSeries).toHaveBeenCalledWith('series-1', access);
+  });
+
+  it('delegates whole-series unpublish and returns counts/status', async () => {
+    service.unpublishSeries.mockResolvedValue({
+      seriesId: 'series-1',
+      name: '鸡肉双阶段',
+      businessStatus: 'DRAFT',
+      releaseState: 'UNPUBLISHED',
+      unpublishedRecipeCount: 2,
+      remainingPublicRecipeCount: 0,
+    });
+
+    await expect(
+      controller.unpublishSeries('series-1', currentUser),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        code: 0,
+        data: expect.objectContaining({
+          businessStatus: 'DRAFT',
+          releaseState: 'UNPUBLISHED',
+          unpublishedRecipeCount: 2,
+        }),
+      }),
+    );
+
+    expect(service.unpublishSeries).toHaveBeenCalledWith('series-1', {
+      userId: 'staff-1',
+      role: 'STAFF',
+    });
   });
 
   it('delegates recipe designer series status filters to the service', async () => {

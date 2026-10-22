@@ -23,8 +23,9 @@ function source(
   sourceRecordId: string,
   values: Record<string, number | null | undefined>,
   units?: Record<string, string | null | undefined>,
+  sourceValues?: Record<string, number | null | undefined>,
 ): SourceNutrition {
-  return { sourceRecordId, values, units };
+  return { sourceRecordId, values, units, sourceValues };
 }
 
 function rowOf(plan: MergePlan, fieldPath: string): MergeRow | undefined {
@@ -106,8 +107,20 @@ describe('buildMergePlan', () => {
     expect(conflictOf(plan, 'minerals.iron')).toEqual({
       fieldPath: 'minerals.iron',
       candidates: [
-        { sourceRecordId: PRIMARY_ID, value: 5.5, unit: 'mg' },
-        { sourceRecordId: SUPPLEMENT_ID, value: 12, unit: 'mg' },
+        {
+          sourceRecordId: PRIMARY_ID,
+          value: 5.5,
+          unit: 'mg',
+          sourceValue: 5.5,
+          sourceUnit: 'mg',
+        },
+        {
+          sourceRecordId: SUPPLEMENT_ID,
+          value: 12,
+          unit: 'mg',
+          sourceValue: 12,
+          sourceUnit: 'mg',
+        },
       ],
     });
   });
@@ -131,8 +144,20 @@ describe('buildMergePlan', () => {
       sourceUnit: null,
     });
     expect(conflictOf(plan, 'macros.crudeProtein')?.candidates).toEqual([
-      { sourceRecordId: SUPPLEMENT_ID, value: 18, unit: 'g' },
-      { sourceRecordId: OTHER_SUPPLEMENT_ID, value: 22, unit: 'g' },
+      {
+        sourceRecordId: SUPPLEMENT_ID,
+        value: 18,
+        unit: 'g',
+        sourceValue: 18,
+        sourceUnit: 'g',
+      },
+      {
+        sourceRecordId: OTHER_SUPPLEMENT_ID,
+        value: 22,
+        unit: 'g',
+        sourceValue: 22,
+        sourceUnit: 'g',
+      },
     ]);
     expect(rowOf(plan, 'minerals.calcium')?.value).toBe(100);
   });
@@ -201,6 +226,28 @@ describe('buildMergePlan', () => {
 
     expect(withinTolerance.conflicts).toEqual([]);
     expect(outsideTolerance.conflicts).toHaveLength(1);
+  });
+
+  it('treats a 9e-7 relative difference as equal, just inside the tolerance', () => {
+    const plan = buildMergePlan({
+      primary: source(PRIMARY_ID, { 'minerals.calcium': 1000 }),
+      supplementals: [source(SUPPLEMENT_ID, { 'minerals.calcium': 1000.0009 })],
+    });
+
+    expect(plan.conflicts).toEqual([]);
+    expect(rowOf(plan, 'minerals.calcium')?.value).toBe(1000);
+    expect(rowOf(plan, 'minerals.calcium')?.status).toBe('DIRECT');
+  });
+
+  it('treats a 2e-6 relative difference as a conflict, just outside the tolerance', () => {
+    const plan = buildMergePlan({
+      primary: source(PRIMARY_ID, { 'minerals.calcium': 1000 }),
+      supplementals: [source(SUPPLEMENT_ID, { 'minerals.calcium': 1000.002 })],
+    });
+
+    expect(plan.conflicts).toHaveLength(1);
+    expect(rowOf(plan, 'minerals.calcium')?.value).toBeNull();
+    expect(rowOf(plan, 'minerals.calcium')?.status).toBe('CONFLICT');
   });
 
   it('treats an absent key or an explicit null as missing, never as zero', () => {
@@ -300,34 +347,73 @@ describe('buildMergePlan', () => {
     ]);
   });
 
-  it('records the declared source unit without converting the value', () => {
+  it('exposes the raw source value on rows while the final value stays in the catalog unit', () => {
     const plan = buildMergePlan({
-      primary: source(
-        PRIMARY_ID,
-        { 'minerals.selenium': 12 },
-        { 'minerals.selenium': 'μg' },
-      ),
+      primary: source(PRIMARY_ID, { 'minerals.calcium': 100 }),
       supplementals: [
         source(
           SUPPLEMENT_ID,
-          { 'minerals.iodine': 3 },
-          { 'minerals.iodine': 'μg' },
+          { 'minerals.iodine': 550 },
+          { 'minerals.iodine': 'mg' },
+          { 'minerals.iodine': 0.55 },
         ),
       ],
     });
 
-    expect(rowOf(plan, 'minerals.selenium')).toMatchObject({
-      value: 12,
-      unit: 'μg',
-      sourceValue: 12,
-      sourceUnit: 'μg',
-    });
-    expect(rowOf(plan, 'minerals.iodine')).toMatchObject({
-      value: 3,
+    expect(rowOf(plan, 'minerals.iodine')).toEqual({
+      fieldPath: 'minerals.iodine',
+      value: 550,
       unit: 'μg',
       status: 'FILLED',
-      sourceValue: 3,
-      sourceUnit: 'μg',
+      sourceRecordId: SUPPLEMENT_ID,
+      sourceValue: 0.55,
+      sourceUnit: 'mg',
+    });
+  });
+
+  it('exposes both catalog-unit values and raw source values in conflict candidates', () => {
+    const plan = buildMergePlan({
+      primary: source(
+        PRIMARY_ID,
+        { 'minerals.iodine': 550 },
+        { 'minerals.iodine': 'mg' },
+        { 'minerals.iodine': 0.55 },
+      ),
+      supplementals: [
+        source(
+          SUPPLEMENT_ID,
+          { 'minerals.iodine': 600 },
+          { 'minerals.iodine': 'mg' },
+          { 'minerals.iodine': 0.6 },
+        ),
+      ],
+    });
+
+    expect(conflictOf(plan, 'minerals.iodine')).toEqual({
+      fieldPath: 'minerals.iodine',
+      candidates: [
+        {
+          sourceRecordId: PRIMARY_ID,
+          value: 550,
+          unit: 'μg',
+          sourceValue: 0.55,
+          sourceUnit: 'mg',
+        },
+        {
+          sourceRecordId: SUPPLEMENT_ID,
+          value: 600,
+          unit: 'μg',
+          sourceValue: 0.6,
+          sourceUnit: 'mg',
+        },
+      ],
+    });
+    expect(rowOf(plan, 'minerals.iodine')).toMatchObject({
+      value: null,
+      unit: 'μg',
+      status: 'CONFLICT',
+      sourceValue: null,
+      sourceUnit: null,
     });
   });
 
@@ -366,7 +452,7 @@ describe('applyManualResolution', () => {
     });
   }
 
-  it('writes the chosen source value into rows as a direct row and clears the conflict', () => {
+  it('writes the chosen source value into rows as a manual row and clears the conflict', () => {
     const plan = conflictedPlan();
 
     const resolved = applyManualResolution(plan, 'minerals.iron', {
@@ -377,7 +463,7 @@ describe('applyManualResolution', () => {
       fieldPath: 'minerals.iron',
       value: 12,
       unit: 'mg',
-      status: 'DIRECT',
+      status: 'MANUAL',
       sourceRecordId: SUPPLEMENT_ID,
       sourceValue: 12,
       sourceUnit: 'mg',
@@ -393,7 +479,7 @@ describe('applyManualResolution', () => {
 
     expect(rowOf(resolved, 'minerals.iron')).toMatchObject({
       value: 5.5,
-      status: 'DIRECT',
+      status: 'MANUAL',
       sourceRecordId: PRIMARY_ID,
       sourceValue: 5.5,
     });
@@ -516,8 +602,20 @@ describe('applyManualResolution', () => {
         {
           fieldPath: 'macros.moisture',
           candidates: [
-            { sourceRecordId: PRIMARY_ID, value: 70, unit: 'g' },
-            { sourceRecordId: SUPPLEMENT_ID, value: 68, unit: 'g' },
+            {
+              sourceRecordId: PRIMARY_ID,
+              value: 70,
+              unit: 'g',
+              sourceValue: 70000,
+              sourceUnit: 'mg',
+            },
+            {
+              sourceRecordId: SUPPLEMENT_ID,
+              value: 68,
+              unit: 'g',
+              sourceValue: 68000,
+              sourceUnit: 'mg',
+            },
           ],
         },
       ],
@@ -536,10 +634,10 @@ describe('applyManualResolution', () => {
       fieldPath: 'macros.moisture',
       value: 68,
       unit: 'g',
-      status: 'DIRECT',
+      status: 'MANUAL',
       sourceRecordId: SUPPLEMENT_ID,
-      sourceValue: 68,
-      sourceUnit: 'g',
+      sourceValue: 68000,
+      sourceUnit: 'mg',
     });
     expect(resolved.conflicts).toEqual([]);
     expect(resolved.missingFields).toEqual(['macros.energyKcal']);

@@ -16,13 +16,16 @@ import {
  * 且必须能反算回原始值）。`null`、缺键、非有限数一律表示「来源没给这个字段」，
  * **不是 0**：来源真的给了 0，就传 0，两者必须区分开。
  *
- * `units` 只用于证据账本：记录来源原文单位（如 `μg`），不参与换算；
- * 不传时按字段目录单位记。
+ * `sourceValues` + `units` 是**成对的**来源原文（如 `0.55` + `mg`）：调用方已经
+ * 按确定性规则把原文换算成 `values` 里的目录单位值（如 `550` + `μg`）。本模块
+ * 只把原文照抄进证据/冲突候选，**不做换算**。只传 `units` 不传 `sourceValues`
+ * 时按目录单位记（唯一已知的数值是目录单位值，不假装知道原文）。
  */
 export interface SourceNutrition {
   sourceRecordId: string;
   values: Record<string, number | null | undefined>;
   units?: Record<string, string | null | undefined>;
+  sourceValues?: Record<string, number | null | undefined>;
 }
 
 /** 两边（及多个补位来源）数值的相等判定：相对误差 1e-6，浮点噪声不算冲突。 */
@@ -39,6 +42,8 @@ interface ProvidedFieldValue {
   sourceRecordId: string;
   value: number;
   unit: string;
+  sourceValue: number;
+  sourceUnit: string;
 }
 
 function readProvidedValue(
@@ -49,18 +54,29 @@ function readProvidedValue(
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-function readSourceUnit(
+function readRawValue(
   source: SourceNutrition,
   fieldPath: string,
-  defaultUnit: string,
-): string {
+): number | null {
+  const value = source.sourceValues?.[fieldPath];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function readDeclaredUnit(
+  source: SourceNutrition,
+  fieldPath: string,
+): string | null {
   const unit = source.units?.[fieldPath]?.trim();
-  return unit ? unit : defaultUnit;
+  return unit ? unit : null;
 }
 
 /**
  * 按「主来源在前、补位来源按传入顺序在后」收集一份字段的候选值。
  * 没给这个字段的来源直接跳过：缺失不进候选，更不会补成 0。
+ *
+ * 目录单位值与来源原文值成对存下：`value/unit` 一定是目录单位（可直接比较、
+ * 写入档案），`sourceValue/sourceUnit` 是来源原文（只作证据展示）。没给原文值时
+ * 回退成目录单位值与目录单位——不假装知道原文。
  */
 function collectProvidedValues(
   primary: SourceNutrition,
@@ -70,15 +86,23 @@ function collectProvidedValues(
   const provided: ProvidedFieldValue[] = [];
 
   for (const source of [primary, ...supplementals]) {
-    const value = readProvidedValue(source, field.fieldPath as string);
+    const fieldPath = field.fieldPath as string;
+    const value = readProvidedValue(source, fieldPath);
     if (value === null) {
       continue;
     }
 
+    const rawValue = readRawValue(source, fieldPath);
+    const hasRawValue = rawValue !== null;
+
     provided.push({
       sourceRecordId: source.sourceRecordId,
       value,
-      unit: readSourceUnit(source, field.fieldPath as string, field.unit),
+      unit: field.unit,
+      sourceValue: hasRawValue ? rawValue : value,
+      sourceUnit: hasRawValue
+        ? (readDeclaredUnit(source, fieldPath) ?? field.unit)
+        : field.unit,
     });
   }
 
@@ -145,8 +169,8 @@ export function buildMergePlan(input: {
         unit: field.unit,
         status: primaryHasValue ? 'DIRECT' : 'FILLED',
         sourceRecordId: chosen.sourceRecordId,
-        sourceValue: chosen.value,
-        sourceUnit: chosen.unit,
+        sourceValue: chosen.sourceValue,
+        sourceUnit: chosen.sourceUnit,
       });
       continue;
     }
@@ -166,6 +190,8 @@ export function buildMergePlan(input: {
         sourceRecordId: entry.sourceRecordId,
         value: entry.value,
         unit: entry.unit,
+        sourceValue: entry.sourceValue,
+        sourceUnit: entry.sourceUnit,
       })),
     });
   }
@@ -187,9 +213,13 @@ function compareRowsByCatalogOrder(left: MergeRow, right: MergeRow): number {
 }
 
 /**
- * 人对冲突字段做裁决：按选定来源把值写进 `rows`（状态 `DIRECT`），
+ * 人对冲突字段做裁决：按选定来源把值写进 `rows`（状态 `MANUAL`，
+ * 与自动盖章的 `DIRECT`/`FILLED` 区分开，后面统计「改动率」才分得清），
  * 并从 `conflicts` 里移除这一条。其余行、其余冲突原样保留；
  * `missingFields` 也原样保留——冲突字段本来就不在缺失清单里（有值才冲突）。
+ *
+ * 写入的行同时保留两套数：`value`/`unit` 是目录单位下的最终值，
+ * `sourceValue`/`sourceUnit` 照抄所选候选的来源原文。
  *
  * 候选值只能来自该字段冲突里的 `candidates`——`MergePlan` 不携带各来源的
  * 完整营养数据，所以「选了一个没提供该字段的来源」在这里就是「不在候选里」，
@@ -229,10 +259,10 @@ export function applyManualResolution(
     fieldPath,
     value: candidate.value,
     unit: field.unit,
-    status: 'DIRECT',
+    status: 'MANUAL',
     sourceRecordId: candidate.sourceRecordId,
-    sourceValue: candidate.value,
-    sourceUnit: candidate.unit,
+    sourceValue: candidate.sourceValue,
+    sourceUnit: candidate.sourceUnit,
   };
 
   const rows = plan.rows

@@ -126,28 +126,45 @@ export interface CandidateSearchResult {
  *
  * `status` 只描述「这个字段的值是怎么来的」：
  * - `DIRECT`：主来源直接给的（主来源的行）
- * - `FILLED`：主来源缺、由补位来源补上的
+ * - `FILLED`：主来源缺、由补位来源自动补上的
+ * - `MANUAL`：人工裁决后确定的（`applyManualResolution` 写入）
  * - `CONFLICT`：多个来源给了值但互不相等，**没有写出最终值**；
  *   `value` / `sourceValue` / `sourceRecordId` / `sourceUnit` 全为 `null`，
  *   候选值放在 `MergePlan.conflicts` 里等人裁决。
+ *
+ * `value`/`unit` 是目录单位下的最终值；`sourceValue`/`sourceUnit` 是来源原文，
+ * 两者不能混用（详见 `MergeConflict.candidates`）。
  */
 export interface MergeRow {
   fieldPath: string;
   value: number | null;
   unit: string;
-  status: 'DIRECT' | 'FILLED' | 'CONFLICT';
+  status: 'DIRECT' | 'FILLED' | 'MANUAL' | 'CONFLICT';
   sourceRecordId: string | null;
   sourceValue: number | null;
   sourceUnit: string | null;
 }
 
-/** 同一字段多源冲突：不自动裁决，标红等人选。 */
+/**
+ * 同一字段多源冲突：不自动裁决，标红等人选。
+ *
+ * 每个候选同时给两套数，展示时必须区分：
+ * - `value`/`unit`：**目录单位**下的值，用于比较与写入档案；
+ * - `sourceValue`/`sourceUnit`：**来源原文**值与单位，只作证据展示。
+ *
+ * 例：来源写 `0.55 mg`、该字段目录单位是 `μg` 时，
+ * `value` 是 `550`、`unit` 是 `μg`，而 `sourceValue` 是 `0.55`、`sourceUnit` 是 `mg`。
+ * 来源没有单独给原文值时，`sourceValue`/`sourceUnit` 回退为目录单位下的值与单位
+ * （已换算过的值就是唯一已知的值，不假装知道原文）。
+ */
 export interface MergeConflict {
   fieldPath: string;
   candidates: Array<{
     sourceRecordId: string;
     value: number;
     unit: string;
+    sourceValue: number | null;
+    sourceUnit: string | null;
   }>;
 }
 

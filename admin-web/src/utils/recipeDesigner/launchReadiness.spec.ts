@@ -18,6 +18,7 @@ const summary: DraftLaunchReadinessSummary = {
   foodItemCount: 4,
   totalWeightG: 1250,
   energyDensityKcalPerKg: 4321.6,
+  dryMatterEnergyDensityKcalPerKg: 4850.4,
   supplementCount: 2,
   stepCount: 4,
   reportAvailable: true,
@@ -46,7 +47,7 @@ describe('上线检查 · 概要展示', () => {
     expect(rows.map((row) => row.label)).toEqual([
       '参与评估项',
       '参与评估食材',
-      '能量密度（每kg成品）',
+      '能量密度（每kg干物质）',
       '参与评估补剂',
       '制作步骤',
       '完整营养报告'
@@ -54,7 +55,7 @@ describe('上线检查 · 概要展示', () => {
     expect(rows.map((row) => row.value)).toEqual([
       '6 项',
       '4 种',
-      '4322 kcal/kg',
+      '4850 kcal/kg DM',
       '2 种',
       '4 步',
       '可生成'
@@ -68,7 +69,8 @@ describe('上线检查 · 概要展示', () => {
     const rows = buildLaunchSummaryRows({
       ...summary,
       reportAvailable: false,
-      energyDensityKcalPerKg: null
+      energyDensityKcalPerKg: null,
+      dryMatterEnergyDensityKcalPerKg: null
     })
 
     expect(rows.find((row) => row.key === 'reportAvailable')).toMatchObject({

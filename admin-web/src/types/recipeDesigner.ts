@@ -167,6 +167,8 @@ export interface DraftLaunchReadinessSummary {
   foodItemCount: number
   totalWeightG: number
   energyDensityKcalPerKg: number | null
+  /** 干物质基础能量密度；概要优先展示 */
+  dryMatterEnergyDensityKcalPerKg: number | null
   /** 参与评估的补剂数 */
   supplementCount: number
   /** 有效制作步骤数 */

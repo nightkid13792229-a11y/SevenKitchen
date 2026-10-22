@@ -7737,6 +7737,10 @@ export class RecipeDesignerService {
     return {
       totalWeightG: assessment.totalWeightG,
       energyDensityKcalPerKg: assessment.energyDensityKcalPerKg,
+      dryMatterEnergyDensityKcalPerKg:
+        assessment.dryMatterEnergyKcalPer100g !== null
+          ? assessment.dryMatterEnergyKcalPer100g * 10
+          : null,
       overallStatus: assessment.overallStatus,
       deficientCount: assessment.summary.deficient,
       excessCount: assessment.summary.excess,

@@ -231,15 +231,15 @@ function buildEnergyDensityRows(assessment: DesignRecipeAssessmentResult) {
 
   return [
     {
+      label: '每公斤干物质',
+      value: formatEnergyDensity(dryMatterEnergyDensity, 'kcal/kg DM'),
+    },
+    {
       label: '每公斤配方',
       value: formatEnergyDensity(
         assessment.energyDensityKcalPerKg,
         'kcal/kg',
       ),
-    },
-    {
-      label: '每公斤干物质',
-      value: formatEnergyDensity(dryMatterEnergyDensity, 'kcal/kg DM'),
     },
   ];
 }

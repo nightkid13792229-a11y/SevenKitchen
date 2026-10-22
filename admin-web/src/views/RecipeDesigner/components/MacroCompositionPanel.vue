@@ -76,8 +76,8 @@ const densityRows = computed(() => {
   const dryPerKg =
     a.dryMatterEnergyKcalPer100g != null ? a.dryMatterEnergyKcalPer100g * 10 : null
   return [
-    { label: '每公斤配方', value: perKg == null ? '—' : `${Math.round(perKg)} kcal/kg` },
-    { label: '每公斤干物质', value: dryPerKg == null ? '—' : `${Math.round(dryPerKg)} kcal/kg DM` }
+    { label: '每公斤干物质', value: dryPerKg == null ? '—' : `${Math.round(dryPerKg)} kcal/kg DM` },
+    { label: '每公斤配方', value: perKg == null ? '—' : `${Math.round(perKg)} kcal/kg` }
   ]
 })
 </script>

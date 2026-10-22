@@ -151,8 +151,8 @@ function buildEnergyDensityRows(assessment: any): PublishEnergyDensityRow[] {
   const dryMatterEnergyPerKg = readDryMatterEnergyDensityPerKg(assessment)
 
   return [
-    { label: '每公斤配方', value: formatEnergyDensity(energyDensity, 'kcal/kg') },
     { label: '每公斤干物质', value: formatEnergyDensity(dryMatterEnergyPerKg, 'kcal/kg DM') },
+    { label: '每公斤配方', value: formatEnergyDensity(energyDensity, 'kcal/kg') },
   ]
 }
 

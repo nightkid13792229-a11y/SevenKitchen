@@ -66,7 +66,10 @@ export interface DraftLaunchReadinessSummary {
   /** 参与评估的食材种类数（不含补剂） */
   foodItemCount: number;
   totalWeightG: number;
+  /** 成品基础能量密度（校验用，不优先展示） */
   energyDensityKcalPerKg: number | null;
+  /** 干物质基础能量密度（展示优先） */
+  dryMatterEnergyDensityKcalPerKg: number | null;
   /** 参与评估的补剂数 */
   supplementCount: number;
   /** 有效制作步骤数 */
@@ -107,6 +110,7 @@ export interface LaunchReadinessItemInput {
 export interface LaunchReadinessAssessmentSnapshot {
   totalWeightG: number;
   energyDensityKcalPerKg: number | null;
+  dryMatterEnergyDensityKcalPerKg: number | null;
   overallStatus: string;
   deficientCount: number;
   excessCount: number;
@@ -323,6 +327,8 @@ export const buildDraftLaunchReadiness = (
       foodItemCount,
       totalWeightG: assessment?.totalWeightG ?? 0,
       energyDensityKcalPerKg: assessment?.energyDensityKcalPerKg ?? null,
+      dryMatterEnergyDensityKcalPerKg:
+        assessment?.dryMatterEnergyDensityKcalPerKg ?? null,
       supplementCount,
       stepCount: Math.max(0, input.productionStepCount),
       reportAvailable: input.reportAvailable,

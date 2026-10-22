@@ -89,12 +89,37 @@ export function formatLaunchWeightG(value: number | null | undefined): string {
 
 /** 能量密度：缺失显示破折号，不把 null 伪造成 0 */
 export function formatLaunchEnergyDensity(
-  value: number | null | undefined
+  value: number | null | undefined,
+  unit = 'kcal/kg'
 ): string {
   if (value === null || value === undefined) return '—'
   const energy = Number(value)
   if (!Number.isFinite(energy)) return '—'
-  return `${Math.round(energy)} kcal/kg`
+  return `${Math.round(energy)} ${unit}`
+}
+
+/** 概要能量密度：优先干物质，缺失时才回退成品值 */
+export function resolveLaunchEnergyDensity(
+  summary: Pick<
+    DraftLaunchReadinessSummary,
+    'dryMatterEnergyDensityKcalPerKg' | 'energyDensityKcalPerKg'
+  >
+): { value: string; basis: 'DM' | 'AS_FED' | 'MISSING' } {
+  const dm = summary.dryMatterEnergyDensityKcalPerKg
+  if (dm !== null && dm !== undefined && Number.isFinite(Number(dm))) {
+    return {
+      value: formatLaunchEnergyDensity(dm, 'kcal/kg DM'),
+      basis: 'DM'
+    }
+  }
+  return {
+    value: formatLaunchEnergyDensity(summary.energyDensityKcalPerKg),
+    basis:
+      summary.energyDensityKcalPerKg === null ||
+      summary.energyDensityKcalPerKg === undefined
+        ? 'MISSING'
+        : 'AS_FED'
+  }
 }
 
 /** 概要区六项：原料 / 重量 / 能量 / 补剂 / 步骤 / 报告 */
@@ -116,8 +141,8 @@ export function buildLaunchSummaryRows(
     },
     {
       key: 'energyDensityKcalPerKg',
-      label: '能量密度（每kg成品）',
-      value: formatLaunchEnergyDensity(summary.energyDensityKcalPerKg),
+      label: '能量密度（每kg干物质）',
+      value: resolveLaunchEnergyDensity(summary).value,
       tone: 'default'
     },
     {

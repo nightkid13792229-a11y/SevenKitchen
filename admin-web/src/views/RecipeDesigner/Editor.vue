@@ -156,17 +156,7 @@
                 <span class="item-type-tag" :class="itemTypeTagClass(element)">{{ itemTypeLabel(element) }}</span>
                 <div class="item-main">
                   <div class="item-name">{{ itemDisplayName(element) }}</div>
-                  <div class="item-meta">
-                    {{ itemProfileName(element) }}
-                    <span
-                      v-if="itemPreparationText(element)"
-                      class="item-preparation"
-                      :class="{ 'item-preparation-mismatch': itemPreparationHint(element) }"
-                      :title="itemPreparationHint(element) || '制备方法（由系统按营养档案自动带出）'"
-                    >
-                      · 制备：{{ itemPreparationText(element) }}
-                    </span>
-                  </div>
+                  <div class="item-meta">{{ itemProfileName(element) }}</div>
                 </div>
                 <div class="item-controls">
                   <div class="weight-editor">
@@ -198,6 +188,81 @@
                       @click="handleRemoveItem(element)"
                     />
                   </div>
+                </div>
+
+                <!--
+                  补剂目标营养素 + 当前实际添加浓度（2026-10-22）：
+                  浓度按「评估总重量」实时计算，改用量 / 配方总重 / 目标后自动重算。
+                -->
+                <div v-if="isSupplementItem(element)" class="item-supplement-row">
+                  <template v-if="itemSupplementTargetViews(element).length">
+                    <el-tag
+                      v-for="target in itemSupplementTargetViews(element)"
+                      :key="target.fieldPath"
+                      size="small"
+                      :type="target.valuePerKg === null ? 'danger' : 'warning'"
+                      effect="plain"
+                      :title="target.valuePerKg === null ? '当前档案缺该字段或配方总重量未知，无法计算添加浓度' : '每 kg 配方实际添加浓度'"
+                    >
+                      {{ target.text }}
+                    </el-tag>
+                  </template>
+                  <span v-else class="item-target-missing">
+                    未设置目标营养素（保存 / 发布会被拒绝）
+                  </span>
+                  <el-button
+                    size="small"
+                    text
+                    type="primary"
+                    @click="openSupplementTargetEditor(element)"
+                  >修改目标</el-button>
+                </div>
+
+                <!--
+                  原料预处理（2026-10-22）：按原料维护，进入制作前处理信息，
+                  与整份食谱的「制作步骤」分开；不从历史食谱自动复制。
+                -->
+                <div class="item-preparation-row">
+                  <div class="preparation-label">原料预处理</div>
+                  <el-select
+                    :model-value="element.preparationMethod || ''"
+                    class="preparation-method-select"
+                    size="small"
+                    filterable
+                    allow-create
+                    default-first-option
+                    clearable
+                    placeholder="选择或输入预处理方式"
+                    @change="(value: string | undefined) => onPreparationMethodChange(element, value)"
+                  >
+                    <el-option
+                      v-for="option in preparationMethodOptions"
+                      :key="option.id"
+                      :label="option.name"
+                      :value="option.id"
+                    />
+                  </el-select>
+                  <el-input
+                    :model-value="element.preparationNote || ''"
+                    class="preparation-note-input"
+                    size="small"
+                    maxlength="500"
+                    placeholder="预处理补充说明（可选）"
+                    @change="(value: string) => onPreparationNoteChange(element, value)"
+                  />
+                  <el-tag
+                    v-if="element.preparationSource"
+                    size="small"
+                    :type="element.preparationSource === 'MANUAL' ? 'warning' : 'info'"
+                    effect="plain"
+                  >
+                    {{ element.preparationSource === 'MANUAL' ? '人工' : '自动' }}
+                  </el-tag>
+                  <span v-else class="preparation-source-empty">未设置</span>
+                  <span
+                    v-if="itemPreparationHint(element)"
+                    class="item-preparation-hint"
+                  >{{ itemPreparationHint(element) }}</span>
                 </div>
               </div>
             </template>
@@ -266,6 +331,22 @@
         <el-button type="primary" :loading="renaming" @click="confirmRename">保存</el-button>
       </template>
     </el-dialog>
+
+    <!--
+      添加 / 修改补剂目标营养素（2026-10-22）。
+      补剂没有目标就不允许加入配方；预选默认目标或当前评估营养素，仍可多选调整。
+    -->
+    <SupplementTargetDialog
+      v-if="supplementTargetDialog"
+      v-model="supplementTargetDialogVisible"
+      :mode="supplementTargetDialog.mode"
+      :ingredient-name="supplementTargetDialog.ingredientName"
+      :nutrition-food-name="supplementTargetDialog.nutritionFoodName"
+      :profile="supplementTargetDialog.profile"
+      :initial-targets="supplementTargetDialog.initialTargets"
+      :saving="supplementDialogSaving"
+      @confirm="confirmSupplementTargets"
+    />
   </div>
 </template>
 
@@ -277,6 +358,7 @@ import { ArrowDown, ArrowLeft, CircleCheckFilled, Delete, EditPen, Loading, Rank
 import draggable from 'vuedraggable'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import type { CreateRecipeSeriesStageDraftPayload } from '@/api/recipeDesigner'
+import { nutritionFoodApi, type NutritionFoodDetail } from '@/api/ingredients'
 import { orderRecipeDesignApi } from '@/api/orderRecipeDesign'
 import type {
   OrderDesignWorkspace,
@@ -291,6 +373,7 @@ import {
   FEDIAF_DOG_SCENARIO_LABELS,
   type DesignRecipeDraftDetail,
   type DesignerItem,
+  type DesignerSupplementTarget,
   type FediafDogScenario,
   type IngredientNutritionProfileOption,
   type RecipeDesignerIngredientOption
@@ -303,7 +386,18 @@ import GaugePanel from './components/GaugePanel.vue'
 import MacroCompositionPanel from './components/MacroCompositionPanel.vue'
 import DogInsightPanel from './components/DogInsightPanel.vue'
 import AiDesignSuggestionPanel from './components/AiDesignSuggestionPanel.vue'
+import SupplementTargetDialog from './components/SupplementTargetDialog.vue'
 import type { DesignRecipeAssessmentResult } from '@/utils/recipeDesigner/assessmentTypes'
+import {
+  computeSupplementTargetConcentration,
+  formatSupplementTargetConcentration,
+  listSupplementTargetFieldCandidates,
+  normalizeSupplementTargetDefinitions,
+  readDefaultSupplementTargets,
+  resolveSupplementTargetDefinition,
+  resolveSupplementTargetFieldPath,
+  type SupplementTargetDefinition
+} from '@/utils/recipeDesigner/supplementTargets'
 import { preparationBasisMismatchHint } from '@/utils/preparationBasis'
 
 /** 兜底烹饪方式选项（后端未提供时使用） */
@@ -355,6 +449,47 @@ const draft = ref<DesignRecipeDraftDetail | null>(null)
 const items = ref<DesignerItem[]>([])
 /** 原料对象内部字段变更的修订号；watch 必须显式读它，否则改开关不会触发评估 */
 const itemsRevision = ref(0)
+
+/**
+ * 补剂目标营养素弹窗上下文（2026-10-22）。
+ *
+ * add = 从原料库 / 智能添加进入，确认后才真正调用 addItem；
+ * edit = 修改已有补剂项的目标，保存时调用 updateItem。
+ */
+interface SupplementTargetDialogState {
+  mode: 'add' | 'edit'
+  ingredientId?: string
+  itemId?: string
+  nutritionFoodId: string
+  ingredientName: string
+  nutritionFoodName: string
+  profile: unknown
+  initialTargets: SupplementTargetDefinition[]
+  weightG: number
+}
+const supplementTargetDialog = ref<SupplementTargetDialogState | null>(null)
+const supplementDialogSaving = ref(false)
+const supplementTargetDialogVisible = computed({
+  get: () => Boolean(supplementTargetDialog.value),
+  set: (visible: boolean) => {
+    if (!visible) supplementTargetDialog.value = null
+  }
+})
+const nutritionFoodDetailCache = new Map<string, Promise<NutritionFoodDetail>>()
+
+async function loadNutritionFoodDetail(
+  nutritionFoodId: string
+): Promise<NutritionFoodDetail> {
+  const cached = nutritionFoodDetailCache.get(nutritionFoodId)
+  if (cached) return cached
+
+  const request = nutritionFoodApi.getDetail(nutritionFoodId).catch((error) => {
+    nutritionFoodDetailCache.delete(nutritionFoodId)
+    throw error
+  })
+  nutritionFoodDetailCache.set(nutritionFoodId, request)
+  return request
+}
 const initialLoading = ref(true)
 /** 切换生命阶段中 */
 const switchingStage = ref(false)
@@ -660,19 +795,41 @@ function applyOrderByIds(ids: string[]) {
 /** 撤销删除后服务器上原料已不存在时，用原信息重新创建原料（生成新 id 并替换本地引用） */
 async function recreateItem(snapshot: DesignerItem) {
   if (!draft.value) return
+  const supplementTargets = normalizeSupplementTargetDefinitions(
+    snapshot.supplementTargets
+  )
   const payload = {
     ingredientId: snapshot.ingredientId ?? snapshot.ingredient?.id,
     nutritionFoodId: snapshot.nutritionFoodId ?? '',
     weightG: Number(snapshot.weightG ?? 0),
     includeInAssessment: snapshot.includeInAssessment,
     preparationMethod: snapshot.preparationMethod,
+    preparationNote: snapshot.preparationNote ?? undefined,
+    preparationSource: snapshot.preparationSource ?? undefined,
     nutrientTargetKey: snapshot.nutrientTargetKey ?? undefined,
-    nutrientTargetValue: snapshot.nutrientTargetValue ?? undefined
+    nutrientTargetValue: snapshot.nutrientTargetValue ?? undefined,
+    ...(supplementTargets.length > 0
+      ? {
+          supplementTargets: supplementTargets.map((target) => ({
+            fieldPath: target.fieldPath,
+            label: target.label,
+            unit: target.unit
+          }))
+        }
+      : {})
   }
   try {
     const created = await recipeDesignerApi.addItem(draft.value.id, payload)
     const oldId = snapshot.id
-    items.value = items.value.map((item) => (item.id === oldId ? created : item))
+    const decorated: DesignerItem = {
+      ...created,
+      nutritionFood: snapshot.nutritionFood ?? created.nutritionFood,
+      supplementTargets:
+        supplementTargets.length > 0
+          ? buildStoredSupplementTargets(supplementTargets)
+          : created.supplementTargets
+    }
+    items.value = items.value.map((item) => (item.id === oldId ? decorated : item))
     // 旧 id 在服务器上已失效：丢弃指向它的待保存操作，并把历史栈中的 id 换成新 id
     cancelItemOps(oldId)
     remapHistoryItemId(oldId, created.id)
@@ -773,6 +930,282 @@ function isSupplementItem(item: DesignerItem): boolean {
   return (
     String(item.ingredientType || item.ingredient?.type || '').trim().toUpperCase() === 'SUPPLEMENT'
   )
+}
+
+function isSupplementOption(option: RecipeDesignerIngredientOption): boolean {
+  return String(option.type || '').trim().toUpperCase() === 'SUPPLEMENT'
+}
+
+// ---------- 原料预处理（2026-10-22） ----------
+
+const preparationMethodOptions = computed(
+  () => draft.value?.preparationMethodOptions ?? []
+)
+
+/**
+ * 修改原料预处理方式：可从字典选择，也允许手填。
+ * 只把改动写回该原料；不从历史食谱自动复制默认值。
+ */
+function onPreparationMethodChange(
+  item: DesignerItem,
+  value: string | undefined
+) {
+  const nextMethod = String(value ?? '').trim() || null
+  const currentMethod = String(item.preparationMethod ?? '').trim() || null
+  if (nextMethod === currentMethod) return
+
+  item.preparationMethod = nextMethod ?? undefined
+  item.preparationMethodLabel = nextMethod
+    ? preparationMethodOptions.value.find((option) => option.id === nextMethod)?.name ?? nextMethod
+    : null
+  item.preparationSource = nextMethod || item.preparationNote ? 'MANUAL' : null
+  itemsRevision.value += 1
+  enqueue({
+    kind: 'updateItem',
+    itemId: item.id,
+    data: { preparationMethod: nextMethod }
+  })
+}
+
+/** 修改预处理补充说明（最多 500 字，与后端限制一致） */
+function onPreparationNoteChange(item: DesignerItem, value: string) {
+  const nextNote = String(value ?? '').trim().slice(0, 500) || null
+  const currentNote = String(item.preparationNote ?? '').trim() || null
+  if (nextNote === currentNote) return
+
+  item.preparationNote = nextNote
+  item.preparationSource = nextNote || item.preparationMethod ? 'MANUAL' : null
+  itemsRevision.value += 1
+  enqueue({
+    kind: 'updateItem',
+    itemId: item.id,
+    data: { preparationNote: nextNote }
+  })
+}
+
+// ---------- 补剂目标营养素与添加浓度（2026-10-22） ----------
+
+interface SupplementTargetView extends SupplementTargetDefinition {
+  valuePerKg: number | null
+  text: string
+}
+
+function buildStoredSupplementTargets(
+  definitions: SupplementTargetDefinition[]
+): DesignerSupplementTarget[] {
+  return definitions.map((definition) => ({
+    fieldPath: definition.fieldPath,
+    label: definition.label,
+    unit: definition.unit,
+    nutrientTargetKey:
+      definition.fieldPath.slice(definition.fieldPath.lastIndexOf('.') + 1) ||
+      null,
+    targetValuePerKg: null
+  }))
+}
+
+/**
+ * 明细行展示：目标营养素标签 + 当前配方的实际添加浓度（每 kg）。
+ * 浓度按当前评估总重量实时计算，用量 / 总重 / 目标变化后自动重算。
+ */
+function itemSupplementTargetViews(item: DesignerItem): SupplementTargetView[] {
+  const definitions = normalizeSupplementTargetDefinitions(
+    item.supplementTargets
+  )
+
+  // 历史数据兼容：只有旧版单目标字段时也展示出来，避免看起来像「没有目标」。
+  if (definitions.length === 0 && item.nutrientTargetKey) {
+    const legacyFieldPath = resolveSupplementTargetFieldPath(
+      item.nutrientTargetKey
+    )
+    const legacyDefinition = legacyFieldPath
+      ? resolveSupplementTargetDefinition(legacyFieldPath)
+      : null
+    if (legacyDefinition) definitions.push(legacyDefinition)
+  }
+
+  const totalWeightG = assessment.value?.totalWeightG ?? null
+  return definitions.map((definition) => {
+    const valuePerKg =
+      item.includeInAssessment === false
+        ? null
+        : computeSupplementTargetConcentration(
+            item.nutritionFood?.nutritionData,
+            definition.fieldPath,
+            Number(item.weightG ?? 0),
+            totalWeightG
+          )
+    return {
+      ...definition,
+      valuePerKg,
+      text: formatSupplementTargetConcentration(definition, valuePerKg)
+    }
+  })
+}
+
+async function openSupplementTargetEditor(item: DesignerItem) {
+  const nutritionFoodId = String(item.nutritionFoodId ?? '').trim()
+  if (!nutritionFoodId) {
+    ElMessage.warning('该补剂缺少营养档案，无法修改目标营养素')
+    return
+  }
+
+  let profile = item.nutritionFood?.nutritionData ?? null
+  let nutritionFoodName =
+    item.nutritionFood?.name || item.nutritionFoodName || ''
+
+  if (!profile) {
+    try {
+      const detail = await loadNutritionFoodDetail(nutritionFoodId)
+      profile = detail.nutritionData
+      nutritionFoodName = detail.name || nutritionFoodName
+    } catch {
+      return
+    }
+  }
+
+  const currentTargets = normalizeSupplementTargetDefinitions(
+    item.supplementTargets
+  )
+  if (currentTargets.length === 0 && item.nutrientTargetKey) {
+    const legacyFieldPath = resolveSupplementTargetFieldPath(
+      item.nutrientTargetKey
+    )
+    const legacyDefinition = legacyFieldPath
+      ? resolveSupplementTargetDefinition(legacyFieldPath)
+      : null
+    if (legacyDefinition) currentTargets.push(legacyDefinition)
+  }
+
+  supplementTargetDialog.value = {
+    mode: 'edit',
+    itemId: item.id,
+    nutritionFoodId,
+    ingredientName: itemDisplayName(item),
+    nutritionFoodName,
+    profile,
+    initialTargets: currentTargets,
+    weightG: Number(item.weightG ?? 0)
+  }
+}
+
+/**
+ * 添加补剂前先解析默认目标 / 智能添加目标，再打开目标选择弹窗。
+ * 没有任何目标时不允许调用 addItem —— 后端也会 400，这里提前拦住。
+ */
+async function openSupplementTargetAddDialog(
+  option: RecipeDesignerIngredientOption,
+  profile: IngredientNutritionProfileOption,
+  weightG: number,
+  nutrientKey?: string
+) {
+  let detail: NutritionFoodDetail
+  try {
+    detail = await loadNutritionFoodDetail(profile.nutritionFoodId)
+  } catch {
+    return
+  }
+
+  const initialTargets = readDefaultSupplementTargets(detail)
+  const smartFieldPath = resolveSupplementTargetFieldPath(nutrientKey)
+  if (smartFieldPath) {
+    const definition = resolveSupplementTargetDefinition(smartFieldPath)
+    if (definition) {
+      const available = listSupplementTargetFieldCandidates(detail.nutritionData)
+      if (available.some((candidate) => candidate.fieldPath === definition.fieldPath)) {
+        if (!initialTargets.some((target) => target.fieldPath === definition.fieldPath)) {
+          initialTargets.push(definition)
+        }
+      } else {
+        ElMessage.warning(
+          `「${definition.label}」在「${detail.name}」营养档案中为空或为 0，请改选其他目标营养素`
+        )
+      }
+    }
+  }
+
+  supplementTargetDialog.value = {
+    mode: 'add',
+    ingredientId: option.id,
+    nutritionFoodId: profile.nutritionFoodId,
+    ingredientName: option.name,
+    nutritionFoodName: detail.name,
+    profile: detail.nutritionData,
+    initialTargets,
+    weightG
+  }
+}
+
+async function confirmSupplementTargets(
+  targets: SupplementTargetDefinition[]
+) {
+  const dialogState = supplementTargetDialog.value
+  if (!dialogState || !draft.value) return
+  if (targets.length === 0) {
+    ElMessage.warning('补剂至少需要选择一个目标营养素')
+    return
+  }
+
+  const payloadTargets = targets.map((target) => ({
+    fieldPath: target.fieldPath,
+    label: target.label,
+    unit: target.unit
+  }))
+
+  supplementDialogSaving.value = true
+  try {
+    if (dialogState.mode === 'add') {
+      if (!dialogState.ingredientId) {
+        ElMessage.error('缺少原料信息，无法添加补剂')
+        return
+      }
+      const created = await recipeDesignerApi.addItem(draft.value.id, {
+        ingredientId: dialogState.ingredientId,
+        nutritionFoodId: dialogState.nutritionFoodId,
+        weightG: dialogState.weightG,
+        includeInAssessment: true,
+        supplementTargets: payloadTargets
+      })
+      const decoratedItem: DesignerItem = {
+        ...created,
+        nutritionFood: {
+          ...(created.nutritionFood ?? {}),
+          id: dialogState.nutritionFoodId,
+          name: dialogState.nutritionFoodName,
+          nutritionData: dialogState.profile
+        },
+        supplementTargets: buildStoredSupplementTargets(targets)
+      }
+      items.value = [...items.value, decoratedItem]
+      recordHistory({ type: 'add', item: decoratedItem })
+      supplementTargetDialog.value = null
+      await refreshInputsKeepingScroll()
+    } else {
+      if (!dialogState.itemId) {
+        ElMessage.error('缺少补剂明细，无法保存目标')
+        return
+      }
+      await recipeDesignerApi.updateItem(dialogState.itemId, {
+        supplementTargets: payloadTargets
+      })
+      const item = items.value.find(
+        (candidate) => candidate.id === dialogState.itemId
+      )
+      if (item) {
+        item.supplementTargets = buildStoredSupplementTargets(targets)
+        item.nutritionFood = {
+          ...(item.nutritionFood ?? {}),
+          nutritionData: dialogState.profile
+        }
+      }
+      supplementTargetDialog.value = null
+      ElMessage.success('补剂目标营养素已更新')
+    }
+  } catch {
+    // 后端校验失败时保留弹窗，方便调整目标后重试
+  } finally {
+    supplementDialogSaving.value = false
+  }
 }
 
 /** 明细行单位：食材统一为克；补剂按其规格单位显示（如 粒/片/胶囊/毫升），无规格时兜底克 */
@@ -969,14 +1402,32 @@ async function handleAiAddItem(payload: {
 async function handleAddOption(
   option: RecipeDesignerIngredientOption,
   targetProfile?: IngredientNutritionProfileOption,
-  weightG?: number
+  weightG?: number,
+  nutrientKey?: string
 ) {
   if (!draft.value) return
   const profile =
     targetProfile ??
     option.nutritionProfiles.find((candidate) => candidate.isPrimary) ??
     option.nutritionProfiles[0]
-  if (!profile) return
+  if (!profile) {
+    ElMessage.warning(`「${option.name}」暂无可用营养档案，无法加入配方`)
+    return
+  }
+
+  /**
+   * 补剂必须先明确目标营养素（默认目标或人工选择），
+   * 不允许绕过弹窗直接 addItem，也不做营养缺口推断。
+   */
+  if (isSupplementOption(option)) {
+    await openSupplementTargetAddDialog(
+      option,
+      profile,
+      weightG ?? 100,
+      nutrientKey
+    )
+    return
+  }
 
   const payload = {
     ingredientId: option.id,
@@ -1465,6 +1916,50 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.item-supplement-row {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0 0 22px;
+}
+.item-target-missing {
+  font-size: 11px;
+  color: #f56c6c;
+}
+.item-preparation-row {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  padding: 5px 0 0 22px;
+  border-top: 1px dashed #ebeef5;
+}
+.preparation-label {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #909399;
+}
+.preparation-method-select {
+  width: 180px;
+}
+.preparation-note-input {
+  flex: 1 1 160px;
+  max-width: 280px;
+}
+.preparation-source-empty {
+  font-size: 11px;
+  color: #c0c4cc;
+}
+.item-preparation-hint {
+  flex-basis: 100%;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #e6a23c;
 }
 .item-preparation {
   margin-left: 6px;

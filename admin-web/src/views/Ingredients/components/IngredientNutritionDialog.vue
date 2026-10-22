@@ -243,6 +243,10 @@
               v-model="draftNutritionProfile"
               :ingredient-type="ingredient.type"
               :show-sample-state="shouldShowSampleState"
+              :default-supplement-targets="draftDefaultSupplementTargets"
+              @update:default-supplement-targets="
+                handleDefaultSupplementTargetsUpdate
+              "
             />
           </div>
         </div>
@@ -358,6 +362,7 @@ import {
   type NutritionFoodMapping,
   type NutritionProfile,
   type NutritionSampleState,
+  type NutritionSupplementTarget,
 } from "@/types/ingredient";
 import type {
   ApplyIngredientCandidateConfigurationPayload,
@@ -402,6 +407,11 @@ const agentProfileDraftValidationResults = ref<
 >({});
 const selectedMappingId = ref("");
 const draftNutritionProfile = ref<NutritionProfile | null>(null);
+const draftDefaultSupplementTargets = ref<NutritionSupplementTarget[]>([]);
+/** 已成功读取默认目标的营养档案 id；为空表示还没读到（保存时不能当成清空） */
+const defaultTargetsLoadedForId = ref("");
+let defaultTargetsRequestToken = 0;
+let defaultTargetsDirty = false;
 const newProfileForm = ref({
   preparationState: "RAW" as NutritionSampleState,
   ediblePortionLabel: "标准可食部",
@@ -546,6 +556,52 @@ function applySelectedProfile() {
   draftNutritionProfile.value = profile
     ? JSON.parse(JSON.stringify(profile))
     : null;
+
+  // 默认补剂目标不在原料列表 / 映射里内嵌，按营养档案 id 单独读取。
+  defaultTargetsDirty = false;
+  defaultTargetsLoadedForId.value = "";
+  const inlineDefaults = mapping?.nutritionFood?.defaultSupplementTargets;
+  draftDefaultSupplementTargets.value = (inlineDefaults ?? []).map(
+    (target) => ({ ...target }),
+  );
+  if (mapping?.nutritionFoodId && inlineDefaults !== undefined) {
+    defaultTargetsLoadedForId.value = mapping.nutritionFoodId;
+  }
+
+  if (
+    mapping?.nutritionFoodId &&
+    props.ingredient?.type === IngredientType.SUPPLEMENT
+  ) {
+    void loadDefaultSupplementTargets(mapping.nutritionFoodId);
+  }
+}
+
+async function loadDefaultSupplementTargets(nutritionFoodId: string) {
+  const requestToken = ++defaultTargetsRequestToken;
+  try {
+    const detail = await nutritionFoodApi.getDetail(nutritionFoodId);
+    if (
+      requestToken !== defaultTargetsRequestToken ||
+      selectedMapping.value?.nutritionFoodId !== nutritionFoodId
+    ) {
+      return;
+    }
+    if (!defaultTargetsDirty) {
+      draftDefaultSupplementTargets.value = (
+        detail.defaultSupplementTargets ?? []
+      ).map((target) => ({ ...target }));
+    }
+    defaultTargetsLoadedForId.value = nutritionFoodId;
+  } catch {
+    // 读取失败时保留现有值，保存时也不会把默认目标清空。
+  }
+}
+
+function handleDefaultSupplementTargetsUpdate(
+  targets: NutritionSupplementTarget[],
+) {
+  defaultTargetsDirty = true;
+  draftDefaultSupplementTargets.value = targets;
 }
 
 function formatProfileTitle(mapping: NutritionFoodMapping) {
@@ -957,8 +1013,28 @@ async function handleSave() {
 
   try {
     if (selectedMapping.value) {
+      /**
+       * 默认目标需要单独按档案 id 读取。还没读到（或读取失败）时
+       * 不要提交空数组 —— 那会把已有配置误清空。
+       */
+      let defaultSupplementTargetsPayload:
+        | NutritionSupplementTarget[]
+        | undefined;
+      if (props.ingredient.type === IngredientType.SUPPLEMENT) {
+        const nutritionFoodId = selectedMapping.value.nutritionFoodId;
+        if (defaultTargetsLoadedForId.value !== nutritionFoodId) {
+          await loadDefaultSupplementTargets(nutritionFoodId);
+        }
+        if (defaultTargetsLoadedForId.value === nutritionFoodId) {
+          defaultSupplementTargetsPayload = draftDefaultSupplementTargets.value;
+        }
+      }
+
       await nutritionFoodApi.update(selectedMapping.value.nutritionFoodId, {
         nutritionData: draftNutritionProfile.value,
+        ...(defaultSupplementTargetsPayload
+          ? { defaultSupplementTargets: defaultSupplementTargetsPayload }
+          : {}),
       });
       ElMessage.success("营养档案已保存");
       emit("saved");

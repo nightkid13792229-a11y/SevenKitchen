@@ -51,13 +51,26 @@ export interface CopyRecipeSeriesStageIngredientsPayload {
   sourceLifeStage: string
 }
 
+/** 补剂目标营养素写入定义（一个目标只对应一个 fieldPath） */
+export interface RecipeDesignSupplementTargetPayload {
+  fieldPath: string
+  label?: string
+  unit?: string
+  /** 计算缓存；服务端始终按当前配方重新计算，不信任客户端值 */
+  targetValuePerKg?: number
+}
+
 export interface DesignRecipeItemPayload {
   ingredientId?: string
   nutritionFoodId: string
   weightG: number
   preparationMethod?: string
+  preparationNote?: string | null
+  preparationSource?: 'AUTO' | 'MANUAL' | null
   nutrientTargetKey?: string
   nutrientTargetValue?: number
+  /** 补剂目标营养素；补剂不传且档案没有默认目标时后端会 400 */
+  supplementTargets?: RecipeDesignSupplementTargetPayload[]
   sortOrder?: number
   includeInAssessment?: boolean
 }
@@ -65,8 +78,11 @@ export interface DesignRecipeItemPayload {
 export interface UpdateDesignRecipeItemPayload {
   weightG?: number
   preparationMethod?: string | null
+  preparationNote?: string | null
+  preparationSource?: 'AUTO' | 'MANUAL' | null
   nutrientTargetKey?: string | null
   nutrientTargetValue?: number | null
+  supplementTargets?: RecipeDesignSupplementTargetPayload[]
   sortOrder?: number
   includeInAssessment?: boolean
 }

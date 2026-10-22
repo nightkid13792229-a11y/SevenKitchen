@@ -6,6 +6,7 @@ import type {
   Ingredient,
   IngredientForm,
   NutritionProfile,
+  NutritionSupplementTarget,
   ProcurementSku,
   ProcurementSkuForm,
   ProcurementSkuPriceHistory,
@@ -184,7 +185,38 @@ export const ingredientApi = {
     api.delete(`/admin/ingredients/${ingredientId}/procurement-skus/${id}`)
 }
 
+// ==================== 营养档案 ====================
+
+export interface NutritionFoodDetail {
+  id: string
+  name: string
+  nameEn?: string | null
+  displayNameZh?: string | null
+  category?: string
+  dataSource?: string
+  status?: string
+  preparationState?: string | null
+  preparationStateLabel?: string | null
+  ediblePortionLabel?: string | null
+  processingLabel?: string | null
+  externalId?: string | null
+  version?: number
+  nutritionData: NutritionProfile
+  /** 补剂默认目标营养素；非补剂档案通常为空 */
+  defaultSupplementTargets?: NutritionSupplementTarget[] | null
+  notes?: string | null
+}
+
 export const nutritionFoodApi = {
+  /**
+   * 获取单个营养档案详情。
+   *
+   * 原料列表 / 映射里故意不内嵌 nutritionData 与默认补剂目标，
+   * 需要编辑档案或解析补剂默认目标时必须按 id 单独读取。
+   */
+  getDetail: (id: string): Promise<NutritionFoodDetail> =>
+    api.get(`/nutrition-foods/${id}`),
+
   create: (
     data: {
       name: string
@@ -197,6 +229,7 @@ export const nutritionFoodApi = {
       processingLabel?: string | null
       externalId?: string | null
       nutritionData: NutritionProfile
+      defaultSupplementTargets?: NutritionSupplementTarget[] | null
       notes?: string | null
     }
   ): Promise<any> =>
@@ -206,6 +239,7 @@ export const nutritionFoodApi = {
     id: string,
     data: {
       nutritionData?: NutritionProfile | null
+      defaultSupplementTargets?: NutritionSupplementTarget[] | null
       notes?: string | null
       preparationState?: string | null
       preparationStateLabel?: string | null

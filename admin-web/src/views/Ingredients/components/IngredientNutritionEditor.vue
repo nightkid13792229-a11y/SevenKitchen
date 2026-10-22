@@ -102,6 +102,90 @@
       </div>
     </div>
 
+    <!--
+      补剂默认目标营养素（2026-10-22）：
+      只对补剂营养档案显示；从原料库添加该补剂时作为初始值带出，
+      不锁定食谱内的选择，也不会反写食谱里人工改过的目标。
+    -->
+    <div v-if="isSupplementProfile" class="custom-section supplement-target-section">
+      <div class="custom-header">
+        <div>
+          <div class="custom-title">默认补剂目标营养素</div>
+          <div class="custom-desc">
+            从本档案已填写且大于 0 的字段中选择；添加该补剂时会自动带出。
+            组合目标（如 EPA + DHA）请选择派生字段，一个目标对应一个字段。
+          </div>
+        </div>
+        <el-tag
+          v-if="selectedDefaultTargets.length"
+          type="warning"
+          effect="plain"
+        >
+          已配置 {{ selectedDefaultTargets.length }} 个
+        </el-tag>
+        <el-tag v-else type="info" effect="plain">未配置</el-tag>
+      </div>
+
+      <el-select
+        v-model="selectedTargetFieldPaths"
+        class="supplement-target-select"
+        multiple
+        filterable
+        clearable
+        :disabled="supplementTargetOptions.length === 0"
+        placeholder="选择一个或多个目标营养素"
+      >
+        <el-option
+          v-for="option in supplementTargetOptions"
+          :key="option.fieldPath"
+          :label="`${option.label}（${option.unit}）`"
+          :value="option.fieldPath"
+        >
+          <div class="supplement-target-option">
+            <span>{{ option.label }}（{{ option.unit }}）</span>
+            <span class="supplement-target-option-meta">{{ option.valueText }}</span>
+          </div>
+        </el-option>
+      </el-select>
+
+      <el-alert
+        v-if="supplementTargetOptions.length === 0"
+        class="supplement-target-hint"
+        type="info"
+        :closable="false"
+        show-icon
+        title="当前档案还没有可用的目标字段"
+        description="请先在上方填写营养数据（数值需大于 0），再回来配置默认目标。"
+      />
+      <el-alert
+        v-else-if="selectedDefaultTargets.length === 0"
+        class="supplement-target-hint"
+        type="warning"
+        :closable="false"
+        show-icon
+        title="未配置默认目标"
+        description="从原料库添加该补剂时，将要求先手动选择目标营养素，系统不会按营养缺口自动推断。"
+      />
+      <div v-else class="supplement-target-preview">
+        <el-tag
+          v-for="target in selectedDefaultTargets"
+          :key="target.fieldPath"
+          type="warning"
+          effect="plain"
+        >
+          {{ target.label }}（{{ target.unit }}）
+        </el-tag>
+        <span class="supplement-target-preview-hint">
+          保存后生效：仅作为添加补剂时的初始值，不锁定食谱内选择。
+        </span>
+      </div>
+
+      <div v-if="ignoredDefaultTargets.length" class="supplement-target-ignored">
+        已忽略 {{ ignoredDefaultTargets.length }} 个当前档案中为空或为 0
+        的默认目标：{{ ignoredDefaultTargets.map((target) => target.label).join("、") }}
+      </div>
+    </div>
+
     <el-tabs v-model="activeTab" class="nutrition-tabs">
       <el-tab-pane
         v-for="tab in INGREDIENT_NUTRITION_TAB_DEFINITIONS"
@@ -243,7 +327,7 @@ import {
   INGREDIENT_NUTRITION_TAB_KEYS,
   type IngredientNutritionTabKey,
 } from "@/constants/ingredientNutrition";
-import { IngredientType, type NutritionProfile } from "@/types/ingredient";
+import { IngredientType, type NutritionProfile, type NutritionSupplementTarget } from "@/types/ingredient";
 import {
   buildIngredientNutritionPayload,
   createEmptyIngredientNutritionFormValue,
@@ -255,15 +339,30 @@ import {
   getIngredientNutritionUnitPrecision,
   getIngredientNutritionUnitStep,
 } from "@/utils/ingredientNutritionUnits";
+import {
+  DERIVED_NUTRITION_FIELD_CATALOG,
+  NUTRITION_FIELD_CATALOG,
+} from "@/utils/recipeDesigner/nutritionFieldCatalog";
+import {
+  normalizeSupplementTargetDefinitions,
+  resolveSupplementTargetDefinition,
+  type SupplementTargetDefinition,
+} from "@/utils/recipeDesigner/supplementTargets";
 
 interface Props {
   modelValue: NutritionProfile | null | undefined;
   ingredientType: IngredientType;
   showSampleState?: boolean;
+  /** 补剂营养档案的默认目标营养素（独立于 nutritionData 保存） */
+  defaultSupplementTargets?: NutritionSupplementTarget[] | null;
 }
 
 interface Emits {
   (e: "update:modelValue", value: NutritionProfile | null): void;
+  (
+    e: "update:defaultSupplementTargets",
+    value: NutritionSupplementTarget[],
+  ): void;
 }
 
 const props = defineProps<Props>();
@@ -284,6 +383,164 @@ const rawBasisLabel = computed(
       (option) => option.value === formValue.meta.rawBasisType,
     )?.label || "原始基准",
 );
+
+// ---------- 补剂默认目标营养素 ----------
+
+interface SupplementTargetOption {
+  fieldPath: string;
+  label: string;
+  unit: string;
+  valueText: string;
+}
+
+const isSupplementProfile = computed(
+  () => props.ingredientType === IngredientType.SUPPLEMENT,
+);
+
+const selectedTargetFieldPaths = ref<string[]>([]);
+const ignoredDefaultTargets = ref<SupplementTargetDefinition[]>([]);
+let syncingDefaultTargets = false;
+let lastEmittedDefaultTargetsSnapshot = JSON.stringify([]);
+
+function formatTargetValue(value: number): string {
+  const rounded = Math.round((value + Number.EPSILON) * 100) / 100;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2);
+}
+
+/**
+ * 只列出当前档案中「已填写且大于 0」的字段，并补上 SUM 派生字段。
+ * 比例类派生字段不是添加浓度，不参与选择。
+ */
+const supplementTargetOptions = computed<SupplementTargetOption[]>(() => {
+  if (!isSupplementProfile.value) {
+    return [];
+  }
+
+  const options: SupplementTargetOption[] = [];
+
+  for (const field of NUTRITION_FIELD_CATALOG) {
+    const tabValues = formValue[field.tabKey] as Record<
+      string,
+      number | null | undefined
+    >;
+    const value = tabValues?.[field.fieldKey];
+    if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+      continue;
+    }
+    options.push({
+      fieldPath: field.fieldPath,
+      label: field.label,
+      unit: field.unit,
+      valueText: `档案值 ${formatTargetValue(value)} ${field.unit}`,
+    });
+  }
+
+  for (const derived of DERIVED_NUTRITION_FIELD_CATALOG) {
+    if (derived.formula !== "SUM") {
+      continue;
+    }
+
+    let total = 0;
+    let complete = true;
+    for (const sourceFieldPath of derived.sourceFieldPaths) {
+      const sourceField = NUTRITION_FIELD_CATALOG.find(
+        (field) => field.fieldPath === sourceFieldPath,
+      );
+      if (!sourceField) {
+        complete = false;
+        break;
+      }
+      const tabValues = formValue[sourceField.tabKey] as Record<
+        string,
+        number | null | undefined
+      >;
+      const value = tabValues?.[sourceField.fieldKey];
+      if (typeof value !== "number" || !Number.isFinite(value)) {
+        complete = false;
+        break;
+      }
+      total += value;
+    }
+
+    if (complete && total > 0) {
+      options.push({
+        fieldPath: derived.fieldPath,
+        label: derived.label,
+        unit: derived.unit,
+        valueText: `组合合计 ${formatTargetValue(total)} ${derived.unit}`,
+      });
+    }
+  }
+
+  return options;
+});
+
+const selectedDefaultTargets = computed<SupplementTargetDefinition[]>(() => {
+  const optionByFieldPath = new Map(
+    supplementTargetOptions.value.map((option) => [option.fieldPath, option]),
+  );
+
+  return selectedTargetFieldPaths.value
+    .map((fieldPath) => optionByFieldPath.get(fieldPath))
+    .filter((option): option is SupplementTargetOption => Boolean(option))
+    .map((option) => ({
+      fieldPath: option.fieldPath,
+      label: option.label,
+      unit: option.unit,
+    }));
+});
+
+function buildDefaultSupplementTargetPayload(): NutritionSupplementTarget[] {
+  const optionByFieldPath = new Map(
+    supplementTargetOptions.value.map((option) => [option.fieldPath, option]),
+  );
+  const seenFieldPaths = new Set<string>();
+
+  return selectedTargetFieldPaths.value
+    .filter((fieldPath) => {
+      if (seenFieldPaths.has(fieldPath)) {
+        return false;
+      }
+      seenFieldPaths.add(fieldPath);
+      return true;
+    })
+    .map((fieldPath) => optionByFieldPath.get(fieldPath))
+    .filter((option): option is SupplementTargetOption => Boolean(option))
+    .map((option) => ({
+      fieldPath: option.fieldPath,
+      label: option.label,
+      unit: option.unit,
+    }));
+}
+
+/** 已选字段被清空时移除它并给出明确提示，避免保存一个空字段目标 */
+function pruneInvalidDefaultTargets() {
+  if (!isSupplementProfile.value) {
+    return;
+  }
+
+  const availableFieldPaths = new Set(
+    supplementTargetOptions.value.map((option) => option.fieldPath),
+  );
+  const invalidFieldPaths = selectedTargetFieldPaths.value.filter(
+    (fieldPath) => !availableFieldPaths.has(fieldPath),
+  );
+  if (invalidFieldPaths.length === 0) {
+    return;
+  }
+
+  const invalidDefinitions = invalidFieldPaths
+    .map((fieldPath) => resolveSupplementTargetDefinition(fieldPath))
+    .filter(
+      (definition): definition is SupplementTargetDefinition =>
+        Boolean(definition),
+    );
+  ignoredDefaultTargets.value = invalidDefinitions;
+  selectedTargetFieldPaths.value = selectedTargetFieldPaths.value.filter(
+    (fieldPath) => availableFieldPaths.has(fieldPath),
+  );
+}
+
 
 let syncingFromProps = false;
 let lastAppliedPayloadSnapshot = JSON.stringify(null);
@@ -467,8 +724,70 @@ watch(
       buildIngredientNutritionPayload(formValue),
     );
     syncingFromProps = false;
+    pruneInvalidDefaultTargets();
   },
   { immediate: true, deep: true },
+);
+
+watch(
+  () => props.defaultSupplementTargets,
+  (targets) => {
+    if (!isSupplementProfile.value) {
+      selectedTargetFieldPaths.value = [];
+      ignoredDefaultTargets.value = [];
+      return;
+    }
+
+    const definitions = normalizeSupplementTargetDefinitions(targets);
+    const availableFieldPaths = new Set(
+      supplementTargetOptions.value.map((option) => option.fieldPath),
+    );
+    const validDefinitions = definitions.filter((definition) =>
+      availableFieldPaths.has(definition.fieldPath),
+    );
+
+    ignoredDefaultTargets.value = definitions.filter(
+      (definition) => !availableFieldPaths.has(definition.fieldPath),
+    );
+
+    syncingDefaultTargets = true;
+    selectedTargetFieldPaths.value = validDefinitions.map(
+      (definition) => definition.fieldPath,
+    );
+    /**
+     * 以「档案里原样的目标」作为已同步快照：
+     * 如果其中有当前档案已为空/为 0 的字段，下面的 selected 监听会把
+     * 校正后的有效目标 emit 回父组件，避免保存时又把失效目标写回去。
+     */
+    lastEmittedDefaultTargetsSnapshot = serializeValue(
+      definitions.map((definition) => ({
+        fieldPath: definition.fieldPath,
+        label: definition.label,
+        unit: definition.unit,
+      })),
+    );
+    syncingDefaultTargets = false;
+  },
+  { immediate: true, deep: true },
+);
+
+watch(
+  selectedTargetFieldPaths,
+  () => {
+    if (syncingDefaultTargets) {
+      return;
+    }
+
+    const payload = buildDefaultSupplementTargetPayload();
+    const snapshot = serializeValue(payload);
+    if (snapshot === lastEmittedDefaultTargetsSnapshot) {
+      return;
+    }
+
+    lastEmittedDefaultTargetsSnapshot = snapshot;
+    emit("update:defaultSupplementTargets", payload);
+  },
+  { deep: true },
 );
 
 watch(attachmentsText, (value) => {
@@ -507,6 +826,7 @@ watch(
       "update:modelValue",
       JSON.parse(payloadSnapshot) as NutritionProfile | null,
     );
+    pruneInvalidDefaultTargets();
   },
   { immediate: false },
 );
@@ -644,6 +964,51 @@ watch(
   border: 1px solid #e4e7ed;
   border-radius: 12px;
   background: #fff;
+}
+
+.supplement-target-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.supplement-target-select {
+  width: 100%;
+}
+
+.supplement-target-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.supplement-target-option-meta {
+  font-size: 12px;
+  color: #909399;
+}
+
+.supplement-target-hint {
+  margin-top: 0;
+}
+
+.supplement-target-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.supplement-target-preview-hint {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #909399;
+}
+
+.supplement-target-ignored {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #e6a23c;
 }
 
 .custom-header {

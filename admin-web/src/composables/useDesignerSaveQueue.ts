@@ -90,7 +90,18 @@ export function useDesignerSaveQueue() {
           candidate.kind === 'updateItem' && candidate.itemId === op.itemId
       )
       if (index >= 0) {
-        queue[index] = op
+        // 合并同一条原料的多个字段修改：只替换整个 data 会丢掉排队中的
+        // 用量 / 预处理 / 开关改动，导致其中一个修改静默没有保存。
+        const existing = queue[index]
+        const mergedData =
+          existing && existing.kind === 'updateItem'
+            ? { ...existing.data, ...op.data }
+            : op.data
+        queue[index] = {
+          kind: 'updateItem',
+          itemId: op.itemId,
+          data: mergedData
+        }
       } else {
         queue.push(op)
       }

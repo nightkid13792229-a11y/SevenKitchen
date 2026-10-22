@@ -409,6 +409,18 @@ export interface PackagingProperties {
   supplier_name?: string | null;
 }
 
+/**
+ * 补剂营养档案上的默认目标营养素（2026-10-22）。
+ *
+ * 一个目标只对应一个 fieldPath；组合（如 EPA+DHA）使用派生字段。
+ * 只作为设计器「添加补剂」时的初始值，不锁定食谱内的选择。
+ */
+export interface NutritionSupplementTarget {
+  fieldPath: string;
+  label?: string | null;
+  unit?: string | null;
+}
+
 export interface NutritionFoodReference {
   id: string;
   name: string;
@@ -421,6 +433,7 @@ export interface NutritionFoodReference {
   ediblePortionLabel?: string;
   processingLabel?: string;
   nutritionData?: NutritionProfile;
+  defaultSupplementTargets?: NutritionSupplementTarget[] | null;
 }
 
 export interface NutritionFoodMapping {

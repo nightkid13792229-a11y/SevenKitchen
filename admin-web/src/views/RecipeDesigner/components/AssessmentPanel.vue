@@ -268,7 +268,9 @@ const emit = defineEmits<{
     event: 'add-ingredient',
     option: RecipeDesignerIngredientOption,
     profile?: IngredientNutritionProfileOption,
-    weightG?: number
+    weightG?: number,
+    /** 当前正在查看的营养素（补剂智能添加时作为预选目标） */
+    nutrientKey?: string
   ): void
 }>()
 
@@ -820,7 +822,13 @@ function loadMoreNutrientPicker() {
 }
 
 function addNutrientOption(option: RecipeDesignerIngredientOption) {
-  emit('add-ingredient', option)
+  emit(
+    'add-ingredient',
+    option,
+    undefined,
+    undefined,
+    activeEntry.value?.nutrientKey
+  )
   nutrientPickerVisible.value = false
 }
 
@@ -941,7 +949,7 @@ async function handleSmartAdd(option: RecipeDesignerIngredientOption) {
     ElMessage.warning(`「${option.name}」暂无可用营养档案，无法加入配方`)
     return
   }
-  emit('add-ingredient', option, profile, info.weightG)
+  emit('add-ingredient', option, profile, info.weightG, entry.nutrientKey)
   nutrientPickerVisible.value = false
 }
 

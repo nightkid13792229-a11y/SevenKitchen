@@ -79,6 +79,26 @@ export interface RecipeDesignerNutritionWarning {
   message: string
 }
 
+/**
+ * 设计稿补剂项上保存的目标营养素（2026-10-22）。
+ *
+ * `targetValuePerKg` 是服务端按当前配方计算的添加浓度缓存；
+ * 编辑器显示时按当前评估总重量重新计算，不能把它当成人工维护的目标值。
+ */
+export interface DesignerSupplementTarget {
+  nutrientTargetKey?: string | null
+  fieldPath: string
+  label?: string
+  unit?: string
+  targetValue?: number | null
+  /** 每 kg 配方实际添加浓度（后端计算缓存） */
+  targetValuePerKg?: number | null
+  expressionBasis?: string | null
+}
+
+/** 原料预处理来源：AUTO = 系统带出；MANUAL = 人工修改 */
+export type DesignerPreparationSource = 'AUTO' | 'MANUAL'
+
 export interface DesignerItem {
   id: string
   name?: string
@@ -99,8 +119,18 @@ export interface DesignerItem {
   nutritionFood?: {
     id?: string
     name?: string
+    nameEn?: string | null
     displayNameZh?: string | null
     preparationState?: string | null
+    category?: string | null
+    /** 档案营养数据（getDraft 内嵌，用于计算补剂实际添加浓度） */
+    nutritionData?: unknown
+    /** 补剂默认目标营养素（getDraft 内嵌） */
+    defaultSupplementTargets?: Array<{
+      fieldPath: string
+      label?: string | null
+      unit?: string | null
+    }> | null
     mappings?: Array<{
       ingredientId?: string | null
       isPrimary?: boolean
@@ -119,8 +149,14 @@ export interface DesignerItem {
   preparationMethod?: string
   /** 后端解析后的烹饪方式文字名（UUID 已解析为名称，旧文本原样保留） */
   preparationMethodLabel?: string | null
+  /** 原料预处理补充说明（2026-10-22） */
+  preparationNote?: string | null
+  /** 原料预处理来源：AUTO = 系统带出；MANUAL = 人工修改 */
+  preparationSource?: DesignerPreparationSource | null
   nutrientTargetKey?: string | null
   nutrientTargetValue?: number | null
+  /** 补剂目标营养素定义与计算值 */
+  supplementTargets?: DesignerSupplementTarget[] | null
   sortOrder?: number
 }
 

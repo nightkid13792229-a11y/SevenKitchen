@@ -91,12 +91,21 @@ export interface CandidateRow {
   notes: string[];
 }
 
-/** 缝合方案的一行：只补缺，不覆盖主来源。 */
+/**
+ * 缝合方案的一行：只补缺，不覆盖主来源。
+ *
+ * `status` 只描述「这个字段的值是怎么来的」：
+ * - `DIRECT`：主来源直接给的（主来源的行）
+ * - `FILLED`：主来源缺、由补位来源补上的
+ * - `CONFLICT`：多个来源给了值但互不相等，**没有写出最终值**；
+ *   `value` / `sourceValue` / `sourceRecordId` / `sourceUnit` 全为 `null`，
+ *   候选值放在 `MergePlan.conflicts` 里等人裁决。
+ */
 export interface MergeRow {
   fieldPath: string;
   value: number | null;
   unit: string;
-  status: 'DIRECT' | 'FILLED';
+  status: 'DIRECT' | 'FILLED' | 'CONFLICT';
   sourceRecordId: string | null;
   sourceValue: number | null;
   sourceUnit: string | null;
@@ -117,6 +126,13 @@ export interface MergePlan {
   primarySourceRecordId: string;
   rows: MergeRow[];
   conflicts: MergeConflict[];
+  /**
+   * 所有来源都没给的字段（按营养字段目录顺序）。
+   *
+   * 「缺失」与「冲突」是两件事：缺失 = 谁都没给（不产生 `rows` 行、绝不写成 0），
+   * 冲突 = 有值但不一致。冲突字段不会出现在这里，缺失字段也不会进 `conflicts`。
+   */
+  missingFields: string[];
 }
 
 /** 终检的一项（Task 6 产出）。 */

@@ -108,11 +108,12 @@ function providedValuesAgree(provided: readonly ProvidedFieldValue[]): boolean {
  * - 主来源没值、恰好一个（或几个取值一致的）补位来源有值：补进来，状态 `FILLED`。
  *   取值一致时按传入顺序取第一个补位来源，结果确定。
  * - 同一字段有值且互不相等（主来源与补位来源之间、或多个补位来源之间）：
- *   **不写最终值**，`MergeRow.value` 保持 `null`，候选全部进 `conflicts` 等人裁决。
- *   `MergeRow.status` 只保留「这行本来归谁」：主来源给了值记 `DIRECT`，
- *   只有补位来源给了值记 `FILLED`；两者都不代表值已确定。
- * - 所有来源都没有的字段：不产生行（也绝不写成 0）。消费方按目录遍历时，
- *   「没有这一行」就是缺失，取值为 `null`。
+ *   **不写最终值**，`MergeRow.value` 保持 `null`、状态 `CONFLICT`，
+ *   候选全部进 `conflicts` 等人裁决。
+ * - 所有来源都没有的字段：不产生行（也绝不写成 0），按目录顺序进 `missingFields`。
+ *
+ * 「缺失」与「冲突」是两件事：缺失字段不进 `rows`、不进 `conflicts`；
+ * 冲突字段不进 `missingFields`。
  *
  * 行顺序固定按营养字段目录（`nutrition-field-catalog.ts`），不按来源顺序。
  * 目录之外的键一律忽略：缝合方案只承载目录里的字段。
@@ -124,6 +125,7 @@ export function buildMergePlan(input: {
   const { primary, supplementals } = input;
   const rows: MergeRow[] = [];
   const conflicts: MergeConflict[] = [];
+  const missingFields: string[] = [];
 
   for (const field of NUTRITION_FIELD_CATALOG) {
     const primaryHasValue =
@@ -131,11 +133,9 @@ export function buildMergePlan(input: {
     const provided = collectProvidedValues(primary, supplementals, field);
 
     if (provided.length === 0) {
+      missingFields.push(field.fieldPath);
       continue;
     }
-
-    // 状态只说明这行归谁：主来源有的行是 DIRECT，补进来的行是 FILLED。
-    const status: MergeRow['status'] = primaryHasValue ? 'DIRECT' : 'FILLED';
 
     if (providedValuesAgree(provided)) {
       const [chosen] = provided;
@@ -143,7 +143,7 @@ export function buildMergePlan(input: {
         fieldPath: field.fieldPath,
         value: chosen.value,
         unit: field.unit,
-        status,
+        status: primaryHasValue ? 'DIRECT' : 'FILLED',
         sourceRecordId: chosen.sourceRecordId,
         sourceValue: chosen.value,
         sourceUnit: chosen.unit,
@@ -155,7 +155,7 @@ export function buildMergePlan(input: {
       fieldPath: field.fieldPath,
       value: null,
       unit: field.unit,
-      status,
+      status: 'CONFLICT',
       sourceRecordId: null,
       sourceValue: null,
       sourceUnit: null,
@@ -174,6 +174,7 @@ export function buildMergePlan(input: {
     primarySourceRecordId: primary.sourceRecordId,
     rows,
     conflicts,
+    missingFields,
   };
 }
 
@@ -187,7 +188,8 @@ function compareRowsByCatalogOrder(left: MergeRow, right: MergeRow): number {
 
 /**
  * 人对冲突字段做裁决：按选定来源把值写进 `rows`（状态 `DIRECT`），
- * 并从 `conflicts` 里移除这一条。其余行、其余冲突原样保留。
+ * 并从 `conflicts` 里移除这一条。其余行、其余冲突原样保留；
+ * `missingFields` 也原样保留——冲突字段本来就不在缺失清单里（有值才冲突）。
  *
  * 候选值只能来自该字段冲突里的 `candidates`——`MergePlan` 不携带各来源的
  * 完整营养数据，所以「选了一个没提供该字段的来源」在这里就是「不在候选里」，
@@ -242,5 +244,6 @@ export function applyManualResolution(
     primarySourceRecordId: plan.primarySourceRecordId,
     rows,
     conflicts: plan.conflicts.filter((entry) => entry.fieldPath !== fieldPath),
+    missingFields: [...plan.missingFields],
   };
 }

@@ -3,6 +3,7 @@ import type {
   MergePlan,
   MergeRow,
 } from '../../../src/application/ingredient-creation/ingredient-creation.types';
+import { NUTRITION_FIELD_CATALOG } from '../../../src/domain/ingredient/nutrition-field-catalog';
 import {
   applyManualResolution,
   buildMergePlan,
@@ -13,6 +14,10 @@ const PRIMARY_ID = 'source-primary';
 const SUPPLEMENT_ID = 'source-supplement';
 const OTHER_SUPPLEMENT_ID = 'source-other-supplement';
 const UNUSED_SOURCE_ID = 'source-without-values';
+
+const ALL_FIELD_PATHS = NUTRITION_FIELD_CATALOG.map(
+  (field) => field.fieldPath as string,
+);
 
 function source(
   sourceRecordId: string,
@@ -92,7 +97,7 @@ describe('buildMergePlan', () => {
       fieldPath: 'minerals.iron',
       value: null,
       unit: 'mg',
-      status: 'DIRECT',
+      status: 'CONFLICT',
       sourceRecordId: null,
       sourceValue: null,
       sourceUnit: null,
@@ -120,7 +125,7 @@ describe('buildMergePlan', () => {
       fieldPath: 'macros.crudeProtein',
       value: null,
       unit: 'g',
-      status: 'FILLED',
+      status: 'CONFLICT',
       sourceRecordId: null,
       sourceValue: null,
       sourceUnit: null,
@@ -130,6 +135,29 @@ describe('buildMergePlan', () => {
       { sourceRecordId: OTHER_SUPPLEMENT_ID, value: 22, unit: 'g' },
     ]);
     expect(rowOf(plan, 'minerals.calcium')?.value).toBe(100);
+  });
+
+  it('marks conflicting rows as CONFLICT with no final value and no credited source', () => {
+    const primaryConflict = buildMergePlan({
+      primary: source(PRIMARY_ID, { 'minerals.iron': 5.5 }),
+      supplementals: [source(SUPPLEMENT_ID, { 'minerals.iron': 12 })],
+    });
+    const fillConflict = buildMergePlan({
+      primary: source(PRIMARY_ID, {}),
+      supplementals: [
+        source(SUPPLEMENT_ID, { 'minerals.iron': 5.5 }),
+        source(OTHER_SUPPLEMENT_ID, { 'minerals.iron': 12 }),
+      ],
+    });
+
+    for (const plan of [primaryConflict, fillConflict]) {
+      const row = rowOf(plan, 'minerals.iron');
+      expect(row?.status).toBe('CONFLICT');
+      expect(row?.value).toBeNull();
+      expect(row?.sourceRecordId).toBeNull();
+      expect(row?.sourceValue).toBeNull();
+      expect(row?.sourceUnit).toBeNull();
+    }
   });
 
   it('fills from the first supplemental when several fill sources agree', () => {
@@ -177,13 +205,47 @@ describe('buildMergePlan', () => {
 
   it('treats an absent key or an explicit null as missing, never as zero', () => {
     const plan = buildMergePlan({
-      primary: source(PRIMARY_ID, { 'minerals.iron': null }),
+      primary: source(PRIMARY_ID, {
+        'minerals.calcium': 100,
+        'minerals.iron': null,
+      }),
       supplementals: [source(SUPPLEMENT_ID, {})],
     });
 
-    expect(plan.rows).toEqual([]);
+    expect(plan.rows.map((row) => row.fieldPath)).toEqual(['minerals.calcium']);
     expect(plan.conflicts).toEqual([]);
     expect(plan.rows.some((row) => row.value === 0)).toBe(false);
+    expect(plan.missingFields).toContain('minerals.iron');
+    expect(plan.missingFields).not.toContain('minerals.calcium');
+    expect(plan.missingFields).toHaveLength(ALL_FIELD_PATHS.length - 1);
+  });
+
+  it('lists fields nobody provided in catalog order and keeps conflicts out of missingFields', () => {
+    const plan = buildMergePlan({
+      primary: source(PRIMARY_ID, { 'minerals.iron': 5.5 }),
+      supplementals: [
+        source(SUPPLEMENT_ID, {
+          'minerals.iron': 12,
+          'macros.moisture': 70,
+        }),
+      ],
+    });
+
+    expect(plan.rows.map((row) => row.fieldPath)).toEqual([
+      'macros.moisture',
+      'minerals.iron',
+    ]);
+    expect(plan.conflicts.map((conflict) => conflict.fieldPath)).toEqual([
+      'minerals.iron',
+    ]);
+    expect(plan.missingFields).toEqual(
+      ALL_FIELD_PATHS.filter(
+        (fieldPath) =>
+          fieldPath !== 'macros.moisture' && fieldPath !== 'minerals.iron',
+      ),
+    );
+    expect(plan.missingFields).not.toContain('minerals.iron');
+    expect(plan.missingFields).not.toContain('macros.moisture');
   });
 
   it('keeps a value of zero that a source actually provided', () => {
@@ -281,7 +343,7 @@ describe('buildMergePlan', () => {
     expect(plan.rows.map((row) => row.fieldPath)).toEqual(['minerals.iron']);
   });
 
-  it('returns an empty plan when no source provides a value', () => {
+  it('returns an empty plan with every field missing when no source provides a value', () => {
     const plan = buildMergePlan({
       primary: source(PRIMARY_ID, {}),
       supplementals: [source(SUPPLEMENT_ID, {})],
@@ -291,6 +353,7 @@ describe('buildMergePlan', () => {
       primarySourceRecordId: PRIMARY_ID,
       rows: [],
       conflicts: [],
+      missingFields: ALL_FIELD_PATHS,
     });
   });
 });
@@ -431,6 +494,8 @@ describe('applyManualResolution', () => {
       'vitamins.vitaminA',
     ]);
     expect(rowOf(resolved, 'vitamins.vitaminA')?.value).toBeNull();
+    expect(resolved.missingFields).toEqual(plan.missingFields);
+    expect(resolved.missingFields).not.toContain('minerals.iron');
   });
 
   it('inserts a resolved row in catalog order when the plan had no row for it', () => {
@@ -456,6 +521,7 @@ describe('applyManualResolution', () => {
           ],
         },
       ],
+      missingFields: ['macros.energyKcal'],
     };
 
     const resolved = applyManualResolution(plan, 'macros.moisture', {
@@ -476,5 +542,6 @@ describe('applyManualResolution', () => {
       sourceUnit: 'g',
     });
     expect(resolved.conflicts).toEqual([]);
+    expect(resolved.missingFields).toEqual(['macros.energyKcal']);
   });
 });

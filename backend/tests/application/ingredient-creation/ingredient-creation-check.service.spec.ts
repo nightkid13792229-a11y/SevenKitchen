@@ -7,6 +7,8 @@ import type {
   IngredientCreationDraft,
   IntakeCard,
   MergePlan,
+  NutritionEvidenceEntry,
+  ProfileDraft,
 } from '../../../src/application/ingredient-creation/ingredient-creation.types';
 import { runFinalCheck } from '../../../src/domain/ingredient-creation/final-check';
 import { PrismaService } from '../../../src/infrastructure/prisma.service';
@@ -14,6 +16,10 @@ import { PrismaService } from '../../../src/infrastructure/prisma.service';
 jest.mock('../../../src/domain/ingredient-creation/final-check', () => ({
   runFinalCheck: jest.fn(),
 }));
+
+const actualFinalCheck = jest.requireActual<
+  typeof import('../../../src/domain/ingredient-creation/final-check')
+>('../../../src/domain/ingredient-creation/final-check');
 
 const runFinalCheckMock = runFinalCheck as jest.MockedFunction<
   typeof runFinalCheck
@@ -67,6 +73,46 @@ function planRow(
   };
 }
 
+function entry(
+  overrides: Partial<NutritionEvidenceEntry> = {},
+): NutritionEvidenceEntry {
+  return {
+    fieldPath: 'macros.crudeProtein',
+    finalValue: 20,
+    unit: 'g',
+    status: 'DIRECT',
+    sourceRecordId: 'src-primary',
+    sourceValue: 20,
+    sourceUnit: 'g',
+    formula: null,
+    confirmedBy: null,
+    confirmedAt: null,
+    ...overrides,
+  };
+}
+
+function entryFromPlanRow(
+  row: MergePlan['rows'][number],
+): NutritionEvidenceEntry {
+  return entry({
+    fieldPath: row.fieldPath,
+    finalValue: row.value,
+    unit: row.unit,
+    status: row.status === 'CONFLICT' ? 'DIRECT' : row.status,
+    sourceRecordId: row.sourceRecordId,
+    sourceValue: row.sourceValue,
+    sourceUnit: row.sourceUnit,
+  });
+}
+
+function profile(
+  preparationState: ProfileDraft['preparationState'],
+  sourceRecordId: string,
+  entries: NutritionEvidenceEntry[],
+): ProfileDraft {
+  return { preparationState, sourceRecordId, entries, notes: null };
+}
+
 const fullMergePlan: MergePlan = {
   primarySourceRecordId: 'src-primary',
   rows: [
@@ -78,6 +124,13 @@ const fullMergePlan: MergePlan = {
     planRow('macros.carbohydrate', 10, 'g'),
     planRow('macros.fiber', 3, 'g'),
   ],
+  conflicts: [],
+  missingFields: [],
+};
+
+const ironMergePlan: MergePlan = {
+  primarySourceRecordId: 'src-primary',
+  rows: [planRow('minerals.iron', 5.5, 'mg')],
   conflicts: [],
   missingFields: [],
 };
@@ -96,6 +149,28 @@ function primarySourceRecord(sampleState = 'RAW') {
       },
     },
   ];
+}
+
+function humanEditedIronDraft(): IngredientCreationDraft {
+  return createDraft({
+    payload: {
+      intake: intakeCard,
+      mergePlan: ironMergePlan,
+      profiles: [
+        profile('RAW', 'src-primary', [
+          entry({
+            fieldPath: 'minerals.iron',
+            finalValue: 5.5,
+            unit: 'g',
+            status: 'MANUAL',
+            sourceRecordId: 'src-primary',
+            sourceValue: 5.5,
+            sourceUnit: 'mg',
+          }),
+        ]),
+      ],
+    },
+  });
 }
 
 describe('IngredientCreationCheckService', () => {
@@ -126,25 +201,19 @@ describe('IngredientCreationCheckService', () => {
     service = moduleRef.get(IngredientCreationCheckService);
   });
 
-  it('重建证据账本，算宏量、能量与 4/9/4 反算值', async () => {
+  it('profile 存在时用 profile entries 算宏量、能量与 4/9/4 反算值', async () => {
     draftService.get.mockResolvedValue(
       createDraft({
         payload: {
           intake: intakeCard,
           mergePlan: fullMergePlan,
           profiles: [
-            {
-              preparationState: 'RAW',
-              sourceRecordId: 'src-primary',
-              entries: [],
-              notes: null,
-            },
-            {
-              preparationState: 'COOKED',
-              sourceRecordId: 'src-cooked',
-              entries: [],
-              notes: null,
-            },
+            profile(
+              'RAW',
+              'src-primary',
+              fullMergePlan.rows.map(entryFromPlanRow),
+            ),
+            profile('COOKED', 'src-cooked', []),
           ],
         },
       }),
@@ -170,6 +239,99 @@ describe('IngredientCreationCheckService', () => {
     });
   });
 
+  it('人改过的 profile entries 参与终检：非法单位 → UNIT_MISMATCH（拦死）', async () => {
+    runFinalCheckMock.mockImplementation(actualFinalCheck.runFinalCheck);
+    draftService.get.mockResolvedValue(humanEditedIronDraft());
+
+    const result = await service.runCheck('draft-1');
+
+    expect(result.blocking).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'UNIT_MISMATCH',
+          fieldPath: 'minerals.iron',
+        }),
+      ]),
+    );
+
+    // 检查的是 profile 里人工改过的 g，而不是 mergePlan 里合法的 mg。
+    const input = runFinalCheckMock.mock.calls[0][0];
+    expect(input.entries).toEqual([
+      expect.objectContaining({
+        fieldPath: 'minerals.iron',
+        unit: 'g',
+        status: 'MANUAL',
+      }),
+    ]);
+  });
+
+  it('profiles 为空时仍按 mergePlan 的证据账本跑，行为不变', async () => {
+    runFinalCheckMock.mockImplementation(actualFinalCheck.runFinalCheck);
+    draftService.get.mockResolvedValue(
+      createDraft({
+        payload: {
+          intake: intakeCard,
+          mergePlan: ironMergePlan,
+          profiles: [],
+        },
+      }),
+    );
+
+    const result = await service.runCheck('draft-1');
+
+    expect(result.blocking).toEqual([]);
+    const input = runFinalCheckMock.mock.calls[0][0];
+    expect(input.entries).toEqual([
+      expect.objectContaining({
+        fieldPath: 'minerals.iron',
+        unit: 'mg',
+        status: 'DIRECT',
+      }),
+    ]);
+  });
+
+  it('basis 从 profile 的来源记录取（PER_SERVING + servingGrams）', async () => {
+    prisma.nutritionSourceRecord.findMany.mockResolvedValue([
+      {
+        id: 'src-raw',
+        normalizedNutrition: {
+          meta: {
+            rawBasisType: 'PER_SERVING',
+            sampleState: 'RAW',
+            servingWeightG: 50,
+          },
+        },
+      },
+      {
+        id: 'src-primary',
+        normalizedNutrition: {
+          meta: { rawBasisType: 'PER_100_G', sampleState: 'RAW' },
+        },
+      },
+    ]);
+    draftService.get.mockResolvedValue(
+      createDraft({
+        payload: {
+          intake: intakeCard,
+          mergePlan: ironMergePlan,
+          profiles: [
+            profile('RAW', 'src-raw', [
+              entryFromPlanRow(ironMergePlan.rows[0]),
+            ]),
+          ],
+        },
+      }),
+    );
+
+    await service.runCheck('draft-1');
+
+    expect(runFinalCheckMock.mock.calls[0][0].basis).toEqual({
+      profileBasis: 'PER_100_G',
+      sourceBasis: 'PER_SERVING',
+      servingGrams: 50,
+    });
+  });
+
   it('覆盖：profiles 决定 present，类别决定 required 默认值', async () => {
     const intakeWithoutExplicitStates = {
       name: '土豆',
@@ -186,18 +348,8 @@ describe('IngredientCreationCheckService', () => {
           intake: intakeWithoutExplicitStates,
           mergePlan: fullMergePlan,
           profiles: [
-            {
-              preparationState: 'RAW',
-              sourceRecordId: 'src-primary',
-              entries: [],
-              notes: null,
-            },
-            {
-              preparationState: 'COOKED',
-              sourceRecordId: 'src-cooked',
-              entries: [],
-              notes: null,
-            },
+            profile('RAW', 'src-primary', []),
+            profile('COOKED', 'src-cooked', []),
           ],
         },
       }),
@@ -232,7 +384,7 @@ describe('IngredientCreationCheckService', () => {
     });
   });
 
-  it('没有 mergePlan → 400，不跑终检', async () => {
+  it('没有 profiles 且没有 mergePlan → 400，不跑终检', async () => {
     draftService.get.mockResolvedValue(createDraft({ payload: {} }));
 
     await expect(service.runCheck('draft-1')).rejects.toBeInstanceOf(
@@ -242,28 +394,26 @@ describe('IngredientCreationCheckService', () => {
     expect(runFinalCheckMock).not.toHaveBeenCalled();
   });
 
-  it('提交前置检查：blocking 非空 → 400，并带回阻断项', async () => {
-    const blocking = [{ code: 'UNIT_NOT_ALLOWED', message: '字段单位不合法' }];
-    runFinalCheckMock.mockReturnValue({
-      blocking,
-      exceptionable: [],
-      warnings: [],
-    });
-    draftService.get.mockResolvedValue(
-      createDraft({
-        payload: { intake: intakeCard, mergePlan: fullMergePlan },
-      }),
-    );
+  it('提交前置检查：人改过非法单位 → 400，并带回 UNIT_MISMATCH', async () => {
+    runFinalCheckMock.mockImplementation(actualFinalCheck.runFinalCheck);
+    draftService.get.mockResolvedValue(humanEditedIronDraft());
 
     const error = await service
       .assertCommitAllowed('draft-1')
       .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(BadRequestException);
-    expect((error as BadRequestException).getResponse()).toEqual({
-      message: '终检存在阻断项，不能提交',
-      blocking,
-    });
+    const response = (error as BadRequestException).getResponse() as {
+      blocking: Array<{ code: string }>;
+    };
+    expect(response.blocking).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'UNIT_MISMATCH',
+          fieldPath: 'minerals.iron',
+        }),
+      ]),
+    );
     expect(runFinalCheckMock).toHaveBeenCalledTimes(1);
   });
 

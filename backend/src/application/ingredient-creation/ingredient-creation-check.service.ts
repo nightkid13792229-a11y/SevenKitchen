@@ -22,6 +22,7 @@ import type {
   IngredientCreationDraft,
   MergePlan,
   NutritionEvidenceEntry,
+  ProfileDraft,
 } from './ingredient-creation.types';
 
 /**
@@ -80,6 +81,10 @@ function isMergePlan(value: unknown): value is MergePlan {
     Array.isArray(value.conflicts) &&
     Array.isArray(value.missingFields)
   );
+}
+
+function readMergePlan(draft: IngredientCreationDraft): MergePlan | null {
+  return isMergePlan(draft.payload.mergePlan) ? draft.payload.mergePlan : null;
 }
 
 function readMeta(profile: unknown): Record<string, unknown> | null {
@@ -171,11 +176,10 @@ function collectRequiredStates(
 }
 
 /**
- * 已具备哪些生熟档案。
+ * 已具备哪些生熟档案（无 `profiles` 时的回退路径）。
  *
- * 优先读 PATCH 存进草稿的 `profiles`；否则至少能从本次缝合的主来源
- * `meta.sampleState` 确定一份。都不确定时返回空数组，让终检如实报缺，
- * 不假装已经有了。
+ * 至少能从本次缝合的主来源 `meta.sampleState` 确定一份。都不确定时返回空数组，
+ * 让终检如实报缺，不假装已经有了。
  */
 function collectPresentStates(
   draft: IngredientCreationDraft,
@@ -197,11 +201,131 @@ function collectPresentStates(
   return [...present];
 }
 
+/** 过滤掉数据库里可能存在的脏行，只保留能参与终检的档案。 */
+function usableProfiles(draft: IngredientCreationDraft): ProfileDraft[] {
+  const stored = draft.payload.profiles;
+  if (!Array.isArray(stored)) {
+    return [];
+  }
+
+  return stored.filter(
+    (profile): profile is ProfileDraft =>
+      isRecord(profile) && typeof profile.sourceRecordId === 'string',
+  );
+}
+
+/** 把各 profile 的 entries 合在一起：人的改动就写在这里。 */
+function collectProfileEntries(
+  profiles: readonly ProfileDraft[],
+): NutritionEvidenceEntry[] {
+  const entries: NutritionEvidenceEntry[] = [];
+  for (const profile of profiles) {
+    if (Array.isArray(profile.entries)) {
+      entries.push(...profile.entries);
+    }
+  }
+  return entries;
+}
+
+function collectProfileStates(
+  profiles: readonly ProfileDraft[],
+): PreparationState[] {
+  const states = new Set<PreparationState>();
+  for (const profile of profiles) {
+    if (isPreparationState(profile.preparationState)) {
+      states.add(profile.preparationState);
+    }
+  }
+  return [...states];
+}
+
+/**
+ * 终检用哪一份档案做「宏量 / 能量」的口径基准。
+ *
+ * 优先本次缝合方案的主来源；没有对应档案时取第一份。`entries` 本身仍取全部
+ * profile 合并后的数组（单位闸门要检查每一份），但宏量不能把生、熟两份相加——
+ * 那是两份独立档案，合起来必然虚高。
+ */
+function selectPrimaryProfile(
+  profiles: readonly ProfileDraft[],
+  preferredSourceRecordId: string | null | undefined,
+): ProfileDraft | null {
+  return (
+    profiles.find(
+      (profile) => profile.sourceRecordId === preferredSourceRecordId,
+    ) ??
+    profiles[0] ??
+    null
+  );
+}
+
+/**
+ * 从 profile 侧取终检口径：profile 的来源记录里读 `rawBasisType` / `servingWeightG`。
+ *
+ * 有多个 profile 时：只要有一份来源是「按份」且没有份量克数，就用它（不能把
+ * 无法换算的问题藏起来）；否则优先主来源对应的档案，最后取第一份。
+ * 所有 profile 的来源记录都取不到时返回 null，由调用方回退到 mergePlan 的默认口径。
+ */
+function resolveProfileBasis(
+  profiles: readonly ProfileDraft[],
+  records: ReadonlyMap<string, EvidenceLedgerSource>,
+  preferredSourceRecordId: string | null | undefined,
+): FinalCheckBasis | null {
+  const candidates = profiles
+    .map((profile) => ({
+      profile,
+      record: records.get(profile.sourceRecordId),
+    }))
+    .filter(
+      (item): item is { profile: ProfileDraft; record: EvidenceLedgerSource } =>
+        item.record !== undefined,
+    );
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  for (const { record } of candidates) {
+    const basis = resolveFinalCheckBasis(record.normalizedNutrition);
+    if (basis.sourceBasis === 'PER_SERVING' && basis.servingGrams === null) {
+      return basis;
+    }
+  }
+
+  const chosen =
+    candidates.find(
+      ({ profile }) => profile.sourceRecordId === preferredSourceRecordId,
+    ) ?? candidates[0];
+
+  return resolveFinalCheckBasis(chosen.record.normalizedNutrition);
+}
+
+/** 缝合方案引用到的来源 id（主来源、行来源、冲突候选来源）。 */
+function collectPlanSourceIds(plan: MergePlan): string[] {
+  const ids = new Set<string>([plan.primarySourceRecordId]);
+  for (const row of plan.rows) {
+    if (row.sourceRecordId) {
+      ids.add(row.sourceRecordId);
+    }
+  }
+  for (const conflict of plan.conflicts) {
+    for (const candidate of conflict.candidates) {
+      ids.add(candidate.sourceRecordId);
+    }
+  }
+  return [...ids];
+}
+
 /**
  * 终检的应用服务。
  *
- * 职责：重建证据账本 → 算宏量与 4/9/4 反算能量 → 判断生熟覆盖 →
+ * 职责：确定终检输入 → 算宏量与 4/9/4 反算能量 → 判断生熟覆盖 →
  * 调领域层 `runFinalCheck`。控制器不重算任何营养规则。
+ *
+ * 输入优先级：
+ * 1. 草稿里有 `payload.profiles` 时，用各 profile 的 `entries`（人改过的值就是
+ *    写在这里，状态 `MANUAL`）——检查的必须是即将提交的那份数据；
+ * 2. 没有 profiles 时才回退到 `payload.mergePlan` + 证据账本。
  *
  * 提交前也走同一套终检（`assertCommitAllowed`）：拦死项存在时直接 400，
  * 不盲信前端传来的「我检查过了」。
@@ -238,8 +362,61 @@ export class IngredientCreationCheckService {
   private async evaluateDraft(
     draft: IngredientCreationDraft,
   ): Promise<FinalCheckResult> {
-    const plan = this.requireMergePlan(draft);
-    const records = await this.loadSourceProfiles(plan);
+    const plan = readMergePlan(draft);
+    const profiles = usableProfiles(draft);
+
+    if (profiles.length > 0) {
+      return this.evaluateProfiles(draft, plan, profiles);
+    }
+
+    return this.evaluateMergePlan(draft, this.requireMergePlan(draft));
+  }
+
+  /** ③ 之后：终检以人改过的 profile entries 为准。 */
+  private async evaluateProfiles(
+    draft: IngredientCreationDraft,
+    plan: MergePlan | null,
+    profiles: ProfileDraft[],
+  ): Promise<FinalCheckResult> {
+    const entries = collectProfileEntries(profiles);
+    const primaryProfile = selectPrimaryProfile(
+      profiles,
+      plan?.primarySourceRecordId,
+    );
+    const metricEntries =
+      primaryProfile && Array.isArray(primaryProfile.entries)
+        ? primaryProfile.entries
+        : entries;
+
+    const profileRecords = await this.loadSourceRecords(
+      profiles.map((profile) => profile.sourceRecordId),
+    );
+    const profileBasis = resolveProfileBasis(
+      profiles,
+      profileRecords,
+      plan?.primarySourceRecordId,
+    );
+    const basis = profileBasis ?? (await this.resolvePlanPrimaryBasis(plan));
+
+    return runFinalCheck({
+      entries,
+      basis,
+      macroSumG: sumMacroGrams(metricEntries),
+      energyKcal: readEntryValue(metricEntries, ENERGY_KCAL_FIELD_PATH),
+      energyFromMacrosKcal: energyFromMacrosKcal(metricEntries),
+      coverage: {
+        required: collectRequiredStates(draft),
+        present: collectProfileStates(profiles),
+      },
+    });
+  }
+
+  /** 没有 profiles 时的旧路径：mergePlan + 证据账本。 */
+  private async evaluateMergePlan(
+    draft: IngredientCreationDraft,
+    plan: MergePlan,
+  ): Promise<FinalCheckResult> {
+    const records = await this.loadSourceRecords(collectPlanSourceIds(plan));
     const primaryRecord = records.get(plan.primarySourceRecordId);
     const ledger = buildEvidenceLedger({
       plan,
@@ -262,34 +439,45 @@ export class IngredientCreationCheckService {
     });
   }
 
+  /** profile 侧口径取不到时，回退到 mergePlan 主来源的旧默认。 */
+  private async resolvePlanPrimaryBasis(
+    plan: MergePlan | null,
+  ): Promise<FinalCheckBasis> {
+    if (!plan) {
+      return resolveFinalCheckBasis(undefined);
+    }
+
+    const records = await this.loadSourceRecords([plan.primarySourceRecordId]);
+    return resolveFinalCheckBasis(
+      records.get(plan.primarySourceRecordId)?.normalizedNutrition,
+    );
+  }
+
   private requireMergePlan(draft: IngredientCreationDraft): MergePlan {
-    const plan = draft.payload.mergePlan;
-    if (!isMergePlan(plan)) {
+    const plan = readMergePlan(draft);
+    if (!plan) {
       throw new BadRequestException('草稿还没有缝合方案，请先生成缝合方案');
     }
     return plan;
   }
 
-  /** 读齐方案引用到的来源档案（主来源、行来源、冲突候选来源）。 */
-  private async loadSourceProfiles(
-    plan: MergePlan,
+  /** 按 id 读来源记录；找不到的 id 不在 map 里，由调用方决定回退。 */
+  private async loadSourceRecords(
+    ids: readonly string[],
   ): Promise<Map<string, EvidenceLedgerSource>> {
-    const ids = new Set<string>([plan.primarySourceRecordId]);
-    for (const row of plan.rows) {
-      if (row.sourceRecordId) {
-        ids.add(row.sourceRecordId);
-      }
-    }
-    for (const conflict of plan.conflicts) {
-      for (const candidate of conflict.candidates) {
-        if (candidate.sourceRecordId) {
-          ids.add(candidate.sourceRecordId);
-        }
-      }
+    const uniqueIds = [
+      ...new Set(
+        ids.filter(
+          (id): id is string => typeof id === 'string' && id.length > 0,
+        ),
+      ),
+    ];
+    if (uniqueIds.length === 0) {
+      return new Map();
     }
 
     const rows = await this.prisma.nutritionSourceRecord.findMany({
-      where: { id: { in: [...ids] } },
+      where: { id: { in: uniqueIds } },
       select: { id: true, normalizedNutrition: true },
     });
 

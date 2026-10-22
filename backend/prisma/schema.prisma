@@ -656,6 +656,8 @@ model Recipe {
   nutritionDetailedData  Json?                       @map("nutrition_detailed_data")
   nutritionStandard      String                      @default("FEDIAF_2021") @map("nutrition_standard")
   productionSteps        String?                     @map("production_steps")
+  /// 结构化的制作步骤（顺序流程：操作说明 + 可选时间/温度/设备）
+  productionStepsJson    Json?                       @map("production_steps_json")
   salesCount             Int                         @default(0) @map("sales_count")
   viewCount              Int                         @default(0) @map("view_count")
   targetHealthTags       Json                        @default("[]") @map("target_health_tags")
@@ -743,6 +745,10 @@ model RecipeItem {
   ingredientId           String                        @map("ingredient_id")
   nutritionFoodId        String?                       @map("nutrition_food_id")
   preparationMethod      String?                       @map("preparation_method")
+  /// 原料预处理的补充说明（部位/规格等自由文本）
+  preparationNote        String?                       @map("preparation_note") @db.VarChar(500)
+  /// 预处理来源：AUTO（营养档案/原料默认带出）| MANUAL（人工修改）
+  preparationSource      String?                       @map("preparation_source") @db.VarChar(20)
   ratioPercent           Float?                        @map("ratio_percent")
   nutrientTargetKey      String?                       @map("nutrient_target_key")
   nutrientTargetValue    Float?                        @map("nutrient_target_value")
@@ -3791,6 +3797,8 @@ model NutritionFood {
   ediblePortionLabel    String?                @map("edible_portion_label") @db.VarChar(100)
   processingLabel       String?                @map("processing_label") @db.VarChar(100)
   nutritionData         Json                   @map("nutrition_data")
+  /// 补剂营养档案的默认目标营养素定义（添加补剂时的初始值，不锁定食谱内选择）
+  defaultSupplementTargets Json?              @map("default_supplement_targets")
   notes                 String?                @map("notes")
   createdBy             String?                @map("created_by")
   verifiedBy            String?                @map("verified_by")
@@ -3939,6 +3947,8 @@ model DesignRecipe {
   targetHealthTags       String[]                      @default([]) @map("target_health_tags")
   applicableLifeStages   String[]                      @default([]) @map("applicable_life_stages")
   notes                  String?                       @map("notes")
+  /// 结构化的制作步骤（顺序流程：操作说明 + 可选时间/温度/设备）
+  productionStepsJson    Json?                         @map("production_steps_json")
   createdBy              String                        @map("created_by")
   publishedAt            DateTime?                     @map("published_at")
   publishedRecipeId      String?                       @map("published_recipe_id")
@@ -3980,6 +3990,10 @@ model DesignRecipeItem {
   includeInAssessment Boolean       @default(true) @map("include_in_assessment")
   ratioPercent        Float?        @map("ratio_percent")
   preparationMethod   String?       @map("preparation_method") @db.VarChar(100)
+  /// 原料预处理的补充说明（部位/规格等自由文本）
+  preparationNote     String?       @map("preparation_note") @db.VarChar(500)
+  /// 预处理来源：AUTO（营养档案/原料默认带出）| MANUAL（人工修改）
+  preparationSource   String?       @map("preparation_source") @db.VarChar(20)
   nutrientTargetKey   String?       @map("nutrient_target_key")
   nutrientTargetValue Float?        @map("nutrient_target_value")
   supplementTargets   Json?         @map("supplement_targets")

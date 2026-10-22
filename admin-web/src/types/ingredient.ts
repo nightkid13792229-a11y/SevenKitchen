@@ -479,6 +479,8 @@ export interface Ingredient {
   activeProcurementSkuCount?: number;
   procurementSkuCount?: number;
   hasActiveProcurementSku?: boolean;
+  /** 是否由 AI 新建向导创建过（有创建记录才显示「创建记录」入口） */
+  hasCreationAudit?: boolean;
   purchaseUnit?: string | null;
   purchaseToBaseRatio?: number | null;
   currentPricePerPurchaseUnit?: number;

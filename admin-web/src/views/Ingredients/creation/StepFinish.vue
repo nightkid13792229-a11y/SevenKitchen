@@ -261,25 +261,70 @@
     <template v-else>
       <el-result
         icon="success"
-        title="已提交，原料与营养档案已创建"
-        :sub-title="`原料「${ingredientDraft?.name ?? ''}」与 ${profiles.length} 份营养档案已写入，当前状态：待验证（PENDING）。`"
+        :title="
+          verified
+            ? '已提交，原料与营养档案已确认可用'
+            : '已提交，原料与营养档案已创建'
+        "
+        :sub-title="`原料「${ingredientDraft?.name ?? ''}」与 ${profiles.length} 份营养档案已写入，当前状态：${verified ? '已验证（VERIFIED）' : '待验证（PENDING）'}。`"
       >
         <template #extra>
-          <el-button type="primary" @click="handleConfirmAvailable">
+          <el-button
+            v-if="isAdmin && !verified"
+            type="primary"
+            :loading="verifying"
+            :disabled="verifying"
+            @click="handleConfirmAvailable"
+          >
             确认可用
           </el-button>
+          <el-tag
+            v-else-if="verified"
+            type="success"
+            size="large"
+            effect="light"
+          >
+            已验证
+          </el-tag>
           <el-button @click="goToIngredientList">去原料列表核对</el-button>
         </template>
       </el-result>
 
       <el-alert
+        v-if="verified"
+        type="success"
+        :closable="false"
+        show-icon
+        title="已可在配方中使用"
+      >
+        状态已变为「已验证」，操作人与时间已记录在创建记录里，生 / 熟档案都能在配方里选到。
+      </el-alert>
+
+      <el-alert
+        v-else
         type="warning"
         :closable="false"
         show-icon
         title="当前状态是「待验证」，配方设计器还选不到这份原料"
       >
-        必须由人点一次「确认可用」并记录是谁、什么时候点的，状态才会变成「已验证」。
-        AI 不参与这一步；真正调用审核接口在 Task 12 接入。
+        <template v-if="isAdmin">
+          点「确认可用」会把本次提交的 {{ profiles.length }}
+          份档案逐一确认，并记录是谁、什么时候点的；确认后生 / 熟档案在配方里都能选。
+        </template>
+        <template v-else>
+          {{ ADMIN_ONLY_TIP }}
+        </template>
+      </el-alert>
+
+      <el-alert
+        v-if="verifyError"
+        class="verify-error"
+        type="error"
+        :closable="false"
+        show-icon
+        title="确认可用失败（后端返回原文）"
+      >
+        <p class="commit-error__message">{{ verifyError }}</p>
       </el-alert>
 
       <section class="summary-section">
@@ -312,9 +357,11 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { ingredientCreationApi } from '@/api/ingredientCreation'
+import { nutritionFoodApi } from '@/api/ingredients'
+import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole'
 import { getApiErrorMessage } from '@/utils/apiError'
 import { BaseUnitLabels } from '@/types/ingredient'
 import type {
@@ -352,11 +399,15 @@ defineEmits<{
 }>()
 
 const router = useRouter()
+const isAdmin = useIsAdmin()
 
 const submitting = ref(false)
 const commitError = ref('')
 const blockingDetails = ref<CheckItem[]>([])
 const commitResult = ref<CommitIngredientCreationResult | null>(null)
+const verifying = ref(false)
+const verified = ref(false)
+const verifyError = ref('')
 
 const intake = computed(() => props.draft?.payload.intake ?? null)
 const plan = computed(() => props.draft?.payload.mergePlan ?? null)
@@ -620,15 +671,48 @@ async function submitCommit() {
   }
 }
 
-function handleConfirmAvailable() {
-  void ElMessageBox.alert(
-    '「确认可用」按钮将在 Task 12 接入：届时会调用审核接口，把状态从「待验证」改成「已验证」，并记录操作人与时间。当前请先到原料列表核对营养档案。',
-    '这一功能即将接入',
-    {
-      confirmButtonText: '知道了',
-      type: 'info'
+/**
+ * 「确认可用」：把本次提交的**每一份**档案都验证一遍（生 / 熟都能在配方里选），
+ * 后端记录操作人与时间。部分失败时把后端原文留在页面上，不吞掉原因。
+ */
+async function handleConfirmAvailable() {
+  if (!isAdmin.value) {
+    ElMessage.warning(ADMIN_ONLY_TIP)
+    return
+  }
+
+  const nutritionFoodIds = commitResult.value?.nutritionFoodIds ?? []
+  if (nutritionFoodIds.length === 0) {
+    verifyError.value = '这次提交没有返回营养档案，无法确认可用'
+    return
+  }
+
+  verifying.value = true
+  verifyError.value = ''
+
+  const failures: string[] = []
+  for (const nutritionFoodId of nutritionFoodIds) {
+    try {
+      await nutritionFoodApi.verify(nutritionFoodId)
+    } catch (error) {
+      failures.push(
+        `${shortId(nutritionFoodId)}：${getApiErrorMessage(
+          error,
+          '确认失败，请稍后重试'
+        )}`
+      )
     }
-  )
+  }
+
+  verifying.value = false
+
+  if (failures.length === 0) {
+    verified.value = true
+    ElMessage.success('已可在配方中使用')
+    return
+  }
+
+  verifyError.value = failures.join('\n')
 }
 
 function goToIngredientList() {
@@ -765,6 +849,10 @@ function goToIngredientList() {
   font-size: 13px;
   line-height: 1.6;
   word-break: break-word;
+}
+
+.verify-error {
+  margin-top: 12px;
 }
 
 .commit-error__blocking {

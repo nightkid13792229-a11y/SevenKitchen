@@ -491,6 +491,16 @@ export class AdminController {
       },
     });
 
+    // 「创建记录」入口只为 AI 新建的原料显示：一次性把本页原料的审计记录查出来，
+    // 避免前端逐行探测 404（那会给普通原料弹一串无意义的错误提示）。
+    const auditRows = await this.prisma.ingredientCreationAudit.findMany({
+      where: { ingredientId: { in: ingredientIds } },
+      select: { ingredientId: true },
+    });
+    const auditedIngredientIds = new Set(
+      auditRows.map((row) => row.ingredientId),
+    );
+
     const createdAtMap = new Map(
       prismaIngredients.map((p) => [p.id, p.createdAt.toISOString()]),
     );
@@ -560,6 +570,7 @@ export class AdminController {
         (activeRecommendedProductCountMap.get(ing.id) || 0) > 0,
       hasActiveProcurementSku:
         (activeProcurementSkuCountMap.get(ing.id) || 0) > 0,
+      hasCreationAudit: auditedIngredientIds.has(ing.id),
       weightG: ing.weightG,
       maxCapacityG: ing.maxCapacityG,
       safetyStock: ing.safetyStock,

@@ -10,6 +10,10 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  IngredientCreationAuditService,
+  type IngredientCreationAuditView,
+} from '../../application/ingredient-creation/ingredient-creation-audit.service';
 import { IngredientCreationCandidateService } from '../../application/ingredient-creation/ingredient-creation-candidate.service';
 import { IngredientCreationCheckService } from '../../application/ingredient-creation/ingredient-creation-check.service';
 import {
@@ -69,7 +73,19 @@ export class IngredientCreationController {
     private readonly mergeService: IngredientCreationMergeService,
     private readonly checkService: IngredientCreationCheckService,
     private readonly commitService: IngredientCreationCommitService,
+    private readonly auditService: IngredientCreationAuditService,
   ) {}
+
+  @Get('audits/:ingredientId')
+  @ApiOperation({
+    summary: '按原料读创建记录（AI 提案、人工改动、提交人；没有 → 404）',
+  })
+  async getAudit(
+    @Param('ingredientId') ingredientId: string,
+  ): Promise<ApiResponseDto<IngredientCreationAuditView>> {
+    const audit = await this.auditService.getByIngredientId(ingredientId);
+    return new ApiResponseDto(0, 'Success', audit);
+  }
 
   @Post('drafts')
   @ApiOperation({ summary: '创建 AI 新建原料草稿（INTAKE 站）' })

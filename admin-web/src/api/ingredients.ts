@@ -217,6 +217,13 @@ export const nutritionFoodApi = {
   getDetail: (id: string): Promise<NutritionFoodDetail> =>
     api.get(`/nutrition-foods/${id}`),
 
+  /**
+   * 「确认可用」：把档案从待验证改成已验证，后端记录操作人与时间。
+   * 仅管理员可调用（后端 AdminGuard）。
+   */
+  verify: (id: string): Promise<NutritionFoodDetail> =>
+    api.patch(`/nutrition-foods/${id}/verify`),
+
   create: (
     data: {
       name: string

@@ -260,3 +260,62 @@ export interface CommitIngredientCreationResult {
   nutritionFoodIds: string[]
   auditId: string
 }
+
+// ==================== 创建记录（审计） ====================
+
+/** 人工改动的类型（与后端 `buildAuditChanges` 的 FieldChangeKind 一致）。 */
+export type AuditChangeKind =
+  | 'VALUE_CHANGED'
+  | 'CONFLICT_RESOLVED'
+  | 'MANUALLY_ADDED'
+  | 'REMOVED_FROM_FINAL'
+
+/** AI 当时给出的一个冲突候选（目录单位值 + 来源原文）。 */
+export interface AuditAiConflictCandidate {
+  sourceRecordId: string
+  value: number
+  unit: string
+  sourceValue: number | null
+  sourceUnit: string | null
+}
+
+/** 「AI 提案 vs 最终档案」的一处差异。 */
+export interface IngredientCreationAuditFieldChange {
+  profileIndex: number
+  preparationState: PreparationState
+  sourceRecordId: string
+  fieldPath: string
+  change: AuditChangeKind
+  aiValue: number | null
+  aiUnit: string | null
+  aiSourceRecordId: string | null
+  aiCandidates: AuditAiConflictCandidate[] | null
+  finalValue: number | null
+  finalUnit: string | null
+  finalStatus: NutritionEvidenceEntry['status'] | null
+  finalSourceRecordId: string | null
+  finalConfirmedBy: string | null
+}
+
+/** 提交时落库的人工改动 + 人登记的例外。 */
+export interface IngredientCreationAuditChanges {
+  fields: IngredientCreationAuditFieldChange[]
+  exceptions: ExceptionRecord[]
+}
+
+/**
+ * `GET /admin/ingredient-creation/audits/:ingredientId` 的返回值。
+ *
+ * `proposals` 是 AI 每次出方案的原始快照数组（未做类型收窄，展示层自行容错）；
+ * `changes` 是字段级人工改动。
+ */
+export interface IngredientCreationAudit {
+  id: string
+  draftId: string
+  ingredientId: string
+  nutritionFoodIds: string[]
+  proposals: unknown
+  changes: IngredientCreationAuditChanges | null
+  committedBy: string
+  committedAt: string
+}

@@ -14,6 +14,7 @@ import type {
   CreateMergePlanInput,
   FinalCheckResult,
   FindCandidatesInput,
+  IngredientCreationAudit,
   IngredientCreationDraft,
   IngredientCreationDraftPayload,
   MergePlan,
@@ -64,6 +65,10 @@ export const ingredientCreationApi = {
   /** ④ 跑服务端终检；前端只展示，不自己判定通过 */
   runCheck: (id: string): Promise<FinalCheckResult> =>
     api.post(`${BASE}/drafts/${id}/check`),
+
+  /** 按原料读 AI 创建记录（提案 / 人工改动 / 提交人）；没有 → 404 */
+  getAudit: (ingredientId: string): Promise<IngredientCreationAudit> =>
+    api.get(`${BASE}/audits/${ingredientId}`),
 
   /** ⑥ 一次性提交原料、营养档案与映射 */
   commit: (

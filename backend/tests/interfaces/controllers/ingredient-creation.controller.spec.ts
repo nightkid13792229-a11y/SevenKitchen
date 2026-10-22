@@ -7,6 +7,7 @@ import {
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { IngredientCreationCandidateService } from '../../../src/application/ingredient-creation/ingredient-creation-candidate.service';
+import { IngredientCreationAuditService } from '../../../src/application/ingredient-creation/ingredient-creation-audit.service';
 import { IngredientCreationCheckService } from '../../../src/application/ingredient-creation/ingredient-creation-check.service';
 import { IngredientCreationCommitService } from '../../../src/application/ingredient-creation/ingredient-creation-commit.service';
 import { IngredientCreationDraftService } from '../../../src/application/ingredient-creation/ingredient-creation-draft.service';
@@ -106,6 +107,7 @@ describe('IngredientCreationController', () => {
   let mergeService: ServiceMock;
   let checkService: ServiceMock;
   let commitService: ServiceMock;
+  let auditService: ServiceMock;
   let jwtAuthService: { validateToken: jest.Mock };
 
   beforeEach(async () => {
@@ -128,6 +130,9 @@ describe('IngredientCreationController', () => {
     commitService = {
       commit: jest.fn(),
     };
+    auditService = {
+      getByIngredientId: jest.fn(),
+    };
     jwtAuthService = {
       validateToken: jest.fn().mockReturnValue({
         userId: 'admin-1',
@@ -147,6 +152,7 @@ describe('IngredientCreationController', () => {
         { provide: IngredientCreationMergeService, useValue: mergeService },
         { provide: IngredientCreationCheckService, useValue: checkService },
         { provide: IngredientCreationCommitService, useValue: commitService },
+        { provide: IngredientCreationAuditService, useValue: auditService },
         { provide: JwtAuthService, useValue: jwtAuthService },
         AuthGuard,
         AdminGuard,

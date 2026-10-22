@@ -41,6 +41,7 @@ import { ApiResponseDto } from '../dto/common/response.dto';
 import { NutritionFoodCategory, NutritionFoodStatus } from '@prisma/client';
 import { AuthGuard, CurrentUser } from '../auth';
 import type { RequestUser } from '../auth';
+import { AdminGuard } from '../guards/role.guard';
 
 @ApiTags('Nutrition Food')
 @ApiBearerAuth()
@@ -163,6 +164,9 @@ export class NutritionFoodController {
   }
 
   @Patch(':id/verify')
+  // 「确认可用」是放行到配方链路的人工动作，只允许管理员做；类上的 AuthGuard
+  // 负责登录校验，这里再叠加 AdminGuard 挡掉员工（403 而不是静默通过）。
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: '验证营养原料' })
   @ApiParam({ name: 'id', description: '营养原料ID' })
   @ApiResponse({ status: 200, description: '验证成功' })

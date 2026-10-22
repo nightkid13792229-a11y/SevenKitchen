@@ -75,6 +75,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "原料管理" },
       },
       {
+        path: "ingredients/creation/:draftId?",
+        name: "IngredientCreation",
+        component: () => import("@/views/Ingredients/creation/index.vue"),
+        meta: { title: "AI 新建标准原料" },
+      },
+      {
         path: "supplement-shop/catalog",
         name: "SupplementShopCatalog",
         component: () => import("@/views/SupplementShop/Catalog.vue"),

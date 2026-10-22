@@ -14,6 +14,7 @@
         <el-button type="primary" @click="handleCreate" :icon="Plus">
           新增标准原料
         </el-button>
+        <el-button :icon="MagicStick" @click="handleAiCreate">AI 新建</el-button>
       </div>
     </div>
 
@@ -446,7 +447,7 @@ import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ElTable } from 'element-plus'
-import { Plus, Search, Refresh } from '@element-plus/icons-vue'
+import { Plus, Search, Refresh, MagicStick } from '@element-plus/icons-vue'
 import { ingredientApi } from '@/api/ingredients'
 import {
   IngredientType,
@@ -651,6 +652,11 @@ const handleCreate = () => {
   copySourceName.value = ''
   currentIngredient.value = undefined
   dialogVisible.value = true
+}
+
+/** AI 新建：进入六站向导；draftId 由向导页创建后补进地址栏。 */
+const handleAiCreate = () => {
+  router.push({ name: 'IngredientCreation' })
 }
 
 // 新增补剂（合并自食谱设计器补剂库，数据与设计器共用）

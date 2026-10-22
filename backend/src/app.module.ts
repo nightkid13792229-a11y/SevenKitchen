@@ -194,6 +194,9 @@ import { NutritionFoodController } from './interfaces/controllers/nutrition-food
 import { NutritionFoodService } from './application/nutrition-food/nutrition-food.service';
 import { NutritionGovernanceController } from './interfaces/controllers/nutrition-governance.controller';
 import { NutritionGovernanceService } from './application/nutrition-governance/nutrition-governance.service';
+import { IngredientCreationController } from './interfaces/controllers/ingredient-creation.controller';
+import { IngredientCreationCandidateService } from './application/ingredient-creation/ingredient-creation-candidate.service';
+import { IngredientCreationCommitService } from './application/ingredient-creation/ingredient-creation-commit.service';
 import { SearchGovernanceController } from './interfaces/controllers/search-governance.controller';
 import { SearchGovernanceService } from './application/search-governance/search-governance.service';
 import { AgentProviderConfigService } from './application/nutrition-governance/agent-provider-config.service';
@@ -419,6 +422,7 @@ validatePrismaConfig();
     SharedPhotosController,
     NutritionFoodController,
     NutritionGovernanceController,
+    IngredientCreationController,
     SearchGovernanceController,
     RecommendedProductController,
     ReviewsController,
@@ -899,6 +903,8 @@ validatePrismaConfig();
     NutrientMappingAuditService,
     IngredientReadinessService,
     IngredientCreationDraftService,
+    IngredientCreationCandidateService,
+    IngredientCreationCommitService,
     FediafTargetSelectorService,
     NutritionUnitNormalizerService,
     IngredientBatchReplaceService,

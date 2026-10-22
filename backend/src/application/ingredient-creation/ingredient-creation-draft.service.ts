@@ -75,9 +75,16 @@ export class IngredientCreationDraftService {
     step: CreationStep,
     payload: Partial<IngredientCreationDraftPayload>,
   ): Promise<IngredientCreationDraft> {
+    // 兜底：`proposalHistory` 只能由 `appendProposal` 追加，绝不接受 patch 覆盖。
+    // 前端若把整份 payload 回传，HTTP DTO 会先剥一次，这里再剥一次。
+    const safePayload = {
+      ...payload,
+    } as Partial<IngredientCreationDraftPayload>;
+    delete (safePayload as Record<string, unknown>).proposalHistory;
+
     const rows = await this.prisma.$queryRaw<RawDraftRow[]>`
       UPDATE "ingredient_creation_draft"
-      SET payload = payload || ${JSON.stringify(payload)}::jsonb,
+      SET payload = payload || ${JSON.stringify(safePayload)}::jsonb,
           step = ${step},
           updated_at = now()
       WHERE id = ${id}

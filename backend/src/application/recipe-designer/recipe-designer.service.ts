@@ -64,6 +64,7 @@ import {
   type SeriesReleaseReadiness,
   type SeriesReleaseStageSnapshot,
   type SeriesReleaseStageStatus,
+  type SeriesReleaseState,
 } from '../../domain/recipe-designer/series-release-readiness';
 import type {
   AssessmentEntry,
@@ -301,6 +302,19 @@ type SeriesReleaseResult = {
   /** 本次实际写入（含已公开行刷新展示资料）的食谱行数 */
   updatedRecipeCount: number;
   releasedAt: Date;
+};
+
+/** 整系列下架结果：只统计状态行数，不删除设计稿 / 历史版本。 */
+type SeriesUnpublishResult = {
+  seriesId: string;
+  name: string;
+  businessStatus: string;
+  releaseState: SeriesReleaseState;
+  /** 本次从 PUBLIC 变成 DRAFT 的食谱行数 */
+  unpublishedRecipeCount: number;
+  /** 下架后仍为 PUBLIC 的食谱行数（事务内应恒为 0） */
+  remainingPublicRecipeCount: number;
+  unpublishedAt: Date;
 };
 
 const DESIGN_RECIPE_ITEM_CLIENT_INGREDIENT_SELECT = {
@@ -4245,14 +4259,20 @@ export class RecipeDesignerService {
    * 发布整条产品线（管理员）。
    *
    * 先按同一份门槛断言就绪，再在一个事务里：
-   *  · 该系列**所有阶段**的 `Recipe`（DRAFT / PUBLIC）→ `PUBLIC`；
+   *  · 每个生命阶段只处理**最新一版**：
+   *      - 最新一版是 DRAFT → 改成 PUBLIC（这是「重新发布」要发出去的新版本）；
+   *      - 最新一版已经是 PUBLIC → 只刷新系列展示资料；
+   *      - 更老的版本保持原状（可以继续是 PUBLIC，不影响前台取最新版本）；
    *    —— 不只必填阶段：未勾选但已经设计好的阶段如果留在 DRAFT，
    *       就是顾客永远看不到的「隐藏草稿」，所以一起发布；
    *       只有设计稿、从未写进系列仓库的阶段没有 `Recipe` 可发，保持原状，
    *       后台仍能在 readiness.stages 里看到它的 DRAFT 状态；
-   *  · 系列展示资料复制到每条 `Recipe`（目标健康标签为空时保留食谱原值，
+   *  · 系列展示资料复制到每个阶段最新一版（目标健康标签为空时保留食谱原值，
    *    因为空标签只是提醒，不应清掉阶段发布时已有的标签）；
    *  · 系列 `businessStatus` → `PUBLIC`。
+   *
+   * 「旧 PUBLIC + 新 DRAFT」不是阻断项：重新发布时旧版本原样保留，
+   * 新 DRAFT 版本成为该阶段新的 PUBLIC 版本。
    */
   async releaseSeries(
     seriesId: string,
@@ -4286,8 +4306,15 @@ export class RecipeDesignerService {
         ? { targetHealthTags: this.toJsonValue(seriesTargetHealthTags) }
         : {}),
     };
-    // 已公开行只刷新展示资料，不计入「新发布」。
-    const publishedRecipeCount = sources.recipes.filter(
+    /**
+     * 只发布每个阶段的最新一版：旧版本（包括旧 PUBLIC 和更早的 DRAFT）
+     * 一律不动。已公开的最新版本仍会写入展示资料，但不计入「新发布」。
+     */
+    const releaseTargets = this.pickSeriesReleasePublishTargets(
+      sources.recipes,
+    );
+    const releaseTargetIds = releaseTargets.map((recipe) => recipe.id);
+    const publishedRecipeCount = releaseTargets.filter(
       (recipe) => recipe.status === RecipeStatus.DRAFT,
     ).length;
     const releasedStageCodes = readiness.stages
@@ -4295,13 +4322,19 @@ export class RecipeDesignerService {
       .map((stage) => stage.stageCode);
 
     return this.prisma.$transaction(async (tx) => {
-      const updatedRecipes = await tx.recipe.updateMany({
-        where: {
-          seriesId,
-          status: { in: [RecipeStatus.DRAFT, RecipeStatus.PUBLIC] },
-        },
-        data: recipeUpdateData,
-      });
+      const updatedRecipes =
+        releaseTargetIds.length > 0
+          ? await tx.recipe.updateMany({
+              where: {
+                id: { in: releaseTargetIds },
+                seriesId,
+                status: {
+                  in: [RecipeStatus.DRAFT, RecipeStatus.PUBLIC],
+                },
+              },
+              data: recipeUpdateData,
+            })
+          : { count: 0 };
 
       const updatedSeries = await tx.recipeSeries.update({
         where: { id: seriesId },
@@ -4317,6 +4350,56 @@ export class RecipeDesignerService {
         publishedRecipeCount,
         updatedRecipeCount: updatedRecipes.count,
         releasedAt: updatedSeries.updatedAt,
+      };
+    });
+  }
+
+  /**
+   * 下架整条产品线（管理员）。
+   *
+   * 只改状态，不删除任何数据：
+   *  · 该系列所有 `Recipe.status=PUBLIC` → `DRAFT`（旧版本也一起变草稿，
+   *    避免下架后还有任意历史版本被前台当成公开食谱）；
+   *  · 系列 `businessStatus` → `DRAFT`；
+   *  · 设计稿、版本历史、发布记录全部保留，之后仍可重新发布。
+   *
+   * 权限 / 可见性复用发布接口的系列加载（不可见 → 404，订单系列 → 400）。
+   */
+  async unpublishSeries(
+    seriesId: string,
+    access: RecipeDesignerAccessInput,
+  ): Promise<SeriesUnpublishResult> {
+    const context = normalizeRecipeDesignerAccessContext(access);
+    if (context.role !== UserRole.ADMIN) {
+      throw new BadRequestException('只有管理员可以下架产品线');
+    }
+
+    await this.loadCatalogSeriesForRelease(seriesId, context);
+
+    return this.prisma.$transaction(async (tx) => {
+      const unpublishedRecipes = await tx.recipe.updateMany({
+        where: {
+          seriesId,
+          status: RecipeStatus.PUBLIC,
+        },
+        data: {
+          status: RecipeStatus.DRAFT,
+        },
+      });
+
+      const updatedSeries = await tx.recipeSeries.update({
+        where: { id: seriesId },
+        data: { businessStatus: RecipeSeriesBusinessStatus.DRAFT },
+      });
+
+      return {
+        seriesId,
+        name: updatedSeries.name,
+        businessStatus: updatedSeries.businessStatus,
+        releaseState: 'UNPUBLISHED' as const,
+        unpublishedRecipeCount: unpublishedRecipes.count,
+        remainingPublicRecipeCount: 0,
+        unpublishedAt: updatedSeries.updatedAt,
       };
     });
   }
@@ -4376,6 +4459,7 @@ export class RecipeDesignerService {
       RecipeSeries,
       | 'id'
       | 'designMode'
+      | 'businessStatus'
       | 'requiredLifeStages'
       | 'coverImageUrl'
       | 'coverTitle'
@@ -4390,6 +4474,7 @@ export class RecipeDesignerService {
     return buildSeriesReleaseReadiness({
       seriesId: series.id,
       designMode: series.designMode ?? RecipeDesignMode.CATALOG,
+      businessStatus: series.businessStatus,
       requiredLifeStages: series.requiredLifeStages,
       presentation: {
         coverImageUrl: series.coverImageUrl,
@@ -4410,6 +4495,11 @@ export class RecipeDesignerService {
    *  · DRAFT  → 只有设计稿，还没写进系列仓库；
    *  · READY  → 已有 `Recipe.status=DRAFT`，可随系列发布；
    *  · PUBLIC → 已有 `Recipe.status=PUBLIC`。
+   *
+   * 「旧 PUBLIC + 新 DRAFT」时状态仍保持 PUBLIC（兼容老前端），但同时给出：
+   *  · latestRecipeVersion    最新一版的版本号（可能是 DRAFT）；
+   *  · publishedRecipeVersion 最近一次 PUBLIC 的版本号；
+   *  · hasPendingUpdate=true  表示有一版更新的草稿等待发布。
    */
   private buildSeriesReleaseStageSnapshots(
     recipes: SeriesReleaseRecipeRecord[],
@@ -4447,12 +4537,21 @@ export class RecipeDesignerService {
             ? 'DRAFT'
             : 'EMPTY';
 
+      const hasPendingUpdate = Boolean(
+        latestRecipe &&
+        publishedRecipe &&
+        latestRecipe.status === RecipeStatus.DRAFT &&
+        this.isSeriesReleaseRecipeNewer(latestRecipe, publishedRecipe),
+      );
+
       return {
         stageCode: lifeStage,
         label: SERIES_LIFE_STAGE_LABELS[lifeStage],
         status,
         latestRecipeId: latestRecipe?.recipeId ?? null,
         latestRecipeVersion: latestRecipe?.version ?? null,
+        publishedRecipeVersion: publishedRecipe?.version ?? null,
+        hasPendingUpdate,
         designDraftId: editableDesign?.id ?? null,
       };
     });
@@ -4484,19 +4583,61 @@ export class RecipeDesignerService {
     return (matched as RecipeSeriesLifeStage | undefined) ?? null;
   }
 
+  /**
+   * 阶段食谱排序：版本号越大越新；同一版本号（例如换成了新的 recipeId）
+   * 用行 id 兜底，保证结果稳定、可比较。
+   */
+  private compareSeriesReleaseRecipeOrder(
+    left: Pick<SeriesReleaseRecipeRecord, 'id' | 'version'>,
+    right: Pick<SeriesReleaseRecipeRecord, 'id' | 'version'>,
+  ): number {
+    const byVersion = (right.version ?? 0) - (left.version ?? 0);
+    if (byVersion !== 0) {
+      return byVersion;
+    }
+    return String(right.id).localeCompare(String(left.id));
+  }
+
+  private isSeriesReleaseRecipeNewer(
+    candidate: Pick<SeriesReleaseRecipeRecord, 'id' | 'version'>,
+    baseline: Pick<SeriesReleaseRecipeRecord, 'id' | 'version'>,
+  ): boolean {
+    return this.compareSeriesReleaseRecipeOrder(candidate, baseline) < 0;
+  }
+
   private pickLatestSeriesReleaseRecipe<
-    T extends Pick<SeriesReleaseRecipeRecord, 'version' | 'updatedAt'>,
+    T extends Pick<SeriesReleaseRecipeRecord, 'id' | 'version'>,
   >(recipes: T[]): T | null {
     if (recipes.length === 0) {
       return null;
     }
-    return [...recipes].sort((left, right) => {
-      const byVersion = (right.version ?? 0) - (left.version ?? 0);
-      if (byVersion !== 0) {
-        return byVersion;
+    return [...recipes].sort((left, right) =>
+      this.compareSeriesReleaseRecipeOrder(left, right),
+    )[0];
+  }
+
+  /**
+   * 重新发布只处理每个阶段的**最新一版**：
+   *  · 最新是 DRAFT → 本次发布它；
+   *  · 最新是 PUBLIC → 只刷新展示资料；
+   *  · 更老版本不在这里，保持原状（旧 PUBLIC 可以继续是 PUBLIC）。
+   *
+   * 无法归属到固定生命阶段的历史数据按 recipeId 分组，
+   * 避免系列里存在永远发不出去的阶段食谱。
+   */
+  private pickSeriesReleasePublishTargets(
+    recipes: SeriesReleaseRecipeRecord[],
+  ): SeriesReleaseRecipeRecord[] {
+    const latestByGroup = new Map<string, SeriesReleaseRecipeRecord>();
+    for (const recipe of recipes) {
+      const stage = this.resolveSeriesReleaseRecipeStage(recipe);
+      const key = stage ? `stage:${stage}` : `recipe:${recipe.recipeId}`;
+      const current = latestByGroup.get(key);
+      if (!current || this.isSeriesReleaseRecipeNewer(recipe, current)) {
+        latestByGroup.set(key, recipe);
       }
-      return this.getUpdatedTime(right) - this.getUpdatedTime(left);
-    })[0];
+    }
+    return [...latestByGroup.values()];
   }
 
   private toSeriesReleaseSettingsSnapshot(series: {

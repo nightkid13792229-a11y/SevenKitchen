@@ -22,6 +22,8 @@ function stage(
     status: 'EMPTY',
     latestRecipeId: null,
     latestRecipeVersion: null,
+    publishedRecipeVersion: null,
+    hasPendingUpdate: false,
     designDraftId: null,
     ...overrides,
   };
@@ -74,8 +76,18 @@ function readyStages(): SeriesReleaseStageSnapshot[] {
           status: 'PUBLIC' as const,
           latestRecipeId: 'recipe-senior',
           latestRecipeVersion: 1,
+          publishedRecipeVersion: 1,
         }
       : entry,
+  );
+}
+
+function withReadyStage(
+  stageCode: string,
+  overrides: Partial<SeriesReleaseStageSnapshot>,
+): SeriesReleaseStageSnapshot[] {
+  return readyStages().map((entry) =>
+    entry.stageCode === stageCode ? { ...entry, ...overrides } : entry,
   );
 }
 
@@ -133,6 +145,7 @@ describe('buildSeriesReleaseReadiness', () => {
       readyStageCount: 2,
       publishedStageCount: 1,
       designedStageCount: 2,
+      pendingStageCount: 0,
     });
     expect(readiness.stages.every((entry) => entry.required === false)).toBe(
       false,
@@ -326,5 +339,147 @@ describe('buildSeriesReleaseReadiness', () => {
         (blocker) => blocker.scope === 'SERIES',
       ),
     ).toBe(true);
+  });
+
+  it('flags a pending update when a newer DRAFT version exists after an old PUBLIC one', () => {
+    const readiness = buildSeriesReleaseReadiness(
+      baseInput({
+        businessStatus: 'PUBLIC',
+        stages: withReadyStage('LOW_ACTIVITY_ADULT_OR_SENIOR', {
+          status: 'PUBLIC',
+          latestRecipeId: 'recipe-senior',
+          latestRecipeVersion: 3,
+          publishedRecipeVersion: 2,
+        }),
+      }),
+    );
+
+    // 待更新只是提示，不阻断重新发布。
+    expect(readiness.ready).toBe(true);
+    expect(
+      readiness.stages.find(
+        (entry) => entry.stageCode === 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+      ),
+    ).toMatchObject({
+      status: 'PUBLIC',
+      latestRecipeVersion: 3,
+      publishedRecipeVersion: 2,
+      hasPendingUpdate: true,
+    });
+    expect(readiness.hasPendingUpdates).toBe(true);
+    expect(readiness.pendingStageCodes).toEqual([
+      'LOW_ACTIVITY_ADULT_OR_SENIOR',
+    ]);
+    expect(readiness.summary.pendingStageCount).toBe(1);
+    expect(readiness.releaseState).toBe('NEEDS_UPDATE');
+    expect(readiness.businessStatus).toBe('PUBLIC');
+  });
+
+  it('derives releaseState from series businessStatus and pending updates', () => {
+    const published = buildSeriesReleaseReadiness(
+      baseInput({ businessStatus: 'PUBLIC' }),
+    );
+    expect(published.releaseState).toBe('PUBLISHED');
+    expect(published.hasPendingUpdates).toBe(false);
+    expect(published.pendingStageCodes).toEqual([]);
+
+    const unpublished = buildSeriesReleaseReadiness(
+      baseInput({ businessStatus: 'DRAFT' }),
+    );
+    expect(unpublished.releaseState).toBe('UNPUBLISHED');
+    expect(unpublished.businessStatus).toBe('DRAFT');
+
+    const needsUpdate = buildSeriesReleaseReadiness(
+      baseInput({
+        businessStatus: 'PUBLIC',
+        stages: withReadyStage('LOW_ACTIVITY_ADULT_OR_SENIOR', {
+          status: 'PUBLIC',
+          latestRecipeId: 'recipe-senior',
+          latestRecipeVersion: 2,
+          publishedRecipeVersion: 1,
+        }),
+      }),
+    );
+    expect(needsUpdate.releaseState).toBe('NEEDS_UPDATE');
+
+    // PRIVATE_CUSTOM 等非 PUBLIC 系列一律按未发布展示。
+    const privateCustom = buildSeriesReleaseReadiness(
+      baseInput({ businessStatus: 'PRIVATE_CUSTOM' }),
+    );
+    expect(privateCustom.releaseState).toBe('UNPUBLISHED');
+
+    // 未传 businessStatus 时按 DRAFT（兼容旧调用方）。
+    const missingStatus = buildSeriesReleaseReadiness(baseInput());
+    expect(missingStatus.businessStatus).toBe('DRAFT');
+    expect(missingStatus.releaseState).toBe('UNPUBLISHED');
+  });
+
+  it('honours an explicit pending flag when version numbers are equal', () => {
+    const explicitPending = buildSeriesReleaseReadiness(
+      baseInput({
+        businessStatus: 'PUBLIC',
+        stages: withReadyStage('LOW_ACTIVITY_ADULT_OR_SENIOR', {
+          status: 'PUBLIC',
+          latestRecipeVersion: 1,
+          publishedRecipeVersion: 1,
+          hasPendingUpdate: true,
+        }),
+      }),
+    );
+    expect(
+      explicitPending.stages.find(
+        (entry) => entry.stageCode === 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+      )?.hasPendingUpdate,
+    ).toBe(true);
+    expect(explicitPending.releaseState).toBe('NEEDS_UPDATE');
+
+    // 即使调用方漏传 flag，版本号更高也会被兜底识别为待更新。
+    const inferred = buildSeriesReleaseReadiness(
+      baseInput({
+        businessStatus: 'PUBLIC',
+        stages: withReadyStage('LOW_ACTIVITY_ADULT_OR_SENIOR', {
+          status: 'PUBLIC',
+          latestRecipeVersion: 5,
+          publishedRecipeVersion: 4,
+          hasPendingUpdate: false,
+        }),
+      }),
+    );
+    expect(
+      inferred.stages.find(
+        (entry) => entry.stageCode === 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+      )?.hasPendingUpdate,
+    ).toBe(true);
+  });
+
+  it('normalizes missing versions and never marks an unpublished stage as pending', () => {
+    const readiness = buildSeriesReleaseReadiness(
+      baseInput({
+        businessStatus: 'PUBLIC',
+        stages: withReadyStage('LOW_ACTIVITY_ADULT_OR_SENIOR', {
+          status: 'PUBLIC',
+          latestRecipeVersion: 2,
+          publishedRecipeVersion: 2,
+        }),
+      }),
+    );
+
+    const senior = readiness.stages.find(
+      (entry) => entry.stageCode === 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+    );
+    expect(senior).toMatchObject({
+      latestRecipeVersion: 2,
+      publishedRecipeVersion: 2,
+      hasPendingUpdate: false,
+    });
+    expect(
+      readiness.stages.find(
+        (entry) => entry.stageCode === 'PUPPY_UNDER_14_WEEKS',
+      ),
+    ).toMatchObject({
+      latestRecipeVersion: null,
+      publishedRecipeVersion: null,
+      hasPendingUpdate: false,
+    });
   });
 });

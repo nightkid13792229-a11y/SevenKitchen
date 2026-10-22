@@ -127,9 +127,9 @@ export interface CandidateSearchResult {
  * 缝合方案的一行：只补缺，不覆盖主来源。
  *
  * `status` 只描述「这个字段的值是怎么来的」：
- * - `DIRECT`：主来源直接给的（主来源的行）
+ * - `DIRECT`：主来源直接给的，或人确认「采纳主来源」的冲突值（不算人工改动）
  * - `FILLED`：主来源缺、由补位来源自动补上的
- * - `MANUAL`：人工裁决后确定的（`applyManualResolution` 写入）
+ * - `MANUAL`：人明确改判到**非主来源**的候选（才算人工改动）
  * - `CONFLICT`：多个来源给了值但互不相等，**没有写出最终值**；
  *   `value` / `sourceValue` / `sourceRecordId` / `sourceUnit` 全为 `null`，
  *   候选值放在 `MergePlan.conflicts` 里等人裁决。

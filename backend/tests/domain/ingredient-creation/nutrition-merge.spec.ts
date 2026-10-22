@@ -452,7 +452,7 @@ describe('applyManualResolution', () => {
     });
   }
 
-  it('writes the chosen source value into rows as a manual row and clears the conflict', () => {
+  it('writes a supplemental choice as a MANUAL row and clears the conflict', () => {
     const plan = conflictedPlan();
 
     const resolved = applyManualResolution(plan, 'minerals.iron', {
@@ -472,18 +472,52 @@ describe('applyManualResolution', () => {
     expect(resolved.primarySourceRecordId).toBe(PRIMARY_ID);
   });
 
-  it('lets a human keep the primary value', () => {
+  it('treats choosing the primary source as adoption (DIRECT), not a manual edit', () => {
     const resolved = applyManualResolution(conflictedPlan(), 'minerals.iron', {
       sourceRecordId: PRIMARY_ID,
     });
 
     expect(rowOf(resolved, 'minerals.iron')).toMatchObject({
       value: 5.5,
-      status: 'MANUAL',
+      status: 'DIRECT',
       sourceRecordId: PRIMARY_ID,
       sourceValue: 5.5,
     });
     expect(resolved.conflicts).toEqual([]);
+  });
+
+  it('keeps DIRECT for primary adoption and MANUAL for a supplemental edit in the same plan', () => {
+    const plan = buildMergePlan({
+      primary: source(PRIMARY_ID, {
+        'minerals.iron': 5.5,
+        'vitamins.vitaminA': 5000,
+      }),
+      supplementals: [
+        source(SUPPLEMENT_ID, {
+          'minerals.iron': 12,
+          'vitamins.vitaminA': 6000,
+        }),
+      ],
+    });
+
+    const adopted = applyManualResolution(plan, 'minerals.iron', {
+      sourceRecordId: PRIMARY_ID,
+    });
+    const edited = applyManualResolution(adopted, 'vitamins.vitaminA', {
+      sourceRecordId: SUPPLEMENT_ID,
+    });
+
+    expect(rowOf(edited, 'minerals.iron')).toMatchObject({
+      value: 5.5,
+      status: 'DIRECT',
+      sourceRecordId: PRIMARY_ID,
+    });
+    expect(rowOf(edited, 'vitamins.vitaminA')).toMatchObject({
+      value: 6000,
+      status: 'MANUAL',
+      sourceRecordId: SUPPLEMENT_ID,
+    });
+    expect(edited.conflicts).toEqual([]);
   });
 
   it('does not mutate the plan it is given', () => {

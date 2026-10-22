@@ -213,10 +213,13 @@ function compareRowsByCatalogOrder(left: MergeRow, right: MergeRow): number {
 }
 
 /**
- * 人对冲突字段做裁决：按选定来源把值写进 `rows`（状态 `MANUAL`，
- * 与自动盖章的 `DIRECT`/`FILLED` 区分开，后面统计「改动率」才分得清），
- * 并从 `conflicts` 里移除这一条。其余行、其余冲突原样保留；
- * `missingFields` 也原样保留——冲突字段本来就不在缺失清单里（有值才冲突）。
+ * 人对冲突字段做裁决：按选定来源把值写进 `rows`，并从 `conflicts` 里移除这一条。
+ * 其余行、其余冲突原样保留；`missingFields` 也原样保留——冲突字段本来就不在
+ * 缺失清单里（有值才冲突）。
+ *
+ * 状态语义（用于统计「改动率」，不能混）：
+ * - 选主来源 → `DIRECT`：人只是确认「AI 的主来源方案是对的」，不是人工修改；
+ * - 选非主来源 → `MANUAL`：人明确改判到别的来源，才算人工改动。
  *
  * 写入的行同时保留两套数：`value`/`unit` 是目录单位下的最终值，
  * `sourceValue`/`sourceUnit` 照抄所选候选的来源原文。
@@ -259,7 +262,10 @@ export function applyManualResolution(
     fieldPath,
     value: candidate.value,
     unit: field.unit,
-    status: 'MANUAL',
+    status:
+      candidate.sourceRecordId === plan.primarySourceRecordId
+        ? 'DIRECT'
+        : 'MANUAL',
     sourceRecordId: candidate.sourceRecordId,
     sourceValue: candidate.sourceValue,
     sourceUnit: candidate.sourceUnit,

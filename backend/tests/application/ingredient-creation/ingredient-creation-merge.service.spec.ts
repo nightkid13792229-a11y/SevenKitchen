@@ -234,7 +234,7 @@ describe('IngredientCreationMergeService', () => {
     );
   });
 
-  it('人工裁决只 patch 当前方案，不追加提案快照', async () => {
+  it('采纳主来源只 patch 当前方案，写成 DIRECT，且不追加提案快照', async () => {
     draftService.get.mockResolvedValue(
       createDraft({ payload: { mergePlan: draftPlanWithIronConflict } }),
     );
@@ -249,7 +249,7 @@ describe('IngredientCreationMergeService', () => {
         fieldPath: 'minerals.iron',
         value: 5.5,
         unit: 'mg',
-        status: 'MANUAL',
+        status: 'DIRECT',
         sourceRecordId: 'src-primary',
         sourceValue: 5.5,
         sourceUnit: 'mg',

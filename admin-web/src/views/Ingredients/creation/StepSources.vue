@@ -326,16 +326,20 @@
             >
               更新缝合方案
             </el-button>
-            <el-button
-              v-if="conflictCount > 0"
-              size="small"
-              type="warning"
-              :loading="resolvingAll"
-              :disabled="isResolving"
-              @click="resolveAllByPrimary"
-            >
-              全部按主来源
-            </el-button>
+            <div v-if="conflictCount > 0" class="merge-panel__adopt">
+              <el-button
+                size="small"
+                type="warning"
+                :loading="resolvingAll"
+                :disabled="isResolving"
+                @click="resolveAllByPrimary"
+              >
+                全部按主来源（其余来源仅作参考）
+              </el-button>
+              <span class="merge-panel__adopt-hint">
+                这一步不算人工修改
+              </span>
+            </div>
           </div>
         </header>
 
@@ -375,7 +379,9 @@
             show-icon
             :title="`还有 ${conflictCount} 个字段冲突未裁决，不能进入下一站`"
           >
-            冲突不会自动选边：请逐行选一个候选，或点上方「全部按主来源」。
+            冲突不会自动选边：请逐行选一个候选，或点上方
+            「全部按主来源（其余来源仅作参考）」。选主来源只是采纳 AI 方案，
+            不会记成人工修改。
           </el-alert>
 
           <el-table
@@ -460,8 +466,10 @@
             <div class="conflict-section__header">
               <h4>冲突裁决</h4>
               <p>
-                每一行必须选一个值。下面把「目录单位值」与「来源原文」分开列，
-                它们不是一回事；写入档案的是目录单位值。
+                每一行必须选一个值。选主来源等于采纳 AI 方案，记为「直接」，
+                不算人工修改；改选其他来源才记为「人工裁决」。
+                下面把「目录单位值」与「来源原文」分开列，它们不是一回事；
+                写入档案的是目录单位值。
               </p>
             </div>
 
@@ -490,6 +498,14 @@
                 >
                   <span class="conflict-option__source">
                     {{ sourceLabel(option.sourceRecordId) }}
+                    <el-tag
+                      v-if="option.sourceRecordId === primarySourceRecordId"
+                      size="small"
+                      type="success"
+                      effect="plain"
+                    >
+                      主来源
+                    </el-tag>
                   </span>
                   <span class="conflict-option__values">
                     <span class="value-block">
@@ -507,7 +523,13 @@
                       </strong>
                     </span>
                   </span>
-                  <span class="conflict-option__cta">采用这个值</span>
+                  <span class="conflict-option__cta">
+                    {{
+                      option.sourceRecordId === primarySourceRecordId
+                        ? '采用主来源值（不算人工修改）'
+                        : '采用这个值（记为人工裁决）'
+                    }}
+                  </span>
                 </button>
               </div>
             </article>
@@ -965,11 +987,11 @@ async function resolveAllByPrimary() {
   }
   if (skipped > 0) {
     ElMessage.warning(
-      `已按主来源裁决 ${targets.length} 个字段；主来源没给值的 ${skipped} 个冲突仍需逐行选择`
+      `已按主来源采纳 ${targets.length} 个字段；主来源没给值的 ${skipped} 个冲突仍需逐行选择`
     )
     return
   }
-  ElMessage.success('冲突已全部按主来源裁决')
+  ElMessage.success('已按主来源采纳全部冲突（不算人工修改）')
 }
 
 /* ------------------------------------------------------------------ *
@@ -1508,6 +1530,19 @@ defineExpose({ submit })
   gap: 8px;
 }
 
+.merge-panel__adopt {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.merge-panel__adopt-hint {
+  color: #909399;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .merge-summary {
   display: flex;
   flex-wrap: wrap;
@@ -1644,6 +1679,10 @@ defineExpose({ submit })
 }
 
 .conflict-option__source {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
   color: #303133;
   font-size: 13px;
   font-weight: 600;

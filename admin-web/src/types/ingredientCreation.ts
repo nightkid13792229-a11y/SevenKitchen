@@ -129,7 +129,10 @@ export interface MergeRow {
   fieldPath: string
   value: number | null
   unit: string
-  /** CONFLICT 行没有最终值，候选值在 `MergePlan.conflicts` 里等人裁决 */
+  /**
+   * CONFLICT 行没有最终值，候选值在 `MergePlan.conflicts` 里等人裁决。
+   * 裁决选主来源时后端仍写 DIRECT（采纳 AI 方案），只有改判到非主来源才写 MANUAL。
+   */
   status: 'DIRECT' | 'FILLED' | 'MANUAL' | 'CONFLICT'
   sourceRecordId: string | null
   sourceValue: number | null

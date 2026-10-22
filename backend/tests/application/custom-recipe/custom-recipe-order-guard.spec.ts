@@ -74,6 +74,17 @@ describe('CustomRecipeService · 自动排期与名额抢占', () => {
     return TimezoneUtil.toShanghaiDateString(shifted);
   };
 
+  /** 下一个工作日：自动排期会跳过周末；测试不能在周五期待“明天” */
+  const nextWorkdayKey = () => {
+    for (let offset = 1; offset <= 10; offset += 1) {
+      const base = new Date(`${shanghaiToday()}T00:00:00.000Z`);
+      const shifted = new Date(base.getTime() + offset * 86400000);
+      const day = shifted.getUTCDay();
+      if (day !== 0 && day !== 6) return dayKey(offset);
+    }
+    return dayKey(1);
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -174,7 +185,7 @@ describe('CustomRecipeService · 自动排期与名额抢占', () => {
     const order = await submit();
 
     expect(TimezoneUtil.toShanghaiDateString(order.scheduledDate)).toBe(
-      dayKey(1),
+      nextWorkdayKey(),
     );
   });
 
@@ -186,7 +197,7 @@ describe('CustomRecipeService · 自动排期与名额抢占', () => {
     const order = await submit();
 
     expect(TimezoneUtil.toShanghaiDateString(order.scheduledDate)).toBe(
-      dayKey(1),
+      nextWorkdayKey(),
     );
   });
 
@@ -199,7 +210,7 @@ describe('CustomRecipeService · 自动排期与名额抢占', () => {
     const order = await submit();
 
     expect(TimezoneUtil.toShanghaiDateString(order.scheduledDate)).toBe(
-      dayKey(1),
+      nextWorkdayKey(),
     );
     expect(orderCreate).toHaveBeenCalledTimes(1);
   });

@@ -7,6 +7,7 @@ import { IngredientCreationCheckService } from '../../../src/application/ingredi
 import { IngredientCreationCommitService } from '../../../src/application/ingredient-creation/ingredient-creation-commit.service';
 import { IngredientCreationDraftService } from '../../../src/application/ingredient-creation/ingredient-creation-draft.service';
 import { IngredientCreationMergeService } from '../../../src/application/ingredient-creation/ingredient-creation-merge.service';
+import { IngredientCreationOnlineService } from '../../../src/application/ingredient-creation/ingredient-creation-online.service';
 import { AuthGuard } from '../../../src/interfaces/auth/auth.guard';
 import { JwtAuthService } from '../../../src/interfaces/auth/jwt.service';
 import { IngredientCreationController } from '../../../src/interfaces/controllers/ingredient-creation.controller';
@@ -41,6 +42,10 @@ describe('IngredientCreationController audits', () => {
         {
           provide: IngredientCreationMergeService,
           useValue: { createMergePlan: jest.fn(), resolveConflict: jest.fn() },
+        },
+        {
+          provide: IngredientCreationOnlineService,
+          useValue: { search: jest.fn() },
         },
         {
           provide: IngredientCreationCheckService,

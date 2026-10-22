@@ -62,3 +62,6 @@ miniapp/verify-*.js
 
 # 评测集（含真实疫苗本照片，绝不提交）
 .eval-data/
+
+# 头脑风暴草图（本地会话产物，不入库）
+.superpowers/

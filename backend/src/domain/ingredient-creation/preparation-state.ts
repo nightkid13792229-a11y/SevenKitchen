@@ -51,8 +51,8 @@ type CookingMethodKeyword = string | RegExp;
  * 否决项：烤 / 煎。必须先扫这一组——同一段原文里既提到水煮 / 蒸又提到烤 / 煎时，
  * 以烤 / 煎为准（如 `蒸し焼き`、`boiled & fried`），否则熟食来源会被误放行。
  *
- * 英文覆盖词干（`grill/grilling`、`pan-fry`、`deep-frying` 等），
- * 中文 / 日文覆盖 `焼`、`烤`、`炸`、`フライ` 等写法；否决项宁多勿漏。
+ * 英文覆盖词干（`grill/grilling`、`pan-fry`、`baked`、`seared`、`sautéed` 等），
+ * 中文 / 日文覆盖 `焼`、`烤`、`烘烤`、`炸`、`煎烤`、`フライ` 等写法；否决项宁多勿漏。
  */
 const VETOED_COOKING_METHOD_KEYWORDS: ReadonlyArray<
   readonly [CookingMethod, readonly CookingMethodKeyword[]]
@@ -63,9 +63,16 @@ const VETOED_COOKING_METHOD_KEYWORDS: ReadonlyArray<
       /\bgrill(?:ed|ing|s)?\b/,
       /\bbroil(?:ed|ing|s)?\b/,
       /\broast(?:ed|ing)?\b/,
+      /\bbak(?:e|ed|ing)\b/,
+      /\bbarbecue(?:d)?\b/,
+      /\bbbq\b/,
+      /\bchar[-\s]?grill(?:ed)?\b/,
       '焼き',
       '焼',
       '烤',
+      '烘烤',
+      '烘焙',
+      '焙烤',
     ],
   ],
   [
@@ -74,10 +81,14 @@ const VETOED_COOKING_METHOD_KEYWORDS: ReadonlyArray<
       /\bpan[-\s]?fr(?:y|ied|ying)\b/,
       /\bdeep[-\s]?fr(?:y|ied|ying)\b/,
       /\bfr(?:y|ied|ying)\b/,
+      /\bsear(?:ed|ing)\b/,
+      /\bsaut[eé](?:ed|ing)?\b/,
+      /\bgriddl(?:e|ed|ing)\b/,
       '炸',
       'フライ',
       '揚げ',
       '煎',
+      '煎烤',
     ],
   ],
 ];

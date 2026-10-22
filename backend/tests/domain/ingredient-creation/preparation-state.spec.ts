@@ -86,6 +86,20 @@ describe('classifyCookingMethod', () => {
     expect(classifyCookingMethod('煮鸡胸')).toBe('BOILED');
   });
 
+  it('recognizes oven-baked, barbecued, and seared veto methods', () => {
+    expect(classifyCookingMethod('baked')).toBe('GRILLED');
+    expect(classifyCookingMethod('oven-baked')).toBe('GRILLED');
+    expect(classifyCookingMethod('barbecued')).toBe('GRILLED');
+    expect(classifyCookingMethod('pan-seared')).toBe('FRIED');
+    expect(classifyCookingMethod('sautéed')).toBe('FRIED');
+    expect(classifyCookingMethod('烘烤')).toBe('GRILLED');
+  });
+
+  it('leaves unknown cooked wording null while keeping 水煮 recognised', () => {
+    expect(classifyCookingMethod('cooked, simmered')).toBeNull();
+    expect(classifyCookingMethod('水煮')).toBe('BOILED');
+  });
+
   it('classifies fried sources to FRIED', () => {
     expect(classifyCookingMethod('fried')).toBe('FRIED');
     expect(classifyCookingMethod('pan-fried')).toBe('FRIED');
@@ -159,6 +173,23 @@ describe('isCookedSourceAcceptable', () => {
     expect(isCookedSourceAcceptable(classifyCookingMethod('蒸し焼き'))).toBe(
       false,
     );
+  });
+
+  it('rejects baked, barbecued, and seared sources', () => {
+    const vetoedSources = [
+      'baked',
+      'oven-baked',
+      'barbecued',
+      'pan-seared',
+      'sautéed',
+      '烘烤',
+    ];
+
+    for (const source of vetoedSources) {
+      const method = classifyCookingMethod(source);
+      expect(method).not.toBeNull();
+      expect(isCookedSourceAcceptable(method)).toBe(false);
+    }
   });
 });
 

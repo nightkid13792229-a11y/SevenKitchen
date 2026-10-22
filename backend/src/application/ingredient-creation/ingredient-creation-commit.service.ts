@@ -3,7 +3,11 @@ import {
   ConflictException,
   Injectable,
 } from '@nestjs/common';
-import type { NutritionGovernanceSourceType, Prisma } from '@prisma/client';
+import type {
+  NutritionGovernanceRecordStatus,
+  NutritionGovernanceSourceType,
+  Prisma,
+} from '@prisma/client';
 import { createEmptyNutritionProfile } from '../../domain/ingredient/nutrition-profile.utils';
 import { findNutritionField } from '../../domain/ingredient/nutrition-field-catalog';
 import { normalizeLegacyNutritionSourceType } from '../../domain/ingredient/nutrition-source-contract';
@@ -46,6 +50,7 @@ interface SourceRecordSnapshot {
   sourceKey: string;
   sourceTitle: string;
   foodNameEn: string | null;
+  status: NutritionGovernanceRecordStatus;
 }
 
 interface PreparedProfile {
@@ -152,6 +157,24 @@ function readNonEmptyString(value: unknown): string | null {
     ? value.trim()
     : null;
 }
+
+/**
+ * 原料名的唯一口径：NFKC（全角→半角）→ 连续空白压成一个 → 去首尾空白。
+ *
+ * 查重、咨询锁、入库都用这一份：否则 `"鸡肝 "` 能绕过查重建出第二条。
+ */
+function normalizeIngredientName(raw: unknown): string {
+  if (typeof raw !== 'string') {
+    return '';
+  }
+
+  return raw.normalize('NFKC').replace(/\s+/g, ' ').trim();
+}
+
+/** `nutrition_food.external_id` 是 VarChar(100)，来源编号是 VarChar(200)。 */
+const EXTERNAL_ID_MAX_LENGTH = 100;
+
+const ALLOWED_BASE_UNITS = new Set(['G', 'ML', 'PCS']);
 
 function isPrismaUniqueViolation(error: unknown): boolean {
   return isRecord(error) && error.code === 'P2002';
@@ -273,8 +296,9 @@ function findAiProposalForProfile(
  *   或者提案基线这一行本身就标着 `status = MANUAL`（`applyManualResolution` 的产物）。
  * - `VALUE_CHANGED`：AI 给过值，最终值或单位不一样 —— 人改过。
  * - `REMOVED_FROM_FINAL`：AI 给过值，最终档案里没有 / 值为 null。
- * - `MANUALLY_ADDED`：AI 没给过值，最终有值（有提案基线时全算；没有基线时
- *   只算 `status = MANUAL` 的字段，因为整份档案本来就是人录的）。
+ * - `MANUALLY_ADDED`：AI 提案里没有这个值，且最终账本标明是人填的
+ *   （`status = MANUAL`）。账本里的 DIRECT / FILLED / CONVERTED 都算来源给的值，
+ *   哪怕匹配到的提案基线里没有这一行，也不臆测成人工新增。
  * 与提案完全一致且单位也一致的字段不写记录——那是「采纳」，不是「改动」。
  */
 function buildAuditChanges(
@@ -320,7 +344,9 @@ function buildAuditChanges(
         // 缝合方案里标 MANUAL 的行＝人工裁决后的结果（见 applyManualResolution）。
         change = 'CONFLICT_RESOLVED';
       } else if (aiValue === null) {
-        if (baseline === null || final?.status === 'MANUAL') {
+        // 只有账本明确标了 MANUAL 才是人填的；DIRECT / FILLED / CONVERTED
+        // 都表示值来自来源（AI 缝合），不能记成「人工新增」。
+        if (final?.status === 'MANUAL') {
           change = 'MANUALLY_ADDED';
         }
       } else if (
@@ -437,8 +463,18 @@ export class IngredientCreationCommitService {
   async commit(
     input: CommitIngredientCreationInput,
   ): Promise<CommitIngredientCreationResult> {
-    const primaryProfileIndex = this.assertInput(input);
+    const { primaryProfileIndex, ingredientName } = this.assertInput(input);
     const draft = await this.draftService.get(input.draftId);
+    // 幂等：同一草稿已经提交过就不再建第二套数据。并发下由事务里的条件更新再兜一道。
+    if (draft.step === 'COMMIT') {
+      throw new ConflictException('这份草稿已经提交过了');
+    }
+
+    // 查重、加锁、入库都用同一份归一后的名字。
+    const ingredient: IngredientDraft = {
+      ...input.ingredient,
+      name: ingredientName,
+    };
     const sourceRecords = await this.loadSourceRecords(input.profiles);
     const preparedProfiles = input.profiles.map((profile): PreparedProfile => {
       const sourceRecord = sourceRecords.get(profile.sourceRecordId)!;
@@ -456,35 +492,58 @@ export class IngredientCreationCommitService {
       preparedProfiles[primaryProfileIndex].nutritionData;
 
     return this.prisma.$transaction(async (tx) => {
+      // Postgres 唯一索引把 NULL 当互不相等，而向导提交的 brand/productModel 都是 NULL：
+      // `findFirst` 与唯一键都挡不住并发同名提交，用同名咨询锁把它们串行化。
+      await this.acquireIngredientNameLock(tx, ingredientName);
+
+      // 认领草稿：条件更新在行锁下原子生效，并发提交时只有一方能拿到 count = 1。
+      const claimed = await tx.ingredientCreationDraft.updateMany({
+        where: { id: input.draftId, step: { not: 'COMMIT' } },
+        data: { step: 'COMMIT' },
+      });
+      if (claimed.count === 0) {
+        throw new ConflictException('这份草稿已经提交过了');
+      }
+
       const existing = await tx.ingredient.findFirst({
-        where: {
-          name: input.ingredient.name,
-          brand: null,
-          productModel: null,
-        },
+        where: { name: ingredientName, brand: null, productModel: null },
         select: { id: true },
       });
       if (existing) {
         throw new ConflictException(
-          `原料「${input.ingredient.name}」已存在，请到原料列表处理`,
+          `原料「${ingredientName}」已存在，请到原料列表处理`,
         );
       }
 
-      const ingredient = await this.createIngredient(
+      const createdIngredient = await this.createIngredient(
         tx,
-        input,
+        ingredient,
+        input.draftId,
         primaryNutritionData,
       );
       const nutritionFoodIds: string[] = [];
       for (const [index, prepared] of preparedProfiles.entries()) {
-        const nutritionFood = await tx.nutritionFood.create({
-          data: this.buildNutritionFoodData(input, prepared),
-        });
+        let nutritionFood: { id: string };
+        try {
+          nutritionFood = await tx.nutritionFood.create({
+            data: this.buildNutritionFoodData(
+              ingredient,
+              prepared,
+              input.draftId,
+              input.userId,
+            ),
+          });
+        } catch (error) {
+          if (isPrismaUniqueViolation(error)) {
+            throw new ConflictException('同名营养档案已存在（同来源同版本）');
+          }
+          throw error;
+        }
         nutritionFoodIds.push(nutritionFood.id);
 
         await tx.nutritionFoodMapping.create({
           data: {
-            ingredientId: ingredient.id,
+            ingredientId: createdIngredient.id,
             nutritionFoodId: nutritionFood.id,
             yieldRate: 1,
             isPrimary: index === primaryProfileIndex,
@@ -496,7 +555,7 @@ export class IngredientCreationCommitService {
       const audit = await tx.ingredientCreationAudit.create({
         data: {
           draftId: input.draftId,
-          ingredientId: ingredient.id,
+          ingredientId: createdIngredient.id,
           nutritionFoodIds,
           proposals: proposals as unknown as Prisma.InputJsonValue,
           changes: changes as unknown as Prisma.InputJsonValue,
@@ -505,7 +564,7 @@ export class IngredientCreationCommitService {
       });
 
       return {
-        ingredientId: ingredient.id,
+        ingredientId: createdIngredient.id,
         nutritionFoodIds,
         auditId: audit.id,
       };
@@ -513,18 +572,48 @@ export class IngredientCreationCommitService {
   }
 
   /**
-   * 纯校验（不碰库）：档案非空、每份档案有内容、主档案下标唯一且有效。
+   * 纯校验（不碰库），并返回归一后的原料名与主档案下标。
    *
    * 调用方可能在档案上直接标 `isPrimary`（HTTP DTO 透传）；它和
    * `primaryProfileIndex` 是同一件事的两种表达，同时出现时必须一致，
    * 且最多一个为 true——否则就是「两个主档案」，直接拒绝。
    */
-  private assertInput(input: CommitIngredientCreationInput): number {
-    const { profiles, primaryProfileIndex } = input;
+  private assertInput(input: CommitIngredientCreationInput): {
+    primaryProfileIndex: number;
+    ingredientName: string;
+  } {
+    const { profiles, primaryProfileIndex, ingredient } = input;
+
+    if (!ingredient || typeof ingredient !== 'object') {
+      throw new BadRequestException('缺少原料档案');
+    }
+    // 名字是查重与锁的 key：空名、只有空白的名字一律不收。
+    const ingredientName = normalizeIngredientName(ingredient.name);
+    if (!ingredientName) {
+      throw new BadRequestException('原料名称不能为空');
+    }
+    if (ingredient.type !== 'FOOD') {
+      throw new BadRequestException('原料类型只能是 FOOD');
+    }
+    if (!ALLOWED_BASE_UNITS.has(ingredient.baseUnit)) {
+      throw new BadRequestException('原料基准单位只能是 G / ML / PCS');
+    }
+    const edibleYieldRate = ingredient.edibleYieldRate;
+    if (edibleYieldRate !== null && edibleYieldRate !== undefined) {
+      if (
+        !Number.isFinite(edibleYieldRate) ||
+        edibleYieldRate <= 0 ||
+        edibleYieldRate > 1
+      ) {
+        throw new BadRequestException('可食部比例必须在 (0, 1] 之间');
+      }
+    }
+
     if (!Array.isArray(profiles) || profiles.length === 0) {
       throw new BadRequestException('提交至少需要一份营养档案');
     }
 
+    const seenStates = new Set<PreparationState>();
     profiles.forEach((profile, index) => {
       if (!Array.isArray(profile.entries) || profile.entries.length === 0) {
         throw new BadRequestException(
@@ -532,14 +621,31 @@ export class IngredientCreationCommitService {
         );
       }
       // 状态是受控词表：库里历史上 RAW/raw 混写过，脏值不能从这里进正式表。
-      if (
-        profile.preparationState !== 'RAW' &&
-        profile.preparationState !== 'COOKED'
-      ) {
+      const state = profile.preparationState;
+      if (state !== 'RAW' && state !== 'COOKED') {
         throw new BadRequestException(
           `第 ${index + 1} 份营养档案的状态必须是 RAW 或 COOKED`,
         );
       }
+      // 设计每次创建只有「生」「熟」各一份档案，重复状态说明调用方传错了。
+      if (seenStates.has(state)) {
+        throw new BadRequestException(`生熟状态 ${state} 只能有一份营养档案`);
+      }
+      seenStates.add(state);
+
+      profile.entries.forEach((entry, entryIndex) => {
+        const finalValue: unknown = entry?.finalValue;
+        // 显式 null = 这个字段没有值（缺失），与 0 是两件事，放行；
+        // 但字符串 / undefined 这类「有值却不能用」的必须拒绝，不能静默跳过丢数据。
+        if (finalValue === null) {
+          return;
+        }
+        if (typeof finalValue !== 'number' || !Number.isFinite(finalValue)) {
+          throw new BadRequestException(
+            `第 ${index + 1} 份营养档案的第 ${entryIndex + 1} 条证据（${entry?.fieldPath ?? '未知字段'}）必须是非空有限数字或 null`,
+          );
+        }
+      });
     });
 
     if (
@@ -571,10 +677,24 @@ export class IngredientCreationCommitService {
       );
     }
 
-    return primaryProfileIndex;
+    return { primaryProfileIndex, ingredientName };
   }
 
-  /** 读齐所有档案引用的来源记录；引用不存在就不提交（不猜来源、不落空 dataSource）。 */
+  /**
+   * 同名提交串行化的 Postgres 事务级咨询锁（事务结束自动释放）。
+   *
+   * `hashtext` 把归一后的小写名字压成 int4；哈希碰撞只会让两个不同名字多串行化
+   * 一次，不会漏锁。锁必须在事务客户端上取，才会随事务结束释放。
+   */
+  private async acquireIngredientNameLock(
+    tx: Prisma.TransactionClient,
+    ingredientName: string,
+  ): Promise<void> {
+    const lockKey = ingredientName.toLowerCase();
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+  }
+
+  /** 读齐所有档案引用的来源记录；引用不存在或已停用就不提交（不猜来源、不落空 dataSource）。 */
   private async loadSourceRecords(
     profiles: ProfileDraft[],
   ): Promise<Map<string, SourceRecordSnapshot>> {
@@ -595,14 +715,21 @@ export class IngredientCreationCommitService {
         sourceKey: true,
         sourceTitle: true,
         foodNameEn: true,
+        status: true,
       },
     });
     const byId = new Map(rows.map((row) => [row.id, row]));
 
     for (const profile of profiles) {
-      if (!byId.has(profile.sourceRecordId)) {
+      const sourceRecord = byId.get(profile.sourceRecordId);
+      if (!sourceRecord) {
         throw new BadRequestException(
           `营养来源记录 ${profile.sourceRecordId} 不存在，不能提交`,
+        );
+      }
+      if (sourceRecord.status !== 'ACTIVE') {
+        throw new BadRequestException(
+          `营养来源记录 ${profile.sourceRecordId} 已停用（${sourceRecord.status}），不能提交`,
         );
       }
     }
@@ -612,32 +739,32 @@ export class IngredientCreationCommitService {
 
   private async createIngredient(
     tx: Prisma.TransactionClient,
-    input: CommitIngredientCreationInput,
+    ingredient: IngredientDraft,
+    draftId: string,
     primaryNutritionData: NutritionProfileV2,
   ) {
     const properties: Record<string, unknown> = {
-      ingredientCreationDraftId: input.draftId,
+      ingredientCreationDraftId: draftId,
     };
-    const cfctClass = input.ingredient.cfctClass?.trim();
+    const cfctClass = ingredient.cfctClass?.trim();
     if (cfctClass) {
       properties.cfct_class = cfctClass;
     }
-    if (typeof input.ingredient.edibleYieldRate === 'number') {
-      properties.edible_yield_rate = input.ingredient.edibleYieldRate;
+    if (typeof ingredient.edibleYieldRate === 'number') {
+      properties.edible_yield_rate = ingredient.edibleYieldRate;
     }
 
     const data: Prisma.IngredientUncheckedCreateInput = {
-      name: input.ingredient.name,
-      type: input.ingredient.type,
-      baseUnit: input.ingredient.baseUnit,
-      unitDisplayLabel: input.ingredient.unitDisplayLabel,
+      name: ingredient.name,
+      type: ingredient.type,
+      baseUnit: ingredient.baseUnit,
+      unitDisplayLabel: ingredient.unitDisplayLabel,
       // 向导提交的原料还没确认采购口径：与手工新建一致，默认不参与采购/DIY 推荐。
       diyEnabled: false,
       procurementEnabled: false,
       brand: null,
       productModel: null,
-      purchaseUnit:
-        input.ingredient.unitDisplayLabel?.trim() || input.ingredient.baseUnit,
+      purchaseUnit: ingredient.unitDisplayLabel?.trim() || ingredient.baseUnit,
       purchaseToBaseRatio: 1,
       currentPricePerPurchaseUnit: 0,
       properties: properties as Prisma.InputJsonValue,
@@ -648,10 +775,10 @@ export class IngredientCreationCommitService {
     try {
       return await tx.ingredient.create({ data });
     } catch (error) {
-      // 查重与写入之间仍有竞态：唯一键被抢占时同样按「已存在」处理。
+      // 查重与咨询锁之外仍有其它写入路径：唯一键被抢占时同样按「已存在」处理。
       if (isPrismaUniqueViolation(error)) {
         throw new ConflictException(
-          `原料「${input.ingredient.name}」已存在，请到原料列表处理`,
+          `原料「${ingredient.name}」已存在，请到原料列表处理`,
         );
       }
       throw error;
@@ -659,27 +786,37 @@ export class IngredientCreationCommitService {
   }
 
   private buildNutritionFoodData(
-    input: CommitIngredientCreationInput,
+    ingredient: IngredientDraft,
     prepared: PreparedProfile,
+    draftId: string,
+    createdBy: string,
   ): Prisma.NutritionFoodUncheckedCreateInput {
     const label = PREPARATION_STATE_LABELS[prepared.profile.preparationState];
+    const sourceKey = prepared.sourceRecord.sourceKey;
+    // external_id 只有 100 长度：超长必须截断（否则 P2000 500），截断事实留在 notes。
+    const externalId = sourceKey.slice(0, EXTERNAL_ID_MAX_LENGTH);
+    const truncationNote =
+      externalId === sourceKey
+        ? ''
+        : `（来源编号超长已截断，原文：${sourceKey}）`;
+    const notes = `${
+      prepared.profile.notes ?? `由 AI 辅助新建原料向导提交（草稿 ${draftId}）`
+    }${truncationNote}`;
 
     return {
-      name: `${input.ingredient.name}（${label}）`,
+      name: `${ingredient.name}（${label}）`,
       nameEn: prepared.sourceRecord.foodNameEn,
       category: 'OTHER',
       // 来源身份写进列上，档案能直接追回哪条来源记录。
       dataSource: prepared.sourceRecord.sourceType,
-      externalId: prepared.sourceRecord.sourceKey,
+      externalId,
       // 一律待验证：变成 VERIFIED 必须由人点「确认可用」，不在这里写。
       status: 'PENDING',
       preparationState: prepared.profile.preparationState,
       preparationStateLabel: label,
       nutritionData: prepared.nutritionData as unknown as Prisma.InputJsonValue,
-      notes:
-        prepared.profile.notes ??
-        `由 AI 辅助新建原料向导提交（草稿 ${input.draftId}）`,
-      createdBy: input.userId,
+      notes,
+      createdBy,
     };
   }
 }

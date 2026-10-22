@@ -33,6 +33,7 @@ interface SourceRecordFixture {
   sourceTitle: string;
   foodName: string;
   foodNameEn: string | null;
+  status?: 'ACTIVE' | 'DEPRECATED';
 }
 
 interface ExistingIngredientFixture {
@@ -60,7 +61,9 @@ const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 /**
  * 内存版 Prisma 假实现：事务用「快照 + 失败还原」模拟真库的回滚。
  *
- * 断言只看服务发了什么语句、以及回滚后库里还剩什么——不去断言数据库本身。
+ * 事务里的客户端是**另一个对象**：这样「咨询锁必须在事务内执行」才能被断言出来
+ * （服务如果误用 `this.prisma`，外层 `$queryRaw` 会直接报错）。草稿行是可变的，
+ * 提交成功后 `step` 会变成 `COMMIT`，用来验证幂等。
  */
 function createPrismaMock(options: HarnessOptions = {}) {
   const store: Store = {
@@ -70,7 +73,16 @@ function createPrismaMock(options: HarnessOptions = {}) {
     audits: [],
   };
   const sourceRecords = options.sourceRecords ?? [];
-  const draft = options.draft === undefined ? null : options.draft;
+  const draftState =
+    options.draft === undefined || options.draft === null
+      ? null
+      : clone(options.draft);
+  const queryRawLog = {
+    insideTransaction: [] as boolean[],
+    sqls: [] as string[],
+    values: [] as unknown[][],
+  };
+  let transactionDepth = 0;
   const counters = new Map<string, number>();
   const nextId = (prefix: string): string => {
     const next = (counters.get(prefix) ?? 0) + 1;
@@ -81,10 +93,20 @@ function createPrismaMock(options: HarnessOptions = {}) {
   const client: any = {
     ingredientCreationDraft: {
       findUnique: jest.fn(async ({ where }: any) => {
-        if (!draft || draft.id !== where.id) {
+        if (!draftState || draftState.id !== where.id) {
           return null;
         }
-        return clone(draft);
+        return clone(draftState);
+      }),
+      updateMany: jest.fn(async ({ where, data }: any) => {
+        if (!draftState || draftState.id !== where.id) {
+          return { count: 0 };
+        }
+        if (where?.step?.not === 'COMMIT' && draftState.step === 'COMMIT') {
+          return { count: 0 };
+        }
+        draftState.step = data.step;
+        return { count: 1 };
       }),
     },
     nutritionSourceRecord: {
@@ -92,7 +114,7 @@ function createPrismaMock(options: HarnessOptions = {}) {
         const ids: string[] = where?.id?.in ?? [];
         return sourceRecords
           .filter((row) => ids.includes(row.id))
-          .map((row) => clone(row));
+          .map((row) => ({ status: 'ACTIVE', ...clone(row) }));
       }),
     },
     ingredient: {
@@ -132,21 +154,52 @@ function createPrismaMock(options: HarnessOptions = {}) {
         return { id: row.id };
       }),
     },
-    $transaction: jest.fn(async (callback: (tx: any) => Promise<any>) => {
+    // 锁只能走事务客户端；外层客户端一旦被调用就是实现写错了。
+    $queryRaw: jest.fn(async () => {
+      throw new Error('pg_advisory_xact_lock 必须在事务客户端上执行');
+    }),
+  };
+
+  const txQueryRaw = jest.fn(
+    async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      queryRawLog.insideTransaction.push(transactionDepth > 0);
+      queryRawLog.sqls.push(strings.join('?'));
+      queryRawLog.values.push(values);
+      return [{ pg_advisory_xact_lock: null }];
+    },
+  );
+  const tx: any = {
+    ingredientCreationDraft: client.ingredientCreationDraft,
+    ingredient: client.ingredient,
+    nutritionFood: client.nutritionFood,
+    nutritionFoodMapping: client.nutritionFoodMapping,
+    ingredientCreationAudit: client.ingredientCreationAudit,
+    $queryRaw: txQueryRaw,
+  };
+
+  client.$transaction = jest.fn(
+    async (callback: (transaction: any) => Promise<any>) => {
       const snapshot = clone(store);
+      const draftStepSnapshot = draftState?.step;
+      transactionDepth += 1;
       try {
-        return await callback(client);
+        return await callback(tx);
       } catch (error) {
         store.ingredients = snapshot.ingredients;
         store.nutritionFoods = snapshot.nutritionFoods;
         store.mappings = snapshot.mappings;
         store.audits = snapshot.audits;
+        if (draftState && draftStepSnapshot !== undefined) {
+          draftState.step = draftStepSnapshot;
+        }
         throw error;
+      } finally {
+        transactionDepth -= 1;
       }
-    }),
-  };
+    },
+  );
 
-  return { client, store };
+  return { client, store, tx, txQueryRaw, queryRawLog };
 }
 
 function buildEvidenceEntry(
@@ -334,7 +387,7 @@ function buildDraft(
     id: 'draft-1',
     name: '鸡肝',
     type: 'FOOD',
-    step: 'COMMIT',
+    step: 'INGREDIENT',
     payload,
     createdBy: 'admin-1',
     createdAt: new Date('2026-10-22T09:00:00.000Z'),
@@ -343,7 +396,7 @@ function buildDraft(
 }
 
 async function createHarness(options: HarnessOptions = {}) {
-  const { client, store } = createPrismaMock({
+  const { client, store, tx, txQueryRaw, queryRawLog } = createPrismaMock({
     draft: options.draft === undefined ? buildDraft() : options.draft,
     sourceRecords: options.sourceRecords ?? sourceRecords,
     existingIngredients: options.existingIngredients,
@@ -361,6 +414,9 @@ async function createHarness(options: HarnessOptions = {}) {
     service: moduleRef.get(IngredientCreationCommitService),
     prisma: client,
     store,
+    tx,
+    txQueryRaw,
+    queryRawLog,
   };
 }
 
@@ -374,7 +430,8 @@ const baseInput = {
 
 describe('IngredientCreationCommitService', () => {
   it('一次事务里建原料、两份 PENDING 档案、主映射与审计', async () => {
-    const { service, prisma, store } = await createHarness();
+    const { service, prisma, store, txQueryRaw, queryRawLog } =
+      await createHarness();
 
     const result = await service.commit(baseInput);
 
@@ -383,6 +440,24 @@ describe('IngredientCreationCommitService', () => {
       ingredientId: 'ingredient-1',
       nutritionFoodIds: ['food-1', 'food-2'],
       auditId: 'audit-1',
+    });
+
+    // 同名提交先拿事务级咨询锁，再查重：真实库唯一索引把 NULL 当互不相等，
+    // 没有锁的话两个 brand/productModel 都为 null 的并发提交都能通过 findFirst。
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
+    expect(txQueryRaw).toHaveBeenCalledTimes(1);
+    expect(queryRawLog.insideTransaction).toEqual([true]);
+    expect(queryRawLog.sqls[0]).toContain('pg_advisory_xact_lock');
+    expect(queryRawLog.sqls[0]).toContain('hashtext');
+    expect(queryRawLog.values[0]).toEqual(['鸡肝']);
+    expect(txQueryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      prisma.ingredient.findFirst.mock.invocationCallOrder[0],
+    );
+
+    // 提交成功把草稿标成 COMMIT（幂等：同一草稿不能再提交一次）
+    expect(prisma.ingredientCreationDraft.updateMany).toHaveBeenCalledWith({
+      where: { id: 'draft-1', step: { not: 'COMMIT' } },
+      data: { step: 'COMMIT' },
     });
 
     // 查重走 name + brand + productModel 的组合键（向导不填品牌与规格）
@@ -487,6 +562,26 @@ describe('IngredientCreationCommitService', () => {
       'PENDING',
     ]);
     expect(store.audits).toHaveLength(1);
+  });
+
+  it('原料名按 NFKC + 空白归一后查重、加锁、入库', async () => {
+    const { service, prisma, queryRawLog } = await createHarness();
+    const ingredient = { ...ingredientDraft, name: '  Chicken　Liver  ' };
+
+    await service.commit({ ...baseInput, ingredient });
+
+    // 锁 key 是归一后的小写名（全角空格已归一成普通空格）
+    expect(queryRawLog.values[0]).toEqual(['chicken liver']);
+    expect(prisma.ingredient.findFirst).toHaveBeenCalledWith({
+      where: { name: 'Chicken Liver', brand: null, productModel: null },
+      select: { id: true },
+    });
+    expect(prisma.ingredient.create.mock.calls[0][0].data.name).toBe(
+      'Chicken Liver',
+    );
+    expect(prisma.nutritionFood.create.mock.calls[0][0].data.name).toBe(
+      'Chicken Liver（生）',
+    );
   });
 
   it('审计保存本次 AI 提案快照，并按 profile + 字段列出人工改动与裁决', async () => {
@@ -631,6 +726,35 @@ describe('IngredientCreationCommitService', () => {
     expect(findChange('macros.crudeProtein')).toBeUndefined();
   });
 
+  it('AI 给过值、最终值相同（账本仍是 DIRECT）→ 不产生改动记录', async () => {
+    // 没有 proposalHistory / mergePlan：基线找不到，但账本里 DIRECT 明确表示
+    // 这个值来自来源（AI 缝合），不是人填的 —— 不能记成「人工新增」。
+    const draft = buildDraft({});
+    const profile: ProfileDraft = {
+      preparationState: 'RAW',
+      sourceRecordId: 'src-usda-raw',
+      notes: null,
+      entries: [
+        buildEvidenceEntry('macros.crudeProtein', 20.4),
+        buildEvidenceEntry('minerals.phosphorus', 300, {
+          unit: 'mg',
+          sourceUnit: 'mg',
+        }),
+      ],
+    };
+    const { service, prisma } = await createHarness({ draft });
+
+    await service.commit({
+      ...baseInput,
+      profiles: [profile],
+      primaryProfileIndex: 0,
+    });
+
+    const changes = prisma.ingredientCreationAudit.create.mock.calls[0][0].data
+      .changes as { fields: unknown[] };
+    expect(changes.fields).toEqual([]);
+  });
+
   it('两份档案都标了 isPrimary → BadRequest，且不写任何数据', async () => {
     const { service, prisma, store } = await createHarness();
     const profiles = [
@@ -760,5 +884,196 @@ describe('IngredientCreationCommitService', () => {
     );
 
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('来源记录已停用（非 ACTIVE）→ BadRequest，且不写任何数据', async () => {
+    const { service, prisma } = await createHarness({
+      sourceRecords: [
+        sourceRecords[0],
+        { ...sourceRecords[1], status: 'DEPRECATED' },
+      ],
+    });
+
+    await expect(service.commit(baseInput)).rejects.toThrow('已停用');
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.ingredient.create).not.toHaveBeenCalled();
+  });
+
+  it('同一生熟状态出现两份档案 → BadRequest，且不写任何数据', async () => {
+    const { service, prisma } = await createHarness();
+    const profiles = [
+      rawProfile,
+      { ...rawProfile, sourceRecordId: 'src-nzfcd-cooked' },
+    ];
+
+    await expect(
+      service.commit({ ...baseInput, profiles }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.nutritionFood.create).not.toHaveBeenCalled();
+  });
+
+  it('entries 的 finalValue 是字符串 / undefined → BadRequest；显式 null 放行（缺失≠0）', async () => {
+    const { service, prisma } = await createHarness();
+    const stringValueProfiles = [
+      {
+        ...rawProfile,
+        entries: [buildEvidenceEntry('macros.crudeProtein', '0.55' as any)],
+      },
+      cookedProfile,
+    ];
+    const undefinedValueProfiles = [
+      {
+        ...rawProfile,
+        entries: [buildEvidenceEntry('macros.crudeProtein', undefined as any)],
+      },
+      cookedProfile,
+    ];
+
+    await expect(
+      service.commit({ ...baseInput, profiles: stringValueProfiles }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.commit({ ...baseInput, profiles: undefinedValueProfiles }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.nutritionFood.create).not.toHaveBeenCalled();
+
+    // 显式 null 表示「这个字段没有值」：允许提交，营养数据里保持 null，绝不补 0
+    const nullValueProfiles = [
+      {
+        ...rawProfile,
+        entries: [
+          buildEvidenceEntry('macros.crudeProtein', 20.4),
+          buildEvidenceEntry('macros.crudeFat', null),
+        ],
+      },
+      cookedProfile,
+    ];
+    await service.commit({ ...baseInput, profiles: nullValueProfiles });
+
+    const rawFoodData = prisma.nutritionFood.create.mock.calls[0][0].data;
+    expect(rawFoodData.nutritionData.macros.crudeProtein).toBe(20.4);
+    expect(rawFoodData.nutritionData.macros.crudeFat).toBeNull();
+  });
+
+  it('原料基础字段不合法 → BadRequest，且不写任何数据', async () => {
+    const { service, prisma } = await createHarness();
+    const invalidIngredients = [
+      { ...ingredientDraft, name: '   ' },
+      { ...ingredientDraft, type: 'SUPPLEMENT' as any },
+      { ...ingredientDraft, baseUnit: 'KG' as any },
+      { ...ingredientDraft, edibleYieldRate: 0 },
+      { ...ingredientDraft, edibleYieldRate: 1.2 },
+    ];
+
+    for (const ingredient of invalidIngredients) {
+      await expect(
+        service.commit({ ...baseInput, ingredient }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    }
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.ingredient.create).not.toHaveBeenCalled();
+  });
+
+  it('营养档案撞唯一键（P2002）→ ConflictException，用档案自己的文案', async () => {
+    const { service, prisma, store } = await createHarness();
+    prisma.nutritionFood.create.mockRejectedValueOnce(
+      Object.assign(new Error('Unique constraint failed'), {
+        code: 'P2002',
+        meta: { target: ['name', 'data_source', 'version'] },
+      }),
+    );
+
+    await expect(service.commit(baseInput)).rejects.toThrow(
+      '同名营养档案已存在（同来源同版本）',
+    );
+
+    expect(store.ingredients).toHaveLength(0);
+    expect(store.nutritionFoods).toHaveLength(0);
+    expect(store.mappings).toHaveLength(0);
+    expect(store.audits).toHaveLength(0);
+  });
+
+  it('来源编号超过 external_id 长度时截断，并在 notes 留原文', async () => {
+    const longKey = `CFCT:${'9'.repeat(120)}`;
+    const profile: ProfileDraft = {
+      preparationState: 'RAW',
+      sourceRecordId: 'src-long',
+      notes: null,
+      entries: [buildEvidenceEntry('macros.crudeProtein', 20.4)],
+    };
+    const { service, prisma } = await createHarness({
+      draft: buildDraft({}),
+      sourceRecords: [
+        {
+          id: 'src-long',
+          sourceType: 'CFCT',
+          sourceKey: longKey,
+          sourceTitle: '超长编号来源',
+          foodName: '鸡肝',
+          foodNameEn: null,
+        },
+      ],
+    });
+
+    await service.commit({
+      ...baseInput,
+      profiles: [profile],
+      primaryProfileIndex: 0,
+    });
+
+    const foodData = prisma.nutritionFood.create.mock.calls[0][0].data;
+    expect(foodData.externalId).toHaveLength(100);
+    expect(foodData.externalId).toBe(longKey.slice(0, 100));
+    expect(foodData.notes).toContain(longKey);
+    // meta 里保留完整来源编号（JSON 没有列长度限制）
+    expect(foodData.nutritionData.meta.externalId).toBe(longKey);
+  });
+
+  it('草稿已提交过（step=COMMIT）→ ConflictException，不开事务', async () => {
+    const { service, prisma } = await createHarness({
+      draft: { ...buildDraft(), step: 'COMMIT' },
+    });
+
+    await expect(service.commit(baseInput)).rejects.toThrow(
+      '这份草稿已经提交过了',
+    );
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.ingredient.create).not.toHaveBeenCalled();
+  });
+
+  it('同一草稿提交成功后再次提交 → ConflictException，不建第二套数据', async () => {
+    const { service, prisma, store } = await createHarness();
+
+    await service.commit(baseInput);
+    await expect(service.commit(baseInput)).rejects.toThrow(
+      '这份草稿已经提交过了',
+    );
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(store.ingredients).toHaveLength(1);
+    expect(store.nutritionFoods).toHaveLength(2);
+    expect(store.audits).toHaveLength(1);
+  });
+
+  it('事务内认领草稿失败（并发提交抢先）→ ConflictException，且回滚', async () => {
+    const { service, prisma, store } = await createHarness();
+    prisma.ingredientCreationDraft.updateMany.mockResolvedValueOnce({
+      count: 0,
+    });
+
+    await expect(service.commit(baseInput)).rejects.toThrow(
+      '这份草稿已经提交过了',
+    );
+
+    expect(store.ingredients).toHaveLength(0);
+    expect(store.nutritionFoods).toHaveLength(0);
+    expect(store.audits).toHaveLength(0);
   });
 });

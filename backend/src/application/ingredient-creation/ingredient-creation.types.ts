@@ -92,6 +92,36 @@ export interface CandidateRow {
 }
 
 /**
+ * 候选检索的覆盖概况：页面顶部「本状态下最全的一份覆盖率 xx%，缺 xx」用。
+ *
+ * 零候选时两个 best* 都是 `null` 而不是 `0`——「没有候选」与「候选覆盖率为 0」
+ * 是两件事，页面要能分开显示。
+ */
+export interface CandidateSearchCoverage {
+  /** 本次检索的状态。 */
+  state: PreparationState;
+  /** 返回的候选条数（已过滤烤/煎，等于 `candidates.length`）。 */
+  candidateCount: number;
+  /** 覆盖率最高的候选的必需营养素覆盖率；零候选时为 null。 */
+  bestCoveragePercent: number | null;
+  /** 覆盖率最高的候选缺多少项必需营养素；零候选时为 null。 */
+  bestMissingFieldCount: number | null;
+}
+
+/**
+ * ② 营养依据站的候选检索结果（Task 4 产出）。
+ *
+ * `excludedCount` 只统计**名字对得上、但因做法不符合熟食策略（烤/煎等）被排除**
+ * 的词条；生熟不符属于状态筛选，不计入——页面上的「另有 N 条因烤/煎被排除」
+ * 直接用它。
+ */
+export interface CandidateSearchResult {
+  candidates: CandidateRow[];
+  excludedCount: number;
+  coverage: CandidateSearchCoverage;
+}
+
+/**
  * 缝合方案的一行：只补缺，不覆盖主来源。
  *
  * `status` 只描述「这个字段的值是怎么来的」：

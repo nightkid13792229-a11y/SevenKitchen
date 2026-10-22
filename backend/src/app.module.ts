@@ -259,6 +259,7 @@ import { IngredientReadinessService } from './application/nutrition-calculation/
 import { NutrientMappingAuditService } from './application/nutrition-calculation/nutrient-mapping-audit.service';
 import { NutritionUnitNormalizerService } from './application/nutrition-calculation/nutrition-unit-normalizer.service';
 import { NutritionStandardService } from './application/nutrition-standard/nutrition-standard.service';
+import { IngredientCreationDraftService } from './application/ingredient-creation/ingredient-creation-draft.service';
 import { RecipeDesignerService } from './application/recipe-designer/recipe-designer.service';
 import { SupplementTargetService } from './application/recipe-designer/supplement-target.service';
 import { OrderRecipeDesignService } from './application/recipe-designer/order-recipe-design.service';
@@ -897,6 +898,7 @@ validatePrismaConfig();
     SupplementOrderService,
     NutrientMappingAuditService,
     IngredientReadinessService,
+    IngredientCreationDraftService,
     FediafTargetSelectorService,
     NutritionUnitNormalizerService,
     IngredientBatchReplaceService,

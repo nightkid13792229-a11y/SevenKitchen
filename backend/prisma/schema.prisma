@@ -4976,3 +4976,45 @@ model CustomerMessage {
   @@index([customerId, readAt])
   @@map("customer_message")
 }
+
+/// AI 辅助新建标准原料（阶段一：食材）· 向导草稿
+///
+/// 六站向导（起手 → 营养依据 → 档案成型 → 终检 → 原料档案 → 收尾）的中间状态
+/// 全存在这张表里：当前站点 `step`、累积的 `payload`（口径卡、候选、缝合方案、
+/// 证据账本、终检结果、原料预填）。
+///
+/// **草稿永远不进入配方链路** —— 只有提交后建出来的 Ingredient / NutritionFood
+/// 才可能被配方用到。草稿也不做清理任务，随本次创建永久保留，供事后审查。
+model IngredientCreationDraft {
+  id        String         @id @default(uuid()) @map("id")
+  name      String
+  type      IngredientType
+  /// 当前站点：INTAKE / SOURCES / PROFILE / CHECK / INGREDIENT / COMMIT
+  step      String         @db.VarChar(20)
+  payload   Json           @default("{}")
+  createdBy String         @map("created_by")
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+
+  @@index([createdBy])
+  @@index([createdAt])
+  @@map("ingredient_creation_draft")
+}
+
+/// AI 辅助新建标准原料 · 提交审计快照
+///
+/// 记下「AI 提了什么（proposals）、人改了什么（changes）」，是将来放权决策的依据。
+/// 每次提交一条，由提交事务一起写入；`ingredient_id` 指向本次新建的标准原料。
+model IngredientCreationAudit {
+  id               String   @id @default(uuid()) @map("id")
+  draftId          String   @map("draft_id")
+  ingredientId     String   @map("ingredient_id")
+  nutritionFoodIds String[] @default([]) @map("nutrition_food_ids")
+  proposals        Json
+  changes          Json
+  committedBy      String   @map("committed_by")
+  committedAt      DateTime @default(now()) @map("committed_at")
+
+  @@index([ingredientId])
+  @@map("ingredient_creation_audit")
+}

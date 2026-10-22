@@ -8,7 +8,8 @@
 import type {
   DraftLaunchReadiness,
   DraftLaunchReadinessSummary,
-  LaunchReadinessIssue
+  LaunchReadinessIssue,
+  LaunchReadinessScope
 } from '@/types/recipeDesigner'
 
 /** 后端字段路径 / 字段名 → 后台可读名 */
@@ -24,7 +25,193 @@ export const LAUNCH_READINESS_FIELD_LABELS: Record<string, string> = {
   productionStepsJson: '制作步骤',
   reviewNote: '审核说明',
   nutritionData: '营养数据',
-  nutrition: '营养指标'
+  nutrition: '营养指标',
+  coverImageUrl: '封面图',
+  coverTitle: '封面标题',
+  description: '详情描述',
+  sellingPoint: '一句话卖点',
+  applicableLifeStages: '适用生命阶段',
+  targetHealthTags: '目标健康标签',
+  'series.orderId': '订单号',
+  'series.orderQuantity': '本单份数',
+  customerDogId: '顾客爱犬'
+}
+
+/** 问题归属的固定展示顺序：公共 → 展示 → 当前分支 */
+export const LAUNCH_READINESS_SCOPE_ORDER: LaunchReadinessScope[] = [
+  'COMMON',
+  'PRESENTATION',
+  'CATALOG',
+  'ORDER'
+]
+
+export const LAUNCH_READINESS_SCOPE_LABELS: Record<
+  LaunchReadinessScope,
+  string
+> = {
+  COMMON: '共用',
+  PRESENTATION: '展示资料',
+  CATALOG: '产品线',
+  ORDER: '订单'
+}
+
+/** 旧响应没有 scope 时按 COMMON 处理，未知值也不丢问题 */
+export function resolveLaunchIssueScope(
+  scope?: string | null
+): LaunchReadinessScope {
+  const normalized = String(scope ?? '').trim().toUpperCase()
+  return LAUNCH_READINESS_SCOPE_ORDER.includes(
+    normalized as LaunchReadinessScope
+  )
+    ? (normalized as LaunchReadinessScope)
+    : 'COMMON'
+}
+
+export function launchReadinessScopeLabel(scope?: string | null): string {
+  return LAUNCH_READINESS_SCOPE_LABELS[resolveLaunchIssueScope(scope)]
+}
+
+/** 当前设计模式需要展示哪些归属（按固定顺序） */
+export function launchReadinessScopesForDesign(
+  designMode?: string | null
+): LaunchReadinessScope[] {
+  const branch: LaunchReadinessScope =
+    String(designMode ?? '').trim().toUpperCase() === 'ORDER'
+      ? 'ORDER'
+      : 'CATALOG'
+  return ['COMMON', 'PRESENTATION', branch]
+}
+
+export interface LaunchReadinessIssueGroup<
+  TIssue extends Pick<LaunchReadinessIssue, 'scope'>
+> {
+  scope: LaunchReadinessScope
+  label: string
+  issues: TIssue[]
+}
+
+/**
+ * 按归属分组（共用 / 展示资料 / 产品线 或 订单）。
+ * 空分组不返回，避免抽屉里出现一排「0 项」。
+ */
+export function groupLaunchReadinessIssues<
+  TIssue extends Pick<LaunchReadinessIssue, 'scope'>
+>(
+  issues: TIssue[],
+  designMode?: string | null
+): LaunchReadinessIssueGroup<TIssue>[] {
+  const allowedScopes = launchReadinessScopesForDesign(designMode)
+  return allowedScopes
+    .map((scope) => ({
+      scope,
+      label: LAUNCH_READINESS_SCOPE_LABELS[scope],
+      issues: issues.filter(
+        (issue) => resolveLaunchIssueScope(issue.scope) === scope
+      )
+    }))
+    .filter((group) => group.issues.length > 0)
+}
+
+export interface LaunchPassedCheck {
+  code: string
+  label: string
+  scope: LaunchReadinessScope
+  scopeLabel: string
+}
+
+/**
+ * 「已通过」清单：按阻断 / 提醒代码反推。
+ *
+ * 分支专属项只在对应分支展示：产品线看描述 / 卖点 / 生命阶段 / 健康标签，
+ * 订单看订单号 / 份数 / 顾客爱犬。这样列表不会出现「订单设计已通过详情描述」
+ * 这种没有意义的通过项。
+ */
+const LAUNCH_PASSED_CHECK_DEFINITIONS: Array<
+  Omit<LaunchPassedCheck, 'scopeLabel'>
+> = [
+  { code: 'NAME_REQUIRED', label: '食谱名称已填写', scope: 'COMMON' },
+  { code: 'NO_INCLUDED_ITEMS', label: '已有参与评估的原料', scope: 'COMMON' },
+  { code: 'ASSESSMENT_UNAVAILABLE', label: '配方评估已完成', scope: 'COMMON' },
+  { code: 'TOTAL_WEIGHT_INVALID', label: '配方总重量正常', scope: 'COMMON' },
+  { code: 'ENERGY_DENSITY_INVALID', label: '能量密度正常', scope: 'COMMON' },
+  {
+    code: 'NUTRITION_REPORT_UNAVAILABLE',
+    label: '完整营养报告可生成',
+    scope: 'COMMON'
+  },
+  {
+    code: 'SUPPLEMENT_TARGETS_REQUIRED',
+    label: '补剂目标完整',
+    scope: 'COMMON'
+  },
+  {
+    code: 'PREPARATION_METHOD_REQUIRED',
+    label: '原料预处理完整',
+    scope: 'COMMON'
+  },
+  { code: 'PRODUCTION_STEPS_REQUIRED', label: '制作步骤已填写', scope: 'COMMON' },
+  {
+    code: 'COVER_IMAGE_REQUIRED',
+    label: '封面图已上传',
+    scope: 'PRESENTATION'
+  },
+  {
+    code: 'COVER_TITLE_REQUIRED',
+    label: '封面标题已填写',
+    scope: 'PRESENTATION'
+  },
+  {
+    code: 'DESCRIPTION_REQUIRED',
+    label: '详情描述已填写',
+    scope: 'CATALOG'
+  },
+  {
+    code: 'SELLING_POINT_REQUIRED',
+    label: '一句话卖点已填写',
+    scope: 'CATALOG'
+  },
+  {
+    code: 'APPLICABLE_LIFE_STAGES_REQUIRED',
+    label: '适用生命阶段已选择',
+    scope: 'CATALOG'
+  },
+  {
+    code: 'TARGET_HEALTH_TAGS_MISSING',
+    label: '目标健康标签已设置',
+    scope: 'CATALOG'
+  },
+  { code: 'ORDER_ID_REQUIRED', label: '订单已绑定', scope: 'ORDER' },
+  { code: 'ORDER_QUANTITY_INVALID', label: '本单份数有效', scope: 'ORDER' },
+  {
+    code: 'CUSTOMER_DOG_REQUIRED',
+    label: '顾客爱犬已绑定',
+    scope: 'ORDER'
+  }
+]
+
+export function buildLaunchPassedChecks(
+  readiness: Pick<
+    DraftLaunchReadiness,
+    'blockers' | 'warnings' | 'designMode'
+  >
+): LaunchPassedCheck[] {
+  const blockerCodes = new Set<string>(
+    readiness.blockers.map((item) => item.code)
+  )
+  const warningCodes = new Set<string>(
+    readiness.warnings.map((item) => item.code)
+  )
+  const scopes = new Set(launchReadinessScopesForDesign(readiness.designMode))
+
+  return LAUNCH_PASSED_CHECK_DEFINITIONS.filter(
+    (check) =>
+      scopes.has(check.scope) &&
+      !blockerCodes.has(check.code) &&
+      !warningCodes.has(check.code)
+  ).map((check) => ({
+    ...check,
+    scopeLabel: LAUNCH_READINESS_SCOPE_LABELS[check.scope]
+  }))
 }
 
 export type LaunchReadinessSummaryTone = 'default' | 'success' | 'danger'
@@ -63,14 +250,14 @@ export function launchReadinessStatusSummary(
   return `发现 ${readiness.blockers.length} 项阻断，暂时不能进入下一步`
 }
 
-/** 模式说明：明确订单与产品线共用共享门槛，订单分支专属检查尚未接入 */
+/** 模式说明：公共门槛两种设计都适用，分支专属检查按设计模式区分 */
 export function launchReadinessModeNote(
   designMode?: string | null
 ): string {
   if (String(designMode ?? '').trim().toUpperCase() === 'ORDER') {
-    return '本单设计与产品线发布共用同一套上线门槛；订单分支专属检查（订单状态、交付数量等）暂未接入。'
+    return '公共门槛 + 展示资料 + 订单信息共同决定能否加入本单待提交；产品线上架文案不参与本单检查。'
   }
-  return '产品线发布使用共享上线门槛；本单设计同样使用这一套门槛，订单分支专属检查暂未接入。'
+  return '公共门槛 + 展示资料 + 上架文案共同决定能否发布到产品线；订单信息不参与产品线检查。'
 }
 
 function formatDecimal(value: number, fractionDigits: number): string {

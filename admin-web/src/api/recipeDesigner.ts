@@ -14,6 +14,7 @@ import type {
   DraftAssessmentInputs,
   DraftLaunchReadiness,
   DraftNutritionReportEnvelope,
+  DraftPresentationSnapshot,
   FediafDogScenario,
   IngredientOptionListResponse,
   IngredientRecommendationResult,
@@ -27,8 +28,10 @@ import type {
   SupplementLabelExtractionDraft,
   SupplementNutritionBasisType,
   SupplementUsageUnit,
+  UpdateDesignRecipeDraftPayload,
   UpdateDesignRecipeProductionStepsPayload,
-  UpdateDogDesignNotesPayload
+  UpdateDogDesignNotesPayload,
+  UpdateDraftPresentationPayload
 } from '@/types/recipeDesigner'
 
 export interface RecipeDesignerSeriesListQuery {
@@ -139,6 +142,26 @@ export const recipeDesignerApi = {
   // 草稿
   getDraft: (draftId: string): Promise<DesignRecipeDraftDetail> =>
     api.get(`/recipe-designer/drafts/${draftId}`),
+  /**
+   * 更新草稿基础字段（适用生命阶段 / 目标健康标签等）。
+   *
+   * 适用生命阶段与目标健康标签不在产品展示 PATCH 的字段范围内，
+   * 产品线分支保存展示资料时需要调用这个既有接口。
+   */
+  updateDraft: (
+    draftId: string,
+    data: UpdateDesignRecipeDraftPayload,
+  ): Promise<DesignRecipeDraftDetail> =>
+    api.patch(`/recipe-designer/drafts/${draftId}`, data),
+  /**
+   * 按 patch semantics 保存产品展示字段（封面 / 文案）。
+   * 显式 null 表示清空；响应只包含展示字段与新的 contentRevision。
+   */
+  updateDraftPresentation: (
+    draftId: string,
+    data: UpdateDraftPresentationPayload,
+  ): Promise<DraftPresentationSnapshot> =>
+    api.patch(`/recipe-designer/drafts/${draftId}/presentation`, data),
   /** 读取草稿的结构化制作步骤（Task 7：轻量刷新步骤区，不重拉整份草稿） */
   getDraftProductionSteps: (draftId: string): Promise<DesignRecipeProductionStepsResult> =>
     api.get(`/recipe-designer/drafts/${draftId}/production-steps`),

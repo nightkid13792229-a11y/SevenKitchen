@@ -186,7 +186,7 @@ const routes: RouteRecordRaw[] = [
         path: "recipe-designer",
         name: "RecipeDesigner",
         component: () => import("@/views/RecipeDesigner/index.vue"),
-        meta: { title: "食谱设计器" },
+        meta: { title: "食谱列表&设计" },
       },
       {
         path: "recipe-designer/series/:seriesId/drafts/:draftId",

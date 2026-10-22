@@ -2,7 +2,7 @@
   <div class="recipe-designer-list">
     <div class="page-header">
       <div>
-        <h2>食谱设计器</h2>
+        <h2>食谱列表 &amp; 设计</h2>
         <p class="subtitle">为爱犬档案定制鲜食配方系列，配餐员设计、管理员审核发布</p>
       </div>
       <div class="header-actions">

@@ -1277,14 +1277,26 @@ async function confirmSupplementTargets(
         ElMessage.error('缺少补剂明细，无法保存目标')
         return
       }
-      await recipeDesignerApi.updateItem(dialogState.itemId, {
+      // 目标编辑走独立接口；先把此前的用量/预处理修改落盘，
+      // 否则旧的 updateItem 请求可能在目标保存后把 supplementTargets 覆盖回旧值。
+      await flushNow()
+      if (hasPending()) {
+        await waitForSaveIdle()
+      }
+      if (hasPending() || saveStatus.value === 'error') {
+        ElMessage.error('原料修改尚未保存成功，暂时不能保存补剂目标，请稍后重试')
+        return
+      }
+      const updated = await recipeDesignerApi.updateItem(dialogState.itemId, {
         supplementTargets: payloadTargets
       })
       const item = items.value.find(
         (candidate) => candidate.id === dialogState.itemId
       )
       if (item) {
-        item.supplementTargets = buildStoredSupplementTargets(targets)
+        // 以服务端返回为准，避免本地多选 3 项、数据库只落 1 项却继续显示 3 项。
+        item.supplementTargets =
+          updated.supplementTargets ?? buildStoredSupplementTargets(targets)
         item.nutritionFood = {
           ...(item.nutritionFood ?? {}),
           nutritionData: dialogState.profile
@@ -1732,9 +1744,8 @@ async function openLaunchReadiness() {
       await waitForSaveIdle()
     }
     if (hasPending() || saveStatus.value === 'error') {
-      ElMessage.warning(
-        '还有改动尚未保存成功；本次上线检查基于服务器上已保存的版本'
-      )
+      ElMessage.error('还有改动尚未保存成功，已停止本次上线检查；请等待保存完成后再试')
+      return
     }
     launchReadinessVisible.value = true
   } finally {

@@ -131,6 +131,26 @@
         </section>
 
         <section class="launch-readiness__section">
+          <div class="launch-readiness__section-title">
+            已通过
+            <span class="launch-readiness__count">{{ passedChecks.length }}</span>
+          </div>
+          <div v-if="passedChecks.length" class="launch-readiness__passed">
+            <div
+              v-for="check in passedChecks"
+              :key="check.code"
+              class="launch-passed"
+            >
+              <el-icon class="is-success"><CircleCheckFilled /></el-icon>
+              <span>{{ check.label }}</span>
+            </div>
+          </div>
+          <div v-else class="launch-readiness__clear">
+            暂无已通过项
+          </div>
+        </section>
+
+        <section class="launch-readiness__section">
           <el-collapse v-model="stepsExpanded" class="launch-readiness__steps">
             <el-collapse-item name="steps">
               <template #title>
@@ -301,6 +321,22 @@ let requestSeq = 0
 const summaryRows = computed(() =>
   readiness.value ? buildLaunchSummaryRows(readiness.value.summary) : []
 )
+
+const passedChecks = computed(() => {
+  if (!readiness.value) return []
+  const blockerCodes = new Set<string>(readiness.value.blockers.map((item) => item.code))
+  const checks = [
+    { code: 'NAME_REQUIRED', label: '食谱名称已填写' },
+    { code: 'NO_INCLUDED_ITEMS', label: '已有参与评估的原料' },
+    { code: 'TOTAL_WEIGHT_INVALID', label: '配方总重量正常' },
+    { code: 'ENERGY_DENSITY_INVALID', label: '能量密度正常' },
+    { code: 'NUTRITION_REPORT_UNAVAILABLE', label: '完整营养报告可生成' },
+    { code: 'SUPPLEMENT_TARGETS_REQUIRED', label: '补剂目标完整' },
+    { code: 'PREPARATION_METHOD_REQUIRED', label: '原料预处理完整' },
+    { code: 'PRODUCTION_STEPS_REQUIRED', label: '制作步骤已填写' }
+  ]
+  return checks.filter((check) => !blockerCodes.has(check.code))
+})
 
 async function loadReadiness(): Promise<void> {
   if (!props.draftId) {
@@ -654,5 +690,23 @@ watch(
   color: #409eff;
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+.launch-readiness__passed {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+}
+
+.launch-passed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #529b2e;
+}
+
+.launch-passed .is-success {
+  color: #67c23a;
 }
 </style>

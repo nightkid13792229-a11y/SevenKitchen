@@ -80,10 +80,10 @@
           v-if="!orderId"
           type="primary"
           :disabled="!draft || items.length === 0"
-          title="产品线分支：发布到产品线"
+          title="产品线分支：保存到系列仓库（整条系列发布由管理员在列表页操作）"
           @click="goPublish"
         >
-          发布到产品线
+          保存到系列仓库
         </el-button>
       </div>
     </div>

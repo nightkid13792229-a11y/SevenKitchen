@@ -86,12 +86,11 @@ describe('产品展示 · 面板', () => {
     expect(panel).toContain('validatePresentationCoverFile(file)')
   })
 
-  it('产品线分支有描述 / 卖点 / 生命阶段 / 健康标签，标签值是 id', () => {
+  it('产品线分支有卖点 / 健康标签，标签值是 id', () => {
     expect(panel).toContain('<template v-if="isCatalog">')
     expect(panel).not.toContain('v-model="form.description"')
     expect(panel).not.toContain('适用生命阶段')
     expect(panel).toContain('v-model="form.sellingPoint"')
-    expect(panel).toContain('v-model="form.applicableLifeStages"')
     expect(panel).toContain('v-model="form.targetHealthTags"')
     expect(panel).toContain('recipeHealthTagApi.list()')
     expect(panel).toContain(':key="tag.id"')
@@ -99,7 +98,6 @@ describe('产品展示 · 面板', () => {
     expect(panel).toContain('ORDER_DESIGN_LIFE_STAGE_LABELS')
     expect(panel).toContain('RECIPE_PRESENTATION_LIMITS.coverTitle')
     expect(panel).toContain('RECIPE_PRESENTATION_LIMITS.sellingPoint')
-    expect(panel).toContain('RECIPE_PRESENTATION_LIMITS.description')
   })
 
   it('订单分支只读展示订单号 / 份数 / 顾客爱犬', () => {
@@ -152,8 +150,9 @@ describe('上线检查抽屉 · 产品展示与分支分组', () => {
 describe('编辑器 · 分支按钮', () => {
   const editor = clean(editorSource)
 
-  it('产品线按钮为「发布到产品线」，订单按钮保留「加入本单待提交」', () => {
-    expect(editor).toContain('发布到产品线')
+  it('产品线按钮为「保存到系列仓库」，订单按钮保留「加入本单待提交」', () => {
+    expect(editor).toContain('保存到系列仓库')
+    expect(editor).not.toContain('发布到产品线')
     expect(editor).toContain('@click="goPublish"')
     expect(editor).toContain('加入本单待提交')
     expect(editor).toContain('@click="stageOrderDesign"')

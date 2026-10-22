@@ -179,8 +179,9 @@ describe('编辑器 · 上线检查入口', () => {
     expect(editor).toContain('公共门槛 + 展示资料 + 分支条件')
   })
 
-  it('产品线分支按钮使用「发布到产品线」，本单分支保留「加入本单待提交」', () => {
-    expect(editor).toContain('发布到产品线')
+  it('产品线分支按钮使用「保存到系列仓库」，本单分支保留「加入本单待提交」', () => {
+    expect(editor).toContain('保存到系列仓库')
+    expect(editor).not.toContain('发布到产品线')
     expect(editor).toContain('加入本单待提交')
     // 按钮文案只改标签，不改变既有 goPublish 行为
     expect(editor).toContain('@click="goPublish"')

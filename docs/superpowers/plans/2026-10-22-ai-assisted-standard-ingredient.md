@@ -286,9 +286,11 @@ git commit -m "feat(ingredient-creation): local candidate search with cooking-me
 
 **Interfaces:**
 - Produces:
-  - `interface MergeRow { fieldPath: string; value: number | null; unit: string; status: 'DIRECT' | 'FILLED'; sourceRecordId: string | null; sourceValue: number | null; sourceUnit: string | null }`
-  - `interface MergeConflict { fieldPath: string; candidates: Array<{ sourceRecordId: string; value: number; unit: string }> }`
-  - `interface MergePlan { primarySourceRecordId: string; rows: MergeRow[]; conflicts: MergeConflict[] }`
+  - `interface MergeRow { fieldPath: string; value: number | null; unit: string; status: 'DIRECT' | 'FILLED' | 'MANUAL' | 'CONFLICT'; sourceRecordId: string | null; sourceValue: number | null; sourceUnit: string | null }`
+    （`DIRECT`＝主来源；`FILLED`＝补位自动补；`MANUAL`＝人工裁决；`CONFLICT`＝待裁决）
+  - `interface MergeConflict { fieldPath: string; candidates: Array<{ sourceRecordId: string; value: number; unit: string; sourceValue: number | null; sourceUnit: string | null }> }`
+    （`value/unit` 是目录单位值；`sourceValue/sourceUnit` 是来源原文，展示时必须区分）
+  - `interface MergePlan { primarySourceRecordId: string; rows: MergeRow[]; conflicts: MergeConflict[]; missingFields: string[] }`
   - `buildMergePlan(input: { primary: SourceNutrition; supplementals: SourceNutrition[] }): MergePlan`
   - `applyManualResolution(plan: MergePlan, fieldPath: string, choice: { sourceRecordId: string }): MergePlan`
 

@@ -95,18 +95,44 @@ export interface TrustedNutritionWebSearchInput {
   searchTerms?: string[];
 }
 
+/**
+ * 白名单抓取的诊断信息：线上兜底检索要用 `attemptedHosts` 告诉人「找了几个来源」，
+ * 用 `rejectedHosts` 说明哪些网址因不在白名单被直接拒绝。
+ */
+export interface TrustedNutritionWebSearchReport {
+  sources: NutritionSourceInput[];
+  attemptedHosts: string[];
+  rejectedHosts: string[];
+}
+
 @Injectable()
 export class TrustedNutritionWebSearchService {
   async search(
     input: TrustedNutritionWebSearchInput,
   ): Promise<NutritionSourceInput[]> {
-    const urls = await this.resolveCandidateUrls(input);
-    const records: NutritionSourceInput[] = [];
+    const report = await this.searchWithReport(input);
+    return report.sources;
+  }
 
-    for (const candidate of urls) {
+  /**
+   * 与 `search` 走同一套白名单解析 / 抓取 / 解析逻辑，额外返回尝试与拒绝的主机。
+   *
+   * `search` 保持原样，只做 `searchWithReport(...).sources` 的转发，
+   * 营养治理工作台的行为不受影响。
+   */
+  async searchWithReport(
+    input: TrustedNutritionWebSearchInput,
+  ): Promise<TrustedNutritionWebSearchReport> {
+    const { candidates, attemptedHosts, rejectedHosts } =
+      await this.resolveCandidateUrls(input);
+    const records: NutritionSourceInput[] = [];
+    const attempted = new Set(attemptedHosts);
+
+    for (const candidate of candidates) {
       const trustedHost = resolveTrustedHost(candidate.url);
       if (!trustedHost) continue;
 
+      attempted.add(trustedHost);
       const content = await fetchTrustedText(candidate.url);
       if (!content) continue;
 
@@ -121,13 +147,23 @@ export class TrustedNutritionWebSearchService {
       );
     }
 
-    return records.slice(0, 8);
+    return {
+      sources: records.slice(0, 8),
+      attemptedHosts: [...attempted],
+      rejectedHosts,
+    };
   }
 
   private async resolveCandidateUrls(
     input: TrustedNutritionWebSearchInput,
-  ): Promise<TrustedUrlCandidate[]> {
+  ): Promise<{
+    candidates: TrustedUrlCandidate[];
+    attemptedHosts: string[];
+    rejectedHosts: string[];
+  }> {
     const candidates = new Map<string, TrustedUrlCandidate>();
+    const attemptedHosts = new Set<string>();
+    const rejectedHosts = new Set<string>();
     const explicitTexts = [
       input.reviewerRequirement ?? '',
       ...(input.searchTerms ?? []),
@@ -137,17 +173,21 @@ export class TrustedNutritionWebSearchService {
     );
 
     for (const text of explicitTexts) {
-      addUrlCandidates(candidates, text, 'explicit-url');
+      addUrlCandidates(candidates, text, 'explicit-url', rejectedHosts);
     }
     addUrlCandidates(
       candidates,
       process.env.NUTRITION_TRUSTED_SOURCE_URLS ?? '',
       'configured-url',
+      rejectedHosts,
     );
 
     if (!hasExplicitUrl && isWhitelistWebSearchEnabled()) {
-      const discoveredUrls = await discoverTrustedSourceUrls(input);
-      for (const url of discoveredUrls) {
+      const discovery = await discoverTrustedSourceUrls(input);
+      for (const host of discovery.attemptedHosts) {
+        attemptedHosts.add(host);
+      }
+      for (const url of discovery.urls) {
         if (!candidates.has(url)) {
           candidates.set(url, {
             url,
@@ -157,7 +197,11 @@ export class TrustedNutritionWebSearchService {
       }
     }
 
-    return [...candidates.values()];
+    return {
+      candidates: [...candidates.values()],
+      attemptedHosts: [...attemptedHosts],
+      rejectedHosts: [...rejectedHosts],
+    };
   }
 }
 
@@ -165,12 +209,32 @@ function addUrlCandidates(
   candidates: Map<string, TrustedUrlCandidate>,
   text: string,
   discoveryMode: TrustedUrlDiscoveryMode,
+  rejectedHosts: Set<string>,
 ): void {
   for (const match of text.matchAll(URL_PATTERN)) {
     const normalized = normalizeUrl(match[0]);
-    if (normalized && !candidates.has(normalized)) {
+    if (!normalized) continue;
+
+    // 非白名单网址绝不进入待抓取列表，只记下 host 供调用方展示。
+    if (!resolveTrustedHost(normalized)) {
+      const host = resolveUrlHostname(normalized);
+      if (host) {
+        rejectedHosts.add(host);
+      }
+      continue;
+    }
+
+    if (!candidates.has(normalized)) {
       candidates.set(normalized, { url: normalized, discoveryMode });
     }
+  }
+}
+
+function resolveUrlHostname(urlText: string): string | null {
+  try {
+    return new URL(urlText).hostname.toLowerCase().replace(/^www\./u, '');
+  } catch {
+    return null;
   }
 }
 
@@ -182,24 +246,28 @@ function isWhitelistWebSearchEnabled(): boolean {
 
 async function discoverTrustedSourceUrls(
   input: TrustedNutritionWebSearchInput,
-): Promise<string[]> {
+): Promise<{ urls: string[]; attemptedHosts: string[] }> {
   const queryText = buildDiscoveryQueryText(input);
-  if (!queryText) return [];
+  if (!queryText) {
+    return { urls: [], attemptedHosts: [] };
+  }
 
   const urls = new Set<string>();
+  const attemptedHosts: string[] = [];
   for (const host of getDiscoveryHosts()) {
+    attemptedHosts.push(host);
     const discoveredUrls = await fetchSearchResultUrls(
       `${queryText} nutrition composition site:${host}`,
     );
     for (const url of discoveredUrls) {
       urls.add(url);
       if (urls.size >= MAX_DISCOVERED_SOURCE_URLS) {
-        return [...urls];
+        return { urls: [...urls], attemptedHosts };
       }
     }
   }
 
-  return [...urls];
+  return { urls: [...urls], attemptedHosts };
 }
 
 function buildDiscoveryQueryText(input: TrustedNutritionWebSearchInput): string {

@@ -12,6 +12,7 @@ import { IngredientCreationCheckService } from '../../../src/application/ingredi
 import { IngredientCreationCommitService } from '../../../src/application/ingredient-creation/ingredient-creation-commit.service';
 import { IngredientCreationDraftService } from '../../../src/application/ingredient-creation/ingredient-creation-draft.service';
 import { IngredientCreationMergeService } from '../../../src/application/ingredient-creation/ingredient-creation-merge.service';
+import { IngredientCreationOnlineService } from '../../../src/application/ingredient-creation/ingredient-creation-online.service';
 import type {
   FinalCheckResult,
   IngredientCreationDraft,
@@ -104,6 +105,7 @@ describe('IngredientCreationController', () => {
   let controller: IngredientCreationController;
   let draftService: ServiceMock;
   let candidateService: ServiceMock;
+  let onlineService: ServiceMock;
   let mergeService: ServiceMock;
   let checkService: ServiceMock;
   let commitService: ServiceMock;
@@ -119,6 +121,9 @@ describe('IngredientCreationController', () => {
     };
     candidateService = {
       findCandidates: jest.fn(),
+    };
+    onlineService = {
+      searchOnline: jest.fn(),
     };
     mergeService = {
       createMergePlan: jest.fn(),
@@ -149,6 +154,10 @@ describe('IngredientCreationController', () => {
         {
           provide: IngredientCreationCandidateService,
           useValue: candidateService,
+        },
+        {
+          provide: IngredientCreationOnlineService,
+          useValue: onlineService,
         },
         { provide: IngredientCreationMergeService, useValue: mergeService },
         { provide: IngredientCreationCheckService, useValue: checkService },

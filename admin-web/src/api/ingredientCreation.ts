@@ -19,6 +19,7 @@ import type {
   IngredientCreationDraftPayload,
   IngredientCreationDraftSummary,
   MergePlan,
+  OnlineCandidateSearchResult,
   CreationStep,
   ResolveMergeConflictInput
 } from '@/types/ingredientCreation'
@@ -52,6 +53,16 @@ export const ingredientCreationApi = {
     input: FindCandidatesInput
   ): Promise<CandidateSearchResult> =>
     api.post(`${BASE}/drafts/${id}/candidates`, input),
+
+  /**
+   * ② 本地零候选时的线上白名单兜底检索。
+   * 后端会把抓到的数据落成来源记录，同一查询第二次直接命中缓存。
+   */
+  findOnlineCandidates: (
+    id: string,
+    input: FindCandidatesInput
+  ): Promise<OnlineCandidateSearchResult> =>
+    api.post(`${BASE}/drafts/${id}/candidates/online`, input),
 
   /** ② 选主来源与补位来源，生成缝合方案 */
   createMergePlan: (

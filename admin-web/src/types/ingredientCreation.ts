@@ -101,6 +101,24 @@ export interface CandidateRow {
   missingFields: string[]
   matchScore: number
   notes: string[]
+  /** 线上兜底抓取的原始网址；本地候选没有 */
+  sourceUrl?: string
+  /** 线上抓取时间（ISO）；本地候选没有 */
+  fetchedAt?: string
+  /** 这一条来自「到线上找一轮」的白名单抓取 */
+  isOnline?: boolean
+}
+
+/**
+ * ② 线上白名单兜底检索结果。
+ *
+ * 线上候选永远追加在本地候选之后；`attemptedHosts` / `rejectedHosts`
+ * 用于页面说明「找了几个来源」「哪些网址不在白名单」。
+ */
+export interface OnlineCandidateSearchResult {
+  candidates: CandidateRow[]
+  attemptedHosts: string[]
+  rejectedHosts: string[]
 }
 
 /**

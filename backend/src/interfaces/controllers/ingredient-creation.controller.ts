@@ -22,6 +22,10 @@ import {
 } from '../../application/ingredient-creation/ingredient-creation-commit.service';
 import { IngredientCreationDraftService } from '../../application/ingredient-creation/ingredient-creation-draft.service';
 import { IngredientCreationMergeService } from '../../application/ingredient-creation/ingredient-creation-merge.service';
+import {
+  IngredientCreationOnlineService,
+  type OnlineSearchResult,
+} from '../../application/ingredient-creation/ingredient-creation-online.service';
 import type {
   CandidateSearchResult,
   CreationStep,
@@ -40,6 +44,7 @@ import {
   CreateMergePlanDto,
   FindCandidatesDto,
   ResolveMergeConflictDto,
+  SearchOnlineCandidatesDto,
   UpdateDraftDto,
   type UpdateDraftPayloadDto,
 } from '../dto/ingredient-creation';
@@ -71,6 +76,7 @@ export class IngredientCreationController {
   constructor(
     private readonly draftService: IngredientCreationDraftService,
     private readonly candidateService: IngredientCreationCandidateService,
+    private readonly onlineService: IngredientCreationOnlineService,
     private readonly mergeService: IngredientCreationMergeService,
     private readonly checkService: IngredientCreationCheckService,
     private readonly commitService: IngredientCreationCommitService,
@@ -151,6 +157,26 @@ export class IngredientCreationController {
     await this.draftService.get(id);
 
     const result = await this.candidateService.findCandidates({
+      name: dto.name,
+      nameEn: dto.nameEn,
+      state: dto.state,
+    });
+
+    return new ApiResponseDto(0, 'Success', result);
+  }
+
+  @Post('drafts/:id/candidates/online')
+  @ApiOperation({
+    summary: '本地零候选时到白名单来源兜底检索（结果落库，下次直接走本地库）',
+  })
+  async findOnlineCandidates(
+    @Param('id') id: string,
+    @Body() dto: SearchOnlineCandidatesDto,
+  ): Promise<ApiResponseDto<OnlineSearchResult>> {
+    // 与本地候选一致：先确认草稿存在，再联网；不让不存在的草稿消耗抓取。
+    await this.draftService.get(id);
+
+    const result = await this.onlineService.searchOnline({
       name: dto.name,
       nameEn: dto.nameEn,
       state: dto.state,

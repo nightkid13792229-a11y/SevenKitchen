@@ -200,6 +200,7 @@ import { IngredientCreationCandidateService } from './application/ingredient-cre
 import { IngredientCreationCheckService } from './application/ingredient-creation/ingredient-creation-check.service';
 import { IngredientCreationCommitService } from './application/ingredient-creation/ingredient-creation-commit.service';
 import { IngredientCreationMergeService } from './application/ingredient-creation/ingredient-creation-merge.service';
+import { IngredientCreationOnlineService } from './application/ingredient-creation/ingredient-creation-online.service';
 import { SearchGovernanceController } from './interfaces/controllers/search-governance.controller';
 import { SearchGovernanceService } from './application/search-governance/search-governance.service';
 import { AgentProviderConfigService } from './application/nutrition-governance/agent-provider-config.service';
@@ -908,6 +909,7 @@ validatePrismaConfig();
     IngredientCreationDraftService,
     IngredientCreationAuditService,
     IngredientCreationCandidateService,
+    IngredientCreationOnlineService,
     IngredientCreationMergeService,
     IngredientCreationCheckService,
     IngredientCreationCommitService,

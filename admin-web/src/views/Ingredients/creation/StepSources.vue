@@ -48,11 +48,18 @@
             重新查一轮
           </el-button>
           <el-tooltip
-            content="本地库一个都没匹配到时才使用；即将支持"
+            :content="onlineButtonHint"
             placement="top"
           >
             <span class="tooltip-wrapper">
-              <el-button size="small" disabled>到线上找一轮</el-button>
+              <el-button
+                size="small"
+                :loading="onlineLoading"
+                :disabled="onlineDisabled"
+                @click="searchOnline"
+              >
+                到线上找一轮
+              </el-button>
             </span>
           </el-tooltip>
         </div>
@@ -73,6 +80,46 @@
         </div>
       </el-alert>
 
+      <div v-if="onlineLoading" class="online-progress">
+        <el-skeleton :rows="1" animated />
+        <p>正在白名单来源里查找…（每个来源都要现场抓取，可能要十几秒）</p>
+      </div>
+
+      <el-alert
+        v-else-if="onlineError"
+        type="error"
+        :closable="false"
+        show-icon
+        title="线上检索失败"
+      >
+        <div class="search-error">
+          <span>{{ onlineError }}</span>
+          <el-button link type="primary" @click="searchOnline">
+            再试一次
+          </el-button>
+        </div>
+      </el-alert>
+
+      <el-alert
+        v-else-if="onlineSearched"
+        :type="onlineCandidateCount > 0 ? 'success' : 'warning'"
+        :closable="false"
+        show-icon
+        :title="onlineResultTitle"
+      >
+        <p class="online-summary">
+          线上候选排在本地候选之后，仍然只是候选；要沿 ② → ⑥ 继续人工确认，
+          不会自动变成已验证。
+          <span v-if="onlineAttemptedHosts.length">
+            尝试了 {{ onlineAttemptedHosts.length }} 个白名单来源：
+            {{ onlineAttemptedHosts.join('、') }}。
+          </span>
+          <span v-if="onlineRejectedHosts.length" class="online-summary__rejected">
+            已拒绝非白名单网址：{{ onlineRejectedHosts.join('、') }}。
+          </span>
+        </p>
+      </el-alert>
+
       <section
         v-for="state in requestedStates"
         :key="state"
@@ -90,7 +137,10 @@
             </p>
           </div>
           <el-tag v-if="stateResult(state)" type="info" effect="plain">
-            {{ stateResult(state)?.coverage.candidateCount ?? 0 }} 条
+            {{ visibleCandidateCount(state) }} 条
+            <template v-if="onlineCandidates(state).length">
+              （线上 {{ onlineCandidates(state).length }}）
+            </template>
           </el-tag>
         </header>
 
@@ -112,10 +162,12 @@
               </strong>
             </span>
             <span v-else class="state-summary__empty">
-              本地库没有匹配到{{ getPreparationStateLabel(state) }}词条
+              本地库没有匹配到{{ getPreparationStateLabel(state) }}词条<template
+                v-if="onlineCandidates(state).length"
+              >；下面是线上兜底候选</template>
             </span>
             <span class="state-summary__count">
-              共 {{ stateResult(state)?.coverage.candidateCount ?? 0 }} 条候选
+              共 {{ visibleCandidateCount(state) }} 条候选
             </span>
             <span
               v-if="(stateResult(state)?.excludedCount ?? 0) > 0"
@@ -126,19 +178,30 @@
           </div>
 
           <div
-            v-if="stateResult(state)?.candidates.length"
+            v-if="candidatesFor(state).length"
             class="candidate-list"
           >
             <article
-              v-for="candidate in stateResult(state)?.candidates ?? []"
+              v-for="candidate in candidatesFor(state)"
               :key="candidate.sourceRecordId"
               class="candidate-card"
-              :class="{ 'is-primary': isPrimary(candidate) }"
+              :class="{
+                'is-primary': isPrimary(candidate),
+                'is-online': candidate.isOnline
+              }"
             >
               <div class="candidate-card__top">
                 <div class="candidate-card__tags">
+                  <el-tag
+                    v-if="candidate.isOnline"
+                    size="small"
+                    type="warning"
+                    effect="dark"
+                  >
+                    线上
+                  </el-tag>
                   <el-tag size="small" effect="plain">
-                    {{ sourceTypeLabel(candidate.sourceType) }}
+                    {{ candidateSourceLabel(candidate) }}
                   </el-tag>
                   <el-tag
                     size="small"
@@ -174,6 +237,21 @@
               <div class="candidate-card__name">{{ candidate.foodName }}</div>
               <div v-if="candidate.foodNameEn" class="candidate-card__name-en">
                 {{ candidate.foodNameEn }}
+              </div>
+
+              <div v-if="candidate.isOnline" class="candidate-card__source">
+                <a
+                  v-if="candidate.sourceUrl"
+                  :href="candidate.sourceUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {{ onlineHost(candidate.sourceUrl) }}
+                </a>
+                <span v-else>线上抓取</span>
+                <span v-if="candidate.fetchedAt">
+                  · 抓取于 {{ formatFetchedAt(candidate.fetchedAt) }}
+                </span>
               </div>
 
               <div class="candidate-card__coverage">
@@ -246,7 +324,7 @@
             </p>
             <p class="empty-state__hint">
               多半是英文名对不上：回 ① 站补上包装上的英文名再试。
-              也可以等「到线上找一轮」上线后去白名单来源查（本期暂不可用）。
+              也可以点上方「到线上找一轮」去白名单来源查；线上数据仍要人工确认。
             </p>
           </div>
         </template>
@@ -258,7 +336,7 @@
           <template v-if="primaryCandidate">
             {{ primaryCandidate.foodName }}
             <span class="primary-panel__meta">
-              · {{ sourceTypeLabel(primaryCandidate.sourceType) }}
+              · {{ candidateSourceLabel(primaryCandidate) }}
               · 状态
               {{
                 primaryCandidate.preparationState
@@ -300,8 +378,8 @@
         show-icon
         title="本地库零候选"
       >
-        这已经等同于「本地库一个都没匹配到」。本期「到线上找一轮」还没接上，
-        下一步只能手工填写档案；缺失的数字会在终检里按「营养待补」提示。
+        这已经等同于「本地库一个都没匹配到」。可以点上方「到线上找一轮」去白名单来源查；
+        还找不到就只能手工填写档案，缺失的数字会在终检里按「营养待补」提示。
       </el-alert>
 
       <section
@@ -562,6 +640,7 @@ import type {
   MergeConflict,
   MergePlan,
   MergeRow,
+  OnlineCandidateSearchResult,
   PreparationState
 } from '@/types/ingredientCreation'
 import { getApiErrorMessage, shouldToastApiError } from '@/utils/apiError'
@@ -617,10 +696,34 @@ const searchResults = ref<Partial<Record<PreparationState, CandidateSearchResult
 const searchLoading = ref(false)
 const searchError = ref('')
 
+/**
+ * 线上兜底结果按状态分开存：与本地结果合并时**本地永远在前**，
+ * 线上来源只是兜底，不能因为覆盖率更高就插到本地来源前面。
+ */
+const onlineResults = ref<
+  Partial<Record<PreparationState, OnlineCandidateSearchResult>>
+>({})
+const onlineLoading = ref(false)
+const onlineError = ref('')
+const onlineSearched = ref(false)
+const onlineAttemptedHosts = ref<string[]>([])
+const onlineRejectedHosts = ref<string[]>([])
+
+function localCandidates(state: PreparationState): CandidateRow[] {
+  return searchResults.value[state]?.candidates ?? []
+}
+
+function onlineCandidates(state: PreparationState): CandidateRow[] {
+  return onlineResults.value[state]?.candidates ?? []
+}
+
+/** ② 站实际展示/选择的候选顺序：本地候选在前，线上候选在后。 */
+function candidatesFor(state: PreparationState): CandidateRow[] {
+  return [...localCandidates(state), ...onlineCandidates(state)]
+}
+
 const allCandidates = computed<CandidateRow[]>(() =>
-  requestedStates.value.flatMap(
-    (state) => searchResults.value[state]?.candidates ?? []
-  )
+  requestedStates.value.flatMap((state) => candidatesFor(state))
 )
 
 const candidateMap = computed(() => {
@@ -635,12 +738,73 @@ function stateResult(state: PreparationState): CandidateSearchResult | null {
   return searchResults.value[state] ?? null
 }
 
+function visibleCandidateCount(state: PreparationState): number {
+  return candidatesFor(state).length
+}
+
+const hasLocalCandidates = computed(() =>
+  requestedStates.value.some((state) => localCandidates(state).length > 0)
+)
+
+const onlineCandidateCount = computed(() =>
+  requestedStates.value.reduce(
+    (count, state) => count + onlineCandidates(state).length,
+    0
+  )
+)
+
+const onlineResultTitle = computed(() => {
+  if (!onlineSearched.value) return ''
+  if (onlineCandidateCount.value > 0) {
+    return `线上找到 ${onlineCandidateCount.value} 条候选（试了 ${onlineAttemptedHosts.value.length} 个来源）`
+  }
+  return `找了 ${onlineAttemptedHosts.value.length} 个来源都没有找到`
+})
+
 function bestCoveragePercent(state: PreparationState): number | null {
   return stateResult(state)?.coverage.bestCoveragePercent ?? null
 }
 
 function bestMissingCount(state: PreparationState): number {
   return stateResult(state)?.coverage.bestMissingFieldCount ?? 0
+}
+
+/**
+ * 候选落进草稿，后续站点要按来源记录回看词条名与状态；失败不阻断本页。
+ *
+ * 线上候选也一起写进去：StepProfile / StepFinish 要能按 sourceRecordId
+ * 找到线上来源的词条名，不能只留在本页内存里。
+ */
+async function persistCandidatesToDraft() {
+  const draft = props.draft
+  if (!draft) {
+    return
+  }
+
+  const candidates = requestedStates.value.flatMap((state) =>
+    candidatesFor(state)
+  )
+  try {
+    // 用草稿当前站点而不是写死 SOURCES：从 ③ 站点回本页只是重新查候选，
+    // 不能把已经推进到 PROFILE 的草稿悄悄退回 SOURCES。
+    await ingredientCreationApi.patchDraft(draft.id, draft.step, {
+      candidates
+    })
+  } catch (error) {
+    if (shouldToastApiError(error, '候选已查到，但保存到草稿失败')) {
+      ElMessage.warning(
+        getApiErrorMessage(error, '候选已查到，但保存到草稿失败')
+      )
+    }
+  }
+}
+
+function resetOnlineSearch() {
+  onlineResults.value = {}
+  onlineError.value = ''
+  onlineSearched.value = false
+  onlineAttemptedHosts.value = []
+  onlineRejectedHosts.value = []
 }
 
 async function searchCandidates() {
@@ -657,6 +821,8 @@ async function searchCandidates() {
   searchLoading.value = true
   searchError.value = ''
   searchResults.value = {}
+  // 重新查本地库后，上一轮线上结果不再代表当前候选集合，先清掉。
+  resetOnlineSearch()
 
   try {
     const nameEn = card.nameEn?.trim()
@@ -679,23 +845,7 @@ async function searchCandidates() {
     }
     searchResults.value = nextResults
 
-    // 候选落进草稿，后续站点要按来源记录回看词条名与状态；失败不阻断本页。
-    const candidates = requestedStates.value.flatMap(
-      (state) => nextResults[state]?.candidates ?? []
-    )
-    try {
-      // 用草稿当前站点而不是写死 SOURCES：从 ③ 站点回本页只是重新查候选，
-      // 不能把已经推进到 PROFILE 的草稿悄悄退回 SOURCES。
-      await ingredientCreationApi.patchDraft(draft.id, draft.step, {
-        candidates
-      })
-    } catch (error) {
-      if (shouldToastApiError(error, '候选已查到，但保存到草稿失败')) {
-        ElMessage.warning(
-          getApiErrorMessage(error, '候选已查到，但保存到草稿失败')
-        )
-      }
-    }
+    await persistCandidatesToDraft()
   } catch (error) {
     searchError.value = getApiErrorMessage(
       error,
@@ -706,6 +856,76 @@ async function searchCandidates() {
     }
   } finally {
     searchLoading.value = false
+  }
+}
+
+/**
+ * 本地零候选时才允许点：到白名单来源兜底找一轮。
+ *
+ * 不自动跑：每建一个原料都联网既慢又浪费；由人点按钮触发。
+ */
+async function searchOnline() {
+  const draft = props.draft
+  const card = intake.value
+  if (!draft || !card) {
+    return
+  }
+  if (!card.name.trim()) {
+    onlineError.value = '缺少中文名，请先回①站填写。'
+    return
+  }
+
+  onlineLoading.value = true
+  resetOnlineSearch()
+
+  try {
+    const nameEn = card.nameEn?.trim()
+    const entries = await Promise.all(
+      requestedStates.value.map(async (state) => {
+        const result = await ingredientCreationApi.findOnlineCandidates(
+          draft.id,
+          {
+            name: card.name.trim(),
+            ...(nameEn ? { nameEn } : {}),
+            state
+          }
+        )
+        return [state, result] as const
+      })
+    )
+
+    const nextResults: Partial<
+      Record<PreparationState, OnlineCandidateSearchResult>
+    > = {}
+    const attempted = new Set<string>()
+    const rejected = new Set<string>()
+    for (const [state, result] of entries) {
+      nextResults[state] = result
+      result.attemptedHosts.forEach((host) => attempted.add(host))
+      result.rejectedHosts.forEach((host) => rejected.add(host))
+    }
+    onlineResults.value = nextResults
+    onlineAttemptedHosts.value = [...attempted]
+    onlineRejectedHosts.value = [...rejected]
+    onlineSearched.value = true
+
+    await persistCandidatesToDraft()
+
+    if (onlineCandidateCount.value > 0) {
+      ElMessage.success(`线上找到 ${onlineCandidateCount.value} 条候选`)
+    } else {
+      ElMessage.warning(`找了 ${attempted.size} 个来源都没有找到`)
+    }
+  } catch (error) {
+    onlineError.value = getApiErrorMessage(
+      error,
+      '线上检索失败，请稍后重试'
+    )
+    if (shouldToastApiError(error, '线上检索失败')) {
+      ElMessage.error(onlineError.value)
+    }
+  } finally {
+    onlineLoading.value = false
   }
 }
 
@@ -915,6 +1135,36 @@ const isResolving = computed(
   () => resolvingAll.value || resolvingChoice.value !== null
 )
 
+/** 线上按钮只有在「本地零候选」且没有别的请求在跑时才可用。 */
+const onlineDisabled = computed(
+  () =>
+    searchLoading.value ||
+    mergeLoading.value ||
+    isResolving.value ||
+    onlineLoading.value ||
+    hasLocalCandidates.value ||
+    Boolean(searchError.value)
+)
+
+const onlineButtonHint = computed(() => {
+  if (hasLocalCandidates.value) {
+    return '本地库已有候选，优先用本地来源'
+  }
+  if (searchLoading.value) {
+    return '正在查本地库…'
+  }
+  if (searchError.value) {
+    return '本地检索失败，请先重试'
+  }
+  if (onlineLoading.value) {
+    return '正在白名单来源里查找…'
+  }
+  if (onlineSearched.value && onlineCandidateCount.value === 0) {
+    return '本次已经找过；再点一次会命中缓存，不会重复抓取'
+  }
+  return '本地库一个都没匹配到时才使用；只查白名单来源'
+})
+
 const conflictCount = computed(() => mergePlan.value?.conflicts.length ?? 0)
 
 async function resolveConflict(
@@ -1050,6 +1300,27 @@ function sourceTypeLabel(sourceType: string): string {
   return SOURCE_TYPE_LABELS[sourceType] ?? sourceType
 }
 
+/** 线上候选不显示「人工录入」，直接标成线上抓取。 */
+function candidateSourceLabel(candidate: CandidateRow): string {
+  return candidate.isOnline ? '线上抓取' : sourceTypeLabel(candidate.sourceType)
+}
+
+function onlineHost(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return url
+  }
+}
+
+function formatFetchedAt(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+  return date.toLocaleString('zh-CN', { hour12: false })
+}
+
 const FIELD_LABEL_BY_PATH = new Map<string, string>()
 const NUTRIENT_LABEL_BY_CODE = new Map<string, string>()
 
@@ -1137,7 +1408,7 @@ function sourceLabel(sourceRecordId: string | null): string {
   const state = candidate.preparationState
     ? getPreparationStateLabel(candidate.preparationState)
     : '生熟未知'
-  return `${candidate.foodName}（${sourceTypeLabel(candidate.sourceType)} · ${state}）`
+  return `${candidate.foodName}（${candidateSourceLabel(candidate)} · ${state}）`
 }
 
 const MERGE_STATUS_META: Readonly<
@@ -1286,6 +1557,30 @@ defineExpose({ submit })
   gap: 8px;
 }
 
+.online-progress {
+  padding: 10px 14px;
+  border: 1px solid #faecd8;
+  border-radius: 8px;
+  background: #fdf6ec;
+}
+
+.online-progress p {
+  margin: 8px 0 0;
+  color: #b88230;
+  font-size: 12px;
+}
+
+.online-summary {
+  margin: 4px 0 0;
+  color: #606266;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.online-summary__rejected {
+  color: #e6a23c;
+}
+
 .state-section {
   padding: 16px;
   border: 1px solid #ebeef5;
@@ -1370,6 +1665,12 @@ defineExpose({ submit })
   background: #f5faff;
 }
 
+.candidate-card.is-online {
+  border-style: dashed;
+  border-color: #e6a23c;
+  background: #fffdf8;
+}
+
 .candidate-card__top {
   display: flex;
   align-items: flex-start;
@@ -1394,6 +1695,22 @@ defineExpose({ submit })
   color: #909399;
   font-size: 12px;
   word-break: break-word;
+}
+
+.candidate-card__source {
+  color: #909399;
+  font-size: 12px;
+  line-height: 1.6;
+  word-break: break-all;
+}
+
+.candidate-card__source a {
+  color: #409eff;
+  text-decoration: none;
+}
+
+.candidate-card__source a:hover {
+  text-decoration: underline;
 }
 
 .candidate-card__coverage {

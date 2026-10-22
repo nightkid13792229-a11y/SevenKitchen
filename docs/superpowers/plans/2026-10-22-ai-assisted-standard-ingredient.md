@@ -22,6 +22,8 @@
 - 草稿数据永不进入配方链路；只有提交后的原料与档案才可能被配方使用。
 - 单位只接受营养字段目录里规定的单位；不接受自由文本。
 - 数据缺失与「值为 0」是两件事，缺失一律保持 `null`。
+- 工作区与主仓库共享 `node_modules`：若 `tsc`/`jest` 报 `@prisma/client` 里没有 `IngredientCreationDraft`，先在工作区 `backend` 下跑 `npx prisma generate`，再判断是不是真的类型错误。
+- 本仓库 `PrismaService` 没有独立模块、也没有 export：新增的服务与控制器一律注册进 `AppModule`，不要建 feature module。
 
 ## Review Focus
 
@@ -63,7 +65,6 @@
 - Create: `backend/src/domain/ingredient-creation/preparation-state.ts`（本任务只放类型，Task 2 补函数）
 - Create: `backend/src/application/ingredient-creation/ingredient-creation.types.ts`
 - Create: `backend/src/application/ingredient-creation/ingredient-creation-draft.service.ts`
-- Create: `backend/src/application/ingredient-creation/ingredient-creation.module.ts`
 - Modify: `backend/src/app.module.ts`
 - Test: `backend/tests/application/ingredient-creation/ingredient-creation-draft.service.spec.ts`
 

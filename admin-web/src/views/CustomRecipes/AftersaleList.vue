@@ -87,7 +87,7 @@
               class="batch-recipe-request"
             >{{ recipe.requestDescription }}</span>
             <el-button
-              v-if="isAdmin"
+              v-if="isAdmin && ['ACCEPTED', 'PROCESSING'].includes(item.status)"
               size="small"
               link
               type="primary"

@@ -40,9 +40,18 @@
 - 售后单份自动选中唯一食谱；
 - 售后页不再提前报错。
 
+## 验收截图
+
+- [订单列表](images/custom-orders.jpg)
+- [订单详情](images/custom-order-detail.jpg)
+- [采购与制作](images/custom-shopping.jpg)
+- [制作步骤](images/custom-steps.jpg)
+- [售后提交](images/custom-aftersale.jpg)
+
 ## 仍需人工确认
 
 - 微信真机订阅消息是否实际到达；
 - 生产环境真实微信支付；
 - 多份订单（2 份以上）的顾客端批量选择、逐份改稿和只重交选中份；
+- 后台售后页「重新交付并自动完成」的实际点击与通知；
 - 不同机型/字体大小下的截图回归。

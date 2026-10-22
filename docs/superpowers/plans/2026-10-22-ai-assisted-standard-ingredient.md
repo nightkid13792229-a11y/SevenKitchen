@@ -48,6 +48,7 @@
 | 5 | 缝合方案与证据账本 | `nutrition-merge.ts` + 测试 |
 | 6 | 终检规则 | `unit-guard.ts`、`final-check.ts` + 测试 |
 | 7 | 提交事务与审计 | `IngredientCreationCommitService` |
+| 7B | 证据账本构建 | `buildEvidenceLedger`（把来源的 `meta.fieldSources` 转成证据行） |
 | 8 | HTTP 接口与权限 | `ingredient-creation.controller.ts` |
 | 9 | 前端：类型、API 客户端、向导骨架与入口 | `views/Ingredients/creation/` |
 | 10 | 前端：① 起手 与 ② 营养依据 两站 | `StepIntake.vue`、`StepSources.vue` |
@@ -436,6 +437,8 @@ git commit -m "feat(ingredient-creation): transactional commit with pending prof
   - `GET drafts/:id` → 草稿
   - `PATCH drafts/:id` → 更新站点与 payload
   - `POST drafts/:id/candidates` → `{ candidates, excludedCount, coverage }`
+  - `POST drafts/:id/merge` → `MergePlan`（选中主来源后生成缝合方案）
+  - `POST drafts/:id/merge/resolve` → `MergePlan`（人工裁决一个字段；领域层抛的普通 Error 要映射成 400）
   - `POST drafts/:id/check` → `FinalCheckResult`
   - `POST drafts/:id/commit` → `{ ingredientId, nutritionFoodIds, auditId }`
 

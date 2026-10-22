@@ -457,6 +457,10 @@ Expected: FAIL。
 
 控制器只做参数校验与转发；DTO 用 `class-validator`，与现有 controller 一致的 `ValidationPipe` 风格。`category` 与 `state` 必须用 `@IsIn` 枚举校验（类别漏了校验会静默变成「无主状态」，默认主档案也跟着错）。
 
+两条硬要求：
+- `patch` 的入参**必须剥离 `proposalHistory`**（DTO 不收这个键，服务层再兜一层），否则前端一回传整份 payload，AI 提案历史就被整体覆盖了。补一条「patch 不会清空 proposalHistory」的测试。
+- 控制器注册进 `AppModule.controllers`，不是 `providers`。
+
 - [ ] **Step 4: 跑测试确认通过**
 
 Run: `cd backend && npx jest tests/interfaces/controllers/ingredient-creation.controller.spec.ts`

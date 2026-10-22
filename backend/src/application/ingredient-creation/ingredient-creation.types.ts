@@ -1,5 +1,8 @@
 import type { IngredientCreationDraft as PrismaIngredientCreationDraft } from '@prisma/client';
-import type { PreparationState } from '../../domain/ingredient-creation/preparation-state';
+import type {
+  CookingMethod,
+  PreparationState,
+} from '../../domain/ingredient-creation/preparation-state';
 
 /**
  * 向导站点。草稿的 `step` 只取这些值，其它字符串一律视为脏数据。
@@ -72,8 +75,8 @@ export interface ProfileDraft {
 /**
  * ② 营养依据站的候选行（Task 4 的候选检索产出）。
  *
- * `cookingMethod` 的值域由 Task 2 的 `CookingMethod` 收窄，草稿里先按字符串存，
- * 方便在规则演进时兼容历史草稿。
+ * `cookingMethod` 只取 Task 2 的 `CookingMethod`；认不出的做法存 `null`，
+ * 不猜成 `OTHER`。
  */
 export interface CandidateRow {
   sourceRecordId: string;
@@ -81,7 +84,7 @@ export interface CandidateRow {
   foodName: string;
   foodNameEn: string | null;
   preparationState: PreparationState | null;
-  cookingMethod: string | null;
+  cookingMethod: CookingMethod | null;
   coveragePercent: number;
   missingFields: string[];
   matchScore: number;

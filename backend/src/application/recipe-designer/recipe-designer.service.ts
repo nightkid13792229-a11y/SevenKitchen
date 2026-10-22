@@ -7525,6 +7525,7 @@ export class RecipeDesignerService {
 
     const launchItems: Array<{
       id: string;
+      ingredientId?: string | null;
       name: string;
       included: boolean;
       isSupplement: boolean;
@@ -7559,6 +7560,7 @@ export class RecipeDesignerService {
       }
       launchItems.push({
         id: item.id,
+        ingredientId: item.ingredientId,
         name: this.resolveIngredientDisplayName(item),
         included: this.isItemIncludedInAssessment(item),
         isSupplement,

@@ -87,6 +87,8 @@ export interface DraftLaunchReadiness {
 
 export interface LaunchReadinessItemInput {
   id: string;
+  /** 原料库中的原料 id；用于「食材种类」去重，缺失时回退 item id */
+  ingredientId?: string | null;
   name: string;
   /** includeInAssessment !== false */
   included: boolean;
@@ -173,7 +175,11 @@ export const buildDraftLaunchReadiness = (
   const supplementCount = includedItems.filter(
     (item) => item.isSupplement,
   ).length;
-  const foodItemCount = includedItems.length - supplementCount;
+  const foodItemCount = new Set(
+    includedItems
+      .filter((item) => !item.isSupplement)
+      .map((item) => item.ingredientId || item.id),
+  ).size;
 
   if (!normalizeText(input.name)) {
     blockers.push({

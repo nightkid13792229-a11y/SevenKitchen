@@ -6145,7 +6145,12 @@ export class RecipeDesignerService {
         await this.buildPrivateSnapshotNutritionData(draft),
       ),
       nutritionStandard: draft.nutritionStandard ?? 'FEDIAF_2025',
-      description: draft.notes,
+      description: draft.description ?? draft.notes,
+      coverImageUrl: draft.coverImageUrl ?? null,
+      coverTitle: draft.coverTitle ?? null,
+      sellingPoint: draft.sellingPoint ?? null,
+      detailImages: this.toJsonValue(draft.detailImages),
+      videoUrl: draft.videoUrl ?? null,
       ...productionStepsData,
       designSource: RECIPE_DESIGNER_PUBLISHED_SOURCE,
       isCustomRecipe: true,
@@ -6298,7 +6303,6 @@ export class RecipeDesignerService {
             this.buildPublishedNutritionDetailedData(draft, assessment),
           ),
           nutritionStandard: 'FEDIAF_2025',
-          description: draft.notes,
           ...productionStepsData,
           designSource: RECIPE_DESIGNER_PUBLISHED_SOURCE,
           isCustomRecipe: false,
@@ -6308,6 +6312,18 @@ export class RecipeDesignerService {
           ...this.buildPublishedRecipePresentationMediaCreateData(
             inheritance.media,
           ),
+          // 设计器里维护的产品展示资料优先于历史版本继承值
+          coverImageUrl:
+            draft.coverImageUrl ?? inheritance.media?.coverImageUrl ?? null,
+          coverTitle:
+            draft.coverTitle ?? inheritance.media?.coverTitle ?? null,
+          description: draft.description ?? draft.notes,
+          sellingPoint: draft.sellingPoint ?? null,
+          detailImages: this.toJsonValue(
+            draft.detailImages ?? inheritance.media?.detailImages ?? null,
+          ),
+          videoUrl:
+            draft.videoUrl ?? inheritance.media?.videoUrl ?? null,
           ...this.buildPublishedRecipeOperationalCreateData(
             inheritance.previousVersion,
           ),

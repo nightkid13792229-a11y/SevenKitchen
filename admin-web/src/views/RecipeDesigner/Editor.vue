@@ -48,6 +48,12 @@
         >重做</el-button>
         <el-button
           text
+          :type="productionStepsDrawerVisible ? 'primary' : 'default'"
+          :disabled="!draft"
+          @click="productionStepsDrawerVisible = true"
+        >制作步骤{{ productionStepsDirty ? ' · 未保存' : '' }}</el-button>
+        <el-button
+          text
           :type="aiPanelVisible ? 'primary' : 'default'"
           @click="aiPanelVisible = !aiPanelVisible"
         >🤖 AI 设计建议</el-button>
@@ -347,6 +353,29 @@
       :saving="supplementDialogSaving"
       @confirm="confirmSupplementTargets"
     />
+
+    <!--
+      制作步骤（2026-10-22 · Task 7）：整份食谱级别的结构化步骤。
+      用抽屉在当前设计器页面内编辑，不跳走；与每行原料的「原料预处理」分开维护。
+    -->
+    <el-drawer
+      v-model="productionStepsDrawerVisible"
+      title="制作步骤"
+      size="720px"
+      destroy-on-close
+      :before-close="handleProductionStepsDrawerClose"
+      @closed="productionStepsDirty = false"
+    >
+      <ProductionStepsEditor
+        v-if="draft"
+        :draft-id="draft.id"
+        :legacy-steps="legacyProductionStepsText"
+        @dirty-change="(value: boolean) => (productionStepsDirty = value)"
+      />
+      <div v-else class="production-steps-drawer-empty">
+        草稿加载完成后即可编辑制作步骤
+      </div>
+    </el-drawer>
   </div>
 </template>
 
@@ -387,6 +416,7 @@ import MacroCompositionPanel from './components/MacroCompositionPanel.vue'
 import DogInsightPanel from './components/DogInsightPanel.vue'
 import AiDesignSuggestionPanel from './components/AiDesignSuggestionPanel.vue'
 import SupplementTargetDialog from './components/SupplementTargetDialog.vue'
+import ProductionStepsEditor from './components/ProductionStepsEditor.vue'
 import type { DesignRecipeAssessmentResult } from '@/utils/recipeDesigner/assessmentTypes'
 import {
   computeSupplementTargetConcentration,
@@ -634,6 +664,23 @@ async function refreshInputsKeepingScroll() {
 
 const referenceDogId = ref<string | null>(null)
 const aiPanelVisible = ref(false)
+
+/** 制作步骤抽屉（2026-10-22 · Task 7）：在当前设计器页面内编辑，不离开页面 */
+const productionStepsDrawerVisible = ref(false)
+const productionStepsDirty = ref(false)
+/**
+ * 旧版纯文本制作步骤（如果有）。
+ * 设计草稿接口当前不返回该字段；没有时传空串，编辑器不显示旧版提示，
+ * 也不会把旧文本自动转换为结构化步骤。
+ */
+const legacyProductionStepsText = computed(() => {
+  const legacy = (
+    draft.value as
+      | (DesignRecipeDraftDetail & { productionSteps?: unknown })
+      | null
+  )?.productionSteps
+  return typeof legacy === 'string' ? legacy.trim() : ''
+})
 
 function syncReferenceDog() {
   referenceDogId.value = draft.value?.series?.referenceDogId ?? null
@@ -1607,12 +1654,35 @@ function goBack() {
   router.push('/recipe-designer')
 }
 
+/** 关闭制作步骤抽屉：有未保存修改时先确认，避免静默丢失编辑 */
+async function handleProductionStepsDrawerClose(done: () => void) {
+  if (!productionStepsDirty.value) {
+    done()
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      '制作步骤还有未保存的修改，关闭抽屉会丢失这些修改。确定关闭吗？',
+      '制作步骤未保存',
+      {
+        type: 'warning',
+        confirmButtonText: '放弃修改并关闭',
+        cancelButtonText: '继续编辑'
+      }
+    )
+    productionStepsDirty.value = false
+    done()
+  } catch {
+    // 留在抽屉里继续编辑
+  }
+}
+
 let beforeUnloadRegistered = false
 function registerBeforeUnload() {
   if (beforeUnloadRegistered) return
   beforeUnloadRegistered = true
   window.addEventListener('beforeunload', (event) => {
-    if (hasPending()) {
+    if (hasPending() || productionStepsDirty.value) {
       event.preventDefault()
       event.returnValue = ''
     }
@@ -1657,6 +1727,12 @@ onBeforeUnmount(() => {
      这里只保证自己不被父级 flex 压窄。 */
   min-width: 0;
   flex-shrink: 0;
+}
+.production-steps-drawer-empty {
+  padding: 32px 16px;
+  font-size: 13px;
+  color: #909399;
+  text-align: center;
 }
 .editor-header {
   display: flex;

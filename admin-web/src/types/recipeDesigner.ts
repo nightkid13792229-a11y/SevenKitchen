@@ -96,6 +96,31 @@ export interface DesignerSupplementTarget {
   expressionBasis?: string | null
 }
 
+/**
+ * 结构化制作步骤（2026-10-22 · Task 7）。
+ *
+ * `sortOrder` 由编辑器自动维护为 1..n，是数组顺序的持久化形式；
+ * `instruction` 必填，时长 / 温度 / 设备可缺省（后端存 null）。
+ */
+export interface DesignerProductionStep {
+  sortOrder: number
+  instruction: string
+  durationMinutes?: number | null
+  temperatureC?: number | null
+  equipment?: string | null
+}
+
+/** GET /recipe-designer/drafts/:id/production-steps */
+export interface DesignRecipeProductionStepsResult {
+  draftId: string
+  productionSteps: DesignerProductionStep[]
+}
+
+/** PATCH /recipe-designer/drafts/:id/production-steps（整组覆盖，空数组 = 清空） */
+export interface UpdateDesignRecipeProductionStepsPayload {
+  steps: DesignerProductionStep[]
+}
+
 /** 原料预处理来源：AUTO = 系统带出；MANUAL = 人工修改 */
 export type DesignerPreparationSource = 'AUTO' | 'MANUAL'
 

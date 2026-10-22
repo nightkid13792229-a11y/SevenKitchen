@@ -9,6 +9,7 @@ import type {
   CreateRecipeSeriesPayload,
   DesignerItem,
   DesignRecipeDraftDetail,
+  DesignRecipeProductionStepsResult,
   DogDesignInsight,
   DraftAssessmentInputs,
   FediafDogScenario,
@@ -24,6 +25,7 @@ import type {
   SupplementLabelExtractionDraft,
   SupplementNutritionBasisType,
   SupplementUsageUnit,
+  UpdateDesignRecipeProductionStepsPayload,
   UpdateDogDesignNotesPayload
 } from '@/types/recipeDesigner'
 
@@ -135,6 +137,15 @@ export const recipeDesignerApi = {
   // 草稿
   getDraft: (draftId: string): Promise<DesignRecipeDraftDetail> =>
     api.get(`/recipe-designer/drafts/${draftId}`),
+  /** 读取草稿的结构化制作步骤（Task 7：轻量刷新步骤区，不重拉整份草稿） */
+  getDraftProductionSteps: (draftId: string): Promise<DesignRecipeProductionStepsResult> =>
+    api.get(`/recipe-designer/drafts/${draftId}/production-steps`),
+  /** 整组覆盖保存制作步骤；空数组表示清空 */
+  updateDraftProductionSteps: (
+    draftId: string,
+    payload: UpdateDesignRecipeProductionStepsPayload,
+  ): Promise<DesignRecipeProductionStepsResult> =>
+    api.patch(`/recipe-designer/drafts/${draftId}/production-steps`, payload),
   createRevisionDraft: (draftId: string): Promise<unknown> =>
     api.post(`/recipe-designer/drafts/${draftId}/revisions`),
   revertDraftToLatestOfficial: (draftId: string): Promise<unknown> =>

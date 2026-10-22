@@ -11,7 +11,7 @@ export type PreparationState = 'RAW' | 'COOKED';
  * 来源给的做法。只在「找数据」时用于筛选熟食候选：
  * 水煮 / 蒸是温和烹饪，可进候选；烤 / 煎不进（老板 2026-10-22 定）。
  *
- * `OTHER` 表示「认得出、但不在上面四种里」；分类器认不出时返回 `null`，
+ * `OTHER` 是保留值：本期分类器不会返回它；认不出做法时返回 `null`，
  * **不猜成 `OTHER`**，两者含义不同。
  */
 export type CookingMethod =
@@ -43,21 +43,63 @@ export function normalizePreparationState(
 }
 
 /**
- * 做法关键词表；命中顺序即优先级，来源原文按「包含」匹配
- * （如 `boiled, drained`）。
+ * 一条做法关键词：日文按「包含」匹配；拉丁文一律用词边界匹配。
  */
-const COOKING_METHOD_KEYWORDS: ReadonlyArray<
-  readonly [CookingMethod, readonly string[]]
+type CookingMethodKeyword = string | RegExp;
+
+/**
+ * 否决项：烤 / 煎。必须先扫这一组——同一段原文里既提到水煮 / 蒸又提到烤 / 煎时，
+ * 以烤 / 煎为准（如 `蒸し焼き`、`boiled & fried`），否则熟食来源会被误放行。
+ */
+const VETOED_COOKING_METHOD_KEYWORDS: ReadonlyArray<
+  readonly [CookingMethod, readonly CookingMethodKeyword[]]
 > = [
-  ['BOILED', ['boiled', 'ゆで', '茹で', '水煮']],
-  ['STEAMED', ['steamed', 'steam', '蒸し']],
-  ['GRILLED', ['broiled', 'grilled', 'roasted', '焼き', '烤']],
-  ['FRIED', ['fried', 'pan-fried', 'deep-fried', '揚げ', '煎']],
+  ['GRILLED', [/\bbroiled\b/, /\bgrilled\b/, /\broast(?:ed)?\b/, '焼き', '烤']],
+  ['FRIED', [/\bfried\b/, '揚げ', '煎']],
 ];
 
 /**
+ * 温和做法：水煮 / 蒸，只有否决项都没命中时才看这一组。
+ *
+ * 拉丁关键词用词边界匹配（`parboiled`、`unfried` 不算）；
+ * `par-boiled` 的 `par-` 是「半煮」，用负向断言排除，`hard-boiled` 仍能命中。
+ */
+const GENTLE_COOKING_METHOD_KEYWORDS: ReadonlyArray<
+  readonly [CookingMethod, readonly CookingMethodKeyword[]]
+> = [
+  ['BOILED', [/(?<!par[-\s])\bboiled\b/, 'ゆで', '茹で', '水煮']],
+  ['STEAMED', [/\bsteam(?:ed)?\b/, '蒸し']],
+];
+
+function containsCookingKeyword(
+  value: string,
+  keyword: CookingMethodKeyword,
+): boolean {
+  return typeof keyword === 'string'
+    ? value.includes(keyword)
+    : keyword.test(value);
+}
+
+function findFirstCookingMethod(
+  value: string,
+  rules: ReadonlyArray<
+    readonly [CookingMethod, readonly CookingMethodKeyword[]]
+  >,
+): CookingMethod | null {
+  for (const [method, keywords] of rules) {
+    if (keywords.some((keyword) => containsCookingKeyword(value, keyword))) {
+      return method;
+    }
+  }
+
+  return null;
+}
+
+/**
  * 从来源原文识别做法；认不出返回 `null`，不猜。
- * 全角 / 大小写先归一，再按关键词包含匹配。
+ *
+ * 全角 / 大小写先归一；否决项（烤 / 煎）优先于温和做法（水煮 / 蒸），
+ * 所以 `蒸し焼き`、`boiled & fried` 这类混合描述一律判为烤 / 煎。
  */
 export function classifyCookingMethod(
   value: string | null | undefined,
@@ -65,13 +107,13 @@ export function classifyCookingMethod(
   const keyword = normalizeKeyword(value);
   if (!keyword) return null;
 
-  for (const [method, keywords] of COOKING_METHOD_KEYWORDS) {
-    if (keywords.some((candidate) => keyword.includes(candidate))) {
-      return method;
-    }
-  }
+  const vetoed = findFirstCookingMethod(
+    keyword,
+    VETOED_COOKING_METHOD_KEYWORDS,
+  );
+  if (vetoed) return vetoed;
 
-  return null;
+  return findFirstCookingMethod(keyword, GENTLE_COOKING_METHOD_KEYWORDS);
 }
 
 /**

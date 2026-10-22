@@ -55,8 +55,23 @@ describe('classifyCookingMethod', () => {
     expect(classifyCookingMethod('broiled')).toBe('GRILLED');
     expect(classifyCookingMethod('grilled')).toBe('GRILLED');
     expect(classifyCookingMethod('roasted')).toBe('GRILLED');
+    expect(classifyCookingMethod('roast')).toBe('GRILLED');
     expect(classifyCookingMethod('焼き')).toBe('GRILLED');
     expect(classifyCookingMethod('烤')).toBe('GRILLED');
+  });
+
+  it('denies grilled or fried when the source also mentions gentle cooking', () => {
+    expect(classifyCookingMethod('蒸し焼き')).toBe('GRILLED');
+    expect(classifyCookingMethod('boiled & fried')).toBe('FRIED');
+    expect(classifyCookingMethod('steamed then pan-fried')).toBe('FRIED');
+    expect(classifyCookingMethod('水煮然后烤')).toBe('GRILLED');
+  });
+
+  it('matches Latin keywords on word boundaries only', () => {
+    expect(classifyCookingMethod('parboiled')).toBeNull();
+    expect(classifyCookingMethod('par-boiled')).toBeNull();
+    expect(classifyCookingMethod('unfried')).toBeNull();
+    expect(classifyCookingMethod('hard-boiled')).toBe('BOILED');
   });
 
   it('classifies fried sources to FRIED', () => {
@@ -91,6 +106,21 @@ describe('isCookedSourceAcceptable', () => {
     expect(isCookedSourceAcceptable('FRIED')).toBe(false);
     expect(isCookedSourceAcceptable('OTHER')).toBe(false);
     expect(isCookedSourceAcceptable(null)).toBe(false);
+  });
+
+  it('rejects every source where grilled or fried appears alongside a gentle method', () => {
+    const vetoedSources = [
+      '蒸し焼き',
+      'boiled & fried',
+      'steamed then pan-fried',
+      '水煮然后烤',
+    ];
+
+    for (const source of vetoedSources) {
+      expect(isCookedSourceAcceptable(classifyCookingMethod(source))).toBe(
+        false,
+      );
+    }
   });
 });
 

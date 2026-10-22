@@ -119,7 +119,12 @@
             >
               <span
                 class="launch-readiness__summary-value"
-                :class="`is-${row.tone}`"
+                :class="[
+                  `is-${row.tone}`,
+                  { 'is-clickable': row.key === 'stepCount' }
+                ]"
+                :title="row.key === 'stepCount' ? '点击展开制作步骤' : undefined"
+                @click="onSummaryRowClick(row.key)"
               >{{ row.value }}</span>
             </el-descriptions-item>
           </el-descriptions>
@@ -323,6 +328,12 @@ async function loadReadiness(): Promise<void> {
     if (seq === requestSeq) {
       loading.value = false
     }
+  }
+}
+
+function onSummaryRowClick(key: string): void {
+  if (key === 'stepCount') {
+    stepsExpanded.value = ['steps']
   }
 }
 
@@ -636,5 +647,12 @@ watch(
   font-size: 12px;
   font-weight: 400;
   color: #909399;
+}
+
+.launch-readiness__summary-value.is-clickable {
+  cursor: pointer;
+  color: #409eff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 </style>

@@ -102,6 +102,7 @@ import {
   RECIPE_PRESENTATION_LIMITS,
 } from '../../interfaces/dto/recipe-designer/recipe-designer.dto';
 import {
+  formatProductionStepsText,
   readProductionSteps,
   validateProductionSteps,
   type ProductionStep,
@@ -9645,6 +9646,7 @@ export class RecipeDesignerService {
 
   private buildProductionStepsSnapshotData(value: unknown): {
     productionStepsJson: Prisma.InputJsonValue | typeof Prisma.DbNull;
+    productionSteps: string | null;
   } {
     const steps = this.validateDraftProductionSteps(value, {
       allowEmpty: true,
@@ -9652,6 +9654,8 @@ export class RecipeDesignerService {
     return {
       productionStepsJson:
         steps.length > 0 ? this.toJsonValue(steps) : Prisma.DbNull,
+      productionSteps:
+        steps.length > 0 ? formatProductionStepsText(steps) : null,
     };
   }
 

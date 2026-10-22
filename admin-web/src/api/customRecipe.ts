@@ -440,6 +440,9 @@ export interface AdminAftersaleItem {
   resolvedAt?: string | null;
   /** 多份售后针对哪一批交付；老的单份售后为 null */
   deliveryBatchId: string | null;
+  /** 老单份售后关联的交付记录 / 食谱 */
+  deliveryId?: string | null;
+  deliveryRecipeId?: string | null;
   /** 多份售后选中了哪几份（顺序即展示顺序）；老订单为空数组 */
   deliveryItemIds: string[];
   /** 每份各自的诉求说明；只有共用说明时为空数组 */

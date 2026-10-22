@@ -229,7 +229,8 @@ export const recipeDesignerApi = {
     designId: string
     seriesId: string
     draftId: string
-    deliveryItemId: string
+    deliveryItemId: string | null
+    recipeId: string
   }> =>
     api.post(`/recipe-designer/aftersales/${aftersaleId}/reopen-design`, {
       deliveryItemId

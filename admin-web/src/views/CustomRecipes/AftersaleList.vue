@@ -121,6 +121,32 @@
         >
           {{ action.label }}
         </el-button>
+        <el-button
+          v-if="
+            isAdmin &&
+            item.deliveryId &&
+            batchRecipesOf(item).length === 0 &&
+            ['ACCEPTED', 'PROCESSING'].includes(item.status)
+          "
+          type="primary"
+          plain
+          :loading="reopeningId === item.id"
+          :disabled="Boolean(reopeningId)"
+          @click="editAftersaleRecipe(item)"
+        >修改食谱</el-button>
+        <el-button
+          v-if="
+            isAdmin &&
+            item.deliveryId &&
+            item.deliveryRecipeId &&
+            batchRecipesOf(item).length === 0 &&
+            ['ACCEPTED', 'PROCESSING'].includes(item.status)
+          "
+          type="success"
+          plain
+          :loading="redeliveringId === item.id"
+          @click="redeliverSingleAftersale(item)"
+        >重新交付并完成</el-button>
         <!--
           多份售后改稿（2026-10-21）：只重交顾客选中的那几份。
           老的单份售后没有 deliveryItemIds，按钮不显示 ——
@@ -317,7 +343,7 @@ const batchRecipesOf = (item: AdminAftersaleItem) =>
  */
 const editAftersaleRecipe = async (
   item: AdminAftersaleItem,
-  deliveryItemId: string,
+  deliveryItemId?: string,
 ) => {
   if (!isAdmin.value || reopeningId.value) return;
   reopeningId.value = item.id;
@@ -386,8 +412,9 @@ const redeliverSelectedRecipes = async (item: AdminAftersaleItem) => {
 
     const redeliveredCount =
       result?.selectedRecipes?.length ?? deliveryItemIds.length;
+    await resolveAfterRedelivery(item);
     ElMessage.success(
-      `已按选中的 ${redeliveredCount} 份重新交付，顾客会收到一条新通知`,
+      `已按选中的 ${redeliveredCount} 份重新交付，并完成售后`,
     );
     await load();
   } catch (error) {
@@ -400,6 +427,49 @@ const redeliverSelectedRecipes = async (item: AdminAftersaleItem) => {
     toastApiError(error, '按选中份重新交付失败，请重试', (toastMessage) =>
       ElMessage.error(toastMessage),
     );
+  } finally {
+    redeliveringId.value = '';
+  }
+};
+
+/** 重新交付后自动完成售后；处理说明用系统口径，顾客能看懂改了什么。 */
+const resolveAfterRedelivery = async (item: AdminAftersaleItem) => {
+  if (!['ACCEPTED', 'PROCESSING'].includes(item.status)) return;
+  try {
+    await customRecipeApi.resolveAftersale(item.id, {
+      handleNote: '已按你的要求调整并重新交付了一版食谱，请在小程序里查看最新交付内容。',
+    });
+  } catch (error) {
+    // 交付已经成功，售后完成失败要提示但不能再报成交付失败
+    toastApiError(error, '食谱已重新交付，但售后状态未自动完成，请手动处理', (message) =>
+      ElMessage.warning(message),
+    );
+  }
+};
+
+/**
+ * 老单份售后：修改后重新交付同一份食谱，然后自动完成售后。
+ * 多份订单仍走「按选中份重新交付」。
+ */
+const redeliverSingleAftersale = async (item: AdminAftersaleItem) => {
+  if (!item.deliveryRecipeId || redeliveringId.value) return;
+  try {
+    await ElMessageBox.confirm(
+      '将用当前修改后的食谱重新交付给顾客，并完成这条售后。顾客会收到新的交付通知。',
+      '重新交付并完成售后',
+      { type: 'warning', confirmButtonText: '确认重新交付', cancelButtonText: '取消' },
+    );
+  } catch {
+    return;
+  }
+  redeliveringId.value = item.id;
+  try {
+    await customRecipeApi.deliverRecipe(item.orderId, item.deliveryRecipeId);
+    await resolveAfterRedelivery(item);
+    ElMessage.success('已重新交付，并完成售后');
+    await load();
+  } catch (error) {
+    toastApiError(error, '重新交付失败，请重试', (message) => ElMessage.error(message));
   } finally {
     redeliveringId.value = '';
   }

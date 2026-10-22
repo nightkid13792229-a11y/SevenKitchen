@@ -271,3 +271,27 @@ export const readProductionSteps = (value: unknown): ProductionStep[] => {
 
   return steps.sort((left, right) => left.sortOrder - right.sortOrder);
 };
+
+/**
+ * 把结构化步骤转成旧版单段文本，供 DIY 卡片等旧消费方使用。
+ * 不包含序号（渲染端自己编号）；时间/温度/设备作为括号补充。
+ */
+export function formatProductionStepsText(steps: readonly ProductionStep[]): string {
+  return steps
+    .map((step) => {
+      const extras: string[] = [];
+      if (step.durationMinutes !== null && step.durationMinutes !== undefined) {
+        extras.push(`${step.durationMinutes} 分钟`);
+      }
+      if (step.temperatureC !== null && step.temperatureC !== undefined) {
+        extras.push(`${step.temperatureC}℃`);
+      }
+      if (step.equipment) {
+        extras.push(step.equipment);
+      }
+      return extras.length > 0
+        ? `${step.instruction}（${extras.join('，')}）`
+        : step.instruction;
+    })
+    .join('\n');
+}

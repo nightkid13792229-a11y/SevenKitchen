@@ -137,7 +137,8 @@ describe('售后待办页 · 多份售后只做展示', () => {
   it('★ 重新交付选中份只走按份接口，不再复用首次交付 / 单份交付', () => {
     expect(pageCode).toContain('customRecipeApi.redeliverBatch(')
     expect(pageCode).not.toContain('customRecipeApi.deliverBatch(')
-    expect(pageCode).not.toContain('customRecipeApi.deliverRecipe(')
+    // 老单份售后走 deliverRecipe；多份售后仍只走 redeliverBatch
+    expect(pageCode).toContain('customRecipeApi.deliverRecipe(')
   })
 })
 

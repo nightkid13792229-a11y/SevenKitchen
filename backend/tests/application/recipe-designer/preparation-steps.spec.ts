@@ -694,8 +694,8 @@ describe('原料预处理与结构化制作步骤（Task 4）', () => {
 
       const createData = prisma.recipe.create.mock.calls[0][0].data;
       expect(createData.productionStepsJson).toEqual(VALID_STEPS);
-      // legacy 字符串字段保持不写
-      expect(createData).not.toHaveProperty('productionSteps');
+      // legacy 字符串字段同步写一份，供 DIY 卡片等旧消费方使用
+      expect(createData.productionSteps).toContain('将所有食材按配方称重');
 
       const publishedItem = createData.items.create[0];
       expect(publishedItem).toEqual(
@@ -735,7 +735,7 @@ describe('原料预处理与结构化制作步骤（Task 4）', () => {
       const createData = prisma.recipe.create.mock.calls[0][0].data;
       expect(createData.items.create[0].preparationSource).toBe('AUTO');
       expect(createData.productionStepsJson).toEqual(VALID_STEPS);
-      expect(createData).not.toHaveProperty('productionSteps');
+      expect(createData.productionSteps).toContain('将所有食材按配方称重');
     });
 
     it('rejects publishing when stored steps are malformed', async () => {
@@ -780,7 +780,7 @@ describe('原料预处理与结构化制作步骤（Task 4）', () => {
 
       const createData = prisma.recipe.create.mock.calls[0][0].data;
       expect(createData.productionStepsJson).toEqual(VALID_STEPS);
-      expect(createData).not.toHaveProperty('productionSteps');
+      expect(createData.productionSteps).toContain('将所有食材按配方称重');
       expect(createData.items.create[0]).toEqual(
         expect.objectContaining({
           preparationMethod: '去皮切块',
@@ -813,7 +813,7 @@ describe('原料预处理与结构化制作步骤（Task 4）', () => {
 
       const updateData = prisma.recipe.update.mock.calls[0][0].data;
       expect(updateData.productionStepsJson).toEqual(VALID_STEPS);
-      expect(updateData).not.toHaveProperty('productionSteps');
+      expect(updateData.productionSteps).toContain('将所有食材按配方称重');
     });
   });
 

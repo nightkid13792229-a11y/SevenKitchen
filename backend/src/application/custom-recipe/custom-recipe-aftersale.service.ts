@@ -492,6 +492,7 @@ export class CustomRecipeAftersaleService {
             customer: { select: { nickname: true, phone: true } },
           },
         },
+        delivery: { select: { id: true, recipeId: true } },
       },
     });
 
@@ -519,6 +520,8 @@ export class CustomRecipeAftersaleService {
           statusLabel: CUSTOM_RECIPE_AFTERSALE_STATUS_LABELS[row.status],
           description: row.description,
           photos: row.photos ?? [],
+          deliveryId: row.deliveryId ?? null,
+          deliveryRecipeId: row.delivery?.recipeId ?? null,
           createdAt: row.createdAt,
           acceptedAt: row.acceptedAt,
           resolvedAt: row.resolvedAt,

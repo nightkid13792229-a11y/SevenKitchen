@@ -1,4 +1,8 @@
 import {
+  formatProductionStepsText,
+  readProductionSteps,
+} from '../../domain/recipe-designer/production-steps';
+import {
   BadRequestException,
   Injectable,
   NotFoundException,
@@ -1210,6 +1214,10 @@ export class CustomRecipeDeliveryService {
       nutritionStandard: string | null;
       /** 一句话卖点（交付第 1 页封面下方那句）· 2026-10-18 */
       sellingPoint: string | null;
+      /** 旧版单段制作步骤（DIY 卡片兼容） */
+      productionSteps: string | null;
+      /** 结构化制作步骤（顾客交付页优先） */
+      productionStepsJson: unknown;
       /** 核心营养 8 项（蛋白质/脂肪/…/钙磷比）· 2026-10-18 */
       nutritionDetailedData: unknown;
       items: Array<{
@@ -1305,6 +1313,17 @@ export class CustomRecipeDeliveryService {
         };
       });
 
+    const structuredSteps = readProductionSteps(input.recipe.productionStepsJson);
+    const steps =
+      structuredSteps.length > 0
+        ? structuredSteps.map((step) => formatProductionStepsText([step]))
+        : input.recipe.productionSteps
+          ? input.recipe.productionSteps
+              .split(/\r?\n/)
+              .map((line) => line.trim())
+              .filter(Boolean)
+          : [];
+
     return buildDeliverySnapshot({
       recipe: {
         recipeId: input.recipe.recipeId,
@@ -1350,7 +1369,7 @@ export class CustomRecipeDeliveryService {
         }),
       ),
       supplements,
-      steps: [],
+      steps,
       now: input.now,
     });
   }

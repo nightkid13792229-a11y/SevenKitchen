@@ -281,7 +281,8 @@ export class OrderRecipeDesignService {
     designId: string;
     seriesId: string;
     draftId: string;
-    deliveryItemId: string;
+    deliveryItemId: string | null;
+    recipeId: string;
   }> {
     const aftersale = await this.prisma.customRecipeAftersale.findUnique({
       where: { id: input.aftersaleId },
@@ -308,21 +309,40 @@ export class OrderRecipeDesignService {
     const selectedDeliveryItemId = String(
       input.deliveryItemId ?? deliveryItemIds[0] ?? '',
     ).trim();
-    if (!selectedDeliveryItemId || !deliveryItemIds.includes(selectedDeliveryItemId)) {
-      throw new BadRequestException('请选择本次售后要修改的那一份食谱');
+
+    let deliveryRecipeId: string | null = null;
+    if (deliveryItemIds.length > 0) {
+      if (
+        !selectedDeliveryItemId ||
+        !deliveryItemIds.includes(selectedDeliveryItemId)
+      ) {
+        throw new BadRequestException('请选择本次售后要修改的那一份食谱');
+      }
+      const deliveryItem = await this.prisma.customRecipeDeliveryItem.findUnique({
+        where: { id: selectedDeliveryItemId },
+        select: { id: true, batchId: true, recipeId: true },
+      });
+      if (!deliveryItem) {
+        throw new NotFoundException('交付明细不存在');
+      }
+      deliveryRecipeId = deliveryItem.recipeId;
+    } else if (aftersale.deliveryId) {
+      const legacyDelivery = await this.prisma.customRecipeDelivery.findUnique({
+        where: { id: aftersale.deliveryId },
+        select: { recipeId: true },
+      });
+      if (!legacyDelivery) {
+        throw new NotFoundException('交付记录不存在');
+      }
+      deliveryRecipeId = legacyDelivery.recipeId;
+    } else {
+      throw new BadRequestException('这条售后没有关联可修改的交付食谱');
     }
 
-    const deliveryItem = await this.prisma.customRecipeDeliveryItem.findUnique({
-      where: { id: selectedDeliveryItemId },
-      select: { id: true, batchId: true, recipeId: true },
-    });
-    if (!deliveryItem) {
-      throw new NotFoundException('交付明细不存在');
-    }
     const slot = await this.prisma.orderRecipeDesign.findFirst({
       where: {
         orderId: aftersale.order.id,
-        recipeId: deliveryItem.recipeId,
+        recipeId: deliveryRecipeId,
       },
       select: {
         id: true,
@@ -347,7 +367,8 @@ export class OrderRecipeDesignService {
       designId: slot.id,
       seriesId: slot.seriesId,
       draftId: slot.designDraftId,
-      deliveryItemId: selectedDeliveryItemId,
+      deliveryItemId: selectedDeliveryItemId || null,
+      recipeId: deliveryRecipeId,
     };
   }
 

@@ -121,6 +121,68 @@ export interface UpdateDesignRecipeProductionStepsPayload {
   steps: DesignerProductionStep[]
 }
 
+/** 设计草稿模式：CATALOG = 产品线；ORDER = 订单绑定（本单设计） */
+export type DesignRecipeDesignMode = 'CATALOG' | 'ORDER'
+
+/**
+ * 上线检查（共享发布门槛）阻断项，与后端
+ * `backend/src/domain/recipe-designer/launch-readiness.ts` 对齐。
+ */
+export type LaunchReadinessBlockerCode =
+  | 'NAME_REQUIRED'
+  | 'NO_INCLUDED_ITEMS'
+  | 'TOTAL_WEIGHT_INVALID'
+  | 'ENERGY_DENSITY_INVALID'
+  | 'ASSESSMENT_UNAVAILABLE'
+  | 'NUTRITION_REPORT_UNAVAILABLE'
+  | 'SUPPLEMENT_TARGETS_REQUIRED'
+  | 'PREPARATION_METHOD_REQUIRED'
+  | 'PRODUCTION_STEPS_REQUIRED'
+
+/** 上线检查提醒项（只提示，不阻断） */
+export type LaunchReadinessWarningCode =
+  | 'REVIEW_REQUIRED'
+  | 'MISSING_NUTRITION_DATA'
+  | 'NUTRIENT_OUT_OF_RANGE'
+
+export interface LaunchReadinessIssue<TCode extends string = string> {
+  code: TCode
+  message: string
+  /** 相关原料项 id（整份草稿级别的问题没有这个字段） */
+  itemId?: string
+  /** 相关字段路径 / 字段名（便于后台定位） */
+  field?: string
+}
+
+export type LaunchReadinessBlocker =
+  LaunchReadinessIssue<LaunchReadinessBlockerCode>
+export type LaunchReadinessWarning =
+  LaunchReadinessIssue<LaunchReadinessWarningCode>
+
+/** 上线检查概要：与发布 / 加入待提交使用同一份数字 */
+export interface DraftLaunchReadinessSummary {
+  /** 参与评估的原料数 */
+  itemCount: number
+  totalWeightG: number
+  energyDensityKcalPerKg: number | null
+  /** 参与评估的补剂数 */
+  supplementCount: number
+  /** 有效制作步骤数 */
+  stepCount: number
+  /** 完整营养报告是否可生成 */
+  reportAvailable: boolean
+}
+
+/** GET /recipe-designer/drafts/:id/launch-readiness */
+export interface DraftLaunchReadiness {
+  draftId: string
+  designMode: DesignRecipeDesignMode
+  ready: boolean
+  blockers: LaunchReadinessBlocker[]
+  warnings: LaunchReadinessWarning[]
+  summary: DraftLaunchReadinessSummary
+}
+
 /** 原料预处理来源：AUTO = 系统带出；MANUAL = 人工修改 */
 export type DesignerPreparationSource = 'AUTO' | 'MANUAL'
 

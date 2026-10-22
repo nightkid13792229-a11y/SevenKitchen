@@ -12,6 +12,7 @@ import type {
   DesignRecipeProductionStepsResult,
   DogDesignInsight,
   DraftAssessmentInputs,
+  DraftLaunchReadiness,
   FediafDogScenario,
   IngredientOptionListResponse,
   IngredientRecommendationResult,
@@ -140,6 +141,12 @@ export const recipeDesignerApi = {
   /** 读取草稿的结构化制作步骤（Task 7：轻量刷新步骤区，不重拉整份草稿） */
   getDraftProductionSteps: (draftId: string): Promise<DesignRecipeProductionStepsResult> =>
     api.get(`/recipe-designer/drafts/${draftId}/production-steps`),
+  /**
+   * 上线检查：读取草稿的共享发布门槛（发布 / 加入待提交同一套判断）。
+   * 只读预览，不改变草稿状态，也不会跳转路由。
+   */
+  getDraftLaunchReadiness: (draftId: string): Promise<DraftLaunchReadiness> =>
+    api.get(`/recipe-designer/drafts/${draftId}/launch-readiness`),
   /** 整组覆盖保存制作步骤；空数组表示清空 */
   updateDraftProductionSteps: (
     draftId: string,

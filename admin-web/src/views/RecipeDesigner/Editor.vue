@@ -52,6 +52,19 @@
           :disabled="!draft"
           @click="productionStepsDrawerVisible = true"
         >制作步骤{{ productionStepsDirty ? ' · 未保存' : '' }}</el-button>
+        <!--
+          上线检查：产品线（CATALOG）与本单设计（ORDER）共用同一套发布 /
+          加入待提交门槛；订单分支专属检查暂未接入。
+        -->
+        <el-button
+          text
+          :type="launchReadinessVisible ? 'primary' : 'default'"
+          :icon="CircleCheck"
+          :disabled="!draft"
+          :loading="launchCheckOpening"
+          title="产品线与本单设计共用同一套上线门槛；订单分支专属检查暂未接入"
+          @click="openLaunchReadiness"
+        >上线检查</el-button>
         <el-button
           text
           :type="aiPanelVisible ? 'primary' : 'default'"
@@ -393,6 +406,15 @@
         草稿加载完成后即可编辑制作步骤
       </div>
     </el-drawer>
+
+    <!--
+      上线检查（2026-10-22）：读取后端共享发布门槛（发布 / 加入待提交同一套判断）。
+      产品线与本单设计都可用；只在当前页打开抽屉，不跳转路由。
+    -->
+    <LaunchReadinessDrawer
+      v-model="launchReadinessVisible"
+      :draft-id="currentDraftId"
+    />
   </div>
 </template>
 
@@ -400,7 +422,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown, ArrowLeft, CircleCheckFilled, Delete, EditPen, Loading, Rank, RefreshLeft, RefreshRight, Setting, WarningFilled } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowLeft, CircleCheck, CircleCheckFilled, Delete, EditPen, Loading, Rank, RefreshLeft, RefreshRight, Setting, WarningFilled } from '@element-plus/icons-vue'
 import draggable from 'vuedraggable'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import type { CreateRecipeSeriesStageDraftPayload } from '@/api/recipeDesigner'
@@ -436,6 +458,7 @@ import AiDesignSuggestionPanel from './components/AiDesignSuggestionPanel.vue'
 import SupplementTargetDialog from './components/SupplementTargetDialog.vue'
 import PreparationMethodManagerDialog from './components/PreparationMethodManagerDialog.vue'
 import ProductionStepsEditor from './components/ProductionStepsEditor.vue'
+import LaunchReadinessDrawer from './components/LaunchReadinessDrawer.vue'
 import type { DesignRecipeAssessmentResult } from '@/utils/recipeDesigner/assessmentTypes'
 import {
   computeSupplementTargetConcentration,
@@ -687,6 +710,12 @@ const aiPanelVisible = ref(false)
 /** 制作步骤抽屉（2026-10-22 · Task 7）：在当前设计器页面内编辑，不离开页面 */
 const productionStepsDrawerVisible = ref(false)
 const productionStepsDirty = ref(false)
+/**
+ * 上线检查抽屉：产品线与本单设计共用同一套后端门槛。
+ * 打开前先把待保存修改落盘，避免检查读到上一次保存的版本。
+ */
+const launchReadinessVisible = ref(false)
+const launchCheckOpening = ref(false)
 /**
  * 旧版纯文本制作步骤（如果有）。
  * 设计草稿接口当前不返回该字段；没有时传空串，编辑器不显示旧版提示，
@@ -1679,6 +1708,65 @@ async function stageOrderDesign() {
     // 错误提示由 API 拦截器统一处理
   } finally {
     stagingReady.value = false
+  }
+}
+
+/**
+ * 等正在进行的保存请求落地（最多 timeoutMs）。
+ *
+ * `flushNow()` 遇到已有保存在飞时会立即返回；上线检查读的是服务器上的草稿，
+ * 不等一下就会和保存请求赛跑，检查结果可能落后一次修改。
+ */
+function waitForSaveIdle(timeoutMs = 5000): Promise<void> {
+  if (!hasPending()) return Promise.resolve()
+  return new Promise((resolve) => {
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const finish = () => {
+      stop()
+      if (timer) clearTimeout(timer)
+      resolve()
+    }
+    const stop = watch([saveStatus, willAutoRetry], () => {
+      if (!hasPending()) {
+        finish()
+        return
+      }
+      // 自动重试已经放弃时不再干等，打开后仍会提示结果可能不是最新
+      if (saveStatus.value === 'error' && !willAutoRetry.value) {
+        finish()
+      }
+    })
+    timer = setTimeout(finish, timeoutMs)
+  })
+}
+
+/**
+ * 打开「上线检查」抽屉（产品线 / 本单设计都可用）。
+ *
+ * 不跳转路由：检查结果在抽屉里看；先把未落盘修改刷完，避免读到旧版本。
+ * 本单设计与产品线共用同一套后端门槛，订单分支专属检查暂未接入。
+ */
+async function openLaunchReadiness() {
+  if (!draft.value) {
+    ElMessage.warning('草稿加载完成后才能做上线检查')
+    return
+  }
+  if (launchCheckOpening.value) return
+
+  launchCheckOpening.value = true
+  try {
+    await flushNow()
+    if (hasPending()) {
+      await waitForSaveIdle()
+    }
+    if (hasPending() || saveStatus.value === 'error') {
+      ElMessage.warning(
+        '还有改动尚未保存成功；本次上线检查基于服务器上已保存的版本'
+      )
+    }
+    launchReadinessVisible.value = true
+  } finally {
+    launchCheckOpening.value = false
   }
 }
 

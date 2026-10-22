@@ -3,7 +3,7 @@
     <div class="page-header">
       <el-page-header @back="$router.back()">
         <template #content>
-          <span class="header-title">发布配方</span>
+          <span class="header-title">保存到系列仓库</span>
         </template>
       </el-page-header>
     </div>
@@ -234,7 +234,7 @@
               :disabled="!isAdmin"
               @click="confirmPublish"
             >
-              {{ isAdmin ? '发布到食谱管理' : '仅管理员可发布' }}
+              {{ isAdmin ? '保存到系列仓库' : '仅管理员可操作' }}
             </el-button>
           </div>
         </el-card>
@@ -488,10 +488,10 @@ async function confirmPublish() {
   }
   try {
     await ElMessageBox.confirm(
-      `确认将「${effectivePublishName.value}」发布到食谱管理？发布后将进入后台审核流程。`,
-      '发布确认',
+      `确认将「${effectivePublishName.value}」保存到系列仓库？单阶段入仓后不会直接上橱窗，需等系列齐套后统一发布。`,
+      '入仓确认',
       {
-        confirmButtonText: '确认发布',
+        confirmButtonText: '确认入仓',
         cancelButtonText: '取消',
         type: 'warning'
       }
@@ -506,8 +506,8 @@ async function confirmPublish() {
       name: effectivePublishName.value,
       ...(publishForm.reviewNote.trim() ? { reviewNote: publishForm.reviewNote.trim() } : {})
     })
-    ElMessage.success('发布成功，已进入食谱管理审核')
-    router.push('/recipes')
+    ElMessage.success('已保存到系列仓库，等待系列齐套')
+    router.push('/recipe-designer')
   } finally {
     publishing.value = false
   }

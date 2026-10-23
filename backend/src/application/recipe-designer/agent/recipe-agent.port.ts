@@ -5,7 +5,10 @@
  * P0a 用 `tests/helpers/fake-recipe-agent-port.ts` 的内存实现驱动；
  * P0b 再接 Prisma 和现有 `RecipeDesignerService`。
  */
-import type { FoodCategory } from '../../../domain/recipe-designer/food-category-map';
+import type {
+  FoodCategory,
+  RequiredFoodCategory,
+} from '../../../domain/recipe-designer/food-category-map';
 import type {
   AgentAssessmentView,
   AgentCatalogUsage,
@@ -84,4 +87,36 @@ export interface RecipeAgentDraftPort {
 
   /** 在当前内容版本上跑现有评估引擎，返回并落库评估结果。 */
   runAssessment(draftId: string): Promise<AgentAssessmentView>;
+}
+
+/**
+ * Agent 控制端口（P0a Task 5）。
+ *
+ * 管“人”这一侧：提问、申请例外/缺类确认、生成交付确认卡。
+ *
+ * **审批状态只能由后端从会话/数据库读取**（spec 4.3 / 5.2）：
+ * `getApprovalState` 是 `check_ready` / `finish_draft` 唯一的审批来源，
+ * 模型只能 `request_exception`，不能把 `exceptionApproved` 设成 true。
+ */
+export interface RecipeAgentControlPort {
+  /** 在对话里挂一个问题，等人回答；调用后这次运行进入等待状态。 */
+  askUser(input: {
+    questions: Array<{ question: string; options?: string[] }>;
+  }): Promise<void>;
+
+  /** 发起达标例外（管理员批）或缺类确认（营养师确认）申请；理由必填。 */
+  requestException(input: {
+    type: 'COMPLIANCE' | 'CATEGORY_OMISSION';
+    reason: string;
+    detail?: string;
+  }): Promise<void>;
+
+  /** 生成交付确认卡；`warnings` 逐条列出需要人确认的警告。 */
+  finishDraft(input: { summary: string; warnings: string[] }): Promise<void>;
+
+  /** 当前会话/数据库里的审批状态；模型不可传入，也不可覆盖。 */
+  getApprovalState(): Promise<{
+    approvedException: boolean;
+    confirmedOmissions: RequiredFoodCategory[];
+  }>;
 }

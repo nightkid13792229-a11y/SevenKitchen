@@ -541,16 +541,20 @@ Expected: FAIL，模块不存在。
   - 至少一个字段；
   - `name` 非空且 ≤ 200；
   - `coverTitle` ≤ 20、`sellingPoint` ≤ 200、`description` ≤ 4000（用 `RECIPE_PRESENTATION_LIMITS`）；
-  - `targetHealthTags` 每个都过 `tagPolicy.isAllowedTag`，否则 `TAG_NOT_ALLOWED`；
+  - `targetHealthTags` 每个先 `trim`、去重、保序，再逐个过 `tagPolicy.isAllowedTag`，否则 `TAG_NOT_ALLOWED`；`[]` 表示清空；
   - 调 `assertCopywritingCompliant({ sellingPoint: args.sellingPoint ?? '', description: args.description ?? '', suggestedTags: [], basis: '' })`，捕获 `BadRequestException` → `COPY_FORBIDDEN_CLAIM`；
-  - 只用 `coverTitle` 时也要用 `scanForbiddenClaims` 扫一遍；
+  - 用 `scanForbiddenClaims` 扫 `name` + `coverTitle`；
   - **只把传入的字段传给端口**，不要补 `undefined`（测试按精确参数断言）。
-- `set_production_steps`：1–30 步；每步 `instruction.trim()` 非空；`sortOrder` 必须从 1 连续递增；不合法 → `INVALID_ARGUMENT`。
+- `set_production_steps`：1–30 步；每步 `instruction.trim()` 非空；`sortOrder` 必须从 1 连续递增；`duration/temperature/equipment` 接受 `string | null`（null 原样传给 port，保证“读出来→改一句→写回去”能走通）；不合法 → `INVALID_ARGUMENT`。
+
+`remove_ingredient`：先 `getDraft` 找到该原料；删掉后总重 ≤ 0 → `DRAFT_EMPTY`，不调 port；成功返回 `{ itemId, name, totalWeightG }`。
+
+所有写工具的 port 调用都要 `try/catch`，把 port 异常转成 `INVALID_ARGUMENT` 数据，不要让异常穿出去。
 
 - [ ] **Step 4: 跑测试，确认通过**
 
 Run: `cd backend && npx jest tests/application/recipe-designer/agent/write-tools.spec.ts --runInBand`
-Expected: PASS（8 个用例，含 `it.each` 三条）。
+Expected: PASS（47 个用例；含评审补充的 null round-trip、trim/去重、边界等）。
 
 - [ ] **Step 5: 提交**
 

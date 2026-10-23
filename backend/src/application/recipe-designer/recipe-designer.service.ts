@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   Logger,
@@ -572,6 +573,8 @@ type DesignRecipeWithItems = {
   /** 生成报告时的 contentRevision；与当前值不同即表示报告过期 */
   nutritionReportRevision?: number | null;
   nutritionReportGeneratedAt?: Date | null;
+  /** 写评估结果时的 contentRevision；与当前值不同即表示评估过期 */
+  assessmentContentRevision?: number | null;
   createdBy: string;
   publishedAt: Date | null;
   publishedRecipeId: string | null;
@@ -6537,6 +6540,36 @@ export class RecipeDesignerService {
       removableSupplementWarnings,
       allergenWarnings,
     );
+  }
+
+  /**
+   * P0b：给 Agent 用的评估。评估跑在草稿的**当前内容版本**上，
+   * 结果与 `assessmentContentRevision` 一起原子写回；
+   * 评估期间草稿被改（contentRevision 变了）就冲突，不返回新鲜结果。
+   */
+  async assessDraftForAgent(
+    id: string,
+    access: RecipeDesignerAccessInput,
+  ): Promise<{
+    contentRevision: number;
+    assessment: DesignRecipeAssessmentResult;
+  }> {
+    const draft = await this.getDraft(id, access);
+    const targets = await this.targetProvider.getTargets(
+      draft.fediafDogScenario,
+    );
+    const result = await this.assessLoadedDraft(draft, targets);
+    const { count } = await this.prisma.designRecipe.updateMany({
+      where: { id, contentRevision: draft.contentRevision },
+      data: {
+        ...this.buildAssessmentUpdateData(result),
+        assessmentContentRevision: draft.contentRevision,
+      },
+    });
+    if (count === 0) {
+      throw new ConflictException('草稿在评估期间被修改，请重新评估');
+    }
+    return { contentRevision: draft.contentRevision, assessment: result };
   }
 
   /**

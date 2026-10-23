@@ -95,6 +95,10 @@
           这里只判断一件事：你说的是食材，还是补剂。
         </p>
 
+        <div v-if="state.correctingText" class="result-panel__correcting">
+          <el-tag type="warning" size="small" effect="plain">正在纠正：{{ state.correctingText }}</el-tag>
+        </div>
+
         <div class="route-card" :class="`route-card--${routeKind}`">
           <template v-if="routeKind === 'pending'">
             <el-tag type="info" size="small" effect="plain">待判断</el-tag>
@@ -470,6 +474,10 @@ function goBackToList() {
   font-size: 12px;
   line-height: 1.6;
   color: var(--el-text-color-secondary);
+}
+
+.result-panel__correcting {
+  margin: -4px 0 12px;
 }
 
 .route-card {

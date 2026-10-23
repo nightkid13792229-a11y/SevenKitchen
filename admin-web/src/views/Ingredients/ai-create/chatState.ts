@@ -9,12 +9,18 @@ import { computed, reactive } from 'vue'
 import type { ComputedRef } from 'vue'
 import type {
   IntakeClassification,
+  IntakeCurrentIngredient,
+  IntakeHistoryTurn,
+  IntakeIntent,
   IntakeKind
 } from '@/types/ingredientCreation'
 
 /** 进入页面时 AI 的第一句，固定不变。 */
 export const WELCOME_TEXT = '你要添加什么原料？'
 export const WELCOME_HINT = '说个名字就行，我来判断它是食材还是补剂。'
+
+/** 每次请求最多带最近 6 条对话，避免上下文越滚越长。 */
+export const INTAKE_HISTORY_LIMIT = 6
 
 /** 拿不到后端原因（断网、超时）时的兜底文案；后端有中文提示时一律用原文。 */
 export const ERROR_FALLBACK = 'AI 暂时不可用，请稍后重试。'
@@ -42,10 +48,19 @@ export interface IntakeChatState {
   judgedText: string
   /** 最近一次失败的输入；「重试」重发它，不重复追加「我」的气泡 */
   failedText: string | null
+  /**
+   * 当前原料（最近一次判出 FOOD / SUPPLEMENT 的那条）。
+   * 请求时带给后端，用于识别「纠正刚才那条」；失败不影响它。
+   */
+  current: IntakeCurrentIngredient | null
+  /** 正在纠正的原原料名；不在纠正时为 null */
+  correctingText: string | null
 }
 
 export type IntakeClassifier = (
-  text: string
+  text: string,
+  history?: IntakeHistoryTurn[],
+  current?: IntakeCurrentIngredient
 ) => Promise<IntakeClassification>
 
 export interface IntakeChat {
@@ -105,8 +120,27 @@ export function createInitialChatState(): IntakeChatState {
     sending: false,
     kind: 'UNKNOWN',
     judgedText: '',
-    failedText: null
+    failedText: null,
+    current: null,
+    correctingText: null
   }
+}
+
+/**
+ * 取最近 `limit` 条对话作为请求历史。
+ *
+ * 当前这句由 `text` 单独传，不能再进 history，否则后端会收到两遍；
+ * 所以调用方要在追加「我」的气泡之前先取快照。
+ */
+export function buildIntakeHistory(
+  messages: readonly ChatMessage[],
+  limit: number = INTAKE_HISTORY_LIMIT
+): IntakeHistoryTurn[] {
+  if (limit <= 0) return []
+  return messages.slice(-limit).map((message) => ({
+    role: message.role === 'me' ? 'user' : 'assistant',
+    content: message.text
+  }))
 }
 
 function pickText(value: unknown): string {
@@ -153,6 +187,28 @@ function normalizeKind(kind: unknown): IntakeKind {
   return kind === 'FOOD' || kind === 'SUPPLEMENT' ? kind : 'UNKNOWN'
 }
 
+/**
+ * 后端一定会给 intent；这里仍做一次容错：
+ * 老响应 / 缺字段时按「判出类别就是新原料，否则是追问」处理。
+ */
+function normalizeIntent(intent: unknown, kind: IntakeKind): IntakeIntent {
+  if (
+    intent === 'NEW' ||
+    intent === 'CORRECTION' ||
+    intent === 'CLARIFY' ||
+    intent === 'OFF_TOPIC'
+  ) {
+    return intent
+  }
+  return kind === 'UNKNOWN' ? 'CLARIFY' : 'NEW'
+}
+
+function normalizeResolvedText(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0
+    ? value.trim()
+    : null
+}
+
 function normalizeSuggestions(value: unknown): string[] {
   if (!Array.isArray(value)) return []
   return value
@@ -167,23 +223,74 @@ function normalizeReply(reply: unknown): string {
 }
 
 /**
+ * 把一轮判定结果落到右侧：以 `kind + resolvedText` 为准。
+ *
+ * - 判出有效类型（含 NEW 与纠正成功的 CORRECTION）：更新为新原料；
+ * - `CORRECTION + UNKNOWN`：右侧保留原原料，并标记「正在纠正」；
+ * - 其它：按 kind 渲染（UNKNOWN 就是待判断）。
+ */
+function applyClassification(
+  state: IntakeChatState,
+  text: string,
+  result: IntakeClassification
+): void {
+  state.failedText = null
+  const kind = normalizeKind(result?.kind)
+  const intent = normalizeIntent(result?.intent, kind)
+  const resolvedText = normalizeResolvedText(result?.resolvedText)
+  const name = resolvedText ?? text
+
+  if (intent === 'CORRECTION' && kind === 'UNKNOWN') {
+    if (state.current) {
+      // 右侧继续展示原原料；顶部那行提示交给页面。
+      state.kind = state.current.kind
+      state.judgedText = state.current.text
+      state.correctingText = state.current.text
+    } else {
+      // 还没判出过原料，没有可保留的对象，按待判断处理。
+      state.kind = 'UNKNOWN'
+      state.judgedText = ''
+      state.correctingText = null
+    }
+    return
+  }
+
+  state.correctingText = null
+
+  if (kind === 'UNKNOWN') {
+    state.kind = 'UNKNOWN'
+    state.judgedText = ''
+    return
+  }
+
+  state.current = { text: name, kind }
+  state.kind = kind
+  state.judgedText = name
+}
+
+/**
  * 对话控制器：发送、点建议、重试都走同一条 `request`，
  * 保证「发送中禁止重复发送」只有一处判断。
  */
 export function createIntakeChat(classify: IntakeClassifier): IntakeChat {
   const state = reactive<IntakeChatState>(createInitialChatState())
+  // 失败时留存这次请求的上下文，「重试」原样重发，不重算历史。
+  let retryHistory: IntakeHistoryTurn[] = []
+  let retryCurrent: IntakeCurrentIngredient | undefined
 
   function pushMessage(message: ChatMessage) {
     state.messages = appendMessage(state.messages, message)
   }
 
-  async function request(text: string): Promise<boolean> {
+  async function request(
+    text: string,
+    history: IntakeHistoryTurn[],
+    current: IntakeCurrentIngredient | undefined
+  ): Promise<boolean> {
     state.sending = true
     try {
-      const result = await classify(text)
-      state.kind = normalizeKind(result?.kind)
-      state.judgedText = text
-      state.failedText = null
+      const result = await classify(text, history, current)
+      applyClassification(state, text, result)
       pushMessage(
         createMessage('ai', normalizeReply(result?.reply), {
           suggestions: normalizeSuggestions(result?.suggestions)
@@ -192,9 +299,13 @@ export function createIntakeChat(classify: IntakeClassifier): IntakeChat {
       return true
     } catch (error) {
       // 这一句没判出来：右侧回到「待判断」，不要继续展示上一条原料的结果。
+      // `current` 保留：那是上一次真正判出的原料，重试和下一句纠正还要用。
       state.kind = 'UNKNOWN'
       state.judgedText = ''
+      state.correctingText = null
       state.failedText = text
+      retryHistory = history
+      retryCurrent = current
       pushMessage(
         createMessage('ai', resolveChatErrorMessage(error), { tone: 'error' })
       )
@@ -210,8 +321,10 @@ export function createIntakeChat(classify: IntakeClassifier): IntakeChat {
       return false
     }
 
+    // 当前这句由 `text` 单独传，history 只取它之前的对话，避免后端收到两遍。
+    const history = buildIntakeHistory(state.messages)
     pushMessage(createMessage('me', value))
-    return request(value)
+    return request(value, history, state.current ?? undefined)
   }
 
   async function pickSuggestion(text: string): Promise<boolean> {
@@ -222,7 +335,7 @@ export function createIntakeChat(classify: IntakeClassifier): IntakeChat {
     if (state.sending || !state.failedText) {
       return false
     }
-    return request(state.failedText)
+    return request(state.failedText, retryHistory, retryCurrent)
   }
 
   return {

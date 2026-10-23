@@ -51,8 +51,10 @@ describe('AI 添加原料 · 列表入口与第一步对话页', () => {
     expect(page).not.toContain('api.post(')
   })
 
-  it('API 客户端接上 POST /admin/ingredient-creation/intake/classify', () => {
+  it('API 客户端接上 POST /admin/ingredient-creation/intake/classify，并带 history / current', () => {
     expect(creationApi).toContain('classifyIntake')
-    expect(creationApi).toContain('api.post(`${BASE}/intake/classify`, { text })')
+    expect(creationApi).toContain(
+      'api.post(`${BASE}/intake/classify`, { text, history, current })'
+    )
   })
 })

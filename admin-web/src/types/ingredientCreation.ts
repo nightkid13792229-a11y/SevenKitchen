@@ -362,9 +362,28 @@ export interface IngredientCreationAudit {
  */
 export type IntakeKind = 'FOOD' | 'SUPPLEMENT' | 'UNKNOWN'
 
+/** 这一轮用户输入的性质，用于区分「新原料」与「纠正当前原料」。 */
+export type IntakeIntent = 'NEW' | 'CORRECTION' | 'CLARIFY' | 'OFF_TOPIC'
+
+/** 发给后端的对话历史：只保留说话人和文本，不需要页面气泡的 id / 建议项。 */
+export interface IntakeHistoryTurn {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+/** 当前已经判定的原料，纠正时让后端知道「在原话指哪条原料」。 */
+export interface IntakeCurrentIngredient {
+  text: string
+  kind: Exclude<IntakeKind, 'UNKNOWN'>
+}
+
 /** 判断接口的返回值；`suggestions` 只在需要补充输入时非空。 */
 export interface IntakeClassification {
   kind: IntakeKind
   reply: string
   suggestions: string[]
+  /** 这一轮是新建、纠正、追问还是跑题 */
+  intent: IntakeIntent
+  /** 归一化后的原料文本；`kind=UNKNOWN` 或没有可识别原料时为 null */
+  resolvedText: string | null
 }

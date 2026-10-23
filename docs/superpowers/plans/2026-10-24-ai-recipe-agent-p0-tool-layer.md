@@ -24,6 +24,7 @@
 - 健康标签白名单由注入的 `HealthTagPolicy` 决定；v1 只允许“低脂 / 易消化 / 单一动物蛋白”。
 - 测试命令：`cd backend && npx jest tests/<path>.spec.ts --runInBand`。
 - 每个任务结束提交一次。
+- **提交纪律（本仓库有并发 agent）**：只提交本任务的文件；先 `git status --short` 看清，再 `git add <精确文件>` + `git commit --only <精确文件> -m ...`。不要 `git add -A` / `git add .`；不要把别人已 staged 的文件带进来。
 
 ## Review Focus
 
@@ -162,7 +163,7 @@ Expected: FAIL，`Cannot find module 'src/domain/recipe-designer/food-category-m
 - [ ] **Step 4: 跑测试，确认通过**
 
 Run: `cd backend && npx jest tests/domain/recipe-designer/food-category-map.spec.ts --runInBand`
-Expected: PASS（11 个用例）。
+Expected: PASS（20 个用例）。
 
 - [ ] **Step 5: 提交**
 

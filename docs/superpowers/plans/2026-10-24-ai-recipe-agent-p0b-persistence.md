@@ -174,6 +174,8 @@ npx prisma generate
 
 Expected: migration 文件生成；`validate` 输出 “The schema at prisma/schema.prisma is valid”；`generate` 成功。检查 SQL 里包含 4 张表 + `design_recipe.assessment_content_revision`，没有多余的表/列改动。
 
+⚠️ 当前仓库的 `migrate dev` 会因旧 shadow DB 的 enum 回放失败（P3006，`OrderStatus` 的 `PURCHASING`）；按 `docs/superpowers/plans/2026-10-20-multi-recipe-pricing.md` 的已有做法：`prisma migrate diff --from-schema-datamodel <HEAD> --to-schema-datamodel prisma/schema.prisma --script` 生成 SQL，放进 `migrations/<时间戳>_add_recipe_agent_tables/`，再 `prisma migrate deploy` 到**本地库**。SQL 必须是 Prisma 生成的，不要手写。
+
 - [ ] **Step 3: 提交**
 
 ```bash
@@ -449,7 +451,7 @@ Expected: FAIL，模块不存在。
 - [ ] **Step 4: 跑测试，确认通过**
 
 Run: `cd backend && npx jest tests/application/recipe-designer/agent/recipe-agent-session.service.spec.ts --runInBand`
-Expected: PASS（5 个用例）。
+Expected: PASS（8 个用例）。
 
 - [ ] **Step 5: 提交**
 
@@ -572,12 +574,12 @@ Expected: FAIL，模块不存在。
 - [ ] **Step 4: 跑测试，确认通过**
 
 Run: `cd backend && npx jest tests/application/recipe-designer/agent/recipe-agent-approval.service.spec.ts --runInBand`
-Expected: PASS（4 个用例）。
+Expected: PASS（12 个用例）。
 
 - [ ] **Step 5: 跑 P0a + 持久层测试**
 
 Run: `cd backend && npx jest tests/domain/recipe-designer/food-category-map.spec.ts tests/application/recipe-designer/agent --runInBand`
-Expected: 9 个 spec 全通过（P0a 6 个 + 本计划 3 个；Task 2 的 spec 也在 agent 目录下）。
+Expected: 9 个 spec、158 个测试全通过（P0a 6 个 + 本计划 3 个）。
 
 - [ ] **Step 6: 提交**
 

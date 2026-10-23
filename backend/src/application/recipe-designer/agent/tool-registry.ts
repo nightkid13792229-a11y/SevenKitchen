@@ -5,15 +5,22 @@
  * `AGENT_TOOL_DEFINITIONS` 是给模型看的 18 个工具定义，
  * `createAgentToolHandlers` 返回同名 handler。
  *
- * **审批安全边界**：`check_ready` / `finish_draft` 的 JSON schema 里没有
- * `exceptionApproved` / `confirmedOmissions`；handler 也不读模型参数，只从
- * `controlPort.getApprovalState()` 注入。模型只能 `request_exception`，不能自批。
+ * **审批安全边界**：`check_ready` / `check_coverage` / `finish_draft` 的
+ * JSON schema 里没有 `exceptionApproved` / `confirmedOmissions`；handler 也不读
+ * 模型参数，只从 `controlPort.getApprovalState()` 注入。模型只能
+ * `request_exception`，不能自批。
+ *
+ * 所有 handler 都套了边界兜底：工具内部未捕获的异常统一转成
+ * `CONTROL_NOT_AVAILABLE`，不让异常穿到模型或运行时。
  */
-import { REQUIRED_FOOD_CATEGORIES } from '../../../domain/recipe-designer/food-category-map';
 import type { FoodCategory } from '../../../domain/recipe-designer/food-category-map';
-import type { AgentReadyResult, RecipeAgentCheckTools } from './check-tools';
+import type {
+  AgentCoverageResult,
+  AgentReadyResult,
+  RecipeAgentCheckTools,
+} from './check-tools';
 import { createCheckTools } from './check-tools';
-import { createControlTools } from './control-tools';
+import { createControlTools, readApprovalState } from './control-tools';
 import { createReadTools } from './read-tools';
 import type { AgentToolResult, HealthTagPolicy } from './agent-types';
 import type {
@@ -52,6 +59,34 @@ function errorMessage(error: unknown): string {
   return String(error);
 }
 
+/** 审批状态读不到/形状不对时统一失败，不能当成“已批准”。 */
+function controlUnavailable(message: string): AgentToolResult<never> {
+  return {
+    ok: false,
+    error: { code: 'CONTROL_NOT_AVAILABLE', message },
+  };
+}
+
+/**
+ * 模型边界兜底：工具内部任何未捕获异常（端口/DB 抛错等）都转成数据，
+ * 不让异常穿到模型或运行时。复用现有 CONTROL_NOT_AVAILABLE，不新增错误码。
+ */
+function withBoundary(handler: AgentToolHandler): AgentToolHandler {
+  return async (args): Promise<AgentToolResult<unknown>> => {
+    try {
+      return await handler(args);
+    } catch (error) {
+      return {
+        ok: false,
+        error: {
+          code: 'CONTROL_NOT_AVAILABLE',
+          message: `工具执行失败：${errorMessage(error)}`,
+        },
+      };
+    }
+  };
+}
+
 const FOOD_CATEGORY_VALUES = [
   'PROTEIN',
   'ORGAN',
@@ -68,8 +103,6 @@ const FOOD_CATEGORY_VALUES = [
   'SUPPLEMENT',
   'UNCLASSIFIED',
 ] as const satisfies readonly FoodCategory[];
-
-const REQUIRED_CATEGORY_VALUES = [...REQUIRED_FOOD_CATEGORIES];
 
 const NO_ARGS_SCHEMA = {
   type: 'object',
@@ -115,6 +148,11 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
           description: '最多返回多少条，默认 20。',
         },
       },
+      anyOf: [
+        { required: ['search'] },
+        { required: ['category'] },
+        { required: ['type'] },
+      ],
       required: [],
       additionalProperties: false,
     },
@@ -152,6 +190,10 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
           description: '要查重合的原料名列表。',
         },
       },
+      anyOf: [
+        { required: ['mainProteinName'] },
+        { required: ['ingredientNames'] },
+      ],
       required: [],
       additionalProperties: false,
     },
@@ -251,7 +293,8 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
         method: { type: 'string', description: '预处理方式，如「焯水切丁」。' },
         note: {
           type: ['string', 'null'],
-          description: '预处理备注，可选。',
+          maxLength: 500,
+          description: '预处理备注，可选，最多 500 字。',
         },
       },
       required: ['itemId', 'method'],
@@ -265,16 +308,33 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
     parameters: {
       type: 'object',
       properties: {
-        name: { type: 'string', description: '系列名。' },
-        coverTitle: { type: 'string', description: '封面标题。' },
-        sellingPoint: { type: 'string', description: '卖点。' },
-        description: { type: 'string', description: '描述。' },
+        name: {
+          type: 'string',
+          maxLength: 200,
+          description: '系列名，最多 200 字。',
+        },
+        coverTitle: {
+          type: 'string',
+          maxLength: 20,
+          description: '封面标题，最多 20 字。',
+        },
+        sellingPoint: {
+          type: 'string',
+          maxLength: 200,
+          description: '卖点，最多 200 字。',
+        },
+        description: {
+          type: 'string',
+          maxLength: 4000,
+          description: '描述，最多 4000 字。',
+        },
         targetHealthTags: {
           type: 'array',
           items: { type: 'string' },
           description: '健康标签，必须在白名单内。',
         },
       },
+      minProperties: 1,
       required: [],
       additionalProperties: false,
     },
@@ -294,7 +354,7 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
               sortOrder: {
                 type: 'integer',
                 minimum: 1,
-                description: '步骤序号。',
+                description: '步骤序号，从 1 连续递增。',
               },
               instruction: {
                 type: 'string',
@@ -332,13 +392,7 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
     description: '检查七类食材覆盖和未归类原料；定骨架或判断缺类原因时用。',
     parameters: {
       type: 'object',
-      properties: {
-        confirmedOmissions: {
-          type: 'array',
-          items: { type: 'string', enum: REQUIRED_CATEGORY_VALUES },
-          description: '人已经确认过的缺类，只用于展示。',
-        },
-      },
+      properties: {},
       required: [],
       additionalProperties: false,
     },
@@ -407,7 +461,8 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
   },
   {
     name: 'request_exception',
-    description: '申请达标例外或缺类确认，等待人批准；只能申请，不能自批。',
+    description:
+      '评估达不到目标、或某个七类缺项需要人确认时用：申请达标例外或缺类确认，等待人批准；只能申请，不能自批。',
     parameters: {
       type: 'object',
       properties: {
@@ -435,7 +490,7 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
   {
     name: 'finish_draft',
     description:
-      '生成交付确认卡；check_ready 不通过时会被拒绝，有警告时逐条列出。',
+      '检查单跑完、准备交付时用：生成交付确认卡；check_ready 不通过时会被拒绝，有警告时逐条列出。',
     parameters: {
       type: 'object',
       properties: {
@@ -477,7 +532,7 @@ export function createAgentToolHandlers(
   });
 
   // 模型参数未经校验，具体 typeof 守卫在各工具内部；这里只做透传。
-  return {
+  const handlers: Record<string, AgentToolHandler> = {
     get_draft: () => readTools.get_draft(),
     search_ingredients: (args) => readTools.search_ingredients(args as never),
     get_ingredient: (args) => readTools.get_ingredient(args as never),
@@ -491,30 +546,34 @@ export function createAgentToolHandlers(
     set_production_steps: (args) =>
       writeTools.set_production_steps(args as never),
     run_assessment: () => checkTools.run_assessment(),
-    check_coverage: (args) => checkTools.check_coverage(args as never),
+    check_coverage: async (): Promise<AgentToolResult<AgentCoverageResult>> => {
+      // 模型传来的 confirmedOmissions 一律不读：缺类确认只认后端。
+      const approval = await readApprovalState(deps.controlPort);
+      if (!approval.ok) return controlUnavailable(approval.message);
+      return checkTools.check_coverage({
+        confirmedOmissions: approval.state.confirmedOmissions,
+      });
+    },
     check_catalog_conflicts: (args) =>
       checkTools.check_catalog_conflicts(args as never),
     check_ready: async (): Promise<AgentToolResult<AgentReadyResult>> => {
       // 模型传来的参数一律不读：审批状态只认后端。
-      let approval: Awaited<
-        ReturnType<RecipeAgentControlPort['getApprovalState']>
-      >;
-      try {
-        approval = await deps.controlPort.getApprovalState();
-      } catch (error) {
-        const message = `读取审批状态失败，不能判断能否交付：${errorMessage(error)}`;
-        return {
-          ok: false,
-          error: { code: 'CONTROL_NOT_AVAILABLE', message },
-        };
-      }
+      const approval = await readApprovalState(deps.controlPort);
+      if (!approval.ok) return controlUnavailable(approval.message);
       return checkTools.check_ready({
-        exceptionApproved: approval.approvedException,
-        confirmedOmissions: approval.confirmedOmissions,
+        exceptionApproved: approval.state.approvedException,
+        confirmedOmissions: approval.state.confirmedOmissions,
       });
     },
     ask_user: (args) => controlTools.ask_user(args as never),
     request_exception: (args) => controlTools.request_exception(args as never),
     finish_draft: (args) => controlTools.finish_draft(args as never),
   };
+
+  // 模型边界：任何漏网的异常都变成数据，不让它穿到模型/运行时。
+  return Object.fromEntries(
+    Object.entries(handlers).map(
+      ([name, handler]) => [name, withBoundary(handler)] as const,
+    ),
+  );
 }

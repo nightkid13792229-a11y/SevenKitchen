@@ -13,6 +13,8 @@
  * 入参来自模型（运行时会绕过 TypeScript 类型），所以每个字段先做 `typeof`
  * 守卫：非法值返回 `INVALID_ARGUMENT`，绝不让 `TypeError` 冒出去。
  */
+import { REQUIRED_FOOD_CATEGORIES } from '../../../domain/recipe-designer/food-category-map';
+import type { RequiredFoodCategory } from '../../../domain/recipe-designer/food-category-map';
 import type { AgentToolErrorCode, AgentToolResult } from './agent-types';
 import type { AgentReadyResult, RecipeAgentCheckTools } from './check-tools';
 import type { RecipeAgentControlPort } from './recipe-agent.port';
@@ -40,6 +42,17 @@ export interface AgentDeliveryResult {
   status: Exclude<AgentReadyResult['status'], 'BLOCKED'>;
   warnings: string[];
 }
+
+/** 从后端读到的审批状态；模型不可传入。 */
+export interface AgentApprovalState {
+  approvedException: boolean;
+  confirmedOmissions: RequiredFoodCategory[];
+}
+
+/** 读审批状态的结果：读失败或形状不对时带原因，调用方统一转成 CONTROL_NOT_AVAILABLE。 */
+export type ApprovalStateRead =
+  | { ok: true; state: AgentApprovalState }
+  | { ok: false; message: string };
 
 type RawToolArgs = Record<string, unknown>;
 
@@ -90,6 +103,65 @@ function isExceptionType(value: unknown): value is AgentExceptionType {
     typeof value === 'string' &&
     (EXCEPTION_TYPES as readonly string[]).includes(value)
   );
+}
+
+function isRequiredFoodCategory(value: string): value is RequiredFoodCategory {
+  return (REQUIRED_FOOD_CATEGORIES as readonly string[]).includes(value);
+}
+
+/**
+ * 读取并校验后端审批状态。
+ *
+ * 审批状态来自会话/数据库，运行时可能返回 null、字段类型不对或整段缺失；
+ * 这里先做形状守卫，读失败/形状不对都返回原因，不让解构抛 `TypeError`。
+ * 调用方统一映射为 `CONTROL_NOT_AVAILABLE`（fail closed，不能当成“已批准”）。
+ */
+export async function readApprovalState(
+  controlPort: RecipeAgentControlPort,
+): Promise<ApprovalStateRead> {
+  let raw: unknown;
+  try {
+    raw = await controlPort.getApprovalState();
+  } catch (error) {
+    return { ok: false, message: `读取审批状态失败：${errorMessage(error)}` };
+  }
+
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    return { ok: false, message: '审批状态格式不正确：必须是对象。' };
+  }
+
+  const record = raw as Record<string, unknown>;
+  const approvedException = record.approvedException;
+  if (typeof approvedException !== 'boolean') {
+    return {
+      ok: false,
+      message: '审批状态格式不正确：approvedException 必须是布尔值。',
+    };
+  }
+
+  const omissions = record.confirmedOmissions;
+  if (!Array.isArray(omissions)) {
+    return {
+      ok: false,
+      message: '审批状态格式不正确：confirmedOmissions 必须是数组。',
+    };
+  }
+
+  const confirmedOmissions: RequiredFoodCategory[] = [];
+  for (const entry of omissions) {
+    if (typeof entry !== 'string' || !isRequiredFoodCategory(entry)) {
+      return {
+        ok: false,
+        message: `审批状态格式不正确：confirmedOmissions 只能包含七类必需类别（${REQUIRED_FOOD_CATEGORIES.join('、')}）。`,
+      };
+    }
+    confirmedOmissions.push(entry);
+  }
+
+  return {
+    ok: true,
+    state: { approvedException, confirmedOmissions },
+  };
 }
 
 /** 解析问题列表：1–2 个，每个问题非空且 ≤ 200 字，选项最多 6 个。 */
@@ -301,21 +373,17 @@ export function createControlTools(
 
       // 审批状态只从后端读；args 里的 exceptionApproved / confirmedOmissions
       // 在这里根本不会被读取。
-      let approval: Awaited<
-        ReturnType<RecipeAgentControlPort['getApprovalState']>
-      >;
-      try {
-        approval = await controlPort.getApprovalState();
-      } catch (error) {
+      const approval = await readApprovalState(controlPort);
+      if (!approval.ok) {
         return fail(
           'CONTROL_NOT_AVAILABLE',
-          `读取审批状态失败，不能生成交付确认卡：${errorMessage(error)}`,
+          `不能生成交付确认卡：${approval.message}`,
         );
       }
 
       const ready = await checkReady({
-        exceptionApproved: approval.approvedException,
-        confirmedOmissions: approval.confirmedOmissions,
+        exceptionApproved: approval.state.approvedException,
+        confirmedOmissions: approval.state.confirmedOmissions,
       });
       if (!ready.ok) {
         return fail(ready.error.code, ready.error.message);

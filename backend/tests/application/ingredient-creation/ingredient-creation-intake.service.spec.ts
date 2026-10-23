@@ -7,6 +7,7 @@ import {
 import { Test, type TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import {
+  buildIngredientIntakeClassifyPrompt,
   IngredientCreationIntakeService,
   type IntakeClassification,
 } from '../../../src/application/ingredient-creation/ingredient-creation-intake.service';
@@ -74,20 +75,35 @@ interface CreateServiceOptions {
 
 const FOOD_RESULT: IntakeClassification = {
   kind: 'FOOD',
-  reply: '这是食材。好，我们走食材这条路。',
+  reply: '好，牛肉，按食材处理。',
   suggestions: [],
+  intent: 'NEW',
+  resolvedText: '牛肉',
 };
 
 const SUPPLEMENT_RESULT: IntakeClassification = {
   kind: 'SUPPLEMENT',
-  reply: '这是补剂。好，我们走补剂这条路。',
+  reply: '好，葡萄糖酸锌，按补剂处理。',
   suggestions: [],
+  intent: 'NEW',
+  resolvedText: null,
 };
 
 const UNKNOWN_RESULT: IntakeClassification = {
   kind: 'UNKNOWN',
-  reply: '我没太确定，你想加的是食材还是补剂？',
+  reply: '你想加的是食材还是补剂？',
   suggestions: ['食材', '补剂', '我说的是牛肉'],
+  intent: 'CLARIFY',
+  resolvedText: null,
+};
+
+/** 纠正“这不是补剂”但没给新名字：模型只追问，resolvedText 由服务补回原原料名。 */
+const CORRECTION_UNKNOWN_RESULT: IntakeClassification = {
+  kind: 'UNKNOWN',
+  reply: '抱歉，那正确的名字是什么？',
+  suggestions: ['这是食材', '我说的是牛肉'],
+  intent: 'CORRECTION',
+  resolvedText: null,
 };
 
 function buildSettings(
@@ -390,6 +406,138 @@ describe('IngredientCreationIntakeService', () => {
     expect(result.kind).toBe('UNKNOWN');
     expect(result.reply).toContain('？');
     expect(result.suggestions).toHaveLength(3);
+  });
+
+  it('提示词不再写死三句回复，并要求口语化短回复与四种意图', () => {
+    const prompt = buildIngredientIntakeClassifyPrompt();
+
+    expect(prompt).not.toContain('这是食材。好，我们走食材这条路。');
+    expect(prompt).not.toContain('这是补剂。好，我们走补剂这条路。');
+    expect(prompt).toContain('不超过 40 字');
+    expect(prompt).toContain('不要客套');
+    expect(prompt).toContain('不要评价营养');
+    for (const intent of ['NEW', 'CORRECTION', 'CLARIFY', 'OFF_TOPIC']) {
+      expect(prompt).toContain(intent);
+    }
+    expect(prompt).toContain('只输出 JSON');
+  });
+
+  it('带 history 与 current 时，提示词里带上刚才判过什么', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValue(chatResponse(CORRECTION_UNKNOWN_RESULT));
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const { service } = await createService();
+    const history = [
+      { role: 'user' as const, content: '葡萄糖酸锌' },
+      { role: 'assistant' as const, content: '这是补剂。' },
+    ];
+    const current = { text: '葡萄糖酸锌', kind: 'SUPPLEMENT' as const };
+
+    await service.classify('这不是补剂', { history, current });
+
+    const body = firstRequestBody(fetchMock);
+    const systemPrompt = String(body.messages[0].content);
+    expect(systemPrompt).toContain('葡萄糖酸锌');
+    expect(systemPrompt).toContain('这是补剂');
+    expect(systemPrompt).toContain('SUPPLEMENT');
+    expect(systemPrompt).toContain('CORRECTION');
+    // 用户这句话仍作为 user 消息单独送，不和上下文混在一个 JSON 里。
+    expect(JSON.parse(body.messages[1].content)).toEqual({
+      text: '这不是补剂',
+    });
+  });
+
+  it('纠错但没给新名字时，判 UNKNOWN 并把 resolvedText 指回当前原料', async () => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(chatResponse(CORRECTION_UNKNOWN_RESULT)) as any;
+
+    const { service } = await createService();
+
+    const result = await service.classify('这不是补剂', {
+      current: { text: '葡萄糖酸锌', kind: 'SUPPLEMENT' },
+      history: [{ role: 'assistant', content: '这是补剂。' }],
+    });
+
+    expect(result).toMatchObject({
+      kind: 'UNKNOWN',
+      intent: 'CORRECTION',
+      resolvedText: '葡萄糖酸锌',
+    });
+    expect(result.reply).toContain('？');
+    expect(result.suggestions.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('纠错并给出新名字时，按新名字判并保留新名字', async () => {
+    const corrected: IntakeClassification = {
+      kind: 'FOOD',
+      reply: '好，那就按牛肉算。',
+      suggestions: [],
+      intent: 'CORRECTION',
+      resolvedText: '牛肉',
+    };
+    global.fetch = jest.fn().mockResolvedValue(chatResponse(corrected)) as any;
+
+    const { service } = await createService();
+
+    const result = await service.classify('搞错了，是牛肉', {
+      current: { text: '锌', kind: 'SUPPLEMENT' },
+    });
+
+    expect(result).toEqual(corrected);
+  });
+
+  it.each([
+    ['FOOD', '好的，这是补剂。'],
+    ['SUPPLEMENT', '好的，这是食材。'],
+  ] as const)(
+    'kind=%s 但回复提到另一类时视为不可信，切备模型重试',
+    async (kind, contradictoryReply) => {
+      const contradictory = {
+        kind,
+        reply: contradictoryReply,
+        suggestions: [],
+        intent: 'NEW' as const,
+        resolvedText: null,
+      };
+      const fetchMock = jest
+        .fn()
+        .mockResolvedValueOnce(chatResponse(contradictory))
+        .mockResolvedValueOnce(
+          chatResponse(kind === 'FOOD' ? FOOD_RESULT : SUPPLEMENT_RESULT),
+        );
+      global.fetch = fetchMock as unknown as typeof global.fetch;
+
+      const { service } = await createService();
+
+      await expect(service.classify('牛肉')).resolves.toEqual(
+        kind === 'FOOD' ? FOOD_RESULT : SUPPLEMENT_RESULT,
+      );
+      expect(sentModels(fetchMock)).toEqual([PRIMARY_MODEL, REVIEW_MODEL]);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('分类与回复矛盾'),
+      );
+    },
+  );
+
+  it('reply 超过 80 字时截断', async () => {
+    global.fetch = jest.fn().mockResolvedValue(
+      chatResponse({
+        kind: 'FOOD',
+        reply: '牛'.repeat(120),
+        suggestions: [],
+        intent: 'NEW',
+        resolvedText: '牛肉',
+      }),
+    ) as any;
+
+    const { service } = await createService();
+
+    const result = await service.classify('牛肉');
+
+    expect(result.reply).toBe('牛'.repeat(80));
   });
 
   it('主模型失败时自动切 reviewModel 重试一次', async () => {
@@ -714,12 +862,104 @@ describe('POST /api/v1/admin/ingredient-creation/intake/classify', () => {
       .send({ text: '牛肉' })
       .expect(201);
 
-    expect(intakeService.classify).toHaveBeenCalledWith('牛肉');
+    expect(intakeService.classify).toHaveBeenCalledWith('牛肉', {
+      history: undefined,
+      current: null,
+    });
     expect(response.body).toEqual({
       code: 0,
       message: 'Success',
       data: FOOD_RESULT,
     });
+  });
+
+  it('带 history 与 current 时原样交给分类服务', async () => {
+    intakeService.classify.mockResolvedValue(CORRECTION_UNKNOWN_RESULT);
+    const history = [
+      { role: 'user', content: '锌是补剂吗' },
+      { role: 'assistant', content: '这是补剂。' },
+    ];
+    const current = { text: '锌', kind: 'SUPPLEMENT' };
+
+    await http()
+      .post(CLASSIFY_PATH)
+      .set('Authorization', 'Bearer admin-token')
+      .send({ text: '这不是补剂', history, current })
+      .expect(201);
+
+    const [text, context] = intakeService.classify.mock.calls[0];
+    expect(text).toBe('这不是补剂');
+    expect(context).toEqual({ history, current });
+  });
+
+  it('current 显式传 null 时按未提供处理', async () => {
+    intakeService.classify.mockResolvedValue(FOOD_RESULT);
+
+    await http()
+      .post(CLASSIFY_PATH)
+      .set('Authorization', 'Bearer admin-token')
+      .send({ text: '牛肉', current: null })
+      .expect(201);
+
+    expect(intakeService.classify).toHaveBeenCalledWith('牛肉', {
+      history: undefined,
+      current: null,
+    });
+  });
+
+  it('history 超过 6 条 → 400，且不调用分类服务', async () => {
+    await http()
+      .post(CLASSIFY_PATH)
+      .set('Authorization', 'Bearer admin-token')
+      .send({
+        text: '牛肉',
+        history: Array.from({ length: 7 }, () => ({
+          role: 'user',
+          content: '牛肉',
+        })),
+      })
+      .expect(400);
+
+    expect(intakeService.classify).not.toHaveBeenCalled();
+  });
+
+  it('history 单条 content 超过 200 字 → 400', async () => {
+    await http()
+      .post(CLASSIFY_PATH)
+      .set('Authorization', 'Bearer admin-token')
+      .send({
+        text: '牛肉',
+        history: [{ role: 'user', content: '牛'.repeat(201) }],
+      })
+      .expect(400);
+
+    expect(intakeService.classify).not.toHaveBeenCalled();
+  });
+
+  it('history 的 role 不是 user / assistant 时 → 400', async () => {
+    await http()
+      .post(CLASSIFY_PATH)
+      .set('Authorization', 'Bearer admin-token')
+      .send({
+        text: '牛肉',
+        history: [{ role: 'system', content: '牛肉' }],
+      })
+      .expect(400);
+
+    expect(intakeService.classify).not.toHaveBeenCalled();
+  });
+
+  it('current.kind 不是 FOOD / SUPPLEMENT 时 → 400', async () => {
+    await http()
+      .post(CLASSIFY_PATH)
+      .set('Authorization', 'Bearer admin-token')
+      .send({
+        text: '牛肉',
+        current: { text: '牛肉', kind: 'UNKNOWN' },
+      })
+      .expect(400);
+
+    expect(intakeService.classify).not.toHaveBeenCalled();
   });
 
   it('缺少 text → 400，且不调用分类服务', async () => {

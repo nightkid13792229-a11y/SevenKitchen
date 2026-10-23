@@ -91,12 +91,16 @@ export class IngredientCreationController {
 
   @Post('intake/classify')
   @ApiOperation({
-    summary: '判断输入的是食材还是补剂（AI 未启用或不可用 → 503）',
+    summary:
+      '判断输入的是食材还是补剂（可带对话上下文纠正；AI 未启用或不可用 → 503）',
   })
   async classifyIntake(
     @Body() dto: ClassifyIntakeDto,
   ): Promise<ApiResponseDto<IntakeClassification>> {
-    const result = await this.intakeService.classify(dto.text);
+    const result = await this.intakeService.classify(dto.text, {
+      history: dto.history,
+      current: dto.current ?? null,
+    });
     return new ApiResponseDto(0, 'Success', result);
   }
 

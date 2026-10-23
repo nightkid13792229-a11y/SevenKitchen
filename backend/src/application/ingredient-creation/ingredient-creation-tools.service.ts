@@ -48,6 +48,8 @@ export interface ExecuteAgentToolInput {
 }
 
 const SEARCH_CANDIDATE_LIMIT = 8;
+/** 单次最多回灌多少条营养值，避免把提示词撑爆。 */
+const MAX_NUTRITION_RECORD_VALUES = 80;
 const ARGS_LOG_MAX = 300;
 const ERROR_MESSAGE_MAX = 300;
 
@@ -57,7 +59,7 @@ const SEARCH_TOOL: AgentToolDefinition = {
   function: {
     name: 'searchLocalNutrition',
     description:
-      '在本地营养库检索某个原料的候选来源（只读）。返回来源记录 id、名称、生熟状态、必需营养素覆盖率与缺项。',
+      '在本地营养库检索某个原料的候选来源（只读）。返回来源记录 id、名称、生熟状态、必需营养素覆盖率与缺项；这里只有元数据，拿到 sourceRecordId 后要用 getNutritionRecord 读取具体营养数值。',
     parameters: {
       type: 'object',
       properties: {
@@ -73,6 +75,27 @@ const SEARCH_TOOL: AgentToolDefinition = {
         },
       },
       required: ['keyword'],
+      additionalProperties: false,
+    },
+  },
+};
+
+const GET_RECORD_TOOL: AgentToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'getNutritionRecord',
+    description:
+      '读取某条来源记录里真实存在的全部营养素值（只读）。返回按营养字段目录输出的 fieldPath / value / unit、目录里缺的字段与生熟状态；coverage 是目录字段中有值的比例（%）。拿到值之后，应当用 updateNutritionField 逐项写入草稿（fieldPath 与 unit 原样照抄）；没有值的字段不要编造、不要推算。',
+    parameters: {
+      type: 'object',
+      properties: {
+        sourceRecordId: {
+          type: 'string',
+          description:
+            '来源记录 id（searchLocalNutrition 返回的 sourceRecordId）。',
+        },
+      },
+      required: ['sourceRecordId'],
       additionalProperties: false,
     },
   },
@@ -132,7 +155,7 @@ const RUN_CHECK_TOOL: AgentToolDefinition = {
   },
 };
 
-/** 来源记录里本工具要用的列；`normalizedNutrition` 只在自动建档案时用来判生熟。 */
+/** 来源记录里本工具要用的列；`normalizedNutrition` 用来判生熟、读营养值。 */
 interface SourceRecordRow {
   id: string;
   status: string;
@@ -214,6 +237,70 @@ function derivePreparationStateFromSource(
   return null;
 }
 
+interface NutritionRecordValue {
+  fieldPath: string;
+  value: number;
+  unit: string;
+}
+
+/** 按目录读一个字段：只认有限数字（含数字字符串），null / 缺失都算没有值。 */
+function readCatalogFieldValue(
+  profile: unknown,
+  fieldPath: string,
+): number | null {
+  if (!isRecord(profile)) {
+    return null;
+  }
+  const [tabKey, fieldKey] = fieldPath.split('.');
+  const tab = tabKey ? profile[tabKey] : undefined;
+  if (!isRecord(tab) || !fieldKey) {
+    return null;
+  }
+  return readFiniteNumber(tab[fieldKey]);
+}
+
+/**
+ * 把 `normalizedNutrition` 压成「只带真实值」的清单。
+ *
+ * - 只输出目录字段；记录里没有 / 值为 null 的进 `missing`，**不补 0**；
+ * - 目录字段超过 80 个时截断，并返回 truncated / omittedFieldCount
+ *   （当前目录 60 个字段，这条是目录增长后的防御）。
+ */
+function collectNutritionRecordValues(profile: unknown): {
+  values: NutritionRecordValue[];
+  missing: string[];
+  truncated: boolean;
+  omittedFieldCount: number;
+} {
+  const values: NutritionRecordValue[] = [];
+  const missing: string[] = [];
+
+  for (const field of NUTRITION_FIELD_CATALOG) {
+    const value = readCatalogFieldValue(profile, field.fieldPath);
+    if (value === null) {
+      missing.push(field.fieldPath);
+      continue;
+    }
+    values.push({
+      fieldPath: field.fieldPath,
+      value,
+      unit: field.unit,
+    });
+  }
+
+  const omittedFieldCount = Math.max(
+    0,
+    values.length - MAX_NUTRITION_RECORD_VALUES,
+  );
+
+  return {
+    values: values.slice(0, MAX_NUTRITION_RECORD_VALUES),
+    missing,
+    truncated: omittedFieldCount > 0,
+    omittedFieldCount,
+  };
+}
+
 function truncate(value: string, max: number): string {
   const chars = Array.from(value);
   return chars.length <= max ? value : `${chars.slice(0, max).join('')}…`;
@@ -258,7 +345,7 @@ export class IngredientCreationToolsService {
   ) {}
 
   getDefinitions(): readonly AgentToolDefinition[] {
-    return [SEARCH_TOOL, UPDATE_FIELD_TOOL, RUN_CHECK_TOOL];
+    return [SEARCH_TOOL, GET_RECORD_TOOL, UPDATE_FIELD_TOOL, RUN_CHECK_TOOL];
   }
 
   availableToolNames(): string[] {
@@ -307,6 +394,8 @@ export class IngredientCreationToolsService {
     switch (input.name) {
       case 'searchLocalNutrition':
         return this.searchLocalNutrition(input.draftId, input.args);
+      case 'getNutritionRecord':
+        return this.getNutritionRecord(input.args);
       case 'updateNutritionField':
         return this.updateNutritionField(input.draftId, input.args);
       case 'runCheck':
@@ -370,7 +459,75 @@ export class IngredientCreationToolsService {
   }
 
   /**
-   * 工具 2：写草稿里的一个营养字段。
+   * 工具 2：读某条来源记录里的全部真实营养值（只读）。
+   *
+   * 只从 `normalizedNutrition` 搬值，不做换算、不推算、不补 0；
+   * id 不存在 / 记录非 ACTIVE 都返回错误文本，不抛 500。
+   */
+  private async getNutritionRecord(
+    args: Record<string, unknown>,
+  ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
+    const sourceRecordId = normalizeText(args.sourceRecordId);
+    if (!sourceRecordId) {
+      return this.error(
+        'getNutritionRecord 需要非空的 sourceRecordId。请先用 searchLocalNutrition 检索，再把候选的 sourceRecordId 传进来。',
+      );
+    }
+
+    const record = await this.prisma.nutritionSourceRecord.findUnique({
+      where: { id: sourceRecordId },
+      select: {
+        id: true,
+        status: true,
+        foodName: true,
+        foodNameEn: true,
+        normalizedNutrition: true,
+      },
+    });
+    if (!record) {
+      return this.error(
+        `来源记录 ${sourceRecordId} 不存在。请先用 searchLocalNutrition 检索，并把候选的 sourceRecordId 传进来。`,
+      );
+    }
+    if (record.status !== 'ACTIVE') {
+      return this.error(
+        `来源记录 ${sourceRecordId} 已停用（${record.status}），不能作为营养来源。`,
+      );
+    }
+
+    const { values, missing, truncated, omittedFieldCount } =
+      collectNutritionRecordValues(record.normalizedNutrition);
+    const presentFieldCount = values.length + omittedFieldCount;
+    const coverage =
+      NUTRITION_FIELD_CATALOG.length === 0
+        ? 0
+        : Math.round(
+            (presentFieldCount / NUTRITION_FIELD_CATALOG.length) * 1000,
+          ) / 10;
+
+    return {
+      ok: true,
+      content: okContent({
+        record: {
+          id: record.id,
+          name: record.foodName,
+          state: derivePreparationStateFromSource(record),
+          coverage,
+          values,
+          missing,
+          ...(truncated ? { truncated: true, omittedFieldCount } : {}),
+        },
+        ...(values.length === 0
+          ? {
+              hint: '这条记录没有目录内可用的营养数值，不要编造；请换一条来源，或如实告诉用户缺数据。',
+            }
+          : {}),
+      }),
+    };
+  }
+
+  /**
+   * 工具 3：写草稿里的一个营养字段。
    *
    * 校验顺序固定：下标 → 字段目录 → 单位 → 数值 → 来源记录 → 档案。
    * 每一步失败都只返回错误文本，不抛 500 —— 模型可以照着改。
@@ -540,7 +697,7 @@ export class IngredientCreationToolsService {
     };
   }
 
-  /** 工具 3：跑现有终检服务，只返回三档摘要；服务报错也变成错误文本。 */
+  /** 工具 4：跑现有终检服务，只返回三档摘要；服务报错也变成错误文本。 */
   private async runCheck(
     draftId: string,
   ): Promise<Omit<AgentToolExecution, 'durationMs'>> {

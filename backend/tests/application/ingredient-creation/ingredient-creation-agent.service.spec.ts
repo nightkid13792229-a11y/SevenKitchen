@@ -852,6 +852,112 @@ describe('IngredientCreationAgentService · 工具循环', () => {
     expect(harness.checkService.runCheck).toHaveBeenCalledTimes(2);
   });
 
+  it('模型调用链：检索 → 读整条营养记录 → 用返回的数值写字段', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'searchLocalNutrition',
+            { keyword: '鸡肝', state: 'RAW' },
+            'call_search',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'getNutritionRecord',
+            { sourceRecordId: 'rec-liver-raw' },
+            'call_record',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'updateNutritionField',
+            {
+              profileIndex: 0,
+              fieldPath: 'macros.crudeProtein',
+              value: 19.5,
+              unit: 'g',
+              sourceRecordId: 'rec-liver-raw',
+            },
+            'call_write',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(assistantReply('已把来源里的粗蛋白 19.5 g 写进草稿。')),
+      );
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness({
+      draft: createDraft(),
+      sourceRecords: [
+        {
+          id: 'rec-liver-raw',
+          status: 'ACTIVE',
+          foodName: 'Chicken, liver, raw',
+          foodNameEn: 'Chicken, liver, raw',
+          normalizedNutrition: {
+            meta: { rawBasisType: 'PER_100_G', sampleState: 'RAW' },
+            macros: {
+              energyKcal: 120,
+              crudeProtein: 19.5,
+              crudeFat: null,
+              moisture: null,
+            },
+            minerals: { calcium: 120, selenium: 0.25 },
+          },
+        },
+      ],
+    });
+
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '帮我加鸡肝',
+      userId: 'admin-1',
+    });
+
+    expect(result.steps).toBe(4);
+    expect(result.toolCalls.map((call) => call.name)).toEqual([
+      'searchLocalNutrition',
+      'getNutritionRecord',
+      'updateNutritionField',
+    ]);
+    expect(result.toolCalls.every((call) => call.ok)).toBe(true);
+
+    // 第一次请求的工具定义里必须有新工具。
+    const first = requestBody(fetchMock, 0);
+    expect(first.tools.map((tool: any) => tool.function.name)).toContain(
+      'getNutritionRecord',
+    );
+
+    // 读完整条记录后，下一次模型请求必须真的拿到 19.5 g 这个值。
+    const third = requestBody(fetchMock, 2);
+    const toolMessages = third.messages.filter(
+      (message: any) => message.role === 'tool',
+    );
+    expect(toolMessages).toHaveLength(2);
+    expect(toolMessages[1].content).toContain('macros.crudeProtein');
+    expect(toolMessages[1].content).toContain('19.5');
+    expect(toolMessages[1].content).toContain('"unit":"g"');
+
+    // 最终草稿按来源值写入，且状态来自来源记录。
+    const profiles = harness.currentDraft()?.payload.profiles ?? [];
+    expect(profiles).toHaveLength(1);
+    expect(profiles[0].preparationState).toBe('RAW');
+    expect(profiles[0].entries[0]).toMatchObject({
+      fieldPath: 'macros.crudeProtein',
+      finalValue: 19.5,
+      unit: 'g',
+      sourceRecordId: 'rec-liver-raw',
+    });
+    expect(result.reply).toContain('19.5');
+  });
+
   it('AI 配置不可用时 503，不发起模型请求', async () => {
     const fetchMock = jest.fn();
     global.fetch = fetchMock as unknown as typeof global.fetch;

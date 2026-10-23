@@ -3958,6 +3958,8 @@ model DesignRecipe {
   missingDataReport      Json                          @default("[]") @map("missing_data_report")
   complianceScore        Float                         @default(0) @map("compliance_score")
   isCompliant            Boolean                       @default(false) @map("is_compliant")
+  /// 评估结果对应的内容版本；null = 从未评估。
+  assessmentContentRevision Int?                        @map("assessment_content_revision")
   reviewStatus           DesignRecipeReviewStatus      @default(NONE) @map("review_status")
   reviewNote             String?                       @map("review_note")
   reviewedBy             String?                       @map("reviewed_by")
@@ -4000,6 +4002,8 @@ model DesignRecipe {
   aiGenerationLog        DesignRecipeAIGenerationLog?
   aiDesignData           DesignRecipeAiDesignData?
   publishSnapshots       DesignRecipePublishSnapshot[]
+  agentSessions          RecipeDesignAgentSession[]
+  agentSnapshots         RecipeDesignAgentSnapshot[]
   orderDesign            OrderRecipeDesign?            @relation("OrderRecipeDesignDraft")
   series                 RecipeSeries?                 @relation(fields: [seriesId], references: [id])
 
@@ -5037,4 +5041,101 @@ model IngredientCreationAudit {
 
   @@index([ingredientId])
   @@map("ingredient_creation_audit")
+}
+
+enum RecipeAgentSessionStatus {
+  RUNNING
+  WAITING_USER
+  COMPLETED
+  STOPPED
+  FAILED
+  INTERRUPTED
+}
+
+enum RecipeAgentMessageRole {
+  USER
+  ASSISTANT
+  TOOL
+}
+
+enum RecipeAgentApprovalType {
+  COMPLIANCE_EXCEPTION
+  CATEGORY_OMISSION
+}
+
+enum RecipeAgentApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model RecipeDesignAgentSession {
+  id               String                    @id @default(uuid())
+  designRecipeId   String                    @map("design_recipe_id")
+  status           RecipeAgentSessionStatus  @default(RUNNING)
+  skillName        String                    @map("skill_name") @db.VarChar(80)
+  skillVersion     String                    @map("skill_version") @db.VarChar(40)
+  stepCount        Int                       @default(0) @map("step_count")
+  promptTokens     Int                       @default(0) @map("prompt_tokens")
+  completionTokens Int                       @default(0) @map("completion_tokens")
+  startedAt        DateTime                  @default(now()) @map("started_at")
+  endedAt          DateTime?                 @map("ended_at")
+  lastError        String?                   @map("last_error")
+  createdBy        String                    @map("created_by")
+  createdAt        DateTime                  @default(now()) @map("created_at")
+  updatedAt        DateTime                  @updatedAt @map("updated_at")
+  designRecipe     DesignRecipe              @relation(fields: [designRecipeId], references: [id], onDelete: Cascade)
+  messages         RecipeDesignAgentMessage[]
+  approvals        RecipeDesignAgentApproval[]
+  snapshots        RecipeDesignAgentSnapshot[]
+
+  @@index([designRecipeId, status])
+  @@map("recipe_design_agent_session")
+}
+
+model RecipeDesignAgentMessage {
+  id         String                   @id @default(uuid())
+  sessionId  String                   @map("session_id")
+  seq        Int
+  role       RecipeAgentMessageRole
+  content    String                   @db.Text
+  toolName   String?                  @map("tool_name") @db.VarChar(80)
+  toolArgs   Json?                    @map("tool_args")
+  toolResult Json?                    @map("tool_result")
+  createdAt  DateTime                 @default(now()) @map("created_at")
+  session    RecipeDesignAgentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, seq])
+  @@index([sessionId, seq])
+  @@map("recipe_design_agent_message")
+}
+
+model RecipeDesignAgentApproval {
+  id          String                    @id @default(uuid())
+  sessionId   String                    @map("session_id")
+  type        RecipeAgentApprovalType
+  status      RecipeAgentApprovalStatus @default(PENDING)
+  reason      String                    @db.Text
+  detail      Json?
+  requestedAt DateTime                  @default(now()) @map("requested_at")
+  decidedAt   DateTime?                 @map("decided_at")
+  decidedBy   String?                   @map("decided_by")
+  session     RecipeDesignAgentSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, status])
+  @@map("recipe_design_agent_approval")
+}
+
+model RecipeDesignAgentSnapshot {
+  id              String                    @id @default(uuid())
+  designRecipeId  String                    @map("design_recipe_id")
+  sessionId       String?                   @map("session_id")
+  contentRevision Int                       @map("content_revision")
+  snapshot        Json
+  createdAt       DateTime                  @default(now()) @map("created_at")
+  designRecipe    DesignRecipe              @relation(fields: [designRecipeId], references: [id], onDelete: Cascade)
+  session         RecipeDesignAgentSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([designRecipeId, createdAt])
+  @@map("recipe_design_agent_snapshot")
 }

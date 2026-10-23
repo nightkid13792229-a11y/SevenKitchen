@@ -277,12 +277,12 @@ async assessDraftForAgent(
 }
 ```
 
-不要改现有 `assessDraft` 的返回形状；它继续给编辑器用。
+同时在现有 `assessDraft` 的 `updateMany` 的 `data` 里补 `assessmentContentRevision: draft.contentRevision`（`where` 不变，返回形状不变，0 行行为不变）；否则人在编辑器里跑完评估，Agent 会把它当成“没评估过”。
 
 - [ ] **Step 4: 跑测试，确认通过**
 
 Run: `cd backend && npx jest tests/application/recipe-designer/agent/assessment-revision.spec.ts --runInBand`
-Expected: PASS（2 个用例）。
+Expected: PASS（3 个用例：Agent 原子写入、0 行冲突、编辑器评估也写版本）。
 
 - [ ] **Step 5: 提交**
 

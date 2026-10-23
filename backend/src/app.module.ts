@@ -200,7 +200,7 @@ import { IngredientCreationCandidateService } from './application/ingredient-cre
 import { IngredientCreationCheckService } from './application/ingredient-creation/ingredient-creation-check.service';
 import { IngredientCreationCommitService } from './application/ingredient-creation/ingredient-creation-commit.service';
 import { IngredientCreationIntakeService } from './application/ingredient-creation/ingredient-creation-intake.service';
-import { IngredientCreationAgentService } from './application/ingredient-creation/ingredient-creation-agent.service';
+import { IngredientDraftAgentService } from './application/ingredient-creation/ingredient-draft-agent.service';
 import { IngredientCreationToolsService } from './application/ingredient-creation/ingredient-creation-tools.service';
 import { IngredientCreationMergeService } from './application/ingredient-creation/ingredient-creation-merge.service';
 import { IngredientCreationOnlineService } from './application/ingredient-creation/ingredient-creation-online.service';
@@ -917,7 +917,7 @@ validatePrismaConfig();
     IngredientCreationCheckService,
     IngredientCreationCommitService,
     IngredientCreationIntakeService,
-    IngredientCreationAgentService,
+    IngredientDraftAgentService,
     IngredientCreationToolsService,
     FediafTargetSelectorService,
     NutritionUnitNormalizerService,

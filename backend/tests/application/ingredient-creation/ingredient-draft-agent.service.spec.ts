@@ -8,9 +8,9 @@ import {
 import { Test, type TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import {
-  IngredientCreationAgentService,
+  IngredientDraftAgentService,
   type IngredientAgentRunResult,
-} from '../../../src/application/ingredient-creation/ingredient-creation-agent.service';
+} from '../../../src/application/ingredient-creation/ingredient-draft-agent.service';
 import { IngredientCreationAuditService } from '../../../src/application/ingredient-creation/ingredient-creation-audit.service';
 import { IngredientCreationCandidateService } from '../../../src/application/ingredient-creation/ingredient-creation-candidate.service';
 import { IngredientCreationCheckService } from '../../../src/application/ingredient-creation/ingredient-creation-check.service';
@@ -259,7 +259,7 @@ function createHarness(options: HarnessOptions = {}) {
     prisma as never,
   );
 
-  const agent = new IngredientCreationAgentService(
+  const agent = new IngredientDraftAgentService(
     configService as unknown as AgentProviderConfigService,
     tools,
     draftService as unknown as IngredientCreationDraftService,
@@ -299,7 +299,7 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-describe('IngredientCreationAgentService · 工具循环', () => {
+describe('IngredientDraftAgentService · 工具循环', () => {
   it('模型第一步请求 searchLocalNutrition 时工具被调用，结果回灌给下一步', async () => {
     const fetchMock = jest
       .fn()
@@ -1351,7 +1351,7 @@ describe('POST /api/v1/admin/ingredient-creation/agent/run', () => {
         { provide: IngredientCreationCommitService, useValue: {} },
         { provide: IngredientCreationAuditService, useValue: {} },
         { provide: IngredientCreationIntakeService, useValue: {} },
-        { provide: IngredientCreationAgentService, useValue: agentService },
+        { provide: IngredientDraftAgentService, useValue: agentService },
         {
           provide: JwtAuthService,
           useValue: {

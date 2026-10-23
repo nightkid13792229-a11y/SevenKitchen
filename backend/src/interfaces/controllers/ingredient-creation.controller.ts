@@ -15,9 +15,9 @@ import {
   type IngredientCreationAuditView,
 } from '../../application/ingredient-creation/ingredient-creation-audit.service';
 import {
-  IngredientCreationAgentService,
+  IngredientDraftAgentService,
   type IngredientAgentRunResult,
-} from '../../application/ingredient-creation/ingredient-creation-agent.service';
+} from '../../application/ingredient-creation/ingredient-draft-agent.service';
 import { IngredientCreationCandidateService } from '../../application/ingredient-creation/ingredient-creation-candidate.service';
 import { IngredientCreationCheckService } from '../../application/ingredient-creation/ingredient-creation-check.service';
 import {
@@ -92,7 +92,7 @@ export class IngredientCreationController {
     private readonly commitService: IngredientCreationCommitService,
     private readonly auditService: IngredientCreationAuditService,
     private readonly intakeService: IngredientCreationIntakeService,
-    private readonly agentService: IngredientCreationAgentService,
+    private readonly agentService: IngredientDraftAgentService,
   ) {}
 
   @Post('intake/classify')

@@ -528,8 +528,8 @@ function buildStopReply(input: {
  * - 模型 / 配置失败直接 503，不偷偷回退到规则猜。
  */
 @Injectable()
-export class IngredientCreationAgentService {
-  private readonly logger = new Logger(IngredientCreationAgentService.name);
+export class IngredientDraftAgentService {
+  private readonly logger = new Logger(IngredientDraftAgentService.name);
 
   constructor(
     private readonly agentProviderConfig: AgentProviderConfigService,

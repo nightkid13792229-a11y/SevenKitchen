@@ -14,7 +14,7 @@
         <el-button type="primary" @click="handleCreate" :icon="Plus">
           新增标准原料
         </el-button>
-        <el-dropdown trigger="click" @command="handleAiCommand">
+        <el-dropdown v-if="AI_CREATION_ENABLED" trigger="click" @command="handleAiCommand">
           <el-button :icon="MagicStick">
             AI 新建<el-icon class="el-icon--right"><ArrowDown /></el-icon>
           </el-button>
@@ -541,6 +541,12 @@ import {
 
 // Data
 type IngredientCenterTab = 'standard' | 'nutrition' | 'tags'
+
+/**
+ * 2026-10-23 老板要求：线上那版六站「AI 新建」AI 感太弱，先隐藏入口，
+ * 按「一屏起草」重做后再打开。向导路由本身保留，便于内测直接访问。
+ */
+const AI_CREATION_ENABLED = false
 
 const route = useRoute()
 const router = useRouter()

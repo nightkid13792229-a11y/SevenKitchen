@@ -9,7 +9,7 @@
  * 入参来自模型（运行时会绕过 TypeScript 类型），所以每个字段先做 `typeof`
  * 守卫：非法值返回 `INVALID_ARGUMENT` / `INVALID_WEIGHT`，绝不让 `TypeError`
  * 冒出去。校验顺序：先看必填 id / 字符串，再看克数；文案先看长度和标签，
- * 最后扫禁用词。
+ * 最后扫禁用词。端口自身抛出的异常（如原料不存在）也统一转成数据。
  */
 import { BadRequestException } from '@nestjs/common';
 
@@ -98,7 +98,9 @@ export interface RecipeAgentWriteTools {
   ): Promise<AgentToolResult<AgentDraftItem>>;
   remove_ingredient(
     args: RemoveIngredientArgs,
-  ): Promise<AgentToolResult<{ itemId: string }>>;
+  ): Promise<
+    AgentToolResult<{ itemId: string; name: string; totalWeightG: number }>
+  >;
   set_preparation(
     args: SetPreparationArgs,
   ): Promise<AgentToolResult<AgentDraftItem>>;
@@ -131,6 +133,25 @@ const okWrite = <T>(data: T, summary: string): AgentToolResult<T> => ({
   summary,
   stale: [...STALE_AFTER_WRITE],
 });
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  return String(error);
+}
+
+/**
+ * 端口调用统一在这里兜住：端口抛错（原料不存在、DB 异常）也变成数据，
+ * 不让异常穿过工具层。
+ */
+async function callPort<T>(
+  action: () => Promise<T>,
+): Promise<{ ok: true; value: T } | { ok: false; message: string }> {
+  try {
+    return { ok: true, value: await action() };
+  } catch (error) {
+    return { ok: false, message: `操作失败：${errorMessage(error)}` };
+  }
+}
 
 function asRawArgs(args: unknown): RawToolArgs | null {
   if (typeof args !== 'object' || args === null || Array.isArray(args)) {
@@ -205,12 +226,18 @@ export function createWriteTools(deps: WriteToolDeps): RecipeAgentWriteTools {
         return fail('INVALID_WEIGHT', WEIGHT_MESSAGE);
       }
 
-      const item = await port.addItem(draftId, {
-        nutritionFoodId,
-        weightG,
-        ...(ingredientId ? { ingredientId } : {}),
-        ...(preparationMethod ? { preparationMethod } : {}),
-      });
+      const written = await callPort(() =>
+        port.addItem(draftId, {
+          nutritionFoodId,
+          weightG,
+          ...(ingredientId ? { ingredientId } : {}),
+          ...(preparationMethod ? { preparationMethod } : {}),
+        }),
+      );
+      if (!written.ok) {
+        return fail('INVALID_ARGUMENT', written.message);
+      }
+      const item = written.value;
       return okWrite(
         item,
         `已加入原料「${item.name}」${weightG}g；${STALE_NOTE}`,
@@ -243,11 +270,17 @@ export function createWriteTools(deps: WriteToolDeps): RecipeAgentWriteTools {
         return fail('INVALID_WEIGHT', WEIGHT_MESSAGE);
       }
 
-      const item = await port.replaceItem(itemId, {
-        nutritionFoodId,
-        weightG,
-        ...(ingredientId ? { ingredientId } : {}),
-      });
+      const written = await callPort(() =>
+        port.replaceItem(itemId, {
+          nutritionFoodId,
+          weightG,
+          ...(ingredientId ? { ingredientId } : {}),
+        }),
+      );
+      if (!written.ok) {
+        return fail('INVALID_ARGUMENT', written.message);
+      }
+      const item = written.value;
       return okWrite(
         item,
         `已把「${item.name}」替换为${weightG}g；${STALE_NOTE}`,
@@ -272,13 +305,21 @@ export function createWriteTools(deps: WriteToolDeps): RecipeAgentWriteTools {
         return fail('INVALID_WEIGHT', WEIGHT_MESSAGE);
       }
 
-      const item = await port.updateWeight(itemId, weightG);
-      return okWrite(item, `已把原料克数改为 ${weightG}g；${STALE_NOTE}`);
+      const written = await callPort(() => port.updateWeight(itemId, weightG));
+      if (!written.ok) {
+        return fail('INVALID_ARGUMENT', written.message);
+      }
+      return okWrite(
+        written.value,
+        `已把原料克数改为 ${weightG}g；${STALE_NOTE}`,
+      );
     },
 
     async remove_ingredient(
       args: RemoveIngredientArgs,
-    ): Promise<AgentToolResult<{ itemId: string }>> {
+    ): Promise<
+      AgentToolResult<{ itemId: string; name: string; totalWeightG: number }>
+    > {
       const raw = asRawArgs(args);
       if (!raw) {
         return fail('INVALID_ARGUMENT', '参数必须是对象。');
@@ -289,8 +330,33 @@ export function createWriteTools(deps: WriteToolDeps): RecipeAgentWriteTools {
         return fail('INVALID_ARGUMENT', 'itemId 不能为空。');
       }
 
-      await port.removeItem(itemId);
-      return okWrite({ itemId }, `已删除原料「${itemId}」；${STALE_NOTE}`);
+      const draftResult = await callPort(() => port.getDraft(draftId));
+      if (!draftResult.ok) {
+        return fail('INVALID_ARGUMENT', draftResult.message);
+      }
+      const item = draftResult.value.items.find((entry) => entry.id === itemId);
+      if (!item) {
+        return fail('INVALID_ARGUMENT', `找不到原料「${itemId}」。`);
+      }
+
+      const totalWeightG =
+        Math.round((draftResult.value.totalWeightG - item.weightG) * 100) / 100;
+      if (totalWeightG <= 0) {
+        return fail(
+          'DRAFT_EMPTY',
+          `删掉「${item.name}」后总重会变成 ${totalWeightG}g，不能把草稿删空。`,
+        );
+      }
+
+      const removed = await callPort(() => port.removeItem(itemId));
+      if (!removed.ok) {
+        return fail('INVALID_ARGUMENT', removed.message);
+      }
+
+      return okWrite(
+        { itemId, name: item.name, totalWeightG },
+        `已删除原料「${item.name}」；剩余总重 ${totalWeightG}g；${STALE_NOTE}`,
+      );
     },
 
     async set_preparation(
@@ -331,11 +397,19 @@ export function createWriteTools(deps: WriteToolDeps): RecipeAgentWriteTools {
         }
       }
 
-      const item = await port.setPreparation(itemId, {
-        method,
-        ...(note !== undefined ? { note } : {}),
-      });
-      return okWrite(item, `已设置原料预处理方式「${method}」；${STALE_NOTE}`);
+      const written = await callPort(() =>
+        port.setPreparation(itemId, {
+          method,
+          ...(note !== undefined ? { note } : {}),
+        }),
+      );
+      if (!written.ok) {
+        return fail('INVALID_ARGUMENT', written.message);
+      }
+      return okWrite(
+        written.value,
+        `已设置原料预处理方式「${method}」；${STALE_NOTE}`,
+      );
     },
 
     async set_copy(
@@ -371,13 +445,17 @@ export function createWriteTools(deps: WriteToolDeps): RecipeAgentWriteTools {
         if (typeof raw.coverTitle !== 'string') {
           return fail('INVALID_ARGUMENT', 'coverTitle 必须是字符串。');
         }
-        if (raw.coverTitle.length > RECIPE_PRESENTATION_LIMITS.coverTitle) {
+        const coverTitle = raw.coverTitle.trim();
+        if (!coverTitle) {
+          return fail('INVALID_ARGUMENT', 'coverTitle 不能为空。');
+        }
+        if (coverTitle.length > RECIPE_PRESENTATION_LIMITS.coverTitle) {
           return fail(
             'INVALID_ARGUMENT',
             `coverTitle 不能超过 ${RECIPE_PRESENTATION_LIMITS.coverTitle} 字。`,
           );
         }
-        patch.coverTitle = raw.coverTitle;
+        patch.coverTitle = coverTitle;
         changed.push(COPY_FIELD_LABELS.coverTitle);
       }
 
@@ -385,13 +463,17 @@ export function createWriteTools(deps: WriteToolDeps): RecipeAgentWriteTools {
         if (typeof raw.sellingPoint !== 'string') {
           return fail('INVALID_ARGUMENT', 'sellingPoint 必须是字符串。');
         }
-        if (raw.sellingPoint.length > RECIPE_PRESENTATION_LIMITS.sellingPoint) {
+        const sellingPoint = raw.sellingPoint.trim();
+        if (!sellingPoint) {
+          return fail('INVALID_ARGUMENT', 'sellingPoint 不能为空。');
+        }
+        if (sellingPoint.length > RECIPE_PRESENTATION_LIMITS.sellingPoint) {
           return fail(
             'INVALID_ARGUMENT',
             `sellingPoint 不能超过 ${RECIPE_PRESENTATION_LIMITS.sellingPoint} 字。`,
           );
         }
-        patch.sellingPoint = raw.sellingPoint;
+        patch.sellingPoint = sellingPoint;
         changed.push(COPY_FIELD_LABELS.sellingPoint);
       }
 
@@ -399,13 +481,17 @@ export function createWriteTools(deps: WriteToolDeps): RecipeAgentWriteTools {
         if (typeof raw.description !== 'string') {
           return fail('INVALID_ARGUMENT', 'description 必须是字符串。');
         }
-        if (raw.description.length > RECIPE_PRESENTATION_LIMITS.description) {
+        const description = raw.description.trim();
+        if (!description) {
+          return fail('INVALID_ARGUMENT', 'description 不能为空。');
+        }
+        if (description.length > RECIPE_PRESENTATION_LIMITS.description) {
           return fail(
             'INVALID_ARGUMENT',
             `description 不能超过 ${RECIPE_PRESENTATION_LIMITS.description} 字。`,
           );
         }
-        patch.description = raw.description;
+        patch.description = description;
         changed.push(COPY_FIELD_LABELS.description);
       }
 
@@ -420,15 +506,21 @@ export function createWriteTools(deps: WriteToolDeps): RecipeAgentWriteTools {
             'targetHealthTags 必须是字符串数组。',
           );
         }
-        const tags = tagsValue as string[];
-        const rejected = tags.filter((tag) => !tagPolicy.isAllowedTag(tag));
+        const tags = (tagsValue as string[]).map((tag) => tag.trim());
+        if (tags.some((tag) => !tag)) {
+          return fail('TAG_NOT_ALLOWED', '健康标签不能是空串。');
+        }
+        const uniqueTags = Array.from(new Set(tags));
+        const rejected = uniqueTags.filter(
+          (tag) => !tagPolicy.isAllowedTag(tag),
+        );
         if (rejected.length > 0) {
           return fail(
             'TAG_NOT_ALLOWED',
             `健康标签「${rejected.join('、')}」不在白名单内；v1 只允许「低脂」「易消化」「单一动物蛋白」。`,
           );
         }
-        patch.targetHealthTags = [...tags];
+        patch.targetHealthTags = uniqueTags;
         changed.push(COPY_FIELD_LABELS.targetHealthTags);
       }
 
@@ -439,7 +531,7 @@ export function createWriteTools(deps: WriteToolDeps): RecipeAgentWriteTools {
         );
       }
 
-      // 卖点 / 描述先用现有合规函数兜底；只有 coverTitle 时也要单独扫一遍。
+      // 卖点 / 描述先用现有合规函数兜底；系列名和封面标题单独扫一遍。
       try {
         assertCopywritingCompliant({
           sellingPoint: patch.sellingPoint ?? '',
@@ -453,15 +545,18 @@ export function createWriteTools(deps: WriteToolDeps): RecipeAgentWriteTools {
         }
         throw error;
       }
-      const coverTitleHits = scanForbiddenClaims(patch.coverTitle);
-      if (coverTitleHits.length > 0) {
+      const headingHits = scanForbiddenClaims(patch.name, patch.coverTitle);
+      if (headingHits.length > 0) {
         return fail(
           'COPY_FORBIDDEN_CLAIM',
-          `封面标题命中禁用表述：${coverTitleHits.join('、')}。请改写后再写。`,
+          `系列名或封面标题命中禁用表述：${headingHits.join('、')}。请改写后再写。`,
         );
       }
 
-      await port.setCopy(draftId, patch);
+      const written = await callPort(() => port.setCopy(draftId, patch));
+      if (!written.ok) {
+        return fail('INVALID_ARGUMENT', written.message);
+      }
       return okWrite(patch, `已更新${changed.join('、')}；${STALE_NOTE}`);
     },
 
@@ -520,10 +615,10 @@ export function createWriteTools(deps: WriteToolDeps): RecipeAgentWriteTools {
         for (const key of ['duration', 'temperature', 'equipment'] as const) {
           const value = stepRaw[key];
           if (value === undefined) continue;
-          if (typeof value !== 'string') {
+          if (value !== null && typeof value !== 'string') {
             return fail(
               'INVALID_ARGUMENT',
-              `${position}的 ${key} 必须是字符串。`,
+              `${position}的 ${key} 必须是字符串或 null。`,
             );
           }
           step[key] = value;
@@ -531,7 +626,12 @@ export function createWriteTools(deps: WriteToolDeps): RecipeAgentWriteTools {
         steps.push(step);
       }
 
-      await port.setProductionSteps(draftId, steps);
+      const written = await callPort(() =>
+        port.setProductionSteps(draftId, steps),
+      );
+      if (!written.ok) {
+        return fail('INVALID_ARGUMENT', written.message);
+      }
       return okWrite(steps, `已写入 ${steps.length} 步制作步骤；${STALE_NOTE}`);
     },
   };

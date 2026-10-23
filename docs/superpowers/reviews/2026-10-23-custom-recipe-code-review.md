@@ -6,6 +6,23 @@
 
 核心领域设计扎实，但**不能直接宣布生产就绪**。审查发现 4 个 Critical、7 个 Important。
 
+## 修复进度（2026-10-23）
+
+已修复并部署：
+- Critical 1：批次交付后列表动作；
+- Critical 2：绕过交付记录写 DELIVERED；
+- Critical 3：多份订单单份交付；
+- Important 5：ACCEPTED 售后计入 open；
+- Important 6：订单详情 hasOpenAftersale；
+- Important 7：未完成售后增加部分唯一索引；
+- Important 8：交付批次版本加订单行锁，冲突返回 409。
+
+仍未修复：
+- Critical 4：交付快照与 live Recipe 契约；
+- Important 9：售后明细在另一次重交后失效；
+- Important 10：设计槽位容量并发；
+- Important 11：缺少真实 Postgres 并发集成测试。
+
 ## Critical
 
 1. **批次交付后订单列表丢失交付动作**（已修复）
@@ -30,8 +47,8 @@
 
 5. ACCEPTED 售后未计入列表 open（已修复：PENDING/ACCEPTED/PROCESSING）。
 6. 订单详情未传 hasOpenAftersale（已修复）。
-7. 售后创建 check-then-create 无事务/唯一约束，双击可能重复（未修复）。
-8. 交付批次 version 分配非并发安全（未修复）。
+7. 售后创建 check-then-create 无事务/唯一约束（已修复：部分唯一索引 + P2002 → 409）。
+8. 交付批次 version 分配非并发安全（已修复：订单行锁 + 冲突 409）。
 9. 售后 item id 在另一次重交后失效（未修复）。
 10. 设计槽位容量 check-then-write 无 DB 约束（未修复）。
 11. 测试大量 mock `$transaction`，未覆盖真实约束/并发（未修复）。
@@ -50,8 +67,9 @@
 - 后端 4595 通过
 - 后台 789 通过
 - 小程序 1915 通过
-- 后端部署：`5c2dc97b`
+- 后端部署：`b7e65aff`（222 个迁移）
 - 后台已部署
+- 生产订单列表动作已复核
 
 ## 建议
 

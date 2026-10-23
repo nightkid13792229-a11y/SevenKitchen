@@ -523,7 +523,7 @@ import { nutritionFoodApi } from '@/api/ingredients'
 import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole'
 import { INGREDIENT_NUTRITION_TAB_DEFINITIONS } from '@/constants/ingredientNutrition'
 import { CFCT_CLASS_OPTIONS } from '@/types/ingredient'
-import { COVERAGE_CATEGORY_OPTIONS } from '../creation/stateCoverage'
+import { COVERAGE_CATEGORY_OPTIONS } from './ingredientProfileRules'
 import { getApiErrorMessage } from '@/utils/apiError'
 import type {
   CommitIngredientCreationResult,

@@ -287,15 +287,6 @@
               营养数据
             </el-button>
             <el-button
-              v-if="row.hasCreationAudit"
-              type="info"
-              size="small"
-              link
-              @click="handleOpenCreationAudit(row)"
-            >
-              创建记录
-            </el-button>
-            <el-button
               type="info"
               size="small"
               link
@@ -450,13 +441,6 @@
 
     <!-- 新增补剂（含拍照识别标签；补剂数据与食谱设计器共用） -->
     <SupplementOptionForm v-model="supplementDialogVisible" @saved="handleSupplementSaved" />
-
-    <!-- AI 新建的创建记录（AI 提案 / 人工改动 / 提交人） -->
-    <IngredientCreationAuditDrawer
-      v-model="creationAuditVisible"
-      :ingredient-id="creationAuditIngredient?.id ?? null"
-      :ingredient-name="creationAuditIngredient?.name ?? null"
-    />
   </div>
 </template>
 
@@ -478,7 +462,6 @@ import {
 } from '@/types/ingredient'
 import IngredientFormComponent from './IngredientForm.vue'
 import IngredientNutritionDialog from './components/IngredientNutritionDialog.vue'
-import IngredientCreationAuditDrawer from './components/IngredientCreationAuditDrawer.vue'
 import IngredientNutritionGovernancePanel from './components/IngredientNutritionGovernancePanel.vue'
 import IngredientTagsPanel from './components/IngredientTagsPanel.vue'
 import SupplementOptionForm from './components/SupplementOptionForm.vue'
@@ -508,8 +491,6 @@ const currentIngredientForUsage = ref<Ingredient | null>(null)
 const usageRecipes = ref<any[]>([])
 const nutritionDialogVisible = ref(false)
 const currentIngredientForNutrition = ref<Ingredient | null>(null)
-const creationAuditVisible = ref(false)
-const creationAuditIngredient = ref<Ingredient | null>(null)
 const activeCenterTab = ref<IngredientCenterTab>('standard')
 
 // Pagination
@@ -732,12 +713,6 @@ const handleEditNutrition = async (ingredient: Ingredient) => {
   } finally {
     loading.value = false
   }
-}
-
-/** 只有 AI 新建向导提交过的原料才带创建记录（列表接口的 hasCreationAudit）。 */
-const handleOpenCreationAudit = (ingredient: Ingredient) => {
-  creationAuditIngredient.value = ingredient
-  creationAuditVisible.value = true
 }
 
 const buildDuplicateName = (sourceName: string) => {

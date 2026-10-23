@@ -4,7 +4,7 @@ import type {
   NutritionEvidenceEntry,
   ProfileDraft
 } from '@/types/ingredientCreation'
-import { PROFILE_FIELD_DEFINITIONS } from '../creation/profileLedger'
+import { PROFILE_FIELD_DEFINITIONS } from './ingredientProfileRules'
 import {
   applyProfileCellEdit,
   countPendingRows,

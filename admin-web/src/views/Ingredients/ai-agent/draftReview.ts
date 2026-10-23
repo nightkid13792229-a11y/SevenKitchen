@@ -16,11 +16,11 @@ import type {
   PreparationState,
   ProfileDraft
 } from '@/types/ingredientCreation'
-import { PROFILE_FIELD_DEFINITIONS } from '../creation/profileLedger'
 import {
+  PROFILE_FIELD_DEFINITIONS,
   resolvePrimaryProfileIndex,
   sortProfilesByState
-} from '../creation/stepProfileHelpers'
+} from './ingredientProfileRules'
 
 /** 原料卡上人工可编辑、AI 也能写的字段（公共字段名）。 */
 export type IngredientEditableField =

@@ -6,7 +6,7 @@
  * 这里的类型只描述 `data` 本身。
  */
 
-/** 向导六站。顺序即 `stepList` 的顺序，不能随意调换。 */
+/** 草稿阶段。后端 `CreationStep` 契约：新建草稿从 INTAKE 开始。 */
 export type CreationStep =
   | 'INTAKE'
   | 'SOURCES'
@@ -42,7 +42,7 @@ export interface IntakeCard {
   category: CoverageCategory
   requiredStates: PreparationState[]
   suggestedStates: PreparationState[]
-  /** ① 起手页的备注（可选）；随草稿保存，供创建记录与后续核查。 */
+  /** 起手页的备注（可选）；随草稿保存，供提交审计与后续核查。 */
   notes?: string | null
 }
 
@@ -127,39 +127,6 @@ export interface CandidateRow {
   isOnline?: boolean
 }
 
-/**
- * ② 线上白名单兜底检索结果。
- *
- * 线上候选永远追加在本地候选之后；`attemptedHosts` / `rejectedHosts`
- * 用于页面说明「找了几个来源」「哪些网址不在白名单」。
- */
-export interface OnlineCandidateSearchResult {
-  candidates: CandidateRow[]
-  attemptedHosts: string[]
-  rejectedHosts: string[]
-}
-
-/**
- * 候选检索的覆盖概况。
- *
- * 零候选时 `bestCoveragePercent` / `bestMissingFieldCount` 都是 null，
- * 页面必须把「没有候选」与「候选覆盖率为 0」分开显示。
- */
-export interface CandidateSearchCoverage {
-  state: PreparationState
-  candidateCount: number
-  bestCoveragePercent: number | null
-  bestMissingFieldCount: number | null
-}
-
-/** ② 营养依据站的候选检索结果。 */
-export interface CandidateSearchResult {
-  candidates: CandidateRow[]
-  /** 名字对得上、但因烤/煎被排除的条数 */
-  excludedCount: number
-  coverage: CandidateSearchCoverage
-}
-
 /** 缝合方案的一行：只补缺，不覆盖主来源。 */
 export interface MergeRow {
   fieldPath: string
@@ -226,7 +193,7 @@ export interface ProposalSnapshot {
   [key: string]: unknown
 }
 
-/** 草稿里累积的六站数据；patch 时只传本站需要更新的键（浅合并）。 */
+/** 草稿里累积的数据；patch 时只传本次需要更新的键（浅合并）。 */
 export interface IngredientCreationDraftPayload {
   intake?: IntakeCard
   candidates?: CandidateRow[]
@@ -256,45 +223,6 @@ export interface IngredientCreationDraft {
   updatedAt: string
 }
 
-/**
- * 「我的未完成草稿」列表项。
- *
- * 后端为避免 payload 过大，只返回这几个摘要字段；
- * `intake.nameEn` 在 payload 里没有时整个为 null。
- */
-export interface IngredientCreationDraftSummary {
-  draftId: string
-  name: string
-  step: CreationStep
-  updatedAt: string
-  intake: { nameEn: string } | null
-}
-
-/** `POST drafts` 的返回值。 */
-export interface CreateDraftResult {
-  draftId: string
-  step: CreationStep
-}
-
-/** `POST drafts/:id/candidates` 的入参。 */
-export interface FindCandidatesInput {
-  name: string
-  nameEn?: string
-  state: PreparationState
-}
-
-/** `POST drafts/:id/merge` 的入参。 */
-export interface CreateMergePlanInput {
-  primarySourceRecordId: string
-  supplementalSourceRecordIds: string[]
-}
-
-/** `POST drafts/:id/merge/resolve` 的入参。 */
-export interface ResolveMergeConflictInput {
-  fieldPath: string
-  sourceRecordId: string
-}
-
 /** `POST drafts/:id/commit` 的入参。 */
 export interface CommitIngredientCreationInput {
   ingredient: IngredientDraft
@@ -309,67 +237,6 @@ export interface CommitIngredientCreationResult {
   /** 与请求里的 `profiles` 顺序一一对应 */
   nutritionFoodIds: string[]
   auditId: string
-}
-
-// ==================== 创建记录（审计） ====================
-
-/** 人工改动的类型（与后端 `buildAuditChanges` 的 FieldChangeKind 一致）。 */
-export type AuditChangeKind =
-  | 'VALUE_CHANGED'
-  | 'CONFLICT_RESOLVED'
-  | 'MANUALLY_ADDED'
-  | 'REMOVED_FROM_FINAL'
-
-/** AI 当时给出的一个冲突候选（目录单位值 + 来源原文）。 */
-export interface AuditAiConflictCandidate {
-  sourceRecordId: string
-  value: number
-  unit: string
-  sourceValue: number | null
-  sourceUnit: string | null
-}
-
-/** 「AI 提案 vs 最终档案」的一处差异。 */
-export interface IngredientCreationAuditFieldChange {
-  profileIndex: number
-  preparationState: PreparationState
-  sourceRecordId: string
-  fieldPath: string
-  change: AuditChangeKind
-  aiValue: number | null
-  aiUnit: string | null
-  aiSourceRecordId: string | null
-  aiCandidates: AuditAiConflictCandidate[] | null
-  finalValue: number | null
-  finalUnit: string | null
-  finalStatus: NutritionEvidenceEntry['status'] | null
-  finalSourceRecordId: string | null
-  finalConfirmedBy: string | null
-}
-
-/** 提交时落库的人工改动 + 人登记的例外。 */
-export interface IngredientCreationAuditChanges {
-  fields: IngredientCreationAuditFieldChange[]
-  exceptions: ExceptionRecord[]
-  /** 原料卡上人工改过的字段名（与 `IngredientDraft.manualFields` 同口径） */
-  ingredientFields?: IngredientCardField[]
-}
-
-/**
- * `GET /admin/ingredient-creation/audits/:ingredientId` 的返回值。
- *
- * `proposals` 是 AI 每次出方案的原始快照数组（未做类型收窄，展示层自行容错）；
- * `changes` 是字段级人工改动。
- */
-export interface IngredientCreationAudit {
-  id: string
-  draftId: string
-  ingredientId: string
-  nutritionFoodIds: string[]
-  proposals: unknown
-  changes: IngredientCreationAuditChanges | null
-  committedBy: string
-  committedAt: string
 }
 
 // ==================== 第一步：判断食材还是补剂 ====================

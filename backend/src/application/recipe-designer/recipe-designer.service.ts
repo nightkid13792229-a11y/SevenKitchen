@@ -5843,6 +5843,12 @@ export class RecipeDesignerService {
         targetHealthTags: source.targetHealthTags,
         applicableLifeStages: source.applicableLifeStages,
         notes: source.notes,
+        coverImageUrl: source.coverImageUrl,
+        coverTitle: source.coverTitle,
+        description: source.description,
+        sellingPoint: source.sellingPoint,
+        detailImages: source.detailImages,
+        videoUrl: source.videoUrl,
         ...(revisionProductionSteps.length > 0
           ? { productionStepsJson: this.toJsonValue(revisionProductionSteps) }
           : {}),
@@ -5886,6 +5892,14 @@ export class RecipeDesignerService {
               nutrientTargetValue: item.nutrientTargetValue,
               ...(supplementTargets.length > 0
                 ? { supplementTargets: this.toJsonValue(supplementTargets) }
+                : {}),
+              ...(Array.isArray(item.supplementAlternatives) &&
+              item.supplementAlternatives.length > 0
+                ? {
+                    supplementAlternatives: this.toJsonValue(
+                      item.supplementAlternatives,
+                    ),
+                  }
                 : {}),
               sortOrder: item.sortOrder,
             };

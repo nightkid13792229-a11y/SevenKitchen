@@ -154,6 +154,8 @@ function createService(options: {
   latestBatch?: Record<string, unknown> | null;
   recipes?: Array<Record<string, unknown>>;
   config?: Record<string, unknown>;
+  revisionDeliveryItemId?: string;
+  revisionRecipeId?: string;
 }) {
   const recipes = options.recipes ?? [
     buildRecipe(1),
@@ -238,6 +240,14 @@ function createService(options: {
       createMany: jest.fn(),
     },
     customRecipeDelivery: legacyDelivery,
+    orderRecipeDesign: {
+      findFirst: jest.fn(async ({ where }: any) =>
+        options.revisionDeliveryItemId &&
+        where?.revisionDeliveryItemId === options.revisionDeliveryItemId
+          ? { recipeId: options.revisionRecipeId }
+          : null,
+      ),
+    },
     recipe: { findFirst: recipeFindFirst },
     preparationMethod: { findMany: jest.fn().mockResolvedValue([]) },
     dog: { findUnique: dogFindUnique },
@@ -274,6 +284,39 @@ function createService(options: {
 }
 
 describe('CustomRecipeDeliveryService · 按选中份重新交付', () => {
+  describe('售后改稿后重新交付', () => {
+    it('选中的份使用新版本 Recipe，旧批次里的旧 Recipe 行保持不变', async () => {
+      const { service, txProxy } = createService({
+        recipes: [buildRecipe(1), buildRecipe(2), buildRecipe(3), buildRecipe(4)],
+        revisionDeliveryItemId: 'item-2',
+        revisionRecipeId: 'recipe-pk-4',
+      });
+
+      const result = await service.redeliverBatchItems({
+        orderIdOrId: 'CR202610210001',
+        deliveryItemIds: ['item-2'],
+        deliveredBy: 'admin-1',
+      });
+
+      expect(result.selectedRecipes).toEqual([
+        expect.objectContaining({
+          deliveryItemId: 'item-2',
+          recipeId: 'CR1759100000004',
+          recipeName: '新食谱 4',
+        }),
+      ]);
+      const itemsCreate = (
+        txProxy.customRecipeDeliveryItem.createMany as jest.Mock
+      ).mock.calls[0][0];
+      expect(itemsCreate.data.map((item: any) => item.recipeId)).toEqual([
+        'recipe-pk-1',
+        'recipe-pk-4',
+        'recipe-pk-3',
+      ]);
+      expect(itemsCreate.data[1].contentSnapshot.recipe.name).toBe('新食谱 4');
+    });
+  });
+
   describe('成功路径：2 / 3 份选中', () => {
     it('★ 新批次仍含全部 3 份，只刷新选中的 2 份快照', async () => {
       const now = new Date('2026-10-21T10:00:00+08:00');

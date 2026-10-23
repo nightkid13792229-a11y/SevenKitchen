@@ -101,6 +101,10 @@ describe('OrderRecipeDesignService', () => {
     createOrderBoundSeriesDesign: jest.fn(),
     deleteOrderBoundSeriesDesign: jest.fn(),
     publishOrderDesignSlot: jest.fn(),
+    createRevisionDraft: jest.fn().mockResolvedValue({
+      id: 'draft-revision-1',
+      seriesId: 'series-1',
+    }),
   };
   const orderRecipeTemplateService = {
     compareOrderTemplateStage: jest.fn(),
@@ -540,12 +544,20 @@ describe('OrderRecipeDesignService', () => {
         orderUuid: 'order-uuid',
         designId: 'design-1',
         seriesId: 'series-1',
-        draftId: 'draft-1',
+        draftId: 'draft-revision-1',
         deliveryItemId: 'delivery-item-1',
       });
+      expect(recipeDesignerService.createRevisionDraft).toHaveBeenCalledWith(
+        'draft-1',
+        { userId: 'admin-1', role: 'ADMIN' },
+      );
       expect(prisma.orderRecipeDesign.update).toHaveBeenCalledWith({
         where: { id: 'design-1' },
-        data: { status: 'EDITING' },
+        data: {
+          status: 'EDITING',
+          designDraftId: 'draft-revision-1',
+          revisionDeliveryItemId: 'delivery-item-1',
+        },
       });
     });
 

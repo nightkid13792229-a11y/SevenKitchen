@@ -2707,6 +2707,8 @@ model OrderRecipeDesign {
   orderId             String                  @map("order_id")
   dogId               String                  @map("dog_id")
   seriesId            String                  @unique @map("series_id")
+  /// 售后改稿来源的交付明细；重新交付时用它找到新 Recipe 指纹
+  revisionDeliveryItemId String?              @map("revision_delivery_item_id")
   designDraftId       String                  @unique @map("design_draft_id")
   /// 加入待提交时生成的私密食谱（recipe.id）；未就绪时为 null
   recipeId            String?                 @unique @map("recipe_id")

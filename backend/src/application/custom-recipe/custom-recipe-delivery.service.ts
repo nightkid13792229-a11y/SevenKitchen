@@ -614,6 +614,7 @@ export class CustomRecipeDeliveryService {
     const refreshed = new Map<
       string,
       {
+        recipeRowId: string;
         recipeId: string;
         recipeName: string;
         recipeVersion: number;
@@ -625,7 +626,23 @@ export class CustomRecipeDeliveryService {
     await Promise.all(
       selectedIds.map(async (deliveryItemId) => {
         const item = latestById.get(deliveryItemId)!;
-        const recipe = await this.resolveRecipe(item.recipeId, order);
+        /**
+         * 售后改稿会创建新 Recipe 版本，并把这个交付明细 id 记在
+         * OrderRecipeDesign.revisionDeliveryItemId。重新交付时必须用新行，
+         * 不能再用旧批次里的 recipeId —— 否则顾客永远看不到改后的内容。
+         */
+        const revision = await this.prisma.orderRecipeDesign.findFirst({
+          where: {
+            orderId: order.id,
+            revisionDeliveryItemId: deliveryItemId,
+            recipeId: { not: null },
+          },
+          select: { recipeId: true },
+        });
+        const recipe = await this.resolveRecipe(
+          revision?.recipeId ?? item.recipeId,
+          order,
+        );
         const snapshot = await this.buildSnapshot({
           order,
           recipe,
@@ -636,6 +653,7 @@ export class CustomRecipeDeliveryService {
         const itemCodes = await this.configuredItemCodes(snapshot);
 
         refreshed.set(deliveryItemId, {
+          recipeRowId: recipe.id,
           recipeId: recipe.recipeId,
           recipeName: recipe.name,
           recipeVersion: recipe.version,
@@ -653,7 +671,7 @@ export class CustomRecipeDeliveryService {
       const fresh = refreshed.get(item.id);
       if (fresh) {
         return {
-          recipeId: item.recipeId,
+          recipeId: fresh.recipeRowId,
           recipeVersion: fresh.recipeVersion,
           contentSnapshot: fresh.snapshot as unknown as Prisma.InputJsonValue,
           items: fresh.itemCodes as unknown as Prisma.InputJsonValue,
@@ -693,7 +711,8 @@ export class CustomRecipeDeliveryService {
      * 老字段兼容：取**新批次第一份**，与 `deliverBatch` 同一口径。
      * 老页面 / 老接口只认这一列，它代表"这张单的那份食谱"，不代表只有一份。
      */
-    const legacyRecipeId = latestBatch.items[0].recipeId;
+    const legacyRecipeId =
+      preparedItems[0]?.recipeId ?? latestBatch.items[0].recipeId;
 
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`

@@ -407,9 +407,22 @@ export class OrderRecipeDesignService {
       throw new NotFoundException('找不到这份交付对应的设计槽位');
     }
 
+    /**
+     * 售后改稿必须开新版本：旧 Recipe 行保持冻结，交付页继续读旧快照；
+     * 只有重新交付时才把订单/批次切到新 Recipe。
+     */
+    const revision = await this.recipeDesignerService.createRevisionDraft(
+      slot.designDraftId,
+      { userId: input.operatorId, role: 'ADMIN' },
+    );
+
     await this.prisma.orderRecipeDesign.update({
       where: { id: slot.id },
-      data: { status: OrderRecipeDesignStatus.EDITING },
+      data: {
+        status: OrderRecipeDesignStatus.EDITING,
+        designDraftId: revision.id,
+        revisionDeliveryItemId: selectedDeliveryItemId || null,
+      },
     });
 
     return {
@@ -417,7 +430,7 @@ export class OrderRecipeDesignService {
       orderUuid: aftersale.order.id,
       designId: slot.id,
       seriesId: slot.seriesId,
-      draftId: slot.designDraftId,
+      draftId: revision.id,
       deliveryItemId: selectedDeliveryItemId || null,
       recipeId: deliveryRecipeId,
     };

@@ -2588,6 +2588,7 @@ describe('RecipeDesignerService', () => {
       preparationMethod: '蒸熟',
       nutrientTargetKey: 'calcium',
       nutrientTargetValue: 1200,
+      supplementAlternatives: ['alternative-1', 'alternative-2'],
       sortOrder: 7,
       ingredient: {
         id: 'ingredient-source',
@@ -2663,6 +2664,11 @@ describe('RecipeDesignerService', () => {
         revisionBaseRecipeId: 'recipe-series-1',
         seriesId: 'series-1',
         seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        coverImageUrl: 'https://img.example.com/cover.jpg',
+        coverTitle: '成犬鸡肉',
+        description: '成犬鸡肉配方展示描述',
+        sellingPoint: '鲜肉低敏',
+        detailImages: ['https://img.example.com/detail.jpg'],
         publishedAt: null,
         publishedRecipeId: null,
         publishedRecipeVersion: null,
@@ -2679,6 +2685,7 @@ describe('RecipeDesignerService', () => {
               preparationMethod: '蒸熟',
               nutrientTargetKey: 'calcium',
               nutrientTargetValue: 1200,
+              supplementAlternatives: ['alternative-1', 'alternative-2'],
               supplementTargets: [
                 expect.objectContaining({
                   fieldPath: 'minerals.calcium',

@@ -389,6 +389,13 @@ describe('read tools', () => {
 
 每个端口方法都是 `jest.fn()`。默认返回 `fakeDraftSnapshot()`（7 条原料、900g、contentRevision 4；每条原料都有 `preparationMethod`；copy 四个字段都有值；3 步制作步骤）与 `fakeAssessment()`（34/34，entries 三条余量 32% / 25% / 21%，都 ≥ 20%）。测试要警告时单独覆盖成 19.9%。`getDraft` 返回的 `lastAssessment` 用传入的 `assessment` 覆盖（没传就是默认 `fakeAssessment()`，显式 `null` 表示还没跑）。`addItem` 要真的把 item 追加到内存草稿并让 `contentRevision + 1`；`runAssessment` 返回与当前草稿 `contentRevision` 一致的结果，**并把内存草稿的 `lastAssessment` 一起更新**（`check_ready` 读的是它，不是重新跑）。后续任务往这个 helper 里加默认返回值。
 
+评审补充用例（同一任务内）：
+
+- `get_catalog_usage` 空结果摘要为“没有重合记录”；重复/空名字先去重，命中时按结果说“按 N 个原料查询，命中 M 道菜”；
+- 畸形参数（`search: 123`、`args: null`、`ingredientNames: '香菇'`）→ `INVALID_ARGUMENT`，不抛 TypeError；
+- `addItem` 不传预处理时缺省 `'生'`；
+- `setCopy` 后内存草稿的内容版本 +1。
+
 - [ ] **Step 2: 跑测试，确认失败**
 
 Run: `cd backend && npx jest tests/application/recipe-designer/agent/read-tools.spec.ts --runInBand`
@@ -402,12 +409,13 @@ Expected: FAIL，模块不存在。
 - `get_ingredient`：`nutritionFoodId` 非空；端口返回 `null` → `INGREDIENT_NOT_FOUND`。
 - `get_catalog_usage`：`mainProteinName` 或 `ingredientNames` 至少一个。
 - `get_draft`：不加参数，直接返回端口结果。
+- 四个工具都要做运行时 `typeof` 守卫（Task 5 的 registry 会传 `Record<string, unknown>`）；非法参数返回 `INVALID_ARGUMENT`，不许抛。
 - 摘要示例：`找到 2 个候选（菌藻）`、`香菇：菌藻类，营养档案已验证`、`目录 26 道菜；主蛋白「鸭肉」出现 2 次`。
 
 - [ ] **Step 4: 跑测试，确认通过**
 
 Run: `cd backend && npx jest tests/application/recipe-designer/agent/read-tools.spec.ts --runInBand`
-Expected: PASS（5 个用例）。
+Expected: PASS（12 个用例，含评审补充）。
 
 - [ ] **Step 5: 提交**
 
@@ -875,7 +883,7 @@ Expected: FAIL，模块不存在。
 - [ ] **Step 4: 跑测试，确认通过**
 
 Run: `cd backend && npx jest tests/application/recipe-designer/agent/tool-registry.spec.ts --runInBand`
-Expected: PASS（5 个用例）。
+Expected: PASS（12 个用例，含评审补充）。
 
 - [ ] **Step 5: 提交**
 

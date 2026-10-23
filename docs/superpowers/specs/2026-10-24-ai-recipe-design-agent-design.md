@@ -210,6 +210,7 @@
 - **达标例外**（如急性胰腺炎发病期）：只有管理员能批；营养师可发起；理由必填；批准人、时间、理由写进草稿历史。Agent 只能 `request_exception`，不能自己开。
 - **缺类确认**：设计者（营养师）确认即可，理由必填；不算达标例外。
 - 两者的审批卡都出现在对话里，不另开页面。
+- **审批状态不由模型传入**：`check_ready` / `finish_draft` 从会话/数据库读取已批准的例外和已确认的缺类；模型只能 `request_exception`，不能把 `exceptionApproved` 设成 true。
 
 ### 4.4 差异化规则（已确认）
 
@@ -268,7 +269,7 @@
 | `run_assessment` | 在当前版本上跑评估：达标/不足/超标/缺数据、离限值余量 | 由现有评估引擎算，Agent 不许自己算 |
 | `check_coverage` | 七类覆盖情况 + 缺类原因 | 只读映射表，不改草稿 |
 | `check_catalog_conflicts` | 跟目录比，按硬/软规则返回“跟谁像、像在哪” | 只给证据，不下结论 |
-| `check_ready` | 把 A/B 合成一份“能不能交付”的检查单（含已批例外、缺类确认） | 返回 PASS / PASS_WITH_WARNINGS / BLOCKED + 逐条原因 |
+| `check_ready` | 把 A/B 合成一份“能不能交付”的检查单（含已批例外、缺类确认） | 审批/确认状态由后端注入，模型不可传；返回 PASS / PASS_WITH_WARNINGS / BLOCKED + 逐条原因 |
 
 #### 问 / 收尾（3）
 

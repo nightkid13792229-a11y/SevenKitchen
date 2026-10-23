@@ -797,18 +797,32 @@ git commit -m "feat(recipe-agent): add assessment, coverage and ready checks"
   - `askUser(input: { questions: Array<{ question: string; options?: string[] }> }): Promise<void>`
   - `requestException(input: { type: 'COMPLIANCE' | 'CATEGORY_OMISSION'; reason: string; detail?: string }): Promise<void>`
   - `finishDraft(input: { summary: string; warnings: string[] }): Promise<void>`
-- Produces `createControlTools(deps: { controlPort; checkReady: (args?) => Promise<AgentToolResult<AgentReadyResult>> })`，返回 `ask_user`、`request_exception`、`finish_draft`。
+  - `getApprovalState(): Promise<{ approvedException: boolean; confirmedOmissions: RequiredFoodCategory[] }>`
+    —— **审批状态来自会话/数据库，不由模型传入**；`check_ready` / `finish_draft` 只读它。
+- Produces `createControlTools(deps: { controlPort; checkReady })`，返回 `ask_user`、`request_exception`、`finish_draft`。
 - Produces `AGENT_TOOL_DEFINITIONS: AgentToolDefinition[]`（18 个）与 `createAgentToolHandlers(deps)`。
 - `AgentToolDefinition { name: string; description: string; parameters: Record<string, unknown> }`。
+- **安全约束**：`check_ready` / `finish_draft` 的 JSON schema **不包含** `exceptionApproved` / `confirmedOmissions`；handler 内部从 `getApprovalState()` 注入，模型传了也忽略。模型只能 `request_exception`，不能自批。
 
 - [ ] **Step 1: 写失败的测试**
 
 ```ts
 // backend/tests/application/recipe-designer/agent/tool-registry.spec.ts
 import { AGENT_TOOL_DEFINITIONS, createAgentToolHandlers } from 'src/application/recipe-designer/agent/tool-registry';
-import { createFakeRecipeAgentPort, fakeAssessment } from '../../../helpers/fake-recipe-agent-port';
+import type { RecipeAgentControlPort } from 'src/application/recipe-designer/agent/recipe-agent.port';
+import { createFakeRecipeAgentPort, fakeAssessment, fakeDraftSnapshot } from '../../../helpers/fake-recipe-agent-port';
 
 const tagPolicy = { isAllowedTag: () => true };
+
+function createFakeControlPort(overrides: Partial<RecipeAgentControlPort> = {}): RecipeAgentControlPort {
+  return {
+    askUser: jest.fn(),
+    requestException: jest.fn(),
+    finishDraft: jest.fn(),
+    getApprovalState: jest.fn().mockResolvedValue({ approvedException: false, confirmedOmissions: [] }),
+    ...overrides,
+  };
+}
 
 describe('tool registry', () => {
   it('18 个工具，名字唯一', () => {
@@ -827,7 +841,7 @@ describe('tool registry', () => {
   it('每个定义都有 handler', () => {
     const handlers = createAgentToolHandlers({
       port: createFakeRecipeAgentPort(),
-      controlPort: { askUser: jest.fn(), requestException: jest.fn(), finishDraft: jest.fn() },
+      controlPort: createFakeControlPort(),
       tagPolicy,
       draftId: 'draft-1',
     });
@@ -839,7 +853,7 @@ describe('tool registry', () => {
   it('ask_user 最多两个问题，且不能为空', async () => {
     const handlers = createAgentToolHandlers({
       port: createFakeRecipeAgentPort(),
-      controlPort: { askUser: jest.fn(), requestException: jest.fn(), finishDraft: jest.fn() },
+      controlPort: createFakeControlPort(),
       tagPolicy, draftId: 'draft-1',
     });
     expect((await handlers.ask_user({ questions: [] })).ok).toBe(false);
@@ -847,7 +861,7 @@ describe('tool registry', () => {
   });
 
   it('check_ready 不通过时 finish_draft 拒绝', async () => {
-    const controlPort = { askUser: jest.fn(), requestException: jest.fn(), finishDraft: jest.fn() };
+    const controlPort = createFakeControlPort();
     const handlers = createAgentToolHandlers({
       port: createFakeRecipeAgentPort({ assessment: fakeAssessment({ contentRevision: 4, deficient: 1 }) }),
       controlPort, tagPolicy, draftId: 'draft-1',
@@ -858,7 +872,7 @@ describe('tool registry', () => {
   });
 
   it('request_exception 需要合法类型和理由', async () => {
-    const controlPort = { askUser: jest.fn(), requestException: jest.fn(), finishDraft: jest.fn() };
+    const controlPort = createFakeControlPort();
     const handlers = createAgentToolHandlers({
       port: createFakeRecipeAgentPort(), controlPort, tagPolicy, draftId: 'draft-1',
     });
@@ -866,10 +880,68 @@ describe('tool registry', () => {
     expect((await handlers.request_exception({ type: 'COMPLIANCE', reason: '急性胰腺炎' })).ok).toBe(true);
     expect(controlPort.requestException).toHaveBeenCalledTimes(1);
   });
+
+  it('模型传 exceptionApproved 不能自批，只能读 getApprovalState', async () => {
+    const port = createFakeRecipeAgentPort({ assessment: fakeAssessment({ contentRevision: 4, deficient: 1 }) });
+
+    const denied = createAgentToolHandlers({
+      port, controlPort: createFakeControlPort(), tagPolicy, draftId: 'draft-1',
+    });
+    const deniedResult = await denied.check_ready({ exceptionApproved: true });
+    expect(deniedResult.ok).toBe(true);
+    if (!deniedResult.ok) return;
+    expect(deniedResult.data.status).toBe('BLOCKED');
+
+    const approved = createAgentToolHandlers({
+      port,
+      controlPort: createFakeControlPort({
+        getApprovalState: jest.fn().mockResolvedValue({ approvedException: true, confirmedOmissions: [] }),
+      }),
+      tagPolicy, draftId: 'draft-1',
+    });
+    const approvedResult = await approved.check_ready({});
+    if (!approvedResult.ok) return;
+    expect(approvedResult.data.status).toBe('PASS_WITH_WARNINGS');
+  });
+
+  it('confirmedOmissions 只能来自 getApprovalState', async () => {
+    const draft = fakeDraftSnapshot({ items: fakeDraftSnapshot().items.filter((i) => i.category !== 'MUSHROOM') });
+    const port = createFakeRecipeAgentPort({ draft });
+
+    const bare = createAgentToolHandlers({
+      port, controlPort: createFakeControlPort(), tagPolicy, draftId: 'draft-1',
+    });
+    const bareResult = await bare.check_ready({ confirmedOmissions: ['MUSHROOM'] });
+    expect(bareResult.ok).toBe(true);
+    if (!bareResult.ok) return;
+    expect(bareResult.data.status).toBe('BLOCKED');
+
+    const confirmed = createAgentToolHandlers({
+      port,
+      controlPort: createFakeControlPort({
+        getApprovalState: jest.fn().mockResolvedValue({ approvedException: false, confirmedOmissions: ['MUSHROOM'] }),
+      }),
+      tagPolicy, draftId: 'draft-1',
+    });
+    const confirmedResult = await confirmed.check_ready({});
+    if (!confirmedResult.ok) return;
+    expect(confirmedResult.data.status).toBe('PASS_WITH_WARNINGS');
+  });
+
+  it('已批例外时 finish_draft 生成交付卡', async () => {
+    const controlPort = createFakeControlPort({
+      getApprovalState: jest.fn().mockResolvedValue({ approvedException: true, confirmedOmissions: [] }),
+    });
+    const handlers = createAgentToolHandlers({
+      port: createFakeRecipeAgentPort({ assessment: fakeAssessment({ contentRevision: 4, deficient: 1 }) }),
+      controlPort, tagPolicy, draftId: 'draft-1',
+    });
+    const result = await handlers.finish_draft({ summary: '按例外交付' });
+    expect(result.ok).toBe(true);
+    expect(controlPort.finishDraft).toHaveBeenCalledTimes(1);
+  });
 });
 ```
-
-> 上面第三个 `finish_draft` 用例的 fixture 写法只是示意；实现时用 `fakeAssessment({ contentRevision: 4, deficient: 1 })`（与 Task 4 的 helper 一致），确保 `check_ready` 返回 BLOCKED。
 
 - [ ] **Step 2: 跑测试，确认失败**
 
@@ -880,23 +952,22 @@ Expected: FAIL，模块不存在。
 
 - `ask_user`：1–2 个问题；每个 `question.trim()` 非空且 ≤ 200；`options` 最多 6 个；否则 `INVALID_ARGUMENT`。调 `controlPort.askUser`，成功摘要“已停下来问你”。
 - `request_exception`：`type` 只允许两个枚举；`reason.trim()` 非空且 ≤ 500；调 `controlPort.requestException`。
-- `finish_draft`：先调 `checkReady`；`BLOCKED` → `READY_BLOCKED`；否则把 `warnings`（所有 WARN 的 detail）传给 `controlPort.finishDraft`，摘要“已生成交付确认卡”。
-- `AGENT_TOOL_DEFINITIONS`：18 条，`parameters` 至少 `{ type: 'object', properties: {...}, required: [...] }`。描述用中文、一句话说清“什么时候用”；参数名与端口/工具函数一致。
+- `check_ready` handler：**忽略模型传入的任何审批/缺类参数**；先 `const state = await controlPort.getApprovalState()`，再调 Task 4 的 `check_ready({ exceptionApproved: state.approvedException, confirmedOmissions: state.confirmedOmissions })`。
+- `finish_draft`：同样从 `getApprovalState()` 注入；`BLOCKED` → `READY_BLOCKED`；否则把 `warnings`（所有 WARN 的 detail）传给 `controlPort.finishDraft`，摘要“已生成交付确认卡”。
+- `AGENT_TOOL_DEFINITIONS`：18 条，`parameters` 至少 `{ type: 'object', properties: {...}, required: [...] }`。`check_ready` 的 properties 为空；`finish_draft` 只接受 `summary`。描述用中文、一句话说清“什么时候用”。
 - `createAgentToolHandlers`：把 Task 2–4 的工厂组合起来，返回 `Record<string, handler>`；handler 统一接 `Record<string, unknown>`，内部做类型收窄。
 
 - [ ] **Step 4: 跑测试，确认通过**
 
 Run: `cd backend && npx jest tests/application/recipe-designer/agent/tool-registry.spec.ts --runInBand`
-Expected: PASS（12 个用例，含评审补充）。
+Expected: PASS（8 个用例）。
 
 - [ ] **Step 5: 提交**
 
 ```bash
-git add backend/src/application/recipe-designer/agent/control-tools.ts backend/src/application/recipe-designer/agent/tool-registry.ts backend/tests/application/recipe-designer/agent/tool-registry.spec.ts
-git commit -m "feat(recipe-agent): add control tools and 18-tool registry"
+git add backend/src/application/recipe-designer/agent/control-tools.ts backend/src/application/recipe-designer/agent/tool-registry.ts backend/src/application/recipe-designer/agent/recipe-agent.port.ts backend/tests/application/recipe-designer/agent/tool-registry.spec.ts
+git commit --only backend/src/application/recipe-designer/agent/control-tools.ts backend/src/application/recipe-designer/agent/tool-registry.ts backend/src/application/recipe-designer/agent/recipe-agent.port.ts backend/tests/application/recipe-designer/agent/tool-registry.spec.ts -m "feat(recipe-agent): add control tools and 18-tool registry"
 ```
-
----
 
 ### Task 6: 工具箱组装与端到端冒烟
 

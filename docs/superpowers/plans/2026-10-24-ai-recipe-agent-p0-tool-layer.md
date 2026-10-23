@@ -1029,12 +1029,12 @@ Expected: FAIL，模块不存在。
 - [ ] **Step 4: 跑测试，确认通过**
 
 Run: `cd backend && npx jest tests/application/recipe-designer/agent/agent-flow.spec.ts --runInBand`
-Expected: PASS。
+Expected: PASS（2 个用例：18 个定义 + 一条完整链路）。
 
 - [ ] **Step 5: 跑全套相关测试**
 
 Run: `cd backend && npx jest tests/domain/recipe-designer/food-category-map.spec.ts tests/application/recipe-designer/agent --runInBand`
-Expected: 6 个 spec 全通过。
+Expected: 6 个 spec、135 个测试全通过。
 
 - [ ] **Step 6: 提交**
 

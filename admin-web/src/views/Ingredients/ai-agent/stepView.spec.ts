@@ -1,0 +1,124 @@
+import { describe, expect, it } from 'vitest'
+import { toStepView, type AgentStepView } from './stepView'
+
+type ToolCalls = Parameters<typeof toStepView>[0]
+
+function onlyStep(toolCalls: ToolCalls): AgentStepView {
+  const views = toStepView(toolCalls)
+  expect(views).toHaveLength(1)
+  const [view] = views
+  if (!view) {
+    throw new Error('期望映射出一个步骤，实际为空')
+  }
+  return view
+}
+
+/**
+ * 工具调用 → 页面步骤的纯函数测试。
+ *
+ * 页面只负责把这里的结果按顺序画出来，所以中文名、参数摘要、
+ * 失败原因都收在这一层验证。
+ */
+describe('toStepView', () => {
+  it('searchLocalNutrition 映射成「查本地库」，摘要含关键词与生熟状态', () => {
+    const view = onlyStep([
+      {
+        name: 'searchLocalNutrition',
+        args: { keyword: '鸡肝', state: 'RAW' },
+        ok: true
+      }
+    ])
+
+    expect(view.name).toBe('searchLocalNutrition')
+    expect(view.label).toBe('查本地库')
+    expect(view.summary).toContain('鸡肝')
+    expect(view.summary).toContain('生')
+    expect(view.ok).toBe(true)
+    expect(view.error).toBeUndefined()
+  })
+
+  it('searchLocalNutrition 的熟档案显示「熟」', () => {
+    const view = onlyStep([
+      {
+        name: 'searchLocalNutrition',
+        args: { keyword: '鸡肝', state: 'COOKED' },
+        ok: true
+      }
+    ])
+
+    expect(view.summary).toBe('鸡肝 · 熟')
+  })
+
+  it('updateNutritionField 成功：中文名「写字段」，摘要含字段名、数值与单位', () => {
+    const view = onlyStep([
+      {
+        name: 'updateNutritionField',
+        args: {
+          profileIndex: 0,
+          fieldPath: 'macros.crudeProtein',
+          value: 19.5,
+          unit: 'g'
+        },
+        ok: true
+      }
+    ])
+
+    expect(view.label).toBe('写字段')
+    expect(view.summary).toBe('粗蛋白 = 19.5 g')
+    expect(view.ok).toBe(true)
+    expect(view.error).toBeUndefined()
+  })
+
+  it('updateNutritionField 失败：摘要照常，error 保留后端原文', () => {
+    const error =
+      '字段 macros.crudeProtein 的目录单位是 g，不接受「mg」（本工具不做换算）。'
+    const view = onlyStep([
+      {
+        name: 'updateNutritionField',
+        args: {
+          profileIndex: 0,
+          fieldPath: 'macros.crudeProtein',
+          value: 19500,
+          unit: 'mg'
+        },
+        ok: false,
+        error
+      }
+    ])
+
+    expect(view.label).toBe('写字段')
+    expect(view.summary).toBe('粗蛋白 = 19500 mg')
+    expect(view.ok).toBe(false)
+    expect(view.error).toBe(error)
+  })
+
+  it('未知工具名不崩，原样显示工具名与参数', () => {
+    const view = onlyStep([
+      {
+        name: 'someFutureTool',
+        args: { foo: 'bar', count: 2 },
+        ok: true
+      }
+    ])
+
+    expect(view.label).toBe('someFutureTool')
+    expect(view.summary).toContain('foo')
+    expect(view.summary).toContain('bar')
+    expect(view.summary).not.toContain('\n')
+    expect(view.ok).toBe(true)
+  })
+
+  it('runCheck 映射成「跑终检」', () => {
+    const view = onlyStep([
+      { name: 'runCheck', args: {}, ok: false, error: '终检服务超时' }
+    ])
+
+    expect(view.label).toBe('跑终检')
+    expect(view.ok).toBe(false)
+    expect(view.error).toBe('终检服务超时')
+  })
+
+  it('空列表返回空数组', () => {
+    expect(toStepView([])).toEqual([])
+  })
+})

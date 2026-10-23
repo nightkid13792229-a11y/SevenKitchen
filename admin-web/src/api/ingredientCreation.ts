@@ -24,7 +24,9 @@ import type {
   MergePlan,
   OnlineCandidateSearchResult,
   CreationStep,
-  ResolveMergeConflictInput
+  IngredientAgentRunResult,
+  ResolveMergeConflictInput,
+  RunIngredientAgentInput
 } from '@/types/ingredientCreation'
 
 const BASE = '/admin/ingredient-creation'
@@ -109,5 +111,16 @@ export const ingredientCreationApi = {
     id: string,
     input: CommitIngredientCreationInput
   ): Promise<CommitIngredientCreationResult> =>
-    api.post(`${BASE}/drafts/${id}/commit`, input)
+    api.post(`${BASE}/drafts/${id}/commit`, input),
+
+  /**
+   * Agent 起草循环：给一句话，让 AI 在草稿上受控地查库 / 写字段 / 跑终检。
+   *
+   * 第一轮不传 `draftId`（后端新建草稿），之后带上上一轮返回的
+   * `draftId`，就能在同一份草稿上连续对话。
+   */
+  runAgent: (
+    input: RunIngredientAgentInput
+  ): Promise<IngredientAgentRunResult> =>
+    api.post(`${BASE}/agent/run`, input)
 }

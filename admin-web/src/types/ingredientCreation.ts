@@ -387,3 +387,48 @@ export interface IntakeClassification {
   /** 归一化后的原料文本；`kind=UNKNOWN` 或没有可识别原料时为 null */
   resolvedText: string | null
 }
+
+// ==================== Agent 起草循环 ====================
+
+/**
+ * 本次实际使用的模型协议：
+ * - `FUNCTION_CALLING`：OpenAI 兼容的 tools / tool_calls（首选）；
+ * - `JSON_ACTION`：模型不支持 tools 时的退化协议。
+ */
+export type IngredientAgentMode = 'FUNCTION_CALLING' | 'JSON_ACTION'
+
+/** 一次工具调用：名字、入参、成败；失败时 `error` 是后端原文。 */
+export interface AgentToolCallRecord {
+  name: string
+  args: Record<string, unknown>
+  ok: boolean
+  error?: string
+}
+
+/** 服务端留痕的一步（工具调用 / 工具结果 / 最终回复 / 步数上限）。 */
+export interface AgentTranscriptEntry {
+  step: number
+  type: 'tool_call' | 'tool_result' | 'reply' | 'limit'
+  atMs: number
+  tool?: string
+  args?: Record<string, unknown>
+  ok?: boolean
+  error?: string
+  summary?: string
+}
+
+/** `POST /admin/ingredient-creation/agent/run` 的返回值。 */
+export interface IngredientAgentRunResult {
+  draftId: string
+  reply: string
+  toolCalls: AgentToolCallRecord[]
+  steps: number
+  transcript: AgentTranscriptEntry[]
+  mode: IngredientAgentMode
+}
+
+/** `POST agent/run` 的入参；第一轮不传 `draftId`，之后带上上一轮的。 */
+export interface RunIngredientAgentInput {
+  draftId?: string
+  text: string
+}

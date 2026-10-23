@@ -24,9 +24,9 @@ describe('AI 添加原料 · 列表入口与第一步对话页', () => {
   const creationApi = clean(creationApiSource)
   const router = clean(routerSource)
 
-  it('原料列表的「AI 新建」下拉换成「AI 添加原料」按钮', () => {
+  it('原料列表的「AI 新建」下拉换成「AI 添加原料」按钮，指向 Agent 页', () => {
     expect(list).toContain('AI 添加原料')
-    expect(list).toContain("name: 'IngredientAiCreate'")
+    expect(list).toContain("name: 'IngredientAiAgent'")
     expect(list).not.toContain('<el-dropdown')
     expect(list).not.toContain('AI_CREATION_ENABLED')
   })

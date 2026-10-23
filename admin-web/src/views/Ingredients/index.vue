@@ -675,9 +675,9 @@ const handleCreate = () => {
   dialogVisible.value = true
 }
 
-/** 「AI 添加原料」：进入第一步对话页，先判断是食材还是补剂。 */
+/** 「AI 添加原料」：进入 Agent 页，由 AI 在草稿上连续调工具。 */
 const handleAiCreate = () => {
-  void router.push({ name: 'IngredientAiCreate' })
+  void router.push({ name: 'IngredientAiAgent' })
 }
 
 // 新增补剂（合并自食谱设计器补剂库，数据与设计器共用）

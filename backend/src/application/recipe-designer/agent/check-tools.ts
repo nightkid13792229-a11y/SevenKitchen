@@ -44,13 +44,17 @@ const MARGIN_PERCENT = MARGIN_RATIO * 100;
 /** 目录对比里算硬撞的类别（主蛋白必须不同）。 */
 const HARD_CATEGORIES: readonly FoodCategory[] = ['PROTEIN'];
 
-/** 目录对比里算软撞的类别；水果/乳/蛋/豆/油脂/调味/补剂不参与。 */
+/** 目录对比里算软撞的类别；油脂/调味/补剂不参与。 */
 const SOFT_CATEGORIES: readonly FoodCategory[] = [
   'ORGAN',
   'CARB',
   'VEGETABLE',
   'MUSHROOM',
   'NUTS',
+  'FRUIT',
+  'DAIRY',
+  'EGG',
+  'LEGUME',
 ];
 
 const COMPARED_CATEGORIES = new Set<FoodCategory>([
@@ -561,11 +565,16 @@ export function createCheckTools(deps: CheckToolDeps): RecipeAgentCheckTools {
               `${assessment.compliant} 项达标，无不足、超标或缺数据。`,
             ),
           );
+        } else if (assessment.entries.length === 0) {
+          checks.push(
+            buildReadyCheck(
+              'ASSESSMENT_COMPLIANT',
+              'FAIL',
+              '评估结果里没有任何指标，无法判断是否达标；请重跑评估。',
+            ),
+          );
         } else {
           const problems: string[] = [];
-          if (assessment.entries.length === 0) {
-            problems.push('评估结果里没有任何指标');
-          }
           if (assessment.deficient > 0) {
             problems.push(`不足 ${assessment.deficient} 项`);
           }

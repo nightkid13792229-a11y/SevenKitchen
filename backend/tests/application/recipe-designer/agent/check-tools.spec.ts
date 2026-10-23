@@ -255,10 +255,10 @@ describe('check tools', () => {
             },
             {
               recipeId: 'r3',
-              name: '蛋奶餐',
+              name: '清蒸鱼餐',
               mainProteinName: null,
-              overlappingCategories: ['EGG', 'OIL'],
-              overlappingIngredientNames: ['鸡蛋'],
+              overlappingCategories: ['OIL', 'SEASONING'],
+              overlappingIngredientNames: ['食用盐'],
             },
           ],
         },
@@ -278,6 +278,97 @@ describe('check tools', () => {
       severity: 'SOFT',
       categories: ['CARB', 'MUSHROOM'],
     });
+  });
+
+  it('只重合水果时报 SOFT', async () => {
+    const tools = createCheckTools({
+      port: createFakeRecipeAgentPort({
+        catalogUsage: {
+          totalPublishedRecipes: 26,
+          mainProteinCount: 2,
+          recipes: [
+            {
+              recipeId: 'r4',
+              name: '鸭肉苹果餐',
+              mainProteinName: '鸭肉',
+              overlappingCategories: ['FRUIT'],
+              overlappingIngredientNames: ['苹果'],
+            },
+          ],
+        },
+      }),
+      draftId: 'draft-1',
+      tagPolicy,
+    });
+    const result = await tools.check_catalog_conflicts({
+      mainProteinName: '鸭腿肉',
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data[0]).toEqual({
+      recipeId: 'r4',
+      recipeName: '鸭肉苹果餐',
+      severity: 'SOFT',
+      categories: ['FRUIT'],
+    });
+  });
+
+  it('只重合调味料时不报冲突', async () => {
+    const tools = createCheckTools({
+      port: createFakeRecipeAgentPort({
+        catalogUsage: {
+          totalPublishedRecipes: 26,
+          mainProteinCount: 2,
+          recipes: [
+            {
+              recipeId: 'r5',
+              name: '鸭肉海盐餐',
+              mainProteinName: '鸭肉',
+              overlappingCategories: ['SEASONING'],
+              overlappingIngredientNames: ['食用盐'],
+            },
+          ],
+        },
+      }),
+      draftId: 'draft-1',
+      tagPolicy,
+    });
+    const result = await tools.check_catalog_conflicts({
+      mainProteinName: '鸭腿肉',
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data).toEqual([]);
+  });
+
+  it('主蛋白重合加水果重合时只报 HARD', async () => {
+    const tools = createCheckTools({
+      port: createFakeRecipeAgentPort({
+        catalogUsage: {
+          totalPublishedRecipes: 26,
+          mainProteinCount: 2,
+          recipes: [
+            {
+              recipeId: 'r6',
+              name: '鸭肉苹果餐',
+              mainProteinName: '鸭腿肉',
+              overlappingCategories: ['PROTEIN', 'FRUIT'],
+              overlappingIngredientNames: ['鸭腿肉', '苹果'],
+            },
+          ],
+        },
+      }),
+      draftId: 'draft-1',
+      tagPolicy,
+    });
+    const result = await tools.check_catalog_conflicts({
+      mainProteinName: '鸭腿肉',
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0]?.severity).toBe('HARD');
+    expect(result.data[0]?.categories).toEqual(['PROTEIN', 'FRUIT']);
   });
 
   it('mainProteinName 不是字符串时返回 INVALID_ARGUMENT', async () => {
@@ -325,6 +416,25 @@ describe('check tools', () => {
       result.data.checks.find((c) => c.key === 'ASSESSMENT_FRESH')?.status,
     ).toBe('FAIL');
     expect(port.runAssessment).not.toHaveBeenCalled();
+  });
+
+  it('空评估不能靠已批例外降级', async () => {
+    const tools = createCheckTools({
+      port: createFakeRecipeAgentPort({
+        assessment: fakeAssessment({ entries: [] }),
+      }),
+      draftId: 'draft-1',
+      tagPolicy,
+    });
+    const result = await tools.check_ready({ exceptionApproved: true });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.status).toBe('BLOCKED');
+    const compliant = result.data.checks.find(
+      (c) => c.key === 'ASSESSMENT_COMPLIANT',
+    );
+    expect(compliant?.status).toBe('FAIL');
+    expect(compliant?.detail ?? '').not.toContain('已批例外');
   });
 
   it('缺预处理或没有制作步骤时 BLOCKED', async () => {

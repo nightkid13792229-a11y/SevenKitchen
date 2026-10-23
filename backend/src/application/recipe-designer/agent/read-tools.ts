@@ -4,6 +4,9 @@
  * 四个工具都只读：`get_draft` / `search_ingredients` / `get_ingredient` /
  * `get_catalog_usage`。校验失败不抛异常，统一返回 `{ ok: false, error }`，
  * 让模型自己改参数；成功时带一句给人看的 `summary`。
+ *
+ * 入参来自模型（运行时会绕过 TypeScript 类型），所以所有字段先做 `typeof`
+ * 守卫：非法值返回 `INVALID_ARGUMENT`，绝不让 `TypeError` 冒出去。
  */
 import type { FoodCategory } from '../../../domain/recipe-designer/food-category-map';
 import type {
@@ -45,6 +48,8 @@ interface SearchIngredientsInput {
   limit: number;
 }
 
+type RawToolArgs = Record<string, unknown>;
+
 const CATEGORY_LABELS: Record<FoodCategory, string> = {
   PROTEIN: '蛋白',
   ORGAN: '内脏',
@@ -75,6 +80,34 @@ const fail = <T>(
   ok: false,
   error: { code, message },
 });
+
+function asRawArgs(args: unknown): RawToolArgs | null {
+  if (typeof args !== 'object' || args === null || Array.isArray(args)) {
+    return null;
+  }
+  return args as RawToolArgs;
+}
+
+function isFoodCategory(value: string): value is FoodCategory {
+  return Object.hasOwn(CATEGORY_LABELS, value);
+}
+
+function isIngredientType(value: string): value is IngredientType {
+  return value === 'FOOD' || value === 'SUPPLEMENT';
+}
+
+/** 去空白、去空串、去重；重复的原料名只查一次。 */
+function normalizeIngredientNames(names: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const name of names) {
+    const trimmed = name.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    normalized.push(trimmed);
+  }
+  return normalized;
+}
 
 function describeSearchScope(input: {
   search?: string;
@@ -134,13 +167,13 @@ export function createReadTools(
 ): {
   get_draft(): Promise<AgentToolResult<AgentDraftSnapshot>>;
   search_ingredients(
-    args?: SearchIngredientsArgs,
+    args?: SearchIngredientsArgs | null,
   ): Promise<AgentToolResult<AgentIngredientCandidate[]>>;
   get_ingredient(
-    args: GetIngredientArgs,
+    args: GetIngredientArgs | null,
   ): Promise<AgentToolResult<AgentIngredientDetail>>;
   get_catalog_usage(
-    args?: GetCatalogUsageArgs,
+    args?: GetCatalogUsageArgs | null,
   ): Promise<AgentToolResult<AgentCatalogUsage>>;
 } {
   return {
@@ -150,10 +183,42 @@ export function createReadTools(
     },
 
     async search_ingredients(
-      args: SearchIngredientsArgs = {},
+      args: SearchIngredientsArgs | null = {},
     ): Promise<AgentToolResult<AgentIngredientCandidate[]>> {
-      const search = args.search?.trim();
-      const { category, type } = args;
+      const raw = asRawArgs(args);
+      if (!raw) {
+        return fail('INVALID_ARGUMENT', '参数必须是对象。');
+      }
+
+      const searchValue = raw.search;
+      if (searchValue !== undefined && typeof searchValue !== 'string') {
+        return fail('INVALID_ARGUMENT', 'search 必须是字符串。');
+      }
+      const categoryValue = raw.category;
+      if (
+        categoryValue !== undefined &&
+        (typeof categoryValue !== 'string' || !isFoodCategory(categoryValue))
+      ) {
+        return fail('INVALID_ARGUMENT', 'category 不是合法的食材分类。');
+      }
+      const typeValue = raw.type;
+      if (
+        typeValue !== undefined &&
+        (typeof typeValue !== 'string' || !isIngredientType(typeValue))
+      ) {
+        return fail('INVALID_ARGUMENT', 'type 只允许 FOOD 或 SUPPLEMENT。');
+      }
+      const limitValue = raw.limit;
+      if (limitValue !== undefined && typeof limitValue !== 'number') {
+        return fail(
+          'INVALID_ARGUMENT',
+          `limit 必须是 ${MIN_SEARCH_LIMIT}–${MAX_SEARCH_LIMIT} 的整数（默认 ${DEFAULT_SEARCH_LIMIT}）。`,
+        );
+      }
+
+      const search = searchValue?.trim();
+      const category = categoryValue as FoodCategory | undefined;
+      const type = typeValue as IngredientType | undefined;
       if (!search && !category && !type) {
         return fail(
           'INVALID_ARGUMENT',
@@ -161,7 +226,7 @@ export function createReadTools(
         );
       }
 
-      const limit = args.limit ?? DEFAULT_SEARCH_LIMIT;
+      const limit = (limitValue as number | undefined) ?? DEFAULT_SEARCH_LIMIT;
       if (
         !Number.isInteger(limit) ||
         limit < MIN_SEARCH_LIMIT ||
@@ -199,9 +264,17 @@ export function createReadTools(
     },
 
     async get_ingredient(
-      args: GetIngredientArgs,
+      args: GetIngredientArgs | null,
     ): Promise<AgentToolResult<AgentIngredientDetail>> {
-      const nutritionFoodId = args?.nutritionFoodId?.trim();
+      const raw = asRawArgs(args);
+      if (!raw) {
+        return fail('INVALID_ARGUMENT', 'nutritionFoodId 不能为空。');
+      }
+      const idValue = raw.nutritionFoodId;
+      if (typeof idValue !== 'string') {
+        return fail('INVALID_ARGUMENT', 'nutritionFoodId 不能为空。');
+      }
+      const nutritionFoodId = idValue.trim();
       if (!nutritionFoodId) {
         return fail('INVALID_ARGUMENT', 'nutritionFoodId 不能为空。');
       }
@@ -218,12 +291,31 @@ export function createReadTools(
     },
 
     async get_catalog_usage(
-      args: GetCatalogUsageArgs = {},
+      args: GetCatalogUsageArgs | null = {},
     ): Promise<AgentToolResult<AgentCatalogUsage>> {
-      const mainProteinName = args.mainProteinName?.trim();
-      const ingredientNames = (args.ingredientNames ?? [])
-        .map((name) => name.trim())
-        .filter((name) => name.length > 0);
+      const raw = asRawArgs(args);
+      if (!raw) {
+        return fail('INVALID_ARGUMENT', '参数必须是对象。');
+      }
+
+      const proteinValue = raw.mainProteinName;
+      if (proteinValue !== undefined && typeof proteinValue !== 'string') {
+        return fail('INVALID_ARGUMENT', 'mainProteinName 必须是字符串。');
+      }
+      const namesValue = raw.ingredientNames;
+      if (namesValue !== undefined) {
+        if (
+          !Array.isArray(namesValue) ||
+          namesValue.some((name) => typeof name !== 'string')
+        ) {
+          return fail('INVALID_ARGUMENT', 'ingredientNames 必须是字符串数组。');
+        }
+      }
+
+      const mainProteinName = proteinValue?.trim();
+      const ingredientNames = normalizeIngredientNames(
+        (namesValue as string[] | undefined) ?? [],
+      );
       if (!mainProteinName && ingredientNames.length === 0) {
         return fail('INVALID_ARGUMENT', '至少给一个条件：主蛋白名或原料名。');
       }
@@ -240,10 +332,14 @@ export function createReadTools(
         );
       }
       if (ingredientNames.length > 0) {
-        parts.push(`${ingredientNames.length} 个原料有重合记录`);
-      }
-      if (usage.recipes.length > 0) {
-        parts.push(`${usage.recipes.length} 道菜重合`);
+        // 命中/未命中必须从结果推，不能从输入推：输入里几个名字不等于有几条重合。
+        parts.push(
+          usage.recipes.length > 0
+            ? `按 ${ingredientNames.length} 个原料查询，命中 ${usage.recipes.length} 道菜`
+            : '没有重合记录',
+        );
+      } else if (usage.recipes.length === 0 && usage.mainProteinCount === 0) {
+        parts.push('没有重合记录');
       }
       return ok(usage, `${parts.join('；')}。`);
     },

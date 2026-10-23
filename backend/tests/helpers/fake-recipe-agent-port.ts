@@ -11,10 +11,12 @@
 import type {
   AgentAssessmentView,
   AgentCatalogUsage,
+  AgentCopyPatch,
   AgentDraftItem,
   AgentDraftSnapshot,
   AgentIngredientCandidate,
   AgentIngredientDetail,
+  AgentProductionStep,
 } from 'src/application/recipe-designer/agent/agent-types';
 import type { RecipeAgentDraftPort } from 'src/application/recipe-designer/agent/recipe-agent.port';
 import { classifyFoodCategory } from 'src/domain/recipe-designer/food-category-map';
@@ -305,8 +307,9 @@ function cloneAssessment(view: AgentAssessmentView): AgentAssessmentView {
 }
 
 /**
- * 造一个内存版草稿端口。默认方法都是 `jest.fn()`，读方法立即返回 fixture，
- * 写方法（除 `addItem` 外）只记录调用，不真的改草稿。
+ * 造一个内存版草稿端口。默认方法都是 `jest.fn()`，读方法立即返回 fixture；
+ * 写方法会真的改内存草稿并把 `contentRevision` +1，这样“写完评估过期”
+ * 这类链路在后续任务里能测出来。
  */
 export function createFakeRecipeAgentPort(
   overrides: FakeRecipeAgentPortOverrides = {},
@@ -339,6 +342,62 @@ export function createFakeRecipeAgentPort(
   // 显式传 null 表示还没跑过评估，但真跑一次时仍要有一份可返回的基线结果。
   const assessmentTemplate = overrides.assessment ?? fakeAssessment();
 
+  let nextItemNumber = state.draft.items.length + 1;
+
+  const resolveCandidate = (
+    nutritionFoodId: string,
+  ): AgentIngredientCandidate | null => {
+    if (state.ingredientDetail?.nutritionFoodId === nutritionFoodId) {
+      return state.ingredientDetail;
+    }
+    return (
+      state.searchResults.find(
+        (candidate) => candidate.nutritionFoodId === nutritionFoodId,
+      ) ?? null
+    );
+  };
+
+  const describeIngredient = (nutritionFoodId: string) => {
+    const candidate = resolveCandidate(nutritionFoodId);
+    const name = candidate?.name ?? '新原料';
+    const cfctClass = candidate?.cfctClass ?? null;
+    const nutritionCategory = candidate?.nutritionCategory ?? null;
+    return {
+      ingredientId: candidate?.ingredientId ?? null,
+      name,
+      cfctClass,
+      nutritionCategory,
+      category: classifyFoodCategory({
+        name,
+        cfctClass,
+        nutritionCategory,
+        ingredientType: candidate?.type ?? 'FOOD',
+      }),
+    };
+  };
+
+  const findItemIndex = (itemId: string): number => {
+    const index = state.draft.items.findIndex((item) => item.id === itemId);
+    if (index < 0) {
+      throw new Error(`fake port: 找不到原料「${itemId}」`);
+    }
+    return index;
+  };
+
+  /** 写入一条替换后的原料，内容版本 +1，并同步总重。 */
+  const commitItem = (index: number, item: AgentDraftItem): AgentDraftItem => {
+    const previous = state.draft.items[index];
+    state.draft = {
+      ...state.draft,
+      contentRevision: state.draft.contentRevision + 1,
+      totalWeightG: state.draft.totalWeightG - previous.weightG + item.weightG,
+      items: state.draft.items.map((current, currentIndex) =>
+        currentIndex === index ? item : current,
+      ),
+    };
+    return item;
+  };
+
   const getDraft = jest.fn(async (_draftId: string) => ({
     ...state.draft,
     lastAssessment: state.lastAssessment,
@@ -362,31 +421,19 @@ export function createFakeRecipeAgentPort(
         preparationMethod?: string;
       },
     ): Promise<AgentDraftItem> => {
-      const candidate =
-        state.ingredientDetail?.nutritionFoodId === input.nutritionFoodId
-          ? state.ingredientDetail
-          : (state.searchResults.find(
-              (item) => item.nutritionFoodId === input.nutritionFoodId,
-            ) ?? null);
-      const name = candidate?.name ?? '新原料';
-      const cfctClass = candidate?.cfctClass ?? null;
-      const nutritionCategory = candidate?.nutritionCategory ?? null;
+      const described = describeIngredient(input.nutritionFoodId);
       const item: AgentDraftItem = {
-        id: `item-${state.draft.items.length + 1}`,
-        ingredientId: input.ingredientId ?? candidate?.ingredientId ?? null,
+        id: `item-${nextItemNumber++}`,
+        ingredientId: input.ingredientId ?? described.ingredientId,
         nutritionFoodId: input.nutritionFoodId,
-        name,
-        cfctClass,
-        nutritionCategory,
-        category: classifyFoodCategory({
-          name,
-          cfctClass,
-          nutritionCategory,
-          ingredientType: candidate?.type ?? 'FOOD',
-        }),
+        name: described.name,
+        cfctClass: described.cfctClass,
+        nutritionCategory: described.nutritionCategory,
+        category: described.category,
         weightG: input.weightG,
         ratioPercent: null,
-        preparationMethod: input.preparationMethod ?? null,
+        // 缺省给「生」，免得后续 check_ready 因为新加的原料没预处理而误挂。
+        preparationMethod: input.preparationMethod?.trim() || '生',
         preparationNote: null,
       };
       state.draft = {
@@ -411,18 +458,109 @@ export function createFakeRecipeAgentPort(
     },
   );
 
+  const replaceItem = jest.fn(
+    async (
+      itemId: string,
+      input: {
+        nutritionFoodId: string;
+        ingredientId?: string;
+        weightG: number;
+      },
+    ): Promise<AgentDraftItem> => {
+      const index = findItemIndex(itemId);
+      const existing = state.draft.items[index];
+      const described = describeIngredient(input.nutritionFoodId);
+      return commitItem(index, {
+        ...existing,
+        ingredientId: input.ingredientId ?? described.ingredientId,
+        nutritionFoodId: input.nutritionFoodId,
+        name: described.name,
+        cfctClass: described.cfctClass,
+        nutritionCategory: described.nutritionCategory,
+        category: described.category,
+        weightG: input.weightG,
+      });
+    },
+  );
+
+  const updateWeight = jest.fn(
+    async (itemId: string, weightG: number): Promise<AgentDraftItem> => {
+      const index = findItemIndex(itemId);
+      return commitItem(index, { ...state.draft.items[index], weightG });
+    },
+  );
+
+  const removeItem = jest.fn(async (itemId: string): Promise<void> => {
+    const index = findItemIndex(itemId);
+    const removed = state.draft.items[index];
+    state.draft = {
+      ...state.draft,
+      contentRevision: state.draft.contentRevision + 1,
+      totalWeightG: state.draft.totalWeightG - removed.weightG,
+      items: state.draft.items.filter(
+        (_item, currentIndex) => currentIndex !== index,
+      ),
+    };
+  });
+
+  const setPreparation = jest.fn(
+    async (
+      itemId: string,
+      input: { method: string; note?: string | null },
+    ): Promise<AgentDraftItem> => {
+      const index = findItemIndex(itemId);
+      const existing = state.draft.items[index];
+      return commitItem(index, {
+        ...existing,
+        preparationMethod: input.method,
+        preparationNote:
+          input.note === undefined ? existing.preparationNote : input.note,
+      });
+    },
+  );
+
+  const setCopy = jest.fn(
+    async (_draftId: string, patch: AgentCopyPatch): Promise<void> => {
+      const copy = { ...state.draft.copy };
+      if (patch.coverTitle !== undefined) copy.coverTitle = patch.coverTitle;
+      if (patch.sellingPoint !== undefined) {
+        copy.sellingPoint = patch.sellingPoint;
+      }
+      if (patch.description !== undefined) copy.description = patch.description;
+      if (patch.targetHealthTags !== undefined) {
+        copy.targetHealthTags = [...patch.targetHealthTags];
+      }
+      state.draft = {
+        ...state.draft,
+        name: patch.name ?? state.draft.name,
+        copy,
+        contentRevision: state.draft.contentRevision + 1,
+      };
+    },
+  );
+
+  const setProductionSteps = jest.fn(
+    async (_draftId: string, steps: AgentProductionStep[]): Promise<void> => {
+      state.draft = {
+        ...state.draft,
+        productionSteps: steps.map((step) => ({ ...step })),
+        contentRevision: state.draft.contentRevision + 1,
+      };
+    },
+  );
+
   const port: RecipeAgentDraftPort = {
     getDraft,
     searchIngredients,
     getIngredient,
     getCatalogUsage,
     addItem,
-    replaceItem: jest.fn(),
-    updateWeight: jest.fn(),
-    removeItem: jest.fn(),
-    setPreparation: jest.fn(),
-    setCopy: jest.fn(),
-    setProductionSteps: jest.fn(),
+    replaceItem,
+    updateWeight,
+    removeItem,
+    setPreparation,
+    setCopy,
+    setProductionSteps,
     runAssessment,
   };
   return port;

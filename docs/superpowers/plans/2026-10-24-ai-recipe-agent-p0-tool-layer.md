@@ -1047,9 +1047,19 @@ git commit -m "feat(recipe-agent): assemble toolkit and smoke-test full tool flo
 
 ## 接下来（P0b，不在本计划）
 
-- Prisma 三张表 + migration（session / message / snapshot）。
-- `RecipeDesignerAgentAdapter`：把 `RecipeAgentDraftPort` 接到现有 `RecipeDesignerService` / `PrismaService` / `RecipeCopywritingService`。
-- `RecipeAgentControlPort` 的实现：写会话消息、改状态、生成例外/交付卡。
-- `deepseek-tools-chat.ts`：支持 `tools` 与多轮 tool 消息；不支持的兜底。
-- 应用入口接线（`app.module.ts` 或新的 Agent module）。
+P0a 的边界是“工具做形状校验，适配器做数据校验”。以下每一条都是 P0b 的验收项：
+
+- **评估版本（最高风险）**：`check_ready` 要求 `lastAssessment.contentRevision === draft.contentRevision`，但现有库没有评估版本字段。P0b 必须持久化“评估跑在哪个内容版本”，不能读的时候现盖当前版本；`assessDraft` 的 0 行更新也要处理。
+- **总量与占比**：现有 item 写入只加 `contentRevision`；`getDraft` 适配器必须按当前原料重算 `totalWeightG` 和 `ratioPercent`，否则 `ITEMS` / `remove_ingredient` 会判断错。
+- **真实/不重复/已验证**：`addItem`/`replaceItem` 必须拒绝不存在、停用、营养档案未验证、以及同一 `nutritionFoodId` 重复；`searchIngredients` 只返回启用+已验证；`addItem` 缺省预处理 `生`。
+- **详情字段**：`getIngredient` 返回价格（N1）；补剂目标在快照/检查里补上（N4），适配器不能接受没有有效目标的补剂。
+- **健康标签举证**：`HealthTagPolicy` 由适配器按草稿构造——低脂看数值门槛、易消化要举证、单一动物蛋白看原料；不要只做名字白名单（N3）。
+- **目录对比**：`getCatalogUsage` 需要草稿上下文，`overlappingCategories` 必须是“跟当前草稿”的真实重合；主蛋白撞车在全目录阶段只是提醒，鱼是软类（N5）。
+- **审批/缺类持久化**：`getApprovalState` 只读会话/数据库里的批准记录；`requestException` 建待批记录；`finishDraft` 生成交付卡，人确认前不能把 run 标 COMPLETED；畸形状态 fail-closed。
+- **事务与运行锁**：每个写入 + `contentRevision` 增量一个事务；同一草稿只能一个运行；运行中人类写接口 409。
+- **错误映射与脱敏**：写工具现在把所有 port 失败都归 `INVALID_ARGUMENT`；P0b 要抛干净的领域错误，不把 Prisma/DB 细节交给模型。
+- **ID 语义**：`nutritionFoodId` 与 `ingredientId` 不要混；search 两个都返回；`addItem` 校验映射。
+- **文案路由**：`set_copy.name` 是系列名；适配器要统一系列级/草稿级字段与 `contentRevision` 的写法；`set_production_steps` 保留 `null` 与省略的区别。
+- **会话/工具客户端**：Prisma 三张表（session / message / snapshot）+ migration；`deepseek-tools-chat.ts` 支持 `tools` 与多轮 tool 消息；未知工具名拒绝；30 次/6 分钟/重试规则；营养师/管理员权限；`draftId` 绑会话。
+- **应用接线**：`app.module.ts` 或独立 Agent module；不要把 `createCheckTools` / `createControlTools` 直接暴露给运行时（它们仍接受审批参数），只暴露 registry/toolkit。
 - 管理端抽屉（P2）与评测（P3）各自单独成计划。

@@ -759,7 +759,7 @@ Expected: FAIL，模块不存在。
 | `ITEMS` | 至少 1 条、总重 > 0 | FAIL |
 | `IDENTITY` | 每条都有 `nutritionFoodId` | FAIL |
 | `ASSESSMENT_FRESH` | `draft.lastAssessment` 存在且 `contentRevision === draft.contentRevision` | FAIL |
-| `ASSESSMENT_COMPLIANT` | `entries.length > 0 && deficient=0 && excess=0 && missingData=0` | FAIL（`exceptionApproved` 时降为 WARN，detail 带“已批例外”） |
+| `ASSESSMENT_COMPLIANT` | `entries.length > 0 && deficient=0 && excess=0 && missingData=0` | FAIL；只有 `entries.length > 0` 的达标失败才能在 `exceptionApproved` 时降为 WARN（detail 带“已批例外”），空评估仍 FAIL |
 | `MARGIN` | 忽略 `INFO` 条目；其余 `marginPercent == null` 或 `>= 20` | WARN |
 | `COVERAGE` | `missing` 全部在 `confirmedOmissions` | FAIL（确认过则 WARN） |
 | `COPY` | name/coverTitle/sellingPoint/description 非空 | FAIL |
@@ -769,7 +769,7 @@ Expected: FAIL，模块不存在。
 
 `status`：有 FAIL → `BLOCKED`；否则有 WARN → `PASS_WITH_WARNINGS`；否则 `PASS`。
 
-`check_catalog_conflicts`：取草稿里克数最大的 `PROTEIN` 项作为主蛋白（没有就返回空数组 + 摘要“没有主蛋白可对比”）；调 `port.getCatalogUsage({ mainProteinName })`，不要额外塞 `ingredientNames`；`PROTEIN` 重合 → `HARD`，`ORGAN/CARB/VEGETABLE/MUSHROOM/NUTS` 重合 → `SOFT`；同一道菜同时命中硬和软时只报 `HARD`。
+`check_catalog_conflicts`：取草稿里克数最大的 `PROTEIN` 项作为主蛋白（没有就返回空数组 + 摘要“没有主蛋白可对比”）；调 `port.getCatalogUsage({ mainProteinName })`，不要额外塞 `ingredientNames`；`PROTEIN` 重合 → `HARD`，`ORGAN/CARB/VEGETABLE/MUSHROOM/NUTS/FRUIT/DAIRY/EGG/LEGUME` 重合 → `SOFT`；`SEASONING`/`SUPPLEMENT` 不比；同一道菜同时命中硬和软时只报 `HARD`。
 
 - [ ] **Step 4: 跑测试，确认通过**
 

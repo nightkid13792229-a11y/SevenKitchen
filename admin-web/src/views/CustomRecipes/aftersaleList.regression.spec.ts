@@ -170,7 +170,7 @@ describe('售后待办页 · 按选中份重新交付', () => {
   })
 
   it('★ 按钮只在多份售后卡上显示（有选中明细 + 订单号）', () => {
-    expect(pageCode).toContain('v-if="canRedeliverAftersaleBatch(item)"')
+    expect(pageCode).toContain('canRedeliverAftersaleBatch(item) && canResolveAftersale(item)')
     expect(pageCode).toContain('按选中份重新交付')
     // 判断交给纯函数，页面不自己拼 `item.deliveryItemIds.length` 这类条件
     expect(pageCode).not.toContain('item.deliveryItemIds.length')

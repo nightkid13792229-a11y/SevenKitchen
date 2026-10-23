@@ -153,7 +153,7 @@
           判断收在 canRedeliverAftersaleBatch 里，页面不自己拼条件。
         -->
         <el-button
-          v-if="canRedeliverAftersaleBatch(item)"
+          v-if="canRedeliverAftersaleBatch(item) && canResolveAftersale(item)"
           type="primary"
           plain
           :loading="redeliveringId === item.id"
@@ -436,6 +436,11 @@ const redeliverSelectedRecipes = async (item: AdminAftersaleItem) => {
  * 售后还没受理时先受理，避免重新交付后停在“待受理”。
  * 能不能受理由后端下发（`actions`），前端不判断状态字符串。
  */
+const canResolveAftersale = (item: AdminAftersaleItem) =>
+  (item.actions || []).some(
+    (action) => action.code === 'RESOLVE' && action.enabled,
+  );
+
 const ensureAftersaleAccepted = async (item: AdminAftersaleItem) => {
   const canAccept = (item.actions || []).some(
     (action) => action.code === 'ACCEPT' && action.enabled,

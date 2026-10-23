@@ -959,6 +959,7 @@ export class AdminCustomRecipeController {
   async createRecipe(
     @Param('orderId') orderId: string,
     @Body() dto: CreateRecipeDTO,
+    @Req() req: any,
   ) {
     /**
      * 内部生产损耗系数读**全局配置**（2026-10-21 从 CustomRecipeConfig 迁来）。
@@ -1051,11 +1052,15 @@ export class AdminCustomRecipeController {
       });
     }
 
-    // Update order
-    await this.customRecipeService.updateOrder(orderId, {
-      recipeId: recipe.id,
-      status: CustomRecipeStatus.DELIVERED,
-      deliveredAt: new Date(),
+    /**
+     * 交付必须走交付服务：建交付记录/快照、写 autoCompleteAt、
+     * 走状态机。绝不能再直接 updateOrder 把状态写成 DELIVERED ——
+     * 那样顾客确认、售后、自动完成都会找不到交付记录。
+     */
+    await this.deliveryService.deliver({
+      orderIdOrId: orderId,
+      recipeIdOrBizId: recipe.id,
+      deliveredBy: this.currentOperatorId(req),
     });
 
     // Send WeChat notification to customer

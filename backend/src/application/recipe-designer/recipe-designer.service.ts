@@ -3941,6 +3941,16 @@ export class RecipeDesignerService {
       ...(supplementTargets.length > 0
         ? { supplementTargets: this.toJsonValue(supplementTargets) }
         : {}),
+      ...(Array.isArray(item.supplementAlternatives) &&
+      item.supplementAlternatives.length > 0
+        ? {
+            supplementAlternatives: this.toJsonValue(
+              item.supplementAlternatives.filter(
+                (id): id is string => typeof id === 'string',
+              ),
+            ),
+          }
+        : {}),
       sortOrder: item.sortOrder,
     };
   }
@@ -7703,6 +7713,19 @@ export class RecipeDesignerService {
         : (publishedFoodRatioMap.get(item.id) ??
           this.findAssessedRatio(assessment, item.id)),
       ...nutrientTargetData,
+      ...(Array.isArray(item.supplementAlternatives) &&
+      item.supplementAlternatives.length > 0
+        ? {
+            supplementAlternatives: {
+              create: (item.supplementAlternatives as string[]).map(
+                (alternativeIngredientId, index) => ({
+                  alternativeIngredientId,
+                  sortOrder: index,
+                }),
+              ),
+            },
+          }
+        : {}),
       sortOrder: item.sortOrder,
       exampleWeight: item.weightG,
     };

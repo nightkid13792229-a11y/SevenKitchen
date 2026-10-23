@@ -997,8 +997,13 @@ export class CustomRecipeService implements ICustomRecipeRepository {
             where: { replacedByDeliveryId: null },
             select: { confirmedAt: true },
           },
+          deliveryBatches: {
+            orderBy: { version: 'desc' },
+            take: 1,
+            select: { confirmedAt: true },
+          },
           aftersales: {
-            where: { status: { in: ['PENDING', 'PROCESSING'] } },
+            where: { status: { in: ['PENDING', 'ACCEPTED', 'PROCESSING'] } },
             select: { id: true },
             take: 1,
           },
@@ -1079,6 +1084,32 @@ export class CustomRecipeService implements ICustomRecipeRepository {
 
     if (order.status === status) {
       return;
+    }
+
+    /**
+     * DELIVERED 只能由交付服务写入（它同时建快照/交付记录）。
+     * COMPLETED 只有存在交付时才允许从后台手动推进，否则顾客
+     * 确认、售后和自动完成都会找不到内容。
+     */
+    if (status === CustomRecipeStatus.DELIVERED) {
+      throw new BadRequestException(
+        '不能直接把订单改成已交付，请通过交付流程交付食谱',
+      );
+    }
+    if (status === CustomRecipeStatus.COMPLETED) {
+      const [deliveryCount, batchCount] = await Promise.all([
+        this.prisma.customRecipeDelivery.count({
+          where: { orderId: order.id },
+        }),
+        this.prisma.customRecipeDeliveryBatch.count({
+          where: { orderId: order.id },
+        }),
+      ]);
+      if (deliveryCount === 0 && batchCount === 0) {
+        throw new BadRequestException(
+          '订单还没有交付记录，不能直接改成已完成',
+        );
+      }
     }
 
     /**

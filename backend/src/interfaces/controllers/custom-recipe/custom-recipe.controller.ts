@@ -183,10 +183,16 @@ export class CustomRecipeController {
           cancellationReason: order.cancellationReason,
           refundStatus: order.refundStatus ?? null,
           refundAmount: this.toNullableNumber(order.refundAmount),
-          hasAnyDelivery: (order.deliveries ?? []).length > 0,
-          hasUnconfirmedDelivery: (order.deliveries ?? []).some(
-            (delivery: any) => !delivery.confirmedAt,
-          ),
+          hasAnyDelivery:
+            (order.deliveries ?? []).length > 0 ||
+            (order.deliveryBatches ?? []).length > 0,
+          hasUnconfirmedDelivery:
+            (order.deliveries ?? []).some(
+              (delivery: any) => !delivery.confirmedAt,
+            ) ||
+            (order.deliveryBatches ?? []).some(
+              (batch: any) => !batch.confirmedAt,
+            ),
           hasOpenAftersale: (order.aftersales ?? []).length > 0,
           requireCustomerConfirm,
           aftersaleWindowDays,
@@ -378,6 +384,10 @@ export class CustomRecipeController {
       (currentDelivery && !currentDelivery.confirmedAt) ||
       (deliveryBatch && !deliveryBatch.confirmedAt),
     );
+    const hasOpenAftersale =
+      typeof this.aftersaleService.hasOpenForOrder === 'function'
+        ? await this.aftersaleService.hasOpenForOrder(order.id)
+        : false;
 
     return ApiResponseDto.success({
       orderId: order.orderId,
@@ -515,6 +525,7 @@ export class CustomRecipeController {
          */
         hasAnyDelivery,
         hasUnconfirmedDelivery,
+        hasOpenAftersale,
         /**
          * 售后窗口从**交付时间**起算，不是下单时间。
          *

@@ -69,13 +69,19 @@ describe('CustomRecipeController · 交付与编号口径', () => {
         status: 'PROCESSING',
       }),
     };
+    const deliveryService = {
+      deliver: jest.fn().mockResolvedValue({
+        deliveryId: 'delivery-1',
+        autoCompleteAt: null,
+      }),
+    };
 
     const controller = new AdminCustomRecipeController(
       customRecipeService as any,
       {} as any,
       wechatService as any,
       wechatPaymentService as any,
-      undefined,
+      deliveryService as any,
       undefined,
       undefined,
       undefined,

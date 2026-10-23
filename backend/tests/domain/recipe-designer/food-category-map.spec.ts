@@ -43,6 +43,29 @@ describe('classifyFoodCategory', () => {
     );
   });
 
+  it.each(['火腿肠', '红肠'])('加工肠类 %s 归蛋白，不归内脏', (name) => {
+    expect(classifyFoodCategory(food(name, '畜肉类及制品', 'MEAT'))).toBe(
+      'PROTEIN',
+    );
+  });
+
+  it('牛肝按营养库 ORGAN 分类归内脏（CFCT 为空）', () => {
+    expect(
+      classifyFoodCategory({
+        name: '牛肝',
+        cfctClass: null,
+        nutritionCategory: 'ORGAN',
+        ingredientType: 'FOOD',
+      }),
+    ).toBe('ORGAN');
+  });
+
+  it('腰果的“腰”不被当成内脏', () => {
+    expect(classifyFoodCategory(food('腰果', '坚果种子类', 'OTHER'))).toBe(
+      'NUTS',
+    );
+  });
+
   it('鱼油归油脂，不归蛋白', () => {
     expect(classifyFoodCategory(food('鱼油', '油脂类', 'OIL'))).toBe('OIL');
   });
@@ -72,6 +95,21 @@ describe('classifyFoodCategory', () => {
       }),
     ).toBe('UNCLASSIFIED');
   });
+
+  it('CFCT 非空但未映射时归未归类', () => {
+    expect(classifyFoodCategory(food('神秘粉', '其他', 'OTHER'))).toBe(
+      'UNCLASSIFIED',
+    );
+  });
+
+  it.each(['toString', '__proto__'])(
+    'CFCT 原型键 %s 不被查表命中',
+    (cfctClass) => {
+      expect(classifyFoodCategory(food('神秘粉', cfctClass, 'OTHER'))).toBe(
+        'UNCLASSIFIED',
+      );
+    },
+  );
 });
 
 describe('summarizeFoodCategoryCoverage', () => {
@@ -113,5 +151,21 @@ describe('summarizeFoodCategoryCoverage', () => {
       { category: 'OIL' },
     ]);
     expect(coverage.missing).toEqual(['MUSHROOM']);
+  });
+
+  it('可选类按固定顺序输出，不受输入顺序影响', () => {
+    const coverage = summarizeFoodCategoryCoverage([
+      { category: 'SEASONING' },
+      { category: 'DAIRY' },
+    ]);
+    expect(coverage.optionalPresent).toEqual(['DAIRY', 'SEASONING']);
+  });
+
+  it('两个补剂按出现次数计数', () => {
+    const coverage = summarizeFoodCategoryCoverage([
+      { category: 'SUPPLEMENT' },
+      { category: 'SUPPLEMENT' },
+    ]);
+    expect(coverage.supplementCount).toBe(2);
   });
 });

@@ -86,25 +86,33 @@ const ORGAN_NAME_KEYWORDS: readonly string[] = [
 ];
 
 /** 加工肉排除词：名称里带这些的「肠」不算内脏。 */
-const PROCESSED_MEAT_KEYWORDS: readonly string[] = ['香肠', '腊肠', '火腿肠'];
+const PROCESSED_MEAT_KEYWORDS: readonly string[] = [
+  '香肠',
+  '腊肠',
+  '火腿肠',
+  '红肠',
+  '脆皮肠',
+  '鸡肉肠',
+  '鱼肠',
+];
 
-/** CFCT 分类 → 七类 / 可选类。 */
-const CFCT_CATEGORY_MAP: Record<string, FoodCategory> = {
-  畜肉类及制品: 'PROTEIN',
-  禽肉类及制品: 'PROTEIN',
-  水产类: 'PROTEIN',
-  谷类及制品: 'CARB',
-  薯类及制品: 'CARB',
-  蔬菜类及制品: 'VEGETABLE',
-  菌藻类: 'MUSHROOM',
-  坚果种子类: 'NUTS',
-  油脂类: 'OIL',
-  水果类及制品: 'FRUIT',
-  乳类及制品: 'DAIRY',
-  蛋类及制品: 'EGG',
-  干豆类及制品: 'LEGUME',
-  调味品类: 'SEASONING',
-};
+/** CFCT 分类 → 七类 / 可选类。用 Map 避免 `toString` / `__proto__` 命中原型。 */
+const CFCT_CATEGORY_MAP = new Map<string, FoodCategory>([
+  ['畜肉类及制品', 'PROTEIN'],
+  ['禽肉类及制品', 'PROTEIN'],
+  ['水产类', 'PROTEIN'],
+  ['谷类及制品', 'CARB'],
+  ['薯类及制品', 'CARB'],
+  ['蔬菜类及制品', 'VEGETABLE'],
+  ['菌藻类', 'MUSHROOM'],
+  ['坚果种子类', 'NUTS'],
+  ['油脂类', 'OIL'],
+  ['水果类及制品', 'FRUIT'],
+  ['乳类及制品', 'DAIRY'],
+  ['蛋类及制品', 'EGG'],
+  ['干豆类及制品', 'LEGUME'],
+  ['调味品类', 'SEASONING'],
+]);
 
 const includesAny = (text: string, keywords: readonly string[]): boolean =>
   keywords.some((keyword) => text.includes(keyword));
@@ -144,7 +152,7 @@ export function classifyFoodCategory(input: FoodCategoryInput): FoodCategory {
   }
 
   if (cfctClass) {
-    const mapped = CFCT_CATEGORY_MAP[cfctClass];
+    const mapped = CFCT_CATEGORY_MAP.get(cfctClass);
     if (mapped) {
       return mapped;
     }

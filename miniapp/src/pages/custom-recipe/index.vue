@@ -3871,4 +3871,34 @@ const getBCSText = (bcsScore: number) => {
 }
 
 /* ===== 需求 2.3.5：下单前告知（2026-10-18）===== */
+
+/* ===== 2026-10-23 顾客端统一视觉：温暖私厨 ===== */
+.custom-recipe-page {
+  background: #f3eee3;
+}
+
+.section {
+  background: #fffdf7;
+  border-color: #e8decd;
+  box-shadow: 0 12rpx 34rpx rgba(30, 58, 47, 0.05);
+}
+
+.title-text {
+  font-family: "Songti SC", "STSong", serif;
+  font-size: 32rpx;
+  letter-spacing: 2rpx;
+  color: #1e3a2f;
+}
+
+.step-number {
+  background: linear-gradient(135deg, #e7d3a5 0%, #d8bc85 100%);
+  color: #1e3a2f;
+  font-family: "Songti SC", "STSong", serif;
+}
+
+.hero-card {
+  border-radius: 28rpx;
+  box-shadow: 0 18rpx 46rpx rgba(20, 41, 31, 0.2);
+}
+
 </style>

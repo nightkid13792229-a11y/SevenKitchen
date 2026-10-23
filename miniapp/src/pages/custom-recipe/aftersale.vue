@@ -1117,4 +1117,225 @@ onLoad((options) => {
   font-weight: 700;
   color: #8c7b66;
 }
+
+/* ===== 2026-10-23 顾客端统一视觉：温暖私厨 ===== */
+.aftersale-page {
+  background: #f3eee3;
+  padding: 24rpx 24rpx calc(48rpx + env(safe-area-inset-bottom));
+}
+
+.state-text {
+  color: #7d7564;
+}
+
+.section {
+  background: #fffdf7;
+  border: 1rpx solid #e8decd;
+  border-radius: 28rpx;
+  box-shadow: 0 12rpx 34rpx rgba(30, 58, 47, 0.05);
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  font-size: 29rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+}
+
+.section-title::before {
+  content: '';
+  width: 5rpx;
+  height: 28rpx;
+  border-radius: 4rpx;
+  background: #c6a15b;
+}
+
+.recipe-pick {
+  border-bottom-color: #eee5d6;
+}
+
+.recipe-pick__note,
+.recipe-pick__tip {
+  color: #8a806c;
+}
+
+.recipe-option {
+  background: #fffaf1;
+  border-color: #e8decd;
+}
+
+.recipe-option--picked {
+  border-color: #c6a15b;
+  background: #fbf2df;
+}
+
+.recipe-checkbox {
+  border-color: #b08d4f;
+}
+
+.recipe-checkbox--checked {
+  background: #c6a15b;
+  border-color: #c6a15b;
+}
+
+.recipe-checkbox__tick {
+  color: #fffdf7;
+}
+
+.recipe-option__name,
+.recipe-option__input {
+  color: #2f3a30;
+}
+
+.aftersale-type {
+  color: #1e3a2f;
+}
+
+.aftersale-status {
+  background: #f7f1e4;
+  color: #8a6d2f;
+}
+
+.status--RESOLVED {
+  background: #e8f0e6;
+  color: #1e5b35;
+}
+
+.status--REJECTED {
+  background: #f7e9e3;
+  color: #a74a35;
+}
+
+.aftersale-desc {
+  color: #4b4a3f;
+}
+
+.progress-label {
+  color: #8a806c;
+}
+
+.progress-item--done .progress-label,
+.progress-item--active .progress-label {
+  color: #1e3a2f;
+}
+
+.progress-note {
+  color: #8a806c;
+}
+
+.progress-dot {
+  background: #e6dccb;
+}
+
+.progress-item--done .progress-dot {
+  background: #6f9d84;
+}
+
+.progress-item--active .progress-dot {
+  background: #c6a15b;
+  color: #1e3a2f;
+}
+
+.progress-line {
+  background: #e6dccb;
+}
+
+.aftersale-note {
+  background: #f7f1e4;
+}
+
+.aftersale-note-label {
+  color: #8a6d2f;
+}
+
+.aftersale-note-text {
+  color: #2f3a30;
+}
+
+.type-option {
+  background: #fffaf1;
+  border-color: #e8decd;
+}
+
+.type-option--picked {
+  border-color: #c6a15b;
+  background: #fbf2df;
+}
+
+.type-label {
+  color: #1e3a2f;
+}
+
+.type-desc {
+  color: #8a806c;
+}
+
+.desc-input {
+  color: #2f3a30;
+  background: #fffdf7;
+  border-color: #e8decd;
+}
+
+.word-count {
+  color: #9a927f;
+}
+
+.btn-primary {
+  color: #1e3a2f;
+  background: linear-gradient(135deg, #e7d3a5 0%, #d8bc85 100%);
+  border: 1rpx solid #c6a15b;
+}
+
+.btn-secondary {
+  color: #1e3a2f;
+  border-color: #d9cdb8;
+}
+
+.hint {
+  color: #8a806c;
+}
+
+.attach-title {
+  color: #1e3a2f;
+}
+
+.attach-count,
+.attach-tip {
+  color: #8a806c;
+}
+
+.quota-bar {
+  margin: 0 0 22rpx;
+  padding: 24rpx 28rpx;
+  background: linear-gradient(145deg, #294b3c 0%, #1b3328 100%);
+  border: 1rpx solid rgba(216, 188, 133, 0.45);
+  border-radius: 24rpx;
+}
+
+.quota-value {
+  font-family: "Songti SC", "STSong", serif;
+  font-size: 46rpx;
+  color: #e7d3a5;
+}
+
+.quota-label {
+  color: #cfdccf;
+}
+
+.quota-reason {
+  margin: 0 0 22rpx;
+  background: #f7e9e3;
+}
+
+.quota-reason-text {
+  color: #a74a35;
+}
+
+.attach-add {
+  border-color: #d9cdb8;
+  background: #fffdf7;
+}
+
 </style>

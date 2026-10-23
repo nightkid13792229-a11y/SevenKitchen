@@ -1689,4 +1689,22 @@ onUnmounted(() => {
   font-size: 18rpx;
   color: #8a7a63;
 }
+
+/* ===== 2026-10-23 顾客端统一视觉：温暖私厨 ===== */
+.confirm-page {
+  background: #f3eee3;
+}
+
+.section {
+  background: #fffdf7;
+  border-color: #e8decd;
+  box-shadow: 0 12rpx 34rpx rgba(30, 58, 47, 0.05);
+}
+
+.title-text {
+  font-family: "Songti SC", "STSong", serif;
+  letter-spacing: 2rpx;
+  color: #1e3a2f;
+}
+
 </style>

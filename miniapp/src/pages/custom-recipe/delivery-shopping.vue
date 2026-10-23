@@ -30,8 +30,7 @@
           {{ resolved.version }} 版
         </text>
         <text v-if="resolved.isBatch && resolved.batchSize > 1" class="hero-batch">
-          本次共交付 {{ resolved.batchSize }} 份 · 当前第
-          {{ resolved.selectedIndex + 1 }} 份
+          本次共交付 {{ resolved.batchSize }} 份 · 可在订单详情切换查看
         </text>
       </view>
 
@@ -591,6 +590,7 @@ const goRecipe = () => {
 };
 
 onLoad((options) => {
+  uni.setNavigationBarTitle({ title: '采购与制作' });
   orderId.value = options?.orderId ? decodeURIComponent(options.orderId) : '';
   recipeId.value = options?.recipeId
     ? decodeURIComponent(options.recipeId)
@@ -887,4 +887,118 @@ onPullDownRefresh(async () => {
   color: #b45309;
   flex: 0 0 auto;
 }
+
+/* ===== 2026-10-23 顾客端统一视觉：温暖私厨 ===== */
+.shopping-page {
+  background: #f3eee3;
+  padding: 24rpx 24rpx calc(40rpx + env(safe-area-inset-bottom));
+}
+
+.hero {
+  margin-bottom: 22rpx;
+  padding: 34rpx 32rpx;
+  background: linear-gradient(145deg, #294b3c 0%, #1b3328 100%);
+  border: 1rpx solid rgba(216, 188, 133, 0.45);
+  border-radius: 28rpx;
+  box-shadow: 0 18rpx 46rpx rgba(20, 41, 31, 0.2);
+}
+
+.hero-title {
+  font-family: "Songti SC", "STSong", serif;
+  font-size: 46rpx;
+  letter-spacing: 2rpx;
+  color: #f6efe0;
+}
+
+.hero-sub {
+  margin-top: 12rpx;
+  color: #cfdccf;
+}
+
+.hero-batch {
+  color: #e7d3a5;
+}
+
+.section {
+  background: #fffdf7;
+  border: 1rpx solid #e8decd;
+  border-radius: 28rpx;
+  box-shadow: 0 12rpx 34rpx rgba(30, 58, 47, 0.05);
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  font-size: 29rpx;
+  font-weight: 700;
+  letter-spacing: 1rpx;
+  color: #1e3a2f;
+}
+
+.section-title::before {
+  content: '';
+  width: 5rpx;
+  height: 28rpx;
+  border-radius: 4rpx;
+  background: #c6a15b;
+}
+
+.section-note {
+  color: #8a806c;
+}
+
+.info-row .label {
+  color: #8a806c;
+}
+
+.info-row .value {
+  color: #2f3a30;
+  font-weight: 600;
+}
+
+.step-index {
+  background: #f1e5cc;
+  color: #8a6d2f;
+  font-weight: 700;
+}
+
+.step-text {
+  font-size: 26rpx;
+  color: #2f3a30;
+}
+
+.save-image {
+  margin-top: 12rpx;
+  background: #fffdf7;
+  border: 1rpx solid #d9cdb8;
+  color: #1e3a2f;
+  font-weight: 600;
+}
+
+.goto-recipe {
+  margin-top: 12rpx;
+  background: #1e3a2f;
+  color: #f6efe0;
+  border-radius: 999rpx;
+  font-weight: 600;
+}
+
+.footer-note {
+  color: #9a927f;
+}
+
+.state-title {
+  color: #1e3a2f;
+}
+
+.state-text {
+  color: #7d7564;
+}
+
+.state-btn {
+  color: #1e3a2f;
+  background: #d8bc85;
+}
+
 </style>

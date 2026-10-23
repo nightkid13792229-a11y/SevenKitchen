@@ -1,6 +1,11 @@
 <template>
   <view class="orders-page">
     <scroll-view scroll-y class="orders-list">
+      <view class="orders-masthead">
+        <text class="orders-eyebrow">SEVEN KITCHEN · 专属定制</text>
+        <text class="orders-title">我的定制订单</text>
+        <text class="orders-subtitle">每一份，都按它的身体单独设计</text>
+      </view>
       <view v-if="loading && orders.length === 0" class="empty-state">
         <text class="empty-text">加载中...</text>
       </view>
@@ -21,32 +26,27 @@
         class="order-card"
         @tap="viewOrderDetail(order.orderId)"
       >
-        <view class="order-header">
-          <text class="order-id">{{order.orderId}}</text>
+        <view class="order-head">
+          <text class="order-no">NO. {{order.orderId}}</text>
           <view class="status-badge" :class="getStatusClass(order.status)">
             {{getStatusText(order.status)}}
           </view>
         </view>
 
-        <view class="order-body">
-          <view class="info-row">
-            <text class="label">狗狗：</text>
-            <text class="value">{{order.dogName}}</text>
+        <view class="order-identity">
+          <text class="order-dog">{{order.dogName || '专属定制'}}</text>
+          <text class="order-goal">{{getGoalText(order.targetGoal) || '专属配方'}}</text>
+        </view>
+
+        <view class="order-meta">
+          <view class="meta-item">
+            <text class="meta-label">预计交付</text>
+            <text class="meta-value">{{formatDate(order.estimatedDeliveryDate, '排期中')}}</text>
           </view>
-          <view class="info-row">
-            <text class="label">目标：</text>
-            <text class="value">{{getGoalText(order.targetGoal)}}</text>
-          </view>
-          <!-- 口径：顾客不选日期，排期由系统自动定，这里只展示后端排好的预计交付日 -->
-          <view class="info-row">
-            <text class="label">预计交付：</text>
-            <text class="value">{{formatDate(order.estimatedDeliveryDate, '排期中')}}</text>
-          </view>
-          <!-- 退款进度：顾客自助取消后钱去哪了，必须在这里看得到 -->
-          <view class="info-row" v-if="refundTextOf(order)">
-            <text class="label">退款：</text>
+          <view v-if="refundTextOf(order)" class="meta-item meta-item--refund">
+            <text class="meta-label">退款</text>
             <text
-              class="value"
+              class="meta-value"
               :class="{
                 'refund-done': refundToneOf(order) === 'done',
                 'refund-failed': refundToneOf(order) === 'failed',
@@ -157,6 +157,8 @@ const needLogin = ref(false);
 const paymentTimeoutMinutes = ref(0);
 
 onLoad(() => {
+  // 顶部导航只做返回/品牌，不和大标题重复
+  uni.setNavigationBarTitle({ title: '专属定制' });
   // 状态与目标的中文都来自选项字典（批次 5.1）
   ensureStatusOptions();
   ensureGoalOptions();
@@ -676,4 +678,205 @@ const paymentHintOf = (order: CustomRecipeOrderItem): string =>
 .create-btn::after {
   border: none;
 }
+
+/* ===== 2026-10-23 顾客端统一视觉：温暖私厨 ===== */
+.orders-page {
+  background: #f3eee3;
+}
+
+.orders-list {
+  padding: 0 24rpx 48rpx;
+}
+
+.orders-masthead {
+  padding: 36rpx 8rpx 28rpx;
+}
+
+.orders-eyebrow {
+  display: block;
+  font-size: 19rpx;
+  font-weight: 700;
+  letter-spacing: 4rpx;
+  color: #b08d4f;
+}
+
+.orders-title {
+  display: block;
+  margin-top: 10rpx;
+  font-family: "Songti SC", "STSong", serif;
+  font-size: 52rpx;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: 2rpx;
+  color: #1e3a2f;
+}
+
+.orders-subtitle {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 23rpx;
+  letter-spacing: 1rpx;
+  color: #7d7564;
+}
+
+.order-card {
+  position: relative;
+  overflow: hidden;
+  padding: 30rpx;
+  background: #fffdf7;
+  border: 1rpx solid #e8decd;
+  border-radius: 28rpx;
+  box-shadow: 0 14rpx 40rpx rgba(30, 58, 47, 0.07);
+}
+
+.order-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6rpx;
+  background: linear-gradient(180deg, #d8bc85, #b08d4f);
+}
+
+.order-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.order-no {
+  font-size: 21rpx;
+  font-weight: 600;
+  letter-spacing: 1.5rpx;
+  color: #968f6d;
+}
+
+.order-identity {
+  display: flex;
+  align-items: baseline;
+  gap: 16rpx;
+  margin-top: 18rpx;
+}
+
+.order-dog {
+  font-family: "Songti SC", "STSong", serif;
+  font-size: 42rpx;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #1e3a2f;
+}
+
+.order-goal {
+  font-size: 22rpx;
+  font-weight: 600;
+  letter-spacing: 1rpx;
+  color: #b08d4f;
+}
+
+.order-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx 36rpx;
+  margin-top: 22rpx;
+  padding: 18rpx 22rpx;
+  background: #f7f1e4;
+  border-radius: 16rpx;
+}
+
+.meta-item {
+  display: flex;
+  align-items: baseline;
+  gap: 12rpx;
+}
+
+.meta-item--refund {
+  flex-basis: 100%;
+}
+
+.meta-label {
+  font-size: 21rpx;
+  color: #8a806c;
+}
+
+.meta-value {
+  font-size: 25rpx;
+  font-weight: 600;
+  color: #2f3a30;
+}
+
+.status-badge {
+  padding: 7rpx 18rpx;
+  font-size: 21rpx;
+  font-weight: 600;
+  letter-spacing: 1rpx;
+}
+
+.status-badge.pending {
+  color: #8a6d2f;
+  background: #f6efe0;
+}
+
+.status-badge.paid,
+.status-badge.progress {
+  color: #f6efe0;
+  background: #1e3a2f;
+}
+
+.status-badge.delivered {
+  color: #1e5b35;
+  background: #e8f0e6;
+}
+
+.status-badge.cancelled {
+  color: #7a7463;
+  background: #eeebe2;
+  border: 1rpx solid #e0dbcf;
+}
+
+.order-footer {
+  gap: 14rpx;
+  margin-top: 24rpx;
+  padding-top: 22rpx;
+  border-top: 1rpx solid #eee5d6;
+}
+
+.action-btn {
+  height: 78rpx;
+  line-height: 78rpx;
+  font-size: 25rpx;
+}
+
+.action-btn.primary {
+  color: #1e3a2f;
+  background: linear-gradient(135deg, #e7d3a5 0%, #d8bc85 100%);
+  border: 1rpx solid #c6a15b;
+}
+
+.action-btn.secondary {
+  color: #556052;
+  background: transparent;
+  border: 1rpx solid #ddd3c1;
+}
+
+.empty-state {
+  padding-top: 120rpx;
+}
+
+.empty-text {
+  color: #8a806c;
+}
+
+.create-btn {
+  margin-top: 8rpx;
+  padding: 0 42rpx;
+  height: 76rpx;
+  line-height: 76rpx;
+  border-radius: 999rpx;
+  color: #f6efe0;
+  background: #1e3a2f;
+  font-size: 26rpx;
+}
+
 </style>

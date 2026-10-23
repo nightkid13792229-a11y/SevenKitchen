@@ -19,6 +19,7 @@
     <template v-else>
       <view class="status-card" :class="`status-card--${statusTone}`">
         <text class="status-text">{{ statusText }}</text>
+        <text v-if="order.dogName" class="status-dog">为 {{ order.dogName }} 定制</text>
         <text class="status-order-id">订单号 {{ order.orderId }}</text>
         <!-- 待付款时限：直接决定这单会不会被自动取消 -->
         <text v-if="paymentHint" class="status-deadline">{{ paymentHint }}</text>
@@ -1266,22 +1267,32 @@ onUnmounted(() => {
 
 .batch-recipe__actions {
   display: flex;
-  flex-direction: column;
-  gap: 10rpx;
+  flex-direction: row;
+  align-items: center;
+  gap: 12rpx;
   margin-top: auto;
 }
 
 .batch-recipe__actions .recipe-btn {
+  flex: 1;
   height: 64rpx;
   line-height: 64rpx;
   font-size: 24rpx;
 }
 
-/* 「继续调整」与「进入食谱」区分开，但仍是这一张卡片里的次级动作 */
-.batch-recipe__adjust {
+/* 「进入食谱」是主操作；「继续调整」退成文字动作，避免每张卡两个大胶囊 */
+.batch-recipe__actions .recipe-btn:first-child {
   color: #1e3a2f;
+  background: linear-gradient(135deg, #e7d3a5 0%, #d8bc85 100%);
+  border-color: #c6a15b;
+  font-weight: 700;
+}
+
+.batch-recipe__adjust {
+  color: #8a6d2f;
   background: transparent;
-  border: 1rpx solid rgba(176, 141, 79, 0.55);
+  border: 0;
+  font-weight: 500;
 }
 
 .delivery-head {
@@ -1914,4 +1925,123 @@ onUnmounted(() => {
   background: #1e3a2f;
   border-radius: 999rpx;
 }
+
+/* ===== 2026-10-23 顾客端统一视觉：温暖私厨 ===== */
+.detail-page {
+  background: #f3eee3;
+  padding-bottom: calc(210rpx + env(safe-area-inset-bottom));
+}
+
+.status-card {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(145deg, #294b3c 0%, #1b3328 100%);
+  border: 1rpx solid rgba(216, 188, 133, 0.45);
+  box-shadow: 0 18rpx 46rpx rgba(20, 41, 31, 0.22);
+}
+
+.status-card::after {
+  content: '';
+  position: absolute;
+  right: -80rpx;
+  top: -80rpx;
+  width: 260rpx;
+  height: 260rpx;
+  border: 1rpx solid rgba(216, 188, 133, 0.2);
+  border-radius: 50%;
+}
+
+.status-text {
+  position: relative;
+  z-index: 1;
+  font-family: "Songti SC", "STSong", serif;
+  font-size: 44rpx;
+  letter-spacing: 2rpx;
+}
+
+.status-dog {
+  position: relative;
+  z-index: 1;
+  margin-top: 2rpx;
+  font-size: 24rpx;
+  color: #e7d3a5;
+}
+
+.status-order-id,
+.status-hint,
+.status-deadline {
+  position: relative;
+  z-index: 1;
+}
+
+.section {
+  background: #fffdf7;
+  border: 1rpx solid #e8decd;
+  border-radius: 28rpx;
+  box-shadow: 0 12rpx 34rpx rgba(30, 58, 47, 0.05);
+  padding: 30rpx 30rpx;
+  margin-bottom: 22rpx;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  margin-bottom: 24rpx;
+  font-size: 29rpx;
+  font-weight: 700;
+  letter-spacing: 1rpx;
+  color: #1e3a2f;
+}
+
+.section-title::before {
+  content: '';
+  width: 5rpx;
+  height: 28rpx;
+  border-radius: 4rpx;
+  background: #c6a15b;
+}
+
+.info-row {
+  font-size: 26rpx;
+}
+
+.info-row .label,
+.info-row .info-label {
+  color: #8a806c;
+}
+
+.info-row .value,
+.info-row .info-value {
+  color: #2f3a30;
+  font-weight: 500;
+}
+
+.progress-note {
+  background: #f7f1e4;
+  color: #6b6653;
+}
+
+.action-bar {
+  background: rgba(255, 253, 247, 0.96);
+  border-top: 1rpx solid #e8decd;
+  box-shadow: 0 -10rpx 30rpx rgba(30, 58, 47, 0.06);
+}
+
+.btn.secondary {
+  color: #1e3a2f;
+  background: #fffdf7;
+  border: 1rpx solid #d9cdb8;
+}
+
+.btn.primary {
+  color: #1e3a2f;
+  background: linear-gradient(135deg, #e7d3a5 0%, #d8bc85 100%);
+}
+
+.delivery-notice {
+  background: #f7f1e4;
+  border-color: #e8decd;
+}
+
 </style>

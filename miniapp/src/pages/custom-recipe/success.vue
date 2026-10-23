@@ -575,4 +575,30 @@ const goHome = () => {
   background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
   border: 1rpx solid var(--sk-gold-bright, #d8bc85);
 }
+
+/* ===== 2026-10-23 顾客端统一视觉：温暖私厨 ===== */
+.success-page {
+  background: #f3eee3;
+}
+
+.success-hero {
+  border-radius: 28rpx;
+  box-shadow: 0 18rpx 46rpx rgba(20, 41, 31, 0.2);
+}
+
+.success-title {
+  font-family: "Songti SC", "STSong", serif;
+  font-size: 42rpx;
+  letter-spacing: 2rpx;
+}
+
+.order-info,
+.payment-info,
+.delivery-card {
+  background: #fffdf7;
+  border-color: #e8decd;
+  border-radius: 28rpx;
+  box-shadow: 0 12rpx 34rpx rgba(30, 58, 47, 0.05);
+}
+
 </style>

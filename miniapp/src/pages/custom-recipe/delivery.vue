@@ -210,9 +210,7 @@ const content = computed(
 const batchNote = computed(() => {
   const current = resolved.value;
   if (!current?.isBatch || current.batchSize <= 1) return '';
-  return `${deliveryBatchCountText(current.batchSize)} · 当前查看第 ${
-    current.selectedIndex + 1
-  } 份`;
+  return `${deliveryBatchCountText(current.batchSize)} · 可在订单详情切换查看`;
 });
 
 /** 食材与补充剂分开渲染（补充剂单独一块，不与食材混） */
@@ -651,4 +649,126 @@ onPullDownRefresh(async () => {
 .bottom-bar__btn::after {
   border: 0;
 }
+
+/* ===== 2026-10-23 顾客端统一视觉：温暖私厨 ===== */
+.delivery-page {
+  background: #f3eee3;
+  padding: 24rpx 24rpx calc(190rpx + env(safe-area-inset-bottom));
+}
+
+.recipe-cover {
+  margin-bottom: 24rpx;
+  border-radius: 28rpx;
+  overflow: hidden;
+  box-shadow: 0 18rpx 46rpx rgba(20, 41, 31, 0.2);
+}
+
+.batch-note {
+  margin: 0 0 22rpx;
+  background: #f7f1e4;
+  border-color: #e8decd;
+}
+
+.batch-note-text {
+  color: #8a6d2f;
+}
+
+.section {
+  background: #fffdf7;
+  border: 1rpx solid #e8decd;
+  border-radius: 28rpx;
+  box-shadow: 0 12rpx 34rpx rgba(30, 58, 47, 0.05);
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  font-size: 29rpx;
+  font-weight: 700;
+  letter-spacing: 1rpx;
+  color: #1e3a2f;
+}
+
+.section-title::before {
+  content: '';
+  width: 5rpx;
+  height: 28rpx;
+  border-radius: 4rpx;
+  background: #c6a15b;
+}
+
+.section-note {
+  color: #7d7564;
+}
+
+.feeding-cell {
+  background: #f7f1e4;
+  border: 1rpx solid #eee5d6;
+}
+
+.feeding-value {
+  font-family: "Songti SC", "STSong", serif;
+  color: #1e3a2f;
+}
+
+.feeding-unit {
+  color: #8a806c;
+}
+
+.shopping-buy {
+  color: #1e3a2f;
+}
+
+.shopping-net,
+.shopping-loss {
+  color: #8a806c;
+}
+
+.shopping-total {
+  color: #b08d4f;
+}
+
+.step-text {
+  color: #2f3a30;
+}
+
+.oneline {
+  background: #fffdf7;
+  border-color: #e8decd;
+}
+
+.footer-note {
+  color: #9a927f;
+}
+
+.bottom-bar {
+  background: linear-gradient(180deg, rgba(243, 238, 227, 0), #f3eee3 34%);
+}
+
+.bottom-bar__inner {
+  background: #fffdf7;
+  border: 1rpx solid #e8decd;
+  box-shadow: 0 10rpx 30rpx rgba(30, 58, 47, 0.08);
+}
+
+.bottom-bar__btn {
+  background: linear-gradient(135deg, #e7d3a5 0%, #d8bc85 100%);
+  color: #1e3a2f;
+  border-radius: 999rpx;
+}
+
+.state-title {
+  color: #1e3a2f;
+}
+
+.state-text {
+  color: #7d7564;
+}
+
+.state-btn {
+  color: #1e3a2f;
+  background: #d8bc85;
+}
+
 </style>

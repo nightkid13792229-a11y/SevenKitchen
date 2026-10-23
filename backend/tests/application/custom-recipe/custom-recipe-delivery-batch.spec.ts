@@ -231,6 +231,7 @@ describe('CustomRecipeDeliveryService · 批量交付（多份）', () => {
         'recipe-pk-1',
         'recipe-pk-2',
       ]);
+      expect(itemsCreate.data.map((item: any) => item.sortOrder)).toEqual([0, 1]);
       for (const item of itemsCreate.data) {
         expect(item.batchId).toBe('batch-1');
         expect(item.recipeVersion).toBe(1);

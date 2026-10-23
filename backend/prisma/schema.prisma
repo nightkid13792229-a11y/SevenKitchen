@@ -2989,6 +2989,8 @@ model CustomRecipeDeliveryItem {
   contentSnapshot Json     @map("content_snapshot")
   /// 这一版包含哪些交付物（取值来自选项集 custom_recipe_delivery_item）
   items           Json     @default("[]")
+  /// 本份在本批次里的展示顺序（0 开始）—— 不能靠 createdAt：批量插入同一时刻
+  sortOrder       Int      @default(0) @map("sort_order")
   /// 营养师给定的喂食参数（几餐 / 每餐多少 / 做几天）
   feedingParams   Json?    @map("feeding_params")
   createdAt       DateTime @default(now()) @map("created_at")

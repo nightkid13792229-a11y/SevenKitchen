@@ -435,12 +435,13 @@ export class CustomRecipeDeliveryService {
       });
 
       await tx.customRecipeDeliveryItem.createMany({
-        data: prepared.map(({ recipe, snapshot, itemCodes }) => ({
+        data: prepared.map(({ recipe, snapshot, itemCodes }, sortOrder) => ({
           batchId: batch.id,
           recipeId: recipe.id,
           recipeVersion: recipe.version,
           contentSnapshot: snapshot as unknown as object,
           items: itemCodes,
+          sortOrder,
           feedingParams: snapshot.feeding as unknown as object,
         })),
       });
@@ -558,7 +559,7 @@ export class CustomRecipeDeliveryService {
             items: true,
             feedingParams: true,
           },
-          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
         },
       },
     });
@@ -693,8 +694,9 @@ export class CustomRecipeDeliveryService {
       });
 
       await tx.customRecipeDeliveryItem.createMany({
-        data: preparedItems.map((item) => ({
+        data: preparedItems.map((item, sortOrder) => ({
           batchId: batch.id,
+          sortOrder,
           ...item,
         })),
       });
@@ -878,7 +880,7 @@ export class CustomRecipeDeliveryService {
               select: { recipeId: true, name: true, coverImageUrl: true },
             },
           },
-          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
         },
       },
     });
@@ -916,7 +918,7 @@ export class CustomRecipeDeliveryService {
               select: { recipeId: true, name: true, coverImageUrl: true },
             },
           },
-          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
         },
       },
     });

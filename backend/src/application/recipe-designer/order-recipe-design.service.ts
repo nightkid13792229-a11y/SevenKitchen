@@ -303,12 +303,53 @@ export class OrderRecipeDesignService {
       throw new BadRequestException('请先受理售后，再修改食谱');
     }
 
-    const deliveryItemIds = Array.isArray(aftersale.deliveryItemIds)
+    let deliveryItemIds = Array.isArray(aftersale.deliveryItemIds)
       ? aftersale.deliveryItemIds
       : [];
-    const selectedDeliveryItemId = String(
+    let selectedDeliveryItemId = String(
       input.deliveryItemId ?? deliveryItemIds[0] ?? '',
     ).trim();
+
+    /**
+     * 售后提交后可能又发生过一次重新交付，旧明细 id 已不在最新批次。
+     * 打开改稿时按 recipe 行映射到最新批次 id，避免后续重交时报
+     * “选中的食谱不在本次交付里”。
+     */
+    if (deliveryItemIds.length > 0) {
+      const [oldItems, latestBatch] = await Promise.all([
+        this.prisma.customRecipeDeliveryItem.findMany({
+          where: { id: { in: deliveryItemIds } },
+          select: { id: true, recipeId: true },
+        }),
+        this.prisma.customRecipeDeliveryBatch.findFirst({
+          where: { orderId: aftersale.order.id },
+          orderBy: { version: 'desc' },
+          select: {
+            items: { select: { id: true, recipeId: true } },
+          },
+        }),
+      ]);
+      const oldById = new Map(oldItems.map((item) => [item.id, item]));
+      const latestByRecipeId = new Map(
+        (latestBatch?.items ?? []).map((item) => [item.recipeId, item.id]),
+      );
+      const mappedIds = deliveryItemIds.map((id) => {
+        const recipeId = oldById.get(id)?.recipeId;
+        return recipeId ? (latestByRecipeId.get(recipeId) ?? id) : id;
+      });
+      if (mappedIds.some((id, index) => id !== deliveryItemIds[index])) {
+        const selectedIndex = deliveryItemIds.indexOf(selectedDeliveryItemId);
+        deliveryItemIds = mappedIds;
+        selectedDeliveryItemId =
+          selectedIndex >= 0
+            ? mappedIds[selectedIndex]
+            : (mappedIds[0] ?? '');
+        await this.prisma.customRecipeAftersale.update({
+          where: { id: aftersale.id },
+          data: { deliveryItemIds: mappedIds },
+        });
+      }
+    }
 
     let deliveryRecipeId: string | null = null;
     if (deliveryItemIds.length > 0) {

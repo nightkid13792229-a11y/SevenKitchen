@@ -105,6 +105,7 @@ import {
 } from '@/api/custom-recipe';
 import { onLoad, onShow, onPullDownRefresh } from '@dcloudio/uni-app';
 import { getToken, request } from '@/utils/api';
+import { buildDeliveryDetailUrl } from '@/utils/custom-recipe-delivery';
 import {
   getCustomerServiceConfig,
   openCustomerServiceChat,
@@ -317,6 +318,9 @@ function onListAction(order: CustomRecipeOrderItem, action: ListAction) {
       void payOrder(order.orderId);
       return;
     case 'VIEW_DELIVERY':
+      // 已交付订单必须读冻结快照，不能打开实时的 Recipe 详情。
+      uni.navigateTo({ url: buildDeliveryDetailUrl(order.orderId) });
+      return;
     case 'VIEW_DETAIL':
       viewRecipe(order.recipeId);
       return;

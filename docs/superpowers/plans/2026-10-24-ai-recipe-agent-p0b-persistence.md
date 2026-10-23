@@ -579,7 +579,7 @@ Expected: PASS（12 个用例）。
 - [ ] **Step 5: 跑 P0a + 持久层测试**
 
 Run: `cd backend && npx jest tests/domain/recipe-designer/food-category-map.spec.ts tests/application/recipe-designer/agent --runInBand`
-Expected: 9 个 spec、158 个测试全通过（P0a 6 个 + 本计划 3 个）。
+Expected: 9 个 spec、163 个测试全通过（P0a 6 个 + 本计划 3 个；含评审加固：已发布草稿守卫、审批原子决定、恢复清 endedAt、token 上限）。
 
 - [ ] **Step 6: 提交**
 
@@ -589,6 +589,10 @@ git commit --only backend/src/application/recipe-designer/agent/recipe-agent-app
 ```
 
 ---
+
+## 评审加固（已完成）
+
+持久层评审提出的 4 个前置项已修：`assessDraftForAgent` 拒绝已发布草稿；`decide` 用 `updateMany({ id, status: 'PENDING' })` 原子决定；非终态 `updateStatus` 清 `endedAt`；`recordUsage` 只收 0..10,000,000 的整数。对应测试在 `assessment-revision.spec.ts` / `recipe-agent-approval.service.spec.ts` / `recipe-agent-session.service.spec.ts`。
 
 ## 接下来（不在本计划）
 

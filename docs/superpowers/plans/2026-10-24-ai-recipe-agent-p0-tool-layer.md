@@ -136,6 +136,14 @@ describe('summarizeFoodCategoryCoverage', () => {
 });
 ```
 
+评审补充用例（同一任务内，和上面的测试一起写）：
+
+- 牛肝：`cfctClass: null` + `nutritionCategory: 'ORGAN'` → `ORGAN`；
+- 神秘粉：`cfctClass: '其他'` → `UNCLASSIFIED`；
+- 腰果：`cfctClass: '坚果种子类'` → `NUTS`；
+- 火腿肠 / 红肠：→ `PROTEIN`；
+- 覆盖率：`DAIRY` + `SEASONING` 同时存在时 `optionalPresent` 为 `['DAIRY','SEASONING']`；两个补剂时 `supplementCount` 为 2。
+
 - [ ] **Step 2: 跑测试，确认失败**
 
 Run: `cd backend && npx jest tests/domain/recipe-designer/food-category-map.spec.ts --runInBand`
@@ -146,8 +154,8 @@ Expected: FAIL，`Cannot find module 'src/domain/recipe-designer/food-category-m
 实现 `classifyFoodCategory` 时按这个顺序：
 
 1. `ingredientType === 'SUPPLEMENT'` → `SUPPLEMENT`（最优先）。
-2. 内脏：`nutritionCategory === 'ORGAN'`；或 `cfctClass` 属于 `['畜肉类及制品','禽肉类及制品','水产类']` **且** 名称命中 `['肝','心','胗','肾','肚','肠','肺','脾','脑','胰','腺','腰']` **且** 名称不含 `['香肠','腊肠','火腿肠']`。
-3. 按 `cfctClass` 映射：畜肉/禽肉/水产 → `PROTEIN`；谷类/薯类 → `CARB`；蔬菜 → `VEGETABLE`；菌藻 → `MUSHROOM`；坚果种子 → `NUTS`；油脂 → `OIL`；水果 → `FRUIT`；乳类 → `DAIRY`；蛋类 → `EGG`；干豆 → `LEGUME`；调味品 → `SEASONING`；其余/空 → `UNCLASSIFIED`。
+2. 内脏：`nutritionCategory === 'ORGAN'`；或 `cfctClass` 属于 `['畜肉类及制品','禽肉类及制品','水产类']` **且** 名称命中 `['肝','心','胗','肾','肚','肠','肺','脾','脑','胰','腺','腰']` **且** 名称不含 `['香肠','腊肠','火腿肠','红肠','脆皮肠','鸡肉肠','鱼肠']`。
+3. 按 `cfctClass` 映射（用 `Map` 或 `Object.hasOwn` 查表，避免 `toString`/`__proto__` 命中原型）：畜肉/禽肉/水产 → `PROTEIN`；谷类/薯类 → `CARB`；蔬菜 → `VEGETABLE`；菌藻 → `MUSHROOM`；坚果种子 → `NUTS`；油脂 → `OIL`；水果 → `FRUIT`；乳类 → `DAIRY`；蛋类 → `EGG`；干豆 → `LEGUME`；调味品 → `SEASONING`；其余/空 → `UNCLASSIFIED`。
 
 `summarizeFoodCategoryCoverage` 按 `REQUIRED_FOOD_CATEGORIES` 顺序输出 `covered` / `missing`；可选类只收集出现过的；补剂与未归类只计数。
 

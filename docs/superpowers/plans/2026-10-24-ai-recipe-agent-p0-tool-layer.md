@@ -989,7 +989,12 @@ import { createFakeRecipeAgentPort } from '../../../helpers/fake-recipe-agent-po
 
 it('一条完整链路：读草稿 → 查原料 → 加原料 → 评估 → 写文案 → 交付', async () => {
   const port = createFakeRecipeAgentPort({ assessment: null }); // 第一次评估前没有结果
-  const controlPort = { askUser: jest.fn(), requestException: jest.fn(), finishDraft: jest.fn() };
+  const controlPort = {
+    askUser: jest.fn(),
+    requestException: jest.fn(),
+    finishDraft: jest.fn(),
+    getApprovalState: jest.fn().mockResolvedValue({ approvedException: false, confirmedOmissions: [] }),
+  };
   const toolkit = createRecipeAgentToolkit({
     port, controlPort, draftId: 'draft-1',
     tagPolicy: { isAllowedTag: (n) => ['低脂', '易消化'].includes(n) },
@@ -1008,6 +1013,8 @@ it('一条完整链路：读草稿 → 查原料 → 加原料 → 评估 → �
 ```
 
 `createFakeRecipeAgentPort` 的 `addItem` 要真的把 item 追加到内存草稿、`runAssessment` 要返回 `contentRevision` 与草稿一致的 34/34 结果；否则这条链路走不通。
+
+`check_ready` / `finish_draft` 的审批状态由 `controlPort.getApprovalState()` 注入，模型不能传；默认 `{ approvedException: false, confirmedOmissions: [] }`。
 
 - [ ] **Step 2: 跑测试，确认失败**
 

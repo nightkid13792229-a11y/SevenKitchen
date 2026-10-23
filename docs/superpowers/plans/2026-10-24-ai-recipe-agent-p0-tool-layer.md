@@ -954,7 +954,8 @@ Expected: FAIL，模块不存在。
 
 - `ask_user`：1–2 个问题；每个 `question.trim()` 非空且 ≤ 200；`options` 最多 6 个；否则 `INVALID_ARGUMENT`。调 `controlPort.askUser`，成功摘要“已停下来问你”。
 - `request_exception`：`type` 只允许两个枚举；`reason.trim()` 非空且 ≤ 500；调 `controlPort.requestException`。
-- `check_ready` handler：**忽略模型传入的任何审批/缺类参数**；先 `const state = await controlPort.getApprovalState()`，再调 Task 4 的 `check_ready({ exceptionApproved: state.approvedException, confirmedOmissions: state.confirmedOmissions })`。
+- `check_ready` / `check_coverage` handler：**忽略模型传入的任何审批/缺类参数**；先 `const state = await getApprovalState()`（带形状守卫，畸形 → `CONTROL_NOT_AVAILABLE`），再调 Task 4 的对应工具。`check_coverage` 的 schema 也不出现 `confirmedOmissions`。
+- 所有 18 个 handler 包一层 boundary：未捕获异常（DB/port）→ `{ ok:false, error:{ code:'CONTROL_NOT_AVAILABLE', message:'工具执行失败：…' } }`，不让异常穿出去。
 - `finish_draft`：同样从 `getApprovalState()` 注入；`BLOCKED` → `READY_BLOCKED`；否则把 `warnings`（所有 WARN 的 detail）传给 `controlPort.finishDraft`，摘要“已生成交付确认卡”。
 - `AGENT_TOOL_DEFINITIONS`：18 条，`parameters` 至少 `{ type: 'object', properties: {...}, required: [...] }`。`check_ready` 的 properties 为空；`finish_draft` 只接受 `summary`。描述用中文、一句话说清“什么时候用”。
 - `createAgentToolHandlers`：把 Task 2–4 的工厂组合起来，返回 `Record<string, handler>`；handler 统一接 `Record<string, unknown>`，内部做类型收窄。
@@ -962,7 +963,7 @@ Expected: FAIL，模块不存在。
 - [ ] **Step 4: 跑测试，确认通过**
 
 Run: `cd backend && npx jest tests/application/recipe-designer/agent/tool-registry.spec.ts --runInBand`
-Expected: PASS（8 个用例）。
+Expected: PASS（17 个用例）。
 
 - [ ] **Step 5: 提交**
 

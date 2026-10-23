@@ -118,9 +118,11 @@ export const ingredientCreationApi = {
    *
    * 第一轮不传 `draftId`（后端新建草稿），之后带上上一轮返回的
    * `draftId`，就能在同一份草稿上连续对话。
+   *
+   * 后端一轮最多跑 180 秒，axios 默认 30 秒会提前断掉，所以单独放宽。
    */
   runAgent: (
     input: RunIngredientAgentInput
   ): Promise<IngredientAgentRunResult> =>
-    api.post(`${BASE}/agent/run`, input)
+    api.post(`${BASE}/agent/run`, input, { timeout: 190000 })
 }

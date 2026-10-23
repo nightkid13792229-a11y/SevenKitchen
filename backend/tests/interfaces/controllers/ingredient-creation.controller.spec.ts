@@ -11,6 +11,7 @@ import { IngredientCreationAuditService } from '../../../src/application/ingredi
 import { IngredientCreationCheckService } from '../../../src/application/ingredient-creation/ingredient-creation-check.service';
 import { IngredientCreationCommitService } from '../../../src/application/ingredient-creation/ingredient-creation-commit.service';
 import { IngredientCreationDraftService } from '../../../src/application/ingredient-creation/ingredient-creation-draft.service';
+import { IngredientCreationIntakeService } from '../../../src/application/ingredient-creation/ingredient-creation-intake.service';
 import { IngredientCreationMergeService } from '../../../src/application/ingredient-creation/ingredient-creation-merge.service';
 import { IngredientCreationOnlineService } from '../../../src/application/ingredient-creation/ingredient-creation-online.service';
 import type {
@@ -163,6 +164,10 @@ describe('IngredientCreationController', () => {
         { provide: IngredientCreationCheckService, useValue: checkService },
         { provide: IngredientCreationCommitService, useValue: commitService },
         { provide: IngredientCreationAuditService, useValue: auditService },
+        {
+          provide: IngredientCreationIntakeService,
+          useValue: { classify: jest.fn() },
+        },
         { provide: JwtAuthService, useValue: jwtAuthService },
         AuthGuard,
         AdminGuard,

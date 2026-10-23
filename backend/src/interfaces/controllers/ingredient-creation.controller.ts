@@ -21,6 +21,10 @@ import {
   type CommitIngredientCreationResult,
 } from '../../application/ingredient-creation/ingredient-creation-commit.service';
 import { IngredientCreationDraftService } from '../../application/ingredient-creation/ingredient-creation-draft.service';
+import {
+  IngredientCreationIntakeService,
+  type IntakeClassification,
+} from '../../application/ingredient-creation/ingredient-creation-intake.service';
 import { IngredientCreationMergeService } from '../../application/ingredient-creation/ingredient-creation-merge.service';
 import {
   IngredientCreationOnlineService,
@@ -39,6 +43,7 @@ import { AuthGuard, CurrentUser } from '../auth';
 import type { RequestUser } from '../auth';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import {
+  ClassifyIntakeDto,
   CommitIngredientCreationDto,
   CreateDraftDto,
   CreateMergePlanDto,
@@ -81,7 +86,19 @@ export class IngredientCreationController {
     private readonly checkService: IngredientCreationCheckService,
     private readonly commitService: IngredientCreationCommitService,
     private readonly auditService: IngredientCreationAuditService,
+    private readonly intakeService: IngredientCreationIntakeService,
   ) {}
+
+  @Post('intake/classify')
+  @ApiOperation({
+    summary: '判断输入的是食材还是补剂（AI 未启用或不可用 → 503）',
+  })
+  async classifyIntake(
+    @Body() dto: ClassifyIntakeDto,
+  ): Promise<ApiResponseDto<IntakeClassification>> {
+    const result = await this.intakeService.classify(dto.text);
+    return new ApiResponseDto(0, 'Success', result);
+  }
 
   @Get('audits/:ingredientId')
   @ApiOperation({

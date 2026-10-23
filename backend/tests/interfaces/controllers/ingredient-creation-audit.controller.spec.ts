@@ -6,6 +6,7 @@ import { IngredientCreationCandidateService } from '../../../src/application/ing
 import { IngredientCreationCheckService } from '../../../src/application/ingredient-creation/ingredient-creation-check.service';
 import { IngredientCreationCommitService } from '../../../src/application/ingredient-creation/ingredient-creation-commit.service';
 import { IngredientCreationDraftService } from '../../../src/application/ingredient-creation/ingredient-creation-draft.service';
+import { IngredientCreationIntakeService } from '../../../src/application/ingredient-creation/ingredient-creation-intake.service';
 import { IngredientCreationMergeService } from '../../../src/application/ingredient-creation/ingredient-creation-merge.service';
 import { IngredientCreationOnlineService } from '../../../src/application/ingredient-creation/ingredient-creation-online.service';
 import { AuthGuard } from '../../../src/interfaces/auth/auth.guard';
@@ -58,6 +59,10 @@ describe('IngredientCreationController audits', () => {
         {
           provide: IngredientCreationAuditService,
           useValue: auditService,
+        },
+        {
+          provide: IngredientCreationIntakeService,
+          useValue: { classify: jest.fn() },
         },
         { provide: JwtAuthService, useValue: { validateToken } },
         AuthGuard,

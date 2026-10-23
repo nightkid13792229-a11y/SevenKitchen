@@ -1,3 +1,4 @@
+export * from './classify-intake.dto';
 export * from './commit.dto';
 export * from './create-draft.dto';
 export * from './find-candidates.dto';

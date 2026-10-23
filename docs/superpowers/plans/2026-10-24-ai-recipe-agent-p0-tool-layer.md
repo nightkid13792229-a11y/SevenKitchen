@@ -750,6 +750,8 @@ Expected: FAIL，模块不存在。
 
 `computeMarginPercent`：有 `min` 且 `value >= min` → `((value - min) / min) * 100`；有 `max` 且 `value <= max` → `((max - value) / max) * 100`；两边都有取较小值；否则 `null`。保留 1 位小数。
 
+`run_assessment` / `check_ready` 读到的评估先过 `withComputedMargins`：`marginPercent` 为 null 但有 `value/min/max` 时用 `computeMarginPercent` 补算；补不出来的保留 null，`MARGIN` detail 说明“无法计算余量”，不能谎称都已 ≥20%。
+
 `check_ready` 先 `getDraft`，用 `draft.lastAssessment` 判断（不是重新跑评估）；没跑过、或版本对不上，都算“没准备好”。`run_assessment` 才是重新跑并落库的那个工具。**内容版本任何写操作都会 +1，所以 skill 的顺序应是“先改完、再跑评估、再交付”；评估之后再改字段，必须重跑。**
 
 `check_ready` 生成这些检查项（key → 失败后果）：

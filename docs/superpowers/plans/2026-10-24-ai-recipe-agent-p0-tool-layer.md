@@ -774,7 +774,7 @@ Expected: FAIL，模块不存在。
 - [ ] **Step 4: 跑测试，确认通过**
 
 Run: `cd backend && npx jest tests/application/recipe-designer/agent/check-tools.spec.ts --runInBand`
-Expected: PASS（15 个用例）。
+Expected: PASS（37 个用例）。
 
 - [ ] **Step 5: 提交**
 

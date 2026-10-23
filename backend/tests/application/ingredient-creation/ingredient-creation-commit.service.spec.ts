@@ -6,6 +6,7 @@ import {
 import { Test, type TestingModule } from '@nestjs/testing';
 import { IngredientCreationCommitService } from '../../../src/application/ingredient-creation/ingredient-creation-commit.service';
 import { IngredientCreationDraftService } from '../../../src/application/ingredient-creation/ingredient-creation-draft.service';
+import { NutritionFoodService } from '../../../src/application/nutrition-food/nutrition-food.service';
 import type {
   IngredientCreationDraftPayload,
   IngredientDraft,
@@ -676,6 +677,38 @@ describe('IngredientCreationCommitService', () => {
     expect(changes.fields).toHaveLength(6);
   });
 
+  it('提交审计记录人工改过的原料卡字段（manualFields）', async () => {
+    const draft = buildDraft({
+      ingredient: {
+        ...ingredientDraft,
+        nameEn: 'Chicken liver',
+        category: 'MEAT_ORGAN',
+        manualFields: ['name', 'edibleYieldPercent', 'name'],
+      },
+    });
+    const { service, prisma } = await createHarness({ draft });
+
+    await service.commit({
+      ...baseInput,
+      ingredient: {
+        ...ingredientDraft,
+        nameEn: 'Chicken liver',
+        category: 'MEAT_ORGAN',
+      },
+    });
+
+    const changes = prisma.ingredientCreationAudit.create.mock.calls[0][0].data
+      .changes as { ingredientFields: string[] };
+    // 去重后原样进审计：营养字段靠 MANUAL 证据行，原料卡靠这份清单。
+    expect(changes.ingredientFields).toEqual(['name', 'edibleYieldPercent']);
+
+    const ingredientData = prisma.ingredient.create.mock.calls[0][0].data;
+    expect(ingredientData.properties).toMatchObject({
+      name_en: 'Chicken liver',
+      coverage_category: 'MEAT_ORGAN',
+    });
+  });
+
   it('没有提案快照时退回草稿的缝合方案，status=MANUAL 的行仍算人工裁决', async () => {
     const draft = buildDraft({
       mergePlan: {
@@ -1075,5 +1108,61 @@ describe('IngredientCreationCommitService', () => {
     expect(store.ingredients).toHaveLength(0);
     expect(store.nutritionFoods).toHaveLength(0);
     expect(store.audits).toHaveLength(0);
+  });
+
+  it('提交返回的每个 nutritionFoodId 都能被「确认可用」写成 VERIFIED', async () => {
+    const { service, store } = await createHarness();
+
+    const committed = await service.commit(baseInput);
+
+    // 提交只负责落 PENDING；「确认可用」是另一个动作，逐份验证。
+    expect(committed.nutritionFoodIds).toHaveLength(2);
+    expect(
+      store.nutritionFoods.every((food) => food.status === 'PENDING'),
+    ).toBe(true);
+
+    const verifyPrisma = {
+      nutritionFood: {
+        findUnique: jest.fn(async ({ where }: { where: { id: string } }) => {
+          return (
+            store.nutritionFoods.find((food) => food.id === where.id) ?? null
+          );
+        }),
+        update: jest.fn(
+          async ({
+            where,
+            data,
+          }: {
+            where: { id: string };
+            data: Record<string, unknown>;
+          }) => {
+            const food = store.nutritionFoods.find(
+              (row) => row.id === where.id,
+            )!;
+            Object.assign(food, data);
+            return { ...food, mappings: [] };
+          },
+        ),
+      },
+    } as any;
+    const nutritionFoodService = new NutritionFoodService(verifyPrisma);
+
+    for (const nutritionFoodId of committed.nutritionFoodIds) {
+      const verified = await nutritionFoodService.verify(
+        nutritionFoodId,
+        'admin-1',
+      );
+      expect(verified.status).toBe('VERIFIED');
+    }
+
+    expect(verifyPrisma.nutritionFood.update).toHaveBeenCalledTimes(2);
+    expect(
+      store.nutritionFoods.every(
+        (food) =>
+          food.status === 'VERIFIED' &&
+          food.verifiedBy === 'admin-1' &&
+          food.verifiedAt instanceof Date,
+      ),
+    ).toBe(true);
   });
 });

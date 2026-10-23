@@ -162,6 +162,15 @@ function resolveFinalCheckBasis(primaryProfile: unknown): FinalCheckBasis {
 function collectRequiredStates(
   draft: IngredientCreationDraft,
 ): PreparationState[] {
+  // 审核页允许人改原料卡的类别；卡片上的类别比草稿创建时的起手卡更新，
+  // 优先按它决定「必需生熟」，否则人改了类别终检却仍按旧类别报缺失。
+  const ingredient = isRecord(draft.payload.ingredient)
+    ? draft.payload.ingredient
+    : null;
+  if (ingredient && isCoverageCategory(ingredient.category)) {
+    return resolveStateCoverage(ingredient.category).required;
+  }
+
   const intake = isRecord(draft.payload.intake) ? draft.payload.intake : null;
   if (intake && Array.isArray(intake.requiredStates)) {
     return intake.requiredStates.filter(isPreparationState);

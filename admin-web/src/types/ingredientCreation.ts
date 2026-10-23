@@ -71,14 +71,32 @@ export interface ExceptionRecord {
   approvedAt: string
 }
 
+/** 原料卡上人可改、AI 也能写的字段（公共字段名）。 */
+export type IngredientCardField =
+  | 'name'
+  | 'nameEn'
+  | 'category'
+  | 'baseUnit'
+  | 'unitDisplayLabel'
+  | 'cfctClass'
+  | 'edibleYieldPercent'
+
 /** ⑤ 标准原料档案的预填值；拿不准的保持 null，标「待补」。 */
 export interface IngredientDraft {
   name: string
+  nameEn?: string | null
   type: 'FOOD'
+  /** 与 ① 起手卡同一套类别词表；终检的「必需生熟」按它判断 */
+  category?: CoverageCategory | null
   baseUnit: 'G' | 'ML' | 'PCS'
   unitDisplayLabel: string
   cfctClass: string | null
   edibleYieldRate: number | null
+  /**
+   * 人工审核时改过的字段（只存在草稿里）。
+   * AI 的 updateIngredientFields 遇到这些字段会跳过，不覆盖人的判断。
+   */
+  manualFields?: IngredientCardField[]
 }
 
 /** ③ 一份营养档案草稿（生 / 熟各一份）。 */
@@ -333,6 +351,8 @@ export interface IngredientCreationAuditFieldChange {
 export interface IngredientCreationAuditChanges {
   fields: IngredientCreationAuditFieldChange[]
   exceptions: ExceptionRecord[]
+  /** 原料卡上人工改过的字段名（与 `IngredientDraft.manualFields` 同口径） */
+  ingredientFields?: IngredientCardField[]
 }
 
 /**

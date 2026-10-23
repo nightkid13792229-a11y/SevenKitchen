@@ -3,6 +3,7 @@ import type {
   CookingMethod,
   PreparationState,
 } from '../../domain/ingredient-creation/preparation-state';
+import type { CoverageCategory } from '../../domain/ingredient-creation/state-coverage';
 
 /**
  * 向导站点。草稿的 `step` 只取这些值，其它字符串一律视为脏数据。
@@ -56,14 +57,40 @@ export interface ExceptionRecord {
   approvedAt: string;
 }
 
+/**
+ * 原料卡上允许人改、AI 也能写的字段。
+ *
+ * 用**公共字段名**（而不是入库键名）标记人工改动：可食部在库里存成比例
+ * `edibleYieldRate`，但工具与页面都以百分数 `edibleYieldPercent` 交流，
+ * 标记也统一用后者，避免同一件事两套名字。
+ */
+export type IngredientCardField =
+  | 'name'
+  | 'nameEn'
+  | 'category'
+  | 'baseUnit'
+  | 'unitDisplayLabel'
+  | 'cfctClass'
+  | 'edibleYieldPercent';
+
 /** ⑤ 标准原料档案的预填值；拿不准的保持 null，标「待补」，不阻断保存。 */
 export interface IngredientDraft {
   name: string;
+  nameEn?: string | null;
   type: 'FOOD';
+  /** 与 ① 起手卡同一套类别词表；终检的「必需生熟」按它判断。 */
+  category?: CoverageCategory | null;
   baseUnit: 'G' | 'ML' | 'PCS';
   unitDisplayLabel: string;
   cfctClass: string | null;
   edibleYieldRate: number | null;
+  /**
+   * 人工审核时改过的字段（只存在草稿里，不写正式表）。
+   *
+   * AI 的 `updateIngredientFields` 遇到这些字段会跳过并说明原因，
+   * 不允许把人的判断悄悄改回去；提交时随审计一起留痕。
+   */
+  manualFields?: IngredientCardField[];
 }
 
 /** ③ 一份营养档案草稿（生 / 熟各一份）。 */

@@ -17,6 +17,7 @@ import { PrismaService } from '../../infrastructure/prisma.service';
 import { IngredientCreationDraftService } from './ingredient-creation-draft.service';
 import type {
   ExceptionRecord,
+  IngredientCardField,
   IngredientCreationDraft,
   IngredientDraft,
   NutritionEvidenceEntry,
@@ -107,6 +108,13 @@ interface AuditChanges {
    * 但同属「人裁决过什么」，与字段差异一起进审计。
    */
   exceptions: ExceptionRecord[];
+  /**
+   * 原料卡上人工改过的字段名（`payload.ingredient.manualFields`）。
+   *
+   * 营养字段靠证据行的 `status=MANUAL` 留痕；原料卡没有逐字段证据行，
+   * 就用这份清单把「哪些格子是人改的」带进审计。
+   */
+  ingredientFields: IngredientCardField[];
 }
 
 /** AI 提案（缝合方案）里，一个字段的原始值与状态。 */
@@ -288,6 +296,39 @@ function findAiProposalForProfile(
     : null;
 }
 
+const INGREDIENT_CARD_FIELDS = new Set<IngredientCardField>([
+  'name',
+  'nameEn',
+  'category',
+  'baseUnit',
+  'unitDisplayLabel',
+  'cfctClass',
+  'edibleYieldPercent',
+]);
+
+/** 读原料卡上的人工改动标记；脏值过滤掉，顺序按入库顺序保留。 */
+function readIngredientManualFields(
+  draft: IngredientCreationDraft,
+): IngredientCardField[] {
+  const ingredient = isRecord(draft.payload.ingredient)
+    ? draft.payload.ingredient
+    : null;
+  const raw = ingredient?.manualFields;
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return [
+    ...new Set(
+      raw.filter((field): field is IngredientCardField =>
+        typeof field === 'string'
+          ? INGREDIENT_CARD_FIELDS.has(field as IngredientCardField)
+          : false,
+      ),
+    ),
+  ];
+}
+
 /**
  * 逐 profile + fieldPath 比较「AI 提案」与「最终档案」，只记录有差异的字段。
  *
@@ -383,6 +424,7 @@ function buildAuditChanges(
   return {
     fields,
     exceptions: Array.isArray(exceptions) ? exceptions : [],
+    ingredientFields: readIngredientManualFields(draft),
   };
 }
 
@@ -746,6 +788,13 @@ export class IngredientCreationCommitService {
     const properties: Record<string, unknown> = {
       ingredientCreationDraftId: draftId,
     };
+    const nameEn = ingredient.nameEn?.trim();
+    if (nameEn) {
+      properties.name_en = nameEn;
+    }
+    if (ingredient.category) {
+      properties.coverage_category = ingredient.category;
+    }
     const cfctClass = ingredient.cfctClass?.trim();
     if (cfctClass) {
       properties.cfct_class = cfctClass;
@@ -805,7 +854,8 @@ export class IngredientCreationCommitService {
 
     return {
       name: `${ingredient.name}（${label}）`,
-      nameEn: prepared.sourceRecord.foodNameEn,
+      // 原料卡上人工核对过的英文名优先；没填才回退来源记录的英文名。
+      nameEn: ingredient.nameEn?.trim() || prepared.sourceRecord.foodNameEn,
       category: 'OTHER',
       // 来源身份写进列上，档案能直接追回哪条来源记录。
       dataSource: prepared.sourceRecord.sourceType,

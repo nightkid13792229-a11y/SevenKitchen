@@ -274,7 +274,9 @@ export class IngredientCreationController {
       userId: user.userId,
       ingredient: {
         name: dto.ingredient.name,
+        nameEn: dto.ingredient.nameEn ?? null,
         type: dto.ingredient.type,
+        category: dto.ingredient.category ?? null,
         baseUnit: dto.ingredient.baseUnit,
         unitDisplayLabel: dto.ingredient.unitDisplayLabel,
         cfctClass: dto.ingredient.cfctClass ?? null,

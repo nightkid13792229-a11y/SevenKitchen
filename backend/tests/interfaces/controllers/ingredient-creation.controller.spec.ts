@@ -291,6 +291,46 @@ describe('IngredientCreationController', () => {
         .expect(404);
     });
 
+    it('GET drafts/:id 原样返回审核页需要的 payload（原料卡 / 档案 / 证据 / 终检）', async () => {
+      const payload = {
+        ingredient: {
+          name: '鸡肝',
+          nameEn: 'Chicken liver',
+          type: 'FOOD' as const,
+          category: 'MEAT_ORGAN' as const,
+          baseUnit: 'G' as const,
+          unitDisplayLabel: '克',
+          cfctClass: '禽肉类及制品',
+          edibleYieldRate: 0.95,
+          manualFields: ['edibleYieldPercent' as const],
+        },
+        profiles: [
+          {
+            preparationState: 'RAW' as const,
+            sourceRecordId: 'src-primary',
+            entries: [evidenceEntry],
+            notes: null,
+          },
+        ],
+        evidence: [evidenceEntry],
+        checks: { blocking: [], exceptionable: [], warnings: [] },
+      };
+      draftService.get.mockResolvedValue(
+        createDraft({ step: 'INGREDIENT', payload }),
+      );
+
+      const response = await http()
+        .get(`${BASE_PATH}/drafts/draft-1`)
+        .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
+        .expect(200);
+
+      expect(draftService.get).toHaveBeenCalledWith('draft-1');
+      expect(response.body.data.payload).toEqual(payload);
+      expect(response.body.data.payload.ingredient.manualFields).toEqual([
+        'edibleYieldPercent',
+      ]);
+    });
+
     it('PATCH drafts/:id 剥掉 payload.proposalHistory，保留 profiles', async () => {
       draftService.patch.mockResolvedValue(
         createDraft({
@@ -391,6 +431,41 @@ describe('IngredientCreationController', () => {
           category: 'MEAT_ORGAN',
           notes: '用户原话',
         },
+      });
+    });
+
+    it('PATCH drafts/:id 保留 ingredient.manualFields（人工改动标记不被 whitelist 剥掉）', async () => {
+      draftService.patch.mockResolvedValue(
+        createDraft({ step: 'INGREDIENT', payload: {} }),
+      );
+
+      await authorizedPatch('/drafts/draft-1')
+        .send({
+          step: 'INGREDIENT',
+          payload: {
+            ingredient: {
+              name: '鸡肝',
+              nameEn: 'Chicken liver',
+              type: 'FOOD',
+              category: 'MEAT_ORGAN',
+              baseUnit: 'G',
+              unitDisplayLabel: '克',
+              cfctClass: '禽肉类及制品',
+              edibleYieldRate: 0.95,
+              manualFields: ['name', 'edibleYieldPercent'],
+            },
+          },
+        })
+        .expect(200);
+
+      expect(draftService.patch).toHaveBeenCalledTimes(1);
+      const payload = draftService.patch.mock.calls[0][2];
+      // 人工标记是 AI 工具跳过覆盖的唯一依据，绝不能在这一层丢掉。
+      expect(payload.ingredient).toMatchObject({
+        name: '鸡肝',
+        category: 'MEAT_ORGAN',
+        edibleYieldRate: 0.95,
+        manualFields: ['name', 'edibleYieldPercent'],
       });
     });
 

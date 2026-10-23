@@ -15,6 +15,9 @@ import { IngredientCreationCheckService } from './ingredient-creation-check.serv
 import { IngredientCreationDraftService } from './ingredient-creation-draft.service';
 import type {
   CheckItem,
+  IngredientCardField,
+  IngredientCreationDraft,
+  IngredientDraft,
   NutritionEvidenceEntry,
   ProfileDraft,
 } from './ingredient-creation.types';
@@ -222,6 +225,96 @@ const UPDATE_FIELDS_TOOL: AgentToolDefinition = {
   },
 };
 
+/** 原料卡可写字段：与 `IngredientCardField` 一一对应，白名单只在这里声明一次。 */
+const INGREDIENT_CARD_FIELDS = [
+  'name',
+  'nameEn',
+  'category',
+  'baseUnit',
+  'unitDisplayLabel',
+  'cfctClass',
+  'edibleYieldPercent',
+] as const satisfies readonly IngredientCardField[];
+
+const INGREDIENT_CARD_FIELD_SET: ReadonlySet<string> = new Set(
+  INGREDIENT_CARD_FIELDS,
+);
+
+const INGREDIENT_CATEGORIES = [
+  'MEAT_ORGAN',
+  'STARCHY_VEGETABLE',
+  'OTHER',
+] as const;
+
+const INGREDIENT_CATEGORY_SET: ReadonlySet<string> = new Set(
+  INGREDIENT_CATEGORIES,
+);
+
+const INGREDIENT_BASE_UNITS = ['G', 'ML', 'PCS'] as const;
+const INGREDIENT_BASE_UNIT_SET: ReadonlySet<string> = new Set(
+  INGREDIENT_BASE_UNITS,
+);
+
+/** 基准单位对应的默认展示名：AI 改单位但没给展示名时沿用这套。 */
+const DEFAULT_UNIT_DISPLAY_LABELS: Readonly<Record<string, string>> = {
+  G: '克',
+  ML: '毫升',
+  PCS: '个',
+};
+
+const INGREDIENT_NAME_MAX = 100;
+const INGREDIENT_NAME_EN_MAX = 200;
+const INGREDIENT_UNIT_LABEL_MAX = 50;
+const INGREDIENT_CFCT_CLASS_MAX = 100;
+
+const UPDATE_INGREDIENT_FIELDS_TOOL: AgentToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'updateIngredientFields',
+    description:
+      '修改草稿里「原料卡」的字段（名称 / 英文名 / 类别 / 基准单位 / 展示名 / CFCT 分类 / 可食部）。只写草稿，不碰正式原料。类别只接受 MEAT_ORGAN / STARCHY_VEGETABLE / OTHER，基准单位只接受 G / ML / PCS，可食部按 0–100 的百分数传。人工审核时改过的字段不会被覆盖，会在 skipped 里逐条说明；要改的字段都写清，校验失败会返回错误文本，按提示改正后重试。',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: `原料中文名（1–${INGREDIENT_NAME_MAX} 字）。`,
+        },
+        nameEn: {
+          type: 'string',
+          description: '英文名；传空字符串表示清空。没有把握就留空，不要编造。',
+        },
+        category: {
+          type: 'string',
+          enum: INGREDIENT_CATEGORIES,
+          description:
+            '原料类别，用于判断必需的生熟档案：MEAT_ORGAN=肉/内脏/水产/蛋，STARCHY_VEGETABLE=根茎淀粉类蔬菜，OTHER=其他。',
+        },
+        baseUnit: {
+          type: 'string',
+          enum: INGREDIENT_BASE_UNITS,
+          description: '基准单位：G=克，ML=毫升，PCS=个/件。',
+        },
+        unitDisplayLabel: {
+          type: 'string',
+          description: `单位展示名，例如「克」「毫升」「个」（最多 ${INGREDIENT_UNIT_LABEL_MAX} 字）。`,
+        },
+        cfctClass: {
+          type: 'string',
+          description:
+            'CFCT 分类，例如「禽肉类及制品」；判不准传空字符串清空，不要硬填。',
+        },
+        edibleYieldPercent: {
+          type: 'number',
+          description:
+            '可食部百分比，必须大于 0 且不超过 100（例如带骨肉 85 表示 85%）；未知就不要传，留作待补。',
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+};
+
 const RUN_CHECK_TOOL: AgentToolDefinition = {
   type: 'function',
   function: {
@@ -412,6 +505,196 @@ function readProfiles(draft: {
   return Array.isArray(draft.payload.profiles) ? draft.payload.profiles : [];
 }
 
+/** 只认受控类别词表；脏值当作没填，不硬猜。 */
+function readIngredientCategory(value: unknown): IngredientDraft['category'] {
+  return typeof value === 'string' && INGREDIENT_CATEGORY_SET.has(value)
+    ? (value as IngredientDraft['category'])
+    : null;
+}
+
+function readIngredientBaseUnit(
+  value: unknown,
+): IngredientDraft['baseUnit'] | null {
+  return typeof value === 'string' && INGREDIENT_BASE_UNIT_SET.has(value)
+    ? (value as IngredientDraft['baseUnit'])
+    : null;
+}
+
+/**
+ * 从草稿里读原料卡；还没有卡片时按草稿名 / 起手卡兜底出一张空卡。
+ *
+ * 兜底顺序有意为之：原料卡上的值优先，其次起手卡（人纠正过的名字与类别
+ * 在那边更准），最后才是创建草稿时的原始名称。
+ */
+function readIngredientEditorCard(
+  draft: IngredientCreationDraft,
+): IngredientDraft {
+  const stored = isRecord(draft.payload.ingredient)
+    ? draft.payload.ingredient
+    : null;
+  const intake = isRecord(draft.payload.intake) ? draft.payload.intake : null;
+
+  const baseUnit = readIngredientBaseUnit(stored?.baseUnit) ?? ('G' as const);
+  const category =
+    readIngredientCategory(stored?.category) ??
+    readIngredientCategory(intake?.category);
+
+  const name =
+    normalizeText(stored?.name) ||
+    normalizeText(intake?.name) ||
+    draft.name.trim();
+  const nameEn = normalizeText(stored?.nameEn) || normalizeText(intake?.nameEn);
+  const unitDisplayLabel =
+    normalizeText(stored?.unitDisplayLabel) ||
+    DEFAULT_UNIT_DISPLAY_LABELS[baseUnit] ||
+    baseUnit;
+  const cfctClass = normalizeText(stored?.cfctClass);
+  const edibleYieldRate = readFiniteNumber(stored?.edibleYieldRate);
+  const manualFields = Array.isArray(stored?.manualFields)
+    ? [
+        ...new Set(
+          stored.manualFields.filter(
+            (field): field is IngredientCardField =>
+              typeof field === 'string' && INGREDIENT_CARD_FIELD_SET.has(field),
+          ),
+        ),
+      ]
+    : [];
+
+  return {
+    name,
+    nameEn: nameEn || null,
+    type: 'FOOD',
+    category,
+    baseUnit,
+    unitDisplayLabel,
+    cfctClass: cfctClass || null,
+    edibleYieldRate:
+      edibleYieldRate !== null && edibleYieldRate > 0 && edibleYieldRate <= 1
+        ? edibleYieldRate
+        : null,
+    manualFields,
+  };
+}
+
+type IngredientFieldValue = string | number | null;
+
+type IngredientFieldValidation =
+  | { ok: true; value: IngredientFieldValue }
+  | { ok: false; error: string };
+
+/**
+ * 原料卡单字段校验。
+ *
+ * 与前端表单同一套口径：类别 / 基准单位是枚举，可食部是 (0, 100] 百分数，
+ * 长度上限对齐数据库列（展示名 50、CFCT 50 余量到 100、名称 100）。
+ */
+function validateIngredientField(
+  field: IngredientCardField,
+  raw: unknown,
+): IngredientFieldValidation {
+  switch (field) {
+    case 'name': {
+      const name = normalizeText(raw);
+      if (!name) {
+        return { ok: false, error: 'name 不能为空。' };
+      }
+      if (Array.from(name).length > INGREDIENT_NAME_MAX) {
+        return {
+          ok: false,
+          error: `name 最多 ${INGREDIENT_NAME_MAX} 个字符，收到 ${Array.from(name).length} 个。`,
+        };
+      }
+      return { ok: true, value: name };
+    }
+    case 'nameEn': {
+      if (typeof raw !== 'string') {
+        return { ok: false, error: 'nameEn 必须是字符串；没有就传空字符串。' };
+      }
+      const nameEn = raw.trim();
+      if (Array.from(nameEn).length > INGREDIENT_NAME_EN_MAX) {
+        return {
+          ok: false,
+          error: `nameEn 最多 ${INGREDIENT_NAME_EN_MAX} 个字符，收到 ${Array.from(nameEn).length} 个。`,
+        };
+      }
+      return { ok: true, value: nameEn || null };
+    }
+    case 'category': {
+      if (typeof raw !== 'string' || !INGREDIENT_CATEGORY_SET.has(raw.trim())) {
+        return {
+          ok: false,
+          error: `category 只能是 ${INGREDIENT_CATEGORIES.join(' / ')}；收到「${normalizeText(raw) || '（空）'}」。`,
+        };
+      }
+      return { ok: true, value: raw.trim() };
+    }
+    case 'baseUnit': {
+      if (
+        typeof raw !== 'string' ||
+        !INGREDIENT_BASE_UNIT_SET.has(raw.trim())
+      ) {
+        return {
+          ok: false,
+          error: `baseUnit 只能是 ${INGREDIENT_BASE_UNITS.join(' / ')}；收到「${normalizeText(raw) || '（空）'}」。`,
+        };
+      }
+      return { ok: true, value: raw.trim() };
+    }
+    case 'unitDisplayLabel': {
+      const label = normalizeText(raw);
+      if (!label) {
+        return {
+          ok: false,
+          error:
+            'unitDisplayLabel 不能为空；例如基准单位 G 用「克」、ML 用「毫升」。',
+        };
+      }
+      if (Array.from(label).length > INGREDIENT_UNIT_LABEL_MAX) {
+        return {
+          ok: false,
+          error: `unitDisplayLabel 最多 ${INGREDIENT_UNIT_LABEL_MAX} 个字符，收到 ${Array.from(label).length} 个。`,
+        };
+      }
+      return { ok: true, value: label };
+    }
+    case 'cfctClass': {
+      if (raw !== null && typeof raw !== 'string') {
+        return {
+          ok: false,
+          error: 'cfctClass 必须是字符串；判不准就传空字符串清空。',
+        };
+      }
+      const cfctClass = normalizeText(raw);
+      if (Array.from(cfctClass).length > INGREDIENT_CFCT_CLASS_MAX) {
+        return {
+          ok: false,
+          error: `cfctClass 最多 ${INGREDIENT_CFCT_CLASS_MAX} 个字符，收到 ${Array.from(cfctClass).length} 个。`,
+        };
+      }
+      return { ok: true, value: cfctClass || null };
+    }
+    case 'edibleYieldPercent': {
+      const percent = readFiniteNumber(raw);
+      if (percent === null) {
+        return {
+          ok: false,
+          error: 'edibleYieldPercent 必须是数字（0–100 的百分数）。',
+        };
+      }
+      if (percent <= 0 || percent > 100) {
+        return {
+          ok: false,
+          error: `edibleYieldPercent 必须在 (0, 100] 之间；收到 ${percent}。`,
+        };
+      }
+      return { ok: true, value: percent };
+    }
+    default:
+      return { ok: false, error: `不支持的原料卡字段「${field}」。` };
+  }
+}
+
 interface ValidatedFieldArgs {
   field: NutritionFieldDefinition;
   fieldPath: string;
@@ -501,6 +784,7 @@ export class IngredientCreationToolsService {
       GET_RECORD_TOOL,
       UPDATE_FIELD_TOOL,
       UPDATE_FIELDS_TOOL,
+      UPDATE_INGREDIENT_FIELDS_TOOL,
       RUN_CHECK_TOOL,
     ];
   }
@@ -557,6 +841,8 @@ export class IngredientCreationToolsService {
         return this.updateNutritionField(input.draftId, input.args);
       case 'updateNutritionFields':
         return this.updateNutritionFields(input.draftId, input.args);
+      case 'updateIngredientFields':
+        return this.updateIngredientFields(input.draftId, input.args);
       case 'runCheck':
         return this.runCheck(input.draftId);
       default:
@@ -841,6 +1127,161 @@ export class IngredientCreationToolsService {
       content: okContent({ applied, failed }),
       progress: {
         writtenFieldPaths,
+        sourceRecordIds: [],
+      },
+    };
+  }
+
+  /**
+   * 工具 5：写草稿里的原料卡（名称 / 英文名 / 类别 / 基准单位 / 展示名 /
+   * CFCT 分类 / 可食部）。
+   *
+   * 三道闸门都在这里：
+   * - 字段白名单：未知字段直接拒绝，不让 `brand` 之类混进草稿；
+   * - 枚举 / 长度 / 范围：非法值返回错误文本，模型可以照着改；
+   * - 人工保护：`ingredient.manualFields` 里的字段一律跳过并说明，
+   *   AI 不能把审核人刚改过的判断悄悄改回去。
+   */
+  private async updateIngredientFields(
+    draftId: string,
+    args: Record<string, unknown>,
+  ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
+    const unsupported = Object.keys(args).filter(
+      (key) => !INGREDIENT_CARD_FIELD_SET.has(key),
+    );
+    if (unsupported.length > 0) {
+      return this.error(
+        `updateIngredientFields 不支持字段「${unsupported.join('、')}」。可写字段只有：${INGREDIENT_CARD_FIELDS.join('、')}。`,
+      );
+    }
+
+    const provided = INGREDIENT_CARD_FIELDS.filter((field) => field in args);
+    if (provided.length === 0) {
+      return this.error(
+        `updateIngredientFields 至少需要一个字段（${INGREDIENT_CARD_FIELDS.join('、')}）。`,
+      );
+    }
+
+    const draft = await this.draftService.get(draftId);
+    const current = readIngredientEditorCard(draft);
+    const next: IngredientDraft = {
+      ...current,
+      manualFields: [...(current.manualFields ?? [])],
+    };
+    const previousBaseUnit = current.baseUnit;
+    const applied: IngredientCardField[] = [];
+    const skipped: Array<{ field: IngredientCardField; reason: string }> = [];
+    const changed: IngredientCardField[] = [];
+
+    for (const field of provided) {
+      if ((next.manualFields ?? []).includes(field)) {
+        skipped.push({
+          field,
+          reason:
+            '该字段在人工审核时改过，AI 不覆盖；如确需修改，请让审核人在页面上改。',
+        });
+        continue;
+      }
+
+      const validation = validateIngredientField(field, args[field]);
+      if (!validation.ok) {
+        return this.error(validation.error);
+      }
+
+      if (field === 'edibleYieldPercent') {
+        // 页面与工具都用百分数；库里沿用既有比例（0, 1]。
+        const percent = validation.value as number;
+        const rate = Math.round(percent * 100) / 10000;
+        if (next.edibleYieldRate !== rate) {
+          next.edibleYieldRate = rate;
+          changed.push(field);
+        }
+        applied.push(field);
+        continue;
+      }
+
+      if (field === 'name') {
+        const value = validation.value as string;
+        if (next.name !== value) {
+          next.name = value;
+          changed.push(field);
+        }
+        applied.push(field);
+        continue;
+      }
+
+      if (field === 'nameEn' || field === 'cfctClass') {
+        const value = validation.value as string | null;
+        if (next[field] !== value) {
+          next[field] = value;
+          changed.push(field);
+        }
+        applied.push(field);
+        continue;
+      }
+
+      if (field === 'category') {
+        const value = validation.value as IngredientDraft['category'];
+        if (next.category !== value) {
+          next.category = value;
+          changed.push(field);
+        }
+        applied.push(field);
+        continue;
+      }
+
+      if (field === 'baseUnit') {
+        const value = validation.value as IngredientDraft['baseUnit'];
+        if (next.baseUnit !== value) {
+          next.baseUnit = value;
+          changed.push(field);
+        }
+        applied.push(field);
+
+        // 改基准单位但没给展示名：只把「旧单位的默认展示名」换成新单位的默认值。
+        if (
+          !provided.includes('unitDisplayLabel') &&
+          !(next.manualFields ?? []).includes('unitDisplayLabel') &&
+          next.unitDisplayLabel ===
+            DEFAULT_UNIT_DISPLAY_LABELS[previousBaseUnit]
+        ) {
+          const label = DEFAULT_UNIT_DISPLAY_LABELS[value] ?? value;
+          if (next.unitDisplayLabel !== label) {
+            next.unitDisplayLabel = label;
+            changed.push('unitDisplayLabel');
+            applied.push('unitDisplayLabel');
+          }
+        }
+        continue;
+      }
+
+      const value = validation.value as string;
+      if (next.unitDisplayLabel !== value) {
+        next.unitDisplayLabel = value;
+        changed.push(field);
+      }
+      applied.push(field);
+    }
+
+    if (changed.length > 0) {
+      await this.draftService.patch(draftId, draft.step, { ingredient: next });
+    }
+
+    return {
+      ok: true,
+      content: okContent({
+        applied,
+        skipped,
+        changed,
+        ingredient: next,
+        ...(skipped.length > 0
+          ? {
+              hint: 'skipped 里的字段是人工审核改过的，AI 不覆盖；不要重复尝试写它们。',
+            }
+          : {}),
+      }),
+      progress: {
+        writtenFieldPaths: changed.map((field) => `ingredient.${field}`),
         sourceRecordIds: [],
       },
     };

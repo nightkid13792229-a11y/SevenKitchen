@@ -24,7 +24,10 @@ export interface AgentStepView {
 /** 已知工具的中文名；新增工具没登记时按原始名显示，不隐藏。 */
 const TOOL_LABELS: Record<string, string> = {
   searchLocalNutrition: '查本地库',
+  getNutritionRecord: '读来源记录',
   updateNutritionField: '写字段',
+  updateNutritionFields: '批量写字段',
+  updateIngredientFields: '改原料卡',
   runCheck: '跑终检'
 }
 
@@ -93,12 +96,49 @@ function summarizeUnknownArgs(args: AnyArgs): string {
   }
 }
 
+/** 原料卡工具的参数名 → 中文，让记录能直接读懂。 */
+const INGREDIENT_FIELD_LABELS: Record<string, string> = {
+  name: '名称',
+  nameEn: '英文名',
+  category: '类别',
+  baseUnit: '基准单位',
+  unitDisplayLabel: '展示名',
+  cfctClass: 'CFCT',
+  edibleYieldPercent: '可食部'
+}
+
+/** 改原料卡：名称=鸡肝 · 类别=MEAT_ORGAN · 可食部=95 */
+function summarizeIngredientFields(args: AnyArgs): string {
+  const parts = Object.entries(args)
+    .filter(([key]) => key in INGREDIENT_FIELD_LABELS)
+    .map(
+      ([key, value]) =>
+        `${INGREDIENT_FIELD_LABELS[key]}=${formatValue(value)}`
+    )
+  return oneLine(parts.join(' · ') || '（无字段）')
+}
+
+/** 批量写字段：档案 0 · 12 项 */
+function summarizeBatchUpdate(args: AnyArgs): string {
+  const profileIndex = formatValue(args.profileIndex)
+  const entries = Array.isArray(args.entries) ? args.entries.length : 0
+  return oneLine(`档案 ${profileIndex} · ${entries} 项`)
+}
+
 function summarize(name: string, args: AnyArgs): string {
   switch (name) {
     case 'searchLocalNutrition':
       return summarizeSearch(args)
+    case 'getNutritionRecord': {
+      const id = readText(args.sourceRecordId)
+      return oneLine(id || '（未填来源记录）')
+    }
     case 'updateNutritionField':
       return summarizeUpdate(args)
+    case 'updateNutritionFields':
+      return summarizeBatchUpdate(args)
+    case 'updateIngredientFields':
+      return summarizeIngredientFields(args)
     case 'runCheck':
       return '检查整份草稿'
     default: {

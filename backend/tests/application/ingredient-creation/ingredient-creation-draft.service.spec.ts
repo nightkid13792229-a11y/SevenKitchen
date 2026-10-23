@@ -28,8 +28,7 @@ type DraftRow = {
 function createPrismaMock() {
   const rows = new Map<string, DraftRow>();
   let sequence = 0;
-  const clone = <T>(value: T): T =>
-    JSON.parse(JSON.stringify(value)) as T;
+  const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
   const toRawRow = (row: DraftRow) => ({
     id: row.id,
@@ -76,59 +75,66 @@ function createPrismaMock() {
         return row ? clone(row) : null;
       }),
     },
-    $queryRaw: jest.fn(async (strings: TemplateStringsArray, ...values: any[]) => {
-      const sql = strings.join('?');
+    $queryRaw: jest.fn(
+      async (strings: TemplateStringsArray, ...values: any[]) => {
+        const sql = strings.join('?');
 
-      // 未完成草稿列表：只查摘要列 + payload 里的 intake.nameEn，不取整份 payload。
-      if (sql.includes('intake_name_en')) {
-        const createdBy = values[0] as string;
-        const limit = Number(values[1]);
-        return [...rows.values()]
-          .filter((row) => row.createdBy === createdBy && row.step !== 'COMMIT')
-          .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
-          .slice(0, limit)
-          .map((row) => ({
-            id: row.id,
-            name: row.name,
-            step: row.step,
-            updated_at: row.updatedAt,
-            intake_name_en: readIntakeNameEn(row.payload),
-          }));
-      }
-
-      if (sql.includes('proposalHistory')) {
-        const entries = JSON.parse(values[0] as string) as unknown[];
-        const row = rows.get(values[1] as string);
-        if (!row) {
-          return [];
+        // 未完成草稿列表：只查摘要列 + payload 里的 intake.nameEn，不取整份 payload。
+        if (sql.includes('intake_name_en')) {
+          const createdBy = values[0] as string;
+          const limit = Number(values[1]);
+          return [...rows.values()]
+            .filter(
+              (row) => row.createdBy === createdBy && row.step !== 'COMMIT',
+            )
+            .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+            .slice(0, limit)
+            .map((row) => ({
+              id: row.id,
+              name: row.name,
+              step: row.step,
+              updated_at: row.updatedAt,
+              intake_name_en: readIntakeNameEn(row.payload),
+            }));
         }
-        const payload = (row.payload ?? {}) as Record<string, unknown>;
-        const history = Array.isArray(payload.proposalHistory)
-          ? (payload.proposalHistory as unknown[])
-          : [];
-        row.payload = {
-          ...payload,
-          proposalHistory: [...history, ...entries],
-        };
-        row.updatedAt = new Date();
-        return [{ id: row.id }];
-      }
 
-      if (sql.includes('payload ||')) {
-        const fragment = JSON.parse(values[0] as string) as Record<string, unknown>;
-        const step = values[1] as string;
-        const row = rows.get(values[2] as string);
-        if (!row) {
-          return [];
+        if (sql.includes('proposalHistory')) {
+          const entries = JSON.parse(values[0] as string) as unknown[];
+          const row = rows.get(values[1] as string);
+          if (!row) {
+            return [];
+          }
+          const payload = (row.payload ?? {}) as Record<string, unknown>;
+          const history = Array.isArray(payload.proposalHistory)
+            ? (payload.proposalHistory as unknown[])
+            : [];
+          row.payload = {
+            ...payload,
+            proposalHistory: [...history, ...entries],
+          };
+          row.updatedAt = new Date();
+          return [{ id: row.id }];
         }
-        row.payload = { ...(row.payload as object), ...fragment };
-        row.step = step;
-        row.updatedAt = new Date();
-        return [toRawRow(row)];
-      }
 
-      throw new Error(`Unexpected raw SQL in test: ${sql}`);
-    }),
+        if (sql.includes('payload ||')) {
+          const fragment = JSON.parse(values[0] as string) as Record<
+            string,
+            unknown
+          >;
+          const step = values[1] as string;
+          const row = rows.get(values[2] as string);
+          if (!row) {
+            return [];
+          }
+          row.payload = { ...(row.payload as object), ...fragment };
+          row.step = step;
+          row.updatedAt = new Date();
+          return [toRawRow(row)];
+        }
+
+        throw new Error(`Unexpected raw SQL in test: ${sql}`);
+      },
+    ),
   };
   return client;
 }
@@ -316,6 +322,61 @@ describe('IngredientCreationDraftService', () => {
     await expect(service.get('missing-draft')).rejects.toBeInstanceOf(
       NotFoundException,
     );
+  });
+
+  it('get 原样返回完整 payload：原料卡、营养档案、证据与终检结果', async () => {
+    const payload = {
+      ingredient: {
+        name: '鸡肝',
+        nameEn: 'Chicken liver',
+        type: 'FOOD',
+        category: 'MEAT_ORGAN',
+        baseUnit: 'G',
+        unitDisplayLabel: '克',
+        cfctClass: '禽肉类及制品',
+        edibleYieldRate: 0.95,
+        manualFields: ['edibleYieldPercent'],
+      },
+      profiles: [
+        {
+          preparationState: 'RAW',
+          sourceRecordId: 'src-raw',
+          entries: [
+            {
+              fieldPath: 'macros.crudeProtein',
+              finalValue: 20.4,
+              unit: 'g',
+              status: 'DIRECT',
+              sourceRecordId: 'src-raw',
+              sourceValue: 20.4,
+              sourceUnit: 'g',
+              formula: null,
+              confirmedBy: null,
+              confirmedAt: null,
+            },
+          ],
+          notes: null,
+        },
+      ],
+      evidence: [],
+      checks: { blocking: [], exceptionable: [], warnings: [] },
+    };
+    await seedDraft({ id: 'review-draft', step: 'INGREDIENT', payload });
+
+    const draft = await service.get('review-draft');
+
+    expect(draft.step).toBe('INGREDIENT');
+    // 审核页靠这份 payload 渲染原料卡与营养档案，四个键一个都不能少。
+    expect(draft.payload).toEqual(payload);
+    expect(draft.payload.ingredient?.manualFields).toEqual([
+      'edibleYieldPercent',
+    ]);
+    expect(draft.payload.profiles?.[0]?.entries[0]?.finalValue).toBe(20.4);
+    expect(draft.payload.checks).toEqual({
+      blocking: [],
+      exceptionable: [],
+      warnings: [],
+    });
   });
 
   describe('listUnfinished', () => {

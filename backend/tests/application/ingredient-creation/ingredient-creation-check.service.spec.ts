@@ -363,6 +363,35 @@ describe('IngredientCreationCheckService', () => {
     });
   });
 
+  it('审核页改了原料卡类别 → required 以卡片为准，不再用旧起手卡', async () => {
+    draftService.get.mockResolvedValue(
+      createDraft({
+        payload: {
+          // 起手卡是「肉/内脏」（必需生），但人在原料卡上改成了根茎淀粉类（必需熟）。
+          intake: intakeCard,
+          ingredient: {
+            name: '鸡肝',
+            type: 'FOOD',
+            category: 'STARCHY_VEGETABLE',
+            baseUnit: 'G',
+            unitDisplayLabel: '克',
+            cfctClass: null,
+            edibleYieldRate: null,
+          },
+          mergePlan: fullMergePlan,
+          profiles: [profile('RAW', 'src-primary', [])],
+        },
+      }),
+    );
+
+    await service.runCheck('draft-1');
+
+    expect(runFinalCheckMock.mock.calls[0][0].coverage).toEqual({
+      required: ['COOKED'],
+      present: ['RAW'],
+    });
+  });
+
   it('没有 profiles 时，只按主来源的 sampleState 判断 present', async () => {
     prisma.nutritionSourceRecord.findMany.mockResolvedValue(
       primarySourceRecord('COOKED'),

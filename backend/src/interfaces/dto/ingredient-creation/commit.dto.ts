@@ -18,6 +18,7 @@ import type { IngredientDraft } from '../../../application/ingredient-creation/i
 import type { PreparationState } from '../../../domain/ingredient-creation/preparation-state';
 import {
   BASE_UNITS,
+  COVERAGE_CATEGORIES,
   INGREDIENT_TYPES,
   PREPARATION_STATES,
 } from './ingredient-creation.constants';
@@ -30,9 +31,23 @@ export class CommitIngredientDto {
   @IsNotEmpty()
   name!: string;
 
+  @ApiPropertyOptional({ description: '英文名', nullable: true })
+  @IsOptional()
+  @IsString()
+  nameEn?: string | null;
+
   @ApiProperty({ description: '原料类型', enum: INGREDIENT_TYPES })
   @IsIn(INGREDIENT_TYPES)
   type!: IngredientDraft['type'];
+
+  @ApiPropertyOptional({
+    description: '原料类别（判断必需生熟档案）',
+    enum: COVERAGE_CATEGORIES,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsIn(COVERAGE_CATEGORIES)
+  category?: IngredientDraft['category'];
 
   @ApiProperty({ description: '基准单位', enum: BASE_UNITS })
   @IsIn(BASE_UNITS)

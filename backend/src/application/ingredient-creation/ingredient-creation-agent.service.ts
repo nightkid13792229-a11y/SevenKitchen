@@ -311,6 +311,37 @@ function buildDraftPromptLines(draft: IngredientCreationDraft): string[] {
     );
   }
 
+  const ingredient = isRecord(draft.payload.ingredient)
+    ? draft.payload.ingredient
+    : null;
+  if (ingredient) {
+    const percent =
+      typeof ingredient.edibleYieldRate === 'number'
+        ? `${Math.round(ingredient.edibleYieldRate * 10000) / 100}%`
+        : '待补';
+    lines.push(
+      `原料卡：名称=${String(ingredient.name ?? '')} 英文名=${String(
+        ingredient.nameEn ?? '待补',
+      )} 类别=${String(ingredient.category ?? '待补')} 基准单位=${String(
+        ingredient.baseUnit ?? 'G',
+      )} 展示名=${String(ingredient.unitDisplayLabel ?? '')} CFCT=${String(
+        ingredient.cfctClass ?? '待补',
+      )} 可食部=${percent}`,
+    );
+    const manualFields = Array.isArray(ingredient.manualFields)
+      ? ingredient.manualFields.filter((field) => typeof field === 'string')
+      : [];
+    if (manualFields.length > 0) {
+      lines.push(
+        `人工审核已改字段（updateIngredientFields 会拒绝覆盖，不要重复尝试）：${manualFields.join('、')}`,
+      );
+    }
+  } else {
+    lines.push(
+      '（草稿还没有原料卡。可用 updateIngredientFields 写名称 / 英文名 / 类别 / 基准单位 / 展示名 / CFCT 分类 / 可食部。）',
+    );
+  }
+
   const profiles = Array.isArray(draft.payload.profiles)
     ? draft.payload.profiles
     : [];
@@ -357,6 +388,7 @@ function buildSystemPrompt(
     '- 只能读写草稿。系统没有提交、确认可用、批准例外的工具；不要假装能做，也不要建议用户让你做。',
     '- 每一轮可以返回一个或多个工具调用；也可以直接给出最终回复。',
     '- 读到多个营养值后，**优先用 updateNutritionFields 一次写入**（单次最多 70 条），不要 60 个字段调 60 次 updateNutritionField。',
+    '- 原料卡（名称 / 英文名 / 类别 / 基准单位 / 展示名 / CFCT / 可食部）用 updateIngredientFields 写；人工审核改过的字段会被跳过，不要反复重试。',
     '- 不要编造营养数值。只写来源记录里有的值，或用户明确给出的值。',
     '- 工具报错表示输入不合法。按错误文本改正参数后重试；连续改不出来就停下，说明卡在哪。',
     `- 本轮预算：最多 ${INGREDIENT_AGENT_MAX_TOOL_CALLS} 次工具调用 / ${INGREDIENT_AGENT_TIMEOUT_MS / 1000} 秒；连续 ${INGREDIENT_AGENT_MAX_NO_PROGRESS} 次工具调用没有新进展会被系统停止。`,
@@ -489,7 +521,7 @@ function buildStopReply(input: {
  * （查库 → 写字段 → 跑校验 → 按报错改），直到给出最终回复或撞上限。
  *
  * 安全边界不靠模型自觉：
- * - 工具层只有 5 个，全部只碰草稿；提交 / 确认可用不在这里；
+ * - 工具层只有 6 个，全部只碰草稿；提交 / 确认可用不在这里；
  * - 硬保险丝：80 次工具调用 / 180 秒 / 可配 token 预算；
  * - 软停止：连续 3 次工具调用没有新进展（不写字段、不发现新来源）就停；
  * - 停下来不回滚：已写入的草稿保持原样，reply 说明还剩什么；

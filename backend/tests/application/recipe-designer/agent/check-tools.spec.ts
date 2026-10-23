@@ -1,0 +1,391 @@
+import type { AgentAssessmentEntry } from 'src/application/recipe-designer/agent/agent-types';
+import {
+  computeMarginPercent,
+  createCheckTools,
+} from 'src/application/recipe-designer/agent/check-tools';
+import {
+  createFakeRecipeAgentPort,
+  fakeAssessment,
+  fakeDraftSnapshot,
+} from '../../../helpers/fake-recipe-agent-port';
+
+const tagPolicy = {
+  isAllowedTag: (name: string) =>
+    ['低脂', '易消化', '单一动物蛋白'].includes(name),
+};
+
+describe('computeMarginPercent', () => {
+  it('下限 100、值 120 → 20%', () => {
+    expect(computeMarginPercent({ value: 120, min: 100, max: null })).toBe(20);
+  });
+
+  it('上限 100、值 80 → 20%', () => {
+    expect(computeMarginPercent({ value: 80, min: null, max: 100 })).toBe(20);
+  });
+
+  it('同时有上下限时取更近的一边', () => {
+    expect(computeMarginPercent({ value: 110, min: 100, max: 200 })).toBe(10);
+  });
+
+  it('缺值返回 null', () => {
+    expect(
+      computeMarginPercent({ value: null, min: 100, max: null }),
+    ).toBeNull();
+  });
+
+  it('分母为 0 或值为 null 都返回 null', () => {
+    expect(computeMarginPercent({ value: 10, min: 0, max: null })).toBeNull();
+    expect(computeMarginPercent({ value: null, min: 0, max: 100 })).toBeNull();
+  });
+
+  it('结果保留 1 位小数', () => {
+    // (110 - 90) / 90 * 100 = 22.222…
+    expect(computeMarginPercent({ value: 110, min: 90, max: null })).toBe(22.2);
+  });
+});
+
+describe('check tools', () => {
+  it('run_assessment 调端口并返回评估', async () => {
+    const port = createFakeRecipeAgentPort();
+    const tools = createCheckTools({ port, draftId: 'draft-1', tagPolicy });
+    const result = await tools.run_assessment();
+    expect(result.ok).toBe(true);
+    expect(port.runAssessment).toHaveBeenCalledWith('draft-1');
+    if (!result.ok) return;
+    expect(result.data.contentRevision).toBe(4);
+    expect(result.summary).toContain('34/34');
+  });
+
+  it('评估过期时 check_ready 必须 BLOCKED', async () => {
+    const port = createFakeRecipeAgentPort({
+      draft: fakeDraftSnapshot({ contentRevision: 5 }),
+      assessment: fakeAssessment({ contentRevision: 4 }),
+    });
+    const tools = createCheckTools({ port, draftId: 'draft-1', tagPolicy });
+    const result = await tools.check_ready();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.status).toBe('BLOCKED');
+    expect(
+      result.data.checks.find((c) => c.key === 'ASSESSMENT_FRESH')?.status,
+    ).toBe('FAIL');
+  });
+
+  it('有 MISSING_DATA 时不能 PASS', async () => {
+    const port = createFakeRecipeAgentPort({
+      assessment: fakeAssessment({ missingData: 1 }),
+    });
+    const tools = createCheckTools({ port, draftId: 'draft-1', tagPolicy });
+    const result = await tools.check_ready();
+    if (!result.ok) return;
+    expect(result.data.status).toBe('BLOCKED');
+  });
+
+  it('正好 20% 余量算 PASS；19.9% 是 PASS_WITH_WARNINGS', async () => {
+    const make = (marginPercent: number) =>
+      createCheckTools({
+        port: createFakeRecipeAgentPort({
+          assessment: fakeAssessment({
+            entries: [{ ...fakeAssessment().entries[0], marginPercent }],
+          }),
+        }),
+        draftId: 'draft-1',
+        tagPolicy,
+      });
+
+    const passResult = await make(20).check_ready();
+    expect(passResult.ok).toBe(true);
+    if (!passResult.ok) return;
+    expect(passResult.data.status).toBe('PASS');
+
+    const warnResult = await make(19.9).check_ready();
+    expect(warnResult.ok).toBe(true);
+    if (!warnResult.ok) return;
+    expect(warnResult.data.status).toBe('PASS_WITH_WARNINGS');
+  });
+
+  it('缺菌藻且没确认 → BLOCKED；确认过 → PASS_WITH_WARNINGS', async () => {
+    const draft = fakeDraftSnapshot({
+      items: fakeDraftSnapshot().items.filter((i) => i.category !== 'MUSHROOM'),
+    });
+    const tools = createCheckTools({
+      port: createFakeRecipeAgentPort({ draft }),
+      draftId: 'draft-1',
+      tagPolicy,
+    });
+    const blocked = await tools.check_ready();
+    const confirmed = await tools.check_ready({
+      confirmedOmissions: ['MUSHROOM'],
+    });
+    if (!blocked.ok || !confirmed.ok) return;
+    expect(blocked.data.status).toBe('BLOCKED');
+    expect(confirmed.data.status).toBe('PASS_WITH_WARNINGS');
+  });
+
+  it('已批例外可以把达标失败降为警告', async () => {
+    const tools = createCheckTools({
+      port: createFakeRecipeAgentPort({
+        assessment: fakeAssessment({ deficient: 1 }),
+      }),
+      draftId: 'draft-1',
+      tagPolicy,
+    });
+    const result = await tools.check_ready({ exceptionApproved: true });
+    if (!result.ok) return;
+    expect(result.data.status).toBe('PASS_WITH_WARNINGS');
+    expect(
+      result.data.checks.find((c) => c.key === 'ASSESSMENT_COMPLIANT')?.detail,
+    ).toContain('已批例外');
+  });
+
+  it('check_coverage 报出缺类；确认过的不算缺', async () => {
+    const draft = fakeDraftSnapshot({
+      items: fakeDraftSnapshot().items.filter((i) => i.category !== 'MUSHROOM'),
+    });
+    const tools = createCheckTools({
+      port: createFakeRecipeAgentPort({ draft }),
+      draftId: 'draft-1',
+      tagPolicy,
+    });
+    const open = await tools.check_coverage();
+    const confirmed = await tools.check_coverage({
+      confirmedOmissions: ['MUSHROOM'],
+    });
+    if (!open.ok || !confirmed.ok) return;
+    expect(open.data.missing).toEqual(['MUSHROOM']);
+    expect(open.data.confirmedOmissions).toEqual([]);
+    expect(confirmed.data.missing).toEqual([]);
+    expect(confirmed.data.confirmedOmissions).toEqual(['MUSHROOM']);
+  });
+
+  it('check_coverage 的缺类确认会去重，空白值返回 INVALID_ARGUMENT', async () => {
+    const tools = createCheckTools({
+      port: createFakeRecipeAgentPort(),
+      draftId: 'draft-1',
+      tagPolicy,
+    });
+
+    const deduped = await tools.check_coverage({
+      confirmedOmissions: ['MUSHROOM', 'MUSHROOM'],
+    });
+    expect(deduped.ok).toBe(true);
+    if (!deduped.ok) return;
+    expect(deduped.data.confirmedOmissions).toEqual(['MUSHROOM']);
+
+    const blank = await tools.check_coverage({
+      confirmedOmissions: ['MUSHROOM', '   '] as never,
+    });
+    expect(blank.ok).toBe(false);
+    if (blank.ok) return;
+    expect(blank.error.code).toBe('INVALID_ARGUMENT');
+  });
+
+  it('没有主蛋白时目录对比返回空证据，不抛错', async () => {
+    const draft = fakeDraftSnapshot({
+      items: fakeDraftSnapshot().items.filter((i) => i.category !== 'PROTEIN'),
+    });
+    const port = createFakeRecipeAgentPort({ draft });
+    const tools = createCheckTools({ port, draftId: 'draft-1', tagPolicy });
+    const result = await tools.check_catalog_conflicts();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data).toEqual([]);
+    expect(result.summary).toContain('没有主蛋白可对比');
+    expect(port.getCatalogUsage).not.toHaveBeenCalled();
+  });
+
+  it('多种蛋白时取克数最大的作为主蛋白', async () => {
+    const items = fakeDraftSnapshot().items.map((item) =>
+      item.category === 'PROTEIN'
+        ? { ...item, name: '鸭腿肉', weightG: 450 }
+        : item,
+    );
+    items.push({ ...items[0], id: 'item-8', name: '鸡胸肉', weightG: 100 });
+    const port = createFakeRecipeAgentPort({
+      draft: fakeDraftSnapshot({ items }),
+    });
+    const tools = createCheckTools({ port, draftId: 'draft-1', tagPolicy });
+    await tools.check_catalog_conflicts();
+    expect(port.getCatalogUsage).toHaveBeenCalledWith({
+      mainProteinName: '鸭腿肉',
+    });
+  });
+
+  it('主蛋白重合报 HARD，软类重合只报 SOFT', async () => {
+    const catalogUsage = {
+      totalPublishedRecipes: 26,
+      mainProteinCount: 2,
+      recipes: [
+        {
+          recipeId: 'r1',
+          name: '南瓜鸭肉餐',
+          mainProteinName: '鸭腿肉',
+          overlappingCategories: ['PROTEIN' as const, 'CARB' as const],
+          overlappingIngredientNames: ['鸭腿肉', '燕麦'],
+        },
+      ],
+    };
+    const tools = createCheckTools({
+      port: createFakeRecipeAgentPort({ catalogUsage }),
+      draftId: 'draft-1',
+      tagPolicy,
+    });
+    const result = await tools.check_catalog_conflicts({
+      mainProteinName: '鸭腿肉',
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data[0]?.severity).toBe('HARD');
+    expect(result.data[0]?.categories).toEqual(['PROTEIN', 'CARB']);
+  });
+
+  it('只重合软类时报 SOFT，完全没有重合的菜跳过', async () => {
+    const tools = createCheckTools({
+      port: createFakeRecipeAgentPort({
+        catalogUsage: {
+          totalPublishedRecipes: 26,
+          mainProteinCount: 2,
+          recipes: [
+            {
+              recipeId: 'r2',
+              name: '鸭肉燕麦餐',
+              mainProteinName: '鸭腿肉',
+              overlappingCategories: ['CARB', 'MUSHROOM'],
+              overlappingIngredientNames: ['燕麦'],
+            },
+            {
+              recipeId: 'r3',
+              name: '蛋奶餐',
+              mainProteinName: null,
+              overlappingCategories: ['EGG', 'OIL'],
+              overlappingIngredientNames: ['鸡蛋'],
+            },
+          ],
+        },
+      }),
+      draftId: 'draft-1',
+      tagPolicy,
+    });
+    const result = await tools.check_catalog_conflicts({
+      mainProteinName: '鸭腿肉',
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0]).toEqual({
+      recipeId: 'r2',
+      recipeName: '鸭肉燕麦餐',
+      severity: 'SOFT',
+      categories: ['CARB', 'MUSHROOM'],
+    });
+  });
+
+  it('mainProteinName 不是字符串时返回 INVALID_ARGUMENT', async () => {
+    const port = createFakeRecipeAgentPort();
+    const tools = createCheckTools({ port, draftId: 'draft-1', tagPolicy });
+    const result = await tools.check_catalog_conflicts({
+      mainProteinName: 123 as never,
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('INVALID_ARGUMENT');
+    expect(port.getCatalogUsage).not.toHaveBeenCalled();
+  });
+
+  it('文案为空、缺预处理、标签不合规都会 BLOCKED', async () => {
+    const draft = fakeDraftSnapshot({
+      copy: {
+        coverTitle: null,
+        sellingPoint: null,
+        description: null,
+        targetHealthTags: ['体重管理'],
+      },
+    });
+    const tools = createCheckTools({
+      port: createFakeRecipeAgentPort({ draft }),
+      draftId: 'draft-1',
+      tagPolicy,
+    });
+    const result = await tools.check_ready();
+    if (!result.ok) return;
+    expect(result.data.status).toBe('BLOCKED');
+    expect(
+      result.data.checks.filter((c) => c.status === 'FAIL').map((c) => c.key),
+    ).toEqual(expect.arrayContaining(['COPY', 'TAGS']));
+  });
+
+  it('lastAssessment 为 null 时 check_ready BLOCKED，且不重跑评估', async () => {
+    const port = createFakeRecipeAgentPort({ assessment: null });
+    const tools = createCheckTools({ port, draftId: 'draft-1', tagPolicy });
+    const result = await tools.check_ready();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.status).toBe('BLOCKED');
+    expect(
+      result.data.checks.find((c) => c.key === 'ASSESSMENT_FRESH')?.status,
+    ).toBe('FAIL');
+    expect(port.runAssessment).not.toHaveBeenCalled();
+  });
+
+  it('缺预处理或没有制作步骤时 BLOCKED', async () => {
+    const draft = fakeDraftSnapshot({
+      items: fakeDraftSnapshot().items.map((item, index) =>
+        index === 0 ? { ...item, preparationMethod: null } : item,
+      ),
+      productionSteps: [],
+    });
+    const tools = createCheckTools({
+      port: createFakeRecipeAgentPort({ draft }),
+      draftId: 'draft-1',
+      tagPolicy,
+    });
+    const result = await tools.check_ready();
+    if (!result.ok) return;
+    expect(result.data.status).toBe('BLOCKED');
+    expect(
+      result.data.checks.filter((c) => c.status === 'FAIL').map((c) => c.key),
+    ).toEqual(expect.arrayContaining(['PREPARATION', 'PRODUCTION_STEPS']));
+  });
+
+  it('MARGIN 忽略 INFO 条目', async () => {
+    const infoEntry: AgentAssessmentEntry = {
+      key: 'reference',
+      label: '参考项',
+      status: 'INFO',
+      value: 1,
+      min: 10,
+      max: null,
+      marginPercent: 5,
+    };
+    const tools = createCheckTools({
+      port: createFakeRecipeAgentPort({
+        assessment: fakeAssessment({
+          entries: [...fakeAssessment().entries, infoEntry],
+        }),
+      }),
+      draftId: 'draft-1',
+      tagPolicy,
+    });
+    const result = await tools.check_ready();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.status).toBe('PASS');
+    expect(result.data.checks.find((c) => c.key === 'MARGIN')?.status).toBe(
+      'PASS',
+    );
+  });
+
+  it('check_ready 的参数类型不对时返回 INVALID_ARGUMENT', async () => {
+    const tools = createCheckTools({
+      port: createFakeRecipeAgentPort(),
+      draftId: 'draft-1',
+      tagPolicy,
+    });
+    const result = await tools.check_ready({
+      exceptionApproved: 'yes' as never,
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('INVALID_ARGUMENT');
+  });
+});

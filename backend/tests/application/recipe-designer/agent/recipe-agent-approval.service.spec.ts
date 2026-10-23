@@ -10,7 +10,7 @@ function makePrisma() {
     recipeDesignAgentApproval: {
       create: jest.fn().mockImplementation(({ data }) => ({ id: 'a1', ...data })),
       findUnique: jest.fn().mockResolvedValue(null),
-      update: jest.fn().mockImplementation(({ data }) => ({ id: 'a1', ...data })),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       findMany: jest.fn().mockResolvedValue([]),
     },
   };
@@ -97,7 +97,7 @@ describe('RecipeAgentApprovalService', () => {
     await expect(
       service.decide('a1', { status: 'APPROVED', decidedBy: 'admin-1' }),
     ).rejects.toBeInstanceOf(ConflictException);
-    expect(prisma.recipeDesignAgentApproval.update).not.toHaveBeenCalled();
+    expect(prisma.recipeDesignAgentApproval.updateMany).not.toHaveBeenCalled();
   });
 
   it('getApprovalState 只认 APPROVED', async () => {
@@ -152,7 +152,7 @@ describe('RecipeAgentApprovalService', () => {
     await expect(
       service.decide('missing', { status: 'APPROVED', decidedBy: 'admin-1' }),
     ).rejects.toBeInstanceOf(NotFoundException);
-    expect(prisma.recipeDesignAgentApproval.update).not.toHaveBeenCalled();
+    expect(prisma.recipeDesignAgentApproval.updateMany).not.toHaveBeenCalled();
   });
 
   it('getApprovalState 忽略 PENDING 与 REJECTED', async () => {
@@ -199,11 +199,16 @@ describe('RecipeAgentApprovalService', () => {
     const row = pendingRow({
       detail: { note: '急性期' },
     });
-    prisma.recipeDesignAgentApproval.findUnique.mockResolvedValue(row);
-    prisma.recipeDesignAgentApproval.update.mockImplementation(({ data }) => ({
-      ...row,
-      ...data,
-    }));
+    const decidedAt = new Date('2026-10-24T01:00:00.000Z');
+    const decided = pendingRow({
+      detail: { note: '急性期' },
+      status: 'APPROVED',
+      decidedAt,
+      decidedBy: 'admin-1',
+    });
+    prisma.recipeDesignAgentApproval.findUnique
+      .mockResolvedValueOnce(row)
+      .mockResolvedValueOnce(decided);
     const service = new RecipeAgentApprovalService(prisma as any);
 
     const record = await service.decide('a1', {
@@ -211,8 +216,8 @@ describe('RecipeAgentApprovalService', () => {
       decidedBy: ' admin-1 ',
     });
 
-    expect(prisma.recipeDesignAgentApproval.update).toHaveBeenCalledWith({
-      where: { id: 'a1' },
+    expect(prisma.recipeDesignAgentApproval.updateMany).toHaveBeenCalledWith({
+      where: { id: 'a1', status: 'PENDING' },
       data: {
         status: 'APPROVED',
         decidedAt: expect.any(Date),
@@ -225,8 +230,34 @@ describe('RecipeAgentApprovalService', () => {
       type: 'COMPLIANCE_EXCEPTION',
       status: 'APPROVED',
       decidedBy: 'admin-1',
-      decidedAt: expect.any(Date),
+      decidedAt,
     });
+  });
+
+  it('并发决定时 updateMany 未命中且已是终态 → Conflict', async () => {
+    const prisma = makePrisma();
+    prisma.recipeDesignAgentApproval.findUnique
+      .mockResolvedValueOnce(pendingRow())
+      .mockResolvedValueOnce(pendingRow({ status: 'APPROVED' }));
+    prisma.recipeDesignAgentApproval.updateMany.mockResolvedValue({ count: 0 });
+    const service = new RecipeAgentApprovalService(prisma as any);
+
+    await expect(
+      service.decide('a1', { status: 'APPROVED', decidedBy: 'admin-1' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('并发决定时 updateMany 未命中且记录消失 → NotFound', async () => {
+    const prisma = makePrisma();
+    prisma.recipeDesignAgentApproval.findUnique
+      .mockResolvedValueOnce(pendingRow())
+      .mockResolvedValueOnce(null);
+    prisma.recipeDesignAgentApproval.updateMany.mockResolvedValue({ count: 0 });
+    const service = new RecipeAgentApprovalService(prisma as any);
+
+    await expect(
+      service.decide('a1', { status: 'APPROVED', decidedBy: 'admin-1' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('decide 只接受 APPROVED / REJECTED', async () => {

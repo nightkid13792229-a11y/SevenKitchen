@@ -122,16 +122,28 @@ export class RecipeAgentApprovalService {
       throw new ConflictException('这条审批已经处理过了');
     }
 
-    const updated = await this.prisma.recipeDesignAgentApproval.update({
-      where: { id: approvalId },
+    const result = await this.prisma.recipeDesignAgentApproval.updateMany({
+      where: { id: approvalId, status: 'PENDING' },
       data: {
         status: input.status,
         decidedAt: new Date(),
         decidedBy,
       },
     });
+    if (result.count === 0) {
+      const latest = await this.prisma.recipeDesignAgentApproval.findUnique({
+        where: { id: approvalId },
+      });
+      if (!latest) {
+        throw new NotFoundException('审批不存在');
+      }
+      throw new ConflictException('这条审批已经处理过了');
+    }
 
-    return this.toApprovalRecord(updated);
+    const updated = await this.prisma.recipeDesignAgentApproval.findUnique({
+      where: { id: approvalId },
+    });
+    return this.toApprovalRecord(updated!);
   }
 
   async getApprovalState(sessionId: string): Promise<AgentApprovalState> {

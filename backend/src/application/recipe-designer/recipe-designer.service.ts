@@ -6558,6 +6558,9 @@ export class RecipeDesignerService {
     assessment: DesignRecipeAssessmentResult;
   }> {
     const draft = await this.getDraft(id, access);
+    if (this.isPublishedDraft(draft)) {
+      throw new BadRequestException('已发布草稿不能由 Agent 重新评估');
+    }
     const targets = await this.targetProvider.getTargets(
       draft.fediafDogScenario,
     );

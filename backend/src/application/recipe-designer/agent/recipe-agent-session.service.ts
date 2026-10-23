@@ -94,6 +94,8 @@ export class RecipeAgentSessionService {
     const data: Prisma.RecipeDesignAgentSessionUpdateInput = { status };
     if (TERMINAL_STATUSES.has(status)) {
       data.endedAt = new Date();
+    } else {
+      data.endedAt = null;
     }
     if (lastError !== undefined) {
       data.lastError = lastError;
@@ -158,8 +160,8 @@ export class RecipeAgentSessionService {
   }
 
   private assertTokenCount(value: number, label: string): void {
-    if (!Number.isFinite(value) || value < 0) {
-      throw new BadRequestException(`${label} 必须是非负有限数`);
+    if (!Number.isSafeInteger(value) || value < 0 || value > 10_000_000) {
+      throw new BadRequestException(`${label} 必须是 0 到 10000000 之间的整数`);
     }
   }
 

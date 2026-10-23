@@ -1,4 +1,4 @@
-import { ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { RecipeDesignerService } from 'src/application/recipe-designer/recipe-designer.service';
 
 function makeService(updateMany: jest.Mock) {
@@ -39,6 +39,24 @@ describe('assessDraftForAgent', () => {
     await expect(
       service.assessDraftForAgent('draft-1', { userId: 'u1', role: 'STAFF' }),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('已发布草稿拒绝 Agent 重新评估，且不落库', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const service = makeService(updateMany);
+    service.getDraft.mockResolvedValue({
+      id: 'draft-1',
+      contentRevision: 7,
+      fediafDogScenario: 'ADULT_MER_110',
+      items: [],
+      publishedRecipeId: 'r1',
+    });
+
+    await expect(
+      service.assessDraftForAgent('draft-1', { userId: 'u1', role: 'STAFF' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(updateMany).not.toHaveBeenCalled();
+    expect(service.targetProvider.getTargets).not.toHaveBeenCalled();
   });
 });
 

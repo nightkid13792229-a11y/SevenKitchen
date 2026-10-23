@@ -1,4 +1,4 @@
-import { ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { RecipeAgentSessionService } from 'src/application/recipe-designer/agent/recipe-agent-session.service';
 
 function makePrisma() {
@@ -148,7 +148,7 @@ describe('RecipeAgentSessionService', () => {
     });
   });
 
-  it('updateStatus WAITING_USER 不设置 endedAt', async () => {
+  it('updateStatus WAITING_USER 清空 endedAt', async () => {
     const { prisma } = makePrisma();
     const service = new RecipeAgentSessionService(prisma as any);
 
@@ -156,7 +156,35 @@ describe('RecipeAgentSessionService', () => {
 
     expect(prisma.recipeDesignAgentSession.update).toHaveBeenCalledWith({
       where: { id: 's1' },
-      data: { status: 'WAITING_USER' },
+      data: { status: 'WAITING_USER', endedAt: null },
+    });
+  });
+
+  it('recordUsage 拒绝小数与溢出的 token 数', async () => {
+    const { prisma } = makePrisma();
+    const service = new RecipeAgentSessionService(prisma as any);
+
+    await expect(service.recordUsage('s1', 1.5, 0)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    await expect(service.recordUsage('s1', 1e15, 0)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(prisma.recipeDesignAgentSession.update).not.toHaveBeenCalled();
+  });
+
+  it('recordUsage 接受 0 与 1000 这类合法 token 数', async () => {
+    const { prisma } = makePrisma();
+    const service = new RecipeAgentSessionService(prisma as any);
+
+    await service.recordUsage('s1', 0, 1000);
+
+    expect(prisma.recipeDesignAgentSession.update).toHaveBeenCalledWith({
+      where: { id: 's1' },
+      data: {
+        promptTokens: { increment: 0 },
+        completionTokens: { increment: 1000 },
+      },
     });
   });
 });

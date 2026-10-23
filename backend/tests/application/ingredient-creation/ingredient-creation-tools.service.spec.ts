@@ -17,7 +17,10 @@ interface SourceRecordFixture {
   normalizedNutrition?: unknown;
 }
 
-function createTools(records: SourceRecordFixture[]) {
+function createTools(
+  records: SourceRecordFixture[],
+  draftPayload: Record<string, unknown> = {},
+) {
   const prisma = {
     nutritionSourceRecord: {
       findUnique: jest.fn(async (query: { where: { id: string } }) => {
@@ -39,7 +42,7 @@ function createTools(records: SourceRecordFixture[]) {
       name: '鸡肝',
       type: 'FOOD',
       step: 'INTAKE',
-      payload: {},
+      payload: draftPayload,
       createdBy: 'admin-1',
       createdAt: new Date('2026-10-23T00:00:00.000Z'),
       updatedAt: new Date('2026-10-23T00:00:00.000Z'),
@@ -76,6 +79,48 @@ async function executeGetRecord(
     body: JSON.parse(execution.content) as any,
   };
 }
+
+async function executeBatch(
+  tools: IngredientCreationToolsService,
+  args: Record<string, unknown>,
+) {
+  const execution = await tools.execute({
+    runId: RUN_ID,
+    draftId: DRAFT_ID,
+    name: 'updateNutritionFields',
+    args,
+  });
+
+  return {
+    ...execution,
+    body: JSON.parse(execution.content) as any,
+  };
+}
+
+function draftWithRawProfile() {
+  return {
+    profiles: [
+      {
+        preparationState: 'RAW',
+        sourceRecordId: 'rec-liver-raw',
+        entries: [],
+        notes: null,
+      },
+    ],
+  };
+}
+
+const RAW_LIVER: SourceRecordFixture = {
+  id: 'rec-liver-raw',
+  status: 'ACTIVE',
+  foodName: 'Chicken, liver, raw',
+  foodNameEn: 'Chicken, liver, raw',
+  normalizedNutrition: {
+    meta: { rawBasisType: 'PER_100_G', sampleState: 'RAW' },
+    macros: { energyKcal: 120, crudeProtein: 19.5 },
+    minerals: { calcium: 120 },
+  },
+};
 
 const FULL_PROFILE = {
   meta: { rawBasisType: 'PER_100_G', sampleState: 'RAW' },
@@ -287,5 +332,184 @@ describe('IngredientCreationToolsService · getNutritionRecord', () => {
 
     expect(result.ok).toBe(false);
     expect(result.body.error).toContain('sourceRecordId');
+  });
+});
+
+describe('IngredientCreationToolsService · updateNutritionFields 批量写入', () => {
+  it('工具定义存在，描述提示优先使用并写明单次最多 70 条', () => {
+    const { tools } = createTools([]);
+
+    const definition = tools
+      .getDefinitions()
+      .find((tool) => tool.function.name === 'updateNutritionFields');
+
+    expect(definition).toBeDefined();
+    expect(definition?.function.description).toContain('优先');
+    expect(definition?.function.description).toContain('70');
+    expect(definition?.function.parameters.required).toEqual(
+      expect.arrayContaining(['profileIndex', 'entries']),
+    );
+  });
+
+  it('全部合法：一次调用写入所有字段，返回 applied 且只 patch 一次', async () => {
+    const { tools, draftService } = createTools(
+      [RAW_LIVER],
+      draftWithRawProfile(),
+    );
+
+    const result = await executeBatch(tools, {
+      profileIndex: 0,
+      entries: [
+        {
+          fieldPath: 'macros.crudeProtein',
+          value: 19.5,
+          unit: 'g',
+          sourceRecordId: 'rec-liver-raw',
+        },
+        {
+          fieldPath: 'macros.energyKcal',
+          value: 120,
+          unit: 'kcal',
+          sourceRecordId: 'rec-liver-raw',
+        },
+        {
+          fieldPath: 'minerals.calcium',
+          value: 120,
+          unit: 'mg',
+          sourceRecordId: 'rec-liver-raw',
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.body).toMatchObject({ ok: true, applied: 3, failed: [] });
+    expect(draftService.patch).toHaveBeenCalledTimes(1);
+
+    const [, , payload] = draftService.patch.mock.calls[0];
+    const entries = (payload as any).profiles[0].entries as Array<
+      Record<string, unknown>
+    >;
+    expect(entries).toHaveLength(3);
+    expect(entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fieldPath: 'macros.crudeProtein',
+          finalValue: 19.5,
+          unit: 'g',
+          status: 'DIRECT',
+          sourceRecordId: 'rec-liver-raw',
+        }),
+        expect.objectContaining({
+          fieldPath: 'macros.energyKcal',
+          finalValue: 120,
+          unit: 'kcal',
+        }),
+        expect.objectContaining({
+          fieldPath: 'minerals.calcium',
+          finalValue: 120,
+          unit: 'mg',
+        }),
+      ]),
+    );
+
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.stringContaining('tool=updateNutritionFields'),
+    );
+  });
+
+  it('部分失败：成功项照常写入，失败项逐条返回 fieldPath 与错误', async () => {
+    const { tools, draftService } = createTools(
+      [RAW_LIVER],
+      draftWithRawProfile(),
+    );
+
+    const result = await executeBatch(tools, {
+      profileIndex: 0,
+      entries: [
+        {
+          fieldPath: 'macros.crudeProtein',
+          value: 19.5,
+          unit: 'g',
+          sourceRecordId: 'rec-liver-raw',
+        },
+        {
+          fieldPath: 'macros.energyKcal',
+          value: 120,
+          unit: '两',
+          sourceRecordId: 'rec-liver-raw',
+        },
+        {
+          fieldPath: 'minerals.calcium',
+          value: 120,
+          unit: 'mg',
+          sourceRecordId: 'missing-source',
+        },
+        {
+          fieldPath: 'minerals.selenium',
+          value: 0.25,
+          unit: 'μg',
+          sourceRecordId: 'rec-liver-raw',
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.body.ok).toBe(true);
+    expect(result.body.applied).toBe(2);
+    expect(result.body.failed).toEqual([
+      {
+        fieldPath: 'macros.energyKcal',
+        error: expect.stringContaining('单位'),
+      },
+      {
+        fieldPath: 'minerals.calcium',
+        error: expect.stringContaining('不存在'),
+      },
+    ]);
+
+    // 部分成功也必须落库：patch 里只有成功的那两条，失败项不写。
+    const [, , payload] = draftService.patch.mock.calls[0];
+    const entries = (payload as any).profiles[0].entries as Array<
+      Record<string, unknown>
+    >;
+    expect(entries.map((entry) => entry.fieldPath)).toEqual([
+      'macros.crudeProtein',
+      'minerals.selenium',
+    ]);
+  });
+
+  it('超过 70 条：整批拒绝，什么都不写', async () => {
+    const { tools, draftService } = createTools(
+      [RAW_LIVER],
+      draftWithRawProfile(),
+    );
+
+    const entries = Array.from({ length: 71 }, (_, index) => ({
+      fieldPath: 'macros.crudeProtein',
+      value: index + 1,
+      unit: 'g',
+      sourceRecordId: 'rec-liver-raw',
+    }));
+
+    const result = await executeBatch(tools, { profileIndex: 0, entries });
+
+    expect(result.ok).toBe(false);
+    expect(result.body.ok).toBe(false);
+    expect(result.body.error).toContain('70');
+    expect(result.body.error).toContain('71');
+    expect(draftService.patch).not.toHaveBeenCalled();
+  });
+
+  it('entries 为空：返回错误文本，不 patch', async () => {
+    const { tools, draftService } = createTools(
+      [RAW_LIVER],
+      draftWithRawProfile(),
+    );
+
+    const result = await executeBatch(tools, { profileIndex: 0, entries: [] });
+
+    expect(result.ok).toBe(false);
+    expect(result.body.error).toContain('entries');
+    expect(draftService.patch).not.toHaveBeenCalled();
   });
 });

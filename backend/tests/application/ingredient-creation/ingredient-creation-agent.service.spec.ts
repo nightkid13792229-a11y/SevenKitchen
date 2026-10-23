@@ -132,15 +132,32 @@ function assistantToolCall(
   };
 }
 
+function assistantToolCalls(
+  calls: Array<{ name: string; args: Record<string, unknown>; id: string }>,
+) {
+  return {
+    role: 'assistant',
+    content: null,
+    tool_calls: calls.map((call) => ({
+      id: call.id,
+      type: 'function',
+      function: { name: call.name, arguments: JSON.stringify(call.args) },
+    })),
+  };
+}
+
 function assistantReply(content: string) {
   return { role: 'assistant', content };
 }
 
-function chatResponse(message: unknown) {
+function chatResponse(message: unknown, usage?: { total_tokens: number }) {
   return {
     ok: true,
     status: 200,
-    json: jest.fn().mockResolvedValue({ choices: [{ message }] }),
+    json: jest.fn().mockResolvedValue({
+      choices: [{ message }],
+      ...(usage ? { usage } : {}),
+    }),
   } as unknown as Response;
 }
 
@@ -473,14 +490,15 @@ describe('IngredientCreationAgentService · 工具循环', () => {
     expect(result.steps).toBe(2);
   });
 
-  it('超过 8 步时停止，返回“我跑到上限了”和已完成的工具调用', async () => {
+  it('硬保险丝：单轮最多 80 次工具调用，到线即停并保留 transcript', async () => {
+    let sourceSequence = 0;
     const fetchMock = jest.fn();
-    for (let index = 0; index < 8; index += 1) {
+    for (let index = 0; index < 80; index += 1) {
       fetchMock.mockResolvedValueOnce(
         chatResponse(
           assistantToolCall(
             'searchLocalNutrition',
-            { keyword: `鸡肝${index + 1}`, state: 'RAW' },
+            { keyword: '鸡肝', state: 'RAW' },
             `call_${index + 1}`,
           ),
         ),
@@ -489,29 +507,53 @@ describe('IngredientCreationAgentService · 工具循环', () => {
     global.fetch = fetchMock as unknown as typeof global.fetch;
 
     const harness = createHarness();
+    // 每次检索都返回一个没出现过的来源 id，避免触发「连续无进展」软停止。
+    harness.candidateService.findCandidates.mockImplementation(async () => {
+      sourceSequence += 1;
+      return {
+        ...CANDIDATE_RESULT,
+        candidates: [
+          {
+            ...CANDIDATE_RESULT.candidates[0],
+            sourceRecordId: `rec-${sourceSequence}`,
+          },
+        ],
+      };
+    });
+
     const result = await harness.agent.run({
       text: '帮我加鸡肝',
       userId: 'admin-1',
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(8);
-    expect(result.steps).toBe(8);
-    expect(result.toolCalls).toHaveLength(8);
+    expect(fetchMock).toHaveBeenCalledTimes(80);
+    expect(result.steps).toBe(80);
+    expect(result.toolCallCount).toBe(80);
+    expect(result.toolCalls).toHaveLength(80);
+    expect(result.stopReason).toBe('TOOL_CALL_LIMIT');
     expect(result.reply).toContain('我跑到上限了');
-    expect(result.toolCalls[7]).toMatchObject({
+    expect(result.reply).toContain('80');
+    expect(result.reply).toContain('已完成');
+    expect(result.reply).toContain('还没做完');
+    expect(result.toolCalls[79]).toMatchObject({
       name: 'searchLocalNutrition',
       ok: true,
     });
     // 「带上已有 transcript」：每一步都留痕，不能只给一句上限提示。
-    expect(result.transcript?.length).toBeGreaterThanOrEqual(8);
+    expect(
+      result.transcript.filter((entry) => entry.type === 'tool_result'),
+    ).toHaveLength(80);
+    expect(result.transcript.some((entry) => entry.type === 'limit')).toBe(
+      true,
+    );
   });
 
-  it('总时长 60 秒用完时停止，返回“我跑到上限了”，不报 503', async () => {
+  it('总时长 3 分钟用完时停止，返回“我跑到上限了”，不报 503', async () => {
     let now = 1_000_000;
     const nowSpy = jest.spyOn(Date, 'now').mockImplementation(() => now);
     const fetchMock = jest.fn(async () => {
-      // 模拟一次模型调用把 60 秒预算全部耗尽。
-      now += 61_000;
+      // 模拟一次模型调用把 180 秒预算全部耗尽。
+      now += 181_000;
       throw Object.assign(new Error('aborted'), { name: 'AbortError' });
     });
     global.fetch = fetchMock as unknown as typeof global.fetch;
@@ -525,6 +567,7 @@ describe('IngredientCreationAgentService · 工具循环', () => {
 
     expect(result.reply).toContain('我跑到上限了');
     expect(result.steps).toBe(1);
+    expect(result.stopReason).toBe('TIMEOUT');
     expect(result.transcript.some((entry) => entry.type === 'limit')).toBe(
       true,
     );
@@ -1003,6 +1046,291 @@ describe('IngredientCreationAgentService · 工具循环', () => {
     expect((caught as Error).message).toBe('AI 暂时不可用，请稍后重试');
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  it('连续 3 次工具调用没有新进展时停止，reply 含“没有新进展”并保留 transcript', async () => {
+    const fetchMock = jest.fn();
+    for (let index = 0; index < 4; index += 1) {
+      fetchMock.mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'searchLocalNutrition',
+            { keyword: '鸡肝', state: 'RAW' },
+            `call_${index + 1}`,
+          ),
+        ),
+      );
+    }
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    const result = await harness.agent.run({
+      text: '帮我加鸡肝',
+      userId: 'admin-1',
+    });
+
+    // 第 1 次检索到新来源算进展，之后 3 次重复检索都不算 → 第 4 次后停止。
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(result.steps).toBe(4);
+    expect(result.toolCallCount).toBe(4);
+    expect(result.toolCalls).toHaveLength(4);
+    expect(result.toolCalls.every((call) => call.ok)).toBe(true);
+    expect(result.stopReason).toBe('NO_PROGRESS');
+    expect(result.reply).toContain('没有新进展');
+    expect(result.reply).toContain('已完成');
+    expect(result.reply).toContain('还没做完');
+    expect(
+      result.transcript.filter((entry) => entry.type === 'tool_result'),
+    ).toHaveLength(4);
+    expect(result.transcript.some((entry) => entry.type === 'limit')).toBe(
+      true,
+    );
+  });
+
+  it('有进展时重置无进展计数，不提前停', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'searchLocalNutrition',
+            { keyword: '鸡肝', state: 'RAW' },
+            'call_search_1',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'searchLocalNutrition',
+            { keyword: '鸡肝', state: 'RAW' },
+            'call_search_2',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'searchLocalNutrition',
+            { keyword: '鸡肝', state: 'RAW' },
+            'call_search_3',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'updateNutritionField',
+            {
+              profileIndex: 0,
+              fieldPath: 'macros.crudeProtein',
+              value: 19.5,
+              unit: 'g',
+              sourceRecordId: 'rec-liver-raw',
+            },
+            'call_write',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'searchLocalNutrition',
+            { keyword: '鸡肝', state: 'RAW' },
+            'call_search_4',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(assistantReply('已写入粗蛋白 19.5 g。')),
+      );
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness({
+      draft: draftWithProfile(),
+      sourceRecords: [
+        {
+          id: 'rec-liver-raw',
+          status: 'ACTIVE',
+          foodName: 'Chicken, liver, raw',
+          foodNameEn: 'Chicken, liver, raw',
+          normalizedNutrition: { meta: { sampleState: 'RAW' } },
+        },
+      ],
+    });
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+
+    // 两次重复检索后有一次成功写入（进展），计数清零，所以还能继续跑到回复。
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(result.steps).toBe(6);
+    expect(result.toolCallCount).toBe(5);
+    expect(result.stopReason).toBeNull();
+    expect(result.reply).toContain('19.5');
+    expect(result.transcript.some((entry) => entry.type === 'limit')).toBe(
+      false,
+    );
+  });
+
+  it('一次模型回复里的多个 tool_call 全部执行：steps 是轮次，toolCallCount 是动作数', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCalls([
+            {
+              name: 'updateNutritionFields',
+              id: 'call_batch_1',
+              args: {
+                profileIndex: 0,
+                entries: [
+                  {
+                    fieldPath: 'macros.crudeProtein',
+                    value: 19.5,
+                    unit: 'g',
+                    sourceRecordId: 'rec-liver-raw',
+                  },
+                  {
+                    fieldPath: 'macros.energyKcal',
+                    value: 120,
+                    unit: 'kcal',
+                    sourceRecordId: 'rec-liver-raw',
+                  },
+                ],
+              },
+            },
+            {
+              name: 'updateNutritionFields',
+              id: 'call_batch_2',
+              args: {
+                profileIndex: 0,
+                entries: [
+                  {
+                    fieldPath: 'minerals.calcium',
+                    value: 120,
+                    unit: 'mg',
+                    sourceRecordId: 'rec-liver-raw',
+                  },
+                ],
+              },
+            },
+            { name: 'runCheck', id: 'call_check', args: {} },
+          ]),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(assistantReply('批量写入 3 个字段，终检通过。')),
+      );
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness({
+      draft: createDraft(),
+      sourceRecords: [
+        {
+          id: 'rec-liver-raw',
+          status: 'ACTIVE',
+          foodName: 'Chicken, liver, raw',
+          foodNameEn: 'Chicken, liver, raw',
+          normalizedNutrition: { meta: { sampleState: 'RAW' } },
+        },
+      ],
+    });
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+
+    expect(result.steps).toBe(2);
+    expect(result.toolCallCount).toBe(3);
+    expect(result.toolCalls.map((call) => call.name)).toEqual([
+      'updateNutritionFields',
+      'updateNutritionFields',
+      'runCheck',
+    ]);
+    expect(result.toolCalls.every((call) => call.ok)).toBe(true);
+    expect(result.stopReason).toBeNull();
+
+    const profiles = harness.currentDraft()?.payload.profiles ?? [];
+    expect(profiles).toHaveLength(1);
+    expect(profiles[0].entries).toHaveLength(3);
+  });
+
+  it('token 成本上限用完时停止，保留已完成的 transcript', async () => {
+    const previousBudget = process.env.INGREDIENT_AGENT_TOKEN_BUDGET;
+    process.env.INGREDIENT_AGENT_TOKEN_BUDGET = '100';
+
+    try {
+      let sourceSequence = 0;
+      const fetchMock = jest.fn();
+      for (let index = 0; index < 2; index += 1) {
+        fetchMock.mockResolvedValueOnce(
+          chatResponse(
+            assistantToolCall(
+              'searchLocalNutrition',
+              { keyword: '鸡肝', state: 'RAW' },
+              `call_${index + 1}`,
+            ),
+            { total_tokens: 60 },
+          ),
+        );
+      }
+      global.fetch = fetchMock as unknown as typeof global.fetch;
+
+      const harness = createHarness();
+      harness.candidateService.findCandidates.mockImplementation(async () => {
+        sourceSequence += 1;
+        return {
+          ...CANDIDATE_RESULT,
+          candidates: [
+            {
+              ...CANDIDATE_RESULT.candidates[0],
+              sourceRecordId: `rec-${sourceSequence}`,
+            },
+          ],
+        };
+      });
+
+      const result = await harness.agent.run({
+        text: '帮我加鸡肝',
+        userId: 'admin-1',
+      });
+
+      // 每次模型请求 60 tokens；第二次之后累计 120 > 100，停止。
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(result.stopReason).toBe('TOKEN_BUDGET');
+      expect(result.toolCallCount).toBe(2);
+      expect(result.reply).toContain('我跑到上限了');
+      expect(result.reply).toContain('成本');
+      expect(
+        result.transcript.filter((entry) => entry.type === 'tool_result'),
+      ).toHaveLength(2);
+    } finally {
+      if (previousBudget === undefined) {
+        delete process.env.INGREDIENT_AGENT_TOKEN_BUDGET;
+      } else {
+        process.env.INGREDIENT_AGENT_TOKEN_BUDGET = previousBudget;
+      }
+    }
+  });
+
+  it('模型请求的 max_tokens 提到 8000，避免工具参数被截断', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(chatResponse(assistantReply('好。')));
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+
+    expect(requestBody(fetchMock, 0).max_tokens).toBe(8000);
+  });
 });
 
 describe('POST /api/v1/admin/ingredient-creation/agent/run', () => {
@@ -1066,8 +1394,10 @@ describe('POST /api/v1/admin/ingredient-creation/agent/run', () => {
       reply: '已填好。',
       toolCalls: [],
       steps: 1,
+      toolCallCount: 0,
       transcript: [],
       mode: 'FUNCTION_CALLING',
+      stopReason: null,
     };
     agentService.run.mockResolvedValue(runResult);
 

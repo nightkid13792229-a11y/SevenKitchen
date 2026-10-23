@@ -18,17 +18,31 @@ import {
 } from './ingredient-creation-intake.service';
 import {
   IngredientCreationToolsService,
+  type AgentCheckSummary,
   type AgentToolDefinition,
+  type AgentToolExecution,
 } from './ingredient-creation-tools.service';
 import type { IngredientCreationDraft } from './ingredient-creation.types';
 
-/** 一次起草最多问模型 8 次（一次工具往返算一步）。 */
-export const INGREDIENT_AGENT_MAX_STEPS = 8;
+/**
+ * 单轮最多执行多少次**工具调用**（不是模型轮次）。
+ *
+ * 模型一次回复可能带很多 tool_call，拿「步数」当动作数会被严重低估：
+ * 线上 8 步实际写出了 34 个字段。这里直接按动作数设保险丝。
+ */
+export const INGREDIENT_AGENT_MAX_TOOL_CALLS = 80;
 /** 一次起草的总时长上限：超时不再发起模型请求。 */
-export const INGREDIENT_AGENT_TIMEOUT_MS = 60_000;
+export const INGREDIENT_AGENT_TIMEOUT_MS = 180_000;
+/** 连续多少次工具调用没有任何新进展就软停止。 */
+export const INGREDIENT_AGENT_MAX_NO_PROGRESS = 3;
+/** 单轮 token 成本预算默认值（输入 + 输出）；可用环境变量覆盖。 */
+export const INGREDIENT_AGENT_DEFAULT_TOKEN_BUDGET = 600_000;
+export const INGREDIENT_AGENT_TOKEN_BUDGET_ENV =
+  'INGREDIENT_AGENT_TOKEN_BUDGET';
 
 const AGENT_TEMPERATURE = 0.2;
-const AGENT_MAX_TOKENS = 1_500;
+/** 输出上限：1.5k 会在长 tool_call 参数中途截断，产生非法 JSON。 */
+const AGENT_MAX_TOKENS = 8_000;
 const REPLY_MAX = 500;
 const TRANSCRIPT_SUMMARY_MAX = 240;
 
@@ -48,7 +62,7 @@ export interface AgentToolCallRecord {
   error?: string;
 }
 
-/** 本次运行的留痕：每一步模型动作与工具结果。超步数时原样带回。 */
+/** 本次运行的留痕：每一步模型动作与工具结果。撞保险丝时原样带回。 */
 export interface AgentTranscriptEntry {
   step: number;
   type: 'tool_call' | 'tool_result' | 'reply' | 'limit';
@@ -58,16 +72,53 @@ export interface AgentTranscriptEntry {
   ok?: boolean;
   error?: string;
   summary?: string;
+  stopReason?: IngredientAgentStopReason;
 }
+
+/**
+ * 本轮为什么停下。
+ *
+ * - `TOOL_CALL_LIMIT` / `TIMEOUT` / `TOKEN_BUDGET`：硬保险丝；
+ * - `NO_PROGRESS`：连续多次工具调用没有新进展的软停止。
+ */
+export type IngredientAgentStopReason =
+  | 'TOOL_CALL_LIMIT'
+  | 'TIMEOUT'
+  | 'TOKEN_BUDGET'
+  | 'NO_PROGRESS';
 
 export interface IngredientAgentRunResult {
   draftId: string;
   reply: string;
   toolCalls: AgentToolCallRecord[];
+  /** 模型轮次（一次请求算一轮）。 */
   steps: number;
+  /** 实际执行的工具调用次数（一轮可能带多个 tool_call）。 */
+  toolCallCount: number;
   transcript: AgentTranscriptEntry[];
   /** 本次实际使用的协议；报告与排查用。 */
   mode: IngredientAgentMode;
+  /** 正常给出最终回复时为 null。 */
+  stopReason: IngredientAgentStopReason | null;
+}
+
+/**
+ * 成本保险丝：单轮允许消耗的 token 总数（输入 + 输出）。
+ *
+ * 用 token 预算而不是写死金额，避免供应商调价后代码失效；
+ * 未配置 / 非法 / 非正数时用默认值。设成很大的值等于放宽，不关闭硬上限。
+ */
+export function resolveIngredientAgentTokenBudget(
+  env: NodeJS.ProcessEnv = process.env,
+): number {
+  const raw = env[INGREDIENT_AGENT_TOKEN_BUDGET_ENV];
+  if (typeof raw !== 'string' || !raw.trim()) {
+    return INGREDIENT_AGENT_DEFAULT_TOKEN_BUDGET;
+  }
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0
+    ? Math.floor(parsed)
+    : INGREDIENT_AGENT_DEFAULT_TOKEN_BUDGET;
 }
 
 export interface RunIngredientAgentInput {
@@ -92,6 +143,8 @@ interface AgentMessage {
 interface AgentAssistantTurn {
   content: string;
   toolCalls: AgentToolCallPayload[];
+  /** 供应商返回的 usage.total_tokens；没返回时按 0（不猜）。 */
+  totalTokens: number;
 }
 
 /** 模型请求失败（网络 / 非 2xx / 输出结构不对）。上层据此 503。 */
@@ -134,6 +187,29 @@ function isAbortError(error: unknown): boolean {
     (error.name === 'AbortError' ||
       error.message === 'This operation was aborted')
   );
+}
+
+/** 读 usage.total_tokens；兼容 prompt/completion 两段式，读不到返回 0。 */
+function readUsageTotalTokens(body: unknown): number {
+  if (!isRecord(body) || !isRecord(body.usage)) {
+    return 0;
+  }
+  const usage = body.usage;
+  const total = usage.total_tokens ?? usage.totalTokens;
+  if (typeof total === 'number' && Number.isFinite(total) && total > 0) {
+    return Math.floor(total);
+  }
+  const prompt = usage.prompt_tokens;
+  const completion = usage.completion_tokens;
+  if (
+    typeof prompt === 'number' &&
+    Number.isFinite(prompt) &&
+    typeof completion === 'number' &&
+    Number.isFinite(completion)
+  ) {
+    return Math.floor(prompt + completion);
+  }
+  return 0;
 }
 
 function readChoiceMessage(body: unknown): Record<string, unknown> | null {
@@ -262,7 +338,7 @@ function buildDraftPromptLines(draft: IngredientCreationDraft): string[] {
 
   if (profiles.length === 0) {
     lines.push(
-      '（草稿还没有营养档案。第一次写入请把 profileIndex 设为 0，并带上 searchLocalNutrition 返回的 sourceRecordId。）',
+      '（草稿还没有营养档案。第一次写入请用 updateNutritionFields，把 profileIndex 设为 0，并带上 searchLocalNutrition 返回的 sourceRecordId。）',
     );
   }
 
@@ -279,9 +355,11 @@ function buildSystemPrompt(
     '',
     '硬规则：',
     '- 只能读写草稿。系统没有提交、确认可用、批准例外的工具；不要假装能做，也不要建议用户让你做。',
-    '- 每一步二选一：调用一个工具，或给出最终回复（不再调用工具）。',
+    '- 每一轮可以返回一个或多个工具调用；也可以直接给出最终回复。',
+    '- 读到多个营养值后，**优先用 updateNutritionFields 一次写入**（单次最多 70 条），不要 60 个字段调 60 次 updateNutritionField。',
     '- 不要编造营养数值。只写来源记录里有的值，或用户明确给出的值。',
     '- 工具报错表示输入不合法。按错误文本改正参数后重试；连续改不出来就停下，说明卡在哪。',
+    `- 本轮预算：最多 ${INGREDIENT_AGENT_MAX_TOOL_CALLS} 次工具调用 / ${INGREDIENT_AGENT_TIMEOUT_MS / 1000} 秒；连续 ${INGREDIENT_AGENT_MAX_NO_PROGRESS} 次工具调用没有新进展会被系统停止。`,
     '- 最终回复用一句中文，说清楚改了什么、还缺什么、下一步建议；不要粘贴 JSON。',
     `可用工具：${toolNames.join('、')}`,
     '',
@@ -320,12 +398,87 @@ function buildInitialMessages(
   ];
 }
 
-function buildLimitReply(toolCallCount: number, draftId: string): string {
-  return (
-    `我跑到上限了（最多 ${INGREDIENT_AGENT_MAX_STEPS} 步 / ${
-      INGREDIENT_AGENT_TIMEOUT_MS / 1000
-    } 秒）。已完成 ${toolCallCount} 次工具调用，草稿 ${draftId} 里的改动已保存，` +
-    '请人工检查还没做完的部分。'
+interface DraftProgressSummary {
+  profileCount: number;
+  entryCount: number;
+  missingFieldCount: number;
+}
+
+/** 停止时按**库里的最终草稿**统计，不用中途快照。 */
+function summarizeDraftProgress(
+  draft: IngredientCreationDraft,
+): DraftProgressSummary {
+  const profiles = Array.isArray(draft.payload.profiles)
+    ? draft.payload.profiles
+    : [];
+  let entryCount = 0;
+  // 没有档案时整份目录都缺；有多份时按「最不完整的那份」报，避免熟档案空着却显示已齐。
+  let missingFieldCount =
+    profiles.length === 0 ? NUTRITION_FIELD_CATALOG.length : 0;
+
+  for (const profile of profiles) {
+    // payload 可以被人工编辑，停止摘要不能因为一份脏档案把整轮打成 500。
+    if (!isRecord(profile)) {
+      continue;
+    }
+    const entries = Array.isArray(profile.entries) ? profile.entries : [];
+    entryCount += entries.length;
+
+    const fieldPaths = new Set<string>();
+    for (const entry of entries) {
+      if (
+        isRecord(entry) &&
+        typeof entry.fieldPath === 'string' &&
+        entry.fieldPath
+      ) {
+        fieldPaths.add(entry.fieldPath);
+      }
+    }
+    const missing = NUTRITION_FIELD_CATALOG.filter(
+      (field) => !fieldPaths.has(field.fieldPath),
+    ).length;
+    missingFieldCount = Math.max(missingFieldCount, missing);
+  }
+
+  return {
+    profileCount: profiles.length,
+    entryCount,
+    missingFieldCount,
+  };
+}
+
+/**
+ * 停止回复：先说为什么停、做了多少、还剩什么，最后明确草稿不回滚。
+ *
+ * `NO_PROGRESS` 的文案必须含「没有新进展」，这是线上排查与用户提示的锚点。
+ */
+function buildStopReply(input: {
+  reason: IngredientAgentStopReason;
+  steps: number;
+  toolCallCount: number;
+  seenSourceCount: number;
+  draft: IngredientCreationDraft;
+  lastCheck: AgentCheckSummary | null;
+}): string {
+  const reasonText: Record<IngredientAgentStopReason, string> = {
+    NO_PROGRESS: `连续 ${INGREDIENT_AGENT_MAX_NO_PROGRESS} 次工具调用没有新进展，我停了下来`,
+    TIMEOUT: `我跑到上限了（总时长 ${INGREDIENT_AGENT_TIMEOUT_MS / 1000} 秒用完）`,
+    TOKEN_BUDGET: '我跑到上限了（本轮 token 成本预算用完了）',
+    TOOL_CALL_LIMIT: `我跑到上限了（单轮最多 ${INGREDIENT_AGENT_MAX_TOOL_CALLS} 次工具调用）`,
+  };
+  const summary = summarizeDraftProgress(input.draft);
+  const checkText = input.lastCheck
+    ? input.lastCheck.passed
+      ? `终检已通过（还有 ${input.lastCheck.warnings} 条提醒）`
+      : `终检还没过（${input.lastCheck.blocking} 项拦死、${input.lastCheck.exceptionable} 项可例外）`
+    : '还没跑终检';
+
+  return truncate(
+    `${reasonText[input.reason]}（共 ${input.steps} 轮、${input.toolCallCount} 次工具调用）。` +
+      `已完成：写入 ${summary.entryCount} 条营养值（${summary.profileCount} 份营养档案），检索到 ${input.seenSourceCount} 条来源。` +
+      `还没做完：${checkText}；营养目录 ${NUTRITION_FIELD_CATALOG.length} 项里，最不完整的一份档案还有 ${summary.missingFieldCount} 项没有值。` +
+      '已写入的草稿内容保持不动，请人工检查还没做完的部分。',
+    REPLY_MAX,
   );
 }
 
@@ -336,8 +489,10 @@ function buildLimitReply(toolCallCount: number, draftId: string): string {
  * （查库 → 写字段 → 跑校验 → 按报错改），直到给出最终回复或撞上限。
  *
  * 安全边界不靠模型自觉：
- * - 工具层只有 4 个，全部只碰草稿；提交 / 确认可用不在这里；
- * - 步数（8）与总时长（60s）都是硬上限；
+ * - 工具层只有 5 个，全部只碰草稿；提交 / 确认可用不在这里；
+ * - 硬保险丝：80 次工具调用 / 180 秒 / 可配 token 预算；
+ * - 软停止：连续 3 次工具调用没有新进展（不写字段、不发现新来源）就停；
+ * - 停下来不回滚：已写入的草稿保持原样，reply 说明还剩什么；
  * - 模型 / 配置失败直接 503，不偷偷回退到规则猜。
  */
 @Injectable()
@@ -359,6 +514,7 @@ export class IngredientCreationAgentService {
     const runtime = await this.loadRuntimeConfig();
     const startedAt = Date.now();
     const deadline = startedAt + INGREDIENT_AGENT_TIMEOUT_MS;
+    const tokenBudget = resolveIngredientAgentTokenBudget();
     const runId = randomUUID();
 
     // 没有 draftId 时先建草稿；从这里开始，AI 的所有写入都只落在这份草稿上。
@@ -380,27 +536,43 @@ export class IngredientCreationAgentService {
     let mode: IngredientAgentMode = 'FUNCTION_CALLING';
     let messages = buildInitialMessages(draft, text, mode, toolNames);
     let steps = 0;
+    let toolCallCount = 0;
+    let tokensUsed = 0;
+    let noProgressStreak = 0;
     let reply = '';
-    let limitReached = false;
+    let stopReason: IngredientAgentStopReason | null = null;
+    let lastCheck: AgentCheckSummary | null = null;
+    const seenSourceIds = new Set<string>();
     const toolCalls: AgentToolCallRecord[] = [];
     const transcript: AgentTranscriptEntry[] = [];
 
     this.logger.log(
       `[ingredient-agent] runStart runId=${runId} draft=${draft.id} mode=${mode} ` +
-        `maxSteps=${INGREDIENT_AGENT_MAX_STEPS} timeoutMs=${INGREDIENT_AGENT_TIMEOUT_MS}`,
+        `maxToolCalls=${INGREDIENT_AGENT_MAX_TOOL_CALLS} timeoutMs=${INGREDIENT_AGENT_TIMEOUT_MS} ` +
+        `tokenBudget=${tokenBudget}`,
     );
 
-    while (steps < INGREDIENT_AGENT_MAX_STEPS) {
+    // 不设固定「步数」上限：模型一轮可能带很多 tool_call，循环靠硬保险丝 + 进展感知收口。
+    runLoop: while (true) {
+      if (toolCallCount >= INGREDIENT_AGENT_MAX_TOOL_CALLS) {
+        stopReason = 'TOOL_CALL_LIMIT';
+        break;
+      }
       if (Date.now() >= deadline) {
-        limitReached = true;
+        stopReason = 'TIMEOUT';
+        break;
+      }
+      if (tokenBudget > 0 && tokensUsed >= tokenBudget) {
+        stopReason = 'TOKEN_BUDGET';
         break;
       }
 
       steps += 1;
       const remainingMs = Math.max(1, deadline - Date.now());
       this.logger.log(
-        `[ingredient-agent] step=${steps}/${INGREDIENT_AGENT_MAX_STEPS} ` +
-          `runId=${runId} draft=${draft.id} mode=${mode} remainingMs=${remainingMs}`,
+        `[ingredient-agent] step=${steps} runId=${runId} draft=${draft.id} ` +
+          `mode=${mode} toolCalls=${toolCallCount}/${INGREDIENT_AGENT_MAX_TOOL_CALLS} ` +
+          `tokens=${tokensUsed}/${tokenBudget} remainingMs=${remainingMs}`,
       );
 
       let turn: AgentAssistantTurn;
@@ -421,7 +593,7 @@ export class IngredientCreationAgentService {
           error instanceof AgentDeadlineExceededError ||
           Date.now() >= deadline
         ) {
-          limitReached = true;
+          stopReason = 'TIMEOUT';
           this.logger.warn(
             `[ingredient-agent] 总时长用完 runId=${runId} draft=${draft.id} steps=${steps}`,
           );
@@ -455,6 +627,8 @@ export class IngredientCreationAgentService {
         );
       }
 
+      tokensUsed += turn.totalTokens;
+
       if (mode === 'FUNCTION_CALLING') {
         messages.push({
           role: 'assistant',
@@ -474,12 +648,17 @@ export class IngredientCreationAgentService {
         }
 
         for (const call of turn.toolCalls) {
-          // 总时长在模型思考时已经用完：不要再执行工具，直接收尾。
+          // 硬保险丝：动作数到时立即停，不再执行后面的 tool_call。
+          if (toolCallCount >= INGREDIENT_AGENT_MAX_TOOL_CALLS) {
+            stopReason = 'TOOL_CALL_LIMIT';
+            break runLoop;
+          }
           if (Date.now() >= deadline) {
-            limitReached = true;
-            break;
+            stopReason = 'TIMEOUT';
+            break runLoop;
           }
 
+          toolCallCount += 1;
           const toolName = call.function.name;
           const { args, parseError } = this.parseToolArguments(
             call.function.arguments,
@@ -528,17 +707,30 @@ export class IngredientCreationAgentService {
             content: execution.content,
           });
 
+          if (
+            this.recordProgress(execution, seenSourceIds, (check) => {
+              lastCheck = check;
+            })
+          ) {
+            noProgressStreak = 0;
+          } else {
+            noProgressStreak += 1;
+          }
+
           if (Date.now() >= deadline) {
-            limitReached = true;
-            break;
+            stopReason = 'TIMEOUT';
+            break runLoop;
+          }
+          if (toolCallCount >= INGREDIENT_AGENT_MAX_TOOL_CALLS) {
+            stopReason = 'TOOL_CALL_LIMIT';
+            break runLoop;
+          }
+          if (noProgressStreak >= INGREDIENT_AGENT_MAX_NO_PROGRESS) {
+            stopReason = 'NO_PROGRESS';
+            break runLoop;
           }
         }
 
-        if (limitReached) break;
-        if (steps >= INGREDIENT_AGENT_MAX_STEPS) {
-          limitReached = true;
-          break;
-        }
         continue;
       }
 
@@ -580,10 +772,15 @@ export class IngredientCreationAgentService {
 
       // 总时长在模型思考时已经用完：不要再执行工具，直接收尾。
       if (Date.now() >= deadline) {
-        limitReached = true;
+        stopReason = 'TIMEOUT';
+        break;
+      }
+      if (toolCallCount >= INGREDIENT_AGENT_MAX_TOOL_CALLS) {
+        stopReason = 'TOOL_CALL_LIMIT';
         break;
       }
 
+      toolCallCount += 1;
       const args = isRecord(action.args) ? action.args : {};
       transcript.push({
         step: steps,
@@ -619,31 +816,64 @@ export class IngredientCreationAgentService {
         content: `工具 ${toolName} 返回：${execution.content}`,
       });
 
-      if (steps >= INGREDIENT_AGENT_MAX_STEPS) {
-        limitReached = true;
+      if (
+        this.recordProgress(execution, seenSourceIds, (check) => {
+          lastCheck = check;
+        })
+      ) {
+        noProgressStreak = 0;
+      } else {
+        noProgressStreak += 1;
+      }
+
+      if (Date.now() >= deadline) {
+        stopReason = 'TIMEOUT';
+        break;
+      }
+      if (noProgressStreak >= INGREDIENT_AGENT_MAX_NO_PROGRESS) {
+        stopReason = 'NO_PROGRESS';
         break;
       }
     }
 
-    if (limitReached) {
-      reply = buildLimitReply(toolCalls.length, draft.id);
+    if (stopReason) {
+      // 停止时读最终草稿：reply 里的「已完成 / 还剩」必须与库里一致。
+      let finalDraft = draft;
+      try {
+        finalDraft = await this.draftService.get(draft.id);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        this.logger.warn(
+          `[ingredient-agent] 停止时读草稿失败 runId=${runId} draft=${draft.id}: ${reason}`,
+        );
+      }
+
+      reply = buildStopReply({
+        reason: stopReason,
+        steps,
+        toolCallCount,
+        seenSourceCount: seenSourceIds.size,
+        draft: finalDraft,
+        lastCheck,
+      });
       transcript.push({
         step: steps,
         type: 'limit',
         atMs: Date.now() - startedAt,
         summary: reply,
+        stopReason,
       });
       this.logger.warn(
-        `[ingredient-agent] 达到上限 runId=${runId} draft=${draft.id} ` +
-          `steps=${steps} toolCalls=${toolCalls.length}`,
+        `[ingredient-agent] 停止 runId=${runId} draft=${draft.id} reason=${stopReason} ` +
+          `steps=${steps} toolCalls=${toolCallCount} tokens=${tokensUsed}`,
       );
     }
 
     this.logger.log(
       `[ingredient-agent] runEnd runId=${runId} draft=${draft.id} mode=${mode} ` +
-        `steps=${steps} toolCalls=${toolCalls.length} durationMs=${
-          Date.now() - startedAt
-        }`,
+        `steps=${steps} toolCalls=${toolCallCount} stopReason=${
+          stopReason ?? 'none'
+        } durationMs=${Date.now() - startedAt}`,
     );
 
     return {
@@ -651,9 +881,44 @@ export class IngredientCreationAgentService {
       reply,
       toolCalls,
       steps,
+      toolCallCount,
       transcript,
       mode,
+      stopReason,
     };
+  }
+
+  /**
+   * 把一次工具结果折算成「有没有新进展」。
+   *
+   * 新进展只有两种：本次新写入（新增或改变）字段，或读到此前没出现过的来源 id。
+   * 失败调用、重复检索、重复写同一个值都不算。
+   */
+  private recordProgress(
+    execution: AgentToolExecution,
+    seenSourceIds: Set<string>,
+    onCheck: (check: AgentCheckSummary) => void,
+  ): boolean {
+    const progress = execution.progress;
+    if (!progress) {
+      return false;
+    }
+
+    let progressed = false;
+    for (const sourceRecordId of progress.sourceRecordIds) {
+      if (!seenSourceIds.has(sourceRecordId)) {
+        seenSourceIds.add(sourceRecordId);
+        progressed = true;
+      }
+    }
+    if (progress.writtenFieldPaths.length > 0) {
+      progressed = true;
+    }
+    if (progress.check) {
+      onCheck(progress.check);
+    }
+
+    return progressed;
   }
 
   /** 与 intake 同一条回落链：INGREDIENT_INTAKE → DEFAULT → RECIPE_DESIGN。 */
@@ -837,7 +1102,11 @@ export class IngredientCreationAgentService {
         if (!content) {
           throw new AgentModelError('AI 生成失败：无内容');
         }
-        return { content, toolCalls: [] };
+        return {
+          content,
+          toolCalls: [],
+          totalTokens: readUsageTotalTokens(body),
+        };
       }
 
       const toolCalls = normalizeToolCalls(message.tool_calls);
@@ -845,7 +1114,7 @@ export class IngredientCreationAgentService {
         throw new AgentModelError('AI 生成失败：无内容');
       }
 
-      return { content, toolCalls };
+      return { content, toolCalls, totalTokens: readUsageTotalTokens(body) };
     } catch (error) {
       if (error instanceof AgentModelError) {
         throw error;

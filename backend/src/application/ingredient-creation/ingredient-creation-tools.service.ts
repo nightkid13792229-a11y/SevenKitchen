@@ -5,7 +5,10 @@ import {
   type PreparationState,
 } from '../../domain/ingredient-creation/preparation-state';
 import { normalizeUnit } from '../../domain/ingredient-creation/unit-guard';
-import { NUTRITION_FIELD_CATALOG } from '../../domain/ingredient/nutrition-field-catalog';
+import {
+  NUTRITION_FIELD_CATALOG,
+  type NutritionFieldDefinition,
+} from '../../domain/ingredient/nutrition-field-catalog';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { IngredientCreationCandidateService } from './ingredient-creation-candidate.service';
 import { IngredientCreationCheckService } from './ingredient-creation-check.service';
@@ -28,6 +31,29 @@ export interface AgentToolExecution {
   error?: string;
   /** 本次工具耗时；只用于日志与 transcript，不回灌给模型。 */
   durationMs: number;
+  /** 给起草循环判断「有没有新进展」用；不回灌给模型。 */
+  progress?: AgentToolProgress;
+}
+
+/** 终检摘要：停止时用来说明「还剩什么没做」。 */
+export interface AgentCheckSummary {
+  passed: boolean;
+  blocking: number;
+  exceptionable: number;
+  warnings: number;
+}
+
+/**
+ * 一次工具调用的进展信号。
+ *
+ * - `writtenFieldPaths`：本次**新增或改变**了值的字段（重复写同一个值不算）；
+ * - `sourceRecordIds`：本次读到的来源记录 id（是否「新」由循环自己比对）；
+ * - `check`：只有 runCheck 会填。
+ */
+export interface AgentToolProgress {
+  writtenFieldPaths: string[];
+  sourceRecordIds: string[];
+  check?: AgentCheckSummary;
 }
 
 /** OpenAI 兼容的 function calling 工具定义。 */
@@ -50,6 +76,8 @@ export interface ExecuteAgentToolInput {
 const SEARCH_CANDIDATE_LIMIT = 8;
 /** 单次最多回灌多少条营养值，避免把提示词撑爆。 */
 const MAX_NUTRITION_RECORD_VALUES = 80;
+/** 批量写入单次上限：60 个目录字段一次能装下，且给模型留余量。 */
+export const MAX_BATCH_NUTRITION_FIELDS = 70;
 const ARGS_LOG_MAX = 300;
 const ERROR_MESSAGE_MAX = 300;
 
@@ -85,7 +113,7 @@ const GET_RECORD_TOOL: AgentToolDefinition = {
   function: {
     name: 'getNutritionRecord',
     description:
-      '读取某条来源记录里真实存在的全部营养素值（只读）。返回按营养字段目录输出的 fieldPath / value / unit、目录里缺的字段与生熟状态；coverage 是目录字段中有值的比例（%）。拿到值之后，应当用 updateNutritionField 逐项写入草稿（fieldPath 与 unit 原样照抄）；没有值的字段不要编造、不要推算。',
+      '读取某条来源记录里真实存在的全部营养素值（只读）。返回按营养字段目录输出的 fieldPath / value / unit、目录里缺的字段与生熟状态；coverage 是目录字段中有值的比例（%）。拿到值之后，应当用 updateNutritionFields 把要写的字段一次性批量写入草稿（fieldPath 与 unit 原样照抄；单次最多 70 条）；只有补写单个字段时才用 updateNutritionField。没有值的字段不要编造、不要推算。',
     parameters: {
       type: 'object',
       properties: {
@@ -106,7 +134,7 @@ const UPDATE_FIELD_TOOL: AgentToolDefinition = {
   function: {
     name: 'updateNutritionField',
     description:
-      '把一个营养数值写进草稿里某份营养档案的某个字段。字段必须在营养字段目录里、单位必须是目录单位；来源记录必须真实存在。任何校验失败都返回错误文本，按错误改正后可以重试。',
+      '把一个营养数值写进草稿里某份营养档案的某个字段。字段必须在营养字段目录里、单位必须是目录单位；来源记录必须真实存在。任何校验失败都返回错误文本，按错误改正后可以重试。只写一个字段；一次要写多个字段时优先用 updateNutritionFields（一次最多 70 条），不要逐条调用本工具。',
     parameters: {
       type: 'object',
       properties: {
@@ -136,6 +164,59 @@ const UPDATE_FIELD_TOOL: AgentToolDefinition = {
         },
       },
       required: ['profileIndex', 'fieldPath', 'value', 'unit'],
+      additionalProperties: false,
+    },
+  },
+};
+
+const UPDATE_FIELDS_TOOL: AgentToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'updateNutritionFields',
+    description:
+      '批量把多个营养数值写进草稿里某份营养档案（一次最多 70 条）。**优先用它**：读完 getNutritionRecord 后，把要写的值一次性全写进草稿，不要逐条调用 updateNutritionField。每条都按 updateNutritionField 的同一套规则校验；部分失败时已成功的字段仍会写入，失败项在 failed 里逐条返回（fieldPath + error），按错误改正失败项即可。',
+    parameters: {
+      type: 'object',
+      properties: {
+        profileIndex: {
+          type: 'integer',
+          minimum: 0,
+          description:
+            '营养档案下标，从 0 开始，对本批所有条目生效。等于当前档案数时，会按条目里的 sourceRecordId 自动新建一份档案。',
+        },
+        entries: {
+          type: 'array',
+          minItems: 1,
+          maxItems: MAX_BATCH_NUTRITION_FIELDS,
+          description: `一次最多 ${MAX_BATCH_NUTRITION_FIELDS} 条字段写入。`,
+          items: {
+            type: 'object',
+            properties: {
+              fieldPath: {
+                type: 'string',
+                description: '营养字段路径，例如 macros.crudeProtein。',
+              },
+              value: {
+                type: 'number',
+                description: '目录单位下的数值，必须是非负有限数字。',
+              },
+              unit: {
+                type: 'string',
+                description:
+                  '目录单位：g / mg / μg / kcal / IU。必须与字段目录单位一致。',
+              },
+              sourceRecordId: {
+                type: 'string',
+                description:
+                  '来源记录 id（searchLocalNutrition 返回的 sourceRecordId）。有来源时这一行标 DIRECT；没有来源则标 MANUAL。',
+              },
+            },
+            required: ['fieldPath', 'value', 'unit'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['profileIndex', 'entries'],
       additionalProperties: false,
     },
   },
@@ -325,6 +406,76 @@ function summarizeCheckItems(
   }));
 }
 
+function readProfiles(draft: {
+  payload: { profiles?: unknown };
+}): ProfileDraft[] {
+  return Array.isArray(draft.payload.profiles) ? draft.payload.profiles : [];
+}
+
+interface ValidatedFieldArgs {
+  field: NutritionFieldDefinition;
+  fieldPath: string;
+  value: number;
+  sourceRecordId: string | null;
+}
+
+type FieldValidation =
+  | ({ ok: true } & ValidatedFieldArgs)
+  | { ok: false; fieldPath: string; error: string };
+
+/**
+ * 单条字段的纯校验：字段目录 → 单位 → 数值。
+ *
+ * 批量工具逐条调用它，错误文本与单条工具完全一致（模型换工具也能照旧自纠）。
+ */
+function validateFieldArgs(raw: Record<string, unknown>): FieldValidation {
+  const fieldPath = normalizeText(raw.fieldPath);
+  const field = NUTRITION_FIELD_CATALOG.find(
+    (candidate) => candidate.fieldPath === fieldPath,
+  );
+  if (!field) {
+    return {
+      ok: false,
+      fieldPath,
+      error: `字段「${fieldPath || '（空）'}」不在营养字段目录里。fieldPath 必须形如「表名.字段名」，可用路径见系统提示里的字段目录。`,
+    };
+  }
+
+  const unit = normalizeText(raw.unit);
+  const normalizedUnit = normalizeUnit(unit);
+  if (!normalizedUnit) {
+    return {
+      ok: false,
+      fieldPath,
+      error: `单位「${unit || '（空）'}」不合法。只接受 g / mg / μg / kcal / IU。`,
+    };
+  }
+  const catalogUnit = normalizeUnit(field.unit) ?? field.unit;
+  if (normalizedUnit !== catalogUnit) {
+    return {
+      ok: false,
+      fieldPath,
+      error: `字段 ${fieldPath} 的目录单位是 ${field.unit}，不接受「${unit}」（本工具不做换算）；请把 unit 改成 ${field.unit}，并把数值换算到 ${field.unit}。`,
+    };
+  }
+
+  const value = readFiniteNumber(raw.value);
+  if (value === null) {
+    return { ok: false, fieldPath, error: 'value 必须是有限数字。' };
+  }
+  if (value < 0) {
+    return { ok: false, fieldPath, error: 'value 不能是负数。' };
+  }
+
+  return {
+    ok: true,
+    field,
+    fieldPath,
+    value,
+    sourceRecordId: normalizeText(raw.sourceRecordId) || null,
+  };
+}
+
 /**
  * AI 起草可调用的**全部**写入口。
  *
@@ -345,7 +496,13 @@ export class IngredientCreationToolsService {
   ) {}
 
   getDefinitions(): readonly AgentToolDefinition[] {
-    return [SEARCH_TOOL, GET_RECORD_TOOL, UPDATE_FIELD_TOOL, RUN_CHECK_TOOL];
+    return [
+      SEARCH_TOOL,
+      GET_RECORD_TOOL,
+      UPDATE_FIELD_TOOL,
+      UPDATE_FIELDS_TOOL,
+      RUN_CHECK_TOOL,
+    ];
   }
 
   availableToolNames(): string[] {
@@ -398,6 +555,8 @@ export class IngredientCreationToolsService {
         return this.getNutritionRecord(input.args);
       case 'updateNutritionField':
         return this.updateNutritionField(input.draftId, input.args);
+      case 'updateNutritionFields':
+        return this.updateNutritionFields(input.draftId, input.args);
       case 'runCheck':
         return this.runCheck(input.draftId);
       default:
@@ -455,6 +614,12 @@ export class IngredientCreationToolsService {
             }
           : {}),
       }),
+      progress: {
+        writtenFieldPaths: [],
+        sourceRecordIds: candidates.map(
+          (candidate) => candidate.sourceRecordId,
+        ),
+      },
     };
   }
 
@@ -523,6 +688,10 @@ export class IngredientCreationToolsService {
             }
           : {}),
       }),
+      progress: {
+        writtenFieldPaths: [],
+        sourceRecordIds: [record.id],
+      },
     };
   }
 
@@ -541,65 +710,183 @@ export class IngredientCreationToolsService {
       return this.error('profileIndex 必须是从 0 开始的整数。');
     }
 
-    const fieldPath = normalizeText(args.fieldPath);
-    const field = NUTRITION_FIELD_CATALOG.find(
-      (candidate) => candidate.fieldPath === fieldPath,
-    );
-    if (!field) {
-      return this.error(
-        `字段「${fieldPath || '（空）'}」不在营养字段目录里。fieldPath 必须形如「表名.字段名」，可用路径见系统提示里的字段目录。`,
-      );
+    const validation = validateFieldArgs(args);
+    if (!validation.ok) {
+      return this.error(validation.error);
     }
 
-    const unit = normalizeText(args.unit);
-    const normalizedUnit = normalizeUnit(unit);
-    if (!normalizedUnit) {
-      return this.error(
-        `单位「${unit || '（空）'}」不合法。只接受 g / mg / μg / kcal / IU。`,
-      );
-    }
-    const catalogUnit = normalizeUnit(field.unit) ?? field.unit;
-    if (normalizedUnit !== catalogUnit) {
-      return this.error(
-        `字段 ${fieldPath} 的目录单位是 ${field.unit}，不接受「${unit}」（本工具不做换算）；请把 unit 改成 ${field.unit}，并把数值换算到 ${field.unit}。`,
-      );
-    }
-
-    const value = readFiniteNumber(args.value);
-    if (value === null) {
-      return this.error('value 必须是有限数字。');
-    }
-    if (value < 0) {
-      return this.error('value 不能是负数。');
-    }
-
-    const sourceRecordId = normalizeText(args.sourceRecordId) || null;
     const draft = await this.draftService.get(draftId);
-    const profiles: ProfileDraft[] = Array.isArray(draft.payload.profiles)
-      ? draft.payload.profiles
-      : [];
+    const write = await this.applyFieldWrite({
+      profiles: readProfiles(draft),
+      profileIndex,
+      field: validation.field,
+      fieldPath: validation.fieldPath,
+      value: validation.value,
+      sourceRecordId: validation.sourceRecordId,
+      sourceCache: new Map(),
+    });
+    if (!write.ok) {
+      return this.error(write.error);
+    }
+
+    await this.draftService.patch(draftId, draft.step, {
+      profiles: write.profiles,
+    });
+
+    const saved = write.profiles[profileIndex];
+    return {
+      ok: true,
+      content: okContent({
+        profileIndex,
+        preparationState: write.preparationState,
+        fieldPath: validation.fieldPath,
+        value: validation.value,
+        unit: validation.field.unit,
+        status: validation.sourceRecordId ? 'DIRECT' : 'MANUAL',
+        entryCount: saved.entries.length,
+      }),
+      progress: {
+        writtenFieldPaths: write.changed ? [validation.fieldPath] : [],
+        sourceRecordIds: [],
+      },
+    };
+  }
+
+  /**
+   * 工具 4：批量写同一份营养档案里的多个字段。
+   *
+   * 逐条复用 `updateNutritionField` 的校验；单条失败只进 `failed`，不影响其它条目。
+   * 全部成功条目在**一次 patch** 里落库（部分成功也保留已写入的），
+   * 避免 60 个字段打 60 次补丁。
+   */
+  private async updateNutritionFields(
+    draftId: string,
+    args: Record<string, unknown>,
+  ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
+    const profileIndex = readNonNegativeInteger(args.profileIndex);
+    if (profileIndex === null) {
+      return this.error('profileIndex 必须是从 0 开始的整数。');
+    }
+    if (!Array.isArray(args.entries)) {
+      return this.error(
+        `updateNutritionFields 需要 entries 数组（一次最多 ${MAX_BATCH_NUTRITION_FIELDS} 条）。`,
+      );
+    }
+    if (args.entries.length > MAX_BATCH_NUTRITION_FIELDS) {
+      return this.error(
+        `updateNutritionFields 一次最多写入 ${MAX_BATCH_NUTRITION_FIELDS} 条，收到 ${args.entries.length} 条；请拆成多批，每批不超过 ${MAX_BATCH_NUTRITION_FIELDS} 条。`,
+      );
+    }
+    if (args.entries.length === 0) {
+      return this.error('entries 不能为空：至少提供 1 条营养字段。');
+    }
+
+    const draft = await this.draftService.get(draftId);
+    let profiles = readProfiles(draft);
+    const failed: Array<{ fieldPath: string; error: string }> = [];
+    const writtenFieldPaths: string[] = [];
+    const sourceCache = new Map<string, SourceRecordRow | null>();
+    let applied = 0;
+
+    for (let index = 0; index < args.entries.length; index += 1) {
+      const raw = args.entries[index];
+      if (!isRecord(raw)) {
+        failed.push({
+          fieldPath: '',
+          error: `entries[${index}] 必须是对象。`,
+        });
+        continue;
+      }
+
+      const validation = validateFieldArgs(raw);
+      if (!validation.ok) {
+        failed.push({
+          fieldPath: validation.fieldPath,
+          error: validation.error,
+        });
+        continue;
+      }
+
+      const write = await this.applyFieldWrite({
+        profiles,
+        profileIndex,
+        field: validation.field,
+        fieldPath: validation.fieldPath,
+        value: validation.value,
+        sourceRecordId: validation.sourceRecordId,
+        sourceCache,
+      });
+      if (!write.ok) {
+        failed.push({
+          fieldPath: validation.fieldPath,
+          error: write.error,
+        });
+        continue;
+      }
+
+      profiles = write.profiles;
+      applied += 1;
+      if (write.changed) {
+        writtenFieldPaths.push(validation.fieldPath);
+      }
+    }
+
+    // 部分成功也要落库：失败项跳过，成功项已在 profiles 里。
+    if (applied > 0) {
+      await this.draftService.patch(draftId, draft.step, { profiles });
+    }
+
+    return {
+      ok: true,
+      content: okContent({ applied, failed }),
+      progress: {
+        writtenFieldPaths,
+        sourceRecordIds: [],
+      },
+    };
+  }
+
+  /**
+   * 单条字段写入的公共实现：来源记录校验 + 档案定位 + 生成新 profiles。
+   *
+   * 不落库，由调用方决定 patch 一次还是多次；失败只返回错误文本。
+   */
+  private async applyFieldWrite(input: {
+    profiles: ProfileDraft[];
+    profileIndex: number;
+    field: NutritionFieldDefinition;
+    fieldPath: string;
+    value: number;
+    sourceRecordId: string | null;
+    sourceCache: Map<string, SourceRecordRow | null>;
+  }): Promise<
+    | {
+        ok: true;
+        profiles: ProfileDraft[];
+        preparationState: PreparationState;
+        changed: boolean;
+      }
+    | { ok: false; error: string }
+  > {
+    const { field, fieldPath, value, profileIndex, profiles } = input;
 
     let sourceRecord: SourceRecordRow | null = null;
-    if (sourceRecordId) {
-      sourceRecord = await this.prisma.nutritionSourceRecord.findUnique({
-        where: { id: sourceRecordId },
-        select: {
-          id: true,
-          status: true,
-          foodName: true,
-          foodNameEn: true,
-          normalizedNutrition: true,
-        },
-      });
+    if (input.sourceRecordId) {
+      sourceRecord = await this.lookupSourceRecord(
+        input.sourceRecordId,
+        input.sourceCache,
+      );
       if (!sourceRecord) {
-        return this.error(
-          `来源记录 ${sourceRecordId} 不存在。请先用 searchLocalNutrition 检索，并把候选的 sourceRecordId 传进来。`,
-        );
+        return {
+          ok: false,
+          error: `来源记录 ${input.sourceRecordId} 不存在。请先用 searchLocalNutrition 检索，并把候选的 sourceRecordId 传进来。`,
+        };
       }
       if (sourceRecord.status !== 'ACTIVE') {
-        return this.error(
-          `来源记录 ${sourceRecordId} 已停用（${sourceRecord.status}），不能作为营养来源。`,
-        );
+        return {
+          ok: false,
+          error: `来源记录 ${input.sourceRecordId} 已停用（${sourceRecord.status}），不能作为营养来源。`,
+        };
       }
     }
 
@@ -608,19 +895,16 @@ export class IngredientCreationToolsService {
       finalValue: value,
       unit: field.unit,
       // 有来源 → DIRECT；没有来源 → MANUAL（架构文档第四节）。
-      status: sourceRecordId ? 'DIRECT' : 'MANUAL',
-      sourceRecordId,
+      status: input.sourceRecordId ? 'DIRECT' : 'MANUAL',
+      sourceRecordId: input.sourceRecordId,
       // 工具只收到目录单位下的值，不伪造来源原文值 / 原文单位。
       sourceValue: null,
       sourceUnit: null,
       formula: null,
       // 人没有参与这一步：标记 AI 起草，人工审核时再覆盖。
-      confirmedBy: sourceRecordId ? null : 'AI_AGENT',
+      confirmedBy: input.sourceRecordId ? null : 'AI_AGENT',
       confirmedAt: new Date().toISOString(),
     };
-
-    let nextProfiles: ProfileDraft[];
-    let preparationState: PreparationState;
 
     if (profileIndex < profiles.length) {
       const current = profiles[profileIndex];
@@ -630,74 +914,102 @@ export class IngredientCreationToolsService {
         (current.preparationState !== 'RAW' &&
           current.preparationState !== 'COOKED')
       ) {
-        return this.error(
-          `第 ${profileIndex} 份营养档案的数据不完整，不能写入。`,
-        );
+        return {
+          ok: false,
+          error: `第 ${profileIndex} 份营养档案的数据不完整，不能写入。`,
+        };
       }
 
-      preparationState = current.preparationState;
-      const nextEntries = current.entries.some(
+      const existing = current.entries.find(
         (candidate) => candidate.fieldPath === fieldPath,
-      )
+      );
+      // 新增字段或值/单位变了才算进展；重复写同一个值不算。
+      const changed =
+        !existing ||
+        existing.finalValue !== value ||
+        existing.unit !== field.unit;
+
+      const nextEntries = existing
         ? current.entries.map((candidate) =>
             candidate.fieldPath === fieldPath ? entry : candidate,
           )
         : [...current.entries, entry];
-      nextProfiles = profiles.map((profile, index) =>
+      const nextProfiles = profiles.map((profile, index) =>
         index === profileIndex ? { ...profile, entries: nextEntries } : profile,
       );
-    } else if (profileIndex === profiles.length && sourceRecord) {
+
+      return {
+        ok: true,
+        profiles: nextProfiles,
+        preparationState: current.preparationState,
+        changed,
+      };
+    }
+
+    if (profileIndex === profiles.length && sourceRecord) {
       // 新草稿没有任何档案：第一次写入时按来源记录自动建一份（状态不猜）。
       const state = derivePreparationStateFromSource(sourceRecord);
       if (!state) {
-        return this.error(
-          `来源记录 ${sourceRecord.id} 判断不出是生还是熟（meta.sampleState、名称、做法都没有生/熟信息）。请换一条明确生熟的候选。`,
-        );
+        return {
+          ok: false,
+          error: `来源记录 ${sourceRecord.id} 判断不出是生还是熟（meta.sampleState、名称、做法都没有生/熟信息）。请换一条明确生熟的候选。`,
+        };
       }
 
-      preparationState = state;
-      nextProfiles = [
-        ...profiles,
-        {
-          preparationState: state,
-          sourceRecordId: sourceRecord.id,
-          entries: [entry],
-          notes: 'AI 起草',
-        },
-      ];
-    } else {
-      const range =
-        profiles.length === 0
-          ? '草稿目前还没有任何营养档案'
-          : `草稿目前有 ${profiles.length} 份营养档案（可用下标 0..${profiles.length - 1}）`;
-      return this.error(
-        `profileIndex ${profileIndex} 超出范围：${range}` +
-          (sourceRecordId
-            ? '。'
-            : '；要新建一份档案，请把 profileIndex 设为当前档案数并带上 sourceRecordId。'),
-      );
+      return {
+        ok: true,
+        profiles: [
+          ...profiles,
+          {
+            preparationState: state,
+            sourceRecordId: sourceRecord.id,
+            entries: [entry],
+            notes: 'AI 起草',
+          },
+        ],
+        preparationState: state,
+        changed: true,
+      };
     }
 
-    await this.draftService.patch(draftId, draft.step, {
-      profiles: nextProfiles,
-    });
-
-    const saved = nextProfiles[profileIndex];
+    const range =
+      profiles.length === 0
+        ? '草稿目前还没有任何营养档案'
+        : `草稿目前有 ${profiles.length} 份营养档案（可用下标 0..${profiles.length - 1}）`;
     return {
-      ok: true,
-      content: okContent({
-        profileIndex,
-        preparationState,
-        fieldPath,
-        value,
-        unit: field.unit,
-        status: entry.status,
-        entryCount: saved.entries.length,
-      }),
+      ok: false,
+      error:
+        `profileIndex ${profileIndex} 超出范围：${range}` +
+        (input.sourceRecordId
+          ? '。'
+          : '；要新建一份档案，请把 profileIndex 设为当前档案数并带上 sourceRecordId。'),
     };
   }
 
-  /** 工具 4：跑现有终检服务，只返回三档摘要；服务报错也变成错误文本。 */
+  /** 同一批里多个字段共用来源时只查一次库。 */
+  private async lookupSourceRecord(
+    sourceRecordId: string,
+    cache: Map<string, SourceRecordRow | null>,
+  ): Promise<SourceRecordRow | null> {
+    if (cache.has(sourceRecordId)) {
+      return cache.get(sourceRecordId) ?? null;
+    }
+
+    const record = await this.prisma.nutritionSourceRecord.findUnique({
+      where: { id: sourceRecordId },
+      select: {
+        id: true,
+        status: true,
+        foodName: true,
+        foodNameEn: true,
+        normalizedNutrition: true,
+      },
+    });
+    cache.set(sourceRecordId, record ?? null);
+    return record ?? null;
+  }
+
+  /** 工具 5：跑现有终检服务，只返回三档摘要；服务报错也变成错误文本。 */
   private async runCheck(
     draftId: string,
   ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
@@ -716,6 +1028,16 @@ export class IngredientCreationToolsService {
           exceptionable: summarizeCheckItems(result.exceptionable),
           warnings: summarizeCheckItems(result.warnings),
         }),
+        progress: {
+          writtenFieldPaths: [],
+          sourceRecordIds: [],
+          check: {
+            passed: result.blocking.length === 0,
+            blocking: result.blocking.length,
+            exceptionable: result.exceptionable.length,
+            warnings: result.warnings.length,
+          },
+        },
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

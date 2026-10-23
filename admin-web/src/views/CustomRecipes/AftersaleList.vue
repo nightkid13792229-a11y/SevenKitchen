@@ -432,13 +432,45 @@ const redeliverSelectedRecipes = async (item: AdminAftersaleItem) => {
   }
 };
 
-/** 重新交付后自动完成售后；处理说明用系统口径，顾客能看懂改了什么。 */
+/**
+ * 售后还没受理时先受理，避免重新交付后停在“待受理”。
+ * 能不能受理由后端下发（`actions`），前端不判断状态字符串。
+ */
+const ensureAftersaleAccepted = async (item: AdminAftersaleItem) => {
+  const canAccept = (item.actions || []).some(
+    (action) => action.code === 'ACCEPT' && action.enabled,
+  );
+  if (canAccept) {
+    await customRecipeApi.acceptAftersale(item.id);
+  }
+};
+
+/**
+ * 重新交付后自动完成售后。
+ * 处理说明可改，默认带一句系统口径；顾客能直接看到改了什么。
+ */
 const resolveAfterRedelivery = async (item: AdminAftersaleItem) => {
-  if (!['ACCEPTED', 'PROCESSING'].includes(item.status)) return;
+  const defaultNote =
+    '已按你的要求调整并重新交付了一版食谱，请在小程序里查看最新交付内容。';
+  let handleNote = defaultNote;
   try {
-    await customRecipeApi.resolveAftersale(item.id, {
-      handleNote: '已按你的要求调整并重新交付了一版食谱，请在小程序里查看最新交付内容。',
-    });
+    const result = await ElMessageBox.prompt(
+      '给顾客的处理说明（会显示在售后记录里）',
+      '完成售后',
+      {
+        inputType: 'textarea',
+        inputValue: defaultNote,
+        confirmButtonText: '重新交付并完成',
+        cancelButtonText: '使用默认说明',
+        type: 'success',
+      },
+    );
+    handleNote = result.value?.trim() || defaultNote;
+  } catch {
+    // 顾客端仍需要看到结果；取消编辑就用默认说明，不留下未完成的售后
+  }
+  try {
+    await customRecipeApi.resolveAftersale(item.id, { handleNote });
   } catch (error) {
     // 交付已经成功，售后完成失败要提示但不能再报成交付失败
     toastApiError(error, '食谱已重新交付，但售后状态未自动完成，请手动处理', (message) =>
@@ -464,6 +496,7 @@ const redeliverSingleAftersale = async (item: AdminAftersaleItem) => {
   }
   redeliveringId.value = item.id;
   try {
+    await ensureAftersaleAccepted(item);
     await customRecipeApi.deliverRecipe(item.orderId, item.deliveryRecipeId);
     await resolveAfterRedelivery(item);
     ElMessage.success('已重新交付，并完成售后');

@@ -153,6 +153,16 @@ export interface SnapshotSupplementTarget {
   unit: string | null;
 }
 
+export interface SnapshotSupplementAlternative {
+  ingredientId: string;
+  name: string;
+  brand?: string | null;
+  productModel?: string | null;
+  imageUrl?: string | null;
+  purchaseLink?: { url: string; platform?: string | null } | null;
+  displayUnit?: string | null;
+}
+
 export interface SnapshotSupplement {
   name: string;
   /**
@@ -174,6 +184,8 @@ export interface SnapshotSupplement {
   timing?: string | null;
   /** 这个补剂对应的营养素目标（2026-10-18 加） */
   targets?: SnapshotSupplementTarget[] | null;
+  /** 可替换的补剂产品（交付时冻结，2026-10-23） */
+  alternatives?: SnapshotSupplementAlternative[] | null;
 }
 
 export interface DeliveryContentSnapshot {

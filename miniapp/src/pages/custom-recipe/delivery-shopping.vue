@@ -79,8 +79,8 @@
         老板原话："就不再展示营养素添加量，而是应该展示每一个补剂需要用多少了"。
         原来给的是"每 kg 食材加多少"（比例），顾客还得自己乘一遍总净重。
 
-        ⚠️ 「换一个 / 去买」暂未接入：快照里**没有产品信息**
-        （哪一瓶、什么规格、什么价）。要做得再拉一次食谱的补剂替代品接口 —— 单独一步。
+        2026-10-23：交付时冻结了可替换产品（名称/品牌/购买链接）；
+        顾客可以换一个产品去买，但配方里的补剂用量不变。
       -->
       <view v-if="content.supplements.length" class="section">
         <view class="section-title">额外补充的营养素</view>
@@ -97,6 +97,11 @@
             <text v-if="supplementHint(item)" class="supp-card__sub">
               {{ supplementHint(item) }}
             </text>
+            <text
+              v-if="(item.alternatives || []).length"
+              class="supp-card__switch"
+              @tap="chooseSupplementAlternative(item)"
+            >换一个 / 去买 ›</text>
           </view>
         </view>
 
@@ -288,6 +293,51 @@ const foodUsageRows = computed(() => {
  *
  * 拿不到就**整颗按钮不显示** —— 顾客看到按钮点进去必然失败，还不如不显示。
  */
+/**
+ * 换一个补剂产品。
+ *
+ * 交付快照里存的是"可替换产品"，不是实时商品库：
+ * 顾客换的是买哪瓶，配方里的营养目标和用量不变。
+ */
+function chooseSupplementAlternative(item: {
+  name: string;
+  alternatives?: Array<{
+    name: string;
+    brand?: string | null;
+    productModel?: string | null;
+    purchaseLink?: { url: string; platform?: string | null } | null;
+  }> | null;
+}) {
+  const options = (item.alternatives || []).filter((option) => option.name);
+  if (options.length === 0) return;
+  uni.showActionSheet({
+    itemList: options.map((option) =>
+      [option.brand, option.name, option.productModel]
+        .filter(Boolean)
+        .join(' · '),
+    ),
+    success: (res) => {
+      const selected = options[res.tapIndex];
+      if (!selected?.purchaseLink?.url) {
+        uni.showToast({ title: '这个产品暂未配置购买链接', icon: 'none' });
+        return;
+      }
+      uni.setClipboardData({
+        data: selected.purchaseLink.url,
+        success: () => {
+          uni.showModal({
+            title: selected.name,
+            content:
+              '购买链接已复制。去京东/淘宝/天猫打开即可下单；补剂用量和营养目标仍按本页配方。',
+            showCancel: false,
+            confirmText: '知道了',
+          });
+        },
+      });
+    },
+  });
+}
+
 /**
  * 制作设备推荐（2026-10-18 · 需求 2.4.2 ⑦）
  *
@@ -807,6 +857,15 @@ onPullDownRefresh(async () => {
   color: #8a7a66;
   margin-top: 6rpx;
   line-height: 1.5;
+}
+
+.supp-card__switch {
+  display: inline-block;
+  margin-top: 10rpx;
+  font-size: 23rpx;
+  font-weight: 600;
+  color: #b08d4f;
+  border-bottom: 1rpx solid rgba(176, 141, 79, 0.45);
 }
 
 /* ===== 一键买齐（2026-10-18）===== */

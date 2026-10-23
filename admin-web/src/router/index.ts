@@ -183,10 +183,10 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "AI / Agent 配置" },
       },
       {
+        // 旧「食谱列表」已合并到食谱设计器（2026-10-23）。
+        // 保留地址跳转，避免书签/群链接失效；直接编辑旧食谱的详情地址仍保留。
         path: "recipes",
-        name: "Recipes",
-        component: () => import("@/views/Recipes/index.vue"),
-        meta: { title: "食谱管理" },
+        redirect: "/recipe-designer",
       },
       {
         path: "recipe-designer",

@@ -1156,7 +1156,13 @@ export class CustomRecipeDeliveryService {
       where: { OR: [{ recipeId: recipeIdOrBizId }, { id: recipeIdOrBizId }] },
       include: {
         items: {
-          include: { ingredient: true },
+          include: {
+            ingredient: true,
+            supplementAlternatives: {
+              include: { alternativeIngredient: true },
+              orderBy: { sortOrder: 'asc' },
+            },
+          },
           orderBy: { sortOrder: 'asc' },
         },
       },
@@ -1228,6 +1234,17 @@ export class CustomRecipeDeliveryService {
         preparationMethod: string | null;
         /** 补剂营养素目标（钙/锌/…）· 2026-10-18 */
         supplementTargets: unknown;
+        /** 补剂可替换产品（2026-10-23） */
+        supplementAlternatives?: Array<{
+          alternativeIngredient: {
+            id: string;
+            name: string;
+            brand: string | null;
+            productModel: string | null;
+            unitDisplayLabel: string | null;
+            properties: unknown;
+          } | null;
+        }> | null;
         /**
          * `resolveRecipe` 用的是 `include: { ingredient: true }` ——
          * 运行时**一直都有 `id`**，只是此前类型里没写（2026-10-18 补）。
@@ -1337,6 +1354,45 @@ export class CustomRecipeDeliveryService {
           brand: null,
           timing: item.preparation,
           targets: toSnapshotSupplementTargets(source?.supplementTargets),
+          alternatives: (source?.supplementAlternatives ?? [])
+            .map((alternative) => alternative.alternativeIngredient)
+            .filter((ingredient): ingredient is NonNullable<typeof ingredient> =>
+              Boolean(ingredient?.id),
+            )
+            .map((ingredient) => {
+              const properties =
+                ingredient.properties &&
+                typeof ingredient.properties === 'object'
+                  ? (ingredient.properties as Record<string, unknown>)
+                  : {};
+              const rawLink = properties.purchase_link as
+                | { url?: unknown; platform?: unknown }
+                | undefined;
+              const purchaseUrl =
+                rawLink && typeof rawLink.url === 'string'
+                  ? rawLink.url.trim()
+                  : '';
+              return {
+                ingredientId: ingredient.id,
+                name: ingredient.name,
+                brand: ingredient.brand,
+                productModel: ingredient.productModel,
+                imageUrl:
+                  typeof properties.image_url === 'string'
+                    ? properties.image_url
+                    : null,
+                purchaseLink: purchaseUrl
+                  ? {
+                      url: purchaseUrl,
+                      platform:
+                        typeof rawLink?.platform === 'string'
+                          ? rawLink.platform
+                          : null,
+                    }
+                  : null,
+                displayUnit: ingredient.unitDisplayLabel,
+              };
+            }),
         };
       });
 

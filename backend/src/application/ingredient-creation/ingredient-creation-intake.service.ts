@@ -4,14 +4,32 @@ import {
   Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { AgentProviderConfigService } from '../nutrition-governance/agent-provider-config.service';
+import {
+  AgentProviderConfigService,
+  DEFAULT_AGENT_PURPOSE,
+  type DeepSeekRuntimeConfig,
+} from '../nutrition-governance/agent-provider-config.service';
+import { RECIPE_DESIGN_AGENT_PURPOSE } from '../recipe-designer/ai-design-suggestion.service';
 import {
   callDeepSeekJson,
   normalizeOptionalText,
 } from '../recipe-designer/deepseek-chat';
 
-/** 原料录入的第一步判断单独走这个用途；没单独配就回落 DEFAULT。 */
+/** 原料录入的第一步判断单独走这个用途；没单独配就按下面的链回落。 */
 export const INGREDIENT_INTAKE_AGENT_PURPOSE = 'INGREDIENT_INTAKE';
+
+/**
+ * 取运行时配置的回落链。
+ *
+ * 线上只有 RECIPE_DESIGN / RECIPE_COPYWRITING / HEALTH_REPORT_EXTRACTION /
+ * HEALTH_ANALYSIS 四条，既没有 INGREDIENT_INTAKE 也没有 DEFAULT；只回落到
+ * DEFAULT 会让接口一直 503。RECIPE_DESIGN 在生产上一定存在且已启用，用它兜底。
+ */
+export const INGREDIENT_INTAKE_AGENT_PURPOSES = [
+  INGREDIENT_INTAKE_AGENT_PURPOSE,
+  DEFAULT_AGENT_PURPOSE,
+  RECIPE_DESIGN_AGENT_PURPOSE,
+] as const;
 
 export const INTAKE_KINDS = ['FOOD', 'SUPPLEMENT', 'UNKNOWN'] as const;
 export type IntakeKind = (typeof INTAKE_KINDS)[number];
@@ -54,21 +72,13 @@ export class IngredientCreationIntakeService {
       throw new BadRequestException('请输入要添加的原料名称');
     }
 
-    const settings = await this.agentProviderConfig.getSettings(
-      INGREDIENT_INTAKE_AGENT_PURPOSE,
-    );
-
-    if (!settings.enabled || !settings.apiKeyConfigured) {
-      throw new ServiceUnavailableException(AI_NOT_CONFIGURED_MESSAGE);
-    }
-
-    // getSettings 只返回 key 是否配置，不返回明文；真正调用还需要 runtime config。
+    // 取配置本身就是回落链：每一级都要求 enabled 且有 key，不满足就跳下一级。
     const runtime = await this.loadRuntimeConfig();
 
-    const primaryModel = normalizeOptionalText(settings.model);
-    // 线上 DEFAULT 行的 review_model 可能是 null：getSettings 会回落成 model，
-    // 但这里仍按“没配备模型 = 用同一个 model 再试一次”处理，不因空值提前失败。
-    const reviewModel = normalizeOptionalText(settings.reviewModel);
+    const primaryModel = normalizeOptionalText(runtime.model);
+    // review_model 可能是 null：配置服务会回落成 model，
+    // 这里仍按“没配备模型 = 用同一个 model 再试一次”处理，不因空值提前失败。
+    const reviewModel = normalizeOptionalText(runtime.reviewModel);
     const models = [primaryModel, reviewModel || primaryModel];
 
     for (let index = 0; index < models.length; index += 1) {
@@ -98,16 +108,42 @@ export class IngredientCreationIntakeService {
     throw new ServiceUnavailableException(AI_TEMPORARILY_UNAVAILABLE_MESSAGE);
   }
 
-  private async loadRuntimeConfig() {
-    try {
-      return await this.agentProviderConfig.getEnabledDeepSeekRuntimeConfig({
-        purpose: INGREDIENT_INTAKE_AGENT_PURPOSE,
-      });
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      this.logger.error(`[intake-classify] 读取 AI 配置失败: ${reason}`);
-      throw new ServiceUnavailableException(AI_NOT_CONFIGURED_MESSAGE);
+  /**
+   * 按 INGREDIENT_INTAKE → DEFAULT → RECIPE_DESIGN 依次取配置。
+   *
+   * `fallbackToDefault: false` 是刻意的：配置服务自己的 DEFAULT 回落只能兜到第二级，
+   * 而且看不出实际用了哪一级；这里逐级显式尝试，命中哪级就记哪级。
+   */
+  private async loadRuntimeConfig(): Promise<DeepSeekRuntimeConfig> {
+    const skipped: string[] = [];
+
+    for (const purpose of INGREDIENT_INTAKE_AGENT_PURPOSES) {
+      try {
+        const runtime =
+          await this.agentProviderConfig.getEnabledDeepSeekRuntimeConfig({
+            purpose,
+            fallbackToDefault: false,
+          });
+        const fallbackNote = skipped.length
+          ? ` fallbackFrom=${skipped.join(',')}`
+          : '';
+        this.logger.log(
+          `[intake-classify] 使用 AI 配置 purpose=${purpose}${fallbackNote}`,
+        );
+        return runtime;
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        skipped.push(purpose);
+        this.logger.warn(
+          `[intake-classify] 跳过 AI 配置 purpose=${purpose}: ${reason}`,
+        );
+      }
     }
+
+    this.logger.error(
+      `[intake-classify] AI 配置不可用 tried=${INGREDIENT_INTAKE_AGENT_PURPOSES.join(',')}`,
+    );
+    throw new ServiceUnavailableException(AI_NOT_CONFIGURED_MESSAGE);
   }
 
   private async classifyWithModel(input: {

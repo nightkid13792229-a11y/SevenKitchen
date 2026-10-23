@@ -28,10 +28,49 @@ import { IngredientCreationController } from '../../../src/interfaces/controller
 import { AdminGuard } from '../../../src/interfaces/guards/role.guard';
 
 const INTAKE_PURPOSE = 'INGREDIENT_INTAKE';
+const DEFAULT_PURPOSE = 'DEFAULT';
+const RECIPE_DESIGN_PURPOSE = 'RECIPE_DESIGN';
 const PRIMARY_MODEL = 'deepseek-v4-flash';
 const REVIEW_MODEL = 'deepseek-v4-pro';
 const BASE_URL = 'https://api.deepseek.test';
 const CLASSIFY_PATH = '/api/v1/admin/ingredient-creation/intake/classify';
+
+type PurposeState = 'enabled' | 'disabled' | 'missing-key' | 'missing';
+
+interface PurposeFixture {
+  baseUrl: string;
+  model: string;
+  reviewModel: string;
+  apiKey: string;
+}
+
+/** 每一级都用完全不同的值，断言才能看出来这次到底用了哪一级。 */
+const PURPOSE_FIXTURES: Record<string, PurposeFixture> = {
+  [INTAKE_PURPOSE]: {
+    baseUrl: BASE_URL,
+    model: PRIMARY_MODEL,
+    reviewModel: REVIEW_MODEL,
+    apiKey: 'sk-ingredient-intake',
+  },
+  [DEFAULT_PURPOSE]: {
+    baseUrl: 'https://default.deepseek.test',
+    model: 'default-model',
+    reviewModel: 'default-review-model',
+    apiKey: 'sk-default',
+  },
+  [RECIPE_DESIGN_PURPOSE]: {
+    baseUrl: 'https://recipe-design.deepseek.test',
+    model: 'recipe-design-model',
+    reviewModel: 'recipe-design-review-model',
+    apiKey: 'sk-recipe-design',
+  },
+};
+
+interface CreateServiceOptions {
+  /** 未列出的用途按生产现状处理：INGREDIENT_INTAKE 启用，DEFAULT 不存在。 */
+  purposes?: Partial<Record<string, PurposeState>>;
+  runtimeOverrides?: Partial<DeepSeekRuntimeConfig>;
+}
 
 const FOOD_RESULT: IntakeClassification = {
   kind: 'FOOD',
@@ -114,19 +153,76 @@ function errorResponse(status = 500) {
   } as unknown as Response;
 }
 
-async function createService(
-  options: {
-    settings?: Partial<AgentProviderSettingsView>;
-    runtime?: Partial<DeepSeekRuntimeConfig>;
-    runtimeError?: Error;
-  } = {},
-) {
-  const configService = {
-    getSettings: jest.fn().mockResolvedValue(buildSettings(options.settings)),
-    getEnabledDeepSeekRuntimeConfig: options.runtimeError
-      ? jest.fn().mockRejectedValue(options.runtimeError)
-      : jest.fn().mockResolvedValue(buildRuntime(options.runtime)),
+async function createService(options: CreateServiceOptions = {}) {
+  const purposeStates: Record<string, PurposeState> = {
+    [INTAKE_PURPOSE]: 'enabled',
+    [DEFAULT_PURPOSE]: 'missing',
+    [RECIPE_DESIGN_PURPOSE]: 'enabled',
+    ...options.purposes,
   };
+
+  const fixtureFor = (purpose: string): PurposeFixture =>
+    PURPOSE_FIXTURES[purpose] ?? PURPOSE_FIXTURES[DEFAULT_PURPOSE];
+
+  const runtimeFor = (purpose: string): DeepSeekRuntimeConfig => {
+    const fixture = fixtureFor(purpose);
+    return buildRuntime({
+      baseUrl: fixture.baseUrl,
+      model: fixture.model,
+      reviewModel: fixture.reviewModel,
+      apiKey: fixture.apiKey,
+      ...options.runtimeOverrides,
+    });
+  };
+
+  // 生产版 getSettings 在指定用途没有行时会回落到 DEFAULT；测试替身保留同样行为。
+  const getSettings = jest.fn(async (purpose?: string) => {
+    const requested = purpose || DEFAULT_PURPOSE;
+    const resolved =
+      requested !== DEFAULT_PURPOSE && purposeStates[requested] === 'missing'
+        ? DEFAULT_PURPOSE
+        : requested;
+    const state = purposeStates[resolved] ?? 'missing';
+    const fixture = fixtureFor(resolved);
+    return buildSettings({
+      purpose: resolved,
+      baseUrl: fixture.baseUrl,
+      model: fixture.model,
+      reviewModel: fixture.reviewModel,
+      enabled: state === 'enabled' || state === 'missing-key',
+      apiKeyConfigured: state === 'enabled' || state === 'disabled',
+      apiKeyLast4: state === 'missing-key' ? null : '1234',
+    });
+  });
+
+  const getEnabledDeepSeekRuntimeConfig = jest.fn(
+    async (
+      input: { purpose?: string; fallbackToDefault?: boolean } = {},
+    ): Promise<DeepSeekRuntimeConfig> => {
+      let purpose = input.purpose || DEFAULT_PURPOSE;
+      if (
+        (input.fallbackToDefault ?? true) &&
+        purpose !== DEFAULT_PURPOSE &&
+        purposeStates[purpose] === 'missing'
+      ) {
+        purpose = DEFAULT_PURPOSE;
+      }
+
+      const state = purposeStates[purpose] ?? 'missing';
+      if (state === 'disabled') {
+        throw new Error(`DeepSeek Agent 设置未启用：${purpose}`);
+      }
+      if (state === 'missing-key') {
+        throw new Error(`DeepSeek API Key 未配置：${purpose}`);
+      }
+      if (state !== 'enabled') {
+        throw new Error(`DeepSeek 未配置：${purpose}`);
+      }
+      return runtimeFor(purpose);
+    },
+  );
+
+  const configService = { getSettings, getEnabledDeepSeekRuntimeConfig };
 
   const moduleRef: TestingModule = await Test.createTestingModule({
     providers: [
@@ -152,27 +248,92 @@ function firstRequestBody(fetchMock: jest.Mock): any {
   return JSON.parse(String(init.body));
 }
 
+function sentRequests(fetchMock: jest.Mock) {
+  return fetchMock.mock.calls.map(([url, init]) => {
+    const body = JSON.parse(String(init.body));
+    return {
+      url,
+      model: body.model,
+      authorization: init.headers.Authorization,
+    };
+  });
+}
+
+function attemptedPurposes(configService: {
+  getEnabledDeepSeekRuntimeConfig: jest.Mock;
+}): string[] {
+  return configService.getEnabledDeepSeekRuntimeConfig.mock.calls.map(
+    ([input]) => String(input.purpose),
+  );
+}
+
+async function expectServiceUnavailable(
+  service: IngredientCreationIntakeService,
+): Promise<void> {
+  let caught: unknown;
+  try {
+    await service.classify('牛肉');
+  } catch (error) {
+    caught = error;
+  }
+
+  expect(caught).toBeInstanceOf(ServiceUnavailableException);
+  expect((caught as ServiceUnavailableException).getStatus()).toBe(503);
+  expect((caught as Error).message).toBe(
+    'AI 当前不可用，请在「原料营养治理 → Agent 设置」里启用并配置模型',
+  );
+}
+
+/** 主模型先失败一次、复核模型成功，顺带验证 baseUrl/model/reviewModel/apiKey 都取自同一级。 */
+async function expectUsesPurpose(
+  purpose: string,
+  options: CreateServiceOptions = {},
+) {
+  const fetchMock = jest
+    .fn()
+    .mockResolvedValueOnce(errorResponse(500))
+    .mockResolvedValueOnce(chatResponse(FOOD_RESULT));
+  global.fetch = fetchMock as unknown as typeof global.fetch;
+
+  const { service, configService } = await createService(options);
+
+  await expect(service.classify('牛肉')).resolves.toEqual(FOOD_RESULT);
+
+  const fixture = PURPOSE_FIXTURES[purpose];
+  const shared = {
+    url: `${fixture.baseUrl}/chat/completions`,
+    authorization: `Bearer ${fixture.apiKey}`,
+  };
+  expect(sentRequests(fetchMock)).toEqual([
+    { ...shared, model: fixture.model },
+    { ...shared, model: fixture.reviewModel },
+  ]);
+  expect(logSpy).toHaveBeenCalledWith(
+    expect.stringContaining(`purpose=${purpose}`),
+  );
+
+  return { fetchMock, configService };
+}
+
+const originalFetch = global.fetch;
+let logSpy: jest.SpyInstance;
+let warnSpy: jest.SpyInstance;
+let errorSpy: jest.SpyInstance;
+
+beforeEach(() => {
+  logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => {});
+  warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+  errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
+  // 非 2xx 时共享的 deepseek-chat 会 console.error 一次；测试里静音。
+  jest.spyOn(console, 'error').mockImplementation(() => {});
+});
+
+afterEach(() => {
+  global.fetch = originalFetch;
+  jest.restoreAllMocks();
+});
+
 describe('IngredientCreationIntakeService', () => {
-  const originalFetch = global.fetch;
-  let logSpy: jest.SpyInstance;
-  let warnSpy: jest.SpyInstance;
-  let errorSpy: jest.SpyInstance;
-
-  beforeEach(() => {
-    logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => {});
-    warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
-    errorSpy = jest
-      .spyOn(Logger.prototype, 'error')
-      .mockImplementation(() => {});
-    // 非 2xx 时共享的 deepseek-chat 会 console.error 一次；测试里静音。
-    jest.spyOn(console, 'error').mockImplementation(() => {});
-  });
-
-  afterEach(() => {
-    global.fetch = originalFetch;
-    jest.restoreAllMocks();
-  });
-
   it('食材输入返回 FOOD 与确认话术', async () => {
     const fetchMock = jest.fn().mockResolvedValue(chatResponse(FOOD_RESULT));
     global.fetch = fetchMock as unknown as typeof global.fetch;
@@ -181,9 +342,9 @@ describe('IngredientCreationIntakeService', () => {
 
     await expect(service.classify('牛肉')).resolves.toEqual(FOOD_RESULT);
 
-    expect(configService.getSettings).toHaveBeenCalledWith(INTAKE_PURPOSE);
     expect(configService.getEnabledDeepSeekRuntimeConfig).toHaveBeenCalledWith({
       purpose: INTAKE_PURPOSE,
+      fallbackToDefault: false,
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
@@ -256,7 +417,9 @@ describe('IngredientCreationIntakeService', () => {
       .mockResolvedValueOnce(chatResponse(FOOD_RESULT));
     global.fetch = fetchMock as unknown as typeof global.fetch;
 
-    const { service } = await createService({ settings: { reviewModel: '' } });
+    const { service } = await createService({
+      runtimeOverrides: { reviewModel: '' },
+    });
 
     await expect(service.classify('牛肉')).resolves.toEqual(FOOD_RESULT);
     expect(sentModels(fetchMock)).toEqual([PRIMARY_MODEL, PRIMARY_MODEL]);
@@ -297,12 +460,16 @@ describe('IngredientCreationIntakeService', () => {
     );
   });
 
-  it('AI 未启用时抛 503，提示去「Agent 设置」启用并配置模型', async () => {
+  it('三级配置都未启用时抛 503，提示去「Agent 设置」启用并配置模型', async () => {
     const fetchMock = jest.fn();
     global.fetch = fetchMock as unknown as typeof global.fetch;
 
     const { service } = await createService({
-      settings: { enabled: false },
+      purposes: {
+        [INTAKE_PURPOSE]: 'disabled',
+        [DEFAULT_PURPOSE]: 'disabled',
+        [RECIPE_DESIGN_PURPOSE]: 'disabled',
+      },
     });
 
     let caught: unknown;
@@ -321,12 +488,16 @@ describe('IngredientCreationIntakeService', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('AI 已启用但没配 API Key 时也抛 503，不发起任何请求', async () => {
+  it('三级配置都没配 API Key 时也抛 503，不发起任何请求', async () => {
     const fetchMock = jest.fn();
     global.fetch = fetchMock as unknown as typeof global.fetch;
 
     const { service } = await createService({
-      settings: { apiKeyConfigured: false },
+      purposes: {
+        [INTAKE_PURPOSE]: 'missing-key',
+        [DEFAULT_PURPOSE]: 'missing-key',
+        [RECIPE_DESIGN_PURPOSE]: 'missing-key',
+      },
     });
 
     await expect(service.classify('牛肉')).rejects.toMatchObject({
@@ -345,7 +516,138 @@ describe('IngredientCreationIntakeService', () => {
       status: 400,
     });
     expect(configService.getSettings).not.toHaveBeenCalled();
+    expect(
+      configService.getEnabledDeepSeekRuntimeConfig,
+    ).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('运行时配置回落链（INGREDIENT_INTAKE → DEFAULT → RECIPE_DESIGN）', () => {
+  it('INGREDIENT_INTAKE 存在且启用时直接用它，不再看后面两级', async () => {
+    const { configService } = await expectUsesPurpose(INTAKE_PURPOSE);
+
+    expect(attemptedPurposes(configService)).toEqual([INTAKE_PURPOSE]);
+  });
+
+  it('INGREDIENT_INTAKE 不存在、DEFAULT 存在且启用时用 DEFAULT', async () => {
+    const { configService } = await expectUsesPurpose(DEFAULT_PURPOSE, {
+      purposes: {
+        [INTAKE_PURPOSE]: 'missing',
+        [DEFAULT_PURPOSE]: 'enabled',
+      },
+    });
+
+    expect(attemptedPurposes(configService)).toEqual([
+      INTAKE_PURPOSE,
+      DEFAULT_PURPOSE,
+    ]);
+    expect(logSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining(`purpose=${INTAKE_PURPOSE}`),
+    );
+  });
+
+  it('前两级都没有、RECIPE_DESIGN 启用时用 RECIPE_DESIGN（线上现状）', async () => {
+    const { configService } = await expectUsesPurpose(RECIPE_DESIGN_PURPOSE, {
+      purposes: {
+        [INTAKE_PURPOSE]: 'missing',
+        [DEFAULT_PURPOSE]: 'missing',
+      },
+    });
+
+    expect(attemptedPurposes(configService)).toEqual([
+      INTAKE_PURPOSE,
+      DEFAULT_PURPOSE,
+      RECIPE_DESIGN_PURPOSE,
+    ]);
+  });
+
+  it('三级都没有配置时仍然 503，文案不变且不发起模型请求', async () => {
+    const fetchMock = jest.fn();
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const { service, configService } = await createService({
+      purposes: {
+        [INTAKE_PURPOSE]: 'missing',
+        [DEFAULT_PURPOSE]: 'missing',
+        [RECIPE_DESIGN_PURPOSE]: 'missing',
+      },
+    });
+
+    await expectServiceUnavailable(service);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(attemptedPurposes(configService)).toEqual([
+      INTAKE_PURPOSE,
+      DEFAULT_PURPOSE,
+      RECIPE_DESIGN_PURPOSE,
+    ]);
+    // 排查时要能从日志看到三级都试过了。
+    for (const purpose of [
+      INTAKE_PURPOSE,
+      DEFAULT_PURPOSE,
+      RECIPE_DESIGN_PURPOSE,
+    ]) {
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining(purpose));
+    }
+  });
+
+  const SKIP_CASES: Array<[string, PurposeState, string]> = [
+    [INTAKE_PURPOSE, 'disabled', DEFAULT_PURPOSE],
+    [INTAKE_PURPOSE, 'missing-key', DEFAULT_PURPOSE],
+    [DEFAULT_PURPOSE, 'disabled', RECIPE_DESIGN_PURPOSE],
+    [DEFAULT_PURPOSE, 'missing-key', RECIPE_DESIGN_PURPOSE],
+  ];
+
+  describe.each(SKIP_CASES)(
+    '%s 为 %s 时跳到 %s',
+    (skippedPurpose, state, fallbackPurpose) => {
+      it(`使用 ${fallbackPurpose} 的配置`, async () => {
+        const purposes: Partial<Record<string, PurposeState>> = {
+          [INTAKE_PURPOSE]: 'missing',
+          [DEFAULT_PURPOSE]: 'missing',
+          [skippedPurpose]: state,
+          [fallbackPurpose]: 'enabled',
+        };
+
+        const { configService } = await expectUsesPurpose(fallbackPurpose, {
+          purposes,
+        });
+
+        expect(attemptedPurposes(configService)).toEqual(
+          fallbackPurpose === DEFAULT_PURPOSE
+            ? [INTAKE_PURPOSE, DEFAULT_PURPOSE]
+            : [INTAKE_PURPOSE, DEFAULT_PURPOSE, RECIPE_DESIGN_PURPOSE],
+        );
+        expect(logSpy).not.toHaveBeenCalledWith(
+          expect.stringContaining(`purpose=${skippedPurpose}`),
+        );
+      });
+    },
+  );
+
+  const UNAVAILABLE_STATES: PurposeState[] = ['disabled', 'missing-key'];
+
+  describe.each(UNAVAILABLE_STATES)('RECIPE_DESIGN 为 %s 时', (state) => {
+    it('三级都不可用，仍然 503 且不发起模型请求', async () => {
+      const fetchMock = jest.fn();
+      global.fetch = fetchMock as unknown as typeof global.fetch;
+
+      const { service, configService } = await createService({
+        purposes: {
+          [INTAKE_PURPOSE]: 'missing',
+          [DEFAULT_PURPOSE]: 'missing',
+          [RECIPE_DESIGN_PURPOSE]: state,
+        },
+      });
+
+      await expectServiceUnavailable(service);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(attemptedPurposes(configService)).toEqual([
+        INTAKE_PURPOSE,
+        DEFAULT_PURPOSE,
+        RECIPE_DESIGN_PURPOSE,
+      ]);
+    });
   });
 });
 

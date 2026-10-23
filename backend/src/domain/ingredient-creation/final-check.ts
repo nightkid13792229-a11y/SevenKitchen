@@ -41,7 +41,12 @@ export interface FinalCheckInput {
   magnitudeOutlierFields?: readonly string[];
 }
 
-const MACRO_SUM_LIMIT_G = 100;
+/**
+ * 宏量之和的上限。USDA 等来源的四个宏量是分别测定、分别四舍五入的，
+ * 误差不抵消，正常数据加起来也会略超 100（实测 101.07~101.23）。
+ * 所以留 3% 容差：超过 103 才算异常。
+ */
+const MACRO_SUM_LIMIT_G = 103;
 const ENERGY_DEVIATION_THRESHOLD = 0.1;
 
 function isUsableServingGrams(value: number | null): boolean {
@@ -186,7 +191,7 @@ export function runFinalCheck(input: FinalCheckInput): FinalCheckResult {
   if (input.macroSumG > MACRO_SUM_LIMIT_G) {
     exceptionable.push({
       code: 'MACRO_SUM_OVER_100',
-      message: `宏量之和为 ${input.macroSumG}g/100g，超过 100g 上限，需要登记例外。`,
+      message: `宏量之和为 ${input.macroSumG}g/100g，超过容差上限 103g/100g，需要登记例外。`,
     });
   }
 

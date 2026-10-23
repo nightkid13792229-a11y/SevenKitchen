@@ -127,6 +127,12 @@ describe('runFinalCheck', () => {
 
     expect(result.exceptionable).toHaveLength(1);
     expect(result.exceptionable[0].code).toBe('MACRO_SUM_OVER_100');
+
+    // USDA 的宏量分别测定、分别四舍五入，合计 101.07~101.23 属正常，3% 容差内不报
+    const tolerable = runFinalCheck(input({ macroSumG: 101.23 }));
+    expect(
+      tolerable.exceptionable.some((item) => item.code === 'MACRO_SUM_OVER_100'),
+    ).toBe(false);
   });
 
   it('does not flag a macro sum of exactly 100', () => {

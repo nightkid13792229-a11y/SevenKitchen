@@ -101,6 +101,7 @@ function createService(options: {
   });
 
   const txProxy = {
+    $queryRaw: jest.fn().mockResolvedValue([{ id: 'order-uuid' }]),
     customRecipeDeliveryBatch: {
       count: jest.fn().mockResolvedValue(options.existingBatchCount ?? 0),
       create: jest.fn().mockImplementation(async ({ data }: any) => ({
@@ -143,6 +144,8 @@ function createService(options: {
         .mockResolvedValue(options.occupiedDeliveryItem ?? null),
       createMany: jest.fn(),
     },
+    $queryRaw: jest.fn().mockResolvedValue([{ id: 'order-uuid' }]),
+    $queryRaw: jest.fn().mockResolvedValue([{ id: 'order-uuid' }]),
     $transaction: jest.fn().mockImplementation(async (fn: any) => fn(txProxy)),
   };
 

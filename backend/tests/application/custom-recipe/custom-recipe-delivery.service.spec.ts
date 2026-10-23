@@ -72,6 +72,7 @@ function createService(options: {
   config?: Record<string, unknown>;
 }) {
   const txProxy = {
+    $queryRaw: jest.fn().mockResolvedValue([{ id: 'order-uuid' }]),
     customRecipeDelivery: {
       count: jest
         .fn()
@@ -124,6 +125,8 @@ function createService(options: {
       findFirst: jest.fn(),
       findMany: jest.fn().mockResolvedValue([]),
     },
+    $queryRaw: jest.fn().mockResolvedValue([{ id: 'order-uuid' }]),
+    $queryRaw: jest.fn().mockResolvedValue([{ id: 'order-uuid' }]),
     $transaction: jest.fn().mockImplementation(async (fn: any) => fn(txProxy)),
   };
 
@@ -506,6 +509,7 @@ describe('CustomRecipeDeliveryService', () => {
       delivery?: unknown;
     }) {
       const txProxy = {
+        $queryRaw: jest.fn().mockResolvedValue([{ id: 'order-uuid' }]),
         customRecipeDelivery: { update: jest.fn().mockResolvedValue({}) },
         customRecipeOrder: { update: jest.fn().mockResolvedValue({}) },
       };
@@ -523,6 +527,7 @@ describe('CustomRecipeDeliveryService', () => {
         customRecipeDeliveryBatch: {
           findFirst: jest.fn().mockResolvedValue(null),
         },
+        $queryRaw: jest.fn().mockResolvedValue([{ id: 'order-uuid' }]),
         $transaction: jest
           .fn()
           .mockImplementation(async (fn: any) => fn(txProxy)),

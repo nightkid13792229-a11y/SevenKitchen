@@ -1,5 +1,6 @@
 import { Optional,
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -301,8 +302,9 @@ export class CustomRecipeAftersaleService {
 
     const typeLabel = await this.resolveTypeLabel(input.type);
 
-    const created = await this.prisma.customRecipeAftersale.create({
-      data: {
+    const created = await this.prisma.customRecipeAftersale
+      .create({
+        data: {
         orderId: order.id,
         deliveryId,
         deliveryBatchId,
@@ -314,11 +316,19 @@ export class CustomRecipeAftersaleService {
                 recipeRequests as unknown as Prisma.InputJsonValue,
             }
           : {}),
-        type: input.type,
-        description: trimmed,
-        photos: input.photos ?? [],
-      },
-    });
+          type: input.type,
+          description: trimmed,
+          photos: input.photos ?? [],
+        },
+      })
+      .catch((error: any) => {
+        if (error?.code === 'P2002') {
+          throw new ConflictException(
+            '你已经提交过售后，我们正在处理中。有新情况可以直接在客服里补充',
+          );
+        }
+        throw error;
+      });
 
     return {
       id: created.id,

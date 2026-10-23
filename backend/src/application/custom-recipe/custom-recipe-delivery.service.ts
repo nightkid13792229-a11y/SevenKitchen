@@ -4,6 +4,7 @@ import {
 } from '../../domain/recipe-designer/production-steps';
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -145,6 +146,13 @@ export class CustomRecipeDeliveryService {
     });
 
     const result = await this.prisma.$transaction(async (tx) => {
+      /**
+       * 同一订单的交付串行化：锁住订单行后再数版本，避免两个管理员
+       * 同时交付时都拿到 version=1。
+       */
+      await tx.$queryRaw`
+        SELECT id FROM "custom_recipe_order" WHERE id = ${order.id} FOR UPDATE
+      `;
       /** 版本号 = 该订单已有交付数 + 1；唯一索引兜底防并发重号 */
       const existingCount = await tx.customRecipeDelivery.count({
         where: { orderId: order.id },
@@ -413,6 +421,10 @@ export class CustomRecipeDeliveryService {
         : null;
 
     return this.prisma.$transaction(async (tx) => {
+      /** 同一订单的批次交付串行化。 */
+      await tx.$queryRaw`
+        SELECT id FROM "custom_recipe_order" WHERE id = ${order.id} FOR UPDATE
+      `;
       /** 版本号 = 该订单已有批次数 + 1；唯一索引兜底防并发重号 */
       const existingCount = await tx.customRecipeDeliveryBatch.count({
         where: { orderId: order.id },
@@ -673,8 +685,10 @@ export class CustomRecipeDeliveryService {
         ? new Date(now.getTime() + autoCompleteDays * 24 * 60 * 60 * 1000)
         : null;
 
-    /** 版本号 = 最新批次 + 1（不是 count + 1：批次只增不删，两者等价但语义更直白） */
-    const version = latestBatch.version + 1;
+    /**
+     * 版本号在事务内、锁住订单行后再确定，避免两个处理人同时
+     * 按同一个 latestBatch 派生同一版本。
+     */
     /**
      * 老字段兼容：取**新批次第一份**，与 `deliverBatch` 同一口径。
      * 老页面 / 老接口只认这一列，它代表"这张单的那份食谱"，不代表只有一份。
@@ -682,6 +696,20 @@ export class CustomRecipeDeliveryService {
     const legacyRecipeId = latestBatch.items[0].recipeId;
 
     return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`
+        SELECT id FROM "custom_recipe_order" WHERE id = ${order.id} FOR UPDATE
+      `;
+      const currentLatest = await tx.customRecipeDeliveryBatch.findFirst({
+        where: { orderId: order.id },
+        orderBy: { version: 'desc' },
+        select: { version: true },
+      });
+      if ((currentLatest?.version ?? 0) !== latestBatch.version) {
+        throw new ConflictException(
+          '这笔订单刚刚被其他人重新交付过，请刷新后重试',
+        );
+      }
+      const version = latestBatch.version + 1;
       const batch = await tx.customRecipeDeliveryBatch.create({
         data: {
           orderId: order.id,

@@ -199,6 +199,34 @@
         <text>这份内容在交付时已存档，之后调整配方不会改变你现在看到的版本。</text>
       </view>
     </template>
+
+    <!-- 补剂产品选择：不用系统 actionSheet，保证和页面视觉一致且可截图验收 -->
+    <view
+      v-if="alternativeSheet"
+      class="alt-mask"
+      @tap="alternativeSheet = null"
+    >
+      <view class="alt-sheet" @tap.stop>
+        <text class="alt-title">换一个 · {{ alternativeSheet.supplementName }}</text>
+        <text class="alt-note">只换买哪瓶，配方用量和营养目标不变。</text>
+        <view
+          v-for="option in alternativeSheet.options"
+          :key="option.name + (option.brand || '')"
+          class="alt-option"
+          @tap="selectSupplementAlternative(option)"
+        >
+          <image v-if="option.imageUrl" class="alt-option__image" :src="option.imageUrl" mode="aspectFill" />
+          <view class="alt-option__body">
+            <text class="alt-option__name">{{ option.name }}</text>
+            <text class="alt-option__brand">
+              {{ [option.brand, option.productModel].filter(Boolean).join(' · ') || '同营养素替代' }}
+            </text>
+          </view>
+          <text class="alt-option__action">{{ option.purchaseLink?.url ? '去买 ›' : '暂无链接' }}</text>
+        </view>
+        <button class="alt-cancel" @tap="alternativeSheet = null">取消</button>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -299,40 +327,44 @@ const foodUsageRows = computed(() => {
  * 交付快照里存的是"可替换产品"，不是实时商品库：
  * 顾客换的是买哪瓶，配方里的营养目标和用量不变。
  */
+type SupplementAlternative = {
+  name: string;
+  brand?: string | null;
+  productModel?: string | null;
+  imageUrl?: string | null;
+  purchaseLink?: { url: string; platform?: string | null } | null;
+};
+
+const alternativeSheet = ref<{
+  supplementName: string;
+  options: SupplementAlternative[];
+} | null>(null);
+
 function chooseSupplementAlternative(item: {
   name: string;
-  alternatives?: Array<{
-    name: string;
-    brand?: string | null;
-    productModel?: string | null;
-    purchaseLink?: { url: string; platform?: string | null } | null;
-  }> | null;
+  alternatives?: SupplementAlternative[] | null;
 }) {
   const options = (item.alternatives || []).filter((option) => option.name);
   if (options.length === 0) return;
-  uni.showActionSheet({
-    itemList: options.map((option) =>
-      [option.brand, option.name, option.productModel]
-        .filter(Boolean)
-        .join(' · '),
-    ),
-    success: (res) => {
-      const selected = options[res.tapIndex];
-      if (!selected?.purchaseLink?.url) {
-        uni.showToast({ title: '这个产品暂未配置购买链接', icon: 'none' });
-        return;
-      }
-      uni.setClipboardData({
-        data: selected.purchaseLink.url,
-        success: () => {
-          uni.showModal({
-            title: selected.name,
-            content:
-              '购买链接已复制。去京东/淘宝/天猫打开即可下单；补剂用量和营养目标仍按本页配方。',
-            showCancel: false,
-            confirmText: '知道了',
-          });
-        },
+  alternativeSheet.value = { supplementName: item.name, options };
+}
+
+function selectSupplementAlternative(option: SupplementAlternative) {
+  if (!option.purchaseLink?.url) {
+    uni.showToast({ title: '这个产品暂未配置购买链接', icon: 'none' });
+    return;
+  }
+  const url = option.purchaseLink.url;
+  uni.setClipboardData({
+    data: url,
+    success: () => {
+      alternativeSheet.value = null;
+      uni.showModal({
+        title: option.name,
+        content:
+          '购买链接已复制。去京东/淘宝/天猫打开即可下单；补剂用量和营养目标仍按本页配方。',
+        showCancel: false,
+        confirmText: '知道了',
       });
     },
   });
@@ -1060,4 +1092,79 @@ onPullDownRefresh(async () => {
   background: #d8bc85;
 }
 
+
+/* ===== 补剂产品选择弹层（2026-10-23）===== */
+.alt-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(23, 34, 27, 0.48);
+}
+.alt-sheet {
+  width: 100%;
+  padding: 32rpx 28rpx calc(28rpx + env(safe-area-inset-bottom));
+  background: #fffdf7;
+  border-radius: 32rpx 32rpx 0 0;
+}
+.alt-title {
+  display: block;
+  font-family: "Songti SC", "STSong", serif;
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+}
+.alt-note {
+  display: block;
+  margin: 8rpx 0 20rpx;
+  font-size: 22rpx;
+  color: #8a806c;
+}
+.alt-option {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  padding: 20rpx 0;
+  border-top: 1rpx solid #eee5d6;
+}
+.alt-option__image {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 14rpx;
+  background: #f4ebe0;
+  flex-shrink: 0;
+}
+.alt-option__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+.alt-option__name {
+  font-size: 27rpx;
+  font-weight: 600;
+  color: #1e3a2f;
+}
+.alt-option__brand {
+  font-size: 21rpx;
+  color: #8a806c;
+}
+.alt-option__action {
+  font-size: 23rpx;
+  font-weight: 600;
+  color: #b08d4f;
+  flex-shrink: 0;
+}
+.alt-cancel {
+  margin-top: 20rpx;
+  height: 84rpx;
+  line-height: 84rpx;
+  border-radius: 999rpx;
+  background: #f4efe3;
+  color: #556052;
+  font-size: 27rpx;
+}
+.alt-cancel::after { border: 0; }
 </style>

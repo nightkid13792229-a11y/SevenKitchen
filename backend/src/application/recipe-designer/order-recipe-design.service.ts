@@ -200,6 +200,11 @@ export class OrderRecipeDesignService {
       await this.recipeDesignerService
         .deleteOrderBoundSeriesDesign(created.seriesId, created.draftId)
         .catch(() => undefined);
+      if (String((error as any)?.message || '').includes('订单份数已满')) {
+        throw new BadRequestException(
+          `本单最多设计 ${order.recipeQuantity} 份，当前已经达到上限`,
+        );
+      }
       throw error;
     }
 
@@ -249,6 +254,11 @@ export class OrderRecipeDesignService {
       await this.recipeDesignerService
         .deleteOrderBoundSeriesDesign(created.seriesId, created.draftId)
         .catch(() => undefined);
+      if (String((error as any)?.message || '').includes('订单份数已满')) {
+        throw new BadRequestException(
+          `本单最多设计 ${order.recipeQuantity} 份，当前已经达到上限`,
+        );
+      }
       throw error;
     }
 

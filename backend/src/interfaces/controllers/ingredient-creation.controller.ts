@@ -14,6 +14,10 @@ import {
   IngredientCreationAuditService,
   type IngredientCreationAuditView,
 } from '../../application/ingredient-creation/ingredient-creation-audit.service';
+import {
+  IngredientCreationAgentService,
+  type IngredientAgentRunResult,
+} from '../../application/ingredient-creation/ingredient-creation-agent.service';
 import { IngredientCreationCandidateService } from '../../application/ingredient-creation/ingredient-creation-candidate.service';
 import { IngredientCreationCheckService } from '../../application/ingredient-creation/ingredient-creation-check.service';
 import {
@@ -49,6 +53,7 @@ import {
   CreateMergePlanDto,
   FindCandidatesDto,
   ResolveMergeConflictDto,
+  RunIngredientAgentDto,
   SearchOnlineCandidatesDto,
   UpdateDraftDto,
   type UpdateDraftPayloadDto,
@@ -87,6 +92,7 @@ export class IngredientCreationController {
     private readonly commitService: IngredientCreationCommitService,
     private readonly auditService: IngredientCreationAuditService,
     private readonly intakeService: IngredientCreationIntakeService,
+    private readonly agentService: IngredientCreationAgentService,
   ) {}
 
   @Post('intake/classify')
@@ -101,6 +107,24 @@ export class IngredientCreationController {
       history: dto.history,
       current: dto.current ?? null,
     });
+    return new ApiResponseDto(0, 'Success', result);
+  }
+
+  @Post('agent/run')
+  @ApiOperation({
+    summary:
+      'AI 起草循环：受控调用工具（查库 / 写字段 / 跑校验），最多 8 步、60 秒',
+  })
+  async runAgent(
+    @Body() dto: RunIngredientAgentDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<IngredientAgentRunResult>> {
+    const result = await this.agentService.run({
+      draftId: dto.draftId,
+      text: dto.text,
+      userId: user.userId,
+    });
+
     return new ApiResponseDto(0, 'Success', result);
   }
 

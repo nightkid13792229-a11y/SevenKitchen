@@ -1,0 +1,995 @@
+import {
+  INestApplication,
+  Logger,
+  NotFoundException,
+  ServiceUnavailableException,
+  ValidationPipe,
+} from '@nestjs/common';
+import { Test, type TestingModule } from '@nestjs/testing';
+import request from 'supertest';
+import {
+  IngredientCreationAgentService,
+  type IngredientAgentRunResult,
+} from '../../../src/application/ingredient-creation/ingredient-creation-agent.service';
+import { IngredientCreationAuditService } from '../../../src/application/ingredient-creation/ingredient-creation-audit.service';
+import { IngredientCreationCandidateService } from '../../../src/application/ingredient-creation/ingredient-creation-candidate.service';
+import { IngredientCreationCheckService } from '../../../src/application/ingredient-creation/ingredient-creation-check.service';
+import { IngredientCreationCommitService } from '../../../src/application/ingredient-creation/ingredient-creation-commit.service';
+import { IngredientCreationDraftService } from '../../../src/application/ingredient-creation/ingredient-creation-draft.service';
+import { IngredientCreationIntakeService } from '../../../src/application/ingredient-creation/ingredient-creation-intake.service';
+import { IngredientCreationMergeService } from '../../../src/application/ingredient-creation/ingredient-creation-merge.service';
+import { IngredientCreationOnlineService } from '../../../src/application/ingredient-creation/ingredient-creation-online.service';
+import { IngredientCreationToolsService } from '../../../src/application/ingredient-creation/ingredient-creation-tools.service';
+import type {
+  CandidateSearchResult,
+  FinalCheckResult,
+  IngredientCreationDraft,
+} from '../../../src/application/ingredient-creation/ingredient-creation.types';
+import {
+  AgentProviderConfigService,
+  type DeepSeekRuntimeConfig,
+} from '../../../src/application/nutrition-governance/agent-provider-config.service';
+import { AuthGuard } from '../../../src/interfaces/auth/auth.guard';
+import { JwtAuthService } from '../../../src/interfaces/auth/jwt.service';
+import { IngredientCreationController } from '../../../src/interfaces/controllers/ingredient-creation.controller';
+import { AdminGuard } from '../../../src/interfaces/guards/role.guard';
+
+const DRAFT_ID = 'draft-1';
+const BASE_URL = 'https://api.deepseek.test';
+const MODEL = 'deepseek-v4-flash';
+const REVIEW_MODEL = 'deepseek-v4-pro';
+const AGENT_PATH = '/api/v1/admin/ingredient-creation/agent/run';
+
+const CANDIDATE_RESULT: CandidateSearchResult = {
+  candidates: [
+    {
+      sourceRecordId: 'rec-liver-raw',
+      sourceType: 'USDA_FDC',
+      foodName: 'Chicken, liver, raw',
+      foodNameEn: 'Chicken, liver, raw',
+      preparationState: 'RAW',
+      cookingMethod: null,
+      coveragePercent: 82,
+      missingFields: ['minerals.iodine'],
+      matchScore: 0.9,
+      notes: [],
+    },
+  ],
+  excludedCount: 0,
+  coverage: {
+    state: 'RAW',
+    candidateCount: 1,
+    bestCoveragePercent: 82,
+    bestMissingFieldCount: 1,
+  },
+};
+
+const PASSING_CHECK: FinalCheckResult = {
+  blocking: [],
+  exceptionable: [],
+  warnings: [],
+};
+
+function createDraft(
+  overrides: Partial<IngredientCreationDraft> = {},
+): IngredientCreationDraft {
+  return {
+    id: DRAFT_ID,
+    name: '鸡肝',
+    type: 'FOOD',
+    step: 'INTAKE',
+    payload: {},
+    createdBy: 'admin-1',
+    createdAt: new Date('2026-10-23T00:00:00.000Z'),
+    updatedAt: new Date('2026-10-23T00:00:00.000Z'),
+    ...overrides,
+  };
+}
+
+function draftWithProfile(): IngredientCreationDraft {
+  return createDraft({
+    payload: {
+      profiles: [
+        {
+          preparationState: 'RAW',
+          sourceRecordId: 'src-1',
+          entries: [],
+          notes: null,
+        },
+      ],
+    },
+  });
+}
+
+function buildRuntime(): DeepSeekRuntimeConfig {
+  return {
+    provider: 'deepseek',
+    baseUrl: BASE_URL,
+    model: MODEL,
+    reviewModel: REVIEW_MODEL,
+    apiKey: 'sk-agent-test',
+    maxConcurrency: 1,
+    requestTimeoutMs: 90_000,
+    retryCount: 2,
+  };
+}
+
+function assistantToolCall(
+  name: string,
+  args: Record<string, unknown>,
+  id = 'call_1',
+) {
+  return {
+    role: 'assistant',
+    content: null,
+    tool_calls: [
+      {
+        id,
+        type: 'function',
+        function: { name, arguments: JSON.stringify(args) },
+      },
+    ],
+  };
+}
+
+function assistantReply(content: string) {
+  return { role: 'assistant', content };
+}
+
+function chatResponse(message: unknown) {
+  return {
+    ok: true,
+    status: 200,
+    json: jest.fn().mockResolvedValue({ choices: [{ message }] }),
+  } as unknown as Response;
+}
+
+function errorResponse(status: number, body: unknown) {
+  return {
+    ok: false,
+    status,
+    json: jest.fn().mockResolvedValue(body),
+  } as unknown as Response;
+}
+
+interface HarnessOptions {
+  draft?: IngredientCreationDraft | null;
+  candidates?: CandidateSearchResult;
+  checkResult?: FinalCheckResult;
+  runtime?: DeepSeekRuntimeConfig;
+  sourceRecords?: Array<{
+    id: string;
+    status: string;
+    foodName?: string;
+    foodNameEn?: string | null;
+    normalizedNutrition?: unknown;
+  }>;
+}
+
+function createHarness(options: HarnessOptions = {}) {
+  let draft: IngredientCreationDraft | null =
+    options.draft === undefined ? createDraft() : options.draft;
+
+  const draftService = {
+    create: jest.fn(
+      async (input: { name: string; type: 'FOOD'; createdBy: string }) => {
+        draft = createDraft({
+          id: 'draft-created',
+          name: input.name,
+          createdBy: input.createdBy,
+          payload: {},
+        });
+        return draft;
+      },
+    ),
+    get: jest.fn(async (id: string) => {
+      if (!draft || draft.id !== id) {
+        throw new NotFoundException(
+          `Ingredient creation draft ${id} not found`,
+        );
+      }
+      return draft;
+    }),
+    patch: jest.fn(
+      async (
+        id: string,
+        step: IngredientCreationDraft['step'],
+        payload: Partial<IngredientCreationDraft['payload']>,
+      ) => {
+        if (!draft || draft.id !== id) {
+          throw new NotFoundException(
+            `Ingredient creation draft ${id} not found`,
+          );
+        }
+        draft = {
+          ...draft,
+          step,
+          payload: { ...draft.payload, ...payload },
+          updatedAt: new Date(),
+        };
+        return draft;
+      },
+    ),
+  };
+
+  const candidateService = {
+    findCandidates: jest.fn(async () => options.candidates ?? CANDIDATE_RESULT),
+  };
+
+  const checkService = {
+    runCheck: jest.fn(async () => options.checkResult ?? PASSING_CHECK),
+  };
+
+  const prisma = {
+    nutritionSourceRecord: {
+      findUnique: jest.fn(async (query: { where: { id: string } }) => {
+        const records = options.sourceRecords ?? [];
+        return records.find((record) => record.id === query.where.id) ?? null;
+      }),
+    },
+  };
+
+  const configService = {
+    getEnabledDeepSeekRuntimeConfig: jest.fn(
+      async () => options.runtime ?? buildRuntime(),
+    ),
+  };
+
+  const tools = new IngredientCreationToolsService(
+    candidateService as unknown as IngredientCreationCandidateService,
+    draftService as unknown as IngredientCreationDraftService,
+    checkService as unknown as IngredientCreationCheckService,
+    prisma as never,
+  );
+
+  const agent = new IngredientCreationAgentService(
+    configService as unknown as AgentProviderConfigService,
+    tools,
+    draftService as unknown as IngredientCreationDraftService,
+  );
+
+  return {
+    agent,
+    tools,
+    draftService,
+    candidateService,
+    checkService,
+    prisma,
+    configService,
+    currentDraft: () => draft,
+  };
+}
+
+function requestBody(fetchMock: jest.Mock, index: number): any {
+  const [, init] = fetchMock.mock.calls[index];
+  return JSON.parse(String(init.body));
+}
+
+const originalFetch = global.fetch;
+let logSpy: jest.SpyInstance;
+let warnSpy: jest.SpyInstance;
+let errorSpy: jest.SpyInstance;
+
+beforeEach(() => {
+  logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => {});
+  warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+  errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
+  jest.spyOn(console, 'error').mockImplementation(() => {});
+});
+
+afterEach(() => {
+  global.fetch = originalFetch;
+  jest.restoreAllMocks();
+});
+
+describe('IngredientCreationAgentService · 工具循环', () => {
+  it('模型第一步请求 searchLocalNutrition 时工具被调用，结果回灌给下一步', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall('searchLocalNutrition', {
+            keyword: '鸡肝',
+            state: 'RAW',
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(assistantReply('本地库找到一条生鸡肝来源，覆盖率 82%。')),
+      );
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '帮我加鸡肝',
+      userId: 'admin-1',
+    });
+
+    expect(harness.candidateService.findCandidates).toHaveBeenCalledWith({
+      name: '鸡肝',
+      state: 'RAW',
+    });
+
+    expect(result).toMatchObject({
+      draftId: DRAFT_ID,
+      reply: '本地库找到一条生鸡肝来源，覆盖率 82%。',
+      steps: 2,
+      toolCalls: [
+        {
+          name: 'searchLocalNutrition',
+          args: { keyword: '鸡肝', state: 'RAW' },
+          ok: true,
+        },
+      ],
+    });
+
+    // 第二次请求必须把「工具返回」作为 role=tool 的消息带给模型。
+    const second = requestBody(fetchMock, 1);
+    const toolMessage = second.messages.find(
+      (message: any) => message.role === 'tool',
+    );
+    expect(toolMessage).toBeDefined();
+    expect(toolMessage.tool_call_id).toBe('call_1');
+    expect(toolMessage.content).toContain('rec-liver-raw');
+    expect(toolMessage.content).toContain('Chicken, liver, raw');
+    expect(toolMessage.content).toContain('82');
+
+    // 工具调用要留日志：工具名、参数摘要、耗时、成功/失败。
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.stringContaining('tool=searchLocalNutrition'),
+    );
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('durationMs='));
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('ok=true'));
+  });
+
+  it('模型写非法单位时返回错误文本，模型改对后 runCheck 通过', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'updateNutritionField',
+            {
+              profileIndex: 0,
+              fieldPath: 'macros.crudeProtein',
+              value: 20,
+              unit: '两',
+              sourceRecordId: 'src-1',
+            },
+            'call_bad_unit',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'updateNutritionField',
+            {
+              profileIndex: 0,
+              fieldPath: 'macros.crudeProtein',
+              value: 20,
+              unit: 'g',
+              sourceRecordId: 'src-1',
+            },
+            'call_fixed',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(assistantToolCall('runCheck', {}, 'call_check')),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(assistantReply('已按来源填好粗蛋白，终检通过。')),
+      );
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness({
+      draft: draftWithProfile(),
+      sourceRecords: [
+        {
+          id: 'src-1',
+          status: 'ACTIVE',
+          foodName: 'Chicken, liver, raw',
+          foodNameEn: 'Chicken, liver, raw',
+          normalizedNutrition: { meta: { sampleState: 'RAW' } },
+        },
+      ],
+    });
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+
+    expect(result.toolCalls).toHaveLength(3);
+    expect(result.toolCalls[0]).toMatchObject({
+      name: 'updateNutritionField',
+      ok: false,
+    });
+    expect(result.toolCalls[0].error).toContain('单位');
+    expect(result.toolCalls[0].error).toContain('两');
+    expect(result.toolCalls[1]).toMatchObject({
+      name: 'updateNutritionField',
+      ok: true,
+    });
+    expect(result.toolCalls[2]).toMatchObject({ name: 'runCheck', ok: true });
+
+    // 错误文本必须作为 role=tool 的消息回灌给模型，否则它没法自纠。
+    const secondRequest = requestBody(fetchMock, 1);
+    const feedback = secondRequest.messages.find(
+      (message: any) => message.role === 'tool',
+    );
+    expect(feedback.content).toContain('单位');
+    expect(feedback.content).toContain('两');
+
+    // 非法单位那次没有落库；改对后才写进草稿。
+    const draft = harness.currentDraft();
+    expect(draft?.payload.profiles?.[0].entries).toEqual([
+      expect.objectContaining({
+        fieldPath: 'macros.crudeProtein',
+        finalValue: 20,
+        unit: 'g',
+        sourceRecordId: 'src-1',
+      }),
+    ]);
+    expect(harness.checkService.runCheck).toHaveBeenCalledWith(DRAFT_ID);
+    expect(result.steps).toBe(4);
+    expect(result.reply).toContain('终检通过');
+  });
+
+  it('模型调用不存在的工具时返回错误文本，不崩', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall('deleteIngredient', { id: 'x' }, 'call_unknown'),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(assistantReply('没有这个工具，我停下来。')),
+      );
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+
+    expect(result.toolCalls).toHaveLength(1);
+    expect(result.toolCalls[0]).toMatchObject({
+      name: 'deleteIngredient',
+      ok: false,
+    });
+    expect(result.toolCalls[0].error).toContain('未知工具');
+
+    const secondRequest = requestBody(fetchMock, 1);
+    const toolMessage = secondRequest.messages.find(
+      (message: any) => message.role === 'tool',
+    );
+    expect(toolMessage.content).toContain('未知工具');
+    expect(result.steps).toBe(2);
+  });
+
+  it('超过 8 步时停止，返回“我跑到上限了”和已完成的工具调用', async () => {
+    const fetchMock = jest.fn();
+    for (let index = 0; index < 8; index += 1) {
+      fetchMock.mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'searchLocalNutrition',
+            { keyword: `鸡肝${index + 1}`, state: 'RAW' },
+            `call_${index + 1}`,
+          ),
+        ),
+      );
+    }
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    const result = await harness.agent.run({
+      text: '帮我加鸡肝',
+      userId: 'admin-1',
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(8);
+    expect(result.steps).toBe(8);
+    expect(result.toolCalls).toHaveLength(8);
+    expect(result.reply).toContain('我跑到上限了');
+    expect(result.toolCalls[7]).toMatchObject({
+      name: 'searchLocalNutrition',
+      ok: true,
+    });
+    // 「带上已有 transcript」：每一步都留痕，不能只给一句上限提示。
+    expect(result.transcript?.length).toBeGreaterThanOrEqual(8);
+  });
+
+  it('总时长 60 秒用完时停止，返回“我跑到上限了”，不报 503', async () => {
+    let now = 1_000_000;
+    const nowSpy = jest.spyOn(Date, 'now').mockImplementation(() => now);
+    const fetchMock = jest.fn(async () => {
+      // 模拟一次模型调用把 60 秒预算全部耗尽。
+      now += 61_000;
+      throw Object.assign(new Error('aborted'), { name: 'AbortError' });
+    });
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+
+    expect(result.reply).toContain('我跑到上限了');
+    expect(result.steps).toBe(1);
+    expect(result.transcript.some((entry) => entry.type === 'limit')).toBe(
+      true,
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    nowSpy.mockRestore();
+  });
+
+  it('模型不支持 tools 时退化为 JSON 动作模式，并在报文里去掉 tools 参数', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        errorResponse(400, {
+          error: { message: 'tools is not supported by this model' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantReply(JSON.stringify({ reply: 'JSON 动作模式也能回话。' })),
+        ),
+      );
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+
+    expect(result.mode).toBe('JSON_ACTION');
+    expect(result.reply).toBe('JSON 动作模式也能回话。');
+    expect(result.steps).toBe(1);
+
+    const first = requestBody(fetchMock, 0);
+    expect(first.tools).toBeDefined();
+    const second = requestBody(fetchMock, 1);
+    expect(second.tools).toBeUndefined();
+    expect(second.response_format).toEqual({ type: 'json_object' });
+    expect(second.messages).toHaveLength(2);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('JSON 动作'));
+  });
+
+  it('没有 draftId 时先建草稿，再在草稿上跑循环', async () => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(assistantReply('草稿已建好。')),
+      ) as any;
+
+    const harness = createHarness({ draft: null });
+    const result = await harness.agent.run({
+      text: '帮我加鸡肝',
+      userId: 'admin-1',
+    });
+
+    expect(harness.draftService.create).toHaveBeenCalledWith({
+      name: '帮我加鸡肝',
+      type: 'FOOD',
+      createdBy: 'admin-1',
+    });
+    expect(result.draftId).toBe('draft-created');
+    expect(result.reply).toBe('草稿已建好。');
+  });
+
+  it('字段不在目录、来源不存在时都返回错误文本，且不写入草稿', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'updateNutritionField',
+            {
+              profileIndex: 0,
+              fieldPath: 'macros.notAField',
+              value: 20,
+              unit: 'g',
+            },
+            'call_bad_field',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'updateNutritionField',
+            {
+              profileIndex: 0,
+              fieldPath: 'macros.crudeProtein',
+              value: 20,
+              unit: 'g',
+              sourceRecordId: 'missing-source',
+            },
+            'call_missing_source',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(assistantReply('字段和来源都不对，我停下来问用户。')),
+      );
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness({ draft: draftWithProfile() });
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+
+    expect(result.toolCalls).toHaveLength(2);
+    expect(result.toolCalls[0].ok).toBe(false);
+    expect(result.toolCalls[0].error).toContain('不在营养字段目录');
+    expect(result.toolCalls[1].ok).toBe(false);
+    expect(result.toolCalls[1].error).toContain('不存在');
+    expect(harness.currentDraft()?.payload.profiles?.[0].entries).toEqual([]);
+
+    // 两条错误都以 role=tool 的形式回灌给模型。
+    const secondRequest = requestBody(fetchMock, 1);
+    const feedback = secondRequest.messages.find(
+      (message: any) => message.role === 'tool',
+    );
+    expect(feedback.content).toContain('不在营养字段目录');
+  });
+
+  it('草稿还没有档案时，第一次写入按来源记录自动建档案（状态不猜）', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'updateNutritionField',
+            {
+              profileIndex: 0,
+              fieldPath: 'macros.crudeProtein',
+              value: 20,
+              unit: 'g',
+              sourceRecordId: 'src-1',
+            },
+            'call_first_write',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(assistantToolCall('runCheck', {}, 'call_check')),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(assistantReply('已建生档案并填好粗蛋白，终检通过。')),
+      );
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness({
+      draft: createDraft(),
+      sourceRecords: [
+        {
+          id: 'src-1',
+          status: 'ACTIVE',
+          foodName: 'Chicken, liver, raw',
+          foodNameEn: 'Chicken, liver, raw',
+          normalizedNutrition: { meta: { sampleState: 'RAW' } },
+        },
+      ],
+    });
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+
+    const profiles = harness.currentDraft()?.payload.profiles ?? [];
+    expect(profiles).toHaveLength(1);
+    expect(profiles[0].preparationState).toBe('RAW');
+    expect(profiles[0].sourceRecordId).toBe('src-1');
+    expect(profiles[0].entries).toEqual([
+      expect.objectContaining({
+        fieldPath: 'macros.crudeProtein',
+        finalValue: 20,
+        unit: 'g',
+      }),
+    ]);
+    expect(result.toolCalls.every((call) => call.ok)).toBe(true);
+    expect(result.steps).toBe(3);
+  });
+
+  it('完整一轮：查库 → 单位改对 → 终检发现缺熟 → 补熟档案 → 通过', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'searchLocalNutrition',
+            { keyword: '鸡肝', state: 'RAW' },
+            'call_search',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'updateNutritionField',
+            {
+              profileIndex: 0,
+              fieldPath: 'macros.crudeProtein',
+              value: 19.5,
+              unit: 'mg',
+              sourceRecordId: 'rec-liver-raw',
+            },
+            'call_bad_unit',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'updateNutritionField',
+            {
+              profileIndex: 0,
+              fieldPath: 'macros.crudeProtein',
+              value: 19.5,
+              unit: 'g',
+              sourceRecordId: 'rec-liver-raw',
+            },
+            'call_fix_unit',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(assistantToolCall('runCheck', {}, 'call_check_1')),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'updateNutritionField',
+            {
+              profileIndex: 1,
+              fieldPath: 'macros.crudeProtein',
+              value: 25.1,
+              unit: 'g',
+              sourceRecordId: 'rec-liver-cooked',
+            },
+            'call_cooked',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(assistantToolCall('runCheck', {}, 'call_check_2')),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantReply('生熟两份档案都填好粗蛋白，终检通过，请人工审核。'),
+        ),
+      );
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness({
+      draft: createDraft(),
+      sourceRecords: [
+        {
+          id: 'rec-liver-raw',
+          status: 'ACTIVE',
+          foodName: 'Chicken, liver, raw',
+          foodNameEn: 'Chicken, liver, raw',
+          normalizedNutrition: { meta: { sampleState: 'RAW' } },
+        },
+        {
+          id: 'rec-liver-cooked',
+          status: 'ACTIVE',
+          foodName: 'Chicken, liver, cooked, simmered',
+          foodNameEn: 'Chicken, liver, cooked, simmered',
+          normalizedNutrition: { meta: { sampleState: 'COOKED' } },
+        },
+      ],
+    });
+
+    // 第一次终检缺熟档案；补完之后第二次通过（只剩提醒）。
+    harness.checkService.runCheck
+      .mockResolvedValueOnce({
+        blocking: [
+          {
+            code: 'REQUIRED_STATE_MISSING',
+            message: '缺少必需的熟档案（COOKED），需要补数据或登记例外。',
+          },
+        ],
+        exceptionable: [],
+        warnings: [],
+      })
+      .mockResolvedValueOnce({
+        blocking: [],
+        exceptionable: [],
+        warnings: [
+          {
+            code: 'ENERGY_CROSS_CHECK_DEVIATION',
+            message: '能量与按 4/9/4 反算的值偏差 12.0%，超过 10%。',
+          },
+        ],
+      });
+
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '帮我加鸡肝',
+      userId: 'admin-1',
+    });
+
+    expect(result.steps).toBe(7);
+    expect(result.toolCalls.map((call) => call.name)).toEqual([
+      'searchLocalNutrition',
+      'updateNutritionField',
+      'updateNutritionField',
+      'runCheck',
+      'updateNutritionField',
+      'runCheck',
+    ]);
+    expect(result.toolCalls[1].ok).toBe(false);
+    expect(result.toolCalls[1].error).toContain('单位');
+    expect(result.toolCalls.slice(2).every((call) => call.ok)).toBe(true);
+    expect(result.reply).toContain('终检通过');
+
+    const profiles = harness.currentDraft()?.payload.profiles ?? [];
+    expect(profiles.map((profile) => profile.preparationState)).toEqual([
+      'RAW',
+      'COOKED',
+    ]);
+    expect(profiles.map((profile) => profile.entries[0].finalValue)).toEqual([
+      19.5, 25.1,
+    ]);
+    expect(harness.checkService.runCheck).toHaveBeenCalledTimes(2);
+  });
+
+  it('AI 配置不可用时 503，不发起模型请求', async () => {
+    const fetchMock = jest.fn();
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    harness.configService.getEnabledDeepSeekRuntimeConfig.mockRejectedValue(
+      new Error('DeepSeek Agent 设置未启用'),
+    );
+
+    await expect(
+      harness.agent.run({
+        draftId: DRAFT_ID,
+        text: '鸡肝',
+        userId: 'admin-1',
+      }),
+    ).rejects.toMatchObject({
+      status: 503,
+      message:
+        'AI 当前不可用，请在「原料营养治理 → Agent 设置」里启用并配置模型',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('模型两次都调用失败时 503，文案沿用 intake 口径', async () => {
+    const fetchMock = jest.fn().mockRejectedValue(new Error('network down'));
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+
+    let caught: unknown;
+    try {
+      await harness.agent.run({
+        draftId: DRAFT_ID,
+        text: '鸡肝',
+        userId: 'admin-1',
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(ServiceUnavailableException);
+    expect((caught as ServiceUnavailableException).getStatus()).toBe(503);
+    expect((caught as Error).message).toBe('AI 暂时不可用，请稍后重试');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('POST /api/v1/admin/ingredient-creation/agent/run', () => {
+  let app: INestApplication;
+  let agentService: { run: jest.Mock };
+
+  beforeEach(async () => {
+    agentService = { run: jest.fn() };
+
+    const moduleRef: TestingModule = await Test.createTestingModule({
+      controllers: [IngredientCreationController],
+      providers: [
+        { provide: IngredientCreationDraftService, useValue: {} },
+        { provide: IngredientCreationCandidateService, useValue: {} },
+        { provide: IngredientCreationOnlineService, useValue: {} },
+        { provide: IngredientCreationMergeService, useValue: {} },
+        { provide: IngredientCreationCheckService, useValue: {} },
+        { provide: IngredientCreationCommitService, useValue: {} },
+        { provide: IngredientCreationAuditService, useValue: {} },
+        { provide: IngredientCreationIntakeService, useValue: {} },
+        { provide: IngredientCreationAgentService, useValue: agentService },
+        {
+          provide: JwtAuthService,
+          useValue: {
+            validateToken: jest.fn().mockReturnValue({
+              userId: 'admin-1',
+              customerId: 'admin-1',
+              role: 'ADMIN',
+            }),
+          },
+        },
+        AuthGuard,
+        AdminGuard,
+      ],
+    }).compile();
+
+    app = moduleRef.createNestApplication();
+    app.useGlobalPipes(
+      new ValidationPipe({ transform: true, whitelist: true }),
+    );
+    await app.init();
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  function http() {
+    return request(app.getHttpServer());
+  }
+
+  it('未登录 → 401，且不调用起草服务', async () => {
+    await http().post(AGENT_PATH).send({ text: '鸡肝' }).expect(401);
+
+    expect(agentService.run).not.toHaveBeenCalled();
+  });
+
+  it('已登录时把 draftId / text / userId 交给服务，并用 ApiResponseDto 包裹', async () => {
+    const runResult: IngredientAgentRunResult = {
+      draftId: DRAFT_ID,
+      reply: '已填好。',
+      toolCalls: [],
+      steps: 1,
+      transcript: [],
+      mode: 'FUNCTION_CALLING',
+    };
+    agentService.run.mockResolvedValue(runResult);
+
+    const response = await http()
+      .post(AGENT_PATH)
+      .set('Authorization', 'Bearer admin-token')
+      .send({ draftId: DRAFT_ID, text: '鸡肝' })
+      .expect(201);
+
+    expect(agentService.run).toHaveBeenCalledWith({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+    expect(response.body).toEqual({
+      code: 0,
+      message: 'Success',
+      data: runResult,
+    });
+  });
+
+  it('缺少 text → 400，且不调用起草服务', async () => {
+    await http()
+      .post(AGENT_PATH)
+      .set('Authorization', 'Bearer admin-token')
+      .send({ draftId: DRAFT_ID })
+      .expect(400);
+
+    expect(agentService.run).not.toHaveBeenCalled();
+  });
+});

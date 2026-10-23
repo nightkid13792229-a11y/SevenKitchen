@@ -88,9 +88,10 @@ const CURRENT_TEXT_MAX = 300;
 /** 回复太长会挤掉气泡，服务端兜底截断。 */
 const REPLY_MAX = 80;
 
-const AI_NOT_CONFIGURED_MESSAGE =
+/** 与原料录入 / 起草循环共用的 503 口径：配置缺失与临时失败分开报。 */
+export const AI_NOT_CONFIGURED_MESSAGE =
   'AI 当前不可用，请在「原料营养治理 → Agent 设置」里启用并配置模型';
-const AI_TEMPORARILY_UNAVAILABLE_MESSAGE = 'AI 暂时不可用，请稍后重试';
+export const AI_TEMPORARILY_UNAVAILABLE_MESSAGE = 'AI 暂时不可用，请稍后重试';
 
 /**
  * 判断用户输入的是食材还是补剂，并识别它是不是在纠正上一轮判断。

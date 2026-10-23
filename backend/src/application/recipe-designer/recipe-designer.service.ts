@@ -6532,7 +6532,10 @@ export class RecipeDesignerService {
     const assessmentData = this.buildAssessmentUpdateData(result);
     await this.prisma.designRecipe.updateMany({
       where: { id, contentRevision: draft.contentRevision },
-      data: assessmentData,
+      data: {
+        ...assessmentData,
+        assessmentContentRevision: draft.contentRevision,
+      },
     });
 
     return this.toClientAssessmentResult(

@@ -41,3 +41,20 @@ describe('assessDraftForAgent', () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 });
+
+describe('assessDraft', () => {
+  it('编辑器评估也把 assessmentContentRevision 一起写回', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const service = makeService(updateMany);
+    service.buildRemovableSupplementWarnings = jest.fn().mockReturnValue([]);
+    service.buildDraftAllergenWarnings = jest.fn().mockResolvedValue([]);
+    service.toClientAssessmentResult = jest.fn().mockReturnValue({});
+
+    await service.assessDraft('draft-1', { userId: 'u1', role: 'STAFF' });
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: 'draft-1', contentRevision: 7 },
+      data: { isCompliant: true, assessmentContentRevision: 7 },
+    });
+  });
+});

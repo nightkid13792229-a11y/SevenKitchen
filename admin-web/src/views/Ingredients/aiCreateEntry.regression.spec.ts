@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import listSource from './index.vue?raw'
-import creationSource from './creation/index.vue?raw'
+import aiCreatePageSource from './ai-create/index.vue?raw'
+import chatStateSource from './ai-create/chatState.ts?raw'
 import creationApiSource from '@/api/ingredientCreation.ts?raw'
+import routerSource from '@/router/index.ts?raw'
 
 function clean(source: string) {
   return source
@@ -11,50 +13,46 @@ function clean(source: string) {
 }
 
 /**
- * 「继续未完成」的入口、弹窗与跳转靠人工点按钮接入，纯函数之外的行为
- * 没有组件挂载环境可测，沿用仓库里的源码回归测试。
+ * 「AI 添加原料」入口与第一步页面的接线靠人工点按钮接入，
+ * 对话状态本身由 chatState.spec.ts 覆盖；这里沿用仓库的源码回归测试，
+ * 防止入口又退回隐藏的下拉、或者路由 / 接口路径被改错。
  */
-describe('AI 新建原料 · 继续未完成入口', () => {
+describe('AI 添加原料 · 列表入口与第一步对话页', () => {
   const list = clean(listSource)
-  const creation = clean(creationSource)
+  const page = clean(aiCreatePageSource)
+  const chatState = clean(chatStateSource)
   const creationApi = clean(creationApiSource)
+  const router = clean(routerSource)
 
-  it('原料列表的「AI 新建」变成含「新建 / 继续未完成」的下拉', () => {
-    expect(list).toContain('<el-dropdown')
-    expect(list).toContain('command="new"')
-    expect(list).toContain('command="resume"')
-    expect(list).toContain('新建')
-    expect(list).toContain('resumeEntryLabel(unfinishedDrafts.length)')
+  it('原料列表的「AI 新建」下拉换成「AI 添加原料」按钮', () => {
+    expect(list).toContain('AI 添加原料')
+    expect(list).toContain("name: 'IngredientAiCreate'")
+    expect(list).not.toContain('<el-dropdown')
+    expect(list).not.toContain('AI_CREATION_ENABLED')
   })
 
-  it('没有未完成草稿时隐藏「继续未完成」入口', () => {
-    expect(list).toContain('v-if="hasUnfinishedDrafts(unfinishedDrafts)"')
+  it('路由是 /ingredients/ai-create，name IngredientAiCreate，标题 AI 添加原料', () => {
+    expect(router).toContain('ingredients/ai-create')
+    expect(router).toContain('name: "IngredientAiCreate"')
+    expect(router).toContain('title: "AI 添加原料"')
   })
 
-  it('弹窗列出名字、中文站点与最后编辑时间', () => {
-    expect(list).toContain('{{ draft.name }}')
-    expect(list).toContain('creationStepLabel(draft.step)')
-    expect(list).toContain('formatDraftUpdatedAt(draft.updatedAt)')
+  it('进入页面 AI 的第一句固定是「你要添加什么原料？」', () => {
+    expect(chatState).toContain("export const WELCOME_TEXT = '你要添加什么原料？'")
+    expect(page).toContain(
+      'createIntakeChat(ingredientCreationApi.classifyIntake)'
+    )
   })
 
-  it('点一条草稿跳到带 draftId 的向导地址', () => {
-    expect(list).toContain('handleResumeDraft(draft)')
-    expect(list).toContain("name: 'IngredientCreation'")
-    expect(list).toContain('draftId: draft.draftId')
+  it('建议项点击、失败重试都接到对话控制器，页面不自己发请求', () => {
+    expect(page).toContain('handleSuggestion(suggestion)')
+    expect(page).toContain('handleRetry')
+    expect(page).toContain('state.failedText')
+    expect(page).not.toContain('api.post(')
   })
 
-  it('列表页挂载时拉取未完成草稿（接口失败也不挡主列表）', () => {
-    expect(list).toContain('ingredientCreationApi.listDrafts()')
-    expect(list).toContain('loadUnfinishedDrafts')
-  })
-
-  it('API 客户端接上 GET /admin/ingredient-creation/drafts', () => {
-    expect(creationApi).toContain('listDrafts')
-    expect(creationApi).toContain('api.get(`${BASE}/drafts`)')
-  })
-
-  it('向导离开确认里说明草稿可保留并可从列表找回', () => {
-    expect(creation).toContain('继续未完成')
-    expect(creation).toContain('草稿会自动保存在服务器')
+  it('API 客户端接上 POST /admin/ingredient-creation/intake/classify', () => {
+    expect(creationApi).toContain('classifyIntake')
+    expect(creationApi).toContain('api.post(`${BASE}/intake/classify`, { text })')
   })
 })

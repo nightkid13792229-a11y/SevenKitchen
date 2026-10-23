@@ -351,3 +351,20 @@ export interface IngredientCreationAudit {
   committedBy: string
   committedAt: string
 }
+
+// ==================== 第一步：判断食材还是补剂 ====================
+
+/**
+ * `POST /admin/ingredient-creation/intake/classify` 的判定结果。
+ *
+ * `UNKNOWN` 表示模型判不准（或输入太泛），此时 `reply` 是追问；
+ * 前端只负责展示，不自己猜类型。
+ */
+export type IntakeKind = 'FOOD' | 'SUPPLEMENT' | 'UNKNOWN'
+
+/** 判断接口的返回值；`suggestions` 只在需要补充输入时非空。 */
+export interface IntakeClassification {
+  kind: IntakeKind
+  reply: string
+  suggestions: string[]
+}

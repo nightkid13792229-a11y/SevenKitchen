@@ -18,6 +18,7 @@ import type {
   IngredientCreationDraft,
   IngredientCreationDraftPayload,
   IngredientCreationDraftSummary,
+  IntakeClassification,
   MergePlan,
   OnlineCandidateSearchResult,
   CreationStep,
@@ -27,6 +28,15 @@ import type {
 const BASE = '/admin/ingredient-creation'
 
 export const ingredientCreationApi = {
+  /**
+   * 第一步：判断一句话说的是食材还是补剂。
+   *
+   * `UNKNOWN` 不是错误：后端会在 `reply` 里追问，并给可点的补全建议。
+   * AI 未启用 / 不可用时后端返回 503 + 中文提示，由页面原样显示成对话气泡。
+   */
+  classifyIntake: (text: string): Promise<IntakeClassification> =>
+    api.post(`${BASE}/intake/classify`, { text }),
+
   /** 起手：创建一条 `step = INTAKE` 的空草稿 */
   createDraft: (name: string): Promise<CreateDraftResult> =>
     api.post(`${BASE}/drafts`, { name }),

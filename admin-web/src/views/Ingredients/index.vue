@@ -14,22 +14,9 @@
         <el-button type="primary" @click="handleCreate" :icon="Plus">
           新增标准原料
         </el-button>
-        <el-dropdown v-if="AI_CREATION_ENABLED" trigger="click" @command="handleAiCommand">
-          <el-button :icon="MagicStick">
-            AI 新建<el-icon class="el-icon--right"><ArrowDown /></el-icon>
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="new">新建</el-dropdown-item>
-              <el-dropdown-item
-                v-if="hasUnfinishedDrafts(unfinishedDrafts)"
-                command="resume"
-              >
-                {{ resumeEntryLabel(unfinishedDrafts.length) }}
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+        <el-button :icon="MagicStick" @click="handleAiCreate">
+          AI 添加原料
+        </el-button>
       </div>
     </div>
 
@@ -470,39 +457,6 @@
       :ingredient-id="creationAuditIngredient?.id ?? null"
       :ingredient-name="creationAuditIngredient?.name ?? null"
     />
-
-    <!-- 继续未完成：只列当前登录人、未提交的草稿（最多 20 条） -->
-    <el-dialog v-model="resumeDialogVisible" title="继续未完成" width="560px">
-      <div v-loading="loadingUnfinishedDrafts" class="resume-drafts">
-        <p
-          v-if="!hasUnfinishedDrafts(unfinishedDrafts)"
-          class="resume-drafts__empty"
-        >
-          暂无未完成的草稿
-        </p>
-        <ul v-else class="resume-drafts__list">
-          <li v-for="draft in unfinishedDrafts" :key="draft.draftId">
-            <button
-              type="button"
-              class="resume-draft"
-              @click="handleResumeDraft(draft)"
-            >
-              <span class="resume-draft__main">
-                <span class="resume-draft__name">{{ draft.name }}</span>
-                <span class="resume-draft__meta">
-                  {{ creationStepLabel(draft.step) }} · 最后编辑
-                  {{ formatDraftUpdatedAt(draft.updatedAt) }}
-                </span>
-                <span v-if="draft.intake?.nameEn" class="resume-draft__en">
-                  {{ draft.intake.nameEn }}
-                </span>
-              </span>
-              <span class="resume-draft__action">继续</span>
-            </button>
-          </li>
-        </ul>
-      </div>
-    </el-dialog>
   </div>
 </template>
 
@@ -511,9 +465,8 @@ import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ElTable } from 'element-plus'
-import { Plus, Search, Refresh, MagicStick, ArrowDown } from '@element-plus/icons-vue'
+import { Plus, Search, Refresh, MagicStick } from '@element-plus/icons-vue'
 import { ingredientApi } from '@/api/ingredients'
-import { ingredientCreationApi } from '@/api/ingredientCreation'
 import {
   IngredientType,
   IngredientProcurementStrategy,
@@ -531,22 +484,9 @@ import IngredientTagsPanel from './components/IngredientTagsPanel.vue'
 import SupplementOptionForm from './components/SupplementOptionForm.vue'
 import IngredientBatchReplaceDialog from './components/IngredientBatchReplaceDialog.vue'
 import { getIngredientTypeCapabilities } from '@/utils/ingredientTypeCapabilities'
-import type { IngredientCreationDraftSummary } from '@/types/ingredientCreation'
-import {
-  creationStepLabel,
-  formatDraftUpdatedAt,
-  hasUnfinishedDrafts,
-  resumeEntryLabel
-} from './creation/draftResume'
 
 // Data
 type IngredientCenterTab = 'standard' | 'nutrition' | 'tags'
-
-/**
- * 2026-10-23 老板要求：线上那版六站「AI 新建」AI 感太弱，先隐藏入口，
- * 按「一屏起草」重做后再打开。向导路由本身保留，便于内测直接访问。
- */
-const AI_CREATION_ENABLED = false
 
 const route = useRoute()
 const router = useRouter()
@@ -571,10 +511,6 @@ const currentIngredientForNutrition = ref<Ingredient | null>(null)
 const creationAuditVisible = ref(false)
 const creationAuditIngredient = ref<Ingredient | null>(null)
 const activeCenterTab = ref<IngredientCenterTab>('standard')
-// 「继续未完成」：只存列表摘要（后端不返回整份 payload），点一条按 draftId 回向导。
-const unfinishedDrafts = ref<IngredientCreationDraftSummary[]>([])
-const loadingUnfinishedDrafts = ref(false)
-const resumeDialogVisible = ref(false)
 
 // Pagination
 const currentPage = ref(1)
@@ -739,51 +675,9 @@ const handleCreate = () => {
   dialogVisible.value = true
 }
 
-/** AI 新建：进入六站向导；draftId 由向导页创建后补进地址栏。 */
+/** 「AI 添加原料」：进入第一步对话页，先判断是食材还是补剂。 */
 const handleAiCreate = () => {
-  router.push({ name: 'IngredientCreation' })
-}
-
-/**
- * 拉取当前登录人的未完成草稿。
- *
- * 失败时按「没有未完成草稿」处理：列表入口不该因为一个附加查询挡住主列表，
- * 错误提示已由 axios 拦截器统一弹出。
- */
-const loadUnfinishedDrafts = async () => {
-  loadingUnfinishedDrafts.value = true
-  try {
-    unfinishedDrafts.value = await ingredientCreationApi.listDrafts()
-  } catch {
-    unfinishedDrafts.value = []
-  } finally {
-    loadingUnfinishedDrafts.value = false
-  }
-}
-
-const openResumeDialog = async () => {
-  resumeDialogVisible.value = true
-  await loadUnfinishedDrafts()
-}
-
-/** 「AI 新建」下拉：新建 / 继续未完成。 */
-const handleAiCommand = (command: string | number | object) => {
-  if (command === 'new') {
-    handleAiCreate()
-    return
-  }
-  if (command === 'resume') {
-    void openResumeDialog()
-  }
-}
-
-/** 点一条草稿：按 draftId 回到向导对应站点。 */
-const handleResumeDraft = (draft: IngredientCreationDraftSummary) => {
-  resumeDialogVisible.value = false
-  void router.push({
-    name: 'IngredientCreation',
-    params: { draftId: draft.draftId }
-  })
+  void router.push({ name: 'IngredientAiCreate' })
 }
 
 // 新增补剂（合并自食谱设计器补剂库，数据与设计器共用）
@@ -1133,7 +1027,6 @@ const getProcurementStrategyTagType = (strategy?: string) => {
 // Lifecycle
 onMounted(() => {
   loadData()
-  void loadUnfinishedDrafts()
 })
 </script>
 
@@ -1282,77 +1175,5 @@ onMounted(() => {
 }
 .cell-empty {
   color: #c0c4cc;
-}
-
-.resume-drafts {
-  min-height: 80px;
-}
-
-.resume-drafts__empty {
-  margin: 0;
-  padding: 24px 0;
-  color: #909399;
-  text-align: center;
-}
-
-.resume-drafts__list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 420px;
-  margin: 0;
-  padding: 0;
-  overflow-y: auto;
-  list-style: none;
-}
-
-.resume-draft {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  padding: 12px 14px;
-  border: 1px solid #ebeef5;
-  border-radius: 8px;
-  background: #fff;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 0.2s, background-color 0.2s;
-}
-
-.resume-draft:hover {
-  border-color: #a0cfff;
-  background: #ecf5ff;
-}
-
-.resume-draft__main {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.resume-draft__name {
-  font-size: 15px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.resume-draft__meta {
-  font-size: 12px;
-  color: #606266;
-}
-
-.resume-draft__en {
-  font-size: 12px;
-  color: #909399;
-}
-
-.resume-draft__action {
-  flex: none;
-  font-size: 13px;
-  color: #409eff;
 }
 </style>

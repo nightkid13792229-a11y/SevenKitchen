@@ -61,6 +61,14 @@ describe('OrderRecipeDesignService', () => {
     },
     customRecipeDeliveryItem: {
       findUnique: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([
+        { id: 'delivery-item-1', recipeId: 'recipe-row-1' },
+      ]),
+    },
+    customRecipeDeliveryBatch: {
+      findFirst: jest.fn().mockResolvedValue({
+        items: [{ id: 'delivery-item-1', recipeId: 'recipe-row-1' }],
+      }),
     },
     orderRecipeDesign: {
       findMany: jest.fn(),

@@ -2,6 +2,7 @@ import type { AgentAssessmentEntry } from 'src/application/recipe-designer/agent
 import {
   computeMarginPercent,
   createCheckTools,
+  withComputedMargins,
 } from 'src/application/recipe-designer/agent/check-tools';
 import {
   createFakeRecipeAgentPort,
@@ -44,6 +45,45 @@ describe('computeMarginPercent', () => {
   });
 });
 
+describe('withComputedMargins', () => {
+  it('只补算缺失的余量，不覆盖已有值，也不改原对象', () => {
+    const entries: AgentAssessmentEntry[] = [
+      {
+        key: 'a',
+        label: 'A',
+        status: 'COMPLIANT',
+        value: 110,
+        min: 100,
+        max: null,
+        marginPercent: null,
+      },
+      {
+        key: 'b',
+        label: 'B',
+        status: 'COMPLIANT',
+        value: 110,
+        min: 100,
+        max: null,
+        marginPercent: 33,
+      },
+      {
+        key: 'c',
+        label: 'C',
+        status: 'COMPLIANT',
+        value: null,
+        min: 100,
+        max: null,
+        marginPercent: null,
+      },
+    ];
+    const normalized = withComputedMargins(fakeAssessment({ entries }));
+    expect(normalized.entries[0]?.marginPercent).toBe(10);
+    expect(normalized.entries[1]?.marginPercent).toBe(33);
+    expect(normalized.entries[2]?.marginPercent).toBeNull();
+    expect(entries[0]?.marginPercent).toBeNull();
+  });
+});
+
 describe('check tools', () => {
   it('run_assessment 调端口并返回评估', async () => {
     const port = createFakeRecipeAgentPort();
@@ -54,6 +94,27 @@ describe('check tools', () => {
     if (!result.ok) return;
     expect(result.data.contentRevision).toBe(4);
     expect(result.summary).toContain('34/34');
+  });
+
+  it('run_assessment 也补算评估里缺失的余量', async () => {
+    const port = createFakeRecipeAgentPort({
+      assessment: fakeAssessment({
+        entries: [
+          {
+            ...fakeAssessment().entries[0],
+            value: 110,
+            min: 100,
+            max: null,
+            marginPercent: null,
+          },
+        ],
+      }),
+    });
+    const tools = createCheckTools({ port, draftId: 'draft-1', tagPolicy });
+    const result = await tools.run_assessment();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.entries[0]?.marginPercent).toBe(10);
   });
 
   it('评估过期时 check_ready 必须 BLOCKED', async () => {
@@ -178,6 +239,23 @@ describe('check tools', () => {
     expect(blank.ok).toBe(false);
     if (blank.ok) return;
     expect(blank.error.code).toBe('INVALID_ARGUMENT');
+  });
+
+  it('确认已覆盖的类别不会在摘要里被说成缺类', async () => {
+    const tools = createCheckTools({
+      port: createFakeRecipeAgentPort(),
+      draftId: 'draft-1',
+      tagPolicy,
+    });
+    const result = await tools.check_coverage({
+      confirmedOmissions: ['PROTEIN'],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // 数据保留输入，不被摘要过滤影响。
+    expect(result.data.confirmedOmissions).toEqual(['PROTEIN']);
+    expect(result.summary).toContain('七类齐全');
+    expect(result.summary).not.toContain('已确认缺类');
   });
 
   it('没有主蛋白时目录对比返回空证据，不抛错', async () => {
@@ -371,6 +449,59 @@ describe('check tools', () => {
     expect(result.data[0]?.categories).toEqual(['PROTEIN', 'FRUIT']);
   });
 
+  it.each(['DAIRY', 'EGG', 'LEGUME'] as const)(
+    '只重合 %s 也报 SOFT',
+    async (category) => {
+      const tools = createCheckTools({
+        port: createFakeRecipeAgentPort({
+          catalogUsage: {
+            totalPublishedRecipes: 26,
+            mainProteinCount: 2,
+            recipes: [
+              {
+                recipeId: `r-${category}`,
+                name: `${category} 重合餐`,
+                mainProteinName: '鸭腿肉',
+                overlappingCategories: [category],
+                overlappingIngredientNames: [],
+              },
+            ],
+          },
+        }),
+        draftId: 'draft-1',
+        tagPolicy,
+      });
+      const result = await tools.check_catalog_conflicts({
+        mainProteinName: '鸭腿肉',
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0]?.severity).toBe('SOFT');
+      expect(result.data[0]?.categories).toEqual([category]);
+    },
+  );
+
+  it('显式主蛋白即使草稿没有 PROTEIN 也会查询目录', async () => {
+    const draft = fakeDraftSnapshot({
+      items: fakeDraftSnapshot().items.filter(
+        (item) => item.category !== 'PROTEIN',
+      ),
+    });
+    const port = createFakeRecipeAgentPort({ draft });
+    const tools = createCheckTools({ port, draftId: 'draft-1', tagPolicy });
+    const result = await tools.check_catalog_conflicts({
+      mainProteinName: '鸭腿肉',
+    });
+    expect(port.getCatalogUsage).toHaveBeenCalledWith({
+      mainProteinName: '鸭腿肉',
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.summary).toContain('鸭腿肉');
+    expect(result.summary).not.toContain('没有主蛋白可对比');
+  });
+
   it('mainProteinName 不是字符串时返回 INVALID_ARGUMENT', async () => {
     const port = createFakeRecipeAgentPort();
     const tools = createCheckTools({ port, draftId: 'draft-1', tagPolicy });
@@ -455,6 +586,62 @@ describe('check tools', () => {
     expect(
       result.data.checks.filter((c) => c.status === 'FAIL').map((c) => c.key),
     ).toEqual(expect.arrayContaining(['PREPARATION', 'PRODUCTION_STEPS']));
+  });
+
+  it('marginPercent 缺失但能补算时按补算结果判 WARN', async () => {
+    const tools = createCheckTools({
+      port: createFakeRecipeAgentPort({
+        assessment: fakeAssessment({
+          entries: [
+            {
+              ...fakeAssessment().entries[0],
+              label: '粗蛋白',
+              value: 110,
+              min: 100,
+              max: null,
+              marginPercent: null,
+            },
+          ],
+        }),
+      }),
+      draftId: 'draft-1',
+      tagPolicy,
+    });
+    const result = await tools.check_ready();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.status).toBe('PASS_WITH_WARNINGS');
+    const margin = result.data.checks.find((c) => c.key === 'MARGIN');
+    expect(margin?.status).toBe('WARN');
+    expect(margin?.detail).toContain('10%');
+  });
+
+  it('余量完全无法计算时 MARGIN 不谎称都已达标', async () => {
+    const tools = createCheckTools({
+      port: createFakeRecipeAgentPort({
+        assessment: fakeAssessment({
+          entries: [
+            {
+              ...fakeAssessment().entries[0],
+              value: null,
+              min: null,
+              max: null,
+              marginPercent: null,
+            },
+          ],
+        }),
+      }),
+      draftId: 'draft-1',
+      tagPolicy,
+    });
+    const result = await tools.check_ready();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.status).toBe('PASS');
+    const margin = result.data.checks.find((c) => c.key === 'MARGIN');
+    expect(margin?.status).toBe('PASS');
+    expect(margin?.detail).toContain('无法计算余量');
+    expect(margin?.detail).not.toContain('都在');
   });
 
   it('MARGIN 忽略 INFO 条目', async () => {

@@ -11,7 +11,8 @@
  *   不重新跑评估，版本对不上就算“没准备好”。
  * - 七类允许缺，但没确认的缺类会 BLOCKED；确认过只算警告。
  * - 20% 余量是工作标准不是门禁：不足只 WARN，但必须逐条列出来。
- * - 目录对比只给证据：主蛋白重合 HARD，内脏/碳水/蔬菜/菌藻/坚果重合 SOFT。
+ * - 目录对比只给证据：主蛋白重合 HARD，内脏/碳水/蔬菜/菌藻/坚果/水果/乳/蛋/豆重合 SOFT；
+ *   油脂/调味/补剂不比。
  *
  * 入参来自模型（运行时会绕过 TypeScript 类型），所以所有字段先做 `typeof`
  * 守卫：非法值返回 `INVALID_ARGUMENT`，绝不让 `TypeError` 冒出去。
@@ -229,6 +230,31 @@ export function computeMarginPercent(
   return rounded === 0 ? 0 : rounded;
 }
 
+/**
+ * 补齐评估里缺失的余量。
+ *
+ * P0b 的评估适配器可能只给 `value/min/max` 而不填 `marginPercent`；这里对
+ * `marginPercent == null` 的条目用 `computeMarginPercent` 补算，算不出来就保持
+ * null，让 `check_ready` 如实说“无法计算余量”，而不是假装达标。
+ */
+export function withComputedMargins(
+  view: AgentAssessmentView,
+): AgentAssessmentView {
+  return {
+    ...view,
+    entries: view.entries.map((entry) => {
+      if (
+        typeof entry.marginPercent === 'number' &&
+        Number.isFinite(entry.marginPercent)
+      ) {
+        return entry;
+      }
+      const computed = computeMarginPercent(entry);
+      return computed === null ? entry : { ...entry, marginPercent: computed };
+    }),
+  };
+}
+
 /** 解析人确认过的缺类：必须是七类之一，去空白、去重。 */
 function readConfirmedOmissions(
   value: unknown,
@@ -332,7 +358,7 @@ export function createCheckTools(deps: CheckToolDeps): RecipeAgentCheckTools {
 
   return {
     async run_assessment(): Promise<AgentToolResult<AgentAssessmentView>> {
-      const view = await port.runAssessment(draftId);
+      const view = withComputedMargins(await port.runAssessment(draftId));
       return ok(view, summarizeAssessment(view));
     },
 
@@ -354,6 +380,10 @@ export function createCheckTools(deps: CheckToolDeps): RecipeAgentCheckTools {
       const missing = coverage.missing.filter(
         (category) => !confirmedSet.has(category),
       );
+      // 摘要只说“确实缺 + 已确认”的交集；确认一个已经覆盖的类别不该被说成缺类。
+      const confirmedMissing = coverage.missing.filter((category) =>
+        confirmedSet.has(category),
+      );
 
       const result: AgentCoverageResult = {
         covered: coverage.covered,
@@ -372,8 +402,8 @@ export function createCheckTools(deps: CheckToolDeps): RecipeAgentCheckTools {
       } else {
         parts.push(`未覆盖「${categoryLabels(coverage.missing)}」`);
       }
-      if (omissions.value.length > 0) {
-        parts.push(`已确认缺类「${categoryLabels(omissions.value)}」`);
+      if (confirmedMissing.length > 0) {
+        parts.push(`已确认缺类「${categoryLabels(confirmedMissing)}」`);
       }
       if (coverage.optionalPresent.length > 0) {
         parts.push(`可选类：${categoryLabels(coverage.optionalPresent)}`);
@@ -473,7 +503,9 @@ export function createCheckTools(deps: CheckToolDeps): RecipeAgentCheckTools {
       const confirmedSet = new Set(omissions.value);
 
       const draft = await port.getDraft(draftId);
-      const assessment = draft.lastAssessment;
+      const assessment = draft.lastAssessment
+        ? withComputedMargins(draft.lastAssessment)
+        : null;
       const checks: AgentReadyCheck[] = [];
 
       // ITEMS：至少 1 条、总重 > 0。
@@ -597,17 +629,23 @@ export function createCheckTools(deps: CheckToolDeps): RecipeAgentCheckTools {
         }
       }
 
-      // MARGIN：INFO 条目只是参考，不参与余量计算。
+      // MARGIN：INFO 条目只是参考；缺失的余量先补算，补不出来的如实说。
       const measured = assessment
         ? assessment.entries.filter((entry) => entry.status !== 'INFO')
         : [];
+      const hasMargin = (entry: AgentAssessmentEntry): boolean =>
+        typeof entry.marginPercent === 'number' &&
+        Number.isFinite(entry.marginPercent);
       const lowMargin = measured.filter(
         (entry) =>
-          typeof entry.marginPercent === 'number' &&
-          Number.isFinite(entry.marginPercent) &&
-          entry.marginPercent < MARGIN_PERCENT,
+          hasMargin(entry) && (entry.marginPercent as number) < MARGIN_PERCENT,
       );
+      const unresolvedMargin = measured.filter((entry) => !hasMargin(entry));
       if (lowMargin.length > 0) {
+        const unresolvedNote =
+          unresolvedMargin.length > 0
+            ? `；另有 ${unresolvedMargin.length} 项无法计算余量`
+            : '';
         checks.push(
           buildReadyCheck(
             'MARGIN',
@@ -617,9 +655,16 @@ export function createCheckTools(deps: CheckToolDeps): RecipeAgentCheckTools {
                 (entry) =>
                   `${entry.label} ${formatPercent(entry.marginPercent as number)}%`,
               )
-              .join('、')}。交付前需逐条确认。`,
+              .join('、')}。交付前需逐条确认${unresolvedNote}。`,
           ),
         );
+      } else if (unresolvedMargin.length > 0) {
+        const resolvedCount = measured.length - unresolvedMargin.length;
+        const detail =
+          resolvedCount > 0
+            ? `有 ${unresolvedMargin.length} 项无法计算余量（缺数值或上下限），其余 ${resolvedCount} 项余量都 ≥ ${formatPercent(MARGIN_PERCENT)}%。`
+            : `有 ${unresolvedMargin.length} 项无法计算余量（缺数值或上下限），需要人工核对。`;
+        checks.push(buildReadyCheck('MARGIN', 'PASS', detail));
       } else {
         checks.push(
           buildReadyCheck(

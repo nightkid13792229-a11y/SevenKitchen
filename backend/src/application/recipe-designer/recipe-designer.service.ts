@@ -641,6 +641,7 @@ type DesignRecipeItemWithFood = {
   nutrientTargetKey: string | null;
   nutrientTargetValue: number | null;
   supplementTargets?: unknown;
+  supplementAlternatives?: unknown;
   sortOrder: number;
   ingredient?: {
     id: string;
@@ -833,6 +834,7 @@ type RecipeSeriesCopyableRecipeItem = {
   nutrientTargetKey?: string | null;
   nutrientTargetValue?: number | null;
   supplementTargets?: unknown;
+  supplementAlternatives?: Array<{ alternativeIngredientId: string }> | null;
   sortOrder?: number | null;
 };
 
@@ -2662,7 +2664,14 @@ export class RecipeDesignerService {
               const recipe = await tx.recipe.findUnique({
                 where: { id: sourceRecipeId },
                 include: {
-                  items: { orderBy: { sortOrder: 'asc' } },
+                  items: {
+                    orderBy: { sortOrder: 'asc' },
+                    include: {
+                      supplementAlternatives: {
+                        select: { alternativeIngredientId: true },
+                      },
+                    },
+                  },
                 },
               });
               if (!recipe) {
@@ -3825,6 +3834,16 @@ export class RecipeDesignerService {
         nutrientTargetValue: item.nutrientTargetValue ?? null,
         ...(supplementTargets.length > 0
           ? { supplementTargets: this.toJsonValue(supplementTargets) }
+          : {}),
+        ...(Array.isArray(item.supplementAlternatives) &&
+        item.supplementAlternatives.length > 0
+          ? {
+              supplementAlternatives: this.toJsonValue(
+                item.supplementAlternatives
+                  .map((alternative) => alternative.alternativeIngredientId)
+                  .filter(Boolean),
+              ),
+            }
           : {}),
         sortOrder: item.sortOrder ?? index,
       };
@@ -7516,6 +7535,19 @@ export class RecipeDesignerService {
             : item.nutrientTargetValue,
           ...(supplementTargets
             ? { supplementTargets: this.toJsonValue(supplementTargets) }
+            : {}),
+          ...(Array.isArray(item.supplementAlternatives) &&
+          item.supplementAlternatives.length > 0
+            ? {
+                supplementAlternatives: {
+                  create: (
+                    item.supplementAlternatives as string[]
+                  ).map((alternativeIngredientId, index) => ({
+                    alternativeIngredientId,
+                    sortOrder: index,
+                  })),
+                },
+              }
             : {}),
           sortOrder: item.sortOrder,
           exampleWeight: item.weightG,

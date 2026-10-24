@@ -200,59 +200,104 @@ function formatPercent(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
+/** 余量方向后缀；方向未知时不加，避免把“无法判断”说成某一侧。 */
+function formatMarginSide(entry: AgentAssessmentEntry): string {
+  if (entry.marginSide === 'LOWER') return '（距下限）';
+  if (entry.marginSide === 'UPPER') return '（距上限）';
+  return '';
+}
+
+type MarginSide = 'LOWER' | 'UPPER';
+
+interface MarginCandidate {
+  side: MarginSide;
+  margin: number;
+}
+
+/**
+ * 列出某条指标所有可用的余量（未四舍五入）。
+ *
+ * 下限型：(value - min) / min × 100；上限型：(max - value) / max × 100。
+ * 没有可用限值、或分母为 0 时返回空数组。
+ */
+function listMarginCandidates(
+  entry: Pick<AgentAssessmentEntry, 'value' | 'min' | 'max'>,
+): MarginCandidate[] {
+  const { value, min, max } = entry;
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return [];
+  }
+
+  const candidates: MarginCandidate[] = [];
+  if (typeof min === 'number' && Number.isFinite(min) && min !== 0) {
+    candidates.push({ side: 'LOWER', margin: ((value - min) / min) * 100 });
+  }
+  if (typeof max === 'number' && Number.isFinite(max) && max !== 0) {
+    candidates.push({ side: 'UPPER', margin: ((max - value) / max) * 100 });
+  }
+  return candidates;
+}
+
+/** 取更小的余量；相等时保留下限，保证方向稳定。 */
+function pickSmallestMargin(
+  candidates: readonly MarginCandidate[],
+): MarginCandidate | null {
+  if (candidates.length === 0) {
+    return null;
+  }
+  return candidates.reduce((best, candidate) =>
+    candidate.margin < best.margin ? candidate : best,
+  );
+}
+
 /**
  * 计算某条指标离最近一边限值的余量百分比。
  *
- * 下限型：(value - min) / min × 100；上限型：(max - value) / max × 100。
- * 两边都有取较小值；没有可用限值、或分母为 0 时返回 null。
  * 结果保留 1 位小数。
  */
 export function computeMarginPercent(
   entry: Pick<AgentAssessmentEntry, 'value' | 'min' | 'max'>,
 ): number | null {
-  const { value, min, max } = entry;
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
+  const smallest = pickSmallestMargin(listMarginCandidates(entry));
+  if (!smallest) {
     return null;
   }
 
-  const margins: number[] = [];
-  if (typeof min === 'number' && Number.isFinite(min) && min !== 0) {
-    margins.push(((value - min) / min) * 100);
-  }
-  if (typeof max === 'number' && Number.isFinite(max) && max !== 0) {
-    margins.push(((max - value) / max) * 100);
-  }
-  if (margins.length === 0) {
-    return null;
-  }
-
-  const rounded = Math.round(Math.min(...margins) * 10) / 10;
+  const rounded = Math.round(smallest.margin * 10) / 10;
   // 避免 -0 这种对模型无意义的输出。
   return rounded === 0 ? 0 : rounded;
 }
 
+/** 余量更近的一边；缺值或缺限值时无法判断，返回 null。 */
+export function computeMarginSide(
+  entry: Pick<AgentAssessmentEntry, 'value' | 'min' | 'max'>,
+): MarginSide | null {
+  return pickSmallestMargin(listMarginCandidates(entry))?.side ?? null;
+}
+
 /**
- * 补齐评估里缺失的余量。
+ * 补齐评估里缺失的余量，并给每条指标标出更近的一边。
  *
  * P0b 的评估适配器可能只给 `value/min/max` 而不填 `marginPercent`；这里对
  * `marginPercent == null` 的条目用 `computeMarginPercent` 补算，算不出来就保持
  * null，让 `check_ready` 如实说“无法计算余量”，而不是假装达标。
+ * `marginSide` 与 `marginPercent` 是否已存在无关，永远按 value/min/max 重算：
+ * 警告文案要靠它说清“距下限”还是“距上限”。
  */
 export function withComputedMargins(
   view: AgentAssessmentView,
 ): AgentAssessmentView {
   return {
     ...view,
-    entries: view.entries.map((entry) => {
-      if (
+    entries: view.entries.map((entry) => ({
+      ...entry,
+      marginPercent:
         typeof entry.marginPercent === 'number' &&
         Number.isFinite(entry.marginPercent)
-      ) {
-        return entry;
-      }
-      const computed = computeMarginPercent(entry);
-      return computed === null ? entry : { ...entry, marginPercent: computed };
-    }),
+          ? entry.marginPercent
+          : computeMarginPercent(entry),
+      marginSide: computeMarginSide(entry),
+    })),
   };
 }
 
@@ -665,7 +710,7 @@ export function createCheckTools(deps: CheckToolDeps): RecipeAgentCheckTools {
             `余量不足 ${formatPercent(MARGIN_PERCENT)}%：${lowMargin
               .map(
                 (entry) =>
-                  `${entry.label} ${formatPercent(entry.marginPercent as number)}%`,
+                  `${entry.label} ${formatPercent(entry.marginPercent as number)}%${formatMarginSide(entry)}`,
               )
               .join('、')}。交付前需逐条确认${unresolvedNote}。`,
           ),

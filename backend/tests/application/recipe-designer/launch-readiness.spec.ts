@@ -247,6 +247,9 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
     designRecipePublishSnapshot: {
       create: jest.fn(),
     },
+    recipeDesignAgentSnapshot: {
+      findFirst: jest.fn(),
+    },
     $transaction: jest.fn(),
   } as any;
 
@@ -290,6 +293,7 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
     prisma.designRecipePublishSnapshot.create.mockResolvedValue({
       id: 'snapshot-1',
     });
+    prisma.recipeDesignAgentSnapshot.findFirst.mockResolvedValue(null);
     prisma.recipeItem.findMany.mockResolvedValue([]);
     prisma.$transaction.mockImplementation(async (callback: any) =>
       callback(prisma),
@@ -723,6 +727,89 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
     );
     // 产品线的健康标签提醒已随展示检查上移到系列发布门槛。
     expect(warningCodes).not.toContain('TARGET_HEALTH_TAGS_MISSING');
+  });
+
+  it('surfaces AI delivery warnings from the latest snapshot at the current revision', async () => {
+    prisma.recipeDesignAgentSnapshot.findFirst.mockResolvedValue({
+      snapshot: {
+        warnings: ['钙 19.1%（距下限）', '磷 9.3%（距上限）'],
+      },
+    });
+
+    const readiness = await readinessFor({ contentRevision: 7 });
+
+    expect(readiness.ready).toBe(true);
+    expect(readiness.blockers).toEqual([]);
+    expect(
+      readiness.warnings.filter(
+        (warning) => warning.code === 'AI_DELIVERY_WARNING',
+      ),
+    ).toEqual([
+      {
+        code: 'AI_DELIVERY_WARNING',
+        scope: 'COMMON',
+        message: 'AI 交付提醒：钙 19.1%（距下限）',
+      },
+      {
+        code: 'AI_DELIVERY_WARNING',
+        scope: 'COMMON',
+        message: 'AI 交付提醒：磷 9.3%（距上限）',
+      },
+    ]);
+    expect(prisma.recipeDesignAgentSnapshot.findFirst).toHaveBeenCalledWith({
+      where: { designRecipeId: 'draft-1', contentRevision: 7 },
+      orderBy: { createdAt: 'desc' },
+      select: { snapshot: true },
+    });
+  });
+
+  it('ignores AI delivery snapshots from a stale content revision', async () => {
+    prisma.recipeDesignAgentSnapshot.findFirst.mockImplementation(
+      async ({ where }: { where: { contentRevision?: number } }) =>
+        where.contentRevision === 7
+          ? { snapshot: { warnings: ['旧版本的提醒'] } }
+          : null,
+    );
+
+    const readiness = await readinessFor({ contentRevision: 8 });
+
+    expect(
+      readiness.warnings.filter(
+        (warning) => warning.code === 'AI_DELIVERY_WARNING',
+      ),
+    ).toEqual([]);
+    expect(prisma.recipeDesignAgentSnapshot.findFirst).toHaveBeenCalledWith({
+      where: { designRecipeId: 'draft-1', contentRevision: 8 },
+      orderBy: { createdAt: 'desc' },
+      select: { snapshot: true },
+    });
+  });
+
+  it('ignores malformed AI delivery snapshots', async () => {
+    prisma.recipeDesignAgentSnapshot.findFirst.mockResolvedValue({
+      snapshot: { warnings: 'not-an-array' },
+    });
+
+    const readiness = await readinessFor();
+
+    expect(
+      readiness.warnings.filter(
+        (warning) => warning.code === 'AI_DELIVERY_WARNING',
+      ),
+    ).toEqual([]);
+  });
+
+  it('dedupes AI delivery warnings by message', async () => {
+    prisma.recipeDesignAgentSnapshot.findFirst.mockResolvedValue({
+      snapshot: { warnings: ['钙偏低', '钙偏低', '磷偏低'] },
+    });
+
+    const readiness = await readinessFor();
+
+    const messages = readiness.warnings
+      .filter((warning) => warning.code === 'AI_DELIVERY_WARNING')
+      .map((warning) => warning.message);
+    expect(messages).toEqual(['AI 交付提醒：钙偏低', 'AI 交付提醒：磷偏低']);
   });
 
   it('summarizes persisted report state without generating a report on readiness', async () => {

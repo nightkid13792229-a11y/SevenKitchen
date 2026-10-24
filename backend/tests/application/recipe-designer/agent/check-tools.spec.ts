@@ -85,6 +85,91 @@ describe('withComputedMargins', () => {
     expect(normalized.entries[2]?.marginPercent).toBeNull();
     expect(entries[0]?.marginPercent).toBeNull();
   });
+
+  it.each([
+    ['只有下限', 120, 100, null, 'LOWER'],
+    ['只有上限', 80, null, 100, 'UPPER'],
+  ] as const)(
+    '%s 时标出余量方向',
+    (_label, value, min, max, expected) => {
+      const normalized = withComputedMargins(
+        fakeAssessment({
+          entries: [
+            {
+              key: 'x',
+              label: 'X',
+              status: 'COMPLIANT',
+              value,
+              min,
+              max,
+              marginPercent: null,
+            },
+          ],
+        }),
+      );
+      expect(normalized.entries[0]?.marginSide).toBe(expected);
+    },
+  );
+
+  it('同时有上下限时标更小的一边', () => {
+    const normalized = withComputedMargins(
+      fakeAssessment({
+        entries: [
+          {
+            key: 'x',
+            label: 'X',
+            status: 'COMPLIANT',
+            value: 190,
+            min: 100,
+            max: 200,
+            marginPercent: null,
+          },
+        ],
+      }),
+    );
+    // 下限余量 90%，上限余量 5% → 更近的是上限。
+    expect(normalized.entries[0]?.marginSide).toBe('UPPER');
+    expect(normalized.entries[0]?.marginPercent).toBe(5);
+  });
+
+  it('无法判断方向时 marginSide 为 null', () => {
+    const normalized = withComputedMargins(
+      fakeAssessment({
+        entries: [
+          {
+            key: 'x',
+            label: 'X',
+            status: 'COMPLIANT',
+            value: null,
+            min: 100,
+            max: 200,
+            marginPercent: null,
+          },
+        ],
+      }),
+    );
+    expect(normalized.entries[0]?.marginSide).toBeNull();
+  });
+
+  it('已有 marginPercent 时也补 marginSide', () => {
+    const normalized = withComputedMargins(
+      fakeAssessment({
+        entries: [
+          {
+            key: 'x',
+            label: 'X',
+            status: 'COMPLIANT',
+            value: 110,
+            min: 100,
+            max: null,
+            marginPercent: 33,
+          },
+        ],
+      }),
+    );
+    expect(normalized.entries[0]?.marginPercent).toBe(33);
+    expect(normalized.entries[0]?.marginSide).toBe('LOWER');
+  });
 });
 
 describe('check tools', () => {
@@ -645,6 +730,73 @@ describe('check tools', () => {
     const margin = result.data.checks.find((c) => c.key === 'MARGIN');
     expect(margin?.status).toBe('WARN');
     expect(margin?.detail).toContain('10%');
+  });
+
+  it('MARGIN 警告标明是距下限还是距上限', async () => {
+    const tools = createCheckTools({
+      port: createFakeRecipeAgentPort({
+        assessment: fakeAssessment({
+          entries: [
+            {
+              key: 'calcium',
+              label: '钙',
+              status: 'COMPLIANT',
+              value: 119.1,
+              min: 100,
+              max: null,
+              marginPercent: 19.1,
+            },
+            {
+              key: 'phosphorus',
+              label: '磷',
+              status: 'COMPLIANT',
+              value: 90.7,
+              min: null,
+              max: 100,
+              marginPercent: 9.3,
+            },
+          ],
+        }),
+      }),
+      draftId: 'draft-1',
+      tagPolicy,
+    });
+    const result = await tools.check_ready();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const margin = result.data.checks.find((c) => c.key === 'MARGIN');
+    expect(margin?.status).toBe('WARN');
+    expect(margin?.detail).toContain('钙 19.1%（距下限）');
+    expect(margin?.detail).toContain('磷 9.3%（距上限）');
+  });
+
+  it('MARGIN 警告在方向未知时不加后缀', async () => {
+    const tools = createCheckTools({
+      port: createFakeRecipeAgentPort({
+        assessment: fakeAssessment({
+          entries: [
+            {
+              key: 'reference',
+              label: '参考项',
+              status: 'COMPLIANT',
+              value: null,
+              min: null,
+              max: null,
+              marginPercent: 5,
+            },
+          ],
+        }),
+      }),
+      draftId: 'draft-1',
+      tagPolicy,
+    });
+    const result = await tools.check_ready();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const margin = result.data.checks.find((c) => c.key === 'MARGIN');
+    expect(margin?.detail).toContain('参考项 5%');
+    expect(margin?.detail).not.toContain('距下限');
+    expect(margin?.detail).not.toContain('距上限');
   });
 
   it('余量完全无法计算时 MARGIN 不谎称都已达标', async () => {

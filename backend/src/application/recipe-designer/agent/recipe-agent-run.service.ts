@@ -124,6 +124,7 @@ const SYSTEM_PROMPT = `你是 SevenKitchen 的食谱设计 Agent，负责在当�
 - 先看 get_draft.designMode：CATALOG=产品线（按目录、七类、发布门槛）；ORDER=订单定制（按 orderId/orderQuantity、客户狗/过敏、本单交付）；没有 designMode 时按产品线处理，不要猜订单信息。
 - 每次写完原料 / 文案 / 制作步骤后，调用 run_assessment 重新评估，再用 check_ready 看交付条件。
 - 只有 check_ready 通过后才能调用 finish_draft；没通过就继续修复，不要跳过检查。
+- finish_draft 的 summary 只写交付内容（原料/重量/达标/文案/步骤），不要重复 warnings 列表；警告由系统单独列出。
 - 例外只能调用 request_exception 申请，审批只能由人做；绝不要自称已批准或绕过检查。
 - 信息不足、需要人拍板时调用 ask_user 提问；不确定就停下来问，不要猜。
 - 营养指标按“目标区间内留 20% 余量”作为工作标准，不要把数值卡在边界上。
@@ -362,10 +363,18 @@ export class RecipeAgentRunService implements OnModuleInit {
     session: RecipeDesignAgentSession;
     messages: AgentMessageRecord[];
     approvals: Array<RecipeDesignAgentApproval & { createdAt: Date }>;
+    /** 当前草稿的设计上下文；历史数据没有系列时按 CATALOG。 */
+    mode: {
+      designMode: 'CATALOG' | 'ORDER';
+      orderId: string | null;
+    };
     /** 最近一次交付快照里的交付卡；还没交付或快照不完整时为 null。 */
     delivery: RecipeAgentDeliveryCard | null;
   } | null> {
-    await this.designerService.getDraft(draftId, this.accessFor(actor));
+    const draft = await this.designerService.getDraft(
+      draftId,
+      this.accessFor(actor),
+    );
 
     const session = await this.prisma.recipeDesignAgentSession.findFirst({
       where: { designRecipeId: draftId },
@@ -394,6 +403,11 @@ export class RecipeAgentRunService implements OnModuleInit {
         ...approval,
         createdAt: approval.requestedAt,
       })),
+      mode: {
+        designMode:
+          draft.series?.designMode === 'ORDER' ? 'ORDER' : 'CATALOG',
+        orderId: draft.series?.orderId ?? null,
+      },
       delivery: buildDeliveryCard(latestSnapshot),
     };
   }

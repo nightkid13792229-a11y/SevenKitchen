@@ -572,7 +572,6 @@ async function loadSession(silent = false) {
   const lastMessage = messages.value[messages.value.length - 1]
   const previousLastSeq = lastMessage ? lastMessage.seq : 0
   const hadMessages = messages.value.length > 0
-  const wasStickToBottom = stickToBottom.value
 
   try {
     const view = await recipeDesignerApi.getAgentSession(props.draftId)
@@ -616,7 +615,9 @@ async function loadSession(silent = false) {
 
     const nextMessages = view?.messages ?? []
     const hasNewMessages = nextMessages.some((message) => message.seq > previousLastSeq)
-    if (!hadMessages || wasStickToBottom) {
+    // 不要在请求开始时捕获“是否在底部”：用户可能在请求期间往上翻，
+    // 结束时按当前状态判断，避免一次慢请求把用户拽回底部。
+    if (!hadMessages || stickToBottom.value) {
       await scrollToBottom(true)
     } else if (hasNewMessages) {
       hasNewBelow.value = true

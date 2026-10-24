@@ -414,7 +414,7 @@ Expected: PASS（4 个用例）。
 - [ ] **Step 5: 跑全套**
 
 Run: `cd backend && npx jest tests/domain/recipe-designer/food-category-map.spec.ts tests/application/recipe-designer/agent --runInBand`
-Expected: 11 个 spec 全通过（P0a 6 + P0b-1 3 + 本计划读适配器 1 + 标签策略 1）。
+Expected: 11 个 spec、180 个测试全通过（P0a 6 + P0b-1 3 + 本计划读适配器 1 + 标签策略 1）。
 
 - [ ] **Step 6: 提交**
 

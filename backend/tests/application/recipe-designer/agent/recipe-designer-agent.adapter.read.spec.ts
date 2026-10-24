@@ -744,6 +744,8 @@ describe('RecipeDesignerAgentAdapter read', () => {
       min: 20,
       max: null,
       marginPercent: null,
+      unit: null,
+      basis: null,
     });
     expect(draft.lastAssessment?.compliant).toBe(1);
     expect(draft.lastAssessment?.deficient).toBe(1);

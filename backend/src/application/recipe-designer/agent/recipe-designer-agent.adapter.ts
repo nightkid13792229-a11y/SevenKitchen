@@ -342,8 +342,19 @@ const buildLastAssessment = (
       min: toFiniteNumber(raw.minValue),
       max: toFiniteNumber(raw.maxValue),
       marginPercent: null,
+      unit: typeof raw.unit === 'string' ? raw.unit : null,
+      basis:
+        typeof raw.expressionBasis === 'string'
+          ? raw.expressionBasis
+          : null,
     });
   }
+
+  const energyDensityKcalPerKg = draft.energyDensityKcalPerKg ?? null;
+  const totalEnergyKcal =
+    energyDensityKcalPerKg !== null && draft.totalWeightG > 0
+      ? (energyDensityKcalPerKg * draft.totalWeightG) / 1000
+      : null;
 
   return {
     contentRevision: draft.contentRevision,
@@ -353,6 +364,10 @@ const buildLastAssessment = (
     missingData: entries.filter((entry) => entry.status === 'MISSING_DATA')
       .length,
     entries,
+    basis: 'PER_1000_KCAL',
+    totalEnergyKcal,
+    energyDensityKcalPerKg,
+    totalWeightG: draft.totalWeightG,
   };
 };
 
@@ -1693,6 +1708,8 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
           min: entry.minValue,
           max: entry.maxValue,
           marginPercent: null,
+          unit: entry.unit,
+          basis: entry.expressionBasis,
         }),
       );
 
@@ -1706,6 +1723,10 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
         missingData: entries.filter((entry) => entry.status === 'MISSING_DATA')
           .length,
         entries,
+        basis: 'PER_1000_KCAL',
+        totalEnergyKcal: assessment.totalEnergyKcal,
+        energyDensityKcalPerKg: assessment.energyDensityKcalPerKg,
+        totalWeightG: assessment.totalWeightG,
       };
     } catch (error) {
       if (error instanceof ConflictException) {

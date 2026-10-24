@@ -685,6 +685,9 @@ describe('RecipeDesignerAgentAdapter 写方法', () => {
       service.assessDraftForAgent.mockResolvedValue({
         contentRevision: 7,
         assessment: {
+          totalEnergyKcal: 4000,
+          energyDensityKcalPerKg: 2000,
+          totalWeightG: 2000,
           groupedEntries: [
             groupedEntry(),
             groupedEntry({
@@ -736,6 +739,10 @@ describe('RecipeDesignerAgentAdapter 写方法', () => {
         deficient: 1,
         excess: 1,
         missingData: 1,
+        basis: 'PER_1000_KCAL',
+        totalEnergyKcal: 4000,
+        energyDensityKcalPerKg: 2000,
+        totalWeightG: 2000,
         entries: [
           {
             key: 'crudeProtein',
@@ -745,6 +752,8 @@ describe('RecipeDesignerAgentAdapter 写方法', () => {
             min: 50,
             max: 80,
             marginPercent: null,
+            unit: 'g',
+            basis: 'PER_1000_KCAL_ME',
           },
           {
             key: 'calcium',
@@ -754,6 +763,8 @@ describe('RecipeDesignerAgentAdapter 写方法', () => {
             min: 2,
             max: null,
             marginPercent: null,
+            unit: 'g',
+            basis: 'PER_1000_KCAL_ME',
           },
           {
             key: 'phosphorus',
@@ -763,6 +774,8 @@ describe('RecipeDesignerAgentAdapter 写方法', () => {
             min: null,
             max: 5,
             marginPercent: null,
+            unit: 'g',
+            basis: 'PER_1000_KCAL_ME',
           },
           {
             key: 'zinc',
@@ -772,6 +785,8 @@ describe('RecipeDesignerAgentAdapter 写方法', () => {
             min: 1,
             max: 2,
             marginPercent: null,
+            unit: 'g',
+            basis: 'PER_1000_KCAL_ME',
           },
           {
             key: 'omega6Omega3Ratio',
@@ -781,6 +796,8 @@ describe('RecipeDesignerAgentAdapter 写方法', () => {
             min: null,
             max: null,
             marginPercent: null,
+            unit: 'g',
+            basis: 'PER_1000_KCAL_ME',
           },
         ],
       });

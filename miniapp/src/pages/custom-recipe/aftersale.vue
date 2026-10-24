@@ -465,7 +465,7 @@ function buildItems(
   );
   const current = next.find((item) => item.key === activeKey.value);
   activeKey.value =
-    entry?.key || current?.key || next[0]?.key || '';
+    current?.key || entry?.key || next[0]?.key || '';
 }
 
 async function load() {

@@ -287,6 +287,25 @@
   .macro-caption { margin-top: 12px; margin-bottom: 6px; font-size: 11px; color: #8a9a8f; }
   .macro-grid--five { grid-template-columns: repeat(3, 1fr); }
 
+
+  .summary-select { margin-bottom: 8px; }
+  .summary-tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+  .summary-tab {
+    border: 1px solid #e0d3bf; background: #fffdf7; color: #6b5c45;
+    border-radius: 999px; padding: 6px 12px; font-size: 12px;
+  }
+  .summary-tab.active { background: var(--green); border-color: var(--green); color: #f4ecd8; }
+
+
+  .summary-edit { color: var(--gold); font-weight: 700; }
+  .recipe-option {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 14px; margin-bottom: 8px;
+    background: #f7f1e4; border-radius: 12px;
+    font-size: 14px; color: #3f3222;
+  }
+  .recipe-option input { width: 18px; height: 18px; accent-color: #1e3a2f; }
+
   /* 多份选择 */
   .recipe-picker { margin-bottom: 10px; }
   .picker-label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
@@ -425,7 +444,7 @@
 
       <div class="section">
         <div class="section-head">
-          <div class="section-title">食谱调整历史</div>
+          <div class="section-title">食谱调整记录</div>
         </div>
 
         <!-- 待受理 / 处理中 / 已交付：当前这条 -->
@@ -549,13 +568,16 @@
       <div class="section">
         <div class="section-head">
           <div class="section-title">食谱摘要</div>
+          <div class="section-sub">本次调整 2 份 · <span class="summary-edit" data-open-recipe-sheet>调整份数</span></div>
         </div>
-        <div class="recipe-card">
+        <div class="summary-tabs">
+          <button class="summary-tab active" data-summary-tab="0">鸡肉南瓜</button>
+          <button class="summary-tab" data-summary-tab="1">鸭肉西兰花</button>
+        </div>
+        <div class="recipe-card" data-summary-panel="0">
           <div class="recipe-top">
             <div class="recipe-name">鸡肉南瓜低脂鲜食</div>
-            <div class="recipe-count">当前展示</div>
           </div>
-          <div class="recipe-multi-note">本次调整 2 份 · 另有 1 份：鸭肉西兰花</div>
           <div class="food-list">
             <div class="food-row"><span class="food-name">鸡胸肉</span><span class="food-ratio">40.00%</span></div>
             <div class="food-row"><span class="food-name">南瓜</span><span class="food-ratio">25.00%</span></div>
@@ -574,6 +596,28 @@
             <div class="macro-cell"><div class="macro-label">碳水</div><div class="macro-value">22.4%</div></div>
           </div>
         </div>
+        <div class="recipe-card" data-summary-panel="1" hidden>
+          <div class="recipe-top">
+            <div class="recipe-name">鸭肉西兰花鲜食</div>
+          </div>
+          <div class="food-list">
+            <div class="food-row"><span class="food-name">鸭肉</span><span class="food-ratio">40.00%</span></div>
+            <div class="food-row"><span class="food-name">西兰花</span><span class="food-ratio">25.00%</span></div>
+            <div class="food-row"><span class="food-name">南瓜</span><span class="food-ratio">20.00%</span></div>
+            <div class="food-row"><span class="food-name">鸭肝</span><span class="food-ratio">10.00%</span></div>
+            <div class="food-row"><span class="food-name">鸡蛋</span><span class="food-ratio">4.88%</span></div>
+            <div class="food-row"><span class="food-name">食用盐</span><span class="food-ratio">0.12%</span></div>
+          </div>
+          <div class="supplement-line">须额外添加：<b>钙 每公斤食材添加 5 g</b>、<b>锌 每公斤食材添加 15 mg</b></div>
+          <div class="macro-caption">干物质（DM）占比</div>
+          <div class="macro-grid macro-grid--five">
+            <div class="macro-cell"><div class="macro-label">蛋白质</div><div class="macro-value">43.0%</div></div>
+            <div class="macro-cell"><div class="macro-label">脂肪</div><div class="macro-value">18.5%</div></div>
+            <div class="macro-cell"><div class="macro-label">灰分</div><div class="macro-value">8.0%</div></div>
+            <div class="macro-cell"><div class="macro-label">纤维</div><div class="macro-value">5.2%</div></div>
+            <div class="macro-cell"><div class="macro-label">碳水</div><div class="macro-value">25.3%</div></div>
+          </div>
+        </div>
       </div>
 
       <div class="section state-only state-submit">
@@ -581,13 +625,6 @@
           <div class="section-title">想怎么调整</div>
         </div>
         <div class="form-card">
-          <div class="recipe-picker">
-            <div class="picker-label">本次要调整的食谱</div>
-            <div class="picker-chips">
-              <span class="recipe-chip active">鸡肉南瓜 ✓</span>
-              <span class="recipe-chip active">鸭肉西兰花 ✓</span>
-            </div>
-          </div>
           <textarea class="adjust-input" placeholder="比如：鸡肉想换成鸭肉、某样食材减少一点、份量想调整……"></textarea>
           <div class="attachment-block">
             <div class="attachment-list">
@@ -611,13 +648,6 @@
           <div class="section-title">想怎么调整</div>
         </div>
         <div class="form-card">
-          <div class="recipe-picker">
-            <div class="picker-label">本次要调整的食谱</div>
-            <div class="picker-chips">
-              <span class="recipe-chip active">鸡肉南瓜 ✓</span>
-              <span class="recipe-chip active">鸭肉西兰花 ✓</span>
-            </div>
-          </div>
           <textarea class="adjust-input" placeholder="比如：鸡肉想换成鸭肉、某样食材减少一点、份量想调整……"></textarea>
           <div class="attachment-block">
             <div class="attachment-list">
@@ -641,13 +671,6 @@
           <div class="section-title">想怎么调整</div>
         </div>
         <div class="form-card">
-          <div class="recipe-picker">
-            <div class="picker-label">本次要调整的食谱</div>
-            <div class="picker-chips">
-              <span class="recipe-chip active">鸡肉南瓜 ✓</span>
-              <span class="recipe-chip active">鸭肉西兰花 ✓</span>
-            </div>
-          </div>
           <textarea class="adjust-input" placeholder="比如：鸡肉想换成鸭肉、某样食材减少一点、份量想调整……"></textarea>
           <div class="attachment-block">
             <div class="attachment-list">
@@ -693,6 +716,15 @@
       <div class="bar-state bar-withdrawn"><button class="primary-btn submit-adjust" disabled>提交调整</button></div>
     </div>
 
+    <div class="sheet-mask" id="recipeSheet" hidden>
+      <div class="sheet">
+        <div class="sheet-title">选择要调整的食谱</div>
+        <label class="recipe-option"><input type="checkbox" checked /> 鸡肉南瓜</label>
+        <label class="recipe-option"><input type="checkbox" checked /> 鸭肉西兰花</label>
+        <button class="sheet-cancel" id="recipeSheetDone">完成</button>
+      </div>
+    </div>
+
     <div class="sheet-mask" id="attachmentSheet" hidden>
       <div class="sheet">
         <div class="sheet-title">添加附件</div>
@@ -724,6 +756,30 @@
         const content = toggle.previousElementSibling;
         content.classList.toggle('open');
         toggle.textContent = content.classList.contains('open') ? '收起' : '展开';
+      });
+    });
+
+    // 调整份数弹窗
+    const recipeSheet = document.getElementById('recipeSheet');
+    document.querySelector('[data-open-recipe-sheet]').addEventListener('click', () => {
+      recipeSheet.hidden = false;
+    });
+    document.getElementById('recipeSheetDone').addEventListener('click', () => {
+      recipeSheet.hidden = true;
+    });
+    recipeSheet.addEventListener('click', (event) => {
+      if (event.target === recipeSheet) recipeSheet.hidden = true;
+    });
+
+    // 食谱摘要切换
+    const summaryTabs = document.querySelectorAll('.summary-tab');
+    const summaryPanels = document.querySelectorAll('[data-summary-panel]');
+    summaryTabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        summaryTabs.forEach((t) => t.classList.toggle('active', t === tab));
+        summaryPanels.forEach((panel) => {
+          panel.hidden = panel.dataset.summaryPanel !== tab.dataset.summaryTab;
+        });
       });
     });
 

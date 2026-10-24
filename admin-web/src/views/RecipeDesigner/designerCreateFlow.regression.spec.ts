@@ -4,30 +4,26 @@ import { describe, expect, it } from 'vitest'
 import designer from '@/views/RecipeDesigner/index.vue?raw'
 import publish from '@/views/RecipeDesigner/Publish.vue?raw'
 
-describe('食谱设计器 · 新建系列（默认阶段 + 临时名称）', () => {
-  it('新建对话框不再要求填写系列名称', () => {
-    expect(designer).not.toContain('label="系列名称"')
-    expect(designer).not.toContain('createForm.name')
-    expect(designer).not.toContain("请填写系列名称")
-    expect(designer).toContain('label="参考爱犬"')
-    expect(designer).toContain('label="默认阶段"')
+describe('食谱设计器 · 新建食谱（一键创建 + 临时名称）', () => {
+  it('按钮叫「新建食谱」，不再有创建弹窗', () => {
+    expect(designer).toContain('新建食谱')
+    expect(designer).not.toContain('新建设计系列')
+    expect(designer).not.toContain('label="参考爱犬"')
+    expect(designer).not.toContain('label="默认阶段"')
+    expect(designer).not.toContain('openCreateDialog')
+    expect(designer).not.toContain('createDialogVisible')
+    expect(designer).toContain('@click="createSeries"')
   })
 
-  it('切换参考爱犬时按犬档案自动带出默认阶段', () => {
-    expect(designer).toContain('@change="handleReferenceDogChange"')
+  it('从订单入口带入参考爱犬，但不弹窗', () => {
+    expect(designer).toContain('pendingReferenceDogId')
+    expect(designer).toContain('await dogApi.getDetail(dogId)')
     expect(designer).toContain('resolveDogScenarioFromDetail')
-    expect(designer).toContain('autoFillScenarioFromDog')
-    expect(designer).toContain('dogApi.getDetail(dogId)')
-  })
-
-  it('从订单入口进入时也会自动带出默认阶段', () => {
-    expect(designer).toContain('await autoFillScenarioFromDog(dogId)')
+    expect(designer).not.toContain('createDialogVisible')
   })
 
   it('创建时自动生成可识别的临时名称', () => {
     expect(designer).toContain('buildTemporarySeriesName')
-    expect(designer).toContain('未命名系列 · 10-21 22:15')
-    expect(designer).toContain('待改名')
     expect(designer).toContain('isTemporarySeriesName(card.name)')
   })
 })

@@ -7,12 +7,13 @@
       </div>
       <div class="header-actions">
         <el-button
-          v-if="designModeFilter === 'CATALOG'"
+          v-if="designModeFilter === 'CATALOG' || pendingReferenceDogId"
           type="primary"
           :icon="Plus"
-          @click="openCreateDialog"
+          :loading="creating"
+          @click="createSeries"
         >
-          新建设计系列
+          新建食谱
         </el-button>
       </div>
     </div>
@@ -217,51 +218,6 @@
       </div>
     </el-card>
 
-    <!-- 新建系列 -->
-    <el-dialog v-model="createDialogVisible" title="新建设计系列" width="520px" @closed="resetCreateForm">
-      <el-form label-width="96px">
-        <el-form-item label="参考爱犬">
-          <el-select
-            v-model="createForm.referenceDogId"
-            filterable
-            remote
-            clearable
-            placeholder="可选：选择一位客户的爱犬（用于设计参考）"
-            :remote-method="searchDogs"
-            :loading="dogLoading"
-            style="width: 100%"
-            @change="handleReferenceDogChange"
-          >
-            <el-option
-              v-for="dog in dogOptions"
-              :key="dog.id"
-              :label="dogLabel(dog)"
-              :value="dog.id"
-            />
-          </el-select>
-          <div class="form-tip">可选的参考爱犬：进入配方编辑页后，可随时在「爱犬信息」面板设置或更换；该犬档案与 AI 建议仅作设计参考，发布后与犬解耦</div>
-        </el-form-item>
-        <el-form-item label="默认阶段">
-          <el-select v-model="createForm.scenario" clearable placeholder="默认：普通成年犬（110ME）" style="width: 100%">
-            <el-option
-              v-for="(label, key) in FEDIAF_DOG_SCENARIO_LABELS"
-              :key="key"
-              :label="label"
-              :value="key"
-            />
-          </el-select>
-          <div class="form-tip">选择参考爱犬后，会自动按它的生命阶段带出默认阶段；仍可在这里手动修改。</div>
-        </el-form-item>
-      </el-form>
-      <div class="form-tip create-name-tip">
-        创建时会自动生成临时名称（如「未命名系列 · 10-21 22:15」），可稍后在列表、编辑页或发布页改名。
-      </div>
-      <template #footer>
-        <el-button @click="createDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="creating" @click="createSeries">创建</el-button>
-      </template>
-    </el-dialog>
-
     <!-- 重命名 -->
     <el-dialog v-model="renameDialogVisible" title="重命名系列" width="420px">
       <el-input v-model="renameForm.name" maxlength="60" show-word-limit />
@@ -328,7 +284,6 @@ import {
 } from '@/utils/recipeDesigner/seriesName'
 import { dogApi } from '@/api/dogs'
 import { customRecipeApi } from '@/api/customRecipe'
-import type { DogProfile } from '@/types/dog'
 import SeriesReleaseDrawer from './components/SeriesReleaseDrawer.vue'
 import {
   FEDIAF_DOG_SCENARIO_LABELS,
@@ -366,11 +321,10 @@ const loadMoreSentinel = ref<HTMLElement | null>(null)
 let seriesObserver: IntersectionObserver | null = null
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
-const createDialogVisible = ref(false)
-const createForm = reactive<{ referenceDogId?: string; scenario?: FediafDogScenario }>({
-  referenceDogId: undefined,
-  scenario: undefined
-})
+/** 从订单入口带入的参考爱犬：不弹窗，点“新建食谱”时直接使用。 */
+const pendingReferenceDogId = ref<string | null>(null)
+const pendingReferenceDogName = ref<string | null>(null)
+const pendingScenario = ref<FediafDogScenario | undefined>(undefined)
 
 const renameDialogVisible = ref(false)
 const renameForm = reactive<{ id: string; name: string }>({ id: '', name: '' })
@@ -390,10 +344,6 @@ const copyTargetStage = ref<RecipeDesignerSeriesStage | null>(null)
 const copyingItems = ref(false)
 const duplicatingStage = ref(false)
 
-const dogOptions = ref<DogProfile[]>([])
-const dogLoading = ref(false)
-/** 参考爱犬详情请求序号：只接受最后一次请求的结果，避免快速切换时旧结果覆盖新犬 */
-let referenceDogRequestSeq = 0
 
 function formatTime(value?: string): string {
   if (!value) return '—'
@@ -479,67 +429,6 @@ async function handleSeriesReleased(): Promise<void> {
 /** 下架 / 系列状态变化后刷新列表，卡片入口文案与进度同步更新 */
 async function handleSeriesUpdated(): Promise<void> {
   await loadSeries(true)
-}
-
-function dogLabel(dog: DogProfile): string {
-  return `${dog.name}（${dog.breedName || dog.customBreedName || '未知品种'}，${dog.currentWeightKg}kg）`
-}
-
-async function searchDogs(keyword: string) {
-  dogLoading.value = true
-  try {
-    const res = await dogApi.list({ search: keyword, pageSize: 50 })
-    dogOptions.value = (res as unknown as { data: DogProfile[] }).data ?? res ?? []
-  } catch {
-    dogOptions.value = []
-  } finally {
-    dogLoading.value = false
-  }
-}
-
-function addDogOption(profile: DogProfile | null | undefined) {
-  if (!profile?.id) return
-  const index = dogOptions.value.findIndex((dog) => dog.id === profile.id)
-  if (index >= 0) {
-    dogOptions.value = dogOptions.value.map((dog, dogIndex) =>
-      dogIndex === index ? { ...dog, ...profile } : dog
-    )
-  } else {
-    dogOptions.value = [profile, ...dogOptions.value]
-  }
-}
-
-/**
- * 按参考爱犬档案自动带出「默认阶段」。
- *
- * 只在能明确推断时写入；缺生命阶段/周龄/活动量时保持 undefined，不猜。
- * 请求期间如果营养师手动改过默认阶段，则尊重手动选择，不让异步结果覆盖。
- */
-async function autoFillScenarioFromDog(dogId: string) {
-  const requestId = ++referenceDogRequestSeq
-  const scenarioBefore = createForm.scenario
-  try {
-    const res: any = await dogApi.getDetail(dogId)
-    if (requestId !== referenceDogRequestSeq) return
-    const detail = res?.data ?? res
-    addDogOption((detail?.profile ?? null) as DogProfile | null)
-    const scenario = resolveDogScenarioFromDetail(detail)
-    if (createForm.scenario !== scenarioBefore) return
-    createForm.scenario = scenario
-  } catch {
-    if (requestId !== referenceDogRequestSeq) return
-    if (createForm.scenario === scenarioBefore) createForm.scenario = undefined
-  }
-}
-
-function handleReferenceDogChange(dogId?: string) {
-  const id = String(dogId || '').trim()
-  if (!id) {
-    // 清空参考犬：保留当前默认阶段，营养师仍可手动选择
-    referenceDogRequestSeq += 1
-    return
-  }
-  void autoFillScenarioFromDog(id)
 }
 
 async function loadSeries(reset = true) {
@@ -635,44 +524,31 @@ const emptyDescription = computed(() => {
   }
   return searchKeyword.value.trim()
     ? `没有找到名称、原料或爱犬包含「${searchKeyword.value.trim()}」的设计系列`
-    : '还没有设计系列，点击右上角「新建设计系列」开始'
+    : '还没有设计系列，点击右上角「新建食谱」开始'
 })
 
-function openCreateDialog() {
-  referenceDogRequestSeq += 1
-  createForm.referenceDogId = undefined
-  createForm.scenario = undefined
-  createDialogVisible.value = true
-  searchDogs('')
-}
-
-function resetCreateForm() {
-  referenceDogRequestSeq += 1
-  createForm.referenceDogId = undefined
-  createForm.scenario = undefined
-}
-
 async function createSeries() {
-  const referenceDog = dogOptions.value.find((dog) => dog.id === createForm.referenceDogId)
-  // 系列名不再要求营养师在创建时填写：先落一个带「未命名」前缀的临时名称，
-  // 发布前会在 Publish.vue 强制改名（后端 CreateRecipeSeriesDto.name 仍必填）。
-  const name = buildTemporarySeriesName({ dogName: referenceDog?.name })
-  // 参考爱犬为可选项（2026-10-14 修正）。
-  //
-  // 背景：产品线系列是面向所有用户的，不绑定某只具体的狗，因此这里不能强制必选。
-  // 后端 CreateRecipeSeriesDto.referenceDogId 本就是 @IsOptional()，不传即 null；
-  // 此前前端多加了一道必选校验，与输入框提示「可选：选择一位客户的爱犬」自相矛盾，
-  // 且挡住「无犬设计」这条路。
+  // 一键创建：不再弹「参考爱犬 / 默认阶段」。
+  // 产品线默认普通成年犬；参考爱犬只在从订单带入时使用，阶段由后端/编辑器再切。
+  const referenceDogId = pendingReferenceDogId.value || undefined
+  const name = buildTemporarySeriesName({
+    dogName: pendingReferenceDogName.value || undefined
+  })
   creating.value = true
   try {
     const card = await recipeDesignerApi.createSeries({
       name,
-      referenceDogId: createForm.referenceDogId || undefined,
-      scenario: createForm.scenario
+      referenceDogId,
+      scenario: pendingScenario.value
     })
-    ElMessage.success('系列创建成功')
-    createDialogVisible.value = false
-    // 创建成功后直接进入默认阶段（第一个有草稿的阶段）编辑器
+    ElMessage.success(
+      referenceDogId
+        ? '食谱创建成功，已按参考爱犬带出默认阶段；可在编辑器切换阶段。'
+        : '食谱创建成功，默认阶段为普通成年犬；可在编辑器切换阶段、设置参考爱犬。'
+    )
+    pendingReferenceDogId.value = null
+    pendingReferenceDogName.value = null
+    pendingScenario.value = undefined
     const targetDraftId = card?.initialDraftId || card?.stages.find((s) => s.draftId)?.draftId
     if (targetDraftId) {
       router.push(draftRoute(card.id, targetDraftId))
@@ -877,15 +753,21 @@ async function applyEntryQuery() {
   const dogId = String(route.query.dogId || '').trim()
   const orderId = String(route.query.orderId || '').trim()
   entryOrderId.value = orderId
-  if (!dogId) return
 
-  createForm.referenceDogId = dogId
-  createDialogVisible.value = true
-
-  await searchDogs('')
-  // 参考爱犬可能不在前 50 条里：详情接口同时负责把犬补进下拉选项，
-  // 并按它的生命阶段自动带出默认阶段（推断不出来时保持为空）。
-  await autoFillScenarioFromDog(dogId)
+  // 从订单带入参考爱犬：不弹窗，点“新建食谱”时直接使用；
+  // 犬的生命阶段能推断就带出，推断不出来再用普通成年犬默认值。
+  if (dogId) {
+    pendingReferenceDogId.value = dogId
+    try {
+      const res: any = await dogApi.getDetail(dogId)
+      const detail = res?.data ?? res
+      pendingReferenceDogName.value = detail?.profile?.name ?? null
+      pendingScenario.value = resolveDogScenarioFromDetail(detail) ?? undefined
+    } catch {
+      pendingReferenceDogName.value = null
+      pendingScenario.value = undefined
+    }
+  }
 
   /**
    * 从订单进来时带上本单份数与已设计数量。

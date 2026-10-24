@@ -586,6 +586,40 @@ export class UpdateRecipeDesignItemDto {
   includeInAssessment?: boolean;
 }
 
+/**
+ * 替换草稿原料（2026-10-24 · P0b-2b）。
+ *
+ * 换入新营养档案时保留旧项的排序、是否参与评估和预处理；
+ * 只有显式传入的字段才覆盖旧值。
+ */
+export class ReplaceRecipeDesignItemDto {
+  @IsString()
+  nutritionFoodId!: string;
+
+  @IsOptional()
+  @IsString()
+  ingredientId?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  weightG?: number;
+
+  @IsOptional()
+  @IsString()
+  preparationMethod?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(RECIPE_PREPARATION_NOTE_MAX_LENGTH)
+  preparationNote?: string | null;
+
+  @IsOptional()
+  @IsIn(RECIPE_PREPARATION_SOURCES)
+  preparationSource?: RecipePreparationSource | null;
+}
+
 export class ReorderRecipeDesignItemDto {
   @IsString()
   id!: string;

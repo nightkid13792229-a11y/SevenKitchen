@@ -86,6 +86,7 @@ import type {
   DeleteRecipeSeriesDto,
   RecipeDesignerSeriesStatusFilter,
   RecipePreparationSource,
+  ReplaceRecipeDesignItemDto,
   ListRecipeDesignerIngredientOptionsDto,
   ListRecipeDesignerSeriesDto,
   PublishRecipeDesignDraftDto,
@@ -6245,6 +6246,109 @@ export class RecipeDesignerService {
     });
   }
 
+  /**
+   * 替换草稿明细（2026-10-24 · P0b-2b）。
+   *
+   * 删除旧项 + 创建新项 + 递增 contentRevision 在同一个事务里完成；
+   * 排序、是否参与评估和未显式覆盖的预处理沿用旧值。
+   */
+  async replaceItem(
+    itemId: string,
+    dto: ReplaceRecipeDesignItemDto,
+    access: RecipeDesignerAccessInput,
+  ) {
+    const context = normalizeRecipeDesignerAccessContext(access);
+    const current = await this.assertItemEditableByUser(itemId, context);
+    const ingredientId = await this.resolveDesignItemIngredientId(dto);
+
+    const duplicate = await this.prisma.designRecipeItem.findFirst({
+      where: {
+        designRecipeId: current.id,
+        nutritionFoodId: dto.nutritionFoodId,
+        id: { not: itemId },
+      },
+    });
+    if (duplicate) {
+      throw new BadRequestException('这个原料已经在配方里');
+    }
+
+    const weightG = dto.weightG ?? current.weightG;
+    const preparationMethod =
+      dto.preparationMethod ?? current.preparationMethod;
+    const preparationNote =
+      dto.preparationNote !== undefined
+        ? dto.preparationNote
+        : current.preparationNote;
+    const preparationSource =
+      dto.preparationSource !== undefined
+        ? dto.preparationSource
+        : this.normalizeStoredPreparationSource(current.preparationSource);
+    const resolvedPreparationMethod =
+      await this.resolveDesignItemPreparationMethod(
+        preparationMethod,
+        ingredientId,
+        dto.nutritionFoodId,
+      );
+    const preparationData = this.buildPreparationCreateData({
+      explicitMethod: preparationMethod,
+      explicitNote: preparationNote,
+      explicitSource: this.parsePreparationSourceInput(preparationSource),
+      resolvedMethod: resolvedPreparationMethod,
+    });
+
+    /**
+     * 换入补剂时必须带目标定义；换入普通原料时目标字段全部清空，
+     * 不能把旧补剂的目标带到新原料上。
+     */
+    const shouldPersistNutrientTarget =
+      await this.isIngredientIdSupplement(ingredientId);
+    const supplementTargets = shouldPersistNutrientTarget
+      ? await this.resolveDesignSupplementTargetsForWrite({
+          nutritionFoodId: dto.nutritionFoodId,
+          explicitTargets: undefined,
+          legacyTargetKey: undefined,
+          legacyTargetValue: undefined,
+          weightG,
+          includeInAssessment: current.includeInAssessment,
+          baseTotalWeightG: current.totalWeightG,
+        })
+      : [];
+
+    const data = {
+      designRecipeId: current.id,
+      ingredientId,
+      nutritionFoodId: dto.nutritionFoodId,
+      weightG,
+      ...preparationData,
+      ...(shouldPersistNutrientTarget
+        ? {
+            nutrientTargetKey: supplementTargets[0]?.nutrientTargetKey ?? null,
+            nutrientTargetValue: supplementTargets[0]?.targetValue ?? null,
+            supplementTargets: this.toJsonValue(supplementTargets),
+          }
+        : {
+            nutrientTargetKey: null,
+            nutrientTargetValue: null,
+            supplementTargets: Prisma.DbNull,
+          }),
+      sortOrder: current.sortOrder,
+      includeInAssessment: current.includeInAssessment,
+    } satisfies Prisma.DesignRecipeItemUncheckedCreateInput;
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.designRecipeItem.delete({ where: { id: itemId } });
+      const created = await tx.designRecipeItem.create({
+        data,
+        select: DESIGN_RECIPE_ITEM_CLIENT_SELECT,
+      });
+      await tx.designRecipe.update({
+        where: { id: current.id },
+        data: { contentRevision: { increment: 1 } },
+      });
+      return created;
+    });
+  }
+
   async reorderItems(
     designRecipeId: string,
     dto: ReorderRecipeDesignItemsDto,
@@ -9265,6 +9369,12 @@ export class RecipeDesignerService {
       where: { id: itemId },
       select: {
         id: true,
+        // 替换原料需要在同一次查询里带回旧值（保留排序/是否评估/预处理）
+        weightG: true,
+        sortOrder: true,
+        includeInAssessment: true,
+        nutritionFoodId: true,
+        ingredientId: true,
         // 预处理更新需要在同一次查询里带回当前值，避免再把 AUTO 误翻成 MANUAL
         preparationMethod: true,
         preparationNote: true,
@@ -9293,6 +9403,11 @@ export class RecipeDesignerService {
 
     return {
       ...item.designRecipe,
+      weightG: item.weightG,
+      sortOrder: item.sortOrder,
+      includeInAssessment: item.includeInAssessment,
+      nutritionFoodId: item.nutritionFoodId,
+      ingredientId: item.ingredientId,
       preparationMethod: item.preparationMethod,
       preparationNote: item.preparationNote,
       preparationSource: item.preparationSource,
@@ -9509,7 +9624,10 @@ export class RecipeDesignerService {
     return mapping.ingredientId;
   }
 
-  private async resolveDesignItemIngredientId(dto: AddRecipeDesignItemDto) {
+  private async resolveDesignItemIngredientId(dto: {
+    ingredientId?: string;
+    nutritionFoodId: string;
+  }) {
     if (!dto.ingredientId) {
       return null;
     }

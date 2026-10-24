@@ -75,6 +75,27 @@ export function askOptionAiBadge(
   }
 }
 
+/**
+ * 选项按钮的悬停标题：完整展示被单行省略截掉的文案。
+ *
+ * 选项允许 120 字，按钮里单行省略才不会撑破面板；完整文案（含候选全称）
+ * 放在 title 里，悬停即可看全。命中库内词条且与展示文案不同时补一行全称。
+ */
+export function askOptionTitle(
+  displayLabel: string,
+  matchedName: string | null
+): string {
+  const text = displayLabel.trim()
+  const name = (matchedName ?? '').trim()
+  if (!text) {
+    return name ? `库里词条：${name}` : ''
+  }
+  if (name && name !== text && !text.includes(name)) {
+    return `${text}\n库里词条：${name}`
+  }
+  return text
+}
+
 /** 从 `候选名 —— 相关：理由` 里拆出候选名与 AI 判断。 */
 export function splitAskOptionLabel(label: string): {
   candidateLabel: string

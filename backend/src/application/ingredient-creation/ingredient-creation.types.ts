@@ -344,10 +344,11 @@ export interface ProposalSnapshot {
 /**
  * `askUser` 的一个选项，以及它在本地营养库里的核实结果。
  *
- * `label` 是点选后真正回传给模型的答案；`displayLabel` 只用于页面展示
- * （未收录时带「会去线上找」的后缀），两者不要混用。
+ * `label` 是点选后真正回传给模型的答案（超长会截到 120 字以内）；
+ * `displayLabel` 只用于页面展示（未收录时带「会去线上找」的后缀），两者不要混用。
  */
 export interface PendingQuestionOption {
+  /** 点选后回传的答案；超过 120 字已由工具层截断（前 117 字 + …）。 */
   label: string;
   /**
    * `true`：本地库有候选；`false`：查了但没有；`null`：核实失败 / 超时，
@@ -356,12 +357,17 @@ export interface PendingQuestionOption {
   inLibrary: boolean | null;
   /** 命中时库里的词条名，用于页面提示；未命中 / 未知时为 null。 */
   matchedName: string | null;
-  /** 页面展示文案；未收录时是 `label + 后缀`。 */
+  /**
+   * 页面展示文案；未收录时是 `label + 后缀`。
+   *
+   * 命中的候选名可能超过 120 字：这里保留完整全称，页面单行省略 +
+   * title / tooltip 展示全文，不能靠截断字段丢名字。
+   */
   displayLabel: string;
   /**
-   * 候选名（从 `候选名 —— 相关：理由` 的文案里拆出来）。
+   * 候选名（从 `候选名 —— 相关：理由` 的文案里拆出来），**不截断**。
    *
-   * `label` 仍是点选后回传给模型的完整答案；页面展示 AI 判断时用这个字段，
+   * `label` 是截断后的点选答案；页面展示 AI 判断、查库都用这个完整字段，
    * 避免把「相关 / 理由」重复显示两遍。旧草稿没有它。
    */
   candidateLabel?: string | null;
@@ -378,9 +384,11 @@ export interface PendingQuestionOption {
  * 带进来，用完即清（置 null），避免同一份问题被反复消费。
  */
 export interface PendingQuestion {
+  /** 要问用户的一句话；超过 200 字已由工具层截断（前 197 字 + …）。 */
   question: string;
   /**
    * 纯文本选项，保持与旧草稿 / 旧页面兼容；点选时回传的就是这里的原文。
+   * 单项超过 120 字已截断（前 117 字 + …），完整词条名见 `optionChecks`。
    * 核实结果放在 `optionChecks`，与下标一一对应。
    */
   options: string[];

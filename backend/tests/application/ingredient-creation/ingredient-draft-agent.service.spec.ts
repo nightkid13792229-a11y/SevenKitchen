@@ -1853,19 +1853,55 @@ describe('IngredientDraftAgentService · askUser（先问人，再动手）', ()
     expect(harness.currentDraft()?.payload.pendingQuestion).toBeUndefined();
   });
 
-  it('askUser 的 question 超过 120 字时拒绝', async () => {
+  it('askUser 的 question 超过 200 字时自动截断，不再让模型重试', async () => {
+    const longQuestion = '牛'.repeat(201);
     const fetchMock = jest
       .fn()
       .mockResolvedValueOnce(
         chatResponse(
           assistantToolCall(
             'askUser',
-            { question: '牛'.repeat(121), options: ['牛腩', '牛腱子'] },
+            { question: longQuestion, options: ['牛腩', '牛腱子'] },
             'call_long_question',
           ),
         ),
-      )
-      .mockResolvedValueOnce(chatResponse(assistantReply('问题太长了。')));
+      );
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '牛肉',
+      userId: 'admin-1',
+    });
+
+    // 问题照样问出去：截断的是文案，不是这次提问。
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result.toolCalls[0]).toMatchObject({
+      name: 'askUser',
+      ok: true,
+    });
+    expect(result.stopReason).toBe('waiting_user');
+    expect(result.pendingQuestion?.question).toBe(`${'牛'.repeat(197)}…`);
+    expect(Array.from(result.pendingQuestion?.question ?? '')).toHaveLength(198);
+    expect(harness.currentDraft()?.payload.pendingQuestion).toMatchObject({
+      question: `${'牛'.repeat(197)}…`,
+    });
+  });
+
+  it('askUser 的 question 恰好 200 字时原样提问（200 是允许的上限）', async () => {
+    const question = '牛'.repeat(200);
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'askUser',
+            { question, options: ['牛腩', '牛腱子'] },
+            'call_boundary_question',
+          ),
+        ),
+      );
     global.fetch = fetchMock as unknown as typeof global.fetch;
 
     const harness = createHarness();
@@ -1877,10 +1913,9 @@ describe('IngredientDraftAgentService · askUser（先问人，再动手）', ()
 
     expect(result.toolCalls[0]).toMatchObject({
       name: 'askUser',
-      ok: false,
+      ok: true,
     });
-    expect(result.toolCalls[0].error).toContain('120');
-    expect(harness.currentDraft()?.payload.pendingQuestion).toBeUndefined();
+    expect(result.pendingQuestion?.question).toBe(question);
   });
 
   it('askUser 选项超过 5 个时拒绝', async () => {
@@ -1916,19 +1951,54 @@ describe('IngredientDraftAgentService · askUser（先问人，再动手）', ()
     expect(harness.currentDraft()?.payload.pendingQuestion).toBeUndefined();
   });
 
-  it('askUser 单个选项超过 40 字时拒绝', async () => {
+  it('askUser 单个选项 41 字时照常提问，不再让模型缩短重试', async () => {
+    // 线上就是这一档：41 字刚超过旧的 40 字上限，模型被迫重写文案。
+    const option = '牛'.repeat(41);
     const fetchMock = jest
       .fn()
       .mockResolvedValueOnce(
         chatResponse(
           assistantToolCall(
             'askUser',
-            { question: '牛肉用哪个部位？', options: ['牛'.repeat(41), '牛腱子'] },
+            { question: '牛肉用哪个部位？', options: [option, '牛腱子'] },
+            'call_typed_option',
+          ),
+        ),
+      );
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '牛肉',
+      userId: 'admin-1',
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result.toolCalls[0]).toMatchObject({
+      name: 'askUser',
+      ok: true,
+    });
+    expect(result.stopReason).toBe('waiting_user');
+    expect(result.pendingQuestion?.options[0]).toBe(option);
+  });
+
+  it('askUser 单个选项超过 120 字时自动截断（前 117 字 + …）', async () => {
+    const longOption = '牛'.repeat(121);
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'askUser',
+            {
+              question: '牛肉用哪个部位？',
+              options: [longOption, '牛腱子'],
+            },
             'call_long_option',
           ),
         ),
-      )
-      .mockResolvedValueOnce(chatResponse(assistantReply('选项太长了。')));
+      );
     global.fetch = fetchMock as unknown as typeof global.fetch;
 
     const harness = createHarness();
@@ -1940,10 +2010,16 @@ describe('IngredientDraftAgentService · askUser（先问人，再动手）', ()
 
     expect(result.toolCalls[0]).toMatchObject({
       name: 'askUser',
-      ok: false,
+      ok: true,
     });
-    expect(result.toolCalls[0].error).toContain('40');
-    expect(harness.currentDraft()?.payload.pendingQuestion).toBeUndefined();
+    expect(result.stopReason).toBe('waiting_user');
+    expect(result.pendingQuestion?.options[0]).toBe(`${'牛'.repeat(117)}…`);
+    expect(Array.from(result.pendingQuestion?.options[0] ?? '')).toHaveLength(
+      118,
+    );
+    expect(harness.currentDraft()?.payload.pendingQuestion).toMatchObject({
+      options: [`${'牛'.repeat(117)}…`, '牛腱子'],
+    });
   });
 
   it('ask 事件带上选项的库内核实标记：未收录的保留并带后缀', async () => {

@@ -734,6 +734,7 @@ import {
 import {
   answerInputFromPendingQuestion,
   askOptionAiBadge,
+  askOptionTitle,
   pendingOptionBadge,
   readPendingQuestion,
   streamIngredientAgent,
@@ -785,17 +786,20 @@ const state = reactive({
 /**
  * 选项按钮的展示视图：文本用后端给的 displayLabel（未收录时带后缀），
  * 右侧小标说明库里有没有；旧草稿没有 optionChecks 时不显示小标。
+ *
+ * 长文案在按钮里单行省略，完整文案（含候选全称）放进 title 供悬停查看。
  */
 const askOptionViews = computed(() =>
   (state.pendingQuestion?.options ?? []).map((label, index) => {
     const check = state.pendingQuestion?.optionChecks?.[index]
+    const displayLabel = check?.displayLabel || label
     return {
       label,
-      displayLabel: check?.displayLabel || label,
+      displayLabel,
       badge: pendingOptionBadge(check),
       // AI 判断与「你的选择」分开：上面是 AI 的参考意见，下面的按钮才是人点选的。
       aiBadge: askOptionAiBadge(check),
-      title: check?.matchedName ? `库里词条：${check.matchedName}` : ''
+      title: askOptionTitle(displayLabel, check?.matchedName ?? null)
     }
   })
 )
@@ -1794,25 +1798,38 @@ function goBackToList() {
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
+  min-width: 0;
+  max-width: 100%;
   white-space: normal;
   text-align: left;
 }
 
+/* 长选项单行省略，避免 120 字文案把按钮撑破；完整文案在按钮 title 里。 */
 .agent-ask__option-text {
-  white-space: normal;
+  display: block;
+  max-width: min(520px, 72vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   text-align: left;
 }
 
+/* AI 判断标签在上、理由在下：分开两行，不挤在同一行里。 */
 .agent-ask__option-ai {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  max-width: min(520px, 72vw);
 }
 
 .agent-ask__option-reason {
+  max-width: 100%;
   font-size: 12px;
   color: var(--el-text-color-secondary);
+  white-space: normal;
+  word-break: break-word;
+  text-align: left;
 }
 
 .agent-ask__option-tag {

@@ -1288,4 +1288,61 @@ describe('IngredientCreationToolsService · AI 复核候选（判断与写入闸
       'Celery —— 存疑：不确定',
     ]);
   });
+
+  it('长选项只截断文案，结构化候选名与库内词条名保留完整全称', async () => {
+    const fullName = `Beef, ${'very long cut name '.repeat(10)}raw`;
+    const option = `${fullName} —— 相关：肌肉部位，适合炖煮`;
+    expect(Array.from(option)).toHaveLength(215);
+
+    const { tools, candidateService } = createTools([], {});
+    candidateService.findCandidates.mockResolvedValue(
+      searchResult([row('rec-long', fullName)]),
+    );
+
+    const result = await executeTool(tools, 'askUser', {
+      question: '牛肉用哪一条？',
+      options: [option, '牛腱子'],
+    });
+
+    expect(result.ok).toBe(true);
+    const check = result.body.optionChecks[0];
+    // 点选回传的文案截到 118 字（前 117 字 + …）。
+    expect(Array.from(check.label)).toHaveLength(118);
+    expect(check.label.endsWith('…')).toBe(true);
+    // 词条名本身不截断：结构化字段里保留完整全称。
+    expect(check.candidateLabel).toBe(fullName);
+    expect(check.matchedName).toBe(fullName);
+    expect(Array.from(check.candidateLabel)).toHaveLength(
+      Array.from(fullName).length,
+    );
+    expect(Array.from(check.matchedName ?? '')).toHaveLength(
+      Array.from(fullName).length,
+    );
+    // 展示层拿完整名，省略交给前端单行省略 + title。
+    expect(check.displayLabel).toBe(fullName);
+    expect(result.pendingQuestion?.optionChecks?.[0]?.candidateLabel).toBe(
+      fullName,
+    );
+  });
+
+  it('普通长选项：点选文案截断，displayLabel 保留完整原文', async () => {
+    const longOption = `牛${'肉'.repeat(130)}`;
+    const { tools, candidateService } = createTools([], {});
+    candidateService.findCandidates.mockResolvedValue(
+      searchResult([row('rec-beef', 'Beef, raw')]),
+    );
+
+    const result = await executeTool(tools, 'askUser', {
+      question: '牛肉用哪一个？',
+      options: [longOption, '牛腱子'],
+    });
+
+    expect(result.ok).toBe(true);
+    const check = result.body.optionChecks[0];
+    expect(Array.from(check.label)).toHaveLength(118);
+    expect(check.label.endsWith('…')).toBe(true);
+    // 展示文案保留完整原文，页面单行省略 + title 展示全文。
+    expect(check.displayLabel).toBe(longOption);
+    expect(Array.from(check.displayLabel)).toHaveLength(131);
+  });
 });

@@ -353,14 +353,35 @@ const RUN_CHECK_TOOL: AgentToolDefinition = {
   },
 };
 
-const ASK_USER_QUESTION_MAX = 120;
-const ASK_USER_OPTION_MAX = 40;
+/**
+ * askUser 的文案上限。
+ *
+ * 超长**不再报错**：模型被长度卡住会缩短文案再试一次，白花一轮模型调用
+ * （线上就是这么卡住的）。这里直接截断，问题照常问出去。
+ *
+ * 截断保留前 `上限 - 3` 个字 + `…`（120 字上限 → 前 117 字 + …）；
+ * 词条名本身不截断，结构化字段里保留完整名称，展示层再做单行省略。
+ */
+const ASK_USER_QUESTION_MAX = 200;
+const ASK_USER_OPTION_MAX = 120;
+/** 省略号占位：与产品口径「120 字保留前 117 字 + …」对齐。 */
+const ASK_USER_TRUNCATE_MARGIN = 3;
+const ASK_USER_ELLIPSIS = '…';
 const ASK_USER_OPTION_MIN = 2;
 const ASK_USER_OPTION_MAX_COUNT = 5;
 /** 单个选项核实的最长等待；5 个并发，整体不会超过这个值太多。 */
 const ASK_OPTION_VERIFY_TIMEOUT_MS = 800;
 /** 未收录选项在页面上的后缀：让用户点之前就知道会去线上找。 */
 const ASK_OPTION_MISSING_SUFFIX = '（库里未收录，选了会去线上找）';
+
+/** 按“字”截断 askUser 文案：连同省略号不超过 `max` 个字。 */
+function truncateAskCopy(value: string, max: number): string {
+  const chars = Array.from(value);
+  if (chars.length <= max) {
+    return value;
+  }
+  return `${chars.slice(0, max - ASK_USER_TRUNCATE_MARGIN).join('')}${ASK_USER_ELLIPSIS}`;
+}
 
 const COVERAGE_CATEGORIES: readonly CoverageCategory[] = [
   'MEAT_ORGAN',
@@ -576,7 +597,7 @@ const ASK_USER_TOOL: AgentToolDefinition = {
       properties: {
         question: {
           type: 'string',
-          description: `要问用户的一句话，最多 ${ASK_USER_QUESTION_MAX} 个字。一次只问一个问题。`,
+          description: `要问用户的一句话，最多 ${ASK_USER_QUESTION_MAX} 个字（超长会自动截断，不影响提问）。一次只问一个问题。`,
         },
         options: {
           type: 'array',
@@ -584,7 +605,7 @@ const ASK_USER_TOOL: AgentToolDefinition = {
           maxItems: ASK_USER_OPTION_MAX_COUNT,
           items: {
             type: 'string',
-            description: `一个具体答案（最多 ${ASK_USER_OPTION_MAX} 个字），不要写「其他」这种空选项。多个候选里选时用「候选名 —— 相关/存疑/不相关：理由」。`,
+            description: `一个具体答案（最多 ${ASK_USER_OPTION_MAX} 个字，超长会自动截断），不要写「其他」这种空选项。多个候选里选时用「候选名 —— 相关/存疑/不相关：≤40 字理由」。`,
           },
           description: `2–${ASK_USER_OPTION_MAX_COUNT} 个可直接点选的具体答案。`,
         },
@@ -1925,16 +1946,12 @@ export class IngredientCreationToolsService {
     draftId: string,
     args: Record<string, unknown>,
   ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
-    const question = normalizeText(args.question);
-    if (!question) {
+    const rawQuestion = normalizeText(args.question);
+    if (!rawQuestion) {
       return this.error('askUser 需要非空的 question。');
     }
-    const questionLength = Array.from(question).length;
-    if (questionLength > ASK_USER_QUESTION_MAX) {
-      return this.error(
-        `askUser 的 question 最多 ${ASK_USER_QUESTION_MAX} 个字，收到 ${questionLength} 个。`,
-      );
-    }
+    // 超长截断而不是报错：让模型重写一遍文案只会多花一轮调用。
+    const question = truncateAskCopy(rawQuestion, ASK_USER_QUESTION_MAX);
 
     if (!Array.isArray(args.options)) {
       return this.error('askUser 的 options 必须是 2–5 个字符串组成的数组。');
@@ -1948,7 +1965,7 @@ export class IngredientCreationToolsService {
       );
     }
 
-    const options: string[] = [];
+    const rawOptions: string[] = [];
     for (const [index, raw] of args.options.entries()) {
       const option = normalizeText(raw);
       if (!option) {
@@ -1956,13 +1973,7 @@ export class IngredientCreationToolsService {
           `askUser 的 options 第 ${index + 1} 项必须是非空字符串。`,
         );
       }
-      const length = Array.from(option).length;
-      if (length > ASK_USER_OPTION_MAX) {
-        return this.error(
-          `askUser 的 options 第 ${index + 1} 项最多 ${ASK_USER_OPTION_MAX} 个字，收到 ${length} 个。`,
-        );
-      }
-      options.push(option);
+      rawOptions.push(option);
     }
 
     // 草稿不存在时先报 404（与其它工具一致），也顺便拿到当前站点与目标状态。
@@ -1975,19 +1986,26 @@ export class IngredientCreationToolsService {
     // 选项可能带 AI 复核文案（`Yam, raw —— 相关：就是山药`）：查库要用拆出来
     // 的候选名，不能拿整句去匹配；AI 判断随 optionChecks 一起落库，页面不再
     // 从字符串里猜。
-    const parsedOptions = options.map((label) => ({
-      label,
+    //
+    // 先按**完整原文**解析、查库，再截断点选文案：词条名 / AI 判断这些结构化
+    // 字段保留全称，只有 `label`（回传给模型的答案）受长度上限约束。
+    const parsedOptions = rawOptions.map((label) => ({
+      fullLabel: label,
+      label: truncateAskCopy(label, ASK_USER_OPTION_MAX),
       ...parseAskOptionLabel(label),
     }));
+    const options = parsedOptions.map((option) => option.label);
     const optionChecks: PendingQuestionOption[] = await Promise.all(
       parsedOptions.map(async (option) => {
         const check = await this.checkAskOption(
           option.candidateLabel,
           targetState,
         );
+        // 展示层拿完整文案（候选选项拿完整候选名），省略交给页面单行省略 +
+        // title；`label` 仍按上限截断，避免点选答案无限长。
         const displayBase = option.aiVerdict
           ? option.candidateLabel
-          : option.label;
+          : option.fullLabel;
         return {
           label: option.label,
           ...(option.aiVerdict

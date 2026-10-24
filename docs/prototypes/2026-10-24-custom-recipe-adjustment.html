@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>食谱调整 · 原型</title>
+<style>
+  :root {
+    --green: #1e3a2f;
+    --green-2: #2b5040;
+    --gold: #b08d4f;
+    --gold-soft: #d8bc85;
+    --cream: #fffdf7;
+    --paper: #f4efe4;
+    --line: #e8decd;
+    --text: #26261f;
+    --muted: #8a7a66;
+    --orange: #b45309;
+    --blue: #1e5b35;
+    --red: #b3261e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: #e9e2d3;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 12px 40px;
+  }
+  .demo-head {
+    width: 100%;
+    max-width: 900px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .demo-title { font-size: 15px; color: #5f5646; font-weight: 600; }
+  .demo-note { font-size: 12px; color: #8a7a66; }
+  .state-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+  .state-tab {
+    border: 1px solid #d8cbb6;
+    background: #fffdf7;
+    color: #5f5646;
+    border-radius: 999px;
+    padding: 7px 14px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .state-tab.active { background: var(--green); border-color: var(--green); color: #f4ecd8; }
+
+  .phone {
+    position: relative;
+    width: 390px;
+    max-width: 100%;
+    height: 844px;
+    background: var(--paper);
+    border-radius: 34px;
+    box-shadow: 0 26px 70px rgba(30, 58, 47, 0.24), 0 0 0 8px #1d2a23;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .nav {
+    flex: 0 0 48px;
+    background: var(--paper);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    border-bottom: 1px solid rgba(232, 222, 205, 0.6);
+  }
+  .nav-title { font-size: 17px; font-weight: 700; letter-spacing: 0.5px; }
+  .nav-back {
+    position: absolute; left: 18px; top: 50%; transform: translateY(-50%);
+    font-size: 26px; line-height: 1; color: #3f3222; font-weight: 300;
+  }
+  .scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 16px 108px;
+    scrollbar-width: none;
+  }
+  .scroll::-webkit-scrollbar { display: none; }
+
+  .quota {
+    background: linear-gradient(145deg, #24483a, #16261f 70%);
+    border-radius: 18px;
+    padding: 18px 18px 16px;
+    color: #f4ecd8;
+    box-shadow: 0 10px 24px rgba(30, 58, 47, 0.16);
+  }
+  .quota-row { display: flex; gap: 10px; }
+  .quota-cell {
+    flex: 1;
+    background: rgba(255, 253, 247, 0.08);
+    border: 1px solid rgba(216, 188, 133, 0.22);
+    border-radius: 12px;
+    padding: 10px 12px;
+  }
+  .quota-label { font-size: 11px; color: rgba(244, 236, 216, 0.68); }
+  .quota-value { margin-top: 4px; font-size: 20px; font-weight: 800; color: var(--gold-soft); }
+  .quota-value small { font-size: 12px; font-weight: 500; color: rgba(244, 236, 216, 0.72); margin-left: 2px; }
+
+  .section { margin-top: 20px; }
+  .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .section-title { font-size: 15px; font-weight: 700; color: #3f3222; }
+  .section-sub { font-size: 11px; color: var(--muted); }
+
+  .request-card {
+    background: var(--cream);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 14px 14px 12px;
+    margin-bottom: 10px;
+  }
+  .request-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .request-time { font-size: 12px; color: var(--muted); }
+  .pill { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+  .pill.pending { background: #fff1e3; color: var(--orange); }
+  .pill.processing { background: #eaf4ec; color: var(--blue); }
+  .pill.delivered { background: #e8f5e9; color: #2e7d32; }
+  .pill.withdrawn { background: #f1f1ee; color: #777; }
+  .request-content {
+    margin-top: 10px;
+    font-size: 13px;
+    line-height: 1.65;
+    color: #3f3222;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .request-content.open { display: block; -webkit-line-clamp: unset; }
+  .request-toggle { margin-top: 6px; font-size: 12px; color: var(--gold); cursor: pointer; }
+  .request-attachments { display: flex; gap: 6px; margin-top: 10px; }
+  .thumb {
+    width: 46px; height: 46px; border-radius: 8px;
+    background: #eef2e4; border: 1px solid #dce4d2;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; color: #8a9a8f;
+  }
+  .state-note {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #f7f1e4;
+    border: 1px solid #eadfcb;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #6b5c45;
+  }
+
+  .recipe-card {
+    background: var(--cream);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 14px;
+  }
+  .recipe-top { display: flex; align-items: baseline; justify-content: space-between; }
+  .recipe-name { font-size: 14px; font-weight: 700; color: #3f3222; }
+  .recipe-count { font-size: 11px; color: var(--muted); }
+  .food-list { margin-top: 10px; }
+  .food-row { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px dashed #f0e6d8; font-size: 12px; }
+  .food-row:last-child { border-bottom: none; }
+  .food-name { color: #3f3222; }
+  .food-ratio { color: var(--orange); font-weight: 700; }
+  .supplement-line { margin-top: 8px; font-size: 12px; line-height: 1.65; color: #4f4636; }
+  .supplement-line b { color: var(--blue); }
+  .macro-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .macro-cell { background: #f4f7f5; border-radius: 9px; padding: 8px 8px 7px; }
+  .macro-label { font-size: 10px; color: #8a9a8f; }
+  .macro-value { margin-top: 2px; font-size: 13px; font-weight: 700; color: #3f3222; }
+
+  .form-card {
+    background: var(--cream);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 14px;
+  }
+  .field-label { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  textarea {
+    width: 100%;
+    min-height: 96px;
+    resize: none;
+    border: 1px solid #e6dccb;
+    border-radius: 10px;
+    background: #fffdf9;
+    padding: 10px 12px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #3f3222;
+    font-family: inherit;
+    outline: none;
+  }
+  textarea::placeholder { color: #b4a58e; }
+  .upload-row { display: flex; gap: 8px; margin-top: 10px; }
+  .upload-tile {
+    width: 64px; height: 64px;
+    border-radius: 10px;
+    border: 1px dashed #cdbfa8;
+    background: #fbf7ee;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 2px; color: #a08c6d; font-size: 10px;
+  }
+  .upload-tile .plus { font-size: 20px; line-height: 1; font-weight: 300; }
+  .form-note { margin-top: 8px; font-size: 11px; line-height: 1.55; color: #a08c6d; }
+
+  .locked-card {
+    background: var(--cream);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 16px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: #6b5c45;
+  }
+  .locked-card b { color: #3f3222; }
+
+  .bottom-bar {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+    background: rgba(255, 253, 247, 0.97);
+    border-top: 1px solid var(--line);
+    box-shadow: 0 -10px 26px rgba(30, 58, 47, 0.07);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .service-btn {
+    flex: 0 0 auto;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    color: #8a6b33; font-size: 10px;
+  }
+  .service-icon {
+    width: 38px; height: 38px; border-radius: 50%;
+    background: #f6efe0; border: 1px solid rgba(176, 141, 79, 0.5);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--green); font-weight: 800; font-size: 15px;
+  }
+  .primary-btn {
+    flex: 1;
+    height: 46px;
+    border-radius: 999px;
+    border: none;
+    background: linear-gradient(135deg, #e7d3a5 0%, #d8bc85 100%);
+    color: var(--green);
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+  }
+  .danger-btn {
+    flex: 1;
+    height: 46px;
+    border-radius: 999px;
+    border: 1px solid #e3c7c3;
+    background: #fff7f5;
+    color: var(--red);
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .disabled-btn {
+    flex: 1;
+    height: 46px;
+    border-radius: 999px;
+    border: none;
+    background: #e9e4d8;
+    color: #a59b89;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  /* 按状态切换 */
+  .state-only { display: none; }
+  #phone[data-state="submit"] .state-submit,
+  #phone[data-state="pending"] .state-pending,
+  #phone[data-state="processing"] .state-processing,
+  #phone[data-state="delivered"] .state-delivered,
+  #phone[data-state="withdrawn"] .state-withdrawn { display: block; }
+
+  #phone[data-state="submit"] .bar-submit,
+  #phone[data-state="pending"] .bar-pending,
+  #phone[data-state="processing"] .bar-processing,
+  #phone[data-state="delivered"] .bar-delivered,
+  #phone[data-state="withdrawn"] .bar-withdrawn { display: flex; }
+  .bar-state { display: none; flex: 1; }
+
+  .footer-space { height: 4px; }
+</style>
+</head>
+<body>
+  <div class="demo-head">
+    <div>
+      <div class="demo-title">食谱调整 · 页面原型</div>
+      <div class="demo-note">切换状态看进度卡、表单和底部固定栏的变化</div>
+    </div>
+    <div class="state-tabs">
+      <button class="state-tab active" data-set="submit">可提交</button>
+      <button class="state-tab" data-set="pending">待受理</button>
+      <button class="state-tab" data-set="processing">处理中</button>
+      <button class="state-tab" data-set="delivered">已交付</button>
+      <button class="state-tab" data-set="withdrawn">已撤销</button>
+    </div>
+  </div>
+
+  <div class="phone" id="phone" data-state="submit">
+    <div class="nav">
+      <div class="nav-back">‹</div>
+      <div class="nav-title">食谱调整</div>
+    </div>
+
+    <div class="scroll">
+      <div class="quota">
+        <div class="quota-row">
+          <div class="quota-cell">
+            <div class="quota-label">售后窗口期还剩</div>
+            <div class="quota-value">12 <small>天</small></div>
+          </div>
+          <div class="quota-cell">
+            <div class="quota-label">调整次数还剩</div>
+            <div class="quota-value">2 <small>次</small></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-head">
+          <div class="section-title">食谱调整进度</div>
+          <div class="section-sub">最新一条在最上面</div>
+        </div>
+
+        <!-- 待受理 / 处理中 / 已交付：当前这条 -->
+        <div class="request-card state-only state-pending">
+          <div class="request-top">
+            <div class="request-time">2026-10-24 18:20</div>
+            <div class="pill pending">待受理</div>
+          </div>
+          <div class="request-content">
+            鸡胸肉想换成鸭肉，南瓜的比例稍微降一点；最近它有点软便，希望整体清淡一些。另外鸡肝的比例能不能也降一点？它不太爱吃内脏，每次都要拌很久。还有，如果可以的话，希望能把西兰花换一种它更愿意吃的蔬菜。
+          </div>
+          <div class="request-toggle">展开</div>
+          <div class="request-attachments">
+            <div class="thumb">照片</div>
+            <div class="thumb">报告.pdf</div>
+          </div>
+          <div class="state-note">已提交，等待 Seven爸爸受理；受理前可以撤销本次提交。</div>
+        </div>
+
+        <div class="request-card state-only state-processing">
+          <div class="request-top">
+            <div class="request-time">2026-10-24 18:20</div>
+            <div class="pill processing">处理中</div>
+          </div>
+          <div class="request-content open">
+            鸡胸肉想换成鸭肉，南瓜的比例稍微降一点；最近它有点软便，希望整体清淡一些。
+          </div>
+          <div class="request-attachments">
+            <div class="thumb">照片</div>
+            <div class="thumb">报告.pdf</div>
+          </div>
+          <div class="state-note">已经受理，正在调整；如需补充，请点左下角找 Seven爸爸。</div>
+        </div>
+
+        <div class="request-card state-only state-delivered">
+          <div class="request-top">
+            <div class="request-time">2026-10-24 18:20</div>
+            <div class="pill delivered">已交付</div>
+          </div>
+          <div class="request-content open">
+            鸡胸肉想换成鸭肉，南瓜的比例稍微降一点；最近它有点软便，希望整体清淡一些。
+          </div>
+          <div class="state-note">已重新交付一版。如果还想调整，可以再提交一条（受窗口和次数限制）。</div>
+        </div>
+
+        <div class="request-card state-only state-withdrawn">
+          <div class="request-top">
+            <div class="request-time">2026-10-24 18:20</div>
+            <div class="pill withdrawn">已撤销</div>
+          </div>
+          <div class="request-content open">
+            鸡胸肉想换成鸭肉，南瓜的比例稍微降一点；最近它有点软便，希望整体清淡一些。
+          </div>
+          <div class="state-note">本次已撤销，不计入调整次数；可以重新提交。</div>
+        </div>
+
+        <!-- 历史记录：所有状态都展示一条已交付，证明列表按时间倒序 -->
+        <div class="request-card state-only state-submit">
+          <div class="request-top">
+            <div class="request-time">2026-10-18 09:12</div>
+            <div class="pill delivered">已交付</div>
+          </div>
+          <div class="request-content">
+            鸡胸肉换成鸭肉，南瓜比例降到 20%，希望颗粒感不要太强。
+          </div>
+        </div>
+        <div class="request-card state-only state-pending">
+          <div class="request-top">
+            <div class="request-time">2026-10-18 09:12</div>
+            <div class="pill delivered">已交付</div>
+          </div>
+          <div class="request-content">
+            鸡胸肉换成鸭肉，南瓜比例降到 20%，希望颗粒感不要太强。
+          </div>
+        </div>
+        <div class="request-card state-only state-processing">
+          <div class="request-top">
+            <div class="request-time">2026-10-18 09:12</div>
+            <div class="pill delivered">已交付</div>
+          </div>
+          <div class="request-content">
+            鸡胸肉换成鸭肉，南瓜比例降到 20%，希望颗粒感不要太强。
+          </div>
+        </div>
+        <div class="request-card state-only state-delivered">
+          <div class="request-top">
+            <div class="request-time">2026-10-18 09:12</div>
+            <div class="pill delivered">已交付</div>
+          </div>
+          <div class="request-content">
+            鸡胸肉换成鸭肉，南瓜比例降到 20%，希望颗粒感不要太强。
+          </div>
+        </div>
+        <div class="request-card state-only state-withdrawn">
+          <div class="request-top">
+            <div class="request-time">2026-10-18 09:12</div>
+            <div class="pill delivered">已交付</div>
+          </div>
+          <div class="request-content">
+            鸡胸肉换成鸭肉，南瓜比例降到 20%，希望颗粒感不要太强。
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-head">
+          <div class="section-title">本次食谱</div>
+          <div class="section-sub">共 6 种食材</div>
+        </div>
+        <div class="recipe-card">
+          <div class="recipe-top">
+            <div class="recipe-name">鸡肉南瓜低脂鲜食</div>
+            <div class="recipe-count">6 种食材</div>
+          </div>
+          <div class="food-list">
+            <div class="food-row"><span class="food-name">鸡胸肉</span><span class="food-ratio">40.00%</span></div>
+            <div class="food-row"><span class="food-name">南瓜</span><span class="food-ratio">25.00%</span></div>
+            <div class="food-row"><span class="food-name">西兰花</span><span class="food-ratio">20.00%</span></div>
+            <div class="food-row"><span class="food-name">鸡肝</span><span class="food-ratio">10.00%</span></div>
+            <div class="food-row"><span class="food-name">鸡蛋</span><span class="food-ratio">4.88%</span></div>
+            <div class="food-row"><span class="food-name">食用盐</span><span class="food-ratio">0.12%</span></div>
+          </div>
+          <div class="supplement-line">须额外添加：<b>钙 每公斤食材添加 5 g</b>、<b>锌 每公斤食材添加 15 mg</b></div>
+          <div class="macro-grid">
+            <div class="macro-cell"><div class="macro-label">蛋白质</div><div class="macro-value">32.1%</div></div>
+            <div class="macro-cell"><div class="macro-label">脂肪</div><div class="macro-value">14.2%</div></div>
+            <div class="macro-cell"><div class="macro-label">灰分</div><div class="macro-value">5.8%</div></div>
+            <div class="macro-cell"><div class="macro-label">水分</div><div class="macro-value">62.4%</div></div>
+            <div class="macro-cell"><div class="macro-label">钙磷比</div><div class="macro-value">1.35</div></div>
+            <div class="macro-cell"><div class="macro-label">能量</div><div class="macro-value">1420</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section state-only state-submit">
+        <div class="section-head">
+          <div class="section-title">调整需求</div>
+          <div class="section-sub">一次只能提交一条</div>
+        </div>
+        <div class="form-card">
+          <div class="field-label">想怎么调整？</div>
+          <textarea placeholder="比如：鸡肉想换成鸭肉、某样食材减少一点、份量想调整……"></textarea>
+          <div class="upload-row">
+            <div class="upload-tile"><span class="plus">＋</span><span>照片</span></div>
+            <div class="upload-tile"><span class="plus">＋</span><span>文档</span></div>
+          </div>
+          <div class="form-note">支持照片和 PDF / Word；提交后由 Seven爸爸看一下，处理完会重新交付一版食谱。</div>
+        </div>
+      </div>
+
+      <div class="section state-only state-withdrawn">
+        <div class="section-head">
+          <div class="section-title">调整需求</div>
+          <div class="section-sub">一次只能提交一条</div>
+        </div>
+        <div class="form-card">
+          <div class="field-label">想怎么调整？</div>
+          <textarea placeholder="比如：鸡肉想换成鸭肉、某样食材减少一点、份量想调整……"></textarea>
+          <div class="upload-row">
+            <div class="upload-tile"><span class="plus">＋</span><span>照片</span></div>
+            <div class="upload-tile"><span class="plus">＋</span><span>文档</span></div>
+          </div>
+          <div class="form-note">支持照片和 PDF / Word；提交后由 Seven爸爸看一下，处理完会重新交付一版食谱。</div>
+        </div>
+      </div>
+
+      <div class="section state-only state-delivered">
+        <div class="section-head">
+          <div class="section-title">调整需求</div>
+          <div class="section-sub">还可以再提一条</div>
+        </div>
+        <div class="form-card">
+          <div class="field-label">想怎么调整？</div>
+          <textarea placeholder="比如：鸡肉想换成鸭肉、某样食材减少一点、份量想调整……"></textarea>
+          <div class="upload-row">
+            <div class="upload-tile"><span class="plus">＋</span><span>照片</span></div>
+            <div class="upload-tile"><span class="plus">＋</span><span>文档</span></div>
+          </div>
+          <div class="form-note">支持照片和 PDF / Word；提交后由 Seven爸爸看一下，处理完会重新交付一版食谱。</div>
+        </div>
+      </div>
+
+      <div class="section state-only state-pending">
+        <div class="locked-card">
+          当前有一条调整<strong>待受理</strong>，处理完之前不能再提交下一条。想补充或修改，请点左下角找 Seven爸爸。
+        </div>
+      </div>
+
+      <div class="section state-only state-processing">
+        <div class="locked-card">
+          当前调整<strong>正在处理</strong>，处理完之前不能再提交下一条。想补充或修改，请点左下角找 Seven爸爸。
+        </div>
+      </div>
+
+      <div class="footer-space"></div>
+    </div>
+
+    <div class="bottom-bar">
+      <div class="service-btn">
+        <div class="service-icon">7</div>
+        <div>Seven爸爸</div>
+      </div>
+      <div class="bar-state bar-submit"><button class="primary-btn">提交调整</button></div>
+      <div class="bar-state bar-pending"><button class="danger-btn">撤销本次提交</button></div>
+      <div class="bar-state bar-processing"><button class="disabled-btn">处理中</button></div>
+      <div class="bar-state bar-delivered"><button class="primary-btn">提交调整</button></div>
+      <div class="bar-state bar-withdrawn"><button class="primary-btn">提交调整</button></div>
+    </div>
+  </div>
+
+  <script>
+    const phone = document.getElementById('phone');
+    const tabs = document.querySelectorAll('.state-tab');
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        phone.dataset.state = tab.dataset.set;
+        tabs.forEach((t) => t.classList.toggle('active', t === tab));
+      });
+    });
+    document.querySelectorAll('.request-toggle').forEach((toggle) => {
+      toggle.addEventListener('click', () => {
+        const content = toggle.previousElementSibling;
+        content.classList.toggle('open');
+        toggle.textContent = content.classList.contains('open') ? '收起' : '展开';
+      });
+    });
+  </script>
+</body>
+</html>

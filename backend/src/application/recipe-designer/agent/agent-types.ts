@@ -119,11 +119,29 @@ export interface AgentIngredientCandidate {
   keyNutrients?: AgentIngredientKeyNutrients;
 }
 
+/**
+ * 营养值的计量基准。
+ *
+ * 补剂的浓度必须结合基准看：`PER_SERVING` + `usageUnit='粒'` 表示
+ * `nutritionSummary` 里是“每粒”的量；`PER_100_G` 表示每 100g。
+ */
+export interface AgentIngredientNutritionBasis {
+  basisType: string | null;
+  servingWeightG: number | null;
+  usageUnit: string | null;
+}
+
 /** `get_ingredient` 的原料详情。 */
 export interface AgentIngredientDetail extends AgentIngredientCandidate {
   /** 七类判定结果；搜索时用来过滤，详情里直接给模型看。 */
   category: FoodCategory;
+  /**
+   * 营养摘要。食物 = 宏量（`moisture`/`crudeProtein`/...）；
+   * 补剂 = 宏量 + `minerals.*` / `vitamins.*` / `aminoAcids.*` / `fattyAcids.*`。
+   */
   nutritionSummary: Record<string, number | null>;
+  /** 仅补剂返回：这些数值是每 100g、每 1g 还是每粒/每份。 */
+  nutritionBasis?: AgentIngredientNutritionBasis;
   allergenNames: string[];
   preparationMethods: string[];
   pricePerPurchaseUnit: number | null;

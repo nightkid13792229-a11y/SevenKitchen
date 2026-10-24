@@ -44,6 +44,7 @@ import {
   type AgentIngredientCandidate,
   type AgentIngredientDetail,
   type AgentIngredientKeyNutrients,
+  type AgentIngredientNutritionBasis,
   type AgentProductionStep,
 } from './agent-types';
 import type { RecipeAgentDraftPort } from './recipe-agent.port';
@@ -509,21 +510,63 @@ const loadCfctClasses = async (
 };
 
 /** 营养档案 `nutritionData.macros` → 只保留有限数值；缺失时返回空对象。 */
+const NUTRITION_GROUPS = [
+  'macros',
+  'minerals',
+  'vitamins',
+  'aminoAcids',
+  'fattyAcids',
+] as const;
+
+/**
+ * 营养摘要。
+ *
+ * - 食物：只读 `macros`（水分/蛋白/脂肪/灰分/纤维），总量由评估算；
+ * - 补剂：读全部组，矿物质/维生素等用 `minerals.calcium` 这种带组前缀的 key，
+ *   因为补剂的价值就在这些组里，只给宏量等于什么都没给。
+ */
 const readNutritionSummary = (
   nutritionData: unknown,
+  full = false,
 ): Record<string, number | null> => {
-  if (!isRecord(nutritionData) || !isRecord(nutritionData.macros)) {
+  if (!isRecord(nutritionData)) {
     return {};
   }
 
   const summary: Record<string, number | null> = {};
-  for (const [key, value] of Object.entries(nutritionData.macros)) {
-    const amount = toFiniteNumber(value);
-    if (amount !== null) {
-      summary[key] = amount;
+  const groups = full ? NUTRITION_GROUPS : (['macros'] as const);
+  for (const group of groups) {
+    const values = nutritionData[group];
+    if (!isRecord(values)) {
+      continue;
+    }
+    for (const [key, value] of Object.entries(values)) {
+      const amount = toFiniteNumber(value);
+      if (amount !== null) {
+        summary[full && group !== 'macros' ? `${group}.${key}` : key] = amount;
+      }
     }
   }
   return summary;
+};
+
+/** 补剂的营养值基准：每 100g / 每份 / 每粒，必须和数值一起给模型。 */
+const readNutritionBasis = (
+  nutritionData: unknown,
+  usageUnit: string | null,
+): AgentIngredientNutritionBasis => {
+  const meta =
+    isRecord(nutritionData) && isRecord(nutritionData.meta)
+      ? nutritionData.meta
+      : null;
+  return {
+    basisType:
+      meta && typeof meta.rawBasisType === 'string'
+        ? meta.rawBasisType
+        : null,
+    servingWeightG: toFiniteNumber(meta?.servingWeightG),
+    usageUnit,
+  };
 };
 
 /** 过敏原名去重（保持映射顺序）；空名字跳过。 */
@@ -994,6 +1037,7 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
                 properties: true,
                 currentPricePerPurchaseUnit: true,
                 purchaseUnit: true,
+                unitDisplayLabel: true,
                 allergenTags: {
                   select: { allergenTag: { select: { name: true } } },
                 },
@@ -1024,6 +1068,7 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
     const nutritionCategory = nutritionFood.category ?? null;
     const type: 'FOOD' | 'SUPPLEMENT' =
       ingredient.type === 'SUPPLEMENT' ? 'SUPPLEMENT' : 'FOOD';
+    const isSupplement = type === 'SUPPLEMENT';
 
     return {
       ingredientId: ingredient.id,
@@ -1040,7 +1085,18 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
         nutritionCategory,
         ingredientType: type,
       }),
-      nutritionSummary: readNutritionSummary(nutritionFood.nutritionData),
+      nutritionSummary: readNutritionSummary(
+        nutritionFood.nutritionData,
+        isSupplement,
+      ),
+      ...(isSupplement
+        ? {
+            nutritionBasis: readNutritionBasis(
+              nutritionFood.nutritionData,
+              ingredient.unitDisplayLabel ?? ingredient.purchaseUnit ?? null,
+            ),
+          }
+        : {}),
       allergenNames: collectAllergenNames(ingredient.allergenTags),
       preparationMethods: [],
       pricePerPurchaseUnit: toPriceNumber(

@@ -1193,6 +1193,58 @@ describe('RecipeDesignerAgentAdapter read', () => {
     expect(detail?.category).toBe('PROTEIN');
     expect(detail?.allergenNames).toEqual(['鸭肉']);
     expect(detail?.pricePerPurchaseUnit).toBe(30);
+    // 食物详情只给宏量，矿物质/维生素交给评估报告算总账。
+    expect(detail?.nutritionSummary).toEqual({ crudeProtein: 18, crudeFat: 6 });
+    expect(detail?.nutritionBasis).toBeUndefined();
+  });
+
+  it('getIngredient 补剂返回矿物质/维生素明细和计量基准', async () => {
+    const prisma = {
+      nutritionFood: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'nf2',
+          name: '碳酸钙粉',
+          displayNameZh: '碳酸钙粉',
+          status: 'VERIFIED',
+          category: 'MINERAL',
+          nutritionData: {
+            meta: { rawBasisType: 'PER_SERVING', servingWeightG: 1.2 },
+            macros: { moisture: 1 },
+            minerals: { calcium: 50000 },
+            vitamins: { vitaminD: 10000 },
+          },
+          mappings: [
+            {
+              ingredientId: 'i2',
+              isPrimary: true,
+              ingredient: {
+                id: 'i2',
+                name: '碳酸钙粉',
+                type: 'SUPPLEMENT',
+                properties: {},
+                currentPricePerPurchaseUnit: 120,
+                purchaseUnit: '瓶',
+                unitDisplayLabel: '粒',
+                allergenTags: [],
+              },
+            },
+          ],
+        }),
+      },
+    };
+    const adapter = createAdapter({}, prisma);
+
+    const detail = await adapter.getIngredient({ nutritionFoodId: 'nf2' });
+
+    expect(detail?.type).toBe('SUPPLEMENT');
+    expect(detail?.nutritionSummary.moisture).toBe(1);
+    expect(detail?.nutritionSummary['minerals.calcium']).toBe(50000);
+    expect(detail?.nutritionSummary['vitamins.vitaminD']).toBe(10000);
+    expect(detail?.nutritionBasis).toEqual({
+      basisType: 'PER_SERVING',
+      servingWeightG: 1.2,
+      usageUnit: '粒',
+    });
   });
 
   it('getIngredient 没有采购原料映射时返回 null', async () => {

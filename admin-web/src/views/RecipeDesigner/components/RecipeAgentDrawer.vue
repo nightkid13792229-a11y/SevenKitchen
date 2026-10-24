@@ -26,7 +26,9 @@
 
     <div class="agent-drawer">
       <div v-if="session" class="agent-meta">
-        <span>第 {{ session.stepCount }} 步</span>
+        <span :class="{ 'agent-meta__warning': currentRunSteps >= 25 }">
+          本次 {{ currentRunSteps }}/{{ MAX_RUN_STEPS }} 次工具调用 · 会话累计 {{ session.stepCount }}
+        </span>
         <span>输入 {{ session.promptTokens }} / 输出 {{ session.completionTokens }} tokens</span>
       </div>
 
@@ -142,7 +144,22 @@ const scrollRef = ref<HTMLElement | null>(null)
 
 let pollTimer: number | null = null
 
+const MAX_RUN_STEPS = 30
+
 const running = computed(() => session.value?.status === 'RUNNING')
+
+/**
+ * 本次运行已用的工具调用数：从最后一条用户消息之后开始数。
+ * 会话的 stepCount 是累计值，不能直接拿来和 30 次上限比。
+ */
+const currentRunSteps = computed(() => {
+  const lastUserIndex = messages.value
+    .map((message) => message.role)
+    .lastIndexOf('USER')
+  return messages.value
+    .slice(lastUserIndex + 1)
+    .filter((message) => message.role === 'TOOL').length
+})
 const waiting = computed(() => session.value?.status === 'WAITING_USER')
 const canSend = computed(
   () => !running.value && !sending.value && input.value.trim().length > 0
@@ -371,6 +388,11 @@ onBeforeUnmount(stopPolling)
   padding: 0 0 8px;
   color: #909399;
   font-size: 12px;
+}
+
+.agent-meta__warning {
+  color: #e6a23c;
+  font-weight: 600;
 }
 
 .agent-conversation {

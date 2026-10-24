@@ -16,7 +16,10 @@ import {
   type FoodCategory,
 } from '../../../domain/recipe-designer/food-category-map';
 import { readProfileFieldAmount } from '../../../domain/recipe-designer/nutrition-profile-reader';
-import type { ProductionStep } from '../../../domain/recipe-designer/production-steps';
+import {
+  PRODUCTION_STEP_LIMITS,
+  type ProductionStep,
+} from '../../../domain/recipe-designer/production-steps';
 import type { PrismaService } from '../../../infrastructure/prisma.service';
 import { nutritionDataToNutritionProfile } from '../../nutrition-standard/nutrient-value-resolver';
 import type { RecipeDesignerService } from '../recipe-designer.service';
@@ -320,6 +323,88 @@ const toAgentProductionSteps = (
     temperature: step.temperatureC == null ? null : `${step.temperatureC}℃`,
     equipment: step.equipment ?? null,
   }));
+
+/** `"5 分钟"` / `"5分钟"` / `"5"`；分钟是最小单位，不接受秒/小时单位。 */
+const STEP_DURATION_PATTERN = /^(\d+(?:\.\d+)?)\s*(?:分钟)?$/;
+
+/** `"180℃"` / `"180°C"` / `"180"`；允许负温度（冷冻）。 */
+const STEP_TEMPERATURE_PATTERN = /^(-?\d+(?:\.\d+)?)\s*(?:℃|°c)?$/i;
+
+/** 步骤时长下限：0 分钟只可能是缺省值，显式写 0 视为越界。 */
+const MIN_STEP_DURATION_MINUTES = 1;
+
+const invalidStepDuration = (message: string): RecipeAgentPortError =>
+  new RecipeAgentPortError('INVALID_ARGUMENT', message);
+
+const invalidStepTemperature = (message: string): RecipeAgentPortError =>
+  new RecipeAgentPortError('INVALID_ARGUMENT', message);
+
+/**
+ * 解析步骤时长字符串。
+ *
+ * 缺省 / 空白 → `undefined`（不写库）；格式不认识或越界 → `INVALID_ARGUMENT`，
+ * 绝不能让 `NaN` 落到 Prisma。
+ */
+const parseStepDurationMinutes = (
+  value: string | null | undefined,
+): number | undefined => {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== 'string') {
+    throw invalidStepDuration('时长格式不正确');
+  }
+  const text = value.trim();
+  if (!text) {
+    return undefined;
+  }
+  const match = STEP_DURATION_PATTERN.exec(text);
+  if (!match) {
+    throw invalidStepDuration('时长格式不正确');
+  }
+  const minutes = Number(match[1]);
+  if (
+    !Number.isFinite(minutes) ||
+    minutes < MIN_STEP_DURATION_MINUTES ||
+    minutes > PRODUCTION_STEP_LIMITS.maxDurationMinutes
+  ) {
+    throw invalidStepDuration(
+      `时长必须在 ${MIN_STEP_DURATION_MINUTES}-${PRODUCTION_STEP_LIMITS.maxDurationMinutes} 分钟之间`,
+    );
+  }
+  return minutes;
+};
+
+/** 解析步骤温度字符串；缺省 / 空白 → `undefined`，格式/范围错误 → `INVALID_ARGUMENT`。 */
+const parseStepTemperatureC = (
+  value: string | null | undefined,
+): number | undefined => {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== 'string') {
+    throw invalidStepTemperature('温度格式不正确');
+  }
+  const text = value.trim();
+  if (!text) {
+    return undefined;
+  }
+  const match = STEP_TEMPERATURE_PATTERN.exec(text);
+  if (!match) {
+    throw invalidStepTemperature('温度格式不正确');
+  }
+  const temperature = Number(match[1]);
+  if (
+    !Number.isFinite(temperature) ||
+    temperature < PRODUCTION_STEP_LIMITS.minTemperatureC ||
+    temperature > PRODUCTION_STEP_LIMITS.maxTemperatureC
+  ) {
+    throw invalidStepTemperature(
+      `温度必须在 ${PRODUCTION_STEP_LIMITS.minTemperatureC} 到 ${PRODUCTION_STEP_LIMITS.maxTemperatureC} ℃ 之间`,
+    );
+  }
+  return temperature;
+};
 
 type IngredientOption = Awaited<
   ReturnType<RecipeDesignerService['listIngredientOptions']>
@@ -1252,15 +1337,133 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
     return this.toAgentItem(item);
   }
 
-  async setCopy(_draftId: string, _patch: AgentCopyPatch): Promise<void> {
-    throw new Error('P0b-2b: write not implemented');
+  /**
+   * 文案路由（P0b-2b Task 3）：
+   * - 有系列：`name` → `renameSeries`（系列已发布时禁止 AI 改名），
+   *   `coverTitle/sellingPoint/targetHealthTags` → 系列发布设置；
+   * - 无系列：`name/targetHealthTags` → 草稿本身；
+   * - `coverTitle/sellingPoint/description` 始终同步草稿展示字段，
+   *   保证后台详情可见（系列值仍由 `getDraft` 优先读取）。
+   */
+  async setCopy(draftId: string, patch: AgentCopyPatch): Promise<void> {
+    this.assertDraft(draftId);
+    const draft = await this.service.getDraft(draftId, this.access);
+    const seriesId = draft.seriesId ?? null;
+
+    if (patch.name !== undefined) {
+      if (seriesId) {
+        // 改名会重写 recipe 表与历史版本，已发布系列只能人工确认。
+        const publishedCount = await this.prisma.recipe.count({
+          where: { seriesId, status: 'PUBLIC' },
+        });
+        if (publishedCount > 0) {
+          throw new RecipeAgentPortError(
+            'INVALID_ARGUMENT',
+            '系列已有已发布食谱，改名需要人工确认',
+          );
+        }
+        await this.service.renameSeries(
+          seriesId,
+          { name: patch.name },
+          this.access,
+        );
+      } else {
+        await this.service.updateDraft(
+          draftId,
+          { name: patch.name },
+          this.access,
+        );
+      }
+    }
+
+    if (seriesId) {
+      const releaseSettings = {
+        ...(patch.coverTitle !== undefined
+          ? { coverTitle: patch.coverTitle }
+          : {}),
+        ...(patch.sellingPoint !== undefined
+          ? { sellingPoint: patch.sellingPoint }
+          : {}),
+        ...(patch.targetHealthTags !== undefined
+          ? { targetHealthTags: patch.targetHealthTags }
+          : {}),
+      };
+      if (Object.keys(releaseSettings).length > 0) {
+        await this.service.updateSeriesReleaseSettings(
+          seriesId,
+          releaseSettings,
+          this.access,
+        );
+      }
+    } else if (patch.targetHealthTags !== undefined) {
+      await this.service.updateDraft(
+        draftId,
+        { targetHealthTags: patch.targetHealthTags },
+        this.access,
+      );
+    }
+
+    const presentation = {
+      ...(patch.coverTitle !== undefined
+        ? { coverTitle: patch.coverTitle }
+        : {}),
+      ...(patch.sellingPoint !== undefined
+        ? { sellingPoint: patch.sellingPoint }
+        : {}),
+      ...(patch.description !== undefined
+        ? { description: patch.description }
+        : {}),
+    };
+    if (Object.keys(presentation).length > 0) {
+      await this.service.updateDraftPresentation(
+        draftId,
+        presentation,
+        this.access,
+      );
+    }
   }
 
+  /**
+   * 写结构化步骤：展示字符串先转数字，`sortOrder` 按数组顺序 1..n 重排。
+   *
+   * 任何一条格式/范围不合法都在调用 service 前抛 `INVALID_ARGUMENT`，
+   * 保证不会只写一半或把 `NaN` 落库。
+   */
   async setProductionSteps(
-    _draftId: string,
-    _steps: AgentProductionStep[],
+    draftId: string,
+    steps: AgentProductionStep[],
   ): Promise<void> {
-    throw new Error('P0b-2b: write not implemented');
+    this.assertDraft(draftId);
+
+    const parsed = steps.map((step, index) => {
+      const instruction =
+        typeof step.instruction === 'string' ? step.instruction.trim() : '';
+      if (!instruction) {
+        throw new RecipeAgentPortError(
+          'INVALID_ARGUMENT',
+          `第 ${index + 1} 步缺少操作说明`,
+        );
+      }
+
+      const durationMinutes = parseStepDurationMinutes(step.duration);
+      const temperatureC = parseStepTemperatureC(step.temperature);
+      const equipment =
+        typeof step.equipment === 'string' ? step.equipment.trim() : '';
+
+      return {
+        sortOrder: index + 1,
+        instruction,
+        ...(durationMinutes !== undefined ? { durationMinutes } : {}),
+        ...(temperatureC !== undefined ? { temperatureC } : {}),
+        ...(equipment ? { equipment } : {}),
+      };
+    });
+
+    await this.service.updateDraftProductionSteps(
+      draftId,
+      { steps: parsed },
+      this.access,
+    );
   }
 
   async runAssessment(_draftId: string): Promise<AgentAssessmentView> {

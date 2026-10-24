@@ -81,6 +81,14 @@ function serviceMock() {
     replaceItem: jest.fn().mockResolvedValue(writtenItem()),
     updateItem: jest.fn().mockResolvedValue(writtenItem()),
     removeItem: jest.fn().mockResolvedValue({ id: 'item-1' }),
+    getDraft: jest.fn().mockResolvedValue({ seriesId: 'series-1' }),
+    renameSeries: jest.fn().mockResolvedValue({ id: 'series-1' }),
+    updateSeriesReleaseSettings: jest.fn().mockResolvedValue({}),
+    updateDraft: jest.fn().mockResolvedValue({ id: 'draft-1' }),
+    updateDraftPresentation: jest.fn().mockResolvedValue({}),
+    updateDraftProductionSteps: jest
+      .fn()
+      .mockResolvedValue({ draftId: 'draft-1', productionSteps: [] }),
   };
 }
 
@@ -92,6 +100,9 @@ function prismaMock() {
     designRecipeItem: {
       findFirst: jest.fn().mockResolvedValue(null),
       findUnique: jest.fn().mockResolvedValue({ designRecipeId: 'draft-1' }),
+    },
+    recipe: {
+      count: jest.fn().mockResolvedValue(0),
     },
   };
 }
@@ -372,6 +383,179 @@ describe('RecipeDesignerAgentAdapter 写方法', () => {
         },
         ACCESS,
       );
+    });
+  });
+
+  describe('setCopy', () => {
+    it('有系列时改名走 renameSeries，不改草稿名', async () => {
+      const service = serviceMock();
+      const prisma = prismaMock();
+      const adapter = createAdapter(service, prisma);
+
+      await adapter.setCopy('draft-1', { name: '鸭肉南瓜新名' });
+
+      expect(service.getDraft).toHaveBeenCalledWith('draft-1', ACCESS);
+      expect(prisma.recipe.count).toHaveBeenCalledWith({
+        where: { seriesId: 'series-1', status: 'PUBLIC' },
+      });
+      expect(service.renameSeries).toHaveBeenCalledWith(
+        'series-1',
+        { name: '鸭肉南瓜新名' },
+        ACCESS,
+      );
+      expect(service.updateDraft).not.toHaveBeenCalled();
+      expect(service.updateDraftPresentation).not.toHaveBeenCalled();
+    });
+
+    it('有系列时封面标题同时写系列发布设置与草稿展示字段', async () => {
+      const service = serviceMock();
+      const prisma = prismaMock();
+      const adapter = createAdapter(service, prisma);
+
+      await adapter.setCopy('draft-1', { coverTitle: '今日鲜鸭' });
+
+      expect(service.updateSeriesReleaseSettings).toHaveBeenCalledWith(
+        'series-1',
+        { coverTitle: '今日鲜鸭' },
+        ACCESS,
+      );
+      expect(service.updateDraftPresentation).toHaveBeenCalledWith(
+        'draft-1',
+        { coverTitle: '今日鲜鸭' },
+        ACCESS,
+      );
+      expect(service.renameSeries).not.toHaveBeenCalled();
+      expect(service.updateDraft).not.toHaveBeenCalled();
+    });
+
+    it('有系列时描述只写草稿展示字段', async () => {
+      const service = serviceMock();
+      const prisma = prismaMock();
+      const adapter = createAdapter(service, prisma);
+
+      await adapter.setCopy('draft-1', { description: '低温慢煮，保留肉汁。' });
+
+      expect(service.updateDraftPresentation).toHaveBeenCalledWith(
+        'draft-1',
+        { description: '低温慢煮，保留肉汁。' },
+        ACCESS,
+      );
+      expect(service.updateSeriesReleaseSettings).not.toHaveBeenCalled();
+      expect(service.renameSeries).not.toHaveBeenCalled();
+    });
+
+    it('系列已有已发布食谱时拒绝改名，且不写其他字段', async () => {
+      const service = serviceMock();
+      const prisma = prismaMock();
+      prisma.recipe.count.mockResolvedValue(2);
+      const adapter = createAdapter(service, prisma);
+
+      await expect(
+        adapter.setCopy('draft-1', {
+          name: '鸭肉南瓜新名',
+          coverTitle: '今日鲜鸭',
+        }),
+      ).rejects.toMatchObject({
+        name: 'RecipeAgentPortError',
+        code: 'INVALID_ARGUMENT',
+        message: '系列已有已发布食谱，改名需要人工确认',
+      });
+
+      expect(service.renameSeries).not.toHaveBeenCalled();
+      expect(service.updateSeriesReleaseSettings).not.toHaveBeenCalled();
+      expect(service.updateDraftPresentation).not.toHaveBeenCalled();
+    });
+
+    it('无系列时改名走 updateDraft', async () => {
+      const service = serviceMock();
+      const prisma = prismaMock();
+      service.getDraft.mockResolvedValue({ seriesId: null });
+      const adapter = createAdapter(service, prisma);
+
+      await adapter.setCopy('draft-1', { name: '鸭肉南瓜新名' });
+
+      expect(service.updateDraft).toHaveBeenCalledWith(
+        'draft-1',
+        { name: '鸭肉南瓜新名' },
+        ACCESS,
+      );
+      expect(prisma.recipe.count).not.toHaveBeenCalled();
+      expect(service.renameSeries).not.toHaveBeenCalled();
+      expect(service.updateSeriesReleaseSettings).not.toHaveBeenCalled();
+      expect(service.updateDraftPresentation).not.toHaveBeenCalled();
+    });
+
+    it('无系列时健康标签走 updateDraft', async () => {
+      const service = serviceMock();
+      const prisma = prismaMock();
+      service.getDraft.mockResolvedValue({ seriesId: null });
+      const adapter = createAdapter(service, prisma);
+
+      await adapter.setCopy('draft-1', { targetHealthTags: ['低脂'] });
+
+      expect(service.updateDraft).toHaveBeenCalledWith(
+        'draft-1',
+        { targetHealthTags: ['低脂'] },
+        ACCESS,
+      );
+      expect(service.updateSeriesReleaseSettings).not.toHaveBeenCalled();
+      expect(service.updateDraftPresentation).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('setProductionSteps', () => {
+    it('把「5 分钟」「180℃」转成数字，sortOrder 从 1 连续递增', async () => {
+      const service = serviceMock();
+      const prisma = prismaMock();
+      const adapter = createAdapter(service, prisma);
+
+      await adapter.setProductionSteps('draft-1', [
+        {
+          sortOrder: 1,
+          instruction: '烤箱预热',
+          duration: '5 分钟',
+          temperature: '180℃',
+          equipment: '烤箱',
+        },
+        { sortOrder: 2, instruction: '放入鸭腿慢烤' },
+      ]);
+
+      expect(service.updateDraftProductionSteps).toHaveBeenCalledWith(
+        'draft-1',
+        {
+          steps: [
+            {
+              sortOrder: 1,
+              instruction: '烤箱预热',
+              durationMinutes: 5,
+              temperatureC: 180,
+              equipment: '烤箱',
+            },
+            {
+              sortOrder: 2,
+              instruction: '放入鸭腿慢烤',
+            },
+          ],
+        },
+        ACCESS,
+      );
+    });
+
+    it('时长格式不合法时返回 INVALID_ARGUMENT，不调用 service', async () => {
+      const service = serviceMock();
+      const prisma = prismaMock();
+      const adapter = createAdapter(service, prisma);
+
+      await expect(
+        adapter.setProductionSteps('draft-1', [
+          { sortOrder: 1, instruction: '切块', duration: 'abc' },
+        ]),
+      ).rejects.toMatchObject({
+        name: 'RecipeAgentPortError',
+        code: 'INVALID_ARGUMENT',
+        message: '时长格式不正确',
+      });
+      expect(service.updateDraftProductionSteps).not.toHaveBeenCalled();
     });
   });
 });

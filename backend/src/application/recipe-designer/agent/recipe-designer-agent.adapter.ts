@@ -408,14 +408,6 @@ const toPriceNumber = (value: unknown): number | null => {
   return Number.isFinite(price) ? price : null;
 };
 
-/**
- * `AgentIngredientDetail` 没声明 `category`，但 `get_ingredient` 要回答
- * “这份原料属于七类里的哪一类”；在适配器内扩展返回类型，不动 P0a 的公共类型。
- */
-export type RecipeAgentIngredientDetail = AgentIngredientDetail & {
-  category: FoodCategory;
-};
-
 /** 按 item 名称收集动物物种；一条原料只记第一个命中的物种。 */
 const collectAnimalSpecies = (names: readonly string[]): string[] => {
   const species: string[] = [];
@@ -620,7 +612,7 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
 
   async getIngredient(input: {
     nutritionFoodId: string;
-  }): Promise<RecipeAgentIngredientDetail | null> {
+  }): Promise<AgentIngredientDetail | null> {
     const nutritionFood = await this.prisma.nutritionFood.findUnique({
       where: { id: input.nutritionFoodId },
       select: {
@@ -656,24 +648,25 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
       return null;
     }
 
-    // 主映射优先；没有主映射取第一条。营养档案可能还没关联采购原料。
+    // `get_ingredient` 只服务真实原料：没有采购原料映射的营养档案不算。
     const mappings = nutritionFood.mappings ?? [];
-    const mapping =
-      mappings.find((candidate) => candidate.isPrimary) ?? mappings[0] ?? null;
-    const ingredient = mapping?.ingredient ?? null;
+    if (mappings.length === 0) {
+      return null;
+    }
 
-    const name =
-      ingredient?.name ?? nutritionFood.displayNameZh ?? nutritionFood.name;
-    const cfctClass = readCfctClass(ingredient?.properties);
+    // 主映射优先；没有主映射取第一条。
+    const mapping =
+      mappings.find((candidate) => candidate.isPrimary) ?? mappings[0];
+    const ingredient = mapping.ingredient;
+
+    const name = ingredient.name;
+    const cfctClass = readCfctClass(ingredient.properties);
     const nutritionCategory = nutritionFood.category ?? null;
     const type: 'FOOD' | 'SUPPLEMENT' =
-      ingredient?.type === 'SUPPLEMENT' ||
-      (!ingredient && nutritionFood.category === 'SUPPLEMENT')
-        ? 'SUPPLEMENT'
-        : 'FOOD';
+      ingredient.type === 'SUPPLEMENT' ? 'SUPPLEMENT' : 'FOOD';
 
     return {
-      ingredientId: mapping?.ingredientId ?? '',
+      ingredientId: ingredient.id,
       nutritionFoodId: nutritionFood.id,
       name,
       nutritionProfileName: nutritionFood.displayNameZh ?? nutritionFood.name,
@@ -688,12 +681,12 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
         ingredientType: type,
       }),
       nutritionSummary: readNutritionSummary(nutritionFood.nutritionData),
-      allergenNames: collectAllergenNames(ingredient?.allergenTags),
+      allergenNames: collectAllergenNames(ingredient.allergenTags),
       preparationMethods: [],
       pricePerPurchaseUnit: toPriceNumber(
-        ingredient?.currentPricePerPurchaseUnit,
+        ingredient.currentPricePerPurchaseUnit,
       ),
-      purchaseUnit: ingredient?.purchaseUnit ?? null,
+      purchaseUnit: ingredient.purchaseUnit,
     };
   }
 

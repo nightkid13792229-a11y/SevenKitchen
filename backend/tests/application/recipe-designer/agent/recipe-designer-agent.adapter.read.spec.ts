@@ -557,4 +557,23 @@ describe('RecipeDesignerAgentAdapter read', () => {
     expect(detail?.allergenNames).toEqual(['鸭肉']);
     expect(detail?.pricePerPurchaseUnit).toBe(30);
   });
+
+  it('getIngredient 没有采购原料映射时返回 null', async () => {
+    const prisma = {
+      nutritionFood: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'nf1',
+          name: '鸭腿肉',
+          displayNameZh: '鸭腿肉',
+          status: 'VERIFIED',
+          category: 'MEAT',
+          nutritionData: { macros: { crudeProtein: 18 } },
+          mappings: [],
+        }),
+      },
+    };
+    const adapter = createAdapter({}, prisma);
+
+    expect(await adapter.getIngredient({ nutritionFoodId: 'nf1' })).toBeNull();
+  });
 });

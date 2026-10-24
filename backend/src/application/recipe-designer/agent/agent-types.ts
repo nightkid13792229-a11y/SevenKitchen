@@ -102,6 +102,8 @@ export interface AgentIngredientCandidate {
 
 /** `get_ingredient` 的原料详情。 */
 export interface AgentIngredientDetail extends AgentIngredientCandidate {
+  /** 七类判定结果；搜索时用来过滤，详情里直接给模型看。 */
+  category: FoodCategory;
   nutritionSummary: Record<string, number | null>;
   allergenNames: string[];
   preparationMethods: string[];

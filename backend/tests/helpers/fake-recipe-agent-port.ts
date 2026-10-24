@@ -149,6 +149,7 @@ const DEFAULT_INGREDIENT_DETAIL: AgentIngredientDetail = {
   type: 'FOOD',
   cfctClass: '菌藻类',
   nutritionCategory: 'OTHER',
+  category: 'MUSHROOM',
   verified: true,
   nutritionSummary: {
     protein: 2.2,

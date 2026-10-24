@@ -576,4 +576,68 @@ describe('RecipeDesignerAgentAdapter read', () => {
 
     expect(await adapter.getIngredient({ nutritionFoodId: 'nf1' })).toBeNull();
   });
+
+  it('目录使用只算与当前草稿的交集，并统计主蛋白', async () => {
+    const service = { getDraft: jest.fn().mockResolvedValue(serviceDraft()) };
+    // 真实 schema：Recipe 的明细关系叫 items（不是 recipeItems），
+    // 每条克重字段是 exampleWeight（RecipeItem 没有 weightG）。
+    const prisma = {
+      recipe: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'r1',
+            name: '旧鸭肉餐',
+            items: [
+              {
+                ingredientId: 'i9',
+                exampleWeight: 400,
+                ingredient: {
+                  name: '鸭腿肉',
+                  properties: { cfct_class: '禽肉类及制品' },
+                },
+                nutritionFood: {
+                  name: '鸭腿肉',
+                  displayNameZh: '鸭腿肉',
+                  category: 'MEAT',
+                },
+              },
+              {
+                ingredientId: 'i10',
+                exampleWeight: 100,
+                ingredient: {
+                  name: '燕麦',
+                  properties: { cfct_class: '谷类及制品' },
+                },
+                nutritionFood: {
+                  name: '燕麦',
+                  displayNameZh: '燕麦',
+                  category: 'GRAIN',
+                },
+              },
+            ],
+          },
+        ]),
+      },
+    };
+    const adapter = createAdapter(service, prisma);
+
+    const usage = await adapter.getCatalogUsage({ mainProteinName: '鸭腿肉' });
+
+    expect(usage.totalPublishedRecipes).toBe(1);
+    expect(usage.mainProteinCount).toBe(1);
+    expect(usage.recipes).toHaveLength(1);
+    expect(usage.recipes[0].recipeId).toBe('r1');
+    expect(usage.recipes[0].mainProteinName).toBe('鸭腿肉');
+    expect(usage.recipes[0].overlappingCategories).toEqual(
+      expect.arrayContaining(['PROTEIN', 'CARB']),
+    );
+    expect(usage.recipes[0].overlappingIngredientNames).toEqual(
+      expect.arrayContaining(['鸭腿肉', '燕麦']),
+    );
+    expect(service.getDraft).toHaveBeenCalledWith('draft-1', {
+      userId: 'u1',
+      role: 'STAFF',
+      customerId: undefined,
+    });
+  });
 });

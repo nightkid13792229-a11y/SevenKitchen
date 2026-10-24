@@ -2,8 +2,7 @@
  * `Recipe Agent` 的真实草稿端口（P0b-2a）。
  *
  * 每次运行绑定一份草稿（`draftId`）和当前员工身份（`actor`）：
- * - 读方法走现有 `RecipeDesignerService` + 只读 Prisma（`getDraft` /
- *   `searchIngredients` / `getIngredient` 已接真实数据，`getCatalogUsage` 在 Task 4 实现）；
+ * - 读方法走现有 `RecipeDesignerService` + 只读 Prisma（四个读方法都已接真实数据）；
  * - 写方法必须在 P0b-2b 通过 `RecipeDesignerService` 落库（它负责
  *   `contentRevision` 与事务），本任务先统一抛错。
  *
@@ -25,6 +24,7 @@ import type {
   AgentAssessmentEntry,
   AgentAssessmentView,
   AgentCatalogUsage,
+  AgentCatalogUsageRecipe,
   AgentCopyPatch,
   AgentDraftItem,
   AgentDraftSnapshot,
@@ -422,6 +422,86 @@ const collectAnimalSpecies = (names: readonly string[]): string[] => {
   return species;
 };
 
+/** 一条食谱明细的展示名与七类分类；当前草稿与已发布食谱共用同一口径。 */
+interface CatalogItemIdentity {
+  name: string;
+  category: FoodCategory;
+}
+
+/**
+ * 明细 → `{ name, category }`。
+ *
+ * 名称优先取采购原料名，其次营养档案的中文名 / 英文名；
+ * `nutritionFood` 可为 null，`ingredient.properties` 可能是任意 JSON。
+ */
+const toCatalogItemIdentity = (item: {
+  ingredient?: {
+    name?: string | null;
+    type?: string | null;
+    properties?: unknown;
+  } | null;
+  nutritionFood?: {
+    name?: string | null;
+    displayNameZh?: string | null;
+    category?: string | null;
+  } | null;
+}): CatalogItemIdentity => {
+  const ingredient = item.ingredient ?? null;
+  const nutritionFood = item.nutritionFood ?? null;
+  const name =
+    ingredient?.name ??
+    nutritionFood?.displayNameZh ??
+    nutritionFood?.name ??
+    '';
+
+  return {
+    name,
+    category: classifyFoodCategory({
+      name,
+      cfctClass: readCfctClass(ingredient?.properties),
+      nutritionCategory: nutritionFood?.category ?? null,
+      ingredientType: ingredient?.type === 'SUPPLEMENT' ? 'SUPPLEMENT' : 'FOOD',
+    }),
+  };
+};
+
+/** 名称比对口径：去首尾空白 + 大小写不敏感（中文名不受影响）。 */
+const normalizeCatalogName = (value: string): string =>
+  value.trim().toLowerCase();
+
+/** 按出现顺序去重。 */
+const uniqueValues = <T>(values: readonly T[]): T[] => {
+  const result: T[] = [];
+  for (const value of values) {
+    if (!result.includes(value)) {
+      result.push(value);
+    }
+  }
+  return result;
+};
+
+/** 主蛋白 = 克数最大的 `PROTEIN` 项；没有则 null（并列取先出现的）。 */
+const findMainProteinName = (
+  items: readonly {
+    identity: CatalogItemIdentity;
+    exampleWeight?: unknown;
+  }[],
+): string | null => {
+  let mainProtein: { name: string; weightG: number } | null = null;
+
+  for (const item of items) {
+    if (item.identity.category !== 'PROTEIN' || !item.identity.name) {
+      continue;
+    }
+    const weightG = toFiniteNumber(item.exampleWeight) ?? 0;
+    if (!mainProtein || weightG > mainProtein.weightG) {
+      mainProtein = { name: item.identity.name, weightG };
+    }
+  }
+
+  return mainProtein?.name ?? null;
+};
+
 /** Agent 草稿端口的真实实现；一个实例只服务一份草稿、一个调用者。 */
 export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
   constructor(
@@ -440,7 +520,7 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
     };
   }
 
-  // ---- 读方法：getDraft / searchIngredients / getIngredient 已接真实数据 ----
+  // ---- 读方法：四个读方法都已接真实数据 ----
 
   async getDraft(draftId: string): Promise<AgentDraftSnapshot> {
     const [draft, productionSteps] = await Promise.all([
@@ -690,11 +770,98 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
     };
   }
 
-  async getCatalogUsage(_input: {
+  async getCatalogUsage(input: {
     mainProteinName?: string;
     ingredientNames?: string[];
   }): Promise<AgentCatalogUsage> {
-    return { totalPublishedRecipes: 0, mainProteinCount: 0, recipes: [] };
+    const [draft, publishedRecipes] = await Promise.all([
+      this.service.getDraft(this.draftId, this.access),
+      // 只读已发布食谱；schema 的明细关系叫 items，单条克重字段是 exampleWeight。
+      this.prisma.recipe.findMany({
+        where: { status: 'PUBLIC' },
+        select: {
+          id: true,
+          name: true,
+          items: {
+            select: {
+              ingredientId: true,
+              exampleWeight: true,
+              ingredient: { select: { name: true, properties: true } },
+              nutritionFood: {
+                select: { name: true, displayNameZh: true, category: true },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const draftIdentities = draft.items.map((item) =>
+      toCatalogItemIdentity(item),
+    );
+    const draftCategories = uniqueValues(
+      draftIdentities.map((item) => item.category),
+    );
+    const targetMainProtein = normalizeCatalogName(input.mainProteinName ?? '');
+
+    let mainProteinCount = 0;
+    const recipes: AgentCatalogUsageRecipe[] = [];
+
+    for (const recipe of publishedRecipes) {
+      const items = recipe.items.map((item) => ({
+        identity: toCatalogItemIdentity(item),
+        exampleWeight: item.exampleWeight,
+      }));
+      const recipeCategories = uniqueValues(
+        items.map((item) => item.identity.category),
+      );
+      const mainProteinName = findMainProteinName(items);
+
+      // 主蛋白比对：去空白 + 大小写不敏感。
+      const mainProteinMatches =
+        targetMainProtein.length > 0 &&
+        mainProteinName !== null &&
+        normalizeCatalogName(mainProteinName) === targetMainProtein;
+      if (mainProteinMatches) {
+        mainProteinCount += 1;
+      }
+
+      // 只保留“分类有交集，或主蛋白相同”的菜。
+      const overlappingCategories = draftCategories.filter((category) =>
+        recipeCategories.includes(category),
+      );
+      if (overlappingCategories.length === 0 && !mainProteinMatches) {
+        continue;
+      }
+
+      const recipeNameKeys = new Set(
+        items
+          .map((item) => normalizeCatalogName(item.identity.name))
+          .filter((name) => name.length > 0),
+      );
+      const overlappingIngredientNames = uniqueValues(
+        draftIdentities
+          .filter((item) => {
+            const key = normalizeCatalogName(item.name);
+            return key.length > 0 && recipeNameKeys.has(key);
+          })
+          .map((item) => item.name),
+      );
+
+      recipes.push({
+        recipeId: recipe.id,
+        name: recipe.name,
+        mainProteinName,
+        overlappingCategories,
+        overlappingIngredientNames,
+      });
+    }
+
+    return {
+      totalPublishedRecipes: publishedRecipes.length,
+      mainProteinCount,
+      recipes,
+    };
   }
 
   // ---- 写方法：P0b-2b 实现（届时用 service 保证 contentRevision 与事务） ----

@@ -4,7 +4,8 @@ import {
   parseSseChunk,
   reduceAgentEvents,
   streamIngredientAgent,
-  type AgentStreamEvent
+  type AgentStreamEvent,
+  type AgentStreamState
 } from './agentStream'
 
 function stepStart(index = 1): AgentStreamEvent {
@@ -16,14 +17,13 @@ function stepStart(index = 1): AgentStreamEvent {
   }
 }
 
+type StepEndOverrides = Partial<
+  Omit<Extract<AgentStreamEvent, { type: 'step_end' }>, 'type' | 'index'>
+>
+
 function stepEnd(
   index = 1,
-  overrides: Partial<{
-    ok: boolean
-    found: boolean
-    resultSummary: string
-    error: string
-  }> = {}
+  overrides: StepEndOverrides = {}
 ): AgentStreamEvent {
   return {
     type: 'step_end',
@@ -31,7 +31,15 @@ function stepEnd(
     ok: overrides.ok ?? true,
     resultSummary: overrides.resultSummary ?? '命中 1 条',
     ...(overrides.found === undefined ? {} : { found: overrides.found }),
-    ...(overrides.error === undefined ? {} : { error: overrides.error })
+    ...(overrides.error === undefined ? {} : { error: overrides.error }),
+    ...(overrides.keywords === undefined
+      ? {}
+      : { keywords: overrides.keywords }),
+    ...(overrides.candidateCount === undefined
+      ? {}
+      : { candidateCount: overrides.candidateCount }),
+    ...(overrides.matches === undefined ? {} : { matches: overrides.matches }),
+    ...(overrides.record === undefined ? {} : { record: overrides.record })
   }
 }
 
@@ -107,6 +115,116 @@ describe('reduceAgentEvents', () => {
       resultSummary: '命中 1 条'
     })
     expect(state.steps[0]?.error).toBeUndefined()
+  })
+
+  it('step_end 带 matches / keywords 时，查库步骤的展开数据完整', () => {
+    let state = reduceAgentEvents(createAgentStreamState(), stepStart())
+    state = reduceAgentEvents(
+      state,
+      stepEnd(1, {
+        found: true,
+        resultSummary: '命中 2 条',
+        keywords: ['西洋菜', 'watercress'],
+        candidateCount: 2,
+        matches: [
+          {
+            name: 'Watercress, raw',
+            matchedBy: 'EN_PARTIAL',
+            matchedKeyword: 'watercress',
+            score: 0.86
+          },
+          {
+            name: '西洋菜',
+            matchedBy: 'ZH_ALIAS',
+            matchedKeyword: '西洋菜',
+            score: 0.72
+          }
+        ]
+      })
+    )
+
+    const search = state.steps[0]?.search
+    expect(search).toBeDefined()
+    expect(search?.keywords).toEqual(['西洋菜', 'watercress'])
+    expect(search?.found).toBe(true)
+    expect(search?.totalCount).toBe(2)
+    expect(search?.message).toBe('命中 2 条')
+    expect(search?.matches).toHaveLength(2)
+    expect(search?.matches[0]).toMatchObject({
+      foodName: 'Watercress, raw',
+      foodNameEn: null,
+      matchedBy: 'EN_PARTIAL',
+      matchedByLabel: '英文名部分匹配',
+      matchedKeyword: 'watercress',
+      score: 0.86,
+      scoreLabel: '0.86'
+    })
+    expect(search?.matches[1]).toMatchObject({
+      foodName: '西洋菜',
+      matchedBy: 'ZH_ALIAS',
+      matchedByLabel: '中英别名匹配',
+      matchedKeyword: '西洋菜',
+      scoreLabel: '0.72'
+    })
+  })
+
+  it('零命中的 step_end 仍给出空 matches 与「没有找到匹配词条」', () => {
+    let state = reduceAgentEvents(createAgentStreamState(), stepStart())
+    state = reduceAgentEvents(
+      state,
+      stepEnd(1, {
+        found: false,
+        resultSummary: '没有找到匹配词条',
+        keywords: ['西洋菜', 'watercress'],
+        candidateCount: 0,
+        matches: []
+      })
+    )
+
+    expect(state.steps[0]).toMatchObject({
+      found: false,
+      status: 'success'
+    })
+    expect(state.steps[0]?.search).toMatchObject({
+      keywords: ['西洋菜', 'watercress'],
+      found: false,
+      totalCount: 0,
+      matches: [],
+      message: '没有找到匹配词条'
+    })
+  })
+
+  it('读来源记录的 step_end 带 record 摘要（词条名 / 覆盖率 / 项数）', () => {
+    let state = reduceAgentEvents(createAgentStreamState(), {
+      type: 'step_start',
+      index: 2,
+      name: 'getNutritionRecord',
+      summary: '读来源记录 rec-liver-raw'
+    })
+    state = reduceAgentEvents(
+      state,
+      stepEnd(2, {
+        resultSummary: '读到 12 项营养值',
+        record: {
+          name: 'Chicken, liver, raw',
+          coverage: 82,
+          valueCount: 12
+        }
+      })
+    )
+
+    expect(state.steps[0]).toMatchObject({
+      label: '读来源记录',
+      status: 'success',
+      resultSummary: '读到 12 项营养值'
+    })
+    expect(state.steps[0]?.record).toEqual({
+      name: 'Chicken, liver, raw',
+      coverage: 82,
+      coverageLabel: '82%',
+      valueCount: 12,
+      message: '来源记录「Chicken, liver, raw」· 覆盖率 82% · 读到 12 项'
+    })
   })
 
   it('step_end 失败时保留下游 error 原文', () => {
@@ -185,6 +303,56 @@ describe('reduceAgentEvents', () => {
 
     expect(state.steps).toHaveLength(1)
     expect(state.error).toBe('AI 暂时不可用，请稍后重试')
+  })
+})
+
+describe('streamIngredientAgent · 实时渲染', () => {
+  it('step_start 一到达 onState 就给出 running，不等 step_end', async () => {
+    const encoder = new TextEncoder()
+    let push!: (chunk: string) => void
+    let close!: () => void
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        push = (chunk) => controller.enqueue(encoder.encode(chunk))
+        close = () => controller.close()
+      }
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(body, { status: 200 }))
+    )
+
+    const states: AgentStreamState[] = []
+    const pending = streamIngredientAgent(
+      { text: '帮我加西洋菜' },
+      { onState: (next) => states.push(next) }
+    )
+
+    push(
+      'data: {"type":"step_start","index":1,"name":"searchLocalNutrition","summary":"查本地库 西洋菜·生"}\n\n'
+    )
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    const latest = states[states.length - 1]
+    expect(latest?.steps).toHaveLength(1)
+    expect(latest?.steps[0]).toMatchObject({
+      index: 1,
+      status: 'running',
+      label: '查本地库'
+    })
+
+    push(
+      'data: {"type":"step_end","index":1,"ok":true,"found":true,"resultSummary":"命中 1 条"}\n\n'
+    )
+    push(
+      'data: {"type":"reply","reply":"已找到。","draftId":"draft-1","steps":2,"toolCallCount":1}\n\n'
+    )
+    push('data: {"type":"done"}\n\n')
+    close()
+
+    const final = await pending
+    expect(final.steps[0]?.status).toBe('success')
+    expect(final.reply).toBe('已找到。')
   })
 })
 

@@ -34,6 +34,16 @@ export interface AgentSearchEvidenceView {
   message: string
 }
 
+/** 「读来源记录」这一步的展开内容：词条名、覆盖率与读到的项数。 */
+export interface AgentRecordEvidenceView {
+  name: string
+  coverage: number | null
+  coverageLabel: string
+  valueCount: number
+  /** 给人看的一句话：来源记录「X」· 覆盖率 82% · 读到 12 项 */
+  message: string
+}
+
 /** 一个工具调用在页面上的一行。 */
 export interface AgentStepView {
   /** 后端原始工具名；未知工具也原样保留 */
@@ -136,6 +146,37 @@ function readResultRecord(value: unknown): AnyArgs {
   return asRecord(value)
 }
 
+function isRecordValue(value: unknown): value is AnyArgs {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/**
+ * 一条候选 → 页面可渲染的匹配依据。
+ *
+ * 兼容两种来源：旧接口的 `foodName` 与流式事件里的 `name`；
+ * 分数取 `score`（流式事件）或 `matchScore`（工具原始结果）。
+ */
+function toMatchView(
+  candidate: AnyArgs,
+  fallbackKeyword: string
+): AgentSearchMatchView {
+  const matchedBy = readText(candidate.matchedBy) || 'UNKNOWN'
+  const score =
+    readFiniteNumber(candidate.score) ?? readFiniteNumber(candidate.matchScore)
+  return {
+    foodName:
+      readText(candidate.foodName) ||
+      readText(candidate.name) ||
+      '（未知词条）',
+    foodNameEn: readText(candidate.foodNameEn) || null,
+    matchedBy,
+    matchedByLabel: matchMethodLabel(matchedBy),
+    matchedKeyword: readText(candidate.matchedKeyword) || fallbackKeyword,
+    score,
+    scoreLabel: score === null ? '—' : score.toFixed(2)
+  }
+}
+
 /**
  * 从 searchLocalNutrition 的工具结果里读出「匹配依据」。
  *
@@ -163,28 +204,8 @@ export function toSearchEvidence(
     ? record.candidates
     : []
   const matches: AgentSearchMatchView[] = rawCandidates
-    .filter(
-      (candidate): candidate is AnyArgs =>
-        typeof candidate === 'object' &&
-        candidate !== null &&
-        !Array.isArray(candidate)
-    )
-    .map((candidate) => {
-      const matchedBy = readText(candidate.matchedBy) || 'UNKNOWN'
-      const score =
-        readFiniteNumber(candidate.score) ??
-        readFiniteNumber(candidate.matchScore)
-      return {
-        foodName: readText(candidate.foodName) || '（未知词条）',
-        foodNameEn: readText(candidate.foodNameEn) || null,
-        matchedBy,
-        matchedByLabel: matchMethodLabel(matchedBy),
-        matchedKeyword:
-          readText(candidate.matchedKeyword) || keywords[0] || '',
-        score,
-        scoreLabel: score === null ? '—' : score.toFixed(2)
-      }
-    })
+    .filter((candidate): candidate is AnyArgs => isRecordValue(candidate))
+    .map((candidate) => toMatchView(candidate, keywords[0] || ''))
 
   const candidateCount = readFiniteNumber(record.candidateCount)
   const totalCount =
@@ -202,6 +223,77 @@ export function toSearchEvidence(
     totalCount,
     found,
     message: found ? `命中 ${totalCount} 条` : '没有找到匹配词条'
+  }
+}
+
+/**
+ * 从流式 `step_end` 事件还原「匹配依据」展开数据。
+ *
+ * 事件只带精简后的 matches（name / matchedBy / matchedKeyword / score）
+ * 与 keywords / candidateCount；旧后端没有这些字段时返回 null，页面退回
+ * 只显示结果摘要，不假装有依据。
+ */
+export function toSearchEvidenceFromEvent(input: {
+  found?: unknown
+  keywords?: unknown
+  matches?: unknown
+  candidateCount?: unknown
+}): AgentSearchEvidenceView | null {
+  const rawMatches = Array.isArray(input.matches) ? input.matches : null
+  const rawKeywords = Array.isArray(input.keywords) ? input.keywords : null
+  if (!rawMatches && !rawKeywords) {
+    return null
+  }
+
+  const keywords = uniqueText(
+    (rawKeywords ?? []).filter(
+      (keyword): keyword is string => typeof keyword === 'string'
+    )
+  )
+  const matches = (rawMatches ?? [])
+    .filter((match): match is AnyArgs => isRecordValue(match))
+    .map((match) => toMatchView(match, keywords[0] ?? ''))
+
+  const candidateCount = readFiniteNumber(input.candidateCount)
+  const totalCount =
+    candidateCount === null
+      ? matches.length
+      : Math.max(0, Math.floor(candidateCount))
+  const found =
+    input.found === false
+      ? false
+      : input.found === true || matches.length > 0 || totalCount > 0
+
+  return {
+    keywords,
+    matches,
+    totalCount,
+    found,
+    message: found ? `命中 ${totalCount} 条` : '没有找到匹配词条'
+  }
+}
+
+/** 从流式 `step_end.record` 还原「读来源记录」的展开摘要。 */
+export function toRecordEvidenceFromEvent(
+  value: unknown
+): AgentRecordEvidenceView | null {
+  if (!isRecordValue(value)) {
+    return null
+  }
+  const valueCount = readFiniteNumber(value.valueCount)
+  if (valueCount === null) {
+    return null
+  }
+  const name = readText(value.name) || '（未知词条）'
+  const coverage = readFiniteNumber(value.coverage)
+  const coverageLabel = coverage === null ? '—' : `${coverage}%`
+  const count = Math.max(0, Math.floor(valueCount))
+  return {
+    name,
+    coverage,
+    coverageLabel,
+    valueCount: count,
+    message: `来源记录「${name}」· 覆盖率 ${coverageLabel} · 读到 ${count} 项`
   }
 }
 

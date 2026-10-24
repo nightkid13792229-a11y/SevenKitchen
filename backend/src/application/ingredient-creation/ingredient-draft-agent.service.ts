@@ -92,7 +92,10 @@ export interface AgentTranscriptEntry {
  * - `NO_PROGRESS`：连续多次工具调用没有新进展的软停止。
  */
 export type IngredientAgentStopReason =
-  'TOOL_CALL_LIMIT' | 'TIMEOUT' | 'TOKEN_BUDGET' | 'NO_PROGRESS';
+  | 'TOOL_CALL_LIMIT'
+  | 'TIMEOUT'
+  | 'TOKEN_BUDGET'
+  | 'NO_PROGRESS';
 
 export interface IngredientAgentRunResult {
   draftId: string;
@@ -129,6 +132,27 @@ export function resolveIngredientAgentTokenBudget(
 }
 
 /**
+ * 查库命中的一条词条：只带页面展开所需字段。
+ *
+ * 与工具返回的 `foodName / matchedBy / matchedKeyword / score` 同口径，
+ * 但改名为 `name` 并去掉 sourceRecordId、missingFields 等大字段，避免
+ * 把整份工具结果塞进 SSE 事件。
+ */
+export interface IngredientAgentStreamMatch {
+  name: string;
+  matchedBy: string;
+  matchedKeyword: string;
+  score: number | null;
+}
+
+/** 「读来源记录」这一步的精简摘要：词条名 / 覆盖率 / 读到多少项。 */
+export interface IngredientAgentStreamRecord {
+  name: string;
+  coverage: number | null;
+  valueCount: number;
+}
+
+/**
  * 流式运行事件（SSE `data:` 的 JSON）。
  *
  * 一次工具调用固定成对出现：先 `step_start`（页面立刻显示「执行中」），
@@ -149,6 +173,14 @@ export type IngredientAgentStreamEvent =
       found?: boolean;
       resultSummary: string;
       error?: string;
+      /** 查库：本次实际用过的关键词（含中文名扩展出的英文别名）。 */
+      keywords?: string[];
+      /** 查库：候选总数；页面用来提示还有多少条没有展示。 */
+      candidateCount?: number;
+      /** 查库：最多 5 条匹配依据。 */
+      matches?: IngredientAgentStreamMatch[];
+      /** 读来源记录：词条名 / 覆盖率 / 读到多少项。 */
+      record?: IngredientAgentStreamRecord;
     }
   | {
       type: 'reply';
@@ -496,6 +528,126 @@ function readToolFound(
     return undefined;
   }
   return readSearchOutcome(execution.content)?.found;
+}
+
+/** step_end 最多带 5 条命中，避免一次长检索把 SSE 事件撑大。 */
+const STEP_MATCH_LIMIT = 5;
+/** 关键词 / 词条名都是展示用，超长截断，避免单条事件体积失控。 */
+const STEP_KEYWORD_MAX = 80;
+const STEP_KEYWORD_LIMIT = 10;
+const STEP_NAME_MAX = 120;
+
+interface SearchStepEvidence {
+  matches: IngredientAgentStreamMatch[];
+  keywords: string[];
+  candidateCount: number;
+}
+
+/**
+ * 查库 step_end 的匹配依据：关键词 + 前 5 条命中。
+ *
+ * 只在查库工具**成功且返回结构化结果**时生成；零命中时 matches 为空数组、
+ * keywords 保留本次实际检索词，页面仍可展开并显示「没有找到匹配词条」。
+ */
+function buildSearchStepEvidence(
+  name: string,
+  execution: { ok: boolean; content: string },
+): SearchStepEvidence | null {
+  if (name !== 'searchLocalNutrition' || !execution.ok) {
+    return null;
+  }
+  const parsed = parseToolResult(execution.content);
+  if (
+    !isRecord(parsed) ||
+    parsed.ok !== true ||
+    typeof parsed.found !== 'boolean'
+  ) {
+    return null;
+  }
+
+  const matches: IngredientAgentStreamMatch[] = [];
+  if (Array.isArray(parsed.candidates)) {
+    for (const candidate of parsed.candidates) {
+      if (!isRecord(candidate)) {
+        continue;
+      }
+      const score =
+        typeof candidate.score === 'number' && Number.isFinite(candidate.score)
+          ? candidate.score
+          : null;
+      matches.push({
+        name:
+          oneLine(
+            readTextValue(candidate.foodName) ||
+              readTextValue(candidate.name) ||
+              '（未知词条）',
+            STEP_NAME_MAX,
+          ) || '（未知词条）',
+        matchedBy: readTextValue(candidate.matchedBy) || 'UNKNOWN',
+        matchedKeyword: truncate(
+          readTextValue(candidate.matchedKeyword),
+          STEP_KEYWORD_MAX,
+        ),
+        score,
+      });
+      if (matches.length >= STEP_MATCH_LIMIT) {
+        break;
+      }
+    }
+  }
+
+  const keywords = (Array.isArray(parsed.keywords) ? parsed.keywords : [])
+    .filter((keyword): keyword is string => typeof keyword === 'string')
+    .map((keyword) => truncate(keyword.trim(), STEP_KEYWORD_MAX))
+    .filter(Boolean);
+  const uniqueKeywords = uniqueNonEmpty(keywords).slice(0, STEP_KEYWORD_LIMIT);
+
+  const candidateCount =
+    typeof parsed.candidateCount === 'number' &&
+    Number.isFinite(parsed.candidateCount) &&
+    parsed.candidateCount >= 0
+      ? Math.floor(parsed.candidateCount)
+      : matches.length;
+
+  return { matches, keywords: uniqueKeywords, candidateCount };
+}
+
+/**
+ * 读来源记录 step_end 的摘要：词条名 / 覆盖率 / 读到多少项。
+ *
+ * `valueCount` 统计记录里真实存在的目录字段（含因目录上限被省略的项），
+ * 不补 0、不推算。
+ */
+function buildRecordStepEvidence(
+  name: string,
+  execution: { ok: boolean; content: string },
+): IngredientAgentStreamRecord | null {
+  if (name !== 'getNutritionRecord' || !execution.ok) {
+    return null;
+  }
+  const parsed = parseToolResult(execution.content);
+  if (!isRecord(parsed) || parsed.ok !== true || !isRecord(parsed.record)) {
+    return null;
+  }
+
+  const record = parsed.record;
+  const values = Array.isArray(record.values) ? record.values.length : 0;
+  const omitted =
+    typeof record.omittedFieldCount === 'number' &&
+    Number.isFinite(record.omittedFieldCount) &&
+    record.omittedFieldCount > 0
+      ? Math.floor(record.omittedFieldCount)
+      : 0;
+  return {
+    name:
+      oneLine(readTextValue(record.name) || '（未知词条）', STEP_NAME_MAX) ||
+      '（未知词条）',
+    coverage:
+      typeof record.coverage === 'number' && Number.isFinite(record.coverage)
+        ? record.coverage
+        : null,
+    valueCount: values + omitted,
+  };
 }
 
 /** 流式错误事件要给人看：HTTP 异常取业务文案，其余一律按 AI 暂不可用兜底。 */
@@ -971,6 +1123,8 @@ export class IngredientDraftAgentService {
         });
 
     const found = readToolFound(input.name, execution);
+    const searchEvidence = buildSearchStepEvidence(input.name, execution);
+    const recordEvidence = buildRecordStepEvidence(input.name, execution);
     this.emitEvent(input.onEvent, {
       type: 'step_end',
       index: input.index,
@@ -978,6 +1132,14 @@ export class IngredientDraftAgentService {
       resultSummary: buildToolResultSummary(input.name, execution),
       ...(found === undefined ? {} : { found }),
       ...(execution.error ? { error: execution.error } : {}),
+      ...(searchEvidence
+        ? {
+            matches: searchEvidence.matches,
+            keywords: searchEvidence.keywords,
+            candidateCount: searchEvidence.candidateCount,
+          }
+        : {}),
+      ...(recordEvidence ? { record: recordEvidence } : {}),
     });
 
     return execution;

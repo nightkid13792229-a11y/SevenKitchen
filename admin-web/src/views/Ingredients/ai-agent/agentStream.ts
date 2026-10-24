@@ -5,7 +5,28 @@
  * 工具调用就推一条事件，`parseSseChunk` 处理分片，`reduceAgentEvents` 把事件
  * 归并成可渲染的状态。三个函数都是纯的（只有 stream 会发请求），方便测试。
  */
-import { toolLabel } from './stepView'
+import {
+  toolLabel,
+  toRecordEvidenceFromEvent,
+  toSearchEvidenceFromEvent,
+  type AgentRecordEvidenceView,
+  type AgentSearchEvidenceView
+} from './stepView'
+
+/** 查库命中的一条词条（后端 step_end.matches 的精简结构）。 */
+export interface AgentStreamMatch {
+  name: string
+  matchedBy: string
+  matchedKeyword: string
+  score: number | null
+}
+
+/** 读来源记录的步骤摘要（后端 step_end.record）。 */
+export interface AgentStreamRecord {
+  name: string
+  coverage: number | null
+  valueCount: number
+}
 
 export type AgentStreamEvent =
   | {
@@ -21,6 +42,14 @@ export type AgentStreamEvent =
       found?: boolean
       resultSummary: string
       error?: string
+      /** 查库：本次实际用过的关键词。 */
+      keywords?: string[]
+      /** 查库：候选总数（页面用于提示还有多少条没展示）。 */
+      candidateCount?: number
+      /** 查库：最多 5 条匹配依据。 */
+      matches?: AgentStreamMatch[]
+      /** 读来源记录：词条名 / 覆盖率 / 读到多少项。 */
+      record?: AgentStreamRecord
     }
   | {
       type: 'reply'
@@ -43,6 +72,10 @@ export interface AgentStreamStep {
   found?: boolean
   resultSummary?: string
   error?: string
+  /** 查库步骤的展开数据：关键词 / 词条 / 匹配方式 / 分数 */
+  search?: AgentSearchEvidenceView
+  /** 读来源记录步骤的展开摘要 */
+  record?: AgentRecordEvidenceView
 }
 
 export interface AgentStreamMeta {
@@ -188,6 +221,14 @@ export function reduceAgentEvents(
       const found = typeof event.found === 'boolean' ? event.found : undefined
       const resultSummary = readText(event.resultSummary)
       const error = readText(event.error)
+      // 只有查库 / 读记录事件才带展开数据；其它步骤仍然只有一行摘要。
+      const search = toSearchEvidenceFromEvent({
+        found: event.found,
+        keywords: event.keywords,
+        matches: event.matches,
+        candidateCount: event.candidateCount
+      })
+      const record = toRecordEvidenceFromEvent(event.record)
       return {
         ...state,
         steps: replaceStep(state.steps, {
@@ -199,7 +240,9 @@ export function reduceAgentEvents(
           ok,
           ...(found === undefined ? {} : { found }),
           ...(resultSummary ? { resultSummary } : {}),
-          ...(error ? { error } : {})
+          ...(error ? { error } : {}),
+          ...(search ? { search } : {}),
+          ...(record ? { record } : {})
         })
       }
     }

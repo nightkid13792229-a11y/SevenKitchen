@@ -83,6 +83,69 @@
                   <p v-if="step.status === 'failed'" class="agent-step__error">
                     {{ step.error || '工具执行失败（后端没有给出原因）' }}
                   </p>
+                  <p v-if="step.record" class="agent-step__record">
+                    {{ step.record.message }}
+                  </p>
+                  <details v-if="step.search" class="agent-step__evidence">
+                    <summary class="agent-step__evidence-summary">
+                      匹配依据 · {{ step.search.message }}
+                    </summary>
+                    <div class="agent-step__evidence-body">
+                      <div class="agent-step__keywords">
+                        <span>本次关键词：</span>
+                        <el-tag
+                          v-for="keyword in step.search.keywords"
+                          :key="keyword"
+                          size="small"
+                          effect="plain"
+                        >
+                          {{ keyword }}
+                        </el-tag>
+                      </div>
+                      <p v-if="!step.search.found" class="agent-step__empty">
+                        没有找到匹配词条
+                      </p>
+                      <ul v-else class="agent-step__matches">
+                        <li
+                          v-for="(match, matchIndex) in step.search.matches"
+                          :key="matchIndex"
+                          class="agent-step__match"
+                        >
+                          <span class="agent-step__match-name">
+                            {{ match.foodName }}
+                          </span>
+                          <span
+                            v-if="
+                              match.foodNameEn &&
+                              match.foodNameEn !== match.foodName
+                            "
+                            class="agent-step__match-en"
+                          >
+                            {{ match.foodNameEn }}
+                          </span>
+                          <el-tag size="small" effect="plain" type="info">
+                            {{ match.matchedByLabel }}
+                          </el-tag>
+                          <span class="agent-step__match-meta">
+                            关键词「{{ match.matchedKeyword }}」
+                          </span>
+                          <span class="agent-step__match-meta">
+                            分数 {{ match.scoreLabel }}
+                          </span>
+                        </li>
+                      </ul>
+                      <p
+                        v-if="
+                          step.search.found &&
+                          step.search.totalCount > step.search.matches.length
+                        "
+                        class="agent-step__match-more"
+                      >
+                        共 {{ step.search.totalCount }} 条，这里显示前
+                        {{ step.search.matches.length }} 条。
+                      </p>
+                    </div>
+                  </details>
                 </div>
               </div>
             </div>
@@ -99,6 +162,10 @@
             <div v-if="run.running" class="agent-typing">
               <span class="agent-typing__dot" aria-hidden="true"></span>
               AI 正在执行…
+              <span class="agent-typing__elapsed">
+                已运行 {{ runElapsedSeconds(run) }} 秒 · 已收到
+                {{ run.steps.length }} 步
+              </span>
             </div>
           </div>
         </div>
@@ -524,7 +591,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import {
+  computed,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  reactive,
+  ref,
+  watch
+} from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ingredientCreationApi } from '@/api/ingredientCreation'
@@ -581,6 +656,9 @@ interface AgentRunRecord {
   meta: AgentStreamMeta | null
   error: string | null
   running: boolean
+  /** 本轮开始 / 结束时间：用于实时显示「已运行 N 秒」 */
+  startedAt: number
+  finishedAt: number | null
 }
 
 const router = useRouter()
@@ -594,6 +672,36 @@ const state = reactive({
   draftId: null as string | null,
   runs: [] as AgentRunRecord[]
 })
+
+/**
+ * 每秒推进一次的时钟：页面上「已运行 N 秒 / 已收到 M 步」会跟着跳，
+ * 用来证明步骤是边跑边到的，而不是等最后一次性出现。
+ */
+const clockNow = ref(Date.now())
+let clockTimer: ReturnType<typeof setInterval> | null = null
+
+function stopClock() {
+  if (clockTimer) {
+    clearInterval(clockTimer)
+    clockTimer = null
+  }
+}
+
+watch(
+  () => state.running,
+  (running) => {
+    stopClock()
+    if (running) {
+      clockNow.value = Date.now()
+      clockTimer = setInterval(() => {
+        clockNow.value = Date.now()
+      }, 1000)
+    }
+  },
+  { immediate: true }
+)
+
+onUnmounted(stopClock)
 
 const draft = ref<IngredientCreationDraft | null>(null)
 const draftLoading = ref(false)
@@ -745,6 +853,12 @@ function stepSummary(step: AgentStreamStep): string {
   return summary
 }
 
+/** 本轮已运行秒数；结束后停在最终耗时，不再每秒重算。 */
+function runElapsedSeconds(run: AgentRunRecord): number {
+  const end = run.running ? clockNow.value : (run.finishedAt ?? clockNow.value)
+  return Math.max(0, Math.floor((end - run.startedAt) / 1000))
+}
+
 function shortId(value: string): string {
   return value.length > 12 ? `${value.slice(0, 8)}…` : value
 }
@@ -806,7 +920,9 @@ async function handleRun() {
     draftId: null,
     meta: null,
     error: null,
-    running: true
+    running: true,
+    startedAt: Date.now(),
+    finishedAt: null
   })
   state.runs.push(run)
   await scrollToBottom()
@@ -846,6 +962,7 @@ async function handleRun() {
     // 流式函数本身不抛错；这里是防御性兜底，且不清空已经收到的步骤。
     run.error = getApiErrorMessage(error, '流式请求失败，已保留收到的步骤。')
   } finally {
+    run.finishedAt = Date.now()
     run.running = false
     state.running = false
     await scrollToBottom()
@@ -1340,7 +1457,8 @@ function goBackToList() {
   word-break: break-word;
 }
 
-.agent-step__result {
+.agent-step__result,
+.agent-step__record {
   margin: 6px 0 0;
   font-size: 12px;
   color: var(--el-text-color-secondary);
@@ -1493,6 +1611,10 @@ function goBackToList() {
   border-radius: 50%;
   background: var(--el-color-primary);
   animation: agent-pulse 1s ease-in-out infinite;
+}
+
+.agent-typing__elapsed {
+  font-variant-numeric: tabular-nums;
 }
 
 @keyframes agent-pulse {

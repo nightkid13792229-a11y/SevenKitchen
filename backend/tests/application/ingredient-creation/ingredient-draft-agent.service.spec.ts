@@ -29,6 +29,7 @@ import {
   AgentProviderConfigService,
   type DeepSeekRuntimeConfig,
 } from '../../../src/application/nutrition-governance/agent-provider-config.service';
+import { NUTRITION_FIELD_CATALOG } from '../../../src/domain/ingredient/nutrition-field-catalog';
 import { AuthGuard } from '../../../src/interfaces/auth/auth.guard';
 import { JwtAuthService } from '../../../src/interfaces/auth/jwt.service';
 import { IngredientCreationController } from '../../../src/interfaces/controllers/ingredient-creation.controller';
@@ -1501,6 +1502,151 @@ describe('IngredientDraftAgentService · 工具循环', () => {
     });
     expect(events[7]).toEqual({ type: 'done' });
     expect(result.toolCallCount).toBe(3);
+  });
+
+  it('流式回调：查库 step_end 带 matches / keywords（最多 5 条），读记录带 record 摘要', async () => {
+    const candidates = Array.from({ length: 7 }, (_, index) => ({
+      ...CANDIDATE_RESULT.candidates[0],
+      sourceRecordId: index === 0 ? 'rec-liver-raw' : `rec-liver-${index}`,
+      foodName: `Chicken, liver, raw ${index + 1}`,
+      matchScore: Number((0.9 - index * 0.01).toFixed(2)),
+    }));
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'searchLocalNutrition',
+            { keyword: '鸡肝', state: 'RAW' },
+            'call_search',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'getNutritionRecord',
+            { sourceRecordId: 'rec-liver-raw' },
+            'call_record',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(assistantToolCall('runCheck', {}, 'call_check')),
+      )
+      .mockResolvedValueOnce(chatResponse(assistantReply('三步都跑完了。')));
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness({
+      candidates: {
+        ...CANDIDATE_RESULT,
+        candidates,
+        coverage: { ...CANDIDATE_RESULT.coverage, candidateCount: 7 },
+      },
+      sourceRecords: [
+        {
+          id: 'rec-liver-raw',
+          status: 'ACTIVE',
+          foodName: 'Chicken, liver, raw',
+          normalizedNutrition: {
+            meta: { sampleState: 'RAW' },
+            macros: { energyKcal: 120, crudeProtein: 19.5 },
+            minerals: { calcium: 120 },
+          },
+        },
+      ],
+    });
+
+    const events: any[] = [];
+    await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '帮我加鸡肝',
+      userId: 'admin-1',
+      onEvent: (event: any) => events.push(event),
+    });
+
+    const searchEnd = events[1];
+    expect(searchEnd).toMatchObject({
+      type: 'step_end',
+      index: 1,
+      ok: true,
+      found: true,
+    });
+    expect(searchEnd.keywords).toEqual(['鸡肝', 'Chicken liver']);
+    expect(searchEnd.candidateCount).toBe(7);
+    expect(searchEnd.matches).toHaveLength(5);
+    expect(searchEnd.matches[0]).toEqual({
+      name: 'Chicken, liver, raw 1',
+      matchedBy: 'EN_PARTIAL',
+      matchedKeyword: 'Chicken liver',
+      score: 0.9,
+    });
+    expect(Object.keys(searchEnd.matches[0]).sort()).toEqual([
+      'matchedBy',
+      'matchedKeyword',
+      'name',
+      'score',
+    ]);
+    expect(searchEnd.record).toBeUndefined();
+
+    const recordEnd = events[3];
+    expect(recordEnd).toMatchObject({
+      type: 'step_end',
+      index: 2,
+      ok: true,
+    });
+    expect(recordEnd.record).toEqual({
+      name: 'Chicken, liver, raw',
+      coverage: Math.round((3 / NUTRITION_FIELD_CATALOG.length) * 1000) / 10,
+      valueCount: 3,
+    });
+    expect(recordEnd.matches).toBeUndefined();
+    expect(recordEnd.keywords).toBeUndefined();
+
+    // 其它工具（开始 / 结束）都不带查库匹配依据。
+    for (const index of [0, 2, 4, 5]) {
+      expect(events[index].matches).toBeUndefined();
+      expect(events[index].keywords).toBeUndefined();
+      expect(events[index].record).toBeUndefined();
+    }
+  });
+
+  it('流式回调：查库零命中时 step_end 带空 matches 与本次实际关键词', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'searchLocalNutrition',
+            { keyword: '西洋菜', state: 'RAW' },
+            'call_search',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(assistantReply('本地库没有找到西洋菜。')),
+      );
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness({ candidates: EMPTY_CANDIDATE_RESULT });
+    const events: any[] = [];
+    await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '帮我加西洋菜',
+      userId: 'admin-1',
+      onEvent: (event: any) => events.push(event),
+    });
+
+    expect(events[1]).toMatchObject({
+      type: 'step_end',
+      index: 1,
+      ok: true,
+      found: false,
+      resultSummary: '没有找到匹配词条',
+    });
+    expect(events[1].matches).toEqual([]);
+    expect(events[1].keywords).toEqual(['西洋菜', 'watercress']);
+    expect(events[1].candidateCount).toBe(0);
   });
 
   it('流式回调：模型失败时只发 error，不带 done；原异常仍按 503 抛出', async () => {

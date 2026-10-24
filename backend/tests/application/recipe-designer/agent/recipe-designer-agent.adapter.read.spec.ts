@@ -127,6 +127,14 @@ function serviceDraft() {
     assessmentContentRevision: 4,
     totalWeightG: 900,
     seriesId: 'series-1',
+    series: {
+      id: 'series-1',
+      name: '鸭肉南瓜餐',
+      referenceDogId: null,
+      designMode: 'CATALOG',
+      orderId: null,
+      orderQuantity: null,
+    },
     fediafDogScenario: 'ADULT_MER_110',
     coverTitle: '草稿封面标题',
     sellingPoint: '草稿卖点',
@@ -473,6 +481,10 @@ describe('RecipeDesignerAgentAdapter read', () => {
     });
     expect(draft.draftId).toBe('draft-1');
     expect(draft.seriesId).toBe('series-1');
+    // 产品线设计：designMode=CATALOG，没有订单上下文。
+    expect(draft.designMode).toBe('CATALOG');
+    expect(draft.orderId).toBeNull();
+    expect(draft.orderQuantity).toBeNull();
     expect(draft.name).toBe('鸭肉南瓜餐');
     expect(draft.scenario).toBe('ADULT_MER_110');
     expect(draft.contentRevision).toBe(4);
@@ -496,6 +508,52 @@ describe('RecipeDesignerAgentAdapter read', () => {
     // 不是 calculatedNutrition 里的 600g / 90g。
     expect(draft.nutritionSummary?.moisturePercent).toBeCloseTo(61.3447, 3);
     expect(draft.nutritionSummary?.fatWetPercent).toBeCloseTo(9.4013, 3);
+  });
+
+  it('getDraft 把 ORDER 设计的订单上下文映射进快照', async () => {
+    const draft: any = serviceDraft();
+    draft.series = {
+      id: 'series-1',
+      name: '订单定制餐',
+      referenceDogId: 'dog-1',
+      designMode: 'ORDER',
+      orderId: 'order-2026-001',
+      orderQuantity: 3,
+    };
+    const service = {
+      getDraft: jest.fn().mockResolvedValue(draft),
+      getDraftProductionSteps: jest
+        .fn()
+        .mockResolvedValue({ draftId: 'draft-1', productionSteps: [] }),
+    };
+    const prisma = {
+      recipeSeries: { findUnique: jest.fn().mockResolvedValue(null) },
+    };
+
+    const snapshot = await createAdapter(service, prisma).getDraft('draft-1');
+
+    expect(snapshot.designMode).toBe('ORDER');
+    expect(snapshot.orderId).toBe('order-2026-001');
+    expect(snapshot.orderQuantity).toBe(3);
+  });
+
+  it('getDraft 在没有系列时把设计上下文设为 null', async () => {
+    const draft: any = serviceDraft();
+    draft.seriesId = null;
+    draft.series = null;
+    const service = {
+      getDraft: jest.fn().mockResolvedValue(draft),
+      getDraftProductionSteps: jest
+        .fn()
+        .mockResolvedValue({ draftId: 'draft-1', productionSteps: [] }),
+    };
+
+    const adapter = createAdapter(service, {});
+    const snapshot = await adapter.getDraft('draft-1');
+
+    expect(snapshot.designMode).toBeNull();
+    expect(snapshot.orderId).toBeNull();
+    expect(snapshot.orderQuantity).toBeNull();
   });
 
   it('animalSpecies 只从蛋白/内脏类识别，果蔬菌不误判', async () => {

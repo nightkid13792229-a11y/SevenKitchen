@@ -202,6 +202,9 @@ export function fakeDraftSnapshot(
   return {
     draftId: 'draft-1',
     seriesId: 'series-1',
+    designMode: 'CATALOG',
+    orderId: null,
+    orderQuantity: null,
     name: '鸭肉南瓜成犬餐',
     scenario: '成犬 110ME',
     contentRevision: 4,

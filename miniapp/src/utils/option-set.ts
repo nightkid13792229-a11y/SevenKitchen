@@ -70,7 +70,8 @@ export async function loadOptionSet(setCode: string): Promise<OptionItem[]> {
       return normalized;
     } catch (error) {
       console.warn(`[OptionSet] 读取选项集 ${setCode} 失败:`, error);
-      return [];
+      // 让调用方知道是“加载失败”而不是“这个字典本来就是空”
+      throw error;
     } finally {
       inflight.delete(setCode);
     }
@@ -90,16 +91,26 @@ export async function loadOptionSet(setCode: string): Promise<OptionItem[]> {
 export function useOptionSet(setCode: string) {
   const items = ref<OptionItem[]>(cache.get(setCode) ?? []);
   const loading = ref(!cache.has(setCode));
+  /** 加载失败（与“字典本来就是空”区分；页面可以给重试） */
+  const failed = ref(false);
 
   const ensure = async () => {
     if (cache.has(setCode)) {
       items.value = cache.get(setCode)!;
       loading.value = false;
+      failed.value = false;
       return;
     }
     loading.value = true;
-    items.value = await loadOptionSet(setCode);
-    loading.value = false;
+    failed.value = false;
+    try {
+      items.value = await loadOptionSet(setCode);
+    } catch {
+      items.value = [];
+      failed.value = true;
+    } finally {
+      loading.value = false;
+    }
   };
 
   /**
@@ -129,7 +140,7 @@ export function useOptionSet(setCode: string) {
     return items.value.find((item) => item.code === key)?.tone || '';
   };
 
-  return { items, loading, ensure, labelOf, toneOf };
+  return { items, loading, failed, ensure, labelOf, toneOf };
 }
 
 /** 定制订单状态（与后端枚举同名） */

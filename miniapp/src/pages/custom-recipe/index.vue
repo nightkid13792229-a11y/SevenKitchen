@@ -533,7 +533,23 @@
 
       <view class="intake-block">
         <text class="intake-question">现在主要喂什么<text class="intake-required">*</text></text>
-        <view class="intake-options">
+        <view
+          v-if="currentFoodOptionsLoading && !currentFoodOptions.length"
+          class="option-state"
+        >
+          <text class="option-state__text">选项加载中…</text>
+        </view>
+        <view
+          v-else-if="currentFoodOptionsFailed && !currentFoodOptions.length"
+          class="option-state option-state--error"
+        >
+          <text class="option-state__text">选项没加载出来</text>
+          <text class="option-state__retry" @tap="retryCurrentFoodOptions">重试</text>
+        </view>
+        <view v-else-if="!currentFoodOptions.length" class="option-state">
+          <text class="option-state__text">暂无可选项，请联系 Seven爸爸</text>
+        </view>
+        <view v-else class="intake-options">
           <text
             v-for="opt in currentFoodOptions"
             :key="opt.code"
@@ -559,7 +575,23 @@
 
       <view class="intake-block">
         <text class="intake-question">定制原因<text class="intake-required">*</text></text>
-        <view class="intake-options">
+        <view
+          v-if="changeReasonOptionsLoading && !changeReasonOptions.length"
+          class="option-state"
+        >
+          <text class="option-state__text">选项加载中…</text>
+        </view>
+        <view
+          v-else-if="changeReasonOptionsFailed && !changeReasonOptions.length"
+          class="option-state option-state--error"
+        >
+          <text class="option-state__text">选项没加载出来</text>
+          <text class="option-state__retry" @tap="retryChangeReasonOptions">重试</text>
+        </view>
+        <view v-else-if="!changeReasonOptions.length" class="option-state">
+          <text class="option-state__text">暂无可选项，请联系 Seven爸爸</text>
+        </view>
+        <view v-else class="intake-options">
           <text
             v-for="opt in changeReasonOptions"
             :key="opt.code"
@@ -586,7 +618,23 @@
 
       <view class="intake-block">
         <text class="intake-question">最近肠胃怎么样（可选）</text>
-        <view class="intake-options">
+        <view
+          v-if="stomachOptionsLoading && !stomachOptions.length"
+          class="option-state"
+        >
+          <text class="option-state__text">选项加载中…</text>
+        </view>
+        <view
+          v-else-if="stomachOptionsFailed && !stomachOptions.length"
+          class="option-state option-state--error"
+        >
+          <text class="option-state__text">选项没加载出来</text>
+          <text class="option-state__retry" @tap="retryStomachOptions">重试</text>
+        </view>
+        <view v-else-if="!stomachOptions.length" class="option-state">
+          <text class="option-state__text">暂无可选项</text>
+        </view>
+        <view v-else class="intake-options">
           <text
             v-for="opt in stomachOptions"
             :key="opt.code"
@@ -1404,15 +1452,33 @@ function focusStomachOther() {
 
 const {
   items: currentFoodOptions,
+  loading: currentFoodOptionsLoading,
+  failed: currentFoodOptionsFailed,
   ensure: ensureCurrentFoodOptions,
 } = useOptionSet('custom_recipe_current_food');
 const {
   items: changeReasonOptions,
+  loading: changeReasonOptionsLoading,
+  failed: changeReasonOptionsFailed,
   ensure: ensureChangeReasonOptions,
 } = useOptionSet('custom_recipe_change_reason');
-const { items: stomachOptions, ensure: ensureStomachOptions } = useOptionSet(
-  'custom_recipe_stomach',
-);
+const {
+  items: stomachOptions,
+  loading: stomachOptionsLoading,
+  failed: stomachOptionsFailed,
+  ensure: ensureStomachOptions,
+} = useOptionSet('custom_recipe_stomach');
+
+/** 选项字典加载失败时，页面给重试；不要把空列表当成“没有选项” */
+function retryCurrentFoodOptions() {
+  void ensureCurrentFoodOptions();
+}
+function retryChangeReasonOptions() {
+  void ensureChangeReasonOptions();
+}
+function retryStomachOptions() {
+  void ensureStomachOptions();
+}
 
 /** 单选当前食物；选「其他」时自动聚焦输入框 */
 function selectCurrentFood(code: string) {
@@ -3966,6 +4032,36 @@ const getBCSText = (bcsScore: number) => {
   display: flex;
   flex-wrap: wrap;
   gap: 16rpx;
+}
+
+.option-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 12rpx;
+  background: #f7f8f2;
+}
+
+.option-state--error {
+  background: #fff7ed;
+}
+
+.option-state__text {
+  font-size: 23rpx;
+  color: #7a806f;
+}
+
+.option-state--error .option-state__text {
+  color: #b45309;
+}
+
+.option-state__retry {
+  flex: 0 0 auto;
+  font-size: 23rpx;
+  font-weight: 700;
+  color: #1e5b35;
 }
 
 .intake-option {

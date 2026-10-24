@@ -531,6 +531,21 @@ describe('custom recipe page · 结构与知情同意', () => {
     expect(page).toContain(':focus="stomachOtherFocused"')
   })
 
+  it('★ 选项加载失败有“加载中/加载失败/重试”，不把空列表当成没有选项', () => {
+    expect(page).toContain('currentFoodOptionsLoading')
+    expect(page).toContain('currentFoodOptionsFailed')
+    expect(page).toContain('retryCurrentFoodOptions')
+    expect(page).toContain('changeReasonOptionsLoading')
+    expect(page).toContain('changeReasonOptionsFailed')
+    expect(page).toContain('retryChangeReasonOptions')
+    expect(page).toContain('stomachOptionsLoading')
+    expect(page).toContain('stomachOptionsFailed')
+    expect(page).toContain('retryStomachOptions')
+    expect(page).toContain('选项加载中')
+    expect(page).toContain('选项没加载出来')
+    expect(page).toContain('option-state__retry')
+  })
+
   it('补上了附件上传入口（此前字段有、界面没有）', () => {
     expect(page).toContain('pickAttachmentEntry')
     expect(page).toContain('uploadCustomRecipeDraftAttachment')

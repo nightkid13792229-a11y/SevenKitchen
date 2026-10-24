@@ -14,12 +14,14 @@ import { ApiResponseDto } from '../dto/common/response.dto';
 import { StaffGuard } from '../guards/role.guard';
 
 type AgentMessageBody = { message?: string };
+type AgentDecisionBody = { status?: string };
+type AgentDecisionStatus = 'APPROVED' | 'REJECTED';
 
 /**
  * 食谱设计 Agent 的内部员工入口。
  *
  * 只做参数校验和身份透传：会话状态、运行锁、审批判断都在
- * `RecipeAgentRunService` / 工具箱里。P0b-3 不开放审批决定端点。
+ * `RecipeAgentRunService` / 工具箱里。
  */
 @ApiTags('Recipe Designer Agent')
 @ApiBearerAuth()
@@ -83,6 +85,23 @@ export class RecipeAgentController {
     });
     return ApiResponseDto.success(null);
   }
+
+  @Post('agent/approvals/:approvalId/decide')
+  @UseGuards(StaffGuard)
+  @ApiOperation({ summary: 'Approve or reject a recipe design agent approval' })
+  async decideApproval(
+    @Param('approvalId') approvalId: string,
+    @Body() body: AgentDecisionBody,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<unknown>> {
+    return ApiResponseDto.success(
+      await this.runService.decideApproval(
+        approvalId,
+        { status: requireDecisionStatus(body) },
+        toActor(user),
+      ),
+    );
+  }
 }
 
 function toActor(user: RequestUser) {
@@ -99,4 +118,14 @@ function requireMessage(body: AgentMessageBody | undefined): string {
     throw new BadRequestException('消息不能为空');
   }
   return message;
+}
+
+function requireDecisionStatus(
+  body: AgentDecisionBody | undefined,
+): AgentDecisionStatus {
+  const status = body?.status;
+  if (status !== 'APPROVED' && status !== 'REJECTED') {
+    throw new BadRequestException('审批结果只能是 APPROVED 或 REJECTED');
+  }
+  return status;
 }

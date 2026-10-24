@@ -19,6 +19,7 @@ import type {
   IngredientOptionListResponse,
   IngredientRecommendationResult,
   NutritionPlanResult,
+  RecipeAgentApprovalStatus,
   RecipeAgentSessionView,
   RecipeAiDesignData,
   RecipeDesignerIngredientOption,
@@ -373,4 +374,9 @@ export const recipeDesignerApi = {
     api.post(`/recipe-designer/agent/runs/${sessionId}/stop`),
   answerAgentRun: (sessionId: string, message: string): Promise<void> =>
     api.post(`/recipe-designer/agent/runs/${sessionId}/answer`, { message }),
+  decideAgentApproval: (
+    approvalId: string,
+    status: RecipeAgentApprovalStatus
+  ): Promise<unknown> =>
+    api.post(`/recipe-designer/agent/approvals/${approvalId}/decide`, { status }),
 }

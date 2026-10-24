@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import type { AgentToolResult } from 'src/application/recipe-designer/agent/agent-types';
@@ -149,6 +150,7 @@ function makeRunService(options: {
   sessionService?: ReturnType<typeof makeSessionService>;
   prisma?: any;
   designerService?: { getDraft: jest.Mock };
+  approvalService?: { getApprovalState?: jest.Mock; decide?: jest.Mock };
 }) {
   const sessionService = options.sessionService ?? makeSessionService();
   const designerService = options.designerService ?? {
@@ -192,7 +194,7 @@ function makeRunService(options: {
 
   const service = new RecipeAgentRunService(
     sessionService as any,
-    { getApprovalState: jest.fn() } as any,
+    (options.approvalService ?? { getApprovalState: jest.fn() }) as any,
     designerService as any,
     prisma as any,
     providerConfig as any,
@@ -218,6 +220,36 @@ function makeRunService(options: {
 
 function messageCalls(sessionService: ReturnType<typeof makeSessionService>) {
   return sessionService.appendMessage.mock.calls.map(([message]) => message);
+}
+
+const APPROVAL_ID = 'approval-1';
+
+function makeApprovalDecisionPrisma(
+  overrides: { approval?: any; session?: any } = {},
+) {
+  return {
+    recipeDesignAgentApproval: {
+      findUnique: jest.fn().mockResolvedValue(
+        overrides.approval === undefined
+          ? {
+              id: APPROVAL_ID,
+              sessionId: SESSION_ID,
+              type: 'CATEGORY_OMISSION',
+              status: 'PENDING',
+            }
+          : overrides.approval,
+      ),
+    },
+    recipeDesignAgentSession: {
+      findUnique: jest
+        .fn()
+        .mockResolvedValue(
+          overrides.session === undefined
+            ? { id: SESSION_ID, designRecipeId: DRAFT_ID }
+            : overrides.session,
+        ),
+    },
+  };
 }
 
 describe('RecipeAgentRunService', () => {
@@ -1064,6 +1096,259 @@ describe('RecipeAgentRunService', () => {
 
     expect(prisma.recipeDesignAgentSession.findFirst).not.toHaveBeenCalled();
     expect(sessionService.listMessages).not.toHaveBeenCalled();
+  });
+
+  it('getSessionView 返回会话、消息和该会话的审批（按申请时间升序）', async () => {
+    const requestedAt = new Date('2026-10-24T10:00:00Z');
+    const approval = {
+      id: APPROVAL_ID,
+      sessionId: SESSION_ID,
+      type: 'CATEGORY_OMISSION',
+      status: 'PENDING',
+      reason: '用户不要内脏',
+      detail: { categories: ['内脏'] },
+      requestedAt,
+      decidedBy: null,
+      decidedAt: null,
+    };
+    const session = {
+      id: SESSION_ID,
+      designRecipeId: DRAFT_ID,
+      status: 'WAITING_USER',
+    };
+    const message = historyMessage(1, 'USER', '不要内脏');
+    const prisma = {
+      recipeDesignAgentSession: {
+        findFirst: jest.fn().mockResolvedValue(session),
+      },
+      recipeDesignAgentApproval: {
+        findMany: jest.fn().mockResolvedValue([approval]),
+      },
+    };
+    const sessionService = makeSessionService();
+    sessionService.listMessages.mockResolvedValue([message]);
+    const { service } = makeRunService({
+      handlers: {},
+      prisma,
+      sessionService,
+    });
+
+    await expect(service.getSessionView(DRAFT_ID, ACTOR)).resolves.toEqual({
+      session,
+      messages: [message],
+      approvals: [{ ...approval, createdAt: requestedAt }],
+    });
+    expect(prisma.recipeDesignAgentApproval.findMany).toHaveBeenCalledWith({
+      where: { sessionId: SESSION_ID },
+      orderBy: { requestedAt: 'asc' },
+    });
+  });
+
+  describe('decideApproval', () => {
+    it('校验草稿访问后委托审批服务决定，并带上审批人和结果', async () => {
+      const prisma = makeApprovalDecisionPrisma();
+      const decided = {
+        id: APPROVAL_ID,
+        sessionId: SESSION_ID,
+        type: 'CATEGORY_OMISSION',
+        status: 'APPROVED',
+      };
+      const approvalService = {
+        getApprovalState: jest.fn(),
+        decide: jest.fn().mockResolvedValue(decided),
+      };
+      const { service, designerService } = makeRunService({
+        handlers: {},
+        prisma,
+        approvalService,
+      });
+
+      await expect(
+        service.decideApproval(APPROVAL_ID, { status: 'APPROVED' }, ACTOR),
+      ).resolves.toBe(decided);
+
+      expect(designerService.getDraft).toHaveBeenCalledWith(DRAFT_ID, ACTOR);
+      expect(approvalService.decide).toHaveBeenCalledWith(APPROVAL_ID, {
+        status: 'APPROVED',
+        decidedBy: ACTOR.userId,
+      });
+    });
+
+    it('无草稿访问权时拒绝，且不写审批结果', async () => {
+      const prisma = makeApprovalDecisionPrisma();
+      const designerService = {
+        getDraft: jest
+          .fn()
+          .mockRejectedValue(new NotFoundException('设计草稿不存在')),
+      };
+      const approvalService = { decide: jest.fn() };
+      const { service } = makeRunService({
+        handlers: {},
+        prisma,
+        designerService,
+        approvalService,
+      });
+
+      await expect(
+        service.decideApproval(APPROVAL_ID, { status: 'APPROVED' }, ACTOR),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(approvalService.decide).not.toHaveBeenCalled();
+    });
+
+    it('审批不存在时返回 404，不再查会话', async () => {
+      const prisma = makeApprovalDecisionPrisma({ approval: null });
+      const approvalService = { decide: jest.fn() };
+      const { service } = makeRunService({
+        handlers: {},
+        prisma,
+        approvalService,
+      });
+
+      const error = await service
+        .decideApproval(APPROVAL_ID, { status: 'APPROVED' }, ACTOR)
+        .catch((caught) => caught);
+
+      expect(error).toBeInstanceOf(NotFoundException);
+      expect(error.message).toBe('审批不存在');
+      expect(prisma.recipeDesignAgentSession.findUnique).not.toHaveBeenCalled();
+      expect(approvalService.decide).not.toHaveBeenCalled();
+    });
+
+    it('审批所属会话不存在时返回 404', async () => {
+      const prisma = makeApprovalDecisionPrisma({ session: null });
+      const approvalService = { decide: jest.fn() };
+      const { service } = makeRunService({
+        handlers: {},
+        prisma,
+        approvalService,
+      });
+
+      const error = await service
+        .decideApproval(APPROVAL_ID, { status: 'APPROVED' }, ACTOR)
+        .catch((caught) => caught);
+
+      expect(error).toBeInstanceOf(NotFoundException);
+      expect(error.message).toBe('会话不存在');
+      expect(approvalService.decide).not.toHaveBeenCalled();
+    });
+
+    it('达标例外只有 ADMIN 能决定；普通员工被拒且不写审批结果', async () => {
+      const prisma = makeApprovalDecisionPrisma({
+        approval: {
+          id: APPROVAL_ID,
+          sessionId: SESSION_ID,
+          type: 'COMPLIANCE_EXCEPTION',
+          status: 'PENDING',
+        },
+      });
+      const approvalService = { decide: jest.fn() };
+      const { service, designerService } = makeRunService({
+        handlers: {},
+        prisma,
+        approvalService,
+      });
+
+      const error = await service
+        .decideApproval(
+          APPROVAL_ID,
+          { status: 'APPROVED' },
+          { ...ACTOR, role: 'STAFF' },
+        )
+        .catch((caught) => caught);
+
+      expect(error).toBeInstanceOf(ForbiddenException);
+      expect(error.message).toBe('只有管理员可以批准达标例外');
+      expect(designerService.getDraft).toHaveBeenCalledTimes(1);
+      expect(approvalService.decide).not.toHaveBeenCalled();
+    });
+
+    it('ADMIN 可以决定达标例外', async () => {
+      const prisma = makeApprovalDecisionPrisma({
+        approval: {
+          id: APPROVAL_ID,
+          sessionId: SESSION_ID,
+          type: 'COMPLIANCE_EXCEPTION',
+          status: 'PENDING',
+        },
+      });
+      const approvalService = {
+        decide: jest.fn().mockResolvedValue({ id: APPROVAL_ID }),
+      };
+      const { service } = makeRunService({
+        handlers: {},
+        prisma,
+        approvalService,
+      });
+
+      await expect(
+        service.decideApproval(
+          APPROVAL_ID,
+          { status: 'APPROVED' },
+          { ...ACTOR, role: 'ADMIN' },
+        ),
+      ).resolves.toEqual({ id: APPROVAL_ID });
+      expect(approvalService.decide).toHaveBeenCalledWith(APPROVAL_ID, {
+        status: 'APPROVED',
+        decidedBy: ACTOR.userId,
+      });
+    });
+
+    it('已经处理过的审批返回冲突，不重复写', async () => {
+      const prisma = makeApprovalDecisionPrisma({
+        approval: {
+          id: APPROVAL_ID,
+          sessionId: SESSION_ID,
+          type: 'CATEGORY_OMISSION',
+          status: 'APPROVED',
+        },
+      });
+      const approvalService = { decide: jest.fn() };
+      const { service } = makeRunService({
+        handlers: {},
+        prisma,
+        approvalService,
+      });
+
+      const error = await service
+        .decideApproval(APPROVAL_ID, { status: 'REJECTED' }, ACTOR)
+        .catch((caught) => caught);
+
+      expect(error).toBeInstanceOf(ConflictException);
+      expect(error.message).toBe('这条审批已经处理过了');
+      expect(approvalService.decide).not.toHaveBeenCalled();
+    });
+
+    it('先校验访问权再校验管理员权限，未授权者拿不到角色错误', async () => {
+      const prisma = makeApprovalDecisionPrisma({
+        approval: {
+          id: APPROVAL_ID,
+          sessionId: SESSION_ID,
+          type: 'COMPLIANCE_EXCEPTION',
+          status: 'PENDING',
+        },
+      });
+      const designerService = {
+        getDraft: jest
+          .fn()
+          .mockRejectedValue(new NotFoundException('设计草稿不存在')),
+      };
+      const approvalService = { decide: jest.fn() };
+      const { service } = makeRunService({
+        handlers: {},
+        prisma,
+        designerService,
+        approvalService,
+      });
+
+      await expect(
+        service.decideApproval(
+          APPROVAL_ID,
+          { status: 'APPROVED' },
+          { ...ACTOR, role: 'STAFF' },
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(approvalService.decide).not.toHaveBeenCalled();
+    });
   });
 
   it('resume 只接受 WAITING_USER，追加用户消息后重置 RUNNING 并继续跑', async () => {

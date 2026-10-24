@@ -8,6 +8,7 @@ import { StaffGuard } from '../../../src/interfaces/guards/role.guard';
 
 const DRAFT_ID = 'draft-1';
 const SESSION_ID = 'session-1';
+const APPROVAL_ID = 'approval-1';
 const USER: RequestUser = {
   userId: 'user-1',
   customerId: 'customer-1',
@@ -25,6 +26,7 @@ function makeRunService() {
     resume: jest.fn(),
     stop: jest.fn(),
     getSessionView: jest.fn(),
+    decideApproval: jest.fn(),
   };
 }
 
@@ -41,11 +43,17 @@ describe('RecipeAgentController', () => {
   });
 
   it('requires authentication at class level and staff guard on every route', () => {
-    expect(
-      Reflect.getMetadata(GUARDS_METADATA, RecipeAgentController),
-    ).toEqual([AuthGuard]);
+    expect(Reflect.getMetadata(GUARDS_METADATA, RecipeAgentController)).toEqual(
+      [AuthGuard],
+    );
 
-    for (const method of ['start', 'getSession', 'stop', 'answer'] as const) {
+    for (const method of [
+      'start',
+      'getSession',
+      'stop',
+      'answer',
+      'decideApproval',
+    ] as const) {
       expect(
         Reflect.getMetadata(
           GUARDS_METADATA,
@@ -133,5 +141,49 @@ describe('RecipeAgentController', () => {
 
       expect(runService.resume).not.toHaveBeenCalled();
     });
+  });
+
+  describe('decideApproval', () => {
+    it('delegates the decision with the actor and wraps the result', async () => {
+      const approval = {
+        id: APPROVAL_ID,
+        sessionId: SESSION_ID,
+        type: 'CATEGORY_OMISSION',
+        status: 'APPROVED',
+      };
+      runService.decideApproval.mockResolvedValue(approval);
+
+      await expect(
+        controller.decideApproval(APPROVAL_ID, { status: 'APPROVED' }, USER),
+      ).resolves.toEqual(ApiResponseDto.success(approval));
+
+      expect(runService.decideApproval).toHaveBeenCalledTimes(1);
+      expect(runService.decideApproval).toHaveBeenCalledWith(
+        APPROVAL_ID,
+        { status: 'APPROVED' },
+        ACTOR,
+      );
+    });
+
+    it.each([
+      ['missing', {}],
+      ['unknown', { status: 'DONE' }],
+      ['wrong type', { status: 1 }],
+    ])(
+      'rejects a %s decision status without calling the run service',
+      async (_label, body) => {
+        const decide = controller.decideApproval(
+          APPROVAL_ID,
+          body as { status?: string },
+          USER,
+        );
+
+        await expect(decide).rejects.toBeInstanceOf(BadRequestException);
+        await expect(decide).rejects.toThrow(
+          '审批结果只能是 APPROVED 或 REJECTED',
+        );
+        expect(runService.decideApproval).not.toHaveBeenCalled();
+      },
+    );
   });
 });

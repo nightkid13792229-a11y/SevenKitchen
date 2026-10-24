@@ -226,7 +226,7 @@ P0b-3 评审 NOT READY 的 3 个阻塞项已修：
 - 开跑/查会话/停/回答都先过 `RecipeDesignerService.getDraft` 的草稿权限；无权时不建会话、不返回消息。
 - 会话状态改成带前置状态的 `transitionStatus` 条件更新 + 进程内 `activeDrafts`/`claiming` 锁；双启动/双回答只成一个，停止/完成不会被覆盖。
 
-当前 17 个 spec / 281 个测试全绿。
+当前 17 个 spec / 282 个测试全绿。草稿锁是计数锁：start/resume 都持锁，stop 不主动释放，旧循环真正退出后才释放，stop→start 在这之前会被拒绝。
 
 ## 接下来（P1/P2，不在本计划）
 

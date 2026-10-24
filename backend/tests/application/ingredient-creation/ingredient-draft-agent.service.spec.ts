@@ -1929,6 +1929,178 @@ describe('IngredientDraftAgentService · askUser（先问人，再动手）', ()
     expect(result.toolCalls[0].error).toContain('40');
     expect(harness.currentDraft()?.payload.pendingQuestion).toBeUndefined();
   });
+
+  it('ask 事件带上选项的库内核实标记：未收录的保留并带后缀', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'askUser',
+            {
+              question: '山药你指的是哪一种？',
+              options: ['铁棍山药', '菜山药', '毛山药'],
+            },
+            'call_ask_checks',
+          ),
+        ),
+      );
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    (harness.candidateService.findCandidates as jest.Mock).mockImplementation(
+      async (input: { name: string }) =>
+        input.name === '毛山药' ? EMPTY_CANDIDATE_RESULT : CANDIDATE_RESULT,
+    );
+
+    const events: any[] = [];
+    const result = await harness.agent.run(
+      { draftId: DRAFT_ID, text: '山药', userId: 'admin-1' },
+      (event) => events.push(event),
+    );
+
+    // 选项原文仍按字符串存（旧页面 / 旧草稿兼容），核实结果平行放在
+    // optionChecks 里；未收录的展示文案带「会去线上找」的后缀。
+    expect(result.pendingQuestion?.options).toEqual([
+      '铁棍山药',
+      '菜山药',
+      '毛山药',
+    ]);
+    expect(result.pendingQuestion?.optionChecks).toEqual([
+      {
+        label: '铁棍山药',
+        inLibrary: true,
+        matchedName: 'Chicken, liver, raw',
+        displayLabel: '铁棍山药',
+      },
+      {
+        label: '菜山药',
+        inLibrary: true,
+        matchedName: 'Chicken, liver, raw',
+        displayLabel: '菜山药',
+      },
+      {
+        label: '毛山药',
+        inLibrary: false,
+        matchedName: null,
+        displayLabel: '毛山药（库里未收录，选了会去线上找）',
+      },
+    ]);
+
+    const askEvent = events.find((event) => event.type === 'ask');
+    expect(askEvent).toMatchObject({
+      question: '山药你指的是哪一种？',
+      options: ['铁棍山药', '菜山药', '毛山药'],
+      optionChecks: result.pendingQuestion?.optionChecks,
+      draftId: DRAFT_ID,
+    });
+    expect(harness.currentDraft()?.payload.pendingQuestion).toMatchObject({
+      options: ['铁棍山药', '菜山药', '毛山药'],
+      optionChecks: result.pendingQuestion?.optionChecks,
+    });
+  });
+
+  it('所有选项都查不到时把错误文本回灌给模型，不写待回答问题', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'askUser',
+            {
+              question: '山药你指的是哪一种？',
+              options: ['铁棍山药', '菜山药', '毛山药', '山药干'],
+            },
+            'call_ask_all_miss',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(assistantReply('这几类本地库都没有，我换个问法。')),
+      );
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    harness.candidateService.findCandidates.mockResolvedValue(
+      EMPTY_CANDIDATE_RESULT,
+    );
+
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '山药',
+      userId: 'admin-1',
+    });
+
+    expect(result.toolCalls[0]).toMatchObject({
+      name: 'askUser',
+      ok: false,
+    });
+    expect(result.toolCalls[0].error).toContain('全部未收录');
+    expect(result.toolCalls[0].error).toContain('可能库里没有');
+    expect(result.toolCalls[0].error).toContain('更宽');
+    expect(result.stopReason).toBeNull();
+
+    // 模型必须能看到这段错误文本，才有机会改问法；草稿里不能留下问题。
+    const second = requestBody(fetchMock, 1);
+    const toolMessage = second.messages.find(
+      (message: any) => message.role === 'tool',
+    );
+    expect(toolMessage?.content).toContain('全部未收录');
+    expect(toolMessage?.content).toContain('更宽');
+    expect(harness.currentDraft()?.payload.pendingQuestion).toBeUndefined();
+  });
+
+  it('回答未收录的选项时提示模型走线上或留空，不编造', async () => {
+    const harness = createHarness({
+      draft: createDraft({
+        payload: {
+          pendingQuestion: {
+            question: '山药你指的是哪一种？',
+            options: ['铁棍山药', '毛山药'],
+            optionChecks: [
+              {
+                label: '铁棍山药',
+                inLibrary: true,
+                matchedName: 'Yam, raw',
+                displayLabel: '铁棍山药',
+              },
+              {
+                label: '毛山药',
+                inLibrary: false,
+                matchedName: null,
+                displayLabel: '毛山药（库里未收录，选了会去线上找）',
+              },
+            ],
+            askedAt: '2026-10-24T12:00:00.000Z',
+          },
+        },
+      }),
+    });
+
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(chatResponse(assistantReply('我去线上找毛山药。')));
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '毛山药',
+      userId: 'admin-1',
+    });
+
+    const messages = requestBody(fetchMock, 0).messages as Array<{
+      role: string;
+      content: string | null;
+    }>;
+    const prompt = messages
+      .map((message) => String(message.content ?? ''))
+      .join('\n');
+    expect(prompt).toContain('你刚问');
+    expect(prompt).toContain('用户答：毛山药');
+    expect(prompt).toContain('库里未收录');
+    expect(prompt).toContain('线上');
+    expect(prompt).toContain('留空');
+  });
 });
 
 describe('POST /api/v1/admin/ingredient-creation/agent/run', () => {

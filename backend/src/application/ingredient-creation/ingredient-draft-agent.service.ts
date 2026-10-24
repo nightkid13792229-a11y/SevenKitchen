@@ -26,6 +26,7 @@ import {
 import type {
   IngredientCreationDraft,
   PendingQuestion,
+  PendingQuestionOption,
 } from './ingredient-creation.types';
 
 /**
@@ -207,6 +208,8 @@ export type IngredientAgentStreamEvent =
       type: 'ask';
       question: string;
       options: string[];
+      /** 每个选项的库内核实结果，与 options 同序；页面据此显示小标。 */
+      optionChecks?: PendingQuestionOption[];
       draftId: string;
     }
   | { type: 'done' }
@@ -946,6 +949,35 @@ function buildSystemPrompt(
 }
 
 /**
+ * 读取草稿里存的选项核实结果。
+ *
+ * 旧草稿没有 `optionChecks`；这里只在它确实是数组时补默认值，
+ * 不因为缺字段就让整份问题读不出来。
+ */
+function readPendingQuestionOptionChecks(
+  value: unknown,
+  options: readonly string[],
+): PendingQuestionOption[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return options.map((label, index) => {
+    const raw = isRecord(value[index]) ? value[index] : null;
+    const inLibrary =
+      raw && typeof raw.inLibrary === 'boolean' ? raw.inLibrary : null;
+    const matchedName =
+      raw && typeof raw.matchedName === 'string' && raw.matchedName.trim()
+        ? raw.matchedName.trim()
+        : null;
+    const displayLabel =
+      raw && typeof raw.displayLabel === 'string' && raw.displayLabel.trim()
+        ? raw.displayLabel.trim()
+        : label;
+    return { label, inLibrary, matchedName, displayLabel };
+  });
+}
+
+/**
  * 读草稿里存的问题；payload 可以被人工编辑，认不出来就当没有。
  *
  * 只用于拼提示词，所以缺 `askedAt` 时补空串而不是拒绝整条问题。
@@ -969,7 +1001,16 @@ function readPendingQuestion(value: unknown): PendingQuestion | null {
     : [];
   const askedAt =
     typeof value.askedAt === 'string' ? value.askedAt.trim() : '';
-  return { question, options, askedAt };
+  const optionChecks = readPendingQuestionOptionChecks(
+    value.optionChecks,
+    options,
+  );
+  return {
+    question,
+    options,
+    ...(optionChecks.length > 0 ? { optionChecks } : {}),
+    askedAt,
+  };
 }
 
 /** 回答上一轮的问题时，把「问过什么 + 用户答了什么」一起交给模型。 */
@@ -980,11 +1021,25 @@ function buildUserPrompt(
   if (!pendingQuestion) {
     return text;
   }
-  return [
-    `你刚问：${pendingQuestion.question}`,
-    `用户答：${text}`,
-    '（请按用户回答继续；不要假装早已知道答案，也不要重复问同一个问题。）',
-  ].join('\n');
+
+  const lines = [`你刚问：${pendingQuestion.question}`, `用户答：${text}`];
+  const selected = pendingQuestion.optionChecks?.find(
+    (option) => option.label === text || option.displayLabel === text,
+  );
+  if (selected?.inLibrary === false) {
+    // 用户点了一个本地库没有的选项：明确告诉他走线上或留空，绝不编数值。
+    lines.push(
+      '（这个选项库里未收录：请走线上检索；线上也没有就先留空，不要编造营养数值。）',
+    );
+  } else if (selected?.inLibrary === true) {
+    lines.push(
+      `（这个选项库里已收录${
+        selected.matchedName ? `：${selected.matchedName}` : ''
+      }；请优先用本地来源。）`,
+    );
+  }
+  lines.push('（请按用户回答继续；不要假装早已知道答案，也不要重复问同一个问题。）');
+  return lines.join('\n');
 }
 
 function buildInitialMessages(
@@ -1131,6 +1186,9 @@ export class IngredientDraftAgentService {
           type: 'ask',
           question: result.pendingQuestion.question,
           options: result.pendingQuestion.options,
+          ...(result.pendingQuestion.optionChecks
+            ? { optionChecks: result.pendingQuestion.optionChecks }
+            : {}),
           draftId: result.draftId,
         });
         this.emitEvent(effectiveInput.onEvent, { type: 'done' });

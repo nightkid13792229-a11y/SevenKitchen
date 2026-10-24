@@ -5,6 +5,10 @@ import { IngredientCreationDraftService } from '../../../src/application/ingredi
 import { IngredientCreationToolsService } from '../../../src/application/ingredient-creation/ingredient-creation-tools.service';
 import { NUTRITION_FIELD_CATALOG } from '../../../src/domain/ingredient/nutrition-field-catalog';
 import type { PrismaService } from '../../../src/infrastructure/prisma.service';
+import type {
+  CandidateSearchResult,
+  PendingQuestion,
+} from '../../../src/application/ingredient-creation/ingredient-creation.types';
 
 const DRAFT_ID = 'draft-1';
 const RUN_ID = 'run-1';
@@ -608,5 +612,249 @@ describe('IngredientCreationToolsService · searchLocalNutrition 匹配依据', 
     expect(result.body.hint).toContain('没有找到匹配词条');
     expect(result.body.hint).toContain('西洋菜');
     expect(result.body.hint).toContain('watercress');
+  });
+});
+
+describe('IngredientCreationToolsService · askUser 选项先核实本地营养库', () => {
+  const ASK_QUESTION = '山药你指的是哪一种？';
+  const ASK_OPTIONS = ['铁棍山药', '菜山药', '毛山药'];
+  const COOKED_INTAKE = {
+    intake: {
+      name: '山药',
+      nameEn: null,
+      aliases: [],
+      confusables: [],
+      category: 'STARCHY_VEGETABLE',
+      requiredStates: ['COOKED'],
+      suggestedStates: ['RAW'],
+    },
+  };
+
+  function candidateHit(
+    foodName: string,
+    state: 'RAW' | 'COOKED' = 'COOKED',
+  ): CandidateSearchResult {
+    return {
+      keywords: [foodName],
+      candidates: [
+        {
+          sourceRecordId: `rec-${foodName}`,
+          sourceType: 'USDA_FDC',
+          foodName,
+          foodNameEn: null,
+          preparationState: state,
+          cookingMethod: null,
+          coveragePercent: 80,
+          missingFields: [],
+          matchScore: 0.9,
+          notes: [],
+        },
+      ],
+      excludedCount: 0,
+      coverage: {
+        state,
+        candidateCount: 1,
+        bestCoveragePercent: 80,
+        bestMissingFieldCount: 0,
+      },
+    };
+  }
+
+  function emptyCandidates(state: 'RAW' | 'COOKED' = 'COOKED') {
+    return {
+      keywords: [],
+      candidates: [],
+      excludedCount: 0,
+      coverage: {
+        state,
+        candidateCount: 0,
+        bestCoveragePercent: null,
+        bestMissingFieldCount: null,
+      },
+    };
+  }
+
+  async function executeAskUser(
+    tools: IngredientCreationToolsService,
+    args: Record<string, unknown>,
+  ) {
+    const execution = await tools.execute({
+      runId: RUN_ID,
+      draftId: DRAFT_ID,
+      name: 'askUser',
+      args,
+    });
+
+    return {
+      ...execution,
+      body: JSON.parse(execution.content) as {
+        ok: boolean;
+        error?: string;
+        options?: string[];
+        optionChecks?: PendingQuestion['optionChecks'];
+      },
+    };
+  }
+
+  it('3 个选项命中 2 个：标 inLibrary=true 并带词条名，未命中的保留且加后缀', async () => {
+    const { tools, draftService, candidateService } = createTools(
+      [],
+      COOKED_INTAKE,
+    );
+    candidateService.findCandidates.mockImplementation(
+      async (input: { name: string }) => {
+        if (input.name === '铁棍山药') return candidateHit('Yam, raw');
+        if (input.name === '菜山药') return candidateHit('Yam, cooked');
+        return emptyCandidates();
+      },
+    );
+
+    const result = await executeAskUser(tools, {
+      question: ASK_QUESTION,
+      options: ASK_OPTIONS,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.body.ok).toBe(true);
+    expect(result.body.options).toEqual(ASK_OPTIONS);
+    expect(result.body.optionChecks).toEqual([
+      {
+        label: '铁棍山药',
+        inLibrary: true,
+        matchedName: 'Yam, raw',
+        displayLabel: '铁棍山药',
+      },
+      {
+        label: '菜山药',
+        inLibrary: true,
+        matchedName: 'Yam, cooked',
+        displayLabel: '菜山药',
+      },
+      {
+        label: '毛山药',
+        inLibrary: false,
+        matchedName: null,
+        displayLabel: '毛山药（库里未收录，选了会去线上找）',
+      },
+    ]);
+
+    // 每个选项都用当前草稿的目标状态（STARCHY_VEGETABLE → COOKED）核实，
+    // limit=1，不把 50 条候选全读出来。
+    expect(candidateService.findCandidates).toHaveBeenCalledTimes(3);
+    for (const option of ASK_OPTIONS) {
+      expect(candidateService.findCandidates).toHaveBeenCalledWith(
+        { name: option, state: 'COOKED' },
+        1,
+      );
+    }
+
+    // 核实结果随问题一起落库，刷新页面后标签仍然在。
+    expect(draftService.patch).toHaveBeenCalledWith(
+      DRAFT_ID,
+      'INTAKE',
+      expect.objectContaining({
+        pendingQuestion: expect.objectContaining({
+          options: ASK_OPTIONS,
+          optionChecks: expect.arrayContaining([
+            expect.objectContaining({ label: '毛山药', inLibrary: false }),
+          ]),
+        }),
+      }),
+    );
+  });
+
+  it('一个都没命中：返回错误文本让模型改问更宽的问题，不写 pendingQuestion', async () => {
+    const { tools, draftService, candidateService } = createTools(
+      [],
+      COOKED_INTAKE,
+    );
+    candidateService.findCandidates.mockResolvedValue(emptyCandidates());
+
+    const result = await executeAskUser(tools, {
+      question: ASK_QUESTION,
+      options: ASK_OPTIONS,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.pendingQuestion).toBeUndefined();
+    expect(result.error).toContain('全部未收录');
+    expect(result.error).toContain('可能库里没有');
+    expect(result.error).toContain('更宽');
+    expect(result.body.ok).toBe(false);
+    expect(draftService.patch).not.toHaveBeenCalled();
+  });
+
+  it('核实失败（异常）不影响提问：仍写 pendingQuestion，全部标 inLibrary=null', async () => {
+    const { tools, draftService, candidateService } = createTools(
+      [],
+      COOKED_INTAKE,
+    );
+    candidateService.findCandidates.mockRejectedValue(
+      new Error('nutrition db down'),
+    );
+
+    const result = await executeAskUser(tools, {
+      question: ASK_QUESTION,
+      options: ['铁棍山药', '菜山药'],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.pendingQuestion).toBeDefined();
+    expect(result.body.optionChecks).toEqual([
+      {
+        label: '铁棍山药',
+        inLibrary: null,
+        matchedName: null,
+        displayLabel: '铁棍山药',
+      },
+      {
+        label: '菜山药',
+        inLibrary: null,
+        matchedName: null,
+        displayLabel: '菜山药',
+      },
+    ]);
+    expect(draftService.patch).toHaveBeenCalledWith(
+      DRAFT_ID,
+      'INTAKE',
+      expect.objectContaining({ pendingQuestion: expect.any(Object) }),
+    );
+  });
+
+  it('单个选项核实超时（800ms）不阻塞：标 inLibrary=null，提问仍然成功', async () => {
+    const { tools, candidateService } = createTools([], COOKED_INTAKE);
+    candidateService.findCandidates.mockImplementation(
+      async (input: { name: string }) => {
+        if (input.name === '铁棍山药') {
+          return new Promise<CandidateSearchResult>(() => {});
+        }
+        return emptyCandidates();
+      },
+    );
+
+    const startedAt = Date.now();
+    const result = await executeAskUser(tools, {
+      question: ASK_QUESTION,
+      options: ['铁棍山药', '菜山药'],
+    });
+    const elapsed = Date.now() - startedAt;
+
+    expect(result.ok).toBe(true);
+    expect(elapsed).toBeGreaterThanOrEqual(750);
+    expect(elapsed).toBeLessThan(3_000);
+    expect(result.body.optionChecks).toEqual([
+      {
+        label: '铁棍山药',
+        inLibrary: null,
+        matchedName: null,
+        displayLabel: '铁棍山药',
+      },
+      {
+        label: '菜山药',
+        inLibrary: false,
+        matchedName: null,
+        displayLabel: '菜山药（库里未收录，选了会去线上找）',
+      },
+    ]);
   });
 });

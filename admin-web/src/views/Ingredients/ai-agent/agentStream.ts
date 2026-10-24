@@ -29,9 +29,21 @@ export interface AgentStreamRecord {
 }
 
 /** AI 停下来问人的问题；`options` 是可直接点选的答案。 */
+export interface AgentPendingQuestionOption {
+  label: string
+  /** true=库里已收录；false=未收录；null=核实失败 / 超时，状态未知 */
+  inLibrary: boolean | null
+  /** 命中时的库内词条名；未命中 / 未知时为 null */
+  matchedName: string | null
+  /** 页面展示文案（未收录时后端会带「会去线上找」的后缀） */
+  displayLabel: string
+}
+
 export interface AgentPendingQuestion {
   question: string
   options: string[]
+  /** 与 options 同序的库内核实结果；旧草稿可能没有。 */
+  optionChecks?: AgentPendingQuestionOption[]
 }
 
 export type AgentStreamEvent =
@@ -72,6 +84,8 @@ export type AgentStreamEvent =
       type: 'ask'
       question: string
       options: string[]
+      /** 每个选项的库内核实结果，与 options 同序。 */
+      optionChecks?: AgentPendingQuestionOption[]
       draftId?: string
     }
   | { type: 'done' }
@@ -143,6 +157,37 @@ function readText(value: unknown): string {
 }
 
 /**
+ * 把后端附带的「选项是否在库里」还原成页面结构。
+ *
+ * 旧草稿没有 `optionChecks`；缺少 `displayLabel` 时按状态补：未收录的选项
+ * 必须让用户点之前就知道会去线上找，不能只显示一个裸名字。
+ */
+function readOptionChecks(
+  value: unknown,
+  options: readonly string[]
+): AgentPendingQuestionOption[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    return []
+  }
+  return options.map((label, index) => {
+    const raw = isRecord(value[index]) ? value[index] : null
+    const inLibrary =
+      raw && typeof raw.inLibrary === 'boolean' ? raw.inLibrary : null
+    const matchedName =
+      raw && typeof raw.matchedName === 'string' && raw.matchedName.trim()
+        ? raw.matchedName.trim()
+        : null
+    const displayLabel =
+      raw && typeof raw.displayLabel === 'string' && raw.displayLabel.trim()
+        ? raw.displayLabel.trim()
+        : inLibrary === false
+          ? `${label}（库里未收录，选了会去线上找）`
+          : label
+    return { label, inLibrary, matchedName, displayLabel }
+  })
+}
+
+/**
  * 把「待回答的问题」归一成页面结构。
  *
  * 三个入口共用：SSE `ask` 事件、非流式 `runAgent` 返回值、草稿 payload
@@ -167,7 +212,33 @@ export function readPendingQuestion(
   if (options.length < 2) {
     return null
   }
-  return { question, options }
+  const optionChecks = readOptionChecks(value.optionChecks, options)
+  return {
+    question,
+    options,
+    ...(optionChecks.length > 0 ? { optionChecks } : {})
+  }
+}
+
+/** 选项按钮上的小标：已收录 / 未收录 / 未核实。 */
+export interface AgentPendingOptionBadge {
+  label: string
+  type: 'success' | 'warning' | 'info'
+}
+
+export function pendingOptionBadge(
+  option: AgentPendingQuestionOption | null | undefined
+): AgentPendingOptionBadge | null {
+  if (!option) {
+    return null
+  }
+  if (option.inLibrary === true) {
+    return { label: '库里已收录', type: 'success' }
+  }
+  if (option.inLibrary === false) {
+    return { label: '未收录', type: 'warning' }
+  }
+  return { label: '未核实', type: 'info' }
 }
 
 /**

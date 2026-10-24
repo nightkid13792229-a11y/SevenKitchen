@@ -283,6 +283,25 @@ export interface ProposalSnapshot {
 }
 
 /**
+ * `askUser` 的一个选项，以及它在本地营养库里的核实结果。
+ *
+ * `label` 是点选后真正回传给模型的答案；`displayLabel` 只用于页面展示
+ * （未收录时带「会去线上找」的后缀），两者不要混用。
+ */
+export interface PendingQuestionOption {
+  label: string;
+  /**
+   * `true`：本地库有候选；`false`：查了但没有；`null`：核实失败 / 超时，
+   * 状态未知。未知不能当成「没有」，否则一次超时就会挡住正常的提问。
+   */
+  inLibrary: boolean | null;
+  /** 命中时库里的词条名，用于页面提示；未命中 / 未知时为 null。 */
+  matchedName: string | null;
+  /** 页面展示文案；未收录时是 `label + 后缀`。 */
+  displayLabel: string;
+}
+
+/**
  * AI 停下来问人的问题（`askUser` 工具写下）。
  *
  * 只存「问到了什么」，不存「用户答了什么」：答案由下一次 run 的 `text`
@@ -290,7 +309,18 @@ export interface ProposalSnapshot {
  */
 export interface PendingQuestion {
   question: string;
+  /**
+   * 纯文本选项，保持与旧草稿 / 旧页面兼容；点选时回传的就是这里的原文。
+   * 核实结果放在 `optionChecks`，与下标一一对应。
+   */
   options: string[];
+  /**
+   * 每个选项的库内核实结果（与 `options` 同序）。
+   *
+   * 旧草稿里没有这个字段，读取方必须容忍缺失；核实失败时选项仍会问，
+   * 只是对应项标 `inLibrary: null`。
+   */
+  optionChecks?: PendingQuestionOption[];
   /** ISO 时间戳；页面按它排序 / 排查用。 */
   askedAt: string;
 }

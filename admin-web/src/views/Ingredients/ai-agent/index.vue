@@ -188,17 +188,29 @@
             <div class="agent-ask__options">
               <span class="agent-ask__hint">点一个答案继续：</span>
               <el-button
-                v-for="option in state.pendingQuestion.options"
-                :key="option"
+                v-for="(option, index) in askOptionViews"
+                :key="`${option.label}-${index}`"
                 size="small"
                 type="primary"
                 plain
+                :title="option.title || undefined"
                 :disabled="
                   state.running || saving || Boolean(commitResult)
                 "
-                @click="handleAnswerOption(option)"
+                @click="handleAnswerOption(option.label)"
               >
-                {{ option }}
+                <span class="agent-ask__option-text">
+                  {{ option.displayLabel }}
+                </span>
+                <el-tag
+                  v-if="option.badge"
+                  size="small"
+                  :type="option.badge.type"
+                  effect="plain"
+                  class="agent-ask__option-tag"
+                >
+                  {{ option.badge.label }}
+                </el-tag>
               </el-button>
             </div>
           </div>
@@ -668,6 +680,7 @@ import {
 } from './draftReview'
 import {
   answerInputFromPendingQuestion,
+  pendingOptionBadge,
   readPendingQuestion,
   streamIngredientAgent,
   type AgentPendingQuestion,
@@ -714,6 +727,22 @@ const state = reactive({
    */
   pendingQuestion: null as AgentPendingQuestion | null
 })
+
+/**
+ * 选项按钮的展示视图：文本用后端给的 displayLabel（未收录时带后缀），
+ * 右侧小标说明库里有没有；旧草稿没有 optionChecks 时不显示小标。
+ */
+const askOptionViews = computed(() =>
+  (state.pendingQuestion?.options ?? []).map((label, index) => {
+    const check = state.pendingQuestion?.optionChecks?.[index]
+    return {
+      label,
+      displayLabel: check?.displayLabel || label,
+      badge: pendingOptionBadge(check),
+      title: check?.matchedName ? `库里词条：${check.matchedName}` : ''
+    }
+  })
+)
 
 /**
  * 每秒推进一次的时钟：页面上「已运行 N 秒 / 已收到 M 步」会跟着跳，
@@ -1033,6 +1062,16 @@ async function handleAnswerOption(option: string) {
   const input = answerInputFromPendingQuestion(state, option)
   if (!input) {
     return
+  }
+  // 点之前按钮上已经有「未收录」小标和文案后缀；点之后再明确一次预期：
+  // 这一轮会去线上找，线上也没有就留空，不会拿编造的数值凑。
+  const check = state.pendingQuestion?.optionChecks?.find(
+    (entry) => entry.label === option
+  )
+  if (check?.inLibrary === false) {
+    ElMessage.info(
+      '这个选项库里未收录：本轮会去线上检索；线上也没有就先留空待补。'
+    )
   }
   state.pendingQuestion = null
   inputText.value = input.text
@@ -1663,6 +1702,16 @@ function goBackToList() {
 .agent-ask__hint {
   font-size: 12px;
   color: var(--el-text-color-secondary);
+}
+
+.agent-ask__option-text {
+  white-space: normal;
+  text-align: left;
+}
+
+.agent-ask__option-tag {
+  margin-left: 6px;
+  flex-shrink: 0;
 }
 
 .agent-run__failure {

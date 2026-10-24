@@ -193,10 +193,27 @@ export interface ProposalSnapshot {
   [key: string]: unknown
 }
 
+/**
+ * `askUser` 的一个选项，以及它在本地营养库里的核实结果。
+ *
+ * `label` 是点选后回传给模型的答案；`displayLabel` 只用于页面展示
+ * （未收录时带「会去线上找」的后缀）。
+ */
+export interface PendingQuestionOption {
+  label: string
+  /** true=库里已收录；false=未收录；null=核实失败 / 超时，状态未知 */
+  inLibrary: boolean | null
+  /** 命中时的库内词条名；未命中 / 未知时为 null */
+  matchedName: string | null
+  displayLabel: string
+}
+
 /** AI 停下来问人的问题；`options` 是可直接点选的答案。 */
 export interface PendingQuestion {
   question: string
   options: string[]
+  /** 与 options 同序的库内核实结果；旧草稿可能没有。 */
+  optionChecks?: PendingQuestionOption[]
   askedAt: string
 }
 

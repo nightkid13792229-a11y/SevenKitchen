@@ -3,9 +3,11 @@ import {
   answerInputFromPendingQuestion,
   createAgentStreamState,
   parseSseChunk,
+  pendingOptionBadge,
   readPendingQuestion,
   reduceAgentEvents,
   streamIngredientAgent,
+  type AgentPendingQuestionOption,
   type AgentStreamEvent,
   type AgentStreamState
 } from './agentStream'
@@ -520,5 +522,102 @@ describe('ask 事件 · 先问人再动手', () => {
 
     expect(readPendingQuestion(null)).toBeNull()
     expect(readPendingQuestion({ question: '   ' })).toBeNull()
+  })
+})
+
+describe('ask 事件 · 选项库内核实标记', () => {
+  const QUESTION = '山药你指的是哪一种？'
+  const OPTIONS = ['铁棍山药', '菜山药', '毛山药']
+  const CHECKS: AgentPendingQuestionOption[] = [
+    {
+      label: '铁棍山药',
+      inLibrary: true,
+      matchedName: 'Yam, raw',
+      displayLabel: '铁棍山药'
+    },
+    {
+      label: '菜山药',
+      inLibrary: false,
+      matchedName: null,
+      displayLabel: '菜山药（库里未收录，选了会去线上找）'
+    },
+    {
+      label: '毛山药',
+      inLibrary: null,
+      matchedName: null,
+      displayLabel: '毛山药'
+    }
+  ]
+
+  it('ask 事件保留字符串选项，并附带同序的 inLibrary 标记', () => {
+    const state = reduceAgentEvents(createAgentStreamState(), {
+      type: 'ask',
+      question: QUESTION,
+      options: OPTIONS,
+      optionChecks: CHECKS,
+      draftId: 'draft-yam'
+    })
+
+    expect(state.pendingQuestion?.options).toEqual(OPTIONS)
+    expect(state.pendingQuestion?.optionChecks).toEqual(CHECKS)
+    expect(state.draftId).toBe('draft-yam')
+  })
+
+  it('已收录 / 未收录两种标签不同，核实失败显示未核实', () => {
+    expect(pendingOptionBadge(CHECKS[0])).toEqual({
+      label: '库里已收录',
+      type: 'success'
+    })
+    expect(pendingOptionBadge(CHECKS[1])).toEqual({
+      label: '未收录',
+      type: 'warning'
+    })
+    expect(pendingOptionBadge(CHECKS[2])).toEqual({
+      label: '未核实',
+      type: 'info'
+    })
+    expect(pendingOptionBadge(undefined)).toBeNull()
+  })
+
+  it('点击未收录选项仍发送原始 label，不把展示后缀当答案', () => {
+    const state = reduceAgentEvents(createAgentStreamState(), {
+      type: 'ask',
+      question: QUESTION,
+      options: OPTIONS,
+      optionChecks: CHECKS,
+      draftId: 'draft-yam'
+    })
+
+    expect(answerInputFromPendingQuestion(state, '菜山药')).toEqual({
+      draftId: 'draft-yam',
+      text: '菜山药'
+    })
+  })
+
+  it('草稿里缺少 displayLabel 时，未收录选项自动补“会去线上找”的后缀', () => {
+    const parsed = readPendingQuestion({
+      question: QUESTION,
+      options: ['菜山药', '铁棍山药'],
+      optionChecks: [
+        { label: '菜山药', inLibrary: false, matchedName: null },
+        { label: '铁棍山药', inLibrary: true, matchedName: 'Yam, raw' }
+      ],
+      askedAt: '2026-10-24T12:00:00.000Z'
+    })
+
+    expect(parsed?.optionChecks?.[0]?.displayLabel).toBe(
+      '菜山药（库里未收录，选了会去线上找）'
+    )
+    expect(parsed?.optionChecks?.[1]?.displayLabel).toBe('铁棍山药')
+  })
+
+  it('旧草稿没有 optionChecks 时保持原样，不凭空造标记', () => {
+    const parsed = readPendingQuestion({
+      question: QUESTION,
+      options: OPTIONS,
+      askedAt: '2026-10-24T12:00:00.000Z'
+    })
+
+    expect(parsed).toEqual({ question: QUESTION, options: OPTIONS })
   })
 })

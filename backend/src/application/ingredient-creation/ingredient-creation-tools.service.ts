@@ -4,6 +4,10 @@ import {
   normalizePreparationState,
   type PreparationState,
 } from '../../domain/ingredient-creation/preparation-state';
+import {
+  resolveDefaultPrimaryState,
+  type CoverageCategory,
+} from '../../domain/ingredient-creation/state-coverage';
 import { normalizeUnit } from '../../domain/ingredient-creation/unit-guard';
 import {
   NUTRITION_FIELD_CATALOG,
@@ -20,6 +24,7 @@ import type {
   IngredientDraft,
   NutritionEvidenceEntry,
   PendingQuestion,
+  PendingQuestionOption,
   ProfileDraft,
 } from './ingredient-creation.types';
 
@@ -339,6 +344,113 @@ const ASK_USER_QUESTION_MAX = 120;
 const ASK_USER_OPTION_MAX = 40;
 const ASK_USER_OPTION_MIN = 2;
 const ASK_USER_OPTION_MAX_COUNT = 5;
+/** 单个选项核实的最长等待；5 个并发，整体不会超过这个值太多。 */
+const ASK_OPTION_VERIFY_TIMEOUT_MS = 800;
+/** 未收录选项在页面上的后缀：让用户点之前就知道会去线上找。 */
+const ASK_OPTION_MISSING_SUFFIX = '（库里未收录，选了会去线上找）';
+
+const COVERAGE_CATEGORIES: readonly CoverageCategory[] = [
+  'MEAT_ORGAN',
+  'STARCHY_VEGETABLE',
+  'OTHER',
+];
+
+function readCoverageCategory(value: unknown): CoverageCategory | null {
+  return typeof value === 'string' &&
+    (COVERAGE_CATEGORIES as readonly string[]).includes(value)
+    ? (value as CoverageCategory)
+    : null;
+}
+
+/**
+ * 核实 askUser 选项时用当前草稿的「目标状态」。
+ *
+ * 起手卡显式要求的生熟优先级最高；没有时再看原料卡类别（审核页可能刚改过）、
+ * 起手卡类别默认值、已有档案（只有一份时），最后按生档案查。
+ * 这只是选检索口径，不会把核实结果写回词典或草稿。
+ */
+function resolveAskTargetState(
+  draft: IngredientCreationDraft,
+): PreparationState {
+  const payload: unknown = draft.payload;
+
+  const intake =
+    isRecord(payload) && isRecord(payload.intake) ? payload.intake : null;
+  if (intake && Array.isArray(intake.requiredStates)) {
+    for (const raw of intake.requiredStates) {
+      const state = normalizeState(raw);
+      if (state) return state;
+    }
+  }
+
+  const ingredient =
+    isRecord(payload) && isRecord(payload.ingredient)
+      ? payload.ingredient
+      : null;
+  const ingredientCategory = readCoverageCategory(ingredient?.category);
+  if (ingredientCategory) {
+    return resolveDefaultPrimaryState(ingredientCategory);
+  }
+
+  const intakeCategory = readCoverageCategory(intake?.category);
+  if (intakeCategory) {
+    return resolveDefaultPrimaryState(intakeCategory);
+  }
+
+  const profileStates = new Set<PreparationState>();
+  const profiles =
+    isRecord(payload) && Array.isArray(payload.profiles)
+      ? payload.profiles
+      : [];
+  for (const profile of profiles) {
+    if (!isRecord(profile)) continue;
+    const state = normalizeState(profile.preparationState);
+    if (state) profileStates.add(state);
+  }
+  if (profileStates.size === 1) {
+    return [...profileStates][0];
+  }
+
+  return 'RAW';
+}
+
+/**
+ * 给一次核实套超时。超时 / 异常都返回 null（状态未知），
+ * 不能把「查不动」当成「库里没有」。
+ */
+async function settleWithin<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), timeoutMs);
+      }),
+    ]);
+  } catch {
+    return null;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/** 全部选项都查不到时回给模型的错误文本：要求换更宽的问法，不要原样再问。 */
+function buildAskOptionsMissingError(
+  options: readonly string[],
+  state: PreparationState,
+): string {
+  const listed = options.slice(0, 3).join('、');
+  const more = options.length > 3 ? ' 等' : '';
+  const stateLabel = state === 'COOKED' ? '熟' : '生';
+  return (
+    `askUser 的选项在本地营养库全部未收录（${listed}${more}；按${stateLabel}档案查）。` +
+    '可能库里没有这些具体种类，不要原样再问；请改问更宽的问题（例如确认生/熟，或先留空去线上找），' +
+    '并告诉用户可能要走线上检索。'
+  );
+}
 
 /**
  * 问人工具：歧义时停下来，不自己挑一条凑合。
@@ -1553,6 +1665,30 @@ export class IngredientCreationToolsService {
     }
   }
 
+  /**
+   * 用一个选项名查本地营养库，判断它是不是真能选。
+   *
+   * 复用候选检索（limit=1），不自己写一套名字匹配；查询失败 / 超时返回
+   * `inLibrary: null`（未知），由调用方决定「不阻塞提问」。
+   */
+  private async checkAskOption(
+    option: string,
+    state: PreparationState,
+  ): Promise<{ inLibrary: boolean | null; matchedName: string | null }> {
+    const result = await settleWithin(
+      this.candidateService.findCandidates({ name: option, state }, 1),
+      ASK_OPTION_VERIFY_TIMEOUT_MS,
+    );
+    if (result === null) {
+      return { inLibrary: null, matchedName: null };
+    }
+
+    const hit = result.candidates[0];
+    return hit
+      ? { inLibrary: true, matchedName: hit.foodName }
+      : { inLibrary: false, matchedName: null };
+  }
+
   /** 工具 6：问人。校验通过就把问题写进草稿，交给起草循环收尾。 */
   private async askUser(
     draftId: string,
@@ -1598,11 +1734,37 @@ export class IngredientCreationToolsService {
       options.push(option);
     }
 
-    // 草稿不存在时先报 404（与其它工具一致），也顺便拿到当前站点。
+    // 草稿不存在时先报 404（与其它工具一致），也顺便拿到当前站点与目标状态。
     const draft = await this.draftService.get(draftId);
+    const targetState = resolveAskTargetState(draft);
+
+    // 先核实再问：每个选项并发查一次本地库（limit=1），单个最多 800ms。
+    // 核实结果只用于本次提问与展示，不写词典、不改草稿里的检索口径。
+    const optionChecks: PendingQuestionOption[] = await Promise.all(
+      options.map(async (label) => {
+        const check = await this.checkAskOption(label, targetState);
+        return {
+          label,
+          inLibrary: check.inLibrary,
+          matchedName: check.matchedName,
+          displayLabel:
+            check.inLibrary === false
+              ? `${label}${ASK_OPTION_MISSING_SUFFIX}`
+              : label,
+        };
+      }),
+    );
+
+    // 一个都没命中：这四个选项大概率是模型编的，原样问出去用户会白跑。
+    // 不回滚草稿，只把错误文本回给模型，让它换一个更宽的问题。
+    if (optionChecks.every((option) => option.inLibrary === false)) {
+      return this.error(buildAskOptionsMissingError(options, targetState));
+    }
+
     const pendingQuestion: PendingQuestion = {
       question,
       options,
+      optionChecks,
       askedAt: new Date().toISOString(),
     };
     await this.draftService.patch(draftId, draft.step, { pendingQuestion });
@@ -1612,6 +1774,7 @@ export class IngredientCreationToolsService {
       content: okContent({
         question: pendingQuestion.question,
         options: pendingQuestion.options,
+        optionChecks: pendingQuestion.optionChecks,
         askedAt: pendingQuestion.askedAt,
         awaitingUser: true,
       }),

@@ -14,10 +14,17 @@ import {
   type NutritionFieldDefinition,
 } from '../../domain/ingredient/nutrition-field-catalog';
 import { PrismaService } from '../../infrastructure/prisma.service';
+import {
+  IngredientCandidateReviewService,
+  normalizeReviewReason,
+  normalizeReviewVerdict,
+} from './ingredient-candidate-review.service';
 import { IngredientCreationCandidateService } from './ingredient-creation-candidate.service';
 import { IngredientCreationCheckService } from './ingredient-creation-check.service';
 import { IngredientCreationDraftService } from './ingredient-creation-draft.service';
 import type {
+  CandidateReviewGate,
+  CandidateReviewVerdict,
   CheckItem,
   IngredientCardField,
   IngredientCreationDraft,
@@ -87,7 +94,13 @@ export interface ExecuteAgentToolInput {
   args: Record<string, unknown>;
 }
 
-const SEARCH_CANDIDATE_LIMIT = 8;
+/**
+ * 单次查库最多回灌多少条候选。
+ *
+ * 与复核服务的单批上限一致（12）：召回结果**不按类别 / 词位置过滤**，
+ * 候选多了只截断，交给 AI 判断、再交给人选。
+ */
+const SEARCH_CANDIDATE_LIMIT = 12;
 /** 单次最多回灌多少条营养值，避免把提示词撑爆。 */
 const MAX_NUTRITION_RECORD_VALUES = 80;
 /** 批量写入单次上限：60 个目录字段一次能装下，且给模型留余量。 */
@@ -101,7 +114,7 @@ const SEARCH_TOOL: AgentToolDefinition = {
   function: {
     name: 'searchLocalNutrition',
     description:
-      '在本地营养库检索某个原料的候选来源（只读）。返回 found、keywords、候选条数，以及每条候选的来源记录 id、名称、生熟状态、必需营养素覆盖率、缺项与匹配依据（matchedBy / matchedKeyword / score）。注意：ok=true 只表示查询执行成功，found=false 表示没有找到匹配词条；这里只有元数据，拿到 sourceRecordId 后要用 getNutritionRecord 读取具体营养数值。',
+      '在本地营养库检索某个原料的候选来源（只读）。召回不按类别 / 词位置过滤；返回前会逐条做 AI 相关性复核，每条候选带 review.verdict（RELEVANT / UNCERTAIN / IRRELEVANT）与一句 review.reason，顶部还有 reviewSummary 与 nextAction。复核只打标，不删、不重排候选。注意：ok=true 只表示查询执行成功，found=false 表示没有找到匹配词条；拿到 sourceRecordId 后要用 getNutritionRecord 读取具体营养数值。',
     parameters: {
       type: 'object',
       properties: {
@@ -437,6 +450,100 @@ async function settleWithin<T>(
   }
 }
 
+/** 起手卡里的英文名：复核消歧用；没填就不传，不拿中文词硬充英文。 */
+function readIntakeNameEn(draft: IngredientCreationDraft): string {
+  const payload: unknown = draft.payload;
+  if (!isRecord(payload) || !isRecord(payload.intake)) {
+    return '';
+  }
+  return normalizeText(payload.intake.nameEn);
+}
+
+/** 从 `候选名 —— 相关：理由` 里拆出候选名与 AI 判断。 */
+function parseAskOptionLabel(label: string): {
+  candidateLabel: string;
+  aiVerdict: CandidateReviewVerdict | null;
+  aiReason: string | null;
+} {
+  const match = label.match(
+    /^(.*?)\s*(?:——|—{1,2}|--)\s*(不相关|存疑|相关)\s*[:：]\s*(.*)$/u,
+  );
+  if (!match) {
+    return { candidateLabel: label.trim(), aiVerdict: null, aiReason: null };
+  }
+
+  const candidateLabel = match[1]?.trim() || label.trim();
+  const aiVerdict = normalizeReviewVerdict(match[2] ?? '');
+  const aiReason = normalizeReviewReason(match[3] ?? '');
+  return {
+    candidateLabel,
+    aiVerdict,
+    aiReason: aiVerdict ? aiReason : null,
+  };
+}
+
+/**
+ * 写入前的复核闸门。
+ *
+ * 只在检索确实带回复核结论时生效；复核失败（全存疑 + 空理由）时返回 null，
+ * 不让一次模型故障把正常流程卡死。
+ */
+function reviewGateBlockReason(
+  draft: IngredientCreationDraft,
+  sourceRecordId: string | null,
+): string | null {
+  const payload: unknown = draft.payload;
+  if (!isRecord(payload) || !isRecord(payload.candidateReviewGate)) {
+    return null;
+  }
+
+  const gate = payload.candidateReviewGate;
+  if (gate.reviewFailed === true) {
+    return null;
+  }
+
+  const relevantCount =
+    typeof gate.relevantCount === 'number' && Number.isFinite(gate.relevantCount)
+      ? gate.relevantCount
+      : 0;
+  const reviewed = Array.isArray(gate.candidates)
+    ? gate.candidates.filter(isRecord)
+    : [];
+  const hit = sourceRecordId
+    ? reviewed.find((candidate) => candidate.id === sourceRecordId)
+    : null;
+  const verdict =
+    hit && (hit.verdict === 'RELEVANT' ||
+      hit.verdict === 'UNCERTAIN' ||
+      hit.verdict === 'IRRELEVANT')
+      ? hit.verdict
+      : null;
+
+  if (relevantCount === 0) {
+    return '本次检索没有 AI 判为相关的候选，不能硬选。请转“去线上找 / 留空”，或先调用 askUser 让用户决定；不要写营养字段。';
+  }
+  if (relevantCount >= 2) {
+    return `本次检索有 ${relevantCount} 条 AI 判为相关的候选，必须先调用 askUser 让用户选择；不要直接写营养字段。`;
+  }
+  if (verdict === 'IRRELEVANT') {
+    const reason =
+      hit && typeof hit.reason === 'string' && hit.reason.trim()
+        ? `（${hit.reason.trim()}）`
+        : '';
+    return `来源记录 ${sourceRecordId ?? ''} 被 AI 复核判为「不相关」${reason}，不能直接写入。请改用相关候选，或先调用 askUser 让用户确认。`;
+  }
+  if (
+    relevantCount === 1 &&
+    sourceRecordId &&
+    verdict !== null &&
+    verdict !== 'RELEVANT'
+  ) {
+    return '本次只有 1 条 AI 判为相关的候选，当前来源被复核为存疑 / 不相关，不能直接写入。请用那条相关候选，或先让用户确认。';
+  }
+
+  return null;
+}
+
 /** 全部选项都查不到时回给模型的错误文本：要求换更宽的问法，不要原样再问。 */
 function buildAskOptionsMissingError(
   options: readonly string[],
@@ -463,7 +570,7 @@ const ASK_USER_TOOL: AgentToolDefinition = {
   function: {
     name: 'askUser',
     description:
-      '向用户提一个必须由人决定的问题，并结束本轮等待回答。以下情况必须先问、不许自己猜：部位 / 加工态 / 种类有歧义（例如「牛肉」「猪肉」「土豆」「鱼」「山药」）；多个候选覆盖率接近且生熟状态不同；要新建多份档案但主次不明。一次只问一个问题，给 2–5 个具体可点的选项；用户回答后会继续，不要重复问同一个问题。',
+      '向用户提一个必须由人决定的问题，并结束本轮等待回答。以下情况必须先问、不许自己猜：AI 复核判为相关的候选 ≥2 条；部位 / 加工态 / 种类有歧义（例如「牛肉」「猪肉」「土豆」「鱼」「山药」）；多个候选覆盖率接近且生熟状态不同；要新建多份档案但主次不明。一次只问一个问题，给 2–5 个具体可点的选项；如果是在多个候选里选，选项文案必须写成「候选名 —— 相关/存疑/不相关：≤40 字理由」，让用户看着 AI 判断做选择。用户回答后会继续，不要重复问同一个问题。',
     parameters: {
       type: 'object',
       properties: {
@@ -477,7 +584,7 @@ const ASK_USER_TOOL: AgentToolDefinition = {
           maxItems: ASK_USER_OPTION_MAX_COUNT,
           items: {
             type: 'string',
-            description: `一个具体答案（最多 ${ASK_USER_OPTION_MAX} 个字），不要写「其他」这种空选项。`,
+            description: `一个具体答案（最多 ${ASK_USER_OPTION_MAX} 个字），不要写「其他」这种空选项。多个候选里选时用「候选名 —— 相关/存疑/不相关：理由」。`,
           },
           description: `2–${ASK_USER_OPTION_MAX_COUNT} 个可直接点选的具体答案。`,
         },
@@ -935,6 +1042,7 @@ export class IngredientCreationToolsService {
     private readonly draftService: IngredientCreationDraftService,
     private readonly checkService: IngredientCreationCheckService,
     private readonly prisma: PrismaService,
+    private readonly candidateReviewService: IngredientCandidateReviewService,
   ) {}
 
   getDefinitions(): readonly AgentToolDefinition[] {
@@ -1029,17 +1137,19 @@ export class IngredientCreationToolsService {
     const state = normalizeState(args.state) ?? 'RAW';
 
     // 草稿不存在时先报 404，避免给一个不存在的草稿做检索。
-    await this.draftService.get(draftId);
+    const draft = await this.draftService.get(draftId);
 
     const result = await this.candidateService.findCandidates({
       name: keyword,
       state,
     });
 
+    // 召回交给代码：这里只截断到单次上限，不按类别 / 词位置丢候选。
     const candidates = result.candidates
       .slice(0, SEARCH_CANDIDATE_LIMIT)
       .map((candidate) => ({
         sourceRecordId: candidate.sourceRecordId,
+        sourceType: candidate.sourceType,
         foodName: candidate.foodName,
         foodNameEn: candidate.foodNameEn,
         preparationState: candidate.preparationState,
@@ -1053,7 +1163,116 @@ export class IngredientCreationToolsService {
         matchedSourceName: candidate.matchedSourceName ?? candidate.foodName,
         score: candidate.matchScore,
       }));
-    const found = candidates.length > 0;
+
+    if (candidates.length === 0) {
+      return {
+        ok: true,
+        content: okContent({
+          keyword,
+          keywords: result.keywords,
+          state,
+          // ok=true 只代表工具执行成功；found 才代表有没有数据。
+          found: false,
+          candidateCount: result.candidates.length,
+          returnedCount: 0,
+          bestCoveragePercent: result.coverage.bestCoveragePercent,
+          candidates: [],
+          hint: [
+            result.notice ? `${result.notice}。` : '本地库没有找到匹配词条。',
+            `已尝试关键词：${result.keywords.join('、')}（状态 ${state}）。`,
+            '可以换中文名/英文名再试；仍然没有就如实告诉用户库里缺数据，不要编造数值，也不要把这次工具调用说成“成功找到”。',
+          ].join(''),
+        }),
+        progress: {
+          writtenFieldPaths: [],
+          sourceRecordIds: [],
+        },
+      };
+    }
+
+    /**
+     * 判断交给 AI：一次复核最多 12 条，失败也返回全存疑，不阻塞检索。
+     * 复核结果只打标，不删、不重排候选。
+     */
+    const targetNameEn = readIntakeNameEn(draft);
+    const reviews = await this.candidateReviewService.reviewCandidates({
+      target: {
+        zh: keyword,
+        ...(targetNameEn ? { en: targetNameEn } : {}),
+        state,
+      },
+      candidates: candidates.map((candidate) => ({
+        id: candidate.sourceRecordId,
+        name: candidate.foodName,
+        sourceType: candidate.sourceType,
+        coverage: candidate.coveragePercent,
+      })),
+    });
+    const reviewById = new Map(
+      reviews.map((review) => [review.id, review] as const),
+    );
+    const reviewedCandidates = candidates.map((candidate) => {
+      const review = reviewById.get(candidate.sourceRecordId);
+      return {
+        ...candidate,
+        review: {
+          verdict: review?.verdict ?? 'UNCERTAIN',
+          reason: review?.reason ?? '',
+        },
+      };
+    });
+    const relevantCandidates = reviewedCandidates.filter(
+      (candidate) => candidate.review.verdict === 'RELEVANT',
+    );
+    const uncertainCount = reviewedCandidates.filter(
+      (candidate) => candidate.review.verdict === 'UNCERTAIN',
+    ).length;
+    const irrelevantCount = reviewedCandidates.filter(
+      (candidate) => candidate.review.verdict === 'IRRELEVANT',
+    ).length;
+    const reviewFailed = reviewedCandidates.every(
+      (candidate) =>
+        candidate.review.verdict === 'UNCERTAIN' &&
+        candidate.review.reason === '',
+    );
+    const relevantCount = relevantCandidates.length;
+    const nextAction =
+      relevantCount >= 2
+        ? 'ASK_USER'
+        : relevantCount === 1
+          ? 'USE_SINGLE_RELEVANT'
+          : reviewFailed
+            ? 'REVIEW_UNAVAILABLE'
+            : 'ONLINE_OR_LEAVE_BLANK';
+    const reviewHint =
+      relevantCount >= 2
+        ? `AI 复核判定 ${relevantCount} 条相关候选：必须先调用 askUser 让用户选择，选项文案写成「候选名 —— 相关/存疑/不相关：≤40 字理由」，不要先写原料卡或营养档案。`
+        : relevantCount === 1
+          ? `AI 复核只判定 1 条相关候选「${relevantCandidates[0]?.foodName ?? ''}」：可以继续用它写入；最终回复必须说明“我选了这条，因为…”，并把其它候选的 AI 判断列在证据里。`
+          : reviewFailed
+            ? 'AI 复核当前不可用（全部存疑、没有理由）：不要把它当成“都不相关”；可以按名字匹配继续，但拿不准就先 askUser，写入时说明复核未完成。'
+            : 'AI 复核没有判定为相关的候选：不许硬选。请转“去线上找 / 留空”分支，并告诉用户其它候选为什么不相关；不要写原料卡或营养档案。';
+
+    /**
+     * 把复核结论随草稿保存：工具层据此拦住「直接写不相关 / 还没让人选就写」。
+     * 复核失败时 `reviewFailed=true`，闸门不拦任何写入。
+     */
+    const gate: CandidateReviewGate = {
+      reviewedAt: new Date().toISOString(),
+      reviewFailed,
+      relevantCount,
+      uncertainCount,
+      irrelevantCount,
+      candidates: reviewedCandidates.map((candidate) => ({
+        id: candidate.sourceRecordId,
+        foodName: candidate.foodName,
+        verdict: candidate.review.verdict,
+        reason: candidate.review.reason,
+      })),
+    };
+    await this.draftService.patch(draftId, draft.step, {
+      candidateReviewGate: gate,
+    });
 
     return {
       ok: true,
@@ -1061,27 +1280,23 @@ export class IngredientCreationToolsService {
         keyword,
         keywords: result.keywords,
         state,
-        // ok=true 只代表工具执行成功；found 才代表有没有数据。
-        found,
+        found: true,
         candidateCount: result.candidates.length,
-        returnedCount: candidates.length,
+        returnedCount: reviewedCandidates.length,
         bestCoveragePercent: result.coverage.bestCoveragePercent,
-        candidates,
-        ...(found
-          ? {}
-          : {
-              hint: [
-                result.notice
-                  ? `${result.notice}。`
-                  : '本地库没有找到匹配词条。',
-                `已尝试关键词：${result.keywords.join('、')}（状态 ${state}）。`,
-                '可以换中文名/英文名再试；仍然没有就如实告诉用户库里缺数据，不要编造数值，也不要把这次工具调用说成“成功找到”。',
-              ].join(''),
-            }),
+        reviewSummary: {
+          relevantCount,
+          uncertainCount,
+          irrelevantCount,
+          failed: reviewFailed,
+        },
+        nextAction,
+        hint: reviewHint,
+        candidates: reviewedCandidates,
       }),
       progress: {
         writtenFieldPaths: [],
-        sourceRecordIds: candidates.map(
+        sourceRecordIds: reviewedCandidates.map(
           (candidate) => candidate.sourceRecordId,
         ),
       },
@@ -1181,6 +1396,10 @@ export class IngredientCreationToolsService {
     }
 
     const draft = await this.draftService.get(draftId);
+    const gateError = reviewGateBlockReason(draft, validation.sourceRecordId);
+    if (gateError) {
+      return this.error(gateError);
+    }
     const write = await this.applyFieldWrite({
       profiles: readProfiles(draft),
       profileIndex,
@@ -1268,6 +1487,18 @@ export class IngredientCreationToolsService {
         failed.push({
           fieldPath: validation.fieldPath,
           error: validation.error,
+        });
+        continue;
+      }
+
+      const gateError = reviewGateBlockReason(
+        draft,
+        validation.sourceRecordId,
+      );
+      if (gateError) {
+        failed.push({
+          fieldPath: validation.fieldPath,
+          error: gateError,
         });
         continue;
       }
@@ -1740,25 +1971,51 @@ export class IngredientCreationToolsService {
 
     // 先核实再问：每个选项并发查一次本地库（limit=1），单个最多 800ms。
     // 核实结果只用于本次提问与展示，不写词典、不改草稿里的检索口径。
+    //
+    // 选项可能带 AI 复核文案（`Yam, raw —— 相关：就是山药`）：查库要用拆出来
+    // 的候选名，不能拿整句去匹配；AI 判断随 optionChecks 一起落库，页面不再
+    // 从字符串里猜。
+    const parsedOptions = options.map((label) => ({
+      label,
+      ...parseAskOptionLabel(label),
+    }));
     const optionChecks: PendingQuestionOption[] = await Promise.all(
-      options.map(async (label) => {
-        const check = await this.checkAskOption(label, targetState);
+      parsedOptions.map(async (option) => {
+        const check = await this.checkAskOption(
+          option.candidateLabel,
+          targetState,
+        );
+        const displayBase = option.aiVerdict
+          ? option.candidateLabel
+          : option.label;
         return {
-          label,
+          label: option.label,
+          ...(option.aiVerdict
+            ? {
+                candidateLabel: option.candidateLabel,
+                aiVerdict: option.aiVerdict,
+                aiReason: option.aiReason ?? '',
+              }
+            : {}),
           inLibrary: check.inLibrary,
           matchedName: check.matchedName,
           displayLabel:
             check.inLibrary === false
-              ? `${label}${ASK_OPTION_MISSING_SUFFIX}`
-              : label,
+              ? `${displayBase}${ASK_OPTION_MISSING_SUFFIX}`
+              : displayBase,
         };
       }),
     );
 
-    // 一个都没命中：这四个选项大概率是模型编的，原样问出去用户会白跑。
+    // 一个都没命中：这几个选项大概率是模型编的，原样问出去用户会白跑。
     // 不回滚草稿，只把错误文本回给模型，让它换一个更宽的问题。
     if (optionChecks.every((option) => option.inLibrary === false)) {
-      return this.error(buildAskOptionsMissingError(options, targetState));
+      return this.error(
+        buildAskOptionsMissingError(
+          parsedOptions.map((option) => option.candidateLabel),
+          targetState,
+        ),
+      );
     }
 
     const pendingQuestion: PendingQuestion = {
@@ -1767,7 +2024,28 @@ export class IngredientCreationToolsService {
       optionChecks,
       askedAt: new Date().toISOString(),
     };
-    await this.draftService.patch(draftId, draft.step, { pendingQuestion });
+
+    // 有 ≥2 条相关候选时，只有「真的把候选摆给用户选」才清闸门；
+    // 先问生熟 / 部位这类普通问题不能替代候选选择，否则闸门会被绕过。
+    const gate = isRecord(draft.payload)
+      ? draft.payload.candidateReviewGate
+      : null;
+    const gateRelevantCount =
+      isRecord(gate) &&
+      typeof gate.relevantCount === 'number' &&
+      Number.isFinite(gate.relevantCount)
+        ? gate.relevantCount
+        : 0;
+    const selectingCandidates = parsedOptions.some(
+      (option) => option.aiVerdict !== null,
+    );
+    const clearReviewGate =
+      !isRecord(gate) || gateRelevantCount < 2 || selectingCandidates;
+
+    await this.draftService.patch(draftId, draft.step, {
+      pendingQuestion,
+      ...(clearReviewGate ? { candidateReviewGate: null } : {}),
+    });
 
     return {
       ok: true,

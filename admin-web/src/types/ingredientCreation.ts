@@ -199,6 +199,11 @@ export interface ProposalSnapshot {
  * `label` 是点选后回传给模型的答案；`displayLabel` 只用于页面展示
  * （未收录时带「会去线上找」的后缀）。
  */
+export type CandidateReviewVerdict =
+  | 'RELEVANT'
+  | 'UNCERTAIN'
+  | 'IRRELEVANT'
+
 export interface PendingQuestionOption {
   label: string
   /** true=库里已收录；false=未收录；null=核实失败 / 超时，状态未知 */
@@ -206,6 +211,12 @@ export interface PendingQuestionOption {
   /** 命中时的库内词条名；未命中 / 未知时为 null */
   matchedName: string | null
   displayLabel: string
+  /** 候选名（从「候选名 —— 相关：理由」里拆出）；普通问题没有 */
+  candidateLabel?: string
+  /** AI 复核对这条选项的判断；普通问题没有 */
+  aiVerdict?: CandidateReviewVerdict | null
+  /** AI 复核的一句理由（≤40 字） */
+  aiReason?: string | null
 }
 
 /** AI 停下来问人的问题；`options` 是可直接点选的答案。 */

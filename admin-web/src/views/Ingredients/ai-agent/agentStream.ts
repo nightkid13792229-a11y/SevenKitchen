@@ -6,9 +6,14 @@
  * 归并成可渲染的状态。三个函数都是纯的（只有 stream 会发请求），方便测试。
  */
 import {
+  aiVerdictLabel,
+  aiVerdictTagType,
+  isAiVerdict,
   toolLabel,
   toRecordEvidenceFromEvent,
   toSearchEvidenceFromEvent,
+  type AgentAiVerdict,
+  type AgentAiVerdictTagType,
   type AgentRecordEvidenceView,
   type AgentSearchEvidenceView
 } from './stepView'
@@ -19,6 +24,11 @@ export interface AgentStreamMatch {
   matchedBy: string
   matchedKeyword: string
   score: number | null
+  /** 服务端 AI 复核判断；旧后端没有这个字段。 */
+  review?: {
+    verdict: AgentAiVerdict
+    reason: string
+  }
 }
 
 /** 读来源记录的步骤摘要（后端 step_end.record）。 */
@@ -37,6 +47,59 @@ export interface AgentPendingQuestionOption {
   matchedName: string | null
   /** 页面展示文案（未收录时后端会带「会去线上找」的后缀） */
   displayLabel: string
+  /** 候选名（从 `候选名 —— 相关：理由` 里拆出）；普通问题没有 */
+  candidateLabel?: string
+  /** AI 复核对这条选项的判断；没有判断时为 null / 缺失 */
+  aiVerdict?: AgentAiVerdict | null
+  /** AI 复核的一句理由（≤40 字） */
+  aiReason?: string | null
+}
+
+/** ask 选项上的 AI 判断小标；没有判断时返回 null。 */
+export interface AgentAskOptionAiBadge {
+  label: string
+  type: AgentAiVerdictTagType
+  reason: string
+}
+
+export function askOptionAiBadge(
+  option: AgentPendingQuestionOption | null | undefined
+): AgentAskOptionAiBadge | null {
+  if (!option || !isAiVerdict(option.aiVerdict)) {
+    return null
+  }
+  return {
+    label: aiVerdictLabel(option.aiVerdict),
+    type: aiVerdictTagType(option.aiVerdict),
+    reason: (option.aiReason ?? '').trim()
+  }
+}
+
+/** 从 `候选名 —— 相关：理由` 里拆出候选名与 AI 判断。 */
+export function splitAskOptionLabel(label: string): {
+  candidateLabel: string
+  aiVerdict: AgentAiVerdict | null
+  aiReason: string
+} {
+  const text = label.trim()
+  const match = text.match(
+    /^(.*?)\s*(?:——|—{1,2}|--)\s*(不相关|存疑|相关)\s*[:：]\s*(.*)$/u
+  )
+  if (!match) {
+    return { candidateLabel: text, aiVerdict: null, aiReason: '' }
+  }
+  const verdictText = match[2] ?? ''
+  const aiVerdict: AgentAiVerdict | null =
+    verdictText === '不相关'
+      ? 'IRRELEVANT'
+      : verdictText === '存疑'
+        ? 'UNCERTAIN'
+        : 'RELEVANT'
+  return {
+    candidateLabel: (match[1] ?? '').trim() || text,
+    aiVerdict,
+    aiReason: (match[3] ?? '').replace(/\s+/g, ' ').trim()
+  }
 }
 
 export interface AgentPendingQuestion {
@@ -177,13 +240,37 @@ function readOptionChecks(
       raw && typeof raw.matchedName === 'string' && raw.matchedName.trim()
         ? raw.matchedName.trim()
         : null
+
+    // 新后端直接给结构化 AI 判断；旧草稿只有「候选名 —— 相关：理由」文案，
+    // 从文案里还原，保证刷新后标签不丢。
+    const parsed = splitAskOptionLabel(label)
+    const rawVerdict = raw && isAiVerdict(raw.aiVerdict) ? raw.aiVerdict : null
+    const aiVerdict = rawVerdict ?? parsed.aiVerdict
+    const candidateLabel =
+      (raw && typeof raw.candidateLabel === 'string'
+        ? raw.candidateLabel.trim()
+        : '') ||
+      (aiVerdict ? parsed.candidateLabel : '')
+    const aiReason = aiVerdict
+      ? (raw && typeof raw.aiReason === 'string' ? raw.aiReason.trim() : '') ||
+        parsed.aiReason
+      : ''
+    const baseLabel = aiVerdict ? candidateLabel || label : label
     const displayLabel =
       raw && typeof raw.displayLabel === 'string' && raw.displayLabel.trim()
         ? raw.displayLabel.trim()
         : inLibrary === false
-          ? `${label}（库里未收录，选了会去线上找）`
-          : label
-    return { label, inLibrary, matchedName, displayLabel }
+          ? `${baseLabel}（库里未收录，选了会去线上找）`
+          : baseLabel
+    return {
+      label,
+      inLibrary,
+      matchedName,
+      displayLabel,
+      ...(aiVerdict
+        ? { candidateLabel: baseLabel, aiVerdict, aiReason }
+        : {})
+    }
   })
 }
 

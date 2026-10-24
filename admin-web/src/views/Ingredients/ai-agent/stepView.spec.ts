@@ -159,6 +159,102 @@ describe('toStepView', () => {
     expect(view.statusLabel).toBe('成功')
   })
 
+  it('查本地库候选带 AI 复核时逐条显示 相关/存疑/不相关 标签与一句理由', () => {
+    const view = onlyStep([
+      {
+        name: 'searchLocalNutrition',
+        args: { keyword: '山药', state: 'RAW' },
+        ok: true,
+        result: {
+          ok: true,
+          found: true,
+          keywords: ['山药', 'yam'],
+          candidateCount: 3,
+          candidates: [
+            {
+              sourceRecordId: 'rec-yam',
+              foodName: 'Yam, raw',
+              matchedBy: 'EN_PARTIAL',
+              matchedKeyword: 'yam',
+              score: 0.9,
+              review: { verdict: 'RELEVANT', reason: '就是山药' }
+            },
+            {
+              sourceRecordId: 'rec-jicama',
+              foodName: 'Yambean (jicama), raw',
+              matchedBy: 'EN_PARTIAL',
+              matchedKeyword: 'yam',
+              score: 0.8,
+              review: { verdict: 'IRRELEVANT', reason: '凉薯，不是山药' }
+            },
+            {
+              sourceRecordId: 'rec-celery',
+              foodName: 'Celery, raw',
+              matchedBy: 'FUZZY',
+              matchedKeyword: 'yam',
+              score: 0.4,
+              review: { verdict: 'UNCERTAIN', reason: '无法确认' }
+            }
+          ]
+        }
+      }
+    ])
+
+    expect(view.search?.matches).toHaveLength(3)
+    expect(view.search?.matches[0]).toMatchObject({
+      foodName: 'Yam, raw',
+      aiVerdict: 'RELEVANT',
+      aiVerdictLabel: '相关',
+      aiVerdictTagType: 'success',
+      aiReason: '就是山药'
+    })
+    expect(view.search?.matches[1]).toMatchObject({
+      foodName: 'Yambean (jicama), raw',
+      aiVerdict: 'IRRELEVANT',
+      aiVerdictLabel: '不相关',
+      aiVerdictTagType: 'danger',
+      aiReason: '凉薯，不是山药'
+    })
+    expect(view.search?.matches[2]).toMatchObject({
+      aiVerdict: 'UNCERTAIN',
+      aiVerdictLabel: '存疑',
+      aiVerdictTagType: 'warning',
+      aiReason: '无法确认'
+    })
+  })
+
+  it('AI 复核缺失或 verdict 非法时不假装有判断', () => {
+    const view = onlyStep([
+      {
+        name: 'searchLocalNutrition',
+        args: { keyword: '山药', state: 'RAW' },
+        ok: true,
+        result: {
+          ok: true,
+          found: true,
+          keywords: ['山药'],
+          candidateCount: 1,
+          candidates: [
+            {
+              sourceRecordId: 'rec-yam',
+              foodName: 'Yam, raw',
+              matchedBy: 'EN_PARTIAL',
+              matchedKeyword: 'yam',
+              score: 0.9,
+              review: { verdict: 'MAYBE', reason: '不是合法判断' }
+            }
+          ]
+        }
+      }
+    ])
+
+    expect(view.search?.matches[0]).toMatchObject({
+      aiVerdict: null,
+      aiVerdictLabel: '',
+      aiReason: ''
+    })
+  })
+
   it('查本地库零命中时明确写“没有找到匹配词条”，不写成功', () => {
     const view = onlyStep([
       {

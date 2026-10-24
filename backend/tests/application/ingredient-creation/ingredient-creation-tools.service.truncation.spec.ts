@@ -16,6 +16,7 @@ jest.mock('../../../src/domain/ingredient/nutrition-field-catalog', () => ({
 }));
 
 import { Logger } from '@nestjs/common';
+import { IngredientCandidateReviewService } from '../../../src/application/ingredient-creation/ingredient-candidate-review.service';
 import { IngredientCreationToolsService } from '../../../src/application/ingredient-creation/ingredient-creation-tools.service';
 import type { PrismaService } from '../../../src/infrastructure/prisma.service';
 
@@ -44,6 +45,9 @@ function createTools() {
     {} as never,
     {} as never,
     prisma as unknown as PrismaService,
+    {
+      reviewCandidates: jest.fn(async () => []),
+    } as unknown as IngredientCandidateReviewService,
   );
 }
 

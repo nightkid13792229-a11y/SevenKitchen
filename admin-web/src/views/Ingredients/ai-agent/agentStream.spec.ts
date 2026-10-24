@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   answerInputFromPendingQuestion,
+  askOptionAiBadge,
   createAgentStreamState,
   parseSseChunk,
   pendingOptionBadge,
@@ -169,6 +170,51 @@ describe('reduceAgentEvents', () => {
       matchedByLabel: '中英别名匹配',
       matchedKeyword: '西洋菜',
       scoreLabel: '0.72'
+    })
+  })
+
+  it('step_end.matches 带 review 时，查库展开数据逐条带 AI 判断与理由', () => {
+    let state = reduceAgentEvents(createAgentStreamState(), stepStart())
+    state = reduceAgentEvents(
+      state,
+      stepEnd(1, {
+        found: true,
+        resultSummary: '命中 2 条',
+        keywords: ['山药', 'yam'],
+        candidateCount: 2,
+        matches: [
+          {
+            name: 'Yam, raw',
+            matchedBy: 'EN_PARTIAL',
+            matchedKeyword: 'yam',
+            score: 0.9,
+            review: { verdict: 'RELEVANT', reason: '就是山药' }
+          },
+          {
+            name: 'Yambean (jicama), raw',
+            matchedBy: 'EN_PARTIAL',
+            matchedKeyword: 'yam',
+            score: 0.8,
+            review: { verdict: 'IRRELEVANT', reason: '凉薯，不是山药' }
+          }
+        ]
+      })
+    )
+
+    expect(state.steps[0]?.search?.matches).toHaveLength(2)
+    expect(state.steps[0]?.search?.matches[0]).toMatchObject({
+      foodName: 'Yam, raw',
+      aiVerdict: 'RELEVANT',
+      aiVerdictLabel: '相关',
+      aiVerdictTagType: 'success',
+      aiReason: '就是山药'
+    })
+    expect(state.steps[0]?.search?.matches[1]).toMatchObject({
+      foodName: 'Yambean (jicama), raw',
+      aiVerdict: 'IRRELEVANT',
+      aiVerdictLabel: '不相关',
+      aiVerdictTagType: 'danger',
+      aiReason: '凉薯，不是山药'
     })
   })
 
@@ -609,6 +655,106 @@ describe('ask 事件 · 选项库内核实标记', () => {
       '菜山药（库里未收录，选了会去线上找）'
     )
     expect(parsed?.optionChecks?.[1]?.displayLabel).toBe('铁棍山药')
+  })
+
+  it('ask 选项带 AI 判断：候选名 / 标签 / 理由可结构化展示', () => {
+    const checks: AgentPendingQuestionOption[] = [
+      {
+        label: 'Yam, raw —— 相关：就是山药',
+        candidateLabel: 'Yam, raw',
+        aiVerdict: 'RELEVANT',
+        aiReason: '就是山药',
+        inLibrary: true,
+        matchedName: 'Yam, raw',
+        displayLabel: 'Yam, raw'
+      },
+      {
+        label: 'Yambean (jicama) —— 不相关：凉薯',
+        candidateLabel: 'Yambean (jicama)',
+        aiVerdict: 'IRRELEVANT',
+        aiReason: '凉薯',
+        inLibrary: true,
+        matchedName: 'Yambean (jicama), raw',
+        displayLabel: 'Yambean (jicama)'
+      },
+      {
+        label: 'Celery —— 存疑：不确定',
+        candidateLabel: 'Celery',
+        aiVerdict: 'UNCERTAIN',
+        aiReason: '不确定',
+        inLibrary: true,
+        matchedName: 'Celery, raw',
+        displayLabel: 'Celery'
+      }
+    ]
+
+    const state = reduceAgentEvents(createAgentStreamState(), {
+      type: 'ask',
+      question: QUESTION,
+      options: checks.map((check) => check.label),
+      optionChecks: checks,
+      draftId: 'draft-yam'
+    })
+
+    expect(state.pendingQuestion?.optionChecks).toEqual(checks)
+    expect(askOptionAiBadge(checks[0])).toEqual({
+      label: '相关',
+      type: 'success',
+      reason: '就是山药'
+    })
+    expect(askOptionAiBadge(checks[1])).toEqual({
+      label: '不相关',
+      type: 'danger',
+      reason: '凉薯'
+    })
+    expect(askOptionAiBadge(checks[2])).toEqual({
+      label: '存疑',
+      type: 'warning',
+      reason: '不确定'
+    })
+    // 普通部位 / 加工问题没有 AI 判断，不显示标签。
+    expect(askOptionAiBadge(CHECKS[0])).toBeNull()
+  })
+
+  it('旧草稿只有「候选名 —— 相关：理由」文案时，从文案里还原 AI 判断', () => {
+    const parsed = readPendingQuestion({
+      question: QUESTION,
+      options: [
+        'Yam, raw —— 相关：就是山药',
+        'Yambean (jicama) —— 不相关：凉薯'
+      ],
+      optionChecks: [
+        {
+          label: 'Yam, raw —— 相关：就是山药',
+          inLibrary: true,
+          matchedName: 'Yam, raw'
+        },
+        {
+          label: 'Yambean (jicama) —— 不相关：凉薯',
+          inLibrary: true,
+          matchedName: 'Yambean (jicama), raw'
+        }
+      ],
+      askedAt: '2026-10-24T12:00:00.000Z'
+    })
+
+    expect(parsed?.optionChecks?.[0]).toMatchObject({
+      candidateLabel: 'Yam, raw',
+      aiVerdict: 'RELEVANT',
+      aiReason: '就是山药',
+      displayLabel: 'Yam, raw'
+    })
+    expect(parsed?.optionChecks?.[1]).toMatchObject({
+      candidateLabel: 'Yambean (jicama)',
+      aiVerdict: 'IRRELEVANT',
+      aiReason: '凉薯',
+      displayLabel: 'Yambean (jicama)'
+    })
+    expect(askOptionAiBadge(parsed?.optionChecks?.[0])).toEqual({
+      label: '相关',
+      type: 'success',
+      reason: '就是山药'
+    })
   })
 
   it('旧草稿没有 optionChecks 时保持原样，不凭空造标记', () => {

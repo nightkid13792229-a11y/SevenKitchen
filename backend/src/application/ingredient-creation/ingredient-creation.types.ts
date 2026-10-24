@@ -123,6 +123,65 @@ export type CandidateMatchMethod =
   | 'FUZZY';
 
 /**
+ * AI 复核对一条候选的判断。
+ *
+ * - `RELEVANT`：就是目标食材；
+ * - `UNCERTAIN`：名字相近但无法确认，交给用户判断；
+ * - `IRRELEVANT`：明显是另一种食材（如山药搜到凉薯 / 芹菜）。
+ *
+ * 复核只打标，不过滤、不排序、不删除候选；真正写不写由人与工具闸门决定。
+ */
+export type CandidateReviewVerdict =
+  | 'RELEVANT'
+  | 'UNCERTAIN'
+  | 'IRRELEVANT';
+
+/** 复核目标：中文名必填；英文名与生熟状态用于消歧。 */
+export interface CandidateReviewTarget {
+  zh: string;
+  en?: string;
+  state: PreparationState;
+}
+
+/** 送去复核的一条候选（只带判断需要的元数据，不带营养档案）。 */
+export interface CandidateReviewItem {
+  id: string;
+  name: string;
+  sourceType: string;
+  coverage: number;
+}
+
+/** `reviewCandidates` 的返回项：与输入同序、同数量。 */
+export interface CandidateReviewResult {
+  id: string;
+  verdict: CandidateReviewVerdict;
+  reason: string;
+}
+
+/**
+ * 一次检索的复核闸门，随草稿保存。
+ *
+ * 工具层用它阻止「模型直接写不相关候选 / 还没让人选就写」：
+ * - `reviewFailed=true`（模型没配 / 调用失败）时不拦任何写入，避免复核故障阻塞流程；
+ * - 其余情况下，写不相关候选、0 条相关、≥2 条相关但还没问人，都会被拒绝。
+ *
+ * `askUser` 成功后清空（人已经参与选择），下一条回答带来的人工决定优先于 AI 判断。
+ */
+export interface CandidateReviewGate {
+  reviewedAt: string;
+  reviewFailed: boolean;
+  relevantCount: number;
+  uncertainCount: number;
+  irrelevantCount: number;
+  /** 参与本次复核的候选（最多 12 条），供闸门按 sourceRecordId 反查。 */
+  candidates: Array<
+    CandidateReviewResult & {
+      foodName: string;
+    }
+  >;
+}
+
+/**
  * ② 营养依据站的候选行（Task 4 的候选检索产出）。
  *
  * `cookingMethod` 只取 Task 2 的 `CookingMethod`；认不出的做法存 `null`，
@@ -299,6 +358,17 @@ export interface PendingQuestionOption {
   matchedName: string | null;
   /** 页面展示文案；未收录时是 `label + 后缀`。 */
   displayLabel: string;
+  /**
+   * 候选名（从 `候选名 —— 相关：理由` 的文案里拆出来）。
+   *
+   * `label` 仍是点选后回传给模型的完整答案；页面展示 AI 判断时用这个字段，
+   * 避免把「相关 / 理由」重复显示两遍。旧草稿没有它。
+   */
+  candidateLabel?: string | null;
+  /** AI 复核对这条选项的判断；普通部位 / 加工问题没有。 */
+  aiVerdict?: CandidateReviewVerdict | null;
+  /** AI 复核的一句理由（≤40 字）；没有判断时为空。 */
+  aiReason?: string | null;
 }
 
 /**
@@ -340,6 +410,12 @@ export interface IngredientCreationDraftPayload {
   verify?: { exceptions: ExceptionRecord[] };
   /** AI 提案历史：只追加、不覆盖（appendProposal） */
   proposalHistory?: ProposalSnapshot[];
+  /**
+   * 最近一次检索的 AI 复核闸门；`askUser` 成功后清空。
+   *
+   * 只是工具层的保护，不参与页面渲染；旧草稿没有这个键。
+   */
+  candidateReviewGate?: CandidateReviewGate | null;
   /**
    * AI 正在等用户回答的问题；下一次带同一 draftId 的 run 会把它塞进提示词，
    * 然后置为 null。null / 缺失都表示「现在没有待回答的问题」。

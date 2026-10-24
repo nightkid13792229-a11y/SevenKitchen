@@ -11,6 +11,7 @@ import {
   IngredientDraftAgentService,
   type IngredientAgentRunResult,
 } from '../../../src/application/ingredient-creation/ingredient-draft-agent.service';
+import { IngredientCandidateReviewService } from '../../../src/application/ingredient-creation/ingredient-candidate-review.service';
 import { IngredientCreationAuditService } from '../../../src/application/ingredient-creation/ingredient-creation-audit.service';
 import { IngredientCreationCandidateService } from '../../../src/application/ingredient-creation/ingredient-creation-candidate.service';
 import { IngredientCreationCheckService } from '../../../src/application/ingredient-creation/ingredient-creation-check.service';
@@ -270,11 +271,23 @@ function createHarness(options: HarnessOptions = {}) {
     ),
   };
 
+  const reviewService: { reviewCandidates: jest.Mock } = {
+    reviewCandidates: jest.fn(
+      async (input: { candidates: Array<{ id: string }> }) =>
+        input.candidates.map((candidate) => ({
+          id: candidate.id,
+          verdict: 'RELEVANT' as const,
+          reason: '就是目标食材',
+        })),
+    ),
+  };
+
   const tools = new IngredientCreationToolsService(
     candidateService as unknown as IngredientCreationCandidateService,
     draftService as unknown as IngredientCreationDraftService,
     checkService as unknown as IngredientCreationCheckService,
     prisma as never,
+    reviewService as unknown as IngredientCandidateReviewService,
   );
 
   const agent = new IngredientDraftAgentService(
@@ -291,6 +304,7 @@ function createHarness(options: HarnessOptions = {}) {
     checkService,
     prisma,
     configService,
+    reviewService,
     currentDraft: () => draft,
   };
 }
@@ -1504,7 +1518,7 @@ describe('IngredientDraftAgentService · 工具循环', () => {
     expect(result.toolCallCount).toBe(3);
   });
 
-  it('流式回调：查库 step_end 带 matches / keywords（最多 5 条），读记录带 record 摘要', async () => {
+  it('流式回调：查库 step_end 带 matches / keywords（最多 12 条），读记录带 record 摘要', async () => {
     const candidates = Array.from({ length: 7 }, (_, index) => ({
       ...CANDIDATE_RESULT.candidates[0],
       sourceRecordId: index === 0 ? 'rec-liver-raw' : `rec-liver-${index}`,
@@ -1574,17 +1588,19 @@ describe('IngredientDraftAgentService · 工具循环', () => {
     });
     expect(searchEnd.keywords).toEqual(['鸡肝', 'Chicken liver']);
     expect(searchEnd.candidateCount).toBe(7);
-    expect(searchEnd.matches).toHaveLength(5);
+    expect(searchEnd.matches).toHaveLength(7);
     expect(searchEnd.matches[0]).toEqual({
       name: 'Chicken, liver, raw 1',
       matchedBy: 'EN_PARTIAL',
       matchedKeyword: 'Chicken liver',
       score: 0.9,
+      review: { verdict: 'RELEVANT', reason: '就是目标食材' },
     });
     expect(Object.keys(searchEnd.matches[0]).sort()).toEqual([
       'matchedBy',
       'matchedKeyword',
       'name',
+      'review',
       'score',
     ]);
     expect(searchEnd.record).toBeUndefined();
@@ -2100,6 +2116,276 @@ describe('IngredientDraftAgentService · askUser（先问人，再动手）', ()
     expect(prompt).toContain('库里未收录');
     expect(prompt).toContain('线上');
     expect(prompt).toContain('留空');
+  });
+});
+
+describe('IngredientDraftAgentService · AI 复核候选（判断交给 AI，选择交给人）', () => {
+  function twoCandidates(): CandidateSearchResult {
+    return {
+      ...CANDIDATE_RESULT,
+      candidates: [
+        CANDIDATE_RESULT.candidates[0],
+        {
+          ...CANDIDATE_RESULT.candidates[0],
+          sourceRecordId: 'rec-liver-cooked',
+          foodName: 'Chicken, liver, cooked',
+          foodNameEn: 'Chicken, liver, cooked',
+          preparationState: 'COOKED',
+        },
+      ],
+      coverage: { ...CANDIDATE_RESULT.coverage, candidateCount: 2 },
+    };
+  }
+
+  it('系统提示词：先看复核再写；相关≥2 先问人、=1 说明理由、=0 不硬选', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(chatResponse(assistantReply('好的。')));
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '山药',
+      userId: 'admin-1',
+    });
+
+    const system = String(requestBody(fetchMock, 0).messages[0].content);
+    expect(system).toContain('RELEVANT');
+    expect(system).toContain('IRRELEVANT');
+    expect(system).toContain('不要因为候选里有不相关项就丢弃');
+    expect(system).toContain('相关候选 ≥2');
+    expect(system).toContain('askUser');
+    expect(system).toContain('候选名 —— 相关/存疑/不相关');
+    expect(system).toContain('我选了这条');
+    expect(system).toContain('去线上找');
+    expect(system).toContain('留空');
+  });
+
+  it('回答带 AI 判断的选项时，提示词同时给出 AI 判断与「以用户选择为准」', async () => {
+    const harness = createHarness({
+      draft: createDraft({
+        payload: {
+          pendingQuestion: {
+            question: '鸡肝用哪一条？',
+            options: [
+              'Chicken, liver, raw —— 相关：就是鸡肝',
+              'Chicken, liver, cooked —— 相关：也是鸡肝',
+            ],
+            optionChecks: [
+              {
+                label: 'Chicken, liver, raw —— 相关：就是鸡肝',
+                candidateLabel: 'Chicken, liver, raw',
+                aiVerdict: 'RELEVANT',
+                aiReason: '就是鸡肝',
+                inLibrary: true,
+                matchedName: 'Chicken, liver, raw',
+                displayLabel: 'Chicken, liver, raw',
+              },
+              {
+                label: 'Chicken, liver, cooked —— 相关：也是鸡肝',
+                candidateLabel: 'Chicken, liver, cooked',
+                aiVerdict: 'RELEVANT',
+                aiReason: '也是鸡肝',
+                inLibrary: true,
+                matchedName: 'Chicken, liver, cooked',
+                displayLabel: 'Chicken, liver, cooked',
+              },
+            ],
+            askedAt: '2026-10-24T12:00:00.000Z',
+          },
+        },
+      }),
+    });
+
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(chatResponse(assistantReply('按生的那条继续。')));
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: 'Chicken, liver, raw —— 相关：就是鸡肝',
+      userId: 'admin-1',
+    });
+
+    const messages = requestBody(fetchMock, 0).messages as Array<{
+      role: string
+      content: string | null
+    }>;
+    const prompt = messages
+      .map((message) => String(message.content ?? ''))
+      .join('\n');
+    expect(prompt).toContain('AI 当时的判断：相关——就是鸡肝');
+    expect(prompt).toContain('用户已经选了这条，以用户的选择为准');
+    expect(prompt).toContain('用户答：Chicken, liver, raw');
+  });
+
+  it('≥2 条相关：模型直接写入会被拒，改调 askUser 后选项带 AI 判断与理由', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'searchLocalNutrition',
+            { keyword: '鸡肝', state: 'RAW' },
+            'call_search',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'updateNutritionField',
+            {
+              profileIndex: 0,
+              fieldPath: 'macros.crudeProtein',
+              value: 19.5,
+              unit: 'g',
+              sourceRecordId: 'rec-liver-raw',
+            },
+            'call_write',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'askUser',
+            {
+              question: '鸡肝用哪一条？',
+              options: [
+                'Chicken, liver, raw —— 相关：就是鸡肝',
+                'Chicken, liver, cooked —— 相关：也是鸡肝',
+              ],
+            },
+            'call_ask',
+          ),
+        ),
+      );
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness({ candidates: twoCandidates() });
+    harness.reviewService.reviewCandidates.mockResolvedValue([
+      { id: 'rec-liver-raw', verdict: 'RELEVANT', reason: '就是鸡肝' },
+      { id: 'rec-liver-cooked', verdict: 'RELEVANT', reason: '也是鸡肝' },
+    ]);
+
+    const events: any[] = [];
+    const result = await harness.agent.run(
+      { draftId: DRAFT_ID, text: '鸡肝', userId: 'admin-1' },
+      (event) => events.push(event),
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const writeResult = JSON.parse(
+      String(
+        (requestBody(fetchMock, 2).messages as any[])
+          .filter((message) => message.role === 'tool')
+          .pop()?.content,
+      ),
+    );
+    expect(writeResult.ok).toBe(false);
+    expect(writeResult.error).toContain('askUser');
+
+    // 写入被闸门拦住，草稿里没有营养档案。
+    expect(harness.currentDraft()?.payload.profiles).toBeUndefined();
+
+    expect(result.stopReason).toBe('waiting_user');
+    expect(result.pendingQuestion?.options).toEqual([
+      'Chicken, liver, raw —— 相关：就是鸡肝',
+      'Chicken, liver, cooked —— 相关：也是鸡肝',
+    ]);
+    expect(result.pendingQuestion?.optionChecks?.map((option) => ({
+      candidateLabel: option.candidateLabel,
+      aiVerdict: option.aiVerdict,
+      aiReason: option.aiReason,
+    }))).toEqual([
+      {
+        candidateLabel: 'Chicken, liver, raw',
+        aiVerdict: 'RELEVANT',
+        aiReason: '就是鸡肝',
+      },
+      {
+        candidateLabel: 'Chicken, liver, cooked',
+        aiVerdict: 'RELEVANT',
+        aiReason: '也是鸡肝',
+      },
+    ]);
+    expect(harness.currentDraft()?.payload.candidateReviewGate).toBeNull();
+    expect(events.map((event) => event.type).slice(-2)).toEqual([
+      'ask',
+      'done',
+    ]);
+  });
+
+  it('0 条相关：写入被拒并明确让模型走线上 / 留空，不硬选', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'searchLocalNutrition',
+            { keyword: '山药', state: 'RAW' },
+            'call_search',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'updateNutritionField',
+            {
+              profileIndex: 0,
+              fieldPath: 'macros.crudeProtein',
+              value: 1.5,
+              unit: 'g',
+              sourceRecordId: 'rec-jicama',
+            },
+            'call_write',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(assistantReply('本地没有相关来源，我去线上找或先留空。')),
+      );
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness({
+      candidates: {
+        ...CANDIDATE_RESULT,
+        candidates: [
+          {
+            ...CANDIDATE_RESULT.candidates[0],
+            sourceRecordId: 'rec-jicama',
+            foodName: 'Yambean (jicama), raw',
+            foodNameEn: 'Yambean (jicama), raw',
+          },
+        ],
+      },
+    });
+    harness.reviewService.reviewCandidates.mockResolvedValue([
+      { id: 'rec-jicama', verdict: 'IRRELEVANT', reason: '凉薯，不是山药' },
+    ]);
+
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '山药',
+      userId: 'admin-1',
+    });
+
+    const writeResult = JSON.parse(
+      String(
+        (requestBody(fetchMock, 2).messages as any[])
+          .filter((message) => message.role === 'tool')
+          .pop()?.content,
+      ),
+    );
+    expect(writeResult.ok).toBe(false);
+    expect(writeResult.error).toContain('线上');
+    expect(writeResult.error).toContain('留空');
+    expect(harness.currentDraft()?.payload.profiles).toBeUndefined();
+    expect(result.reply).toContain('线上');
   });
 });
 

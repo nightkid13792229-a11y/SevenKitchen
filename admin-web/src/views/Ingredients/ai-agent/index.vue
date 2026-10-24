@@ -133,13 +133,31 @@
                             {{ match.foodNameEn }}
                           </span>
                           <el-tag size="small" effect="plain" type="info">
-                            {{ match.matchedByLabel }}
+                            匹配方式：{{ match.matchedByLabel }}
                           </el-tag>
                           <span class="agent-step__match-meta">
                             关键词「{{ match.matchedKeyword }}」
                           </span>
                           <span class="agent-step__match-meta">
                             分数 {{ match.scoreLabel }}
+                          </span>
+                          <span
+                            v-if="match.aiVerdict"
+                            class="agent-step__match-ai"
+                          >
+                            <el-tag
+                              size="small"
+                              :type="match.aiVerdictTagType"
+                              effect="plain"
+                            >
+                              AI 判断：{{ match.aiVerdictLabel }}
+                            </el-tag>
+                            <span
+                              v-if="match.aiReason"
+                              class="agent-step__match-reason"
+                            >
+                              {{ match.aiReason }}
+                            </span>
                           </span>
                         </li>
                       </ul>
@@ -186,32 +204,67 @@
               </p>
             </div>
             <div class="agent-ask__options">
-              <span class="agent-ask__hint">点一个答案继续：</span>
-              <el-button
-                v-for="(option, index) in askOptionViews"
-                :key="`${option.label}-${index}`"
-                size="small"
-                type="primary"
-                plain
-                :title="option.title || undefined"
-                :disabled="
-                  state.running || saving || Boolean(commitResult)
-                "
-                @click="handleAnswerOption(option.label)"
-              >
-                <span class="agent-ask__option-text">
-                  {{ option.displayLabel }}
+              <div class="agent-ask__legend">
+                <span class="agent-ask__legend-item">
+                  <el-tag size="small" type="info" effect="plain">
+                    AI 判断
+                  </el-tag>
+                  <span>仅供参考，不是你的选择</span>
                 </span>
-                <el-tag
-                  v-if="option.badge"
+                <span class="agent-ask__legend-item">
+                  <el-tag size="small" type="primary" effect="plain">
+                    你的选择
+                  </el-tag>
+                  <span>点一个答案继续</span>
+                </span>
+              </div>
+              <div class="agent-ask__buttons">
+                <el-button
+                  v-for="(option, index) in askOptionViews"
+                  :key="`${option.label}-${index}`"
                   size="small"
-                  :type="option.badge.type"
-                  effect="plain"
-                  class="agent-ask__option-tag"
+                  type="primary"
+                  plain
+                  :title="option.title || undefined"
+                  :disabled="
+                    state.running || saving || Boolean(commitResult)
+                  "
+                  @click="handleAnswerOption(option.label)"
                 >
-                  {{ option.badge.label }}
-                </el-tag>
-              </el-button>
+                  <span class="agent-ask__option-body">
+                    <span class="agent-ask__option-text">
+                      {{ option.displayLabel }}
+                    </span>
+                    <span
+                      v-if="option.aiBadge"
+                      class="agent-ask__option-ai"
+                    >
+                      <el-tag
+                        size="small"
+                        :type="option.aiBadge.type"
+                        effect="plain"
+                      >
+                        AI 判断：{{ option.aiBadge.label }}
+                      </el-tag>
+                      <span
+                        v-if="option.aiBadge.reason"
+                        class="agent-ask__option-reason"
+                      >
+                        {{ option.aiBadge.reason }}
+                      </span>
+                    </span>
+                    <el-tag
+                      v-if="option.badge"
+                      size="small"
+                      :type="option.badge.type"
+                      effect="plain"
+                      class="agent-ask__option-tag"
+                    >
+                      {{ option.badge.label }}
+                    </el-tag>
+                  </span>
+                </el-button>
+              </div>
             </div>
           </div>
         </div>
@@ -680,6 +733,7 @@ import {
 } from './draftReview'
 import {
   answerInputFromPendingQuestion,
+  askOptionAiBadge,
   pendingOptionBadge,
   readPendingQuestion,
   streamIngredientAgent,
@@ -739,6 +793,8 @@ const askOptionViews = computed(() =>
       label,
       displayLabel: check?.displayLabel || label,
       badge: pendingOptionBadge(check),
+      // AI 判断与「你的选择」分开：上面是 AI 的参考意见，下面的按钮才是人点选的。
+      aiBadge: askOptionAiBadge(check),
       title: check?.matchedName ? `库里词条：${check.matchedName}` : ''
     }
   })
@@ -1640,8 +1696,19 @@ function goBackToList() {
 
 .agent-step__match-en,
 .agent-step__match-meta,
-.agent-step__match-more {
+.agent-step__match-more,
+.agent-step__match-reason {
   color: var(--el-text-color-secondary);
+}
+
+/* AI 判断单独成组，与「匹配方式 / 关键词 / 分数」这些代码证据分开。 */
+.agent-step__match-ai {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-left: 6px;
+  border-left: 2px solid var(--el-border-color);
 }
 
 .agent-step__match-more {
@@ -1693,15 +1760,42 @@ function goBackToList() {
 
 .agent-ask__options {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 8px;
   padding-left: 34px;
 }
 
-.agent-ask__hint {
+/* 先把「AI 判断」和「你的选择」说清楚：标签是参考，按钮才是决定。 */
+.agent-ask__legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
   font-size: 12px;
   color: var(--el-text-color-secondary);
+}
+
+.agent-ask__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.agent-ask__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.agent-ask__option-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  white-space: normal;
+  text-align: left;
 }
 
 .agent-ask__option-text {
@@ -1709,8 +1803,19 @@ function goBackToList() {
   text-align: left;
 }
 
+.agent-ask__option-ai {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.agent-ask__option-reason {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
 .agent-ask__option-tag {
-  margin-left: 6px;
   flex-shrink: 0;
 }
 

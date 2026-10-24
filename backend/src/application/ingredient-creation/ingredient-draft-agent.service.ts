@@ -24,6 +24,7 @@ import {
   type AgentToolExecution,
 } from './ingredient-creation-tools.service';
 import type {
+  CandidateReviewVerdict,
   IngredientCreationDraft,
   PendingQuestion,
   PendingQuestionOption,
@@ -154,6 +155,11 @@ export interface IngredientAgentStreamMatch {
   matchedBy: string;
   matchedKeyword: string;
   score: number | null;
+  /** 服务端 AI 复核判断；旧后端没有这个字段。 */
+  review?: {
+    verdict: CandidateReviewVerdict;
+    reason: string;
+  };
 }
 
 /** 「读来源记录」这一步的精简摘要：词条名 / 覆盖率 / 读到多少项。 */
@@ -559,8 +565,8 @@ function readToolFound(
   return readSearchOutcome(execution.content)?.found;
 }
 
-/** step_end 最多带 5 条命中，避免一次长检索把 SSE 事件撑大。 */
-const STEP_MATCH_LIMIT = 5;
+/** step_end 最多带 12 条命中（与单次检索 / 复核上限一致），页面要能逐条显示 AI 判断。 */
+const STEP_MATCH_LIMIT = 12;
 /** 关键词 / 词条名都是展示用，超长截断，避免单条事件体积失控。 */
 const STEP_KEYWORD_MAX = 80;
 const STEP_KEYWORD_LIMIT = 10;
@@ -572,8 +578,32 @@ interface SearchStepEvidence {
   candidateCount: number;
 }
 
+/** 候选里的 AI 判断：认不出 verdict 就不带，页面不会假装有判断。 */
+function readCandidateReview(
+  value: unknown,
+): IngredientAgentStreamMatch['review'] | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const verdict = value.verdict;
+  if (
+    verdict !== 'RELEVANT' &&
+    verdict !== 'UNCERTAIN' &&
+    verdict !== 'IRRELEVANT'
+  ) {
+    return null;
+  }
+  return {
+    verdict,
+    reason: truncate(
+      readTextValue(value.reason).replace(/\s+/g, ' '),
+      40,
+    ),
+  };
+}
+
 /**
- * 查库 step_end 的匹配依据：关键词 + 前 5 条命中。
+ * 查库 step_end 的匹配依据：关键词 + 前 12 条命中（含 AI 复核判断）。
  *
  * 只在查库工具**成功且返回结构化结果**时生成；零命中时 matches 为空数组、
  * keywords 保留本次实际检索词，页面仍可展开并显示「没有找到匹配词条」。
@@ -604,6 +634,7 @@ function buildSearchStepEvidence(
         typeof candidate.score === 'number' && Number.isFinite(candidate.score)
           ? candidate.score
           : null;
+      const review = readCandidateReview(candidate.review);
       matches.push({
         name:
           oneLine(
@@ -618,6 +649,7 @@ function buildSearchStepEvidence(
           STEP_KEYWORD_MAX,
         ),
         score,
+        ...(review ? { review } : {}),
       });
       if (matches.length >= STEP_MATCH_LIMIT) {
         break;
@@ -918,6 +950,11 @@ function buildSystemPrompt(
     '- 不要编造营养数值。只写来源记录里有的值，或用户明确给出的值。',
     '- 工具报错表示输入不合法。按错误文本改正参数后重试；连续改不出来就停下，说明卡在哪。',
     '- searchLocalNutrition 返回 ok=true 只表示「查询执行成功」，不代表找到数据。看 found / candidateCount：found=false 或 0 条时必须明确说「没有找到匹配词条」，并列出 keywords 里已尝试的关键词；不要写成「成功找到」，也不要编造数据。',
+    '- searchLocalNutrition 返回的每条候选都带 review（RELEVANT=相关 / UNCERTAIN=存疑 / IRRELEVANT=不相关）和一句理由，这是服务端自动复核的结果。不要因为候选里有不相关项就丢弃或隐藏候选；AI 判断只是证据，最终选择由人做。',
+    '- 写原料卡或营养档案之前必须先查库并看复核结论；review.verdict=IRRELEVANT 的候选不允许直接写入。',
+    '- 相关候选 ≥2 条：**必须先调用 askUser** 让用户选择，不许自己挑一条；选项文案写成「候选名 —— 相关/存疑/不相关：≤40 字理由」，把 AI 判断展示给用户。',
+    '- 相关候选 =1 条：可以继续用它写入，但最终回复必须说明“我选了这条，因为…”，并把其它候选的 AI 判断列在证据里。',
+    '- 相关候选 =0 条：不许硬选，转“去线上找 / 留空”分支，明确告诉用户本地库没有相关来源。',
     '- 以下情况**必须先调用 askUser 问人，不许自己猜**：部位 / 加工态 / 种类有歧义（例如「牛肉」「猪肉」「土豆」「鱼」「山药」）；多个候选覆盖率接近且生熟状态不同；要新建多份档案但主次不明。',
     '- 一次只问一个问题，给 2–5 个可点选项（每个选项是一个具体答案）。用户回答之前不要写原料卡或营养档案；拿到回答后再继续，不要重复问同一个问题。',
     '- askUser 会把问题存进草稿并结束本轮，等待用户回答。不要在同一轮里自问自答，也不要在回复里假装已经知道答案。',
@@ -973,7 +1010,28 @@ function readPendingQuestionOptionChecks(
       raw && typeof raw.displayLabel === 'string' && raw.displayLabel.trim()
         ? raw.displayLabel.trim()
         : label;
-    return { label, inLibrary, matchedName, displayLabel };
+    const candidateLabel =
+      raw && typeof raw.candidateLabel === 'string' && raw.candidateLabel.trim()
+        ? raw.candidateLabel.trim()
+        : null;
+    const aiVerdict =
+      raw &&
+      (raw.aiVerdict === 'RELEVANT' ||
+        raw.aiVerdict === 'UNCERTAIN' ||
+        raw.aiVerdict === 'IRRELEVANT')
+        ? raw.aiVerdict
+        : null;
+    const aiReason =
+      raw && typeof raw.aiReason === 'string' ? raw.aiReason.trim() : '';
+
+    return {
+      label,
+      inLibrary,
+      matchedName,
+      displayLabel,
+      ...(candidateLabel ? { candidateLabel } : {}),
+      ...(aiVerdict ? { aiVerdict, aiReason } : {}),
+    };
   });
 }
 
@@ -1036,6 +1094,19 @@ function buildUserPrompt(
       `（这个选项库里已收录${
         selected.matchedName ? `：${selected.matchedName}` : ''
       }；请优先用本地来源。）`,
+    );
+  }
+  if (selected?.aiVerdict) {
+    const verdictText =
+      selected.aiVerdict === 'RELEVANT'
+        ? '相关'
+        : selected.aiVerdict === 'IRRELEVANT'
+          ? '不相关'
+          : '存疑';
+    lines.push(
+      `（AI 当时的判断：${verdictText}${
+        selected.aiReason ? `——${selected.aiReason}` : ''
+      }。用户已经选了这条，以用户的选择为准。）`,
     );
   }
   lines.push('（请按用户回答继续；不要假装早已知道答案，也不要重复问同一个问题。）');

@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { IngredientCandidateReviewService } from '../../../src/application/ingredient-creation/ingredient-candidate-review.service';
 import { IngredientCreationCandidateService } from '../../../src/application/ingredient-creation/ingredient-creation-candidate.service';
 import { IngredientCreationCheckService } from '../../../src/application/ingredient-creation/ingredient-creation-check.service';
 import { IngredientCreationDraftService } from '../../../src/application/ingredient-creation/ingredient-creation-draft.service';
@@ -40,31 +41,58 @@ function createTools(
     },
   };
 
+  let payload = { ...draftPayload };
   const draftService = {
     get: jest.fn(async () => ({
       id: DRAFT_ID,
       name: '鸡肝',
       type: 'FOOD',
       step: 'INTAKE',
-      payload: draftPayload,
+      payload: { ...payload },
       createdBy: 'admin-1',
       createdAt: new Date('2026-10-23T00:00:00.000Z'),
       updatedAt: new Date('2026-10-23T00:00:00.000Z'),
     })),
-    patch: jest.fn(),
+    patch: jest.fn(
+      async (
+        _id: string,
+        _step: string,
+        next: Record<string, unknown>,
+      ) => {
+        payload = { ...payload, ...next };
+        return { payload };
+      },
+    ),
   };
 
   const candidateService = { findCandidates: jest.fn() };
   const checkService = { runCheck: jest.fn() };
+  const reviewService: { reviewCandidates: jest.Mock } = {
+    reviewCandidates: jest.fn(
+      async (input: { candidates: Array<{ id: string }> }) =>
+        input.candidates.map((candidate) => ({
+          id: candidate.id,
+          verdict: 'RELEVANT' as const,
+          reason: '就是目标食材',
+        })),
+    ),
+  };
 
   const tools = new IngredientCreationToolsService(
     candidateService as unknown as IngredientCreationCandidateService,
     draftService as unknown as IngredientCreationDraftService,
     checkService as unknown as IngredientCreationCheckService,
     prisma as unknown as PrismaService,
+    reviewService as unknown as IngredientCandidateReviewService,
   );
 
-  return { tools, prisma, draftService, candidateService };
+  return {
+    tools,
+    prisma,
+    draftService,
+    candidateService,
+    reviewService,
+  };
 }
 
 async function executeGetRecord(
@@ -92,6 +120,24 @@ async function executeBatch(
     runId: RUN_ID,
     draftId: DRAFT_ID,
     name: 'updateNutritionFields',
+    args,
+  });
+
+  return {
+    ...execution,
+    body: JSON.parse(execution.content) as any,
+  };
+}
+
+async function executeTool(
+  tools: IngredientCreationToolsService,
+  name: string,
+  args: Record<string, unknown>,
+) {
+  const execution = await tools.execute({
+    runId: RUN_ID,
+    draftId: DRAFT_ID,
+    name,
     args,
   });
 
@@ -855,6 +901,391 @@ describe('IngredientCreationToolsService · askUser 选项先核实本地营养�
         matchedName: null,
         displayLabel: '菜山药（库里未收录，选了会去线上找）',
       },
+    ]);
+  });
+});
+
+describe('IngredientCreationToolsService · AI 复核候选（判断与写入闸门）', () => {
+  const coverage = {
+    state: 'RAW' as const,
+    candidateCount: 0,
+    bestCoveragePercent: null,
+    bestMissingFieldCount: null,
+  };
+
+  function row(
+    sourceRecordId: string,
+    foodName: string,
+    matchScore = 0.8,
+  ) {
+    return {
+      sourceRecordId,
+      sourceType: 'USDA_FDC',
+      foodName,
+      foodNameEn: foodName,
+      preparationState: 'RAW' as const,
+      cookingMethod: null,
+      coveragePercent: 80,
+      missingFields: [],
+      matchScore,
+      matchedBy: 'EN_PARTIAL' as const,
+      matchedKeyword: 'yam',
+      matchedSourceName: foodName,
+      notes: [],
+    };
+  }
+
+  function searchResult(candidates: ReturnType<typeof row>[]) {
+    return {
+      keywords: ['山药', 'yam'],
+      candidates,
+      excludedCount: 0,
+      coverage: {
+        ...coverage,
+        candidateCount: candidates.length,
+        bestCoveragePercent: 80,
+        bestMissingFieldCount: 0,
+      },
+    };
+  }
+
+  const YAM_RECORD: SourceRecordFixture = {
+    id: 'rec-yam',
+    status: 'ACTIVE',
+    foodName: 'Yam, raw',
+    foodNameEn: 'Yam, raw',
+    normalizedNutrition: {
+      meta: { sampleState: 'RAW' },
+      macros: { crudeProtein: 1.5 },
+    },
+  };
+
+  const JICAMA_RECORD: SourceRecordFixture = {
+    id: 'rec-jicama',
+    status: 'ACTIVE',
+    foodName: 'Yambean (jicama), raw',
+    foodNameEn: 'Yambean (jicama), raw',
+    normalizedNutrition: {
+      meta: { sampleState: 'RAW' },
+      macros: { crudeProtein: 0.7 },
+    },
+  };
+
+  function review(
+    id: string,
+    verdict: 'RELEVANT' | 'UNCERTAIN' | 'IRRELEVANT',
+    reason: string,
+  ) {
+    return { id, verdict, reason };
+  }
+
+  it('查库后先复核：每条候选带 review，顶部给出相关 / 存疑 / 不相关计数与下一步', async () => {
+    const { tools, candidateService, reviewService, draftService } =
+      createTools([], { intake: { name: '山药', nameEn: 'yam' } });
+    const candidates = [
+      row('rec-yam', 'Yam, raw'),
+      row('rec-jicama', 'Yambean (jicama), raw'),
+      row('rec-celery', 'Celery, raw'),
+    ];
+    candidateService.findCandidates.mockResolvedValue(searchResult(candidates));
+    reviewService.reviewCandidates.mockResolvedValue([
+      review('rec-yam', 'RELEVANT', '就是山药'),
+      review('rec-jicama', 'IRRELEVANT', '凉薯，不是山药'),
+      review('rec-celery', 'UNCERTAIN', '无法确认'),
+    ]);
+
+    const result = await executeTool(tools, 'searchLocalNutrition', {
+      keyword: '山药',
+      state: 'RAW',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(reviewService.reviewCandidates).toHaveBeenCalledWith({
+      target: { zh: '山药', en: 'yam', state: 'RAW' },
+      candidates: [
+        {
+          id: 'rec-yam',
+          name: 'Yam, raw',
+          sourceType: 'USDA_FDC',
+          coverage: 80,
+        },
+        {
+          id: 'rec-jicama',
+          name: 'Yambean (jicama), raw',
+          sourceType: 'USDA_FDC',
+          coverage: 80,
+        },
+        {
+          id: 'rec-celery',
+          name: 'Celery, raw',
+          sourceType: 'USDA_FDC',
+          coverage: 80,
+        },
+      ],
+    });
+    expect(result.body.candidates.map((candidate: any) => candidate.review)).toEqual([
+      { verdict: 'RELEVANT', reason: '就是山药' },
+      { verdict: 'IRRELEVANT', reason: '凉薯，不是山药' },
+      { verdict: 'UNCERTAIN', reason: '无法确认' },
+    ]);
+    expect(result.body.reviewSummary).toEqual({
+      relevantCount: 1,
+      uncertainCount: 1,
+      irrelevantCount: 1,
+      failed: false,
+    });
+    expect(result.body.nextAction).toBe('USE_SINGLE_RELEVANT');
+    expect(result.body.hint).toContain('我选了这条');
+    expect(draftService.patch).toHaveBeenCalledWith(
+      DRAFT_ID,
+      'INTAKE',
+      expect.objectContaining({
+        candidateReviewGate: expect.objectContaining({
+          relevantCount: 1,
+          reviewFailed: false,
+          candidates: expect.arrayContaining([
+            expect.objectContaining({
+              id: 'rec-jicama',
+              verdict: 'IRRELEVANT',
+              foodName: 'Yambean (jicama), raw',
+            }),
+          ]),
+        }),
+      }),
+    );
+  });
+
+  it('不因类别 / 词位置丢候选：12 条原样交给复核，芹菜也在结果里', async () => {
+    const { tools, candidateService, reviewService } = createTools([]);
+    const candidates = Array.from({ length: 12 }, (_, index) =>
+      row(
+        `rec-${index}`,
+        index === 5 ? 'Celery, raw' : index === 7 ? 'Yambean (jicama), raw' : `Yam ${index}, raw`,
+        0.9 - index * 0.01,
+      ),
+    );
+    candidateService.findCandidates.mockResolvedValue(searchResult(candidates));
+    reviewService.reviewCandidates.mockResolvedValue(
+      candidates.map((candidate) =>
+        review(candidate.sourceRecordId, 'UNCERTAIN', '需要人判断'),
+      ),
+    );
+
+    const result = await executeTool(tools, 'searchLocalNutrition', {
+      keyword: '山药',
+      state: 'RAW',
+    });
+
+    expect(result.body.candidates).toHaveLength(12);
+    expect(result.body.candidates.map((candidate: any) => candidate.foodName)).toEqual(
+      candidates.map((candidate) => candidate.foodName),
+    );
+    expect(result.body.candidates[5].foodName).toBe('Celery, raw');
+    expect(reviewService.reviewCandidates).toHaveBeenCalledTimes(1);
+    expect(
+      (reviewService.reviewCandidates.mock.calls[0] as any)[0].candidates,
+    ).toHaveLength(12);
+  });
+
+  it('候选被判为不相关时，不能直接写入营养字段', async () => {
+    const { tools, candidateService, reviewService, draftService } = createTools(
+      [YAM_RECORD, JICAMA_RECORD],
+      {},
+    );
+    candidateService.findCandidates.mockResolvedValue(
+      searchResult([
+        row('rec-yam', 'Yam, raw'),
+        row('rec-jicama', 'Yambean (jicama), raw'),
+      ]),
+    );
+    reviewService.reviewCandidates.mockResolvedValue([
+      review('rec-yam', 'RELEVANT', '就是山药'),
+      review('rec-jicama', 'IRRELEVANT', '凉薯，不是山药'),
+    ]);
+    await executeTool(tools, 'searchLocalNutrition', {
+      keyword: '山药',
+      state: 'RAW',
+    });
+
+    draftService.patch.mockClear();
+    const result = await executeTool(tools, 'updateNutritionFields', {
+      profileIndex: 0,
+      entries: [
+        {
+          fieldPath: 'macros.crudeProtein',
+          value: 0.7,
+          unit: 'g',
+          sourceRecordId: 'rec-jicama',
+        },
+      ],
+    });
+
+    // 批量工具按条返回失败：整批没有写入，错误逐条给出。
+    expect(result.body.applied).toBe(0);
+    const error = result.body.failed[0].error as string;
+    expect(error).toContain('AI 复核');
+    expect(error).toContain('不相关');
+    expect(error).toContain('凉薯');
+    expect(draftService.patch).not.toHaveBeenCalled();
+  });
+
+  it('0 条相关时不许硬选：任何营养写入都被拒绝', async () => {
+    const { tools, candidateService, reviewService, draftService } = createTools(
+      [JICAMA_RECORD],
+      {},
+    );
+    candidateService.findCandidates.mockResolvedValue(
+      searchResult([row('rec-jicama', 'Yambean (jicama), raw')]),
+    );
+    reviewService.reviewCandidates.mockResolvedValue([
+      review('rec-jicama', 'IRRELEVANT', '凉薯，不是山药'),
+    ]);
+    const search = await executeTool(tools, 'searchLocalNutrition', {
+      keyword: '山药',
+      state: 'RAW',
+    });
+    expect(search.body.nextAction).toBe('ONLINE_OR_LEAVE_BLANK');
+    expect(search.body.hint).toContain('去线上');
+
+    draftService.patch.mockClear();
+    const result = await executeTool(tools, 'updateNutritionField', {
+      profileIndex: 0,
+      fieldPath: 'macros.crudeProtein',
+      value: 0.7,
+      unit: 'g',
+      sourceRecordId: 'rec-jicama',
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('没有');
+    expect(result.error).toContain('相关');
+    expect(result.error).toContain('线上');
+    expect(draftService.patch).not.toHaveBeenCalled();
+  });
+
+  it('≥2 条相关时先拦写入，askUser 之后才放行', async () => {
+    const { tools, candidateService, reviewService, draftService } = createTools(
+      [YAM_RECORD],
+      {},
+    );
+    candidateService.findCandidates.mockResolvedValue(
+      searchResult([row('rec-yam', 'Yam, raw'), row('rec-yam-2', 'Yam, cooked')]),
+    );
+    reviewService.reviewCandidates.mockResolvedValue([
+      review('rec-yam', 'RELEVANT', '就是山药'),
+      review('rec-yam-2', 'RELEVANT', '也是山药'),
+    ]);
+    const search = await executeTool(tools, 'searchLocalNutrition', {
+      keyword: '山药',
+      state: 'RAW',
+    });
+    expect(search.body.nextAction).toBe('ASK_USER');
+    expect(search.body.hint).toContain('askUser');
+
+    draftService.patch.mockClear();
+    const blocked = await executeTool(tools, 'updateNutritionFields', {
+      profileIndex: 0,
+      entries: [
+        {
+          fieldPath: 'macros.crudeProtein',
+          value: 1.5,
+          unit: 'g',
+          sourceRecordId: 'rec-yam',
+        },
+      ],
+    });
+    expect(blocked.body.applied).toBe(0);
+    expect(blocked.body.failed[0].error).toContain('askUser');
+    expect(blocked.body.failed[0].error).toContain('2 条');
+    expect(draftService.patch).not.toHaveBeenCalled();
+
+    candidateService.findCandidates.mockResolvedValue(
+      searchResult([row('rec-yam', 'Yam, raw')]),
+    );
+    const asked = await executeTool(tools, 'askUser', {
+      question: '山药用哪一条？',
+      options: ['Yam, raw —— 相关：就是山药', 'Yam, cooked —— 相关：也是山药'],
+    });
+    expect(asked.ok).toBe(true);
+    expect(draftService.patch).toHaveBeenCalledWith(
+      DRAFT_ID,
+      'INTAKE',
+      expect.objectContaining({ candidateReviewGate: null }),
+    );
+
+    const written = await executeTool(tools, 'updateNutritionFields', {
+      profileIndex: 0,
+      entries: [
+        {
+          fieldPath: 'macros.crudeProtein',
+          value: 1.5,
+          unit: 'g',
+          sourceRecordId: 'rec-yam',
+        },
+      ],
+    });
+    expect(written.ok).toBe(true);
+    expect(written.body.applied).toBe(1);
+  });
+
+  it('askUser 选项带 AI 判断：拆出候选名去核实，标签与理由随问题一起落库', async () => {
+    const { tools, candidateService } = createTools([], {});
+    candidateService.findCandidates.mockResolvedValue(
+      searchResult([row('rec-yam', 'Yam, raw')]),
+    );
+
+    const result = await executeTool(tools, 'askUser', {
+      question: '山药你指的是哪一条？',
+      options: [
+        'Yam, raw —— 相关：就是山药',
+        'Yambean (jicama) —— 不相关：凉薯',
+        'Celery —— 存疑：不确定',
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(candidateService.findCandidates).toHaveBeenCalledWith(
+      { name: 'Yam, raw', state: 'RAW' },
+      1,
+    );
+    expect(candidateService.findCandidates).toHaveBeenCalledWith(
+      { name: 'Yambean (jicama)', state: 'RAW' },
+      1,
+    );
+    expect(result.body.optionChecks).toEqual([
+      {
+        label: 'Yam, raw —— 相关：就是山药',
+        candidateLabel: 'Yam, raw',
+        aiVerdict: 'RELEVANT',
+        aiReason: '就是山药',
+        inLibrary: true,
+        matchedName: 'Yam, raw',
+        displayLabel: 'Yam, raw',
+      },
+      {
+        label: 'Yambean (jicama) —— 不相关：凉薯',
+        candidateLabel: 'Yambean (jicama)',
+        aiVerdict: 'IRRELEVANT',
+        aiReason: '凉薯',
+        inLibrary: true,
+        matchedName: 'Yam, raw',
+        displayLabel: 'Yambean (jicama)',
+      },
+      {
+        label: 'Celery —— 存疑：不确定',
+        candidateLabel: 'Celery',
+        aiVerdict: 'UNCERTAIN',
+        aiReason: '不确定',
+        inLibrary: true,
+        matchedName: 'Yam, raw',
+        displayLabel: 'Celery',
+      },
+    ]);
+    // 页面点选后回传的仍是完整 label，AI 判断只是附加信息。
+    expect(result.pendingQuestion?.options).toEqual([
+      'Yam, raw —— 相关：就是山药',
+      'Yambean (jicama) —— 不相关：凉薯',
+      'Celery —— 存疑：不确定',
     ]);
   });
 });

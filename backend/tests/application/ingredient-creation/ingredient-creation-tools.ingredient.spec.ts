@@ -1,3 +1,4 @@
+import { IngredientCandidateReviewService } from '../../../src/application/ingredient-creation/ingredient-candidate-review.service';
 import { IngredientCreationCandidateService } from '../../../src/application/ingredient-creation/ingredient-creation-candidate.service';
 import { IngredientCreationCheckService } from '../../../src/application/ingredient-creation/ingredient-creation-check.service';
 import { IngredientCreationDraftService } from '../../../src/application/ingredient-creation/ingredient-creation-draft.service';
@@ -47,6 +48,9 @@ function createTools(draftPayload: Record<string, unknown> = {}) {
     {
       nutritionSourceRecord: { findUnique: jest.fn() },
     } as unknown as PrismaService,
+    {
+      reviewCandidates: jest.fn(async () => []),
+    } as unknown as IngredientCandidateReviewService,
   );
 
   return { tools, draftService };

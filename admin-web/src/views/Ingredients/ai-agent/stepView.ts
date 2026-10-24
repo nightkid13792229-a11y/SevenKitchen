@@ -8,6 +8,40 @@
 import type { AgentToolCallRecord } from '@/types/ingredientCreation'
 import { findNutritionField } from '@/utils/recipeDesigner/nutritionFieldCatalog'
 
+/** AI 复核对一条候选的判断；与后端 `CandidateReviewVerdict` 同口径。 */
+export type AgentAiVerdict = 'RELEVANT' | 'UNCERTAIN' | 'IRRELEVANT'
+
+export const AI_VERDICT_LABELS: Record<AgentAiVerdict, string> = {
+  RELEVANT: '相关',
+  UNCERTAIN: '存疑',
+  IRRELEVANT: '不相关'
+}
+
+export type AgentAiVerdictTagType = 'success' | 'warning' | 'danger'
+
+const AI_VERDICT_TAG_TYPES: Record<AgentAiVerdict, AgentAiVerdictTagType> = {
+  RELEVANT: 'success',
+  UNCERTAIN: 'warning',
+  IRRELEVANT: 'danger'
+}
+
+export function isAiVerdict(value: unknown): value is AgentAiVerdict {
+  return (
+    value === 'RELEVANT' || value === 'UNCERTAIN' || value === 'IRRELEVANT'
+  )
+}
+
+/** 判断代码 → 页面中文；没有判断时返回空串，不写「未知」。 */
+export function aiVerdictLabel(verdict: AgentAiVerdict | null): string {
+  return verdict ? AI_VERDICT_LABELS[verdict] : ''
+}
+
+export function aiVerdictTagType(
+  verdict: AgentAiVerdict | null
+): AgentAiVerdictTagType {
+  return verdict ? AI_VERDICT_TAG_TYPES[verdict] : 'warning'
+}
+
 /** 查库命中的一条词条：给页面直接渲染的匹配依据。 */
 export interface AgentSearchMatchView {
   foodName: string
@@ -19,6 +53,13 @@ export interface AgentSearchMatchView {
   matchedKeyword: string
   score: number | null
   scoreLabel: string
+  /** 服务端 AI 复核判断；旧后端没有时为 null */
+  aiVerdict: AgentAiVerdict | null
+  /** 「相关 / 存疑 / 不相关」；没有判断时为空串 */
+  aiVerdictLabel: string
+  aiVerdictTagType: AgentAiVerdictTagType
+  /** AI 复核的一句理由（≤40 字）；没有判断时为空串 */
+  aiReason: string
 }
 
 /** 「查本地库」这一步的展开内容：关键词、命中词条与匹配方式。 */
@@ -166,6 +207,16 @@ function toMatchView(
   const matchedBy = readText(candidate.matchedBy) || 'UNKNOWN'
   const score =
     readFiniteNumber(candidate.score) ?? readFiniteNumber(candidate.matchScore)
+  const review = isRecordValue(candidate.review) ? candidate.review : null
+  const aiVerdict = isAiVerdict(review?.verdict)
+    ? review.verdict
+    : isAiVerdict(candidate.aiVerdict)
+      ? candidate.aiVerdict
+      : null
+  const rawReason = readText(review?.reason) || readText(candidate.aiReason)
+  const aiReason = aiVerdict
+    ? Array.from(rawReason.replace(/\s+/g, ' ')).slice(0, 40).join('')
+    : ''
   return {
     foodName:
       readText(candidate.foodName) ||
@@ -176,7 +227,11 @@ function toMatchView(
     matchedByLabel: matchMethodLabel(matchedBy),
     matchedKeyword: readText(candidate.matchedKeyword) || fallbackKeyword,
     score,
-    scoreLabel: score === null ? '—' : score.toFixed(2)
+    scoreLabel: score === null ? '—' : score.toFixed(2),
+    aiVerdict,
+    aiVerdictLabel: aiVerdictLabel(aiVerdict),
+    aiVerdictTagType: aiVerdictTagType(aiVerdict),
+    aiReason
   }
 }
 

@@ -1553,6 +1553,49 @@ describe('RecipeAgentRunService', () => {
     );
   });
 
+  it('resume 允许因达到运行上限而 FAILED 的会话继续', async () => {
+    const prisma = {
+      recipeDesignAgentSession: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: SESSION_ID,
+          designRecipeId: DRAFT_ID,
+          status: 'FAILED',
+          lastError: '超过运行上限',
+        }),
+      },
+    };
+    const getDraft = jest.fn().mockResolvedValue(okResult({}, '草稿'));
+    const { service, sessionService } = makeRunService({
+      handlers: {
+        get_draft: getDraft,
+        ask_user: jest.fn(),
+        finish_draft: jest.fn(),
+      },
+      prisma,
+      responses: [toolCallResponse('get_draft'), finalResponse('继续看过了')],
+    });
+
+    await service.resume({
+      sessionId: SESSION_ID,
+      actor: ACTOR,
+      message: '继续补完',
+    });
+    await service.waitForIdle(SESSION_ID);
+
+    expect(sessionService.appendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: SESSION_ID,
+        role: 'USER',
+        content: '继续补完',
+      }),
+    );
+    expect(sessionService.transitionStatus).toHaveBeenCalledWith(
+      SESSION_ID,
+      ['FAILED'],
+      'RUNNING',
+    );
+  });
+
   it('resume 遇到非 WAITING_USER 的会话拒绝', async () => {
     const prisma = {
       recipeDesignAgentSession: {

@@ -253,8 +253,13 @@ export class RecipeAgentRunService implements OnModuleInit {
         session.designRecipeId,
         this.accessFor(input.actor),
       );
-      if (session.status !== 'WAITING_USER') {
-        throw new BadRequestException('只有等待用户回答的会话可以继续');
+      const isLimitReached =
+        session.status === 'FAILED' &&
+        session.lastError === OVER_LIMIT_MESSAGE;
+      if (session.status !== 'WAITING_USER' && !isLimitReached) {
+        throw new BadRequestException(
+          '只有等待回答或达到运行上限的会话可以继续',
+        );
       }
 
       // resume 启动的循环也占草稿：旧循环真正结束前，start 不能插队。
@@ -265,7 +270,7 @@ export class RecipeAgentRunService implements OnModuleInit {
         // 只有仍然是 WAITING_USER 才允许改成 RUNNING。
         const claimed = await this.sessionService.transitionStatus(
           input.sessionId,
-          ['WAITING_USER'],
+          [isLimitReached ? 'FAILED' : 'WAITING_USER'],
           'RUNNING',
         );
         if (!claimed) {
@@ -790,7 +795,7 @@ export class RecipeAgentRunService implements OnModuleInit {
       await this.sessionService.appendMessage({
         sessionId,
         role: 'ASSISTANT',
-        content: `这次运行已经超过上限（${MAX_TOOL_CALLS} 次工具调用 / 6 分钟），已停止。`,
+        content: `这次运行达到上限（${MAX_TOOL_CALLS} 次工具调用 / 6 分钟），草稿已保存；可以继续下一轮。`,
       });
     } catch {
       // 状态已经落下，消息写不进去不影响停止。

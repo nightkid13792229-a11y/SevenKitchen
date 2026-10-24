@@ -414,7 +414,7 @@ Expected: PASS（4 个用例）。
 - [ ] **Step 5: 跑全套**
 
 Run: `cd backend && npx jest tests/domain/recipe-designer/food-category-map.spec.ts tests/application/recipe-designer/agent --runInBand`
-Expected: 11 个 spec、184 个测试全通过（P0a 6 + P0b-1 3 + 本计划读适配器 1 + 标签策略 1）。
+Expected: 11 个 spec、191 个测试全通过（P0a 6 + P0b-1 3 + 本计划读适配器 1 + 标签策略 1）。
 
 - [ ] **Step 6: 提交**
 
@@ -430,7 +430,9 @@ git commit --only <the 2 exact files> -m "feat(recipe-agent): add draft health t
 - 原料搜索按 50 条/页翻页，目标类别在第 2/3 页也能找到；
 - `totalWeightG` / `ratioPercent` / `nutritionSummary` 只用“计入评估且非补剂”的原料；不计入的原料和补粒数的补剂 `ratioPercent` 为 null；
 - 动物种类只从 `PROTEIN`/`ORGAN` 项推断，补鹿/鹌鹑；
-- 目录查询补 `ingredient.type`，补剂不会被误判成蛋白。
+- 目录查询补 `ingredient.type`，补剂不会被误判成蛋白；
+- 补剂按单位区分：g/克/ml/毫升计入，粒/片/袋/包/颗/支/瓶排除，单位未知则健康摘要直接 null；
+- 动物种类扫描包含 `UNCLASSIFIED`，匹配不到物种的蛋白项 `unknownAnimalProtein=true`，直接让“单一动物蛋白”false。
 
 ## 接下来（P0b-2b，不在本计划）
 

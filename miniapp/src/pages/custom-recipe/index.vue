@@ -54,14 +54,37 @@
     <!-- 待付款单提醒（2026-10-04 新增）。
          口径是**不限制下单张数**（顾客养多只狗可以分别定制），所以这里只提醒
          "别忘了付这一单"，绝不做成"先付完才能再下单"的阻断。 -->
-    <view v-if="pendingOrder && !pendingOrderExpired" class="pending-banner">
+    <view v-if="pendingOrder" class="pending-banner">
       <view class="pending-banner__head">
-        <text class="pending-banner__title">你有一张待付款的定制单</text>
+        <text class="pending-banner__title">
+          {{ pendingOrderCount > 1 ? `你有 ${pendingOrderCount} 张待付款的定制单` : '你有一张待付款的定制单' }}
+        </text>
         <text v-if="pendingOrderRemainingText" class="pending-banner__time">{{ pendingOrderRemainingText }}</text>
       </view>
+
+      <view class="pending-banner__summary">
+        <text class="pending-banner__dog">{{ pendingOrder.dogName || '定制订单' }}</text>
+        <text class="pending-banner__amount">
+          {{ pendingOrder.amount === null ? '金额待确认' : `¥${formatAmount(pendingOrder.amount)}` }}
+        </text>
+      </view>
+      <text
+        v-if="pendingOrderCount > 1 && !pendingOrderIsCurrentDog"
+        class="pending-banner__hint"
+      >当前显示最急的一张</text>
+
       <text class="pending-banner__desc">
         超时未支付，订单会自动取消。定制张数不限，你也可以继续提交新的定制单。
       </text>
+
+      <view v-if="pendingOrderCount > 1" class="pending-banner__more">
+        <text>
+          {{ pendingOrderIsCurrentDog ? '另外还有' : '还有' }}
+          {{ otherPendingCount }} 张待付款
+        </text>
+        <text class="pending-banner__all" @tap="viewAllPendingOrders">查看全部 ›</text>
+      </view>
+
       <view class="pending-banner__actions">
         <button
           class="pending-banner__btn primary"
@@ -679,9 +702,13 @@ import { runCustomRecipePayment } from '@/utils/custom-recipe-payment';
 import {
   formatAmount,
   formatRemainingMinutes,
-  isPaymentExpired,
   resolvePaymentDeadlineAt,
 } from '@/utils/custom-recipe-order';
+import {
+  countValidPendingOrders,
+  selectPendingOrder,
+  type PendingOrderView,
+} from '@/utils/custom-recipe-pending';
 import { navigateToDogCreate } from '@/utils/dog-profile-entry';
 import { getStoredUser } from '@/utils/account';
 import {
@@ -1791,15 +1818,30 @@ const healthPrefillHint = computed(() => {
  * 口径：不限制下单张数 —— 顾客养多只狗可以分别定制，所以这里**不能**做成
  * "先付完这一单才能再下单"。只提示"别忘了付"并给两个入口。
  */
-const pendingOrder = ref<{ orderId: string; deadlineAt: number | null } | null>(
-  null,
-);
+const pendingOrders = ref<PendingOrderView[]>([]);
 const pendingPaying = ref(false);
 /** 到点隐藏待付款提醒，不等后台定时关单 */
 const nowTick = ref(Date.now());
 let paymentClockTimer: ReturnType<typeof setInterval> | null = null;
-const pendingOrderExpired = computed(() =>
-  isPaymentExpired(pendingOrder.value?.deadlineAt ?? null, nowTick.value),
+
+/**
+ * 优先当前狗狗的待付款；没有才显示最急的一张。
+ * 已过期的单不算张数、也不展示。
+ */
+const pendingOrder = computed(() =>
+  selectPendingOrder(pendingOrders.value, formData.value.dogId, nowTick.value),
+);
+const pendingOrderCount = computed(() =>
+  countValidPendingOrders(pendingOrders.value, nowTick.value),
+);
+const pendingOrderIsCurrentDog = computed(
+  () =>
+    Boolean(pendingOrder.value) &&
+    String(pendingOrder.value?.dogId || '') ===
+      String(formData.value.dogId || ''),
+);
+const otherPendingCount = computed(() =>
+  Math.max(0, pendingOrderCount.value - (pendingOrder.value ? 1 : 0)),
 );
 
 /** 剩余时间文案；拿不到截止时间就整段不显示，不猜 */
@@ -1825,7 +1867,7 @@ function ensureRecipeConfig(): Promise<void> {
 const loadPendingOrder = async () => {
   // 未登录时 /my-orders 必然 401，静默跳过即可
   if (!getToken()) {
-    pendingOrder.value = null;
+    pendingOrders.value = [];
     return;
   }
 
@@ -1835,7 +1877,8 @@ const loadPendingOrder = async () => {
     const data = await fetchMyOrders({
       status: 'PENDING_PAYMENT',
       page: 1,
-      pageSize: 1,
+      // 多取几张：页面优先当前狗狗，再取最急的；只取 1 张会漏掉其他狗/其他单
+      pageSize: 20,
     });
 
     /**
@@ -1843,25 +1886,36 @@ const loadPendingOrder = async () => {
      * 直接返回 `data`，不再有 `res.code`。是**架构守卫**（用了却没声明的名字）
      * 把它抓出来的：真机上这一行会直接崩。
      */
-    const first = Array.isArray(data?.orders) ? data.orders[0] : null;
-    if (!first?.orderId) {
-      pendingOrder.value = null;
-      return;
-    }
-
-    pendingOrder.value = {
-      orderId: String(first.orderId),
-      // 优先用后端下发的 paymentDeadlineAt，没有才用下单时间 + 配置超时估算
-      deadlineAt: resolvePaymentDeadlineAt({
-        paymentDeadlineAt: first.paymentDeadlineAt ?? null,
-        createdAt: first.createdAt ?? null,
-        paymentTimeoutMinutes: recipeConfig.value?.paymentTimeoutMinutes ?? 0,
-      }),
-    };
+    const rows = Array.isArray(data?.orders) ? data.orders : [];
+    pendingOrders.value = rows
+      .map((row: any) => {
+        const orderId = String(row?.orderId || '').trim();
+        if (!orderId) return null;
+        const dog = row?.dog || {};
+        const amount =
+          row?.amount === null || row?.amount === undefined
+            ? NaN
+            : Number(row.amount);
+        return {
+          orderId,
+          dogId: String(row?.dogId || dog.id || '').trim(),
+          dogName: String(row?.dogName || dog.name || '').trim(),
+          amount: Number.isFinite(amount) ? amount : null,
+          // 优先用后端下发的 paymentDeadlineAt，没有才用下单时间 + 配置超时估算
+          deadlineAt: resolvePaymentDeadlineAt({
+            paymentDeadlineAt: row?.paymentDeadlineAt ?? null,
+            createdAt: row?.createdAt ?? null,
+            paymentTimeoutMinutes:
+              recipeConfig.value?.paymentTimeoutMinutes ?? 0,
+          }),
+          createdAt: row?.createdAt ? String(row.createdAt) : null,
+        };
+      })
+      .filter(Boolean) as PendingOrderView[];
   } catch (error) {
     // 提醒读不到不影响下单：不打扰顾客，也不弹错
     console.warn('[CustomRecipe] 读取待付款订单失败:', error);
-    pendingOrder.value = null;
+    pendingOrders.value = [];
   }
 };
 
@@ -1869,13 +1923,6 @@ const loadPendingOrder = async () => {
 const continuePayPending = async () => {
   const orderId = pendingOrder.value?.orderId;
   if (!orderId || pendingPaying.value) return;
-
-  if (pendingOrderExpired.value) {
-    pendingOrder.value = null;
-    uni.showToast({ title: '支付已超时，订单已关闭', icon: 'none' });
-    void loadPendingOrder();
-    return;
-  }
 
   pendingPaying.value = true;
   try {
@@ -1914,6 +1961,13 @@ const viewPendingOrder = () => {
   if (!orderId) return;
   uni.navigateTo({
     url: `/pages/custom-recipe/order-detail?orderId=${encodeURIComponent(orderId)}`,
+  });
+};
+
+/** 查看全部待付款：订单列表已支持 status=PENDING_PAYMENT */
+const viewAllPendingOrders = () => {
+  uni.navigateTo({
+    url: '/pages/orders-list/index?status=PENDING_PAYMENT',
   });
 };
 
@@ -3693,6 +3747,50 @@ const getBCSText = (bcsScore: number) => {
   font-size: 26rpx;
   font-weight: 700;
   color: #b03a2e;
+}
+
+.pending-banner__summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-top: 10rpx;
+}
+
+.pending-banner__dog {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+}
+
+.pending-banner__amount {
+  font-size: 28rpx;
+  font-weight: 800;
+  color: #b45309;
+}
+
+.pending-banner__hint {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 21rpx;
+  color: #8a7a66;
+}
+
+.pending-banner__more {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  color: #8a7a66;
+}
+
+.pending-banner__all {
+  flex: 0 0 auto;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #b08d4f;
 }
 
 .pending-banner__desc {

@@ -1005,6 +1005,19 @@ describe('custom recipe pending payment reminder · 待付款提醒', () => {
     expect(submit).toContain('runCustomRecipePayment(')
   })
 
+  it('★ 多张待付款：带狗名/金额/张数，并给出查看全部', () => {
+    // 2026-10-25：当前狗狗优先，没当前狗狗才显示最急的
+    expect(submit).toContain('pendingOrder.dogName')
+    expect(submit).toContain('pendingOrder.amount')
+    expect(submit).toContain('pendingOrderCount')
+    expect(submit).toContain('pendingOrderIsCurrentDog')
+    expect(submit).toContain('otherPendingCount')
+    expect(submit).toContain('viewAllPendingOrders')
+    expect(submit).toContain('pages/orders-list/index?status=PENDING_PAYMENT')
+    // 不能只取一张
+    expect(submit).toContain('pageSize: 20')
+  });
+
   it('只提醒不阻断：提交校验里没有"有待付款单就不许下单"', () => {
     const validationSource =
       submit.match(/function validateCustomRecipeForm\(\)[\s\S]*?\n\}/)?.[0] || ''

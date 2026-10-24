@@ -213,6 +213,10 @@ export class RecipeAgentPortError extends Error {
 
 ---
 
+## 评审结论（已完成）
+
+P0b-2b 评审：**READY WITH NITS**，无阻塞；13 个 spec / 225 个测试全绿。非阻塞项：nutritionFood 无 primary mapping 时会退到第一条 mapping；`set_copy` 只改名/标签时 `contentRevision` 不一定 +1（P0b-3 的快照/撤销不能只看 revision）；`set_copy` 多字段非原子；评估计数从 grouped entries 重算；重复原料无数据库唯一约束（依赖运行锁）。`setPreparation` 省略备注会清空备注的坑已修（`1a806d38`）。
+
 ## 接下来（P0b-3，不在本计划）
 
 - `RecipeAgentControlService`：`askUser`/`requestException`/`finishDraft`/`getApprovalState`；会话/审批落库；`request_exception` 的 `COMPLIANCE` → `COMPLIANCE_EXCEPTION` 映射，`CATEGORY_OMISSION` 从最近一次 `check_coverage` 取缺类，不解析自由文本。

@@ -52,7 +52,7 @@ const toggle = () => {
 
 <style scoped lang="scss">
 .nutrition-standard {
-  margin: 20rpx 24rpx 0;
+  margin: 20rpx 24rpx 24rpx;
 }
 
 .nutrition-standard__card {

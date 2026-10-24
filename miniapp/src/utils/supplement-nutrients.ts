@@ -353,7 +353,11 @@ function getFixedRatioSupplementAmount(
 
 export function formatSupplementTargets(item: any): string {
   return getSupplementTargets(item)
-    .map((target) => `每kg食材添加${target.targetValuePerKg}${target.unit}${target.label}`)
+    .map((target) => {
+      const raw = Number(target.targetValuePerKg)
+      const value = Number.isFinite(raw) ? Math.round(raw) : target.targetValuePerKg
+      return `每公斤食材添加${value}${target.unit}${target.label}`
+    })
     .join('、')
 }
 

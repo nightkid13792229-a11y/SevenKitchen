@@ -103,7 +103,7 @@
           </view>
         </view>
         <text class="section-note">
-          喂食建议仅供参考。每天喂食量、每日进食次数和每餐喂食量，可以点击下方【自己做】自定义配置。
+          喂食建议仅供参考。可以点击下方【自己做】自定义配置。
         </text>
       </view>
 
@@ -332,19 +332,13 @@ const supplementTargetRows = computed(() => {
       rows.push({
         nutrient,
         concentration: Number.isFinite(value)
-          ? `${formatTargetValue(value)} ${unit}/kg`
+          ? `每公斤食材添加 ${Math.round(value)} ${unit}`
           : '—',
       });
     }
   }
   return rows;
 });
-
-/** 浓度数值：整数不带小数，非整数最多两位 */
-function formatTargetValue(value: number): string {
-  if (!Number.isFinite(value)) return '—';
-  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(2)));
-}
 
 /** 喂食量取整（2026-10-24）；日喂量和每餐量各自四舍五入，允许 1g 误差 */
 function formatFeedingGrams(value: number | null | undefined): string {

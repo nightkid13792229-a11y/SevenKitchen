@@ -415,16 +415,18 @@ describe('diy sheet layout regressions', () => {
     expect(source).toContain('return foodSourceItems.value')
   })
 
-  it('carries recipe nutrition state labels into food rows and print rows', () => {
+  it('keeps nutrition state out of the raw-material column (2026-10-24)', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
       'utf-8',
     )
+    const template = source.slice(0, source.indexOf('<script setup'))
 
+    // 数据还在（后台计算要用），但不再拼到原料名后面
     expect(source).toContain('formatNutritionStateForDisplay')
     expect(source).toContain('nutritionStateLabel: formatNutritionStateForDisplay(item)')
-    expect(source).toContain('item.preparationMethod || item.nutritionStateLabel || \'-\'')
-    expect(source).toContain('item.nutritionStateLabel ? `${item.ingredientName}（${item.nutritionStateLabel}）` : item.ingredientName')
+    expect(template).not.toContain('item.nutritionStateLabel ?')
+    expect(source).toContain('item.preparationMethod || \'-\'')
   })
 
   it('keeps diy sheets free of customer-facing price preview warnings', () => {
@@ -531,11 +533,11 @@ describe('diy sheet layout regressions', () => {
     expect(source).not.toContain('actualAmountStr')
     expect(source).toContain('item.netAmountStr')
     expect(source).toContain('item.recommendedPrintText')
-    // 目标补充量 排在 添加总量 之前
-    expect(source).toContain("['补剂名称', '产品 / 规格', '目标补充量', '添加总量']")
+    // 目标补充量 排在 制作单总量 之前
+    expect(source).toContain("['补剂名称', '产品 / 规格', '目标补充量', '制作单总量']")
     expect(source).not.toContain("['补剂名称', '已选商品 / 规格', '添加总量', '目标补充量']")
     expect(source).toContain('builder.drawSupplementNotice(')
-    expect(source).toContain('营养补充剂的添加总量与产品严格匹配')
+    expect(source).toContain('营养补充剂的制作单总量与产品严格匹配')
     expect(source).not.toContain('drawImportantTipsSection')
     expect(source).toContain("builder.drawSectionTitle('储存和烹饪')")
     expect(source).not.toContain("['原料名称', DIY_SHEET_FOOD_RECOMMENDATION_LABEL, '制备方法', '采购量']")
@@ -755,5 +757,52 @@ describe('DIY制作单 · 2026-10-24 改版', () => {
     expect(template).toContain('class="bottom-actions"')
     expect(template).toContain('icon-only')
     expect(template).not.toContain('sheet-service')
+  })
+})
+
+/**
+ * 2026-10-24 第二轮：食物净重弹窗移除、补剂总量改名、商品弹窗交互。
+ */
+describe('DIY制作单 · 2026-10-24 第二轮', () => {
+  const source = readFileSync(
+    resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
+    'utf-8',
+  )
+  const template = source.slice(0, source.indexOf('<script setup'))
+
+  it('食材净重不再弹用量详情，补剂保留营养信息弹窗', () => {
+    expect(template).not.toContain('用量详情')
+    expect(source).not.toContain('showAmountDetailModal')
+    expect(template).toContain('营养信息')
+    expect(template).toContain('showNutritionInfoModal')
+  })
+
+  it('补剂总量改叫制作单总量，弹窗不再展示营养素总量', () => {
+    expect(template).toContain('制作单总量')
+    expect(template).not.toContain('营养素总量')
+    const nutrientSource = readFileSync(
+      resolve(process.cwd(), 'src/utils/supplement-nutrients.ts'),
+      'utf-8',
+    )
+    expect(nutrientSource).toContain('每公斤食材添加')
+  })
+
+  it('商品卡片：勾选态、确认选择、无图/有图两套按钮布局', () => {
+    expect(template).toContain('rp-card-check')
+    expect(template).toContain('confirmProductSelection')
+    expect(template).toContain('rp-card-actions--row')
+    expect(template).toContain('rp-card-actions--stacked')
+    // 底部取消/确认选择不再出现
+    expect(template).not.toContain('spec-actions')
+    // 图片加载前有骨架
+    expect(template).toContain('rp-card-image-skeleton')
+  })
+
+  it('“不想自己做”在储存和烹饪上方', () => {
+    const finishedAt = template.indexOf('finished-food-card')
+    const storageAt = template.indexOf('storage-cooking-section')
+    expect(finishedAt).toBeGreaterThan(-1)
+    expect(storageAt).toBeGreaterThan(-1)
+    expect(finishedAt).toBeLessThan(storageAt)
   })
 })

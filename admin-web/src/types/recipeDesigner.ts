@@ -1086,3 +1086,51 @@ export interface SupplementLabelExtractionDraft {
   imageUrl?: string
   imageKey?: string
 }
+
+// ---------------------------------------------------------------------------
+// 食谱设计 Agent（P2 抽屉）
+// ---------------------------------------------------------------------------
+
+export type RecipeAgentSessionStatus =
+  | 'RUNNING'
+  | 'WAITING_USER'
+  | 'COMPLETED'
+  | 'STOPPED'
+  | 'FAILED'
+  | 'INTERRUPTED'
+
+export type RecipeAgentMessageRole = 'USER' | 'ASSISTANT' | 'TOOL'
+
+export interface RecipeAgentSession {
+  id: string
+  designRecipeId: string
+  status: RecipeAgentSessionStatus
+  skillName: string
+  skillVersion: string
+  stepCount: number
+  promptTokens: number
+  completionTokens: number
+  startedAt: string
+  endedAt: string | null
+  lastError: string | null
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface RecipeAgentMessage {
+  id: string
+  sessionId: string
+  seq: number
+  role: RecipeAgentMessageRole
+  content: string | null
+  toolName?: string | null
+  toolArgs?: unknown
+  toolResult?: unknown
+  createdAt: string
+}
+
+export interface RecipeAgentSessionView {
+  session: RecipeAgentSession
+  messages: RecipeAgentMessage[]
+}

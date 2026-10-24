@@ -64,6 +64,13 @@
           :type="aiPanelVisible ? 'primary' : 'default'"
           @click="aiPanelVisible = !aiPanelVisible"
         >🤖 AI 设计建议</el-button>
+        <el-button
+          text
+          :type="agentDrawerVisible ? 'primary' : 'default'"
+          :icon="MagicStick"
+          :disabled="!draft"
+          @click="agentDrawerVisible = true"
+        >AI 设计对话</el-button>
         <span class="save-status" :class="saveStatus">
           <el-icon v-if="saveStatus === 'saving'"><Loading /></el-icon>
           <el-icon v-else-if="saveStatus === 'error'"><WarningFilled /></el-icon>
@@ -366,6 +373,17 @@
       @published="handleStagePublished"
       @staged="handleOrderStaged"
     />
+
+    <!--
+      AI 食谱设计 Agent（P2）：对话式抽屉。
+      运行中每 1.5 秒轮询会话；工具步骤可折叠；停止后才能接管。
+    -->
+    <RecipeAgentDrawer
+      v-model="agentDrawerVisible"
+      :draft-id="currentDraftId"
+      :draft-name="draft?.series?.name || draft?.name || ''"
+      @refresh="loadDraft()"
+    />
   </div>
 </template>
 
@@ -373,7 +391,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown, ArrowLeft, CircleCheck, CircleCheckFilled, Delete, EditPen, Loading, Rank, RefreshLeft, RefreshRight, Setting, WarningFilled } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowLeft, CircleCheck, CircleCheckFilled, Delete, EditPen, Loading, MagicStick, Rank, RefreshLeft, RefreshRight, Setting, WarningFilled } from '@element-plus/icons-vue'
 import draggable from 'vuedraggable'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import type { CreateRecipeSeriesStageDraftPayload } from '@/api/recipeDesigner'
@@ -409,6 +427,7 @@ import AiDesignSuggestionPanel from './components/AiDesignSuggestionPanel.vue'
 import SupplementTargetDialog from './components/SupplementTargetDialog.vue'
 import PreparationMethodManagerDialog from './components/PreparationMethodManagerDialog.vue'
 import LaunchReadinessDrawer from './components/LaunchReadinessDrawer.vue'
+import RecipeAgentDrawer from './components/RecipeAgentDrawer.vue'
 import type { DesignRecipeAssessmentResult } from '@/utils/recipeDesigner/assessmentTypes'
 import {
   computeSupplementTargetConcentration,
@@ -466,6 +485,7 @@ async function loadOrderDesignWorkspace() {
 
 // 进入已发布草稿会自动跳转到修订版，此后用 currentDraftId 跟随最新草稿
 const currentDraftId = ref(draftId)
+const agentDrawerVisible = ref(false)
 
 const draft = ref<DesignRecipeDraftDetail | null>(null)
 const items = ref<DesignerItem[]>([])

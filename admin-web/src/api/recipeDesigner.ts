@@ -19,6 +19,7 @@ import type {
   IngredientOptionListResponse,
   IngredientRecommendationResult,
   NutritionPlanResult,
+  RecipeAgentSessionView,
   RecipeAiDesignData,
   RecipeDesignerIngredientOption,
   RecipeDesignerSeriesCard,
@@ -362,4 +363,14 @@ export const recipeDesignerApi = {
     api.post(`/recipe-designer/drafts/${draftId}/ai/sop`, undefined, { timeout: 180000 }),
   getAiDesignData: (draftId: string): Promise<RecipeAiDesignData> =>
     api.get(`/recipe-designer/drafts/${draftId}/ai-design-data`),
+
+  // AI 食谱设计 Agent（P2 对话抽屉）
+  startAgentRun: (draftId: string, message: string): Promise<{ sessionId: string }> =>
+    api.post(`/recipe-designer/drafts/${draftId}/agent/runs`, { message }),
+  getAgentSession: (draftId: string): Promise<RecipeAgentSessionView | null> =>
+    api.get(`/recipe-designer/drafts/${draftId}/agent/session`),
+  stopAgentRun: (sessionId: string): Promise<void> =>
+    api.post(`/recipe-designer/agent/runs/${sessionId}/stop`),
+  answerAgentRun: (sessionId: string, message: string): Promise<void> =>
+    api.post(`/recipe-designer/agent/runs/${sessionId}/answer`, { message }),
 }

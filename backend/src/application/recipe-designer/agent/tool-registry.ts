@@ -407,7 +407,8 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
   },
   {
     name: 'check_coverage',
-    description: '检查七类食材覆盖和未归类原料；定骨架或判断缺类原因时用。',
+    description:
+      '检查 10 类选料清单（基础 7 + 建议 3）；缺类只提醒，不是门禁。',
     parameters: {
       type: 'object',
       properties: {},
@@ -433,7 +434,7 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
   {
     name: 'check_ready',
     description:
-      '生成交付检查单；准备交付前必须调用，审批和缺类确认由后端注入，模型不能传。',
+      '生成交付检查单；准备交付前必须调用，审批状态由后端注入，模型不能传。',
     parameters: {
       type: 'object',
       properties: {},
@@ -480,7 +481,7 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
   {
     name: 'request_exception',
     description:
-      '评估达不到目标、或某个七类缺项需要人确认时用：申请达标例外或缺类确认，等待人批准；只能申请，不能自批。',
+      '申请达标/合规例外，等待人批准；缺类已不再需要申请，只有达标/合规例外需要人批准；CATEGORY_OMISSION 仅保留兼容。只能申请，不能自批。',
     parameters: {
       type: 'object',
       properties: {
@@ -488,7 +489,7 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
           type: 'string',
           enum: ['COMPLIANCE', 'CATEGORY_OMISSION'],
           description:
-            'COMPLIANCE 是达标例外（管理员批），CATEGORY_OMISSION 是缺类确认（营养师确认）。',
+            'COMPLIANCE 是达标/合规例外（管理员批）；CATEGORY_OMISSION 是缺类确认（已不再需要，仅保留兼容）。',
         },
         reason: {
           type: 'string',

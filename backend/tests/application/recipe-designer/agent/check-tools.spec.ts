@@ -281,7 +281,7 @@ describe('check tools', () => {
     expect(warnResult.data.status).toBe('PASS_WITH_WARNINGS');
   });
 
-  it('缺菌藻且没确认 → BLOCKED；确认过 → PASS_WITH_WARNINGS', async () => {
+  it('缺基础类只 WARN、不阻断；确认过也一样', async () => {
     const draft = fakeDraftSnapshot({
       items: fakeDraftSnapshot().items.filter((i) => i.category !== 'MUSHROOM'),
     });
@@ -290,13 +290,80 @@ describe('check tools', () => {
       draftId: 'draft-1',
       tagPolicy,
     });
-    const blocked = await tools.check_ready();
+    const open = await tools.check_ready();
     const confirmed = await tools.check_ready({
       confirmedOmissions: ['MUSHROOM'],
     });
-    if (!blocked.ok || !confirmed.ok) return;
-    expect(blocked.data.status).toBe('BLOCKED');
+    if (!open.ok || !confirmed.ok) return;
+
+    expect(open.data.status).toBe('PASS_WITH_WARNINGS');
     expect(confirmed.data.status).toBe('PASS_WITH_WARNINGS');
+    for (const result of [open, confirmed]) {
+      const coverage = result.data.checks.find((c) => c.key === 'COVERAGE');
+      expect(coverage?.label).toBe('分类检查');
+      expect(coverage?.status).toBe('WARN');
+      expect(coverage?.detail).toContain('基础分类还缺「菌藻」');
+      expect(coverage?.detail).toContain('分类是选料检查清单，不阻断交付');
+      expect(result.data.checks.some((c) => c.status === 'FAIL')).toBe(false);
+    }
+  });
+
+  it('基础 7 类齐全、只缺建议类 → PASS，并提示建议项', async () => {
+    const tools = createCheckTools({
+      port: createFakeRecipeAgentPort(),
+      draftId: 'draft-1',
+      tagPolicy,
+    });
+    const result = await tools.check_ready();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.status).toBe('PASS');
+    const coverage = result.data.checks.find((c) => c.key === 'COVERAGE');
+    expect(coverage?.label).toBe('分类检查');
+    expect(coverage?.status).toBe('PASS');
+    expect(coverage?.detail).toBe(
+      '基础 7 类齐全；建议项未覆盖：蛋、豆、水果。',
+    );
+  });
+
+  it('10 类检查项齐全 → PASS', async () => {
+    const base = fakeDraftSnapshot();
+    const suggestedItems = [
+      {
+        ...base.items[0],
+        id: 'item-8',
+        name: '鸡蛋',
+        category: 'EGG' as const,
+      },
+      {
+        ...base.items[0],
+        id: 'item-9',
+        name: '鹰嘴豆',
+        category: 'LEGUME' as const,
+      },
+      {
+        ...base.items[0],
+        id: 'item-10',
+        name: '苹果',
+        category: 'FRUIT' as const,
+      },
+    ];
+    const draft = fakeDraftSnapshot({
+      items: [...base.items, ...suggestedItems],
+      totalWeightG: 900 + suggestedItems.length * base.items[0].weightG,
+    });
+    const tools = createCheckTools({
+      port: createFakeRecipeAgentPort({ draft }),
+      draftId: 'draft-1',
+      tagPolicy,
+    });
+    const result = await tools.check_ready();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.status).toBe('PASS');
+    const coverage = result.data.checks.find((c) => c.key === 'COVERAGE');
+    expect(coverage?.status).toBe('PASS');
+    expect(coverage?.detail).toBe('10 类检查项齐全。');
   });
 
   it('已批例外可以把达标失败降为警告', async () => {
@@ -315,7 +382,7 @@ describe('check tools', () => {
     ).toContain('已批例外');
   });
 
-  it('check_coverage 报出缺类；确认过的不算缺', async () => {
+  it('check_coverage 分报基础/建议缺类；确认过也不过滤 missing', async () => {
     const draft = fakeDraftSnapshot({
       items: fakeDraftSnapshot().items.filter((i) => i.category !== 'MUSHROOM'),
     });
@@ -329,10 +396,48 @@ describe('check tools', () => {
       confirmedOmissions: ['MUSHROOM'],
     });
     if (!open.ok || !confirmed.ok) return;
-    expect(open.data.missing).toEqual(['MUSHROOM']);
+
+    for (const result of [open, confirmed]) {
+      expect(result.data.missing).toEqual(['MUSHROOM']);
+      expect(result.data.suggestedCovered).toEqual([]);
+      expect(result.data.suggestedMissing).toEqual(['EGG', 'LEGUME', 'FRUIT']);
+      expect(result.summary).toContain('分类检查 6/10（基础 6/7，建议 0/3）');
+      expect(result.summary).toContain('基础缺「菌藻」');
+      expect(result.summary).toContain('建议未覆盖「蛋、豆、水果」');
+    }
     expect(open.data.confirmedOmissions).toEqual([]);
-    expect(confirmed.data.missing).toEqual([]);
     expect(confirmed.data.confirmedOmissions).toEqual(['MUSHROOM']);
+  });
+
+  it('check_coverage 把水果算建议类，不算可选类', async () => {
+    const base = fakeDraftSnapshot();
+    const draft = fakeDraftSnapshot({
+      items: [
+        ...base.items,
+        {
+          ...base.items[0],
+          id: 'item-8',
+          name: '苹果',
+          category: 'FRUIT' as const,
+          weightG: 30,
+        },
+      ],
+      totalWeightG: 930,
+    });
+    const tools = createCheckTools({
+      port: createFakeRecipeAgentPort({ draft }),
+      draftId: 'draft-1',
+      tagPolicy,
+    });
+    const result = await tools.check_coverage();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.suggestedCovered).toEqual(['FRUIT']);
+    expect(result.data.suggestedMissing).toEqual(['EGG', 'LEGUME']);
+    expect(result.data.optionalPresent).toEqual([]);
+    expect(result.summary).toContain('分类检查 8/10（基础 7/7，建议 1/3）');
+    expect(result.summary).toContain('基础 7 类齐全');
+    expect(result.summary).toContain('建议未覆盖「蛋、豆」');
   });
 
   it('check_coverage 的缺类确认会去重，空白值返回 INVALID_ARGUMENT', async () => {
@@ -370,7 +475,8 @@ describe('check tools', () => {
     if (!result.ok) return;
     // 数据保留输入，不被摘要过滤影响。
     expect(result.data.confirmedOmissions).toEqual(['PROTEIN']);
-    expect(result.summary).toContain('七类齐全');
+    expect(result.summary).toContain('基础 7 类齐全');
+    expect(result.summary).not.toContain('基础缺');
     expect(result.summary).not.toContain('已确认缺类');
   });
 

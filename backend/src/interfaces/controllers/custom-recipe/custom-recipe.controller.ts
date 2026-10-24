@@ -7,6 +7,7 @@ import {
   Controller,
   Post,
   Get,
+  Delete,
   Body,
   Param,
   Query,
@@ -1003,12 +1004,32 @@ export class CustomRecipeController {
     );
 
     return ApiResponseDto.success({
+      id: attachment.id,
       fileUrl: attachment.fileUrl,
       fileName: attachment.fileName,
       fileSize: attachment.fileSize,
       fileType: attachment.fileType,
       uploadedAt: attachment.uploadedAt,
     });
+  }
+
+  /**
+   * 删除附件（2026-10-25）。
+   *
+   * 顾客在提交前可以删掉上传错的文件；删除会连 COS 对象一起删。
+   * 归属校验在服务层做，控制器只传当前登录顾客。
+   */
+  @Delete('attachments/:attachmentId')
+  @ApiOperation({ summary: 'Delete a custom recipe attachment' })
+  async deleteAttachment(
+    @Req() req: any,
+    @Param('attachmentId') attachmentId: string,
+  ) {
+    await this.customRecipeService.deleteAttachment(
+      attachmentId,
+      req.user.userId,
+    );
+    return ApiResponseDto.success({ deleted: true });
   }
 
   /**

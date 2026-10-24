@@ -9,7 +9,7 @@
  *
  * - 评估必须跑在**当前内容版本**上；`check_ready` 只看 `draft.lastAssessment`，
  *   不重新跑评估，版本对不上就算“没准备好”。
- * - 七类允许缺，但没确认的缺类会 BLOCKED；确认过只算警告。
+ * - 10 类选料检查清单不是门禁：基础类缺只 WARN，建议类缺只提示，都不阻断交付。
  * - 20% 余量是工作标准不是门禁：不足只 WARN，但必须逐条列出来。
  * - 目录对比只给证据：主蛋白重合 HARD，内脏/碳水/蔬菜/菌藻/坚果/水果/乳/蛋/豆重合 SOFT；
  *   油脂/调味/补剂不比。
@@ -18,13 +18,16 @@
  * 守卫：非法值返回 `INVALID_ARGUMENT`，绝不让 `TypeError` 冒出去。
  */
 import {
-  REQUIRED_FOOD_CATEGORIES,
+  BASE_FOOD_CATEGORIES,
+  CHECKLIST_FOOD_CATEGORIES,
+  SUGGESTED_FOOD_CATEGORIES,
   summarizeFoodCategoryCoverage,
 } from '../../../domain/recipe-designer/food-category-map';
 import type {
+  BaseFoodCategory,
   FoodCategory,
   OptionalFoodCategory,
-  RequiredFoodCategory,
+  SuggestedFoodCategory,
 } from '../../../domain/recipe-designer/food-category-map';
 import {
   RecipeAgentPortError,
@@ -87,18 +90,22 @@ const READY_CHECK_LABELS = {
   ASSESSMENT_FRESH: '评估版本',
   ASSESSMENT_COMPLIANT: '评估达标',
   MARGIN: '指标余量',
-  COVERAGE: '七类覆盖',
+  COVERAGE: '分类检查',
   COPY: '文案',
   PRODUCTION_STEPS: '制作步骤',
   PREPARATION: '预处理',
   TAGS: '健康标签',
 } as const;
 
-/** `check_coverage` 的结果；`missing` 已排除人确认过的缺类。 */
+/** `check_coverage` 的结果；`missing` 是真实的基础类缺口，不受确认记录影响。 */
 export interface AgentCoverageResult {
-  covered: RequiredFoodCategory[];
-  missing: RequiredFoodCategory[];
-  confirmedOmissions: RequiredFoodCategory[];
+  covered: BaseFoodCategory[];
+  missing: BaseFoodCategory[];
+  suggestedCovered: SuggestedFoodCategory[];
+  suggestedMissing: SuggestedFoodCategory[];
+  /** @deprecated 缺类确认已不参与门禁，仅回显后端审批状态以兼容旧调用方。 */
+  confirmedOmissions: BaseFoodCategory[];
+  /** 实际只会出现 DAIRY / SEASONING。 */
   optionalPresent: OptionalFoodCategory[];
   supplementCount: number;
   unclassifiedCount: number;
@@ -127,7 +134,8 @@ export interface AgentReadyResult {
 }
 
 export interface CheckCoverageArgs {
-  confirmedOmissions?: RequiredFoodCategory[];
+  /** @deprecated 仅用于兼容旧调用方，不再过滤缺类。 */
+  confirmedOmissions?: BaseFoodCategory[];
 }
 
 export interface CheckCatalogConflictsArgs {
@@ -135,7 +143,8 @@ export interface CheckCatalogConflictsArgs {
 }
 
 export interface CheckReadyArgs {
-  confirmedOmissions?: RequiredFoodCategory[];
+  /** @deprecated 缺类确认已不参与门禁，传了也会被忽略。 */
+  confirmedOmissions?: BaseFoodCategory[];
   exceptionApproved?: boolean;
 }
 
@@ -184,8 +193,8 @@ function asRawArgs(args: unknown): RawToolArgs | null {
   return args as RawToolArgs;
 }
 
-function isRequiredFoodCategory(value: string): value is RequiredFoodCategory {
-  return (REQUIRED_FOOD_CATEGORIES as readonly string[]).includes(value);
+function isBaseFoodCategory(value: string): value is BaseFoodCategory {
+  return (BASE_FOOD_CATEGORIES as readonly string[]).includes(value);
 }
 
 function isNonEmptyString(value: unknown): value is string {
@@ -301,27 +310,25 @@ export function withComputedMargins(
   };
 }
 
-/** 解析人确认过的缺类：必须是七类之一，去空白、去重。 */
-function readConfirmedOmissions(
-  value: unknown,
-): Parsed<RequiredFoodCategory[]> {
+/** 解析兼容用的缺类确认：必须是基础 7 类之一，去空白、去重。 */
+function readConfirmedOmissions(value: unknown): Parsed<BaseFoodCategory[]> {
   if (value === undefined) {
     return { ok: true, value: [] };
   }
   if (!Array.isArray(value)) {
     return {
       ok: false,
-      message: `confirmedOmissions 必须是数组，只能确认七类：${REQUIRED_FOOD_CATEGORIES.join('、')}。`,
+      message: `confirmedOmissions 必须是数组，只能确认基础 7 类：${BASE_FOOD_CATEGORIES.join('、')}。`,
     };
   }
 
-  const seen = new Set<RequiredFoodCategory>();
-  const omissions: RequiredFoodCategory[] = [];
+  const seen = new Set<BaseFoodCategory>();
+  const omissions: BaseFoodCategory[] = [];
   for (const entry of value) {
     if (typeof entry !== 'string') {
       return {
         ok: false,
-        message: `confirmedOmissions 必须是七类类别的字符串数组：${REQUIRED_FOOD_CATEGORIES.join('、')}。`,
+        message: `confirmedOmissions 必须是基础 7 类的字符串数组：${BASE_FOOD_CATEGORIES.join('、')}。`,
       };
     }
     const trimmed = entry.trim();
@@ -331,10 +338,10 @@ function readConfirmedOmissions(
         message: 'confirmedOmissions 不能包含空白类别。',
       };
     }
-    if (!isRequiredFoodCategory(trimmed)) {
+    if (!isBaseFoodCategory(trimmed)) {
       return {
         ok: false,
-        message: `confirmedOmissions 里的「${trimmed}」不是七类必需类别；只能确认：${REQUIRED_FOOD_CATEGORIES.join('、')}。`,
+        message: `confirmedOmissions 里的「${trimmed}」不是基础类别；只能确认：${BASE_FOOD_CATEGORIES.join('、')}。`,
       };
     }
     if (seen.has(trimmed)) continue;
@@ -433,34 +440,40 @@ export function createCheckTools(deps: CheckToolDeps): RecipeAgentCheckTools {
 
       const draft = await port.getDraft(draftId);
       const coverage = summarizeFoodCategoryCoverage(draft.items);
-      const confirmedSet = new Set(omissions.value);
-      const missing = coverage.missing.filter(
-        (category) => !confirmedSet.has(category),
-      );
-      // 摘要只说“确实缺 + 已确认”的交集；确认一个已经覆盖的类别不该被说成缺类。
-      const confirmedMissing = coverage.missing.filter((category) =>
-        confirmedSet.has(category),
-      );
 
       const result: AgentCoverageResult = {
         covered: coverage.covered,
-        missing,
+        // 真实缺口照实报；缺类确认只回显，不再过滤。
+        missing: coverage.missing,
+        suggestedCovered: coverage.suggestedCovered,
+        suggestedMissing: coverage.suggestedMissing,
         confirmedOmissions: omissions.value,
         optionalPresent: coverage.optionalPresent,
         supplementCount: coverage.supplementCount,
         unclassifiedCount: coverage.unclassifiedCount,
       };
 
+      const totalCovered =
+        coverage.covered.length + coverage.suggestedCovered.length;
       const parts = [
-        `七类覆盖 ${coverage.covered.length}/${REQUIRED_FOOD_CATEGORIES.length}`,
+        `分类检查 ${totalCovered}/${CHECKLIST_FOOD_CATEGORIES.length}（基础 ${coverage.covered.length}/${BASE_FOOD_CATEGORIES.length}，建议 ${coverage.suggestedCovered.length}/${SUGGESTED_FOOD_CATEGORIES.length}）`,
       ];
-      if (coverage.missing.length === 0) {
-        parts.push('七类齐全');
+      if (
+        coverage.missing.length === 0 &&
+        coverage.suggestedMissing.length === 0
+      ) {
+        parts.push('10 类检查项齐全');
       } else {
-        parts.push(`未覆盖「${categoryLabels(coverage.missing)}」`);
-      }
-      if (confirmedMissing.length > 0) {
-        parts.push(`已确认缺类「${categoryLabels(confirmedMissing)}」`);
+        parts.push(
+          coverage.missing.length === 0
+            ? '基础 7 类齐全'
+            : `基础缺「${categoryLabels(coverage.missing)}」`,
+        );
+        parts.push(
+          coverage.suggestedMissing.length === 0
+            ? '建议 3 类齐全'
+            : `建议未覆盖「${categoryLabels(coverage.suggestedMissing)}」`,
+        );
       }
       if (coverage.optionalPresent.length > 0) {
         parts.push(`可选类：${categoryLabels(coverage.optionalPresent)}`);
@@ -548,16 +561,12 @@ export function createCheckTools(deps: CheckToolDeps): RecipeAgentCheckTools {
       if (!raw) {
         return fail('INVALID_ARGUMENT', '参数必须是对象。');
       }
-      const omissions = readConfirmedOmissions(raw.confirmedOmissions);
-      if (!omissions.ok) {
-        return fail('INVALID_ARGUMENT', omissions.message);
-      }
+      // confirmedOmissions 保留在参数里只为兼容；缺类确认已不参与门禁，直接忽略。
       const exceptionValue = raw.exceptionApproved;
       if (exceptionValue !== undefined && typeof exceptionValue !== 'boolean') {
         return fail('INVALID_ARGUMENT', 'exceptionApproved 必须是布尔值。');
       }
       const exceptionApproved = exceptionValue === true;
-      const confirmedSet = new Set(omissions.value);
 
       const draft = await port.getDraft(draftId);
       const assessment = draft.lastAssessment
@@ -734,32 +743,27 @@ export function createCheckTools(deps: CheckToolDeps): RecipeAgentCheckTools {
         );
       }
 
-      // COVERAGE：没确认的缺类硬拦；确认过的只警告。
+      // COVERAGE：10 类选料检查清单，不是门禁。
+      // 基础类缺只 WARN；建议类缺只提示（仍 PASS）；都不阻断交付。
       const coverage = summarizeFoodCategoryCoverage(draft.items);
-      const unconfirmedMissing = coverage.missing.filter(
-        (category) => !confirmedSet.has(category),
-      );
-      const confirmedMissing = coverage.missing.filter((category) =>
-        confirmedSet.has(category),
-      );
-      if (unconfirmedMissing.length > 0) {
-        checks.push(
-          buildReadyCheck(
-            'COVERAGE',
-            'FAIL',
-            `七类里还缺「${categoryLabels(unconfirmedMissing)}」，没有确认过；请补原料，或让人确认缺类。`,
-          ),
-        );
-      } else if (confirmedMissing.length > 0) {
+      if (coverage.missing.length > 0) {
         checks.push(
           buildReadyCheck(
             'COVERAGE',
             'WARN',
-            `已确认缺类「${categoryLabels(confirmedMissing)}」。`,
+            `基础分类还缺「${categoryLabels(coverage.missing)}」；分类是选料检查清单，不阻断交付；能补就补，不能补请在交付说明里写原因。`,
+          ),
+        );
+      } else if (coverage.suggestedMissing.length > 0) {
+        checks.push(
+          buildReadyCheck(
+            'COVERAGE',
+            'PASS',
+            `基础 7 类齐全；建议项未覆盖：${categoryLabels(coverage.suggestedMissing)}。`,
           ),
         );
       } else {
-        checks.push(buildReadyCheck('COVERAGE', 'PASS', '七类齐全。'));
+        checks.push(buildReadyCheck('COVERAGE', 'PASS', '10 类检查项齐全。'));
       }
 
       // COPY：四个字段都要有内容。

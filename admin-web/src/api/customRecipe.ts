@@ -419,6 +419,8 @@ export interface AdminAftersaleSelectedRecipe {
 export interface AdminAftersaleRecipeRequest {
   deliveryItemId: string;
   description: string;
+  /** 这一份自己的附件（2026-10-25）；旧记录没有时为空 */
+  photos?: string[];
 }
 
 /** 后台待办里的一条售后 */

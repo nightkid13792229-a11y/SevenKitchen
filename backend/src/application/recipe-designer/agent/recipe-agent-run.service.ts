@@ -121,20 +121,20 @@ const SYSTEM_PROMPT = `你是 SevenKitchen 的食谱设计 Agent，负责在当�
 工作规则：
 - 必须通过工具读写草稿，不要凭空编造原料、克数、营养数据或审批状态。
 - 开始先调用 get_draft 读当前草稿；内容被改过后要重新读。
-- 先看 get_draft.designMode：CATALOG=产品线（按目录、七类、发布门槛）；ORDER=订单定制（按 orderId/orderQuantity、客户狗/过敏、本单交付）；没有 designMode 时按产品线处理，不要猜订单信息。
+- 先看 get_draft.designMode：CATALOG=产品线（按目录、分类清单、发布门槛）；ORDER=订单定制（按 orderId/orderQuantity、客户狗/过敏、本单交付）；没有 designMode 时按产品线处理，不要猜订单信息。
 - 每次写完原料 / 文案 / 制作步骤后，调用 run_assessment 重新评估，再用 check_ready 看交付条件。
 - 只有 check_ready 通过后才能调用 finish_draft；没通过就继续修复，不要跳过检查。
 - finish_draft 的 summary 只写交付内容（原料/重量/达标/文案/步骤），不要重复 warnings 列表；警告由系统单独列出。
 - 例外只能调用 request_exception 申请，审批只能由人做；绝不要自称已批准或绕过检查。
 - 信息不足、需要人拍板时调用 ask_user 提问；不确定就停下来问，不要猜。
 - 营养指标按“目标区间内留 20% 余量”作为工作标准，不要把数值卡在边界上。
-- 选料顺序：先用 search_ingredients 按七类各找 1-2 个候选；候选里已经带蛋白/脂肪/钙/磷（keyNutrients），直接比较，不要为了比较逐个调用 get_ingredient。只有准备下锅的 7-10 个原料才查详情（价格/过敏原/预处理）。
-- 先写骨架再算精确值：先 add_ingredient 把七类骨架加进草稿，再 run_assessment；按评估结果调重量，不要先在脑内把所有克数算完再写。补剂只在评估明确缺口时加，不要预查所有补剂。
+- 选料顺序：先按 10 类检查清单扫一遍：基础 7 类（主蛋白/内脏/碳水/蔬菜/菌藻/坚果种子/油脂）+ 建议 3 类（蛋/豆/水果），每类找 1-2 个候选；不要求每类都进最终配方，缺类说明原因即可，分类不是门禁。候选里已经带蛋白/脂肪/钙/磷（keyNutrients），直接比较，不要为了比较逐个调用 get_ingredient。只有准备下锅的 7-10 个原料才查详情（价格/过敏原/预处理）。
+- 先写骨架再算精确值：先 add_ingredient 把选中的骨架加进草稿，再 run_assessment；按评估结果调重量，不要先在脑内把所有克数算完再写。补剂只在评估明确缺口时加，不要预查所有补剂。
 - 补剂数量按基准单位：PCS=粒/片数，G=克，ML=毫升；不要按每粒重量换算。补剂营养按“每份/每单位”的值乘数量，不需要每粒重量；档案基准和数量单位对不上就 ask_user。
 - 小缺口先调食材（如亚麻籽/亚麻籽油）；单粒剂量远大于缺口（例如缺口 1.6IU、胶囊 200IU）先问人，不要硬加。
 - 同一营养素最多换 2 个关键词；还没有就改用复合补剂（如 B 族复合）或 ask_user，不要连续搜 5 个同义词。
 - 评估条目里的 value/min/max 是“每 1000 千卡”，不是整份总量；补剂剂量 = 缺口(每 1000 千卡) × 总能量(assessment.totalEnergyKcal) ÷ 1000。不要拿每 1000 千卡的值当总量，也不要因此误判“补剂没计入”。
-- 用户明确说不要的类别/原料（如“不要内脏”），绝对不要为了凑七类偷偷加；缺类只能 ask_user 或 request_exception。
+- 用户明确说不要的类别/原料绝对不要加；缺类不需要申请例外，说明原因即可；只有营养达标例外才 request_exception。
 - 工具预算 30 次：读（get_draft/search_ingredients/get_ingredient/get_catalog_usage）尽量不超过 10 次；写至少 8 次；评估/检查至少 3 次。预算快用完时先交付一个可评估的骨架，不要停在“还在查”。
 - 回复用简洁中文，说明改了什么、还差什么。`;
 
@@ -253,8 +253,13 @@ export class RecipeAgentRunService implements OnModuleInit {
         session.designRecipeId,
         this.accessFor(input.actor),
       );
-      if (session.status !== 'WAITING_USER') {
-        throw new BadRequestException('只有等待用户回答的会话可以继续');
+      const isLimitReached =
+        session.status === 'FAILED' &&
+        session.lastError === OVER_LIMIT_MESSAGE;
+      if (session.status !== 'WAITING_USER' && !isLimitReached) {
+        throw new BadRequestException(
+          '只有等待回答或达到运行上限的会话可以继续',
+        );
       }
 
       // resume 启动的循环也占草稿：旧循环真正结束前，start 不能插队。
@@ -265,7 +270,7 @@ export class RecipeAgentRunService implements OnModuleInit {
         // 只有仍然是 WAITING_USER 才允许改成 RUNNING。
         const claimed = await this.sessionService.transitionStatus(
           input.sessionId,
-          ['WAITING_USER'],
+          [isLimitReached ? 'FAILED' : 'WAITING_USER'],
           'RUNNING',
         );
         if (!claimed) {
@@ -790,7 +795,7 @@ export class RecipeAgentRunService implements OnModuleInit {
       await this.sessionService.appendMessage({
         sessionId,
         role: 'ASSISTANT',
-        content: `这次运行已经超过上限（${MAX_TOOL_CALLS} 次工具调用 / 6 分钟），已停止。`,
+        content: `这次运行达到上限（${MAX_TOOL_CALLS} 次工具调用 / 6 分钟），草稿已保存；可以继续下一轮。`,
       });
     } catch {
       // 状态已经落下，消息写不进去不影响停止。

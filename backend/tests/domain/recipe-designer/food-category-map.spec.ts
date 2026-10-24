@@ -1,4 +1,7 @@
 import {
+  BASE_FOOD_CATEGORIES,
+  CHECKLIST_FOOD_CATEGORIES,
+  SUGGESTED_FOOD_CATEGORIES,
   classifyFoodCategory,
   summarizeFoodCategoryCoverage,
   type FoodCategoryInput,
@@ -112,8 +115,28 @@ describe('classifyFoodCategory', () => {
   );
 });
 
+describe('food category checklist constants', () => {
+  it('基础 7 类 + 建议 3 类 = 10 类检查清单', () => {
+    expect(BASE_FOOD_CATEGORIES).toEqual([
+      'PROTEIN',
+      'ORGAN',
+      'CARB',
+      'VEGETABLE',
+      'MUSHROOM',
+      'NUTS',
+      'OIL',
+    ]);
+    expect(SUGGESTED_FOOD_CATEGORIES).toEqual(['EGG', 'LEGUME', 'FRUIT']);
+    expect(CHECKLIST_FOOD_CATEGORIES).toEqual([
+      ...BASE_FOOD_CATEGORIES,
+      ...SUGGESTED_FOOD_CATEGORIES,
+    ]);
+    expect(CHECKLIST_FOOD_CATEGORIES).toHaveLength(10);
+  });
+});
+
 describe('summarizeFoodCategoryCoverage', () => {
-  it('七类齐全，可选类与补剂单独计数', () => {
+  it('10 类齐全，可选类与补剂单独计数', () => {
     const coverage = summarizeFoodCategoryCoverage([
       { category: 'PROTEIN' },
       { category: 'ORGAN' },
@@ -122,7 +145,11 @@ describe('summarizeFoodCategoryCoverage', () => {
       { category: 'MUSHROOM' },
       { category: 'NUTS' },
       { category: 'OIL' },
+      { category: 'EGG' },
+      { category: 'LEGUME' },
       { category: 'FRUIT' },
+      { category: 'DAIRY' },
+      { category: 'SEASONING' },
       { category: 'SUPPLEMENT' },
       { category: 'UNCLASSIFIED' },
     ]);
@@ -136,12 +163,14 @@ describe('summarizeFoodCategoryCoverage', () => {
       'OIL',
     ]);
     expect(coverage.missing).toEqual([]);
-    expect(coverage.optionalPresent).toEqual(['FRUIT']);
+    expect(coverage.suggestedCovered).toEqual(['EGG', 'LEGUME', 'FRUIT']);
+    expect(coverage.suggestedMissing).toEqual([]);
+    expect(coverage.optionalPresent).toEqual(['DAIRY', 'SEASONING']);
     expect(coverage.supplementCount).toBe(1);
     expect(coverage.unclassifiedCount).toBe(1);
   });
 
-  it('缺菌藻时 missing 只报菌藻', () => {
+  it('缺菌藻时 missing 只报菌藻，建议 3 类全未覆盖', () => {
     const coverage = summarizeFoodCategoryCoverage([
       { category: 'PROTEIN' },
       { category: 'ORGAN' },
@@ -151,9 +180,26 @@ describe('summarizeFoodCategoryCoverage', () => {
       { category: 'OIL' },
     ]);
     expect(coverage.missing).toEqual(['MUSHROOM']);
+    expect(coverage.suggestedMissing).toEqual(['EGG', 'LEGUME', 'FRUIT']);
   });
 
-  it('可选类按固定顺序输出，不受输入顺序影响', () => {
+  it('水果属于建议类，不算可选类', () => {
+    const coverage = summarizeFoodCategoryCoverage([{ category: 'FRUIT' }]);
+    expect(coverage.suggestedCovered).toEqual(['FRUIT']);
+    expect(coverage.suggestedMissing).toEqual(['EGG', 'LEGUME']);
+    expect(coverage.optionalPresent).toEqual([]);
+  });
+
+  it('建议类按固定顺序输出，不受输入顺序影响', () => {
+    const coverage = summarizeFoodCategoryCoverage([
+      { category: 'FRUIT' },
+      { category: 'EGG' },
+    ]);
+    expect(coverage.suggestedCovered).toEqual(['EGG', 'FRUIT']);
+    expect(coverage.suggestedMissing).toEqual(['LEGUME']);
+  });
+
+  it('可选类只统计乳/调味，按固定顺序输出', () => {
     const coverage = summarizeFoodCategoryCoverage([
       { category: 'SEASONING' },
       { category: 'DAIRY' },

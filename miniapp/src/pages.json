@@ -283,7 +283,7 @@
     {
       "path": "pages/custom-recipe/aftersale",
       "style": {
-        "navigationBarTitleText": "售后与问题反馈"
+        "navigationBarTitleText": "食谱调整"
       }
     },
     {

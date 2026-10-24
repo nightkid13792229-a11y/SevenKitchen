@@ -7,6 +7,7 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
+  ForbiddenException,
   ConflictException,
   Optional,
 } from '@nestjs/common';
@@ -2789,7 +2790,27 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   /**
    * Delete attachment
    */
-  async deleteAttachment(id: string): Promise<void> {
+  /**
+   * 删除附件（2026-10-25）。
+   *
+   * 必须连 COS 对象一起删：只删数据库记录会留下永久孤儿文件。
+   * 顾客调用时传 `customerId` 校验归属；后台不传，沿用后台权限。
+   * COS 删除失败就抛错、保留记录，让顾客重试，避免“页面删了、桶里还在”。
+   */
+  async deleteAttachment(id: string, customerId?: string): Promise<void> {
+    const attachment = await this.prisma.customRecipeAttachment.findUnique({
+      where: { id },
+      include: { order: { select: { customerId: true } } },
+    });
+    if (!attachment) {
+      throw new NotFoundException('附件不存在');
+    }
+    if (customerId && attachment.order.customerId !== customerId) {
+      throw new ForbiddenException('无权删除此附件');
+    }
+    if (attachment.fileUrl) {
+      await this.cosService.deleteImageByUrl(attachment.fileUrl);
+    }
     await this.prisma.customRecipeAttachment.delete({
       where: { id },
     });

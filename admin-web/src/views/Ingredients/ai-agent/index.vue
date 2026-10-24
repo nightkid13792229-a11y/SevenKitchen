@@ -219,51 +219,55 @@
                 </span>
               </div>
               <div class="agent-ask__buttons">
-                <el-button
+                <!--
+                  一行一个卡片：el-button 自带固定高度（小号仅 24px），多行内容会溢出
+                  压到下一个选项上；这里用原生 button + height auto 承载三行。
+                -->
+                <button
                   v-for="(option, index) in askOptionViews"
                   :key="`${option.label}-${index}`"
-                  size="small"
-                  type="primary"
-                  plain
+                  type="button"
+                  class="agent-ask__option"
                   :title="option.title || undefined"
                   :disabled="
                     state.running || saving || Boolean(commitResult)
                   "
                   @click="handleAnswerOption(option.label)"
                 >
-                  <span class="agent-ask__option-body">
+                  <span class="agent-ask__option-head">
                     <span class="agent-ask__option-text">
                       {{ option.displayLabel }}
                     </span>
                     <span
-                      v-if="option.aiBadge"
-                      class="agent-ask__option-ai"
+                      v-if="option.aiBadge || option.badge"
+                      class="agent-ask__option-meta"
                     >
                       <el-tag
+                        v-if="option.aiBadge"
                         size="small"
                         :type="option.aiBadge.type"
                         effect="plain"
                       >
                         AI 判断：{{ option.aiBadge.label }}
                       </el-tag>
-                      <span
-                        v-if="option.aiBadge.reason"
-                        class="agent-ask__option-reason"
+                      <el-tag
+                        v-if="option.badge"
+                        size="small"
+                        :type="option.badge.type"
+                        effect="plain"
+                        class="agent-ask__option-tag"
                       >
-                        {{ option.aiBadge.reason }}
-                      </span>
+                        {{ option.badge.label }}
+                      </el-tag>
                     </span>
-                    <el-tag
-                      v-if="option.badge"
-                      size="small"
-                      :type="option.badge.type"
-                      effect="plain"
-                      class="agent-ask__option-tag"
-                    >
-                      {{ option.badge.label }}
-                    </el-tag>
                   </span>
-                </el-button>
+                  <span
+                    v-if="option.aiBadge?.reason"
+                    class="agent-ask__option-reason"
+                  >
+                    {{ option.aiBadge.reason }}
+                  </span>
+                </button>
               </div>
             </div>
           </div>
@@ -1765,9 +1769,12 @@ function goBackToList() {
 .agent-ask__options {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 8px;
+  width: 100%;
+  min-width: 0;
   padding-left: 34px;
+  box-sizing: border-box;
 }
 
 /* 先把「AI 判断」和「你的选择」说清楚：标签是参考，按钮才是决定。 */
@@ -1786,45 +1793,90 @@ function goBackToList() {
   gap: 6px;
 }
 
+/* 选项纵向一列，一行一张卡片；宽度跟随面板，不设固定宽度。 */
 .agent-ask__buttons {
   display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
+  flex-direction: column;
   gap: 8px;
+  width: 100%;
+  min-width: 0;
 }
 
-.agent-ask__option-body {
+/*
+ * 卡片必须是自适应高度：历史上 el-button 的固定高度（小号 24px）装不下
+ * 「名字 + 标签 + 理由」，内容溢出后会直接压到下一个选项上。
+ */
+.agent-ask__option {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
   gap: 4px;
+  box-sizing: border-box;
+  width: 100%;
   min-width: 0;
-  max-width: 100%;
-  white-space: normal;
+  height: auto;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--el-border-color);
+  border-radius: 8px;
+  background: var(--el-fill-color-blank);
+  color: var(--el-text-color-primary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
   text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
 }
 
-/* 长选项单行省略，避免 120 字文案把按钮撑破；完整文案在按钮 title 里。 */
+.agent-ask__option:hover:not(:disabled) {
+  border-color: var(--el-color-primary-light-7);
+  background: var(--el-color-primary-light-9);
+}
+
+.agent-ask__option:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 1px;
+}
+
+.agent-ask__option:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* 第一行：名字占满剩余宽度，标签固定在右侧且不参与收缩。 */
+.agent-ask__option-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+/* 长选项单行省略，避免 120 字文案把卡片撑破；完整文案在 title 里。 */
 .agent-ask__option-text {
-  display: block;
-  max-width: min(520px, 72vw);
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: left;
 }
 
-/* AI 判断标签在上、理由在下：分开两行，不挤在同一行里。 */
-.agent-ask__option-ai {
+.agent-ask__option-meta {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  max-width: min(520px, 72vw);
+  flex-shrink: 0;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
 }
 
+/* 第二行：理由自动换行，不截断、不覆盖上面的名字。 */
 .agent-ask__option-reason {
-  max-width: 100%;
+  display: block;
+  width: 100%;
   font-size: 12px;
   color: var(--el-text-color-secondary);
   white-space: normal;
@@ -1834,6 +1886,28 @@ function goBackToList() {
 
 .agent-ask__option-tag {
   flex-shrink: 0;
+}
+
+/* 窄屏：名字继续单行省略，标签整体换到下一行，不跟名字抢宽度。 */
+@media (max-width: 640px) {
+  .agent-ask__options {
+    padding-left: 0;
+  }
+
+  .agent-ask__option-head {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .agent-ask__option-text {
+    flex: 1 1 100%;
+  }
+
+  .agent-ask__option-meta {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
 }
 
 .agent-run__failure {

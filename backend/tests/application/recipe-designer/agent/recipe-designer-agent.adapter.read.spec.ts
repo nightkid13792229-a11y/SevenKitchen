@@ -273,6 +273,62 @@ function serviceDraft() {
   };
 }
 
+/** 一条已发布食谱行（`Recipe.items` 形状），多版本去重测试复用。 */
+function catalogRecipe(input: {
+  recipeId: string;
+  version?: number;
+  name: string;
+  items: Array<{
+    ingredientId: string;
+    exampleWeight: number;
+    name: string;
+    cfctClass: string;
+    category: string;
+  }>;
+}) {
+  return {
+    id: `row-${input.recipeId}-v${input.version ?? 1}`,
+    recipeId: input.recipeId,
+    version: input.version ?? 1,
+    name: input.name,
+    items: input.items.map((item) => ({
+      ingredientId: item.ingredientId,
+      exampleWeight: item.exampleWeight,
+      ingredient: {
+        name: item.name,
+        properties: { cfct_class: item.cfctClass },
+      },
+      nutritionFood: {
+        name: item.name,
+        displayNameZh: item.name,
+        category: item.category,
+      },
+    })),
+  };
+}
+
+const CATALOG_DUCK = {
+  ingredientId: 'i9',
+  exampleWeight: 400,
+  name: '鸭腿肉',
+  cfctClass: '禽肉类及制品',
+  category: 'MEAT',
+};
+const CATALOG_OATS = {
+  ingredientId: 'i10',
+  exampleWeight: 100,
+  name: '燕麦',
+  cfctClass: '谷类及制品',
+  category: 'GRAIN',
+};
+const CATALOG_PUMPKIN = {
+  ingredientId: 'i11',
+  exampleWeight: 100,
+  name: '南瓜',
+  cfctClass: '蔬菜类及制品',
+  category: 'VEGETABLE',
+};
+
 describe('RecipeDesignerAgentAdapter read', () => {
   it('适配器能构造，四个读方法都存在', () => {
     const adapter = createAdapter({}, {});
@@ -586,6 +642,8 @@ describe('RecipeDesignerAgentAdapter read', () => {
         findMany: jest.fn().mockResolvedValue([
           {
             id: 'r1',
+            recipeId: 'r1',
+            version: 1,
             name: '旧鸭肉餐',
             items: [
               {
@@ -639,5 +697,100 @@ describe('RecipeDesignerAgentAdapter read', () => {
       role: 'STAFF',
       customerId: undefined,
     });
+  });
+
+  it('同一 recipeId 的多个已发布版本只算一次，取版本最高的', async () => {
+    const service = { getDraft: jest.fn().mockResolvedValue(serviceDraft()) };
+    const prisma = {
+      recipe: {
+        findMany: jest.fn().mockResolvedValue([
+          catalogRecipe({
+            recipeId: 'r1',
+            version: 1,
+            name: '旧鸭肉餐 v1',
+            items: [CATALOG_DUCK, CATALOG_OATS],
+          }),
+          catalogRecipe({
+            recipeId: 'r1',
+            version: 3,
+            name: '旧鸭肉餐 v3',
+            items: [CATALOG_DUCK, CATALOG_OATS],
+          }),
+          catalogRecipe({
+            recipeId: 'r2',
+            name: '鸭肉南瓜餐',
+            items: [CATALOG_DUCK, CATALOG_PUMPKIN],
+          }),
+        ]),
+      },
+    };
+    const adapter = createAdapter(service, prisma);
+
+    const usage = await adapter.getCatalogUsage({});
+
+    expect(usage.totalPublishedRecipes).toBe(2);
+    expect(usage.recipes.map((recipe) => recipe.recipeId)).toEqual([
+      'r1',
+      'r2',
+    ]);
+    expect(usage.recipes[0].name).toBe('旧鸭肉餐 v3');
+    expect(usage.recipes.map((recipe) => recipe.name)).not.toContain(
+      '旧鸭肉餐 v1',
+    );
+    expect(prisma.recipe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { status: 'PUBLIC' },
+        select: expect.objectContaining({ recipeId: true, version: true }),
+      }),
+    );
+  });
+
+  it('ingredientNames 按名字过滤已发布菜，不传则保持原逻辑', async () => {
+    const service = { getDraft: jest.fn().mockResolvedValue(serviceDraft()) };
+    const chicken = {
+      ingredientId: 'i12',
+      exampleWeight: 400,
+      name: 'Chicken',
+      cfctClass: '禽肉类及制品',
+      category: 'MEAT',
+    };
+    const prisma = {
+      recipe: {
+        findMany: jest.fn().mockResolvedValue([
+          catalogRecipe({
+            recipeId: 'r1',
+            name: '旧鸭肉餐',
+            items: [CATALOG_DUCK, CATALOG_OATS],
+          }),
+          catalogRecipe({
+            recipeId: 'r2',
+            name: 'Chicken Dinner',
+            items: [chicken, CATALOG_PUMPKIN],
+          }),
+        ]),
+      },
+    };
+    const adapter = createAdapter(service, prisma);
+
+    const all = await adapter.getCatalogUsage({});
+    expect(all.recipes.map((recipe) => recipe.recipeId)).toEqual(['r1', 'r2']);
+
+    // 去空白 + 大小写不敏感；目录总数仍按全目录去重口径。
+    const oatsOnly = await adapter.getCatalogUsage({
+      ingredientNames: [' 燕麦 '],
+    });
+    expect(oatsOnly.totalPublishedRecipes).toBe(2);
+    expect(oatsOnly.recipes.map((recipe) => recipe.recipeId)).toEqual(['r1']);
+    expect(oatsOnly.recipes[0].overlappingIngredientNames).toEqual(
+      expect.arrayContaining(['燕麦']),
+    );
+
+    const chickenOnly = await adapter.getCatalogUsage({
+      ingredientNames: [' CHICKEN '],
+    });
+    expect(chickenOnly.recipes.map((recipe) => recipe.recipeId)).toEqual([
+      'r2',
+    ]);
+    expect(chickenOnly.recipes[0].mainProteinName).toBe('Chicken');
   });
 });

@@ -780,7 +780,8 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
       this.prisma.recipe.findMany({
         where: { status: 'PUBLIC' },
         select: {
-          id: true,
+          recipeId: true,
+          version: true,
           name: true,
           items: {
             select: {
@@ -796,6 +797,19 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
       }),
     ]);
 
+    // 同一道菜可能有多个 PUBLIC 版本（重新发布保留旧版本）；每个 recipeId 只取最高版本。
+    const latestByRecipeId = new Map<
+      string,
+      (typeof publishedRecipes)[number]
+    >();
+    for (const recipe of publishedRecipes) {
+      const latest = latestByRecipeId.get(recipe.recipeId);
+      if (!latest || recipe.version > latest.version) {
+        latestByRecipeId.set(recipe.recipeId, recipe);
+      }
+    }
+    const catalogRecipes = [...latestByRecipeId.values()];
+
     const draftIdentities = draft.items.map((item) =>
       toCatalogItemIdentity(item),
     );
@@ -803,11 +817,17 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
       draftIdentities.map((item) => item.category),
     );
     const targetMainProtein = normalizeCatalogName(input.mainProteinName ?? '');
+    // 传了原料名就按名字过滤已发布菜；不传保持“分类交集或主蛋白相同”的原逻辑。
+    const ingredientNameFilter = new Set(
+      (input.ingredientNames ?? [])
+        .map((name) => normalizeCatalogName(name))
+        .filter((name) => name.length > 0),
+    );
 
     let mainProteinCount = 0;
     const recipes: AgentCatalogUsageRecipe[] = [];
 
-    for (const recipe of publishedRecipes) {
+    for (const recipe of catalogRecipes) {
       const items = recipe.items.map((item) => ({
         identity: toCatalogItemIdentity(item),
         exampleWeight: item.exampleWeight,
@@ -826,11 +846,19 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
         mainProteinCount += 1;
       }
 
-      // 只保留“分类有交集，或主蛋白相同”的菜。
       const overlappingCategories = draftCategories.filter((category) =>
         recipeCategories.includes(category),
       );
-      if (overlappingCategories.length === 0 && !mainProteinMatches) {
+
+      if (ingredientNameFilter.size > 0) {
+        const matchesIngredientFilter = items.some((item) =>
+          ingredientNameFilter.has(normalizeCatalogName(item.identity.name)),
+        );
+        if (!matchesIngredientFilter) {
+          continue;
+        }
+      } else if (overlappingCategories.length === 0 && !mainProteinMatches) {
+        // 没传原料名时，只保留“分类有交集，或主蛋白相同”的菜。
         continue;
       }
 
@@ -849,7 +877,7 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
       );
 
       recipes.push({
-        recipeId: recipe.id,
+        recipeId: recipe.recipeId,
         name: recipe.name,
         mainProteinName,
         overlappingCategories,
@@ -858,7 +886,7 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
     }
 
     return {
-      totalPublishedRecipes: publishedRecipes.length,
+      totalPublishedRecipes: catalogRecipes.length,
       mainProteinCount,
       recipes,
     };

@@ -44,9 +44,9 @@
         <text class="oneline-toggle">{{ sellingPointOpen ? '收起' : '展开' }}</text>
       </view>
 
-      <!-- 每天怎么喂：顾客最关心的三个数 -->
+      <!-- 喂食建议：顾客每天要照着喂的三个数 -->
       <view v-if="hasFeeding" class="section">
-        <view class="section-title">每天怎么喂</view>
+        <view class="section-title">喂食建议</view>
         <view class="feeding-grid">
           <view v-if="content.feeding.dailyIntakeG" class="feeding-cell">
             <text class="feeding-value">{{ content.feeding.dailyIntakeG }}</text>
@@ -61,43 +61,45 @@
             <text class="feeding-unit">克 / 餐</text>
           </view>
         </view>
-        <text v-if="content.feeding.cycleDays" class="section-note">
-          这份量是按 {{ content.feeding.cycleDays }} 天配的
+        <text class="section-note">
+          份量可以按你的习惯调整 —— 点下面「自己做」，想一次做几天、每餐多少都自己定。
         </text>
       </view>
 
       <!-- 没有喂食量时说清为什么，而不是显示一堆 0 -->
       <view v-else class="section">
-        <view class="section-title">每天怎么喂</view>
+        <view class="section-title">喂食建议</view>
         <text class="section-note">
-          暂时算不出喂食量（缺少爱犬的体重或体况），请联系客服补全档案后重新生成
+          暂时算不出喂食量（缺少爱犬的体重或体况）。找 Seven爸爸补全档案后，我们再帮你算。
         </text>
       </view>
 
-      <!-- 食材：**只给名称 + 占比**（不带制备方法 —— 那是制作单的事） -->
+      <!-- 配方组成：只给名称 + 占比（克数在制作单里） -->
       <view class="section">
-        <view class="section-title">食材</view>
+        <view class="section-title">配方组成</view>
+        <text v-if="foodItems.length" class="section-note">
+          这份配方里的 {{ foodItems.length }} 种食材
+        </text>
         <RecipeIngredientRatioTable :items="foodItems" />
       </view>
 
       <!--
-        额外补充的营养素：**列营养素名（钙）而不是产品名（钙粉）**。
-
-        老板 2026-10-18 定的口径：这一页是"我的配方要求什么"，
-        产品是第 2 页"我要买哪一瓶"的事。两个别混。
+        补剂：**只给名称 + 怎么加，不写用量**。
+        用量与买法在「自己做」生成的制作单里 —— 同一组数字不在这页再出现一遍。
       -->
-      <view v-if="nutrientRows.length" class="section">
-        <view class="section-title">额外补充的营养素</view>
+      <view v-if="supplementRows.length" class="section">
+        <view class="section-title">要加的补剂</view>
         <view class="nutrient-box">
           <view
-            v-for="(row, index) in nutrientRows"
+            v-for="(row, index) in supplementRows"
             :key="index"
             class="nutrient-row"
           >
-            <text class="nutrient-name">{{ row.label }}</text>
-            <text class="nutrient-value">{{ row.text }}</text>
+            <text class="nutrient-name">{{ row.name }}</text>
+            <text class="nutrient-value">{{ row.how }}</text>
           </view>
         </view>
+        <text class="section-note">用量和买法在「自己做」生成的制作单里。</text>
       </view>
 
       <!-- 核心营养成分：标准 + 8 项 + 报告入口，合成一块（与详情页同一套） -->
@@ -115,16 +117,39 @@
     </template>
 
     <!--
-      固定栏：进第 2 页的**唯一入口**。
-      老板 2026-10-18 审原型时指出"这边没给入口，顾客进不去第 2 页"——
-      原来那个按钮在页面最底部，要滚到底才看得到。
+      固定底栏：三件事，只有一颗实心。
+        · 找 Seven爸爸 —— 视觉最轻，带订单号；
+        · 自己做 —— 进 DIY 配置，自己定份量；
+        · 订购成品 —— 实心主操作，进成品订购页。
     -->
     <view v-if="resolved" class="bottom-bar">
       <view class="bottom-bar__inner">
         <view v-if="deliveryDateText" class="bottom-bar__date">
           <text class="bottom-bar__date-text">{{ deliveryDateText }}</text>
         </view>
-        <button class="bottom-bar__btn" @tap="goShopping">开始采购与制作</button>
+        <view class="bottom-bar__actions">
+          <CustomerServiceInlineButton
+            compact
+            label="Seven爸爸"
+            source-type="ORDER"
+            :order-id="orderId"
+            :order-no="orderId"
+            :title="`定制订单 ${orderId}`"
+            path="/pages/custom-recipe/orders"
+          />
+          <button
+            class="bottom-bar__btn bottom-bar__btn--secondary"
+            @tap="goDiy"
+          >
+            自己做
+          </button>
+          <button
+            class="bottom-bar__btn bottom-bar__btn--primary"
+            @tap="goOrderFinished"
+          >
+            订购成品
+          </button>
+        </view>
       </view>
     </view>
   </view>
@@ -135,21 +160,23 @@ import { computed, ref } from 'vue';
 import { onLoad, onPullDownRefresh } from '@dcloudio/uni-app';
 import { fetchDelivery } from '@/api/custom-recipe';
 import {
-  buildDeliveryShoppingUrl,
+  buildDeliveryDiyUrl,
+  buildFinishedFoodOrderUrl,
   deliveryBatchCountText,
   resolveDeliverySelection,
   type CustomRecipeDeliveryResponse,
 } from '@/utils/custom-recipe-delivery';
 import RecipeCover from '@/components/recipe/RecipeCover.vue';
 import RecipeNutritionCard from '@/components/recipe/RecipeNutritionCard.vue';
+import CustomerServiceInlineButton from '@/components/CustomerServiceInlineButton.vue';
 import RecipeIngredientRatioTable from '@/components/recipe/RecipeIngredientRatioTable.vue';
 
 /**
- * 交付内容 · 第 1 页「专属食谱」（2026-10-16，批次 2.4；2.6 拆页）
+ * 交付内容 · 第 1 页「我的定制食谱」（2026-10-16，批次 2.4；2.6 拆页）
  *
- * 这一页只放**天天要看**的东西：每天喂多少、食材配比、补充剂、营养结论。
- * 采购量与制作步骤挪到第 2 页（`delivery-shopping.vue`）——
- * 那两件事是采购和做饭那一次才看的。
+ * 这一页只放**天天要看**的东西：喂食建议、配方组成、补剂、营养结论。
+ * 采购量与制作步骤不再由交付页承担 —— 顾客点「自己做」进 DIY 配置，
+ * 由 DIY 制作单按**交付那一版**生成（2026-10-24）。
 
  *
  * ## 页面里**没有任何计算**
@@ -273,28 +300,18 @@ const sellingPointText = computed(() =>
 );
 
 /**
- * 额外补充的营养素：**名称 + 每 kg 添加量**。
+ * 要加的补剂：**名称 + 怎么加**。
  *
- * 口径：这一页列**营养素**（钙/锌/维生素D），不是产品（钙粉/鱼油）。
- * 数据来自快照的 `supplements[].targets`。
+ * 这一页不写用量 —— 用量在「自己做」生成的制作单里。
+ * 同一组数字在交付页和制作单各出现一次，顾客会以为是两份不同的要求。
  */
-const nutrientRows = computed(() => {
-  const rows: Array<{ label: string; text: string }> = [];
-  for (const supplement of content.value.supplements || []) {
-    for (const target of supplement.targets || []) {
-      const label = (target.label || '').trim();
-      if (!label) continue;
-      const perKg = target.targetValuePerKg;
-      const unit = (target.unit || 'g').trim();
-      const text =
-        perKg === null || perKg === undefined
-          ? '按说明添加'
-          : `每kg食材添加 ${perKg}${unit}`;
-      // 同一个营养素可能挂在多个补剂下，去重
-      if (!rows.some((row) => row.label === label)) rows.push({ label, text });
-    }
-  }
-  return rows;
+const supplementRows = computed(() => {
+  return (content.value.supplements || [])
+    .map((supplement) => ({
+      name: (supplement.name || '').trim(),
+      how: (supplement.timing || '').trim(),
+    }))
+    .filter((row) => Boolean(row.name));
 });
 
 /** 底部固定栏上那行交付日期 */
@@ -327,23 +344,42 @@ const load = async () => {
 
 const goBack = () => uni.navigateBack();
 
+/** 这一份的业务食谱编号；没有就返回空（按钮会提示而不是跳空页） */
+const selectedRecipeId = computed(
+  () => resolved.value?.recipeId ?? recipeId.value ?? '',
+);
+
+/** 交付单上的狗；DIY / 成品下单都要预选它，不能再让顾客选一次 */
+const dogId = computed(() => String((delivery.value as any)?.dogId || ''));
+
 /**
- * 去第 2 页「采购与制作」。
+ * 自己做：进 DIY 配置页，按**交付的那一版**取食谱。
  *
- * 必须把这一份的 `recipeId` 带过去；否则第 2 页会默认显示批次第一份，
- * 顾客在第 1 页看的是鸭肉、翻页却变成鸡肉。老单份订单不带这个参数。
+ * `orderId` 是版本锁的钥匙 —— 后端据此从交付记录里读出版本号；
+ * `recipeId` 决定多份订单里是哪一份；`dogId` 让选狗那一步直接预选。
  */
-const goShopping = () => {
-  /**
-   * 老单份订单不带 recipeId —— 保持原来的链接形状；
-   * 多份批次才需要把"看的是哪一份"传下去。
-   */
-  const selectedRecipeId = resolved.value?.recipeId ?? recipeId.value;
-  const routeRecipeId = resolved.value?.isBatch
-    ? selectedRecipeId
-    : undefined;
+const goDiy = () => {
+  if (!selectedRecipeId.value) {
+    uni.showToast({ title: '这条交付缺少食谱编号', icon: 'none' });
+    return;
+  }
   uni.navigateTo({
-    url: buildDeliveryShoppingUrl(orderId.value, routeRecipeId),
+    url: buildDeliveryDiyUrl(
+      orderId.value,
+      selectedRecipeId.value,
+      dogId.value,
+    ),
+  });
+};
+
+/** 订购成品：进成品订购页，同样带这份食谱和这只狗 */
+const goOrderFinished = () => {
+  if (!selectedRecipeId.value) {
+    uni.showToast({ title: '这条交付缺少食谱编号', icon: 'none' });
+    return;
+  }
+  uni.navigateTo({
+    url: buildFinishedFoodOrderUrl(selectedRecipeId.value, dogId.value),
   });
 };
 
@@ -636,14 +672,36 @@ onPullDownRefresh(async () => {
 }
 
 .bottom-bar__btn {
-  width: 100%;
-  background: #b45309;
-  color: #fff;
-  font-size: 28rpx;
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  height: 76rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26rpx;
   font-weight: 700;
-  border-radius: 18rpx;
-  padding: 22rpx 0;
-  line-height: 1.2;
+  border-radius: 999rpx;
+  padding: 0 10rpx;
+  line-height: 1;
+}
+
+.bottom-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.bottom-bar__btn--secondary {
+  background: #fffdf7;
+  border: 1rpx solid #d9cdb8;
+  color: #1e3a2f;
+}
+
+.bottom-bar__btn--primary {
+  flex: 1.15;
+  background: linear-gradient(135deg, #e7d3a5 0%, #d8bc85 100%);
+  color: #1e3a2f;
 }
 
 .bottom-bar__btn::after {
@@ -752,7 +810,7 @@ onPullDownRefresh(async () => {
   box-shadow: 0 10rpx 30rpx rgba(30, 58, 47, 0.08);
 }
 
-.bottom-bar__btn {
+.bottom-bar__btn--primary {
   background: linear-gradient(135deg, #e7d3a5 0%, #d8bc85 100%);
   color: #1e3a2f;
   border-radius: 999rpx;

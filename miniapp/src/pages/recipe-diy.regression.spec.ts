@@ -247,19 +247,25 @@ describe('recipe diy regressions', () => {
   })
 
   /**
-   * 本页不放客服入口；底部只有「生成制作单」一个按钮。
+   * 2026-10-24 改口径：底栏 = 「找 Seven爸爸」（紧凑）+「生成制作单」，
+   * 仍然只有**一颗主按钮**；客服入口只放一个，不做第二处。
    */
-  it('keeps the bottom bar to a single full-width action', () => {
+  it('keeps one primary action plus one compact service entry', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/recipe-diy/index.vue'),
       'utf-8',
     )
     const templateSource = source.slice(0, source.indexOf('<script setup'))
 
-    expect(source).not.toContain('CustomerServiceInlineButton')
-    expect(templateSource).not.toContain('CustomerServiceInlineButton')
-    expect(templateSource).not.toContain('bottom-bar-row')
-    expect(source).toContain('.btn-generate {\n  width: 100%;')
+    expect(templateSource).toContain('CustomerServiceInlineButton')
+    // 只出现一次：底栏一个入口，不在页面别处再放一个
+    expect(
+      templateSource.match(/CustomerServiceInlineButton/g)?.length ?? 0,
+    ).toBe(1)
+    expect(templateSource).toContain('compact')
+    expect(templateSource).toContain('生成制作单')
+    expect(source).toContain('.btn-generate {')
+    expect(source).toContain('flex: 1;')
     // 按钮不可用时仍会说明原因
     expect(templateSource).toContain('generateBlockReason')
   })

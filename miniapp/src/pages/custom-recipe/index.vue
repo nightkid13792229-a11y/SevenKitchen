@@ -214,7 +214,7 @@
       <!-- 无档案时的引导：原先只弹一句 toast，页面上没有任何建档入口，提交按钮永久不可用 -->
       <view v-else-if="dogOptions.length === 0" class="no-dog-hint">
         <text class="no-dog-hint-title">还没有狗狗档案</text>
-        <text class="no-dog-hint-desc">专属食谱需要先有狗狗档案，我们才能按它的体重和身体状况来定制。</text>
+        <text class="no-dog-hint-desc">定制食谱需要先有狗狗档案，我们才能按它的体重和身体状况来定制。</text>
         <button class="no-dog-hint-btn" @tap="goToCreateDog">创建狗狗档案</button>
       </view>
     </view>

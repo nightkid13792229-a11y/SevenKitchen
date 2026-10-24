@@ -325,7 +325,7 @@ function onListAction(order: CustomRecipeOrderItem, action: ListAction) {
       viewRecipe(order.recipeId);
       return;
     case 'CONTACT_SERVICE':
-      void contactService();
+      void contactService(order);
       return;
     /**
      * 下面这些**都进详情页**，不在列表上直接做。
@@ -394,12 +394,21 @@ const viewRecipe = (recipeId: string | null | undefined) => {
  * 2026-09-28：小程序已接入**企业微信客服**（后台 corp_id / open_kfid 已配置），
  * 全站其它入口走的是 wx.openCustomerServiceChat。这里原先弹一个微信号让顾客去加，
  * 既和别处不一致，也会把"人工收款"这条兜底路径变成手动流程。
+ *
+ * 2026-10-24：补上订单号 —— 列表每张卡都有自己的客服入口，
+ * 不带单号的话客服进来还得反问"是哪一单"。
  */
-const contactService = async () => {
+const contactService = async (order?: CustomRecipeOrderItem) => {
   const config = await getCustomerServiceConfig();
 
   openCustomerServiceChat(config, {
     sourceType: 'ORDER',
+    orderId: order?.orderId,
+    orderNo: order?.orderId,
+    title: order?.orderId ? `定制订单 ${order.orderId}` : undefined,
+    path: order?.orderId
+      ? `/pages/custom-recipe/order-detail?orderId=${encodeURIComponent(order.orderId)}`
+      : undefined,
   });
 };
 

@@ -2,6 +2,7 @@
   <button
     v-if="visible"
     class="customer-service-inline-button"
+    :class="{ 'customer-service-inline-button--compact': compact }"
     @tap="handleCustomerServiceTap"
   >
     <image
@@ -9,7 +10,7 @@
       src="/static/ui-icons/service-chat.png"
       mode="aspectFit"
     />
-    <text class="customer-service-inline-text">咨询客服</text>
+    <text class="customer-service-inline-text">{{ label }}</text>
   </button>
 </template>
 
@@ -34,6 +35,10 @@ const props = withDefaults(
     title?: string
     path?: string
     imageUrl?: string
+    /** 按钮文案（2026-10-24 统一为 Seven爸爸） */
+    label?: string
+    /** 紧凑版：固定底栏里三颗按钮并列时用 */
+    compact?: boolean
   }>(),
   {
     sourceType: 'GENERAL',
@@ -44,6 +49,8 @@ const props = withDefaults(
     title: '',
     path: '',
     imageUrl: '',
+    label: '找 Seven爸爸',
+    compact: false,
   },
 )
 
@@ -129,5 +136,26 @@ onMounted(async () => {
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
+}
+
+/* 紧凑版：与「自己做」「订购成品」并列在固定底栏里（2026-10-24） */
+.customer-service-inline-button--compact {
+  height: 76rpx;
+  min-width: 0;
+  flex: 0 0 176rpx;
+  padding: 0 12rpx;
+  margin: 0;
+  box-shadow: none;
+}
+
+.customer-service-inline-button--compact .customer-service-inline-icon {
+  width: 28rpx;
+  height: 28rpx;
+  margin-right: 6rpx;
+}
+
+.customer-service-inline-button--compact .customer-service-inline-text {
+  font-size: 22rpx;
+  font-weight: 600;
 }
 </style>

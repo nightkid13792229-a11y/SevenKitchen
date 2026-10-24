@@ -1,5 +1,10 @@
 <template>
   <view class="recipe-diy-page">
+    <!-- 从定制食谱进来：说清这一页按哪一版算，顾客不会以为进了橱窗的 DIY -->
+    <view v-if="orderId" class="custom-source-banner">
+      <text class="custom-source-text">来自你的定制食谱 · 按交付那一版计算</text>
+    </view>
+
     <!-- 食谱信息卡片 -->
     <view class="section recipe-info-section">
       <!--
@@ -255,13 +260,24 @@
         </text>
       </view>
 
-      <button
-        class="btn-generate"
-        :disabled="!canGenerateSheet || isGeneratingSheet"
-        @tap="generateSheet"
-      >
-        生成制作单
-      </button>
+      <view class="bottom-bar-actions">
+        <CustomerServiceInlineButton
+          compact
+          label="Seven爸爸"
+          :source-type="orderId ? 'ORDER' : 'GENERAL'"
+          :order-id="orderId"
+          :order-no="orderId"
+          :title="orderId ? `定制订单 ${orderId}` : 'DIY 制作咨询'"
+          path="/pages/recipe-diy/index"
+        />
+        <button
+          class="btn-generate"
+          :disabled="!canGenerateSheet || isGeneratingSheet"
+          @tap="generateSheet"
+        >
+          生成制作单
+        </button>
+      </view>
     </view>
   </view>
 </template>
@@ -284,6 +300,7 @@ import {
   type LifeStageMatchVerdict,
 } from '../../utils/life-stage-match'
 import LifeStageVersionCard from '@/components/recipe/LifeStageVersionCard.vue'
+import CustomerServiceInlineButton from '@/components/CustomerServiceInlineButton.vue'
 import { useDogSelection } from '@/composables/useDogSelection'
 import { usePackagePlan } from '@/composables/usePackagePlan'
 import { useLifeStageVersion } from '@/composables/useLifeStageVersion'
@@ -345,6 +362,13 @@ interface RecipeLifeStageVersion {
 
 
 const recipeId = ref('')
+/**
+ * 定制订单号（2026-10-24）。
+ *
+ * 从「我的定制食谱」点「自己做」进来时带上，后端据此按**交付那一版**取食谱；
+ * 从橱窗进来时为空，行为与原来完全一致（取最新版）。
+ */
+const orderId = ref('')
 const shareToken = ref('')
 const selectedLifeStage = ref('')
 const recipe = ref<Recipe>({
@@ -591,10 +615,19 @@ onMounted(async () => {
   console.log('[页面参数]', options)
 
   recipeId.value = options.recipeId || ''
+  orderId.value = options.orderId || ''
   shareToken.value = options.shareToken || ''
   initialDogId.value = options.dogId || ''
   selectedLifeStage.value = options.lifeStage || ''
-  console.log('[食谱ID]', recipeId.value)
+  console.log('[食谱ID]', recipeId.value, '[订单]', orderId.value)
+
+  /**
+   * 从定制食谱进来时，这一页就是「自己做」——
+   * 导航标题跟着按钮文案走，顾客不会觉得点进了另一个功能。
+   */
+  if (orderId.value) {
+    uni.setNavigationBarTitle({ title: '自己做' })
+  }
 
   if (recipeId.value) {
     // 【修复】先加载健康标签映射
@@ -629,6 +662,10 @@ async function loadRecipe() {
     }
     if (shareToken.value) {
       requestData.shareToken = shareToken.value
+    }
+    // 定制场景：按交付记录冻结的那一版取食谱（后端据此解析版本）
+    if (orderId.value) {
+      requestData.orderId = orderId.value
     }
 
     const res = await request({
@@ -1037,6 +1074,7 @@ async function generateAndNavigateToSheet() {
       method: 'POST',
       data: {
         dogId: selectedDogId.value,
+        ...(orderId.value ? { orderId: orderId.value } : {}),
         ...(shareToken.value ? { shareToken: shareToken.value } : {})
       }
     })
@@ -1072,6 +1110,7 @@ function navigateToSheet() {
     packageCount: totalPackages.value,
     packageSpecG: getPrimaryPackageSpecG(normalizedPackagePlan.value),
     packagePlan: JSON.stringify(normalizedPackagePlan.value),
+    ...(orderId.value ? { orderId: orderId.value } : {}),
     ...(shareToken.value ? { shareToken: shareToken.value } : {})
   }
 
@@ -2004,7 +2043,9 @@ function getHealthTagLabel(tagOrUuid: string): string {
 }
 
 .btn-generate {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
+  width: auto;
   height: 88rpx;
   display: flex;
   align-items: center;
@@ -2020,5 +2061,26 @@ function getHealthTagLabel(tagOrUuid: string): string {
 .btn-generate[disabled] {
   background-color: #f2f4ea;
   color: #6b6653;
+}
+
+/* 底栏两颗：找 Seven爸爸 + 生成制作单（2026-10-24） */
+.bottom-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+/* 从定制食谱进来时的来源提示 */
+.custom-source-banner {
+  margin: 0 0 16rpx;
+  padding: 14rpx 24rpx;
+  background-color: #f7f1e4;
+  border: 1rpx solid #e8decd;
+  border-radius: 999rpx;
+}
+
+.custom-source-text {
+  font-size: 22rpx;
+  color: #8a6d2f;
 }
 </style>

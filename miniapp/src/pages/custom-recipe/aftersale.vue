@@ -230,6 +230,17 @@
         </text>
       </view>
 
+      <!-- 其它问题（答疑 / 投诉 / 退款）走企业微信，找 Seven爸爸 -->
+      <view class="aftersale-service">
+        <CustomerServiceInlineButton
+          source-type="ORDER"
+          :order-id="orderId"
+          :order-no="orderId"
+          :title="`定制订单 ${orderId}`"
+          path="/pages/custom-recipe/aftersale"
+        />
+      </view>
+
     </template>
   </view>
 </template>
@@ -237,6 +248,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
+import CustomerServiceInlineButton from '@/components/CustomerServiceInlineButton.vue';
 import {
   cancelAftersale,
   uploadAftersaleAttachment,
@@ -1336,6 +1348,13 @@ onLoad((options) => {
 .attach-add {
   border-color: #d9cdb8;
   background: #fffdf7;
+}
+
+/* 其它问题？找 Seven爸爸 */
+.aftersale-service {
+  display: flex;
+  justify-content: center;
+  padding: 20rpx 0 48rpx;
 }
 
 </style>

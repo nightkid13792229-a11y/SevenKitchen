@@ -235,6 +235,22 @@
       </view>
     </view>
 
+    <!--
+      不想自己做？订购成品（2026-10-24）
+
+      位置放在“怎么做”之后：顾客刚看完做饭步骤，正是最想偷懒的时候。
+      带这份食谱和这只狗，成品页不用再选一次。
+    -->
+    <view v-if="recipeId" class="finished-food-card">
+      <view class="finished-food-copy">
+        <text class="finished-food-title">不想自己做？</text>
+        <text class="finished-food-desc">这份配方也能做成成品，冷链送到家。</text>
+      </view>
+      <button class="finished-food-btn" @tap="goFinishedFood">
+        订购成品
+      </button>
+    </view>
+
     <!-- 4-8. 固定文案卡片 -->
     <view class="info-cards-grid">
       <!--
@@ -272,6 +288,22 @@
           </view>
         </view>
       </view>
+    </view>
+
+    <!--
+      找 Seven爸爸：制作单底部已有三个操作，第四颗会挤；
+      放在内容末尾，滚到底就能看到（2026-10-24）。
+    -->
+    <view v-if="recipeId" class="sheet-service">
+      <CustomerServiceInlineButton
+        compact
+        label="Seven爸爸"
+        :source-type="orderId ? 'ORDER' : 'GENERAL'"
+        :order-id="orderId"
+        :order-no="orderId"
+        :title="orderId ? `定制订单 ${orderId}` : 'DIY 制作咨询'"
+        path="/pages/diy-sheet/index"
+      />
     </view>
 
     <!--
@@ -555,6 +587,8 @@ import {
 } from '../../utils/life-stage-match'
 import ImagePreviewModal from '../../components/ImagePreviewModal.vue'
 import LifeStageVersionCard from '@/components/recipe/LifeStageVersionCard.vue'
+import CustomerServiceInlineButton from '../../components/CustomerServiceInlineButton.vue'
+import { buildFinishedFoodOrderUrl } from '../../utils/custom-recipe-delivery'
 import { useLifeStageVersion } from '@/composables/useLifeStageVersion'
 import { normalizeImageUrl, getOptimizedProductImageUrl } from '../../utils/config'
 import { formatSupplementAmountWithDisplayUnit } from '../../utils/diy-sheet-format'
@@ -586,6 +620,11 @@ import {
 
 // 页面参数
 const recipeId = ref('')
+/**
+ * 定制订单号（2026-10-24）：从定制食谱进来时带着，
+ * 取食谱与生成补剂草稿都按交付那一版；橱窗 DIY 为空，行为不变。
+ */
+const orderId = ref('')
 const shareToken = ref('')
 const dogId = ref('')
 const cycleDays = ref(7)
@@ -1154,6 +1193,21 @@ function handleSupplementStatusRetry() {
 }
 
 /**
+ * 订购成品（2026-10-24）：这份配方也能做成成品，冷链到家。
+ *
+ * 带业务食谱编号 + 这只狗 —— 成品页不用再让顾客选一次。
+ */
+function goFinishedFood() {
+  if (!recipeId.value) {
+    uni.showToast({ title: '缺少食谱编号', icon: 'none' })
+    return
+  }
+  uni.navigateTo({
+    url: buildFinishedFoodOrderUrl(recipeId.value, dogId.value)
+  })
+}
+
+/**
  * 购买预分装补剂：把制作单上的补剂清单交给下单页。
  * 补剂行带用量，塞不进 URL，因此走本地存储传递。
  */
@@ -1209,6 +1263,7 @@ onMounted(() => {
   console.log('[DIYSheet] 页面参数:', options)
 
   recipeId.value = options.recipeId || ''
+  orderId.value = options.orderId || ''
   shareToken.value = options.shareToken || ''
   dogId.value = options.dogId || ''
   cycleDays.value = parseInt(options.cycleDays || '7')
@@ -1301,6 +1356,7 @@ async function loadRecipe() {
       url: `/recipes/${recipeId.value}`,
       method: 'GET',
       data: {
+        ...(orderId.value ? { orderId: orderId.value } : {}),
         ...(shareToken.value ? { shareToken: shareToken.value } : {})
       }
     })
@@ -3387,5 +3443,61 @@ onShareTimeline(() => {
   font-size: 21rpx;
   line-height: 1.5;
   color: #968f6d;
+}
+
+/* 订购成品：放在“怎么做”之后（2026-10-24） */
+.finished-food-card {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin: 24rpx 24rpx 0;
+  padding: 24rpx;
+  background: #fffdf7;
+  border: 1rpx solid #e8decd;
+  border-radius: 24rpx;
+}
+
+.finished-food-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.finished-food-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+}
+
+.finished-food-desc {
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #8a806c;
+}
+
+.finished-food-btn {
+  flex: 0 0 auto;
+  height: 64rpx;
+  line-height: 64rpx;
+  padding: 0 26rpx;
+  margin: 0;
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+  background: linear-gradient(135deg, #e7d3a5 0%, #d8bc85 100%);
+  border-radius: 999rpx;
+}
+
+.finished-food-btn::after {
+  border: 0;
+}
+
+/* 找 Seven爸爸：制作单没有第四颗底栏按钮，放内容末尾 */
+.sheet-service {
+  display: flex;
+  justify-content: center;
+  padding: 24rpx 0 180rpx;
 }
 </style>

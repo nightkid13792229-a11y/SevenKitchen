@@ -167,13 +167,37 @@ export function buildDeliveryDetailUrl(
   return `/pages/custom-recipe/delivery?${buildQuery(orderId, recipeId)}`;
 }
 
-/** 交付第 1 页 → 采购第 2 页（同样不能把份数丢掉） */
-export function buildDeliveryShoppingUrl(
+/** 交付第 1 页 → 自己做（DIY 配置页） */
+export function buildDeliveryDiyUrl(
   orderId: string,
   recipeId?: string | null,
+  dogId?: string | null,
 ): string {
-  return `/pages/custom-recipe/delivery-shopping?${buildQuery(
-    orderId,
-    recipeId,
-  )}`;
+  const params = [
+    `orderId=${encodeURIComponent(String(orderId ?? '').trim())}`,
+  ];
+  const wantedRecipeId = String(recipeId ?? '').trim();
+  if (wantedRecipeId) {
+    params.push(`recipeId=${encodeURIComponent(wantedRecipeId)}`);
+  }
+  const wantedDogId = String(dogId ?? '').trim();
+  if (wantedDogId) {
+    params.push(`dogId=${encodeURIComponent(wantedDogId)}`);
+  }
+  return `/pages/recipe-diy/index?${params.join('&')}`;
+}
+
+/** 交付第 1 页 / 制作单 → 订购成品 */
+export function buildFinishedFoodOrderUrl(
+  recipeId: string,
+  dogId?: string | null,
+): string {
+  const params = [
+    `recipeId=${encodeURIComponent(String(recipeId ?? '').trim())}`,
+  ];
+  const wantedDogId = String(dogId ?? '').trim();
+  if (wantedDogId) {
+    params.push(`dogId=${encodeURIComponent(wantedDogId)}`);
+  }
+  return `/pages/recipe-order/index?${params.join('&')}`;
 }

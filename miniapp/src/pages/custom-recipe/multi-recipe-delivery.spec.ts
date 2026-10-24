@@ -19,7 +19,6 @@ import { resolve } from 'node:path';
 
 const ORDER_DETAIL = 'src/pages/custom-recipe/order-detail.vue';
 const DELIVERY = 'src/pages/custom-recipe/delivery.vue';
-const SHOPPING = 'src/pages/custom-recipe/delivery-shopping.vue';
 
 function read(relativePath: string): string {
   return readFileSync(resolve(process.cwd(), relativePath), 'utf-8');
@@ -90,9 +89,10 @@ describe('交付详情页 · 按 recipeId 选份', () => {
     expect(source).toContain('resolved.deliveredAt');
   });
 
-  it('★ 去采购页时把 recipeId 带上，避免第二页退回第一份', () => {
-    expect(source).toContain('buildDeliveryShoppingUrl');
-    expect(source).toContain('resolved.value?.recipeId');
+  it('★ 去做 / 订购成品时把这一份的 recipeId 带上，避免退回第一份', () => {
+    expect(source).toContain('buildDeliveryDiyUrl');
+    expect(source).toContain('buildFinishedFoodOrderUrl');
+    expect(source).toContain('selectedRecipeId');
   });
 
   it('老单份交付仍然直接读 content，不经过批次分支', () => {
@@ -101,24 +101,9 @@ describe('交付详情页 · 按 recipeId 选份', () => {
   });
 });
 
-describe('采购与制作页 · 按 recipeId 选份', () => {
-  const source = stripComments(read(SHOPPING));
-
-  it('★ 接收 recipeId 并渲染选中那份的快照', () => {
-    expect(source).toContain('recipeId');
-    expect(source).toContain('resolveDeliverySelection');
-    expect(source).toContain('content.shopping');
-  });
-
-  it('★ 返回第 1 页时保留 recipeId（不能退回批次第一份）', () => {
-    expect(source).toContain('buildDeliveryDetailUrl');
-    expect(source).toContain('resolved.value?.recipeId');
-  });
-});
-
 describe('多份交付 · 全面取消成品抵扣', () => {
-  it('★ 订单详情 / 交付页 / 采购页都不出现抵扣或 credit', () => {
-    for (const file of [ORDER_DETAIL, DELIVERY, SHOPPING]) {
+  it('★ 订单详情 / 交付页都不出现抵扣或 credit', () => {
+    for (const file of [ORDER_DETAIL, DELIVERY]) {
       const source = stripComments(read(file));
       expect(source).not.toMatch(/抵扣|credit/i);
     }

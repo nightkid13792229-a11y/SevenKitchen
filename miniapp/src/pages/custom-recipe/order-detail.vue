@@ -230,7 +230,7 @@
       -->
       <view class="section delivery-card" v-if="deliveryBatch">
         <view class="delivery-head">
-          <text class="section-title">你的专属食谱</text>
+          <text class="section-title">你的定制食谱</text>
           <text v-if="deliveryBatch.version > 1" class="delivery-version">
             第 {{ deliveryBatch.version }} 版
           </text>
@@ -323,7 +323,7 @@
       -->
       <view class="section delivery-card" v-if="!deliveryBatch && delivery">
         <view class="delivery-head">
-          <text class="section-title">你的专属食谱</text>
+          <text class="section-title">你的定制食谱</text>
           <text v-if="delivery.version > 1" class="delivery-version">
             第 {{ delivery.version }} 版
           </text>
@@ -420,6 +420,14 @@
           {{ cancelAction.label }}
         </button>
         <button class="btn secondary" @tap="goOrders">返回定制订单</button>
+        <CustomerServiceInlineButton
+          class="order-service"
+          source-type="ORDER"
+          :order-id="orderId"
+          :order-no="orderId"
+          :title="`定制订单 ${orderId}`"
+          path="/pages/custom-recipe/orders"
+        />
       </view>
     </template>
   </view>
@@ -442,6 +450,7 @@ import {
   type DeliverySummary,
 } from '@/api/custom-recipe';
 import { buildDeliveryDetailUrl } from '@/utils/custom-recipe-delivery';
+import CustomerServiceInlineButton from '@/components/CustomerServiceInlineButton.vue';
 import { buildAftersaleUrl } from '@/utils/custom-recipe-aftersale';
 import {
   requestCustomRecipeOrderSubscription,
@@ -717,7 +726,7 @@ const confirmAction = computed(() =>
 
 /** 交付物码 → 中文。码是后端定的，这里只做展示名 */
 const DELIVERY_ITEM_LABELS: Record<string, string> = {
-  RECIPE: '专属食谱',
+  RECIPE: '定制食谱',
   SHOPPING_SOP: '采购与制作单',
   NUTRITION_REPORT: '营养评估报告',
 };

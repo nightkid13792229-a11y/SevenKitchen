@@ -53,11 +53,15 @@ const rows = computed(() => (props.items || []).filter((item) => !!item?.name))
  *
  * 后端存的是 `40`（表示 40%）；拿不到就给「—」而不是 0 ——
  * `0%` 会被读成"这道菜里没有这个食材"，而它明明在表里。
+ *
+ * 小于 1% 但大于 0 的（真实数据里食用盐是 0.12%）显示「<1%」：
+ * 四舍五入成 `0%` 同样是"没放"的误读。
  */
 function formatRatio(value: number | null | undefined): string {
   if (value === null || value === undefined) return '—'
   const num = Number(value)
   if (!Number.isFinite(num)) return '—'
+  if (num > 0 && num < 1) return '<1%'
   return `${Math.round(num)}%`
 }
 </script>

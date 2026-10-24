@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildDeliveryDetailUrl,
-  buildDeliveryShoppingUrl,
+  buildDeliveryDiyUrl,
+  buildFinishedFoodOrderUrl,
   deliveryBatchCountText,
   resolveDeliverySelection,
 } from './custom-recipe-delivery';
@@ -139,9 +140,30 @@ describe('多份交付 · 页面路由', () => {
     );
   });
 
-  it('第 2 页同样把 recipeId 传下去，避免回退到第一份', () => {
-    expect(buildDeliveryShoppingUrl('CR202610210001', 'CR1759100000002')).toBe(
-      '/pages/custom-recipe/delivery-shopping?orderId=CR202610210001&recipeId=CR1759100000002',
+  it('「自己做」把 orderId / recipeId / dogId 一起传下去', () => {
+    expect(
+      buildDeliveryDiyUrl(
+        'CR202610210001',
+        'CR1759100000002',
+        'dog-1',
+      ),
+    ).toBe(
+      '/pages/recipe-diy/index?orderId=CR202610210001&recipeId=CR1759100000002&dogId=dog-1',
+    );
+  });
+
+  it('「自己做」没有狗的编号时只带订单与食谱（页面自己让顾客选）', () => {
+    expect(buildDeliveryDiyUrl('CR202610210001', 'CR1759100000002')).toBe(
+      '/pages/recipe-diy/index?orderId=CR202610210001&recipeId=CR1759100000002',
+    );
+  });
+
+  it('「订购成品」带这份食谱和这只狗', () => {
+    expect(buildFinishedFoodOrderUrl('CR1759100000002', 'dog-1')).toBe(
+      '/pages/recipe-order/index?recipeId=CR1759100000002&dogId=dog-1',
+    );
+    expect(buildFinishedFoodOrderUrl('CR1759100000002')).toBe(
+      '/pages/recipe-order/index?recipeId=CR1759100000002',
     );
   });
 

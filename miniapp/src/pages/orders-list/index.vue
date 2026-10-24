@@ -84,7 +84,7 @@
         <!--
           定制单（2026-10-18 并入）。
           顾客找的是"我给狗定的那份食谱"，所以标题用**食谱名**，
-          没交付时显示「设计中的专属食谱」—— 订单号不是他要找的东西。
+          没交付时显示「设计中的定制食谱」—— 订单号不是他要找的东西。
           整卡可点，进定制订单详情。
         -->
         <template v-if="order._orderType === 'custom'">
@@ -459,7 +459,7 @@ type SupplementOrderRow = SupplementOrder & { _orderType: 'supplement' };
  * 定制单（2026-10-18 并入）。
  *
  * 顾客在这里看到的是"我给狗定的那份食谱"，所以卡片标题用**食谱名**，
- * 没交付时显示「设计中的专属食谱」—— 订单号不是他要找的东西。
+ * 没交付时显示「设计中的定制食谱」—— 订单号不是他要找的东西。
  */
 type CustomOrderRow = CustomRecipeOrderDetail & { _orderType: 'custom' };
 
@@ -824,7 +824,7 @@ function viewOrder(orderId: string) {
 /**
  * 定制单卡片的三行文案（2026-10-18）。
  *
- * 标题用**食谱名**（没交付时「设计中的专属食谱」）—— 顾客认的是"给我家狗做的那份"，
+ * 标题用**食谱名**（没交付时「设计中的定制食谱」）—— 顾客认的是"给我家狗做的那份"，
  * 不是订单号。副标题给"给谁 + 交付日期"，这是他在这一页真正想知道的两件事。
  */
 function customOrderTitle(order: UnifiedOrder): string {
@@ -832,7 +832,7 @@ function customOrderTitle(order: UnifiedOrder): string {
   if (row.status === 'CANCELLED') return '已取消的定制食谱';
   if (row.status === 'PENDING_PAYMENT') return '待付款的定制食谱';
   const name = (row.recipeName || '').trim();
-  return name || '设计中的专属食谱';
+  return name || '设计中的定制食谱';
 }
 
 function customOrderSubtitle(order: UnifiedOrder): string {

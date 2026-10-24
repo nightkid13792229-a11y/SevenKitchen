@@ -65,8 +65,8 @@ describe('customer service page placement regressions', () => {
   it('renders the inline customer service button with an icon and label', () => {
     const source = readPage('src/components/CustomerServiceInlineButton.vue')
 
-    expect(source).toContain('咨询客服')
-    // 图标：金色对话气泡（原为纯文字，按产品要求补充图标）
+    expect(source).toContain('找 Seven爸爸')
+    // 图标：金色对话气泡；文案统一为 Seven爸爸（2026-10-24）
     expect(source).toContain('customer-service-inline-icon')
     expect(source).toContain("src=\"/static/ui-icons/service-chat.png\"")
   })

@@ -188,6 +188,8 @@ export interface OrderDelivery {
   version: number;
   deliveredAt: string;
   confirmedAt?: string | null;
+  /** 这只狗（2026-10-24）：交付页预选 DIY / 成品下单用 */
+  dogId?: string | null;
   itemCodes: string[];
   content: DeliveryContent;
   autoCompleteAt?: string | null;
@@ -257,6 +259,8 @@ export interface DeliveryBatchContent {
   version: number;
   deliveredAt: string;
   confirmedAt?: string | null;
+  /** 这只狗（2026-10-24）：交付页预选 DIY / 成品下单用 */
+  dogId?: string | null;
   /** 批次级交付物并集；判断"这一份有没有采购单"要用 `items[].itemCodes` */
   itemCodes: string[];
   items: DeliveryBatchContentItem[];

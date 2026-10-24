@@ -218,6 +218,16 @@ export class RecipeAgentRunService {
 
 ---
 
+## 评审修复（已完成）
+
+P0b-3 评审 NOT READY 的 3 个阻塞项已修：
+
+- 运行循环会把会话历史（用户/助手/工具摘要，最近 20 条 / 4000 字）作为 system 消息带给模型；回答“第二个”时能看到上一轮问题。
+- 开跑/查会话/停/回答都先过 `RecipeDesignerService.getDraft` 的草稿权限；无权时不建会话、不返回消息。
+- 会话状态改成带前置状态的 `transitionStatus` 条件更新 + 进程内 `activeDrafts`/`claiming` 锁；双启动/双回答只成一个，停止/完成不会被覆盖。
+
+当前 17 个 spec / 281 个测试全绿。
+
 ## 接下来（P1/P2，不在本计划）
 
 - P1：一个 skill + 系统提示；真实模型 smoke；30 次/6 分钟参数调优。

@@ -66,6 +66,10 @@ type ServiceWrittenItem = Awaited<ReturnType<RecipeDesignerService['addItem']>>;
 interface WritableNutritionFood {
   ingredientId: string;
   type: 'FOOD' | 'SUPPLEMENT';
+  baseUnit: 'G' | 'ML' | 'PCS';
+  usageUnit: string | null;
+  basisType: string | null;
+  servingWeightG: number | null;
 }
 
 const ASSESSMENT_STATUSES: ReadonlySet<AgentAssessmentEntry['status']> =
@@ -548,6 +552,42 @@ const readNutritionSummary = (
     }
   }
   return summary;
+};
+
+/**
+ * 补剂的数量单位必须和营养档案的基准对得上：
+ * - PCS（粒/片）→ 每份（PER_SERVING），或能按每份重量换算；
+ * - G → 每克/每 100g，或能按每份重量换算；
+ * - ML → 每毫升/每 100ml，或能按每份重量换算。
+ *
+ * 对不上就不允许 AI 写，避免“0.16g 海藻粉 = 几平勺”这种猜。
+ */
+const assertSupplementUnitMatches = (
+  nutritionFoodId: string,
+  baseUnit: 'G' | 'ML' | 'PCS',
+  basisType: string | null,
+  servingWeightG: number | null,
+): void => {
+  const perGram = basisType === 'PER_100_G' || basisType === 'PER_1_G';
+  const perMl = basisType === 'PER_100_ML' || basisType === 'PER_1_ML';
+  const perServing = basisType === 'PER_SERVING';
+  const canConvertServing =
+    perServing && servingWeightG !== null && servingWeightG > 0;
+  const compatible =
+    baseUnit === 'PCS'
+      ? perServing || canConvertServing
+      : baseUnit === 'G'
+        ? perGram || canConvertServing
+        : baseUnit === 'ML'
+          ? perMl || canConvertServing
+          : false;
+
+  if (!compatible) {
+    throw new RecipeAgentPortError(
+      'INVALID_ARGUMENT',
+      `补剂档案 ${nutritionFoodId} 的计量基准（${basisType ?? '未知'}）和基准单位（${baseUnit}）不一致；请补每份重量，或把营养数据改成按克/毫升/每粒记录，再让 AI 添加。`,
+    );
+  }
 };
 
 /** 补剂的营养值基准：每 100g / 每份 / 每粒，必须和数值一起给模型。 */
@@ -1034,6 +1074,7 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
                 id: true,
                 name: true,
                 type: true,
+                baseUnit: true,
                 properties: true,
                 currentPricePerPurchaseUnit: true,
                 purchaseUnit: true,
@@ -1076,6 +1117,7 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
       name,
       nutritionProfileName: nutritionFood.displayNameZh ?? nutritionFood.name,
       type,
+      baseUnit: ingredient.baseUnit,
       cfctClass,
       nutritionCategory,
       verified: nutritionFood.status === 'VERIFIED',
@@ -1262,11 +1304,19 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
         id: true,
         status: true,
         category: true,
+        nutritionData: true,
         mappings: {
           select: {
             ingredientId: true,
             isPrimary: true,
-            ingredient: { select: { id: true, type: true } },
+            ingredient: {
+              select: {
+                id: true,
+                type: true,
+                baseUnit: true,
+                unitDisplayLabel: true,
+              },
+            },
           },
         },
       },
@@ -1294,10 +1344,28 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
     }
     const mapping =
       mappings.find((candidate) => candidate.isPrimary) ?? mappings[0];
+    const type: 'FOOD' | 'SUPPLEMENT' =
+      mapping.ingredient?.type === 'SUPPLEMENT' ? 'SUPPLEMENT' : 'FOOD';
+    const baseUnit = mapping.ingredient?.baseUnit ?? 'G';
+    const usageUnit = mapping.ingredient?.unitDisplayLabel ?? null;
+    const basis = readNutritionBasis(nutritionFood.nutritionData, usageUnit);
+
+    if (type === 'SUPPLEMENT') {
+      assertSupplementUnitMatches(
+        nutritionFood.id,
+        baseUnit,
+        basis.basisType,
+        basis.servingWeightG,
+      );
+    }
 
     return {
       ingredientId: mapping.ingredient?.id ?? mapping.ingredientId,
-      type: mapping.ingredient?.type === 'SUPPLEMENT' ? 'SUPPLEMENT' : 'FOOD',
+      type,
+      baseUnit,
+      usageUnit,
+      basisType: basis.basisType,
+      servingWeightG: basis.servingWeightG,
     };
   }
 

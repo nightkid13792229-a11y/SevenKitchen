@@ -147,6 +147,7 @@ const DEFAULT_INGREDIENT_DETAIL: AgentIngredientDetail = {
   name: '香菇',
   nutritionProfileName: '香菇（鲜）',
   type: 'FOOD',
+  baseUnit: 'G',
   cfctClass: '菌藻类',
   nutritionCategory: 'OTHER',
   category: 'MUSHROOM',

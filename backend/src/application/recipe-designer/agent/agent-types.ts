@@ -133,6 +133,8 @@ export interface AgentIngredientNutritionBasis {
 
 /** `get_ingredient` 的原料详情。 */
 export interface AgentIngredientDetail extends AgentIngredientCandidate {
+  /** 基准单位：G=克，ML=毫升，PCS=个/件（粒、片）。数量必须按它填。 */
+  baseUnit: 'G' | 'ML' | 'PCS';
   /** 七类判定结果；搜索时用来过滤，详情里直接给模型看。 */
   category: FoodCategory;
   /**

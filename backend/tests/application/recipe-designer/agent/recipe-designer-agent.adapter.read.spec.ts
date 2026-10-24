@@ -1173,6 +1173,7 @@ describe('RecipeDesignerAgentAdapter read', () => {
                   id: 'i1',
                   name: '鸭腿肉',
                   type: 'FOOD',
+                  baseUnit: 'G',
                   properties: { cfct_class: '禽肉类及制品' },
                   currentPricePerPurchaseUnit: 30,
                   purchaseUnit: 'kg',
@@ -1191,6 +1192,7 @@ describe('RecipeDesignerAgentAdapter read', () => {
     const detail = await adapter.getIngredient({ nutritionFoodId: 'nf1' });
 
     expect(detail?.category).toBe('PROTEIN');
+    expect(detail?.baseUnit).toBe('G');
     expect(detail?.allergenNames).toEqual(['鸭肉']);
     expect(detail?.pricePerPurchaseUnit).toBe(30);
     // 食物详情只给宏量，矿物质/维生素交给评估报告算总账。
@@ -1221,6 +1223,7 @@ describe('RecipeDesignerAgentAdapter read', () => {
                 id: 'i2',
                 name: '碳酸钙粉',
                 type: 'SUPPLEMENT',
+                baseUnit: 'PCS',
                 properties: {},
                 currentPricePerPurchaseUnit: 120,
                 purchaseUnit: '瓶',
@@ -1237,6 +1240,7 @@ describe('RecipeDesignerAgentAdapter read', () => {
     const detail = await adapter.getIngredient({ nutritionFoodId: 'nf2' });
 
     expect(detail?.type).toBe('SUPPLEMENT');
+    expect(detail?.baseUnit).toBe('PCS');
     expect(detail?.nutritionSummary.moisture).toBe(1);
     expect(detail?.nutritionSummary['minerals.calcium']).toBe(50000);
     expect(detail?.nutritionSummary['vitamins.vitaminD']).toBe(10000);

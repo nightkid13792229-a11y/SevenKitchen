@@ -41,7 +41,12 @@ function nutritionFoodRow(overrides: Record<string, unknown> = {}) {
       {
         ingredientId: 'ing-1',
         isPrimary: true,
-        ingredient: { id: 'ing-1', type: 'FOOD' },
+        ingredient: {
+          id: 'ing-1',
+          type: 'FOOD',
+          baseUnit: 'G',
+          unitDisplayLabel: null,
+        },
       },
     ],
     ...overrides,
@@ -247,6 +252,75 @@ describe('RecipeDesignerAgentAdapter 写方法', () => {
       expect(result).toEqual(expected);
     });
   });
+
+    it('补剂基准单位与营养档案不一致时拒绝，不调用 service', async () => {
+      const service = serviceMock();
+      const prisma = prismaMock();
+      prisma.nutritionFood.findUnique.mockResolvedValue(
+        nutritionFoodRow({
+          category: 'SUPPLEMENT',
+          nutritionData: {
+            meta: { rawBasisType: 'PER_100_G' },
+            macros: { crudeProtein: 0 },
+          },
+          mappings: [
+            {
+              ingredientId: 'ing-1',
+              isPrimary: true,
+              ingredient: {
+                id: 'ing-1',
+                type: 'SUPPLEMENT',
+                baseUnit: 'PCS',
+                unitDisplayLabel: '粒',
+              },
+            },
+          ],
+        }),
+      );
+      const adapter = createAdapter(service, prisma);
+
+      await expect(
+        adapter.addItem('draft-1', { nutritionFoodId: 'nf-1', weightG: 1 }),
+      ).rejects.toMatchObject({
+        name: 'RecipeAgentPortError',
+        code: 'INVALID_ARGUMENT',
+      });
+      expect(service.addItem).not.toHaveBeenCalled();
+    });
+
+    it('补剂按粒记录且档案按每份时允许添加', async () => {
+      const service = serviceMock();
+      const prisma = prismaMock();
+      prisma.nutritionFood.findUnique.mockResolvedValue(
+        nutritionFoodRow({
+          category: 'SUPPLEMENT',
+          nutritionData: {
+            meta: { rawBasisType: 'PER_SERVING' },
+            minerals: { calcium: 50000 },
+          },
+          mappings: [
+            {
+              ingredientId: 'ing-1',
+              isPrimary: true,
+              ingredient: {
+                id: 'ing-1',
+                type: 'SUPPLEMENT',
+                baseUnit: 'PCS',
+                unitDisplayLabel: '粒',
+              },
+            },
+          ],
+        }),
+      );
+      const adapter = createAdapter(service, prisma);
+
+      await adapter.addItem('draft-1', {
+        nutritionFoodId: 'nf-1',
+        weightG: 1,
+      });
+
+      expect(service.addItem).toHaveBeenCalledTimes(1);
+    });
 
   describe('replaceItem', () => {
     it('正常替换：调用 service.replaceItem，重复校验排除自己', async () => {

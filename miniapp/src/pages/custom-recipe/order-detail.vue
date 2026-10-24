@@ -422,6 +422,8 @@
         <button class="btn secondary" @tap="goOrders">返回定制订单</button>
         <CustomerServiceInlineButton
           class="order-service"
+          compact
+          label="Seven爸爸"
           source-type="ORDER"
           :order-id="orderId"
           :order-no="orderId"

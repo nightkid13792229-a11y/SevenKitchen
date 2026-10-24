@@ -17,19 +17,23 @@ describe('我的订单合并补剂订单', () => {
   const template = source.slice(0, source.indexOf('<script setup'))
   const meSource = readPage('src/pages/me/index.vue')
 
-  it('筛选项统一成 6 个状态 + 全部，且不再用旧的鲜食口径文案', () => {
-    const labels = ['全部', '未付款', '已付款', '已发货', '已完成', '售后中', '已取消']
+  it('状态筛选精简为 6 个，并按订单类型换词（2026-10-24）', () => {
+    // 全部 / 待付款 / 进行中 / 待收货·待确认 / 已完成 / 售后中
+    expect(source).toMatch(
+      /'ALL',\s*'PENDING_PAYMENT',\s*'IN_PROGRESS',\s*'WAIT_RECEIVE',\s*'COMPLETED',\s*'AFTERSALE'/,
+    )
+    // 同一档位在三种订单上的说法不同
+    expect(source).toContain("IN_PROGRESS: '制作中'")
+    expect(source).toContain("WAIT_RECEIVE: '待收货'")
+    expect(source).toContain("IN_PROGRESS: '分装中'")
+    expect(source).toContain("IN_PROGRESS: '定制中'")
+    expect(source).toContain("WAIT_RECEIVE: '待确认'")
 
-    labels.forEach((label) => {
-      expect(source, `缺少筛选项 ${label}`).toContain(`label: '${label}'`)
-    })
-
-    // 旧文案不能残留，否则两个列表会对同一个状态叫两个名字
-    expect(source).not.toContain("label: '待付款'")
-    expect(source).not.toContain("label: '已付款/制作中'")
-    expect(source).not.toContain("label: '待收货'")
-    expect(source).not.toContain("label: '已收货'")
-    expect(source).not.toContain("label: '已取消/退款'")
+    // 旧的七档文案不再作为 Tab 出现
+    expect(source).not.toContain("label: '未付款'")
+    expect(source).not.toContain("label: '已付款'")
+    expect(source).not.toContain("label: '已发货'")
+    expect(source).not.toContain("label: '已取消'")
   })
 
   it('鲜食状态分组原样保留，补剂补上 PACKING / PACKED', () => {

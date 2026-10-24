@@ -824,7 +824,7 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   }
 
   async getOrderByOrderId(orderId: string): Promise<any | null> {
-    return await this.prisma.customRecipeOrder.findUnique({
+    const order = await this.prisma.customRecipeOrder.findUnique({
       where: { orderId },
       include: {
         dog: {
@@ -835,6 +835,10 @@ export class CustomRecipeService implements ICustomRecipeRepository {
             currentWeightKg: true,
             bcsScore: true,
             activityLevel: true,
+            mealsPerDay: true,
+            /** 定制对象档案（2026-10-24）：详情页要显示品种 */
+            customBreedName: true,
+            breedId: true,
             /**
              * 过敏（2026-10-04 第四期补）。
              *
@@ -905,6 +909,38 @@ export class CustomRecipeService implements ICustomRecipeRepository {
         },
       },
     });
+    if (!order) return null;
+    await this.attachDogBreedNames([order]);
+    return order;
+  }
+
+  /**
+   * 给订单的 dog 补上品种名（2026-10-24）。
+   *
+   * Dog 表只有 breedId，Prisma 里没有 breed 关联；列表/详情要显示"柯基"，
+   * 就在这里按 id 批量查一次 dog_breed，挂到 dog.breedName 上。
+   * 不改 schema、不加迁移，避免为了一个展示字段动数据模型。
+   */
+  private async attachDogBreedNames(orders: any[]): Promise<void> {
+    const ids = Array.from(
+      new Set(
+        orders
+          .map((order) => order?.dog?.breedId)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0),
+      ),
+    );
+    if (ids.length === 0) return;
+
+    const breeds = await this.prisma.dogBreed.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true },
+    });
+    const nameById = new Map(breeds.map((breed) => [breed.id, breed.name]));
+    for (const order of orders) {
+      if (order?.dog) {
+        order.dog.breedName = nameById.get(order.dog.breedId) ?? '';
+      }
+    }
   }
 
   /**
@@ -969,6 +1005,10 @@ export class CustomRecipeService implements ICustomRecipeRepository {
               currentWeightKg: true,
               bcsScore: true,
               activityLevel: true,
+              mealsPerDay: true,
+              /** 列表卡要显示"豆豆 · 柯基 · 11.2kg"（2026-10-24） */
+              customBreedName: true,
+              breedId: true,
             },
           },
           recipe: {
@@ -1015,6 +1055,7 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       this.prisma.customRecipeOrder.count({ where }),
     ]);
 
+    await this.attachDogBreedNames(orders);
     return { orders, total };
   }
 

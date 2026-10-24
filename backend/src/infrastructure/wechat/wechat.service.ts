@@ -767,7 +767,14 @@ export class WechatService {
     const page =
       status === 'DELIVERED' && recipeId
         ? `pages/recipe-detail/index?id=${recipeId}`
-        : `pages/custom-recipe/orders`;
+        : /**
+           * 2026-10-24：定制专属列表页已删除，非交付状态的消息
+           * 直接落到**这张订单的详情**，顾客点开就看当前进度，
+           * 不再经过一个已经不存在（或将来会删）的列表页。
+           */
+          `pages/custom-recipe/order-detail?orderId=${encodeURIComponent(
+            normalizedOrderId,
+          )}`;
 
     let last: { success: boolean; msgid?: string; error?: string } = {
       success: false,

@@ -24,6 +24,18 @@ describe('CustomRecipeController · 顾客端多份交付', () => {
     orderId: 'CR202610210001',
     customerId: 'user-1',
     dogId: 'dog-1',
+    dog: {
+      id: 'dog-1',
+      name: '豆豆',
+      breedId: 'breed-1',
+      breedName: '柯基',
+      customBreedName: null,
+      birthday: new Date('2024-01-01T00:00:00.000Z'),
+      currentWeightKg: 11.2,
+      bcsScore: 5,
+      activityLevel: 'NORMAL',
+      mealsPerDay: 2,
+    },
     status: 'DELIVERED',
     amount: 570,
     recipeQuantity: 2,
@@ -220,6 +232,14 @@ describe('CustomRecipeController · 顾客端多份交付', () => {
       // ★ 老字段保持原样：多份订单没有老的单份交付记录 → null
       expect(res.data.delivery).toBeNull();
 
+      // ★ 定制对象档案与份数（2026-10-24）：详情页要显示给顾客核对
+      expect(res.data.dogBreedName).toBe('柯基');
+      expect(res.data.dogWeightKg).toBe(11.2);
+      expect(res.data.dogBcsScore).toBe(5);
+      expect(res.data.dogActivityLevel).toBe('NORMAL');
+      expect(res.data.dogMealsPerDay).toBe(2);
+      expect(res.data.recipeQuantity).toBe(2);
+
       // ★ 摘要里不能带内容快照（几十 KB × N 份）
       const serialized = JSON.stringify(res.data.deliveryBatch);
       expect(serialized).not.toContain('contentSnapshot');
@@ -360,6 +380,8 @@ describe('CustomRecipeController · 顾客端多份交付', () => {
         version: 1,
         deliveredAt: new Date('2026-10-18T02:00:00.000Z'),
         confirmedAt: null,
+        // 2026-10-24：交付页预选 DIY / 成品下单要用这只狗
+        dogId: 'dog-1',
         itemCodes: ['RECIPE', 'NUTRITION_REPORT'],
         content: legacy.contentSnapshot,
         autoCompleteAt: new Date('2026-10-28T02:00:00.000Z'),

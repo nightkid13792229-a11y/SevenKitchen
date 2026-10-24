@@ -379,7 +379,7 @@ const allergyDisplay = computed(() => {
     const text = String(form.value.allergyText || '').trim();
     return text || '有过敏（未填写具体食物）';
   }
-  return '未回答';
+  return '未填写';
 });
 
 const hasAllergyForDisplay = computed(

@@ -135,7 +135,7 @@
             :order-id="orderId"
             :order-no="orderId"
             :title="`定制订单 ${orderId}`"
-            path="/pages/custom-recipe/orders"
+            path="/pages/orders-list/index"
           />
           <button
             class="bottom-bar__btn bottom-bar__btn--secondary"

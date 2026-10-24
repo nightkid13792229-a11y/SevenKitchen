@@ -70,6 +70,15 @@ export interface CustomRecipeOrderDetail {
   orderId: string;
   dogId?: string;
   dogName?: string;
+  /** 定制对象档案（2026-10-24）：列表卡与详情页共用 */
+  dogBreedName?: string | null;
+  dogWeightKg?: number | null;
+  dogBirthday?: string | null;
+  dogBcsScore?: number | null;
+  dogActivityLevel?: string | null;
+  dogMealsPerDay?: number | null;
+  /** 本单份数（1–5） */
+  recipeQuantity?: number | null;
   status: string;
   /** 后端下发的可渲染形态；老后端不返回 */
   renderable?: RenderableOrderView | null;

@@ -46,15 +46,13 @@ describe('brand name unification (赛文的食堂)', () => {
     expect(read('src/pages/custom-recipe/success.vue')).toContain(
       'CustomerServiceInlineButton',
     );
-    expect(read('src/pages/custom-recipe/orders.vue')).toContain(
-      'openCustomerServiceChat',
+    // 2026-10-24：定制专属列表已删除；统一订单页用自己的客服入口
+    expect(read('src/pages/orders-list/index.vue')).toContain(
+      'CustomerServiceInlineButton',
     );
     // 不应再把个人微信号当作客服入口写死在页面上
     expect(read('src/pages/custom-recipe/success.vue')).not.toContain(
       "wechatId = ref('SevenKitchen')",
-    );
-    expect(read('src/pages/custom-recipe/orders.vue')).not.toContain(
-      '微信号：SevenKitchen',
     );
   });
 });

@@ -306,6 +306,15 @@ const recipeTexts = reactive<Record<string, string>>({});
 /** 有没有批次明细 —— 没有就完全走原来的整单售后 */
 const isBatchOrder = computed(() => batchItems.value.length > 0);
 
+/**
+ * 退款入口（2026-10-24）。
+ *
+ * 从订单详情底栏「退款申请」进来时带 `scene=refund`：
+ * 退款不是针对某一份食谱的，所以**不显示按份选择**、提交也不带按份字段；
+ * 类型默认选字典里的"退款"那一项。
+ */
+const isRefundScene = ref(false);
+
 const isRecipeSelected = (deliveryItemId: string) =>
   selectedItemIds.value.includes(deliveryItemId);
 
@@ -338,6 +347,17 @@ function resetRecipeSelection() {
 function applyBatchItems(
   batch: { items?: DeliveryBatchItemSummary[] | null } | null | undefined,
 ) {
+  /**
+   * 退款场景不需要"选哪份食谱"：
+   * 清空批次，isBatchOrder 随之为 false，提交时不会带按份字段，
+   * 也不会被"至少选一份"的校验拦住。
+   */
+  if (isRefundScene.value) {
+    batchItems.value = [];
+    selectedItemIds.value = [];
+    return;
+  }
+
   const items = resolveAftersaleBatchItems(batch);
   batchItems.value = items;
 
@@ -540,9 +560,16 @@ const load = async () => {
     list.value = result.items;
     quota.value = result.quota;
     typeOptions.value = types;
-    // 默认选中字典里标了 isDefault 的那个，没有就选第一个
+    // 默认选中字典里标了 isDefault 的那个，没有就选第一个；
+    // 退款入口优先选"退款"那一项，省得顾客再找。
     if (!form.type && types.length) {
-      form.type = types[0].code;
+      const refundType = isRefundScene.value
+        ? types.find(
+            (option) =>
+              option.label.includes('退款') || option.code.includes('REFUND'),
+          )
+        : null;
+      form.type = refundType?.code || types[0].code;
     }
     applyBatchItems(detail?.deliveryBatch ?? null);
   } finally {
@@ -650,6 +677,11 @@ onLoad((options) => {
   recipeId.value = options?.recipeId
     ? decodeURIComponent(options.recipeId)
     : '';
+  isRefundScene.value =
+    String(options?.scene || '') === 'refund';
+  if (isRefundScene.value) {
+    uni.setNavigationBarTitle({ title: '退款申请' });
+  }
   load();
 });
 </script>

@@ -9,6 +9,12 @@
  * 身份直接复用 `RecipeDesignerService.getDraft` 的第二个参数类型，
  * 避免依赖 service 里未导出的 `RecipeDesignerAccessInput`。
  */
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
+
 import { normalizeNutritionProfile } from '../../../domain/ingredient/nutrition-profile.utils';
 import type { NutritionProfile } from '../../../domain/ingredient/types';
 import {
@@ -1466,7 +1472,58 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
     );
   }
 
-  async runAssessment(_draftId: string): Promise<AgentAssessmentView> {
-    throw new Error('P0b-2b: write not implemented');
+  /**
+   * 在当前内容版本上跑现有评估引擎（P0b-2b Task 4）。
+   *
+   * `assessDraftForAgent` 用 `updateMany({ where: { contentRevision } })` 原子写回：
+   * 评估期间草稿被改会返回 409，必须让模型重跑，不能把旧结果当成新鲜结果。
+   * 已发布 / 空草稿等 400、草稿不存在等 404 是业务校验失败，统一转成
+   * `INVALID_ARGUMENT` 交给模型改参数或问人；其余异常（DB 等）原样抛出。
+   */
+  async runAssessment(draftId: string): Promise<AgentAssessmentView> {
+    this.assertDraft(draftId);
+
+    try {
+      const { contentRevision, assessment } =
+        await this.service.assessDraftForAgent(draftId, this.access);
+
+      const entries: AgentAssessmentEntry[] = assessment.groupedEntries.map(
+        (entry) => ({
+          key: entry.nutrientKey,
+          label: entry.label,
+          status: entry.status,
+          value: entry.currentValue,
+          min: entry.minValue,
+          max: entry.maxValue,
+          marginPercent: null,
+        }),
+      );
+
+      return {
+        contentRevision,
+        compliant: entries.filter((entry) => entry.status === 'COMPLIANT')
+          .length,
+        deficient: entries.filter((entry) => entry.status === 'DEFICIENT')
+          .length,
+        excess: entries.filter((entry) => entry.status === 'EXCESS').length,
+        missingData: entries.filter((entry) => entry.status === 'MISSING_DATA')
+          .length,
+        entries,
+      };
+    } catch (error) {
+      if (error instanceof ConflictException) {
+        throw new RecipeAgentPortError(
+          'ASSESSMENT_STALE',
+          '草稿在评估期间被修改，请重新评估',
+        );
+      }
+      if (
+        error instanceof BadRequestException ||
+        error instanceof NotFoundException
+      ) {
+        throw new RecipeAgentPortError('INVALID_ARGUMENT', error.message);
+      }
+      throw error;
+    }
   }
 }

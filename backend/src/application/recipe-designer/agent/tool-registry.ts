@@ -10,8 +10,8 @@
  * 模型参数，只从 `controlPort.getApprovalState()` 注入。模型只能
  * `request_exception`，不能自批。
  *
- * 所有 handler 都套了边界兜底：工具内部未捕获的异常统一转成
- * `CONTROL_NOT_AVAILABLE`，不让异常穿到模型或运行时。
+ * 所有 handler 都套了边界兜底：工具内部未捕获的 `RecipeAgentPortError` 保留
+ * 错误码与原文，其余异常统一转成 `CONTROL_NOT_AVAILABLE`，不让异常穿到模型或运行时。
  */
 import type { FoodCategory } from '../../../domain/recipe-designer/food-category-map';
 import type {
@@ -22,7 +22,11 @@ import type {
 import { createCheckTools } from './check-tools';
 import { createControlTools, readApprovalState } from './control-tools';
 import { createReadTools } from './read-tools';
-import type { AgentToolResult, HealthTagPolicy } from './agent-types';
+import {
+  RecipeAgentPortError,
+  type AgentToolResult,
+  type HealthTagPolicy,
+} from './agent-types';
 import type {
   RecipeAgentControlPort,
   RecipeAgentDraftPort,
@@ -69,13 +73,23 @@ function controlUnavailable(message: string): AgentToolResult<never> {
 
 /**
  * 模型边界兜底：工具内部任何未捕获异常（端口/DB 抛错等）都转成数据，
- * 不让异常穿到模型或运行时。复用现有 CONTROL_NOT_AVAILABLE，不新增错误码。
+ * 不让异常穿到模型或运行时。
+ *
+ * `RecipeAgentPortError` 是端口层表达“业务校验失败”的异常（如 409 →
+ * `ASSESSMENT_STALE`），保留它的 `code` 与 `message`；其余异常没有业务错误码，
+ * 统一映射成 `CONTROL_NOT_AVAILABLE`。
  */
 function withBoundary(handler: AgentToolHandler): AgentToolHandler {
   return async (args): Promise<AgentToolResult<unknown>> => {
     try {
       return await handler(args);
     } catch (error) {
+      if (error instanceof RecipeAgentPortError) {
+        return {
+          ok: false,
+          error: { code: error.code, message: error.message },
+        };
+      }
       return {
         ok: false,
         error: {

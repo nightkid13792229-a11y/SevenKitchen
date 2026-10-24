@@ -18,13 +18,14 @@ import {
   assertCopywritingCompliant,
   scanForbiddenClaims,
 } from '../recipe-copywriting-compliance';
-import type {
-  AgentCopyPatch,
-  AgentDraftItem,
-  AgentProductionStep,
-  AgentToolErrorCode,
-  AgentToolResult,
-  HealthTagPolicy,
+import {
+  RecipeAgentPortError,
+  type AgentCopyPatch,
+  type AgentDraftItem,
+  type AgentProductionStep,
+  type AgentToolErrorCode,
+  type AgentToolResult,
+  type HealthTagPolicy,
 } from './agent-types';
 import type { RecipeAgentDraftPort } from './recipe-agent.port';
 
@@ -142,14 +143,24 @@ function errorMessage(error: unknown): string {
 /**
  * 端口调用统一在这里兜住：端口抛错（原料不存在、DB 异常）也变成数据，
  * 不让异常穿过工具层。
+ *
+ * `RecipeAgentPortError` 自带业务错误码（如 `INGREDIENT_NOT_FOUND`），原样带上；
+ * 其他异常没有错误码，由调用方回退成 `INVALID_ARGUMENT`。
  */
 async function callPort<T>(
   action: () => Promise<T>,
-): Promise<{ ok: true; value: T } | { ok: false; message: string }> {
+): Promise<
+  | { ok: true; value: T }
+  | { ok: false; code?: AgentToolErrorCode; message: string }
+> {
   try {
     return { ok: true, value: await action() };
   } catch (error) {
-    return { ok: false, message: `操作失败：${errorMessage(error)}` };
+    return {
+      ok: false,
+      ...(error instanceof RecipeAgentPortError ? { code: error.code } : {}),
+      message: `操作失败：${errorMessage(error)}`,
+    };
   }
 }
 
@@ -235,7 +246,7 @@ export function createWriteTools(deps: WriteToolDeps): RecipeAgentWriteTools {
         }),
       );
       if (!written.ok) {
-        return fail('INVALID_ARGUMENT', written.message);
+        return fail(written.code ?? 'INVALID_ARGUMENT', written.message);
       }
       const item = written.value;
       return okWrite(
@@ -278,7 +289,7 @@ export function createWriteTools(deps: WriteToolDeps): RecipeAgentWriteTools {
         }),
       );
       if (!written.ok) {
-        return fail('INVALID_ARGUMENT', written.message);
+        return fail(written.code ?? 'INVALID_ARGUMENT', written.message);
       }
       const item = written.value;
       return okWrite(
@@ -307,7 +318,7 @@ export function createWriteTools(deps: WriteToolDeps): RecipeAgentWriteTools {
 
       const written = await callPort(() => port.updateWeight(itemId, weightG));
       if (!written.ok) {
-        return fail('INVALID_ARGUMENT', written.message);
+        return fail(written.code ?? 'INVALID_ARGUMENT', written.message);
       }
       return okWrite(
         written.value,
@@ -332,7 +343,10 @@ export function createWriteTools(deps: WriteToolDeps): RecipeAgentWriteTools {
 
       const draftResult = await callPort(() => port.getDraft(draftId));
       if (!draftResult.ok) {
-        return fail('INVALID_ARGUMENT', draftResult.message);
+        return fail(
+          draftResult.code ?? 'INVALID_ARGUMENT',
+          draftResult.message,
+        );
       }
       const item = draftResult.value.items.find((entry) => entry.id === itemId);
       if (!item) {
@@ -350,7 +364,7 @@ export function createWriteTools(deps: WriteToolDeps): RecipeAgentWriteTools {
 
       const removed = await callPort(() => port.removeItem(itemId));
       if (!removed.ok) {
-        return fail('INVALID_ARGUMENT', removed.message);
+        return fail(removed.code ?? 'INVALID_ARGUMENT', removed.message);
       }
 
       return okWrite(
@@ -404,7 +418,7 @@ export function createWriteTools(deps: WriteToolDeps): RecipeAgentWriteTools {
         }),
       );
       if (!written.ok) {
-        return fail('INVALID_ARGUMENT', written.message);
+        return fail(written.code ?? 'INVALID_ARGUMENT', written.message);
       }
       return okWrite(
         written.value,
@@ -555,7 +569,7 @@ export function createWriteTools(deps: WriteToolDeps): RecipeAgentWriteTools {
 
       const written = await callPort(() => port.setCopy(draftId, patch));
       if (!written.ok) {
-        return fail('INVALID_ARGUMENT', written.message);
+        return fail(written.code ?? 'INVALID_ARGUMENT', written.message);
       }
       return okWrite(patch, `已更新${changed.join('、')}；${STALE_NOTE}`);
     },
@@ -630,7 +644,7 @@ export function createWriteTools(deps: WriteToolDeps): RecipeAgentWriteTools {
         port.setProductionSteps(draftId, steps),
       );
       if (!written.ok) {
-        return fail('INVALID_ARGUMENT', written.message);
+        return fail(written.code ?? 'INVALID_ARGUMENT', written.message);
       }
       return okWrite(steps, `已写入 ${steps.length} 步制作步骤；${STALE_NOTE}`);
     },

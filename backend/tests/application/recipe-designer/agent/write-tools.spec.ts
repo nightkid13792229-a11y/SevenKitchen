@@ -1,3 +1,4 @@
+import { RecipeAgentPortError } from 'src/application/recipe-designer/agent/agent-types';
 import {
   MAX_ITEM_WEIGHT_G,
   MIN_ITEM_WEIGHT_G,
@@ -570,6 +571,28 @@ describe('write tools', () => {
     if (result.ok) return;
     expect(result.error.code).toBe('INVALID_ARGUMENT');
     expect(result.error.message).toContain('找不到');
+  });
+
+  it('端口抛 RecipeAgentPortError 时保留错误码，不降级成 INVALID_ARGUMENT', async () => {
+    const { tools, port } = setup();
+    jest
+      .mocked(port.addItem)
+      .mockRejectedValue(
+        new RecipeAgentPortError(
+          'INGREDIENT_NOT_FOUND',
+          '原料档案不存在，请重新搜索原料',
+        ),
+      );
+
+    const result = await tools.add_ingredient({
+      nutritionFoodId: 'nf-1',
+      weightG: 50,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('INGREDIENT_NOT_FOUND');
+    expect(result.error.message).toContain('原料档案不存在');
   });
 
   it('缺 itemId 的写工具都返回 INVALID_ARGUMENT', async () => {

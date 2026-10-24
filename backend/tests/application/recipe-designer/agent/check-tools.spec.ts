@@ -1,4 +1,7 @@
-import type { AgentAssessmentEntry } from 'src/application/recipe-designer/agent/agent-types';
+import {
+  RecipeAgentPortError,
+  type AgentAssessmentEntry,
+} from 'src/application/recipe-designer/agent/agent-types';
 import {
   computeMarginPercent,
   createCheckTools,
@@ -115,6 +118,34 @@ describe('check tools', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.data.entries[0]?.marginPercent).toBe(10);
+  });
+
+  it('端口抛 RecipeAgentPortError 时 run_assessment 保留错误码', async () => {
+    const port = createFakeRecipeAgentPort();
+    jest
+      .mocked(port.runAssessment)
+      .mockRejectedValue(
+        new RecipeAgentPortError(
+          'ASSESSMENT_STALE',
+          '草稿在评估期间被修改，请重新评估',
+        ),
+      );
+    const tools = createCheckTools({ port, draftId: 'draft-1', tagPolicy });
+
+    const result = await tools.run_assessment();
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('ASSESSMENT_STALE');
+    expect(result.error.message).toBe('草稿在评估期间被修改，请重新评估');
+  });
+
+  it('run_assessment 对普通异常不吞，交给注册表边界', async () => {
+    const port = createFakeRecipeAgentPort();
+    jest.mocked(port.runAssessment).mockRejectedValue(new Error('db down'));
+    const tools = createCheckTools({ port, draftId: 'draft-1', tagPolicy });
+
+    await expect(tools.run_assessment()).rejects.toThrow('db down');
   });
 
   it('评估过期时 check_ready 必须 BLOCKED', async () => {

@@ -1,4 +1,10 @@
 import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
+
+import {
   RecipeAgentPortError,
   type AgentDraftItem,
 } from 'src/application/recipe-designer/agent/agent-types';
@@ -89,6 +95,7 @@ function serviceMock() {
     updateDraftProductionSteps: jest
       .fn()
       .mockResolvedValue({ draftId: 'draft-1', productionSteps: [] }),
+    assessDraftForAgent: jest.fn(),
   };
 }
 
@@ -556,6 +563,195 @@ describe('RecipeDesignerAgentAdapter 写方法', () => {
         message: '时长格式不正确',
       });
       expect(service.updateDraftProductionSteps).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('runAssessment', () => {
+    /** 评估引擎的 grouped entry；映射时只取其中的营养字段。 */
+    function groupedEntry(overrides: Record<string, unknown> = {}) {
+      return {
+        nutrientKey: 'crudeProtein',
+        label: '粗蛋白',
+        category: 'MACRO',
+        expressionBasis: 'PER_1000_KCAL_ME',
+        unit: 'g',
+        minValue: 50,
+        maxValue: 80,
+        currentValue: 66,
+        status: 'COMPLIANT',
+        details: [],
+        detailCount: 1,
+        ...overrides,
+      };
+    }
+
+    it('把 groupedEntries、计数和内容版本映射成 AgentAssessmentView', async () => {
+      const service = serviceMock();
+      const prisma = prismaMock();
+      service.assessDraftForAgent.mockResolvedValue({
+        contentRevision: 7,
+        assessment: {
+          groupedEntries: [
+            groupedEntry(),
+            groupedEntry({
+              nutrientKey: 'calcium',
+              label: '钙',
+              status: 'DEFICIENT',
+              currentValue: 1.2,
+              minValue: 2,
+              maxValue: null,
+            }),
+            groupedEntry({
+              nutrientKey: 'phosphorus',
+              label: '磷',
+              status: 'EXCESS',
+              currentValue: 9,
+              minValue: null,
+              maxValue: 5,
+            }),
+            groupedEntry({
+              nutrientKey: 'zinc',
+              label: '锌',
+              status: 'MISSING_DATA',
+              currentValue: null,
+              minValue: 1,
+              maxValue: 2,
+            }),
+            groupedEntry({
+              nutrientKey: 'omega6Omega3Ratio',
+              label: 'Omega-6:Omega-3',
+              status: 'INFO',
+              currentValue: 5,
+              minValue: null,
+              maxValue: null,
+            }),
+          ],
+        },
+      });
+      const adapter = createAdapter(service, prisma);
+
+      const view = await adapter.runAssessment('draft-1');
+
+      expect(service.assessDraftForAgent).toHaveBeenCalledWith(
+        'draft-1',
+        ACCESS,
+      );
+      expect(view).toEqual({
+        contentRevision: 7,
+        compliant: 1,
+        deficient: 1,
+        excess: 1,
+        missingData: 1,
+        entries: [
+          {
+            key: 'crudeProtein',
+            label: '粗蛋白',
+            status: 'COMPLIANT',
+            value: 66,
+            min: 50,
+            max: 80,
+            marginPercent: null,
+          },
+          {
+            key: 'calcium',
+            label: '钙',
+            status: 'DEFICIENT',
+            value: 1.2,
+            min: 2,
+            max: null,
+            marginPercent: null,
+          },
+          {
+            key: 'phosphorus',
+            label: '磷',
+            status: 'EXCESS',
+            value: 9,
+            min: null,
+            max: 5,
+            marginPercent: null,
+          },
+          {
+            key: 'zinc',
+            label: '锌',
+            status: 'MISSING_DATA',
+            value: null,
+            min: 1,
+            max: 2,
+            marginPercent: null,
+          },
+          {
+            key: 'omega6Omega3Ratio',
+            label: 'Omega-6:Omega-3',
+            status: 'INFO',
+            value: 5,
+            min: null,
+            max: null,
+            marginPercent: null,
+          },
+        ],
+      });
+    });
+
+    it('评估期间草稿被改（409 Conflict）时转成 ASSESSMENT_STALE', async () => {
+      const service = serviceMock();
+      const prisma = prismaMock();
+      service.assessDraftForAgent.mockRejectedValue(
+        new ConflictException('草稿在评估期间被修改，请重新评估'),
+      );
+      const adapter = createAdapter(service, prisma);
+
+      await expect(adapter.runAssessment('draft-1')).rejects.toMatchObject({
+        name: 'RecipeAgentPortError',
+        code: 'ASSESSMENT_STALE',
+        message: '草稿在评估期间被修改，请重新评估',
+      });
+    });
+
+    it('BadRequest / NotFound（已发布、草稿不存在）转成 INVALID_ARGUMENT', async () => {
+      const service = serviceMock();
+      const prisma = prismaMock();
+      const adapter = createAdapter(service, prisma);
+
+      service.assessDraftForAgent.mockRejectedValueOnce(
+        new BadRequestException('已发布草稿不能由 Agent 重新评估'),
+      );
+      await expect(adapter.runAssessment('draft-1')).rejects.toMatchObject({
+        name: 'RecipeAgentPortError',
+        code: 'INVALID_ARGUMENT',
+        message: '已发布草稿不能由 Agent 重新评估',
+      });
+
+      service.assessDraftForAgent.mockRejectedValueOnce(
+        new NotFoundException('草稿不存在'),
+      );
+      await expect(adapter.runAssessment('draft-1')).rejects.toMatchObject({
+        name: 'RecipeAgentPortError',
+        code: 'INVALID_ARGUMENT',
+        message: '草稿不存在',
+      });
+    });
+
+    it('不是当前草稿时 INVALID_ARGUMENT，不调用 service', async () => {
+      const service = serviceMock();
+      const prisma = prismaMock();
+      const adapter = createAdapter(service, prisma);
+
+      await expect(adapter.runAssessment('draft-2')).rejects.toMatchObject({
+        name: 'RecipeAgentPortError',
+        code: 'INVALID_ARGUMENT',
+        message: '只能修改当前这一份草稿',
+      });
+      expect(service.assessDraftForAgent).not.toHaveBeenCalled();
+    });
+
+    it('非 HTTP 异常原样抛出，不误判成业务校验失败', async () => {
+      const service = serviceMock();
+      const prisma = prismaMock();
+      const dbError = new Error('db down');
+      service.assessDraftForAgent.mockRejectedValue(dbError);
+      const adapter = createAdapter(service, prisma);
+
+      await expect(adapter.runAssessment('draft-1')).rejects.toBe(dbError);
     });
   });
 });

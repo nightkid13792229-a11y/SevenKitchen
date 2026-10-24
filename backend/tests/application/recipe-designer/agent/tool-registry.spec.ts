@@ -2,6 +2,7 @@ import {
   AGENT_TOOL_DEFINITIONS,
   createAgentToolHandlers,
 } from 'src/application/recipe-designer/agent/tool-registry';
+import { RecipeAgentPortError } from 'src/application/recipe-designer/agent/agent-types';
 import type { RecipeAgentControlPort } from 'src/application/recipe-designer/agent/recipe-agent.port';
 import {
   createFakeRecipeAgentPort,
@@ -406,6 +407,49 @@ describe('tool registry', () => {
       draftId: 'draft-1',
     });
     const result = await handlers.get_draft({});
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('CONTROL_NOT_AVAILABLE');
+    expect(result.error.message).toContain('工具执行失败');
+  });
+
+  it('handler 抛 RecipeAgentPortError 时保留错误码', async () => {
+    const port = createFakeRecipeAgentPort();
+    jest
+      .mocked(port.getDraft)
+      .mockRejectedValue(
+        new RecipeAgentPortError(
+          'ASSESSMENT_STALE',
+          '草稿在评估期间被修改，请重新评估',
+        ),
+      );
+    const handlers = createAgentToolHandlers({
+      port,
+      controlPort: createFakeControlPort(),
+      tagPolicy,
+      draftId: 'draft-1',
+    });
+
+    const result = await handlers.get_draft({});
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('ASSESSMENT_STALE');
+    expect(result.error.message).toBe('草稿在评估期间被修改，请重新评估');
+  });
+
+  it('run_assessment 的普通异常仍由边界兜底为 CONTROL_NOT_AVAILABLE', async () => {
+    const port = createFakeRecipeAgentPort();
+    jest.mocked(port.runAssessment).mockRejectedValue(new Error('db down'));
+    const handlers = createAgentToolHandlers({
+      port,
+      controlPort: createFakeControlPort(),
+      tagPolicy,
+      draftId: 'draft-1',
+    });
+
+    const result = await handlers.run_assessment({});
+
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.code).toBe('CONTROL_NOT_AVAILABLE');

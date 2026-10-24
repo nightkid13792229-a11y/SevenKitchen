@@ -26,13 +26,14 @@ import type {
   OptionalFoodCategory,
   RequiredFoodCategory,
 } from '../../../domain/recipe-designer/food-category-map';
-import type {
-  AgentAssessmentEntry,
-  AgentAssessmentView,
-  AgentDraftItem,
-  AgentToolErrorCode,
-  AgentToolResult,
-  HealthTagPolicy,
+import {
+  RecipeAgentPortError,
+  type AgentAssessmentEntry,
+  type AgentAssessmentView,
+  type AgentDraftItem,
+  type AgentToolErrorCode,
+  type AgentToolResult,
+  type HealthTagPolicy,
 } from './agent-types';
 import type { RecipeAgentDraftPort } from './recipe-agent.port';
 
@@ -358,7 +359,18 @@ export function createCheckTools(deps: CheckToolDeps): RecipeAgentCheckTools {
 
   return {
     async run_assessment(): Promise<AgentToolResult<AgentAssessmentView>> {
-      const view = withComputedMargins(await port.runAssessment(draftId));
+      let assessment: AgentAssessmentView;
+      try {
+        assessment = await port.runAssessment(draftId);
+      } catch (error) {
+        // 端口自带错误码（如 409 → ASSESSMENT_STALE）时原样还给模型；
+        // 其他异常继续往上抛，由 tool-registry 的边界转成 CONTROL_NOT_AVAILABLE。
+        if (error instanceof RecipeAgentPortError) {
+          return fail(error.code, error.message);
+        }
+        throw error;
+      }
+      const view = withComputedMargins(assessment);
       return ok(view, summarizeAssessment(view));
     },
 

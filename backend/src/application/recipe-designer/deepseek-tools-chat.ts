@@ -92,6 +92,10 @@ export async function callDeepSeekTools(
             messages: options.messages,
             tools: options.tools,
             tool_choice: 'auto',
+            // DeepSeek 新模型默认开启 thinking（effort=high）：工具调用场景
+            // 会把大量时间/配额花在思维链上，实测单轮可达数分钟。
+            // 与健康报告抽取一致，显式关闭；需要推理时由业务提示词约束。
+            thinking: { type: 'disabled' },
             temperature: options.temperature ?? 0.3,
             max_tokens: options.maxTokens ?? 16384,
           }),

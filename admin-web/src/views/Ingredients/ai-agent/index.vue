@@ -55,7 +55,10 @@
                   v-for="(step, index) in run.steps"
                   :key="index"
                   class="agent-step"
-                  :class="{ 'agent-step--failed': !step.ok }"
+                  :class="{
+                    'agent-step--failed': !step.ok,
+                    'agent-step--empty': step.statusType === 'warning'
+                  }"
                 >
                   <span class="agent-step__index">{{ index + 1 }}</span>
                   <div class="agent-step__body">
@@ -65,14 +68,76 @@
                       <el-tag
                         size="small"
                         effect="plain"
-                        :type="step.ok ? 'success' : 'danger'"
+                        :type="
+                          step.statusType || (step.ok ? 'success' : 'danger')
+                        "
                       >
-                        {{ step.ok ? '成功' : '失败' }}
+                        {{ step.statusLabel || (step.ok ? '成功' : '失败') }}
                       </el-tag>
                     </div>
                     <p v-if="!step.ok" class="agent-step__error">
                       {{ step.error || '工具执行失败（后端没有给出原因）' }}
                     </p>
+                    <details v-if="step.search" class="agent-step__evidence">
+                      <summary class="agent-step__evidence-summary">
+                        匹配依据 · {{ step.search.message }}
+                      </summary>
+                      <div class="agent-step__evidence-body">
+                        <div class="agent-step__keywords">
+                          <span>本次关键词：</span>
+                          <el-tag
+                            v-for="keyword in step.search.keywords"
+                            :key="keyword"
+                            size="small"
+                            effect="plain"
+                          >
+                            {{ keyword }}
+                          </el-tag>
+                        </div>
+                        <p v-if="!step.search.found" class="agent-step__empty">
+                          没有找到匹配词条
+                        </p>
+                        <ul v-else class="agent-step__matches">
+                          <li
+                            v-for="(match, matchIndex) in step.search.matches"
+                            :key="matchIndex"
+                            class="agent-step__match"
+                          >
+                            <span class="agent-step__match-name">
+                              {{ match.foodName }}
+                            </span>
+                            <span
+                              v-if="
+                                match.foodNameEn &&
+                                match.foodNameEn !== match.foodName
+                              "
+                              class="agent-step__match-en"
+                            >
+                              {{ match.foodNameEn }}
+                            </span>
+                            <el-tag size="small" effect="plain" type="info">
+                              {{ match.matchedByLabel }}
+                            </el-tag>
+                            <span class="agent-step__match-meta">
+                              关键词「{{ match.matchedKeyword }}」
+                            </span>
+                            <span class="agent-step__match-meta">
+                              分数 {{ match.scoreLabel }}
+                            </span>
+                          </li>
+                        </ul>
+                        <p
+                          v-if="
+                            step.search.found &&
+                            step.search.totalCount > step.search.matches.length
+                          "
+                          class="agent-step__match-more"
+                        >
+                          共 {{ step.search.totalCount }} 条，这里显示前
+                          {{ step.search.matches.length }} 条。
+                        </p>
+                      </div>
+                    </details>
                   </div>
                 </div>
               </div>
@@ -1215,6 +1280,11 @@ function goBackToList() {
   background: var(--el-color-danger-light-9);
 }
 
+.agent-step--empty {
+  border-color: var(--el-color-warning-light-5);
+  background: var(--el-color-warning-light-9);
+}
+
 .agent-step__index {
   flex: none;
   width: 20px;
@@ -1258,6 +1328,72 @@ function goBackToList() {
 
 .agent-step__head :deep(.el-tag) {
   margin-left: auto;
+}
+
+.agent-step__evidence {
+  margin-top: 8px;
+}
+
+.agent-step__evidence-summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--el-color-primary);
+  user-select: none;
+}
+
+.agent-step__evidence-body {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-bg-color);
+  font-size: 12px;
+}
+
+.agent-step__keywords {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  color: var(--el-text-color-secondary);
+}
+
+.agent-step__empty {
+  margin: 0;
+  font-weight: 600;
+  color: var(--el-color-warning);
+}
+
+.agent-step__matches {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agent-step__match {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.agent-step__match-name {
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.agent-step__match-en,
+.agent-step__match-meta,
+.agent-step__match-more {
+  color: var(--el-text-color-secondary);
+}
+
+.agent-step__match-more {
+  margin: 6px 0 0;
 }
 
 .agent-step__error {

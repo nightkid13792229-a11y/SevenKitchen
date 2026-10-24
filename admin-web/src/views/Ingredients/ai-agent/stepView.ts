@@ -8,6 +8,32 @@
 import type { AgentToolCallRecord } from '@/types/ingredientCreation'
 import { findNutritionField } from '@/utils/recipeDesigner/nutritionFieldCatalog'
 
+/** 查库命中的一条词条：给页面直接渲染的匹配依据。 */
+export interface AgentSearchMatchView {
+  foodName: string
+  foodNameEn: string | null
+  /** 后端原始匹配方式代码，如 ZH_ALIAS */
+  matchedBy: string
+  /** 中文匹配方式，如「中英别名匹配」 */
+  matchedByLabel: string
+  matchedKeyword: string
+  score: number | null
+  scoreLabel: string
+}
+
+/** 「查本地库」这一步的展开内容：关键词、命中词条与匹配方式。 */
+export interface AgentSearchEvidenceView {
+  /** 本次实际用过的关键词（含中文名扩展出的英文别名） */
+  keywords: string[]
+  matches: AgentSearchMatchView[]
+  /** 后端候选总数（可能大于页面展示的前几条） */
+  totalCount: number
+  /** 只有真的命中才是 true；工具 ok 不等于命中 */
+  found: boolean
+  /** 给人看的一句话：命中 N 条 / 没有找到匹配词条 */
+  message: string
+}
+
 /** 一个工具调用在页面上的一行。 */
 export interface AgentStepView {
   /** 后端原始工具名；未知工具也原样保留 */
@@ -19,6 +45,28 @@ export interface AgentStepView {
   ok: boolean
   /** 失败时后端返回的错误原文 */
   error?: string
+  /** 标签文案：成功 / 未找到 / 失败；查库零命中不能写「成功」 */
+  statusLabel?: string
+  statusType?: 'success' | 'warning' | 'danger'
+  /** 查本地库的匹配依据；没有结构化结果（旧后端）时为空 */
+  search?: AgentSearchEvidenceView
+}
+
+/** 匹配方式代码 → 中文。未知代码原样显示，不藏信息。 */
+const MATCH_METHOD_LABELS: Record<string, string> = {
+  EN_EXACT: '英文名完全匹配',
+  EN_PARTIAL: '英文名部分匹配',
+  ZH_EXACT: '中文名完全匹配',
+  ZH_PARTIAL: '中文名部分匹配',
+  ZH_ALIAS: '中英别名匹配',
+  FUZZY: '近似匹配'
+}
+
+export function matchMethodLabel(method: string): string {
+  if (!method) {
+    return '匹配方式未知'
+  }
+  return MATCH_METHOD_LABELS[method] ?? method
 }
 
 /** 已知工具的中文名；新增工具没登记时按原始名显示，不隐藏。 */
@@ -46,6 +94,109 @@ function asRecord(value: unknown): AnyArgs {
 
 function readText(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+function readFiniteNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
+function uniqueText(values: readonly string[]): string[] {
+  const result: string[] = []
+  for (const value of values) {
+    const trimmed = value.trim()
+    if (trimmed && !result.includes(trimmed)) {
+      result.push(trimmed)
+    }
+  }
+  return result
+}
+
+/** 后端 result 可能是对象，也可能是旧接口里的 JSON 字符串。 */
+function readResultRecord(value: unknown): AnyArgs {
+  if (typeof value === 'string') {
+    try {
+      return asRecord(JSON.parse(value))
+    } catch {
+      return {}
+    }
+  }
+  return asRecord(value)
+}
+
+/**
+ * 从 searchLocalNutrition 的工具结果里读出「匹配依据」。
+ *
+ * - 关键词同时取后端回传的 keywords 与本次参数里的 keyword；
+ * - 只有 found=true 或确有候选才算命中，工具 ok 不算；
+ * - 零命中时 message 固定为「没有找到匹配词条」，页面不能写成成功。
+ */
+export function toSearchEvidence(
+  result: unknown,
+  args: AnyArgs = {}
+): AgentSearchEvidenceView | null {
+  const record = readResultRecord(result)
+  if (Object.keys(record).length === 0) {
+    return null
+  }
+
+  const rawKeywords = Array.isArray(record.keywords)
+    ? record.keywords.filter(
+        (keyword): keyword is string => typeof keyword === 'string'
+      )
+    : []
+  const keywords = uniqueText([...rawKeywords, readText(args.keyword)])
+
+  const rawCandidates = Array.isArray(record.candidates)
+    ? record.candidates
+    : []
+  const matches: AgentSearchMatchView[] = rawCandidates
+    .filter(
+      (candidate): candidate is AnyArgs =>
+        typeof candidate === 'object' &&
+        candidate !== null &&
+        !Array.isArray(candidate)
+    )
+    .map((candidate) => {
+      const matchedBy = readText(candidate.matchedBy) || 'UNKNOWN'
+      const score =
+        readFiniteNumber(candidate.score) ??
+        readFiniteNumber(candidate.matchScore)
+      return {
+        foodName: readText(candidate.foodName) || '（未知词条）',
+        foodNameEn: readText(candidate.foodNameEn) || null,
+        matchedBy,
+        matchedByLabel: matchMethodLabel(matchedBy),
+        matchedKeyword:
+          readText(candidate.matchedKeyword) || keywords[0] || '',
+        score,
+        scoreLabel: score === null ? '—' : score.toFixed(2)
+      }
+    })
+
+  const candidateCount = readFiniteNumber(record.candidateCount)
+  const totalCount =
+    candidateCount === null
+      ? matches.length
+      : Math.max(0, Math.floor(candidateCount))
+  const found =
+    record.found === false
+      ? false
+      : record.found === true || matches.length > 0 || totalCount > 0
+
+  return {
+    keywords,
+    matches,
+    totalCount,
+    found,
+    message: found ? `命中 ${totalCount} 条` : '没有找到匹配词条'
+  }
 }
 
 function oneLine(value: string): string {
@@ -168,12 +319,34 @@ export function toStepView(
         ? call.name.trim()
         : UNKNOWN_TOOL_LABEL
     const label = TOOL_LABELS[name] ?? name
-    const summary = summarize(name, asRecord(call?.args))
+    const args = asRecord(call?.args)
+    const ok = call?.ok === true
+    // 查库零命中时，摘要与标签都要说「没有找到」，不能因为工具 ok 就写成功。
+    const search =
+      name === 'searchLocalNutrition' && ok
+        ? toSearchEvidence(call?.result, args)
+        : null
+    let summary = summarize(name, args)
+    let statusLabel = ok ? '成功' : '失败'
+    let statusType: 'success' | 'warning' | 'danger' = ok
+      ? 'success'
+      : 'danger'
+    if (search) {
+      summary = oneLine(`${summary} · ${search.message}`)
+      if (!search.found) {
+        statusLabel = '未找到'
+        statusType = 'warning'
+      }
+    }
+
     const view: AgentStepView = {
       name,
       label,
       summary,
-      ok: call?.ok === true
+      ok,
+      statusLabel,
+      statusType,
+      ...(search ? { search } : {})
     }
     if (typeof call?.error === 'string' && call.error) {
       view.error = call.error

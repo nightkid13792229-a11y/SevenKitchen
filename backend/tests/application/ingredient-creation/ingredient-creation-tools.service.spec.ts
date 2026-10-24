@@ -60,7 +60,7 @@ function createTools(
     prisma as unknown as PrismaService,
   );
 
-  return { tools, prisma, draftService };
+  return { tools, prisma, draftService, candidateService };
 }
 
 async function executeGetRecord(
@@ -511,5 +511,102 @@ describe('IngredientCreationToolsService · updateNutritionFields 批量写入',
     expect(result.ok).toBe(false);
     expect(result.body.error).toContain('entries');
     expect(draftService.patch).not.toHaveBeenCalled();
+  });
+});
+
+describe('IngredientCreationToolsService · searchLocalNutrition 匹配依据', () => {
+  async function executeSearch(
+    tools: IngredientCreationToolsService,
+    args: Record<string, unknown>,
+  ) {
+    const execution = await tools.execute({
+      runId: RUN_ID,
+      draftId: DRAFT_ID,
+      name: 'searchLocalNutrition',
+      args,
+    });
+
+    return {
+      ...execution,
+      body: JSON.parse(execution.content) as any,
+    };
+  }
+
+  const coverage = {
+    state: 'RAW' as const,
+    candidateCount: 0,
+    bestCoveragePercent: null,
+    bestMissingFieldCount: null,
+  };
+
+  it('命中时回传 keywords、matchedBy、matchedKeyword 与 score', async () => {
+    const { tools, candidateService } = createTools([]);
+    candidateService.findCandidates.mockResolvedValue({
+      keywords: ['西洋菜', 'watercress'],
+      candidates: [
+        {
+          sourceRecordId: 'usda-watercress',
+          sourceType: 'USDA',
+          foodName: 'Watercress, raw',
+          foodNameEn: 'Watercress, raw',
+          preparationState: 'RAW',
+          cookingMethod: null,
+          coveragePercent: 82,
+          missingFields: [],
+          matchScore: 0.8,
+          matchedBy: 'ZH_ALIAS',
+          matchedKeyword: '西洋菜',
+          matchedSourceName: 'Watercress, raw',
+          notes: [],
+        },
+      ],
+      excludedCount: 0,
+      coverage: {
+        ...coverage,
+        candidateCount: 1,
+        bestCoveragePercent: 82,
+        bestMissingFieldCount: 0,
+      },
+    });
+
+    const result = await executeSearch(tools, {
+      keyword: '西洋菜',
+      state: 'RAW',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.body.found).toBe(true);
+    expect(result.body.keywords).toEqual(['西洋菜', 'watercress']);
+    expect(result.body.candidates[0]).toMatchObject({
+      sourceRecordId: 'usda-watercress',
+      foodName: 'Watercress, raw',
+      matchedBy: 'ZH_ALIAS',
+      matchedKeyword: '西洋菜',
+      score: 0.8,
+    });
+  });
+
+  it('零命中时工具仍然 ok，但 found=false、候选为空并明确写“没有找到匹配词条”', async () => {
+    const { tools, candidateService } = createTools([]);
+    candidateService.findCandidates.mockResolvedValue({
+      keywords: ['西洋菜', 'watercress'],
+      candidates: [],
+      excludedCount: 0,
+      coverage,
+    });
+
+    const result = await executeSearch(tools, {
+      keyword: '西洋菜',
+      state: 'RAW',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.body.ok).toBe(true);
+    expect(result.body.found).toBe(false);
+    expect(result.body.candidates).toEqual([]);
+    expect(result.body.keywords).toEqual(['西洋菜', 'watercress']);
+    expect(result.body.hint).toContain('没有找到匹配词条');
+    expect(result.body.hint).toContain('西洋菜');
+    expect(result.body.hint).toContain('watercress');
   });
 });

@@ -45,6 +45,8 @@ const AGENT_TEMPERATURE = 0.2;
 const AGENT_MAX_TOKENS = 8_000;
 const REPLY_MAX = 500;
 const TRANSCRIPT_SUMMARY_MAX = 240;
+/** 工具结果超过这个长度就不回传给页面，避免一次大检索撑爆响应。 */
+const TOOL_RESULT_MAX_CHARS = 8_000;
 
 /**
  * 模型输出协议。
@@ -60,6 +62,13 @@ export interface AgentToolCallRecord {
   args: Record<string, unknown>;
   ok: boolean;
   error?: string;
+  /**
+   * 工具返回的结构化结果（已解析的 JSON）。
+   *
+   * 页面靠它展开「匹配依据」；过大的结果不塞进列表，避免一次长检索把响应撑大。
+   * 注意：`ok=true` 只表示工具执行成功，像 searchLocalNutrition 还要看 `found`。
+   */
+  result?: unknown;
 }
 
 /** 本次运行的留痕：每一步模型动作与工具结果。撞保险丝时原样带回。 */
@@ -174,6 +183,93 @@ function uniqueNonEmpty(values: Array<string | null | undefined>): string[] {
     }
   }
   return result;
+}
+
+/** 工具结果是 JSON 文本；解析不了或过大就当作没有结构化结果。 */
+function parseToolResult(content: string): unknown {
+  if (content.length > TOOL_RESULT_MAX_CHARS) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(content) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
+/** searchLocalNutrition 的 found/keywords；不是这个工具的结果就返回 null。 */
+function readSearchOutcome(
+  content: string,
+): { found: boolean; keywords: string[] } | null {
+  const parsed = parseToolResult(content);
+  if (
+    !isRecord(parsed) ||
+    parsed.ok !== true ||
+    typeof parsed.found !== 'boolean'
+  ) {
+    return null;
+  }
+
+  const keywords = Array.isArray(parsed.keywords)
+    ? uniqueNonEmpty(
+        parsed.keywords.filter(
+          (keyword): keyword is string => typeof keyword === 'string',
+        ),
+      )
+    : [];
+  return { found: parsed.found, keywords };
+}
+
+/**
+ * 工具执行成功 ≠ 找到数据：查库零命中时，最终回复必须说「没找到」并列出
+ * 已尝试的关键词（模型没说就由这里补一句，不让人误以为已经找到）。
+ */
+function appendMissedSearchNotice(reply: string, keywords: string[]): string {
+  if (keywords.length === 0) {
+    return reply;
+  }
+
+  const notice = `本地库没有找到匹配词条（已尝试关键词：${keywords.join('、')}）。`;
+  const mentionsMiss = /没找到|没有找到|未找到/u.test(reply);
+  const listsAllKeywords = keywords.every((keyword) => reply.includes(keyword));
+  if (mentionsMiss && listsAllKeywords) {
+    return reply;
+  }
+
+  const base = reply.trim();
+  return truncate(base ? `${base}\n${notice}` : notice, REPLY_MAX);
+}
+
+/** 一次工具调用 → 响应里的留痕（含结构化结果与零命中关键词收集）。 */
+function buildToolCallRecord(
+  name: string,
+  args: Record<string, unknown>,
+  execution: { ok: boolean; content: string; error?: string },
+  missedSearchKeywords: string[],
+): AgentToolCallRecord {
+  const result = parseToolResult(execution.content);
+  if (name === 'searchLocalNutrition') {
+    const outcome = readSearchOutcome(execution.content);
+    if (outcome) {
+      if (outcome.found) {
+        missedSearchKeywords.length = 0;
+      } else {
+        for (const keyword of outcome.keywords) {
+          if (!missedSearchKeywords.includes(keyword)) {
+            missedSearchKeywords.push(keyword);
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    name,
+    args,
+    ok: execution.ok,
+    ...(execution.error ? { error: execution.error } : {}),
+    ...(result !== undefined ? { result } : {}),
+  };
 }
 
 function deriveDraftName(text: string): string {
@@ -391,8 +487,9 @@ function buildSystemPrompt(
     '- 原料卡（名称 / 英文名 / 类别 / 基准单位 / 展示名 / CFCT / 可食部）用 updateIngredientFields 写；人工审核改过的字段会被跳过，不要反复重试。',
     '- 不要编造营养数值。只写来源记录里有的值，或用户明确给出的值。',
     '- 工具报错表示输入不合法。按错误文本改正参数后重试；连续改不出来就停下，说明卡在哪。',
+    '- searchLocalNutrition 返回 ok=true 只表示「查询执行成功」，不代表找到数据。看 found / candidateCount：found=false 或 0 条时必须明确说「没有找到匹配词条」，并列出 keywords 里已尝试的关键词；不要写成「成功找到」，也不要编造数据。',
     `- 本轮预算：最多 ${INGREDIENT_AGENT_MAX_TOOL_CALLS} 次工具调用 / ${INGREDIENT_AGENT_TIMEOUT_MS / 1000} 秒；连续 ${INGREDIENT_AGENT_MAX_NO_PROGRESS} 次工具调用没有新进展会被系统停止。`,
-    '- 最终回复用一句中文，说清楚改了什么、还缺什么、下一步建议；不要粘贴 JSON。',
+    '- 最终回复用一句中文，说清楚改了什么、还缺什么、下一步建议；找不到数据时要先说「没找到」并列出查过的关键词。不要粘贴 JSON。',
     `可用工具：${toolNames.join('、')}`,
     '',
     '【营养字段目录】fieldPath 形如「表名.字段名」，单位必须用括号里的目录单位：',
@@ -576,6 +673,8 @@ export class IngredientDraftAgentService {
     let lastCheck: AgentCheckSummary | null = null;
     const seenSourceIds = new Set<string>();
     const toolCalls: AgentToolCallRecord[] = [];
+    /** 查库零命中的关键词；后续真找到数据就清空。 */
+    const missedSearchKeywords: string[] = [];
     const transcript: AgentTranscriptEntry[] = [];
 
     this.logger.log(
@@ -718,12 +817,14 @@ export class IngredientDraftAgentService {
                 args,
               });
 
-          toolCalls.push({
-            name: toolName,
-            args,
-            ok: execution.ok,
-            ...(execution.error ? { error: execution.error } : {}),
-          });
+          toolCalls.push(
+            buildToolCallRecord(
+              toolName,
+              args,
+              execution,
+              missedSearchKeywords,
+            ),
+          );
           transcript.push({
             step: steps,
             type: 'tool_result',
@@ -828,12 +929,9 @@ export class IngredientDraftAgentService {
         name: toolName,
         args,
       });
-      toolCalls.push({
-        name: toolName,
-        args,
-        ok: execution.ok,
-        ...(execution.error ? { error: execution.error } : {}),
-      });
+      toolCalls.push(
+        buildToolCallRecord(toolName, args, execution, missedSearchKeywords),
+      );
       transcript.push({
         step: steps,
         type: 'tool_result',
@@ -899,6 +997,11 @@ export class IngredientDraftAgentService {
         `[ingredient-agent] 停止 runId=${runId} draft=${draft.id} reason=${stopReason} ` +
           `steps=${steps} toolCalls=${toolCallCount} tokens=${tokensUsed}`,
       );
+    }
+
+    // 查库零命中时兜一句：工具调用成功不代表找到数据，回复必须明确说「没找到」。
+    if (missedSearchKeywords.length > 0) {
+      reply = appendMissedSearchNotice(reply, missedSearchKeywords);
     }
 
     this.logger.log(

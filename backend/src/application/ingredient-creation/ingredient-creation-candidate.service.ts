@@ -8,13 +8,19 @@ import {
 } from '../../domain/ingredient-creation/preparation-state';
 import { NUTRITION_FIELD_CATALOG } from '../../domain/ingredient/nutrition-field-catalog';
 import type { NutritionGovernanceSourceType } from '../../domain/nutrition-governance/nutrition-governance.types';
-import { scoreIngredientSourceNameMatch } from '../../domain/nutrition-governance/nutrition-governance.utils';
+import {
+  findChineseEnglishAliases,
+  hasChineseEnglishAliasMatch,
+  normalizeNameForMatch,
+  scoreIngredientSourceNameMatch,
+} from '../../domain/nutrition-governance/nutrition-governance.utils';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import {
   auditNutritionProfileForImport,
   type NutritionImportNutrientValue,
 } from '../standard-ingredient-import/nutrition-audit';
 import type {
+  CandidateMatchMethod,
   CandidateRow,
   CandidateSearchCoverage,
   CandidateSearchResult,
@@ -79,11 +85,16 @@ interface QueryAnalysis {
   analyses: NameAnalysis[];
   /** 所有查询名字的部位并集，用于跨语言比较（牛肉 vs Beef, liver）。 */
   parts: Set<string>;
+  /** 回传给页面/模型的关键词，含中文名扩展出的英文别名。 */
+  keywords: string[];
 }
 
 interface MatchOutcome {
   score: number;
   differentPart: boolean;
+  matchedBy: CandidateMatchMethod;
+  matchedKeyword: string;
+  matchedSourceName: string;
 }
 
 interface ScoredCandidate {
@@ -92,6 +103,9 @@ interface ScoredCandidate {
   cookingMethod: CookingMethod | null;
   notes: string[];
   matchScore: number;
+  matchedBy: CandidateMatchMethod;
+  matchedKeyword: string;
+  matchedSourceName: string;
   /** 同分时的优先：状态与查询一致（0）排在看不出状态（1）前面。 */
   stateRank: number;
   coveragePercent: number;
@@ -249,7 +263,49 @@ function buildQueryAnalysis(input: FindCandidatesInput): QueryAnalysis {
     analysis.parts.forEach((part) => parts.add(part));
   }
 
-  return { names, analyses, parts };
+  // 中文检索词扩展出英文别名（西洋菜 → watercress）：库里绝大多数词条只有
+  // 英文名，不能只拿中文去比。英文检索词不反向扩展，避免把「Watercress」
+  // 同时当成「西洋菜」再算一遍。
+  const keywords = uniqueNonEmptyText([
+    ...names,
+    ...names.flatMap((name) =>
+      HAN_SCRIPT.test(name) ? findChineseEnglishAliases(name) : [],
+    ),
+  ]);
+
+  return { names, analyses, parts, keywords };
+}
+
+/**
+ * 说出「这一对名字是怎么对上的」。
+ *
+ * 只做确定性判断：完全相等 → 部分包含 → 中文别名命中 → 其余算 FUZZY。
+ * 分数仍由 `scoreIngredientSourceNameMatch` 给，两者不能互相替代。
+ */
+function classifyMatchMethod(
+  queryName: string,
+  sourceName: string,
+): CandidateMatchMethod {
+  const query = normalizeNameForMatch(queryName);
+  const source = normalizeNameForMatch(sourceName);
+  if (!query || !source) {
+    return 'FUZZY';
+  }
+
+  const chinese = HAN_SCRIPT.test(queryName) || HAN_SCRIPT.test(sourceName);
+  if (query === source) {
+    return chinese ? 'ZH_EXACT' : 'EN_EXACT';
+  }
+  if (query.includes(source) || source.includes(query)) {
+    return chinese ? 'ZH_PARTIAL' : 'EN_PARTIAL';
+  }
+  if (
+    HAN_SCRIPT.test(queryName) &&
+    hasChineseEnglishAliasMatch(queryName, sourceName)
+  ) {
+    return 'ZH_ALIAS';
+  }
+  return 'FUZZY';
 }
 
 /**
@@ -261,6 +317,7 @@ function buildQueryAnalysis(input: FindCandidatesInput): QueryAnalysis {
  * 2. 名字对不上、但去掉部位词后头部相同——如 兔肝 vs 兔肉、鸡肝 vs 鸡胸。
  *
  * 两种情况都压到 `DIFFERENT_PART_SCORE` 并带备注，不当同名命中。
+ * 同时保留最高分那一对（关键词 / 词条名 / 匹配方式），供页面展示匹配依据。
  */
 function scoreSourceRecord(
   query: QueryAnalysis,
@@ -269,6 +326,10 @@ function scoreSourceRecord(
   const sourceNames = uniqueNonEmptyText([record.foodName, record.foodNameEn]);
 
   let bestScore = 0;
+  let bestEvidence: Pick<
+    MatchOutcome,
+    'matchedBy' | 'matchedKeyword' | 'matchedSourceName'
+  > | null = null;
   for (const queryName of query.names) {
     for (const sourceName of sourceNames) {
       const { score } = scoreIngredientSourceNameMatch({
@@ -276,11 +337,22 @@ function scoreSourceRecord(
         sourceFoodName: sourceName,
         sourceType: record.sourceType,
       });
-      if (score > bestScore) {
+      if (bestEvidence === null || score > bestScore) {
         bestScore = score;
+        bestEvidence = {
+          matchedBy: classifyMatchMethod(queryName, sourceName),
+          matchedKeyword: queryName,
+          matchedSourceName: sourceName,
+        };
       }
     }
   }
+
+  const evidence = bestEvidence ?? {
+    matchedBy: 'FUZZY' as const,
+    matchedKeyword: query.names[0] ?? '',
+    matchedSourceName: sourceNames[0] ?? '',
+  };
 
   const sourceAnalyses = sourceNames.map(analyzeName);
   const sourceParts = new Set<string>();
@@ -295,7 +367,7 @@ function scoreSourceRecord(
     arePartsDisjoint(query.parts, sourceParts);
 
   if (partConflict) {
-    return { score: DIFFERENT_PART_SCORE, differentPart: true };
+    return { score: DIFFERENT_PART_SCORE, differentPart: true, ...evidence };
   }
 
   for (const queryAnalysis of query.analyses) {
@@ -308,7 +380,7 @@ function scoreSourceRecord(
         continue;
       }
 
-      return { score: DIFFERENT_PART_SCORE, differentPart: true };
+      return { score: DIFFERENT_PART_SCORE, differentPart: true, ...evidence };
     }
   }
 
@@ -316,7 +388,7 @@ function scoreSourceRecord(
     return null;
   }
 
-  return { score: bestScore, differentPart: false };
+  return { score: bestScore, differentPart: false, ...evidence };
 }
 
 /** 来源记录 `normalizedNutrition.meta.sampleState` 的原文；没有则 null。 */
@@ -440,6 +512,9 @@ function toCandidateRow(candidate: ScoredCandidate): CandidateRow {
     coveragePercent: candidate.coveragePercent,
     missingFields: candidate.missingFields,
     matchScore: candidate.matchScore,
+    matchedBy: candidate.matchedBy,
+    matchedKeyword: candidate.matchedKeyword,
+    matchedSourceName: candidate.matchedSourceName,
     notes: candidate.notes,
   };
 }
@@ -489,11 +564,15 @@ function summarizeCoverage(
   };
 }
 
-function buildEmptyResult(state: PreparationState): CandidateSearchResult {
+function buildEmptyResult(
+  state: PreparationState,
+  keywords: string[] = [],
+): CandidateSearchResult {
   return {
     candidates: [],
     excludedCount: 0,
     coverage: summarizeCoverage(state, []),
+    keywords: [...keywords],
   };
 }
 
@@ -525,7 +604,7 @@ export class IngredientCreationCandidateService {
   ): Promise<CandidateSearchResult> {
     const query = buildQueryAnalysis(input);
     if (query.names.length === 0) {
-      return buildEmptyResult(input.state);
+      return buildEmptyResult(input.state, query.keywords);
     }
 
     // 第一段只取元数据：库里有约 1.96 万条来源，整份 normalizedNutrition 是
@@ -553,7 +632,7 @@ export class IngredientCreationCandidateService {
     }
 
     if (matched.length === 0) {
-      return buildEmptyResult(input.state);
+      return buildEmptyResult(input.state, query.keywords);
     }
 
     // 第二段只取名字对得上的词条的营养档案：生熟状态要靠 meta.sampleState，
@@ -631,6 +710,9 @@ export class IngredientCreationCandidateService {
         cookingMethod,
         notes,
         matchScore,
+        matchedBy: match.matchedBy,
+        matchedKeyword: match.matchedKeyword,
+        matchedSourceName: match.matchedSourceName,
         stateRank: preparationState === input.state ? 0 : 1,
         coveragePercent,
         missingFields,
@@ -646,6 +728,7 @@ export class IngredientCreationCandidateService {
       candidates: rows,
       excludedCount,
       coverage: summarizeCoverage(input.state, rows),
+      keywords: query.keywords,
     };
   }
 }

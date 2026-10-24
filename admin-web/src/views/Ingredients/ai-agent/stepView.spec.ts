@@ -118,6 +118,67 @@ describe('toStepView', () => {
     expect(view.error).toBe('终检服务超时')
   })
 
+  it('查本地库命中时展开匹配依据：关键词、词条名、匹配方式与分数', () => {
+    const view = onlyStep([
+      {
+        name: 'searchLocalNutrition',
+        args: { keyword: '西洋菜', state: 'RAW' },
+        ok: true,
+        result: {
+          ok: true,
+          found: true,
+          keywords: ['西洋菜', 'watercress'],
+          candidateCount: 1,
+          candidates: [
+            {
+              sourceRecordId: 'usda-watercress',
+              foodName: 'Watercress, raw',
+              foodNameEn: 'Watercress, raw',
+              matchedBy: 'ZH_ALIAS',
+              matchedKeyword: '西洋菜',
+              score: 0.8
+            }
+          ]
+        }
+      }
+    ])
+
+    expect(view.search?.keywords).toEqual(['西洋菜', 'watercress'])
+    expect(view.search?.matches).toHaveLength(1)
+    expect(view.search?.matches[0]).toMatchObject({
+      foodName: 'Watercress, raw',
+      matchedByLabel: '中英别名匹配',
+      matchedKeyword: '西洋菜',
+      scoreLabel: '0.80'
+    })
+    expect(view.summary).toContain('命中 1 条')
+    expect(view.statusLabel).toBe('成功')
+  })
+
+  it('查本地库零命中时明确写“没有找到匹配词条”，不写成功', () => {
+    const view = onlyStep([
+      {
+        name: 'searchLocalNutrition',
+        args: { keyword: '西洋菜', state: 'RAW' },
+        ok: true,
+        result: {
+          ok: true,
+          found: false,
+          keywords: ['西洋菜', 'watercress'],
+          candidateCount: 0,
+          candidates: []
+        }
+      }
+    ])
+
+    expect(view.search?.found).toBe(false)
+    expect(view.search?.message).toBe('没有找到匹配词条')
+    expect(view.summary).toContain('没有找到匹配词条')
+    expect(view.summary).not.toContain('成功')
+    expect(view.statusLabel).toBe('未找到')
+    expect(view.statusType).toBe('warning')
+  })
+
   it('空列表返回空数组', () => {
     expect(toStepView([])).toEqual([])
   })

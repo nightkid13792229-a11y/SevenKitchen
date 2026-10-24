@@ -90,7 +90,7 @@ const SEARCH_TOOL: AgentToolDefinition = {
   function: {
     name: 'searchLocalNutrition',
     description:
-      '在本地营养库检索某个原料的候选来源（只读）。返回来源记录 id、名称、生熟状态、必需营养素覆盖率与缺项；这里只有元数据，拿到 sourceRecordId 后要用 getNutritionRecord 读取具体营养数值。',
+      '在本地营养库检索某个原料的候选来源（只读）。返回 found、keywords、候选条数，以及每条候选的来源记录 id、名称、生熟状态、必需营养素覆盖率、缺项与匹配依据（matchedBy / matchedKeyword / score）。注意：ok=true 只表示查询执行成功，found=false 表示没有找到匹配词条；这里只有元数据，拿到 sourceRecordId 后要用 getNutritionRecord 读取具体营养数值。',
     parameters: {
       type: 'object',
       properties: {
@@ -884,21 +884,32 @@ export class IngredientCreationToolsService {
         coveragePercent: candidate.coveragePercent,
         missingFields: candidate.missingFields,
         notes: candidate.notes,
+        // 匹配依据：让页面与模型都能说清「为什么这条算命中」。
+        // 本地候选一定有；线上兜底结果没有名字匹配依据，补成 FUZZY。
+        matchedBy: candidate.matchedBy ?? 'FUZZY',
+        matchedKeyword: candidate.matchedKeyword ?? keyword,
+        matchedSourceName: candidate.matchedSourceName ?? candidate.foodName,
+        score: candidate.matchScore,
       }));
+    const found = candidates.length > 0;
 
     return {
       ok: true,
       content: okContent({
         keyword,
+        keywords: result.keywords,
         state,
+        // ok=true 只代表工具执行成功；found 才代表有没有数据。
+        found,
         candidateCount: result.candidates.length,
+        returnedCount: candidates.length,
         bestCoveragePercent: result.coverage.bestCoveragePercent,
         candidates,
-        ...(candidates.length === 0
-          ? {
-              hint: '本地库没有命中。可以换中文名/英文名再试；仍然没有就如实告诉用户库里缺数据，不要编造数值。',
-            }
-          : {}),
+        ...(found
+          ? {}
+          : {
+              hint: `本地库没有找到匹配词条。已尝试关键词：${result.keywords.join('、')}（状态 ${state}）。可以换中文名/英文名再试；仍然没有就如实告诉用户库里缺数据，不要编造数值，也不要把这次工具调用说成“成功找到”。`,
+            }),
       }),
       progress: {
         writtenFieldPaths: [],

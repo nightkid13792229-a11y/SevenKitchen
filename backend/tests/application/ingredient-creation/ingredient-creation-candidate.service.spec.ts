@@ -548,6 +548,80 @@ describe('IngredientCreationCandidateService', () => {
     });
   });
 
+  describe('findCandidates 中英别名与匹配依据', () => {
+    const watercressFixture = (
+      overrides: Partial<SourceRecordFixture> & Pick<SourceRecordFixture, 'id'>,
+    ): SourceRecordFixture => ({
+      sourceType: 'USDA',
+      foodName: 'Watercress, raw',
+      status: 'ACTIVE',
+      ...overrides,
+    });
+
+    it('中文关键词通过中英别名命中英文词条，并给出 matchedBy / matchedKeyword / score', async () => {
+      const { service } = await createService([
+        watercressFixture({ id: 'usda-watercress' }),
+      ]);
+
+      const result = await service.findCandidates({
+        name: '西洋菜',
+        state: 'RAW',
+      });
+
+      expect(result.keywords).toEqual(['西洋菜', 'watercress']);
+      expect(result.candidates).toHaveLength(1);
+      const [candidate] = result.candidates;
+      expect(candidate).toMatchObject({
+        sourceRecordId: 'usda-watercress',
+        foodName: 'Watercress, raw',
+        preparationState: 'RAW',
+        matchedBy: 'ZH_ALIAS',
+        matchedKeyword: '西洋菜',
+        matchedSourceName: 'Watercress, raw',
+      });
+      expect(candidate?.matchScore).toBeGreaterThanOrEqual(0.35);
+      expect(candidate?.notes).not.toContain('STATE_UNKNOWN');
+    });
+
+    it('英文关键词命中英文词条，标 EN_PARTIAL', async () => {
+      const { service } = await createService([
+        watercressFixture({ id: 'usda-watercress' }),
+      ]);
+
+      const result = await service.findCandidates({
+        name: 'Watercress',
+        state: 'RAW',
+      });
+
+      expect(result.keywords).toEqual(['Watercress']);
+      expect(result.candidates).toHaveLength(1);
+      const [candidate] = result.candidates;
+      expect(candidate).toMatchObject({
+        matchedBy: 'EN_PARTIAL',
+        matchedKeyword: 'Watercress',
+        matchedSourceName: 'Watercress, raw',
+      });
+      expect(candidate?.matchScore).toBeGreaterThanOrEqual(0.35);
+    });
+
+    it('零命中时 keywords 仍然回传，候选为空数组', async () => {
+      const { service } = await createService([
+        watercressFixture({
+          id: 'unrelated',
+          foodName: 'Cabbage, raw',
+        }),
+      ]);
+
+      const result = await service.findCandidates({
+        name: '西洋菜',
+        state: 'RAW',
+      });
+
+      expect(result.keywords).toEqual(['西洋菜', 'watercress']);
+      expect(result.candidates).toEqual([]);
+    });
+  });
+
   describe('findCandidates 排序与来源范围', () => {
     it('候选按匹配分降序排列', async () => {
       const { service } = await createService([

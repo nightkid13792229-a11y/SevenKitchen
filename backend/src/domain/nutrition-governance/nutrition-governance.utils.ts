@@ -73,6 +73,7 @@ const CHINESE_TO_ENGLISH_FOOD_ALIASES: ReadonlyArray<{
   { zh: '胡萝卜', aliases: ['carrot'] },
   { zh: '西兰花', aliases: ['broccoli'] },
   { zh: '菠菜', aliases: ['spinach'] },
+  { zh: '西洋菜', aliases: ['watercress'] },
   { zh: '黄瓜', aliases: ['cucumber'] },
   { zh: '红薯', aliases: ['sweet potato'] },
   { zh: '土豆', aliases: ['potato'] },
@@ -408,6 +409,42 @@ function findChineseEnglishAliasMatch(
       );
     });
   });
+}
+
+/**
+ * 关键词对应的常用英文别名，用于把中文检索词扩展到英文词条。
+ *
+ * 只认「关键词里包含完整中文规范名」的方向（西洋菜 → watercress），
+ * 避免一个字的关键词（菜）把整张别名表都扩进来。
+ */
+export function findChineseEnglishAliases(ingredientName: string): string[] {
+  const normalized = normalizeNameForMatch(ingredientName);
+  if (!normalized) return [];
+
+  const aliases: string[] = [];
+  for (const entry of CHINESE_TO_ENGLISH_FOOD_ALIASES) {
+    const normalizedChinese = normalizeNameForMatch(entry.zh);
+    if (!normalizedChinese || !normalized.includes(normalizedChinese)) {
+      continue;
+    }
+    for (const alias of entry.aliases) {
+      if (!aliases.includes(alias)) {
+        aliases.push(alias);
+      }
+    }
+  }
+  return aliases;
+}
+
+/** 名称是否通过中英常用别名命中（供候选检索判定 ZH_ALIAS）。 */
+export function hasChineseEnglishAliasMatch(
+  ingredientName: string,
+  sourceFoodName: string,
+): boolean {
+  return findChineseEnglishAliasMatch(
+    normalizeNameForMatch(ingredientName),
+    sourceFoodName,
+  );
 }
 
 export function mapUsdaNutrientsToNutritionProfile(

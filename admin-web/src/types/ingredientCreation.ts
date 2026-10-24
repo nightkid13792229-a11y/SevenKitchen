@@ -290,6 +290,13 @@ export interface AgentToolCallRecord {
   args: Record<string, unknown>
   ok: boolean
   error?: string
+  /**
+   * 工具返回的结构化结果（后端已解析成 JSON）。
+   *
+   * 查本地库时用它展开关键词、命中词条与匹配方式；`ok=true` 不代表
+   * `found=true`，零命中时页面要写「没有找到匹配词条」。
+   */
+  result?: unknown
 }
 
 /** 服务端留痕的一步（工具调用 / 工具结果 / 最终回复 / 步数上限）。 */

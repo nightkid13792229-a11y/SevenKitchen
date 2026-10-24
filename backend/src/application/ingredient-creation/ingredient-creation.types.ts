@@ -102,10 +102,29 @@ export interface ProfileDraft {
 }
 
 /**
+ * 候选为什么被判定为命中。
+ *
+ * - `EN_EXACT` / `EN_PARTIAL`：英文名完全 / 部分匹配；
+ * - `ZH_EXACT` / `ZH_PARTIAL`：中文名完全 / 部分匹配；
+ * - `ZH_ALIAS`：中文关键词通过常用中英别名命中英文词条（西洋菜 → Watercress）；
+ * - `FUZZY`：打过准入线、但说不出更具体依据的匹配。
+ */
+export type CandidateMatchMethod =
+  | 'EN_EXACT'
+  | 'EN_PARTIAL'
+  | 'ZH_EXACT'
+  | 'ZH_PARTIAL'
+  | 'ZH_ALIAS'
+  | 'FUZZY';
+
+/**
  * ② 营养依据站的候选行（Task 4 的候选检索产出）。
  *
  * `cookingMethod` 只取 Task 2 的 `CookingMethod`；认不出的做法存 `null`，
  * 不猜成 `OTHER`。
+ *
+ * 匹配依据（`matchedBy` / `matchedKeyword` / `matchedSourceName`）只描述
+ * **名字怎么对上的**；`matchScore` 才是最终排序分（熟查询里可能叠加温和做法权重）。
  */
 export interface CandidateRow {
   sourceRecordId: string;
@@ -117,6 +136,14 @@ export interface CandidateRow {
   coveragePercent: number;
   missingFields: string[];
   matchScore: number;
+  /**
+   * 本地候选检索会填这三项；线上兜底检索（OnlineCandidateRow）不参与本地
+   * 名字匹配，可以没有。Agent 的 searchLocalNutrition 只读本地结果，
+   * 返回前会把缺失值补成 `FUZZY` / 本次关键词。
+   */
+  matchedBy?: CandidateMatchMethod;
+  matchedKeyword?: string;
+  matchedSourceName?: string;
   notes: string[];
 }
 
@@ -148,6 +175,12 @@ export interface CandidateSearchResult {
   candidates: CandidateRow[];
   excludedCount: number;
   coverage: CandidateSearchCoverage;
+  /**
+   * 本次实际用于检索的关键词（中文 + 从中文规范名扩展出的英文别名）。
+   *
+   * 零候选时也回传：页面要能列出「查过哪些词」，而不是只显示一句「没结果」。
+   */
+  keywords: string[];
 }
 
 /**

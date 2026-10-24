@@ -41,6 +41,7 @@ const REVIEW_MODEL = 'deepseek-v4-pro';
 const AGENT_PATH = '/api/v1/admin/ingredient-creation/agent/run';
 
 const CANDIDATE_RESULT: CandidateSearchResult = {
+  keywords: ['鸡肝', 'Chicken liver'],
   candidates: [
     {
       sourceRecordId: 'rec-liver-raw',
@@ -52,6 +53,9 @@ const CANDIDATE_RESULT: CandidateSearchResult = {
       coveragePercent: 82,
       missingFields: ['minerals.iodine'],
       matchScore: 0.9,
+      matchedBy: 'EN_PARTIAL',
+      matchedKeyword: 'Chicken liver',
+      matchedSourceName: 'Chicken, liver, raw',
       notes: [],
     },
   ],
@@ -61,6 +65,18 @@ const CANDIDATE_RESULT: CandidateSearchResult = {
     candidateCount: 1,
     bestCoveragePercent: 82,
     bestMissingFieldCount: 1,
+  },
+};
+
+const EMPTY_CANDIDATE_RESULT: CandidateSearchResult = {
+  keywords: ['西洋菜', 'watercress'],
+  candidates: [],
+  excludedCount: 0,
+  coverage: {
+    state: 'RAW',
+    candidateCount: 0,
+    bestCoveragePercent: null,
+    bestMissingFieldCount: null,
   },
 };
 
@@ -340,6 +356,19 @@ describe('IngredientDraftAgentService · 工具循环', () => {
         },
       ],
     });
+    // 工具调用记录要带上结构化结果，页面才能展开「匹配依据」。
+    expect(result.toolCalls[0]?.result).toMatchObject({
+      found: true,
+      keywords: ['鸡肝', 'Chicken liver'],
+      candidates: [
+        {
+          foodName: 'Chicken, liver, raw',
+          matchedBy: 'EN_PARTIAL',
+          matchedKeyword: 'Chicken liver',
+          score: 0.9,
+        },
+      ],
+    });
 
     // 第二次请求必须把「工具返回」作为 role=tool 的消息带给模型。
     const second = requestBody(fetchMock, 1);
@@ -358,6 +387,37 @@ describe('IngredientDraftAgentService · 工具循环', () => {
     );
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('durationMs='));
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('ok=true'));
+  });
+
+  it('查库零命中时工具结果带 found=false，最终回复补上“没找到”和关键词', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall('searchLocalNutrition', {
+            keyword: '西洋菜',
+            state: 'RAW',
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(chatResponse(assistantReply('已完成。')));
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness({ candidates: EMPTY_CANDIDATE_RESULT });
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '帮我加西洋菜',
+      userId: 'admin-1',
+    });
+
+    expect(result.toolCalls[0]?.result).toMatchObject({
+      found: false,
+      candidateCount: 0,
+      keywords: ['西洋菜', 'watercress'],
+    });
+    expect(result.reply).toContain('没有找到匹配词条');
+    expect(result.reply).toContain('西洋菜');
+    expect(result.reply).toContain('watercress');
   });
 
   it('模型写非法单位时返回错误文本，模型改对后 runCheck 通过', async () => {

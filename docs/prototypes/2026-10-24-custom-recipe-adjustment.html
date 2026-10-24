@@ -306,6 +306,26 @@
   }
   .recipe-option input { width: 18px; height: 18px; accent-color: #1e3a2f; }
 
+
+  /* 调整哪个食谱：一个大容器 */
+  .adjust-container { background: var(--cream); border: 1px solid var(--line); border-radius: 18px; padding: 16px 14px; }
+  .container-title { font-size: 18px; font-weight: 800; color: #3f3222; letter-spacing: 0.3px; }
+  .container-sub { margin-top: 4px; font-size: 11px; color: var(--muted); }
+  .recipe-tabs { display: flex; gap: 8px; overflow-x: auto; margin: 12px 0 2px; padding-bottom: 2px; scrollbar-width: none; }
+  .recipe-tabs::-webkit-scrollbar { display: none; }
+  .recipe-tab {
+    display: inline-flex; align-items: center; gap: 5px;
+    border: 1px solid #e0d3bf; background: #fffdf7; color: #6b5c45;
+    border-radius: 999px; padding: 7px 13px; font-size: 12px; white-space: nowrap;
+  }
+  .recipe-tab.active { background: var(--green); border-color: var(--green); color: #f4ecd8; font-weight: 700; }
+  .tab-mark { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); display: none; }
+  .recipe-tab.filled .tab-mark { display: inline-block; }
+  .recipe-tab.active .tab-mark { background: var(--gold-soft); }
+  .container-section { padding-top: 14px; margin-top: 14px; border-top: 1px dashed #eadfcb; }
+  .container-section-title { font-size: 14px; font-weight: 700; color: #3f3222; margin-bottom: 8px; }
+  .summary-name { font-size: 15px; font-weight: 800; color: #3f3222; margin-bottom: 4px; }
+
   /* 多份选择 */
   .recipe-picker { margin-bottom: 10px; }
   .picker-label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
@@ -565,139 +585,97 @@
         </div>
       </div>
 
-      <div class="section">
-        <div class="section-head">
-          <div class="section-title">食谱摘要</div>
-          <div class="section-sub">本次调整 2 份 · <span class="summary-edit" data-open-recipe-sheet>调整份数</span></div>
+      <div class="section adjust-container">
+        <div class="container-head">
+          <div class="container-title">调整哪个食谱？</div>
+          <div class="container-sub">写哪几份，就提交哪几份</div>
         </div>
-        <div class="summary-tabs">
-          <button class="summary-tab active" data-summary-tab="0">鸡肉南瓜</button>
-          <button class="summary-tab" data-summary-tab="1">鸭肉西兰花</button>
-        </div>
-        <div class="recipe-card" data-summary-panel="0">
-          <div class="recipe-top">
-            <div class="recipe-name">鸡肉南瓜低脂鲜食</div>
-          </div>
-          <div class="food-list">
-            <div class="food-row"><span class="food-name">鸡胸肉</span><span class="food-ratio">40.00%</span></div>
-            <div class="food-row"><span class="food-name">南瓜</span><span class="food-ratio">25.00%</span></div>
-            <div class="food-row"><span class="food-name">西兰花</span><span class="food-ratio">20.00%</span></div>
-            <div class="food-row"><span class="food-name">鸡肝</span><span class="food-ratio">10.00%</span></div>
-            <div class="food-row"><span class="food-name">鸡蛋</span><span class="food-ratio">4.88%</span></div>
-            <div class="food-row"><span class="food-name">食用盐</span><span class="food-ratio">0.12%</span></div>
-          </div>
-          <div class="supplement-line">须额外添加：<b>钙 每公斤食材添加 5 g</b>、<b>锌 每公斤食材添加 15 mg</b></div>
-          <div class="macro-caption">干物质（DM）占比</div>
-          <div class="macro-grid macro-grid--five">
-            <div class="macro-cell"><div class="macro-label">蛋白质</div><div class="macro-value">45.2%</div></div>
-            <div class="macro-cell"><div class="macro-label">脂肪</div><div class="macro-value">20.1%</div></div>
-            <div class="macro-cell"><div class="macro-label">灰分</div><div class="macro-value">8.2%</div></div>
-            <div class="macro-cell"><div class="macro-label">纤维</div><div class="macro-value">4.1%</div></div>
-            <div class="macro-cell"><div class="macro-label">碳水</div><div class="macro-value">22.4%</div></div>
-          </div>
-        </div>
-        <div class="recipe-card" data-summary-panel="1" hidden>
-          <div class="recipe-top">
-            <div class="recipe-name">鸭肉西兰花鲜食</div>
-          </div>
-          <div class="food-list">
-            <div class="food-row"><span class="food-name">鸭肉</span><span class="food-ratio">40.00%</span></div>
-            <div class="food-row"><span class="food-name">西兰花</span><span class="food-ratio">25.00%</span></div>
-            <div class="food-row"><span class="food-name">南瓜</span><span class="food-ratio">20.00%</span></div>
-            <div class="food-row"><span class="food-name">鸭肝</span><span class="food-ratio">10.00%</span></div>
-            <div class="food-row"><span class="food-name">鸡蛋</span><span class="food-ratio">4.88%</span></div>
-            <div class="food-row"><span class="food-name">食用盐</span><span class="food-ratio">0.12%</span></div>
-          </div>
-          <div class="supplement-line">须额外添加：<b>钙 每公斤食材添加 5 g</b>、<b>锌 每公斤食材添加 15 mg</b></div>
-          <div class="macro-caption">干物质（DM）占比</div>
-          <div class="macro-grid macro-grid--five">
-            <div class="macro-cell"><div class="macro-label">蛋白质</div><div class="macro-value">43.0%</div></div>
-            <div class="macro-cell"><div class="macro-label">脂肪</div><div class="macro-value">18.5%</div></div>
-            <div class="macro-cell"><div class="macro-label">灰分</div><div class="macro-value">8.0%</div></div>
-            <div class="macro-cell"><div class="macro-label">纤维</div><div class="macro-value">5.2%</div></div>
-            <div class="macro-cell"><div class="macro-label">碳水</div><div class="macro-value">25.3%</div></div>
-          </div>
-        </div>
-      </div>
 
-      <div class="section state-only state-submit">
-        <div class="section-head">
-          <div class="section-title">想怎么调整</div>
+        <div class="recipe-tabs">
+          <button class="recipe-tab active" data-recipe-tab="0">鸡肉南瓜<span class="tab-mark"></span></button>
+          <button class="recipe-tab" data-recipe-tab="1">鸭肉西兰花<span class="tab-mark"></span></button>
         </div>
-        <div class="form-card">
-          <textarea class="adjust-input" placeholder="比如：鸡肉想换成鸭肉、某样食材减少一点、份量想调整……"></textarea>
-          <div class="attachment-block">
-            <div class="attachment-list">
-              <div class="attachment-photo">
-                <div class="photo-thumb">照片</div>
-                <span class="attachment-remove">×</span>
-              </div>
-              <div class="attachment-doc">
-                <span class="doc-icon">PDF</span>
-                <span class="doc-name">血检报告.pdf</span>
-                <span class="attachment-remove">×</span>
-              </div>
+
+        <div class="container-section">
+          <div class="container-section-title">食谱摘要</div>
+          <div class="summary-panel" data-recipe-panel="0">
+            <div class="summary-name">鸡肉南瓜低脂鲜食</div>
+            <div class="food-list">
+              <div class="food-row"><span class="food-name">鸡胸肉</span><span class="food-ratio">40.00%</span></div>
+              <div class="food-row"><span class="food-name">南瓜</span><span class="food-ratio">25.00%</span></div>
+              <div class="food-row"><span class="food-name">西兰花</span><span class="food-ratio">20.00%</span></div>
+              <div class="food-row"><span class="food-name">鸡肝</span><span class="food-ratio">10.00%</span></div>
+              <div class="food-row"><span class="food-name">鸡蛋</span><span class="food-ratio">4.88%</span></div>
+              <div class="food-row"><span class="food-name">食用盐</span><span class="food-ratio">0.12%</span></div>
             </div>
-            <button class="add-attachment-btn" data-open-sheet>＋ 添加附件</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="section state-only state-withdrawn">
-        <div class="section-head">
-          <div class="section-title">想怎么调整</div>
-        </div>
-        <div class="form-card">
-          <textarea class="adjust-input" placeholder="比如：鸡肉想换成鸭肉、某样食材减少一点、份量想调整……"></textarea>
-          <div class="attachment-block">
-            <div class="attachment-list">
-              <div class="attachment-photo">
-                <div class="photo-thumb">照片</div>
-                <span class="attachment-remove">×</span>
-              </div>
-              <div class="attachment-doc">
-                <span class="doc-icon">PDF</span>
-                <span class="doc-name">血检报告.pdf</span>
-                <span class="attachment-remove">×</span>
-              </div>
+            <div class="supplement-line">须额外添加：<b>钙 每公斤食材添加 5 g</b>、<b>锌 每公斤食材添加 15 mg</b></div>
+            <div class="macro-caption">干物质（DM）占比</div>
+            <div class="macro-grid macro-grid--five">
+              <div class="macro-cell"><div class="macro-label">蛋白质</div><div class="macro-value">45.2%</div></div>
+              <div class="macro-cell"><div class="macro-label">脂肪</div><div class="macro-value">20.1%</div></div>
+              <div class="macro-cell"><div class="macro-label">灰分</div><div class="macro-value">8.2%</div></div>
+              <div class="macro-cell"><div class="macro-label">纤维</div><div class="macro-value">4.1%</div></div>
+              <div class="macro-cell"><div class="macro-label">碳水</div><div class="macro-value">22.4%</div></div>
             </div>
-            <button class="add-attachment-btn" data-open-sheet>＋ 添加附件</button>
           </div>
-        </div>
-      </div>
-
-      <div class="section state-only state-delivered">
-        <div class="section-head">
-          <div class="section-title">想怎么调整</div>
-        </div>
-        <div class="form-card">
-          <textarea class="adjust-input" placeholder="比如：鸡肉想换成鸭肉、某样食材减少一点、份量想调整……"></textarea>
-          <div class="attachment-block">
-            <div class="attachment-list">
-              <div class="attachment-photo">
-                <div class="photo-thumb">照片</div>
-                <span class="attachment-remove">×</span>
-              </div>
-              <div class="attachment-doc">
-                <span class="doc-icon">PDF</span>
-                <span class="doc-name">血检报告.pdf</span>
-                <span class="attachment-remove">×</span>
-              </div>
+          <div class="summary-panel" data-recipe-panel="1" hidden>
+            <div class="summary-name">鸭肉西兰花鲜食</div>
+            <div class="food-list">
+              <div class="food-row"><span class="food-name">鸭肉</span><span class="food-ratio">40.00%</span></div>
+              <div class="food-row"><span class="food-name">西兰花</span><span class="food-ratio">25.00%</span></div>
+              <div class="food-row"><span class="food-name">南瓜</span><span class="food-ratio">20.00%</span></div>
+              <div class="food-row"><span class="food-name">鸭肝</span><span class="food-ratio">10.00%</span></div>
+              <div class="food-row"><span class="food-name">鸡蛋</span><span class="food-ratio">4.88%</span></div>
+              <div class="food-row"><span class="food-name">食用盐</span><span class="food-ratio">0.12%</span></div>
             </div>
-            <button class="add-attachment-btn" data-open-sheet>＋ 添加附件</button>
+            <div class="supplement-line">须额外添加：<b>钙 每公斤食材添加 5 g</b>、<b>锌 每公斤食材添加 15 mg</b></div>
+            <div class="macro-caption">干物质（DM）占比</div>
+            <div class="macro-grid macro-grid--five">
+              <div class="macro-cell"><div class="macro-label">蛋白质</div><div class="macro-value">43.0%</div></div>
+              <div class="macro-cell"><div class="macro-label">脂肪</div><div class="macro-value">18.5%</div></div>
+              <div class="macro-cell"><div class="macro-label">灰分</div><div class="macro-value">8.0%</div></div>
+              <div class="macro-cell"><div class="macro-label">纤维</div><div class="macro-value">5.2%</div></div>
+              <div class="macro-cell"><div class="macro-label">碳水</div><div class="macro-value">25.3%</div></div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div class="section state-only state-pending">
-        <div class="locked-card">
-          当前有一条调整<strong>待受理</strong>，处理完之前不能再提交下一条。想补充或修改，请点左下角找 Seven爸爸。
+        <div class="container-section state-only state-submit state-withdrawn state-delivered">
+          <div class="container-section-title">想怎么调整</div>
+          <div class="form-panel" data-form-panel="0">
+            <textarea class="adjust-input" placeholder="比如：鸡肉想换成鸭肉、某样食材减少一点、份量想调整……">鸡胸肉想换成鸭肉，南瓜的比例降一点。</textarea>
+            <div class="attachment-block">
+              <div class="attachment-list">
+                <div class="attachment-photo">
+                  <div class="photo-thumb">照片</div>
+                  <span class="attachment-remove">×</span>
+                </div>
+                <div class="attachment-doc">
+                  <span class="doc-icon">PDF</span>
+                  <span class="doc-name">血检报告.pdf</span>
+                  <span class="attachment-remove">×</span>
+                </div>
+              </div>
+              <button class="add-attachment-btn" data-open-sheet>＋ 添加附件</button>
+            </div>
+          </div>
+          <div class="form-panel" data-form-panel="1" hidden>
+            <textarea class="adjust-input" placeholder="比如：鸭肉想换成鸡肉、西兰花减少一点、份量想调整……"></textarea>
+            <div class="attachment-block">
+              <div class="attachment-list">
+                <div class="attachment-doc">
+                  <span class="doc-icon">PDF</span>
+                  <span class="doc-name">皮肤报告.pdf</span>
+                  <span class="attachment-remove">×</span>
+                </div>
+              </div>
+              <button class="add-attachment-btn" data-open-sheet>＋ 添加附件</button>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <div class="section state-only state-processing">
-        <div class="locked-card">
-          当前调整<strong>正在处理</strong>，处理完之前不能再提交下一条。
+        <div class="container-section state-only state-pending state-processing">
+          <div class="locked-card">当前有一条调整正在处理，处理完之前不能再提交下一条。</div>
         </div>
       </div>
 
@@ -714,15 +692,6 @@
       <div class="bar-state bar-processing"><button class="disabled-btn">处理中</button></div>
       <div class="bar-state bar-delivered"><button class="primary-btn submit-adjust" disabled>提交调整</button></div>
       <div class="bar-state bar-withdrawn"><button class="primary-btn submit-adjust" disabled>提交调整</button></div>
-    </div>
-
-    <div class="sheet-mask" id="recipeSheet" hidden>
-      <div class="sheet">
-        <div class="sheet-title">选择要调整的食谱</div>
-        <label class="recipe-option"><input type="checkbox" checked /> 鸡肉南瓜</label>
-        <label class="recipe-option"><input type="checkbox" checked /> 鸭肉西兰花</label>
-        <button class="sheet-cancel" id="recipeSheetDone">完成</button>
-      </div>
     </div>
 
     <div class="sheet-mask" id="attachmentSheet" hidden>
@@ -759,30 +728,6 @@
       });
     });
 
-    // 调整份数弹窗
-    const recipeSheet = document.getElementById('recipeSheet');
-    document.querySelector('[data-open-recipe-sheet]').addEventListener('click', () => {
-      recipeSheet.hidden = false;
-    });
-    document.getElementById('recipeSheetDone').addEventListener('click', () => {
-      recipeSheet.hidden = true;
-    });
-    recipeSheet.addEventListener('click', (event) => {
-      if (event.target === recipeSheet) recipeSheet.hidden = true;
-    });
-
-    // 食谱摘要切换
-    const summaryTabs = document.querySelectorAll('.summary-tab');
-    const summaryPanels = document.querySelectorAll('[data-summary-panel]');
-    summaryTabs.forEach((tab) => {
-      tab.addEventListener('click', () => {
-        summaryTabs.forEach((t) => t.classList.toggle('active', t === tab));
-        summaryPanels.forEach((panel) => {
-          panel.hidden = panel.dataset.summaryPanel !== tab.dataset.summaryTab;
-        });
-      });
-    });
-
     // 附件弹窗
     const sheet = document.getElementById('attachmentSheet');
     document.querySelectorAll('[data-open-sheet]').forEach((btn) => {
@@ -798,14 +743,43 @@
       });
     });
 
-    // 只有文字非空才能提交
-    const syncSubmit = () => {
-      const state = phone.dataset.state;
-      const input = document.querySelector(`.state-${state} .adjust-input`);
-      const button = document.querySelector(`.bar-${state} .submit-adjust`);
-      if (button) button.disabled = !input || !input.value.trim();
+    // 调整哪个食谱：Tab 同时切换摘要和表单
+    const recipeTabs = document.querySelectorAll('.recipe-tab');
+    const summaryPanels = document.querySelectorAll('[data-recipe-panel]');
+    const formPanels = document.querySelectorAll('[data-form-panel]');
+    const activateRecipe = (index) => {
+      recipeTabs.forEach((tab) => {
+        tab.classList.toggle('active', Number(tab.dataset.recipeTab) === index);
+      });
+      summaryPanels.forEach((panel) => {
+        panel.hidden = Number(panel.dataset.recipePanel) !== index;
+      });
+      formPanels.forEach((panel) => {
+        panel.hidden = Number(panel.dataset.formPanel) !== index;
+      });
     };
-    document.querySelectorAll('.adjust-input').forEach((input) => {
+    recipeTabs.forEach((tab) => {
+      tab.addEventListener('click', () => activateRecipe(Number(tab.dataset.recipeTab)));
+    });
+
+    // 任意一份写了文字就能提交；按钮显示份数
+    const submitButtons = document.querySelectorAll('.submit-adjust');
+    const adjustInputs = document.querySelectorAll('.adjust-input');
+    const syncSubmit = () => {
+      let filled = 0;
+      recipeTabs.forEach((tab) => {
+        const panel = document.querySelector(`[data-form-panel="${tab.dataset.recipeTab}"]`);
+        const input = panel ? panel.querySelector('.adjust-input') : null;
+        const hasText = Boolean(input && input.value.trim());
+        tab.classList.toggle('filled', hasText);
+        if (hasText) filled += 1;
+      });
+      submitButtons.forEach((button) => {
+        button.disabled = filled === 0;
+        button.textContent = filled > 0 ? `提交调整（${filled} 份）` : '提交调整';
+      });
+    };
+    adjustInputs.forEach((input) => {
       input.addEventListener('input', syncSubmit);
     });
     tabs.forEach((tab) => {

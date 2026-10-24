@@ -72,6 +72,36 @@ interface WritableNutritionFood {
   servingWeightG: number | null;
 }
 
+/**
+ * 补剂数量统一按 0.1 粒度（一位小数，最小 0.1）。
+ *
+ * 注意：这是“按基准单位”的规则，不是所有补剂都按片/粒：
+ *  · PCS：0.1 片/粒；
+ *  · G：0.1g（谷粉等粉剂）；
+ *  · ML：0.1ml。
+ * 食材仍然按克，不受这条限制。
+ */
+const assertSupplementAmountPrecision = (
+  type: 'FOOD' | 'SUPPLEMENT',
+  baseUnit: 'G' | 'ML' | 'PCS',
+  amount: number,
+): void => {
+  if (type !== 'SUPPLEMENT') return;
+  if (!Number.isFinite(amount) || amount < 0.1) {
+    throw new RecipeAgentPortError(
+      'INVALID_ARGUMENT',
+      `补剂数量不能小于 0.1（当前基准单位 ${baseUnit}）；请按 0.1 粒度填写。`,
+    );
+  }
+  const scaled = amount * 10;
+  if (Math.abs(scaled - Math.round(scaled)) > 1e-9) {
+    throw new RecipeAgentPortError(
+      'INVALID_ARGUMENT',
+      `补剂数量必须按 0.1 粒度（一位小数，如 0.2、0.5、1.3；当前基准单位 ${baseUnit}）。`,
+    );
+  }
+};
+
 const ASSESSMENT_STATUSES: ReadonlySet<AgentAssessmentEntry['status']> =
   new Set(['COMPLIANT', 'DEFICIENT', 'EXCESS', 'MISSING_DATA', 'INFO']);
 
@@ -1479,9 +1509,15 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
     },
   ): Promise<AgentDraftItem> {
     this.assertDraft(draftId);
-    const { ingredientId } = await this.resolveWritableNutritionFood(
+    const writable = await this.resolveWritableNutritionFood(
       input.nutritionFoodId,
     );
+    assertSupplementAmountPrecision(
+      writable.type,
+      writable.baseUnit,
+      input.weightG,
+    );
+    const { ingredientId } = writable;
     await this.assertNotDuplicate(draftId, input.nutritionFoodId);
 
     const item = await this.service.addItem(
@@ -1509,9 +1545,15 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
     },
   ): Promise<AgentDraftItem> {
     await this.assertItemInDraft(itemId);
-    const { ingredientId } = await this.resolveWritableNutritionFood(
+    const writable = await this.resolveWritableNutritionFood(
       input.nutritionFoodId,
     );
+    assertSupplementAmountPrecision(
+      writable.type,
+      writable.baseUnit,
+      input.weightG,
+    );
+    const { ingredientId } = writable;
     await this.assertNotDuplicate(this.draftId, input.nutritionFoodId, itemId);
 
     const item = await this.service.replaceItem(
@@ -1528,7 +1570,21 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
   }
 
   async updateWeight(itemId: string, weightG: number): Promise<AgentDraftItem> {
-    await this.assertItemInDraft(itemId);
+    const itemForUnits = await this.prisma.designRecipeItem.findUnique({
+      where: { id: itemId },
+      select: {
+        designRecipeId: true,
+        ingredient: { select: { type: true, baseUnit: true } },
+      },
+    });
+    if (!itemForUnits || itemForUnits.designRecipeId !== this.draftId) {
+      throw new RecipeAgentPortError('INVALID_ARGUMENT', '原料不在当前草稿里');
+    }
+    assertSupplementAmountPrecision(
+      itemForUnits.ingredient?.type === 'SUPPLEMENT' ? 'SUPPLEMENT' : 'FOOD',
+      itemForUnits.ingredient?.baseUnit ?? 'G',
+      weightG,
+    );
 
     const item = await this.service.updateItem(
       itemId,

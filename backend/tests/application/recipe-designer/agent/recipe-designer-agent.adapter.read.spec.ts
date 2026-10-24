@@ -9,6 +9,241 @@ function createAdapter(service: any, prisma: any = {}) {
   );
 }
 
+/**
+ * 一份判分用的真实草稿形状：7 类原料 900g 的配方，但 items 现算只有 821g。
+ *
+ * `totalWeightG` / 每条 `ratioPercent` 故意保留旧值（900g 口径），
+ * 用来验证适配器必须从当前 items 现算，不能信库里的缓存。
+ * `calculatedNutrition` 用草稿持久化的分组形状（macros 下是宏量总克数）。
+ */
+function serviceDraft() {
+  return {
+    id: 'draft-1',
+    name: '鸭肉南瓜餐（草稿）',
+    contentRevision: 4,
+    assessmentContentRevision: 4,
+    totalWeightG: 900,
+    seriesId: 'series-1',
+    fediafDogScenario: 'ADULT_MER_110',
+    coverTitle: '草稿封面标题',
+    sellingPoint: '草稿卖点',
+    description: '鸭腿肉配南瓜和燕麦，低温慢煮。',
+    targetHealthTags: ['低脂'],
+    calculatedNutrition: { macros: { moisture: 600, crudeFat: 90 } },
+    complianceStatus: [
+      {
+        nutrientKey: 'crudeProtein',
+        label: '粗蛋白',
+        status: 'COMPLIANT',
+        currentValue: 26.4,
+        minValue: 20,
+        maxValue: null,
+      },
+      {
+        nutrientKey: 'calcium',
+        label: '钙',
+        status: 'DEFICIENT',
+        currentValue: 0.8,
+        minValue: 1,
+        maxValue: null,
+      },
+      {
+        nutrientKey: 'vitaminD',
+        label: '维生素 D',
+        status: 'MISSING_DATA',
+        currentValue: null,
+        minValue: 1.5,
+        maxValue: 8,
+      },
+    ],
+    productionStepsJson: [],
+    items: [
+      {
+        id: 'item-1',
+        ingredientId: 'ing-1',
+        nutritionFoodId: 'nf-1',
+        weightG: 450,
+        includeInAssessment: true,
+        ratioPercent: 50,
+        preparationMethod: '去皮切块',
+        preparationNote: null,
+        nutrientTargetKey: null,
+        nutrientTargetValue: null,
+        sortOrder: 1,
+        ingredient: {
+          id: 'ing-1',
+          name: '鸭腿肉',
+          type: 'FOOD',
+          properties: { cfct_class: '禽肉类及制品' },
+        },
+        nutritionFood: {
+          id: 'nf-1',
+          name: 'duck_leg',
+          displayNameZh: '鸭腿肉',
+          category: 'MEAT',
+          status: 'VERIFIED',
+        },
+      },
+      {
+        id: 'item-2',
+        ingredientId: 'ing-2',
+        nutritionFoodId: 'nf-2',
+        weightG: 45,
+        includeInAssessment: true,
+        ratioPercent: 5,
+        preparationMethod: '去筋膜切丁',
+        preparationNote: null,
+        nutrientTargetKey: null,
+        nutrientTargetValue: null,
+        sortOrder: 2,
+        ingredient: {
+          id: 'ing-2',
+          name: '鸭胗',
+          type: 'FOOD',
+          properties: { cfct_class: '禽肉类及制品' },
+        },
+        nutritionFood: {
+          id: 'nf-2',
+          name: 'duck_gizzard',
+          displayNameZh: '鸭胗',
+          category: 'MEAT',
+          status: 'VERIFIED',
+        },
+      },
+      {
+        id: 'item-3',
+        ingredientId: 'ing-3',
+        nutritionFoodId: 'nf-3',
+        weightG: 135,
+        includeInAssessment: true,
+        ratioPercent: 15,
+        preparationMethod: '提前浸泡',
+        preparationNote: '浸泡 20 分钟',
+        nutrientTargetKey: null,
+        nutrientTargetValue: null,
+        sortOrder: 3,
+        ingredient: {
+          id: 'ing-3',
+          name: '燕麦',
+          type: 'FOOD',
+          properties: { cfct_class: '谷类及制品' },
+        },
+        nutritionFood: {
+          id: 'nf-3',
+          name: 'oats',
+          displayNameZh: '燕麦',
+          category: 'GRAIN',
+          status: 'VERIFIED',
+        },
+      },
+      {
+        id: 'item-4',
+        ingredientId: 'ing-4',
+        nutritionFoodId: 'nf-4',
+        weightG: 110,
+        includeInAssessment: true,
+        ratioPercent: 11,
+        preparationMethod: '去皮切块',
+        preparationNote: null,
+        nutrientTargetKey: null,
+        nutrientTargetValue: null,
+        sortOrder: 4,
+        ingredient: {
+          id: 'ing-4',
+          name: '南瓜',
+          type: 'FOOD',
+          properties: { cfct_class: '蔬菜类及制品' },
+        },
+        nutritionFood: {
+          id: 'nf-4',
+          name: 'pumpkin',
+          displayNameZh: '南瓜',
+          category: 'VEGETABLE',
+          status: 'VERIFIED',
+        },
+      },
+      {
+        id: 'item-5',
+        ingredientId: 'ing-5',
+        nutritionFoodId: 'nf-5',
+        weightG: 45,
+        includeInAssessment: true,
+        ratioPercent: 5,
+        preparationMethod: '焯水切丁',
+        preparationNote: null,
+        nutrientTargetKey: null,
+        nutrientTargetValue: null,
+        sortOrder: 5,
+        ingredient: {
+          id: 'ing-5',
+          name: '香菇',
+          type: 'FOOD',
+          properties: { cfct_class: '菌藻类' },
+        },
+        nutritionFood: {
+          id: 'nf-5',
+          name: 'shiitake',
+          displayNameZh: '香菇',
+          category: 'OTHER',
+          status: 'VERIFIED',
+        },
+      },
+      {
+        id: 'item-6',
+        ingredientId: 'ing-6',
+        nutritionFoodId: 'nf-6',
+        weightG: 27,
+        includeInAssessment: true,
+        ratioPercent: 3,
+        preparationMethod: '研磨成粉',
+        preparationNote: null,
+        nutrientTargetKey: null,
+        nutrientTargetValue: null,
+        sortOrder: 6,
+        ingredient: {
+          id: 'ing-6',
+          name: '亚麻籽',
+          type: 'FOOD',
+          properties: { cfct_class: '坚果种子类' },
+        },
+        nutritionFood: {
+          id: 'nf-6',
+          name: 'flaxseed',
+          displayNameZh: '亚麻籽',
+          category: 'NUT',
+          status: 'VERIFIED',
+        },
+      },
+      {
+        id: 'item-7',
+        ingredientId: 'ing-7',
+        nutritionFoodId: 'nf-7',
+        weightG: 9,
+        includeInAssessment: true,
+        ratioPercent: 1,
+        preparationMethod: '直接拌入',
+        preparationNote: '出锅后放凉再加',
+        nutrientTargetKey: null,
+        nutrientTargetValue: null,
+        sortOrder: 7,
+        ingredient: {
+          id: 'ing-7',
+          name: '鱼油',
+          type: 'FOOD',
+          properties: { cfct_class: '油脂类' },
+        },
+        nutritionFood: {
+          id: 'nf-7',
+          name: 'fish_oil',
+          displayNameZh: '鱼油',
+          category: 'OIL',
+          status: 'VERIFIED',
+        },
+      },
+    ],
+  };
+}
+
 describe('RecipeDesignerAgentAdapter read', () => {
   it('适配器能构造，四个读方法都存在', () => {
     const adapter = createAdapter({}, {});
@@ -16,5 +251,113 @@ describe('RecipeDesignerAgentAdapter read', () => {
     expect(typeof adapter.searchIngredients).toBe('function');
     expect(typeof adapter.getIngredient).toBe('function');
     expect(typeof adapter.getCatalogUsage).toBe('function');
+  });
+
+  it('getDraft 把草稿映射成 AgentDraftSnapshot', async () => {
+    const service = {
+      getDraft: jest.fn().mockResolvedValue(serviceDraft()),
+      getDraftProductionSteps: jest
+        .fn()
+        .mockResolvedValue({ draftId: 'draft-1', productionSteps: [] }),
+    };
+    const prisma = {
+      recipeSeries: {
+        findUnique: jest.fn().mockResolvedValue({
+          name: '鸭肉南瓜餐',
+          coverTitle: '鲜鸭南瓜',
+          sellingPoint: '鲜鸭配南瓜',
+          targetHealthTags: ['低脂'],
+        }),
+      },
+    };
+    const adapter = createAdapter(service, prisma);
+    const draft = await adapter.getDraft('draft-1');
+
+    expect(prisma.recipeSeries.findUnique).toHaveBeenCalledWith({
+      where: { id: 'series-1' },
+      select: {
+        name: true,
+        coverTitle: true,
+        sellingPoint: true,
+        targetHealthTags: true,
+      },
+    });
+    expect(draft.draftId).toBe('draft-1');
+    expect(draft.seriesId).toBe('series-1');
+    expect(draft.name).toBe('鸭肉南瓜餐');
+    expect(draft.scenario).toBe('ADULT_MER_110');
+    expect(draft.contentRevision).toBe(4);
+    expect(draft.items).toHaveLength(7);
+    expect(draft.items.find((i) => i.name === '鸭胗')?.category).toBe('ORGAN');
+    expect(draft.items.find((i) => i.name === '南瓜')?.category).toBe(
+      'VEGETABLE',
+    );
+    expect(draft.items.find((i) => i.name === '香菇')?.category).toBe(
+      'MUSHROOM',
+    );
+    expect(draft.totalWeightG).toBe(821);
+    expect(draft.items[0].ratioPercent).toBe(54.8);
+    expect(draft.copy.coverTitle).toBe('鲜鸭南瓜');
+    expect(draft.copy.sellingPoint).toBe('鲜鸭配南瓜');
+    expect(draft.copy.description).toBe('鸭腿肉配南瓜和燕麦，低温慢煮。');
+    expect(draft.copy.targetHealthTags).toEqual(['低脂']);
+    expect(draft.productionSteps).toEqual([]);
+    expect(draft.animalSpecies).toEqual(['鸭']);
+    expect(draft.nutritionSummary?.moisturePercent).toBeCloseTo(
+      (600 / 821) * 100,
+      5,
+    );
+    expect(draft.nutritionSummary?.fatWetPercent).toBeCloseTo(
+      (90 / 821) * 100,
+      5,
+    );
+  });
+
+  it('评估版本不一致时 lastAssessment 为 null', async () => {
+    const service = {
+      getDraft: jest
+        .fn()
+        .mockResolvedValue({ ...serviceDraft(), contentRevision: 5 }),
+      getDraftProductionSteps: jest
+        .fn()
+        .mockResolvedValue({ draftId: 'draft-1', productionSteps: [] }),
+    };
+    const adapter = createAdapter(service, {
+      recipeSeries: { findUnique: jest.fn().mockResolvedValue(null) },
+    });
+
+    const draft = await adapter.getDraft('draft-1');
+
+    expect(draft.lastAssessment).toBeNull();
+  });
+
+  it('评估版本一致时映射条目与计数', async () => {
+    const adapter = createAdapter(
+      {
+        getDraft: jest.fn().mockResolvedValue(serviceDraft()),
+        getDraftProductionSteps: jest
+          .fn()
+          .mockResolvedValue({ draftId: 'draft-1', productionSteps: [] }),
+      },
+      { recipeSeries: { findUnique: jest.fn().mockResolvedValue(null) } },
+    );
+
+    const draft = await adapter.getDraft('draft-1');
+
+    expect(draft.lastAssessment?.contentRevision).toBe(4);
+    expect(draft.lastAssessment?.entries.length).toBe(3);
+    expect(draft.lastAssessment?.entries[0]).toEqual({
+      key: 'crudeProtein',
+      label: '粗蛋白',
+      status: 'COMPLIANT',
+      value: 26.4,
+      min: 20,
+      max: null,
+      marginPercent: null,
+    });
+    expect(draft.lastAssessment?.compliant).toBe(1);
+    expect(draft.lastAssessment?.deficient).toBe(1);
+    expect(draft.lastAssessment?.excess).toBe(0);
+    expect(draft.lastAssessment?.missingData).toBe(1);
   });
 });

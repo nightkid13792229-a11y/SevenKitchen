@@ -1,4 +1,8 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import type { AgentToolResult } from 'src/application/recipe-designer/agent/agent-types';
 import { RecipeAgentRunService } from 'src/application/recipe-designer/agent/recipe-agent-run.service';
 import type { DeepSeekToolsResult } from 'src/application/recipe-designer/deepseek-tools-chat';
@@ -102,10 +106,30 @@ function makeSessionService() {
       status: 'RUNNING',
     }),
     appendMessage: jest.fn().mockResolvedValue({ id: 'message-1' }),
+    listMessages: jest.fn().mockResolvedValue([]),
     updateStatus: jest.fn().mockResolvedValue(undefined),
     recordUsage: jest.fn().mockResolvedValue(undefined),
     incrementStep: jest.fn().mockResolvedValue(undefined),
     markInterruptedRuns: jest.fn().mockResolvedValue(0),
+  };
+}
+
+function historyMessage(
+  seq: number,
+  role: 'USER' | 'ASSISTANT' | 'TOOL',
+  content: string,
+  extra: { toolName?: string; toolResult?: unknown } = {},
+) {
+  return {
+    id: `message-${seq}`,
+    sessionId: SESSION_ID,
+    seq,
+    role,
+    content,
+    toolName: extra.toolName ?? null,
+    toolArgs: null,
+    toolResult: extra.toolResult ?? null,
+    createdAt: new Date('2026-01-01T00:00:00Z'),
   };
 }
 
@@ -124,8 +148,12 @@ function makeRunService(options: {
   callModel?: jest.Mock;
   sessionService?: ReturnType<typeof makeSessionService>;
   prisma?: any;
+  designerService?: { getDraft: jest.Mock };
 }) {
   const sessionService = options.sessionService ?? makeSessionService();
+  const designerService = options.designerService ?? {
+    getDraft: jest.fn().mockResolvedValue({ draftId: DRAFT_ID }),
+  };
   const providerConfig = {
     getEnabledDeepSeekRuntimeConfig: jest.fn().mockResolvedValue({
       provider: 'deepseek',
@@ -165,7 +193,7 @@ function makeRunService(options: {
   const service = new RecipeAgentRunService(
     sessionService as any,
     { getApprovalState: jest.fn() } as any,
-    {} as any,
+    designerService as any,
     prisma as any,
     providerConfig as any,
     callModel as any,
@@ -178,6 +206,7 @@ function makeRunService(options: {
   return {
     service,
     sessionService,
+    designerService,
     providerConfig,
     prisma,
     runtime,
@@ -293,6 +322,61 @@ describe('RecipeAgentRunService', () => {
     // start 的消息是 system + 本次用户输入；第二轮带上 assistant/tool。
     expect(messageRoles[0]).toEqual(['system', 'user']);
     expect(messageRoles[1]).toEqual(['system', 'user', 'assistant', 'tool']);
+  });
+
+  it('start 只把本轮用户消息作为 user，刚追加的那条不会重复进历史 transcript', async () => {
+    const sessionService = makeSessionService();
+    // 真实 listMessages 在 appendMessage 之后调用，所以一定包含本轮用户消息。
+    sessionService.listMessages.mockResolvedValue([
+      historyMessage(1, 'USER', '开始'),
+    ]);
+    const { service, callModel } = makeRunService({
+      handlers: {},
+      sessionService,
+      responses: [finalResponse('好的')],
+    });
+
+    const { sessionId } = await service.start({
+      draftId: DRAFT_ID,
+      actor: ACTOR,
+      message: '开始',
+    });
+    await service.waitForIdle(sessionId);
+
+    expect(sessionService.listMessages).toHaveBeenCalledWith(SESSION_ID);
+    const messages: Array<{ role: string; content?: string | null }> =
+      callModel.mock.calls[0][0].messages;
+    expect(messages).toHaveLength(2);
+    expect(messages[0].role).toBe('system');
+    expect(messages[1]).toEqual({ role: 'user', content: '开始' });
+  });
+
+  it('start 在 getDraft 拒绝时不建会话也不写消息', async () => {
+    const designerService = {
+      getDraft: jest
+        .fn()
+        .mockRejectedValue(new NotFoundException('设计草稿不存在')),
+    };
+    const { service, sessionService } = makeRunService({
+      handlers: {},
+      designerService,
+    });
+
+    await expect(
+      service.start({
+        draftId: DRAFT_ID,
+        actor: ACTOR,
+        message: '开始',
+      }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(designerService.getDraft).toHaveBeenCalledWith(
+      DRAFT_ID,
+      expect.objectContaining({ userId: 'user-1', role: 'STAFF' }),
+    );
+    expect(sessionService.createSession).not.toHaveBeenCalled();
+    expect(sessionService.appendMessage).not.toHaveBeenCalled();
+    expect(sessionService.listMessages).not.toHaveBeenCalled();
   });
 
   it('本轮自然收尾时不会把已 COMPLETED 的会话改回 WAITING_USER', async () => {
@@ -498,12 +582,22 @@ describe('RecipeAgentRunService', () => {
           release = resolve;
         }),
     );
+    const prisma = {
+      recipeDesignAgentSession: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: SESSION_ID,
+          designRecipeId: DRAFT_ID,
+          status: 'RUNNING',
+        }),
+      },
+    };
     const { service, sessionService } = makeRunService({
       handlers: {
         get_draft: jest.fn(),
         ask_user: jest.fn(),
         finish_draft: jest.fn(),
       },
+      prisma,
       callModel,
     });
 
@@ -516,7 +610,7 @@ describe('RecipeAgentRunService', () => {
     await new Promise((resolve) => setImmediate(resolve));
     expect(callModel).toHaveBeenCalledTimes(1);
 
-    await service.stop(sessionId);
+    await service.stop(sessionId, ACTOR);
     expect(sessionService.updateStatus).toHaveBeenLastCalledWith(
       sessionId,
       'STOPPED',
@@ -538,6 +632,63 @@ describe('RecipeAgentRunService', () => {
         (message) => message.role === 'ASSISTANT',
       ),
     ).toHaveLength(0);
+  });
+
+  it('stop 在 getDraft 拒绝时不改会话状态', async () => {
+    const prisma = {
+      recipeDesignAgentSession: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: SESSION_ID,
+          designRecipeId: DRAFT_ID,
+          status: 'RUNNING',
+        }),
+      },
+    };
+    const designerService = {
+      getDraft: jest
+        .fn()
+        .mockRejectedValue(new NotFoundException('设计草稿不存在')),
+    };
+    const { service, sessionService } = makeRunService({
+      handlers: {},
+      prisma,
+      designerService,
+    });
+
+    await expect(service.stop(SESSION_ID, ACTOR)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+
+    expect(designerService.getDraft).toHaveBeenCalledWith(
+      DRAFT_ID,
+      expect.objectContaining({ userId: 'user-1' }),
+    );
+    expect(sessionService.updateStatus).not.toHaveBeenCalled();
+  });
+
+  it('getSessionView 在 getDraft 拒绝时不查会话和消息', async () => {
+    const prisma = {
+      recipeDesignAgentSession: {
+        findFirst: jest.fn().mockResolvedValue({ id: SESSION_ID }),
+      },
+    };
+    const designerService = {
+      getDraft: jest
+        .fn()
+        .mockRejectedValue(new NotFoundException('设计草稿不存在')),
+    };
+    const { service, sessionService } = makeRunService({
+      handlers: {},
+      prisma,
+      designerService,
+    });
+
+    await expect(
+      service.getSessionView(DRAFT_ID, ACTOR),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(prisma.recipeDesignAgentSession.findFirst).not.toHaveBeenCalled();
+    expect(sessionService.listMessages).not.toHaveBeenCalled();
   });
 
   it('resume 只接受 WAITING_USER，追加用户消息后重置 RUNNING 并继续跑', async () => {
@@ -609,6 +760,106 @@ describe('RecipeAgentRunService', () => {
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(createRuntime).not.toHaveBeenCalled();
+  });
+
+  it('resume 把上一轮助手提问和工具结果放进 system transcript，模型能看到用户回答的是什么', async () => {
+    const prisma = {
+      recipeDesignAgentSession: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: SESSION_ID,
+          designRecipeId: DRAFT_ID,
+          status: 'WAITING_USER',
+        }),
+      },
+    };
+    const sessionService = makeSessionService();
+    // 包含刚追加的“第二个”，运行服务应该把它从 transcript 里剔除，
+    // 只作为最后一条 user 消息传给模型。
+    sessionService.listMessages.mockResolvedValue([
+      historyMessage(1, 'USER', '开始设计'),
+      historyMessage(2, 'ASSISTANT', '主蛋白用鸡胸还是三文鱼？'),
+      historyMessage(
+        3,
+        'TOOL',
+        JSON.stringify({ ok: true, summary: '已在对话里提问' }),
+        {
+          toolName: 'ask_user',
+          toolResult: { ok: true, summary: '已在对话里提问' },
+        },
+      ),
+      historyMessage(4, 'USER', '第二个'),
+    ]);
+    const { service, callModel } = makeRunService({
+      handlers: {},
+      prisma,
+      sessionService,
+      responses: [finalResponse('那用三文鱼。')],
+    });
+
+    await service.resume({
+      sessionId: SESSION_ID,
+      actor: ACTOR,
+      message: '第二个',
+    });
+    await service.waitForIdle(SESSION_ID);
+
+    expect(sessionService.listMessages).toHaveBeenCalledWith(SESSION_ID);
+    const messages: Array<{ role: string; content?: string | null }> =
+      callModel.mock.calls[0][0].messages;
+
+    expect(messages[0].role).toBe('system');
+    expect(messages[1].role).toBe('system');
+    const historyTranscript = messages[1].content as string;
+    expect(historyTranscript).toContain('历史对话（最近 3 条）：');
+    expect(historyTranscript).toContain('助手：主蛋白用鸡胸还是三文鱼？');
+    expect(historyTranscript).toContain('工具 ask_user：');
+    expect(historyTranscript).not.toContain('用户：第二个');
+    expect(messages[messages.length - 1]).toEqual({
+      role: 'user',
+      content: '第二个',
+    });
+    expect(messages.filter((message) => message.role === 'user')).toHaveLength(
+      1,
+    );
+  });
+
+  it('resume 先校验草稿访问，再判断会话状态', async () => {
+    const prisma = {
+      recipeDesignAgentSession: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: SESSION_ID,
+          designRecipeId: DRAFT_ID,
+          status: 'COMPLETED',
+        }),
+      },
+    };
+    const designerService = {
+      getDraft: jest
+        .fn()
+        .mockRejectedValue(new NotFoundException('设计草稿不存在')),
+    };
+    const { service, sessionService } = makeRunService({
+      handlers: {},
+      prisma,
+      designerService,
+    });
+
+    // 访问失败优先于“只有 WAITING_USER 可以继续”的状态校验。
+    await expect(
+      service.resume({
+        sessionId: SESSION_ID,
+        actor: ACTOR,
+        message: '继续',
+      }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(designerService.getDraft).toHaveBeenCalledWith(
+      DRAFT_ID,
+      expect.objectContaining({ userId: 'user-1' }),
+    );
+    expect(sessionService.appendMessage).not.toHaveBeenCalled();
+    expect(sessionService.updateStatus).not.toHaveBeenCalled();
+    expect(sessionService.listMessages).not.toHaveBeenCalled();
   });
 
   it('markInterruptedOnBoot 委托会话服务', async () => {

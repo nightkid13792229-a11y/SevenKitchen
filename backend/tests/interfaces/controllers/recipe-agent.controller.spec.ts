@@ -83,26 +83,28 @@ describe('RecipeAgentController', () => {
   });
 
   describe('getSession', () => {
-    it('delegates to the run service and returns its view', async () => {
+    it('delegates to the run service with the actor and returns its view', async () => {
       const view = {
         session: { id: SESSION_ID },
         messages: [{ id: 'message-1' }],
       };
       runService.getSessionView.mockResolvedValue(view);
 
-      await expect(controller.getSession(DRAFT_ID)).resolves.toEqual(view);
+      await expect(controller.getSession(DRAFT_ID, USER)).resolves.toEqual(
+        view,
+      );
       expect(runService.getSessionView).toHaveBeenCalledTimes(1);
-      expect(runService.getSessionView).toHaveBeenCalledWith(DRAFT_ID);
+      expect(runService.getSessionView).toHaveBeenCalledWith(DRAFT_ID, ACTOR);
     });
   });
 
   describe('stop', () => {
-    it('delegates to the run service', async () => {
+    it('delegates to the run service with the actor', async () => {
       runService.stop.mockResolvedValue(undefined);
 
-      await expect(controller.stop(SESSION_ID)).resolves.toBeUndefined();
+      await expect(controller.stop(SESSION_ID, USER)).resolves.toBeUndefined();
       expect(runService.stop).toHaveBeenCalledTimes(1);
-      expect(runService.stop).toHaveBeenCalledWith(SESSION_ID);
+      expect(runService.stop).toHaveBeenCalledWith(SESSION_ID, ACTOR);
     });
   });
 

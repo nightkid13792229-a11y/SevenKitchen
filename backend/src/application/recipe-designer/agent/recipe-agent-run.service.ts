@@ -56,6 +56,11 @@ const MAX_TOOL_CALLS = 30;
 const MAX_RUN_MS = 6 * 60 * 1000;
 /** 失败时给会话留下的错误码文案；与外层 HTTP 错误无关。 */
 const OVER_LIMIT_MESSAGE = '超过运行上限';
+/** 送进模型的历史 transcript：最多最近 20 条、4000 字符。 */
+const MAX_HISTORY_MESSAGES = 20;
+const MAX_HISTORY_CHARS = 4000;
+/** 单条历史消息最多保留 800 字符。 */
+const MAX_HISTORY_MESSAGE_CHARS = 800;
 
 /**
  * 模型调用函数。默认是 DeepSeek 工具调用客户端；测试或后续切供应商时
@@ -132,6 +137,11 @@ export class RecipeAgentRunService implements OnModuleInit {
     actor: RecipeAgentRunActor;
     message: string;
   }): Promise<{ sessionId: string }> {
+    // 先校草稿访问权：无权访问时不建会话、不写消息，也不暴露运行状态。
+    await this.designerService.getDraft(
+      input.draftId,
+      this.accessFor(input.actor),
+    );
     await this.sessionService.assertNoActiveRun(input.draftId);
 
     const session = await this.sessionService.createSession({
@@ -170,6 +180,11 @@ export class RecipeAgentRunService implements OnModuleInit {
     if (!session) {
       throw new NotFoundException('会话不存在');
     }
+    // 访问权先于状态校验：无权访问的会话不能因为状态不同而泄露信息。
+    await this.designerService.getDraft(
+      session.designRecipeId,
+      this.accessFor(input.actor),
+    );
     if (session.status !== 'WAITING_USER') {
       throw new BadRequestException('只有等待用户回答的会话可以继续');
     }
@@ -194,8 +209,19 @@ export class RecipeAgentRunService implements OnModuleInit {
     );
   }
 
-  /** 人工停止：先记账再落状态，循环看到标记后不再覆盖。 */
-  async stop(sessionId: string): Promise<void> {
+  /** 人工停止：先校草稿访问权，再记账落状态，循环看到标记后不再覆盖。 */
+  async stop(sessionId: string, actor: RecipeAgentRunActor): Promise<void> {
+    const session = await this.prisma.recipeDesignAgentSession.findUnique({
+      where: { id: sessionId },
+    });
+    if (!session) {
+      throw new NotFoundException('会话不存在');
+    }
+    await this.designerService.getDraft(
+      session.designRecipeId,
+      this.accessFor(actor),
+    );
+
     this.stopped.add(sessionId);
     await this.sessionService.updateStatus(sessionId, 'STOPPED');
   }
@@ -219,10 +245,15 @@ export class RecipeAgentRunService implements OnModuleInit {
   }
 
   /** 草稿最近一次会话 + 全部消息；还没跑过 Agent 时返回 null。 */
-  async getSessionView(draftId: string): Promise<{
+  async getSessionView(
+    draftId: string,
+    actor: RecipeAgentRunActor,
+  ): Promise<{
     session: RecipeDesignAgentSession;
     messages: AgentMessageRecord[];
   } | null> {
+    await this.designerService.getDraft(draftId, this.accessFor(actor));
+
     const session = await this.prisma.recipeDesignAgentSession.findFirst({
       where: { designRecipeId: draftId },
       orderBy: { startedAt: 'desc' },
@@ -232,6 +263,39 @@ export class RecipeAgentRunService implements OnModuleInit {
     }
     const messages = await this.sessionService.listMessages(session.id);
     return { session, messages };
+  }
+
+  /** 后台草稿接口的访问上下文；与会话操作的身份保持同一份。 */
+  private accessFor(actor: RecipeAgentRunActor): RecipeAgentRunActor {
+    return {
+      userId: actor.userId,
+      role: actor.role,
+      customerId: actor.customerId,
+    };
+  }
+
+  /**
+   * 组装一次模型调用的初始消息：system 提示词 + 可选的历史 transcript +
+   * 本轮用户输入。
+   *
+   * `listMessages` 在用户消息 append 之后调用，因此最后一条 USER 就是
+   * 本轮输入；把它从 transcript 里剔除，只作为最后一条 user 消息出现。
+   */
+  private async buildModelMessages(
+    sessionId: string,
+    currentMessage: string,
+  ): Promise<DeepSeekToolsMessage[]> {
+    const persisted = await this.sessionService.listMessages(sessionId);
+    const history = withoutCurrentUserMessage(persisted, currentMessage);
+    const historyPrompt = buildHistoryTranscript(history);
+
+    return [
+      { role: 'system', content: SYSTEM_PROMPT },
+      ...(historyPrompt
+        ? [{ role: 'system' as const, content: historyPrompt }]
+        : []),
+      { role: 'user', content: currentMessage },
+    ];
   }
 
   /**
@@ -315,12 +379,10 @@ export class RecipeAgentRunService implements OnModuleInit {
       });
       const tools = toToolDefinitions(runtime.toolkit.definitions);
 
-      // 每次运行只带 system + 本轮用户输入；历史消息留在库里做审计，
-      // 模型需要上下文时用 get_draft 重新读草稿。
-      const messages: DeepSeekToolsMessage[] = [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: message },
-      ];
+      // 历史消息以紧凑文本 transcript 的形式放进第二条 system 消息：
+      // 不还原 tool_call 配对，避免跨轮次的 tool_call_id 对不上；本轮
+      // 用户输入始终是最后一条 user 消息。
+      const messages = await this.buildModelMessages(sessionId, message);
 
       while (true) {
         if (this.isStopped(sessionId)) return;
@@ -577,6 +639,74 @@ export class RecipeAgentRunService implements OnModuleInit {
   private isOverTime(startedAt: number): boolean {
     return Date.now() - startedAt > MAX_RUN_MS;
   }
+}
+
+/**
+ * 去掉刚 append 的本轮用户消息：它是 `currentMessage`，会作为最后一条
+ * user 消息单独发送，不能再在历史 transcript 里重复一遍。
+ */
+function withoutCurrentUserMessage(
+  messages: AgentMessageRecord[],
+  currentMessage: string,
+): AgentMessageRecord[] {
+  const last = messages[messages.length - 1];
+  if (last && last.role === 'USER' && last.content === currentMessage) {
+    return messages.slice(0, -1);
+  }
+  return messages;
+}
+
+/**
+ * 把持久化消息压成紧凑文本 transcript。
+ *
+ * 只保留最近 20 条，且整段不超过 4000 字符（超了从最旧的行开始丢）。
+ * 没有历史时返回 null，调用方据此省略第二条 system 消息。
+ */
+function buildHistoryTranscript(messages: AgentMessageRecord[]): string | null {
+  let lines = messages.slice(-MAX_HISTORY_MESSAGES).map(formatHistoryMessage);
+  while (lines.length > 0 && lines.join('\n').length > MAX_HISTORY_CHARS) {
+    lines = lines.slice(1);
+  }
+  if (lines.length === 0) {
+    return null;
+  }
+  return `历史对话（最近 ${lines.length} 条）：\n${lines.join('\n')}`;
+}
+
+/** 单条历史消息的文本行：用户 / 助手 / 工具。 */
+function formatHistoryMessage(message: AgentMessageRecord): string {
+  if (message.role === 'USER') {
+    return `用户：${truncateHistoryText(
+      message.content ?? '',
+      MAX_HISTORY_MESSAGE_CHARS,
+    )}`;
+  }
+  if (message.role === 'ASSISTANT') {
+    return `助手：${truncateHistoryText(
+      message.content ?? '',
+      MAX_HISTORY_MESSAGE_CHARS,
+    )}`;
+  }
+  const content = message.content ?? stringifyToolResult(message.toolResult);
+  return `工具 ${message.toolName ?? ''}：${truncateHistoryText(
+    content,
+    MAX_HISTORY_MESSAGE_CHARS,
+  )}`;
+}
+
+function stringifyToolResult(toolResult: unknown): string {
+  if (typeof toolResult === 'string') {
+    return toolResult;
+  }
+  try {
+    return JSON.stringify(toolResult) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function truncateHistoryText(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max)}…` : text;
 }
 
 /** 工具箱定义 → DeepSeek 工具定义（字段原样透传）。 */

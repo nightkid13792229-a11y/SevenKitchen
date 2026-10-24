@@ -45,15 +45,21 @@ export class RecipeAgentController {
   @Get('drafts/:draftId/agent/session')
   @UseGuards(StaffGuard)
   @ApiOperation({ summary: 'Get the latest agent session and messages' })
-  async getSession(@Param('draftId') draftId: string) {
-    return this.runService.getSessionView(draftId);
+  async getSession(
+    @Param('draftId') draftId: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.runService.getSessionView(draftId, toActor(user));
   }
 
   @Post('agent/runs/:sessionId/stop')
   @UseGuards(StaffGuard)
   @ApiOperation({ summary: 'Stop a recipe design agent run' })
-  async stop(@Param('sessionId') sessionId: string): Promise<void> {
-    await this.runService.stop(sessionId);
+  async stop(
+    @Param('sessionId') sessionId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<void> {
+    await this.runService.stop(sessionId, toActor(user));
   }
 
   @Post('agent/runs/:sessionId/answer')

@@ -9,12 +9,16 @@
  * 身份直接复用 `RecipeDesignerService.getDraft` 的第二个参数类型，
  * 避免依赖 service 里未导出的 `RecipeDesignerAccessInput`。
  */
+import { normalizeNutritionProfile } from '../../../domain/ingredient/nutrition-profile.utils';
+import type { NutritionProfile } from '../../../domain/ingredient/types';
 import {
   classifyFoodCategory,
   type FoodCategory,
 } from '../../../domain/recipe-designer/food-category-map';
+import { readProfileFieldAmount } from '../../../domain/recipe-designer/nutrition-profile-reader';
 import type { ProductionStep } from '../../../domain/recipe-designer/production-steps';
 import type { PrismaService } from '../../../infrastructure/prisma.service';
+import { nutritionDataToNutritionProfile } from '../../nutrition-standard/nutrient-value-resolver';
 import type { RecipeDesignerService } from '../recipe-designer.service';
 import type {
   AgentAssessmentEntry,
@@ -88,13 +92,45 @@ const readAssessmentStatus = (
     : null;
 };
 
+type NutritionSummary = {
+  fatWetPercent: number | null;
+  moisturePercent: number | null;
+};
+
+const GROUPED_NUTRITION_PROFILE_KEYS = [
+  'meta',
+  'macros',
+  'minerals',
+  'vitamins',
+  'fattyAcids',
+  'aminoAcids',
+  'items',
+] as const;
+
 /**
- * 从 `calculatedNutrition` 读一个宏量的总克数。
- *
- * 草稿持久化的是评估结果的分组形状：`macros.moisture` / `macros.crudeFat`；
- * 兼容旧数据里直接存 `nutrients` 的扁平形状（`crudeFat.total`）。
+ * 与 `RecipeDesignerService.toNutritionProfile` 同一判定：
+ * 分组 v2 档案走 normalizer，扁平旧数据走营养字段别名转换。
  */
-const readMacroTotalGrams = (
+const resolveNutritionProfile = (
+  nutritionData: unknown,
+): NutritionProfile | null => {
+  if (!isRecord(nutritionData)) {
+    return null;
+  }
+  if (GROUPED_NUTRITION_PROFILE_KEYS.some((key) => key in nutritionData)) {
+    return normalizeNutritionProfile(
+      nutritionData as unknown as NutritionProfile,
+    );
+  }
+  return nutritionDataToNutritionProfile(nutritionData);
+};
+
+/**
+ * 从 `calculatedNutrition` 读一个宏量的总克数（只作为 items 没有档案时的兜底）。
+ *
+ * 兼容分组形状（`macros.moisture`）与旧扁平形状（`crudeFat.total`）。
+ */
+const readCalculatedMacroTotalGrams = (
   calculatedNutrition: Record<string, unknown>,
   key: 'moisture' | 'crudeFat',
 ): number | null => {
@@ -109,18 +145,100 @@ const readMacroTotalGrams = (
   return isRecord(flat) ? toFiniteNumber(flat.total) : toFiniteNumber(flat);
 };
 
-/** 湿基脂肪 / 水分百分比；总重 <= 0 时两者都是 null。 */
-const buildNutritionSummary = (
+const buildNutritionSummaryFromCalculated = (
   calculatedNutrition: unknown,
   totalWeightG: number,
-): { fatWetPercent: number | null; moisturePercent: number | null } => {
+): NutritionSummary => {
   const empty = { fatWetPercent: null, moisturePercent: null };
   if (!isRecord(calculatedNutrition) || totalWeightG <= 0) {
     return empty;
   }
 
-  const moistureG = readMacroTotalGrams(calculatedNutrition, 'moisture');
-  const crudeFatG = readMacroTotalGrams(calculatedNutrition, 'crudeFat');
+  const moistureG = readCalculatedMacroTotalGrams(
+    calculatedNutrition,
+    'moisture',
+  );
+  const crudeFatG = readCalculatedMacroTotalGrams(
+    calculatedNutrition,
+    'crudeFat',
+  );
+
+  return {
+    fatWetPercent: crudeFatG === null ? null : (crudeFatG / totalWeightG) * 100,
+    moisturePercent:
+      moistureG === null ? null : (moistureG / totalWeightG) * 100,
+  };
+};
+
+/**
+ * 从参与评估的 item 营养档案现算总克数。
+ *
+ * 任一条缺该字段 → null（保守，不用部分和）；0g 的 item 不参与，与评估口径一致。
+ */
+const sumProfileAmount = (
+  items: ServiceDraft['items'],
+  profiles: readonly (NutritionProfile | null)[],
+  fieldPath: string,
+): number | null => {
+  let total = 0;
+  let hasPositiveWeightItem = false;
+
+  for (const [index, item] of items.entries()) {
+    if (item.weightG === 0) {
+      continue;
+    }
+    hasPositiveWeightItem = true;
+    const read = readProfileFieldAmount(
+      profiles[index],
+      fieldPath,
+      item.weightG,
+    );
+    if (read.missing || read.amount === null) {
+      return null;
+    }
+    total += read.amount;
+  }
+
+  return hasPositiveWeightItem ? total : null;
+};
+
+/**
+ * 湿基脂肪 / 水分百分比：优先从当前 items 的 `nutritionFood.nutritionData` 现算，
+ * 只有所有参与评估的 item 都没有营养档案时，才回退到 `calculatedNutrition`。
+ */
+const buildNutritionSummary = (
+  items: ServiceDraft['items'],
+  totalWeightG: number,
+  calculatedNutrition: unknown,
+): NutritionSummary => {
+  if (totalWeightG <= 0) {
+    return { fatWetPercent: null, moisturePercent: null };
+  }
+
+  const includedItems = items.filter(
+    (item) => item.includeInAssessment !== false,
+  );
+  const profiles = includedItems.map((item) =>
+    resolveNutritionProfile(item.nutritionFood?.nutritionData),
+  );
+
+  if (profiles.every((profile) => profile === null)) {
+    return buildNutritionSummaryFromCalculated(
+      calculatedNutrition,
+      totalWeightG,
+    );
+  }
+
+  const moistureG = sumProfileAmount(
+    includedItems,
+    profiles,
+    'macros.moisture',
+  );
+  const crudeFatG = sumProfileAmount(
+    includedItems,
+    profiles,
+    'macros.crudeFat',
+  );
 
   return {
     fatWetPercent: crudeFatG === null ? null : (crudeFatG / totalWeightG) * 100,
@@ -302,8 +420,9 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
       productionSteps: toAgentProductionSteps(productionSteps?.productionSteps),
       lastAssessment: buildLastAssessment(draft),
       nutritionSummary: buildNutritionSummary(
-        draft.calculatedNutrition,
+        draft.items,
         totalWeightG,
+        draft.calculatedNutrition,
       ),
       animalSpecies: collectAnimalSpecies(
         // 鱼油算油脂、补剂不进七类，都不能算“动物蛋白”。

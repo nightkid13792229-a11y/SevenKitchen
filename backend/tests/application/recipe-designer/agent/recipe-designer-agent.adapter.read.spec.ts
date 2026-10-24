@@ -14,7 +14,8 @@ function createAdapter(service: any, prisma: any = {}) {
  *
  * `totalWeightG` / 每条 `ratioPercent` 故意保留旧值（900g 口径），
  * 用来验证适配器必须从当前 items 现算，不能信库里的缓存。
- * `calculatedNutrition` 用草稿持久化的分组形状（macros 下是宏量总克数）。
+ * 每条 `nutritionFood.nutritionData` 都带每 100g 的水分/粗脂肪，
+ * `calculatedNutrition` 只是“所有 item 都没档案”时的兜底。
  */
 function serviceDraft() {
   return {
@@ -82,6 +83,10 @@ function serviceDraft() {
           displayNameZh: '鸭腿肉',
           category: 'MEAT',
           status: 'VERIFIED',
+          nutritionData: {
+            meta: { rawBasisType: 'PER_100_G' },
+            macros: { moisture: 70, crudeFat: 10 },
+          },
         },
       },
       {
@@ -108,6 +113,10 @@ function serviceDraft() {
           displayNameZh: '鸭胗',
           category: 'MEAT',
           status: 'VERIFIED',
+          nutritionData: {
+            meta: { rawBasisType: 'PER_100_G' },
+            macros: { moisture: 75, crudeFat: 5 },
+          },
         },
       },
       {
@@ -134,6 +143,10 @@ function serviceDraft() {
           displayNameZh: '燕麦',
           category: 'GRAIN',
           status: 'VERIFIED',
+          nutritionData: {
+            meta: { rawBasisType: 'PER_100_G' },
+            macros: { moisture: 10, crudeFat: 7 },
+          },
         },
       },
       {
@@ -160,6 +173,10 @@ function serviceDraft() {
           displayNameZh: '南瓜',
           category: 'VEGETABLE',
           status: 'VERIFIED',
+          nutritionData: {
+            meta: { rawBasisType: 'PER_100_G' },
+            macros: { moisture: 90, crudeFat: 0.5 },
+          },
         },
       },
       {
@@ -186,6 +203,10 @@ function serviceDraft() {
           displayNameZh: '香菇',
           category: 'OTHER',
           status: 'VERIFIED',
+          nutritionData: {
+            meta: { rawBasisType: 'PER_100_G' },
+            macros: { moisture: 90, crudeFat: 0.3 },
+          },
         },
       },
       {
@@ -212,6 +233,10 @@ function serviceDraft() {
           displayNameZh: '亚麻籽',
           category: 'NUT',
           status: 'VERIFIED',
+          nutritionData: {
+            meta: { rawBasisType: 'PER_100_G' },
+            macros: { moisture: 7, crudeFat: 40 },
+          },
         },
       },
       {
@@ -238,6 +263,10 @@ function serviceDraft() {
           displayNameZh: '鱼油',
           category: 'OIL',
           status: 'VERIFIED',
+          nutritionData: {
+            meta: { rawBasisType: 'PER_100_G' },
+            macros: { moisture: 0, crudeFat: 100 },
+          },
         },
       },
     ],
@@ -303,14 +332,10 @@ describe('RecipeDesignerAgentAdapter read', () => {
     expect(draft.copy.targetHealthTags).toEqual(['低脂']);
     expect(draft.productionSteps).toEqual([]);
     expect(draft.animalSpecies).toEqual(['鸭']);
-    expect(draft.nutritionSummary?.moisturePercent).toBeCloseTo(
-      (600 / 821) * 100,
-      5,
-    );
-    expect(draft.nutritionSummary?.fatWetPercent).toBeCloseTo(
-      (90 / 821) * 100,
-      5,
-    );
+    // 从 7 条 nutritionFood.nutritionData 现算（每 100g 值 × 克重），
+    // 不是 calculatedNutrition 里的 600g / 90g。
+    expect(draft.nutritionSummary?.moisturePercent).toBeCloseTo(61.3447, 3);
+    expect(draft.nutritionSummary?.fatWetPercent).toBeCloseTo(9.4013, 3);
   });
 
   it('评估版本不一致时 lastAssessment 为 null', async () => {
@@ -359,5 +384,78 @@ describe('RecipeDesignerAgentAdapter read', () => {
     expect(draft.lastAssessment?.deficient).toBe(1);
     expect(draft.lastAssessment?.excess).toBe(0);
     expect(draft.lastAssessment?.missingData).toBe(1);
+  });
+
+  it('items 没有营养档案时回退到 calculatedNutrition', async () => {
+    const draft: any = serviceDraft();
+    for (const item of draft.items) {
+      item.nutritionFood.nutritionData = null;
+    }
+    const adapter = createAdapter(
+      {
+        getDraft: jest.fn().mockResolvedValue(draft),
+        getDraftProductionSteps: jest
+          .fn()
+          .mockResolvedValue({ draftId: 'draft-1', productionSteps: [] }),
+      },
+      { recipeSeries: { findUnique: jest.fn().mockResolvedValue(null) } },
+    );
+
+    const snapshot = await adapter.getDraft('draft-1');
+
+    expect(snapshot.nutritionSummary?.moisturePercent).toBeCloseTo(
+      (600 / 821) * 100,
+      5,
+    );
+    expect(snapshot.nutritionSummary?.fatWetPercent).toBeCloseTo(
+      (90 / 821) * 100,
+      5,
+    );
+  });
+
+  it('items 与 calculatedNutrition 都没有时 nutritionSummary 为 null', async () => {
+    const draft: any = serviceDraft();
+    for (const item of draft.items) {
+      item.nutritionFood.nutritionData = null;
+    }
+    draft.calculatedNutrition = null;
+    const adapter = createAdapter(
+      {
+        getDraft: jest.fn().mockResolvedValue(draft),
+        getDraftProductionSteps: jest
+          .fn()
+          .mockResolvedValue({ draftId: 'draft-1', productionSteps: [] }),
+      },
+      { recipeSeries: { findUnique: jest.fn().mockResolvedValue(null) } },
+    );
+
+    const snapshot = await adapter.getDraft('draft-1');
+
+    expect(snapshot.nutritionSummary).toEqual({
+      fatWetPercent: null,
+      moisturePercent: null,
+    });
+  });
+
+  it('任一参与评估的 item 缺字段时该指标为 null', async () => {
+    const draft: any = serviceDraft();
+    // 燕麦缺粗脂肪，其余原料仍有水分；水分应照常算出，脂肪保守为 null。
+    draft.items[2].nutritionFood.nutritionData = {
+      macros: { moisture: 10 },
+    };
+    const adapter = createAdapter(
+      {
+        getDraft: jest.fn().mockResolvedValue(draft),
+        getDraftProductionSteps: jest
+          .fn()
+          .mockResolvedValue({ draftId: 'draft-1', productionSteps: [] }),
+      },
+      { recipeSeries: { findUnique: jest.fn().mockResolvedValue(null) } },
+    );
+
+    const snapshot = await adapter.getDraft('draft-1');
+
+    expect(snapshot.nutritionSummary?.moisturePercent).toBeCloseTo(61.3447, 3);
+    expect(snapshot.nutritionSummary?.fatWetPercent).toBeNull();
   });
 });

@@ -93,7 +93,7 @@
           先选要调整哪一份（可多选），每一份选中后再写自己的说明。
           老订单没有 batchItems，整块不显示，下面的表单与以前一模一样。
         -->
-        <view v-if="batchItems.length > 1" class="recipe-pick">
+        <view v-if="showRecipePicker" class="recipe-pick">
           <view class="section-title">选择要调整的食谱</view>
           <text class="recipe-pick__note">
             可以只选一份，也可以多选；勾选后可以分别写清这一份要改什么。
@@ -305,6 +305,24 @@ const recipeTexts = reactive<Record<string, string>>({});
 
 /** 有没有批次明细 —— 没有就完全走原来的整单售后 */
 const isBatchOrder = computed(() => batchItems.value.length > 0);
+
+/**
+ * 从某份食谱卡点进来时，售后就是针对这一份的：
+ * 不再让顾客在页面里重新选（选错了反而会改错食谱）。
+ * 只有链接里的 recipeId 确实在这一批里时才隐藏选择器；
+ * 查不到就退回可选择的形态，不能把顾客卡在"没得选"。
+ */
+const fixedRecipeId = computed(() => {
+  if (!recipeId.value) return '';
+  const matched = batchItems.value.some(
+    (item) => String(item.recipeId || '') === recipeId.value,
+  );
+  return matched ? recipeId.value : '';
+});
+
+const showRecipePicker = computed(
+  () => batchItems.value.length > 1 && !fixedRecipeId.value,
+);
 
 /**
  * 退款入口（2026-10-24）。

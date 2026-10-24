@@ -20,8 +20,10 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  OnModuleInit,
   Optional,
 } from '@nestjs/common';
+import type { RecipeDesignAgentSession } from '@prisma/client';
 
 import { PrismaService } from '../../../infrastructure/prisma.service';
 import { AgentProviderConfigService } from '../../nutrition-governance/agent-provider-config.service';
@@ -43,6 +45,7 @@ import type {
   RecipeAgentDraftPort,
 } from './recipe-agent.port';
 import { RecipeAgentSessionService } from './recipe-agent-session.service';
+import type { AgentMessageRecord } from './recipe-agent-session.types';
 import { RecipeDesignerAgentAdapter } from './recipe-designer-agent.adapter';
 import type { AgentToolDefinition } from './tool-registry';
 import { createRecipeAgentToolkit, type RecipeAgentToolkit } from './toolkit';
@@ -108,7 +111,7 @@ const SYSTEM_PROMPT = `你是 SevenKitchen 的食谱设计 Agent，负责在当�
  * 测试可以整体替换它来避开真实数据库。
  */
 @Injectable()
-export class RecipeAgentRunService {
+export class RecipeAgentRunService implements OnModuleInit {
   private readonly running = new Map<string, Promise<void>>();
   private readonly stopped = new Set<string>();
 
@@ -205,9 +208,30 @@ export class RecipeAgentRunService {
     }
   }
 
+  /** Nest 启动钩子：把上次进程留下的 RUNNING 会话标记为 INTERRUPTED。 */
+  async onModuleInit(): Promise<void> {
+    await this.markInterruptedOnBoot();
+  }
+
   /** 进程启动时把上次中断的 RUNNING 会话标记为 INTERRUPTED。 */
   async markInterruptedOnBoot(): Promise<number> {
     return this.sessionService.markInterruptedRuns();
+  }
+
+  /** 草稿最近一次会话 + 全部消息；还没跑过 Agent 时返回 null。 */
+  async getSessionView(draftId: string): Promise<{
+    session: RecipeDesignAgentSession;
+    messages: AgentMessageRecord[];
+  } | null> {
+    const session = await this.prisma.recipeDesignAgentSession.findFirst({
+      where: { designRecipeId: draftId },
+      orderBy: { startedAt: 'desc' },
+    });
+    if (!session) {
+      return null;
+    }
+    const messages = await this.sessionService.listMessages(session.id);
+    return { session, messages };
   }
 
   /**

@@ -264,6 +264,7 @@ import { IngredientBatchReplaceController } from './interfaces/controllers/ingre
 import { IngredientBatchReplaceService } from './application/ingredient/ingredient-batch-replace.service';
 import { NutritionStandardController } from './interfaces/controllers/nutrition-standard.controller';
 import { RecipeDesignerController } from './interfaces/controllers/recipe-designer.controller';
+import { RecipeAgentController } from './interfaces/controllers/recipe-agent.controller';
 import { FediafTargetSelectorService } from './application/nutrition-calculation/fediaf-target-selector.service';
 import { IngredientReadinessService } from './application/nutrition-calculation/ingredient-readiness.service';
 import { NutrientMappingAuditService } from './application/nutrition-calculation/nutrient-mapping-audit.service';
@@ -271,6 +272,9 @@ import { NutritionUnitNormalizerService } from './application/nutrition-calculat
 import { NutritionStandardService } from './application/nutrition-standard/nutrition-standard.service';
 import { IngredientCreationDraftService } from './application/ingredient-creation/ingredient-creation-draft.service';
 import { RecipeDesignerService } from './application/recipe-designer/recipe-designer.service';
+import { RecipeAgentApprovalService } from './application/recipe-designer/agent/recipe-agent-approval.service';
+import { RecipeAgentRunService } from './application/recipe-designer/agent/recipe-agent-run.service';
+import { RecipeAgentSessionService } from './application/recipe-designer/agent/recipe-agent-session.service';
 import { SupplementTargetService } from './application/recipe-designer/supplement-target.service';
 import { OrderRecipeDesignService } from './application/recipe-designer/order-recipe-design.service';
 import { OrderRecipeTemplateService } from './application/recipe-designer/order-recipe-template.service';
@@ -448,6 +452,7 @@ validatePrismaConfig();
     IngredientBatchReplaceController,
     NutritionStandardController,
     RecipeDesignerController,
+    RecipeAgentController,
     PlatformConfigController,
     PublicPlatformConfigController,
     CustomerServiceController,
@@ -924,6 +929,9 @@ validatePrismaConfig();
     IngredientBatchReplaceService,
     NutritionStandardService,
     RecipeDesignerService,
+    RecipeAgentSessionService,
+    RecipeAgentApprovalService,
+    RecipeAgentRunService,
     SupplementTargetService,
     OrderRecipeDesignService,
     OrderRecipeTemplateService,

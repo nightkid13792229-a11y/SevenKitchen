@@ -3,6 +3,7 @@ import {
   createAgentToolHandlers,
 } from 'src/application/recipe-designer/agent/tool-registry';
 import { RecipeAgentPortError } from 'src/application/recipe-designer/agent/agent-types';
+import type { AgentReadyCheck } from 'src/application/recipe-designer/agent/check-tools';
 import type { RecipeAgentControlPort } from 'src/application/recipe-designer/agent/recipe-agent.port';
 import {
   createFakeRecipeAgentPort,
@@ -53,6 +54,24 @@ describe('tool registry', () => {
         'finish_draft',
       ]),
     );
+  });
+
+  it('check_coverage 描述说明 10 类清单不是门禁', () => {
+    const definition = AGENT_TOOL_DEFINITIONS.find(
+      (tool) => tool.name === 'check_coverage',
+    );
+    expect(definition?.description).toBe(
+      '检查 10 类选料清单（基础 7 + 建议 3）；缺类只提醒，不是门禁。',
+    );
+  });
+
+  it('request_exception 描述说明缺类不再需要申请', () => {
+    const definition = AGENT_TOOL_DEFINITIONS.find(
+      (tool) => tool.name === 'request_exception',
+    );
+    expect(definition?.description).toContain('缺类已不再需要申请');
+    expect(definition?.description).toContain('只有达标/合规例外需要人批准');
+    expect(definition?.description).toContain('CATEGORY_OMISSION');
   });
 
   it('每个定义都有 handler', () => {
@@ -153,7 +172,7 @@ describe('tool registry', () => {
     expect(approvedResult.data.status).toBe('PASS_WITH_WARNINGS');
   });
 
-  it('confirmedOmissions 只能来自 getApprovalState', async () => {
+  it('confirmedOmissions 只能来自 getApprovalState，且不再影响分类检查', async () => {
     const draft = fakeDraftSnapshot({
       items: fakeDraftSnapshot().items.filter((i) => i.category !== 'MUSHROOM'),
     });
@@ -170,7 +189,12 @@ describe('tool registry', () => {
     });
     expect(bareResult.ok).toBe(true);
     if (!bareResult.ok) return;
-    expect(bareResult.data.status).toBe('BLOCKED');
+    expect(bareResult.data.status).toBe('PASS_WITH_WARNINGS');
+    const bareCoverage = bareResult.data.checks.find(
+      (check: AgentReadyCheck) => check.key === 'COVERAGE',
+    );
+    expect(bareCoverage?.status).toBe('WARN');
+    expect(bareCoverage?.detail).toContain('菌藻');
 
     const confirmed = createAgentToolHandlers({
       port,
@@ -186,6 +210,12 @@ describe('tool registry', () => {
     const confirmedResult = await confirmed.check_ready({});
     if (!confirmedResult.ok) return;
     expect(confirmedResult.data.status).toBe('PASS_WITH_WARNINGS');
+    const confirmedCoverage = confirmedResult.data.checks.find(
+      (check: AgentReadyCheck) => check.key === 'COVERAGE',
+    );
+    // 缺类确认已废弃：只做回显，不再过滤缺类或降级。
+    expect(confirmedCoverage?.status).toBe('WARN');
+    expect(confirmedCoverage?.detail).toBe(bareCoverage?.detail);
   });
 
   it('已批例外时 finish_draft 生成交付卡', async () => {
@@ -224,9 +254,9 @@ describe('tool registry', () => {
     });
     expect(bareResult.ok).toBe(true);
     if (!bareResult.ok) return;
-    expect(bareResult.data.missing).toContain('MUSHROOM');
+    expect(bareResult.data.missing).toEqual(['MUSHROOM']);
     expect(bareResult.data.confirmedOmissions).toEqual([]);
-    expect(bareResult.summary).toContain('未覆盖「菌藻」');
+    expect(bareResult.summary).toContain('基础缺「菌藻」');
     expect(bareResult.summary).not.toContain('已确认缺类');
 
     const confirmed = createAgentToolHandlers({
@@ -243,9 +273,11 @@ describe('tool registry', () => {
     const confirmedResult = await confirmed.check_coverage({});
     expect(confirmedResult.ok).toBe(true);
     if (!confirmedResult.ok) return;
-    expect(confirmedResult.data.missing).toEqual([]);
+    // 缺类确认只回显，不再从 missing 里剔除。
+    expect(confirmedResult.data.missing).toEqual(['MUSHROOM']);
     expect(confirmedResult.data.confirmedOmissions).toEqual(['MUSHROOM']);
-    expect(confirmedResult.summary).toContain('已确认缺类「菌藻」');
+    expect(confirmedResult.summary).toContain('基础缺「菌藻」');
+    expect(confirmedResult.summary).not.toContain('已确认缺类');
   });
 
   it('finish_draft 在 BLOCKED 时返回 READY_BLOCKED', async () => {

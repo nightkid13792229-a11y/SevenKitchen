@@ -377,6 +377,32 @@ describe('RecipeAgentRunService', () => {
     );
   });
 
+  it('SYSTEM_PROMPT 按 10 类检查清单选料，且分类不是门禁', async () => {
+    const { service, callModel } = makeRunService({
+      handlers: {},
+      responses: [finalResponse('好的')],
+    });
+
+    const { sessionId } = await service.start({
+      draftId: DRAFT_ID,
+      actor: ACTOR,
+      message: '开始',
+    });
+    await service.waitForIdle(sessionId);
+
+    const systemMessage = callModel.mock.calls[0][0].messages[0];
+    const content = systemMessage.content as string;
+    expect(content).toContain(
+      '先按 10 类检查清单扫一遍：基础 7 类（主蛋白/内脏/碳水/蔬菜/菌藻/坚果种子/油脂）+ 建议 3 类（蛋/豆/水果），每类找 1-2 个候选；不要求每类都进最终配方，缺类说明原因即可，分类不是门禁。',
+    );
+    expect(content).toContain(
+      '用户明确说不要的类别/原料绝对不要加；缺类不需要申请例外，说明原因即可；只有营养达标例外才 request_exception。',
+    );
+    expect(content).toContain('按目录、分类清单、发布门槛');
+    expect(content).not.toContain('按七类各找 1-2 个候选');
+    expect(content).not.toContain('缺类只能 ask_user 或 request_exception');
+  });
+
   it('start 只把本轮用户消息作为 user，刚追加的那条不会重复进历史 transcript', async () => {
     const sessionService = makeSessionService();
     // 真实 listMessages 在 appendMessage 之后调用，所以一定包含本轮用户消息。

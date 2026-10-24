@@ -247,12 +247,12 @@ describe('定制链路 · 成品抵扣已彻底下线（2026-10-20）', () => {
     }
   };
 
-  it('确认页 / 定制订单详情 / 定制页 / 定制订单列表 不再出现抵扣文案与字段', () => {
+  it('确认页 / 定制订单详情 / 定制页 / 统一订单列表 不再出现抵扣文案与字段', () => {
     const sources: Array<[string, string]> = [
       ['确认页', read(`${PAGE_DIR}/confirm.vue`)],
       ['定制订单详情', read(`${PAGE_DIR}/order-detail.vue`)],
       ['定制页', read(`${PAGE_DIR}/index.vue`)],
-      ['定制订单列表', read(`${PAGE_DIR}/orders.vue`)],
+      ['统一订单列表', read('src/pages/orders-list/index.vue')],
     ];
 
     for (const [name, source] of sources) assertNoCredit(name, source);

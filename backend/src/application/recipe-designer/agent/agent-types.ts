@@ -28,10 +28,15 @@ export interface AgentAssessmentEntry {
   key: string;
   label: string;
   status: 'COMPLIANT' | 'DEFICIENT' | 'EXCESS' | 'MISSING_DATA' | 'INFO';
+  /** 按 `basis` 口径的当前值；当前引擎是“每 1000 千卡”。 */
   value: number | null;
   min: number | null;
   max: number | null;
   marginPercent: number | null;
+  /** 单位：g / mg / IU / μg 等。 */
+  unit?: string | null;
+  /** 数值口径，如 PER_1000_KCAL；不填时按 view.basis 理解。 */
+  basis?: string | null;
 }
 
 /** 某一份草稿在某一个内容版本上的评估结果。 */
@@ -42,6 +47,13 @@ export interface AgentAssessmentView {
   excess: number;
   missingData: number;
   entries: AgentAssessmentEntry[];
+  /** 当前评估引擎的口径：条目里的 value/min/max 是“每 1000 千卡”。 */
+  basis?: 'PER_1000_KCAL';
+  /** 整份配方的总能量（千卡）；补剂剂量换算用。 */
+  totalEnergyKcal?: number | null;
+  /** 每公斤配方的能量密度；没有总能量时用它 × 总重 / 1000。 */
+  energyDensityKcalPerKg?: number | null;
+  totalWeightG?: number;
 }
 
 /** `get_draft` 返回的完整草稿快照。 */

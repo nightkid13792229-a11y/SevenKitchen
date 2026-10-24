@@ -18,13 +18,17 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
   OnModuleInit,
   Optional,
 } from '@nestjs/common';
-import type { RecipeDesignAgentSession } from '@prisma/client';
+import type {
+  RecipeDesignAgentApproval,
+  RecipeDesignAgentSession,
+} from '@prisma/client';
 
 import { PrismaService } from '../../../infrastructure/prisma.service';
 import { AgentProviderConfigService } from '../../nutrition-governance/agent-provider-config.service';
@@ -40,6 +44,7 @@ import { RecipeDesignerService } from '../recipe-designer.service';
 import type { AgentToolResult, HealthTagPolicy } from './agent-types';
 import { DraftHealthTagPolicy } from './draft-health-tag-policy';
 import { RecipeAgentApprovalService } from './recipe-agent-approval.service';
+import type { AgentApprovalRecord } from './recipe-agent-approval.service';
 import { RecipeAgentControlService } from './recipe-agent-control.service';
 import type {
   RecipeAgentControlPort,
@@ -113,6 +118,8 @@ const SYSTEM_PROMPT = `你是 SevenKitchen 的食谱设计 Agent，负责在当�
 - 补剂数量按基准单位：PCS=粒/片数，G=克，ML=毫升；不要按每粒重量换算。补剂营养按“每份/每单位”的值乘数量，不需要每粒重量；档案基准和数量单位对不上就 ask_user。
 - 小缺口先调食材（如亚麻籽/亚麻籽油）；单粒剂量远大于缺口（例如缺口 1.6IU、胶囊 200IU）先问人，不要硬加。
 - 同一营养素最多换 2 个关键词；还没有就改用复合补剂（如 B 族复合）或 ask_user，不要连续搜 5 个同义词。
+- 评估条目里的 value/min/max 是“每 1000 千卡”，不是整份总量；补剂剂量 = 缺口(每 1000 千卡) × 总能量(assessment.totalEnergyKcal) ÷ 1000。不要拿每 1000 千卡的值当总量，也不要因此误判“补剂没计入”。
+- 用户明确说不要的类别/原料（如“不要内脏”），绝对不要为了凑七类偷偷加；缺类只能 ask_user 或 request_exception。
 - 工具预算 30 次：读（get_draft/search_ingredients/get_ingredient/get_catalog_usage）尽量不超过 10 次；写至少 8 次；评估/检查至少 3 次。预算快用完时先交付一个可评估的骨架，不要停在“还在查”。
 - 回复用简洁中文，说明改了什么、还差什么。`;
 
@@ -333,13 +340,14 @@ export class RecipeAgentRunService implements OnModuleInit {
     return this.sessionService.markInterruptedRuns();
   }
 
-  /** 草稿最近一次会话 + 全部消息；还没跑过 Agent 时返回 null。 */
+  /** 草稿最近一次会话 + 全部消息 + 审批；还没跑过 Agent 时返回 null。 */
   async getSessionView(
     draftId: string,
     actor: RecipeAgentRunActor,
   ): Promise<{
     session: RecipeDesignAgentSession;
     messages: AgentMessageRecord[];
+    approvals: Array<RecipeDesignAgentApproval & { createdAt: Date }>;
   } | null> {
     await this.designerService.getDraft(draftId, this.accessFor(actor));
 
@@ -351,7 +359,64 @@ export class RecipeAgentRunService implements OnModuleInit {
       return null;
     }
     const messages = await this.sessionService.listMessages(session.id);
-    return { session, messages };
+    const approvals = await this.prisma.recipeDesignAgentApproval.findMany({
+      where: { sessionId: session.id },
+      orderBy: { requestedAt: 'asc' },
+    });
+    return {
+      session,
+      messages,
+      // 库里的申请时间是 requestedAt；前端契约统一用 createdAt。
+      approvals: approvals.map((approval) => ({
+        ...approval,
+        createdAt: approval.requestedAt,
+      })),
+    };
+  }
+
+  /**
+   * 人工批准 / 驳回一条审批。
+   *
+   * 权限与状态都在这里判：先确认草稿访问权，再要求达标例外必须管理员，
+   * 最后只允许 PENDING 的审批被处理。写库仍由审批服务做条件更新。
+   */
+  async decideApproval(
+    approvalId: string,
+    input: { status: 'APPROVED' | 'REJECTED' },
+    actor: RecipeAgentRunActor,
+  ): Promise<AgentApprovalRecord> {
+    const approval = await this.prisma.recipeDesignAgentApproval.findUnique({
+      where: { id: approvalId },
+      select: { id: true, sessionId: true, type: true, status: true },
+    });
+    if (!approval) {
+      throw new NotFoundException('审批不存在');
+    }
+
+    const session = await this.prisma.recipeDesignAgentSession.findUnique({
+      where: { id: approval.sessionId },
+      select: { designRecipeId: true },
+    });
+    if (!session) {
+      throw new NotFoundException('会话不存在');
+    }
+
+    await this.designerService.getDraft(
+      session.designRecipeId,
+      this.accessFor(actor),
+    );
+
+    if (approval.type === 'COMPLIANCE_EXCEPTION' && actor.role !== 'ADMIN') {
+      throw new ForbiddenException('只有管理员可以批准达标例外');
+    }
+    if (approval.status !== 'PENDING') {
+      throw new ConflictException('这条审批已经处理过了');
+    }
+
+    return this.approvalService.decide(approvalId, {
+      status: input.status,
+      decidedBy: actor.userId,
+    });
   }
 
   /** 后台草稿接口的访问上下文；与会话操作的身份保持同一份。 */

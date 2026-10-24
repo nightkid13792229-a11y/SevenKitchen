@@ -205,6 +205,11 @@ export class CustomRecipeController {
         orderId: order.orderId,
         dogId: order.dogId,
         dogName: order.dog?.name ?? '',
+        /** 列表卡要显示"豆豆 · 柯基 · 11.2kg · 3 份"（2026-10-24） */
+        dogBreedName:
+          order.dog?.customBreedName || order.dog?.breedName || '',
+        dogWeightKg: order.dog?.currentWeightKg ?? null,
+        recipeQuantity: order.recipeQuantity ?? 1,
         targetGoal: order.targetGoal,
         needsHealthManagement: Boolean(order.needsHealthManagement),
         scheduledDate: order.scheduledDate,
@@ -393,6 +398,18 @@ export class CustomRecipeController {
       orderId: order.orderId,
       dogId: order.dogId,
       dogName: order.dog?.name ?? '',
+      /**
+       * 定制对象档案（2026-10-24）：详情页要显示品种/体重/年龄/体况/活动量/餐数，
+       * 以及本单份数 —— 这些是营养师设计时用到的输入，顾客有权核对。
+       */
+      dogBreedName:
+        order.dog?.customBreedName || order.dog?.breedName || '',
+      dogWeightKg: order.dog?.currentWeightKg ?? null,
+      dogBirthday: order.dog?.birthday ?? null,
+      dogBcsScore: order.dog?.bcsScore ?? null,
+      dogActivityLevel: order.dog?.activityLevel ?? null,
+      dogMealsPerDay: order.dog?.mealsPerDay ?? null,
+      recipeQuantity: order.recipeQuantity ?? 1,
       targetGoal: order.targetGoal,
       needsHealthManagement: Boolean(order.needsHealthManagement),
       scheduledDate: order.scheduledDate,

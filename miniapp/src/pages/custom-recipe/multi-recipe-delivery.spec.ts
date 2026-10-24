@@ -42,10 +42,9 @@ describe('定制订单详情 · 多份交付卡片', () => {
     expect(source).toMatch(/v-for="[^"]*deliveryBatch\.items/);
   });
 
-  it('★ 每张卡片有食谱名、封面、交付时间、交付物标签和「进入食谱」', () => {
+  it('★ 每张卡片有食谱名、封面、交付时间和「进入食谱」', () => {
     expect(source).toContain('item.recipeName');
     expect(source).toContain('item.recipeCoverImageUrl');
-    expect(source).toContain('item.itemCodes');
     expect(source).toContain('deliveryBatch.deliveredAt');
     expect(source).toContain('进入食谱');
   });
@@ -57,19 +56,19 @@ describe('定制订单详情 · 多份交付卡片', () => {
     expect(source).not.toContain('/pages/custom-recipe/delivery?orderId=');
   });
 
-  it('★ 确认收到仍是整单一次调用，不按份重复', () => {
-    const calls = source.match(/confirmReceiptRequest\(/g) ?? [];
-    expect(calls).toHaveLength(1);
-    expect(source).toContain('@tap="handleConfirmReceipt"');
+  it('★ 确认收到按钮已移除（2026-10-24）；售后入口留在每份卡片', () => {
+    expect(source).not.toContain('handleConfirmReceipt');
+    expect(source).not.toContain('confirmReceiptRequest');
+    expect(source).toContain('继续调整');
+    expect(source).toContain('查看进展');
   });
 
-  it('★ 只有老 delivery、没有批次时，原来的单份卡片保持原样', () => {
+  it('★ 只有老 delivery、没有批次时，单份卡片仍可进入内容', () => {
     expect(source).toContain('v-if="!deliveryBatch && delivery"');
-    // 老卡片的入口与文案都还在
     expect(source).toContain('查看完整内容');
     expect(source).toContain('viewDelivery');
     expect(source).toContain('order.recipeName');
-    expect(source).toContain('delivery.itemCodes');
+    expect(source).toContain('order.recipeCoverImageUrl');
     expect(source).toContain('delivery.deliveredAt');
   });
 });

@@ -467,12 +467,23 @@ describe('动作解析器', () => {
       });
     });
 
-    describe('buildCustomerHint：每个状态都要有一句"所以呢"', () => {
-      it('★ 所有状态都有提示语（漏了就是 2026-10-04「已取消」那个坑重演）', () => {
-        const missing = ALL_STATUSES.filter(
-          (status) => !buildCustomerHint({ status }),
-        );
-        expect(missing).toEqual([]);
+    describe('buildCustomerHint：只给可执行的状态提示', () => {
+      it('★ 只保留待付款/已取消；已付款/制作中/已交付/已完成不再下发（2026-10-24）', () => {
+        // 日期在订单信息、阶段在进度里；"已交付……请确认"还和确认按钮一起下线
+        for (const status of [
+          CustomRecipeStatus.PAID,
+          CustomRecipeStatus.IN_PROGRESS,
+          CustomRecipeStatus.DELIVERED,
+          CustomRecipeStatus.COMPLETED,
+        ]) {
+          expect(buildCustomerHint({ status })).toBeNull();
+        }
+        expect(
+          buildCustomerHint({ status: CustomRecipeStatus.PENDING_PAYMENT }),
+        ).toBeTruthy();
+        expect(
+          buildCustomerHint({ status: CustomRecipeStatus.CANCELLED }),
+        ).toBeTruthy();
       });
 
       it('待付款带上支付截止日', () => {

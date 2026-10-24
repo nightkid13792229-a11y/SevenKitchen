@@ -1,12 +1,19 @@
 <template>
   <view class="container">
+    <!-- 登录态过期：与原来的定制专属列表同一套处理，删页不能把这条体验弄丢 -->
+    <view v-if="needLogin" class="state-block">
+      <text class="state-title">登录已过期</text>
+      <text class="state-text">登录已过期，请重新登录后再查看订单</text>
+      <button class="state-btn" @tap="goToLogin">去登录</button>
+    </view>
+
     <!-- 状态筛选Tab -->
     <!--
       类型筛选（2026-10-18 加，老板定"按类型筛"）。
       放在状态筛选**上面**：先想"我要找哪种单"，再想"它到哪一步了"。
       与状态筛选**叠加生效**（不是二选一）—— 两个维度互相独立。
     -->
-    <view class="type-tabs">
+    <view v-if="!needLogin" class="type-tabs">
       <view
         v-for="tab in TYPE_TABS"
         :key="tab.value"
@@ -18,7 +25,7 @@
       </view>
     </view>
 
-    <view class="status-tabs">
+    <view v-if="!needLogin" class="status-tabs">
       <view
         v-for="tab in statusTabs"
         :key="tab.value"
@@ -31,7 +38,7 @@
       </view>
     </view>
 
-    <view class="order-list">
+    <view v-if="!needLogin" class="order-list">
       <view
         v-for="order in orders"
         :key="`${order._orderType}-${order.id}`"
@@ -40,38 +47,25 @@
       >
         <!-- 订单时间和状态 -->
         <view class="order-header">
-          <!--
-            左侧色条（2026-10-18 · 需求 2.10）：光靠角标不够快 ——
-            顾客滑列表时先看到颜色，再看到字。
-          -->
           <view class="order-header-main">
+            <!--
+              分类标识放最左侧（2026-10-24）：
+              顾客扫一眼先知道"这是哪类单"，再看时间和状态。
+              名称统一走 utils/order-type.ts，不再各页写"定制/成品/补剂"。
+            -->
+            <text
+              class="order-type-tag"
+              :class="`order-type-tag--${order._orderType || 'food'}`"
+            >
+              {{ orderTypeLabel(order._orderType || 'food') }}
+            </text>
             <view
               class="order-type-stripe"
               :class="`order-type-stripe--${order._orderType || 'food'}`"
             />
-            <view class="order-header-left">
-              <text class="order-time">{{
-                formatShortDateTime(order.createdAt)
-              }}</text>
-            <!-- 两类订单混在一个列表里，靠这个标签让顾客一眼知道是哪一类 -->
-            <text
-              v-if="order._orderType === 'supplement'"
-              class="order-type-tag"
-            >
-              补剂
+            <text class="order-time">
+              下单时间 {{ formatShortDateTime(order.createdAt) }}
             </text>
-            <text
-              v-else-if="order._orderType === 'custom'"
-              class="order-type-tag order-type-tag--custom"
-            >
-              定制
-            </text>
-            <!--
-              成品也要标（2026-10-18 · 需求 2.10：定制橙 / 成品绿 / 补剂紫）。
-              两种都标、只有一种不标，顾客反而会以为没标的那种是"默认"。
-            -->
-              <text v-else class="order-type-tag order-type-tag--food">成品</text>
-            </view>
           </view>
           <text
             class="order-status"
@@ -93,14 +87,16 @@
             <text v-if="customOrderSubtitle(order)" class="custom-order-sub">
               {{ customOrderSubtitle(order) }}
             </text>
+            <text v-if="customRefundText(order)" class="custom-order-refund">
+              {{ customRefundText(order) }}
+            </text>
           </view>
-          <view class="order-footer">
-            <view class="order-footer-left">
-              <text class="amount-label">定制费:</text>
-              <text class="custom-order-amount"
-                >¥{{ formatAmountText(customOrderAmount(order)) }}</text
-              >
-            </view>
+          <!-- 金额与成品/补剂同一套：标签和数值一起靠右 -->
+          <view class="order-amount">
+            <text class="amount-label">订单金额</text>
+            <text class="amount-value"
+              >¥{{ formatAmountText(customOrderAmount(order)) }}</text
+            >
           </view>
           <view class="order-actions" @tap.stop>
             <button
@@ -246,7 +242,7 @@
 
         <!-- 金额：定制单已在上面的定制卡片里展示，避免出现 ¥0.00 的第二行 -->
         <view v-if="order._orderType !== 'custom'" class="order-amount">
-          <text class="amount-label">订单金额:</text>
+          <text class="amount-label">订单金额</text>
           <text class="amount-value"
             >¥{{ formatAmount(order.totalAmount) }}</text
           >
@@ -331,7 +327,7 @@
       </view>
     </view>
 
-    <view class="customer-service-bottom-bar">
+    <view v-if="!needLogin" class="customer-service-bottom-bar">
       <CustomerServiceInlineButton
         class="customer-service-bottom-action"
         source-type="GENERAL"
@@ -345,7 +341,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { onShow, onLoad } from '@dcloudio/uni-app';
-import { request, getToken } from '../../utils/api';
+import { request, getToken } from '@/utils/api';
 import {
   createWechatPayment,
   type WechatPaymentResult,
@@ -357,16 +353,22 @@ import {
 } from '../../api/supplements';
 import { runSupplementPayment } from '../../utils/supplement-payment';
 import { formatShortDateTime } from '../../utils/date';
+import { ORDER_TYPE_META, ORDER_TYPE_TABS, orderTypeLabel } from '../../utils/order-type';
 // 定制单（2026-10-18 并入三单合一）
 import {
   fetchMyOrders,
   findAction,
   type CustomRecipeOrderDetail,
 } from '@/api/custom-recipe';
-import { formatDate, isPaymentExpired } from '@/utils/custom-recipe-order';
+import {
+  describeCustomRecipeRefund,
+  formatDate,
+  isPaymentExpired,
+} from '@/utils/custom-recipe-order';
 import { runCustomRecipePayment } from '@/utils/custom-recipe-payment';
 import {
   CUSTOM_RECIPE_GOAL_SET,
+  CUSTOM_RECIPE_STATUS_SET,
   useOptionSet,
 } from '@/utils/option-set';
 import { requestWechatOrderPayment } from '../../utils/wechat-payment';
@@ -383,6 +385,16 @@ import CustomerServiceInlineButton from '../../components/CustomerServiceInlineB
 const { ensure: ensureGoalOptions, labelOf: goalLabel } = useOptionSet(
   CUSTOM_RECIPE_GOAL_SET,
 );
+
+/**
+ * 定制单状态中文（2026-10-24）。
+ *
+ * 定制专属列表删除后，统一列表成了唯一入口；此前它用的是本页的 statusMap，
+ * 里面没有 IN_PROGRESS / DELIVERED —— 定制单会露出英文码。
+ * 这里改用后端的选项字典，和原来的专属列表同一份来源。
+ */
+const { ensure: ensureCustomStatusOptions, labelOf: customStatusLabel } =
+  useOptionSet(CUSTOM_RECIPE_STATUS_SET);
 
 // DEBUG flag for development logging
 const DEBUG = true;
@@ -469,34 +481,19 @@ type UnifiedOrder = FoodOrderRow | SupplementOrderRow | CustomOrderRow;
 const selectedStatus = ref<string>('ALL');
 
 /**
- * 类型筛选（2026-10-18）。
+ * 类型筛选（2026-10-24 文案收口）。
  *
- * 老板定："不管在哪个页面…"—— 这里是"按类型"，因为顾客找东西的心智是
- * "我给狗定的那份食谱在哪""我买的狗粮到哪了"，**先想类型，再想状态**。
+ * 名称统一走 `utils/order-type.ts`：食谱定制 / 成品鲜食 / 预分装补剂。
+ * 以前这里写死"定制 / 成品 / 补剂"，和卡片角标、专属列表各一份。
  */
 type TypeFilter = 'ALL' | 'custom' | 'food' | 'supplement';
-const TYPE_TABS: Array<{ label: string; value: TypeFilter }> = [
-  { label: '全部', value: 'ALL' },
-  { label: '定制', value: 'custom' },
-  { label: '成品', value: 'food' },
-  { label: '补剂', value: 'supplement' },
-];
+const TYPE_TABS = ORDER_TYPE_TABS;
 const selectedType = ref<TypeFilter>('ALL');
 
 function selectType(value: TypeFilter) {
   selectedType.value = value;
   filterOrders();
 }
-
-const statusTabs = ref<Array<{ label: string; value: string; count: number }>>([
-  { label: '全部', value: 'ALL', count: 0 },
-  { label: '未付款', value: 'PENDING_PAYMENT', count: 0 },
-  { label: '已付款', value: 'IN_PROGRESS', count: 0 },
-  { label: '已发货', value: 'WAIT_RECEIVE', count: 0 },
-  { label: '已完成', value: 'RECEIVED', count: 0 },
-  { label: '售后中', value: 'AFTERSALE', count: 0 },
-  { label: '已取消', value: 'CANCELLED', count: 0 },
-]);
 
 const allOrders = ref<UnifiedOrder[]>([]);
 const orders = ref<UnifiedOrder[]>([]);
@@ -507,6 +504,88 @@ const payingSupplementId = ref('');
 const payingCustomId = ref('');
 const nowTick = ref(Date.now());
 let paymentClockTimer: ReturnType<typeof setInterval> | null = null;
+/** 登录态过期（2026-10-24 从定制专属列表迁过来） */
+const needLogin = ref(false);
+
+function isAuthError(error: any): boolean {
+  const message = String(error?.message || error || '');
+  return message.includes('Authentication required') || message.includes('401');
+}
+
+function goToLogin() {
+  const redirect = encodeURIComponent('/pages/orders-list/index');
+  uni.navigateTo({ url: `/pages/login/index?redirect=${redirect}` });
+}
+
+/**
+ * 状态 Tab（2026-10-24 精简 + 按类型换词）。
+ *
+ * 三类订单的状态语义不同：
+ *   · 成品：制作中 / 待收货
+ *   · 补剂：分装中 / 待收货
+ *   · 定制：定制中 / 待确认
+ * 所以 Tab 的 value 固定、label 随 selectedType 变；数量也跟着类型重算。
+ * "已取消"不再单独占一个 Tab —— 取消的单在"全部"里显示灰色状态。
+ */
+type StatusTabKey =
+  | 'ALL'
+  | 'PENDING_PAYMENT'
+  | 'IN_PROGRESS'
+  | 'WAIT_RECEIVE'
+  | 'COMPLETED'
+  | 'AFTERSALE';
+
+const STATUS_TAB_KEYS: StatusTabKey[] = [
+  'ALL',
+  'PENDING_PAYMENT',
+  'IN_PROGRESS',
+  'WAIT_RECEIVE',
+  'COMPLETED',
+  'AFTERSALE',
+];
+
+const STATUS_TAB_LABELS: Record<TypeFilter, Record<StatusTabKey, string>> = {
+  ALL: {
+    ALL: '全部',
+    PENDING_PAYMENT: '待付款',
+    IN_PROGRESS: '进行中',
+    WAIT_RECEIVE: '待收货/确认',
+    COMPLETED: '已完成',
+    AFTERSALE: '售后中',
+  },
+  custom: {
+    ALL: '全部',
+    PENDING_PAYMENT: '待付款',
+    IN_PROGRESS: '定制中',
+    WAIT_RECEIVE: '待确认',
+    COMPLETED: '已完成',
+    AFTERSALE: '售后中',
+  },
+  food: {
+    ALL: '全部',
+    PENDING_PAYMENT: '待付款',
+    IN_PROGRESS: '制作中',
+    WAIT_RECEIVE: '待收货',
+    COMPLETED: '已完成',
+    AFTERSALE: '售后中',
+  },
+  supplement: {
+    ALL: '全部',
+    PENDING_PAYMENT: '待付款',
+    IN_PROGRESS: '分装中',
+    WAIT_RECEIVE: '待收货',
+    COMPLETED: '已完成',
+    AFTERSALE: '售后中',
+  },
+};
+
+const statusTabs = computed(() =>
+  STATUS_TAB_KEYS.map((key) => ({
+    value: key,
+    label: STATUS_TAB_LABELS[selectedType.value][key],
+    count: getOrdersByTab(key).length,
+  })),
+);
 
 /**
  * 补剂自己的状态分色：金=待办、绿=正常、红=售后、灰=结束。
@@ -537,17 +616,17 @@ const emptyText = computed(() => {
   const copyMap: Record<string, string> = {
     ALL: '去首页选择食谱，下单后订单会出现在这里。',
     PENDING_PAYMENT: '没有需要付款的订单。',
-    IN_PROGRESS: '没有已付款或正在制作的订单。',
-    WAIT_RECEIVE: '没有等待收货的订单。',
-    RECEIVED: '没有已完成订单。',
+    IN_PROGRESS: '没有进行中的订单。',
+    WAIT_RECEIVE: '没有等待收货 / 确认的订单。',
+    COMPLETED: '没有已完成订单。',
     AFTERSALE: '没有售后中的订单。',
-    CANCELLED: '没有已取消订单。',
   };
   return copyMap[selectedStatus.value] || '这里暂时没有订单。';
 });
 
 onMounted(async () => {
   ensureGoalOptions();
+  ensureCustomStatusOptions();
   paymentClockTimer = setInterval(() => {
     nowTick.value = Date.now();
   }, 15000);
@@ -576,6 +655,11 @@ onShow(async () => {
 });
 
 async function loadOrders() {
+  if (!viewAllOrders.value && !getToken()) {
+    needLogin.value = true;
+    return;
+  }
+  needLogin.value = false;
   if (DEBUG) {
     const token = getToken();
     console.log('[OrdersList] Loading orders', {
@@ -644,11 +728,13 @@ async function loadOrders() {
         supplementOrders,
         customOrders,
       );
-      updateStatusCounts();
       filterOrders();
     }
   } catch (err) {
     console.error('Load orders error:', err);
+    if (isAuthError(err)) {
+      needLogin.value = true;
+    }
   } finally {
     uni.hideLoading();
   }
@@ -724,23 +810,9 @@ function toCreatedAtTime(value?: string): number {
   return Number.isFinite(time) ? time : 0;
 }
 
-// 更新各状态订单数量
-// Phase 9: Simplified status counts aligned with e-commerce standards
-// Phase 9.1: Added PURCHASING, FREEZING and AFTERSALE status counts
-function updateStatusCounts() {
-  statusTabs.value.forEach((tab) => {
-    tab.count = getOrdersByTab(tab.value).length;
-  });
-}
-
-// 根据选中状态筛选订单
-// Phase 9: Simplified filter logic
+// 根据选中状态筛选订单（类型过滤也在 getOrdersByTab 里，避免两处口径）
 function filterOrders() {
-  const byStatus = getOrdersByTab(selectedStatus.value);
-  orders.value =
-    selectedType.value === 'ALL'
-      ? byStatus
-      : byStatus.filter((order) => order._orderType === selectedType.value);
+  orders.value = getOrdersByTab(selectedStatus.value);
 }
 
 /**
@@ -752,7 +824,7 @@ const FOOD_STATUS_GROUPS: Record<string, string[]> = {
   PENDING_PAYMENT: ['PENDING_PAYMENT'],
   IN_PROGRESS: ['PAID', 'PURCHASING', 'IN_PRODUCTION', 'FREEZING'],
   WAIT_RECEIVE: ['SHIPPED'],
-  RECEIVED: ['COMPLETED'],
+  COMPLETED: ['COMPLETED'],
   AFTERSALE: ['AFTERSALE'],
   CANCELLED: ['CANCELLED'],
 };
@@ -761,20 +833,23 @@ const SUPPLEMENT_STATUS_GROUPS: Record<string, string[]> = {
   PENDING_PAYMENT: ['PENDING_PAYMENT'],
   IN_PROGRESS: ['PAID', 'PACKING', 'PACKED'],
   WAIT_RECEIVE: ['SHIPPED'],
-  RECEIVED: ['COMPLETED'],
+  COMPLETED: ['COMPLETED'],
   AFTERSALE: ['AFTERSALE'],
   CANCELLED: ['CANCELLED'],
 };
 
 /**
- * 定制单的状态分组（2026-10-18）。
+ * 定制单的状态分组（2026-10-18，2026-10-24 补 IN_PROGRESS）。
  *
- * 定制单的状态名跟成品不一样（PENDING_PAYMENT / PAID / DELIVERED / COMPLETED /
- * CANCELLED），所以不能直接套用 FOOD_STATUS_GROUPS —— 那会把"已付款"错算成"制作中"。
+ * 定制单的状态名跟成品不一样（PENDING_PAYMENT / PAID / IN_PROGRESS /
+ * DELIVERED / COMPLETED / CANCELLED），不能直接套用 FOOD_STATUS_GROUPS。
+ *
+ * ⚠️ 售后中的定制单状态仍是 DELIVERED，售后只是一个标记 ——
+ * 所以"售后中"Tab 不能只看 status，要走 isAftersaleOrder()。
  */
 const CUSTOM_STATUS_GROUPS: Record<string, string[]> = {
   PENDING_PAYMENT: ['PENDING_PAYMENT'],
-  IN_PROGRESS: ['PAID'],
+  IN_PROGRESS: ['PAID', 'IN_PROGRESS'],
   WAIT_RECEIVE: ['DELIVERED'],
   COMPLETED: ['COMPLETED'],
   CANCELLED: ['CANCELLED'],
@@ -793,12 +868,44 @@ function getStatusesForTab(
   return statusGroups[status] || null;
 }
 
-function getOrdersByTab(status: string): UnifiedOrder[] {
+/**
+ * 这一单是不是"售后中"。
+ *
+ * 成品/补剂有 AFTERSALE 状态；定制单没有，后端把状态标签覆盖成"售后中"，
+ * 底层 status 仍是 DELIVERED。所以定制单必须读 renderable，不能只看 status。
+ */
+function isAftersaleOrder(order: UnifiedOrder): boolean {
+  if (order._orderType === 'custom') {
+    const label = (order as CustomOrderRow).renderable?.status?.label;
+    if (label === '售后中') return true;
+    return Boolean((order as unknown as { hasOpenAftersale?: boolean }).hasOpenAftersale);
+  }
+  return (
+    order.status === 'AFTERSALE' ||
+    Boolean((order as unknown as { hasOpenAftersale?: boolean }).hasOpenAftersale)
+  );
+}
+
+function getOrdersByTab(
+  status: string,
+  type: OrderType | 'ALL' = selectedType.value,
+): UnifiedOrder[] {
+  const sameType =
+    type === 'ALL'
+      ? allOrders.value
+      : allOrders.value.filter((order) => order._orderType === type);
+
   if (status === 'ALL') {
-    return allOrders.value;
+    return sameType;
   }
 
-  return allOrders.value.filter((order) => {
+  if (status === 'AFTERSALE') {
+    return sameType.filter((order) => isAftersaleOrder(order));
+  }
+
+  return sameType.filter((order) => {
+    // 有未处理售后的单只出现在"售后中"，不在"待确认/已完成"里重复出现
+    if (isAftersaleOrder(order)) return false;
     const statuses = getStatusesForTab(status, order._orderType);
     // 未知筛选值（例如 URL 里传进来的野状态码）退化为精确匹配当前状态
     return statuses ? statuses.includes(order.status) : order.status === status;
@@ -835,15 +942,29 @@ function customOrderTitle(order: UnifiedOrder): string {
   return name || '设计中的定制食谱';
 }
 
+/**
+ * 定制卡副标题（2026-10-24 改）：
+ * 只给"给谁 · 什么品种 · 多重 · 几份"。
+ * 定制目标、预计交付日期从卡片上拿掉 —— 它们是详情页的信息，
+ * 列表卡要让人一眼认出"这是我家哪只狗的那份"。
+ */
 function customOrderSubtitle(order: UnifiedOrder): string {
   const row = order as CustomOrderRow;
   const parts: string[] = [];
   if (row.dogName) parts.push(row.dogName);
-  const goal = (row.targetGoal || '').trim();
-  if (goal) parts.push(`目标：${goalLabel(goal) || goal}`);
-  const delivery = row.estimatedDeliveryDate || row.scheduledDate;
-  if (delivery) parts.push(`预计交付 ${formatDate(delivery)}`);
+  if (row.dogBreedName) parts.push(row.dogBreedName);
+  const weight = Number(row.dogWeightKg);
+  if (Number.isFinite(weight) && weight > 0) parts.push(`${weight}kg`);
+  const quantity = Number(row.recipeQuantity);
+  if (Number.isFinite(quantity) && quantity > 0) {
+    parts.push(`${quantity} 份`);
+  }
   return parts.join(' · ');
+}
+
+/** 已取消的定制单：退款进展（退款中 / 已退款 / 退款失败） */
+function customRefundText(order: UnifiedOrder): string {
+  return describeCustomRecipeRefund(order as any)?.text || '';
 }
 
 function customOrderAmount(order: UnifiedOrder): number {
@@ -1265,6 +1386,17 @@ function getStatusText(orderOrStatus: UnifiedOrder | string): string {
     if (orderOrStatus._orderType === 'supplement') {
       return SUPPLEMENT_ORDER_STATUS_LABELS[status] || getOrderStatusText(status)
     }
+    /**
+     * 定制单：状态中文以后端渲染契约为准，缺了再回落到选项字典。
+     * 统一列表原先的 statusMap 没有 IN_PROGRESS / DELIVERED，
+     * 定制单会露出英文码（专属列表删除后，这里成了唯一入口）。
+     */
+    if (orderOrStatus._orderType === 'custom') {
+      // 查不到也必须给中文，绝不把 IN_PROGRESS / DELIVERED 这类码漏给顾客
+      const label =
+        orderOrStatus.renderable?.status?.label || customStatusLabel(status);
+      return label || '状态待确认';
+    }
     if (isRefundedOrder(orderOrStatus)) {
       return '已退款（钱款原路退回）'
     }
@@ -1294,6 +1426,22 @@ function getStatusColor(orderOrStatus: UnifiedOrder | string): string {
   if (typeof orderOrStatus !== 'string') {
     if (orderOrStatus._orderType === 'supplement') {
       return SUPPLEMENT_STATUS_COLORS[status] || '#999'
+    }
+    if (orderOrStatus._orderType === 'custom') {
+      const tone = String(orderOrStatus.renderable?.status?.tone || '')
+      const toneColors: Record<string, string> = {
+        success: '#52c41a',
+        warning: '#faad14',
+        danger: '#f5222d',
+        info: '#1890ff',
+        progress: '#1890ff',
+        neutral: '#999',
+        muted: '#999',
+      }
+      if (toneColors[tone]) return toneColors[tone]
+      if (status === 'PENDING_PAYMENT') return '#ff9800'
+      if (status === 'CANCELLED') return '#999'
+      return '#52c41a'
     }
     if (isRefundedOrder(orderOrStatus)) {
       return '#16a34a'
@@ -1473,13 +1621,12 @@ onUnmounted(() => {
   padding-bottom: 136rpx;
 }
 
-/* 状态筛选Tab */
+/* 状态筛选：文字 Tab + 下划线，与上面的分段式类型筛选同一套节奏 */
 .status-tabs {
   display: flex;
-  background-color: #fbfcf7;
-  padding: 20rpx;
-  margin-bottom: 20rpx;
-  border-radius: 16rpx;
+  background-color: transparent;
+  padding: 10rpx 20rpx 0;
+  margin-bottom: 8rpx;
   overflow-x: auto;
   white-space: nowrap;
   position: sticky;
@@ -1489,37 +1636,39 @@ onUnmounted(() => {
 
 .tab-item {
   flex-shrink: 0;
-  padding: 12rpx 24rpx;
-  margin-right: 16rpx;
-  border-radius: 20rpx;
-  background-color: #fbfcf7;
+  padding: 14rpx 18rpx;
+  margin-right: 4rpx;
+  border-radius: 0;
+  background-color: transparent;
+  border-bottom: 4rpx solid transparent;
   display: flex;
   align-items: center;
   gap: 4rpx;
-  transition: all 0.3s;
+  transition: color 0.2s, border-color 0.2s;
 }
 
 .tab-item.active {
-  background-color: #1e3a2f;
+  background-color: transparent;
+  border-bottom-color: #c6a15b;
 }
 
 .tab-text {
   font-size: 26rpx;
-  color: #26261f;
-}
-
-.tab-item.active .tab-text {
-  color: #f3eddd;
-  font-weight: bold;
-}
-
-.tab-count {
-  font-size: 22rpx;
   color: #6b6653;
 }
 
+.tab-item.active .tab-text {
+  color: #1e3a2f;
+  font-weight: 700;
+}
+
+.tab-count {
+  font-size: 20rpx;
+  color: #9a927f;
+}
+
 .tab-item.active .tab-count {
-  color: #f3eddd;
+  color: #b08d4f;
 }
 
 .order-list {
@@ -1546,19 +1695,18 @@ onUnmounted(() => {
 .order-header-main {
   display: flex;
   align-items: center;
+  gap: 10rpx;
+  flex: 1;
   min-width: 0;
 }
 
 .order-time {
-  font-size: 26rpx;
-  color: #6b6653;
-}
-
-.order-header-left {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 24rpx;
+  color: #8a7a66;
 }
 
 /* 补剂类型标签：暖金底 + 深金字，与「我的」页的次级提示同一套色，不使用旧蓝色系 */
@@ -1605,8 +1753,10 @@ onUnmounted(() => {
 }
 
 .order-status {
-  font-size: 28rpx;
-  font-weight: bold;
+  flex-shrink: 0;
+  margin-left: 12rpx;
+  font-size: 26rpx;
+  font-weight: 700;
 }
 
 .order-dogs {
@@ -1692,9 +1842,10 @@ onUnmounted(() => {
 
 .order-amount {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-top: 8rpx;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: 8rpx;
+  padding-top: 10rpx;
 }
 
 .amount-label {
@@ -1827,12 +1978,12 @@ onUnmounted(() => {
   color: #2e7d32;
 }
 
-/* 左侧色条：定制橙 / 成品绿 / 补剂紫（需求 2.10） */
+/* 类型色条：定制橙 / 成品绿 / 补剂紫（需求 2.10） */
 .order-type-stripe {
-  width: 6rpx;
-  align-self: stretch;
+  width: 4rpx;
+  height: 26rpx;
+  align-self: center;
   border-radius: 999rpx;
-  margin-right: 12rpx;
   background: #2e7d32;
 }
 
@@ -1849,6 +2000,11 @@ onUnmounted(() => {
   color: #b45309;
 }
 
+.order-type-tag--supplement {
+  background: #f3e8ff;
+  color: #7c3aed;
+}
+
 .custom-order-sub {
   display: block;
   font-size: 22rpx;
@@ -1857,11 +2013,23 @@ onUnmounted(() => {
   line-height: 1.5;
 }
 
+.custom-order-refund {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #b45309;
+  line-height: 1.5;
+}
+
 /* ===== 类型筛选（2026-10-18）===== */
+/* 类型筛选：一个分段控件（4 段共用一个容器），不再每段各自描边 */
 .type-tabs {
   display: flex;
-  gap: 12rpx;
-  padding: 16rpx 24rpx 0;
+  gap: 4rpx;
+  margin: 8rpx 20rpx 0;
+  padding: 6rpx;
+  background: #f1ead9;
+  border-radius: 999rpx;
 }
 
 .type-tab {
@@ -1869,13 +2037,14 @@ onUnmounted(() => {
   text-align: center;
   border-radius: 999rpx;
   padding: 12rpx 0;
-  background: #fff;
-  border: 2rpx solid #ede0d0;
+  background: transparent;
+  border: none;
+  transition: background 0.2s, box-shadow 0.2s;
 }
 
 .type-tab.active {
-  background: #fff1e3;
-  border-color: #e5c9a3;
+  background: #fffdf7;
+  box-shadow: 0 4rpx 14rpx rgba(30, 58, 47, 0.08);
 }
 
 .type-tab-text {
@@ -1884,7 +2053,40 @@ onUnmounted(() => {
 }
 
 .type-tab.active .type-tab-text {
-  color: #b45309;
+  color: #1e3a2f;
   font-weight: 700;
 }
+/* 登录态过期的空态（从定制专属列表迁过来，2026-10-24） */
+.state-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 160rpx 48rpx;
+}
+
+.state-title {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+}
+
+.state-text {
+  margin-top: 16rpx;
+  font-size: 26rpx;
+  color: #8a7a66;
+  text-align: center;
+}
+
+.state-btn {
+  margin-top: 32rpx;
+  padding: 0 48rpx;
+  height: 72rpx;
+  line-height: 72rpx;
+  border-radius: 999rpx;
+  background: #1e3a2f;
+  color: #f3eddd;
+  font-size: 26rpx;
+}
+
 </style>

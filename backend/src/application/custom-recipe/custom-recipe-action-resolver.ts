@@ -458,26 +458,18 @@ export function buildCustomerHint(input: {
         ? `请在 ${deadline}前完成支付，超时订单会自动取消。`
         : '订单还没付款，付款后我们就开始安排。';
     }
-    case CustomRecipeStatus.PAID: {
-      const due = fmt(input.estimatedDeliveryDate);
-      return due
-        ? `我们已经收到款，会在 ${due}前把食谱交给你。`
-        : '我们已经收到款，马上开始安排。';
-    }
-    case CustomRecipeStatus.IN_PROGRESS: {
-      const due = fmt(input.estimatedDeliveryDate);
-      return due
-        ? `营养师正在为它设计专属食谱，预计 ${due}前交付。`
-        : '营养师正在为它设计专属食谱。';
-    }
-    case CustomRecipeStatus.DELIVERED: {
-      const auto = fmt(input.autoCompleteAt);
-      return auto
-        ? `专属食谱已经完成，请在 ${auto}前确认收到。`
-        : '专属食谱已经完成，确认一下就能开始用了。';
-    }
+    case CustomRecipeStatus.PAID:
+    case CustomRecipeStatus.IN_PROGRESS:
+    case CustomRecipeStatus.DELIVERED:
     case CustomRecipeStatus.COMPLETED:
-      return '这单已经完成。喂的过程中有任何问题，都可以申请售后。';
+      /**
+       * 2026-10-24：这四种状态不再下发"给顾客的一句话"。
+       *
+       * 原因：日期在"订单信息"里已经有了，阶段在进度时间轴里也有；
+       * "已交付……请在 X 前确认收到"还和"确认收到"按钮一起被移除。
+       * 只保留**可执行**的提示（去付款、看退款），减少页面上的重复文案。
+       */
+      return null;
     case CustomRecipeStatus.CANCELLED: {
       const amount =
         input.refundAmount && input.refundAmount > 0

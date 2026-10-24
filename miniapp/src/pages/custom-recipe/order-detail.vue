@@ -20,14 +20,18 @@
       <view class="status-card" :class="`status-card--${statusTone}`">
         <text class="status-text">{{ statusText }}</text>
         <text v-if="order.dogName" class="status-dog">为 {{ order.dogName }} 定制</text>
-        <text class="status-order-id">订单号 {{ order.orderId }}</text>
+        <!-- 订单号 + 一键复制（2026-10-24） -->
+        <view class="status-order-row">
+          <text class="status-order-id">订单号 {{ order.orderId }}</text>
+          <text class="status-order-copy" @tap="copyOrderId">复制</text>
+        </view>
         <!-- 待付款时限：直接决定这单会不会被自动取消 -->
         <text v-if="paymentHint" class="status-deadline">{{ paymentHint }}</text>
         <!--
-          后端下发的「给顾客的一句话」。
-          比状态名多一层"所以呢" —— 顾客看到"制作中"仍然不知道要等多久。
+          2026-10-24：不再展示后端下发的「给顾客的一句话」。
+          日期在订单信息里、阶段在进度里，"已交付……确认一下"还和确认按钮一起被移除，
+          这里再放一句就是重复。
         -->
-        <text v-if="statusHint" class="status-hint">{{ statusHint }}</text>
       </view>
 
       <!--
@@ -71,9 +75,7 @@
             <text class="progress-node__label">{{ step.label }}</text>
           </view>
         </view>
-        <text v-if="activeProgressNote" class="progress-note">
-          {{ activeProgressNote }}
-        </text>
+        <!-- 2026-10-24：去掉进度下方的小字说明 —— 阶段标签和订单信息里的日期已经够了 -->
       </view>
 
       <!-- 退款进度：顾客自助取消后钱去哪了，不能让他自己去猜 -->
@@ -88,56 +90,176 @@
         </text>
       </view>
 
+      <!--
+        多份交付（2026-10-21 · 第二阶段 Task 4）
+        一张订单一次交付 N 份，每份一张卡片。后端只给摘要（不含快照），
+        点「进入食谱」才拉那一份的内容；售后入口就留在这一份的卡上。
+      -->
+      <view class="section delivery-card" v-if="deliveryBatch">
+        <view class="delivery-head">
+          <text class="section-title">你的定制食谱</text>
+          <text v-if="deliveryBatch.version > 1" class="delivery-version">
+            第 {{ deliveryBatch.version }} 版
+          </text>
+        </view>
+        <text
+          v-if="deliveryBatch.items.length > 1"
+          class="batch-summary"
+        >
+          本次共交付 {{ deliveryBatch.items.length }} 份
+        </text>
+
+        <view
+          v-for="(item, index) in deliveryBatch.items"
+          :key="item.deliveryItemId"
+          class="batch-recipe"
+        >
+          <image
+            v-if="item.recipeCoverImageUrl"
+            class="batch-recipe__cover"
+            :src="item.recipeCoverImageUrl"
+            mode="aspectFill"
+          />
+          <view
+            v-else
+            class="batch-recipe__cover batch-recipe__cover--fallback"
+          >
+            <text class="batch-recipe__cover-initial">
+              {{ (item.recipeName || '食').slice(0, 1) }}
+            </text>
+          </view>
+
+          <view class="batch-recipe__body">
+            <text class="batch-recipe__name">
+              {{ item.recipeName || `第 ${index + 1} 份食谱` }}
+            </text>
+            <text class="delivery-time">
+              交付于 {{ formatDeliveryTime(deliveryBatch.deliveredAt) }}
+            </text>
+            <view class="batch-recipe__actions">
+              <button class="recipe-btn" @tap="viewBatchDelivery(item)">
+                进入食谱
+              </button>
+              <!--
+                按份售后（2026-10-21，2026-10-24 改）：
+                售后是针对这一份食谱的，所以入口留在卡片上；
+                已有未处理售后时按钮变成"查看进展"，不再另设整单售后卡。
+              -->
+              <button
+                v-if="aftersaleCount > 0 || aftersaleAction?.enabled"
+                class="recipe-btn batch-recipe__adjust"
+                @tap="viewBatchAftersale(item)"
+              >
+                {{ aftersaleCount > 0 ? '查看进展' : '继续调整' }}
+              </button>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!--
+        交付卡片（2026-10-16 批次 2.4）—— 老单份订单保持原样。
+        后端只给"第几版、什么时候交的、包含哪几样"，**不含内容本体** ——
+        点进去才拉那几十 KB 的快照。这样订单页每次打开都不会被拖慢。
+      -->
+      <view class="section delivery-card" v-if="!deliveryBatch && delivery">
+        <view class="delivery-head">
+          <text class="section-title">你的定制食谱</text>
+          <text v-if="delivery.version > 1" class="delivery-version">
+            第 {{ delivery.version }} 版
+          </text>
+        </view>
+        <!-- 封面：与交付页同一张图，16:9（上传要求就是 16:9） -->
+        <image
+          v-if="order.recipeCoverImageUrl"
+          class="single-recipe__cover"
+          :src="order.recipeCoverImageUrl"
+          mode="aspectFill"
+        />
+        <text class="recipe-name">{{ order.recipeName || '已交付的定制食谱' }}</text>
+        <text class="delivery-time">交付于 {{ formatDeliveryTime(delivery.deliveredAt) }}</text>
+
+        <view class="batch-recipe__actions">
+          <button class="recipe-btn ghost" @tap="viewDelivery">
+            查看完整内容
+          </button>
+          <!-- 按份售后：单份订单只有这一份，入口同样留在卡片上 -->
+          <button
+            v-if="aftersaleCount > 0 || aftersaleAction?.enabled"
+            class="recipe-btn batch-recipe__adjust"
+            @tap="viewAftersale"
+          >
+            {{ aftersaleCount > 0 ? '查看进展' : '继续调整' }}
+          </button>
+        </view>
+      </view>
+
       <view class="section">
-        <view class="section-title">定制信息</view>
+        <view class="section-title">订单信息</view>
         <view class="info-row">
           <text class="label">定制对象</text>
           <text class="value">{{ order.dogName || '—' }}</text>
         </view>
+        <!-- 营养师设计时用到的狗档案：顾客有权核对（2026-10-24） -->
+        <view class="info-row" v-if="dogProfileText">
+          <text class="label">对象档案</text>
+          <text class="value info-value--wrap">{{ dogProfileText }}</text>
+        </view>
         <view class="info-row">
-          <text class="label">定制目标</text>
-          <text class="value">{{ goalText }}</text>
+          <text class="label">体重管理方向</text>
+          <text class="value">{{ weightGoalText }}</text>
+        </view>
+        <view class="info-row">
+          <text class="label">健康管理</text>
+          <text class="value">{{ healthManagementText }}</text>
+        </view>
+        <view class="info-row">
+          <text class="label">定制份数</text>
+          <text class="value">{{ recipeQuantityText }}</text>
         </view>
         <view class="info-row">
           <text class="label">定制费</text>
           <text class="value">¥{{ formatAmount(order.amount) }}</text>
         </view>
-        <!-- 排期由系统自动定（顾客不选日期），这里只展示后端排好的结果 -->
-        <view class="info-row" v-if="order.status !== 'CANCELLED'">
-          <text class="label">预计交付</text>
+        <view class="info-row">
+          <text class="label">订单创建时间</text>
+          <text class="value">{{ formatDateTime(order.createdAt, '—') }}</text>
+        </view>
+        <view class="info-row" v-if="order.paymentConfirmedAt">
+          <text class="label">付款时间</text>
+          <text class="value">{{ formatDateTime(order.paymentConfirmedAt, '—') }}</text>
+        </view>
+        <!-- 交付前看预计；已交付后看实际，避免两行日期同时占版面 -->
+        <view class="info-row" v-if="showEstimatedDelivery">
+          <text class="label">预计交付日期</text>
           <text class="value">{{ formatDate(order.estimatedDeliveryDate, '排期中') }}</text>
         </view>
-        <view class="info-row" v-else-if="order.cancelledAt">
-          <text class="label">取消时间</text>
-          <text class="value">{{ formatDate(order.cancelledAt, '已取消') }}</text>
+        <view class="info-row" v-if="order.deliveredAt">
+          <text class="label">实际交付日期</text>
+          <text class="value">{{ formatDateTime(order.deliveredAt, '—') }}</text>
         </view>
-        <view class="info-row">
-          <text class="label">提交时间</text>
-          <text class="value">{{ formatDate(order.createdAt, '—') }}</text>
+        <view class="info-row" v-if="order.status === 'CANCELLED' && order.cancelledAt">
+          <text class="label">取消时间</text>
+          <text class="value">{{ formatDateTime(order.cancelledAt, '—') }}</text>
         </view>
       </view>
 
       <view class="section" v-if="hasRequirements">
-        <view class="section-title">你的需求</view>
+        <view class="section-title">定制需求</view>
         <view class="tag-group" v-if="(order.medicalConditions || []).length">
           <text class="tag-label">疾病史</text>
           <view class="tag-list">
             <text v-for="(item, index) in order.medicalConditions" :key="`c-${index}`" class="tag">{{ item }}</text>
           </view>
         </view>
-        <view class="tag-group" v-if="order.allergyText">
-          <text class="tag-label">过敏信息</text>
-          <text class="allergy-text">{{ order.allergyText }}</text>
-        </view>
-        <view class="tag-group" v-else-if="(order.allergies || []).length">
-          <text class="tag-label">过敏信息</text>
-          <view class="tag-list">
-            <text v-for="(item, index) in order.allergies" :key="`a-${index}`" class="tag">{{ item }}</text>
-          </view>
-        </view>
-        <view class="tag-group" v-if="order.allergyStatus">
-          <text class="tag-label">过敏回答</text>
-          <text class="allergy-text">{{ allergyAnswerText }}</text>
+        <!--
+          过敏合并成一行（2026-10-24）：
+          原先"过敏信息"和"过敏回答"两行，顾客要自己把两行对起来看；
+          现在一行说完：内容 + 是否确认过。
+        -->
+        <view class="tag-group" v-if="allergyDisplayText">
+          <text class="tag-label">过敏</text>
+          <text class="allergy-text">{{ allergyDisplayText }}</text>
         </view>
         <view class="tag-group" v-if="currentFoodText">
           <text class="tag-label">现在主要喂什么</text>
@@ -224,167 +346,10 @@
       </view>
 
       <!--
-        多份交付（2026-10-21 · 第二阶段 Task 4）
-        一张订单一次交付 N 份，每份一张卡片。后端只给摘要（不含快照），
-        点「进入食谱」才拉那一份的内容。确认收到仍是**整单一次**。
+        2026-10-24：整单"售后与问题反馈"卡已移除。
+        售后是针对某份食谱的 —— 入口留在上面的食谱卡（继续调整 / 查看进展）；
+        退款是另一件事，入口在底部固定栏。
       -->
-      <view class="section delivery-card" v-if="deliveryBatch">
-        <view class="delivery-head">
-          <text class="section-title">你的定制食谱</text>
-          <text v-if="deliveryBatch.version > 1" class="delivery-version">
-            第 {{ deliveryBatch.version }} 版
-          </text>
-        </view>
-        <text
-          v-if="deliveryBatch.items.length > 1"
-          class="batch-summary"
-        >
-          本次共交付 {{ deliveryBatch.items.length }} 份
-        </text>
-
-        <view
-          v-for="(item, index) in deliveryBatch.items"
-          :key="item.deliveryItemId"
-          class="batch-recipe"
-        >
-          <image
-            v-if="item.recipeCoverImageUrl"
-            class="batch-recipe__cover"
-            :src="item.recipeCoverImageUrl"
-            mode="aspectFill"
-          />
-          <view
-            v-else
-            class="batch-recipe__cover batch-recipe__cover--fallback"
-          >
-            <text class="batch-recipe__cover-initial">
-              {{ (item.recipeName || '食').slice(0, 1) }}
-            </text>
-          </view>
-
-          <view class="batch-recipe__body">
-            <text class="batch-recipe__name">
-              {{ item.recipeName || `第 ${index + 1} 份食谱` }}
-            </text>
-            <view class="delivery-items">
-              <text
-                v-for="code in item.itemCodes"
-                :key="code"
-                class="delivery-item"
-              >
-                {{ deliveryItemLabel(code) }}
-              </text>
-            </view>
-            <text class="delivery-time">
-              交付于 {{ formatDeliveryTime(deliveryBatch.deliveredAt) }}
-            </text>
-            <view class="batch-recipe__actions">
-              <button class="recipe-btn" @tap="viewBatchDelivery(item)">
-                进入食谱
-              </button>
-              <!--
-                按份售后（2026-10-21 · 第二阶段 Task 6）：
-                只在这一份允许提售后时出现；点进去默认勾选这一份，
-                顾客还可以在表单里追加其他份。
-              -->
-              <button
-                v-if="aftersaleAction && aftersaleAction.enabled"
-                class="recipe-btn batch-recipe__adjust"
-                @tap="viewBatchAftersale(item)"
-              >
-                继续调整
-              </button>
-            </view>
-          </view>
-        </view>
-
-        <!-- 确认收到：整单一次，不按份重复；文案与可用性仍由后端下发 -->
-        <button
-          v-if="confirmAction"
-          class="recipe-btn"
-          :loading="confirming"
-          :disabled="confirming || !confirmAction.enabled"
-          @tap="handleConfirmReceipt"
-        >
-          {{ confirmAction.label }}
-        </button>
-        <text
-          v-if="confirmAction && !confirmAction.enabled && confirmAction.disabledReason"
-          class="action-disabled-reason"
-        >
-          {{ confirmAction.disabledReason }}
-        </text>
-      </view>
-
-      <!--
-        交付卡片（2026-10-16 批次 2.4）—— 老单份订单保持原样。
-        后端只给"第几版、什么时候交的、包含哪几样"，**不含内容本体** ——
-        点进去才拉那几十 KB 的快照。这样订单页每次打开都不会被拖慢。
-      -->
-      <view class="section delivery-card" v-if="!deliveryBatch && delivery">
-        <view class="delivery-head">
-          <text class="section-title">你的定制食谱</text>
-          <text v-if="delivery.version > 1" class="delivery-version">
-            第 {{ delivery.version }} 版
-          </text>
-        </view>
-        <text class="recipe-name">{{ order.recipeName || '已交付的定制食谱' }}</text>
-        <view class="delivery-items">
-          <text
-            v-for="code in delivery.itemCodes"
-            :key="code"
-            class="delivery-item"
-          >
-            {{ deliveryItemLabel(code) }}
-          </text>
-        </view>
-        <text class="delivery-time">交付于 {{ formatDeliveryTime(delivery.deliveredAt) }}</text>
-
-        <!-- 确认收到：文案与"能不能点"都由后端下发 -->
-        <button
-          v-if="confirmAction"
-          class="recipe-btn"
-          :loading="confirming"
-          :disabled="confirming || !confirmAction.enabled"
-          @tap="handleConfirmReceipt"
-        >
-          {{ confirmAction.label }}
-        </button>
-        <text
-          v-if="confirmAction && !confirmAction.enabled && confirmAction.disabledReason"
-          class="action-disabled-reason"
-        >
-          {{ confirmAction.disabledReason }}
-        </text>
-
-        <button class="recipe-btn ghost" @tap="viewDelivery">查看完整内容</button>
-      </view>
-
-      <!--
-        「有问题」入口（批次 2.5）。
-        按钮文案与"能不能点"由后端下发；不能点时把原因说出来。
-      -->
-      <view class="section" v-if="aftersaleAction || aftersaleCount > 0">
-        <view class="section-title">售后与问题反馈</view>
-        <text class="section-note">
-          {{ aftersaleCount > 0
-            ? `你有 ${aftersaleCount} 条反馈，处理进展在里面`
-            : '食材买不到、吃了不适应、想改一版 —— 都可以在这里说' }}
-        </text>
-        <button
-          class="recipe-btn"
-          :disabled="aftersaleAction ? !aftersaleAction.enabled : false"
-          @tap="viewAftersale"
-        >
-          {{ aftersaleCount > 0 ? '查看处理进展' : (aftersaleAction?.label || '有问题') }}
-        </button>
-        <text
-          v-if="aftersaleAction && !aftersaleAction.enabled && aftersaleAction.disabledReason"
-          class="action-disabled-reason"
-        >
-          {{ aftersaleAction.disabledReason }}
-        </text>
-      </view>
 
       <view class="action-bar">
         <button
@@ -419,7 +384,14 @@
         >
           {{ cancelAction.label }}
         </button>
-        <button class="btn secondary" @tap="goOrders">返回定制订单</button>
+        <!-- 退款是另一件事：入口在底栏，售后（调整食谱）留在食谱卡片上 -->
+        <button
+          v-if="canRequestRefund"
+          class="btn secondary"
+          @tap="viewRefund"
+        >
+          退款申请
+        </button>
         <CustomerServiceInlineButton
           class="order-service"
           compact
@@ -428,7 +400,7 @@
           :order-id="orderId"
           :order-no="orderId"
           :title="`定制订单 ${orderId}`"
-          path="/pages/custom-recipe/orders"
+          path="/pages/orders-list/index"
         />
       </view>
     </template>
@@ -441,7 +413,6 @@ import { onLoad, onPullDownRefresh } from '@dcloudio/uni-app';
 import { getToken } from '@/utils/api';
 import {
   cancelOrder as cancelOrderRequest,
-  confirmReceipt as confirmReceiptRequest,
   fetchAftersales,
   fetchOrderDetail,
   fetchPublicConfig,
@@ -679,11 +650,6 @@ const statusText = computed(
     statusLabel(order.value.status) || '状态待确认',
 );
 
-/** 后端下发的"给顾客的一句话"；老后端没有就不显示 */
-const statusHint = computed(
-  () => order.value.renderable?.status?.customerHint || '',
-);
-
 /** 色彩档位（后端给语义档位，前端只做档位 → class 的映射） */
 const statusTone = computed(() => toneToClass(order.value.renderable?.status?.tone));
 
@@ -694,17 +660,6 @@ const statusTone = computed(() => toneToClass(order.value.renderable?.status?.to
  * （编出来的会和真实进度不一致，比不显示更糟）。
  */
 const progressSteps = computed(() => order.value.renderable?.progress?.timeline || []);
-
-/** 进度说明只显示一条，避免五个节点各塞一段长文案互相挤压。 */
-const activeProgressNote = computed(() => {
-  const active = progressSteps.value.find((step) => step.active && step.note);
-  if (active?.note) return active.note;
-  return (
-    [...progressSteps.value]
-      .reverse()
-      .find((step) => step.done && step.note)?.note || ''
-  );
-});
 
 /**
  * 交付摘要（来自订单详情，不含内容本体）。
@@ -721,70 +676,10 @@ const delivery = computed(() => order.value.delivery ?? null);
  */
 const deliveryBatch = computed(() => order.value.deliveryBatch ?? null);
 
-/** 「确认收到」这个动作 —— 文案与可用性全部由后端下发 */
-const confirmAction = computed(() =>
-  findAction(order.value.renderable, 'CONFIRM_RECEIPT'),
-);
-
-/** 交付物码 → 中文。码是后端定的，这里只做展示名 */
-const DELIVERY_ITEM_LABELS: Record<string, string> = {
-  RECIPE: '定制食谱',
-  SHOPPING_SOP: '采购与制作单',
-  NUTRITION_REPORT: '营养评估报告',
-};
-const deliveryItemLabel = (code: string) =>
-  DELIVERY_ITEM_LABELS[code] || code;
-
 const formatDeliveryTime = (iso: string) => {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
   return `${d.getMonth() + 1} 月 ${d.getDate()} 日 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-};
-
-const confirming = ref(false);
-
-/**
- * 顾客确认收到。
- *
- * 幂等由后端保证，所以**不需要在前端挡重复点击** ——
- * 挡了反而会出现"点了没反应"的困惑。这里只在请求进行中禁一下按钮。
- */
-const handleConfirmReceipt = async () => {
-  if (confirming.value) return;
-
-  const confirmed = await new Promise<boolean>((resolve) => {
-    uni.showModal({
-      title: '确认收到？',
-      content:
-        '确认后这单就完成了。如果食谱有问题，之后还可以在售后期内申请调整。',
-      confirmText: '确认收到',
-      cancelText: '再看看',
-      success: (res) => resolve(Boolean(res.confirm)),
-      fail: () => resolve(false),
-    });
-  });
-  if (!confirmed) return;
-
-  confirming.value = true;
-  try {
-    const result = await confirmReceiptRequest(orderId.value);
-    if (!result.ok) {
-      throw new Error(result.message || '确认失败，请重试');
-    }
-    uni.showToast({
-      title: result.alreadyConfirmed ? '你已经确认过了' : '已确认收到',
-      icon: 'none',
-    });
-    // 重新拉一次详情：状态、动作、进度都由后端算，前端不自己改
-    await loadOrderDetail();
-  } catch (error) {
-    uni.showToast({
-      title: (error as Error)?.message || '确认失败，请重试',
-      icon: 'none',
-    });
-  } finally {
-    confirming.value = false;
-  }
 };
 
 /**
@@ -881,18 +776,134 @@ const {
   ensure: ensureStatusOptions,
   labelOf: statusLabel,
 } = useOptionSet(CUSTOM_RECIPE_STATUS_SET);
-const goalText = computed(() => {
-  const goal = order.value.targetGoal;
-  if (!goal) return '—';
-  return goalLabel(goal) || '—';
+/** 体重管理方向：只显示减重/维持/增重；健康管理单独一行 */
+const weightGoalText = computed(() => {
+  const goal = String(order.value.targetGoal || '');
+  if (!goal || goal === 'HEALTH_SUPPORT') return '—';
+  return goalLabel(goal) || goal;
 });
 
-const allergyAnswerText = computed(() => {
-  const status = String(order.value.allergyStatus || '');
-  if (status === 'HAS_ALLERGY') return '有过敏';
-  if (status === 'NO_ALLERGY') return '明确回答：没有过敏';
-  return '未回答';
+/**
+ * 健康管理：布尔字段 + 历史单兜底。
+ * 老的健康管理单 targetGoal = HEALTH_SUPPORT，needsHealthManagement 可能没落库；
+ * 只看布尔会把它显示成"不需要"，和"体重方向 —"自相矛盾。
+ */
+const healthManagementText = computed(() => {
+  if (order.value.needsHealthManagement) return '需要';
+  if (String(order.value.targetGoal || '') === 'HEALTH_SUPPORT') {
+    return '需要（历史订单）';
+  }
+  return '不需要';
 });
+
+/** 定制份数 */
+const recipeQuantityText = computed(() => {
+  const quantity = Number(order.value.recipeQuantity);
+  return Number.isFinite(quantity) && quantity > 0 ? `${quantity} 份` : '1 份';
+});
+
+const ACTIVITY_LEVEL_LABELS: Record<string, string> = {
+  RESTING: '静养',
+  LOW: '低活动量',
+  NORMAL: '正常活动量',
+  HIGH: '高活动量',
+  WORKING: '工作犬强活动量',
+};
+
+/** 生日 → 几岁几个月（详情页展示用，不参与业务计算） */
+function formatDogAge(birthday: string | null | undefined): string {
+  if (!birthday) return '';
+  const d = new Date(birthday);
+  if (Number.isNaN(d.getTime())) return '';
+  const now = new Date();
+  let months =
+    (now.getFullYear() - d.getFullYear()) * 12 +
+    (now.getMonth() - d.getMonth());
+  if (now.getDate() < d.getDate()) months -= 1;
+  if (months < 0) return '';
+  if (months < 12) return `${months} 个月`;
+  const years = Math.floor(months / 12);
+  const rest = months % 12;
+  return rest ? `${years} 岁 ${rest} 个月` : `${years} 岁`;
+}
+
+/** 定制对象档案：品种 · 年龄 · 体重 · 体况 · 活动量 · 餐数 */
+const dogProfileText = computed(() => {
+  const parts: string[] = [];
+  const breed = String(order.value.dogBreedName || '').trim();
+  if (breed) parts.push(breed);
+  const age = formatDogAge(order.value.dogBirthday);
+  if (age) parts.push(age);
+  const weight = Number(order.value.dogWeightKg);
+  if (Number.isFinite(weight) && weight > 0) parts.push(`${weight}kg`);
+  const bcs = Number(order.value.dogBcsScore);
+  if (Number.isFinite(bcs) && bcs > 0) parts.push(`体况 ${bcs}/9`);
+  const activity =
+    ACTIVITY_LEVEL_LABELS[String(order.value.dogActivityLevel || '')];
+  if (activity) parts.push(activity);
+  const meals = Number(order.value.dogMealsPerDay);
+  if (Number.isFinite(meals) && meals > 0) parts.push(`每天 ${meals} 餐`);
+  return parts.join(' · ');
+});
+
+/** 交付前看预计、交付后看实际，避免两行日期同时占版面 */
+const showEstimatedDelivery = computed(
+  () => order.value.status !== 'CANCELLED' && !order.value.deliveredAt,
+);
+
+/** 过敏合并成一行：内容 + 是否确认过 */
+const allergyDisplayText = computed(() => {
+  const status = String(order.value.allergyStatus || '');
+  const text =
+    String(order.value.allergyText || '').trim() ||
+    (order.value.allergies || []).join('、');
+  if (status === 'NO_ALLERGY') return '没有过敏（已确认）';
+  if (status === 'HAS_ALLERGY') {
+    return text ? `${text}（已确认有过敏）` : '有过敏（已确认）';
+  }
+  if (text) return `${text}（未确认）`;
+  return '未填写';
+});
+
+/** 订单/付款/交付时间要带时分；纯日期仍用 formatDate */
+function formatDateTime(
+  value: string | null | undefined,
+  fallback = '—',
+): string {
+  if (!value) return fallback;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return fallback;
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const hour = String(d.getHours()).padStart(2, '0');
+  const minute = String(d.getMinutes()).padStart(2, '0');
+  return `${d.getFullYear()}-${month}-${day} ${hour}:${minute}`;
+}
+
+/** 一键复制订单号 */
+const copyOrderId = () => {
+  const value = String(order.value.orderId || '').trim();
+  if (!value) return;
+  uni.setClipboardData({
+    data: value,
+    success: () => uni.showToast({ title: '订单号已复制', icon: 'none' }),
+  });
+};
+
+/** 退款入口：只在不能自助取消（已进入制作/已交付）时出现 */
+const canRequestRefund = computed(() => {
+  const status = String(order.value.status || '');
+  return (
+    !cancelAction.value?.enabled &&
+    ['PAID', 'IN_PROGRESS', 'DELIVERED', 'COMPLETED'].includes(status)
+  );
+});
+
+const viewRefund = () => {
+  uni.navigateTo({
+    url: `${buildAftersaleUrl(orderId.value)}&scene=refund`,
+  });
+};
 
 const currentFoodText = computed(() => {
   const code = String(order.value.currentFoodMain || '');
@@ -1188,9 +1199,6 @@ const cancelOrder = async () => {
   }
 };
 
-const goOrders = () => {
-  uni.redirectTo({ url: '/pages/custom-recipe/orders' });
-};
 
 onUnmounted(() => {
   if (paymentClockTimer) {
@@ -1226,9 +1234,10 @@ onUnmounted(() => {
   border-radius: 20rpx;
 }
 
+/* 封面比例 16:9（后台上传要求就是 16:9，2026-10-24） */
 .batch-recipe__cover {
-  width: 180rpx;
-  height: 180rpx;
+  width: 240rpx;
+  height: 135rpx;
   flex-shrink: 0;
   border-radius: 16rpx;
   background: #f1ead9;
@@ -1624,6 +1633,12 @@ onUnmounted(() => {
   text-align: right;
   flex: 1;
   margin-left: 20rpx;
+}
+
+/* 对象档案这种长文本：允许换行，右对齐 */
+.info-value--wrap {
+  line-height: 1.55;
+  word-break: break-all;
 }
 
 .value.highlight {
@@ -2053,6 +2068,30 @@ onUnmounted(() => {
 .delivery-notice {
   background: #f7f1e4;
   border-color: #e8decd;
+}
+
+/* ===== 2026-10-24 顾客订单详情：复制 / 封面 / 单份卡 ===== */
+.status-order-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-top: 6rpx;
+}
+
+.status-order-copy {
+  padding: 2rpx 14rpx;
+  font-size: 20rpx;
+  color: #1e3a2f;
+  background: rgba(255, 253, 247, 0.9);
+  border-radius: 999rpx;
+}
+
+.single-recipe__cover {
+  width: 100%;
+  height: 368rpx;
+  border-radius: 16rpx;
+  margin-bottom: 16rpx;
+  background: #f1ead9;
 }
 
 </style>

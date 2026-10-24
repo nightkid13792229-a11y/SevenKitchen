@@ -71,6 +71,41 @@
         :title="session.lastError"
       />
 
+      <div v-if="pendingApprovals.length > 0" class="agent-approvals">
+        <div
+          v-for="approval in pendingApprovals"
+          :key="approval.id"
+          class="agent-approval"
+        >
+          <div class="agent-approval__header">
+            <span class="agent-approval__title">{{ approvalTitle(approval) }}</span>
+            <el-tag size="small" type="warning" effect="plain">待审批</el-tag>
+          </div>
+          <div class="agent-approval__reason">{{ approval.reason }}</div>
+          <div
+            v-if="approval.type === 'CATEGORY_OMISSION'"
+            class="agent-approval__detail"
+          >
+            缺类：{{ omissionCategories(approval) }}
+          </div>
+          <div class="agent-approval__actions">
+            <el-button
+              type="danger"
+              plain
+              size="small"
+              :disabled="approvalActionsDisabled"
+              @click="decide(approval, 'REJECTED')"
+            >驳回</el-button>
+            <el-button
+              type="primary"
+              size="small"
+              :disabled="approvalActionsDisabled"
+              @click="decide(approval, 'APPROVED')"
+            >批准</el-button>
+          </div>
+        </div>
+      </div>
+
       <div class="agent-composer">
         <el-input
           v-model="input"
@@ -113,6 +148,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import type {
+  RecipeAgentApproval,
   RecipeAgentMessage,
   RecipeAgentSession,
   RecipeAgentSessionStatus
@@ -136,10 +172,12 @@ const visible = computed({
 
 const session = ref<RecipeAgentSession | null>(null)
 const messages = ref<RecipeAgentMessage[]>([])
+const approvals = ref<RecipeAgentApproval[]>([])
 const input = ref('')
 const loading = ref(false)
 const sending = ref(false)
 const stopping = ref(false)
+const decidingApprovalId = ref<string | null>(null)
 const scrollRef = ref<HTMLElement | null>(null)
 
 let pollTimer: number | null = null
@@ -161,6 +199,16 @@ const currentRunSteps = computed(() => {
     .filter((message) => message.role === 'TOOL').length
 })
 const waiting = computed(() => session.value?.status === 'WAITING_USER')
+const pendingApprovals = computed(() =>
+  approvals.value.filter((approval) => approval.status === 'PENDING')
+)
+const busy = computed(
+  () =>
+    sending.value ||
+    stopping.value ||
+    decidingApprovalId.value !== null
+)
+const approvalActionsDisabled = computed(() => running.value || busy.value)
 const canSend = computed(
   () => !running.value && !sending.value && input.value.trim().length > 0
 )
@@ -237,6 +285,7 @@ async function loadSession(silent = false) {
     const view = await recipeDesignerApi.getAgentSession(props.draftId)
     session.value = view?.session ?? null
     messages.value = view?.messages ?? []
+    approvals.value = view?.approvals ?? []
 
     const terminalStatuses: RecipeAgentSessionStatus[] = [
       'COMPLETED',
@@ -283,7 +332,9 @@ async function loadSession(silent = false) {
 function handleOpen() {
   session.value = null
   messages.value = []
+  approvals.value = []
   input.value = ''
+  decidingApprovalId.value = null
   void loadSession()
 }
 
@@ -326,6 +377,55 @@ async function stopRun() {
     ElMessage.error(error instanceof Error ? error.message : '停止失败')
   } finally {
     stopping.value = false
+  }
+}
+
+function approvalTitle(approval: RecipeAgentApproval): string {
+  return approval.type === 'CATEGORY_OMISSION' ? '缺类确认' : '达标例外'
+}
+
+function omissionCategories(approval: RecipeAgentApproval): string {
+  const detail = approval.detail
+  if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
+    const raw = (detail as { categories?: unknown }).categories
+    if (Array.isArray(raw)) {
+      const categories = raw
+        .map((value) => (typeof value === 'string' ? value.trim() : ''))
+        .filter(Boolean)
+      if (categories.length > 0) {
+        return categories.join('、')
+      }
+    }
+  }
+  if (typeof detail === 'string' && detail.trim()) {
+    return detail.trim()
+  }
+  return '未提供'
+}
+
+async function decide(
+  approval: RecipeAgentApproval,
+  status: 'APPROVED' | 'REJECTED'
+) {
+  if (!session.value || approvalActionsDisabled.value) return
+  const sessionId = session.value.id
+  decidingApprovalId.value = approval.id
+  try {
+    await recipeDesignerApi.decideAgentApproval(approval.id, status)
+    await recipeDesignerApi.answerAgentRun(
+      sessionId,
+      status === 'APPROVED'
+        ? '缺类确认已批准，请重新 check_ready 并 finish_draft；保留所有警告。'
+        : '缺类确认被驳回，请调整方案或说明。'
+    )
+    await loadSession()
+    ensurePolling()
+    ElMessage.success(status === 'APPROVED' ? '审批已批准' : '审批已驳回')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '审批失败')
+    await loadSession(true)
+  } finally {
+    decidingApprovalId.value = null
   }
 }
 
@@ -491,6 +591,56 @@ onBeforeUnmount(stopPolling)
 
 .agent-error {
   margin-top: 8px;
+}
+
+.agent-approvals {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.agent-approval {
+  padding: 10px 12px;
+  border: 1px solid #f3d19e;
+  border-radius: 8px;
+  background: #fdf6ec;
+}
+
+.agent-approval__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.agent-approval__title {
+  color: #303133;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.agent-approval__reason {
+  margin-top: 6px;
+  color: #606266;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.agent-approval__detail {
+  margin-top: 4px;
+  color: #b88230;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.agent-approval__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 8px;
 }
 
 .agent-composer {

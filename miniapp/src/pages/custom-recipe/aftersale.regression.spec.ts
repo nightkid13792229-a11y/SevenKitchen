@@ -79,14 +79,17 @@ describe('售后页 · 类型与原因都来自后端', () => {
     expect(api).toContain('/aftersale');
   });
 
-  it('订单详情有售后入口，且按钮文案与可用性来自后端', () => {
+  it('订单详情的售后入口在食谱卡上，状态与文案来自后端', () => {
     const detail = stripComments(
       read('src/pages/custom-recipe/order-detail.vue'),
     );
     expect(detail).toContain('aftersaleAction');
     expect(detail).toContain("findAction(order.value.renderable, 'APPLY_AFTERSALE')");
     expect(detail).toContain('viewAftersale');
-    // 不能点时要把原因说出来
-    expect(detail).toContain('aftersaleAction.disabledReason');
+    // 2026-10-24：整单售后卡已移除，入口留在每份食谱卡：
+    // 可申请 → 继续调整；已有售后 → 查看进展
+    expect(detail).toContain('aftersaleCount > 0 || aftersaleAction?.enabled');
+    expect(detail).toContain('继续调整');
+    expect(detail).toContain('查看进展');
   });
 });

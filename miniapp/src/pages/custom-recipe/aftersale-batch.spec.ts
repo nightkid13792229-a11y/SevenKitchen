@@ -56,17 +56,18 @@ describe('订单详情 · 每份食谱的「继续调整」', () => {
     expect(source).not.toContain('/pages/custom-recipe/aftersale?orderId=');
   });
 
-  it('★ 只有后端允许售后时才显示，不允许就只保留订单级原因', () => {
-    expect(source).toMatch(/aftersaleAction\??\.enabled/);
-    expect(source).toContain('aftersaleAction.disabledReason');
+  it('★ 售后入口只在可申请或有进展时显示（2026-10-24 改口径）', () => {
+    // 入口留在每份食谱卡上：可申请 → 继续调整；已有售后 → 查看进展
+    expect(source).toMatch(/aftersaleCount > 0 \|\| aftersaleAction\??\.enabled/);
+    expect(source).toContain('继续调整');
+    expect(source).toContain('查看进展');
   });
 
-  it('★ 原来的「进入食谱」和订单级售后按钮都还在', () => {
+  it('★ 每份食谱的「进入食谱」与售后入口都还在', () => {
     expect(source).toContain('进入食谱');
     expect(source).toContain('viewBatchDelivery');
-    expect(source).toContain('viewAftersale');
-    expect(source).toContain('售后与问题反馈');
-    // 订单级入口仍然只带 orderId
+    expect(source).toContain('viewBatchAftersale');
+    // 单份订单仍有订单级售后入口（带 orderId）
     expect(source).toContain('buildAftersaleUrl(orderId.value)');
   });
 });
@@ -114,10 +115,12 @@ describe('售后页 · 选择要调整的食谱', () => {
     expect(source).toContain(':disabled="submitting || !canSubmit"');
   });
 
-  it('★ 没有批次时仍走原来的整单表单，不显示份选择', () => {
+  it('★ 单份/指定份不显示份选择；只有多份且未指定时才显示', () => {
     expect(source).toContain('isBatchOrder');
-    // 单份订单自动选中，不再渲染"选哪一份"区块；多份才显示。
-    expect(source).toContain('v-if="batchItems.length > 1"');
+    expect(source).toContain('showRecipePicker');
+    expect(source).toContain('v-if="showRecipePicker"');
+    // 从某份食谱卡进来时，售后固定这一份，不再让顾客重选
+    expect(source).toContain('fixedRecipeId');
     expect(source).toContain('canSubmitNew');
   });
 

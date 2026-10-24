@@ -1101,6 +1101,24 @@ export type RecipeAgentSessionStatus =
 
 export type RecipeAgentMessageRole = 'USER' | 'ASSISTANT' | 'TOOL'
 
+export type RecipeAgentApprovalType =
+  | 'COMPLIANCE_EXCEPTION'
+  | 'CATEGORY_OMISSION'
+
+export type RecipeAgentApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
+
+export interface RecipeAgentApproval {
+  id: string
+  sessionId: string
+  type: RecipeAgentApprovalType
+  status: RecipeAgentApprovalStatus
+  reason: string
+  detail?: unknown
+  decidedBy?: string | null
+  decidedAt?: string | null
+  createdAt: string
+}
+
 export interface RecipeAgentSession {
   id: string
   designRecipeId: string
@@ -1133,4 +1151,5 @@ export interface RecipeAgentMessage {
 export interface RecipeAgentSessionView {
   session: RecipeAgentSession
   messages: RecipeAgentMessage[]
+  approvals?: RecipeAgentApproval[]
 }

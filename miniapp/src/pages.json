@@ -274,13 +274,6 @@
       }
     },
     {
-      "path": "pages/custom-recipe/orders",
-      "style": {
-        "navigationBarTitleText": "我的定制订单",
-        "enablePullDownRefresh": true
-      }
-    },
-    {
       "path": "pages/custom-recipe/order-detail",
       "style": {
         "navigationBarTitleText": "定制订单详情",

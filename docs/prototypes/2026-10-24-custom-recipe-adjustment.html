@@ -282,6 +282,94 @@
     font-weight: 700;
   }
 
+
+  .recipe-multi-note { margin-top: 4px; font-size: 11px; color: #8a7a66; }
+  .macro-caption { margin-top: 12px; margin-bottom: 6px; font-size: 11px; color: #8a9a8f; }
+  .macro-grid--five { grid-template-columns: repeat(3, 1fr); }
+
+  /* 多份选择 */
+  .recipe-picker { margin-bottom: 10px; }
+  .picker-label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .picker-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .recipe-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 5px 10px; border-radius: 999px;
+    background: #f4f7f5; border: 1px solid #dfe9e3;
+    font-size: 11px; color: #4f4636;
+  }
+  .recipe-chip.active { background: #eaf4ec; border-color: #b9d3c0; color: #1e5b35; font-weight: 700; }
+
+  /* 附件 */
+  .attachment-block { margin-top: 10px; }
+  .attachment-list { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+  .attachment-photo { position: relative; }
+  .photo-thumb {
+    width: 58px; height: 58px; border-radius: 9px;
+    background: #eef2e4; border: 1px solid #dce4d2;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; color: #8a9a8f;
+  }
+  .attachment-doc {
+    position: relative; display: flex; align-items: center; gap: 7px;
+    height: 58px; padding: 0 26px 0 10px; border-radius: 9px;
+    background: #fbf7ee; border: 1px solid #eadfcb;
+  }
+  .doc-icon {
+    width: 30px; height: 34px; border-radius: 5px;
+    background: #fff; border: 1px solid #e3d5bd;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 8px; font-weight: 800; color: #b45309;
+  }
+  .doc-name { font-size: 11px; color: #4f4636; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .attachment-remove {
+    position: absolute; top: -5px; right: -5px;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #4a4a42; color: #fff;
+    font-size: 12px; line-height: 18px; text-align: center;
+  }
+  .attachment-doc .attachment-remove { top: -5px; right: -5px; }
+  .add-attachment-btn {
+    margin-top: 8px; height: 42px; width: 100%;
+    border-radius: 9px; border: 1px dashed #cdbfa8;
+    background: #fbf7ee; color: #a08c6d; font-size: 12px;
+  }
+
+  /* 历史卡涉及食谱 */
+  .request-scope { margin-top: 6px; font-size: 11px; color: #8a9a8f; }
+
+  /* 已交付总结 */
+  .delivery-summary { margin-top: 10px; padding: 10px 12px; background: #f4f7f5; border-radius: 10px; }
+  .summary-label { font-size: 11px; color: #1e5b35; font-weight: 700; }
+  .summary-text { margin-top: 4px; font-size: 12px; line-height: 1.6; color: #3f3222; }
+  .delivery-link { margin-top: 10px; font-size: 11px; color: #8a7a66; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .delivery-link-btn { color: #b08d4f; font-weight: 700; white-space: nowrap; }
+
+  .primary-btn:disabled { background: #e9e4d8; color: #a59b89; }
+
+  /* 附件底部弹窗 */
+  .sheet-mask {
+    position: absolute; inset: 0; z-index: 300;
+    background: rgba(20, 30, 25, 0.45);
+    display: flex; align-items: flex-end;
+  }
+  .sheet-mask[hidden] { display: none; }
+  .sheet {
+    width: 100%; background: #fffdf7;
+    border-radius: 22px 22px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+  }
+  .sheet-title { text-align: center; font-size: 14px; font-weight: 700; color: #3f3222; margin-bottom: 10px; }
+  .sheet-option {
+    width: 100%; text-align: left; border: none; background: #f7f1e4;
+    border-radius: 12px; padding: 12px 14px; margin-bottom: 8px;
+    display: flex; flex-direction: column; gap: 3px;
+  }
+  .sheet-option-title { font-size: 14px; font-weight: 700; color: #1e3a2f; }
+  .sheet-option-desc { font-size: 11px; color: #8a7a66; }
+  .sheet-cancel {
+    width: 100%; height: 44px; border: none; border-radius: 12px;
+    background: #fff; color: #6b6653; font-size: 14px; margin-top: 4px;
+  }
+
   /* 按状态切换 */
   .state-only { display: none; }
   #phone[data-state="submit"] .state-submit,
@@ -337,20 +425,20 @@
 
       <div class="section">
         <div class="section-head">
-          <div class="section-title">食谱调整进度</div>
-          <div class="section-sub">最新一条在最上面</div>
+          <div class="section-title">食谱调整历史</div>
         </div>
 
         <!-- 待受理 / 处理中 / 已交付：当前这条 -->
         <div class="request-card state-only state-pending">
           <div class="request-top">
-            <div class="request-time">2026-10-24 18:20</div>
+            <div class="request-time">提交时间 2026-10-24 18:20</div>
             <div class="pill pending">待受理</div>
           </div>
           <div class="request-content">
             鸡胸肉想换成鸭肉，南瓜的比例稍微降一点；最近它有点软便，希望整体清淡一些。另外鸡肝的比例能不能也降一点？它不太爱吃内脏，每次都要拌很久。还有，如果可以的话，希望能把西兰花换一种它更愿意吃的蔬菜。
           </div>
           <div class="request-toggle">展开</div>
+          <div class="request-scope">涉及 2 份：鸡肉南瓜、鸭肉西兰花</div>
           <div class="request-attachments">
             <div class="thumb">照片</div>
             <div class="thumb">报告.pdf</div>
@@ -360,99 +448,114 @@
 
         <div class="request-card state-only state-processing">
           <div class="request-top">
-            <div class="request-time">2026-10-24 18:20</div>
+            <div class="request-time">提交时间 2026-10-24 18:20</div>
             <div class="pill processing">处理中</div>
           </div>
           <div class="request-content open">
             鸡胸肉想换成鸭肉，南瓜的比例稍微降一点；最近它有点软便，希望整体清淡一些。
           </div>
+          <div class="request-scope">涉及 2 份：鸡肉南瓜、鸭肉西兰花</div>
           <div class="request-attachments">
             <div class="thumb">照片</div>
             <div class="thumb">报告.pdf</div>
           </div>
-          <div class="state-note">已经受理，正在调整；如需补充，请点左下角找 Seven爸爸。</div>
+          <div class="state-note">已经受理，正在调整。</div>
         </div>
 
         <div class="request-card state-only state-delivered">
           <div class="request-top">
-            <div class="request-time">2026-10-24 18:20</div>
+            <div class="request-time">提交时间 2026-10-24 18:20</div>
             <div class="pill delivered">已交付</div>
           </div>
           <div class="request-content open">
             鸡胸肉想换成鸭肉，南瓜的比例稍微降一点；最近它有点软便，希望整体清淡一些。
           </div>
-          <div class="state-note">已重新交付一版。如果还想调整，可以再提交一条（受窗口和次数限制）。</div>
+          <div class="request-scope">涉及 2 份：鸡肉南瓜、鸭肉西兰花</div>
+          <div class="delivery-summary">
+            <div class="summary-label">调整总结</div>
+            <div class="summary-text">已把鸡胸肉换成鸭肉，南瓜降到 20%，整体更清淡；新版本已按这个方案调整。</div>
+          </div>
+          <div class="delivery-link">
+            最新的食谱可以在你的定制订单中查看
+            <span class="delivery-link-btn">查看最新食谱 ›</span>
+          </div>
         </div>
 
         <div class="request-card state-only state-withdrawn">
           <div class="request-top">
-            <div class="request-time">2026-10-24 18:20</div>
+            <div class="request-time">提交时间 2026-10-24 18:20</div>
             <div class="pill withdrawn">已撤销</div>
           </div>
           <div class="request-content open">
             鸡胸肉想换成鸭肉，南瓜的比例稍微降一点；最近它有点软便，希望整体清淡一些。
           </div>
+          <div class="request-scope">涉及 2 份：鸡肉南瓜、鸭肉西兰花</div>
           <div class="state-note">本次已撤销，不计入调整次数；可以重新提交。</div>
         </div>
 
         <!-- 历史记录：所有状态都展示一条已交付，证明列表按时间倒序 -->
         <div class="request-card state-only state-submit">
           <div class="request-top">
-            <div class="request-time">2026-10-18 09:12</div>
+            <div class="request-time">提交时间 2026-10-18 09:12</div>
             <div class="pill delivered">已交付</div>
           </div>
           <div class="request-content">
             鸡胸肉换成鸭肉，南瓜比例降到 20%，希望颗粒感不要太强。
           </div>
+          <div class="request-scope">涉及 2 份：鸡肉南瓜、鸭肉西兰花</div>
         </div>
         <div class="request-card state-only state-pending">
           <div class="request-top">
-            <div class="request-time">2026-10-18 09:12</div>
+            <div class="request-time">提交时间 2026-10-18 09:12</div>
             <div class="pill delivered">已交付</div>
           </div>
           <div class="request-content">
             鸡胸肉换成鸭肉，南瓜比例降到 20%，希望颗粒感不要太强。
           </div>
+          <div class="request-scope">涉及 2 份：鸡肉南瓜、鸭肉西兰花</div>
         </div>
         <div class="request-card state-only state-processing">
           <div class="request-top">
-            <div class="request-time">2026-10-18 09:12</div>
+            <div class="request-time">提交时间 2026-10-18 09:12</div>
             <div class="pill delivered">已交付</div>
           </div>
           <div class="request-content">
             鸡胸肉换成鸭肉，南瓜比例降到 20%，希望颗粒感不要太强。
           </div>
+          <div class="request-scope">涉及 2 份：鸡肉南瓜、鸭肉西兰花</div>
         </div>
         <div class="request-card state-only state-delivered">
           <div class="request-top">
-            <div class="request-time">2026-10-18 09:12</div>
+            <div class="request-time">提交时间 2026-10-18 09:12</div>
             <div class="pill delivered">已交付</div>
           </div>
           <div class="request-content">
             鸡胸肉换成鸭肉，南瓜比例降到 20%，希望颗粒感不要太强。
           </div>
+          <div class="request-scope">涉及 2 份：鸡肉南瓜、鸭肉西兰花</div>
         </div>
         <div class="request-card state-only state-withdrawn">
           <div class="request-top">
-            <div class="request-time">2026-10-18 09:12</div>
+            <div class="request-time">提交时间 2026-10-18 09:12</div>
             <div class="pill delivered">已交付</div>
           </div>
           <div class="request-content">
             鸡胸肉换成鸭肉，南瓜比例降到 20%，希望颗粒感不要太强。
           </div>
+          <div class="request-scope">涉及 2 份：鸡肉南瓜、鸭肉西兰花</div>
         </div>
       </div>
 
       <div class="section">
         <div class="section-head">
-          <div class="section-title">本次食谱</div>
-          <div class="section-sub">共 6 种食材</div>
+          <div class="section-title">食谱摘要</div>
         </div>
         <div class="recipe-card">
           <div class="recipe-top">
             <div class="recipe-name">鸡肉南瓜低脂鲜食</div>
-            <div class="recipe-count">6 种食材</div>
+            <div class="recipe-count">当前展示</div>
           </div>
+          <div class="recipe-multi-note">本次调整 2 份 · 另有 1 份：鸭肉西兰花</div>
           <div class="food-list">
             <div class="food-row"><span class="food-name">鸡胸肉</span><span class="food-ratio">40.00%</span></div>
             <div class="food-row"><span class="food-name">南瓜</span><span class="food-ratio">25.00%</span></div>
@@ -462,62 +565,104 @@
             <div class="food-row"><span class="food-name">食用盐</span><span class="food-ratio">0.12%</span></div>
           </div>
           <div class="supplement-line">须额外添加：<b>钙 每公斤食材添加 5 g</b>、<b>锌 每公斤食材添加 15 mg</b></div>
-          <div class="macro-grid">
-            <div class="macro-cell"><div class="macro-label">蛋白质</div><div class="macro-value">32.1%</div></div>
-            <div class="macro-cell"><div class="macro-label">脂肪</div><div class="macro-value">14.2%</div></div>
-            <div class="macro-cell"><div class="macro-label">灰分</div><div class="macro-value">5.8%</div></div>
-            <div class="macro-cell"><div class="macro-label">水分</div><div class="macro-value">62.4%</div></div>
-            <div class="macro-cell"><div class="macro-label">钙磷比</div><div class="macro-value">1.35</div></div>
-            <div class="macro-cell"><div class="macro-label">能量</div><div class="macro-value">1420</div></div>
+          <div class="macro-caption">干物质（DM）占比</div>
+          <div class="macro-grid macro-grid--five">
+            <div class="macro-cell"><div class="macro-label">蛋白质</div><div class="macro-value">45.2%</div></div>
+            <div class="macro-cell"><div class="macro-label">脂肪</div><div class="macro-value">20.1%</div></div>
+            <div class="macro-cell"><div class="macro-label">灰分</div><div class="macro-value">8.2%</div></div>
+            <div class="macro-cell"><div class="macro-label">纤维</div><div class="macro-value">4.1%</div></div>
+            <div class="macro-cell"><div class="macro-label">碳水</div><div class="macro-value">22.4%</div></div>
           </div>
         </div>
       </div>
 
       <div class="section state-only state-submit">
         <div class="section-head">
-          <div class="section-title">调整需求</div>
-          <div class="section-sub">一次只能提交一条</div>
+          <div class="section-title">想怎么调整</div>
         </div>
         <div class="form-card">
-          <div class="field-label">想怎么调整？</div>
-          <textarea placeholder="比如：鸡肉想换成鸭肉、某样食材减少一点、份量想调整……"></textarea>
-          <div class="upload-row">
-            <div class="upload-tile"><span class="plus">＋</span><span>照片</span></div>
-            <div class="upload-tile"><span class="plus">＋</span><span>文档</span></div>
+          <div class="recipe-picker">
+            <div class="picker-label">本次要调整的食谱</div>
+            <div class="picker-chips">
+              <span class="recipe-chip active">鸡肉南瓜 ✓</span>
+              <span class="recipe-chip active">鸭肉西兰花 ✓</span>
+            </div>
           </div>
-          <div class="form-note">支持照片和 PDF / Word；提交后由 Seven爸爸看一下，处理完会重新交付一版食谱。</div>
+          <textarea class="adjust-input" placeholder="比如：鸡肉想换成鸭肉、某样食材减少一点、份量想调整……"></textarea>
+          <div class="attachment-block">
+            <div class="attachment-list">
+              <div class="attachment-photo">
+                <div class="photo-thumb">照片</div>
+                <span class="attachment-remove">×</span>
+              </div>
+              <div class="attachment-doc">
+                <span class="doc-icon">PDF</span>
+                <span class="doc-name">血检报告.pdf</span>
+                <span class="attachment-remove">×</span>
+              </div>
+            </div>
+            <button class="add-attachment-btn" data-open-sheet>＋ 添加附件</button>
+          </div>
         </div>
       </div>
 
       <div class="section state-only state-withdrawn">
         <div class="section-head">
-          <div class="section-title">调整需求</div>
-          <div class="section-sub">一次只能提交一条</div>
+          <div class="section-title">想怎么调整</div>
         </div>
         <div class="form-card">
-          <div class="field-label">想怎么调整？</div>
-          <textarea placeholder="比如：鸡肉想换成鸭肉、某样食材减少一点、份量想调整……"></textarea>
-          <div class="upload-row">
-            <div class="upload-tile"><span class="plus">＋</span><span>照片</span></div>
-            <div class="upload-tile"><span class="plus">＋</span><span>文档</span></div>
+          <div class="recipe-picker">
+            <div class="picker-label">本次要调整的食谱</div>
+            <div class="picker-chips">
+              <span class="recipe-chip active">鸡肉南瓜 ✓</span>
+              <span class="recipe-chip active">鸭肉西兰花 ✓</span>
+            </div>
           </div>
-          <div class="form-note">支持照片和 PDF / Word；提交后由 Seven爸爸看一下，处理完会重新交付一版食谱。</div>
+          <textarea class="adjust-input" placeholder="比如：鸡肉想换成鸭肉、某样食材减少一点、份量想调整……"></textarea>
+          <div class="attachment-block">
+            <div class="attachment-list">
+              <div class="attachment-photo">
+                <div class="photo-thumb">照片</div>
+                <span class="attachment-remove">×</span>
+              </div>
+              <div class="attachment-doc">
+                <span class="doc-icon">PDF</span>
+                <span class="doc-name">血检报告.pdf</span>
+                <span class="attachment-remove">×</span>
+              </div>
+            </div>
+            <button class="add-attachment-btn" data-open-sheet>＋ 添加附件</button>
+          </div>
         </div>
       </div>
 
       <div class="section state-only state-delivered">
         <div class="section-head">
-          <div class="section-title">调整需求</div>
-          <div class="section-sub">还可以再提一条</div>
+          <div class="section-title">想怎么调整</div>
         </div>
         <div class="form-card">
-          <div class="field-label">想怎么调整？</div>
-          <textarea placeholder="比如：鸡肉想换成鸭肉、某样食材减少一点、份量想调整……"></textarea>
-          <div class="upload-row">
-            <div class="upload-tile"><span class="plus">＋</span><span>照片</span></div>
-            <div class="upload-tile"><span class="plus">＋</span><span>文档</span></div>
+          <div class="recipe-picker">
+            <div class="picker-label">本次要调整的食谱</div>
+            <div class="picker-chips">
+              <span class="recipe-chip active">鸡肉南瓜 ✓</span>
+              <span class="recipe-chip active">鸭肉西兰花 ✓</span>
+            </div>
           </div>
-          <div class="form-note">支持照片和 PDF / Word；提交后由 Seven爸爸看一下，处理完会重新交付一版食谱。</div>
+          <textarea class="adjust-input" placeholder="比如：鸡肉想换成鸭肉、某样食材减少一点、份量想调整……"></textarea>
+          <div class="attachment-block">
+            <div class="attachment-list">
+              <div class="attachment-photo">
+                <div class="photo-thumb">照片</div>
+                <span class="attachment-remove">×</span>
+              </div>
+              <div class="attachment-doc">
+                <span class="doc-icon">PDF</span>
+                <span class="doc-name">血检报告.pdf</span>
+                <span class="attachment-remove">×</span>
+              </div>
+            </div>
+            <button class="add-attachment-btn" data-open-sheet>＋ 添加附件</button>
+          </div>
         </div>
       </div>
 
@@ -529,7 +674,7 @@
 
       <div class="section state-only state-processing">
         <div class="locked-card">
-          当前调整<strong>正在处理</strong>，处理完之前不能再提交下一条。想补充或修改，请点左下角找 Seven爸爸。
+          当前调整<strong>正在处理</strong>，处理完之前不能再提交下一条。
         </div>
       </div>
 
@@ -541,12 +686,28 @@
         <div class="service-icon">7</div>
         <div>Seven爸爸</div>
       </div>
-      <div class="bar-state bar-submit"><button class="primary-btn">提交调整</button></div>
+      <div class="bar-state bar-submit"><button class="primary-btn submit-adjust" disabled>提交调整</button></div>
       <div class="bar-state bar-pending"><button class="danger-btn">撤销本次提交</button></div>
       <div class="bar-state bar-processing"><button class="disabled-btn">处理中</button></div>
-      <div class="bar-state bar-delivered"><button class="primary-btn">提交调整</button></div>
-      <div class="bar-state bar-withdrawn"><button class="primary-btn">提交调整</button></div>
+      <div class="bar-state bar-delivered"><button class="primary-btn submit-adjust" disabled>提交调整</button></div>
+      <div class="bar-state bar-withdrawn"><button class="primary-btn submit-adjust" disabled>提交调整</button></div>
     </div>
+
+    <div class="sheet-mask" id="attachmentSheet" hidden>
+      <div class="sheet">
+        <div class="sheet-title">添加附件</div>
+        <button class="sheet-option" data-pick="photo">
+          <span class="sheet-option-title">照片</span>
+          <span class="sheet-option-desc">从相册选择，支持 JPG / PNG</span>
+        </button>
+        <button class="sheet-option" data-pick="doc">
+          <span class="sheet-option-title">文档</span>
+          <span class="sheet-option-desc">支持 PDF / Word</span>
+        </button>
+        <button class="sheet-cancel" id="sheetCancel">取消</button>
+      </div>
+    </div>
+
   </div>
 
   <script>
@@ -565,6 +726,36 @@
         toggle.textContent = content.classList.contains('open') ? '收起' : '展开';
       });
     });
+
+    // 附件弹窗
+    const sheet = document.getElementById('attachmentSheet');
+    document.querySelectorAll('[data-open-sheet]').forEach((btn) => {
+      btn.addEventListener('click', () => { sheet.hidden = false; });
+    });
+    document.getElementById('sheetCancel').addEventListener('click', () => { sheet.hidden = true; });
+    sheet.addEventListener('click', (event) => {
+      if (event.target === sheet) sheet.hidden = true;
+    });
+    sheet.querySelectorAll('.sheet-option').forEach((option) => {
+      option.addEventListener('click', () => {
+        sheet.hidden = true;
+      });
+    });
+
+    // 只有文字非空才能提交
+    const syncSubmit = () => {
+      const state = phone.dataset.state;
+      const input = document.querySelector(`.state-${state} .adjust-input`);
+      const button = document.querySelector(`.bar-${state} .submit-adjust`);
+      if (button) button.disabled = !input || !input.value.trim();
+    };
+    document.querySelectorAll('.adjust-input').forEach((input) => {
+      input.addEventListener('input', syncSubmit);
+    });
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', syncSubmit);
+    });
+    syncSubmit();
   </script>
 </body>
 </html>

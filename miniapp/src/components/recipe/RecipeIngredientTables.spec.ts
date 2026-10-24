@@ -37,24 +37,27 @@ describe('两张食材表 · 分成两个组件', () => {
     'utf-8',
   )
 
-  it('★ 小于 1% 的占比显示 <1%，不能显示成 0%', () => {
+  it('★ 占比保留两位小数；小于 0.01% 显示 <0.01%，不能舍成 0.00%', () => {
     /**
-     * 真实数据里食用盐是 0.12% —— 四舍五入会变成 "0%"，
-     * 顾客会读成"这道菜没放盐"。小比例必须如实说"<1%"。
+     * 2026-10-24 老板定：占比保留两位小数。
+     * 真实数据里食用盐是 0.12%，显示 0.12%；
+     * 更小的（<0.01%）显示 <0.01%，不能读成"没放"。
      */
-    expect(ratio).toContain("'<1%'")
+    expect(ratio).toContain("'<0.01%'")
     expect(ratio).toContain('num > 0')
-    expect(ratio).toContain('num < 1')
+    expect(ratio).toContain('num < 0.01')
+    expect(ratio).toContain('toFixed(2)')
   })
 
-  it('★ 占比表固定两列：名称 + 占比，不显示制备方法', () => {
+  it('★ 占比表三列：名称 + 部位/预处理 + 占比，不显示老的"制备方法"', () => {
     expect(ratio).toContain('占比')
-    // 占比表里不该出现制备方法那一列（同样要剥注释再断言）
+    expect(ratio).toContain('部位/预处理')
+    expect(ratio).toContain('item.preparation')
+    // 老文案不能再出现（部位/预处理不是老的"制备方法"）
     const template = stripComments(
       ratio.slice(0, ratio.indexOf('<script setup')),
     )
     expect(template).not.toContain('制备方法')
-    expect(template).not.toContain('preparation')
   })
 
   it('★ 用量表三列：名称 + 制备方法 + 净用量', () => {

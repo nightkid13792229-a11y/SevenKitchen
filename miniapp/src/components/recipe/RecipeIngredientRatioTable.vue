@@ -12,13 +12,17 @@
     一个组件加 `showPreparation` / `showAmount` 两个开关，
     比两个组件更容易出现"某一页漏传导致多一列"。
 
-    ## 固定两列
+    ## 三列（2026-10-24 改）
 
-    名称 + 占比。**不显示制备方法**（那是制作单的事）。
+    名称 + 部位/预处理 + 占比。
+    "部位/预处理"用的是设计器里被重新定义的 `preparationMethod`
+    （不是老的"制备方法"，也不是历史字段 `preparationNote`）。
+    **整道菜的火候/时间/顺序仍然不在这张表**，那是制作单的"制作步骤"。
   -->
   <view class="ratio-table">
     <view class="ratio-table__head">
       <text class="ratio-table__th-name">食材</text>
+      <text class="ratio-table__th-prep">部位/预处理</text>
       <text class="ratio-table__th-ratio">占比</text>
     </view>
     <view
@@ -27,6 +31,7 @@
       class="ratio-table__row"
     >
       <text class="ratio-table__name">{{ item.name }}</text>
+      <text class="ratio-table__prep">{{ item.preparation || '—' }}</text>
       <text class="ratio-table__ratio">{{ formatRatio(item.ratioPercent) }}</text>
     </view>
     <view v-if="!rows.length" class="ratio-table__empty">
@@ -41,7 +46,12 @@ import { computed } from 'vue'
 const props = withDefaults(
   defineProps<{
     /** 只传食材行（`ingredientType === 'FOOD'`）—— 补剂与包材不进这张表 */
-    items?: Array<{ name: string; ratioPercent?: number | null }>
+    items?: Array<{
+      name: string;
+      ratioPercent?: number | null;
+      /** 设计器里的"部位/预处理"（preparationMethod 的新语义） */
+      preparation?: string | null;
+    }>
   }>(),
   { items: () => [] },
 )
@@ -49,20 +59,20 @@ const props = withDefaults(
 const rows = computed(() => (props.items || []).filter((item) => !!item?.name))
 
 /**
- * 占比只显示整数百分比。
+ * 占比保留两位小数（2026-10-24 老板定）。
  *
  * 后端存的是 `40`（表示 40%）；拿不到就给「—」而不是 0 ——
  * `0%` 会被读成"这道菜里没有这个食材"，而它明明在表里。
  *
- * 小于 1% 但大于 0 的（真实数据里食用盐是 0.12%）显示「<1%」：
- * 四舍五入成 `0%` 同样是"没放"的误读。
+ * 小于 0.01% 的显示「<0.01%」：两位小数会把它舍成 `0.00%`，
+ * 同样会被读成"没放"。这比原来的「<1%」精确，也不会误导。
  */
 function formatRatio(value: number | null | undefined): string {
   if (value === null || value === undefined) return '—'
   const num = Number(value)
   if (!Number.isFinite(num)) return '—'
-  if (num > 0 && num < 1) return '<1%'
-  return `${Math.round(num)}%`
+  if (num > 0 && num < 0.01) return '<0.01%'
+  return `${num.toFixed(2)}%`
 }
 </script>
 
@@ -86,8 +96,16 @@ function formatRatio(value: number | null | undefined): string {
   color: #a9967e;
 }
 
+.ratio-table__th-prep {
+  flex: 1;
+  min-width: 0;
+  margin-left: 16rpx;
+  font-size: 20rpx;
+  color: #a9967e;
+}
+
 .ratio-table__th-ratio {
-  width: 130rpx;
+  width: 120rpx;
   text-align: right;
   font-size: 20rpx;
   color: #a9967e;
@@ -95,7 +113,7 @@ function formatRatio(value: number | null | undefined): string {
 
 .ratio-table__row {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   padding: 16rpx 0;
   border-bottom: 1px dashed #f4ebe0;
 }
@@ -106,14 +124,26 @@ function formatRatio(value: number | null | undefined): string {
 
 .ratio-table__name {
   flex: 1;
+  min-width: 0;
   font-size: 25rpx;
   color: #3f3222;
 }
 
+/* 部位/预处理：允许两行，长文本不把占比挤出去 */
+.ratio-table__prep {
+  flex: 1;
+  min-width: 0;
+  margin-left: 16rpx;
+  font-size: 22rpx;
+  line-height: 1.45;
+  color: #6b6653;
+  word-break: break-all;
+}
+
 .ratio-table__ratio {
-  width: 130rpx;
+  width: 120rpx;
   text-align: right;
-  font-size: 25rpx;
+  font-size: 24rpx;
   font-weight: 700;
   color: #b45309;
 }

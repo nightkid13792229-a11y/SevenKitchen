@@ -36,6 +36,7 @@ import {
   normalizePreparationMethodHistoryText,
   resolvePreparationMethodText,
 } from './preparation-method-text.util';
+import { readProductionSteps } from '../../domain/recipe-designer/production-steps';
 import type { RecipeQueryDto } from '../../interfaces/dto/recipes/admin-recipe.dto';
 import type {
   IngredientPreparationMethodHistoryDto,
@@ -2111,6 +2112,12 @@ export class RecipeService {
       nutritionStandard: recipe.nutritionStandard as NutritionStandard,
       nutritionDetailedData: recipe.nutritionDetailedData || undefined,
       productionSteps: recipe.productionSteps || undefined,
+      /**
+       * 结构化制作步骤（2026-10-24）：新设计器写的是 productionStepsJson，
+       * 老字段 productionSteps 故意不动；顾客制作单要按新结构渲染，
+       * 否则新食谱的"制作步骤"会是空的。
+       */
+      productionStepsList: readProductionSteps(recipe.productionStepsJson),
       productionLossRate: recipe.productionLossRate,
       batchLaborHours: recipe.batchLaborHours || undefined,
       items:

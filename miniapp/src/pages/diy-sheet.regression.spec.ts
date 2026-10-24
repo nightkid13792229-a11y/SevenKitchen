@@ -151,18 +151,18 @@ describe('diy sheet layout regressions', () => {
     expect(source).toContain("import { getNutritionStandardExplain } from '../../utils/label-mapping'")
   })
 
-  it('drops the cooking / packaging / storage advice cards', () => {
+  it('uses one compact storage/cooking section instead of the old advice cards', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
       'utf-8',
     )
     const templateSource = source.slice(0, source.indexOf('<script setup'))
 
+    // 2026-10-24：三张建议大卡合并成"储存和烹饪"一块，全店统一文案
+    expect(templateSource).toContain('储存和烹饪')
+    expect(templateSource).toContain('分装建议用食品真空袋抽真空')
     expect(templateSource).not.toContain('烹饪建议')
-    expect(templateSource).not.toContain('分装建议')
     expect(templateSource).not.toContain('储存&保质期')
-    expect(templateSource).not.toContain('不建议微波、烤、煎等高温烹饪')
-    expect(templateSource).not.toContain('-18℃冷冻保存6个月')
   })
 
   /**
@@ -526,18 +526,18 @@ describe('diy sheet layout regressions', () => {
     expect(source).not.toContain('drawShareSummaryCards')
     // 适用阶段标签不再进图片
     expect(source).not.toContain('stages: recipe.value.applicableLifeStages')
-    expect(source).toContain("['原料名称', '已选商品', getFoodPrepAmountHeaderForPrint(), '制备方法']")
+    expect(source).toContain("['原料', '产品', getFoodPrepAmountHeaderForPrint(), '部位/预处理']")
     // 2026-10-18：采购量删掉后，纸质单这一列只印净用量（原来印"净重 / 建议采购量"两个数）
     expect(source).not.toContain('actualAmountStr')
     expect(source).toContain('item.netAmountStr')
     expect(source).toContain('item.recommendedPrintText')
     // 目标补充量 排在 添加总量 之前
-    expect(source).toContain("['补剂名称', '已选商品 / 规格', '目标补充量', '添加总量']")
+    expect(source).toContain("['补剂名称', '产品 / 规格', '目标补充量', '添加总量']")
     expect(source).not.toContain("['补剂名称', '已选商品 / 规格', '添加总量', '目标补充量']")
     expect(source).toContain('builder.drawSupplementNotice(')
-    expect(source).toContain('营养补充剂的添加总量与已选商品严格匹配')
+    expect(source).toContain('营养补充剂的添加总量与产品严格匹配')
     expect(source).not.toContain('drawImportantTipsSection')
-    expect(source).toContain("builder.drawSectionTitle('储存提示')")
+    expect(source).toContain("builder.drawSectionTitle('储存和烹饪')")
     expect(source).not.toContain("['原料名称', DIY_SHEET_FOOD_RECOMMENDATION_LABEL, '制备方法', '采购量']")
     expect(source).not.toContain("['原料名称', '备料量', '制备方法', DIY_SHEET_FOOD_RECOMMENDATION_LABEL]")
     expect(source).not.toContain('builder.drawTags(tags)')
@@ -654,10 +654,10 @@ describe('diy sheet layout regressions', () => {
     expect(source).not.toContain('备料量（含')
     expect(source).not.toContain('formatRecipeLossRatePercent()')
 
-    // 列头只叫「净用量」
-    expect(templateSource).toContain('净用量')
+    // 列头只叫「净重」
+    expect(templateSource).toContain('净重')
     expect(templateSource).not.toContain('建议采购量')
-    expect(source).toContain("return '净用量'")
+    expect(source).toContain("return '净重'")
 
     // 只用净用量，不再有采购量相关的一切
     expect(source).toContain('netAmountStr')
@@ -668,8 +668,8 @@ describe('diy sheet layout regressions', () => {
     expect(templateSource).not.toContain('建议采购量已计算制作损耗')
     // 合计行改成「合计净重」
     expect(templateSource).toContain('合计净重')
-    // 明确告诉顾客"买多少你自己判断"
-    expect(templateSource).toContain('要买多少，你自己判断')
+    // 2026-10-24：这句"买多少你自己判断"已按老板要求拿掉
+    expect(templateSource).not.toContain('要买多少，你自己判断')
 
     // 取整到「好买的量」
     expect(source).toContain('function formatPurchaseAmount')
@@ -680,7 +680,7 @@ describe('diy sheet layout regressions', () => {
     // 图片上的建议卡已下线，储存提示改成一行文字
     expect(canvasSource).not.toContain('const sectionHeight = 176')
     expect(canvasSource).not.toContain('const tipMaxLines')
-    expect(source).toContain('builder.drawSectionTitle(\'储存提示\')')
+    expect(source).toContain("builder.drawSectionTitle('储存和烹饪')")
     expect(canvasSource).not.toContain("tip.content.join('；')")
     expect(canvasSource).not.toContain('tipMaxLines[index] || 2')
   })
@@ -721,5 +721,39 @@ describe('制作单：自定义分装下的真实覆盖天数', () => {
 
   it('每日摄入缺失时退回用户选的天数，不会算出 0 天', () => {
     expect(source).toMatch(/intake <= 0[\s\S]{0,40}return cycleDays\.value/)
+  })
+})
+
+/**
+ * 2026-10-24 老板定的制作单改版
+ *
+ * 制作步骤/储存烹饪是新板块；合计净重 0 是真实 bug；
+ * 客服改成底栏最左侧的圆形图标。这三条都要锁住。
+ */
+describe('DIY制作单 · 2026-10-24 改版', () => {
+  const source = readFileSync(
+    resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
+    'utf-8',
+  )
+  const template = source.slice(0, source.indexOf('<script setup'))
+
+  it('新增制作步骤与储存和烹饪，并优先读结构化步骤', () => {
+    expect(template).toContain('制作步骤')
+    expect(template).toContain('储存和烹饪')
+    expect(source).toContain('displaySteps')
+    expect(source).toContain('productionStepsList')
+    // 旧的「制作流程」不再作为标题
+    expect(template).not.toContain('制作流程')
+  })
+
+  it('合计净重加的是 netAmount，不再加不存在的 theoreticalAmount', () => {
+    expect(source).toContain('Number(item.netAmount) || 0')
+    expect(source).not.toContain('sum + item.theoreticalAmount')
+  })
+
+  it('客服是底栏最左侧的圆形图标，不再放在内容末尾', () => {
+    expect(template).toContain('class="bottom-actions"')
+    expect(template).toContain('icon-only')
+    expect(template).not.toContain('sheet-service')
   })
 })

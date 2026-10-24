@@ -21,8 +21,8 @@
       <text class="nutrition-card__title">核心营养成分</text>
     </view>
 
-    <!-- 标准背书：只在有 standard 时出现，不给一个空标签 -->
-    <view v-if="standardLabel" class="nutrition-card__standard">
+    <!-- 标准背书：只在有 standard 时出现，不给一个空标签；页面已有 banner 时可关闭 -->
+    <view v-if="showStandard && standardLabel" class="nutrition-card__standard">
       <text class="nutrition-card__standard-text">✓ 符合 {{ standardLabel }}</text>
     </view>
 
@@ -76,11 +76,14 @@ const props = withDefaults(
     macros?: Record<string, number | null> | null
     /** 有没有"完整报告"可看；没有就不显示那个入口 */
     reportAvailable?: boolean
+    /** 页面已有独立的全营养标准 banner 时，关掉卡片里这行，避免重复 */
+    showStandard?: boolean
   }>(),
   {
     standard: null,
     macros: null,
     reportAvailable: true,
+    showStandard: true,
   },
 )
 

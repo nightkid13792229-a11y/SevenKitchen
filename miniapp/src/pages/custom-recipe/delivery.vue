@@ -44,12 +44,53 @@
         <text class="oneline-toggle">{{ sellingPointOpen ? '收起' : '展开' }}</text>
       </view>
 
+      <!-- 全营养标准 banner：封面下方、食材清单上方（2026-10-24） -->
+      <NutritionStandardBanner
+        v-if="content.nutrition.standard"
+        :standard="content.nutrition.standard"
+      />
+
+      <!-- 食材清单：名称 + 部位/预处理 + 占比（2026-10-24） -->
+      <view class="section">
+        <view class="section-title">食材清单</view>
+        <text v-if="foodItems.length" class="section-note">
+          共计 {{ foodItems.length }} 种食材
+        </text>
+        <RecipeIngredientRatioTable :items="foodItems" />
+      </view>
+
+      <!--
+        须额外添加的营养素（2026-10-24）：
+        顾客要看的是"补什么、每公斤补多少"，不是补剂原料名或添加时机。
+        数据来自快照的 supplements[].targets，老快照没有 targets 就整块不显示。
+      -->
+      <view v-if="supplementTargetRows.length" class="section">
+        <view class="section-title">须额外添加的营养素</view>
+        <view class="nutrient-box">
+          <view class="nutrient-head">
+            <text class="nutrient-name">营养素</text>
+            <text class="nutrient-value">添加浓度</text>
+          </view>
+          <view
+            v-for="(row, index) in supplementTargetRows"
+            :key="index"
+            class="nutrient-row"
+          >
+            <text class="nutrient-name">{{ row.nutrient }}</text>
+            <text class="nutrient-value">{{ row.concentration }}</text>
+          </view>
+        </view>
+        <text class="section-note">
+          具体的补剂产品和实际用量，可点击下方【自己做】并生成制作单后查看。
+        </text>
+      </view>
+
       <!-- 喂食建议：顾客每天要照着喂的三个数 -->
       <view v-if="hasFeeding" class="section">
         <view class="section-title">喂食建议</view>
         <view class="feeding-grid">
           <view v-if="content.feeding.dailyIntakeG" class="feeding-cell">
-            <text class="feeding-value">{{ content.feeding.dailyIntakeG }}</text>
+            <text class="feeding-value">{{ formatFeedingGrams(content.feeding.dailyIntakeG) }}</text>
             <text class="feeding-unit">克 / 天</text>
           </view>
           <view v-if="content.feeding.mealsPerDay" class="feeding-cell">
@@ -57,12 +98,12 @@
             <text class="feeding-unit">餐 / 天</text>
           </view>
           <view v-if="content.feeding.perMealG" class="feeding-cell">
-            <text class="feeding-value">{{ content.feeding.perMealG }}</text>
+            <text class="feeding-value">{{ formatFeedingGrams(content.feeding.perMealG) }}</text>
             <text class="feeding-unit">克 / 餐</text>
           </view>
         </view>
         <text class="section-note">
-          份量可以按你的习惯调整 —— 点下面「自己做」，想一次做几天、每餐多少都自己定。
+          喂食建议仅供参考。每天喂食量、每日进食次数和每餐喂食量，可以点击下方【自己做】自定义配置。
         </text>
       </view>
 
@@ -74,46 +115,16 @@
         </text>
       </view>
 
-      <!-- 配方组成：只给名称 + 占比（克数在制作单里） -->
-      <view class="section">
-        <view class="section-title">配方组成</view>
-        <text v-if="foodItems.length" class="section-note">
-          这份配方里的 {{ foodItems.length }} 种食材
-        </text>
-        <RecipeIngredientRatioTable :items="foodItems" />
-      </view>
-
-      <!--
-        补剂：**只给名称 + 怎么加，不写用量**。
-        用量与买法在「自己做」生成的制作单里 —— 同一组数字不在这页再出现一遍。
-      -->
-      <view v-if="supplementRows.length" class="section">
-        <view class="section-title">要加的补剂</view>
-        <view class="nutrient-box">
-          <view
-            v-for="(row, index) in supplementRows"
-            :key="index"
-            class="nutrient-row"
-          >
-            <text class="nutrient-name">{{ row.name }}</text>
-            <text class="nutrient-value">{{ row.how }}</text>
-          </view>
-        </view>
-        <text class="section-note">用量和买法在「自己做」生成的制作单里。</text>
-      </view>
-
       <!-- 核心营养成分：标准 + 8 项 + 报告入口，合成一块（与详情页同一套） -->
       <view class="section">
         <RecipeNutritionCard
           :standard="content.nutrition.standard"
           :macros="content.nutrition.macros || null"
           :report-available="false"
+          :show-standard="false"
         />
       </view>
 
-      <view class="footer-note">
-        <text>这份内容在交付时已存档，之后调整配方不会改变你现在看到的版本。</text>
-      </view>
     </template>
 
     <!--
@@ -158,7 +169,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { onLoad, onPullDownRefresh } from '@dcloudio/uni-app';
-import { fetchDelivery } from '@/api/custom-recipe';
+import { fetchDelivery, fetchOrderDetail } from '@/api/custom-recipe';
 import {
   buildDeliveryDiyUrl,
   buildFinishedFoodOrderUrl,
@@ -168,6 +179,7 @@ import {
 } from '@/utils/custom-recipe-delivery';
 import RecipeCover from '@/components/recipe/RecipeCover.vue';
 import RecipeNutritionCard from '@/components/recipe/RecipeNutritionCard.vue';
+import NutritionStandardBanner from '@/components/recipe/NutritionStandardBanner.vue';
 import CustomerServiceInlineButton from '@/components/CustomerServiceInlineButton.vue';
 import RecipeIngredientRatioTable from '@/components/recipe/RecipeIngredientRatioTable.vue';
 
@@ -196,6 +208,8 @@ const orderId = ref('');
 const recipeId = ref('');
 const loading = ref(true);
 const delivery = ref<CustomRecipeDeliveryResponse | null>(null);
+/** 老交付没有 dogId 时，从订单详情补一次，保证"自己做"能预选这只狗 */
+const orderDogId = ref('');
 
 /**
  * 多份交付里选中的那一份。
@@ -300,19 +314,45 @@ const sellingPointText = computed(() =>
 );
 
 /**
- * 要加的补剂：**名称 + 怎么加**。
+ * 须额外添加的营养素：**营养素名 + 每公斤添加浓度**。
  *
- * 这一页不写用量 —— 用量在「自己做」生成的制作单里。
- * 同一组数字在交付页和制作单各出现一次，顾客会以为是两份不同的要求。
+ * 快照里的 supplements[].targets 已经是营养师定的目标（钙/锌/…），
+ * 不再显示补剂原料名或添加时机 —— 那是"买哪瓶"和"什么时候加"，
+ * 不是这一页要回答的"补什么、补多少"。
  */
-const supplementRows = computed(() => {
-  return (content.value.supplements || [])
-    .map((supplement) => ({
-      name: (supplement.name || '').trim(),
-      how: (supplement.timing || '').trim(),
-    }))
-    .filter((row) => Boolean(row.name));
+const supplementTargetRows = computed(() => {
+  const rows: Array<{ nutrient: string; concentration: string }> = [];
+  for (const supplement of content.value.supplements || []) {
+    for (const target of supplement.targets || []) {
+      const nutrient = String(target.label || '').trim();
+      if (!nutrient) continue;
+      const raw = target.targetValuePerKg;
+      const value = raw === null || raw === undefined ? NaN : Number(raw);
+      const unit = String(target.unit || 'g').trim();
+      rows.push({
+        nutrient,
+        concentration: Number.isFinite(value)
+          ? `${formatTargetValue(value)} ${unit}/kg`
+          : '—',
+      });
+    }
+  }
+  return rows;
 });
+
+/** 浓度数值：整数不带小数，非整数最多两位 */
+function formatTargetValue(value: number): string {
+  if (!Number.isFinite(value)) return '—';
+  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(2)));
+}
+
+/** 喂食量取整（2026-10-24）；日喂量和每餐量各自四舍五入，允许 1g 误差 */
+function formatFeedingGrams(value: number | null | undefined): string {
+  if (value === null || value === undefined) return '';
+  const grams = Number(value);
+  if (!Number.isFinite(grams)) return '';
+  return String(Math.round(grams));
+}
 
 /** 底部固定栏上那行交付日期 */
 const deliveryDateText = computed(() => {
@@ -337,6 +377,15 @@ const load = async () => {
       undefined,
       recipeId.value,
     );
+    orderDogId.value = '';
+    if (delivery.value && !(delivery.value as any).dogId) {
+      try {
+        const detail = await fetchOrderDetail(orderId.value);
+        orderDogId.value = String(detail.dogId || '');
+      } catch (error) {
+        console.warn('[Delivery] 补取订单狗狗失败:', error);
+      }
+    }
   } finally {
     loading.value = false;
   }
@@ -350,7 +399,9 @@ const selectedRecipeId = computed(
 );
 
 /** 交付单上的狗；DIY / 成品下单都要预选它，不能再让顾客选一次 */
-const dogId = computed(() => String((delivery.value as any)?.dogId || ''));
+const dogId = computed(() =>
+  String((delivery.value as any)?.dogId || orderDogId.value || ''),
+);
 
 /**
  * 自己做：进 DIY 配置页，按**交付的那一版**取食谱。
@@ -616,6 +667,26 @@ onPullDownRefresh(async () => {
   background: #f4f7f5;
   border-radius: 24rpx;
   padding: 8rpx 24rpx;
+}
+
+/* 营养素表头（2026-10-24）：营养素 / 添加浓度 */
+.nutrient-head {
+  display: flex;
+  align-items: center;
+  padding: 14rpx 0 10rpx;
+  border-bottom: 1rpx solid #dfe9e3;
+}
+
+.nutrient-head .nutrient-name,
+.nutrient-head .nutrient-value {
+  font-size: 20rpx;
+  font-weight: 500;
+  color: #8a9a8f;
+}
+
+.nutrient-head .nutrient-value {
+  flex-shrink: 0;
+  margin-left: 16rpx;
 }
 
 .nutrient-row {

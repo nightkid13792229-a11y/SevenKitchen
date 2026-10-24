@@ -313,8 +313,8 @@ describe('CustomRecipeAftersaleService · 多份批次售后（2026-10-21）', (
     expect(data.deliveryId).toBeNull();
     expect(data.deliveryItemIds).toEqual(['item-1', 'item-2']);
     expect(data.recipeRequests).toEqual([
-      { deliveryItemId: 'item-1', description: '鸡肉南瓜太油' },
-      { deliveryItemId: 'item-2', description: '鸭肉西兰花吃完软便' },
+      { deliveryItemId: 'item-1', description: '鸡肉南瓜太油', photos: [] },
+      { deliveryItemId: 'item-2', description: '鸭肉西兰花吃完软便', photos: [] },
     ]);
     // 共用说明仍按老字段保存（老页面 / 后台详情还在读它）
     expect(data.description).toBe('整体说明：两份都不太适应');
@@ -325,6 +325,52 @@ describe('CustomRecipeAftersaleService · 多份批次售后（2026-10-21）', (
 
     // 有批次时不该再去看老的单份交付表
     expect(prisma.customRecipeDelivery.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('★ 每份带自己的附件：逐份存，顶层存并集', async () => {
+    const { service, prisma } = createService({ batch: buildBatch() });
+
+    await service.create({
+      ...baseInput,
+      deliveryItemIds: ['item-1', 'item-2'],
+      photos: ['https://cdn.example.com/common.jpg'],
+      recipeRequests: [
+        {
+          deliveryItemId: 'item-1',
+          description: '鸡肉南瓜太油',
+          photos: ['https://cdn.example.com/a.jpg', 'https://cdn.example.com/a2.jpg'],
+        },
+        {
+          deliveryItemId: 'item-2',
+          description: '鸭肉西兰花吃完软便',
+          photos: ['https://cdn.example.com/b.jpg'],
+        },
+      ],
+    });
+
+    const data = (prisma.customRecipeAftersale.create as jest.Mock).mock
+      .calls[0][0].data;
+
+    expect(data.recipeRequests).toEqual([
+      {
+        deliveryItemId: 'item-1',
+        description: '鸡肉南瓜太油',
+        photos: ['https://cdn.example.com/a.jpg', 'https://cdn.example.com/a2.jpg'],
+      },
+      {
+        deliveryItemId: 'item-2',
+        description: '鸭肉西兰花吃完软便',
+        photos: ['https://cdn.example.com/b.jpg'],
+      },
+    ]);
+    expect(new Set(data.photos)).toEqual(
+      new Set([
+        'https://cdn.example.com/common.jpg',
+        'https://cdn.example.com/a.jpg',
+        'https://cdn.example.com/a2.jpg',
+        'https://cdn.example.com/b.jpg',
+      ]),
+    );
   });
 
   it('只传逐份说明、不传「涉及食谱」：说明里提到的几份就是选中范围', async () => {
@@ -503,7 +549,7 @@ describe('CustomRecipeAftersaleService · 多份批次售后（2026-10-21）', (
 });
 
 describe('CustomRecipeAftersaleService · 响应带出「涉及哪几份」', () => {
-  const batchAftersale = () =>
+  const batchAftersale = (overrides: Record<string, unknown> = {}) =>
     buildAftersale({
       deliveryId: null,
       deliveryBatchId: 'batch-1',
@@ -512,12 +558,39 @@ describe('CustomRecipeAftersaleService · 响应带出「涉及哪几份」', ()
         { deliveryItemId: 'item-1', description: '太油了' },
         { deliveryItemId: 'item-2', description: '想换成鸭肉' },
       ],
+      ...overrides,
     });
 
   const batchItems = () => [
     { id: 'item-1', recipe: { recipeId: 'CR1759100000001', name: '鸡肉南瓜' } },
     { id: 'item-2', recipe: { recipeId: 'CR1759100000002', name: '鸭肉西兰花' } },
   ];
+
+  it('★ 顾客侧状态：已交付 / 已撤销，不把撤回显示成未受理', async () => {
+    const resolved = await (async () => {
+      const { service } = createService({
+        rows: [batchAftersale({ status: 'RESOLVED', handleNote: '已调整' })],
+        batchItems: batchItems(),
+      });
+      return service.listForCustomer('CR202610160001', 'customer-1');
+    })();
+
+    const withdrawn = await (async () => {
+      const { service } = createService({
+        rows: [
+          batchAftersale({
+            status: 'REJECTED',
+            rejectReason: '顾客自行撤回',
+          }),
+        ],
+        batchItems: batchItems(),
+      });
+      return service.listForCustomer('CR202610160001', 'customer-1');
+    })();
+
+    expect(resolved[0].customerStatusLabel).toBe('已交付');
+    expect(withdrawn[0].customerStatusLabel).toBe('已撤销');
+  });
 
   it('★ 顾客侧：批次 id / 明细 id / 食谱名字 / 逐份说明都返回（可直接渲染）', async () => {
     const { service } = createService({
@@ -545,8 +618,8 @@ describe('CustomRecipeAftersaleService · 响应带出「涉及哪几份」', ()
       },
     ]);
     expect(list[0].recipeRequests).toEqual([
-      { deliveryItemId: 'item-1', description: '太油了' },
-      { deliveryItemId: 'item-2', description: '想换成鸭肉' },
+      { deliveryItemId: 'item-1', description: '太油了', photos: [] },
+      { deliveryItemId: 'item-2', description: '想换成鸭肉', photos: [] },
     ]);
   });
 

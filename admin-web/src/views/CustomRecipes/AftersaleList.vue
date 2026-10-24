@@ -86,6 +86,20 @@
               v-if="recipe.requestDescription"
               class="batch-recipe-request"
             >{{ recipe.requestDescription }}</span>
+            <div
+              v-if="recipe.requestPhotos && recipe.requestPhotos.length"
+              class="batch-recipe-photos"
+            >
+              <el-image
+                v-for="(photo, photoIndex) in recipe.requestPhotos"
+                :key="photoIndex"
+                :src="photo"
+                :preview-src-list="recipe.requestPhotos"
+                :initial-index="photoIndex"
+                fit="cover"
+                class="batch-recipe-photo"
+              />
+            </div>
             <el-button
               v-if="isAdmin && ['ACCEPTED', 'PROCESSING'].includes(item.status)"
               size="small"
@@ -97,7 +111,10 @@
             >修改食谱</el-button>
           </div>
         </div>
-        <div v-if="item.photos && item.photos.length" class="photos">
+        <div
+          v-if="item.photos && item.photos.length && !hasPerRecipePhotos(item)"
+          class="photos"
+        >
           <el-image
             v-for="(photo, index) in item.photos"
             :key="index"
@@ -326,6 +343,10 @@ const formatWaiting = (hours: number) => {
  */
 const batchRecipesOf = (item: AdminAftersaleItem) =>
   buildAftersaleRecipeDetails(item);
+
+/** 新记录每份附件在 recipeRequests[].photos 里；旧记录才看整单 photos */
+const hasPerRecipePhotos = (item: AdminAftersaleItem) =>
+  batchRecipesOf(item).some((recipe) => recipe.requestPhotos.length > 0);
 
 /**
  * 按选中份重新交付（2026-10-21 · 多份售后改稿）。
@@ -707,6 +728,20 @@ onMounted(load);
 .batch-recipe-request {
   color: var(--el-text-color-regular);
   white-space: pre-wrap;
+}
+
+.batch-recipe-photos {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.batch-recipe-photo {
+  width: 64px;
+  height: 64px;
+  border-radius: 6px;
 }
 
 .photos {

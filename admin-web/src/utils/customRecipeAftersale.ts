@@ -20,6 +20,8 @@ export interface AftersaleRecipeDetail {
   recipeName: string
   /** 这一份自己的诉求；没写逐份说明时为空字符串（页面不渲染空行） */
   requestDescription: string
+  /** 这一份自己的附件；旧记录为空数组 */
+  requestPhotos: string[]
 }
 
 export function buildAftersaleRecipeDetails(
@@ -50,6 +52,9 @@ export function buildAftersaleRecipeDetails(
       deliveryItemId,
       recipeName,
       requestDescription: String(request?.description ?? '').trim(),
+      requestPhotos: Array.isArray(request?.photos)
+        ? request.photos.filter(Boolean)
+        : [],
     }
   })
 }

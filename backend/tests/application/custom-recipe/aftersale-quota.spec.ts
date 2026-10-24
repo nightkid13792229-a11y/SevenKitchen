@@ -8,7 +8,7 @@ import { CustomRecipeAftersaleService } from '../../../src/application/custom-re
 function createQuotaService(options: {
   deliveredAt?: Date | null
   status?: string
-  rows?: Array<{ status: string; rejectReason?: string | null }>
+  rows?: Array<{ status: string; rejectReason?: string | null; type?: string }>
   freeRevisionCount?: number
   aftersaleWindowDays?: number
 }) {
@@ -27,14 +27,16 @@ function createQuotaService(options: {
       }),
     },
     customRecipeAftersale: {
-      findMany: jest.fn().mockResolvedValue(
-        (options.rows ?? []).map((row, index) => ({
-          id: `a-${index}`,
-          status: row.status,
-          rejectReason: row.rejectReason ?? null,
-          createdAt: new Date(),
-        })),
-      ),
+      findMany: jest.fn().mockImplementation(async ({ where }: any) => {
+        return (options.rows ?? [])
+          .filter((row) => !where?.type || (row.type ?? 'ADJUST_RECIPE') === where.type)
+          .map((row, index) => ({
+            id: `a-${index}`,
+            status: row.status,
+            rejectReason: row.rejectReason ?? null,
+            createdAt: new Date(),
+          }));
+      }),
     },
   }
 
@@ -106,6 +108,35 @@ describe('售后配额', () => {
     expect(quota.hasOpen).toBe(true)
     expect(quota.canSubmit).toBe(false)
     expect(quota.reason).toContain('正在处理')
+  })
+
+  it('★ 旧的问题单不占调整次数、也不挡住调整', async () => {
+    const { service } = createQuotaService({
+      rows: [
+        { status: 'RESOLVED', type: 'QUESTION' },
+        { status: 'PENDING', type: 'OTHER' },
+      ],
+    })
+    const quota = await service.getQuota('CR1', 'user-1')
+
+    expect(quota.usedCount).toBe(0)
+    expect(quota.freeRevisionsLeft).toBe(2)
+    expect(quota.hasOpen).toBe(false)
+    expect(quota.canSubmit).toBe(true)
+  })
+
+  it('★ 商家驳回不占次数（顾客撤回同样不占）', async () => {
+    const { service } = createQuotaService({
+      rows: [
+        { status: 'REJECTED', rejectReason: '不符合调整范围' },
+        { status: 'REJECTED', rejectReason: '顾客自行撤回' },
+        { status: 'RESOLVED' },
+      ],
+    })
+    const quota = await service.getQuota('CR1', 'user-1')
+
+    expect(quota.usedCount).toBe(1)
+    expect(quota.freeRevisionsLeft).toBe(1)
   })
 
   it('★ 窗口过了：不能再提', async () => {

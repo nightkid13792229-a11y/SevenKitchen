@@ -150,7 +150,7 @@
                 class="recipe-btn batch-recipe__adjust"
                 @tap="viewBatchAftersale(item)"
               >
-                {{ aftersaleCount > 0 ? '查看进展' : '继续调整' }}
+                {{ aftersaleCount > 0 ? '查看进展' : '调整食谱' }}
               </button>
             </view>
           </view>
@@ -189,7 +189,7 @@
             class="recipe-btn batch-recipe__adjust"
             @tap="viewAftersale"
           >
-            {{ aftersaleCount > 0 ? '查看进展' : '继续调整' }}
+            {{ aftersaleCount > 0 ? '查看进展' : '调整食谱' }}
           </button>
         </view>
       </view>

@@ -59,7 +59,7 @@ describe('定制订单详情 · 多份交付卡片', () => {
   it('★ 确认收到按钮已移除（2026-10-24）；售后入口留在每份卡片', () => {
     expect(source).not.toContain('handleConfirmReceipt');
     expect(source).not.toContain('confirmReceiptRequest');
-    expect(source).toContain('继续调整');
+    expect(source).toContain('调整食谱');
     expect(source).toContain('查看进展');
   });
 

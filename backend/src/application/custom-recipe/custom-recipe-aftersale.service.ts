@@ -26,6 +26,8 @@ import {
 export interface CustomRecipeAftersaleRecipeRequest {
   deliveryItemId: string;
   description: string;
+  /** 这一份自己的附件（2026-10-25）；旧记录没有时为 [] */
+  photos: string[];
 }
 
 /** 响应里"这次涉及哪几份"的统一形状（顾客端与后台共用） */
@@ -206,9 +208,15 @@ export class CustomRecipeAftersaleService {
           );
         }
 
+        const rawPhotos = Array.isArray(raw.photos) ? raw.photos : [];
+        const requestPhotos = rawPhotos
+          .map((photo) => String(photo ?? '').trim())
+          .filter((photo): photo is string => photo.length > 0);
+
         recipeRequests.push({
           deliveryItemId: itemId,
           description: requestDescription,
+          photos: requestPhotos,
         });
       }
 
@@ -285,13 +293,14 @@ export class CustomRecipeAftersaleService {
     const open = await this.prisma.customRecipeAftersale.findFirst({
       where: {
         orderId: order.id,
+        type: 'ADJUST_RECIPE',
         status: { in: ['PENDING', 'ACCEPTED', 'PROCESSING'] },
       },
       select: { id: true },
     });
     if (open) {
       throw new BadRequestException(
-        '你已经提交过售后，我们正在处理中。有新情况可以直接在客服里补充',
+        '你已经提交过一次调整，我们正在处理中。有新情况可以直接在客服里补充',
       );
     }
 
@@ -301,6 +310,17 @@ export class CustomRecipeAftersaleService {
     }
 
     const typeLabel = await this.resolveTypeLabel(input.type);
+
+    /**
+     * 顶层 photos 存所有份的并集：老页面/后台列表仍按整单附件看，
+     * 每份的精确归属在 `recipeRequests[].photos` 里。
+     */
+    const allPhotos = Array.from(
+      new Set([
+        ...(input.photos ?? []),
+        ...recipeRequests.flatMap((request) => request.photos),
+      ]),
+    );
 
     const created = await this.prisma.customRecipeAftersale
       .create({
@@ -318,13 +338,13 @@ export class CustomRecipeAftersaleService {
           : {}),
           type: input.type,
           description: trimmed,
-          photos: input.photos ?? [],
+          photos: allPhotos,
         },
       })
       .catch((error: any) => {
         if (error?.code === 'P2002') {
           throw new ConflictException(
-            '你已经提交过售后，我们正在处理中。有新情况可以直接在客服里补充',
+            '你已经提交过一次调整，我们正在处理中。有新情况可以直接在客服里补充',
           );
         }
         throw error;
@@ -362,7 +382,11 @@ export class CustomRecipeAftersaleService {
     }
 
     const rows = await this.prisma.customRecipeAftersale.findMany({
-      where: { orderId: order.id },
+      /**
+       * 只返回“调整”类：这一页只做食谱调整。
+       * 历史的问题/其他意见/退款单不混进调整记录，避免顾客以为它们也是调整。
+       */
+      where: { orderId: order.id, type: 'ADJUST_RECIPE' },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -376,6 +400,8 @@ export class CustomRecipeAftersaleService {
       typeLabel: labels[row.type] ?? row.type,
       status: row.status,
       statusLabel: CUSTOM_RECIPE_AFTERSALE_STATUS_LABELS[row.status],
+      /** 顾客端状态：撤回显示“已撤销”，完成显示“已交付”，不直接复用后台的“已解决/未受理” */
+      customerStatusLabel: this.customerStatusLabel(row),
       description: row.description,
       photos: row.photos ?? [],
       createdAt: row.createdAt,
@@ -814,14 +840,16 @@ export class CustomRecipeAftersaleService {
       : 2;
 
     const rows = await this.prisma.customRecipeAftersale.findMany({
-      where: { orderId: order.id },
+      /**
+       * 只统计“调整”类：
+       * - 旧的问题/其他意见/退款单不占调整次数，也不挡住调整提交；
+       * - 顾客撤回、商家驳回（都是 REJECTED）都不算一次，没有实际调整。
+       */
+      where: { orderId: order.id, type: 'ADJUST_RECIPE' },
       select: { id: true, status: true, rejectReason: true, createdAt: true },
     });
 
-    /** 撤回过的 (`rejectReason = '顾客自行撤回'`) 不计数 */
-    const withdrawn = (row: { rejectReason: string | null }) =>
-      (row.rejectReason || '').includes('撤回');
-    const usedCount = rows.filter((row) => !withdrawn(row)).length;
+    const usedCount = rows.filter((row) => row.status !== 'REJECTED').length;
     const freeRevisionsLeft = Math.max(0, freeRevisionCount - usedCount);
 
     const hasOpen = rows.some((row) =>
@@ -845,7 +873,7 @@ export class CustomRecipeAftersaleService {
     } else if (windowDaysLeft !== null && windowDaysLeft <= 0) {
       reason = `已超过售后受理期（交付后 ${windowDays} 天内），如需帮助请联系客服`;
     } else if (hasOpen) {
-      reason = '你已经提交过售后，我们正在处理中';
+      reason = '你已经提交过一次调整，我们正在处理中';
     } else if (freeRevisionsLeft <= 0) {
       reason = `免费调整次数已用完（共 ${freeRevisionCount} 次），如需帮助请联系客服`;
     }
@@ -895,6 +923,7 @@ export class CustomRecipeAftersaleService {
   private parseRecipeRequestsShape(value: unknown): Array<{
     deliveryItemId: unknown;
     description: unknown;
+    photos: unknown;
   }> {
     if (value === undefined || value === null) return [];
     if (!Array.isArray(value)) {
@@ -908,6 +937,7 @@ export class CustomRecipeAftersaleService {
       return {
         deliveryItemId: record.deliveryItemId,
         description: record.description,
+        photos: record.photos,
       };
     });
   }
@@ -923,7 +953,12 @@ export class CustomRecipeAftersaleService {
       const deliveryItemId = String(record.deliveryItemId ?? '').trim();
       const description = String(record.description ?? '').trim();
       if (!deliveryItemId || !description) return [];
-      return [{ deliveryItemId, description }];
+      const photos = Array.isArray(record.photos)
+        ? record.photos
+            .map((photo) => String(photo ?? '').trim())
+            .filter((photo): photo is string => photo.length > 0)
+        : [];
+      return [{ deliveryItemId, description, photos }];
     });
   }
 
@@ -992,6 +1027,28 @@ export class CustomRecipeAftersaleService {
         ),
       recipeRequests: this.readRecipeRequests(row.recipeRequests),
     };
+  }
+
+  /**
+   * 顾客端状态中文。
+   *
+   * 后台的 `statusLabel` 把 `REJECTED` 统一翻成“未受理”，
+   * 但顾客自己撤回也走 REJECTED —— 顾客看到的应当是“已撤销”。
+   * RESOLVED 在这页显示“已交付”，与“调整完成”语义一致。
+   */
+  private customerStatusLabel(row: {
+    status: string;
+    rejectReason?: string | null;
+  }): string {
+    if (row.status === 'RESOLVED') return '已交付';
+    if (row.status === 'REJECTED') {
+      return (row.rejectReason || '').includes('撤回') ? '已撤销' : '未受理';
+    }
+    return (
+      CUSTOM_RECIPE_AFTERSALE_STATUS_LABELS[
+        row.status as keyof typeof CUSTOM_RECIPE_AFTERSALE_STATUS_LABELS
+      ] ?? row.status
+    );
   }
 
   private async getWindowDays(): Promise<number> {

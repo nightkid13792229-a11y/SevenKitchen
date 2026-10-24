@@ -1,247 +1,260 @@
 <template>
-  <view class="aftersale-page">
-    <!--
-      售后页（2026-10-16，批次 2.5）
-      「问个问题 / 调整食谱 / 其他意见」三类**来自选项字典**，不写死在前端。
-      提交与撤回的规则全部由后端判定，页面只把后端说的原因如实显示出来。
-    -->
+  <view class="adjust-page">
     <view v-if="loading" class="state-block">
       <text class="state-text">加载中...</text>
     </view>
 
     <template v-else>
-      <!-- 已经提过的：显示进度 -->
-      <view v-for="item in list" :key="item.id" class="section aftersale-card">
-        <view class="aftersale-head">
-          <text class="aftersale-type">{{ item.typeLabel }}</text>
-          <text class="aftersale-status" :class="`status--${item.status}`">
-            {{ item.statusLabel }}
+      <!-- 退款入口暂未做独立页：先给一个明确的占位，不把顾客带到调整表单 -->
+      <view v-if="isRefundScene" class="refund-wrap">
+        <view class="refund-card">
+          <text class="refund-title">退款申请</text>
+          <text class="refund-text">
+            退款申请页正在制作中。需要退款，请直接找 Seven爸爸，我们会尽快处理。
           </text>
         </view>
-        <text class="aftersale-desc">{{ item.description }}</text>
-
-        <!-- 进度时间轴：节点与文案由后端下发 -->
-        <view class="progress-list">
-          <view
-            v-for="(step, index) in item.progress.timeline"
-            :key="step.code"
-            class="progress-item"
-            :class="{
-              'progress-item--done': step.done,
-              'progress-item--active': step.active,
-            }"
-          >
-            <view class="progress-marker">
-              <text class="progress-dot">{{ step.done ? '✓' : '' }}</text>
-              <view
-                v-if="index < item.progress.timeline.length - 1"
-                class="progress-line"
-              />
-            </view>
-            <view class="progress-body">
-              <text class="progress-label">{{ step.label }}</text>
-              <text v-if="step.note" class="progress-note">{{ step.note }}</text>
-            </view>
-          </view>
-        </view>
-
-        <!-- 客服的处理说明 / 驳回原因，如实显示 -->
-        <view v-if="item.handleNote" class="aftersale-note">
-          <text class="aftersale-note-label">处理说明</text>
-          <text class="aftersale-note-text">{{ item.handleNote }}</text>
-        </view>
-        <view v-if="item.rejectReason" class="aftersale-note">
-          <text class="aftersale-note-label">说明</text>
-          <text class="aftersale-note-text">{{ item.rejectReason }}</text>
-        </view>
-
-        <!-- 能不能撤回由后端算好 -->
-        <button
-          v-if="item.canCancel"
-          class="btn-secondary"
-          :loading="cancellingId === item.id"
-          @tap="handleCancel(item)"
-        >
-          撤回这条
-        </button>
-      </view>
-
-      <!-- 提交新的：已经有未处理完的就不显示表单（后端也会拦，这里省一次往返） -->
-      <!--
-        配额条（2026-10-18 · 需求 2.5.7）：**两个数字必须在最上面**。
-        顾客打开这一页的第一件事是"我还能不能提"，不是"填表"。
-      -->
-      <view v-if="quota" class="quota-bar">
-        <view v-if="quota.windowDaysLeft !== null" class="quota-item">
-          <text class="quota-value">{{ quota.windowDaysLeft }}</text>
-          <text class="quota-label">天窗口期</text>
-        </view>
-        <view class="quota-item">
-          <text class="quota-value">{{ quota.freeRevisionsLeft }}</text>
-          <text class="quota-label">次免费调整</text>
-        </view>
-      </view>
-
-      <!-- 不能提时说清楚为什么，顾客不用猜 -->
-      <view v-if="quota && !quota.canSubmit && quota.reason" class="quota-reason">
-        <text class="quota-reason-text">{{ quota.reason }}</text>
-      </view>
-
-      <view v-if="canSubmitNew" class="section">
-        <!--
-          多份订单 · 按份售后（2026-10-21 · 第二阶段 Task 6）
-          先选要调整哪一份（可多选），每一份选中后再写自己的说明。
-          老订单没有 batchItems，整块不显示，下面的表单与以前一模一样。
-        -->
-        <view v-if="showRecipePicker" class="recipe-pick">
-          <view class="section-title">选择要调整的食谱</view>
-          <text class="recipe-pick__note">
-            可以只选一份，也可以多选；勾选后可以分别写清这一份要改什么。
-          </text>
-
-          <view
-            v-for="item in batchItems"
-            :key="item.deliveryItemId"
-            class="recipe-option"
-            :class="{ 'recipe-option--picked': isRecipeSelected(item.deliveryItemId) }"
-          >
-            <view
-              class="recipe-option__head"
-              @tap="toggleRecipeSelection(item.deliveryItemId)"
-            >
-              <view
-                class="recipe-checkbox"
-                :class="{ 'recipe-checkbox--checked': isRecipeSelected(item.deliveryItemId) }"
-              >
-                <text
-                  v-if="isRecipeSelected(item.deliveryItemId)"
-                  class="recipe-checkbox__tick"
-                >✓</text>
-              </view>
-              <text class="recipe-option__name">
-                {{ item.recipeName || '未命名食谱' }}
-              </text>
-            </view>
-
-            <textarea
-              v-if="isRecipeSelected(item.deliveryItemId)"
-              class="recipe-option__input"
-              :value="recipeTexts[item.deliveryItemId]"
-              placeholder="这一份想怎么调整？（选填，比如「鸡肉换成鸭肉」）"
-              :maxlength="500"
-              auto-height
-              @input="handleRecipeTextInput(item.deliveryItemId, $event)"
-            />
-          </view>
-
-          <text class="recipe-pick__tip">
-            一次提交只算 1 次调整，不按份数叠加。
-          </text>
-        </view>
-
-        <view class="section-title">遇到什么问题了？</view>
-
-        <view class="type-list">
-          <view
-            v-for="option in typeOptions"
-            :key="option.code"
-            class="type-option"
-            :class="{ 'type-option--picked': form.type === option.code }"
-            @tap="form.type = option.code"
-          >
-            <text class="type-icon">{{ option.icon || '·' }}</text>
-            <view class="type-text">
-              <text class="type-label">{{ option.label }}</text>
-              <text v-if="option.description" class="type-desc">
-                {{ option.description }}
-              </text>
-            </view>
-          </view>
-        </view>
-
-        <textarea
-          v-model="form.description"
-          class="desc-input"
-          placeholder="说一下具体情况，比如「吃了三天有点软便」"
-          :maxlength="1000"
-          auto-height
-        />
-        <text class="word-count">{{ form.description.length }} / 1000</text>
-
-        <!--
-          附件（2026-10-18；20:30 补上文档）
-          老板："只上传照片吗？PDF和Word能不能上传呢？"
-
-          需求 2.5.7：**照片 + PDF + Word**，每条可预览 / 删除，可继续新增。
-
-          后端本来就接受 PDF（`getFileType` 有 pdf 分支，其它类型落到 OTHER 也不拒），
-          缺的只是前端只给了相册 —— 这里补一个「从微信里选文件」。
-        -->
-        <view class="attach-block">
-          <view class="attach-head">
-            <text class="attach-title">照片 / 文档（选填）</text>
-            <text v-if="attachments.length" class="attach-count">
-              已传 {{ attachments.length }} 个
-            </text>
-          </view>
-          <view class="attach-list">
-            <view
-              v-for="(url, index) in attachments"
-              :key="url + index"
-              class="attach-item"
-            >
-              <image class="attach-thumb" :src="url" mode="aspectFill" @tap="previewAttach(index)" />
-              <text class="attach-remove" @tap.stop="removeAttach(index)">×</text>
-            </view>
-            <view v-if="attachments.length < MAX_ATTACH" class="attach-add" @tap="pickAttach">
-              <text class="attach-add-icon">＋</text>
-            </view>
-            <!--
-              从微信里选文件（PDF / Word）。
-              微信只能从**聊天记录**里选文件，所以走 `chooseMessageFile`。
-            -->
-            <view
-              v-if="attachments.length < MAX_ATTACH"
-              class="attach-add attach-add--doc"
-              @tap="pickDocument"
-            >
-              <text class="attach-add-doc">文档</text>
-            </view>
-          </view>
-          <text class="attach-tip">
-            {{
-              uploading
-                ? '上传中…'
-                : '照片直接拍；PDF / Word 化验单可先从微信「文件传输助手」发一下，再点「文档」选进来'
-            }}
-          </text>
-        </view>
-
-        <button
-          class="btn-primary"
-          :loading="submitting"
-          :disabled="submitting || !canSubmit"
-          @tap="handleSubmit"
-        >
-          提交
-        </button>
-        <text v-if="!canSubmit && !submitting" class="hint">
-          {{ submitHint }}
-        </text>
-      </view>
-
-      <!-- 其它问题（答疑 / 投诉 / 退款）走企业微信，找 Seven爸爸 -->
-      <view class="aftersale-service">
         <CustomerServiceInlineButton
           source-type="ORDER"
           :order-id="orderId"
           :order-no="orderId"
           :title="`定制订单 ${orderId}`"
           path="/pages/custom-recipe/aftersale"
+          label="找 Seven爸爸"
         />
       </view>
 
+      <template v-else>
+        <!-- 额度：两个数字必须在最上面 -->
+        <view class="quota-card">
+          <view class="quota-cell">
+            <text class="quota-label">售后窗口期还剩</text>
+            <view class="quota-value-row">
+              <text class="quota-value">{{ quota?.windowDaysLeft ?? '—' }}</text>
+              <text class="quota-unit">天</text>
+            </view>
+          </view>
+          <view class="quota-divider" />
+          <view class="quota-cell">
+            <text class="quota-label">调整次数还剩</text>
+            <view class="quota-value-row">
+              <text class="quota-value">{{ quota?.freeRevisionsLeft ?? '—' }}</text>
+              <text class="quota-unit">次</text>
+            </view>
+          </view>
+        </view>
+
+        <view v-if="quota && !quota.canSubmit && quota.reason" class="quota-reason">
+          <text class="quota-reason-text">{{ quota.reason }}</text>
+        </view>
+
+        <!-- 历史：只看提交时间、内容、状态；不展开时间轴 -->
+        <view class="history-section">
+          <view class="section-head">
+            <text class="section-title">食谱调整记录</text>
+          </view>
+
+          <view v-if="!list.length" class="empty-record">
+            <text class="empty-record-text">还没有提交过调整需求</text>
+          </view>
+
+          <view v-for="item in list" :key="item.id" class="record-card">
+            <view class="record-top">
+              <text class="record-time">提交时间 {{ formatTime(item.createdAt) }}</text>
+              <text class="status-pill" :class="statusClass(item)">
+                {{ statusText(item) }}
+              </text>
+            </view>
+
+            <text v-if="scopeText(item)" class="record-scope">{{ scopeText(item) }}</text>
+
+            <text
+              class="record-content"
+              :class="{ 'record-content--open': isExpanded(item.id) }"
+            >{{ historyContent(item) }}</text>
+            <text
+              v-if="isLongRecord(item)"
+              class="record-toggle"
+              @tap="toggleExpanded(item.id)"
+            >{{ isExpanded(item.id) ? '收起' : '展开' }}</text>
+
+            <view v-if="item.status === 'RESOLVED' && item.handleNote" class="record-result">
+              <text class="record-result-label">调整总结</text>
+              <text class="record-result-text">{{ item.handleNote }}</text>
+            </view>
+            <view v-if="item.status === 'REJECTED' && item.rejectReason" class="record-result">
+              <text class="record-result-label">说明</text>
+              <text class="record-result-text">{{ item.rejectReason }}</text>
+            </view>
+
+            <view
+              v-if="item.status === 'RESOLVED'"
+              class="record-latest"
+              @tap="openLatestRecipe(item)"
+            >
+              <text class="record-latest-text">最新的食谱可以在你的定制订单中查看</text>
+              <text class="record-latest-link">查看最新食谱 ›</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 一个大容器：调整哪个食谱？→ Tab → 摘要 → 当前这份的表单 -->
+        <view v-if="items.length" class="adjust-container">
+          <view class="container-head">
+            <text class="container-title">
+              {{ items.length > 1 ? '调整哪个食谱？' : '本次要调整的食谱' }}
+            </text>
+            <text class="container-sub">
+              {{ items.length > 1 ? '写哪几份，就提交哪几份' : activeItem?.name }}
+            </text>
+          </view>
+
+          <scroll-view
+            v-if="items.length > 1"
+            class="recipe-tabs"
+            scroll-x
+            :show-scrollbar="false"
+          >
+            <view
+              v-for="item in items"
+              :key="item.key"
+              class="recipe-tab"
+              :class="{ 'recipe-tab--active': item.key === activeKey }"
+              @tap="selectRecipe(item.key)"
+            >
+              <text class="recipe-tab-name">{{ item.name }}</text>
+              <view v-if="isDraftFilled(item.key)" class="tab-dot" />
+            </view>
+          </scroll-view>
+
+          <view v-if="activeItem" class="container-section">
+            <text class="container-section-title">食谱摘要</text>
+            <text class="summary-name">{{ activeItem.name }}</text>
+
+            <template v-if="activeItem.content">
+              <view v-if="foodRowsOf(activeItem.content).length" class="food-list">
+                <view
+                  v-for="row in foodRowsOf(activeItem.content)"
+                  :key="row.name"
+                  class="food-row"
+                >
+                  <text class="food-name">{{ row.name }}</text>
+                  <text class="food-ratio">{{ formatRatio(row.ratioPercent) }}</text>
+                </view>
+              </view>
+
+              <view
+                v-if="supplementRowsOf(activeItem.content).length"
+                class="supplement-line"
+              >
+                <text class="supplement-label">须额外添加：</text>
+                <text
+                  v-for="(row, index) in supplementRowsOf(activeItem.content)"
+                  :key="row.label + row.unit"
+                  class="supplement-item"
+                >{{ row.label }} 每公斤食材添加 {{ row.value }}{{ row.unit }}<text v-if="index < supplementRowsOf(activeItem.content).length - 1">，</text></text>
+              </view>
+
+              <text class="macro-caption">干物质（DM）占比</text>
+              <view class="macro-grid">
+                <view
+                  v-for="row in dmRowsOf(activeItem.content)"
+                  :key="row.label"
+                  class="macro-cell"
+                >
+                  <text class="macro-label">{{ row.label }}</text>
+                  <text class="macro-value">{{ row.value }}</text>
+                </view>
+              </view>
+            </template>
+            <text v-else class="summary-empty">暂时读不到这份食谱的摘要</text>
+          </view>
+
+          <view v-if="canSubmitNew && activeDraft" class="container-section">
+            <text class="container-section-title">想怎么调整</text>
+            <textarea
+              v-model="activeDraft.description"
+              class="adjust-input"
+              placeholder="比如：鸡肉想换成鸭肉、某样食材减少一点、份量想调整……"
+              :maxlength="1000"
+              auto-height
+            />
+
+            <view class="attachment-area">
+              <view
+                v-for="att in activeDraft.attachments"
+                :key="att.id || att.url"
+                class="attachment-item"
+              >
+                <image
+                  v-if="isImageAttachment(att)"
+                  class="attachment-thumb"
+                  :src="att.url"
+                  mode="aspectFill"
+                  @tap="previewAttachment(att)"
+                />
+                <view v-else class="attachment-doc" @tap="previewAttachment(att)">
+                  <text class="attachment-doc-badge">{{ docBadge(att) }}</text>
+                  <text class="attachment-doc-name">{{ att.fileName || '文档' }}</text>
+                </view>
+                <text class="attachment-remove" @tap.stop="removeAttachment(att)">×</text>
+              </view>
+
+              <view
+                v-if="activeDraft.attachments.length < MAX_ATTACH"
+                class="add-attachment"
+                @tap="pickAttachment"
+              >
+                <text class="add-attachment-icon">＋</text>
+                <text class="add-attachment-text">添加附件</text>
+              </view>
+            </view>
+
+            <text
+              v-if="activeDraft.attachments.length && !activeDraft.description.trim()"
+              class="attachment-hint"
+            >写一句这份想怎么调，附件才会随这份提交</text>
+          </view>
+
+          <view v-else class="container-section">
+            <view class="locked-note">
+              <text class="locked-note-text">{{ lockedText }}</text>
+            </view>
+          </view>
+        </view>
+
+        <view v-else class="empty-recipe">
+          <text class="empty-recipe-text">暂时读不到这次的食谱摘要，请稍后重试或联系 Seven爸爸</text>
+        </view>
+      </template>
     </template>
+
+    <view v-if="!isRefundScene" class="bottom-bar">
+      <view class="service-slot">
+        <CustomerServiceInlineButton
+          source-type="ORDER"
+          :order-id="orderId"
+          :order-no="orderId"
+          :title="`定制订单 ${orderId}`"
+          path="/pages/custom-recipe/aftersale"
+          compact
+          label="Seven爸爸"
+        />
+      </view>
+      <button
+        v-if="canSubmitNew"
+        class="submit-btn"
+        :disabled="!canSubmit || submitting"
+        :loading="submitting"
+        @tap="handleSubmit"
+      >{{ submitLabel }}</button>
+      <button
+        v-else-if="canWithdraw"
+        class="withdraw-btn"
+        :loading="cancelling"
+        @tap="handleCancel"
+      >撤销本次提交</button>
+      <button v-else-if="openItem" class="processing-btn" disabled>处理中</button>
+    </view>
   </view>
 </template>
 
@@ -251,407 +264,611 @@ import { onLoad } from '@dcloudio/uni-app';
 import CustomerServiceInlineButton from '@/components/CustomerServiceInlineButton.vue';
 import {
   cancelAftersale,
-  uploadAftersaleAttachment,
+  deleteAftersaleAttachment,
   fetchAftersales,
+  fetchDelivery,
   fetchOrderDetail,
-  type AftersaleQuota,
-  type DeliveryBatchItemSummary,
-  fetchAftersaleTypes,
   submitAftersale,
+  uploadAftersaleAttachment,
   type AftersaleItem,
-  type AftersaleTypeOption,
+  type AftersaleQuota,
+  type AftersaleRecipeRequest,
+  type CustomRecipeOrderDetail,
+  type DeliveryBatchContent,
+  type DeliveryContent,
+  type OrderDelivery,
 } from '@/api/custom-recipe';
-import {
-  buildAftersaleSelectionPayload,
-  preselectAftersaleDeliveryItemIds,
-  resolveAftersaleBatchItems,
-  toggleAftersaleDeliveryItem,
-  validateAftersaleBatchSelection,
-} from '@/utils/custom-recipe-aftersale';
+import { toDryMatterMacros } from '@/utils/nutrition-dm';
 import { requestCustomRecipeOrderSubscription } from '@/utils/custom-recipe-payment';
 
-/**
- * 售后页（2026-10-16，批次 2.5）
- *
- * ## 页面里**没有业务判断**
- *
- * · 类型选项来自**选项字典**（后台可加可改，不用发版）
- * · "能不能撤回"由后端算好（`item.canCancel`）
- * · 进度节点与文案由后端下发
- * · 提交失败时显示的**是后端给的原因**（"已超过售后受理期（交付后 30 天内）"），
- *   不是前端编的通用文案
- *
- * 页面自己只做一件事：判断"有没有未处理完的"来决定显不显示表单 ——
- * 而那也只是省一次往返，真正的拦截在后端。
- */
+interface Attachment {
+  id: string;
+  url: string;
+  fileName: string;
+  fileSize: number;
+  fileType: string;
+}
+
+interface AdjustDraft {
+  description: string;
+  attachments: Attachment[];
+}
+
+interface AdjustItem {
+  key: string;
+  /** 批次交付明细 id；单份老交付为空 */
+  deliveryItemId: string;
+  recipeId: string;
+  name: string;
+  content: DeliveryContent | null;
+}
+
+const MAX_ATTACH = 9;
 
 const orderId = ref('');
-const loading = ref(true);
-const list = ref<AftersaleItem[]>([]);
-
-/**
- * 多份订单的按份售后（2026-10-21 · 第二阶段 Task 6）。
- *
- * · `recipeId` 是可选的入口参数：从某张食谱卡片点进来时带上，默认选中那一份；
- * · `batchItems` 来自订单详情的 `deliveryBatch.items`，老订单为空；
- * · `selectedItemIds` 存的是**交付明细主键**（`deliveryItemId`），
- *   不是业务编号 `recipeId` —— 后端按前者认"这一条说的是哪一份"；
- * · `recipeTexts` 按 `deliveryItemId` 存每一份自己的说明。
- */
 const recipeId = ref('');
-const batchItems = ref<DeliveryBatchItemSummary[]>([]);
-const selectedItemIds = ref<string[]>([]);
-const recipeTexts = reactive<Record<string, string>>({});
-
-/** 有没有批次明细 —— 没有就完全走原来的整单售后 */
-const isBatchOrder = computed(() => batchItems.value.length > 0);
-
-/**
- * 从某份食谱卡点进来时，售后就是针对这一份的：
- * 不再让顾客在页面里重新选（选错了反而会改错食谱）。
- * 只有链接里的 recipeId 确实在这一批里时才隐藏选择器；
- * 查不到就退回可选择的形态，不能把顾客卡在"没得选"。
- */
-const fixedRecipeId = computed(() => {
-  if (!recipeId.value) return '';
-  const matched = batchItems.value.some(
-    (item) => String(item.recipeId || '') === recipeId.value,
-  );
-  return matched ? recipeId.value : '';
-});
-
-const showRecipePicker = computed(
-  () => batchItems.value.length > 1 && !fixedRecipeId.value,
-);
-
-/**
- * 退款入口（2026-10-24）。
- *
- * 从订单详情底栏「退款申请」进来时带 `scene=refund`：
- * 退款不是针对某一份食谱的，所以**不显示按份选择**、提交也不带按份字段；
- * 类型默认选字典里的"退款"那一项。
- */
 const isRefundScene = ref(false);
-
-const isRecipeSelected = (deliveryItemId: string) =>
-  selectedItemIds.value.includes(deliveryItemId);
-
-const toggleRecipeSelection = (deliveryItemId: string) => {
-  selectedItemIds.value = toggleAftersaleDeliveryItem(
-    selectedItemIds.value,
-    deliveryItemId,
-  );
-};
-
-/** 每一份自己的说明（不用动态 v-model，避免小程序端对象下标绑定踩坑） */
-function handleRecipeTextInput(deliveryItemId: string, event: any) {
-  const value = event?.detail?.value ?? event?.target?.value ?? '';
-  recipeTexts[deliveryItemId] = String(value);
-}
-
-function resetRecipeSelection() {
-  selectedItemIds.value = [];
-  for (const key of Object.keys(recipeTexts)) {
-    recipeTexts[key] = '';
-  }
-}
-
-/**
- * 把订单详情里的批次明细装进页面。
- *
- * 默认只勾选链接带过来的那一份（没有链接参数就一份都不选）——
- * 具体规则在 `preselectAftersaleDeliveryItemIds` 里，页面不自己 find。
- */
-function applyBatchItems(
-  batch: { items?: DeliveryBatchItemSummary[] | null } | null | undefined,
-) {
-  /**
-   * 退款场景不需要"选哪份食谱"：
-   * 清空批次，isBatchOrder 随之为 false，提交时不会带按份字段，
-   * 也不会被"至少选一份"的校验拦住。
-   */
-  if (isRefundScene.value) {
-    batchItems.value = [];
-    selectedItemIds.value = [];
-    return;
-  }
-
-  const items = resolveAftersaleBatchItems(batch);
-  batchItems.value = items;
-
-  for (const key of Object.keys(recipeTexts)) {
-    delete recipeTexts[key];
-  }
-  for (const item of items) {
-    recipeTexts[item.deliveryItemId] = '';
-  }
-
-  const preselected = preselectAftersaleDeliveryItemIds(
-    items,
-    recipeId.value,
-  );
-  // 只有一份时没有"选哪份"的问题，直接选中，少一步操作。
-  selectedItemIds.value =
-    preselected.length > 0
-      ? preselected
-      : items.length === 1
-        ? [items[0].deliveryItemId]
-        : [];
-}
-
-/**
- * 售后配额（2026-10-18 · 需求 2.5.7）
- *
- * 需求写死了：「**必须先显示两个数字** —— 窗口还剩几天、免费修改还剩几次。
- * **不让顾客猜自己还能不能提。**」
- *
- * 数字与"能不能提"都由**后端算**，这里只负责画。
- */
-const quota = ref<AftersaleQuota | null>(null);
-const typeOptions = ref<AftersaleTypeOption[]>([]);
+const loading = ref(true);
 const submitting = ref(false);
-const cancellingId = ref('');
-
-const form = reactive({ type: '', description: '' });
-
-/**
- * 附件（2026-10-18）。
- *
- * 上限**不在前端写死**为准 —— 后端的 `getAttachmentLimits` 才是权威，
- * 这里只是提前挡一下，给一句人话提示（不要等传完才报错）。
- */
-const MAX_ATTACH = 9;
-const attachments = ref<string[]>([]);
+const cancelling = ref(false);
 const uploading = ref(false);
 
-async function pickAttach() {
-  if (uploading.value) return;
-  if (attachments.value.length >= MAX_ATTACH) {
-    uni.showToast({ title: `最多 ${MAX_ATTACH} 个`, icon: 'none' });
-    return;
+const quota = ref<AftersaleQuota | null>(null);
+const list = ref<AftersaleItem[]>([]);
+const items = ref<AdjustItem[]>([]);
+const drafts = reactive<Record<string, AdjustDraft>>({});
+const activeKey = ref('');
+const expandedIds = ref<string[]>([]);
+
+const activeItem = computed(
+  () => items.value.find((item) => item.key === activeKey.value) || null,
+);
+const activeDraft = computed(() =>
+  activeKey.value ? drafts[activeKey.value] || null : null,
+);
+
+const filledCount = computed(
+  () =>
+    items.value.filter(
+      (item) => (drafts[item.key]?.description || '').trim().length > 0,
+    ).length,
+);
+
+/** 只传了附件没写说明的草稿：不把它当一份提交，提示补文字或删附件 */
+const hasAttachmentOnlyDraft = computed(() =>
+  items.value.some((item) => {
+    const draft = drafts[item.key];
+    return Boolean(draft && draft.attachments.length && !draft.description.trim());
+  }),
+);
+
+const canSubmit = computed(
+  () => filledCount.value > 0 && !hasAttachmentOnlyDraft.value,
+);
+const canSubmitNew = computed(
+  () => Boolean(quota.value?.canSubmit) && items.value.length > 0,
+);
+const openItem = computed(
+  () =>
+    list.value.find((item) =>
+      ['PENDING', 'ACCEPTED', 'PROCESSING'].includes(item.status),
+    ) || null,
+);
+const canWithdraw = computed(() => Boolean(openItem.value?.canCancel));
+
+const lockedText = computed(() => {
+  if (quota.value?.reason) return quota.value.reason;
+  if (openItem.value) {
+    return '当前有一条调整正在处理，处理完之前不能再提交下一条。';
+  }
+  return '当前暂时不能提交调整需求，如需帮助请联系 Seven爸爸。';
+});
+
+const submitLabel = computed(() =>
+  filledCount.value > 0
+    ? `提交调整（${filledCount.value} 份）`
+    : '提交调整',
+);
+
+function isDraftFilled(key: string): boolean {
+  return Boolean((drafts[key]?.description || '').trim());
+}
+
+function selectRecipe(key: string) {
+  activeKey.value = key;
+}
+
+function isBatchDelivery(value: unknown): value is DeliveryBatchContent {
+  return Boolean(value && typeof value === 'object' && 'batchId' in value);
+}
+
+function isSingleDelivery(value: unknown): value is OrderDelivery {
+  return Boolean(value && typeof value === 'object' && 'content' in value);
+}
+
+/**
+ * 建立“这份食谱”的列表。
+ *
+ * 优先用订单详情的批次明细（id 才是售后要传的）；
+ * 交付内容只用来补摘要；两者都可能失败，失败时仍显示名字、允许提交。
+ */
+function buildItems(
+  detail: CustomRecipeOrderDetail | null,
+  delivery: OrderDelivery | DeliveryBatchContent | null,
+) {
+  const next: AdjustItem[] = [];
+  const contentById = new Map<string, DeliveryContent>();
+
+  if (isBatchDelivery(delivery)) {
+    for (const item of delivery.items || []) {
+      contentById.set(item.id, item.content);
+    }
   }
 
-  let filePath = '';
-  try {
-    const chosen: any = await new Promise((resolve, reject) => {
-      uni.chooseImage({
-        count: 1,
-        sizeType: ['compressed'],
-        // 只从相册选：只给一个来源时微信不再弹"拍照/相册"选择器
-        sourceType: ['album'],
-        success: resolve,
-        fail: reject,
+  const batch = detail?.deliveryBatch;
+  if (batch?.items?.length) {
+    for (const item of batch.items) {
+      next.push({
+        key: item.deliveryItemId,
+        deliveryItemId: item.deliveryItemId,
+        recipeId: item.recipeId || '',
+        name: item.recipeName || '未命名食谱',
+        content: contentById.get(item.deliveryItemId) || null,
       });
+    }
+  } else if (isBatchDelivery(delivery) && delivery.items?.length) {
+    for (const item of delivery.items) {
+      next.push({
+        key: item.id,
+        deliveryItemId: item.id,
+        recipeId: item.recipeId || '',
+        name: item.recipeName || '未命名食谱',
+        content: item.content || null,
+      });
+    }
+  } else {
+    const content = isSingleDelivery(delivery) ? delivery.content : null;
+    const name =
+      content?.recipe?.name ||
+      detail?.recipeName ||
+      '这份食谱';
+    next.push({
+      key: 'single',
+      deliveryItemId: '',
+      recipeId:
+        content?.recipe?.recipeId || detail?.recipeId || recipeId.value || '',
+      name,
+      content,
     });
-    filePath = chosen?.tempFilePaths?.[0] || '';
-  } catch {
-    // 顾客取消：静默返回
+  }
+
+  items.value = next;
+
+  for (const item of next) {
+    if (!drafts[item.key]) {
+      drafts[item.key] = { description: '', attachments: [] };
+    }
+  }
+  for (const key of Object.keys(drafts)) {
+    if (!next.some((item) => item.key === key)) {
+      delete drafts[key];
+    }
+  }
+
+  /**
+   * 从某份食谱卡进入：默认就是那一份。
+   * 从消息/订单列表/客服进入（没有 recipeId）：默认第一份。
+   * 这条规则在“可提交”状态下尤其重要，不能让顾客自己再找。
+   */
+  const entry = next.find(
+    (item) => recipeId.value && item.recipeId === recipeId.value,
+  );
+  const current = next.find((item) => item.key === activeKey.value);
+  activeKey.value =
+    entry?.key || current?.key || next[0]?.key || '';
+}
+
+async function load() {
+  loading.value = true;
+  try {
+    if (isRefundScene.value) return;
+
+    const [aftersaleResult, detail, delivery] = await Promise.all([
+      fetchAftersales(orderId.value),
+      fetchOrderDetail(orderId.value).catch((error) => {
+        console.warn('[CustomRecipe] 读取订单详情失败:', error);
+        return null;
+      }),
+      fetchDelivery(orderId.value).catch((error) => {
+        console.warn('[CustomRecipe] 读取交付内容失败:', error);
+        return null;
+      }),
+    ]);
+
+    list.value = aftersaleResult.items;
+    quota.value = aftersaleResult.quota;
+    buildItems(detail, delivery as OrderDelivery | DeliveryBatchContent | null);
+  } catch (error) {
+    uni.showToast({
+      title: (error as Error)?.message || '读取调整信息失败',
+      icon: 'none',
+    });
+  } finally {
+    loading.value = false;
+  }
+}
+
+function resetDrafts() {
+  for (const item of items.value) {
+    drafts[item.key] = { description: '', attachments: [] };
+  }
+}
+
+function formatTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const pad = (num: number) => String(num).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+    date.getDate(),
+  )} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function statusText(item: AftersaleItem): string {
+  if (item.customerStatusLabel) return item.customerStatusLabel;
+  if (item.status === 'RESOLVED') return '已交付';
+  if (
+    item.status === 'REJECTED' &&
+    (item.rejectReason || '').includes('撤回')
+  ) {
+    return '已撤销';
+  }
+  return item.statusLabel;
+}
+
+function statusClass(item: AftersaleItem): string {
+  if (item.status === 'RESOLVED') return 'status-pill--delivered';
+  if (item.status === 'REJECTED') {
+    return (item.rejectReason || '').includes('撤回')
+      ? 'status-pill--withdrawn'
+      : 'status-pill--rejected';
+  }
+  if (item.status === 'PENDING') return 'status-pill--pending';
+  return 'status-pill--processing';
+}
+
+function scopeText(item: AftersaleItem): string {
+  const selected = item.items || [];
+  if (selected.length) {
+    return `涉及 ${selected.length} 份：${selected
+      .map((row) => row.recipeName || '未命名食谱')
+      .join('、')}`;
+  }
+  if (item.deliveryItemIds?.length) {
+    return `涉及 ${item.deliveryItemIds.length} 份`;
+  }
+  return '';
+}
+
+function historyContent(item: AftersaleItem): string {
+  const requests = item.recipeRequests || [];
+  if (requests.length) {
+    const names = new Map(
+      (item.items || []).map((row) => [row.deliveryItemId, row.recipeName]),
+    );
+    return requests
+      .map(
+        (request) =>
+          `${names.get(request.deliveryItemId) || '食谱'}：${request.description}`,
+      )
+      .join('\n');
+  }
+  return item.description;
+}
+
+function isLongRecord(item: AftersaleItem): boolean {
+  return historyContent(item).length > 120;
+}
+
+function isExpanded(id: string): boolean {
+  return expandedIds.value.includes(id);
+}
+
+function toggleExpanded(id: string) {
+  expandedIds.value = isExpanded(id)
+    ? expandedIds.value.filter((item) => item !== id)
+    : [...expandedIds.value, id];
+}
+
+function foodRowsOf(content: DeliveryContent) {
+  return (content.recipe?.items || [])
+    .filter(
+      (item) => !item.isSupplement && item.ingredientType !== 'SUPPLEMENT',
+    )
+    .map((item) => ({
+      name: item.name,
+      ratioPercent: item.ratioPercent ?? null,
+    }));
+}
+
+function formatRatio(value: number | null): string {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return '—';
+  if (numeric > 0 && numeric < 0.01) return '<0.01%';
+  return `${numeric.toFixed(2)}%`;
+}
+
+function supplementRowsOf(content: DeliveryContent) {
+  const rows: Array<{ label: string; value: string; unit: string }> = [];
+  const seen = new Set<string>();
+  for (const supplement of content.supplements || []) {
+    for (const target of supplement.targets || []) {
+      const value = Number(target.targetValuePerKg);
+      if (!target.label || !Number.isFinite(value)) continue;
+      const unit = target.unit || '';
+      const key = `${target.label}:${unit}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rows.push({
+        label: target.label,
+        value: Number.isInteger(value) ? String(value) : value.toFixed(1),
+        unit,
+      });
+    }
+  }
+  return rows;
+}
+
+function dmRowsOf(content: DeliveryContent) {
+  const macros = toDryMatterMacros(content.nutrition?.macros);
+  return [
+    { label: '蛋白质', value: macros.protein },
+    { label: '脂肪', value: macros.fat },
+    { label: '灰分', value: macros.ash },
+    { label: '纤维', value: macros.fiber },
+    { label: '碳水', value: macros.carbohydrate },
+  ].map((row) => ({
+    label: row.label,
+    value: row.value === null ? '—' : `${row.value}%`,
+  }));
+}
+
+function isImageAttachment(att: Attachment): boolean {
+  if (att.fileType === 'IMAGE') return true;
+  return /\.(jpe?g|png|gif|webp)(\?|$)/.test(att.url.toLowerCase());
+}
+
+function docBadge(att: Attachment): string {
+  const match = /\.([a-z0-9]+)(\?|$)/.exec(
+    (att.fileName || att.url).toLowerCase(),
+  );
+  return (match?.[1] || '文件').toUpperCase().slice(0, 4);
+}
+
+function previewAttachment(att: Attachment) {
+  if (isImageAttachment(att)) {
+    const draft = items.value
+      .map((item) => drafts[item.key])
+      .find((candidate) => candidate?.attachments.includes(att));
+    const images = (draft?.attachments || [])
+      .filter(isImageAttachment)
+      .map((item) => item.url);
+    uni.previewImage({ urls: images, current: att.url });
     return;
   }
-  if (!filePath) return;
+  uni.showLoading({ title: '打开中…' });
+  uni.downloadFile({
+    url: att.url,
+    success: (res) => {
+      if (res.statusCode !== 200) {
+        uni.showToast({ title: '文档打开失败', icon: 'none' });
+        return;
+      }
+      uni.openDocument({
+        filePath: res.tempFilePath,
+        showMenu: true,
+        fail: () => uni.showToast({ title: '文档打开失败', icon: 'none' }),
+      });
+    },
+    fail: () => uni.showToast({ title: '文档下载失败', icon: 'none' }),
+    complete: () => uni.hideLoading(),
+  });
+}
 
+async function uploadSelected(
+  filePath: string,
+  fileName = '照片',
+  draftKey = activeKey.value,
+) {
+  const draft = drafts[draftKey];
+  if (!draft) return;
+  if (draft.attachments.length >= MAX_ATTACH) {
+    uni.showToast({ title: `最多 ${MAX_ATTACH} 个附件`, icon: 'none' });
+    return;
+  }
   uploading.value = true;
   uni.showLoading({ title: '上传中…' });
   try {
-    const { url } = await uploadAftersaleAttachment(orderId.value, filePath);
-    attachments.value = [...attachments.value, url];
+    const result = await uploadAftersaleAttachment(orderId.value, filePath);
+    // 上传期间顾客可能切了 Tab：文件仍要挂到发起上传的那一份
+    draft.attachments = [
+      ...draft.attachments,
+      {
+        id: result.id,
+        url: result.url,
+        fileName: result.fileName || fileName,
+        fileSize: result.fileSize,
+        fileType: result.fileType,
+      },
+    ];
     uni.showToast({ title: '已上传', icon: 'none' });
-  } catch (error: any) {
-    uni.showToast({ title: error?.message || '上传失败，请重试', icon: 'none' });
+  } catch (error) {
+    uni.showToast({
+      title: (error as Error)?.message || '上传失败，请重试',
+      icon: 'none',
+    });
   } finally {
     uploading.value = false;
     uni.hideLoading();
   }
 }
 
-/**
- * 从微信里选文件（PDF / Word）—— 需求 2.5.7 要求「照片 + PDF + Word」。
- *
- * 为什么用 `chooseMessageFile` 而不是 `chooseImage`：
- * 微信小程序的相册选择器**只能选图片**；要选 PDF/Word 必须走
- * "从聊天记录里选文件"这条路（`uni.chooseMessageFile`）。
- *
- * 所以顾客的用法是：**先把化验单发到微信里（发给"文件传输助手"就行）**，
- * 再回来从这里选。这点在提示文案里写清楚，否则他会以为坏了。
- */
-async function pickDocument() {
-  if (uploading.value) return;
-  if (attachments.value.length >= MAX_ATTACH) {
-    uni.showToast({ title: `最多 ${MAX_ATTACH} 个`, icon: 'none' });
-    return;
+async function pickPhoto(draftKey = activeKey.value) {
+  try {
+    const chosen: any = await new Promise((resolve, reject) => {
+      uni.chooseImage({
+        count: 1,
+        sizeType: ['compressed'],
+        sourceType: ['album'],
+        success: resolve,
+        fail: reject,
+      });
+    });
+    const filePath = chosen?.tempFilePaths?.[0] || '';
+    if (!filePath) return;
+    const fileName =
+      chosen?.tempFiles?.[0]?.name ||
+      chosen?.tempFilePaths?.[0]?.split('/').pop() ||
+      '照片';
+    await uploadSelected(filePath, fileName, draftKey);
+  } catch {
+    // 顾客取消，静默
   }
+}
 
-  let filePath = '';
+async function pickDocument(draftKey = activeKey.value) {
   try {
     const chosen: any = await new Promise((resolve, reject) => {
       uni.chooseMessageFile({
         count: 1,
-        // PDF 与 Word（doc/docx）。微信的 type 只支持大类，具体扩展名靠后端判。
         type: 'file',
         extension: ['pdf', 'doc', 'docx'],
         success: resolve,
         fail: reject,
       });
     });
-    filePath = chosen?.tempFiles?.[0]?.path || '';
+    const file = chosen?.tempFiles?.[0];
+    if (!file?.path) return;
+    await uploadSelected(file.path, file.name || '文档', draftKey);
   } catch {
-    // 顾客取消：静默返回
+    // 顾客取消，静默
+  }
+}
+
+function pickAttachment() {
+  if (uploading.value) return;
+  const draftKey = activeKey.value;
+  const draft = drafts[draftKey];
+  if (!draft) return;
+  if (draft.attachments.length >= MAX_ATTACH) {
+    uni.showToast({ title: `最多 ${MAX_ATTACH} 个附件`, icon: 'none' });
     return;
   }
-  if (!filePath) return;
-
-  uploading.value = true;
-  uni.showLoading({ title: '上传中…' });
-  try {
-    const { url } = await uploadAftersaleAttachment(orderId.value, filePath);
-    attachments.value = [...attachments.value, url];
-    uni.showToast({ title: '已上传', icon: 'none' });
-  } catch (error: any) {
-    uni.showToast({ title: error?.message || '上传失败，请重试', icon: 'none' });
-  } finally {
-    uploading.value = false;
-    uni.hideLoading();
-  }
-}
-
-function removeAttach(index: number) {
-  attachments.value = attachments.value.filter((_, i) => i !== index);
-}
-
-function previewAttach(index: number) {
-  uni.previewImage({
-    urls: attachments.value,
-    current: attachments.value[index],
+  uni.showActionSheet({
+    itemList: ['照片', '文档'],
+    success: (res) => {
+      if (res.tapIndex === 0) pickPhoto(draftKey);
+      if (res.tapIndex === 1) pickDocument(draftKey);
+    },
   });
 }
 
-/** 有未处理完的就不再显示表单（后端也会拦，这里只是省一次往返） */
-const canSubmitNew = computed(
-  () => !list.value.some((item) => item.canCancel),
-);
+async function removeAttachment(att: Attachment) {
+  const draft = items.value
+    .map((item) => drafts[item.key])
+    .find((candidate) => candidate?.attachments.includes(att));
+  if (!draft) return;
 
-/**
- * 批次订单一份都没选时的行内错误；老订单恒为空。
- *
- * 这里只校验"表单填没填完"，**不做任何配额计算** ——
- * 窗口、免费次数、能不能提全部以后端为准。
- */
-const batchSelectionError = computed(() =>
-  validateAftersaleBatchSelection({
-    isBatch: isBatchOrder.value,
-    selectedIds: selectedItemIds.value,
-  }),
-);
+  const confirmed = await new Promise<boolean>((resolve) => {
+    uni.showModal({
+      title: '删除这个附件？',
+      content: '删除后文件也会从服务器删掉。',
+      confirmText: '删除',
+      cancelText: '取消',
+      success: (res) => resolve(Boolean(res.confirm)),
+      fail: () => resolve(false),
+    });
+  });
+  if (!confirmed) return;
 
-const canSubmit = computed(
-  () =>
-    Boolean(form.type) &&
-    form.description.trim().length > 0 &&
-    !batchSelectionError.value,
-);
-
-/** 提交按钮下面的提示：批次订单先提醒选食谱 */
-const submitHint = computed(() =>
-  batchSelectionError.value
-    ? '先勾选要调整的食谱'
-    : '选个类型、写一句具体情况就能提交',
-);
-
-const load = async () => {
-  loading.value = true;
-  try {
-    const [result, types, detail] = await Promise.all([
-      fetchAftersales(orderId.value),
-      fetchAftersaleTypes(),
-      /**
-       * 订单详情只用来判断"这一单是不是多份交付"。
-       *
-       * 失败**不能拖垮售后页**：老订单本来就不需要批次；
-       * 多份订单读不到批次时退回整单售后 —— 提交仍由后端校验，
-       * 页面不自己编一份批次出来。
-       */
-      fetchOrderDetail(orderId.value).catch((error) => {
-        console.warn('[CustomRecipe] 读取订单交付批次失败:', error);
-        return null;
-      }),
-    ]);
-    list.value = result.items;
-    quota.value = result.quota;
-    typeOptions.value = types;
-    // 默认选中字典里标了 isDefault 的那个，没有就选第一个；
-    // 退款入口优先选"退款"那一项，省得顾客再找。
-    if (!form.type && types.length) {
-      const refundType = isRefundScene.value
-        ? types.find(
-            (option) =>
-              option.label.includes('退款') || option.code.includes('REFUND'),
-          )
-        : null;
-      form.type = refundType?.code || types[0].code;
+  if (att.id) {
+    uni.showLoading({ title: '删除中…' });
+    try {
+      const result = await deleteAftersaleAttachment(att.id);
+      if (!result.ok) {
+        uni.showToast({ title: result.message || '删除失败', icon: 'none' });
+        return;
+      }
+    } catch (error) {
+      uni.showToast({
+        title: (error as Error)?.message || '删除失败，请重试',
+        icon: 'none',
+      });
+      return;
+    } finally {
+      uni.hideLoading();
     }
-    applyBatchItems(detail?.deliveryBatch ?? null);
-  } finally {
-    loading.value = false;
   }
-};
 
-/**
- * 提交售后时申请一次订阅（2026-10-18 · 需求 2.5.8）。
- *
- * 为什么在这一刻申请：微信是**一次性订阅** —— 一次授权只能下发一条消息。
- * 售后处理完成那一刻顾客不在小程序里，没法当时授权；
- * 而**提售后这个动作**正好是他主动操作、最有理由接受通知的时刻。
- *
- * 复用下单那个封装（它自己会去取模板 ID、自己吞掉所有失败）——
- * 不发通知也**不影响提交**，站内消息是兜底。
- */
-async function requestAftersaleSubscription() {
-  await requestCustomRecipeOrderSubscription();
+  draft.attachments = draft.attachments.filter((item) => item !== att);
 }
 
-const handleSubmit = async () => {
+async function handleSubmit() {
   if (!canSubmit.value || submitting.value) return;
+
   submitting.value = true;
   try {
-    // 先申请订阅（点提交这个动作本身就授权了一次），再提交
-    await requestAftersaleSubscription();
+    await requestCustomRecipeOrderSubscription();
 
-    /**
-     * 多份订单：带上"选了哪几份 / 每份要改什么"。
-     * 老订单（没有批次）返回空值，请求形状与以前完全一致。
-     */
-    const { deliveryItemIds, recipeRequests } =
-      buildAftersaleSelectionPayload({
-        isBatch: isBatchOrder.value,
-        selectedIds: selectedItemIds.value,
-        texts: recipeTexts,
-      });
+    const filledItems = items.value.filter(
+      (item) => (drafts[item.key]?.description || '').trim().length > 0,
+    );
+    const isBatch = filledItems.some((item) => Boolean(item.deliveryItemId));
+
+    const recipeRequests: AftersaleRecipeRequest[] | undefined = isBatch
+      ? filledItems.map((item) => ({
+          deliveryItemId: item.deliveryItemId,
+          description: (drafts[item.key]?.description || '').trim(),
+          photos: (drafts[item.key]?.attachments || []).map((att) => att.url),
+        }))
+      : undefined;
+
+    const photos = Array.from(
+      new Set(
+        filledItems.flatMap((item) =>
+          (drafts[item.key]?.attachments || []).map((att) => att.url),
+        ),
+      ),
+    );
+
+    const description = isBatch
+      ? `共 ${filledItems.length} 份食谱调整需求`
+      : (drafts[filledItems[0].key]?.description || '').trim();
 
     const result = await submitAftersale({
       orderId: orderId.value,
-      type: form.type,
-      description: form.description.trim(),
-      // 附件（2026-10-18）：接口早就支持了，之前只是没传
-      photos: attachments.value,
-      // 老订单这里是 undefined，API 层不会把键写进请求
-      deliveryItemIds,
-      recipeRequests,
+      type: 'ADJUST_RECIPE',
+      description,
+      photos,
+      ...(isBatch
+        ? {
+            deliveryItemIds: filledItems.map((item) => item.deliveryItemId),
+            recipeRequests,
+          }
+        : {}),
     });
 
     if (!result.ok) {
-      // 后端的原因直接给顾客看 —— 它比前端编的通用文案有用得多
       uni.showModal({
         title: '没能提交',
-        content: result.message || '请稍后重试，或直接联系客服',
+        content: result.message || '请稍后重试，或直接联系 Seven爸爸',
         showCancel: false,
       });
       return;
     }
 
     uni.showToast({ title: '已提交，我们会尽快看', icon: 'none' });
-    form.description = '';
+    resetDrafts();
     await load();
-    resetRecipeSelection();
   } catch (error) {
     uni.showToast({
       title: (error as Error)?.message || '提交失败，请重试',
@@ -660,14 +877,15 @@ const handleSubmit = async () => {
   } finally {
     submitting.value = false;
   }
-};
+}
 
-const handleCancel = async (item: AftersaleItem) => {
+async function handleCancel() {
+  if (!openItem.value || cancelling.value) return;
   const confirmed = await new Promise<boolean>((resolve) => {
     uni.showModal({
-      title: '撤回这条？',
-      content: '撤回后这条售后就不再处理了。如果只是想说点补充情况，直接联系客服更快。',
-      confirmText: '撤回',
+      title: '撤销本次提交？',
+      content: '撤销后这次调整不再处理，次数会退回；重新提交即可。',
+      confirmText: '撤销',
       cancelText: '再想想',
       success: (res) => resolve(Boolean(res.confirm)),
       fail: () => resolve(false),
@@ -675,28 +893,43 @@ const handleCancel = async (item: AftersaleItem) => {
   });
   if (!confirmed) return;
 
-  cancellingId.value = item.id;
+  cancelling.value = true;
   try {
-    const result = await cancelAftersale(item.id);
+    const result = await cancelAftersale(openItem.value.id);
     if (!result.ok) {
-      uni.showToast({ title: result.message || '撤回失败', icon: 'none' });
+      uni.showToast({ title: result.message || '撤销失败', icon: 'none' });
       return;
     }
-    uni.showToast({ title: '已撤回', icon: 'none' });
+    uni.showToast({ title: '已撤销', icon: 'none' });
     await load();
   } finally {
-    cancellingId.value = '';
+    cancelling.value = false;
   }
-};
+}
+
+function openLatestRecipe(item?: AftersaleItem) {
+  const targetRecipeId =
+    item?.items?.find((row) => row.recipeId)?.recipeId ||
+    activeItem.value?.recipeId ||
+    recipeId.value;
+  const query = targetRecipeId
+    ? `&recipeId=${encodeURIComponent(targetRecipeId)}`
+    : '';
+  uni.navigateTo({
+    url: `/pages/custom-recipe/delivery?orderId=${encodeURIComponent(
+      orderId.value,
+    )}${query}`,
+  });
+}
 
 onLoad((options) => {
-  orderId.value = options?.orderId ? decodeURIComponent(options.orderId) : '';
-  // 可选：从某份食谱卡片进来时指定默认勾选哪一份
+  orderId.value = options?.orderId
+    ? decodeURIComponent(options.orderId)
+    : '';
   recipeId.value = options?.recipeId
     ? decodeURIComponent(options.recipeId)
     : '';
-  isRefundScene.value =
-    String(options?.scene || '') === 'refund';
+  isRefundScene.value = String(options?.scene || '') === 'refund';
   if (isRefundScene.value) {
     uni.setNavigationBarTitle({ title: '退款申请' });
   }
@@ -705,706 +938,638 @@ onLoad((options) => {
 </script>
 
 <style scoped>
-.aftersale-page {
+.adjust-page {
   min-height: 100vh;
-  padding: 24rpx;
-  background: #16261f;
+  padding: 24rpx 24rpx 220rpx;
+  background: #f4efe4;
+  box-sizing: border-box;
 }
 
 .state-block {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 120rpx 0;
+  padding: 160rpx 0;
 }
 
 .state-text {
   font-size: 26rpx;
-  color: rgba(244, 236, 216, 0.6);
+  color: #8a7a66;
 }
 
-.section {
-  padding: 28rpx 32rpx;
-  margin-bottom: 24rpx;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1rpx solid rgba(216, 188, 133, 0.22);
+/* 额度 */
+.quota-card {
+  display: flex;
+  align-items: stretch;
+  padding: 28rpx 24rpx;
   border-radius: 28rpx;
+  background: linear-gradient(145deg, #24483a, #16261f 70%);
+  box-shadow: 0 16rpx 36rpx rgba(30, 58, 47, 0.18);
 }
 
-.section-title {
-  margin-bottom: 20rpx;
-  font-size: 30rpx;
-  font-weight: 600;
-  color: #d8bc85;
-}
-
-/* ===== 多份订单 · 按份售后（2026-10-21 · 第二阶段 Task 6）===== */
-.recipe-pick {
-  padding-bottom: 24rpx;
-  margin-bottom: 24rpx;
-  border-bottom: 1rpx solid rgba(216, 188, 133, 0.18);
-}
-
-.recipe-pick__note {
-  display: block;
-  margin: -8rpx 0 18rpx;
-  font-size: 22rpx;
-  line-height: 1.6;
-  color: rgba(244, 236, 216, 0.55);
-}
-
-.recipe-option {
-  margin-bottom: 14rpx;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1rpx solid rgba(216, 188, 133, 0.2);
-  border-radius: 20rpx;
-  overflow: hidden;
-}
-
-.recipe-option--picked {
-  border-color: #d8bc85;
-  background: rgba(216, 188, 133, 0.12);
-}
-
-.recipe-option__head {
-  display: flex;
-  align-items: center;
-  gap: 16rpx;
-  padding: 20rpx 22rpx;
-}
-
-.recipe-checkbox {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36rpx;
-  height: 36rpx;
-  flex-shrink: 0;
-  border: 2rpx solid rgba(216, 188, 133, 0.6);
-  border-radius: 8rpx;
-}
-
-.recipe-checkbox--checked {
-  background: #d8bc85;
-  border-color: #d8bc85;
-}
-
-.recipe-checkbox__tick {
-  font-size: 22rpx;
-  font-weight: 700;
-  line-height: 1;
-  color: #1e3a2f;
-}
-
-.recipe-option__name {
+.quota-cell {
   flex: 1;
-  font-size: 27rpx;
-  color: #f4ecd8;
+  min-width: 0;
 }
 
-.recipe-option__input {
-  width: 100%;
-  min-height: 120rpx;
-  padding: 0 22rpx 20rpx;
-  font-size: 25rpx;
-  line-height: 1.6;
-  color: #f4ecd8;
-  box-sizing: border-box;
-}
-
-.recipe-pick__tip {
-  display: block;
-  margin-top: 12rpx;
+.quota-label {
   font-size: 21rpx;
-  color: rgba(244, 236, 216, 0.45);
+  color: rgba(244, 236, 216, 0.68);
 }
 
-/* 行内校验错误：必须看得见 */
-.form-error {
-  display: block;
+.quota-value-row {
+  display: flex;
+  align-items: baseline;
   margin-top: 8rpx;
-  font-size: 22rpx;
-  line-height: 1.5;
-  color: #f0a3a3;
 }
 
-.aftersale-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12rpx;
-}
-
-.aftersale-type {
-  font-size: 30rpx;
-  font-weight: 600;
-  color: #f4ecd8;
-}
-
-.aftersale-status {
-  padding: 4rpx 16rpx;
-  font-size: 22rpx;
-  border-radius: 100rpx;
-  background: rgba(216, 188, 133, 0.18);
+.quota-value {
+  font-size: 42rpx;
+  font-weight: 800;
   color: #d8bc85;
+  line-height: 1.1;
 }
 
-.status--RESOLVED {
-  background: rgba(123, 196, 138, 0.2);
-  color: #7bc48a;
-}
-
-.status--REJECTED {
-  background: rgba(224, 139, 139, 0.2);
-  color: #e08b8b;
-}
-
-.aftersale-desc {
-  display: block;
-  margin-bottom: 20rpx;
-  font-size: 26rpx;
-  line-height: 1.6;
-  color: rgba(244, 236, 216, 0.85);
-}
-
-.progress-list {
-  margin: 16rpx 0;
-}
-
-.progress-item {
-  display: flex;
-  gap: 16rpx;
-  min-height: 72rpx;
-}
-
-.progress-marker {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 32rpx;
-  flex-shrink: 0;
-}
-
-.progress-dot {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30rpx;
-  height: 30rpx;
-  font-size: 18rpx;
-  color: #fff;
-  background: rgba(216, 188, 133, 0.28);
-  border-radius: 50%;
-}
-
-.progress-item--done .progress-dot {
-  background: #6fb3a0;
-}
-
-.progress-item--active .progress-dot {
-  background: #d8bc85;
-  box-shadow: 0 0 0 6rpx rgba(216, 188, 133, 0.22);
-}
-
-.progress-line {
-  flex: 1;
-  width: 2rpx;
-  margin: 6rpx 0;
-  background: rgba(216, 188, 133, 0.22);
-}
-
-.progress-body {
-  display: flex;
-  flex-direction: column;
-  gap: 4rpx;
-  padding-bottom: 16rpx;
-}
-
-.progress-label {
-  font-size: 26rpx;
-  color: rgba(255, 255, 255, 0.6);
-}
-
-.progress-item--done .progress-label,
-.progress-item--active .progress-label {
-  color: #f4ecd8;
-}
-
-.progress-note {
+.quota-unit {
+  margin-left: 6rpx;
   font-size: 22rpx;
-  line-height: 1.5;
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.aftersale-note {
-  padding: 16rpx 20rpx;
-  margin-top: 12rpx;
-  background: rgba(216, 188, 133, 0.1);
-  border-radius: 16rpx;
-}
-
-.aftersale-note-label {
-  display: block;
-  margin-bottom: 6rpx;
-  font-size: 22rpx;
-  color: #d8bc85;
-}
-
-.aftersale-note-text {
-  font-size: 26rpx;
-  line-height: 1.6;
-  color: #f4ecd8;
-}
-
-.type-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16rpx;
-  margin-bottom: 24rpx;
-}
-
-.type-option {
-  display: flex;
-  align-items: center;
-  gap: 16rpx;
-  padding: 22rpx 24rpx;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1rpx solid rgba(216, 188, 133, 0.2);
-  border-radius: 20rpx;
-}
-
-.type-option--picked {
-  border-color: #d8bc85;
-  background: rgba(216, 188, 133, 0.12);
-}
-
-.type-icon {
-  font-size: 32rpx;
-}
-
-.type-text {
-  display: flex;
-  flex-direction: column;
-  gap: 4rpx;
-  flex: 1;
-}
-
-.type-label {
-  font-size: 28rpx;
-  color: #f4ecd8;
-}
-
-.type-desc {
-  font-size: 22rpx;
-  color: rgba(244, 236, 216, 0.55);
-}
-
-.desc-input {
-  width: 100%;
-  min-height: 180rpx;
-  padding: 20rpx;
-  font-size: 26rpx;
-  line-height: 1.6;
-  color: #f4ecd8;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1rpx solid rgba(216, 188, 133, 0.2);
-  border-radius: 20rpx;
-  box-sizing: border-box;
-}
-
-.word-count {
-  display: block;
-  margin: 8rpx 0 24rpx;
-  font-size: 22rpx;
-  text-align: right;
-  color: rgba(244, 236, 216, 0.4);
-}
-
-.btn-primary {
-  color: #1e3a2f;
-  background: #d8bc85;
-}
-
-.btn-secondary {
-  margin-top: 20rpx;
-  color: #f4ecd8;
-  background: transparent;
-  border: 1rpx solid rgba(216, 188, 133, 0.5);
-}
-
-.hint {
-  display: block;
-  margin-top: 12rpx;
-  font-size: 22rpx;
-  text-align: center;
-  color: rgba(244, 236, 216, 0.45);
-}
-
-.done-note {
-  font-size: 26rpx;
-  line-height: 1.6;
   color: rgba(244, 236, 216, 0.7);
 }
 
-/* ===== 附件（2026-10-18）===== */
-.attach-block {
-  margin-top: 20rpx;
-}
-
-.attach-head {
-  display: flex;
-  align-items: baseline;
-  margin-bottom: 12rpx;
-}
-
-.attach-title {
-  flex: 1;
-  font-size: 24rpx;
-  font-weight: 700;
-  color: #e7d3a5;
-}
-
-.attach-count {
-  font-size: 21rpx;
-  color: #9c8b76;
-}
-
-.attach-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14rpx;
-}
-
-.attach-item {
-  position: relative;
-  width: 140rpx;
-  height: 140rpx;
-}
-
-.attach-thumb {
-  width: 140rpx;
-  height: 140rpx;
-  border-radius: 14rpx;
-  background: #f4ebe0;
-}
-
-.attach-remove {
-  position: absolute;
-  top: -8rpx;
-  right: -8rpx;
-  width: 36rpx;
-  height: 36rpx;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.62);
-  color: #fff;
-  font-size: 24rpx;
-  text-align: center;
-  line-height: 36rpx;
-}
-
-.attach-add {
-  width: 140rpx;
-  height: 140rpx;
-  border-radius: 14rpx;
-  border: 2rpx dashed #e5c9a3;
-  background: #fffdf8;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.attach-add-icon {
-  font-size: 40rpx;
-  color: #b45309;
-}
-
-.attach-tip {
-  display: block;
-  font-size: 20rpx;
-  color: #b3a492;
-  margin-top: 10rpx;
-  line-height: 1.5;
-}
-
-/* ===== 售后配额条（2026-10-18 · 需求 2.5.7）===== */
-.quota-bar {
-  display: flex;
-  gap: 24rpx;
-  padding: 22rpx 24rpx;
-  margin: 0 24rpx 20rpx;
-  background: #fffdf7;
-  border: 2rpx solid #f0e4d2;
-  border-radius: 18rpx;
-}
-
-.quota-item {
-  display: flex;
-  align-items: baseline;
-  gap: 8rpx;
-}
-
-.quota-value {
-  font-size: 40rpx;
-  font-weight: 700;
-  color: #b45309;
-}
-
-.quota-label {
-  font-size: 23rpx;
-  color: #8c7b66;
+.quota-divider {
+  width: 1rpx;
+  margin: 0 22rpx;
+  background: rgba(216, 188, 133, 0.24);
 }
 
 .quota-reason {
-  margin: 0 24rpx 20rpx;
-  padding: 16rpx 20rpx;
-  background: #fef2f2;
-  border-radius: 14rpx;
+  margin-top: 18rpx;
+  padding: 18rpx 22rpx;
+  border-radius: 16rpx;
+  background: #f7f1e4;
+  border: 1rpx solid #eadfcb;
 }
 
 .quota-reason-text {
-  font-size: 24rpx;
-  color: #b91c1c;
-  line-height: 1.5;
+  font-size: 23rpx;
+  line-height: 1.6;
+  color: #8a6b33;
 }
 
-/* ===== 文档上传入口（2026-10-18 · 需求 2.5.7）===== */
-.attach-add--doc {
-  border-style: solid;
-  border-color: #e8dccb;
-  background: #fff;
+/* 历史 */
+.history-section {
+  margin-top: 32rpx;
 }
 
-.attach-add-doc {
-  font-size: 24rpx;
-  font-weight: 700;
-  color: #8c7b66;
-}
-
-/* ===== 2026-10-23 顾客端统一视觉：温暖私厨 ===== */
-.aftersale-page {
-  background: #f3eee3;
-  padding: 24rpx 24rpx calc(48rpx + env(safe-area-inset-bottom));
-}
-
-.state-text {
-  color: #7d7564;
-}
-
-.section {
-  background: #fffdf7;
-  border: 1rpx solid #e8decd;
-  border-radius: 28rpx;
-  box-shadow: 0 12rpx 34rpx rgba(30, 58, 47, 0.05);
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18rpx;
 }
 
 .section-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #3f3222;
+}
+
+.empty-record {
+  padding: 30rpx 24rpx;
+  border-radius: 20rpx;
+  background: #fffdf7;
+  border: 1rpx solid #e8decd;
+}
+
+.empty-record-text {
+  font-size: 24rpx;
+  color: #8a7a66;
+}
+
+.record-card {
+  margin-bottom: 18rpx;
+  padding: 24rpx;
+  border-radius: 22rpx;
+  background: #fffdf7;
+  border: 1rpx solid #e8decd;
+}
+
+.record-top {
   display: flex;
   align-items: center;
-  gap: 14rpx;
-  font-size: 29rpx;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.record-time {
+  font-size: 22rpx;
+  color: #8a7a66;
+}
+
+.status-pill {
+  flex: 0 0 auto;
+  padding: 6rpx 16rpx;
+  border-radius: 999rpx;
+  font-size: 21rpx;
   font-weight: 700;
-  color: #1e3a2f;
 }
 
-.section-title::before {
-  content: '';
-  width: 5rpx;
-  height: 28rpx;
-  border-radius: 4rpx;
-  background: #c6a15b;
+.status-pill--pending {
+  color: #b45309;
+  background: #fff1e3;
 }
 
-.recipe-pick {
-  border-bottom-color: #eee5d6;
+.status-pill--processing {
+  color: #1e5b35;
+  background: #eaf4ec;
 }
 
-.recipe-pick__note,
-.recipe-pick__tip {
-  color: #8a806c;
+.status-pill--delivered {
+  color: #2e7d32;
+  background: #e8f5e9;
 }
 
-.recipe-option {
-  background: #fffaf1;
-  border-color: #e8decd;
+.status-pill--withdrawn {
+  color: #777;
+  background: #f1f1ee;
 }
 
-.recipe-option--picked {
-  border-color: #c6a15b;
-  background: #fbf2df;
+.status-pill--rejected {
+  color: #b3261e;
+  background: #fdecea;
 }
 
-.recipe-checkbox {
-  border-color: #b08d4f;
+.record-scope {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  color: #8a9a8f;
 }
 
-.recipe-checkbox--checked {
-  background: #c6a15b;
-  border-color: #c6a15b;
+.record-content {
+  display: -webkit-box;
+  margin-top: 12rpx;
+  font-size: 26rpx;
+  line-height: 1.65;
+  color: #3f3222;
+  white-space: pre-wrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
 }
 
-.recipe-checkbox__tick {
-  color: #fffdf7;
+.record-content--open {
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
 }
 
-.recipe-option__name,
-.recipe-option__input {
-  color: #2f3a30;
+.record-toggle {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #b08d4f;
 }
 
-.aftersale-type {
-  color: #1e3a2f;
+.record-result {
+  margin-top: 14rpx;
+  padding: 16rpx 18rpx;
+  border-radius: 12rpx;
+  background: #f4f7f5;
 }
 
-.aftersale-status {
-  background: #f7f1e4;
-  color: #8a6d2f;
-}
-
-.status--RESOLVED {
-  background: #e8f0e6;
+.record-result-label {
+  display: block;
+  font-size: 21rpx;
+  font-weight: 700;
   color: #1e5b35;
 }
 
-.status--REJECTED {
-  background: #f7e9e3;
-  color: #a74a35;
+.record-result-text {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #3f3222;
 }
 
-.aftersale-desc {
-  color: #4b4a3f;
-}
-
-.progress-label {
-  color: #8a806c;
-}
-
-.progress-item--done .progress-label,
-.progress-item--active .progress-label {
-  color: #1e3a2f;
-}
-
-.progress-note {
-  color: #8a806c;
-}
-
-.progress-dot {
-  background: #e6dccb;
-}
-
-.progress-item--done .progress-dot {
-  background: #6f9d84;
-}
-
-.progress-item--active .progress-dot {
-  background: #c6a15b;
-  color: #1e3a2f;
-}
-
-.progress-line {
-  background: #e6dccb;
-}
-
-.aftersale-note {
-  background: #f7f1e4;
-}
-
-.aftersale-note-label {
-  color: #8a6d2f;
-}
-
-.aftersale-note-text {
-  color: #2f3a30;
-}
-
-.type-option {
-  background: #fffaf1;
-  border-color: #e8decd;
-}
-
-.type-option--picked {
-  border-color: #c6a15b;
-  background: #fbf2df;
-}
-
-.type-label {
-  color: #1e3a2f;
-}
-
-.type-desc {
-  color: #8a806c;
-}
-
-.desc-input {
-  color: #2f3a30;
-  background: #fffdf7;
-  border-color: #e8decd;
-}
-
-.word-count {
-  color: #9a927f;
-}
-
-.btn-primary {
-  color: #1e3a2f;
-  background: linear-gradient(135deg, #e7d3a5 0%, #d8bc85 100%);
-  border: 1rpx solid #c6a15b;
-}
-
-.btn-secondary {
-  color: #1e3a2f;
-  border-color: #d9cdb8;
-}
-
-.hint {
-  color: #8a806c;
-}
-
-.attach-title {
-  color: #1e3a2f;
-}
-
-.attach-count,
-.attach-tip {
-  color: #8a806c;
-}
-
-.quota-bar {
-  margin: 0 0 22rpx;
-  padding: 24rpx 28rpx;
-  background: linear-gradient(145deg, #294b3c 0%, #1b3328 100%);
-  border: 1rpx solid rgba(216, 188, 133, 0.45);
-  border-radius: 24rpx;
-}
-
-.quota-value {
-  font-family: "Songti SC", "STSong", serif;
-  font-size: 46rpx;
-  color: #e7d3a5;
-}
-
-.quota-label {
-  color: #cfdccf;
-}
-
-.quota-reason {
-  margin: 0 0 22rpx;
-  background: #f7e9e3;
-}
-
-.quota-reason-text {
-  color: #a74a35;
-}
-
-.attach-add {
-  border-color: #d9cdb8;
-  background: #fffdf7;
-}
-
-/* 其它问题？找 Seven爸爸 */
-.aftersale-service {
+.record-latest {
   display: flex;
-  justify-content: center;
-  padding: 20rpx 0 48rpx;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  margin-top: 16rpx;
+  padding-top: 14rpx;
+  border-top: 1rpx dashed #eadfcb;
 }
 
+.record-latest-text {
+  font-size: 21rpx;
+  color: #8a7a66;
+}
+
+.record-latest-link {
+  flex: 0 0 auto;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #b08d4f;
+}
+
+/* 大容器 */
+.adjust-container {
+  margin-top: 28rpx;
+  padding: 28rpx 24rpx;
+  border-radius: 28rpx;
+  background: #fffdf7;
+  border: 1rpx solid #e8decd;
+}
+
+.container-title {
+  display: block;
+  font-size: 34rpx;
+  font-weight: 800;
+  color: #3f3222;
+  letter-spacing: 0.5rpx;
+}
+
+.container-sub {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: #8a7a66;
+}
+
+.recipe-tabs {
+  margin-top: 20rpx;
+  white-space: nowrap;
+}
+
+.recipe-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8rpx;
+  margin-right: 12rpx;
+  padding: 12rpx 22rpx;
+  border-radius: 999rpx;
+  border: 1rpx solid #e0d3bf;
+  background: #fffdf7;
+  color: #6b5c45;
+  font-size: 24rpx;
+}
+
+.recipe-tab--active {
+  background: #1e3a2f;
+  border-color: #1e3a2f;
+  color: #f4ecd8;
+  font-weight: 700;
+}
+
+.recipe-tab-name {
+  max-width: 260rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-dot {
+  width: 10rpx;
+  height: 10rpx;
+  border-radius: 50%;
+  background: #b08d4f;
+}
+
+.recipe-tab--active .tab-dot {
+  background: #d8bc85;
+}
+
+.container-section {
+  margin-top: 24rpx;
+  padding-top: 24rpx;
+  border-top: 1rpx dashed #eadfcb;
+}
+
+.container-section-title {
+  display: block;
+  margin-bottom: 14rpx;
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #3f3222;
+}
+
+.summary-name {
+  display: block;
+  margin-bottom: 8rpx;
+  font-size: 27rpx;
+  font-weight: 700;
+  color: #3f3222;
+}
+
+.food-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12rpx 0;
+  border-bottom: 1rpx dashed #f0e6d8;
+}
+
+.food-row:last-child {
+  border-bottom: none;
+}
+
+.food-name {
+  font-size: 24rpx;
+  color: #3f3222;
+}
+
+.food-ratio {
+  font-size: 25rpx;
+  font-weight: 700;
+  color: #b45309;
+}
+
+.supplement-line {
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  line-height: 1.7;
+  color: #4f4636;
+}
+
+.supplement-label {
+  color: #6b5c45;
+}
+
+.supplement-item {
+  color: #1e5b35;
+  font-weight: 700;
+}
+
+.macro-caption {
+  display: block;
+  margin-top: 18rpx;
+  margin-bottom: 10rpx;
+  font-size: 21rpx;
+  color: #8a9a8f;
+}
+
+.macro-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12rpx;
+}
+
+.macro-cell {
+  padding: 14rpx 12rpx;
+  border-radius: 12rpx;
+  background: #f4f7f5;
+}
+
+.macro-label {
+  display: block;
+  font-size: 19rpx;
+  color: #8a9a8f;
+}
+
+.macro-value {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 25rpx;
+  font-weight: 700;
+  color: #3f3222;
+}
+
+.summary-empty {
+  display: block;
+  padding: 20rpx 0;
+  font-size: 23rpx;
+  color: #a08c6d;
+}
+
+.adjust-input {
+  width: 100%;
+  min-height: 180rpx;
+  padding: 20rpx;
+  border-radius: 14rpx;
+  border: 1rpx solid #e6dccb;
+  background: #fffdf9;
+  font-size: 26rpx;
+  line-height: 1.65;
+  color: #3f3222;
+  box-sizing: border-box;
+}
+
+.attachment-area {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14rpx;
+  margin-top: 18rpx;
+}
+
+.attachment-item {
+  position: relative;
+  width: 112rpx;
+  height: 112rpx;
+}
+
+.attachment-thumb {
+  width: 112rpx;
+  height: 112rpx;
+  border-radius: 12rpx;
+  background: #eef2e4;
+}
+
+.attachment-doc {
+  width: 112rpx;
+  height: 112rpx;
+  padding: 8rpx;
+  border-radius: 12rpx;
+  border: 1rpx solid #eadfcb;
+  background: #fbf7ee;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6rpx;
+}
+
+.attachment-doc-badge {
+  font-size: 19rpx;
+  font-weight: 800;
+  color: #b45309;
+}
+
+.attachment-doc-name {
+  width: 92rpx;
+  font-size: 17rpx;
+  color: #6b5c45;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-remove {
+  position: absolute;
+  top: -10rpx;
+  right: -10rpx;
+  width: 34rpx;
+  height: 34rpx;
+  border-radius: 50%;
+  background: #4a4a42;
+  color: #fff;
+  font-size: 22rpx;
+  line-height: 34rpx;
+  text-align: center;
+  z-index: 2;
+}
+
+.add-attachment {
+  width: 112rpx;
+  height: 112rpx;
+  border-radius: 12rpx;
+  border: 1rpx dashed #cdbfa8;
+  background: #fbf7ee;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rpx;
+}
+
+.add-attachment-icon {
+  font-size: 34rpx;
+  line-height: 1;
+  color: #a08c6d;
+  font-weight: 300;
+}
+
+.add-attachment-text {
+  font-size: 18rpx;
+  color: #a08c6d;
+}
+
+.attachment-hint {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 21rpx;
+  line-height: 1.55;
+  color: #b45309;
+}
+
+.locked-note {
+  padding: 20rpx;
+  border-radius: 14rpx;
+  background: #f7f1e4;
+  border: 1rpx solid #eadfcb;
+}
+
+.locked-note-text {
+  font-size: 24rpx;
+  line-height: 1.65;
+  color: #6b5c45;
+}
+
+.empty-recipe {
+  margin-top: 28rpx;
+  padding: 28rpx 24rpx;
+  border-radius: 20rpx;
+  background: #fffdf7;
+  border: 1rpx solid #e8decd;
+}
+
+.empty-recipe-text {
+  font-size: 24rpx;
+  line-height: 1.65;
+  color: #8a7a66;
+}
+
+/* 退款占位 */
+.refund-wrap {
+  padding-top: 40rpx;
+}
+
+.refund-card {
+  padding: 32rpx 28rpx;
+  border-radius: 24rpx;
+  background: #fffdf7;
+  border: 1rpx solid #e8decd;
+}
+
+.refund-title {
+  display: block;
+  font-size: 32rpx;
+  font-weight: 800;
+  color: #3f3222;
+}
+
+.refund-text {
+  display: block;
+  margin-top: 16rpx;
+  font-size: 25rpx;
+  line-height: 1.7;
+  color: #6b5c45;
+}
+
+/* 固定栏 */
+.bottom-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 18rpx 24rpx calc(18rpx + env(safe-area-inset-bottom));
+  background: rgba(255, 253, 247, 0.98);
+  border-top: 1rpx solid #e8decd;
+  box-shadow: 0 -12rpx 30rpx rgba(30, 58, 47, 0.08);
+}
+
+.service-slot {
+  flex: 0 0 auto;
+}
+
+.submit-btn {
+  flex: 1;
+  height: 84rpx;
+  margin: 0;
+  border: none;
+  border-radius: 999rpx;
+  background: linear-gradient(135deg, #e7d3a5 0%, #d8bc85 100%);
+  color: #1e3a2f;
+  font-size: 27rpx;
+  font-weight: 800;
+  line-height: 84rpx;
+}
+
+.submit-btn[disabled] {
+  background: #e9e4d8;
+  color: #a59b89;
+}
+
+.withdraw-btn {
+  flex: 1;
+  height: 84rpx;
+  margin: 0;
+  border: 1rpx solid #e3c7c3;
+  border-radius: 999rpx;
+  background: #fff7f5;
+  color: #b3261e;
+  font-size: 27rpx;
+  font-weight: 700;
+  line-height: 84rpx;
+}
+
+.processing-btn {
+  flex: 1;
+  height: 84rpx;
+  margin: 0;
+  border: none;
+  border-radius: 999rpx;
+  background: #e9e4d8;
+  color: #a59b89;
+  font-size: 27rpx;
+  font-weight: 700;
+  line-height: 84rpx;
+}
 </style>

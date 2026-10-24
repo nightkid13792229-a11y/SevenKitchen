@@ -597,8 +597,18 @@ export interface AftersaleItem {
   typeLabel: string;
   status: string;
   statusLabel: string;
+  /** 顾客端状态：已撤销 / 已交付（后端算好） */
+  customerStatusLabel?: string;
   description: string;
   photos: string[];
+  deliveryBatchId?: string | null;
+  deliveryItemIds?: string[];
+  items?: Array<{
+    deliveryItemId: string;
+    recipeId: string | null;
+    recipeName: string | null;
+  }>;
+  recipeRequests?: AftersaleRecipeRequest[];
   createdAt: string;
   resolvedAt?: string | null;
   handleNote?: string | null;
@@ -627,6 +637,8 @@ export interface AftersaleItem {
 export interface AftersaleRecipeRequest {
   deliveryItemId: string;
   description: string;
+  /** 这一份自己的附件；旧记录没有时为 [] */
+  photos?: string[];
 }
 
 /** 售后类型选项（来自选项字典） */
@@ -853,7 +865,13 @@ export async function uploadCustomRecipeDraftAttachment(
 export async function uploadAftersaleAttachment(
   orderId: string,
   filePath: string,
-): Promise<{ url: string }> {
+): Promise<{
+  id: string;
+  url: string;
+  fileName: string;
+  fileSize: number;
+  fileType: string;
+}> {
   return new Promise((resolve, reject) => {
     const token = getToken();
     uni.uploadFile({
@@ -870,12 +888,20 @@ export async function uploadAftersaleAttachment(
             reject(new Error(parsed?.message || '上传失败'));
             return;
           }
-          const url = String(parsed?.data?.url || '').trim();
+          const data = parsed?.data ?? {};
+          /** 后端同时保留 fileUrl（旧）和 url（兼容），两处都读 */
+          const url = String(data.fileUrl || data.url || '').trim();
           if (!url) {
             reject(new Error('上传失败，请重试'));
             return;
           }
-          resolve({ url });
+          resolve({
+            id: String(data.id || ''),
+            url,
+            fileName: String(data.fileName || ''),
+            fileSize: Number(data.fileSize || 0),
+            fileType: String(data.fileType || ''),
+          });
         } catch {
           reject(new Error('上传失败，请重试'));
         }
@@ -883,4 +909,16 @@ export async function uploadAftersaleAttachment(
       fail: () => reject(new Error('上传失败，请检查网络')),
     });
   });
+}
+
+/** 删除附件（连 COS 文件一起删） */
+export async function deleteAftersaleAttachment(
+  attachmentId: string,
+): Promise<{ ok: boolean; message?: string }> {
+  const res: any = await request({
+    url: `/custom-recipe/attachments/${encodeURIComponent(attachmentId)}`,
+    method: 'DELETE',
+  });
+  if (res?.code === 0) return { ok: true };
+  return { ok: false, message: res?.message };
 }

@@ -34,11 +34,13 @@ describe('后台售后 · 多份售后的食谱明细', () => {
         deliveryItemId: 'item-1',
         recipeName: '鸡肉南瓜',
         requestDescription: '太油了',
+        requestPhotos: [],
       },
       {
         deliveryItemId: 'item-2',
         recipeName: '鸭肉西兰花',
         requestDescription: '想换成鸭肉',
+        requestPhotos: [],
       },
     ])
   })
@@ -60,13 +62,40 @@ describe('后台售后 · 多份售后的食谱明细', () => {
         deliveryItemId: 'item-1',
         recipeName: '未命名食谱',
         requestDescription: '',
+        requestPhotos: [],
       },
       {
         deliveryItemId: 'item-deleted',
         recipeName: '未命名食谱',
         requestDescription: '',
+        requestPhotos: [],
       },
     ])
+  })
+
+  it('★ 每份自己的附件按份带出', () => {
+    const rows = buildAftersaleRecipeDetails({
+      deliveryItemIds: ['item-1', 'item-2'],
+      items: [
+        { deliveryItemId: 'item-1', recipeId: 'CR1', recipeName: '鸡肉南瓜' },
+        { deliveryItemId: 'item-2', recipeId: 'CR2', recipeName: '鸭肉西兰花' },
+      ],
+      recipeRequests: [
+        {
+          deliveryItemId: 'item-1',
+          description: '太油了',
+          photos: ['https://cdn.example.com/a.jpg'],
+        },
+        {
+          deliveryItemId: 'item-2',
+          description: '想换成鸭肉',
+          photos: ['https://cdn.example.com/b.jpg'],
+        },
+      ],
+    })
+
+    expect(rows[0]?.requestPhotos).toEqual(['https://cdn.example.com/a.jpg'])
+    expect(rows[1]?.requestPhotos).toEqual(['https://cdn.example.com/b.jpg'])
   })
 })
 

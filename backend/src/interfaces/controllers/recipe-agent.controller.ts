@@ -10,6 +10,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RecipeAgentRunService } from '../../application/recipe-designer/agent/recipe-agent-run.service';
 import { AuthGuard, CurrentUser, type RequestUser } from '../auth';
+import { ApiResponseDto } from '../dto/common/response.dto';
 import { StaffGuard } from '../guards/role.guard';
 
 type AgentMessageBody = { message?: string };
@@ -34,12 +35,14 @@ export class RecipeAgentController {
     @Param('draftId') draftId: string,
     @Body() body: AgentMessageBody,
     @CurrentUser() user: RequestUser,
-  ): Promise<{ sessionId: string }> {
-    return this.runService.start({
-      draftId,
-      actor: toActor(user),
-      message: requireMessage(body),
-    });
+  ): Promise<ApiResponseDto<{ sessionId: string }>> {
+    return ApiResponseDto.success(
+      await this.runService.start({
+        draftId,
+        actor: toActor(user),
+        message: requireMessage(body),
+      }),
+    );
   }
 
   @Get('drafts/:draftId/agent/session')
@@ -49,7 +52,9 @@ export class RecipeAgentController {
     @Param('draftId') draftId: string,
     @CurrentUser() user: RequestUser,
   ) {
-    return this.runService.getSessionView(draftId, toActor(user));
+    return ApiResponseDto.success(
+      await this.runService.getSessionView(draftId, toActor(user)),
+    );
   }
 
   @Post('agent/runs/:sessionId/stop')
@@ -58,8 +63,9 @@ export class RecipeAgentController {
   async stop(
     @Param('sessionId') sessionId: string,
     @CurrentUser() user: RequestUser,
-  ): Promise<void> {
+  ): Promise<ApiResponseDto<null>> {
     await this.runService.stop(sessionId, toActor(user));
+    return ApiResponseDto.success(null);
   }
 
   @Post('agent/runs/:sessionId/answer')
@@ -69,12 +75,13 @@ export class RecipeAgentController {
     @Param('sessionId') sessionId: string,
     @Body() body: AgentMessageBody,
     @CurrentUser() user: RequestUser,
-  ): Promise<void> {
+  ): Promise<ApiResponseDto<null>> {
     await this.runService.resume({
       sessionId,
       actor: toActor(user),
       message: requireMessage(body),
     });
+    return ApiResponseDto.success(null);
   }
 }
 

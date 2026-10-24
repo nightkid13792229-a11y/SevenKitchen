@@ -281,9 +281,12 @@ git commit --only <the 2 exact files> -m "feat(recipe-agent): add ingredient sea
 
 **Interfaces:**
 - `getCatalogUsage(input: { mainProteinName?: string; ingredientNames?: string[] }): Promise<AgentCatalogUsage>`
-- 查询 `prisma.recipe.findMany({ where: { status: 'PUBLIC' }, select: { id, name, recipeItems: { select: { ingredientId, weightG, ingredient: { select: { name, properties } }, nutritionFood: { select: { name, displayNameZh, category } } } } } })`。
+- 查询 `prisma.recipe.findMany({ where: { status: 'PUBLIC' }, select: { recipeId, version, id, name, items: { select: { ingredientId, exampleWeight, ingredient: { select: { name, properties } }, nutritionFood: { select: { name, displayNameZh, category } } } } } })`。
+  - `Recipe` 的明细关系是 `items`，克数字段是 `exampleWeight`（不是 `recipeItems`/`weightG`）。
+  - 同一 `recipeId` 可能有多条 PUBLIC 版本：按 `recipeId` 取版本最高的一条，`totalPublishedRecipes` 和 `recipes` 都按去重后的菜算。
 - 当前草稿：`service.getDraft(this.draftId, this.access)`；把当前 items 映射成 `{ name, category }`。
 - 每道已发布菜：映射 items 的 `{ name, category }`；主蛋白 = 克数最大的 `PROTEIN` 项的 name（没有则 null）。
+- 若传了 `input.ingredientNames`，只保留名字与这些输入有交集的菜（trim、大小写不敏感）；
 - `recipes` 只保留“有分类交集，或主蛋白与 input.mainProteinName 相同”的菜；`overlappingCategories` = 当前草稿与这道菜的分类交集；`overlappingIngredientNames` = 名字交集。
 - `mainProteinCount` = 主蛋白与 `input.mainProteinName` 相同的菜数（大小写/空白不敏感）。
 - `totalPublishedRecipes` = 所有已发布菜数。
@@ -296,9 +299,9 @@ it('目录使用只算与当前草稿的交集，并统计主蛋白', async () =
   const prisma = {
     recipe: {
       findMany: jest.fn().mockResolvedValue([
-        { id: 'r1', name: '旧鸭肉餐', recipeItems: [
-          { ingredientId: 'i9', weightG: 400, ingredient: { name: '鸭腿肉', properties: { cfct_class: '禽肉类及制品' } }, nutritionFood: { name: '鸭腿肉', displayNameZh: '鸭腿肉', category: 'MEAT' } },
-          { ingredientId: 'i10', weightG: 100, ingredient: { name: '燕麦', properties: { cfct_class: '谷类及制品' } }, nutritionFood: { name: '燕麦', displayNameZh: '燕麦', category: 'GRAIN' } },
+        { recipeId: 'recipe-1', version: 1, id: 'r1', name: '旧鸭肉餐', items: [
+          { ingredientId: 'i9', exampleWeight: 400, ingredient: { name: '鸭腿肉', properties: { cfct_class: '禽肉类及制品' } }, nutritionFood: { name: '鸭腿肉', displayNameZh: '鸭腿肉', category: 'MEAT' } },
+          { ingredientId: 'i10', exampleWeight: 100, ingredient: { name: '燕麦', properties: { cfct_class: '谷类及制品' } }, nutritionFood: { name: '燕麦', displayNameZh: '燕麦', category: 'GRAIN' } },
         ] },
       ]),
     },
@@ -323,7 +326,7 @@ Expected: FAIL（未实现）。
 - [ ] **Step 4: 跑测试，确认通过**
 
 Run: 同上
-Expected: PASS（7 个用例）。
+Expected: PASS（13 个用例：含去重和 ingredientNames 过滤）。
 
 - [ ] **Step 5: 提交**
 

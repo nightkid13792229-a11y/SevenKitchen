@@ -169,7 +169,12 @@ export function calculateSupplementAmountForOption(
     totalFoodInputWeightG,
   );
 
-  return result.amount || baseItem.amount || 0;
+  /**
+   * 兜底必须用 netAmount（净需求，不含生产损耗/出肉率），
+   * 不能用 amount —— 那是含损耗的采购/生产用量。
+   * 2026-10-24：顾客制作单的补剂总量明确不含损耗。
+   */
+  return result.amount || baseItem.netAmount || 0;
 }
 
 export function getSupplementNutrientUnit(

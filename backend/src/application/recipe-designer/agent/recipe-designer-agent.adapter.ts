@@ -116,6 +116,15 @@ const readCfctClass = (properties: unknown): string | null => {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 };
 
+/**
+ * 系列上的 designMode 在 service 类型里是 string（历史数据可能为空）。
+ * 只把 CATALOG / ORDER 透给模型；其它值按“不知道”返回 null，让模型走产品线。
+ */
+const readDesignMode = (
+  value: string | null | undefined,
+): AgentDraftSnapshot['designMode'] =>
+  value === 'CATALOG' || value === 'ORDER' ? value : null;
+
 const readAssessmentStatus = (
   value: unknown,
 ): AgentAssessmentEntry['status'] | null => {
@@ -926,6 +935,10 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
     return {
       draftId,
       seriesId: draft.seriesId ?? null,
+      // 设计上下文来自 service include 的 series；没有系列时一律 null。
+      designMode: readDesignMode(draft.series?.designMode),
+      orderId: draft.series?.orderId ?? null,
+      orderQuantity: draft.series?.orderQuantity ?? null,
       name: series?.name ?? draft.name,
       scenario: draft.fediafDogScenario,
       contentRevision: draft.contentRevision,

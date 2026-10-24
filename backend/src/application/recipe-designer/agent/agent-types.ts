@@ -60,6 +60,15 @@ export interface AgentAssessmentView {
 export interface AgentDraftSnapshot {
   draftId: string;
   seriesId: string | null;
+  /**
+   * 设计上下文：CATALOG=产品线设计，ORDER=订单定制。
+   * 没有系列或历史数据没写时是 null，模型按产品线处理。
+   */
+  designMode: 'CATALOG' | 'ORDER' | null;
+  /** ORDER 模式绑定的订单号；产品线设计为 null。 */
+  orderId?: string | null;
+  /** ORDER 模式本单要做几份；产品线设计为 null。 */
+  orderQuantity?: number | null;
   name: string;
   scenario: string;
   contentRevision: number;

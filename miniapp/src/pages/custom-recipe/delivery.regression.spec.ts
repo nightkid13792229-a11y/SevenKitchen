@@ -84,6 +84,12 @@ describe('交付页 · 内容与交互（P1）', () => {
     expect(template).toContain('label="Seven爸爸"');
   });
 
+  it('★ 添加浓度用“每公斤食材添加 X 单位”，喂食说明只留头尾', () => {
+    expect(source).toContain('每公斤食材添加');
+    expect(template).toContain('喂食建议仅供参考。可以点击下方【自己做】自定义配置。');
+    expect(template).not.toContain('每天喂食量、每日进食次数和每餐喂食量');
+  });
+
   it('★ 全营养标准 banner 独立展示，核心营养卡不再重复标准行', () => {
     expect(template).toContain('NutritionStandardBanner');
     expect(template).toContain(':show-standard="false"');

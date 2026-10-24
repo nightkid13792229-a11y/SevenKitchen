@@ -376,13 +376,14 @@
 
     <!--
       AI 食谱设计 Agent（P2）：对话式抽屉。
-      运行中每 1.5 秒轮询会话；工具步骤可折叠；停止后才能接管。
+      运行中每 1.5 秒轮询会话；连续工具步骤合并为可折叠执行记录；
+      有交付卡时可退回修改，或直接确认交付并打开上线检查。
     -->
     <RecipeAgentDrawer
       v-model="agentDrawerVisible"
       :draft-id="currentDraftId"
-      :draft-name="draft?.series?.name || draft?.name || ''"
       @refresh="loadDraft()"
+      @publish="openLaunchReadiness"
     />
   </div>
 </template>

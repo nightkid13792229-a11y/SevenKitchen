@@ -36,6 +36,10 @@ describe('recipe diy regressions', () => {
     // 来源提示条已按 2026-10-24 要求拿掉；版本锁仍靠 orderId
     expect(source).not.toContain('custom-source-banner')
     expect(source).not.toContain('来自你的定制食谱')
+    // 选中的爱犬排第一位并滚到它
+    expect(source).toContain('const orderedDogs = computed')
+    expect(source).toContain('v-for="dog in orderedDogs"')
+    expect(source).toContain('scroll-into-view')
   })
 
   it('offers a quick switch to the selected dog matched life-stage recipe version', () => {

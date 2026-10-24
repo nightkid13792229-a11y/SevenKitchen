@@ -108,7 +108,7 @@
               <text class="header-item actual-col">净重</text>
             </view>
             <view v-for="(item, idx) in foodItemsDetailed" :key="'food-' + idx" class="table-row food-table">
-              <text class="row-item name-col">{{ item.nutritionStateLabel ? `${item.ingredientName}（${item.nutritionStateLabel}）` : item.ingredientName }}</text>
+              <text class="row-item name-col">{{ item.ingredientName }}</text>
               <view
                 v-if="item.selectedProductDisplayText !== '-' && item.hasSpecDetail"
                 class="row-item recommend-col recommend-choice"
@@ -127,10 +127,7 @@
                 <text class="recommend-main">{{ item.selectedProductDisplayText }}</text>
               </view>
               <text class="row-item method-col">{{ item.preparationMethod || '—' }}</text>
-              <text
-                class="row-item actual-col highlight amount-link"
-                @tap.stop="showAmountDetailModal(item)"
-              >
+              <text class="row-item actual-col highlight">
                 {{ item.netAmountStr }}
               </text>
             </view>
@@ -152,7 +149,7 @@
               <text class="header-item product-col">补剂名称</text>
               <text class="header-item brand-col">{{ DIY_SHEET_SUPPLEMENT_RECOMMENDATION_LABEL }}</text>
               <text class="header-item timing-col">建议添加时机</text>
-              <text class="header-item dosage-col">添加总量</text>
+              <text class="header-item dosage-col">制作单总量</text>
             </view>
             <view v-for="(item, idx) in supplementItemsDetailed" :key="'supp-' + idx" class="table-row supplement-table">
               <view class="row-item product-col">
@@ -177,12 +174,13 @@
                 <text class="recommend-main">{{ item.selectedProductDisplayText }}</text>
               </view>
               <text class="row-item timing-col">{{ item.preparationMethod }}</text>
-              <text
-                class="row-item dosage-col highlight amount-link"
+              <view
+                class="row-item dosage-col highlight amount-detail-cell"
                 @tap.stop="showNutritionInfoModal(item)"
               >
-                {{ item.amountStr }}
-              </text>
+                <text class="amount-detail-value">{{ item.amountStr }}</text>
+                <text class="amount-detail-hint">详情</text>
+              </view>
             </view>
           </view>
           <view v-if="supplementItemsDetailed.some((item: any) => item.purchasable === false)" class="production-only-note">
@@ -235,6 +233,23 @@
           </view>
         </view>
       </view>
+    </view>
+
+    <!--
+      不想自己做？订购成品（2026-10-24）
+
+      位置放在制作步骤之后、储存和烹饪之前（2026-10-24 老板定）：
+      顾客刚看完做法，正是最想偷懒的时候；先给成品出口，再讲储存。
+      带这份食谱和这只狗，成品页不用再选一次。
+    -->
+    <view v-if="recipeId" class="finished-food-card">
+      <view class="finished-food-copy">
+        <text class="finished-food-title">不想自己做？</text>
+        <text class="finished-food-desc">这份配方也能做成成品，冷链送到家。</text>
+      </view>
+      <button class="finished-food-btn" @tap="goFinishedFood">
+        订购成品
+      </button>
     </view>
 
     <!-- 3.5 储存和烹饪（2026-10-24 全店统一文案） -->
@@ -291,23 +306,6 @@
           </view>
         </view>
       </view>
-    </view>
-
-    <!--
-      不想自己做？订购成品（2026-10-24）
-
-      位置放在制作设备推荐之后（2026-10-24 老板定）：
-      先把“怎么做、用什么设备”讲完，再给不想做的人一个出口。
-      带这份食谱和这只狗，成品页不用再选一次。
-    -->
-    <view v-if="recipeId" class="finished-food-card">
-      <view class="finished-food-copy">
-        <text class="finished-food-title">不想自己做？</text>
-        <text class="finished-food-desc">这份配方也能做成成品，冷链送到家。</text>
-      </view>
-      <button class="finished-food-btn" @tap="goFinishedFood">
-        订购成品
-      </button>
     </view>
 
     <!--
@@ -375,7 +373,7 @@
           <text class="spec-title">{{ DIY_SHEET_SPEC_MODAL_TITLE }}</text>
           <text class="btn-close" @tap="closeSpecModal">✕</text>
         </view>
-        <!-- 有多个推荐产品时：展示产品卡片列表 -->
+        <!-- 有多个推荐产品时：展示产品卡片列表（2026-10-24 交互改版） -->
         <view v-if="currentSpec.allRecommendedProducts && currentSpec.allRecommendedProducts.length > 1" class="spec-body">
           <view class="rp-cards-list">
             <view
@@ -387,8 +385,10 @@
             >
               <view class="rp-card-header">
                 <text class="rp-card-name">{{ rp.name }}</text>
-                <text v-if="rpIdx === modalSelectedRpIndex" class="rp-card-badge">已选</text>
+                <!-- 选中状态：右上角打勾（不再用"已选"文字角标） -->
+                <text v-if="rpIdx === modalSelectedRpIndex" class="rp-card-check">✓</text>
               </view>
+
               <view class="rp-card-main">
                 <view class="rp-card-body">
                   <view v-if="rp.brand" class="rp-card-field">
@@ -404,28 +404,53 @@
                     <text class="rp-card-field-value">{{ getSpecPurchaseChannelDisplay(rp) }}</text>
                   </view>
                 </view>
-                <view class="rp-card-aside">
-                  <view v-if="rp.imageUrl" class="rp-card-media">
+
+                <!-- 有图：图在右侧，按钮在图下方整行展示 -->
+                <view v-if="rp.imageUrl" class="rp-card-aside">
+                  <view class="rp-card-media">
+                    <view
+                      v-if="!isProductImageLoaded(productImageKey('card', rp))"
+                      class="rp-card-image-skeleton"
+                    ></view>
                     <image
                       :src="getOptimizedProductImageUrl(rp.imageUrl)"
                       class="rp-card-image"
                       mode="aspectFill"
                       lazy-load
+                      @load="markProductImageLoaded(productImageKey('card', rp))"
+                      @error="markProductImageLoaded(productImageKey('card', rp))"
                     />
                   </view>
-                  <view v-if="rp.purchaseLink?.url" class="rp-card-actions">
+                </view>
+
+                <!-- 无图：按钮在右侧竖排、垂直居中 -->
+                <view v-else class="rp-card-aside rp-card-aside--actions">
+                  <view class="rp-card-actions rp-card-actions--stacked">
                     <button
+                      v-if="rp.purchaseLink?.url"
                       class="btn-purchase btn-purchase-sm"
                       @tap.stop="handlePurchase(rp.purchaseLink, rp.name)"
                     >去购买</button>
+                    <button
+                      class="btn-confirm-select"
+                      @tap.stop="confirmProductSelection(rpIdx)"
+                    >确认选择</button>
                   </view>
                 </view>
               </view>
+
+              <view v-if="rp.imageUrl" class="rp-card-actions rp-card-actions--row">
+                <button
+                  v-if="rp.purchaseLink?.url"
+                  class="btn-purchase btn-purchase-sm"
+                  @tap.stop="handlePurchase(rp.purchaseLink, rp.name)"
+                >去购买</button>
+                <button
+                  class="btn-confirm-select"
+                  @tap.stop="confirmProductSelection(rpIdx)"
+                >确认选择</button>
+              </view>
             </view>
-          </view>
-          <view class="spec-actions">
-            <button class="spec-action-btn spec-action-btn-secondary" @tap="closeSpecModal">取消</button>
-            <button class="spec-action-btn spec-action-btn-primary" @tap="confirmRecommendedProductSelection">确认选择</button>
           </view>
         </view>
         <!-- 只有1个或没有推荐产品时：原有展示 -->
@@ -449,49 +474,48 @@
                 <text class="spec-detail-field-value">{{ getSpecPurchaseChannelDisplay(currentSpec) }}</text>
               </view>
             </view>
-            <view v-if="currentSpec.imageUrl || currentSpec.purchaseLink?.url" class="spec-detail-aside">
+            <view class="spec-detail-aside">
               <view v-if="currentSpec.imageUrl" class="spec-image-block">
+                <view
+                  v-if="!isProductImageLoaded(productImageKey('single', currentSpec))"
+                  class="spec-image-skeleton"
+                ></view>
                 <image
                   :src="getOptimizedProductImageUrl(currentSpec.imageUrl)"
                   class="spec-image"
                   mode="aspectFill"
                   lazy-load
+                  @load="markProductImageLoaded(productImageKey('single', currentSpec))"
+                  @error="markProductImageLoaded(productImageKey('single', currentSpec))"
                 />
               </view>
-              <view v-if="currentSpec.purchaseLink?.url" class="spec-detail-actions">
+              <!-- 无图：两个按钮在右侧竖排、垂直居中 -->
+              <view v-if="!currentSpec.imageUrl" class="rp-card-actions rp-card-actions--stacked">
                 <button
+                  v-if="currentSpec.purchaseLink?.url"
                   class="btn-purchase btn-purchase-sm"
                   @tap="handlePurchase(currentSpec.purchaseLink, currentSpec.name)"
                 >
                   去购买
                 </button>
+                <button class="btn-confirm-select" @tap="confirmSingleProductSelection">
+                  确认选择
+                </button>
               </view>
             </view>
           </view>
-        </view>
-      </view>
-    </view>
-
-    <!-- 用量详情弹窗 -->
-    <view v-if="showAmountDetail" class="spec-modal" @tap="closeAmountDetailModal">
-      <view class="spec-content" @tap.stop>
-        <view class="spec-header">
-          <text class="spec-title">用量详情</text>
-          <text class="btn-close" @tap="closeAmountDetailModal">✕</text>
-        </view>
-        <view class="spec-body">
-          <view class="spec-row">
-            <text class="spec-label">{{ getAmountDetailNameLabel(currentAmountDetail) }}</text>
-            <text class="spec-value">{{ getAmountDetailName(currentAmountDetail) }}</text>
-          </view>
-          <view v-if="currentAmountDetail.preparationMethod" class="spec-row">
-            <text class="spec-label">{{ currentAmountDetail.type === 'SUPPLEMENT' ? '建议添加时机：' : '部位/预处理：' }}</text>
-            <text class="spec-value">{{ currentAmountDetail.preparationMethod }}</text>
-          </view>
-          <view class="spec-divider"></view>
-          <view class="spec-row highlight-row">
-            <text class="spec-label">净重：</text>
-            <text class="spec-value highlight-value">{{ currentAmountDetail.theoreticalAmountStr }}</text>
+          <!-- 有图：按钮在缩略图下方整行展示 -->
+          <view v-if="currentSpec.imageUrl" class="rp-card-actions rp-card-actions--row">
+            <button
+              v-if="currentSpec.purchaseLink?.url"
+              class="btn-purchase btn-purchase-sm"
+              @tap="handlePurchase(currentSpec.purchaseLink, currentSpec.name)"
+            >
+              去购买
+            </button>
+            <button class="btn-confirm-select" @tap="confirmSingleProductSelection">
+              确认选择
+            </button>
           </view>
         </view>
       </view>
@@ -510,17 +534,13 @@
             <text class="spec-value">{{ currentNutritionInfo.name }}</text>
           </view>
           <view class="spec-row">
-            <text class="spec-label">添加总量：</text>
+            <text class="spec-label">制作单总量：</text>
             <text class="spec-value">{{ currentNutritionInfo.amountStr }}</text>
           </view>
           <view v-if="currentNutritionInfo.targetSummary" class="spec-divider"></view>
           <view v-if="currentNutritionInfo.targetSummary" class="spec-row">
             <text class="spec-label">营养目标：</text>
             <text class="spec-value">{{ currentNutritionInfo.targetSummary }}</text>
-          </view>
-          <view v-if="currentNutritionInfo.nutrientTotal" class="spec-row highlight-row">
-            <text class="spec-label">营养素总量：</text>
-            <text class="spec-value highlight-value">{{ currentNutritionInfo.nutrientTotal }}</text>
           </view>
         </view>
       </view>
@@ -611,8 +631,7 @@ import { formatSupplementAmountWithDisplayUnit } from '../../utils/diy-sheet-for
 import { getPackagePlanTotal, type PackagePlanItem } from '../../utils/order-package-plan'
 import { getNutritionStandardExplain } from '../../utils/label-mapping'
 import {
-  formatSupplementTargets,
-  getSupplementTargetBreakdowns
+  formatSupplementTargets
 } from '../../utils/supplement-nutrients'
 import {
   buildSupplementCandidateOptions,
@@ -681,11 +700,11 @@ const recommendedProductsMap = ref<Record<string, any[]>>({})
 const showSpec = ref(false)
 const currentSpec = ref<any>({})
 const modalSelectedRpIndex = ref(0)
+/** 商品图加载状态：加载前显示骨架，避免弹窗一打开就是一片空白 */
+const loadedProductImageKeys = ref<Record<string, boolean>>({})
 const modalSelectionKey = ref('')
 
 // 用量详情弹窗状态
-const showAmountDetail = ref(false)
-const currentAmountDetail = ref<any>({})
 
 // 营养信息弹窗状态
 const showNutritionInfo = ref(false)
@@ -1677,10 +1696,10 @@ async function handlePrint() {
         builder.drawSectionTitle('食材清单')
 
         const foodRows = foodItemsDetailed.value.map(item => [
-          item.nutritionStateLabel ? `${item.ingredientName}（${item.nutritionStateLabel}）` : item.ingredientName,
+          item.ingredientName,
           item.recommendedPrintText,
           item.netAmountStr,
-          item.preparationMethod || item.nutritionStateLabel || '-'
+          item.preparationMethod || '-'
         ])
 
         builder.drawTable(
@@ -1713,7 +1732,7 @@ async function handlePrint() {
         ])
 
         builder.drawTable(
-          ['补剂名称', '产品 / 规格', '目标补充量', '添加总量'],
+          ['补剂名称', '产品 / 规格', '目标补充量', '制作单总量'],
           supplementRows,
           {
             colWidths: [180, 490, 250, 200],
@@ -1722,7 +1741,7 @@ async function handlePrint() {
         )
 
         builder.drawSupplementNotice(
-          '营养补充剂的添加总量与产品严格匹配。由于不同营养补剂营养浓度不同，如果要选择其它产品，须按目标补充量自行换算添加总量。'
+          '营养补充剂的制作单总量与产品严格匹配。由于不同营养补剂营养浓度不同，如果要选择其它产品，须按目标补充量自行换算制作单总量。'
         )
       }
 
@@ -1970,6 +1989,32 @@ function showSpecModal(item: any) {
   showSpec.value = true
 }
 
+function productImageKey(prefix: string, product: any): string {
+  return `${prefix}-${product?.id || product?.imageUrl || ''}`
+}
+
+function isProductImageLoaded(key: string): boolean {
+  return Boolean(loadedProductImageKeys.value[key])
+}
+
+function markProductImageLoaded(key: string): void {
+  loadedProductImageKeys.value = {
+    ...loadedProductImageKeys.value,
+    [key]: true,
+  }
+}
+
+/** 多商品卡片里的"确认选择"：选中这一张并关闭，不能用别的卡的下标 */
+function confirmProductSelection(rpIndex: number): void {
+  selectRecommendedProduct(modalSelectionKey.value, rpIndex)
+  confirmRecommendedProductSelection()
+}
+
+/** 单商品/无推荐商品：当前商品就是选中的，确认即关闭 */
+function confirmSingleProductSelection(): void {
+  closeSpecModal()
+}
+
 function closeSpecModal() {
   showSpec.value = false
   currentSpec.value = {}
@@ -1985,31 +2030,12 @@ function getSpecPurchaseChannelDisplay(target: any): string {
   })
 }
 
-// 显示用量详情弹窗
-function showAmountDetailModal(item: any) {
-  currentAmountDetail.value = item
-  showAmountDetail.value = true
-}
-
-function closeAmountDetailModal() {
-  showAmountDetail.value = false
-}
-
 // 显示营养信息弹窗
 function showNutritionInfoModal(item: any) {
-  const targetSummary = formatSupplementTargets(item)
-  const nutrientTotal = getSupplementTargetBreakdowns(
-    item,
-    supplementNutrientBaseWeightG.value
-  )
-    .map((breakdown) => `${Number(breakdown.totalNutrientNeeded.toFixed(2))}${breakdown.target.unit}${breakdown.target.label}`)
-    .join('、')
-
-  // 将计算的营养素总量和单位添加到item中
+  // 营养信息只回答"补什么、每公斤加多少"；不再算营养素总量
   currentNutritionInfo.value = {
     ...item,
-    targetSummary,
-    nutrientTotal
+    targetSummary: formatSupplementTargets(item)
   }
 
   showNutritionInfo.value = true
@@ -2140,15 +2166,6 @@ function hasRecommendationDetail(selectedRp: any, item: any, purchaseLink: any):
     item.purchaseChannel ||
     purchaseLink
   )
-}
-
-function getAmountDetailName(item: any): string {
-  if (!item) return '-'
-  return item.type === 'FOOD' ? (item.ingredientName || item.name || '-') : (item.name || '-')
-}
-
-function getAmountDetailNameLabel(item: any): string {
-  return item?.type === 'SUPPLEMENT' ? '补剂名称：' : '原料名称：'
 }
 
 function getHealthTagLabel(tagOrUuid: string): string {
@@ -2540,10 +2557,26 @@ onShareTimeline(() => {
   font-weight: bold;
 }
 
-/* 可点击的用量链接 */
-.amount-link {
-  text-decoration: underline;
-  cursor: pointer;
+/* 补剂制作单总量：数值 + 固定的“详情”提示（不再用文字下划线） */
+.amount-detail-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rpx;
+}
+
+.amount-detail-value {
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #b08d4f;
+  line-height: 1.3;
+}
+
+.amount-detail-hint {
+  font-size: 18rpx;
+  color: #8a7a66;
+  line-height: 1.2;
 }
 
 .food-table .name-col,
@@ -3326,6 +3359,84 @@ onShareTimeline(() => {
   width: 100%;
 }
 
+/* 有图：按钮在缩略图下方整行左右展示 */
+.rp-card-actions--row {
+  gap: 12rpx;
+  margin-top: 16rpx;
+}
+
+.rp-card-actions--row .btn-purchase,
+.rp-card-actions--row .btn-confirm-select {
+  flex: 1;
+  margin-left: 0;
+}
+
+/* 无图：按钮在右侧竖排、垂直居中 */
+.rp-card-actions--stacked {
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.rp-card-actions--stacked .btn-purchase {
+  margin-left: 0;
+}
+
+.rp-card-aside--actions {
+  justify-content: center;
+}
+
+/* 选中打勾：替代"已选"文字角标 */
+.rp-card-check {
+  width: 40rpx;
+  height: 40rpx;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #1e3a2f;
+  color: #f3eddd;
+  font-size: 24rpx;
+  font-weight: 700;
+  text-align: center;
+  line-height: 40rpx;
+}
+
+.btn-confirm-select {
+  width: 100%;
+  height: 68rpx;
+  border: none;
+  border-radius: 999rpx;
+  background: #1e3a2f;
+  color: #f3eddd;
+  font-size: 24rpx;
+  font-weight: 700;
+  line-height: 68rpx;
+  padding: 0 12rpx;
+}
+
+.btn-confirm-select::after {
+  border: none;
+}
+
+/* 商品图骨架：图片加载前先占位，避免弹窗一打开一片空白 */
+.rp-card-media,
+.spec-image-block {
+  position: relative;
+}
+
+.rp-card-image-skeleton,
+.spec-image-skeleton {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(90deg, #f1f3ea 25%, #e4e9d8 37%, #f1f3ea 63%);
+  background-size: 400% 100%;
+  animation: product-image-skeleton 1.4s ease infinite;
+}
+
+@keyframes product-image-skeleton {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
 .spec-actions {
   display: flex;
   justify-content: flex-end;
@@ -3407,6 +3518,7 @@ onShareTimeline(() => {
   width: 220rpx;
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: 12rpx;
   flex-shrink: 0;
 }

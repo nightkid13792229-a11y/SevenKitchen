@@ -91,6 +91,19 @@ export interface RecipeAgentRuntime {
   tagPolicy: HealthTagPolicy;
 }
 
+/**
+ * 交付确认卡：来自最近一次 `finish_draft` 落下的快照。
+ *
+ * 只取人需要确认的部分（摘要 + 警告）和快照自身的版本/时间；
+ * 完整快照留在库里，不在这里重复读出。
+ */
+export interface RecipeAgentDeliveryCard {
+  summary: string;
+  warnings: string[];
+  contentRevision: number;
+  createdAt: Date;
+}
+
 /** 会改草稿内容、需要重建健康标签策略的工具。 */
 const WRITE_TOOL_NAMES: ReadonlySet<string> = new Set([
   'add_ingredient',
@@ -108,6 +121,7 @@ const SYSTEM_PROMPT = `你是 SevenKitchen 的食谱设计 Agent，负责在当�
 工作规则：
 - 必须通过工具读写草稿，不要凭空编造原料、克数、营养数据或审批状态。
 - 开始先调用 get_draft 读当前草稿；内容被改过后要重新读。
+- 先看 get_draft.designMode：CATALOG=产品线（按目录、七类、发布门槛）；ORDER=订单定制（按 orderId/orderQuantity、客户狗/过敏、本单交付）；没有 designMode 时按产品线处理，不要猜订单信息。
 - 每次写完原料 / 文案 / 制作步骤后，调用 run_assessment 重新评估，再用 check_ready 看交付条件。
 - 只有 check_ready 通过后才能调用 finish_draft；没通过就继续修复，不要跳过检查。
 - 例外只能调用 request_exception 申请，审批只能由人做；绝不要自称已批准或绕过检查。
@@ -340,7 +354,7 @@ export class RecipeAgentRunService implements OnModuleInit {
     return this.sessionService.markInterruptedRuns();
   }
 
-  /** 草稿最近一次会话 + 全部消息 + 审批；还没跑过 Agent 时返回 null。 */
+  /** 草稿最近一次会话 + 全部消息 + 审批 + 交付卡；还没跑过 Agent 时返回 null。 */
   async getSessionView(
     draftId: string,
     actor: RecipeAgentRunActor,
@@ -348,6 +362,8 @@ export class RecipeAgentRunService implements OnModuleInit {
     session: RecipeDesignAgentSession;
     messages: AgentMessageRecord[];
     approvals: Array<RecipeDesignAgentApproval & { createdAt: Date }>;
+    /** 最近一次交付快照里的交付卡；还没交付或快照不完整时为 null。 */
+    delivery: RecipeAgentDeliveryCard | null;
   } | null> {
     await this.designerService.getDraft(draftId, this.accessFor(actor));
 
@@ -358,11 +374,18 @@ export class RecipeAgentRunService implements OnModuleInit {
     if (!session) {
       return null;
     }
-    const messages = await this.sessionService.listMessages(session.id);
-    const approvals = await this.prisma.recipeDesignAgentApproval.findMany({
-      where: { sessionId: session.id },
-      orderBy: { requestedAt: 'asc' },
-    });
+    const [messages, approvals, latestSnapshot] = await Promise.all([
+      this.sessionService.listMessages(session.id),
+      this.prisma.recipeDesignAgentApproval.findMany({
+        where: { sessionId: session.id },
+        orderBy: { requestedAt: 'asc' },
+      }),
+      this.prisma.recipeDesignAgentSnapshot.findFirst({
+        where: { sessionId: session.id },
+        orderBy: { createdAt: 'desc' },
+        select: { snapshot: true, contentRevision: true, createdAt: true },
+      }),
+    ]);
     return {
       session,
       messages,
@@ -371,6 +394,7 @@ export class RecipeAgentRunService implements OnModuleInit {
         ...approval,
         createdAt: approval.requestedAt,
       })),
+      delivery: buildDeliveryCard(latestSnapshot),
     };
   }
 
@@ -815,6 +839,47 @@ export class RecipeAgentRunService implements OnModuleInit {
   private isOverTime(startedAt: number): boolean {
     return Date.now() - startedAt > MAX_RUN_MS;
   }
+}
+
+/**
+ * 把快照行映射成交付卡。
+ *
+ * 快照 JSON 的形状是 `{ draft, summary, warnings }`；库里的历史数据可能
+ * 不完整，任何一处不是预期类型都返回 null，让前端按“还没交付”处理。
+ */
+function buildDeliveryCard(
+  record: {
+    snapshot: unknown;
+    contentRevision: number;
+    createdAt: Date;
+  } | null,
+): RecipeAgentDeliveryCard | null {
+  if (!record) {
+    return null;
+  }
+  const value = record.snapshot;
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return null;
+  }
+  const { summary, warnings } = value as {
+    summary?: unknown;
+    warnings?: unknown;
+  };
+  if (typeof summary !== 'string' || !Array.isArray(warnings)) {
+    return null;
+  }
+  const warningList = warnings.filter(
+    (warning): warning is string => typeof warning === 'string',
+  );
+  if (warningList.length !== warnings.length) {
+    return null;
+  }
+  return {
+    summary,
+    warnings: warningList,
+    contentRevision: record.contentRevision,
+    createdAt: record.createdAt,
+  };
 }
 
 /**

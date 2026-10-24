@@ -1098,7 +1098,7 @@ describe('RecipeAgentRunService', () => {
     expect(sessionService.listMessages).not.toHaveBeenCalled();
   });
 
-  it('getSessionView 返回会话、消息和该会话的审批（按申请时间升序）', async () => {
+  it('getSessionView 返回会话、消息、审批（按申请时间升序）和空的交付卡', async () => {
     const requestedAt = new Date('2026-10-24T10:00:00Z');
     const approval = {
       id: APPROVAL_ID,
@@ -1124,6 +1124,9 @@ describe('RecipeAgentRunService', () => {
       recipeDesignAgentApproval: {
         findMany: jest.fn().mockResolvedValue([approval]),
       },
+      recipeDesignAgentSnapshot: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
     };
     const sessionService = makeSessionService();
     sessionService.listMessages.mockResolvedValue([message]);
@@ -1137,11 +1140,84 @@ describe('RecipeAgentRunService', () => {
       session,
       messages: [message],
       approvals: [{ ...approval, createdAt: requestedAt }],
+      delivery: null,
     });
     expect(prisma.recipeDesignAgentApproval.findMany).toHaveBeenCalledWith({
       where: { sessionId: SESSION_ID },
       orderBy: { requestedAt: 'asc' },
     });
+  });
+
+  it('getSessionView 用最近一次快照构建交付卡', async () => {
+    const createdAt = new Date('2026-10-24T12:30:00Z');
+    const session = {
+      id: SESSION_ID,
+      designRecipeId: DRAFT_ID,
+      status: 'COMPLETED',
+    };
+    const snapshotRow = {
+      snapshot: {
+        draft: { draftId: DRAFT_ID },
+        summary: '七类齐全、评估达标，可以交付。',
+        warnings: ['钙接近下限，建议下轮再补一点。'],
+      },
+      contentRevision: 7,
+      createdAt,
+    };
+    const prisma = {
+      recipeDesignAgentSession: {
+        findFirst: jest.fn().mockResolvedValue(session),
+      },
+      recipeDesignAgentApproval: { findMany: jest.fn().mockResolvedValue([]) },
+      recipeDesignAgentSnapshot: {
+        findFirst: jest.fn().mockResolvedValue(snapshotRow),
+      },
+    };
+    const { service } = makeRunService({ handlers: {}, prisma });
+
+    await expect(service.getSessionView(DRAFT_ID, ACTOR)).resolves.toEqual({
+      session,
+      messages: [],
+      approvals: [],
+      delivery: {
+        summary: '七类齐全、评估达标，可以交付。',
+        warnings: ['钙接近下限，建议下轮再补一点。'],
+        contentRevision: 7,
+        createdAt,
+      },
+    });
+    expect(prisma.recipeDesignAgentSnapshot.findFirst).toHaveBeenCalledWith({
+      where: { sessionId: SESSION_ID },
+      orderBy: { createdAt: 'desc' },
+      select: { snapshot: true, contentRevision: true, createdAt: true },
+    });
+  });
+
+  it('getSessionView 在快照结构不完整时不返回交付卡', async () => {
+    const session = {
+      id: SESSION_ID,
+      designRecipeId: DRAFT_ID,
+      status: 'COMPLETED',
+    };
+    const prisma = {
+      recipeDesignAgentSession: {
+        findFirst: jest.fn().mockResolvedValue(session),
+      },
+      recipeDesignAgentApproval: { findMany: jest.fn().mockResolvedValue([]) },
+      recipeDesignAgentSnapshot: {
+        findFirst: jest.fn().mockResolvedValue({
+          // 缺 summary：当坏数据，不拼半张卡给前端。
+          snapshot: { warnings: [] },
+          contentRevision: 7,
+          createdAt: new Date('2026-10-24T12:30:00Z'),
+        }),
+      },
+    };
+    const { service } = makeRunService({ handlers: {}, prisma });
+
+    const view = await service.getSessionView(DRAFT_ID, ACTOR);
+
+    expect(view?.delivery).toBeNull();
   });
 
   describe('decideApproval', () => {

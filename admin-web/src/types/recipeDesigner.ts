@@ -1148,8 +1148,25 @@ export interface RecipeAgentMessage {
   createdAt: string
 }
 
+/**
+ * Agent 交付确认卡。
+ *
+ * 后端在 Agent 产出交付内容时生成；`summary` 是给人工复核的交付说明，
+ * `warnings` 是必须让人看见但不能自动阻断的提醒。
+ */
+export interface RecipeAgentDelivery {
+  summary: string
+  warnings: string[]
+  /** 交付内容对应的草稿内容版本 */
+  contentRevision: number
+  /** ISO 时间 */
+  createdAt: string
+}
+
 export interface RecipeAgentSessionView {
   session: RecipeAgentSession
   messages: RecipeAgentMessage[]
   approvals?: RecipeAgentApproval[]
+  /** 最近一次交付确认卡；没有交付过时为 null / 缺省 */
+  delivery?: RecipeAgentDelivery | null
 }

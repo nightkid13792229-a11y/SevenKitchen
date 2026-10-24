@@ -78,9 +78,15 @@
       <view v-else class="dog-feeding-content">
         <!-- 选项卡与下方参数同属一只狗：同一内嵌面板 + 分隔线，建立视觉归属 -->
         <view class="dog-context-panel">
-          <scroll-view scroll-x class="order-dog-scroll">
+          <scroll-view
+            scroll-x
+            scroll-with-animation
+            class="order-dog-scroll"
+            :scroll-into-view="selectedDogId ? `dog-chip-${selectedDogId}` : ''"
+          >
             <view
-              v-for="dog in dogs"
+              v-for="dog in orderedDogs"
+              :id="`dog-chip-${dog.id}`"
               :key="dog.id"
               :class="['order-dog-chip', { active: dog.id === selectedDogId }]"
               @tap="selectDog(dog.id)"
@@ -408,6 +414,21 @@ const {
   setDogs,
   select: selectDogState,
 } = useDogSelection<Dog>()
+
+/**
+ * 选中的爱犬排第一位（2026-10-24 老板定）。
+ *
+ * 横向选择器里狗一多，选中的那只可能滚在屏幕外；
+ * 把它放到最前面，再配合 scroll-into-view，选中后一定在最左边。
+ */
+const orderedDogs = computed(() => {
+  const selectedId = selectedDogId.value
+  if (!selectedId) return dogs.value
+  const selected = dogs.value.find((dog) => dog.id === selectedId)
+  if (!selected) return dogs.value
+  return [selected, ...dogs.value.filter((dog) => dog.id !== selected.id)]
+})
+
 // 列表加载失败与「没有档案」是两件事：失败时若显示"暂无档案"会诱导重复建档
 const dogsLoadFailed = ref(false)
 const isGeneratingSheet = ref(false)

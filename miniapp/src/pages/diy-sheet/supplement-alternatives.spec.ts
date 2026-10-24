@@ -267,6 +267,28 @@ describe('supplement alternatives helpers', () => {
     ).toBeCloseTo(20, 6)
   })
 
+  it('falls back to netAmount (no production loss) when no target or ratio exists', () => {
+    const baseItem = {
+      amount: 10, // 含损耗的生产用量
+      netAmount: 8, // 净需求
+      unit: 'g',
+      displayUnit: 'g',
+      supplementTargets: []
+    }
+
+    const selectedOption = {
+      id: 'psyllium-alt',
+      ingredientId: 'psyllium-alt',
+      name: '洋车前子壳粉',
+      displayUnit: 'g'
+    }
+
+    // 没有目标、没有比例时，不能用含损耗的 10
+    expect(
+      calculateSupplementAmountForOption(baseItem, selectedOption, 2000)
+    ).toBeCloseTo(8, 6)
+  })
+
   it('keeps fractional tablet amounts when calculating from ingredient input weight', () => {
     const baseItem = {
       amount: 12,

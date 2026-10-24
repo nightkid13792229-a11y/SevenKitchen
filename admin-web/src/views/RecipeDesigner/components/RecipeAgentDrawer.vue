@@ -1,7 +1,7 @@
 <template>
   <el-drawer
     v-model="visible"
-    :size="'480px'"
+    :size="'min(480px, 100%)'"
     :close-on-click-modal="false"
     class="recipe-agent-drawer"
     @open="handleOpen"
@@ -9,18 +9,15 @@
   >
     <template #header>
       <div class="agent-header">
-        <div class="agent-header__title">
-          <span>AI 食谱设计</span>
-          <el-tag
-            v-if="session"
-            size="small"
-            :type="statusTagType"
-            effect="plain"
-          >
-            {{ statusLabel }}
-          </el-tag>
-        </div>
-        <div v-if="draftName" class="agent-header__draft">{{ draftName }}</div>
+        <span class="agent-header__title">AI 食谱设计</span>
+        <el-tag
+          v-if="session"
+          size="small"
+          :type="statusTagType"
+          effect="plain"
+        >
+          {{ statusLabel }}
+        </el-tag>
       </div>
     </template>
 
@@ -39,29 +36,88 @@
           description="还没有开始。告诉 AI 你想设计什么，它会读草稿、查原料、写配方、跑评估。"
         />
 
-        <div
-          v-for="message in messages"
-          :key="message.id"
-          class="agent-message"
-          :class="`agent-message--${message.role.toLowerCase()}`"
-        >
-          <template v-if="message.role === 'TOOL'">
-            <details class="agent-tool">
+        <template v-for="block in blocks" :key="block.key">
+          <div v-if="block.type === 'tools'" class="agent-execution">
+            <details class="agent-execution__group">
               <summary>
-                <span class="agent-tool__name">{{ message.toolName || '工具步骤' }}</span>
-                <span class="agent-tool__summary">{{ toolSummary(message) }}</span>
+                <span class="agent-execution__title">
+                  执行记录 {{ block.items.length }} 步
+                </span>
+                <span class="agent-execution__toggle">展开 / 收起</span>
               </summary>
-              <pre class="agent-tool__payload">{{ formatToolPayload(message) }}</pre>
+              <div class="agent-execution__items">
+                <details
+                  v-for="tool in block.items"
+                  :key="tool.id"
+                  class="agent-tool"
+                >
+                  <summary>
+                    <span class="agent-tool__name">{{ tool.toolName || '工具步骤' }}</span>
+                    <span class="agent-tool__summary">{{ toolSummary(tool) }}</span>
+                  </summary>
+                  <pre class="agent-tool__payload">{{ formatToolPayload(tool) }}</pre>
+                </details>
+              </div>
             </details>
-          </template>
+          </div>
 
-          <template v-else>
-            <div class="agent-bubble" :class="`agent-bubble--${message.role.toLowerCase()}`">
-              {{ message.content || '（空消息）' }}
+          <div
+            v-else
+            class="agent-message"
+            :class="`agent-message--${block.message.role.toLowerCase()}`"
+          >
+            <template v-if="block.message.role === 'ASSISTANT'">
+              <div class="agent-answer">
+                <span class="agent-answer__author">AI</span>
+                <div class="agent-bubble agent-bubble--assistant">
+                  {{ block.message.content || '（空消息）' }}
+                </div>
+              </div>
+            </template>
+            <div v-else class="agent-bubble agent-bubble--user">
+              {{ block.message.content || '（空消息）' }}
             </div>
-          </template>
-        </div>
+          </div>
+        </template>
       </div>
+
+      <section v-if="delivery" class="agent-delivery">
+        <div class="agent-delivery__head">
+          <div class="agent-delivery__title">交付确认卡</div>
+          <div class="agent-delivery__meta">
+            <span class="agent-delivery__revision">
+              内容版本 v{{ delivery.contentRevision }}
+            </span>
+            <span>{{ formatDateTime(delivery.createdAt) }}</span>
+          </div>
+        </div>
+        <p class="agent-delivery__summary">{{ delivery.summary }}</p>
+        <div
+          v-if="deliveryWarnings.length > 0"
+          class="agent-delivery__warnings"
+        >
+          <div class="agent-delivery__warnings-title">
+            交付提醒（{{ deliveryWarnings.length }}）
+          </div>
+          <ol>
+            <li v-for="(warning, index) in deliveryWarnings" :key="index">
+              {{ warning }}
+            </li>
+          </ol>
+        </div>
+        <div class="agent-delivery__actions">
+          <el-button
+            plain
+            :disabled="deliveryActionsDisabled"
+            @click="rejectDelivery"
+          >退回修改</el-button>
+          <el-button
+            type="primary"
+            :disabled="deliveryActionsDisabled"
+            @click="emit('publish')"
+          >确认交付</el-button>
+        </div>
+      </section>
 
       <el-alert
         v-if="session?.lastError"
@@ -108,6 +164,7 @@
 
       <div class="agent-composer">
         <el-input
+          ref="composerRef"
           v-model="input"
           type="textarea"
           :rows="3"
@@ -146,9 +203,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import type { InputInstance } from 'element-plus'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
+import { formatDateTime } from '@/utils/date'
 import type {
   RecipeAgentApproval,
+  RecipeAgentDelivery,
   RecipeAgentMessage,
   RecipeAgentSession,
   RecipeAgentSessionStatus
@@ -157,12 +217,12 @@ import type {
 const props = defineProps<{
   modelValue: boolean
   draftId: string
-  draftName?: string
 }>()
 
 const emit = defineEmits<{
   (event: 'update:modelValue', value: boolean): void
   (event: 'refresh'): void
+  (event: 'publish'): void
 }>()
 
 const visible = computed({
@@ -173,16 +233,32 @@ const visible = computed({
 const session = ref<RecipeAgentSession | null>(null)
 const messages = ref<RecipeAgentMessage[]>([])
 const approvals = ref<RecipeAgentApproval[]>([])
+const delivery = ref<RecipeAgentDelivery | null>(null)
 const input = ref('')
 const loading = ref(false)
 const sending = ref(false)
 const stopping = ref(false)
 const decidingApprovalId = ref<string | null>(null)
 const scrollRef = ref<HTMLElement | null>(null)
+const composerRef = ref<InputInstance | null>(null)
 
 let pollTimer: number | null = null
 
 const MAX_RUN_STEPS = 30
+
+interface AgentToolsBlock {
+  type: 'tools'
+  key: string
+  items: RecipeAgentMessage[]
+}
+
+interface AgentMessageBlock {
+  type: 'message'
+  key: string
+  message: RecipeAgentMessage
+}
+
+type AgentConversationBlock = AgentToolsBlock | AgentMessageBlock
 
 const running = computed(() => session.value?.status === 'RUNNING')
 
@@ -198,6 +274,47 @@ const currentRunSteps = computed(() => {
     .slice(lastUserIndex + 1)
     .filter((message) => message.role === 'TOOL').length
 })
+
+/**
+ * 对话流按「块」渲染：
+ *  · 连续 TOOL 消息合并成一组执行记录（默认折叠）；
+ *  · USER / ASSISTANT 各自独立成块，避免工具输出把 AI 回答冲散。
+ */
+const blocks = computed<AgentConversationBlock[]>(() => {
+  const result: AgentConversationBlock[] = []
+  let toolBlock: AgentToolsBlock | null = null
+
+  for (const message of messages.value) {
+    if (message.role === 'TOOL') {
+      if (!toolBlock) {
+        toolBlock = {
+          type: 'tools',
+          key: `tools-${message.id}`,
+          items: []
+        }
+        result.push(toolBlock)
+      }
+      toolBlock.items.push(message)
+      continue
+    }
+
+    toolBlock = null
+    result.push({
+      type: 'message',
+      key: message.id,
+      message
+    })
+  }
+
+  return result
+})
+
+const deliveryWarnings = computed<string[]>(() => {
+  const warnings = delivery.value?.warnings
+  if (!Array.isArray(warnings)) return []
+  return warnings.filter((warning) => warning.trim().length > 0)
+})
+const deliveryActionsDisabled = computed(() => running.value || sending.value)
 const waiting = computed(() => session.value?.status === 'WAITING_USER')
 const pendingApprovals = computed(() =>
   approvals.value.filter((approval) => approval.status === 'PENDING')
@@ -286,6 +403,7 @@ async function loadSession(silent = false) {
     session.value = view?.session ?? null
     messages.value = view?.messages ?? []
     approvals.value = view?.approvals ?? []
+    delivery.value = view?.delivery ?? null
 
     const terminalStatuses: RecipeAgentSessionStatus[] = [
       'COMPLETED',
@@ -333,6 +451,7 @@ function handleOpen() {
   session.value = null
   messages.value = []
   approvals.value = []
+  delivery.value = null
   input.value = ''
   decidingApprovalId.value = null
   void loadSession()
@@ -363,6 +482,19 @@ async function send() {
   } finally {
     sending.value = false
   }
+}
+
+/**
+ * 退回修改：不直接驳回交付，而是把修改要求带进输入框。
+ *
+ * 会话已 COMPLETED 时，send() 会走 startAgentRun 开一轮新的运行；
+ * 这里不自动发送，留给营养师补全具体要改什么。
+ */
+async function rejectDelivery() {
+  if (!delivery.value || deliveryActionsDisabled.value) return
+  input.value = '交付卡未通过，请调整：'
+  await nextTick()
+  composerRef.value?.focus()
 }
 
 async function stopRun() {
@@ -458,21 +590,15 @@ onBeforeUnmount(stopPolling)
 <style scoped>
 .agent-header {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .agent-header__title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
   font-size: 16px;
   font-weight: 600;
-}
-
-.agent-header__draft {
-  color: #909399;
-  font-size: 12px;
+  white-space: nowrap;
 }
 
 .agent-drawer {
@@ -484,7 +610,9 @@ onBeforeUnmount(stopPolling)
 
 .agent-meta {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
+  gap: 4px 12px;
   padding: 0 0 8px;
   color: #909399;
   font-size: 12px;
@@ -533,32 +661,129 @@ onBeforeUnmount(stopPolling)
   border-bottom-right-radius: 3px;
 }
 
+/* AI 回答：独立卡片 + 小作者标签，和右侧蓝色用户气泡拉开层级 */
+.agent-answer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  max-width: 88%;
+}
+
+.agent-answer__author {
+  align-self: flex-start;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: #ecf5ff;
+  color: #409eff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 18px;
+}
+
+.agent-answer .agent-bubble {
+  max-width: 100%;
+}
+
 .agent-bubble--assistant {
   color: #303133;
   background: #fff;
-  border: 1px solid #ebeef5;
+  border: 1px solid #d9ecff;
+  border-left: 3px solid #79bbff;
   border-bottom-left-radius: 3px;
 }
 
-.agent-tool {
-  width: 100%;
-  padding: 8px 10px;
+/* 执行记录：整组默认折叠、灰底虚线，和 AI 回答明显区分 */
+.agent-execution {
+  margin-bottom: 12px;
+}
+
+.agent-execution__group {
   border: 1px dashed #dcdfe6;
   border-radius: 8px;
-  background: #fff;
+  background: #fafafa;
+  color: #909399;
   font-size: 12px;
 }
 
-.agent-tool summary {
+.agent-execution__group > summary {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  align-items: baseline;
+  padding: 8px 10px;
   cursor: pointer;
   list-style: none;
 }
 
-.agent-tool summary::-webkit-details-marker {
+.agent-execution__group > summary::-webkit-details-marker {
   display: none;
+}
+
+.agent-execution__group[open] > summary {
+  border-bottom: 1px dashed #e4e7ed;
+}
+
+.agent-execution__title {
+  color: #606266;
+  font-weight: 600;
+}
+
+.agent-execution__title::before {
+  display: inline-block;
+  width: 12px;
+  color: #a8abb2;
+  content: '▸';
+  font-size: 10px;
+}
+
+.agent-execution__group[open] .agent-execution__title::before {
+  content: '▾';
+}
+
+.agent-execution__toggle {
+  flex: none;
+  color: #a8abb2;
+  font-size: 11px;
+}
+
+.agent-execution__items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+}
+
+.agent-tool {
+  padding: 6px 8px;
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 12px;
+}
+
+.agent-tool > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.agent-tool > summary::-webkit-details-marker {
+  display: none;
+}
+
+.agent-tool > summary::before {
+  flex: none;
+  color: #c0c4cc;
+  content: '▸';
+  font-size: 10px;
+}
+
+.agent-tool[open] > summary::before {
+  content: '▾';
 }
 
 .agent-tool__name {
@@ -568,6 +793,7 @@ onBeforeUnmount(stopPolling)
 }
 
 .agent-tool__summary {
+  min-width: 0;
   overflow: hidden;
   color: #909399;
   text-overflow: ellipsis;
@@ -587,6 +813,87 @@ onBeforeUnmount(stopPolling)
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+/* 交付确认卡：高亮左边框 + 浅绿底，是抽屉里唯一的前进动作 */
+.agent-delivery {
+  flex: none;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid #b3e19d;
+  border-left: 4px solid #67c23a;
+  border-radius: 8px;
+  background: #f0f9eb;
+  box-shadow: 0 1px 4px rgb(103 194 58 / 12%);
+}
+
+.agent-delivery__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.agent-delivery__title {
+  color: #303133;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.agent-delivery__meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  color: #909399;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.agent-delivery__revision {
+  color: #529b2e;
+  font-weight: 600;
+}
+
+.agent-delivery__summary {
+  margin: 8px 0 0;
+  color: #303133;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.agent-delivery__warnings {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed #c2e7b0;
+}
+
+.agent-delivery__warnings-title {
+  color: #b88230;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.agent-delivery__warnings ol {
+  margin: 6px 0 0;
+  padding-left: 20px;
+  color: #606266;
+  font-size: 12px;
+  line-height: 1.7;
+  word-break: break-word;
+}
+
+.agent-delivery__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.agent-delivery__actions .el-button + .el-button {
+  margin-left: 0;
 }
 
 .agent-error {
@@ -651,6 +958,7 @@ onBeforeUnmount(stopPolling)
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   padding-top: 8px;
 }
 
@@ -662,5 +970,51 @@ onBeforeUnmount(stopPolling)
 .agent-actions__buttons {
   display: flex;
   gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .agent-conversation {
+    padding: 8px;
+  }
+
+  .agent-bubble,
+  .agent-answer {
+    max-width: 100%;
+  }
+
+  .agent-delivery {
+    padding: 10px 12px;
+  }
+
+  .agent-delivery__head {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .agent-delivery__meta {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .agent-delivery__actions {
+    flex-direction: column;
+  }
+
+  .agent-delivery__actions .el-button {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .agent-actions {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .agent-actions__buttons {
+    width: 100%;
+    justify-content: flex-end;
+  }
 }
 </style>

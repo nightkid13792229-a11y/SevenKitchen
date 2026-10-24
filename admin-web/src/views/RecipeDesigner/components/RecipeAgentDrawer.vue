@@ -38,7 +38,22 @@
         <span>输入 {{ session.promptTokens }} / 输出 {{ session.completionTokens }} tokens</span>
       </div>
 
-      <div ref="scrollRef" v-loading="loading" class="agent-conversation">
+      <div
+        v-if="session"
+        class="agent-task-status"
+        :class="`agent-task-status--${session.status.toLowerCase()}`"
+      >
+        <div class="agent-task-status__headline">{{ taskHeadline }}</div>
+        <div class="agent-task-status__hint">{{ taskHint }}</div>
+      </div>
+
+      <div class="agent-conversation-shell">
+        <div
+          ref="scrollRef"
+          v-loading="loading"
+          class="agent-conversation"
+          @scroll="handleScroll"
+        >
         <el-empty
           v-if="!loading && messages.length === 0"
           :image-size="72"
@@ -88,6 +103,17 @@
             </div>
           </div>
         </template>
+        </div>
+        <el-button
+          v-if="hasNewBelow"
+          class="agent-scroll-bottom"
+          size="small"
+          type="primary"
+          plain
+          @click="jumpToBottom"
+        >
+          有新消息，回到底部
+        </el-button>
       </div>
 
       <section v-if="delivery" class="agent-delivery">
@@ -148,6 +174,39 @@
           </div>
         </div>
       </div>
+
+      <section v-if="showQuestionCard" class="agent-questions">
+        <div class="agent-questions__head">
+          <div class="agent-questions__title">AI 在等你回答</div>
+          <el-button link type="primary" size="small" @click="skipQuestions">
+            跳过，直接回复
+          </el-button>
+        </div>
+        <div
+          v-for="(question, index) in pendingQuestions"
+          :key="index"
+          class="agent-question"
+        >
+          <div class="agent-question__text">
+            {{ index + 1 }}. {{ question.question }}
+          </div>
+          <div v-if="question.options.length" class="agent-question__options">
+            <el-button
+              v-for="option in question.options"
+              :key="option"
+              size="small"
+              :type="selectedAnswers[index] === option ? 'primary' : 'default'"
+              plain
+              @click="chooseOption(index, option)"
+            >
+              {{ option }}
+            </el-button>
+          </div>
+        </div>
+        <div class="agent-questions__hint">
+          点选项会填入输入框，可修改后发送；不想选就点“跳过，直接回复”。
+        </div>
+      </section>
 
       <div class="agent-composer">
         <el-input
@@ -226,6 +285,11 @@ const sending = ref(false)
 const stopping = ref(false)
 const decidingApprovalId = ref<string | null>(null)
 const scrollRef = ref<HTMLElement | null>(null)
+/** 用户是否停在底部；向上翻记录后不再自动跟随新消息。 */
+const stickToBottom = ref(true)
+const hasNewBelow = ref(false)
+const questionsDismissedKey = ref<string | null>(null)
+const selectedAnswers = ref<Record<number, string>>({})
 
 let pollTimer: number | null = null
 
@@ -305,6 +369,109 @@ const modeTagType = computed(() =>
 )
 
 const waiting = computed(() => session.value?.status === 'WAITING_USER')
+
+interface AgentQuestion {
+  question: string
+  options: string[]
+}
+
+interface AgentQuestionSet {
+  key: string
+  questions: AgentQuestion[]
+}
+
+function readAskPayload(value: unknown): unknown {
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value)
+    } catch {
+      return null
+    }
+  }
+  return value
+}
+
+function readQuestions(value: unknown): AgentQuestion[] {
+  const root = readAskPayload(value)
+  const data =
+    root && typeof root === 'object' && !Array.isArray(root)
+      ? ((root as { data?: unknown }).data ?? root)
+      : null
+  const raw =
+    data && typeof data === 'object' && Array.isArray((data as { questions?: unknown }).questions)
+      ? (data as { questions: unknown[] }).questions
+      : []
+  const questions: AgentQuestion[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+    const question =
+      typeof (item as { question?: unknown }).question === 'string'
+        ? (item as { question: string }).question.trim()
+        : ''
+    const optionsRaw = (item as { options?: unknown }).options
+    const options = Array.isArray(optionsRaw)
+      ? optionsRaw
+          .filter((option): option is string => typeof option === 'string')
+          .map((option) => option.trim())
+          .filter(Boolean)
+      : []
+    if (question) questions.push({ question, options })
+  }
+  return questions
+}
+
+const pendingQuestionSet = computed<AgentQuestionSet | null>(() => {
+  if (session.value?.status !== 'WAITING_USER') return null
+  const ask = [...messages.value]
+    .reverse()
+    .find((message) => message.role === 'TOOL' && message.toolName === 'ask_user')
+  if (!ask) return null
+  const questions = readQuestions(ask.toolResult ?? ask.toolArgs ?? ask.content)
+  if (questions.length === 0) return null
+  return { key: ask.id || String(ask.seq), questions }
+})
+const pendingQuestions = computed(() => pendingQuestionSet.value?.questions ?? [])
+const showQuestionCard = computed(
+  () =>
+    Boolean(pendingQuestionSet.value) &&
+    questionsDismissedKey.value !== pendingQuestionSet.value?.key
+)
+
+const taskHeadline = computed(() => {
+  switch (session.value?.status) {
+    case 'RUNNING': return 'AI 正在处理'
+    case 'WAITING_USER': return 'AI 在等你回答'
+    case 'COMPLETED': return '本轮已完成'
+    case 'STOPPED': return '已停止'
+    case 'FAILED': return '运行失败'
+    case 'INTERRUPTED': return '已中断'
+    default: return '尚未开始'
+  }
+})
+
+const taskHint = computed(() => {
+  switch (session.value?.status) {
+    case 'RUNNING':
+      return `本次已用 ${currentRunSteps.value}/${MAX_RUN_STEPS} 次工具调用；可以先停止再接管。`
+    case 'WAITING_USER':
+      return showQuestionCard.value && pendingQuestions.value.length > 0
+        ? `有 ${pendingQuestions.value.length} 个问题；可点选项填入，也可跳过直接回复。`
+        : '等待你的回复；直接在下方输入即可。'
+    case 'COMPLETED':
+      return delivery.value
+        ? '交付卡见下方；可继续对话调整。'
+        : '本轮已结束；可继续对话调整。'
+    case 'STOPPED':
+      return '输入新的要求可以重新开始。'
+    case 'FAILED':
+      return session.value?.lastError || '上次运行失败；可以再试一次。'
+    case 'INTERRUPTED':
+      return '上次运行被中断；输入新的要求可以重新开始。'
+    default:
+      return '告诉 AI 你想设计什么。'
+  }
+})
+
 const pendingApprovals = computed(() =>
   approvals.value.filter((approval) => approval.status === 'PENDING')
 )
@@ -370,12 +537,30 @@ function ensurePolling() {
   }, 1500)
 }
 
-async function scrollToBottom() {
+const SCROLL_BOTTOM_THRESHOLD = 80
+
+function handleScroll() {
+  const element = scrollRef.value
+  if (!element) return
+  const distance = element.scrollHeight - element.scrollTop - element.clientHeight
+  const nearBottom = distance <= SCROLL_BOTTOM_THRESHOLD
+  stickToBottom.value = nearBottom
+  if (nearBottom) hasNewBelow.value = false
+}
+
+async function scrollToBottom(force = false) {
   await nextTick()
   const element = scrollRef.value
-  if (element) {
-    element.scrollTop = element.scrollHeight
-  }
+  if (!element) return
+  if (!force && !stickToBottom.value) return
+  element.scrollTop = element.scrollHeight
+  stickToBottom.value = true
+  hasNewBelow.value = false
+}
+
+function jumpToBottom() {
+  stickToBottom.value = true
+  void scrollToBottom(true)
 }
 
 async function loadSession(silent = false) {
@@ -386,6 +571,8 @@ async function loadSession(silent = false) {
   const previousSessionId = session.value?.id
   const lastMessage = messages.value[messages.value.length - 1]
   const previousLastSeq = lastMessage ? lastMessage.seq : 0
+  const hadMessages = messages.value.length > 0
+  const wasStickToBottom = stickToBottom.value
 
   try {
     const view = await recipeDesignerApi.getAgentSession(props.draftId)
@@ -427,7 +614,13 @@ async function loadSession(silent = false) {
       stopPolling()
     }
 
-    await scrollToBottom()
+    const nextMessages = view?.messages ?? []
+    const hasNewMessages = nextMessages.some((message) => message.seq > previousLastSeq)
+    if (!hadMessages || wasStickToBottom) {
+      await scrollToBottom(true)
+    } else if (hasNewMessages) {
+      hasNewBelow.value = true
+    }
   } catch (error) {
     if (!silent) {
       ElMessage.error(error instanceof Error ? error.message : '读取 AI 会话失败')
@@ -445,6 +638,10 @@ function handleOpen() {
   mode.value = null
   input.value = ''
   decidingApprovalId.value = null
+  stickToBottom.value = true
+  hasNewBelow.value = false
+  questionsDismissedKey.value = null
+  selectedAnswers.value = {}
   void loadSession()
 }
 
@@ -457,6 +654,10 @@ async function send() {
   const text = input.value.trim()
   if (!text || sending.value || running.value) return
 
+  // 发出去就代表已经回答了；问题卡收起，等 AI 的下一轮结果。
+  questionsDismissedKey.value = pendingQuestionSet.value?.key ?? null
+  stickToBottom.value = true
+  hasNewBelow.value = false
   sending.value = true
   try {
     if (session.value && waiting.value) {
@@ -539,6 +740,22 @@ async function decide(
   }
 }
 
+function chooseOption(index: number, option: string) {
+  selectedAnswers.value = { ...selectedAnswers.value, [index]: option }
+  input.value = pendingQuestions.value
+    .map((question, questionIndex) =>
+      selectedAnswers.value[questionIndex]
+        ? `${questionIndex + 1}. ${question.question}\n${selectedAnswers.value[questionIndex]}`
+        : ''
+    )
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+function skipQuestions() {
+  questionsDismissedKey.value = pendingQuestionSet.value?.key ?? null
+}
+
 function toolSummary(message: RecipeAgentMessage): string {
   const result = message.toolResult as { summary?: unknown } | null | undefined
   if (result && typeof result === 'object' && typeof result.summary === 'string') {
@@ -556,9 +773,9 @@ function formatToolPayload(message: RecipeAgentMessage): string {
 }
 
 watch(
-  () => messages.value.length,
+  () => pendingQuestionSet.value?.key ?? null,
   () => {
-    void scrollToBottom()
+    selectedAnswers.value = {}
   }
 )
 
@@ -604,6 +821,118 @@ onBeforeUnmount(stopPolling)
 .agent-meta__warning {
   color: #e6a23c;
   font-weight: 600;
+}
+
+.agent-conversation-shell {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.agent-scroll-bottom {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  z-index: 3;
+  transform: translateX(-50%);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 12%);
+}
+
+.agent-task-status {
+  flex-shrink: 0;
+  margin: 0 0 8px;
+  padding: 7px 10px;
+  border-left: 3px solid #909399;
+  border-radius: 6px;
+  background: #f5f7fa;
+}
+
+.agent-task-status__headline {
+  font-size: 13px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.agent-task-status__hint {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #606266;
+}
+
+.agent-task-status--running {
+  border-left-color: #e6a23c;
+  background: #fdf6ec;
+}
+
+.agent-task-status--waiting_user {
+  border-left-color: #e6a23c;
+  background: #fdf6ec;
+}
+
+.agent-task-status--completed {
+  border-left-color: #67c23a;
+  background: #f0f9eb;
+}
+
+.agent-task-status--failed {
+  border-left-color: #f56c6c;
+  background: #fef0f0;
+}
+
+.agent-questions {
+  flex-shrink: 0;
+  max-height: 40vh;
+  margin-bottom: 8px;
+  padding: 10px;
+  overflow-y: auto;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.agent-questions__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.agent-questions__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.agent-question + .agent-question {
+  margin-top: 8px;
+}
+
+.agent-question__text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #303133;
+}
+
+.agent-question__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.agent-question__options .el-button {
+  margin-left: 0;
+}
+
+.agent-questions__hint {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #909399;
 }
 
 .agent-conversation {

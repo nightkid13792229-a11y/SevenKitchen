@@ -159,6 +159,8 @@ const DEFAULT_INGREDIENT_DETAIL: AgentIngredientDetail = {
   },
   allergenNames: [],
   preparationMethods: ['切丁', '焯水'],
+  pricePerPurchaseUnit: 12.5,
+  purchaseUnit: 'kg',
 };
 
 /** 默认目录证据：26 道已发布食谱，鸭肉出现 2 次。 */
@@ -234,6 +236,8 @@ export function fakeDraftSnapshot(
       },
     ],
     lastAssessment: null,
+    nutritionSummary: { fatWetPercent: 12, moisturePercent: 60 },
+    animalSpecies: ['鸭'],
     ...overrides,
   };
 }

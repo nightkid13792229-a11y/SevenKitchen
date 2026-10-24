@@ -61,6 +61,13 @@ export interface AgentDraftSnapshot {
   };
   productionSteps: AgentProductionStep[];
   lastAssessment: AgentAssessmentView | null;
+  /** 湿基脂肪 / 水分百分比；只给健康标签策略用，读工具不展示。 */
+  nutritionSummary?: {
+    fatWetPercent: number | null;
+    moisturePercent: number | null;
+  };
+  /** 菜品里出现的动物物种（去重）；只给健康标签策略用，读工具不展示。 */
+  animalSpecies?: string[];
 }
 
 /** `set_copy` 的字段白名单；只传要改的字段。 */
@@ -98,6 +105,8 @@ export interface AgentIngredientDetail extends AgentIngredientCandidate {
   nutritionSummary: Record<string, number | null>;
   allergenNames: string[];
   preparationMethods: string[];
+  pricePerPurchaseUnit: number | null;
+  purchaseUnit: string | null;
 }
 
 /** 目录里与当前草稿有重合的一道菜。 */

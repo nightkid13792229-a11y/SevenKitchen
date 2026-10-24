@@ -1844,21 +1844,32 @@ describe('定制页 · 2026-10-05 第三批（4 条）', () => {
     expect(template).not.toContain('过敏信息（可选）')
   })
 
-  it('③ 先问「小家伙是否对部分食物过敏？」，答没有就跳过整块录入', () => {
+  it('③ 先问「小家伙是否对部分食物过敏？」，答没有就跳过过敏食物录入', () => {
     expect(template).toContain('小家伙是否对部分食物过敏？')
     expect(template).toContain('@tap="answerFoodAllergy(true)"')
     expect(template).toContain('@tap="answerFoodAllergy(false)"')
-    // 录入界面整块收在"有过敏"分支里（文本框、扫描、已上传报告）
-    const editor = template.slice(
-      template.indexOf('v-if="hasFoodAllergy === true"'),
-      template.indexOf('v-else-if="hasFoodAllergy === false"'),
-    )
+
+    // 只有“过敏食物”文本框收在“有过敏”分支里
+    const trueStart = template.indexOf('<template v-if="hasFoodAllergy === true">')
+    const trueEnd = template.indexOf('</template>', trueStart)
+    expect(trueStart).toBeGreaterThan(-1)
+    expect(trueEnd).toBeGreaterThan(trueStart)
+    const editor = template.slice(trueStart, trueEnd)
     expect(editor).toContain('allergy-text')
     expect(editor).toContain('v-model="formData.allergyText"')
     expect(editor).toContain('<textarea')
-    expect(editor).toContain('<AllergyScanBlock')
-    expect(editor).toContain('allergyReports')
-    // 没作答不能提交（否则"跳过"这件事只做了一半）
+    // 报告区不再藏在答案后面（2026-10-25）
+    expect(editor).not.toContain('<AllergyScanBlock')
+    expect(editor).not.toContain('allergyReports')
+
+    const reportArea = template.slice(
+      template.indexOf('class="allergy-report-area"'),
+    )
+    expect(reportArea).toContain('<AllergyScanBlock')
+    expect(reportArea).toContain('allergyReports')
+    expect(reportArea).toContain('formData.reportDrafts')
+
+    // 没作答不能提交（否则“跳过”这件事只做了一半）
     expect(code).toContain('const hasFoodAllergy = ref<boolean | null>(null)')
     expect(code).toContain('请先回答：小家伙是否对部分食物过敏')
   })
@@ -1970,10 +1981,21 @@ describe('定制页 · 报告缩略图相关（第五批补丁）', () => {
     expect(block).toContain('识别失败，请手工添加过敏原')
   })
 
-  it('有历史报告时默认答"有过敏"，别把预览一起藏起来', () => {
-    expect(page).toContain('allergyReports.value.length > 0 && hasFoodAllergy.value === null')
-    // 只在未作答时兜底，不覆盖家长自己选过的答案
-    expect(page).toContain('hasFoodAllergy.value = true;')
+  it('有历史报告也不预选答案；报告区常显，由顾客自己答', () => {
+    // 2026-10-25 老板：报告常显、题目不预选
+    expect(page).not.toContain('allergyReports.value.length > 0 && hasFoodAllergy.value === null')
+
+    const loadAllergyReports = page.match(
+      /async function loadAllergyReports[\s\S]*?\n\}/,
+    )?.[0] || ''
+    expect(loadAllergyReports).not.toContain('hasFoodAllergy.value = true')
+
+    // 报告区在“有过敏”模板之外
+    const trueStart = page.indexOf('<template v-if="hasFoodAllergy === true">')
+    const trueEnd = page.indexOf('</template>', trueStart)
+    const reportStart = page.indexOf('class="allergy-report-area"')
+    expect(reportStart).toBeGreaterThan(trueEnd)
+    expect(page.slice(reportStart)).toContain('<AllergyScanBlock')
   })
 })
 

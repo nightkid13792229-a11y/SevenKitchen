@@ -231,7 +231,7 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
           minimum: 0.1,
           maximum: 10000,
           description:
-            '数量：食材按克（G）；补剂按基准单位（PCS=粒/片，G=克，ML=毫升），0.1–10000。',
+            '数量：食材按克（G），0.1–10000；补剂按基准单位（PCS=片/粒，G=克，ML=毫升），一位小数、≥0.1，不要默认整片/整粒。',
         },
         preparationMethod: {
           type: 'string',
@@ -262,7 +262,7 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
           minimum: 0.1,
           maximum: 10000,
           description:
-            '新数量：食材按克（G）；补剂按基准单位（PCS=粒/片，G=克，ML=毫升），0.1–10000。',
+            '新数量：食材按克（G），0.1–10000；补剂按基准单位（PCS=片/粒，G=克，ML=毫升），一位小数、≥0.1，不要默认整片/整粒。',
         },
       },
       required: ['itemId', 'nutritionFoodId', 'weightG'],
@@ -272,7 +272,7 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
   {
     name: 'update_weight',
     description:
-      '修改草稿里某条原料的数量；食材是克数，补剂按基准单位（粒/片/克/毫升）。',
+      '修改草稿里某条原料的数量；食材是克数，补剂按基准单位（片/粒/克/毫升），一位小数、≥0.1。',
     parameters: {
       type: 'object',
       properties: {
@@ -282,7 +282,7 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
           minimum: 0.1,
           maximum: 10000,
           description:
-            '新数量：食材按克（G）；补剂按基准单位（PCS=粒/片，G=克，ML=毫升），0.1–10000。',
+            '新数量：食材按克（G），0.1–10000；补剂按基准单位（PCS=片/粒，G=克，ML=毫升），一位小数、≥0.1，不要默认整片/整粒。',
         },
       },
       required: ['itemId', 'weightG'],

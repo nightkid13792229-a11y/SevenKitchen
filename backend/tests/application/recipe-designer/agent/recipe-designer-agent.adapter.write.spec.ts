@@ -322,6 +322,179 @@ describe('RecipeDesignerAgentAdapter 写方法', () => {
       expect(service.addItem).toHaveBeenCalledTimes(1);
     });
 
+    it('补剂 PCS 允许 0.2 粒（0.1 粒度）', async () => {
+      const service = serviceMock();
+      const prisma = prismaMock();
+      prisma.nutritionFood.findUnique.mockResolvedValue(
+        nutritionFoodRow({
+          category: 'SUPPLEMENT',
+          nutritionData: {
+            meta: { rawBasisType: 'PER_SERVING' },
+            minerals: { zinc: 30000 },
+          },
+          mappings: [
+            {
+              ingredientId: 'ing-1',
+              isPrimary: true,
+              ingredient: {
+                id: 'ing-1',
+                type: 'SUPPLEMENT',
+                baseUnit: 'PCS',
+                unitDisplayLabel: '粒',
+              },
+            },
+          ],
+        }),
+      );
+      const adapter = createAdapter(service, prisma);
+
+      await adapter.addItem('draft-1', {
+        nutritionFoodId: 'nf-1',
+        weightG: 0.2,
+      });
+
+      expect(service.addItem).toHaveBeenCalledWith(
+        'draft-1',
+        expect.objectContaining({ weightG: 0.2 }),
+        ACCESS,
+      );
+    });
+
+    it('补剂 0.25 片/粒因不是一位小数被拒绝', async () => {
+      const service = serviceMock();
+      const prisma = prismaMock();
+      prisma.nutritionFood.findUnique.mockResolvedValue(
+        nutritionFoodRow({
+          category: 'SUPPLEMENT',
+          nutritionData: {
+            meta: { rawBasisType: 'PER_SERVING' },
+            minerals: { zinc: 30000 },
+          },
+          mappings: [
+            {
+              ingredientId: 'ing-1',
+              isPrimary: true,
+              ingredient: {
+                id: 'ing-1',
+                type: 'SUPPLEMENT',
+                baseUnit: 'PCS',
+                unitDisplayLabel: '粒',
+              },
+            },
+          ],
+        }),
+      );
+      const adapter = createAdapter(service, prisma);
+
+      await expect(
+        adapter.addItem('draft-1', {
+          nutritionFoodId: 'nf-1',
+          weightG: 0.25,
+        }),
+      ).rejects.toMatchObject({
+        name: 'RecipeAgentPortError',
+        code: 'INVALID_ARGUMENT',
+      });
+      expect(service.addItem).not.toHaveBeenCalled();
+    });
+
+    it('补剂 G 允许 0.5g（谷粉等粉剂）', async () => {
+      const service = serviceMock();
+      const prisma = prismaMock();
+      prisma.nutritionFood.findUnique.mockResolvedValue(
+        nutritionFoodRow({
+          category: 'SUPPLEMENT',
+          nutritionData: {
+            meta: { rawBasisType: 'PER_1_G' },
+            minerals: { calcium: 353 },
+          },
+          mappings: [
+            {
+              ingredientId: 'ing-1',
+              isPrimary: true,
+              ingredient: {
+                id: 'ing-1',
+                type: 'SUPPLEMENT',
+                baseUnit: 'G',
+                unitDisplayLabel: 'g',
+              },
+            },
+          ],
+        }),
+      );
+      const adapter = createAdapter(service, prisma);
+
+      await adapter.addItem('draft-1', {
+        nutritionFoodId: 'nf-1',
+        weightG: 0.5,
+      });
+
+      expect(service.addItem).toHaveBeenCalledWith(
+        'draft-1',
+        expect.objectContaining({ weightG: 0.5 }),
+        ACCESS,
+      );
+    });
+
+    it('补剂 G 的 0.55g 因不是一位小数被拒绝', async () => {
+      const service = serviceMock();
+      const prisma = prismaMock();
+      prisma.nutritionFood.findUnique.mockResolvedValue(
+        nutritionFoodRow({
+          category: 'SUPPLEMENT',
+          nutritionData: {
+            meta: { rawBasisType: 'PER_1_G' },
+            minerals: { calcium: 353 },
+          },
+          mappings: [
+            {
+              ingredientId: 'ing-1',
+              isPrimary: true,
+              ingredient: {
+                id: 'ing-1',
+                type: 'SUPPLEMENT',
+                baseUnit: 'G',
+                unitDisplayLabel: 'g',
+              },
+            },
+          ],
+        }),
+      );
+      const adapter = createAdapter(service, prisma);
+
+      await expect(
+        adapter.addItem('draft-1', {
+          nutritionFoodId: 'nf-1',
+          weightG: 0.55,
+        }),
+      ).rejects.toMatchObject({
+        name: 'RecipeAgentPortError',
+        code: 'INVALID_ARGUMENT',
+      });
+    });
+
+    it('updateWeight 对补剂同样校验 0.1 粒度', async () => {
+      const service = serviceMock();
+      const prisma = prismaMock();
+      prisma.designRecipeItem.findUnique.mockResolvedValue({
+        designRecipeId: 'draft-1',
+        ingredient: { type: 'SUPPLEMENT', baseUnit: 'PCS' },
+      });
+      const adapter = createAdapter(service, prisma);
+
+      await adapter.updateWeight('item-1', 0.2);
+      expect(service.updateItem).toHaveBeenCalledWith(
+        'item-1',
+        { weightG: 0.2 },
+        ACCESS,
+      );
+
+      await expect(adapter.updateWeight('item-1', 0.25)).rejects.toMatchObject({
+        name: 'RecipeAgentPortError',
+        code: 'INVALID_ARGUMENT',
+      });
+    });
+
   describe('replaceItem', () => {
     it('正常替换：调用 service.replaceItem，重复校验排除自己', async () => {
       const service = serviceMock();

@@ -190,9 +190,12 @@
 
         <!-- 补剂购买引导（2026-10-24）：不想全买，可以只买本次制作的一次性预分装补剂 -->
         <view v-if="canBuySupplements" class="supplement-buy-note">
-          <text class="supplement-buy-note-text">不想购买所有的商品补剂？可以购买本次制作需要的</text>
-          <button class="supplement-buy-note-btn" @tap="handleBuySupplements">一次性预分装补剂</button>
-          <text class="supplement-buy-note-text">。</text>
+          <text class="supplement-buy-note-text">不想购买所有的商品补剂？</text>
+          <view class="supplement-buy-note-line">
+            <text class="supplement-buy-note-text">可以购买本次制作需要的</text>
+            <button class="supplement-buy-note-btn" @tap="handleBuySupplements">一次性预分装补剂</button>
+            <text class="supplement-buy-note-text">。</text>
+          </view>
         </view>
 
         <!--
@@ -2814,14 +2817,23 @@ onShareTimeline(() => {
 /* 补剂购买引导：句子里嵌一颗小按钮（2026-10-24） */
 .supplement-buy-note {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 8rpx;
   margin-top: 16rpx;
   padding: 16rpx 20rpx;
   background: #f7f1e4;
   border: 1rpx solid #e8decd;
   border-radius: 14rpx;
+}
+
+/* 第二行：说明 + 按钮，整体作为一行排版 */
+.supplement-buy-note-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6rpx;
+  width: 100%;
 }
 
 .supplement-buy-note-text {

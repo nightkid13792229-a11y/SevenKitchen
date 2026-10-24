@@ -334,17 +334,11 @@ const filledCount = computed(
     ).length,
 );
 
-/** 只传了附件没写说明的草稿：不把它当一份提交，提示补文字或删附件 */
-const hasAttachmentOnlyDraft = computed(() =>
-  items.value.some((item) => {
-    const draft = drafts[item.key];
-    return Boolean(draft && draft.attachments.length && !draft.description.trim());
-  }),
-);
-
-const canSubmit = computed(
-  () => filledCount.value > 0 && !hasAttachmentOnlyDraft.value,
-);
+/**
+ * 附件不作提交门禁：只传了附件、没写说明的那一份不提交，
+ * 但不影响其他写了文字的份提交。
+ */
+const canSubmit = computed(() => filledCount.value > 0);
 const canSubmitNew = computed(
   () => Boolean(quota.value?.canSubmit) && items.value.length > 0,
 );

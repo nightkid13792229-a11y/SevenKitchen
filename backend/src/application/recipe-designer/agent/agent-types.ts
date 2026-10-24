@@ -68,6 +68,11 @@ export interface AgentDraftSnapshot {
   };
   /** 菜品里出现的动物物种（去重）；只给健康标签策略用，读工具不展示。 */
   animalSpecies?: string[];
+  /**
+   * 是否有 PROTEIN / ORGAN 项识别不出物种；只给健康标签策略用。
+   * true 时「单一动物蛋白」必须 fail closed。
+   */
+  unknownAnimalProtein?: boolean;
 }
 
 /** `set_copy` 的字段白名单；只传要改的字段。 */

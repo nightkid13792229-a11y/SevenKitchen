@@ -1,3 +1,5 @@
+import type { AgentDraftSnapshot } from 'src/application/recipe-designer/agent/agent-types';
+import { DraftHealthTagPolicy } from 'src/application/recipe-designer/agent/draft-health-tag-policy';
 import { RecipeDesignerAgentAdapter } from 'src/application/recipe-designer/agent/recipe-designer-agent.adapter';
 
 function createAdapter(service: any, prisma: any = {}) {
@@ -7,6 +9,16 @@ function createAdapter(service: any, prisma: any = {}) {
     { userId: 'u1', role: 'STAFF' },
     'draft-1',
   );
+}
+
+/** 用快照事实构造健康标签策略，验证“读适配器 → 标签策略”的整条链。 */
+function healthTagPolicy(snapshot: AgentDraftSnapshot) {
+  return new DraftHealthTagPolicy({
+    fatWetPercent: snapshot.nutritionSummary?.fatWetPercent ?? null,
+    moisturePercent: snapshot.nutritionSummary?.moisturePercent ?? null,
+    animalSpecies: snapshot.animalSpecies ?? [],
+    unknownAnimalProtein: snapshot.unknownAnimalProtein,
+  });
 }
 
 /** 一份由用例自己拼 items 的最小草稿（其余字段取不会触发额外查询的默认值）。 */
@@ -38,10 +50,13 @@ function simpleItem(input: {
   id: string;
   name: string;
   weightG: number;
-  cfctClass: string;
+  /** 不传 = CFCT 缺失（七类落到 UNCLASSIFIED）。 */
+  cfctClass?: string | null;
   category: string;
   type?: 'FOOD' | 'SUPPLEMENT';
   includeInAssessment?: boolean;
+  unitDisplayLabel?: string | null;
+  purchaseUnit?: string | null;
   macros?: { moisture?: number; crudeFat?: number } | null;
 }) {
   return {
@@ -60,7 +75,9 @@ function simpleItem(input: {
       id: `ing-${input.id}`,
       name: input.name,
       type: input.type ?? 'FOOD',
-      properties: { cfct_class: input.cfctClass },
+      unitDisplayLabel: input.unitDisplayLabel ?? null,
+      purchaseUnit: input.purchaseUnit ?? null,
+      properties: input.cfctClass ? { cfct_class: input.cfctClass } : {},
     },
     nutritionFood: {
       id: `nf-${input.id}`,
@@ -542,6 +559,150 @@ describe('RecipeDesignerAgentAdapter read', () => {
     expect(second.animalSpecies).toEqual(['鸭', '鸡']);
   });
 
+  it('UNCLASSIFIED 的鸡肉也计入物种，单一动物蛋白不再误开', async () => {
+    // 鸡胸肉故意没有 CFCT 分类 → UNCLASSIFIED；只扫 PROTEIN/ORGAN 会漏掉它。
+    const draft = draftWithItems([
+      simpleItem({
+        id: 'chicken',
+        name: '鸡胸肉',
+        weightG: 200,
+        category: 'MEAT',
+      }),
+      simpleItem({
+        id: 'duck',
+        name: '鸭腿肉',
+        weightG: 300,
+        cfctClass: '禽肉类及制品',
+        category: 'MEAT',
+      }),
+    ]);
+    const adapter = createAdapter({
+      getDraft: jest.fn().mockResolvedValue(draft),
+      getDraftProductionSteps: jest
+        .fn()
+        .mockResolvedValue({ draftId: 'draft-1', productionSteps: [] }),
+    });
+
+    const snapshot = await adapter.getDraft('draft-1');
+
+    expect(snapshot.animalSpecies).toEqual(['鸡', '鸭']);
+    expect(snapshot.unknownAnimalProtein).toBe(false);
+    expect(healthTagPolicy(snapshot).isAllowedTag('单一动物蛋白')).toBe(false);
+  });
+
+  it('识别不出物种的蛋白项让单一动物蛋白 fail closed', async () => {
+    const draft = draftWithItems([
+      simpleItem({
+        id: 'duck',
+        name: '鸭腿肉',
+        weightG: 300,
+        cfctClass: '禽肉类及制品',
+        category: 'MEAT',
+      }),
+      // 是 PROTEIN，但名称不含任何物种词。
+      simpleItem({
+        id: 'mystery',
+        name: '神秘肉',
+        weightG: 100,
+        cfctClass: '畜肉类及制品',
+        category: 'MEAT',
+      }),
+    ]);
+    const adapter = createAdapter({
+      getDraft: jest.fn().mockResolvedValue(draft),
+      getDraftProductionSteps: jest
+        .fn()
+        .mockResolvedValue({ draftId: 'draft-1', productionSteps: [] }),
+    });
+
+    const snapshot = await adapter.getDraft('draft-1');
+
+    expect(snapshot.animalSpecies).toEqual(['鸭']);
+    expect(snapshot.unknownAnimalProtein).toBe(true);
+    expect(healthTagPolicy(snapshot).isAllowedTag('单一动物蛋白')).toBe(false);
+  });
+
+  it('物种词表覆盖驴/鸽/蛙/贝/蟹/虾/鹌鹑/鹿', async () => {
+    const draft = draftWithItems([
+      simpleItem({
+        id: 'donkey',
+        name: '驴肉',
+        weightG: 100,
+        cfctClass: '畜肉类及制品',
+        category: 'MEAT',
+      }),
+      simpleItem({
+        id: 'pigeon',
+        name: '鸽胸肉',
+        weightG: 100,
+        cfctClass: '禽肉类及制品',
+        category: 'MEAT',
+      }),
+      simpleItem({
+        id: 'frog',
+        name: '牛蛙',
+        weightG: 100,
+        cfctClass: '水产类',
+        category: 'OTHER',
+      }),
+      simpleItem({
+        id: 'scallop',
+        name: '扇贝',
+        weightG: 100,
+        cfctClass: '水产类',
+        category: 'OTHER',
+      }),
+      simpleItem({
+        id: 'crab',
+        name: '蟹肉',
+        weightG: 100,
+        cfctClass: '水产类',
+        category: 'OTHER',
+      }),
+      simpleItem({
+        id: 'shrimp',
+        name: '虾仁',
+        weightG: 100,
+        cfctClass: '水产类',
+        category: 'OTHER',
+      }),
+      simpleItem({
+        id: 'quail',
+        name: '鹌鹑肉',
+        weightG: 100,
+        cfctClass: '禽肉类及制品',
+        category: 'MEAT',
+      }),
+      simpleItem({
+        id: 'venison',
+        name: '鹿肉',
+        weightG: 100,
+        cfctClass: '畜肉类及制品',
+        category: 'MEAT',
+      }),
+    ]);
+    const adapter = createAdapter({
+      getDraft: jest.fn().mockResolvedValue(draft),
+      getDraftProductionSteps: jest
+        .fn()
+        .mockResolvedValue({ draftId: 'draft-1', productionSteps: [] }),
+    });
+
+    const snapshot = await adapter.getDraft('draft-1');
+
+    expect(snapshot.animalSpecies).toEqual([
+      '驴',
+      '鸽',
+      '蛙',
+      '贝',
+      '蟹',
+      '虾',
+      '鹌鹑',
+      '鹿',
+    ]);
+    expect(snapshot.unknownAnimalProtein).toBe(false);
+  });
+
   it('评估版本不一致时 lastAssessment 为 null', async () => {
     const service = {
       getDraft: jest
@@ -692,6 +853,7 @@ describe('RecipeDesignerAgentAdapter read', () => {
         cfctClass: '油脂类',
         category: 'OIL',
         type: 'SUPPLEMENT',
+        unitDisplayLabel: '粒',
         macros: { moisture: 0, crudeFat: 100 },
       }),
     ]);
@@ -718,6 +880,133 @@ describe('RecipeDesignerAgentAdapter read', () => {
     expect(
       snapshot.items.find((item) => item.id === 'supplement')?.ratioPercent,
     ).toBeNull();
+  });
+
+  it('按克计量的补剂计入总重与营养摘要', async () => {
+    const draft = draftWithItems([
+      simpleItem({
+        id: 'food',
+        name: '鸭腿肉',
+        weightG: 100,
+        cfctClass: '禽肉类及制品',
+        category: 'MEAT',
+        macros: { moisture: 50, crudeFat: 5 },
+      }),
+      // 5g 鱼油按克计量：脂肪 5g，必须进分子和分母。
+      simpleItem({
+        id: 'oil',
+        name: '鱼油',
+        weightG: 5,
+        cfctClass: '油脂类',
+        category: 'OIL',
+        type: 'SUPPLEMENT',
+        unitDisplayLabel: 'g',
+        macros: { moisture: 0, crudeFat: 100 },
+      }),
+    ]);
+    const adapter = createAdapter({
+      getDraft: jest.fn().mockResolvedValue(draft),
+      getDraftProductionSteps: jest
+        .fn()
+        .mockResolvedValue({ draftId: 'draft-1', productionSteps: [] }),
+    });
+
+    const snapshot = await adapter.getDraft('draft-1');
+
+    expect(snapshot.totalWeightG).toBe(105);
+    expect(snapshot.nutritionSummary?.fatWetPercent).toBeCloseTo(
+      (10 / 105) * 100,
+      5,
+    );
+    expect(snapshot.nutritionSummary?.moisturePercent).toBeCloseTo(
+      (50 / 105) * 100,
+      5,
+    );
+    expect(
+      snapshot.items.find((item) => item.id === 'oil')?.ratioPercent,
+    ).toBeCloseTo(4.8, 5);
+    // 水分 47.6% → 低脂上限 7%；脂肪 9.52% 超限。
+    expect(healthTagPolicy(snapshot).isAllowedTag('低脂')).toBe(false);
+  });
+
+  it('按粒计量的补剂不计入总重与占比', async () => {
+    const draft = draftWithItems([
+      simpleItem({
+        id: 'food',
+        name: '鸭腿肉',
+        weightG: 100,
+        cfctClass: '禽肉类及制品',
+        category: 'MEAT',
+        macros: { moisture: 50, crudeFat: 5 },
+      }),
+      simpleItem({
+        id: 'capsule',
+        name: '鱼油软胶囊',
+        weightG: 2,
+        cfctClass: '油脂类',
+        category: 'OIL',
+        type: 'SUPPLEMENT',
+        // unitDisplayLabel 缺失时回退到 purchaseUnit。
+        purchaseUnit: '粒',
+        macros: { moisture: 0, crudeFat: 100 },
+      }),
+    ]);
+    const adapter = createAdapter({
+      getDraft: jest.fn().mockResolvedValue(draft),
+      getDraftProductionSteps: jest
+        .fn()
+        .mockResolvedValue({ draftId: 'draft-1', productionSteps: [] }),
+    });
+
+    const snapshot = await adapter.getDraft('draft-1');
+
+    expect(snapshot.totalWeightG).toBe(100);
+    expect(snapshot.nutritionSummary?.fatWetPercent).toBeCloseTo(5, 5);
+    expect(snapshot.nutritionSummary?.moisturePercent).toBeCloseTo(50, 5);
+    expect(
+      snapshot.items.find((item) => item.id === 'capsule')?.ratioPercent,
+    ).toBeNull();
+    expect(healthTagPolicy(snapshot).isAllowedTag('低脂')).toBe(true);
+  });
+
+  it('补剂单位未知时营养摘要 fail closed', async () => {
+    const draft = draftWithItems([
+      simpleItem({
+        id: 'food',
+        name: '鸭腿肉',
+        weightG: 100,
+        cfctClass: '禽肉类及制品',
+        category: 'MEAT',
+        macros: { moisture: 50, crudeFat: 5 },
+      }),
+      // 没有 unitDisplayLabel / purchaseUnit：不能当成 0g 脂肪放过去。
+      simpleItem({
+        id: 'unknown-unit',
+        name: '鱼油',
+        weightG: 5,
+        cfctClass: '油脂类',
+        category: 'OIL',
+        type: 'SUPPLEMENT',
+        macros: { moisture: 0, crudeFat: 100 },
+      }),
+    ]);
+    const adapter = createAdapter({
+      getDraft: jest.fn().mockResolvedValue(draft),
+      getDraftProductionSteps: jest
+        .fn()
+        .mockResolvedValue({ draftId: 'draft-1', productionSteps: [] }),
+    });
+
+    const snapshot = await adapter.getDraft('draft-1');
+
+    expect(snapshot.nutritionSummary).toEqual({
+      fatWetPercent: null,
+      moisturePercent: null,
+    });
+    expect(
+      snapshot.items.find((item) => item.id === 'unknown-unit')?.ratioPercent,
+    ).toBeNull();
+    expect(healthTagPolicy(snapshot).isAllowedTag('低脂')).toBe(false);
   });
 
   it('searchIngredients 只收已验证档案，并按七类过滤', async () => {

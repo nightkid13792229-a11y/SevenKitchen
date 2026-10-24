@@ -48,16 +48,20 @@ const ASSESSMENT_STATUSES: ReadonlySet<AgentAssessmentEntry['status']> =
   new Set(['COMPLIANT', 'DEFICIENT', 'EXCESS', 'MISSING_DATA', 'INFO']);
 
 /**
- * 物种词表；`火鸡` 必须排在 `鸡` 前面，否则会被拆成两个物种。
+ * 物种词表；长词 / 具体物种在前。
+ * `火鸡` 必须先于 `鸡`，`蛙` 必须先于 `牛`（否则「牛蛙」会被判成牛）。
  * 只用于“单一动物蛋白”标签判断，命中即止。
  */
 const ANIMAL_SPECIES_KEYWORDS = [
   '火鸡',
+  '鹌鹑',
   '鸡',
   '鸭',
   '鹅',
-  '鹌鹑',
   '鹿',
+  '驴',
+  '鸽',
+  '蛙',
   '牛',
   '羊',
   '猪',
@@ -410,18 +414,87 @@ const toPriceNumber = (value: unknown): number | null => {
   return Number.isFinite(price) ? price : null;
 };
 
-/** 按 item 名称收集动物物种；一条原料只记第一个命中的物种。 */
-const collectAnimalSpecies = (names: readonly string[]): string[] => {
+/** 按克计量的单位（可换算成食物质量）。 */
+const GRAM_UNITS: ReadonlySet<string> = new Set(['g', '克', 'ml', '毫升']);
+
+/** 按粒/片/袋等计数的单位：克重不是食物质量。 */
+const COUNT_UNITS: ReadonlySet<string> = new Set([
+  '粒',
+  '片',
+  '袋',
+  '包',
+  '颗',
+  '支',
+  '瓶',
+]);
+
+type SupplementUnitBasis = 'GRAM' | 'COUNT' | 'UNKNOWN';
+
+/**
+ * 补剂的计量口径：展示单位优先，其次采购单位。
+ *
+ * 只认明确的白名单；识别不了返回 UNKNOWN，由调用方 fail closed。
+ */
+const resolveSupplementUnitBasis = (ingredient: {
+  unitDisplayLabel?: string | null;
+  purchaseUnit?: string | null;
+}): SupplementUnitBasis => {
+  const raw =
+    ingredient.unitDisplayLabel?.trim() ||
+    ingredient.purchaseUnit?.trim() ||
+    '';
+  if (!raw) {
+    return 'UNKNOWN';
+  }
+  const unit = raw.toLowerCase();
+  if (GRAM_UNITS.has(unit)) {
+    return 'GRAM';
+  }
+  if (COUNT_UNITS.has(unit)) {
+    return 'COUNT';
+  }
+  return 'UNKNOWN';
+};
+
+interface AnimalSpeciesScan {
+  species: string[];
+  unknownAnimalProtein: boolean;
+}
+
+/**
+ * 扫描动物物种：只扫 `PROTEIN` / `ORGAN` / `UNCLASSIFIED` 项。
+ *
+ * - 名称命中词表 → 记物种；`UNCLASSIFIED` 也记，避免漏掉未分类的鸡肉。
+ * - `PROTEIN` / `ORGAN` 命中不到 → `unknownAnimalProtein`，标签 fail closed。
+ * - 果蔬菌（FRUIT / MUSHROOM / VEGETABLE 等）根本不进扫描。
+ */
+const collectAnimalSpecies = (
+  items: readonly { name: string; category: FoodCategory }[],
+): AnimalSpeciesScan => {
   const species: string[] = [];
-  for (const name of names) {
+  let unknownAnimalProtein = false;
+
+  for (const item of items) {
+    if (
+      item.category !== 'PROTEIN' &&
+      item.category !== 'ORGAN' &&
+      item.category !== 'UNCLASSIFIED'
+    ) {
+      continue;
+    }
     const matched = ANIMAL_SPECIES_KEYWORDS.find((keyword) =>
-      name.includes(keyword),
+      item.name.includes(keyword),
     );
-    if (matched && !species.includes(matched)) {
-      species.push(matched);
+    if (matched) {
+      if (!species.includes(matched)) {
+        species.push(matched);
+      }
+    } else if (item.category !== 'UNCLASSIFIED') {
+      unknownAnimalProtein = true;
     }
   }
-  return species;
+
+  return { species, unknownAnimalProtein };
 };
 
 /** 一条食谱明细的展示名与七类分类；当前草稿与已发布食谱共用同一口径。 */
@@ -575,13 +648,26 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
       };
     });
 
-    // 评估口径 = 参与评估的食品：补剂按粒/片计数（weightG 不是食物质量），
-    // `includeInAssessment === false` 的原料也不进总重/占比/营养分母。
-    const assessedItems = draft.items.filter(
-      (item) =>
-        item.includeInAssessment !== false &&
-        item.ingredient?.type !== 'SUPPLEMENT',
-    );
+    // 评估口径 = 参与评估的食品 + 按克计量的补剂。
+    // 按粒/片等计数的补剂 weightG 不是食物质量，既不进总重也不进营养分母；
+    // 补剂单位识别不了时营养摘要整体 fail closed（不能当成 0）。
+    const assessedItems: ServiceDraft['items'] = [];
+    let unknownSupplementUnit = false;
+    for (const item of draft.items) {
+      if (item.includeInAssessment === false) {
+        continue;
+      }
+      if (item.ingredient?.type !== 'SUPPLEMENT') {
+        assessedItems.push(item);
+        continue;
+      }
+      const unitBasis = resolveSupplementUnitBasis(item.ingredient);
+      if (unitBasis === 'GRAM') {
+        assessedItems.push(item);
+      } else if (unitBasis === 'UNKNOWN') {
+        unknownSupplementUnit = true;
+      }
+    }
     const assessedItemIds = new Set(assessedItems.map((item) => item.id));
 
     // 总重与占比都从当前 items 现算，不信库里可能过期的 totalWeightG / ratioPercent。
@@ -596,6 +682,13 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
           ? roundTo1((item.weightG / totalWeightG) * 100)
           : null,
     }));
+
+    const speciesScan = collectAnimalSpecies(
+      itemsWithRatios.map((item) => ({
+        name: item.name,
+        category: item.category,
+      })),
+    );
 
     return {
       draftId,
@@ -614,20 +707,15 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
       },
       productionSteps: toAgentProductionSteps(productionSteps?.productionSteps),
       lastAssessment: buildLastAssessment(draft),
-      nutritionSummary: buildNutritionSummary(
-        assessedItems,
-        totalWeightG,
-        draft.calculatedNutrition,
-      ),
-      animalSpecies: collectAnimalSpecies(
-        // 只从蛋白/内脏类看物种：牛油果、羊肚菌、贝贝南瓜、鱼油都带动物字，
-        // 但都不是动物蛋白，不能参与“单一动物蛋白”判断。
-        itemsWithRatios
-          .filter(
-            (item) => item.category === 'PROTEIN' || item.category === 'ORGAN',
-          )
-          .map((item) => item.name),
-      ),
+      nutritionSummary: unknownSupplementUnit
+        ? { fatWetPercent: null, moisturePercent: null }
+        : buildNutritionSummary(
+            assessedItems,
+            totalWeightG,
+            draft.calculatedNutrition,
+          ),
+      animalSpecies: speciesScan.species,
+      unknownAnimalProtein: speciesScan.unknownAnimalProtein,
     };
   }
 

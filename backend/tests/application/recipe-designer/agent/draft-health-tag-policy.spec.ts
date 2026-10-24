@@ -8,12 +8,14 @@ function policy(
     fatWetPercent: number | null;
     moisturePercent: number | null;
     animalSpecies: string[];
+    unknownAnimalProtein: boolean;
   }> = {},
 ) {
   return new DraftHealthTagPolicy({
     fatWetPercent: 8,
     moisturePercent: 60,
     animalSpecies: ['鸭'],
+    unknownAnimalProtein: false,
     ...overrides,
   });
 }
@@ -59,6 +61,23 @@ describe('DraftHealthTagPolicy', () => {
       policy({ animalSpecies: ['Chicken', 'chicken'] }).isAllowedTag(
         '单一动物蛋白',
       ),
+    ).toBe(true);
+  });
+
+  it('有识别不出的蛋白项时单一动物蛋白 fail closed', () => {
+    expect(
+      policy({
+        animalSpecies: ['鸭'],
+        unknownAnimalProtein: true,
+      }).isAllowedTag('单一动物蛋白'),
+    ).toBe(false);
+    // 不传（旧调用）按 false 处理，保持原有“恰好一种”的口径。
+    expect(
+      new DraftHealthTagPolicy({
+        fatWetPercent: 8,
+        moisturePercent: 60,
+        animalSpecies: ['鸭'],
+      }).isAllowedTag('单一动物蛋白'),
     ).toBe(true);
   });
 

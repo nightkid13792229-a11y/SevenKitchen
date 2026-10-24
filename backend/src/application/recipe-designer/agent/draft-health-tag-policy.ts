@@ -18,6 +18,11 @@ export interface DraftHealthTagPolicyInput {
   moisturePercent: number | null;
   /** 菜品里出现的动物物种（可能含重复/大小写差异）。 */
   animalSpecies: string[];
+  /**
+   * 是否有 PROTEIN / ORGAN 项识别不出物种；缺省按 false（兼容旧调用）。
+   * true 时「单一动物蛋白」必须 fail closed。
+   */
+  unknownAnimalProtein?: boolean;
 }
 
 /**
@@ -39,11 +44,13 @@ export class DraftHealthTagPolicy implements HealthTagPolicy {
   private readonly fatWetPercent: number | null;
   private readonly moisturePercent: number | null;
   private readonly animalSpecies: string[];
+  private readonly unknownAnimalProtein: boolean;
 
   constructor(input: DraftHealthTagPolicyInput) {
     this.fatWetPercent = input.fatWetPercent;
     this.moisturePercent = input.moisturePercent;
     this.animalSpecies = input.animalSpecies;
+    this.unknownAnimalProtein = input.unknownAnimalProtein ?? false;
   }
 
   isAllowedTag(name: string): boolean {
@@ -54,7 +61,8 @@ export class DraftHealthTagPolicy implements HealthTagPolicy {
         }
         return this.fatWetPercent <= lowFatLimit(this.moisturePercent);
       case '单一动物蛋白':
-        return this.countAnimalSpecies() === 1;
+        // 有识别不出的蛋白项时不能认定“单一”：宁可少挂，不可误挂。
+        return !this.unknownAnimalProtein && this.countAnimalSpecies() === 1;
       case '易消化':
         // 只能人工挂：AI 无法举证“易消化”。
         return false;

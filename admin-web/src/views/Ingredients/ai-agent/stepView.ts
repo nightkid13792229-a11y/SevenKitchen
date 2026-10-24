@@ -79,6 +79,12 @@ const TOOL_LABELS: Record<string, string> = {
   runCheck: '跑终检'
 }
 
+/** 工具名 → 页面中文名；未知工具原样返回，不抛错。 */
+export function toolLabel(name: string): string {
+  const trimmed = name.trim()
+  return TOOL_LABELS[trimmed] ?? (trimmed || UNKNOWN_TOOL_LABEL)
+}
+
 /** 摘要是一行，太长就截断，避免一条参数把页面撑坏。 */
 const SUMMARY_MAX = 120
 
@@ -318,7 +324,7 @@ export function toStepView(
       typeof call?.name === 'string' && call.name.trim()
         ? call.name.trim()
         : UNKNOWN_TOOL_LABEL
-    const label = TOOL_LABELS[name] ?? name
+    const label = toolLabel(name)
     const args = asRecord(call?.args)
     const ok = call?.ok === true
     // 查库零命中时，摘要与标签都要说「没有找到」，不能因为工具 ok 就写成功。

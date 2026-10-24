@@ -37,125 +37,69 @@
             <div v-if="run.error" class="agent-run__failure">
               <div class="agent-run__failure-head">
                 <el-tag type="danger" size="small" effect="plain">失败</el-tag>
-                <span>这一轮没有跑完</span>
+                <span v-if="run.steps.length > 0">
+                  这一轮中断了，已保留上面收到的 {{ run.steps.length }} 步
+                </span>
+                <span v-else>这一轮没有跑完</span>
               </div>
               <p class="agent-run__failure-text">{{ run.error }}</p>
             </div>
 
-            <template v-else-if="run.result">
-              <div class="agent-run__meta">
-                <span>草稿 {{ run.result.draftId }}</span>
-                <span>steps {{ run.result.steps }}</span>
-                <span>{{ modeLabel(run.result.mode) }}</span>
-                <span>工具调用 {{ run.steps.length }} 次</span>
-              </div>
+            <div v-if="run.meta" class="agent-run__meta">
+              <span>草稿 {{ run.draftId || state.draftId }}</span>
+              <span>steps {{ run.meta.steps }}</span>
+              <span>工具调用 {{ run.meta.toolCallCount }} 次</span>
+            </div>
 
-              <div v-if="run.steps.length > 0" class="agent-steps">
-                <div
-                  v-for="(step, index) in run.steps"
-                  :key="index"
-                  class="agent-step"
-                  :class="{
-                    'agent-step--failed': !step.ok,
-                    'agent-step--empty': step.statusType === 'warning'
-                  }"
-                >
-                  <span class="agent-step__index">{{ index + 1 }}</span>
-                  <div class="agent-step__body">
-                    <div class="agent-step__head">
-                      <b class="agent-step__label">{{ step.label }}</b>
-                      <span class="agent-step__summary">{{ step.summary }}</span>
-                      <el-tag
-                        size="small"
-                        effect="plain"
-                        :type="
-                          step.statusType || (step.ok ? 'success' : 'danger')
-                        "
-                      >
-                        {{ step.statusLabel || (step.ok ? '成功' : '失败') }}
-                      </el-tag>
-                    </div>
-                    <p v-if="!step.ok" class="agent-step__error">
-                      {{ step.error || '工具执行失败（后端没有给出原因）' }}
-                    </p>
-                    <details v-if="step.search" class="agent-step__evidence">
-                      <summary class="agent-step__evidence-summary">
-                        匹配依据 · {{ step.search.message }}
-                      </summary>
-                      <div class="agent-step__evidence-body">
-                        <div class="agent-step__keywords">
-                          <span>本次关键词：</span>
-                          <el-tag
-                            v-for="keyword in step.search.keywords"
-                            :key="keyword"
-                            size="small"
-                            effect="plain"
-                          >
-                            {{ keyword }}
-                          </el-tag>
-                        </div>
-                        <p v-if="!step.search.found" class="agent-step__empty">
-                          没有找到匹配词条
-                        </p>
-                        <ul v-else class="agent-step__matches">
-                          <li
-                            v-for="(match, matchIndex) in step.search.matches"
-                            :key="matchIndex"
-                            class="agent-step__match"
-                          >
-                            <span class="agent-step__match-name">
-                              {{ match.foodName }}
-                            </span>
-                            <span
-                              v-if="
-                                match.foodNameEn &&
-                                match.foodNameEn !== match.foodName
-                              "
-                              class="agent-step__match-en"
-                            >
-                              {{ match.foodNameEn }}
-                            </span>
-                            <el-tag size="small" effect="plain" type="info">
-                              {{ match.matchedByLabel }}
-                            </el-tag>
-                            <span class="agent-step__match-meta">
-                              关键词「{{ match.matchedKeyword }}」
-                            </span>
-                            <span class="agent-step__match-meta">
-                              分数 {{ match.scoreLabel }}
-                            </span>
-                          </li>
-                        </ul>
-                        <p
-                          v-if="
-                            step.search.found &&
-                            step.search.totalCount > step.search.matches.length
-                          "
-                          class="agent-step__match-more"
-                        >
-                          共 {{ step.search.totalCount }} 条，这里显示前
-                          {{ step.search.matches.length }} 条。
-                        </p>
-                      </div>
-                    </details>
+            <div v-if="run.steps.length > 0" class="agent-steps">
+              <div
+                v-for="step in run.steps"
+                :key="step.index"
+                class="agent-step"
+                :class="{
+                  'agent-step--running': step.status === 'running',
+                  'agent-step--failed': step.status === 'failed',
+                  'agent-step--empty': step.found === false
+                }"
+              >
+                <span class="agent-step__index">{{ step.index }}</span>
+                <div class="agent-step__body">
+                  <div class="agent-step__head">
+                    <b class="agent-step__label">{{ step.label }}</b>
+                    <span v-if="stepSummary(step)" class="agent-step__summary">
+                      {{ stepSummary(step) }}
+                    </span>
+                    <el-tag
+                      size="small"
+                      effect="plain"
+                      :type="stepTagType(step)"
+                    >
+                      {{ stepTagLabel(step) }}
+                    </el-tag>
                   </div>
+                  <p v-if="step.resultSummary" class="agent-step__result">
+                    {{ step.resultSummary }}
+                  </p>
+                  <p v-if="step.status === 'failed'" class="agent-step__error">
+                    {{ step.error || '工具执行失败（后端没有给出原因）' }}
+                  </p>
                 </div>
               </div>
+            </div>
 
-              <p v-else class="agent-run__no-tools">
-                这一轮没有调用工具，AI 直接回答了。
-              </p>
+            <p v-else-if="run.reply" class="agent-run__no-tools">
+              这一轮没有调用工具，AI 直接回答了。
+            </p>
 
-              <div class="agent-run__reply">
-                <span class="agent-run__role agent-run__role--ai">AI</span>
-                <p class="agent-run__reply-text">{{ run.result.reply }}</p>
-              </div>
-            </template>
-          </div>
+            <div v-if="run.reply" class="agent-run__reply">
+              <span class="agent-run__role agent-run__role--ai">AI</span>
+              <p class="agent-run__reply-text">{{ run.reply }}</p>
+            </div>
 
-          <div v-if="state.running" class="agent-typing">
-            <span class="agent-typing__dot" aria-hidden="true"></span>
-            AI 正在调用工具…
+            <div v-if="run.running" class="agent-typing">
+              <span class="agent-typing__dot" aria-hidden="true"></span>
+              AI 正在执行…
+            </div>
           </div>
         </div>
 
@@ -593,7 +537,6 @@ import { getApiErrorMessage } from '@/utils/apiError'
 import type {
   CommitIngredientCreationResult,
   FinalCheckResult,
-  IngredientAgentRunResult,
   IngredientCreationDraft,
   IngredientCreationDraftPayload,
   IngredientDraft,
@@ -614,7 +557,12 @@ import {
   type ProfileFieldRow,
   type ProfileGroup
 } from './draftReview'
-import { toStepView, type AgentStepView } from './stepView'
+import {
+  streamIngredientAgent,
+  type AgentStreamMeta,
+  type AgentStreamState,
+  type AgentStreamStep
+} from './agentStream'
 
 /**
  * Agent 审核页：
@@ -626,9 +574,13 @@ import { toStepView, type AgentStepView } from './stepView'
 interface AgentRunRecord {
   id: number
   text: string
-  result: IngredientAgentRunResult | null
-  steps: AgentStepView[]
+  /** 边跑边追加：step_start 先落一行「执行中」，step_end 改成成功 / 失败 */
+  steps: AgentStreamStep[]
+  reply: string | null
+  draftId: string | null
+  meta: AgentStreamMeta | null
   error: string | null
+  running: boolean
 }
 
 const router = useRouter()
@@ -768,8 +720,29 @@ const submitHint = computed(() => {
   return '提交会先跑终检；有阻断项就停下，不会写正式数据。'
 })
 
-function modeLabel(mode: IngredientAgentRunResult['mode']): string {
-  return mode === 'JSON_ACTION' ? 'json' : 'function calling'
+function stepTagType(
+  step: AgentStreamStep
+): 'info' | 'success' | 'warning' | 'danger' {
+  if (step.status === 'running') return 'info'
+  if (step.status === 'failed') return 'danger'
+  return step.found === false ? 'warning' : 'success'
+}
+
+function stepTagLabel(step: AgentStreamStep): string {
+  if (step.status === 'running') return '正在执行'
+  if (step.status === 'failed') return '失败'
+  return step.found === false ? '未找到' : '成功'
+}
+
+/** 后端 summary 已带中文动作（如「查本地库 西洋菜·生」），去掉与 label 重复的前缀。 */
+function stepSummary(step: AgentStreamStep): string {
+  const summary = step.summary.trim()
+  for (const prefix of [`调用 ${step.label}`, step.label]) {
+    if (prefix && summary.startsWith(prefix)) {
+      return summary.slice(prefix.length).replace(/^[\s·:：-]+/, '')
+    }
+  }
+  return summary
 }
 
 function shortId(value: string): string {
@@ -828,30 +801,52 @@ async function handleRun() {
   const run = reactive<AgentRunRecord>({
     id: ++runSeq,
     text,
-    result: null,
     steps: [],
-    error: null
+    reply: null,
+    draftId: null,
+    meta: null,
+    error: null,
+    running: true
   })
   state.runs.push(run)
   await scrollToBottom()
 
+  const applyState = (next: AgentStreamState) => {
+    run.steps = next.steps
+    run.reply = next.reply
+    run.draftId = next.draftId
+    run.meta = next.meta
+    run.error = next.error
+    if (next.draftId) {
+      state.draftId = next.draftId
+    }
+  }
+
   try {
-    const result = await ingredientCreationApi.runAgent({
-      ...(state.draftId ? { draftId: state.draftId } : {}),
-      text
-    })
-    run.result = result
-    run.steps = toStepView(
-      Array.isArray(result?.toolCalls) ? result.toolCalls : []
+    // 直接读 ReadableStream：step_start 一到就渲染「执行中」，
+    // step_end 再改成成功 / 失败；断网时 next.steps 已经是收到的那几步。
+    const finalState = await streamIngredientAgent(
+      {
+        ...(state.draftId ? { draftId: state.draftId } : {}),
+        text
+      },
+      {
+        onState: (next) => {
+          applyState(next)
+          void scrollToBottom()
+        }
+      }
     )
-    if (typeof result?.draftId === 'string' && result.draftId) {
-      state.draftId = result.draftId
+    applyState(finalState)
+    if (finalState.draftId) {
       // 每跑完一轮都重新读草稿：右边两个标签永远显示服务端最新版本。
-      await loadDraft(result.draftId)
+      await loadDraft(finalState.draftId)
     }
   } catch (error) {
-    run.error = getApiErrorMessage(error, '请求失败，请稍后重试。')
+    // 流式函数本身不抛错；这里是防御性兜底，且不清空已经收到的步骤。
+    run.error = getApiErrorMessage(error, '流式请求失败，已保留收到的步骤。')
   } finally {
+    run.running = false
     state.running = false
     await scrollToBottom()
   }
@@ -1285,6 +1280,25 @@ function goBackToList() {
   background: var(--el-color-warning-light-9);
 }
 
+.agent-step--running {
+  border-color: var(--el-color-primary-light-5);
+  background: var(--el-color-primary-light-9);
+}
+
+.agent-step--running .agent-step__index {
+  animation: agent-step-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes agent-step-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
 .agent-step__index {
   flex: none;
   width: 20px;
@@ -1323,6 +1337,13 @@ function goBackToList() {
 .agent-step__summary {
   font-size: 13px;
   color: var(--el-text-color-regular);
+  word-break: break-word;
+}
+
+.agent-step__result {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
   word-break: break-word;
 }
 

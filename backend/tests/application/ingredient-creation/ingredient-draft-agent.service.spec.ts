@@ -39,6 +39,7 @@ const BASE_URL = 'https://api.deepseek.test';
 const MODEL = 'deepseek-v4-flash';
 const REVIEW_MODEL = 'deepseek-v4-pro';
 const AGENT_PATH = '/api/v1/admin/ingredient-creation/agent/run';
+const AGENT_STREAM_PATH = '/api/v1/admin/ingredient-creation/agent/stream';
 
 const CANDIDATE_RESULT: CandidateSearchResult = {
   keywords: ['鸡肝', 'Chicken liver'],
@@ -1391,6 +1392,140 @@ describe('IngredientDraftAgentService · 工具循环', () => {
 
     expect(requestBody(fetchMock, 0).max_tokens).toBe(8000);
   });
+
+  it('流式回调：3 次工具调用按 step_start → step_end → … → reply → done 发事件', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'searchLocalNutrition',
+            { keyword: '西洋菜', state: 'RAW' },
+            'call_search',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'updateNutritionField',
+            {
+              profileIndex: 0,
+              fieldPath: 'macros.crudeProtein',
+              value: 19.5,
+              unit: 'g',
+              sourceRecordId: 'rec-liver-raw',
+            },
+            'call_write',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(assistantToolCall('runCheck', {}, 'call_check')),
+      )
+      .mockResolvedValueOnce(chatResponse(assistantReply('三步都跑完了。')));
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness({
+      sourceRecords: [
+        {
+          id: 'rec-liver-raw',
+          status: 'ACTIVE',
+          foodName: 'Chicken, liver, raw',
+          normalizedNutrition: { meta: { sampleState: 'RAW' } },
+        },
+      ],
+    });
+
+    const events: any[] = [];
+    const input = {
+      draftId: DRAFT_ID,
+      text: '帮我加西洋菜',
+      userId: 'admin-1',
+      onEvent: (event: any) => events.push(event),
+    };
+    const result = await harness.agent.run(input);
+
+    expect(events.map((event) => event.type)).toEqual([
+      'step_start',
+      'step_end',
+      'step_start',
+      'step_end',
+      'step_start',
+      'step_end',
+      'reply',
+      'done',
+    ]);
+    expect(events[0]).toMatchObject({
+      type: 'step_start',
+      index: 1,
+      name: 'searchLocalNutrition',
+    });
+    expect(events[0].summary).toBe('查本地库 西洋菜·生');
+    expect(events[1]).toMatchObject({
+      type: 'step_end',
+      index: 1,
+      ok: true,
+      found: true,
+    });
+    expect(events[1].resultSummary).toContain('命中');
+    expect(events[2]).toMatchObject({
+      type: 'step_start',
+      index: 2,
+      name: 'updateNutritionField',
+    });
+    expect(events[2].summary).toBe('写字段 粗蛋白 = 19.5 g');
+    expect(events[3]).toMatchObject({
+      type: 'step_end',
+      index: 2,
+      ok: true,
+    });
+    expect(events[3].found).toBeUndefined();
+    expect(events[4]).toMatchObject({
+      type: 'step_start',
+      index: 3,
+      name: 'runCheck',
+    });
+    expect(events[4].summary).toBe('跑终检');
+    expect(events[5]).toMatchObject({
+      type: 'step_end',
+      index: 3,
+      ok: true,
+    });
+    expect(events[6]).toMatchObject({
+      type: 'reply',
+      reply: '三步都跑完了。',
+      draftId: DRAFT_ID,
+      steps: 4,
+      toolCallCount: 3,
+    });
+    expect(events[7]).toEqual({ type: 'done' });
+    expect(result.toolCallCount).toBe(3);
+  });
+
+  it('流式回调：模型失败时只发 error，不带 done；原异常仍按 503 抛出', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('network down'))
+      .mockRejectedValueOnce(new Error('network down'));
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    const events: any[] = [];
+
+    await expect(
+      harness.agent.run({
+        draftId: DRAFT_ID,
+        text: '鸡肝',
+        userId: 'admin-1',
+        onEvent: (event: any) => events.push(event),
+      } as never),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+
+    expect(events.map((event) => event.type)).toEqual(['error']);
+    expect(events[0].message).toBe('AI 暂时不可用，请稍后重试');
+    expect(events.some((event) => event.type === 'done')).toBe(false);
+  });
 });
 
 describe('POST /api/v1/admin/ingredient-creation/agent/run', () => {
@@ -1487,5 +1622,176 @@ describe('POST /api/v1/admin/ingredient-creation/agent/run', () => {
       .expect(400);
 
     expect(agentService.run).not.toHaveBeenCalled();
+  });
+
+  it('流式接口未登录 → 401', async () => {
+    await http().post(AGENT_STREAM_PATH).send({ text: '鸡肝' }).expect(401);
+
+    expect(agentService.run).not.toHaveBeenCalled();
+  });
+
+  it('流式接口返回 text/event-stream，逐条 flush 事件并以 done 收尾', async () => {
+    agentService.run.mockImplementation(async (input: any) => {
+      expect(typeof input.onEvent).toBe('function');
+      input.onEvent({
+        type: 'step_start',
+        index: 1,
+        name: 'runCheck',
+        summary: '跑终检',
+      });
+      input.onEvent({
+        type: 'step_end',
+        index: 1,
+        ok: true,
+        resultSummary: '终检通过',
+      });
+      input.onEvent({
+        type: 'reply',
+        reply: '好了。',
+        draftId: DRAFT_ID,
+        steps: 2,
+        toolCallCount: 1,
+      });
+      input.onEvent({ type: 'done' });
+      return {
+        draftId: DRAFT_ID,
+        reply: '好了。',
+        toolCalls: [],
+        steps: 2,
+        toolCallCount: 1,
+        transcript: [],
+        mode: 'FUNCTION_CALLING',
+        stopReason: null,
+      } as IngredientAgentRunResult;
+    });
+
+    const response = await http()
+      .post(AGENT_STREAM_PATH)
+      .set('Authorization', 'Bearer admin-token')
+      .send({ draftId: DRAFT_ID, text: '鸡肝' })
+      .buffer(true)
+      .parse((res: any, callback: any) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+        res.on('end', () =>
+          callback(null, Buffer.concat(chunks).toString('utf8')),
+        );
+      })
+      .expect(200);
+
+    expect(String(response.headers['content-type'])).toContain(
+      'text/event-stream',
+    );
+    expect(agentService.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        draftId: DRAFT_ID,
+        text: '鸡肝',
+        userId: 'admin-1',
+        onEvent: expect.any(Function),
+      }),
+    );
+
+    const frames = String(response.body)
+      .split('\n\n')
+      .map((frame) => frame.trim())
+      .filter(Boolean);
+    const events = frames.map((frame) => {
+      expect(frame.startsWith('data: ')).toBe(true);
+      return JSON.parse(frame.slice('data: '.length));
+    });
+    expect(events.map((event) => event.type)).toEqual([
+      'step_start',
+      'step_end',
+      'reply',
+      'done',
+    ]);
+    expect(events[0]).toMatchObject({
+      type: 'step_start',
+      index: 1,
+      name: 'runCheck',
+    });
+    expect(events[1]).toMatchObject({
+      type: 'step_end',
+      index: 1,
+      ok: true,
+    });
+    expect(events[2]).toMatchObject({
+      type: 'reply',
+      draftId: DRAFT_ID,
+      steps: 2,
+      toolCallCount: 1,
+    });
+  });
+
+  it('控制器收到一条事件就写一帧（不攒到结束）', async () => {
+    const chunks: string[] = [];
+    const flush = jest.fn();
+    let ended = false;
+    const fakeResponse = {
+      setHeader: jest.fn(),
+      flushHeaders: jest.fn(),
+      on: jest.fn(),
+      flush,
+      write: jest.fn((chunk: string) => {
+        chunks.push(chunk);
+        return true;
+      }),
+      end: jest.fn(() => {
+        ended = true;
+      }),
+      get writableEnded() {
+        return ended;
+      },
+    };
+
+    agentService.run.mockImplementation(async (input: any) => {
+      input.onEvent({
+        type: 'step_start',
+        index: 1,
+        name: 'runCheck',
+        summary: '跑终检',
+      });
+      // 工具还没结束，第一帧必须已经写出去了。
+      expect(chunks).toHaveLength(1);
+      input.onEvent({
+        type: 'step_end',
+        index: 1,
+        ok: true,
+        resultSummary: '终检通过',
+      });
+      expect(chunks).toHaveLength(2);
+      input.onEvent({
+        type: 'reply',
+        reply: '好了。',
+        draftId: DRAFT_ID,
+        steps: 1,
+        toolCallCount: 1,
+      });
+      input.onEvent({ type: 'done' });
+      return {
+        draftId: DRAFT_ID,
+        reply: '好了。',
+        toolCalls: [],
+        steps: 1,
+        toolCallCount: 1,
+        transcript: [],
+        mode: 'FUNCTION_CALLING',
+        stopReason: null,
+      } as IngredientAgentRunResult;
+    });
+
+    const controller = app.get(IngredientCreationController);
+    await controller.streamAgent(
+      { draftId: DRAFT_ID, text: '鸡肝' },
+      { userId: 'admin-1', customerId: 'admin-1', role: 'ADMIN' },
+      fakeResponse as never,
+    );
+
+    expect(chunks).toHaveLength(4);
+    expect(flush).toHaveBeenCalledTimes(4);
+    expect(chunks[0]).toBe(
+      'data: {"type":"step_start","index":1,"name":"runCheck","summary":"跑终检"}\n\n',
+    );
+    expect(ended).toBe(true);
   });
 });

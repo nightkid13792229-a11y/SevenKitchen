@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  HttpException,
   Injectable,
   Logger,
   ServiceUnavailableException,
@@ -91,10 +92,7 @@ export interface AgentTranscriptEntry {
  * - `NO_PROGRESS`：连续多次工具调用没有新进展的软停止。
  */
 export type IngredientAgentStopReason =
-  | 'TOOL_CALL_LIMIT'
-  | 'TIMEOUT'
-  | 'TOKEN_BUDGET'
-  | 'NO_PROGRESS';
+  'TOOL_CALL_LIMIT' | 'TIMEOUT' | 'TOKEN_BUDGET' | 'NO_PROGRESS';
 
 export interface IngredientAgentRunResult {
   draftId: string;
@@ -130,10 +128,48 @@ export function resolveIngredientAgentTokenBudget(
     : INGREDIENT_AGENT_DEFAULT_TOKEN_BUDGET;
 }
 
+/**
+ * 流式运行事件（SSE `data:` 的 JSON）。
+ *
+ * 一次工具调用固定成对出现：先 `step_start`（页面立刻显示「执行中」），
+ * 执行完再 `step_end`（页面改成成功 / 失败）。`reply` 是最终总结，
+ * 正常结束时最后一条是 `done`；失败时只发 `error`，不发 `done`。
+ */
+export type IngredientAgentStreamEvent =
+  | {
+      type: 'step_start';
+      index: number;
+      name: string;
+      summary: string;
+    }
+  | {
+      type: 'step_end';
+      index: number;
+      ok: boolean;
+      found?: boolean;
+      resultSummary: string;
+      error?: string;
+    }
+  | {
+      type: 'reply';
+      reply: string;
+      draftId: string;
+      steps: number;
+      toolCallCount: number;
+    }
+  | { type: 'done' }
+  | { type: 'error'; message: string };
+
 export interface RunIngredientAgentInput {
   draftId?: string;
   text: string;
   userId: string;
+  /**
+   * 边跑边回调；非流式接口不传，行为与以前完全一致。
+   *
+   * 回调抛错（例如客户端已断开）不会中断起草循环。
+   */
+  onEvent?: (event: IngredientAgentStreamEvent) => void;
 }
 
 interface AgentToolCallPayload {
@@ -275,6 +311,219 @@ function buildToolCallRecord(
 function deriveDraftName(text: string): string {
   const firstLine = text.split(/\r?\n/)[0].trim();
   return truncate(firstLine || '未命名原料', 60);
+}
+
+/** 事件摘要都是一行，太长会撑坏左侧对话面板。 */
+const STEP_SUMMARY_MAX = 120;
+
+function readTextValue(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function readDisplayValue(value: unknown): string {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
+  }
+  if (typeof value === 'string' && value.trim()) {
+    return value.trim();
+  }
+  return '—';
+}
+
+function oneLine(value: string, max = STEP_SUMMARY_MAX): string {
+  return truncate(value.replace(/\s+/g, ' ').trim(), max);
+}
+
+function fieldLabel(fieldPath: string): string {
+  if (!fieldPath) {
+    return '（未填字段）';
+  }
+  return (
+    NUTRITION_FIELD_CATALOG.find((field) => field.fieldPath === fieldPath)
+      ?.label ?? fieldPath
+  );
+}
+
+/** 原料卡字段 → 中文，与页面同口径。 */
+const INGREDIENT_STEP_FIELD_LABELS: Record<string, string> = {
+  name: '名称',
+  nameEn: '英文名',
+  category: '类别',
+  baseUnit: '基准单位',
+  unitDisplayLabel: '展示名',
+  cfctClass: 'CFCT',
+  edibleYieldPercent: '可食部',
+};
+
+/**
+ * 工具调用开始时的中文摘要，例如「查本地库 西洋菜·生」。
+ *
+ * 只做展示，不参与任何校验；模型传入未知工具 / 奇怪参数也不能抛错。
+ */
+export function buildToolStepSummary(
+  name: string,
+  args: Record<string, unknown>,
+): string {
+  switch (name) {
+    case 'searchLocalNutrition': {
+      const keyword = readTextValue(args.keyword) || '（未填关键词）';
+      const state = readTextValue(args.state);
+      const stateLabel =
+        state === 'COOKED' ? '熟' : state === 'RAW' || !state ? '生' : state;
+      return oneLine(`查本地库 ${keyword}·${stateLabel}`);
+    }
+    case 'getNutritionRecord': {
+      return oneLine(
+        `读来源记录 ${readTextValue(args.sourceRecordId) || '（未填来源记录）'}`,
+      );
+    }
+    case 'updateNutritionField': {
+      const fieldPath = readTextValue(args.fieldPath);
+      const field = NUTRITION_FIELD_CATALOG.find(
+        (candidate) => candidate.fieldPath === fieldPath,
+      );
+      const unit = readTextValue(args.unit) || field?.unit || '';
+      const label = field?.label || fieldPath || '（未填字段）';
+      return oneLine(
+        `写字段 ${label} = ${readDisplayValue(args.value)}${
+          unit ? ` ${unit}` : ''
+        }`,
+      );
+    }
+    case 'updateNutritionFields': {
+      const entries = Array.isArray(args.entries) ? args.entries.length : 0;
+      return oneLine(
+        `批量写字段 档案 ${readDisplayValue(args.profileIndex)} · ${entries} 项`,
+      );
+    }
+    case 'updateIngredientFields': {
+      const parts = Object.entries(args)
+        .filter(([key]) => key in INGREDIENT_STEP_FIELD_LABELS)
+        .map(
+          ([key, value]) =>
+            `${INGREDIENT_STEP_FIELD_LABELS[key]}=${readDisplayValue(value)}`,
+        );
+      return oneLine(`改原料卡 ${parts.join(' · ') || '（无字段）'}`);
+    }
+    case 'runCheck':
+      return '跑终检';
+    default: {
+      try {
+        const argsText = JSON.stringify(args);
+        return oneLine(
+          `调用 ${name}${argsText && argsText !== '{}' ? ` ${argsText}` : ''}`,
+        );
+      } catch {
+        return oneLine(`调用 ${name}`);
+      }
+    }
+  }
+}
+
+/** 工具结束时的结果摘要；失败时统一写「执行失败」，具体原因放 error 字段。 */
+export function buildToolResultSummary(
+  name: string,
+  execution: { ok: boolean; content: string },
+): string {
+  if (!execution.ok) {
+    return '执行失败';
+  }
+  const result = parseToolResult(execution.content);
+  if (!isRecord(result)) {
+    return '完成';
+  }
+
+  switch (name) {
+    case 'searchLocalNutrition': {
+      if (result.found !== true) {
+        return '没有找到匹配词条';
+      }
+      const count =
+        typeof result.candidateCount === 'number' ? result.candidateCount : 0;
+      return count > 0 ? `命中 ${count} 条` : '命中';
+    }
+    case 'getNutritionRecord': {
+      const record = isRecord(result.record) ? result.record : null;
+      const count =
+        record && Array.isArray(record.values) ? record.values.length : 0;
+      return count > 0 ? `读到 ${count} 项营养值` : '没有可用的营养值';
+    }
+    case 'updateNutritionField': {
+      const fieldPath = readTextValue(result.fieldPath);
+      return fieldPath ? `已写入 ${fieldLabel(fieldPath)}` : '已写入';
+    }
+    case 'updateNutritionFields': {
+      const applied = typeof result.applied === 'number' ? result.applied : 0;
+      const failed = Array.isArray(result.failed) ? result.failed.length : 0;
+      return failed > 0
+        ? `写入 ${applied} 项，失败 ${failed} 项`
+        : `写入 ${applied} 项`;
+    }
+    case 'updateIngredientFields': {
+      const changed = Array.isArray(result.changed) ? result.changed.length : 0;
+      const skipped = Array.isArray(result.skipped) ? result.skipped.length : 0;
+      if (changed === 0) {
+        return skipped > 0
+          ? `没有改动，跳过 ${skipped} 个字段`
+          : '没有字段需要更新';
+      }
+      return skipped > 0
+        ? `更新 ${changed} 个字段，跳过 ${skipped} 个`
+        : `更新 ${changed} 个字段`;
+    }
+    case 'runCheck': {
+      const counts = isRecord(result.counts) ? result.counts : {};
+      if (result.passed === true) {
+        const warnings =
+          typeof counts.warnings === 'number' ? counts.warnings : 0;
+        return `终检通过（${warnings} 条提醒）`;
+      }
+      const blocking =
+        typeof counts.blocking === 'number' ? counts.blocking : 0;
+      return `终检未通过（${blocking} 项拦死）`;
+    }
+    default:
+      return '完成';
+  }
+}
+
+/** 只有查库需要区分「工具成功」与「真的找到数据」。 */
+function readToolFound(
+  name: string,
+  execution: { ok: boolean; content: string },
+): boolean | undefined {
+  if (name !== 'searchLocalNutrition' || !execution.ok) {
+    return undefined;
+  }
+  return readSearchOutcome(execution.content)?.found;
+}
+
+/** 流式错误事件要给人看：HTTP 异常取业务文案，其余一律按 AI 暂不可用兜底。 */
+function readStreamErrorMessage(error: unknown): string {
+  if (error instanceof HttpException) {
+    const response = error.getResponse();
+    if (typeof response === 'string' && response.trim()) {
+      return response.trim();
+    }
+    if (isRecord(response)) {
+      const message = response.message;
+      if (typeof message === 'string' && message.trim()) {
+        return message.trim();
+      }
+      if (Array.isArray(message)) {
+        const text = message
+          .filter((entry): entry is string => typeof entry === 'string')
+          .join('；');
+        if (text) {
+          return text;
+        }
+      }
+    }
+    if (error.message.trim()) {
+      return error.message.trim();
+    }
+  }
+  return AI_TEMPORARILY_UNAVAILABLE_MESSAGE;
 }
 
 function isAbortError(error: unknown): boolean {
@@ -634,7 +883,109 @@ export class IngredientDraftAgentService {
     private readonly draftService: IngredientCreationDraftService,
   ) {}
 
-  async run(input: RunIngredientAgentInput): Promise<IngredientAgentRunResult> {
+  /**
+   * 跑一轮起草。
+   *
+   * 传了 `onEvent` 就边跑边推流；不传时行为与旧的非流式接口完全一致。
+   * `reply` / `done` 只在成功收尾时发；任何异常都先发 `error` 再把原异常抛给
+   * 非流式调用方（流式控制器会吞掉，避免已发出的错误再变成 HTTP 500）。
+   */
+  async run(
+    input: RunIngredientAgentInput,
+    onEvent?: (event: IngredientAgentStreamEvent) => void,
+  ): Promise<IngredientAgentRunResult> {
+    // 兼容两种接法：把回调放进 input，或作为第二个参数传入。
+    const effectiveInput = onEvent ? { ...input, onEvent } : input;
+    try {
+      const result = await this.runLoop(effectiveInput);
+      this.emitEvent(effectiveInput.onEvent, {
+        type: 'reply',
+        reply: result.reply,
+        draftId: result.draftId,
+        steps: result.steps,
+        toolCallCount: result.toolCallCount,
+      });
+      this.emitEvent(effectiveInput.onEvent, { type: 'done' });
+      return result;
+    } catch (error) {
+      this.emitEvent(effectiveInput.onEvent, {
+        type: 'error',
+        message: readStreamErrorMessage(error),
+      });
+      throw error;
+    }
+  }
+
+  private emitEvent(
+    onEvent: RunIngredientAgentInput['onEvent'],
+    event: IngredientAgentStreamEvent,
+  ): void {
+    if (!onEvent) {
+      return;
+    }
+    try {
+      onEvent(event);
+    } catch (error) {
+      // 页面关了 / 网络断了不应该让 AI 循环崩掉；事件是展示层的旁路。
+      const reason = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `[ingredient-agent] 流式事件发送失败（客户端可能已断开）：${reason}`,
+      );
+    }
+  }
+
+  /**
+   * 执行一次工具调用，并在开始 / 结束时各发一条事件。
+   *
+   * 参数解析失败也走这里：页面仍能看到这一步「开始 → 失败」，
+   * 而不是整轮只剩一句最终报错。
+   */
+  private async executeToolStep(input: {
+    onEvent: RunIngredientAgentInput['onEvent'];
+    index: number;
+    name: string;
+    args: Record<string, unknown>;
+    runId: string;
+    draftId: string;
+    parseError?: string | null;
+  }): Promise<AgentToolExecution> {
+    this.emitEvent(input.onEvent, {
+      type: 'step_start',
+      index: input.index,
+      name: input.name,
+      summary: buildToolStepSummary(input.name, input.args),
+    });
+
+    const execution: AgentToolExecution = input.parseError
+      ? {
+          ok: false,
+          error: input.parseError,
+          content: JSON.stringify({ ok: false, error: input.parseError }),
+          durationMs: 0,
+        }
+      : await this.toolsService.execute({
+          runId: input.runId,
+          draftId: input.draftId,
+          name: input.name,
+          args: input.args,
+        });
+
+    const found = readToolFound(input.name, execution);
+    this.emitEvent(input.onEvent, {
+      type: 'step_end',
+      index: input.index,
+      ok: execution.ok,
+      resultSummary: buildToolResultSummary(input.name, execution),
+      ...(found === undefined ? {} : { found }),
+      ...(execution.error ? { error: execution.error } : {}),
+    });
+
+    return execution;
+  }
+
+  private async runLoop(
+    input: RunIngredientAgentInput,
+  ): Promise<IngredientAgentRunResult> {
     const text = typeof input.text === 'string' ? input.text.trim() : '';
     if (!text) {
       throw new BadRequestException('请输入要添加的原料');
@@ -803,19 +1154,15 @@ export class IngredientDraftAgentService {
             args,
           });
 
-          const execution = parseError
-            ? {
-                ok: false,
-                error: parseError,
-                content: JSON.stringify({ ok: false, error: parseError }),
-                durationMs: 0,
-              }
-            : await this.toolsService.execute({
-                runId,
-                draftId: draft.id,
-                name: toolName,
-                args,
-              });
+          const execution = await this.executeToolStep({
+            onEvent: input.onEvent,
+            index: toolCallCount,
+            name: toolName,
+            args,
+            runId,
+            draftId: draft.id,
+            parseError,
+          });
 
           toolCalls.push(
             buildToolCallRecord(
@@ -923,11 +1270,13 @@ export class IngredientDraftAgentService {
         args,
       });
 
-      const execution = await this.toolsService.execute({
-        runId,
-        draftId: draft.id,
+      const execution = await this.executeToolStep({
+        onEvent: input.onEvent,
+        index: toolCallCount,
         name: toolName,
         args,
+        runId,
+        draftId: draft.id,
       });
       toolCalls.push(
         buildToolCallRecord(toolName, args, execution, missedSearchKeywords),

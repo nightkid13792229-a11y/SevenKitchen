@@ -2,14 +2,17 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   Param,
   Patch,
   Post,
+  Res,
   UseGuards,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { Response } from 'express';
 import {
   IngredientCreationAuditService,
   type IngredientCreationAuditView,
@@ -17,6 +20,7 @@ import {
 import {
   IngredientDraftAgentService,
   type IngredientAgentRunResult,
+  type IngredientAgentStreamEvent,
 } from '../../application/ingredient-creation/ingredient-draft-agent.service';
 import { IngredientCreationCandidateService } from '../../application/ingredient-creation/ingredient-creation-candidate.service';
 import { IngredientCreationCheckService } from '../../application/ingredient-creation/ingredient-creation-check.service';
@@ -126,6 +130,54 @@ export class IngredientCreationController {
     });
 
     return new ApiResponseDto(0, 'Success', result);
+  }
+
+  @Post('agent/stream')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'AI 起草循环（SSE）：每次工具开始 / 结束立刻推一条事件，最后推 reply + done',
+  })
+  async streamAgent(
+    @Body() dto: RunIngredientAgentDto,
+    @CurrentUser() user: RequestUser,
+    @Res() res: Response,
+  ): Promise<void> {
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    // Nginx 等反代默认会缓冲响应；显式关掉，事件才能边跑边到浏览器。
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    let closed = false;
+    res.on('close', () => {
+      closed = true;
+    });
+
+    const send = (event: IngredientAgentStreamEvent) => {
+      if (closed || res.writableEnded) {
+        return;
+      }
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+      // Express 的 flush（挂载了 compression 等中间件时才有）：有就立刻推出去。
+      (res as Response & { flush?: () => void }).flush?.();
+    };
+
+    try {
+      await this.agentService.run({
+        draftId: dto.draftId,
+        text: dto.text,
+        userId: user.userId,
+        onEvent: send,
+      });
+    } catch {
+      // 服务在抛错前已经发过 error 事件；这里只负责收尾，避免重复推一条。
+    } finally {
+      if (!res.writableEnded) {
+        res.end();
+      }
+    }
   }
 
   @Get('audits/:ingredientId')

@@ -132,7 +132,7 @@ git commit --only <the 4 exact files> -m "feat(recipe-agent): scaffold designer 
 
 - [ ] **Step 1: 写测试（在同一个 spec 追加）**
 
-先在 spec 文件顶部加 `serviceDraft()` fixture：7 条原料，`contentRevision: 4`、`assessmentContentRevision: 4`、`totalWeightG: 900`；每条含 `ingredient: { id, name, type, properties: { cfct_class } }`、`nutritionFood: { id, name, displayNameZh, category, status }`；一条 `calculatedNutrition`（macros.moisture / macros.crudeFat 总克数）；`complianceStatus` 数组（3 条：达标/不足/缺数据）；`productionStepsJson: []`；`targetHealthTags: ['低脂']`。
+先在 spec 文件顶部加 `serviceDraft()` fixture：7 条原料，`contentRevision: 4`、`assessmentContentRevision: 4`、stored `totalWeightG: 900`（故意是过期值，适配器要按实际权重 821 重算）；每条含 `ingredient: { id, name, type, properties: { cfct_class } }`、`nutritionFood: { id, name, displayNameZh, category, status }`；每条 `nutritionFood.nutritionData` 带每 100g 的 `macros.moisture` / `macros.crudeFat`；`calculatedNutrition` 仅作 fallback；`complianceStatus` 数组（3 条：达标/不足/缺数据）；`productionStepsJson: []`；`targetHealthTags: ['低脂']`。
 
 ```ts
 it('getDraft 把草稿映射成 AgentDraftSnapshot', async () => {
@@ -148,8 +148,10 @@ it('getDraft 把草稿映射成 AgentDraftSnapshot', async () => {
   expect(draft.copy.coverTitle).toBe('鲜鸭南瓜');
   expect(draft.items.find((i) => i.name === '鸭胗')?.category).toBe('ORGAN');
   expect(draft.items.find((i) => i.name === '南瓜')?.category).toBe('VEGETABLE');
-  expect(draft.totalWeightG).toBe(900);
-  expect(draft.items[0].ratioPercent).toBe(50);
+  expect(draft.totalWeightG).toBe(821);
+  expect(draft.items[0].ratioPercent).toBe(54.8);
+  expect(draft.nutritionSummary?.fatWetPercent).toBeGreaterThan(0);
+  expect(draft.nutritionSummary?.moisturePercent).toBeGreaterThan(0);
 });
 
 it('评估版本不一致时 lastAssessment 为 null', async () => {

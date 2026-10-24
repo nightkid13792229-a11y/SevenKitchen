@@ -9,6 +9,91 @@ function createAdapter(service: any, prisma: any = {}) {
   );
 }
 
+/** 一份由用例自己拼 items 的最小草稿（其余字段取不会触发额外查询的默认值）。 */
+function draftWithItems(items: any[]) {
+  return {
+    id: 'draft-1',
+    name: '测试草稿',
+    contentRevision: 1,
+    assessmentContentRevision: null,
+    totalWeightG: 0,
+    seriesId: null,
+    fediafDogScenario: 'ADULT_MER_110',
+    coverTitle: null,
+    sellingPoint: null,
+    description: null,
+    targetHealthTags: [],
+    calculatedNutrition: null,
+    complianceStatus: [],
+    productionStepsJson: [],
+    items,
+  };
+}
+
+/**
+ * 一条草稿明细；`macros` 为每 100g 值（null 表示没有营养档案）。
+ * `includeInAssessment` 不传按“参与评估”处理（service 的默认值）。
+ */
+function simpleItem(input: {
+  id: string;
+  name: string;
+  weightG: number;
+  cfctClass: string;
+  category: string;
+  type?: 'FOOD' | 'SUPPLEMENT';
+  includeInAssessment?: boolean;
+  macros?: { moisture?: number; crudeFat?: number } | null;
+}) {
+  return {
+    id: input.id,
+    ingredientId: `ing-${input.id}`,
+    nutritionFoodId: `nf-${input.id}`,
+    weightG: input.weightG,
+    includeInAssessment: input.includeInAssessment ?? true,
+    ratioPercent: 0,
+    preparationMethod: null,
+    preparationNote: null,
+    nutrientTargetKey: null,
+    nutrientTargetValue: null,
+    sortOrder: 1,
+    ingredient: {
+      id: `ing-${input.id}`,
+      name: input.name,
+      type: input.type ?? 'FOOD',
+      properties: { cfct_class: input.cfctClass },
+    },
+    nutritionFood: {
+      id: `nf-${input.id}`,
+      name: input.name,
+      displayNameZh: input.name,
+      category: input.category,
+      status: 'VERIFIED',
+      nutritionData: input.macros
+        ? { meta: { rawBasisType: 'PER_100_G' }, macros: input.macros }
+        : null,
+    },
+  };
+}
+
+/** 一条 `listIngredientOptions` 返回的原料行（唯一营养档案已验证）。 */
+function ingredientOptionRow(input: { id: string; name: string }) {
+  return {
+    id: input.id,
+    name: input.name,
+    type: 'FOOD',
+    defaultNutritionFoodId: `nf-${input.id}`,
+    nutritionProfiles: [
+      {
+        nutritionFoodId: `nf-${input.id}`,
+        name: input.name,
+        category: 'OTHER',
+        status: 'VERIFIED',
+        isPrimary: true,
+      },
+    ],
+  };
+}
+
 /**
  * 一份判分用的真实草稿形状：7 类原料 900g 的配方，但 items 现算只有 821g。
  *
@@ -284,6 +369,7 @@ function catalogRecipe(input: {
     name: string;
     cfctClass: string;
     category: string;
+    type?: string;
   }>;
 }) {
   return {
@@ -296,6 +382,7 @@ function catalogRecipe(input: {
       exampleWeight: item.exampleWeight,
       ingredient: {
         name: item.name,
+        type: item.type ?? 'FOOD',
         properties: { cfct_class: item.cfctClass },
       },
       nutritionFood: {
@@ -392,6 +479,67 @@ describe('RecipeDesignerAgentAdapter read', () => {
     // 不是 calculatedNutrition 里的 600g / 90g。
     expect(draft.nutritionSummary?.moisturePercent).toBeCloseTo(61.3447, 3);
     expect(draft.nutritionSummary?.fatWetPercent).toBeCloseTo(9.4013, 3);
+  });
+
+  it('animalSpecies 只从蛋白/内脏类识别，果蔬菌不误判', async () => {
+    const baseItems = [
+      simpleItem({
+        id: 'duck',
+        name: '鸭腿肉',
+        weightG: 400,
+        cfctClass: '禽肉类及制品',
+        category: 'MEAT',
+      }),
+      // 名字里带「牛 / 羊 / 贝」，但都不是动物蛋白。
+      simpleItem({
+        id: 'avocado',
+        name: '牛油果',
+        weightG: 50,
+        cfctClass: '水果类及制品',
+        category: 'OTHER',
+      }),
+      simpleItem({
+        id: 'morel',
+        name: '羊肚菌',
+        weightG: 30,
+        cfctClass: '菌藻类',
+        category: 'OTHER',
+      }),
+      simpleItem({
+        id: 'pumpkin',
+        name: '贝贝南瓜',
+        weightG: 100,
+        cfctClass: '蔬菜类及制品',
+        category: 'VEGETABLE',
+      }),
+    ];
+    const service = {
+      getDraft: jest
+        .fn()
+        .mockResolvedValueOnce(draftWithItems(baseItems))
+        .mockResolvedValueOnce(
+          draftWithItems([
+            ...baseItems,
+            simpleItem({
+              id: 'chicken',
+              name: '鸡胸肉',
+              weightG: 200,
+              cfctClass: '禽肉类及制品',
+              category: 'MEAT',
+            }),
+          ]),
+        ),
+      getDraftProductionSteps: jest
+        .fn()
+        .mockResolvedValue({ draftId: 'draft-1', productionSteps: [] }),
+    };
+    const adapter = createAdapter(service);
+
+    const first = await adapter.getDraft('draft-1');
+    expect(first.animalSpecies).toEqual(['鸭']);
+
+    const second = await adapter.getDraft('draft-1');
+    expect(second.animalSpecies).toEqual(['鸭', '鸡']);
   });
 
   it('评估版本不一致时 lastAssessment 为 null', async () => {
@@ -515,6 +663,63 @@ describe('RecipeDesignerAgentAdapter read', () => {
     expect(snapshot.nutritionSummary?.fatWetPercent).toBeNull();
   });
 
+  it('总重/占比/营养汇总只算参与评估的食品（排除项与补剂不进分母）', async () => {
+    const draft = draftWithItems([
+      simpleItem({
+        id: 'included',
+        name: '鸭腿肉',
+        weightG: 100,
+        cfctClass: '禽肉类及制品',
+        category: 'MEAT',
+        macros: { moisture: 50, crudeFat: 9.5 },
+      }),
+      // 30% 脂肪的排除项：旧口径分母 = 100 + 100 + 2 = 202g，
+      // 而分子只有 9.5 + 2（补剂也进了分子）→ 11.5/202 ≈ 5.69%。
+      simpleItem({
+        id: 'excluded',
+        name: '猪肥肉',
+        weightG: 100,
+        cfctClass: '畜肉类及制品',
+        category: 'MEAT',
+        includeInAssessment: false,
+        macros: { moisture: 0, crudeFat: 30 },
+      }),
+      // 补剂按粒/片计数，克重不代表食物质量，也不进总重与分母。
+      simpleItem({
+        id: 'supplement',
+        name: '鱼油软胶囊',
+        weightG: 2,
+        cfctClass: '油脂类',
+        category: 'OIL',
+        type: 'SUPPLEMENT',
+        macros: { moisture: 0, crudeFat: 100 },
+      }),
+    ]);
+    const adapter = createAdapter({
+      getDraft: jest.fn().mockResolvedValue(draft),
+      getDraftProductionSteps: jest
+        .fn()
+        .mockResolvedValue({ draftId: 'draft-1', productionSteps: [] }),
+    });
+
+    const snapshot = await adapter.getDraft('draft-1');
+
+    // 三条都还在快照里，只有参与评估的那条进总重/占比。
+    expect(snapshot.items).toHaveLength(3);
+    expect(snapshot.nutritionSummary?.fatWetPercent).toBeCloseTo(9.5, 5);
+    expect(snapshot.nutritionSummary?.moisturePercent).toBeCloseTo(50, 5);
+    expect(snapshot.totalWeightG).toBe(100);
+    expect(
+      snapshot.items.find((item) => item.id === 'included')?.ratioPercent,
+    ).toBe(100);
+    expect(
+      snapshot.items.find((item) => item.id === 'excluded')?.ratioPercent,
+    ).toBeNull();
+    expect(
+      snapshot.items.find((item) => item.id === 'supplement')?.ratioPercent,
+    ).toBeNull();
+  });
+
   it('searchIngredients 只收已验证档案，并按七类过滤', async () => {
     const service = {
       listIngredientOptions: jest.fn().mockResolvedValue({
@@ -569,6 +774,72 @@ describe('RecipeDesignerAgentAdapter read', () => {
 
     expect(result.map((c) => c.ingredientId)).toEqual(['i1']);
     expect(result[0].cfctClass).toBe('菌藻类');
+  });
+
+  it('searchIngredients 翻完所有页，第 3 页的菌类也能找到', async () => {
+    // 食材库约 118 条 FOOD：50 + 50 + 18，目标菌类故意放在第 3 页。
+    const pageDescriptors = [
+      Array.from({ length: 50 }, (_, i) => ({
+        id: `g${i + 1}`,
+        name: `谷类${i + 1}`,
+        cfctClass: '谷类及制品',
+      })),
+      Array.from({ length: 50 }, (_, i) => ({
+        id: `g${i + 51}`,
+        name: `谷类${i + 51}`,
+        cfctClass: '谷类及制品',
+      })),
+      [
+        ...Array.from({ length: 17 }, (_, i) => ({
+          id: `g${i + 101}`,
+          name: `谷类${i + 101}`,
+          cfctClass: '谷类及制品',
+        })),
+        { id: 'g118', name: '羊肚菌', cfctClass: '菌藻类' },
+      ],
+    ];
+    const service = {
+      listIngredientOptions: jest.fn((args: any) => {
+        // 旧实现不传 page，这里按第 1 页处理，正好暴露“只看第一页”的截断。
+        const page = args?.page ?? 1;
+        const rows = pageDescriptors[page - 1] ?? [];
+        return Promise.resolve({
+          data: rows.map((item) =>
+            ingredientOptionRow({ id: item.id, name: item.name }),
+          ),
+          hasMore: page < pageDescriptors.length,
+          page,
+          pageSize: 50,
+        });
+      }),
+    };
+    const cfctClassById = new Map(
+      pageDescriptors.flat().map((item) => [item.id, item.cfctClass] as const),
+    );
+    const prisma = {
+      ingredient: {
+        findMany: jest.fn(async (args: any) => {
+          const ids: string[] = args?.where?.id?.in ?? [];
+          return ids.map((id) => ({
+            id,
+            properties: { cfct_class: cfctClassById.get(id) ?? null },
+          }));
+        }),
+      },
+    };
+    const adapter = createAdapter(service, prisma);
+
+    const result = await adapter.searchIngredients({ category: 'MUSHROOM' });
+
+    expect(result.map((candidate) => candidate.ingredientId)).toEqual(['g118']);
+    expect(result[0].name).toBe('羊肚菌');
+    expect(result[0].cfctClass).toBe('菌藻类');
+
+    const calls = service.listIngredientOptions.mock.calls.map(
+      ([args]: [any]) => args,
+    );
+    expect(calls.map((args) => args.page)).toEqual([1, 2, 3]);
+    expect(calls.every((args) => args.pageSize === 50)).toBe(true);
   });
 
   it('getIngredient 找不到返回 null，找到时带价格/过敏原', async () => {
@@ -792,5 +1063,57 @@ describe('RecipeDesignerAgentAdapter read', () => {
       'r2',
     ]);
     expect(chickenOnly.recipes[0].mainProteinName).toBe('Chicken');
+  });
+
+  it('已发布食谱里的补剂归 SUPPLEMENT，不制造 PROTEIN 交集', async () => {
+    // 补剂故意给一个“肉类”CFCT：只有读到 ingredient.type 才会归 SUPPLEMENT。
+    const publishedRow = catalogRecipe({
+      recipeId: 'r-supplement',
+      name: '补剂餐',
+      items: [
+        {
+          ingredientId: 'i-supplement',
+          exampleWeight: 2,
+          name: '鱼油软胶囊',
+          cfctClass: '畜肉类及制品',
+          category: 'OTHER',
+          type: 'SUPPLEMENT',
+        },
+      ],
+    });
+    // 模拟 Prisma 的字段投影：select 没请求的字段，返回行里也不会有。
+    const prisma = {
+      recipe: {
+        findMany: jest.fn(async (args: any) => {
+          const selectsIngredientType =
+            args?.select?.items?.select?.ingredient?.select?.type === true;
+          return [
+            {
+              ...publishedRow,
+              items: publishedRow.items.map((item) => ({
+                ...item,
+                ingredient: selectsIngredientType
+                  ? item.ingredient
+                  : {
+                      name: item.ingredient.name,
+                      properties: item.ingredient.properties,
+                    },
+              })),
+            },
+          ];
+        }),
+      },
+    };
+    const adapter = createAdapter(
+      { getDraft: jest.fn().mockResolvedValue(serviceDraft()) },
+      prisma,
+    );
+
+    const usage = await adapter.getCatalogUsage({});
+
+    expect(usage.totalPublishedRecipes).toBe(1);
+    // 草稿里有 PROTEIN；补剂若被误判成 PROTEIN 就会因分类交集被算进来。
+    expect(usage.recipes).toEqual([]);
+    expect(usage.mainProteinCount).toBe(0);
   });
 });

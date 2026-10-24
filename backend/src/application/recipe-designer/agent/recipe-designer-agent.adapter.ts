@@ -56,6 +56,8 @@ const ANIMAL_SPECIES_KEYWORDS = [
   '鸡',
   '鸭',
   '鹅',
+  '鹌鹑',
+  '鹿',
   '牛',
   '羊',
   '猪',
@@ -204,11 +206,12 @@ const sumProfileAmount = (
 };
 
 /**
- * 湿基脂肪 / 水分百分比：优先从当前 items 的 `nutritionFood.nutritionData` 现算，
- * 只有所有参与评估的 item 都没有营养档案时，才回退到 `calculatedNutrition`。
+ * 湿基脂肪 / 水分百分比：优先从参与评估的食品 item 的
+ * `nutritionFood.nutritionData` 现算，只有这些 item 都没有营养档案时，
+ * 才回退到 `calculatedNutrition`。分母由调用方按同一口径给出。
  */
 const buildNutritionSummary = (
-  items: ServiceDraft['items'],
+  assessedItems: ServiceDraft['items'],
   totalWeightG: number,
   calculatedNutrition: unknown,
 ): NutritionSummary => {
@@ -216,10 +219,7 @@ const buildNutritionSummary = (
     return { fatWetPercent: null, moisturePercent: null };
   }
 
-  const includedItems = items.filter(
-    (item) => item.includeInAssessment !== false,
-  );
-  const profiles = includedItems.map((item) =>
+  const profiles = assessedItems.map((item) =>
     resolveNutritionProfile(item.nutritionFood?.nutritionData),
   );
 
@@ -231,12 +231,12 @@ const buildNutritionSummary = (
   }
 
   const moistureG = sumProfileAmount(
-    includedItems,
+    assessedItems,
     profiles,
     'macros.moisture',
   );
   const crudeFatG = sumProfileAmount(
-    includedItems,
+    assessedItems,
     profiles,
     'macros.crudeFat',
   );
@@ -315,6 +315,8 @@ type IngredientOptionProfile = IngredientOption['nutritionProfiles'][number];
 
 const DEFAULT_SEARCH_LIMIT = 20;
 const MAX_SEARCH_LIMIT = 50;
+/** 翻页上限：20 × 50 = 1000 条，覆盖当前食材库并兜住异常数据。 */
+const MAX_SEARCH_PAGES = 20;
 
 /** `search_ingredients` 的 limit：默认 20，收敛到 1–50（工具层已校验，这里兜底）。 */
 const resolveSearchLimit = (limit: number | undefined): number => {
@@ -573,15 +575,26 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
       };
     });
 
+    // 评估口径 = 参与评估的食品：补剂按粒/片计数（weightG 不是食物质量），
+    // `includeInAssessment === false` 的原料也不进总重/占比/营养分母。
+    const assessedItems = draft.items.filter(
+      (item) =>
+        item.includeInAssessment !== false &&
+        item.ingredient?.type !== 'SUPPLEMENT',
+    );
+    const assessedItemIds = new Set(assessedItems.map((item) => item.id));
+
     // 总重与占比都从当前 items 现算，不信库里可能过期的 totalWeightG / ratioPercent。
-    const totalWeightG = items.reduce(
+    const totalWeightG = assessedItems.reduce(
       (sum, item) => sum + (Number.isFinite(item.weightG) ? item.weightG : 0),
       0,
     );
     const itemsWithRatios: AgentDraftItem[] = items.map((item) => ({
       ...item,
       ratioPercent:
-        totalWeightG > 0 ? roundTo1((item.weightG / totalWeightG) * 100) : null,
+        totalWeightG > 0 && assessedItemIds.has(item.id)
+          ? roundTo1((item.weightG / totalWeightG) * 100)
+          : null,
     }));
 
     return {
@@ -602,15 +615,16 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
       productionSteps: toAgentProductionSteps(productionSteps?.productionSteps),
       lastAssessment: buildLastAssessment(draft),
       nutritionSummary: buildNutritionSummary(
-        draft.items,
+        assessedItems,
         totalWeightG,
         draft.calculatedNutrition,
       ),
       animalSpecies: collectAnimalSpecies(
-        // 鱼油算油脂、补剂不进七类，都不能算“动物蛋白”。
+        // 只从蛋白/内脏类看物种：牛油果、羊肚菌、贝贝南瓜、鱼油都带动物字，
+        // 但都不是动物蛋白，不能参与“单一动物蛋白”判断。
         itemsWithRatios
           .filter(
-            (item) => item.category !== 'OIL' && item.category !== 'SUPPLEMENT',
+            (item) => item.category === 'PROTEIN' || item.category === 'ORGAN',
           )
           .map((item) => item.name),
       ),
@@ -623,19 +637,28 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
     type?: 'FOOD' | 'SUPPLEMENT';
     limit?: number;
   }): Promise<AgentIngredientCandidate[]> {
-    // 一次多取（50 条上限），分类过滤/截断在本地做：七类分类不是数据库字段。
-    const optionsResult = await this.service.listIngredientOptions({
-      search: input.search,
-      type: input.type,
-      pageSize: MAX_SEARCH_LIMIT,
-    });
+    // 七类分类不是数据库字段，只能在本地过滤；必须先翻完整个候选集，
+    // 否则某一类可能整类落在第 2 页之后（食材库 FOOD 约 118 条）。
+    const options: IngredientOption[] = [];
+    for (let page = 1; page <= MAX_SEARCH_PAGES; page += 1) {
+      const pageResult = await this.service.listIngredientOptions({
+        search: input.search,
+        type: input.type,
+        page,
+        pageSize: MAX_SEARCH_LIMIT,
+      });
+      options.push(...(pageResult?.data ?? []));
+      if (!pageResult?.hasMore) {
+        break;
+      }
+    }
 
     // 只有默认/主档案已验证的原料才算候选。
     const picked: Array<{
       option: IngredientOption;
       profile: IngredientOptionProfile;
     }> = [];
-    for (const option of optionsResult?.data ?? []) {
+    for (const option of options) {
       const profile = pickIngredientProfile(option);
       if (!profile || profile.status !== 'VERIFIED') {
         continue;
@@ -787,7 +810,10 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
             select: {
               ingredientId: true,
               exampleWeight: true,
-              ingredient: { select: { name: true, properties: true } },
+              ingredient: {
+                // `type` 决定补剂是否归 SUPPLEMENT；少查它会把补剂误判成 PROTEIN/ORGAN。
+                select: { name: true, properties: true, type: true },
+              },
               nutritionFood: {
                 select: { name: true, displayNameZh: true, category: true },
               },

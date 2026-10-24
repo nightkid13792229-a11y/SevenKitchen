@@ -1330,15 +1330,20 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
   ): Promise<AgentDraftItem> {
     await this.assertItemInDraft(itemId);
 
-    const item = await this.service.updateItem(
-      itemId,
-      {
-        preparationMethod: input.method,
-        preparationNote: input.note ?? null,
-        preparationSource: 'MANUAL',
-      },
-      this.access,
-    );
+    const patch: {
+      preparationMethod: string;
+      preparationNote?: string | null;
+      preparationSource: 'MANUAL';
+    } = {
+      preparationMethod: input.method,
+      preparationSource: 'MANUAL',
+    };
+    // 只有显式传了 note 才写；省略表示“保留原备注”，不能静默清空。
+    if (input.note !== undefined) {
+      patch.preparationNote = input.note;
+    }
+
+    const item = await this.service.updateItem(itemId, patch, this.access);
 
     return this.toAgentItem(item);
   }

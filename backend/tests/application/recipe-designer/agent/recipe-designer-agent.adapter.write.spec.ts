@@ -352,7 +352,7 @@ describe('RecipeDesignerAgentAdapter 写方法', () => {
   });
 
   describe('setPreparation', () => {
-    it('调用 service.updateItem 并标记 MANUAL，备注缺省写 null', async () => {
+    it('调用 service.updateItem 并标记 MANUAL，备注缺省不传、保留原备注', async () => {
       const service = serviceMock();
       const prisma = prismaMock();
       service.updateItem.mockResolvedValue(
@@ -366,7 +366,6 @@ describe('RecipeDesignerAgentAdapter 写方法', () => {
         'item-1',
         {
           preparationMethod: '蒸',
-          preparationNote: null,
           preparationSource: 'MANUAL',
         },
         ACCESS,
@@ -386,6 +385,27 @@ describe('RecipeDesignerAgentAdapter 写方法', () => {
         {
           preparationMethod: '蒸',
           preparationNote: null,
+          preparationSource: 'MANUAL',
+        },
+        ACCESS,
+      );
+    });
+
+    it('备注显式传字符串时原样传字符串', async () => {
+      const service = serviceMock();
+      const prisma = prismaMock();
+      const adapter = createAdapter(service, prisma);
+
+      await adapter.setPreparation('item-1', {
+        method: '蒸',
+        note: '水开后蒸 15 分钟',
+      });
+
+      expect(service.updateItem).toHaveBeenCalledWith(
+        'item-1',
+        {
+          preparationMethod: '蒸',
+          preparationNote: '水开后蒸 15 分钟',
           preparationSource: 'MANUAL',
         },
         ACCESS,

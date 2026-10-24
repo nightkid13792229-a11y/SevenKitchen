@@ -14,6 +14,7 @@ import { RecipesController } from 'src/recipes.controller';
 import { RECIPE_REPOSITORY_TOKEN } from 'src/recipes.controller';
 import { InMemoryRecipeRepository } from 'src/infrastructure/repositories/in-memory-recipe.repository';
 import { DiySheetService } from 'src/application/recipe/diy-sheet.service';
+import { CustomRecipeDeliveryService } from 'src/application/custom-recipe/custom-recipe-delivery.service';
 import { RecipeCoverImageService } from 'src/application/recipe-designer/recipe-cover-image.service';
 import {
   DogService,
@@ -136,6 +137,18 @@ describe('RecipesController (e2e)', () => {
       controllers: [RecipesController],
       providers: [
         DiySheetService,
+        {
+          /**
+           * 2026-10-24：交付版本锁。
+           *
+           * 只有带 `orderId` 的请求才会用到它；本 spec 的老用例都不带，
+           * 这里给一个"查不到交付"的桩，顺带锁住"查不到就 404、不回退最新版"。
+           */
+          provide: CustomRecipeDeliveryService,
+          useValue: {
+            resolveDeliveredRecipeVersion: jest.fn(async () => null),
+          },
+        },
         {
           /**
            * 2026-10-18：RecipesController 加了 AI 封面图生成（注入这个服务）。

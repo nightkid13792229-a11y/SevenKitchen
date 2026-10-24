@@ -3,7 +3,7 @@
  */
 
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsUUID } from 'class-validator';
+import { IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class GenerateDiySheetDto {
   @ApiPropertyOptional({
@@ -20,6 +20,20 @@ export class GenerateDiySheetDto {
   })
   @IsOptional()
   shareToken?: string;
+
+  /**
+   * 定制订单号（2026-10-24 · 交付页重构）。
+   *
+   * 带上时只按**交付记录里冻结的那一版**生成制作单；
+   * 不带时取最新版（橱窗 DIY 的老行为不变）。
+   */
+  @ApiPropertyOptional({
+    description: 'Custom recipe order number (pins the delivered version)',
+    example: 'CR202610230224',
+  })
+  @IsOptional()
+  @IsString()
+  orderId?: string;
 }
 
 export class DiySheetStepDto {

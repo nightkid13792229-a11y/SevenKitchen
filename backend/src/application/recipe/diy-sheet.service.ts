@@ -36,9 +36,19 @@ export class DiySheetService {
   async generateDiySheet(
     recipeId: string,
     dogId?: string,
+    /**
+     * 指定版本（2026-10-24）。
+     *
+     * 从定制交付页进来时传**交付那一刻的版本**，保证顾客按交付给他的配方做；
+     * 橱窗 DIY 不传，仍然是「最新版」，老行为不变。
+     */
+    version?: number,
   ): Promise<DiySheetData> {
-    // Find recipe
-    const recipe = await this.recipeRepository.findById(recipeId);
+    // Find recipe（带版本时按版本取，绝不回退最新版）
+    const recipe =
+      typeof version === 'number'
+        ? await this.recipeRepository.findByIdAndVersion(recipeId, version)
+        : await this.recipeRepository.findById(recipeId);
     if (!recipe) {
       throw new NotFoundException(`Recipe not found: ${recipeId}`);
     }

@@ -64,6 +64,7 @@ import {
 import { AllergenVocabularyService } from '../../application/health/allergen-vocabulary.service';
 import { RecipeCoverImageService } from '../../application/recipe-designer/recipe-cover-image.service';
 import { DiySheetService } from '../../application/recipe/diy-sheet.service';
+import { CustomRecipeDeliveryService } from '../../application/custom-recipe/custom-recipe-delivery.service';
 import { OrderService } from '../../application/order/order.service';
 import {
   GenerateDiySheetDto,
@@ -119,6 +120,7 @@ export class RecipesController {
     private readonly jwtAuthService: JwtAuthService,
     private readonly orderService: OrderService,
     private readonly allergenVocabulary: AllergenVocabularyService,
+    private readonly deliveryService: CustomRecipeDeliveryService,
   ) {}
 
   private buildPublicRecipeWhere(
@@ -614,7 +616,37 @@ export class RecipesController {
     id: string,
     shareToken?: string,
     req?: any,
+    orderNo?: string | null,
   ): Promise<Recipe | null> {
+    /**
+     * 交付版本锁定（2026-10-24 · 定制交付页重构）。
+     *
+     * 带 `orderId` 时，只认**交付记录里冻结的那一版**：
+     *   · 订单不属于当前用户 → null（连"有没有交付"都不泄露）；
+     *   · 交付记录里查不到这道食谱 → null；
+     *   · 按指定版本取不到 → null。
+     * **绝不回退最新版** —— 否则顾客会看到没交付给他的配方。
+     */
+    const pinnedOrderNo = String(orderNo ?? '').trim();
+    if (pinnedOrderNo) {
+      const user = this.getRequestUser(req);
+      const customerId = user?.customerId || user?.userId;
+      if (!user || !customerId) return null;
+
+      const delivered =
+        await this.deliveryService.resolveDeliveredRecipeVersion({
+          orderNo: pinnedOrderNo,
+          recipeBusinessId: id,
+          customerId,
+        });
+      if (!delivered) return null;
+
+      return this.recipeRepository.findByIdAndVersion(
+        id,
+        delivered.version,
+      );
+    }
+
     const recipe = await this.recipeRepository.findById(id);
     if (!recipe) {
       return null;
@@ -1837,6 +1869,12 @@ export class RecipesController {
     required: false,
     description: 'Manual series life stage',
   })
+  @ApiQuery({
+    name: 'orderId',
+    required: false,
+    description:
+      '定制订单号：带上则按交付记录冻结的那一版取食谱（不带取最新版）',
+  })
   @ApiResponse({
     status: 200,
     description: 'Recipe detail',
@@ -1848,13 +1886,30 @@ export class RecipesController {
     @Query('shareToken') shareToken?: string,
     @Query('dogId') dogId?: string,
     @Query('lifeStage') lifeStage?: string,
+    @Query('orderId') orderId?: string,
     @Req() req?: any,
   ): Promise<ApiResponseDto<RecipeDetailDto> | ApiResponseDto<null>> {
+    const pinnedOrderId = String(orderId ?? '').trim();
     const accessibleRecipe = await this.getAccessibleRecipe(
       id,
       shareToken,
       req,
+      pinnedOrderId || null,
     );
+
+    /**
+     * 交付版本锁定：带 orderId 时只走这一版，**不落到下面的公开系列选择**
+     * （那条路会取最新版，正好是我们要避免的）。
+     */
+    if (pinnedOrderId) {
+      if (!accessibleRecipe) {
+        return ApiResponseDto.error(404, 'Recipe not found');
+      }
+      return ApiResponseDto.success(
+        await this.buildRecipeDetailWithOrderability(accessibleRecipe),
+      );
+    }
+
     if (accessibleRecipe && accessibleRecipe.status !== 'PUBLIC') {
       return ApiResponseDto.success(
         await this.buildRecipeDetailWithOrderability(accessibleRecipe),
@@ -2049,10 +2104,12 @@ export class RecipesController {
     @Req() req?: any,
   ): Promise<ApiResponseDto<DiySheetResponseDto> | ApiResponseDto<null>> {
     try {
+      const pinnedOrderId = String(dto.orderId ?? '').trim();
       const accessibleRecipe = await this.getAccessibleRecipe(
         recipeId,
         dto.shareToken,
         req,
+        pinnedOrderId || null,
       );
       if (!accessibleRecipe) {
         return ApiResponseDto.error(404, `Recipe not found: ${recipeId}`);
@@ -2061,17 +2118,25 @@ export class RecipesController {
       const sheetData = await this.diySheetService.generateDiySheet(
         recipeId,
         dto.dogId,
+        pinnedOrderId ? accessibleRecipe.version : undefined,
       );
 
-      // Count the generation only after the DIY sheet is successfully produced
-      const latestRecipe = await this.prisma.recipe.findFirst({
-        where: { recipeId },
+      /**
+       * 计数落在**实际取用的那一版**上：带 orderId 时是交付版本，
+       * 不带时才是最新版。计数错了不影响顾客，但运营看到的「生成次数」
+       * 会跑到一个没被用过的版本上。
+       */
+      const countedRecipe = await this.prisma.recipe.findFirst({
+        where: {
+          recipeId,
+          ...(pinnedOrderId ? { version: accessibleRecipe.version } : {}),
+        },
         orderBy: { version: 'desc' },
         select: { id: true },
       });
-      if (latestRecipe) {
+      if (countedRecipe) {
         await this.prisma.recipe.update({
-          where: { id: latestRecipe.id },
+          where: { id: countedRecipe.id },
           data: { diyGenCount: { increment: 1 } },
         });
       }

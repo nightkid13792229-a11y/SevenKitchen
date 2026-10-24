@@ -980,6 +980,60 @@ export class CustomRecipeDeliveryService {
     });
   }
 
+  /**
+   * 从交付记录解析「交付那一刻的版本」（2026-10-24 · 定制交付页重构）。
+   *
+   * 顾客从交付页点「自己做」或「订购成品」时，必须看到**交付给他的那一版**，
+   * 而不是设计器里后来改出的最新版（后台改配方不会自动挂到已交付的单上）。
+   *
+   * 规则：
+   *   · 订单必须属于当前顾客，否则返回 null（不泄露"有没有交付"）；
+   *   · 多份批次先查明细，老单份交付再查 `custom_recipe_delivery`；
+   *   · 查不到就返回 null —— 调用方返回 404，**绝不回退最新版**。
+   */
+  async resolveDeliveredRecipeVersion(input: {
+    orderNo: string;
+    recipeBusinessId: string;
+    customerId: string;
+  }): Promise<{ version: number; source: 'BATCH' | 'SINGLE' } | null> {
+    const orderNo = String(input.orderNo ?? '').trim();
+    const recipeBusinessId = String(input.recipeBusinessId ?? '').trim();
+    const customerId = String(input.customerId ?? '').trim();
+    if (!orderNo || !recipeBusinessId || !customerId) return null;
+
+    const order = await this.prisma.customRecipeOrder.findUnique({
+      where: { orderId: orderNo },
+      select: { id: true, customerId: true },
+    });
+    if (!order || order.customerId !== customerId) return null;
+
+    const batchItem = await this.prisma.customRecipeDeliveryItem.findFirst({
+      where: {
+        batch: { orderId: order.id },
+        recipe: { recipeId: recipeBusinessId },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { recipeVersion: true },
+    });
+    if (batchItem) {
+      return { version: batchItem.recipeVersion, source: 'BATCH' };
+    }
+
+    const single = await this.prisma.customRecipeDelivery.findFirst({
+      where: {
+        orderId: order.id,
+        recipe: { recipeId: recipeBusinessId },
+      },
+      orderBy: { version: 'desc' },
+      select: { recipeVersion: true },
+    });
+    if (single && typeof single.recipeVersion === 'number') {
+      return { version: single.recipeVersion, source: 'SINGLE' };
+    }
+
+    return null;
+  }
+
   // ==================== 内部 ====================
 
   /**

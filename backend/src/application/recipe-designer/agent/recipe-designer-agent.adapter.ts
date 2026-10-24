@@ -20,17 +20,18 @@ import type { ProductionStep } from '../../../domain/recipe-designer/production-
 import type { PrismaService } from '../../../infrastructure/prisma.service';
 import { nutritionDataToNutritionProfile } from '../../nutrition-standard/nutrient-value-resolver';
 import type { RecipeDesignerService } from '../recipe-designer.service';
-import type {
-  AgentAssessmentEntry,
-  AgentAssessmentView,
-  AgentCatalogUsage,
-  AgentCatalogUsageRecipe,
-  AgentCopyPatch,
-  AgentDraftItem,
-  AgentDraftSnapshot,
-  AgentIngredientCandidate,
-  AgentIngredientDetail,
-  AgentProductionStep,
+import {
+  RecipeAgentPortError,
+  type AgentAssessmentEntry,
+  type AgentAssessmentView,
+  type AgentCatalogUsage,
+  type AgentCatalogUsageRecipe,
+  type AgentCopyPatch,
+  type AgentDraftItem,
+  type AgentDraftSnapshot,
+  type AgentIngredientCandidate,
+  type AgentIngredientDetail,
+  type AgentProductionStep,
 } from './agent-types';
 import type { RecipeAgentDraftPort } from './recipe-agent.port';
 
@@ -43,6 +44,15 @@ export interface RecipeAgentActor {
 
 /** `getDraft` 的返回形状（service 的 `DesignRecipeWithItems` 未导出）。 */
 type ServiceDraft = Awaited<ReturnType<RecipeDesignerService['getDraft']>>;
+
+/** 三个原料写方法返回的明细（service 里共用同一 select）。 */
+type ServiceWrittenItem = Awaited<ReturnType<RecipeDesignerService['addItem']>>;
+
+/** 可写营养档案解析出的真实原料；`type` 供后续补剂目标解析使用。 */
+interface WritableNutritionFood {
+  ingredientId: string;
+  type: 'FOOD' | 'SUPPLEMENT';
+}
 
 const ASSESSMENT_STATUSES: ReadonlySet<AgentAssessmentEntry['status']> =
   new Set(['COMPLIANT', 'DEFICIENT', 'EXCESS', 'MISSING_DATA', 'INFO']);
@@ -1006,47 +1016,240 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
     };
   }
 
-  // ---- 写方法：P0b-2b 实现（届时用 service 保证 contentRevision 与事务） ----
+  // ---- 写方法：只做前置校验，落库与 contentRevision 交给 service ----
+
+  /**
+   * 适配器只允许写绑定的这一份草稿。
+   *
+   * 运行时会绕过 TypeScript 类型，模型也可能传错 id，必须在查库前拦住。
+   */
+  private assertDraft(draftId: string): void {
+    if (draftId !== this.draftId) {
+      throw new RecipeAgentPortError(
+        'INVALID_ARGUMENT',
+        '只能修改当前这一份草稿',
+      );
+    }
+  }
+
+  /**
+   * 解析可写的营养档案：必须存在、已验证、且有采购原料映射。
+   *
+   * 返回真实 `ingredientId`，否则 service 跳过了补剂目标解析；
+   * 主映射优先，没有主映射取第一条（与 `get_ingredient` 同一口径）。
+   */
+  private async resolveWritableNutritionFood(
+    nutritionFoodId: string,
+  ): Promise<WritableNutritionFood> {
+    const nutritionFood = await this.prisma.nutritionFood.findUnique({
+      where: { id: nutritionFoodId },
+      select: {
+        id: true,
+        status: true,
+        category: true,
+        mappings: {
+          select: {
+            ingredientId: true,
+            isPrimary: true,
+            ingredient: { select: { id: true, type: true } },
+          },
+        },
+      },
+    });
+
+    if (!nutritionFood) {
+      throw new RecipeAgentPortError(
+        'INGREDIENT_NOT_FOUND',
+        '原料档案不存在，请重新搜索原料',
+      );
+    }
+    if (nutritionFood.status !== 'VERIFIED') {
+      throw new RecipeAgentPortError(
+        'INVALID_ARGUMENT',
+        '原料档案未验证，不能加入配方',
+      );
+    }
+
+    const mappings = nutritionFood.mappings ?? [];
+    if (mappings.length === 0) {
+      throw new RecipeAgentPortError(
+        'INVALID_ARGUMENT',
+        '原料没有可用的营养档案映射',
+      );
+    }
+    const mapping =
+      mappings.find((candidate) => candidate.isPrimary) ?? mappings[0];
+
+    return {
+      ingredientId: mapping.ingredient?.id ?? mapping.ingredientId,
+      type: mapping.ingredient?.type === 'SUPPLEMENT' ? 'SUPPLEMENT' : 'FOOD',
+    };
+  }
+
+  /** 同一草稿里同一营养档案只能出现一次；替换时排除被替换的那条。 */
+  private async assertNotDuplicate(
+    draftId: string,
+    nutritionFoodId: string,
+    excludeItemId?: string,
+  ): Promise<void> {
+    const duplicate = await this.prisma.designRecipeItem.findFirst({
+      where: {
+        designRecipeId: draftId,
+        nutritionFoodId,
+        ...(excludeItemId ? { id: { not: excludeItemId } } : {}),
+      },
+    });
+    if (duplicate) {
+      throw new RecipeAgentPortError(
+        'INVALID_ARGUMENT',
+        '这个原料已经在配方里',
+      );
+    }
+  }
+
+  /**
+   * `updateItem` / `removeItem` / `replaceItem` 只收 itemId，service 不校验归属，
+   * 这里必须先确认这条明细属于当前草稿。
+   */
+  private async assertItemInDraft(itemId: string): Promise<void> {
+    const item = await this.prisma.designRecipeItem.findUnique({
+      where: { id: itemId },
+      select: { designRecipeId: true },
+    });
+    if (!item || item.designRecipeId !== this.draftId) {
+      throw new RecipeAgentPortError('INVALID_ARGUMENT', '原料不在当前草稿里');
+    }
+  }
+
+  /**
+   * service 的写入结果 → Agent 可读明细。
+   *
+   * 写方法只回一条明细，没有整份草稿的占比分母，所以 `ratioPercent` 置 null；
+   * 下次 `getDraft` 会按当前 items 现算。
+   */
+  private toAgentItem(item: ServiceWrittenItem): AgentDraftItem {
+    const nutritionFood = item.nutritionFood as typeof item.nutritionFood & {
+      category?: string | null;
+    };
+    const ingredient = item.ingredient ?? null;
+    const name =
+      ingredient?.name ?? nutritionFood.displayNameZh ?? nutritionFood.name;
+    const cfctClass = readCfctClass(ingredient?.properties);
+    const nutritionCategory = nutritionFood.category ?? null;
+
+    return {
+      id: item.id,
+      ingredientId: item.ingredientId ?? null,
+      nutritionFoodId: item.nutritionFoodId,
+      name,
+      cfctClass,
+      nutritionCategory,
+      category: classifyFoodCategory({
+        name,
+        cfctClass,
+        nutritionCategory,
+        ingredientType:
+          ingredient?.type === 'SUPPLEMENT' ? 'SUPPLEMENT' : 'FOOD',
+      }),
+      weightG: item.weightG,
+      ratioPercent: null,
+      preparationMethod: item.preparationMethod ?? null,
+      preparationNote: item.preparationNote ?? null,
+    };
+  }
 
   async addItem(
-    _draftId: string,
-    _input: {
+    draftId: string,
+    input: {
       nutritionFoodId: string;
       ingredientId?: string;
       weightG: number;
       preparationMethod?: string;
     },
   ): Promise<AgentDraftItem> {
-    throw new Error('P0b-2b: write not implemented');
+    this.assertDraft(draftId);
+    const { ingredientId } = await this.resolveWritableNutritionFood(
+      input.nutritionFoodId,
+    );
+    await this.assertNotDuplicate(draftId, input.nutritionFoodId);
+
+    const item = await this.service.addItem(
+      draftId,
+      {
+        nutritionFoodId: input.nutritionFoodId,
+        ingredientId,
+        weightG: input.weightG,
+        ...(input.preparationMethod
+          ? { preparationMethod: input.preparationMethod }
+          : {}),
+      },
+      this.access,
+    );
+
+    return this.toAgentItem(item);
   }
 
   async replaceItem(
-    _itemId: string,
-    _input: {
+    itemId: string,
+    input: {
       nutritionFoodId: string;
       ingredientId?: string;
       weightG: number;
     },
   ): Promise<AgentDraftItem> {
-    throw new Error('P0b-2b: write not implemented');
+    await this.assertItemInDraft(itemId);
+    const { ingredientId } = await this.resolveWritableNutritionFood(
+      input.nutritionFoodId,
+    );
+    await this.assertNotDuplicate(this.draftId, input.nutritionFoodId, itemId);
+
+    const item = await this.service.replaceItem(
+      itemId,
+      {
+        nutritionFoodId: input.nutritionFoodId,
+        ingredientId,
+        ...(input.weightG ? { weightG: input.weightG } : {}),
+      },
+      this.access,
+    );
+
+    return this.toAgentItem(item);
   }
 
-  async updateWeight(
-    _itemId: string,
-    _weightG: number,
-  ): Promise<AgentDraftItem> {
-    throw new Error('P0b-2b: write not implemented');
+  async updateWeight(itemId: string, weightG: number): Promise<AgentDraftItem> {
+    await this.assertItemInDraft(itemId);
+
+    const item = await this.service.updateItem(
+      itemId,
+      { weightG },
+      this.access,
+    );
+
+    return this.toAgentItem(item);
   }
 
-  async removeItem(_itemId: string): Promise<void> {
-    throw new Error('P0b-2b: write not implemented');
+  async removeItem(itemId: string): Promise<void> {
+    await this.assertItemInDraft(itemId);
+    await this.service.removeItem(itemId, this.access);
   }
 
   async setPreparation(
-    _itemId: string,
-    _input: { method: string; note?: string | null },
+    itemId: string,
+    input: { method: string; note?: string | null },
   ): Promise<AgentDraftItem> {
-    throw new Error('P0b-2b: write not implemented');
+    await this.assertItemInDraft(itemId);
+
+    const item = await this.service.updateItem(
+      itemId,
+      {
+        preparationMethod: input.method,
+        preparationNote: input.note ?? null,
+        preparationSource: 'MANUAL',
+      },
+      this.access,
+    );
+
+    return this.toAgentItem(item);
   }
 
   async setCopy(_draftId: string, _patch: AgentCopyPatch): Promise<void> {

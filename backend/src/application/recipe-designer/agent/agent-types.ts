@@ -145,6 +145,22 @@ export type AgentToolErrorCode =
   | 'CONTROL_NOT_AVAILABLE';
 
 /**
+ * 端口层带错误码的异常。
+ *
+ * 适配器只抛这个异常表达“业务校验失败”；工具边界据此保留 `code`
+ * （P0b-2b Task 4 接线），不会被统一吞成 `CONTROL_NOT_AVAILABLE`。
+ */
+export class RecipeAgentPortError extends Error {
+  constructor(
+    public readonly code: AgentToolErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'RecipeAgentPortError';
+  }
+}
+
+/**
  * 工具结果：成功时带数据和人话摘要；失败时把原因原样还给模型。
  *
  * `stale` 由写工具填写（如 `['ASSESSMENT', 'READY']`），读工具不填。

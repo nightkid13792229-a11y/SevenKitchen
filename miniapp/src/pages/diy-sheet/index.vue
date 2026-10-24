@@ -188,10 +188,11 @@
           </view>
         </view>
 
-        <!-- 补剂购买引导（2026-10-24）：不想全买，可以只买预分装补剂 -->
+        <!-- 补剂购买引导（2026-10-24）：不想全买，可以只买本次制作的一次性预分装补剂 -->
         <view v-if="canBuySupplements" class="supplement-buy-note">
-          <text class="supplement-buy-note-text">如果不想购买所有的商品补剂，可以点击</text>
-          <button class="supplement-buy-note-btn" @tap="handleBuySupplements">购买预分装补剂</button>
+          <text class="supplement-buy-note-text">不想购买所有的商品补剂？可以购买本次制作需要的</text>
+          <button class="supplement-buy-note-btn" @tap="handleBuySupplements">一次性预分装补剂</button>
+          <text class="supplement-buy-note-text">。</text>
         </view>
 
         <!--
@@ -269,8 +270,12 @@
       </view>
     </view>
 
-    <!-- 4-8. 固定文案卡片 -->
-    <view class="info-cards-grid">
+    <!--
+      4-8. 固定文案卡片
+      制作设备推荐 2026-10-24 暂时下线：代码保留，等做好后把
+      SHOW_EQUIPMENT_RECOMMENDATION 改成 true 即可恢复。
+    -->
+    <view v-if="SHOW_EQUIPMENT_RECOMMENDATION" class="info-cards-grid">
       <!--
         制作设备推荐（2026-10-18 重新打开）
 
@@ -711,6 +716,12 @@ const showNutritionInfo = ref(false)
 const currentNutritionInfo = ref<any>({})
 
 // 设备推荐相关状态
+/**
+ * 制作设备推荐开关（2026-10-24 暂时下线）。
+ * 代码与数据都保留；做好后把这里改成 true 即恢复，不需要改模板。
+ */
+const SHOW_EQUIPMENT_RECOMMENDATION = false
+
 const equipmentRecommendations = ref<any[]>([])
 const diySheetHeaderBgImageUrl = ref('')
 /** 当前制作单 id：首次买补剂时要带给后端冻结快照 */

@@ -53,7 +53,7 @@ const AGENT_MAX_TOKENS = 8_000;
 const REPLY_MAX = 500;
 const TRANSCRIPT_SUMMARY_MAX = 240;
 /** 工具结果超过这个长度就不回传给页面，避免一次大检索撑爆响应。 */
-const TOOL_RESULT_MAX_CHARS = 8_000;
+const TOOL_RESULT_MAX_CHARS = 32_000;
 
 /**
  * 模型输出协议。
@@ -151,6 +151,14 @@ export function resolveIngredientAgentTokenBudget(
  * 但改名为 `name` 并去掉 sourceRecordId、missingFields 等大字段，避免
  * 把整份工具结果塞进 SSE 事件。
  */
+export interface IngredientAgentStreamClassification {
+  state: string;
+  method: string;
+  cutLabel: string | null;
+  cutGroup: string | null;
+  evidence: string | null;
+}
+
 export interface IngredientAgentStreamMatch {
   name: string;
   matchedBy: string;
@@ -161,6 +169,8 @@ export interface IngredientAgentStreamMatch {
     verdict: CandidateReviewVerdict;
     reason: string;
   };
+  /** AI 读词条名判出的生熟 / 做法 / 部位；旧后端没有这个字段。 */
+  classification?: IngredientAgentStreamClassification;
 }
 
 /** 「读来源记录」这一步的精简摘要：词条名 / 覆盖率 / 读到多少项。 */
@@ -449,6 +459,10 @@ export function buildToolStepSummary(
   args: Record<string, unknown>,
 ): string {
   switch (name) {
+    case 'listNutritionNames': {
+      const keyword = readTextValue(args.keyword) || '（未填关键词）';
+      return oneLine(`列词条名 ${keyword}`);
+    }
     case 'searchLocalNutrition': {
       const keyword = readTextValue(args.keyword) || '（未填关键词）';
       const state = readTextValue(args.state);
@@ -522,6 +536,14 @@ export function buildToolResultSummary(
   }
 
   switch (name) {
+    case 'listNutritionNames': {
+      const total =
+        typeof result.total === 'number' && Number.isFinite(result.total)
+          ? Math.floor(result.total)
+          : 0;
+      const returned = Array.isArray(result.names) ? result.names.length : 0;
+      return `列出 ${total} 条名字（返回 ${returned} 条）`;
+    }
     case 'searchLocalNutrition': {
       if (result.found !== true) {
         return '没有找到匹配词条';
@@ -648,6 +670,26 @@ function readCandidateReview(
  * 只在查库工具**成功且返回结构化结果**时生成；零命中时 matches 为空数组、
  * keywords 保留本次实际检索词，页面仍可展开并显示「没有找到匹配词条」。
  */
+function readStreamClassification(
+  value: unknown,
+): IngredientAgentStreamClassification | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const state = readTextValue(value.state);
+  const method = readTextValue(value.method);
+  if (!state && !method) {
+    return null;
+  }
+  return {
+    state: state || 'UNKNOWN',
+    method: method || 'NONE',
+    cutLabel: readTextValue(value.cutLabel) || null,
+    cutGroup: readTextValue(value.cutGroup) || null,
+    evidence: readTextValue(value.evidence) || null,
+  };
+}
+
 function buildSearchStepEvidence(
   name: string,
   execution: { ok: boolean; content: string },
@@ -675,6 +717,7 @@ function buildSearchStepEvidence(
           ? candidate.score
           : null;
       const review = readCandidateReview(candidate.review);
+      const classification = readStreamClassification(candidate.classification);
       matches.push({
         name:
           oneLine(
@@ -690,6 +733,7 @@ function buildSearchStepEvidence(
         ),
         score,
         ...(review ? { review } : {}),
+        ...(classification ? { classification } : {}),
       });
       if (matches.length >= STEP_MATCH_LIMIT) {
         break;
@@ -1049,15 +1093,40 @@ function buildDraftPromptLines(draft: IngredientCreationDraft): string[] {
     const choices = Array.isArray(narrowing.choices)
       ? narrowing.choices.filter(isRecord)
       : [];
+    const stats = isRecord(narrowing.stats) ? narrowing.stats : null;
+    const selectedStates = Array.isArray(narrowing.selectedStates)
+      ? narrowing.selectedStates
+          .map((state) => (typeof state === 'string' ? state : ''))
+          .filter(Boolean)
+      : [];
     lines.push(
       `最近一次检索收窄：关键词=${String(narrowing.keyword ?? '')} 状态=${String(
         narrowing.state ?? '',
       )} 候选总数=${String(narrowing.totalCandidates ?? 0)} 相关=${String(
         narrowing.relevantCount ?? 0,
-      )} required=${narrowing.required === true} 已选分组=${String(
-        narrowing.selectedGroupKey ?? '无',
-      )}`,
+      )} required=${narrowing.required === true} 已选状态=${
+        selectedStates.length > 0 ? selectedStates.join('+') : '无'
+      } 已选分组=${String(narrowing.selectedGroupKey ?? '无')}`,
     );
+    if (stats) {
+      const byState = isRecord(stats.byState)
+        ? (stats.byState as Record<string, number>)
+        : {};
+      const byMethod = isRecord(stats.byMethod)
+        ? (stats.byMethod as Record<string, number>)
+        : {};
+      lines.push(
+        `AI 分类真实统计：生=${String(byState.RAW ?? 0)} 熟=${String(
+          byState.COOKED ?? 0,
+        )} 未知=${String(byState.UNKNOWN ?? 0)}；水煮=${String(
+          byMethod.BOILED ?? 0,
+        )} 蒸=${String(byMethod.STEAMED ?? 0)} 烤=${String(
+          byMethod.GRILLED ?? 0,
+        )} 煎=${String(byMethod.FRIED ?? 0)} 其它=${String(
+          byMethod.OTHER ?? 0,
+        )} 无=${String(byMethod.NONE ?? 0)}`,
+      );
+    }
     if (groups.length > 0) {
       lines.push(
         `候选分组：${groups
@@ -1106,12 +1175,16 @@ function buildSystemPrompt(
     '- 不要编造营养数值。只写来源记录里有的值，或用户明确给出的值。',
     '- 工具报错表示输入不合法。按错误文本改正参数后重试；连续改不出来就停下，说明卡在哪。',
     '- searchLocalNutrition 返回 ok=true 只表示「查询执行成功」，不代表找到数据。看 found / candidateCount：found=false 或 0 条时必须明确说「没有找到匹配词条」，并列出 keywords 里已尝试的关键词；不要写成「成功找到」，也不要编造数据。',
-    '- searchLocalNutrition 返回的每条候选都带 review（RELEVANT=相关 / UNCERTAIN=存疑 / IRRELEVANT=不相关）和一句理由，这是服务端自动复核的结果。不要因为候选里有不相关项就丢弃或隐藏候选；AI 判断只是证据，最终选择由人做。',
+    '- 模糊词（如「牛肉」「猪肉」「鱼」）先用 listNutritionNames 看真实命中（最多 300 条）与 total；它只列名字，不判断生熟 / 做法 / 部位。',
+    '- listNutritionNames 之后直接调用 searchLocalNutrition：它会用 AI 读词条名判断生熟 / 做法 / 部位并落库，再用真实统计生成 narrowing；收窄时先按部位分组，收窄后说「这一组 N 条」。不要自己按关键词猜部位。',
+    '- searchLocalNutrition 返回的每条候选都带 classification（state / method / cutLabel / cutGroup / evidence）与 review（RELEVANT=相关 / UNCERTAIN=存疑 / IRRELEVANT=不相关）。不要因为候选里有不相关项就丢弃或隐藏候选；AI 判断只是证据，最终选择由人做；展示时写出分类标签与依据词（evidence）。',
     '- 写原料卡或营养档案之前必须先查库并看复核结论；review.verdict=IRRELEVANT 的候选不允许直接写入。',
     '- 相关候选 ≥2 条：**必须先调用 askUser** 让用户选择，不许自己挑一条；选项文案写成「候选名 —— 相关/存疑/不相关：≤40 字理由」，把 AI 判断展示给用户。',
-    '- searchLocalNutrition 返回 nextAction=NARROW_STATE / NARROW_GROUP 或 narrowing.required=true 时：**必须先按 narrowing.question / narrowing.options 收窄**，不许直接列词条。候选多时先说「N 条相关，先按部位分组」，不许说「找到 N 条相关」却只给 5 个选项；收窄后说「这一组 N 条」。',
-    '- 收窄后只列该组 ≤5 条词条（每条带来源库 / 覆盖率 / AI 判断），选项最后永远加一条「都不对，我直接说」；该组只剩 1 条时直接用它并说明理由，不必再问。调用 searchLocalNutrition 时把分组 key 传进 group。',
-    '- 用户没指定生/熟时，收窄问题必须包含「生 / 熟」两项；不要默认替用户选生，也不要把默认 RAW 说成用户的选择。',
+    '- searchLocalNutrition 返回 nextAction=NARROW_STATE / NARROW_GROUP 或 narrowing.required=true 时：**必须先按 narrowing.question / narrowing.options 收窄**，不许直接列词条。问句里的条数全部来自 AI 分类的真实统计（生 / 熟 / 水煮 / 蒸 / 烤 / 煎 / 各部位各多少条），不要改写数字。',
+    '- 状态收窄必须支持多选（生 / 熟 / 生 + 熟都要）：narrowing.options 里会有一项「生 + 熟都要（N 条）」。用户选它之后，下一次调用 searchLocalNutrition 必须传 states=["RAW","COOKED"]（后续会建两份档案）；只选生或熟就传 state=RAW / COOKED。',
+    '- 已选状态但还跨多个部位时，searchLocalNutrition 会返回 NARROW_GROUP；必须先 askUser 按部位收窄，再把 narrowing.choices[].key 传进 group。',
+    '- 收窄后只列该组 ≤5 条词条（每条带来源库 / 覆盖率 / AI 分类 / 相关判断），选项最后永远加一条「都不对，我直接说」；该组只剩 1 条时直接用它并说明理由，不必再问。',
+    '- 用户没指定生/熟时，先按 narrowing 问状态；不要默认替用户选生，也不要把默认 RAW 说成用户的选择。',
     '- 相关候选 =1 条：可以继续用它写入，但最终回复必须说明“我选了这条，因为…”，并把其它候选的 AI 判断列在证据里。',
     '- 相关候选 =0 条：不许硬选，转“去线上找 / 留空”分支，明确告诉用户本地库没有相关来源。',
     '- 以下情况**必须先调用 askUser 问人，不许自己猜**：部位 / 加工态 / 种类有歧义（例如「牛肉」「猪肉」「土豆」「鱼」「山药」）；多个候选覆盖率接近且生熟状态不同；要新建多份档案但主次不明。',

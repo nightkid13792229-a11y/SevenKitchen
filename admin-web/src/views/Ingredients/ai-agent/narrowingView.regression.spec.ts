@@ -56,4 +56,10 @@ describe('AI 添加原料 · 候选收窄页面', () => {
     expect(page).toContain('ref="composerRef"')
     expect(page).toContain('const composerRef = ref<')
   })
+  it('匹配依据里显示 AI 分类标签（状态 / 加工方式 / 部位）与依据词', () => {
+    expect(page).toContain('v-if="match.classification"')
+    expect(page).toContain('AI 分类：{{ match.classification.label }}')
+    expect(page).toContain('依据词「{{ match.classification.evidence }}」')
+  })
+
 })

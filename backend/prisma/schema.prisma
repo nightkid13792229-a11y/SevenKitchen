@@ -3854,6 +3854,23 @@ model NutritionFoodMapping {
   @@map("nutrition_food_mapping")
 }
 
+/// 词条名的生熟判断（AI 读名字得出，落库复用、可人工纠正）。
+enum NutritionRecordState {
+  RAW
+  COOKED
+  UNKNOWN
+}
+
+/// 词条名的加工方式判断；生 / 未识别都写 NONE，不硬套「其它做法」。
+enum NutritionRecordMethod {
+  BOILED
+  STEAMED
+  GRILLED
+  FRIED
+  OTHER
+  NONE
+}
+
 model NutritionSourceRecord {
   id                  String                           @id @default(uuid()) @map("id")
   sourceType          NutritionGovernanceSourceType    @map("source_type")
@@ -3872,12 +3889,44 @@ model NutritionSourceRecord {
   candidates          IngredientNutritionCandidate[]
   supplementDrafts    SupplementNutritionDraft[]
   nameAliases         IngredientNameAlias[]
+  classification      NutritionRecordClassification?
 
   @@unique([sourceType, sourceKey])
   @@index([sourceType])
   @@index([foodName])
   @@index([status])
   @@map("nutrition_source_record")
+}
+
+/// 一条来源词条名的 AI 分类结果。
+///
+/// `evidence` 必须是词条名里真实出现的片段（大小写 / 全半角归一后包含），
+/// 用于解释为什么判成这个状态 / 做法 / 部位；校验不过时整条按 UNKNOWN 处理。
+/// 人工纠正过的行（`correctedBy` 非空）永不被 AI 覆盖。
+model NutritionRecordClassification {
+  id           String                @id @default(uuid()) @map("id")
+  recordId     String                @unique @map("record_id")
+  state        NutritionRecordState  @default(UNKNOWN) @map("state")
+  method       NutritionRecordMethod @default(NONE) @map("method")
+  /// 自由文本部位名，如「牛绞肉 85/15」；认不出时为空。
+  cutLabel     String?               @map("cut_label") @db.VarChar(100)
+  /// 归组 key，如 ground / chuck；认不出时为空。
+  cutGroup     String?               @map("cut_group") @db.VarChar(50)
+  /// 判断依据词，必须是词条名里真实出现的片段。
+  evidence     String?               @map("evidence") @db.VarChar(200)
+  confidence   Float?                @map("confidence")
+  model        String?               @map("model") @db.VarChar(100)
+  classifiedAt DateTime              @default(now()) @map("classified_at")
+  correctedBy  String?               @map("corrected_by") @db.VarChar(100)
+  correctedAt  DateTime?             @map("corrected_at")
+  createdAt    DateTime              @default(now()) @map("created_at")
+  updatedAt    DateTime              @updatedAt @map("updated_at")
+  record       NutritionSourceRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+
+  @@index([state])
+  @@index([method])
+  @@index([cutGroup])
+  @@map("nutrition_record_classification")
 }
 
 /// 中文 → 外文检索词的词典来源。

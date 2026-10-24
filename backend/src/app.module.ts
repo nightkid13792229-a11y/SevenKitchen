@@ -202,6 +202,7 @@ import { IngredientCreationCheckService } from './application/ingredient-creatio
 import { IngredientCreationCommitService } from './application/ingredient-creation/ingredient-creation-commit.service';
 import { IngredientCreationIntakeService } from './application/ingredient-creation/ingredient-creation-intake.service';
 import { IngredientNameAliasService } from './application/ingredient-creation/ingredient-name-alias.service';
+import { IngredientNameClassifierService } from './application/ingredient-creation/ingredient-name-classifier.service';
 import { IngredientDraftAgentService } from './application/ingredient-creation/ingredient-draft-agent.service';
 import { IngredientCreationToolsService } from './application/ingredient-creation/ingredient-creation-tools.service';
 import { IngredientCreationMergeService } from './application/ingredient-creation/ingredient-creation-merge.service';
@@ -926,6 +927,7 @@ validatePrismaConfig();
     IngredientCreationCommitService,
     IngredientCreationIntakeService,
     IngredientNameAliasService,
+    IngredientNameClassifierService,
     IngredientDraftAgentService,
     IngredientCreationToolsService,
     FediafTargetSelectorService,

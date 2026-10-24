@@ -18,6 +18,15 @@ import {
   type AgentSearchEvidenceView
 } from './stepView'
 
+/** AI 读词条名判出的生熟 / 做法 / 部位（后端 step_end.matches 的精简结构）。 */
+export interface AgentStreamClassification {
+  state: string
+  method: string
+  cutLabel: string | null
+  cutGroup: string | null
+  evidence: string | null
+}
+
 /** 查库命中的一条词条（后端 step_end.matches 的精简结构）。 */
 export interface AgentStreamMatch {
   name: string
@@ -29,6 +38,8 @@ export interface AgentStreamMatch {
     verdict: AgentAiVerdict
     reason: string
   }
+  /** AI 分类标签与依据词；旧后端没有这个字段。 */
+  classification?: AgentStreamClassification
 }
 
 /** 读来源记录的步骤摘要（后端 step_end.record）。 */
@@ -71,6 +82,8 @@ export interface AgentPendingQuestionOption {
   aiVerdict?: AgentAiVerdict | null
   /** AI 复核的一句理由（≤40 字） */
   aiReason?: string | null
+  /** AI 读词条名判出的生熟 / 做法 / 部位 + 依据词；普通问题没有 */
+  classification?: AgentStreamClassification
 }
 
 /** ask 选项上的 AI 判断小标；没有判断时返回 null。 */
@@ -323,6 +336,28 @@ function readOptionChecks(
         : inLibrary === false
           ? `${baseLabel}（库里未收录，选了会去线上找）`
           : baseLabel
+    const classification =
+      raw &&
+      isRecord(raw.classification) &&
+      typeof raw.classification.state === 'string' &&
+      typeof raw.classification.method === 'string'
+        ? {
+            state: raw.classification.state.trim(),
+            method: raw.classification.method.trim(),
+            cutLabel:
+              typeof raw.classification.cutLabel === 'string'
+                ? raw.classification.cutLabel.trim() || null
+                : null,
+            cutGroup:
+              typeof raw.classification.cutGroup === 'string'
+                ? raw.classification.cutGroup.trim() || null
+                : null,
+            evidence:
+              typeof raw.classification.evidence === 'string'
+                ? raw.classification.evidence.trim() || null
+                : null
+          }
+        : undefined
     return {
       label,
       ...(kind ? { kind } : {}),
@@ -331,7 +366,8 @@ function readOptionChecks(
       displayLabel,
       ...(aiVerdict
         ? { candidateLabel: baseLabel, aiVerdict, aiReason }
-        : {})
+        : {}),
+      ...(classification ? { classification } : {})
     }
   })
 }

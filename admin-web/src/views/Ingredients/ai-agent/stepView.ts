@@ -42,6 +42,91 @@ export function aiVerdictTagType(
   return verdict ? AI_VERDICT_TAG_TYPES[verdict] : 'warning'
 }
 
+/** AI 分类：状态 → 中文 */
+const CLASSIFICATION_STATE_LABELS: Record<string, string> = {
+  RAW: '生',
+  COOKED: '熟',
+  UNKNOWN: '未知'
+}
+
+/** AI 分类：加工方式 → 中文 */
+const CLASSIFICATION_METHOD_LABELS: Record<string, string> = {
+  BOILED: '水煮',
+  STEAMED: '蒸',
+  GRILLED: '烤',
+  FRIED: '煎/炸',
+  OTHER: '其它做法',
+  NONE: '无'
+}
+
+/** AI 分类：部位 key → 中文展示（只是标签，不参与判断） */
+const CLASSIFICATION_CUT_GROUP_LABELS: Record<string, string> = {
+  ground: '绞肉',
+  tenderloin: '里脊',
+  loin: '外脊',
+  round: '后腿',
+  brisket: '腩',
+  shank: '腱',
+  chuck: '肩',
+  rib: '肋排',
+  sandwich: '薄片',
+  breast: '胸',
+  thigh: '腿',
+  wing: '翅',
+  liver: '肝',
+  heart: '心',
+  kidney: '肾',
+  gizzard: '胗',
+  neck: '颈',
+  head: '头',
+  foot: '爪',
+  other: '其他部位'
+}
+
+function readClassification(value: unknown): AgentSearchClassificationView | null {
+  if (!isRecordValue(value)) {
+    return null
+  }
+  const state = readText(value.state) || 'UNKNOWN'
+  const method = readText(value.method) || 'NONE'
+  const cutLabel = readText(value.cutLabel) || null
+  const cutGroup = readText(value.cutGroup) || null
+  const stateLabel = CLASSIFICATION_STATE_LABELS[state] ?? state
+  const methodLabel = CLASSIFICATION_METHOD_LABELS[method] ?? method
+  const cutGroupLabel =
+    (cutGroup && CLASSIFICATION_CUT_GROUP_LABELS[cutGroup]) || cutGroup || ''
+  const cut = cutLabel || cutGroupLabel
+  const label = [stateLabel, method === 'NONE' ? '' : methodLabel, cut]
+    .filter(Boolean)
+    .join(' · ')
+  return {
+    state,
+    stateLabel,
+    method,
+    methodLabel,
+    cutLabel,
+    cutGroup,
+    cutGroupLabel,
+    label,
+    evidence: readText(value.evidence) || null
+  }
+}
+
+/** AI 读词条名判出的生熟 / 做法 / 部位 + 依据词；旧后端没有时为 null。 */
+export interface AgentSearchClassificationView {
+  state: string
+  stateLabel: string
+  method: string
+  methodLabel: string
+  cutLabel: string | null
+  cutGroup: string | null
+  cutGroupLabel: string
+  /** 一行展示：生 · 水煮 · 绞肉 */
+  label: string
+  /** 判断依据词（必须真实出现在词条名里） */
+  evidence: string | null
+}
+
 /** 查库命中的一条词条：给页面直接渲染的匹配依据。 */
 export interface AgentSearchMatchView {
   foodName: string
@@ -60,6 +145,8 @@ export interface AgentSearchMatchView {
   aiVerdictTagType: AgentAiVerdictTagType
   /** AI 复核的一句理由（≤40 字）；没有判断时为空串 */
   aiReason: string
+  /** AI 分类标签（状态 / 加工方式 / 部位）与依据词；旧后端没有时为 null */
+  classification: AgentSearchClassificationView | null
 }
 
 /** 查库结果里的部位分组概览（后端 groups 的页面结构）。 */
@@ -142,6 +229,7 @@ export function matchMethodLabel(method: string): string {
 
 /** 已知工具的中文名；新增工具没登记时按原始名显示，不隐藏。 */
 const TOOL_LABELS: Record<string, string> = {
+  listNutritionNames: '列词条名',
   searchLocalNutrition: '查本地库',
   getNutritionRecord: '读来源记录',
   updateNutritionField: '写字段',
@@ -249,7 +337,8 @@ function toMatchView(
     aiVerdict,
     aiVerdictLabel: aiVerdictLabel(aiVerdict),
     aiVerdictTagType: aiVerdictTagType(aiVerdict),
-    aiReason
+    aiReason,
+    classification: readClassification(candidate.classification)
   }
 }
 

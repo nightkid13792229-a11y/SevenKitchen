@@ -8,6 +8,8 @@ import type {
   CandidateGroupSummary,
   CandidateNarrowingChoice,
 } from './ingredient-candidate-groups';
+import type { NameClassification } from './ingredient-name-classifier.service';
+import type { ClassificationNarrowingStats } from './ingredient-name-narrowing';
 
 /**
  * 向导站点。草稿的 `step` 只取这些值，其它字符串一律视为脏数据。
@@ -210,6 +212,12 @@ export interface CandidateNarrowingRecord {
   choices: CandidateNarrowingChoice[];
   groups: CandidateGroupSummary[];
   selectedGroupKey: string | null;
+  /** 已选状态；「生 + 熟都要」存 ['RAW','COOKED']。旧草稿没有。 */
+  selectedStates?: PreparationState[];
+  /** 本次收窄依据的 AI 分类真实统计；旧草稿没有。 */
+  stats?: ClassificationNarrowingStats | null;
+  /** 收窄后列出的词条名 → AI 分类，askUser 落库 optionChecks 时用。 */
+  classificationByName?: Record<string, NameClassification>;
   updatedAt: string;
 }
 
@@ -241,6 +249,8 @@ export interface CandidateRow {
   matchedKeyword?: string;
   matchedSourceName?: string;
   notes: string[];
+  /** AI 读词条名得出的生熟 / 做法 / 部位；页面「匹配依据」直接展示。 */
+  classification?: NameClassification | null;
 }
 
 /**
@@ -412,6 +422,8 @@ export interface PendingQuestionOption {
   aiVerdict?: CandidateReviewVerdict | null;
   /** AI 复核的一句理由（≤40 字）；没有判断时为空。 */
   aiReason?: string | null;
+  /** AI 读词条名判出的生熟 / 做法 / 部位 + evidence；普通问题没有。 */
+  classification?: NameClassification | null;
 }
 
 /**

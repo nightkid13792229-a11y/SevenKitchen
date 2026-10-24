@@ -939,4 +939,68 @@ describe('候选先收窄 · 分组概览与选项类型', () => {
       displayLabel: '都不对，我直接说'
     })
   })
+  it('状态收窄选项显示真实条数，「生 + 熟都要」是一个合法选项；词条选项保留 AI 分类', () => {
+    const options = ['生（4 条）', '熟（2 条）', '生 + 熟都要（6 条）']
+    const pending = readPendingQuestion({
+      question: '「牛肉」共 6 条：生 4 条、熟 2 条；要哪些状态？',
+      options,
+      optionChecks: options.map((label) => ({
+        label,
+        kind: 'STATE',
+        inLibrary: null,
+        matchedName: null,
+        displayLabel: label
+      }))
+    })
+
+    expect(pending?.options).toEqual(options)
+    expect(pending?.optionChecks?.map((option) => option.kind)).toEqual([
+      'STATE',
+      'STATE',
+      'STATE'
+    ])
+    expect(pending?.optionChecks?.[2]?.displayLabel).toBe('生 + 熟都要（6 条）')
+
+    const entry = readPendingQuestion({
+      question: '绞肉这一组共 2 条，请选一条：',
+      options: [
+        'Beef, ground, raw · 来源 USDA_FDC · 覆盖率 80% · 相关：就是牛肉',
+        '都不对，我直接说'
+      ],
+      optionChecks: [
+        {
+          label:
+            'Beef, ground, raw · 来源 USDA_FDC · 覆盖率 80% · 相关：就是牛肉',
+          kind: undefined,
+          inLibrary: true,
+          matchedName: 'Beef, ground, raw',
+          displayLabel:
+            'Beef, ground, raw · 来源 USDA_FDC · 覆盖率 80% · 相关：就是牛肉',
+          classification: {
+            state: 'RAW',
+            method: 'NONE',
+            cutLabel: '牛绞肉',
+            cutGroup: 'ground',
+            evidence: 'ground'
+          }
+        },
+        {
+          label: '都不对，我直接说',
+          kind: 'FREE',
+          inLibrary: null,
+          matchedName: null,
+          displayLabel: '都不对，我直接说'
+        }
+      ]
+    })
+
+    expect(entry?.optionChecks?.[0]?.classification).toEqual({
+      state: 'RAW',
+      method: 'NONE',
+      cutLabel: '牛绞肉',
+      cutGroup: 'ground',
+      evidence: 'ground'
+    })
+  })
+
 })

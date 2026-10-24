@@ -39,6 +39,32 @@ export interface FindCandidatesInput {
   state: PreparationState;
 }
 
+/** `listNutritionNames` 的入参：只按名字摆事实，不判断生熟 / 做法 / 部位。 */
+export interface ListNutritionNamesInput {
+  /** 中文或外文关键词。 */
+  keyword: string;
+  /** 可选的英文名（口径卡里已有英文名时一起参与匹配）。 */
+  nameEn?: string;
+  /** 最多返回多少条；默认与上限都是 300。 */
+  limit?: number;
+}
+
+/** 一条真实命中的词条名；只有摆事实需要的三列。 */
+export interface NutritionNameRow {
+  id: string;
+  name: string;
+  sourceType: string;
+}
+
+export interface ListNutritionNamesResult {
+  /** 截断前的真实命中总数。 */
+  total: number;
+  names: NutritionNameRow[];
+  /** 本次实际用过的检索词（中文 + 词典展开 + AI 翻译）。 */
+  keywords: string[];
+  notice?: string | null;
+}
+
 /** 补剂标签不是食材来源，不进候选。 */
 const NON_FOOD_SOURCE_TYPES: readonly NutritionGovernanceSourceType[] = [
   'SUPPLEMENT_LABEL',
@@ -68,6 +94,10 @@ const GENTLE_COOKED_METHOD_WEIGHT = 0.05;
 
 /** 候选默认返回条数，避免「牛肉」这类宽泛名字把接口和页面撑爆。 */
 const DEFAULT_CANDIDATE_LIMIT = 50;
+
+/** `listNutritionNames` 的默认 / 上限：只摆事实，不替人判断，所以给 300。 */
+const DEFAULT_NAME_LIST_LIMIT = 300;
+const MAX_NAME_LIST_LIMIT = 300;
 
 /** `nutrition_source_record` 里检索候选时需要的列。 */
 interface SourceRecordMeta {
@@ -549,6 +579,17 @@ function normalizeCandidateLimit(limit: number): number {
   return Math.max(0, Math.floor(limit));
 }
 
+/** `listNutritionNames` 的 limit：默认 300，上限 300，非法值回落默认。 */
+function normalizeNameListLimit(limit: number | undefined): number {
+  if (typeof limit !== 'number' || !Number.isFinite(limit)) {
+    return DEFAULT_NAME_LIST_LIMIT;
+  }
+  return Math.min(
+    MAX_NAME_LIST_LIMIT,
+    Math.max(1, Math.floor(limit)),
+  );
+}
+
 function toCandidateRow(candidate: ScoredCandidate): CandidateRow {
   return {
     sourceRecordId: candidate.record.id,
@@ -669,6 +710,85 @@ export class IngredientCreationCandidateService {
     private readonly prisma: PrismaService,
     private readonly aliasService: IngredientNameAliasService,
   ) {}
+
+  /**
+   * 只按名字摆事实：返回真实命中的词条名（最多 300 条），**不做分类**。
+   *
+   * 中文关键词仍先查词典、词典没有就让模型翻译；翻译词真的命中来源才写回词典
+   * （与 `findCandidates` 同一套 alias 服务与落库策略）。
+   *
+   * 与候选检索的区别：这里不看生熟 / 做法 / 覆盖率，不截断到 50 条，
+   * 也不判断这条词条有没有营养数据 —— 这些交给后面的 AI 分类与人的选择。
+   */
+  async listNutritionNames(
+    input: ListNutritionNamesInput,
+  ): Promise<ListNutritionNamesResult> {
+    const baseNames = uniqueNonEmptyText([input.keyword, input.nameEn]);
+    const limit = normalizeNameListLimit(input.limit);
+    if (baseNames.length === 0) {
+      return { total: 0, names: [], keywords: [], notice: null };
+    }
+
+    const chineseNames = baseNames.filter((name) => HAN_SCRIPT.test(name));
+    const expansions = await this.resolveQueryExpansions(chineseNames);
+    const query = buildQueryAnalysis(
+      {
+        name: input.keyword,
+        ...(input.nameEn ? { nameEn: input.nameEn } : {}),
+        state: 'RAW',
+      },
+      expansions.terms,
+    );
+
+    const records = await this.prisma.nutritionSourceRecord.findMany({
+      where: {
+        status: 'ACTIVE',
+        sourceType: { notIn: [...NON_FOOD_SOURCE_TYPES] },
+      },
+      select: {
+        id: true,
+        sourceType: true,
+        foodName: true,
+        foodNameEn: true,
+      },
+    });
+
+    const matched: Array<{ record: SourceRecordMeta; score: number }> = [];
+    const firstSourceRecordIdByTerm = new Map<string, string>();
+    for (const record of records) {
+      const match = scoreSourceRecord(query, record);
+      if (!match) continue;
+      matched.push({ record, score: match.score });
+      for (const term of match.matchedTerms) {
+        if (!firstSourceRecordIdByTerm.has(term)) {
+          firstSourceRecordIdByTerm.set(term, record.id);
+        }
+      }
+    }
+
+    await this.recordAiTranslationHits(
+      expansions.aiTranslations,
+      firstSourceRecordIdByTerm,
+    );
+
+    matched.sort(
+      (left, right) =>
+        right.score - left.score ||
+        left.record.foodName.localeCompare(right.record.foodName) ||
+        left.record.id.localeCompare(right.record.id),
+    );
+
+    return {
+      total: matched.length,
+      names: matched.slice(0, limit).map(({ record }) => ({
+        id: record.id,
+        name: record.foodName,
+        sourceType: record.sourceType,
+      })),
+      keywords: query.keywords,
+      notice: expansions.notice,
+    };
+  }
 
   /**
    * 中文词 → 外文检索词。

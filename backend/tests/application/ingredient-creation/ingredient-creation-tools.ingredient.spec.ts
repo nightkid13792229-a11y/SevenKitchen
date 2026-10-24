@@ -51,6 +51,24 @@ function createTools(draftPayload: Record<string, unknown> = {}) {
     {
       reviewCandidates: jest.fn(async () => []),
     } as unknown as IngredientCandidateReviewService,
+    {
+      classifyNames: jest.fn(async (input: any) => ({
+        results: input.items.map((item: { id: string }) => ({
+          id: item.id,
+          state: 'UNKNOWN',
+          method: 'NONE',
+          cutLabel: null,
+          cutGroup: null,
+          evidence: null,
+          confidence: null,
+        })),
+        counts: {
+          byState: { RAW: 0, COOKED: 0, UNKNOWN: input.items.length },
+          byMethod: { BOILED: 0, STEAMED: 0, GRILLED: 0, FRIED: 0, OTHER: 0, NONE: input.items.length },
+          byCutGroup: {},
+        },
+      })),
+    } as never,
   );
 
   return { tools, draftService };

@@ -4,6 +4,7 @@ import { IngredientCreationCandidateService } from '../../../src/application/ing
 import { IngredientCreationCheckService } from '../../../src/application/ingredient-creation/ingredient-creation-check.service';
 import { IngredientCreationDraftService } from '../../../src/application/ingredient-creation/ingredient-creation-draft.service';
 import { IngredientCreationToolsService } from '../../../src/application/ingredient-creation/ingredient-creation-tools.service';
+import type { IngredientNameClassifierService } from '../../../src/application/ingredient-creation/ingredient-name-classifier.service';
 import { NUTRITION_FIELD_CATALOG } from '../../../src/domain/ingredient/nutrition-field-catalog';
 import type { PrismaService } from '../../../src/infrastructure/prisma.service';
 import type {
@@ -65,7 +66,14 @@ function createTools(
     ),
   };
 
-  const candidateService = { findCandidates: jest.fn() };
+  const candidateService = {
+    findCandidates: jest.fn(),
+    listNutritionNames: jest.fn(async () => ({
+      total: 0,
+      names: [],
+      keywords: [],
+    })),
+  };
   const checkService = { runCheck: jest.fn() };
   const reviewService: { reviewCandidates: jest.Mock } = {
     reviewCandidates: jest.fn(
@@ -78,12 +86,44 @@ function createTools(
     ),
   };
 
+  const nameClassifierService = {
+      classifyNames: jest.fn(async (input: any) => ({
+        results: input.items.map((item: { id: string; name: string }) => {
+          const lower = item.name.toLowerCase();
+          const cooked = /cooked|boiled|steamed|grilled|fried/.test(lower);
+          const cutGroup = lower.includes('ground')
+            ? 'ground'
+            : lower.includes('tenderloin')
+              ? 'tenderloin'
+              : lower.includes('brisket')
+                ? 'brisket'
+                : null;
+          const evidence = cutGroup ?? (cooked ? 'cooked' : 'raw');
+          return {
+            id: item.id,
+            state: cooked ? 'COOKED' : 'RAW',
+            method: cooked ? 'BOILED' : 'NONE',
+            cutLabel: cutGroup,
+            cutGroup,
+            evidence,
+            confidence: 0.9,
+          };
+        }),
+        counts: {
+          byState: { RAW: 0, COOKED: 0, UNKNOWN: 0 },
+          byMethod: { BOILED: 0, STEAMED: 0, GRILLED: 0, FRIED: 0, OTHER: 0, NONE: 0 },
+          byCutGroup: {},
+        },
+      })),
+  };
+
   const tools = new IngredientCreationToolsService(
     candidateService as unknown as IngredientCreationCandidateService,
     draftService as unknown as IngredientCreationDraftService,
     checkService as unknown as IngredientCreationCheckService,
     prisma as unknown as PrismaService,
     reviewService as unknown as IngredientCandidateReviewService,
+    nameClassifierService as unknown as IngredientNameClassifierService,
   );
 
   return {
@@ -92,6 +132,7 @@ function createTools(
     draftService,
     candidateService,
     reviewService,
+    nameClassifierService,
   };
 }
 
@@ -1169,7 +1210,7 @@ describe('IngredientCreationToolsService · AI 复核候选（判断与写入闸
       {},
     );
     candidateService.findCandidates.mockResolvedValue(
-      searchResult([row('rec-yam', 'Yam, raw'), row('rec-yam-2', 'Yam, cooked')]),
+      searchResult([row('rec-yam', 'Yam, raw'), row('rec-yam-2', 'Yam, raw 2')]),
     );
     reviewService.reviewCandidates.mockResolvedValue([
       review('rec-yam', 'RELEVANT', '就是山药'),
@@ -1179,7 +1220,7 @@ describe('IngredientCreationToolsService · AI 复核候选（判断与写入闸
       keyword: '山药',
       state: 'RAW',
     });
-    expect(search.body.nextAction).toBe('ASK_USER');
+    expect(search.body.nextAction).toBe('ASK_USER_ENTRIES');
     expect(search.body.hint).toContain('askUser');
 
     draftService.patch.mockClear();
@@ -1435,16 +1476,17 @@ describe('IngredientCreationToolsService · 候选太多时先收窄、再列词
     expect(search.body.totalCandidates).toBe(11);
     expect(search.body.nextAction).toBe('NARROW_GROUP');
     expect(search.body.groups).toEqual([
-      { key: 'ground', label: '牛绞肉', count: 6, states: ['RAW'] },
-      { key: 'tenderloin', label: '牛里脊', count: 3, states: ['RAW'] },
-      { key: 'brisket', label: '牛腩', count: 2, states: ['RAW'] },
+      { key: 'ground', label: '绞肉', count: 6, states: ['RAW'] },
+      { key: 'tenderloin', label: '里脊', count: 3, states: ['RAW'] },
+      { key: 'brisket', label: '腩', count: 2, states: ['RAW'] },
     ]);
     expect(search.body.narrowing).toMatchObject({
       required: true,
       kind: 'GROUP',
-      options: ['牛绞肉（6 条）', '牛里脊（3 条）', '牛腩（2 条）'],
+      options: ['绞肉（6 条）', '里脊（3 条）', '腩（2 条）'],
     });
-    expect(search.body.narrowing.question).toContain('11 条相关');
+    expect(search.body.narrowing.question).toContain('共 11 条');
+    expect(search.body.narrowing.question).toContain('绞肉 6 条');
     expect(search.body.narrowing.options.join('')).not.toContain('Beef');
     expect(search.body.hint).toContain('先按部位');
     expect(search.body.hint).toContain('不要列');
@@ -1472,7 +1514,7 @@ describe('IngredientCreationToolsService · 候选太多时先收窄、再列词
     });
     expect(blocked.ok).toBe(false);
     expect(blocked.error).toContain('先按部位收窄');
-    expect(blocked.error).toContain('牛绞肉（6 条）');
+    expect(blocked.error).toContain('绞肉（6 条）');
     expect(draftService.patch).not.toHaveBeenCalled();
   });
 
@@ -1495,7 +1537,7 @@ describe('IngredientCreationToolsService · 候选太多时先收窄、再列词
     expect(narrowed.ok).toBe(true);
     expect(narrowed.body.group).toMatchObject({
       key: 'ground',
-      label: '牛绞肉',
+      label: '绞肉',
       count: 6,
     });
     // 只回该组候选，不再把别的组混进来。
@@ -1556,19 +1598,37 @@ describe('IngredientCreationToolsService · 候选太多时先收窄、再列词
 
     expect(search.body.narrowing.required).toBe(false);
     expect(search.body.narrowing.options).toEqual([]);
-    expect(search.body.nextAction).toBe('ASK_USER');
+    expect(search.body.nextAction).toBe('ASK_USER_ENTRIES');
     expect(search.body.listing.options).toHaveLength(4);
     expect(search.body.listing.options.at(-1)).toBe('都不对，我直接说');
     expect(search.body.hint).toContain('直接列');
     expect(search.body.hint).toContain('不要先问收窄');
   });
 
-  it('未指定状态：收窄问题必须包含「生 / 熟」，且不列词条', async () => {
-    const { tools, candidateService, reviewService } = createTools([], {
-      intake: { name: '牛肉' },
-    });
+  it('未指定状态：用 AI 真实统计发问，选项带条数，且「生 + 熟都要」可点', async () => {
+    const { tools, candidateService, reviewService, nameClassifierService } =
+      createTools([], {
+        intake: { name: '牛肉' },
+      });
     const candidates = beefCandidates();
     mockAllRelevant(candidateService, reviewService, candidates);
+    // 8 条生、3 条熟：分类由 AI 判断（这里 mock 出来），代码只负责统计。
+    nameClassifierService.classifyNames.mockImplementation(async (input: any) => ({
+      results: input.items.map((item: any, index: number) => ({
+        id: item.id,
+        state: index < 8 ? 'RAW' : 'COOKED',
+        method: index < 8 ? 'NONE' : 'BOILED',
+        cutLabel: index < 6 ? '牛绞肉' : index < 9 ? '牛里脊' : '牛腩',
+        cutGroup: index < 6 ? 'ground' : index < 9 ? 'tenderloin' : 'brisket',
+        evidence: item.name.includes('ground') ? 'ground' : 'Beef',
+        confidence: 0.9,
+      })),
+      counts: {
+        byState: { RAW: 8, COOKED: 3, UNKNOWN: 0 },
+        byMethod: { BOILED: 3, STEAMED: 0, GRILLED: 0, FRIED: 0, OTHER: 0, NONE: 8 },
+        byCutGroup: { ground: 6, tenderloin: 3, brisket: 2 },
+      },
+    }));
 
     const search = await executeTool(tools, 'searchLocalNutrition', {
       keyword: '牛肉',
@@ -1578,11 +1638,13 @@ describe('IngredientCreationToolsService · 候选太多时先收窄、再列词
     expect(search.body.stateSpecified).toBe(false);
     expect(search.body.nextAction).toBe('NARROW_STATE');
     expect(search.body.narrowing.kind).toBe('STATE');
-    expect(search.body.narrowing.question).toContain('生');
-    expect(search.body.narrowing.question).toContain('熟');
+    expect(search.body.narrowing.question).toContain('生 8 条');
+    expect(search.body.narrowing.question).toContain('熟 3 条');
+    expect(search.body.narrowing.question).toContain('水煮 3 条');
     expect(search.body.narrowing.options).toEqual([
-      '生（查生档案）',
-      '熟（查熟档案）',
+      '生（8 条）',
+      '熟（3 条）',
+      '生 + 熟都要（11 条）',
     ]);
 
     const asked = await executeTool(tools, 'askUser', {
@@ -1592,22 +1654,58 @@ describe('IngredientCreationToolsService · 候选太多时先收窄、再列词
     expect(asked.ok).toBe(true);
     expect(asked.body.optionChecks).toEqual([
       expect.objectContaining({
-        label: '生（查生档案）',
+        label: '生（8 条）',
         kind: 'STATE',
         inLibrary: null,
-        displayLabel: '生（查生档案）',
+        displayLabel: '生（8 条）',
       }),
       expect.objectContaining({
-        label: '熟（查熟档案）',
+        label: '熟（3 条）',
         kind: 'STATE',
         inLibrary: null,
-        displayLabel: '熟（查熟档案）',
+        displayLabel: '熟（3 条）',
+      }),
+      expect.objectContaining({
+        label: '生 + 熟都要（11 条）',
+        kind: 'STATE',
+        inLibrary: null,
+        displayLabel: '生 + 熟都要（11 条）',
       }),
     ]);
     // 这只是确定生熟，还不是挑候选：不能清复核闸门。
     expect(asked.body.optionChecks.some((check: any) => check.aiVerdict)).toBe(
       false,
     );
+  });
+
+  it('选「生 + 熟都要」后按部位收窄；传 states 两态能继续，并只列该组 ≤5 条', async () => {
+    const { tools, candidateService, reviewService } = createTools([], {
+      intake: { name: '牛肉' },
+    });
+    const candidates = beefCandidates();
+    mockAllRelevant(candidateService, reviewService, candidates);
+
+    const both = await executeTool(tools, 'searchLocalNutrition', {
+      keyword: '牛肉',
+      states: ['RAW', 'COOKED'],
+    });
+    expect(both.body.stateSpecified).toBe(true);
+    expect(both.body.states).toEqual(['RAW', 'COOKED']);
+    expect(both.body.nextAction).toBe('NARROW_GROUP');
+    expect(both.body.narrowing.options).toEqual([
+      '绞肉（6 条）',
+      '里脊（3 条）',
+      '腩（2 条）',
+    ]);
+
+    const narrowed = await executeTool(tools, 'searchLocalNutrition', {
+      keyword: '牛肉',
+      states: ['RAW', 'COOKED'],
+      group: 'ground',
+    });
+    expect(narrowed.ok).toBe(true);
+    expect(narrowed.body.listing.entries.length).toBeLessThanOrEqual(5);
+    expect(narrowed.body.listing.options.at(-1)).toBe('都不对，我直接说');
   });
 
   it('该组只剩 1 条：直接用它并说明理由，不再问', async () => {
@@ -1645,9 +1743,19 @@ describe('IngredientCreationToolsService · 候选太多时先收窄、再列词
     expect(narrowed.body.hint).toContain('理由');
   });
 
-  it('totalCandidates 是截断前的候选总数：50 条候选、前 12 条参与复核与分组', async () => {
+  it('totalCandidates 是截断前的真实命中总数：50 条名字、前 12 条参与复核', async () => {
     const { tools, candidateService, reviewService } = createTools([], {
       intake: { name: '牛肉' },
+    });
+    const allNames = Array.from({ length: 50 }, (_, index) => ({
+      id: `beef-${index}`,
+      name: `Beef, ground, raw ${index + 1}`,
+      sourceType: 'USDA_FDC',
+    }));
+    candidateService.listNutritionNames.mockResolvedValue({
+      total: 50,
+      names: allNames,
+      keywords: ['牛肉', 'beef'],
     });
     const candidates = Array.from({ length: 50 }, (_, index) =>
       row(`beef-${index}`, `Beef, ground, raw ${index + 1}`),
@@ -1664,7 +1772,7 @@ describe('IngredientCreationToolsService · 候选太多时先收窄、再列词
     expect(search.body.returnedCount).toBe(12);
     expect(search.body.candidates).toHaveLength(12);
     expect(search.body.groups).toEqual([
-      { key: 'ground', label: '牛绞肉', count: 12, states: ['RAW'] },
+      { key: 'ground', label: '绞肉', count: 50, states: ['RAW'] },
     ]);
   });
   it('熟组词条核实按收窄记录的 state=COOKED，不能回退到默认 RAW', async () => {
@@ -1695,6 +1803,120 @@ describe('IngredientCreationToolsService · 候选太多时先收窄、再列词
       { name: 'Beef, ground, cooked 1', state: 'COOKED' },
       1,
     );
+  });
+
+
+  it('模糊词：先列名字（300 上限）→ AI 分类 → 按真实统计问，多选生+熟可行', async () => {
+    const { tools, candidateService, reviewService, nameClassifierService } =
+      createTools([], { intake: { name: '牛肉' } });
+    const candidates = beefCandidates();
+    mockAllRelevant(candidateService, reviewService, candidates);
+
+    const names = [
+      ...Array.from({ length: 6 }, (_, index) => ({
+        id: `ground-${index}`,
+        name: `Beef, ground, raw ${index + 1}`,
+        sourceType: 'USDA_FDC',
+      })),
+      ...Array.from({ length: 3 }, (_, index) => ({
+        id: `chuck-${index}`,
+        name: `Beef, chuck, boiled ${index + 1}`,
+        sourceType: 'USDA_FDC',
+      })),
+      { id: 'rib-0', name: 'Beef, rib, grilled', sourceType: 'CFCT' },
+    ];
+    candidateService.listNutritionNames.mockResolvedValue({
+      total: 10,
+      names,
+      keywords: ['牛肉', 'beef'],
+    });
+    nameClassifierService.classifyNames.mockImplementation(
+      async (input: any) => ({
+        results: input.items.map((item: any) => {
+          const lower = item.name.toLowerCase();
+          const cooked = lower.includes('boiled') || lower.includes('grilled');
+          const cutGroup = lower.includes('ground')
+            ? 'ground'
+            : lower.includes('chuck')
+              ? 'chuck'
+              : 'rib';
+          return {
+            id: item.id,
+            state: cooked ? 'COOKED' : 'RAW',
+            method: lower.includes('grilled')
+              ? 'GRILLED'
+              : lower.includes('boiled')
+                ? 'BOILED'
+                : 'NONE',
+            cutLabel: cutGroup,
+            cutGroup,
+            evidence: cutGroup,
+            confidence: 0.9,
+          };
+        }),
+        counts: {
+          byState: { RAW: 6, COOKED: 4, UNKNOWN: 0 },
+          byMethod: { BOILED: 3, STEAMED: 0, GRILLED: 1, FRIED: 0, OTHER: 0, NONE: 6 },
+          byCutGroup: { ground: 6, chuck: 3, rib: 1 },
+        },
+      }),
+    );
+
+    // 第一步：工具只摆事实，不分类、不砍到 50 条。
+    const listed = await executeTool(tools, 'listNutritionNames', {
+      keyword: '牛肉',
+    });
+    expect(listed.body.total).toBe(10);
+    expect(listed.body.names).toHaveLength(10);
+    expect(listed.body.names[0]).toEqual({
+      id: 'ground-0',
+      name: 'Beef, ground, raw 1',
+      sourceType: 'USDA_FDC',
+    });
+
+    // 第二步：AI 分类后按真实统计发状态问句。
+    const search = await executeTool(tools, 'searchLocalNutrition', {
+      keyword: '牛肉',
+    });
+    expect(nameClassifierService.classifyNames).toHaveBeenCalledWith({
+      targetName: '牛肉',
+      items: names.map((name) => ({ id: name.id, name: name.name })),
+    });
+    expect(search.body.nextAction).toBe('NARROW_STATE');
+    expect(search.body.narrowing.options).toEqual([
+      '生（6 条）',
+      '熟（4 条）',
+      '生 + 熟都要（10 条）',
+    ]);
+    expect(search.body.narrowing.question).toContain('水煮 3 条');
+    expect(search.body.narrowing.question).toContain('烤 1 条');
+    expect(search.body.narrowing.question).toContain('绞肉 6 条');
+
+    // 第三步：用户选「生 + 熟都要」，按部位收窄。
+    const both = await executeTool(tools, 'searchLocalNutrition', {
+      keyword: '牛肉',
+      states: ['RAW', 'COOKED'],
+    });
+    expect(both.body.nextAction).toBe('NARROW_GROUP');
+    expect(both.body.narrowing.options).toEqual([
+      '绞肉（6 条）',
+      '肩（3 条）',
+      '肋排（1 条）',
+    ]);
+
+    // 第四步：选组后只列该组 ≤5 条 + 兜底。
+    const narrowed = await executeTool(tools, 'searchLocalNutrition', {
+      keyword: '牛肉',
+      states: ['RAW', 'COOKED'],
+      group: 'ground',
+    });
+    expect(narrowed.body.listing.entries).toHaveLength(5);
+    expect(narrowed.body.listing.options.at(-1)).toBe('都不对，我直接说');
+    expect(narrowed.body.listing.entries[0].classification).toMatchObject({
+      state: 'RAW',
+      cutGroup: 'ground',
+      evidence: 'ground',
+    });
   });
 
 });

@@ -256,6 +256,50 @@ describe('toStepView', () => {
     })
   })
 
+  it('查库结果带 AI 分类：状态 / 加工方式 / 部位与依据词一起展示', () => {
+    const view = onlyStep([
+      {
+        name: 'searchLocalNutrition',
+        args: { keyword: '牛肉', state: 'RAW' },
+        ok: true,
+        result: {
+          ok: true,
+          found: true,
+          keywords: ['牛肉', 'beef'],
+          candidateCount: 1,
+          candidates: [
+            {
+              sourceRecordId: 'beef-ground',
+              foodName: 'Beef, ground, raw',
+              matchedBy: 'EN_PARTIAL',
+              matchedKeyword: 'beef',
+              score: 0.8,
+              classification: {
+                state: 'RAW',
+                method: 'NONE',
+                cutLabel: '牛绞肉 85/15',
+                cutGroup: 'ground',
+                evidence: 'ground'
+              }
+            }
+          ]
+        }
+      }
+    ])
+
+    expect(view.search?.matches[0]?.classification).toEqual({
+      state: 'RAW',
+      stateLabel: '生',
+      method: 'NONE',
+      methodLabel: '无',
+      cutLabel: '牛绞肉 85/15',
+      cutGroup: 'ground',
+      cutGroupLabel: '绞肉',
+      label: '生 · 牛绞肉 85/15',
+      evidence: 'ground'
+    })
+  })
+
   it('查本地库零命中时明确写“没有找到匹配词条”，不写成功', () => {
     const view = onlyStep([
       {

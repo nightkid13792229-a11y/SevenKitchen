@@ -158,6 +158,21 @@
                           <el-tag size="small" effect="plain" type="info">
                             匹配方式：{{ match.matchedByLabel }}
                           </el-tag>
+                          <template v-if="match.classification">
+                            <el-tag
+                              size="small"
+                              effect="plain"
+                              type="success"
+                            >
+                              AI 分类：{{ match.classification.label }}
+                            </el-tag>
+                            <span
+                              v-if="match.classification.evidence"
+                              class="agent-step__match-meta"
+                            >
+                              依据词「{{ match.classification.evidence }}」
+                            </span>
+                          </template>
                           <span class="agent-step__match-meta">
                             关键词「{{ match.matchedKeyword }}」
                           </span>

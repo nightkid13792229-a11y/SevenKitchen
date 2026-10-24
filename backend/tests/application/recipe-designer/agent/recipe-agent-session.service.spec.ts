@@ -160,6 +160,77 @@ describe('RecipeAgentSessionService', () => {
     });
   });
 
+  it('transitionStatus 只在 from 状态匹配时更新，返回 true', async () => {
+    const { prisma } = makePrisma();
+    prisma.recipeDesignAgentSession.updateMany.mockResolvedValue({ count: 1 });
+    const service = new RecipeAgentSessionService(prisma as any);
+
+    const updated = await service.transitionStatus(
+      's1',
+      ['WAITING_USER'],
+      'RUNNING',
+    );
+
+    expect(updated).toBe(true);
+    expect(prisma.recipeDesignAgentSession.updateMany).toHaveBeenCalledWith({
+      where: { id: 's1', status: { in: ['WAITING_USER'] } },
+      data: { status: 'RUNNING', endedAt: null },
+    });
+  });
+
+  it('transitionStatus 条件不匹配时返回 false，不走无条件的 update', async () => {
+    const { prisma } = makePrisma();
+    prisma.recipeDesignAgentSession.updateMany.mockResolvedValue({ count: 0 });
+    const service = new RecipeAgentSessionService(prisma as any);
+
+    const updated = await service.transitionStatus(
+      's1',
+      ['WAITING_USER'],
+      'RUNNING',
+    );
+
+    expect(updated).toBe(false);
+    expect(prisma.recipeDesignAgentSession.update).not.toHaveBeenCalled();
+  });
+
+  it('transitionStatus 终态写 endedAt 和 lastError', async () => {
+    const { prisma } = makePrisma();
+    prisma.recipeDesignAgentSession.updateMany.mockResolvedValue({ count: 1 });
+    const service = new RecipeAgentSessionService(prisma as any);
+
+    await service.transitionStatus(
+      's1',
+      ['RUNNING', 'WAITING_USER'],
+      'FAILED',
+      '模型超时',
+    );
+
+    expect(prisma.recipeDesignAgentSession.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 's1',
+        status: { in: ['RUNNING', 'WAITING_USER'] },
+      },
+      data: {
+        status: 'FAILED',
+        endedAt: expect.any(Date),
+        lastError: '模型超时',
+      },
+    });
+  });
+
+  it('transitionStatus 不传 lastError 时保留已有错误', async () => {
+    const { prisma } = makePrisma();
+    prisma.recipeDesignAgentSession.updateMany.mockResolvedValue({ count: 1 });
+    const service = new RecipeAgentSessionService(prisma as any);
+
+    await service.transitionStatus('s1', ['RUNNING'], 'COMPLETED');
+
+    expect(prisma.recipeDesignAgentSession.updateMany).toHaveBeenCalledWith({
+      where: { id: 's1', status: { in: ['RUNNING'] } },
+      data: { status: 'COMPLETED', endedAt: expect.any(Date) },
+    });
+  });
+
   it('recordUsage 拒绝小数与溢出的 token 数', async () => {
     const { prisma } = makePrisma();
     const service = new RecipeAgentSessionService(prisma as any);

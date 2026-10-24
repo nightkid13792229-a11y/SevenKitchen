@@ -47,12 +47,21 @@ export class RecipeAgentControlService implements RecipeAgentControlPort {
       )
       .join('\n');
 
+    // 先抢状态：会话可能已经被 stop / finish_draft 结束，抢不到就不写对话。
+    const waiting = await this.sessionService.transitionStatus(
+      this.sessionId,
+      ['RUNNING'],
+      'WAITING_USER',
+    );
+    if (!waiting) {
+      return;
+    }
+
     await this.sessionService.appendMessage({
       sessionId: this.sessionId,
       role: 'ASSISTANT',
       content,
     });
-    await this.sessionService.updateStatus(this.sessionId, 'WAITING_USER');
   }
 
   async requestException(input: {
@@ -100,6 +109,16 @@ export class RecipeAgentControlService implements RecipeAgentControlPort {
     summary: string;
     warnings: string[];
   }): Promise<void> {
+    // 先抢状态：停止后的迟到交付不能再写快照 / 交付卡。
+    const completed = await this.sessionService.transitionStatus(
+      this.sessionId,
+      ['RUNNING'],
+      'COMPLETED',
+    );
+    if (!completed) {
+      return;
+    }
+
     const draft = await this.port.getDraft(this.draftId);
 
     const snapshot = {
@@ -116,8 +135,6 @@ export class RecipeAgentControlService implements RecipeAgentControlPort {
         snapshot,
       },
     });
-
-    await this.sessionService.updateStatus(this.sessionId, 'COMPLETED');
 
     const lines = [input.summary];
     if (input.warnings.length > 0) {

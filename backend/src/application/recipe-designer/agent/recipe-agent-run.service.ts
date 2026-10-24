@@ -17,6 +17,7 @@
  */
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   NotFoundException,
@@ -119,6 +120,10 @@ const SYSTEM_PROMPT = `你是 SevenKitchen 的食谱设计 Agent，负责在当�
 export class RecipeAgentRunService implements OnModuleInit {
   private readonly running = new Map<string, Promise<void>>();
   private readonly stopped = new Set<string>();
+  /** 单实例内的草稿锁：一个草稿同一时间只允许一个运行。 */
+  private readonly activeDrafts = new Set<string>();
+  /** 单实例内的会话领取标记：resume 的 check 和 act 之间不能有第二个请求。 */
+  private readonly claiming = new Set<string>();
 
   constructor(
     private readonly sessionService: RecipeAgentSessionService,
@@ -137,35 +142,56 @@ export class RecipeAgentRunService implements OnModuleInit {
     actor: RecipeAgentRunActor;
     message: string;
   }): Promise<{ sessionId: string }> {
-    // 先校草稿访问权：无权访问时不建会话、不写消息，也不暴露运行状态。
-    await this.designerService.getDraft(
-      input.draftId,
-      this.accessFor(input.actor),
-    );
-    await this.sessionService.assertNoActiveRun(input.draftId);
-
-    const session = await this.sessionService.createSession({
-      designRecipeId: input.draftId,
-      createdBy: input.actor.userId,
-      skillName: 'recipe-design',
-      skillVersion: 'v1',
-    });
-    const sessionId = session.id;
-
-    try {
-      await this.sessionService.appendMessage({
-        sessionId,
-        role: 'USER',
-        content: input.message,
-      });
-    } catch (error) {
-      // 会话已经建出来了，不能再把异常抛给 HTTP；失败落到状态里。
-      await this.failSession(sessionId, error);
-      return { sessionId };
+    // 锁必须在第一个 await 之前抢到：两个并发请求会同时读到“没有活跃会话”。
+    if (this.activeDrafts.has(input.draftId)) {
+      throw new ConflictException('这个草稿已经有一个 AI 运行');
     }
+    this.activeDrafts.add(input.draftId);
 
-    this.launch(sessionId, input.draftId, input.actor, input.message);
-    return { sessionId };
+    let launched = false;
+    try {
+      // 先校草稿访问权：无权访问时不建会话、不写消息，也不暴露运行状态。
+      await this.designerService.getDraft(
+        input.draftId,
+        this.accessFor(input.actor),
+      );
+      await this.sessionService.assertNoActiveRun(input.draftId);
+
+      const session = await this.sessionService.createSession({
+        designRecipeId: input.draftId,
+        createdBy: input.actor.userId,
+        skillName: 'recipe-design',
+        skillVersion: 'v1',
+      });
+      const sessionId = session.id;
+
+      try {
+        await this.sessionService.appendMessage({
+          sessionId,
+          role: 'USER',
+          content: input.message,
+        });
+      } catch (error) {
+        // 会话已经建出来了，不能再把异常抛给 HTTP；失败落到状态里。
+        await this.failSession(sessionId, error);
+        return { sessionId };
+      }
+
+      // 草稿锁跟着后台循环走：循环结束（正常/失败/停止）才释放。
+      this.launch(
+        sessionId,
+        input.draftId,
+        input.actor,
+        input.message,
+        input.draftId,
+      );
+      launched = true;
+      return { sessionId };
+    } finally {
+      if (!launched) {
+        this.activeDrafts.delete(input.draftId);
+      }
+    }
   }
 
   /** 人回答 / 继续之后恢复运行；只有 WAITING_USER 的会话可以继续。 */
@@ -174,39 +200,62 @@ export class RecipeAgentRunService implements OnModuleInit {
     actor: RecipeAgentRunActor;
     message: string;
   }): Promise<void> {
-    const session = await this.prisma.recipeDesignAgentSession.findUnique({
-      where: { id: input.sessionId },
-    });
-    if (!session) {
-      throw new NotFoundException('会话不存在');
+    // 已在跑、或另一个 resume 正在领取：直接拒绝，不进入后面的 await。
+    if (
+      this.running.has(input.sessionId) ||
+      this.claiming.has(input.sessionId)
+    ) {
+      throw new ConflictException('这个会话正在运行');
     }
-    // 访问权先于状态校验：无权访问的会话不能因为状态不同而泄露信息。
-    await this.designerService.getDraft(
-      session.designRecipeId,
-      this.accessFor(input.actor),
-    );
-    if (session.status !== 'WAITING_USER') {
-      throw new BadRequestException('只有等待用户回答的会话可以继续');
-    }
+    this.claiming.add(input.sessionId);
 
     try {
-      await this.sessionService.appendMessage({
-        sessionId: input.sessionId,
-        role: 'USER',
-        content: input.message,
+      const session = await this.prisma.recipeDesignAgentSession.findUnique({
+        where: { id: input.sessionId },
       });
-      await this.sessionService.updateStatus(input.sessionId, 'RUNNING');
-    } catch (error) {
-      await this.failSession(input.sessionId, error);
-      return;
-    }
+      if (!session) {
+        throw new NotFoundException('会话不存在');
+      }
+      // 访问权先于状态校验：无权访问的会话不能因为状态不同而泄露信息。
+      await this.designerService.getDraft(
+        session.designRecipeId,
+        this.accessFor(input.actor),
+      );
+      if (session.status !== 'WAITING_USER') {
+        throw new BadRequestException('只有等待用户回答的会话可以继续');
+      }
 
-    this.launch(
-      input.sessionId,
-      session.designRecipeId,
-      input.actor,
-      input.message,
-    );
+      // 上面读到的状态可能已经过期（例如刚好被 stop）：用条件更新抢状态，
+      // 只有仍然是 WAITING_USER 才允许改成 RUNNING。
+      const claimed = await this.sessionService.transitionStatus(
+        input.sessionId,
+        ['WAITING_USER'],
+        'RUNNING',
+      );
+      if (!claimed) {
+        throw new ConflictException('会话已经结束或被停止');
+      }
+
+      try {
+        await this.sessionService.appendMessage({
+          sessionId: input.sessionId,
+          role: 'USER',
+          content: input.message,
+        });
+      } catch (error) {
+        await this.failSession(input.sessionId, error);
+        return;
+      }
+
+      this.launch(
+        input.sessionId,
+        session.designRecipeId,
+        input.actor,
+        input.message,
+      );
+    } finally {
+      this.claiming.delete(input.sessionId);
+    }
   }
 
   /** 人工停止：先校草稿访问权，再记账落状态，循环看到标记后不再覆盖。 */
@@ -222,8 +271,26 @@ export class RecipeAgentRunService implements OnModuleInit {
       this.accessFor(actor),
     );
 
+    // 内存标记让循环在下一个检查点立刻退出；数据库条件更新才是最终事实。
     this.stopped.add(sessionId);
-    await this.sessionService.updateStatus(sessionId, 'STOPPED');
+    const stopped = await this.sessionService.transitionStatus(
+      sessionId,
+      ['RUNNING', 'WAITING_USER'],
+      'STOPPED',
+    );
+    if (stopped) {
+      return;
+    }
+
+    // 条件更新没命中：可能已经停过（幂等），也可能已经结束（冲突）。
+    const current = await this.prisma.recipeDesignAgentSession.findUnique({
+      where: { id: sessionId },
+      select: { status: true },
+    });
+    if (current?.status === 'STOPPED') {
+      return;
+    }
+    throw new ConflictException('会话已经结束');
   }
 
   /** 等某次运行的后台循环结束；测试和 controller 测试用。 */
@@ -348,6 +415,7 @@ export class RecipeAgentRunService implements OnModuleInit {
     draftId: string,
     actor: RecipeAgentRunActor,
     message: string,
+    heldDraftId?: string,
   ): void {
     const running = this.runLoop(sessionId, draftId, actor, message).catch(
       async (error) => {
@@ -359,6 +427,9 @@ export class RecipeAgentRunService implements OnModuleInit {
     void running.finally(() => {
       if (this.running.get(sessionId) === running) {
         this.running.delete(sessionId);
+      }
+      if (heldDraftId) {
+        this.activeDrafts.delete(heldDraftId);
       }
     });
   }
@@ -553,39 +624,42 @@ export class RecipeAgentRunService implements OnModuleInit {
     status: 'WAITING_USER' | 'COMPLETED',
   ): Promise<void> {
     if (this.isStopped(sessionId)) return;
-    await this.sessionService.updateStatus(sessionId, status);
+    // 只有 RUNNING 的会话能被控制类工具推进到停止点；条件不命中就什么都不做。
+    await this.sessionService.transitionStatus(sessionId, ['RUNNING'], status);
   }
 
   /**
    * 模型自然收尾：置 WAITING_USER，等人继续。
    *
-   * 但如果会话已经被别处置成 COMPLETED / STOPPED（例如控制面先落状态、
-   * 后续写消息失败），不要把它改回 WAITING_USER。读状态失败时按“未结束”
-   * 处理，不能因为一次读失败就让本轮没有状态。
+   * 只允许 RUNNING → WAITING_USER：如果会话已经被别处置成 COMPLETED /
+   * STOPPED（例如控制面先落状态、后续写消息失败），条件更新不会命中，
+   * 状态保持不变。
    */
   private async markWaitingForUser(sessionId: string): Promise<void> {
     if (this.isStopped(sessionId)) return;
-
-    let currentStatus: string | undefined;
-    try {
-      const session = await this.prisma.recipeDesignAgentSession.findUnique({
-        where: { id: sessionId },
-        select: { status: true },
-      });
-      currentStatus = session?.status;
-    } catch {
-      currentStatus = undefined;
-    }
-
-    if (currentStatus === 'COMPLETED' || currentStatus === 'STOPPED') {
-      return;
-    }
-    await this.sessionService.updateStatus(sessionId, 'WAITING_USER');
+    await this.sessionService.transitionStatus(
+      sessionId,
+      ['RUNNING'],
+      'WAITING_USER',
+    );
   }
 
-  /** 超过 30 次工具调用或 6 分钟：记一条错误消息，置 FAILED。 */
+  /** 超过 30 次工具调用或 6 分钟：先落 FAILED，再记一条错误消息。 */
   private async failOverLimit(sessionId: string): Promise<void> {
     if (this.isStopped(sessionId)) return;
+
+    let transitioned = false;
+    try {
+      transitioned = await this.sessionService.transitionStatus(
+        sessionId,
+        ['RUNNING'],
+        'FAILED',
+        OVER_LIMIT_MESSAGE,
+      );
+    } catch {
+      // 后台循环不向外抛错。
+    }
+    if (!transitioned || this.isStopped(sessionId)) return;
 
     try {
       await this.sessionService.appendMessage({
@@ -594,25 +668,27 @@ export class RecipeAgentRunService implements OnModuleInit {
         content: `这次运行已经超过上限（${MAX_TOOL_CALLS} 次工具调用 / 6 分钟），已停止。`,
       });
     } catch {
-      // 消息写不进去也要把状态落下来。
-    }
-    if (this.isStopped(sessionId)) return;
-
-    try {
-      await this.sessionService.updateStatus(
-        sessionId,
-        'FAILED',
-        OVER_LIMIT_MESSAGE,
-      );
-    } catch {
-      // 后台循环不向外抛错。
+      // 状态已经落下，消息写不进去不影响停止。
     }
   }
 
-  /** 未预期异常：写一条错误消息并置 FAILED，不覆盖 STOPPED。 */
+  /** 未预期异常：先把状态置 FAILED，成功后再写一条错误消息；不覆盖 STOPPED。 */
   private async failSession(sessionId: string, error: unknown): Promise<void> {
     if (this.isStopped(sessionId)) return;
     const message = errorMessage(error);
+
+    let transitioned = false;
+    try {
+      transitioned = await this.sessionService.transitionStatus(
+        sessionId,
+        ['RUNNING', 'WAITING_USER'],
+        'FAILED',
+        message,
+      );
+    } catch {
+      // 状态比错误消息更重要，但状态写失败也不能把后台循环带崩。
+    }
+    if (!transitioned || this.isStopped(sessionId)) return;
 
     try {
       await this.sessionService.appendMessage({
@@ -620,13 +696,6 @@ export class RecipeAgentRunService implements OnModuleInit {
         role: 'ASSISTANT',
         content: `这次运行出错了：${message}`,
       });
-    } catch {
-      // 同样：状态比错误消息更重要。
-    }
-    if (this.isStopped(sessionId)) return;
-
-    try {
-      await this.sessionService.updateStatus(sessionId, 'FAILED', message);
     } catch {
       // 后台循环不向外抛错。
     }

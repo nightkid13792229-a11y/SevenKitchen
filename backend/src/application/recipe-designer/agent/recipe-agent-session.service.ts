@@ -107,6 +107,34 @@ export class RecipeAgentSessionService {
     });
   }
 
+  /**
+   * 条件状态迁移（compare-and-set）：只有当前状态落在 `from` 里才写入 `to`。
+   *
+   * 运行态是并发入口（开始 / 继续 / 停止 / 交付），不能先读再写：读到的
+   * 状态可能在写之前就被别处改掉。这里用一条带 `status in (...)` 的
+   * `updateMany` 把判断和写入合成一个原子操作，返回是否真的迁移成功。
+   */
+  async transitionStatus(
+    sessionId: string,
+    from: AgentSessionStatus[],
+    to: AgentSessionStatus,
+    lastError?: string | null,
+  ): Promise<boolean> {
+    const data: Prisma.RecipeDesignAgentSessionUpdateManyMutationInput = {
+      status: to,
+      endedAt: TERMINAL_STATUSES.has(to) ? new Date() : null,
+    };
+    if (lastError !== undefined) {
+      data.lastError = lastError;
+    }
+
+    const result = await this.prisma.recipeDesignAgentSession.updateMany({
+      where: { id: sessionId, status: { in: from } },
+      data,
+    });
+    return result.count === 1;
+  }
+
   async recordUsage(
     sessionId: string,
     promptTokens: number,

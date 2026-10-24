@@ -107,7 +107,7 @@ function makeSessionService() {
     }),
     appendMessage: jest.fn().mockResolvedValue({ id: 'message-1' }),
     listMessages: jest.fn().mockResolvedValue([]),
-    updateStatus: jest.fn().mockResolvedValue(undefined),
+    transitionStatus: jest.fn().mockResolvedValue(true),
     recordUsage: jest.fn().mockResolvedValue(undefined),
     incrementStep: jest.fn().mockResolvedValue(undefined),
     markInterruptedRuns: jest.fn().mockResolvedValue(0),
@@ -297,8 +297,9 @@ describe('RecipeAgentRunService', () => {
       7,
       3,
     );
-    expect(sessionService.updateStatus).toHaveBeenLastCalledWith(
+    expect(sessionService.transitionStatus).toHaveBeenLastCalledWith(
       SESSION_ID,
+      ['RUNNING'],
       'WAITING_USER',
     );
 
@@ -380,14 +381,19 @@ describe('RecipeAgentRunService', () => {
   });
 
   it('本轮自然收尾时不会把已 COMPLETED 的会话改回 WAITING_USER', async () => {
-    const prisma = {
-      recipeDesignAgentSession: {
-        findUnique: jest.fn().mockResolvedValue({ status: 'COMPLETED' }),
+    // 用一个有状态的条件更新模拟数据库：只有当前状态在 from 里才允许改。
+    let dbStatus = 'COMPLETED';
+    const sessionService = makeSessionService();
+    sessionService.transitionStatus.mockImplementation(
+      async (_id: string, from: string[], to: string) => {
+        if (!from.includes(dbStatus)) return false;
+        dbStatus = to;
+        return true;
       },
-    };
-    const { service, sessionService } = makeRunService({
+    );
+    const { service } = makeRunService({
       handlers: {},
-      prisma,
+      sessionService,
       responses: [finalResponse('已经完成了')],
     });
 
@@ -404,10 +410,12 @@ describe('RecipeAgentRunService', () => {
         content: '已经完成了',
       }),
     );
-    expect(sessionService.updateStatus).not.toHaveBeenCalledWith(
+    expect(sessionService.transitionStatus).toHaveBeenCalledWith(
       sessionId,
+      ['RUNNING'],
       'WAITING_USER',
     );
+    expect(dbStatus).toBe('COMPLETED');
   });
 
   it('ask_user 之后置 WAITING_USER 并停在第一次工具调用', async () => {
@@ -439,8 +447,9 @@ describe('RecipeAgentRunService', () => {
     });
     expect(callModel).toHaveBeenCalledTimes(1);
     expect(sessionService.incrementStep).toHaveBeenCalledTimes(1);
-    expect(sessionService.updateStatus).toHaveBeenLastCalledWith(
+    expect(sessionService.transitionStatus).toHaveBeenLastCalledWith(
       SESSION_ID,
+      ['RUNNING'],
       'WAITING_USER',
     );
   });
@@ -469,8 +478,9 @@ describe('RecipeAgentRunService', () => {
 
     expect(finishDraft).toHaveBeenCalledTimes(1);
     expect(callModel).toHaveBeenCalledTimes(1);
-    expect(sessionService.updateStatus).toHaveBeenLastCalledWith(
+    expect(sessionService.transitionStatus).toHaveBeenLastCalledWith(
       SESSION_ID,
+      ['RUNNING'],
       'COMPLETED',
     );
   });
@@ -505,13 +515,15 @@ describe('RecipeAgentRunService', () => {
     expect(getDraft).toHaveBeenCalledTimes(30);
     expect(callModel).toHaveBeenCalledTimes(30);
     expect(sessionService.incrementStep).toHaveBeenCalledTimes(30);
-    expect(sessionService.updateStatus).toHaveBeenCalledWith(
+    expect(sessionService.transitionStatus).toHaveBeenCalledWith(
       SESSION_ID,
+      ['RUNNING'],
       'FAILED',
       '超过运行上限',
     );
-    expect(sessionService.updateStatus).not.toHaveBeenCalledWith(
+    expect(sessionService.transitionStatus).not.toHaveBeenCalledWith(
       SESSION_ID,
+      ['RUNNING'],
       'WAITING_USER',
     );
   });
@@ -543,8 +555,9 @@ describe('RecipeAgentRunService', () => {
 
     expect(callModel).toHaveBeenCalledTimes(1);
     expect(getDraft).not.toHaveBeenCalled();
-    expect(sessionService.updateStatus).toHaveBeenCalledWith(
+    expect(sessionService.transitionStatus).toHaveBeenCalledWith(
       SESSION_ID,
+      ['RUNNING'],
       'FAILED',
       '超过运行上限',
     );
@@ -611,20 +624,19 @@ describe('RecipeAgentRunService', () => {
     expect(callModel).toHaveBeenCalledTimes(1);
 
     await service.stop(sessionId, ACTOR);
-    expect(sessionService.updateStatus).toHaveBeenLastCalledWith(
+    expect(sessionService.transitionStatus).toHaveBeenLastCalledWith(
       sessionId,
+      ['RUNNING', 'WAITING_USER'],
       'STOPPED',
     );
 
     release?.(finalResponse('这是被停掉之后迟到的回复'));
     await service.waitForIdle(sessionId);
 
-    expect(sessionService.updateStatus).toHaveBeenLastCalledWith(
+    expect(sessionService.transitionStatus).toHaveBeenCalledTimes(1);
+    expect(sessionService.transitionStatus).not.toHaveBeenCalledWith(
       sessionId,
-      'STOPPED',
-    );
-    expect(sessionService.updateStatus).not.toHaveBeenCalledWith(
-      sessionId,
+      ['RUNNING'],
       'WAITING_USER',
     );
     expect(
@@ -663,7 +675,305 @@ describe('RecipeAgentRunService', () => {
       DRAFT_ID,
       expect.objectContaining({ userId: 'user-1' }),
     );
-    expect(sessionService.updateStatus).not.toHaveBeenCalled();
+    expect(sessionService.transitionStatus).not.toHaveBeenCalled();
+  });
+
+  it('两个并发 start 同一个草稿只有一个成功，createSession 只调用一次', async () => {
+    const { service, sessionService } = makeRunService({
+      handlers: {},
+      responses: [finalResponse('好了')],
+    });
+
+    const results = await Promise.allSettled([
+      service.start({ draftId: DRAFT_ID, actor: ACTOR, message: '第一个' }),
+      service.start({ draftId: DRAFT_ID, actor: ACTOR, message: '第二个' }),
+    ]);
+
+    const fulfilled = results.filter((result) => result.status === 'fulfilled');
+    const rejected = results.filter(
+      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    );
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0].reason).toBeInstanceOf(ConflictException);
+    expect(rejected[0].reason.message).toBe('这个草稿已经有一个 AI 运行');
+    expect(sessionService.createSession).toHaveBeenCalledTimes(1);
+
+    await service.waitForIdle(SESSION_ID);
+  });
+
+  it('草稿锁一直持有到后台循环结束，结束之后才允许下一次 start', async () => {
+    let release: ((value: DeepSeekToolsResult) => void) | undefined;
+    const callModel = jest.fn(
+      () =>
+        new Promise<DeepSeekToolsResult>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const sessionService = makeSessionService();
+    sessionService.createSession
+      .mockResolvedValueOnce({
+        id: 'session-1',
+        designRecipeId: DRAFT_ID,
+        status: 'RUNNING',
+      })
+      .mockResolvedValueOnce({
+        id: 'session-2',
+        designRecipeId: DRAFT_ID,
+        status: 'RUNNING',
+      });
+    const { service } = makeRunService({
+      handlers: {},
+      sessionService,
+      callModel,
+    });
+
+    const first = await service.start({
+      draftId: DRAFT_ID,
+      actor: ACTOR,
+      message: '第一次',
+    });
+    expect(first.sessionId).toBe('session-1');
+    await new Promise((resolve) => setImmediate(resolve));
+
+    // 循环还在跑：草稿锁不能放。
+    await expect(
+      service.start({ draftId: DRAFT_ID, actor: ACTOR, message: '插队' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    release?.(finalResponse('第一次完成'));
+    await service.waitForIdle('session-1');
+
+    const second = await service.start({
+      draftId: DRAFT_ID,
+      actor: ACTOR,
+      message: '第二次',
+    });
+    expect(second.sessionId).toBe('session-2');
+
+    await new Promise((resolve) => setImmediate(resolve));
+    release?.(finalResponse('第二次完成'));
+    await service.waitForIdle('session-2');
+  });
+
+  it('start 在 getDraft 拒绝后释放草稿锁', async () => {
+    const designerService = {
+      getDraft: jest
+        .fn()
+        .mockRejectedValueOnce(new NotFoundException('设计草稿不存在'))
+        .mockResolvedValue({ draftId: DRAFT_ID }),
+    };
+    const { service } = makeRunService({
+      handlers: {},
+      designerService,
+      responses: [finalResponse('好了')],
+    });
+
+    await expect(
+      service.start({ draftId: DRAFT_ID, actor: ACTOR, message: '第一次' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    await expect(
+      service.start({ draftId: DRAFT_ID, actor: ACTOR, message: '第二次' }),
+    ).resolves.toEqual({ sessionId: SESSION_ID });
+    await service.waitForIdle(SESSION_ID);
+  });
+
+  it('两个并发 resume 同一个 WAITING 会话只有一个成功，用户消息只追加一次', async () => {
+    const prisma = {
+      recipeDesignAgentSession: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: SESSION_ID,
+          designRecipeId: DRAFT_ID,
+          status: 'WAITING_USER',
+        }),
+      },
+    };
+    const { service, sessionService } = makeRunService({
+      handlers: {},
+      prisma,
+      responses: [finalResponse('继续了')],
+    });
+
+    const results = await Promise.allSettled([
+      service.resume({
+        sessionId: SESSION_ID,
+        actor: ACTOR,
+        message: '继续一',
+      }),
+      service.resume({
+        sessionId: SESSION_ID,
+        actor: ACTOR,
+        message: '继续二',
+      }),
+    ]);
+
+    const fulfilled = results.filter((result) => result.status === 'fulfilled');
+    const rejected = results.filter(
+      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    );
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0].reason).toBeInstanceOf(ConflictException);
+    expect(rejected[0].reason.message).toBe('这个会话正在运行');
+    expect(
+      sessionService.transitionStatus.mock.calls.filter(
+        ([, , to]) => to === 'RUNNING',
+      ),
+    ).toHaveLength(1);
+    expect(
+      messageCalls(sessionService).filter((message) => message.role === 'USER'),
+    ).toHaveLength(1);
+
+    await service.waitForIdle(SESSION_ID);
+  });
+
+  it('正在运行的会话不能 resume', async () => {
+    let release: ((value: DeepSeekToolsResult) => void) | undefined;
+    const callModel = jest.fn(
+      () =>
+        new Promise<DeepSeekToolsResult>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const prisma = {
+      recipeDesignAgentSession: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: SESSION_ID,
+          designRecipeId: DRAFT_ID,
+          status: 'WAITING_USER',
+        }),
+      },
+    };
+    const { service, sessionService } = makeRunService({
+      handlers: {},
+      prisma,
+      callModel,
+    });
+
+    await service.start({
+      draftId: DRAFT_ID,
+      actor: ACTOR,
+      message: '开始',
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const error = await service
+      .resume({ sessionId: SESSION_ID, actor: ACTOR, message: '继续' })
+      .catch((caught) => caught);
+
+    expect(error).toBeInstanceOf(ConflictException);
+    expect(error.message).toBe('这个会话正在运行');
+    expect(
+      sessionService.transitionStatus.mock.calls.filter(
+        ([, , to]) => to === 'RUNNING',
+      ),
+    ).toHaveLength(0);
+
+    release?.(finalResponse('完成'));
+    await service.waitForIdle(SESSION_ID);
+  });
+
+  it('stop 之后再 resume 会被拒绝，状态保持 STOPPED', async () => {
+    let dbStatus = 'WAITING_USER';
+    const sessionService = makeSessionService();
+    sessionService.transitionStatus.mockImplementation(
+      async (_id: string, from: string[], to: string) => {
+        if (!from.includes(dbStatus)) return false;
+        dbStatus = to;
+        return true;
+      },
+    );
+    const prisma = {
+      recipeDesignAgentSession: {
+        // 模拟并发窗口：停止之后仍然读到旧快照（WAITING_USER）。
+        findUnique: jest.fn().mockResolvedValue({
+          id: SESSION_ID,
+          designRecipeId: DRAFT_ID,
+          status: 'WAITING_USER',
+        }),
+      },
+    };
+    const { service, createRuntime } = makeRunService({
+      handlers: {},
+      prisma,
+      sessionService,
+    });
+
+    await service.stop(SESSION_ID, ACTOR);
+    expect(dbStatus).toBe('STOPPED');
+
+    sessionService.appendMessage.mockClear();
+    const error = await service
+      .resume({ sessionId: SESSION_ID, actor: ACTOR, message: '继续' })
+      .catch((caught) => caught);
+
+    expect(error).toBeInstanceOf(ConflictException);
+    expect(error.message).toBe('会话已经结束或被停止');
+    expect(dbStatus).toBe('STOPPED');
+    expect(sessionService.appendMessage).not.toHaveBeenCalled();
+    expect(createRuntime).not.toHaveBeenCalled();
+  });
+
+  it('stop 一个已经 COMPLETED 的会话抛冲突，状态不会变成 STOPPED', async () => {
+    let dbStatus = 'COMPLETED';
+    const sessionService = makeSessionService();
+    sessionService.transitionStatus.mockImplementation(
+      async (_id: string, from: string[], to: string) => {
+        if (!from.includes(dbStatus)) return false;
+        dbStatus = to;
+        return true;
+      },
+    );
+    const prisma = {
+      recipeDesignAgentSession: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: SESSION_ID,
+          designRecipeId: DRAFT_ID,
+          status: 'COMPLETED',
+        }),
+      },
+    };
+    const { service } = makeRunService({
+      handlers: {},
+      prisma,
+      sessionService,
+    });
+
+    const error = await service
+      .stop(SESSION_ID, ACTOR)
+      .catch((caught) => caught);
+
+    expect(error).toBeInstanceOf(ConflictException);
+    expect(error.message).toBe('会话已经结束');
+    expect(dbStatus).toBe('COMPLETED');
+  });
+
+  it('stop 已经 STOPPED 的会话是幂等的，不抛冲突', async () => {
+    const dbStatus = 'STOPPED';
+    const sessionService = makeSessionService();
+    sessionService.transitionStatus.mockResolvedValue(false);
+    const prisma = {
+      recipeDesignAgentSession: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: SESSION_ID,
+          designRecipeId: DRAFT_ID,
+          status: dbStatus,
+        }),
+      },
+    };
+    const { service } = makeRunService({
+      handlers: {},
+      prisma,
+      sessionService,
+    });
+
+    await expect(service.stop(SESSION_ID, ACTOR)).resolves.toBeUndefined();
+    expect(sessionService.transitionStatus).toHaveBeenCalledWith(
+      SESSION_ID,
+      ['RUNNING', 'WAITING_USER'],
+      'STOPPED',
+    );
   });
 
   it('getSessionView 在 getDraft 拒绝时不查会话和消息', async () => {
@@ -726,13 +1036,15 @@ describe('RecipeAgentRunService', () => {
         content: '继续',
       }),
     );
-    expect(sessionService.updateStatus).toHaveBeenCalledWith(
+    expect(sessionService.transitionStatus).toHaveBeenCalledWith(
       SESSION_ID,
+      ['WAITING_USER'],
       'RUNNING',
     );
     expect(getDraft).toHaveBeenCalledTimes(1);
-    expect(sessionService.updateStatus).toHaveBeenLastCalledWith(
+    expect(sessionService.transitionStatus).toHaveBeenLastCalledWith(
       SESSION_ID,
+      ['RUNNING'],
       'WAITING_USER',
     );
   });
@@ -858,7 +1170,7 @@ describe('RecipeAgentRunService', () => {
       expect.objectContaining({ userId: 'user-1' }),
     );
     expect(sessionService.appendMessage).not.toHaveBeenCalled();
-    expect(sessionService.updateStatus).not.toHaveBeenCalled();
+    expect(sessionService.transitionStatus).not.toHaveBeenCalled();
     expect(sessionService.listMessages).not.toHaveBeenCalled();
   });
 

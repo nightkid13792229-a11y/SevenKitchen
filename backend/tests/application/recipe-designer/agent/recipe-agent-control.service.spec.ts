@@ -18,7 +18,7 @@ const DRAFT = {
 function makeSessionService() {
   return {
     appendMessage: jest.fn().mockResolvedValue({ id: 'm1' }),
-    updateStatus: jest.fn().mockResolvedValue(undefined),
+    transitionStatus: jest.fn().mockResolvedValue(true),
   };
 }
 
@@ -87,10 +87,29 @@ describe('RecipeAgentControlService', () => {
       '1. 主蛋白用鸡胸还是三文鱼？（可选：鸡胸 / 三文鱼）',
     );
     expect(message.content).toContain('2. 需要加坚果吗？');
-    expect(sessionService.updateStatus).toHaveBeenCalledWith(
+    expect(sessionService.transitionStatus).toHaveBeenCalledWith(
       'session-1',
+      ['RUNNING'],
       'WAITING_USER',
     );
+    // 先抢状态再写对话：状态没抢到（会话已停止 / 结束）就不该再追加消息。
+    expect(
+      sessionService.transitionStatus.mock.invocationCallOrder[0],
+    ).toBeLessThan(sessionService.appendMessage.mock.invocationCallOrder[0]);
+  });
+
+  it('askUser 在会话已停止（状态没抢到）时不写对话', async () => {
+    const { service, sessionService } = makeService();
+    sessionService.transitionStatus.mockResolvedValue(false);
+
+    await service.askUser({ questions: [{ question: '还在吗？' }] });
+
+    expect(sessionService.transitionStatus).toHaveBeenCalledWith(
+      'session-1',
+      ['RUNNING'],
+      'WAITING_USER',
+    );
+    expect(sessionService.appendMessage).not.toHaveBeenCalled();
   });
 
   it('COMPLIANCE 映射为 COMPLIANCE_EXCEPTION，原样带 detail 并写对话', async () => {
@@ -191,10 +210,20 @@ describe('RecipeAgentControlService', () => {
         },
       },
     });
-    expect(sessionService.updateStatus).toHaveBeenCalledWith(
+    expect(sessionService.transitionStatus).toHaveBeenCalledWith(
       'session-1',
+      ['RUNNING'],
       'COMPLETED',
     );
+    // 先抢状态，再取草稿 / 写快照 / 写交付卡：停止后不再产生重复快照。
+    expect(
+      sessionService.transitionStatus.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      prisma.recipeDesignAgentSnapshot.create.mock.invocationCallOrder[0],
+    );
+    expect(
+      prisma.recipeDesignAgentSnapshot.create.mock.invocationCallOrder[0],
+    ).toBeLessThan(sessionService.appendMessage.mock.invocationCallOrder[0]);
 
     expect(sessionService.appendMessage).toHaveBeenCalledTimes(1);
     const message = sessionService.appendMessage.mock.calls[0][0];
@@ -202,6 +231,22 @@ describe('RecipeAgentControlService', () => {
     expect(message.content).toContain('低脂鸡肉饭已完成');
     expect(message.content).toContain('缺 CARB：没有主食');
     expect(message.content).toContain('缺 VEGETABLE：没有蔬菜');
+  });
+
+  it('finishDraft 在会话已停止（状态没抢到）时不写快照也不写交付卡', async () => {
+    const { service, prisma, sessionService, port } = makeService();
+    sessionService.transitionStatus.mockResolvedValue(false);
+
+    await service.finishDraft({ summary: '已完成', warnings: [] });
+
+    expect(sessionService.transitionStatus).toHaveBeenCalledWith(
+      'session-1',
+      ['RUNNING'],
+      'COMPLETED',
+    );
+    expect(port.getDraft).not.toHaveBeenCalled();
+    expect(prisma.recipeDesignAgentSnapshot.create).not.toHaveBeenCalled();
+    expect(sessionService.appendMessage).not.toHaveBeenCalled();
   });
 
   it('getApprovalState 委托审批服务并带上当前会话', async () => {

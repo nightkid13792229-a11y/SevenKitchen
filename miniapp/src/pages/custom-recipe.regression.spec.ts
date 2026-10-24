@@ -1874,13 +1874,15 @@ describe('定制页 · 2026-10-05 第三批（4 条）', () => {
     expect(code).toContain('请先回答：小家伙是否对部分食物过敏')
   })
 
-  it('③ 答"没有"不抹掉档案里的过敏；也不再多写一句说明', () => {
+  it('③ 答"没有"不抹掉档案里的过敏；题目始终由顾客自己答', () => {
     // 2026-10-05 老板：答"没有"下面那句说明删掉，不再多话
     expect(code).not.toContain('noFoodAllergyNote')
     expect(template).not.toContain('不再新增过敏信息')
-    // 档案里有过敏时默认答"有"（让家长再答一遍是多余的）
-    expect(code).toContain('if (formData.value.allergyText || summaryAllergies.length > 0) {')
-    expect(code).toContain('hasFoodAllergy.value = true;')
+    // 2026-10-25：档案里有过敏也不预选答案；文本仍然带出
+    expect(code).not.toContain(
+      'if (formData.value.allergyText || summaryAllergies.length > 0) {',
+    )
+    expect(code).toContain('prefilledAllergyText.value = formData.value.allergyText;')
     // 换狗要重新问（上一只狗的答案不能替新狗作答）
     expect(code).toContain('hasFoodAllergy.value = null;')
   })

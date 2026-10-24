@@ -2285,11 +2285,9 @@ const loadDogArchiveInfo = async (dogId: string) => {
       formData.value.allergies = summaryAllergies;
       formData.value.allergyText = archiveAllergyText;
       prefilledAllergyText.value = formData.value.allergyText;
-      // 档案里已经有过敏信息 → 这一问默认答"有过敏"（本来就是事实，
-      // 让家长再答一遍反而是多一道题）；档案里没有就保持未答，等他选
-      if (formData.value.allergyText || summaryAllergies.length > 0) {
-        hasFoodAllergy.value = true;
-      }
+      // 2026-10-25 老板定：**题目不预选**。
+      // 档案里的过敏文本仍然带出来（顾客选“有过敏”后就在文本框里），
+      // 但“有/没有”这一答必须由顾客自己选，不能由系统代答。
       // 过敏可能刚从档案带出来，方向要跟着它算的体况对齐一次
       syncGoalWithPlan();
       // 口味偏好：档案里的两个字段（2026-09-27 才在「健康管理」页有了入口）

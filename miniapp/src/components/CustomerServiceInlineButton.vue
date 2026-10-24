@@ -2,7 +2,10 @@
   <button
     v-if="visible"
     class="customer-service-inline-button"
-    :class="{ 'customer-service-inline-button--compact': compact }"
+    :class="{
+      'customer-service-inline-button--compact': compact,
+      'customer-service-inline-button--icon-only': iconOnly,
+    }"
     @tap="handleCustomerServiceTap"
   >
     <image
@@ -10,7 +13,7 @@
       src="/static/ui-icons/service-chat.png"
       mode="aspectFit"
     />
-    <text class="customer-service-inline-text">{{ label }}</text>
+    <text v-if="!iconOnly" class="customer-service-inline-text">{{ label }}</text>
   </button>
 </template>
 
@@ -39,6 +42,8 @@ const props = withDefaults(
     label?: string
     /** 紧凑版：固定底栏里三颗按钮并列时用 */
     compact?: boolean
+    /** 只要一个圆形图标，不显示文字（2026-10-24 制作单底栏用） */
+    iconOnly?: boolean
   }>(),
   {
     sourceType: 'GENERAL',
@@ -51,6 +56,7 @@ const props = withDefaults(
     imageUrl: '',
     label: '找 Seven爸爸',
     compact: false,
+    iconOnly: false,
   },
 )
 
@@ -157,5 +163,22 @@ onMounted(async () => {
 .customer-service-inline-button--compact .customer-service-inline-text {
   font-size: 22rpx;
   font-weight: 600;
+}
+
+/* 圆形图标版：只留头像/图标，不占文字宽度 */
+.customer-service-inline-button--icon-only {
+  width: 76rpx;
+  height: 76rpx;
+  min-width: 0;
+  flex: 0 0 76rpx;
+  padding: 0;
+  border-radius: 50%;
+  box-shadow: none;
+}
+
+.customer-service-inline-button--icon-only .customer-service-inline-icon {
+  width: 38rpx;
+  height: 38rpx;
+  margin-right: 0;
 }
 </style>

@@ -37,18 +37,20 @@ describe('交付页 · 内容与交互（P1）', () => {
     expect(template).toContain('喂食建议');
     expect(template).not.toContain('每天怎么喂');
     expect(template).not.toContain('这份量是按');
-    expect(template).toContain('份量可以按你的习惯调整');
+    expect(template).toContain('喂食建议仅供参考');
+    expect(template).toContain('可以点击下方【自己做】自定义配置');
   });
 
-  it('★ 配方组成只出现一次；补剂单独一块，不写用量', () => {
-    expect(template).toContain('配方组成');
-    expect(template).toContain('要加的补剂');
-    expect(template).not.toContain('额外补充的营养素');
-    expect(template).not.toContain('nutrientRows');
-    expect(template).toContain('supplementRows');
+  it('★ 食材清单只出现一次；营养素单独一块，不写补剂用量', () => {
+    // 2026-10-24：配方组成→食材清单；要加的补剂→须额外添加的营养素
+    expect(template).toContain('食材清单');
+    expect(template).toContain('须额外添加的营养素');
+    expect(template).toContain('supplementTargetRows');
+    // 营养素表头：营养素 / 添加浓度
+    expect(template).toContain('添加浓度');
     // 原来那句“每 kg 食材添加 2192 毫克”顾客看不懂，已删
     expect(source).not.toContain('每kg食材添加');
-    // 补剂用量不在这一页出现 —— 同一组数字只出现一次
+    // 补剂总量不在这一页出现 —— 同一组数字只出现一次
     expect(template).not.toContain('totalG');
   });
 
@@ -82,8 +84,13 @@ describe('交付页 · 内容与交互（P1）', () => {
     expect(template).toContain('label="Seven爸爸"');
   });
 
-  it('★ 存档说明还在：这一版不会被后来改的配方改掉', () => {
-    expect(template).toContain('这份内容在交付时已存档');
+  it('★ 全营养标准 banner 独立展示，核心营养卡不再重复标准行', () => {
+    expect(template).toContain('NutritionStandardBanner');
+    expect(template).toContain(':show-standard="false"');
+  });
+
+  it('★ 底部“交付时已存档”小字已按 2026-10-24 要求拿掉', () => {
+    expect(template).not.toContain('这份内容在交付时已存档');
   });
 
   it('★ 第 2 页已删除，路由里不再有；标题改为我的定制食谱', () => {

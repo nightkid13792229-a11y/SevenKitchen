@@ -59,7 +59,7 @@ const props = withDefaults(
     title: string
     /** 叠在标题下面的几行（详情页 0 行，交付页「为谁定制 / 品种年龄体重」两行） */
     subtitles?: string[]
-    /** 左上角角标（如「第 1 版 · 10-17 交付」），不传不显示 */
+    /** 右上角角标（如「第 1 版 · 10-17 交付」），不传不显示 */
     badge?: string | null
   }>(),
   {
@@ -155,7 +155,7 @@ const visibleSubtitles = computed(() =>
 .recipe-cover__badge {
   position: absolute;
   top: 22rpx;
-  left: 24rpx;
+  right: 24rpx;
   background: rgba(0, 0, 0, 0.42);
   border-radius: 999rpx;
   padding: 6rpx 18rpx;

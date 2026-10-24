@@ -1,10 +1,5 @@
 <template>
   <view class="recipe-diy-page">
-    <!-- 从定制食谱进来：说清这一页按哪一版算，顾客不会以为进了橱窗的 DIY -->
-    <view v-if="orderId" class="custom-source-banner">
-      <text class="custom-source-text">来自你的定制食谱 · 按交付那一版计算</text>
-    </view>
-
     <!-- 食谱信息卡片 -->
     <view class="section recipe-info-section">
       <!--
@@ -284,7 +279,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { onLoad, onShow } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
 import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
@@ -604,6 +599,14 @@ const {
 // 「每日饭量是怎么算的？」展开状态
 const feedingNoteExpanded = ref(false)
 const initialDogId = ref('')
+/** onLoad 里的路由参数：比 onMounted 里翻页面栈更可靠 */
+const routeDogId = ref('')
+
+onLoad((options) => {
+  routeDogId.value = options?.dogId
+    ? decodeURIComponent(String(options.dogId))
+    : ''
+})
 
 onMounted(async () => {
   console.log('========== [RecipeDiy] onMounted ==========')
@@ -617,7 +620,7 @@ onMounted(async () => {
   recipeId.value = options.recipeId || ''
   orderId.value = options.orderId || ''
   shareToken.value = options.shareToken || ''
-  initialDogId.value = options.dogId || ''
+  initialDogId.value = routeDogId.value || options.dogId || ''
   selectedLifeStage.value = options.lifeStage || ''
   console.log('[食谱ID]', recipeId.value, '[订单]', orderId.value)
 
@@ -2070,17 +2073,4 @@ function getHealthTagLabel(tagOrUuid: string): string {
   gap: 12rpx;
 }
 
-/* 从定制食谱进来时的来源提示 */
-.custom-source-banner {
-  margin: 0 0 16rpx;
-  padding: 14rpx 24rpx;
-  background-color: #f7f1e4;
-  border: 1rpx solid #e8decd;
-  border-radius: 999rpx;
-}
-
-.custom-source-text {
-  font-size: 22rpx;
-  color: #8a6d2f;
-}
 </style>

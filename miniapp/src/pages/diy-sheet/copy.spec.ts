@@ -14,8 +14,8 @@ import {
 
 describe('diy-sheet copy', () => {
   it('uses selected-product wording for diy sheet recommendation labels', () => {
-    expect(DIY_SHEET_FOOD_RECOMMENDATION_LABEL).toBe('已选商品')
-    expect(DIY_SHEET_SUPPLEMENT_RECOMMENDATION_LABEL).toBe('已选商品')
+    expect(DIY_SHEET_FOOD_RECOMMENDATION_LABEL).toBe('产品')
+    expect(DIY_SHEET_SUPPLEMENT_RECOMMENDATION_LABEL).toBe('产品')
     expect(DIY_SHEET_SPEC_MODAL_TITLE).toBe('选择商品')
     expect(DIY_SHEET_PURCHASE_LABEL).toBe('已选商品')
   })

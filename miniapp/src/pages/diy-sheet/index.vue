@@ -60,17 +60,13 @@
         </text>
       </view>
 
-    <!-- 2. 制作清单 -->
+    <!-- 2. 制作清单（标题拿掉：导航栏已经叫 DIY制作单） -->
     <view class="section purchase-list-section">
-      <view class="section-title">
-        <text class="title-text">制作清单</text>
-      </view>
-
       <view class="purchase-list-content">
         <!-- 狗狗信息：标签 + 数值卡片，一眼可读 -->
         <view v-if="dog" class="purchase-facts">
           <view class="purchase-facts-head">
-            <text class="purchase-facts-title">狗狗信息</text>
+            <text class="purchase-facts-title">爱犬信息</text>
           </view>
           <view class="purchase-facts-grid">
             <view
@@ -106,10 +102,10 @@
           <view class="ingredient-category-title">食材</view>
           <view class="ingredient-table">
             <view class="table-header food-table">
-              <text class="header-item name-col">原料名称</text>
+              <text class="header-item name-col">原料</text>
               <text class="header-item recommend-col">{{ DIY_SHEET_FOOD_RECOMMENDATION_LABEL }}</text>
-              <text class="header-item method-col">制备方法</text>
-              <text class="header-item actual-col">净用量</text>
+              <text class="header-item method-col">部位/预处理</text>
+              <text class="header-item actual-col">净重</text>
             </view>
             <view v-for="(item, idx) in foodItemsDetailed" :key="'food-' + idx" class="table-row food-table">
               <text class="row-item name-col">{{ item.nutritionStateLabel ? `${item.ingredientName}（${item.nutritionStateLabel}）` : item.ingredientName }}</text>
@@ -130,7 +126,7 @@
               <view v-else class="row-item recommend-col">
                 <text class="recommend-main">{{ item.selectedProductDisplayText }}</text>
               </view>
-              <text class="row-item method-col">{{ item.preparationMethod || item.nutritionStateLabel || '-' }}</text>
+              <text class="row-item method-col">{{ item.preparationMethod || '—' }}</text>
               <text
                 class="row-item actual-col highlight amount-link"
                 @tap.stop="showAmountDetailModal(item)"
@@ -146,12 +142,6 @@
               <text class="row-item actual-col total-value highlight">{{ foodItemsTotal.netAmountStr }}</text>
             </view>
           </view>
-          <!-- 2026-10-18：采购量整条线删掉，只给净用量 -->
-          <view class="purchase-amount-note">
-            <text class="purchase-amount-note-text">
-              只写这次要用多少。要买多少，你自己判断。
-            </text>
-          </view>
         </view>
 
         <!-- 补剂类：需额外补充的营养 -->
@@ -161,7 +151,7 @@
             <view class="table-header supplement-table">
               <text class="header-item product-col">补剂名称</text>
               <text class="header-item brand-col">{{ DIY_SHEET_SUPPLEMENT_RECOMMENDATION_LABEL }}</text>
-              <text class="header-item timing-col">最佳添加时机</text>
+              <text class="header-item timing-col">建议添加时机</text>
               <text class="header-item dosage-col">添加总量</text>
             </view>
             <view v-for="(item, idx) in supplementItemsDetailed" :key="'supp-' + idx" class="table-row supplement-table">
@@ -200,6 +190,12 @@
           </view>
         </view>
 
+        <!-- 补剂购买引导（2026-10-24）：不想全买，可以只买预分装补剂 -->
+        <view v-if="canBuySupplements" class="supplement-buy-note">
+          <text class="supplement-buy-note-text">如果不想购买所有的商品补剂，可以点击</text>
+          <button class="supplement-buy-note-btn" @tap="handleBuySupplements">购买预分装补剂</button>
+        </view>
+
         <!--
           补剂入口不可用时的说明；可购买时按钮在底部固定栏（购买预分装补剂）。
           说明不再静默消失：接口失败可点击重试。
@@ -225,30 +221,37 @@
       </view>
     </view>
 
-    <!-- 3. 制作流程 -->
-    <view class="section production-steps-section" v-if="recipe.productionSteps">
+    <!-- 3. 制作步骤：结构化步骤优先，老的整段文字兜底 -->
+    <view class="section production-steps-section" v-if="displaySteps.length">
       <view class="section-title">
-        <text class="title-text">制作流程</text>
+        <text class="title-text">制作步骤</text>
       </view>
       <view class="steps-content">
-        <text class="steps-text">{{ recipe.productionSteps }}</text>
+        <view v-for="step in displaySteps" :key="step.order" class="step-row">
+          <text class="step-index">{{ step.order }}</text>
+          <view class="step-body">
+            <text class="step-instruction">{{ step.instruction }}</text>
+            <text v-if="step.meta" class="step-meta">{{ step.meta }}</text>
+          </view>
+        </view>
       </view>
     </view>
 
-    <!--
-      不想自己做？订购成品（2026-10-24）
-
-      位置放在“怎么做”之后：顾客刚看完做饭步骤，正是最想偷懒的时候。
-      带这份食谱和这只狗，成品页不用再选一次。
-    -->
-    <view v-if="recipeId" class="finished-food-card">
-      <view class="finished-food-copy">
-        <text class="finished-food-title">不想自己做？</text>
-        <text class="finished-food-desc">这份配方也能做成成品，冷链送到家。</text>
+    <!-- 3.5 储存和烹饪（2026-10-24 全店统一文案） -->
+    <view class="section storage-cooking-section">
+      <view class="section-title">
+        <text class="title-text">储存和烹饪</text>
       </view>
-      <button class="finished-food-btn" @tap="goFinishedFood">
-        订购成品
-      </button>
+      <view class="guide-card">
+        <view class="guide-row">
+          <text class="guide-label">储存</text>
+          <text class="guide-text">分装建议用食品真空袋抽真空；-18℃ 冷冻保存 6 个月，0-4℃ 冷藏保存 3 天，开封后 3 小时内吃完。</text>
+        </view>
+        <view class="guide-row">
+          <text class="guide-label">烹饪</text>
+          <text class="guide-text">建议蒸、炖、低温慢煮；不建议微波、烤、煎等高温烹饪。</text>
+        </view>
+      </view>
     </view>
 
     <!-- 4-8. 固定文案卡片 -->
@@ -291,19 +294,20 @@
     </view>
 
     <!--
-      找 Seven爸爸：制作单底部已有三个操作，第四颗会挤；
-      放在内容末尾，滚到底就能看到（2026-10-24）。
+      不想自己做？订购成品（2026-10-24）
+
+      位置放在制作设备推荐之后（2026-10-24 老板定）：
+      先把“怎么做、用什么设备”讲完，再给不想做的人一个出口。
+      带这份食谱和这只狗，成品页不用再选一次。
     -->
-    <view v-if="recipeId" class="sheet-service">
-      <CustomerServiceInlineButton
-        compact
-        label="Seven爸爸"
-        :source-type="orderId ? 'ORDER' : 'GENERAL'"
-        :order-id="orderId"
-        :order-no="orderId"
-        :title="orderId ? `定制订单 ${orderId}` : 'DIY 制作咨询'"
-        path="/pages/diy-sheet/index"
-      />
+    <view v-if="recipeId" class="finished-food-card">
+      <view class="finished-food-copy">
+        <text class="finished-food-title">不想自己做？</text>
+        <text class="finished-food-desc">这份配方也能做成成品，冷链送到家。</text>
+      </view>
+      <button class="finished-food-btn" @tap="goFinishedFood">
+        订购成品
+      </button>
     </view>
 
     <!--
@@ -313,6 +317,18 @@
       · 购买预分装补剂的入口从清单里挪到这里，任何滚动位置都能点到。
     -->
     <view class="bottom-actions">
+      <!-- 客服：圆形图标，放最左侧（2026-10-24） -->
+      <CustomerServiceInlineButton
+        v-if="recipeId"
+        class="bottom-service"
+        icon-only
+        :source-type="orderId ? 'ORDER' : 'GENERAL'"
+        :order-id="orderId"
+        :order-no="orderId"
+        :title="orderId ? `定制订单 ${orderId}` : 'DIY 制作咨询'"
+        path="/pages/diy-sheet/index"
+      />
+
       <button
         v-if="canBuySupplements"
         class="action-btn buy"
@@ -469,12 +485,12 @@
             <text class="spec-value">{{ getAmountDetailName(currentAmountDetail) }}</text>
           </view>
           <view v-if="currentAmountDetail.preparationMethod" class="spec-row">
-            <text class="spec-label">{{ currentAmountDetail.type === 'SUPPLEMENT' ? '最佳添加时机：' : '制备方法：' }}</text>
+            <text class="spec-label">{{ currentAmountDetail.type === 'SUPPLEMENT' ? '建议添加时机：' : '部位/预处理：' }}</text>
             <text class="spec-value">{{ currentAmountDetail.preparationMethod }}</text>
           </view>
           <view class="spec-divider"></view>
           <view class="spec-row highlight-row">
-            <text class="spec-label">净用量：</text>
+            <text class="spec-label">净重：</text>
             <text class="spec-value highlight-value">{{ currentAmountDetail.theoreticalAmountStr }}</text>
           </view>
         </view>
@@ -652,7 +668,8 @@ const recipe = ref<any>({
   designSource: '',
   applicableLifeStages: [],
   targetHealthTags: [],
-  productionSteps: ''
+  productionSteps: '',
+  productionStepsList: []
 })
 const pricePreview = ref<any>(null)
 
@@ -860,12 +877,17 @@ const supplementItems = computed(() => {
 })
 
 // 食材类合计
+// 2026-10-24 修复：清单行返回的是 netAmount（克），不是 theoreticalAmount；
+// 原来加的是不存在的字段，合计恒为 0（打印出来的合计也是 0）。
 const foodItemsTotal = computed(() => {
-  const totalTheoretical = foodItems.value.reduce((sum: number, item: any) => sum + item.theoreticalAmount, 0)
+  const totalNet = foodItems.value.reduce(
+    (sum: number, item: any) => sum + (Number(item.netAmount) || 0),
+    0,
+  )
   return {
-    theoreticalAmount: totalTheoretical,
-    theoreticalAmountStr: formatNetAmount(totalTheoretical, true),
-    netAmountStr: formatNetAmount(totalTheoretical, true)
+    theoreticalAmount: totalNet,
+    theoreticalAmountStr: formatNetAmount(totalNet, true),
+    netAmountStr: formatNetAmount(totalNet, true)
   }
 })
 
@@ -913,6 +935,50 @@ const dogAgeText = computed(() => {
   }
 })
 
+/**
+ * 制作步骤（2026-10-24）。
+ *
+ * 新设计器写的是结构化 productionStepsList；老食谱只有一整段 productionSteps。
+ * 优先结构化，老数据按行拆，保证两代食谱都能显示。
+ */
+const displaySteps = computed(() => {
+  const raw = Array.isArray(recipe.value.productionStepsList)
+    ? recipe.value.productionStepsList
+    : []
+  if (raw.length > 0) {
+    return raw
+      .map((step: any, index: number) => {
+        const meta = [
+          step.durationMinutes ? `${step.durationMinutes} 分钟` : '',
+          step.temperatureC !== null && step.temperatureC !== undefined
+            ? `${step.temperatureC}℃`
+            : '',
+          step.equipment ? String(step.equipment) : '',
+        ]
+          .filter(Boolean)
+          .join(' · ')
+        return {
+          order: Number(step.sortOrder) || index + 1,
+          instruction: String(step.instruction || '').trim(),
+          meta,
+        }
+      })
+      .filter((step: any) => step.instruction)
+  }
+
+  const legacy = String(recipe.value.productionSteps || '').trim()
+  if (!legacy) return []
+  return legacy
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line, index) => ({
+      order: index + 1,
+      instruction: line,
+      meta: '',
+    }))
+})
+
 const foodItemsDetailed = computed(() => {
   return foodSourceItems.value
     .map((item: any) => {
@@ -931,6 +997,9 @@ const foodItemsDetailed = computed(() => {
 
       return {
         ...base,
+        // 2026-10-24：部位/预处理以食谱详情解析后的文字为准；
+        // 价格预览里的值可能是字典 id，不能直接给顾客看。
+        preparationMethod: recipeItem?.preparationMethod || base.preparationMethod || '',
         selectionKey: item.ingredientId,
         ingredientId: item.ingredientId,
         ingredientName: item.name,
@@ -1098,7 +1167,7 @@ function formatFoodPrepTotalForPrint(amount: number): string {
  * 不再写「含 7% 损耗」——损耗率是我们的内部口径，顾客只需要知道该买多少。
  */
 function getFoodPrepAmountHeaderForPrint(): string {
-  return '净用量'
+  return '净重'
 }
 
 function formatSupplementTargetForPrint(item: any): string {
@@ -1615,7 +1684,7 @@ async function handlePrint() {
         ])
 
         builder.drawTable(
-          ['原料名称', '已选商品', getFoodPrepAmountHeaderForPrint(), '制备方法'],
+          ['原料', '产品', getFoodPrepAmountHeaderForPrint(), '部位/预处理'],
           foodRows,
           {
             totalRow: [
@@ -1644,7 +1713,7 @@ async function handlePrint() {
         ])
 
         builder.drawTable(
-          ['补剂名称', '已选商品 / 规格', '目标补充量', '添加总量'],
+          ['补剂名称', '产品 / 规格', '目标补充量', '添加总量'],
           supplementRows,
           {
             colWidths: [180, 490, 250, 200],
@@ -1653,20 +1722,24 @@ async function handlePrint() {
         )
 
         builder.drawSupplementNotice(
-          '营养补充剂的添加总量与已选商品严格匹配。由于不同营养补剂营养浓度不同，如果要选择其它产品，须按目标补充量自行换算添加总量。'
+          '营养补充剂的添加总量与产品严格匹配。由于不同营养补剂营养浓度不同，如果要选择其它产品，须按目标补充量自行换算添加总量。'
         )
       }
 
-      // 5. 制作流程
-      if (recipe.value.productionSteps) {
-        builder.drawSectionTitle('制作流程')
-        builder.drawProductionSteps(recipe.value.productionSteps)
+      // 5. 制作步骤（结构化优先，老整段文字兜底）
+      if (displaySteps.value.length > 0) {
+        builder.drawSectionTitle('制作步骤')
+        builder.drawProductionSteps(
+          displaySteps.value
+            .map((step: any) => `${step.order}. ${step.instruction}${step.meta ? `（${step.meta}）` : ''}`)
+            .join('\n'),
+        )
       }
 
-      // 6. 储存提示（原来是三张建议大卡，页面已删，这里保留必要的一行）
-      builder.drawSectionTitle('储存提示')
-      builder.drawNote('建议蒸、炖、低温慢煮，不建议微波、烤、煎等高温烹饪。')
-      builder.drawNote('分装建议使用食品真空袋抽真空；-18℃ 冷冻保存 6 个月，0-4℃ 冷藏保存 3 天，开封后 3 小时内吃完。')
+      // 6. 储存和烹饪（与页面同一套全店统一文案）
+      builder.drawSectionTitle('储存和烹饪')
+      builder.drawNote('烹饪：建议蒸、炖、低温慢煮；不建议微波、烤、煎等高温烹饪。')
+      builder.drawNote('储存：分装建议用食品真空袋抽真空；-18℃ 冷冻保存 6 个月，0-4℃ 冷藏保存 3 天，开封后 3 小时内吃完。')
 
       return builder.getCurrentY()
     }
@@ -2617,6 +2690,123 @@ onShareTimeline(() => {
   color: #26261f;
   line-height: 1.8;
   white-space: pre-wrap;
+}
+
+/* 结构化制作步骤（2026-10-24） */
+.step-row {
+  display: flex;
+  gap: 16rpx;
+  padding: 14rpx 0;
+  border-bottom: 1rpx dashed #ece3d4;
+}
+
+.step-row:last-child {
+  border-bottom: 0;
+}
+
+.step-index {
+  width: 40rpx;
+  height: 40rpx;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #1e3a2f;
+  color: #f4ecd8;
+  font-size: 22rpx;
+  font-weight: 700;
+  text-align: center;
+  line-height: 40rpx;
+}
+
+.step-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.step-instruction {
+  font-size: 26rpx;
+  line-height: 1.7;
+  color: #26261f;
+}
+
+.step-meta {
+  font-size: 22rpx;
+  color: #8a7a66;
+}
+
+/* 储存和烹饪（2026-10-24 全店统一文案） */
+.guide-card {
+  padding: 20rpx 22rpx;
+  background: #f7f1e4;
+  border: 1rpx solid #e8decd;
+  border-radius: 16rpx;
+}
+
+.guide-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  padding: 12rpx 0;
+}
+
+.guide-row + .guide-row {
+  border-top: 1rpx dashed #e2d5bf;
+}
+
+.guide-label {
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #8a6b33;
+}
+
+.guide-text {
+  font-size: 24rpx;
+  line-height: 1.7;
+  color: #4f4636;
+}
+
+/* 补剂购买引导：句子里嵌一颗小按钮（2026-10-24） */
+.supplement-buy-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8rpx;
+  margin-top: 16rpx;
+  padding: 16rpx 20rpx;
+  background: #f7f1e4;
+  border: 1rpx solid #e8decd;
+  border-radius: 14rpx;
+}
+
+.supplement-buy-note-text {
+  font-size: 23rpx;
+  line-height: 1.6;
+  color: #6b6653;
+}
+
+.supplement-buy-note-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 48rpx;
+  margin: 0;
+  padding: 0 20rpx;
+  border-radius: 999rpx;
+  background: #1e3a2f;
+  color: #f3eddd;
+  font-size: 23rpx;
+  font-weight: 600;
+  line-height: 48rpx;
+}
+
+.supplement-buy-note-btn::after {
+  border: none;
+}
+
+.bottom-service {
+  margin-right: 4rpx;
 }
 
 /* 固定文案卡片网格 */

@@ -26,10 +26,16 @@ describe('recipe diy regressions', () => {
     )?.[0] || ''
 
     expect(source).toContain("const initialDogId = ref('')")
-    expect(mountedSource).toContain("initialDogId.value = options.dogId || ''")
+    // 2026-10-24：onLoad 先收 dogId，比 onMounted 翻页面栈可靠
+    expect(source).toContain('onLoad((options) => {')
+    expect(source).toContain('routeDogId.value = options?.dogId')
+    expect(mountedSource).toContain("initialDogId.value = routeDogId.value || options.dogId || ''")
     expect(loadDogsSource).toContain('const preferredDogId = initialDogId.value || uni.getStorageSync(\'dogId\') || \'\'')
     expect(loadDogsSource).toContain('const preferredDog = res.data.find((dog: Dog) => dog.id === preferredDogId) || res.data[0]')
     expect(loadDogsSource).toContain('await selectDog(preferredDog.id)')
+    // 来源提示条已按 2026-10-24 要求拿掉；版本锁仍靠 orderId
+    expect(source).not.toContain('custom-source-banner')
+    expect(source).not.toContain('来自你的定制食谱')
   })
 
   it('offers a quick switch to the selected dog matched life-stage recipe version', () => {

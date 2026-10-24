@@ -1869,6 +1869,10 @@ describe('定制页 · 2026-10-05 第三批（4 条）', () => {
     expect(reportArea).toContain('allergyReports')
     expect(reportArea).toContain('formData.reportDrafts')
 
+    // 连草稿里旧版本自动选的答案也不恢复（避免“一进来又是有过敏”）
+    expect(code).not.toContain('hasFoodAllergy.value = draft.hasFoodAllergy')
+    expect(code).toContain('hasFoodAllergy.value = null;')
+
     // 没作答不能提交（否则“跳过”这件事只做了一半）
     expect(code).toContain('const hasFoodAllergy = ref<boolean | null>(null)')
     expect(code).toContain('请先回答：小家伙是否对部分食物过敏')

@@ -1297,7 +1297,12 @@ function applyCustomRecipeDraft(draft: ReturnType<typeof loadCustomRecipeDraft>)
   if (!Array.isArray(formData.value.reportDrafts)) {
     formData.value.reportDrafts = [];
   }
-  hasFoodAllergy.value = draft.hasFoodAllergy;
+  /**
+   * 过敏题**不从草稿恢复答案**（2026-10-25 老板：题目不预选）。
+   * 旧版本可能把系统自动选的“有过敏”写进了草稿；恢复它等于又替顾客答了。
+   * 过敏文本/报告仍从草稿恢复，顾客选“有过敏”后就能看到。
+   */
+  hasFoodAllergy.value = null;
   weightGoalChoice.value = draft.weightGoalChoice;
   prefilledAllergyText.value = draft.prefilledAllergyText || '';
 }

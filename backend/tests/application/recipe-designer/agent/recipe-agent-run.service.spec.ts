@@ -779,6 +779,71 @@ describe('RecipeAgentRunService', () => {
     await service.waitForIdle(SESSION_ID);
   });
 
+  it('resume 启动的循环持有草稿锁：stop 之后 start 仍被拒绝，直到旧循环结束', async () => {
+    const prisma = {
+      recipeDesignAgentSession: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: SESSION_ID,
+          designRecipeId: DRAFT_ID,
+          status: 'WAITING_USER',
+        }),
+      },
+    };
+    // 让 resume 启动的循环卡在工具里：此时 stop 不会释放草稿锁。
+    let releaseTool: ((value: AgentToolResult<unknown>) => void) | undefined;
+    const getDraft = jest.fn(
+      () =>
+        new Promise<AgentToolResult<unknown>>((resolve) => {
+          releaseTool = resolve;
+        }),
+    );
+    const sessionService = makeSessionService();
+    sessionService.createSession.mockResolvedValueOnce({
+      id: 'session-2',
+      designRecipeId: DRAFT_ID,
+      status: 'RUNNING',
+    });
+    const { service } = makeRunService({
+      handlers: {
+        get_draft: getDraft,
+        ask_user: jest.fn(),
+        finish_draft: jest.fn(),
+      },
+      prisma,
+      sessionService,
+      responses: [toolCallResponse('get_draft'), finalResponse('旧循环结束')],
+    });
+
+    await service.resume({
+      sessionId: SESSION_ID,
+      actor: ACTOR,
+      message: '继续',
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(getDraft).toHaveBeenCalledTimes(1);
+
+    // stop 只落状态，不释放草稿锁：旧循环还在飞。
+    await service.stop(SESSION_ID, ACTOR);
+    expect(sessionService.createSession).not.toHaveBeenCalled();
+
+    const error = await service
+      .start({ draftId: DRAFT_ID, actor: ACTOR, message: '插队' })
+      .catch((caught) => caught);
+    expect(error).toBeInstanceOf(ConflictException);
+    expect(error.message).toBe('这个草稿已经有一个 AI 运行');
+    expect(sessionService.createSession).not.toHaveBeenCalled();
+
+    // 放行旧循环，让它自己走完 finally 释放草稿锁。
+    releaseTool?.(okResult({}, '草稿'));
+    await service.waitForIdle(SESSION_ID);
+
+    await expect(
+      service.start({ draftId: DRAFT_ID, actor: ACTOR, message: '重新开始' }),
+    ).resolves.toEqual({ sessionId: 'session-2' });
+    expect(sessionService.createSession).toHaveBeenCalledTimes(1);
+    await service.waitForIdle('session-2');
+  });
+
   it('两个并发 resume 同一个 WAITING 会话只有一个成功，用户消息只追加一次', async () => {
     const prisma = {
       recipeDesignAgentSession: {

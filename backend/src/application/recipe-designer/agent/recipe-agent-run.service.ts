@@ -120,8 +120,12 @@ const SYSTEM_PROMPT = `你是 SevenKitchen 的食谱设计 Agent，负责在当�
 export class RecipeAgentRunService implements OnModuleInit {
   private readonly running = new Map<string, Promise<void>>();
   private readonly stopped = new Set<string>();
-  /** 单实例内的草稿锁：一个草稿同一时间只允许一个运行。 */
-  private readonly activeDrafts = new Set<string>();
+  /**
+   * 单实例内的草稿锁（引用计数）：一个草稿同一时间只允许一个运行。
+   * 引用计数而不是布尔值：start / resume 启动的循环各自持有一个计数，
+   * 谁先结束谁归还，必须等所有循环都退出后计数才归零。
+   */
+  private readonly activeDrafts = new Map<string, number>();
   /** 单实例内的会话领取标记：resume 的 check 和 act 之间不能有第二个请求。 */
   private readonly claiming = new Set<string>();
 
@@ -143,10 +147,10 @@ export class RecipeAgentRunService implements OnModuleInit {
     message: string;
   }): Promise<{ sessionId: string }> {
     // 锁必须在第一个 await 之前抢到：两个并发请求会同时读到“没有活跃会话”。
-    if (this.activeDrafts.has(input.draftId)) {
+    if ((this.activeDrafts.get(input.draftId) ?? 0) > 0) {
       throw new ConflictException('这个草稿已经有一个 AI 运行');
     }
-    this.activeDrafts.add(input.draftId);
+    this.acquireDraft(input.draftId);
 
     let launched = false;
     try {
@@ -189,7 +193,7 @@ export class RecipeAgentRunService implements OnModuleInit {
       return { sessionId };
     } finally {
       if (!launched) {
-        this.activeDrafts.delete(input.draftId);
+        this.releaseDraft(input.draftId);
       }
     }
   }
@@ -225,34 +229,46 @@ export class RecipeAgentRunService implements OnModuleInit {
         throw new BadRequestException('只有等待用户回答的会话可以继续');
       }
 
-      // 上面读到的状态可能已经过期（例如刚好被 stop）：用条件更新抢状态，
-      // 只有仍然是 WAITING_USER 才允许改成 RUNNING。
-      const claimed = await this.sessionService.transitionStatus(
-        input.sessionId,
-        ['WAITING_USER'],
-        'RUNNING',
-      );
-      if (!claimed) {
-        throw new ConflictException('会话已经结束或被停止');
-      }
-
+      // resume 启动的循环也占草稿：旧循环真正结束前，start 不能插队。
+      this.acquireDraft(session.designRecipeId);
+      let launched = false;
       try {
-        await this.sessionService.appendMessage({
-          sessionId: input.sessionId,
-          role: 'USER',
-          content: input.message,
-        });
-      } catch (error) {
-        await this.failSession(input.sessionId, error);
-        return;
-      }
+        // 上面读到的状态可能已经过期（例如刚好被 stop）：用条件更新抢状态，
+        // 只有仍然是 WAITING_USER 才允许改成 RUNNING。
+        const claimed = await this.sessionService.transitionStatus(
+          input.sessionId,
+          ['WAITING_USER'],
+          'RUNNING',
+        );
+        if (!claimed) {
+          throw new ConflictException('会话已经结束或被停止');
+        }
 
-      this.launch(
-        input.sessionId,
-        session.designRecipeId,
-        input.actor,
-        input.message,
-      );
+        try {
+          await this.sessionService.appendMessage({
+            sessionId: input.sessionId,
+            role: 'USER',
+            content: input.message,
+          });
+        } catch (error) {
+          await this.failSession(input.sessionId, error);
+          return;
+        }
+
+        this.launch(
+          input.sessionId,
+          session.designRecipeId,
+          input.actor,
+          input.message,
+          session.designRecipeId,
+        );
+        launched = true;
+      } finally {
+        // 没走到 launch（transition 失败 / append 失败 / 抛异常）就自己归还。
+        if (!launched) {
+          this.releaseDraft(session.designRecipeId);
+        }
+      }
     } finally {
       this.claiming.delete(input.sessionId);
     }
@@ -429,7 +445,7 @@ export class RecipeAgentRunService implements OnModuleInit {
         this.running.delete(sessionId);
       }
       if (heldDraftId) {
-        this.activeDrafts.delete(heldDraftId);
+        this.releaseDraft(heldDraftId);
       }
     });
   }
@@ -703,6 +719,26 @@ export class RecipeAgentRunService implements OnModuleInit {
 
   private isStopped(sessionId: string): boolean {
     return this.stopped.has(sessionId);
+  }
+
+  /** 占用一个草稿运行位；同一草稿的多个循环各计一次。 */
+  private acquireDraft(draftId: string): void {
+    this.activeDrafts.set(draftId, (this.activeDrafts.get(draftId) ?? 0) + 1);
+  }
+
+  /**
+   * 归还草稿运行位；计数归零才删除。
+   *
+   * stop 不在这里归还：旧循环可能还在飞，必须等它自己走到 finally 才放开，
+   * 否则 stop 之后立刻 start 会在同一个草稿上叠出第二个循环。
+   */
+  private releaseDraft(draftId: string): void {
+    const next = (this.activeDrafts.get(draftId) ?? 0) - 1;
+    if (next > 0) {
+      this.activeDrafts.set(draftId, next);
+      return;
+    }
+    this.activeDrafts.delete(draftId);
   }
 
   private isOverTime(startedAt: number): boolean {

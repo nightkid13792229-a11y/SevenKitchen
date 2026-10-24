@@ -37,6 +37,8 @@ export interface AgentAssessmentEntry {
   unit?: string | null;
   /** 数值口径，如 PER_1000_KCAL；不填时按 view.basis 理解。 */
   basis?: string | null;
+  /** 余量更近的一边：LOWER=距下限，UPPER=距上限；无法判断时为 null。 */
+  marginSide?: 'LOWER' | 'UPPER' | null;
 }
 
 /** 某一份草稿在某一个内容版本上的评估结果。 */

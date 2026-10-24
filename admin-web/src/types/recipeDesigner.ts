@@ -217,6 +217,7 @@ export type LaunchReadinessWarningCode =
   | 'MISSING_NUTRITION_DATA'
   | 'NUTRIENT_OUT_OF_RANGE'
   | 'TARGET_HEALTH_TAGS_MISSING'
+  | 'AI_DELIVERY_WARNING'
 
 export interface LaunchReadinessIssue<TCode extends string = string> {
   code: TCode
@@ -1163,10 +1164,19 @@ export interface RecipeAgentDelivery {
   createdAt: string
 }
 
+/** 会话所属的设计模式：CATALOG = 产品线；ORDER = 本单定制 */
+export type RecipeAgentSessionMode = {
+  designMode: 'CATALOG' | 'ORDER'
+  /** ORDER 模式绑定的订单号；产品线设计缺省 / null */
+  orderId?: string | null
+}
+
 export interface RecipeAgentSessionView {
   session: RecipeAgentSession
   messages: RecipeAgentMessage[]
   approvals?: RecipeAgentApproval[]
+  /** 会话所属的设计模式；旧响应没有这个字段时按产品线处理 */
+  mode?: RecipeAgentSessionMode | null
   /** 最近一次交付确认卡；没有交付过时为 null / 缺省 */
   delivery?: RecipeAgentDelivery | null
 }

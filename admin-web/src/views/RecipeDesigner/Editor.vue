@@ -377,13 +377,12 @@
     <!--
       AI 食谱设计 Agent（P2）：对话式抽屉。
       运行中每 1.5 秒轮询会话；连续工具步骤合并为可折叠执行记录；
-      有交付卡时可退回修改，或直接确认交付并打开上线检查。
+      交付确认卡只读展示，复核与发布统一走头部「上线检查」。
     -->
     <RecipeAgentDrawer
       v-model="agentDrawerVisible"
       :draft-id="currentDraftId"
       @refresh="loadDraft()"
-      @publish="openLaunchReadiness"
     />
   </div>
 </template>

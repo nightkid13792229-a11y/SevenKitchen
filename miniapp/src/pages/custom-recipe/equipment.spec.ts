@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 /**
  * 制作设备推荐守卫（2026-10-18 · 需求 2.4.2 ⑦ / V56 / 附录 B #12）
  *
- * 老板："也需要有制作设备推荐的板块"。
+ * 老板："也需要有制作设备推荐的板块"；2026-10-24 先下线，等做好再上线。
  * 附录 B #12 记着：DIY 制作单里**功能做完了但被 `v-if="false"` 关掉**。
  *
  * 2026-10-24：交付第 2 页删除，设备推荐只保留在 DIY 制作单这一处
@@ -23,8 +23,9 @@ describe('制作设备推荐', () => {
     readFileSync(resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'), 'utf-8'),
   )
 
-  it('★ DIY 制作单里已重新打开（不再是 v-if="false"）', () => {
-    expect(diy).not.toContain('v-if="false"')
+  it('★ 2026-10-24 暂时下线，代码保留，等做好后改开关恢复', () => {
+    expect(diy).toContain('SHOW_EQUIPMENT_RECOMMENDATION = false')
+    expect(diy).toContain('v-if="SHOW_EQUIPMENT_RECOMMENDATION"')
     expect(diy).toContain('equipment-card')
     expect(diy).toContain('handleShowEquipmentList')
   })

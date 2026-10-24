@@ -67,6 +67,7 @@ export type LaunchReadinessWarningCode =
   | 'REVIEW_REQUIRED'
   | 'MISSING_NUTRITION_DATA'
   | 'NUTRIENT_OUT_OF_RANGE'
+  | 'AI_DELIVERY_WARNING'
   | 'TARGET_HEALTH_TAGS_MISSING';
 
 export interface LaunchReadinessIssue<TCode extends string = string> {

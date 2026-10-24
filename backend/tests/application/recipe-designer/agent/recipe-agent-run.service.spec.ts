@@ -357,6 +357,26 @@ describe('RecipeAgentRunService', () => {
     expect(messageRoles[1]).toEqual(['system', 'user', 'assistant', 'tool']);
   });
 
+  it('SYSTEM_PROMPT 要求 finish_draft summary 不重复 warnings', async () => {
+    const { service, callModel } = makeRunService({
+      handlers: {},
+      responses: [finalResponse('好的')],
+    });
+
+    const { sessionId } = await service.start({
+      draftId: DRAFT_ID,
+      actor: ACTOR,
+      message: '开始',
+    });
+    await service.waitForIdle(sessionId);
+
+    const systemMessage = callModel.mock.calls[0][0].messages[0];
+    expect(systemMessage.role).toBe('system');
+    expect(systemMessage.content).toContain(
+      'finish_draft 的 summary 只写交付内容（原料/重量/达标/文案/步骤），不要重复 warnings 列表；警告由系统单独列出。',
+    );
+  });
+
   it('start 只把本轮用户消息作为 user，刚追加的那条不会重复进历史 transcript', async () => {
     const sessionService = makeSessionService();
     // 真实 listMessages 在 appendMessage 之后调用，所以一定包含本轮用户消息。
@@ -1140,12 +1160,43 @@ describe('RecipeAgentRunService', () => {
       session,
       messages: [message],
       approvals: [{ ...approval, createdAt: requestedAt }],
+      mode: { designMode: 'CATALOG', orderId: null },
       delivery: null,
     });
     expect(prisma.recipeDesignAgentApproval.findMany).toHaveBeenCalledWith({
       where: { sessionId: SESSION_ID },
       orderBy: { requestedAt: 'asc' },
     });
+  });
+
+  it('getSessionView 暴露订单模式时带订单号', async () => {
+    const session = {
+      id: SESSION_ID,
+      designRecipeId: DRAFT_ID,
+      status: 'WAITING_USER',
+    };
+    const prisma = {
+      recipeDesignAgentSession: {
+        findFirst: jest.fn().mockResolvedValue(session),
+      },
+      recipeDesignAgentApproval: { findMany: jest.fn().mockResolvedValue([]) },
+      recipeDesignAgentSnapshot: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+    };
+    const designerService = {
+      getDraft: jest.fn().mockResolvedValue({
+        draftId: DRAFT_ID,
+        series: { designMode: 'ORDER', orderId: 'order-9' },
+      }),
+    };
+    const { service } = makeRunService({ handlers: {}, prisma, designerService });
+
+    const view = await service.getSessionView(DRAFT_ID, ACTOR);
+
+    expect(view?.mode).toEqual({ designMode: 'ORDER', orderId: 'order-9' });
+    // 保留原来的 getDraft 访问校验调用。
+    expect(designerService.getDraft).toHaveBeenCalledWith(DRAFT_ID, ACTOR);
   });
 
   it('getSessionView 用最近一次快照构建交付卡', async () => {
@@ -1179,6 +1230,7 @@ describe('RecipeAgentRunService', () => {
       session,
       messages: [],
       approvals: [],
+      mode: { designMode: 'CATALOG', orderId: null },
       delivery: {
         summary: '七类齐全、评估达标，可以交付。',
         warnings: ['钙接近下限，建议下轮再补一点。'],

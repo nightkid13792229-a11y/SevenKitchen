@@ -5261,7 +5261,87 @@ export class RecipeDesignerService {
   ): Promise<DraftLaunchReadiness> {
     const draft = await this.getDraft(id, access);
     const { readiness } = await this.evaluateDraftLaunchReadiness(draft);
+
+    /**
+     * AI 交付卡已改成只读：它落库的 warnings 不在这里重新跑 Agent，
+     * 只取**当前内容版本**最近一次快照，作为额外提醒并入上线检查。
+     * 只加 warnings，不参与 ready / blockers。
+     */
+    const aiWarnings = await this.loadAiDeliveryWarnings(draft);
+    if (aiWarnings.length > 0) {
+      const seenMessages = new Set(
+        readiness.warnings.map((warning) => warning.message),
+      );
+      for (const warning of aiWarnings) {
+        const message = `AI 交付提醒：${warning}`;
+        if (seenMessages.has(message)) continue;
+        seenMessages.add(message);
+        readiness.warnings.push({
+          code: 'AI_DELIVERY_WARNING',
+          scope: 'COMMON',
+          message,
+        });
+      }
+    }
+
     return readiness;
+  }
+
+  /**
+   * 读取当前内容版本上最近一次 AI 交付快照里的 warnings。
+   *
+   * 版本对不上（旧快照）、快照结构不对、或测试/历史库没有这张表时都按
+   * “没有 AI 提醒”处理，绝不让上线检查 500。
+   */
+  private async loadAiDeliveryWarnings(
+    draft: DesignRecipeWithItems,
+  ): Promise<string[]> {
+    const snapshotModel = (this.prisma as any).recipeDesignAgentSnapshot;
+    if (!snapshotModel?.findFirst) {
+      return [];
+    }
+
+    let record: { snapshot?: unknown } | null;
+    try {
+      record = await snapshotModel.findFirst({
+        where: {
+          designRecipeId: draft.id,
+          contentRevision: draft.contentRevision,
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { snapshot: true },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `草稿 ${draft.id} AI 交付快照读取失败，跳过 AI 提醒：${this.resolveLaunchReadinessErrorMessage(error)}`,
+      );
+      return [];
+    }
+    if (!record) {
+      return [];
+    }
+
+    const snapshot = record.snapshot;
+    if (
+      typeof snapshot !== 'object' ||
+      snapshot === null ||
+      Array.isArray(snapshot)
+    ) {
+      return [];
+    }
+    const warnings = (snapshot as { warnings?: unknown }).warnings;
+    if (
+      !Array.isArray(warnings) ||
+      !warnings.every(
+        (warning): warning is string => typeof warning === 'string',
+      )
+    ) {
+      return [];
+    }
+
+    return warnings
+      .map((warning) => warning.trim())
+      .filter((warning) => warning.length > 0);
   }
 
   /**

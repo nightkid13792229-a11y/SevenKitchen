@@ -18,6 +18,15 @@
         >
           {{ statusLabel }}
         </el-tag>
+        <el-tag
+          v-if="session"
+          class="agent-header__mode"
+          size="small"
+          :type="modeTagType"
+          effect="plain"
+        >
+          {{ modeLabel }}
+        </el-tag>
       </div>
     </template>
 
@@ -92,31 +101,9 @@
           </div>
         </div>
         <p class="agent-delivery__summary">{{ delivery.summary }}</p>
-        <div
-          v-if="deliveryWarnings.length > 0"
-          class="agent-delivery__warnings"
-        >
-          <div class="agent-delivery__warnings-title">
-            交付提醒（{{ deliveryWarnings.length }}）
-          </div>
-          <ol>
-            <li v-for="(warning, index) in deliveryWarnings" :key="index">
-              {{ warning }}
-            </li>
-          </ol>
-        </div>
-        <div class="agent-delivery__actions">
-          <el-button
-            plain
-            :disabled="deliveryActionsDisabled"
-            @click="rejectDelivery"
-          >退回修改</el-button>
-          <el-button
-            type="primary"
-            :disabled="deliveryActionsDisabled"
-            @click="emit('publish')"
-          >确认交付</el-button>
-        </div>
+        <p v-if="delivery.warnings.length > 0" class="agent-delivery__sync">
+          {{ delivery.warnings.length }} 项警告已同步到上线检查
+        </p>
       </section>
 
       <el-alert
@@ -164,7 +151,6 @@
 
       <div class="agent-composer">
         <el-input
-          ref="composerRef"
           v-model="input"
           type="textarea"
           :rows="3"
@@ -203,7 +189,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import type { InputInstance } from 'element-plus'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import { formatDateTime } from '@/utils/date'
 import type {
@@ -211,6 +196,7 @@ import type {
   RecipeAgentDelivery,
   RecipeAgentMessage,
   RecipeAgentSession,
+  RecipeAgentSessionMode,
   RecipeAgentSessionStatus
 } from '@/types/recipeDesigner'
 
@@ -222,7 +208,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   (event: 'update:modelValue', value: boolean): void
   (event: 'refresh'): void
-  (event: 'publish'): void
 }>()
 
 const visible = computed({
@@ -234,13 +219,13 @@ const session = ref<RecipeAgentSession | null>(null)
 const messages = ref<RecipeAgentMessage[]>([])
 const approvals = ref<RecipeAgentApproval[]>([])
 const delivery = ref<RecipeAgentDelivery | null>(null)
+const mode = ref<RecipeAgentSessionMode | null>(null)
 const input = ref('')
 const loading = ref(false)
 const sending = ref(false)
 const stopping = ref(false)
 const decidingApprovalId = ref<string | null>(null)
 const scrollRef = ref<HTMLElement | null>(null)
-const composerRef = ref<InputInstance | null>(null)
 
 let pollTimer: number | null = null
 
@@ -309,12 +294,16 @@ const blocks = computed<AgentConversationBlock[]>(() => {
   return result
 })
 
-const deliveryWarnings = computed<string[]>(() => {
-  const warnings = delivery.value?.warnings
-  if (!Array.isArray(warnings)) return []
-  return warnings.filter((warning) => warning.trim().length > 0)
+/** 头部模式标签：ORDER 显示本单定制（带订单号前缀），其余按产品线处理。 */
+const modeLabel = computed(() => {
+  if (mode.value?.designMode !== 'ORDER') return '产品线'
+  const orderId = mode.value.orderId?.trim()
+  return orderId ? `本单定制 · 订单 ${orderId.slice(0, 8)}` : '本单定制'
 })
-const deliveryActionsDisabled = computed(() => running.value || sending.value)
+const modeTagType = computed(() =>
+  mode.value?.designMode === 'ORDER' ? 'primary' : 'info'
+)
+
 const waiting = computed(() => session.value?.status === 'WAITING_USER')
 const pendingApprovals = computed(() =>
   approvals.value.filter((approval) => approval.status === 'PENDING')
@@ -404,6 +393,7 @@ async function loadSession(silent = false) {
     messages.value = view?.messages ?? []
     approvals.value = view?.approvals ?? []
     delivery.value = view?.delivery ?? null
+    mode.value = view?.mode ?? null
 
     const terminalStatuses: RecipeAgentSessionStatus[] = [
       'COMPLETED',
@@ -452,6 +442,7 @@ function handleOpen() {
   messages.value = []
   approvals.value = []
   delivery.value = null
+  mode.value = null
   input.value = ''
   decidingApprovalId.value = null
   void loadSession()
@@ -482,19 +473,6 @@ async function send() {
   } finally {
     sending.value = false
   }
-}
-
-/**
- * 退回修改：不直接驳回交付，而是把修改要求带进输入框。
- *
- * 会话已 COMPLETED 时，send() 会走 startAgentRun 开一轮新的运行；
- * 这里不自动发送，留给营养师补全具体要改什么。
- */
-async function rejectDelivery() {
-  if (!delivery.value || deliveryActionsDisabled.value) return
-  input.value = '交付卡未通过，请调整：'
-  await nextTick()
-  composerRef.value?.focus()
 }
 
 async function stopRun() {
@@ -599,6 +577,11 @@ onBeforeUnmount(stopPolling)
   font-size: 16px;
   font-weight: 600;
   white-space: nowrap;
+}
+
+.agent-header__mode {
+  flex: none;
+  font-size: 11px;
 }
 
 .agent-drawer {
@@ -815,7 +798,7 @@ onBeforeUnmount(stopPolling)
   word-break: break-all;
 }
 
-/* 交付确认卡：高亮左边框 + 浅绿底，是抽屉里唯一的前进动作 */
+/* 交付确认卡：高亮左边框 + 浅绿底，只读展示交付摘要 */
 .agent-delivery {
   flex: none;
   margin-top: 10px;
@@ -864,36 +847,11 @@ onBeforeUnmount(stopPolling)
   word-break: break-word;
 }
 
-.agent-delivery__warnings {
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px dashed #c2e7b0;
-}
-
-.agent-delivery__warnings-title {
-  color: #b88230;
+.agent-delivery__sync {
+  margin: 8px 0 0;
+  color: #909399;
   font-size: 12px;
-  font-weight: 600;
-}
-
-.agent-delivery__warnings ol {
-  margin: 6px 0 0;
-  padding-left: 20px;
-  color: #606266;
-  font-size: 12px;
-  line-height: 1.7;
-  word-break: break-word;
-}
-
-.agent-delivery__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.agent-delivery__actions .el-button + .el-button {
-  margin-left: 0;
+  line-height: 1.5;
 }
 
 .agent-error {
@@ -996,15 +954,6 @@ onBeforeUnmount(stopPolling)
     flex-wrap: wrap;
     align-items: flex-start;
     gap: 8px;
-  }
-
-  .agent-delivery__actions {
-    flex-direction: column;
-  }
-
-  .agent-delivery__actions .el-button {
-    width: 100%;
-    margin-left: 0;
   }
 
   .agent-actions {

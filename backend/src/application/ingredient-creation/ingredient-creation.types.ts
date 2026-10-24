@@ -106,7 +106,10 @@ export interface ProfileDraft {
  *
  * - `EN_EXACT` / `EN_PARTIAL`：英文名完全 / 部分匹配；
  * - `ZH_EXACT` / `ZH_PARTIAL`：中文名完全 / 部分匹配；
- * - `ZH_ALIAS`：中文关键词通过常用中英别名命中英文词条（西洋菜 → Watercress）；
+ * - `ZH_ALIAS`：旧版中文关键词通过代码内手写别名命中英文词条（保留给旧数据；
+ *   新检索改由 `DICTIONARY` / `AI_TRANSLATION` 标记）；
+ * - `DICTIONARY`：中文词通过数据库词典展开的外文词命中；
+ * - `AI_TRANSLATION`：词典没有，模型翻译出的外文词命中；
  * - `FUZZY`：打过准入线、但说不出更具体依据的匹配。
  */
 export type CandidateMatchMethod =
@@ -115,6 +118,8 @@ export type CandidateMatchMethod =
   | 'ZH_EXACT'
   | 'ZH_PARTIAL'
   | 'ZH_ALIAS'
+  | 'DICTIONARY'
+  | 'AI_TRANSLATION'
   | 'FUZZY';
 
 /**
@@ -176,11 +181,16 @@ export interface CandidateSearchResult {
   excludedCount: number;
   coverage: CandidateSearchCoverage;
   /**
-   * 本次实际用于检索的关键词（中文 + 从中文规范名扩展出的英文别名）。
+   * 本次实际用于检索的关键词（中文 + 词典展开词 + AI 翻译候选词）。
    *
    * 零候选时也回传：页面要能列出「查过哪些词」，而不是只显示一句「没结果」。
    */
   keywords: string[];
+  /**
+   * 降级提示。目前只有一种：中文词不在词典里、AI 翻译又不可用。
+   * 零候选时页面/模型据此说清「为什么没查到」，而不是让人以为库里真的没有。
+   */
+  notice?: string | null;
 }
 
 /**

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import {
   classifyCookingMethod,
   isCookedSourceAcceptable,
@@ -9,8 +9,6 @@ import {
 import { NUTRITION_FIELD_CATALOG } from '../../domain/ingredient/nutrition-field-catalog';
 import type { NutritionGovernanceSourceType } from '../../domain/nutrition-governance/nutrition-governance.types';
 import {
-  findChineseEnglishAliases,
-  hasChineseEnglishAliasMatch,
   normalizeNameForMatch,
   scoreIngredientSourceNameMatch,
 } from '../../domain/nutrition-governance/nutrition-governance.utils';
@@ -25,6 +23,12 @@ import type {
   CandidateSearchCoverage,
   CandidateSearchResult,
 } from './ingredient-creation.types';
+import {
+  AI_TRANSLATION_UNAVAILABLE_NOTICE,
+  IngredientNameAliasService,
+  type AiTranslationHit,
+  type AiTranslationResult,
+} from './ingredient-name-alias.service';
 
 export interface FindCandidatesInput {
   /** 中文规范名（必填）。 */
@@ -81,12 +85,28 @@ interface NameAnalysis {
 }
 
 interface QueryAnalysis {
+  /** 口径卡带进来的原始名字（中文名 / 英文名），用于部位分析。 */
   names: string[];
+  /** 实际参与名称匹配的词：原始名字 + 词典展开词 + AI 翻译候选词。 */
+  terms: QueryTerm[];
   analyses: NameAnalysis[];
   /** 所有查询名字的部位并集，用于跨语言比较（牛肉 vs Beef, liver）。 */
   parts: Set<string>;
-  /** 回传给页面/模型的关键词，含中文名扩展出的英文别名。 */
+  /** 回传给页面/模型的关键词，含词典与 AI 翻译展开出的外文词。 */
   keywords: string[];
+}
+
+/** 一个参与匹配的词，以及「这个词是怎么来的」。 */
+interface QueryTerm {
+  text: string;
+  /**
+   * 来自词典 / AI 翻译的外文词要固定标记命中方式；
+   * 原始名字为 null，由 `classifyMatchMethod` 按名字本身判断。
+   */
+  matchedBy: Extract<
+    CandidateMatchMethod,
+    'DICTIONARY' | 'AI_TRANSLATION'
+  > | null;
 }
 
 interface MatchOutcome {
@@ -95,6 +115,8 @@ interface MatchOutcome {
   matchedBy: CandidateMatchMethod;
   matchedKeyword: string;
   matchedSourceName: string;
+  /** 所有名字对得上的查询词（含词典 / AI 翻译），用于回写词典命中。 */
+  matchedTerms: string[];
 }
 
 interface ScoredCandidate {
@@ -255,7 +277,10 @@ function arePartsDisjoint(left: Set<string>, right: Set<string>): boolean {
   return true;
 }
 
-function buildQueryAnalysis(input: FindCandidatesInput): QueryAnalysis {
+function buildQueryAnalysis(
+  input: FindCandidatesInput,
+  expansions: readonly QueryTerm[] = [],
+): QueryAnalysis {
   const names = uniqueNonEmptyText([input.name, input.nameEn]);
   const analyses = names.map(analyzeName);
   const parts = new Set<string>();
@@ -263,23 +288,30 @@ function buildQueryAnalysis(input: FindCandidatesInput): QueryAnalysis {
     analysis.parts.forEach((part) => parts.add(part));
   }
 
-  // 中文检索词扩展出英文别名（西洋菜 → watercress）：库里绝大多数词条只有
-  // 英文名，不能只拿中文去比。英文检索词不反向扩展，避免把「Watercress」
-  // 同时当成「西洋菜」再算一遍。
-  const keywords = uniqueNonEmptyText([
-    ...names,
-    ...names.flatMap((name) =>
-      HAN_SCRIPT.test(name) ? findChineseEnglishAliases(name) : [],
-    ),
-  ]);
+  // 库里绝大多数词条只有英文名，中文检索词必须靠词典 / AI 翻译展开成外文词。
+  // 展开词由调用方先查词典、词典没有再问模型；这里只负责去重与排序。
+  const terms: QueryTerm[] = [];
+  const seen = new Set<string>();
+  for (const term of [
+    ...names.map((name) => ({ text: name, matchedBy: null })),
+    ...expansions,
+  ]) {
+    const key = normalizeNameForMatch(term.text);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    terms.push(term);
+  }
 
-  return { names, analyses, parts, keywords };
+  const keywords = uniqueNonEmptyText(terms.map((term) => term.text));
+
+  return { names, terms, analyses, parts, keywords };
 }
 
 /**
  * 说出「这一对名字是怎么对上的」。
  *
- * 只做确定性判断：完全相等 → 部分包含 → 中文别名命中 → 其余算 FUZZY。
+ * 只做确定性判断：完全相等 → 部分包含 → 其余算 FUZZY。
+ * 词典 / AI 翻译展开词的来源由调用方直接标记，不在这里猜。
  * 分数仍由 `scoreIngredientSourceNameMatch` 给，两者不能互相替代。
  */
 function classifyMatchMethod(
@@ -298,12 +330,6 @@ function classifyMatchMethod(
   }
   if (query.includes(source) || source.includes(query)) {
     return chinese ? 'ZH_PARTIAL' : 'EN_PARTIAL';
-  }
-  if (
-    HAN_SCRIPT.test(queryName) &&
-    hasChineseEnglishAliasMatch(queryName, sourceName)
-  ) {
-    return 'ZH_ALIAS';
   }
   return 'FUZZY';
 }
@@ -330,18 +356,25 @@ function scoreSourceRecord(
     MatchOutcome,
     'matchedBy' | 'matchedKeyword' | 'matchedSourceName'
   > | null = null;
-  for (const queryName of query.names) {
+  const matchedTerms: string[] = [];
+  for (const term of query.terms) {
     for (const sourceName of sourceNames) {
       const { score } = scoreIngredientSourceNameMatch({
-        ingredientName: queryName,
+        ingredientName: term.text,
         sourceFoodName: sourceName,
         sourceType: record.sourceType,
+        // 候选检索只认数据库词典；手写表已经由种子导入，不再参与打分。
+        allowStaticChineseEnglishAliases: false,
       });
+      if (score >= MIN_MATCH_SCORE && !matchedTerms.includes(term.text)) {
+        matchedTerms.push(term.text);
+      }
       if (bestEvidence === null || score > bestScore) {
         bestScore = score;
         bestEvidence = {
-          matchedBy: classifyMatchMethod(queryName, sourceName),
-          matchedKeyword: queryName,
+          matchedBy:
+            term.matchedBy ?? classifyMatchMethod(term.text, sourceName),
+          matchedKeyword: term.text,
           matchedSourceName: sourceName,
         };
       }
@@ -350,7 +383,7 @@ function scoreSourceRecord(
 
   const evidence = bestEvidence ?? {
     matchedBy: 'FUZZY' as const,
-    matchedKeyword: query.names[0] ?? '',
+    matchedKeyword: query.terms[0]?.text ?? '',
     matchedSourceName: sourceNames[0] ?? '',
   };
 
@@ -367,7 +400,12 @@ function scoreSourceRecord(
     arePartsDisjoint(query.parts, sourceParts);
 
   if (partConflict) {
-    return { score: DIFFERENT_PART_SCORE, differentPart: true, ...evidence };
+    return {
+      score: DIFFERENT_PART_SCORE,
+      differentPart: true,
+      matchedTerms,
+      ...evidence,
+    };
   }
 
   for (const queryAnalysis of query.analyses) {
@@ -380,7 +418,12 @@ function scoreSourceRecord(
         continue;
       }
 
-      return { score: DIFFERENT_PART_SCORE, differentPart: true, ...evidence };
+      return {
+        score: DIFFERENT_PART_SCORE,
+        differentPart: true,
+        matchedTerms,
+        ...evidence,
+      };
     }
   }
 
@@ -388,7 +431,12 @@ function scoreSourceRecord(
     return null;
   }
 
-  return { score: bestScore, differentPart: false, ...evidence };
+  return {
+    score: bestScore,
+    differentPart: false,
+    matchedTerms,
+    ...evidence,
+  };
 }
 
 /** 来源记录 `normalizedNutrition.meta.sampleState` 的原文；没有则 null。 */
@@ -567,21 +615,44 @@ function summarizeCoverage(
 function buildEmptyResult(
   state: PreparationState,
   keywords: string[] = [],
+  notice: string | null = null,
 ): CandidateSearchResult {
   return {
     candidates: [],
     excludedCount: 0,
     coverage: summarizeCoverage(state, []),
     keywords: [...keywords],
+    ...(notice ? { notice } : {}),
   };
+}
+
+/** 一次查询里，某个中文词拿到的模型翻译结果。 */
+interface QueryAiTranslation {
+  zhTerm: string;
+  result: AiTranslationResult;
+}
+
+interface QueryExpansions {
+  terms: QueryTerm[];
+  aiTranslations: QueryAiTranslation[];
+  /** 词典没有、模型也不可用时的降级提示；正常情况为 null。 */
+  notice: string | null;
 }
 
 /**
  * ② 营养依据站的本地候选检索。
  *
  * 只读本地营养库（`nutrition_source_record.status = ACTIVE`），按口径卡的名字
- * 与状态给出候选；不联网、不写库。线上兜底检索是 Task 13 的
+ * 与状态给出候选；线上兜底检索是 Task 13 的
  * `IngredientCreationOnlineService`，不在这里做。
+ *
+ * 中文检索词的扩展（设计决定 2026-10-24）：
+ * - 先查 `ingredient_name_alias` 词典，命中就把该中文词的所有外文词一起检索，
+ *   并累加 `hitCount`；
+ * - 词典里没有，就让模型翻译 2-4 个外文候选词；
+ * - 翻译词真的命中来源才写回词典（`source = AI_TRANSLATION`），
+ *   一个都没命中不落库，避免污染；
+ * - 模型没配 / 调用失败就只用词典，零命中时返回空结果 + 提示，不报 500。
  *
  * 生熟与做法策略（设计文档决定 #4，2026-10-22）：
  * - 生查询不返回熟词条；熟查询不回退到生词条（熟档案不得由生档案推算）；
@@ -592,7 +663,99 @@ function buildEmptyResult(
  */
 @Injectable()
 export class IngredientCreationCandidateService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(IngredientCreationCandidateService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly aliasService: IngredientNameAliasService,
+  ) {}
+
+  /**
+   * 中文词 → 外文检索词。
+   *
+   * 词典命中：一次取出该中文词的所有外文词（可能多个同义词），并累加使用次数。
+   * 词典没有：交给模型翻译 2-4 个候选词；模型不可用时只返回空展开 + 提示。
+   */
+  private async resolveQueryExpansions(
+    chineseNames: readonly string[],
+  ): Promise<QueryExpansions> {
+    if (chineseNames.length === 0) {
+      return { terms: [], aiTranslations: [], notice: null };
+    }
+
+    const aliases = await this.aliasService.findAliases(chineseNames);
+    const terms: QueryTerm[] = aliases.map((alias) => ({
+      text: alias.foreignTerm,
+      matchedBy: 'DICTIONARY',
+    }));
+
+    // 「表命中」= 这个中文词在词典里查到了，本次检索确实用了它。
+    if (aliases.length > 0) {
+      await this.aliasService.markAliasesHit(aliases.map((alias) => alias.id));
+    }
+
+    const covered = new Set(aliases.map((alias) => alias.zhTerm));
+    const missing = chineseNames.filter((name) => !covered.has(name));
+    const aiTranslations: QueryAiTranslation[] = [];
+    let unavailable = false;
+
+    for (const zhTerm of missing) {
+      const result = await this.aliasService.translateToForeignTerms(zhTerm);
+      if (!result) {
+        unavailable = true;
+        continue;
+      }
+      aiTranslations.push({ zhTerm, result });
+      for (const translation of result.translations) {
+        terms.push({
+          text: translation.term,
+          matchedBy: 'AI_TRANSLATION',
+        });
+      }
+    }
+
+    return {
+      terms,
+      aiTranslations,
+      notice:
+        unavailable && aiTranslations.length === 0
+          ? AI_TRANSLATION_UNAVAILABLE_NOTICE
+          : null,
+    };
+  }
+
+  /**
+   * 只写「真的命中了来源」的翻译词；每个词记第一次命中的来源记录。
+   * 写词典失败不能把已经查到的候选打掉，所以这里只记日志。
+   */
+  private async recordAiTranslationHits(
+    aiTranslations: readonly QueryAiTranslation[],
+    firstSourceRecordIdByTerm: ReadonlyMap<string, string>,
+  ): Promise<void> {
+    for (const { zhTerm, result } of aiTranslations) {
+      const hits: AiTranslationHit[] = [];
+      for (const translation of result.translations) {
+        const sourceRecordId = firstSourceRecordIdByTerm.get(translation.term);
+        if (!sourceRecordId) continue;
+        hits.push({ ...translation, sourceRecordId });
+      }
+      if (hits.length === 0) continue;
+
+      try {
+        await this.aliasService.recordAiTranslation({
+          zhTerm,
+          translations: hits,
+        });
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        this.logger.warn(
+          `[ingredient-candidate] 写词典失败 zh=${zhTerm} terms=${hits
+            .map((hit) => hit.term)
+            .join(',')}: ${reason}`,
+        );
+      }
+    }
+  }
 
   /**
    * @param limit 最多返回多少条候选（默认 50）；截断前已按匹配分、
@@ -602,10 +765,15 @@ export class IngredientCreationCandidateService {
     input: FindCandidatesInput,
     limit: number = DEFAULT_CANDIDATE_LIMIT,
   ): Promise<CandidateSearchResult> {
-    const query = buildQueryAnalysis(input);
-    if (query.names.length === 0) {
-      return buildEmptyResult(input.state, query.keywords);
+    const baseNames = uniqueNonEmptyText([input.name, input.nameEn]);
+    if (baseNames.length === 0) {
+      return buildEmptyResult(input.state);
     }
+
+    // 先把中文词展开成外文词：词典优先，词典没有才问模型。
+    const chineseNames = baseNames.filter((name) => HAN_SCRIPT.test(name));
+    const expansions = await this.resolveQueryExpansions(chineseNames);
+    const query = buildQueryAnalysis(input, expansions.terms);
 
     // 第一段只取元数据：库里有约 1.96 万条来源，整份 normalizedNutrition 是
     // 200MB 量级，必须先按名字筛完，再去取营养档案（见下一段）。
@@ -624,15 +792,27 @@ export class IngredientCreationCandidateService {
 
     const matched: Array<{ record: SourceRecordMeta; match: MatchOutcome }> =
       [];
+    /** 每个查询词第一次命中的来源记录；写词典时记 sourceRecordId 用。 */
+    const firstSourceRecordIdByTerm = new Map<string, string>();
     for (const record of records) {
       const match = scoreSourceRecord(query, record);
-      if (match) {
-        matched.push({ record, match });
+      if (!match) continue;
+      matched.push({ record, match });
+      for (const term of match.matchedTerms) {
+        if (!firstSourceRecordIdByTerm.has(term)) {
+          firstSourceRecordIdByTerm.set(term, record.id);
+        }
       }
     }
 
+    // 翻译的词一个都没命中 → 不写词典（避免把错译沉淀进去）。
+    await this.recordAiTranslationHits(
+      expansions.aiTranslations,
+      firstSourceRecordIdByTerm,
+    );
+
     if (matched.length === 0) {
-      return buildEmptyResult(input.state, query.keywords);
+      return buildEmptyResult(input.state, query.keywords, expansions.notice);
     }
 
     // 第二段只取名字对得上的词条的营养档案：生熟状态要靠 meta.sampleState，
@@ -729,6 +909,10 @@ export class IngredientCreationCandidateService {
       excludedCount,
       coverage: summarizeCoverage(input.state, rows),
       keywords: query.keywords,
+      // 名字命中了但全被生熟/做法筛掉，也把降级提示带上。
+      ...(rows.length === 0 && expansions.notice
+        ? { notice: expansions.notice }
+        : {}),
     };
   }
 }

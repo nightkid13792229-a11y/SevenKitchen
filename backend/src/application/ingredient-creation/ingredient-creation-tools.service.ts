@@ -958,7 +958,13 @@ export class IngredientCreationToolsService {
         ...(found
           ? {}
           : {
-              hint: `本地库没有找到匹配词条。已尝试关键词：${result.keywords.join('、')}（状态 ${state}）。可以换中文名/英文名再试；仍然没有就如实告诉用户库里缺数据，不要编造数值，也不要把这次工具调用说成“成功找到”。`,
+              hint: [
+                result.notice
+                  ? `${result.notice}。`
+                  : '本地库没有找到匹配词条。',
+                `已尝试关键词：${result.keywords.join('、')}（状态 ${state}）。`,
+                '可以换中文名/英文名再试；仍然没有就如实告诉用户库里缺数据，不要编造数值，也不要把这次工具调用说成“成功找到”。',
+              ].join(''),
             }),
       }),
       progress: {

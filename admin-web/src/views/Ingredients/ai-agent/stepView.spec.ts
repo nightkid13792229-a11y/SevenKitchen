@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { toStepView, type AgentStepView } from './stepView'
+import {
+  matchMethodLabel,
+  toStepView,
+  type AgentStepView
+} from './stepView'
 
 type ToolCalls = Parameters<typeof toStepView>[0]
 
@@ -194,5 +198,17 @@ describe('toStepView', () => {
 
   it('空列表返回空数组', () => {
     expect(toStepView([])).toEqual([])
+  })
+})
+
+describe('matchMethodLabel', () => {
+  it('词典与 AI 翻译的命中方式有中文标签', () => {
+    expect(matchMethodLabel('DICTIONARY')).toBe('词典命中')
+    expect(matchMethodLabel('AI_TRANSLATION')).toBe('AI 翻译')
+  })
+
+  it('未知匹配方式原样显示，不藏信息', () => {
+    expect(matchMethodLabel('SOMETHING_NEW')).toBe('SOMETHING_NEW')
+    expect(matchMethodLabel('')).toBe('匹配方式未知')
   })
 })

@@ -69,6 +69,8 @@ const MATCH_METHOD_LABELS: Record<string, string> = {
   ZH_EXACT: '中文名完全匹配',
   ZH_PARTIAL: '中文名部分匹配',
   ZH_ALIAS: '中英别名匹配',
+  DICTIONARY: '词典命中',
+  AI_TRANSLATION: 'AI 翻译',
   FUZZY: '近似匹配'
 }
 

@@ -20,6 +20,7 @@
     "start:check:miniapp": "PORT=${PORT:-3011} DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} NODE_ENV=development npm run start:check",
     "seed:fediaf-2025-dog-standard": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register prisma/seed-fediaf-2025-dog-standards.ts",
     "seed:search-governance-aliases": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register prisma/seed-search-governance-aliases.ts",
+    "seed:ingredient-name-aliases": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register prisma/seed-ingredient-name-aliases.ts",
     "seed:platform-options": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register prisma/seed-platform-options.ts",
     "seed:platform-options:apply": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register prisma/seed-platform-options.ts --apply",
     "seed:allergen-vocabulary": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register prisma/seed-allergen-vocabulary.ts",

@@ -1,10 +1,75 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { IngredientCreationCandidateService } from '../../../src/application/ingredient-creation/ingredient-creation-candidate.service';
+import {
+  IngredientNameAliasService,
+  type AiTranslationResult,
+  type IngredientNameAliasEntry,
+} from '../../../src/application/ingredient-creation/ingredient-name-alias.service';
 import type { CandidateSearchResult } from '../../../src/application/ingredient-creation/ingredient-creation.types';
 import { auditNutritionProfileForImport } from '../../../src/application/standard-ingredient-import/nutrition-audit';
 import { PrismaService } from '../../../src/infrastructure/prisma.service';
 import type { NutritionGovernanceSourceType } from '../../../src/domain/nutrition-governance/nutrition-governance.types';
 import type { PreparationState } from '../../../src/domain/ingredient-creation/preparation-state';
+
+interface AliasFixture {
+  id: string;
+  zhTerm: string;
+  foreignTerm: string;
+  language?: string;
+  source?: IngredientNameAliasEntry['source'];
+}
+
+interface AliasServiceOptions {
+  aliases?: AliasFixture[];
+  /** 模型翻译结果；null / 不传 = 模型不可用 */
+  translation?: AiTranslationResult | null;
+  /** 需要按调用词动态给翻译结果时用它（优先于 translation） */
+  translate?: (zhTerm: string) => Promise<AiTranslationResult | null>;
+}
+
+/**
+ * 词典服务的测试替身：只记录「查了什么、写了什么」，
+ * 让候选服务的编排（先词典、后 AI、失败降级）能被单独断言。
+ */
+function createAliasServiceMock(options: AliasServiceOptions = {}) {
+  const aliases = (options.aliases ?? []).map((fixture) => ({
+    id: fixture.id,
+    zhTerm: fixture.zhTerm,
+    foreignTerm: fixture.foreignTerm,
+    language: fixture.language ?? 'en',
+    source: fixture.source ?? 'MANUAL_SEED',
+  }));
+
+  const findAliases = jest.fn(
+    async (zhTerms: readonly string[]): Promise<IngredientNameAliasEntry[]> =>
+      aliases.filter((alias) => zhTerms.includes(alias.zhTerm)),
+  );
+  const markAliasesHit = jest.fn(async (_aliasIds: readonly string[]) => {});
+  const translateToForeignTerms = jest.fn(
+    async (zhTerm: string): Promise<AiTranslationResult | null> =>
+      options.translate
+        ? options.translate(zhTerm)
+        : (options.translation ?? null),
+  );
+  const recordAiTranslation = jest.fn(
+    async (_input: {
+      zhTerm: string;
+      translations: ReadonlyArray<{
+        term: string;
+        language: string;
+        sourceRecordId: string | null;
+      }>;
+    }) => {},
+  );
+
+  return {
+    aliases,
+    findAliases,
+    markAliasesHit,
+    translateToForeignTerms,
+    recordAiTranslation,
+  };
+}
 
 interface SourceRecordFixture {
   id: string;
@@ -101,16 +166,24 @@ function createPrismaMock(fixtures: SourceRecordFixture[]) {
   return { nutritionSourceRecord: { findMany } };
 }
 
-async function createService(fixtures: SourceRecordFixture[]) {
+async function createService(
+  fixtures: SourceRecordFixture[],
+  aliasOptions: AliasServiceOptions = {},
+) {
   const prisma = createPrismaMock(fixtures);
+  const aliases = createAliasServiceMock(aliasOptions);
   const moduleRef: TestingModule = await Test.createTestingModule({
     providers: [
       IngredientCreationCandidateService,
       { provide: PrismaService, useValue: prisma },
+      { provide: IngredientNameAliasService, useValue: aliases },
     ],
   }).compile();
 
-  return { service: moduleRef.get(IngredientCreationCandidateService) };
+  return {
+    service: moduleRef.get(IngredientCreationCandidateService),
+    aliases,
+  };
 }
 
 function candidateNames(result: CandidateSearchResult): string[] {
@@ -548,7 +621,7 @@ describe('IngredientCreationCandidateService', () => {
     });
   });
 
-  describe('findCandidates 中英别名与匹配依据', () => {
+  describe('findCandidates 词典命中与匹配依据', () => {
     const watercressFixture = (
       overrides: Partial<SourceRecordFixture> & Pick<SourceRecordFixture, 'id'>,
     ): SourceRecordFixture => ({
@@ -558,10 +631,17 @@ describe('IngredientCreationCandidateService', () => {
       ...overrides,
     });
 
-    it('中文关键词通过中英别名命中英文词条，并给出 matchedBy / matchedKeyword / score', async () => {
-      const { service } = await createService([
-        watercressFixture({ id: 'usda-watercress' }),
-      ]);
+    const watercressAlias = {
+      id: 'alias-watercress',
+      zhTerm: '西洋菜',
+      foreignTerm: 'watercress',
+    };
+
+    it('中文关键词通过词典展开检索，标 DICTIONARY 并累加 hitCount', async () => {
+      const { service, aliases } = await createService(
+        [watercressFixture({ id: 'usda-watercress' })],
+        { aliases: [watercressAlias] },
+      );
 
       const result = await service.findCandidates({
         name: '西洋菜',
@@ -575,12 +655,16 @@ describe('IngredientCreationCandidateService', () => {
         sourceRecordId: 'usda-watercress',
         foodName: 'Watercress, raw',
         preparationState: 'RAW',
-        matchedBy: 'ZH_ALIAS',
-        matchedKeyword: '西洋菜',
+        matchedBy: 'DICTIONARY',
+        matchedKeyword: 'watercress',
         matchedSourceName: 'Watercress, raw',
       });
       expect(candidate?.matchScore).toBeGreaterThanOrEqual(0.35);
       expect(candidate?.notes).not.toContain('STATE_UNKNOWN');
+      expect(aliases.markAliasesHit).toHaveBeenCalledWith(['alias-watercress']);
+      // 词典已经命中，不再花钱调模型。
+      expect(aliases.translateToForeignTerms).not.toHaveBeenCalled();
+      expect(aliases.recordAiTranslation).not.toHaveBeenCalled();
     });
 
     it('英文关键词命中英文词条，标 EN_PARTIAL', async () => {
@@ -604,13 +688,16 @@ describe('IngredientCreationCandidateService', () => {
       expect(candidate?.matchScore).toBeGreaterThanOrEqual(0.35);
     });
 
-    it('零命中时 keywords 仍然回传，候选为空数组', async () => {
-      const { service } = await createService([
-        watercressFixture({
-          id: 'unrelated',
-          foodName: 'Cabbage, raw',
-        }),
-      ]);
+    it('词典命中但没有来源命中时，keywords 仍然回传，候选为空数组', async () => {
+      const { service, aliases } = await createService(
+        [
+          watercressFixture({
+            id: 'unrelated',
+            foodName: 'Cabbage, raw',
+          }),
+        ],
+        { aliases: [watercressAlias] },
+      );
 
       const result = await service.findCandidates({
         name: '西洋菜',
@@ -619,6 +706,108 @@ describe('IngredientCreationCandidateService', () => {
 
       expect(result.keywords).toEqual(['西洋菜', 'watercress']);
       expect(result.candidates).toEqual([]);
+      expect(aliases.markAliasesHit).toHaveBeenCalledWith(['alias-watercress']);
+    });
+  });
+
+  describe('findCandidates 词典未命中时用 AI 翻译', () => {
+    const watercressFixture = (
+      overrides: Partial<SourceRecordFixture> & Pick<SourceRecordFixture, 'id'>,
+    ): SourceRecordFixture => ({
+      sourceType: 'USDA',
+      foodName: 'Watercress, raw',
+      status: 'ACTIVE',
+      ...overrides,
+    });
+
+    it('模型翻译命中英文词条时写词典（source=AI_TRANSLATION）', async () => {
+      const { service, aliases } = await createService(
+        [watercressFixture({ id: 'usda-watercress' })],
+        {
+          translation: {
+            model: 'deepseek-test',
+            translations: [
+              { term: 'watercress', language: 'en' },
+              { term: 'nasturtium', language: 'en' },
+            ],
+          },
+        },
+      );
+
+      const result = await service.findCandidates({
+        name: '西洋菜',
+        state: 'RAW',
+      });
+
+      expect(aliases.translateToForeignTerms).toHaveBeenCalledWith('西洋菜');
+      expect(result.keywords).toEqual(['西洋菜', 'watercress', 'nasturtium']);
+      expect(result.candidates).toHaveLength(1);
+      expect(result.candidates[0]).toMatchObject({
+        sourceRecordId: 'usda-watercress',
+        matchedBy: 'AI_TRANSLATION',
+        matchedKeyword: 'watercress',
+        matchedSourceName: 'Watercress, raw',
+      });
+      // 只把真正命中的词写进词典，没命中的 nasturtium 不落库。
+      expect(aliases.recordAiTranslation).toHaveBeenCalledWith({
+        zhTerm: '西洋菜',
+        translations: [
+          {
+            term: 'watercress',
+            language: 'en',
+            sourceRecordId: 'usda-watercress',
+          },
+        ],
+      });
+      expect(aliases.markAliasesHit).not.toHaveBeenCalled();
+    });
+
+    it('翻译出来的词一个都没命中时不写词典', async () => {
+      const { service, aliases } = await createService(
+        [
+          watercressFixture({
+            id: 'unrelated',
+            foodName: 'Cabbage, raw',
+          }),
+        ],
+        {
+          translation: {
+            model: 'deepseek-test',
+            translations: [{ term: 'yam', language: 'en' }],
+          },
+        },
+      );
+
+      const result = await service.findCandidates({
+        name: '山药',
+        state: 'RAW',
+      });
+
+      expect(result.candidates).toEqual([]);
+      expect(aliases.recordAiTranslation).not.toHaveBeenCalled();
+    });
+
+    it('模型不可用时只用词典，返回 0 且提示，不报 500', async () => {
+      const { service, aliases } = await createService(
+        [
+          watercressFixture({
+            id: 'unrelated',
+            foodName: 'Cabbage, raw',
+          }),
+        ],
+        { translation: null },
+      );
+
+      const result = await service.findCandidates({
+        name: '山药',
+        state: 'RAW',
+      });
+
+      expect(result.candidates).toEqual([]);
+      expect(result.notice).toBe('词典里没有这个词，AI 翻译当前不可用');
+      expect(aliases.translateToForeignTerms).toHaveBeenCalledWith('山药');
+      expect(aliases.recordAiTranslation).not.toHaveBeenCalled();
+      expect(aliases.markAliasesHit).not.toHaveBeenCalled();
     });
   });
 

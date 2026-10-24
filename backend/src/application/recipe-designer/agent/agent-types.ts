@@ -93,6 +93,19 @@ export interface AgentProductionStep {
   equipment?: string | null;
 }
 
+/**
+ * 候选原料的关键营养摘要（每 100g）。
+ *
+ * 有它，模型在 `search_ingredients` 阶段就能比较蛋白/脂肪/钙/磷，
+ * 不用为每个候选再调一次 `get_ingredient`；详情留给真正要下锅的原料。
+ */
+export interface AgentIngredientKeyNutrients {
+  proteinPer100g: number | null;
+  fatPer100g: number | null;
+  calciumMgPer100g: number | null;
+  phosphorusMgPer100g: number | null;
+}
+
 /** `search_ingredients` 的候选原料（只含真实、启用、营养档案已验证的原料）。 */
 export interface AgentIngredientCandidate {
   ingredientId: string;
@@ -103,6 +116,7 @@ export interface AgentIngredientCandidate {
   cfctClass: string | null;
   nutritionCategory: string | null;
   verified: boolean;
+  keyNutrients?: AgentIngredientKeyNutrients;
 }
 
 /** `get_ingredient` 的原料详情。 */

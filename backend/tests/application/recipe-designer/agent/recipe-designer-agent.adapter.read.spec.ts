@@ -1053,6 +1053,18 @@ describe('RecipeDesignerAgentAdapter read', () => {
           { id: 'i2', properties: { cfct_class: '菌藻类' } },
         ]),
       },
+      nutritionFood: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'nf1',
+            nutritionData: {
+              meta: { rawBasisType: 'PER_100_G' },
+              macros: { crudeProtein: 18, crudeFat: 5 },
+              minerals: { calcium: 20, phosphorus: 180 },
+            },
+          },
+        ]),
+      },
     };
     const adapter = createAdapter(service, prisma);
 
@@ -1063,6 +1075,12 @@ describe('RecipeDesignerAgentAdapter read', () => {
 
     expect(result.map((c) => c.ingredientId)).toEqual(['i1']);
     expect(result[0].cfctClass).toBe('菌藻类');
+    expect(result[0].keyNutrients).toEqual({
+      proteinPer100g: 18,
+      fatPer100g: 5,
+      calciumMgPer100g: 20,
+      phosphorusMgPer100g: 180,
+    });
   });
 
   it('searchIngredients 翻完所有页，第 3 页的菌类也能找到', async () => {
@@ -1114,6 +1132,9 @@ describe('RecipeDesignerAgentAdapter read', () => {
             properties: { cfct_class: cfctClassById.get(id) ?? null },
           }));
         }),
+      },
+      nutritionFood: {
+        findMany: jest.fn().mockResolvedValue([]),
       },
     };
     const adapter = createAdapter(service, prisma);

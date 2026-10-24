@@ -108,6 +108,9 @@ const SYSTEM_PROMPT = `你是 SevenKitchen 的食谱设计 Agent，负责在当�
 - 例外只能调用 request_exception 申请，审批只能由人做；绝不要自称已批准或绕过检查。
 - 信息不足、需要人拍板时调用 ask_user 提问；不确定就停下来问，不要猜。
 - 营养指标按“目标区间内留 20% 余量”作为工作标准，不要把数值卡在边界上。
+- 选料顺序：先用 search_ingredients 按七类各找 1-2 个候选；候选里已经带蛋白/脂肪/钙/磷（keyNutrients），直接比较，不要为了比较逐个调用 get_ingredient。只有准备下锅的 7-10 个原料才查详情（价格/过敏原/预处理）。
+- 先写骨架再算精确值：先 add_ingredient 把七类骨架加进草稿，再 run_assessment；按评估结果调重量，不要先在脑内把所有克数算完再写。补剂只在评估明确缺口时加，不要预查所有补剂。
+- 工具预算 30 次：读（get_draft/search_ingredients/get_ingredient/get_catalog_usage）尽量不超过 10 次；写至少 8 次；评估/检查至少 3 次。预算快用完时先交付一个可评估的骨架，不要停在“还在查”。
 - 回复用简洁中文，说明改了什么、还差什么。`;
 
 /**

@@ -21,7 +21,10 @@ import {
   classifyFoodCategory,
   type FoodCategory,
 } from '../../../domain/recipe-designer/food-category-map';
-import { readProfileFieldAmount } from '../../../domain/recipe-designer/nutrition-profile-reader';
+import {
+  readProfileFieldAmount,
+  readProfileValuePer100g,
+} from '../../../domain/recipe-designer/nutrition-profile-reader';
 import {
   PRODUCTION_STEP_LIMITS,
   type ProductionStep,
@@ -40,6 +43,7 @@ import {
   type AgentDraftSnapshot,
   type AgentIngredientCandidate,
   type AgentIngredientDetail,
+  type AgentIngredientKeyNutrients,
   type AgentProductionStep,
 } from './agent-types';
 import type { RecipeAgentDraftPort } from './recipe-agent.port';
@@ -149,6 +153,36 @@ const resolveNutritionProfile = (
     );
   }
   return nutritionDataToNutritionProfile(nutritionData);
+};
+
+const emptyKeyNutrients = (): AgentIngredientKeyNutrients => ({
+  proteinPer100g: null,
+  fatPer100g: null,
+  calciumMgPer100g: null,
+  phosphorusMgPer100g: null,
+});
+
+/** 从营养档案读候选比较用的四个关键值（每 100g）。 */
+const buildKeyNutrients = (
+  profile: NutritionProfile | null,
+): AgentIngredientKeyNutrients => {
+  if (!profile) {
+    return emptyKeyNutrients();
+  }
+  return {
+    proteinPer100g: readProfileValuePer100g(
+      profile,
+      'macros.crudeProtein',
+    ).valuePer100g,
+    fatPer100g: readProfileValuePer100g(profile, 'macros.crudeFat')
+      .valuePer100g,
+    calciumMgPer100g: readProfileValuePer100g(profile, 'minerals.calcium')
+      .valuePer100g,
+    phosphorusMgPer100g: readProfileValuePer100g(
+      profile,
+      'minerals.phosphorus',
+    ).valuePer100g,
+  };
 };
 
 /**
@@ -859,6 +893,9 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
       this.prisma,
       picked.map(({ option }) => option.id),
     );
+    const keyNutrientsByFoodId = await this.loadKeyNutrients(
+      picked.map(({ profile }) => profile.nutritionFoodId),
+    );
 
     const candidates = picked.map(({ option, profile }) => {
       const cfctClass = cfctClassById.get(option.id) ?? null;
@@ -875,6 +912,9 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
         cfctClass,
         nutritionCategory,
         verified: true,
+        keyNutrients:
+          keyNutrientsByFoodId.get(profile.nutritionFoodId) ??
+          emptyKeyNutrients(),
         category: classifyFoodCategory({
           name: option.name,
           cfctClass,
@@ -899,7 +939,35 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
         cfctClass: candidate.cfctClass,
         nutritionCategory: candidate.nutritionCategory,
         verified: candidate.verified,
+        keyNutrients: candidate.keyNutrients,
       }));
+  }
+
+  /**
+   * 批量读候选的关键营养（每 100g）：蛋白、脂肪、钙、磷。
+   *
+   * 搜索阶段给模型一张可比较的表，避免它为了比一个数值就逐个查详情。
+   * 任何一项取不到就是 null，不做猜测。
+   */
+  private async loadKeyNutrients(
+    nutritionFoodIds: string[],
+  ): Promise<Map<string, AgentIngredientKeyNutrients>> {
+    const uniqueIds = [...new Set(nutritionFoodIds)];
+    const result = new Map<string, AgentIngredientKeyNutrients>();
+    if (uniqueIds.length === 0) {
+      return result;
+    }
+
+    const rows = await this.prisma.nutritionFood.findMany({
+      where: { id: { in: uniqueIds } },
+      select: { id: true, nutritionData: true },
+    });
+
+    for (const row of rows ?? []) {
+      const profile = resolveNutritionProfile(row.nutritionData);
+      result.set(row.id, buildKeyNutrients(profile));
+    }
+    return result;
   }
 
   async getIngredient(input: {

@@ -111,6 +111,29 @@
                           {{ keyword }}
                         </el-tag>
                       </div>
+                      <!--
+                        候选多时先给人看「每个部位组多少条」：收窄问题与这里
+                        使用同一份后端 groups，避免「11 条相关」却只显示 5 个。
+                      -->
+                      <div
+                        v-if="step.search.groups.length"
+                        class="agent-step__groups"
+                      >
+                        <span class="agent-step__groups-title">分组概览：</span>
+                        <el-tag
+                          v-for="group in step.search.groups"
+                          :key="group.key"
+                          size="small"
+                          effect="plain"
+                          type="info"
+                          class="agent-step__group"
+                        >
+                          {{ group.labelWithCount }}
+                          <template v-if="group.stateLabel">
+                            · {{ group.stateLabel }}
+                          </template>
+                        </el-tag>
+                      </div>
                       <p v-if="!step.search.found" class="agent-step__empty">
                         没有找到匹配词条
                       </p>
@@ -275,6 +298,7 @@
 
         <div class="agent-composer">
           <el-input
+            ref="composerRef"
             v-model="inputText"
             :disabled="state.running || saving || Boolean(commitResult)"
             maxlength="500"
@@ -775,6 +799,8 @@ const isAdmin = useIsAdmin()
 
 const inputText = ref('')
 const bodyRef = ref<HTMLElement | null>(null)
+/** 点「都不对，我直接说」时把焦点放回输入框（自由输入，不把这句话当答案发出去）。 */
+const composerRef = ref<{ focus?: () => void } | null>(null)
 const state = reactive({
   running: false,
   /** 上一轮成功返回的草稿 id；为空表示下一轮会新建草稿。 */
@@ -1136,6 +1162,15 @@ async function handleAnswerOption(option: string) {
     ElMessage.info(
       '这个选项库里未收录：本轮会去线上检索；线上也没有就先留空待补。'
     )
+  }
+  // 兜底选项是「自由输入」入口：不把这句话当答案发给 AI，
+  // 收起问题卡片、把光标放回输入框，让用户直接说自己的叫法。
+  if (check?.kind === 'FREE') {
+    state.pendingQuestion = null
+    await nextTick()
+    composerRef.value?.focus?.()
+    ElMessage.info('直接输入你要用的名称即可。')
+    return
   }
   state.pendingQuestion = null
   inputText.value = input.text
@@ -1664,6 +1699,23 @@ function goBackToList() {
   border-radius: 8px;
   background: var(--el-bg-color);
   font-size: 12px;
+}
+
+.agent-step__groups {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.agent-step__groups-title {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.agent-step__group {
+  max-width: 100%;
 }
 
 .agent-step__keywords {

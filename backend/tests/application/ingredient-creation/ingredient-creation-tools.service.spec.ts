@@ -1346,3 +1346,355 @@ describe('IngredientCreationToolsService · AI 复核候选（判断与写入闸
     expect(Array.from(check.displayLabel)).toHaveLength(131);
   });
 });
+describe('IngredientCreationToolsService · 候选太多时先收窄、再列词条', () => {
+  const coverage = {
+    state: 'RAW' as const,
+    candidateCount: 0,
+    bestCoveragePercent: null,
+    bestMissingFieldCount: null,
+  };
+
+  function row(
+    sourceRecordId: string,
+    foodName: string,
+    preparationState: 'RAW' | 'COOKED' = 'RAW',
+  ) {
+    return {
+      sourceRecordId,
+      sourceType: 'USDA_FDC',
+      foodName,
+      foodNameEn: foodName,
+      preparationState,
+      cookingMethod: null,
+      coveragePercent: 80,
+      missingFields: [],
+      matchScore: 0.8,
+      matchedBy: 'EN_PARTIAL' as const,
+      matchedKeyword: 'beef',
+      matchedSourceName: foodName,
+      notes: [],
+    };
+  }
+
+  function searchResult(candidates: ReturnType<typeof row>[]) {
+    return {
+      keywords: ['牛肉', 'beef'],
+      candidates,
+      excludedCount: 0,
+      coverage: {
+        ...coverage,
+        candidateCount: candidates.length,
+        bestCoveragePercent: 80,
+        bestMissingFieldCount: 0,
+      },
+    };
+  }
+
+  function beefCandidates() {
+    return [
+      ...Array.from({ length: 6 }, (_, index) =>
+        row(`ground-${index}`, `Beef, ground, raw ${index + 1}`),
+      ),
+      ...Array.from({ length: 3 }, (_, index) =>
+        row(`tenderloin-${index}`, `Beef, tenderloin, raw ${index + 1}`),
+      ),
+      ...Array.from({ length: 2 }, (_, index) =>
+        row(`brisket-${index}`, `Beef, brisket, raw ${index + 1}`),
+      ),
+    ];
+  }
+
+  function mockAllRelevant(
+    candidateService: { findCandidates: jest.Mock },
+    reviewService: { reviewCandidates: jest.Mock },
+    candidates: ReturnType<typeof row>[],
+  ) {
+    candidateService.findCandidates.mockResolvedValue(searchResult(candidates));
+    reviewService.reviewCandidates.mockImplementation(
+      async (input: { candidates: Array<{ id: string }> }) =>
+        input.candidates.map((candidate) => ({
+          id: candidate.id,
+          verdict: 'RELEVANT' as const,
+          reason: '就是牛肉',
+        })),
+    );
+  }
+
+  it('11 条相关跨 3 组：先发收窄问题，选项是组名 + 条数，不列词条', async () => {
+    const { tools, candidateService, reviewService, draftService } =
+      createTools([], { intake: { name: '牛肉' } });
+    const candidates = beefCandidates();
+    mockAllRelevant(candidateService, reviewService, candidates);
+
+    const search = await executeTool(tools, 'searchLocalNutrition', {
+      keyword: '牛肉',
+      state: 'RAW',
+    });
+
+    expect(search.ok).toBe(true);
+    expect(search.body.totalCandidates).toBe(11);
+    expect(search.body.nextAction).toBe('NARROW_GROUP');
+    expect(search.body.groups).toEqual([
+      { key: 'ground', label: '牛绞肉', count: 6, states: ['RAW'] },
+      { key: 'tenderloin', label: '牛里脊', count: 3, states: ['RAW'] },
+      { key: 'brisket', label: '牛腩', count: 2, states: ['RAW'] },
+    ]);
+    expect(search.body.narrowing).toMatchObject({
+      required: true,
+      kind: 'GROUP',
+      options: ['牛绞肉（6 条）', '牛里脊（3 条）', '牛腩（2 条）'],
+    });
+    expect(search.body.narrowing.question).toContain('11 条相关');
+    expect(search.body.narrowing.options.join('')).not.toContain('Beef');
+    expect(search.body.hint).toContain('先按部位');
+    expect(search.body.hint).toContain('不要列');
+
+    // 收窄记录随草稿保存：askUser 用它拦「直接列词条」。
+    expect(draftService.patch).toHaveBeenCalledWith(
+      DRAFT_ID,
+      'INTAKE',
+      expect.objectContaining({
+        candidateNarrowing: expect.objectContaining({
+          required: true,
+          kind: 'GROUP',
+        }),
+      }),
+    );
+
+    // 模型如果绕过收窄、直接拿候选名问人，必须被拒。
+    draftService.patch.mockClear();
+    const blocked = await executeTool(tools, 'askUser', {
+      question: '牛肉用哪一条？',
+      options: [
+        'Beef, ground, raw 1 · 来源 USDA_FDC · 覆盖率 80% · 相关：就是牛肉',
+        'Beef, tenderloin, raw 1 · 来源 USDA_FDC · 覆盖率 80% · 相关：就是牛肉',
+      ],
+    });
+    expect(blocked.ok).toBe(false);
+    expect(blocked.error).toContain('先按部位收窄');
+    expect(blocked.error).toContain('牛绞肉（6 条）');
+    expect(draftService.patch).not.toHaveBeenCalled();
+  });
+
+  it('选组后只列该组 ≤5 条 + 「都不对，我直接说」，并带来源库 / 覆盖率 / AI 判断', async () => {
+    const { tools, candidateService, reviewService, draftService } =
+      createTools([], { intake: { name: '牛肉' } });
+    const candidates = beefCandidates();
+    mockAllRelevant(candidateService, reviewService, candidates);
+
+    await executeTool(tools, 'searchLocalNutrition', {
+      keyword: '牛肉',
+      state: 'RAW',
+    });
+    const narrowed = await executeTool(tools, 'searchLocalNutrition', {
+      keyword: '牛肉',
+      state: 'RAW',
+      group: 'ground',
+    });
+
+    expect(narrowed.ok).toBe(true);
+    expect(narrowed.body.group).toMatchObject({
+      key: 'ground',
+      label: '牛绞肉',
+      count: 6,
+    });
+    // 只回该组候选，不再把别的组混进来。
+    expect(narrowed.body.candidates).toHaveLength(6);
+    expect(
+      narrowed.body.candidates.every((candidate: any) =>
+        candidate.foodName.startsWith('Beef, ground'),
+      ),
+    ).toBe(true);
+    expect(narrowed.body.nextAction).toBe('ASK_USER_ENTRIES');
+    expect(narrowed.body.listing.entries).toHaveLength(5);
+    expect(narrowed.body.listing.options).toHaveLength(6);
+    expect(narrowed.body.listing.options.at(-1)).toBe('都不对，我直接说');
+    expect(narrowed.body.listing.options[0]).toContain('Beef, ground, raw 1');
+    expect(narrowed.body.listing.options[0]).toContain('来源 USDA_FDC');
+    expect(narrowed.body.listing.options[0]).toContain('覆盖率 80%');
+    expect(narrowed.body.listing.options[0]).toContain('相关：就是牛肉');
+    expect(narrowed.body.listing.question).toContain('这一组');
+    expect(narrowed.body.hint).toContain('都不对，我直接说');
+
+    // 把组内词条原样问人：允许，并且兜底选项不能带「未收录」后缀。
+    draftService.patch.mockClear();
+    const asked = await executeTool(tools, 'askUser', {
+      question: narrowed.body.listing.question,
+      options: narrowed.body.listing.options,
+    });
+    expect(asked.ok).toBe(true);
+    expect(asked.body.options).toHaveLength(6);
+    // 展示层保留来源库 / 覆盖率；AI 判断由页面小标展示，不在文案里重复。
+    expect(asked.body.optionChecks[0].displayLabel).toContain('来源 USDA_FDC');
+    expect(asked.body.optionChecks[0].displayLabel).toContain('覆盖率 80%');
+    expect(asked.body.optionChecks[0].displayLabel).not.toContain('相关：');
+    expect(asked.body.optionChecks.at(-1)).toMatchObject({
+      label: '都不对，我直接说',
+      kind: 'FREE',
+      inLibrary: null,
+      displayLabel: '都不对，我直接说',
+    });
+    // 选了具体词条：人已经参与选择，复核闸门要清掉。
+    expect(draftService.patch).toHaveBeenCalledWith(
+      DRAFT_ID,
+      'INTAKE',
+      expect.objectContaining({ candidateReviewGate: null }),
+    );
+  });
+
+  it('相关 ≤5 且单组：直接列词条，不问收窄', async () => {
+    const { tools, candidateService, reviewService } = createTools([], {
+      intake: { name: '牛肉' },
+    });
+    const candidates = beefCandidates().slice(0, 3);
+    mockAllRelevant(candidateService, reviewService, candidates);
+
+    const search = await executeTool(tools, 'searchLocalNutrition', {
+      keyword: '牛肉',
+      state: 'RAW',
+    });
+
+    expect(search.body.narrowing.required).toBe(false);
+    expect(search.body.narrowing.options).toEqual([]);
+    expect(search.body.nextAction).toBe('ASK_USER');
+    expect(search.body.listing.options).toHaveLength(4);
+    expect(search.body.listing.options.at(-1)).toBe('都不对，我直接说');
+    expect(search.body.hint).toContain('直接列');
+    expect(search.body.hint).toContain('不要先问收窄');
+  });
+
+  it('未指定状态：收窄问题必须包含「生 / 熟」，且不列词条', async () => {
+    const { tools, candidateService, reviewService } = createTools([], {
+      intake: { name: '牛肉' },
+    });
+    const candidates = beefCandidates();
+    mockAllRelevant(candidateService, reviewService, candidates);
+
+    const search = await executeTool(tools, 'searchLocalNutrition', {
+      keyword: '牛肉',
+    });
+
+    expect(search.body.state).toBe('RAW');
+    expect(search.body.stateSpecified).toBe(false);
+    expect(search.body.nextAction).toBe('NARROW_STATE');
+    expect(search.body.narrowing.kind).toBe('STATE');
+    expect(search.body.narrowing.question).toContain('生');
+    expect(search.body.narrowing.question).toContain('熟');
+    expect(search.body.narrowing.options).toEqual([
+      '生（查生档案）',
+      '熟（查熟档案）',
+    ]);
+
+    const asked = await executeTool(tools, 'askUser', {
+      question: search.body.narrowing.question,
+      options: search.body.narrowing.options,
+    });
+    expect(asked.ok).toBe(true);
+    expect(asked.body.optionChecks).toEqual([
+      expect.objectContaining({
+        label: '生（查生档案）',
+        kind: 'STATE',
+        inLibrary: null,
+        displayLabel: '生（查生档案）',
+      }),
+      expect.objectContaining({
+        label: '熟（查熟档案）',
+        kind: 'STATE',
+        inLibrary: null,
+        displayLabel: '熟（查熟档案）',
+      }),
+    ]);
+    // 这只是确定生熟，还不是挑候选：不能清复核闸门。
+    expect(asked.body.optionChecks.some((check: any) => check.aiVerdict)).toBe(
+      false,
+    );
+  });
+
+  it('该组只剩 1 条：直接用它并说明理由，不再问', async () => {
+    const { tools, candidateService, reviewService } = createTools([], {
+      intake: { name: '牛肉' },
+    });
+    const candidates = [
+      row('ground-1', 'Beef, ground, raw'),
+      ...Array.from({ length: 3 }, (_, index) =>
+        row(`tenderloin-${index}`, `Beef, tenderloin, raw ${index + 1}`),
+      ),
+      ...Array.from({ length: 2 }, (_, index) =>
+        row(`brisket-${index}`, `Beef, brisket, raw ${index + 1}`),
+      ),
+    ];
+    mockAllRelevant(candidateService, reviewService, candidates);
+
+    const first = await executeTool(tools, 'searchLocalNutrition', {
+      keyword: '牛肉',
+      state: 'RAW',
+    });
+    expect(first.body.nextAction).toBe('NARROW_GROUP');
+
+    const narrowed = await executeTool(tools, 'searchLocalNutrition', {
+      keyword: '牛肉',
+      state: 'RAW',
+      group: 'ground',
+    });
+
+    expect(narrowed.body.candidates).toHaveLength(1);
+    expect(narrowed.body.nextAction).toBe('USE_SINGLE_RELEVANT');
+    expect(narrowed.body.listing.single).toBe(true);
+    expect(narrowed.body.listing.options).toEqual([]);
+    expect(narrowed.body.hint).toContain('不必再问');
+    expect(narrowed.body.hint).toContain('理由');
+  });
+
+  it('totalCandidates 是截断前的候选总数：50 条候选、前 12 条参与复核与分组', async () => {
+    const { tools, candidateService, reviewService } = createTools([], {
+      intake: { name: '牛肉' },
+    });
+    const candidates = Array.from({ length: 50 }, (_, index) =>
+      row(`beef-${index}`, `Beef, ground, raw ${index + 1}`),
+    );
+    mockAllRelevant(candidateService, reviewService, candidates);
+
+    const search = await executeTool(tools, 'searchLocalNutrition', {
+      keyword: '牛肉',
+      state: 'RAW',
+    });
+
+    expect(search.body.totalCandidates).toBe(50);
+    expect(search.body.candidateCount).toBe(50);
+    expect(search.body.returnedCount).toBe(12);
+    expect(search.body.candidates).toHaveLength(12);
+    expect(search.body.groups).toEqual([
+      { key: 'ground', label: '牛绞肉', count: 12, states: ['RAW'] },
+    ]);
+  });
+  it('熟组词条核实按收窄记录的 state=COOKED，不能回退到默认 RAW', async () => {
+    const { tools, candidateService, reviewService } = createTools([], {
+      intake: { name: '牛肉' },
+    });
+    const candidates = [
+      row('ground-cooked-1', 'Beef, ground, cooked 1'),
+      row('ground-cooked-2', 'Beef, ground, cooked 2'),
+    ].map((candidate) => ({ ...candidate, preparationState: 'COOKED' as const }));
+    mockAllRelevant(candidateService, reviewService, candidates);
+
+    const search = await executeTool(tools, 'searchLocalNutrition', {
+      keyword: '牛肉',
+      state: 'COOKED',
+    });
+    expect(search.body.listing.options).toHaveLength(3);
+
+    // askUser 的库内核实要用这次检索的状态，不能拿默认 RAW 去查熟词条。
+    candidateService.findCandidates.mockClear();
+    const asked = await executeTool(tools, 'askUser', {
+      question: search.body.listing.question,
+      options: search.body.listing.options,
+    });
+
+    expect(asked.ok).toBe(true);
+    expect(candidateService.findCandidates).toHaveBeenCalledWith(
+      { name: 'Beef, ground, cooked 1', state: 'COOKED' },
+      1,
+    );
+  });
+
+});

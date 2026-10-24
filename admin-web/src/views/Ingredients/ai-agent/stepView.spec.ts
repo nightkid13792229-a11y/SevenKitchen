@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   matchMethodLabel,
+  toSearchEvidenceFromEvent,
   toStepView,
   type AgentStepView
 } from './stepView'
@@ -306,5 +307,100 @@ describe('matchMethodLabel', () => {
   it('未知匹配方式原样显示，不藏信息', () => {
     expect(matchMethodLabel('SOMETHING_NEW')).toBe('SOMETHING_NEW')
     expect(matchMethodLabel('')).toBe('匹配方式未知')
+  })
+})
+
+describe('查本地库 · 部位分组概览', () => {
+  const groups = [
+    { key: 'ground', label: '牛绞肉', count: 6, states: ['RAW'] },
+    { key: 'tenderloin', label: '牛里脊', count: 3, states: ['RAW'] },
+    { key: 'brisket', label: '牛腩', count: 2, states: ['RAW'] }
+  ]
+
+  it('工具结果带 groups / totalCandidates / reviewSummary：页面能画分组与条数', () => {
+    const view = onlyStep([
+      {
+        name: 'searchLocalNutrition',
+        args: { keyword: '牛肉', state: 'RAW' },
+        ok: true,
+        result: {
+          ok: true,
+          found: true,
+          keywords: ['牛肉', 'beef'],
+          candidateCount: 50,
+          totalCandidates: 50,
+          reviewSummary: {
+            relevantCount: 11,
+            uncertainCount: 0,
+            irrelevantCount: 0,
+            failed: false
+          },
+          groups,
+          candidates: []
+        }
+      }
+    ])
+
+    expect(view.search?.totalCount).toBe(50)
+    expect(view.search?.relevantCount).toBe(11)
+    expect(view.search?.message).toBe('共 50 条候选 · 11 条相关')
+    expect(view.search?.groups).toEqual([
+      {
+        key: 'ground',
+        label: '牛绞肉',
+        count: 6,
+        states: ['RAW'],
+        stateLabel: '生',
+        labelWithCount: '牛绞肉（6 条）'
+      },
+      {
+        key: 'tenderloin',
+        label: '牛里脊',
+        count: 3,
+        states: ['RAW'],
+        stateLabel: '生',
+        labelWithCount: '牛里脊（3 条）'
+      },
+      {
+        key: 'brisket',
+        label: '牛腩',
+        count: 2,
+        states: ['RAW'],
+        stateLabel: '生',
+        labelWithCount: '牛腩（2 条）'
+      }
+    ])
+    expect(view.search?.groupSummary).toBe(
+      '牛绞肉 6 条 · 牛里脊 3 条 · 牛腩 2 条'
+    )
+    expect(view.summary).toContain('共 50 条候选 · 11 条相关')
+  })
+
+  it('流式 step_end 同样还原分组概览；旧事件没有 groups 时保持空数组', () => {
+    const evidence = toSearchEvidenceFromEvent({
+      found: true,
+      keywords: ['牛肉', 'beef'],
+      candidateCount: 50,
+      totalCandidates: 50,
+      reviewSummary: { relevantCount: 11 },
+      groups
+    })
+
+    expect(evidence?.groups).toHaveLength(3)
+    expect(evidence?.groups[0]).toMatchObject({
+      label: '牛绞肉',
+      labelWithCount: '牛绞肉（6 条）'
+    })
+    expect(evidence?.message).toBe('共 50 条候选 · 11 条相关')
+
+    const legacy = toSearchEvidenceFromEvent({
+      found: true,
+      keywords: ['西洋菜'],
+      candidateCount: 1,
+      matches: []
+    })
+    expect(legacy?.groups).toEqual([])
+    expect(legacy?.groupSummary).toBe('')
+    expect(legacy?.message).toBe('命中 1 条')
   })
 })

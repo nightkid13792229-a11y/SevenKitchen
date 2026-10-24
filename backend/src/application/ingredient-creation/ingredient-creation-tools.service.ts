@@ -19,10 +19,19 @@ import {
   normalizeReviewReason,
   normalizeReviewVerdict,
 } from './ingredient-candidate-review.service';
+import {
+  buildCandidateGroupListing,
+  buildCandidateGroups,
+  buildCandidateNarrowing,
+  CANDIDATE_GROUP_FALLBACK_OPTION,
+  resolveCandidateGroupScope,
+  type CandidateGroupSummary,
+} from './ingredient-candidate-groups';
 import { IngredientCreationCandidateService } from './ingredient-creation-candidate.service';
 import { IngredientCreationCheckService } from './ingredient-creation-check.service';
 import { IngredientCreationDraftService } from './ingredient-creation-draft.service';
 import type {
+  CandidateNarrowingRecord,
   CandidateReviewGate,
   CandidateReviewVerdict,
   CheckItem,
@@ -114,7 +123,7 @@ const SEARCH_TOOL: AgentToolDefinition = {
   function: {
     name: 'searchLocalNutrition',
     description:
-      '在本地营养库检索某个原料的候选来源（只读）。召回不按类别 / 词位置过滤；返回前会逐条做 AI 相关性复核，每条候选带 review.verdict（RELEVANT / UNCERTAIN / IRRELEVANT）与一句 review.reason，顶部还有 reviewSummary 与 nextAction。复核只打标，不删、不重排候选。注意：ok=true 只表示查询执行成功，found=false 表示没有找到匹配词条；拿到 sourceRecordId 后要用 getNutritionRecord 读取具体营养数值。',
+      '在本地营养库检索某个原料的候选来源（只读）。召回不按类别 / 词位置过滤；返回前会逐条做 AI 相关性复核，每条候选带 review.verdict（RELEVANT / UNCERTAIN / IRRELEVANT）与一句 review.reason，顶部还有 reviewSummary、nextAction、totalCandidates 与 groups（部位分组：key / label / count / states）。候选太多时 nextAction=NARROW_GROUP 或 NARROW_STATE，必须先按 narrowing.question / narrowing.options 调 askUser 收窄，不许直接列词条；用户选组后再次调用本工具并传 group（来自 narrowing.choices 的 key）只取该组，再用 listing.options 列 ≤5 条词条 + 最后一条「都不对，我直接说」。注意：ok=true 只表示查询执行成功，found=false 表示没有找到匹配词条；拿到 sourceRecordId 后要用 getNutritionRecord 读取具体营养数值。',
     parameters: {
       type: 'object',
       properties: {
@@ -126,7 +135,13 @@ const SEARCH_TOOL: AgentToolDefinition = {
         state: {
           type: 'string',
           enum: ['RAW', 'COOKED'],
-          description: '找生档案还是熟档案；不传按 RAW。',
+          description:
+            '找生档案还是熟档案；不传按 RAW 查，但结果会标记 stateSpecified=false，收窄问题里必须让用户选生/熟。',
+        },
+        group: {
+          type: 'string',
+          description:
+            '选定的部位组 key（来自上一次返回的 narrowing.choices / groups）。传了它只回该组候选并生成 listing；第一次检索不要传。',
         },
       },
       required: ['keyword'],
@@ -368,7 +383,12 @@ const ASK_USER_OPTION_MAX = 120;
 const ASK_USER_TRUNCATE_MARGIN = 3;
 const ASK_USER_ELLIPSIS = '…';
 const ASK_USER_OPTION_MIN = 2;
-const ASK_USER_OPTION_MAX_COUNT = 5;
+/**
+ * 普通问题最多 5 个选项；收窄后列词条允许 5 条 + 最后一条「都不对，我直接说」，
+ * 共 6 个。第 6 个只认兜底文案，不能变成 6 个普通选项。
+ */
+const ASK_USER_OPTION_MAX_COUNT = 6;
+const ASK_USER_PLAIN_OPTION_MAX_COUNT = 5;
 /** 单个选项核实的最长等待；5 个并发，整体不会超过这个值太多。 */
 const ASK_OPTION_VERIFY_TIMEOUT_MS = 800;
 /** 未收录选项在页面上的后缀：让用户点之前就知道会去线上找。 */
@@ -480,17 +500,37 @@ function readIntakeNameEn(draft: IngredientCreationDraft): string {
   return normalizeText(payload.intake.nameEn);
 }
 
-/** 从 `候选名 —— 相关：理由` 里拆出候选名与 AI 判断。 */
+/**
+ * 从选项文案里拆出候选名与 AI 判断。兼容两种格式：
+ * - `候选名 —— 相关：理由`（模型自由写 / 旧版）
+ * - `词条名 · 来源 USDA_FDC · 覆盖率 80% · 相关：理由`（收窄后的确定性词条）
+ */
 function parseAskOptionLabel(label: string): {
   candidateLabel: string;
   aiVerdict: CandidateReviewVerdict | null;
   aiReason: string | null;
+  /**
+   * 是否是收窄后的确定性词条文案（`词条名 · 来源 … · 覆盖率 … · 相关：理由`）。
+   * 这种文案的展示要保留来源库 / 覆盖率，不能像旧版自由文案那样只显示候选名。
+   */
+  entryFormat: boolean;
 } {
-  const match = label.match(
+  const dashMatch = label.match(
     /^(.*?)\s*(?:——|—{1,2}|--)\s*(不相关|存疑|相关)\s*[:：]\s*(.*)$/u,
   );
+  const entryMatch = dashMatch
+    ? null
+    : label.match(
+        /^(.*?)\s*·\s*来源\s+.+?\s*·\s*覆盖率\s+\S+\s*·\s*(不相关|存疑|相关)(?:\s*[:：]\s*(.*))?$/u,
+      );
+  const match = dashMatch ?? entryMatch;
   if (!match) {
-    return { candidateLabel: label.trim(), aiVerdict: null, aiReason: null };
+    return {
+      candidateLabel: label.trim(),
+      aiVerdict: null,
+      aiReason: null,
+      entryFormat: false,
+    };
   }
 
   const candidateLabel = match[1]?.trim() || label.trim();
@@ -500,6 +540,7 @@ function parseAskOptionLabel(label: string): {
     candidateLabel,
     aiVerdict,
     aiReason: aiVerdict ? aiReason : null,
+    entryFormat: entryMatch !== null,
   };
 }
 
@@ -580,6 +621,80 @@ function buildAskOptionsMissingError(
   );
 }
 
+/** askUser 选项的类型：分组 / 生熟 / 自由输入兜底 / 候选词条 / 普通问题。 */
+type AskOptionKind = 'GROUP' | 'STATE' | 'FREE' | 'ENTRY' | 'PLAIN';
+
+/** 读草稿里最近一次检索的收窄记录；旧草稿 / 脏数据都当没有。 */
+function readCandidateNarrowingRecord(
+  draft: IngredientCreationDraft,
+): CandidateNarrowingRecord | null {
+  const record = draft.payload?.candidateNarrowing;
+  if (!isRecord(record) || !Array.isArray(record.options)) {
+    return null;
+  }
+  return record as unknown as CandidateNarrowingRecord;
+}
+
+/**
+ * 识别一个选项是「分组 / 生熟 / 自由输入 / 候选词条 / 普通答案」。
+ *
+ * 分组与生熟选项不查库：它们本来就是收窄用的，不能被标成「未收录」，
+ * 更不能触发「全部选项未收录」的拒绝。
+ */
+function resolveAskOptionKind(
+  label: string,
+  aiVerdict: CandidateReviewVerdict | null,
+  narrowing: CandidateNarrowingRecord | null,
+): AskOptionKind {
+  const text = label.trim();
+  if (text === CANDIDATE_GROUP_FALLBACK_OPTION) {
+    return 'FREE';
+  }
+  if (narrowing && Array.isArray(narrowing.options)) {
+    const index = narrowing.options.indexOf(text);
+    const choice =
+      index >= 0 && Array.isArray(narrowing.choices)
+        ? narrowing.choices[index]
+        : null;
+    if (choice?.kind === 'GROUP') return 'GROUP';
+    if (choice?.kind === 'STATE') return 'STATE';
+
+    // 模型可能漏掉「（N 条）」后缀；仍按分组 / 状态识别。
+    const matched = Array.isArray(narrowing.choices)
+      ? narrowing.choices.find((entry) =>
+          entry.kind === 'GROUP'
+            ? text === entry.label || text.startsWith(`${entry.label}（`)
+            : text === entry.label,
+        )
+      : null;
+    if (matched?.kind === 'GROUP') return 'GROUP';
+    if (matched?.kind === 'STATE') return 'STATE';
+  }
+  return aiVerdict !== null ? 'ENTRY' : 'PLAIN';
+}
+
+/** 收窄没收完就直接列词条时，回给模型的错误文本（含确定性问句）。 */
+function buildNarrowingRequiredError(
+  narrowing: CandidateNarrowingRecord,
+  relevantCount: number,
+): string {
+  const options =
+    narrowing.options.length > 0 ? narrowing.options.join('、') : '（无）';
+  if (narrowing.kind === 'STATE') {
+    return (
+      `本次检索有 ${relevantCount} 条相关候选，但用户还没确定生/熟：` +
+      '必须先调用 askUser 确认状态，不能直接列词条。' +
+      `question=「${narrowing.question}」 options=[${options}]，原样提问；` +
+      '用户回答后再检索。'
+    );
+  }
+  return (
+    `本次检索有 ${relevantCount} 条相关候选，必须先按部位收窄，不能直接列词条。` +
+    `请调用 askUser，question=「${narrowing.question}」 options=[${options}]，原样提问；` +
+    '用户选组后再调用 searchLocalNutrition 并传 group。'
+  );
+}
+
 /**
  * 问人工具：歧义时停下来，不自己挑一条凑合。
  *
@@ -591,7 +706,7 @@ const ASK_USER_TOOL: AgentToolDefinition = {
   function: {
     name: 'askUser',
     description:
-      '向用户提一个必须由人决定的问题，并结束本轮等待回答。以下情况必须先问、不许自己猜：AI 复核判为相关的候选 ≥2 条；部位 / 加工态 / 种类有歧义（例如「牛肉」「猪肉」「土豆」「鱼」「山药」）；多个候选覆盖率接近且生熟状态不同；要新建多份档案但主次不明。一次只问一个问题，给 2–5 个具体可点的选项；如果是在多个候选里选，选项文案必须写成「候选名 —— 相关/存疑/不相关：≤40 字理由」，让用户看着 AI 判断做选择。用户回答后会继续，不要重复问同一个问题。',
+      '向用户提一个必须由人决定的问题，并结束本轮等待回答。以下情况必须先问、不许自己猜：AI 复核判为相关的候选 ≥2 条；部位 / 加工态 / 种类有歧义（例如「牛肉」「猪肉」「土豆」「鱼」「山药」）；多个候选覆盖率接近且生熟状态不同；要新建多份档案但主次不明。候选太多时先问收窄：searchLocalNutrition 返回 narrowing.required=true 时，question / options 必须原样使用 narrowing 的确定性分组（组名 + 条数）或生/熟选项，不许直接列词条；收窄后只列该组 ≤5 条词条，选项文案写「词条名 · 来源库 · 覆盖率 · 相关/存疑/不相关：理由」，最后一条固定加「都不对，我直接说」；该组只剩 1 条时直接用它，不必再问。一次只问一个问题，普通问题给 2–5 个具体可点的选项；如果是在多个候选里选，选项文案必须写成「候选名 —— 相关/存疑/不相关：≤40 字理由」，把 AI 判断展示给用户。用户回答后会继续，不要重复问同一个问题。',
     parameters: {
       type: 'object',
       properties: {
@@ -605,9 +720,9 @@ const ASK_USER_TOOL: AgentToolDefinition = {
           maxItems: ASK_USER_OPTION_MAX_COUNT,
           items: {
             type: 'string',
-            description: `一个具体答案（最多 ${ASK_USER_OPTION_MAX} 个字，超长会自动截断），不要写「其他」这种空选项。多个候选里选时用「候选名 —— 相关/存疑/不相关：≤40 字理由」。`,
+            description: `一个具体答案（最多 ${ASK_USER_OPTION_MAX} 个字，超长会自动截断），不要写「其他」这种空选项。普通问题最多 ${ASK_USER_PLAIN_OPTION_MAX_COUNT} 个；收窄后列词条时最多 5 条，最后一条固定写「都不对，我直接说」（共 6 个）。多个候选里选时用「候选名 —— 相关/存疑/不相关：≤40 字理由」。`,
           },
-          description: `2–${ASK_USER_OPTION_MAX_COUNT} 个可直接点选的具体答案。`,
+          description: `2–${ASK_USER_PLAIN_OPTION_MAX_COUNT} 个可直接点选的具体答案；列词条时允许 5 条 + 最后一条「都不对，我直接说」。`,
         },
       },
       required: ['question', 'options'],
@@ -1152,10 +1267,22 @@ export class IngredientCreationToolsService {
     if (!keyword) {
       return this.error('searchLocalNutrition 需要非空的 keyword。');
     }
-    if (args.state !== undefined && normalizeState(args.state) === null) {
+    const stateValue = args.state;
+    // 不传 state 仍按 RAW 查（兼容旧模型），但明确标记「用户还没定」，
+    // 收窄问题里必须让人选生/熟，不能把默认值当成用户的选择。
+    const stateSpecified =
+      stateValue !== undefined && stateValue !== null && stateValue !== '';
+    if (stateSpecified && normalizeState(stateValue) === null) {
       return this.error('state 只能是 RAW 或 COOKED；不传按 RAW。');
     }
-    const state = normalizeState(args.state) ?? 'RAW';
+    const state = normalizeState(stateValue) ?? 'RAW';
+    const groupKey = normalizeText(args.group);
+    // 选组之前必须先让用户定生/熟：不能让默认 RAW 借「选组」绕过状态收窄。
+    if (groupKey && !stateSpecified) {
+      return this.error(
+        '传 group 之前必须先让用户确认生/熟，并同时传 state（RAW 或 COOKED）。不要拿默认 RAW 当成用户的选择。',
+      );
+    }
 
     // 草稿不存在时先报 404，避免给一个不存在的草稿做检索。
     const draft = await this.draftService.get(draftId);
@@ -1164,6 +1291,7 @@ export class IngredientCreationToolsService {
       name: keyword,
       state,
     });
+    const totalCandidates = result.candidates.length;
 
     // 召回交给代码：这里只截断到单次上限，不按类别 / 词位置丢候选。
     const candidates = result.candidates
@@ -1192,11 +1320,14 @@ export class IngredientCreationToolsService {
           keyword,
           keywords: result.keywords,
           state,
+          stateSpecified,
           // ok=true 只代表工具执行成功；found 才代表有没有数据。
           found: false,
-          candidateCount: result.candidates.length,
+          candidateCount: 0,
+          totalCandidates: 0,
           returnedCount: 0,
           bestCoveragePercent: result.coverage.bestCoveragePercent,
+          groups: [],
           candidates: [],
           hint: [
             result.notice ? `${result.notice}。` : '本地库没有找到匹配词条。',
@@ -1245,54 +1376,198 @@ export class IngredientCreationToolsService {
     const relevantCandidates = reviewedCandidates.filter(
       (candidate) => candidate.review.verdict === 'RELEVANT',
     );
-    const uncertainCount = reviewedCandidates.filter(
-      (candidate) => candidate.review.verdict === 'UNCERTAIN',
-    ).length;
-    const irrelevantCount = reviewedCandidates.filter(
-      (candidate) => candidate.review.verdict === 'IRRELEVANT',
-    ).length;
+    const relevantCount = relevantCandidates.length;
     const reviewFailed = reviewedCandidates.every(
       (candidate) =>
         candidate.review.verdict === 'UNCERTAIN' &&
         candidate.review.reason === '',
     );
-    const relevantCount = relevantCandidates.length;
-    const nextAction =
-      relevantCount >= 2
-        ? 'ASK_USER'
-        : relevantCount === 1
-          ? 'USE_SINGLE_RELEVANT'
-          : reviewFailed
-            ? 'REVIEW_UNAVAILABLE'
-            : 'ONLINE_OR_LEAVE_BLANK';
-    const reviewHint =
-      relevantCount >= 2
-        ? `AI 复核判定 ${relevantCount} 条相关候选：必须先调用 askUser 让用户选择，选项文案写成「候选名 —— 相关/存疑/不相关：≤40 字理由」，不要先写原料卡或营养档案。`
-        : relevantCount === 1
-          ? `AI 复核只判定 1 条相关候选「${relevantCandidates[0]?.foodName ?? ''}」：可以继续用它写入；最终回复必须说明“我选了这条，因为…”，并把其它候选的 AI 判断列在证据里。`
-          : reviewFailed
-            ? 'AI 复核当前不可用（全部存疑、没有理由）：不要把它当成“都不相关”；可以按名字匹配继续，但拿不准就先 askUser，写入时说明复核未完成。'
-            : 'AI 复核没有判定为相关的候选：不许硬选。请转“去线上找 / 留空”分支，并告诉用户其它候选为什么不相关；不要写原料卡或营养档案。';
 
     /**
-     * 把复核结论随草稿保存：工具层据此拦住「直接写不相关 / 还没让人选就写」。
+     * 分组只对「有复核结论的候选」做：有相关项就只分相关项，
+     * 复核失败 / 0 相关时才退回全部已复核候选。这样选项里的条数
+     * 与「N 条相关」是同一个口径，不会出现 11 条相关却只列 5 个的矛盾。
+     */
+    const groupPool =
+      relevantCount > 0 ? relevantCandidates : reviewedCandidates;
+    const groups = buildCandidateGroups(groupPool, { keyword });
+    let scope = null as ReturnType<typeof resolveCandidateGroupScope>;
+    if (groupKey) {
+      scope = resolveCandidateGroupScope(groupPool, groups, groupKey);
+      if (!scope) {
+        const available = groups
+          .map((group) => `${group.key}（${group.label}，${group.count} 条）`)
+          .join('、');
+        return this.error(
+          `未知分组「${groupKey}」。可用分组：${available || '（没有分组）'}。请用上一次检索返回的 groups.key / narrowing.choices.key，不要自己编。`,
+        );
+      }
+    }
+
+    /**
+     * 收窄只在「还没选组」时生成：已经选组时只列该组，
+     * 不再拿全量分组去问第二遍。
+     */
+    const narrowing =
+      relevantCount > 0 && !scope
+        ? buildCandidateNarrowing({
+            keyword,
+            state,
+            stateSpecified,
+            totalCandidates,
+            relevantCount,
+            candidates: groupPool,
+          })
+        : null;
+
+    const scopedIds = scope
+      ? new Set(scope.candidates.map((candidate) => candidate.sourceRecordId))
+      : null;
+    const scopedReviewed = scopedIds
+      ? reviewedCandidates.filter((candidate) =>
+          scopedIds.has(candidate.sourceRecordId),
+        )
+      : reviewedCandidates;
+    const gateRelevantCandidates = scopedReviewed.filter(
+      (candidate) => candidate.review.verdict === 'RELEVANT',
+    );
+    const gateRelevantCount = gateRelevantCandidates.length;
+    const gateUncertainCount = scopedReviewed.filter(
+      (candidate) => candidate.review.verdict === 'UNCERTAIN',
+    ).length;
+    const gateIrrelevantCount = scopedReviewed.filter(
+      (candidate) => candidate.review.verdict === 'IRRELEVANT',
+    ).length;
+    const gateReviewFailed = scopedReviewed.every(
+      (candidate) =>
+        candidate.review.verdict === 'UNCERTAIN' &&
+        candidate.review.reason === '',
+    );
+
+    /**
+     * 收窄后（或本来就只有 ≤5 条、单组）的确定性词条选项：
+     * ≤5 条 + 最后一条「都不对，我直接说」。只有 1 条时 single=true，不再问。
+     */
+    const listing =
+      scope && gateRelevantCount > 0
+        ? buildCandidateGroupListing({
+            group: scope,
+            state,
+            // 只列该组的相关候选：与 groups 的条数同一个口径，
+            // 不能把同部位但被判为存疑 / 不相关的词条混进来凑数。
+            candidates: scope.candidates,
+          })
+        : !narrowing?.required && relevantCount >= 2 && groups.length === 1
+          ? buildCandidateGroupListing({
+              group: groups[0]!,
+              state,
+              candidates: relevantCandidates,
+            })
+          : null;
+
+    let nextAction: string;
+    if (scope) {
+      nextAction =
+        gateRelevantCount === 0
+          ? gateReviewFailed
+            ? 'REVIEW_UNAVAILABLE'
+            : 'ONLINE_OR_LEAVE_BLANK'
+          : gateRelevantCount === 1
+            ? 'USE_SINGLE_RELEVANT'
+            : 'ASK_USER_ENTRIES';
+    } else if (relevantCount === 0) {
+      nextAction = reviewFailed
+        ? 'REVIEW_UNAVAILABLE'
+        : 'ONLINE_OR_LEAVE_BLANK';
+    } else if (narrowing?.required) {
+      nextAction = narrowing.kind === 'STATE' ? 'NARROW_STATE' : 'NARROW_GROUP';
+    } else if (relevantCount === 1) {
+      nextAction = 'USE_SINGLE_RELEVANT';
+    } else {
+      nextAction = 'ASK_USER';
+    }
+
+    const groupSummaryText = groups
+      .map((group) => `${group.label} ${group.count} 条`)
+      .join('、');
+    let hint: string;
+    if (scope) {
+      if (gateRelevantCount === 0) {
+        hint = gateReviewFailed
+          ? `「${scope.label}」这一组的 AI 复核当前不可用（全部存疑、没有理由）：不要当成“都不相关”，可以按名字匹配继续，拿不准就先 askUser。`
+          : `「${scope.label}」这一组没有 AI 判为相关的候选：不许硬选，请转“去线上找 / 留空”分支。`;
+      } else if (gateRelevantCount === 1) {
+        const only = gateRelevantCandidates[0]!;
+        hint =
+          `「${scope.label}」这一组只剩 1 条相关候选「${only.foodName}」：直接用它，不必再问；` +
+          '最终回复必须说明选它的理由（“我选了这条，因为…”），并把 AI 判断列在证据里。';
+      } else {
+        hint =
+          `「${scope.label}」这一组共 ${scope.count} 条（相关 ${gateRelevantCount} 条）：只列这一组，不要列其他组；` +
+          'askUser 的 question / options 用 listing 原样（最多 5 条词条 + 最后一条「都不对，我直接说」），不要先写原料卡或营养档案。';
+      }
+    } else if (narrowing?.required) {
+      hint =
+        narrowing.kind === 'STATE'
+          ? `本次共 ${totalCandidates} 条候选，其中 ${relevantCount} 条相关；用户还没指定生/熟。` +
+            '必须先调用 askUser，用 narrowing.question / narrowing.options 原样问生/熟，' +
+            '不许直接列词条；用户回答后再检索。'
+          : `本次共 ${totalCandidates} 条候选，其中 ${relevantCount} 条相关，分 ${groups.length} 个部位组（${groupSummaryText}）。` +
+            '必须先调用 askUser，用 narrowing.question / narrowing.options 原样先按部位收窄，不要列具体词条；' +
+            '用户选组后再调用 searchLocalNutrition 并传 group=<narrowing.choices[].key>。';
+    } else if (relevantCount === 1) {
+      hint = `AI 复核只判定 1 条相关候选「${relevantCandidates[0]?.foodName ?? ''}」：可以继续用它写入；最终回复必须说明“我选了这条，因为…”，并把其它候选的 AI 判断列在证据里。`;
+    } else if (relevantCount >= 2) {
+      hint = `AI 复核判定 ${relevantCount} 条相关，都在同一部位组「${groups[0]?.label ?? '其他部位'}」：直接列这 ${relevantCount} 条，用 askUser 让用户选（最后加「都不对，我直接说」），不要先问收窄；不要先写原料卡或营养档案。`;
+    } else if (reviewFailed) {
+      hint =
+        'AI 复核当前不可用（全部存疑、没有理由）：不要把它当成“都不相关”；可以按名字匹配继续，但拿不准就先 askUser，写入时说明复核未完成。';
+    } else {
+      hint =
+        'AI 复核没有判定为相关的候选：不许硬选。请转“去线上找 / 留空”分支，并告诉用户其它候选为什么不相关；不要写原料卡或营养档案。';
+    }
+
+    /**
+     * 把复核结论与收窄记录随草稿保存：
+     * - gate 拦住「直接写不相关 / 还没让人选就写」；
+     * - narrowing 拦住「候选很多却直接列词条」。
      * 复核失败时 `reviewFailed=true`，闸门不拦任何写入。
      */
+    const reviewedAt = new Date().toISOString();
     const gate: CandidateReviewGate = {
-      reviewedAt: new Date().toISOString(),
-      reviewFailed,
-      relevantCount,
-      uncertainCount,
-      irrelevantCount,
-      candidates: reviewedCandidates.map((candidate) => ({
+      reviewedAt,
+      reviewFailed: gateReviewFailed,
+      relevantCount: gateRelevantCount,
+      uncertainCount: gateUncertainCount,
+      irrelevantCount: gateIrrelevantCount,
+      candidates: scopedReviewed.map((candidate) => ({
         id: candidate.sourceRecordId,
         foodName: candidate.foodName,
         verdict: candidate.review.verdict,
         reason: candidate.review.reason,
       })),
     };
+    const narrowingRecord: CandidateNarrowingRecord = {
+      keyword,
+      state,
+      stateSpecified,
+      totalCandidates,
+      relevantCount,
+      // 选组后 required 仍为 true：selectedGroupKey 才是「已收窄」的凭据，
+      // 防止模型选完组又拿别的组词条来问。
+      required: scope ? true : (narrowing?.required ?? false),
+      kind: scope ? 'GROUP' : (narrowing?.kind ?? 'NONE'),
+      reason: narrowing?.reason ?? (scope ? 'MULTIPLE_GROUPS' : null),
+      question: narrowing?.question ?? '',
+      options: narrowing?.options ?? [],
+      choices: narrowing?.choices ?? [],
+      groups,
+      selectedGroupKey: scope?.key ?? null,
+      updatedAt: reviewedAt,
+    };
     await this.draftService.patch(draftId, draft.step, {
       candidateReviewGate: gate,
+      candidateNarrowing: narrowingRecord,
     });
 
     return {
@@ -1301,23 +1576,38 @@ export class IngredientCreationToolsService {
         keyword,
         keywords: result.keywords,
         state,
+        stateSpecified,
         found: true,
-        candidateCount: result.candidates.length,
+        candidateCount: totalCandidates,
+        totalCandidates,
         returnedCount: reviewedCandidates.length,
         bestCoveragePercent: result.coverage.bestCoveragePercent,
         reviewSummary: {
-          relevantCount,
-          uncertainCount,
-          irrelevantCount,
-          failed: reviewFailed,
+          relevantCount: gateRelevantCount,
+          uncertainCount: gateUncertainCount,
+          irrelevantCount: gateIrrelevantCount,
+          failed: gateReviewFailed,
         },
         nextAction,
-        hint: reviewHint,
-        candidates: reviewedCandidates,
+        hint,
+        groups,
+        ...(narrowing ? { narrowing } : {}),
+        ...(scope
+          ? {
+              group: {
+                key: scope.key,
+                label: scope.label,
+                count: scope.count,
+                states: scope.states,
+              },
+            }
+          : {}),
+        ...(listing ? { listing } : {}),
+        candidates: scopedReviewed,
       }),
       progress: {
         writtenFieldPaths: [],
-        sourceRecordIds: reviewedCandidates.map(
+        sourceRecordIds: scopedReviewed.map(
           (candidate) => candidate.sourceRecordId,
         ),
       },
@@ -1961,7 +2251,7 @@ export class IngredientCreationToolsService {
       args.options.length > ASK_USER_OPTION_MAX_COUNT
     ) {
       return this.error(
-        `askUser 的 options 必须是 2–${ASK_USER_OPTION_MAX_COUNT} 个选项，收到 ${args.options.length} 个。`,
+        `askUser 的 options 必须是 2–${ASK_USER_PLAIN_OPTION_MAX_COUNT} 个选项（收窄后列词条时最多 5 条 + 最后一条「都不对，我直接说」，共 6 个），收到 ${args.options.length} 个。`,
       );
     }
 
@@ -1975,10 +2265,22 @@ export class IngredientCreationToolsService {
       }
       rawOptions.push(option);
     }
+    // 第 6 个只认兜底文案：普通问题仍然最多 5 个选项。
+    if (
+      rawOptions.length === ASK_USER_OPTION_MAX_COUNT &&
+      rawOptions[rawOptions.length - 1] !== CANDIDATE_GROUP_FALLBACK_OPTION
+    ) {
+      return this.error(
+        `askUser 的 options 必须是 2–${ASK_USER_PLAIN_OPTION_MAX_COUNT} 个选项；只有收窄后列词条时，第 6 个才允许是「${CANDIDATE_GROUP_FALLBACK_OPTION}」。收到 ${rawOptions.length} 个。`,
+      );
+    }
 
     // 草稿不存在时先报 404（与其它工具一致），也顺便拿到当前站点与目标状态。
     const draft = await this.draftService.get(draftId);
-    const targetState = resolveAskTargetState(draft);
+    const narrowing = readCandidateNarrowingRecord(draft);
+    // 收窄记录里的 state 是这次检索实际查的状态：熟组词条不能再按默认 RAW 核实，
+    // 否则会被误标成「未收录」。没有收窄记录时才回退到草稿口径。
+    const targetState = narrowing?.state ?? resolveAskTargetState(draft);
 
     // 先核实再问：每个选项并发查一次本地库（limit=1），单个最多 800ms。
     // 核实结果只用于本次提问与展示，不写词典、不改草稿里的检索口径。
@@ -1989,23 +2291,63 @@ export class IngredientCreationToolsService {
     //
     // 先按**完整原文**解析、查库，再截断点选文案：词条名 / AI 判断这些结构化
     // 字段保留全称，只有 `label`（回传给模型的答案）受长度上限约束。
-    const parsedOptions = rawOptions.map((label) => ({
-      fullLabel: label,
-      label: truncateAskCopy(label, ASK_USER_OPTION_MAX),
-      ...parseAskOptionLabel(label),
-    }));
+    const parsedOptions = rawOptions.map((label) => {
+      const parsed = parseAskOptionLabel(label);
+      return {
+        fullLabel: label,
+        label: truncateAskCopy(label, ASK_USER_OPTION_MAX),
+        ...parsed,
+        kind: resolveAskOptionKind(label, parsed.aiVerdict, narrowing),
+      };
+    });
     const options = parsedOptions.map((option) => option.label);
+
+    // 候选很多 / 跨组 / 没定生熟时，第一问必须是收窄：直接拿候选词条问人
+    // 会让用户以为「只有这几个」，收窄记录就是这道闸门。
+    if (narrowing?.required === true && !narrowing.selectedGroupKey) {
+      const entryOption = parsedOptions.find(
+        (option) => option.kind === 'ENTRY',
+      );
+      if (entryOption) {
+        return this.error(
+          buildNarrowingRequiredError(narrowing, narrowing.relevantCount),
+        );
+      }
+    }
+
     const optionChecks: PendingQuestionOption[] = await Promise.all(
       parsedOptions.map(async (option) => {
+        // 分组 / 生熟 / 自由输入不是库里的具体词条：不查库，也不能被标成
+        // 「未收录」，否则一整个收窄问题会被误判成「全是编的」。
+        if (
+          option.kind === 'GROUP' ||
+          option.kind === 'STATE' ||
+          option.kind === 'FREE'
+        ) {
+          return {
+            label: option.label,
+            kind: option.kind,
+            inLibrary: null,
+            matchedName: null,
+            displayLabel: option.fullLabel,
+          };
+        }
+
         const check = await this.checkAskOption(
           option.candidateLabel,
           targetState,
         );
-        // 展示层拿完整文案（候选选项拿完整候选名），省略交给页面单行省略 +
-        // title；`label` 仍按上限截断，避免点选答案无限长。
-        const displayBase = option.aiVerdict
-          ? option.candidateLabel
-          : option.fullLabel;
+        // 展示层：收窄后的词条保留来源库 / 覆盖率（去掉重复的 AI 判断后缀，
+        // 判断与理由由页面 AI 小标单独展示）；旧版自由文案仍只显示候选名。
+        // 省略交给页面单行省略 + title；`label` 仍按上限截断。
+        const displayBase = option.entryFormat
+          ? option.fullLabel.replace(
+              /\s*·\s*(?:不相关|存疑|相关)(?:\s*[:：].*)?$/u,
+              '',
+            )
+          : option.aiVerdict
+            ? option.candidateLabel
+            : option.fullLabel;
         return {
           label: option.label,
           ...(option.aiVerdict
@@ -2027,10 +2369,23 @@ export class IngredientCreationToolsService {
 
     // 一个都没命中：这几个选项大概率是模型编的，原样问出去用户会白跑。
     // 不回滚草稿，只把错误文本回给模型，让它换一个更宽的问题。
-    if (optionChecks.every((option) => option.inLibrary === false)) {
+    // 有「都不对，我直接说」兜底时不拦：用户还有自由输入这条路。
+    const hasFreeOption = optionChecks.some((option) => option.kind === 'FREE');
+    if (
+      !hasFreeOption &&
+      optionChecks.length > 0 &&
+      optionChecks.every((option) => option.inLibrary === false)
+    ) {
       return this.error(
         buildAskOptionsMissingError(
-          parsedOptions.map((option) => option.candidateLabel),
+          parsedOptions
+            .filter(
+              (option) =>
+                option.kind !== 'GROUP' &&
+                option.kind !== 'STATE' &&
+                option.kind !== 'FREE',
+            )
+            .map((option) => option.candidateLabel),
           targetState,
         ),
       );
@@ -2055,7 +2410,7 @@ export class IngredientCreationToolsService {
         ? gate.relevantCount
         : 0;
     const selectingCandidates = parsedOptions.some(
-      (option) => option.aiVerdict !== null,
+      (option) => option.kind === 'ENTRY',
     );
     const clearReviewGate =
       !isRecord(gate) || gateRelevantCount < 2 || selectingCandidates;

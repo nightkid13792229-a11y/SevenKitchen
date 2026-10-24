@@ -38,9 +38,27 @@ export interface AgentStreamRecord {
   valueCount: number
 }
 
+/** 查库分组概览（后端 step_end.groups 的精简结构）。 */
+export interface AgentStreamGroup {
+  key: string
+  label: string
+  count: number
+  states: string[]
+}
+
+/** 查库复核概要：页面用 relevantCount 写「11 条相关」。 */
+export interface AgentStreamReviewSummary {
+  relevantCount: number
+  uncertainCount?: number
+  irrelevantCount?: number
+  failed?: boolean
+}
+
 /** AI 停下来问人的问题；`options` 是可直接点选的答案。 */
 export interface AgentPendingQuestionOption {
   label: string
+  /** 分组 / 生熟 / 自由输入兜底；普通候选与普通问题没有这个字段。 */
+  kind?: 'GROUP' | 'STATE' | 'FREE'
   /** true=库里已收录；false=未收录；null=核实失败 / 超时，状态未知 */
   inLibrary: boolean | null
   /** 命中时的库内词条名；未命中 / 未知时为 null */
@@ -148,6 +166,12 @@ export type AgentStreamEvent =
       keywords?: string[]
       /** 查库：候选总数（页面用于提示还有多少条没展示）。 */
       candidateCount?: number
+      /** 查库：截断前的候选总数。 */
+      totalCandidates?: number
+      /** 查库：部位分组概览。 */
+      groups?: AgentStreamGroup[]
+      /** 查库：AI 复核概要。 */
+      reviewSummary?: AgentStreamReviewSummary
       /** 查库：最多 5 条匹配依据。 */
       matches?: AgentStreamMatch[]
       /** 读来源记录：词条名 / 覆盖率 / 读到多少项。 */
@@ -240,6 +264,21 @@ function readText(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+/** 自由输入兜底选项的固定文案；旧草稿没有 kind 时靠它识别。 */
+const FREE_OPTION_LABEL = '都不对，我直接说'
+
+function readOptionKind(
+  raw: Record<string, unknown> | null,
+  label: string
+): AgentPendingQuestionOption['kind'] {
+  const kind = raw?.kind
+  if (kind === 'GROUP' || kind === 'STATE' || kind === 'FREE') {
+    return kind
+  }
+  // 旧草稿 / 旧后端没有 kind：兜底选项按固定文案识别。
+  return label.trim() === FREE_OPTION_LABEL ? 'FREE' : undefined
+}
+
 /**
  * 把后端附带的「选项是否在库里」还原成页面结构。
  *
@@ -255,6 +294,7 @@ function readOptionChecks(
   }
   return options.map((label, index) => {
     const raw = isRecord(value[index]) ? value[index] : null
+    const kind = readOptionKind(raw, label)
     const inLibrary =
       raw && typeof raw.inLibrary === 'boolean' ? raw.inLibrary : null
     const matchedName =
@@ -285,6 +325,7 @@ function readOptionChecks(
           : baseLabel
     return {
       label,
+      ...(kind ? { kind } : {}),
       inLibrary,
       matchedName,
       displayLabel,
@@ -315,7 +356,8 @@ export function readPendingQuestion(
     ? value.options
         .map((option) => readText(option))
         .filter((option) => option.length > 0)
-        .slice(0, 5)
+        // 收窄后允许 5 条词条 + 最后一条「都不对，我直接说」，共 6 个。
+        .slice(0, 6)
     : []
   if (options.length < 2) {
     return null
@@ -338,6 +380,15 @@ export function pendingOptionBadge(
   option: AgentPendingQuestionOption | null | undefined
 ): AgentPendingOptionBadge | null {
   if (!option) {
+    return null
+  }
+  if (option.kind === 'GROUP') {
+    return { label: '分组', type: 'info' }
+  }
+  if (option.kind === 'STATE') {
+    return { label: '生熟', type: 'info' }
+  }
+  if (option.kind === 'FREE') {
     return null
   }
   if (option.inLibrary === true) {
@@ -473,7 +524,10 @@ export function reduceAgentEvents(
         found: event.found,
         keywords: event.keywords,
         matches: event.matches,
-        candidateCount: event.candidateCount
+        candidateCount: event.candidateCount,
+        totalCandidates: event.totalCandidates,
+        groups: event.groups,
+        reviewSummary: event.reviewSummary
       })
       const record = toRecordEvidenceFromEvent(event.record)
       return {

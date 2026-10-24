@@ -62,6 +62,18 @@ export interface AgentSearchMatchView {
   aiReason: string
 }
 
+/** 查库结果里的部位分组概览（后端 groups 的页面结构）。 */
+export interface AgentSearchGroupView {
+  key: string
+  label: string
+  count: number
+  states: string[]
+  /** 「生」「熟」「生 + 熟」；认不出时为空串 */
+  stateLabel: string
+  /** 收窄选项 / 页面标签用的「组名（N 条）」 */
+  labelWithCount: string
+}
+
 /** 「查本地库」这一步的展开内容：关键词、命中词条与匹配方式。 */
 export interface AgentSearchEvidenceView {
   /** 本次实际用过的关键词（含中文名扩展出的英文别名） */
@@ -69,9 +81,15 @@ export interface AgentSearchEvidenceView {
   matches: AgentSearchMatchView[]
   /** 后端候选总数（可能大于页面展示的前几条） */
   totalCount: number
+  /** AI 复核判为相关的条数；旧后端没有 reviewSummary 时为 null */
+  relevantCount: number | null
+  /** 部位分组概览：每组给组名 + 条数，页面直接渲染 */
+  groups: AgentSearchGroupView[]
+  /** 一行分组摘要：牛绞肉 6 条 · 牛里脊 3 条；没有分组时为空串 */
+  groupSummary: string
   /** 只有真的命中才是 true；工具 ok 不等于命中 */
   found: boolean
-  /** 给人看的一句话：命中 N 条 / 没有找到匹配词条 */
+  /** 给人看的一句话：共 N 条候选 · M 条相关 / 没有找到匹配词条 */
   message: string
 }
 
@@ -235,6 +253,72 @@ function toMatchView(
   }
 }
 
+const STATE_LABELS: Record<string, string> = {
+  RAW: '生',
+  COOKED: '熟'
+}
+
+/** 后端 groups → 页面结构；认不出的项跳过，不编造条数。 */
+export function toSearchGroups(value: unknown): AgentSearchGroupView[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  const groups: AgentSearchGroupView[] = []
+  for (const raw of value) {
+    if (!isRecordValue(raw)) {
+      continue
+    }
+    const label = readText(raw.label)
+    if (!label) {
+      continue
+    }
+    const key = readText(raw.key) || label
+    const count = Math.max(0, Math.floor(readFiniteNumber(raw.count) ?? 0))
+    const states = (Array.isArray(raw.states) ? raw.states : [])
+      .filter((state): state is string => typeof state === 'string')
+      .map((state) => state.trim())
+      .filter((state) => state === 'RAW' || state === 'COOKED')
+    const stateLabel = states
+      .map((state) => STATE_LABELS[state] ?? state)
+      .join(' + ')
+    groups.push({
+      key,
+      label,
+      count,
+      states,
+      stateLabel,
+      labelWithCount: `${label}（${count} 条）`
+    })
+  }
+  return groups
+}
+
+function groupSummaryText(groups: readonly AgentSearchGroupView[]): string {
+  return groups.map((group) => `${group.label} ${group.count} 条`).join(' · ')
+}
+
+/**
+ * 给人看的命中摘要：有分组 / 复核信息时写「共 N 条候选 · M 条相关」，
+ * 旧后端没有这些字段时保持「命中 N 条」，不凭空编相关数。
+ */
+function searchMessage(input: {
+  found: boolean
+  totalCount: number
+  groups: readonly AgentSearchGroupView[]
+  relevantCount: number | null
+  detailed: boolean
+}): string {
+  if (!input.found) {
+    return '没有找到匹配词条'
+  }
+  if (!input.detailed) {
+    return `命中 ${input.totalCount} 条`
+  }
+  const relevant =
+    input.relevantCount === null ? '' : ` · ${input.relevantCount} 条相关`
+  return `共 ${input.totalCount} 条候选${relevant}`
+}
+
 /**
  * 从 searchLocalNutrition 的工具结果里读出「匹配依据」。
  *
@@ -266,21 +350,41 @@ export function toSearchEvidence(
     .map((candidate) => toMatchView(candidate, keywords[0] || ''))
 
   const candidateCount = readFiniteNumber(record.candidateCount)
+  const totalCandidates = readFiniteNumber(record.totalCandidates)
   const totalCount =
-    candidateCount === null
+    totalCandidates === null && candidateCount === null
       ? matches.length
-      : Math.max(0, Math.floor(candidateCount))
+      : Math.max(0, Math.floor(totalCandidates ?? candidateCount ?? 0))
+  const groups = toSearchGroups(record.groups)
+  const reviewSummary = isRecordValue(record.reviewSummary)
+    ? record.reviewSummary
+    : null
+  const relevantCount =
+    reviewSummary === null
+      ? null
+      : readFiniteNumber(reviewSummary.relevantCount)
   const found =
     record.found === false
       ? false
       : record.found === true || matches.length > 0 || totalCount > 0
+  const detailed =
+    totalCandidates !== null || groups.length > 0 || relevantCount !== null
 
   return {
     keywords,
     matches,
     totalCount,
+    relevantCount,
+    groups,
+    groupSummary: groupSummaryText(groups),
     found,
-    message: found ? `命中 ${totalCount} 条` : '没有找到匹配词条'
+    message: searchMessage({
+      found,
+      totalCount,
+      groups,
+      relevantCount,
+      detailed
+    })
   }
 }
 
@@ -296,6 +400,9 @@ export function toSearchEvidenceFromEvent(input: {
   keywords?: unknown
   matches?: unknown
   candidateCount?: unknown
+  totalCandidates?: unknown
+  groups?: unknown
+  reviewSummary?: unknown
 }): AgentSearchEvidenceView | null {
   const rawMatches = Array.isArray(input.matches) ? input.matches : null
   const rawKeywords = Array.isArray(input.keywords) ? input.keywords : null
@@ -313,21 +420,41 @@ export function toSearchEvidenceFromEvent(input: {
     .map((match) => toMatchView(match, keywords[0] ?? ''))
 
   const candidateCount = readFiniteNumber(input.candidateCount)
+  const totalCandidates = readFiniteNumber(input.totalCandidates)
   const totalCount =
-    candidateCount === null
+    totalCandidates === null && candidateCount === null
       ? matches.length
-      : Math.max(0, Math.floor(candidateCount))
+      : Math.max(0, Math.floor(totalCandidates ?? candidateCount ?? 0))
+  const groups = toSearchGroups(input.groups)
+  const reviewSummary = isRecordValue(input.reviewSummary)
+    ? input.reviewSummary
+    : null
+  const relevantCount =
+    reviewSummary === null
+      ? null
+      : readFiniteNumber(reviewSummary.relevantCount)
   const found =
     input.found === false
       ? false
       : input.found === true || matches.length > 0 || totalCount > 0
+  const detailed =
+    totalCandidates !== null || groups.length > 0 || relevantCount !== null
 
   return {
     keywords,
     matches,
     totalCount,
+    relevantCount,
+    groups,
+    groupSummary: groupSummaryText(groups),
     found,
-    message: found ? `命中 ${totalCount} 条` : '没有找到匹配词条'
+    message: searchMessage({
+      found,
+      totalCount,
+      groups,
+      relevantCount,
+      detailed
+    })
   }
 }
 

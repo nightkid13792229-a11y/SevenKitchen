@@ -2206,7 +2206,9 @@ describe('IngredientDraftAgentService · AI 复核候选（判断交给 AI，选
           sourceRecordId: 'rec-liver-cooked',
           foodName: 'Chicken, liver, cooked',
           foodNameEn: 'Chicken, liver, cooked',
-          preparationState: 'COOKED',
+          // 生查询不会返回熟候选；这里保持 RAW，避免触发“跨生熟”收窄，
+          // 本用例验证的是「≥2 条相关先问人」而不是状态收窄。
+          preparationState: 'RAW',
         },
       ],
       coverage: { ...CANDIDATE_RESULT.coverage, candidateCount: 2 },
@@ -2730,5 +2732,165 @@ describe('POST /api/v1/admin/ingredient-creation/agent/run', () => {
       'data: {"type":"step_start","index":1,"name":"runCheck","summary":"跑终检"}\n\n',
     );
     expect(ended).toBe(true);
+  });
+});
+describe('IngredientDraftAgentService · 候选太多先收窄', () => {
+  function beefCandidates(): CandidateSearchResult {
+    const row = (
+      sourceRecordId: string,
+      foodName: string,
+    ): CandidateSearchResult['candidates'][number] => ({
+      ...CANDIDATE_RESULT.candidates[0]!,
+      sourceRecordId,
+      foodName,
+      foodNameEn: foodName,
+      matchedKeyword: 'beef',
+    });
+    const candidates = [
+      ...Array.from({ length: 6 }, (_, index) =>
+        row(`ground-${index}`, `Beef, ground, raw ${index + 1}`),
+      ),
+      ...Array.from({ length: 3 }, (_, index) =>
+        row(`tenderloin-${index}`, `Beef, tenderloin, raw ${index + 1}`),
+      ),
+      ...Array.from({ length: 2 }, (_, index) =>
+        row(`brisket-${index}`, `Beef, brisket, raw ${index + 1}`),
+      ),
+    ];
+    return {
+      keywords: ['牛肉', 'beef'],
+      candidates,
+      excludedCount: 0,
+      coverage: {
+        ...CANDIDATE_RESULT.coverage,
+        candidateCount: candidates.length,
+      },
+    };
+  }
+
+  it('系统提示词：先按部位收窄、说清条数、最后加「都不对，我直接说」', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(chatResponse(assistantReply('好的。')));
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '牛肉',
+      userId: 'admin-1',
+    });
+
+    const system = String(requestBody(fetchMock, 0).messages[0].content);
+    expect(system).toContain('NARROW_GROUP');
+    expect(system).toContain('先按部位分组');
+    expect(system).toContain('这一组 N 条');
+    expect(system).toContain('都不对，我直接说');
+    expect(system).toContain('生 / 熟');
+    expect(system).toContain('≤5 条');
+  });
+
+  it('查库 step_end 带 totalCandidates / groups / reviewSummary，前端可画分组概览', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'searchLocalNutrition',
+            { keyword: '牛肉', state: 'RAW' },
+            'call_search',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(chatResponse(assistantReply('先按部位收窄。')));
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness({ candidates: beefCandidates() });
+    const events: any[] = [];
+    await harness.agent.run(
+      {
+        draftId: DRAFT_ID,
+        text: '牛肉',
+        userId: 'admin-1',
+      },
+      (event) => events.push(event),
+    );
+
+    const searchEnd = events[1];
+    expect(searchEnd).toMatchObject({
+      type: 'step_end',
+      index: 1,
+      ok: true,
+      found: true,
+      resultSummary: '命中 11 条 · 11 条相关',
+    });
+    expect(searchEnd.totalCandidates).toBe(11);
+    expect(searchEnd.candidateCount).toBe(11);
+    expect(searchEnd.groups).toEqual([
+      { key: 'ground', label: '牛绞肉', count: 6, states: ['RAW'] },
+      { key: 'tenderloin', label: '牛里脊', count: 3, states: ['RAW'] },
+      { key: 'brisket', label: '牛腩', count: 2, states: ['RAW'] },
+    ]);
+    expect(searchEnd.reviewSummary).toMatchObject({
+      relevantCount: 11,
+      uncertainCount: 0,
+      irrelevantCount: 0,
+      failed: false,
+    });
+  });
+
+  it('下一轮系统提示词带收窄分组 key，用户答组名后能接着传 group', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(chatResponse(assistantReply('好的。')));
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const draft = createDraft({
+      payload: {
+        candidateNarrowing: {
+          keyword: '牛肉',
+          state: 'RAW',
+          stateSpecified: true,
+          totalCandidates: 50,
+          relevantCount: 11,
+          required: true,
+          kind: 'GROUP',
+          reason: 'MULTIPLE_GROUPS',
+          question: '牛…',
+          options: ['牛绞肉（6 条）', '牛里脊（3 条）'],
+          choices: [
+            {
+              kind: 'GROUP',
+              key: 'ground',
+              label: '牛绞肉',
+              count: 6,
+            },
+            {
+              kind: 'GROUP',
+              key: 'tenderloin',
+              label: '牛里脊',
+              count: 3,
+            },
+          ],
+          groups: [
+            { key: 'ground', label: '牛绞肉', count: 6, states: ['RAW'] },
+            { key: 'tenderloin', label: '牛里脊', count: 3, states: ['RAW'] },
+          ],
+          selectedGroupKey: null,
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    });
+    const harness = createHarness({ draft });
+    await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '牛绞肉（6 条）',
+      userId: 'admin-1',
+    });
+
+    const system = String(requestBody(fetchMock, 0).messages[0].content);
+    expect(system).toContain('ground=牛绞肉(6条)');
+    expect(system).toContain('GROUP=ground(牛绞肉)');
+    expect(system).toContain('牛绞肉（6 条）');
   });
 });

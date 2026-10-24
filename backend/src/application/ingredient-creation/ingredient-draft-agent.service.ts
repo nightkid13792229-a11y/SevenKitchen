@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { NUTRITION_FIELD_CATALOG } from '../../domain/ingredient/nutrition-field-catalog';
+import type { PreparationState } from '../../domain/ingredient-creation/preparation-state';
 import {
   AgentProviderConfigService,
   type DeepSeekRuntimeConfig,
@@ -169,6 +170,22 @@ export interface IngredientAgentStreamRecord {
   valueCount: number;
 }
 
+/** 查库结果的部位分组概览：页面「匹配依据」直接显示每组条数。 */
+export interface IngredientAgentStreamGroup {
+  key: string;
+  label: string;
+  count: number;
+  states: PreparationState[];
+}
+
+/** 查库复核概要：让页面能写「共 50 条候选 · 11 条相关」。 */
+export interface IngredientAgentStreamReviewSummary {
+  relevantCount: number;
+  uncertainCount: number;
+  irrelevantCount: number;
+  failed: boolean;
+}
+
 /**
  * 流式运行事件（SSE `data:` 的 JSON）。
  *
@@ -194,6 +211,12 @@ export type IngredientAgentStreamEvent =
       keywords?: string[];
       /** 查库：候选总数；页面用来提示还有多少条没有展示。 */
       candidateCount?: number;
+      /** 查库：截断前的候选总数（与 candidateCount 同值，显式给新页面用）。 */
+      totalCandidates?: number;
+      /** 查库：部位分组概览（每组条数）。 */
+      groups?: IngredientAgentStreamGroup[];
+      /** 查库：AI 复核概要（相关 / 存疑 / 不相关）。 */
+      reviewSummary?: IngredientAgentStreamReviewSummary;
       /** 查库：最多 5 条匹配依据。 */
       matches?: IngredientAgentStreamMatch[];
       /** 读来源记录：词条名 / 覆盖率 / 读到多少项。 */
@@ -503,9 +526,23 @@ export function buildToolResultSummary(
       if (result.found !== true) {
         return '没有找到匹配词条';
       }
-      const count =
-        typeof result.candidateCount === 'number' ? result.candidateCount : 0;
-      return count > 0 ? `命中 ${count} 条` : '命中';
+      const total =
+        typeof result.totalCandidates === 'number'
+          ? result.totalCandidates
+          : typeof result.candidateCount === 'number'
+            ? result.candidateCount
+            : 0;
+      const relevant =
+        isRecord(result.reviewSummary) &&
+        typeof result.reviewSummary.relevantCount === 'number'
+          ? result.reviewSummary.relevantCount
+          : null;
+      if (total > 0) {
+        return relevant !== null
+          ? `命中 ${total} 条 · ${relevant} 条相关`
+          : `命中 ${total} 条`;
+      }
+      return '命中';
     }
     case 'getNutritionRecord': {
       const record = isRecord(result.record) ? result.record : null;
@@ -576,6 +613,9 @@ interface SearchStepEvidence {
   matches: IngredientAgentStreamMatch[];
   keywords: string[];
   candidateCount: number;
+  totalCandidates: number;
+  groups: IngredientAgentStreamGroup[];
+  reviewSummary: IngredientAgentStreamReviewSummary | null;
 }
 
 /** 候选里的 AI 判断：认不出 verdict 就不带，页面不会假装有判断。 */
@@ -669,8 +709,71 @@ function buildSearchStepEvidence(
     parsed.candidateCount >= 0
       ? Math.floor(parsed.candidateCount)
       : matches.length;
+  const totalCandidates =
+    typeof parsed.totalCandidates === 'number' &&
+    Number.isFinite(parsed.totalCandidates) &&
+    parsed.totalCandidates >= 0
+      ? Math.floor(parsed.totalCandidates)
+      : candidateCount;
 
-  return { matches, keywords: uniqueKeywords, candidateCount };
+  const groups: IngredientAgentStreamGroup[] = [];
+  if (Array.isArray(parsed.groups)) {
+    for (const group of parsed.groups) {
+      if (!isRecord(group)) {
+        continue;
+      }
+      const key = readTextValue(group.key);
+      const label = readTextValue(group.label);
+      const count =
+        typeof group.count === 'number' &&
+        Number.isFinite(group.count) &&
+        group.count >= 0
+          ? Math.floor(group.count)
+          : 0;
+      if (!key || !label) {
+        continue;
+      }
+      groups.push({
+        key,
+        label,
+        count,
+        states: (Array.isArray(group.states) ? group.states : []).filter(
+          (state): state is PreparationState =>
+            state === 'RAW' || state === 'COOKED',
+        ),
+      });
+    }
+  }
+
+  const reviewSummary = isRecord(parsed.reviewSummary)
+    ? {
+        relevantCount:
+          typeof parsed.reviewSummary.relevantCount === 'number' &&
+          Number.isFinite(parsed.reviewSummary.relevantCount)
+            ? Math.max(0, Math.floor(parsed.reviewSummary.relevantCount))
+            : 0,
+        uncertainCount:
+          typeof parsed.reviewSummary.uncertainCount === 'number' &&
+          Number.isFinite(parsed.reviewSummary.uncertainCount)
+            ? Math.max(0, Math.floor(parsed.reviewSummary.uncertainCount))
+            : 0,
+        irrelevantCount:
+          typeof parsed.reviewSummary.irrelevantCount === 'number' &&
+          Number.isFinite(parsed.reviewSummary.irrelevantCount)
+            ? Math.max(0, Math.floor(parsed.reviewSummary.irrelevantCount))
+            : 0,
+        failed: parsed.reviewSummary.failed === true,
+      }
+    : null;
+
+  return {
+    matches,
+    keywords: uniqueKeywords,
+    candidateCount,
+    totalCandidates,
+    groups,
+    reviewSummary,
+  };
 }
 
 /**
@@ -931,6 +1034,59 @@ function buildDraftPromptLines(draft: IngredientCreationDraft): string[] {
     );
   }
 
+  // 下一轮模型看不到上一轮的工具结果；把收窄状态与分组 key 写进提示词，
+  // 用户回答「牛绞肉（6 条）」后模型才知道该传 group=ground。
+  const narrowing = draft.payload.candidateNarrowing;
+  if (isRecord(narrowing)) {
+    const groups = Array.isArray(narrowing.groups)
+      ? narrowing.groups.filter(isRecord)
+      : [];
+    const options = Array.isArray(narrowing.options)
+      ? narrowing.options.filter(
+          (option): option is string => typeof option === 'string',
+        )
+      : [];
+    const choices = Array.isArray(narrowing.choices)
+      ? narrowing.choices.filter(isRecord)
+      : [];
+    lines.push(
+      `最近一次检索收窄：关键词=${String(narrowing.keyword ?? '')} 状态=${String(
+        narrowing.state ?? '',
+      )} 候选总数=${String(narrowing.totalCandidates ?? 0)} 相关=${String(
+        narrowing.relevantCount ?? 0,
+      )} required=${narrowing.required === true} 已选分组=${String(
+        narrowing.selectedGroupKey ?? '无',
+      )}`,
+    );
+    if (groups.length > 0) {
+      lines.push(
+        `候选分组：${groups
+          .map(
+            (group) =>
+              `${String(group.key)}=${String(group.label)}(${String(
+                group.count ?? 0,
+              )}条)`,
+          )
+          .join('、')}`,
+      );
+    }
+    if (choices.length > 0) {
+      lines.push(
+        `收窄选项（用户点选后原样回传，选组时把 key 传给 searchLocalNutrition.group）：${choices
+          .map(
+            (choice) =>
+              `${String(choice.kind)}=${String(choice.key)}(${String(
+                choice.label ?? '',
+              )})`,
+          )
+          .join('、')}`,
+      );
+    }
+    if (options.length > 0) {
+      lines.push(`收窄问题选项原文：${options.join(' / ')}`);
+    }
+  }
+
   return lines;
 }
 
@@ -953,6 +1109,9 @@ function buildSystemPrompt(
     '- searchLocalNutrition 返回的每条候选都带 review（RELEVANT=相关 / UNCERTAIN=存疑 / IRRELEVANT=不相关）和一句理由，这是服务端自动复核的结果。不要因为候选里有不相关项就丢弃或隐藏候选；AI 判断只是证据，最终选择由人做。',
     '- 写原料卡或营养档案之前必须先查库并看复核结论；review.verdict=IRRELEVANT 的候选不允许直接写入。',
     '- 相关候选 ≥2 条：**必须先调用 askUser** 让用户选择，不许自己挑一条；选项文案写成「候选名 —— 相关/存疑/不相关：≤40 字理由」，把 AI 判断展示给用户。',
+    '- searchLocalNutrition 返回 nextAction=NARROW_STATE / NARROW_GROUP 或 narrowing.required=true 时：**必须先按 narrowing.question / narrowing.options 收窄**，不许直接列词条。候选多时先说「N 条相关，先按部位分组」，不许说「找到 N 条相关」却只给 5 个选项；收窄后说「这一组 N 条」。',
+    '- 收窄后只列该组 ≤5 条词条（每条带来源库 / 覆盖率 / AI 判断），选项最后永远加一条「都不对，我直接说」；该组只剩 1 条时直接用它并说明理由，不必再问。调用 searchLocalNutrition 时把分组 key 传进 group。',
+    '- 用户没指定生/熟时，收窄问题必须包含「生 / 熟」两项；不要默认替用户选生，也不要把默认 RAW 说成用户的选择。',
     '- 相关候选 =1 条：可以继续用它写入，但最终回复必须说明“我选了这条，因为…”，并把其它候选的 AI 判断列在证据里。',
     '- 相关候选 =0 条：不许硬选，转“去线上找 / 留空”分支，明确告诉用户本地库没有相关来源。',
     '- 以下情况**必须先调用 askUser 问人，不许自己猜**：部位 / 加工态 / 种类有歧义（例如「牛肉」「猪肉」「土豆」「鱼」「山药」）；多个候选覆盖率接近且生熟状态不同；要新建多份档案但主次不明。',
@@ -1352,6 +1511,11 @@ export class IngredientDraftAgentService {
             matches: searchEvidence.matches,
             keywords: searchEvidence.keywords,
             candidateCount: searchEvidence.candidateCount,
+            totalCandidates: searchEvidence.totalCandidates,
+            groups: searchEvidence.groups,
+            ...(searchEvidence.reviewSummary
+              ? { reviewSummary: searchEvidence.reviewSummary }
+              : {}),
           }
         : {}),
       ...(recordEvidence ? { record: recordEvidence } : {}),

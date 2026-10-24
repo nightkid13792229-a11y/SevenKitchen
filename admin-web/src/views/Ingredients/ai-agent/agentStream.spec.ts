@@ -43,6 +43,13 @@ function stepEnd(
     ...(overrides.candidateCount === undefined
       ? {}
       : { candidateCount: overrides.candidateCount }),
+    ...(overrides.totalCandidates === undefined
+      ? {}
+      : { totalCandidates: overrides.totalCandidates }),
+    ...(overrides.groups === undefined ? {} : { groups: overrides.groups }),
+    ...(overrides.reviewSummary === undefined
+      ? {}
+      : { reviewSummary: overrides.reviewSummary }),
     ...(overrides.matches === undefined ? {} : { matches: overrides.matches }),
     ...(overrides.record === undefined ? {} : { record: overrides.record })
   }
@@ -765,5 +772,171 @@ describe('ask 事件 · 选项库内核实标记', () => {
     })
 
     expect(parsed).toEqual({ question: QUESTION, options: OPTIONS })
+  })
+})
+
+describe('候选先收窄 · 分组概览与选项类型', () => {
+  it('step_end 带 groups / totalCandidates / reviewSummary 时落进 search 展开数据', () => {
+    let state = reduceAgentEvents(createAgentStreamState(), stepStart())
+    state = reduceAgentEvents(
+      state,
+      stepEnd(1, {
+        found: true,
+        keywords: ['牛肉', 'beef'],
+        candidateCount: 50,
+        totalCandidates: 50,
+        reviewSummary: {
+          relevantCount: 11,
+          uncertainCount: 0,
+          irrelevantCount: 0,
+          failed: false
+        },
+        groups: [
+          { key: 'ground', label: '牛绞肉', count: 6, states: ['RAW'] },
+          { key: 'tenderloin', label: '牛里脊', count: 3, states: ['RAW'] }
+        ]
+      })
+    )
+
+    expect(state.steps[0]?.search?.groups).toHaveLength(2)
+    expect(state.steps[0]?.search?.groups[0]).toMatchObject({
+      key: 'ground',
+      label: '牛绞肉',
+      count: 6,
+      labelWithCount: '牛绞肉（6 条）',
+      stateLabel: '生'
+    })
+    expect(state.steps[0]?.search?.message).toBe('共 50 条候选 · 11 条相关')
+  })
+
+  it('收窄问题 5 个分组 + 兜底共 6 个选项：全部保留，不截成 5 个', () => {
+    const options = [
+      '牛绞肉（6 条）',
+      '牛里脊（3 条）',
+      '牛腩（2 条）',
+      '牛腱（1 条）',
+      '牛肋排（1 条）',
+      '都不对，我直接说'
+    ]
+    const pending = readPendingQuestion({
+      question: '牛肉有 13 条相关，先按部位收窄：',
+      options,
+      optionChecks: [
+        {
+          label: options[0],
+          kind: 'GROUP',
+          inLibrary: null,
+          matchedName: null,
+          displayLabel: options[0]
+        },
+        {
+          label: options[1],
+          kind: 'GROUP',
+          inLibrary: null,
+          matchedName: null,
+          displayLabel: options[1]
+        },
+        {
+          label: options[2],
+          kind: 'GROUP',
+          inLibrary: null,
+          matchedName: null,
+          displayLabel: options[2]
+        },
+        {
+          label: options[3],
+          kind: 'GROUP',
+          inLibrary: null,
+          matchedName: null,
+          displayLabel: options[3]
+        },
+        {
+          label: options[4],
+          kind: 'GROUP',
+          inLibrary: null,
+          matchedName: null,
+          displayLabel: options[4]
+        },
+        {
+          label: options[5],
+          kind: 'FREE',
+          inLibrary: null,
+          matchedName: null,
+          displayLabel: options[5]
+        }
+      ]
+    })
+
+    expect(pending?.options).toEqual(options)
+    expect(pending?.optionChecks).toHaveLength(6)
+    expect(pending?.optionChecks?.[0]?.kind).toBe('GROUP')
+    expect(pending?.optionChecks?.[5]?.kind).toBe('FREE')
+    expect(pending?.optionChecks?.[5]?.displayLabel).toBe('都不对，我直接说')
+  })
+
+  it('分组 / 生熟 / 兜底选项不显示「未收录」或「未核实」小标', () => {
+    expect(
+      pendingOptionBadge({
+        label: '牛绞肉（6 条）',
+        kind: 'GROUP',
+        inLibrary: null,
+        matchedName: null,
+        displayLabel: '牛绞肉（6 条）'
+      })
+    ).toEqual({ label: '分组', type: 'info' })
+    expect(
+      pendingOptionBadge({
+        label: '生（查生档案）',
+        kind: 'STATE',
+        inLibrary: null,
+        matchedName: null,
+        displayLabel: '生（查生档案）'
+      })
+    ).toEqual({ label: '生熟', type: 'info' })
+    expect(
+      pendingOptionBadge({
+        label: '都不对，我直接说',
+        kind: 'FREE',
+        inLibrary: null,
+        matchedName: null,
+        displayLabel: '都不对，我直接说'
+      })
+    ).toBeNull()
+    // 旧草稿没有 kind：维持原来的「未核实」。
+    expect(
+      pendingOptionBadge({
+        label: '铁棍山药',
+        inLibrary: null,
+        matchedName: null,
+        displayLabel: '铁棍山药'
+      })
+    ).toEqual({ label: '未核实', type: 'info' })
+  })
+
+  it('刷新恢复旧草稿时从文案识别兜底选项', () => {
+    const pending = readPendingQuestion({
+      question: '这一组 3 条，请选一条：',
+      options: ['Yam, raw', 'Yam, cooked', '都不对，我直接说'],
+      optionChecks: [
+        {
+          label: 'Yam, raw',
+          inLibrary: true,
+          matchedName: 'Yam, raw',
+          displayLabel: 'Yam, raw'
+        },
+        {
+          label: 'Yam, cooked',
+          inLibrary: true,
+          matchedName: 'Yam, cooked',
+          displayLabel: 'Yam, cooked'
+        }
+      ]
+    })
+
+    expect(pending?.optionChecks?.[2]).toMatchObject({
+      label: '都不对，我直接说',
+      kind: 'FREE',
+      displayLabel: '都不对，我直接说'
+    })
   })
 })

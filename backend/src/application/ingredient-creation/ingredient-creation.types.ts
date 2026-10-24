@@ -4,6 +4,10 @@ import type {
   PreparationState,
 } from '../../domain/ingredient-creation/preparation-state';
 import type { CoverageCategory } from '../../domain/ingredient-creation/state-coverage';
+import type {
+  CandidateGroupSummary,
+  CandidateNarrowingChoice,
+} from './ingredient-candidate-groups';
 
 /**
  * 向导站点。草稿的 `step` 只取这些值，其它字符串一律视为脏数据。
@@ -182,6 +186,34 @@ export interface CandidateReviewGate {
 }
 
 /**
+ * 最近一次检索的「先收窄」记录，随草稿保存。
+ *
+ * `askUser` 用它拦住「候选很多却直接列词条」：`required=true` 且
+ * `selectedGroupKey=null` 时，带 AI 判断的候选选项一律拒绝，要求先按
+ * `question` / `options` 收窄；选组后 `searchLocalNutrition` 会写入
+ * `selectedGroupKey`，之后才允许列该组词条。
+ */
+export interface CandidateNarrowingRecord {
+  keyword: string;
+  state: PreparationState;
+  /** 模型这次调用有没有显式传 state。 */
+  stateSpecified: boolean;
+  /** 截断前的候选总数。 */
+  totalCandidates: number;
+  /** AI 判为相关的条数。 */
+  relevantCount: number;
+  required: boolean;
+  kind: 'NONE' | 'STATE' | 'GROUP';
+  reason: string | null;
+  question: string;
+  options: string[];
+  choices: CandidateNarrowingChoice[];
+  groups: CandidateGroupSummary[];
+  selectedGroupKey: string | null;
+  updatedAt: string;
+}
+
+/**
  * ② 营养依据站的候选行（Task 4 的候选检索产出）。
  *
  * `cookingMethod` 只取 Task 2 的 `CookingMethod`；认不出的做法存 `null`，
@@ -351,8 +383,13 @@ export interface PendingQuestionOption {
   /** 点选后回传的答案；超过 120 字已由工具层截断（前 117 字 + …）。 */
   label: string;
   /**
+   * 这一项不是普通候选时的类型：部位收窄组 / 生熟状态 / 自由输入兜底。
+   * 普通候选与普通问题不写这个字段（保持旧草稿兼容）。
+   */
+  kind?: 'GROUP' | 'STATE' | 'FREE';
+  /**
    * `true`：本地库有候选；`false`：查了但没有；`null`：核实失败 / 超时，
-   * 状态未知。未知不能当成「没有」，否则一次超时就会挡住正常的提问。
+   * 状态未知、或这一项本来就不需要查库（分组 / 生熟 / 自由输入）。
    */
   inLibrary: boolean | null;
   /** 命中时库里的词条名，用于页面提示；未命中 / 未知时为 null。 */
@@ -424,6 +461,11 @@ export interface IngredientCreationDraftPayload {
    * 只是工具层的保护，不参与页面渲染；旧草稿没有这个键。
    */
   candidateReviewGate?: CandidateReviewGate | null;
+  /**
+   * 最近一次检索的收窄记录（见 `CandidateNarrowingRecord`）。
+   * 只是工具层的保护与状态，不参与页面渲染；旧草稿没有这个键。
+   */
+  candidateNarrowing?: CandidateNarrowingRecord | null;
   /**
    * AI 正在等用户回答的问题；下一次带同一 draftId 的 run 会把它塞进提示词，
    * 然后置为 null。null / 缺失都表示「现在没有待回答的问题」。

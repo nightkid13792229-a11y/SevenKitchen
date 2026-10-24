@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  answerInputFromPendingQuestion,
   createAgentStreamState,
   parseSseChunk,
+  readPendingQuestion,
   reduceAgentEvents,
   streamIngredientAgent,
   type AgentStreamEvent,
@@ -410,5 +412,113 @@ describe('streamIngredientAgent · 网络中断', () => {
 
     expect(state.error).toContain('登录已过期')
     expect(state.steps).toEqual([])
+  })
+})
+
+describe('ask 事件 · 先问人再动手', () => {
+  const QUESTION = '牛肉用哪个部位？'
+  const OPTIONS = ['牛腩', '牛腱子', '牛里脊']
+
+  it('收到 ask 事件后记住问题、选项与当前 draftId', () => {
+    const state = reduceAgentEvents(createAgentStreamState(), {
+      type: 'ask',
+      question: QUESTION,
+      options: OPTIONS,
+      draftId: 'draft-beef'
+    })
+
+    expect(state.pendingQuestion).toEqual({
+      question: QUESTION,
+      options: OPTIONS
+    })
+    expect(state.draftId).toBe('draft-beef')
+    expect(state.done).toBe(false)
+  })
+
+  it('ask 之后紧接着 done：不算「没有最终回复」的断流错误', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            const encoder = new TextEncoder()
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  type: 'ask',
+                  question: QUESTION,
+                  options: OPTIONS,
+                  draftId: 'draft-beef'
+                })}\n\n`
+              )
+            )
+            controller.enqueue(encoder.encode('data: {"type":"done"}\n\n'))
+            controller.close()
+          }
+        })
+        return new Response(body, { status: 200 })
+      })
+    )
+
+    const state = await streamIngredientAgent({
+      draftId: 'draft-beef',
+      text: '牛肉'
+    })
+
+    expect(state.pendingQuestion).toEqual({
+      question: QUESTION,
+      options: OPTIONS
+    })
+    expect(state.draftId).toBe('draft-beef')
+    expect(state.done).toBe(true)
+    expect(state.error).toBeNull()
+  })
+
+  it('点选项 = 用当前 draftId 把选项文本发出去', async () => {
+    let state = reduceAgentEvents(createAgentStreamState(), {
+      type: 'ask',
+      question: QUESTION,
+      options: OPTIONS,
+      draftId: 'draft-beef'
+    })
+
+    const input = answerInputFromPendingQuestion(state, '牛腱子')
+    expect(input).toEqual({ draftId: 'draft-beef', text: '牛腱子' })
+    // 不在选项里的文本不能冒充点击；没有待答问题时返回 null。
+    expect(answerInputFromPendingQuestion(state, '牛尾')).toBeNull()
+    expect(
+      answerInputFromPendingQuestion(createAgentStreamState(), '牛腩')
+    ).toBeNull()
+
+    const fetchMock = vi.fn(
+      async (_url: RequestInfo | URL, _init?: RequestInit) =>
+        new Response('data: {"type":"done"}\n\n', { status: 200 })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    await streamIngredientAgent(input!)
+
+    const call = fetchMock.mock.calls[0]
+    expect(call).toBeDefined()
+    const init = call?.[1]
+    expect(JSON.parse(String(init?.body))).toEqual({
+      draftId: 'draft-beef',
+      text: '牛腱子'
+    })
+
+    state = reduceAgentEvents(state, { type: 'done' })
+    expect(state.pendingQuestion).not.toBeNull()
+  })
+
+  it('非流式路径：草稿 payload 里的 pendingQuestion 也能还原成问题与选项', () => {
+    expect(
+      readPendingQuestion({
+        question: QUESTION,
+        options: OPTIONS,
+        askedAt: '2026-10-24T12:00:00.000Z'
+      })
+    ).toEqual({ question: QUESTION, options: OPTIONS })
+
+    expect(readPendingQuestion(null)).toBeNull()
+    expect(readPendingQuestion({ question: '   ' })).toBeNull()
   })
 })

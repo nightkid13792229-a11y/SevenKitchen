@@ -193,6 +193,13 @@ export interface ProposalSnapshot {
   [key: string]: unknown
 }
 
+/** AI 停下来问人的问题；`options` 是可直接点选的答案。 */
+export interface PendingQuestion {
+  question: string
+  options: string[]
+  askedAt: string
+}
+
 /** 草稿里累积的数据；patch 时只传本次需要更新的键（浅合并）。 */
 export interface IngredientCreationDraftPayload {
   intake?: IntakeCard
@@ -209,6 +216,11 @@ export interface IngredientCreationDraftPayload {
   verify?: { exceptions: ExceptionRecord[] }
   /** AI 提案历史：只追加、不覆盖，前端不得回传 */
   proposalHistory?: ProposalSnapshot[]
+  /**
+   * AI 正在等用户回答的问题；有值时页面顶部显示「等你回答」。
+   * 下一次带同一 draftId 的 run 会消费它并置 null。
+   */
+  pendingQuestion?: PendingQuestion | null
 }
 
 /** 草稿记录。 */
@@ -311,6 +323,17 @@ export interface AgentTranscriptEntry {
   summary?: string
 }
 
+/**
+ * 本轮为什么停下：`waiting_user` 表示 AI 问了一个问题、等你回答，
+ * 不属于失败；其余是保险丝。
+ */
+export type IngredientAgentStopReason =
+  | 'TOOL_CALL_LIMIT'
+  | 'TIMEOUT'
+  | 'TOKEN_BUDGET'
+  | 'NO_PROGRESS'
+  | 'waiting_user'
+
 /** `POST /admin/ingredient-creation/agent/run` 的返回值。 */
 export interface IngredientAgentRunResult {
   draftId: string
@@ -319,6 +342,9 @@ export interface IngredientAgentRunResult {
   steps: number
   transcript: AgentTranscriptEntry[]
   mode: IngredientAgentMode
+  stopReason?: IngredientAgentStopReason | null
+  /** 非流式路径同样带问题：页面据此渲染提问气泡 + 选项。 */
+  pendingQuestion?: PendingQuestion | null
 }
 
 /** `POST agent/run` 的入参；第一轮不传 `draftId`，之后带上上一轮的。 */

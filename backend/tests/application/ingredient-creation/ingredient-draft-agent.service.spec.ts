@@ -1674,6 +1674,263 @@ describe('IngredientDraftAgentService · 工具循环', () => {
   });
 });
 
+describe('IngredientDraftAgentService · askUser（先问人，再动手）', () => {
+  const BEEF_QUESTION = '牛肉用哪个部位？';
+  const BEEF_OPTIONS = ['牛腩（肥瘦相间）', '牛腱子（筋膜多）', '牛里脊（瘦）'];
+
+  it('模型调用 askUser 时存下 pendingQuestion，事件以 ask + done 收尾', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'askUser',
+            { question: BEEF_QUESTION, options: BEEF_OPTIONS },
+            'call_ask',
+          ),
+        ),
+      );
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    const events: any[] = [];
+    const result = await harness.agent.run(
+      { draftId: DRAFT_ID, text: '牛肉', userId: 'admin-1' },
+      (event) => events.push(event),
+    );
+
+    // 问完就结束本轮：不再请求模型，也不自己挑一个部位往下写。
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result.stopReason).toBe('waiting_user');
+    expect(result.pendingQuestion).toMatchObject({
+      question: BEEF_QUESTION,
+      options: BEEF_OPTIONS,
+    });
+    expect(Date.parse(String(result.pendingQuestion?.askedAt))).not.toBeNaN();
+    expect(result.reply).toBe(BEEF_QUESTION);
+    expect(result.toolCalls).toEqual([
+      expect.objectContaining({ name: 'askUser', ok: true }),
+    ]);
+
+    // 问题必须落在草稿里：下次带同一个 draftId 才能接上。
+    expect(harness.currentDraft()?.payload.pendingQuestion).toMatchObject({
+      question: BEEF_QUESTION,
+      options: BEEF_OPTIONS,
+    });
+
+    const types = events.map((event) => event.type);
+    expect(types.slice(-2)).toEqual(['ask', 'done']);
+    expect(events[types.length - 2]).toMatchObject({
+      type: 'ask',
+      question: BEEF_QUESTION,
+      options: BEEF_OPTIONS,
+      draftId: DRAFT_ID,
+    });
+  });
+
+  it('带同一 draftId 回答时，提示词包含问题与回答，并清空 pendingQuestion', async () => {
+    const harness = createHarness({
+      draft: createDraft({
+        payload: {
+          pendingQuestion: {
+            question: BEEF_QUESTION,
+            options: BEEF_OPTIONS,
+            askedAt: '2026-10-24T12:00:00.000Z',
+          },
+        },
+      }),
+    });
+
+    const fetchMock = jest.fn(async () => {
+      // 清空必须发生在继续之前，而不是等这一轮跑完。
+      expect(harness.currentDraft()?.payload.pendingQuestion).toBeNull();
+      return chatResponse(assistantReply('已按牛腩建好草稿。'));
+    });
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '牛腩',
+      userId: 'admin-1',
+    });
+
+    const messages = requestBody(fetchMock, 0).messages as Array<{
+      role: string;
+      content: string | null;
+    }>;
+    const prompt = messages
+      .map((message) => String(message.content ?? ''))
+      .join('\n');
+    expect(prompt).toContain('你刚问');
+    expect(prompt).toContain(BEEF_QUESTION);
+    expect(prompt).toContain('用户答');
+    expect(prompt).toContain('牛腩');
+    // 回答之后不许假装早就知道答案，也不许把同一个问题再问一遍。
+    expect(prompt).toContain('不要假装');
+    expect(prompt).toContain('不要重复问');
+
+    expect(harness.currentDraft()?.payload.pendingQuestion).toBeNull();
+    // 清空要真的落库，不能只改内存对象骗过下一次 run。
+    expect(harness.draftService.patch).toHaveBeenCalledWith(
+      DRAFT_ID,
+      'INTAKE',
+      { pendingQuestion: null },
+    );
+    expect(result.pendingQuestion).toBeNull();
+    expect(result.stopReason).toBeNull();
+    expect(result.reply).toBe('已按牛腩建好草稿。');
+  });
+
+  it('系统提示词：歧义必须先 askUser，一次只问一个问题、给 2–5 个选项', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(chatResponse(assistantReply('好的。')));
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '牛肉',
+      userId: 'admin-1',
+    });
+
+    const system = String(requestBody(fetchMock, 0).messages[0].content);
+    expect(system).toContain('askUser');
+    expect(system).toContain('部位');
+    expect(system).toContain('不许自己猜');
+    expect(system).toContain('一次只问一个问题');
+    expect(system).toContain('2–5');
+    expect(system).toContain('不要重复问同一个问题');
+    expect(system).toContain('不要假装');
+  });
+
+  it('askUser 选项少于 2 个时返回错误文本，不写 pendingQuestion', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'askUser',
+            { question: '牛肉用哪个部位？', options: ['牛腩'] },
+            'call_bad_options',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(assistantReply('选项不够，我改一下再问。')),
+      );
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '牛肉',
+      userId: 'admin-1',
+    });
+
+    expect(result.toolCalls[0]).toMatchObject({
+      name: 'askUser',
+      ok: false,
+    });
+    expect(result.toolCalls[0].error).toContain('2');
+    expect(result.stopReason).toBeNull();
+    expect(harness.currentDraft()?.payload.pendingQuestion).toBeUndefined();
+  });
+
+  it('askUser 的 question 超过 120 字时拒绝', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'askUser',
+            { question: '牛'.repeat(121), options: ['牛腩', '牛腱子'] },
+            'call_long_question',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(chatResponse(assistantReply('问题太长了。')));
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '牛肉',
+      userId: 'admin-1',
+    });
+
+    expect(result.toolCalls[0]).toMatchObject({
+      name: 'askUser',
+      ok: false,
+    });
+    expect(result.toolCalls[0].error).toContain('120');
+    expect(harness.currentDraft()?.payload.pendingQuestion).toBeUndefined();
+  });
+
+  it('askUser 选项超过 5 个时拒绝', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'askUser',
+            {
+              question: '牛肉用哪个部位？',
+              options: ['牛腩', '牛腱子', '牛里脊', '牛尾', '牛舌', '牛骨'],
+            },
+            'call_too_many_options',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(chatResponse(assistantReply('选项太多了。')));
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '牛肉',
+      userId: 'admin-1',
+    });
+
+    expect(result.toolCalls[0]).toMatchObject({
+      name: 'askUser',
+      ok: false,
+    });
+    expect(result.toolCalls[0].error).toContain('2–5');
+    expect(harness.currentDraft()?.payload.pendingQuestion).toBeUndefined();
+  });
+
+  it('askUser 单个选项超过 40 字时拒绝', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'askUser',
+            { question: '牛肉用哪个部位？', options: ['牛'.repeat(41), '牛腱子'] },
+            'call_long_option',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(chatResponse(assistantReply('选项太长了。')));
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '牛肉',
+      userId: 'admin-1',
+    });
+
+    expect(result.toolCalls[0]).toMatchObject({
+      name: 'askUser',
+      ok: false,
+    });
+    expect(result.toolCalls[0].error).toContain('40');
+    expect(harness.currentDraft()?.payload.pendingQuestion).toBeUndefined();
+  });
+});
+
 describe('POST /api/v1/admin/ingredient-creation/agent/run', () => {
   let app: INestApplication;
   let agentService: { run: jest.Mock };

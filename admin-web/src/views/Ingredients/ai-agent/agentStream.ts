@@ -28,6 +28,12 @@ export interface AgentStreamRecord {
   valueCount: number
 }
 
+/** AI 停下来问人的问题；`options` 是可直接点选的答案。 */
+export interface AgentPendingQuestion {
+  question: string
+  options: string[]
+}
+
 export type AgentStreamEvent =
   | {
       type: 'step_start'
@@ -57,6 +63,16 @@ export type AgentStreamEvent =
       draftId: string
       steps: number
       toolCallCount: number
+    }
+  /**
+   * AI 先问人：页面渲染提问气泡 + 可点选项；点击等于用同一个 draftId
+   * 把选项文本发出去。`ask` 后面紧接 `done`，没有 `reply`。
+   */
+  | {
+      type: 'ask'
+      question: string
+      options: string[]
+      draftId?: string
     }
   | { type: 'done' }
   | { type: 'error'; message: string }
@@ -90,6 +106,8 @@ export interface AgentStreamState {
   meta: AgentStreamMeta | null
   error: string | null
   done: boolean
+  /** 当前在等用户回答的问题；没有时为 null。 */
+  pendingQuestion: AgentPendingQuestion | null
 }
 
 export function createAgentStreamState(): AgentStreamState {
@@ -99,7 +117,8 @@ export function createAgentStreamState(): AgentStreamState {
     draftId: null,
     meta: null,
     error: null,
-    done: false
+    done: false,
+    pendingQuestion: null
   }
 }
 
@@ -121,6 +140,55 @@ function readNonNegativeInt(value: unknown): number | null {
 
 function readText(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+/**
+ * 把「待回答的问题」归一成页面结构。
+ *
+ * 三个入口共用：SSE `ask` 事件、非流式 `runAgent` 返回值、草稿 payload
+ * （刷新后恢复）。认不出来（没问题 / 选项不足 2 个）就返回 null，不渲染半截问题。
+ */
+export function readPendingQuestion(
+  value: unknown
+): AgentPendingQuestion | null {
+  if (!isRecord(value)) {
+    return null
+  }
+  const question = readText(value.question)
+  if (!question) {
+    return null
+  }
+  const options = Array.isArray(value.options)
+    ? value.options
+        .map((option) => readText(option))
+        .filter((option) => option.length > 0)
+        .slice(0, 5)
+    : []
+  if (options.length < 2) {
+    return null
+  }
+  return { question, options }
+}
+
+/**
+ * 点选项回答：用当前草稿 id 发送选项原文。
+ *
+ * 没有待答问题、选项不在列表里、或还不知道 draftId 时返回 null——
+ * 宁可不发，也不新建一份草稿把问答接错地方。
+ */
+export function answerInputFromPendingQuestion(
+  state: Pick<AgentStreamState, 'draftId' | 'pendingQuestion'>,
+  option: string
+): { draftId: string; text: string } | null {
+  const pending = state.pendingQuestion
+  if (!pending || !state.draftId) {
+    return null
+  }
+  const text = option.trim()
+  if (!text || !pending.options.includes(text)) {
+    return null
+  }
+  return { draftId: state.draftId, text }
 }
 
 function replaceStep(
@@ -258,6 +326,18 @@ export function reduceAgentEvents(
           steps !== null && toolCallCount !== null
             ? { steps, toolCallCount }
             : state.meta
+      }
+    }
+
+    case 'ask': {
+      const pending = readPendingQuestion(event)
+      if (!pending) {
+        return state
+      }
+      return {
+        ...state,
+        pendingQuestion: pending,
+        draftId: readText(event.draftId) || state.draftId
       }
     }
 
@@ -445,7 +525,8 @@ export async function streamIngredientAgent(
     return state
   }
 
-  if (!state.reply && !state.error) {
+  // ask 之后不会有 reply：有待答问题也算「正常收尾」，不能报成断流。
+  if (!state.reply && !state.error && !state.pendingQuestion) {
     state = {
       ...state,
       error: `连接意外结束：没有收到 AI 的最终回复。已保留收到的 ${state.steps.length} 个步骤，请重试。`

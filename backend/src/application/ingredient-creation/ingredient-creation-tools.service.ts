@@ -19,6 +19,7 @@ import type {
   IngredientCreationDraft,
   IngredientDraft,
   NutritionEvidenceEntry,
+  PendingQuestion,
   ProfileDraft,
 } from './ingredient-creation.types';
 
@@ -36,6 +37,11 @@ export interface AgentToolExecution {
   durationMs: number;
   /** 给起草循环判断「有没有新进展」用；不回灌给模型。 */
   progress?: AgentToolProgress;
+  /**
+   * 只有 `askUser` 成功时会填：本轮必须立刻结束，等用户回答。
+   * 起草循环据此把 stopReason 置为 `waiting_user`。
+   */
+  pendingQuestion?: PendingQuestion;
 }
 
 /** 终检摘要：停止时用来说明「还剩什么没做」。 */
@@ -324,6 +330,47 @@ const RUN_CHECK_TOOL: AgentToolDefinition = {
     parameters: {
       type: 'object',
       properties: {},
+      additionalProperties: false,
+    },
+  },
+};
+
+const ASK_USER_QUESTION_MAX = 120;
+const ASK_USER_OPTION_MAX = 40;
+const ASK_USER_OPTION_MIN = 2;
+const ASK_USER_OPTION_MAX_COUNT = 5;
+
+/**
+ * 问人工具：歧义时停下来，不自己挑一条凑合。
+ *
+ * 调用成功后本轮立即结束（stopReason=waiting_user）；问题写进草稿，
+ * 下次带同一个 draftId 的 run 把问题和用户回答一起放进提示词。
+ */
+const ASK_USER_TOOL: AgentToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'askUser',
+    description:
+      '向用户提一个必须由人决定的问题，并结束本轮等待回答。以下情况必须先问、不许自己猜：部位 / 加工态 / 种类有歧义（例如「牛肉」「猪肉」「土豆」「鱼」「山药」）；多个候选覆盖率接近且生熟状态不同；要新建多份档案但主次不明。一次只问一个问题，给 2–5 个具体可点的选项；用户回答后会继续，不要重复问同一个问题。',
+    parameters: {
+      type: 'object',
+      properties: {
+        question: {
+          type: 'string',
+          description: `要问用户的一句话，最多 ${ASK_USER_QUESTION_MAX} 个字。一次只问一个问题。`,
+        },
+        options: {
+          type: 'array',
+          minItems: ASK_USER_OPTION_MIN,
+          maxItems: ASK_USER_OPTION_MAX_COUNT,
+          items: {
+            type: 'string',
+            description: `一个具体答案（最多 ${ASK_USER_OPTION_MAX} 个字），不要写「其他」这种空选项。`,
+          },
+          description: `2–${ASK_USER_OPTION_MAX_COUNT} 个可直接点选的具体答案。`,
+        },
+      },
+      required: ['question', 'options'],
       additionalProperties: false,
     },
   },
@@ -786,6 +833,7 @@ export class IngredientCreationToolsService {
       UPDATE_FIELDS_TOOL,
       UPDATE_INGREDIENT_FIELDS_TOOL,
       RUN_CHECK_TOOL,
+      ASK_USER_TOOL,
     ];
   }
 
@@ -845,6 +893,8 @@ export class IngredientCreationToolsService {
         return this.updateIngredientFields(input.draftId, input.args);
       case 'runCheck':
         return this.runCheck(input.draftId);
+      case 'askUser':
+        return this.askUser(input.draftId, input.args);
       default:
         return this.error(
           `未知工具「${input.name}」。可用工具只有：${this.availableToolNames().join('、')}。`,
@@ -1495,6 +1545,72 @@ export class IngredientCreationToolsService {
       const message = error instanceof Error ? error.message : String(error);
       return this.error(`runCheck 跑不了：${message}`);
     }
+  }
+
+  /** 工具 6：问人。校验通过就把问题写进草稿，交给起草循环收尾。 */
+  private async askUser(
+    draftId: string,
+    args: Record<string, unknown>,
+  ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
+    const question = normalizeText(args.question);
+    if (!question) {
+      return this.error('askUser 需要非空的 question。');
+    }
+    const questionLength = Array.from(question).length;
+    if (questionLength > ASK_USER_QUESTION_MAX) {
+      return this.error(
+        `askUser 的 question 最多 ${ASK_USER_QUESTION_MAX} 个字，收到 ${questionLength} 个。`,
+      );
+    }
+
+    if (!Array.isArray(args.options)) {
+      return this.error('askUser 的 options 必须是 2–5 个字符串组成的数组。');
+    }
+    if (
+      args.options.length < ASK_USER_OPTION_MIN ||
+      args.options.length > ASK_USER_OPTION_MAX_COUNT
+    ) {
+      return this.error(
+        `askUser 的 options 必须是 2–${ASK_USER_OPTION_MAX_COUNT} 个选项，收到 ${args.options.length} 个。`,
+      );
+    }
+
+    const options: string[] = [];
+    for (const [index, raw] of args.options.entries()) {
+      const option = normalizeText(raw);
+      if (!option) {
+        return this.error(
+          `askUser 的 options 第 ${index + 1} 项必须是非空字符串。`,
+        );
+      }
+      const length = Array.from(option).length;
+      if (length > ASK_USER_OPTION_MAX) {
+        return this.error(
+          `askUser 的 options 第 ${index + 1} 项最多 ${ASK_USER_OPTION_MAX} 个字，收到 ${length} 个。`,
+        );
+      }
+      options.push(option);
+    }
+
+    // 草稿不存在时先报 404（与其它工具一致），也顺便拿到当前站点。
+    const draft = await this.draftService.get(draftId);
+    const pendingQuestion: PendingQuestion = {
+      question,
+      options,
+      askedAt: new Date().toISOString(),
+    };
+    await this.draftService.patch(draftId, draft.step, { pendingQuestion });
+
+    return {
+      ok: true,
+      content: okContent({
+        question: pendingQuestion.question,
+        options: pendingQuestion.options,
+        askedAt: pendingQuestion.askedAt,
+        awaitingUser: true,
+      }),
+      pendingQuestion,
+    };
   }
 
   private error(message: string): Omit<AgentToolExecution, 'durationMs'> {

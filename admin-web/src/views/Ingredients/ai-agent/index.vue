@@ -16,6 +16,15 @@
         <div class="agent-panel__head">
           <span class="agent-panel__dot" aria-hidden="true"></span>
           <b>Agent 运行</b>
+          <el-tag
+            v-if="state.pendingQuestion"
+            class="agent-panel__waiting"
+            size="small"
+            type="warning"
+            effect="plain"
+          >
+            等你回答
+          </el-tag>
           <span class="agent-panel__draft">
             草稿：<code>{{ state.draftId || '运行后创建' }}</code>
           </span>
@@ -23,7 +32,7 @@
 
         <div ref="bodyRef" class="agent-panel__body">
           <el-empty
-            v-if="state.runs.length === 0"
+            v-if="state.runs.length === 0 && !state.pendingQuestion"
             description="还没有运行。输入一句话开始，例如「帮我加鸡肝」。"
             :image-size="72"
           />
@@ -166,6 +175,31 @@
                 已运行 {{ runElapsedSeconds(run) }} 秒 · 已收到
                 {{ run.steps.length }} 步
               </span>
+            </div>
+          </div>
+
+          <div v-if="state.pendingQuestion" class="agent-ask">
+            <div class="agent-run__reply">
+              <span class="agent-run__role agent-run__role--ai">AI</span>
+              <p class="agent-run__reply-text">
+                {{ state.pendingQuestion.question }}
+              </p>
+            </div>
+            <div class="agent-ask__options">
+              <span class="agent-ask__hint">点一个答案继续：</span>
+              <el-button
+                v-for="option in state.pendingQuestion.options"
+                :key="option"
+                size="small"
+                type="primary"
+                plain
+                :disabled="
+                  state.running || saving || Boolean(commitResult)
+                "
+                @click="handleAnswerOption(option)"
+              >
+                {{ option }}
+              </el-button>
             </div>
           </div>
         </div>
@@ -633,7 +667,10 @@ import {
   type ProfileGroup
 } from './draftReview'
 import {
+  answerInputFromPendingQuestion,
+  readPendingQuestion,
   streamIngredientAgent,
+  type AgentPendingQuestion,
   type AgentStreamMeta,
   type AgentStreamState,
   type AgentStreamStep
@@ -670,7 +707,12 @@ const state = reactive({
   running: false,
   /** 上一轮成功返回的草稿 id；为空表示下一轮会新建草稿。 */
   draftId: null as string | null,
-  runs: [] as AgentRunRecord[]
+  runs: [] as AgentRunRecord[],
+  /**
+   * AI 正在等你回答的问题。SSE `ask` 事件、草稿 payload（刷新恢复）、
+   * 非流式 `runAgent` 返回值三个来源都归一到这个字段。
+   */
+  pendingQuestion: null as AgentPendingQuestion | null
 })
 
 /**
@@ -897,6 +939,12 @@ async function loadDraft(draftId: string) {
   try {
     const updated = await ingredientCreationApi.getDraft(draftId)
     applyDraft(updated, { resetForm: true })
+    // 非流式路径：刷新 / 直接读草稿时，payload.pendingQuestion 也要恢复成
+    // 「等你回答」，否则页面会像什么都没问过一样。
+    state.draftId = updated.id
+    state.pendingQuestion = readPendingQuestion(
+      updated.payload.pendingQuestion
+    )
   } catch (error) {
     draftError.value = getApiErrorMessage(error, '草稿加载失败，请稍后重试')
   } finally {
@@ -911,6 +959,8 @@ async function handleRun() {
   }
 
   inputText.value = ''
+  // 这一句要么是新指令，要么是在回答上一轮的问题；两种情况问题都已消费。
+  state.pendingQuestion = null
   state.running = true
   const run = reactive<AgentRunRecord>({
     id: ++runSeq,
@@ -933,6 +983,7 @@ async function handleRun() {
     run.draftId = next.draftId
     run.meta = next.meta
     run.error = next.error
+    state.pendingQuestion = next.pendingQuestion
     if (next.draftId) {
       state.draftId = next.draftId
     }
@@ -967,6 +1018,25 @@ async function handleRun() {
     state.running = false
     await scrollToBottom()
   }
+}
+
+/**
+ * 点一个选项 = 把该选项原文发给同一个草稿。
+ *
+ * 不知道 draftId / 选项已经失效时什么都不发：宁可让人重新输入，
+ * 也不能悄悄新建一份草稿，让答案落到别处。
+ */
+async function handleAnswerOption(option: string) {
+  if (state.running || saving.value || commitResult.value) {
+    return
+  }
+  const input = answerInputFromPendingQuestion(state, option)
+  if (!input) {
+    return
+  }
+  state.pendingQuestion = null
+  inputText.value = input.text
+  await handleRun()
 }
 
 /**
@@ -1299,6 +1369,10 @@ function goBackToList() {
   color: var(--el-text-color-secondary);
 }
 
+.agent-panel__waiting {
+  flex-shrink: 0;
+}
+
 .agent-panel__draft code {
   font-family: var(--el-font-family-mono, monospace);
   color: var(--el-text-color-regular);
@@ -1569,6 +1643,26 @@ function goBackToList() {
   color: var(--el-text-color-primary);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* 提问气泡下面的可点选项：一问一答，不让人自己再组织一遍措辞。 */
+.agent-ask {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.agent-ask__options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-left: 34px;
+}
+
+.agent-ask__hint {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 
 .agent-run__failure {

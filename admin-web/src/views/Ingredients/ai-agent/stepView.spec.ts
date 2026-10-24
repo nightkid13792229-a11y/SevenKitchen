@@ -179,6 +179,19 @@ describe('toStepView', () => {
     expect(view.statusType).toBe('warning')
   })
 
+  it('askUser 映射成「向你提问」，摘要带上问题原文', () => {
+    const view = onlyStep([
+      {
+        name: 'askUser',
+        args: { question: '牛肉用哪个部位？', options: ['牛腩', '牛腱子'] },
+        ok: true
+      }
+    ])
+
+    expect(view.label).toBe('向你提问')
+    expect(view.summary).toBe('牛肉用哪个部位？')
+  })
+
   it('空列表返回空数组', () => {
     expect(toStepView([])).toEqual([])
   })

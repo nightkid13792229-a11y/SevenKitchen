@@ -86,7 +86,8 @@ const TOOL_LABELS: Record<string, string> = {
   updateNutritionField: '写字段',
   updateNutritionFields: '批量写字段',
   updateIngredientFields: '改原料卡',
-  runCheck: '跑终检'
+  runCheck: '跑终检',
+  askUser: '向你提问'
 }
 
 /** 工具名 → 页面中文名；未知工具原样返回，不抛错。 */
@@ -390,6 +391,8 @@ function summarize(name: string, args: AnyArgs): string {
       return summarizeIngredientFields(args)
     case 'runCheck':
       return '检查整份草稿'
+    case 'askUser':
+      return oneLine(readText(args.question) || '（未填问题）')
     default: {
       const argsSummary = summarizeUnknownArgs(args)
       return argsSummary && argsSummary !== '{}' ? argsSummary : '（无参数）'

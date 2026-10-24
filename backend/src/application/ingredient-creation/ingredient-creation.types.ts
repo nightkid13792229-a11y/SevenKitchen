@@ -273,6 +273,19 @@ export interface ProposalSnapshot {
 }
 
 /**
+ * AI 停下来问人的问题（`askUser` 工具写下）。
+ *
+ * 只存「问到了什么」，不存「用户答了什么」：答案由下一次 run 的 `text`
+ * 带进来，用完即清（置 null），避免同一份问题被反复消费。
+ */
+export interface PendingQuestion {
+  question: string;
+  options: string[];
+  /** ISO 时间戳；页面按它排序 / 排查用。 */
+  askedAt: string;
+}
+
+/**
  * 草稿里累积的六站数据。`patch` 只做浅合并，每次只传本站需要更新的键。
  */
 export interface IngredientCreationDraftPayload {
@@ -287,6 +300,11 @@ export interface IngredientCreationDraftPayload {
   verify?: { exceptions: ExceptionRecord[] };
   /** AI 提案历史：只追加、不覆盖（appendProposal） */
   proposalHistory?: ProposalSnapshot[];
+  /**
+   * AI 正在等用户回答的问题；下一次带同一 draftId 的 run 会把它塞进提示词，
+   * 然后置为 null。null / 缺失都表示「现在没有待回答的问题」。
+   */
+  pendingQuestion?: PendingQuestion | null;
 }
 
 /**

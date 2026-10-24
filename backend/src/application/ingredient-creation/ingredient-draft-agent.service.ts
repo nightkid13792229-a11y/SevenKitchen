@@ -23,7 +23,10 @@ import {
   type AgentToolDefinition,
   type AgentToolExecution,
 } from './ingredient-creation-tools.service';
-import type { IngredientCreationDraft } from './ingredient-creation.types';
+import type {
+  IngredientCreationDraft,
+  PendingQuestion,
+} from './ingredient-creation.types';
 
 /**
  * 单轮最多执行多少次**工具调用**（不是模型轮次）。
@@ -89,13 +92,15 @@ export interface AgentTranscriptEntry {
  * 本轮为什么停下。
  *
  * - `TOOL_CALL_LIMIT` / `TIMEOUT` / `TOKEN_BUDGET`：硬保险丝；
- * - `NO_PROGRESS`：连续多次工具调用没有新进展的软停止。
+ * - `NO_PROGRESS`：连续多次工具调用没有新进展的软停止；
+ * - `waiting_user`：`askUser` 成功，循环正常结束、等用户回答（不是失败）。
  */
 export type IngredientAgentStopReason =
   | 'TOOL_CALL_LIMIT'
   | 'TIMEOUT'
   | 'TOKEN_BUDGET'
-  | 'NO_PROGRESS';
+  | 'NO_PROGRESS'
+  | 'waiting_user';
 
 export interface IngredientAgentRunResult {
   draftId: string;
@@ -108,8 +113,13 @@ export interface IngredientAgentRunResult {
   transcript: AgentTranscriptEntry[];
   /** 本次实际使用的协议；报告与排查用。 */
   mode: IngredientAgentMode;
-  /** 正常给出最终回复时为 null。 */
+  /** 正常给出最终回复 / 等用户回答时为 null。 */
   stopReason: IngredientAgentStopReason | null;
+  /**
+   * 本轮停下来问了人的问题；非流式接口靠它渲染提问气泡。
+   * 正常跑完时为 null。
+   */
+  pendingQuestion?: PendingQuestion | null;
 }
 
 /**
@@ -188,6 +198,16 @@ export type IngredientAgentStreamEvent =
       draftId: string;
       steps: number;
       toolCallCount: number;
+    }
+  /**
+   * AI 停下来问人。`draftId` 一并带上：页面点选项回答时要用同一个草稿，
+   * 不然会新建一份，问题与答案就接不上了。`ask` 之后紧接 `done`。
+   */
+  | {
+      type: 'ask';
+      question: string;
+      options: string[];
+      draftId: string;
     }
   | { type: 'done' }
   | { type: 'error'; message: string };
@@ -439,6 +459,10 @@ export function buildToolStepSummary(
     }
     case 'runCheck':
       return '跑终检';
+    case 'askUser':
+      return oneLine(
+        `向你提问 ${readTextValue(args.question) || '（未填问题）'}`,
+      );
     default: {
       try {
         const argsText = JSON.stringify(args);
@@ -514,6 +538,8 @@ export function buildToolResultSummary(
         typeof counts.blocking === 'number' ? counts.blocking : 0;
       return `终检未通过（${blocking} 项拦死）`;
     }
+    case 'askUser':
+      return '等你回答';
     default:
       return '完成';
   }
@@ -889,6 +915,9 @@ function buildSystemPrompt(
     '- 不要编造营养数值。只写来源记录里有的值，或用户明确给出的值。',
     '- 工具报错表示输入不合法。按错误文本改正参数后重试；连续改不出来就停下，说明卡在哪。',
     '- searchLocalNutrition 返回 ok=true 只表示「查询执行成功」，不代表找到数据。看 found / candidateCount：found=false 或 0 条时必须明确说「没有找到匹配词条」，并列出 keywords 里已尝试的关键词；不要写成「成功找到」，也不要编造数据。',
+    '- 以下情况**必须先调用 askUser 问人，不许自己猜**：部位 / 加工态 / 种类有歧义（例如「牛肉」「猪肉」「土豆」「鱼」「山药」）；多个候选覆盖率接近且生熟状态不同；要新建多份档案但主次不明。',
+    '- 一次只问一个问题，给 2–5 个可点选项（每个选项是一个具体答案）。用户回答之前不要写原料卡或营养档案；拿到回答后再继续，不要重复问同一个问题。',
+    '- askUser 会把问题存进草稿并结束本轮，等待用户回答。不要在同一轮里自问自答，也不要在回复里假装已经知道答案。',
     `- 本轮预算：最多 ${INGREDIENT_AGENT_MAX_TOOL_CALLS} 次工具调用 / ${INGREDIENT_AGENT_TIMEOUT_MS / 1000} 秒；连续 ${INGREDIENT_AGENT_MAX_NO_PROGRESS} 次工具调用没有新进展会被系统停止。`,
     '- 最终回复用一句中文，说清楚改了什么、还缺什么、下一步建议；找不到数据时要先说「没找到」并列出查过的关键词。不要粘贴 JSON。',
     `可用工具：${toolNames.join('、')}`,
@@ -916,15 +945,58 @@ function buildSystemPrompt(
   return lines.join('\n');
 }
 
+/**
+ * 读草稿里存的问题；payload 可以被人工编辑，认不出来就当没有。
+ *
+ * 只用于拼提示词，所以缺 `askedAt` 时补空串而不是拒绝整条问题。
+ */
+function readPendingQuestion(value: unknown): PendingQuestion | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const question =
+    typeof value.question === 'string' ? value.question.trim() : '';
+  if (!question) {
+    return null;
+  }
+  const options = Array.isArray(value.options)
+    ? value.options
+        .filter(
+          (option): option is string =>
+            typeof option === 'string' && option.trim().length > 0,
+        )
+        .map((option) => option.trim())
+    : [];
+  const askedAt =
+    typeof value.askedAt === 'string' ? value.askedAt.trim() : '';
+  return { question, options, askedAt };
+}
+
+/** 回答上一轮的问题时，把「问过什么 + 用户答了什么」一起交给模型。 */
+function buildUserPrompt(
+  text: string,
+  pendingQuestion: PendingQuestion | null,
+): string {
+  if (!pendingQuestion) {
+    return text;
+  }
+  return [
+    `你刚问：${pendingQuestion.question}`,
+    `用户答：${text}`,
+    '（请按用户回答继续；不要假装早已知道答案，也不要重复问同一个问题。）',
+  ].join('\n');
+}
+
 function buildInitialMessages(
   draft: IngredientCreationDraft,
   text: string,
   mode: IngredientAgentMode,
   toolNames: readonly string[],
+  pendingQuestion: PendingQuestion | null = null,
 ): AgentMessage[] {
   return [
     { role: 'system', content: buildSystemPrompt(draft, mode, toolNames) },
-    { role: 'user', content: text },
+    { role: 'user', content: buildUserPrompt(text, pendingQuestion) },
   ];
 }
 
@@ -983,14 +1055,17 @@ function summarizeDraftProgress(
  * `NO_PROGRESS` 的文案必须含「没有新进展」，这是线上排查与用户提示的锚点。
  */
 function buildStopReply(input: {
-  reason: IngredientAgentStopReason;
+  reason: Exclude<IngredientAgentStopReason, 'waiting_user'>;
   steps: number;
   toolCallCount: number;
   seenSourceCount: number;
   draft: IngredientCreationDraft;
   lastCheck: AgentCheckSummary | null;
 }): string {
-  const reasonText: Record<IngredientAgentStopReason, string> = {
+  const reasonText: Record<
+    Exclude<IngredientAgentStopReason, 'waiting_user'>,
+    string
+  > = {
     NO_PROGRESS: `连续 ${INGREDIENT_AGENT_MAX_NO_PROGRESS} 次工具调用没有新进展，我停了下来`,
     TIMEOUT: `我跑到上限了（总时长 ${INGREDIENT_AGENT_TIMEOUT_MS / 1000} 秒用完）`,
     TOKEN_BUDGET: '我跑到上限了（本轮 token 成本预算用完了）',
@@ -1019,7 +1094,7 @@ function buildStopReply(input: {
  * （查库 → 写字段 → 跑校验 → 按报错改），直到给出最终回复或撞上限。
  *
  * 安全边界不靠模型自觉：
- * - 工具层只有 6 个，全部只碰草稿；提交 / 确认可用不在这里；
+ * - 工具层只有 7 个，全部只碰草稿；提交 / 确认可用不在这里；
  * - 硬保险丝：80 次工具调用 / 180 秒 / 可配 token 预算；
  * - 软停止：连续 3 次工具调用没有新进展（不写字段、不发现新来源）就停；
  * - 停下来不回滚：已写入的草稿保持原样，reply 说明还剩什么；
@@ -1050,6 +1125,17 @@ export class IngredientDraftAgentService {
     const effectiveInput = onEvent ? { ...input, onEvent } : input;
     try {
       const result = await this.runLoop(effectiveInput);
+      if (result.stopReason === 'waiting_user' && result.pendingQuestion) {
+        // 等用户回答：只发 ask + done，不发「最终回复」，页面不把问题当结论。
+        this.emitEvent(effectiveInput.onEvent, {
+          type: 'ask',
+          question: result.pendingQuestion.question,
+          options: result.pendingQuestion.options,
+          draftId: result.draftId,
+        });
+        this.emitEvent(effectiveInput.onEvent, { type: 'done' });
+        return result;
+      }
       this.emitEvent(effectiveInput.onEvent, {
         type: 'reply',
         reply: result.reply,
@@ -1175,14 +1261,35 @@ export class IngredientDraftAgentService {
       throw new ServiceUnavailableException(AI_NOT_CONFIGURED_MESSAGE);
     }
 
+    /**
+     * 上一轮问过的问题：带同一 draftId 再跑时，用户这句话就是答案。
+     *
+     * 先把问答拼进提示词，再把草稿里的问题置 null（清空），避免同一个问题
+     * 被下一次 run 重复消费、重复追问。
+     */
+    const previousQuestion = readPendingQuestion(draft.payload.pendingQuestion);
+    if (previousQuestion) {
+      await this.draftService.patch(draft.id, draft.step, {
+        pendingQuestion: null,
+      });
+      draft.payload.pendingQuestion = null;
+    }
+
     let mode: IngredientAgentMode = 'FUNCTION_CALLING';
-    let messages = buildInitialMessages(draft, text, mode, toolNames);
+    let messages = buildInitialMessages(
+      draft,
+      text,
+      mode,
+      toolNames,
+      previousQuestion,
+    );
     let steps = 0;
     let toolCallCount = 0;
     let tokensUsed = 0;
     let noProgressStreak = 0;
     let reply = '';
     let stopReason: IngredientAgentStopReason | null = null;
+    let pendingQuestion: PendingQuestion | null = null;
     let lastCheck: AgentCheckSummary | null = null;
     const seenSourceIds = new Set<string>();
     const toolCalls: AgentToolCallRecord[] = [];
@@ -1253,7 +1360,13 @@ export class IngredientDraftAgentService {
           toolCalls.length === 0
         ) {
           mode = 'JSON_ACTION';
-          messages = buildInitialMessages(draft, text, mode, toolNames);
+          messages = buildInitialMessages(
+            draft,
+            text,
+            mode,
+            toolNames,
+            previousQuestion,
+          );
           steps -= 1;
           this.logger.warn(
             `[ingredient-agent] 模型不支持 tools，退化为 JSON 动作模式 runId=${runId} draft=${draft.id}`,
@@ -1357,6 +1470,13 @@ export class IngredientDraftAgentService {
             noProgressStreak = 0;
           } else {
             noProgressStreak += 1;
+          }
+
+          // 问完人立刻收尾：同一轮里剩下的 tool_call 不再执行，避免它先猜着写。
+          if (execution.pendingQuestion) {
+            pendingQuestion = execution.pendingQuestion;
+            stopReason = 'waiting_user';
+            break runLoop;
           }
 
           if (Date.now() >= deadline) {
@@ -1467,6 +1587,12 @@ export class IngredientDraftAgentService {
         noProgressStreak += 1;
       }
 
+      if (execution.pendingQuestion) {
+        pendingQuestion = execution.pendingQuestion;
+        stopReason = 'waiting_user';
+        break;
+      }
+
       if (Date.now() >= deadline) {
         stopReason = 'TIMEOUT';
         break;
@@ -1477,7 +1603,20 @@ export class IngredientDraftAgentService {
       }
     }
 
-    if (stopReason) {
+    if (stopReason === 'waiting_user' && pendingQuestion) {
+      // 问人不是失败：本轮正常结束，回复就是问题本身。
+      reply = truncate(pendingQuestion.question, REPLY_MAX);
+      transcript.push({
+        step: steps,
+        type: 'reply',
+        atMs: Date.now() - startedAt,
+        summary: truncate(reply, TRANSCRIPT_SUMMARY_MAX),
+      });
+      this.logger.log(
+        `[ingredient-agent] waitingUser runId=${runId} draft=${draft.id} ` +
+          `question="${truncate(pendingQuestion.question, 80)}" options=${pendingQuestion.options.length}`,
+      );
+    } else if (stopReason && stopReason !== 'waiting_user') {
       // 停止时读最终草稿：reply 里的「已完成 / 还剩」必须与库里一致。
       let finalDraft = draft;
       try {
@@ -1511,7 +1650,8 @@ export class IngredientDraftAgentService {
     }
 
     // 查库零命中时兜一句：工具调用成功不代表找到数据，回复必须明确说「没找到」。
-    if (missedSearchKeywords.length > 0) {
+    // 等用户回答时不追加：问题后面不该跟一句「没找到」，那是下一轮的事。
+    if (missedSearchKeywords.length > 0 && stopReason !== 'waiting_user') {
       reply = appendMissedSearchNotice(reply, missedSearchKeywords);
     }
 
@@ -1531,6 +1671,7 @@ export class IngredientDraftAgentService {
       transcript,
       mode,
       stopReason,
+      pendingQuestion,
     };
   }
 

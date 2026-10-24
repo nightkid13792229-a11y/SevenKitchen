@@ -45,6 +45,17 @@
       >
         <div class="agent-task-status__headline">{{ taskHeadline }}</div>
         <div class="agent-task-status__hint">{{ taskHint }}</div>
+        <el-button
+          v-if="isLimitReached"
+          class="agent-task-status__continue"
+          size="small"
+          type="primary"
+          plain
+          :loading="sending"
+          @click="continueRun"
+        >
+          继续本轮
+        </el-button>
       </div>
 
       <div class="agent-conversation-shell">
@@ -133,7 +144,7 @@
       </section>
 
       <el-alert
-        v-if="session?.lastError"
+        v-if="session?.lastError && !isLimitReached"
         class="agent-error"
         type="error"
         :closable="false"
@@ -369,6 +380,11 @@ const modeTagType = computed(() =>
 )
 
 const waiting = computed(() => session.value?.status === 'WAITING_USER')
+const isLimitReached = computed(
+  () =>
+    session.value?.status === 'FAILED' &&
+    (session.value?.lastError ?? '').includes('超过运行上限')
+)
 
 interface AgentQuestion {
   question: string
@@ -443,7 +459,7 @@ const taskHeadline = computed(() => {
     case 'WAITING_USER': return 'AI 在等你回答'
     case 'COMPLETED': return '本轮已完成'
     case 'STOPPED': return '已停止'
-    case 'FAILED': return '运行失败'
+    case 'FAILED': return isLimitReached.value ? '本轮达到上限' : '运行失败'
     case 'INTERRUPTED': return '已中断'
     default: return '尚未开始'
   }
@@ -464,7 +480,9 @@ const taskHint = computed(() => {
     case 'STOPPED':
       return '输入新的要求可以重新开始。'
     case 'FAILED':
-      return session.value?.lastError || '上次运行失败；可以再试一次。'
+      return isLimitReached.value
+        ? '草稿已保存；点“继续本轮”或直接输入，会获得新的 30 次预算。'
+        : session.value?.lastError || '上次运行失败；可以再试一次。'
     case 'INTERRUPTED':
       return '上次运行被中断；输入新的要求可以重新开始。'
     default:
@@ -508,10 +526,18 @@ const STATUS_TAG_TYPES: Record<
 }
 
 const statusLabel = computed(() =>
-  session.value ? STATUS_LABELS[session.value.status] : '未开始'
+  isLimitReached.value
+    ? '达到上限'
+    : session.value
+      ? STATUS_LABELS[session.value.status]
+      : '未开始'
 )
 const statusTagType = computed(() =>
-  session.value ? STATUS_TAG_TYPES[session.value.status] : 'info'
+  isLimitReached.value
+    ? 'warning'
+    : session.value
+      ? STATUS_TAG_TYPES[session.value.status]
+      : 'info'
 )
 
 const placeholder = computed(() => {
@@ -519,6 +545,7 @@ const placeholder = computed(() => {
   if (waiting.value) return '回答 AI 的问题，或补充你的要求…'
   if (session.value?.status === 'COMPLETED') return '继续调整，或输入新的要求…'
   if (session.value?.status === 'STOPPED') return '已停止；输入新的要求可以重新开始…'
+  if (isLimitReached.value) return '本轮达到上限；输入新的要求可以继续…'
   if (session.value?.status === 'FAILED') return '上次运行失败了；可以再试一次…'
   return '例如：用鸭腿肉和南瓜设计一份 2kg 的成犬主食，低脂，不要内脏…'
 })
@@ -661,7 +688,7 @@ async function send() {
   hasNewBelow.value = false
   sending.value = true
   try {
-    if (session.value && waiting.value) {
+    if (session.value && (waiting.value || isLimitReached.value)) {
       await recipeDesignerApi.answerAgentRun(session.value.id, text)
     } else {
       await recipeDesignerApi.startAgentRun(props.draftId, text)
@@ -675,6 +702,15 @@ async function send() {
   } finally {
     sending.value = false
   }
+}
+
+function continueRun() {
+  if (!isLimitReached.value || sending.value || running.value) return
+  if (!input.value.trim()) {
+    input.value =
+      '继续上一轮未完成的工作：先补完剩余营养缺口，再写文案和制作步骤，check_ready 后交付。'
+  }
+  void send()
 }
 
 async function stopRun() {
@@ -861,6 +897,10 @@ onBeforeUnmount(stopPolling)
   font-size: 12px;
   line-height: 1.5;
   color: #606266;
+}
+
+.agent-task-status__continue {
+  margin-top: 6px;
 }
 
 .agent-task-status--running {

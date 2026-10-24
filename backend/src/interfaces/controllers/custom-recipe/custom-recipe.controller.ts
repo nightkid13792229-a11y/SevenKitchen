@@ -600,6 +600,11 @@ export class CustomRecipeController {
         deliveredAt: batch.deliveredAt,
         confirmedAt: batch.confirmedAt,
         /**
+         * 这只狗（2026-10-24）：交付页要拿它预选 DIY / 成品下单，
+         * 不能让顾客进去再选一次、更不能选错。
+         */
+        dogId: order.dogId ?? null,
+        /**
          * 批次级交付物 = 各份的**并集**（去重、保持出现顺序）。
          *
          * 每份自己还有 `items[].itemCodes` —— 前端要判断"这一份有没有采购单"
@@ -643,6 +648,8 @@ export class CustomRecipeController {
       version: delivery.version,
       deliveredAt: delivery.deliveredAt,
       confirmedAt: delivery.confirmedAt,
+      /** 这只狗（2026-10-24）：交付页预选 DIY / 成品下单用 */
+      dogId: order.dogId ?? null,
       itemCodes: Array.isArray(delivery.items) ? delivery.items : [],
       /** 内容快照：前端照着渲染，不做任何加工 */
       content: delivery.contentSnapshot,

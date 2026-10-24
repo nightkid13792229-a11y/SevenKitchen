@@ -458,4 +458,103 @@ describe('RecipeDesignerAgentAdapter read', () => {
     expect(snapshot.nutritionSummary?.moisturePercent).toBeCloseTo(61.3447, 3);
     expect(snapshot.nutritionSummary?.fatWetPercent).toBeNull();
   });
+
+  it('searchIngredients 只收已验证档案，并按七类过滤', async () => {
+    const service = {
+      listIngredientOptions: jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'i1',
+            name: '香菇',
+            type: 'FOOD',
+            defaultNutritionFoodId: 'nf1',
+            nutritionProfiles: [
+              {
+                nutritionFoodId: 'nf1',
+                name: '香菇',
+                category: 'OTHER',
+                status: 'VERIFIED',
+                isPrimary: true,
+              },
+            ],
+          },
+          {
+            id: 'i2',
+            name: '坏档案',
+            type: 'FOOD',
+            defaultNutritionFoodId: 'nf2',
+            nutritionProfiles: [
+              {
+                nutritionFoodId: 'nf2',
+                name: '坏档案',
+                category: 'OTHER',
+                status: 'PENDING',
+                isPrimary: true,
+              },
+            ],
+          },
+        ],
+      }),
+    };
+    const prisma = {
+      ingredient: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'i1', properties: { cfct_class: '菌藻类' } },
+          { id: 'i2', properties: { cfct_class: '菌藻类' } },
+        ]),
+      },
+    };
+    const adapter = createAdapter(service, prisma);
+
+    const result = await adapter.searchIngredients({
+      category: 'MUSHROOM',
+      limit: 10,
+    });
+
+    expect(result.map((c) => c.ingredientId)).toEqual(['i1']);
+    expect(result[0].cfctClass).toBe('菌藻类');
+  });
+
+  it('getIngredient 找不到返回 null，找到时带价格/过敏原', async () => {
+    const prisma = {
+      nutritionFood: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce({
+            id: 'nf1',
+            name: '鸭腿肉',
+            displayNameZh: '鸭腿肉',
+            status: 'VERIFIED',
+            category: 'MEAT',
+            nutritionData: { macros: { crudeProtein: 18, crudeFat: 6 } },
+            mappings: [
+              {
+                ingredientId: 'i1',
+                isPrimary: true,
+                ingredient: {
+                  id: 'i1',
+                  name: '鸭腿肉',
+                  type: 'FOOD',
+                  properties: { cfct_class: '禽肉类及制品' },
+                  currentPricePerPurchaseUnit: 30,
+                  purchaseUnit: 'kg',
+                  allergenTags: [{ allergenTag: { name: '鸭肉' } }],
+                },
+              },
+            ],
+          }),
+      },
+    };
+    const adapter = createAdapter({}, prisma);
+
+    expect(
+      await adapter.getIngredient({ nutritionFoodId: 'missing' }),
+    ).toBeNull();
+    const detail = await adapter.getIngredient({ nutritionFoodId: 'nf1' });
+
+    expect(detail?.category).toBe('PROTEIN');
+    expect(detail?.allergenNames).toEqual(['鸭肉']);
+    expect(detail?.pricePerPurchaseUnit).toBe(30);
+  });
 });

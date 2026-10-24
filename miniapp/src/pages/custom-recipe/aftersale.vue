@@ -318,6 +318,8 @@ const list = ref<AftersaleItem[]>([]);
 const items = ref<AdjustItem[]>([]);
 const drafts = reactive<Record<string, AdjustDraft>>({});
 const activeKey = ref('');
+/** 进入页面时按链接里的 recipeId 激活过一次；之后 reload 保留顾客当前 Tab */
+const appliedEntryKey = ref('');
 const expandedIds = ref<string[]>([]);
 
 const activeItem = computed(
@@ -450,16 +452,20 @@ function buildItems(
   }
 
   /**
-   * 从某份食谱卡进入：默认就是那一份。
+   * 从某份食谱卡进入：**第一次加载必须默认就是那一份**。
+   * 之后提交/刷新时保留顾客当前 Tab，不把他切回入口那份。
    * 从消息/订单列表/客服进入（没有 recipeId）：默认第一份。
-   * 这条规则在“可提交”状态下尤其重要，不能让顾客自己再找。
    */
   const entry = next.find(
     (item) => recipeId.value && item.recipeId === recipeId.value,
   );
   const current = next.find((item) => item.key === activeKey.value);
-  activeKey.value =
-    current?.key || entry?.key || next[0]?.key || '';
+  if (entry && appliedEntryKey.value !== entry.key) {
+    activeKey.value = entry.key;
+    appliedEntryKey.value = entry.key;
+  } else {
+    activeKey.value = current?.key || entry?.key || next[0]?.key || '';
+  }
 }
 
 async function load() {

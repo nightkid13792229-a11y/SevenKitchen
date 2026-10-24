@@ -72,7 +72,7 @@
 
 `AgentDraftSnapshot` 加两个可选字段；`AgentIngredientDetail` 加 price 字段。更新 `fake-recipe-agent-port.ts` 的 `fakeDraftSnapshot` / `ingredientDetail` 默认值（加 `nutritionSummary: { fatWetPercent: 12, moisturePercent: 60 }`、`animalSpecies: ['鸭']`、price 字段）。读工具测试不应受影响。
 
-- [ ] **Step 2: 建适配器骨架 + 失败的测试**
+- [ ] **Step 2: 建适配器骨架 + 冒烟测试**
 
 ```ts
 // backend/tests/application/recipe-designer/agent/recipe-designer-agent.adapter.read.spec.ts
@@ -83,26 +83,15 @@ function createAdapter(service: any, prisma: any = {}) {
 }
 
 describe('RecipeDesignerAgentAdapter read', () => {
-  it('getDraft 把草稿映射成 AgentDraftSnapshot', async () => {
-    const service = {
-      getDraft: jest.fn().mockResolvedValue(serviceDraft()),
-      getDraftProductionSteps: jest.fn().mockResolvedValue({ draftId: 'draft-1', productionSteps: [] }),
-    };
-    const prisma = {
-      recipeSeries: { findUnique: jest.fn().mockResolvedValue({ name: '鸭肉南瓜餐', coverTitle: '鲜鸭南瓜', sellingPoint: '鲜鸭配南瓜', targetHealthTags: ['低脂'] }) },
-    };
-    const adapter = createAdapter(service, prisma);
-    const draft = await adapter.getDraft('draft-1');
-    expect(draft.copy.coverTitle).toBe('鲜鸭南瓜');
-    expect(draft.items.find((i) => i.name === '鸭胗')?.category).toBe('ORGAN');
-    expect(draft.items.find((i) => i.name === '南瓜')?.category).toBe('VEGETABLE');
-    expect(draft.totalWeightG).toBe(900);
-    expect(draft.items[0].ratioPercent).toBe(50);
+  it('适配器能构造，四个读方法都存在', () => {
+    const adapter = createAdapter({}, {});
+    expect(typeof adapter.getDraft).toBe('function');
+    expect(typeof adapter.searchIngredients).toBe('function');
+    expect(typeof adapter.getIngredient).toBe('function');
+    expect(typeof adapter.getCatalogUsage).toBe('function');
   });
 });
 ```
-
-`serviceDraft()` fixture（放 spec 文件顶部）：7 条原料，`contentRevision: 4`、`assessmentContentRevision: 4`、`totalWeightG: 900`；每条含 `ingredient: { id, name, type, properties: { cfct_class } }`、`nutritionFood: { id, name, displayNameZh, category, status }`；一条 `calculatedNutrition`（macros.moisture / macros.crudeFat 总克数）；`complianceStatus` 数组（3 条：达标/不足/缺数据）；`productionStepsJson: []`；`targetHealthTags: ['低脂']`。
 
 - [ ] **Step 3: 实现骨架**
 
@@ -111,7 +100,7 @@ describe('RecipeDesignerAgentAdapter read', () => {
 - [ ] **Step 4: 跑测试，确认失败**
 
 Run: `cd backend && npx jest tests/application/recipe-designer/agent/recipe-designer-agent.adapter.read.spec.ts --runInBand`
-Expected: FAIL（`getDraft` 返回空快照，断言不通过）。
+Expected: PASS（1 个冒烟用例）。
 
 - [ ] **Step 5: 提交**
 
@@ -143,7 +132,26 @@ git commit --only <the 4 exact files> -m "feat(recipe-agent): scaffold designer 
 
 - [ ] **Step 1: 写测试（在同一个 spec 追加）**
 
+先在 spec 文件顶部加 `serviceDraft()` fixture：7 条原料，`contentRevision: 4`、`assessmentContentRevision: 4`、`totalWeightG: 900`；每条含 `ingredient: { id, name, type, properties: { cfct_class } }`、`nutritionFood: { id, name, displayNameZh, category, status }`；一条 `calculatedNutrition`（macros.moisture / macros.crudeFat 总克数）；`complianceStatus` 数组（3 条：达标/不足/缺数据）；`productionStepsJson: []`；`targetHealthTags: ['低脂']`。
+
 ```ts
+it('getDraft 把草稿映射成 AgentDraftSnapshot', async () => {
+  const service = {
+    getDraft: jest.fn().mockResolvedValue(serviceDraft()),
+    getDraftProductionSteps: jest.fn().mockResolvedValue({ draftId: 'draft-1', productionSteps: [] }),
+  };
+  const prisma = {
+    recipeSeries: { findUnique: jest.fn().mockResolvedValue({ name: '鸭肉南瓜餐', coverTitle: '鲜鸭南瓜', sellingPoint: '鲜鸭配南瓜', targetHealthTags: ['低脂'] }) },
+  };
+  const adapter = createAdapter(service, prisma);
+  const draft = await adapter.getDraft('draft-1');
+  expect(draft.copy.coverTitle).toBe('鲜鸭南瓜');
+  expect(draft.items.find((i) => i.name === '鸭胗')?.category).toBe('ORGAN');
+  expect(draft.items.find((i) => i.name === '南瓜')?.category).toBe('VEGETABLE');
+  expect(draft.totalWeightG).toBe(900);
+  expect(draft.items[0].ratioPercent).toBe(50);
+});
+
 it('评估版本不一致时 lastAssessment 为 null', async () => {
   const service = { getDraft: jest.fn().mockResolvedValue({ ...serviceDraft(), contentRevision: 5 }), getDraftProductionSteps: jest.fn().mockResolvedValue({ draftId: 'draft-1', productionSteps: [] }) };
   const adapter = createAdapter(service, { recipeSeries: { findUnique: jest.fn().mockResolvedValue(null) } });
@@ -172,7 +180,7 @@ Expected: FAIL（映射未实现）。
 - [ ] **Step 4: 跑测试，确认通过**
 
 Run: `cd backend && npx jest tests/application/recipe-designer/agent/recipe-designer-agent.adapter.read.spec.ts --runInBand`
-Expected: PASS（3 个用例）。
+Expected: PASS（4 个用例：1 个冒烟 + 3 个 getDraft）。
 
 - [ ] **Step 5: 提交**
 
@@ -252,7 +260,7 @@ Expected: FAIL（未实现）。
 - [ ] **Step 4: 跑测试，确认通过**
 
 Run: 同上
-Expected: PASS（5 个用例）。
+Expected: PASS（6 个用例）。
 
 - [ ] **Step 5: 提交**
 
@@ -313,7 +321,7 @@ Expected: FAIL（未实现）。
 - [ ] **Step 4: 跑测试，确认通过**
 
 Run: 同上
-Expected: PASS（6 个用例）。
+Expected: PASS（7 个用例）。
 
 - [ ] **Step 5: 提交**
 

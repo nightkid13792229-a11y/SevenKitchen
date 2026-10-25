@@ -232,6 +232,7 @@ export function matchMethodLabel(method: string): string {
 const TOOL_LABELS: Record<string, string> = {
   searchNames: '查名字',
   summarizeNames: '汇总名字',
+  summarizeByKeyword: '按关键词汇总',
   getRecord: '读来源记录',
   writeNutrition: '写营养',
   writeIngredient: '改原料卡',
@@ -668,7 +669,8 @@ function summarize(name: string, args: AnyArgs): string {
   switch (name) {
     case 'searchNames':
       return summarizeSearch(args)
-    case 'summarizeNames': {
+    case 'summarizeNames':
+    case 'summarizeByKeyword': {
       const names = Array.isArray(args.names) ? args.names.length : 0
       return oneLine(`${names} 条名字`)
     }

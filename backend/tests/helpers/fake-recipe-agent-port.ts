@@ -1,8 +1,8 @@
 /**
  * 内存版 `RecipeAgentDraftPort`（P0a Task 2）。
  *
- * 只用于单元测试：不连数据库、不调模型。默认草稿是一份七类齐全的鸭肉南瓜餐
- * （7 种原料、900g、内容版本 4、3 步制作步骤）；默认评估 34/34 全部达标，
+ * 只用于单元测试：不连数据库、不调模型。默认草稿是一份八类基础齐全的鸭肉南瓜餐
+ * （8 种原料、940g、内容版本 4、3 步制作步骤）；默认评估 34/34 全部达标，
  * 三条示例指标的余量分别为 32% / 25% / 21%。
  *
  * `getDraft` 的 `lastAssessment` 由 `createFakeRecipeAgentPort` 的 `assessment`
@@ -21,7 +21,7 @@ import type {
 import type { RecipeAgentDraftPort } from 'src/application/recipe-designer/agent/recipe-agent.port';
 import { classifyFoodCategory } from 'src/domain/recipe-designer/food-category-map';
 
-/** 七类必需类别各一条的默认草稿原料，总重 900g。 */
+/** 八类基础类别各一条的默认草稿原料，总重 940g。 */
 const DEFAULT_ITEMS: readonly AgentDraftItem[] = [
   {
     id: 'item-1',
@@ -114,6 +114,19 @@ const DEFAULT_ITEMS: readonly AgentDraftItem[] = [
     preparationMethod: '直接拌入',
     preparationNote: '出锅后放凉至 40°C 以下再加',
   },
+  {
+    id: 'item-8',
+    ingredientId: 'ing-8',
+    nutritionFoodId: 'nf-8',
+    name: '三文鱼',
+    cfctClass: '水产类',
+    nutritionCategory: 'SEAFOOD',
+    category: 'AQUATIC',
+    weightG: 40,
+    ratioPercent: 4.26,
+    preparationMethod: '去刺切丁',
+    preparationNote: null,
+  },
 ];
 
 /** 默认原料库候选：两条菌藻类，均来自已验证的营养档案。 */
@@ -195,7 +208,7 @@ export interface FakeRecipeAgentPortOverrides {
   catalogUsage?: AgentCatalogUsage;
 }
 
-/** 默认草稿：七类齐全、900g、内容版本 4、文案与步骤都填好。 */
+/** 默认草稿：八类基础齐全、940g、内容版本 4、文案与步骤都填好。 */
 export function fakeDraftSnapshot(
   overrides: Partial<AgentDraftSnapshot> = {},
 ): AgentDraftSnapshot {
@@ -208,7 +221,7 @@ export function fakeDraftSnapshot(
     name: '鸭肉南瓜成犬餐',
     scenario: '成犬 110ME',
     contentRevision: 4,
-    totalWeightG: 900,
+    totalWeightG: 940,
     items: DEFAULT_ITEMS.map((item) => ({ ...item })),
     copy: {
       coverTitle: '鲜鸭南瓜餐',

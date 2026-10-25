@@ -79,7 +79,7 @@ export class RecipeAgentApprovalService {
       );
     }
 
-    // 缺类确认只存规范化后的七类；达标例外的 detail 原样存。
+    // 缺类确认只存规范化后的基础类别；达标例外的 detail 原样存。
     const detail =
       input.type === 'CATEGORY_OMISSION'
         ? this.normalizeOmissionDetail(input.detail)
@@ -196,7 +196,7 @@ export class RecipeAgentApprovalService {
       const category = typeof value === 'string' ? value.trim() : '';
       if (!category || !isRequiredFoodCategory(category)) {
         throw new BadRequestException(
-          '缺类确认的 categories 只能是七类食材之一',
+          '缺类确认的 categories 只能是基础类别之一',
         );
       }
       picked.add(category);

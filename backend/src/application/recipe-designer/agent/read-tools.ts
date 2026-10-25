@@ -55,6 +55,7 @@ type RawToolArgs = Record<string, unknown>;
 const CATEGORY_LABELS: Record<FoodCategory, string> = {
   PROTEIN: '蛋白',
   ORGAN: '内脏',
+  AQUATIC: '水产',
   CARB: '碳水',
   VEGETABLE: '蔬菜',
   MUSHROOM: '菌藻',

@@ -56,12 +56,26 @@ describe('tool registry', () => {
     );
   });
 
-  it('check_coverage 描述说明 10 类清单不是门禁', () => {
+  it('check_coverage 描述说明 11 类清单不是门禁', () => {
     const definition = AGENT_TOOL_DEFINITIONS.find(
       (tool) => tool.name === 'check_coverage',
     );
     expect(definition?.description).toBe(
-      '检查 10 类选料清单（基础 7 + 建议 3）；缺类只提醒，不是门禁。',
+      '检查 11 类选料清单（基础 8 + 建议 3）；缺类只提醒，不是门禁。',
+    );
+  });
+
+  it('search_ingredients 的分类枚举包含 AQUATIC', () => {
+    const definition = AGENT_TOOL_DEFINITIONS.find(
+      (tool) => tool.name === 'search_ingredients',
+    );
+    const category = (
+      definition?.parameters as {
+        properties?: { category?: { enum?: string[] } };
+      }
+    )?.properties?.category;
+    expect(category?.enum).toEqual(
+      expect.arrayContaining(['PROTEIN', 'ORGAN', 'AQUATIC']),
     );
   });
 

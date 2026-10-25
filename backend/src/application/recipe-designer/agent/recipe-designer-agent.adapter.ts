@@ -734,10 +734,10 @@ interface AnimalSpeciesScan {
 }
 
 /**
- * 扫描动物物种：只扫 `PROTEIN` / `ORGAN` / `UNCLASSIFIED` 项。
+ * 扫描动物物种：只扫 `PROTEIN` / `ORGAN` / `AQUATIC` / `UNCLASSIFIED` 项。
  *
  * - 名称命中词表 → 记物种；`UNCLASSIFIED` 也记，避免漏掉未分类的鸡肉。
- * - `PROTEIN` / `ORGAN` 命中不到 → `unknownAnimalProtein`，标签 fail closed。
+ * - `PROTEIN` / `ORGAN` / `AQUATIC` 命中不到 → `unknownAnimalProtein`，标签 fail closed。
  * - 果蔬菌（FRUIT / MUSHROOM / VEGETABLE 等）根本不进扫描。
  */
 const collectAnimalSpecies = (
@@ -750,6 +750,7 @@ const collectAnimalSpecies = (
     if (
       item.category !== 'PROTEIN' &&
       item.category !== 'ORGAN' &&
+      item.category !== 'AQUATIC' &&
       item.category !== 'UNCLASSIFIED'
     ) {
       continue;
@@ -769,7 +770,7 @@ const collectAnimalSpecies = (
   return { species, unknownAnimalProtein };
 };
 
-/** 一条食谱明细的展示名与七类分类；当前草稿与已发布食谱共用同一口径。 */
+/** 一条食谱明细的展示名与分类；当前草稿与已发布食谱共用同一口径。 */
 interface CatalogItemIdentity {
   name: string;
   category: FoodCategory;
@@ -827,7 +828,7 @@ const uniqueValues = <T>(values: readonly T[]): T[] => {
   return result;
 };
 
-/** 主蛋白 = 克数最大的 `PROTEIN` 项；没有则 null（并列取先出现的）。 */
+/** 主蛋白 = 克数最大的 `PROTEIN` / `AQUATIC` 项；没有则 null（并列取先出现的）。 */
 const findMainProteinName = (
   items: readonly {
     identity: CatalogItemIdentity;
@@ -837,7 +838,11 @@ const findMainProteinName = (
   let mainProtein: { name: string; weightG: number } | null = null;
 
   for (const item of items) {
-    if (item.identity.category !== 'PROTEIN' || !item.identity.name) {
+    if (
+      (item.identity.category !== 'PROTEIN' &&
+        item.identity.category !== 'AQUATIC') ||
+      !item.identity.name
+    ) {
       continue;
     }
     const weightG = toFiniteNumber(item.exampleWeight) ?? 0;
@@ -1006,7 +1011,7 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
       ? (await this.service.getDraft(this.draftId, this.access))
           .fediafDogScenario
       : undefined;
-    // 七类分类不是数据库字段，只能在本地过滤；必须先翻完整个候选集，
+    // 分类不是数据库字段，只能在本地过滤；必须先翻完整个候选集，
     // 否则某一类可能整类落在第 2 页之后（食材库 FOOD 约 118 条）。
     const options: IngredientOption[] = [];
     for (let page = 1; page <= MAX_SEARCH_PAGES; page += 1) {

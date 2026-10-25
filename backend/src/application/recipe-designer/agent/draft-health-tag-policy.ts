@@ -19,7 +19,7 @@ export interface DraftHealthTagPolicyInput {
   /** 菜品里出现的动物物种（可能含重复/大小写差异）。 */
   animalSpecies: string[];
   /**
-   * 是否有 PROTEIN / ORGAN 项识别不出物种；缺省按 false（兼容旧调用）。
+   * 是否有 PROTEIN / ORGAN / AQUATIC 项识别不出物种；缺省按 false（兼容旧调用）。
    * true 时「单一动物蛋白」必须 fail closed。
    */
   unknownAnimalProtein?: boolean;

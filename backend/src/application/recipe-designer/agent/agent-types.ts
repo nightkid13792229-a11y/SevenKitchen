@@ -92,7 +92,7 @@ export interface AgentDraftSnapshot {
   /** 菜品里出现的动物物种（去重）；只给健康标签策略用，读工具不展示。 */
   animalSpecies?: string[];
   /**
-   * 是否有 PROTEIN / ORGAN 项识别不出物种；只给健康标签策略用。
+   * 是否有 PROTEIN / ORGAN / AQUATIC 项识别不出物种；只给健康标签策略用。
    * true 时「单一动物蛋白」必须 fail closed。
    */
   unknownAnimalProtein?: boolean;
@@ -171,7 +171,7 @@ export interface AgentIngredientNutritionBasis {
 export interface AgentIngredientDetail extends AgentIngredientCandidate {
   /** 基准单位：G=克，ML=毫升，PCS=个/件（粒、片）。数量必须按它填。 */
   baseUnit: 'G' | 'ML' | 'PCS';
-  /** 七类判定结果；搜索时用来过滤，详情里直接给模型看。 */
+  /** 分类判定结果；搜索时用来过滤，详情里直接给模型看。 */
   category: FoodCategory;
   /**
    * 营养摘要。食物 = 宏量（`moisture`/`crudeProtein`/...）；

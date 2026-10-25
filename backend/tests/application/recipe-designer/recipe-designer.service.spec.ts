@@ -269,6 +269,40 @@ describe('RecipeDesignerService', () => {
     };
   }
 
+  /** 给展示顺序测试造一条能按 CFCT / 原料类型判类的草稿明细。 */
+  function displayItem(
+    id: string,
+    name: string,
+    sortOrder: number,
+    options: {
+      cfctClass?: string | null;
+      nutritionCategory?: string | null;
+      type?: 'FOOD' | 'SUPPLEMENT';
+    } = {},
+  ) {
+    const base = item();
+    return item({
+      id,
+      nutritionFoodId: `food-${id}`,
+      sortOrder,
+      ingredient: {
+        id: `ingredient-${id}`,
+        name,
+        type: options.type ?? 'FOOD',
+        properties: options.cfctClass
+          ? { cfct_class: options.cfctClass }
+          : {},
+      },
+      nutritionFood: {
+        ...base.nutritionFood,
+        id: `food-${id}`,
+        name,
+        category: options.nutritionCategory ?? 'OTHER',
+        mappings: [],
+      },
+    });
+  }
+
   function compliantTargets() {
     return [
       {
@@ -1826,6 +1860,141 @@ describe('RecipeDesignerService', () => {
       { id: 'a6409a79-402b-41d1-bfe1-031a67da0876', name: '去油' },
       { id: 'method-2', name: '打碎' },
       { id: 'method-3', name: '去骨' },
+    ]);
+  });
+
+  it('returns draft items in canonical category display order, not AI add order', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        id: 'design-order',
+        createdBy: 'staff-1',
+        status: 'DRAFT',
+        items: [
+          displayItem('supplement', '钙粉', 0, {
+            type: 'SUPPLEMENT',
+            nutritionCategory: 'SUPPLEMENT',
+          }),
+          displayItem('nuts', '亚麻籽', 1, {
+            cfctClass: '坚果种子类',
+          }),
+          displayItem('fruit', '苹果', 2, {
+            cfctClass: '水果类及制品',
+          }),
+          displayItem('mushroom', '香菇', 3, {
+            cfctClass: '菌藻类',
+          }),
+          displayItem('vegetable', '南瓜', 4, {
+            cfctClass: '蔬菜类及制品',
+          }),
+          displayItem('legume', '鹰嘴豆', 5, {
+            cfctClass: '干豆类及制品',
+          }),
+          displayItem('carb', '燕麦', 6, {
+            cfctClass: '谷类及制品',
+          }),
+          displayItem('dairy', '酸奶', 7, {
+            cfctClass: '乳类及制品',
+          }),
+          displayItem('egg', '鸡蛋', 8, {
+            cfctClass: '蛋类及制品',
+          }),
+          displayItem('aquatic', '三文鱼', 9, {
+            cfctClass: '水产类',
+          }),
+          displayItem('organ', '鸭心', 10, {
+            cfctClass: '禽肉类及制品',
+          }),
+          displayItem('protein-late', '鸭腿肉', 12, {
+            cfctClass: '禽肉类及制品',
+          }),
+          displayItem('protein-early', '鸡胸肉', 2, {
+            cfctClass: '禽肉类及制品',
+          }),
+          displayItem('oil', '鱼油', 13, {
+            cfctClass: '油脂类',
+          }),
+          displayItem('seasoning', '海盐', 14, {
+            cfctClass: '调味品类',
+          }),
+          displayItem('unclassified', '神秘粉', 15),
+        ],
+      }),
+    );
+
+    const result = await (service as any).getDraft('design-order', 'staff-1');
+
+    expect(result.items.map((row: { id: string }) => row.id)).toEqual([
+      'protein-early',
+      'protein-late',
+      'organ',
+      'aquatic',
+      'egg',
+      'dairy',
+      'carb',
+      'legume',
+      'vegetable',
+      'mushroom',
+      'fruit',
+      'nuts',
+      'oil',
+      'seasoning',
+      'supplement',
+      'unclassified',
+    ]);
+  });
+
+  it('puts fruit after vegetable/mushroom and before nuts regardless of sortOrder', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        id: 'design-fruit-order',
+        createdBy: 'staff-1',
+        items: [
+          displayItem('nuts', '亚麻籽', 0, { cfctClass: '坚果种子类' }),
+          displayItem('fruit', '苹果', 1, { cfctClass: '水果类及制品' }),
+          displayItem('mushroom', '香菇', 2, { cfctClass: '菌藻类' }),
+          displayItem('vegetable', '南瓜', 3, { cfctClass: '蔬菜类及制品' }),
+        ],
+      }),
+    );
+
+    const result = await (service as any).getDraft(
+      'design-fruit-order',
+      'staff-1',
+    );
+
+    expect(result.items.map((row: { id: string }) => row.id)).toEqual([
+      'vegetable',
+      'mushroom',
+      'fruit',
+      'nuts',
+    ]);
+  });
+
+  it('puts aquatic after organ and supplements last', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        id: 'design-aquatic-order',
+        createdBy: 'staff-1',
+        items: [
+          displayItem('supplement', '钙粉', 0, {
+            type: 'SUPPLEMENT',
+            nutritionCategory: 'SUPPLEMENT',
+          }),
+          displayItem('aquatic', '三文鱼', 1, { cfctClass: '水产类' }),
+          displayItem('organ', '鸭心', 2, { cfctClass: '禽肉类及制品' }),
+        ],
+      }),
+    );
+
+    const result = await (service as any).getDraft(
+      'design-aquatic-order',
+      'staff-1',
+    );
+
+    expect(result.items.map((row: { id: string }) => row.id)).toEqual([
+      'organ',
+      'aquatic',
+      'supplement',
     ]);
   });
 

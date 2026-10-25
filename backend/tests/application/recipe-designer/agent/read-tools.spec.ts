@@ -30,6 +30,21 @@ describe('read tools', () => {
     expect(result.summary).toContain('没有找到');
   });
 
+  it('search_ingredients 支持按 nutrientKey 搜营养素', async () => {
+    const port = createFakeRecipeAgentPort({ searchResults: [] });
+    const tools = createReadTools(port, 'draft-1');
+    const result = await tools.search_ingredients({
+      nutrientKey: 'zinc',
+      type: 'FOOD',
+    });
+    expect(port.searchIngredients).toHaveBeenCalledWith({
+      nutrientKey: 'zinc',
+      type: 'FOOD',
+      limit: 20,
+    });
+    expect(result.ok).toBe(true);
+  });
+
   it('search_ingredients 拒绝空条件', async () => {
     const tools = createReadTools(createFakeRecipeAgentPort(), 'draft-1');
     const result = await tools.search_ingredients({});

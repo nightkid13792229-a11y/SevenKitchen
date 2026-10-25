@@ -33,12 +33,12 @@ export interface AgentAssessmentEntry {
   min: number | null;
   max: number | null;
   marginPercent: number | null;
+  /** 余量更近的一边：LOWER=距下限，UPPER=距上限；无法判断时为 null。 */
+  marginSide?: 'LOWER' | 'UPPER' | null;
   /** 单位：g / mg / IU / μg 等。 */
   unit?: string | null;
   /** 数值口径，如 PER_1000_KCAL；不填时按 view.basis 理解。 */
   basis?: string | null;
-  /** 余量更近的一边：LOWER=距下限，UPPER=距上限；无法判断时为 null。 */
-  marginSide?: 'LOWER' | 'UPPER' | null;
 }
 
 /** 某一份草稿在某一个内容版本上的评估结果。 */
@@ -130,6 +130,17 @@ export interface AgentIngredientKeyNutrients {
 }
 
 /** `search_ingredients` 的候选原料（只含真实、启用、营养档案已验证的原料）。 */
+export interface AgentIngredientNutrientMatch {
+  nutrientKey: string;
+  label: string;
+  amount: number;
+  unit: string;
+  basis: string;
+  basisLabel: string;
+  displayText: string;
+  score: number;
+}
+
 export interface AgentIngredientCandidate {
   ingredientId: string;
   nutritionFoodId: string;
@@ -140,6 +151,8 @@ export interface AgentIngredientCandidate {
   nutritionCategory: string | null;
   verified: boolean;
   keyNutrients?: AgentIngredientKeyNutrients;
+  /** 按营养素搜索时的匹配量；没传 nutrientKey 时为 null。 */
+  nutrientMatch?: AgentIngredientNutrientMatch | null;
 }
 
 /**

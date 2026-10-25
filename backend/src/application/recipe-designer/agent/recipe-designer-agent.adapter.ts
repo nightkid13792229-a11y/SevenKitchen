@@ -997,10 +997,15 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
 
   async searchIngredients(input: {
     search?: string;
+    nutrientKey?: string;
     category?: FoodCategory;
     type?: 'FOOD' | 'SUPPLEMENT';
     limit?: number;
   }): Promise<AgentIngredientCandidate[]> {
+    const scenario = input.nutrientKey
+      ? (await this.service.getDraft(this.draftId, this.access))
+          .fediafDogScenario
+      : undefined;
     // 七类分类不是数据库字段，只能在本地过滤；必须先翻完整个候选集，
     // 否则某一类可能整类落在第 2 页之后（食材库 FOOD 约 118 条）。
     const options: IngredientOption[] = [];
@@ -1008,6 +1013,9 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
       const pageResult = await this.service.listIngredientOptions({
         search: input.search,
         type: input.type,
+        ...(input.nutrientKey
+          ? { nutrientKey: input.nutrientKey, scenario }
+          : {}),
         page,
         pageSize: MAX_SEARCH_LIMIT,
       });
@@ -1056,6 +1064,9 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
         keyNutrients:
           keyNutrientsByFoodId.get(profile.nutritionFoodId) ??
           emptyKeyNutrients(),
+        nutrientMatch:
+          (option as { nutrientMatch?: AgentIngredientCandidate['nutrientMatch'] })
+            .nutrientMatch ?? null,
         category: classifyFoodCategory({
           name: option.name,
           cfctClass,
@@ -1081,6 +1092,7 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
         nutritionCategory: candidate.nutritionCategory,
         verified: candidate.verified,
         keyNutrients: candidate.keyNutrients,
+        nutrientMatch: candidate.nutrientMatch,
       }));
   }
 

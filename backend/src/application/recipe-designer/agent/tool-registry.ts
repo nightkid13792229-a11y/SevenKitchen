@@ -139,11 +139,16 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
   {
     name: 'search_ingredients',
     description:
-      '按关键词、分类或原料类型搜索标准原料库；需要找可用的真实原料时用。',
+      '按关键词、分类、原料类型或营养素搜索标准原料库；需要找可用的真实原料时用。',
     parameters: {
       type: 'object',
       properties: {
         search: { type: 'string', description: '关键词，如「鸭肉」「南瓜」。' },
+        nutrientKey: {
+          type: 'string',
+          description:
+            '按营养素找来源，如 zinc / copper / vitaminE / choline / iodine / vitaminD / vitaminB12；用评估条目里的 key。',
+        },
         category: {
           type: 'string',
           enum: FOOD_CATEGORY_VALUES,
@@ -164,6 +169,7 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
       },
       anyOf: [
         { required: ['search'] },
+        { required: ['nutrientKey'] },
         { required: ['category'] },
         { required: ['type'] },
       ],

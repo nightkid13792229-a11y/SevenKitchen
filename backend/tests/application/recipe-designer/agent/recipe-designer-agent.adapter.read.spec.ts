@@ -1143,6 +1143,71 @@ describe('RecipeDesignerAgentAdapter read', () => {
     });
   });
 
+  it('searchIngredients 按 nutrientKey 搜索时把匹配量带回给模型', async () => {
+    const service = {
+      getDraft: jest.fn().mockResolvedValue({
+        fediafDogScenario: 'ADULT_MER_110',
+      }),
+      listIngredientOptions: jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'i-zinc',
+            name: '牛肝',
+            type: 'FOOD',
+            defaultNutritionFoodId: 'nf-zinc',
+            nutrientMatch: {
+              nutrientKey: 'zinc',
+              label: '锌',
+              amount: 8.2,
+              unit: 'mg',
+              basis: 'PER_100_G',
+              basisLabel: '每100g',
+              displayText: '8.2 mg / 100g',
+              score: 8.2,
+            },
+            nutritionProfiles: [
+              {
+                nutritionFoodId: 'nf-zinc',
+                name: '牛肝',
+                category: 'OTHER',
+                status: 'VERIFIED',
+                isPrimary: true,
+              },
+            ],
+          },
+        ],
+      }),
+    };
+    const prisma = {
+      ingredient: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([{ id: 'i-zinc', properties: { cfct_class: '畜肉类及制品' } }]),
+      },
+      nutritionFood: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const adapter = createAdapter(service, prisma);
+
+    const result = await adapter.searchIngredients({
+      nutrientKey: 'zinc',
+      type: 'FOOD',
+    });
+
+    expect(service.getDraft).toHaveBeenCalled();
+    expect(service.listIngredientOptions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nutrientKey: 'zinc',
+        scenario: 'ADULT_MER_110',
+        type: 'FOOD',
+      }),
+    );
+    expect(result[0].nutrientMatch).toMatchObject({
+      nutrientKey: 'zinc',
+      amount: 8.2,
+      unit: 'mg',
+    });
+  });
+
   it('searchIngredients 翻完所有页，第 3 页的菌类也能找到', async () => {
     // 食材库约 118 条 FOOD：50 + 50 + 18，目标菌类故意放在第 3 页。
     const pageDescriptors = [

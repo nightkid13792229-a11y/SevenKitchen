@@ -7,6 +7,11 @@ import {
 } from '../preparationBasis';
 
 describe('preparationBasis（前端一致性提示）', () => {
+  it('does not flag free-text preprocessing without a weighing basis', () => {
+    expect(isPreparationBasisConsistent('去皮切块', 'COOKED')).toBe(true);
+    expect(preparationBasisMismatchHint('去皮切块', 'COOKED')).toBeNull();
+  });
+
   it('accepts cooked profiles with 熟重 or a cooked-weighing phrase', () => {
     expect(isPreparationBasisConsistent('熟重、打碎', 'COOKED')).toBe(true);
     expect(isPreparationBasisConsistent('煮熟后称重、打碎', 'COOKED')).toBe(true);

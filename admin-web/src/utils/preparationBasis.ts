@@ -75,11 +75,22 @@ export const isPreparationBasisConsistent = (
     COOKED_BASIS_PHRASES.includes(segment),
   );
 
-  if (expected === null) {
-    return (
-      !segments.some((segment) => BASIS_TOKENS.includes(segment)) &&
-      !hasCookedBasisPhrase
+  const hasAnyBasis =
+    segments.some(
+      (segment) =>
+        BASIS_TOKENS.includes(segment) ||
+        COOKED_BASIS_PHRASES.includes(segment) ||
+        segment.endsWith('后称重'),
     );
+
+  if (expected === null) {
+    return !hasAnyBasis;
+  }
+
+  // 「预处理」是自由文本，没写称重口径时不应被当成冲突。
+  // 只有明确写了生重/熟重/干重（或熟制称重短语）才做一致性判断。
+  if (!hasAnyBasis) {
+    return true;
   }
 
   if (segments.includes(expected)) {

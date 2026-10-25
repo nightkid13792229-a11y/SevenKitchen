@@ -2,6 +2,8 @@
   <el-drawer
     v-model="visible"
     :size="'min(480px, 100%)'"
+    :modal="false"
+    :lock-scroll="false"
     :close-on-click-modal="false"
     class="recipe-agent-drawer"
     @open="handleOpen"

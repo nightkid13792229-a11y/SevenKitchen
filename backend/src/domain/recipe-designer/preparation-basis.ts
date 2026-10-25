@@ -152,11 +152,21 @@ export const isPreparationBasisConsistent = (
     COOKED_BASIS_PHRASE_SET.has(segment),
   );
 
-  if (expected === null) {
-    return (
-      !segments.some((segment) => BASIS_TOKEN_SET.has(segment)) &&
-      !hasCookedBasisPhrase
+  const hasAnyBasis =
+    segments.some(
+      (segment) =>
+        BASIS_TOKEN_SET.has(segment) ||
+        COOKED_BASIS_PHRASE_SET.has(segment) ||
+        segment.endsWith('后称重'),
     );
+
+  if (expected === null) {
+    return !hasAnyBasis;
+  }
+
+  // 「预处理」是自由文本，没写称重口径时不应被当成冲突。
+  if (!hasAnyBasis) {
+    return true;
   }
 
   if (segments.includes(expected)) {

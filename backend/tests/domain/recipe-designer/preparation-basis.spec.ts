@@ -94,6 +94,10 @@ describe('preparation basis alignment', () => {
       expect(isPreparationBasisConsistent('煮熟后称重、打碎', 'COOKED')).toBe(true);
     });
 
+    it('accepts free-text preprocessing without a weighing basis', () => {
+      expect(isPreparationBasisConsistent('去皮切块', 'COOKED')).toBe(true);
+    });
+
     it('rejects cooked profiles that say 生重', () => {
       expect(isPreparationBasisConsistent('生重、打碎', 'COOKED')).toBe(false);
     });

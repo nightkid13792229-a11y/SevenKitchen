@@ -141,10 +141,10 @@
             <button
               v-if="order.status === 'PENDING_PAYMENT' && !isCustomPaymentExpired(order)"
               class="action-btn primary"
-              :disabled="payingCustomId === order.orderId"
+              :disabled="Boolean(payingKey)"
               @tap="payCustomFromList(order)"
             >
-              {{ payingCustomId === order.orderId ? '调起支付中' : '继续支付' }}
+              {{ isPaying('custom', order.orderId) ? '调起支付中' : '继续支付' }}
             </button>
             <text
               v-if="order.status === 'PENDING_PAYMENT' && isCustomPaymentExpired(order)"
@@ -181,8 +181,8 @@
         </template>
 
         <!--
-          补剂订单：字段结构与鲜食完全不同，且没有独立详情页，
-          所以把订单号、概要、明细、物流、售后都在卡片里展示全，点卡片不再跳转。
+          补剂订单：字段结构与鲜食不同，卡片里把订单号、概要、明细、物流、售后展示全；
+          点卡片或「查看详情」都会进补剂订单详情页（2026-10-25 注释纠正）。
         -->
         <template v-if="order._orderType === 'supplement'">
           <view class="order-summary">
@@ -303,10 +303,10 @@
               order.status === 'PENDING_PAYMENT'
             "
             class="action-btn primary"
-            :disabled="payingSupplementId === order.id"
+            :disabled="Boolean(payingKey)"
             @tap="paySupplementFromList(order)"
           >
-            {{ payingSupplementId === order.id ? '调起支付中' : '去支付' }}
+            {{ isPaying('supplement', order.id) ? '调起支付中' : '去支付' }}
           </button>
           <button
             v-if="order._orderType === 'supplement'"
@@ -321,10 +321,10 @@
             <button
               v-if="order.status === 'PENDING_PAYMENT' && !isPaymentExpired(order)"
               class="action-btn primary"
-              :disabled="payingOrderId === order.id"
+              :disabled="Boolean(payingKey)"
               @tap="payOrderFromList(order.id)"
             >
-              {{ payingOrderId === order.id ? '调起支付中' : '立即付款' }}
+              {{ isPaying('food', order.id) ? '调起支付中' : '立即付款' }}
             </button>
             <text v-if="isPaymentExpired(order)" class="order-expired-text">
               支付已超时，订单已关闭
@@ -444,7 +444,7 @@ const { ensure: ensureCustomStatusOptions, labelOf: customStatusLabel } =
   useOptionSet(CUSTOM_RECIPE_STATUS_SET);
 
 // DEBUG flag for development logging
-const DEBUG = true;
+const DEBUG = false;
 
 // 补剂订单列表接口有分页（后端每页上限 100）。合并列表要在本地筛选和排序，
 // 所以这里按页拿全；MAX_PAGES 只是防止 total 异常时死循环的兜底。
@@ -545,10 +545,9 @@ function selectType(value: TypeFilter) {
 const allOrders = ref<UnifiedOrder[]>([]);
 const orders = ref<UnifiedOrder[]>([]);
 const viewAllOrders = ref(false); // 是否查看所有订单（从工作台进入时为true）
-const payingOrderId = ref('');
+/** 统一支付锁：同一时间只允许一笔支付，三类按钮一起禁用 */
+const payingKey = ref('');
 const receivingOrderId = ref('');
-const payingSupplementId = ref('');
-const payingCustomId = ref('');
 const nowTick = ref(Date.now());
 let paymentClockTimer: ReturnType<typeof setInterval> | null = null;
 /** 登录态过期（2026-10-24 从定制专属列表迁过来） */
@@ -574,6 +573,20 @@ const CUSTOM_ORDER_MAX_PAGES = 20;
 function isAuthError(error: any): boolean {
   const message = String(error?.message || error || '');
   return message.includes('Authentication required') || message.includes('401');
+}
+
+function isPaying(type: 'food' | 'supplement' | 'custom', id: string): boolean {
+  return payingKey.value === `${type}:${id}`;
+}
+
+function beginPayment(type: 'food' | 'supplement' | 'custom', id: string): boolean {
+  if (payingKey.value) return false;
+  payingKey.value = `${type}:${id}`;
+  return true;
+}
+
+function endPayment(type: 'food' | 'supplement' | 'custom', id: string): void {
+  if (isPaying(type, id)) payingKey.value = '';
 }
 
 function goToLogin() {
@@ -697,6 +710,9 @@ onMounted(async () => {
   loadOrders();
 });
 
+/** onShow 首次不重复请求（onMounted 已经加载过一次） */
+let hasShownOrdersList = false;
+
 onLoad((options: any) => {
   // 获取页面参数，判断是否查看所有订单
   // 如果URL参数中有viewAll=true，则查看所有订单（管理员模式）
@@ -713,9 +729,13 @@ onLoad((options: any) => {
   }
 });
 
-onShow(async () => {
-  // Refresh orders when page becomes visible (e.g., after creating new order)
-  loadOrders();
+onShow(() => {
+  if (!hasShownOrdersList) {
+    hasShownOrdersList = true;
+    return;
+  }
+  // 从下单/支付/退款页返回时刷新
+  void loadOrders();
 });
 
 async function loadOrders() {
@@ -1044,10 +1064,6 @@ function viewOrder(orderId: string) {
 }
 
 /**
- * 补剂没有独立详情页，卡片上已经把订单号、状态、明细、物流、售后、金额展示全了。
- * 所以点补剂卡片不再跳转——跳过去也只能落在一个「不指向这一单」的列表页上。
- */
-/**
  * 定制单卡片的三行文案（2026-10-18）。
  *
  * 标题用**食谱名**（没交付时「设计中的定制食谱」）—— 顾客认的是"给我家狗做的那份"，
@@ -1168,6 +1184,7 @@ function formatAmountText(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
+/** 补剂有独立详情页：卡片和「查看详情」都进同一页（2026-10-25 注释纠正） */
 function viewSupplementDetail(id: string) {
   uni.navigateTo({
     url: `/pages/supplement-order-detail/index?orderId=${encodeURIComponent(id)}`,
@@ -1208,10 +1225,9 @@ function requestWechatPayment(payment: WechatPaymentResult): Promise<void> {
 }
 
 async function payOrderFromList(orderId: string) {
-  if (payingOrderId.value) return;
+  if (!beginPayment('food', orderId)) return;
 
   try {
-    payingOrderId.value = orderId;
     uni.showLoading({ title: '调起支付中...' });
 
     const res = await createWechatPayment(orderId);
@@ -1237,7 +1253,7 @@ async function payOrderFromList(orderId: string) {
       icon: 'none',
     });
   } finally {
-    payingOrderId.value = '';
+    endPayment('food', orderId);
     uni.hideLoading();
   }
 }
@@ -1248,9 +1264,8 @@ async function payOrderFromList(orderId: string) {
  * 这里直接复用那个封装（以及补剂订单页的提示口径），不再另写一套支付。
  */
 async function paySupplementFromList(order: SupplementOrderRow) {
-  if (payingSupplementId.value) return;
+  if (!beginPayment('supplement', order.id)) return;
 
-  payingSupplementId.value = order.id;
   try {
     const outcome = await runSupplementPayment(order.id);
 
@@ -1276,7 +1291,7 @@ async function paySupplementFromList(order: SupplementOrderRow) {
 
     uni.showToast({ title: '支付失败，请重试', icon: 'none' });
   } finally {
-    payingSupplementId.value = '';
+    endPayment('supplement', order.id);
   }
 }
 
@@ -1400,13 +1415,12 @@ function isCustomPaymentExpired(order: UnifiedOrder): boolean {
  * 订单列表原先只给成品/补剂支付按钮，定制待付款只能点进详情再付。
  */
 async function payCustomFromList(order: CustomOrderRow) {
-  if (payingCustomId.value) return;
   if (isCustomPaymentExpired(order)) {
     uni.showToast({ title: '支付已超时，订单已关闭', icon: 'none' });
     await loadOrders();
     return;
   }
-  payingCustomId.value = order.orderId;
+  if (!beginPayment('custom', order.orderId)) return;
   try {
     const outcome = await runCustomRecipePayment(order.orderId);
     if (outcome === 'PAID') {
@@ -1423,7 +1437,7 @@ async function payCustomFromList(order: CustomOrderRow) {
       icon: 'none',
     });
   } finally {
-    payingCustomId.value = '';
+    endPayment('custom', order.orderId);
   }
 }
 

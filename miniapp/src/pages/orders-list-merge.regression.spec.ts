@@ -92,9 +92,11 @@ describe('我的订单合并补剂订单', () => {
     expect(template).toContain('order.status === \'PENDING_PAYMENT\'')
   })
 
-  it('补剂没有详情页，点卡片不跳转；鲜食点击行为不变', () => {
+  it('补剂有详情页：卡片和「查看详情」都跳转；鲜食点击行为不变', () => {
+    expect(source).toContain('function viewSupplementDetail')
+    expect(source).toContain('url: `/pages/supplement-order-detail/index?orderId=')
     expect(source).toContain('function handleOrderTap(order: UnifiedOrder)')
-    expect(source).toContain("if (order._orderType !== 'food') return")
+    expect(source).toContain("_orderType === 'supplement'")
     expect(source).toContain('viewOrder(order.id)')
     expect(source).toContain('url: `/pages/order-detail/index?id=${orderId}`')
   })

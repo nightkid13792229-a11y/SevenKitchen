@@ -1033,6 +1033,21 @@ describe('custom recipe pending payment reminder · 待付款提醒', () => {
     expect(submit).toContain('pageSize: 20')
   });
 
+  it('★ 从健康管理/体重计划返回：刷新门槛字段和过敏报告，不动草稿', () => {
+    const onShowSource =
+      submit.match(/onShow\(\(\) => \{[\s\S]*?\n\}\);/)?.[0] || ''
+    expect(onShowSource).toContain('refreshDogGateAndReports')
+    expect(onShowSource).toContain('refreshHealthSummary')
+    expect(submit).toContain('dogApi.detail')
+    expect(submit).toContain('bcsScoreConfirmed')
+    expect(submit).toContain('activityLevelConfirmed')
+    expect(submit).toContain('mealsPerDayConfirmed')
+    expect(submit).toContain('loadAllergyReports')
+    expect(submit).toContain('loadSelectedPlan')
+    // 慢响应保护
+    expect(submit).toContain("String(formData.value.dogId || '') !== dogId")
+  })
+
   it('只提醒不阻断：提交校验里没有"有待付款单就不许下单"', () => {
     const validationSource =
       submit.match(/function validateCustomRecipeForm\(\)[\s\S]*?\n\}/)?.[0] || ''

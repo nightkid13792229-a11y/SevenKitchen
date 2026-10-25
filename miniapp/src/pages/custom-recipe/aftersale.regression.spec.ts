@@ -77,8 +77,11 @@ describe('食谱调整页', () => {
       read('src/pages/custom-recipe/order-detail.vue'),
     );
     expect(detail).toContain('aftersaleAction');
-    expect(detail).toContain('aftersaleCount > 0 || aftersaleAction?.enabled');
+    expect(detail).toContain('showAftersaleEntry');
+    expect(detail).toContain('aftersaleEntryLabel');
+    expect(detail).toContain('openAftersaleRecipeIds');
     expect(detail).toContain('调整食谱');
     expect(detail).toContain('查看进展');
+    expect(detail).toContain('查看记录');
   });
 });

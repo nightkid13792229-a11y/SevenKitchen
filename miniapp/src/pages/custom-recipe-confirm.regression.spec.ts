@@ -225,6 +225,54 @@ describe('多份购买 · 确认页（2026-10-20）', () => {
   });
 });
 
+describe('确认页 · 支付前可靠性（2026-10-25）', () => {
+  const confirm = read(`${PAGE_DIR}/confirm.vue`);
+
+  it('选项字典没就绪时挡住支付，并给加载/失败/重试', () => {
+    expect(confirm).toContain('optionsReady');
+    expect(confirm).toContain('optionsFailed');
+    expect(confirm).toContain('optionsLoading');
+    expect(confirm).toContain('optionLoadingText');
+    expect(confirm).toContain('retryOptions');
+    expect(confirm).toContain('currentFoodLoading');
+    expect(confirm).toContain('changeReasonFailed');
+    expect(confirm).toContain('canSubmit = computed');
+    expect(confirm).toContain('optionsReady.value');
+    // 摘要不能只显示空白
+    expect(confirm).toContain("'读取中…'");
+    expect(confirm).toContain("'读取失败'");
+  });
+
+  it('首次交付日期失败不挡整页，狗狗详情失败要阻断', () => {
+    expect(confirm).toContain('fetchNextDeliveryDate().catch');
+    expect(confirm).toContain("loadError.value = '狗狗信息读取失败，请重试'");
+    expect(confirm).toContain('resolveDogAvatarSrc');
+    expect(confirm).toContain('dogAvatar');
+    // 狗狗详情失败后不再用通用“狗狗”继续付款
+    expect(confirm).toContain("dogRes?.data?.profile");
+  });
+
+  it('提交幂等键按顾客+狗持久化，创建成功后清掉', () => {
+    expect(confirm).toContain('getOrCreateCustomRecipeSubmitKey');
+    expect(confirm).toContain('clearCustomRecipeSubmitKey');
+    expect(confirm).toContain("clientRequestId.value = ''");
+    // onLoad 不再自己生成新 key
+    expect(confirm).not.toContain('clientRequestId.value = `cr-');
+  });
+
+  it('提交守卫先立起来；支付未完成先讲清“订单已创建”', () => {
+    const submitIndex = confirm.indexOf('submitting.value = true');
+    const subscribeIndex = confirm.indexOf('const subscriptionRequest');
+    expect(submitIndex).toBeGreaterThan(-1);
+    expect(subscribeIndex).toBeGreaterThan(submitIndex);
+
+    expect(confirm).toContain("title: '订单已创建'");
+    expect(confirm).toContain('本次支付已取消');
+    expect(confirm).toContain('微信支付没有完成');
+    expect(confirm).toContain('onBackPress');
+  });
+});
+
 /**
  * 成品抵扣彻底下线（2026-10-20）。
  *

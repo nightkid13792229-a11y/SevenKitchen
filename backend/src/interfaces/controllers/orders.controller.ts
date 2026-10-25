@@ -17,6 +17,7 @@ import {
   ForbiddenException,
   ConflictException,
   UseGuards,
+  Optional,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -28,6 +29,7 @@ import {
   ApiHeader,
 } from '@nestjs/swagger';
 import { OrderService } from '../../application/order/order.service';
+import { OrderSummaryService } from '../../application/order/order-summary.service';
 import { WechatPaymentService } from '../../application/payment/wechat-payment.service';
 import { RecipeService } from '../../application/recipe/recipe.service';
 import { PrismaService } from '../../infrastructure/prisma.service';
@@ -87,6 +89,8 @@ export class OrdersController {
     @Inject(PRODUCTION_BATCH_REPOSITORY)
     private readonly productionRepository: ProductionBatchRepository,
     private readonly shippingNotificationService: ShippingNotificationService,
+    @Optional()
+    private readonly orderSummaryService?: OrderSummaryService,
   ) {}
 
   @Post()
@@ -492,6 +496,27 @@ export class OrdersController {
       orders.map((order) => this.mapOrderToSummaryDto(order)),
     );
     return ApiResponseDto.success(summaries);
+  }
+
+  @Get('summary')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Get current customer order tab summary' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiHeader({
+    name: 'X-Customer-Id',
+    description: 'Customer ID for authentication',
+    required: true,
+  })
+  async getOrderSummary(
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    if (!this.orderSummaryService) {
+      return ApiResponseDto.error(503, '订单汇总暂不可用');
+    }
+    const summary = await this.orderSummaryService.getCustomerSummary(
+      user.customerId,
+    );
+    return ApiResponseDto.success(summary);
   }
 
   @Get(':id/financial-summary')

@@ -27,6 +27,14 @@
       </view>
 
       <view
+        v-if="profileLoadFailed"
+        class="profile-refresh-error"
+        @tap="retryLoadUserInfo"
+      >
+        <text>资料加载失败，点击重试</text>
+      </view>
+
+      <view
         v-if="!userInfo.phone"
         class="phone-bind-alert"
         @tap="goToPhoneBind"
@@ -57,6 +65,13 @@
             >全部订单</text
           >
         </view>
+        <text
+          v-if="orderSummaryError"
+          class="mall-summary-error"
+          @tap="loadOrderSummary"
+        >
+          订单数量加载失败，点击重试
+        </text>
         <view class="mall-shortcuts">
           <view
             class="mall-shortcut mall-shortcut-production"
@@ -110,7 +125,7 @@
           </view>
           <view
             class="mall-shortcut mall-shortcut-received"
-            @tap="goToOrders('RECEIVED')"
+            @tap="goToOrders('COMPLETED')"
           >
             <text v-if="orderCounts.received > 0" class="shortcut-badge">{{
               orderCounts.received
@@ -250,7 +265,7 @@
 
       </view>
 
-      <view v-if="testIdentityPanelVisible" class="test-identity-panel">
+      <view v-if="testIdentityPanelVisible && canUseTestIdentityPanel()" class="test-identity-panel">
         <view class="section-header">测试身份</view>
         <view class="test-identity-body">
           <text class="test-identity-status">
@@ -330,8 +345,16 @@ interface UserInfo {
   favoriteRecipeCount: number;
 }
 
-const isLoggedIn = ref(false);
+const isLoggedIn = ref(Boolean(getToken()));
 const isLoading = ref(false);
+/** 资料刷新失败：有 token 时不要直接变成未登录，给重试 */
+const profileLoadFailed = ref(false);
+/** 三类订单汇总（2026-10-25） */
+const orderSummaryTotal = ref(0);
+const orderSummaryLoaded = ref(false);
+const orderSummaryError = ref(false);
+let profileRequestSeq = 0;
+let summaryRequestSeq = 0;
 const userInfo = ref<UserInfo>({
   id: "",
   role: "CUSTOMER",
@@ -344,15 +367,19 @@ const userInfo = ref<UserInfo>({
 });
 
 /**
- * 「我的订单 (N笔)」要数两类订单。
+ * 「我的订单 (N笔)」要数三类订单。
  *
  * 后端 orderCount 只数鲜食（它的语义不能动：账号迁移拿它判断"有没有需要搬的
- * 数据"），所以补剂订单数由 supplementOrderCount 单独给，这里相加。
- * 不相加的话会出现"写着 3 笔、列表里 5 条"。
+ * 数据"），补剂有 supplementOrderCount；定制单没有并入 userInfo。
+ * 所以以 `/orders/summary` 的三类总数优先，汇总还没回来时才用旧的鲜食+补剂兜底。
  */
-const totalOrderCount = computed(
-  () => (userInfo.value.orderCount || 0) + (userInfo.value.supplementOrderCount || 0),
-);
+const totalOrderCount = computed(() => {
+  if (orderSummaryLoaded.value) return orderSummaryTotal.value;
+  return (
+    (userInfo.value.orderCount || 0) +
+    (userInfo.value.supplementOrderCount || 0)
+  );
+});
 
 const orderCounts = ref({
   pendingPayment: 0,
@@ -396,6 +423,11 @@ function handleTestIdentityHiddenTap() {
   }
 }
 
+function isAuthError(error: any): boolean {
+  const message = String(error?.message || error || '');
+  return message.includes('Authentication required') || message.includes('401');
+}
+
 // 加载用户信息
 async function loadUserInfo() {
   // 如果刚刚更新过，跳过这次加载
@@ -403,7 +435,14 @@ async function loadUserInfo() {
     return;
   }
 
-  isLoading.value = true;
+  const seq = ++profileRequestSeq;
+  // 首屏没有资料时才盖全屏；从别的页面回来只静默刷新，不整页黑一下
+  const isInitialLoad = !userInfo.value.id;
+  if (isInitialLoad) {
+    isLoading.value = true;
+  }
+  profileLoadFailed.value = false;
+
   try {
     const res = await request({
       url: "/users/me",
@@ -412,56 +451,134 @@ async function loadUserInfo() {
       suppressErrorToast: true,
     });
 
-    console.log("[Me Page] API Response:", res);
-    console.log("[Me Page] res.data:", res.data);
+    if (seq !== profileRequestSeq) return;
 
     if (res.code === 0 && res.data) {
       userInfo.value = res.data;
-      console.log("[Me Page] userInfo.value after update:", userInfo.value);
-      console.log("[Me Page] nickname:", userInfo.value.nickname);
-      console.log("[Me Page] avatarUrl:", userInfo.value.avatarUrl);
       isLoggedIn.value = true;
+      profileLoadFailed.value = false;
     } else {
-      // 未登录或加载失败
-      isLoggedIn.value = false;
+      profileLoadFailed.value = true;
     }
   } catch (error) {
-    console.error("加载用户信息失败:", error);
-    isLoggedIn.value = false;
+    if (seq !== profileRequestSeq) return;
+    if (isAuthError(error)) {
+      clearUserSessionState();
+    } else {
+      // 网络/服务异常不能把有 token 的人直接当成未登录
+      console.error("加载用户信息失败:", error);
+      profileLoadFailed.value = true;
+    }
   } finally {
-    isLoading.value = false;
+    if (seq === profileRequestSeq && isInitialLoad) {
+      isLoading.value = false;
+    }
   }
 }
 
-async function loadOrderCounts() {
+/**
+ * 三类订单统一汇总（2026-10-25）。
+ *
+ * 不再只查鲜食 `/orders`；否则定制的待付款、制作中、退款审核中，
+ * 以及补剂的待付款、分装中都不会进角标，点和数字对不上。
+ */
+async function loadOrderSummary() {
+  const seq = ++summaryRequestSeq;
+  orderSummaryError.value = false;
+
   try {
     const res = await request({
-      url: "/orders",
+      url: "/orders/summary",
       method: "GET",
       quiet: true,
       suppressErrorToast: true,
     } as any);
 
-    const orders = Array.isArray(res.data) ? res.data : [];
-    orderCounts.value = {
-      pendingPayment: orders.filter(
-        (order: any) => order.status === "PENDING_PAYMENT",
-      ).length,
-      inProgress: orders.filter((order: any) =>
-        ["PAID", "PURCHASING", "IN_PRODUCTION", "FREEZING"].includes(
-          order.status,
-        ),
-      ).length,
-      waitReceive: orders.filter((order: any) => order.status === "SHIPPED")
-        .length,
-      received: orders.filter((order: any) => order.status === "COMPLETED")
-        .length,
-      aftersale: orders.filter((order: any) => order.status === "AFTERSALE")
-        .length,
+    if (seq !== summaryRequestSeq) return;
+    if (res.code !== 0 || !res.data) {
+      orderSummaryError.value = true;
+      return;
+    }
+
+    const data = res.data as Record<string, unknown>;
+    const number = (value: unknown) => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
     };
+
+    orderCounts.value = {
+      pendingPayment: number(data.pendingPayment),
+      inProgress: number(data.inProgress),
+      waitReceive: number(data.waitReceive),
+      received: number(data.completed),
+      aftersale: number(data.aftersale),
+    };
+    orderSummaryTotal.value = number(data.total);
+    orderSummaryLoaded.value = true;
+    orderSummaryError.value = false;
   } catch (error) {
-    console.warn("[Me Page] Load order counts failed:", error);
+    if (seq !== summaryRequestSeq) return;
+    console.warn("[Me Page] Load order summary failed:", error);
+    orderSummaryError.value = true;
   }
+}
+
+/**
+ * 彻底清掉当前账号的页面状态。
+ *
+ * 退出登录、401、测试模式恢复失败都走这里；否则换账号后
+ * 上一位用户的未读红点、订单角标、食谱设计入口、测试面板会残留。
+ */
+function clearUserSessionState() {
+  profileRequestSeq += 1;
+  summaryRequestSeq += 1;
+
+  isLoggedIn.value = false;
+  isLoading.value = false;
+  profileLoadFailed.value = false;
+  userInfo.value = {
+    id: "",
+    role: "CUSTOMER",
+    dogCount: 0,
+    orderCount: 0,
+    supplementOrderCount: 0,
+    addressCount: 0,
+    diySheetCount: 0,
+    favoriteRecipeCount: 0,
+  };
+  orderCounts.value = {
+    pendingPayment: 0,
+    inProgress: 0,
+    waitReceive: 0,
+    received: 0,
+    aftersale: 0,
+  };
+  orderSummaryTotal.value = 0;
+  orderSummaryLoaded.value = false;
+  orderSummaryError.value = false;
+  unreadMessageCount.value = storeUnreadMessageCount(0);
+  testIdentityPanelVisible.value = false;
+  customerTestModeActive.value = false;
+  testIdentityTapCount = 0;
+
+  isJustUpdated = false;
+  if (updateTimer) {
+    clearTimeout(updateTimer);
+    updateTimer = null;
+  }
+  if (testIdentityTapTimer) {
+    clearTimeout(testIdentityTapTimer);
+    testIdentityTapTimer = null;
+  }
+
+  resetRecipeDesignerEntry();
+  refreshCurrentTabBar();
+}
+
+function retryLoadUserInfo() {
+  isJustUpdated = false;
+  profileLoadFailed.value = false;
+  void loadUserInfo();
 }
 
 // 跳转登录页
@@ -625,7 +742,11 @@ function exitCustomerTestMode() {
   const restored = restoreAdminSessionFromCustomerTestMode();
   if (!restored) {
     clearToken();
+    clearUserSessionState();
     uni.showToast({ title: "请重新登录管理员账号", icon: "none" });
+    setTimeout(() => {
+      uni.navigateTo({ url: "/pages/login/index" });
+    }, 500);
     return;
   }
   uni.showToast({ title: "已恢复管理员身份", icon: "success" });
@@ -666,6 +787,8 @@ async function resetCustomerTestModeData() {
 
 // 更新用户信息
 async function updateUserInfo(data: { nickname?: string; phone?: string }) {
+  // 让正在飞的 /users/me 结果作废，避免旧资料覆盖刚改的昵称
+  profileRequestSeq += 1;
   isLoading.value = true;
   try {
     const res = await request({
@@ -677,6 +800,8 @@ async function updateUserInfo(data: { nickname?: string; phone?: string }) {
     if (res.code === 0) {
       // 使用后端返回的完整用户信息更新本地状态
       userInfo.value = res.data;
+      isLoggedIn.value = true;
+      profileLoadFailed.value = false;
 
       // 设置标志位，防止 onShow 触发的 loadUserInfo 覆盖刚更新的数据
       isJustUpdated = true;
@@ -721,17 +846,7 @@ function handleLogout() {
     success: (res) => {
       if (res.confirm) {
         clearToken();
-        isLoggedIn.value = false;
-        userInfo.value = {
-          id: "",
-          role: "CUSTOMER",
-          dogCount: 0,
-          orderCount: 0,
-          supplementOrderCount: 0,
-          addressCount: 0,
-          diySheetCount: 0,
-          favoriteRecipeCount: 0,
-        };
+        clearUserSessionState();
         uni.showToast({
           title: "已退出登录",
           icon: "success",
@@ -758,9 +873,7 @@ const {
  * 401 时 API 层已清 token；我的页要立刻切到未登录，不能等下一次 onShow。
  */
 function handleAuthExpired() {
-  isLoggedIn.value = false;
-  resetRecipeDesignerEntry();
-  refreshCurrentTabBar();
+  clearUserSessionState();
 }
 
 onMounted(() => {
@@ -769,6 +882,14 @@ onMounted(() => {
 
 onUnmounted(() => {
   uni.$off(AUTH_EXPIRED_EVENT, handleAuthExpired);
+  if (updateTimer) {
+    clearTimeout(updateTimer);
+    updateTimer = null;
+  }
+  if (testIdentityTapTimer) {
+    clearTimeout(testIdentityTapTimer);
+    testIdentityTapTimer = null;
+  }
 });
 
 onShow(() => {
@@ -780,14 +901,13 @@ onShow(() => {
   // 先看 token，再打受保护接口 —— 没有 token 时不发请求，避免无意义的 401
   const token = getToken();
   if (!token) {
-    isLoggedIn.value = false;
-    resetRecipeDesignerEntry();
+    clearUserSessionState();
     return;
   }
 
   void loadRecipeDesignerEntry();
   loadUserInfo();
-  loadOrderCounts();
+  loadOrderSummary();
 });
 </script>
 
@@ -809,6 +929,25 @@ onShow(() => {
   align-items: center;
   justify-content: space-between;
   gap: 20rpx;
+}
+
+.profile-refresh-error {
+  margin: 24rpx;
+  padding: 18rpx 24rpx;
+  border-radius: 12rpx;
+  background: #fff7ed;
+  border: 1rpx solid #f1dcc2;
+  color: #b45309;
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
+.mall-summary-error {
+  display: block;
+  margin: -16rpx 0 18rpx;
+  color: #b45309;
+  font-size: 22rpx;
+  text-align: right;
 }
 
 .customer-test-banner {
@@ -940,6 +1079,10 @@ onShow(() => {
 }
 
 .user-nickname {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 32rpx;
   font-weight: 500;
   color: #f3eddd;

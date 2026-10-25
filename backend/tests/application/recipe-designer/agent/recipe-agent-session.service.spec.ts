@@ -156,7 +156,7 @@ describe('RecipeAgentSessionService', () => {
 
     expect(prisma.recipeDesignAgentSession.update).toHaveBeenCalledWith({
       where: { id: 's1' },
-      data: { status: 'WAITING_USER', endedAt: null },
+      data: { status: 'WAITING_USER', endedAt: null, lastError: null },
     });
   });
 
@@ -174,7 +174,7 @@ describe('RecipeAgentSessionService', () => {
     expect(updated).toBe(true);
     expect(prisma.recipeDesignAgentSession.updateMany).toHaveBeenCalledWith({
       where: { id: 's1', status: { in: ['WAITING_USER'] } },
-      data: { status: 'RUNNING', endedAt: null },
+      data: { status: 'RUNNING', endedAt: null, lastError: null },
     });
   });
 
@@ -218,7 +218,7 @@ describe('RecipeAgentSessionService', () => {
     });
   });
 
-  it('transitionStatus 不传 lastError 时保留已有错误', async () => {
+  it('transitionStatus 进入完成等非失败状态时清除上一轮错误', async () => {
     const { prisma } = makePrisma();
     prisma.recipeDesignAgentSession.updateMany.mockResolvedValue({ count: 1 });
     const service = new RecipeAgentSessionService(prisma as any);
@@ -227,7 +227,7 @@ describe('RecipeAgentSessionService', () => {
 
     expect(prisma.recipeDesignAgentSession.updateMany).toHaveBeenCalledWith({
       where: { id: 's1', status: { in: ['RUNNING'] } },
-      data: { status: 'COMPLETED', endedAt: expect.any(Date) },
+      data: { status: 'COMPLETED', endedAt: expect.any(Date), lastError: null },
     });
   });
 

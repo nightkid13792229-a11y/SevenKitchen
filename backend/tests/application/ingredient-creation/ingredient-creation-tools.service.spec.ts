@@ -5,6 +5,7 @@ import { IngredientCreationCheckService } from '../../../src/application/ingredi
 import { IngredientCreationDraftService } from '../../../src/application/ingredient-creation/ingredient-creation-draft.service';
 import { IngredientCreationToolsService } from '../../../src/application/ingredient-creation/ingredient-creation-tools.service';
 import type { IngredientNameClassifierService } from '../../../src/application/ingredient-creation/ingredient-name-classifier.service';
+import { buildKeywordNameSummary } from '../../../src/application/ingredient-creation/ingredient-name-summary';
 import { NUTRITION_FIELD_CATALOG } from '../../../src/domain/ingredient/nutrition-field-catalog';
 import type { PrismaService } from '../../../src/infrastructure/prisma.service';
 import type {
@@ -87,6 +88,11 @@ function createTools(
   };
 
   const nameClassifierService = {
+      summarizeNames: jest.fn(async (input: any) => ({
+        ...buildKeywordNameSummary(input.items),
+        degraded: false,
+        notice: null,
+      })),
       classifyNames: jest.fn(async (input: any) => ({
         results: input.items.map((item: { id: string; name: string }) => {
           const lower = item.name.toLowerCase();
@@ -1605,30 +1611,35 @@ describe('IngredientCreationToolsService · 候选太多时先收窄、再列词
     expect(search.body.hint).toContain('不要先问收窄');
   });
 
-  it('未指定状态：用 AI 真实统计发问，选项带条数，且「生 + 熟都要」可点', async () => {
+  it('未指定状态：用一次汇总的真实数字发问，选项带条数，且「生 + 熟都要」可点', async () => {
     const { tools, candidateService, reviewService, nameClassifierService } =
       createTools([], {
         intake: { name: '牛肉' },
       });
     const candidates = beefCandidates();
     mockAllRelevant(candidateService, reviewService, candidates);
-    // 8 条生、3 条熟：分类由 AI 判断（这里 mock 出来），代码只负责统计。
-    nameClassifierService.classifyNames.mockImplementation(async (input: any) => ({
-      results: input.items.map((item: any, index: number) => ({
-        id: item.id,
-        state: index < 8 ? 'RAW' : 'COOKED',
-        method: index < 8 ? 'NONE' : 'BOILED',
-        cutLabel: index < 6 ? '牛绞肉' : index < 9 ? '牛里脊' : '牛腩',
-        cutGroup: index < 6 ? 'ground' : index < 9 ? 'tenderloin' : 'brisket',
-        evidence: item.name.includes('ground') ? 'ground' : 'Beef',
-        confidence: 0.9,
-      })),
-      counts: {
-        byState: { RAW: 8, COOKED: 3, UNKNOWN: 0 },
-        byMethod: { BOILED: 3, STEAMED: 0, GRILLED: 0, FRIED: 0, OTHER: 0, NONE: 8 },
-        byCutGroup: { ground: 6, tenderloin: 3, brisket: 2 },
+    // 8 条生、3 条熟：一次汇总给数字（这里 mock 出来），代码只负责生成问句。
+    nameClassifierService.summarizeNames.mockResolvedValue({
+      total: 11,
+      byState: { RAW: 8, COOKED: 3, UNKNOWN: 0 },
+      byMethod: {
+        BOILED: 3,
+        STEAMED: 0,
+        GRILLED: 0,
+        FRIED: 0,
+        OTHER: 0,
+        NONE: 8,
       },
-    }));
+      byCutGroup: { ground: 6, tenderloin: 3, brisket: 2 },
+      examples: {
+        ground: ['Beef, ground, raw 1'],
+        tenderloin: ['Beef, tenderloin, raw 1'],
+        brisket: ['Beef, brisket, raw 1'],
+      },
+      irrelevantExamples: [],
+      degraded: false,
+      notice: null,
+    });
 
     const search = await executeTool(tools, 'searchLocalNutrition', {
       keyword: '牛肉',
@@ -1646,36 +1657,16 @@ describe('IngredientCreationToolsService · 候选太多时先收窄、再列词
       '熟（3 条）',
       '生 + 熟都要（11 条）',
     ]);
-
-    const asked = await executeTool(tools, 'askUser', {
-      question: search.body.narrowing.question,
-      options: search.body.narrowing.options,
+    // 收窄阶段只调 1 次汇总，不逐条精判。
+    expect(nameClassifierService.summarizeNames).toHaveBeenCalledTimes(1);
+    expect(nameClassifierService.summarizeNames).toHaveBeenCalledWith({
+      targetName: '牛肉',
+      items: candidates.map((candidate) => ({
+        id: candidate.sourceRecordId,
+        name: candidate.foodName,
+      })),
     });
-    expect(asked.ok).toBe(true);
-    expect(asked.body.optionChecks).toEqual([
-      expect.objectContaining({
-        label: '生（8 条）',
-        kind: 'STATE',
-        inLibrary: null,
-        displayLabel: '生（8 条）',
-      }),
-      expect.objectContaining({
-        label: '熟（3 条）',
-        kind: 'STATE',
-        inLibrary: null,
-        displayLabel: '熟（3 条）',
-      }),
-      expect.objectContaining({
-        label: '生 + 熟都要（11 条）',
-        kind: 'STATE',
-        inLibrary: null,
-        displayLabel: '生 + 熟都要（11 条）',
-      }),
-    ]);
-    // 这只是确定生熟，还不是挑候选：不能清复核闸门。
-    expect(asked.body.optionChecks.some((check: any) => check.aiVerdict)).toBe(
-      false,
-    );
+    expect(nameClassifierService.classifyNames).not.toHaveBeenCalled();
   });
 
   it('选「生 + 熟都要」后按部位收窄；传 states 两态能继续，并只列该组 ≤5 条', async () => {
@@ -1806,7 +1797,7 @@ describe('IngredientCreationToolsService · 候选太多时先收窄、再列词
   });
 
 
-  it('模糊词：先列名字（300 上限）→ AI 分类 → 按真实统计问，多选生+熟可行', async () => {
+  it('模糊词：先列全部名字（3000 上限）→ 只调 1 次汇总发问 → 逐条精判只喂 ≤10 条', async () => {
     const { tools, candidateService, reviewService, nameClassifierService } =
       createTools([], { intake: { name: '牛肉' } });
     const candidates = beefCandidates();
@@ -1830,37 +1821,6 @@ describe('IngredientCreationToolsService · 候选太多时先收窄、再列词
       names,
       keywords: ['牛肉', 'beef'],
     });
-    nameClassifierService.classifyNames.mockImplementation(
-      async (input: any) => ({
-        results: input.items.map((item: any) => {
-          const lower = item.name.toLowerCase();
-          const cooked = lower.includes('boiled') || lower.includes('grilled');
-          const cutGroup = lower.includes('ground')
-            ? 'ground'
-            : lower.includes('chuck')
-              ? 'chuck'
-              : 'rib';
-          return {
-            id: item.id,
-            state: cooked ? 'COOKED' : 'RAW',
-            method: lower.includes('grilled')
-              ? 'GRILLED'
-              : lower.includes('boiled')
-                ? 'BOILED'
-                : 'NONE',
-            cutLabel: cutGroup,
-            cutGroup,
-            evidence: cutGroup,
-            confidence: 0.9,
-          };
-        }),
-        counts: {
-          byState: { RAW: 6, COOKED: 4, UNKNOWN: 0 },
-          byMethod: { BOILED: 3, STEAMED: 0, GRILLED: 1, FRIED: 0, OTHER: 0, NONE: 6 },
-          byCutGroup: { ground: 6, chuck: 3, rib: 1 },
-        },
-      }),
-    );
 
     // 第一步：工具只摆事实，不分类、不砍到 50 条。
     const listed = await executeTool(tools, 'listNutritionNames', {
@@ -1874,14 +1834,16 @@ describe('IngredientCreationToolsService · 候选太多时先收窄、再列词
       sourceType: 'USDA_FDC',
     });
 
-    // 第二步：AI 分类后按真实统计发状态问句。
+    // 第二步：一次汇总后按真实统计发状态问句；此时不逐条精判。
     const search = await executeTool(tools, 'searchLocalNutrition', {
       keyword: '牛肉',
     });
-    expect(nameClassifierService.classifyNames).toHaveBeenCalledWith({
+    expect(nameClassifierService.summarizeNames).toHaveBeenCalledTimes(1);
+    expect(nameClassifierService.summarizeNames).toHaveBeenCalledWith({
       targetName: '牛肉',
       items: names.map((name) => ({ id: name.id, name: name.name })),
     });
+    expect(nameClassifierService.classifyNames).not.toHaveBeenCalled();
     expect(search.body.nextAction).toBe('NARROW_STATE');
     expect(search.body.narrowing.options).toEqual([
       '生（6 条）',
@@ -1892,7 +1854,7 @@ describe('IngredientCreationToolsService · 候选太多时先收窄、再列词
     expect(search.body.narrowing.question).toContain('烤 1 条');
     expect(search.body.narrowing.question).toContain('绞肉 6 条');
 
-    // 第三步：用户选「生 + 熟都要」，按部位收窄。
+    // 第三步：用户选「生 + 熟都要」，按汇总的部位收窄；仍然不逐条精判。
     const both = await executeTool(tools, 'searchLocalNutrition', {
       keyword: '牛肉',
       states: ['RAW', 'COOKED'],
@@ -1903,13 +1865,20 @@ describe('IngredientCreationToolsService · 候选太多时先收窄、再列词
       '肩（3 条）',
       '肋排（1 条）',
     ]);
+    expect(nameClassifierService.summarizeNames).toHaveBeenCalledTimes(2);
+    expect(nameClassifierService.classifyNames).not.toHaveBeenCalled();
 
-    // 第四步：选组后只列该组 ≤5 条 + 兜底。
+    // 第四步：选组后只让最终展示的 ≤10 条进入逐条精判，并只列该组 ≤5 条。
     const narrowed = await executeTool(tools, 'searchLocalNutrition', {
       keyword: '牛肉',
       states: ['RAW', 'COOKED'],
       group: 'ground',
     });
+    expect(nameClassifierService.summarizeNames).toHaveBeenCalledTimes(3);
+    expect(nameClassifierService.classifyNames).toHaveBeenCalledTimes(1);
+    const preciseItems = nameClassifierService.classifyNames.mock.calls[0][0]
+      .items as Array<{ id: string; name: string }>;
+    expect(preciseItems.length).toBeLessThanOrEqual(10);
     expect(narrowed.body.listing.entries).toHaveLength(5);
     expect(narrowed.body.listing.options.at(-1)).toBe('都不对，我直接说');
     expect(narrowed.body.listing.entries[0].classification).toMatchObject({
@@ -1918,5 +1887,157 @@ describe('IngredientCreationToolsService · 候选太多时先收窄、再列词
       evidence: 'ground',
     });
   });
+
+
+  it('1,600 条模糊词先收窄：只调 1 次汇总，完全不逐条精判', async () => {
+    const { tools, candidateService, reviewService, nameClassifierService } =
+      createTools([], { intake: { name: '牛肉' } });
+    const names = [
+      ...Array.from({ length: 1000 }, (_, index) => ({
+        id: `ground-${index}`,
+        name: `Beef, ground, raw ${index + 1}`,
+        sourceType: 'USDA_FDC',
+      })),
+      ...Array.from({ length: 400 }, (_, index) => ({
+        id: `chuck-${index}`,
+        name: `Beef, chuck, boiled ${index + 1}`,
+        sourceType: 'USDA_FDC',
+      })),
+      ...Array.from({ length: 200 }, (_, index) => ({
+        id: `brisket-${index}`,
+        name: `Beef, brisket, raw ${index + 1}`,
+        sourceType: 'USDA_FDC',
+      })),
+    ];
+    candidateService.listNutritionNames.mockResolvedValue({
+      total: 1600,
+      names,
+      keywords: ['牛肉', 'beef'],
+    });
+    const candidates = Array.from({ length: 12 }, (_, index) =>
+      row(`ground-${index}`, `Beef, ground, raw ${index + 1}`),
+    );
+    mockAllRelevant(candidateService, reviewService, candidates);
+
+    const search = await executeTool(tools, 'searchLocalNutrition', {
+      keyword: '牛肉',
+    });
+
+    expect(search.body.nextAction).toBe('NARROW_STATE');
+    expect(search.body.narrowing.stats.total).toBe(1600);
+    expect(search.body.narrowing.options).toEqual([
+      '生（1200 条）',
+      '熟（400 条）',
+      '生 + 熟都要（1600 条）',
+    ]);
+    expect(nameClassifierService.summarizeNames).toHaveBeenCalledTimes(1);
+    expect(nameClassifierService.summarizeNames.mock.calls[0][0].items).toHaveLength(1600);
+    expect(nameClassifierService.classifyNames).not.toHaveBeenCalled();
+  });
+
+  it('1,600 条名字只触发 1 次汇总调用，逐条精判只喂最终 ≤10 条', async () => {
+    const { tools, candidateService, reviewService, nameClassifierService } =
+      createTools([], { intake: { name: '牛肉' } });
+    const names = [
+      ...Array.from({ length: 1000 }, (_, index) => ({
+        id: `ground-${index}`,
+        name: `Beef, ground, raw ${index + 1}`,
+        sourceType: 'USDA_FDC',
+      })),
+      ...Array.from({ length: 400 }, (_, index) => ({
+        id: `chuck-${index}`,
+        name: `Beef, chuck, boiled ${index + 1}`,
+        sourceType: 'USDA_FDC',
+      })),
+      ...Array.from({ length: 200 }, (_, index) => ({
+        id: `brisket-${index}`,
+        name: `Beef, brisket, raw ${index + 1}`,
+        sourceType: 'USDA_FDC',
+      })),
+    ];
+    candidateService.listNutritionNames.mockResolvedValue({
+      total: 1600,
+      names,
+      keywords: ['牛肉', 'beef'],
+    });
+    const candidates = Array.from({ length: 12 }, (_, index) =>
+      row(`ground-${index}`, `Beef, ground, raw ${index + 1}`),
+    );
+    mockAllRelevant(candidateService, reviewService, candidates);
+
+    const search = await executeTool(tools, 'searchLocalNutrition', {
+      keyword: '牛肉',
+      state: 'RAW',
+      group: 'ground',
+    });
+
+    // 1,600 条只汇总 1 次；不再按 80 条分批逐条判。
+    expect(nameClassifierService.summarizeNames).toHaveBeenCalledTimes(1);
+    const summarizedItems = nameClassifierService.summarizeNames.mock.calls[0][0]
+      .items as Array<{ id: string; name: string }>;
+    expect(summarizedItems).toHaveLength(1600);
+    expect(nameClassifierService.classifyNames).toHaveBeenCalledTimes(1);
+    const preciseItems = nameClassifierService.classifyNames.mock.calls[0][0]
+      .items as Array<{ id: string; name: string }>;
+    expect(preciseItems.length).toBeLessThanOrEqual(10);
+
+    expect(search.ok).toBe(true);
+    expect(search.body.totalCandidates).toBe(1600);
+    expect(search.body.classificationSummary.byState).toEqual({
+      RAW: 1200,
+      COOKED: 400,
+      UNKNOWN: 0,
+    });
+    expect(search.body.stats.total).toBe(1600);
+    expect(search.body.listing.entries.length).toBeLessThanOrEqual(5);
+  });
+
+  it('汇总失败：按名字关键词粗略计数 + 提示分类不可用，不阻塞列出词条', async () => {
+    const { tools, candidateService, reviewService, nameClassifierService } =
+      createTools([], { intake: { name: '牛肉' } });
+    const names = [
+      ...Array.from({ length: 20 }, (_, index) => ({
+        id: `ground-${index}`,
+        name: `Beef, ground, raw ${index + 1}`,
+        sourceType: 'USDA_FDC',
+      })),
+      ...Array.from({ length: 10 }, (_, index) => ({
+        id: `chuck-${index}`,
+        name: `Beef, chuck, boiled ${index + 1}`,
+        sourceType: 'USDA_FDC',
+      })),
+    ];
+    candidateService.listNutritionNames.mockResolvedValue({
+      total: 30,
+      names,
+      keywords: ['牛肉', 'beef'],
+    });
+    const candidates = Array.from({ length: 10 }, (_, index) =>
+      row(`ground-${index}`, `Beef, ground, raw ${index + 1}`),
+    );
+    mockAllRelevant(candidateService, reviewService, candidates);
+    nameClassifierService.summarizeNames.mockRejectedValue(
+      new Error('summary model down'),
+    );
+
+    const search = await executeTool(tools, 'searchLocalNutrition', {
+      keyword: '牛肉',
+      state: 'RAW',
+      group: 'ground',
+    });
+
+    expect(search.ok).toBe(true);
+    expect(search.body.found).toBe(true);
+    expect(search.body.summary.degraded).toBe(true);
+    expect(search.body.notice).toContain('关键词');
+    expect(search.body.notice).toContain('分类不可用');
+    expect(search.body.classificationSummary.byState).toMatchObject({
+      RAW: 20,
+      COOKED: 10,
+    });
+    expect(search.body.listing).toBeDefined();
+    expect(nameClassifierService.classifyNames).toHaveBeenCalledTimes(1);
+  });
+
 
 });

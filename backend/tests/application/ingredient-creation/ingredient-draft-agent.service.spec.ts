@@ -21,6 +21,7 @@ import { IngredientCreationIntakeService } from '../../../src/application/ingred
 import { IngredientCreationMergeService } from '../../../src/application/ingredient-creation/ingredient-creation-merge.service';
 import { IngredientCreationOnlineService } from '../../../src/application/ingredient-creation/ingredient-creation-online.service';
 import { IngredientCreationToolsService } from '../../../src/application/ingredient-creation/ingredient-creation-tools.service';
+import { buildKeywordNameSummary } from '../../../src/application/ingredient-creation/ingredient-name-summary';
 import type {
   CandidateSearchResult,
   FinalCheckResult,
@@ -288,6 +289,11 @@ function createHarness(options: HarnessOptions = {}) {
   };
 
   const nameClassifierService = {
+      summarizeNames: jest.fn(async (input: any) => ({
+        ...buildKeywordNameSummary(input.items),
+        degraded: false,
+        notice: null,
+      })),
       classifyNames: jest.fn(async (input: any) => ({
         results: input.items.map((item: { id: string }) => ({
           id: item.id,
@@ -650,12 +656,12 @@ describe('IngredientDraftAgentService · 工具循环', () => {
     );
   });
 
-  it('总时长 3 分钟用完时停止，返回“我跑到上限了”，不报 503', async () => {
+  it('总时长 4 分钟用完时停止，返回“我跑到上限了”，不报 503', async () => {
     let now = 1_000_000;
     const nowSpy = jest.spyOn(Date, 'now').mockImplementation(() => now);
     const fetchMock = jest.fn(async () => {
-      // 模拟一次模型调用把 180 秒预算全部耗尽。
-      now += 181_000;
+      // 模拟一次模型调用把 240 秒预算全部耗尽。
+      now += 241_000;
       throw Object.assign(new Error('aborted'), { name: 'AbortError' });
     });
     global.fetch = fetchMock as unknown as typeof global.fetch;
@@ -2802,7 +2808,7 @@ describe('IngredientDraftAgentService · 候选太多先收窄', () => {
     };
   }
 
-  it('系统提示词：模糊词先 listNutritionNames，生+熟都要用 states 表达', async () => {
+  it('系统提示词：模糊词直接用一次汇总，生+熟都要用 states 表达', async () => {
     const fetchMock = jest
       .fn()
       .mockResolvedValueOnce(chatResponse(assistantReply('好的。')));
@@ -2816,9 +2822,10 @@ describe('IngredientDraftAgentService · 候选太多先收窄', () => {
     });
 
     const system = String(requestBody(fetchMock, 0).messages[0].content);
-    expect(system).toContain('listNutritionNames');
-    expect(system).toContain('最多 300 条');
-    expect(system).toContain('AI 读词条名判断生熟 / 做法 / 部位');
+    expect(system).toContain('searchLocalNutrition');
+    expect(system).toContain('最多 3000 条');
+    expect(system).toContain('1 次汇总');
+    expect(system).toContain('逐条精判只发生在最终展示的 ≤10 条');
     expect(system).toContain('生 + 熟都要');
     expect(system).toContain('states=["RAW","COOKED"]');
     expect(system).toContain('evidence');
@@ -2862,32 +2869,27 @@ describe('IngredientDraftAgentService · 候选太多先收窄', () => {
     global.fetch = fetchMock as unknown as typeof global.fetch;
 
     const harness = createHarness({ candidates: beefCandidates() });
-    harness.nameClassifierService.classifyNames.mockImplementation(
-      async (input: any) => ({
-        results: input.items.map((item: any) => {
-          const lower = item.name.toLowerCase();
-          const cutGroup = lower.includes('ground')
-            ? 'ground'
-            : lower.includes('tenderloin')
-              ? 'tenderloin'
-              : 'brisket';
-          return {
-            id: item.id,
-            state: 'RAW',
-            method: 'NONE',
-            cutLabel: cutGroup,
-            cutGroup,
-            evidence: cutGroup,
-            confidence: 0.9,
-          };
-        }),
-        counts: {
-          byState: { RAW: input.items.length, COOKED: 0, UNKNOWN: 0 },
-          byMethod: { BOILED: 0, STEAMED: 0, GRILLED: 0, FRIED: 0, OTHER: 0, NONE: input.items.length },
-          byCutGroup: { ground: 6, tenderloin: 3, brisket: 2 },
-        },
-      }),
-    );
+    harness.nameClassifierService.summarizeNames.mockResolvedValue({
+      total: 11,
+      byState: { RAW: 11, COOKED: 0, UNKNOWN: 0 },
+      byMethod: {
+        BOILED: 0,
+        STEAMED: 0,
+        GRILLED: 0,
+        FRIED: 0,
+        OTHER: 0,
+        NONE: 11,
+      },
+      byCutGroup: { ground: 6, tenderloin: 3, brisket: 2 },
+      examples: {
+        ground: ['Beef, ground, raw 1'],
+        tenderloin: ['Beef, tenderloin, raw 1'],
+        brisket: ['Beef, brisket, raw 1'],
+      },
+      irrelevantExamples: [],
+      degraded: false,
+      notice: null,
+    });
     const events: any[] = [];
     await harness.agent.run(
       {
@@ -2904,7 +2906,7 @@ describe('IngredientDraftAgentService · 候选太多先收窄', () => {
       index: 1,
       ok: true,
       found: true,
-      resultSummary: '命中 11 条 · 11 条相关',
+      resultSummary: '命中 11 条',
     });
     expect(searchEnd.totalCandidates).toBe(11);
     expect(searchEnd.candidateCount).toBe(11);
@@ -2913,12 +2915,6 @@ describe('IngredientDraftAgentService · 候选太多先收窄', () => {
       { key: 'tenderloin', label: '里脊', count: 3, states: ['RAW'] },
       { key: 'brisket', label: '腩', count: 2, states: ['RAW'] },
     ]);
-    expect(searchEnd.reviewSummary).toMatchObject({
-      relevantCount: 11,
-      uncertainCount: 0,
-      irrelevantCount: 0,
-      failed: false,
-    });
   });
 
   it('下一轮系统提示词带收窄分组 key，用户答组名后能接着传 group', async () => {

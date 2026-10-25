@@ -30,12 +30,17 @@ import {
 } from './ingredient-name-classifier.service';
 import {
   buildClassificationListing,
-  buildClassificationNarrowing,
+  buildSummaryNarrowing,
   cutGroupLabel,
   resolveClassificationGroupScope,
   type ClassificationName,
   type ClassificationNarrowing,
 } from './ingredient-name-narrowing';
+import {
+  buildKeywordNameSummary,
+  type NameSummary,
+  type SummarizeNamesResult,
+} from './ingredient-name-summary';
 import type {
   CandidateNarrowingRecord,
   CandidateReviewGate,
@@ -113,9 +118,15 @@ export interface ExecuteAgentToolInput {
  * 单次查库最多回灌多少条候选。
  *
  * 与复核服务的单批上限一致（12）：召回结果**不按类别 / 词位置过滤**，
- * 候选多了只截断，交给 AI 判断、再交给人选。
+ * 候选多了只截断，交给 AI 复核、再交给人选。
  */
 const SEARCH_CANDIDATE_LIMIT = 12;
+
+/** `searchLocalNutrition` 内部一次拉全量名字的上限（与 listNutritionNames 一致）。 */
+const SEARCH_NAME_LIST_LIMIT = 3000;
+
+/** 进入逐条精判的最终展示上限；与汇总调用严格分开。 */
+const PRECISE_CLASSIFICATION_LIMIT = 10;
 /** 单次最多回灌多少条营养值，避免把提示词撑爆。 */
 const MAX_NUTRITION_RECORD_VALUES = 80;
 /** 批量写入单次上限：60 个目录字段一次能装下，且给模型留余量。 */
@@ -129,7 +140,7 @@ const SEARCH_TOOL: AgentToolDefinition = {
   function: {
     name: 'searchLocalNutrition',
     description:
-      '在本地营养库检索某个原料的候选来源（只读）。返回前会先用 AI 读最多 300 条词条名，判断生熟 / 做法 / 部位并落库复用；再用真实统计生成 narrowing（question / options / stats）。每条候选带 AI 分类 classification（state / method / cutLabel / cutGroup / evidence）与 review.verdict（RELEVANT / UNCERTAIN / IRRELEVANT）。候选太多时 nextAction=NARROW_STATE 或 NARROW_GROUP，必须先按 narrowing.question / narrowing.options 调 askUser 收窄，不许直接列词条；状态支持「生 + 熟都要」，选中后把 states=[\"RAW\",\"COOKED\"] 传回来。选组后再次调用本工具并传 group（来自 narrowing.choices 的 key）只取该组，再用 listing.options 列 ≤5 条词条 + 最后一条「都不对，我直接说」。注意：ok=true 只表示查询执行成功，found=false 表示没有找到匹配词条；拿到 sourceRecordId 后要用 getNutritionRecord 读取具体营养数值。',
+      '在本地营养库检索某个原料的候选来源（只读）。返回前会一次拉全部命中名字（最多 3000 条），只发 1 次汇总请求统计生 / 熟 / 做法 / 部位并生成 narrowing（question / options / stats）；逐条精判只用于最终展示的 ≤10 条。每条候选带 AI 分类 classification（state / method / cutLabel / cutGroup / evidence）与 review.verdict（RELEVANT / UNCERTAIN / IRRELEVANT）。候选太多时 nextAction=NARROW_STATE 或 NARROW_GROUP，必须先按 narrowing.question / narrowing.options 调 askUser 收窄，不许直接列词条；状态支持「生 + 熟都要」，选中后把 states=[\"RAW\",\"COOKED\"] 传回来。选组后再次调用本工具并传 group（来自 narrowing.choices 的 key）只取该组，再用 listing.options 列 ≤5 条词条 + 最后一条「都不对，我直接说」。注意：ok=true 只表示查询执行成功，found=false 表示没有找到匹配词条；拿到 sourceRecordId 后要用 getNutritionRecord 读取具体营养数值。',
     parameters: {
       type: 'object',
       properties: {
@@ -175,7 +186,7 @@ const LIST_NUTRITION_NAMES_TOOL: AgentToolDefinition = {
   function: {
     name: 'listNutritionNames',
     description:
-      '按关键词列出本地营养库真实命中的词条名（只读，最多 300 条，默认 300）。只返回 id / name / sourceType 与真实命中总数 total，**不判断生熟 / 做法 / 部位，也不返回营养值**。模糊词（如「牛肉」「猪肉」「鱼」）应先调用它看真实命中，再调用 searchLocalNutrition 做 AI 分类与收窄；中文词会自动走词典 / AI 翻译展开成外文词。',
+      '按关键词列出本地营养库真实命中的词条名（只读，最多 3000 条，默认 3000）。只返回 id / name / sourceType 与真实命中总数 total，**不判断生熟 / 做法 / 部位，也不返回营养值**。通常不需要先调用它：searchLocalNutrition 内部会一次拉全部命中并只发 1 次汇总；只有用户明确要看完整名单时才用它。中文词会自动走词典 / AI 翻译展开成外文词。',
     parameters: {
       type: 'object',
       properties: {
@@ -187,8 +198,8 @@ const LIST_NUTRITION_NAMES_TOOL: AgentToolDefinition = {
         limit: {
           type: 'integer',
           minimum: 1,
-          maximum: 300,
-          description: '最多返回多少条，默认与上限都是 300。',
+          maximum: 3000,
+          description: '最多返回多少条，默认与上限都是 3000。',
         },
       },
       required: ['keyword'],
@@ -1220,6 +1231,97 @@ function validateFieldArgs(raw: Record<string, unknown>): FieldValidation {
   };
 }
 
+function normalizeNameLookup(value: string): string {
+  return value.normalize('NFKC').toLowerCase().replace(/\s+/gu, ' ').trim();
+}
+
+/**
+ * 选出最终要展示、并且值得逐条精判的 ≤10 条名字。
+ *
+ * - 已选部位组：先用汇总 examples 里的该组代表名（保证列的是这一组），
+ *   再用候选元数据补位；
+ * - 没选组：直接用候选元数据（评审 / 覆盖率都在这里）；
+ * - 一个都没有（极端情况）：退回名字清单前 10 条。
+ *
+ * 关键：无论命中 1,600 还是 3,000 条，这里最多只返回 10 条。
+ */
+function selectPreciseNames(input: {
+  candidates: ReadonlyArray<{
+    sourceRecordId: string;
+    foodName: string;
+    sourceType: string;
+  }>;
+  names: readonly ClassificationName[];
+  summary: NameSummary;
+  groupKey: string | null;
+  max: number;
+}): ClassificationName[] {
+  const byId = new Map(input.names.map((name) => [name.id, name] as const));
+  const byNormalizedName = new Map<string, ClassificationName>();
+  for (const name of input.names) {
+    const key = normalizeNameLookup(name.name);
+    if (!byNormalizedName.has(key)) {
+      byNormalizedName.set(key, name);
+    }
+  }
+
+  const picked: ClassificationName[] = [];
+  const seen = new Set<string>();
+  const push = (name: ClassificationName | undefined) => {
+    if (!name || seen.has(name.id)) return;
+    seen.add(name.id);
+    picked.push(name);
+  };
+
+  if (input.groupKey) {
+    for (const example of input.summary.examples[input.groupKey] ?? []) {
+      const normalized = normalizeNameLookup(example);
+      push(
+        byNormalizedName.get(normalized) ??
+          // 模型偶尔会改写标点 / 空格：退一步用「包含」找回原词条。
+          input.names.find((name) => {
+            const candidateName = normalizeNameLookup(name.name);
+            return (
+              candidateName.includes(normalized) ||
+              normalized.includes(candidateName)
+            );
+          }),
+      );
+    }
+    // 模型没给 examples（或改了名字）时，用组 key 在名字里找同类词条，
+    // 保证「选了这一组」时 listing 不会空着。
+    if (input.groupKey !== '__other__') {
+      const groupToken = input.groupKey.toLowerCase();
+      for (const name of input.names) {
+        if (picked.length >= input.max) break;
+        // 按词匹配：round 不能命中 ground，loin 不能命中 tenderloin。
+        const tokens = normalizeNameLookup(name.name).split(/[^a-z]+/u);
+        if (tokens.includes(groupToken)) {
+          push(name);
+        }
+      }
+    }
+  }
+
+  for (const candidate of input.candidates) {
+    push(
+      byId.get(candidate.sourceRecordId) ?? {
+        id: candidate.sourceRecordId,
+        name: candidate.foodName,
+        sourceType: candidate.sourceType,
+      },
+    );
+  }
+
+  if (picked.length === 0) {
+    for (const name of input.names) {
+      push(name);
+    }
+  }
+
+  return picked.slice(0, input.max);
+}
+
 /**
  * AI 起草可调用的**全部**写入口。
  *
@@ -1324,8 +1426,8 @@ export class IngredientCreationToolsService {
   /**
    * 工具 0：只按名字摆事实（不分类、不返回营养值）。
    *
-   * 模糊词先看「库里到底有多少条、都叫什么」，再由 searchLocalNutrition
-   * 逐条读名字判断生熟 / 做法 / 部位；工具本身不替人做判断。
+   * 模糊词先看「库里到底有多少条、都叫什么」；生熟 / 做法 / 部位由
+   * searchLocalNutrition 的一次汇总回答，工具本身不替人做判断。
    */
   private async listNutritionNames(
     args: Record<string, unknown>,
@@ -1343,8 +1445,8 @@ export class IngredientCreationToolsService {
           ? Number(rawLimit)
           : NaN;
     const limit = Number.isFinite(numericLimit)
-      ? Math.min(300, Math.max(1, Math.floor(numericLimit)))
-      : 300;
+      ? Math.min(3000, Math.max(1, Math.floor(numericLimit)))
+      : 3000;
 
     const result = await this.candidateService.listNutritionNames({
       keyword,
@@ -1364,7 +1466,7 @@ export class IngredientCreationToolsService {
         hint:
           result.names.length === 0
             ? '本地库没有按这个名字命中的词条：可以换中文名 / 英文名再试，或如实告诉用户库里缺数据；不要编造词条。'
-            : `共 ${result.total} 条真实命中，先返回 ${result.names.length} 条名字。这只是名字清单，生熟 / 做法 / 部位还没判断；请调用 searchLocalNutrition 用 AI 分类后再按真实统计收窄。`,
+            : `共 ${result.total} 条真实命中，返回 ${result.names.length} 条名字。这只是名字清单，生熟 / 做法 / 部位还没判断；请直接调用 searchLocalNutrition，它会用一次汇总统计全部命中，不要逐条判断。`,
       }),
       progress: {
         writtenFieldPaths: [],
@@ -1377,9 +1479,10 @@ export class IngredientCreationToolsService {
   /**
    * 工具 1：只读检索。
    *
-   * 判断交给 AI：先用 `listNutritionNames` 拿到最多 300 条真实名字，再让
-   * `IngredientNameClassifierService` 逐条判断生熟 / 做法 / 部位并落库，
-   * 最后用**真实统计**生成收窄问句。旧的按关键词表分组不再参与。
+   * 新口径（老板 2026-10-25 定）：先一次拉全部真实名字（最多 3000），
+   * 再让模型**一次汇总**生 / 熟 / 做法 / 部位并给每组 2-3 个代表名；
+   * 收窄问句用汇总数字。逐条精判只留给最终展示的 ≤10 条。
+   * 旧的「按 80 条分批逐条判断」不再参与检索主路径。
    */
   private async searchLocalNutrition(
     draftId: string,
@@ -1446,14 +1549,15 @@ export class IngredientCreationToolsService {
 
     const draft = await this.draftService.get(draftId);
 
-    // 摆事实：真实命中名单（最多 300）+ 当前状态的候选元数据。
+    // 摆事实：一次拉全部真实命中（最多 3000），再一次性汇总；
+    // 不在这里逐条判断 —— 逐条精判只留给最终展示的 ≤10 条。
     const namesResult =
       typeof this.candidateService.listNutritionNames === 'function'
         ? await this.candidateService.listNutritionNames({
             keyword,
-            limit: 300,
+            limit: SEARCH_NAME_LIST_LIMIT,
           })
-        : { total: 0, names: [], keywords: [] };
+        : { total: 0, names: [], keywords: [], notice: null };
     const candidateResults = await Promise.all(
       states.map((state) =>
         this.candidateService.findCandidates({ name: keyword, state }),
@@ -1464,7 +1568,7 @@ export class IngredientCreationToolsService {
       ...namesResult.keywords,
       ...candidateResults.flatMap((result) => result.keywords),
     ]);
-    const notice = namesResult.notice ?? baseResult.notice ?? null;
+    const nameNotice = namesResult.notice ?? baseResult.notice ?? null;
 
     const mergedById = new Map<
       string,
@@ -1477,7 +1581,8 @@ export class IngredientCreationToolsService {
         }
       }
     }
-    const mergedCandidates = [...mergedById.values()].slice(
+    const allMergedCandidates = [...mergedById.values()];
+    const mergedCandidates = allMergedCandidates.slice(
       0,
       SEARCH_CANDIDATE_LIMIT,
     );
@@ -1490,7 +1595,7 @@ export class IngredientCreationToolsService {
     // 极端情况下名字清单为空、候选却有值（旧检索口径差异）：退回用候选名，
     // 至少不把已经召回的数据丢掉。
     if (names.length === 0) {
-      names = mergedCandidates.map((candidate) => ({
+      names = allMergedCandidates.map((candidate) => ({
         id: candidate.sourceRecordId,
         name: candidate.foodName,
         sourceType: candidate.sourceType,
@@ -1517,9 +1622,9 @@ export class IngredientCreationToolsService {
           stats: null,
           candidates: [],
           narrowing: null,
-          ...(notice ? { notice } : {}),
+          ...(nameNotice ? { notice: nameNotice } : {}),
           hint: [
-            notice ? `${notice}。` : '本地库没有找到匹配词条。',
+            nameNotice ? `${nameNotice}。` : '本地库没有找到匹配词条。',
             `已尝试关键词：${keywords.join('、')}（状态 ${states.join(' + ')}）。`,
             '可以换中文名/英文名再试；仍然没有就如实告诉用户库里缺数据，不要编造数值，也不要把这次工具调用说成“成功找到”。',
           ].join(''),
@@ -1531,15 +1636,134 @@ export class IngredientCreationToolsService {
       };
     }
 
-    // 判断交给 AI：最多 300 条逐条判断，结果落库复用 / 可人工纠正。
-    // 服务没注入（旧测试 / 极端装配错误）时按全部 UNKNOWN 降级，不阻塞检索。
+    // 关键路径：全部名字只发 1 次汇总请求。失败时 summarizeAllNames 会
+    // 退化为「按名字关键词粗略计数」，不阻塞本轮检索。
+    const summary = await this.summarizeAllNames(keyword, names);
+    const summaryNotice = summary.notice ?? nameNotice;
+    const classificationSummary = {
+      byState: summary.byState,
+      byMethod: summary.byMethod,
+      byCutGroup: summary.byCutGroup,
+    };
+
+    const built = buildSummaryNarrowing({
+      keyword,
+      summary,
+      stateSpecified,
+      ...(states.length > 0 ? { states } : {}),
+      ...(groupKey ? { groupKey } : {}),
+    });
+    const narrowing: ClassificationNarrowing = built.narrowing;
+    const selectedStates = built.selectedStates;
+
+    if (
+      groupKey &&
+      groupKey !== '__other__' &&
+      !narrowing.groups.some((group) => group.key === groupKey)
+    ) {
+      const available = narrowing.groups
+        .map((group) => `${group.key}（${group.label}，${group.count} 条）`)
+        .join('、');
+      return this.error(
+        `未知分组「${groupKey}」。可用分组：${available || '（没有分组）'}。请用上一次返回的 groups.key / narrowing.choices.key，不要自己编。`,
+      );
+    }
+
+    const updatedAt = new Date().toISOString();
+
+    if (narrowing.required) {
+      // 收窄阶段不逐条精判、不调用复核：只把一次汇总的真实数字摆出来。
+      const narrowingRecord: CandidateNarrowingRecord = {
+        keyword,
+        state: primaryState,
+        stateSpecified,
+        totalCandidates: totalNames,
+        relevantCount: 0,
+        required: narrowing.required,
+        kind: narrowing.kind,
+        reason: narrowing.reason,
+        question: narrowing.question,
+        options: narrowing.options,
+        choices: narrowing.choices,
+        groups: narrowing.groups,
+        selectedGroupKey: built.selectedGroupKey,
+        selectedStates,
+        stats: narrowing.stats,
+        updatedAt,
+      };
+      await this.draftService.patch(draftId, draft.step, {
+        candidateNarrowing: narrowingRecord,
+      });
+
+      const nextAction =
+        narrowing.kind === 'STATE' ? 'NARROW_STATE' : 'NARROW_GROUP';
+      let hint: string;
+      if (narrowing.kind === 'STATE') {
+        hint =
+          `本次共 ${narrowing.stats.total} 条（一次汇总）：` +
+          `生 ${narrowing.stats.byState.RAW} 条、熟 ${narrowing.stats.byState.COOKED} 条` +
+          `（${narrowing.question}）。` +
+          '必须先调用 askUser，用 narrowing.question / narrowing.options 原样问状态；' +
+          '用户选「生 + 熟都要」时下一轮传 states=["RAW","COOKED"]，不要直接列词条。';
+      } else {
+        hint =
+          `已选状态（${selectedStates.join(' + ')}），按一次汇总的部位分 ${narrowing.groups.length} 组：` +
+          `${narrowing.options.join('、')}。必须先调用 askUser 用 narrowing.question / narrowing.options 先按部位收窄，` +
+          '用户选组后再调用 searchLocalNutrition 并传 group=<narrowing.choices[].key>；不要直接列词条，不要列其它组的词条。';
+      }
+
+      return {
+        ok: true,
+        content: okContent({
+          keyword,
+          keywords,
+          state: primaryState,
+          states,
+          stateSpecified,
+          found: true,
+          candidateCount: totalNames,
+          totalCandidates: totalNames,
+          returnedCount: 0,
+          bestCoveragePercent: baseResult.coverage.bestCoveragePercent,
+          classificationSummary,
+          summary: {
+            ...summary,
+            notice: summaryNotice,
+          },
+          stats: narrowing.stats,
+          nextAction,
+          hint,
+          groups: narrowing.groups,
+          narrowing,
+          candidates: [],
+          ...(summaryNotice ? { notice: summaryNotice } : {}),
+        }),
+        progress: {
+          writtenFieldPaths: [],
+          sourceRecordIds: [],
+        },
+      };
+    }
+
+    // 逐条精判只喂最终展示的 ≤10 条：一次汇总已经决定收窄方向，
+    // 这里不再对全部 1,600 条调用模型。
+    const preciseNames = selectPreciseNames({
+      candidates: mergedCandidates,
+      names,
+      summary,
+      groupKey,
+      max: PRECISE_CLASSIFICATION_LIMIT,
+    });
     const classification = this.nameClassifierService
       ? await this.nameClassifierService.classifyNames({
           targetName: keyword,
-          items: names.map((entry) => ({ id: entry.id, name: entry.name })),
+          items: preciseNames.map((entry) => ({
+            id: entry.id,
+            name: entry.name,
+          })),
         })
       : (() => {
-          const results: NameClassification[] = names.map((entry) => ({
+          const results: NameClassification[] = preciseNames.map((entry) => ({
             id: entry.id,
             state: 'UNKNOWN' as const,
             method: 'NONE' as const,
@@ -1557,8 +1781,7 @@ export class IngredientCreationToolsService {
     const candidates = mergedCandidates.map((candidate) => ({
       ...candidate,
       score: candidate.matchScore,
-      classification:
-        classificationById.get(candidate.sourceRecordId) ?? null,
+      classification: classificationById.get(candidate.sourceRecordId) ?? null,
     }));
 
     const targetNameEn = readIntakeNameEn(draft);
@@ -1592,33 +1815,9 @@ export class IngredientCreationToolsService {
       };
     });
 
-    // 收窄问题完全由 AI 分类的真实统计驱动。
-    const built = buildClassificationNarrowing({
-      keyword,
-      names,
-      classifications: classification.results,
-      stateSpecified,
-      states,
-      groupKey,
-    });
-    const narrowing: ClassificationNarrowing = built.narrowing;
-    const selectedStates = built.selectedStates;
-
-    if (
-      groupKey &&
-      groupKey !== '__other__' &&
-      !narrowing.groups.some((group) => group.key === groupKey)
-    ) {
-      const available = narrowing.groups
-        .map((group) => `${group.key}（${group.label}，${group.count} 条）`)
-        .join('、');
-      return this.error(
-        `未知分组「${groupKey}」。可用分组：${available || '（没有分组）'}。请用上一次返回的 groups.key / narrowing.choices.key，不要自己编。`,
-      );
-    }
-
+    // 收窄后的展示范围只看这 ≤10 条的逐条精判结果。
     const scopeItems = resolveClassificationGroupScope({
-      names,
+      names: preciseNames,
       classifications: classification.results,
       groups: narrowing.groups,
       groupKey,
@@ -1635,26 +1834,22 @@ export class IngredientCreationToolsService {
       // 全部 UNKNOWN 时 scopeItems 为空：仍然把名字摆出来，让人自己说，
       // 不因为模型没有判断就把整条链路卡死。
       if (items.length === 0 && selectedStates.length === 0) {
-        items = names.map((name) => ({
+        items = preciseNames.map((name) => ({
           name,
-          classification:
-            classificationById.get(name.id) ?? {
-              id: name.id,
-              state: 'UNKNOWN' as const,
-              method: 'NONE' as const,
-              cutLabel: null,
-              cutGroup: null,
-              evidence: null,
-              confidence: null,
-            },
+          classification: classificationById.get(name.id) ?? {
+            id: name.id,
+            state: 'UNKNOWN' as const,
+            method: 'NONE' as const,
+            cutLabel: null,
+            cutGroup: null,
+            evidence: null,
+            confidence: null,
+          },
         }));
       }
 
       // 熟档案沿用既有策略：烤 / 煎不列进熟候选（用户明确两者都要时保留）。
-      if (
-        selectedStates.length === 1 &&
-        selectedStates[0] === 'COOKED'
-      ) {
+      if (selectedStates.length === 1 && selectedStates[0] === 'COOKED') {
         items = items.filter(
           (item) =>
             item.classification.method !== 'GRILLED' &&
@@ -1693,10 +1888,7 @@ export class IngredientCreationToolsService {
           left.name.name.localeCompare(right.name.name),
       );
 
-      const stateLabel = (selectedStates.length > 0
-        ? selectedStates
-        : []
-      )
+      const stateLabel = (selectedStates.length > 0 ? selectedStates : [])
         .map((state) => (state === 'COOKED' ? '熟' : '生'))
         .join(' + ');
       const title = groupKey
@@ -1733,34 +1925,17 @@ export class IngredientCreationToolsService {
           candidate.review.reason === '',
       );
 
-    let nextAction: string;
-    if (narrowing.required) {
-      nextAction =
-        narrowing.kind === 'STATE' ? 'NARROW_STATE' : 'NARROW_GROUP';
-    } else if (listing?.single) {
-      nextAction = 'USE_SINGLE_RELEVANT';
-    } else if (listing && listing.entries.length > 0) {
-      nextAction = 'ASK_USER_ENTRIES';
-    } else if (reviewFailed) {
-      nextAction = 'REVIEW_UNAVAILABLE';
-    } else {
-      nextAction = 'ONLINE_OR_LEAVE_BLANK';
-    }
+    // 走到这里说明收窄已完成（required=true 已在上面提前返回）。
+    const nextAction: string = listing?.single
+      ? 'USE_SINGLE_RELEVANT'
+      : listing && listing.entries.length > 0
+        ? 'ASK_USER_ENTRIES'
+        : reviewFailed
+          ? 'REVIEW_UNAVAILABLE'
+          : 'ONLINE_OR_LEAVE_BLANK';
 
     let hint: string;
-    if (narrowing.required && narrowing.kind === 'STATE') {
-      hint =
-        `本次共 ${narrowing.stats.total} 条：` +
-        `生 ${narrowing.stats.byState.RAW} 条、熟 ${narrowing.stats.byState.COOKED} 条` +
-        `（${narrowing.question}）。` +
-        '必须先调用 askUser，用 narrowing.question / narrowing.options 原样问状态；' +
-        '用户选「生 + 熟都要」时下一轮传 states=["RAW","COOKED"]，不要直接列词条。';
-    } else if (narrowing.required) {
-      hint =
-        `已选状态（${selectedStates.join(' + ')}），按 AI 判出的部位分 ${narrowing.groups.length} 组：` +
-        `${narrowing.options.join('、')}。必须先调用 askUser 用 narrowing.question / narrowing.options 先按部位收窄，` +
-        '用户选组后再调用 searchLocalNutrition 并传 group=<narrowing.choices[].key>；不要直接列词条，不要列其它组的词条。';
-    } else if (listing?.single) {
+    if (listing?.single) {
       const only = listing.entries[0]!;
       hint =
         `只剩 1 条「${only.foodName}」（AI 分类：${only.classification.state} / ${only.classification.method}` +
@@ -1779,7 +1954,6 @@ export class IngredientCreationToolsService {
         '没有可列出的词条：不许硬选。请转“去线上找 / 留空”分支，并告诉用户为什么；不要写原料卡或营养档案。';
     }
 
-    const updatedAt = new Date().toISOString();
     const gate: CandidateReviewGate | null =
       gateReviewed.length > 0
         ? {
@@ -1834,12 +2008,12 @@ export class IngredientCreationToolsService {
       ? new Set(scopeItems.map((item) => item.name.id))
       : null;
     const visibleCandidates = reviewedCandidates.filter((candidate) => {
-      const classification = classificationById.get(candidate.sourceRecordId);
+      const precise = classificationById.get(candidate.sourceRecordId);
       const stateOk =
         selectedStateSet.size === 0 ||
-        !classification ||
-        classification.state === 'UNKNOWN' ||
-        selectedStateSet.has(classification.state);
+        !precise ||
+        precise.state === 'UNKNOWN' ||
+        selectedStateSet.has(precise.state);
       const groupOk =
         !scopedCandidateIds || scopedCandidateIds.has(candidate.sourceRecordId);
       return stateOk && groupOk;
@@ -1864,7 +2038,11 @@ export class IngredientCreationToolsService {
           irrelevantCount: gateIrrelevantCount,
           failed: reviewFailed,
         },
-        classificationSummary: classification.counts,
+        classificationSummary,
+        summary: {
+          ...summary,
+          notice: summaryNotice,
+        },
         stats: narrowing.stats,
         nextAction,
         hint,
@@ -1882,7 +2060,7 @@ export class IngredientCreationToolsService {
           : {}),
         ...(listing ? { listing } : {}),
         candidates: visibleCandidates,
-        ...(notice ? { notice } : {}),
+        ...(summaryNotice ? { notice: summaryNotice } : {}),
       }),
       progress: {
         writtenFieldPaths: [],
@@ -1891,6 +2069,46 @@ export class IngredientCreationToolsService {
         ),
       },
     };
+  }
+
+  /**
+   * 全部名字只发一次汇总请求；装配缺失 / 模型失败时退化为关键词粗略计数。
+   */
+  private async summarizeAllNames(
+    targetName: string,
+    names: readonly ClassificationName[],
+  ): Promise<SummarizeNamesResult> {
+    if (
+      !this.nameClassifierService ||
+      typeof this.nameClassifierService.summarizeNames !== 'function'
+    ) {
+      const keywordSummary = buildKeywordNameSummary(names);
+      return {
+        ...keywordSummary,
+        degraded: true,
+        notice:
+          'AI 汇总不可用（服务未装配），已按名字关键词粗略计数；生 / 熟 / 部位数字仅供参考，分类不可用。',
+      };
+    }
+
+    try {
+      return await this.nameClassifierService.summarizeNames({
+        targetName,
+        items: names.map((entry) => ({ id: entry.id, name: entry.name })),
+      });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `[agent-tool] 全量名字汇总失败，按关键词降级 target=${targetName}: ${reason}`,
+      );
+      const keywordSummary = buildKeywordNameSummary(names);
+      return {
+        ...keywordSummary,
+        degraded: true,
+        notice:
+          'AI 汇总失败，已按名字关键词粗略计数；生 / 熟 / 部位数字仅供参考，分类不可用。',
+      };
+    }
   }
 
   /**

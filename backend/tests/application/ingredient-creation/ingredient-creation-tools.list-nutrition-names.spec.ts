@@ -10,7 +10,7 @@ const DRAFT_ID = 'draft-1';
 const RUN_ID = 'run-1';
 
 function createTools() {
-  const names = Array.from({ length: 300 }, (_, index) => ({
+  const names = Array.from({ length: 3000 }, (_, index) => ({
     id: `rec-${index}`,
     name: `Beef item ${index}`,
     sourceType: index % 2 === 0 ? 'USDA_FDC' : 'CFCT',
@@ -86,7 +86,7 @@ async function executeTool(
 }
 
 describe('IngredientCreationToolsService · listNutritionNames', () => {
-  it('返回 total 与最多 300 条词条名，只带 id / name / sourceType，不返回营养值', async () => {
+  it('返回 total 与最多 3000 条词条名，只带 id / name / sourceType，不返回营养值', async () => {
     const { tools, listNutritionNames } = createTools();
 
     const result = await executeTool(tools, 'listNutritionNames', {
@@ -96,10 +96,10 @@ describe('IngredientCreationToolsService · listNutritionNames', () => {
     expect(result.ok).toBe(true);
     expect(listNutritionNames).toHaveBeenCalledWith({
       keyword: '牛肉',
-      limit: 300,
+      limit: 3000,
     });
     expect(result.body.total).toBe(4210);
-    expect(result.body.names).toHaveLength(300);
+    expect(result.body.names).toHaveLength(3000);
     expect(result.body.names[0]).toEqual({
       id: 'rec-0',
       name: 'Beef item 0',
@@ -117,16 +117,16 @@ describe('IngredientCreationToolsService · listNutritionNames', () => {
     expect(result.body.names[0]).not.toHaveProperty('normalizedNutrition');
   });
 
-  it('limit 上限 300；传更大也只按 300 取，传非法值回落 300', async () => {
+  it('limit 上限 3000；传更大也只按 3000 取，传非法值回落 3000', async () => {
     const { tools, listNutritionNames } = createTools();
 
     await executeTool(tools, 'listNutritionNames', {
       keyword: '牛肉',
-      limit: 1000,
+      limit: 6000,
     });
     expect(listNutritionNames).toHaveBeenLastCalledWith({
       keyword: '牛肉',
-      limit: 300,
+      limit: 3000,
     });
 
     await executeTool(tools, 'listNutritionNames', {
@@ -135,11 +135,11 @@ describe('IngredientCreationToolsService · listNutritionNames', () => {
     });
     expect(listNutritionNames).toHaveBeenLastCalledWith({
       keyword: '牛肉',
-      limit: 300,
+      limit: 3000,
     });
   });
 
-  it('工具定义把 limit 上限暴露为 300，keyword 必填', () => {
+  it('工具定义把 limit 上限暴露为 3000，keyword 必填', () => {
     const { tools } = createTools();
     const definition = tools
       .getDefinitions()
@@ -154,7 +154,7 @@ describe('IngredientCreationToolsService · listNutritionNames', () => {
         limit: {
           type: 'integer',
           minimum: 1,
-          maximum: 300,
+          maximum: 3000,
         },
       },
     });

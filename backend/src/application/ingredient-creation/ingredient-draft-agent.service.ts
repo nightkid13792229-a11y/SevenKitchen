@@ -39,7 +39,7 @@ import type {
  */
 export const INGREDIENT_AGENT_MAX_TOOL_CALLS = 80;
 /** 一次起草的总时长上限：超时不再发起模型请求。 */
-export const INGREDIENT_AGENT_TIMEOUT_MS = 180_000;
+export const INGREDIENT_AGENT_TIMEOUT_MS = 240_000;
 /** 连续多少次工具调用没有任何新进展就软停止。 */
 export const INGREDIENT_AGENT_MAX_NO_PROGRESS = 3;
 /** 单轮 token 成本预算默认值（输入 + 输出）；可用环境变量覆盖。 */
@@ -1175,8 +1175,9 @@ function buildSystemPrompt(
     '- 不要编造营养数值。只写来源记录里有的值，或用户明确给出的值。',
     '- 工具报错表示输入不合法。按错误文本改正参数后重试；连续改不出来就停下，说明卡在哪。',
     '- searchLocalNutrition 返回 ok=true 只表示「查询执行成功」，不代表找到数据。看 found / candidateCount：found=false 或 0 条时必须明确说「没有找到匹配词条」，并列出 keywords 里已尝试的关键词；不要写成「成功找到」，也不要编造数据。',
-    '- 模糊词（如「牛肉」「猪肉」「鱼」）先用 listNutritionNames 看真实命中（最多 300 条）与 total；它只列名字，不判断生熟 / 做法 / 部位。',
-    '- listNutritionNames 之后直接调用 searchLocalNutrition：它会用 AI 读词条名判断生熟 / 做法 / 部位并落库，再用真实统计生成 narrowing；收窄时先按部位分组，收窄后说「这一组 N 条」。不要自己按关键词猜部位。',
+    '- 模糊词（如「牛肉」「猪肉」「鱼」）直接用 searchLocalNutrition：它内部一次拉全部命中（最多 3000 条名字），只发 1 次汇总请求统计生 / 熟 / 做法 / 部位；不要用 listNutritionNames 把几千条名字拉进上下文，也不要逐条判断。',
+    '- searchLocalNutrition 用一次汇总生成 narrowing（生 / 熟 / 水煮 / 蒸 / 烤 / 煎 / 各部位各多少条），逐条精判只发生在最终展示的 ≤10 条；收窄时先按部位分组，收窄后说「这一组 N 条」。不要自己按关键词猜部位。',
+    '- 汇总失败时工具会按名字关键词粗略计数并返回 notice：据实说明「AI 分类不可用，数字是粗算」，不要编造；也不要因此卡住检索。',
     '- searchLocalNutrition 返回的每条候选都带 classification（state / method / cutLabel / cutGroup / evidence）与 review（RELEVANT=相关 / UNCERTAIN=存疑 / IRRELEVANT=不相关）。不要因为候选里有不相关项就丢弃或隐藏候选；AI 判断只是证据，最终选择由人做；展示时写出分类标签与依据词（evidence）。',
     '- 写原料卡或营养档案之前必须先查库并看复核结论；review.verdict=IRRELEVANT 的候选不允许直接写入。',
     '- 相关候选 ≥2 条：**必须先调用 askUser** 让用户选择，不许自己挑一条；选项文案写成「候选名 —— 相关/存疑/不相关：≤40 字理由」，把 AI 判断展示给用户。',
@@ -1453,7 +1454,7 @@ function buildStopReply(input: {
  *
  * 安全边界不靠模型自觉：
  * - 工具层只有 7 个，全部只碰草稿；提交 / 确认可用不在这里；
- * - 硬保险丝：80 次工具调用 / 180 秒 / 可配 token 预算；
+ * - 硬保险丝：80 次工具调用 / 240 秒 / 可配 token 预算；
  * - 软停止：连续 3 次工具调用没有新进展（不写字段、不发现新来源）就停；
  * - 停下来不回滚：已写入的草稿保持原样，reply 说明还剩什么；
  * - 模型 / 配置失败直接 503，不偷偷回退到规则猜。

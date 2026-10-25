@@ -45,7 +45,7 @@ export interface ListNutritionNamesInput {
   keyword: string;
   /** 可选的英文名（口径卡里已有英文名时一起参与匹配）。 */
   nameEn?: string;
-  /** 最多返回多少条；默认与上限都是 300。 */
+  /** 最多返回多少条；默认与上限都是 3000。 */
   limit?: number;
 }
 
@@ -95,9 +95,9 @@ const GENTLE_COOKED_METHOD_WEIGHT = 0.05;
 /** 候选默认返回条数，避免「牛肉」这类宽泛名字把接口和页面撑爆。 */
 const DEFAULT_CANDIDATE_LIMIT = 50;
 
-/** `listNutritionNames` 的默认 / 上限：只摆事实，不替人判断，所以给 300。 */
-const DEFAULT_NAME_LIST_LIMIT = 300;
-const MAX_NAME_LIST_LIMIT = 300;
+/** `listNutritionNames` 的默认 / 上限：一次返回全部命中，交给一次汇总，所以给 3000。 */
+const DEFAULT_NAME_LIST_LIMIT = 3000;
+const MAX_NAME_LIST_LIMIT = 3000;
 
 /** `nutrition_source_record` 里检索候选时需要的列。 */
 interface SourceRecordMeta {
@@ -579,7 +579,7 @@ function normalizeCandidateLimit(limit: number): number {
   return Math.max(0, Math.floor(limit));
 }
 
-/** `listNutritionNames` 的 limit：默认 300，上限 300，非法值回落默认。 */
+/** `listNutritionNames` 的 limit：默认 3000，上限 3000，非法值回落默认。 */
 function normalizeNameListLimit(limit: number | undefined): number {
   if (typeof limit !== 'number' || !Number.isFinite(limit)) {
     return DEFAULT_NAME_LIST_LIMIT;
@@ -712,7 +712,7 @@ export class IngredientCreationCandidateService {
   ) {}
 
   /**
-   * 只按名字摆事实：返回真实命中的词条名（最多 300 条），**不做分类**。
+   * 只按名字摆事实：返回真实命中的词条名（最多 3000 条），**不做分类**。
    *
    * 中文关键词仍先查词典、词典没有就让模型翻译；翻译词真的命中来源才写回词典
    * （与 `findCandidates` 同一套 alias 服务与落库策略）。

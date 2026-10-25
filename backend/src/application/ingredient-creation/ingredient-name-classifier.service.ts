@@ -9,6 +9,16 @@ import {
   normalizeOptionalText,
 } from '../recipe-designer/deepseek-chat';
 import { INGREDIENT_INTAKE_AGENT_PURPOSES } from './ingredient-creation-intake.service';
+import {
+  NAME_SUMMARY_MAX_TOKENS,
+  NAME_SUMMARY_SYSTEM_PROMPT,
+  NAME_SUMMARY_TIMEOUT_MS,
+  buildKeywordNameSummary,
+  parseNameSummary,
+  type NameSummaryItem,
+  type SummarizeNamesInput,
+  type SummarizeNamesResult,
+} from './ingredient-name-summary';
 
 /**
  * 词条名的生熟判断。
@@ -330,6 +340,92 @@ export class IngredientNameClassifierService {
     private readonly agentProviderConfig: AgentProviderConfigService,
   ) {}
 
+  /**
+   * 全部匹配名字一次汇总（不逐条判断）。
+   *
+   * 输入可以是一两千条名字：只发**一次**请求，要求模型只回
+   * `total / byState / byMethod / byCutGroup / examples / irrelevantExamples`，
+   * 输出上限 2000 token。模型不可用 / 输出非法（含超长）时退化为按名字
+   * 关键词粗略计数，并在 `notice` 里说明分类不可用 —— 不抛异常、不阻塞检索。
+   */
+  async summarizeNames(
+    input: SummarizeNamesInput,
+  ): Promise<SummarizeNamesResult> {
+    const targetName = normalizeOptionalText(input.targetName);
+    const items = this.normalizeSummaryItems(input.items);
+    const keywordSummary = buildKeywordNameSummary(items);
+    if (items.length === 0) {
+      return { ...keywordSummary, degraded: false, notice: null };
+    }
+
+    const runtime = await this.loadRuntimeConfig();
+    if (!runtime) {
+      this.logger.warn(
+        `[ingredient-summary] AI 配置不可用，按关键词降级 target=${targetName || '（空）'} count=${items.length}`,
+      );
+      return {
+        ...keywordSummary,
+        degraded: true,
+        notice:
+          'AI 汇总当前不可用（模型未配置），已按名字关键词粗略计数；生 / 熟 / 部位数字仅供参考，分类不可用。',
+      };
+    }
+
+    try {
+      const payload = await callDeepSeekJson({
+        baseUrl: runtime.baseUrl,
+        apiKey: runtime.apiKey,
+        model: runtime.model,
+        requestTimeoutMs: Math.min(
+          runtime.requestTimeoutMs > 0
+            ? runtime.requestTimeoutMs
+            : NAME_SUMMARY_TIMEOUT_MS,
+          NAME_SUMMARY_TIMEOUT_MS,
+        ),
+        temperature: 0,
+        maxTokens: NAME_SUMMARY_MAX_TOKENS,
+        extraBody: { thinking: { type: 'disabled' } },
+        systemPrompt: NAME_SUMMARY_SYSTEM_PROMPT,
+        userPayload: {
+          targetName,
+          total: items.length,
+          names: items.map((item) => item.name),
+        },
+      });
+
+      const parsed = parseNameSummary(payload, items.length);
+      if (!parsed) {
+        this.logger.warn(
+          `[ingredient-summary] 汇总输出非法（或超长），按关键词降级 target=${targetName || '（空）'} count=${items.length}`,
+        );
+        return {
+          ...keywordSummary,
+          degraded: true,
+          notice:
+            'AI 汇总输出不可用（非法或超长），已按名字关键词粗略计数；生 / 熟 / 部位数字仅供参考，分类不可用。',
+        };
+      }
+
+      this.logger.log(
+        `[ingredient-summary] 汇总完成 target=${targetName || '（空）'} count=${items.length} ` +
+          `raw=${parsed.byState.RAW} cooked=${parsed.byState.COOKED} unknown=${parsed.byState.UNKNOWN} ` +
+          `cutGroups=${Object.keys(parsed.byCutGroup).length}`,
+      );
+      return { ...parsed, degraded: false, notice: null };
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `[ingredient-summary] 汇总失败，按关键词降级 target=${targetName || '（空）'} count=${items.length}: ${reason}`,
+      );
+      return {
+        ...keywordSummary,
+        degraded: true,
+        notice:
+          'AI 汇总失败，已按名字关键词粗略计数；生 / 熟 / 部位数字仅供参考，分类不可用。',
+      };
+    }
+  }
+
   async classifyNames(input: ClassifyNamesInput): Promise<ClassifyNamesResult> {
     const targetName = normalizeOptionalText(input.targetName);
     const items = this.normalizeItems(input.items);
@@ -399,6 +495,24 @@ export class IngredientNameClassifierService {
       if (!id || !name || seen.has(id)) continue;
       seen.add(id);
       normalized.push({ id, name });
+    }
+    return normalized;
+  }
+
+  /** 汇总输入只要求名字；id 可有可无（汇总本身不需要 id）。 */
+  private normalizeSummaryItems(
+    items: readonly NameSummaryItem[] | undefined,
+  ): NameSummaryItem[] {
+    if (!Array.isArray(items)) {
+      return [];
+    }
+    const normalized: NameSummaryItem[] = [];
+    for (const item of items) {
+      if (!isRecord(item)) continue;
+      const name = normalizeOptionalText(item.name);
+      if (!name) continue;
+      const id = normalizeOptionalText(item.id);
+      normalized.push(id ? { id, name } : { name });
     }
     return normalized;
   }

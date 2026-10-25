@@ -8,6 +8,7 @@ import type {
   NutritionRecordMethod,
   NutritionRecordState,
 } from './ingredient-name-classifier.service';
+import type { NameSummary } from './ingredient-name-summary';
 
 /**
  * AI 分类驱动的收窄。
@@ -565,6 +566,157 @@ export function buildClassificationNarrowing(
       options: optionsWithCount(choices),
       choices,
       groups: toCandidateGroups(scopedGroups),
+      stats,
+    },
+  };
+}
+
+export interface BuildSummaryNarrowingInput {
+  keyword: string;
+  /** 一次汇总的结果：全部匹配名字的统计，不逐条判断。 */
+  summary: NameSummary;
+  /** 模型这一轮有没有显式指定状态（`state` / `states`）。 */
+  stateSpecified: boolean;
+  /** 已选状态；「生 + 熟都要」传 ['RAW', 'COOKED']。 */
+  states?: readonly PreparationState[];
+  /** 已选部位组 key（来自上一次的 groups / choices）。 */
+  groupKey?: string | null;
+}
+
+/** 把一次汇总折成收窄用的统计；部位组只能给总数，不假装知道生熟交叉。 */
+export function buildSummaryStats(
+  summary: NameSummary,
+  states?: readonly PreparationState[],
+): ClassificationNarrowingStats {
+  const selected = uniqueStates(states);
+  const knownStates = STATE_ORDER.filter(
+    (state) => (summary.byState[state] ?? 0) > 0,
+  );
+  const groupStates =
+    selected.length > 0
+      ? knownStates.filter((state) => selected.includes(state))
+      : knownStates;
+
+  const cutGroups: ClassificationCutGroupSummary[] = Object.entries(
+    summary.byCutGroup,
+  )
+    .filter(([, count]) => Number.isFinite(count) && count > 0)
+    .map(([key, count]) => ({
+      key,
+      label: cutGroupLabel(key),
+      count,
+      states: [...groupStates],
+    }))
+    .sort(compareCutGroups);
+
+  return {
+    total: summary.total,
+    byState: { ...summary.byState },
+    byMethod: { ...summary.byMethod },
+    cutGroups,
+  };
+}
+
+/**
+ * 全部名字一次汇总驱动的收窄。
+ *
+ * 与 `buildClassificationNarrowing` 的区别：这里**不消费逐条分类**，
+ * 问句里的生 / 熟 / 做法 / 部位条数全部来自一次汇总。逐条精判只发生在
+ * 收窄完成、要列最终 ≤5 条词条时。
+ */
+export function buildSummaryNarrowing(
+  input: BuildSummaryNarrowingInput,
+): BuildClassificationNarrowingResult {
+  const stats = buildSummaryStats(input.summary, input.states);
+  const groups = stats.cutGroups;
+  const knownCount = stats.byState.RAW + stats.byState.COOKED;
+  const selectedStates = uniqueStates(
+    input.stateSpecified ? input.states : undefined,
+  );
+  const requestedGroupKey =
+    typeof input.groupKey === 'string' && input.groupKey.trim()
+      ? input.groupKey.trim()
+      : null;
+
+  if (input.stateSpecified !== true) {
+    if (knownCount === 0) {
+      return {
+        narrowing: emptyNarrowing(stats),
+        selectedStates: [],
+        selectedGroupKey: null,
+      };
+    }
+
+    const choices = stateChoices(stats);
+    if (choices.length === 1) {
+      const only = choices[0]!;
+      choices.push({
+        kind: 'STATE',
+        key: 'RAW+COOKED',
+        label: '生 + 熟都要',
+        count: knownCount,
+        states: ['RAW', 'COOKED'],
+      });
+      if (only.count === undefined) {
+        only.count = knownCount;
+      }
+    }
+
+    return {
+      selectedStates: [],
+      selectedGroupKey: null,
+      narrowing: {
+        required: true,
+        kind: 'STATE',
+        reason: 'STATE_UNSPECIFIED',
+        question: `${statsQuestionPrefix(input.keyword, stats)}要哪些状态？`,
+        options: optionsWithCount(choices),
+        choices,
+        groups: toCandidateGroups(groups),
+        stats,
+      },
+    };
+  }
+
+  const statesForScope =
+    selectedStates.length > 0
+      ? selectedStates
+      : (['RAW'] as PreparationState[]);
+  const selectedGroupKey = requestedGroupKey;
+  const selectedCount = statesForScope.reduce(
+    (total, state) => total + (stats.byState[state] ?? 0),
+    0,
+  );
+
+  if (
+    selectedGroupKey ||
+    selectedCount <= CLASSIFICATION_MAX_ENTRIES ||
+    groups.length <= 1
+  ) {
+    return {
+      narrowing: emptyNarrowing(stats, groups),
+      selectedStates: statesForScope,
+      selectedGroupKey,
+    };
+  }
+
+  const choices = groupChoices(groups);
+  const stateLabel = statesForScope
+    .map((state) => STATE_LABELS[state])
+    .join(' + ');
+  return {
+    selectedStates: statesForScope,
+    selectedGroupKey,
+    narrowing: {
+      required: true,
+      kind: 'GROUP',
+      reason: 'MULTIPLE_GROUPS',
+      question:
+        `「${input.keyword}·${stateLabel}」共 ${selectedCount} 条：` +
+        `${stateSummaryText(stats)}；部位有：${cutSummaryText(stats)}。先按部位收窄：`,
+      options: optionsWithCount(choices),
+      choices,
+      groups: toCandidateGroups(groups),
       stats,
     },
   };

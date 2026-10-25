@@ -61,7 +61,7 @@ describe('IngredientCreationCandidateService · listNutritionNames', () => {
 
     const result = await service.listNutritionNames({
       keyword: '牛肉',
-      limit: 300,
+      limit: 3000,
     });
 
     expect(alias.findAliases).toHaveBeenCalledWith(['牛肉']);
@@ -102,7 +102,7 @@ describe('IngredientCreationCandidateService · listNutritionNames', () => {
     });
   });
 
-  it('total 是截断前的真实命中数；limit 只影响返回条数并封顶 300', async () => {
+  it('total 是截断前的真实命中数；limit 只影响返回条数并封顶 3000', async () => {
     const many = Array.from({ length: 5 }, (_, index) => ({
       id: `beef-${index}`,
       sourceType: 'USDA_FDC',
@@ -126,8 +126,35 @@ describe('IngredientCreationCandidateService · listNutritionNames', () => {
 
     const capped = await service.listNutritionNames({
       keyword: '牛肉',
-      limit: 300,
+      limit: 3000,
     });
     expect(capped.names).toHaveLength(5);
+  });
+
+  it('命中 3005 条时一次最多返回 3000 条，total 仍是真实命中数', async () => {
+    const many = Array.from({ length: 3005 }, (_, index) => ({
+      id: `beef-${index}`,
+      sourceType: 'USDA_FDC',
+      foodName: `Beef item ${index}`,
+      foodNameEn: `Beef item ${index}`,
+    }));
+    const { service, alias } = createService(many);
+    alias.findAliases.mockResolvedValue([
+      {
+        id: 'alias-1',
+        zhTerm: '牛肉',
+        foreignTerm: 'beef',
+        language: 'en',
+        source: 'MANUAL_SEED',
+      },
+    ]);
+
+    const result = await service.listNutritionNames({
+      keyword: '牛肉',
+      limit: 9999,
+    });
+
+    expect(result.total).toBe(3005);
+    expect(result.names).toHaveLength(3000);
   });
 });

@@ -5,11 +5,14 @@ import type {
 } from './ingredient-name-classifier.service';
 
 /**
- * 「全部匹配名字一次汇总」的输入 / 输出。
+ * 「按关键词一次汇总全部名字」的输入 / 输出。
  *
  * 为什么单独做汇总：模糊词（「牛肉」）能命中一两千条，逐条让模型判断会
  * 把输出 token 和 3 分钟预算全部烧光。汇总只要求模型数数 + 给每组 2-3 个
  * 代表名，输出控制在 2000 token 以内；逐条精判只留给最终展示的 ≤10 条。
+ *
+ * 名字永远走**模型输入**：服务端自己取全量名字、自己拼请求，模型只回
+ * 汇总数字，不把名字抄回来（线上 1,600 条名字回抄导致 JSON 截断）。
  */
 export interface NameSummaryItem {
   /** `nutrition_source_record.id`；汇总本身不用，但调用方要按 id 回查。 */
@@ -79,7 +82,7 @@ const METHOD_KEYS: readonly NutritionRecordMethod[] = [
  * 例子必须原样照抄，方便工具按名字回查 id。
  */
 export const NAME_SUMMARY_SYSTEM_PROMPT = [
-  '你是营养数据库的词条名汇总员。用户会给一个目标食材（如「牛肉」）和本地库匹配到的全部词条名。',
+  '你是营养数据库的词条名汇总员。用户会给一个目标食材（如「牛肉」）和本地库匹配到的词条名（最多 3000 条，可能已按部位组筛选）。',
   '你只读名字做一次汇总，**绝对不要逐条输出判断**；只输出一个小 JSON。',
   '',
   '判断口径（只看名字）：',
@@ -283,30 +286,39 @@ export function parseNameSummary(
   };
 }
 
-/** 部位 key 的粗略识别顺序；先长词后短词，避免 `rib` 抢 `brisket` 之类的误判。 */
+/**
+ * 部位 key 的粗略识别顺序；先长词后短词，避免 `rib` 抢 `brisket` 之类的误判。
+ *
+ * 英文按词边界匹配（USDA 风格词条名），中文按常见部位词匹配（CFCT 风格）。
+ * 中文只收确定性高的词；认不出就归 `other`，不硬猜。
+ *
+ * 这套口径同时用于两处：汇总失败时的关键词降级统计，以及
+ * `summarizeByKeyword` 的 `groupHint` 过滤。
+ */
 const CUT_GROUP_KEYWORDS: ReadonlyArray<readonly [string, RegExp]> = [
-  ['ground', /\bground\b/i],
-  ['tenderloin', /\btenderloin\b/i],
-  ['brisket', /\bbrisket\b/i],
-  ['sandwich', /\bsandwich\b/i],
-  ['gizzard', /\bgizzard\b/i],
-  ['kidney', /\bkidney\b/i],
-  ['chuck', /\bchuck\b/i],
-  ['shank', /\bshank\b/i],
-  ['round', /\bround\b/i],
-  ['loin', /\bloin\b/i],
-  ['breast', /\bbreast\b/i],
-  ['thigh', /\bthigh\b/i],
-  ['wing', /\bwing\b/i],
-  ['liver', /\bliver\b/i],
-  ['heart', /\bheart\b/i],
-  ['neck', /\bneck\b/i],
-  ['head', /\bhead\b/i],
-  ['foot', /\bfoot\b/i],
-  ['rib', /\brib\b/i],
+  ['ground', /\bground\b|绞肉|肉馅|肉末|碎肉/iu],
+  ['tenderloin', /\btenderloin\b|里脊|菲力/iu],
+  ['brisket', /\bbrisket\b|腩/iu],
+  ['sandwich', /\bsandwich\b/iu],
+  ['gizzard', /\bgizzard\b|胗|肫/iu],
+  ['kidney', /\bkidney\b|肾脏|腰子|肾/iu],
+  ['chuck', /\bchuck\b|肩肉|上脑|肩/iu],
+  ['shank', /\bshank\b|腱/iu],
+  ['round', /\bround\b|后腿|米龙/iu],
+  ['loin', /\bloin\b|外脊|西冷|沙朗/iu],
+  ['breast', /\bbreast\b|胸/iu],
+  ['thigh', /\bthigh\b|腿/iu],
+  ['wing', /\bwing\b|翅/iu],
+  ['liver', /\bliver\b|肝/iu],
+  ['heart', /\bheart\b|心/iu],
+  ['neck', /\bneck\b|颈|脖子/iu],
+  ['head', /\bhead\b|(?<!骨)头/iu],
+  ['foot', /\bfoot\b|蹄|爪|脚/iu],
+  ['rib', /\brib\b|排骨|肋/iu],
 ];
 
-function detectCutGroup(name: string): string {
+/** 从词条名里粗判部位组；认不出返回 `other`（与汇总提示词的受控 key 一致）。 */
+export function detectCutGroup(name: string): string {
   for (const [key, pattern] of CUT_GROUP_KEYWORDS) {
     if (pattern.test(name)) return key;
   }

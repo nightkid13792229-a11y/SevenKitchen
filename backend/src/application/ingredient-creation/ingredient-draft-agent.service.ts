@@ -619,9 +619,12 @@ export function buildToolStepSummary(
       const keyword = readTextValue(args.keyword) || '（未填关键词）';
       return oneLine(`查名字 ${keyword}`);
     }
-    case 'summarizeNames': {
-      const names = Array.isArray(args.names) ? args.names.length : 0;
-      return oneLine(`汇总名字 ${names} 条`);
+    case 'summarizeByKeyword': {
+      const keyword = readTextValue(args.keyword) || '（未填关键词）';
+      const groupHint = readTextValue(args.groupHint);
+      return oneLine(
+        `按关键词汇总 ${keyword}${groupHint ? ` · ${groupHint}` : ''}`,
+      );
     }
     case 'getRecord': {
       const id =
@@ -696,7 +699,7 @@ export function buildToolResultSummary(
       }
       return `列出 ${total} 条名字（返回 ${returned} 条）`;
     }
-    case 'summarizeNames': {
+    case 'summarizeByKeyword': {
       if (result.degraded === true) {
         return '汇总完成（按关键词粗略计数）';
       }
@@ -1194,11 +1197,12 @@ function buildSystemPrompt(
     '- 你可以自由决定工具调用顺序；调用 finish 结束本轮。',
     '',
     '作业指引（完整版：skills/ingredient-agent/SKILL.md）：',
-    '- 模糊词（牛肉 / 山药 / 鸡肝）先 searchNames 看 total；命中多就先 summarizeNames 看分布，再按「状态 → 部位 → 具体词条」的顺序用 askUser 收窄。不要自己按关键词猜部位。',
+    '- 模糊词（牛肉 / 山药 / 鸡肝）先 searchNames 看 total；命中多就先 summarizeByKeyword(keyword) 看分布（服务端已拿到全部名字、只回汇总，**不要自己抄名字列表**），再按「状态 → 部位 → 具体词条」的顺序用 askUser 收窄。不要自己按关键词猜部位。',
     '- 生熟可以多选：用户说「生 + 熟都要」就分别找生、熟来源，建两份档案；不要替用户默认只做生。',
     '- 候选多时按组给，每组最多 5 条 + 最后一条「都不对，我直接说」；该组只剩 1 条时直接用它，并在结论里说明理由。',
     '- 拿不准就问（部位 / 加工态 / 种类有歧义、多个候选难分、主次不明），不要自己挑一条凑合。一次只问一个问题，给 2–5 个具体可点选项。',
-    '- summarizeNames 返回 degraded=true 时，据实说明「AI 分类不可用，数字是粗算」，不要把粗算当精确分类。',
+    '- 用户已经选定部位组时，用 summarizeByKeyword(keyword, groupHint) 只看该组，不要拿几条名字凑子集，也不要自己按关键词数。',
+    '- summarizeByKeyword 返回 degraded=true 时，据实说明「AI 分类不可用，数字是粗算」，不要把粗算当精确分类。',
     '- searchNames 返回 found=false 时，必须明确说「没有找到匹配词条」并列出 keywords 里已尝试的关键词；不要写成「成功找到」。',
     '- 最终结论用一两句中文：改了什么、还缺什么、下一步建议；找不到数据时先说「没找到」。不要粘贴 JSON。',
     `- 本轮预算：最多 ${INGREDIENT_AGENT_MAX_TOOL_CALLS} 次工具调用 / ${INGREDIENT_AGENT_TIMEOUT_MS / 1000} 秒；连续 ${INGREDIENT_AGENT_MAX_NO_PROGRESS} 次工具调用没有新进展会被系统停止。`,

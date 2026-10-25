@@ -187,7 +187,7 @@ describe('IngredientCreationToolsService · 工具清单（原子能力）', () 
 
     expect(tools.availableToolNames()).toEqual([
       'searchNames',
-      'summarizeNames',
+      'summarizeByKeyword',
       'getRecord',
       'writeNutrition',
       'writeIngredient',

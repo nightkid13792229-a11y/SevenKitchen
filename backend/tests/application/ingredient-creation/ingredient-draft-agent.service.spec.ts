@@ -1838,7 +1838,7 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
     const system = String(requestBody(fetchMock, 0).messages[0].content);
     expect(system).toContain('skills/ingredient-agent/SKILL.md');
     expect(system).toContain('searchNames');
-    expect(system).toContain('summarizeNames');
+    expect(system).toContain('summarizeByKeyword');
     expect(system).toContain('生 + 熟都要');
     expect(system).toContain('都不对，我直接说');
     expect(system).toContain('sourceRecordId');

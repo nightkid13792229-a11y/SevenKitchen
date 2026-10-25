@@ -1,6 +1,6 @@
 ---
 name: ingredient-agent
-description: Use when the "AI 添加原料" agent runs in SevenKitchen admin — it explains how to chain the atomic ingredient-creation tools (searchNames / summarizeNames / getRecord / writeNutrition / writeIngredient / runCheck / askUser / finish) and when to ask the user instead of guessing.
+description: Use when the "AI 添加原料" agent runs in SevenKitchen admin — it explains how to chain the atomic ingredient-creation tools (searchNames / summarizeByKeyword / getRecord / writeNutrition / writeIngredient / runCheck / askUser / finish) and when to ask the user instead of guessing.
 ---
 
 # AI 添加原料 · 对话式作业指引
@@ -19,13 +19,18 @@ description: Use when the "AI 添加原料" agent runs in SevenKitchen admin —
 | 工具 | 能力 | 不会做什么 |
 | --- | --- | --- |
 | `searchNames(keyword, limit=3000)` | 按关键词列出本地库真实命中的词条名：`total / keywords / names[{id,name,sourceType}]` | 不判断生熟 / 做法 / 部位，不返回营养值，不替你收窄 |
-| `summarizeNames(names, keyword?)` | 对一组名字做一次 AI 汇总：`byState / byMethod / byCutGroup / examples / irrelevantExamples` | 不逐条判断，不写草稿 |
+| `summarizeByKeyword(keyword, groupHint?)` | 服务端按关键词取全量名字（≤3000）并做一次 AI 汇总：`total / byState / byMethod / byCutGroup / examples / irrelevantExamples / keywords` | 不接收名字清单、不返回名字清单，不逐条判断，不写草稿 |
 | `getRecord(id)` | 读某条来源记录里真实存在的营养值与生熟状态 | 不推算、不补 0 |
 | `writeNutrition(profileIndex?, entries[])` | 把营养值写进草稿的某份档案 | 没有 `sourceRecordId` 的值一律不写 |
 | `writeIngredient(fields)` | 改草稿里的原料卡字段 | 不覆盖人工审核改过的字段 |
 | `runCheck()` | 跑服务端终检，返回拦死 / 可例外 / 提醒 | 不写库 |
 | `askUser(question, options)` | 向用户提问并结束本轮 | 不再检查「有没有先收窄」 |
 | `finish(summary?)` | 结束本轮，给出结论 | 不写库 |
+
+`summarizeByKeyword` 的请求由服务端自己拼：服务端按 `keyword` 取全量名字，
+把名字放进**模型输入**，模型只回汇总数字。你**不要把名字列表抄进工具参数**
+（线上把 1,600 条名字抄进参数，JSON 被截断，统计只覆盖了几十条）。
+同一 `keyword` + 同一批名字 24 小时内命中缓存，不会重复调模型。
 
 ## 四条硬约束（工具层写死）
 
@@ -42,8 +47,9 @@ description: Use when the "AI 添加原料" agent runs in SevenKitchen admin —
 
 1. `searchNames("牛肉")` → 看 `total` 和 `names`。
 2. `total` 很少（例如 ≤ 10）→ 直接看名字，必要时 `getRecord`。
-3. `total` 很多（几十、几百、上千）→ 先 `summarizeNames(names)` 看分布，不要逐条读几千条名字。
-4. `summarizeNames` 返回 `degraded=true` → 数字只是按关键词粗算，要如实告诉用户「分类不可用」，不要当成精确统计。
+3. `total` 很多（几十、几百、上千）→ 先 `summarizeByKeyword("牛肉")` 看分布，不要逐条读几千条名字，也不要把名字抄进参数。
+4. `summarizeByKeyword` 返回 `degraded=true` → 数字只是按关键词粗算，要如实告诉用户「分类不可用」，不要当成精确统计。
+5. `summarizeByKeyword` 不返回名字清单；要给用户列具体词条时，用同一次汇总里 `examples` 的代表名，或再 `searchNames` 一次。
 
 ### 2. 收窄：状态 → 部位 → 具体词条
 
@@ -52,10 +58,14 @@ description: Use when the "AI 添加原料" agent runs in SevenKitchen admin —
 1. **状态**：生 / 熟 / 生 + 熟都要。
    - 生熟**可以多选**。用户说「生 + 熟都要」就建两份档案，不要只做生。
    - 用户没指定时先问，不要默认替用户选生。
-2. **部位 / 种类**：按 `summarizeNames` 的 `byCutGroup` 分组给选项，写清每组条数，例如
+2. **部位 / 种类**：按 `summarizeByKeyword(keyword)` 的 `byCutGroup` 分组给选项，写清每组条数，例如
    `牛绞肉（6 条）` / `牛里脊（3 条）` / `牛腩（2 条）`。
-3. **具体词条**：选定组后，从该组里给 **最多 5 条**，最后一条固定
-   `都不对，我直接说`。选项文案带上真实词条名；有来源库 / 覆盖率就一起写。
+   - 用户选好组、需要看该组的生熟分布时，用 `summarizeByKeyword(keyword, groupHint)`，
+     `groupHint` 直接用 `byCutGroup` 的 key（如 `ground` / `chuck`）。
+   - 它只统计该组、不会拿别的组充数，也不需要你从名字里挑几条子集。
+3. **具体词条**：选定组后，用该组 `examples` 里的代表名给 **最多 5 条**，最后一条固定
+   `都不对，我直接说`。代表名不够就换个更窄的关键词再 `searchNames`；
+   选项文案带上真实词条名；有来源库 / 覆盖率就一起写。
 
 规则：
 
@@ -110,6 +120,8 @@ description: Use when the "AI 添加原料" agent runs in SevenKitchen admin —
 
 - ❌ 直接 `getRecord` 一条名字相近的记录就写，没确认是不是目标食材。
 - ❌ 候选 200 条时不汇总、不分组，直接列 20 条给用户。
+- ❌ 把 `searchNames` 返回的 `names` 数组抄进 `summarizeByKeyword` 的参数（它只收 `keyword`）。
+- ❌ `summarizeByKeyword` 没返回名字清单，就自己编几个词条名。
 - ❌ 用户说「生 + 熟都要」，只写了一份生档案。
 - ❌ 写了没有 `sourceRecordId` 的营养值（工具会拒绝，但不要试）。
 - ❌ 把 `missing` 里的字段补成 0，或按别的字段推算。
@@ -120,7 +132,7 @@ description: Use when the "AI 添加原料" agent runs in SevenKitchen admin —
 ```text
 用户：帮我加鸡肝
 → searchNames("鸡肝")：看到 total / names
-→ （候选多）summarizeNames(names)
+→ （候选多）summarizeByKeyword("鸡肝")
 → askUser("要生的还是熟的？", ["生的", "熟的", "生 + 熟都要"])
 ← 用户：生的
 → getRecord(选中的 sourceRecordId)

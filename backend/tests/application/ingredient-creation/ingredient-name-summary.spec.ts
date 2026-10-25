@@ -207,6 +207,29 @@ describe('Ingredient name summary · 关键词降级', () => {
       'Beef, ground, cooked',
     ]);
   });
+
+  it('中文词条名也能识别常见部位组（groupHint 过滤用同一套口径）', () => {
+    const summary = buildKeywordNameSummary([
+      { name: '牛绞肉' },
+      { name: '牛肉馅' },
+      { name: '牛腩' },
+      { name: '牛腱子' },
+      { name: '牛肩肉' },
+      { name: '牛里脊' },
+      { name: '鸡肝' },
+      { name: '牛心' },
+    ]);
+
+    expect(summary.byCutGroup).toEqual({
+      ground: 2,
+      brisket: 1,
+      shank: 1,
+      chuck: 1,
+      tenderloin: 1,
+      liver: 1,
+      heart: 1,
+    });
+  });
 });
 
 describe('IngredientNameClassifierService · summarizeNames', () => {

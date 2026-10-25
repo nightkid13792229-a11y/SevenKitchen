@@ -2,8 +2,6 @@ import { IngredientCreationToolsService } from '../../../src/application/ingredi
 import type { IngredientCreationCandidateService } from '../../../src/application/ingredient-creation/ingredient-creation-candidate.service';
 import type { IngredientCreationCheckService } from '../../../src/application/ingredient-creation/ingredient-creation-check.service';
 import type { IngredientCreationDraftService } from '../../../src/application/ingredient-creation/ingredient-creation-draft.service';
-import type { IngredientNameClassifierService } from '../../../src/application/ingredient-creation/ingredient-name-classifier.service';
-import { buildKeywordNameSummary } from '../../../src/application/ingredient-creation/ingredient-name-summary';
 import type { PrismaService } from '../../../src/infrastructure/prisma.service';
 
 const DRAFT_ID = 'draft-1';
@@ -37,28 +35,18 @@ function createTools() {
     })),
     patch: jest.fn(async () => ({})),
   };
-  const summarizeNames = jest.fn(async (input: any) => ({
-    ...buildKeywordNameSummary(input.items),
-    degraded: false,
-    notice: null,
-  }));
-  const classifier = { summarizeNames };
-
   const tools = new IngredientCreationToolsService(
     candidateService as unknown as IngredientCreationCandidateService,
     draftService as unknown as IngredientCreationDraftService,
     { runCheck: jest.fn() } as unknown as IngredientCreationCheckService,
     {} as unknown as PrismaService,
-    classifier as unknown as IngredientNameClassifierService,
   );
 
   return {
     tools,
     candidateService,
-    classifier,
     listNutritionNames,
     draftService,
-    summarizeNames,
   };
 }
 
@@ -175,93 +163,5 @@ describe('IngredientCreationToolsService · searchNames', () => {
     });
     expect(definition?.function.description).toContain('不判断生熟');
     expect(definition?.function.description).toContain('不做收窄');
-  });
-});
-
-describe('IngredientCreationToolsService · summarizeNames', () => {
-  it('把 searchNames 的 names 原样交给汇总：targetName 默认用草稿名', async () => {
-    const { tools, summarizeNames } = createTools();
-
-    const result = await executeTool(tools, 'summarizeNames', {
-      names: [
-        { id: 'rec-1', name: 'Beef, ground, raw' },
-        { id: 'rec-2', name: 'Beef, chuck, cooked' },
-      ],
-    });
-
-    expect(result.ok).toBe(true);
-    expect(summarizeNames).toHaveBeenCalledWith({
-      targetName: '牛肉',
-      items: [
-        { id: 'rec-1', name: 'Beef, ground, raw' },
-        { id: 'rec-2', name: 'Beef, chuck, cooked' },
-      ],
-    });
-    expect(result.body.total).toBe(2);
-    expect(result.body.byState).toBeDefined();
-    expect(result.body.byMethod).toBeDefined();
-    expect(result.body.byCutGroup).toBeDefined();
-    expect(result.body.examples).toBeDefined();
-    expect(result.body.degraded).toBe(false);
-  });
-
-  it('也接受字符串数组，并允许传 keyword 覆盖 targetName', async () => {
-    const { tools, summarizeNames } = createTools();
-
-    const result = await executeTool(tools, 'summarizeNames', {
-      names: ['Beef, ground, raw', 'Beef, chuck, cooked'],
-      keyword: '牛肉馅',
-    });
-
-    expect(result.ok).toBe(true);
-    expect(summarizeNames).toHaveBeenCalledWith({
-      targetName: '牛肉馅',
-      items: [{ name: 'Beef, ground, raw' }, { name: 'Beef, chuck, cooked' }],
-    });
-  });
-
-  it('names 为空 / 非数组 / 项非法都返回错误文本，不调用汇总', async () => {
-    const { tools, summarizeNames } = createTools();
-
-    for (const names of [[], '牛肉', [{ id: 'rec-1' }]] as unknown[]) {
-      const result = await executeTool(tools, 'summarizeNames', { names });
-      expect(result.ok).toBe(false);
-      expect(result.body.ok).toBe(false);
-    }
-    expect(summarizeNames).not.toHaveBeenCalled();
-  });
-
-  it('汇总失败时降级为关键词粗略计数，degraded=true 并带 notice', async () => {
-    const { tools, summarizeNames } = createTools();
-    summarizeNames.mockRejectedValueOnce(new Error('model down'));
-
-    const result = await executeTool(tools, 'summarizeNames', {
-      names: ['Beef, ground, raw', 'Beef, chuck, cooked'],
-    });
-
-    expect(result.ok).toBe(true);
-    expect(result.body.degraded).toBe(true);
-    expect(result.body.notice).toContain('关键词');
-    expect(result.body.total).toBe(2);
-  });
-
-  it('工具定义：names 必填、最多 3000 条', () => {
-    const { tools } = createTools();
-    const definition = tools
-      .getDefinitions()
-      .find((tool) => tool.function.name === 'summarizeNames');
-
-    expect(definition).toBeDefined();
-    expect(definition?.function.parameters).toMatchObject({
-      type: 'object',
-      required: ['names'],
-      properties: {
-        names: {
-          type: 'array',
-          minItems: 1,
-          maxItems: 3000,
-        },
-      },
-    });
   });
 });

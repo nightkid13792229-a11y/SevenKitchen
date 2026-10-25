@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import {
   classifyCookingMethod,
@@ -20,6 +21,7 @@ import { IngredientCreationDraftService } from './ingredient-creation-draft.serv
 import { IngredientNameClassifierService } from './ingredient-name-classifier.service';
 import {
   buildKeywordNameSummary,
+  detectCutGroup,
   type NameSummaryItem,
   type SummarizeNamesResult,
 } from './ingredient-name-summary';
@@ -100,8 +102,6 @@ export interface ExecuteAgentToolInput {
 
 /** 名字清单一次最多返回多少条（与候选服务的上限一致）。 */
 const SEARCH_NAME_LIST_LIMIT = 3000;
-/** 一次汇总最多接收多少条名字。 */
-const MAX_SUMMARY_NAME_ITEMS = 3000;
 /** 单次最多回灌多少条营养值，避免把提示词撑爆。 */
 const MAX_NUTRITION_RECORD_VALUES = 80;
 /** 批量写入单次上限：60 个目录字段一次能装下，且给模型留余量。 */
@@ -111,18 +111,28 @@ const ARGS_LOG_MAX = 300;
 const ERROR_MESSAGE_MAX = 300;
 
 /**
+ * 汇总缓存 24 小时。
+ *
+ * 缓存键 = keyword + 名字集合哈希（见 `nameSummaryCacheKey`）；命中时不
+ * 重复调模型，但**仍然重新检索名字**（库变了哈希就变，自然 miss）。
+ */
+const NAME_SUMMARY_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+/** 进程内最多留 200 条汇总，避免长跑进程内存无界增长。 */
+const NAME_SUMMARY_CACHE_MAX_ENTRIES = 200;
+
+/**
  * 原子工具 1：按关键词列出本地营养库真实命中的词条名。
  *
  * **只摆事实**：id / name / sourceType + 真实命中总数。不判断生熟、做法、
  * 部位，不返回营养值，也不替模型收窄。发现 3000 条还是 3 条，由模型看
- * `total` 后自己决定下一步（summarizeNames / askUser）。
+ * `total` 后自己决定下一步（summarizeByKeyword / askUser）。
  */
 const SEARCH_NAMES_TOOL: AgentToolDefinition = {
   type: 'function',
   function: {
     name: 'searchNames',
     description:
-      '按关键词列出本地营养库真实命中的词条名（只读，最多 3000 条）。只返回 id / name / sourceType 与真实命中总数 total，**不判断生熟 / 做法 / 部位，不返回营养值，也不做收窄**。模糊词（如「牛肉」「山药」）先看 total：命中多就先 summarizeNames 看分布，再按 skills/ingredient-agent/SKILL.md 的指引用 askUser 收窄。中文词会自动走词典 / AI 翻译展开成外文词。',
+      '按关键词列出本地营养库真实命中的词条名（只读，最多 3000 条）。只返回 id / name / sourceType 与真实命中总数 total，**不判断生熟 / 做法 / 部位，不返回营养值，也不做收窄**。模糊词（如「牛肉」「山药」）先看 total：命中多就先 summarizeByKeyword(keyword) 看分布（服务端取全量名字、只回汇总），再按 skills/ingredient-agent/SKILL.md 的指引用 askUser 收窄。中文词会自动走词典 / AI 翻译展开成外文词。',
     parameters: {
       type: 'object',
       properties: {
@@ -144,47 +154,36 @@ const SEARCH_NAMES_TOOL: AgentToolDefinition = {
 };
 
 /**
- * 原子工具 2：对一组词条名做一次 AI 汇总。
+ * 原子工具 2：按关键词在服务端汇总全量词条名（只读）。
  *
- * 复用 `IngredientNameClassifierService.summarizeNames`：只数数 + 给每组
- * 2–3 个代表名，不逐条判断、不写草稿。模型拿到分布后自己决定怎么收窄。
+ * 为什么不再让模型传 names：线上「羊肉」那一轮，模型把 1,600 条名字抄进
+ * 工具参数，JSON 被截断（「工具参数不是合法 JSON」），重试只抄了几十条，
+ * 结果输入 79,893 token、耗时 75 秒，统计只覆盖几十条。
+ *
+ * 现在：服务端自己检索（上限 3000 条）、自己把名字拼进模型请求；名字只走
+ * 模型输入，模型只回汇总数字。缓存 24 小时，命中不重复调模型；模型失败
+ * 按名字关键词粗算并标 degraded，不抛错。
  */
-const SUMMARIZE_NAMES_TOOL: AgentToolDefinition = {
+const SUMMARIZE_BY_KEYWORD_TOOL: AgentToolDefinition = {
   type: 'function',
   function: {
-    name: 'summarizeNames',
+    name: 'summarizeByKeyword',
     description:
-      '对一组词条名做一次 AI 汇总（只读）。返回 total / byState（生熟未知）/ byMethod（做法）/ byCutGroup（部位条数）/ examples（每组 2–3 个代表名）/ irrelevantExamples。names 可以直接传 searchNames 返回的 names 数组，也可以传词条名字符串数组；一次最多 3000 条。汇总失败时 degraded=true 并带 notice（按名字关键词粗略计数），不要把降级数字当成精确分类。',
+      '按关键词让服务端取全量词条名（最多 3000 条）并做一次 AI 汇总（只读）。你只需要给 keyword，**不要把名字列表抄进参数**：服务端自己检索、自己拼请求，模型只回汇总数字。返回 total / byState（生熟未知）/ byMethod（做法）/ byCutGroup（部位条数）/ examples（每组 2–3 个代表名）/ irrelevantExamples 与 keywords，**不返回名字清单**。模糊词命中多时先用它看分布，再 askUser 收窄。可选 groupHint 只统计某个部位组，避免拿几条名字凑子集。汇总失败时 degraded=true 并带 notice（按名字关键词粗略计数），不要把降级数字当成精确分类。',
     parameters: {
       type: 'object',
       properties: {
-        names: {
-          type: 'array',
-          minItems: 1,
-          maxItems: MAX_SUMMARY_NAME_ITEMS,
-          description: '要汇总的词条名；直接传 searchNames 返回的 names 或字符串数组。',
-          items: {
-            oneOf: [
-              { type: 'string' },
-              {
-                type: 'object',
-                properties: {
-                  id: { type: 'string' },
-                  name: { type: 'string' },
-                },
-                required: ['name'],
-                additionalProperties: false,
-              },
-            ],
-          },
-        },
         keyword: {
           type: 'string',
+          description: '要汇总的关键词（中文或英文），例如「牛肉」「Beef」。',
+        },
+        groupHint: {
+          type: 'string',
           description:
-            '用户最初要查的目标词（可选，例如「牛肉」）。只用于给汇总模型消歧；不传时用草稿名。',
+            '可选。只统计某个部位组，用稳定英文 key：ground / tenderloin / loin / round / brisket / shank / chuck / rib / breast / thigh / wing / liver / heart / kidney / other。',
         },
       },
-      required: ['names'],
+      required: ['keyword'],
       additionalProperties: false,
     },
   },
@@ -1038,6 +1037,17 @@ function validateFieldArgs(raw: Record<string, unknown>): FieldValidation {
 export class IngredientCreationToolsService {
   private readonly logger = new Logger(IngredientCreationToolsService.name);
 
+  /**
+   * 汇总缓存（进程内，24 小时）。
+   *
+   * 键 = keyword + 名字集合哈希；只缓存成功结果，降级结果不缓存
+   * （模型恢复后还能重新汇总）。`Map` 的插入顺序就是淘汰顺序。
+   */
+  private readonly nameSummaryCache = new Map<
+    string,
+    { expiresAt: number; summary: SummarizeNamesResult }
+  >();
+
   constructor(
     private readonly candidateService: IngredientCreationCandidateService,
     private readonly draftService: IngredientCreationDraftService,
@@ -1049,7 +1059,7 @@ export class IngredientCreationToolsService {
   getDefinitions(): readonly AgentToolDefinition[] {
     return [
       SEARCH_NAMES_TOOL,
-      SUMMARIZE_NAMES_TOOL,
+      SUMMARIZE_BY_KEYWORD_TOOL,
       GET_RECORD_TOOL,
       WRITE_NUTRITION_TOOL,
       WRITE_INGREDIENT_TOOL,
@@ -1105,8 +1115,8 @@ export class IngredientCreationToolsService {
     switch (input.name) {
       case 'searchNames':
         return this.searchNames(input.args);
-      case 'summarizeNames':
-        return this.summarizeNames(input.draftId, input.args);
+      case 'summarizeByKeyword':
+        return this.summarizeByKeyword(input.args);
       case 'getRecord':
         return this.getRecord(input.args);
       case 'writeNutrition':
@@ -1177,7 +1187,7 @@ export class IngredientCreationToolsService {
         hint:
           names.length === 0
             ? '本地库没有按这个名字命中的词条：可以换中文名 / 英文名再试，或如实告诉用户库里缺数据；不要编造词条。'
-            : `共 ${result.total} 条真实命中，返回 ${names.length} 条名字。这只是名字清单；命中多时先 summarizeNames 看分布，再决定是否 askUser 收窄。`,
+            : `共 ${result.total} 条真实命中，返回 ${names.length} 条名字。这只是名字清单；命中多时先 summarizeByKeyword(keyword) 看分布（服务端取全量名字、只回汇总），再决定是否 askUser 收窄。`,
       }),
       progress: {
         writtenFieldPaths: [],
@@ -1187,62 +1197,52 @@ export class IngredientCreationToolsService {
   }
 
   /**
-   * 工具 2：一次汇总（只读）。
+   * 工具 2：按关键词汇总全量名字（只读）。
    *
-   * 汇总输入就是 searchNames 的结果；模型可以选择重新汇总某个子集，
-   * 也可以先汇总全部再收窄。工具不决定该汇总哪些。
+   * 服务端自己做三步：
+   * 1. 调 `listNutritionNames` 取全量名字（上限 3000）；
+   * 2. 把名字拼进**自己发起**的模型请求（名字走输入，不走模型输出）；
+   * 3. 缓存汇总（keyword + 名字集合哈希，24 小时），命中不重复调模型。
+   *
+   * `groupHint` 只统计指定部位组：先按本地部位词表从全量名字里过滤，
+   * 再让模型汇总这一组 —— 模型不需要、也不可能拿到「别人的」子集。
    */
-  private async summarizeNames(
-    draftId: string,
+  private async summarizeByKeyword(
     args: Record<string, unknown>,
   ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
-    const rawNames = args.names;
-    if (!Array.isArray(rawNames) || rawNames.length === 0) {
-      return this.error(
-        'summarizeNames 需要非空的 names 数组（可直接传 searchNames 返回的 names）。',
-      );
+    const keyword = normalizeText(args.keyword);
+    if (!keyword) {
+      return this.error('summarizeByKeyword 需要非空的 keyword。');
     }
-    if (rawNames.length > MAX_SUMMARY_NAME_ITEMS) {
-      return this.error(
-        `summarizeNames 一次最多汇总 ${MAX_SUMMARY_NAME_ITEMS} 条，收到 ${rawNames.length} 条；请先收窄关键词。`,
-      );
-    }
+    const groupHint = normalizeText(args.groupHint).toLowerCase() || null;
 
-    const items: NameSummaryItem[] = [];
-    for (const [index, raw] of rawNames.entries()) {
-      if (typeof raw === 'string') {
-        const name = raw.trim();
-        if (!name) {
-          return this.error(
-            `summarizeNames 的 names[${index}] 必须是非空字符串或含 name 的对象。`,
-          );
-        }
-        items.push({ name });
-        continue;
-      }
-      if (!isRecord(raw)) {
-        return this.error(
-          `summarizeNames 的 names[${index}] 必须是字符串或 {id,name} 对象。`,
-        );
-      }
-      const name = normalizeText(raw.name);
-      if (!name) {
-        return this.error(
-          `summarizeNames 的 names[${index}].name 不能为空。`,
-        );
-      }
-      const id = normalizeText(raw.id);
-      items.push(id ? { id, name } : { name });
-    }
+    const result = await this.candidateService.listNutritionNames({
+      keyword,
+      limit: SEARCH_NAME_LIST_LIMIT,
+    });
+    const allItems: NameSummaryItem[] = result.names.map((entry) => ({
+      id: entry.id,
+      name: entry.name,
+    }));
+    const items = groupHint
+      ? allItems.filter((item) => detectCutGroup(item.name) === groupHint)
+      : allItems;
 
-    const draft = await this.draftService.get(draftId);
-    const targetName = normalizeText(args.keyword) || draft.name.trim();
-    const summary = await this.summarizeAllNames(targetName, items);
+    const summary =
+      groupHint && items.length === 0
+        ? {
+            ...buildKeywordNameSummary([]),
+            degraded: false,
+            notice: `关键词「${keyword}」下没有识别到部位组「${groupHint}」的名字；可以不带 groupHint 再汇总一次，或先 searchNames 看全部名字。`,
+          }
+        : await this.loadOrBuildKeywordSummary(keyword, items);
 
     return {
       ok: true,
       content: okContent({
-        targetName,
+        keyword,
+        keywords: result.keywords,
+        ...(groupHint ? { groupHint } : {}),
         ...summary,
       }),
       progress: {
@@ -1252,10 +1252,79 @@ export class IngredientCreationToolsService {
     };
   }
 
+  /** 先查缓存（24 小时），miss 才调模型；只缓存成功结果。 */
+  private async loadOrBuildKeywordSummary(
+    keyword: string,
+    items: readonly NameSummaryItem[],
+  ): Promise<SummarizeNamesResult> {
+    const cacheKey = this.nameSummaryCacheKey(keyword, items);
+    const cached = this.readNameSummaryCache(cacheKey);
+    if (cached) {
+      this.logger.log(
+        `[agent-tool] 汇总命中缓存 target=${keyword} count=${items.length}`,
+      );
+      return cached;
+    }
+
+    const summary = await this.summarizeKeywordItems(keyword, items);
+    if (!summary.degraded) {
+      this.writeNameSummaryCache(cacheKey, summary);
+    }
+    return summary;
+  }
+
+  /**
+   * 缓存键 = keyword + 名字集合哈希。
+   *
+   * 名字排序后仍保留重复项：同名记录条数变了（`total` 变）也要算 miss。
+   * 名字集合来自每次实时检索，所以库更新后不会继续用旧分布。
+   */
+  private nameSummaryCacheKey(
+    keyword: string,
+    items: readonly NameSummaryItem[],
+  ): string {
+    const namesHash = createHash('sha256')
+      .update(
+        items
+          .map((item) => item.name)
+          .sort()
+          .join('\u0000'),
+      )
+      .digest('hex');
+    return `${keyword}\u0000${namesHash}`;
+  }
+
+  private readNameSummaryCache(key: string): SummarizeNamesResult | null {
+    const entry = this.nameSummaryCache.get(key);
+    if (!entry) {
+      return null;
+    }
+    if (entry.expiresAt <= Date.now()) {
+      this.nameSummaryCache.delete(key);
+      return null;
+    }
+    return entry.summary;
+  }
+
+  private writeNameSummaryCache(
+    key: string,
+    summary: SummarizeNamesResult,
+  ): void {
+    while (this.nameSummaryCache.size >= NAME_SUMMARY_CACHE_MAX_ENTRIES) {
+      const oldest = this.nameSummaryCache.keys().next().value;
+      if (!oldest) break;
+      this.nameSummaryCache.delete(oldest);
+    }
+    this.nameSummaryCache.set(key, {
+      expiresAt: Date.now() + NAME_SUMMARY_CACHE_TTL_MS,
+      summary,
+    });
+  }
+
   /**
    * 全部名字只发一次汇总请求；装配缺失 / 模型失败时退化为关键词粗略计数。
    */
-  private async summarizeAllNames(
+  private async summarizeKeywordItems(
     targetName: string,
     names: readonly NameSummaryItem[],
   ): Promise<SummarizeNamesResult> {
@@ -1280,7 +1349,7 @@ export class IngredientCreationToolsService {
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       this.logger.warn(
-        `[agent-tool] 名字汇总失败，按关键词降级 target=${targetName}: ${reason}`,
+        `[agent-tool] 关键词汇总失败，按关键词降级 target=${targetName}: ${reason}`,
       );
       const keywordSummary = buildKeywordNameSummary(names);
       return {

@@ -343,6 +343,9 @@ export class IngredientNameClassifierService {
   /**
    * 全部匹配名字一次汇总（不逐条判断）。
    *
+   * **服务端内部方法**：对外工具是 `summarizeByKeyword(keyword, groupHint?)`。
+   * 由工具取好全量名字后调用本方法；名字走模型输入，模型只回汇总数字。
+   *
    * 输入可以是一两千条名字：只发**一次**请求，要求模型只回
    * `total / byState / byMethod / byCutGroup / examples / irrelevantExamples`，
    * 输出上限 2000 token。模型不可用 / 输出非法（含超长）时退化为按名字

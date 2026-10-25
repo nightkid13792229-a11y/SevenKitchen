@@ -3267,14 +3267,29 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   /**
    * Upload attachment
    */
-  async uploadAttachment(file: Express.Multer.File, orderId: string) {
+  async uploadAttachment(file: Express.Multer.File, orderIdOrId: string) {
+    /**
+     * 附件表的 order_id 外键指向 custom_recipe_order.id（uuid），
+     * 而控制器手里是业务订单号 CR…。这里必须先解析成主键再写；
+     * 否则 COS 上传成功、附件落库却因外键失败，页面拿不到 URL。
+     */
+    const order = await this.prisma.customRecipeOrder.findFirst({
+      where: {
+        OR: [{ orderId: orderIdOrId }, { id: orderIdOrId }],
+      },
+      select: { id: true },
+    });
+    if (!order) {
+      throw new NotFoundException(`订单不存在: ${orderIdOrId}`);
+    }
+
     const result = await this.cosService.uploadImage(
       file,
       file.originalname,
       'custom-recipe-attachments',
     );
 
-    const attachment = await this.addAttachment(orderId, {
+    const attachment = await this.addAttachment(order.id, {
       fileName: file.originalname,
       fileUrl: result.url,
       fileSize: file.size,

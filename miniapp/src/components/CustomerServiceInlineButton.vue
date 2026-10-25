@@ -118,6 +118,8 @@ onMounted(async () => {
   justify-content: center;
   box-sizing: border-box;
   line-height: 1;
+  max-width: 100%;
+  overflow: hidden;
   box-shadow: 0 6rpx 16rpx rgba(176, 141, 79, 0.18);
 }
 
@@ -138,6 +140,9 @@ onMounted(async () => {
 }
 
 .customer-service-inline-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 26rpx;
   font-weight: 700;
   line-height: 1;

@@ -28,16 +28,18 @@ function createFakeControlPort(
 }
 
 describe('tool registry', () => {
-  it('18 个工具，名字唯一', () => {
+  it('20 个工具，名字唯一', () => {
     const names = AGENT_TOOL_DEFINITIONS.map((t) => t.name);
-    expect(names).toHaveLength(18);
-    expect(new Set(names).size).toBe(18);
+    expect(names).toHaveLength(20);
+    expect(new Set(names).size).toBe(20);
     expect(names).toEqual(
       expect.arrayContaining([
         'get_draft',
         'search_ingredients',
         'get_ingredient',
         'get_catalog_usage',
+        'web_search',
+        'web_fetch',
         'add_ingredient',
         'replace_ingredient',
         'update_weight',
@@ -54,6 +56,83 @@ describe('tool registry', () => {
         'finish_draft',
       ]),
     );
+  });
+
+  it('web_search 只要求 query，count 限制 1-50，need_content 可选', () => {
+    const definition = AGENT_TOOL_DEFINITIONS.find(
+      (tool) => tool.name === 'web_search',
+    );
+    expect(definition).toBeDefined();
+    const parameters = definition?.parameters as {
+      properties?: Record<string, Record<string, unknown>>;
+      required?: string[];
+    };
+    expect(parameters.required).toEqual(['query']);
+    expect(parameters.properties?.query).toMatchObject({
+      type: 'string',
+      minLength: 1,
+      maxLength: 128,
+    });
+    expect(parameters.properties?.count).toMatchObject({
+      type: 'integer',
+      minimum: 1,
+      maximum: 50,
+    });
+    expect(parameters.properties?.need_content).toMatchObject({
+      type: 'boolean',
+    });
+    expect(definition?.description).toContain('网页内容');
+  });
+
+  it('web_fetch 只要求 url', () => {
+    const definition = AGENT_TOOL_DEFINITIONS.find(
+      (tool) => tool.name === 'web_fetch',
+    );
+    expect(definition).toBeDefined();
+    const parameters = definition?.parameters as {
+      properties?: Record<string, Record<string, unknown>>;
+      required?: string[];
+    };
+    expect(parameters.required).toEqual(['url']);
+    expect(parameters.properties?.url).toMatchObject({ type: 'string' });
+  });
+
+  it('没有 webTools 时 web_search / web_fetch 返回 CONTROL_NOT_AVAILABLE', async () => {
+    const handlers = createAgentToolHandlers({
+      port: createFakeRecipeAgentPort(),
+      controlPort: createFakeControlPort(),
+      tagPolicy,
+      draftId: 'draft-1',
+    });
+
+    const search = await handlers.web_search({ query: '鸭肉' });
+    expect(search.ok).toBe(false);
+    if (search.ok) return;
+    expect(search.error.code).toBe('CONTROL_NOT_AVAILABLE');
+
+    const fetched = await handlers.web_fetch({ url: 'https://example.com/' });
+    expect(fetched.ok).toBe(false);
+    if (fetched.ok) return;
+    expect(fetched.error.code).toBe('CONTROL_NOT_AVAILABLE');
+  });
+
+  it('有 webTools 时 web_search 走联网端口', async () => {
+    const webTools = {
+      search: jest.fn().mockResolvedValue({ query: '鸭肉', results: [] }),
+      fetch: jest.fn(),
+    };
+    const handlers = createAgentToolHandlers({
+      port: createFakeRecipeAgentPort(),
+      controlPort: createFakeControlPort(),
+      tagPolicy,
+      draftId: 'draft-1',
+      webTools,
+    });
+
+    const result = await handlers.web_search({ query: '鸭肉' });
+
+    expect(result.ok).toBe(true);
+    expect(webTools.search).toHaveBeenCalledWith({ query: '鸭肉' });
   });
 
   it('check_coverage 描述说明 11 类清单不是门禁', () => {

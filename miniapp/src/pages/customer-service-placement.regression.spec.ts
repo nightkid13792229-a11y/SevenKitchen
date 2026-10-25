@@ -82,6 +82,27 @@ describe('customer service page placement regressions', () => {
     expect(source).not.toContain('background: #07c160;')
   })
 
+  it('退款页客服入口与主按钮并排，文案短，不再单独占一行', () => {
+    const refund = readPage('src/pages/custom-recipe/refund.vue')
+    const template = refund.slice(0, refund.indexOf('<script setup'))
+
+    expect(template).toContain('class="bottom-bar__row"')
+    expect(template).toContain('label="Seven爸爸"')
+    expect(template).not.toContain('拿不准？联系Seven爸爸')
+    expect(template).not.toContain('退款有问题？联系Seven爸爸')
+    expect(template).not.toContain('class="service-line"')
+    expect(refund).toContain('display: flex;')
+    expect(refund).toContain('.bottom-bar__row .btn')
+  })
+
+  it('客服按钮组件自身防止长文案溢出容器', () => {
+    const source = readPage('src/components/CustomerServiceInlineButton.vue')
+
+    expect(source).toContain('max-width: 100%;')
+    expect(source).toContain('overflow: hidden;')
+    expect(source).toContain('text-overflow: ellipsis;')
+  })
+
   it('keeps the cart page and its shortcut removed from the mini program', () => {
     const pagesJson = readPage('src/pages.json')
 

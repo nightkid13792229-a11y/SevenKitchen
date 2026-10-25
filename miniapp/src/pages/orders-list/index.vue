@@ -25,6 +25,16 @@
       </view>
     </view>
 
+    <view v-if="viewAllOrders && !needLogin" class="view-all-banner">
+      <view class="view-all-banner__head">
+        <text class="view-all-banner__badge">测试视图</text>
+        <text class="view-all-banner__title">全部顾客成品鲜食 + 我的定制/补剂测试单</text>
+      </view>
+      <text class="view-all-banner__desc">
+        这里不是普通顾客的“我的订单”；定制/补剂卡片上的「我的测试单」来自当前管理员账号。
+      </text>
+    </view>
+
     <view v-if="!needLogin" class="status-tabs">
       <view
         v-for="tab in statusTabs"
@@ -81,6 +91,12 @@
               :class="`order-type-tag--${order._orderType || 'food'}`"
             >
               {{ orderTypeLabel(order._orderType || 'food') }}
+            </text>
+            <text
+              v-if="viewAllOrders && order._orderType !== 'food'"
+              class="order-type-tag order-type-tag--test"
+            >
+              我的测试单
             </text>
             <view
               class="order-type-stripe"
@@ -726,14 +742,16 @@ async function loadOrders() {
 
   // 管理员视角看的是「全部顾客的鲜食订单」，而补剂列表接口只返回「我自己的」，
   // 合进来会把管理员本人的补剂订单混进别人的订单里，所以只在顾客视角合并。
-  const supplementPromise: Promise<SupplementOrderRow[]> = viewAllOrders.value
-    ? Promise.resolve([])
-    : fetchAllSupplementOrders().catch((err) => {
-        // 补剂这一路失败不能让鲜食订单一起白屏：降级成空数组，但页面要提示
-        console.error('[OrdersList] 加载补剂订单失败:', err);
-        supplementOrdersLoadFailed.value = true;
-        return [] as SupplementOrderRow[];
-      });
+  /**
+   * 测试视图也要带当前管理员自己的补剂测试单；顾客视图同样只返回自己的。
+   * 补剂这一路失败不能让鲜食订单一起白屏：降级成空数组，但页面要提示。
+   */
+  const supplementPromise: Promise<SupplementOrderRow[]> =
+    fetchAllSupplementOrders().catch((err) => {
+      console.error('[OrdersList] 加载补剂订单失败:', err);
+      supplementOrdersLoadFailed.value = true;
+      return [] as SupplementOrderRow[];
+    });
 
   const foodPromise = request({
     url: apiUrl,
@@ -1812,6 +1830,53 @@ onUnmounted(() => {
 }
 
 /* 状态筛选：文字 Tab + 下划线，与上面的分段式类型筛选同一套节奏 */
+.view-all-banner {
+  margin: 8rpx 20rpx 4rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 14rpx;
+  background: #eef3e8;
+  border: 1rpx solid #d9e4d1;
+}
+
+.view-all-banner__head {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  flex-wrap: wrap;
+}
+
+.view-all-banner__badge {
+  flex: 0 0 auto;
+  padding: 2rpx 10rpx;
+  border-radius: 8rpx;
+  background: #1e3a2f;
+  color: #f6efe0;
+  font-size: 18rpx;
+  font-weight: 700;
+}
+
+.view-all-banner__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+}
+
+.view-all-banner__desc {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 19rpx;
+  line-height: 1.55;
+  color: #6b6653;
+}
+
+.order-type-tag--test {
+  background: #1e3a2f;
+  border-color: #1e3a2f;
+  color: #f6efe0;
+}
+
 .status-tabs {
   display: flex;
   background-color: transparent;

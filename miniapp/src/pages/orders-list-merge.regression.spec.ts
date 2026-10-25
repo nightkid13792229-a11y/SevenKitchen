@@ -70,8 +70,12 @@ describe('我的订单合并补剂订单', () => {
     expect(source).toContain('fetchSupplementOrders(')
     expect(source).toContain('fetchAllSupplementOrders')
     expect(source).toContain('SUPPLEMENT_ORDER_PAGE_SIZE')
-    // 管理员视角只看全部顾客的鲜食订单，不该混进管理员自己的补剂订单
-    expect(source).toMatch(/viewAllOrders\.value\s*\n?\s*\? Promise\.resolve\(\[\]\)/)
+    // 2026-10-25：viewAll 是管理员测试视图，补剂也要把当前管理员自己的测试单带进来
+    expect(source).not.toMatch(
+      /viewAllOrders\.value\s*\n?\s*\? Promise\.resolve\(\[\]\)/,
+    )
+    expect(template).toContain('全部顾客成品鲜食')
+    expect(template).toContain('我的测试单')
   })
 
   it('补剂卡片展示订单号、概要、金额与状态，并复用补剂自己的支付流程', () => {

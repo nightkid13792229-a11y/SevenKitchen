@@ -1,12 +1,17 @@
 /**
  * 只读工具（P0a Task 2）。
  *
- * 四个工具都只读：`get_draft` / `search_ingredients` / `get_ingredient` /
- * `get_catalog_usage`。校验失败不抛异常，统一返回 `{ ok: false, error }`，
- * 让模型自己改参数；成功时带一句给人看的 `summary`。
+ * 六个工具都只读：`get_draft` / `search_ingredients` / `get_ingredient` /
+ * `get_catalog_usage` / `web_search` / `web_fetch`。校验失败不抛异常，
+ * 统一返回 `{ ok: false, error }`，让模型自己改参数；成功时带一句给人看的
+ * `summary`。
  *
  * 入参来自模型（运行时会绕过 TypeScript 类型），所以所有字段先做 `typeof`
  * 守卫：非法值返回 `INVALID_ARGUMENT`，绝不让 `TypeError` 冒出去。
+ *
+ * 联网工具只依赖注入的 `RecipeAgentWebPort`：没有注入时返回
+ * `CONTROL_NOT_AVAILABLE`，不会偷偷本地联网。URL 的 SSRF 校验在端口层
+ * （`DeepSeekWebTools`）完成。
  */
 import type { FoodCategory } from '../../../domain/recipe-designer/food-category-map';
 import type {
@@ -17,11 +22,21 @@ import type {
   AgentToolErrorCode,
   AgentToolResult,
 } from './agent-types';
+import type {
+  AgentWebFetchResult,
+  AgentWebSearchResult,
+  RecipeAgentWebPort,
+} from './deepseek-web-tools';
+import { RecipeAgentWebError } from './deepseek-web-tools';
 import type { RecipeAgentDraftPort } from './recipe-agent.port';
 
 const DEFAULT_SEARCH_LIMIT = 20;
 const MIN_SEARCH_LIMIT = 1;
 const MAX_SEARCH_LIMIT = 50;
+const MAX_WEB_QUERY_LENGTH = 128;
+const MIN_WEB_SEARCH_COUNT = 1;
+const MAX_WEB_SEARCH_COUNT = 50;
+const MAX_WEB_SUMMARY_SOURCES = 3;
 
 type IngredientType = 'FOOD' | 'SUPPLEMENT';
 
@@ -40,6 +55,16 @@ interface GetIngredientArgs {
 interface GetCatalogUsageArgs {
   mainProteinName?: string;
   ingredientNames?: string[];
+}
+
+interface WebSearchArgs {
+  query?: unknown;
+  count?: unknown;
+  need_content?: unknown;
+}
+
+interface WebFetchArgs {
+  url?: unknown;
 }
 
 interface SearchIngredientsInput {
@@ -112,6 +137,50 @@ function normalizeIngredientNames(names: readonly string[]): string[] {
   return normalized;
 }
 
+function summarizeWebSearch(result: AgentWebSearchResult): string {
+  if (result.results.length === 0) {
+    return `搜索「${result.query}」没有找到结果。`;
+  }
+
+  const top = result.results
+    .slice(0, MAX_WEB_SUMMARY_SOURCES)
+    .map((item) => {
+      const title = item.title || item.url || '未命名来源';
+      return item.url ? `${title}（${item.url}）` : title;
+    })
+    .join('、');
+  const suffix = result.results.length > MAX_WEB_SUMMARY_SOURCES ? ' 等' : '';
+  return `搜索「${result.query}」找到 ${result.results.length} 条结果：${top}${suffix}。`;
+}
+
+function summarizeWebFetch(result: AgentWebFetchResult): string {
+  const title = result.title || result.url;
+  const truncated = result.content.includes('内容已截断')
+    ? '（内容已截断）'
+    : '';
+  return `已抓取「${title}」（${result.url}），正文 ${result.content.length} 字符${truncated}。`;
+}
+
+/**
+ * 端口异常 → 工具结果。SSRF/参数类错误保留 `INVALID_ARGUMENT`；
+ * 上游失败保留 WEB_SEARCH_FAILED / WEB_FETCH_FAILED。未知异常只给安全文案，
+ * 不把原始 message（可能是上游响应/内部信息）透给模型。
+ */
+function webErrorResult<T>(
+  error: unknown,
+  fallbackCode: 'WEB_SEARCH_FAILED' | 'WEB_FETCH_FAILED',
+): AgentToolResult<T> {
+  if (error instanceof RecipeAgentWebError) {
+    return fail(error.code, error.message);
+  }
+  return fail(
+    fallbackCode,
+    fallbackCode === 'WEB_SEARCH_FAILED'
+      ? '网页搜索暂时失败，请稍后再试。'
+      : '网页抓取暂时失败，请稍后再试。',
+  );
+}
+
 function describeSearchScope(input: {
   search?: string;
   nutrientKey?: string;
@@ -169,6 +238,7 @@ function summarizeIngredient(detail: AgentIngredientDetail): string {
 export function createReadTools(
   port: RecipeAgentDraftPort,
   draftId: string,
+  webTools?: RecipeAgentWebPort,
 ): {
   get_draft(): Promise<AgentToolResult<AgentDraftSnapshot>>;
   search_ingredients(
@@ -180,6 +250,12 @@ export function createReadTools(
   get_catalog_usage(
     args?: GetCatalogUsageArgs | null,
   ): Promise<AgentToolResult<AgentCatalogUsage>>;
+  web_search(
+    args?: WebSearchArgs | null,
+  ): Promise<AgentToolResult<AgentWebSearchResult>>;
+  web_fetch(
+    args?: WebFetchArgs | null,
+  ): Promise<AgentToolResult<AgentWebFetchResult>>;
 } {
   return {
     async get_draft(): Promise<AgentToolResult<AgentDraftSnapshot>> {
@@ -356,6 +432,105 @@ export function createReadTools(
         parts.push('没有重合记录');
       }
       return ok(usage, `${parts.join('；')}。`);
+    },
+
+    async web_search(
+      args: WebSearchArgs | null = {},
+    ): Promise<AgentToolResult<AgentWebSearchResult>> {
+      if (!webTools) {
+        return fail(
+          'CONTROL_NOT_AVAILABLE',
+          '联网搜索未启用（缺少 webTools 依赖）。',
+        );
+      }
+
+      const raw = asRawArgs(args);
+      if (!raw) {
+        return fail('INVALID_ARGUMENT', '参数必须是对象。');
+      }
+
+      if (typeof raw.query !== 'string') {
+        return fail('INVALID_ARGUMENT', 'query 不能为空。');
+      }
+      const query = raw.query.trim();
+      if (!query) {
+        return fail('INVALID_ARGUMENT', 'query 不能为空。');
+      }
+      if (query.length > MAX_WEB_QUERY_LENGTH) {
+        return fail(
+          'INVALID_ARGUMENT',
+          `query 最多 ${MAX_WEB_QUERY_LENGTH} 个字符。`,
+        );
+      }
+
+      const countValue = raw.count;
+      if (
+        countValue !== undefined &&
+        (typeof countValue !== 'number' ||
+          !Number.isInteger(countValue) ||
+          countValue < MIN_WEB_SEARCH_COUNT ||
+          countValue > MAX_WEB_SEARCH_COUNT)
+      ) {
+        return fail(
+          'INVALID_ARGUMENT',
+          `count 必须是 ${MIN_WEB_SEARCH_COUNT}–${MAX_WEB_SEARCH_COUNT} 的整数。`,
+        );
+      }
+
+      const needContentValue = raw.need_content;
+      if (
+        needContentValue !== undefined &&
+        typeof needContentValue !== 'boolean'
+      ) {
+        return fail('INVALID_ARGUMENT', 'need_content 必须是布尔值。');
+      }
+
+      const input: {
+        query: string;
+        count?: number;
+        needContent?: boolean;
+      } = { query };
+      if (typeof countValue === 'number') input.count = countValue;
+      if (typeof needContentValue === 'boolean') {
+        input.needContent = needContentValue;
+      }
+
+      try {
+        const result = await webTools.search(input);
+        return ok(result, summarizeWebSearch(result));
+      } catch (error) {
+        return webErrorResult(error, 'WEB_SEARCH_FAILED');
+      }
+    },
+
+    async web_fetch(
+      args: WebFetchArgs | null,
+    ): Promise<AgentToolResult<AgentWebFetchResult>> {
+      if (!webTools) {
+        return fail(
+          'CONTROL_NOT_AVAILABLE',
+          '联网抓取未启用（缺少 webTools 依赖）。',
+        );
+      }
+
+      const raw = asRawArgs(args);
+      if (!raw) {
+        return fail('INVALID_ARGUMENT', 'url 不能为空。');
+      }
+      if (typeof raw.url !== 'string') {
+        return fail('INVALID_ARGUMENT', 'url 不能为空。');
+      }
+      const url = raw.url.trim();
+      if (!url) {
+        return fail('INVALID_ARGUMENT', 'url 不能为空。');
+      }
+
+      try {
+        const result = await webTools.fetch({ url });
+        return ok(result, summarizeWebFetch(result));
+      } catch (error) {
+        return webErrorResult(error, 'WEB_FETCH_FAILED');
+      }
     },
   };
 }

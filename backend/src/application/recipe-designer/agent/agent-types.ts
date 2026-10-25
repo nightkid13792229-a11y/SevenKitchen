@@ -212,7 +212,9 @@ export type AgentToolErrorCode =
   | 'TAG_NOT_ALLOWED'
   | 'ASSESSMENT_STALE'
   | 'READY_BLOCKED'
-  | 'CONTROL_NOT_AVAILABLE';
+  | 'CONTROL_NOT_AVAILABLE'
+  | 'WEB_SEARCH_FAILED'
+  | 'WEB_FETCH_FAILED';
 
 /**
  * 端口层带错误码的异常。

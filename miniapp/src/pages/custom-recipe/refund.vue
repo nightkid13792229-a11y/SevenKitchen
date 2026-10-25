@@ -214,6 +214,7 @@
         </view>
 
         <view v-if="resultNote" class="notice">{{ resultNote }}</view>
+        <text class="refresh-link" @tap="refreshProgress">刷新进度</text>
 
         <view class="bottom-bar">
           <button class="btn btn--secondary" @tap="goOrder">查看订单</button>
@@ -236,7 +237,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { onLoad, onShow } from '@dcloudio/uni-app';
+import { onLoad, onPullDownRefresh, onShow } from '@dcloudio/uni-app';
 import {
   cancelOrder,
   createCustomRecipeRefundRequest,
@@ -658,6 +659,10 @@ function reapply() {
   uni.pageScrollTo({ scrollTop: 0, duration: 200 });
 }
 
+function refreshProgress() {
+  void load();
+}
+
 function goOrder() {
   uni.redirectTo({
     url: `/pages/custom-recipe/order-detail?orderId=${encodeURIComponent(orderId.value)}`,
@@ -670,6 +675,10 @@ function goLogin() {
     url: `/pages/login/index?redirect=${encodeURIComponent(redirect)}`,
   });
 }
+
+onPullDownRefresh(() => {
+  void load().finally(() => uni.stopPullDownRefresh());
+});
 
 onLoad((options: any) => {
   orderId.value = String(options?.orderId || '').trim();
@@ -818,6 +827,11 @@ onShow(() => {
 .upload-plus { font-size: 34rpx; line-height: 1; }
 .upload-label { font-size: 18rpx; }
 .upload-hint { display: block; margin-top: 12rpx; font-size: 19rpx; line-height: 1.6; color: #a79b86; }
+
+.refresh-link {
+  display: block; margin-top: 16rpx; text-align: center;
+  font-size: 21rpx; color: #1e5b35; font-weight: 700;
+}
 
 .notice {
   margin-top: 18rpx; padding: 20rpx 22rpx; border-radius: 16rpx;

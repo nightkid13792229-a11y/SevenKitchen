@@ -99,6 +99,10 @@ export class RecipeAgentSessionService {
     }
     if (lastError !== undefined) {
       data.lastError = lastError;
+    } else if (status !== 'FAILED' && status !== 'INTERRUPTED') {
+      // 旧错误不能跟着会话进入下一次运行/完成状态；否则 UI 会在
+      // “已完成/等待回答”下面继续显示上一轮的“超过运行上限”。
+      data.lastError = null;
     }
 
     await this.prisma.recipeDesignAgentSession.update({
@@ -126,6 +130,8 @@ export class RecipeAgentSessionService {
     };
     if (lastError !== undefined) {
       data.lastError = lastError;
+    } else if (to !== 'FAILED' && to !== 'INTERRUPTED') {
+      data.lastError = null;
     }
 
     const result = await this.prisma.recipeDesignAgentSession.updateMany({

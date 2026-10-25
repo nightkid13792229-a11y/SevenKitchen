@@ -38,26 +38,6 @@
         <span>输入 {{ session.promptTokens }} / 输出 {{ session.completionTokens }} tokens</span>
       </div>
 
-      <div
-        v-if="session"
-        class="agent-task-status"
-        :class="`agent-task-status--${session.status.toLowerCase()}`"
-      >
-        <div class="agent-task-status__headline">{{ taskHeadline }}</div>
-        <div class="agent-task-status__hint">{{ taskHint }}</div>
-        <el-button
-          v-if="isLimitReached"
-          class="agent-task-status__continue"
-          size="small"
-          type="primary"
-          plain
-          :loading="sending"
-          @click="continueRun"
-        >
-          继续本轮
-        </el-button>
-      </div>
-
       <div class="agent-conversation-shell">
         <div
           ref="scrollRef"
@@ -114,6 +94,50 @@
             </div>
           </div>
         </template>
+
+          <section v-if="delivery" class="agent-delivery">
+            <div class="agent-delivery__head">
+              <div class="agent-delivery__title">交付确认卡</div>
+              <div class="agent-delivery__meta">
+                <span class="agent-delivery__revision">
+                  内容版本 v{{ delivery.contentRevision }}
+                </span>
+                <span>{{ formatDateTime(delivery.createdAt) }}</span>
+              </div>
+            </div>
+            <p class="agent-delivery__summary">{{ delivery.summary }}</p>
+            <p v-if="delivery.warnings.length > 0" class="agent-delivery__sync">
+              {{ delivery.warnings.length }} 项警告已同步到上线检查
+            </p>
+          </section>
+
+          <div
+            v-if="session"
+            class="agent-task-status"
+            :class="`agent-task-status--${session.status.toLowerCase()}`"
+          >
+            <div class="agent-task-status__headline">{{ taskHeadline }}</div>
+            <div class="agent-task-status__hint">{{ taskHint }}</div>
+            <el-button
+              v-if="isLimitReached"
+              class="agent-task-status__continue"
+              size="small"
+              type="primary"
+              plain
+              :loading="sending"
+              @click="continueRun"
+            >
+              继续本轮
+            </el-button>
+          </div>
+
+          <el-alert
+            v-if="showErrorAlert"
+            class="agent-error"
+            type="error"
+            :closable="false"
+            :title="session?.lastError || ''"
+          />
         </div>
         <el-button
           v-if="hasNewBelow"
@@ -126,30 +150,6 @@
           有新消息，回到底部
         </el-button>
       </div>
-
-      <section v-if="delivery" class="agent-delivery">
-        <div class="agent-delivery__head">
-          <div class="agent-delivery__title">交付确认卡</div>
-          <div class="agent-delivery__meta">
-            <span class="agent-delivery__revision">
-              内容版本 v{{ delivery.contentRevision }}
-            </span>
-            <span>{{ formatDateTime(delivery.createdAt) }}</span>
-          </div>
-        </div>
-        <p class="agent-delivery__summary">{{ delivery.summary }}</p>
-        <p v-if="delivery.warnings.length > 0" class="agent-delivery__sync">
-          {{ delivery.warnings.length }} 项警告已同步到上线检查
-        </p>
-      </section>
-
-      <el-alert
-        v-if="session?.lastError && !isLimitReached"
-        class="agent-error"
-        type="error"
-        :closable="false"
-        :title="session.lastError"
-      />
 
       <div v-if="pendingApprovals.length > 0" class="agent-approvals">
         <div
@@ -385,6 +385,13 @@ const isLimitReached = computed(
     session.value?.status === 'FAILED' &&
     (session.value?.lastError ?? '').includes('超过运行上限')
 )
+const showErrorAlert = computed(
+  () =>
+    Boolean(session.value?.lastError) &&
+    (session.value?.status === 'FAILED' ||
+      session.value?.status === 'INTERRUPTED') &&
+    !isLimitReached.value
+)
 
 interface AgentQuestion {
   question: string
@@ -475,7 +482,7 @@ const taskHint = computed(() => {
         : '等待你的回复；直接在下方输入即可。'
     case 'COMPLETED':
       return delivery.value
-        ? '交付卡见下方；可继续对话调整。'
+        ? '交付卡见上方；可继续对话调整。'
         : '本轮已结束；可继续对话调整。'
     case 'STOPPED':
       return '输入新的要求可以重新开始。'

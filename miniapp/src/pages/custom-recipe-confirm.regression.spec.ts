@@ -44,6 +44,12 @@ describe('定制页 → 订单确认页（2026-10-19 老板确认）', () => {
     expect(page).toContain("focus: 'changeReasonOther'");
     expect(page).toContain("focus: 'stomachOther'");
     expect(page).toContain('uni.pageScrollTo');
+    // 2026-10-25：缺项错误常驻在对应板块/底部，不只靠 toast
+    expect(page).toContain('showValidation');
+    expect(page).toContain('validationMessage');
+    expect(page).toContain('validationTarget');
+    expect(page).toContain('class="section-error"');
+    expect(page).toContain('class="form-error"');
   });
 
   it('确认页有只读汇总、附件预览和确认并支付', () => {

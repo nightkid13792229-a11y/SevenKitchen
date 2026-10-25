@@ -105,6 +105,10 @@
          这个最常见的正常状态下，它下面五个分支一条都不成立，
          只剩内边距与白底，看上去就是一条空白。所以整张卡改成按内容出现。 -->
     <view v-if="showStatusSection" id="custom-status" class="section">
+      <text
+        v-if="validationTarget === '#custom-status'"
+        class="section-error"
+      >{{ validationMessage }}</text>
       <!-- 体重管理计划（阶段 D1）：进行中/维持期/已暂停都带出。
            计划是顾客当下真正在执行的方案，定制时必须看得见 ——
            否则他定的减重计划在定制页完全没有体现，等于白定。
@@ -252,6 +256,10 @@
         <text class="step-number">1</text>
         <text class="title-text">体重管理</text>
       </view>
+      <text
+        v-if="validationTarget === '#custom-weight'"
+        class="section-error"
+      >{{ validationMessage }}</text>
 
       <!-- 2026-10-19 老板定稿：
            ① 三选一（减重/维持/增重），不再按体况限制选项，选择权交给家长
@@ -302,6 +310,10 @@
         <text class="step-number">2</text>
         <text class="title-text">过敏信息</text>
       </view>
+      <text
+        v-if="validationTarget === '#custom-allergy'"
+        class="section-error"
+      >{{ validationMessage }}</text>
 
       <view class="health-item">
         <view class="goal-ask">
@@ -530,6 +542,10 @@
         <text class="step-number">4</text>
         <text class="title-text">饲喂历史</text>
       </view>
+      <text
+        v-if="validationTarget === '#custom-intake'"
+        class="section-error"
+      >{{ validationMessage }}</text>
 
       <view class="intake-block">
         <text class="intake-question">现在主要喂什么<text class="intake-required">*</text></text>
@@ -726,6 +742,7 @@
       导致底栏和按钮看起来半透明。cover-view 才能真正压在原生输入框之上。
     -->
     <cover-view v-if="hasSelectedDog" class="submit-section">
+      <cover-view v-if="validationMessage" class="form-error">{{ validationMessage }}</cover-view>
       <cover-view class="submit-btn" @tap="goToOrderConfirm">
         {{ navigatingToConfirm ? '正在进入…' : '确认订单' }}
       </cover-view>
@@ -1587,6 +1604,54 @@ async function refreshHealthSummary(dogId: string) {
   }
 }
 
+/**
+ * 从健康管理/体重计划页返回：刷新当前狗的门槛字段和过敏报告。
+ *
+ * 只改 selectedDog 的门槛字段 + 报告/计划，不动 formData 草稿；
+ * 不要调用 resetOrderFormForDog/onDogChange，否则会把顾客填的内容清空。
+ */
+async function refreshDogGateAndReports(dogId: string) {
+  if (!dogId) return;
+  try {
+    const res: any = await dogApi.detail(dogId);
+    if (String(formData.value.dogId || '') !== dogId) return;
+    const profile = res?.data;
+    if (profile) {
+      const confirmed = (value: unknown, fallback: unknown) =>
+        value === undefined ? Boolean(fallback) : Boolean(value);
+      selectedDog.value = {
+        ...selectedDog.value,
+        bcsScore: profile.bcsScore ?? selectedDog.value?.bcsScore,
+        activityLevel:
+          profile.activityLevel ?? selectedDog.value?.activityLevel,
+        mealsPerDay: profile.mealsPerDay ?? selectedDog.value?.mealsPerDay,
+        bcsScoreConfirmed: confirmed(
+          profile.bcsScoreConfirmed,
+          selectedDog.value?.bcsScoreConfirmed,
+        ),
+        activityLevelConfirmed: confirmed(
+          profile.activityLevelConfirmed,
+          selectedDog.value?.activityLevelConfirmed,
+        ),
+        mealsPerDayConfirmed: confirmed(
+          profile.mealsPerDayConfirmed,
+          selectedDog.value?.mealsPerDayConfirmed,
+        ),
+      };
+      // 门槛可能因为外部补确认而整体通过；方向按最新计划/体况再对齐一次
+      syncGoalWithPlan();
+    }
+  } catch (error) {
+    // 刷不到就保留旧值，不挡住顾客继续填
+    console.warn('[CustomRecipe] 刷新狗狗门槛失败:', error);
+  }
+
+  await Promise.all([
+    loadAllergyReports(dogId),
+    loadSelectedPlan(dogId),
+  ]);
+}
+
 /** 过敏文本输入框焦点（校验失败时定位用） */
 const allergyTextFocused = ref(false);
 
@@ -2056,9 +2121,12 @@ onShow(() => {
     void loadDogs();
   }
   void loadPendingOrder();
-  // 从健康管理补填回来：只刷新健康档案块，不覆盖顾客已填的草稿（需求 2.3.8）
+  // 从健康管理/体重计划返回：刷新档案块、门槛字段和过敏报告；
+  // 只更新只读/系统字段，不覆盖顾客已填的草稿（需求 2.3.8 + 2026-10-25 审计）
   if (formData.value.dogId) {
-    void refreshHealthSummary(formData.value.dogId);
+    const dogId = String(formData.value.dogId);
+    void refreshHealthSummary(dogId);
+    void refreshDogGateAndReports(dogId);
   }
 });
 
@@ -2658,6 +2726,8 @@ async function loadAllergyReports(dogId: string) {
   try {
     const res: any = await dogApi.allergyReports.list(dogId);
     if (res?.code !== 0) return;
+    // 慢响应保护：等待期间换了狗，旧狗的报告不能挂到新狗上
+    if (String(formData.value.dogId || '') !== dogId) return;
     allergyReports.value = Array.isArray(res?.data?.reports) ? res.data.reports : [];
     /**
      * 报告不再替顾客答“有过敏”（2026-10-25）。
@@ -2830,6 +2900,8 @@ interface CustomRecipeValidationResult {
 
 /** 防重复进入确认页；不是“未填完就置灰”，按钮始终可点。 */
 const navigatingToConfirm = ref(false);
+/** 点过“确认订单”后，把缺项错误常驻在对应板块/底部，而不是只闪 toast */
+const showValidation = ref(false);
 
 /**
  * 提交前校验（2026-10-19 老板确认）。
@@ -2933,6 +3005,17 @@ function validateCustomRecipeForm(): CustomRecipeValidationResult {
   return { valid: true };
 }
 
+/** 当前第一个缺项（只在点过确认后显示，避免一进页面就红） */
+const validationState = computed(() =>
+  showValidation.value ? validateCustomRecipeForm() : null,
+);
+const validationMessage = computed(
+  () => validationState.value?.title || '',
+);
+const validationTarget = computed(
+  () => validationState.value?.selector || '',
+);
+
 function scrollToCustomSection(selector?: string) {
   if (!selector) return;
   uni.pageScrollTo({ selector, duration: 300 });
@@ -2974,11 +3057,13 @@ function goToOrderConfirm() {
   }
   const result = validateCustomRecipeForm();
   if (!result.valid) {
+    showValidation.value = true;
     uni.showToast({ title: result.title || '请先完善信息', icon: 'none' });
     scrollToCustomSection(result.selector);
     focusValidationTarget(result.focus);
     return;
   }
+  showValidation.value = false;
 
   const dogId = String(formData.value.dogId || '').trim();
   if (!dogId) {
@@ -3020,7 +3105,7 @@ const getBCSText = (bcsScore: number) => {
 
 .custom-recipe-page {
   min-height: 100vh;
-  padding: 24rpx 24rpx 200rpx;
+  padding: 24rpx 24rpx 240rpx;
   background: var(--sk-bg, #f0f3e9);
 }
 
@@ -3904,6 +3989,26 @@ const getBCSText = (bcsScore: number) => {
   font-size: 24rpx;
   font-weight: 600;
   color: #5f6b56;
+}
+
+/* ---------- 校验常驻错误 ---------- */
+.section-error {
+  display: block;
+  margin-bottom: 16rpx;
+  padding: 12rpx 16rpx;
+  border-radius: 10rpx;
+  background: #fff7ed;
+  color: #b45309;
+  font-size: 23rpx;
+  line-height: 1.6;
+}
+
+.form-error {
+  padding: 6rpx 12rpx 12rpx;
+  text-align: center;
+  color: #b45309;
+  font-size: 22rpx;
+  line-height: 1.5;
 }
 
 /* ---------- 底部提交 ---------- */

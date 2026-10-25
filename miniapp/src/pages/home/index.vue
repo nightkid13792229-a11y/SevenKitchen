@@ -389,7 +389,7 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { fetchTastingPacks } from '../../api/tastingPack'
 import { onLoad, onShow, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
-import { request, getToken } from '../../utils/api'
+import { AUTH_EXPIRED_EVENT, request, getToken } from '../../utils/api'
 import { fetchUnreadMessageCount } from '@/api/messages'
 import { fetchPublicConfig } from '@/api/custom-recipe'
 import { formatAmount } from '@/utils/custom-recipe-order'
@@ -624,6 +624,18 @@ const checkLoginStatus = () => {
   isLoggedIn.value = !!token
 }
 
+/**
+ * 401 时 API 层已经清掉 token；首页不能等下一次 onShow 才更新。
+ * 立刻切到未登录，让顶部的「立即登录」Banner 当场出现。
+ */
+function handleAuthExpired() {
+  isLoggedIn.value = false
+  if (dogs.value.length > 0) {
+    dogs.value = []
+  }
+  refreshCurrentTabBar()
+}
+
 // 页面加载
 function getQueryStringValue(value: unknown) {
   if (Array.isArray(value)) return String(value[0] || '')
@@ -664,6 +676,7 @@ onLoad((options = {}) => {
 })
 
 onMounted(() => {
+  uni.$on(AUTH_EXPIRED_EVENT, handleAuthExpired)
   hasMountedHome.value = true
   checkLoginStatus()
   loadRecipeCoverOriginalOnlyMap()
@@ -699,6 +712,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  uni.$off(AUTH_EXPIRED_EVENT, handleAuthExpired)
   if (recipeRenderRevealTimer) {
     clearTimeout(recipeRenderRevealTimer)
     recipeRenderRevealTimer = null
@@ -771,7 +785,9 @@ const loadDogList = async () => {
     const res = await request({
       url: '/dogs',
       method: 'GET',
-      quiet: true
+      quiet: true,
+      // 登录态校验失败由 Banner/未登录界面表达，不再弹一条“请先登录”
+      suppressErrorToast: true,
     })
     if (res.code === 0 && res.data) {
       dogs.value = Array.isArray(res.data) ? res.data : []

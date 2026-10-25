@@ -4,7 +4,12 @@ vi.mock('./config', () => ({
   getBaseUrl: () => 'https://api.example.com/api/v1',
 }))
 
-import { normalizeRequestData, request, resolveRuntimeRequest } from './api'
+import {
+  AUTH_EXPIRED_EVENT,
+  normalizeRequestData,
+  request,
+  resolveRuntimeRequest,
+} from './api'
 
 describe('api request data normalization', () => {
   it('removes undefined query params from GET requests', () => {
@@ -143,6 +148,44 @@ describe('api request data normalization', () => {
     expect(wxRequest).toHaveBeenNthCalledWith(2, expect.objectContaining({
       timeout: 30000,
     }))
+  })
+
+  it('401 clears token, emits auth-expired, and can suppress the login toast', async () => {
+    const showToast = vi.fn()
+    const emit = vi.fn()
+    const removeStorageSync = vi.fn()
+    const wxRequest = vi.fn((options: any) => {
+      options.success({
+        statusCode: 401,
+        data: {
+          code: 401,
+          message: 'Authentication required',
+          data: null,
+        },
+      })
+    })
+
+    vi.stubGlobal('uni', {
+      getStorageSync: vi.fn(() => 'stale-token'),
+      removeStorageSync,
+      showToast,
+      $emit: emit,
+    })
+    vi.stubGlobal('wx', {
+      request: wxRequest,
+    })
+
+    await expect(
+      request({
+        url: '/dogs',
+        method: 'GET',
+        suppressErrorToast: true,
+      }),
+    ).rejects.toThrow('Authentication required')
+
+    expect(removeStorageSync).toHaveBeenCalledWith('token')
+    expect(emit).toHaveBeenCalledWith(AUTH_EXPIRED_EVENT)
+    expect(showToast).not.toHaveBeenCalled()
   })
 
   it('includes the resolved request URL when a runtime request fails', async () => {

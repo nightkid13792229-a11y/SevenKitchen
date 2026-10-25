@@ -1,6 +1,15 @@
 // utils/api.ts
 import { getBaseUrl } from './config'
 
+/**
+ * 登录态失效事件（2026-10-25）。
+ *
+ * 401 时 API 层会清 token；页面如果只在 onShow 里重新检查，会一直停在
+ * “以为已登录”的旧状态（首页登录 Banner 不出现、我的页还显示已登录）。
+ * 统一广播一次，订阅的页面立刻切到未登录。
+ */
+export const AUTH_EXPIRED_EVENT = 'auth:expired'
+
 // UUID validation regex
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -348,6 +357,11 @@ export function request<T = any>(options: RequestOptions): Promise<ApiResponse<T
           }
           clearToken()
           resetTokenReady()
+          try {
+            uni.$emit?.(AUTH_EXPIRED_EVENT)
+          } catch (error) {
+            console.warn('[Auth] broadcast expired event failed:', error)
+          }
 
           // Show toast提示用户登录
           if (!options.suppressErrorToast) {

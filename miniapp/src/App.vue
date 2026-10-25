@@ -6,7 +6,7 @@
 
 <script setup lang="ts">
 import { onLaunch, onShow } from "@dcloudio/uni-app";
-import { getToken, markTokenReady } from "./utils/api";
+import { getToken, markTokenReady, request } from "./utils/api";
 import { setBaseUrl } from "./utils/config";
 import { migrateLegacyDevBaseUrl } from "./utils/runtime-base-url";
 
@@ -125,15 +125,27 @@ onLaunch(() => {
     console.warn("Failed to prepare startup config:", err);
   }
 
-  // 游客模式：不再自动登录
-  // 只检查是否有token，不执行登录逻辑
+  /**
+   * 游客模式：不自动登录，但**要校验本地 token 是否还有效**。
+   *
+   * 之前只判断“有没有 token”，过期/失效 token 会被首页和我的页当成已登录，
+   * 它们再各自打受保护接口 → 401 → 弹“请先登录”，页面状态却要等到
+   * 下一次 onShow 才更新（首页 Banner 因此一直不出来）。
+   *
+   * 这里用一次静默的 /users/me 校验：401 时 API 层会清 token 并广播
+   * `auth:expired`；请求本身不弹错误 toast，登录态由页面的登录界面表达。
+   */
   const token = getToken();
   if (token) {
-    markTokenReady();
-  } else {
-    // 即使没有token也标记为ready，让页面可以正常加载
-    markTokenReady();
+    void request({
+      url: "/users/me",
+      method: "GET",
+      quiet: true,
+      suppressErrorToast: true,
+    }).catch(() => undefined);
   }
+  // 无论有没有 token 都标记 ready，让页面可以正常加载
+  markTokenReady();
 });
 
 onShow(() => {

@@ -31,6 +31,7 @@ import {
 } from '../../../domain/recipe-designer/production-steps';
 import type { PrismaService } from '../../../infrastructure/prisma.service';
 import { nutritionDataToNutritionProfile } from '../../nutrition-standard/nutrient-value-resolver';
+import { resolveNutritionProfileDisplayName } from '../../nutrition-food/nutrition-food-display-name';
 import type { RecipeDesignerService } from '../recipe-designer.service';
 import {
   RecipeAgentPortError,
@@ -45,6 +46,10 @@ import {
   type AgentIngredientDetail,
   type AgentIngredientKeyNutrients,
   type AgentIngredientNutritionBasis,
+  type AgentIngredientNutritionProfile,
+  type AgentIngredientProfileSummary,
+  type AgentIngredientRecommendedProduct,
+  type AgentIngredientTag,
   type AgentProductionStep,
 } from './agent-types';
 import type { RecipeAgentDraftPort } from './recipe-agent.port';
@@ -547,6 +552,26 @@ const pickIngredientProfile = (
 };
 
 /**
+ * `listIngredientOptions` 的档案 → 搜索候选的全量档案摘要。
+ *
+ * 搜索必须让模型看到生/熟/蒸等所有做法，不能只给默认档案。
+ */
+const toProfileSummary = (
+  profile: IngredientOptionProfile,
+): AgentIngredientProfileSummary => ({
+  nutritionFoodId: profile.nutritionFoodId,
+  name: profile.name,
+  displayNameZh: profile.displayNameZh ?? null,
+  status: profile.status,
+  category: profile.category ?? null,
+  dataSource: profile.dataSource ?? null,
+  isPrimary: profile.isPrimary,
+  preparationState: profile.preparationState ?? null,
+  preparationStateLabel: profile.preparationStateLabel ?? null,
+  verified: profile.status === 'VERIFIED',
+});
+
+/**
  * 批量补 `cfct_class`：option 只带营养档案，没有 `Ingredient.properties`。
  *
  * 查不到的原料记 null，不阻断搜索。
@@ -1030,14 +1055,15 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
       }
     }
 
-    // 只有默认/主档案已验证的原料才算候选。
+    // 只要有档案就返回；是否已验证由默认/主档案决定，不能因为默认档案
+    // 未验证就丢掉同原料的熟制等其它档案。
     const picked: Array<{
       option: IngredientOption;
       profile: IngredientOptionProfile;
     }> = [];
     for (const option of options) {
       const profile = pickIngredientProfile(option);
-      if (!profile || profile.status !== 'VERIFIED') {
+      if (!profile) {
         continue;
       }
       picked.push({ option, profile });
@@ -1065,7 +1091,10 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
         type,
         cfctClass,
         nutritionCategory,
-        verified: true,
+        verified: profile.status === 'VERIFIED',
+        nutritionProfiles: (option.nutritionProfiles ?? []).map(
+          toProfileSummary,
+        ),
         keyNutrients:
           keyNutrientsByFoodId.get(profile.nutritionFoodId) ??
           emptyKeyNutrients(),
@@ -1096,6 +1125,7 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
         cfctClass: candidate.cfctClass,
         nutritionCategory: candidate.nutritionCategory,
         verified: candidate.verified,
+        nutritionProfiles: candidate.nutritionProfiles,
         keyNutrients: candidate.keyNutrients,
         nutrientMatch: candidate.nutrientMatch,
       }));
@@ -1129,34 +1159,118 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
   }
 
   async getIngredient(input: {
-    nutritionFoodId: string;
+    nutritionFoodId?: string;
+    ingredientId?: string;
   }): Promise<AgentIngredientDetail | null> {
-    const nutritionFood = await this.prisma.nutritionFood.findUnique({
-      where: { id: input.nutritionFoodId },
+    const nutritionFoodId = input.nutritionFoodId?.trim() || null;
+    const ingredientId = input.ingredientId?.trim() || null;
+    if (!nutritionFoodId && !ingredientId) {
+      throw new RecipeAgentPortError(
+        'INVALID_ARGUMENT',
+        'nutritionFoodId 或 ingredientId 至少提供一个。',
+      );
+    }
+
+    // 从原料侧读一次就拿到全部档案；按营养档案查时先定位到它所属的原料。
+    const ingredient = await this.prisma.ingredient.findFirst({
+      where: nutritionFoodId
+        ? { nutritionFoodMappings: { some: { nutritionFoodId } } }
+        : { id: ingredientId as string },
       select: {
         id: true,
         name: true,
-        displayNameZh: true,
-        status: true,
-        category: true,
-        nutritionData: true,
-        mappings: {
+        type: true,
+        procurementStrategy: true,
+        diyEnabled: true,
+        procurementEnabled: true,
+        brand: true,
+        productModel: true,
+        purchaseChannel: true,
+        notes: true,
+        baseUnit: true,
+        unitDisplayLabel: true,
+        nutritionProfile: true,
+        purchaseUnit: true,
+        purchaseToBaseRatio: true,
+        currentPricePerPurchaseUnit: true,
+        effectivePricePerPurchaseUnit: true,
+        weightG: true,
+        maxCapacityG: true,
+        safetyStock: true,
+        reorderPoint: true,
+        targetStock: true,
+        physicalForm: true,
+        isOilBased: true,
+        supplementRetailEnabled: true,
+        shelfLifeMonths: true,
+        storageCondition: true,
+        openedShelfLifeDays: true,
+        properties: true,
+        createdAt: true,
+        updatedAt: true,
+        allergenTags: {
+          select: { allergenTag: { select: { name: true } } },
+        },
+        tags: {
           select: {
-            ingredientId: true,
-            isPrimary: true,
-            ingredient: {
+            tag: {
               select: {
                 id: true,
                 name: true,
-                type: true,
-                baseUnit: true,
-                properties: true,
-                currentPricePerPurchaseUnit: true,
-                purchaseUnit: true,
-                unitDisplayLabel: true,
-                allergenTags: {
-                  select: { allergenTag: { select: { name: true } } },
-                },
+                description: true,
+                parentId: true,
+                sort: true,
+                color: true,
+              },
+            },
+          },
+        },
+        recommendedProducts: {
+          select: {
+            id: true,
+            name: true,
+            brand: true,
+            productModel: true,
+            purchaseChannel: true,
+            purchaseLink: true,
+            imageUrl: true,
+            activeNutrients: true,
+            displayUnit: true,
+            isActive: true,
+            sortOrder: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+        nutritionFoodMappings: {
+          select: {
+            id: true,
+            nutritionFoodId: true,
+            yieldRate: true,
+            isPrimary: true,
+            notes: true,
+            nutritionFood: {
+              select: {
+                id: true,
+                name: true,
+                nameEn: true,
+                displayNameZh: true,
+                category: true,
+                dataSource: true,
+                externalId: true,
+                version: true,
+                status: true,
+                preparationState: true,
+                preparationStateLabel: true,
+                ediblePortionLabel: true,
+                processingLabel: true,
+                nutritionData: true,
+                defaultSupplementTargets: true,
+                notes: true,
+                verifiedBy: true,
+                verifiedAt: true,
+                createdAt: true,
+                updatedAt: true,
               },
             },
           },
@@ -1164,38 +1278,93 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
       },
     });
 
-    if (!nutritionFood) {
-      return null;
-    }
-
     // `get_ingredient` 只服务真实原料：没有采购原料映射的营养档案不算。
-    const mappings = nutritionFood.mappings ?? [];
-    if (mappings.length === 0) {
+    const mappings = ingredient?.nutritionFoodMappings ?? [];
+    if (!ingredient || mappings.length === 0) {
       return null;
     }
 
-    // 主映射优先；没有主映射取第一条。
-    const mapping =
-      mappings.find((candidate) => candidate.isPrimary) ?? mappings[0];
-    const ingredient = mapping.ingredient;
+    // 传了 nutritionFoodId 就以它为准；否则主映射优先，再退第一条。
+    const selectedMapping =
+      (nutritionFoodId
+        ? mappings.find(
+            (mapping) => mapping.nutritionFoodId === nutritionFoodId,
+          )
+        : undefined) ??
+      mappings.find((mapping) => mapping.isPrimary) ??
+      mappings[0];
+    const selectedFood = selectedMapping.nutritionFood;
+
+    const nutritionProfiles: AgentIngredientNutritionProfile[] = [...mappings]
+      .sort((left, right) => {
+        if (left.isPrimary !== right.isPrimary) {
+          return left.isPrimary ? -1 : 1;
+        }
+        return left.nutritionFoodId.localeCompare(right.nutritionFoodId);
+      })
+      .map((mapping) => {
+        const food = mapping.nutritionFood;
+        return {
+          nutritionFoodId: food.id,
+          mappingId: mapping.id,
+          name: resolveNutritionProfileDisplayName(ingredient.name, food),
+          displayNameZh: food.displayNameZh ?? null,
+          status: food.status,
+          category: food.category,
+          dataSource: food.dataSource,
+          externalId: food.externalId ?? null,
+          version: food.version,
+          preparationState: food.preparationState ?? null,
+          preparationStateLabel: food.preparationStateLabel ?? null,
+          ediblePortionLabel: food.ediblePortionLabel ?? null,
+          processingLabel: food.processingLabel ?? null,
+          nutritionData: food.nutritionData ?? null,
+          defaultSupplementTargets: food.defaultSupplementTargets ?? null,
+          notes: food.notes ?? null,
+          verifiedBy: food.verifiedBy ?? null,
+          verifiedAt: food.verifiedAt ?? null,
+          createdAt: food.createdAt,
+          updatedAt: food.updatedAt,
+          isPrimary: mapping.isPrimary,
+          verified: food.status === 'VERIFIED',
+          yieldRate: mapping.yieldRate,
+          mappingNotes: mapping.notes ?? null,
+        };
+      });
 
     const name = ingredient.name;
     const cfctClass = readCfctClass(ingredient.properties);
-    const nutritionCategory = nutritionFood.category ?? null;
+    const nutritionCategory = selectedFood.category ?? null;
     const type: 'FOOD' | 'SUPPLEMENT' =
       ingredient.type === 'SUPPLEMENT' ? 'SUPPLEMENT' : 'FOOD';
     const isSupplement = type === 'SUPPLEMENT';
+    const tags: AgentIngredientTag[] = (ingredient.tags ?? []).map(
+      ({ tag }) => ({
+        id: tag.id,
+        name: tag.name,
+        description: tag.description,
+        parentId: tag.parentId,
+        sort: tag.sort,
+        color: tag.color,
+      }),
+    );
+    const recommendedProducts: AgentIngredientRecommendedProduct[] = (
+      ingredient.recommendedProducts ?? []
+    ).map((product) => ({ ...product }));
 
     return {
       ingredientId: ingredient.id,
-      nutritionFoodId: nutritionFood.id,
+      nutritionFoodId: selectedFood.id,
       name,
-      nutritionProfileName: nutritionFood.displayNameZh ?? nutritionFood.name,
+      nutritionProfileName: resolveNutritionProfileDisplayName(
+        ingredient.name,
+        selectedFood,
+      ),
       type,
       baseUnit: ingredient.baseUnit,
       cfctClass,
       nutritionCategory,
-      verified: nutritionFood.status === 'VERIFIED',
+      verified: selectedFood.status === 'VERIFIED',
       category: classifyFoodCategory({
         name,
         cfctClass,
@@ -1203,13 +1372,13 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
         ingredientType: type,
       }),
       nutritionSummary: readNutritionSummary(
-        nutritionFood.nutritionData,
+        selectedFood.nutritionData,
         isSupplement,
       ),
       ...(isSupplement
         ? {
             nutritionBasis: readNutritionBasis(
-              nutritionFood.nutritionData,
+              selectedFood.nutritionData,
               ingredient.unitDisplayLabel ?? ingredient.purchaseUnit ?? null,
             ),
           }
@@ -1220,6 +1389,39 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
         ingredient.currentPricePerPurchaseUnit,
       ),
       purchaseUnit: ingredient.purchaseUnit,
+      unitDisplayLabel: ingredient.unitDisplayLabel ?? null,
+      brand: ingredient.brand ?? null,
+      productModel: ingredient.productModel ?? null,
+      purchaseChannel: ingredient.purchaseChannel ?? null,
+      notes: ingredient.notes ?? null,
+      procurementStrategy: ingredient.procurementStrategy,
+      diyEnabled: ingredient.diyEnabled,
+      procurementEnabled: ingredient.procurementEnabled,
+      nutritionProfile: ingredient.nutritionProfile ?? null,
+      purchaseToBaseRatio: ingredient.purchaseToBaseRatio,
+      currentPricePerPurchaseUnit: toPriceNumber(
+        ingredient.currentPricePerPurchaseUnit,
+      ),
+      effectivePricePerPurchaseUnit: toPriceNumber(
+        ingredient.effectivePricePerPurchaseUnit,
+      ),
+      weightG: ingredient.weightG ?? null,
+      maxCapacityG: ingredient.maxCapacityG ?? null,
+      safetyStock: ingredient.safetyStock ?? null,
+      reorderPoint: ingredient.reorderPoint ?? null,
+      targetStock: ingredient.targetStock ?? null,
+      physicalForm: ingredient.physicalForm ?? null,
+      isOilBased: ingredient.isOilBased,
+      supplementRetailEnabled: ingredient.supplementRetailEnabled,
+      shelfLifeMonths: ingredient.shelfLifeMonths ?? null,
+      storageCondition: ingredient.storageCondition ?? null,
+      openedShelfLifeDays: ingredient.openedShelfLifeDays ?? null,
+      properties: ingredient.properties,
+      tags,
+      recommendedProducts,
+      createdAt: ingredient.createdAt,
+      updatedAt: ingredient.updatedAt,
+      nutritionProfiles,
     };
   }
 

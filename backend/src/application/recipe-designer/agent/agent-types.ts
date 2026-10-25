@@ -141,8 +141,28 @@ export interface AgentIngredientNutrientMatch {
   score: number;
 }
 
+/**
+ * 搜索候选里的一个营养档案摘要（生/熟/蒸等）。
+ *
+ * 候选顶层只代表默认/主档案；要比较其它做法，必须看 `nutritionProfiles`。
+ */
+export interface AgentIngredientProfileSummary {
+  nutritionFoodId: string;
+  /** 面向人的档案名（优先 displayNameZh，其次按原料名生成）。 */
+  name: string;
+  displayNameZh: string | null;
+  status: string;
+  category: string | null;
+  dataSource: string | null;
+  isPrimary: boolean;
+  preparationState: string | null;
+  preparationStateLabel: string | null;
+  verified: boolean;
+}
+
 export interface AgentIngredientCandidate {
   ingredientId: string;
+  /** 默认/主档案 ID；完整档案列表在 `nutritionProfiles`。 */
   nutritionFoodId: string;
   name: string;
   nutritionProfileName: string;
@@ -150,9 +170,63 @@ export interface AgentIngredientCandidate {
   cfctClass: string | null;
   nutritionCategory: string | null;
   verified: boolean;
+  /** 该原料的全部营养档案（不只默认档案），只读。 */
+  nutritionProfiles: AgentIngredientProfileSummary[];
   keyNutrients?: AgentIngredientKeyNutrients;
   /** 按营养素搜索时的匹配量；没传 nutrientKey 时为 null。 */
   nutrientMatch?: AgentIngredientNutrientMatch | null;
+}
+
+/**
+ * `get_ingredient` 返回的完整营养档案（只读）。
+ *
+ * 包含映射关系（mappingId / isPrimary / yieldRate / mappingNotes）与
+ * 营养档案本身；`verified` 是 `status === 'VERIFIED'` 的便捷布尔值。
+ */
+export interface AgentIngredientNutritionProfile extends AgentIngredientProfileSummary {
+  mappingId: string;
+  category: string;
+  dataSource: string;
+  externalId: string | null;
+  version: number;
+  ediblePortionLabel: string | null;
+  processingLabel: string | null;
+  nutritionData: unknown;
+  defaultSupplementTargets: unknown;
+  notes: string | null;
+  verifiedBy: string | null;
+  verifiedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  yieldRate: number;
+  mappingNotes: string | null;
+}
+
+/** 原料标签（只读）。 */
+export interface AgentIngredientTag {
+  id: string;
+  name: string;
+  description: string | null;
+  parentId: string | null;
+  sort: number;
+  color: string | null;
+}
+
+/** 原料关联的推荐产品（只读）。 */
+export interface AgentIngredientRecommendedProduct {
+  id: string;
+  name: string;
+  brand: string | null;
+  productModel: string | null;
+  purchaseChannel: string | null;
+  purchaseLink: unknown;
+  imageUrl: string | null;
+  activeNutrients: unknown;
+  displayUnit: string | null;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 /**
@@ -167,14 +241,14 @@ export interface AgentIngredientNutritionBasis {
   usageUnit: string | null;
 }
 
-/** `get_ingredient` 的原料详情。 */
+/** `get_ingredient` 的原料详情：全部只读字段 + 全部营养档案。 */
 export interface AgentIngredientDetail extends AgentIngredientCandidate {
   /** 基准单位：G=克，ML=毫升，PCS=个/件（粒、片）。数量必须按它填。 */
   baseUnit: 'G' | 'ML' | 'PCS';
   /** 分类判定结果；搜索时用来过滤，详情里直接给模型看。 */
   category: FoodCategory;
   /**
-   * 营养摘要。食物 = 宏量（`moisture`/`crudeProtein`/...）；
+   * 营养摘要（选中档案）。食物 = 宏量（`moisture`/`crudeProtein`/...）；
    * 补剂 = 宏量 + `minerals.*` / `vitamins.*` / `aminoAcids.*` / `fattyAcids.*`。
    */
   nutritionSummary: Record<string, number | null>;
@@ -184,6 +258,38 @@ export interface AgentIngredientDetail extends AgentIngredientCandidate {
   preparationMethods: string[];
   pricePerPurchaseUnit: number | null;
   purchaseUnit: string | null;
+  /** 补剂/商品展示单位；数量单位优先级高于采购单位。 */
+  unitDisplayLabel: string | null;
+  brand: string | null;
+  productModel: string | null;
+  purchaseChannel: string | null;
+  notes: string | null;
+  procurementStrategy: string;
+  diyEnabled: boolean;
+  procurementEnabled: boolean;
+  /** 旧版内嵌营养 JSON（历史字段，保留只读）。 */
+  nutritionProfile: unknown;
+  purchaseToBaseRatio: number;
+  currentPricePerPurchaseUnit: number | null;
+  effectivePricePerPurchaseUnit: number | null;
+  weightG: number | null;
+  maxCapacityG: number | null;
+  safetyStock: number | null;
+  reorderPoint: number | null;
+  targetStock: number | null;
+  physicalForm: string | null;
+  isOilBased: boolean;
+  supplementRetailEnabled: boolean;
+  shelfLifeMonths: number | null;
+  storageCondition: string | null;
+  openedShelfLifeDays: number | null;
+  properties: unknown;
+  tags: AgentIngredientTag[];
+  recommendedProducts: AgentIngredientRecommendedProduct[];
+  createdAt: Date;
+  updatedAt: Date;
+  /** 同原料的全部营养档案；选中档案见顶层 `nutritionFoodId`。 */
+  nutritionProfiles: AgentIngredientNutritionProfile[];
 }
 
 /** 目录里与当前草稿有重合的一道菜。 */

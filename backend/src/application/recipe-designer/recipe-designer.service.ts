@@ -909,6 +909,8 @@ type IngredientOptionRecord = {
       category: NutritionFoodCategory;
       dataSource: string;
       status: NutritionFoodStatus;
+      preparationState?: string | null;
+      preparationStateLabel?: string | null;
       nutritionData?: unknown;
     };
   }>;
@@ -10278,9 +10280,13 @@ export class RecipeDesignerService {
             mapping.nutritionFood,
           ),
           nameEn: getNutritionProfileSourceName(mapping.nutritionFood),
+          displayNameZh: mapping.nutritionFood.displayNameZh ?? null,
           category: mapping.nutritionFood.category,
           dataSource: mapping.nutritionFood.dataSource,
           status: mapping.nutritionFood.status,
+          preparationState: mapping.nutritionFood.preparationState ?? null,
+          preparationStateLabel:
+            mapping.nutritionFood.preparationStateLabel ?? null,
           yieldRate: mapping.yieldRate,
           isPrimary: mapping.isPrimary,
           notes: mapping.notes,
@@ -10355,6 +10361,8 @@ export class RecipeDesignerService {
               category: true,
               dataSource: true,
               status: true,
+              preparationState: true,
+              preparationStateLabel: true,
               ...(includeNutritionData ? { nutritionData: true } : {}),
             },
           },

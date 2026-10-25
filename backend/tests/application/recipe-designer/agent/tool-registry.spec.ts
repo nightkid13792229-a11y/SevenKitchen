@@ -144,6 +144,45 @@ describe('tool registry', () => {
     );
   });
 
+  it('get_ingredient 的 schema 允许 nutritionFoodId 或 ingredientId 任选一个', () => {
+    const definition = AGENT_TOOL_DEFINITIONS.find(
+      (tool) => tool.name === 'get_ingredient',
+    );
+    expect(definition).toBeDefined();
+    const parameters = definition?.parameters as {
+      properties?: Record<string, Record<string, unknown>>;
+      anyOf?: unknown[];
+      required?: string[];
+      additionalProperties?: boolean;
+    };
+    expect(Object.keys(parameters.properties ?? {})).toHaveLength(2);
+    expect(parameters.properties?.nutritionFoodId).toMatchObject({
+      type: 'string',
+    });
+    expect(parameters.properties?.ingredientId).toMatchObject({
+      type: 'string',
+    });
+    expect(parameters.properties?.nutritionFoodId?.description).toContain(
+      '任一',
+    );
+    expect(parameters.properties?.ingredientId?.description).toContain('任一');
+    expect(parameters.anyOf).toEqual([
+      { required: ['nutritionFoodId'] },
+      { required: ['ingredientId'] },
+    ]);
+    expect(parameters.required).toEqual([]);
+    expect(parameters.additionalProperties).toBe(false);
+    expect(definition?.description).toContain('全部营养档案');
+  });
+
+  it('search_ingredients 描述说明返回全部 nutritionProfiles（含生/熟）', () => {
+    const definition = AGENT_TOOL_DEFINITIONS.find(
+      (tool) => tool.name === 'search_ingredients',
+    );
+    expect(definition?.description).toContain('nutritionProfiles');
+    expect(definition?.description).toContain('生/熟');
+  });
+
   it('search_ingredients 的分类枚举包含 AQUATIC', () => {
     const definition = AGENT_TOOL_DEFINITIONS.find(
       (tool) => tool.name === 'search_ingredients',

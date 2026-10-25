@@ -532,6 +532,17 @@ describe('RecipeAgentRunService', () => {
     expect(content).toContain('当前日期是 2026年1月2日（Asia/Shanghai）');
   });
 
+  it('SYSTEM_PROMPT 要求按实际做法选全部营养档案，内部成本只作证据', () => {
+    const content = buildRecipeAgentSystemPrompt(
+      new Date('2026-01-02T03:04:05.000Z'),
+    );
+    expect(content).toContain('每个候选都带 nutritionProfiles');
+    expect(content).toContain('按实际做法选择对应的 nutritionFoodId');
+    expect(content).toContain('不要因为默认档案是生就断定没有熟制档案');
+    expect(content).toContain('内部成本、采购与库存数据绝不能写进');
+    expect(content).toContain('顾客文案');
+  });
+
   it('start 只把本轮用户消息作为 user，刚追加的那条不会重复进历史 transcript', async () => {
     const sessionService = makeSessionService();
     // 真实 listMessages 在 appendMessage 之后调用，所以一定包含本轮用户消息。

@@ -94,6 +94,62 @@ describe('read tools', () => {
     });
   });
 
+  it('search_ingredients 摘要说明每条候选都有全部营养档案（含生/熟）', async () => {
+    const tools = createReadTools(createFakeRecipeAgentPort(), 'draft-1');
+    const result = await tools.search_ingredients({ category: 'MUSHROOM' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.summary).toContain('nutritionProfiles');
+    expect(result.summary).toContain('生/熟');
+  });
+
+  it('get_ingredient 支持只用 ingredientId，并摘要全部营养档案', async () => {
+    const port = createFakeRecipeAgentPort();
+    const tools = createReadTools(port, 'draft-1');
+    const result = await tools.get_ingredient({ ingredientId: 'ing-8' });
+
+    expect(port.getIngredient).toHaveBeenCalledWith({ ingredientId: 'ing-8' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect((result.data as any).nutritionProfiles).toHaveLength(2);
+    expect(result.summary).toContain('2 个营养档案');
+    expect(result.summary).toContain('水煮');
+  });
+
+  it('get_ingredient 支持只用 nutritionFoodId，并原样传给端口', async () => {
+    const port = createFakeRecipeAgentPort();
+    const tools = createReadTools(port, 'draft-1');
+    const result = await tools.get_ingredient({ nutritionFoodId: 'nf-8' });
+
+    expect(port.getIngredient).toHaveBeenCalledWith({
+      nutritionFoodId: 'nf-8',
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it('get_ingredient 至少需要 nutritionFoodId 或 ingredientId', async () => {
+    const port = createFakeRecipeAgentPort();
+    const tools = createReadTools(port, 'draft-1');
+
+    for (const args of [
+      {},
+      { nutritionFoodId: '' },
+      { nutritionFoodId: '   ' },
+      { ingredientId: '' },
+      { ingredientId: '   ' },
+      { nutritionFoodId: 123 },
+      { ingredientId: 123 },
+    ]) {
+      const result = await tools.get_ingredient(args as never);
+      expect(result.ok).toBe(false);
+      if (result.ok) continue;
+      expect(result.error.code).toBe('INVALID_ARGUMENT');
+      expect(result.error.message).toContain('nutritionFoodId');
+      expect(result.error.message).toContain('ingredientId');
+    }
+    expect(port.getIngredient).not.toHaveBeenCalled();
+  });
+
   it('get_ingredient 找不到返回 INGREDIENT_NOT_FOUND', async () => {
     const tools = createReadTools(
       createFakeRecipeAgentPort({ ingredientDetail: null }),

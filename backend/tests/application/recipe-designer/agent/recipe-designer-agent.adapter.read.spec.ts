@@ -111,6 +111,196 @@ function ingredientOptionRow(input: { id: string; name: string }) {
   };
 }
 
+const PROFILE_VERIFIED_AT = new Date('2026-10-01T08:00:00.000Z');
+const PROFILE_CREATED_AT = new Date('2026-09-01T08:00:00.000Z');
+const PROFILE_UPDATED_AT = new Date('2026-10-02T08:00:00.000Z');
+const INGREDIENT_CREATED_AT = new Date('2026-08-01T08:00:00.000Z');
+const INGREDIENT_UPDATED_AT = new Date('2026-10-03T08:00:00.000Z');
+
+const SWEET_POTATO_RAW_NUTRITION = {
+  meta: { rawBasisType: 'PER_100_G' },
+  macros: { moisture: 75, crudeProtein: 1.6, crudeFat: 0.2 },
+  minerals: { calcium: 30, phosphorus: 40 },
+};
+const SWEET_POTATO_COOKED_NUTRITION = {
+  meta: { rawBasisType: 'PER_100_G' },
+  macros: { moisture: 80, crudeProtein: 1.4, crudeFat: 0.1 },
+  minerals: { calcium: 25, phosphorus: 35 },
+};
+
+/** 红薯的两个档案：生（主） + 水煮（次），模拟真实生产数据。 */
+function sweetPotatoOption() {
+  return {
+    id: 'ing-sweet',
+    name: '红薯',
+    type: 'FOOD',
+    defaultNutritionFoodId: 'nf-raw',
+    nutritionProfiles: [
+      {
+        mappingId: 'map-raw',
+        nutritionFoodId: 'nf-raw',
+        name: '甘薯（生，未加工）',
+        nameEn: 'Sweet potato, raw',
+        displayNameZh: '甘薯（生，未加工）',
+        category: 'OTHER',
+        dataSource: 'CFCT',
+        status: 'VERIFIED',
+        preparationState: 'raw',
+        preparationStateLabel: '生',
+        yieldRate: 1,
+        isPrimary: true,
+        notes: '主档案',
+      },
+      {
+        mappingId: 'map-cooked',
+        nutritionFoodId: 'nf-cooked',
+        name: '甘薯（水煮，去皮）',
+        nameEn: 'Sweet potato, boiled',
+        displayNameZh: '甘薯（水煮，去皮）',
+        category: 'OTHER',
+        dataSource: 'CFCT',
+        status: 'VERIFIED',
+        preparationState: 'boiled',
+        preparationStateLabel: '水煮',
+        yieldRate: 0.85,
+        isPrimary: false,
+        notes: '水煮后',
+      },
+    ],
+  };
+}
+
+/** Prisma `ingredient.findFirst` 的详情行：全字段 + 同原料的两个档案。 */
+function sweetPotatoIngredientRow() {
+  return {
+    id: 'ing-sweet',
+    name: '红薯',
+    type: 'FOOD',
+    procurementStrategy: 'DAILY_PURCHASE',
+    diyEnabled: true,
+    procurementEnabled: true,
+    brand: '田间',
+    productModel: 'SP-1',
+    purchaseChannel: '批发市场',
+    notes: '内部备注：优先本地采购',
+    baseUnit: 'G',
+    unitDisplayLabel: 'g',
+    nutritionProfile: { legacy: 'raw-json' },
+    purchaseUnit: 'kg',
+    purchaseToBaseRatio: 1000,
+    currentPricePerPurchaseUnit: 8.5,
+    effectivePricePerPurchaseUnit: 7.9,
+    weightG: 500,
+    maxCapacityG: 2000,
+    safetyStock: 10,
+    reorderPoint: 20,
+    targetStock: 50,
+    physicalForm: 'POWDER',
+    isOilBased: false,
+    supplementRetailEnabled: false,
+    shelfLifeMonths: 12,
+    storageCondition: '阴凉干燥',
+    openedShelfLifeDays: 30,
+    properties: { cfct_class: '薯类及制品', cfct_code: '05-1-101' },
+    createdAt: INGREDIENT_CREATED_AT,
+    updatedAt: INGREDIENT_UPDATED_AT,
+    tags: [
+      {
+        tag: {
+          id: 'tag-1',
+          name: '高纤',
+          description: '膳食纤维较高',
+          parentId: null,
+          sort: 1,
+          color: '#4caf50',
+        },
+      },
+    ],
+    recommendedProducts: [
+      {
+        id: 'rp-1',
+        name: '红薯粉',
+        brand: '田间',
+        productModel: 'SP-POWDER',
+        purchaseChannel: '批发市场',
+        purchaseLink: { url: 'https://example.test/sweet-potato' },
+        imageUrl: 'https://example.test/sweet-potato.png',
+        activeNutrients: ['膳食纤维'],
+        displayUnit: '袋',
+        isActive: true,
+        sortOrder: 1,
+        createdAt: INGREDIENT_CREATED_AT,
+        updatedAt: INGREDIENT_UPDATED_AT,
+      },
+    ],
+    allergenTags: [],
+    nutritionFoodMappings: [
+      {
+        id: 'map-raw',
+        nutritionFoodId: 'nf-raw',
+        yieldRate: 1,
+        isPrimary: true,
+        notes: '主档案',
+        createdAt: PROFILE_CREATED_AT,
+        updatedAt: PROFILE_UPDATED_AT,
+        nutritionFood: {
+          id: 'nf-raw',
+          name: 'sweet_potato_raw',
+          nameEn: 'Sweet potato, raw',
+          displayNameZh: '甘薯（生，未加工）',
+          category: 'OTHER',
+          dataSource: 'CFCT',
+          externalId: '05-1-101',
+          version: 2,
+          status: 'VERIFIED',
+          preparationState: 'raw',
+          preparationStateLabel: '生',
+          ediblePortionLabel: '去皮',
+          processingLabel: '未加工',
+          nutritionData: SWEET_POTATO_RAW_NUTRITION,
+          defaultSupplementTargets: null,
+          notes: '生档案备注',
+          verifiedBy: 'u-verifier',
+          verifiedAt: PROFILE_VERIFIED_AT,
+          createdAt: PROFILE_CREATED_AT,
+          updatedAt: PROFILE_UPDATED_AT,
+        },
+      },
+      {
+        id: 'map-cooked',
+        nutritionFoodId: 'nf-cooked',
+        yieldRate: 0.85,
+        isPrimary: false,
+        notes: '水煮后',
+        createdAt: PROFILE_CREATED_AT,
+        updatedAt: PROFILE_UPDATED_AT,
+        nutritionFood: {
+          id: 'nf-cooked',
+          name: 'sweet_potato_boiled',
+          nameEn: 'Sweet potato, boiled',
+          displayNameZh: '甘薯（水煮，去皮）',
+          category: 'OTHER',
+          dataSource: 'CFCT',
+          externalId: '05-1-102',
+          version: 1,
+          status: 'VERIFIED',
+          preparationState: 'boiled',
+          preparationStateLabel: '水煮',
+          ediblePortionLabel: '去皮',
+          processingLabel: '水煮',
+          nutritionData: SWEET_POTATO_COOKED_NUTRITION,
+          defaultSupplementTargets: null,
+          notes: '水煮档案备注',
+          verifiedBy: 'u-verifier',
+          verifiedAt: PROFILE_VERIFIED_AT,
+          createdAt: PROFILE_CREATED_AT,
+          updatedAt: PROFILE_UPDATED_AT,
+        },
+      },
+    ],
+  };
+}
+
 /**
  * 一份判分用的真实草稿形状：7 类原料 900g 的配方，但 items 现算只有 821g。
  *
@@ -1069,7 +1259,7 @@ describe('RecipeDesignerAgentAdapter read', () => {
     expect(healthTagPolicy(snapshot).isAllowedTag('低脂')).toBe(false);
   });
 
-  it('searchIngredients 只收已验证档案，并按七类过滤', async () => {
+  it('searchIngredients 返回所有有档案的原料，verified 跟随默认档案，并按七类过滤', async () => {
     const service = {
       listIngredientOptions: jest.fn().mockResolvedValue({
         data: [
@@ -1133,7 +1323,9 @@ describe('RecipeDesignerAgentAdapter read', () => {
       limit: 10,
     });
 
-    expect(result.map((c) => c.ingredientId)).toEqual(['i1']);
+    expect(result.map((c) => c.ingredientId)).toEqual(['i1', 'i2']);
+    expect(result[1].verified).toBe(false);
+    expect(result[1].nutritionProfiles).toHaveLength(1);
     expect(result[0].cfctClass).toBe('菌藻类');
     expect(result[0].keyNutrients).toEqual({
       proteinPer100g: 18,
@@ -1182,7 +1374,9 @@ describe('RecipeDesignerAgentAdapter read', () => {
       ingredient: {
         findMany: jest
           .fn()
-          .mockResolvedValue([{ id: 'i-zinc', properties: { cfct_class: '畜肉类及制品' } }]),
+          .mockResolvedValue([
+            { id: 'i-zinc', properties: { cfct_class: '畜肉类及制品' } },
+          ]),
       },
       nutritionFood: { findMany: jest.fn().mockResolvedValue([]) },
     };
@@ -1277,36 +1471,344 @@ describe('RecipeDesignerAgentAdapter read', () => {
     expect(calls.every((args) => args.pageSize === 50)).toBe(true);
   });
 
-  it('getIngredient 找不到返回 null，找到时带价格/过敏原', async () => {
+  it('searchIngredients 返回红薯的生 + 水煮全部营养档案，不只默认档案', async () => {
+    const service = {
+      listIngredientOptions: jest.fn().mockResolvedValue({
+        data: [sweetPotatoOption()],
+        hasMore: false,
+      }),
+    };
     const prisma = {
+      ingredient: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'ing-sweet',
+            properties: { cfct_class: '薯类及制品' },
+          },
+        ]),
+      },
       nutritionFood: {
-        findUnique: jest
+        findMany: jest
           .fn()
-          .mockResolvedValueOnce(null)
-          .mockResolvedValueOnce({
+          .mockResolvedValue([
+            { id: 'nf-raw', nutritionData: SWEET_POTATO_RAW_NUTRITION },
+          ]),
+      },
+    };
+    const adapter = createAdapter(service, prisma);
+
+    const result = await adapter.searchIngredients({
+      search: '红薯',
+      limit: 10,
+    });
+
+    expect(result).toHaveLength(1);
+    const candidate = result[0] as any;
+    expect(candidate.nutritionFoodId).toBe('nf-raw');
+    expect(candidate.nutritionProfileName).toBe('甘薯（生，未加工）');
+    expect(candidate.verified).toBe(true);
+    expect(candidate.nutritionProfiles).toEqual([
+      {
+        nutritionFoodId: 'nf-raw',
+        name: '甘薯（生，未加工）',
+        displayNameZh: '甘薯（生，未加工）',
+        status: 'VERIFIED',
+        category: 'OTHER',
+        dataSource: 'CFCT',
+        isPrimary: true,
+        preparationState: 'raw',
+        preparationStateLabel: '生',
+        verified: true,
+      },
+      {
+        nutritionFoodId: 'nf-cooked',
+        name: '甘薯（水煮，去皮）',
+        displayNameZh: '甘薯（水煮，去皮）',
+        status: 'VERIFIED',
+        category: 'OTHER',
+        dataSource: 'CFCT',
+        isPrimary: false,
+        preparationState: 'boiled',
+        preparationStateLabel: '水煮',
+        verified: true,
+      },
+    ]);
+    expect(candidate.keyNutrients).toMatchObject({
+      proteinPer100g: 1.6,
+      fatPer100g: 0.2,
+      calciumMgPer100g: 30,
+      phosphorusMgPer100g: 40,
+    });
+  });
+
+  it('searchIngredients 默认档案未验证但有其它档案时仍返回，verified 跟随默认档案', async () => {
+    const option = sweetPotatoOption();
+    option.nutritionProfiles[0].status = 'PENDING';
+    const service = {
+      listIngredientOptions: jest.fn().mockResolvedValue({
+        data: [option],
+        hasMore: false,
+      }),
+    };
+    const prisma = {
+      ingredient: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([{ id: 'ing-sweet', properties: {} }]),
+      },
+      nutritionFood: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+
+    const result = await createAdapter(service, prisma).searchIngredients({
+      search: '红薯',
+    });
+
+    expect(result).toHaveLength(1);
+    const candidate = result[0] as any;
+    expect(candidate.verified).toBe(false);
+    expect(candidate.nutritionProfiles).toHaveLength(2);
+    expect(candidate.nutritionProfiles[1]).toMatchObject({
+      nutritionFoodId: 'nf-cooked',
+      status: 'VERIFIED',
+      verified: true,
+    });
+  });
+
+  it('getIngredient 按 ingredientId 返回全部档案和全部原料只读字段', async () => {
+    const prisma = {
+      ingredient: {
+        findFirst: jest.fn().mockResolvedValue(sweetPotatoIngredientRow()),
+      },
+    };
+    const adapter = createAdapter({}, prisma);
+
+    const detail = (await adapter.getIngredient({
+      ingredientId: 'ing-sweet',
+    })) as any;
+
+    expect(prisma.ingredient.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'ing-sweet' },
+        select: expect.objectContaining({
+          brand: true,
+          productModel: true,
+          purchaseChannel: true,
+          notes: true,
+          procurementStrategy: true,
+          diyEnabled: true,
+          procurementEnabled: true,
+          nutritionProfile: true,
+          purchaseToBaseRatio: true,
+          currentPricePerPurchaseUnit: true,
+          effectivePricePerPurchaseUnit: true,
+          weightG: true,
+          maxCapacityG: true,
+          safetyStock: true,
+          reorderPoint: true,
+          targetStock: true,
+          physicalForm: true,
+          isOilBased: true,
+          supplementRetailEnabled: true,
+          shelfLifeMonths: true,
+          storageCondition: true,
+          openedShelfLifeDays: true,
+          properties: true,
+          tags: expect.any(Object),
+          recommendedProducts: expect.any(Object),
+          createdAt: true,
+          updatedAt: true,
+        }),
+      }),
+    );
+
+    expect(detail).toMatchObject({
+      ingredientId: 'ing-sweet',
+      nutritionFoodId: 'nf-raw',
+      name: '红薯',
+      nutritionProfileName: '甘薯（生，未加工）',
+      type: 'FOOD',
+      baseUnit: 'G',
+      unitDisplayLabel: 'g',
+      cfctClass: '薯类及制品',
+      nutritionCategory: 'OTHER',
+      category: 'CARB',
+      verified: true,
+      brand: '田间',
+      productModel: 'SP-1',
+      purchaseChannel: '批发市场',
+      notes: '内部备注：优先本地采购',
+      procurementStrategy: 'DAILY_PURCHASE',
+      diyEnabled: true,
+      procurementEnabled: true,
+      nutritionProfile: { legacy: 'raw-json' },
+      purchaseToBaseRatio: 1000,
+      currentPricePerPurchaseUnit: 8.5,
+      effectivePricePerPurchaseUnit: 7.9,
+      pricePerPurchaseUnit: 8.5,
+      purchaseUnit: 'kg',
+      weightG: 500,
+      maxCapacityG: 2000,
+      safetyStock: 10,
+      reorderPoint: 20,
+      targetStock: 50,
+      physicalForm: 'POWDER',
+      isOilBased: false,
+      supplementRetailEnabled: false,
+      shelfLifeMonths: 12,
+      storageCondition: '阴凉干燥',
+      openedShelfLifeDays: 30,
+      properties: { cfct_class: '薯类及制品', cfct_code: '05-1-101' },
+      tags: [
+        {
+          id: 'tag-1',
+          name: '高纤',
+          description: '膳食纤维较高',
+          parentId: null,
+          sort: 1,
+          color: '#4caf50',
+        },
+      ],
+      recommendedProducts: [
+        {
+          id: 'rp-1',
+          name: '红薯粉',
+          brand: '田间',
+          productModel: 'SP-POWDER',
+          purchaseChannel: '批发市场',
+          purchaseLink: { url: 'https://example.test/sweet-potato' },
+          imageUrl: 'https://example.test/sweet-potato.png',
+          activeNutrients: ['膳食纤维'],
+          displayUnit: '袋',
+          isActive: true,
+          sortOrder: 1,
+          createdAt: INGREDIENT_CREATED_AT,
+          updatedAt: INGREDIENT_UPDATED_AT,
+        },
+      ],
+      createdAt: INGREDIENT_CREATED_AT,
+      updatedAt: INGREDIENT_UPDATED_AT,
+    });
+    expect(detail.nutritionProfiles).toHaveLength(2);
+    expect(detail.nutritionProfiles[0]).toEqual({
+      nutritionFoodId: 'nf-raw',
+      mappingId: 'map-raw',
+      name: '甘薯（生，未加工）',
+      displayNameZh: '甘薯（生，未加工）',
+      status: 'VERIFIED',
+      category: 'OTHER',
+      dataSource: 'CFCT',
+      externalId: '05-1-101',
+      version: 2,
+      preparationState: 'raw',
+      preparationStateLabel: '生',
+      ediblePortionLabel: '去皮',
+      processingLabel: '未加工',
+      nutritionData: SWEET_POTATO_RAW_NUTRITION,
+      defaultSupplementTargets: null,
+      notes: '生档案备注',
+      verifiedBy: 'u-verifier',
+      verifiedAt: PROFILE_VERIFIED_AT,
+      createdAt: PROFILE_CREATED_AT,
+      updatedAt: PROFILE_UPDATED_AT,
+      isPrimary: true,
+      verified: true,
+      yieldRate: 1,
+      mappingNotes: '主档案',
+    });
+    expect(detail.nutritionProfiles[1]).toMatchObject({
+      nutritionFoodId: 'nf-cooked',
+      mappingId: 'map-cooked',
+      name: '甘薯（水煮，去皮）',
+      displayNameZh: '甘薯（水煮，去皮）',
+      preparationState: 'boiled',
+      preparationStateLabel: '水煮',
+      isPrimary: false,
+      yieldRate: 0.85,
+      mappingNotes: '水煮后',
+    });
+    expect(detail.nutritionSummary).toEqual({
+      moisture: 75,
+      crudeProtein: 1.6,
+      crudeFat: 0.2,
+    });
+  });
+
+  it('getIngredient 按水煮 nutritionFoodId 选中熟档案，同时返回生档案', async () => {
+    const prisma = {
+      ingredient: {
+        findFirst: jest.fn().mockResolvedValue(sweetPotatoIngredientRow()),
+      },
+    };
+    const adapter = createAdapter({}, prisma);
+
+    const detail = (await adapter.getIngredient({
+      nutritionFoodId: 'nf-cooked',
+    })) as any;
+
+    expect(prisma.ingredient.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          nutritionFoodMappings: { some: { nutritionFoodId: 'nf-cooked' } },
+        },
+      }),
+    );
+    expect(detail.nutritionFoodId).toBe('nf-cooked');
+    expect(detail.nutritionProfileName).toBe('甘薯（水煮，去皮）');
+    expect(detail.verified).toBe(true);
+    expect(detail.nutritionProfiles.map((p: any) => p.nutritionFoodId)).toEqual(
+      ['nf-raw', 'nf-cooked'],
+    );
+    expect(detail.nutritionProfiles.map((p: any) => p.isPrimary)).toEqual([
+      true,
+      false,
+    ]);
+    expect(detail.nutritionSummary).toEqual({
+      moisture: 80,
+      crudeProtein: 1.4,
+      crudeFat: 0.1,
+    });
+  });
+
+  function duckIngredientRow() {
+    return {
+      id: 'i1',
+      name: '鸭腿肉',
+      type: 'FOOD',
+      baseUnit: 'G',
+      properties: { cfct_class: '禽肉类及制品' },
+      currentPricePerPurchaseUnit: 30,
+      purchaseUnit: 'kg',
+      tags: [],
+      recommendedProducts: [],
+      allergenTags: [{ allergenTag: { name: '鸭肉' } }],
+      nutritionFoodMappings: [
+        {
+          id: 'map1',
+          nutritionFoodId: 'nf1',
+          yieldRate: 1,
+          isPrimary: true,
+          notes: null,
+          nutritionFood: {
             id: 'nf1',
             name: '鸭腿肉',
             displayNameZh: '鸭腿肉',
             status: 'VERIFIED',
             category: 'MEAT',
+            dataSource: 'CFCT',
             nutritionData: { macros: { crudeProtein: 18, crudeFat: 6 } },
-            mappings: [
-              {
-                ingredientId: 'i1',
-                isPrimary: true,
-                ingredient: {
-                  id: 'i1',
-                  name: '鸭腿肉',
-                  type: 'FOOD',
-                  baseUnit: 'G',
-                  properties: { cfct_class: '禽肉类及制品' },
-                  currentPricePerPurchaseUnit: 30,
-                  purchaseUnit: 'kg',
-                  allergenTags: [{ allergenTag: { name: '鸭肉' } }],
-                },
-              },
-            ],
-          }),
+          },
+        },
+      ],
+    };
+  }
+
+  it('getIngredient 找不到返回 null，找到时带价格/过敏原', async () => {
+    const prisma = {
+      ingredient: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce(duckIngredientRow()),
       },
     };
     const adapter = createAdapter({}, prisma);
@@ -1326,34 +1828,40 @@ describe('RecipeDesignerAgentAdapter read', () => {
   });
 
   it('getIngredient 补剂返回矿物质/维生素明细和计量基准', async () => {
+    const row = duckIngredientRow();
     const prisma = {
-      nutritionFood: {
-        findUnique: jest.fn().mockResolvedValue({
-          id: 'nf2',
+      ingredient: {
+        findFirst: jest.fn().mockResolvedValue({
+          ...row,
+          id: 'i2',
           name: '碳酸钙粉',
-          displayNameZh: '碳酸钙粉',
-          status: 'VERIFIED',
-          category: 'MINERAL',
-          nutritionData: {
-            meta: { rawBasisType: 'PER_SERVING', servingWeightG: 1.2 },
-            macros: { moisture: 1 },
-            minerals: { calcium: 50000 },
-            vitamins: { vitaminD: 10000 },
-          },
-          mappings: [
+          type: 'SUPPLEMENT',
+          baseUnit: 'PCS',
+          properties: {},
+          currentPricePerPurchaseUnit: 120,
+          purchaseUnit: '瓶',
+          unitDisplayLabel: '粒',
+          allergenTags: [],
+          nutritionFoodMappings: [
             {
-              ingredientId: 'i2',
+              id: 'map2',
+              nutritionFoodId: 'nf2',
+              yieldRate: 1,
               isPrimary: true,
-              ingredient: {
-                id: 'i2',
+              notes: null,
+              nutritionFood: {
+                id: 'nf2',
                 name: '碳酸钙粉',
-                type: 'SUPPLEMENT',
-                baseUnit: 'PCS',
-                properties: {},
-                currentPricePerPurchaseUnit: 120,
-                purchaseUnit: '瓶',
-                unitDisplayLabel: '粒',
-                allergenTags: [],
+                displayNameZh: '碳酸钙粉',
+                status: 'VERIFIED',
+                category: 'MINERAL',
+                dataSource: 'MANUAL',
+                nutritionData: {
+                  meta: { rawBasisType: 'PER_SERVING', servingWeightG: 1.2 },
+                  macros: { moisture: 1 },
+                  minerals: { calcium: 50000 },
+                  vitamins: { vitaminD: 10000 },
+                },
               },
             },
           ],
@@ -1378,15 +1886,10 @@ describe('RecipeDesignerAgentAdapter read', () => {
 
   it('getIngredient 没有采购原料映射时返回 null', async () => {
     const prisma = {
-      nutritionFood: {
-        findUnique: jest.fn().mockResolvedValue({
-          id: 'nf1',
-          name: '鸭腿肉',
-          displayNameZh: '鸭腿肉',
-          status: 'VERIFIED',
-          category: 'MEAT',
-          nutritionData: { macros: { crudeProtein: 18 } },
-          mappings: [],
+      ingredient: {
+        findFirst: jest.fn().mockResolvedValue({
+          ...duckIngredientRow(),
+          nutritionFoodMappings: [],
         }),
       },
     };

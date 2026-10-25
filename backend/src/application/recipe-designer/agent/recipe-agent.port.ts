@@ -32,9 +32,16 @@ export interface RecipeAgentDraftPort {
     limit?: number;
   }): Promise<AgentIngredientCandidate[]>;
 
-  /** 某个原料的详情；找不到返回 `null`。 */
+  /**
+   * 某个原料的详情；找不到返回 `null`。
+   *
+   * `nutritionFoodId` 或 `ingredientId` 至少给一个：
+   * - 按 `nutritionFoodId` 选中该营养档案，并返回同原料的全部档案；
+   * - 按 `ingredientId` 选中主/默认档案，并返回全部档案。
+   */
   getIngredient(input: {
-    nutritionFoodId: string;
+    nutritionFoodId?: string;
+    ingredientId?: string;
   }): Promise<AgentIngredientDetail | null>;
 
   /** 目录使用情况：某主蛋白 / 某套原料用过几次、跟哪几道重合。 */

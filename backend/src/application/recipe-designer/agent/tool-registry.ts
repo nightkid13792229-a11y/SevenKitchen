@@ -146,7 +146,7 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
   {
     name: 'search_ingredients',
     description:
-      '按关键词、分类、原料类型或营养素搜索标准原料库；需要找可用的真实原料时用。',
+      '按关键词、分类、原料类型或营养素搜索标准原料库；每条候选都返回 nutritionProfiles（该原料的全部营养档案，含生/熟等做法），需要找可用的真实原料时用。',
     parameters: {
       type: 'object',
       properties: {
@@ -187,16 +187,26 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
   {
     name: 'get_ingredient',
     description:
-      '查看某个真实原料的营养、过敏原和预处理方式；确定用它之前先查详情。',
+      '查看某个真实原料的全部只读信息（全部营养档案、营养数据、过敏原、价格/采购/库存/标签等）；nutritionFoodId 或 ingredientId 任传一个即可，确定用它之前先查详情。',
     parameters: {
       type: 'object',
       properties: {
         nutritionFoodId: {
           type: 'string',
-          description: '营养库的原料 ID。',
+          description:
+            '营养库的原料 ID；与 ingredientId 任一即可（传入时选中该营养档案）。',
+        },
+        ingredientId: {
+          type: 'string',
+          description:
+            '原料库 ID；与 nutritionFoodId 任一即可（传入时选中主/默认营养档案）。',
         },
       },
-      required: ['nutritionFoodId'],
+      anyOf: [
+        { required: ['nutritionFoodId'] },
+        { required: ['ingredientId'] },
+      ],
+      required: [],
       additionalProperties: false,
     },
   },

@@ -49,7 +49,8 @@ interface SearchIngredientsArgs {
 }
 
 interface GetIngredientArgs {
-  nutritionFoodId: string;
+  nutritionFoodId?: string;
+  ingredientId?: string;
 }
 
 interface GetCatalogUsageArgs {
@@ -222,11 +223,20 @@ function summarizeDraft(draft: AgentDraftSnapshot): string {
 
 function summarizeIngredient(detail: AgentIngredientDetail): string {
   const verified = detail.verified ? '已验证' : '未验证';
+  const profileCount = detail.nutritionProfiles?.length ?? 0;
+  const profileNames = (detail.nutritionProfiles ?? [])
+    .slice(0, 3)
+    .map((profile) => profile.name)
+    .join('、');
+  const profiles =
+    profileCount > 0
+      ? `；共 ${profileCount} 个营养档案（${profileNames}${profileCount > 3 ? ' 等' : ''}）`
+      : '';
   const preparation =
     detail.preparationMethods.length > 0
       ? `；预处理：${detail.preparationMethods.join('、')}`
       : '';
-  return `${detail.name}：${detail.cfctClass ?? '未分类'}，营养档案${verified}${preparation}。`;
+  return `${detail.name}：${detail.cfctClass ?? '未分类'}，当前档案「${detail.nutritionProfileName}」${verified}${profiles}${preparation}。`;
 }
 
 /**
@@ -338,7 +348,7 @@ export function createReadTools(
       if (candidates.length === 0) {
         return ok(
           candidates,
-          `没有找到候选原料（${scope}）；换个关键词或类别试试。`,
+          `没有找到候选原料（${scope}）；换个关键词或类别试试。每条候选都会带 nutritionProfiles（含生/熟等全部营养档案）。`,
         );
       }
 
@@ -349,7 +359,7 @@ export function createReadTools(
       const suffix = candidates.length > 5 ? ` 等 ${candidates.length} 个` : '';
       return ok(
         candidates,
-        `找到 ${candidates.length} 个候选（${scope}）：${preview}${suffix}。`,
+        `找到 ${candidates.length} 个候选（${scope}）：${preview}${suffix}。每条候选都带 nutritionProfiles（该原料全部营养档案，含生/熟）；按实际做法选择 nutritionFoodId。`,
       );
     },
 
@@ -358,22 +368,55 @@ export function createReadTools(
     ): Promise<AgentToolResult<AgentIngredientDetail>> {
       const raw = asRawArgs(args);
       if (!raw) {
-        return fail('INVALID_ARGUMENT', 'nutritionFoodId 不能为空。');
-      }
-      const idValue = raw.nutritionFoodId;
-      if (typeof idValue !== 'string') {
-        return fail('INVALID_ARGUMENT', 'nutritionFoodId 不能为空。');
-      }
-      const nutritionFoodId = idValue.trim();
-      if (!nutritionFoodId) {
-        return fail('INVALID_ARGUMENT', 'nutritionFoodId 不能为空。');
+        return fail(
+          'INVALID_ARGUMENT',
+          'nutritionFoodId 或 ingredientId 至少提供一个。',
+        );
       }
 
-      const detail = await port.getIngredient({ nutritionFoodId });
+      const nutritionFoodIdValue = raw.nutritionFoodId;
+      const ingredientIdValue = raw.ingredientId;
+      if (
+        nutritionFoodIdValue !== undefined &&
+        typeof nutritionFoodIdValue !== 'string'
+      ) {
+        return fail(
+          'INVALID_ARGUMENT',
+          'nutritionFoodId 或 ingredientId 必须是字符串。',
+        );
+      }
+      if (
+        ingredientIdValue !== undefined &&
+        typeof ingredientIdValue !== 'string'
+      ) {
+        return fail(
+          'INVALID_ARGUMENT',
+          'nutritionFoodId 或 ingredientId 必须是字符串。',
+        );
+      }
+
+      const nutritionFoodId =
+        typeof nutritionFoodIdValue === 'string'
+          ? nutritionFoodIdValue.trim()
+          : '';
+      const ingredientId =
+        typeof ingredientIdValue === 'string' ? ingredientIdValue.trim() : '';
+      if (!nutritionFoodId && !ingredientId) {
+        return fail(
+          'INVALID_ARGUMENT',
+          'nutritionFoodId 或 ingredientId 至少提供一个。',
+        );
+      }
+
+      const input: GetIngredientArgs = {};
+      if (nutritionFoodId) input.nutritionFoodId = nutritionFoodId;
+      if (ingredientId) input.ingredientId = ingredientId;
+
+      const detail = await port.getIngredient(input);
       if (!detail) {
         return fail(
           'INGREDIENT_NOT_FOUND',
-          `没有找到营养库 ID 为「${nutritionFoodId}」的原料。`,
+          `没有找到 nutritionFoodId「${nutritionFoodId || '-'}」/ ingredientId「${ingredientId || '-'}」对应的原料。`,
         );
       }
 

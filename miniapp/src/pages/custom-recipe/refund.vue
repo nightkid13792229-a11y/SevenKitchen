@@ -166,19 +166,20 @@
         <view class="notice">提交后一个工作日内处理。</view>
 
         <view class="bottom-bar">
-          <CustomerServiceInlineButton
-            class="service-line"
-            compact
-            label="拿不准？联系Seven爸爸"
-            source-type="ORDER"
-            :order-id="orderId"
-            :order-no="orderId"
-            :title="`定制订单退款 ${orderId}`"
-            path="/pages/custom-recipe/order-detail"
-          />
-          <button class="btn btn--gold" :loading="submitting" :disabled="!canSubmitB" @tap="submitRequest">
-            提交退款申请
-          </button>
+          <view class="bottom-bar__row">
+            <CustomerServiceInlineButton
+              compact
+              label="Seven爸爸"
+              source-type="ORDER"
+              :order-id="orderId"
+              :order-no="orderId"
+              :title="`定制订单退款 ${orderId}`"
+              path="/pages/custom-recipe/order-detail"
+            />
+            <button class="btn btn--gold bottom-bar__main" :loading="submitting" :disabled="!canSubmitB" @tap="submitRequest">
+              提交退款申请
+            </button>
+          </view>
         </view>
       </template>
 
@@ -217,17 +218,18 @@
         <text class="refresh-link" @tap="refreshProgress">刷新进度</text>
 
         <view class="bottom-bar">
-          <button class="btn btn--secondary" @tap="goOrder">查看订单</button>
-          <CustomerServiceInlineButton
-            class="service-line"
-            compact
-            label="退款有问题？联系Seven爸爸"
-            source-type="ORDER"
-            :order-id="orderId"
-            :order-no="orderId"
-            :title="`定制订单退款 ${orderId}`"
-            path="/pages/custom-recipe/order-detail"
-          />
+          <view class="bottom-bar__row">
+            <CustomerServiceInlineButton
+              compact
+              label="Seven爸爸"
+              source-type="ORDER"
+              :order-id="orderId"
+              :order-no="orderId"
+              :title="`定制订单退款 ${orderId}`"
+              path="/pages/custom-recipe/order-detail"
+            />
+            <button class="btn btn--secondary bottom-bar__main" @tap="goOrder">查看订单</button>
+          </view>
           <button v-if="canReapply" class="btn btn--ghost" @tap="reapply">重新申请</button>
         </view>
       </template>
@@ -894,5 +896,20 @@ onShow(() => {
 .btn--secondary { margin-top: 20rpx; background: #fffdf7; color: #1e3a2f; border: 1rpx solid #d9cdb8; }
 .btn--ghost { margin-top: 10rpx; background: transparent; color: #8a7a63; font-size: 23rpx; height: 64rpx; line-height: 64rpx; }
 .btn[disabled] { opacity: 0.55; }
-.service-line { display: flex; justify-content: center; margin-bottom: 10rpx; }
+.bottom-bar__row {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+}
+
+.bottom-bar__row .btn {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  margin-top: 0;
+}
+
+.bottom-bar__main {
+  flex: 1;
+}
 </style>

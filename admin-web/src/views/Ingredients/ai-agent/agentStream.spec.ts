@@ -2,13 +2,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   answerInputFromPendingQuestion,
   askOptionAiBadge,
+  buildAgentReportSummary,
   createAgentStreamState,
+  formatAgentDuration,
+  formatAgentTokenCount,
   parseSseChunk,
   pendingOptionBadge,
   readPendingQuestion,
   reduceAgentEvents,
   streamIngredientAgent,
   type AgentPendingQuestionOption,
+  type AgentRunReport,
   type AgentStreamEvent,
   type AgentStreamState
 } from './agentStream'
@@ -51,7 +55,10 @@ function stepEnd(
       ? {}
       : { reviewSummary: overrides.reviewSummary }),
     ...(overrides.matches === undefined ? {} : { matches: overrides.matches }),
-    ...(overrides.record === undefined ? {} : { record: overrides.record })
+    ...(overrides.record === undefined ? {} : { record: overrides.record }),
+    ...(overrides.durationMs === undefined
+      ? {}
+      : { durationMs: overrides.durationMs })
   }
 }
 
@@ -328,6 +335,67 @@ describe('reduceAgentEvents', () => {
     expect(reduceAgentEvents(base, { type: 'heartbeat' })).toEqual(base)
     expect(reduceAgentEvents(base, null)).toEqual(base)
     expect(reduceAgentEvents(base, { type: 'step_start' })).toEqual(base)
+  })
+
+  it('reply 携带 report：记录完整报告，摘要显示工具数 / 耗时 / token', () => {
+    const report: AgentRunReport = {
+      runId: 'run-1',
+      draftId: 'draft-1',
+      text: '鸡肝',
+      steps: 7,
+      toolCalls: 12,
+      tokensIn: 18_000,
+      tokensOut: 6_000,
+      durationMs: 38_000,
+      stopReason: null,
+      tools: ['searchNames', 'finish'],
+      failedTools: [],
+      result: 'FINISHED'
+    }
+    let state = reduceAgentEvents(createAgentStreamState(), {
+      type: 'reply',
+      reply: '已填好，请审核。',
+      draftId: 'draft-1',
+      steps: 7,
+      toolCallCount: 12,
+      report
+    })
+
+    expect(state.report).toEqual(report)
+    expect(buildAgentReportSummary(state.report)).toBe(
+      '12 次工具 · 38s · 24k tokens'
+    )
+  })
+
+  it('report 字段不合法时不记录，页面保持旧行为', () => {
+    const state = reduceAgentEvents(createAgentStreamState(), {
+      type: 'reply',
+      reply: '好了。',
+      draftId: 'draft-1',
+      steps: 1,
+      toolCallCount: 0,
+      report: { runId: 'broken' }
+    })
+
+    expect(state.report).toBeNull()
+    expect(buildAgentReportSummary(state.report)).toBe('')
+  })
+
+  it('step_end 的 durationMs 落到步骤上，展开能看到每个工具耗时', () => {
+    let state = reduceAgentEvents(createAgentStreamState(), stepStart())
+    state = reduceAgentEvents(state, stepEnd(1, { durationMs: 1_500 }))
+
+    expect(state.steps[0]?.durationMs).toBe(1_500)
+  })
+
+  it('耗时与 token 的展示格式：秒 / 分秒、千位缩写', () => {
+    expect(formatAgentDuration(38_000)).toBe('38s')
+    expect(formatAgentDuration(1_500)).toBe('2s')
+    expect(formatAgentDuration(65_000)).toBe('1m5s')
+    expect(formatAgentDuration(120_000)).toBe('2m')
+    expect(formatAgentTokenCount(24_000)).toBe('24k')
+    expect(formatAgentTokenCount(1_500)).toBe('1.5k')
+    expect(formatAgentTokenCount(999)).toBe('999')
   })
 
   it('reply 记录总结与计数，done 标记结束', () => {

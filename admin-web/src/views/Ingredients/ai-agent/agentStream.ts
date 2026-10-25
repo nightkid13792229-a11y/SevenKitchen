@@ -189,6 +189,8 @@ export type AgentStreamEvent =
       matches?: AgentStreamMatch[]
       /** 读来源记录：词条名 / 覆盖率 / 读到多少项。 */
       record?: AgentStreamRecord
+      /** 本次工具耗时；展开步骤时显示。 */
+      durationMs?: number
     }
   | {
       type: 'reply'
@@ -196,6 +198,8 @@ export type AgentStreamEvent =
       draftId: string
       steps: number
       toolCallCount: number
+      /** 本轮运行报告；旧后端没有。 */
+      report?: AgentRunReport
     }
   /**
    * AI 先问人：页面渲染提问气泡 + 可点选项；点击等于用同一个 draftId
@@ -208,9 +212,11 @@ export type AgentStreamEvent =
       /** 每个选项的库内核实结果，与 options 同序。 */
       optionChecks?: AgentPendingQuestionOption[]
       draftId?: string
+      /** 问人也是本轮正常结束：报告一并带回。 */
+      report?: AgentRunReport
     }
-  | { type: 'done' }
-  | { type: 'error'; message: string }
+  | { type: 'done'; report?: AgentRunReport }
+  | { type: 'error'; message: string; report?: AgentRunReport }
 
 /** 页面上的一步：开始即「执行中」，结束改成成功 / 失败。 */
 export interface AgentStreamStep {
@@ -227,6 +233,38 @@ export interface AgentStreamStep {
   search?: AgentSearchEvidenceView
   /** 读来源记录步骤的展开摘要 */
   record?: AgentRecordEvidenceView
+  /** 本次工具耗时；报告摘要与展开列表都用它。 */
+  durationMs?: number
+}
+
+/** 本轮运行结果分类（后端 AgentRunReport.result）。 */
+export type AgentRunOutcome = 'FINISHED' | 'TIMEOUT' | 'NO_PROGRESS' | 'ERROR'
+
+/** 运行报告里的一条失败工具记录。 */
+export interface AgentRunReportFailedTool {
+  name: string
+  error: string
+}
+
+/**
+ * 每轮 run 结束返回的运行报告。
+ *
+ * 只做展示与排查：页面在「已执行 N 步」后显示工具数 / 耗时 / token，
+ * 展开后能看到每个工具的耗时和失败原因。
+ */
+export interface AgentRunReport {
+  runId: string
+  draftId: string
+  text: string
+  steps: number
+  toolCalls: number
+  tokensIn: number
+  tokensOut: number
+  durationMs: number
+  stopReason: string | null
+  tools: string[]
+  failedTools: AgentRunReportFailedTool[]
+  result: AgentRunOutcome
 }
 
 export interface AgentStreamMeta {
@@ -243,6 +281,8 @@ export interface AgentStreamState {
   done: boolean
   /** 当前在等用户回答的问题；没有时为 null。 */
   pendingQuestion: AgentPendingQuestion | null
+  /** 本轮运行报告；旧后端没有时为 null。 */
+  report: AgentRunReport | null
 }
 
 export function createAgentStreamState(): AgentStreamState {
@@ -253,7 +293,8 @@ export function createAgentStreamState(): AgentStreamState {
     meta: null,
     error: null,
     done: false,
-    pendingQuestion: null
+    pendingQuestion: null,
+    report: null
   }
 }
 
@@ -510,6 +551,132 @@ export function parseSseChunk(buffer: string): {
   return { events, rest }
 }
 
+function readDurationMs(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? Math.round(value)
+    : null
+}
+
+const AGENT_RUN_OUTCOMES: ReadonlyArray<AgentRunOutcome> = [
+  'FINISHED',
+  'TIMEOUT',
+  'NO_PROGRESS',
+  'ERROR'
+]
+
+/**
+ * 校验后端报告：字段缺了 / 类型不对就当没有报告。
+ *
+ * 旧后端不发 report，页面必须保持原样；新后端字段以后也可能增加，
+ * 这里只取自己认识的，不因为多一个字段就整份丢掉。
+ */
+export function readAgentRunReport(value: unknown): AgentRunReport | null {
+  if (!isRecord(value)) {
+    return null
+  }
+  const runId = readText(value.runId)
+  const result = typeof value.result === 'string' ? value.result : ''
+  if (
+    !runId ||
+    !AGENT_RUN_OUTCOMES.includes(result as AgentRunOutcome)
+  ) {
+    return null
+  }
+
+  const numbers = [
+    value.steps,
+    value.toolCalls,
+    value.tokensIn,
+    value.tokensOut,
+    value.durationMs
+  ]
+  if (numbers.some((item) => readNonNegativeInt(item) === null)) {
+    return null
+  }
+
+  const tools = Array.isArray(value.tools)
+    ? value.tools.filter((item): item is string => typeof item === 'string')
+    : []
+  const failedTools = Array.isArray(value.failedTools)
+    ? value.failedTools.flatMap((item) => {
+        if (!isRecord(item)) {
+          return []
+        }
+        const name = readText(item.name)
+        if (!name) {
+          return []
+        }
+        return [{ name, error: readText(item.error) || '工具执行失败' }]
+      })
+    : []
+
+  return {
+    runId,
+    draftId: readText(value.draftId),
+    text: typeof value.text === 'string' ? value.text : '',
+    steps: readNonNegativeInt(value.steps) ?? 0,
+    toolCalls: readNonNegativeInt(value.toolCalls) ?? 0,
+    tokensIn: readNonNegativeInt(value.tokensIn) ?? 0,
+    tokensOut: readNonNegativeInt(value.tokensOut) ?? 0,
+    durationMs: readNonNegativeInt(value.durationMs) ?? 0,
+    stopReason:
+      typeof value.stopReason === 'string' && value.stopReason
+        ? value.stopReason
+        : null,
+    tools,
+    failedTools,
+    result: result as AgentRunOutcome
+  }
+}
+
+/** 耗时展示：<1s 用 ms，<60s 用秒，更长用「分m秒s」。 */
+export function formatAgentDuration(durationMs: number): string {
+  const safe = Number.isFinite(durationMs) ? Math.max(0, durationMs) : 0
+  if (safe < 1000) {
+    return `${Math.round(safe)}ms`
+  }
+  const totalSeconds = Math.round(safe / 1000)
+  if (totalSeconds < 60) {
+    return `${totalSeconds}s`
+  }
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return seconds > 0 ? `${minutes}m${seconds}s` : `${minutes}m`
+}
+
+/** token 展示：>=1000 用 k，保留一位小数并去掉 .0。 */
+export function formatAgentTokenCount(tokens: number): string {
+  const safe =
+    Number.isFinite(tokens) && tokens > 0 ? Math.floor(tokens) : 0
+  if (safe < 1000) {
+    return String(safe)
+  }
+  const thousands = safe / 1000
+  const text =
+    thousands >= 100
+      ? String(Math.round(thousands))
+      : thousands.toFixed(1).replace(/\.0$/, '')
+  return `${text}k`
+}
+
+/**
+ * 「已执行 N 步」后面的摘要：`12 次工具 · 38s · 24k tokens`。
+ *
+ * 没有报告时返回空串，旧后端 / 断流时页面只显示原来的「已执行 N 步」。
+ */
+export function buildAgentReportSummary(
+  report: AgentRunReport | null | undefined
+): string {
+  if (!report) {
+    return ''
+  }
+  return (
+    `${report.toolCalls} 次工具 · ` +
+    `${formatAgentDuration(report.durationMs)} · ` +
+    `${formatAgentTokenCount(report.tokensIn + report.tokensOut)} tokens`
+  )
+}
+
 /**
  * 把一条事件并进页面状态。
  *
@@ -566,6 +733,7 @@ export function reduceAgentEvents(
         reviewSummary: event.reviewSummary
       })
       const record = toRecordEvidenceFromEvent(event.record)
+      const durationMs = readDurationMs(event.durationMs)
       return {
         ...state,
         steps: replaceStep(state.steps, {
@@ -579,7 +747,8 @@ export function reduceAgentEvents(
           ...(resultSummary ? { resultSummary } : {}),
           ...(error ? { error } : {}),
           ...(search ? { search } : {}),
-          ...(record ? { record } : {})
+          ...(record ? { record } : {}),
+          ...(durationMs === null ? {} : { durationMs })
         })
       }
     }
@@ -594,7 +763,8 @@ export function reduceAgentEvents(
         meta:
           steps !== null && toolCallCount !== null
             ? { steps, toolCallCount }
-            : state.meta
+            : state.meta,
+        report: readAgentRunReport(event.report) ?? state.report
       }
     }
 
@@ -606,17 +776,23 @@ export function reduceAgentEvents(
       return {
         ...state,
         pendingQuestion: pending,
-        draftId: readText(event.draftId) || state.draftId
+        draftId: readText(event.draftId) || state.draftId,
+        report: readAgentRunReport(event.report) ?? state.report
       }
     }
 
     case 'done':
-      return { ...state, done: true }
+      return {
+        ...state,
+        done: true,
+        report: readAgentRunReport(event.report) ?? state.report
+      }
 
     case 'error':
       return {
         ...state,
-        error: readText(event.message) || '运行失败，请稍后重试。'
+        error: readText(event.message) || '运行失败，请稍后重试。',
+        report: readAgentRunReport(event.report) ?? state.report
       }
 
     default:

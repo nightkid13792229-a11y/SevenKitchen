@@ -8,7 +8,10 @@ import {
 import { Test, type TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import {
+  INGREDIENT_AGENT_MAX_TOOL_CALLS,
+  INGREDIENT_AGENT_TIMEOUT_MS,
   IngredientDraftAgentService,
+  type AgentRunReport,
   type IngredientAgentRunResult,
 } from '../../../src/application/ingredient-creation/ingredient-draft-agent.service';
 import { IngredientCreationAuditService } from '../../../src/application/ingredient-creation/ingredient-creation-audit.service';
@@ -88,6 +91,26 @@ function createDraft(
   };
 }
 
+function buildRunReport(
+  overrides: Partial<AgentRunReport> = {},
+): AgentRunReport {
+  return {
+    runId: 'run-1',
+    draftId: DRAFT_ID,
+    text: '鸡肝',
+    steps: 1,
+    toolCalls: 0,
+    tokensIn: 0,
+    tokensOut: 0,
+    durationMs: 10,
+    stopReason: null,
+    tools: [],
+    failedTools: [],
+    result: 'FINISHED',
+    ...overrides,
+  };
+}
+
 function draftWithProfile(): IngredientCreationDraft {
   return createDraft({
     payload: {
@@ -152,7 +175,14 @@ function assistantReply(content: string) {
   return { role: 'assistant', content };
 }
 
-function chatResponse(message: unknown, usage?: { total_tokens: number }) {
+function chatResponse(
+  message: unknown,
+  usage?: {
+    total_tokens?: number;
+    prompt_tokens?: number;
+    completion_tokens?: number;
+  },
+) {
   return {
     ok: true,
     status: 200,
@@ -495,9 +525,9 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
       name: 'writeNutrition',
       ok: false,
     });
-    expect(
-      (result.toolCalls[0]?.result as any).failed[0].error,
-    ).toContain('单位「两」不合法');
+    expect((result.toolCalls[0]?.result as any).failed[0].error).toContain(
+      '单位「两」不合法',
+    );
     expect(result.toolCalls[1]).toMatchObject({
       name: 'writeNutrition',
       ok: true,
@@ -564,10 +594,15 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
     expect(result.steps).toBe(2);
   });
 
-  it('硬保险丝：单轮最多 80 次工具调用，到线即停并保留 transcript', async () => {
+  it('预算常量：工具调用 200 次 / 总时长 10 分钟', () => {
+    expect(INGREDIENT_AGENT_MAX_TOOL_CALLS).toBe(200);
+    expect(INGREDIENT_AGENT_TIMEOUT_MS).toBe(600_000);
+  });
+
+  it('硬保险丝：单轮最多 200 次工具调用，到线即停并保留 transcript', async () => {
     let sourceSequence = 0;
     const fetchMock = jest.fn();
-    for (let index = 0; index < 80; index += 1) {
+    for (let index = 0; index < INGREDIENT_AGENT_MAX_TOOL_CALLS; index += 1) {
       fetchMock.mockResolvedValueOnce(
         chatResponse(
           assistantToolCall(
@@ -582,54 +617,88 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
 
     const harness = createHarness();
     // 每次检索都返回一个没出现过的来源 id，避免触发「连续无进展」软停止。
-    harness.candidateService.listNutritionNames.mockImplementation(
-      async () => {
-        sourceSequence += 1;
-        return {
-          total: 1,
-          names: [
-            {
-              id: `rec-${sourceSequence}`,
-              name: `Chicken liver ${sourceSequence}`,
-              sourceType: 'USDA_FDC',
-            },
-          ],
-          keywords: ['鸡肝'],
-        };
-      },
-    );
+    harness.candidateService.listNutritionNames.mockImplementation(async () => {
+      sourceSequence += 1;
+      return {
+        total: 1,
+        names: [
+          {
+            id: `rec-${sourceSequence}`,
+            name: `Chicken liver ${sourceSequence}`,
+            sourceType: 'USDA_FDC',
+          },
+        ],
+        keywords: ['鸡肝'],
+      };
+    });
 
     const result = await harness.agent.run({
       text: '帮我加鸡肝',
       userId: 'admin-1',
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(80);
-    expect(result.steps).toBe(80);
-    expect(result.toolCallCount).toBe(80);
-    expect(result.toolCalls).toHaveLength(80);
+    expect(fetchMock).toHaveBeenCalledTimes(INGREDIENT_AGENT_MAX_TOOL_CALLS);
+    expect(result.steps).toBe(INGREDIENT_AGENT_MAX_TOOL_CALLS);
+    expect(result.toolCallCount).toBe(INGREDIENT_AGENT_MAX_TOOL_CALLS);
+    expect(result.toolCalls).toHaveLength(INGREDIENT_AGENT_MAX_TOOL_CALLS);
     expect(result.stopReason).toBe('TOOL_CALL_LIMIT');
     expect(result.reply).toContain('我跑到上限了');
-    expect(result.reply).toContain('80');
+    expect(result.reply).toContain(String(INGREDIENT_AGENT_MAX_TOOL_CALLS));
     expect(result.reply).toContain('已完成');
     expect(result.reply).toContain('还没做完');
-    expect(result.toolCalls[79]).toMatchObject({
-      name: 'searchNames',
-      ok: true,
-    });
+    expect(result.toolCalls[INGREDIENT_AGENT_MAX_TOOL_CALLS - 1]).toMatchObject(
+      {
+        name: 'searchNames',
+        ok: true,
+      },
+    );
     expect(
       result.transcript.filter((entry) => entry.type === 'tool_result'),
-    ).toHaveLength(80);
+    ).toHaveLength(INGREDIENT_AGENT_MAX_TOOL_CALLS);
     expect(result.transcript.some((entry) => entry.type === 'limit')).toBe(
       true,
     );
   });
 
-  it('总时长 4 分钟用完时停止，返回“我跑到上限了”，不报 503', async () => {
+  it('连续 3 次工具调用没有新进展时停止，报告 result=NO_PROGRESS', async () => {
+    const fetchMock = jest.fn();
+    for (let index = 0; index < 3; index += 1) {
+      fetchMock.mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'searchNames',
+            { keyword: '不存在的原料' },
+            `call_${index + 1}`,
+          ),
+        ),
+      );
+    }
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness({ names: [], namesTotal: 0 });
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(result.steps).toBe(3);
+    expect(result.toolCallCount).toBe(3);
+    expect(result.stopReason).toBe('NO_PROGRESS');
+    expect(result.report).toMatchObject({
+      stopReason: 'NO_PROGRESS',
+      result: 'NO_PROGRESS',
+      steps: 3,
+      toolCalls: 3,
+    });
+  });
+
+  it('总时长 10 分钟用完时停止，返回“我跑到上限了”，不报 503', async () => {
     let now = 1_000_000;
     const nowSpy = jest.spyOn(Date, 'now').mockImplementation(() => now);
     const fetchMock = jest.fn(async () => {
-      now += 241_000;
+      now += 601_000;
       throw Object.assign(new Error('aborted'), { name: 'AbortError' });
     });
     global.fetch = fetchMock as unknown as typeof global.fetch;
@@ -648,8 +717,90 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
       true,
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result.report).toMatchObject({
+      draftId: DRAFT_ID,
+      steps: 1,
+      toolCalls: 0,
+      tokensIn: 0,
+      tokensOut: 0,
+      stopReason: 'TIMEOUT',
+      result: 'TIMEOUT',
+      tools: [],
+      failedTools: [],
+    });
+    expect(result.report.durationMs).toBeGreaterThanOrEqual(601_000);
 
     nowSpy.mockRestore();
+  });
+
+  it('输出上限探测：32768 参数错误后降到 16384，后续调用沿用 16384', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        errorResponse(400, {
+          error: { message: 'max_tokens is too large for this model' },
+        }),
+      )
+      .mockResolvedValueOnce(chatResponse(assistantReply('第一次跑完。')))
+      .mockResolvedValueOnce(chatResponse(assistantReply('第二次跑完。')));
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    const first = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+    const second = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '再补一次',
+      userId: 'admin-1',
+    });
+
+    expect(first.reply).toBe('第一次跑完。');
+    expect(second.reply).toBe('第二次跑完。');
+    expect(requestBody(fetchMock, 0).max_tokens).toBe(32768);
+    expect(requestBody(fetchMock, 1).max_tokens).toBe(16384);
+    // 第二次 run 直接使用探测结果，不再从 32768 试错。
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(requestBody(fetchMock, 2).max_tokens).toBe(16384);
+
+    const logs = logSpy.mock.calls
+      .map((args) => args.map(String).join(' '))
+      .join('\n');
+    expect(logs).toContain('maxTokensProbe');
+    expect(logs).toContain('16384');
+  });
+
+  it('输出上限探测：32768 / 16384 都被拒时降到 8192 并缓存', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        errorResponse(400, { error: { message: 'max_tokens too large' } }),
+      )
+      .mockResolvedValueOnce(
+        errorResponse(422, { error: { message: 'max_tokens invalid' } }),
+      )
+      .mockResolvedValueOnce(chatResponse(assistantReply('最低档跑完。')))
+      .mockResolvedValueOnce(chatResponse(assistantReply('继续用最低档。')));
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+    await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '再跑一次',
+      userId: 'admin-1',
+    });
+
+    expect(requestBody(fetchMock, 0).max_tokens).toBe(32768);
+    expect(requestBody(fetchMock, 1).max_tokens).toBe(16384);
+    expect(requestBody(fetchMock, 2).max_tokens).toBe(8192);
+    expect(requestBody(fetchMock, 3).max_tokens).toBe(8192);
   });
 
   it('模型不支持 tools 时退化为 JSON 动作模式，并在报文里去掉 tools 参数', async () => {
@@ -690,7 +841,9 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
   it('没有 draftId 时先建草稿，再在草稿上跑循环', async () => {
     global.fetch = jest
       .fn()
-      .mockResolvedValueOnce(chatResponse(assistantReply('草稿已建好。'))) as any;
+      .mockResolvedValueOnce(
+        chatResponse(assistantReply('草稿已建好。')),
+      ) as any;
 
     const harness = createHarness({ draft: null });
     const result = await harness.agent.run({
@@ -761,12 +914,12 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
     });
 
     expect(result.toolCalls).toHaveLength(2);
-    expect(
-      (result.toolCalls[0]?.result as any).failed[0].error,
-    ).toContain('不在营养字段目录');
-    expect(
-      (result.toolCalls[1]?.result as any).failed[0].error,
-    ).toContain('不存在');
+    expect((result.toolCalls[0]?.result as any).failed[0].error).toContain(
+      '不在营养字段目录',
+    );
+    expect((result.toolCalls[1]?.result as any).failed[0].error).toContain(
+      '不存在',
+    );
     expect(harness.currentDraft()?.payload.profiles?.[0].entries).toEqual([]);
 
     const secondRequest = requestBody(fetchMock, 1);
@@ -868,9 +1021,9 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
       userId: 'admin-1',
     });
 
-    expect(
-      (result.toolCalls[0]?.result as any).failed[0].error,
-    ).toContain('sourceRecordId');
+    expect((result.toolCalls[0]?.result as any).failed[0].error).toContain(
+      'sourceRecordId',
+    );
     expect(harness.currentDraft()?.payload.profiles).toBeUndefined();
   });
 
@@ -879,11 +1032,7 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
       .fn()
       .mockResolvedValueOnce(
         chatResponse(
-          assistantToolCall(
-            'searchNames',
-            { keyword: '鸡肝' },
-            'call_search',
-          ),
+          assistantToolCall('searchNames', { keyword: '鸡肝' }, 'call_search'),
         ),
       )
       .mockResolvedValueOnce(
@@ -1022,9 +1171,9 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
       'runCheck',
       'finish',
     ]);
-    expect(
-      (result.toolCalls[1]?.result as any).failed[0].error,
-    ).toContain('单位');
+    expect((result.toolCalls[1]?.result as any).failed[0].error).toContain(
+      '单位',
+    );
     expect(result.toolCalls.slice(2).every((call) => call.ok)).toBe(true);
     expect(result.reply).toContain('终检通过');
 
@@ -1190,9 +1339,7 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
         ),
       )
       .mockResolvedValueOnce(
-        chatResponse(
-          assistantToolCall('finish', {}, 'call_finish'),
-        ),
+        chatResponse(assistantToolCall('finish', {}, 'call_finish')),
       );
     global.fetch = fetchMock as unknown as typeof fetch;
 
@@ -1232,33 +1379,31 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
   });
 
   it('finish 与其它工具出现在同一条回复里：finish 之后的不再执行', async () => {
-    const fetchMock = jest
-      .fn()
-      .mockResolvedValueOnce(
-        chatResponse(
-          assistantToolCalls([
-            {
-              name: 'finish',
-              args: { summary: '先结束。' },
-              id: 'call_finish',
+    const fetchMock = jest.fn().mockResolvedValueOnce(
+      chatResponse(
+        assistantToolCalls([
+          {
+            name: 'finish',
+            args: { summary: '先结束。' },
+            id: 'call_finish',
+          },
+          {
+            name: 'writeNutrition',
+            args: {
+              entries: [
+                {
+                  fieldPath: 'macros.crudeProtein',
+                  value: 20,
+                  unit: 'g',
+                  sourceRecordId: 'src-1',
+                },
+              ],
             },
-            {
-              name: 'writeNutrition',
-              args: {
-                entries: [
-                  {
-                    fieldPath: 'macros.crudeProtein',
-                    value: 20,
-                    unit: 'g',
-                    sourceRecordId: 'src-1',
-                  },
-                ],
-              },
-              id: 'call_after_finish',
-            },
-          ]),
-        ),
-      );
+            id: 'call_after_finish',
+          },
+        ]),
+      ),
+    );
     global.fetch = fetchMock as unknown as typeof fetch;
 
     const harness = createHarness({ draft: draftWithProfile() });
@@ -1271,6 +1416,159 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
     expect(result.toolCalls.map((call) => call.name)).toEqual(['finish']);
     expect(result.reply).toBe('先结束。');
     expect(harness.currentDraft()?.payload.profiles?.[0].entries).toEqual([]);
+  });
+
+  it('运行报告：成功时返回完整 AgentRunReport（含 token 与工具）并写日志', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall('searchNames', { keyword: '鸡肝' }, 'call_1'),
+          { total_tokens: 120, prompt_tokens: 100, completion_tokens: 20 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall('finish', { summary: '好了。' }, 'call_2'),
+          {
+            total_tokens: 80,
+            prompt_tokens: 60,
+            completion_tokens: 20,
+          },
+        ),
+      );
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness({
+      names: [
+        {
+          id: 'rec-liver-raw',
+          name: 'Chicken, liver, raw',
+          sourceType: 'USDA_FDC',
+        },
+      ],
+      namesTotal: 1,
+    });
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+
+    expect(result.report).toMatchObject({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      steps: 2,
+      toolCalls: 2,
+      tokensIn: 160,
+      tokensOut: 40,
+      stopReason: null,
+      tools: ['searchNames', 'finish'],
+      failedTools: [],
+      result: 'FINISHED',
+    });
+    expect(typeof result.report.runId).toBe('string');
+    expect(result.report.runId.length).toBeGreaterThan(0);
+    expect(result.report.durationMs).toBeGreaterThanOrEqual(0);
+
+    const reportLog = logSpy.mock.calls
+      .map((args) => args.map(String).join(' '))
+      .find((line) => line.includes('runReport'));
+    expect(reportLog).toBeDefined();
+    const reportJson = JSON.parse(
+      String(reportLog).slice(String(reportLog).indexOf('{')),
+    );
+    expect(reportJson).toMatchObject({
+      draftId: DRAFT_ID,
+      result: 'FINISHED',
+      tokensIn: 160,
+      tokensOut: 40,
+    });
+  });
+
+  it('运行报告：失败工具进 failedTools，整体仍算 FINISHED', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall('deleteIngredient', { id: 'x' }, 'call_bad'),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(assistantReply('没有这个工具，我停下来。')),
+      );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const harness = createHarness();
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+
+    expect(result.report.result).toBe('FINISHED');
+    expect(result.report.tools).toEqual(['deleteIngredient']);
+    expect(result.report.failedTools).toHaveLength(1);
+    expect(result.report.failedTools[0]).toMatchObject({
+      name: 'deleteIngredient',
+    });
+    expect(result.report.failedTools[0].error).toContain('未知工具');
+  });
+
+  it('运行报告：模型失败时 result=ERROR，error 事件与日志都带报告', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall('searchNames', { keyword: '鸡肝' }, 'call_1'),
+          { total_tokens: 50, prompt_tokens: 40, completion_tokens: 10 },
+        ),
+      )
+      .mockResolvedValue(errorResponse(500, { error: { message: 'boom' } }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const harness = createHarness({
+      names: [
+        {
+          id: 'rec-liver-raw',
+          name: 'Chicken, liver, raw',
+          sourceType: 'USDA_FDC',
+        },
+      ],
+      namesTotal: 1,
+    });
+    const events: any[] = [];
+    await expect(
+      harness.agent.run(
+        { draftId: DRAFT_ID, text: '鸡肝', userId: 'admin-1' },
+        (event) => events.push(event),
+      ),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+
+    expect(events.map((event) => event.type)).toEqual([
+      'step_start',
+      'step_end',
+      'error',
+    ]);
+    const report: AgentRunReport = events[2].report;
+    expect(report).toMatchObject({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      steps: 2,
+      toolCalls: 1,
+      tokensIn: 40,
+      tokensOut: 10,
+      stopReason: 'ERROR',
+      tools: ['searchNames'],
+      failedTools: [],
+      result: 'ERROR',
+    });
+
+    const reportLog = logSpy.mock.calls
+      .map((args) => args.map(String).join(' '))
+      .find((line) => line.includes('runReport'));
+    expect(reportLog).toBeDefined();
+    expect(reportLog).toContain('"result":"ERROR"');
   });
 
   it('系统提示词引用 skill 要点：原子工具 + 模糊词先汇总 + 生熟多选 + 来源必填', async () => {
@@ -1301,16 +1599,14 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
 
 describe('IngredientDraftAgentService · askUser（无流程闸门）', () => {
   it('模型调用 askUser 时存下 pendingQuestion，事件以 ask + done 收尾', async () => {
-    const fetchMock = jest
-      .fn()
-      .mockResolvedValueOnce(
-        chatResponse(
-          assistantToolCall('askUser', {
-            question: '你要生的还是熟的？',
-            options: ['生的', '熟的', '生 + 熟都要'],
-          }),
-        ),
-      );
+    const fetchMock = jest.fn().mockResolvedValueOnce(
+      chatResponse(
+        assistantToolCall('askUser', {
+          question: '你要生的还是熟的？',
+          options: ['生的', '熟的', '生 + 熟都要'],
+        }),
+      ),
+    );
     global.fetch = fetchMock as unknown as typeof fetch;
 
     const harness = createHarness();
@@ -1349,16 +1645,14 @@ describe('IngredientDraftAgentService · askUser（无流程闸门）', () => {
   });
 
   it('旧草稿里有 narrowing.required=true 也不拦 askUser', async () => {
-    const fetchMock = jest
-      .fn()
-      .mockResolvedValueOnce(
-        chatResponse(
-          assistantToolCall('askUser', {
-            question: '你要哪个部位？',
-            options: ['牛绞肉', '牛肩肉'],
-          }),
-        ),
-      );
+    const fetchMock = jest.fn().mockResolvedValueOnce(
+      chatResponse(
+        assistantToolCall('askUser', {
+          question: '你要哪个部位？',
+          options: ['牛绞肉', '牛肩肉'],
+        }),
+      ),
+    );
     global.fetch = fetchMock as unknown as typeof fetch;
 
     const harness = createHarness({
@@ -1446,16 +1740,14 @@ describe('IngredientDraftAgentService · askUser（无流程闸门）', () => {
   });
 
   it('ask 事件带选项的库内核实标记：未收录的保留并带后缀', async () => {
-    const fetchMock = jest
-      .fn()
-      .mockResolvedValueOnce(
-        chatResponse(
-          assistantToolCall('askUser', {
-            question: '要哪一条？',
-            options: ['鸡肝', '鸭肝'],
-          }),
-        ),
-      );
+    const fetchMock = jest.fn().mockResolvedValueOnce(
+      chatResponse(
+        assistantToolCall('askUser', {
+          question: '要哪一条？',
+          options: ['鸡肝', '鸭肝'],
+        }),
+      ),
+    );
     global.fetch = fetchMock as unknown as typeof fetch;
 
     const harness = createHarness();
@@ -1509,16 +1801,14 @@ describe('IngredientDraftAgentService · askUser（无流程闸门）', () => {
   });
 
   it('所有选项都查不到时也照常提问，不再退回错误文本', async () => {
-    const fetchMock = jest
-      .fn()
-      .mockResolvedValueOnce(
-        chatResponse(
-          assistantToolCall('askUser', {
-            question: '要哪一条？',
-            options: ['不存在的甲', '不存在的乙'],
-          }),
-        ),
-      );
+    const fetchMock = jest.fn().mockResolvedValueOnce(
+      chatResponse(
+        assistantToolCall('askUser', {
+          question: '要哪一条？',
+          options: ['不存在的甲', '不存在的乙'],
+        }),
+      ),
+    );
     global.fetch = fetchMock as unknown as typeof fetch;
 
     const harness = createHarness();
@@ -1546,17 +1836,11 @@ describe('IngredientDraftAgentService · 流式事件', () => {
         ),
       )
       .mockResolvedValueOnce(
-        chatResponse(
-          assistantToolCall('runCheck', {}, 'call_2'),
-        ),
+        chatResponse(assistantToolCall('runCheck', {}, 'call_2')),
       )
       .mockResolvedValueOnce(
         chatResponse(
-          assistantToolCall(
-            'finish',
-            { summary: '好了。' },
-            'call_3',
-          ),
+          assistantToolCall('finish', { summary: '好了。' }, 'call_3'),
         ),
       );
     global.fetch = fetchMock as unknown as typeof fetch;
@@ -1619,11 +1903,7 @@ describe('IngredientDraftAgentService · 流式事件', () => {
       )
       .mockResolvedValueOnce(
         chatResponse(
-          assistantToolCall(
-            'getRecord',
-            { id: 'rec-liver-raw' },
-            'call_2',
-          ),
+          assistantToolCall('getRecord', { id: 'rec-liver-raw' }, 'call_2'),
         ),
       )
       .mockResolvedValueOnce(chatResponse(assistantReply('看完了。')));
@@ -1797,6 +2077,7 @@ describe('POST /api/v1/admin/ingredient-creation/agent/run', () => {
       transcript: [],
       mode: 'FUNCTION_CALLING',
       stopReason: null,
+      report: buildRunReport(),
     };
     agentService.run.mockResolvedValue(runResult);
 
@@ -1866,6 +2147,7 @@ describe('POST /api/v1/admin/ingredient-creation/agent/run', () => {
         transcript: [],
         mode: 'FUNCTION_CALLING',
         stopReason: null,
+        report: buildRunReport({ steps: 2, toolCalls: 1 }),
       } as IngredientAgentRunResult;
     });
 
@@ -1981,6 +2263,7 @@ describe('POST /api/v1/admin/ingredient-creation/agent/run', () => {
         transcript: [],
         mode: 'FUNCTION_CALLING',
         stopReason: null,
+        report: buildRunReport({ steps: 2, toolCalls: 1 }),
       } as IngredientAgentRunResult;
     });
 

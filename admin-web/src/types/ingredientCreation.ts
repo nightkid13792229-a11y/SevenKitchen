@@ -362,6 +362,28 @@ export type IngredientAgentStopReason =
   | 'NO_PROGRESS'
   | 'waiting_user'
 
+/** 运行报告里的一条失败工具记录。 */
+export interface AgentRunReportFailedTool {
+  name: string
+  error: string
+}
+
+/** 每轮 AI 起草结束时返回的运行报告。 */
+export interface AgentRunReport {
+  runId: string
+  draftId: string
+  text: string
+  steps: number
+  toolCalls: number
+  tokensIn: number
+  tokensOut: number
+  durationMs: number
+  stopReason: string | null
+  tools: string[]
+  failedTools: AgentRunReportFailedTool[]
+  result: 'FINISHED' | 'TIMEOUT' | 'NO_PROGRESS' | 'ERROR'
+}
+
 /** `POST /admin/ingredient-creation/agent/run` 的返回值。 */
 export interface IngredientAgentRunResult {
   draftId: string
@@ -371,6 +393,8 @@ export interface IngredientAgentRunResult {
   transcript: AgentTranscriptEntry[]
   mode: IngredientAgentMode
   stopReason?: IngredientAgentStopReason | null
+  /** 本轮运行报告：接口返回值里也带。 */
+  report: AgentRunReport
   /** 非流式路径同样带问题：页面据此渲染提问气泡 + 选项。 */
   pendingQuestion?: PendingQuestion | null
 }

@@ -37,9 +37,9 @@ import type {
  * 模型一次回复可能带很多 tool_call，拿「步数」当动作数会被严重低估：
  * 线上 8 步实际写出了 34 个字段。这里直接按动作数设保险丝。
  */
-export const INGREDIENT_AGENT_MAX_TOOL_CALLS = 80;
+export const INGREDIENT_AGENT_MAX_TOOL_CALLS = 200;
 /** 一次起草的总时长上限：超时不再发起模型请求。 */
-export const INGREDIENT_AGENT_TIMEOUT_MS = 240_000;
+export const INGREDIENT_AGENT_TIMEOUT_MS = 600_000;
 /** 连续多少次工具调用没有任何新进展就软停止。 */
 export const INGREDIENT_AGENT_MAX_NO_PROGRESS = 3;
 /** 单轮 token 成本预算默认值（输入 + 输出）；可用环境变量覆盖。 */
@@ -48,8 +48,16 @@ export const INGREDIENT_AGENT_TOKEN_BUDGET_ENV =
   'INGREDIENT_AGENT_TOKEN_BUDGET';
 
 const AGENT_TEMPERATURE = 0.2;
-/** 输出上限：1.5k 会在长 tool_call 参数中途截断，产生非法 JSON。 */
-const AGENT_MAX_TOKENS = 8_000;
+/**
+ * 启动后首次调用时探测可用输出上限：从高到低试，参数错误就降一档。
+ *
+ * 不同供应商 / 模型对 `max_tokens` 的上限不同；写死 8k 会让长 tool_call
+ * 在参数中途截断（非法 JSON），写死 32k 又可能被供应商直接 400。
+ * 探测成功后缓存在内存里，后续所有调用都直接用可用值。
+ */
+export const INGREDIENT_AGENT_MAX_TOKENS_CANDIDATES = [
+  32_768, 16_384, 8_192,
+] as const;
 const REPLY_MAX = 500;
 const TRANSCRIPT_SUMMARY_MAX = 240;
 /** 工具结果超过这个长度就不回传给页面，避免一次大检索撑爆响应。 */
@@ -76,6 +84,45 @@ export interface AgentToolCallRecord {
    * 注意：`ok=true` 只表示工具执行成功，像 searchNames 还要看 `found`。
    */
   result?: unknown;
+  /** 单次工具耗时；页面展开时显示，报告汇总也用它。 */
+  durationMs?: number;
+}
+
+/** 本轮运行结果分类，写进 AgentRunReport.result。 */
+export type IngredientAgentRunOutcome =
+  | 'FINISHED'
+  | 'TIMEOUT'
+  | 'NO_PROGRESS'
+  | 'ERROR';
+
+/** 运行报告里的一条失败工具记录。 */
+export interface AgentRunReportFailedTool {
+  name: string;
+  error: string;
+}
+
+/**
+ * 每一轮 run 结束时落日志、并随接口 / SSE 返回的运行报告。
+ *
+ * 只做留痕，不参与任何流程判断：看真实运行数据再决定加什么门禁。
+ */
+export interface AgentRunReport {
+  runId: string;
+  draftId: string;
+  text: string;
+  /** 模型轮次（一次请求算一轮）。 */
+  steps: number;
+  /** 实际执行的工具调用次数。 */
+  toolCalls: number;
+  tokensIn: number;
+  tokensOut: number;
+  durationMs: number;
+  stopReason: IngredientAgentStopReason | 'ERROR' | null;
+  /** 本次用过的工具名（去重、按首次出现顺序）。 */
+  tools: string[];
+  /** 失败的工具调用；成功的调用不在这里。 */
+  failedTools: AgentRunReportFailedTool[];
+  result: IngredientAgentRunOutcome;
 }
 
 /** 本次运行的留痕：每一步模型动作与工具结果。撞保险丝时原样带回。 */
@@ -118,6 +165,8 @@ export interface IngredientAgentRunResult {
   mode: IngredientAgentMode;
   /** 正常给出最终回复 / 等用户回答时为 null。 */
   stopReason: IngredientAgentStopReason | null;
+  /** 本轮运行报告：接口返回值与 SSE 都带上。 */
+  report: AgentRunReport;
   /**
    * 本轮停下来问了人的问题；非流式接口靠它渲染提问气泡。
    * 正常跑完时为 null。
@@ -231,6 +280,8 @@ export type IngredientAgentStreamEvent =
       matches?: IngredientAgentStreamMatch[];
       /** 读来源记录：词条名 / 覆盖率 / 读到多少项。 */
       record?: IngredientAgentStreamRecord;
+      /** 本次工具耗时；页面展开步骤时显示。 */
+      durationMs?: number;
     }
   | {
       type: 'reply';
@@ -238,6 +289,8 @@ export type IngredientAgentStreamEvent =
       draftId: string;
       steps: number;
       toolCallCount: number;
+      /** 本轮运行报告。 */
+      report?: AgentRunReport;
     }
   /**
    * AI 停下来问人。`draftId` 一并带上：页面点选项回答时要用同一个草稿，
@@ -250,9 +303,11 @@ export type IngredientAgentStreamEvent =
       /** 每个选项的库内核实结果，与 options 同序；页面据此显示小标。 */
       optionChecks?: PendingQuestionOption[];
       draftId: string;
+      /** 问人也是本轮正常结束：报告一并带回。 */
+      report?: AgentRunReport;
     }
-  | { type: 'done' }
-  | { type: 'error'; message: string };
+  | { type: 'done'; report?: AgentRunReport }
+  | { type: 'error'; message: string; report?: AgentRunReport };
 
 export interface RunIngredientAgentInput {
   draftId?: string;
@@ -279,11 +334,17 @@ interface AgentMessage {
   tool_call_id?: string;
 }
 
+interface AgentUsage {
+  promptTokens: number;
+  completionTokens: number;
+  /** 输入 + 输出；供应商只给 total 时按 total 用。 */
+  totalTokens: number;
+}
+
 interface AgentAssistantTurn {
   content: string;
   toolCalls: AgentToolCallPayload[];
-  /** 供应商返回的 usage.total_tokens；没返回时按 0（不猜）。 */
-  totalTokens: number;
+  usage: AgentUsage;
 }
 
 /** 模型请求失败（网络 / 非 2xx / 输出结构不对）。上层据此 503。 */
@@ -292,8 +353,27 @@ class AgentModelError extends Error {}
 /** 供应商不认 `tools` 参数：只在第一步触发「退化为 JSON 动作」。 */
 class AgentToolsUnsupportedError extends AgentModelError {}
 
-/** 60 秒总预算用完：不是 AI 故障，按「跑到上限」收尾并带回 transcript。 */
+/**
+ * 400 / 413 / 422 参数错误：探测输出上限时据此降一档。
+ *
+ * 超时 / 5xx 不在此列，不能靠降低 max_tokens 解决。
+ */
+class AgentOutputLimitError extends AgentModelError {}
+
+/** 总时长预算用完：不是 AI 故障，按「跑到上限」收尾并带回 transcript。 */
 class AgentDeadlineExceededError extends AgentModelError {}
+
+/** 包住循环错误，让 run() 能在发 error 事件时带上同一份报告。 */
+class AgentRunFailedError extends Error {
+  constructor(
+    readonly causeError: unknown,
+    readonly report: AgentRunReport,
+  ) {
+    super(
+      causeError instanceof Error ? causeError.message : String(causeError),
+    );
+  }
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -374,7 +454,12 @@ function appendMissedSearchNotice(reply: string, keywords: string[]): string {
 function buildToolCallRecord(
   name: string,
   args: Record<string, unknown>,
-  execution: { ok: boolean; content: string; error?: string },
+  execution: {
+    ok: boolean;
+    content: string;
+    error?: string;
+    durationMs: number;
+  },
   missedSearchKeywords: string[],
 ): AgentToolCallRecord {
   const result = parseToolResult(execution.content);
@@ -399,7 +484,63 @@ function buildToolCallRecord(
     ok: execution.ok,
     ...(execution.error ? { error: execution.error } : {}),
     ...(result !== undefined ? { result } : {}),
+    durationMs: execution.durationMs,
   };
+}
+
+/** 把循环状态折成一份 AgentRunReport；成功、超时、失败共用。 */
+function buildAgentRunReport(input: {
+  runId: string;
+  draftId: string;
+  text: string;
+  steps: number;
+  toolCallCount: number;
+  tokensIn: number;
+  tokensOut: number;
+  startedAt: number;
+  stopReason: IngredientAgentStopReason | 'ERROR' | null;
+  result: IngredientAgentRunOutcome;
+  toolCalls: readonly AgentToolCallRecord[];
+}): AgentRunReport {
+  const toolNames: string[] = [];
+  for (const call of input.toolCalls) {
+    if (!toolNames.includes(call.name)) {
+      toolNames.push(call.name);
+    }
+  }
+
+  return {
+    runId: input.runId,
+    draftId: input.draftId,
+    text: input.text,
+    steps: input.steps,
+    toolCalls: input.toolCallCount,
+    tokensIn: input.tokensIn,
+    tokensOut: input.tokensOut,
+    durationMs: Math.max(0, Date.now() - input.startedAt),
+    stopReason: input.stopReason,
+    tools: toolNames,
+    failedTools: input.toolCalls
+      .filter((call) => !call.ok)
+      .map((call) => ({
+        name: call.name,
+        error: call.error ?? '工具执行失败（没有返回原因）。',
+      })),
+    result: input.result,
+  };
+}
+
+/** 停止原因归一成报告里的四分类；工具 / token 硬保险丝算「撞上限」。 */
+function resolveAgentRunOutcome(
+  stopReason: IngredientAgentStopReason | null,
+): IngredientAgentRunOutcome {
+  if (!stopReason || stopReason === 'waiting_user') {
+    return 'FINISHED';
+  }
+  if (stopReason === 'NO_PROGRESS') {
+    return 'NO_PROGRESS';
+  }
+  return 'TIMEOUT';
 }
 
 function deriveDraftName(text: string): string {
@@ -643,10 +784,8 @@ function buildSearchStepEvidence(
       }
       matches.push({
         name:
-          oneLine(
-            readTextValue(entry.name) || '（未知词条）',
-            STEP_NAME_MAX,
-          ) || '（未知词条）',
+          oneLine(readTextValue(entry.name) || '（未知词条）', STEP_NAME_MAX) ||
+          '（未知词条）',
         // searchNames 只按名字命中；没有 AI 复核与分类。
         matchedBy: 'NAME',
         matchedKeyword,
@@ -812,26 +951,42 @@ function isAbortError(error: unknown): boolean {
 }
 
 /** 读 usage.total_tokens；兼容 prompt/completion 两段式，读不到返回 0。 */
-function readUsageTotalTokens(body: unknown): number {
-  if (!isRecord(body) || !isRecord(body.usage)) {
-    return 0;
+function readUsage(body: unknown): AgentUsage {
+  const usage = isRecord(body) && isRecord(body.usage) ? body.usage : null;
+  if (!usage) {
+    return { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
   }
-  const usage = body.usage;
-  const total = usage.total_tokens ?? usage.totalTokens;
-  if (typeof total === 'number' && Number.isFinite(total) && total > 0) {
-    return Math.floor(total);
+
+  const readNumber = (value: unknown): number | null =>
+    typeof value === 'number' && Number.isFinite(value) && value >= 0
+      ? Math.floor(value)
+      : null;
+
+  const total = readNumber(usage.total_tokens ?? usage.totalTokens);
+  const prompt = readNumber(usage.prompt_tokens ?? usage.promptTokens);
+  const completion = readNumber(
+    usage.completion_tokens ?? usage.completionTokens,
+  );
+
+  let promptTokens = prompt ?? 0;
+  let completionTokens = completion ?? 0;
+  let totalTokens = total ?? promptTokens + completionTokens;
+
+  // 只给了 total 时按输入记，输出记 0：不猜供应商没给的拆分。
+  if (totalTokens > 0 && promptTokens === 0 && completionTokens === 0) {
+    promptTokens = totalTokens;
   }
-  const prompt = usage.prompt_tokens;
-  const completion = usage.completion_tokens;
-  if (
-    typeof prompt === 'number' &&
-    Number.isFinite(prompt) &&
-    typeof completion === 'number' &&
-    Number.isFinite(completion)
-  ) {
-    return Math.floor(prompt + completion);
+  if (totalTokens === 0 && promptTokens + completionTokens > 0) {
+    totalTokens = promptTokens + completionTokens;
   }
-  return 0;
+  if (totalTokens > 0 && completionTokens === 0 && prompt !== null) {
+    completionTokens = Math.max(0, totalTokens - promptTokens);
+  }
+  if (totalTokens > 0 && prompt === null && completionTokens > 0) {
+    promptTokens = Math.max(0, totalTokens - completionTokens);
+  }
+
+  return { promptTokens, completionTokens, totalTokens };
 }
 
 function readChoiceMessage(body: unknown): Record<string, unknown> | null {
@@ -1119,8 +1274,7 @@ function readPendingQuestion(value: unknown): PendingQuestion | null {
         )
         .map((option) => option.trim())
     : [];
-  const askedAt =
-    typeof value.askedAt === 'string' ? value.askedAt.trim() : '';
+  const askedAt = typeof value.askedAt === 'string' ? value.askedAt.trim() : '';
   const optionChecks = readPendingQuestionOptionChecks(
     value.optionChecks,
     options,
@@ -1171,7 +1325,9 @@ function buildUserPrompt(
       }。用户已经选了这条，以用户的选择为准。）`,
     );
   }
-  lines.push('（请按用户回答继续；不要假装早已知道答案，也不要重复问同一个问题。）');
+  lines.push(
+    '（请按用户回答继续；不要假装早已知道答案，也不要重复问同一个问题。）',
+  );
   return lines.join('\n');
 }
 
@@ -1283,7 +1439,7 @@ function buildStopReply(input: {
  *
  * 安全边界不靠模型自觉：
  * - 工具层只有 8 个原子工具，全部只碰草稿；提交 / 确认可用不在这里；
- * - 硬保险丝：80 次工具调用 / 240 秒 / 可配 token 预算；
+ * - 硬保险丝：200 次工具调用 / 600 秒 / 可配 token 预算；
  * - 软停止：连续 3 次工具调用没有新进展（不写字段、不发现新来源）就停；
  * - 停下来不回滚：已写入的草稿保持原样，reply 说明还剩什么；
  * - 模型 / 配置失败直接 503，不偷偷回退到规则猜。
@@ -1291,6 +1447,13 @@ function buildStopReply(input: {
 @Injectable()
 export class IngredientDraftAgentService {
   private readonly logger = new Logger(IngredientDraftAgentService.name);
+  /**
+   * 已探测到的可用输出上限：key = baseUrl|model。
+   *
+   * 首次调用时从 32768 往下试；成功后缓存，之后同一个模型的所有请求
+   * 都直接用这个值。不同模型可能上限不同，所以按模型分别缓存。
+   */
+  private readonly outputLimitCache = new Map<string, number>();
 
   constructor(
     private readonly agentProviderConfig: AgentProviderConfigService,
@@ -1323,8 +1486,12 @@ export class IngredientDraftAgentService {
             ? { optionChecks: result.pendingQuestion.optionChecks }
             : {}),
           draftId: result.draftId,
+          report: result.report,
         });
-        this.emitEvent(effectiveInput.onEvent, { type: 'done' });
+        this.emitEvent(effectiveInput.onEvent, {
+          type: 'done',
+          report: result.report,
+        });
         return result;
       }
       this.emitEvent(effectiveInput.onEvent, {
@@ -1333,15 +1500,23 @@ export class IngredientDraftAgentService {
         draftId: result.draftId,
         steps: result.steps,
         toolCallCount: result.toolCallCount,
+        report: result.report,
       });
-      this.emitEvent(effectiveInput.onEvent, { type: 'done' });
+      this.emitEvent(effectiveInput.onEvent, {
+        type: 'done',
+        report: result.report,
+      });
       return result;
     } catch (error) {
+      // 循环内部已把失败折成报告；error 事件也带上，页面失败态也能显示耗时。
+      const failure = error instanceof AgentRunFailedError ? error : null;
+      const cause = failure ? failure.causeError : error;
       this.emitEvent(effectiveInput.onEvent, {
         type: 'error',
-        message: readStreamErrorMessage(error),
+        message: readStreamErrorMessage(cause),
+        ...(failure ? { report: failure.report } : {}),
       });
-      throw error;
+      throw cause;
     }
   }
 
@@ -1409,6 +1584,7 @@ export class IngredientDraftAgentService {
       resultSummary: buildToolResultSummary(input.name, execution),
       ...(found === undefined ? {} : { found }),
       ...(execution.error ? { error: execution.error } : {}),
+      durationMs: execution.durationMs,
       ...(searchEvidence
         ? {
             matches: searchEvidence.matches,
@@ -1482,6 +1658,8 @@ export class IngredientDraftAgentService {
     let steps = 0;
     let toolCallCount = 0;
     let tokensUsed = 0;
+    let tokensIn = 0;
+    let tokensOut = 0;
     let noProgressStreak = 0;
     let reply = '';
     let stopReason: IngredientAgentStopReason | null = null;
@@ -1499,98 +1677,235 @@ export class IngredientDraftAgentService {
         `tokenBudget=${tokenBudget}`,
     );
 
-    // 不设固定「步数」上限：模型一轮可能带很多 tool_call，循环靠硬保险丝 + 进展感知收口。
-    runLoop: while (true) {
-      if (toolCallCount >= INGREDIENT_AGENT_MAX_TOOL_CALLS) {
-        stopReason = 'TOOL_CALL_LIMIT';
-        break;
-      }
-      if (Date.now() >= deadline) {
-        stopReason = 'TIMEOUT';
-        break;
-      }
-      if (tokenBudget > 0 && tokensUsed >= tokenBudget) {
-        stopReason = 'TOKEN_BUDGET';
-        break;
-      }
-
-      steps += 1;
-      const remainingMs = Math.max(1, deadline - Date.now());
-      this.logger.log(
-        `[ingredient-agent] step=${steps} runId=${runId} draft=${draft.id} ` +
-          `mode=${mode} toolCalls=${toolCallCount}/${INGREDIENT_AGENT_MAX_TOOL_CALLS} ` +
-          `tokens=${tokensUsed}/${tokenBudget} remainingMs=${remainingMs}`,
-      );
-
-      let turn: AgentAssistantTurn;
-      try {
-        turn = await this.callModelWithRetry({
-          runtime,
-          models,
-          mode,
-          messages,
-          toolDefinitions,
-          deadline,
-          runId,
-          step: steps,
-        });
-      } catch (error) {
-        // 总时长用完不算 AI 故障：把已完成的 transcript 交回，让人接着看。
-        if (
-          error instanceof AgentDeadlineExceededError ||
-          Date.now() >= deadline
-        ) {
+    try {
+      // 不设固定「步数」上限：模型一轮可能带很多 tool_call，循环靠硬保险丝 + 进展感知收口。
+      runLoop: while (true) {
+        if (toolCallCount >= INGREDIENT_AGENT_MAX_TOOL_CALLS) {
+          stopReason = 'TOOL_CALL_LIMIT';
+          break;
+        }
+        if (Date.now() >= deadline) {
           stopReason = 'TIMEOUT';
-          this.logger.warn(
-            `[ingredient-agent] 总时长用完 runId=${runId} draft=${draft.id} steps=${steps}`,
-          );
+          break;
+        }
+        if (tokenBudget > 0 && tokensUsed >= tokenBudget) {
+          stopReason = 'TOKEN_BUDGET';
           break;
         }
 
-        // 只在第一步、还没产生任何工具结果时退化：之前的 messages 里没有
-        // role=tool，重建成 JSON 动作协议不会丢掉任何上下文。
-        if (
-          error instanceof AgentToolsUnsupportedError &&
-          mode === 'FUNCTION_CALLING' &&
-          steps === 1 &&
-          toolCalls.length === 0
-        ) {
-          mode = 'JSON_ACTION';
-          messages = buildInitialMessages(
-            draft,
-            text,
+        steps += 1;
+        const remainingMs = Math.max(1, deadline - Date.now());
+        this.logger.log(
+          `[ingredient-agent] step=${steps} runId=${runId} draft=${draft.id} ` +
+            `mode=${mode} toolCalls=${toolCallCount}/${INGREDIENT_AGENT_MAX_TOOL_CALLS} ` +
+            `tokens=${tokensUsed}/${tokenBudget} remainingMs=${remainingMs}`,
+        );
+
+        let turn: AgentAssistantTurn;
+        try {
+          turn = await this.callModelWithRetry({
+            runtime,
+            models,
             mode,
-            toolNames,
-            previousQuestion,
+            messages,
+            toolDefinitions,
+            deadline,
+            runId,
+            step: steps,
+          });
+        } catch (error) {
+          // 总时长用完不算 AI 故障：把已完成的 transcript 交回，让人接着看。
+          if (
+            error instanceof AgentDeadlineExceededError ||
+            Date.now() >= deadline
+          ) {
+            stopReason = 'TIMEOUT';
+            this.logger.warn(
+              `[ingredient-agent] 总时长用完 runId=${runId} draft=${draft.id} steps=${steps}`,
+            );
+            break;
+          }
+
+          // 只在第一步、还没产生任何工具结果时退化：之前的 messages 里没有
+          // role=tool，重建成 JSON 动作协议不会丢掉任何上下文。
+          if (
+            error instanceof AgentToolsUnsupportedError &&
+            mode === 'FUNCTION_CALLING' &&
+            steps === 1 &&
+            toolCalls.length === 0
+          ) {
+            mode = 'JSON_ACTION';
+            messages = buildInitialMessages(
+              draft,
+              text,
+              mode,
+              toolNames,
+              previousQuestion,
+            );
+            steps -= 1;
+            this.logger.warn(
+              `[ingredient-agent] 模型不支持 tools，退化为 JSON 动作模式 runId=${runId} draft=${draft.id}`,
+            );
+            continue;
+          }
+
+          const reason = error instanceof Error ? error.message : String(error);
+          this.logger.error(
+            `[ingredient-agent] 模型调用失败 runId=${runId} draft=${draft.id} ` +
+              `step=${steps} mode=${mode}: ${reason}`,
           );
-          steps -= 1;
-          this.logger.warn(
-            `[ingredient-agent] 模型不支持 tools，退化为 JSON 动作模式 runId=${runId} draft=${draft.id}`,
+          throw new ServiceUnavailableException(
+            AI_TEMPORARILY_UNAVAILABLE_MESSAGE,
           );
+        }
+
+        tokensUsed += turn.usage.totalTokens;
+        tokensIn += turn.usage.promptTokens;
+        tokensOut += turn.usage.completionTokens;
+
+        if (mode === 'FUNCTION_CALLING') {
+          messages.push({
+            role: 'assistant',
+            content: turn.content || null,
+            ...(turn.toolCalls.length > 0
+              ? { tool_calls: turn.toolCalls }
+              : {}),
+          });
+
+          if (turn.toolCalls.length === 0) {
+            reply = this.normalizeReply(turn.content);
+            transcript.push({
+              step: steps,
+              type: 'reply',
+              atMs: Date.now() - startedAt,
+              summary: truncate(reply, TRANSCRIPT_SUMMARY_MAX),
+            });
+            break;
+          }
+
+          for (const call of turn.toolCalls) {
+            // 硬保险丝：动作数到时立即停，不再执行后面的 tool_call。
+            if (toolCallCount >= INGREDIENT_AGENT_MAX_TOOL_CALLS) {
+              stopReason = 'TOOL_CALL_LIMIT';
+              break runLoop;
+            }
+            if (Date.now() >= deadline) {
+              stopReason = 'TIMEOUT';
+              break runLoop;
+            }
+
+            toolCallCount += 1;
+            const toolName = call.function.name;
+            const { args, parseError } = this.parseToolArguments(
+              call.function.arguments,
+            );
+
+            transcript.push({
+              step: steps,
+              type: 'tool_call',
+              atMs: Date.now() - startedAt,
+              tool: toolName,
+              args,
+            });
+
+            const execution = await this.executeToolStep({
+              onEvent: input.onEvent,
+              index: toolCallCount,
+              name: toolName,
+              args,
+              runId,
+              draftId: draft.id,
+              parseError,
+            });
+
+            toolCalls.push(
+              buildToolCallRecord(
+                toolName,
+                args,
+                execution,
+                missedSearchKeywords,
+              ),
+            );
+            transcript.push({
+              step: steps,
+              type: 'tool_result',
+              atMs: Date.now() - startedAt,
+              tool: toolName,
+              ok: execution.ok,
+              ...(execution.error ? { error: execution.error } : {}),
+              summary: truncate(execution.content, TRANSCRIPT_SUMMARY_MAX),
+            });
+            messages.push({
+              role: 'tool',
+              tool_call_id: call.id,
+              content: execution.content,
+            });
+
+            // finish 是明确的结束信号：立刻收尾，同一条回复里剩下的 tool_call 不再执行。
+            if (execution.finished) {
+              reply = this.resolveFinishReply(
+                execution.finished.reply,
+                turn.content,
+              );
+              transcript.push({
+                step: steps,
+                type: 'reply',
+                atMs: Date.now() - startedAt,
+                summary: truncate(reply, TRANSCRIPT_SUMMARY_MAX),
+              });
+              break runLoop;
+            }
+
+            if (
+              this.recordProgress(execution, seenSourceIds, (check) => {
+                lastCheck = check;
+              })
+            ) {
+              noProgressStreak = 0;
+            } else {
+              noProgressStreak += 1;
+            }
+
+            // 问完人立刻收尾：同一轮里剩下的 tool_call 不再执行，避免它先猜着写。
+            if (execution.pendingQuestion) {
+              pendingQuestion = execution.pendingQuestion;
+              stopReason = 'waiting_user';
+              break runLoop;
+            }
+
+            if (Date.now() >= deadline) {
+              stopReason = 'TIMEOUT';
+              break runLoop;
+            }
+            if (toolCallCount >= INGREDIENT_AGENT_MAX_TOOL_CALLS) {
+              stopReason = 'TOOL_CALL_LIMIT';
+              break runLoop;
+            }
+            if (noProgressStreak >= INGREDIENT_AGENT_MAX_NO_PROGRESS) {
+              stopReason = 'NO_PROGRESS';
+              break runLoop;
+            }
+          }
+
           continue;
         }
 
-        const reason = error instanceof Error ? error.message : String(error);
-        this.logger.error(
-          `[ingredient-agent] 模型调用失败 runId=${runId} draft=${draft.id} ` +
-            `step=${steps} mode=${mode}: ${reason}`,
-        );
-        throw new ServiceUnavailableException(
-          AI_TEMPORARILY_UNAVAILABLE_MESSAGE,
-        );
-      }
+        // JSON 动作模式：没有 tool_calls，动作写在 content 里。
+        const action = parseJsonAction(turn.content);
+        messages.push({ role: 'assistant', content: turn.content });
 
-      tokensUsed += turn.totalTokens;
+        if (!action) {
+          this.logger.error(
+            `[ingredient-agent] JSON 动作无法解析 runId=${runId} draft=${draft.id} step=${steps}`,
+          );
+          throw new ServiceUnavailableException(
+            AI_TEMPORARILY_UNAVAILABLE_MESSAGE,
+          );
+        }
 
-      if (mode === 'FUNCTION_CALLING') {
-        messages.push({
-          role: 'assistant',
-          content: turn.content || null,
-          ...(turn.toolCalls.length > 0 ? { tool_calls: turn.toolCalls } : {}),
-        });
-
-        if (turn.toolCalls.length === 0) {
-          reply = this.normalizeReply(turn.content);
+        const replyText = typeof action.reply === 'string' ? action.reply : '';
+        if (replyText.trim()) {
+          reply = this.normalizeReply(replyText);
           transcript.push({
             step: steps,
             type: 'reply',
@@ -1600,305 +1915,211 @@ export class IngredientDraftAgentService {
           break;
         }
 
-        for (const call of turn.toolCalls) {
-          // 硬保险丝：动作数到时立即停，不再执行后面的 tool_call。
-          if (toolCallCount >= INGREDIENT_AGENT_MAX_TOOL_CALLS) {
-            stopReason = 'TOOL_CALL_LIMIT';
-            break runLoop;
-          }
-          if (Date.now() >= deadline) {
-            stopReason = 'TIMEOUT';
-            break runLoop;
-          }
-
-          toolCallCount += 1;
-          const toolName = call.function.name;
-          const { args, parseError } = this.parseToolArguments(
-            call.function.arguments,
+        const toolName =
+          typeof action.tool === 'string' ? action.tool.trim() : '';
+        if (!toolName) {
+          this.logger.error(
+            `[ingredient-agent] JSON 动作既没有 tool 也没有 reply runId=${runId} step=${steps}`,
           );
-
-          transcript.push({
-            step: steps,
-            type: 'tool_call',
-            atMs: Date.now() - startedAt,
-            tool: toolName,
-            args,
-          });
-
-          const execution = await this.executeToolStep({
-            onEvent: input.onEvent,
-            index: toolCallCount,
-            name: toolName,
-            args,
-            runId,
-            draftId: draft.id,
-            parseError,
-          });
-
-          toolCalls.push(
-            buildToolCallRecord(
-              toolName,
-              args,
-              execution,
-              missedSearchKeywords,
-            ),
+          throw new ServiceUnavailableException(
+            AI_TEMPORARILY_UNAVAILABLE_MESSAGE,
           );
-          transcript.push({
-            step: steps,
-            type: 'tool_result',
-            atMs: Date.now() - startedAt,
-            tool: toolName,
-            ok: execution.ok,
-            ...(execution.error ? { error: execution.error } : {}),
-            summary: truncate(execution.content, TRANSCRIPT_SUMMARY_MAX),
-          });
-          messages.push({
-            role: 'tool',
-            tool_call_id: call.id,
-            content: execution.content,
-          });
-
-          // finish 是明确的结束信号：立刻收尾，同一条回复里剩下的 tool_call 不再执行。
-          if (execution.finished) {
-            reply = this.resolveFinishReply(
-              execution.finished.reply,
-              turn.content,
-            );
-            transcript.push({
-              step: steps,
-              type: 'reply',
-              atMs: Date.now() - startedAt,
-              summary: truncate(reply, TRANSCRIPT_SUMMARY_MAX),
-            });
-            break runLoop;
-          }
-
-          if (
-            this.recordProgress(execution, seenSourceIds, (check) => {
-              lastCheck = check;
-            })
-          ) {
-            noProgressStreak = 0;
-          } else {
-            noProgressStreak += 1;
-          }
-
-          // 问完人立刻收尾：同一轮里剩下的 tool_call 不再执行，避免它先猜着写。
-          if (execution.pendingQuestion) {
-            pendingQuestion = execution.pendingQuestion;
-            stopReason = 'waiting_user';
-            break runLoop;
-          }
-
-          if (Date.now() >= deadline) {
-            stopReason = 'TIMEOUT';
-            break runLoop;
-          }
-          if (toolCallCount >= INGREDIENT_AGENT_MAX_TOOL_CALLS) {
-            stopReason = 'TOOL_CALL_LIMIT';
-            break runLoop;
-          }
-          if (noProgressStreak >= INGREDIENT_AGENT_MAX_NO_PROGRESS) {
-            stopReason = 'NO_PROGRESS';
-            break runLoop;
-          }
         }
 
-        continue;
+        // 总时长在模型思考时已经用完：不要再执行工具，直接收尾。
+        if (Date.now() >= deadline) {
+          stopReason = 'TIMEOUT';
+          break;
+        }
+        if (toolCallCount >= INGREDIENT_AGENT_MAX_TOOL_CALLS) {
+          stopReason = 'TOOL_CALL_LIMIT';
+          break;
+        }
+
+        toolCallCount += 1;
+        const args = isRecord(action.args) ? action.args : {};
+        transcript.push({
+          step: steps,
+          type: 'tool_call',
+          atMs: Date.now() - startedAt,
+          tool: toolName,
+          args,
+        });
+
+        const execution = await this.executeToolStep({
+          onEvent: input.onEvent,
+          index: toolCallCount,
+          name: toolName,
+          args,
+          runId,
+          draftId: draft.id,
+        });
+        toolCalls.push(
+          buildToolCallRecord(toolName, args, execution, missedSearchKeywords),
+        );
+        transcript.push({
+          step: steps,
+          type: 'tool_result',
+          atMs: Date.now() - startedAt,
+          tool: toolName,
+          ok: execution.ok,
+          ...(execution.error ? { error: execution.error } : {}),
+          summary: truncate(execution.content, TRANSCRIPT_SUMMARY_MAX),
+        });
+        messages.push({
+          role: 'user',
+          content: `工具 ${toolName} 返回：${execution.content}`,
+        });
+
+        // finish 是明确的结束信号：不再请求下一次模型。
+        if (execution.finished) {
+          reply = this.resolveFinishReply(
+            execution.finished.reply,
+            turn.content,
+          );
+          transcript.push({
+            step: steps,
+            type: 'reply',
+            atMs: Date.now() - startedAt,
+            summary: truncate(reply, TRANSCRIPT_SUMMARY_MAX),
+          });
+          break;
+        }
+
+        if (
+          this.recordProgress(execution, seenSourceIds, (check) => {
+            lastCheck = check;
+          })
+        ) {
+          noProgressStreak = 0;
+        } else {
+          noProgressStreak += 1;
+        }
+
+        if (execution.pendingQuestion) {
+          pendingQuestion = execution.pendingQuestion;
+          stopReason = 'waiting_user';
+          break;
+        }
+
+        if (Date.now() >= deadline) {
+          stopReason = 'TIMEOUT';
+          break;
+        }
+        if (noProgressStreak >= INGREDIENT_AGENT_MAX_NO_PROGRESS) {
+          stopReason = 'NO_PROGRESS';
+          break;
+        }
       }
 
-      // JSON 动作模式：没有 tool_calls，动作写在 content 里。
-      const action = parseJsonAction(turn.content);
-      messages.push({ role: 'assistant', content: turn.content });
-
-      if (!action) {
-        this.logger.error(
-          `[ingredient-agent] JSON 动作无法解析 runId=${runId} draft=${draft.id} step=${steps}`,
-        );
-        throw new ServiceUnavailableException(
-          AI_TEMPORARILY_UNAVAILABLE_MESSAGE,
-        );
-      }
-
-      const replyText = typeof action.reply === 'string' ? action.reply : '';
-      if (replyText.trim()) {
-        reply = this.normalizeReply(replyText);
+      if (stopReason === 'waiting_user' && pendingQuestion) {
+        // 问人不是失败：本轮正常结束，回复就是问题本身。
+        reply = truncate(pendingQuestion.question, REPLY_MAX);
         transcript.push({
           step: steps,
           type: 'reply',
           atMs: Date.now() - startedAt,
           summary: truncate(reply, TRANSCRIPT_SUMMARY_MAX),
         });
-        break;
-      }
-
-      const toolName =
-        typeof action.tool === 'string' ? action.tool.trim() : '';
-      if (!toolName) {
-        this.logger.error(
-          `[ingredient-agent] JSON 动作既没有 tool 也没有 reply runId=${runId} step=${steps}`,
+        this.logger.log(
+          `[ingredient-agent] waitingUser runId=${runId} draft=${draft.id} ` +
+            `question="${truncate(pendingQuestion.question, 80)}" options=${pendingQuestion.options.length}`,
         );
-        throw new ServiceUnavailableException(
-          AI_TEMPORARILY_UNAVAILABLE_MESSAGE,
+      } else if (stopReason && stopReason !== 'waiting_user') {
+        // 停止时读最终草稿：reply 里的「已完成 / 还剩」必须与库里一致。
+        let finalDraft = draft;
+        try {
+          finalDraft = await this.draftService.get(draft.id);
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : String(error);
+          this.logger.warn(
+            `[ingredient-agent] 停止时读草稿失败 runId=${runId} draft=${draft.id}: ${reason}`,
+          );
+        }
+
+        reply = buildStopReply({
+          reason: stopReason,
+          steps,
+          toolCallCount,
+          seenSourceCount: seenSourceIds.size,
+          draft: finalDraft,
+          lastCheck,
+        });
+        transcript.push({
+          step: steps,
+          type: 'limit',
+          atMs: Date.now() - startedAt,
+          summary: reply,
+          stopReason,
+        });
+        this.logger.warn(
+          `[ingredient-agent] 停止 runId=${runId} draft=${draft.id} reason=${stopReason} ` +
+            `steps=${steps} toolCalls=${toolCallCount} tokens=${tokensUsed}`,
         );
       }
 
-      // 总时长在模型思考时已经用完：不要再执行工具，直接收尾。
-      if (Date.now() >= deadline) {
-        stopReason = 'TIMEOUT';
-        break;
-      }
-      if (toolCallCount >= INGREDIENT_AGENT_MAX_TOOL_CALLS) {
-        stopReason = 'TOOL_CALL_LIMIT';
-        break;
+      // 查库零命中时兜一句：工具调用成功不代表找到数据，回复必须明确说「没找到」。
+      // 等用户回答时不追加：问题后面不该跟一句「没找到」，那是下一轮的事。
+      if (missedSearchKeywords.length > 0 && stopReason !== 'waiting_user') {
+        reply = appendMissedSearchNotice(reply, missedSearchKeywords);
       }
 
-      toolCallCount += 1;
-      const args = isRecord(action.args) ? action.args : {};
-      transcript.push({
-        step: steps,
-        type: 'tool_call',
-        atMs: Date.now() - startedAt,
-        tool: toolName,
-        args,
-      });
-
-      const execution = await this.executeToolStep({
-        onEvent: input.onEvent,
-        index: toolCallCount,
-        name: toolName,
-        args,
+      const report = buildAgentRunReport({
         runId,
         draftId: draft.id,
-      });
-      toolCalls.push(
-        buildToolCallRecord(toolName, args, execution, missedSearchKeywords),
-      );
-      transcript.push({
-        step: steps,
-        type: 'tool_result',
-        atMs: Date.now() - startedAt,
-        tool: toolName,
-        ok: execution.ok,
-        ...(execution.error ? { error: execution.error } : {}),
-        summary: truncate(execution.content, TRANSCRIPT_SUMMARY_MAX),
-      });
-      messages.push({
-        role: 'user',
-        content: `工具 ${toolName} 返回：${execution.content}`,
-      });
-
-      // finish 是明确的结束信号：不再请求下一次模型。
-      if (execution.finished) {
-        reply = this.resolveFinishReply(
-          execution.finished.reply,
-          turn.content,
-        );
-        transcript.push({
-          step: steps,
-          type: 'reply',
-          atMs: Date.now() - startedAt,
-          summary: truncate(reply, TRANSCRIPT_SUMMARY_MAX),
-        });
-        break;
-      }
-
-      if (
-        this.recordProgress(execution, seenSourceIds, (check) => {
-          lastCheck = check;
-        })
-      ) {
-        noProgressStreak = 0;
-      } else {
-        noProgressStreak += 1;
-      }
-
-      if (execution.pendingQuestion) {
-        pendingQuestion = execution.pendingQuestion;
-        stopReason = 'waiting_user';
-        break;
-      }
-
-      if (Date.now() >= deadline) {
-        stopReason = 'TIMEOUT';
-        break;
-      }
-      if (noProgressStreak >= INGREDIENT_AGENT_MAX_NO_PROGRESS) {
-        stopReason = 'NO_PROGRESS';
-        break;
-      }
-    }
-
-    if (stopReason === 'waiting_user' && pendingQuestion) {
-      // 问人不是失败：本轮正常结束，回复就是问题本身。
-      reply = truncate(pendingQuestion.question, REPLY_MAX);
-      transcript.push({
-        step: steps,
-        type: 'reply',
-        atMs: Date.now() - startedAt,
-        summary: truncate(reply, TRANSCRIPT_SUMMARY_MAX),
-      });
-      this.logger.log(
-        `[ingredient-agent] waitingUser runId=${runId} draft=${draft.id} ` +
-          `question="${truncate(pendingQuestion.question, 80)}" options=${pendingQuestion.options.length}`,
-      );
-    } else if (stopReason && stopReason !== 'waiting_user') {
-      // 停止时读最终草稿：reply 里的「已完成 / 还剩」必须与库里一致。
-      let finalDraft = draft;
-      try {
-        finalDraft = await this.draftService.get(draft.id);
-      } catch (error) {
-        const reason = error instanceof Error ? error.message : String(error);
-        this.logger.warn(
-          `[ingredient-agent] 停止时读草稿失败 runId=${runId} draft=${draft.id}: ${reason}`,
-        );
-      }
-
-      reply = buildStopReply({
-        reason: stopReason,
+        text,
         steps,
         toolCallCount,
-        seenSourceCount: seenSourceIds.size,
-        draft: finalDraft,
-        lastCheck,
-      });
-      transcript.push({
-        step: steps,
-        type: 'limit',
-        atMs: Date.now() - startedAt,
-        summary: reply,
+        tokensIn,
+        tokensOut,
+        startedAt,
         stopReason,
+        result: resolveAgentRunOutcome(stopReason),
+        toolCalls,
       });
-      this.logger.warn(
-        `[ingredient-agent] 停止 runId=${runId} draft=${draft.id} reason=${stopReason} ` +
-          `steps=${steps} toolCalls=${toolCallCount} tokens=${tokensUsed}`,
+      this.logger.log(`[ingredient-agent] runReport ${JSON.stringify(report)}`);
+      this.logger.log(
+        `[ingredient-agent] runEnd runId=${runId} draft=${draft.id} mode=${mode} ` +
+          `steps=${steps} toolCalls=${toolCallCount} stopReason=${
+            stopReason ?? 'none'
+          } durationMs=${report.durationMs}`,
       );
+
+      return {
+        draftId: draft.id,
+        reply,
+        toolCalls,
+        steps,
+        toolCallCount,
+        transcript,
+        mode,
+        stopReason,
+        report,
+        pendingQuestion,
+      };
+    } catch (error) {
+      // 模型 / 工具异常也留一份报告：日志与 SSE error 事件用同一份数据。
+      const report = buildAgentRunReport({
+        runId,
+        draftId: draft.id,
+        text,
+        steps,
+        toolCallCount,
+        tokensIn,
+        tokensOut,
+        startedAt,
+        stopReason: 'ERROR',
+        result: 'ERROR',
+        toolCalls,
+      });
+      this.logger.log(`[ingredient-agent] runReport ${JSON.stringify(report)}`);
+      this.logger.error(
+        `[ingredient-agent] runFailed runId=${runId} draft=${draft.id} ` +
+          `steps=${steps} toolCalls=${toolCallCount} durationMs=${report.durationMs}: ` +
+          (error instanceof Error ? error.message : String(error)),
+      );
+      throw new AgentRunFailedError(error, report);
     }
-
-    // 查库零命中时兜一句：工具调用成功不代表找到数据，回复必须明确说「没找到」。
-    // 等用户回答时不追加：问题后面不该跟一句「没找到」，那是下一轮的事。
-    if (missedSearchKeywords.length > 0 && stopReason !== 'waiting_user') {
-      reply = appendMissedSearchNotice(reply, missedSearchKeywords);
-    }
-
-    this.logger.log(
-      `[ingredient-agent] runEnd runId=${runId} draft=${draft.id} mode=${mode} ` +
-        `steps=${steps} toolCalls=${toolCallCount} stopReason=${
-          stopReason ?? 'none'
-        } durationMs=${Date.now() - startedAt}`,
-    );
-
-    return {
-      draftId: draft.id,
-      reply,
-      toolCalls,
-      steps,
-      toolCallCount,
-      transcript,
-      mode,
-      stopReason,
-      pendingQuestion,
-    };
   }
 
   /**
@@ -2075,6 +2296,78 @@ export class IngredientDraftAgentService {
     toolDefinitions: readonly AgentToolDefinition[];
     timeoutMs: number;
   }): Promise<AgentAssistantTurn> {
+    const cacheKey = `${input.baseUrl.replace(/\/+$/, '')}|${input.model}`;
+    const cached = this.outputLimitCache.get(cacheKey);
+    const candidates: readonly number[] =
+      cached === undefined ? INGREDIENT_AGENT_MAX_TOKENS_CANDIDATES : [cached];
+    let lastError: unknown = null;
+
+    for (let index = 0; index < candidates.length; index += 1) {
+      const maxTokens = candidates[index];
+      try {
+        const turn = await this.requestModelOnce({ ...input, maxTokens });
+        if (cached === undefined) {
+          // 探测成功：同一 baseUrl + model 的后续调用都直接用这一档。
+          this.outputLimitCache.set(cacheKey, maxTokens);
+          this.logger.log(
+            `[ingredient-agent] maxTokensProbe selected=${maxTokens} ` +
+              `tried=${INGREDIENT_AGENT_MAX_TOKENS_CANDIDATES.join('→')} ` +
+              `model=${input.model}`,
+          );
+        }
+        return turn;
+      } catch (error) {
+        lastError = error;
+        if (error instanceof AgentToolsUnsupportedError) {
+          throw error;
+        }
+        if (!(error instanceof AgentOutputLimitError)) {
+          throw error;
+        }
+        const next = candidates[index + 1];
+        if (next === undefined) {
+          break;
+        }
+        this.logger.warn(
+          `[ingredient-agent] maxTokensProbe rejected=${maxTokens} next=${next} ` +
+            `model=${input.model}: ${error.message}`,
+        );
+      }
+    }
+
+    if (lastError instanceof AgentOutputLimitError) {
+      if (cached !== undefined) {
+        // 供应商改了限额：清掉缓存，下一轮重新探测，而不是永远卡在旧值。
+        this.outputLimitCache.delete(cacheKey);
+        this.logger.warn(
+          `[ingredient-agent] maxTokensProbe cachedRejected cached=${cached} ` +
+            `model=${input.model}: ${lastError.message}`,
+        );
+      } else {
+        this.logger.error(
+          `[ingredient-agent] maxTokensProbe exhausted ` +
+            `tried=${INGREDIENT_AGENT_MAX_TOKENS_CANDIDATES.join('→')} ` +
+            `model=${input.model}: ${lastError.message}`,
+        );
+      }
+    }
+
+    throw lastError instanceof Error
+      ? lastError
+      : new AgentModelError('AI 生成失败');
+  }
+
+  /** 真正发一次模型请求；`maxTokens` 由探测 / 缓存决定。 */
+  private async requestModelOnce(input: {
+    baseUrl: string;
+    apiKey: string;
+    model: string;
+    mode: IngredientAgentMode;
+    messages: AgentMessage[];
+    toolDefinitions: readonly AgentToolDefinition[];
+    timeoutMs: number;
+    maxTokens: number;
+  }): Promise<AgentAssistantTurn> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), input.timeoutMs);
 
@@ -2095,7 +2388,7 @@ export class IngredientDraftAgentService {
               ? { tools: input.toolDefinitions, tool_choice: 'auto' }
               : { response_format: { type: 'json_object' } }),
             temperature: AGENT_TEMPERATURE,
-            max_tokens: AGENT_MAX_TOKENS,
+            max_tokens: input.maxTokens,
           }),
         },
       );
@@ -2113,6 +2406,12 @@ export class IngredientDraftAgentService {
             `供应商不支持 tools 参数（HTTP ${response.status}）`,
           );
         }
+        if ([400, 413, 422].includes(response.status)) {
+          // 参数错误：可能是 max_tokens 超上限，交给探测循环降一档。
+          throw new AgentOutputLimitError(
+            `AI 生成失败（HTTP ${response.status}）：${detail}`,
+          );
+        }
         throw new AgentModelError(
           `AI 生成失败（HTTP ${response.status}）：${detail}`,
         );
@@ -2125,6 +2424,7 @@ export class IngredientDraftAgentService {
 
       const content =
         typeof message.content === 'string' ? message.content.trim() : '';
+      const usage = readUsage(body);
 
       if (input.mode === 'JSON_ACTION') {
         if (!content) {
@@ -2133,7 +2433,7 @@ export class IngredientDraftAgentService {
         return {
           content,
           toolCalls: [],
-          totalTokens: readUsageTotalTokens(body),
+          usage,
         };
       }
 
@@ -2142,7 +2442,7 @@ export class IngredientDraftAgentService {
         throw new AgentModelError('AI 生成失败：无内容');
       }
 
-      return { content, toolCalls, totalTokens: readUsageTotalTokens(body) };
+      return { content, toolCalls, usage };
     } catch (error) {
       if (error instanceof AgentModelError) {
         throw error;

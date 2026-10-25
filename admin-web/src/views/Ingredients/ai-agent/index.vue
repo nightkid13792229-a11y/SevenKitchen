@@ -56,7 +56,18 @@
 
             <details v-if="run.steps.length > 0" class="agent-steps">
               <summary class="agent-steps__summary">
-                已执行 {{ run.steps.length }} 步 · 展开
+                已执行 {{ run.steps.length }} 步
+                <template v-if="run.report">
+                  · {{ run.report.toolCalls }} 次工具 ·
+                  {{ formatAgentDuration(run.report.durationMs) }} ·
+                  {{
+                    formatAgentTokenCount(
+                      run.report.tokensIn + run.report.tokensOut
+                    )
+                  }}
+                  tokens
+                </template>
+                · 展开
               </summary>
               <div class="agent-steps__body">
                 <div class="agent-run__meta">
@@ -64,6 +75,24 @@
                   <span v-if="run.meta">steps {{ run.meta.steps }}</span>
                   <span v-if="run.meta">
                     工具调用 {{ run.meta.toolCallCount }} 次
+                  </span>
+                  <span v-if="run.report">结果 {{ run.report.result }}</span>
+                  <span v-if="run.report">
+                    输入 {{ formatAgentTokenCount(run.report.tokensIn) }} /
+                    输出 {{ formatAgentTokenCount(run.report.tokensOut) }} tokens
+                  </span>
+                </div>
+                <!-- 每个工具的耗时在下面每一步右侧；失败工具在报告里再汇总一次。 -->
+                <div
+                  v-if="run.report && run.report.failedTools.length"
+                  class="agent-run__report-failures"
+                >
+                  <span
+                    v-for="(failure, index) in run.report.failedTools"
+                    :key="`${failure.name}-${index}`"
+                    class="agent-run__report-failure"
+                  >
+                    {{ toolLabel(failure.name) }}：{{ failure.error }}
                   </span>
                 </div>
                 <div
@@ -82,6 +111,9 @@
                     <b class="agent-step__label">{{ step.label }}</b>
                     <span v-if="stepSummary(step)" class="agent-step__summary">
                       {{ stepSummary(step) }}
+                    </span>
+                    <span v-if="step.durationMs !== undefined" class="agent-step__duration">
+                      · {{ formatAgentDuration(step.durationMs) }}
                     </span>
                     <el-tag
                       size="small"
@@ -776,14 +808,18 @@ import {
   type ProfileFieldRow,
   type ProfileGroup
 } from './draftReview'
+import { toolLabel } from './stepView'
 import {
   answerInputFromPendingQuestion,
   askOptionAiBadge,
   askOptionTitle,
+  formatAgentDuration,
+  formatAgentTokenCount,
   pendingOptionBadge,
   readPendingQuestion,
   streamIngredientAgent,
   type AgentPendingQuestion,
+  type AgentRunReport,
   type AgentStreamMeta,
   type AgentStreamState,
   type AgentStreamStep
@@ -804,6 +840,8 @@ interface AgentRunRecord {
   reply: string | null
   draftId: string | null
   meta: AgentStreamMeta | null
+  /** 本轮运行报告：摘要行与展开区都靠它；旧后端为 null。 */
+  report: AgentRunReport | null
   error: string | null
   running: boolean
   /** 本轮开始 / 结束时间：用于实时显示「已运行 N 秒」 */
@@ -1105,6 +1143,7 @@ async function handleRun() {
     reply: null,
     draftId: null,
     meta: null,
+    report: null,
     error: null,
     running: true,
     startedAt: Date.now(),
@@ -1118,6 +1157,7 @@ async function handleRun() {
     run.reply = next.reply
     run.draftId = next.draftId
     run.meta = next.meta
+    run.report = next.report
     run.error = next.error
     state.pendingQuestion = next.pendingQuestion
     if (next.draftId) {
@@ -1598,6 +1638,23 @@ function goBackToList() {
   padding-left: 34px;
   font-size: 12px;
   color: var(--el-text-color-secondary);
+}
+
+.agent-run__report-failures {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 34px;
+  font-size: 12px;
+  color: var(--el-color-danger);
+}
+
+.agent-steps__body .agent-run__report-failures {
+  padding-left: 0;
+}
+
+.agent-run__report-failure {
+  word-break: break-word;
 }
 
 .agent-steps {

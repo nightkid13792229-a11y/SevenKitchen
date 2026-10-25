@@ -117,7 +117,7 @@ export class IngredientCreationController {
   @Post('agent/run')
   @ApiOperation({
     summary:
-      'AI 起草循环：受控调用工具（查库 / 写字段 / 跑校验），最多 8 步、60 秒',
+      'AI 起草循环：受控调用工具（查库 / 写字段 / 跑校验），最多 200 次工具调用 / 10 分钟',
   })
   async runAgent(
     @Body() dto: RunIngredientAgentDto,

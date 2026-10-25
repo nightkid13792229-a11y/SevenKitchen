@@ -45,7 +45,7 @@ export interface SummarizeNamesResult extends NameSummary {
 /** 汇总输出硬上限：只数数 + 代表名，2000 token 足够。 */
 export const NAME_SUMMARY_MAX_TOKENS = 2000;
 
-/** 汇总请求最多等 60 秒；再长就该降级，不能吃掉整轮 240 秒预算。 */
+/** 汇总请求最多等 60 秒；再长就该降级，不能吃掉整轮 600 秒预算。 */
 export const NAME_SUMMARY_TIMEOUT_MS = 60_000;
 
 /** 正常汇总远用不到这么多组 / 例子；超过就按「输出超长」判非法。 */

@@ -278,6 +278,34 @@ export class CustomRecipeRefundService {
     return this.toCustomerView(updated as any, order?.orderId ?? null);
   }
 
+  /**
+   * 批量取多张订单各自最新的一条退款申请。
+   *
+   * 统一订单列表一次最多几十张定制单，不能逐单查（N+1）；
+   * 一次 findMany 后按 orderId 取第一条（createdAt desc）。
+   */
+  async getLatestForOrderPks(
+    orderPks: string[],
+  ): Promise<Record<string, CustomerRefundRequestView>> {
+    const ids = Array.from(
+      new Set((orderPks || []).map((id) => String(id || '').trim()).filter(Boolean)),
+    );
+    if (ids.length === 0) return {};
+
+    const rows = await this.prisma.customRecipeRefundRequest.findMany({
+      where: { orderId: { in: ids } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const result: Record<string, CustomerRefundRequestView> = {};
+    for (const row of rows as any[]) {
+      if (!result[row.orderId]) {
+        result[row.orderId] = this.toCustomerView(row, null);
+      }
+    }
+    return result;
+  }
+
   /** 订单详情用：最新一条申请摘要（没有就 null）。 */
   async getLatestForOrderPk(orderPk: string) {
     const row = await this.prisma.customRecipeRefundRequest.findFirst({

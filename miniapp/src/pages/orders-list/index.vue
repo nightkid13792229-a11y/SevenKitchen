@@ -38,7 +38,30 @@
       </view>
     </view>
 
-    <view v-if="!needLogin" class="order-list">
+    <view
+      v-if="!needLogin && loadFailed && allOrders.length === 0"
+      class="state-block"
+    >
+      <text class="state-title">订单加载失败</text>
+      <text class="state-text">请检查网络后重试</text>
+      <button class="state-btn" @tap="loadOrders">重新加载</button>
+    </view>
+
+    <view
+      v-if="
+        !needLogin &&
+        ((loadFailed && allOrders.length > 0) || partialLoadFailed)
+      "
+      class="load-warning"
+    >
+      <text class="load-warning__text">{{ loadWarningText }}</text>
+      <text class="load-warning__retry" @tap="loadOrders">重试</text>
+    </view>
+
+    <view
+      v-if="!needLogin && !(loadFailed && allOrders.length === 0)"
+      class="order-list"
+    >
       <view
         v-for="order in orders"
         :key="`${order._orderType}-${order.id}`"
@@ -114,9 +137,17 @@
               支付已超时，订单已关闭
             </text>
             <button
+              v-if="customRefundEntryLabel(order)"
+              class="action-btn secondary"
+              @tap="goCustomRefund(order)"
+            >
+              {{ customRefundEntryLabel(order) }}
+            </button>
+            <button
               v-if="
                 order.status !== 'PENDING_PAYMENT' &&
-                customAftersaleAction(order)?.enabled
+                customAftersaleAction(order)?.enabled &&
+                !isCustomRefundBlockingAftersale(order)
               "
               class="action-btn secondary"
               @tap="applyCustomAftersale(order)"
@@ -506,6 +537,23 @@ const nowTick = ref(Date.now());
 let paymentClockTimer: ReturnType<typeof setInterval> | null = null;
 /** 登录态过期（2026-10-24 从定制专属列表迁过来） */
 const needLogin = ref(false);
+/** 主列表加载失败；有旧数据时保留旧数据，只提示 */
+const loadFailed = ref(false);
+/** 定制单 / 补剂单部分失败，不影响鲜食列表 */
+const customOrdersLoadFailed = ref(false);
+const supplementOrdersLoadFailed = ref(false);
+const partialLoadFailed = computed(
+  () => customOrdersLoadFailed.value || supplementOrdersLoadFailed.value,
+);
+const loadWarningText = computed(() => {
+  const failed: string[] = [];
+  if (loadFailed.value) failed.push('鲜食订单');
+  if (customOrdersLoadFailed.value) failed.push('定制订单');
+  if (supplementOrdersLoadFailed.value) failed.push('补剂订单');
+  return `${failed.join('、')}加载失败，其他订单仍可查看`;
+});
+const CUSTOM_ORDER_PAGE_SIZE = 50;
+const CUSTOM_ORDER_MAX_PAGES = 20;
 
 function isAuthError(error: any): boolean {
   const message = String(error?.message || error || '');
@@ -660,6 +708,8 @@ async function loadOrders() {
     return;
   }
   needLogin.value = false;
+  loadFailed.value = false;
+  supplementOrdersLoadFailed.value = false;
   if (DEBUG) {
     const token = getToken();
     console.log('[OrdersList] Loading orders', {
@@ -679,21 +729,34 @@ async function loadOrders() {
   const supplementPromise: Promise<SupplementOrderRow[]> = viewAllOrders.value
     ? Promise.resolve([])
     : fetchAllSupplementOrders().catch((err) => {
-        // 补剂这一路失败不能让鲜食订单一起白屏：降级成「本次没有补剂订单」
+        // 补剂这一路失败不能让鲜食订单一起白屏：降级成空数组，但页面要提示
         console.error('[OrdersList] 加载补剂订单失败:', err);
+        supplementOrdersLoadFailed.value = true;
         return [] as SupplementOrderRow[];
       });
 
+  const foodPromise = request({
+    url: apiUrl,
+    method: 'GET',
+  }).catch((error) => {
+    if (isAuthError(error)) {
+      needLogin.value = true;
+      return null;
+    }
+    console.error('[OrdersList] 加载鲜食订单失败:', error);
+    loadFailed.value = true;
+    return null;
+  });
+
   try {
     const [res, supplementOrders, customOrders] = await Promise.all([
-      request({
-        url: apiUrl,
-        method: 'GET',
-      }),
+      foodPromise,
       supplementPromise,
-      // 定制单（2026-10-18 并入）—— 内部已吞异常，失败给空数组
+      // 定制单（2026-10-18 并入）—— 内部已吞异常但有失败标记
       fetchAllCustomOrders(),
     ]);
+
+    if (needLogin.value) return;
 
     if (DEBUG) {
       console.log('[OrdersList] Response:', {
@@ -716,24 +779,33 @@ async function loadOrders() {
       }
     }
 
-    if (res.code === 0 && res.data) {
-      // 管理员API返回的是 { list, total } 结构，普通用户API返回的是数组
-      const rawOrders = Array.isArray(res.data) ? res.data : res.data.list || [];
-      const foodOrders: FoodOrderRow[] = rawOrders.map((order: Order) => ({
-        ...order,
-        _orderType: 'food' as const,
-      }));
-      allOrders.value = mergeOrdersByCreatedAtDesc(
-        foodOrders,
-        supplementOrders,
-        customOrders,
-      );
-      filterOrders();
+    const foodOrders: FoodOrderRow[] =
+      res && res.code === 0 && res.data
+        ? (Array.isArray(res.data) ? res.data : res.data.list || []).map(
+            (order: Order) => ({
+              ...order,
+              _orderType: 'food' as const,
+            }),
+          )
+        : [];
+    if (!res) {
+      loadFailed.value = true;
+    } else if (res.code !== 0) {
+      loadFailed.value = true;
     }
+
+    allOrders.value = mergeOrdersByCreatedAtDesc(
+      foodOrders,
+      supplementOrders,
+      customOrders,
+    );
+    filterOrders();
   } catch (err) {
     console.error('Load orders error:', err);
     if (isAuthError(err)) {
       needLogin.value = true;
+    } else {
+      loadFailed.value = true;
     }
   } finally {
     uni.hideLoading();
@@ -791,18 +863,46 @@ function mergeOrdersByCreatedAtDesc(
  * 失败返回空数组，不让整个列表挂掉 —— 顾客至少还能看到成品和补剂订单。
  */
 async function fetchAllCustomOrders(): Promise<CustomOrderRow[]> {
-  try {
-    const data = await fetchMyOrders({ page: 1, pageSize: 50 });
-    const list = (data?.orders || []) as CustomRecipeOrderDetail[];
-    return list.map((order) => ({
-      ...order,
-      id: order.orderId,
-      _orderType: 'custom' as const,
-    }));
-  } catch (error) {
-    console.warn('[OrdersList] 拉取定制单失败:', error);
-    return [];
+  customOrdersLoadFailed.value = false;
+  const collected: CustomOrderRow[] = [];
+  let page = 1;
+
+  while (page <= CUSTOM_ORDER_MAX_PAGES) {
+    try {
+      const data = await fetchMyOrders({
+        page,
+        pageSize: CUSTOM_ORDER_PAGE_SIZE,
+      });
+      if (!data) {
+        customOrdersLoadFailed.value = true;
+        break;
+      }
+      const list = (data.orders || []) as CustomRecipeOrderDetail[];
+      collected.push(
+        ...list.map((order) => ({
+          ...order,
+          id: order.orderId,
+          _orderType: 'custom' as const,
+        })),
+      );
+
+      const total = Number(data.total || 0);
+      if (
+        list.length === 0 ||
+        list.length < CUSTOM_ORDER_PAGE_SIZE ||
+        (total > 0 && collected.length >= total)
+      ) {
+        break;
+      }
+      page += 1;
+    } catch (error) {
+      console.warn('[OrdersList] 拉取定制单失败:', error);
+      customOrdersLoadFailed.value = true;
+      break;
+    }
   }
+
+  return collected;
 }
 
 function toCreatedAtTime(value?: string): number {
@@ -876,6 +976,7 @@ function getStatusesForTab(
  */
 function isAftersaleOrder(order: UnifiedOrder): boolean {
   if (order._orderType === 'custom') {
+    if (isCustomRefundRequestOpen(order)) return true;
     const label = (order as CustomOrderRow).renderable?.status?.label;
     if (label === '售后中') return true;
     return Boolean((order as unknown as { hasOpenAftersale?: boolean }).hasOpenAftersale);
@@ -962,8 +1063,78 @@ function customOrderSubtitle(order: UnifiedOrder): string {
   return parts.join(' · ');
 }
 
+function customRefundRequest(order: UnifiedOrder) {
+  return order._orderType === 'custom'
+    ? ((order as CustomOrderRow).refundRequest ?? null)
+    : null;
+}
+
+function isCustomRefundRequestOpen(order: UnifiedOrder): boolean {
+  const request = customRefundRequest(order);
+  return Boolean(
+    request && ['PENDING', 'PROCESSING'].includes(String(request.status)),
+  );
+}
+
+/**
+ * 有退款申请时不再让顾客同时去提「调整食谱」——
+ * 退款是资金动作，两个流程并行会让后台和顾客都分不清。
+ * 被驳回/失败后可以再调整或重新申请。
+ */
+function isCustomRefundBlockingAftersale(order: UnifiedOrder): boolean {
+  const request = customRefundRequest(order);
+  return Boolean(
+    request &&
+      ['PENDING', 'PROCESSING', 'REFUNDED'].includes(String(request.status)),
+  );
+}
+
+/** 定制卡退款入口：未开始/制作中/已交付都可以进退款页；有申请时看进度 */
+function customRefundEntryLabel(order: UnifiedOrder): string {
+  if (order._orderType !== 'custom') return '';
+  const row = order as CustomOrderRow;
+  if (
+    !['PAID', 'IN_PROGRESS', 'DELIVERED', 'COMPLETED'].includes(
+      String(row.status || ''),
+    )
+  ) {
+    return '';
+  }
+  const request = row.refundRequest;
+  if (request) {
+    if (
+      ['PENDING', 'PROCESSING', 'REFUNDED'].includes(String(request.status))
+    ) {
+      return '退款进度';
+    }
+    return '再次申请退款';
+  }
+  return '退款';
+}
+
+function goCustomRefund(order: UnifiedOrder) {
+  const row = order as CustomOrderRow;
+  uni.navigateTo({
+    url: `/pages/custom-recipe/refund?orderId=${encodeURIComponent(row.orderId)}`,
+  });
+}
+
 /** 已取消的定制单：退款进展（退款中 / 已退款 / 退款失败） */
 function customRefundText(order: UnifiedOrder): string {
+  const request = customRefundRequest(order);
+  if (request) {
+    const status = String(request.status);
+    if (status === 'REJECTED' || status === 'FAILED') {
+      const note = String(request.adminNote || '').trim();
+      return note
+        ? `审核说明：${note}`
+        : status === 'REJECTED'
+          ? '退款未通过'
+          : '退款失败';
+    }
+    // 审核中/处理中/成功已经在卡片顶部状态显示，避免重复
+    return '';
+  }
   return describeCustomRecipeRefund(order as any)?.text || '';
 }
 
@@ -1392,6 +1563,18 @@ function getStatusText(orderOrStatus: UnifiedOrder | string): string {
      * 定制单会露出英文码（专属列表删除后，这里成了唯一入口）。
      */
     if (orderOrStatus._orderType === 'custom') {
+      const request = customRefundRequest(orderOrStatus);
+      if (request) {
+        const requestStatus = String(request.status);
+        const labels: Record<string, string> = {
+          PENDING: '退款审核中',
+          PROCESSING: '退款处理中',
+          REFUNDED: '退款成功',
+          REJECTED: '退款未通过',
+          FAILED: '退款失败',
+        };
+        if (labels[requestStatus]) return labels[requestStatus];
+      }
       // 查不到也必须给中文，绝不把 IN_PROGRESS / DELIVERED 这类码漏给顾客
       const label =
         orderOrStatus.renderable?.status?.label || customStatusLabel(status);
@@ -1428,6 +1611,13 @@ function getStatusColor(orderOrStatus: UnifiedOrder | string): string {
       return SUPPLEMENT_STATUS_COLORS[status] || '#999'
     }
     if (orderOrStatus._orderType === 'custom') {
+      const request = customRefundRequest(orderOrStatus);
+      if (request) {
+        const requestStatus = String(request.status);
+        if (['PENDING', 'PROCESSING'].includes(requestStatus)) return '#faad14';
+        if (requestStatus === 'REFUNDED') return '#52c41a';
+        return '#f5222d';
+      }
       const tone = String(orderOrStatus.renderable?.status?.tone || '')
       const toneColors: Record<string, string> = {
         success: '#52c41a',
@@ -2057,6 +2247,33 @@ onUnmounted(() => {
   font-weight: 700;
 }
 /* 登录态过期的空态（从定制专属列表迁过来，2026-10-24） */
+.load-warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin: 8rpx 20rpx 0;
+  padding: 18rpx 20rpx;
+  border-radius: 12rpx;
+  background: #fff7ed;
+  border: 1rpx solid #f1dcc2;
+}
+
+.load-warning__text {
+  flex: 1;
+  min-width: 0;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #b45309;
+}
+
+.load-warning__retry {
+  flex: 0 0 auto;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #1e5b35;
+}
+
 .state-block {
   display: flex;
   flex-direction: column;

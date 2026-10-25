@@ -206,6 +206,16 @@ export class CustomRecipeController {
       ),
     );
 
+    /**
+     * 统一订单列表要看到最新退款申请（2026-10-25）。
+     * 退款申请是追加字段；老小程序忽略，不影响原字段。
+     */
+    const refundRequestMap = this.refundService
+      ? await this.refundService.getLatestForOrderPks(
+          orders.map((order) => order.id),
+        )
+      : {};
+
     return ApiResponseDto.success({
       orders: orders.map((order, index) => ({
         orderId: order.orderId,
@@ -245,6 +255,7 @@ export class CustomRecipeController {
         refundAmount: this.toNullableNumber(order.refundAmount),
         refundedAt: order.refundedAt ?? null,
         createdAt: order.createdAt,
+        refundRequest: refundRequestMap[order.id] ?? null,
         renderable: renderables[index],
       })),
       total,

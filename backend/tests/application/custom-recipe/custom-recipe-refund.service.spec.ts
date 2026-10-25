@@ -178,6 +178,41 @@ describe('CustomRecipeRefundService · 顾客提交', () => {
     expect(prisma.customRecipeRefundRequest.create).not.toHaveBeenCalled();
   });
 
+  it('★ 批量取各订单最新退款申请，供统一订单列表展示', async () => {
+    const { service, prisma } = createService();
+    (prisma.customRecipeRefundRequest.findMany as jest.Mock).mockResolvedValue([
+      buildRequest({
+        id: 'refund-newest',
+        orderId: 'order-pk-1',
+        status: 'PROCESSING',
+        createdAt: new Date('2026-10-25T10:30:00+08:00'),
+      }),
+      buildRequest({
+        id: 'refund-older',
+        orderId: 'order-pk-1',
+        status: 'REJECTED',
+        createdAt: new Date('2026-10-24T10:30:00+08:00'),
+      }),
+      buildRequest({
+        id: 'refund-2',
+        orderId: 'order-pk-2',
+        status: 'PENDING',
+        createdAt: new Date('2026-10-25T09:00:00+08:00'),
+      }),
+    ]);
+
+    const map = await service.getLatestForOrderPks([
+      'order-pk-1',
+      'order-pk-2',
+      'order-pk-3',
+    ]);
+
+    expect(map['order-pk-1']?.id).toBe('refund-newest');
+    expect(map['order-pk-1']?.status).toBe('PROCESSING');
+    expect(map['order-pk-2']?.id).toBe('refund-2');
+    expect(map['order-pk-3']).toBeUndefined();
+  });
+
   it('找不到订单给 404', async () => {
     const { service } = createService({ order: null });
     await expect(

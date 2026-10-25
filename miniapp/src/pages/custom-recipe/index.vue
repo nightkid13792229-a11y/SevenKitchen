@@ -95,6 +95,25 @@
       </view>
     </view>
 
+    <!-- 长页面填写进度（2026-10-25）：
+         页面有 1-5 个板块，顾客容易不知道还差什么；顶部给一条可点的轻量进度条，
+         只覆盖 4 个必填门槛，选填的健康/备注不计入。 -->
+    <view v-if="hasSelectedDog" class="form-progress">
+      <view
+        v-for="(step, index) in formProgressSteps"
+        :key="step.selector"
+        class="form-progress__step"
+        :class="{
+          'form-progress__step--done': step.done,
+          'form-progress__step--active': step.active,
+        }"
+        @tap="scrollToCustomSection(step.selector)"
+      >
+        <text class="form-progress__dot">{{ step.done ? '✓' : index + 1 }}</text>
+        <text class="form-progress__label">{{ step.label }}</text>
+      </view>
+    </view>
+
     <!-- 身份与档案状态。
          狗狗选择器已经并入上面的 Banner，这里只剩下"这一单能不能开始"的几件事。
          未登录 / 正在读取 / 没有档案这三种状态卡必须都留着（且互斥），
@@ -3016,9 +3035,59 @@ const validationTarget = computed(
   () => validationState.value?.selector || '',
 );
 
+/**
+ * 四个必填门槛的完成度（2026-10-25）。
+ * 只用于顶部进度感，不参与提交校验；提交仍以 validateCustomRecipeForm 为准。
+ */
+const formProgressSteps = computed(() => {
+  const allergyText = String(formData.value.allergyText || '').trim();
+  const currentFood = String(formData.value.currentFoodMain || '').trim();
+  const currentFoodOther = String(formData.value.currentFoodOther || '').trim();
+  const changeReasons = Array.isArray(formData.value.changeReasons)
+    ? formData.value.changeReasons
+    : [];
+  const steps = [
+    {
+      label: '体况门槛',
+      selector: '#custom-status',
+      done: !gateBlocked.value,
+    },
+    {
+      label: '体重方向',
+      selector: '#custom-weight',
+      done: hasOpenPlan.value || weightGoalChoice.value !== null,
+    },
+    {
+      label: '过敏',
+      selector: '#custom-allergy',
+      done:
+        hasFoodAllergy.value === false ||
+        (hasFoodAllergy.value === true && Boolean(allergyText)),
+    },
+    {
+      label: '饲喂历史',
+      selector: '#custom-intake',
+      done:
+        Boolean(currentFood) &&
+        (currentFood !== 'OTHER' || Boolean(currentFoodOther)) &&
+        changeReasons.length > 0,
+    },
+  ];
+  const firstUndone = steps.findIndex((step) => !step.done);
+  return steps.map((step, index) => ({
+    ...step,
+    active: firstUndone === index,
+  }));
+});
+
 function scrollToCustomSection(selector?: string) {
   if (!selector) return;
-  uni.pageScrollTo({ selector, duration: 300 });
+  // 顶部有吸顶进度条，滚动时给它留出高度，别把板块标题盖住
+  uni.pageScrollTo({
+    selector,
+    offsetTop: uni.upx2px(96),
+    duration: 300,
+  });
 }
 
 function focusValidationTarget(focus?: IntakeValidationFocus) {
@@ -4009,6 +4078,72 @@ const getBCSText = (bcsScore: number) => {
   color: #b45309;
   font-size: 22rpx;
   line-height: 1.5;
+}
+
+/* ---------- 长页面填写进度 ---------- */
+.form-progress {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: flex-start;
+  gap: 4rpx;
+  margin: 0 -24rpx 16rpx;
+  padding: 14rpx 18rpx 12rpx;
+  background: rgba(247, 248, 242, 0.97);
+  border-bottom: 1rpx solid #e6e8db;
+  backdrop-filter: blur(8px);
+}
+
+.form-progress__step {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4rpx;
+}
+
+.form-progress__dot {
+  width: 36rpx;
+  height: 36rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1rpx solid #d9dfcf;
+  background: #fffdf7;
+  color: #a79b86;
+  font-size: 18rpx;
+  font-weight: 700;
+}
+
+.form-progress__label {
+  font-size: 19rpx;
+  color: #a79b86;
+  white-space: nowrap;
+}
+
+.form-progress__step--done .form-progress__dot {
+  background: #e8f0e3;
+  border-color: #b9d0ad;
+  color: #1e5b35;
+}
+
+.form-progress__step--done .form-progress__label {
+  color: #1e5b35;
+}
+
+.form-progress__step--active .form-progress__dot {
+  background: #1e3a2f;
+  border-color: #1e3a2f;
+  color: #f6efe0;
+  box-shadow: 0 0 0 6rpx rgba(30, 58, 47, 0.12);
+}
+
+.form-progress__step--active .form-progress__label {
+  color: #1e3a2f;
+  font-weight: 700;
 }
 
 /* ---------- 底部提交 ---------- */

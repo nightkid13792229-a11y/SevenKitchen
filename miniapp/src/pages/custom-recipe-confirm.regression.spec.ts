@@ -70,6 +70,33 @@ describe('定制页 → 订单确认页（2026-10-19 老板确认）', () => {
     expect(confirm).toContain('（含）之前交付');
   });
 
+  it('★ 多份选择按顾客+狗记住，返回再进不重置', () => {
+    expect(confirm).toContain('loadCustomRecipeMultiChoice');
+    expect(confirm).toContain('saveCustomRecipeMultiChoice');
+    expect(confirm).toContain('loadQuote(recipeQuantity.value)');
+    expect(confirm).toContain('loadDeliveryDate(recipeQuantity.value)');
+    expect(confirm).toContain('watch(');
+  });
+
+  it('★ 单份费用为 0 时挡住支付，不显示“¥0”', () => {
+    expect(confirm).toContain('singleFeeMissing');
+    expect(confirm).toContain('!singleFeeMissing.value');
+    expect(confirm).toContain("'费用读取失败，请返回重试'");
+    expect(confirm).toContain('定制费用没读取出来');
+  });
+
+  it('★ 支付前有退款/取消规则说明', () => {
+    expect(confirm).toContain('未开始制作可全额退款');
+    expect(confirm).toContain('联系 Seven爸爸审核');
+  });
+
+  it('★ 确认页死代码清理：不再有 post* 状态和 payAfterSubmit', () => {
+    expect(confirm).not.toContain('postTitle');
+    expect(confirm).not.toContain('postDesc');
+    expect(confirm).not.toContain('postPaymentHint');
+    expect(confirm).not.toContain('payAfterSubmit');
+  });
+
   it('确认页创建订单后留在本页支付，不再跳提交成功页', () => {
     expect(confirm).toContain('loadCustomRecipeDraft');
     expect(confirm).toContain('allergyStatus');

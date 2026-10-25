@@ -101,22 +101,6 @@
           </div>
         </template>
 
-          <section v-if="delivery" class="agent-delivery">
-            <div class="agent-delivery__head">
-              <div class="agent-delivery__title">交付确认卡</div>
-              <div class="agent-delivery__meta">
-                <span class="agent-delivery__revision">
-                  内容版本 v{{ delivery.contentRevision }}
-                </span>
-                <span>{{ formatDateTime(delivery.createdAt) }}</span>
-              </div>
-            </div>
-            <p class="agent-delivery__summary">{{ delivery.summary }}</p>
-            <p v-if="delivery.warnings.length > 0" class="agent-delivery__sync">
-              {{ delivery.warnings.length }} 项警告已同步到上线检查
-            </p>
-          </section>
-
           <div
             v-if="session"
             class="agent-task-status"
@@ -270,7 +254,6 @@ import { NUTRITION_FIELD_CATALOG } from '@/utils/recipeDesigner/nutritionFieldCa
 import { formatDateTime } from '@/utils/date'
 import type {
   RecipeAgentApproval,
-  RecipeAgentDelivery,
   RecipeAgentMessage,
   RecipeAgentSession,
   RecipeAgentSessionMode,
@@ -295,7 +278,6 @@ const visible = computed({
 const session = ref<RecipeAgentSession | null>(null)
 const messages = ref<RecipeAgentMessage[]>([])
 const approvals = ref<RecipeAgentApproval[]>([])
-const delivery = ref<RecipeAgentDelivery | null>(null)
 const mode = ref<RecipeAgentSessionMode | null>(null)
 const input = ref('')
 const loading = ref(false)
@@ -488,9 +470,7 @@ const taskHint = computed(() => {
         ? `有 ${pendingQuestions.value.length} 个问题；可点选项填入，也可跳过直接回复。`
         : '等待你的回复；直接在下方输入即可。'
     case 'COMPLETED':
-      return delivery.value
-        ? '交付卡见上方；可继续对话调整。'
-        : '本轮已结束；可继续对话调整。'
+      return '本轮已结束；可继续对话调整。'
     case 'STOPPED':
       return '输入新的要求可以重新开始。'
     case 'FAILED':
@@ -619,7 +599,7 @@ async function loadSession(silent = false) {
     session.value = view?.session ?? null
     messages.value = view?.messages ?? []
     approvals.value = view?.approvals ?? []
-    delivery.value = view?.delivery ?? null
+    // 交付确认卡已下线；旧会话仍可能返回 view.delivery，这里直接忽略。
     mode.value = view?.mode ?? null
 
     const terminalStatuses: RecipeAgentSessionStatus[] = [
@@ -676,7 +656,6 @@ function handleOpen() {
   session.value = null
   messages.value = []
   approvals.value = []
-  delivery.value = null
   mode.value = null
   input.value = ''
   decidingApprovalId.value = null
@@ -2361,62 +2340,6 @@ onBeforeUnmount(stopPolling)
   word-break: break-all;
 }
 
-/* 交付确认卡：高亮左边框 + 浅绿底，只读展示交付摘要 */
-.agent-delivery {
-  flex: none;
-  margin-top: 10px;
-  padding: 12px 14px;
-  border: 1px solid #b3e19d;
-  border-left: 4px solid #67c23a;
-  border-radius: 8px;
-  background: #f0f9eb;
-  box-shadow: 0 1px 4px rgb(103 194 58 / 12%);
-}
-
-.agent-delivery__head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.agent-delivery__title {
-  color: #303133;
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.agent-delivery__meta {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-  color: #909399;
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-.agent-delivery__revision {
-  color: #529b2e;
-  font-weight: 600;
-}
-
-.agent-delivery__summary {
-  margin: 8px 0 0;
-  color: #303133;
-  font-size: 13px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.agent-delivery__sync {
-  margin: 8px 0 0;
-  color: #909399;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
 .agent-error {
   margin-top: 8px;
 }
@@ -2501,22 +2424,6 @@ onBeforeUnmount(stopPolling)
   .agent-bubble,
   .agent-answer {
     max-width: 100%;
-  }
-
-  .agent-delivery {
-    padding: 10px 12px;
-  }
-
-  .agent-delivery__head {
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .agent-delivery__meta {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    gap: 8px;
   }
 
   .agent-actions {

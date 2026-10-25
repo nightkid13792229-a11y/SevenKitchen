@@ -482,7 +482,7 @@ const taskHint = computed(() => {
         : '等待你的回复；直接在下方输入即可。'
     case 'COMPLETED':
       return delivery.value
-        ? '交付卡见下方；可继续对话调整。'
+        ? '交付卡见上方；可继续对话调整。'
         : '本轮已结束；可继续对话调整。'
     case 'STOPPED':
       return '输入新的要求可以重新开始。'

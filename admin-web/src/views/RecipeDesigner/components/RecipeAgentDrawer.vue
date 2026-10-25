@@ -817,6 +817,9 @@ function toolSummary(message: RecipeAgentMessage): string {
 
 const TOOL_DETAIL_MAX_LENGTH = 4000
 const TOOL_VALUE_MAX_LENGTH = 120
+const WEB_SEARCH_RESULT_LIMIT = 6
+const WEB_SEARCH_SUMMARY_MAX_LENGTH = 160
+const WEB_FETCH_PREVIEW_MAX_LENGTH = 1200
 
 const TOOL_ERROR_LABELS: Record<string, string> = {
   INVALID_ARGUMENT: '参数不合法',
@@ -979,6 +982,15 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function readString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+/** 依次读取第一个非空字符串，用于兼容新旧字段名。 */
+function readFirstString(...values: unknown[]): string {
+  for (const value of values) {
+    const text = readString(value)
+    if (text) return text
+  }
+  return ''
 }
 
 function readNumber(value: unknown): number | null {
@@ -1643,6 +1655,156 @@ function catalogUsageLines(data: unknown, summary: string): string[] {
   return lines
 }
 
+function looksLikeUrl(value: string): boolean {
+  return /^https?:\/\/\S+$/i.test(value)
+}
+
+/** 发布时间优先本地化；不是合法时间就原样展示（模型可能返回“3 天前”）。 */
+function formatPublishedAt(value: string): string {
+  return Number.isFinite(Date.parse(value))
+    ? formatDateTime(value)
+    : truncateText(value, 40)
+}
+
+/** 正文预览保留原始换行，只截断长度，不把段落压成一行。 */
+function truncatePreview(value: string, max: number): string {
+  const text = value.replace(/\r\n?/g, '\n').trim()
+  if (text.length <= max) return text
+  return `${text.slice(0, max).trimEnd()}…`
+}
+
+/** 兼容 `results` / `items` / `sources` 三种历史字段名。 */
+function webSearchResultList(
+  record: Record<string, unknown> | null
+): unknown[] | null {
+  if (!record) return null
+  for (const key of ['results', 'items', 'sources']) {
+    const value = record[key]
+    if (Array.isArray(value)) return value
+  }
+  return null
+}
+
+/**
+ * `web_search` 的返回数据是 `{ query, results: [...] }`。
+ * 旧版本 / 简化版本可能直接给数组，或把结果放在 `items`、`sources` 里；
+ * 单条结果也可能是纯字符串。这里统一收口，无法识别的形状交给兜底。
+ */
+function webSearchLines(
+  data: unknown,
+  args: unknown,
+  summary: string
+): string[] {
+  const record = asRecord(data)
+  const argRecord = asRecord(args)
+  const rawResults = Array.isArray(data)
+    ? data
+    : webSearchResultList(record)
+  const query = readFirstString(record?.query, argRecord?.query)
+
+  if (!rawResults && !query) return fallbackDetailLines(data, summary)
+
+  const lines = [query ? `搜索：${truncateText(query, 120)}` : '网页搜索']
+  if (!rawResults || rawResults.length === 0) {
+    lines.push('没有返回搜索结果。')
+    if (summary) lines.push(`说明：${truncateText(summary, 200)}`)
+    return lines
+  }
+
+  lines.push(`结果 ${rawResults.length} 条：`)
+  rawResults.slice(0, WEB_SEARCH_RESULT_LIMIT).forEach((item, index) => {
+    const result = asRecord(item)
+    const prefix = `${index + 1}. `
+    if (!result) {
+      const text = readString(item)
+      if (!text) {
+        lines.push(`${prefix}（空结果）`)
+      } else if (looksLikeUrl(text)) {
+        lines.push(`${prefix}链接：${truncateText(text, 400)}`)
+      } else {
+        lines.push(`${prefix}${truncateText(text, 100)}`)
+      }
+      return
+    }
+
+    const title = readFirstString(result.title, result.name) || '未命名结果'
+    const url = readFirstString(result.url, result.link, result.href)
+    const publishedAt = readFirstString(
+      result.publishedAt,
+      result.published_at,
+      result.publishedDate,
+      result.date
+    )
+    const summaryText = readFirstString(
+      result.summary,
+      result.snippet,
+      result.description,
+      result.abstract
+    )
+    const content = readFirstString(
+      result.content,
+      result.rawContent,
+      result.text
+    )
+    const preview =
+      summaryText ||
+      (content ? truncateText(content, WEB_SEARCH_SUMMARY_MAX_LENGTH) : '')
+
+    lines.push(`${prefix}${truncateText(title, 80)}`)
+    if (url) lines.push(`   链接：${truncateText(url, 400)}`)
+    if (publishedAt) lines.push(`   发布：${formatPublishedAt(publishedAt)}`)
+    if (preview) {
+      lines.push(
+        `   摘要：${truncateText(preview, WEB_SEARCH_SUMMARY_MAX_LENGTH)}`
+      )
+    }
+    if (content) lines.push('   正文：已获取（完整内容见“查看原始数据”）')
+  })
+  if (rawResults.length > WEB_SEARCH_RESULT_LIMIT) {
+    lines.push(
+      `…还有 ${rawResults.length - WEB_SEARCH_RESULT_LIMIT} 条结果（完整列表见“查看原始数据”）`
+    )
+  }
+  if (summary) lines.push(`结果：${truncateText(summary, 200)}`)
+  return lines
+}
+
+/**
+ * `web_fetch` 的返回数据是 `{ url, title?, content }`。
+ * 只展示正文开头一段，完整正文留在“查看原始数据”里；
+ * 旧版本可能直接返回正文字符串，此时从入参补 URL。
+ */
+function webFetchLines(data: unknown, args: unknown, summary: string): string[] {
+  const record = asRecord(data)
+  const argRecord = asRecord(args)
+  const directContent = typeof data === 'string' ? data : ''
+  const url = readFirstString(record?.url, record?.finalUrl, argRecord?.url)
+  const title = readFirstString(record?.title)
+  const content = readFirstString(
+    record?.content,
+    record?.text,
+    record?.markdown,
+    directContent
+  )
+
+  if (!record && !directContent && !url) {
+    return fallbackDetailLines(data, summary)
+  }
+
+  const lines: string[] = []
+  if (url) lines.push(`链接：${truncateText(url, 400)}`)
+  if (title) lines.push(`标题：${truncateText(title, 120)}`)
+  if (content) {
+    lines.push(`正文预览（前 ${WEB_FETCH_PREVIEW_MAX_LENGTH} 字）：`)
+    lines.push(truncatePreview(content, WEB_FETCH_PREVIEW_MAX_LENGTH))
+    lines.push('（完整正文见“查看原始数据”）')
+  } else {
+    lines.push('（未返回正文内容）')
+    if (summary) lines.push(`说明：${truncateText(summary, 200)}`)
+  }
+  return lines.length > 0 ? lines : fallbackDetailLines(data, summary)
+}
+
 function fallbackDetailLines(data: unknown, summary: string): string[] {
   const lines: string[] = []
   if (summary) lines.push(truncateText(summary, 260))
@@ -1757,6 +1919,12 @@ function formatToolDetails(message: RecipeAgentMessage): string {
       break
     case 'get_catalog_usage':
       lines = catalogUsageLines(detail.data, detail.summary)
+      break
+    case 'web_search':
+      lines = webSearchLines(detail.data, detail.args, detail.summary)
+      break
+    case 'web_fetch':
+      lines = webFetchLines(detail.data, detail.args, detail.summary)
       break
     default:
       lines = fallbackDetailLines(detail.data, detail.summary)

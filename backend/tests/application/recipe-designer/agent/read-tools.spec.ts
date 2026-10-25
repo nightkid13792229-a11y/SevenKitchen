@@ -3,6 +3,11 @@ import {
   RecipeAgentWebError,
   type RecipeAgentWebPort,
 } from 'src/application/recipe-designer/agent/deepseek-web-tools';
+import type {
+  AgentRecipeDetail,
+  AgentRecipeSearchPage,
+  AgentRecipeSummary,
+} from 'src/application/recipe-designer/agent/agent-types';
 import { createFakeRecipeAgentPort } from '../../../helpers/fake-recipe-agent-port';
 
 function createFakeWebTools(
@@ -36,6 +41,86 @@ function createFakeWebTools(
     }),
     ...overrides,
   } as RecipeAgentWebPort & { search: jest.Mock; fetch: jest.Mock };
+}
+
+const RECIPE_SUMMARY_BASE: Omit<AgentRecipeSummary, 'source' | 'id'> = {
+  recipeId: 'recipe-1',
+  version: 3,
+  name: '鲜鸭南瓜餐',
+  status: 'PUBLIC',
+  applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
+  coverTitle: '鲜鸭南瓜',
+  sellingPoint: '鲜鸭配南瓜',
+  targetHealthTags: ['低脂'],
+  ingredientNames: ['鸭腿肉', '南瓜'],
+  mainProteinName: '鸭腿肉',
+  updatedAt: new Date('2026-10-20T08:00:00.000Z'),
+};
+
+function recipeSummary(
+  overrides: Partial<AgentRecipeSummary> = {},
+): AgentRecipeSummary {
+  return {
+    ...RECIPE_SUMMARY_BASE,
+    source: 'PUBLISHED',
+    id: 'row-recipe-1-v3',
+    ...overrides,
+  };
+}
+
+function recipeDetail(
+  overrides: Partial<AgentRecipeDetail> = {},
+): AgentRecipeDetail {
+  return {
+    ...recipeSummary(),
+    description: '鲜鸭配南瓜，低温慢煮。',
+    coverImageUrl: null,
+    detailImages: [],
+    videoUrl: null,
+    energyDensityKcalPerKg: 1500,
+    nutritionStandard: 'FEDIAF_2025',
+    nutritionDetailedData: { report: {} },
+    productionSteps: [
+      {
+        sortOrder: 1,
+        instruction: '低温慢煮',
+        duration: '30 分钟',
+        temperature: '90℃',
+        equipment: '炖锅',
+      },
+    ],
+    items: [
+      {
+        ingredientId: 'ing-duck',
+        nutritionFoodId: 'nf-duck',
+        name: '鸭腿肉',
+        nutritionProfileName: '鸭腿肉（生）',
+        ingredientType: 'FOOD',
+        weightG: 400,
+        preparationMethod: '切块',
+        preparationNote: null,
+        category: 'PROTEIN',
+      },
+    ],
+    seriesId: 'series-1',
+    seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+    designSource: 'MANUAL',
+    createdAt: new Date('2026-09-20T08:00:00.000Z'),
+    ...overrides,
+  };
+}
+
+function recipeSearchPage(
+  overrides: Partial<AgentRecipeSearchPage> = {},
+): AgentRecipeSearchPage {
+  return {
+    data: [recipeSummary()],
+    page: 1,
+    pageSize: 20,
+    total: 1,
+    hasMore: false,
+    ...overrides,
+  };
 }
 
 describe('read tools', () => {
@@ -256,6 +341,183 @@ describe('read tools', () => {
     expect(draft.name).toBe('鸭肉南瓜新餐');
     expect(draft.copy.sellingPoint).toBe('新卖点');
     expect(draft.contentRevision).toBe(5);
+  });
+
+  describe('recipe catalog read tools', () => {
+    it('search_recipes 校验并传递筛选/分页参数，摘要说明来源和命中数', async () => {
+      const draftSummary = recipeSummary({
+        source: 'CURRENT_DRAFT',
+        id: 'draft-1',
+        recipeId: null,
+        version: null,
+        name: '当前草稿鸭肉餐',
+      });
+      const port = createFakeRecipeAgentPort({
+        recipeSearchPage: recipeSearchPage({
+          data: [recipeSummary(), draftSummary],
+          total: 2,
+          page: 2,
+          pageSize: 10,
+          hasMore: true,
+        }),
+      });
+      const tools = createReadTools(port, 'draft-1');
+
+      const result = await tools.search_recipes({
+        search: '  鸭肉 ',
+        ingredientName: ' 南瓜 ',
+        lifeStage: 'HIGH_ACTIVITY_ADULT',
+        page: 2,
+        limit: 10,
+      });
+
+      expect(port.searchRecipes).toHaveBeenCalledWith({
+        search: '鸭肉',
+        ingredientName: '南瓜',
+        lifeStage: 'HIGH_ACTIVITY_ADULT',
+        page: 2,
+        limit: 10,
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.data).toMatchObject({
+        page: 2,
+        pageSize: 10,
+        total: 2,
+        hasMore: true,
+      });
+      expect(result.summary).toContain('找到 2 道');
+      expect(result.summary).toContain('已发布食谱');
+      expect(result.summary).toContain('当前草稿');
+      expect(result.summary).toContain('鲜鸭南瓜餐');
+    });
+
+    it('search_recipes 默认页码 1、每页 20，空条件也能查', async () => {
+      const port = createFakeRecipeAgentPort();
+      const tools = createReadTools(port, 'draft-1');
+
+      const result = await tools.search_recipes({});
+
+      expect(port.searchRecipes).toHaveBeenCalledWith({ page: 1, limit: 20 });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.summary).toContain('没有找到');
+    });
+
+    it('search_recipes 拒绝非法参数且不调用端口', async () => {
+      const port = createFakeRecipeAgentPort();
+      const tools = createReadTools(port, 'draft-1');
+      const invalidArgs: unknown[] = [
+        null,
+        { search: 123 },
+        { ingredientName: 123 },
+        { lifeStage: false },
+        { page: 0 },
+        { page: 1.5 },
+        { page: '1' },
+        { limit: 0 },
+        { limit: 51 },
+        { limit: 1.5 },
+        { limit: '20' },
+      ];
+
+      for (const args of invalidArgs) {
+        const result = await tools.search_recipes(args as never);
+        expect(result.ok).toBe(false);
+        if (result.ok) continue;
+        expect(result.error.code).toBe('INVALID_ARGUMENT');
+      }
+      expect(port.searchRecipes).not.toHaveBeenCalled();
+    });
+
+    it('search_recipes 无结果时摘要说明只搜已发布目录和当前草稿', async () => {
+      const port = createFakeRecipeAgentPort({
+        recipeSearchPage: recipeSearchPage({
+          data: [],
+          total: 0,
+          hasMore: false,
+        }),
+      });
+      const tools = createReadTools(port, 'draft-1');
+
+      const result = await tools.search_recipes({ search: '不存在' });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.summary).toContain('没有找到');
+      expect(result.summary).toContain('已发布');
+      expect(result.summary).toContain('当前草稿');
+    });
+
+    it('get_recipe 已发布详情带人话摘要和只读数据', async () => {
+      const port = createFakeRecipeAgentPort({
+        recipeDetail: recipeDetail(),
+      });
+      const tools = createReadTools(port, 'draft-1');
+
+      const result = await tools.get_recipe({ recipeId: 'row-recipe-1-v3' });
+
+      expect(port.getRecipeDetail).toHaveBeenCalledWith({
+        recipeId: 'row-recipe-1-v3',
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.data.items).toHaveLength(1);
+      expect(result.summary).toContain('已发布食谱「鲜鸭南瓜餐」v3');
+      expect(result.summary).toContain('1 种原料');
+      expect(result.summary).toContain('1 步制作步骤');
+    });
+
+    it('get_recipe 当前草稿详情摘要标明草稿', async () => {
+      const port = createFakeRecipeAgentPort({
+        recipeDetail: recipeDetail({
+          source: 'CURRENT_DRAFT',
+          id: 'draft-1',
+          recipeId: null,
+          version: null,
+          name: '当前草稿鸭肉餐',
+        }),
+      });
+      const tools = createReadTools(port, 'draft-1');
+
+      const result = await tools.get_recipe({ draftId: 'draft-1' });
+
+      expect(port.getRecipeDetail).toHaveBeenCalledWith({
+        draftId: 'draft-1',
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.summary).toContain('当前草稿「当前草稿鸭肉餐」');
+    });
+
+    it('get_recipe 至少需要一个 ID；找不到返回 RECIPE_NOT_FOUND', async () => {
+      const port = createFakeRecipeAgentPort();
+      const tools = createReadTools(port, 'draft-1');
+
+      for (const args of [
+        null,
+        {},
+        { recipeId: '' },
+        { recipeId: '   ' },
+        { draftId: '' },
+        { recipeId: 123 },
+        { draftId: 123 },
+      ]) {
+        const result = await tools.get_recipe(args as never);
+        expect(result.ok).toBe(false);
+        if (result.ok) continue;
+        expect(result.error.code).toBe('INVALID_ARGUMENT');
+        expect(result.error.message).toContain('recipeId');
+        expect(result.error.message).toContain('draftId');
+      }
+      expect(port.getRecipeDetail).not.toHaveBeenCalled();
+
+      const missing = await tools.get_recipe({ recipeId: 'missing' });
+      expect(missing.ok).toBe(false);
+      if (missing.ok) return;
+      expect(missing.error.code).toBe('RECIPE_NOT_FOUND');
+      expect(missing.error.message).toContain('missing');
+    });
   });
 
   describe('web tools', () => {

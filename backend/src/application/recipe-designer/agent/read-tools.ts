@@ -19,6 +19,8 @@ import type {
   AgentDraftSnapshot,
   AgentIngredientCandidate,
   AgentIngredientDetail,
+  AgentRecipeDetail,
+  AgentRecipeSearchPage,
   AgentToolErrorCode,
   AgentToolResult,
 } from './agent-types';
@@ -37,6 +39,11 @@ const MAX_WEB_QUERY_LENGTH = 128;
 const MIN_WEB_SEARCH_COUNT = 1;
 const MAX_WEB_SEARCH_COUNT = 50;
 const MAX_WEB_SUMMARY_SOURCES = 3;
+const DEFAULT_RECIPE_PAGE = 1;
+const DEFAULT_RECIPE_PAGE_SIZE = 20;
+const MIN_RECIPE_PAGE_SIZE = 1;
+const MAX_RECIPE_PAGE_SIZE = 50;
+const MAX_RECIPE_PAGE = 1000;
 
 type IngredientType = 'FOOD' | 'SUPPLEMENT';
 
@@ -46,6 +53,19 @@ interface SearchIngredientsArgs {
   category?: FoodCategory;
   type?: IngredientType;
   limit?: number;
+}
+
+interface SearchRecipesArgs {
+  search?: string;
+  ingredientName?: string;
+  lifeStage?: string;
+  page?: number;
+  limit?: number;
+}
+
+interface GetRecipeArgs {
+  recipeId?: string;
+  draftId?: string;
 }
 
 interface GetIngredientArgs {
@@ -239,8 +259,55 @@ function summarizeIngredient(detail: AgentIngredientDetail): string {
   return `${detail.name}：${detail.cfctClass ?? '未分类'}，当前档案「${detail.nutritionProfileName}」${verified}${profiles}${preparation}。`;
 }
 
+function describeRecipeScope(input: {
+  search?: string;
+  ingredientName?: string;
+  lifeStage?: string;
+}): string {
+  const parts: string[] = [];
+  if (input.search) parts.push(`关键词「${input.search}」`);
+  if (input.ingredientName) parts.push(`原料「${input.ingredientName}」`);
+  if (input.lifeStage) parts.push(`生命阶段「${input.lifeStage}」`);
+  return parts.length > 0 ? parts.join('、') : '全部已发布食谱与当前草稿';
+}
+
+function summarizeRecipeSearch(
+  page: AgentRecipeSearchPage,
+  filters: {
+    search?: string;
+    ingredientName?: string;
+    lifeStage?: string;
+  },
+): string {
+  if (page.total === 0) {
+    return `没有找到匹配的食谱（${describeRecipeScope(filters)}）；只搜索已发布食谱和当前草稿，不会返回客户/订单信息。`;
+  }
+
+  const preview = page.data
+    .slice(0, 5)
+    .map((recipe) =>
+      recipe.source === 'CURRENT_DRAFT'
+        ? `${recipe.name}（当前草稿）`
+        : recipe.name,
+    )
+    .join('、');
+  const suffix = page.total > page.data.length ? ' 等' : '';
+  return `找到 ${page.total} 道食谱（${describeRecipeScope(filters)}），第 ${page.page} 页返回 ${page.data.length} 条：${preview}${suffix}。来源仅限已发布食谱和当前草稿；不含客户/订单信息。`;
+}
+
+function summarizeRecipeDetail(detail: AgentRecipeDetail): string {
+  const label =
+    detail.source === 'CURRENT_DRAFT'
+      ? `当前草稿「${detail.name}」`
+      : `已发布食谱「${detail.name}」v${detail.version ?? '-'}`;
+  const totalWeightG =
+    Math.round(detail.items.reduce((sum, item) => sum + item.weightG, 0) * 10) /
+    10;
+  return `${label}：${detail.items.length} 种原料，共 ${totalWeightG}g，${detail.productionSteps.length} 步制作步骤；只读详情，不含客户/订单信息。`;
+}
+
 /**
- * 造四个只读工具。
+ * 造只读工具。
  *
  * @param port 草稿端口（P0a 用内存假端口）
  * @param draftId 当前这份草稿的 id
@@ -260,6 +327,12 @@ export function createReadTools(
   get_catalog_usage(
     args?: GetCatalogUsageArgs | null,
   ): Promise<AgentToolResult<AgentCatalogUsage>>;
+  search_recipes(
+    args?: SearchRecipesArgs | null,
+  ): Promise<AgentToolResult<AgentRecipeSearchPage>>;
+  get_recipe(
+    args: GetRecipeArgs | null,
+  ): Promise<AgentToolResult<AgentRecipeDetail>>;
   web_search(
     args?: WebSearchArgs | null,
   ): Promise<AgentToolResult<AgentWebSearchResult>>;
@@ -475,6 +548,110 @@ export function createReadTools(
         parts.push('没有重合记录');
       }
       return ok(usage, `${parts.join('；')}。`);
+    },
+
+    async search_recipes(
+      args: SearchRecipesArgs | null = {},
+    ): Promise<AgentToolResult<AgentRecipeSearchPage>> {
+      const raw = asRawArgs(args);
+      if (!raw) {
+        return fail('INVALID_ARGUMENT', '参数必须是对象。');
+      }
+
+      for (const field of ['search', 'ingredientName', 'lifeStage'] as const) {
+        const value = raw[field];
+        if (value !== undefined && typeof value !== 'string') {
+          return fail('INVALID_ARGUMENT', `${field} 必须是字符串。`);
+        }
+      }
+
+      const pageValue = raw.page;
+      if (
+        pageValue !== undefined &&
+        (typeof pageValue !== 'number' ||
+          !Number.isInteger(pageValue) ||
+          pageValue < 1 ||
+          pageValue > MAX_RECIPE_PAGE)
+      ) {
+        return fail(
+          'INVALID_ARGUMENT',
+          `page 必须是 1–${MAX_RECIPE_PAGE} 的整数（默认 1）。`,
+        );
+      }
+      const limitValue = raw.limit;
+      if (
+        limitValue !== undefined &&
+        (typeof limitValue !== 'number' ||
+          !Number.isInteger(limitValue) ||
+          limitValue < MIN_RECIPE_PAGE_SIZE ||
+          limitValue > MAX_RECIPE_PAGE_SIZE)
+      ) {
+        return fail(
+          'INVALID_ARGUMENT',
+          `limit 必须是 ${MIN_RECIPE_PAGE_SIZE}–${MAX_RECIPE_PAGE_SIZE} 的整数（默认 ${DEFAULT_RECIPE_PAGE_SIZE}）。`,
+        );
+      }
+
+      const filters: {
+        search?: string;
+        ingredientName?: string;
+        lifeStage?: string;
+      } = {};
+      const search = (raw.search as string | undefined)?.trim();
+      const ingredientName = (raw.ingredientName as string | undefined)?.trim();
+      const lifeStage = (raw.lifeStage as string | undefined)?.trim();
+      if (search) filters.search = search;
+      if (ingredientName) filters.ingredientName = ingredientName;
+      if (lifeStage) filters.lifeStage = lifeStage;
+
+      const page = (pageValue as number | undefined) ?? DEFAULT_RECIPE_PAGE;
+      const limit =
+        (limitValue as number | undefined) ?? DEFAULT_RECIPE_PAGE_SIZE;
+      const result = await port.searchRecipes({
+        ...filters,
+        page,
+        limit,
+      });
+      return ok(result, summarizeRecipeSearch(result, filters));
+    },
+
+    async get_recipe(
+      args: GetRecipeArgs | null,
+    ): Promise<AgentToolResult<AgentRecipeDetail>> {
+      const raw = asRawArgs(args);
+      if (!raw) {
+        return fail('INVALID_ARGUMENT', 'recipeId 或 draftId 至少提供一个。');
+      }
+
+      const recipeIdValue = raw.recipeId;
+      const draftIdValue = raw.draftId;
+      if (
+        (recipeIdValue !== undefined && typeof recipeIdValue !== 'string') ||
+        (draftIdValue !== undefined && typeof draftIdValue !== 'string')
+      ) {
+        return fail('INVALID_ARGUMENT', 'recipeId 或 draftId 必须是字符串。');
+      }
+
+      const recipeId =
+        typeof recipeIdValue === 'string' ? recipeIdValue.trim() : '';
+      const draftId =
+        typeof draftIdValue === 'string' ? draftIdValue.trim() : '';
+      if (!recipeId && !draftId) {
+        return fail('INVALID_ARGUMENT', 'recipeId 或 draftId 至少提供一个。');
+      }
+
+      const input: GetRecipeArgs = {};
+      if (recipeId) input.recipeId = recipeId;
+      if (draftId) input.draftId = draftId;
+
+      const detail = await port.getRecipeDetail(input);
+      if (!detail) {
+        return fail(
+          'RECIPE_NOT_FOUND',
+          `没有找到可读的食谱（recipeId「${recipeId || '-'}」/ draftId「${draftId || '-'}」）；只支持已发布目录和当前草稿。`,
+        );
+      }
+      return ok(detail, summarizeRecipeDetail(detail));
     },
 
     async web_search(

@@ -29,7 +29,7 @@ async function expectOk<T>(
 }
 
 describe('recipe agent toolkit', () => {
-  it('把 20 个工具定义和同名 handler 组装在一起', () => {
+  it('把 22 个工具定义和同名 handler 组装在一起', () => {
     const toolkit = createRecipeAgentToolkit({
       port: createFakeRecipeAgentPort(),
       controlPort: createFakeControlPort(),
@@ -37,7 +37,7 @@ describe('recipe agent toolkit', () => {
       draftId: 'draft-1',
     });
 
-    expect(toolkit.definitions).toHaveLength(20);
+    expect(toolkit.definitions).toHaveLength(22);
     for (const definition of toolkit.definitions) {
       expect(typeof toolkit.handlers[definition.name]).toBe('function');
     }

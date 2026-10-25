@@ -17,6 +17,8 @@ import type {
   AgentIngredientCandidate,
   AgentIngredientDetail,
   AgentProductionStep,
+  AgentRecipeDetail,
+  AgentRecipeSearchPage,
 } from 'src/application/recipe-designer/agent/agent-types';
 import type { RecipeAgentDraftPort } from 'src/application/recipe-designer/agent/recipe-agent.port';
 import { classifyFoodCategory } from 'src/domain/recipe-designer/food-category-map';
@@ -195,6 +197,8 @@ const DEFAULT_SEARCH_RESULTS: readonly AgentIngredientCandidate[] = [
 
 const FAKE_DETAIL_CREATED_AT = new Date('2026-08-01T08:00:00.000Z');
 const FAKE_DETAIL_UPDATED_AT = new Date('2026-10-03T08:00:00.000Z');
+const FAKE_DRAFT_CREATED_AT = new Date('2026-10-01T08:00:00.000Z');
+const FAKE_DRAFT_UPDATED_AT = new Date('2026-10-24T08:00:00.000Z');
 const FAKE_DETAIL_NUTRITION_DATA = {
   meta: { rawBasisType: 'PER_100_G' },
   macros: { protein: 2.2, fat: 0.3, fiber: 3.3 },
@@ -336,6 +340,8 @@ export interface FakeRecipeAgentPortOverrides {
   searchResults?: AgentIngredientCandidate[];
   ingredientDetail?: AgentIngredientDetail | null;
   catalogUsage?: AgentCatalogUsage;
+  recipeSearchPage?: AgentRecipeSearchPage;
+  recipeDetail?: AgentRecipeDetail | null;
 }
 
 /** 默认草稿：八类基础齐全、940g、内容版本 4、文案与步骤都填好。 */
@@ -384,6 +390,17 @@ export function fakeDraftSnapshot(
       },
     ],
     lastAssessment: null,
+    status: 'DRAFT',
+    applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
+    coverImageUrl: null,
+    detailImages: [],
+    videoUrl: null,
+    energyDensityKcalPerKg: 1420,
+    nutritionStandard: 'FEDIAF_2025',
+    nutritionDetailedData: null,
+    seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+    createdAt: FAKE_DRAFT_CREATED_AT,
+    updatedAt: FAKE_DRAFT_UPDATED_AT,
     nutritionSummary: { fatWetPercent: 12, moisturePercent: 60 },
     animalSpecies: ['鸭'],
     ...overrides,
@@ -496,6 +513,15 @@ export function createFakeRecipeAgentPort(
           }
         : overrides.ingredientDetail,
     catalogUsage: overrides.catalogUsage ?? DEFAULT_CATALOG_USAGE,
+    recipeSearchPage: overrides.recipeSearchPage ?? {
+      data: [],
+      page: 1,
+      pageSize: 20,
+      total: 0,
+      hasMore: false,
+    },
+    recipeDetail:
+      overrides.recipeDetail === undefined ? null : overrides.recipeDetail,
   };
 
   // 显式传 null 表示还没跑过评估，但真跑一次时仍要有一份可返回的基线结果。
@@ -569,6 +595,18 @@ export function createFakeRecipeAgentPort(
   const getIngredient = jest.fn(async () => state.ingredientDetail);
 
   const getCatalogUsage = jest.fn(async () => state.catalogUsage);
+
+  const searchRecipes = jest.fn(
+    async (_input: {
+      search?: string;
+      ingredientName?: string;
+      lifeStage?: string;
+      page: number;
+      limit: number;
+    }) => state.recipeSearchPage,
+  );
+
+  const getRecipeDetail = jest.fn(async () => state.recipeDetail);
 
   const addItem = jest.fn(
     async (
@@ -713,6 +751,8 @@ export function createFakeRecipeAgentPort(
     searchIngredients,
     getIngredient,
     getCatalogUsage,
+    searchRecipes,
+    getRecipeDetail,
     addItem,
     replaceItem,
     updateWeight,

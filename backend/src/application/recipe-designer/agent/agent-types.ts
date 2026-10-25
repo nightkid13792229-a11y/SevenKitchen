@@ -14,6 +14,10 @@ export interface AgentDraftItem {
   ingredientId: string | null;
   nutritionFoodId: string;
   name: string;
+  /** 营养档案展示名（如「鸭腿肉（生）」）；搜索/详情复用同一口径。 */
+  nutritionProfileName?: string;
+  /** 原料库类型；缺省按 FOOD 处理，旧调用方不受影响。 */
+  ingredientType?: 'FOOD' | 'SUPPLEMENT';
   cfctClass: string | null;
   nutritionCategory: string | null;
   category: FoodCategory;
@@ -84,6 +88,24 @@ export interface AgentDraftSnapshot {
   };
   productionSteps: AgentProductionStep[];
   lastAssessment: AgentAssessmentView | null;
+  /**
+   * 产品展示与目录检索用的只读元数据（Phase 2 追加）。
+   *
+   * 这些字段只用于 `search_recipes` / `get_recipe` 的当前草稿摘要与详情，
+   * 不参与草稿写入；历史服务返回缺字段时适配器按 null / [] 处理。
+   */
+  status: string;
+  applicableLifeStages: string[];
+  coverImageUrl: string | null;
+  detailImages: string[];
+  videoUrl: string | null;
+  energyDensityKcalPerKg: number | null;
+  nutritionStandard: string | null;
+  /** 当前草稿最近一次持久化的营养报告（没有时为 null）。 */
+  nutritionDetailedData: unknown;
+  seriesLifeStage: string | null;
+  createdAt: Date | null;
+  updatedAt: Date | null;
   /** 湿基脂肪 / 水分百分比；只给健康标签策略用，读工具不展示。 */
   nutritionSummary?: {
     fatWetPercent: number | null;
@@ -308,11 +330,81 @@ export interface AgentCatalogUsage {
   recipes: AgentCatalogUsageRecipe[];
 }
 
+/**
+ * 只读食谱来源：已发布目录（status=PUBLIC 的产品线食谱）或当前草稿。
+ *
+ * 自定义/私密食谱（PRIVATE_CUSTOM）永远不会是 PUBLISHED；
+ * 其他设计师的草稿也不会被读成 CURRENT_DRAFT。
+ */
+export type AgentRecipeSource = 'PUBLISHED' | 'CURRENT_DRAFT';
+
+/** 只读食谱搜索结果里的一行；不含客户 / 订单 / 狗狗 / 主人信息。 */
+export interface AgentRecipeSummary {
+  source: AgentRecipeSource;
+  /** Recipe.id（已发布版本行）或 draftId（当前草稿）。 */
+  id: string;
+  /** 逻辑 recipeId；当前草稿为 null。 */
+  recipeId: string | null;
+  /** 版本号；当前草稿为 null。 */
+  version: number | null;
+  name: string;
+  status: string;
+  applicableLifeStages: string[];
+  coverTitle: string | null;
+  sellingPoint: string | null;
+  /** targetHealthTags + healthTagAssignments 的标签名（去重，保持稳定顺序）。 */
+  targetHealthTags: string[];
+  ingredientNames: string[];
+  mainProteinName: string | null;
+  updatedAt: Date;
+}
+
+/** 只读食谱明细里的一条原料。 */
+export interface AgentRecipeItemRead {
+  ingredientId: string | null;
+  nutritionFoodId: string | null;
+  name: string;
+  nutritionProfileName: string;
+  ingredientType: 'FOOD' | 'SUPPLEMENT';
+  weightG: number;
+  preparationMethod: string | null;
+  preparationNote: string | null;
+  category: FoodCategory;
+}
+
+/** `get_recipe` 的完整只读详情（已发布或当前草稿）。 */
+export interface AgentRecipeDetail extends AgentRecipeSummary {
+  description: string | null;
+  coverImageUrl: string | null;
+  detailImages: string[];
+  videoUrl: string | null;
+  /** 每公斤配方的能量密度；草稿可能没有，按 null 返回。 */
+  energyDensityKcalPerKg: number | null;
+  nutritionStandard: string | null;
+  nutritionDetailedData: unknown;
+  productionSteps: AgentProductionStep[];
+  items: AgentRecipeItemRead[];
+  seriesId: string | null;
+  seriesLifeStage: string | null;
+  designSource: string | null;
+  createdAt: Date;
+}
+
+/** `search_recipes` 的分页结果。 */
+export interface AgentRecipeSearchPage {
+  data: AgentRecipeSummary[];
+  page: number;
+  pageSize: number;
+  total: number;
+  hasMore: boolean;
+}
+
 /** 所有工具统一使用的错误码；英文大写，给人看的话用中文。 */
 export type AgentToolErrorCode =
   | 'INVALID_ARGUMENT'
   | 'INVALID_WEIGHT'
   | 'INGREDIENT_NOT_FOUND'
+  | 'RECIPE_NOT_FOUND'
   | 'DRAFT_EMPTY'
   | 'COPY_FORBIDDEN_CLAIM'
   | 'TAG_NOT_ALLOWED'

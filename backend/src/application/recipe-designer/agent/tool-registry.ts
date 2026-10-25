@@ -2,7 +2,7 @@
  * Agent 工具注册表（P0a Task 5）。
  *
  * 把 Task 2–4 的读/写/查工具和 Task 5 的控制工具组装成一张表：
- * `AGENT_TOOL_DEFINITIONS` 是给模型看的 20 个工具定义（含联网搜索/抓取），
+ * `AGENT_TOOL_DEFINITIONS` 是给模型看的 22 个工具定义（含只读食谱目录与联网搜索/抓取），
  * `createAgentToolHandlers` 返回同名 handler。
  *
  * **审批安全边界**：`check_ready` / `check_coverage` / `finish_draft` 的
@@ -130,7 +130,7 @@ const NO_ARGS_SCHEMA = {
 } as const;
 
 /**
- * 20 个工具定义。描述用中文一句话说清“什么时候用”；
+ * 22 个工具定义。描述用中文一句话说清“什么时候用”；
  * 参数 schema 与 Task 2–4 的运行时校验保持一致。
  *
  * 联网两个工具不设意图/域名/关键词限制；网页内容在提示词里明确为
@@ -231,6 +231,65 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
         { required: ['mainProteinName'] },
         { required: ['ingredientNames'] },
       ],
+      required: [],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'search_recipes',
+    description:
+      '只读搜索已发布食谱目录和当前草稿：按菜名、原料名、营养档案名查，可按原料或生命阶段筛选；用于查重名、看文案风格、看目录原料用法。不会返回客户/订单信息。',
+    parameters: {
+      type: 'object',
+      properties: {
+        search: {
+          type: 'string',
+          description: '关键词；匹配菜名、原料名或营养档案名。',
+        },
+        ingredientName: {
+          type: 'string',
+          description: '只看用到某个原料（或营养档案）的食谱。',
+        },
+        lifeStage: {
+          type: 'string',
+          description: '生命阶段，如 HIGH_ACTIVITY_ADULT。',
+        },
+        page: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 1000,
+          default: 1,
+          description: '页码，默认 1。',
+        },
+        limit: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 50,
+          default: 20,
+          description: '每页条数，默认 20。',
+        },
+      },
+      required: [],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'get_recipe',
+    description:
+      '只读查看一道已发布食谱或当前草稿的完整详情（原料、文案、营养、制作步骤、图片等）；recipeId 或 draftId 至少一个，其他设计师的草稿不可读。',
+    parameters: {
+      type: 'object',
+      properties: {
+        recipeId: {
+          type: 'string',
+          description: 'Recipe.id 或逻辑 recipeId；只查已发布目录。',
+        },
+        draftId: {
+          type: 'string',
+          description: '当前草稿 id；只能读这一份草稿。',
+        },
+      },
+      anyOf: [{ required: ['recipeId'] }, { required: ['draftId'] }],
       required: [],
       additionalProperties: false,
     },
@@ -594,7 +653,7 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
 ];
 
 /**
- * 造全部 20 个 handler。
+ * 造全部 22 个 handler。
  *
  * `check_ready` 是唯一从 `getApprovalState()` 注入审批状态的入口；
  * `finish_draft` 在 control-tools 内部做同样的注入。
@@ -624,6 +683,8 @@ export function createAgentToolHandlers(
     search_ingredients: (args) => readTools.search_ingredients(args as never),
     get_ingredient: (args) => readTools.get_ingredient(args as never),
     get_catalog_usage: (args) => readTools.get_catalog_usage(args as never),
+    search_recipes: (args) => readTools.search_recipes(args as never),
+    get_recipe: (args) => readTools.get_recipe(args as never),
     web_search: (args) => readTools.web_search(args as never),
     web_fetch: (args) => readTools.web_fetch(args as never),
     add_ingredient: (args) => writeTools.add_ingredient(args as never),

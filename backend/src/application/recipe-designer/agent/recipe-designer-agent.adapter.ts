@@ -27,6 +27,7 @@ import {
 } from '../../../domain/recipe-designer/nutrition-profile-reader';
 import {
   PRODUCTION_STEP_LIMITS,
+  readProductionSteps,
   type ProductionStep,
 } from '../../../domain/recipe-designer/production-steps';
 import type { PrismaService } from '../../../infrastructure/prisma.service';
@@ -51,6 +52,10 @@ import {
   type AgentIngredientRecommendedProduct,
   type AgentIngredientTag,
   type AgentProductionStep,
+  type AgentRecipeDetail,
+  type AgentRecipeItemRead,
+  type AgentRecipeSearchPage,
+  type AgentRecipeSummary,
 } from './agent-types';
 import type { RecipeAgentDraftPort } from './recipe-agent.port';
 
@@ -879,6 +884,301 @@ const findMainProteinName = (
   return mainProtein?.name ?? null;
 };
 
+// ---- Phase 2：只读食谱目录（已发布 PUBLIC + 当前草稿） ----
+
+const DEFAULT_RECIPE_PAGE_SIZE = 20;
+const MAX_RECIPE_PAGE_SIZE = 50;
+const MAX_RECIPE_PAGE = 1000;
+
+/** 工具层已校验，这里再收敛一次，防止绕过工具直接调端口。 */
+const resolveRecipePage = (page: number | undefined): number => {
+  if (page === undefined || !Number.isFinite(page)) return 1;
+  return Math.min(MAX_RECIPE_PAGE, Math.max(1, Math.floor(page)));
+};
+
+const resolveRecipePageSize = (limit: number | undefined): number => {
+  if (limit === undefined || !Number.isFinite(limit)) {
+    return DEFAULT_RECIPE_PAGE_SIZE;
+  }
+  return Math.min(MAX_RECIPE_PAGE_SIZE, Math.max(1, Math.floor(limit)));
+};
+
+/** Prisma Json / 历史脏数据 → 去空白后的字符串数组。 */
+const readStringArray = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  return uniqueValues(
+    value
+      .filter((item): item is string => typeof item === 'string')
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0),
+  );
+};
+
+interface RecipeHealthTagAssignmentRow {
+  healthTag: { name: string } | null;
+}
+
+/** 健康标签：合并 targetHealthTags 与 assignments 的标签名并去重。 */
+const readHealthTagNames = (
+  assignments: readonly RecipeHealthTagAssignmentRow[] | undefined,
+  targetHealthTags: unknown,
+): string[] => {
+  const assignmentNames = (assignments ?? [])
+    .map((assignment) => assignment.healthTag?.name?.trim() ?? '')
+    .filter((name) => name.length > 0);
+  return uniqueValues([
+    ...readStringArray(targetHealthTags),
+    ...assignmentNames,
+  ]);
+};
+
+interface PublishedRecipeItemRow {
+  ingredientId: string | null;
+  nutritionFoodId: string | null;
+  exampleWeight: number | null;
+  preparationMethod: string | null;
+  preparationNote: string | null;
+  ingredient: {
+    name: string | null;
+    type: string | null;
+    properties: unknown;
+  } | null;
+  nutritionFood: {
+    name: string;
+    nameEn: string | null;
+    displayNameZh: string | null;
+    dataSource: string;
+    category: string | null;
+  } | null;
+}
+
+interface PublishedRecipeSummaryRow {
+  id: string;
+  recipeId: string;
+  version: number;
+  name: string;
+  status: string;
+  isCustomRecipe: boolean;
+  applicableLifeStages: unknown;
+  coverTitle: string | null;
+  sellingPoint: string | null;
+  targetHealthTags: unknown;
+  updatedAt: Date;
+  healthTagAssignments: RecipeHealthTagAssignmentRow[];
+  items: PublishedRecipeItemRow[];
+}
+
+interface PublishedRecipeDetailRow extends PublishedRecipeSummaryRow {
+  createdAt: Date;
+  description: string | null;
+  coverImageUrl: string | null;
+  detailImages: unknown;
+  videoUrl: string | null;
+  energyDensityKcalPerKg: number;
+  nutritionStandard: string;
+  nutritionDetailedData: unknown;
+  productionStepsJson: unknown;
+  designSource: string | null;
+  seriesId: string | null;
+  seriesLifeStage: string | null;
+}
+
+const PUBLISHED_RECIPE_ITEM_SELECT = {
+  ingredientId: true,
+  nutritionFoodId: true,
+  exampleWeight: true,
+  preparationMethod: true,
+  preparationNote: true,
+  ingredient: {
+    select: { name: true, type: true, properties: true },
+  },
+  nutritionFood: {
+    select: {
+      name: true,
+      nameEn: true,
+      displayNameZh: true,
+      dataSource: true,
+      category: true,
+    },
+  },
+} as const;
+
+const PUBLISHED_RECIPE_ITEMS_INCLUDE = {
+  select: PUBLISHED_RECIPE_ITEM_SELECT,
+  orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }],
+};
+
+/** 搜索只需要菜名/原料/标签等轻字段，不拉营养报告和制作步骤。 */
+const RECIPE_SEARCH_SELECT = {
+  id: true,
+  recipeId: true,
+  version: true,
+  name: true,
+  status: true,
+  isCustomRecipe: true,
+  applicableLifeStages: true,
+  coverTitle: true,
+  sellingPoint: true,
+  targetHealthTags: true,
+  updatedAt: true,
+  healthTagAssignments: {
+    select: { healthTag: { select: { name: true } } },
+  },
+  items: PUBLISHED_RECIPE_ITEMS_INCLUDE,
+} as const;
+
+/** 详情在搜索字段基础上补文案、营养、制作步骤、图片与系列信息。 */
+const RECIPE_DETAIL_SELECT = {
+  ...RECIPE_SEARCH_SELECT,
+  createdAt: true,
+  description: true,
+  coverImageUrl: true,
+  detailImages: true,
+  videoUrl: true,
+  energyDensityKcalPerKg: true,
+  nutritionStandard: true,
+  nutritionDetailedData: true,
+  productionStepsJson: true,
+  designSource: true,
+  seriesId: true,
+  seriesLifeStage: true,
+} as const;
+
+/**
+ * 营养档案展示名需要的字段在 service/Prisma 的 include 里不一定有类型声明，
+ * 这里统一补成 `NutritionFoodDisplayNameRecord` 的形状（缺 dataSource 用 UNKNOWN）。
+ */
+const toNutritionFoodDisplayRecord = (food: {
+  name: string;
+  nameEn?: string | null;
+  displayNameZh?: string | null;
+  dataSource?: string | null;
+}): {
+  name: string;
+  nameEn: string | null;
+  displayNameZh: string | null;
+  dataSource: string;
+} => ({
+  name: food.name,
+  nameEn: food.nameEn ?? null,
+  displayNameZh: food.displayNameZh ?? null,
+  dataSource: food.dataSource ?? 'UNKNOWN',
+});
+
+/** 一条已发布明细 → AgentRecipeItemRead（当前草稿与目录共用同一分类口径）。 */
+const toPublishedRecipeItemRead = (
+  item: PublishedRecipeItemRow,
+): AgentRecipeItemRead => {
+  const ingredient = item.ingredient ?? null;
+  const nutritionFood = item.nutritionFood ?? null;
+  const name =
+    ingredient?.name ??
+    nutritionFood?.displayNameZh ??
+    nutritionFood?.name ??
+    '';
+  const ingredientType: 'FOOD' | 'SUPPLEMENT' =
+    ingredient?.type === 'SUPPLEMENT' ? 'SUPPLEMENT' : 'FOOD';
+
+  return {
+    ingredientId: item.ingredientId ?? null,
+    nutritionFoodId: item.nutritionFoodId ?? null,
+    name,
+    nutritionProfileName: nutritionFood
+      ? resolveNutritionProfileDisplayName(
+          ingredient?.name,
+          toNutritionFoodDisplayRecord(nutritionFood),
+        )
+      : name,
+    ingredientType,
+    weightG: toFiniteNumber(item.exampleWeight) ?? 0,
+    preparationMethod: item.preparationMethod ?? null,
+    preparationNote: item.preparationNote ?? null,
+    category: classifyFoodCategory({
+      name,
+      cfctClass: readCfctClass(ingredient?.properties),
+      nutritionCategory: nutritionFood?.category ?? null,
+      ingredientType,
+    }),
+  };
+};
+
+/** 草稿明细 → 同一只读形状；不再额外查库。 */
+const toDraftRecipeItemRead = (item: AgentDraftItem): AgentRecipeItemRead => ({
+  ingredientId: item.ingredientId,
+  nutritionFoodId: item.nutritionFoodId,
+  name: item.name,
+  nutritionProfileName: item.nutritionProfileName ?? item.name,
+  ingredientType:
+    item.ingredientType ??
+    (item.category === 'SUPPLEMENT' ? 'SUPPLEMENT' : 'FOOD'),
+  weightG: item.weightG,
+  preparationMethod: item.preparationMethod,
+  preparationNote: item.preparationNote,
+  category: item.category,
+});
+
+const findMainProteinFromReadItems = (
+  items: readonly AgentRecipeItemRead[],
+): string | null =>
+  findMainProteinName(
+    items.map((item) => ({
+      identity: { name: item.name, category: item.category },
+      exampleWeight: item.weightG,
+    })),
+  );
+
+interface RecipeFilterInput {
+  search?: string;
+  ingredientName?: string;
+  lifeStage?: string;
+}
+
+/**
+ * 搜索/筛选口径（对已发布和当前草稿完全相同）：
+ * - search：菜名、原料名、营养档案名任一包含即命中；
+ * - ingredientName：原料名或营养档案名包含；
+ * - lifeStage：applicableLifeStages 精确匹配（大小写不敏感）。
+ */
+const matchesRecipeFilters = (
+  input: RecipeFilterInput,
+  recipe: {
+    name: string;
+    ingredientNames: string[];
+    nutritionProfileNames: string[];
+    applicableLifeStages: string[];
+  },
+): boolean => {
+  const search = normalizeCatalogName(input.search ?? '');
+  if (search) {
+    const haystack = [
+      recipe.name,
+      ...recipe.ingredientNames,
+      ...recipe.nutritionProfileNames,
+    ]
+      .map((value) => normalizeCatalogName(value))
+      .join(' ');
+    if (!haystack.includes(search)) return false;
+  }
+
+  const ingredientName = normalizeCatalogName(input.ingredientName ?? '');
+  if (ingredientName) {
+    const matched = [...recipe.ingredientNames, ...recipe.nutritionProfileNames]
+      .map((value) => normalizeCatalogName(value))
+      .some((value) => value.includes(ingredientName));
+    if (!matched) return false;
+  }
+
+  const lifeStage = normalizeCatalogName(input.lifeStage ?? '');
+  if (lifeStage) {
+    const matched = recipe.applicableLifeStages
+      .map((value) => normalizeCatalogName(value))
+      .some((value) => value === lifeStage);
+    if (!matched) return false;
+  }
+
+  return true;
+};
+
 /** Agent 草稿端口的真实实现；一个实例只服务一份草稿、一个调用者。 */
 export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
   constructor(
@@ -934,6 +1234,12 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
         ingredientId: item.ingredientId ?? null,
         nutritionFoodId: item.nutritionFoodId,
         name,
+        nutritionProfileName: resolveNutritionProfileDisplayName(
+          name,
+          toNutritionFoodDisplayRecord(nutritionFood),
+        ),
+        ingredientType:
+          ingredient?.type === 'SUPPLEMENT' ? 'SUPPLEMENT' : 'FOOD',
         cfctClass,
         nutritionCategory,
         category: classifyFoodCategory({
@@ -1013,6 +1319,17 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
       },
       productionSteps: toAgentProductionSteps(productionSteps?.productionSteps),
       lastAssessment: buildLastAssessment(draft),
+      status: draft.status ?? 'DRAFT',
+      applicableLifeStages: readStringArray(draft.applicableLifeStages),
+      coverImageUrl: draft.coverImageUrl ?? null,
+      detailImages: readStringArray(draft.detailImages),
+      videoUrl: draft.videoUrl ?? null,
+      energyDensityKcalPerKg: toFiniteNumber(draft.energyDensityKcalPerKg),
+      nutritionStandard: draft.nutritionStandard ?? null,
+      nutritionDetailedData: draft.nutritionReportJson ?? null,
+      seriesLifeStage: draft.seriesLifeStage ?? null,
+      createdAt: draft.createdAt ?? null,
+      updatedAt: draft.updatedAt ?? null,
       nutritionSummary: unknownSupplementUnit
         ? { fatWetPercent: null, moisturePercent: null }
         : buildNutritionSummary(
@@ -1547,6 +1864,244 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
       totalPublishedRecipes: catalogRecipes.length,
       mainProteinCount,
       recipes,
+    };
+  }
+
+  // ---- Phase 2 只读食谱目录：已发布 PUBLIC + 当前草稿 ----
+
+  /**
+   * 只读搜索已发布目录 + 当前草稿。
+   *
+   * 目录在数据库侧先按 `status=PUBLIC && isCustomRecipe=false` 过滤，再在内存里
+   * 按 `recipeId` 去重取最高版本（PUBLIC 会保留旧版本）；当前草稿由
+   * `getDraft(this.draftId)` 提供，绝不读其他草稿。结果统一分页。
+   */
+  async searchRecipes(input: {
+    search?: string;
+    ingredientName?: string;
+    lifeStage?: string;
+    page: number;
+    limit: number;
+  }): Promise<AgentRecipeSearchPage> {
+    const page = resolveRecipePage(input.page);
+    const pageSize = resolveRecipePageSize(input.limit);
+    const filters: RecipeFilterInput = {};
+    const search = input.search?.trim();
+    const ingredientName = input.ingredientName?.trim();
+    const lifeStage = input.lifeStage?.trim();
+    if (search) filters.search = search;
+    if (ingredientName) filters.ingredientName = ingredientName;
+    if (lifeStage) filters.lifeStage = lifeStage;
+
+    const [rows, draft] = await Promise.all([
+      this.prisma.recipe.findMany({
+        where: { status: 'PUBLIC', isCustomRecipe: false },
+        // Postgres 侧先按 recipeId 去重（ORDER BY recipe_id, version DESC），
+        // 只把每道菜的最新版本取回来；下面的 Map 再做一次兜底去重。
+        distinct: ['recipeId'],
+        orderBy: [{ recipeId: 'asc' }, { version: 'desc' }],
+        select: RECIPE_SEARCH_SELECT,
+      }),
+      this.getDraft(this.draftId),
+    ]);
+
+    // 同一道菜可能有多个 PUBLIC 版本；每个 recipeId 只保留最高版本。
+    // 即使查询层漏了过滤（测试替身/未来换端口），这里也按状态再拦一次。
+    const latestByRecipeId = new Map<string, PublishedRecipeSummaryRow>();
+    for (const row of rows as unknown as PublishedRecipeSummaryRow[]) {
+      if (row.status !== 'PUBLIC' || row.isCustomRecipe) continue;
+      const latest = latestByRecipeId.get(row.recipeId);
+      if (!latest || row.version > latest.version) {
+        latestByRecipeId.set(row.recipeId, row);
+      }
+    }
+
+    const summaries: AgentRecipeSummary[] = [];
+    for (const row of latestByRecipeId.values()) {
+      const items = row.items.map(toPublishedRecipeItemRead);
+      const summary = this.toPublishedRecipeSummary(row, items);
+      if (
+        matchesRecipeFilters(filters, {
+          name: summary.name,
+          ingredientNames: summary.ingredientNames,
+          nutritionProfileNames: items.map((item) => item.nutritionProfileName),
+          applicableLifeStages: summary.applicableLifeStages,
+        })
+      ) {
+        summaries.push(summary);
+      }
+    }
+
+    const draftItems = draft.items.map(toDraftRecipeItemRead);
+    const draftSummary = this.toDraftRecipeSummary(draft, draftItems);
+    if (
+      matchesRecipeFilters(filters, {
+        name: draftSummary.name,
+        ingredientNames: draftSummary.ingredientNames,
+        nutritionProfileNames: draftItems.map(
+          (item) => item.nutritionProfileName,
+        ),
+        applicableLifeStages: draftSummary.applicableLifeStages,
+      })
+    ) {
+      summaries.push(draftSummary);
+    }
+
+    // 最近更新的排前面；同时间按名字稳定排序，保证分页结果可重复。
+    summaries.sort(
+      (left, right) =>
+        right.updatedAt.getTime() - left.updatedAt.getTime() ||
+        left.name.localeCompare(right.name),
+    );
+
+    const total = summaries.length;
+    const start = (page - 1) * pageSize;
+    const data = summaries.slice(start, start + pageSize);
+    return {
+      data,
+      page,
+      pageSize,
+      total,
+      hasMore: start + data.length < total,
+    };
+  }
+
+  /**
+   * 只读一道食谱的完整详情。
+   *
+   * - `draftId` 优先：只认当前绑定的草稿，其他 draftId 直接返回 null；
+   * - `recipeId`：先按 `Recipe.id` 解析出逻辑 recipeId，再取最高 PUBLIC 版本；
+   * - 找不到 / 非 PUBLIC / 定制食谱一律 null，由工具层转 `RECIPE_NOT_FOUND`。
+   */
+  async getRecipeDetail(input: {
+    recipeId?: string;
+    draftId?: string;
+  }): Promise<AgentRecipeDetail | null> {
+    const recipeId = input.recipeId?.trim() ?? '';
+    const draftId = input.draftId?.trim() ?? '';
+    if (!recipeId && !draftId) {
+      throw new RecipeAgentPortError(
+        'INVALID_ARGUMENT',
+        'recipeId 或 draftId 至少提供一个。',
+      );
+    }
+
+    if (draftId) {
+      // 只允许当前这一份；不调用 service，避免碰其他设计师的草稿。
+      if (draftId !== this.draftId) return null;
+      return this.toDraftRecipeDetail(await this.getDraft(this.draftId));
+    }
+
+    const byId = await this.prisma.recipe.findFirst({
+      where: { id: recipeId, status: 'PUBLIC', isCustomRecipe: false },
+      select: { recipeId: true },
+    });
+    const logicalRecipeId = byId?.recipeId ?? recipeId;
+    const row = (await this.prisma.recipe.findFirst({
+      where: {
+        recipeId: logicalRecipeId,
+        status: 'PUBLIC',
+        isCustomRecipe: false,
+      },
+      orderBy: { version: 'desc' },
+      select: RECIPE_DETAIL_SELECT,
+    })) as unknown as PublishedRecipeDetailRow | null;
+
+    if (!row || row.status !== 'PUBLIC' || row.isCustomRecipe) return null;
+    const items = row.items.map(toPublishedRecipeItemRead);
+    return this.toPublishedRecipeDetail(row, items);
+  }
+
+  private toPublishedRecipeSummary(
+    row: PublishedRecipeSummaryRow,
+    items: AgentRecipeItemRead[],
+  ): AgentRecipeSummary {
+    return {
+      source: 'PUBLISHED',
+      id: row.id,
+      recipeId: row.recipeId,
+      version: row.version,
+      name: row.name,
+      status: row.status,
+      applicableLifeStages: readStringArray(row.applicableLifeStages),
+      coverTitle: row.coverTitle ?? null,
+      sellingPoint: row.sellingPoint ?? null,
+      targetHealthTags: readHealthTagNames(
+        row.healthTagAssignments,
+        row.targetHealthTags,
+      ),
+      ingredientNames: uniqueValues(
+        items.map((item) => item.name).filter((name) => name.length > 0),
+      ),
+      mainProteinName: findMainProteinFromReadItems(items),
+      updatedAt: row.updatedAt,
+    };
+  }
+
+  private toPublishedRecipeDetail(
+    row: PublishedRecipeDetailRow,
+    items: AgentRecipeItemRead[],
+  ): AgentRecipeDetail {
+    return {
+      ...this.toPublishedRecipeSummary(row, items),
+      description: row.description ?? null,
+      coverImageUrl: row.coverImageUrl ?? null,
+      detailImages: readStringArray(row.detailImages),
+      videoUrl: row.videoUrl ?? null,
+      energyDensityKcalPerKg: toFiniteNumber(row.energyDensityKcalPerKg),
+      nutritionStandard: row.nutritionStandard ?? null,
+      nutritionDetailedData: row.nutritionDetailedData ?? null,
+      productionSteps: toAgentProductionSteps(
+        readProductionSteps(row.productionStepsJson),
+      ),
+      items,
+      seriesId: row.seriesId ?? null,
+      seriesLifeStage: row.seriesLifeStage ?? null,
+      designSource: row.designSource ?? null,
+      createdAt: row.createdAt,
+    };
+  }
+
+  private toDraftRecipeSummary(
+    draft: AgentDraftSnapshot,
+    items: AgentRecipeItemRead[],
+  ): AgentRecipeSummary {
+    return {
+      source: 'CURRENT_DRAFT',
+      id: draft.draftId,
+      recipeId: null,
+      version: null,
+      name: draft.name,
+      status: draft.status ?? 'DRAFT',
+      applicableLifeStages: draft.applicableLifeStages ?? [],
+      coverTitle: draft.copy.coverTitle,
+      sellingPoint: draft.copy.sellingPoint,
+      targetHealthTags: readStringArray(draft.copy.targetHealthTags),
+      ingredientNames: uniqueValues(
+        items.map((item) => item.name).filter((name) => name.length > 0),
+      ),
+      mainProteinName: findMainProteinFromReadItems(items),
+      updatedAt: draft.updatedAt ?? draft.createdAt ?? new Date(0),
+    };
+  }
+
+  private toDraftRecipeDetail(draft: AgentDraftSnapshot): AgentRecipeDetail {
+    const items = draft.items.map(toDraftRecipeItemRead);
+    return {
+      ...this.toDraftRecipeSummary(draft, items),
+      description: draft.copy.description,
+      coverImageUrl: draft.coverImageUrl ?? null,
+      detailImages: draft.detailImages ?? [],
+      videoUrl: draft.videoUrl ?? null,
+      energyDensityKcalPerKg: draft.energyDensityKcalPerKg ?? null,
+      nutritionStandard: draft.nutritionStandard ?? null,
+      nutritionDetailedData: draft.nutritionDetailedData ?? null,
+      productionSteps: draft.productionSteps,
+      items,
+      seriesId: draft.seriesId,
+      seriesLifeStage: draft.seriesLifeStage ?? null,
+      designSource: null,
+      createdAt: draft.createdAt ?? new Date(0),
     };
   }
 

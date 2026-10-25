@@ -28,16 +28,18 @@ function createFakeControlPort(
 }
 
 describe('tool registry', () => {
-  it('20 个工具，名字唯一', () => {
+  it('22 个工具，名字唯一', () => {
     const names = AGENT_TOOL_DEFINITIONS.map((t) => t.name);
-    expect(names).toHaveLength(20);
-    expect(new Set(names).size).toBe(20);
+    expect(names).toHaveLength(22);
+    expect(new Set(names).size).toBe(22);
     expect(names).toEqual(
       expect.arrayContaining([
         'get_draft',
         'search_ingredients',
         'get_ingredient',
         'get_catalog_usage',
+        'search_recipes',
+        'get_recipe',
         'web_search',
         'web_fetch',
         'add_ingredient',
@@ -195,6 +197,91 @@ describe('tool registry', () => {
     expect(category?.enum).toEqual(
       expect.arrayContaining(['PROTEIN', 'ORGAN', 'AQUATIC']),
     );
+  });
+
+  it('search_recipes 的 schema 支持筛选和分页，且不要求任何条件', () => {
+    const definition = AGENT_TOOL_DEFINITIONS.find(
+      (tool) => tool.name === 'search_recipes',
+    );
+    expect(definition).toBeDefined();
+    const parameters = definition?.parameters as {
+      properties?: Record<string, Record<string, unknown>>;
+      required?: string[];
+      additionalProperties?: boolean;
+    };
+    expect(Object.keys(parameters.properties ?? {})).toEqual([
+      'search',
+      'ingredientName',
+      'lifeStage',
+      'page',
+      'limit',
+    ]);
+    expect(parameters.properties?.search).toMatchObject({ type: 'string' });
+    expect(parameters.properties?.ingredientName).toMatchObject({
+      type: 'string',
+    });
+    expect(parameters.properties?.lifeStage).toMatchObject({ type: 'string' });
+    expect(parameters.properties?.page).toMatchObject({
+      type: 'integer',
+      minimum: 1,
+    });
+    expect(parameters.properties?.limit).toMatchObject({
+      type: 'integer',
+      minimum: 1,
+      maximum: 50,
+    });
+    expect(parameters.required).toEqual([]);
+    expect(parameters.additionalProperties).toBe(false);
+    expect(definition?.description).toContain('已发布食谱');
+    expect(definition?.description).toContain('当前草稿');
+    expect(definition?.description).toContain('客户');
+  });
+
+  it('get_recipe 的 schema 允许 recipeId 或 draftId 任选一个', () => {
+    const definition = AGENT_TOOL_DEFINITIONS.find(
+      (tool) => tool.name === 'get_recipe',
+    );
+    expect(definition).toBeDefined();
+    const parameters = definition?.parameters as {
+      properties?: Record<string, Record<string, unknown>>;
+      anyOf?: unknown[];
+      required?: string[];
+      additionalProperties?: boolean;
+    };
+    expect(Object.keys(parameters.properties ?? {})).toEqual([
+      'recipeId',
+      'draftId',
+    ]);
+    expect(parameters.anyOf).toEqual([
+      { required: ['recipeId'] },
+      { required: ['draftId'] },
+    ]);
+    expect(parameters.required).toEqual([]);
+    expect(parameters.additionalProperties).toBe(false);
+    expect(definition?.description).toContain('只读');
+    expect(definition?.description).toContain('当前草稿');
+  });
+
+  it('search_recipes / get_recipe handler 已接进注册表', async () => {
+    const port = createFakeRecipeAgentPort();
+    const handlers = createAgentToolHandlers({
+      port,
+      controlPort: createFakeControlPort(),
+      tagPolicy,
+      draftId: 'draft-1',
+    });
+
+    const search = await handlers.search_recipes({ page: 1, limit: 5 });
+    expect(search.ok).toBe(true);
+    expect(port.searchRecipes).toHaveBeenCalledWith({ page: 1, limit: 5 });
+
+    const detail = await handlers.get_recipe({ recipeId: 'missing' });
+    expect(detail.ok).toBe(false);
+    if (detail.ok) return;
+    expect(detail.error.code).toBe('RECIPE_NOT_FOUND');
+    expect(port.getRecipeDetail).toHaveBeenCalledWith({
+      recipeId: 'missing',
+    });
   });
 
   it('request_exception 描述说明缺类不再需要申请', () => {

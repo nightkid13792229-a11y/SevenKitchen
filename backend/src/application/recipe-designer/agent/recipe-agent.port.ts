@@ -18,6 +18,8 @@ import type {
   AgentIngredientCandidate,
   AgentIngredientDetail,
   AgentProductionStep,
+  AgentRecipeDetail,
+  AgentRecipeSearchPage,
 } from './agent-types';
 
 export interface RecipeAgentDraftPort {
@@ -49,6 +51,32 @@ export interface RecipeAgentDraftPort {
     mainProteinName?: string;
     ingredientNames?: string[];
   }): Promise<AgentCatalogUsage>;
+
+  /**
+   * 只读搜索已发布目录 + 当前草稿（Phase 2）。
+   *
+   * - 已发布只读 `status=PUBLIC` 且非定制；同一 recipeId 只返回最高版本；
+   * - 当前草稿只返回绑定的这一份，其他设计师的草稿绝不出现；
+   * - 结果分页，绝不整表返回给模型。
+   */
+  searchRecipes(input: {
+    search?: string;
+    ingredientName?: string;
+    lifeStage?: string;
+    page: number;
+    limit: number;
+  }): Promise<AgentRecipeSearchPage>;
+
+  /**
+   * 只读一道食谱的完整详情（Phase 2）。
+   *
+   * `recipeId` 可以是 `Recipe.id` 或逻辑 `recipeId`，只查 PUBLIC 且非定制；
+   * `draftId` 只允许当前绑定的那一份草稿。找不到 / 无权读 / 非 PUBLIC 返回 null。
+   */
+  getRecipeDetail(input: {
+    recipeId?: string;
+    draftId?: string;
+  }): Promise<AgentRecipeDetail | null>;
 
   /** 往当前草稿追加一条真实原料；成功后内容版本 +1。 */
   addItem(

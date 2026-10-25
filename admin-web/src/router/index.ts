@@ -414,6 +414,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "售后待办" },
       },
       {
+        path: "custom-recipes/refunds",
+        name: "CustomRecipeRefundRequests",
+        component: () => import("@/views/CustomRecipes/RefundRequests.vue"),
+        meta: { title: "退款申请" },
+      },
+      {
         path: "custom-recipes/config",
         name: "CustomRecipeConfig",
         component: () => import("@/views/CustomRecipes/Config.vue"),

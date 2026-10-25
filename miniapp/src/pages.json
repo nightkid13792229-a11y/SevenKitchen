@@ -286,6 +286,13 @@
         "navigationBarTitleText": "食谱调整"
       }
     },
+
+    {
+      "path": "pages/custom-recipe/refund",
+      "style": {
+        "navigationBarTitleText": "退款"
+      }
+    },
     {
       "path": "pages/custom-recipe/delivery",
       "style": {

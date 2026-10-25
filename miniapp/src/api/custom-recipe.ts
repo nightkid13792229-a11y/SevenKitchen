@@ -66,6 +66,25 @@ export interface RenderableOrderView {
 }
 
 /** 定制订单详情（只列页面用得到的字段） */
+/** 已交付/制作中订单的退款申请（2026-10-25） */
+export interface CustomRecipeRefundRequestView {
+  id: string;
+  orderId: string;
+  status: 'PENDING' | 'PROCESSING' | 'REFUNDED' | 'REJECTED' | 'FAILED' | string;
+  statusLabel: string;
+  reasonCode: string;
+  reasonLabel: string;
+  description: string;
+  photos: string[];
+  amount: number;
+  adminNote: string | null;
+  refundStatus: string | null;
+  refundOutNo: string | null;
+  refundId: string | null;
+  createdAt: string;
+  reviewedAt: string | null;
+}
+
 export interface CustomRecipeOrderDetail {
   orderId: string;
   dogId?: string;
@@ -95,6 +114,8 @@ export interface CustomRecipeOrderDetail {
   createdAt?: string | null;
   paymentConfirmedAt?: string | null;
   deliveredAt?: string | null;
+  /** 最新一条退款申请（2026-10-25）；没有为 null */
+  refundRequest?: CustomRecipeRefundRequestView | null;
   /** 交付摘要（批次 2.4）；未交付时为 null */
   delivery?: DeliverySummary | null;
   /**
@@ -393,7 +414,10 @@ export async function fetchCustomRecipeQuote(
  * 直到他自己去翻订单才发现 —— 那可能是几天后了。
  * （我第一版就漏了它，是从页面里搬代码时丢的。）
  */
-export async function cancelOrder(orderId: string): Promise<{
+export async function cancelOrder(
+  orderId: string,
+  reason?: string,
+): Promise<{
   ok: boolean;
   message?: string;
   refundStatus?: string | null;
@@ -403,6 +427,7 @@ export async function cancelOrder(orderId: string): Promise<{
   const res: any = await request({
     url: `/custom-recipe/orders/${encodeURIComponent(orderId)}/cancel`,
     method: 'POST',
+    data: reason ? { reason } : {},
   });
   if (res?.code === 0) {
     return {
@@ -413,6 +438,51 @@ export async function cancelOrder(orderId: string): Promise<{
     };
   }
   return { ok: false, message: res?.message };
+}
+
+
+/**
+ * 已交付/制作中订单：提交退款申请（2026-10-25）。
+ */
+export async function createCustomRecipeRefundRequest(
+  orderId: string,
+  input: {
+    reasonCode: string;
+    reasonLabel: string;
+    description: string;
+    photos?: string[];
+  },
+): Promise<CustomRecipeRefundRequestView> {
+  const res: any = await request({
+    url: `/custom-recipe/orders/${encodeURIComponent(orderId)}/refund-request`,
+    method: 'POST',
+    data: {
+      reasonCode: input.reasonCode,
+      reasonLabel: input.reasonLabel,
+      description: input.description,
+      photos: input.photos ?? [],
+    },
+  });
+  if (res?.code !== 0 || !res?.data?.id) {
+    throw new Error(res?.message || '退款申请提交失败，请重试');
+  }
+  return res.data as CustomRecipeRefundRequestView;
+}
+
+/** 顾客查看最新一条退款申请。 */
+export async function fetchCustomRecipeRefundRequest(
+  orderId: string,
+): Promise<CustomRecipeRefundRequestView | null> {
+  const res: any = await request({
+    url: `/custom-recipe/orders/${encodeURIComponent(orderId)}/refund-request`,
+    method: 'GET',
+    quiet: true,
+    suppressErrorToast: true,
+  } as any);
+  if (res?.code === 0) {
+    return (res.data?.request ?? null) as CustomRecipeRefundRequestView | null;
+  }
+  return null;
 }
 
 /**

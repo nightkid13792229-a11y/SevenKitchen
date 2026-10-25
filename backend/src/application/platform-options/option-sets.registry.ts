@@ -87,6 +87,12 @@ export const CUSTOM_RECIPE_STATUS_SET = 'custom_recipe_status';
  */
 export const CUSTOM_RECIPE_AFTERSALE_TYPE_SET = 'custom_recipe_aftersale_type';
 
+/**
+ * 定制退款原因（2026-10-25）。
+ * 顾客在退款页选择；后台可以改说法/加一项，不用发版。
+ */
+export const CUSTOM_RECIPE_REFUND_REASON_SET = 'custom_recipe_refund_reason';
+
 export const OPTION_SET_DEFINITIONS: readonly OptionSetDefinition[] = [
   {
     code: CUSTOM_RECIPE_STATUS_SET,
@@ -238,6 +244,25 @@ export const OPTION_SET_DEFINITIONS: readonly OptionSetDefinition[] = [
         icon: '📝',
         sortOrder: 30,
       },
+    ],
+  },
+
+  {
+    code: 'custom_recipe_refund_reason',
+    name: '定制退款原因',
+    description: '顾客申请退款时可选的原因；后台可调整文案',
+    sourceType: 'DATA',
+    seed: [
+      {
+        code: 'NOT_EXPECTED',
+        label: '与预期不符',
+        tone: 'warning',
+        sortOrder: 10,
+        isDefault: true,
+      },
+      { code: 'TASTE', label: '口味不合适', tone: 'info', sortOrder: 20 },
+      { code: 'DOG_UNWELL', label: '狗狗不适应', tone: 'warning', sortOrder: 30 },
+      { code: 'OTHER', label: '其他', tone: 'info', sortOrder: 40 },
     ],
   },
 

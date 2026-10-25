@@ -19,12 +19,14 @@ import {
   UseInterceptors,
   UploadedFile,
   ServiceUnavailableException,
+  Optional,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CustomRecipeService } from '../../../application/custom-recipe/custom-recipe.service';
 import { CustomRecipeDeliveryService } from '../../../application/custom-recipe/custom-recipe-delivery.service';
 import { CustomRecipeAftersaleService } from '../../../application/custom-recipe/custom-recipe-aftersale.service';
+import { CustomRecipeRefundService } from '../../../application/custom-recipe/custom-recipe-refund.service';
 import { CustomRecipeViewService } from '../../../application/custom-recipe/custom-recipe-view.service';
 import { MiniProgramCodeService } from '../../../application/wechat/mini-program-code.service';
 import { CustomRecipeConfigService } from '../../../application/custom-recipe/custom-recipe-config.service';
@@ -62,6 +64,9 @@ export class CustomRecipeController {
     /** 多份购买（2026-10-20）：报价必须由服务端权威计算 */
     private readonly customRecipeConfigService: CustomRecipeConfigService,
     private readonly customRecipePricingService: CustomRecipePricingService,
+    /** 已交付/制作中的退款申请（2026-10-25） */
+    @Optional()
+    private readonly refundService?: CustomRecipeRefundService,
   ) {}
 
   /**
@@ -341,6 +346,57 @@ export class CustomRecipeController {
     });
   }
 
+  /**
+   * 已交付/制作中订单：提交退款申请（2026-10-25）。
+   *
+   * 未开始制作不走这里 —— 那种情况在退款页直接取消并全额原路退回。
+   */
+  @Post('orders/:orderId/refund-request')
+  @ApiOperation({ summary: 'Submit a refund request for a started/delivered order' })
+  async createRefundRequest(
+    @Req() req: any,
+    @Param('orderId') orderId: string,
+    @Body()
+    body: {
+      reasonCode?: string;
+      reasonLabel?: string;
+      description?: string;
+      photos?: string[];
+    },
+  ) {
+    if (!this.refundService) {
+      throw new ServiceUnavailableException('退款服务暂不可用');
+    }
+    const result = await this.refundService.createForCustomer(
+      orderId,
+      req.user.userId,
+      {
+        reasonCode: String(body?.reasonCode || ''),
+        reasonLabel: String(body?.reasonLabel || ''),
+        description: String(body?.description || ''),
+        photos: Array.isArray(body?.photos) ? body.photos : [],
+      },
+    );
+    return ApiResponseDto.success({ ...result.request, reused: result.reused });
+  }
+
+  /** 顾客查看最新一条退款申请。 */
+  @Get('orders/:orderId/refund-request')
+  @ApiOperation({ summary: 'Get my latest refund request' })
+  async getRefundRequest(
+    @Req() req: any,
+    @Param('orderId') orderId: string,
+  ) {
+    if (!this.refundService) {
+      throw new ServiceUnavailableException('退款服务暂不可用');
+    }
+    const request = await this.refundService.getForCustomer(
+      orderId,
+      req.user.userId,
+    );
+    return ApiResponseDto.success({ request });
+  }
+
   @Get('orders/:orderId')
   @ApiOperation({ summary: 'Get order detail' })
   async getOrderDetail(@Req() req: any, @Param('orderId') orderId: string) {
@@ -522,6 +578,14 @@ export class CustomRecipeController {
        * 老小程序忽略 `renderable` 照常工作，所以两端不必同批上线。
        * 真正切到三件套、删掉旧字段是在批次 2。
        */
+      /**
+       * 最新一条退款申请（2026-10-25）。
+       * 没有申请时为 null；老小程序忽略这个追加字段。
+       */
+      refundRequest: this.refundService
+        ? await this.refundService.getLatestForOrderPk(order.id)
+        : null,
+
       renderable: await this.viewService.buildCustomerView({
         status: order.status,
         createdAt: order.createdAt,

@@ -376,7 +376,7 @@
           前端在判断业务。老后端不返回 renderable 时回退到原来的判断。
         -->
         <button
-          v-if="cancelAction?.enabled"
+          v-if="order.status === 'PENDING_PAYMENT' && cancelAction?.enabled"
           class="btn secondary"
           :loading="cancelling"
           :disabled="cancelling || paying || !cancelAction.enabled"
@@ -384,14 +384,12 @@
         >
           {{ cancelAction.label }}
         </button>
-        <!-- 退款是另一件事：入口在底栏，售后（调整食谱）留在食谱卡片上 -->
+        <!-- 退款统一入口（2026-10-25）：未开始制作走全额退款页；制作中/已交付走申请审核 -->
         <button
-          v-if="canRequestRefund"
+          v-if="showRefundEntry"
           class="btn secondary"
-          @tap="viewRefund"
-        >
-          退款申请
-        </button>
+          @tap="goRefund"
+        >{{ refundEntryLabel }}</button>
         <CustomerServiceInlineButton
           class="order-service"
           compact
@@ -891,17 +889,34 @@ const copyOrderId = () => {
 };
 
 /** 退款入口：只在不能自助取消（已进入制作/已交付）时出现 */
-const canRequestRefund = computed(() => {
-  const status = String(order.value.status || '');
-  return (
-    !cancelAction.value?.enabled &&
-    ['PAID', 'IN_PROGRESS', 'DELIVERED', 'COMPLETED'].includes(status)
-  );
+/**
+ * 退款统一入口（2026-10-25）。
+ *
+ * PAID（未开始制作）→ 全额退款；制作中/已交付/已完成 → 人工审核申请。
+ * 已存在退款申请时入口变成「退款进度」，不再让顾客重复提交。
+ */
+const showRefundEntry = computed(() =>
+  ['PAID', 'IN_PROGRESS', 'DELIVERED', 'COMPLETED'].includes(
+    String(order.value.status || ''),
+  ),
+);
+const refundRequest = computed(() => order.value.refundRequest ?? null);
+const refundEntryLabel = computed(() => {
+  if (order.value.status === 'PAID') return '退款';
+  const request = refundRequest.value;
+  if (
+    request &&
+    ['PENDING', 'PROCESSING', 'REFUNDED'].includes(String(request.status))
+  ) {
+    return '退款进度';
+  }
+  if (request) return '再次申请退款';
+  return '退款';
 });
 
-const viewRefund = () => {
+const goRefund = () => {
   uni.navigateTo({
-    url: `${buildAftersaleUrl(orderId.value)}&scene=refund`,
+    url: `/pages/custom-recipe/refund?orderId=${encodeURIComponent(orderId.value)}`,
   });
 };
 

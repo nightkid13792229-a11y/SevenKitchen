@@ -121,6 +121,11 @@
           <span>售后待办</span>
         </el-menu-item>
 
+        <el-menu-item index="/custom-recipes/refunds">
+          <el-icon><Money /></el-icon>
+          <span>退款申请</span>
+        </el-menu-item>
+
         <el-menu-item index="/custom-recipes/config">
           <el-icon><Setting /></el-icon>
           <span>食谱定制设置</span>

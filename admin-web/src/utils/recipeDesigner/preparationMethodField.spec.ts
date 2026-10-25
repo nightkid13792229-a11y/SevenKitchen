@@ -26,6 +26,12 @@ describe('预处理输入框 · 显示文字', () => {
     )
   })
 
+  it('历史数据里存的是字典 id 时，用选项列表兜底显示名称', () => {
+    expect(
+      resolvePreparationMethodDisplayText('method-peel', null, options)
+    ).toBe('去皮')
+  })
+
   it('空值显示空串，不显示 null / undefined', () => {
     expect(resolvePreparationMethodDisplayText(null, null)).toBe('')
     expect(resolvePreparationMethodDisplayText(undefined, undefined)).toBe('')

@@ -116,6 +116,9 @@ function prismaMock() {
     recipe: {
       count: jest.fn().mockResolvedValue(0),
     },
+    preparationMethod: {
+      findUnique: jest.fn().mockResolvedValue(null),
+    },
   };
 }
 
@@ -250,6 +253,46 @@ describe('RecipeDesignerAgentAdapter 写方法', () => {
         preparationNote: null,
       };
       expect(result).toEqual(expected);
+    });
+
+    it('模型传预处理字典 ID 时，解析成中文再落库', async () => {
+      const service = serviceMock();
+      const prisma = prismaMock();
+      prisma.preparationMethod.findUnique.mockResolvedValue({ name: '生重' });
+      service.addItem.mockResolvedValue(
+        writtenItem({ preparationMethod: '生重' }),
+      );
+      const adapter = createAdapter(service, prisma);
+
+      await adapter.addItem('draft-1', {
+        nutritionFoodId: 'nf-1',
+        weightG: 120,
+        preparationMethod: '11111111-1111-4111-8111-111111111111',
+      });
+
+      expect(service.addItem).toHaveBeenCalledWith(
+        'draft-1',
+        expect.objectContaining({ preparationMethod: '生重' }),
+        ACCESS,
+      );
+    });
+
+    it('模型传字典 ID 片段时拒绝，不落库成乱码', async () => {
+      const service = serviceMock();
+      const prisma = prismaMock();
+      const adapter = createAdapter(service, prisma);
+
+      await expect(
+        adapter.addItem('draft-1', {
+          nutritionFoodId: 'nf-1',
+          weightG: 120,
+          preparationMethod: '11111111-1111-4111-',
+        }),
+      ).rejects.toMatchObject({
+        name: 'RecipeAgentPortError',
+        code: 'INVALID_ARGUMENT',
+      });
+      expect(service.addItem).not.toHaveBeenCalled();
     });
   });
 
@@ -657,6 +700,50 @@ describe('RecipeDesignerAgentAdapter 写方法', () => {
         },
         ACCESS,
       );
+    });
+
+    it('模型传预处理字典 ID 时，解析成中文再落库', async () => {
+      const service = serviceMock();
+      const prisma = prismaMock();
+      prisma.preparationMethod.findUnique.mockResolvedValue({ name: '熟重' });
+      const adapter = createAdapter(service, prisma);
+
+      await adapter.setPreparation('item-1', {
+        method: '11111111-1111-4111-8111-111111111111',
+      });
+
+      expect(service.updateItem).toHaveBeenCalledWith(
+        'item-1',
+        {
+          preparationMethod: '熟重',
+          preparationSource: 'MANUAL',
+        },
+        ACCESS,
+      );
+    });
+
+    it('字典 ID 查不到或只抄到片段时拒绝，不写裸 ID', async () => {
+      const service = serviceMock();
+      const prisma = prismaMock();
+      const adapter = createAdapter(service, prisma);
+
+      await expect(
+        adapter.setPreparation('item-1', {
+          method: '11111111-1111-4111-8111-111111111111',
+        }),
+      ).rejects.toMatchObject({
+        name: 'RecipeAgentPortError',
+        code: 'INVALID_ARGUMENT',
+      });
+      await expect(
+        adapter.setPreparation('item-1', {
+          method: '11111111-1111-4111-',
+        }),
+      ).rejects.toMatchObject({
+        name: 'RecipeAgentPortError',
+        code: 'INVALID_ARGUMENT',
+      });
+      expect(service.updateItem).not.toHaveBeenCalled();
     });
   });
 

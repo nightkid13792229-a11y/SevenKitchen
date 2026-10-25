@@ -542,6 +542,7 @@ describe('RecipeAgentRunService', () => {
     expect(content).toContain('可读全部食谱');
     expect(content).toContain('未发布设计草稿');
     expect(content).toContain('顾客定制');
+    expect(content).toContain('不要传字典 ID');
     expect(content).toContain('客户/订单/狗狗/主人');
   });
 

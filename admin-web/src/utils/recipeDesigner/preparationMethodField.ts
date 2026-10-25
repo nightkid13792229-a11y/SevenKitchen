@@ -22,9 +22,17 @@ export interface PreparationMethodCommit {
  */
 export function resolvePreparationMethodDisplayText(
   value?: string | null,
-  label?: string | null
+  label?: string | null,
+  options: PreparationMethodOption[] = []
 ): string {
-  return String(label ?? '').trim() || String(value ?? '').trim()
+  const labelText = String(label ?? '').trim()
+  if (labelText) return labelText
+
+  const raw = String(value ?? '').trim()
+  if (!raw) return ''
+
+  // 历史数据里 preparationMethod 可能还是字典 id；前端拿到选项时兜底显示名称。
+  return options.find((option) => option.id === raw)?.name ?? raw
 }
 
 /**

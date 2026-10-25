@@ -17,9 +17,13 @@ function createAdapter(service: any, prisma: any = {}) {
     findMany: jest.fn().mockResolvedValue([]),
     findFirst: jest.fn().mockResolvedValue(null),
   };
+  const preparationMethod = prisma.preparationMethod ?? {
+    findMany: jest.fn().mockResolvedValue([]),
+    findUnique: jest.fn().mockResolvedValue(null),
+  };
   return new RecipeDesignerAgentAdapter(
     service,
-    { ...prisma, designRecipe },
+    { ...prisma, designRecipe, preparationMethod },
     { userId: 'u1', role: 'STAFF' },
     'draft-1',
   );
@@ -32,6 +36,8 @@ function draftItem(input: {
   weightG: number;
   type?: 'FOOD' | 'SUPPLEMENT';
   cfctClass?: string;
+  preparationMethod?: string;
+  preparationMethodLabel?: string | null;
 }) {
   return {
     id: input.id,
@@ -40,7 +46,8 @@ function draftItem(input: {
     weightG: input.weightG,
     includeInAssessment: true,
     ratioPercent: null,
-    preparationMethod: '切块',
+    preparationMethod: input.preparationMethod ?? '切块',
+    preparationMethodLabel: input.preparationMethodLabel ?? null,
     preparationNote: null,
     nutrientTargetKey: null,
     nutrientTargetValue: null,
@@ -125,12 +132,13 @@ function publishedItem(input: {
   nutritionProfileName?: string;
   type?: 'FOOD' | 'SUPPLEMENT';
   cfctClass?: string;
+  preparationMethod?: string;
 }) {
   return {
     ingredientId: `ing-${input.name}`,
     nutritionFoodId: `nf-${input.name}`,
     exampleWeight: input.weightG,
-    preparationMethod: '切块',
+    preparationMethod: input.preparationMethod ?? '切块',
     preparationNote: null,
     sortOrder: 1,
     ingredient: {
@@ -209,12 +217,13 @@ function designItem(input: {
   nutritionProfileName?: string;
   type?: 'FOOD' | 'SUPPLEMENT';
   cfctClass?: string;
+  preparationMethod?: string;
 }) {
   return {
     ingredientId: `ing-${input.name}`,
     nutritionFoodId: `nf-${input.name}`,
     weightG: input.weightG,
-    preparationMethod: '切块',
+    preparationMethod: input.preparationMethod ?? '切块',
     preparationNote: null,
     ingredient: {
       id: `ing-${input.name}`,
@@ -889,6 +898,96 @@ describe('RecipeDesignerAgentAdapter recipe catalog read', () => {
     expect(
       await adapter.getRecipeDetail({ recipeId: 'missing-row' }),
     ).toBeNull();
+  });
+
+  it('详情把预处理字典 ID 解析成中文，不把裸 ID 交给模型', async () => {
+    const row = publishedRow({
+      recipeId: 'logical-prep',
+      name: '预处理解析餐',
+      items: [
+        publishedItem({
+          name: '牛肝',
+          weightG: 13,
+          preparationMethod: '11111111-1111-4111-8111-111111111111',
+        }),
+      ],
+    });
+    const findFirst = jest
+      .fn()
+      .mockResolvedValueOnce({ recipeId: 'logical-prep' })
+      .mockResolvedValueOnce(row);
+    const preparationMethod = {
+      findMany: jest
+        .fn()
+        .mockResolvedValue([{ id: '11111111-1111-4111-8111-111111111111', name: '生重' }]),
+      findUnique: jest.fn(),
+    };
+    const adapter = createAdapter(draftService(), {
+      recipe: { findFirst },
+      preparationMethod,
+    });
+
+    const detail = await adapter.getRecipeDetail({ recipeId: 'prep-row' });
+
+    expect(detail?.items[0]?.preparationMethod).toBe('生重');
+    expect(JSON.stringify(detail)).not.toContain('11111111-1111-4111-8111-111111111111');
+    expect(preparationMethod.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: { in: ['11111111-1111-4111-8111-111111111111'] } } }),
+    );
+  });
+
+  it('其他草稿详情同样把预处理字典 ID 解析成中文', async () => {
+    const row = designDraftRow({
+      id: 'other-draft',
+      name: '草稿预处理餐',
+      items: [
+        designItem({
+          name: '牛肝',
+          weightG: 13,
+          preparationMethod: '11111111-1111-4111-8111-111111111111',
+        }),
+      ],
+    });
+    const designRecipe = {
+      findFirst: jest.fn().mockResolvedValue(row),
+    };
+    const preparationMethod = {
+      findMany: jest
+        .fn()
+        .mockResolvedValue([{ id: '11111111-1111-4111-8111-111111111111', name: '生重' }]),
+      findUnique: jest.fn(),
+    };
+    const adapter = createAdapter(draftService(), {
+      recipe: { findFirst: jest.fn() },
+      designRecipe,
+      preparationMethod,
+    });
+
+    const detail = await adapter.getRecipeDetail({ draftId: 'other-draft' });
+
+    expect(detail?.items[0]?.preparationMethod).toBe('生重');
+    expect(JSON.stringify(detail)).not.toContain('11111111-1111-4111-8111-111111111111');
+  });
+
+  it('get_draft 优先返回预处理中文标签，不返回裸 ID', async () => {
+    const service = draftService({
+      items: [
+        draftItem({
+          id: 'liver',
+          name: '牛肝',
+          nutritionProfileName: '牛肝（生）',
+          weightG: 13,
+          preparationMethod: '11111111-1111-4111-8111-111111111111',
+          preparationMethodLabel: '生重',
+        }),
+      ],
+    });
+    const adapter = createAdapter(service);
+
+    const draft = await adapter.getDraft('draft-1');
+
+    expect(draft.items[0]?.preparationMethod).toBe('生重');
+    expect(JSON.stringify(draft)).not.toContain('11111111-1111-4111-8111-111111111111');
   });
 
   it('PRIVATE_CUSTOM / 定制食谱可以读，并标记为 CUSTOM', async () => {

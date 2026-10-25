@@ -71,7 +71,11 @@ interface PreparationMethodSuggestion {
 }
 
 const text = ref(
-  resolvePreparationMethodDisplayText(props.modelValue, props.label)
+  resolvePreparationMethodDisplayText(
+    props.modelValue,
+    props.label,
+    props.options
+  )
 )
 const committedText = ref(text.value)
 const lastCommittedValue = ref<string | null>(
@@ -84,10 +88,10 @@ const focusText = ref(text.value)
 const typedText = ref(text.value)
 
 watch(
-  () => [props.modelValue, props.label] as const,
-  ([value, label]) => {
+  () => [props.modelValue, props.label, props.options] as const,
+  ([value, label, options]) => {
     if (editing.value) return
-    const nextText = resolvePreparationMethodDisplayText(value, label)
+    const nextText = resolvePreparationMethodDisplayText(value, label, options)
     text.value = nextText
     committedText.value = nextText
     lastCommittedValue.value = value ? String(value) : null

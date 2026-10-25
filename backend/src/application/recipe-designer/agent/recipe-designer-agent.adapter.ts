@@ -33,6 +33,11 @@ import {
 } from '../../../domain/recipe-designer/production-steps';
 import type { PrismaService } from '../../../infrastructure/prisma.service';
 import { nutritionDataToNutritionProfile } from '../../nutrition-standard/nutrient-value-resolver';
+import {
+  extractLegacyPreparationMethodIds,
+  isUuidLike,
+  resolvePreparationMethodText,
+} from '../../recipe/preparation-method-text.util';
 import { resolveNutritionProfileDisplayName } from '../../nutrition-food/nutrition-food-display-name';
 import type { RecipeDesignerService } from '../recipe-designer.service';
 import {
@@ -1383,6 +1388,10 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
       const cfctClass = readCfctClass(ingredient?.properties);
       const nutritionCategory = nutritionFood.category ?? null;
 
+      const preparationMethodLabel = (
+        item as { preparationMethodLabel?: string | null }
+      ).preparationMethodLabel;
+
       return {
         id: item.id,
         ingredientId: item.ingredientId ?? null,
@@ -1405,7 +1414,8 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
         }),
         weightG: item.weightG,
         ratioPercent: null,
-        preparationMethod: item.preparationMethod ?? null,
+        preparationMethod:
+          preparationMethodLabel ?? item.preparationMethod ?? null,
         preparationNote: item.preparationNote ?? null,
       };
     });
@@ -2187,7 +2197,11 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
 
     if (draftId) {
       if (draftId === this.draftId) {
-        return this.toDraftRecipeDetail(await this.getDraft(this.draftId));
+        const detail = this.toDraftRecipeDetail(
+          await this.getDraft(this.draftId),
+        );
+        detail.items = await this.resolveItemPreparationMethods(detail.items);
+        return detail;
       }
       const row = (await this.prisma.designRecipe.findFirst({
         where: {
@@ -2197,7 +2211,9 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
         select: DESIGN_RECIPE_READ_SELECT,
       })) as unknown as DesignRecipeReadRow | null;
       if (!row) return null;
-      const items = row.items.map(toDesignRecipeItemRead);
+      const items = await this.resolveItemPreparationMethods(
+        row.items.map(toDesignRecipeItemRead),
+      );
       return this.toDesignRecipeDetail(row, items);
     }
 
@@ -2213,8 +2229,75 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
     })) as unknown as PublishedRecipeDetailRow | null;
 
     if (!row) return null;
-    const items = row.items.map(toPublishedRecipeItemRead);
+    const items = await this.resolveItemPreparationMethods(
+      row.items.map(toPublishedRecipeItemRead),
+    );
     return this.toPublishedRecipeDetail(row, items);
+  }
+
+  /**
+   * AI 看到的 preparationMethod 必须是中文文案。
+   *
+   * 存量食谱（含已发布版本和其他设计草稿）里可能把预处理存成字典 id；
+   * 如果原样返回，模型会把 id 当文案复制到别的草稿，界面就显示成乱码。
+   * 这里按 id 批量查字典名称，自由文本原样保留。
+   */
+  private async resolveItemPreparationMethods(
+    items: AgentRecipeItemRead[],
+  ): Promise<AgentRecipeItemRead[]> {
+    const ids = extractLegacyPreparationMethodIds(
+      items.map((item) => item.preparationMethod),
+    );
+    if (ids.length === 0) return items;
+
+    const rows = await this.prisma.preparationMethod.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true },
+    });
+    const nameById = new Map(rows.map((row) => [row.id, row.name] as const));
+
+    return items.map((item) => ({
+      ...item,
+      preparationMethod:
+        resolvePreparationMethodText(item.preparationMethod, nameById, {
+          preserveUnresolvedLegacy: false,
+        }) ?? item.preparationMethod,
+    }));
+  }
+
+  /**
+   * 写入口的预处理文案归一化：模型可能从旧食谱抄到字典 id，直接落库会
+   * 变成一段裸 id。能解析的转成中文名称；解析不了 / 只抄到片段则明确拒绝。
+   */
+  private async normalizePreparationMethodInput(
+    value: string | null | undefined,
+  ): Promise<string | null> {
+    const trimmed = value?.trim() ?? '';
+    if (!trimmed) return null;
+
+    if (isUuidLike(trimmed)) {
+      const row = await this.prisma.preparationMethod.findUnique({
+        where: { id: trimmed },
+        select: { name: true },
+      });
+      if (!row) {
+        throw new RecipeAgentPortError(
+          'INVALID_ARGUMENT',
+          '预处理方式不能用字典 ID；请传中文文案。',
+        );
+      }
+      return row.name;
+    }
+
+    // 完整 uuid 已处理；这里拦住模型从截图/摘要里抄到的 uuid 前缀。
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(trimmed)) {
+      throw new RecipeAgentPortError(
+        'INVALID_ARGUMENT',
+        '预处理方式看起来是字典 ID 片段；请传中文文案。',
+      );
+    }
+
+    return trimmed;
   }
 
   private toPublishedRecipeSummary(
@@ -2545,6 +2628,9 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
     );
     const { ingredientId } = writable;
     await this.assertNotDuplicate(draftId, input.nutritionFoodId);
+    const preparationMethod = await this.normalizePreparationMethodInput(
+      input.preparationMethod,
+    );
 
     const item = await this.service.addItem(
       draftId,
@@ -2552,9 +2638,7 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
         nutritionFoodId: input.nutritionFoodId,
         ingredientId,
         weightG: input.weightG,
-        ...(input.preparationMethod
-          ? { preparationMethod: input.preparationMethod }
-          : {}),
+        ...(preparationMethod ? { preparationMethod } : {}),
       },
       this.access,
     );
@@ -2632,12 +2716,20 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
   ): Promise<AgentDraftItem> {
     await this.assertItemInDraft(itemId);
 
+    const method = await this.normalizePreparationMethodInput(input.method);
+    if (!method) {
+      throw new RecipeAgentPortError(
+        'INVALID_ARGUMENT',
+        '预处理方式不能为空；请传中文文案。',
+      );
+    }
+
     const patch: {
       preparationMethod: string;
       preparationNote?: string | null;
       preparationSource: 'MANUAL';
     } = {
-      preparationMethod: input.method,
+      preparationMethod: method,
       preparationSource: 'MANUAL',
     };
     // 只有显式传了 note 才写；省略表示“保留原备注”，不能静默清空。

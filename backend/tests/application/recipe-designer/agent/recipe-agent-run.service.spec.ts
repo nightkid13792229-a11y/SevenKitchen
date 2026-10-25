@@ -15,7 +15,7 @@ import type { DeepSeekToolsResult } from 'src/application/recipe-designer/deepse
  * 运行循环（P0b-3 Task 3）。
  *
  * 这里只验证「一草稿一运行」的编排：会话/消息、模型调用参数、工具执行、
- * 停止条件（ask_user / finish_draft / 200 次 / 6 分钟 / 最终文本）和状态落库。
+ * 停止条件（ask_user / 200 次 / 6 分钟 / 最终文本）和状态落库。
  * 真实草稿读写由 `createRuntime` 负责，测试里整体替换成假 toolkit。
  */
 
@@ -58,16 +58,6 @@ const TOOL_DEFINITIONS = [
   {
     name: 'ask_user',
     description: '停下来向人提问',
-    parameters: {
-      type: 'object',
-      properties: {},
-      required: [],
-      additionalProperties: false,
-    },
-  },
-  {
-    name: 'finish_draft',
-    description: '生成交付确认卡',
     parameters: {
       type: 'object',
       properties: {},
@@ -269,7 +259,6 @@ describe('RecipeAgentRunService', () => {
         handlers: {
           get_draft: getDraft,
           ask_user: jest.fn(),
-          finish_draft: jest.fn(),
         },
         responses: [
           toolCallResponse('get_draft'),
@@ -360,7 +349,7 @@ describe('RecipeAgentRunService', () => {
     expect(messageRoles[1]).toEqual(['system', 'user', 'assistant', 'tool']);
   });
 
-  it('SYSTEM_PROMPT 要求 finish_draft summary 不重复 warnings', async () => {
+  it('SYSTEM_PROMPT 不再要求 finish_draft 交付门禁，check_ready 只是可选自检', async () => {
     const { service, callModel } = makeRunService({
       handlers: {},
       responses: [finalResponse('好的')],
@@ -375,9 +364,12 @@ describe('RecipeAgentRunService', () => {
 
     const systemMessage = callModel.mock.calls[0][0].messages[0];
     expect(systemMessage.role).toBe('system');
-    expect(systemMessage.content).toContain(
-      'finish_draft 的 summary 只写交付内容（原料/重量/达标/文案/步骤），不要重复 warnings 列表；警告由系统单独列出。',
-    );
+    const content = systemMessage.content as string;
+    expect(content).not.toContain('finish_draft');
+    expect(content).toContain('check_ready 是可选的交付前自检');
+    expect(content).toContain('不是停止条件');
+    expect(content).toContain('普通中文总结');
+    expect(content).toContain('没有交付确认卡');
   });
 
   it('SYSTEM_PROMPT 按 11 类检查清单选料，且分类不是门禁', async () => {
@@ -493,7 +485,6 @@ describe('RecipeAgentRunService', () => {
           get_draft: jest.fn(),
           add_ingredient: addIngredient,
           ask_user: jest.fn(),
-          finish_draft: jest.fn(),
         },
         responses: [
           toolCallResponse(
@@ -582,6 +573,77 @@ describe('RecipeAgentRunService', () => {
     expect(messages[1]).toEqual({ role: 'user', content: '开始' });
   });
 
+  it('历史保留全部会话消息：超过 20 条、总长超过 4000 字也完整送进 transcript', async () => {
+    const sessionService = makeSessionService();
+    const longFirstMessage = `第1条：${'甲'.repeat(5000)}尾标记A`;
+    sessionService.listMessages.mockResolvedValue([
+      historyMessage(1, 'USER', longFirstMessage),
+      ...Array.from({ length: 24 }, (_, index) =>
+        historyMessage(
+          index + 2,
+          index % 2 === 0 ? 'ASSISTANT' : 'USER',
+          `第${index + 2}条：${'乙'.repeat(100)}`,
+        ),
+      ),
+    ]);
+    const { service, callModel } = makeRunService({
+      handlers: {},
+      sessionService,
+      responses: [finalResponse('好的')],
+    });
+
+    const { sessionId } = await service.start({
+      draftId: DRAFT_ID,
+      actor: ACTOR,
+      message: '继续',
+    });
+    await service.waitForIdle(sessionId);
+
+    const messages: Array<{ role: string; content?: string | null }> =
+      callModel.mock.calls[0][0].messages;
+    expect(messages).toHaveLength(3);
+    expect(messages[1].role).toBe('system');
+    const historyPrompt = messages[1].content as string;
+    expect(historyPrompt.length).toBeGreaterThan(4000);
+    expect(historyPrompt).toContain('历史对话（最近 25 条）：');
+    // 最旧的一条没有被 20 条上限丢掉；单条也没有被旧的 800 字上限截断。
+    expect(historyPrompt).toContain('第1条：');
+    expect(historyPrompt).toContain('尾标记A');
+    expect(historyPrompt).toContain('第25条：');
+  });
+
+  it('历史超过物理预算时只丢最旧的消息，最新内容保留', async () => {
+    const sessionService = makeSessionService();
+    sessionService.listMessages.mockResolvedValue(
+      Array.from({ length: 6 }, (_, index) =>
+        historyMessage(
+          index + 1,
+          index % 2 === 0 ? 'USER' : 'ASSISTANT',
+          `第${index + 1}条：${'丙'.repeat(20_000)}`,
+        ),
+      ),
+    );
+    const { service, callModel } = makeRunService({
+      handlers: {},
+      sessionService,
+      responses: [finalResponse('好的')],
+    });
+
+    const { sessionId } = await service.start({
+      draftId: DRAFT_ID,
+      actor: ACTOR,
+      message: '继续',
+    });
+    await service.waitForIdle(sessionId);
+
+    const messages: Array<{ role: string; content?: string | null }> =
+      callModel.mock.calls[0][0].messages;
+    const historyPrompt = messages[1].content as string;
+    expect(historyPrompt).toContain('第6条：');
+    expect(historyPrompt).not.toContain('第1条：');
+    expect(historyPrompt).not.toContain('第2条：');
+  });
+
   it('start 在 getDraft 拒绝时不建会话也不写消息', async () => {
     const designerService = {
       getDraft: jest
@@ -654,7 +716,6 @@ describe('RecipeAgentRunService', () => {
       handlers: {
         get_draft: jest.fn(),
         ask_user: askUser,
-        finish_draft: jest.fn(),
       },
       responses: [
         toolCallResponse(
@@ -684,18 +745,15 @@ describe('RecipeAgentRunService', () => {
     );
   });
 
-  it('finish_draft 之后置 COMPLETED 并停在第一次工具调用', async () => {
-    const finishDraft = jest
-      .fn()
-      .mockResolvedValue(okResult({}, '交付确认卡已生成'));
+  it('finish_draft 已下线：模型调用只得到未知工具，运行仍以 WAITING_USER 收尾', async () => {
     const { service, sessionService, callModel } = makeRunService({
       handlers: {
         get_draft: jest.fn(),
         ask_user: jest.fn(),
-        finish_draft: finishDraft,
       },
       responses: [
         toolCallResponse('finish_draft', JSON.stringify({ summary: '已完成' })),
+        finalResponse('已完成总结。'),
       ],
     });
 
@@ -706,9 +764,25 @@ describe('RecipeAgentRunService', () => {
     });
     await service.waitForIdle(sessionId);
 
-    expect(finishDraft).toHaveBeenCalledTimes(1);
-    expect(callModel).toHaveBeenCalledTimes(1);
+    expect(callModel).toHaveBeenCalledTimes(2);
+    const toolMessage = messageCalls(sessionService).find(
+      (message) =>
+        message.role === 'TOOL' && message.toolName === 'finish_draft',
+    );
+    expect(toolMessage).toBeDefined();
+    expect(toolMessage.toolResult).toMatchObject({
+      ok: false,
+      error: {
+        code: 'INVALID_ARGUMENT',
+        message: expect.stringContaining('未知工具'),
+      },
+    });
     expect(sessionService.transitionStatus).toHaveBeenLastCalledWith(
+      SESSION_ID,
+      ['RUNNING'],
+      'WAITING_USER',
+    );
+    expect(sessionService.transitionStatus).not.toHaveBeenCalledWith(
       SESSION_ID,
       ['RUNNING'],
       'COMPLETED',
@@ -730,7 +804,6 @@ describe('RecipeAgentRunService', () => {
       handlers: {
         get_draft: getDraft,
         ask_user: jest.fn(),
-        finish_draft: jest.fn(),
       },
       callModel,
     });
@@ -771,7 +844,6 @@ describe('RecipeAgentRunService', () => {
       handlers: {
         get_draft: getDraft,
         ask_user: jest.fn(),
-        finish_draft: jest.fn(),
       },
       callModel,
     });
@@ -838,7 +910,6 @@ describe('RecipeAgentRunService', () => {
       handlers: {
         get_draft: jest.fn(),
         ask_user: jest.fn(),
-        finish_draft: jest.fn(),
       },
       prisma,
       callModel,
@@ -1037,7 +1108,6 @@ describe('RecipeAgentRunService', () => {
       handlers: {
         get_draft: getDraft,
         ask_user: jest.fn(),
-        finish_draft: jest.fn(),
       },
       prisma,
       sessionService,
@@ -1672,7 +1742,6 @@ describe('RecipeAgentRunService', () => {
       handlers: {
         get_draft: getDraft,
         ask_user: jest.fn(),
-        finish_draft: jest.fn(),
       },
       prisma,
       responses: [toolCallResponse('get_draft'), finalResponse('继续看过了')],
@@ -1721,7 +1790,6 @@ describe('RecipeAgentRunService', () => {
       handlers: {
         get_draft: getDraft,
         ask_user: jest.fn(),
-        finish_draft: jest.fn(),
       },
       prisma,
       responses: [toolCallResponse('get_draft'), finalResponse('继续看过了')],

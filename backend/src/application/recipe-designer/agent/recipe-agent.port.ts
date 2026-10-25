@@ -127,10 +127,11 @@ export interface RecipeAgentDraftPort {
 /**
  * Agent 控制端口（P0a Task 5）。
  *
- * 管“人”这一侧：提问、申请例外/缺类确认、生成交付确认卡。
+ * 管“人”这一侧：提问、申请例外/缺类确认；`finishDraft` 仅保留给旧会话
+ * 兼容，新运行不再调用，也不会生成新的交付快照。
  *
  * **审批状态只能由后端从会话/数据库读取**（spec 4.3 / 5.2）：
- * `getApprovalState` 是 `check_ready` / `finish_draft` 唯一的审批来源，
+ * `getApprovalState` 是 `check_ready` 唯一的审批来源，
  * 模型只能 `request_exception`，不能把 `exceptionApproved` 设成 true。
  */
 export interface RecipeAgentControlPort {
@@ -146,7 +147,10 @@ export interface RecipeAgentControlPort {
     detail?: string;
   }): Promise<void>;
 
-  /** 生成交付确认卡；`warnings` 逐条列出需要人确认的警告。 */
+  /**
+   * @deprecated 旧会话兼容：写交付快照并置 COMPLETED。
+   * 新运行不再调用（`finish_draft` 工具已下线），不要再新增调用方。
+   */
   finishDraft(input: { summary: string; warnings: string[] }): Promise<void>;
 
   /** 当前会话/数据库里的审批状态；模型不可传入，也不可覆盖。 */

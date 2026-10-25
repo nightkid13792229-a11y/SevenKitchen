@@ -3,16 +3,16 @@
  *
  * 一次运行 = 一个会话：`start` 建会话后把循环放到后台（HTTP 立刻拿到
  * sessionId），循环负责调模型、执行工具、写消息/步数/用量，并在
- * `ask_user`、`finish_draft`、最终文本、200 次工具调用、6 分钟这几处停下。
+ * `ask_user`、最终文本、200 次工具调用、6 分钟这几处停下。
  *
  * 状态语义：
  * - `RUNNING`：循环正在跑；
  * - `WAITING_USER`：模型提问或本轮自然结束，等人继续；
- * - `COMPLETED`：`finish_draft` 成功；
+ * - `COMPLETED`：旧版本 `finish_draft` 留下的历史状态；新运行不再写入；
  * - `STOPPED`：人工停止，循环不再覆盖；
  * - `FAILED`：异常或超过运行上限，`lastError` 记录原因。
  *
- * 审批状态不在这里判断：`check_ready` / `finish_draft` 由工具箱内部从
+ * 审批状态不在这里判断：`check_ready` 由工具箱内部从
  * `getApprovalState()` 读，模型参数不可信。
  */
 import {
@@ -64,11 +64,16 @@ const MAX_TOOL_CALLS = 200;
 const MAX_RUN_MS = 6 * 60 * 1000;
 /** 失败时给会话留下的错误码文案；与外层 HTTP 错误无关。 */
 const OVER_LIMIT_MESSAGE = '超过运行上限';
-/** 送进模型的历史 transcript：最多最近 20 条、4000 字符。 */
-const MAX_HISTORY_MESSAGES = 20;
-const MAX_HISTORY_CHARS = 4000;
-/** 单条历史消息最多保留 800 字符。 */
-const MAX_HISTORY_MESSAGE_CHARS = 800;
+/**
+ * 送进模型的历史 transcript 物理预算，不是产品上限，测试期可调。
+ *
+ * 不再限制历史消息条数：当前会话的消息全部保留，只有总字符数超过
+ * 约 100,000 时才从最旧开始丢；单条历史消息最多 20,000 字符。
+ * 这是为了防止模型上下文被撑爆的物理保护，不做语义摘要。
+ */
+const MAX_HISTORY_CHARS = 100_000;
+/** 单条历史消息最多保留 20,000 字符。 */
+const MAX_HISTORY_MESSAGE_CHARS = 20_000;
 
 /**
  * 模型调用函数。默认是 DeepSeek 工具调用客户端；测试或后续切供应商时
@@ -94,10 +99,11 @@ export interface RecipeAgentRuntime {
 }
 
 /**
- * 交付确认卡：来自最近一次 `finish_draft` 落下的快照。
+ * 交付确认卡：旧会话遗留的快照，仅用于兼容历史数据。
  *
- * 只取人需要确认的部分（摘要 + 警告）和快照自身的版本/时间；
- * 完整快照留在库里，不在这里重复读出。
+ * 新运行不再调用 `finish_draft`，也不会写新快照；`getSessionView` 仍会
+ * 读出旧快照，前端自行隐藏。只取人需要确认的部分（摘要 + 警告）和
+ * 快照自身的版本/时间；完整快照留在库里，不在这里重复读出。
  */
 export interface RecipeAgentDeliveryCard {
   summary: string;
@@ -139,9 +145,8 @@ export function buildRecipeAgentSystemPrompt(now: Date = new Date()): string {
 - 开始先调用 get_draft 读当前草稿；内容被改过后要重新读。
 - 生命阶段核对：用户明确说了生命阶段时，先用 get_draft 读 scenario；如果与用户说法不一致，先 ask_user 请用户在编辑器里切换阶段，确认切换后再设计。不要静默按错误阶段设计，也不要自己改阶段（没有自动切换阶段的工具）。
 - 先看 get_draft.designMode：CATALOG=产品线（按目录、分类清单、发布门槛）；ORDER=订单定制（按 orderId/orderQuantity、客户狗/过敏、本单交付）；没有 designMode 时按产品线处理，不要猜订单信息。
-- 每次写完原料 / 文案 / 制作步骤后，调用 run_assessment 重新评估，再用 check_ready 看交付条件。
-- 只有 check_ready 通过后才能调用 finish_draft；没通过就继续修复，不要跳过检查。
-- finish_draft 的 summary 只写交付内容（原料/重量/达标/文案/步骤），不要重复 warnings 列表；警告由系统单独列出。
+- 每次写完原料 / 文案 / 制作步骤后，调用 run_assessment 重新评估；check_ready 是可选的交付前自检，用来发现遗漏，不是停止条件。
+- 本轮结束时用普通中文总结（原料/重量/达标情况/文案/步骤/还需确认的事项）即可；没有交付确认卡，不要声称已经生成交付卡或等人点确认。
 - 例外只能调用 request_exception 申请，审批只能由人做；绝不要自称已批准或绕过检查。
 - 信息不足、需要人拍板时调用 ask_user 提问；不确定就停下来问，不要猜。
 - 营养指标按“目标区间内留 20% 余量”作为工作标准，不要把数值卡在边界上。
@@ -399,7 +404,7 @@ export class RecipeAgentRunService implements OnModuleInit {
       designMode: 'CATALOG' | 'ORDER';
       orderId: string | null;
     };
-    /** 最近一次交付快照里的交付卡；还没交付或快照不完整时为 null。 */
+    /** 旧会话最近一次交付快照；新运行不再生成，前端自行隐藏。 */
     delivery: RecipeAgentDeliveryCard | null;
   } | null> {
     const draft = await this.designerService.getDraft(
@@ -710,14 +715,9 @@ export class RecipeAgentRunService implements OnModuleInit {
             content: serialized,
           });
 
-          // 控制类工具是明确的停止点；只有成功时才改状态，
-          // 失败（例如 finish_draft 被 check_ready 拒绝）要让模型继续修。
+          // ask_user 是明确的停止点；只有成功时才改状态，失败要让模型继续处理。
           if (outcome.result.ok && outcome.name === 'ask_user') {
-            await this.ensureStatus(sessionId, 'WAITING_USER');
-            return;
-          }
-          if (outcome.result.ok && outcome.name === 'finish_draft') {
-            await this.ensureStatus(sessionId, 'COMPLETED');
+            await this.markWaitingForUser(sessionId);
             return;
           }
 
@@ -795,21 +795,12 @@ export class RecipeAgentRunService implements OnModuleInit {
     });
   }
 
-  private async ensureStatus(
-    sessionId: string,
-    status: 'WAITING_USER' | 'COMPLETED',
-  ): Promise<void> {
-    if (this.isStopped(sessionId)) return;
-    // 只有 RUNNING 的会话能被控制类工具推进到停止点；条件不命中就什么都不做。
-    await this.sessionService.transitionStatus(sessionId, ['RUNNING'], status);
-  }
-
   /**
-   * 模型自然收尾：置 WAITING_USER，等人继续。
+   * 模型自然收尾或 ask_user 停下：置 WAITING_USER，等人继续。
    *
-   * 只允许 RUNNING → WAITING_USER：如果会话已经被别处置成 COMPLETED /
-   * STOPPED（例如控制面先落状态、后续写消息失败），条件更新不会命中，
-   * 状态保持不变。
+   * 只允许 RUNNING → WAITING_USER：如果会话已经被别处置成 STOPPED /
+   * FAILED（例如控制面先落状态、后续写消息失败），条件更新不会命中，
+   * 状态保持不变；旧版本 finish_draft 留下的 COMPLETED 也不会被改回。
    */
   private async markWaitingForUser(sessionId: string): Promise<void> {
     if (this.isStopped(sessionId)) return;
@@ -965,18 +956,28 @@ function withoutCurrentUserMessage(
 /**
  * 把持久化消息压成紧凑文本 transcript。
  *
- * 只保留最近 20 条，且整段不超过 4000 字符（超了从最旧的行开始丢）。
+ * 保留当前会话的全部消息，不再限制条数；只有整段超过
+ * MAX_HISTORY_CHARS（约 100,000）时才从最旧的行开始丢。单条消息在
+ * `formatHistoryMessage` 里截到 MAX_HISTORY_MESSAGE_CHARS（20,000）。
  * 没有历史时返回 null，调用方据此省略第二条 system 消息。
  */
 function buildHistoryTranscript(messages: AgentMessageRecord[]): string | null {
-  let lines = messages.slice(-MAX_HISTORY_MESSAGES).map(formatHistoryMessage);
-  while (lines.length > 0 && lines.join('\n').length > MAX_HISTORY_CHARS) {
-    lines = lines.slice(1);
+  const lines = messages.map(formatHistoryMessage);
+  let total = 0;
+  let start = lines.length;
+  // 从最新往最旧累加：预算内全保留；超预算时只丢最旧的那几条。
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const separator = start < lines.length ? 1 : 0;
+    const nextTotal = total + lines[index].length + separator;
+    if (nextTotal > MAX_HISTORY_CHARS) break;
+    total = nextTotal;
+    start = index;
   }
-  if (lines.length === 0) {
+  const kept = lines.slice(start);
+  if (kept.length === 0) {
     return null;
   }
-  return `历史对话（最近 ${lines.length} 条）：\n${lines.join('\n')}`;
+  return `历史对话（最近 ${kept.length} 条）：\n${kept.join('\n')}`;
 }
 
 /** 单条历史消息的文本行：用户 / 助手 / 工具。 */

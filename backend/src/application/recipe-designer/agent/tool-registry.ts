@@ -2,13 +2,16 @@
  * Agent 工具注册表（P0a Task 5）。
  *
  * 把 Task 2–4 的读/写/查工具和 Task 5 的控制工具组装成一张表：
- * `AGENT_TOOL_DEFINITIONS` 是给模型看的 22 个工具定义（含只读食谱目录与联网搜索/抓取），
+ * `AGENT_TOOL_DEFINITIONS` 是给模型看的 21 个工具定义（含只读食谱目录与联网搜索/抓取），
  * `createAgentToolHandlers` 返回同名 handler。
  *
- * **审批安全边界**：`check_ready` / `check_coverage` / `finish_draft` 的
+ * **审批安全边界**：`check_ready` / `check_coverage` 的
  * JSON schema 里没有 `exceptionApproved` / `confirmedOmissions`；handler 也不读
  * 模型参数，只从 `controlPort.getApprovalState()` 注入。模型只能
  * `request_exception`，不能自批。
+ *
+ * 交付确认卡（`finish_draft`）已下线：不再暴露给模型，也不再有 handler；
+ * 历史会话的交付快照仍由 `getSessionView` 读取，前端自己隐藏。
  *
  * 所有 handler 都套了边界兜底：工具内部未捕获的 `RecipeAgentPortError` 保留
  * 错误码与原文，其余异常统一转成 `CONTROL_NOT_AVAILABLE`，不让异常穿到模型或运行时。
@@ -130,7 +133,7 @@ const NO_ARGS_SCHEMA = {
 } as const;
 
 /**
- * 22 个工具定义。描述用中文一句话说清“什么时候用”；
+ * 21 个工具定义。描述用中文一句话说清“什么时候用”；
  * 参数 schema 与 Task 2–4 的运行时校验保持一致。
  *
  * 联网两个工具不设意图/域名/关键词限制；网页内容在提示词里明确为
@@ -561,7 +564,7 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
   {
     name: 'check_ready',
     description:
-      '生成交付检查单；准备交付前必须调用，审批状态由后端注入，模型不能传。',
+      '可选的交付前自检：检查原料、营养评估、文案、制作步骤和预处理是否齐备；结果只供参考，不阻断本轮结束，审批状态由后端注入，模型不能传。',
     parameters: {
       type: 'object',
       properties: {},
@@ -633,30 +636,13 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
       additionalProperties: false,
     },
   },
-  {
-    name: 'finish_draft',
-    description:
-      '检查单跑完、准备交付时用：生成交付确认卡；check_ready 不通过时会被拒绝，有警告时逐条列出。',
-    parameters: {
-      type: 'object',
-      properties: {
-        summary: {
-          type: 'string',
-          minLength: 1,
-          description: '给人看的交付说明。',
-        },
-      },
-      required: ['summary'],
-      additionalProperties: false,
-    },
-  },
 ];
 
 /**
- * 造全部 22 个 handler。
+ * 造全部 21 个 handler。
  *
  * `check_ready` 是唯一从 `getApprovalState()` 注入审批状态的入口；
- * `finish_draft` 在 control-tools 内部做同样的注入。
+ * 交付确认卡（`finish_draft`）已下线，不再有对应 handler。
  */
 export function createAgentToolHandlers(
   deps: AgentToolHandlerDeps,
@@ -674,7 +660,6 @@ export function createAgentToolHandlers(
   });
   const controlTools = createControlTools({
     controlPort: deps.controlPort,
-    checkReady: (args) => checkTools.check_ready(args as never),
   });
 
   // 模型参数未经校验，具体 typeof 守卫在各工具内部；这里只做透传。
@@ -717,7 +702,6 @@ export function createAgentToolHandlers(
     },
     ask_user: (args) => controlTools.ask_user(args as never),
     request_exception: (args) => controlTools.request_exception(args as never),
-    finish_draft: (args) => controlTools.finish_draft(args as never),
   };
 
   // 模型边界：任何漏网的异常都变成数据，不让它穿到模型/运行时。

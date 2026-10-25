@@ -28,10 +28,11 @@ function createFakeControlPort(
 }
 
 describe('tool registry', () => {
-  it('22 个工具，名字唯一', () => {
+  it('21 个工具，名字唯一，finish_draft 已下线', () => {
     const names = AGENT_TOOL_DEFINITIONS.map((t) => t.name);
-    expect(names).toHaveLength(22);
-    expect(new Set(names).size).toBe(22);
+    expect(names).toHaveLength(21);
+    expect(new Set(names).size).toBe(21);
+    expect(names).not.toContain('finish_draft');
     expect(names).toEqual(
       expect.arrayContaining([
         'get_draft',
@@ -55,7 +56,6 @@ describe('tool registry', () => {
         'check_ready',
         'ask_user',
         'request_exception',
-        'finish_draft',
       ]),
     );
   });
@@ -305,6 +305,19 @@ describe('tool registry', () => {
     }
   });
 
+  it('finish_draft 已从工具表下线，模型无法再生成交付确认卡', () => {
+    const names = AGENT_TOOL_DEFINITIONS.map((tool) => tool.name);
+    expect(names).not.toContain('finish_draft');
+
+    const handlers = createAgentToolHandlers({
+      port: createFakeRecipeAgentPort(),
+      controlPort: createFakeControlPort(),
+      tagPolicy,
+      draftId: 'draft-1',
+    });
+    expect(handlers.finish_draft).toBeUndefined();
+  });
+
   it('ask_user 最多两个问题，且不能为空', async () => {
     const handlers = createAgentToolHandlers({
       port: createFakeRecipeAgentPort(),
@@ -320,21 +333,6 @@ describe('tool registry', () => {
         })
       ).ok,
     ).toBe(false);
-  });
-
-  it('check_ready 不通过时 finish_draft 拒绝', async () => {
-    const controlPort = createFakeControlPort();
-    const handlers = createAgentToolHandlers({
-      port: createFakeRecipeAgentPort({
-        assessment: fakeAssessment({ contentRevision: 4, deficient: 1 }),
-      }),
-      controlPort,
-      tagPolicy,
-      draftId: 'draft-1',
-    });
-    const result = await handlers.finish_draft({ summary: '交付' });
-    expect(result.ok).toBe(false);
-    expect(controlPort.finishDraft).not.toHaveBeenCalled();
   });
 
   it('request_exception 需要合法类型和理由', async () => {
@@ -437,25 +435,6 @@ describe('tool registry', () => {
     expect(confirmedCoverage?.detail).toBe(bareCoverage?.detail);
   });
 
-  it('已批例外时 finish_draft 生成交付卡', async () => {
-    const controlPort = createFakeControlPort({
-      getApprovalState: jest
-        .fn()
-        .mockResolvedValue({ approvedException: true, confirmedOmissions: [] }),
-    });
-    const handlers = createAgentToolHandlers({
-      port: createFakeRecipeAgentPort({
-        assessment: fakeAssessment({ contentRevision: 4, deficient: 1 }),
-      }),
-      controlPort,
-      tagPolicy,
-      draftId: 'draft-1',
-    });
-    const result = await handlers.finish_draft({ summary: '按例外交付' });
-    expect(result.ok).toBe(true);
-    expect(controlPort.finishDraft).toHaveBeenCalledTimes(1);
-  });
-
   it('check_coverage 的 confirmedOmissions 只能来自 getApprovalState', async () => {
     const draft = fakeDraftSnapshot({
       items: fakeDraftSnapshot().items.filter((i) => i.category !== 'MUSHROOM'),
@@ -499,66 +478,6 @@ describe('tool registry', () => {
     expect(confirmedResult.summary).not.toContain('已确认缺类');
   });
 
-  it('finish_draft 在 BLOCKED 时返回 READY_BLOCKED', async () => {
-    const controlPort = createFakeControlPort();
-    const handlers = createAgentToolHandlers({
-      port: createFakeRecipeAgentPort({
-        assessment: fakeAssessment({ contentRevision: 4, deficient: 1 }),
-      }),
-      controlPort,
-      tagPolicy,
-      draftId: 'draft-1',
-    });
-    const result = await handlers.finish_draft({ summary: '交付' });
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.code).toBe('READY_BLOCKED');
-    expect(controlPort.finishDraft).not.toHaveBeenCalled();
-  });
-
-  it('已批例外时 finishDraft 收到 summary 与 WARN 明细', async () => {
-    const controlPort = createFakeControlPort({
-      getApprovalState: jest
-        .fn()
-        .mockResolvedValue({ approvedException: true, confirmedOmissions: [] }),
-    });
-    const handlers = createAgentToolHandlers({
-      port: createFakeRecipeAgentPort({
-        assessment: fakeAssessment({ contentRevision: 4, deficient: 1 }),
-      }),
-      controlPort,
-      tagPolicy,
-      draftId: 'draft-1',
-    });
-    const result = await handlers.finish_draft({ summary: '按例外交付' });
-    expect(result.ok).toBe(true);
-    expect(controlPort.finishDraft).toHaveBeenCalledWith({
-      summary: '按例外交付',
-      warnings: [expect.stringContaining('评估未完全达标')],
-    });
-  });
-
-  it('finish_draft 的模型自批无效', async () => {
-    const controlPort = createFakeControlPort();
-    const handlers = createAgentToolHandlers({
-      port: createFakeRecipeAgentPort({
-        assessment: fakeAssessment({ contentRevision: 4, deficient: 1 }),
-      }),
-      controlPort,
-      tagPolicy,
-      draftId: 'draft-1',
-    });
-    const result = await handlers.finish_draft({
-      summary: '按模型自称的例外交付',
-      exceptionApproved: true,
-      confirmedOmissions: [],
-    });
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.code).toBe('READY_BLOCKED');
-    expect(controlPort.finishDraft).not.toHaveBeenCalled();
-  });
-
   it('getApprovalState 抛错时返回 CONTROL_NOT_AVAILABLE', async () => {
     const controlPort = createFakeControlPort({
       getApprovalState: jest.fn().mockRejectedValue(new Error('db down')),
@@ -574,15 +493,8 @@ describe('tool registry', () => {
     expect(ready.ok).toBe(false);
     if (!ready.ok) {
       expect(ready.error.code).toBe('CONTROL_NOT_AVAILABLE');
+      expect(ready.error.message).toContain('读取审批状态失败');
     }
-
-    const finish = await handlers.finish_draft({ summary: '交付' });
-    expect(finish.ok).toBe(false);
-    if (!finish.ok) {
-      expect(finish.error.code).toBe('CONTROL_NOT_AVAILABLE');
-      expect(finish.error.message).toContain('读取审批状态失败');
-    }
-    expect(controlPort.finishDraft).not.toHaveBeenCalled();
   });
 
   it('getApprovalState 返回畸形时返回 CONTROL_NOT_AVAILABLE', async () => {

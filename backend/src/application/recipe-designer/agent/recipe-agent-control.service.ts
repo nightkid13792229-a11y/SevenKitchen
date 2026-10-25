@@ -1,9 +1,10 @@
 /**
  * Agent 控制面（P0b-3 Task 1）。
  *
- * 实现 `RecipeAgentControlPort`：把模型发起的「问人 / 申请例外或确认缺类 /
- * 交付确认卡」落进当前会话（`recipe_design_agent_message` /
- * `recipe_design_agent_approval` / `recipe_design_agent_snapshot`）。
+ * 实现 `RecipeAgentControlPort`：把模型发起的「问人 / 申请例外或确认缺类」
+ * 落进当前会话（`recipe_design_agent_message` / `recipe_design_agent_approval`）。
+ * `finishDraft` 仅保留给旧会话兼容；`finish_draft` 工具已下线，新运行
+ * 不再调用它，也不会再生成交付快照。
  *
  * 安全边界（spec 4.3 / 5.2）：
  * - 缺类确认的 categories 只能从**当前草稿**重新算，模型传的自由文本
@@ -47,7 +48,7 @@ export class RecipeAgentControlService implements RecipeAgentControlPort {
       )
       .join('\n');
 
-    // 先抢状态：会话可能已经被 stop / finish_draft 结束，抢不到就不写对话。
+    // 先抢状态：会话可能已经被 stop 结束，抢不到就不写对话。
     const waiting = await this.sessionService.transitionStatus(
       this.sessionId,
       ['RUNNING'],
@@ -105,6 +106,10 @@ export class RecipeAgentControlService implements RecipeAgentControlPort {
     });
   }
 
+  /**
+   * @deprecated 仅旧会话兼容：写交付快照并置 COMPLETED。
+   * 新运行不再调用（`finish_draft` 工具已下线），不要再新增调用方。
+   */
   async finishDraft(input: {
     summary: string;
     warnings: string[];

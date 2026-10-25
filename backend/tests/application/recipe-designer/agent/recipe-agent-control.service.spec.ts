@@ -191,7 +191,7 @@ describe('RecipeAgentControlService', () => {
     expect(sessionService.appendMessage).not.toHaveBeenCalled();
   });
 
-  it('finishDraft 用当前 contentRevision 写快照、置 COMPLETED 并写交付卡', async () => {
+  it('旧会话兼容：finishDraft 用当前 contentRevision 写快照、置 COMPLETED 并写交付卡', async () => {
     const { service, prisma, sessionService } = makeService();
 
     await service.finishDraft({
@@ -234,7 +234,7 @@ describe('RecipeAgentControlService', () => {
     expect(message.content).toContain('缺 VEGETABLE：没有蔬菜');
   });
 
-  it('finishDraft 在会话已停止（状态没抢到）时不写快照也不写交付卡', async () => {
+  it('旧会话兼容：finishDraft 在会话已停止（状态没抢到）时不写快照也不写交付卡', async () => {
     const { service, prisma, sessionService, port } = makeService();
     sessionService.transitionStatus.mockResolvedValue(false);
 

@@ -1,7 +1,7 @@
 /**
  * 检查工具（P0a Task 4）。
  *
- * 四个工具都只回答“现在能不能交付”，不改草稿：
+ * 四个工具只提供交付前参考信息，都不改草稿、也不阻断本轮运行：
  * `run_assessment` / `check_coverage` / `check_catalog_conflicts` / `check_ready`。
  *
  * 依据 `docs/superpowers/specs/2026-10-24-ai-recipe-design-agent-design.md`
@@ -395,7 +395,7 @@ function summarizeReady(checks: readonly AgentReadyCheck[]): string {
     return `还不能交付：${failCount} 项不通过${warnings}。`;
   }
   if (warnCount > 0) {
-    return `可以交付，但有 ${warnCount} 项警告，需要人在交付确认卡上确认。`;
+    return `可以交付，但有 ${warnCount} 项警告，请在最终总结里说明并请人确认。`;
   }
   return '检查全部通过，可以交付。';
 }
@@ -689,7 +689,7 @@ export function createCheckTools(deps: CheckToolDeps): RecipeAgentCheckTools {
               'ASSESSMENT_COMPLIANT',
               exceptionApproved ? 'WARN' : 'FAIL',
               exceptionApproved
-                ? `${detail}已批例外放行，需在交付确认卡上留痕。`
+                ? `${detail}已批例外放行，请在最终总结里说明。`
                 : `${detail}需调整配方，或请管理员批准例外。`,
             ),
           );

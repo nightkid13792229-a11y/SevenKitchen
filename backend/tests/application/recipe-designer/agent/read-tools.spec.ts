@@ -387,9 +387,49 @@ describe('read tools', () => {
         hasMore: true,
       });
       expect(result.summary).toContain('找到 2 道');
-      expect(result.summary).toContain('已发布食谱');
+      expect(result.summary).toContain('已发布');
       expect(result.summary).toContain('当前草稿');
       expect(result.summary).toContain('鲜鸭南瓜餐');
+    });
+
+    it('search_recipes 摘要区分定制与设计草稿来源', async () => {
+      const port = createFakeRecipeAgentPort({
+        recipeSearchPage: recipeSearchPage({
+          data: [
+            recipeSummary({ name: '已发布菜' }),
+            recipeSummary({
+              source: 'CUSTOM',
+              id: 'row-custom',
+              name: '定制菜',
+            }),
+            recipeSummary({
+              source: 'DESIGN_DRAFT',
+              id: 'draft-2',
+              recipeId: null,
+              version: 1,
+              name: '草稿菜',
+            }),
+            recipeSummary({
+              source: 'CURRENT_DRAFT',
+              id: 'draft-1',
+              recipeId: null,
+              version: null,
+              name: '当前菜',
+            }),
+          ],
+          total: 4,
+          hasMore: false,
+        }),
+      });
+      const tools = createReadTools(port, 'draft-1');
+
+      const result = await tools.search_recipes({});
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.summary).toContain('定制菜（定制食谱）');
+      expect(result.summary).toContain('草稿菜（设计草稿）');
+      expect(result.summary).toContain('当前菜（当前草稿）');
     });
 
     it('search_recipes 默认页码 1、每页 20，空条件也能查', async () => {
@@ -430,7 +470,7 @@ describe('read tools', () => {
       expect(port.searchRecipes).not.toHaveBeenCalled();
     });
 
-    it('search_recipes 无结果时摘要说明只搜已发布目录和当前草稿', async () => {
+    it('search_recipes 无结果时摘要说明可读全部食谱', async () => {
       const port = createFakeRecipeAgentPort({
         recipeSearchPage: recipeSearchPage({
           data: [],
@@ -445,8 +485,9 @@ describe('read tools', () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.summary).toContain('没有找到');
-      expect(result.summary).toContain('已发布');
-      expect(result.summary).toContain('当前草稿');
+      expect(result.summary).toContain('全部食谱');
+      expect(result.summary).toContain('顾客定制');
+      expect(result.summary).toContain('未发布草稿');
     });
 
     it('get_recipe 已发布详情带人话摘要和只读数据', async () => {

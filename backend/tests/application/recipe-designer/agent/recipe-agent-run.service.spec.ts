@@ -534,16 +534,15 @@ describe('RecipeAgentRunService', () => {
     expect(content).toContain('顾客文案');
   });
 
-  it('SYSTEM_PROMPT 要求目录检索只读已发布食谱与当前草稿', () => {
+  it('SYSTEM_PROMPT 要求食谱检索可读全库，但不含客户/订单信息', () => {
     const content = buildRecipeAgentSystemPrompt(
       new Date('2026-01-02T03:04:05.000Z'),
     );
     expect(content).toContain('search_recipes / get_recipe');
-    expect(content).toContain('已发布目录');
-    expect(content).toContain('当前草稿');
-    expect(content).toContain('其他设计师');
-    expect(content).toContain('客户');
-    expect(content).toContain('订单');
+    expect(content).toContain('可读全部食谱');
+    expect(content).toContain('未发布设计草稿');
+    expect(content).toContain('顾客定制');
+    expect(content).toContain('客户/订单/狗狗/主人');
   });
 
   it('start 只把本轮用户消息作为 user，刚追加的那条不会重复进历史 transcript', async () => {

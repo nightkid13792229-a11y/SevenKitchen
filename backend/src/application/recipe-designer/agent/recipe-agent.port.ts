@@ -53,10 +53,11 @@ export interface RecipeAgentDraftPort {
   }): Promise<AgentCatalogUsage>;
 
   /**
-   * 只读搜索已发布目录 + 当前草稿（Phase 2）。
+   * 只读搜索全部食谱。
    *
-   * - 已发布只读 `status=PUBLIC` 且非定制；同一 recipeId 只返回最高版本；
-   * - 当前草稿只返回绑定的这一份，其他设计师的草稿绝不出现；
+   * - 公开、定制、未公开的正式食谱版本都可查；同一 recipeId 只返回最高版本；
+   * - 其他设计师未归档的设计草稿也纳入；当前草稿单独返回；
+   * - 绝不返回客户 / 订单 / 狗 / 主人字段；
    * - 结果分页，绝不整表返回给模型。
    */
   searchRecipes(input: {
@@ -68,10 +69,11 @@ export interface RecipeAgentDraftPort {
   }): Promise<AgentRecipeSearchPage>;
 
   /**
-   * 只读一道食谱的完整详情（Phase 2）。
+   * 只读一道食谱 / 草稿的完整详情。
    *
-   * `recipeId` 可以是 `Recipe.id` 或逻辑 `recipeId`，只查 PUBLIC 且非定制；
-   * `draftId` 只允许当前绑定的那一份草稿。找不到 / 无权读 / 非 PUBLIC 返回 null。
+   * `recipeId` 可以是任意 `Recipe.id` 或逻辑 `recipeId`（公开 / 定制 / 未公开）；
+   * `draftId` 可以是当前草稿或任意未归档设计草稿。找不到返回 null。
+   * 返回内容只含配方，不含客户 / 订单 / 狗 / 主人字段。
    */
   getRecipeDetail(input: {
     recipeId?: string;

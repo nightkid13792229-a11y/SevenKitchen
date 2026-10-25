@@ -232,8 +232,9 @@ describe('tool registry', () => {
     });
     expect(parameters.required).toEqual([]);
     expect(parameters.additionalProperties).toBe(false);
-    expect(definition?.description).toContain('已发布食谱');
-    expect(definition?.description).toContain('当前草稿');
+    expect(definition?.description).toContain('全部食谱');
+    expect(definition?.description).toContain('未发布');
+    expect(definition?.description).toContain('顾客定制');
     expect(definition?.description).toContain('客户');
   });
 
@@ -259,7 +260,7 @@ describe('tool registry', () => {
     expect(parameters.required).toEqual([]);
     expect(parameters.additionalProperties).toBe(false);
     expect(definition?.description).toContain('只读');
-    expect(definition?.description).toContain('当前草稿');
+    expect(definition?.description).toContain('设计草稿');
   });
 
   it('search_recipes / get_recipe handler 已接进注册表', async () => {

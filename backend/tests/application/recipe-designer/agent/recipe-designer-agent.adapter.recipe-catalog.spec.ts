@@ -13,9 +13,13 @@ const DRAFT_UPDATED_AT = new Date('2026-10-24T08:00:00.000Z');
 const RECIPE_UPDATED_AT = new Date('2026-10-20T08:00:00.000Z');
 
 function createAdapter(service: any, prisma: any = {}) {
+  const designRecipe = prisma.designRecipe ?? {
+    findMany: jest.fn().mockResolvedValue([]),
+    findFirst: jest.fn().mockResolvedValue(null),
+  };
   return new RecipeDesignerAgentAdapter(
     service,
-    prisma,
+    { ...prisma, designRecipe },
     { userId: 'u1', role: 'STAFF' },
     'draft-1',
   );
@@ -199,8 +203,78 @@ function publishedRow(input: {
   };
 }
 
+function designItem(input: {
+  name: string;
+  weightG: number;
+  nutritionProfileName?: string;
+  type?: 'FOOD' | 'SUPPLEMENT';
+  cfctClass?: string;
+}) {
+  return {
+    ingredientId: `ing-${input.name}`,
+    nutritionFoodId: `nf-${input.name}`,
+    weightG: input.weightG,
+    preparationMethod: '切块',
+    preparationNote: null,
+    ingredient: {
+      id: `ing-${input.name}`,
+      name: input.name,
+      type: input.type ?? 'FOOD',
+      properties: { cfct_class: input.cfctClass ?? '禽肉类及制品' },
+    },
+    nutritionFood: {
+      id: `nf-${input.name}`,
+      name: `profile-${input.name}`,
+      nameEn: `profile-${input.name}`,
+      displayNameZh: input.nutritionProfileName ?? `${input.name}（生）`,
+      dataSource: 'CFCT',
+      category: 'MEAT',
+    },
+  };
+}
+
+function designDraftRow(input: {
+  id: string;
+  name: string;
+  version?: number;
+  status?: string;
+  seriesId?: string | null;
+  seriesLifeStage?: string | null;
+  orderDesignId?: string;
+  publishedRecipeId?: string | null;
+  applicableLifeStages?: string[];
+  items?: ReturnType<typeof designItem>[];
+  updatedAt?: Date;
+}) {
+  return {
+    id: input.id,
+    name: input.name,
+    version: input.version ?? 1,
+    status: input.status ?? 'DRAFT',
+    applicableLifeStages: input.applicableLifeStages ?? ['HIGH_ACTIVITY_ADULT'],
+    coverTitle: `${input.name}草稿封面`,
+    sellingPoint: `${input.name}草稿卖点`,
+    targetHealthTags: ['低脂'],
+    description: `${input.name}草稿描述`,
+    coverImageUrl: 'https://img.test/draft-cover.jpg',
+    detailImages: ['https://img.test/draft-detail.jpg'],
+    videoUrl: null,
+    energyDensityKcalPerKg: 1300,
+    nutritionStandard: 'FEDIAF_2025',
+    nutritionDetailedData: { report: { totalEnergyKcal: 900 } },
+    productionStepsJson: [],
+    seriesId: input.seriesId ?? null,
+    seriesLifeStage: input.seriesLifeStage ?? null,
+    createdAt: DRAFT_CREATED_AT,
+    updatedAt: input.updatedAt ?? DRAFT_UPDATED_AT,
+    publishedRecipeId: input.publishedRecipeId ?? null,
+    orderDesign: input.orderDesignId ? { id: input.orderDesignId } : null,
+    items: input.items ?? [designItem({ name: '鸭腿肉', weightG: 400 })],
+  };
+}
+
 describe('RecipeDesignerAgentAdapter recipe catalog read', () => {
-  it('目录搜索只查 PUBLIC 且非定制食谱，并按 recipeId 去重取最高版本', async () => {
+  it('食谱搜索读取全部 Recipe 行，并按 recipeId 去重取最高版本', async () => {
     const service = draftService({ name: '不匹配的草稿' });
     const prisma = {
       recipe: {
@@ -236,12 +310,12 @@ describe('RecipeDesignerAgentAdapter recipe catalog read', () => {
 
     expect(prisma.recipe.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { status: 'PUBLIC', isCustomRecipe: false },
-        // 数据库侧先按 recipeId 去重，避免把整个目录（含所有旧版本）搬回内存。
+        // 数据库侧先按 recipeId 去重，避免把全部旧版本搬回内存。
         distinct: ['recipeId'],
         orderBy: [{ recipeId: 'asc' }, { version: 'desc' }],
       }),
     );
+    expect(prisma.recipe.findMany.mock.calls[0]?.[0]?.where).toBeUndefined();
     expect(result.total).toBe(2);
     expect(result.data.map((recipe) => recipe.name)).toEqual(
       expect.arrayContaining(['目录鸭肉餐 v3', '目录南瓜餐']),
@@ -262,7 +336,7 @@ describe('RecipeDesignerAgentAdapter recipe catalog read', () => {
     );
   });
 
-  it('即使查询返回了 PRIVATE_CUSTOM / 定制行，也不会出现在结果里', async () => {
+  it('PRIVATE_CUSTOM / 定制行也会返回，并标记为 CUSTOM', async () => {
     const service = draftService({ name: '不匹配的草稿' });
     const prisma = {
       recipe: {
@@ -299,8 +373,145 @@ describe('RecipeDesignerAgentAdapter recipe catalog read', () => {
       limit: 20,
     });
 
-    expect(result.data.map((recipe) => recipe.name)).toEqual(['公开鸭肉餐']);
-    expect(JSON.stringify(result.data)).not.toContain('私密定制餐');
+    expect(result.data.map((recipe) => recipe.name)).toEqual(
+      expect.arrayContaining(['公开鸭肉餐', '私密定制餐', '定制标记餐']),
+    );
+    expect(
+      result.data.find((recipe) => recipe.name === '公开鸭肉餐')?.source,
+    ).toBe('PUBLISHED');
+    expect(
+      result.data.find((recipe) => recipe.name === '私密定制餐')?.source,
+    ).toBe('CUSTOM');
+    expect(
+      result.data.find((recipe) => recipe.name === '定制标记餐')?.source,
+    ).toBe('CUSTOM');
+    expect(JSON.stringify(result.data)).not.toMatch(
+      /customer|orderId|customerDog|owner/i,
+    );
+  });
+
+  it('其他设计师的设计草稿也可读，并按订单 / 系列阶段去重、跳过已发布草稿', async () => {
+    const service = draftService();
+    const designRows = [
+      designDraftRow({
+        id: 'draft-2',
+        name: '设计草稿鸭肉餐',
+        seriesId: 'series-1',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        updatedAt: new Date('2026-10-24T10:00:00.000Z'),
+      }),
+      designDraftRow({
+        id: 'draft-4',
+        name: '同一阶段旧草稿',
+        seriesId: 'series-1',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        updatedAt: new Date('2026-10-24T09:00:00.000Z'),
+      }),
+      designDraftRow({
+        id: 'draft-3',
+        name: '已发布草稿',
+        status: 'PUBLISHED',
+        publishedRecipeId: 'row-r1-v3',
+      }),
+      designDraftRow({
+        id: 'draft-6',
+        name: '发布后的新修订',
+        status: 'DRAFT',
+        publishedRecipeId: 'row-r1-v3',
+        seriesId: 'series-2',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+      }),
+      designDraftRow({
+        id: 'draft-5',
+        name: '订单草稿',
+        orderDesignId: 'od-1',
+      }),
+      designDraftRow({
+        id: 'draft-1',
+        name: '当前草稿重复项',
+      }),
+    ];
+    const prisma = {
+      recipe: { findMany: jest.fn().mockResolvedValue([]) },
+      designRecipe: { findMany: jest.fn().mockResolvedValue(designRows) },
+    };
+    const adapter = createAdapter(service, prisma);
+
+    const result = await adapter.searchRecipes({ page: 1, limit: 20 });
+
+    expect(prisma.designRecipe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          status: { not: 'ARCHIVED' },
+          id: { not: 'draft-1' },
+        },
+        orderBy: { updatedAt: 'desc' },
+      }),
+    );
+    expect(result.data.map((recipe) => recipe.name)).toEqual(
+      expect.arrayContaining([
+        '当前草稿鸭肉餐',
+        '设计草稿鸭肉餐',
+        '订单草稿',
+        '发布后的新修订',
+      ]),
+    );
+    expect(result.data.map((recipe) => recipe.name)).not.toEqual(
+      expect.arrayContaining(['同一阶段旧草稿', '已发布草稿', '当前草稿重复项']),
+    );
+    expect(
+      result.data.find((recipe) => recipe.name === '设计草稿鸭肉餐'),
+    ).toMatchObject({
+      source: 'DESIGN_DRAFT',
+      id: 'draft-2',
+      recipeId: null,
+      version: 1,
+      status: 'DRAFT',
+      ingredientNames: ['鸭腿肉'],
+    });
+    expect(
+      result.data.find((recipe) => recipe.name === '订单草稿')?.source,
+    ).toBe('DESIGN_DRAFT');
+    const designQuery = prisma.designRecipe.findMany.mock.calls[0]?.[0];
+    // 只读选择里绝不能带客户 / 狗 / 订单字段；orderDesign 只取 id 用于去重。
+    expect(designQuery?.select).not.toHaveProperty('customerDogId');
+    expect(designQuery?.select).not.toHaveProperty('createdBy');
+    expect(designQuery?.select).not.toHaveProperty('series');
+    expect(designQuery?.select).not.toHaveProperty('referenceDogId');
+    expect(JSON.stringify(result.data)).not.toMatch(
+      /customer|orderId|customerDog|owner/i,
+    );
+    expect(JSON.stringify(result.data)).not.toContain('orderDesign');
+  });
+
+  it('非公开的正式食谱版本标记为 RECIPE_DRAFT', async () => {
+    const service = draftService({ name: '不匹配的草稿' });
+    const prisma = {
+      recipe: {
+        findMany: jest.fn().mockResolvedValue([
+          publishedRow({
+            recipeId: 'r-draft',
+            name: '待发布鸭肉餐',
+            status: 'DRAFT',
+            items: [publishedItem({ name: '鸭腿肉', weightG: 400 })],
+          }),
+        ]),
+      },
+    };
+    const adapter = createAdapter(service, prisma);
+
+    const result = await adapter.searchRecipes({
+      search: '待发布',
+      page: 1,
+      limit: 20,
+    });
+
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0]).toMatchObject({
+      source: 'RECIPE_DRAFT',
+      name: '待发布鸭肉餐',
+      status: 'DRAFT',
+    });
   });
 
   it('ingredientName 按原料名 / 营养档案名过滤（大小写与空白不敏感）', async () => {
@@ -578,21 +789,13 @@ describe('RecipeDesignerAgentAdapter recipe catalog read', () => {
     expect(findFirst).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
-        where: {
-          id: 'row-r1-v3',
-          status: 'PUBLIC',
-          isCustomRecipe: false,
-        },
+        where: { id: 'row-r1-v3' },
       }),
     );
     expect(findFirst).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        where: {
-          recipeId: 'logical-r1',
-          status: 'PUBLIC',
-          isCustomRecipe: false,
-        },
+        where: { recipeId: 'logical-r1' },
         orderBy: { version: 'desc' },
       }),
     );
@@ -659,11 +862,7 @@ describe('RecipeDesignerAgentAdapter recipe catalog read', () => {
     expect(findFirst).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        where: {
-          recipeId: 'logical-r2',
-          status: 'PUBLIC',
-          isCustomRecipe: false,
-        },
+        where: { recipeId: 'logical-r2' },
         orderBy: { version: 'desc' },
       }),
     );
@@ -674,8 +873,19 @@ describe('RecipeDesignerAgentAdapter recipe catalog read', () => {
     });
   });
 
-  it('未找到 / PRIVATE_CUSTOM / 定制食谱都返回 null', async () => {
-    const service = draftService();
+  it('未找到的食谱返回 null', async () => {
+    const findFirst = jest
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+    const adapter = createAdapter(draftService(), { recipe: { findFirst } });
+
+    expect(
+      await adapter.getRecipeDetail({ recipeId: 'missing-row' }),
+    ).toBeNull();
+  });
+
+  it('PRIVATE_CUSTOM / 定制食谱可以读，并标记为 CUSTOM', async () => {
     const findFirst = jest
       .fn()
       .mockResolvedValueOnce({ recipeId: 'private-1' })
@@ -695,22 +905,29 @@ describe('RecipeDesignerAgentAdapter recipe catalog read', () => {
           isCustomRecipe: true,
           items: [publishedItem({ name: '鸭腿肉', weightG: 400 })],
         }),
-      )
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(null);
-    const adapter = createAdapter(service, {
-      recipe: { findFirst },
+      );
+    const adapter = createAdapter(draftService(), { recipe: { findFirst } });
+
+    const privateDetail = await adapter.getRecipeDetail({
+      recipeId: 'private-row',
+    });
+    expect(privateDetail).toMatchObject({
+      source: 'CUSTOM',
+      name: '私密定制餐',
+      status: 'PRIVATE_CUSTOM',
     });
 
-    expect(
-      await adapter.getRecipeDetail({ recipeId: 'private-row' }),
-    ).toBeNull();
-    expect(
-      await adapter.getRecipeDetail({ recipeId: 'custom-row' }),
-    ).toBeNull();
-    expect(
-      await adapter.getRecipeDetail({ recipeId: 'missing-row' }),
-    ).toBeNull();
+    const customDetail = await adapter.getRecipeDetail({
+      recipeId: 'custom-row',
+    });
+    expect(customDetail).toMatchObject({
+      source: 'CUSTOM',
+      name: '定制标记餐',
+    });
+
+    expect(JSON.stringify([privateDetail, customDetail])).not.toMatch(
+      /customer|orderId|customerDog|owner/i,
+    );
   });
 
   it('当前草稿详情报错复用 getDraft 快照并映射成只读详情', async () => {
@@ -762,15 +979,45 @@ describe('RecipeDesignerAgentAdapter recipe catalog read', () => {
     expect(detail?.productionSteps).toEqual([]);
   });
 
-  it('其他 draftId 不可读：返回 null 且不调用 getDraft', async () => {
+  it('其他设计师的 draftId 可读，且不调用当前草稿的 getDraft', async () => {
     const service = draftService();
+    const designRecipe = {
+      findFirst: jest.fn().mockResolvedValue(
+        designDraftRow({
+          id: 'other-draft',
+          name: '其他人的草稿',
+          seriesId: 'series-9',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        }),
+      ),
+    };
     const adapter = createAdapter(service, {
       recipe: { findFirst: jest.fn() },
+      designRecipe,
     });
 
-    await expect(
-      adapter.getRecipeDetail({ draftId: 'other-draft' }),
-    ).resolves.toBeNull();
+    const detail = await adapter.getRecipeDetail({ draftId: 'other-draft' });
+
+    expect(designRecipe.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'other-draft', status: { not: 'ARCHIVED' } },
+      }),
+    );
+    expect(detail).toMatchObject({
+      source: 'DESIGN_DRAFT',
+      id: 'other-draft',
+      name: '其他人的草稿',
+      version: 1,
+      seriesId: 'series-9',
+      seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+    });
+    expect(detail?.items[0]).toMatchObject({
+      name: '鸭腿肉',
+      weightG: 400,
+    });
     expect(service.getDraft).not.toHaveBeenCalled();
+    expect(JSON.stringify(detail)).not.toMatch(
+      /customer|orderId|customerDog|owner/i,
+    );
   });
 });

@@ -21,6 +21,7 @@ import type {
   AgentIngredientDetail,
   AgentRecipeDetail,
   AgentRecipeSearchPage,
+  AgentRecipeSummary,
   AgentToolErrorCode,
   AgentToolResult,
 } from './agent-types';
@@ -268,7 +269,23 @@ function describeRecipeScope(input: {
   if (input.search) parts.push(`关键词「${input.search}」`);
   if (input.ingredientName) parts.push(`原料「${input.ingredientName}」`);
   if (input.lifeStage) parts.push(`生命阶段「${input.lifeStage}」`);
-  return parts.length > 0 ? parts.join('、') : '全部已发布食谱与当前草稿';
+  return parts.length > 0 ? parts.join('、') : '全部食谱（已发布、未发布草稿、顾客定制）';
+}
+
+/** 把只读来源翻成模型能直接写给人看的中文。 */
+function recipeSourceLabel(source: AgentRecipeSummary['source']): string {
+  switch (source) {
+    case 'CURRENT_DRAFT':
+      return '当前草稿';
+    case 'DESIGN_DRAFT':
+      return '设计草稿';
+    case 'CUSTOM':
+      return '定制食谱';
+    case 'RECIPE_DRAFT':
+      return '待发布食谱';
+    default:
+      return '已发布食谱';
+  }
 }
 
 function summarizeRecipeSearch(
@@ -280,26 +297,25 @@ function summarizeRecipeSearch(
   },
 ): string {
   if (page.total === 0) {
-    return `没有找到匹配的食谱（${describeRecipeScope(filters)}）；只搜索已发布食谱和当前草稿，不会返回客户/订单信息。`;
+    return `没有找到匹配的食谱（${describeRecipeScope(filters)}）；可读全部食谱（已发布、未发布草稿、顾客定制），不会返回客户/订单/狗信息。`;
   }
 
   const preview = page.data
     .slice(0, 5)
     .map((recipe) =>
-      recipe.source === 'CURRENT_DRAFT'
-        ? `${recipe.name}（当前草稿）`
-        : recipe.name,
+      recipe.source === 'PUBLISHED'
+        ? recipe.name
+        : `${recipe.name}（${recipeSourceLabel(recipe.source)}）`,
     )
     .join('、');
   const suffix = page.total > page.data.length ? ' 等' : '';
-  return `找到 ${page.total} 道食谱（${describeRecipeScope(filters)}），第 ${page.page} 页返回 ${page.data.length} 条：${preview}${suffix}。来源仅限已发布食谱和当前草稿；不含客户/订单信息。`;
+  return `找到 ${page.total} 道食谱（${describeRecipeScope(filters)}），第 ${page.page} 页返回 ${page.data.length} 条：${preview}${suffix}。来源覆盖已发布、未发布草稿和顾客定制；不含客户/订单/狗信息。`;
 }
 
 function summarizeRecipeDetail(detail: AgentRecipeDetail): string {
-  const label =
-    detail.source === 'CURRENT_DRAFT'
-      ? `当前草稿「${detail.name}」`
-      : `已发布食谱「${detail.name}」v${detail.version ?? '-'}`;
+  const label = `${recipeSourceLabel(detail.source)}「${detail.name}」${
+    detail.version !== null ? `v${detail.version}` : ''
+  }`;
   const totalWeightG =
     Math.round(detail.items.reduce((sum, item) => sum + item.weightG, 0) * 10) /
     10;
@@ -648,7 +664,7 @@ export function createReadTools(
       if (!detail) {
         return fail(
           'RECIPE_NOT_FOUND',
-          `没有找到可读的食谱（recipeId「${recipeId || '-'}」/ draftId「${draftId || '-'}」）；只支持已发布目录和当前草稿。`,
+          `没有找到可读的食谱（recipeId「${recipeId || '-'}」/ draftId「${draftId || '-'}」）；可读全部食谱（含未发布草稿、顾客定制），不含客户/订单/狗信息。`,
         );
       }
       return ok(detail, summarizeRecipeDetail(detail));

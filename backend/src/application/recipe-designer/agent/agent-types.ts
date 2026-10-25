@@ -331,21 +331,28 @@ export interface AgentCatalogUsage {
 }
 
 /**
- * 只读食谱来源：已发布目录（status=PUBLIC 的产品线食谱）或当前草稿。
- *
- * 自定义/私密食谱（PRIVATE_CUSTOM）永远不会是 PUBLISHED；
- * 其他设计师的草稿也不会被读成 CURRENT_DRAFT。
+ * 只读食谱来源：
+ * - PUBLISHED：已发布的标准产品线食谱；
+ * - CUSTOM：顾客定制 / 私密食谱（只读配方，不含客户信息）；
+ * - RECIPE_DRAFT：已生成正式食谱版本、但尚未公开的食谱；
+ * - DESIGN_DRAFT：其他设计师的设计草稿；
+ * - CURRENT_DRAFT：当前正在设计的草稿。
  */
-export type AgentRecipeSource = 'PUBLISHED' | 'CURRENT_DRAFT';
+export type AgentRecipeSource =
+  | 'PUBLISHED'
+  | 'CUSTOM'
+  | 'RECIPE_DRAFT'
+  | 'DESIGN_DRAFT'
+  | 'CURRENT_DRAFT';
 
 /** 只读食谱搜索结果里的一行；不含客户 / 订单 / 狗狗 / 主人信息。 */
 export interface AgentRecipeSummary {
   source: AgentRecipeSource;
-  /** Recipe.id（已发布版本行）或 draftId（当前草稿）。 */
+  /** Recipe.id 或 DesignRecipe.id。 */
   id: string;
-  /** 逻辑 recipeId；当前草稿为 null。 */
+  /** 逻辑 recipeId；设计草稿 / 当前草稿为 null。 */
   recipeId: string | null;
-  /** 版本号；当前草稿为 null。 */
+  /** 版本号；设计草稿返回草稿 version，当前草稿为 null。 */
   version: number | null;
   name: string;
   status: string;
@@ -372,7 +379,7 @@ export interface AgentRecipeItemRead {
   category: FoodCategory;
 }
 
-/** `get_recipe` 的完整只读详情（已发布或当前草稿）。 */
+/** `get_recipe` 的完整只读详情（任意来源，不含客户/订单/狗信息）。 */
 export interface AgentRecipeDetail extends AgentRecipeSummary {
   description: string | null;
   coverImageUrl: string | null;

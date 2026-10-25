@@ -241,7 +241,7 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
   {
     name: 'search_recipes',
     description:
-      '只读搜索已发布食谱目录和当前草稿：按菜名、原料名、营养档案名查，可按原料或生命阶段筛选；用于查重名、看文案风格、看目录原料用法。不会返回客户/订单信息。',
+      '只读搜索全部食谱（已发布、未发布设计草稿、顾客定制）：按菜名、原料名、营养档案名查，可按原料或生命阶段筛选；用于查重名、看文案风格、看原料用法。只返回配方内容，不会返回客户/订单/狗信息。',
     parameters: {
       type: 'object',
       properties: {
@@ -279,17 +279,18 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
   {
     name: 'get_recipe',
     description:
-      '只读查看一道已发布食谱或当前草稿的完整详情（原料、文案、营养、制作步骤、图片等）；recipeId 或 draftId 至少一个，其他设计师的草稿不可读。',
+      '只读查看任意一道食谱或设计草稿的完整详情（原料、文案、营养、制作步骤、图片等）；recipeId 或 draftId 至少一个，可读其他设计师的草稿。只返回配方内容，不会返回客户/订单/狗信息。',
     parameters: {
       type: 'object',
       properties: {
         recipeId: {
           type: 'string',
-          description: 'Recipe.id 或逻辑 recipeId；只查已发布目录。',
+          description:
+            'Recipe.id 或逻辑 recipeId；公开、定制、未公开的正式食谱版本都可查。',
         },
         draftId: {
           type: 'string',
-          description: '当前草稿 id；只能读这一份草稿。',
+          description: '任意设计草稿 id；当前草稿和其他设计师的草稿都可读。',
         },
       },
       anyOf: [{ required: ['recipeId'] }, { required: ['draftId'] }],

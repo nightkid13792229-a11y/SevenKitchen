@@ -14,6 +14,7 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
+import { DesignRecipeStatus } from '@prisma/client';
 
 import { normalizeNutritionProfile } from '../../../domain/ingredient/nutrition-profile.utils';
 import type { NutritionProfile } from '../../../domain/ingredient/types';
@@ -884,7 +885,7 @@ const findMainProteinName = (
   return mainProtein?.name ?? null;
 };
 
-// ---- Phase 2：只读食谱目录（已发布 PUBLIC + 当前草稿） ----
+// ---- 只读食谱库（全部正式食谱 + 全部设计草稿 + 当前草稿） ----
 
 const DEFAULT_RECIPE_PAGE_SIZE = 20;
 const MAX_RECIPE_PAGE_SIZE = 50;
@@ -983,6 +984,58 @@ interface PublishedRecipeDetailRow extends PublishedRecipeSummaryRow {
   seriesLifeStage: string | null;
 }
 
+interface DesignRecipeItemRow {
+  ingredientId: string | null;
+  nutritionFoodId: string | null;
+  weightG: number;
+  preparationMethod: string | null;
+  preparationNote: string | null;
+  ingredient: {
+    name: string;
+    type: string;
+    properties: unknown;
+  } | null;
+  nutritionFood: {
+    name: string;
+    nameEn: string | null;
+    displayNameZh: string | null;
+    dataSource: string | null;
+    category: string | null;
+  } | null;
+}
+
+/**
+ * 其他设计师的设计草稿只读行。
+ *
+ * 刻意不 select `customerDogId` / `createdBy` / `series`（series 上有参考犬），
+ * 也不把 `orderDesign` 的 id 暴露给模型 —— 它只用于同一订单草稿的去重。
+ */
+interface DesignRecipeReadRow {
+  id: string;
+  name: string;
+  version: number;
+  status: string;
+  applicableLifeStages: unknown;
+  coverTitle: string | null;
+  sellingPoint: string | null;
+  targetHealthTags: unknown;
+  description: string | null;
+  coverImageUrl: string | null;
+  detailImages: unknown;
+  videoUrl: string | null;
+  energyDensityKcalPerKg: number | null;
+  nutritionStandard: string | null;
+  nutritionDetailedData: unknown;
+  productionStepsJson: unknown;
+  seriesId: string | null;
+  seriesLifeStage: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  publishedRecipeId: string | null;
+  orderDesign: { id: string } | null;
+  items: DesignRecipeItemRow[];
+}
+
 const PUBLISHED_RECIPE_ITEM_SELECT = {
   ingredientId: true,
   nutritionFoodId: true,
@@ -1044,6 +1097,58 @@ const RECIPE_DETAIL_SELECT = {
   seriesLifeStage: true,
 } as const;
 
+const DESIGN_RECIPE_ITEM_SELECT = {
+  ingredientId: true,
+  nutritionFoodId: true,
+  weightG: true,
+  preparationMethod: true,
+  preparationNote: true,
+  ingredient: {
+    select: { name: true, type: true, properties: true },
+  },
+  nutritionFood: {
+    select: {
+      name: true,
+      nameEn: true,
+      displayNameZh: true,
+      dataSource: true,
+      category: true,
+    },
+  },
+} as const;
+
+/** 设计草稿只读：不 select 客户/狗/订单字段，避免把 PII 带进模型上下文。 */
+const DESIGN_RECIPE_ITEMS_ORDER = [{ sortOrder: 'asc' as const }];
+
+const DESIGN_RECIPE_READ_SELECT = {
+  id: true,
+  name: true,
+  version: true,
+  status: true,
+  applicableLifeStages: true,
+  coverTitle: true,
+  sellingPoint: true,
+  targetHealthTags: true,
+  description: true,
+  coverImageUrl: true,
+  detailImages: true,
+  videoUrl: true,
+  energyDensityKcalPerKg: true,
+  nutritionStandard: true,
+  nutritionDetailedData: true,
+  productionStepsJson: true,
+  seriesId: true,
+  seriesLifeStage: true,
+  createdAt: true,
+  updatedAt: true,
+  publishedRecipeId: true,
+  orderDesign: { select: { id: true } },
+  items: {
+    select: DESIGN_RECIPE_ITEM_SELECT,
+    orderBy: DESIGN_RECIPE_ITEMS_ORDER,
+  },
+} as const;
+
 /**
  * 营养档案展示名需要的字段在 service/Prisma 的 include 里不一定有类型声明，
  * 这里统一补成 `NutritionFoodDisplayNameRecord` 的形状（缺 dataSource 用 UNKNOWN）。
@@ -1101,6 +1206,54 @@ const toPublishedRecipeItemRead = (
     }),
   };
 };
+
+/** 其他设计师的设计草稿明细 → 同一只读形状（字段与已发布明细一致，只是克重列名不同）。 */
+const toDesignRecipeItemRead = (
+  item: DesignRecipeItemRow,
+): AgentRecipeItemRead => {
+  const ingredient = item.ingredient ?? null;
+  const nutritionFood = item.nutritionFood ?? null;
+  const name =
+    ingredient?.name ??
+    nutritionFood?.displayNameZh ??
+    nutritionFood?.name ??
+    '';
+  const ingredientType: 'FOOD' | 'SUPPLEMENT' =
+    ingredient?.type === 'SUPPLEMENT' ? 'SUPPLEMENT' : 'FOOD';
+
+  return {
+    ingredientId: item.ingredientId ?? null,
+    nutritionFoodId: item.nutritionFoodId ?? null,
+    name,
+    nutritionProfileName: nutritionFood
+      ? resolveNutritionProfileDisplayName(
+          ingredient?.name,
+          toNutritionFoodDisplayRecord(nutritionFood),
+        )
+      : name,
+    ingredientType,
+    weightG: toFiniteNumber(item.weightG) ?? 0,
+    preparationMethod: item.preparationMethod ?? null,
+    preparationNote: item.preparationNote ?? null,
+    category: classifyFoodCategory({
+      name,
+      cfctClass: readCfctClass(ingredient?.properties),
+      nutritionCategory: nutritionFood?.category ?? null,
+      ingredientType,
+    }),
+  };
+};
+
+/** Recipe 行的只读来源：公开 / 定制 / 未公开的正式版本。 */
+const resolveRecipeSource = (row: {
+  status: string;
+  isCustomRecipe: boolean;
+}): AgentRecipeSummary['source'] =>
+  row.isCustomRecipe || row.status === 'PRIVATE_CUSTOM'
+    ? 'CUSTOM'
+    : row.status === 'PUBLIC'
+      ? 'PUBLISHED'
+      : 'RECIPE_DRAFT';
 
 /** 草稿明细 → 同一只读形状；不再额外查库。 */
 const toDraftRecipeItemRead = (item: AgentDraftItem): AgentRecipeItemRead => ({
@@ -1867,14 +2020,16 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
     };
   }
 
-  // ---- Phase 2 只读食谱目录：已发布 PUBLIC + 当前草稿 ----
+  // ---- 只读食谱库：全部正式食谱 + 全部设计草稿 + 当前草稿 ----
 
   /**
-   * 只读搜索已发布目录 + 当前草稿。
+   * 只读搜索全部食谱。
    *
-   * 目录在数据库侧先按 `status=PUBLIC && isCustomRecipe=false` 过滤，再在内存里
-   * 按 `recipeId` 去重取最高版本（PUBLIC 会保留旧版本）；当前草稿由
-   * `getDraft(this.draftId)` 提供，绝不读其他草稿。结果统一分页。
+   * - Recipe 行不再按 PUBLIC / 非定制过滤：公开、定制、未公开正式版本都可命中；
+   * - 同一 recipeId 只返回最高版本（旧版本不单独列出）；
+   * - 其他设计师的设计草稿（DesignRecipe，未归档）也纳入；当前草稿单独提供；
+   * - 设计草稿按「订单 / 系列+生命阶段 / 单条」去重，已发布草稿由 Recipe 行代表；
+   * - 结果绝不返回客户 / 订单 / 狗狗 / 主人字段。分页返回。
    */
   async searchRecipes(input: {
     search?: string;
@@ -1893,23 +2048,27 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
     if (ingredientName) filters.ingredientName = ingredientName;
     if (lifeStage) filters.lifeStage = lifeStage;
 
-    const [rows, draft] = await Promise.all([
+    const [rows, designRows, draft] = await Promise.all([
       this.prisma.recipe.findMany({
-        where: { status: 'PUBLIC', isCustomRecipe: false },
-        // Postgres 侧先按 recipeId 去重（ORDER BY recipe_id, version DESC），
-        // 只把每道菜的最新版本取回来；下面的 Map 再做一次兜底去重。
+        // Postgres 侧先按 recipeId 去重（ORDER BY recipe_id, version DESC）；
+        // 下面的 Map 再做一次兜底去重，兼容测试替身与未来换端口。
         distinct: ['recipeId'],
         orderBy: [{ recipeId: 'asc' }, { version: 'desc' }],
         select: RECIPE_SEARCH_SELECT,
       }),
+      this.prisma.designRecipe.findMany({
+        where: {
+          status: { not: DesignRecipeStatus.ARCHIVED },
+          id: { not: this.draftId },
+        },
+        orderBy: { updatedAt: 'desc' },
+        select: DESIGN_RECIPE_READ_SELECT,
+      }),
       this.getDraft(this.draftId),
     ]);
 
-    // 同一道菜可能有多个 PUBLIC 版本；每个 recipeId 只保留最高版本。
-    // 即使查询层漏了过滤（测试替身/未来换端口），这里也按状态再拦一次。
     const latestByRecipeId = new Map<string, PublishedRecipeSummaryRow>();
     for (const row of rows as unknown as PublishedRecipeSummaryRow[]) {
-      if (row.status !== 'PUBLIC' || row.isCustomRecipe) continue;
       const latest = latestByRecipeId.get(row.recipeId);
       if (!latest || row.version > latest.version) {
         latestByRecipeId.set(row.recipeId, row);
@@ -1920,6 +2079,44 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
     for (const row of latestByRecipeId.values()) {
       const items = row.items.map(toPublishedRecipeItemRead);
       const summary = this.toPublishedRecipeSummary(row, items);
+      if (
+        matchesRecipeFilters(filters, {
+          name: summary.name,
+          ingredientNames: summary.ingredientNames,
+          nutritionProfileNames: items.map((item) => item.nutritionProfileName),
+          applicableLifeStages: summary.applicableLifeStages,
+        })
+      ) {
+        summaries.push(summary);
+      }
+    }
+
+    // 设计草稿：同一订单 / 同一系列同一生命阶段只保留最近更新的一份；
+    // 已经发布过的草稿由 Recipe 行代表，避免同一道菜出现两次。
+    const latestDesignByKey = new Map<string, DesignRecipeReadRow>();
+    for (const row of designRows as unknown as DesignRecipeReadRow[]) {
+      if (row.id === this.draftId) continue;
+      // 只有「已经发布且没有后续修改」的草稿才由 Recipe 行代表；
+      // 发布后的未发布修订版（status 仍是 DRAFT）必须保留，否则会漏掉最新改动。
+      if (
+        row.status === DesignRecipeStatus.PUBLISHED &&
+        row.publishedRecipeId
+      ) {
+        continue;
+      }
+      const key = row.orderDesign?.id
+        ? `order:${row.orderDesign.id}`
+        : row.seriesId && row.seriesLifeStage
+          ? `series:${row.seriesId}:${row.seriesLifeStage}`
+          : `draft:${row.id}`;
+      if (!latestDesignByKey.has(key)) {
+        latestDesignByKey.set(key, row);
+      }
+    }
+
+    for (const row of latestDesignByKey.values()) {
+      const items = row.items.map(toDesignRecipeItemRead);
+      const summary = this.toDesignRecipeSummary(row, items);
       if (
         matchesRecipeFilters(filters, {
           name: summary.name,
@@ -1967,11 +2164,12 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
   }
 
   /**
-   * 只读一道食谱的完整详情。
+   * 只读一道食谱 / 草稿的完整详情。
    *
-   * - `draftId` 优先：只认当前绑定的草稿，其他 draftId 直接返回 null；
-   * - `recipeId`：先按 `Recipe.id` 解析出逻辑 recipeId，再取最高 PUBLIC 版本；
-   * - 找不到 / 非 PUBLIC / 定制食谱一律 null，由工具层转 `RECIPE_NOT_FOUND`。
+   * - `draftId` 优先：当前草稿走 service 快照；其他设计草稿直接按只读字段查，
+   *   不加载客户 / 订单 / 狗信息；
+   * - `recipeId`：任意 Recipe 行（公开 / 定制 / 未公开正式版本），取最高版本；
+   * - 找不到 / 草稿已归档返回 null，由工具层转 `RECIPE_NOT_FOUND`。
    */
   async getRecipeDetail(input: {
     recipeId?: string;
@@ -1987,27 +2185,33 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
     }
 
     if (draftId) {
-      // 只允许当前这一份；不调用 service，避免碰其他设计师的草稿。
-      if (draftId !== this.draftId) return null;
-      return this.toDraftRecipeDetail(await this.getDraft(this.draftId));
+      if (draftId === this.draftId) {
+        return this.toDraftRecipeDetail(await this.getDraft(this.draftId));
+      }
+      const row = (await this.prisma.designRecipe.findFirst({
+        where: {
+          id: draftId,
+          status: { not: DesignRecipeStatus.ARCHIVED },
+        },
+        select: DESIGN_RECIPE_READ_SELECT,
+      })) as unknown as DesignRecipeReadRow | null;
+      if (!row) return null;
+      const items = row.items.map(toDesignRecipeItemRead);
+      return this.toDesignRecipeDetail(row, items);
     }
 
     const byId = await this.prisma.recipe.findFirst({
-      where: { id: recipeId, status: 'PUBLIC', isCustomRecipe: false },
+      where: { id: recipeId },
       select: { recipeId: true },
     });
     const logicalRecipeId = byId?.recipeId ?? recipeId;
     const row = (await this.prisma.recipe.findFirst({
-      where: {
-        recipeId: logicalRecipeId,
-        status: 'PUBLIC',
-        isCustomRecipe: false,
-      },
+      where: { recipeId: logicalRecipeId },
       orderBy: { version: 'desc' },
       select: RECIPE_DETAIL_SELECT,
     })) as unknown as PublishedRecipeDetailRow | null;
 
-    if (!row || row.status !== 'PUBLIC' || row.isCustomRecipe) return null;
+    if (!row) return null;
     const items = row.items.map(toPublishedRecipeItemRead);
     return this.toPublishedRecipeDetail(row, items);
   }
@@ -2017,7 +2221,7 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
     items: AgentRecipeItemRead[],
   ): AgentRecipeSummary {
     return {
-      source: 'PUBLISHED',
+      source: resolveRecipeSource(row),
       id: row.id,
       recipeId: row.recipeId,
       version: row.version,
@@ -2102,6 +2306,53 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
       seriesLifeStage: draft.seriesLifeStage ?? null,
       designSource: null,
       createdAt: draft.createdAt ?? new Date(0),
+    };
+  }
+
+  private toDesignRecipeSummary(
+    row: DesignRecipeReadRow,
+    items: AgentRecipeItemRead[],
+  ): AgentRecipeSummary {
+    return {
+      source: 'DESIGN_DRAFT',
+      id: row.id,
+      recipeId: null,
+      version: row.version,
+      name: row.name,
+      status: row.status,
+      applicableLifeStages: readStringArray(row.applicableLifeStages),
+      coverTitle: row.coverTitle ?? null,
+      sellingPoint: row.sellingPoint ?? null,
+      targetHealthTags: readStringArray(row.targetHealthTags),
+      ingredientNames: uniqueValues(
+        items.map((item) => item.name).filter((name) => name.length > 0),
+      ),
+      mainProteinName: findMainProteinFromReadItems(items),
+      updatedAt: row.updatedAt,
+    };
+  }
+
+  private toDesignRecipeDetail(
+    row: DesignRecipeReadRow,
+    items: AgentRecipeItemRead[],
+  ): AgentRecipeDetail {
+    return {
+      ...this.toDesignRecipeSummary(row, items),
+      description: row.description ?? null,
+      coverImageUrl: row.coverImageUrl ?? null,
+      detailImages: readStringArray(row.detailImages),
+      videoUrl: row.videoUrl ?? null,
+      energyDensityKcalPerKg: toFiniteNumber(row.energyDensityKcalPerKg),
+      nutritionStandard: row.nutritionStandard ?? null,
+      nutritionDetailedData: row.nutritionDetailedData ?? null,
+      productionSteps: toAgentProductionSteps(
+        readProductionSteps(row.productionStepsJson),
+      ),
+      items,
+      seriesId: row.seriesId ?? null,
+      seriesLifeStage: row.seriesLifeStage ?? null,
+      designSource: null,
+      createdAt: row.createdAt,
     };
   }
 

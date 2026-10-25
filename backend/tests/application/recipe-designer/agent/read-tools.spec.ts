@@ -8,9 +8,9 @@ describe('read tools', () => {
     const result = await tools.get_draft();
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.data.totalWeightG).toBe(900);
-    expect(result.data.items).toHaveLength(7);
-    expect(result.summary).toContain('7 种原料');
+    expect(result.data.totalWeightG).toBe(940);
+    expect(result.data.items).toHaveLength(8);
+    expect(result.summary).toContain('8 种原料');
   });
 
   it('search_ingredients 把条件传给端口，无结果也返回 ok', async () => {
@@ -149,7 +149,7 @@ describe('read tools', () => {
     });
     expect(item.preparationMethod).toBe('生');
     const draft = await port.getDraft('draft-1');
-    expect(draft.items).toHaveLength(8);
+    expect(draft.items).toHaveLength(9);
     expect(draft.contentRevision).toBe(5);
   });
 

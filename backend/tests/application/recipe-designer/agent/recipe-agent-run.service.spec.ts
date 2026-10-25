@@ -5,7 +5,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { AgentToolResult } from 'src/application/recipe-designer/agent/agent-types';
-import { RecipeAgentRunService } from 'src/application/recipe-designer/agent/recipe-agent-run.service';
+import {
+  RecipeAgentRunService,
+  buildRecipeAgentSystemPrompt,
+} from 'src/application/recipe-designer/agent/recipe-agent-run.service';
 import type { DeepSeekToolsResult } from 'src/application/recipe-designer/deepseek-tools-chat';
 
 /**
@@ -377,7 +380,7 @@ describe('RecipeAgentRunService', () => {
     );
   });
 
-  it('SYSTEM_PROMPT 按 10 类检查清单选料，且分类不是门禁', async () => {
+  it('SYSTEM_PROMPT 按 11 类检查清单选料，且分类不是门禁', async () => {
     const { service, callModel } = makeRunService({
       handlers: {},
       responses: [finalResponse('好的')],
@@ -393,7 +396,7 @@ describe('RecipeAgentRunService', () => {
     const systemMessage = callModel.mock.calls[0][0].messages[0];
     const content = systemMessage.content as string;
     expect(content).toContain(
-      '先按 10 类检查清单扫一遍：基础 7 类（主蛋白/内脏/碳水/蔬菜/菌藻/坚果种子/油脂）+ 建议 3 类（蛋/豆/水果），每类找 1-2 个候选；不要求每类都进最终配方，缺类说明原因即可，分类不是门禁。',
+      '先按 11 类检查清单扫一遍：基础 8 类（主蛋白/内脏/水产/碳水/蔬菜/菌藻/坚果种子/油脂）+ 建议 3 类（蛋/豆/水果），每类找 1-2 个候选；不要求每类都进最终配方，缺类说明原因即可，分类不是门禁。',
     );
     expect(content).toContain(
       '用户明确说不要的类别/原料绝对不要加；缺类不需要申请例外，说明原因即可；只有营养达标例外才 request_exception。',
@@ -401,6 +404,83 @@ describe('RecipeAgentRunService', () => {
     expect(content).toContain('按目录、分类清单、发布门槛');
     expect(content).not.toContain('按七类各找 1-2 个候选');
     expect(content).not.toContain('缺类只能 ask_user 或 request_exception');
+  });
+
+  it('SYSTEM_PROMPT 要求候选确认后才允许 add_ingredient', async () => {
+    const { service, callModel } = makeRunService({
+      handlers: {},
+      responses: [finalResponse('好的')],
+    });
+
+    const { sessionId } = await service.start({
+      draftId: DRAFT_ID,
+      actor: ACTOR,
+      message: '开始',
+    });
+    await service.waitForIdle(sessionId);
+
+    const content = callModel.mock.calls[0][0].messages[0].content as string;
+    expect(content).toContain(
+      '用 search_ingredients 收齐候选后、调用任何 add_ingredient 之前',
+    );
+    expect(content).toContain('必须先把 11 类候选逐类列成清单');
+    expect(content).toContain('然后调用 ask_user 请用户确认或调整');
+    expect(content).toContain('用户回复前绝对不要 add_ingredient');
+    expect(content).toContain('逐项列出缺失的类别和原因');
+    expect(content).toContain('请用户确认这个例外');
+  });
+
+  it('SYSTEM_PROMPT 要求先核对生命阶段，不一致时请人切换', async () => {
+    const { service, callModel } = makeRunService({
+      handlers: {},
+      responses: [finalResponse('好的')],
+    });
+
+    const { sessionId } = await service.start({
+      draftId: DRAFT_ID,
+      actor: ACTOR,
+      message: '给幼犬做一份',
+    });
+    await service.waitForIdle(sessionId);
+
+    const content = callModel.mock.calls[0][0].messages[0].content as string;
+    expect(content).toContain('用户明确说了生命阶段时，先用 get_draft 读 scenario');
+    expect(content).toContain('ask_user 请用户在编辑器里切换阶段');
+    expect(content).toContain('不要静默按错误阶段设计');
+    expect(content).toContain('不要自己改阶段（没有自动切换阶段的工具）');
+  });
+
+  it('SYSTEM_PROMPT 注入 Asia/Shanghai 当前日期并说明没有季节元数据', async () => {
+    const { service, callModel } = makeRunService({
+      handlers: {},
+      responses: [finalResponse('好的')],
+    });
+
+    const { sessionId } = await service.start({
+      draftId: DRAFT_ID,
+      actor: ACTOR,
+      message: '开始',
+    });
+    await service.waitForIdle(sessionId);
+
+    const content = callModel.mock.calls[0][0].messages[0].content as string;
+    const today = new Intl.DateTimeFormat('zh-CN', {
+      timeZone: 'Asia/Shanghai',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    }).format(new Date());
+    expect(content).toContain(`当前日期是 ${today}（Asia/Shanghai）`);
+    expect(content).toContain('原料库没有季节/时令元数据，也没有联网搜索');
+    expect(content).toContain('时令假设');
+    expect(content).toContain('请用户确认');
+  });
+
+  it('buildRecipeAgentSystemPrompt 用传入时间生成日期，不是写死日期', () => {
+    const content = buildRecipeAgentSystemPrompt(
+      new Date('2026-01-02T03:04:05.000Z'),
+    );
+    expect(content).toContain('当前日期是 2026年1月2日（Asia/Shanghai）');
   });
 
   it('start 只把本轮用户消息作为 user，刚追加的那条不会重复进历史 transcript', async () => {

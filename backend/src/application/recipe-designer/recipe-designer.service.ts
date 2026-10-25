@@ -49,6 +49,11 @@ import {
   getProfileEffectiveWeightG,
   readProfileValuePer100g,
 } from '../../domain/recipe-designer/nutrition-profile-reader';
+import {
+  classifyFoodCategory,
+  sortRecipeItemsByDisplayOrder,
+  type FoodCategory,
+} from '../../domain/recipe-designer/food-category-map';
 import { buildFoodWeightRatioMap } from '../../domain/recipe/food-ratio-normalization';
 import {
   assessRecipeDraft,
@@ -492,6 +497,20 @@ const INTERNAL_RECIPE_DESIGNER_CREATOR_IDS = [
 const PUBLISHED_RECIPE_BATCH_LABOR_HOURS = 2;
 const DESIGN_RECIPE_VERSION_CREATE_MAX_ATTEMPTS = 3;
 const DESIGN_RECIPE_ITEM_ORDER_MAX_ATTEMPTS = 3;
+
+/** 读标准原料 `properties.cfct_class`；非对象/空白一律 null。 */
+function readCfctClass(properties: unknown): string | null {
+  if (
+    typeof properties !== 'object' ||
+    properties === null ||
+    Array.isArray(properties)
+  ) {
+    return null;
+  }
+  const value = (properties as Record<string, unknown>).cfct_class;
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
 const COPYABLE_RECIPE_STATUS_PRIORITY: Record<string, number> = {
   [RecipeStatus.PRIVATE_CUSTOM]: 3,
   [RecipeStatus.DRAFT]: 2,
@@ -662,6 +681,7 @@ type DesignRecipeItemWithFood = {
     name: string;
     displayNameZh?: string | null;
     preparationState?: string | null;
+    category?: NutritionFoodCategory | string | null;
     nutritionData: unknown;
     mappings?: Array<{
       ingredientId: string;
@@ -5235,7 +5255,8 @@ export class RecipeDesignerService {
       if (draft.createdBy !== context.userId) {
         throw new NotFoundException(`Design recipe ${id} not found`);
       }
-      return this.withPreparationMethodLabels(draft);
+      const labeled = await this.withPreparationMethodLabels(draft);
+      return this.withItemDisplayOrder(labeled);
     }
 
     const internalUserIds = await this.listInternalRecipeDesignerCreatorIds();
@@ -5243,7 +5264,8 @@ export class RecipeDesignerService {
       throw new NotFoundException(`Design recipe ${id} not found`);
     }
 
-    return this.withPreparationMethodLabels(draft);
+    const labeled = await this.withPreparationMethodLabels(draft);
+    return this.withItemDisplayOrder(labeled);
   }
 
   /**
@@ -10063,6 +10085,46 @@ export class RecipeDesignerService {
           null,
       })),
     } as T;
+  }
+
+  /**
+   * 一条草稿明细的分类：与 Agent / 目录对比共用 `classifyFoodCategory` 口径。
+   * 营养档案缺失或脏数据时归 `UNCLASSIFIED`，只影响展示顺序。
+   */
+  private resolveDraftItemDisplayCategory(
+    item: DesignRecipeItemWithFood,
+  ): FoodCategory {
+    if (!item.nutritionFood) {
+      return 'UNCLASSIFIED';
+    }
+    const ingredient = this.resolveItemIngredient(item);
+    const name =
+      ingredient?.name ??
+      item.nutritionFood.displayNameZh ??
+      item.nutritionFood.name ??
+      '';
+    return classifyFoodCategory({
+      name,
+      cfctClass: readCfctClass(ingredient?.properties),
+      nutritionCategory: item.nutritionFood.category ?? null,
+      ingredientType:
+        ingredient?.type === IngredientType.SUPPLEMENT ? 'SUPPLEMENT' : 'FOOD',
+    });
+  }
+
+  /**
+   * 读接口按固定分类顺序展示明细；只改返回顺序，不改库里的 `sortOrder`。
+   * 同一分类内保留原 `sortOrder` 升序，作为稳定 tie-break。
+   */
+  private withItemDisplayOrder<T extends DesignRecipeWithItems>(draft: T): T {
+    const ordered = sortRecipeItemsByDisplayOrder(
+      (draft.items ?? []).map((item) => ({
+        category: this.resolveDraftItemDisplayCategory(item),
+        sortOrder: item.sortOrder ?? 0,
+        item,
+      })),
+    );
+    return { ...draft, items: ordered.map((entry) => entry.item) } as T;
   }
 
   /**

@@ -308,7 +308,7 @@ describe('check tools', () => {
     }
   });
 
-  it('基础 7 类齐全、只缺建议类 → PASS，并提示建议项', async () => {
+  it('基础 8 类齐全、只缺建议类 → PASS，并提示建议项', async () => {
     const tools = createCheckTools({
       port: createFakeRecipeAgentPort(),
       draftId: 'draft-1',
@@ -322,35 +322,36 @@ describe('check tools', () => {
     expect(coverage?.label).toBe('分类检查');
     expect(coverage?.status).toBe('PASS');
     expect(coverage?.detail).toBe(
-      '基础 7 类齐全；建议项未覆盖：蛋、豆、水果。',
+      '基础 8 类齐全；建议项未覆盖：蛋、豆、水果。',
     );
   });
 
-  it('10 类检查项齐全 → PASS', async () => {
+  it('11 类检查项齐全 → PASS', async () => {
     const base = fakeDraftSnapshot();
     const suggestedItems = [
       {
         ...base.items[0],
-        id: 'item-8',
+        id: 'item-9',
         name: '鸡蛋',
         category: 'EGG' as const,
       },
       {
         ...base.items[0],
-        id: 'item-9',
+        id: 'item-10',
         name: '鹰嘴豆',
         category: 'LEGUME' as const,
       },
       {
         ...base.items[0],
-        id: 'item-10',
+        id: 'item-11',
         name: '苹果',
         category: 'FRUIT' as const,
       },
     ];
     const draft = fakeDraftSnapshot({
       items: [...base.items, ...suggestedItems],
-      totalWeightG: 900 + suggestedItems.length * base.items[0].weightG,
+      totalWeightG:
+        base.totalWeightG + suggestedItems.length * base.items[0].weightG,
     });
     const tools = createCheckTools({
       port: createFakeRecipeAgentPort({ draft }),
@@ -363,7 +364,7 @@ describe('check tools', () => {
     expect(result.data.status).toBe('PASS');
     const coverage = result.data.checks.find((c) => c.key === 'COVERAGE');
     expect(coverage?.status).toBe('PASS');
-    expect(coverage?.detail).toBe('10 类检查项齐全。');
+    expect(coverage?.detail).toBe('11 类检查项齐全。');
   });
 
   it('已批例外可以把达标失败降为警告', async () => {
@@ -401,7 +402,7 @@ describe('check tools', () => {
       expect(result.data.missing).toEqual(['MUSHROOM']);
       expect(result.data.suggestedCovered).toEqual([]);
       expect(result.data.suggestedMissing).toEqual(['EGG', 'LEGUME', 'FRUIT']);
-      expect(result.summary).toContain('分类检查 6/10（基础 6/7，建议 0/3）');
+      expect(result.summary).toContain('分类检查 7/11（基础 7/8，建议 0/3）');
       expect(result.summary).toContain('基础缺「菌藻」');
       expect(result.summary).toContain('建议未覆盖「蛋、豆、水果」');
     }
@@ -416,13 +417,13 @@ describe('check tools', () => {
         ...base.items,
         {
           ...base.items[0],
-          id: 'item-8',
+          id: 'item-9',
           name: '苹果',
           category: 'FRUIT' as const,
           weightG: 30,
         },
       ],
-      totalWeightG: 930,
+      totalWeightG: base.totalWeightG + 30,
     });
     const tools = createCheckTools({
       port: createFakeRecipeAgentPort({ draft }),
@@ -435,8 +436,8 @@ describe('check tools', () => {
     expect(result.data.suggestedCovered).toEqual(['FRUIT']);
     expect(result.data.suggestedMissing).toEqual(['EGG', 'LEGUME']);
     expect(result.data.optionalPresent).toEqual([]);
-    expect(result.summary).toContain('分类检查 8/10（基础 7/7，建议 1/3）');
-    expect(result.summary).toContain('基础 7 类齐全');
+    expect(result.summary).toContain('分类检查 9/11（基础 8/8，建议 1/3）');
+    expect(result.summary).toContain('基础 8 类齐全');
     expect(result.summary).toContain('建议未覆盖「蛋、豆」');
   });
 
@@ -475,14 +476,16 @@ describe('check tools', () => {
     if (!result.ok) return;
     // 数据保留输入，不被摘要过滤影响。
     expect(result.data.confirmedOmissions).toEqual(['PROTEIN']);
-    expect(result.summary).toContain('基础 7 类齐全');
+    expect(result.summary).toContain('基础 8 类齐全');
     expect(result.summary).not.toContain('基础缺');
     expect(result.summary).not.toContain('已确认缺类');
   });
 
   it('没有主蛋白时目录对比返回空证据，不抛错', async () => {
     const draft = fakeDraftSnapshot({
-      items: fakeDraftSnapshot().items.filter((i) => i.category !== 'PROTEIN'),
+      items: fakeDraftSnapshot().items.filter(
+        (i) => i.category !== 'PROTEIN' && i.category !== 'AQUATIC',
+      ),
     });
     const port = createFakeRecipeAgentPort({ draft });
     const tools = createCheckTools({ port, draftId: 'draft-1', tagPolicy });
@@ -509,6 +512,63 @@ describe('check tools', () => {
     expect(port.getCatalogUsage).toHaveBeenCalledWith({
       mainProteinName: '鸭腿肉',
     });
+  });
+
+  it('水产也算主蛋白：克数更大的水产用于目录对比', async () => {
+    const base = fakeDraftSnapshot();
+    const items = base.items.map((item) =>
+      item.category === 'PROTEIN' ? { ...item, weightG: 10 } : item,
+    );
+    items.push({
+      ...base.items[0],
+      id: 'salmon',
+      name: '三文鱼',
+      category: 'AQUATIC',
+      weightG: 500,
+    });
+    const port = createFakeRecipeAgentPort({
+      draft: fakeDraftSnapshot({ items }),
+    });
+    const tools = createCheckTools({ port, draftId: 'draft-1', tagPolicy });
+    await tools.check_catalog_conflicts();
+    expect(port.getCatalogUsage).toHaveBeenCalledWith({
+      mainProteinName: '三文鱼',
+    });
+  });
+
+  it('只重合水产报 HARD', async () => {
+    const tools = createCheckTools({
+      port: createFakeRecipeAgentPort({
+        catalogUsage: {
+          totalPublishedRecipes: 26,
+          mainProteinCount: 2,
+          recipes: [
+            {
+              recipeId: 'r-aquatic',
+              name: '三文鱼餐',
+              mainProteinName: '三文鱼',
+              overlappingCategories: ['AQUATIC'],
+              overlappingIngredientNames: ['三文鱼'],
+            },
+          ],
+        },
+      }),
+      draftId: 'draft-1',
+      tagPolicy,
+    });
+    const result = await tools.check_catalog_conflicts({
+      mainProteinName: '三文鱼',
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data).toEqual([
+      {
+        recipeId: 'r-aquatic',
+        recipeName: '三文鱼餐',
+        severity: 'HARD',
+        categories: ['AQUATIC'],
+      },
+    ]);
   });
 
   it('主蛋白重合报 HARD，软类重合只报 SOFT', async () => {

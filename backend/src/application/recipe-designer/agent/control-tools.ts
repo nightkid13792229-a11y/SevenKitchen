@@ -152,7 +152,7 @@ export async function readApprovalState(
     if (typeof entry !== 'string' || !isRequiredFoodCategory(entry)) {
       return {
         ok: false,
-        message: `审批状态格式不正确：confirmedOmissions 只能包含七类必需类别（${REQUIRED_FOOD_CATEGORIES.join('、')}）。`,
+        message: `审批状态格式不正确：confirmedOmissions 只能包含基础必需类别（${REQUIRED_FOOD_CATEGORIES.join('、')}）。`,
       };
     }
     confirmedOmissions.push(entry);

@@ -104,6 +104,7 @@ function withBoundary(handler: AgentToolHandler): AgentToolHandler {
 const FOOD_CATEGORY_VALUES = [
   'PROTEIN',
   'ORGAN',
+  'AQUATIC',
   'CARB',
   'VEGETABLE',
   'MUSHROOM',
@@ -414,7 +415,7 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
   {
     name: 'check_coverage',
     description:
-      '检查 10 类选料清单（基础 7 + 建议 3）；缺类只提醒，不是门禁。',
+      '检查 11 类选料清单（基础 8 + 建议 3）；缺类只提醒，不是门禁。',
     parameters: {
       type: 'object',
       properties: {},

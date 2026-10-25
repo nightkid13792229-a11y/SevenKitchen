@@ -147,7 +147,7 @@ describe('RecipeAgentControlService', () => {
       sessionId: 'session-1',
       type: 'CATEGORY_OMISSION',
       reason: '这份菜谱刻意不加主食和蔬菜',
-      detail: { categories: ['CARB', 'VEGETABLE'] },
+      detail: { categories: ['AQUATIC', 'CARB', 'VEGETABLE'] },
     });
     expect(sessionService.appendMessage).toHaveBeenCalledTimes(1);
     const message = sessionService.appendMessage.mock.calls[0][0];
@@ -160,6 +160,7 @@ describe('RecipeAgentControlService', () => {
       items: [
         { category: 'PROTEIN' },
         { category: 'ORGAN' },
+        { category: 'AQUATIC' },
         { category: 'CARB' },
         { category: 'VEGETABLE' },
         { category: 'MUSHROOM' },

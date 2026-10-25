@@ -528,7 +528,7 @@ describe('write tools', () => {
     expect(result.data).toEqual({
       itemId: 'item-7',
       name: '鱼油',
-      totalWeightG: 860,
+      totalWeightG: 900,
     });
     expect(result.summary).toContain('鱼油');
     expect(result.summary).not.toContain('item-7');

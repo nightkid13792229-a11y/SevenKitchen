@@ -9,9 +9,9 @@
  *
  * - 评估必须跑在**当前内容版本**上；`check_ready` 只看 `draft.lastAssessment`，
  *   不重新跑评估，版本对不上就算“没准备好”。
- * - 10 类选料检查清单不是门禁：基础类缺只 WARN，建议类缺只提示，都不阻断交付。
+ * - 11 类选料检查清单不是门禁：基础类缺只 WARN，建议类缺只提示，都不阻断交付。
  * - 20% 余量是工作标准不是门禁：不足只 WARN，但必须逐条列出来。
- * - 目录对比只给证据：主蛋白重合 HARD，内脏/碳水/蔬菜/菌藻/坚果/水果/乳/蛋/豆重合 SOFT；
+ * - 目录对比只给证据：主蛋白（畜/禽/水产）重合 HARD，内脏/碳水/蔬菜/菌藻/坚果/水果/乳/蛋/豆重合 SOFT；
  *   油脂/调味/补剂不比。
  *
  * 入参来自模型（运行时会绕过 TypeScript 类型），所以所有字段先做 `typeof`
@@ -46,8 +46,8 @@ export const MARGIN_RATIO = 0.2;
 /** 低于这个百分数就算“余量不足”。 */
 const MARGIN_PERCENT = MARGIN_RATIO * 100;
 
-/** 目录对比里算硬撞的类别（主蛋白必须不同）。 */
-const HARD_CATEGORIES: readonly FoodCategory[] = ['PROTEIN'];
+/** 目录对比里算硬撞的类别（主蛋白必须不同；水产也算主蛋白）。 */
+const HARD_CATEGORIES: readonly FoodCategory[] = ['PROTEIN', 'AQUATIC'];
 
 /** 目录对比里算软撞的类别；油脂/调味/补剂不参与。 */
 const SOFT_CATEGORIES: readonly FoodCategory[] = [
@@ -70,6 +70,7 @@ const COMPARED_CATEGORIES = new Set<FoodCategory>([
 const CATEGORY_LABELS: Record<FoodCategory, string> = {
   PROTEIN: '蛋白',
   ORGAN: '内脏',
+  AQUATIC: '水产',
   CARB: '碳水',
   VEGETABLE: '蔬菜',
   MUSHROOM: '菌藻',
@@ -310,7 +311,7 @@ export function withComputedMargins(
   };
 }
 
-/** 解析兼容用的缺类确认：必须是基础 7 类之一，去空白、去重。 */
+/** 解析兼容用的缺类确认：必须是基础类别之一，去空白、去重。 */
 function readConfirmedOmissions(value: unknown): Parsed<BaseFoodCategory[]> {
   if (value === undefined) {
     return { ok: true, value: [] };
@@ -318,7 +319,7 @@ function readConfirmedOmissions(value: unknown): Parsed<BaseFoodCategory[]> {
   if (!Array.isArray(value)) {
     return {
       ok: false,
-      message: `confirmedOmissions 必须是数组，只能确认基础 7 类：${BASE_FOOD_CATEGORIES.join('、')}。`,
+      message: `confirmedOmissions 必须是数组，只能确认基础类别：${BASE_FOOD_CATEGORIES.join('、')}。`,
     };
   }
 
@@ -328,7 +329,7 @@ function readConfirmedOmissions(value: unknown): Parsed<BaseFoodCategory[]> {
     if (typeof entry !== 'string') {
       return {
         ok: false,
-        message: `confirmedOmissions 必须是基础 7 类的字符串数组：${BASE_FOOD_CATEGORIES.join('、')}。`,
+        message: `confirmedOmissions 必须是基础类别的字符串数组：${BASE_FOOD_CATEGORIES.join('、')}。`,
       };
     }
     const trimmed = entry.trim();
@@ -351,13 +352,13 @@ function readConfirmedOmissions(value: unknown): Parsed<BaseFoodCategory[]> {
   return { ok: true, value: omissions };
 }
 
-/** 克数最大的 PROTEIN 项名；没有主蛋白时返回 null。 */
+/** 克数最大的主蛋白（PROTEIN / AQUATIC）项名；没有主蛋白时返回 null。 */
 function findLargestProteinName(
   items: readonly AgentDraftItem[],
 ): string | null {
   let selected: AgentDraftItem | null = null;
   for (const item of items) {
-    if (item.category !== 'PROTEIN') continue;
+    if (item.category !== 'PROTEIN' && item.category !== 'AQUATIC') continue;
     if (selected === null || item.weightG > selected.weightG) {
       selected = item;
     }
@@ -462,16 +463,16 @@ export function createCheckTools(deps: CheckToolDeps): RecipeAgentCheckTools {
         coverage.missing.length === 0 &&
         coverage.suggestedMissing.length === 0
       ) {
-        parts.push('10 类检查项齐全');
+        parts.push(`${CHECKLIST_FOOD_CATEGORIES.length} 类检查项齐全`);
       } else {
         parts.push(
           coverage.missing.length === 0
-            ? '基础 7 类齐全'
+            ? `基础 ${BASE_FOOD_CATEGORIES.length} 类齐全`
             : `基础缺「${categoryLabels(coverage.missing)}」`,
         );
         parts.push(
           coverage.suggestedMissing.length === 0
-            ? '建议 3 类齐全'
+            ? `建议 ${SUGGESTED_FOOD_CATEGORIES.length} 类齐全`
             : `建议未覆盖「${categoryLabels(coverage.suggestedMissing)}」`,
         );
       }
@@ -743,7 +744,7 @@ export function createCheckTools(deps: CheckToolDeps): RecipeAgentCheckTools {
         );
       }
 
-      // COVERAGE：10 类选料检查清单，不是门禁。
+      // COVERAGE：11 类选料检查清单，不是门禁。
       // 基础类缺只 WARN；建议类缺只提示（仍 PASS）；都不阻断交付。
       const coverage = summarizeFoodCategoryCoverage(draft.items);
       if (coverage.missing.length > 0) {
@@ -759,11 +760,17 @@ export function createCheckTools(deps: CheckToolDeps): RecipeAgentCheckTools {
           buildReadyCheck(
             'COVERAGE',
             'PASS',
-            `基础 7 类齐全；建议项未覆盖：${categoryLabels(coverage.suggestedMissing)}。`,
+            `基础 ${BASE_FOOD_CATEGORIES.length} 类齐全；建议项未覆盖：${categoryLabels(coverage.suggestedMissing)}。`,
           ),
         );
       } else {
-        checks.push(buildReadyCheck('COVERAGE', 'PASS', '10 类检查项齐全。'));
+        checks.push(
+          buildReadyCheck(
+            'COVERAGE',
+            'PASS',
+            `${CHECKLIST_FOOD_CATEGORIES.length} 类检查项齐全。`,
+          ),
+        );
       }
 
       // COPY：四个字段都要有内容。

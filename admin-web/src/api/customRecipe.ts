@@ -657,6 +657,29 @@ export type CustomRecipeIntakeOptionSets = Record<
 
 const BASE = '/admin/custom-recipe'
 
+/** 后台退款申请（2026-10-25） */
+export interface AdminRefundRequest {
+  id: string;
+  orderId: string;
+  orderStatus: string | null;
+  status: string;
+  statusLabel: string;
+  reasonCode: string;
+  reasonLabel: string;
+  description: string;
+  photos: string[];
+  amount: number;
+  adminNote: string | null;
+  refundStatus: string | null;
+  refundOutNo: string | null;
+  refundId: string | null;
+  createdAt: string;
+  reviewedAt: string | null;
+  dogName: string | null;
+  customerName: string | null;
+  customerPhone: string | null;
+}
+
 export const customRecipeApi = {
   /** 订单列表（分页 + 状态/日期/关键词筛选） */
   listOrders: (params: {
@@ -946,6 +969,19 @@ export const customRecipeApi = {
 
   rejectAftersale: (id: string, payload: { reason: string }) =>
     api.post(`/admin/custom-recipe/aftersales/${id}/reject`, payload),
+
+  // ---------- 退款申请（2026-10-25）----------
+
+  listRefundRequests: (
+    params?: { status?: string },
+  ): Promise<{ items: AdminRefundRequest[] }> =>
+    api.get('/admin/custom-recipe/refund-requests', { params }),
+
+  approveRefundRequest: (id: string, payload: { note?: string }) =>
+    api.post(`/admin/custom-recipe/refund-requests/${id}/approve`, payload),
+
+  rejectRefundRequest: (id: string, payload: { reason: string }) =>
+    api.post(`/admin/custom-recipe/refund-requests/${id}/reject`, payload),
 
   /** 保存食谱定制设置（仅管理员） */
   updateConfig: (payload: Partial<CustomRecipeConfig>) =>

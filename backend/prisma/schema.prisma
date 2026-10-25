@@ -2678,6 +2678,8 @@ model CustomRecipeOrder {
   /// 只读交付分享链接（2026-10-21 新增，无账号代客客户用）
   deliveryShares        CustomRecipeDeliveryShare[]
   aftersales            CustomRecipeAftersale[]
+  /// 已交付/制作中订单的退款申请（2026-10-25）。未开始制作仍走取消+全额退款。
+  refundRequests        CustomRecipeRefundRequest[]
   customer              User                     @relation("CustomRecipeOrderCustomer", fields: [customerId], references: [id], onDelete: Cascade)
   dog                   Dog                      @relation("CustomRecipeOrderDog", fields: [dogId], references: [id], onDelete: Cascade)
   recipe                Recipe?                  @relation("CustomRecipeOrders", fields: [recipeId], references: [id])
@@ -3090,6 +3092,54 @@ model CustomRecipeAftersale {
   @@index([handlerId])
   @@index([deliveryBatchId])
   @@map("custom_recipe_aftersale")
+}
+
+/// 已交付/制作中订单的退款申请（2026-10-25）。
+///
+/// 为什么单独一张表，不复用售后表：
+/// 售后是"调整食谱"，有免费次数/交付窗口；退款是资金动作，有自己的审核、
+/// 退款单号和失败状态。混在一起会让两个配额互相污染。
+model CustomRecipeRefundRequest {
+  id            String   @id @default(uuid()) @map("id")
+  orderId       String   @map("order_id")
+  customerId    String   @map("customer_id")
+  /// 原因码 + 提交时的中文快照（后台/顾客看到的是当时选的那一项）
+  reasonCode    String   @map("reason_code") @db.VarChar(48)
+  reasonLabel   String   @map("reason_label") @db.VarChar(100)
+  description   String   @db.VarChar(1000)
+  photos        String[] @default([])
+  /// 申请退款金额；当前按订单实付全额，后续要支持部分退款时再扩
+  amount        Decimal  @db.Decimal(10, 2)
+  status        CustomRecipeRefundRequestStatus @default(PENDING)
+  /// 后台审核备注 / 驳回原因（给顾客看）
+  adminNote     String?  @map("admin_note") @db.VarChar(1000)
+  /// 微信退款状态快照：PROCESSING / SUCCESS / FAILED …
+  refundStatus  String?  @map("refund_status") @db.VarChar(20)
+  refundOutNo   String?  @map("refund_out_no") @db.VarChar(64)
+  refundId      String?  @map("refund_id") @db.VarChar(64)
+  reviewedBy    String?  @map("reviewed_by") @db.VarChar(64)
+  reviewedAt    DateTime? @map("reviewed_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  order         CustomRecipeOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([status])
+  @@map("custom_recipe_refund_request")
+}
+
+enum CustomRecipeRefundRequestStatus {
+  /// 待审核
+  PENDING
+  /// 审核通过，退款处理中
+  PROCESSING
+  /// 退款成功
+  REFUNDED
+  /// 审核驳回
+  REJECTED
+  /// 退款失败（可重试）
+  FAILED
 }
 
 enum CustomRecipeAftersaleStatus {

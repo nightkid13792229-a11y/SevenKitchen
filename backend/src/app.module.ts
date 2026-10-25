@@ -55,6 +55,7 @@ import { CustomRecipeViewService } from './application/custom-recipe/custom-reci
 import { OrderDesignSubmitService } from './application/custom-recipe/order-design-submit.service';
 import { CustomRecipeDeliveryService } from './application/custom-recipe/custom-recipe-delivery.service';
 import { CustomRecipeAftersaleService } from './application/custom-recipe/custom-recipe-aftersale.service';
+import { CustomRecipeRefundService } from './application/custom-recipe/custom-recipe-refund.service';
 import { CustomRecipeSchedulerService } from './application/scheduler/custom-recipe-scheduler.service';
 import { SharedPhotosController } from './interfaces/controllers/shared-photos.controller';
 import { CustomRecipeService } from './application/custom-recipe/custom-recipe.service';
@@ -479,6 +480,7 @@ validatePrismaConfig();
     CustomRecipeDeliveryService,
     OrderDesignSubmitService,
     CustomRecipeAftersaleService,
+    CustomRecipeRefundService,
     CustomRecipeSchedulerService,
     DogService,
     {

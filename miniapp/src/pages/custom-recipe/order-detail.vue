@@ -146,11 +146,11 @@
                 已有未处理售后时按钮变成"查看进展"，不再另设整单售后卡。
               -->
               <button
-                v-if="aftersaleCount > 0 || aftersaleAction?.enabled"
+                v-if="showAftersaleEntry(item.recipeId)"
                 class="recipe-btn batch-recipe__adjust"
                 @tap="viewBatchAftersale(item)"
               >
-                {{ aftersaleCount > 0 ? '查看进展' : '调整食谱' }}
+                {{ aftersaleEntryLabel(item.recipeId) }}
               </button>
             </view>
           </view>
@@ -185,11 +185,11 @@
           </button>
           <!-- 按份售后：单份订单只有这一份，入口同样留在卡片上 -->
           <button
-            v-if="aftersaleCount > 0 || aftersaleAction?.enabled"
+            v-if="showAftersaleEntry(order.recipeId)"
             class="recipe-btn batch-recipe__adjust"
             @tap="viewAftersale"
           >
-            {{ aftersaleCount > 0 ? '查看进展' : '调整食谱' }}
+            {{ aftersaleEntryLabel(order.recipeId) }}
           </button>
         </view>
       </view>
@@ -356,7 +356,7 @@
           v-if="order.status === 'PENDING_PAYMENT' && !paymentExpired"
           class="btn primary"
           :loading="paying"
-          :disabled="paying"
+          :disabled="paying || cancelling"
           @tap="goPay"
         >
           立即付款
@@ -376,7 +376,7 @@
           前端在判断业务。老后端不返回 renderable 时回退到原来的判断。
         -->
         <button
-          v-if="cancelAction?.enabled"
+          v-if="order.status === 'PENDING_PAYMENT' && cancelAction?.enabled"
           class="btn secondary"
           :loading="cancelling"
           :disabled="cancelling || paying || !cancelAction.enabled"
@@ -384,14 +384,12 @@
         >
           {{ cancelAction.label }}
         </button>
-        <!-- 退款是另一件事：入口在底栏，售后（调整食谱）留在食谱卡片上 -->
+        <!-- 退款统一入口（2026-10-25）：未开始制作走全额退款页；制作中/已交付走申请审核 -->
         <button
-          v-if="canRequestRefund"
+          v-if="showRefundEntry"
           class="btn secondary"
-          @tap="viewRefund"
-        >
-          退款申请
-        </button>
+          @tap="goRefund"
+        >{{ refundEntryLabel }}</button>
         <CustomerServiceInlineButton
           class="order-service"
           compact
@@ -409,7 +407,7 @@
 
 <script setup lang="ts">
 import { computed, ref, onUnmounted } from 'vue';
-import { onLoad, onPullDownRefresh } from '@dcloudio/uni-app';
+import { onLoad, onPullDownRefresh, onShow } from '@dcloudio/uni-app';
 import { getToken } from '@/utils/api';
 import {
   cancelOrder as cancelOrderRequest,
@@ -531,6 +529,23 @@ onPullDownRefresh(() => {
 });
 
 /**
+ * 从售后调整/退款页/交付页返回时刷新。
+ *
+ * 首次 onShow 不重复请求（onLoad 已经在拉）；之后每次回到本页再拉一次，
+ * 否则「调整食谱」会一直停在旧状态，顾客以为没提交成功。
+ */
+let hasShownOrderDetail = false;
+onShow(() => {
+  if (!hasShownOrderDetail) {
+    hasShownOrderDetail = true;
+    return;
+  }
+  if (orderId.value && !loading.value && !paying.value && !cancelling.value) {
+    void loadOrderDetail();
+  }
+});
+
+/**
  * 读支付超时配置。
  *
  * 订单接口若还没下发 paymentDeadlineAt，就用它 + createdAt 估算剩余时间；
@@ -596,8 +611,37 @@ const loadOrderDetail = async () => {
     try {
       const result = await fetchAftersales(orderId.value);
       aftersaleCount.value = result.items.length;
+
+      const openIds = new Set<string>();
+      const historyIds = new Set<string>();
+      for (const item of result.items) {
+        const recipeIds = (Array.isArray(item.items) ? item.items : [])
+          .map((row) => String(row.recipeId || '').trim())
+          .filter(Boolean);
+        for (const recipeId of recipeIds) {
+          historyIds.add(recipeId);
+          if (OPEN_AFTERSALE_STATUSES.includes(String(item.status))) {
+            openIds.add(recipeId);
+          }
+        }
+      }
+
+      openAftersaleRecipeIds.value = Array.from(openIds);
+      aftersaleHistoryRecipeIds.value = Array.from(historyIds);
+      /**
+       * 后端 quota.hasOpen 是整单口径；只有在老记录没有任何逐份 recipeId 时
+       * 才用它兜底，否则会把“A 份有进展”误显示到 B 份。
+       */
+      aftersaleOpenAll.value =
+        Boolean(result.quota?.hasOpen) && openIds.size === 0;
+      aftersaleHistoryAll.value =
+        result.items.length > 0 && historyIds.size === 0;
     } catch {
       aftersaleCount.value = 0;
+      openAftersaleRecipeIds.value = [];
+      aftersaleHistoryRecipeIds.value = [];
+      aftersaleOpenAll.value = false;
+      aftersaleHistoryAll.value = false;
     }
   } catch (error) {
     // 401 不能报成"网络错误"：那会让顾客去查自己的网络，方向完全错了
@@ -692,6 +736,51 @@ const aftersaleAction = computed(() =>
   findAction(order.value.renderable, 'APPLY_AFTERSALE'),
 );
 const aftersaleCount = ref(0);
+/**
+ * 每一份自己的未完成售后。
+ *
+ * 不能再用 `aftersaleCount > 0` 给所有卡片统一显示「查看进展」——
+ * 一张单里 A 份有进展，B 份仍然应该能「调整食谱」。
+ */
+const openAftersaleRecipeIds = ref<string[]>([]);
+const aftersaleHistoryRecipeIds = ref<string[]>([]);
+/** 老数据没有逐份 recipeId 时，退化为整单判断（不能让入口消失） */
+const aftersaleOpenAll = ref(false);
+const aftersaleHistoryAll = ref(false);
+
+const OPEN_AFTERSALE_STATUSES = ['PENDING', 'ACCEPTED', 'PROCESSING'];
+
+function isAftersaleOpenForRecipe(recipeId?: string | null) {
+  if (aftersaleOpenAll.value) return true;
+  const id = String(recipeId || '').trim();
+  return Boolean(id) && openAftersaleRecipeIds.value.includes(id);
+}
+
+function hasAftersaleHistoryForRecipe(recipeId?: string | null) {
+  if (aftersaleHistoryAll.value) return true;
+  const id = String(recipeId || '').trim();
+  return Boolean(id) && aftersaleHistoryRecipeIds.value.includes(id);
+}
+
+/** 这一份要不要显示售后入口：有进展、还能调整、或历史可看 */
+function showAftersaleEntry(recipeId?: string | null) {
+  return (
+    Boolean(aftersaleAction.value?.enabled) ||
+    isAftersaleOpenForRecipe(recipeId) ||
+    hasAftersaleHistoryForRecipe(recipeId)
+  );
+}
+
+/**
+ * 入口文案按这一份的真实状态：
+ * 有未完成 → 查看进展；还能提 → 调整食谱；只有历史 → 查看记录。
+ */
+function aftersaleEntryLabel(recipeId?: string | null) {
+  if (isAftersaleOpenForRecipe(recipeId)) return '查看进展';
+  if (aftersaleAction.value?.enabled) return '调整食谱';
+  if (hasAftersaleHistoryForRecipe(recipeId)) return '查看记录';
+  return '调整食谱';
+}
 
 const viewAftersale = () => {
   uni.navigateTo({
@@ -757,15 +846,28 @@ const cancelAction = computed(() => {
  * 本地那份表在后端加枚举时跟不上。
  * 取不到时给「—」，与原来的 fallback 一致。
  */
-const { ensure: ensureGoalOptions, labelOf: goalLabel } = useOptionSet(
-  CUSTOM_RECIPE_GOAL_SET,
-);
+// 不用跨行解构别名：ref-scope 守卫对别名有误判风险，拆成显式常量
+const goalSet = useOptionSet(CUSTOM_RECIPE_GOAL_SET);
+const { ensure: ensureGoalOptions, labelOf: goalLabel } = goalSet;
+const goalLoading = goalSet.loading;
+const goalFailed = goalSet.failed;
+
+const currentFoodSet = useOptionSet('custom_recipe_current_food');
 const { ensure: ensureCurrentFoodOptions, labelOf: currentFoodLabel } =
-  useOptionSet('custom_recipe_current_food');
+  currentFoodSet;
+const currentFoodLoading = currentFoodSet.loading;
+const currentFoodFailed = currentFoodSet.failed;
+
+const changeReasonSet = useOptionSet('custom_recipe_change_reason');
 const { ensure: ensureChangeReasonOptions, labelOf: changeReasonLabel } =
-  useOptionSet('custom_recipe_change_reason');
-const { ensure: ensureStomachOptions, labelOf: stomachLabel } =
-  useOptionSet('custom_recipe_stomach');
+  changeReasonSet;
+const changeReasonLoading = changeReasonSet.loading;
+const changeReasonFailed = changeReasonSet.failed;
+
+const stomachSet = useOptionSet('custom_recipe_stomach');
+const { ensure: ensureStomachOptions, labelOf: stomachLabel } = stomachSet;
+const stomachLoading = stomachSet.loading;
+const stomachFailed = stomachSet.failed;
 
 /**
  * 状态中文：**优先用后端渲染契约里的**（`renderable.status.label`），
@@ -780,7 +882,11 @@ const {
 const weightGoalText = computed(() => {
   const goal = String(order.value.targetGoal || '');
   if (!goal || goal === 'HEALTH_SUPPORT') return '—';
-  return goalLabel(goal) || goal;
+  const label = goalLabel(goal);
+  if (label) return label;
+  if (goalLoading.value) return '读取中…';
+  if (goalFailed.value) return '读取失败';
+  return '待确认';
 });
 
 /**
@@ -891,25 +997,47 @@ const copyOrderId = () => {
 };
 
 /** 退款入口：只在不能自助取消（已进入制作/已交付）时出现 */
-const canRequestRefund = computed(() => {
-  const status = String(order.value.status || '');
-  return (
-    !cancelAction.value?.enabled &&
-    ['PAID', 'IN_PROGRESS', 'DELIVERED', 'COMPLETED'].includes(status)
-  );
+/**
+ * 退款统一入口（2026-10-25）。
+ *
+ * PAID（未开始制作）→ 全额退款；制作中/已交付/已完成 → 人工审核申请。
+ * 已存在退款申请时入口变成「退款进度」，不再让顾客重复提交。
+ */
+const showRefundEntry = computed(() =>
+  ['PAID', 'IN_PROGRESS', 'DELIVERED', 'COMPLETED'].includes(
+    String(order.value.status || ''),
+  ),
+);
+const refundRequest = computed(() => order.value.refundRequest ?? null);
+const refundEntryLabel = computed(() => {
+  if (order.value.status === 'PAID') return '退款';
+  const request = refundRequest.value;
+  if (
+    request &&
+    ['PENDING', 'PROCESSING', 'REFUNDED'].includes(String(request.status))
+  ) {
+    return '退款进度';
+  }
+  if (request) return '再次申请退款';
+  return '退款';
 });
 
-const viewRefund = () => {
+const goRefund = () => {
   uni.navigateTo({
-    url: `${buildAftersaleUrl(orderId.value)}&scene=refund`,
+    url: `/pages/custom-recipe/refund?orderId=${encodeURIComponent(orderId.value)}`,
   });
 };
 
 const currentFoodText = computed(() => {
   const code = String(order.value.currentFoodMain || '');
   if (!code) return '';
-  const label = currentFoodLabel(code) || code;
+  const label = currentFoodLabel(code);
   const other = String(order.value.currentFoodOther || '').trim();
+  if (!label) {
+    if (currentFoodLoading.value) return '读取中…';
+    if (currentFoodFailed.value) return '读取失败';
+    return other || '待确认';
+  }
   return other ? `${label}（${other}）` : label;
 });
 
@@ -917,18 +1045,26 @@ const changeReasonText = computed(() => {
   const codes = order.value.changeReasons || [];
   const other = String(order.value.changeReasonOther || '').trim();
   if (codes.length === 0 && !other) return '';
-  return `${codes.map((code) => changeReasonLabel(code) || code).join('、')}${
-    other ? `（${other}）` : ''
-  }`;
+  const labels = codes.map((code) => changeReasonLabel(code)).filter(Boolean);
+  if (codes.length > 0 && labels.length === 0) {
+    if (changeReasonLoading.value) return '读取中…';
+    if (changeReasonFailed.value) return '读取失败';
+    return other || '待确认';
+  }
+  return `${labels.join('、')}${other ? `（${other}）` : ''}`;
 });
 
 const stomachText = computed(() => {
   const codes = order.value.stomachConditions || [];
   const other = String(order.value.stomachOther || '').trim();
   if (codes.length === 0 && !other) return '';
-  return `${codes.map((code) => stomachLabel(code) || code).join('、')}${
-    other ? `（${other}）` : ''
-  }`;
+  const labels = codes.map((code) => stomachLabel(code)).filter(Boolean);
+  if (codes.length > 0 && labels.length === 0) {
+    if (stomachLoading.value) return '读取中…';
+    if (stomachFailed.value) return '读取失败';
+    return other || '待确认';
+  }
+  return `${labels.join('、')}${other ? `（${other}）` : ''}`;
 });
 
 /** 退款进度：识别不出来就整块不显示（退款不能靠猜） */
@@ -1048,7 +1184,7 @@ const viewRecipe = () => {
  * 保证订单在任何情况下都能被付掉。
  */
 const goPay = async () => {
-  if (paying.value) return;
+  if (paying.value || cancelling.value) return;
 
   if (paymentExpired.value) {
     uni.showToast({ title: '支付已超时，订单已关闭', icon: 'none' });
@@ -1126,7 +1262,7 @@ const cancelling = ref(false);
  * 避免出现"取消了钱没退"这种最糟的结果 —— 所以要如实告诉顾客。
  */
 const cancelOrder = async () => {
-  if (cancelling.value) return;
+  if (cancelling.value || paying.value) return;
 
   const paid = order.value.status === 'PAID';
 

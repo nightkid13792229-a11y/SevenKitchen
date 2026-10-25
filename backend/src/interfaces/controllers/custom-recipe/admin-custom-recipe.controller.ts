@@ -31,6 +31,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CustomRecipeService } from '../../../application/custom-recipe/custom-recipe.service';
 import { CustomRecipeDeliveryService } from '../../../application/custom-recipe/custom-recipe-delivery.service';
 import { CustomRecipeAftersaleService } from '../../../application/custom-recipe/custom-recipe-aftersale.service';
+import { CustomRecipeRefundService } from '../../../application/custom-recipe/custom-recipe-refund.service';
 import { PrismaService } from '../../../infrastructure/prisma.service';
 import {
   DEFAULT_PRODUCTION_LOSS_RATE,
@@ -139,6 +140,9 @@ export class AdminCustomRecipeController {
      */
     @Optional()
     private readonly orderDesignSubmitService?: OrderDesignSubmitService,
+    /** 已交付/制作中的退款申请审核（2026-10-25） */
+    @Optional()
+    private readonly refundService?: CustomRecipeRefundService,
   ) {}
 
   /**
@@ -890,6 +894,66 @@ export class AdminCustomRecipeController {
    *
    * 仅管理员：退款是资金动作，与"取消订单"同级。
    */
+  /**
+   * 退款申请列表（2026-10-25）。
+   *
+   * 只给管理员：审核通过会直接触发微信退款，是资金动作。
+   */
+  @Get('refund-requests')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'List custom recipe refund requests' })
+  async listRefundRequests(@Query('status') status?: string) {
+    if (!this.refundService) {
+      throw new ServiceUnavailableException('退款服务暂不可用');
+    }
+    const items = await this.refundService.listForAdmin(
+      String(status || '').trim() || undefined,
+    );
+    return ApiResponseDto.success({ items });
+  }
+
+  @Post('refund-requests/:id/approve')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Approve a refund request and refund via WeChat' })
+  async approveRefundRequest(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body('note') note?: string,
+  ) {
+    if (!this.refundService) {
+      throw new ServiceUnavailableException('退款服务暂不可用');
+    }
+    const request = await this.refundService.approve(
+      id,
+      this.adminUserId(req),
+      String(note || ''),
+    );
+    return ApiResponseDto.success({ request });
+  }
+
+  @Post('refund-requests/:id/reject')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Reject a refund request' })
+  async rejectRefundRequest(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body('reason') reason?: string,
+  ) {
+    if (!this.refundService) {
+      throw new ServiceUnavailableException('退款服务暂不可用');
+    }
+    const request = await this.refundService.reject(
+      id,
+      this.adminUserId(req),
+      String(reason || ''),
+    );
+    return ApiResponseDto.success({ request });
+  }
+
+  private adminUserId(req: any): string {
+    return String(req?.user?.userId || req?.user?.id || '').trim() || 'admin';
+  }
+
   @Post('orders/:orderId/refund')
   @UseGuards(AdminGuard)
   @ApiOperation({ summary: '手工补退款（仅管理员，已付款的已取消单）' })

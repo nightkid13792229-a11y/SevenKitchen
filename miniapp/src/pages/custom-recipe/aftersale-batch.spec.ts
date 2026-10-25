@@ -38,7 +38,11 @@ describe('订单详情 · 每份食谱的「调整食谱」', () => {
   });
 
   it('★ 售后入口只在可申请或有进展时显示', () => {
-    expect(source).toMatch(/aftersaleCount > 0 \|\| aftersaleAction\??\.enabled/);
+    // 2026-10-25：改为按这一份的真实进展判断，不再整单统一“查看进展”
+    expect(source).toContain('showAftersaleEntry(item.recipeId)');
+    expect(source).toContain('aftersaleEntryLabel(item.recipeId)');
+    expect(source).toContain('isAftersaleOpenForRecipe');
+    expect(source).toContain('openAftersaleRecipeIds');
   });
 });
 

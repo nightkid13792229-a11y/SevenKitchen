@@ -294,9 +294,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
-import { getToken, clearToken, request } from "../../utils/api";
+import {
+  AUTH_EXPIRED_EVENT,
+  getToken,
+  clearToken,
+  request,
+} from "../../utils/api";
 import { resolveUserAvatarSrc } from "../../utils/user-profile";
 import { refreshCurrentTabBar } from '../../utils/tabbar';
 import { fetchUnreadMessageCount } from '@/api/messages';
@@ -403,6 +408,8 @@ async function loadUserInfo() {
     const res = await request({
       url: "/users/me",
       method: "GET",
+      // 登录态失效由页面切到“未登录”表达，不在这里弹“请先登录”
+      suppressErrorToast: true,
     });
 
     console.log("[Me Page] API Response:", res);
@@ -741,24 +748,46 @@ function handleLogout() {
   });
 }
 
-const { shouldShowRecipeDesignerEntry, loadRecipeDesignerEntry } =
-  useRecipeDesignerEntry();
+const {
+  shouldShowRecipeDesignerEntry,
+  loadRecipeDesignerEntry,
+  resetRecipeDesignerEntry,
+} = useRecipeDesignerEntry();
+
+/**
+ * 401 时 API 层已清 token；我的页要立刻切到未登录，不能等下一次 onShow。
+ */
+function handleAuthExpired() {
+  isLoggedIn.value = false;
+  resetRecipeDesignerEntry();
+  refreshCurrentTabBar();
+}
+
+onMounted(() => {
+  uni.$on(AUTH_EXPIRED_EVENT, handleAuthExpired);
+});
+
+onUnmounted(() => {
+  uni.$off(AUTH_EXPIRED_EVENT, handleAuthExpired);
+});
 
 onShow(() => {
-  void loadRecipeDesignerEntry();
   refreshCurrentTabBar();
   refreshCustomerTestModeState();
   // 从消息页返回时红点要立刻变（失败静默给 0，不打扰顾客）
   void refreshUnreadMessages();
 
-  // 检查登录状态（每次显示页面时都会执行）
+  // 先看 token，再打受保护接口 —— 没有 token 时不发请求，避免无意义的 401
   const token = getToken();
-  if (token) {
-    loadUserInfo();
-    loadOrderCounts();
-  } else {
+  if (!token) {
     isLoggedIn.value = false;
+    resetRecipeDesignerEntry();
+    return;
   }
+
+  void loadRecipeDesignerEntry();
+  loadUserInfo();
+  loadOrderCounts();
 });
 </script>
 

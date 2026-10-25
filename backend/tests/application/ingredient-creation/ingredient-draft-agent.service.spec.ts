@@ -290,7 +290,8 @@ function createHarness(options: HarnessOptions = {}) {
 
   const configService = {
     getEnabledDeepSeekRuntimeConfig: jest.fn(
-      async () => options.runtime ?? buildRuntime(),
+      async (_input: { purpose?: string; fallbackToDefault?: boolean } = {}) =>
+        options.runtime ?? buildRuntime(),
     ),
   };
 
@@ -347,6 +348,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  jest.useRealTimers();
   global.fetch = originalFetch;
   jest.restoreAllMocks();
 });
@@ -733,7 +735,42 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
     nowSpy.mockRestore();
   });
 
-  it('输出上限探测：32768 参数错误后降到 16384，后续调用沿用 16384', async () => {
+  it('输出上限探测：从小到大，8192 合法就命中并缓存，不再试大值', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(chatResponse(assistantReply('第一次跑完。')))
+      .mockResolvedValueOnce(chatResponse(assistantReply('第二次跑完。')));
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    const first = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+    const second = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '再补一次',
+      userId: 'admin-1',
+    });
+
+    expect(first.reply).toBe('第一次跑完。');
+    expect(second.reply).toBe('第二次跑完。');
+    // 未探测成功前默认用 8192，第一档成功就不往上试。
+    expect(requestBody(fetchMock, 0).max_tokens).toBe(8192);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // 第二次 run 直接用缓存值，不重新探测。
+    expect(requestBody(fetchMock, 1).max_tokens).toBe(8192);
+
+    const logs = logSpy.mock.calls
+      .map((args) => args.map(String).join(' '))
+      .join('\n');
+    expect(logs).toContain('maxTokensProbe');
+    expect(logs).toContain('selected=8192');
+    expect(logs).toContain('tried=8192→16384→32768');
+  });
+
+  it('输出上限探测：8192 参数错误后升到 16384，后续调用沿用 16384', async () => {
     const fetchMock = jest
       .fn()
       .mockResolvedValueOnce(
@@ -759,9 +796,9 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
 
     expect(first.reply).toBe('第一次跑完。');
     expect(second.reply).toBe('第二次跑完。');
-    expect(requestBody(fetchMock, 0).max_tokens).toBe(32768);
+    expect(requestBody(fetchMock, 0).max_tokens).toBe(8192);
     expect(requestBody(fetchMock, 1).max_tokens).toBe(16384);
-    // 第二次 run 直接使用探测结果，不再从 32768 试错。
+    // 第二次 run 直接使用探测结果，不再从 8192 试错。
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(requestBody(fetchMock, 2).max_tokens).toBe(16384);
 
@@ -769,38 +806,252 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
       .map((args) => args.map(String).join(' '))
       .join('\n');
     expect(logs).toContain('maxTokensProbe');
-    expect(logs).toContain('16384');
+    expect(logs).toContain('selected=16384');
   });
 
-  it('输出上限探测：32768 / 16384 都被拒时降到 8192 并缓存', async () => {
+  it('输出上限探测：无效响应也算失败；全部失败后回落到 8192 并记 probeExhausted', async () => {
+    const invalidMessage = chatResponse({
+      role: 'assistant',
+      content: null,
+      tool_calls: [],
+    });
     const fetchMock = jest
       .fn()
+      .mockResolvedValueOnce(invalidMessage) // 8192：无效响应
+      .mockRejectedValueOnce(
+        Object.assign(new Error('aborted'), { name: 'AbortError' }),
+      ) // 16384：超时
+      .mockResolvedValueOnce(invalidMessage) // 32768：无效响应
+      .mockResolvedValueOnce(chatResponse(assistantReply('回落到 8192 跑完。')))
       .mockResolvedValueOnce(
-        errorResponse(400, { error: { message: 'max_tokens too large' } }),
-      )
-      .mockResolvedValueOnce(
-        errorResponse(422, { error: { message: 'max_tokens invalid' } }),
-      )
-      .mockResolvedValueOnce(chatResponse(assistantReply('最低档跑完。')))
-      .mockResolvedValueOnce(chatResponse(assistantReply('继续用最低档。')));
+        chatResponse(assistantReply('缓存后继续用 8192。')),
+      );
     global.fetch = fetchMock as unknown as typeof global.fetch;
 
     const harness = createHarness();
-    await harness.agent.run({
+    const first = await harness.agent.run({
       draftId: DRAFT_ID,
       text: '鸡肝',
       userId: 'admin-1',
     });
-    await harness.agent.run({
+    const second = await harness.agent.run({
       draftId: DRAFT_ID,
       text: '再跑一次',
       userId: 'admin-1',
     });
 
-    expect(requestBody(fetchMock, 0).max_tokens).toBe(32768);
+    expect(first.reply).toBe('回落到 8192 跑完。');
+    expect(second.reply).toBe('缓存后继续用 8192。');
+    expect(requestBody(fetchMock, 0).max_tokens).toBe(8192);
     expect(requestBody(fetchMock, 1).max_tokens).toBe(16384);
-    expect(requestBody(fetchMock, 2).max_tokens).toBe(8192);
+    expect(requestBody(fetchMock, 2).max_tokens).toBe(32768);
+    // 三档都失败后仍用 8192 发起最终请求，而不是把探测失败当成 500。
     expect(requestBody(fetchMock, 3).max_tokens).toBe(8192);
+    expect(requestBody(fetchMock, 4).max_tokens).toBe(8192);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+
+    const allLogs = [...logSpy.mock.calls, ...errorSpy.mock.calls]
+      .map((args) => args.map(String).join(' '))
+      .join('\n');
+    expect(allLogs).toContain('maxTokensProbe');
+    expect(allLogs).toContain('probeExhausted');
+    expect(allLogs).toContain('8192');
+  });
+
+  it('缓存的 32768 返回无效响应时视为失败，降回 8192 并改缓存', async () => {
+    const invalidMessage = chatResponse({
+      role: 'assistant',
+      content: null,
+      tool_calls: [],
+    });
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(invalidMessage) // 8192 无效
+      .mockResolvedValueOnce(invalidMessage) // 16384 无效
+      .mockResolvedValueOnce(chatResponse(assistantReply('先用 32768 跑完。')))
+      .mockResolvedValueOnce(invalidMessage) // 缓存的 32768 这次无效
+      .mockResolvedValueOnce(chatResponse(assistantReply('降回 8192 跑完。')))
+      .mockResolvedValueOnce(chatResponse(assistantReply('继续用 8192。')));
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    const first = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+    const second = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '再跑一次',
+      userId: 'admin-1',
+    });
+    const third = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '第三次',
+      userId: 'admin-1',
+    });
+
+    expect(first.reply).toBe('先用 32768 跑完。');
+    expect(second.reply).toBe('降回 8192 跑完。');
+    expect(third.reply).toBe('继续用 8192。');
+    expect([
+      requestBody(fetchMock, 0).max_tokens,
+      requestBody(fetchMock, 1).max_tokens,
+      requestBody(fetchMock, 2).max_tokens,
+      requestBody(fetchMock, 3).max_tokens,
+      requestBody(fetchMock, 4).max_tokens,
+      requestBody(fetchMock, 5).max_tokens,
+    ]).toEqual([8192, 16384, 32768, 32768, 8192, 8192]);
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+
+    const allLogs = [...logSpy.mock.calls, ...warnSpy.mock.calls]
+      .map((args) => args.map(String).join(' '))
+      .join('\n');
+    expect(allLogs).toContain('cachedRejected');
+    expect(allLogs).toContain('selected=8192');
+  });
+
+  it('单次模型调用最多 90 秒：超时按失败升档重试，不跟随 600 秒总时长', async () => {
+    jest.useFakeTimers();
+    const abortedAt: number[] = [];
+    const startedAt = Date.now();
+    const fetchMock = jest.fn((_url: string, init: RequestInit) => {
+      if (fetchMock.mock.calls.length === 1) {
+        return new Promise<Response>((_resolve, reject) => {
+          const signal = init.signal as AbortSignal;
+          signal.addEventListener(
+            'abort',
+            () => {
+              abortedAt.push(Date.now() - startedAt);
+              reject(
+                Object.assign(new Error('aborted'), { name: 'AbortError' }),
+              );
+            },
+            { once: true },
+          );
+        });
+      }
+      return Promise.resolve(
+        chatResponse(assistantReply('超时后升到 16384 跑完。')),
+      );
+    });
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness({
+      runtime: { ...buildRuntime(), requestTimeoutMs: 600_000 },
+    });
+    const runPromise = harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+
+    await jest.advanceTimersByTimeAsync(89_999);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(abortedAt).toEqual([]);
+
+    // 第 90 秒：这一次请求被强制中止，按失败处理并升档重试。
+    await jest.advanceTimersByTimeAsync(1);
+    expect(abortedAt).toEqual([90_000]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(requestBody(fetchMock, 0).max_tokens).toBe(8192);
+    expect(requestBody(fetchMock, 1).max_tokens).toBe(16384);
+
+    const result = await runPromise;
+    expect(result.reply).toBe('超时后升到 16384 跑完。');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('连续单次超时最终让该步失败，不会一直等到 600 秒总时长', async () => {
+    jest.useFakeTimers();
+    const abortedAt: number[] = [];
+    const startedAt = Date.now();
+    const fetchMock = jest.fn((_url: string, init: RequestInit) => {
+      return new Promise<Response>((_resolve, reject) => {
+        const signal = init.signal as AbortSignal;
+        signal.addEventListener(
+          'abort',
+          () => {
+            abortedAt.push(Date.now() - startedAt);
+            reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+          },
+          { once: true },
+        );
+      });
+    });
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness({
+      runtime: {
+        ...buildRuntime(),
+        reviewModel: MODEL,
+        requestTimeoutMs: 600_000,
+      },
+    });
+    const runPromise = harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+    const rejection = expect(runPromise).rejects.toBeInstanceOf(
+      ServiceUnavailableException,
+    );
+
+    // 8192 / 16384 / 32768 / 回落 8192 各最多等 90 秒。
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      await jest.advanceTimersByTimeAsync(90_000);
+    }
+
+    await rejection;
+    expect(abortedAt).toEqual([90_000, 180_000, 270_000, 360_000]);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect([
+      requestBody(fetchMock, 0).max_tokens,
+      requestBody(fetchMock, 1).max_tokens,
+      requestBody(fetchMock, 2).max_tokens,
+      requestBody(fetchMock, 3).max_tokens,
+    ]).toEqual([8192, 16384, 32768, 8192]);
+  });
+
+  it('实际使用回落配置时 WARN 建议单独启用 INGREDIENT_INTAKE', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(assistantReply('回落到设计配置也跑完。')),
+      );
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    harness.configService.getEnabledDeepSeekRuntimeConfig.mockImplementation(
+      async (
+        input: {
+          purpose?: string;
+          fallbackToDefault?: boolean;
+        } = {},
+      ) => {
+        if (
+          input.purpose === 'INGREDIENT_INTAKE' ||
+          input.purpose === 'DEFAULT'
+        ) {
+          throw new Error(`DeepSeek Agent 设置未启用：${input.purpose}`);
+        }
+        return buildRuntime();
+      },
+    );
+
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+
+    expect(result.reply).toBe('回落到设计配置也跑完。');
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('purpose=RECIPE_DESIGN'),
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('建议单独启用 INGREDIENT_INTAKE 配置'),
+    );
   });
 
   it('模型不支持 tools 时退化为 JSON 动作模式，并在报文里去掉 tools 参数', async () => {

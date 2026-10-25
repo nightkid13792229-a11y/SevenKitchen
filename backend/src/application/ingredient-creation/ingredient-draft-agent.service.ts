@@ -16,6 +16,7 @@ import { IngredientCreationDraftService } from './ingredient-creation-draft.serv
 import {
   AI_NOT_CONFIGURED_MESSAGE,
   AI_TEMPORARILY_UNAVAILABLE_MESSAGE,
+  INGREDIENT_INTAKE_AGENT_PURPOSE,
   INGREDIENT_INTAKE_AGENT_PURPOSES,
 } from './ingredient-creation-intake.service';
 import {
@@ -48,15 +49,27 @@ export const INGREDIENT_AGENT_TOKEN_BUDGET_ENV =
   'INGREDIENT_AGENT_TOKEN_BUDGET';
 
 const AGENT_TEMPERATURE = 0.2;
+/** 未探测成功前的保守默认输出上限：不再默认一上来就用 32k。 */
+export const INGREDIENT_AGENT_DEFAULT_MAX_TOKENS = 8_192;
 /**
- * 启动后首次调用时探测可用输出上限：从高到低试，参数错误就降一档。
+ * 单次模型请求的硬超时。
  *
- * 不同供应商 / 模型对 `max_tokens` 的上限不同；写死 8k 会让长 tool_call
- * 在参数中途截断（非法 JSON），写死 32k 又可能被供应商直接 400。
+ * 不跟随整轮 600 秒总时长：供应商挂住时，一次请求最多等 90 秒，
+ * 超时按失败处理、计入重试；否则一次调用就能卡掉三分钟。
+ */
+export const INGREDIENT_AGENT_REQUEST_TIMEOUT_MS = 90_000;
+/**
+ * 启动后首次调用时探测可用输出上限：从小到大试，拿到合法响应就停。
+ *
+ * 不同供应商 / 模型对 `max_tokens` 的接受度不同：32k 可能被“接受”却
+ * 返回空响应 / 无效结构，所以探测的通过标准不是 HTTP 200，而是
+ * `choices[0].message` 里确实有 content 或 tool_calls。
  * 探测成功后缓存在内存里，后续所有调用都直接用可用值。
  */
 export const INGREDIENT_AGENT_MAX_TOKENS_CANDIDATES = [
-  32_768, 16_384, 8_192,
+  INGREDIENT_AGENT_DEFAULT_MAX_TOKENS,
+  16_384,
+  32_768,
 ] as const;
 const REPLY_MAX = 500;
 const TRANSCRIPT_SUMMARY_MAX = 240;
@@ -360,6 +373,14 @@ class AgentToolsUnsupportedError extends AgentModelError {}
  */
 class AgentOutputLimitError extends AgentModelError {}
 
+/**
+ * HTTP 200 但响应结构不可用：没有 message，或 content / tool_calls 都为空。
+ *
+ * 供应商“接受”了大 max_tokens 却给出空响应时，这一档不能算探测通过；
+ * 缓存的档位遇到这种响应也要失效，重新探测。
+ */
+class AgentInvalidResponseError extends AgentModelError {}
+
 /** 总时长预算用完：不是 AI 故障，按「跑到上限」收尾并带回 transcript。 */
 class AgentDeadlineExceededError extends AgentModelError {}
 
@@ -377,6 +398,10 @@ class AgentRunFailedError extends Error {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function truncate(value: string, max: number): string {
@@ -1450,7 +1475,7 @@ export class IngredientDraftAgentService {
   /**
    * 已探测到的可用输出上限：key = baseUrl|model。
    *
-   * 首次调用时从 32768 往下试；成功后缓存，之后同一个模型的所有请求
+   * 首次调用时从 8192 往上试；成功后缓存，之后同一个模型的所有请求
    * 都直接用这个值。不同模型可能上限不同，所以按模型分别缓存。
    */
   private readonly outputLimitCache = new Map<string, number>();
@@ -2172,6 +2197,12 @@ export class IngredientDraftAgentService {
         this.logger.log(
           `[ingredient-agent] 使用 AI 配置 purpose=${purpose}${fallbackNote}`,
         );
+        if (purpose !== INGREDIENT_INTAKE_AGENT_PURPOSE) {
+          this.logger.warn(
+            `[ingredient-agent] 使用回落配置 purpose=${purpose}${fallbackNote}；` +
+              `建议单独启用 INGREDIENT_INTAKE 配置`,
+          );
+        }
         return runtime;
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
@@ -2253,9 +2284,10 @@ export class IngredientDraftAgentService {
         1,
         Math.min(
           remainingMs,
+          INGREDIENT_AGENT_REQUEST_TIMEOUT_MS,
           input.runtime.requestTimeoutMs > 0
             ? input.runtime.requestTimeoutMs
-            : remainingMs,
+            : INGREDIENT_AGENT_REQUEST_TIMEOUT_MS,
         ),
       );
 
@@ -2268,6 +2300,7 @@ export class IngredientDraftAgentService {
           messages: input.messages,
           toolDefinitions: input.toolDefinitions,
           timeoutMs,
+          deadline: input.deadline,
         });
       } catch (error) {
         if (error instanceof AgentToolsUnsupportedError) {
@@ -2295,66 +2328,145 @@ export class IngredientDraftAgentService {
     messages: AgentMessage[];
     toolDefinitions: readonly AgentToolDefinition[];
     timeoutMs: number;
+    deadline: number;
   }): Promise<AgentAssistantTurn> {
+    const { deadline, ...request } = input;
     const cacheKey = `${input.baseUrl.replace(/\/+$/, '')}|${input.model}`;
     const cached = this.outputLimitCache.get(cacheKey);
-    const candidates: readonly number[] =
-      cached === undefined ? INGREDIENT_AGENT_MAX_TOKENS_CANDIDATES : [cached];
-    let lastError: unknown = null;
 
-    for (let index = 0; index < candidates.length; index += 1) {
-      const maxTokens = candidates[index];
+    if (cached !== undefined) {
       try {
-        const turn = await this.requestModelOnce({ ...input, maxTokens });
-        if (cached === undefined) {
-          // 探测成功：同一 baseUrl + model 的后续调用都直接用这一档。
-          this.outputLimitCache.set(cacheKey, maxTokens);
-          this.logger.log(
-            `[ingredient-agent] maxTokensProbe selected=${maxTokens} ` +
-              `tried=${INGREDIENT_AGENT_MAX_TOKENS_CANDIDATES.join('→')} ` +
-              `model=${input.model}`,
-          );
-        }
-        return turn;
+        const timeoutMs = this.resolveRequestTimeout(
+          deadline,
+          request.timeoutMs,
+        );
+        return await this.requestModelOnce({
+          ...request,
+          timeoutMs,
+          maxTokens: cached,
+        });
       } catch (error) {
-        lastError = error;
         if (error instanceof AgentToolsUnsupportedError) {
           throw error;
         }
-        if (!(error instanceof AgentOutputLimitError)) {
+        if (
+          !(error instanceof AgentOutputLimitError) &&
+          !(error instanceof AgentInvalidResponseError)
+        ) {
           throw error;
         }
-        const next = candidates[index + 1];
-        if (next === undefined) {
-          break;
-        }
+        // 供应商改了限额 / 大值返回空响应：清掉缓存，重新探测，而不是永远卡在旧值。
+        this.outputLimitCache.delete(cacheKey);
         this.logger.warn(
-          `[ingredient-agent] maxTokensProbe rejected=${maxTokens} next=${next} ` +
+          `[ingredient-agent] maxTokensProbe cachedRejected cached=${cached} ` +
             `model=${input.model}: ${error.message}`,
         );
       }
     }
 
-    if (lastError instanceof AgentOutputLimitError) {
-      if (cached !== undefined) {
-        // 供应商改了限额：清掉缓存，下一轮重新探测，而不是永远卡在旧值。
-        this.outputLimitCache.delete(cacheKey);
-        this.logger.warn(
-          `[ingredient-agent] maxTokensProbe cachedRejected cached=${cached} ` +
-            `model=${input.model}: ${lastError.message}`,
+    return this.probeModelOutputLimit({ ...request, deadline, cacheKey });
+  }
+
+  /**
+   * 每次真正发请求前重算剩余时间。
+   *
+   * 探测会连续发多档请求，必须受整轮 deadline 约束；否则一次探测就能
+   * 越过 600 秒硬上限。
+   */
+  private resolveRequestTimeout(deadline: number, capMs: number): number {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
+      throw new AgentDeadlineExceededError('总时长已用完');
+    }
+    return Math.max(1, Math.min(capMs, remainingMs));
+  }
+
+  /**
+   * 输出上限探测：8192 → 16384 → 32768。
+   *
+   * 通过标准不是 HTTP 200，而是拿到真正可用的 assistant turn：
+   * 有 `choices[0].message`，且 content / tool_calls 至少一个非空。
+   * 参数错误、超时、网络错误、空响应都算这一档失败，继续升档。
+   * 三档全失败时按保守值 8192 再发一次，并记 `probeExhausted`。
+   */
+  private async probeModelOutputLimit(input: {
+    baseUrl: string;
+    apiKey: string;
+    model: string;
+    mode: IngredientAgentMode;
+    messages: AgentMessage[];
+    toolDefinitions: readonly AgentToolDefinition[];
+    timeoutMs: number;
+    deadline: number;
+    cacheKey: string;
+  }): Promise<AgentAssistantTurn> {
+    const { deadline, cacheKey, ...request } = input;
+    let lastError: unknown = null;
+
+    for (
+      let index = 0;
+      index < INGREDIENT_AGENT_MAX_TOKENS_CANDIDATES.length;
+      index += 1
+    ) {
+      const maxTokens = INGREDIENT_AGENT_MAX_TOKENS_CANDIDATES[index];
+      try {
+        const timeoutMs = this.resolveRequestTimeout(
+          deadline,
+          request.timeoutMs,
         );
-      } else {
-        this.logger.error(
-          `[ingredient-agent] maxTokensProbe exhausted ` +
+        const turn = await this.requestModelOnce({
+          ...request,
+          timeoutMs,
+          maxTokens,
+        });
+        // 探测成功：同一 baseUrl + model 的后续调用都直接用这一档。
+        this.outputLimitCache.set(cacheKey, maxTokens);
+        this.logger.log(
+          `[ingredient-agent] maxTokensProbe selected=${maxTokens} ` +
             `tried=${INGREDIENT_AGENT_MAX_TOKENS_CANDIDATES.join('→')} ` +
-            `model=${input.model}: ${lastError.message}`,
+            `model=${input.model}`,
+        );
+        return turn;
+      } catch (error) {
+        lastError = error;
+        if (
+          error instanceof AgentToolsUnsupportedError ||
+          error instanceof AgentDeadlineExceededError
+        ) {
+          // 协议问题交给外层退化 JSON；总时长用完交给外层按 TIMEOUT 收尾。
+          throw error;
+        }
+        const next = INGREDIENT_AGENT_MAX_TOKENS_CANDIDATES[index + 1];
+        if (next === undefined) {
+          break;
+        }
+        this.logger.warn(
+          `[ingredient-agent] maxTokensProbe rejected=${maxTokens} next=${next} ` +
+            `model=${input.model}: ${errorMessage(error)}`,
         );
       }
     }
 
-    throw lastError instanceof Error
-      ? lastError
-      : new AgentModelError('AI 生成失败');
+    const fallback = INGREDIENT_AGENT_DEFAULT_MAX_TOKENS;
+    // 全部探测失败也固定用 8192：后续调用不再每次从 32k 试错。
+    this.outputLimitCache.set(cacheKey, fallback);
+    this.logger.error(
+      `[ingredient-agent] maxTokensProbe probeExhausted fallback=${fallback} ` +
+        `tried=${INGREDIENT_AGENT_MAX_TOKENS_CANDIDATES.join('→')} ` +
+        `model=${input.model}: ${errorMessage(lastError)}`,
+    );
+
+    const timeoutMs = this.resolveRequestTimeout(deadline, request.timeoutMs);
+    const turn = await this.requestModelOnce({
+      ...request,
+      timeoutMs,
+      maxTokens: fallback,
+    });
+    this.logger.log(
+      `[ingredient-agent] maxTokensProbe selected=${fallback} fallback=true ` +
+        `model=${input.model}`,
+    );
+    return turn;
   }
 
   /** 真正发一次模型请求；`maxTokens` 由探测 / 缓存决定。 */
@@ -2419,7 +2531,7 @@ export class IngredientDraftAgentService {
 
       const message = readChoiceMessage(body);
       if (!message) {
-        throw new AgentModelError('AI 生成失败：无效响应');
+        throw new AgentInvalidResponseError('AI 生成失败：无效响应');
       }
 
       const content =
@@ -2428,7 +2540,7 @@ export class IngredientDraftAgentService {
 
       if (input.mode === 'JSON_ACTION') {
         if (!content) {
-          throw new AgentModelError('AI 生成失败：无内容');
+          throw new AgentInvalidResponseError('AI 生成失败：无内容');
         }
         return {
           content,
@@ -2439,7 +2551,7 @@ export class IngredientDraftAgentService {
 
       const toolCalls = normalizeToolCalls(message.tool_calls);
       if (!content && toolCalls.length === 0) {
-        throw new AgentModelError('AI 生成失败：无内容');
+        throw new AgentInvalidResponseError('AI 生成失败：无内容');
       }
 
       return { content, toolCalls, usage };

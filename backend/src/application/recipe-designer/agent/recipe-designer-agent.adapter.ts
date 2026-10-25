@@ -1005,7 +1005,7 @@ const PUBLISHED_RECIPE_ITEM_SELECT = {
 
 const PUBLISHED_RECIPE_ITEMS_INCLUDE = {
   select: PUBLISHED_RECIPE_ITEM_SELECT,
-  orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }],
+  orderBy: [{ sortOrder: 'asc' as const }],
 };
 
 /** 搜索只需要菜名/原料/标签等轻字段，不拉营养报告和制作步骤。 */

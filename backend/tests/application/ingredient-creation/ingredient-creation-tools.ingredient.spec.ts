@@ -1,4 +1,3 @@
-import { IngredientCandidateReviewService } from '../../../src/application/ingredient-creation/ingredient-candidate-review.service';
 import { IngredientCreationCandidateService } from '../../../src/application/ingredient-creation/ingredient-creation-candidate.service';
 import { IngredientCreationCheckService } from '../../../src/application/ingredient-creation/ingredient-creation-check.service';
 import { IngredientCreationDraftService } from '../../../src/application/ingredient-creation/ingredient-creation-draft.service';
@@ -49,9 +48,6 @@ function createTools(draftPayload: Record<string, unknown> = {}) {
       nutritionSourceRecord: { findUnique: jest.fn() },
     } as unknown as PrismaService,
     {
-      reviewCandidates: jest.fn(async () => []),
-    } as unknown as IngredientCandidateReviewService,
-    {
       classifyNames: jest.fn(async (input: any) => ({
         results: input.items.map((item: { id: string }) => ({
           id: item.id,
@@ -81,8 +77,8 @@ async function executeIngredient(
   const execution = await tools.execute({
     runId: RUN_ID,
     draftId: DRAFT_ID,
-    name: 'updateIngredientFields',
-    args,
+    name: 'writeIngredient',
+    args: { fields: args },
   });
 
   return {
@@ -97,19 +93,21 @@ async function executeIngredient(
   };
 }
 
-describe('IngredientCreationToolsService · updateIngredientFields 原料卡', () => {
+describe('IngredientCreationToolsService · writeIngredient 原料卡', () => {
   it('工具定义存在：七个人工审核字段、类别与基准单位是枚举', () => {
     const { tools } = createTools();
 
     const definition = tools
       .getDefinitions()
-      .find((tool) => tool.function.name === 'updateIngredientFields');
+      .find((tool) => tool.function.name === 'writeIngredient');
 
     expect(definition).toBeDefined();
-    const properties = definition?.function.parameters.properties as Record<
-      string,
-      { enum?: unknown[] }
-    >;
+    const properties = (
+      definition?.function.parameters.properties as Record<
+        string,
+        { properties?: Record<string, { enum?: unknown[] }> }
+      >
+    ).fields?.properties as Record<string, { enum?: unknown[] }>;
     expect(Object.keys(properties)).toEqual(
       expect.arrayContaining([
         'name',

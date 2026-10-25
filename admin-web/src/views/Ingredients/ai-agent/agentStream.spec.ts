@@ -17,8 +17,8 @@ function stepStart(index = 1): AgentStreamEvent {
   return {
     type: 'step_start',
     index,
-    name: 'searchLocalNutrition',
-    summary: '查本地库 西洋菜·生'
+    name: 'searchNames',
+    summary: '查名字 西洋菜'
   }
 }
 
@@ -62,7 +62,7 @@ afterEach(() => {
 describe('parseSseChunk', () => {
   it('只消费完整帧，半帧留在 rest 里', () => {
     const buffer =
-      'data: {"type":"step_start","index":1,"name":"searchLocalNutrition","summary":"查本地库 西洋菜·生"}\n\n' +
+      'data: {"type":"step_start","index":1,"name":"searchNames","summary":"查名字 西洋菜"}\n\n' +
       'data: {"type":"step_end","index":1,'
 
     const parsed = parseSseChunk(buffer)
@@ -108,9 +108,9 @@ describe('reduceAgentEvents', () => {
     expect(state.steps).toHaveLength(1)
     expect(state.steps[0]).toMatchObject({
       index: 1,
-      name: 'searchLocalNutrition',
-      label: '查本地库',
-      summary: '查本地库 西洋菜·生',
+      name: 'searchNames',
+      label: '查名字',
+      summary: '查名字 西洋菜',
       status: 'running',
       ok: null
     })
@@ -255,7 +255,7 @@ describe('reduceAgentEvents', () => {
     let state = reduceAgentEvents(createAgentStreamState(), {
       type: 'step_start',
       index: 2,
-      name: 'getNutritionRecord',
+      name: 'getRecord',
       summary: '读来源记录 rec-liver-raw'
     })
     state = reduceAgentEvents(
@@ -386,7 +386,7 @@ describe('streamIngredientAgent · 实时渲染', () => {
     )
 
     push(
-      'data: {"type":"step_start","index":1,"name":"searchLocalNutrition","summary":"查本地库 西洋菜·生"}\n\n'
+      'data: {"type":"step_start","index":1,"name":"searchNames","summary":"查名字 西洋菜"}\n\n'
     )
     await new Promise((resolve) => setTimeout(resolve, 0))
 
@@ -395,7 +395,7 @@ describe('streamIngredientAgent · 实时渲染', () => {
     expect(latest?.steps[0]).toMatchObject({
       index: 1,
       status: 'running',
-      label: '查本地库'
+      label: '查名字'
     })
 
     push(
@@ -421,7 +421,7 @@ describe('streamIngredientAgent · 网络中断', () => {
       start(controller) {
         controller.enqueue(
           encoder.encode(
-            'data: {"type":"step_start","index":1,"name":"searchLocalNutrition","summary":"查本地库 西洋菜·生"}\n\n'
+            'data: {"type":"step_start","index":1,"name":"searchNames","summary":"查名字 西洋菜"}\n\n'
           )
         )
       },

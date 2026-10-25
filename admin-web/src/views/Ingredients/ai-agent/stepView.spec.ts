@@ -25,74 +25,105 @@ function onlyStep(toolCalls: ToolCalls): AgentStepView {
  * 失败原因都收在这一层验证。
  */
 describe('toStepView', () => {
-  it('searchLocalNutrition 映射成「查本地库」，摘要含关键词与生熟状态', () => {
+  it('searchNames 映射成「查名字」，摘要就是关键词（不再有生熟参数）', () => {
     const view = onlyStep([
       {
-        name: 'searchLocalNutrition',
-        args: { keyword: '鸡肝', state: 'RAW' },
+        name: 'searchNames',
+        args: { keyword: '鸡肝' },
         ok: true
       }
     ])
 
-    expect(view.name).toBe('searchLocalNutrition')
-    expect(view.label).toBe('查本地库')
-    expect(view.summary).toContain('鸡肝')
-    expect(view.summary).toContain('生')
+    expect(view.name).toBe('searchNames')
+    expect(view.label).toBe('查名字')
+    expect(view.summary).toBe('鸡肝')
     expect(view.ok).toBe(true)
     expect(view.error).toBeUndefined()
   })
 
-  it('searchLocalNutrition 的熟档案显示「熟」', () => {
-    const view = onlyStep([
+  it('原子工具各有中文名：汇总 / 读记录 / 写营养 / 改原料卡 / 结束本轮', () => {
+    const views = toStepView([
+      { name: 'summarizeNames', args: { names: ['a', 'b', 'c'] }, ok: true },
+      { name: 'getRecord', args: { id: 'rec-1' }, ok: true },
       {
-        name: 'searchLocalNutrition',
-        args: { keyword: '鸡肝', state: 'COOKED' },
-        ok: true
-      }
-    ])
-
-    expect(view.summary).toBe('鸡肝 · 熟')
-  })
-
-  it('updateNutritionField 成功：中文名「写字段」，摘要含字段名、数值与单位', () => {
-    const view = onlyStep([
-      {
-        name: 'updateNutritionField',
+        name: 'writeNutrition',
         args: {
           profileIndex: 0,
-          fieldPath: 'macros.crudeProtein',
-          value: 19.5,
-          unit: 'g'
+          entries: [
+            { fieldPath: 'macros.crudeProtein', value: 19.5, unit: 'g' }
+          ]
+        },
+        ok: true
+      },
+      {
+        name: 'writeIngredient',
+        args: { fields: { name: '鸡肝', category: 'MEAT_ORGAN' } },
+        ok: true
+      },
+      { name: 'finish', args: { summary: '好了。' }, ok: true }
+    ])
+
+    expect(views.map((view) => view.label)).toEqual([
+      '汇总名字',
+      '读来源记录',
+      '写营养',
+      '改原料卡',
+      '结束本轮'
+    ])
+    expect(views[0]?.summary).toContain('3 条名字')
+    expect(views[1]?.summary).toBe('rec-1')
+    expect(views[2]?.summary).toBe('档案 0 · 1 项')
+    expect(views[3]?.summary).toContain('名称=鸡肝')
+    expect(views[4]?.summary).toBe('好了。')
+  })
+
+  it('writeNutrition 成功：中文名「写营养」，摘要含档案与条目数', () => {
+    const view = onlyStep([
+      {
+        name: 'writeNutrition',
+        args: {
+          profileIndex: 0,
+          entries: [
+            {
+              fieldPath: 'macros.crudeProtein',
+              value: 19.5,
+              unit: 'g',
+              sourceRecordId: 'rec-1'
+            }
+          ]
         },
         ok: true
       }
     ])
 
-    expect(view.label).toBe('写字段')
-    expect(view.summary).toBe('粗蛋白 = 19.5 g')
+    expect(view.label).toBe('写营养')
+    expect(view.summary).toBe('档案 0 · 1 项')
     expect(view.ok).toBe(true)
     expect(view.error).toBeUndefined()
   })
 
-  it('updateNutritionField 失败：摘要照常，error 保留后端原文', () => {
+  it('writeNutrition 省略档案时显示「自动」；失败时 error 保留后端原文', () => {
     const error =
-      '字段 macros.crudeProtein 的目录单位是 g，不接受「mg」（本工具不做换算）。'
+      '缺少 sourceRecordId：没有来源的营养值不能写入草稿。'
     const view = onlyStep([
       {
-        name: 'updateNutritionField',
+        name: 'writeNutrition',
         args: {
-          profileIndex: 0,
-          fieldPath: 'macros.crudeProtein',
-          value: 19500,
-          unit: 'mg'
+          entries: [
+            {
+              fieldPath: 'macros.crudeProtein',
+              value: 19500,
+              unit: 'mg'
+            }
+          ]
         },
         ok: false,
         error
       }
     ])
 
-    expect(view.label).toBe('写字段')
-    expect(view.summary).toBe('粗蛋白 = 19500 mg')
+    expect(view.label).toBe('写营养')
+    expect(view.summary).toBe('档案 自动 · 1 项')
     expect(view.ok).toBe(false)
     expect(view.error).toBe(error)
   })
@@ -126,22 +157,19 @@ describe('toStepView', () => {
   it('查本地库命中时展开匹配依据：关键词、词条名、匹配方式与分数', () => {
     const view = onlyStep([
       {
-        name: 'searchLocalNutrition',
-        args: { keyword: '西洋菜', state: 'RAW' },
+        name: 'searchNames',
+        args: { keyword: '西洋菜' },
         ok: true,
         result: {
           ok: true,
           found: true,
           keywords: ['西洋菜', 'watercress'],
-          candidateCount: 1,
-          candidates: [
+          total: 1,
+          names: [
             {
-              sourceRecordId: 'usda-watercress',
-              foodName: 'Watercress, raw',
-              foodNameEn: 'Watercress, raw',
-              matchedBy: 'ZH_ALIAS',
-              matchedKeyword: '西洋菜',
-              score: 0.8
+              id: 'usda-watercress',
+              name: 'Watercress, raw',
+              sourceType: 'USDA_FDC'
             }
           ]
         }
@@ -152,19 +180,19 @@ describe('toStepView', () => {
     expect(view.search?.matches).toHaveLength(1)
     expect(view.search?.matches[0]).toMatchObject({
       foodName: 'Watercress, raw',
-      matchedByLabel: '中英别名匹配',
+      matchedByLabel: '名字命中',
       matchedKeyword: '西洋菜',
-      scoreLabel: '0.80'
+      scoreLabel: '—'
     })
-    expect(view.summary).toContain('命中 1 条')
+    expect(view.summary).toContain('共 1 条候选')
     expect(view.statusLabel).toBe('成功')
   })
 
   it('查本地库候选带 AI 复核时逐条显示 相关/存疑/不相关 标签与一句理由', () => {
     const view = onlyStep([
       {
-        name: 'searchLocalNutrition',
-        args: { keyword: '山药', state: 'RAW' },
+        name: 'searchNames',
+        args: { keyword: '山药' },
         ok: true,
         result: {
           ok: true,
@@ -227,8 +255,8 @@ describe('toStepView', () => {
   it('AI 复核缺失或 verdict 非法时不假装有判断', () => {
     const view = onlyStep([
       {
-        name: 'searchLocalNutrition',
-        args: { keyword: '山药', state: 'RAW' },
+        name: 'searchNames',
+        args: { keyword: '山药' },
         ok: true,
         result: {
           ok: true,
@@ -259,8 +287,8 @@ describe('toStepView', () => {
   it('查库结果带 AI 分类：状态 / 加工方式 / 部位与依据词一起展示', () => {
     const view = onlyStep([
       {
-        name: 'searchLocalNutrition',
-        args: { keyword: '牛肉', state: 'RAW' },
+        name: 'searchNames',
+        args: { keyword: '牛肉' },
         ok: true,
         result: {
           ok: true,
@@ -303,15 +331,15 @@ describe('toStepView', () => {
   it('查本地库零命中时明确写“没有找到匹配词条”，不写成功', () => {
     const view = onlyStep([
       {
-        name: 'searchLocalNutrition',
-        args: { keyword: '西洋菜', state: 'RAW' },
+        name: 'searchNames',
+        args: { keyword: '西洋菜' },
         ok: true,
         result: {
           ok: true,
           found: false,
           keywords: ['西洋菜', 'watercress'],
-          candidateCount: 0,
-          candidates: []
+          total: 0,
+          names: []
         }
       }
     ])
@@ -364,8 +392,8 @@ describe('查本地库 · 部位分组概览', () => {
   it('工具结果带 groups / totalCandidates / reviewSummary：页面能画分组与条数', () => {
     const view = onlyStep([
       {
-        name: 'searchLocalNutrition',
-        args: { keyword: '牛肉', state: 'RAW' },
+        name: 'searchNames',
+        args: { keyword: '牛肉' },
         ok: true,
         result: {
           ok: true,

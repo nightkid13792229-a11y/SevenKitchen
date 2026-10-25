@@ -196,7 +196,6 @@ import { NutritionGovernanceController } from './interfaces/controllers/nutritio
 import { NutritionGovernanceService } from './application/nutrition-governance/nutrition-governance.service';
 import { IngredientCreationController } from './interfaces/controllers/ingredient-creation.controller';
 import { IngredientCreationAuditService } from './application/ingredient-creation/ingredient-creation-audit.service';
-import { IngredientCandidateReviewService } from './application/ingredient-creation/ingredient-candidate-review.service';
 import { IngredientCreationCandidateService } from './application/ingredient-creation/ingredient-creation-candidate.service';
 import { IngredientCreationCheckService } from './application/ingredient-creation/ingredient-creation-check.service';
 import { IngredientCreationCommitService } from './application/ingredient-creation/ingredient-creation-commit.service';
@@ -919,7 +918,6 @@ validatePrismaConfig();
     IngredientReadinessService,
     IngredientCreationDraftService,
     IngredientCreationAuditService,
-    IngredientCandidateReviewService,
     IngredientCreationCandidateService,
     IngredientCreationOnlineService,
     IngredientCreationMergeService,

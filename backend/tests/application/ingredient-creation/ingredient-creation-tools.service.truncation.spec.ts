@@ -16,7 +16,6 @@ jest.mock('../../../src/domain/ingredient/nutrition-field-catalog', () => ({
 }));
 
 import { Logger } from '@nestjs/common';
-import { IngredientCandidateReviewService } from '../../../src/application/ingredient-creation/ingredient-candidate-review.service';
 import { IngredientCreationToolsService } from '../../../src/application/ingredient-creation/ingredient-creation-tools.service';
 import type { PrismaService } from '../../../src/infrastructure/prisma.service';
 
@@ -45,9 +44,6 @@ function createTools() {
     {} as never,
     {} as never,
     prisma as unknown as PrismaService,
-    {
-      reviewCandidates: jest.fn(async () => []),
-    } as unknown as IngredientCandidateReviewService,
     {
       classifyNames: jest.fn(async (input: any) => ({
         results: input.items.map((item: { id: string }) => ({
@@ -78,15 +74,15 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-describe('IngredientCreationToolsService · getNutritionRecord 截断', () => {
+describe('IngredientCreationToolsService · getRecord 截断', () => {
   it('有值字段超过 80 时只返回前 80 个，并说明省略了多少', async () => {
     const tools = createTools();
 
     const execution = await tools.execute({
       runId: 'run-1',
       draftId: 'draft-1',
-      name: 'getNutritionRecord',
-      args: { sourceRecordId: 'rec-many-fields' },
+      name: 'getRecord',
+      args: { id: 'rec-many-fields' },
     });
 
     expect(execution.ok).toBe(true);

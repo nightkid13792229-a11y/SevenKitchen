@@ -47,22 +47,27 @@
               <div class="agent-run__failure-head">
                 <el-tag type="danger" size="small" effect="plain">失败</el-tag>
                 <span v-if="run.steps.length > 0">
-                  这一轮中断了，已保留上面收到的 {{ run.steps.length }} 步
+                  这一轮中断了，已保留收到的 {{ run.steps.length }} 步
                 </span>
                 <span v-else>这一轮没有跑完</span>
               </div>
               <p class="agent-run__failure-text">{{ run.error }}</p>
             </div>
 
-            <div v-if="run.meta" class="agent-run__meta">
-              <span>草稿 {{ run.draftId || state.draftId }}</span>
-              <span>steps {{ run.meta.steps }}</span>
-              <span>工具调用 {{ run.meta.toolCallCount }} 次</span>
-            </div>
-
-            <div v-if="run.steps.length > 0" class="agent-steps">
-              <div
-                v-for="step in run.steps"
+            <details v-if="run.steps.length > 0" class="agent-steps">
+              <summary class="agent-steps__summary">
+                已执行 {{ run.steps.length }} 步 · 展开
+              </summary>
+              <div class="agent-steps__body">
+                <div class="agent-run__meta">
+                  <span>草稿 {{ run.draftId || state.draftId }}</span>
+                  <span v-if="run.meta">steps {{ run.meta.steps }}</span>
+                  <span v-if="run.meta">
+                    工具调用 {{ run.meta.toolCallCount }} 次
+                  </span>
+                </div>
+                <div
+                  v-for="step in run.steps"
                 :key="step.index"
                 class="agent-step"
                 :class="{
@@ -212,12 +217,9 @@
                     </div>
                   </details>
                 </div>
+                </div>
               </div>
-            </div>
-
-            <p v-else-if="run.reply" class="agent-run__no-tools">
-              这一轮没有调用工具，AI 直接回答了。
-            </p>
+            </details>
 
             <div v-if="run.reply" class="agent-run__reply">
               <span class="agent-run__role agent-run__role--ai">AI</span>
@@ -1599,10 +1601,32 @@ function goBackToList() {
 }
 
 .agent-steps {
+  padding-left: 34px;
+}
+
+/* 执行步骤默认只占一行；展开后才显示每一步的工具与结果。 */
+.agent-steps__summary {
+  cursor: pointer;
+  width: fit-content;
+  padding: 2px 0;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  user-select: none;
+}
+
+.agent-steps__summary:hover {
+  color: var(--el-color-primary);
+}
+
+.agent-steps__body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding-left: 34px;
+  margin-top: 8px;
+}
+
+.agent-steps__body .agent-run__meta {
+  padding-left: 0;
 }
 
 .agent-step {
@@ -1797,13 +1821,6 @@ function goBackToList() {
   color: var(--el-color-danger);
   white-space: pre-wrap;
   word-break: break-word;
-}
-
-.agent-run__no-tools {
-  margin: 0;
-  padding-left: 34px;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
 }
 
 .agent-run__reply {

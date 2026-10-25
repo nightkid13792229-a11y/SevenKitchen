@@ -217,7 +217,8 @@ const MATCH_METHOD_LABELS: Record<string, string> = {
   ZH_ALIAS: '中英别名匹配',
   DICTIONARY: '词典命中',
   AI_TRANSLATION: 'AI 翻译',
-  FUZZY: '近似匹配'
+  FUZZY: '近似匹配',
+  NAME: '名字命中'
 }
 
 export function matchMethodLabel(method: string): string {
@@ -229,14 +230,14 @@ export function matchMethodLabel(method: string): string {
 
 /** 已知工具的中文名；新增工具没登记时按原始名显示，不隐藏。 */
 const TOOL_LABELS: Record<string, string> = {
-  listNutritionNames: '列词条名',
-  searchLocalNutrition: '查本地库',
-  getNutritionRecord: '读来源记录',
-  updateNutritionField: '写字段',
-  updateNutritionFields: '批量写字段',
-  updateIngredientFields: '改原料卡',
+  searchNames: '查名字',
+  summarizeNames: '汇总名字',
+  getRecord: '读来源记录',
+  writeNutrition: '写营养',
+  writeIngredient: '改原料卡',
   runCheck: '跑终检',
-  askUser: '向你提问'
+  askUser: '向你提问',
+  finish: '结束本轮'
 }
 
 /** 工具名 → 页面中文名；未知工具原样返回，不抛错。 */
@@ -409,10 +410,10 @@ function searchMessage(input: {
 }
 
 /**
- * 从 searchLocalNutrition 的工具结果里读出「匹配依据」。
+ * 从 searchNames 的工具结果里读出「匹配依据」。
  *
  * - 关键词同时取后端回传的 keywords 与本次参数里的 keyword；
- * - 只有 found=true 或确有候选才算命中，工具 ok 不算；
+ * - 只有 found=true 或确有词条才算命中，工具 ok 不算；
  * - 零命中时 message 固定为「没有找到匹配词条」，页面不能写成成功。
  */
 export function toSearchEvidence(
@@ -431,19 +432,32 @@ export function toSearchEvidence(
     : []
   const keywords = uniqueText([...rawKeywords, readText(args.keyword)])
 
+  // 新工具只返回名字（names）；旧数据仍可能有 candidates，两套都兼容。
+  const fromNames = !Array.isArray(record.candidates)
   const rawCandidates = Array.isArray(record.candidates)
     ? record.candidates
-    : []
+    : Array.isArray(record.names)
+      ? record.names
+      : []
   const matches: AgentSearchMatchView[] = rawCandidates
     .filter((candidate): candidate is AnyArgs => isRecordValue(candidate))
-    .map((candidate) => toMatchView(candidate, keywords[0] || ''))
+    .map((candidate) =>
+      toMatchView(
+        fromNames ? { matchedBy: 'NAME', ...candidate } : candidate,
+        keywords[0] || ''
+      )
+    )
 
   const candidateCount = readFiniteNumber(record.candidateCount)
   const totalCandidates = readFiniteNumber(record.totalCandidates)
+  const total = readFiniteNumber(record.total)
   const totalCount =
-    totalCandidates === null && candidateCount === null
+    totalCandidates === null && candidateCount === null && total === null
       ? matches.length
-      : Math.max(0, Math.floor(totalCandidates ?? candidateCount ?? 0))
+      : Math.max(
+          0,
+          Math.floor(totalCandidates ?? candidateCount ?? total ?? 0)
+        )
   const groups = toSearchGroups(record.groups)
   const reviewSummary = isRecordValue(record.reviewSummary)
     ? record.reviewSummary
@@ -457,7 +471,10 @@ export function toSearchEvidence(
       ? false
       : record.found === true || matches.length > 0 || totalCount > 0
   const detailed =
-    totalCandidates !== null || groups.length > 0 || relevantCount !== null
+    totalCandidates !== null ||
+    total !== null ||
+    groups.length > 0 ||
+    relevantCount !== null
 
   return {
     keywords,
@@ -590,13 +607,9 @@ function formatValue(value: unknown): string {
   return '—'
 }
 
-/** 查库：关键词 · 生熟状态（后端不传 state 时按 RAW 处理）。 */
+/** 查名字：只显示关键词；新工具没有生熟状态参数。 */
 function summarizeSearch(args: AnyArgs): string {
-  const keyword = readText(args.keyword) || '（未填关键词）'
-  const state = readText(args.state)
-  const stateLabel =
-    state === 'COOKED' ? '熟' : state === 'RAW' || !state ? '生' : state
-  return oneLine(`${keyword} · ${stateLabel}`)
+  return oneLine(readText(args.keyword) || '（未填关键词）')
 }
 
 /** 写字段：字段中文名 = 数值 单位。 */
@@ -641,31 +654,38 @@ function summarizeIngredientFields(args: AnyArgs): string {
   return oneLine(parts.join(' · ') || '（无字段）')
 }
 
-/** 批量写字段：档案 0 · 12 项 */
+/** 批量写营养：档案 0 · 12 项（省略档案时显示「自动」） */
 function summarizeBatchUpdate(args: AnyArgs): string {
-  const profileIndex = formatValue(args.profileIndex)
+  const profileIndex =
+    args.profileIndex === undefined || args.profileIndex === null
+      ? '自动'
+      : formatValue(args.profileIndex)
   const entries = Array.isArray(args.entries) ? args.entries.length : 0
   return oneLine(`档案 ${profileIndex} · ${entries} 项`)
 }
 
 function summarize(name: string, args: AnyArgs): string {
   switch (name) {
-    case 'searchLocalNutrition':
+    case 'searchNames':
       return summarizeSearch(args)
-    case 'getNutritionRecord': {
-      const id = readText(args.sourceRecordId)
+    case 'summarizeNames': {
+      const names = Array.isArray(args.names) ? args.names.length : 0
+      return oneLine(`${names} 条名字`)
+    }
+    case 'getRecord': {
+      const id = readText(args.id) || readText(args.sourceRecordId)
       return oneLine(id || '（未填来源记录）')
     }
-    case 'updateNutritionField':
-      return summarizeUpdate(args)
-    case 'updateNutritionFields':
+    case 'writeNutrition':
       return summarizeBatchUpdate(args)
-    case 'updateIngredientFields':
-      return summarizeIngredientFields(args)
+    case 'writeIngredient':
+      return summarizeIngredientFields(asRecord(args.fields))
     case 'runCheck':
       return '检查整份草稿'
     case 'askUser':
       return oneLine(readText(args.question) || '（未填问题）')
+    case 'finish':
+      return oneLine(readText(args.summary) || '结束本轮')
     default: {
       const argsSummary = summarizeUnknownArgs(args)
       return argsSummary && argsSummary !== '{}' ? argsSummary : '（无参数）'
@@ -697,9 +717,7 @@ export function toStepView(
     const ok = call?.ok === true
     // 查库零命中时，摘要与标签都要说「没有找到」，不能因为工具 ok 就写成功。
     const search =
-      name === 'searchLocalNutrition' && ok
-        ? toSearchEvidence(call?.result, args)
-        : null
+      name === 'searchNames' && ok ? toSearchEvidence(call?.result, args) : null
     let summary = summarize(name, args)
     let statusLabel = ok ? '成功' : '失败'
     let statusType: 'success' | 'warning' | 'danger' = ok

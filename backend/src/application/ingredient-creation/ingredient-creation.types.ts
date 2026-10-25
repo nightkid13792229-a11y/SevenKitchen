@@ -4,12 +4,7 @@ import type {
   PreparationState,
 } from '../../domain/ingredient-creation/preparation-state';
 import type { CoverageCategory } from '../../domain/ingredient-creation/state-coverage';
-import type {
-  CandidateGroupSummary,
-  CandidateNarrowingChoice,
-} from './ingredient-candidate-groups';
 import type { NameClassification } from './ingredient-name-classifier.service';
-import type { ClassificationNarrowingStats } from './ingredient-name-narrowing';
 
 /**
  * 向导站点。草稿的 `step` 只取这些值，其它字符串一律视为脏数据。
@@ -93,7 +88,7 @@ export interface IngredientDraft {
   /**
    * 人工审核时改过的字段（只存在草稿里，不写正式表）。
    *
-   * AI 的 `updateIngredientFields` 遇到这些字段会跳过并说明原因，
+   * AI 的 `writeIngredient` 遇到这些字段会跳过并说明原因，
    * 不允许把人的判断悄悄改回去；提交时随审计一起留痕。
    */
   manualFields?: IngredientCardField[];
@@ -135,91 +130,13 @@ export type CandidateMatchMethod =
  * - `UNCERTAIN`：名字相近但无法确认，交给用户判断；
  * - `IRRELEVANT`：明显是另一种食材（如山药搜到凉薯 / 芹菜）。
  *
- * 复核只打标，不过滤、不排序、不删除候选；真正写不写由人与工具闸门决定。
+ * 复核只打标，不过滤、不排序、不删除候选；判断只作证据，写不写由模型按
+ * skill 指引决定，工具层不再用它做写入闸门。
  */
 export type CandidateReviewVerdict =
   | 'RELEVANT'
   | 'UNCERTAIN'
   | 'IRRELEVANT';
-
-/** 复核目标：中文名必填；英文名与生熟状态用于消歧。 */
-export interface CandidateReviewTarget {
-  zh: string;
-  en?: string;
-  state: PreparationState;
-}
-
-/** 送去复核的一条候选（只带判断需要的元数据，不带营养档案）。 */
-export interface CandidateReviewItem {
-  id: string;
-  name: string;
-  sourceType: string;
-  coverage: number;
-}
-
-/** `reviewCandidates` 的返回项：与输入同序、同数量。 */
-export interface CandidateReviewResult {
-  id: string;
-  verdict: CandidateReviewVerdict;
-  reason: string;
-}
-
-/**
- * 一次检索的复核闸门，随草稿保存。
- *
- * 工具层用它阻止「模型直接写不相关候选 / 还没让人选就写」：
- * - `reviewFailed=true`（模型没配 / 调用失败）时不拦任何写入，避免复核故障阻塞流程；
- * - 其余情况下，写不相关候选、0 条相关、≥2 条相关但还没问人，都会被拒绝。
- *
- * `askUser` 成功后清空（人已经参与选择），下一条回答带来的人工决定优先于 AI 判断。
- */
-export interface CandidateReviewGate {
-  reviewedAt: string;
-  reviewFailed: boolean;
-  relevantCount: number;
-  uncertainCount: number;
-  irrelevantCount: number;
-  /** 参与本次复核的候选（最多 12 条），供闸门按 sourceRecordId 反查。 */
-  candidates: Array<
-    CandidateReviewResult & {
-      foodName: string;
-    }
-  >;
-}
-
-/**
- * 最近一次检索的「先收窄」记录，随草稿保存。
- *
- * `askUser` 用它拦住「候选很多却直接列词条」：`required=true` 且
- * `selectedGroupKey=null` 时，带 AI 判断的候选选项一律拒绝，要求先按
- * `question` / `options` 收窄；选组后 `searchLocalNutrition` 会写入
- * `selectedGroupKey`，之后才允许列该组词条。
- */
-export interface CandidateNarrowingRecord {
-  keyword: string;
-  state: PreparationState;
-  /** 模型这次调用有没有显式传 state。 */
-  stateSpecified: boolean;
-  /** 截断前的候选总数。 */
-  totalCandidates: number;
-  /** AI 判为相关的条数。 */
-  relevantCount: number;
-  required: boolean;
-  kind: 'NONE' | 'STATE' | 'GROUP';
-  reason: string | null;
-  question: string;
-  options: string[];
-  choices: CandidateNarrowingChoice[];
-  groups: CandidateGroupSummary[];
-  selectedGroupKey: string | null;
-  /** 已选状态；「生 + 熟都要」存 ['RAW','COOKED']。旧草稿没有。 */
-  selectedStates?: PreparationState[];
-  /** 本次收窄依据的 AI 分类真实统计；旧草稿没有。 */
-  stats?: ClassificationNarrowingStats | null;
-  /** 收窄后列出的词条名 → AI 分类，askUser 落库 optionChecks 时用。 */
-  classificationByName?: Record<string, NameClassification>;
-  updatedAt: string;
-}
 
 /**
  * ② 营养依据站的候选行（Task 4 的候选检索产出）。
@@ -242,7 +159,7 @@ export interface CandidateRow {
   matchScore: number;
   /**
    * 本地候选检索会填这三项；线上兜底检索（OnlineCandidateRow）不参与本地
-   * 名字匹配，可以没有。Agent 的 searchLocalNutrition 只读本地结果，
+   * 名字匹配，可以没有。Agent 的 searchNames 只返回名字，
    * 返回前会把缺失值补成 `FUZZY` / 本次关键词。
    */
   matchedBy?: CandidateMatchMethod;
@@ -467,17 +384,6 @@ export interface IngredientCreationDraftPayload {
   verify?: { exceptions: ExceptionRecord[] };
   /** AI 提案历史：只追加、不覆盖（appendProposal） */
   proposalHistory?: ProposalSnapshot[];
-  /**
-   * 最近一次检索的 AI 复核闸门；`askUser` 成功后清空。
-   *
-   * 只是工具层的保护，不参与页面渲染；旧草稿没有这个键。
-   */
-  candidateReviewGate?: CandidateReviewGate | null;
-  /**
-   * 最近一次检索的收窄记录（见 `CandidateNarrowingRecord`）。
-   * 只是工具层的保护与状态，不参与页面渲染；旧草稿没有这个键。
-   */
-  candidateNarrowing?: CandidateNarrowingRecord | null;
   /**
    * AI 正在等用户回答的问题；下一次带同一 draftId 的 run 会把它塞进提示词，
    * 然后置为 null。null / 缺失都表示「现在没有待回答的问题」。

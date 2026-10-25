@@ -73,7 +73,7 @@ export interface AgentToolCallRecord {
    * 工具返回的结构化结果（已解析的 JSON）。
    *
    * 页面靠它展开「匹配依据」；过大的结果不塞进列表，避免一次长检索把响应撑大。
-   * 注意：`ok=true` 只表示工具执行成功，像 searchLocalNutrition 还要看 `found`。
+   * 注意：`ok=true` 只表示工具执行成功，像 searchNames 还要看 `found`。
    */
   result?: unknown;
 }
@@ -327,7 +327,7 @@ function parseToolResult(content: string): unknown {
   }
 }
 
-/** searchLocalNutrition 的 found/keywords；不是这个工具的结果就返回 null。 */
+/** searchNames 的 found/keywords；不是这个工具的结果就返回 null。 */
 function readSearchOutcome(
   content: string,
 ): { found: boolean; keywords: string[] } | null {
@@ -378,7 +378,7 @@ function buildToolCallRecord(
   missedSearchKeywords: string[],
 ): AgentToolCallRecord {
   const result = parseToolResult(execution.content);
-  if (name === 'searchLocalNutrition') {
+  if (name === 'searchNames') {
     const outcome = readSearchOutcome(execution.content);
     if (outcome) {
       if (outcome.found) {
@@ -428,16 +428,6 @@ function oneLine(value: string, max = STEP_SUMMARY_MAX): string {
   return truncate(value.replace(/\s+/g, ' ').trim(), max);
 }
 
-function fieldLabel(fieldPath: string): string {
-  if (!fieldPath) {
-    return '（未填字段）';
-  }
-  return (
-    NUTRITION_FIELD_CATALOG.find((field) => field.fieldPath === fieldPath)
-      ?.label ?? fieldPath
-  );
-}
-
 /** 原料卡字段 → 中文，与页面同口径。 */
 const INGREDIENT_STEP_FIELD_LABELS: Record<string, string> = {
   name: '名称',
@@ -459,43 +449,32 @@ export function buildToolStepSummary(
   args: Record<string, unknown>,
 ): string {
   switch (name) {
-    case 'listNutritionNames': {
+    case 'searchNames': {
       const keyword = readTextValue(args.keyword) || '（未填关键词）';
-      return oneLine(`列词条名 ${keyword}`);
+      return oneLine(`查名字 ${keyword}`);
     }
-    case 'searchLocalNutrition': {
-      const keyword = readTextValue(args.keyword) || '（未填关键词）';
-      const state = readTextValue(args.state);
-      const stateLabel =
-        state === 'COOKED' ? '熟' : state === 'RAW' || !state ? '生' : state;
-      return oneLine(`查本地库 ${keyword}·${stateLabel}`);
+    case 'summarizeNames': {
+      const names = Array.isArray(args.names) ? args.names.length : 0;
+      return oneLine(`汇总名字 ${names} 条`);
     }
-    case 'getNutritionRecord': {
-      return oneLine(
-        `读来源记录 ${readTextValue(args.sourceRecordId) || '（未填来源记录）'}`,
-      );
+    case 'getRecord': {
+      const id =
+        readTextValue(args.id) ||
+        readTextValue(args.sourceRecordId) ||
+        '（未填来源记录）';
+      return oneLine(`读来源记录 ${id}`);
     }
-    case 'updateNutritionField': {
-      const fieldPath = readTextValue(args.fieldPath);
-      const field = NUTRITION_FIELD_CATALOG.find(
-        (candidate) => candidate.fieldPath === fieldPath,
-      );
-      const unit = readTextValue(args.unit) || field?.unit || '';
-      const label = field?.label || fieldPath || '（未填字段）';
-      return oneLine(
-        `写字段 ${label} = ${readDisplayValue(args.value)}${
-          unit ? ` ${unit}` : ''
-        }`,
-      );
-    }
-    case 'updateNutritionFields': {
+    case 'writeNutrition': {
       const entries = Array.isArray(args.entries) ? args.entries.length : 0;
-      return oneLine(
-        `批量写字段 档案 ${readDisplayValue(args.profileIndex)} · ${entries} 项`,
-      );
+      const profileIndex =
+        args.profileIndex === undefined
+          ? '自动'
+          : readDisplayValue(args.profileIndex);
+      return oneLine(`写营养 档案 ${profileIndex} · ${entries} 项`);
     }
-    case 'updateIngredientFields': {
-      const parts = Object.entries(args)
+    case 'writeIngredient': {
+      const fields = isRecord(args.fields) ? args.fields : {};
+      const parts = Object.entries(fields)
         .filter(([key]) => key in INGREDIENT_STEP_FIELD_LABELS)
         .map(
           ([key, value]) =>
@@ -508,6 +487,10 @@ export function buildToolStepSummary(
     case 'askUser':
       return oneLine(
         `向你提问 ${readTextValue(args.question) || '（未填问题）'}`,
+      );
+    case 'finish':
+      return oneLine(
+        readTextValue(args.summary) ? '结束本轮并给出结论' : '结束本轮',
       );
     default: {
       try {
@@ -536,54 +519,44 @@ export function buildToolResultSummary(
   }
 
   switch (name) {
-    case 'listNutritionNames': {
+    case 'searchNames': {
       const total =
         typeof result.total === 'number' && Number.isFinite(result.total)
           ? Math.floor(result.total)
           : 0;
       const returned = Array.isArray(result.names) ? result.names.length : 0;
-      return `列出 ${total} 条名字（返回 ${returned} 条）`;
-    }
-    case 'searchLocalNutrition': {
       if (result.found !== true) {
         return '没有找到匹配词条';
       }
-      const total =
-        typeof result.totalCandidates === 'number'
-          ? result.totalCandidates
-          : typeof result.candidateCount === 'number'
-            ? result.candidateCount
-            : 0;
-      const relevant =
-        isRecord(result.reviewSummary) &&
-        typeof result.reviewSummary.relevantCount === 'number'
-          ? result.reviewSummary.relevantCount
-          : null;
-      if (total > 0) {
-        return relevant !== null
-          ? `命中 ${total} 条 · ${relevant} 条相关`
-          : `命中 ${total} 条`;
-      }
-      return '命中';
+      return `列出 ${total} 条名字（返回 ${returned} 条）`;
     }
-    case 'getNutritionRecord': {
+    case 'summarizeNames': {
+      if (result.degraded === true) {
+        return '汇总完成（按关键词粗略计数）';
+      }
+      const byState = isRecord(result.byState) ? result.byState : {};
+      const raw = typeof byState.RAW === 'number' ? byState.RAW : 0;
+      const cooked = typeof byState.COOKED === 'number' ? byState.COOKED : 0;
+      const total =
+        typeof result.total === 'number' && Number.isFinite(result.total)
+          ? Math.floor(result.total)
+          : 0;
+      return `汇总 ${total} 条 · 生 ${raw} / 熟 ${cooked}`;
+    }
+    case 'getRecord': {
       const record = isRecord(result.record) ? result.record : null;
       const count =
         record && Array.isArray(record.values) ? record.values.length : 0;
       return count > 0 ? `读到 ${count} 项营养值` : '没有可用的营养值';
     }
-    case 'updateNutritionField': {
-      const fieldPath = readTextValue(result.fieldPath);
-      return fieldPath ? `已写入 ${fieldLabel(fieldPath)}` : '已写入';
-    }
-    case 'updateNutritionFields': {
+    case 'writeNutrition': {
       const applied = typeof result.applied === 'number' ? result.applied : 0;
       const failed = Array.isArray(result.failed) ? result.failed.length : 0;
       return failed > 0
         ? `写入 ${applied} 项，失败 ${failed} 项`
         : `写入 ${applied} 项`;
     }
-    case 'updateIngredientFields': {
+    case 'writeIngredient': {
       const changed = Array.isArray(result.changed) ? result.changed.length : 0;
       const skipped = Array.isArray(result.skipped) ? result.skipped.length : 0;
       if (changed === 0) {
@@ -608,6 +581,8 @@ export function buildToolResultSummary(
     }
     case 'askUser':
       return '等你回答';
+    case 'finish':
+      return '结束本轮';
     default:
       return '完成';
   }
@@ -618,7 +593,7 @@ function readToolFound(
   name: string,
   execution: { ok: boolean; content: string },
 ): boolean | undefined {
-  if (name !== 'searchLocalNutrition' || !execution.ok) {
+  if (name !== 'searchNames' || !execution.ok) {
     return undefined;
   }
   return readSearchOutcome(execution.content)?.found;
@@ -640,61 +615,11 @@ interface SearchStepEvidence {
   reviewSummary: IngredientAgentStreamReviewSummary | null;
 }
 
-/** 候选里的 AI 判断：认不出 verdict 就不带，页面不会假装有判断。 */
-function readCandidateReview(
-  value: unknown,
-): IngredientAgentStreamMatch['review'] | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-  const verdict = value.verdict;
-  if (
-    verdict !== 'RELEVANT' &&
-    verdict !== 'UNCERTAIN' &&
-    verdict !== 'IRRELEVANT'
-  ) {
-    return null;
-  }
-  return {
-    verdict,
-    reason: truncate(
-      readTextValue(value.reason).replace(/\s+/g, ' '),
-      40,
-    ),
-  };
-}
-
-/**
- * 查库 step_end 的匹配依据：关键词 + 前 12 条命中（含 AI 复核判断）。
- *
- * 只在查库工具**成功且返回结构化结果**时生成；零命中时 matches 为空数组、
- * keywords 保留本次实际检索词，页面仍可展开并显示「没有找到匹配词条」。
- */
-function readStreamClassification(
-  value: unknown,
-): IngredientAgentStreamClassification | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-  const state = readTextValue(value.state);
-  const method = readTextValue(value.method);
-  if (!state && !method) {
-    return null;
-  }
-  return {
-    state: state || 'UNKNOWN',
-    method: method || 'NONE',
-    cutLabel: readTextValue(value.cutLabel) || null,
-    cutGroup: readTextValue(value.cutGroup) || null,
-    evidence: readTextValue(value.evidence) || null,
-  };
-}
-
 function buildSearchStepEvidence(
   name: string,
   execution: { ok: boolean; content: string },
 ): SearchStepEvidence | null {
-  if (name !== 'searchLocalNutrition' || !execution.ok) {
+  if (name !== 'searchNames' || !execution.ok) {
     return null;
   }
   const parsed = parseToolResult(execution.content);
@@ -707,33 +632,25 @@ function buildSearchStepEvidence(
   }
 
   const matches: IngredientAgentStreamMatch[] = [];
-  if (Array.isArray(parsed.candidates)) {
-    for (const candidate of parsed.candidates) {
-      if (!isRecord(candidate)) {
+  const matchedKeyword = truncate(
+    readTextValue(parsed.keyword),
+    STEP_KEYWORD_MAX,
+  );
+  if (Array.isArray(parsed.names)) {
+    for (const entry of parsed.names) {
+      if (!isRecord(entry)) {
         continue;
       }
-      const score =
-        typeof candidate.score === 'number' && Number.isFinite(candidate.score)
-          ? candidate.score
-          : null;
-      const review = readCandidateReview(candidate.review);
-      const classification = readStreamClassification(candidate.classification);
       matches.push({
         name:
           oneLine(
-            readTextValue(candidate.foodName) ||
-              readTextValue(candidate.name) ||
-              '（未知词条）',
+            readTextValue(entry.name) || '（未知词条）',
             STEP_NAME_MAX,
           ) || '（未知词条）',
-        matchedBy: readTextValue(candidate.matchedBy) || 'UNKNOWN',
-        matchedKeyword: truncate(
-          readTextValue(candidate.matchedKeyword),
-          STEP_KEYWORD_MAX,
-        ),
-        score,
-        ...(review ? { review } : {}),
-        ...(classification ? { classification } : {}),
+        // searchNames 只按名字命中；没有 AI 复核与分类。
+        matchedBy: 'NAME',
+        matchedKeyword,
+        score: null,
       });
       if (matches.length >= STEP_MATCH_LIMIT) {
         break;
@@ -748,16 +665,16 @@ function buildSearchStepEvidence(
   const uniqueKeywords = uniqueNonEmpty(keywords).slice(0, STEP_KEYWORD_LIMIT);
 
   const candidateCount =
-    typeof parsed.candidateCount === 'number' &&
-    Number.isFinite(parsed.candidateCount) &&
-    parsed.candidateCount >= 0
-      ? Math.floor(parsed.candidateCount)
+    typeof parsed.total === 'number' &&
+    Number.isFinite(parsed.total) &&
+    parsed.total >= 0
+      ? Math.floor(parsed.total)
       : matches.length;
   const totalCandidates =
-    typeof parsed.totalCandidates === 'number' &&
-    Number.isFinite(parsed.totalCandidates) &&
-    parsed.totalCandidates >= 0
-      ? Math.floor(parsed.totalCandidates)
+    typeof parsed.total === 'number' &&
+    Number.isFinite(parsed.total) &&
+    parsed.total >= 0
+      ? Math.floor(parsed.total)
       : candidateCount;
 
   const groups: IngredientAgentStreamGroup[] = [];
@@ -830,7 +747,7 @@ function buildRecordStepEvidence(
   name: string,
   execution: { ok: boolean; content: string },
 ): IngredientAgentStreamRecord | null {
-  if (name !== 'getNutritionRecord' || !execution.ok) {
+  if (name !== 'getRecord' || !execution.ok) {
     return null;
   }
   const parsed = parseToolResult(execution.content);
@@ -1038,12 +955,12 @@ function buildDraftPromptLines(draft: IngredientCreationDraft): string[] {
       : [];
     if (manualFields.length > 0) {
       lines.push(
-        `人工审核已改字段（updateIngredientFields 会拒绝覆盖，不要重复尝试）：${manualFields.join('、')}`,
+        `人工审核已改字段（writeIngredient 会拒绝覆盖，不要重复尝试）：${manualFields.join('、')}`,
       );
     }
   } else {
     lines.push(
-      '（草稿还没有原料卡。可用 updateIngredientFields 写名称 / 英文名 / 类别 / 基准单位 / 展示名 / CFCT 分类 / 可食部。）',
+      '（草稿还没有原料卡。可用 writeIngredient.fields 写名称 / 英文名 / 类别 / 基准单位 / 展示名 / CFCT 分类 / 可食部。）',
     );
   }
 
@@ -1074,86 +991,8 @@ function buildDraftPromptLines(draft: IngredientCreationDraft): string[] {
 
   if (profiles.length === 0) {
     lines.push(
-      '（草稿还没有营养档案。第一次写入请用 updateNutritionFields，把 profileIndex 设为 0，并带上 searchLocalNutrition 返回的 sourceRecordId。）',
+      '（草稿还没有营养档案。第一次写入用 writeNutrition：省略 profileIndex，并按来源记录带上 sourceRecordId，工具会按来源的生熟状态建档案。）',
     );
-  }
-
-  // 下一轮模型看不到上一轮的工具结果；把收窄状态与分组 key 写进提示词，
-  // 用户回答「牛绞肉（6 条）」后模型才知道该传 group=ground。
-  const narrowing = draft.payload.candidateNarrowing;
-  if (isRecord(narrowing)) {
-    const groups = Array.isArray(narrowing.groups)
-      ? narrowing.groups.filter(isRecord)
-      : [];
-    const options = Array.isArray(narrowing.options)
-      ? narrowing.options.filter(
-          (option): option is string => typeof option === 'string',
-        )
-      : [];
-    const choices = Array.isArray(narrowing.choices)
-      ? narrowing.choices.filter(isRecord)
-      : [];
-    const stats = isRecord(narrowing.stats) ? narrowing.stats : null;
-    const selectedStates = Array.isArray(narrowing.selectedStates)
-      ? narrowing.selectedStates
-          .map((state) => (typeof state === 'string' ? state : ''))
-          .filter(Boolean)
-      : [];
-    lines.push(
-      `最近一次检索收窄：关键词=${String(narrowing.keyword ?? '')} 状态=${String(
-        narrowing.state ?? '',
-      )} 候选总数=${String(narrowing.totalCandidates ?? 0)} 相关=${String(
-        narrowing.relevantCount ?? 0,
-      )} required=${narrowing.required === true} 已选状态=${
-        selectedStates.length > 0 ? selectedStates.join('+') : '无'
-      } 已选分组=${String(narrowing.selectedGroupKey ?? '无')}`,
-    );
-    if (stats) {
-      const byState = isRecord(stats.byState)
-        ? (stats.byState as Record<string, number>)
-        : {};
-      const byMethod = isRecord(stats.byMethod)
-        ? (stats.byMethod as Record<string, number>)
-        : {};
-      lines.push(
-        `AI 分类真实统计：生=${String(byState.RAW ?? 0)} 熟=${String(
-          byState.COOKED ?? 0,
-        )} 未知=${String(byState.UNKNOWN ?? 0)}；水煮=${String(
-          byMethod.BOILED ?? 0,
-        )} 蒸=${String(byMethod.STEAMED ?? 0)} 烤=${String(
-          byMethod.GRILLED ?? 0,
-        )} 煎=${String(byMethod.FRIED ?? 0)} 其它=${String(
-          byMethod.OTHER ?? 0,
-        )} 无=${String(byMethod.NONE ?? 0)}`,
-      );
-    }
-    if (groups.length > 0) {
-      lines.push(
-        `候选分组：${groups
-          .map(
-            (group) =>
-              `${String(group.key)}=${String(group.label)}(${String(
-                group.count ?? 0,
-              )}条)`,
-          )
-          .join('、')}`,
-      );
-    }
-    if (choices.length > 0) {
-      lines.push(
-        `收窄选项（用户点选后原样回传，选组时把 key 传给 searchLocalNutrition.group）：${choices
-          .map(
-            (choice) =>
-              `${String(choice.kind)}=${String(choice.key)}(${String(
-                choice.label ?? '',
-              )})`,
-          )
-          .join('、')}`,
-      );
-    }
-    if (options.length > 0) {
-      lines.push(`收窄问题选项原文：${options.join(' / ')}`);
-    }
   }
 
   return lines;
@@ -1167,32 +1006,22 @@ function buildSystemPrompt(
   const lines = [
     '你是宠物鲜食后台的「AI 添加原料」助手。你的工作是通过工具把一份**草稿**填好；正式原料与营养档案不在你的权限内。',
     '',
-    '硬规则：',
+    '硬规则（工具层写死，绕不过）：',
     '- 只能读写草稿。系统没有提交、确认可用、批准例外的工具；不要假装能做，也不要建议用户让你做。',
-    '- 每一轮可以返回一个或多个工具调用；也可以直接给出最终回复。',
-    '- 读到多个营养值后，**优先用 updateNutritionFields 一次写入**（单次最多 70 条），不要 60 个字段调 60 次 updateNutritionField。',
-    '- 原料卡（名称 / 英文名 / 类别 / 基准单位 / 展示名 / CFCT / 可食部）用 updateIngredientFields 写；人工审核改过的字段会被跳过，不要反复重试。',
+    '- 每条营养写入都必须带 sourceRecordId。没有来源的数值一律不写：先 searchNames 找词条、getRecord 读来源。',
+    '- 字段必须在营养字段目录里，单位必须与目录一致。工具报错就按错误文本改参数后重试；连续改不出来就停下，说明卡在哪。',
     '- 不要编造营养数值。只写来源记录里有的值，或用户明确给出的值。',
-    '- 工具报错表示输入不合法。按错误文本改正参数后重试；连续改不出来就停下，说明卡在哪。',
-    '- searchLocalNutrition 返回 ok=true 只表示「查询执行成功」，不代表找到数据。看 found / candidateCount：found=false 或 0 条时必须明确说「没有找到匹配词条」，并列出 keywords 里已尝试的关键词；不要写成「成功找到」，也不要编造数据。',
-    '- 模糊词（如「牛肉」「猪肉」「鱼」）直接用 searchLocalNutrition：它内部一次拉全部命中（最多 3000 条名字），只发 1 次汇总请求统计生 / 熟 / 做法 / 部位；不要用 listNutritionNames 把几千条名字拉进上下文，也不要逐条判断。',
-    '- searchLocalNutrition 用一次汇总生成 narrowing（生 / 熟 / 水煮 / 蒸 / 烤 / 煎 / 各部位各多少条），逐条精判只发生在最终展示的 ≤10 条；收窄时先按部位分组，收窄后说「这一组 N 条」。不要自己按关键词猜部位。',
-    '- 汇总失败时工具会按名字关键词粗略计数并返回 notice：据实说明「AI 分类不可用，数字是粗算」，不要编造；也不要因此卡住检索。',
-    '- searchLocalNutrition 返回的每条候选都带 classification（state / method / cutLabel / cutGroup / evidence）与 review（RELEVANT=相关 / UNCERTAIN=存疑 / IRRELEVANT=不相关）。不要因为候选里有不相关项就丢弃或隐藏候选；AI 判断只是证据，最终选择由人做；展示时写出分类标签与依据词（evidence）。',
-    '- 写原料卡或营养档案之前必须先查库并看复核结论；review.verdict=IRRELEVANT 的候选不允许直接写入。',
-    '- 相关候选 ≥2 条：**必须先调用 askUser** 让用户选择，不许自己挑一条；选项文案写成「候选名 —— 相关/存疑/不相关：≤40 字理由」，把 AI 判断展示给用户。',
-    '- searchLocalNutrition 返回 nextAction=NARROW_STATE / NARROW_GROUP 或 narrowing.required=true 时：**必须先按 narrowing.question / narrowing.options 收窄**，不许直接列词条。问句里的条数全部来自 AI 分类的真实统计（生 / 熟 / 水煮 / 蒸 / 烤 / 煎 / 各部位各多少条），不要改写数字。',
-    '- 状态收窄必须支持多选（生 / 熟 / 生 + 熟都要）：narrowing.options 里会有一项「生 + 熟都要（N 条）」。用户选它之后，下一次调用 searchLocalNutrition 必须传 states=["RAW","COOKED"]（后续会建两份档案）；只选生或熟就传 state=RAW / COOKED。',
-    '- 已选状态但还跨多个部位时，searchLocalNutrition 会返回 NARROW_GROUP；必须先 askUser 按部位收窄，再把 narrowing.choices[].key 传进 group。',
-    '- 收窄后只列该组 ≤5 条词条（每条带来源库 / 覆盖率 / AI 分类 / 相关判断），选项最后永远加一条「都不对，我直接说」；该组只剩 1 条时直接用它并说明理由，不必再问。',
-    '- 用户没指定生/熟时，先按 narrowing 问状态；不要默认替用户选生，也不要把默认 RAW 说成用户的选择。',
-    '- 相关候选 =1 条：可以继续用它写入，但最终回复必须说明“我选了这条，因为…”，并把其它候选的 AI 判断列在证据里。',
-    '- 相关候选 =0 条：不许硬选，转“去线上找 / 留空”分支，明确告诉用户本地库没有相关来源。',
-    '- 以下情况**必须先调用 askUser 问人，不许自己猜**：部位 / 加工态 / 种类有歧义（例如「牛肉」「猪肉」「土豆」「鱼」「山药」）；多个候选覆盖率接近且生熟状态不同；要新建多份档案但主次不明。',
-    '- 一次只问一个问题，给 2–5 个可点选项（每个选项是一个具体答案）。用户回答之前不要写原料卡或营养档案；拿到回答后再继续，不要重复问同一个问题。',
-    '- askUser 会把问题存进草稿并结束本轮，等待用户回答。不要在同一轮里自问自答，也不要在回复里假装已经知道答案。',
+    '- 你可以自由决定工具调用顺序；调用 finish 结束本轮。',
+    '',
+    '作业指引（完整版：skills/ingredient-agent/SKILL.md）：',
+    '- 模糊词（牛肉 / 山药 / 鸡肝）先 searchNames 看 total；命中多就先 summarizeNames 看分布，再按「状态 → 部位 → 具体词条」的顺序用 askUser 收窄。不要自己按关键词猜部位。',
+    '- 生熟可以多选：用户说「生 + 熟都要」就分别找生、熟来源，建两份档案；不要替用户默认只做生。',
+    '- 候选多时按组给，每组最多 5 条 + 最后一条「都不对，我直接说」；该组只剩 1 条时直接用它，并在结论里说明理由。',
+    '- 拿不准就问（部位 / 加工态 / 种类有歧义、多个候选难分、主次不明），不要自己挑一条凑合。一次只问一个问题，给 2–5 个具体可点选项。',
+    '- summarizeNames 返回 degraded=true 时，据实说明「AI 分类不可用，数字是粗算」，不要把粗算当精确分类。',
+    '- searchNames 返回 found=false 时，必须明确说「没有找到匹配词条」并列出 keywords 里已尝试的关键词；不要写成「成功找到」。',
+    '- 最终结论用一两句中文：改了什么、还缺什么、下一步建议；找不到数据时先说「没找到」。不要粘贴 JSON。',
     `- 本轮预算：最多 ${INGREDIENT_AGENT_MAX_TOOL_CALLS} 次工具调用 / ${INGREDIENT_AGENT_TIMEOUT_MS / 1000} 秒；连续 ${INGREDIENT_AGENT_MAX_NO_PROGRESS} 次工具调用没有新进展会被系统停止。`,
-    '- 最终回复用一句中文，说清楚改了什么、还缺什么、下一步建议；找不到数据时要先说「没找到」并列出查过的关键词。不要粘贴 JSON。',
     `可用工具：${toolNames.join('、')}`,
     '',
     '【营养字段目录】fieldPath 形如「表名.字段名」，单位必须用括号里的目录单位：',
@@ -1453,7 +1282,7 @@ function buildStopReply(input: {
  * （查库 → 写字段 → 跑校验 → 按报错改），直到给出最终回复或撞上限。
  *
  * 安全边界不靠模型自觉：
- * - 工具层只有 7 个，全部只碰草稿；提交 / 确认可用不在这里；
+ * - 工具层只有 8 个原子工具，全部只碰草稿；提交 / 确认可用不在这里；
  * - 硬保险丝：80 次工具调用 / 240 秒 / 可配 token 预算；
  * - 软停止：连续 3 次工具调用没有新进展（不写字段、不发现新来源）就停；
  * - 停下来不回滚：已写入的草稿保持原样，reply 说明还剩什么；
@@ -1829,6 +1658,21 @@ export class IngredientDraftAgentService {
             content: execution.content,
           });
 
+          // finish 是明确的结束信号：立刻收尾，同一条回复里剩下的 tool_call 不再执行。
+          if (execution.finished) {
+            reply = this.resolveFinishReply(
+              execution.finished.reply,
+              turn.content,
+            );
+            transcript.push({
+              step: steps,
+              type: 'reply',
+              atMs: Date.now() - startedAt,
+              summary: truncate(reply, TRANSCRIPT_SUMMARY_MAX),
+            });
+            break runLoop;
+          }
+
           if (
             this.recordProgress(execution, seenSourceIds, (check) => {
               lastCheck = check;
@@ -1943,6 +1787,21 @@ export class IngredientDraftAgentService {
         role: 'user',
         content: `工具 ${toolName} 返回：${execution.content}`,
       });
+
+      // finish 是明确的结束信号：不再请求下一次模型。
+      if (execution.finished) {
+        reply = this.resolveFinishReply(
+          execution.finished.reply,
+          turn.content,
+        );
+        transcript.push({
+          step: steps,
+          type: 'reply',
+          atMs: Date.now() - startedAt,
+          summary: truncate(reply, TRANSCRIPT_SUMMARY_MAX),
+        });
+        break;
+      }
 
       if (
         this.recordProgress(execution, seenSourceIds, (check) => {
@@ -2124,6 +1983,21 @@ export class IngredientDraftAgentService {
         parseError: `工具参数不是合法 JSON：${truncate(raw, 200)}`,
       };
     }
+  }
+
+  /**
+   * finish 的结论：优先用工具参数里的 summary，其次用同一条 assistant 回复；
+   * 都没有时给一句中性收尾，不能把空字符串当成最终回复。
+   */
+  private resolveFinishReply(
+    finishedReply: string | null,
+    assistantContent: string | null,
+  ): string {
+    const text =
+      (finishedReply ?? '').trim() ||
+      (assistantContent ?? '').trim() ||
+      '本轮已完成。';
+    return this.normalizeReply(text);
   }
 
   private normalizeReply(reply: string): string {

@@ -159,30 +159,24 @@
                   预处理方式与重量 / 占比 / 开关 / 删除同排（2026-10-22）：
                   名称和营养档案留在左侧；名称下面不再放预处理控件。
                   Tab 顺序只保留每行的重量输入：其余控件显式 tabindex=-1
-                  （ElSelect / ElSwitch 均支持 tabindex prop，ElButton 透传原生属性）。
+                  （ElAutocomplete / ElSwitch 均支持 tabindex prop，ElButton 透传原生属性）。
                 -->
                 <div class="item-controls">
                   <div class="item-preparation-inline">
                     <span class="preparation-label" title="原料预处理">预处理</span>
-                    <el-select
+                    <!--
+                      2026-10-26：改成可编辑输入框（带字典建议）。
+                      原下拉框点开时输入框是空的，AI 填的整句没法直接改，且
+                      只有按回车才保存；现在点进去就是原文字，回车 / 失焦都保存。
+                    -->
+                    <PreparationMethodField
+                      class="preparation-method-field"
                       :model-value="element.preparationMethod || ''"
-                      class="preparation-method-select"
-                      size="small"
-                      filterable
-                      allow-create
-                      default-first-option
-                      clearable
+                      :label="element.preparationMethodLabel || ''"
+                      :options="preparationMethodOptions"
                       :tabindex="-1"
-                      placeholder="选择或输入"
-                      @change="(value: string | undefined) => onPreparationMethodChange(element, value)"
-                    >
-                      <el-option
-                        v-for="option in preparationMethodOptions"
-                        :key="option.id"
-                        :label="option.name"
-                        :value="option.id"
-                      />
-                    </el-select>
+                      @change="(value: string | null) => onPreparationMethodChange(element, value)"
+                    />
                     <el-button
                       class="preparation-manage-btn"
                       size="small"
@@ -425,6 +419,7 @@ import MacroCompositionPanel from './components/MacroCompositionPanel.vue'
 import DogInsightPanel from './components/DogInsightPanel.vue'
 import AiDesignSuggestionPanel from './components/AiDesignSuggestionPanel.vue'
 import SupplementTargetDialog from './components/SupplementTargetDialog.vue'
+import PreparationMethodField from './components/PreparationMethodField.vue'
 import PreparationMethodManagerDialog from './components/PreparationMethodManagerDialog.vue'
 import LaunchReadinessDrawer from './components/LaunchReadinessDrawer.vue'
 import RecipeAgentDrawer from './components/RecipeAgentDrawer.vue'
@@ -1054,7 +1049,7 @@ function onPreparationMethodsChanged(methods: PreparationMethod[]) {
  */
 function onPreparationMethodChange(
   item: DesignerItem,
-  value: string | undefined
+  value: string | null | undefined
 ) {
   const nextMethod = String(value ?? '').trim() || null
   const currentMethod = String(item.preparationMethod ?? '').trim() || null
@@ -2126,9 +2121,6 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   font-size: 11px;
   color: #909399;
-}
-.preparation-method-select {
-  width: 118px;
 }
 .preparation-manage-btn {
   flex-shrink: 0;

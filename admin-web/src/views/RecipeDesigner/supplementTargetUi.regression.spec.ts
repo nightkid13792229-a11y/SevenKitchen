@@ -3,6 +3,7 @@ import editorSource from '@/views/RecipeDesigner/Editor.vue?raw'
 import assessmentSource from '@/views/RecipeDesigner/components/AssessmentPanel.vue?raw'
 import dialogSource from '@/views/RecipeDesigner/components/SupplementTargetDialog.vue?raw'
 import managerDialogSource from '@/views/RecipeDesigner/components/PreparationMethodManagerDialog.vue?raw'
+import preparationFieldSource from '@/views/RecipeDesigner/components/PreparationMethodField.vue?raw'
 import preparationMethodApiSource from '@/api/preparationMethods.ts?raw'
 import designerApiSource from '@/api/recipeDesigner.ts?raw'
 import saveQueueSource from '@/composables/useDesignerSaveQueue.ts?raw'
@@ -96,7 +97,7 @@ describe('设计器 · 原料预处理控件内联与 Tab 顺序', () => {
   it('预处理选择 / 来源标签 / 管理入口与重量、占比、开关同排', () => {
     const controls = itemControlsSource()
 
-    expect(controls).toContain('class="preparation-method-select"')
+    expect(controls).toContain('class="preparation-method-field"')
     expect(controls).toContain('preparationSource === \'MANUAL\'')
     expect(controls).toContain('人工')
     expect(controls).toContain('自动')
@@ -107,7 +108,7 @@ describe('设计器 · 原料预处理控件内联与 Tab 顺序', () => {
     expect(controls).toContain('el-switch')
     expect(controls).toContain('type="danger"')
 
-    const prepIndex = controls.indexOf('class="preparation-method-select"')
+    const prepIndex = controls.indexOf('class="preparation-method-field"')
     const weightIndex = controls.indexOf('class="weight-input"')
     const ratioIndex = controls.indexOf('class="item-ratio-column"')
     expect(prepIndex).toBeGreaterThan(-1)
@@ -122,11 +123,11 @@ describe('设计器 · 原料预处理控件内联与 Tab 顺序', () => {
 
     expect(itemMetaStart).toBeGreaterThan(-1)
     expect(itemMeta).toContain('item-profile-name')
-    expect(itemMeta).not.toContain('preparation-method-select')
+    expect(itemMeta).not.toContain('preparation-method-field')
     expect(itemMeta).not.toContain('preparation-label')
     expect(itemMeta).not.toContain('preparation-manage-btn')
 
-    const prepIndex = editor.indexOf('class="preparation-method-select"')
+    const prepIndex = editor.indexOf('class="preparation-method-field"')
     const controlsIndex = editor.indexOf('<div class="item-controls">')
     expect(controlsIndex).toBeGreaterThan(-1)
     expect(prepIndex).toBeGreaterThan(controlsIndex)
@@ -135,13 +136,13 @@ describe('设计器 · 原料预处理控件内联与 Tab 顺序', () => {
   it('重量输入是行内唯一可 Tab 进入的控件，其余控件 tabindex=-1', () => {
     const controls = itemControlsSource()
 
-    // ElSelect / ElSwitch 支持 tabindex prop；ElButton 透传原生 tabindex。
+    // ElAutocomplete / ElSwitch 支持 tabindex prop；ElButton 透传原生 tabindex。
     const tabindexCount = (controls.match(/:tabindex="-1"/g) ?? []).length
     expect(tabindexCount).toBeGreaterThanOrEqual(4)
 
     const prepTag = controls.slice(
-      controls.indexOf('<el-select'),
-      controls.indexOf('</el-select>')
+      controls.indexOf('<PreparationMethodField'),
+      controls.indexOf('/>', controls.indexOf('<PreparationMethodField'))
     )
     expect(prepTag).toContain(':tabindex="-1"')
 
@@ -193,6 +194,39 @@ describe('设计器 · 原料预处理控件内联与 Tab 顺序', () => {
 
   it('同一原料排队的多个字段修改会合并，不会互相覆盖', () => {
     expect(saveQueueSource).toContain('...existing.data, ...op.data')
+  })
+})
+
+describe('设计器 · 预处理字段可直接编辑（2026-10-26）', () => {
+  const editor = clean(editorSource)
+  const field = clean(preparationFieldSource)
+
+  it('编辑器用可编辑输入框替换只能选的下拉框，并回填当前文字', () => {
+    expect(editor).toContain('<PreparationMethodField')
+    expect(editor).toContain(':model-value="element.preparationMethod')
+    expect(editor).toContain(':label="element.preparationMethodLabel')
+    expect(editor).toContain(':options="preparationMethodOptions"')
+    expect(editor).not.toContain('<el-select')
+  })
+
+  it('输入框直接显示原文字，回车 / 失焦都会提交', () => {
+    expect(field).toContain('el-autocomplete')
+    expect(field).toContain('v-model="text"')
+    expect(field).toContain('select-when-unmatched')
+    expect(field).toContain('@select="handleSelect"')
+    expect(field).toContain('@change="handleChange"')
+    expect(field).toContain('@blur="handleBlur"')
+    expect(field).toContain('resolvePreparationMethodDisplayText')
+  })
+
+  it('字典项作为建议；选中或输入同名文字时保存字典 id', () => {
+    expect(field).toContain('filterPreparationMethodOptions')
+    expect(field).toContain('resolvePreparationMethodCommitText')
+    expect(field).toContain('applyPreparationMethodSuggestion')
+    expect(field).toContain('handleNativeInput')
+    expect(field).toContain('preparation-method-field')
+    // AI 写进来的自由文本不在字典里，也必须能继续编辑并保存
+    expect(field).toContain('clearable')
   })
 })
 

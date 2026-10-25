@@ -14,7 +14,7 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
-import { DesignRecipeStatus } from '@prisma/client';
+import { DesignRecipeStatus, Prisma } from '@prisma/client';
 
 import { normalizeNutritionProfile } from '../../../domain/ingredient/nutrition-profile.utils';
 import type { NutritionProfile } from '../../../domain/ingredient/types';
@@ -1025,7 +1025,7 @@ interface DesignRecipeReadRow {
   videoUrl: string | null;
   energyDensityKcalPerKg: number | null;
   nutritionStandard: string | null;
-  nutritionDetailedData: unknown;
+  nutritionReportJson: unknown;
   productionStepsJson: unknown;
   seriesId: string | null;
   seriesLifeStage: string | null;
@@ -1135,7 +1135,8 @@ const DESIGN_RECIPE_READ_SELECT = {
   videoUrl: true,
   energyDensityKcalPerKg: true,
   nutritionStandard: true,
-  nutritionDetailedData: true,
+  // DesignRecipe 只有 nutritionReportJson，没有 Recipe 的 nutritionDetailedData。
+  nutritionReportJson: true,
   productionStepsJson: true,
   seriesId: true,
   seriesLifeStage: true,
@@ -1147,7 +1148,7 @@ const DESIGN_RECIPE_READ_SELECT = {
     select: DESIGN_RECIPE_ITEM_SELECT,
     orderBy: DESIGN_RECIPE_ITEMS_ORDER,
   },
-} as const;
+} as const satisfies Prisma.DesignRecipeSelect;
 
 /**
  * 营养档案展示名需要的字段在 service/Prisma 的 include 里不一定有类型声明，
@@ -2344,7 +2345,7 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
       videoUrl: row.videoUrl ?? null,
       energyDensityKcalPerKg: toFiniteNumber(row.energyDensityKcalPerKg),
       nutritionStandard: row.nutritionStandard ?? null,
-      nutritionDetailedData: row.nutritionDetailedData ?? null,
+      nutritionDetailedData: row.nutritionReportJson ?? null,
       productionSteps: toAgentProductionSteps(
         readProductionSteps(row.productionStepsJson),
       ),

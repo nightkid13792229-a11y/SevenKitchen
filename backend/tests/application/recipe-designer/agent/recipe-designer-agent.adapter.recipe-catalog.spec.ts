@@ -261,7 +261,7 @@ function designDraftRow(input: {
     videoUrl: null,
     energyDensityKcalPerKg: 1300,
     nutritionStandard: 'FEDIAF_2025',
-    nutritionDetailedData: { report: { totalEnergyKcal: 900 } },
+    nutritionReportJson: { report: { totalEnergyKcal: 900 } },
     productionStepsJson: [],
     seriesId: input.seriesId ?? null,
     seriesLifeStage: input.seriesLifeStage ?? null,
@@ -474,6 +474,12 @@ describe('RecipeDesignerAgentAdapter recipe catalog read', () => {
     ).toBe('DESIGN_DRAFT');
     const designQuery = prisma.designRecipe.findMany.mock.calls[0]?.[0];
     // 只读选择里绝不能带客户 / 狗 / 订单字段；orderDesign 只取 id 用于去重。
+    expect(designQuery?.select).toMatchObject({
+      // DesignRecipe 只有 nutritionReportJson；select 成 Recipe 的
+      // nutritionDetailedData 会让 Prisma 在运行时直接报 Unknown field。
+      nutritionReportJson: true,
+    });
+    expect(designQuery?.select).not.toHaveProperty('nutritionDetailedData');
     expect(designQuery?.select).not.toHaveProperty('customerDogId');
     expect(designQuery?.select).not.toHaveProperty('createdBy');
     expect(designQuery?.select).not.toHaveProperty('series');
@@ -1014,6 +1020,9 @@ describe('RecipeDesignerAgentAdapter recipe catalog read', () => {
     expect(detail?.items[0]).toMatchObject({
       name: '鸭腿肉',
       weightG: 400,
+    });
+    expect(detail?.nutritionDetailedData).toEqual({
+      report: { totalEnergyKcal: 900 },
     });
     expect(service.getDraft).not.toHaveBeenCalled();
     expect(JSON.stringify(detail)).not.toMatch(

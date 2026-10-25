@@ -1956,6 +1956,15 @@ onBeforeUnmount(stopPolling)
 </script>
 
 <style scoped>
+:global(.is-drawer:has(.recipe-agent-drawer)) {
+  /* 只移除 AI 抽屉这层全屏容器的拦截；抽屉面板本身仍可交互。 */
+  pointer-events: none;
+}
+
+:global(.recipe-agent-drawer) {
+  pointer-events: auto;
+}
+
 .agent-header {
   display: flex;
   align-items: center;

@@ -15,7 +15,7 @@ import type { DeepSeekToolsResult } from 'src/application/recipe-designer/deepse
  * 运行循环（P0b-3 Task 3）。
  *
  * 这里只验证「一草稿一运行」的编排：会话/消息、模型调用参数、工具执行、
- * 停止条件（ask_user / finish_draft / 100 次 / 6 分钟 / 最终文本）和状态落库。
+ * 停止条件（ask_user / finish_draft / 200 次 / 6 分钟 / 最终文本）和状态落库。
  * 真实草稿读写由 `createRuntime` 负责，测试里整体替换成假 toolkit。
  */
 
@@ -480,7 +480,7 @@ describe('RecipeAgentRunService', () => {
     expect(content).toContain('库外原料必须先入库');
     expect(content).toContain('时令假设');
     expect(content).toContain('请用户确认');
-    expect(content).toContain('计入 100 次工具预算');
+    expect(content).toContain('计入 200 次工具预算');
   });
 
   it('每轮只取一次运行时配置，写工具后重建 runtime 复用同一个 webTools', async () => {
@@ -692,7 +692,7 @@ describe('RecipeAgentRunService', () => {
     );
   });
 
-  it('模型一直要工具时在第 100 次之后停下，置 FAILED 且不会无限循环', async () => {
+  it('模型一直要工具时在第 200 次之后停下，置 FAILED 且不会无限循环', async () => {
     const getDraft = jest.fn().mockResolvedValue(okResult({}, '草稿'));
     let callIndex = 0;
     const callModel = jest.fn(async (input: any) => {
@@ -719,9 +719,9 @@ describe('RecipeAgentRunService', () => {
     });
     await service.waitForIdle(sessionId);
 
-    expect(getDraft).toHaveBeenCalledTimes(100);
-    expect(callModel).toHaveBeenCalledTimes(100);
-    expect(sessionService.incrementStep).toHaveBeenCalledTimes(100);
+    expect(getDraft).toHaveBeenCalledTimes(200);
+    expect(callModel).toHaveBeenCalledTimes(200);
+    expect(sessionService.incrementStep).toHaveBeenCalledTimes(200);
     expect(sessionService.transitionStatus).toHaveBeenCalledWith(
       SESSION_ID,
       ['RUNNING'],

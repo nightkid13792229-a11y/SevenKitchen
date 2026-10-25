@@ -309,7 +309,7 @@ const selectedAnswers = ref<Record<number, string>>({})
 
 let pollTimer: number | null = null
 
-const MAX_RUN_STEPS = 30
+const MAX_RUN_STEPS = 200
 
 interface AgentToolsBlock {
   type: 'tools'
@@ -329,7 +329,7 @@ const running = computed(() => session.value?.status === 'RUNNING')
 
 /**
  * 本次运行已用的工具调用数：从最后一条用户消息之后开始数。
- * 会话的 stepCount 是累计值，不能直接拿来和 30 次上限比。
+ * 会话的 stepCount 是累计值，不能直接拿来和 200 次上限比。
  */
 const currentRunSteps = computed(() => {
   const lastUserIndex = messages.value
@@ -493,7 +493,7 @@ const taskHint = computed(() => {
       return '输入新的要求可以重新开始。'
     case 'FAILED':
       return isLimitReached.value
-        ? '草稿已保存；点“继续本轮”或直接输入，会获得新的 30 次预算。'
+        ? '草稿已保存；点“继续本轮”或直接输入，会获得新的 200 次预算。'
         : session.value?.lastError || '上次运行失败；可以再试一次。'
     case 'INTERRUPTED':
       return '上次运行被中断；输入新的要求可以重新开始。'

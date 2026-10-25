@@ -27,6 +27,7 @@ type IngredientType = 'FOOD' | 'SUPPLEMENT';
 
 interface SearchIngredientsArgs {
   search?: string;
+  nutrientKey?: string;
   category?: FoodCategory;
   type?: IngredientType;
   limit?: number;
@@ -43,6 +44,7 @@ interface GetCatalogUsageArgs {
 
 interface SearchIngredientsInput {
   search?: string;
+  nutrientKey?: string;
   category?: FoodCategory;
   type?: IngredientType;
   limit: number;
@@ -111,11 +113,13 @@ function normalizeIngredientNames(names: readonly string[]): string[] {
 
 function describeSearchScope(input: {
   search?: string;
+  nutrientKey?: string;
   category?: FoodCategory;
   type?: IngredientType;
 }): string {
   const parts: string[] = [];
   if (input.search) parts.push(`关键词「${input.search}」`);
+  if (input.nutrientKey) parts.push(`营养素「${input.nutrientKey}」`);
   if (input.category) {
     parts.push(CATEGORY_LABELS[input.category] ?? input.category);
   }
@@ -194,6 +198,13 @@ export function createReadTools(
       if (searchValue !== undefined && typeof searchValue !== 'string') {
         return fail('INVALID_ARGUMENT', 'search 必须是字符串。');
       }
+      const nutrientKeyValue = raw.nutrientKey;
+      if (
+        nutrientKeyValue !== undefined &&
+        typeof nutrientKeyValue !== 'string'
+      ) {
+        return fail('INVALID_ARGUMENT', 'nutrientKey 必须是字符串。');
+      }
       const categoryValue = raw.category;
       if (
         categoryValue !== undefined &&
@@ -219,10 +230,11 @@ export function createReadTools(
       const search = searchValue?.trim();
       const category = categoryValue as FoodCategory | undefined;
       const type = typeValue as IngredientType | undefined;
-      if (!search && !category && !type) {
+      const nutrientKey = nutrientKeyValue?.trim();
+      if (!search && !nutrientKey && !category && !type) {
         return fail(
           'INVALID_ARGUMENT',
-          '至少给一个条件：关键词、分类或原料类型。',
+          '至少给一个条件：关键词、营养素、分类或原料类型。',
         );
       }
 
@@ -240,6 +252,7 @@ export function createReadTools(
 
       const input: SearchIngredientsInput = { limit };
       if (search) input.search = search;
+      if (nutrientKey) input.nutrientKey = nutrientKey;
       if (category) input.category = category;
       if (type) input.type = type;
 

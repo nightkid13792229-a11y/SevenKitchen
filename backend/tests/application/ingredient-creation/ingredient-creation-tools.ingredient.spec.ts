@@ -418,6 +418,7 @@ describe('IngredientCreationToolsService · 进展信号只认真读', () => {
     const findUnique = jest.fn(async (input: any) => ({
       id: input.where.id,
       status: 'ACTIVE',
+      sourceType: 'USDA',
       foodName: 'Chicken, liver, raw',
       foodNameEn: 'Chicken liver raw',
       normalizedNutrition: {},
@@ -462,5 +463,17 @@ describe('IngredientCreationToolsService · 进展信号只认真读', () => {
     const read = await executeTool(tools, 'getRecord', { id: 'rec-1' });
     expect(read.ok).toBe(true);
     expect(read.progress?.sourceRecordIds).toEqual(['rec-1']);
+  });
+
+  it('getRecord 返回来源库，步骤摘要才能写清这条记录来自哪个库', async () => {
+    const { tools } = createProgressTools();
+
+    const read = await executeTool(tools, 'getRecord', { id: 'rec-1' });
+
+    expect(read.ok).toBe(true);
+    const body = JSON.parse(read.content) as {
+      record?: { sourceType?: string };
+    };
+    expect(body.record?.sourceType).toBe('USDA');
   });
 });

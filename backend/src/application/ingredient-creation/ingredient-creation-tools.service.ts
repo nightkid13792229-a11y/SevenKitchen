@@ -1403,6 +1403,7 @@ export class IngredientCreationToolsService {
       select: {
         id: true,
         status: true,
+        sourceType: true,
         foodName: true,
         foodNameEn: true,
         normalizedNutrition: true,
@@ -1435,6 +1436,7 @@ export class IngredientCreationToolsService {
         record: {
           id: record.id,
           name: record.foodName,
+          sourceType: record.sourceType,
           state: derivePreparationStateFromSource(record),
           coverage,
           values,

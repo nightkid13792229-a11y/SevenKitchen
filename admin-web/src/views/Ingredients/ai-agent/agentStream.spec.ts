@@ -258,12 +258,12 @@ describe('reduceAgentEvents', () => {
     })
   })
 
-  it('读来源记录的 step_end 带 record 摘要（词条名 / 覆盖率 / 项数）', () => {
+  it('读来源记录的 step_end 带 record 摘要（词条名 / 来源库 / 覆盖率 / 项数）', () => {
     let state = reduceAgentEvents(createAgentStreamState(), {
       type: 'step_start',
       index: 2,
       name: 'getRecord',
-      summary: '读来源记录 rec-liver-raw'
+      summary: '读来源记录'
     })
     state = reduceAgentEvents(
       state,
@@ -271,6 +271,7 @@ describe('reduceAgentEvents', () => {
         resultSummary: '读到 12 项营养值',
         record: {
           name: 'Chicken, liver, raw',
+          sourceType: 'USDA',
           coverage: 82,
           valueCount: 12
         }
@@ -284,10 +285,12 @@ describe('reduceAgentEvents', () => {
     })
     expect(state.steps[0]?.record).toEqual({
       name: 'Chicken, liver, raw',
+      sourceType: 'USDA',
       coverage: 82,
       coverageLabel: '82%',
       valueCount: 12,
-      message: '来源记录「Chicken, liver, raw」· 覆盖率 82% · 读到 12 项'
+      message:
+        '来源记录「Chicken, liver, raw」· USDA · 覆盖率 82% · 读到 12 项'
     })
   })
 

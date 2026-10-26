@@ -237,9 +237,10 @@ export interface IngredientAgentStreamMatch {
   classification?: IngredientAgentStreamClassification;
 }
 
-/** 「读来源记录」这一步的精简摘要：词条名 / 覆盖率 / 读到多少项。 */
+/** 「读来源记录」这一步的精简摘要：词条名 / 来源库 / 覆盖率 / 读到多少项。 */
 export interface IngredientAgentStreamRecord {
   name: string;
+  sourceType: string | null;
   coverage: number | null;
   valueCount: number;
 }
@@ -629,11 +630,8 @@ export function buildToolStepSummary(
       );
     }
     case 'getRecord': {
-      const id =
-        readTextValue(args.id) ||
-        readTextValue(args.sourceRecordId) ||
-        '（未填来源记录）';
-      return oneLine(`读来源记录 ${id}`);
+      // 标题只写动作：UUID 对用户是乱码，名字与来源库由执行后的 record 摘要给出。
+      return '读来源记录';
     }
     case 'writeNutrition': {
       const entries = Array.isArray(args.entries) ? args.entries.length : 0;
@@ -907,7 +905,7 @@ function buildSearchStepEvidence(
 }
 
 /**
- * 读来源记录 step_end 的摘要：词条名 / 覆盖率 / 读到多少项。
+ * 读来源记录 step_end 的摘要：词条名 / 来源库 / 覆盖率 / 读到多少项。
  *
  * `valueCount` 统计记录里真实存在的目录字段（含因目录上限被省略的项），
  * 不补 0、不推算。
@@ -936,6 +934,7 @@ function buildRecordStepEvidence(
     name:
       oneLine(readTextValue(record.name) || '（未知词条）', STEP_NAME_MAX) ||
       '（未知词条）',
+    sourceType: readTextValue(record.sourceType) || null,
     coverage:
       typeof record.coverage === 'number' && Number.isFinite(record.coverage)
         ? record.coverage

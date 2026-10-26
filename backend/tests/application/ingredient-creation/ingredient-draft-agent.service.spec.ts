@@ -11,6 +11,7 @@ import {
   INGREDIENT_AGENT_MAX_TOOL_CALLS,
   INGREDIENT_AGENT_TIMEOUT_MS,
   IngredientDraftAgentService,
+  buildToolStepSummary,
   type AgentRunReport,
   type IngredientAgentRunResult,
 } from '../../../src/application/ingredient-creation/ingredient-draft-agent.service';
@@ -212,6 +213,7 @@ interface HarnessOptions {
   sourceRecords?: Array<{
     id: string;
     status: string;
+    sourceType?: string;
     foodName?: string;
     foodNameEn?: string | null;
     normalizedNutrition?: unknown;
@@ -2245,6 +2247,7 @@ describe('IngredientDraftAgentService · 流式事件', () => {
         {
           id: 'rec-liver-raw',
           status: 'ACTIVE',
+          sourceType: 'USDA',
           foodName: 'Chicken, liver, raw',
           normalizedNutrition: {
             meta: { sampleState: 'RAW' },
@@ -2279,6 +2282,7 @@ describe('IngredientDraftAgentService · 流式事件', () => {
     const recordEnd = events[3];
     expect(recordEnd.record).toMatchObject({
       name: 'Chicken, liver, raw',
+      sourceType: 'USDA',
       valueCount: 1,
     });
   });
@@ -2331,6 +2335,17 @@ describe('IngredientDraftAgentService · 流式事件', () => {
 
     expect(events.map((event) => event.type)).toEqual(['error']);
     expect(events[0].message).toBeTruthy();
+  });
+});
+
+describe('buildToolStepSummary · 步骤标题', () => {
+  it('getRecord 只写「读来源记录」，不把 UUID 拼进标题', () => {
+    const summary = buildToolStepSummary('getRecord', {
+      id: 'ee93ecc5-3f7a-4f2b-9c1d-123456789abc',
+    });
+
+    expect(summary).toBe('读来源记录');
+    expect(summary).not.toContain('ee93ecc5');
   });
 });
 

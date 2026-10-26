@@ -110,6 +110,7 @@
                 <div class="agent-step__body">
                   <div class="agent-step__head">
                     <b class="agent-step__label">{{ step.label }}</b>
+                    <code v-if="step.name" class="agent-step__tool">{{ step.name }}</code>
                     <span v-if="stepSummary(step)" class="agent-step__summary">
                       {{ stepSummary(step) }}
                     </span>
@@ -2607,6 +2608,18 @@ function goBackToList() {
 .agent-step__label {
   font-size: 13px;
   color: var(--el-text-color-primary);
+}
+
+/* 原始工具名放在中文标签后面，只做辅助信息，不抢主标签的视觉层级。 */
+.agent-step__tool {
+  padding: 0 5px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 4px;
+  background: var(--el-fill-color-lighter);
+  color: var(--el-text-color-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 16px;
 }
 
 .agent-step__summary {

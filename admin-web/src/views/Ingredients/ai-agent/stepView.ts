@@ -180,13 +180,15 @@ export interface AgentSearchEvidenceView {
   message: string
 }
 
-/** 「读来源记录」这一步的展开内容：词条名、覆盖率与读到的项数。 */
+/** 「读来源记录」这一步的展开内容：词条名、来源库、覆盖率与读到的项数。 */
 export interface AgentRecordEvidenceView {
   name: string
+  /** 来源库代码（USDA / CNF / NZFCD / MEXT / CFCT …）；旧后端没有时为 null */
+  sourceType: string | null
   coverage: number | null
   coverageLabel: string
   valueCount: number
-  /** 给人看的一句话：来源记录「X」· 覆盖率 82% · 读到 12 项 */
+  /** 给人看的一句话：来源记录「X」· USDA · 覆盖率 82% · 读到 12 项 */
   message: string
 }
 
@@ -577,15 +579,17 @@ export function toRecordEvidenceFromEvent(
     return null
   }
   const name = readText(value.name) || '（未知词条）'
+  const sourceType = readText(value.sourceType) || null
   const coverage = readFiniteNumber(value.coverage)
   const coverageLabel = coverage === null ? '—' : `${coverage}%`
   const count = Math.max(0, Math.floor(valueCount))
   return {
     name,
+    sourceType,
     coverage,
     coverageLabel,
     valueCount: count,
-    message: `来源记录「${name}」· 覆盖率 ${coverageLabel} · 读到 ${count} 项`
+    message: `来源记录「${name}」· ${sourceType ?? '未知库'} · 覆盖率 ${coverageLabel} · 读到 ${count} 项`
   }
 }
 

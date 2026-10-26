@@ -380,7 +380,7 @@
                 <div class="header-cell">原料名称</div>
                 <div class="header-cell">类型</div>
                 <div class="header-cell">营养状态</div>
-                <div class="header-cell">制备方法</div>
+                <div class="header-cell">部位 / 状态 / 预处理</div>
                 <div class="header-cell">示例重量</div>
                 <div class="header-cell">占比</div>
                 <div class="header-cell nutrient-target-header">营养目标</div>
@@ -814,16 +814,16 @@
           </el-select>
         </el-form-item>
 
-        <el-form-item label="制备方法">
+        <el-form-item label="部位 / 状态 / 预处理">
           <el-input
             v-model="ingredientForm.preparationMethodText"
             type="textarea"
             :rows="3"
-            placeholder="直接输入制备方法文案，如：去皮、蒸熟后压泥"
+            placeholder="如：牛里脊/生/去油"
           />
 
           <div style="margin-top: 8px">
-            <div style="font-size: 12px; color: #909399; margin-bottom: 6px">历史制备方法</div>
+            <div style="font-size: 12px; color: #909399; margin-bottom: 6px">历史记录</div>
             <el-skeleton
               v-if="ingredientPreparationMethodHistoryLoading"
               :rows="1"
@@ -847,8 +847,8 @@
               v-else
               :description="
                 ingredientForm.ingredientId
-                  ? '暂无历史制备方法'
-                  : '请选择原料后查看历史制备方法'
+                  ? '暂无历史记录'
+                  : '请选择原料后查看历史记录'
               "
               :image-size="40"
             />
@@ -1681,7 +1681,7 @@ watch(
       if (!isCurrentRequest) {
         return;
       }
-      ElMessage.error(error.message || '加载历史制备方法失败');
+      ElMessage.error(error.message || '加载历史记录失败');
     } finally {
       if (isCurrentRequest) {
         ingredientPreparationMethodHistoryLoading.value = false;
@@ -2915,7 +2915,7 @@ const formatPreparationMethods = (preparationMethod: string | undefined) => {
   return preparationMethod?.trim() || '-';
 };
 
-/** 制备方法的称重口径与营养状态不一致时给出提示；一致则返回 null */
+/** 部位 / 状态 / 预处理的称重口径与营养状态不一致时给出提示；一致则返回 null */
 const preparationBasisHint = (item: RecipeItem): string | null =>
   preparationBasisMismatchHint(
     item.preparationMethod,

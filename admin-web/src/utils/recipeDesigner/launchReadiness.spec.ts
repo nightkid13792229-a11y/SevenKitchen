@@ -147,7 +147,7 @@ describe('上线检查 · 状态与模式文案', () => {
 
 describe('上线检查 · 阻断定位提示', () => {
   it('字段路径翻译成中文，未知字段原样展示', () => {
-    expect(launchIssueFieldLabel('preparationMethod')).toBe('预处理方式')
+    expect(launchIssueFieldLabel('preparationMethod')).toBe('部位 / 状态 / 预处理')
     expect(launchIssueFieldLabel('supplementTargets')).toBe('补剂目标')
     expect(launchIssueFieldLabel('productionStepsJson')).toBe('制作步骤')
     expect(launchIssueFieldLabel('futureField')).toBe('futureField')

@@ -891,7 +891,7 @@ const FIELD_LABELS: Record<string, string> = {
   weightG: '克数',
   totalWeightG: '总重',
   ratioPercent: '占比',
-  preparationMethod: '预处理',
+  preparationMethod: '部位 / 状态 / 预处理',
   preparationNote: '预处理备注',
   nutritionFoodId: '营养档案 ID',
   ingredientId: '原料 ID',
@@ -920,7 +920,7 @@ const FIELD_LABELS: Record<string, string> = {
   totalEnergyKcal: '总能量',
   energyDensityKcalPerKg: '能量密度',
   allergenNames: '过敏原',
-  preparationMethods: '预处理方式',
+  preparationMethods: '部位 / 状态 / 预处理',
   pricePerPurchaseUnit: '参考价',
   purchaseUnit: '采购单位',
   nutrientMatch: '营养匹配',
@@ -1289,7 +1289,7 @@ function ingredientDetailLines(data: unknown, summary: string): string[] {
 
   const preparations = readStringArray(record.preparationMethods)
   lines.push(
-    `预处理：${
+    `部位 / 状态 / 预处理：${
       preparations.length > 0
         ? truncateText(preparations.join('、'), 160)
         : '暂无记录'
@@ -1348,7 +1348,7 @@ function ingredientChangeLines(
     if (ratio !== null) lines.push(`占草稿比例：${formatNumber(ratio)}%`)
     if (toolName === 'add_ingredient') {
       const method = readString(record.preparationMethod)
-      if (method) lines.push(`预处理：${method}`)
+      if (method) lines.push(`部位 / 状态 / 预处理：${method}`)
     }
     if (toolName === 'remove_ingredient') {
       const total = readNumber(record.totalWeightG)

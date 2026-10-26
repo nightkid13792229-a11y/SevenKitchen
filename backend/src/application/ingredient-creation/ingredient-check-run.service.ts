@@ -22,8 +22,11 @@ import type {
  * - `INGREDIENT`：只读原料卡 + 库里已有 FOOD 名字，跑领域层
  *   `runIngredientCardCheck`；查重**只查 `type = 'FOOD'`**——补剂 / 包装跟食材
  *   同在 `ingredient` 表，名字撞了不该拦住食材建档；
- * - `NUTRITION`：原样复用 `IngredientDraftFinalCheckEvaluator` 的终检结果
- *   （与 `POST drafts/:id/check`、提交前置检查同一份计算），不重算一遍。
+ * - `NUTRITION`：有可用的生/熟档案时，原样复用
+ *   `IngredientDraftFinalCheckEvaluator` 的终检结果（与 `POST drafts/:id/check`、
+ *   提交前置检查同一份计算），不重算一遍；档案还没有时不调评估器（它没有输入会
+ *   抛 400），直接落一条 `NUTRITION_PROFILE_MISSING` 拦死项，弹窗用同一套形状
+ *   显示原因而不是弹错误。
  *
  * 每次核验落一条 `ingredient_check_run`，`payloadHash` 记下「检查的是哪份内容」。
  * 过期判定只看内容哈希、不看 `updatedAt`：同一毫秒内的两次改动时间戳可能相同，
@@ -85,6 +88,61 @@ const INGREDIENT_RULE_LEVELS = new Map<
   string,
   'blocking' | 'exceptionable' | 'warning'
 >(INGREDIENT_CARD_RULES.map((rule) => [rule.code, rule.level]));
+
+/** 营养档案只有生 / 熟两种状态；状态缺失或非法都不算「可用档案」。 */
+const NUTRITION_PROFILE_STATES: readonly string[] = ['RAW', 'COOKED'];
+
+/**
+ * 草稿里有没有可用的营养档案：`payload.profiles` 至少一份生/熟档案，且带着
+ * 来源记录 id（没有来源就没有任何营养数据可算）。
+ *
+ * 为什么核验入口要先自己判一次：`evaluateDraft` 在没有 profiles 且没有 mergePlan
+ * 时会抛 400。核验是「拿报告去看」，不是「提交」，缺档案应如实落一条可展示的
+ * 拦死项，而不是让弹窗收到一个错误。
+ */
+function hasUsableNutritionProfile(draft: IngredientCreationDraft): boolean {
+  const profiles: unknown = draft.payload.profiles;
+  if (!Array.isArray(profiles)) {
+    return false;
+  }
+
+  return profiles.some((profile: unknown) => {
+    if (
+      typeof profile !== 'object' ||
+      profile === null ||
+      Array.isArray(profile)
+    ) {
+      return false;
+    }
+
+    const record = profile as Record<string, unknown>;
+    return (
+      typeof record.preparationState === 'string' &&
+      NUTRITION_PROFILE_STATES.includes(record.preparationState) &&
+      typeof record.sourceRecordId === 'string' &&
+      record.sourceRecordId.length > 0
+    );
+  });
+}
+
+/**
+ * 没有营养档案时的报告内容：与普通核验完全相同的三档形状，弹窗不用特判，
+ * 授权闸门也会因为 blocking=1 正常拦住。
+ */
+function missingNutritionProfileResult(): FinalCheckResult {
+  return {
+    blocking: [
+      {
+        code: 'NUTRITION_PROFILE_MISSING',
+        message: '还没有营养档案，先在营养页建立生/熟档案',
+        fieldPath: 'profiles',
+        suggestion: '让 AI 先查库写入，或手动选来源',
+      },
+    ],
+    exceptionable: [],
+    warnings: [],
+  };
+}
 
 /**
  * 草稿里的原料卡；还没走到这一步时返回 null（终检会报 NAME_REQUIRED）。
@@ -257,7 +315,9 @@ export class IngredientCheckRunService {
   ): Promise<CheckRunView | null> {
     const row = await this.prisma.ingredientCheckRun.findFirst({
       where: { draftId, domain },
-      orderBy: { createdAt: 'desc' },
+      // 同一毫秒可能落两条（连点、AI 自动跟跑）：created_at 相同再用 id 倒序兜底，
+      // 保证「最新一份」是确定的、可重复的。
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
 
     return row ? toView(row) : null;
@@ -269,6 +329,10 @@ export class IngredientCheckRunService {
   ): Promise<FinalCheckResult> {
     if (domain === 'INGREDIENT') {
       return this.evaluateIngredientDomain(draft);
+    }
+
+    if (!hasUsableNutritionProfile(draft)) {
+      return missingNutritionProfileResult();
     }
 
     return this.evaluator.evaluate(draft);

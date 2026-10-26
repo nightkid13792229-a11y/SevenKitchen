@@ -254,6 +254,18 @@ describe('IngredientCheckRunService', () => {
 
   describe('runDomain · NUTRITION', () => {
     it('直接复用草稿终检结果（不重算），并按 final-check 版本落库', async () => {
+      draft = createDraft({
+        payload: {
+          profiles: [
+            {
+              preparationState: 'RAW',
+              sourceRecordId: 'src-primary',
+              entries: [],
+              notes: null,
+            },
+          ],
+        },
+      });
       const nutritionResult: FinalCheckResult = {
         blocking: [
           checkItem('MACRO_SUM_OVER_100'),
@@ -293,6 +305,83 @@ describe('IngredientCheckRunService', () => {
       );
       // 营养域不查原料名字。
       expect(prisma.ingredient.findMany).not.toHaveBeenCalled();
+    });
+
+    it('没有可用的生/熟档案时不调评估器，落一条 NUTRITION_PROFILE_MISSING', async () => {
+      // 只有原料卡、还没有营养档案：以前 evaluateDraft 会抛 400，核验什么都不落库。
+      draft = createDraft({ payload: {} });
+      const evaluate = jest.spyOn(
+        IngredientDraftFinalCheckEvaluator.prototype,
+        'evaluate',
+      );
+
+      const run = await service.runDomain('draft-1', 'NUTRITION', 'USER');
+
+      expect(evaluate).not.toHaveBeenCalled();
+      expect(run.result).toEqual({
+        blocking: [
+          {
+            code: 'NUTRITION_PROFILE_MISSING',
+            message: '还没有营养档案，先在营养页建立生/熟档案',
+            fieldPath: 'profiles',
+            suggestion: '让 AI 先查库写入，或手动选来源',
+          },
+        ],
+        exceptionable: [],
+        warnings: [],
+      });
+      expect(run.rulesVersion).toBe('final-check-v1');
+      expect(run.counts).toEqual({
+        blocking: 1,
+        exceptionable: 0,
+        warning: 0,
+      });
+      expect(prisma.ingredientCheckRun.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            domain: 'NUTRITION',
+            rulesVersion: 'final-check-v1',
+            result: {
+              blocking: [
+                expect.objectContaining({
+                  code: 'NUTRITION_PROFILE_MISSING',
+                }),
+              ],
+              exceptionable: [],
+              warnings: [],
+            },
+            blockingCount: 1,
+            exceptionableCount: 0,
+            warningCount: 0,
+          }),
+        }),
+      );
+    });
+
+    it('有 sourceRecordId 但生熟状态非法的档案也不算可用（仍报缺档案）', async () => {
+      draft = createDraft({
+        payload: {
+          profiles: [
+            {
+              preparationState: 'FROZEN' as never,
+              sourceRecordId: 'src-primary',
+              entries: [],
+              notes: null,
+            },
+          ],
+        },
+      });
+      const evaluate = jest.spyOn(
+        IngredientDraftFinalCheckEvaluator.prototype,
+        'evaluate',
+      );
+
+      const run = await service.runDomain('draft-1', 'NUTRITION', 'USER');
+
+      expect(evaluate).not.toHaveBeenCalled();
+      expect(run.result.blocking.map((item) => item.code)).toEqual([
+        'NUTRITION_PROFILE_MISSING',
+      ]);
     });
   });
 
@@ -342,11 +431,11 @@ describe('IngredientCheckRunService', () => {
       expect(runs.NUTRITION).toBeNull();
       expect(prisma.ingredientCheckRun.findFirst).toHaveBeenCalledWith({
         where: { draftId: 'draft-1', domain: 'INGREDIENT' },
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       });
       expect(prisma.ingredientCheckRun.findFirst).toHaveBeenCalledWith({
         where: { draftId: 'draft-1', domain: 'NUTRITION' },
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       });
     });
 
@@ -386,6 +475,17 @@ describe('IngredientCheckRunService', () => {
         createdBy: 'admin-1',
         createdAt: CREATED_AT.toISOString(),
       });
+    });
+
+    it('同毫秒内按 id 倒序兜底（createdAt 后还有第二级排序）', async () => {
+      await service.latestRuns('draft-1');
+
+      for (const domain of ['INGREDIENT', 'NUTRITION']) {
+        expect(prisma.ingredientCheckRun.findFirst).toHaveBeenCalledWith({
+          where: { draftId: 'draft-1', domain },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        });
+      }
     });
   });
 });

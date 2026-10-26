@@ -14,6 +14,8 @@ import {
   MaxLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { IsPreparationMethodContentLength } from './preparation-method-content.validator';
+
 import {
   RecipeStatus,
   RecipeHealthTag,
@@ -65,7 +67,8 @@ export class RecipeItemDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(100)
+  @MaxLength(20)
+  @IsPreparationMethodContentLength()
   preparationMethod?: string;
 
   @IsOptional()

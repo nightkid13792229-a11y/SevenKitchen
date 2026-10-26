@@ -21,6 +21,7 @@ describe('旧食谱编辑页 · 设计器托管字段只读（2026-10-22）', ()
   it('历史记录点击后替换整段，不再追加成多段', () => {
     expect(source).not.toContain('appendPreparationMethodText')
     expect(source).toContain('ingredientForm.preparationMethodText = historyText')
-    expect(source).toContain('maxlength="100"')
+    expect(source).toContain('maxlength="12"')
+    expect(source).toContain('preparation-length-hint')
   })
 })

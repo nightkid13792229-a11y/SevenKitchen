@@ -147,12 +147,20 @@ describe('IngredientPreparationHistoryService', () => {
     expect(history[0]?.text).toBe('生重');
   });
 
-  it('caps history text at the 100-character database limit', async () => {
-    const { service } = createService([catalogRow('x'.repeat(120), NEW)]);
+  it('drops history text over the 10-content-character limit', async () => {
+    const { service } = createService([catalogRow('x'.repeat(11), NEW)]);
 
     const history = await service.getHistory('ing-1');
 
-    expect(history[0]?.text).toHaveLength(100);
+    expect(history).toEqual([]);
+  });
+
+  it('keeps history text within 10 content characters even with separators', async () => {
+    const { service } = createService([catalogRow('牛里脊/生/去油', NEW)]);
+
+    const history = await service.getHistory('ing-1');
+
+    expect(history[0]?.text).toBe('牛里脊/生/去油');
   });
 
   it('limits to the requested number of distinct entries', async () => {

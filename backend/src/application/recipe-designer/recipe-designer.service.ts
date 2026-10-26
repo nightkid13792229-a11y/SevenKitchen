@@ -137,6 +137,11 @@ import {
 import { IngredientPreparationHistoryService } from '../recipe/ingredient-preparation-history.service';
 import { isPreparationRequiredFoodCategory } from '../../domain/recipe-designer/preparation-field.constants';
 import {
+  PREPARATION_METHOD_MAX_CONTENT_LENGTH,
+  isPreparationMethodWithinContentLimit,
+  truncatePreparationMethodContent,
+} from '../../domain/recipe/preparation-field-text';
+import {
   SupplementTargetService,
   type SupplementTargetDefinition,
 } from './supplement-target.service';
@@ -3884,7 +3889,7 @@ export class RecipeDesignerService {
       .map((s) => s.trim())
       .find(Boolean);
     const candidate = firstSegment || trimmed;
-    return candidate.length > 100 ? candidate.slice(0, 100) : candidate;
+    return truncatePreparationMethodContent(candidate) || null;
   }
 
   private resolveRecipeItemDesignWeight(
@@ -9708,6 +9713,11 @@ export class RecipeDesignerService {
     explicitPreparationMethod: string | null | undefined,
     ingredientId: string | null,
   ) {
+    // 补剂不维护这个字段；显式传入也忽略，避免后续又被历史带出。
+    if (ingredientId && (await this.isIngredientIdSupplement(ingredientId))) {
+      return null;
+    }
+
     const normalizedExplicit = this.normalizePreparationMethod(
       explicitPreparationMethod,
     );
@@ -9730,7 +9740,14 @@ export class RecipeDesignerService {
   }
 
   private normalizePreparationMethod(value: string | null | undefined) {
-    return normalizePreparationMethodHistoryText(value)?.slice(0, 100) ?? null;
+    const normalized = normalizePreparationMethodHistoryText(value);
+    if (!normalized) return null;
+    if (!isPreparationMethodWithinContentLimit(normalized)) {
+      throw new BadRequestException(
+        `部位 / 状态 / 预处理最多 ${PREPARATION_METHOD_MAX_CONTENT_LENGTH} 个字（不含符号）`,
+      );
+    }
+    return normalized;
   }
 
   /** 制作步骤读取（GET / 私有快照展示）：坏条目丢弃，避免脏数据锁死编辑器。 */

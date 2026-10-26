@@ -2,6 +2,9 @@ import { Injectable } from '@nestjs/common';
 
 import { PrismaService } from '../../infrastructure/prisma.service';
 import {
+  isPreparationMethodWithinContentLimit,
+} from '../../domain/recipe/preparation-field-text';
+import {
   extractLegacyPreparationMethodIds,
   normalizePreparationMethodHistoryText,
   resolvePreparationMethodText,
@@ -247,11 +250,9 @@ export class IngredientPreparationHistoryService {
         methodMap,
         { preserveUnresolvedLegacy: false },
       );
-      const text = normalizePreparationMethodHistoryText(readable)?.slice(
-        0,
-        100,
-      );
-      if (!text) continue;
+      const text = normalizePreparationMethodHistoryText(readable);
+      // 历史里仍可能保留旧的长文案；10 字上限生效后不再作为候选。
+      if (!text || !isPreparationMethodWithinContentLimit(text)) continue;
       entries.push({
         ingredientId: candidate.ingredientId,
         text,
@@ -275,11 +276,8 @@ export class IngredientPreparationHistoryService {
         methodMap,
         { preserveUnresolvedLegacy: false },
       );
-      const text = normalizePreparationMethodHistoryText(readable)?.slice(
-        0,
-        100,
-      );
-      if (!text) continue;
+      const text = normalizePreparationMethodHistoryText(readable);
+      if (!text || !isPreparationMethodWithinContentLimit(text)) continue;
       entries.push({
         ingredientId: row.ingredientId,
         text,

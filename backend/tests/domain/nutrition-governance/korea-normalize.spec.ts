@@ -106,6 +106,34 @@ describe('buildKoreaNutritionProfile', () => {
     expect(profile.macros.insolubleFiber).toBeCloseTo(3.4);
   });
 
+  it('maps the real 10.4 sheet headers that wrap before parentheses', () => {
+    // 官方表头在 Excel 里换行：空白折叠后括号前会留下一个空格，映射表必须按
+    // **真实表头**写，否则 B9 / 亚油酸 / α-亚麻酸 / 花生四烯酸 / EPA / DPA / DHA
+    // 会全部静默漏掉（2026-10 实测 300,372 个数值格）。
+    const profile = buildKoreaNutritionProfile(
+      food([
+        ['엽산_ 엽산당량', 24, 'μg'],
+        ['리놀레산 (18:2(n-6))', 2764.5, 'mg'],
+        ['알파 리놀렌산 (18:3 (n-3))', 79.27, 'mg'],
+        ['아라키돈산 (20:4(n-6))', 12, 'mg'],
+        ['에이코사 펜타에노산 (20:5(n-3))', 30, 'mg'],
+        ['도코사 펜타에노산 (22:5(n-3))', 20, 'mg'],
+        ['도코사 헥사에노산 (22:6(n-3))', 40, 'mg'],
+      ]),
+    );
+
+    // 叶酸：目录与 RDA 都是 µg，不换算。
+    expect(profile.vitamins.vitaminB9).toBeCloseTo(24);
+    // 亚油酸 / α-亚麻酸 / 花生四烯酸：mg → g（÷1000）。
+    expect(profile.fattyAcids.linoleicAcid).toBeCloseTo(2.7645);
+    expect(profile.fattyAcids.alphaLinolenicAcid).toBeCloseTo(0.07927);
+    expect(profile.fattyAcids.arachidonicAcid).toBeCloseTo(0.012);
+    // EPA / DPA / DHA：目录本身就是 mg，不再除。
+    expect(profile.fattyAcids.epa).toBe(30);
+    expect(profile.fattyAcids.dpa).toBe(20);
+    expect(profile.fattyAcids.dha).toBe(40);
+  });
+
   it('builds a profile when the English name is missing', () => {
     const profile = buildKoreaNutritionProfile(
       food([['에너지', 100, 'kcal']], { nameEn: null }),

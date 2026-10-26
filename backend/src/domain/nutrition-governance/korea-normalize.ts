@@ -102,6 +102,10 @@ const mgToGramField = (
 /**
  * 显式映射表，覆盖 10.4 表中所有能落到营养目录的列。
  * 每个 `tabKey.fieldKey` 只出现一次：同一字段不做多条候选、也不求和。
+ *
+ * ⚠️ `header` 必须是**真实表头**空白折叠后的样子：10.4 表在括号前换行，
+ * 折叠后括号前会保留一个空格（如 `리놀레산 (18:2(n-6))`），不要手写成
+ * 无空格版本，否则该字段永远不会命中。
  */
 export const KOREA_NUTRIENT_MAP: readonly KoreaNutrientMapping[] = [
   // ── 一般成分（macros）─────────────────────────────────────────────
@@ -141,7 +145,7 @@ export const KOREA_NUTRIENT_MAP: readonly KoreaNutrientMapping[] = [
   koreaField('판토텐산', 'vitamins', 'vitaminB5', 'mg'),
   koreaField('비타민 B6', 'vitamins', 'vitaminB6', 'mg'),
   koreaField('비오틴', 'vitamins', 'vitaminB7', 'µg'),
-  koreaField('엽산_엽산당량', 'vitamins', 'vitaminB9', 'µg'),
+  koreaField('엽산_ 엽산당량', 'vitamins', 'vitaminB9', 'µg'),
   koreaField('비타민 B12', 'vitamins', 'vitaminB12', 'µg'),
   koreaField('비타민 C', 'vitamins', 'vitaminC', 'mg'),
 
@@ -160,17 +164,17 @@ export const KOREA_NUTRIENT_MAP: readonly KoreaNutrientMapping[] = [
     'g',
   ),
   // 亚油酸 / α-亚麻酸 / 花生四烯酸：RDA 报 mg、目录存 g。
-  mgToGramField('리놀레산(18:2(n-6))', 'fattyAcids', 'linoleicAcid'),
+  mgToGramField('리놀레산 (18:2(n-6))', 'fattyAcids', 'linoleicAcid'),
   mgToGramField(
-    '알파 리놀렌산(18:3 (n-3))',
+    '알파 리놀렌산 (18:3 (n-3))',
     'fattyAcids',
     'alphaLinolenicAcid',
   ),
-  mgToGramField('아라키돈산(20:4(n-6))', 'fattyAcids', 'arachidonicAcid'),
+  mgToGramField('아라키돈산 (20:4(n-6))', 'fattyAcids', 'arachidonicAcid'),
   // EPA/DPA/DHA：RDA 已经是 mg，目录也是 mg，不再 ÷1000。
-  koreaField('에이코사 펜타에노산(20:5(n-3))', 'fattyAcids', 'epa', 'mg'),
-  koreaField('도코사 펜타에노산(22:5(n-3))', 'fattyAcids', 'dpa', 'mg'),
-  koreaField('도코사 헥사에노산(22:6(n-3))', 'fattyAcids', 'dha', 'mg'),
+  koreaField('에이코사 펜타에노산 (20:5(n-3))', 'fattyAcids', 'epa', 'mg'),
+  koreaField('도코사 펜타에노산 (22:5(n-3))', 'fattyAcids', 'dpa', 'mg'),
+  koreaField('도코사 헥사에노산 (22:6(n-3))', 'fattyAcids', 'dha', 'mg'),
 
   // ── 氨基酸（aminoAcids，mg → g）───────────────────────────────────
   mgToGramField('아르기닌', 'aminoAcids', 'arginine'),

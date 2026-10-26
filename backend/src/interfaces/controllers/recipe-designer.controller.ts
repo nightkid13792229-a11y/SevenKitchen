@@ -48,6 +48,7 @@ import {
   ListRecipeTemplatesDto,
   PublishRecipeDesignDraftDto,
   RenameRecipeSeriesDto,
+  ReleaseRecipeSeriesDto,
   ReorderRecipeDesignItemsDto,
   SetRecipeSeriesReferenceDogDto,
   UpdateDogDesignNotesDto,
@@ -471,7 +472,7 @@ export class RecipeDesignerController {
   @Patch('series/:seriesId/release-settings')
   @UseGuards(StaffGuard)
   @ApiOperation({
-    summary: 'Patch required life stages and presentation of a recipe series',
+    summary: 'Patch presentation settings of a recipe series',
   })
   async updateSeriesReleaseSettings(
     @Param('seriesId') seriesId: string,
@@ -483,6 +484,9 @@ export class RecipeDesignerController {
         seriesId,
         dto,
         toRecipeDesignerAccessContext(user),
+        // 这是「人点保存发布设置」的唯一入口：立即同步线上阶段门面。
+        // AI set_copy 直接调服务、不传该选项，避免 AI 改文案立即影响线上。
+        { applyToLive: true },
       );
     return ApiResponseDto.success(settings);
   }
@@ -492,15 +496,17 @@ export class RecipeDesignerController {
   @Roles('ADMIN')
   @ApiOperation({
     summary:
-      'Release a whole recipe series after all required stages are ready',
+      'Release all READY series stages first time, or only selected stages on update',
   })
   async releaseSeries(
     @Param('seriesId') seriesId: string,
+    @Body() dto: ReleaseRecipeSeriesDto,
     @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<any>> {
     const result = await this.recipeDesignerService.releaseSeries(
       seriesId,
       toRecipeDesignerAccessContext(user),
+      { stageCodes: dto?.stageCodes },
     );
     return ApiResponseDto.success(result);
   }

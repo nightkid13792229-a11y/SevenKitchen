@@ -421,15 +421,19 @@ export class UpdateRecipeDesignPresentationDto {
 }
 
 /**
- * 产品线发布设置（2026-10-22 · 两阶段发布）。
+ * 产品线发布设置（2026-10-26 · 系列级展示资料）。
  *
- * 阶段设计只以 `Recipe.status=DRAFT` 存入系列仓库；展示资料与必填阶段
- * 统一在系列上维护，保存后由 `release-readiness` 重新评估。
+ * 阶段设计只以 `Recipe.status=DRAFT` 存入系列仓库；展示资料统一在系列上
+ * 维护，保存后由 `release-readiness` 重新评估，并以 `applyToLive` 决定是否
+ * 立即同步到已上线食谱行。
  *
  * 全部字段可选（patch semantics）：没传的字段保持原值，显式 null 表示清空。
  */
 export class UpdateRecipeSeriesReleaseSettingsDto {
-  /** 必填生命阶段；按系统固定顺序保存，非法代码直接 400 */
+  /**
+   * @deprecated 2026-10-26：发布范围改由阶段状态推导。
+   * DTO 仍接受该字段以兼容旧前端，但服务层忽略、不再写库。
+   */
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(RECIPE_SERIES_RELEASE_STAGE_CODES.length)
@@ -456,6 +460,21 @@ export class UpdateRecipeSeriesReleaseSettingsDto {
   @ArrayMaxSize(50)
   @IsString({ each: true })
   targetHealthTags?: string[];
+}
+
+/**
+ * 产品线发布 / 更新请求体（2026-10-26）。
+ *
+ * - 首次发布不需要 body：服务端取当前全部 READY 阶段，传了也忽略；
+ * - 已上线更新时传本次要更新的阶段代码；省略 = 全量更新（兼容旧前端），
+ *   空数组 = 400，非法 / 不可操作代码 = 400。
+ */
+export class ReleaseRecipeSeriesDto {
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(RECIPE_SERIES_RELEASE_STAGE_CODES.length)
+  @IsString({ each: true })
+  stageCodes?: string[];
 }
 
 /**

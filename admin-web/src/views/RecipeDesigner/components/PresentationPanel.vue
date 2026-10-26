@@ -63,7 +63,7 @@
           />
         </el-form-item>
 
-        <!-- 产品线：上架文案 + 目标人群 -->
+        <!-- 产品线：上架文案 -->
         <template v-if="isCatalog">
           <el-form-item label="一句话卖点" required>
             <el-input
@@ -72,34 +72,6 @@
               show-word-limit
               placeholder="例如：鲜肉低敏，日常维持"
             />
-          </el-form-item>
-
-          <el-form-item label="目标健康标签">
-            <el-select
-              v-model="form.targetHealthTags"
-              multiple
-              filterable
-              clearable
-              collapse-tags
-              collapse-tags-tooltip
-              :loading="healthTagsLoading"
-              placeholder="选择顾客可筛选的健康标签（可多选）"
-              class="presentation-select"
-            >
-              <el-option
-                v-for="tag in healthTags"
-                :key="tag.id"
-                :label="tag.name"
-                :value="tag.id"
-              />
-            </el-select>
-            <div v-if="healthTagsError" class="presentation-inline-error">
-              {{ healthTagsError }}
-              <el-button link type="primary" @click="loadHealthTags">重新加载</el-button>
-            </div>
-            <div v-else class="presentation-hint">
-              未设置仍可上线，但顾客无法按健康需求筛选到这道食谱。
-            </div>
           </el-form-item>
         </template>
 
@@ -160,10 +132,6 @@ import type { UploadProps } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import { recipeApi } from '@/api/recipes'
-import {
-  recipeHealthTagApi,
-  type RecipeHealthTag
-} from '@/api/recipeHealthTags'
 import type {
   DesignRecipeDesignMode,
   DesignRecipeDraftDetail
@@ -173,12 +141,10 @@ import {
   RECIPE_PRESENTATION_LIMITS,
   buildPresentationForm,
   buildPresentationPatch,
-  buildPresentationTargetPatch,
   clonePresentationForm,
   emptyPresentationForm,
   formatOrderQuantityLabel,
   hasPresentationPatch,
-  hasPresentationTargetPatch,
   isPresentationDirty,
   normalizePresentationDesignMode,
   resolveOrderPresentationInfo,
@@ -211,13 +177,8 @@ const saving = ref(false)
 const uploading = ref(false)
 const error = ref('')
 
-const healthTags = ref<RecipeHealthTag[]>([])
-const healthTagsLoading = ref(false)
-const healthTagsError = ref('')
-
 /** 只认最后一次加载，避免切换草稿时旧响应覆盖新表单 */
 let requestSeq = 0
-let healthTagsRequestSeq = 0
 
 const isCatalog = computed(
   () => normalizePresentationDesignMode(props.designMode) === 'CATALOG'
@@ -229,7 +190,7 @@ const orderQuantityLabel = computed(() =>
 )
 
 const dirty = computed(() =>
-  isPresentationDirty(form, baseline.value, isCatalog.value)
+  isPresentationDirty(form, baseline.value, false)
 )
 
 watch(
@@ -247,12 +208,6 @@ watch(
   },
   { immediate: true }
 )
-
-watch(isCatalog, (catalog) => {
-  if (catalog && healthTags.value.length === 0 && !healthTagsLoading.value) {
-    void loadHealthTags()
-  }
-})
 
 onBeforeUnmount(() => {
   emit('dirty-change', false)
@@ -279,9 +234,6 @@ async function loadDraft(): Promise<void> {
     const initial = buildPresentationForm(detail)
     Object.assign(form, initial)
     baseline.value = clonePresentationForm(initial)
-    if (isCatalog.value) {
-      void loadHealthTags()
-    }
   } catch {
     if (seq !== requestSeq) return
     // 错误提示已由 API 拦截器统一弹出，这里保留可重试的内联状态
@@ -289,24 +241,6 @@ async function loadDraft(): Promise<void> {
   } finally {
     if (seq === requestSeq) {
       loading.value = false
-    }
-  }
-}
-
-async function loadHealthTags(): Promise<void> {
-  const seq = ++healthTagsRequestSeq
-  healthTagsLoading.value = true
-  healthTagsError.value = ''
-  try {
-    const tags = await recipeHealthTagApi.list()
-    if (seq !== healthTagsRequestSeq) return
-    healthTags.value = Array.isArray(tags) ? tags : []
-  } catch {
-    if (seq !== healthTagsRequestSeq) return
-    healthTagsError.value = '健康标签加载失败'
-  } finally {
-    if (seq === healthTagsRequestSeq) {
-      healthTagsLoading.value = false
     }
   }
 }
@@ -340,21 +274,13 @@ const handleCoverUpload: UploadProps['beforeUpload'] = async (file) => {
 /**
  * 保存：
  *  · 展示字段走 PATCH presentation（只发变化项，空串按 null 清空）；
- *  · 适用生命阶段 / 目标健康标签走既有草稿 PATCH（不在 presentation DTO 里）；
  *  · 成功后把基线更新为本次提交值，并通知抽屉重新拉上线检查。
  */
 async function savePresentation(): Promise<void> {
   if (!draft.value || saving.value) return
 
   const presentationPatch = buildPresentationPatch(form, baseline.value)
-  const targetPatch = isCatalog.value
-    ? buildPresentationTargetPatch(form, baseline.value)
-    : {}
-
-  if (
-    !hasPresentationPatch(presentationPatch) &&
-    !hasPresentationTargetPatch(targetPatch)
-  ) {
+  if (!hasPresentationPatch(presentationPatch)) {
     ElMessage.info('展示资料没有修改')
     return
   }
@@ -362,20 +288,11 @@ async function savePresentation(): Promise<void> {
   const submitted = clonePresentationForm(form)
   saving.value = true
   try {
-    const presentationRequest = hasPresentationPatch(presentationPatch)
-      ? recipeDesignerApi.updateDraftPresentation(
-          props.draftId,
-          presentationPatch
-        )
-      : Promise.resolve(null)
-    const targetRequest = hasPresentationTargetPatch(targetPatch)
-      ? recipeDesignerApi.updateDraft(props.draftId, targetPatch)
-      : Promise.resolve(null)
-
-    const [presentationSnapshot] = await Promise.all([
-      presentationRequest,
-      targetRequest
-    ])
+    const presentationSnapshot =
+      await recipeDesignerApi.updateDraftPresentation(
+        props.draftId,
+        presentationPatch
+      )
 
     // 只把提交时的值设为基线：保存期间继续输入的内容仍算未保存
     baseline.value = submitted
@@ -384,9 +301,7 @@ async function savePresentation(): Promise<void> {
       coverImageUrl: submitted.coverImageUrl || null,
       coverTitle: submitted.coverTitle || null,
       description: submitted.description || null,
-      sellingPoint: submitted.sellingPoint || null,
-      applicableLifeStages: [...submitted.applicableLifeStages],
-      targetHealthTags: [...submitted.targetHealthTags]
+      sellingPoint: submitted.sellingPoint || null
     }
 
     ElMessage.success('展示资料已保存，上线检查已刷新')
@@ -497,16 +412,6 @@ async function savePresentation(): Promise<void> {
   font-size: 12px;
   line-height: 1.6;
   color: #909399;
-}
-
-.presentation-inline-error {
-  font-size: 12px;
-  line-height: 1.6;
-  color: #f56c6c;
-}
-
-.presentation-select {
-  width: 100%;
 }
 
 .presentation-order {

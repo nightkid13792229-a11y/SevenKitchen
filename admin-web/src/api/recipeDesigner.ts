@@ -155,9 +155,17 @@ export const recipeDesignerApi = {
     data: UpdateRecipeSeriesReleaseSettingsPayload,
   ): Promise<SeriesReleaseSettingsSnapshot> =>
     api.patch(`/recipe-designer/series/${seriesId}/release-settings`, data),
-  /** 发布整条产品线（仅管理员；后端会再次校验门槛与角色） */
-  releaseSeries: (seriesId: string): Promise<SeriesReleaseResult> =>
-    api.post(`/recipe-designer/series/${seriesId}/release`),
+  /**
+   * 发布整条产品线（仅管理员；后端会再次校验门槛与角色）。
+   *
+   * 首次发布不传 `stageCodes`，由后端取当前全部 READY 阶段；
+   * 更新时传本次勾选的阶段代码，省略 = 全量更新，空数组 = 400。
+   */
+  releaseSeries: (
+    seriesId: string,
+    payload: { stageCodes?: string[] } = {},
+  ): Promise<SeriesReleaseResult> =>
+    api.post(`/recipe-designer/series/${seriesId}/release`, payload),
   /**
    * 下架整条产品线（仅管理员）。
    *

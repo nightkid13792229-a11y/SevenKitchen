@@ -215,7 +215,7 @@
               待重新发布
             </el-tag>
             <span class="release-progress-hint">
-              未发布的阶段可在「系列发布」里查看
+              未发布的阶段可在「发布 / 更新」里查看
             </span>
           </div>
 
@@ -429,11 +429,9 @@ function hasCardPendingUpdates(card: RecipeDesignerSeriesCard): boolean {
   )
 }
 
-/** 卡片入口文案：已上线过的系列叫「重新发布系列」，其余叫「系列发布」 */
+/** 卡片入口文案：已上线叫「更新」，未上线叫「发布」（设计 6.1） */
 function seriesReleaseEntryLabel(card: RecipeDesignerSeriesCard): string {
-  return hasCardPendingUpdates(card) || card.businessStatus === 'PUBLIC'
-    ? '重新发布系列'
-    : '系列发布'
+  return card.businessStatus === 'PUBLIC' ? '更新' : '发布'
 }
 
 function openSeriesReleaseDrawer(card: RecipeDesignerSeriesCard): void {

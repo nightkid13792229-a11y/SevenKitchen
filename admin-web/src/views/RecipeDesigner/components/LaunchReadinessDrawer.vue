@@ -130,6 +130,58 @@
           </div>
         </div>
 
+        <section
+          v-if="readiness.designMode !== 'ORDER' && seriesId"
+          class="launch-readiness__section"
+        >
+          <div class="launch-readiness__series-head">
+            <div class="launch-readiness__section-title">系列资料（共用）</div>
+            <el-button
+              size="small"
+              type="primary"
+              plain
+              @click="emit('open-series-release')"
+            >去发布 / 更新</el-button>
+          </div>
+
+          <div v-if="seriesLoading" class="launch-readiness__series-loading">
+            <el-skeleton :rows="2" animated />
+          </div>
+          <el-alert
+            v-else-if="seriesError"
+            type="warning"
+            :closable="false"
+            show-icon
+            title="系列资料加载失败"
+            :description="seriesError"
+          />
+          <div v-else-if="seriesReadiness" class="launch-readiness__series">
+            <div class="launch-readiness__series-row">
+              <span class="launch-readiness__series-label">封面图</span>
+              <span
+                class="launch-readiness__series-value"
+                :class="seriesReadiness.presentation.coverImageUrl ? 'is-success' : 'is-danger'"
+              >{{ seriesReadiness.presentation.coverImageUrl ? '✓ 已设置' : '✗ 未设置' }}</span>
+            </div>
+            <div class="launch-readiness__series-row">
+              <span class="launch-readiness__series-label">一句话卖点</span>
+              <span
+                class="launch-readiness__series-value"
+                :class="seriesReadiness.presentation.sellingPoint ? 'is-success' : 'is-danger'"
+              >{{ seriesReadiness.presentation.sellingPoint ? '✓ 已设置' : '✗ 未设置' }}</span>
+            </div>
+            <div class="launch-readiness__series-row">
+              <span class="launch-readiness__series-label">封面角标</span>
+              <span class="launch-readiness__series-value">
+                {{ seriesCoverBadgeText }}
+              </span>
+            </div>
+            <div class="launch-readiness__series-hint">
+              系列资料由整条系列共用；保存后顾客立即看到，不需要重新发布阶段。
+            </div>
+          </div>
+        </section>
+
         <section class="launch-readiness__section">
           <div class="launch-readiness__section-title">概要</div>
           <el-descriptions :column="3" border size="small">
@@ -419,7 +471,8 @@ import NutritionReportDrawer from './NutritionReportDrawer.vue'
 import PresentationPanel from './PresentationPanel.vue'
 import type {
   DraftLaunchReadiness,
-  DraftNutritionReportEnvelope
+  DraftNutritionReportEnvelope,
+  SeriesReleaseReadiness
 } from '@/types/recipeDesigner'
 import {
   buildLaunchPassedChecks,
@@ -440,12 +493,14 @@ const props = defineProps<{
   draftName?: string
   orderId?: string
   designId?: string
+  seriesId?: string
 }>()
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
   (e: 'published'): void
   (e: 'staged'): void
+  (e: 'open-series-release'): void
 }>()
 
 const visible = computed({
@@ -472,6 +527,10 @@ watch(
 const loading = ref(false)
 const error = ref('')
 const readiness = ref<DraftLaunchReadiness | null>(null)
+/** 系列门面资料：与草稿检查分开加载，失败不阻塞阶段检查 */
+const seriesReadiness = ref<SeriesReleaseReadiness | null>(null)
+const seriesLoading = ref(false)
+const seriesError = ref('')
 const stepsExpanded = ref<string[]>([])
 const stepsDirty = ref(false)
 const publishing = ref(false)
@@ -487,12 +546,24 @@ const reportError = ref('')
 
 /** 只认最后一次请求，避免关闭 / 重复刷新时的旧响应覆盖新状态 */
 let requestSeq = 0
+/** 系列资料单独计数，失败 / 旧响应不影响草稿上线检查 */
+let seriesRequestSeq = 0
 /** 营养报告独立计数，生成 / 查看失败时不干扰上线检查本身 */
 let reportRequestSeq = 0
 
 const summaryRows = computed(() =>
   readiness.value ? buildLaunchSummaryRows(readiness.value.summary) : []
 )
+
+/** 封面角标只读展示：空值明确提示「封面左下角为空」 */
+const seriesCoverBadgeText = computed(() => {
+  const badges = (seriesReadiness.value?.presentation.coverBadges ?? [])
+    .map((badge) => String(badge ?? '').trim())
+    .filter(Boolean)
+  return badges.length > 0
+    ? badges.join(' · ')
+    : '未设置（封面左下角为空）'
+})
 
 /** 概要里的「完整营养报告」不是纯文本，而是按报告状态给出的动作 */
 const reportAction = computed(() =>
@@ -592,6 +663,33 @@ async function saveName() {
     ElMessage.error('改名失败，请重试')
   } finally {
     nameSaving.value = false
+  }
+}
+
+async function loadSeriesReadiness(): Promise<void> {
+  if (!props.seriesId || props.orderId) {
+    seriesReadiness.value = null
+    seriesLoading.value = false
+    seriesError.value = ''
+    return
+  }
+
+  const seq = ++seriesRequestSeq
+  seriesLoading.value = true
+  seriesError.value = ''
+  try {
+    const result = await recipeDesignerApi.getSeriesReleaseReadiness(props.seriesId)
+    if (seq !== seriesRequestSeq) return
+    seriesReadiness.value = result
+  } catch {
+    if (seq !== seriesRequestSeq) return
+    // 系列资料加载失败只在区块内提示，不影响阶段检查本身
+    seriesReadiness.value = null
+    seriesError.value = '系列资料加载失败，请稍后重试'
+  } finally {
+    if (seq === seriesRequestSeq) {
+      seriesLoading.value = false
+    }
   }
 }
 
@@ -769,12 +867,16 @@ async function handleBeforeClose(done: () => void): Promise<void> {
 }
 
 watch(
-  () => [props.modelValue, props.draftId] as const,
+  () => [props.modelValue, props.draftId, props.seriesId, props.orderId] as const,
   ([open, draftId]) => {
     if (!open) {
       // 关闭后到达的响应不再写回，避免下次打开先闪一眼旧结果
       requestSeq += 1
+      seriesRequestSeq += 1
       loading.value = false
+      seriesLoading.value = false
+      seriesReadiness.value = null
+      seriesError.value = ''
       stepsDirty.value = false
       presentationDirty.value = false
       reportRequestSeq += 1
@@ -785,7 +887,10 @@ watch(
       return
     }
     readiness.value = null
+    seriesReadiness.value = null
     error.value = ''
+    seriesError.value = ''
+    seriesLoading.value = false
     stepsDirty.value = false
     presentationDirty.value = false
     reportSnapshot.value = null
@@ -794,7 +899,9 @@ watch(
       error.value = '缺少草稿 id，无法执行上线检查'
       return
     }
+    // 草稿门槛与系列门面互不依赖：并行拉取，系列失败不阻塞阶段检查
     void loadReadiness()
+    void loadSeriesReadiness()
   },
   { immediate: true }
 )
@@ -921,6 +1028,60 @@ watch(
 .launch-readiness__overview-sub {
   margin-top: 4px;
   font-size: 12px;
+  color: #909399;
+}
+
+.launch-readiness__series-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.launch-readiness__series-loading {
+  padding: 4px 0;
+}
+
+.launch-readiness__series {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.launch-readiness__series-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.launch-readiness__series-label {
+  flex-shrink: 0;
+  width: 84px;
+  color: #909399;
+}
+
+.launch-readiness__series-value {
+  color: #303133;
+}
+
+.launch-readiness__series-value.is-success {
+  color: #529b2e;
+  font-weight: 600;
+}
+
+.launch-readiness__series-value.is-danger {
+  color: #f56c6c;
+  font-weight: 600;
+}
+
+.launch-readiness__series-hint {
+  font-size: 12px;
+  line-height: 1.6;
   color: #909399;
 }
 

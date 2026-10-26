@@ -11,6 +11,7 @@ import { TencentCosService } from '../../../src/infrastructure/services/tencent-
 import { AuthGuard, JwtAuthService } from '../../../src/interfaces/auth';
 import { RecipeDesignerController } from '../../../src/interfaces/controllers/recipe-designer.controller';
 import {
+  ReleaseRecipeSeriesDto,
   UpdateRecipeDesignItemOrderDto,
   UpdateRecipeDesignPresentationDto,
   UpdateRecipeSeriesReleaseSettingsDto,
@@ -226,6 +227,34 @@ describe('RecipeDesignerController authorization', () => {
     nulls.coverTitle = null;
     nulls.sellingPoint = null;
     await expect(validate(nulls)).resolves.toEqual([]);
+  });
+
+  it('validates the optional release stage code list', async () => {
+    const empty = new ReleaseRecipeSeriesDto();
+    await expect(validate(empty)).resolves.toEqual([]);
+
+    const valid = new ReleaseRecipeSeriesDto();
+    valid.stageCodes = ['PUPPY_UNDER_14_WEEKS', 'HIGH_ACTIVITY_ADULT'];
+    await expect(validate(valid)).resolves.toEqual([]);
+
+    const malformed = new ReleaseRecipeSeriesDto();
+    (malformed as any).stageCodes = 'HIGH_ACTIVITY_ADULT';
+    await expect(validate(malformed)).resolves.toEqual([
+      expect.objectContaining({ property: 'stageCodes' }),
+    ]);
+
+    const tooMany = new ReleaseRecipeSeriesDto();
+    tooMany.stageCodes = [
+      'PUPPY_UNDER_14_WEEKS',
+      'PUPPY_14_WEEKS_PLUS',
+      'HIGH_ACTIVITY_ADULT',
+      'LOW_ACTIVITY_ADULT_OR_SENIOR',
+      'REPRODUCTION',
+      'ADULT',
+    ];
+    await expect(validate(tooMany)).resolves.toEqual([
+      expect.objectContaining({ property: 'stageCodes' }),
+    ]);
   });
 
   it('exposes nutrition report generation and read routes to draft viewers', () => {
@@ -744,7 +773,11 @@ describe('RecipeDesignerController', () => {
       ),
     ).resolves.toEqual(expect.objectContaining({ code: 0 }));
     await expect(
-      controller.releaseSeries('series-1', currentUser),
+      controller.releaseSeries(
+        'series-1',
+        { stageCodes: ['HIGH_ACTIVITY_ADULT'] },
+        currentUser,
+      ),
     ).resolves.toEqual(
       expect.objectContaining({
         code: 0,
@@ -757,12 +790,50 @@ describe('RecipeDesignerController', () => {
       'series-1',
       access,
     );
+    // PATCH release-settings 是「人点保存」的唯一入口：必须同步线上门面。
     expect(service.updateSeriesReleaseSettings).toHaveBeenCalledWith(
       'series-1',
       { requiredLifeStages: ['HIGH_ACTIVITY_ADULT'] },
       access,
+      { applyToLive: true },
     );
-    expect(service.releaseSeries).toHaveBeenCalledWith('series-1', access);
+    expect(service.releaseSeries).toHaveBeenCalledWith('series-1', access, {
+      stageCodes: ['HIGH_ACTIVITY_ADULT'],
+    });
+  });
+
+  it('passes release stageCodes from the body', async () => {
+    service.releaseSeries.mockResolvedValue({
+      seriesId: 's1',
+      businessStatus: 'PUBLIC',
+    });
+
+    await controller.releaseSeries(
+      's1',
+      { stageCodes: ['HIGH_ACTIVITY_ADULT'] },
+      currentUser,
+    );
+
+    expect(service.releaseSeries).toHaveBeenCalledWith(
+      's1',
+      expect.anything(),
+      { stageCodes: ['HIGH_ACTIVITY_ADULT'] },
+    );
+  });
+
+  it('passes an omitted body as undefined stageCodes on first release', async () => {
+    service.releaseSeries.mockResolvedValue({
+      seriesId: 's1',
+      businessStatus: 'PUBLIC',
+    });
+
+    await controller.releaseSeries('s1', undefined as any, currentUser);
+
+    expect(service.releaseSeries).toHaveBeenCalledWith(
+      's1',
+      expect.anything(),
+      { stageCodes: undefined },
+    );
   });
 
   it('delegates whole-series unpublish and returns counts/status', async () => {

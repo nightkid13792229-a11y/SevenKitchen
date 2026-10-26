@@ -147,8 +147,8 @@ describe('home runtime regressions', () => {
     )
 
     expect(source).toContain('coverTitle?: string')
-    // 角标文案改由 resolveCoverBadgeText 解析：优先系列级 coverBadges（合规词表），
-    // 为空时回退到版本级 coverTitle，保证迁移期间角标不会消失
+    // 角标文案只来自系列级 coverBadges（合规词表）；页面仍保留 coverTitle 字段（API 仍返回），
+    // 但解析函数不再回退封面标题，没配角标就不显示
     expect(source).toContain('coverBadges?: string[]')
     expect(source).toContain('v-if="recipe.displayCoverUrl && resolveCoverBadgeText(recipe)"')
     expect(source).toContain('class="recipe-cover-badge-gradient"')

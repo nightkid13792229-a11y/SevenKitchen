@@ -86,6 +86,27 @@
         v-loading="loading"
         class="launch-readiness__content"
       >
+
+        <!-- 2026-10-27：名称与归类都要按系列操作，历史独立草稿没有系列就整块不显示 -->
+        <div v-if="readiness.seriesId" class="launch-readiness__series-block">
+          <div class="launch-readiness__series-row">
+            <span class="launch-readiness__series-k">食谱名称</span>
+            <AiNameField v-model="nameDraft" :series-id="readiness.seriesId" />
+            <el-button
+              v-if="nameDirty"
+              size="small"
+              type="primary"
+              :loading="nameSaving"
+              @click="saveName"
+            >保存名称</el-button>
+          </div>
+
+          <QuickTaxonomyPicker
+            v-if="readiness.designMode !== 'ORDER'"
+            :series-id="readiness.seriesId"
+            @saved="loadReadiness"
+          />
+        </div>
         <div
           class="launch-readiness__overview"
           :class="{ 'is-ready': readiness.ready, 'is-blocked': !readiness.ready }"
@@ -389,6 +410,8 @@ import {
   WarningFilled
 } from '@element-plus/icons-vue'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
+import AiNameField from './AiNameField.vue'
+import QuickTaxonomyPicker from './QuickTaxonomyPicker.vue'
 import { useUserStore } from '@/store/user'
 import { orderRecipeDesignApi } from '@/api/orderRecipeDesign'
 import ProductionStepsEditor from './ProductionStepsEditor.vue'
@@ -429,6 +452,22 @@ const visible = computed({
   get: () => props.modelValue,
   set: (value: boolean) => emit('update:modelValue', value)
 })
+
+/** 名称草稿：改完点「保存名称」才写库 */
+const nameDraft = ref('')
+const nameSaving = ref(false)
+const nameDirty = computed(
+  () => nameDraft.value.trim() !== String(props.draftName ?? '').trim()
+)
+
+// 抽屉打开或切换草稿时，把当前名称灌进草稿值
+watch(
+  () => props.draftName,
+  (value) => {
+    nameDraft.value = value ?? ''
+  },
+  { immediate: true }
+)
 
 const loading = ref(false)
 const error = ref('')
@@ -530,6 +569,29 @@ async function loadReadiness(): Promise<void> {
     if (seq === requestSeq) {
       loading.value = false
     }
+  }
+}
+
+async function saveName() {
+  if (!readiness.value?.seriesId) return
+  const name = nameDraft.value.trim()
+  if (!name) {
+    ElMessage.warning('请填写食谱名称')
+    return
+  }
+  if ([...name].length > 12) {
+    ElMessage.warning('食谱名称最多 12 个字，超了标签印不下')
+    return
+  }
+  nameSaving.value = true
+  try {
+    await recipeDesignerApi.renameSeries(readiness.value.seriesId, { name })
+    ElMessage.success('名称已更新')
+    await loadReadiness()
+  } catch {
+    ElMessage.error('改名失败，请重试')
+  } finally {
+    nameSaving.value = false
   }
 }
 

@@ -329,6 +329,8 @@ export interface DraftNutritionReportEnvelope {
 /** GET /recipe-designer/drafts/:id/launch-readiness */
 export interface DraftLaunchReadiness {
   draftId: string
+  /** 草稿所属系列；历史独立草稿为 null（抽屉据此决定能否改名/归类） */
+  seriesId: string | null
   designMode: DesignRecipeDesignMode
   ready: boolean
   blockers: LaunchReadinessBlocker[]

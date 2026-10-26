@@ -64,3 +64,27 @@ describe('上线检查里的「已归类」项', () => {
     expect(block).toContain("scope: 'CATALOG'")
   })
 })
+
+import drawerSource from '@/views/RecipeDesigner/components/LaunchReadinessDrawer.vue?raw'
+import quickSource from '@/views/RecipeDesigner/components/QuickTaxonomyPicker.vue?raw'
+
+describe('上线检查抽屉里的命名与归类', () => {
+  it('抽屉里有 AI 命名字段，且按系列操作', () => {
+    expect(drawerSource).toContain('AiNameField')
+    expect(drawerSource).toContain(':series-id="readiness.seriesId"')
+  })
+
+  it('没有系列的历史草稿不显示这一整块', () => {
+    expect(drawerSource).toContain('v-if="readiness.seriesId"')
+  })
+
+  it('定制设计不显示归类面板', () => {
+    expect(drawerSource).toContain("v-if=\"readiness.designMode !== 'ORDER'\"")
+  })
+
+  it('快速归类按分类逐行挂，并说明双拼菜可留空主蛋白', () => {
+    expect(quickSource).toContain('快速归类')
+    expect(quickSource).toContain('replaceLinks')
+    expect(quickSource).toContain('双拼')
+  })
+})

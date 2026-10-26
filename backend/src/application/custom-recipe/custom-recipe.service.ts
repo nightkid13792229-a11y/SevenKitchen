@@ -1105,7 +1105,21 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   async updateOrderStatus(
     orderIdOrId: string,
     status: CustomRecipeStatus,
-    options?: { reason?: string },
+    options?: {
+      reason?: string;
+      /**
+       * 退款成功后的订单退款字段（2026-10-26）。
+       *
+       * 只允许随状态迁移一起写，避免退款服务再开一条直接写订单表的路径；
+       * 金额固定为订单实付，不支持部分退款。
+       */
+      refund?: {
+        outRefundNo?: string | null;
+        refundId?: string | null;
+        refundedAt?: Date | null;
+        reason?: string;
+      };
+    },
   ): Promise<void> {
     const ref = await this.resolveOrderRef(orderIdOrId);
 
@@ -1116,6 +1130,7 @@ export class CustomRecipeService implements ICustomRecipeRepository {
         status: true,
         scheduledDate: true,
         recipeQuantity: true,
+        amount: true,
         allergyReportDrafts: true,
       },
     });
@@ -1205,6 +1220,19 @@ export class CustomRecipeService implements ICustomRecipeRepository {
             ? {
                 cancelledAt: new Date(),
                 cancellationReason: options?.reason || '后台手动取消',
+              }
+            : {}),
+          ...(options?.refund
+            ? {
+                refundStatus: 'SUCCESS',
+                refundAmount: Number(order.amount),
+                refundOutNo: options.refund.outRefundNo ?? null,
+                refundId: options.refund.refundId ?? null,
+                refundedAt: options.refund.refundedAt ?? new Date(),
+                refundReason:
+                  options.refund.reason ||
+                  options?.reason ||
+                  '退款申请审核通过',
               }
             : {}),
         },
@@ -1472,6 +1500,58 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     });
 
     return result;
+  }
+
+  /**
+   * 退款申请审核通过并退款成功后，取消还没交付的订单并释放排期。
+   *
+   * 只处理 PAID / IN_PROGRESS（制作中）；DELIVERED / COMPLETED 的钱
+   * 可以退，但已经交付，订单不能撤销。
+   *
+   * 状态与名额统一走 `updateOrderStatus`（GD-01 唯一入口）；
+   * 退款字段随这次状态迁移一起写，不再另开直接写订单表的路径。
+   * 金额固定取订单实付，**不支持部分退款**。
+   */
+  async cancelOrderAfterRefund(
+    orderPk: string,
+    refund: {
+      outRefundNo?: string | null;
+      refundId?: string | null;
+      refundedAt?: Date | null;
+      reason?: string;
+    } = {},
+  ): Promise<{ cancelled: boolean; orderId?: string }> {
+    const order = await this.prisma.customRecipeOrder.findUnique({
+      where: { id: orderPk },
+      select: {
+        id: true,
+        orderId: true,
+        status: true,
+        amount: true,
+      },
+    });
+    if (!order) return { cancelled: false };
+
+    if (!['PAID', 'IN_PROGRESS'].includes(String(order.status))) {
+      // 已交付/已完成/已取消：退款字段由退款创建/微信回调写入，这里不撤单
+      return { cancelled: false, orderId: order.orderId };
+    }
+
+    const reason =
+      String(refund.reason || '').trim() ||
+      '退款申请审核通过，已全额退款，自动停单取消';
+
+    await this.updateOrderStatus(order.id, CustomRecipeStatus.CANCELLED, {
+      reason,
+      refund: {
+        outRefundNo: refund.outRefundNo ?? null,
+        refundId: refund.refundId ?? null,
+        refundedAt: refund.refundedAt ?? new Date(),
+        reason,
+      },
+    });
+
+    return { cancelled: true, orderId: order.orderId };
   }
 
   /**

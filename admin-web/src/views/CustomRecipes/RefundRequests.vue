@@ -105,14 +105,14 @@
         type="warning"
         :closable="false"
         show-icon
-        title="确认后会立即调用微信全额原路退款，不能撤回。"
+        title="只支持全额退款，金额固定为订单实付；确认后立即调用微信原路退款，不能撤回。"
       />
       <el-alert
         v-if="activeRequest?.orderStatus === 'IN_PROGRESS'"
-        type="error"
+        type="success"
         :closable="false"
         show-icon
-        title="制作中订单退款后，还要到订单详情取消订单，停止制作。"
+        title="制作中订单退款成功后，系统会自动停单并取消订单，无需再手工取消。"
         class="tip"
       />
       <div v-if="activeRequest" class="dialog-summary">

@@ -163,7 +163,7 @@
           <text class="upload-hint">食谱、实际喂食情况或狗狗状态的照片，能帮助Seven爸爸更快判断。</text>
         </view>
 
-        <view class="notice">提交后一个工作日内处理。</view>
+        <view class="notice">提交后一个工作日内处理。审核通过且退款成功后，制作中的订单会自动停单并取消。</view>
 
         <view class="bottom-bar">
           <view class="bottom-bar__row">
@@ -389,12 +389,20 @@ const resultTitle = computed(() => {
 });
 const resultDesc = computed(() => {
   if (isCancelledWithRefund.value) {
-    if (refundStatus.value === 'SUCCESS') return '退款已原路退回，到账时间以微信为准。';
+    if (refundStatus.value === 'SUCCESS') {
+      return activeRequest.value
+        ? '退款已原路退回，制作已停止，订单已取消；到账时间以微信为准。'
+        : '退款已原路退回，订单已取消；到账时间以微信为准。';
+    }
     if (refundStatus.value === 'FAILED') return '退款没有成功，请联系Seven爸爸处理。';
     return '退款已发起，正在原路退回你的微信支付账户。';
   }
   const status = activeRequest.value?.status;
-  if (status === 'REFUNDED') return '退款已完成，到账时间以微信为准。';
+  if (status === 'REFUNDED') {
+    return order.value.status === 'CANCELLED'
+      ? '退款已完成，制作已停止，订单已取消；到账时间以微信为准。'
+      : '退款已完成，到账时间以微信为准。';
+  }
   if (status === 'REJECTED') return '这次申请没有通过。可以看看审核说明，或联系Seven爸爸。';
   if (status === 'FAILED') return '退款没有成功，请联系Seven爸爸，我们会帮你查这笔退款。';
   if (status === 'PROCESSING') return '审核已通过，退款正在处理中。';

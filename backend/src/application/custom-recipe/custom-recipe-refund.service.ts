@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { WechatPaymentService } from '../payment/wechat-payment.service';
+import { CustomRecipeService } from './custom-recipe.service';
+import { CustomerMessageService } from '../message/customer-message.service';
 
 /**
  * 已交付/制作中订单的退款申请。
@@ -52,6 +54,13 @@ export class CustomRecipeRefundService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly wechatPaymentService: WechatPaymentService,
+    /**
+     * 退款成功后自动停单/取消（2026-10-26）。
+     * 可选注入，避免既有单测一次性改构造签名。
+     */
+    private readonly customRecipeService?: CustomRecipeService,
+    /** 审核结果站内消息；不发微信订阅消息 */
+    private readonly customerMessages?: CustomerMessageService,
   ) {}
 
   /**
@@ -245,6 +254,41 @@ export class CustomRecipeRefundService {
         reviewedAt: new Date(),
       },
     });
+
+    /**
+     * 退款成功才停单：微信返回 PROCESSING 时先等回调，不能提前取消。
+     * 取消失败不回滚退款（钱已经退出去了），只记录日志；后台仍可手工处理。
+     */
+    let cancelled = false;
+    if (status === 'REFUNDED' && this.customRecipeService) {
+      try {
+        const result = await this.customRecipeService.cancelOrderAfterRefund(
+          row.orderId,
+          {
+            outRefundNo: refund.outRefundNo ?? null,
+            refundId: refund.refundId ?? null,
+            refundedAt: new Date(),
+            reason: '退款申请审核通过，已全额退款，自动停单取消',
+          },
+        );
+        cancelled = Boolean(result?.cancelled);
+      } catch (error) {
+        console.error(
+          '[CustomRecipeRefund] 退款成功但自动停单失败:',
+          error,
+        );
+      }
+    }
+
+    await this.sendReviewMessage({
+      customerId: row.customerId,
+      orderNo: order.orderId,
+      amount: Number(row.amount),
+      status,
+      cancelled,
+      adminNote: String(note || '').trim(),
+    });
+
     return this.toCustomerView(updated as any, order.orderId);
   }
 
@@ -275,6 +319,18 @@ export class CustomRecipeRefundService {
         reviewedAt: new Date(),
       },
     });
+
+    await this.customerMessages
+      ?.send({
+        customerId: row.customerId,
+        category: 'AFTERSALE',
+        title: '退款申请未通过',
+        body: adminNote,
+        linkType: 'ORDER',
+        linkId: order?.orderId ?? null,
+      })
+      .catch(() => false);
+
     return this.toCustomerView(updated as any, order?.orderId ?? null);
   }
 
@@ -313,6 +369,57 @@ export class CustomRecipeRefundService {
       orderBy: { createdAt: 'desc' },
     });
     return row ? this.toCustomerView(row as any, null) : null;
+  }
+
+  /**
+   * 审核结果站内消息。只写站内信，不调用微信订阅消息。
+   */
+  private async sendReviewMessage(input: {
+    customerId: string;
+    orderNo: string;
+    amount: number;
+    status: string;
+    cancelled: boolean;
+    adminNote: string;
+  }): Promise<void> {
+    if (!this.customerMessages) return;
+
+    const amount = `¥${Number(input.amount || 0).toFixed(2)}`;
+    let title = '退款申请审核结果';
+    let body = '';
+
+    if (input.status === 'REFUNDED') {
+      title = input.cancelled
+        ? '退款申请已通过，订单已取消'
+        : '退款申请已通过，退款已到账';
+      body = input.cancelled
+        ? `订单 ${input.orderNo} 的 ${amount} 已原路退回；制作已停止，订单已取消。`
+        : `订单 ${input.orderNo} 的 ${amount} 已原路退回，到账时间以微信为准。`;
+    } else if (input.status === 'PROCESSING') {
+      title = '退款申请已通过，退款处理中';
+      body = `订单 ${input.orderNo} 的 ${amount} 正在原路退回；制作中的订单会在退款成功后自动停单取消。`;
+    } else if (input.status === 'FAILED') {
+      title = '退款申请审核通过，但退款失败';
+      body = `订单 ${input.orderNo} 的退款暂未成功，请联系客服处理。`;
+    } else {
+      title = '退款申请审核结果';
+      body = `订单 ${input.orderNo} 的退款申请已有处理结果。`;
+    }
+
+    if (input.adminNote) {
+      body += ` 审核备注：${input.adminNote}`;
+    }
+
+    await this.customerMessages
+      .send({
+        customerId: input.customerId,
+        category: 'AFTERSALE',
+        title,
+        body,
+        linkType: 'ORDER',
+        linkId: input.orderNo,
+      })
+      .catch(() => false);
   }
 
   private async mustFind(requestId: string) {

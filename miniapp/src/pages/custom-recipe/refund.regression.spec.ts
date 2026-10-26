@@ -49,6 +49,8 @@ describe('定制退款页（2026-10-25）', () => {
     expect(page).toContain('uploadAftersaleAttachment');
     expect(page).toContain('最多 6 张');
     expect(page).toContain('提交后一个工作日内处理');
+    expect(page).toContain('制作中的订单会自动停单并取消');
+    expect(page).toContain('退款已原路退回，制作已停止，订单已取消');
     expect(page).toContain("screen.value = 'C'");
     expect(page).toContain('canReapply');
   });

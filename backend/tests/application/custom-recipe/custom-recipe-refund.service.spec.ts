@@ -58,6 +58,8 @@ function createService(options: {
   request?: unknown;
   rows?: unknown[];
   refund?: unknown;
+  customRecipeService?: unknown;
+  customerMessages?: unknown;
 } = {}) {
   const prisma = {
     customRecipeOrder: {
@@ -91,6 +93,8 @@ function createService(options: {
     service: new CustomRecipeRefundService(
       prisma as unknown as PrismaService,
       wechat as unknown as WechatPaymentService,
+      options.customRecipeService as any,
+      options.customerMessages as any,
     ),
     prisma,
     wechat,
@@ -262,6 +266,60 @@ describe('CustomRecipeRefundService · 后台审核', () => {
     expect(prisma.customRecipeRefundRequest.update).not.toHaveBeenCalled();
   });
 
+  it('★ 审核通过退款成功：自动停单取消并发站内消息，不发微信订阅', async () => {
+    const cancel = jest.fn().mockResolvedValue({ cancelled: true });
+    const messages = { send: jest.fn().mockResolvedValue(true) };
+    const { service } = createService({
+      customRecipeService: { cancelOrderAfterRefund: cancel },
+      customerMessages: messages,
+    });
+
+    const result = await service.approve('refund-1', 'admin-1', '同意退款');
+
+    expect(result.status).toBe('REFUNDED');
+    expect(cancel).toHaveBeenCalledWith(
+      'order-pk-1',
+      expect.objectContaining({
+        outRefundNo: 'CRR1',
+        refundId: 'wx-refund-1',
+      }),
+    );
+    expect(messages.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        category: 'AFTERSALE',
+        title: '退款申请已通过，订单已取消',
+        linkType: 'ORDER',
+        linkId: 'CR202610250001',
+      }),
+    );
+  });
+
+  it('★ 审核通过但微信仍在处理：只发处理中消息，不提前停单', async () => {
+    const cancel = jest.fn().mockResolvedValue({ cancelled: true });
+    const messages = { send: jest.fn().mockResolvedValue(true) };
+    const { service } = createService({
+      refund: {
+        status: 'PROCESSING',
+        amount: 299,
+        outRefundNo: 'CRR1',
+        refundId: 'wx-refund-1',
+        reused: false,
+      },
+      customRecipeService: { cancelOrderAfterRefund: cancel },
+      customerMessages: messages,
+    });
+
+    const result = await service.approve('refund-1', 'admin-1');
+
+    expect(result.status).toBe('PROCESSING');
+    expect(cancel).not.toHaveBeenCalled();
+    expect(messages.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: '退款申请已通过，退款处理中',
+      }),
+    );
+  });
+
   it('驳回写原因并标记 REJECTED', async () => {
     const { service, prisma } = createService();
     const result = await service.reject('refund-1', 'admin-1', '不符合退款条件');
@@ -274,5 +332,23 @@ describe('CustomRecipeRefundService · 后台审核', () => {
       }),
     );
     expect(result.status).toBe('REJECTED');
+  });
+
+  it('★ 驳回也发站内消息，说明原因', async () => {
+    const messages = { send: jest.fn().mockResolvedValue(true) };
+    const { service } = createService({
+      customerMessages: messages,
+    });
+
+    await service.reject('refund-1', 'admin-1', '不符合退款条件');
+
+    expect(messages.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        category: 'AFTERSALE',
+        title: '退款申请未通过',
+        body: '不符合退款条件',
+        linkType: 'ORDER',
+      }),
+    );
   });
 });

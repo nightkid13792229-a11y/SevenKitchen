@@ -352,7 +352,11 @@ export const buildSeriesReleaseReadiness = (
   const isProductLine =
     normalizeText(input.designMode).toUpperCase() !== 'ORDER' &&
     businessStatus !== 'PRIVATE_CUSTOM';
-  if (isProductLine && (input.taxonomyLinkCount ?? 0) <= 0) {
+  if (
+    isProductLine &&
+    typeof input.taxonomyLinkCount === 'number' &&
+    input.taxonomyLinkCount <= 0
+  ) {
     blockers.push({
       code: 'TAXONOMY_REQUIRED',
       scope: 'SERIES',

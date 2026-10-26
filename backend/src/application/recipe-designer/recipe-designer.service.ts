@@ -4510,9 +4510,23 @@ export class RecipeDesignerService {
     return { recipes, designs };
   }
 
-  /** 该系列挂了几条需求分类（用于发布门禁「已归类」）。 */
-  private async countSeriesTaxonomyLinks(seriesId: string): Promise<number> {
-    return this.prisma.recipeSeriesTaxonomy.count({ where: { seriesId } });
+  /**
+   * 该系列挂了几条需求分类（用于发布门禁「已归类」）。
+   *
+   * 查不到（表还没建 / 该部署形态下没有这个模型）时返回 `undefined`，
+   * 让门槛**跳过**而不是把整条发布流程打成阻断：
+   * 分类服务挂掉不该让人连菜都发不出去。
+   */
+  private async countSeriesTaxonomyLinks(
+    seriesId: string,
+  ): Promise<number | undefined> {
+    try {
+      return await this.prisma.recipeSeriesTaxonomy.count({
+        where: { seriesId },
+      });
+    } catch {
+      return undefined;
+    }
   }
 
   private buildSeriesReleaseReadinessForSeries(
@@ -8845,6 +8859,10 @@ export class RecipeDesignerService {
         orderQuantity: draft.series?.orderQuantity,
         customerDogId: draft.customerDogId,
       },
+      // 没有系列（历史独立草稿）就没有分类可挂，跳过这条门禁而不是判它阻断
+      taxonomyLinkCount: draft.seriesId
+        ? await this.countSeriesTaxonomyLinks(draft.seriesId)
+        : undefined,
     });
 
     return { readiness, assessment };

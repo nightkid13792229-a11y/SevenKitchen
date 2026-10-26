@@ -110,6 +110,7 @@
                 <div class="agent-step__body">
                   <div class="agent-step__head">
                     <b class="agent-step__label">{{ step.label }}</b>
+                    <code v-if="step.name" class="agent-step__tool">{{ step.name }}</code>
                     <span v-if="stepSummary(step)" class="agent-step__summary">
                       {{ stepSummary(step) }}
                     </span>
@@ -906,6 +907,7 @@ import {
   checkDomainLabel,
   formatCheckedAt,
   gateState,
+  staleBannerText,
   toAuthorizeReasons,
   toCheckRunSummary,
   toLocateTarget
@@ -1051,6 +1053,13 @@ const loadedCard = ref<IngredientCardForm | null>(null)
 
 /** 两域最新报告 + 是否对应当前草稿；任何一次草稿保存后都要重新拉。 */
 const checksView = ref<IngredientDraftChecksView | null>(null)
+/**
+ * 本次载入草稿后是否成功保存过。
+ *
+ * 横幅靠它区分「这一页从没核验」和「改过之后还没核验」；
+ * 换草稿 / 重新载入时归零，任何一次草稿 PATCH 成功后才置 true。
+ */
+const draftTouched = ref(false)
 const checksLoading = ref(false)
 const checksError = ref('')
 /** 并发 GET /checks 时只让最后一次落地，避免旧响应盖掉新报告。 */
@@ -1238,9 +1247,10 @@ const authorizeHint = computed(() => {
 })
 
 /**
- * 页签上的过期横幅：
- * - 从没跑过 → 说「还没核验」，不假装是过期；
- * - 跑过但改过草稿 → 用任务要求的原话「报告已过期，改过之后要重跑」。
+ * 页签上的核验横幅：
+ * - 报告新鲜 → 不提示；
+ * - 有报告但改过草稿 → 说「报告已过期」；
+ * - 从没跑过 → 按本次载入后有没有保存过，说「还没核验」或「改动后还没核验」。
  */
 function staleNotice(domain: CheckDomain): string {
   const view = checksView.value
@@ -1250,12 +1260,12 @@ function staleNotice(domain: CheckDomain): string {
 
   const fresh =
     domain === 'INGREDIENT' ? view.fresh.ingredient : view.fresh.nutrition
-  if (fresh) {
-    return ''
-  }
-
   const run = domain === 'INGREDIENT' ? view.ingredient : view.nutrition
-  return run ? '报告已过期，改过之后要重跑' : '这一页还没核验，跑一次才能授权'
+  return staleBannerText({
+    hasRun: Boolean(run),
+    fresh,
+    touchedSinceLoad: draftTouched.value
+  })
 }
 
 const checkDialogStale = computed(() => {
@@ -1413,6 +1423,8 @@ async function loadDraft(draftId: string) {
   draftError.value = ''
   // 换草稿时先清掉上一份的报告，避免用别人的 fresh 判定这一页。
   checksView.value = null
+  // 上一份草稿的「改过」不能带过来：新草稿载入后先按「这一页还没核验」说。
+  draftTouched.value = false
   try {
     const updated = await ingredientCreationApi.getDraft(draftId)
     applyDraft(updated, { resetForm: true })
@@ -1752,6 +1764,8 @@ async function saveIngredientCell(key: IngredientCardFieldKey) {
       ingredient
     })
     draft.value = updated
+    // 保存成功才说明这一页被改过：横幅据此区分「还没核验」与「改动后还没核验」。
+    draftTouched.value = true
     // 服务端会 trim 字符串、把目录外枚举收敛成空；把归一化结果回写表单，
     // 否则表单会长期「看起来有改动」，刷新提示也一直挂着。
     const nextCard = toIngredientCard(updated.payload, updated.name)
@@ -1837,6 +1851,7 @@ async function handleCellChange(
     })
     draft.value = updated
     pendingCells.delete(key)
+    draftTouched.value = true
     // 营养页改一格也会让两页报告同时过期。
     markChecksStale()
     await refreshChecks(updated.id)
@@ -2044,6 +2059,7 @@ async function handleRegisterException(item: CheckItem) {
         { verify: { exceptions } }
       )
       draft.value = updated
+      draftTouched.value = true
       markChecksStale()
       await refreshChecks(updated.id)
     })
@@ -2092,6 +2108,7 @@ async function flushIngredientCard(): Promise<boolean> {
       ingredient
     })
     draft.value = updated
+    draftTouched.value = true
     const nextCard = toIngredientCard(updated.payload, updated.name)
     loadedCard.value = nextCard
     Object.assign(ingredientForm, nextCard)
@@ -2591,6 +2608,18 @@ function goBackToList() {
 .agent-step__label {
   font-size: 13px;
   color: var(--el-text-color-primary);
+}
+
+/* 原始工具名放在中文标签后面，只做辅助信息，不抢主标签的视觉层级。 */
+.agent-step__tool {
+  padding: 0 5px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 4px;
+  background: var(--el-fill-color-lighter);
+  color: var(--el-text-color-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 16px;
 }
 
 .agent-step__summary {

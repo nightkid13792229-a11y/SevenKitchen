@@ -11,6 +11,7 @@ import {
   INGREDIENT_AGENT_MAX_TOOL_CALLS,
   INGREDIENT_AGENT_TIMEOUT_MS,
   IngredientDraftAgentService,
+  buildToolStepSummary,
   type AgentRunReport,
   type IngredientAgentRunResult,
 } from '../../../src/application/ingredient-creation/ingredient-draft-agent.service';
@@ -212,6 +213,7 @@ interface HarnessOptions {
   sourceRecords?: Array<{
     id: string;
     status: string;
+    sourceType?: string;
     foodName?: string;
     foodNameEn?: string | null;
     normalizedNutrition?: unknown;
@@ -609,7 +611,8 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
         chatResponse(
           assistantToolCall(
             'searchNames',
-            { keyword: '鸡肝' },
+            // 每次关键词都不同：调用指纹不同，才不会被「无进展」软停止提前打断。
+            { keyword: `鸡肝-${index + 1}` },
             `call_${index + 1}`,
           ),
         ),
@@ -618,7 +621,7 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
     global.fetch = fetchMock as unknown as typeof global.fetch;
 
     const harness = createHarness();
-    // 每次检索都返回一个没出现过的来源 id，避免触发「连续无进展」软停止。
+    // 每次检索都返回一个没出现过的来源 id，确保每一步都算新进展。
     harness.candidateService.listNutritionNames.mockImplementation(async () => {
       sourceSequence += 1;
       return {
@@ -664,7 +667,8 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
 
   it('连续 3 次工具调用没有新进展时停止，报告 result=NO_PROGRESS', async () => {
     const fetchMock = jest.fn();
-    for (let index = 0; index < 3; index += 1) {
+    // 第 1 次是没见过的调用（算新探索），后面 3 次参数完全相同才算「连续 3 次没有新进展」。
+    for (let index = 0; index < 4; index += 1) {
       fetchMock.mockResolvedValueOnce(
         chatResponse(
           assistantToolCall(
@@ -684,15 +688,15 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
       userId: 'admin-1',
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(result.steps).toBe(3);
-    expect(result.toolCallCount).toBe(3);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(result.steps).toBe(4);
+    expect(result.toolCallCount).toBe(4);
     expect(result.stopReason).toBe('NO_PROGRESS');
     expect(result.report).toMatchObject({
       stopReason: 'NO_PROGRESS',
       result: 'NO_PROGRESS',
-      steps: 3,
-      toolCalls: 3,
+      steps: 4,
+      toolCalls: 4,
     });
   });
 
@@ -1558,6 +1562,75 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
     expect(result.reply).toContain('19.5');
   });
 
+  it('回归：searchNames 列出三条后连续读三个不同记录，不会被判成没有进展', async () => {
+    // 事故复现：第三轮 searchNames + 3×getRecord（三个不同 id）被 NO_PROGRESS 停止。
+    // 三个只读调用参数各不相同，必须继续跑完并由模型正常收尾。
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'searchNames',
+            { keyword: '鹌鹑肉' },
+            'call_search',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(assistantToolCall('getRecord', { id: 'rec-a' }, 'call_a')),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(assistantToolCall('getRecord', { id: 'rec-b' }, 'call_b')),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(assistantToolCall('getRecord', { id: 'rec-c' }, 'call_c')),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(assistantReply('三份记录都读完了，先不动草稿。')),
+      );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const harness = createHarness({
+      draft: createDraft(),
+      names: [
+        { id: 'rec-a', name: 'Quail, meat only, raw', sourceType: 'USDA_FDC' },
+        { id: 'rec-b', name: 'Quail, meat and skin, raw', sourceType: 'CFCT' },
+        { id: 'rec-c', name: 'Quail, whole, raw', sourceType: 'CNF' },
+      ],
+      namesTotal: 3,
+      sourceRecords: ['rec-a', 'rec-b', 'rec-c'].map((id) => ({
+        id,
+        status: 'ACTIVE',
+        foodName: `Quail ${id}`,
+        foodNameEn: `Quail ${id}`,
+        normalizedNutrition: {},
+      })),
+    });
+
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '帮我加鹌鹑肉',
+      userId: 'admin-1',
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(result.toolCalls.map((call) => call.name)).toEqual([
+      'searchNames',
+      'getRecord',
+      'getRecord',
+      'getRecord',
+    ]);
+    expect(result.toolCalls.every((call) => call.ok)).toBe(true);
+    expect(
+      harness.prisma.nutritionSourceRecord.findUnique.mock.calls.map(
+        (call) => (call[0] as { where: { id: string } }).where.id,
+      ),
+    ).toEqual(['rec-a', 'rec-b', 'rec-c']);
+    expect(result.stopReason).toBeNull();
+    expect(result.report.result).toBe('FINISHED');
+    expect(result.reply).toContain('三份记录都读完了');
+  });
+
   it('模型可以自由决定顺序：跳过检索，直接 getRecord → writeNutrition → finish', async () => {
     const fetchMock = jest
       .fn()
@@ -2174,6 +2247,7 @@ describe('IngredientDraftAgentService · 流式事件', () => {
         {
           id: 'rec-liver-raw',
           status: 'ACTIVE',
+          sourceType: 'USDA',
           foodName: 'Chicken, liver, raw',
           normalizedNutrition: {
             meta: { sampleState: 'RAW' },
@@ -2208,6 +2282,7 @@ describe('IngredientDraftAgentService · 流式事件', () => {
     const recordEnd = events[3];
     expect(recordEnd.record).toMatchObject({
       name: 'Chicken, liver, raw',
+      sourceType: 'USDA',
       valueCount: 1,
     });
   });
@@ -2260,6 +2335,17 @@ describe('IngredientDraftAgentService · 流式事件', () => {
 
     expect(events.map((event) => event.type)).toEqual(['error']);
     expect(events[0].message).toBeTruthy();
+  });
+});
+
+describe('buildToolStepSummary · 步骤标题', () => {
+  it('getRecord 只写「读来源记录」，不把 UUID 拼进标题', () => {
+    const summary = buildToolStepSummary('getRecord', {
+      id: 'ee93ecc5-3f7a-4f2b-9c1d-123456789abc',
+    });
+
+    expect(summary).toBe('读来源记录');
+    expect(summary).not.toContain('ee93ecc5');
   });
 });
 

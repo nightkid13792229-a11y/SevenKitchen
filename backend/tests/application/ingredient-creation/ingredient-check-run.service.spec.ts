@@ -137,7 +137,7 @@ describe('IngredientCheckRunService', () => {
         trigger: 'USER',
         rulesVersion: 'ingredient-card-v1',
         payloadHash: hashDraftPayload(draft.payload),
-        counts: { blocking: 1, exceptionable: 0, warning: 0 },
+        counts: { blocking: 1, exceptionable: 0, warning: 1 },
         createdBy: 'admin-1',
       });
       expect(run.createdAt).toBe(CREATED_AT.toISOString());
@@ -155,29 +155,42 @@ describe('IngredientCheckRunService', () => {
           result: {
             blocking: [expect.objectContaining({ code: 'NAME_DUPLICATE' })],
             exceptionable: [],
-            warnings: [],
+            warnings: [expect.objectContaining({ code: 'FIELDS_EMPTY' })],
           },
           blockingCount: 1,
           exceptionableCount: 0,
-          warningCount: 0,
+          warningCount: 1,
           createdBy: 'admin-1',
         },
       });
     });
 
-    it('干净草稿零问题，计数全 0 也照样落库', async () => {
+    it('只填 4 个必填项时完整度只进 warning，绝不阻断授权', async () => {
       const run = await service.runDomain('draft-1', 'INGREDIENT', 'USER');
 
-      expect(run.counts).toEqual({
-        blocking: 0,
-        exceptionable: 0,
-        warning: 0,
-      });
-      expect(run.result).toEqual({
-        blocking: [],
-        exceptionable: [],
-        warnings: [],
-      });
+      expect(run.counts.blocking).toBe(0);
+      expect(run.counts.exceptionable).toBe(0);
+      expect(run.counts.warning).toBeGreaterThanOrEqual(1);
+      expect(run.result.blocking).toEqual([]);
+      expect(run.result.exceptionable).toEqual([]);
+      expect(run.result.warnings.map((item) => item.code)).toContain(
+        'FIELDS_EMPTY',
+      );
+      // 落库的那份报告里也要有它——页面读的是库里的结果。
+      expect(prisma.ingredientCheckRun.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            blockingCount: 0,
+            exceptionableCount: 0,
+            warningCount: run.counts.warning,
+            result: expect.objectContaining({
+              blocking: [],
+              exceptionable: [],
+              warnings: [expect.objectContaining({ code: 'FIELDS_EMPTY' })],
+            }),
+          }),
+        }),
+      );
       expect(prisma.ingredientCheckRun.create).toHaveBeenCalledTimes(1);
     });
 

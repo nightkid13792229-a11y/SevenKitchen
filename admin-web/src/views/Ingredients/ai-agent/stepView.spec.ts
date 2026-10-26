@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   matchMethodLabel,
+  toRecordEvidenceFromEvent,
   toSearchEvidenceFromEvent,
   toStepView,
   type AgentStepView
@@ -474,5 +475,34 @@ describe('查本地库 · 部位分组概览', () => {
     expect(legacy?.groups).toEqual([])
     expect(legacy?.groupSummary).toBe('')
     expect(legacy?.message).toBe('命中 1 条')
+  })
+})
+
+describe('读来源记录 · 来源库与覆盖率', () => {
+  it('来源记录摘要带来源库与覆盖率', () => {
+    const view = toRecordEvidenceFromEvent({
+      name: 'Quail, meat only, raw',
+      sourceType: 'USDA',
+      coverage: 83.3,
+      valueCount: 50
+    })
+
+    expect(view?.sourceType).toBe('USDA')
+    expect(view?.message).toBe(
+      '来源记录「Quail, meat only, raw」· USDA · 覆盖率 83.3% · 读到 50 项'
+    )
+  })
+
+  it('旧后端没有来源库时写「未知库」，不把摘要留空', () => {
+    const view = toRecordEvidenceFromEvent({
+      name: 'Chicken, liver, raw',
+      coverage: 82,
+      valueCount: 12
+    })
+
+    expect(view?.sourceType).toBeNull()
+    expect(view?.message).toBe(
+      '来源记录「Chicken, liver, raw」· 未知库 · 覆盖率 82% · 读到 12 项'
+    )
   })
 })

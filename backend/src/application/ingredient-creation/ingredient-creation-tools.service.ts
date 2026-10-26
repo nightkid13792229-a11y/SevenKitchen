@@ -1209,7 +1209,9 @@ export class IngredientCreationToolsService {
       }),
       progress: {
         writtenFieldPaths: [],
-        sourceRecordIds: names.map((entry) => entry.id),
+        // 只列名字清单、没有读过任何记录：上报 id 会让后面真正 getRecord 时
+        // 被误判成「早就见过」，连续三次就成了「没有新进展」（线上停摆即此）。
+        sourceRecordIds: [],
       },
     };
   }
@@ -1401,6 +1403,7 @@ export class IngredientCreationToolsService {
       select: {
         id: true,
         status: true,
+        sourceType: true,
         foodName: true,
         foodNameEn: true,
         normalizedNutrition: true,
@@ -1433,6 +1436,7 @@ export class IngredientCreationToolsService {
         record: {
           id: record.id,
           name: record.foodName,
+          sourceType: record.sourceType,
           state: derivePreparationStateFromSource(record),
           coverage,
           values,

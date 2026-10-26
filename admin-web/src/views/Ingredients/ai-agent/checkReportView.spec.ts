@@ -8,6 +8,7 @@ import {
   checkRunCounts,
   formatCheckedAt,
   gateState,
+  staleBannerText,
   toAuthorizeReasons,
   toCheckReportSections,
   toCheckRunSummary,
@@ -286,6 +287,32 @@ describe('授权闸门 gateState', () => {
     expect(
       gateState({ ingredient, nutrition, exceptions: [], saving: true })
     ).toEqual({ ready: false, reasons: ['正在保存草稿，保存完再授权。'] })
+  })
+})
+
+describe('页签横幅文案 staleBannerText', () => {
+  it('有报告且新鲜 → 不提示', () => {
+    expect(
+      staleBannerText({ hasRun: true, fresh: true, touchedSinceLoad: true })
+    ).toBe('')
+  })
+
+  it('有报告但过期 → 明确说要重跑', () => {
+    expect(
+      staleBannerText({ hasRun: true, fresh: false, touchedSinceLoad: true })
+    ).toBe('报告已过期，改过之后要重跑')
+  })
+
+  it('没报告但改过 → 说「改动后还没核验」', () => {
+    expect(
+      staleBannerText({ hasRun: false, fresh: false, touchedSinceLoad: true })
+    ).toBe('改动后还没核验，跑一次才能授权')
+  })
+
+  it('没报告也没改 → 说「这一页还没核验」', () => {
+    expect(
+      staleBannerText({ hasRun: false, fresh: false, touchedSinceLoad: false })
+    ).toBe('这一页还没核验，跑一次才能授权')
   })
 })
 

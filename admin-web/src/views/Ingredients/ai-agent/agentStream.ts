@@ -45,6 +45,7 @@ export interface AgentStreamMatch {
 /** 读来源记录的步骤摘要（后端 step_end.record）。 */
 export interface AgentStreamRecord {
   name: string
+  sourceType: string | null
   coverage: number | null
   valueCount: number
 }

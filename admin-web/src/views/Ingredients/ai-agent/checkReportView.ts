@@ -189,6 +189,29 @@ export function toCheckRunSummary(
   }
 }
 
+/**
+ * 页签横幅文案。
+ *
+ * `fresh` 优先：报告新鲜时什么都不提示；有报告但不新鲜才算「过期」；
+ * 没有报告时要区分「这一页从没核验过」和「改过草稿之后还没核验」，
+ * 否则第一次打开页面也会被误说成「报告已过期」。
+ */
+export function staleBannerText(input: {
+  hasRun: boolean
+  fresh: boolean
+  touchedSinceLoad: boolean
+}): string {
+  if (input.fresh) {
+    return ''
+  }
+  if (input.hasRun) {
+    return '报告已过期，改过之后要重跑'
+  }
+  return input.touchedSinceLoad
+    ? '改动后还没核验，跑一次才能授权'
+    : '这一页还没核验，跑一次才能授权'
+}
+
 /** 例外 code 集合：占位/空白记录不算数。 */
 function toExceptionCodes(
   exceptions: readonly (ExceptionRecord | string)[] | undefined

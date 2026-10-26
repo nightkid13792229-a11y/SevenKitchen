@@ -3,6 +3,7 @@ import {
   INGREDIENT_CARD_RULES,
   runIngredientCardCheck,
 } from 'src/domain/ingredient-creation/ingredient-card-check';
+import { INGREDIENT_CARD_FIELDS } from 'src/domain/ingredient-creation/ingredient-card-fields';
 
 /** 干净草稿：只填 4 个必填项，采购、贮存等其余字段都留空。 */
 const base: IngredientDraft = {
@@ -22,9 +23,107 @@ const codes = (
   existingNames: readonly string[] = [],
 ) => check(ingredient, existingNames).map((item) => item.code);
 
+/** 有必填校验的 4 项，不计入完整度提醒。 */
+const REQUIRED_FIELD_KEYS: ReadonlySet<string> = new Set([
+  'name',
+  'type',
+  'baseUnit',
+  'unitDisplayLabel',
+]);
+
+/** 枚举字段给合法值，其余按类型给一个非空值：完整度只看「有没有值」。 */
+function sampleValue(field: (typeof INGREDIENT_CARD_FIELDS)[number]): unknown {
+  if (field.key === 'category') return 'MEAT_ORGAN';
+  if (field.key === 'procurementStrategy') return 'DAILY_PURCHASE';
+  if (field.key === 'addTiming') return 'BEFORE_MIXING';
+  return field.valueType === 'NUMBER' || field.valueType === 'BOOLEAN'
+    ? 1
+    : 'x';
+}
+
+/** 从字段契约生成「所有 CREATABLE 非必填字段都有值」的草稿。 */
+function filledDraft(): Record<string, unknown> {
+  const draft: Record<string, unknown> = {
+    name: '鹌鹑肉',
+    type: 'FOOD',
+    baseUnit: 'G',
+    unitDisplayLabel: '克',
+  };
+  for (const field of INGREDIENT_CARD_FIELDS) {
+    if (field.stage !== 'CREATABLE' || REQUIRED_FIELD_KEYS.has(field.key)) {
+      continue;
+    }
+    draft[field.key] = sampleValue(field);
+  }
+  return draft;
+}
+
+const draftOf = (value: Record<string, unknown>): IngredientDraft =>
+  value as unknown as IngredientDraft;
+
 describe('runIngredientCardCheck', () => {
-  it('干净草稿零问题', () => {
-    expect(check(base)).toEqual([]);
+  it('干净草稿只有完整度提醒，没有阻断 / 例外', () => {
+    const items = check(base);
+    const levels = new Map(
+      INGREDIENT_CARD_RULES.map((rule) => [rule.code, rule.level]),
+    );
+
+    expect(items.filter((item) => levels.get(item.code) !== 'warning')).toEqual(
+      [],
+    );
+    expect(items.map((item) => item.code)).toEqual(['FIELDS_EMPTY']);
+  });
+
+  it('空字段给出唯一一条完整度提醒，不阻断、不可例外', () => {
+    const warnings = check(base).filter((item) => item.code === 'FIELDS_EMPTY');
+
+    expect(warnings).toHaveLength(1);
+    // 无法定位到单格，所以不带 fieldPath。
+    expect(warnings[0].fieldPath).toBeUndefined();
+    expect(warnings[0].message).toMatch(/还有 \d+ 项没填/);
+    expect(warnings[0].message).toBe(
+      '还有 22 项没填：英文名、类别、备注、单块重量、最大容量、CFCT 分类、可食部、主要营养价值 等',
+    );
+    expect(warnings[0].suggestion).toBe('这些不是阻断项，补不补由你定');
+    expect(
+      INGREDIENT_CARD_RULES.find((rule) => rule.code === 'FIELDS_EMPTY')?.level,
+    ).toBe('warning');
+  });
+
+  it('填满 CREATABLE 非必填字段后不再提示完整度', () => {
+    expect(codes(draftOf(filledDraft()))).not.toContain('FIELDS_EMPTY');
+  });
+
+  it('AFTER_CREATE 字段留空不报完整度缺失', () => {
+    const filled = filledDraft();
+    for (const field of INGREDIENT_CARD_FIELDS) {
+      if (field.stage === 'AFTER_CREATE') {
+        filled[field.key] = null;
+      }
+    }
+
+    expect(codes(draftOf(filled))).not.toContain('FIELDS_EMPTY');
+  });
+
+  it('数字 0 与布尔 false 算已填，不算完整度缺失', () => {
+    const filled = filledDraft();
+    for (const field of INGREDIENT_CARD_FIELDS) {
+      if (field.stage !== 'CREATABLE' || REQUIRED_FIELD_KEYS.has(field.key)) {
+        continue;
+      }
+      if (field.valueType === 'NUMBER') filled[field.key] = 0;
+      if (field.valueType === 'BOOLEAN') filled[field.key] = false;
+    }
+
+    expect(codes(draftOf(filled))).not.toContain('FIELDS_EMPTY');
+  });
+
+  it('可食部按草稿里的比例 edibleYieldRate 判断，已填不算空', () => {
+    const filled = filledDraft();
+    delete filled.edibleYieldPercent;
+    filled.edibleYieldRate = 0.75;
+
+    expect(codes(draftOf(filled))).not.toContain('FIELDS_EMPTY');
   });
 
   it('草稿为 null 时只报名称必填', () => {
@@ -204,10 +303,11 @@ describe('runIngredientCardCheck', () => {
       'EDIBLE_RANGE',
       'SHELF_LIFE_RANGE',
       'STORAGE_EMPTY',
+      'FIELDS_EMPTY',
     ]);
   });
 
-  it('每条都带能定位的 fieldPath、中文说明与一句建议', () => {
+  it('每条都带中文说明与一句建议；能定位到单格的带 fieldPath', () => {
     const items = check({
       name: '  ',
       type: 'FOOD',
@@ -222,8 +322,13 @@ describe('runIngredientCardCheck', () => {
     });
 
     expect(items.length).toBeGreaterThan(0);
+    expect(items.some((item) => item.code === 'FIELDS_EMPTY')).toBe(true);
     for (const item of items) {
-      expect(item.fieldPath).toMatch(/^ingredient\./);
+      if (item.code === 'FIELDS_EMPTY') {
+        expect(item.fieldPath).toBeUndefined();
+      } else {
+        expect(item.fieldPath).toMatch(/^ingredient\./);
+      }
       expect(item.message).toMatch(/[\u4e00-\u9fff]/);
       expect(item.suggestion?.trim()).toBeTruthy();
     }
@@ -240,6 +345,7 @@ describe('runIngredientCardCheck', () => {
       'EDIBLE_RANGE',
       'SHELF_LIFE_RANGE',
       'STORAGE_EMPTY',
+      'FIELDS_EMPTY',
     ]);
     expect(INGREDIENT_CARD_RULES).toEqual([
       { code: 'NAME_REQUIRED', level: 'blocking' },
@@ -251,6 +357,7 @@ describe('runIngredientCardCheck', () => {
       { code: 'EDIBLE_RANGE', level: 'exceptionable' },
       { code: 'SHELF_LIFE_RANGE', level: 'exceptionable' },
       { code: 'STORAGE_EMPTY', level: 'warning' },
+      { code: 'FIELDS_EMPTY', level: 'warning' },
     ]);
     expect(
       INGREDIENT_CARD_RULES.find((rule) => rule.code === 'NAME_REQUIRED')
@@ -262,6 +369,9 @@ describe('runIngredientCardCheck', () => {
     expect(
       INGREDIENT_CARD_RULES.find((rule) => rule.code === 'STORAGE_EMPTY')
         ?.level,
+    ).toBe('warning');
+    expect(
+      INGREDIENT_CARD_RULES.find((rule) => rule.code === 'FIELDS_EMPTY')?.level,
     ).toBe('warning');
     expect(
       INGREDIENT_CARD_RULES.some((rule) => rule.code === 'PRICE_LOOKS_PROMO'),

@@ -404,3 +404,76 @@ describe('IngredientCreationToolsService · writeIngredient 原料卡', () => {
     expect(draftService.patch).not.toHaveBeenCalled();
   });
 });
+
+describe('IngredientCreationToolsService · 进展信号只认真读', () => {
+  function createProgressTools() {
+    const listNutritionNames = jest.fn(async () => ({
+      total: 2,
+      names: [
+        { id: 'rec-1', name: 'Chicken, liver, raw', sourceType: 'USDA_FDC' },
+        { id: 'rec-2', name: 'Chicken, liver, cooked', sourceType: 'CFCT' },
+      ],
+      keywords: ['鸡肝'],
+    }));
+    const findUnique = jest.fn(async (input: any) => ({
+      id: input.where.id,
+      status: 'ACTIVE',
+      sourceType: 'USDA',
+      foodName: 'Chicken, liver, raw',
+      foodNameEn: 'Chicken liver raw',
+      normalizedNutrition: {},
+    }));
+
+    const tools = new IngredientCreationToolsService(
+      {
+        findCandidates: jest.fn(),
+        listNutritionNames,
+      } as unknown as IngredientCreationCandidateService,
+      {
+        get: jest.fn(),
+        patch: jest.fn(),
+      } as unknown as IngredientCreationDraftService,
+      { runCheck: jest.fn() } as unknown as IngredientCreationCheckService,
+      {
+        nutritionSourceRecord: { findUnique },
+      } as unknown as PrismaService,
+    );
+
+    return { tools, findUnique };
+  }
+
+  async function executeTool(
+    tools: IngredientCreationToolsService,
+    name: string,
+    args: Record<string, unknown>,
+  ) {
+    return tools.execute({ runId: RUN_ID, draftId: DRAFT_ID, name, args });
+  }
+
+  it('searchNames 只列清单不算已读；getRecord 才算真正读了这条记录', async () => {
+    const { tools } = createProgressTools();
+
+    const searched = await executeTool(tools, 'searchNames', {
+      keyword: '鸡肝',
+    });
+    expect(searched.ok).toBe(true);
+    // 只列了名字、没读记录：不能上报成「已见过的来源」。
+    expect(searched.progress?.sourceRecordIds).toEqual([]);
+
+    const read = await executeTool(tools, 'getRecord', { id: 'rec-1' });
+    expect(read.ok).toBe(true);
+    expect(read.progress?.sourceRecordIds).toEqual(['rec-1']);
+  });
+
+  it('getRecord 返回来源库，步骤摘要才能写清这条记录来自哪个库', async () => {
+    const { tools } = createProgressTools();
+
+    const read = await executeTool(tools, 'getRecord', { id: 'rec-1' });
+
+    expect(read.ok).toBe(true);
+    const body = JSON.parse(read.content) as {
+      record?: { sourceType?: string };
+    };
+    expect(body.record?.sourceType).toBe('USDA');
+  });
+});

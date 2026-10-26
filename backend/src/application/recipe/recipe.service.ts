@@ -4,6 +4,7 @@
  */
 
 import {
+  Inject,
   Injectable,
   NotFoundException,
   BadRequestException,
@@ -61,6 +62,7 @@ export class RecipeService {
     @Optional()
     private readonly recipeCopywritingService?: RecipeCopywritingService,
     @Optional()
+    @Inject(IngredientPreparationHistoryService)
     private readonly ingredientPreparationHistoryService?: IngredientPreparationHistoryService,
   ) {}
 

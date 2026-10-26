@@ -138,6 +138,7 @@ import {
   type AiWizardDogProfile,
   type AiWizardDraftSummary,
 } from './recipe-ai-wizard.service';
+import { IngredientPreparationHistoryService } from '../recipe/ingredient-preparation-history.service';
 import {
   SupplementTargetService,
   type SupplementTargetDefinition,
@@ -160,7 +161,6 @@ import {
 } from '../recipe/preparation-method-text.util';
 import { SearchGovernanceService } from '../search-governance/search-governance.service';
 import { LifeStage as RecipeLifeStage } from '../../domain/recipe/enums';
-import { alignPreparationMethodBasis } from '../../domain/recipe-designer/preparation-basis';
 import {
   DEFAULT_PRODUCTION_LOSS_RATE,
   MAX_PRODUCTION_LOSS_RATE,
@@ -1558,6 +1558,15 @@ export class RecipeDesignerService {
      */
     @Optional()
     private readonly supplementTargetService?: SupplementTargetService,
+    /**
+     * 原料预处理历史（2026-10-26）。
+     *
+     * 自动带出改为读「橱窗 + 当前有效交付定制」的历史原文；不再自动改写
+     * 生/熟/干口径。同样放在参数表最后并 @Optional，避免既有按位置构造的测试错位。
+     */
+    @Optional()
+    @Inject(IngredientPreparationHistoryService)
+    private readonly ingredientPreparationHistoryService?: IngredientPreparationHistoryService,
   ) {}
 
   /**
@@ -6139,7 +6148,6 @@ export class RecipeDesignerService {
       await this.resolveDesignItemPreparationMethod(
         dto.preparationMethod,
         ingredientId,
-        dto.nutritionFoodId,
       );
     const preparationData = this.buildPreparationCreateData({
       explicitMethod: dto.preparationMethod,
@@ -6391,7 +6399,6 @@ export class RecipeDesignerService {
       await this.resolveDesignItemPreparationMethod(
         preparationMethod,
         ingredientId,
-        dto.nutritionFoodId,
       );
     const preparationData = this.buildPreparationCreateData({
       explicitMethod: preparationMethod,
@@ -7192,9 +7199,9 @@ export class RecipeDesignerService {
     const publishedFoodRatioMap =
       this.buildPublishedFoodRatioMap(ingredientItems);
     const defaultPreparationMethods =
-      await this.loadDefaultPreparationMethodMap(
+      (await this.ingredientPreparationHistoryService?.getLatestTextMap(
         ingredientItems.map(({ ingredientId }) => ingredientId),
-      );
+      )) ?? new Map<string, string>();
     const supplementTargetMap = await this.buildPublishedSupplementTargetMap(
       draft,
       assessment,
@@ -7951,11 +7958,7 @@ export class RecipeDesignerService {
       item.preparationMethod,
     );
     const preparationMethod =
-      explicitPreparationMethod ??
-      alignPreparationMethodBasis(
-        defaultPreparationMethod,
-        item.nutritionFood?.preparationState ?? null,
-      );
+      explicitPreparationMethod ?? defaultPreparationMethod;
 
     return {
       ingredientId,
@@ -9771,7 +9774,6 @@ export class RecipeDesignerService {
   private async resolveDesignItemPreparationMethod(
     explicitPreparationMethod: string | null | undefined,
     ingredientId: string | null,
-    nutritionFoodId?: string | null,
   ) {
     const normalizedExplicit = this.normalizePreparationMethod(
       explicitPreparationMethod,
@@ -9785,32 +9787,13 @@ export class RecipeDesignerService {
       return null;
     }
 
+    // 自动带出只取历史原文；状态是否与营养档案一致由黄字提示/AI 复核，
+    // 代码不再自动改写「生重/熟重/干重」。
     const fallback =
-      await this.resolveDefaultPreparationMethodForIngredient(ingredientId);
-
-    // 自动生成的默认文案必须与所选营养档案的称重口径一致，
-    // 否则会出现「档案是熟、文案却写生重」这类矛盾。
-    return alignPreparationMethodBasis(
-      fallback,
-      await this.resolveNutritionFoodPreparationState(nutritionFoodId),
-    );
-  }
-
-  /** 读取营养档案的制备状态（决定称重口径：生/熟/干…） */
-  private async resolveNutritionFoodPreparationState(
-    nutritionFoodId?: string | null,
-  ): Promise<string | null> {
-    const id = nutritionFoodId?.trim();
-    if (!id) {
-      return null;
-    }
-
-    const nutritionFood = await this.prisma.nutritionFood.findUnique({
-      where: { id },
-      select: { preparationState: true },
-    });
-
-    return nutritionFood?.preparationState ?? null;
+      await this.ingredientPreparationHistoryService?.getLatestText(
+        ingredientId,
+      );
+    return this.normalizePreparationMethod(fallback);
   }
 
   private normalizePreparationMethod(value: string | null | undefined) {
@@ -9987,58 +9970,6 @@ export class RecipeDesignerService {
       productionSteps:
         steps.length > 0 ? formatProductionStepsText(steps) : null,
     };
-  }
-
-  private async resolveDefaultPreparationMethodForIngredient(
-    ingredientId: string,
-  ) {
-    const defaults = await this.loadDefaultPreparationMethodMap([ingredientId]);
-    return defaults.get(ingredientId) ?? null;
-  }
-
-  private async loadDefaultPreparationMethodMap(ingredientIds: string[]) {
-    const uniqueIngredientIds = [...new Set(ingredientIds.filter(Boolean))];
-    const defaults = new Map<string, string>();
-    if (uniqueIngredientIds.length === 0) {
-      return defaults;
-    }
-
-    const rows = await this.prisma.recipeItem.findMany({
-      where: {
-        ingredientId: { in: uniqueIngredientIds },
-        preparationMethod: { not: null },
-        recipe: { isCustomRecipe: false },
-      },
-      select: {
-        ingredientId: true,
-        preparationMethod: true,
-        recipe: { select: { updatedAt: true } },
-      },
-      orderBy: {
-        recipe: { updatedAt: 'desc' },
-      },
-    });
-    const methodMap = await this.loadPreparationMethodNameMap(
-      rows.map((row) => row.preparationMethod),
-    );
-
-    for (const row of rows) {
-      if (defaults.has(row.ingredientId)) {
-        continue;
-      }
-
-      const readable = resolvePreparationMethodText(
-        row.preparationMethod,
-        methodMap,
-        { preserveUnresolvedLegacy: false },
-      );
-      const normalized = this.normalizePreparationMethod(readable);
-      if (normalized) {
-        defaults.set(row.ingredientId, normalized);
-      }
-    }
-
-    return defaults;
   }
 
   private async loadPreparationMethodNameMap(

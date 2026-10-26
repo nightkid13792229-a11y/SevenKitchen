@@ -2,6 +2,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Test } from '@nestjs/testing';
 import { RecipeDesignerService } from '../../../src/application/recipe-designer/recipe-designer.service';
+import { IngredientPreparationHistoryService } from '../../../src/application/recipe/ingredient-preparation-history.service';
 import { AiDesignSuggestionService } from '../../../src/application/recipe-designer/ai-design-suggestion.service';
 import { SupplementTargetService } from '../../../src/application/recipe-designer/supplement-target.service';
 import { SearchGovernanceService } from '../../../src/application/search-governance/search-governance.service';
@@ -117,6 +118,10 @@ describe('RecipeDesignerService', () => {
     isAvailable: jest.fn(),
     generate: jest.fn(),
   };
+  const preparationHistory = {
+    getLatestText: jest.fn(),
+    getLatestTextMap: jest.fn(),
+  };
   const adminAccess = { userId: 'admin-1', role: 'ADMIN' };
 
   /** 补剂添加浓度按每 kg 保留 2 位小数（与 SupplementTargetService 一致） */
@@ -133,6 +138,10 @@ describe('RecipeDesignerService', () => {
         { provide: 'FediafTargetProvider', useValue: targetProvider },
         { provide: SearchGovernanceService, useValue: searchGovernance },
         { provide: AiDesignSuggestionService, useValue: aiDesignSuggestion },
+        {
+          provide: IngredientPreparationHistoryService,
+          useValue: preparationHistory,
+        },
       ],
     }).compile();
 
@@ -155,6 +164,8 @@ describe('RecipeDesignerService', () => {
       { id: 'admin-1' },
     ]);
     prisma.recipeItem.findMany.mockResolvedValue([]);
+    preparationHistory.getLatestText.mockResolvedValue(null);
+    preparationHistory.getLatestTextMap.mockResolvedValue(new Map());
     prisma.nutritionFood.findUnique.mockResolvedValue(null);
     prisma.preparationMethod.findMany.mockResolvedValue([]);
     prisma.dogBreed.findUnique.mockResolvedValue(null);
@@ -1505,24 +1516,18 @@ describe('RecipeDesignerService', () => {
     });
   });
 
-  it('aligns the auto-generated preparation method with the selected nutrition profile state', async () => {
+  it('uses the latest history text without rewriting the basis', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({ id: 'design-1', createdBy: 'staff-1', status: 'DRAFT' }),
     );
     prisma.nutritionFoodMapping.findFirst.mockResolvedValue({
       id: 'mapping-1',
     });
-    prisma.nutritionFood.findUnique.mockResolvedValue({
-      preparationState: 'COOKED',
-    });
-    // 该原料上一次的写法是「生重」，与本次选择的熟制档案冲突
-    prisma.recipeItem.findMany.mockResolvedValue([
-      {
-        ingredientId: 'ingredient-pumpkin',
-        preparationMethod: '生重、打碎、充分搅拌',
-        recipe: { updatedAt: new Date('2026-09-01T00:00:00.000Z') },
-      },
-    ]);
+    // 历史原文是「生重」，本次选择的档案是熟制；代码不再自动改写，只保留原文，
+    // 由编辑器的黄字提示 / AI 复核状态是否一致。
+    preparationHistory.getLatestText.mockResolvedValue(
+      '生重、打碎、充分搅拌',
+    );
     prisma.designRecipeItem.create.mockResolvedValue(
       item({
         ingredientId: 'ingredient-pumpkin',
@@ -1541,15 +1546,14 @@ describe('RecipeDesignerService', () => {
       'staff-1',
     );
 
-    expect(prisma.nutritionFood.findUnique).toHaveBeenCalledWith({
-      where: { id: 'food-cooked' },
-      select: { preparationState: true },
-    });
+    expect(preparationHistory.getLatestText).toHaveBeenCalledWith(
+      'ingredient-pumpkin',
+    );
     expect(prisma.designRecipeItem.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           ingredientId: 'ingredient-pumpkin',
-          preparationMethod: '熟重、打碎、充分搅拌',
+          preparationMethod: '生重、打碎、充分搅拌',
         }),
       }),
     );
@@ -1669,13 +1673,7 @@ describe('RecipeDesignerService', () => {
     prisma.nutritionFoodMapping.findFirst.mockResolvedValue({
       id: 'mapping-1',
     });
-    prisma.recipeItem.findMany.mockResolvedValue([
-      {
-        ingredientId: 'ingredient-mussel',
-        preparationMethod: '蒸熟、压泥',
-        recipe: { updatedAt: new Date('2026-05-26T08:00:00.000Z') },
-      },
-    ]);
+    preparationHistory.getLatestText.mockResolvedValue('蒸熟、压泥');
     prisma.designRecipeItem.create.mockResolvedValue(
       item({
         ingredientId: 'ingredient-mussel',

@@ -505,6 +505,7 @@ export class AddRecipeDesignItemDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   preparationMethod?: string;
 
   @IsOptional()
@@ -550,6 +551,7 @@ export class UpdateRecipeDesignItemDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   preparationMethod?: string | null;
 
   @IsOptional()
@@ -608,6 +610,7 @@ export class ReplaceRecipeDesignItemDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   preparationMethod?: string;
 
   @IsOptional()

@@ -192,14 +192,27 @@ function createPrismaMock() {
 describe('原料预处理与结构化制作步骤（Task 4）', () => {
   let prisma: any;
   let targetProvider: any;
+  let preparationHistory: any;
   let service: RecipeDesignerService;
 
   beforeEach(() => {
     prisma = createPrismaMock();
     targetProvider = { getTargets: jest.fn().mockResolvedValue([]) };
+    preparationHistory = {
+      getLatestText: jest.fn().mockResolvedValue(null),
+      getLatestTextMap: jest.fn().mockResolvedValue(new Map()),
+    };
     service = new RecipeDesignerService(
       prisma as PrismaService,
       targetProvider,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      preparationHistory,
     );
   });
 
@@ -269,19 +282,7 @@ describe('原料预处理与结构化制作步骤（Task 4）', () => {
     it('marks a system-resolved default method as AUTO', async () => {
       mockEditableDraft();
       mockCreate();
-      prisma.recipeItem.findMany.mockResolvedValue([
-        {
-          ingredientId: 'ingredient-food',
-          preparationMethod: '生重',
-          recipe: { updatedAt: new Date('2026-10-20T00:00:00Z') },
-        },
-      ]);
-      prisma.nutritionFood.findUnique.mockImplementation(async (args: any) => {
-        if (args?.select?.preparationState) {
-          return { preparationState: 'RAW' };
-        }
-        return null;
-      });
+      preparationHistory.getLatestText.mockResolvedValue('生重');
 
       await service.addItem(
         'design-1',
@@ -306,19 +307,7 @@ describe('原料预处理与结构化制作步骤（Task 4）', () => {
     it('defaults a note-only edit to MANUAL while still bringing the default method', async () => {
       mockEditableDraft();
       mockCreate();
-      prisma.recipeItem.findMany.mockResolvedValue([
-        {
-          ingredientId: 'ingredient-food',
-          preparationMethod: '生重',
-          recipe: { updatedAt: new Date('2026-10-20T00:00:00Z') },
-        },
-      ]);
-      prisma.nutritionFood.findUnique.mockImplementation(async (args: any) => {
-        if (args?.select?.preparationState) {
-          return { preparationState: 'RAW' };
-        }
-        return null;
-      });
+      preparationHistory.getLatestText.mockResolvedValue('生重');
 
       await service.addItem(
         'design-1',

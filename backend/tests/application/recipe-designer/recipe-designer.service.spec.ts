@@ -5032,7 +5032,17 @@ describe('RecipeDesignerService', () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({
         isCompliant: true,
-        items: [item({ preparationMethod: null })],
+        items: [
+          item({
+            preparationMethod: null,
+            ingredient: {
+              id: 'ingredient-1',
+              name: '鸡胸肉',
+              type: 'FOOD',
+              properties: { cfct_class: '禽肉类及制品' },
+            },
+          }),
+        ],
       }),
     );
     targetProvider.getTargets.mockResolvedValue(compliantTargets());
@@ -5041,12 +5051,12 @@ describe('RecipeDesignerService', () => {
     await expect(
       service.publishDraft(
         'design-1',
-        { name: '历史制备食谱' },
+        { name: '历史部位处理食谱' },
         adminAccess,
       ),
     ).rejects.toThrow(
       new BadRequestException(
-        '食材「鸡胸肉」未填写预处理方式，不能发布或加入待提交',
+        '食材「鸡胸肉」未填写部位 / 状态 / 预处理，不能发布或加入待提交',
       ),
     );
 

@@ -408,177 +408,152 @@
             <el-tab-pane label="原料卡" name="ingredient">
               <el-form
                 class="ingredient-form"
-                label-position="top"
                 :disabled="Boolean(commitResult) || saving || submitting"
                 @submit.prevent
               >
-                <div class="ingredient-form__grid">
-                  <el-form-item label="名称">
-                    <div class="field-with-tag">
-                      <el-input
-                        v-model="ingredientForm.name"
-                        maxlength="100"
-                        placeholder="例如：鸡肝"
-                        @change="saveIngredientField('name')"
-                      />
-                      <el-tag
-                        v-if="isIngredientManual('name')"
-                        size="small"
-                        type="warning"
-                        effect="plain"
-                      >
-                        人工
-                      </el-tag>
-                    </div>
-                  </el-form-item>
+                <section
+                  v-for="group in ingredientCardGroups"
+                  :key="group.key"
+                  class="ingredient-group"
+                >
+                  <h4 class="ingredient-group__head">{{ group.label }}</h4>
 
-                  <el-form-item label="英文名">
-                    <div class="field-with-tag">
-                      <el-input
-                        v-model="ingredientForm.nameEn"
-                        maxlength="200"
-                        placeholder="没有把握就留空"
-                        @change="saveIngredientField('nameEn')"
-                      />
-                      <el-tag
-                        v-if="isIngredientManual('nameEn')"
-                        size="small"
-                        type="warning"
-                        effect="plain"
-                      >
-                        人工
-                      </el-tag>
-                    </div>
-                  </el-form-item>
+                  <div class="ingredient-form__grid">
+                    <div
+                      v-for="cell in group.cells"
+                      :key="cell.key"
+                      class="ingredient-cell"
+                      :class="{
+                        'ingredient-cell--empty': isIngredientCellEmpty(cell),
+                        'ingredient-cell--after-create': cell.isAfterCreate
+                      }"
+                    >
+                      <div class="ingredient-cell__head">
+                        <span
+                          class="ingredient-cell__label"
+                          :title="cell.key"
+                        >
+                          {{ cell.label }}
+                        </span>
+                        <span v-if="cell.unit" class="ingredient-cell__unit">
+                          {{ cell.unit }}
+                        </span>
+                        <el-tag
+                          v-if="cell.sourceLabel"
+                          size="small"
+                          effect="plain"
+                          class="ingredient-cell__source"
+                          :type="cell.isManual ? 'warning' : 'success'"
+                        >
+                          {{ cell.sourceLabel }}
+                        </el-tag>
+                        <span
+                          v-if="cell.isAfterCreate"
+                          class="ingredient-cell__note"
+                        >
+                          建完后补
+                        </span>
+                      </div>
 
-                  <el-form-item label="类别">
-                    <div class="field-with-tag">
                       <el-select
-                        v-model="ingredientForm.category"
-                        clearable
-                        placeholder="判不准就留空"
-                        class="field-control"
-                        @change="saveIngredientField('category')"
+                        v-if="cell.kind === 'select'"
+                        :model-value="ingredientCellText(cell)"
+                        :disabled="isIngredientCellDisabled(cell)"
+                        :clearable="isIngredientCellClearable(cell)"
+                        placeholder="空"
+                        class="ingredient-cell__control"
+                        @update:model-value="
+                          setIngredientCellTextValue(cell.key, $event)
+                        "
+                        @change="handleIngredientSelectChange(cell.key, $event)"
                       >
                         <el-option
-                          v-for="option in COVERAGE_CATEGORY_OPTIONS"
+                          v-for="option in ingredientCellOptions(cell)"
                           :key="option.value"
                           :label="option.label"
                           :value="option.value"
                         />
                       </el-select>
-                      <el-tag
-                        v-if="isIngredientManual('category')"
-                        size="small"
-                        type="warning"
-                        effect="plain"
-                      >
-                        人工
-                      </el-tag>
-                    </div>
-                  </el-form-item>
 
-                  <el-form-item label="基准单位">
-                    <div class="field-with-tag">
                       <el-select
-                        v-model="ingredientForm.baseUnit"
-                        class="field-control"
-                        @change="saveIngredientField('baseUnit')"
-                      >
-                        <el-option
-                          v-for="option in BASE_UNIT_OPTIONS"
-                          :key="option.value"
-                          :label="option.label"
-                          :value="option.value"
-                        />
-                      </el-select>
-                      <el-tag
-                        v-if="isIngredientManual('baseUnit')"
-                        size="small"
-                        type="warning"
-                        effect="plain"
-                      >
-                        人工
-                      </el-tag>
-                    </div>
-                  </el-form-item>
-
-                  <el-form-item label="单位展示名">
-                    <div class="field-with-tag">
-                      <el-input
-                        v-model="ingredientForm.unitDisplayLabel"
-                        maxlength="50"
-                        placeholder="例如：克"
-                        @change="saveIngredientField('unitDisplayLabel')"
-                      />
-                      <el-tag
-                        v-if="isIngredientManual('unitDisplayLabel')"
-                        size="small"
-                        type="warning"
-                        effect="plain"
-                      >
-                        人工
-                      </el-tag>
-                    </div>
-                  </el-form-item>
-
-                  <el-form-item label="CFCT 分类">
-                    <div class="field-with-tag">
-                      <el-select
-                        v-model="ingredientForm.cfctClass"
+                        v-else-if="cell.kind === 'boolean'"
+                        :model-value="ingredientCellBoolean(cell)"
+                        :disabled="isIngredientCellDisabled(cell)"
                         clearable
-                        filterable
-                        placeholder="判不准就留空"
-                        class="field-control"
-                        @change="handleCfctClassChange"
+                        placeholder="空"
+                        class="ingredient-cell__control"
+                        @update:model-value="
+                          setIngredientCellBooleanValue(cell.key, $event)
+                        "
+                        @change="handleIngredientBooleanChange(cell.key, $event)"
                       >
-                        <el-option
-                          v-for="option in CFCT_CLASS_OPTIONS"
-                          :key="option"
-                          :label="option"
-                          :value="option"
-                        />
+                        <el-option label="是" :value="true" />
+                        <el-option label="否" :value="false" />
                       </el-select>
-                      <el-tag
-                        v-if="isIngredientManual('cfctClass')"
-                        size="small"
-                        type="warning"
-                        effect="plain"
-                      >
-                        人工
-                      </el-tag>
-                    </div>
-                  </el-form-item>
 
-                  <el-form-item label="可食部（%）">
-                    <div class="field-with-tag">
                       <el-input-number
-                        :model-value="ingredientForm.edibleYieldPercent ?? undefined"
-                        :min="0.1"
-                        :max="100"
-                        :step="0.5"
-                        :precision="2"
+                        v-else-if="cell.kind === 'number'"
+                        :model-value="ingredientCellNumber(cell)"
+                        :disabled="isIngredientCellDisabled(cell)"
                         :controls="false"
-                        placeholder="未知留空"
-                        class="field-control"
-                        @change="handlePercentChange"
+                        :precision="ingredientCellPrecision(cell)"
+                        :min="ingredientCellMin(cell)"
+                        :max="ingredientCellMax(cell)"
+                        placeholder="空"
+                        class="ingredient-cell__control"
+                        @update:model-value="
+                          setIngredientCellNumberValue(cell.key, $event)
+                        "
+                        @change="handleIngredientNumberChange(cell.key, $event)"
                       />
-                      <el-tag
-                        v-if="isIngredientManual('edibleYieldPercent')"
-                        size="small"
-                        type="warning"
-                        effect="plain"
+
+                      <div
+                        v-else-if="cell.kind === 'tags'"
+                        class="ingredient-tags"
                       >
-                        人工
-                      </el-tag>
+                        <template v-if="ingredientCellTags(cell).length > 0">
+                          <el-tag
+                            v-for="tag in ingredientCellTags(cell)"
+                            :key="tag"
+                            size="small"
+                            effect="plain"
+                          >
+                            {{ tag }}
+                          </el-tag>
+                        </template>
+                        <span v-else class="ingredient-cell__empty-text">
+                          空
+                        </span>
+                      </div>
+
+                      <el-input
+                        v-else
+                        :model-value="ingredientCellText(cell)"
+                        :disabled="isIngredientCellDisabled(cell)"
+                        :maxlength="ingredientCellMaxlength(cell)"
+                        placeholder="空"
+                        class="ingredient-cell__control"
+                        @update:model-value="
+                          setIngredientCellTextValue(cell.key, $event)
+                        "
+                        @change="handleIngredientTextChange(cell.key, $event)"
+                      />
+
+                      <span
+                        v-if="cell.hint"
+                        class="ingredient-cell__hint"
+                      >
+                        {{ cell.hint }}
+                      </span>
                     </div>
-                  </el-form-item>
-                </div>
+                  </div>
+                </section>
               </el-form>
 
               <p class="review-hint">
-                改动会在离开输入框时自动保存到草稿。标「人工」的字段 AI
-                之后不会再覆盖；提交后可在原料详情里继续补。
+                改动会在离开输入框时自动保存；每次保存整张卡（30 项）一起发，
+                不会丢字段。标「人工」的格子 AI 之后不会再覆盖；库存三项与标签
+                要等原料建完再补，这里先灰显只读。
               </p>
             </el-tab-pane>
 
@@ -770,6 +745,7 @@
 import {
   computed,
   nextTick,
+  onBeforeUnmount,
   onMounted,
   onUnmounted,
   reactive,
@@ -781,16 +757,18 @@ import { ElMessage } from 'element-plus'
 import { ingredientCreationApi } from '@/api/ingredientCreation'
 import { nutritionFoodApi } from '@/api/ingredients'
 import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole'
+import {
+  INGREDIENT_CARD_FIELDS,
+  INGREDIENT_CARD_FIELD_GROUPS,
+  type IngredientCardFieldKey
+} from '@/constants/ingredientCardFields'
 import { INGREDIENT_NUTRITION_TAB_DEFINITIONS } from '@/constants/ingredientNutrition'
-import { CFCT_CLASS_OPTIONS } from '@/types/ingredient'
-import { COVERAGE_CATEGORY_OPTIONS } from './ingredientProfileRules'
 import { getApiErrorMessage } from '@/utils/apiError'
 import type {
   CommitIngredientCreationResult,
   FinalCheckResult,
   IngredientCreationDraft,
   IngredientCreationDraftPayload,
-  IngredientDraft,
   ProfileDraft
 } from '@/types/ingredientCreation'
 import {
@@ -804,11 +782,19 @@ import {
   toIngredientDraft,
   toProfileRows,
   type IngredientCardForm,
-  type IngredientEditableField,
+  type IngredientCardFormValue,
   type ProfileFieldRow,
   type ProfileGroup
 } from './draftReview'
 import { toolLabel } from './stepView'
+import {
+  buildIngredientCardCells,
+  ingredientCellValuesEqual,
+  isEmptyIngredientCardValue,
+  selectOptionsForValue,
+  toIngredientDraftFromCells,
+  type IngredientCardCell
+} from './ingredientCardView'
 import {
   answerInputFromPendingQuestion,
   askOptionAiBadge,
@@ -924,16 +910,7 @@ const draftLoading = ref(false)
 const draftError = ref('')
 const activeTab = ref<'ingredient' | 'profiles'>('ingredient')
 
-const ingredientForm = reactive<IngredientCardForm>({
-  name: '',
-  nameEn: '',
-  category: '',
-  baseUnit: 'G',
-  unitDisplayLabel: '克',
-  cfctClass: '',
-  edibleYieldPercent: null,
-  manualFields: []
-})
+const ingredientForm = reactive<IngredientCardForm>(toIngredientCard(null))
 /** 最近一次从后端读到的原料卡：用来判断人到底改了没有。 */
 const loadedCard = ref<IngredientCardForm | null>(null)
 
@@ -956,15 +933,6 @@ let saveQueue: Promise<void> = Promise.resolve()
 
 let runSeq = 0
 
-const BASE_UNIT_OPTIONS: ReadonlyArray<{
-  value: IngredientDraft['baseUnit']
-  label: string
-}> = [
-  { value: 'G', label: '克' },
-  { value: 'ML', label: '毫升' },
-  { value: 'PCS', label: '个/件' }
-]
-
 const saving = computed(() => savingCount.value > 0)
 
 const canRun = computed(
@@ -984,6 +952,35 @@ const reviewVisible = computed(
     Boolean(state.draftId) &&
     Boolean(draft.value || draftLoading.value || draftError.value)
 )
+
+/**
+ * 原料卡 30 个格子：值来自服务端草稿，人工标记来自当前表单。
+ * 表单里的即时输入由各控件自己回显，保存成功后草稿更新，格子元数据跟着刷新。
+ */
+const ingredientCells = computed(() =>
+  buildIngredientCardCells(
+    draft.value?.payload.ingredient ?? null,
+    ingredientForm.manualFields
+  )
+)
+
+const ingredientCardGroups = computed(() =>
+  INGREDIENT_CARD_FIELD_GROUPS.map((group) => ({
+    key: group.key,
+    label: group.label,
+    cells: ingredientCells.value.filter((cell) => cell.group === group.key)
+  }))
+)
+
+/** 有没保存成功的原料卡改动：刷新 / 关页前提醒，避免输入框还没失焦就丢掉。 */
+const hasUnsavedIngredientChanges = computed(() => {
+  if (!loadedCard.value) {
+    return false
+  }
+  return INGREDIENT_CARD_FIELDS.some((field) =>
+    isIngredientCellChanged(field.key)
+  )
+})
 
 const sourceNames = computed(() => {
   const map = new Map<string, string>()
@@ -1023,7 +1020,7 @@ const canSubmit = computed(
     !submitting.value &&
     !saving.value &&
     !checkBlocked.value &&
-    ingredientForm.name.trim().length > 0 &&
+    ingredientTextValue('name').trim().length > 0 &&
     (draft.value?.payload.profiles?.length ?? 0) > 0
 )
 
@@ -1036,7 +1033,7 @@ const submitHint = computed(() => {
   if (checkBlocked.value) {
     return '终检有阻断项，已禁止提交；按明细修改草稿后可再试。'
   }
-  if (!ingredientForm.name.trim()) return '原料名称还没填。'
+  if (!ingredientTextValue('name').trim()) return '原料名称还没填。'
   if ((draft.value?.payload.profiles?.length ?? 0) === 0) {
     return '还没有营养档案，先让 AI 写入再提交。'
   }
@@ -1089,7 +1086,24 @@ async function scrollToBottom() {
 
 watch(() => state.runs.length, scrollToBottom)
 watch(() => state.running, scrollToBottom)
-onMounted(scrollToBottom)
+
+/** 关页 / 刷新时才拦（站内跳转靠失焦保存 + 保存队列兜底）。 */
+function handleBeforeUnload(event: BeforeUnloadEvent) {
+  if (!hasUnsavedIngredientChanges.value) {
+    return
+  }
+  event.preventDefault()
+  event.returnValue = ''
+}
+
+onMounted(() => {
+  void scrollToBottom()
+  window.addEventListener('beforeunload', handleBeforeUnload)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+})
 
 /** 后端返回的草稿统一在这里落状态；`resetForm` 只在首次加载/新一轮后使用。 */
 function applyDraft(
@@ -1259,43 +1273,187 @@ function enqueueSave(task: () => Promise<void>): Promise<boolean> {
   return run
 }
 
-function ingredientFieldValue(
-  card: IngredientCardForm,
-  field: IngredientEditableField
-): string | number | null {
-  if (field === 'edibleYieldPercent') {
-    return card.edibleYieldPercent
-  }
-  return card[field]
+/** 一格在表单里的当前值（展示口径）。 */
+function ingredientTextValue(key: IngredientCardFieldKey): string {
+  const value = ingredientForm[key]
+  return typeof value === 'string' ? value : ''
 }
 
-function isIngredientChanged(field: IngredientEditableField): boolean {
+function ingredientCellText(cell: IngredientCardCell): string {
+  return ingredientTextValue(cell.key)
+}
+
+function ingredientCellNumber(cell: IngredientCardCell): number | undefined {
+  const value = ingredientForm[cell.key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function ingredientCellBoolean(cell: IngredientCardCell): boolean | null {
+  const value = ingredientForm[cell.key]
+  return typeof value === 'boolean' ? value : null
+}
+
+function ingredientCellTags(cell: IngredientCardCell): string[] {
+  const value = ingredientForm[cell.key]
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : []
+}
+
+function ingredientCellOptions(
+  cell: IngredientCardCell
+): { label: string; value: string }[] {
+  return selectOptionsForValue(cell.options, ingredientForm[cell.key])
+}
+
+function ingredientCellMin(cell: IngredientCardCell): number {
+  if (cell.key === 'purchaseToBaseRatio') {
+    return 0.001
+  }
+  if (cell.key === 'productionLossRate') {
+    return 1
+  }
+  return 0
+}
+
+function ingredientCellMax(cell: IngredientCardCell): number | undefined {
+  if (cell.key === 'edibleYieldPercent') {
+    return 100
+  }
+  if (cell.key === 'productionLossRate') {
+    return 2
+  }
+  return undefined
+}
+
+function ingredientCellPrecision(cell: IngredientCardCell): number | undefined {
+  if (
+    cell.key === 'edibleYieldPercent' ||
+    cell.key === 'productionLossRate'
+  ) {
+    return 2
+  }
+  if (cell.key === 'shelfLifeMonths' || cell.key === 'openedShelfLifeDays') {
+    return 0
+  }
+  return undefined
+}
+
+/** 与后端 DTO 的长度上限一致，避免输入时就注定 400。 */
+function ingredientCellMaxlength(cell: IngredientCardCell): number {
+  switch (cell.key) {
+    case 'name':
+      return 100
+    case 'nameEn':
+      return 200
+    case 'unitDisplayLabel':
+    case 'purchaseUnit':
+      return 50
+    case 'brand':
+    case 'productModel':
+      return 100
+    case 'purchaseChannel':
+    case 'mainNutrientsDesc':
+    case 'storageCondition':
+      return 200
+    default:
+      return 500
+  }
+}
+
+function isIngredientCellEmpty(cell: IngredientCardCell): boolean {
+  return isEmptyIngredientCardValue(ingredientForm[cell.key])
+}
+
+function isIngredientCellClearable(cell: IngredientCardCell): boolean {
+  // 类型与基准单位是建原料的必填项，不给清空；其余可选枚举允许清回空。
+  return cell.kind === 'select' && cell.key !== 'type' && cell.key !== 'baseUnit'
+}
+
+/**
+ * 一格的禁用状态：建完后补的 4 项始终禁用；保存中 / 提交中 / 已提交整卡禁用。
+ *
+ * 不能只写 `cell.isAfterCreate`：Element Plus 的 disabled 是
+ * `props.disabled ?? form.disabled`，显式 false 会盖掉 el-form 的整卡禁用。
+ */
+function isIngredientCellDisabled(cell: IngredientCardCell): boolean {
+  return (
+    cell.isAfterCreate ||
+    Boolean(commitResult.value) ||
+    saving.value ||
+    submitting.value
+  )
+}
+
+/**
+ * 表单值按控件的实际类型写入。
+ *
+ * 用一次窄化的下标写入：IngredientCardForm 是 30 个键的映射类型，
+ * 逐个键写会让 TS 把联合键的写入类型收成 never。
+ */
+function setIngredientCellValue(
+  key: IngredientCardFieldKey,
+  value: IngredientCardFormValue
+) {
+  const target = ingredientForm as unknown as Record<
+    string,
+    IngredientCardFormValue
+  >
+  target[key] = value
+}
+
+function setIngredientCellTextValue(
+  key: IngredientCardFieldKey,
+  value: unknown
+) {
+  setIngredientCellValue(key, typeof value === 'string' ? value : '')
+}
+
+function setIngredientCellNumberValue(
+  key: IngredientCardFieldKey,
+  value: unknown
+) {
+  setIngredientCellValue(
+    key,
+    typeof value === 'number' && Number.isFinite(value) ? value : null
+  )
+}
+
+function setIngredientCellBooleanValue(
+  key: IngredientCardFieldKey,
+  value: unknown
+) {
+  setIngredientCellValue(key, typeof value === 'boolean' ? value : null)
+}
+
+function isIngredientCellChanged(key: IngredientCardFieldKey): boolean {
   const before = loadedCard.value
   if (!before) {
     return true
   }
-  return (
-    ingredientFieldValue(before, field) !==
-    ingredientFieldValue(ingredientForm, field)
-  )
+  return !ingredientCellValuesEqual(before[key], ingredientForm[key])
 }
 
-function isIngredientManual(field: IngredientEditableField): boolean {
-  return ingredientForm.manualFields.includes(field)
-}
-
-/** 人改了原料卡的一格：先记人工标记，再 PATCH 整张卡。 */
-async function saveIngredientField(field: IngredientEditableField) {
+/**
+ * 人改了原料卡的一格：先记人工标记，再把**整张 30 项卡**PATCH 回草稿。
+ *
+ * 后端 PATCH 是浅替换（`payload.ingredient` 会被整块覆盖），只发改动的那一格
+ * 会把 AI 填的其它字段悄悄抹掉，所以每次保存都必须发完整原料卡。
+ */
+async function saveIngredientCell(key: IngredientCardFieldKey) {
   if (!draft.value || commitResult.value) {
     return
   }
-  if (!isIngredientChanged(field)) {
+  if (!isIngredientCellChanged(key)) {
     return
   }
 
-  const marked = markIngredientFieldManual(ingredientForm, field)
+  const marked = markIngredientFieldManual(ingredientForm, key)
   ingredientForm.manualFields = marked.manualFields
-  const ingredient = toIngredientDraft(marked)
+  const ingredient = toIngredientDraftFromCells(
+    draft.value.payload.ingredient,
+    ingredientForm
+  )
   const draftId = draft.value.id
   const step = draft.value.step
   checkResult.value = null
@@ -1306,19 +1464,44 @@ async function saveIngredientField(field: IngredientEditableField) {
       ingredient
     })
     draft.value = updated
-    loadedCard.value = toIngredientCard(updated.payload, updated.name)
+    // 服务端会 trim 字符串、把目录外枚举收敛成空；把归一化结果回写表单，
+    // 否则表单会长期「看起来有改动」，刷新提示也一直挂着。
+    const nextCard = toIngredientCard(updated.payload, updated.name)
+    loadedCard.value = nextCard
+    Object.assign(ingredientForm, nextCard)
   })
 }
 
-function handleCfctClassChange(value: unknown) {
-  ingredientForm.cfctClass = typeof value === 'string' ? value : ''
-  void saveIngredientField('cfctClass')
+function handleIngredientTextChange(
+  key: IngredientCardFieldKey,
+  value: unknown
+) {
+  setIngredientCellTextValue(key, value)
+  void saveIngredientCell(key)
 }
 
-function handlePercentChange(value: number | undefined) {
-  ingredientForm.edibleYieldPercent =
-    typeof value === 'number' && Number.isFinite(value) ? value : null
-  void saveIngredientField('edibleYieldPercent')
+function handleIngredientSelectChange(
+  key: IngredientCardFieldKey,
+  value: unknown
+) {
+  setIngredientCellTextValue(key, value)
+  void saveIngredientCell(key)
+}
+
+function handleIngredientNumberChange(
+  key: IngredientCardFieldKey,
+  value: unknown
+) {
+  setIngredientCellNumberValue(key, value)
+  void saveIngredientCell(key)
+}
+
+function handleIngredientBooleanChange(
+  key: IngredientCardFieldKey,
+  value: unknown
+) {
+  setIngredientCellBooleanValue(key, value)
+  void saveIngredientCell(key)
 }
 
 function cellKey(profileIndex: number, fieldPath: string): string {
@@ -2207,35 +2390,123 @@ function goBackToList() {
   padding-top: 4px;
 }
 
+.ingredient-group + .ingredient-group {
+  margin-top: 16px;
+}
+
+.ingredient-group__head {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-text-color-regular);
+}
+
 .ingredient-form__grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 10px;
 }
 
-.ingredient-form :deep(.el-form-item) {
-  margin-bottom: 14px;
+.ingredient-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
 }
 
-.field-with-tag {
+/* 空格子不隐藏：虚线框 + 控件占位「空」，仍然是可点的输入位。 */
+.ingredient-cell--empty {
+  border: 1px dashed var(--el-border-color);
+  background: var(--el-fill-color-lighter);
+}
+
+.ingredient-cell--empty :deep(.el-input__wrapper),
+.ingredient-cell--empty :deep(.el-select__wrapper) {
+  background: transparent;
+  box-shadow: none;
+}
+
+.ingredient-cell--empty:focus-within {
+  border-color: var(--el-color-primary);
+  border-style: solid;
+}
+
+.ingredient-cell--empty:focus-within :deep(.el-input__wrapper),
+.ingredient-cell--empty:focus-within :deep(.el-select__wrapper) {
+  box-shadow: 0 0 0 1px var(--el-color-primary) inset;
+}
+
+.ingredient-cell--after-create {
+  background: var(--el-fill-color-light);
+}
+
+.ingredient-cell--after-create .ingredient-cell__label,
+.ingredient-cell--after-create .ingredient-cell__unit {
+  color: var(--el-text-color-placeholder);
+}
+
+.ingredient-cell__head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ingredient-cell__label {
+  font-size: 12px;
+  color: var(--el-text-color-regular);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ingredient-cell__unit {
+  flex: none;
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+}
+
+.ingredient-cell__source {
+  flex: none;
+  margin-left: auto;
+}
+
+.ingredient-cell__note {
+  flex: none;
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--el-text-color-placeholder);
+}
+
+.ingredient-cell__control {
   width: 100%;
 }
 
-.field-with-tag :deep(.el-input),
-.field-with-tag :deep(.el-select),
-.field-with-tag :deep(.el-input-number) {
-  flex: 1;
-}
-
-.field-control {
+.ingredient-cell__control :deep(.el-input__wrapper),
+.ingredient-cell__control :deep(.el-select__wrapper) {
   width: 100%;
 }
 
-.field-control :deep(.el-input__wrapper) {
-  width: 100%;
+.ingredient-cell__hint {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--el-color-warning);
+}
+
+.ingredient-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+}
+
+.ingredient-cell__empty-text {
+  font-size: 12px;
+  color: var(--el-text-color-placeholder);
 }
 
 .review-hint {

@@ -2,7 +2,10 @@ import type {
   CheckItem,
   IngredientDraft,
 } from '../../application/ingredient-creation/ingredient-creation.types';
-import type { IngredientCardFieldKey } from './ingredient-card-fields';
+import {
+  INGREDIENT_CARD_FIELDS,
+  type IngredientCardFieldKey,
+} from './ingredient-card-fields';
 
 /**
  * 原料域核验：只看原料卡本身，不查营养档案、不查库、不落报告。
@@ -39,10 +42,38 @@ export const INGREDIENT_CARD_RULES: readonly {
   { code: 'EDIBLE_RANGE', level: 'exceptionable' },
   { code: 'SHELF_LIFE_RANGE', level: 'exceptionable' },
   { code: 'STORAGE_EMPTY', level: 'warning' },
+  { code: 'FIELDS_EMPTY', level: 'warning' },
 ];
 
 /** 基本单位白名单；原料只能按重量 / 体积 / 个数计量。 */
 const BASE_UNITS: readonly IngredientDraft['baseUnit'][] = ['G', 'ML', 'PCS'];
+
+/**
+ * 不参与「完整度」统计的 4 项：它们各有自己的必填 / 合法性规则
+ * （`NAME_REQUIRED` / `NAME_DUPLICATE` / `BASE_UNIT_INVALID` /
+ * `UNIT_LABEL_REQUIRED`），再数一遍只会重复啰嗦。
+ */
+const FIELDS_WITH_OWN_REQUIRED_CHECKS: ReadonlySet<IngredientCardFieldKey> =
+  new Set(['name', 'type', 'baseUnit', 'unitDisplayLabel']);
+
+/**
+ * 完整度只看建原料时就能填的字段；`AFTER_CREATE`（库存三项、标签）
+ * 要等原料建完、有了库存记录才谈得上，空着不是「没填完」。
+ */
+const COMPLETENESS_FIELD_KEYS: readonly IngredientCardFieldKey[] =
+  INGREDIENT_CARD_FIELDS.filter(
+    (field) =>
+      field.stage === 'CREATABLE' &&
+      !FIELDS_WITH_OWN_REQUIRED_CHECKS.has(field.key),
+  ).map((field) => field.key);
+
+/** 字段公共名 → 中文标签；消息里给人看的是标签，不是 `nameEn` 这种键名。 */
+const FIELD_LABEL_BY_KEY: ReadonlyMap<IngredientCardFieldKey, string> = new Map(
+  INGREDIENT_CARD_FIELDS.map((field) => [field.key, field.label]),
+);
+
+/** 消息里最多列 8 个标签，其余用「等」收尾，避免一条提醒刷满屏。 */
+const FIELDS_EMPTY_LABEL_LIMIT = 8;
 
 /** 所有空白段（`\s` 在 JS 里也包含全角空格 U+3000）压成一个半角空格。 */
 const WHITESPACE_RUN = /\s+/gu;
@@ -90,6 +121,38 @@ function isSet<T>(value: T | null | undefined): value is T {
 }
 
 /**
+ * 「这一格填了没有」的通用口径：`null` / `undefined` / 纯空白字符串算空，
+ * 数字 `0` 与布尔 `false` 都是值（它们分别表示「换算为 0」「关闭」这类明确选择）。
+ */
+function hasValue(value: unknown): boolean {
+  if (value === null || value === undefined) {
+    return false;
+  }
+
+  return typeof value !== 'string' || value.trim() !== '';
+}
+
+/**
+ * 草稿里某个公共字段有没有值。
+ *
+ * 可食部是唯一公共名与存储名不同的字段：契约里叫 `edibleYieldPercent`，
+ * 草稿里存的比例叫 `edibleYieldRate`。两种写法都认，已填的就不要算成空。
+ */
+function isDraftFieldFilled(
+  ingredient: IngredientDraft,
+  key: IngredientCardFieldKey,
+): boolean {
+  const record = ingredient as unknown as Record<string, unknown>;
+  if (key === 'edibleYieldPercent') {
+    return (
+      hasValue(record.edibleYieldPercent) || hasValue(record.edibleYieldRate)
+    );
+  }
+
+  return hasValue(record[key]);
+}
+
+/**
  * 前端定位用的 `fieldPath`：一律用公共字段名（`ingredient.<key>`），
  * 包括可食部这种存储名与公共名不同的字段。
  */
@@ -107,9 +170,28 @@ function nameRequiredItem(): CheckItem {
 }
 
 /**
+ * 完整度提醒：一次列出所有还空着的可填字段，只提醒不阻断。
+ *
+ * 不带 `fieldPath`：一条提醒对应多格，定位到任何单格都会误导。`0` / `false`
+ * 由 `hasValue` 认作已填，所以「明确选了 0」不会被当成漏填。
+ */
+function fieldsEmptyItem(keys: readonly IngredientCardFieldKey[]): CheckItem {
+  const shownLabels = keys
+    .slice(0, FIELDS_EMPTY_LABEL_LIMIT)
+    .map((key) => FIELD_LABEL_BY_KEY.get(key) ?? key);
+  const suffix = keys.length > FIELDS_EMPTY_LABEL_LIMIT ? ' 等' : '';
+
+  return {
+    code: 'FIELDS_EMPTY',
+    message: `还有 ${keys.length} 项没填：${shownLabels.join('、')}${suffix}`,
+    suggestion: '这些不是阻断项，补不补由你定',
+  };
+}
+
+/**
  * 跑一遍原料域核验，按 `INGREDIENT_CARD_RULES` 的固定顺序返回所有问题。
  *
- * - 干净草稿返回空数组；
+ * - 干净草稿只可能有一条 `FIELDS_EMPTY` 提醒，不会阻断；
  * - 草稿为 null 时只报 `NAME_REQUIRED`；
  * - 纯函数：同一份输入永远得到同一份输出，不读写任何外部状态。
  */
@@ -213,6 +295,15 @@ export function runIngredientCardCheck(
       fieldPath: cell('storageCondition'),
       suggestion: '补一句贮存条件，例如「-18℃ 冷冻」「常温避光」。',
     });
+  }
+
+  // 完整度放最后：前面的每条都有单格可定位，这条只是「还没填满」的整体提醒，
+  // 档位是 warning，绝不参与 blocking / exceptionable 的分档。
+  const emptyFieldKeys = COMPLETENESS_FIELD_KEYS.filter(
+    (key) => !isDraftFieldFilled(ingredient, key),
+  );
+  if (emptyFieldKeys.length > 0) {
+    items.push(fieldsEmptyItem(emptyFieldKeys));
   }
 
   return items;

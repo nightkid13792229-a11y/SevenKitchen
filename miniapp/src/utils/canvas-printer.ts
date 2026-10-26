@@ -261,7 +261,7 @@ function drawIngredientsList(ctx: any, ingredients: ParsedIngredient[], y: numbe
   const colType = 120; // 类型列
   const colName = 300; // 原料名称列
   const colAmount = 200; // 用量列
-  const colMethod = CONTENT_WIDTH - colType - colName - colAmount; // 制备方法列（500px，填满剩余空间）
+  const colMethod = CONTENT_WIDTH - colType - colName - colAmount; // 部位 / 状态 / 预处理列（500px，填满剩余空间）
 
   // 绘制表头
   ctx.setFillStyle(COLORS.highlight);
@@ -286,7 +286,7 @@ function drawIngredientsList(ctx: any, ingredients: ParsedIngredient[], y: numbe
   ctx.fillText('用量', headerX + colAmount / 2, y + 35);
   headerX += colAmount;
 
-  ctx.fillText('制备方法', headerX + colMethod / 2, y + 35);
+  ctx.fillText('部位 / 状态 / 预处理', headerX + colMethod / 2, y + 35);
 
   y += headerHeight;
 
@@ -353,7 +353,7 @@ function drawIngredientsList(ctx: any, ingredients: ParsedIngredient[], y: numbe
     ctx.fillText(`${ingredient.amount}${ingredient.unit}`, textX + colAmount / 2, y + 30);
     textX += colAmount;
 
-    // 制备方法列（居中）
+    // 部位 / 状态 / 预处理列（居中）
     if (ingredient.method) {
       ctx.fillText(ingredient.method, textX + colMethod / 2, y + 30);
     }
@@ -394,7 +394,7 @@ function drawIngredientsList(ctx: any, ingredients: ParsedIngredient[], y: numbe
         y + 30
       );
 
-      // 制备方法列：空
+      // 部位 / 状态 / 预处理列：空
       ctx.setFontSize(23);
       ctx.setFillStyle(COLORS.text);
       ctx.fillText('', PADDING + colType + colName + colAmount + colMethod / 2, y + 30);

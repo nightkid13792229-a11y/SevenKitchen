@@ -125,7 +125,7 @@
       <view v-if="foodItems.length > 0" class="ingredient-block">
         <view class="ingredient-table-header">
           <text class="header-name">食材</text>
-          <text class="header-method">制备方法</text>
+          <text class="header-method">部位 / 状态 / 预处理</text>
           <text class="header-ratio">占比</text>
         </view>
         <view
@@ -181,7 +181,7 @@
         </view>
         <view class="ingredient-table-header">
           <text class="header-name">物料</text>
-          <text class="header-method">制备方法</text>
+          <text class="header-method">部位 / 状态 / 预处理</text>
           <text class="header-ratio">占比</text>
         </view>
         <view

@@ -418,7 +418,7 @@ const parsedIngredients = computed(() => {
     };
     const type = item.ingredient_type ? typeMap[item.ingredient_type] : '';
 
-    // 获取制备方法（多个方法用顿号分隔）
+    // 获取部位 / 状态 / 预处理（多个方法用顿号分隔）
     const preparationMethods = item.preparation_methods && item.preparation_methods.length > 0
       ? item.preparation_methods.join('、')
       : '';
@@ -460,7 +460,7 @@ const parsedIngredients = computed(() => {
       amount: formatDecimal(amount),
       unit, // 单位
       type, // 原料类型
-      method: preparationMethods, // 制备方法
+      method: preparationMethods, // 部位 / 状态 / 预处理
     };
   });
 });

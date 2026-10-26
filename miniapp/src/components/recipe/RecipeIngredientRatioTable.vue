@@ -14,15 +14,15 @@
 
     ## 三列（2026-10-24 改）
 
-    名称 + 部位/预处理 + 占比。
-    "部位/预处理"用的是设计器里被重新定义的 `preparationMethod`
-    （不是老的"制备方法"，也不是历史字段 `preparationNote`）。
+    名称 + 部位 / 状态 / 预处理 + 占比。
+    "部位 / 状态 / 预处理"用的是设计器里被重新定义的 `preparationMethod`
+    （不是老的"部位 / 状态 / 预处理"，也不是历史字段 `preparationNote`）。
     **整道菜的火候/时间/顺序仍然不在这张表**，那是制作单的"制作步骤"。
   -->
   <view class="ratio-table">
     <view class="ratio-table__head">
       <text class="ratio-table__th-name">食材</text>
-      <text class="ratio-table__th-prep">部位/预处理</text>
+      <text class="ratio-table__th-prep">部位 / 状态 / 预处理</text>
       <text class="ratio-table__th-ratio">占比</text>
     </view>
     <view
@@ -49,7 +49,7 @@ const props = withDefaults(
     items?: Array<{
       name: string;
       ratioPercent?: number | null;
-      /** 设计器里的"部位/预处理"（preparationMethod 的新语义） */
+      /** 设计器里的"部位 / 状态 / 预处理"（preparationMethod 的新语义） */
       preparation?: string | null;
     }>
   }>(),
@@ -129,7 +129,7 @@ function formatRatio(value: number | null | undefined): string {
   color: #3f3222;
 }
 
-/* 部位/预处理：允许两行，长文本不把占比挤出去 */
+/* 部位 / 状态 / 预处理：允许两行，长文本不把占比挤出去 */
 .ratio-table__prep {
   flex: 1;
   min-width: 0;

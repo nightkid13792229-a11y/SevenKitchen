@@ -49,20 +49,20 @@ describe('两张食材表 · 分成两个组件', () => {
     expect(ratio).toContain('toFixed(2)')
   })
 
-  it('★ 占比表三列：名称 + 部位/预处理 + 占比，不显示老的"制备方法"', () => {
+  it('★ 占比表三列：名称 + 部位 / 状态 / 预处理 + 占比，不显示老的"制备方法"', () => {
     expect(ratio).toContain('占比')
-    expect(ratio).toContain('部位/预处理')
+    expect(ratio).toContain('部位 / 状态 / 预处理')
     expect(ratio).toContain('item.preparation')
-    // 老文案不能再出现（部位/预处理不是老的"制备方法"）
+    // 老文案不能再出现
     const template = stripComments(
       ratio.slice(0, ratio.indexOf('<script setup')),
     )
     expect(template).not.toContain('制备方法')
   })
 
-  it('★ 用量表三列：名称 + 制备方法 + 净用量', () => {
+  it('★ 用量表三列：名称 + 部位 / 状态 / 预处理 + 净用量', () => {
     expect(usage).toContain('原料名称')
-    expect(usage).toContain('制备方法')
+    expect(usage).toContain('部位 / 状态 / 预处理')
     expect(usage).toContain('净用量')
     expect(usage).toContain('item.preparation')
   })

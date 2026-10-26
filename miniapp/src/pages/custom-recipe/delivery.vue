@@ -19,9 +19,9 @@
       <!--
         2026-10-18 重写：封面、一句话、核心营养、食材占比全部改用共享组件。
 
-        改之前这一页是这样：hero 只有食谱名 → 食材配比（带制备方法）→
+        改之前这一页是这样：hero 只有食谱名 → 食材配比（带部位 / 状态 / 预处理）→
         营养补充剂（按占比给）→ 营养（能量密度 + 标准）→ 一个"去买食材"按钮。
-        跟定稿原型差了四块，而且食材表多了一列制备方法。
+        跟定稿原型差了四块，而且食材表多了一列部位 / 状态 / 预处理。
       -->
       <RecipeCover
         :cover-image-url="resolved.recipeCoverImageUrl"
@@ -50,7 +50,7 @@
         :standard="content.nutrition.standard"
       />
 
-      <!-- 食材清单：名称 + 部位/预处理 + 占比（2026-10-24） -->
+      <!-- 食材清单：名称 + 部位 / 状态 / 预处理 + 占比（2026-10-24） -->
       <view class="section">
         <view class="section-title">食材清单</view>
         <text v-if="foodItems.length" class="section-note">

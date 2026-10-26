@@ -528,7 +528,7 @@ describe('diy sheet layout regressions', () => {
     expect(source).not.toContain('drawShareSummaryCards')
     // 适用阶段标签不再进图片
     expect(source).not.toContain('stages: recipe.value.applicableLifeStages')
-    expect(source).toContain("['原料', '产品', getFoodPrepAmountHeaderForPrint(), '部位/预处理']")
+    expect(source).toContain("['原料', '产品', getFoodPrepAmountHeaderForPrint(), '部位 / 状态 / 预处理']")
     // 2026-10-18：采购量删掉后，纸质单这一列只印净用量（原来印"净重 / 建议采购量"两个数）
     expect(source).not.toContain('actualAmountStr')
     expect(source).toContain('item.netAmountStr')
@@ -540,8 +540,8 @@ describe('diy sheet layout regressions', () => {
     expect(source).toContain('营养补充剂的制作单总量与产品严格匹配')
     expect(source).not.toContain('drawImportantTipsSection')
     expect(source).toContain("builder.drawSectionTitle('储存和烹饪')")
-    expect(source).not.toContain("['原料名称', DIY_SHEET_FOOD_RECOMMENDATION_LABEL, '制备方法', '采购量']")
-    expect(source).not.toContain("['原料名称', '备料量', '制备方法', DIY_SHEET_FOOD_RECOMMENDATION_LABEL]")
+    expect(source).not.toContain("['原料名称', DIY_SHEET_FOOD_RECOMMENDATION_LABEL, '部位 / 状态 / 预处理', '采购量']")
+    expect(source).not.toContain("['原料名称', '备料量', '部位 / 状态 / 预处理', DIY_SHEET_FOOD_RECOMMENDATION_LABEL]")
     expect(source).not.toContain('builder.drawTags(tags)')
     expect(source).not.toContain('builder.drawInfoCard([')
 

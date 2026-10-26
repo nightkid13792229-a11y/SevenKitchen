@@ -104,7 +104,7 @@
             <view class="table-header food-table">
               <text class="header-item name-col">原料</text>
               <text class="header-item recommend-col">{{ DIY_SHEET_FOOD_RECOMMENDATION_LABEL }}</text>
-              <text class="header-item method-col">部位/预处理</text>
+              <text class="header-item method-col">部位 / 状态 / 预处理</text>
               <text class="header-item actual-col">净重</text>
             </view>
             <view v-for="(item, idx) in foodItemsDetailed" :key="'food-' + idx" class="table-row food-table">
@@ -1030,7 +1030,7 @@ const foodItemsDetailed = computed(() => {
 
       return {
         ...base,
-        // 2026-10-24：部位/预处理以食谱详情解析后的文字为准；
+        // 2026-10-24：部位 / 状态 / 预处理以食谱详情解析后的文字为准；
         // 价格预览里的值可能是字典 id，不能直接给顾客看。
         preparationMethod: recipeItem?.preparationMethod || base.preparationMethod || '',
         selectionKey: item.ingredientId,
@@ -1717,7 +1717,7 @@ async function handlePrint() {
         ])
 
         builder.drawTable(
-          ['原料', '产品', getFoodPrepAmountHeaderForPrint(), '部位/预处理'],
+          ['原料', '产品', getFoodPrepAmountHeaderForPrint(), '部位 / 状态 / 预处理'],
           foodRows,
           {
             totalRow: [

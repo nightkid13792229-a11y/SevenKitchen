@@ -6,7 +6,7 @@
 
     这一张回答「**这次要下多少克**」。所以：
       · 单位是克，不是百分比
-      · **保留制备方法**（"切丁煮熟"是动手时真要看的）
+      · **保留部位 / 状态 / 预处理**（"切丁煮熟"是动手时真要看的）
       · 底部给「合计净重」
 
     ## 为什么没有"采购量"列
@@ -19,7 +19,7 @@
   <view class="usage-table">
     <view class="usage-table__head">
       <text class="usage-table__th-name">原料名称</text>
-      <text class="usage-table__th-prep">制备方法</text>
+      <text class="usage-table__th-prep">部位 / 状态 / 预处理</text>
       <text class="usage-table__th-amount">净用量</text>
     </view>
     <view

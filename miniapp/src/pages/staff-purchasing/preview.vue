@@ -97,7 +97,7 @@
       <view class="ingredients-section">
         <text class="section-title">📊 原料汇总</text>
         <text v-if="hasPreparationHints" class="section-hint">
-          带有制备方法的原料可据此安排提前预处理，避免正式生产时临时备料。
+          带有部位 / 状态 / 预处理的原料可据此安排提前预处理，避免正式生产时临时备料。
         </text>
 
         <!-- 按类型分组显示 -->
@@ -497,7 +497,7 @@ const getDisplayUnit = (item: any) => {
 };
 
 const getPreparationLabel = (item: any) => {
-  return item.type === 'SUPPLEMENT' ? '添加时机' : '制备方法';
+  return item.type === 'SUPPLEMENT' ? '添加时机' : '部位 / 状态 / 预处理';
 };
 </script>
 

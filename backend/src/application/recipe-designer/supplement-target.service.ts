@@ -220,6 +220,10 @@ export class SupplementTargetService {
     totalWeightG: number | null | undefined,
   ): ComputedSupplementTarget[] {
     const definitions = this.validateTargets(nutritionProfile, targets);
+    if (!nutritionProfile) {
+      // 没有档案时 validateTargets 已经拦下非空目标；这里只剩“目标也为空”的情况。
+      return [];
+    }
     const supplementWeightG = toPositiveWeight(weightG, '补剂用量');
     const recipeTotalWeightG = toPositiveWeight(totalWeightG, '配方总重量');
 

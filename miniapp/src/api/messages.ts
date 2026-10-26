@@ -49,17 +49,27 @@ export async function fetchMessages(params: {
   );
 }
 
+/**
+ * 未读数严格版：失败会抛错。
+ *
+ * 消息页需要知道“失败”而不是把 0 当成真实未读；首页/「我的」可以
+ * 继续用下面的宽松版（失败静默 0，不让红点接口影响主页面）。
+ */
+export async function fetchUnreadMessageCountStrict(): Promise<number> {
+  const res = await request({
+    url: '/messages/unread-count',
+    method: 'GET',
+    quiet: true,
+    suppressErrorToast: true,
+  } as any);
+  const count = Number((res?.data as any)?.count);
+  return Number.isFinite(count) && count > 0 ? count : 0;
+}
+
 /** 未读数（首页铃铛 / 我的红点） */
 export async function fetchUnreadMessageCount(): Promise<number> {
   try {
-    const res = await request({
-      url: '/messages/unread-count',
-      method: 'GET',
-      quiet: true,
-      suppressErrorToast: true,
-    } as any);
-    const count = Number((res?.data as any)?.count);
-    return Number.isFinite(count) && count > 0 ? count : 0;
+    return await fetchUnreadMessageCountStrict();
   } catch (error) {
     // 红点拿不到不该打扰顾客 —— 静默返回 0
     console.warn('[Messages] 读取未读数失败:', error);

@@ -545,6 +545,7 @@ validatePrismaConfig();
     OrderSummaryService,
     OrderSourcePlanService,
     RecipeService,
+    IngredientPreparationHistoryService,
     CoverImageService,
     RecipeCoverImageService,
     AddressService,

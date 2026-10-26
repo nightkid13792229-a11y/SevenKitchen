@@ -32,6 +32,14 @@ export class ListTaxonomySeriesQueryDto {
   keyword?: string;
 
   @IsOptional()
+  @IsIn(['CATALOG', 'ORDER'])
+  designMode?: 'CATALOG' | 'ORDER';
+
+  @IsOptional()
+  @IsIn(['DRAFT', 'PUBLIC', 'PRIVATE_CUSTOM'])
+  businessStatus?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)

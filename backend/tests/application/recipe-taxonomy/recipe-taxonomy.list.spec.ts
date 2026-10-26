@@ -60,7 +60,12 @@ describe('RecipeTaxonomyService.listSeries', () => {
 
     expect(prisma.recipeSeries.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { taxonomyLinks: { none: {} } },
+        where: {
+          deletedAt: null,
+          designMode: undefined,
+          businessStatus: { not: 'PRIVATE_CUSTOM' },
+          taxonomyLinks: { none: {} },
+        },
       }),
     );
     expect(result.items[0].missingKindCodes).toEqual([
@@ -111,6 +116,9 @@ describe('RecipeTaxonomyService.listSeries', () => {
     expect(prisma.recipeSeries.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
+          deletedAt: null,
+          designMode: undefined,
+          businessStatus: { not: 'PRIVATE_CUSTOM' },
           taxonomyLinks: {
             some: { nodeId: { in: ['n-fish', 'n-salmon', 'n-cod'] } },
           },
@@ -134,6 +142,38 @@ describe('RecipeTaxonomyService.listSeries', () => {
     expect(result.items[0].links[0].nodeName).toBe('鳕鱼');
   });
 
+  it('默认排除定制与订单设计：范围写进查询条件', async () => {
+    const { prisma, service } = createService({ rows: [seriesRow()] });
+
+    await service.listSeries({});
+
+    expect(prisma.recipeSeries.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          deletedAt: null,
+          designMode: undefined,
+          businessStatus: { not: 'PRIVATE_CUSTOM' },
+        },
+      }),
+    );
+  });
+
+  it('显式传状态时覆盖默认范围，定制可以单独查看', async () => {
+    const { prisma, service } = createService({ rows: [seriesRow()] });
+
+    await service.listSeries({ businessStatus: 'PRIVATE_CUSTOM', designMode: 'CATALOG' });
+
+    expect(prisma.recipeSeries.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          deletedAt: null,
+          designMode: 'CATALOG',
+          businessStatus: 'PRIVATE_CUSTOM',
+        },
+      }),
+    );
+  });
+
   it('关键词走 name 模糊匹配，并带分页', async () => {
     const { prisma, service } = createService({ rows: [seriesRow()] });
 
@@ -141,7 +181,12 @@ describe('RecipeTaxonomyService.listSeries', () => {
 
     expect(prisma.recipeSeries.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { name: { contains: '三文鱼', mode: 'insensitive' } },
+        where: {
+          deletedAt: null,
+          designMode: undefined,
+          businessStatus: { not: 'PRIVATE_CUSTOM' },
+          name: { contains: '三文鱼', mode: 'insensitive' },
+        },
         skip: 10,
         take: 10,
       }),

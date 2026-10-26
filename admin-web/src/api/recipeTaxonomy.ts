@@ -10,7 +10,12 @@ import type {
   TaxonomySeriesItem
 } from '@/types/recipeDesigner'
 
-export interface ListTaxonomySeriesParams {
+export interface TaxonomyScopeParams {
+  designMode?: 'CATALOG' | 'ORDER'
+  businessStatus?: string
+}
+
+export interface ListTaxonomySeriesParams extends TaxonomyScopeParams {
   nodeId?: string
   unclassified?: boolean
   keyword?: string
@@ -43,8 +48,8 @@ export interface UpdateTaxonomyNodePayload {
 }
 
 export const recipeTaxonomyApi = {
-  getTree: (): Promise<TaxonomyTreeResult> =>
-    api.get('/admin/recipe-taxonomy/tree'),
+  getTree: (scope: TaxonomyScopeParams = {}): Promise<TaxonomyTreeResult> =>
+    api.get('/admin/recipe-taxonomy/tree', { params: scope }),
 
   listSeries: (params: ListTaxonomySeriesParams = {}): Promise<TaxonomySeriesResult> =>
     api.get('/admin/recipe-taxonomy/series', {

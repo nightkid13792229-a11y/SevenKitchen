@@ -23,6 +23,10 @@ export interface ListTaxonomySeriesQuery {
   keyword?: string;
   page?: number;
   pageSize?: number;
+  /** CATALOG=产品线（默认），ORDER=订单设计 */
+  designMode?: 'CATALOG' | 'ORDER';
+  /** DRAFT / PUBLIC / PRIVATE_CUSTOM；缺省时排除定制 */
+  businessStatus?: string;
 }
 
 export interface TaxonomySeriesItem {
@@ -52,13 +56,14 @@ export interface TaxonomySeriesItem {
 export class RecipeTaxonomyService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** 完整分类树（含每个节点的直接归属数与含子孙的总数）。 */
-  async getTree(): Promise<TaxonomyKindView[]> {
+  /** 完整分类树（含每个节点的直接归属数与含子孙的总数），计数口径与列表一致。 */
+  async getTree(scope: { designMode?: 'CATALOG' | 'ORDER'; businessStatus?: string } = {}): Promise<TaxonomyKindView[]> {
     const [kinds, nodes, grouped] = await Promise.all([
       this.prisma.recipeTaxonomyKind.findMany({ orderBy: { sort: 'asc' } }),
       this.prisma.recipeTaxonomyNode.findMany({ orderBy: { sort: 'asc' } }),
       this.prisma.recipeSeriesTaxonomy.groupBy({
         by: ['nodeId'],
+        where: { series: this.buildScopeWhere(scope) },
         _count: { _all: true },
       }),
     ]);
@@ -209,6 +214,21 @@ export class RecipeTaxonomyService {
     return { updated: seriesIds.length };
   }
 
+  /**
+   * 需求分类只服务产品线整理：默认排除「定制」与订单设计。
+   * 定制食谱是某只狗的私有版本，不进货架，混进来只会把清单撑大。
+   */
+  private buildScopeWhere(query: {
+    designMode?: 'CATALOG' | 'ORDER';
+    businessStatus?: string;
+  }) {
+    return {
+      deletedAt: null,
+      designMode: query.designMode ?? undefined,
+      businessStatus: query.businessStatus ?? { not: 'PRIVATE_CUSTOM' },
+    };
+  }
+
   /** 查某个节点时，把它的直接子节点一并算进来（分类树最多两层）。 */
   private async collectNodeAndChildren(nodeId: string): Promise<string[]> {
     const children = await this.prisma.recipeTaxonomyNode.findMany({
@@ -230,7 +250,7 @@ export class RecipeTaxonomyService {
       orderBy: { sort: 'asc' },
     });
 
-    const where: Record<string, unknown> = {};
+    const where: Record<string, unknown> = this.buildScopeWhere(query);
     if (query.keyword?.trim()) {
       where.name = {
         contains: query.keyword.trim(),

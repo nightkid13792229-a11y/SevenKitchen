@@ -42,8 +42,13 @@ export class AdminRecipeTaxonomyController {
 
   @Get('tree')
   @ApiOperation({ summary: '需求分类树（含每节点归属数）' })
-  async getTree() {
-    return ApiResponseDto.success({ kinds: await this.taxonomy.getTree() });
+  async getTree(@Query() query: ListTaxonomySeriesQueryDto) {
+    return ApiResponseDto.success({
+      kinds: await this.taxonomy.getTree({
+        designMode: query.designMode,
+        businessStatus: query.businessStatus,
+      }),
+    });
   }
 
   @Get('series')
@@ -55,6 +60,8 @@ export class AdminRecipeTaxonomyController {
       keyword: query.keyword,
       page: query.page,
       pageSize: query.pageSize,
+      designMode: query.designMode,
+      businessStatus: query.businessStatus,
     });
     return ApiResponseDto.success(result);
   }

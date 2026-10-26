@@ -132,7 +132,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { recipeTaxonomyApi } from '@/api/recipeTaxonomy'
 import { buildTaxonomyChips, type TaxonomyChip } from '@/utils/recipeDesigner/taxonomyChips'
 import type { TaxonomyKindView, TaxonomySeriesItem } from '@/types/recipeDesigner'
@@ -150,6 +150,13 @@ interface TreeNodeData {
   node?: TaxonomyNodeView
   children?: TreeNodeData[]
 }
+
+const props = defineProps<{
+  /** 与页面上「产品线食谱 / 订单定制食谱」开关保持一致 */
+  designMode?: 'CATALOG' | 'ORDER'
+  /** 与页面上「全部 / 草稿 / 已发布 / 定制」开关保持一致 */
+  status?: string
+}>()
 
 const PAGE_SIZE = 20
 
@@ -244,13 +251,21 @@ function toggleSelect(id: string, checked: boolean) {
     : selectedIds.value.filter((item) => item !== id)
 }
 
+function scopeParams() {
+  return {
+    designMode: props.designMode,
+    businessStatus: props.status
+  }
+}
+
 async function loadTree() {
-  const result = await recipeTaxonomyApi.getTree()
+  const result = await recipeTaxonomyApi.getTree(scopeParams())
   kinds.value = result.kinds ?? []
 }
 
 async function loadUnclassifiedTotal() {
   const result = await recipeTaxonomyApi.listSeries({
+    ...scopeParams(),
     unclassified: true,
     page: 1,
     pageSize: 1
@@ -262,6 +277,7 @@ async function loadList() {
   loading.value = true
   try {
     const result = await recipeTaxonomyApi.listSeries({
+      ...scopeParams(),
       nodeId: selected.value.nodeId ?? undefined,
       unclassified: selected.value.nodeId === null,
       page: page.value,
@@ -321,6 +337,16 @@ async function afterSaved() {
   selectedIds.value = []
   await refresh()
 }
+
+// 上面的开关一变，树的计数和列表都要跟着换口径
+watch(
+  () => [props.designMode, props.status],
+  () => {
+    page.value = 1
+    selectedIds.value = []
+    void refresh()
+  }
+)
 
 onMounted(() => {
   void refresh()

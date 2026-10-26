@@ -10,6 +10,14 @@ describe('需求分类视图', () => {
     expect(viewSource).toContain('buildTaxonomyChips')
   })
 
+  it('沿用页面上的产品线/订单、状态开关，避免定制食谱混进整理清单', () => {
+    expect(viewSource).toContain('designMode?:')
+    expect(viewSource).toContain('status?:')
+    expect(viewSource).toContain('scopeParams()')
+    expect(indexSource).toContain(':design-mode="designModeFilter"')
+    expect(indexSource).toContain(':status="statusFilter"')
+  })
+
   it('没归的分类显示占位，而不是不显示', () => {
     expect(viewSource).toContain('chip.missing')
   })

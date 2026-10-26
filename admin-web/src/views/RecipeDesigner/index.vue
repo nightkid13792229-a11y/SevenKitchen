@@ -112,7 +112,11 @@
         </div>
       </template>
 
-      <TaxonomyView v-if="viewMode === 'TAXONOMY'" />
+      <TaxonomyView
+        v-if="viewMode === 'TAXONOMY'"
+        :design-mode="designModeFilter"
+        :status="statusFilter"
+      />
 
       <el-empty
         v-if="viewMode === 'SERIES' && loading && series.length === 0"

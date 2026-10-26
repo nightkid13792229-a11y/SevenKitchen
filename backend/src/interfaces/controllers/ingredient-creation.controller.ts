@@ -25,7 +25,6 @@ import {
 import type { CheckRunView } from '../../application/ingredient-creation/ingredient-check-run.service';
 import {
   IngredientCreationAuthorizeService,
-  type AuthorizeInput,
   type AuthorizeResult,
 } from '../../application/ingredient-creation/ingredient-creation-authorize.service';
 import { IngredientCreationCandidateService } from '../../application/ingredient-creation/ingredient-creation-candidate.service';
@@ -56,6 +55,7 @@ import { AuthGuard, CurrentUser } from '../auth';
 import type { RequestUser } from '../auth';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import {
+  AuthorizeIngredientCreationDto,
   ClassifyIntakeDto,
   CommitIngredientCreationDto,
   CreateDraftDto,
@@ -357,12 +357,14 @@ export class IngredientCreationController {
   })
   async authorize(
     @Param('id') id: string,
-    @Body() dto: CommitIngredientCreationDto,
+    @Body() dto: AuthorizeIngredientCreationDto,
     @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<AuthorizeResult>> {
-    const result = await this.authorizeService.authorize(
-      this.toAuthorizeInput(id, dto, user),
-    );
+    const result = await this.authorizeService.authorize({
+      draftId: id,
+      userId: user.userId,
+      primaryProfileIndex: dto.primaryProfileIndex,
+    });
 
     return new ApiResponseDto(0, 'Success', result);
   }
@@ -373,51 +375,19 @@ export class IngredientCreationController {
   })
   async commit(
     @Param('id') id: string,
+    // 旧 DTO 只为兼容已上线的调用方（仍会校验必填形状）；其中 ingredient /
+    // profiles 一律忽略——写入的只能是草稿里被核验过的那一份。
     @Body() dto: CommitIngredientCreationDto,
     @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<AuthorizeResult>> {
     // 刻意不保留绕过闸门的直写入口：直接调 API 也必须先过四条件，
     // 否则提交前的核验只是页面上的建议，挡不住任何绕过前端的调用。
-    const result = await this.authorizeService.authorize(
-      this.toAuthorizeInput(id, dto, user),
-    );
+    const result = await this.authorizeService.authorize({
+      draftId: id,
+      userId: user.userId,
+      primaryProfileIndex: dto.primaryProfileIndex,
+    });
 
     return new ApiResponseDto(0, 'Success', result);
-  }
-
-  /**
-   * authorize / commit 共用同一份入参。
-   *
-   * 整份原料卡与档案透传：字段契约已在 DTO 里校验/白名单，服务层按「有值才写」
-   * 落库；这里不再逐字段挑选，否则每加一个字段都要记得改两处。
-   */
-  private toAuthorizeInput(
-    draftId: string,
-    dto: CommitIngredientCreationDto,
-    user: RequestUser,
-  ): AuthorizeInput {
-    return {
-      draftId,
-      userId: user.userId,
-      ingredient: dto.ingredient,
-      profiles: dto.profiles.map((profile) => ({
-        preparationState: profile.preparationState,
-        sourceRecordId: profile.sourceRecordId,
-        entries: profile.entries.map((entry) => ({
-          fieldPath: entry.fieldPath,
-          finalValue: entry.finalValue,
-          unit: entry.unit,
-          status: entry.status,
-          sourceRecordId: entry.sourceRecordId,
-          sourceValue: entry.sourceValue,
-          sourceUnit: entry.sourceUnit ?? null,
-          formula: entry.formula ?? null,
-          confirmedBy: entry.confirmedBy ?? null,
-          confirmedAt: entry.confirmedAt ?? null,
-        })),
-        notes: profile.notes ?? null,
-      })),
-      primaryProfileIndex: dto.primaryProfileIndex,
-    };
   }
 }

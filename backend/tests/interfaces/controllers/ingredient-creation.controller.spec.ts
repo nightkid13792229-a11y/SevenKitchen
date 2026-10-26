@@ -686,32 +686,51 @@ describe('IngredientCreationController', () => {
         .expect(201);
 
       expect(authorizeService.authorize).toHaveBeenCalledTimes(1);
-
-      const input = authorizeService.authorize.mock.calls[0][0];
-      expect(input).toMatchObject({
+      expect(authorizeService.authorize).toHaveBeenCalledWith({
         draftId: 'draft-1',
         userId: 'admin-1',
         primaryProfileIndex: 0,
-        ingredient: {
-          name: '鸡肝',
-          type: 'FOOD',
-          baseUnit: 'G',
-          unitDisplayLabel: '克',
-          brand: '××水产',
-          weightG: 150,
-          purchaseToBaseRatio: 1000,
-          productionLossRate: 1.05,
-          procurementStrategy: 'DAILY_PURCHASE',
-          addTiming: 'BEFORE_MEAL',
-        },
       });
-      expect(input.profiles).toHaveLength(2);
       expect(response.body.data).toEqual({
         ingredientId: 'ing-1',
         nutritionFoodIds: ['nf-1', 'nf-2'],
         auditId: 'audit-1',
         authorizedAt: '2026-10-26T08:00:00.000Z',
       });
+    });
+
+    it('请求体里的 ingredient / profiles 不进入授权入参（写入只认草稿）', async () => {
+      authorizeService.authorize.mockResolvedValue({
+        ingredientId: 'ing-1',
+        nutritionFoodIds: ['nf-1'],
+        auditId: 'audit-1',
+        authorizedAt: '2026-10-26T08:00:00.000Z',
+      });
+
+      await authorizedPost('/drafts/draft-1/commit')
+        .send({
+          ...commitBody,
+          ingredient: {
+            ...commitBody.ingredient,
+            name: '另一份没被核验的原料',
+          },
+          profiles: [
+            {
+              ...commitBody.profiles[0],
+              sourceRecordId: 'body-src',
+            },
+          ],
+        })
+        .expect(201);
+
+      const input = authorizeService.authorize.mock.calls[0][0];
+      expect(input).toEqual({
+        draftId: 'draft-1',
+        userId: 'admin-1',
+        primaryProfileIndex: 0,
+      });
+      expect(input).not.toHaveProperty('ingredient');
+      expect(input).not.toHaveProperty('profiles');
     });
 
     it('没有新鲜核验报告 → 400，reasons 原样透出（不再直写正式表）', async () => {
@@ -909,13 +928,10 @@ describe('IngredientCreationController', () => {
         .expect(201);
 
       expect(authorizeService.authorize).toHaveBeenCalledTimes(1);
-      expect(
-        authorizeService.authorize.mock.calls[0][0].profiles[0].entries[0],
-      ).toMatchObject({
-        finalValue: null,
-        sourceRecordId: null,
-        sourceValue: null,
-        sourceUnit: null,
+      expect(authorizeService.authorize).toHaveBeenCalledWith({
+        draftId: 'draft-1',
+        userId: 'admin-1',
+        primaryProfileIndex: 0,
       });
     });
   });
@@ -933,19 +949,42 @@ describe('IngredientCreationController', () => {
         .send(commitBody)
         .expect(201);
 
-      expect(authorizeService.authorize).toHaveBeenCalledWith(
-        expect.objectContaining({
-          draftId: 'draft-1',
-          userId: 'admin-1',
-          primaryProfileIndex: 0,
-        }),
-      );
+      expect(authorizeService.authorize).toHaveBeenCalledWith({
+        draftId: 'draft-1',
+        userId: 'admin-1',
+        primaryProfileIndex: 0,
+      });
       expect(response.body.data).toEqual({
         ingredientId: 'ing-1',
         nutritionFoodIds: ['nf-1'],
         auditId: 'audit-1',
         authorizedAt: '2026-10-26T08:00:00.000Z',
       });
+    });
+
+    it('POST authorize 只传 primaryProfileIndex 即可（轻量 DTO）', async () => {
+      authorizeService.authorize.mockResolvedValue({
+        ingredientId: 'ing-1',
+        nutritionFoodIds: ['nf-1'],
+        auditId: 'audit-1',
+        authorizedAt: '2026-10-26T08:00:00.000Z',
+      });
+
+      await authorizedPost('/drafts/draft-1/authorize')
+        .send({ primaryProfileIndex: 0 })
+        .expect(201);
+
+      expect(authorizeService.authorize).toHaveBeenCalledWith({
+        draftId: 'draft-1',
+        userId: 'admin-1',
+        primaryProfileIndex: 0,
+      });
+    });
+
+    it('POST authorize 缺 primaryProfileIndex → 400，且不调授权服务', async () => {
+      await authorizedPost('/drafts/draft-1/authorize').send({}).expect(400);
+
+      expect(authorizeService.authorize).not.toHaveBeenCalled();
     });
 
     it('POST authorize 未过闸门 → 400，reasons 原样透出', async () => {

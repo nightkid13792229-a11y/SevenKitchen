@@ -32,16 +32,16 @@ export interface AuthorizeBlockedReason {
 }
 
 /**
- * 授权入参：与提交入参完全同字段。
+ * 授权入参：请求体只带主档案下标。
  *
- * 闸门判定对着**库里当前草稿**，与这份入参无关；入参原样转交给提交服务，
- * 由提交服务做字段级校验与写入。
+ * 原料卡与营养档案一律从**库里当前草稿**取（`payload.ingredient` /
+ * `payload.profiles`），请求体里的同名字段不参与授权，也不参与写入：
+ * 否则拿一份「通过」的报告配另一份没被核验过的数据，就能把没验过的内容
+ * 写进正式表。
  */
 export interface AuthorizeInput {
   draftId: string;
   userId: string;
-  ingredient: IngredientDraft;
-  profiles: ProfileDraft[];
   primaryProfileIndex: number;
 }
 
@@ -73,6 +73,43 @@ export const SOURCE_PENDING_REASON: AuthorizeBlockedReason = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** 营养档案只有生 / 熟两种状态；状态缺失或非法都不算「可用档案」。 */
+const NUTRITION_PROFILE_STATES: readonly string[] = ['RAW', 'COOKED'];
+
+/**
+ * 一份档案是否可用于提交：生/熟状态合法，且带着来源记录 id。
+ *
+ * 与按域核验的「可用档案」同一口径：没有来源就没有任何营养数据可写。
+ */
+function isUsableProfile(value: unknown): value is ProfileDraft {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.preparationState === 'string' &&
+    NUTRITION_PROFILE_STATES.includes(value.preparationState) &&
+    typeof value.sourceRecordId === 'string' &&
+    value.sourceRecordId.length > 0
+  );
+}
+
+/** 草稿里的原料卡；还没走到这一步或缺数据时返回 null。 */
+function readDraftIngredient(
+  draft: IngredientCreationDraft,
+): IngredientDraft | null {
+  const ingredient: unknown = draft.payload.ingredient;
+  return isRecord(ingredient)
+    ? (ingredient as unknown as IngredientDraft)
+    : null;
+}
+
+/** 草稿里的营养档案；脏数据（不是数组）按没有档案处理。 */
+function readDraftProfiles(draft: IngredientCreationDraft): ProfileDraft[] {
+  const profiles: unknown = draft.payload.profiles;
+  return Array.isArray(profiles) ? (profiles as ProfileDraft[]) : [];
 }
 
 /** 人登记过的例外 code 集合；脏数据（非对象 / 缺 code）直接忽略。 */
@@ -123,6 +160,9 @@ function collectSourceReasons(): AuthorizeBlockedReason[] {
  * 4. 两域所有 `exceptionable` 都被 `payload.verify.exceptions` 按 code 覆盖；
  * 5. 来源核验（本阶段占位，恒不触发）。
  *
+ * 唯一被写入的数据就是**被核验的那份草稿**：原料卡与档案直接取
+ * `payload.ingredient` / `payload.profiles`，请求体只提供主档案下标。
+ *
  * 失败时一次返回**全部**未满足条件（不是第一条），前端才能一次列清楚；
  * 只有全过才调用提交服务，`authorizedAt` 是真正写库的时间。
  */
@@ -136,6 +176,8 @@ export class IngredientCreationAuthorizeService {
 
   async authorize(input: AuthorizeInput): Promise<AuthorizeResult> {
     const draft = await this.draftService.get(input.draftId);
+    // 先确认草稿里有可写的东西：缺原料卡 / 缺可用档案时不用再查核验报告。
+    const material = this.readDraftMaterial(draft);
     const runs = await this.checkRunService.latestRuns(input.draftId);
     const reasons = this.collectReasons(draft, runs);
 
@@ -146,15 +188,77 @@ export class IngredientCreationAuthorizeService {
       });
     }
 
+    this.assertPrimaryProfile(material.profiles, input.primaryProfileIndex);
+
     const result = await this.commitService.commit({
       draftId: input.draftId,
       userId: input.userId,
-      ingredient: input.ingredient,
-      profiles: input.profiles,
+      ingredient: material.ingredient,
+      profiles: material.profiles,
       primaryProfileIndex: input.primaryProfileIndex,
     });
 
     return { ...result, authorizedAt: new Date().toISOString() };
+  }
+
+  /**
+   * 从草稿取这次要写的材料；缺原料卡 / 缺可用档案时直接 400。
+   *
+   * 两条缺失原因一起收集（而不是只报第一条），detail 分开写清是缺原料卡
+   * 还是缺营养档案。这份材料同时是提交入参，请求体不可能替换它。
+   */
+  private readDraftMaterial(draft: IngredientCreationDraft): {
+    ingredient: IngredientDraft;
+    profiles: ProfileDraft[];
+  } {
+    const ingredient = readDraftIngredient(draft);
+    const profiles = readDraftProfiles(draft);
+    const reasons: AuthorizeBlockedReason[] = [];
+
+    if (!ingredient) {
+      reasons.push({
+        code: 'CHECK_MISSING',
+        detail: '草稿里还没有原料卡，先把原料页填好再授权',
+      });
+    }
+    if (!profiles.some((profile) => isUsableProfile(profile))) {
+      reasons.push({
+        code: 'CHECK_MISSING',
+        detail:
+          '草稿里还没有可用的营养档案（生/熟且带来源记录），先建档案再授权',
+      });
+    }
+
+    if (!ingredient || reasons.length > 0) {
+      throw new BadRequestException({
+        message: AUTHORIZE_BLOCKED_MESSAGE,
+        reasons,
+      });
+    }
+
+    return { ingredient, profiles };
+  }
+
+  /**
+   * 主档案下标必须指向草稿里一份可用档案（生/熟 + 来源记录）。
+   *
+   * 下标按草稿 `profiles` 原数组计，与前端看到的下标一致；不做过滤后重排，
+   * 否则下标错位会把错误的那份档案标成主档案。
+   */
+  private assertPrimaryProfile(
+    profiles: readonly ProfileDraft[],
+    primaryProfileIndex: number,
+  ): void {
+    const profile: ProfileDraft | undefined = profiles[primaryProfileIndex];
+    if (
+      !Number.isInteger(primaryProfileIndex) ||
+      primaryProfileIndex < 0 ||
+      !isUsableProfile(profile)
+    ) {
+      throw new BadRequestException(
+        `主档案下标 ${primaryProfileIndex} 不指向草稿里可用的营养档案（生/熟且带来源记录）`,
+      );
+    }
   }
 
   /**

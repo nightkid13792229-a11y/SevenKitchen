@@ -7,7 +7,10 @@ import { request } from '../utils/api'
 
 export interface SupplementQuoteLineInput {
   ingredientId: string
-  amount: number
+  /** 旧协议：手机算的量；新协议带 recipeItemId 时可不传，服务端重算 */
+  amount?: number
+  /** 新协议：对应的食谱行 */
+  recipeItemId?: string
 }
 
 export interface SupplementQuoteLineResult {
@@ -189,7 +192,11 @@ export function fetchSupplementShopStatus() {
  */
 export function quoteSupplements(
   lines: SupplementQuoteLineInput[],
-  options: { portionMultiplier?: number; cycleDays?: number } = {}
+  options: {
+    portionMultiplier?: number
+    cycleDays?: number
+    diySheetId?: string
+  } = {}
 ) {
   return request<SupplementQuoteResponse>({
     url: '/supplements/quote',
@@ -199,7 +206,8 @@ export function quoteSupplements(
       ...(options.portionMultiplier !== undefined
         ? { portionMultiplier: options.portionMultiplier }
         : {}),
-      ...(options.cycleDays !== undefined ? { cycleDays: options.cycleDays } : {})
+      ...(options.cycleDays !== undefined ? { cycleDays: options.cycleDays } : {}),
+      ...(options.diySheetId ? { diySheetId: options.diySheetId } : {})
     }
   })
 }
@@ -442,7 +450,9 @@ export function syncSupplementPayment(orderId: string) {
  */
 export interface SupplementPurchaseDraftLine {
   ingredientId: string
-  amount: number
+  /** 新协议：对应的食谱行；给了它服务端会重算用量 */
+  recipeItemId?: string
+  amount?: number
   /** 仅用于首屏占位展示，价格与最终名称以服务端报价为准 */
   name?: string
   unit?: string

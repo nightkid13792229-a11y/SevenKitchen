@@ -413,7 +413,13 @@ describe('supplement purchase regressions', () => {
     })
 
     it('把品牌规格带进购买草稿，供下单页小字展示', () => {
-      expect(source).toContain('specText: item.selectedProductDisplayText')
+      // 2026-10-26：购买行改由 supplement-candidates 生成，行内不带 amount
+      expect(source).toContain('buildSupplementPurchaseLines(')
+      const helper = readFileSync(
+        resolve(process.cwd(), 'src/pages/diy-sheet/supplement-candidates.ts'),
+        'utf-8',
+      )
+      expect(helper).toContain('specText:')
     })
   })
 

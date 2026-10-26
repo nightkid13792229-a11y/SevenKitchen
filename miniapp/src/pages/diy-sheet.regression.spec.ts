@@ -313,7 +313,8 @@ describe('diy sheet layout regressions', () => {
     )
 
     expect(source).toContain('selectedProductDisplayText')
-    expect(source).toContain('formatSelectedProductDisplayText(')
+    expect(source).toContain('buildSupplementRows(')
+    expect(source).toContain('buildSupplementPurchaseLines(')
     expect(source).toContain('formatRecommendationActionLabel(')
     expect(source).toContain('choiceLabel')
     expect(source).toContain('recommend-badge')
@@ -345,7 +346,7 @@ describe('diy sheet layout regressions', () => {
     expect(foodBlock).toContain('const purchaseLink = selectedRp?.purchaseLink || undefined')
     expect(foodBlock).toContain('productModel: selectedRp?.productModel')
     expect(foodBlock).toContain('purchaseChannel: selectedRp?.purchaseChannel')
-    expect(source).toContain('const selectedProductDisplayText = formatSelectedProductDisplayText(selectedRp || item, item.name)')
+    expect(source).toContain('buildSupplementRows(')
   })
 
   it('passes food recommended product images into the single-product detail modal', () => {

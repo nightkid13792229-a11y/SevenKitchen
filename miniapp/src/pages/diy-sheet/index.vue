@@ -141,6 +141,15 @@
           </view>
         </view>
 
+        <!-- 补剂候选获取失败：给一个可点的重试，不阻塞制作单 -->
+        <view v-if="supplementCandidateError" class="ingredient-group">
+          <view class="ingredient-category-title">营养补充剂</view>
+          <view class="production-only-note">
+            <text>补剂候选暂时获取失败，</text>
+            <button class="supplement-buy-note-btn" @tap="retrySupplementCandidates">点击重试</button>
+          </view>
+        </view>
+
         <!-- 补剂类：需额外补充的营养 -->
         <view v-if="supplementItemsDetailed.length > 0" class="ingredient-group">
           <view class="ingredient-category-title">营养补充剂</view>
@@ -386,7 +395,7 @@
           <view class="rp-cards-list">
             <view
               v-for="(rp, rpIdx) in currentSpec.allRecommendedProducts"
-              :key="rp.id"
+              :key="rp.ingredientId || rp.id || rpIdx"
               class="rp-card"
               :class="{ 'rp-card-active': rpIdx === modalSelectedRpIndex }"
               @tap="selectRecommendedProduct(modalSelectionKey, rpIdx)"
@@ -406,6 +415,16 @@
                   <view v-if="rp.productModel" class="rp-card-field">
                     <text class="rp-card-field-label">规格</text>
                     <text class="rp-card-field-value">{{ rp.productModel }}</text>
+                  </view>
+                  <view v-if="supplementFormLabel(rp.physicalForm)" class="rp-card-field">
+                    <text class="rp-card-field-label">形态</text>
+                    <text class="rp-card-field-value">{{ supplementFormLabel(rp.physicalForm) }}</text>
+                  </view>
+                  <view v-if="rp.dosage && rp.dosage.amount !== null" class="rp-card-field">
+                    <text class="rp-card-field-label">换算用量</text>
+                    <text class="rp-card-field-value">
+                      {{ formatSupplementAmountWithDisplayUnit(rp.dosage.amount, rp.displayUnit, rp.displayUnit) }}
+                    </text>
                   </view>
                   <view v-if="getSpecPurchaseChannelDisplay(rp)" class="rp-card-field">
                     <text class="rp-card-field-label">推荐购买渠道</text>
@@ -642,17 +661,18 @@ import {
   formatSupplementTargets
 } from '../../utils/supplement-nutrients'
 import {
-  buildSupplementCandidateOptions,
-  calculateSupplementAmountForOption,
-  getSupplementSelectionKey
-} from './supplement-alternatives'
+  buildSupplementPurchaseLines,
+  buildSupplementRows,
+  buildSupplementSelections,
+  selectionsFromSaved,
+  type ServerCandidateItem
+} from './supplement-candidates'
 import {
   DIY_SHEET_FOOD_RECOMMENDATION_LABEL,
   DIY_SHEET_SUPPLEMENT_RECOMMENDATION_LABEL,
   DIY_SHEET_SPEC_MODAL_TITLE,
   formatFoodSelectedProductDisplayText,
   formatRecommendationActionLabel,
-  formatSelectedProductDisplayText,
   getPurchaseTipByPlatform,
   getSpecRecommendedPurchaseChannelDisplay
 } from './copy'
@@ -734,6 +754,13 @@ const currentEquipmentDetail = ref<any>(null)
 
 // 每个原料当前选中的推荐产品索引 { ingredientId: index }
 const selectedRpIndexMap = ref<Record<string, number>>({})
+/** 服务端算好的补剂候选（新协议） */
+const supplementCandidateItems = ref<ServerCandidateItem[]>([])
+/** 每条补剂当前选中的原料：recipeItemId -> ingredientId */
+const selectedSupplementIngredientMap = ref<Record<string, string>>({})
+/** 制作单存档里恢复出来的选择 */
+const savedSupplementSelections = ref<Record<string, string>>({})
+const supplementCandidateError = ref(false)
 
 // 图片预览弹窗状态
 const showImagePreview = ref(false)
@@ -893,9 +920,16 @@ const purchaseListData = computed(() => {
 
   return [
     ...foodSourceItems.value.map((item: any) => buildPurchaseListItem(item)),
-    ...ingredientDetails.value
-      .filter((item: any) => item.type === 'SUPPLEMENT')
-      .map((item: any) => buildPurchaseListItem(item))
+    ...supplementItemsDetailed.value.map((row: any) => ({
+      name: row.name,
+      type: 'SUPPLEMENT',
+      netAmount: row.amount,
+      displayUnit: row.displayUnit,
+      nutritionStateLabel: '',
+      preparationMethod: row.preparationMethod || null,
+      theoreticalAmountStr: row.amountStr,
+      netAmountStr: row.amountStr
+    }))
   ]
 })
 
@@ -1053,90 +1087,26 @@ const foodItemsDetailed = computed(() => {
 })
 
 // 补剂类详细数据（用于需额外补充的营养表格）
+//
+// 2026-10-26 起候选与用量都来自服务端；这里只做展示行映射，不再自己算浓度。
 const supplementItemsDetailed = computed(() => {
-  if (ingredientDetails.value.length === 0) {
-    return []
-  }
-
-  // 直接使用API返回的补剂数据
-  const allItems = ingredientDetails.value
-  const supplementItems = allItems.filter((item: any) => item.type === 'SUPPLEMENT')
-
-  return supplementItems.map((item: any) => {
-    const recipeItem = (recipe.value.items || []).find((candidate: any) => {
-      if (item.recipeItemId && candidate.id === item.recipeItemId) {
-        return true
-      }
-      return candidate.ingredientId === item.ingredientId
-    })
-    const supplementOptions = buildSupplementCandidateOptions(item, recipeItem)
-    const selectionKey = getSupplementSelectionKey(item)
-    const rpIdx = selectedRpIndexMap.value[selectionKey] ?? 0
-    const hasRecommendedOptions = supplementOptions.length > 0
-    const selectedRp = hasRecommendedOptions
-      ? (supplementOptions[rpIdx] || supplementOptions[0])
-      : undefined
-    const selectedProductDisplayText = formatSelectedProductDisplayText(selectedRp || item, item.name)
-
-    // 使用displayUnit作为显示单位
-    const displayUnit = selectedRp?.displayUnit || item.displayUnit || item.unit || 'g'
-
-    // 只用开启 DIY 推荐的补剂生成用户可见购买链接和详情
-    const purchaseLink = hasRecommendedOptions ? selectedRp?.purchaseLink : undefined
-    const hasSpecDetail = hasRecommendedOptions
-      ? hasRecommendationDetail(selectedRp, {}, purchaseLink)
-      : false
-
-    const amount = calculateSupplementAmountForOption(
-      item,
-      selectedRp,
-      supplementNutrientBaseWeightG.value
-    )
-
-    return {
-      selectionKey,
-      name: selectedRp?.name || item.name,                          // 推荐营养品
-      brand: hasRecommendedOptions ? (selectedRp?.brand || '-') : '-', // 推荐品牌
-      preparationMethod: selectedRp?.timingLabel || item.preparationMethod || '', // 添加时机
-      amount: amount,                                               // 用量数值
-      unit: item.unit,                                              // 原始单位（用于计算）
-      displayUnit: displayUnit,                                     // 显示单位（用于展示）
-      amountStr: formatSupplementAmountWithDisplayUnit(amount, item.unit, displayUnit),  // 格式化用量
-      productModel: hasRecommendedOptions ? selectedRp?.productModel : undefined, // 规格
-      purchaseChannel: hasRecommendedOptions ? selectedRp?.purchaseChannel : undefined, // 购买渠道
-      imageUrl: hasRecommendedOptions ? selectedRp?.imageUrl : undefined,
-      purchaseLink: purchaseLink,                                   // 购买链接
-      ingredientId: item.ingredientId,                              // 原料ID
-      nutrientTargetKey: item.nutrientTargetKey,                    // 营养素名称
-      nutrientTargetValue: item.nutrientTargetValue,                // 营养目标值
-      supplementTargets: item.supplementTargets || item.supplement_targets || recipeItem?.supplementTargets || recipeItem?.supplement_targets || [],
-      nutritionProfile: selectedRp?.nutritionProfile || item.nutritionProfile || item.nutrition_profile_snapshot || item.ingredient?.nutritionProfile,
-      activeNutrients:
-        selectedRp?.activeNutrients ||
-        selectedRp?.properties?.active_nutrients ||
-        item.activeNutrients ||
-        item.properties?.active_nutrients,
-      nutrition_profile_snapshot: selectedRp?.nutritionProfile || item.nutrition_profile_snapshot,
-      type: item.type,                                              // 类型标识
-      // 仅生产用补剂仍显示在制作单里，但不进入补剂购买草稿
-      purchasable: item.supplementRetailEnabled !== false,
-      properties: {
-        ...(item.properties || {}),
-        ...((selectedRp?.activeNutrients || selectedRp?.properties?.active_nutrients)
-          ? {
-              active_nutrients:
-                selectedRp?.activeNutrients || selectedRp?.properties?.active_nutrients
-            }
-          : {})
-      },                                                            // 完整的properties
-      selectedProductDisplayText,                                   // 已选商品入口文案
-      choiceLabel: formatRecommendationActionLabel(supplementOptions.length), // 候选数量提示
-      recommendedSpecPrintText: selectedProductDisplayText,
-      hasSpecDetail,                                                // 是否有规格/购买信息
-      allRecommendedProducts: supplementOptions,                    // 所有候选补剂
-      selectedRPIndex: 0                                            // 当前选中的推荐产品索引
-    }
-  })
+  return buildSupplementRows(
+    supplementCandidateItems.value,
+    selectedSupplementIngredientMap.value
+  ).map((row) => ({
+    ...row,
+    amountStr: formatSupplementAmountWithDisplayUnit(
+      row.amount,
+      row.unit,
+      row.displayUnit
+    ),
+    allRecommendedProducts: row.candidates,
+    selectedRPIndex: row.selectedCandidateIndex,
+    recommendedSpecPrintText: row.selectedProductDisplayText,
+    selectedProductDisplayText: row.selectedProductDisplayText,
+    type: 'SUPPLEMENT',
+    properties: {}
+  }))
 })
 
 /**
@@ -1170,6 +1140,16 @@ function formatPurchaseAmount(amount: number): string {
  * 净重的展示格式：不做「好买的量」进位，保留真实用量，
  * 2026-10-18：采购量删掉后，这一列就是唯一的用量数字（净用量）。
  */
+function supplementFormLabel(value: string | null | undefined): string {
+  const labels: Record<string, string> = {
+    POWDER: '粉剂',
+    TABLET: '片剂',
+    CAPSULE: '胶囊',
+    LIQUID: '液体'
+  }
+  return labels[value || ''] || ''
+}
+
 function formatNetAmount(amount: number, isFood: boolean): string {
   if (!Number.isFinite(amount) || amount <= 0) return '0g'
   if (!isFood) return `${amount.toFixed(1)}g`
@@ -1314,21 +1294,8 @@ function goFinishedFood() {
  * 补剂行带用量，塞不进 URL，因此走本地存储传递。
  */
 async function handleBuySupplements() {
-  const lines = supplementItemsDetailed.value
-    .filter(
-      (item: any) =>
-        item.ingredientId && Number(item.amount) > 0 && item.purchasable !== false
-    )
-    .map((item: any) => ({
-      ingredientId: item.ingredientId,
-      amount: Number(item.amount),
-      name: item.name,
-      unit: item.displayUnit || item.unit || 'g',
-      // 下单页用小字展示「品牌和规格」，这里一并带过去（报价接口不返回这两个字段）
-      specText: item.selectedProductDisplayText && item.selectedProductDisplayText !== '-'
-        ? item.selectedProductDisplayText
-        : ''
-    }))
+  // 只带“选了哪个原料”，用量由后端按配方重算（2026-10-26）
+  const lines = buildSupplementPurchaseLines(supplementItemsDetailed.value)
 
   if (lines.length === 0) {
     uni.showToast({ title: '暂无可购买的补剂', icon: 'none' })
@@ -1412,8 +1379,11 @@ async function loadData() {
     // 价格预览加载完成后，加载推荐产品（需要 ingredientIds）
     await loadRecommendedProducts()
 
-    // 自动保存制作单（用于评价权限验证），静默失败
-    autoSaveDiySheet()
+    // 先拿到制作单 id（算量/版本锚定/冻结快照都靠它），再取服务端补剂候选
+    const sheetId = await autoSaveDiySheet()
+    await loadSupplementCandidates(sheetId)
+    // 候选/选择就绪后再存一次，把默认选择写进制作单（已冻结则后端不会覆盖）
+    await autoSaveDiySheet()
   } catch (error) {
     console.error('[DIYSheet] Load data error:', error)
   } finally {
@@ -1427,6 +1397,10 @@ async function loadData() {
  */
 async function autoSaveDiySheet(): Promise<string> {
   try {
+    const selections =
+      supplementCandidateItems.value.length > 0
+        ? buildSupplementSelections(supplementItemsDetailed.value)
+        : undefined
     const res: any = await request({
       url: '/user/diy-sheets',
       method: 'POST',
@@ -1439,17 +1413,83 @@ async function autoSaveDiySheet(): Promise<string> {
         dailyIntakeG: dailyIntakeG.value,
         packagePlan: packagePlan.value,
         purchaseList: purchaseListData.value,
-        productionSteps: recipe.value.productionSteps
+        productionSteps: recipe.value.productionSteps,
+        recipeVersion: recipe.value.version || undefined,
+        ...(selections ? { supplementSelections: selections } : {})
       }
     })
     if (res.code === 0 && res.data?.id) {
       currentDiySheetId.value = res.data.id
+      if (Array.isArray(res.data.supplementSelections)) {
+        savedSupplementSelections.value = selectionsFromSaved(
+          res.data.supplementSelections
+        )
+        restoreSupplementSelections()
+      }
       return res.data.id
     }
   } catch {
     // 静默失败；购买时会再尝试一次
   }
   return ''
+}
+
+/**
+ * 服务端补剂候选（2026-10-26）。
+ * 候选、换算用量都在后端算；失败时降级为“只有原原料”，不阻塞制作单。
+ */
+async function loadSupplementCandidates(sheetId?: string) {
+  if (!recipeId.value) return
+  try {
+    const res: any = await request({
+      url: `/recipes/${recipeId.value}/supplement-candidates`,
+      method: 'GET',
+      data: {
+        ...(sheetId ? { diySheetId: sheetId } : {}),
+        ...(supplementNutrientBaseWeightG.value > 0
+          ? { totalWeightG: supplementNutrientBaseWeightG.value }
+          : {}),
+        ...(orderId.value ? { orderId: orderId.value } : {}),
+        ...(shareToken.value ? { shareToken: shareToken.value } : {})
+      }
+    })
+    if (res.code === 0 && Array.isArray(res.data?.items)) {
+      supplementCandidateItems.value = res.data.items
+      supplementCandidateError.value = false
+      restoreSupplementSelections()
+    } else {
+      supplementCandidateError.value = true
+    }
+  } catch (error) {
+    console.error('[DIYSheet] Load supplement candidates error:', error)
+    supplementCandidateError.value = true
+  }
+}
+
+/** 恢复顾客上次选的原料（只认仍在候选里的 ingredientId） */
+function restoreSupplementSelections() {
+  const saved = savedSupplementSelections.value
+  if (!saved || Object.keys(saved).length === 0) return
+  const next = { ...selectedSupplementIngredientMap.value }
+  const indexes = { ...selectedRpIndexMap.value }
+  for (const item of supplementCandidateItems.value) {
+    const wanted = saved[item.recipeItemId]
+    if (!wanted) continue
+    const index = item.candidates.findIndex(
+      (candidate) => candidate.ingredientId === wanted
+    )
+    if (index >= 0) {
+      next[item.recipeItemId] = wanted
+      indexes[item.recipeItemId] = index
+    }
+  }
+  selectedSupplementIngredientMap.value = next
+  selectedRpIndexMap.value = indexes
+}
+
+function retrySupplementCandidates() {
+  supplementCandidateError.value = false
+  void loadSupplementCandidates(currentDiySheetId.value)
 }
 
 async function loadRecipe() {
@@ -2072,7 +2112,19 @@ function confirmRecommendedProductSelection() {
     return
   }
 
-  selectedRpIndexMap.value[modalSelectionKey.value] = modalSelectedRpIndex.value
+  const key = modalSelectionKey.value
+  selectedRpIndexMap.value[key] = modalSelectedRpIndex.value
+  const candidateItem = supplementCandidateItems.value.find(
+    (item) => item.recipeItemId === key
+  )
+  const chosen = candidateItem?.candidates[modalSelectedRpIndex.value]
+  if (chosen) {
+    selectedSupplementIngredientMap.value = {
+      ...selectedSupplementIngredientMap.value,
+      [key]: chosen.ingredientId
+    }
+    void autoSaveDiySheet()
+  }
   closeSpecModal()
 }
 

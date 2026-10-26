@@ -4,7 +4,7 @@
 
 **Goal:** 把 CNF（加拿大营养库）5,993 条记录里被导入映射漏掉的矿物质重新归一化进 `normalizedNutrition.minerals`，让检索与覆盖率不再把“有数据”误判成“缺数据”。
 
-**Architecture:** 不重新下载 26MB 源文件。CNF 的 `rawData.amounts` 已经保留了每条记录的全部原始营养值；新增一个纯函数把 amounts 按“CNF 编码 → FDC id”翻译后复用现有 `mapUsdaNutrientsToNutritionProfile`，再用一个可 dry-run 的脚本回填 `normalizedNutrition`。只改这一个字段，不动 `rawData`、来源元数据、状态。
+**Architecture:** 不重新下载 26MB 源文件。CNF 的 `rawData.amounts` 已经保留了每条记录的全部原始营养值；新增一个纯函数把 amounts 按“CNF 编码 → FDC id”翻译后复用现有 `mapUsdaNutrientsToNutritionProfile`，再用一个可 dry-run 的脚本回填。**只替换 `normalizedNutrition.minerals` 与对应的矿物质来源元数据**，macros / vitamins / 脂肪酸 / 氨基酸、`meta.sampleState`、其它字段的 `sourceForms` 原样保留。
 
 **Tech Stack:** NestJS 项目内的 ts-node 脚本、Prisma、Jest。
 
@@ -15,7 +15,7 @@
 - 只在 `backend/` 内改；不碰 admin-web / miniapp。
 - 不改 Prisma schema、不加 migration、不加依赖。
 - 给生产库做数据修复的脚本必须**默认 dry-run**，只有显式 `--apply` 才写库；写库前打印将影响的条数。
-- 只更新 `normalizedNutrition`（和 Prisma 自动维护的 `updatedAt`）；`rawData`、`foodName`、`sourceKey`、`status` 一律不动。
+- 只更新 `normalizedNutrition.minerals`、`normalizedNutrition.meta.sourceForms/conversionNotes` 里**矿物质字段**的条目（和 Prisma 自动维护的 `updatedAt`）；`rawData`、`foodName`、`sourceKey`、`status`、其它营养 tab、`meta.sampleState` 一律不动。
 - 修复只针对 `sourceType='CNF'` 且 `rawData.amounts` 非空的记录。
 - 任何一步失败就停下，不跳过、不“部分成功也算过”。
 
@@ -158,26 +158,44 @@ git commit -m "fix(nutrition): map CNF mineral codes into normalized profile"
 
 **Interfaces:**
 - 复用 Task 1 的 `buildCnfNutritionProfile`。
+- 在 `cnf-normalize.ts` 增加 `export function mergeCnfMinerals(existing: NutritionProfileV2 | null, built: NutritionProfileV2): NutritionProfileV2`：
+  - `existing` 为空时直接返回 `built`；
+  - 否则返回浅拷贝：`minerals` 整个换成 `built.minerals`；`meta.sourceForms` / `meta.conversionNotes` 只合并“矿物质字段且 built 里有值”的条目；其它所有键（macros/vitamins/fattyAcids/aminoAcids/meta.sampleState/meta.externalId…）保持 `existing` 原值；
+  - 纯函数，不改入参。
 - CLI：`--limit N`、`--apply`、`--report <path>`、`--help`；默认 dry-run。
 - 输出报告：`{ scanned, changed, mineralsBefore, mineralsAfter, skipped: [{id, reason}], samples: [{id, name, calcium}] }`。
 
-- [ ] **Step 1: 写脚本**
+- [ ] **Step 1: 先给 `mergeCnfMinerals` 写测试**
+
+在 `cnf-normalize.spec.ts` 追加：
+- 现有 profile 的 `macros.crudeProtein`、`vitamins.vitaminC`、`meta.sampleState='DRIED'`、`meta.sourceForms['macros.crudeProtein'].originalUnit='g'` 在合并后**保持不变**；
+- `minerals.calcium` 被新值覆盖；
+- `meta.sourceForms['minerals.calcium']` 存在且 `originalValue` 等于新值；
+- 入参对象没有被修改（深比较前后 JSON）。
+
+Run: `npx jest tests/domain/nutrition-governance/cnf-normalize.spec.ts --runInBand` → 新用例失败（函数不存在）。
+
+- [ ] **Step 2: 实现 `mergeCnfMinerals` 并跑绿**
+
+Run: 同上 → 全绿。
+
+- [ ] **Step 3: 写脚本**
 
 逻辑：
 1. 读 `scripts/data/usda-nutrient-nbr-to-fdc-id.json`（与导入脚本同一个文件）。
 2. `prisma.nutritionSourceRecord.findMany({ where: { sourceType: 'CNF' }, select: { id, sourceType, foodName, rawData, normalizedNutrition } })`。
 3. `rawData.amounts` 必须是数组；元素取 `nutrientCode` 与 `value`（`value` 非有限数则跳过）。
-4. 调 `buildCnfNutritionProfile`。
+4. 调 `buildCnfNutritionProfile`，再用 `mergeCnfMinerals(existing, built)` 合并（**不要整体替换**，否则会丢 macros/vitamins 的 `sourceForms.originalUnit` 和 `meta.sampleState`）。
 5. 统计“修复前 minerals 有值数”和“修复后”；`changed` 定义为前后 JSON 不相等。
 6. `--apply` 时 `update({ where: { id }, data: { normalizedNutrition } })`，每 100 条打印一次进度。
 7. 报告写文件（若给 `--report`），否则打印摘要。
 
-- [ ] **Step 2: 本地类型检查**
+- [ ] **Step 4: 本地类型检查**
 
 Run: `cd backend && npx tsc --noEmit -p tsconfig.json 2>&1 | grep renormalize-cnf-nutrition || echo CLEAN`
 Expected: 无该文件的错误。
 
-- [ ] **Step 3: 合并推送，并把脚本同步到生产机**
+- [ ] **Step 5: 合并推送，并把脚本同步到生产机**
 
 生产机的源码目录会被部署脚本重置到 `origin/main`，所以脚本必须先合并进主线：
 
@@ -187,7 +205,7 @@ ssh -i ~/.ssh/claude_deploy root@1.14.3.2 "cd /opt/sevenkitchen/SevenKitchen/bac
 ```
 Expected: 生产机 HEAD 等于刚推的提交；`git status` 干净。
 
-- [ ] **Step 4: 生产 dry-run**
+- [ ] **Step 6: 生产 dry-run**
 
 Run（在仓库根目录）:
 ```bash
@@ -195,7 +213,7 @@ ssh -i ~/.ssh/claude_deploy root@1.14.3.2 "cd /opt/sevenkitchen/SevenKitchen/bac
 ```
 Expected：`scanned=5993`，`mineralsBefore=0`，`mineralsAfter>=5000` 量级，`skipped` 为空或个位数；报告里抽样能看到 calcium 有值。
 
-- [ ] **Step 5: 提交脚本（先不 apply）**
+- [ ] **Step 7: 提交脚本（先不 apply）**
 
 ```bash
 git add backend/scripts/renormalize-cnf-nutrition.ts

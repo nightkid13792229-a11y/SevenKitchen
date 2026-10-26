@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { NUTRITION_FIELD_CATALOG } from '../../domain/ingredient/nutrition-field-catalog';
+import { hashDraftPayload } from '../../domain/ingredient-creation/draft-payload-hash';
 import type { PreparationState } from '../../domain/ingredient-creation/preparation-state';
 import {
   AgentProviderConfigService,
@@ -19,6 +20,7 @@ import {
   INGREDIENT_INTAKE_AGENT_PURPOSE,
   INGREDIENT_INTAKE_AGENT_PURPOSES,
 } from './ingredient-creation-intake.service';
+import { trackAgentProgress } from './agent-progress';
 import {
   IngredientCreationToolsService,
   type AgentCheckSummary,
@@ -1694,7 +1696,9 @@ export class IngredientDraftAgentService {
     let stopReason: IngredientAgentStopReason | null = null;
     let pendingQuestion: PendingQuestion | null = null;
     let lastCheck: AgentCheckSummary | null = null;
-    const seenSourceIds = new Set<string>();
+    /** 已经出现过的「工具 + 参数」指纹：没出现过的调用本身就是新探索。 */
+    const seenCallSignatures = new Set<string>();
+    const seenSourceRecordIds = new Set<string>();
     const toolCalls: AgentToolCallRecord[] = [];
     /** 查库零命中的关键词；后续真找到数据就清空。 */
     const missedSearchKeywords: string[] = [];
@@ -1885,9 +1889,15 @@ export class IngredientDraftAgentService {
               break runLoop;
             }
 
+            if (execution.progress?.check) {
+              lastCheck = execution.progress.check;
+            }
             if (
-              this.recordProgress(execution, seenSourceIds, (check) => {
-                lastCheck = check;
+              trackAgentProgress({
+                progress: execution.progress,
+                signature: `${toolName}:${hashDraftPayload(args ?? {})}`,
+                seenSignatures: seenCallSignatures,
+                seenSourceRecordIds,
               })
             ) {
               noProgressStreak = 0;
@@ -2015,9 +2025,15 @@ export class IngredientDraftAgentService {
           break;
         }
 
+        if (execution.progress?.check) {
+          lastCheck = execution.progress.check;
+        }
         if (
-          this.recordProgress(execution, seenSourceIds, (check) => {
-            lastCheck = check;
+          trackAgentProgress({
+            progress: execution.progress,
+            signature: `${toolName}:${hashDraftPayload(args ?? {})}`,
+            seenSignatures: seenCallSignatures,
+            seenSourceRecordIds,
           })
         ) {
           noProgressStreak = 0;
@@ -2070,7 +2086,7 @@ export class IngredientDraftAgentService {
           reason: stopReason,
           steps,
           toolCallCount,
-          seenSourceCount: seenSourceIds.size,
+          seenSourceCount: seenSourceRecordIds.size,
           draft: finalDraft,
           lastCheck,
         });
@@ -2149,39 +2165,6 @@ export class IngredientDraftAgentService {
       );
       throw new AgentRunFailedError(error, report);
     }
-  }
-
-  /**
-   * 把一次工具结果折算成「有没有新进展」。
-   *
-   * 新进展只有两种：本次新写入（新增或改变）字段，或读到此前没出现过的来源 id。
-   * 失败调用、重复检索、重复写同一个值都不算。
-   */
-  private recordProgress(
-    execution: AgentToolExecution,
-    seenSourceIds: Set<string>,
-    onCheck: (check: AgentCheckSummary) => void,
-  ): boolean {
-    const progress = execution.progress;
-    if (!progress) {
-      return false;
-    }
-
-    let progressed = false;
-    for (const sourceRecordId of progress.sourceRecordIds) {
-      if (!seenSourceIds.has(sourceRecordId)) {
-        seenSourceIds.add(sourceRecordId);
-        progressed = true;
-      }
-    }
-    if (progress.writtenFieldPaths.length > 0) {
-      progressed = true;
-    }
-    if (progress.check) {
-      onCheck(progress.check);
-    }
-
-    return progressed;
   }
 
   /** 与 intake 同一条回落链：INGREDIENT_INTAKE → DEFAULT → RECIPE_DESIGN。 */

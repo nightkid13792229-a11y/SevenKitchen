@@ -129,7 +129,6 @@ export class RecipeNamingService {
         },
         maxLength: RECIPE_NAME_MAX_LENGTH,
         forbiddenPatterns: getForbiddenClaimPatterns(),
-        existingNames: input.existingNames ?? [],
       },
     });
 
@@ -192,7 +191,6 @@ export function buildRecipeNamingSystemPrompt(): string {
     `硬要求：≤${RECIPE_NAME_MAX_LENGTH} 个字（含竖线）；价值点必须能从给定事实推出，不得虚构；食材必须来自 foodItems；不写数字、百分比、疾病名、医疗用语和功效承诺（含「低敏」）。`,
     '输入里没有的事实一律不写；拿不准就换成更保守的说法。',
     '',
-    '不能与 existingNames 里的任何名字重复（那些是在架食谱）。',
     '',
     '输出 JSON：candidates 数组，2 条，每条含 name / valuePoint / ingredients。',
     '两条的价值点不能重复：一条讲配方构成，一条讲适用场景或工艺。',

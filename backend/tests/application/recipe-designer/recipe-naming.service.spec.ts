@@ -6,6 +6,9 @@ jest.mock('src/application/recipe-designer/deepseek-chat', () => ({
   callDeepSeekJson: (...args: unknown[]) => callDeepSeekJson(...args),
 }));
 
+import { readFileSync } from 'fs';
+import { join } from 'path';
+
 import {
   RecipeNamingService,
   buildRecipeNamingSystemPrompt,
@@ -188,7 +191,20 @@ describe('重名检测', () => {
     expect(result.candidates[1].duplicate).toBe(false);
   });
 
-  it('提示词要求不要与 existingNames 重复', () => {
-    expect(buildRecipeNamingSystemPrompt()).toContain('existingNames');
+  it('不把在架名字塞给模型（会拖慢），查重交给服务端', () => {
+    expect(buildRecipeNamingSystemPrompt()).not.toContain('existingNames');
+  });
+});
+
+describe('系列取哪一份配方起名（契约）', () => {
+  it('后端选阶段的代码里，普通成年犬优先于其它阶段', () => {
+    const source = readFileSync(
+      join(__dirname, '../../../src/application/recipe/recipe.service.ts'),
+      'utf8',
+    );
+    expect(source).toContain("item.seriesLifeStage === 'HIGH_ACTIVITY_ADULT'");
+    expect(source).toContain('pickCanonicalRecipe');
+    // 不能再退回"随便取最近更新的一份"当唯一规则
+    expect(source).not.toContain('const recipe = series.recipes[0];');
   });
 });

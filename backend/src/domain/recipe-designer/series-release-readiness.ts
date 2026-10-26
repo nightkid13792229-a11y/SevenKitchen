@@ -68,7 +68,8 @@ export type SeriesReleaseBlockerCode =
   | 'REQUIRED_STAGE_NOT_READY'
   | 'COVER_IMAGE_REQUIRED'
   | 'COVER_TITLE_REQUIRED'
-  | 'SELLING_POINT_REQUIRED';
+  | 'SELLING_POINT_REQUIRED'
+  | 'TAXONOMY_REQUIRED';
 
 export type SeriesReleaseWarningCode = 'TARGET_HEALTH_TAGS_MISSING';
 
@@ -128,6 +129,11 @@ export interface BuildSeriesReleaseReadinessInput {
   businessStatus?: string | null;
   requiredLifeStages?: string[] | null;
   presentation?: SeriesReleasePresentation | null;
+  /**
+   * 该系列挂了几个需求分类（2026-10-27）。
+   * 只数条数，不区分分类种类：双拼菜不挂主蛋白、只挂场景，也算已归类。
+   */
+  taxonomyLinkCount?: number;
   /** 全量阶段快照，顺序即后台展示顺序 */
   stages: SeriesReleaseStageSnapshot[];
 }
@@ -338,6 +344,21 @@ export const buildSeriesReleaseReadiness = (
       scope: 'PRESENTATION',
       message: '请填写一句话卖点（最多 200 个字符）',
       field: 'sellingPoint',
+    });
+  }
+
+  // 需求分类门禁（2026-10-27）：只卡产品线。
+  // 定制系列不进橱窗、也不参与货架分组，因此不计算这条。
+  const isProductLine =
+    normalizeText(input.designMode).toUpperCase() !== 'ORDER' &&
+    businessStatus !== 'PRIVATE_CUSTOM';
+  if (isProductLine && (input.taxonomyLinkCount ?? 0) <= 0) {
+    blockers.push({
+      code: 'TAXONOMY_REQUIRED',
+      scope: 'SERIES',
+      field: 'taxonomy',
+      message:
+        '这道菜还没有任何需求分类，发布后它进不了货架分组。在「快速归类」里挂一个即可',
     });
   }
   if (targetHealthTags.length === 0) {

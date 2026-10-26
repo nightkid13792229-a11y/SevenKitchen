@@ -4229,7 +4229,12 @@ export class RecipeDesignerService {
     const context = normalizeRecipeDesignerAccessContext(access);
     const series = await this.loadCatalogSeriesForRelease(seriesId, context);
     const sources = await this.loadSeriesReleaseStageSources(seriesId);
-    return this.buildSeriesReleaseReadinessForSeries(series, sources);
+    const taxonomyLinkCount = await this.countSeriesTaxonomyLinks(seriesId);
+    return this.buildSeriesReleaseReadinessForSeries(
+      series,
+      sources,
+      taxonomyLinkCount,
+    );
   }
 
   /**
@@ -4326,9 +4331,11 @@ export class RecipeDesignerService {
 
     const series = await this.loadCatalogSeriesForRelease(seriesId, context);
     const sources = await this.loadSeriesReleaseStageSources(seriesId);
+    const taxonomyLinkCount = await this.countSeriesTaxonomyLinks(seriesId);
     const readiness = this.buildSeriesReleaseReadinessForSeries(
       series,
       sources,
+      taxonomyLinkCount,
     );
     if (!readiness.ready) {
       throw new BadRequestException(
@@ -4495,6 +4502,11 @@ export class RecipeDesignerService {
     return { recipes, designs };
   }
 
+  /** 该系列挂了几条需求分类（用于发布门禁「已归类」）。 */
+  private async countSeriesTaxonomyLinks(seriesId: string): Promise<number> {
+    return this.prisma.recipeSeriesTaxonomy.count({ where: { seriesId } });
+  }
+
   private buildSeriesReleaseReadinessForSeries(
     series: Pick<
       RecipeSeries,
@@ -4511,9 +4523,11 @@ export class RecipeDesignerService {
       recipes: SeriesReleaseRecipeRecord[];
       designs: SeriesReleaseDesignRecord[];
     },
+    taxonomyLinkCount = 0,
   ): SeriesReleaseReadiness {
     return buildSeriesReleaseReadiness({
       seriesId: series.id,
+      taxonomyLinkCount,
       designMode: series.designMode ?? RecipeDesignMode.CATALOG,
       businessStatus: series.businessStatus,
       requiredLifeStages: series.requiredLifeStages,

@@ -2,6 +2,9 @@ import { Injectable } from '@nestjs/common';
 
 import { PrismaService } from '../../infrastructure/prisma.service';
 import {
+  isPreparationMethodWithinContentLimit,
+} from '../../domain/recipe/preparation-field-text';
+import {
   extractLegacyPreparationMethodIds,
   normalizePreparationMethodHistoryText,
   resolvePreparationMethodText,
@@ -24,12 +27,36 @@ interface RecipeItemHistoryRow {
   };
 }
 
+interface HistoryTextEntry {
+  ingredientId: string;
+  text: string;
+  lastUsedAt: Date;
+}
+
+interface DeliverySnapshotRecipeItem {
+  ingredientId?: string | null;
+  preparation?: string | null;
+}
+
+interface DeliverySnapshot {
+  recipe?: {
+    items?: DeliverySnapshotRecipeItem[];
+  } | null;
+}
+
+interface DeliveryBatchRow {
+  orderId: string;
+  version: number;
+  deliveredAt: Date;
+  items: Array<{ contentSnapshot: unknown }>;
+}
+
 /**
  * 原料「部位 / 状态 / 预处理」历史。
  *
  * 口径（设计文档 2026-10-26）：
  * - 橱窗已发布正式食谱：`Recipe.status=PUBLIC` 且非定制；
- * - 已交付定制食谱：只认当前有效交付（未撤销、未被替换），取最近一次交付时间；
+ * - 已交付定制：当前有效交付（legacy 单份：未撤销、未被替换；多份批次：每个订单最新一批）；
  * - 不包含设计草稿、未交付/撤销/替换的定制食谱；
  * - 只读，不返回客户/狗/订单信息。
  */
@@ -44,56 +71,14 @@ export class IngredientPreparationHistoryService {
     const id = ingredientId?.trim();
     if (!id) return [];
 
-    const rows = (await this.prisma.recipeItem.findMany({
-      where: {
-        ingredientId: id,
-        OR: [
-          {
-            recipe: {
-              status: 'PUBLIC',
-              isCustomRecipe: false,
-            },
-          },
-          {
-            recipe: {
-              isCustomRecipe: true,
-              deliveries: {
-                some: {
-                  revokedAt: null,
-                  replacedByDeliveryId: null,
-                },
-              },
-            },
-          },
-        ],
-      },
-      select: {
-        ingredientId: true,
-        preparationMethod: true,
-        recipe: {
-          select: {
-            isCustomRecipe: true,
-            status: true,
-            createdAt: true,
-            deliveries: {
-              where: {
-                revokedAt: null,
-                replacedByDeliveryId: null,
-              },
-              orderBy: { deliveredAt: 'desc' },
-              take: 1,
-              select: { deliveredAt: true },
-            },
-          },
-        },
-      },
-    })) as unknown as RecipeItemHistoryRow[];
+    const rows = await this.queryRecipeItemRows([id]);
+    const methodMap = await this.loadMethodMap(rows);
+    const entries = [
+      ...this.toRowEntries(rows, methodMap),
+      ...(await this.loadBatchEntries([id])),
+    ];
 
-    return this.aggregateWithMethodMap(
-      rows,
-      await this.loadMethodMap(rows),
-      limit,
-    );
+    return this.aggregateEntries(entries, limit);
   }
 
   async getLatestText(ingredientId: string): Promise<string | null> {
@@ -108,9 +93,43 @@ export class IngredientPreparationHistoryService {
     const result = new Map<string, string>();
     if (ids.length === 0) return result;
 
-    const rows = (await this.prisma.recipeItem.findMany({
+    const rows = await this.queryRecipeItemRows(ids);
+    const methodMap = await this.loadMethodMap(rows);
+    const batchEntries = await this.loadBatchEntries(ids);
+
+    const rowEntriesByIngredient = new Map<string, HistoryTextEntry[]>();
+    for (const entry of this.toRowEntries(rows, methodMap)) {
+      const list = rowEntriesByIngredient.get(entry.ingredientId) ?? [];
+      list.push(entry);
+      rowEntriesByIngredient.set(entry.ingredientId, list);
+    }
+    const batchEntriesByIngredient = new Map<string, HistoryTextEntry[]>();
+    for (const entry of batchEntries) {
+      const list = batchEntriesByIngredient.get(entry.ingredientId) ?? [];
+      list.push(entry);
+      batchEntriesByIngredient.set(entry.ingredientId, list);
+    }
+
+    for (const ingredientId of ids) {
+      const [first] = this.aggregateEntries(
+        [
+          ...(rowEntriesByIngredient.get(ingredientId) ?? []),
+          ...(batchEntriesByIngredient.get(ingredientId) ?? []),
+        ],
+        1,
+      );
+      if (first) result.set(ingredientId, first.text);
+    }
+
+    return result;
+  }
+
+  private async queryRecipeItemRows(
+    ingredientIds: string[],
+  ): Promise<RecipeItemHistoryRow[]> {
+    return (await this.prisma.recipeItem.findMany({
       where: {
-        ingredientId: { in: ids },
+        ingredientId: { in: ingredientIds },
         OR: [
           {
             recipe: {
@@ -152,34 +171,20 @@ export class IngredientPreparationHistoryService {
         },
       },
     })) as unknown as RecipeItemHistoryRow[];
-
-    const methodMap = await this.loadMethodMap(rows);
-    const byIngredient = new Map<string, RecipeItemHistoryRow[]>();
-    for (const row of rows) {
-      if (!row.ingredientId) continue;
-      const list = byIngredient.get(row.ingredientId) ?? [];
-      list.push(row);
-      byIngredient.set(row.ingredientId, list);
-    }
-
-    for (const [ingredientId, ingredientRows] of byIngredient) {
-      const [first] = this.aggregateWithMethodMap(
-        ingredientRows,
-        methodMap,
-        1,
-      );
-      if (first) result.set(ingredientId, first.text);
-    }
-
-    return result;
   }
 
   private async loadMethodMap(
     rows: RecipeItemHistoryRow[],
   ): Promise<Map<string, string>> {
-    const ids = extractLegacyPreparationMethodIds(
+    return this.loadMethodMapFromValues(
       rows.map((row) => row.preparationMethod),
     );
+  }
+
+  private async loadMethodMapFromValues(
+    values: Array<string | null | undefined>,
+  ): Promise<Map<string, string>> {
+    const ids = extractLegacyPreparationMethodIds(values);
     if (ids.length === 0) return new Map();
 
     const methods = await this.prisma.preparationMethod.findMany({
@@ -189,10 +194,102 @@ export class IngredientPreparationHistoryService {
     return new Map(methods.map((method) => [method.id, method.name] as const));
   }
 
-  /** 聚合：同文去重、按最近使用时间倒序、可选 limit。 */
-  private aggregateWithMethodMap(
+  /**
+   * 多份交付走 `CustomRecipeDeliveryBatch`，不写 legacy `CustomRecipeDelivery`。
+   * 每个订单只取最新一批（version 最大）；批次内的每份食谱各有一份冻结快照。
+   */
+  private async loadBatchEntries(
+    ingredientIds: string[],
+  ): Promise<HistoryTextEntry[]> {
+    const allowed = new Set(ingredientIds);
+    const batches = (await this.prisma.customRecipeDeliveryBatch.findMany({
+      select: {
+        orderId: true,
+        version: true,
+        deliveredAt: true,
+        items: { select: { contentSnapshot: true } },
+      },
+      orderBy: [{ orderId: 'asc' }, { version: 'desc' }],
+    })) as unknown as DeliveryBatchRow[];
+
+    const latestByOrder = new Map<string, DeliveryBatchRow>();
+    for (const batch of batches) {
+      if (!latestByOrder.has(batch.orderId)) {
+        latestByOrder.set(batch.orderId, batch);
+      }
+    }
+
+    const candidates: Array<{
+      ingredientId: string;
+      preparation: string | null;
+      lastUsedAt: Date;
+    }> = [];
+    for (const batch of latestByOrder.values()) {
+      for (const item of batch.items) {
+        const snapshot = item.contentSnapshot as DeliverySnapshot | null;
+        const recipeItems = snapshot?.recipe?.items ?? [];
+        for (const recipeItem of recipeItems) {
+          const ingredientId = String(recipeItem.ingredientId ?? '').trim();
+          if (!ingredientId || !allowed.has(ingredientId)) continue;
+          candidates.push({
+            ingredientId,
+            preparation: recipeItem.preparation ?? null,
+            lastUsedAt: batch.deliveredAt,
+          });
+        }
+      }
+    }
+
+    const methodMap = await this.loadMethodMapFromValues(
+      candidates.map((candidate) => candidate.preparation),
+    );
+    const entries: HistoryTextEntry[] = [];
+    for (const candidate of candidates) {
+      const readable = resolvePreparationMethodText(
+        candidate.preparation,
+        methodMap,
+        { preserveUnresolvedLegacy: false },
+      );
+      const text = normalizePreparationMethodHistoryText(readable);
+      // 历史里仍可能保留旧的长文案；10 字上限生效后不再作为候选。
+      if (!text || !isPreparationMethodWithinContentLimit(text)) continue;
+      entries.push({
+        ingredientId: candidate.ingredientId,
+        text,
+        lastUsedAt: candidate.lastUsedAt,
+      });
+    }
+    return entries;
+  }
+
+  private toRowEntries(
     rows: RecipeItemHistoryRow[],
     methodMap: Map<string, string>,
+  ): HistoryTextEntry[] {
+    const entries: HistoryTextEntry[] = [];
+    for (const row of rows) {
+      const lastUsedAt = this.resolveLastUsedAt(row);
+      if (!lastUsedAt || !row.ingredientId) continue;
+
+      const readable = resolvePreparationMethodText(
+        row.preparationMethod,
+        methodMap,
+        { preserveUnresolvedLegacy: false },
+      );
+      const text = normalizePreparationMethodHistoryText(readable);
+      if (!text || !isPreparationMethodWithinContentLimit(text)) continue;
+      entries.push({
+        ingredientId: row.ingredientId,
+        text,
+        lastUsedAt,
+      });
+    }
+    return entries;
+  }
+
+  /** 聚合：同文去重、按最近使用时间倒序、可选 limit。 */
+  private aggregateEntries(
+    entries: HistoryTextEntry[],
     limit?: number,
   ): IngredientPreparationHistoryEntry[] {
     const aggregated = new Map<
@@ -200,31 +297,20 @@ export class IngredientPreparationHistoryService {
       { text: string; usageCount: number; lastUsedAt: Date }
     >();
 
-    for (const row of rows) {
-      const lastUsedAt = this.resolveLastUsedAt(row);
-      if (!lastUsedAt) continue;
-
-      const readable = resolvePreparationMethodText(
-        row.preparationMethod,
-        methodMap,
-        { preserveUnresolvedLegacy: false },
-      );
-      const normalized = normalizePreparationMethodHistoryText(readable);
-      if (!normalized) continue;
-
-      const existing = aggregated.get(normalized);
+    for (const entry of entries) {
+      const existing = aggregated.get(entry.text);
       if (existing) {
         existing.usageCount += 1;
-        if (lastUsedAt > existing.lastUsedAt) {
-          existing.lastUsedAt = lastUsedAt;
+        if (entry.lastUsedAt > existing.lastUsedAt) {
+          existing.lastUsedAt = entry.lastUsedAt;
         }
         continue;
       }
 
-      aggregated.set(normalized, {
-        text: normalized,
+      aggregated.set(entry.text, {
+        text: entry.text,
         usageCount: 1,
-        lastUsedAt,
+        lastUsedAt: entry.lastUsedAt,
       });
     }
 

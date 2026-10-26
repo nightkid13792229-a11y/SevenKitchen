@@ -1,4 +1,6 @@
 import { Type } from 'class-transformer';
+import { IsPreparationMethodContentLength } from '../recipes/preparation-method-content.validator';
+
 import {
   ArrayMaxSize,
   ArrayMinSize,
@@ -497,7 +499,8 @@ export class AddRecipeDesignItemDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(100)
+  @MaxLength(20)
+  @IsPreparationMethodContentLength()
   preparationMethod?: string;
 
   @IsOptional()
@@ -534,7 +537,8 @@ export class UpdateRecipeDesignItemDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(100)
+  @MaxLength(20)
+  @IsPreparationMethodContentLength()
   preparationMethod?: string | null;
 
   @IsOptional()
@@ -584,7 +588,8 @@ export class ReplaceRecipeDesignItemDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(100)
+  @MaxLength(20)
+  @IsPreparationMethodContentLength()
   preparationMethod?: string;
 }
 

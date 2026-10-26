@@ -99,7 +99,7 @@ export interface RecipeItem {
   id?: string;
   ingredientId: string;
   ingredient: Ingredient;
-  preparationMethod?: string | null; // 添加时机/制备方法
+  preparationMethod?: string | null; // 添加时机 / 部位状态预处理
   ratioPercent?: number | null;
   exampleWeight?: number | null;
   nutrientTargetKey?: string | null;
@@ -258,7 +258,7 @@ export interface IngredientCostItem {
   procurementSkuSourceTier?: string; // 实际命中的采购 SKU 来源等级
   procurementSkuFallbackLevel?: number; // 来源方案回退层级
   properties?: any; // 完整的properties对象（包含purchase_link等）
-  preparationMethod?: string; // 添加时机/制备方法
+  preparationMethod?: string; // 添加时机 / 部位状态预处理
   nutrientTargetKey?: string; // 营养素名称（补剂用）
   nutrientTargetValue?: number; // 营养目标值（补剂用）
   supplementTargets?: SupplementTarget[];

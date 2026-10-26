@@ -9,7 +9,7 @@
       :debounce="0"
       :tabindex="tabindex"
       :placeholder="placeholder"
-      maxlength="100"
+      maxlength="20"
       clearable
       @select="handleSelect"
       @change="handleChange"
@@ -21,14 +21,22 @@
         <span class="preparation-method-suggestion">{{ item.value }}</span>
       </template>
     </el-autocomplete>
+    <div
+      class="preparation-method-count"
+      :class="{ 'is-over': contentLength > PREPARATION_METHOD_MAX_CONTENT_LENGTH }"
+    >
+      {{ contentLength }}/{{ PREPARATION_METHOD_MAX_CONTENT_LENGTH }} 字（不含符号）
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { recipeApi } from '@/api/recipes'
 import { PREPARATION_FIELD_PLACEHOLDER } from '@/constants/preparationField'
 import {
+  PREPARATION_METHOD_MAX_CONTENT_LENGTH,
+  countPreparationMethodContentCharacters,
   resolvePreparationHistorySuggestions,
   resolvePreparationMethodCommitText,
   resolvePreparationMethodDisplayText
@@ -75,6 +83,9 @@ const historyCache = new Map<string, string[]>()
 
 const text = ref(
   resolvePreparationMethodDisplayText(props.modelValue, props.label)
+)
+const contentLength = computed(() =>
+  countPreparationMethodContentCharacters(text.value)
 )
 const committedText = ref(text.value)
 const lastCommittedValue = ref<string | null>(
@@ -137,6 +148,9 @@ async function fetchSuggestions(
 }
 
 function commitText() {
+  // 超出 10 个内容字符时不提交，保留输入让用户自己删；
+  // 后端 DTO 也会再校验一次。
+  if (contentLength.value > PREPARATION_METHOD_MAX_CONTENT_LENGTH) return
   const commit = resolvePreparationMethodCommitText(text.value)
   text.value = commit.text
   focusText.value = commit.text
@@ -196,6 +210,15 @@ function normalize(value: string) {
   width: 240px;
   max-width: 100%;
   flex: 0 0 auto;
+}
+.preparation-method-count {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.3;
+  color: #909399;
+}
+.preparation-method-count.is-over {
+  color: #f56c6c;
 }
 .preparation-method-field :deep(.el-autocomplete) {
   width: 100%;

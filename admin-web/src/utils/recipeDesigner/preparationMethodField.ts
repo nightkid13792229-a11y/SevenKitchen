@@ -1,5 +1,16 @@
 import { normalizePreparationMethodText } from '@/utils/preparationMethodText'
 
+export const PREPARATION_METHOD_MAX_CONTENT_LENGTH = 10
+const NON_CONTENT_CHARACTER_RE = /[\p{P}\p{S}\s]/u
+
+export function countPreparationMethodContentCharacters(
+  value: string | null | undefined
+): number {
+  return Array.from(String(value ?? '')).filter(
+    (character) => !NON_CONTENT_CHARACTER_RE.test(character)
+  ).length
+}
+
 export interface PreparationMethodCommit {
   value: string | null
   text: string

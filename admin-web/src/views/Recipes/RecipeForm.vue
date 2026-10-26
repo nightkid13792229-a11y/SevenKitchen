@@ -819,8 +819,15 @@
             v-model="ingredientForm.preparationMethodText"
             type="textarea"
             :rows="3"
+            maxlength="20"
             placeholder="如：牛里脊/生/去油"
           />
+          <div
+            class="preparation-length-hint"
+            :class="{ 'is-over': preparationMethodContentLength > PREPARATION_METHOD_MAX_CONTENT_LENGTH }"
+          >
+            {{ preparationMethodContentLength }}/{{ PREPARATION_METHOD_MAX_CONTENT_LENGTH }} 字（不含符号）
+          </div>
 
           <div style="margin-top: 8px">
             <div style="font-size: 12px; color: #909399; margin-bottom: 6px">历史记录</div>
@@ -1177,10 +1184,11 @@ import { recipeHealthTagApi, recipeSeriesCoverBadgeApi } from '@/api/recipeHealt
 import { inventoryApi } from '@/api';
 import { IngredientTypeLabels, type NutritionFoodMapping } from '@/types/ingredient';
 import { SUPPLEMENT_TARGET_FIELD_OPTIONS } from '@/constants/ingredientNutrition';
+import { getDefaultPreparationMethodFromHistory } from '@/utils/preparationMethodText';
 import {
-  appendPreparationMethodText,
-  getDefaultPreparationMethodFromHistory,
-} from '@/utils/preparationMethodText';
+  PREPARATION_METHOD_MAX_CONTENT_LENGTH,
+  countPreparationMethodContentCharacters,
+} from '@/utils/recipeDesigner/preparationMethodField';
 import {
   preparationBasisMismatchHint,
 } from '@/utils/preparationBasis';
@@ -1316,6 +1324,9 @@ const ingredientForm = reactive({
   supplementTargets: [] as SupplementTarget[],
   supplementAlternativeIngredientIds: [] as string[],
 });
+const preparationMethodContentLength = computed(() =>
+  countPreparationMethodContentCharacters(ingredientForm.preparationMethodText),
+);
 const ingredientPreparationMethodHistory = ref<
   IngredientPreparationMethodHistoryItem[]
 >([]);
@@ -1592,10 +1603,8 @@ const normalizeSupplementTargetsForSave = (): SupplementTarget[] => {
 };
 
 const applyPreparationMethodHistory = (historyText: string) => {
-  ingredientForm.preparationMethodText = appendPreparationMethodText(
-    ingredientForm.preparationMethodText,
-    historyText,
-  );
+  // 历史记录已经是完整句子；点击后替换，不追加。
+  ingredientForm.preparationMethodText = historyText;
 };
 
 watch(
@@ -2720,6 +2729,16 @@ const saveIngredient = () => {
     return;
   }
 
+  if (
+    preparationMethodContentLength.value >
+    PREPARATION_METHOD_MAX_CONTENT_LENGTH
+  ) {
+    ElMessage.warning(
+      `部位 / 状态 / 预处理最多 ${PREPARATION_METHOD_MAX_CONTENT_LENGTH} 个字（不含符号）`,
+    );
+    return;
+  }
+
   // Create item object - 根据原料类型保存相应字段
   const item: RecipeItem = {
     id: existingItem?.id || '',
@@ -2728,7 +2747,9 @@ const saveIngredient = () => {
     ingredientName: ingredient.name,
     ingredientType: ingredient.type,
     preparationMethod:
-      ingredientForm.preparationMethodText.trim() || undefined,
+      ingredient.type === 'SUPPLEMENT'
+        ? undefined
+        : ingredientForm.preparationMethodText.trim() || undefined,
     // 食材类型：保存示例重量和占比
     ...(ingredient.type === 'FOOD' && {
       nutritionFoodId: ingredientForm.nutritionFoodId || undefined,
@@ -3862,5 +3883,14 @@ onMounted(async () => {
   font-size: 12px;
   line-height: 1.5;
   color: #e6a23c;
+}
+.preparation-length-hint {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #909399;
+}
+.preparation-length-hint.is-over {
+  color: #f56c6c;
 }
 </style>

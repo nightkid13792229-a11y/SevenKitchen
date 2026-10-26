@@ -41,10 +41,17 @@ function customRow(input: {
   };
 }
 
-function createService(recipeRows: unknown[], methodRows: unknown[] = []) {
+function createService(
+  recipeRows: unknown[],
+  methodRows: unknown[] = [],
+  batchRows: unknown[] = [],
+) {
   const prisma = {
     recipeItem: {
       findMany: jest.fn().mockResolvedValue(recipeRows),
+    },
+    customRecipeDeliveryBatch: {
+      findMany: jest.fn().mockResolvedValue(batchRows),
     },
     preparationMethod: {
       findMany: jest.fn().mockResolvedValue(methodRows),
@@ -77,7 +84,7 @@ describe('IngredientPreparationHistoryService', () => {
     expect(prisma.recipeItem.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          ingredientId: 'ing-1',
+          ingredientId: { in: ['ing-1'] },
           OR: expect.arrayContaining([
             expect.objectContaining({
               recipe: expect.objectContaining({
@@ -140,6 +147,22 @@ describe('IngredientPreparationHistoryService', () => {
     expect(history[0]?.text).toBe('生重');
   });
 
+  it('drops history text over the 10-content-character limit', async () => {
+    const { service } = createService([catalogRow('x'.repeat(11), NEW)]);
+
+    const history = await service.getHistory('ing-1');
+
+    expect(history).toEqual([]);
+  });
+
+  it('keeps history text within 10 content characters even with separators', async () => {
+    const { service } = createService([catalogRow('牛里脊/生/去油', NEW)]);
+
+    const history = await service.getHistory('ing-1');
+
+    expect(history[0]?.text).toBe('牛里脊/生/去油');
+  });
+
   it('limits to the requested number of distinct entries', async () => {
     const { service } = createService([
       catalogRow('A', new Date('2026-10-03T00:00:00.000Z')),
@@ -178,4 +201,151 @@ describe('IngredientPreparationHistoryService', () => {
     expect(map.get('ing-duck')).toBe('鸭肉新');
     expect(map.get('ing-beef')).toBe('牛肉定制');
   });
+  it('includes batch-delivered custom recipes from the latest batch only', async () => {
+    const { service, prisma } = createService(
+      [],
+      [],
+      [
+        {
+          orderId: 'order-1',
+          version: 2,
+          deliveredAt: NEW,
+          items: [
+            {
+              contentSnapshot: {
+                recipe: {
+                  items: [
+                    {
+                      ingredientId: 'ing-1',
+                      preparation: '牛里脊/生/去油',
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+        {
+          orderId: 'order-1',
+          version: 1,
+          deliveredAt: OLD,
+          items: [
+            {
+              contentSnapshot: {
+                recipe: {
+                  items: [
+                    {
+                      ingredientId: 'ing-1',
+                      preparation: '旧批次/生/去筋膜',
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+        {
+          orderId: 'order-2',
+          version: 1,
+          deliveredAt: MID,
+          items: [
+            {
+              contentSnapshot: {
+                recipe: {
+                  items: [
+                    {
+                      ingredientId: 'ing-1',
+                      preparation: '牛里脊/生/去筋膜',
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+      ],
+    );
+
+    const history = await service.getHistory('ing-1');
+
+    expect(history.map((entry) => entry.text)).toEqual([
+      '牛里脊/生/去油',
+      '牛里脊/生/去筋膜',
+    ]);
+    expect(history[0]).toEqual({
+      text: '牛里脊/生/去油',
+      usageCount: 1,
+      lastUsedAt: NEW,
+    });
+  });
+
+  it('resolves legacy IDs inside a batch snapshot', async () => {
+    const { service } = createService(
+      [],
+      [{ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', name: '生重' }],
+      [
+        {
+          orderId: 'order-1',
+          version: 1,
+          deliveredAt: NEW,
+          items: [
+            {
+              contentSnapshot: {
+                recipe: {
+                  items: [
+                    {
+                      ingredientId: 'ing-1',
+                      preparation: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+      ],
+    );
+
+    const history = await service.getHistory('ing-1');
+
+    expect(history[0]?.text).toBe('生重');
+  });
+
+  it('getLatestTextMap includes batch entries for the requested ingredient', async () => {
+    const { service } = createService(
+      [],
+      [],
+      [
+        {
+          orderId: 'order-1',
+          version: 1,
+          deliveredAt: NEW,
+          items: [
+            {
+              contentSnapshot: {
+                recipe: {
+                  items: [
+                    {
+                      ingredientId: 'ing-batch',
+                      preparation: '鸡胸/生/去皮',
+                    },
+                    {
+                      ingredientId: 'ing-other',
+                      preparation: '鸭肉/生/去骨',
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+      ],
+    );
+
+    const map = await service.getLatestTextMap(['ing-batch']);
+
+    expect(map.get('ing-batch')).toBe('鸡胸/生/去皮');
+    expect(map.has('ing-other')).toBe(false);
+  });
+
 });

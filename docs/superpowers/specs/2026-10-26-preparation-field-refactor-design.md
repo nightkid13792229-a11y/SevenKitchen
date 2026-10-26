@@ -62,7 +62,7 @@
 新增原料时，系统自动带出该原料**最近一次使用过的历史文案**：
 
 - 来源一：橱窗已发布正式食谱（`Recipe.status = PUBLIC` 且 `isCustomRecipe = false`）。
-- 来源二：已交付定制食谱（存在 `CustomRecipeDelivery` 交付记录，且为当前有效交付：`revokedAt = null`、`replacedByDeliveryId = null`）。
+- 来源二：已交付定制食谱。单份交付取当前有效 `CustomRecipeDelivery`（`revokedAt = null`、`replacedByDeliveryId = null`）；多份批次取该订单最新一批 `CustomRecipeDeliveryBatch` 的冻结快照。
 - 不包含：当前草稿、其他设计草稿、未交付/已撤销/已被替换的定制食谱。
 - 排序：按最近使用时间倒序。橱窗取 `Recipe.createdAt`（发布版本创建时间），定制取有效交付的 `deliveredAt`。
 - 同文去重；最多返回 3 条。
@@ -80,7 +80,7 @@
 ### 4.3 历史接口的数据口径
 
 - 目录：`RecipeItem` 关联 `Recipe`，筛选 `status = PUBLIC`、`isCustomRecipe = false`。
-- 定制：`RecipeItem` 关联 `Recipe`，筛选 `isCustomRecipe = true`，且关联的 `CustomRecipeDelivery` 存在当前有效交付。
+- 定制：单份交付看 `RecipeItem` 关联的当前有效 `CustomRecipeDelivery`；多份批次直接读取最新 `CustomRecipeDeliveryBatch` 内每份 `CustomRecipeDeliveryItem.contentSnapshot.recipe.items`（不再依赖可被后续编辑覆盖的 `RecipeItem`）。
 - 每条记录计算 `lastUsedAt`：
   - 目录：`Recipe.createdAt`
   - 定制：当前有效交付的 `deliveredAt`
@@ -127,11 +127,11 @@
 | 碳水/谷物 CARB | 必须 |
 | 蔬菜 VEGETABLE | 必须 |
 | 菌藻 MUSHROOM | 必须 |
-| 坚果种子 NUT_SEED | 必须 |
+| 坚果种子 NUTS | 必须 |
 | 豆 LEGUME | 必须 |
 | 水果 FRUIT | 必须 |
 | 补剂 SUPPLEMENT | 不要求 |
-| 油脂 FAT | 不要求 |
+| 油脂 OIL | 不要求 |
 | 调味 SEASONING | 不要求 |
 | 乳制品 DAIRY | 不要求 |
 | 未分类 UNCLASSIFIED | 不要求 |

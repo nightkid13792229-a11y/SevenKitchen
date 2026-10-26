@@ -98,13 +98,15 @@ function formatAmount(value: number | null | undefined): string {
 }
 
 .usage-table__th-prep {
-  width: 180rpx;
+  width: 210rpx;
   font-size: 20rpx;
+  line-height: 1.4;
   color: #a9967e;
+  word-break: break-all;
 }
 
 .usage-table__th-amount {
-  width: 150rpx;
+  width: 140rpx;
   text-align: right;
   font-size: 20rpx;
   color: #a9967e;
@@ -124,13 +126,15 @@ function formatAmount(value: number | null | undefined): string {
 }
 
 .usage-table__prep {
-  width: 180rpx;
-  font-size: 22rpx;
+  width: 210rpx;
+  font-size: 20rpx;
+  line-height: 1.45;
   color: #8a7a66;
+  word-break: break-all;
 }
 
 .usage-table__amount {
-  width: 150rpx;
+  width: 140rpx;
   text-align: right;
   font-size: 25rpx;
   font-weight: 700;

@@ -45,7 +45,7 @@ export interface SnapshotRecipeItem {
   name: string;
   /** 食材 id（2026-10-18 补；用途同上，老快照没有） */
   ingredientId?: string | null;
-  /** 制备方法（如"切丁煮熟"） */
+  /** 部位 / 状态 / 预处理（如"切丁煮熟"） */
   preparation?: string | null;
   /** 占比，如 32（表示 32%） */
   ratioPercent?: number | null;

@@ -169,9 +169,15 @@ export const TFDA_NUTRIENT_MAP: readonly TfdaNutrientMapping[] = [
   tfdaField('α-維生素E當量(α-TE)', 'vitamins', 'vitaminE', 'mg', {
     multiplier: VITAMIN_E_MG_TO_IU,
   }),
-  // K：TFDA 拆成 K1/K2 两行，目录只有 vitaminK，按 µg 相加。
+  // K：官方文件拆成 K1 + K2（MK-4/MK-7 两种形态，没有笼统的「維生素K2」），
+  // 目录只有 vitaminK 一个字段，按 µg 相加；少一条就会静默丢掉一部分 K2。
   tfdaField('維生素K1', 'vitamins', 'vitaminK', 'ug', { combine: 'SUM' }),
-  tfdaField('維生素K2', 'vitamins', 'vitaminK', 'ug', { combine: 'SUM' }),
+  tfdaField('維生素K2(MK-4)', 'vitamins', 'vitaminK', 'ug', {
+    combine: 'SUM',
+  }),
+  tfdaField('維生素K2(MK-7)', 'vitamins', 'vitaminK', 'ug', {
+    combine: 'SUM',
+  }),
   tfdaField('維生素B1', 'vitamins', 'vitaminB1', 'mg'),
   tfdaField('維生素B2', 'vitamins', 'vitaminB2', 'mg'),
   tfdaField('菸鹼素', 'vitamins', 'vitaminB3', 'mg'),

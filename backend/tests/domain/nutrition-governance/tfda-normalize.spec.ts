@@ -35,7 +35,7 @@ describe('buildTfdaNutritionProfile', () => {
         ['維生素E總量', 'mg', 2],
         ['維生素D總量(IU)', 'IU', 40],
         ['維生素K1', 'ug', 1],
-        ['維生素K2', 'ug', 2],
+        ['維生素K2(MK-7)', 'ug', 2],
       ]),
     });
 
@@ -302,22 +302,37 @@ describe('buildTfdaNutritionProfile', () => {
     expect(sourceForm?.basisType).toBe('PER_100_G');
   });
 
-  it('维生素 K 由 K1/K2 相加，sourceForm 记两个来源项', () => {
+  it('维生素 K 由 K1/MK-4/MK-7 相加，sourceForm 记三个来源项', () => {
     const p = buildTfdaNutritionProfile(
       food(
         rows([
           ['維生素K1', 'ug', 1],
-          ['維生素K2', 'ug', 2],
+          ['維生素K2(MK-4)', 'ug', 2],
+          ['維生素K2(MK-7)', 'ug', 3],
         ]),
       ),
     );
 
     const sourceForm = p.meta.sourceForms?.['vitamins.vitaminK'];
-    expect(p.vitamins.vitaminK).toBe(3);
-    expect(sourceForm?.sourceNutrientName).toBe('維生素K1 + 維生素K2');
+    expect(p.vitamins.vitaminK).toBe(6);
+    expect(sourceForm?.sourceNutrientName).toBe(
+      '維生素K1 + 維生素K2(MK-4) + 維生素K2(MK-7)',
+    );
     expect(sourceForm?.originalValue).toBeNull();
-    expect(sourceForm?.canonicalValue).toBe(3);
+    expect(sourceForm?.canonicalValue).toBe(6);
     expect(sourceForm?.basisType).toBe('PER_100_G');
+  });
+
+  it.each([
+    { name: '維生素K2(MK-4)', value: 2 },
+    { name: '維生素K2(MK-7)', value: 3 },
+  ])('$name 单独存在时也计入 vitaminK', ({ name, value }) => {
+    const p = buildTfdaNutritionProfile(food(rows([[name, 'ug', value]])));
+
+    expect(p.vitamins.vitaminK).toBe(value);
+    expect(p.meta.sourceForms?.['vitamins.vitaminK']?.sourceNutrientName).toBe(
+      name,
+    );
   });
 
   it('refuseRate 留在输入里，不写进 profile', () => {

@@ -50,3 +50,17 @@ describe('AI 命名字段', () => {
     expect(apiSource).not.toContain('updateSeries')
   })
 })
+
+import launchReadinessSource from '@/utils/recipeDesigner/launchReadiness.ts?raw'
+
+describe('上线检查里的「已归类」项', () => {
+  it('通过时有中文标签，且只在产品线分支出现', () => {
+    expect(launchReadinessSource).toContain("code: 'TAXONOMY_REQUIRED'")
+    expect(launchReadinessSource).toContain('已归类（至少一个需求分类）')
+    const block = launchReadinessSource.slice(
+      launchReadinessSource.indexOf("code: 'TAXONOMY_REQUIRED'"),
+      launchReadinessSource.indexOf("code: 'TAXONOMY_REQUIRED'") + 160
+    )
+    expect(block).toContain("scope: 'CATALOG'")
+  })
+})

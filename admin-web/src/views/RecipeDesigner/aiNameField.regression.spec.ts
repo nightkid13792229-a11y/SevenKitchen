@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import fieldSource from '@/views/RecipeDesigner/components/AiNameField.vue?raw'
 import apiSource from '@/api/recipeNaming.ts?raw'
-import publishSource from '@/views/RecipeDesigner/Publish.vue?raw'
 
 describe('AI 命名字段', () => {
   it('输入框旁有 AI 生成按钮与 12 字计数器', () => {
@@ -21,9 +20,11 @@ describe('AI 命名字段', () => {
     expect(fieldSource).toContain('合规存疑')
   })
 
-  it('AI 不可用时按钮禁用而不是点了报错', () => {
+  it('只有后端明确说不可用才置灰，拿不到答案时保持可点', () => {
     expect(fieldSource).toContain(':disabled="!available || !seriesId"')
     expect(fieldSource).toContain('AI 命名服务未配置')
+    // 401/网络错误不能把人挡在一个不解释原因的灰按钮外面
+    expect(fieldSource).toContain('available.value = true')
   })
 
   it('生成失败会恢复按钮并可重试', () => {
@@ -31,16 +32,7 @@ describe('AI 命名字段', () => {
     expect(fieldSource).toContain('generating.value = false')
   })
 
-  it('发布页把名称行换成了 AI 字段，并保留「保存名称」动作', () => {
-    expect(publishSource).toContain('AiNameField')
-    expect(publishSource).toContain('seriesNameDraft')
-    expect(publishSource).toContain('保存名称')
-  })
 
-  it('发布页改名弹窗限 12 字，与后端同一口径', () => {
-    expect(publishSource).toContain('maxlength="12"')
-    expect(publishSource).toContain('最多 12 个字')
-  })
 
   it('接口路径与后端一致，且只生成不落库', () => {
     expect(apiSource).toContain("'/admin/recipe-designer/naming/availability'")

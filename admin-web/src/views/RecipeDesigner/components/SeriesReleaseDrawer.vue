@@ -224,6 +224,16 @@
             label-position="left"
             class="series-release__form"
           >
+            <el-alert
+              v-if="isTemporaryName"
+              class="series-release__temp-name"
+              type="warning"
+              :closable="false"
+              show-icon
+              title="还是临时名称，不能发布"
+              description="先把上面改成正式名称（例如「均衡营养｜三文鱼南瓜」），再点保存名称。"
+            />
+
             <!-- 2026-10-27：系列名是唯一名字，整系列发布前必须定下来 -->
             <el-form-item label="食谱名称" required>
               <div class="series-release__name-row">
@@ -622,6 +632,11 @@ watch(
     nameDraft.value = value ?? ''
   },
   { immediate: true }
+)
+
+/** 临时名（「未命名系列 · …」）会印在标签上，后端也会拦 */
+const isTemporaryName = computed(() =>
+  String(props.seriesName ?? '').trim().startsWith('未命名')
 )
 
 async function saveName() {

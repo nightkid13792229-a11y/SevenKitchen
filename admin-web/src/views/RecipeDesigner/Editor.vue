@@ -1733,14 +1733,6 @@ function handleStagePublished() {
   router.push('/recipe-designer')
 }
 
-function goPublish() {
-  if (orderId) {
-    ElMessage.warning('本单设计请用「加入本单待提交」，由管理员最终提交交付')
-    return
-  }
-  router.push(`/recipe-designer/drafts/${currentDraftId.value}/publish`)
-}
-
 function goBack() {
   if (orderId) {
     backToOrderWorkspace()

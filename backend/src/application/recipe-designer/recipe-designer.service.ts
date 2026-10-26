@@ -4366,6 +4366,12 @@ export class RecipeDesignerService {
     }
 
     const series = await this.loadCatalogSeriesForRelease(seriesId, context);
+    // 临时名（「未命名系列 · 10-21 22:15」）不能上线：它会印在标签上
+    if (String(series.name ?? '').trim().startsWith('未命名')) {
+      throw new BadRequestException(
+        '系列名称还是临时名称，先在「发布设置」里改成正式名称再发布',
+      );
+    }
     const [sources, coverBadges, taxonomyLinkCount] = await Promise.all([
       this.loadSeriesReleaseStageSources(seriesId),
       this.loadSeriesCoverBadgeNames(seriesId),

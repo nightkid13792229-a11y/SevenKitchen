@@ -90,9 +90,11 @@ const isOverLimit = computed(() => length.value > RECIPE_NAME_MAX_LENGTH)
 onMounted(async () => {
   try {
     const result = await recipeNamingApi.availability()
+    // 只有后端明确说"不可用"才置灰；拿不到答案（401/网络错误）时保持可点，
+    // 让用户点下去看到真正的错误，而不是面对一个不解释原因的灰按钮。
     available.value = result.available
   } catch {
-    available.value = false
+    available.value = true
   }
 })
 

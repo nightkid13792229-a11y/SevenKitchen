@@ -6,7 +6,10 @@ jest.mock('src/application/recipe-designer/deepseek-chat', () => ({
   callDeepSeekJson: (...args: unknown[]) => callDeepSeekJson(...args),
 }));
 
-import { RecipeNamingService } from 'src/application/recipe-designer/recipe-naming.service';
+import {
+  RecipeNamingService,
+  buildRecipeNamingSystemPrompt,
+} from 'src/application/recipe-designer/recipe-naming.service';
 
 function createService() {
   const provider = {
@@ -131,5 +134,21 @@ describe('RecipeNamingService 配置回退', () => {
     };
     const service = new RecipeNamingService(provider as never);
     expect(await service.isAvailable()).toBe(false);
+  });
+});
+
+describe('命名提示词', () => {
+  it('要求把主蛋白放在食材段最后（碳水/辅料在前）', () => {
+    const prompt = buildRecipeNamingSystemPrompt();
+    expect(prompt).toContain('主蛋白放在最后');
+    expect(prompt).toContain('红薯鸡胸肉');
+    // 不能出现"主蛋白放第一位"这种反向指令
+    expect(prompt).not.toContain('主蛋白放第一位');
+  });
+
+  it('保留 12 字硬约束与禁止虚构', () => {
+    const prompt = buildRecipeNamingSystemPrompt();
+    expect(prompt).toContain('12 个字');
+    expect(prompt).toContain('不得虚构');
   });
 });

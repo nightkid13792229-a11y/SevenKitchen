@@ -103,6 +103,7 @@ export class RecipeNamingService {
   async generate(input: RecipeNamingInput): Promise<RecipeNamingResult> {
     const config = await this.resolveRuntimeConfig();
 
+    const startedAt = Date.now();
     const parsed = await callDeepSeekJson({
       baseUrl: config.baseUrl,
       model: config.model,
@@ -125,6 +126,11 @@ export class RecipeNamingService {
         forbiddenPatterns: getForbiddenClaimPatterns(),
       },
     });
+
+    // 命名是用户要盯着转圈的动作，耗时值得留痕（模型/超时都能从这一行看出来）
+    console.log(
+      `[RecipeNaming] provider=${config.provider} model=${config.model} 耗时=${Date.now() - startedAt}ms`,
+    );
 
     return {
       candidates: this.normalizeCandidates(parsed),
@@ -171,7 +177,8 @@ export function buildRecipeNamingSystemPrompt(): string {
     '',
     '【命名格式】必须是「价值点｜食材」两段，用全角竖线「｜」分隔。',
     '  · 价值点：顾客为什么买。例如 全价、低脂、高蛋白、单一动物蛋白、鲜肉、蒸煮、均衡营养。',
-    '  · 食材：主蛋白放第一位，可以带一个主碳水。例如「红薯鸡胸肉」「三文鱼牛霖」。',
+    '  · 食材：按「碳水/辅料 → 动物蛋白」的顺序写，**主蛋白放在最后**。',
+    '    例：低脂｜红薯鸡胸肉、缓慢升糖｜粗粮猪里脊、均衡营养｜三文鱼牛霖。',
     '',
     '【硬性要求】',
     `- 每条名字**最多 ${RECIPE_NAME_MAX_LENGTH} 个字**（中文按字算，含分隔符）。超过的不要输出——标签是一行不换行的，多一个字就印不下。`,

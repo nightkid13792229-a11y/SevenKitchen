@@ -297,6 +297,25 @@ describe('SupplementDosageService', () => {
     expect(bad.status).toBe('UNIT_MISMATCH');
   });
 
+  it('converts PER_SERVING to grams when servingWeightG is present', () => {
+    const result = service.computeDosage({
+      ingredient: ingredient({
+        baseUnit: 'G',
+        unitDisplayLabel: 'g',
+        nutritionProfile: {
+          meta: { rawBasisType: 'PER_SERVING', servingWeightG: 5 },
+          minerals: { calcium: 500 },
+        },
+      }),
+      targets: [target({ targetValuePerKg: 1000 })],
+      totalWeightG: 1000,
+    });
+
+    expect(result.status).toBe('OK');
+    // 500mg/5g = 100mg/g；1000mg ÷ 100 = 10g
+    expect(result.amount).toBeCloseTo(10, 6);
+  });
+
   it('rejects PER_SERVING data on a gram-based ingredient', () => {
     const result = service.computeDosage({
       ingredient: ingredient({

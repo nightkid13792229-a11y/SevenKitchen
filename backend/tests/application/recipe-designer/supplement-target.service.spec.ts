@@ -72,6 +72,18 @@ function buildEpaDhaProfile(): NutritionProfileV2 {
   });
 }
 
+function buildGlucosamineProfile(): NutritionProfileV2 {
+  const profile = createEmptyNutritionProfile();
+  profile.meta.rawBasisType = 'PER_SERVING';
+  profile.customItems.push({
+    name: '氨糖',
+    value: 500,
+    unit: 'mg',
+    rawBasisType: 'PER_SERVING',
+  });
+  return normalizeNutritionProfile(profile)!;
+}
+
 describe('SupplementTargetService', () => {
   let service: SupplementTargetService;
   let findUnique: jest.Mock;
@@ -243,6 +255,50 @@ describe('SupplementTargetService', () => {
         service.validateTargets(profile, [{ fieldPath: 'derived.epaDha' }]),
       ).toEqual([
         { fieldPath: 'derived.epaDha', label: 'EPA + DHA', unit: 'mg' },
+      ]);
+    });
+
+    it('accepts a custom nutrient target and uses the profile item unit', () => {
+      const profile = buildGlucosamineProfile();
+
+      expect(
+        service.validateTargets(profile, [{ fieldPath: 'custom:氨糖' }]),
+      ).toEqual([
+        { fieldPath: 'custom:氨糖', label: '氨糖', unit: 'mg' },
+      ]);
+    });
+
+    it('rejects a custom target that is not in the profile', () => {
+      expect(() =>
+        service.validateTargets(buildGlucosamineProfile(), [
+          { fieldPath: 'custom:软骨素' },
+        ]),
+      ).toThrow(BadRequestException);
+    });
+
+    it('rejects a custom target with a mismatched unit', () => {
+      expect(() =>
+        service.validateTargets(buildGlucosamineProfile(), [
+          { fieldPath: 'custom:氨糖', unit: 'IU' },
+        ]),
+      ).toThrow(BadRequestException);
+    });
+
+    it('computes a custom target concentration from the profile item', () => {
+      expect(
+        service.computeTargets(
+          buildGlucosamineProfile(),
+          [{ fieldPath: 'custom:氨糖' }],
+          2,
+          2000,
+        ),
+      ).toEqual([
+        {
+          fieldPath: 'custom:氨糖',
+          label: '氨糖',
+          unit: 'mg',
+          targetValuePerKg: 500,
+        },
       ]);
     });
 

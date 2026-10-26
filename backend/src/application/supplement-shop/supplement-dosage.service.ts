@@ -355,6 +355,24 @@ export class SupplementDosageService {
       const actualBase = String(input.ingredient?.baseUnit ?? '')
         .trim()
         .toUpperCase();
+
+      // 每份标注、但库存按克记：有每份克重就换算成“每克”，否则拒绝。
+      // 例：1 平勺 5g、含钙 500mg → 100mg/g；没有 servingWeightG 就不能猜。
+      if (basis === 'PER_SERVING' && actualBase === 'G') {
+        const servingWeightG = Number(input.profile?.meta?.servingWeightG);
+        if (!Number.isFinite(servingWeightG) || servingWeightG <= 0) {
+          return {
+            status: 'UNIT_MISMATCH',
+            actualUnit: resolveDisplayUnit(input.ingredient),
+          };
+        }
+        return this.matchUnit(
+          input.rawValue / servingWeightG,
+          input.rawUnit,
+          input.target,
+        );
+      }
+
       if (expectedBase && actualBase && expectedBase !== actualBase) {
         return {
           status: 'UNIT_MISMATCH',

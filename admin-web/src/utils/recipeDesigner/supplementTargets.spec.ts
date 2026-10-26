@@ -39,6 +39,28 @@ describe('补剂目标营养素 · 营养字段选择', () => {
       .toContain('90')
   })
 
+  it('自定义成分也作为补剂目标候选，fieldPath 用 custom: 前缀', () => {
+    const profile = buildProfile((draft) => {
+      draft.customItems.push({
+        name: '氨糖',
+        value: 500,
+        unit: 'mg',
+        rawBasisType: 'PER_SERVING'
+      })
+    })
+
+    const candidate = listSupplementTargetFieldCandidates(profile).find(
+      (item) => item.fieldPath === 'custom:氨糖'
+    )
+
+    expect(candidate).toMatchObject({
+      fieldPath: 'custom:氨糖',
+      label: '氨糖',
+      unit: 'mg',
+      value: 500
+    })
+  })
+
   it('只提供独立营养字段，即使来源字段齐全也不提供派生组合字段', () => {
     const completeProfile = buildProfile((draft) => {
       draft.fattyAcids.epa = 100

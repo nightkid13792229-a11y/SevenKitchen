@@ -53,6 +53,12 @@ export const AGENT_PURPOSES: AgentPurposeMeta[] = [
     defaultModel: 'deepseek-v4-pro',
   },
   {
+    purpose: 'INGREDIENT_INTAKE',
+    label: 'AI 添加原料',
+    description: '原料识别、营养词条匹配与草稿起草（对话式 Agent）',
+    defaultModel: 'deepseek-v4-pro',
+  },
+  {
     purpose: 'NUTRITION_REVIEW',
     label: '营养复核',
     description: '配方营养校验、复杂来源与人工升级复核',

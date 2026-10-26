@@ -819,6 +819,8 @@
             v-model="ingredientForm.preparationMethodText"
             type="textarea"
             :rows="3"
+            maxlength="100"
+            show-word-limit
             placeholder="如：牛里脊/生/去油"
           />
 
@@ -1177,10 +1179,7 @@ import { recipeHealthTagApi, recipeSeriesCoverBadgeApi } from '@/api/recipeHealt
 import { inventoryApi } from '@/api';
 import { IngredientTypeLabels, type NutritionFoodMapping } from '@/types/ingredient';
 import { SUPPLEMENT_TARGET_FIELD_OPTIONS } from '@/constants/ingredientNutrition';
-import {
-  appendPreparationMethodText,
-  getDefaultPreparationMethodFromHistory,
-} from '@/utils/preparationMethodText';
+import { getDefaultPreparationMethodFromHistory } from '@/utils/preparationMethodText';
 import {
   preparationBasisMismatchHint,
 } from '@/utils/preparationBasis';
@@ -1592,10 +1591,8 @@ const normalizeSupplementTargetsForSave = (): SupplementTarget[] => {
 };
 
 const applyPreparationMethodHistory = (historyText: string) => {
-  ingredientForm.preparationMethodText = appendPreparationMethodText(
-    ingredientForm.preparationMethodText,
-    historyText,
-  );
+  // 历史记录已经是完整句子；点击后替换，不追加。
+  ingredientForm.preparationMethodText = historyText;
 };
 
 watch(

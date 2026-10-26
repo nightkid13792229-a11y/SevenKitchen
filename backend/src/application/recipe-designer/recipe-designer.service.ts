@@ -6339,8 +6339,13 @@ export class RecipeDesignerService {
     }
 
     const weightG = dto.weightG ?? current.weightG;
+    const ingredientChanged =
+      String(ingredientId ?? '').trim() !==
+      String(current.ingredientId ?? '').trim();
+    // 换原料时不能沿用旧原料的部位/状态/预处理；没有显式传入就按新原料历史重新带出。
     const preparationMethod =
-      dto.preparationMethod ?? current.preparationMethod;
+      dto.preparationMethod ??
+      (ingredientChanged ? undefined : current.preparationMethod);
     const resolvedPreparationMethod =
       await this.resolveDesignItemPreparationMethod(
         preparationMethod,
@@ -9725,7 +9730,7 @@ export class RecipeDesignerService {
   }
 
   private normalizePreparationMethod(value: string | null | undefined) {
-    return normalizePreparationMethodHistoryText(value) ?? null;
+    return normalizePreparationMethodHistoryText(value)?.slice(0, 100) ?? null;
   }
 
   /** 制作步骤读取（GET / 私有快照展示）：坏条目丢弃，避免脏数据锁死编辑器。 */

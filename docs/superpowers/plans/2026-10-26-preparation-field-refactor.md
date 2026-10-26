@@ -253,7 +253,7 @@ git commit -m "feat(recipe-designer): use history text for preparation autofill"
 - [x] **Step 1: Write failing tests**
 
 - 10 类食材（PROTEIN/ORGAN/AQUATIC/EGG/CARB/VEGETABLE/MUSHROOM/NUTS/LEGUME/FRUIT）空值产生 `PREPARATION_METHOD_REQUIRED`；
-- SUPPLEMENT/FAT/SEASONING/DAIRY/UNCLASSIFIED 空值不产生 blocker；
+- SUPPLEMENT/OIL/SEASONING/DAIRY/UNCLASSIFIED 空值不产生 blocker；
 - 非空时全部通过；
 - 服务层 `launchItems` 正确计算 `preparationRequired`。
 

@@ -127,11 +127,11 @@
 | 碳水/谷物 CARB | 必须 |
 | 蔬菜 VEGETABLE | 必须 |
 | 菌藻 MUSHROOM | 必须 |
-| 坚果种子 NUT_SEED | 必须 |
+| 坚果种子 NUTS | 必须 |
 | 豆 LEGUME | 必须 |
 | 水果 FRUIT | 必须 |
 | 补剂 SUPPLEMENT | 不要求 |
-| 油脂 FAT | 不要求 |
+| 油脂 OIL | 不要求 |
 | 调味 SEASONING | 不要求 |
 | 乳制品 DAIRY | 不要求 |
 | 未分类 UNCLASSIFIED | 不要求 |

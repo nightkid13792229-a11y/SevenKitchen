@@ -51,7 +51,7 @@ export interface ShoppingLine {
   purchaseG: number;
   /** 是不是营养补充剂（补剂与食材的损耗率不同） */
   isSupplement: boolean;
-  /** 制备方法（"切丁煮熟"）—— 采购页也显示它，省得来回翻 */
+  /** 部位 / 状态 / 预处理 —— 采购页也显示它，省得来回翻 */
   preparation?: string | null;
 }
 

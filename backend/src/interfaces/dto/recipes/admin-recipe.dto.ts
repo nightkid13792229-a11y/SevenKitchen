@@ -65,6 +65,7 @@ export class RecipeItemDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   preparationMethod?: string;
 
   @IsOptional()

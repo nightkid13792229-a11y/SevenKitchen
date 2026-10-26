@@ -721,12 +721,12 @@ function itemProfileName(item: DesignerItem): string {
   )
 }
 
-/** 制备方法文案（后端已把字典 ID 解析成中文） */
+/** 部位 / 状态 / 预处理文案（后端已把字典 ID 解析成中文） */
 function itemPreparationText(item: DesignerItem): string {
   return String(item.preparationMethodLabel || item.preparationMethod || '').trim()
 }
 
-/** 制备方法的称重口径与所选营养档案不一致时给出提示 */
+/** 部位 / 状态 / 预处理的称重口径与所选营养档案不一致时给出提示 */
 function itemPreparationHint(item: DesignerItem): string | null {
   return preparationBasisMismatchHint(
     itemPreparationText(item),

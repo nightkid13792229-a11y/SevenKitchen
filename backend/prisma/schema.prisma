@@ -771,6 +771,7 @@ model RecipeItem {
 
   @@index([recipeId, recipeVersion])
   @@index([nutritionFoodId])
+  @@index([ingredientId])
   @@map("recipe_item")
 }
 

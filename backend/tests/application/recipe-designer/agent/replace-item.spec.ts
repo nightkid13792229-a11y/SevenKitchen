@@ -19,11 +19,7 @@ function makeService(options: { duplicate?: { id: string } | null } = {}) {
   service.resolveDesignItemPreparationMethod = jest
     .fn()
     .mockResolvedValue('生');
-  service.buildPreparationCreateData = jest.fn().mockReturnValue({
-    preparationMethod: '生',
-  });
   service.isIngredientIdSupplement = jest.fn().mockResolvedValue(false);
-  service.parsePreparationSourceInput = jest.fn().mockReturnValue('AUTO');
 
   const created = { id: 'item-2', name: '鸡胸肉' };
   const tx = {
@@ -84,6 +80,10 @@ describe('RecipeDesignerService.replaceItem', () => {
         }),
         select: expect.any(Object),
       }),
+    );
+    expect(service.resolveDesignItemPreparationMethod).toHaveBeenCalledWith(
+      undefined,
+      'ing-2',
     );
     expect(tx.designRecipe.update).toHaveBeenCalledWith({
       where: { id: 'draft-1' },

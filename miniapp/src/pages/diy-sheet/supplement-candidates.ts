@@ -40,7 +40,7 @@ export interface ServerCandidate {
 export interface ServerCandidateItem {
   recipeItemId: string;
   sourceIngredientId: string;
-  source: 'EQUIVALENCE_GROUP' | 'DEFAULT_ONLY';
+  source: 'EQUIVALENCE_GROUP' | 'RECIPE_ALTERNATIVE' | 'DEFAULT_ONLY';
   group: { id: string; code: string; name: string; status: string } | null;
   defaultIngredient: {
     ingredientId: string;
@@ -89,7 +89,7 @@ export interface SupplementRow {
   unavailableReason: string | null;
   group: ServerCandidateItem['group'];
   groupName: string | null;
-  selectionSource: 'DEFAULT' | 'EQUIVALENCE_GROUP' | 'RATIO';
+  selectionSource: 'DEFAULT' | 'EQUIVALENCE_GROUP' | 'RECIPE_ALTERNATIVE' | 'RATIO';
   isDefaultCandidate: boolean;
 }
 
@@ -165,7 +165,9 @@ export function buildSupplementRows(
       const selectionSource: SupplementRow['selectionSource'] = candidate
         ? candidate.ingredientId === item.sourceIngredientId
           ? 'DEFAULT'
-          : 'EQUIVALENCE_GROUP'
+          : item.group
+            ? 'EQUIVALENCE_GROUP'
+            : 'RECIPE_ALTERNATIVE'
         : fallback !== null
           ? 'RATIO'
           : 'DEFAULT';

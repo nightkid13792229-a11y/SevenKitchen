@@ -1889,14 +1889,19 @@ export class SupplementOrderService {
 
       let amount: number | null = candidate?.dosage.amount ?? null;
       let dosage = candidate?.dosage;
-      let selectionSource: 'EQUIVALENCE_GROUP' | 'DEFAULT' | 'RATIO' =
-        'DEFAULT';
+      let selectionSource:
+        | 'EQUIVALENCE_GROUP'
+        | 'RECIPE_ALTERNATIVE'
+        | 'DEFAULT'
+        | 'RATIO' = 'DEFAULT';
 
       if (candidate) {
         selectionSource =
           candidate.ingredientId === item.sourceIngredientId
             ? 'DEFAULT'
-            : 'EQUIVALENCE_GROUP';
+            : item.source === 'EQUIVALENCE_GROUP'
+              ? 'EQUIVALENCE_GROUP'
+              : 'RECIPE_ALTERNATIVE';
       } else if (
         line.ingredientId === item.sourceIngredientId &&
         item.fallbackAmount !== null

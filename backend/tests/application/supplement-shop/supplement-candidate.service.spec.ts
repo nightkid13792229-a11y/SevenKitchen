@@ -230,6 +230,25 @@ describe('SupplementCandidateService', () => {
     expect(item.candidates).toEqual([]);
   });
 
+  it('falls back to the legacy per-recipe alternatives when there is no group', () => {
+    const item = service.resolveForRecipeItem({
+      recipeItem: recipeItem(),
+      ingredient: supplement(),
+      group: null,
+      legacyAlternatives: [citrate],
+      totalWeightG: 3000,
+      equivalenceEnabled: true,
+      audience: 'CUSTOMER',
+    });
+
+    expect(item.source).toBe('RECIPE_ALTERNATIVE');
+    expect(item.candidates.map((candidate) => candidate.ingredientId)).toEqual([
+      'ing-caco3',
+      'ing-citrate',
+    ]);
+    expect(item.candidates[1].dosage.amount).toBeCloseTo(31.314, 3);
+  });
+
   it('never crosses groups', () => {
     const boneMeal = supplement({
       id: 'ing-bone',

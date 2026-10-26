@@ -26,7 +26,7 @@ export interface SupplementCandidate {
 export interface SupplementCandidateItem {
   recipeItemId: string;
   sourceIngredientId: string;
-  source: 'EQUIVALENCE_GROUP' | 'DEFAULT_ONLY';
+  source: 'EQUIVALENCE_GROUP' | 'RECIPE_ALTERNATIVE' | 'DEFAULT_ONLY';
   group: {
     id: string;
     code: string;
@@ -84,7 +84,13 @@ export class SupplementCandidateService {
       },
       include: {
         items: {
-          include: { ingredient: true },
+          include: {
+            ingredient: true,
+            supplementAlternatives: {
+              include: { alternativeIngredient: true },
+              orderBy: { sortOrder: 'asc' },
+            },
+          },
           orderBy: { sortOrder: 'asc' },
         },
       },
@@ -139,6 +145,9 @@ export class SupplementCandidateService {
           group: item.ingredient?.equivalenceGroupId
             ? (groupMap.get(item.ingredient.equivalenceGroupId) ?? null)
             : null,
+          legacyAlternatives: (item as any).supplementAlternatives
+            ?.map((alternative: any) => alternative?.alternativeIngredient)
+            .filter((ingredient: any) => Boolean(ingredient?.id)) ?? [],
           totalWeightG: input.totalWeightG,
           equivalenceEnabled,
           audience: input.audience,
@@ -151,6 +160,8 @@ export class SupplementCandidateService {
     recipeItem: any;
     ingredient: any;
     group: any;
+    /** 旧机制：逐食谱配置的替代补剂（仅在没有可用组时兜底） */
+    legacyAlternatives?: any[];
     totalWeightG: number;
     equivalenceEnabled: boolean;
     audience: 'CUSTOMER';
@@ -175,6 +186,10 @@ export class SupplementCandidateService {
         input.group.ingredients.length >= 2,
     );
 
+    const legacyAlternatives = (input.legacyAlternatives ?? []).filter(
+      (candidate) =>
+        candidate?.id && candidate.id !== input.ingredient.id,
+    );
     const members: any[] = groupUsable
       ? [...input.group.ingredients].sort(
           (left, right) =>
@@ -182,7 +197,7 @@ export class SupplementCandidateService {
               Number(right.equivalencePriority ?? 0) ||
             String(left.name ?? '').localeCompare(String(right.name ?? '')),
         )
-      : [input.ingredient];
+      : [input.ingredient, ...legacyAlternatives];
 
     const candidates: SupplementCandidate[] = [];
     for (const member of members) {
@@ -228,7 +243,11 @@ export class SupplementCandidateService {
     return {
       recipeItemId: input.recipeItem.id,
       sourceIngredientId: input.ingredient.id,
-      source: groupUsable ? 'EQUIVALENCE_GROUP' : 'DEFAULT_ONLY',
+      source: groupUsable
+        ? 'EQUIVALENCE_GROUP'
+        : legacyAlternatives.length > 0
+          ? 'RECIPE_ALTERNATIVE'
+          : 'DEFAULT_ONLY',
       group: input.group
         ? {
             id: input.group.id,

@@ -26,7 +26,7 @@
 | 4 | 审核 | 管理员（老板）签字。后台记录审核人、日期、依据；未签字不上线 |
 | 5 | 覆盖范围 | 35 种补剂原料全部归组；未来品类（关节/益生菌等）通过“自定义有效成分”支持，不改代码 |
 | 6 | 用量权威 | **后端唯一算**。新版本客户端只提交“这条补剂选了哪个原料”，不提交用量 |
-| 7 | 旧机制 | 新机制验收通过后直接删除（表、接口、后台入口、相关代码）；删前只读确认 0 条 |
+| 7 | 旧机制 | **先兜底、后迁移、再删除**。2026-10-26 部署前线上核对：`recipe_supplement_alternative` 不是 0，而是 **261 条**。新候选在“没有可用组”时继续读旧配置兜底；261 条逐条处理完（人工归组/确认不再需要）后才删表 |
 | 8 | 采购/缺货建议 | 第二期；本期只做“可替代候选”的解析能力 |
 | 9 | 小程序发布 | 只上传体验版，正式版不动；真实顾客暂时看不到新候选 |
 
@@ -188,7 +188,9 @@ interface SupplementDosageResult {
 ### 6.1 规则
 
 1. 读取食谱行、原原料、该行 `supplementTargets`、组（若有）。
-2. 组可用（`equivalenceEnabled` + `APPROVED` + `isActive` + 成员数 ≥ 2）→ 候选 = 组成员；否则候选 = 原原料（`DEFAULT_ONLY`）。
+2. 组可用（`equivalenceEnabled` + `APPROVED` + `isActive` + 成员数 ≥ 2）→ 候选 = 组成员；
+   没有可用组 → **先回退到旧逐食谱替代**（`RECIPE_ALTERNATIVE`，2026-10-26 线上仍有 261 条）；
+   旧配置也没有 → 候选 = 原原料（`DEFAULT_ONLY`）。
 3. 顾客侧过滤：`diyEnabled`、`supplementRetailEnabled`、非 `LIQUID`、展示单位与基准单位 1:1、`dosage.status === 'OK'`。
 4. 组成员按 `equivalencePriority`、`name` 排序；原原料标 `isDefault`。
 5. 原原料不可售但组内有可售成员时，默认选中第一个可售成员；一个可售都没有时返回原原料 + `unavailableReason`，前端显示“暂时买不到，找 Seven爸爸”。
@@ -236,8 +238,8 @@ Query：`totalWeightG`（必填，>0）、`diySheetId?`、`orderId?`、`shareTok
 - 所有行都带 `recipeItemId` → 新路径：要求 `diySheetId`，服务端解析食谱行 + 被选原料，算出 `amount`；忽略客户端 `amount`。
 - 所有行都不带 → 旧路径：保持现状（`amount > 0`）。
 - 混用 → 400。
-- 新路径必须复核资格：提交的 `ingredientId` 只能是该食谱行的原原料，或该行所属组的
-  `APPROVED + isActive` 成员；总开关关闭、组停用、成员不可售/浓度不齐 → 400
+- 新路径必须复核资格：提交的 `ingredientId` 只能是该食谱行的原原料、该行所属组的
+  `APPROVED + isActive` 成员，或旧逐食谱替代里的成员；总开关关闭、组停用、成员不可售/浓度不齐 → 400
   `该补剂已调整，请刷新制作单`。不允许客户端把任意补剂塞进某一行。
 - 新旧路径都按 `SupplementOrderItem`（每个 ingredient 一行）落库：同一 ingredient 的多行金额合并，
   但 `dosageSnapshot.lines[]` 保留每一行（recipeItemId/sourceIngredientId/目标/浓度/算量）。
@@ -382,8 +384,9 @@ Query：`totalWeightG`（必填，>0）、`diySheetId?`、`orderId?`、`shareTok
 
 ## 13. 旧机制删除（验收通过后）
 
-1. 线上只读确认 `recipe_supplement_alternative` 为 0 条；若不为 0，**不自动迁移**（禁止按名称合并），
-   先导出清单交管理员决定是删除还是人工归组；确认后才删；
+1. 线上只读确认 `recipe_supplement_alternative` 的条数。**2026-10-26 实测为 261 条，不是 0**；
+   先导出清单（食谱/原原料/替代原料/是否仍在用），交管理员逐条决定“归组 / 保留为一次性例外 / 删除”；
+   **禁止按名称自动迁移**；261 条全部处理并有记录后才删表；
 2. migration 删除该表；
 3. 删除 Prisma model/relations；
 4. 删除 `recipe.service`、`recipe-designer.service`、`custom-recipe-delivery.service`、`order.service`、`ingredient-batch-replace.service`、`prisma-recipe.repository` 中的 `supplementAlternatives` 读写；

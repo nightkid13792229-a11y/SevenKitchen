@@ -60,6 +60,12 @@ describe('两张食材表 · 分成两个组件', () => {
     expect(template).not.toContain('制备方法')
   })
 
+  it('用量表的预处理列允许换行，不把净用量挤出去', () => {
+    expect(usage).toContain('width: 210rpx')
+    expect(usage).toContain('word-break: break-all')
+    expect(usage).toContain('width: 140rpx')
+  });
+
   it('★ 用量表三列：名称 + 部位 / 状态 / 预处理 + 净用量', () => {
     expect(usage).toContain('原料名称')
     expect(usage).toContain('部位 / 状态 / 预处理')

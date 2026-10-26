@@ -1996,6 +1996,8 @@ function onReviewSubmitted() {
   width: 100%;
   text-align: center;
   display: block;
+  word-break: break-all;
+  line-height: 1.4;
 }
 
 .ingredient-ratio {

@@ -2665,6 +2665,8 @@ onShareTimeline(() => {
 
 .food-table .method-col {
   flex: 1.6;
+  word-break: break-all;
+  line-height: 1.35;
 }
 
 .food-table .actual-col {

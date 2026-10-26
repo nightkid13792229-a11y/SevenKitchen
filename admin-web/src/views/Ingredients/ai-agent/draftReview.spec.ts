@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { INGREDIENT_CARD_FIELDS } from '@/constants/ingredientCardFields'
 import type {
   IngredientCreationDraftPayload,
+  IngredientDraft,
   NutritionEvidenceEntry,
   ProfileDraft
 } from '@/types/ingredientCreation'
@@ -464,5 +466,159 @@ describe('审核页 · 顶部检查状态与提交入参', () => {
       manualFields: ['name']
     })
     expect(input?.primaryProfileIndex).toBe(0)
+  })
+})
+
+/**
+ * 30 项全量往返：后端的草稿 PATCH 是浅替换，`payload.ingredient` 会被整块覆盖。
+ * 只映射 9 项等于每改一次就悄悄抹掉另外 21 项，所以这里逐项钉死。
+ */
+const FULL_INGREDIENT: IngredientDraft = {
+  // BASIC
+  name: '冷冻三文鱼',
+  nameEn: 'Frozen salmon',
+  type: 'FOOD',
+  category: 'MEAT_ORGAN',
+  notes: '去皮分切',
+  // MEASURE
+  baseUnit: 'G',
+  unitDisplayLabel: '克',
+  weightG: 250,
+  maxCapacityG: 1000,
+  // NUTRITION
+  cfctClass: '鱼类及制品',
+  edibleYieldRate: 0.75,
+  mainNutrientsDesc: '优质蛋白、Omega-3',
+  // PURCHASE
+  procurementStrategy: 'DAILY_PURCHASE',
+  purchaseUnit: '袋',
+  purchaseToBaseRatio: 500,
+  currentPricePerPurchaseUnit: 39.9,
+  brand: '挪威海产',
+  productModel: '500g/袋',
+  purchaseChannel: '山姆会员店',
+  // STOCK
+  safetyStock: 2,
+  reorderPoint: 3,
+  targetStock: 10,
+  // USAGE
+  diyEnabled: false,
+  addTiming: 'BEFORE_MIXING',
+  productionLossRate: 1.05,
+  tags: ['高蛋白', '冷冻'],
+  // STORAGE
+  shelfLifeMonths: 12,
+  storageCondition: '冷冻 -18℃',
+  openedShelfLifeDays: 3,
+  isOilBased: false,
+  manualFields: ['brand', 'edibleYieldPercent']
+}
+
+const FULL_INGREDIENT_BY_KEY = FULL_INGREDIENT as unknown as Record<
+  string,
+  unknown
+>
+
+describe('审核页 · 原料卡 30 项全量映射', () => {
+  it('toIngredientCard 读全 30 项，可食部换成 0–100 百分数', () => {
+    const card = toIngredientCard({ ingredient: FULL_INGREDIENT })
+
+    for (const field of INGREDIENT_CARD_FIELDS) {
+      const expected =
+        field.key === 'edibleYieldPercent'
+          ? 75
+          : FULL_INGREDIENT_BY_KEY[field.key]
+      expect(card[field.key], field.key).toEqual(expected)
+    }
+    expect(card.manualFields).toEqual(['brand', 'edibleYieldPercent'])
+  })
+
+  it('toIngredientDraft 写回 30 项，brand / weightG / shelfLifeMonths / 采购策略都在', () => {
+    const draft = toIngredientDraft(
+      toIngredientCard({ ingredient: FULL_INGREDIENT })
+    )
+
+    for (const field of INGREDIENT_CARD_FIELDS) {
+      // 可食部的公共名是 edibleYieldPercent，草稿里存的是比例 edibleYieldRate。
+      const draftKey =
+        field.key === 'edibleYieldPercent' ? 'edibleYieldRate' : field.key
+      expect(draft, `缺字段 ${draftKey}`).toHaveProperty(draftKey)
+    }
+    // 30 个存储字段 + manualFields，不多不少。
+    expect(Object.keys(draft)).toHaveLength(31)
+    expect(draft).toMatchObject({
+      brand: '挪威海产',
+      weightG: 250,
+      shelfLifeMonths: 12,
+      procurementStrategy: 'DAILY_PURCHASE',
+      purchaseChannel: '山姆会员店',
+      storageCondition: '冷冻 -18℃',
+      productionLossRate: 1.05,
+      tags: ['高蛋白', '冷冻'],
+      diyEnabled: false,
+      isOilBased: false,
+      edibleYieldRate: 0.75,
+      manualFields: ['brand', 'edibleYieldPercent']
+    })
+  })
+
+  it('toCommitInput 带完整原料卡，21 个非手填字段不会在提交时丢掉', () => {
+    const input = toCommitInput({
+      ingredient: FULL_INGREDIENT,
+      profiles: [rawProfile]
+    })
+
+    expect(input).not.toBeNull()
+    for (const field of INGREDIENT_CARD_FIELDS) {
+      const draftKey =
+        field.key === 'edibleYieldPercent' ? 'edibleYieldRate' : field.key
+      expect(input?.ingredient, `缺字段 ${draftKey}`).toHaveProperty(draftKey)
+    }
+    expect(input?.ingredient).toMatchObject({
+      brand: '挪威海产',
+      weightG: 250,
+      shelfLifeMonths: 12,
+      procurementStrategy: 'DAILY_PURCHASE'
+    })
+  })
+
+  it('0 与 false 写回草稿时不被当成空', () => {
+    const card = {
+      ...toIngredientCard(null),
+      name: '冷冻三文鱼',
+      currentPricePerPurchaseUnit: 0,
+      productionLossRate: 1,
+      diyEnabled: false,
+      isOilBased: false,
+      edibleYieldPercent: 0
+    }
+
+    expect(toIngredientDraft(card)).toMatchObject({
+      currentPricePerPurchaseUnit: 0,
+      productionLossRate: 1,
+      diyEnabled: false,
+      isOilBased: false,
+      edibleYieldRate: 0
+    })
+  })
+
+  it('未知类别在表单里原样展示，写回时按受控词表收敛（后端 @IsIn 会拒非法值）', () => {
+    const card = toIngredientCard({
+      ingredient: { ...FULL_INGREDIENT, category: 'FUTURE_CATEGORY' as never }
+    })
+
+    expect(card.category).toBe('FUTURE_CATEGORY')
+    expect(toIngredientDraft(card).category).toBeNull()
+  })
+
+  it('manualFields 过滤目录外的脏键，目录内的一项不丢', () => {
+    const card = toIngredientCard({
+      ingredient: {
+        ...FULL_INGREDIENT,
+        manualFields: ['brand', 'notAField', 'cfctClass'] as never
+      }
+    })
+
+    expect(card.manualFields).toEqual(['brand', 'cfctClass'])
   })
 })

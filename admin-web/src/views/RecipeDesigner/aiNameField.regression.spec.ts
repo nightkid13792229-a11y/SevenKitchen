@@ -101,8 +101,9 @@ describe('系列发布抽屉里的命名', () => {
     expect(releaseDrawerSource).toContain(':series-id="seriesId"')
   })
 
-  it('改完点「保存名称」才写库，并通知父级刷新', () => {
-    expect(releaseDrawerSource).toContain('保存名称')
+  it('采用或失焦即写库，不再有「保存名称」按钮', () => {
+    expect(releaseDrawerSource).not.toContain('保存名称')
     expect(releaseDrawerSource).toContain("emit('saved')")
+    expect(releaseDrawerSource).toContain('@saved="onNameAdopted"')
   })
 })

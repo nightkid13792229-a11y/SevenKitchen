@@ -231,7 +231,7 @@
               :closable="false"
               show-icon
               title="还是临时名称，不能发布"
-              description="先把上面改成正式名称（例如「均衡营养｜三文鱼南瓜」），再点保存名称。"
+              description="先把上面改成正式名称（例如「均衡营养｜三文鱼南瓜」），改完离开输入框就会自动保存。"
             />
 
             <!-- 2026-10-27：系列名是唯一名字，整系列发布前必须定下来 -->
@@ -242,13 +242,6 @@
                   :series-id="seriesId"
                   @saved="onNameAdopted"
                 />
-                <el-button
-                  v-if="nameDirty"
-                  size="small"
-                  type="primary"
-                  :loading="nameSaving"
-                  @click="saveName"
-                >保存名称</el-button>
               </div>
               <div class="series-release__hint">
                 价值点在前、食材在后，最多 12 个字——多了标签印不下。
@@ -620,9 +613,8 @@ const visible = computed({
 
 const isAdmin = useIsAdmin()
 
-/** 系列名草稿：改完点「保存名称」才写库 */
+/** 系列名草稿：采用候选或失焦即写库，没有单独按钮 */
 const nameDraft = ref('')
-const nameSaving = ref(false)
 const nameDirty = computed(
   () => nameDraft.value.trim() !== String(props.seriesName ?? '').trim()
 )
@@ -646,28 +638,6 @@ const isTemporaryName = computed(() =>
   String(props.seriesName ?? '').trim().startsWith('未命名')
 )
 
-async function saveName() {
-  const name = nameDraft.value.trim()
-  if (!name) {
-    ElMessage.warning('请填写食谱名称')
-    return
-  }
-  if ([...name].length > 12) {
-    ElMessage.warning('食谱名称最多 12 个字，超了标签印不下')
-    return
-  }
-  nameSaving.value = true
-  try {
-    await recipeDesignerApi.renameSeries(props.seriesId, { name })
-    ElMessage.success('名称已更新')
-    nameDraft.value = name
-    emit('saved')
-  } catch {
-    ElMessage.error('改名失败，请重试')
-  } finally {
-    nameSaving.value = false
-  }
-}
 
 const readiness = ref<SeriesReleaseReadiness | null>(null)
 const loading = ref(false)

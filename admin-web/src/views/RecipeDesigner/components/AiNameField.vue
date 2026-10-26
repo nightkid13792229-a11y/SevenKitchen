@@ -6,6 +6,8 @@
         :placeholder="placeholder || '例如：均衡营养｜三文鱼南瓜'"
         clearable
         @update:model-value="(value: string) => emit('update:modelValue', value)"
+        @blur="commitTypedName"
+        @keyup.enter="commitTypedName"
       />
       <span class="counter" :class="{ over: isOverLimit }">
         {{ length }} / {{ RECIPE_NAME_MAX_LENGTH }}
@@ -62,7 +64,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import {
@@ -87,6 +89,8 @@ const available = ref(true)
 const generating = ref(false)
 /** 正在保存的候选名（只让那一条转圈） */
 const adopting = ref('')
+/** 已经落库的名字，用来判断失焦时要不要真的发请求 */
+const savedValue = ref('')
 const candidates = ref<RecipeNameCandidate[]>([])
 
 /** 按"字"数，与后端同一口径：中文、数字、符号都算 1 个字 */
@@ -97,7 +101,15 @@ function countLength(value: string): number {
 const length = computed(() => countLength(props.modelValue))
 const isOverLimit = computed(() => length.value > RECIPE_NAME_MAX_LENGTH)
 
+watch(
+  () => props.modelValue,
+  (value) => {
+    if (!adopting.value && !value) savedValue.value = ''
+  }
+)
+
 onMounted(async () => {
+  savedValue.value = props.modelValue.trim()
   try {
     const result = await recipeNamingApi.availability()
     // 只有后端明确说"不可用"才置灰；拿不到答案（401/网络错误）时保持可点，
@@ -128,6 +140,27 @@ async function generate() {
   }
 }
 
+/**
+ * 手打的名字：失焦或按回车即保存。
+ * 没有「保存名称」按钮——名字只有十几个人在改，多一个按钮就是多一次点击。
+ */
+async function commitTypedName() {
+  const name = props.modelValue.trim()
+  if (!props.seriesId) return
+  if (!name || name === savedValue.value) return
+  adopting.value = name
+  try {
+    await recipeDesignerApi.renameSeries(props.seriesId, { name })
+    savedValue.value = name
+    ElMessage.success('名称已保存')
+    emit('saved', name)
+  } catch (error: any) {
+    ElMessage.error(error?.message || '保存失败，请重试')
+  } finally {
+    adopting.value = ''
+  }
+}
+
 /** 点「采用」= 直接落库。名字是用户一眼就能定的东西，不该再点第二次。 */
 async function use(name: string) {
   emit('update:modelValue', name)
@@ -135,6 +168,7 @@ async function use(name: string) {
   adopting.value = name
   try {
     await recipeDesignerApi.renameSeries(props.seriesId, { name })
+    savedValue.value = name
     ElMessage.success('名称已保存')
     emit('saved', name)
   } catch (error: any) {

@@ -140,7 +140,7 @@ describe('RecipeNamingService 配置回退', () => {
 describe('命名提示词', () => {
   it('要求把主蛋白放在食材段最后（碳水/辅料在前）', () => {
     const prompt = buildRecipeNamingSystemPrompt();
-    expect(prompt).toContain('主蛋白放在最后');
+    expect(prompt).toContain('主蛋白在最后');
     expect(prompt).toContain('红薯鸡胸肉');
     // 不能出现"主蛋白放第一位"这种反向指令
     expect(prompt).not.toContain('主蛋白放第一位');
@@ -148,7 +148,7 @@ describe('命名提示词', () => {
 
   it('只要 2 条候选，且两条的价值点不能重复', () => {
     const prompt = buildRecipeNamingSystemPrompt();
-    expect(prompt).toContain('只需要 2 条候选');
+    expect(prompt).toContain('candidates 数组，2 条');
     expect(prompt).toContain('价值点不能重复');
     expect(prompt).not.toContain('reason: string');
   })

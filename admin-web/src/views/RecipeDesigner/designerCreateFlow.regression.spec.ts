@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 // 没有 jsdom/test-utils，页面接线只能锁源码（与 designerMultiProgress 同一做法）。
 import designer from '@/views/RecipeDesigner/index.vue?raw'
 import releaseDrawer from '@/views/RecipeDesigner/components/SeriesReleaseDrawer.vue?raw'
+import nameField from '@/views/RecipeDesigner/components/AiNameField.vue?raw'
 
 describe('食谱设计器 · 新建食谱（一键创建 + 临时名称）', () => {
   it('按钮叫「新建食谱」，不再有创建弹窗', () => {
@@ -36,7 +37,8 @@ describe('系列发布 · 临时系列名称守卫', () => {
     expect(releaseDrawer).toContain('还是临时名称，不能发布')
   })
 
-  it('保存名称时不允许继续保存未命名名称（后端也会拦）', () => {
-    expect(releaseDrawer).toContain('saveName')
+  it('命名组件在失焦时自动保存，不再有单独的「保存名称」按钮', () => {
+    expect(nameField).toContain('commitTypedName')
+    expect(releaseDrawer).not.toContain('保存名称')
   })
 })

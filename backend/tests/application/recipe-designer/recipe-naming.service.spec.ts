@@ -159,3 +159,36 @@ describe('命名提示词', () => {
     expect(prompt).toContain('不得虚构');
   });
 });
+
+describe('重名检测', () => {
+  it('与在架名字相同会被标出来', async () => {
+    callDeepSeekJson.mockResolvedValue({
+      candidates: [
+        { name: '均衡营养|三文鱼南瓜', valuePoint: '均衡营养', ingredients: '三文鱼南瓜' },
+        { name: '高蛋白|鸡胸红薯', valuePoint: '高蛋白', ingredients: '鸡胸红薯' },
+      ],
+    });
+
+    const service = new RecipeNamingService({
+      getEnabledDeepSeekRuntimeConfig: jest.fn().mockResolvedValue({
+        baseUrl: 'https://example.invalid',
+        model: 'm',
+        apiKey: 'k',
+        requestTimeoutMs: 1000,
+        provider: 'deepseek',
+      }),
+    } as never);
+
+    const result = await service.generate({
+      ...input,
+      existingNames: ['均衡营养|三文鱼南瓜'],
+    });
+
+    expect(result.candidates[0].duplicate).toBe(true);
+    expect(result.candidates[1].duplicate).toBe(false);
+  });
+
+  it('提示词要求不要与 existingNames 重复', () => {
+    expect(buildRecipeNamingSystemPrompt()).toContain('existingNames');
+  });
+});

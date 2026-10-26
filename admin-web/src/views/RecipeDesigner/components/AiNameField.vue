@@ -45,6 +45,9 @@
           <div v-if="candidate.complianceWarning" class="cand-warn">
             这句话合规存疑，用之前请自己看一眼
           </div>
+          <div v-if="candidate.duplicate" class="cand-warn">
+            与在架食谱重名了，建议换一个
+          </div>
         </div>
         <span class="cand-len">{{ countLength(candidate.name) }} 字</span>
         <el-button

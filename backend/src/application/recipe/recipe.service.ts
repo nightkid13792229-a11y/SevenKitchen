@@ -1576,7 +1576,21 @@ export class RecipeService {
       }))
       .filter((item) => Boolean(item.name));
 
+    // 在架产品线的名字：既要让模型避重，也要在服务端兜一次
+    const existing = await this.prisma.recipeSeries.findMany({
+      where: {
+        deletedAt: null,
+        customerDogId: null,
+        businessStatus: { not: 'PRIVATE_CUSTOM' },
+        NOT: { id: seriesId },
+      },
+      select: { name: true },
+      orderBy: { updatedAt: 'desc' },
+      take: 200,
+    });
+
     return this.recipeNamingService.generate({
+      existingNames: existing.map((item) => item.name).filter(Boolean),
       foodItems,
       energyDensityKcalPerKg: recipe.energyDensityKcalPerKg ?? null,
       moisturePercent: nutrition?.moisture_pct ?? null,

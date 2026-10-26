@@ -84,6 +84,12 @@ const commitBody = {
     unitDisplayLabel: '克',
     cfctClass: '畜肉类',
     edibleYieldRate: 0.95,
+    // 这四项不在旧控制器的手挑白名单里：只要控制器又退回「逐字段挑」，
+    // 下面断言 input.ingredient 时就会红。
+    brand: '××水产',
+    weightG: 150,
+    purchaseToBaseRatio: 1000,
+    productionLossRate: 1.05,
   },
   profiles: [
     {
@@ -635,6 +641,10 @@ describe('IngredientCreationController', () => {
           type: 'FOOD',
           baseUnit: 'G',
           unitDisplayLabel: '克',
+          brand: '××水产',
+          weightG: 150,
+          purchaseToBaseRatio: 1000,
+          productionLossRate: 1.05,
         },
       });
       expect(input.profiles).toHaveLength(2);

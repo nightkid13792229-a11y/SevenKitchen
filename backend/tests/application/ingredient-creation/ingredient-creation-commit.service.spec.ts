@@ -795,7 +795,14 @@ describe('IngredientCreationCommitService', () => {
     const result = await service.commit({
       draftId: 'draft-1',
       userId: 'admin-1',
-      ingredient: { ...baseIngredient, currentPricePerPurchaseUnit: 0 },
+      // 0 是有效值：采购价为 0 时不能因为「假值」被默认值覆盖；
+      // 重量 / 容量用 0 钉住，避免默认值同样是 0 时测试假通过。
+      ingredient: {
+        ...baseIngredient,
+        currentPricePerPurchaseUnit: 0,
+        weightG: 0,
+        maxCapacityG: 0,
+      },
       profiles: [rawProfile],
       primaryProfileIndex: 0,
     });
@@ -806,6 +813,8 @@ describe('IngredientCreationCommitService', () => {
     expect(row.purchaseUnit).toBe('克');
     expect(row.purchaseToBaseRatio).toBe(1);
     expect(row.currentPricePerPurchaseUnit).toBe(0);
+    expect(row.weightG).toBe(0);
+    expect(row.maxCapacityG).toBe(0);
     expect(row.diyEnabled).toBe(false);
     expect(row.procurementEnabled).toBe(false);
     expect(row.properties).toEqual({

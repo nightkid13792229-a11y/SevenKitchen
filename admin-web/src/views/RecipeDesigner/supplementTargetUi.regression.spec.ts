@@ -214,7 +214,7 @@ describe('设计器 · 部位 / 状态 / 预处理可直接编辑（2026-10-26�
 
   it('下拉建议来自该原料历史，最多 3 条，不再保存字典 id', () => {
     expect(field).toContain('getIngredientPreparationMethodHistory')
-    expect(field).toContain('filterPreparationHistory')
+    expect(field).toContain('resolvePreparationHistorySuggestions')
     expect(field).toContain('resolvePreparationMethodCommitText')
     expect(field).not.toContain('filterPreparationMethodOptions')
     expect(field).not.toContain('applyPreparationMethodSuggestion')

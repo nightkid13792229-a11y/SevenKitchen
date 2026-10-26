@@ -3,6 +3,7 @@ import {
   applyPreparationMethodSuggestion,
   filterPreparationHistory,
   filterPreparationMethodOptions,
+  resolvePreparationHistorySuggestions,
   resolvePreparationMethodCommitText,
   resolvePreparationMethodDisplayText
 } from './preparationMethodField'
@@ -136,6 +137,14 @@ describe('预处理输入框 · 历史下拉', () => {
 
   it('最多返回 3 条', () => {
     expect(filterPreparationHistory(history, '', 3)).toHaveLength(3)
+  })
+
+  it('匹配不到时退回最近 3 条，保证下拉始终能看到历史', () => {
+    expect(resolvePreparationHistorySuggestions(history, '完全不存在的词')).toEqual([
+      '牛里脊/生/去油',
+      '牛里脊/生/去筋膜',
+      '牛里脊/熟/切块'
+    ])
   })
 })
 

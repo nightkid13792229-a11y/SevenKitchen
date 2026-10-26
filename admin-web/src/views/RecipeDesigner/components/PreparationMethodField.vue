@@ -29,7 +29,7 @@ import { ref, watch } from 'vue'
 import { recipeApi } from '@/api/recipes'
 import { PREPARATION_FIELD_PLACEHOLDER } from '@/constants/preparationField'
 import {
-  filterPreparationHistory,
+  resolvePreparationHistorySuggestions,
   resolvePreparationMethodCommitText,
   resolvePreparationMethodDisplayText,
   type PreparationMethodOption
@@ -138,9 +138,9 @@ async function fetchSuggestions(
 ) {
   await loadHistory()
   callback(
-    filterPreparationHistory(historyTexts.value, query, 3).map((value) => ({
-      value
-    }))
+    resolvePreparationHistorySuggestions(historyTexts.value, query, 3).map(
+      (value) => ({ value })
+    )
   )
 }
 

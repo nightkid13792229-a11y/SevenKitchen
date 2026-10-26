@@ -74,6 +74,21 @@ export function filterPreparationHistory(
 }
 
 /**
+ * 下拉最终展示：有关键词时优先匹配；匹配不到就退回最近 3 条。
+ *
+ * 这个字段的诉求是「看看这个原料上次怎么写的」，不是搜索框。
+ * 输入框里已有整句时，按整句过滤很容易一条都不剩；兜底保证历史始终可见。
+ */
+export function resolvePreparationHistorySuggestions(
+  texts: string[],
+  query: string | null | undefined,
+  limit = 3
+): string[] {
+  const matched = filterPreparationHistory(texts, query, limit)
+  return matched.length > 0 ? matched : texts.slice(0, limit)
+}
+
+/**
  * 下拉建议：多段文字只按最后一段过滤，方便在「去皮、切」后面继续补写。
  */
 export function filterPreparationMethodOptions(

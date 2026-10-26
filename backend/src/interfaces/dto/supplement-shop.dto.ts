@@ -28,10 +28,23 @@ export class SupplementQuoteLineDto {
   @IsUUID()
   ingredientId!: string;
 
-  @ApiProperty({ description: '制作单上的用量（按补剂展示单位）', example: 22.7 })
+  @ApiPropertyOptional({
+    description:
+      '旧协议：制作单上的用量（按补剂展示单位）。新协议带 recipeItemId 时可不传，服务端重算',
+    example: 22.7,
+  })
+  @IsOptional()
   @IsNumber()
   @Min(0.0001)
-  amount!: number;
+  amount?: number;
+
+  @ApiPropertyOptional({
+    description:
+      '新协议：对应的食谱行 ID。带它就由服务端按配方/批次总重/被选原料浓度算用量',
+  })
+  @IsOptional()
+  @IsUUID()
+  recipeItemId?: string;
 }
 
 export class SupplementQuoteRequestDto {
@@ -70,6 +83,13 @@ export class SupplementQuoteRequestDto {
   @IsInt()
   @Min(1)
   cycleDays?: number;
+
+  @ApiPropertyOptional({
+    description: '来源 DIY 制作单 ID（新协议算量、版本锚定、冻结快照都靠它）',
+  })
+  @IsOptional()
+  @IsUUID()
+  diySheetId?: string;
 }
 
 export class CreateSupplementOrderDto extends SupplementQuoteRequestDto {
@@ -98,11 +118,6 @@ export class CreateSupplementOrderDto extends SupplementQuoteRequestDto {
   @IsString()
   @MaxLength(100)
   dogName?: string;
-
-  @ApiPropertyOptional({ description: '来源 DIY 制作单 ID' })
-  @IsOptional()
-  @IsUUID()
-  diySheetId?: string;
 
   // cycleDays 已上移到 SupplementQuoteRequestDto（报价阶段就需要它算总天数）
 

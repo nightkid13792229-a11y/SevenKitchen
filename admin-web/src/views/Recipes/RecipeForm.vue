@@ -972,35 +972,10 @@
           </el-form-item>
 
           <el-form-item label="替代补剂">
-            <el-select
-              v-model="ingredientForm.supplementAlternativeIngredientIds"
-              multiple
-              clearable
-              placeholder="可选：为这条补剂配置替代产品"
-              style="width: 100%"
-            >
-              <el-option
-                v-for="option in availableSupplementAlternativeOptions"
-                :key="option.id"
-                :label="formatIngredientDisplayLabel(option)"
-                :value="option.id"
-              >
-                <div style="display: flex; flex-direction: column; gap: 4px">
-                  <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
-                    <span style="font-weight: 500">{{ option.name }}</span>
-                    <span v-if="option.brand" style="color: #909399; font-size: 12px">
-                      {{ option.brand }}
-                    </span>
-                    <span v-if="option.productModel" style="color: #909399; font-size: 12px">
-                      {{ option.productModel }}
-                    </span>
-                  </div>
-                </div>
-              </el-option>
-            </el-select>
-            <div style="color: #909399; font-size: 12px; margin-top: 4px">
-              💡 用户在 DIY 制作单里可在这些补剂产品间切换，系统会按所选补剂的营养数据重算默认用量
-            </div>
+            <el-alert type="info" :closable="false" show-icon>
+              已由「补剂等价组」接管：组审核通过后，制作单会按组推荐同营养替代原料。
+              这里只保留历史配置，不再新增；验收完成后会删除这套旧机制。
+            </el-alert>
           </el-form-item>
         </template>
       </el-form>

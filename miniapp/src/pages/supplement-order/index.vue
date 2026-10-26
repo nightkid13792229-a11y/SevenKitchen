@@ -561,11 +561,19 @@ async function refreshQuote() {
   quoting.value = true
   try {
     const allRes = await quoteSupplements(
-      draft.value.lines.map((line) => ({
-        ingredientId: line.ingredientId,
-        amount: line.amount
-      })),
-      { portionMultiplier: portionMultiplier.value, cycleDays: cycleDays.value || undefined }
+      draft.value.lines.map((line) =>
+        line.recipeItemId
+          ? {
+              ingredientId: line.ingredientId,
+              recipeItemId: line.recipeItemId
+            }
+          : { ingredientId: line.ingredientId, amount: line.amount }
+      ),
+      {
+        portionMultiplier: portionMultiplier.value,
+        cycleDays: cycleDays.value || undefined,
+        diySheetId: draft.value.diySheetId
+      }
     )
 
     if (allRes.code !== 0) {
@@ -585,7 +593,7 @@ async function refreshQuote() {
         ingredientId: line.ingredientId,
         name: quoted?.name || line.name || '补剂',
         unit: quoted?.unit || line.unit || '',
-        requestedAmount: quoted?.requestedAmount ?? line.amount,
+        requestedAmount: quoted?.requestedAmount ?? line.amount ?? 0,
         packedAmount: quoted?.packedAmount ?? 0,
         price: quoted?.price ?? 0,
         shelfLifeMonths: quoted?.shelfLifeMonths ?? 0,
@@ -628,13 +636,17 @@ async function refreshSummaryOnly() {
 
   const payload = ids.map((id) => {
     const line = lines.value.find((item) => item.ingredientId === id)!
-    return { ingredientId: id, amount: line.requestedAmount }
+    const draftLine = draft.value?.lines.find((item) => item.ingredientId === id)
+    return draftLine?.recipeItemId
+      ? { ingredientId: id, recipeItemId: draftLine.recipeItemId }
+      : { ingredientId: id, amount: line.requestedAmount }
   })
 
   try {
     const res = await quoteSupplements(payload, {
       portionMultiplier: portionMultiplier.value,
-      cycleDays: cycleDays.value || undefined
+      cycleDays: cycleDays.value || undefined,
+      diySheetId: draft.value?.diySheetId
     })
     if (res.code === 0) {
       summary.value = res.data.quote
@@ -751,10 +763,14 @@ async function handleSubmit() {
     await requestSupplementSubscriptions()
     const res = await createSupplementOrder({
       addressId: selectedAddressId.value,
-      lines: selectedLines.value.map((line) => ({
-        ingredientId: line.ingredientId,
-        amount: line.requestedAmount
-      })),
+      lines: selectedLines.value.map((line) => {
+        const draftLine = draft.value!.lines.find(
+          (item) => item.ingredientId === line.ingredientId
+        )
+        return draftLine?.recipeItemId
+          ? { ingredientId: line.ingredientId, recipeItemId: draftLine.recipeItemId }
+          : { ingredientId: line.ingredientId, amount: line.requestedAmount }
+      }),
       recipeId: draft.value.recipeId,
       recipeName: draft.value.recipeName,
       dogId: draft.value.dogId,

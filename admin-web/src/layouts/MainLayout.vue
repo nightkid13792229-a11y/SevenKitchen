@@ -37,6 +37,10 @@
           <el-icon><FirstAidKit /></el-icon>
           <span>补剂上架清单</span>
         </el-menu-item>
+        <el-menu-item index="/supplement-shop/equivalence-groups">
+          <el-icon><Connection /></el-icon>
+          <span>补剂等价组</span>
+        </el-menu-item>
         <el-menu-item index="/supplement-shop/packing-summary">
           <el-icon><List /></el-icon>
           <span>分装汇总</span>
@@ -321,7 +325,8 @@ import {
   Lock,
   Collection,
   Bell,
-  Calendar
+  Calendar,
+  Connection
 } from '@element-plus/icons-vue'
 
 const route = useRoute()

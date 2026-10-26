@@ -93,6 +93,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "补剂上架清单" },
       },
       {
+        path: "supplement-shop/equivalence-groups",
+        name: "SupplementShopEquivalenceGroups",
+        component: () => import("@/views/SupplementShop/EquivalenceGroups.vue"),
+        meta: { title: "补剂等价组" },
+      },
+      {
         path: "supplement-shop/config",
         name: "SupplementShopConfig",
         component: () => import("@/views/SupplementShop/Config.vue"),

@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { SupplementCatalogService } from '../../../src/application/supplement-shop/supplement-catalog.service';
+import { SupplementDosageService } from '../../../src/application/supplement-shop/supplement-dosage.service';
 import { PrismaService } from '../../../src/infrastructure/prisma.service';
 
 interface IngredientFixture {
@@ -105,6 +106,7 @@ describe('SupplementCatalogService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SupplementCatalogService,
+        SupplementDosageService,
         { provide: PrismaService, useValue: mockPrismaService },
       ],
     }).compile();
@@ -169,6 +171,72 @@ describe('SupplementCatalogService', () => {
     expect(kelp.suggestedPhysicalForm).toBe('POWDER');
     expect(kelp.suggestedShelfLifeMonths).toBe(24);
     expect(kelp.recipeReferenceCount).toBe(14);
+  });
+
+  it('把等价组状态、单成员、缺浓度做成提醒，不阻断上架', async () => {
+    const group = {
+      id: 'group-iodine',
+      code: 'IODINE_NATURAL',
+      name: '碘 · 天然',
+      status: 'APPROVED',
+      isActive: true,
+      nutrientKey: 'minerals.iodine',
+      nutrientLabel: '碘',
+      nutrientUnit: 'μg',
+      _count: { ingredients: 1 },
+    };
+    const item = {
+      ...fixtures[0],
+      nutritionProfile: {
+        meta: { rawBasisType: 'PER_SERVING' },
+        minerals: { iodine: 450 },
+      },
+      equivalenceGroupId: group.id,
+      equivalenceGroup: group,
+    };
+    mockPrismaService.ingredient.findMany.mockResolvedValue([item]);
+    mockPrismaService.recipeItem.groupBy.mockResolvedValue([]);
+
+    const result = await service.listCatalog();
+    const codes = result.items[0].issues.map((issue) => issue.code);
+
+    expect(codes).toContain('EQUIVALENCE_GROUP_SINGLETON');
+    expect(codes).not.toContain('EQUIVALENCE_UNGROUPED');
+    expect(codes).not.toContain('EQUIVALENCE_NUTRIENT_MISSING');
+    expect(result.items[0].equivalenceGroup).toMatchObject({
+      name: '碘 · 天然',
+      memberCount: 1,
+    });
+  });
+
+  it('等价组要求钙但档案只有碘时，提示缺浓度且不参与替换', async () => {
+    const group = {
+      id: 'group-calcium',
+      code: 'CALCIUM_MINERAL_SALT',
+      name: '钙 · 矿物盐',
+      status: 'APPROVED',
+      isActive: true,
+      nutrientKey: 'minerals.calcium',
+      nutrientLabel: '钙',
+      nutrientUnit: 'mg',
+      _count: { ingredients: 2 },
+    };
+    const item = {
+      ...fixtures[0],
+      nutritionProfile: {
+        meta: { rawBasisType: 'PER_SERVING' },
+        minerals: { iodine: 450 },
+      },
+      equivalenceGroupId: group.id,
+      equivalenceGroup: group,
+    };
+    mockPrismaService.ingredient.findMany.mockResolvedValue([item]);
+    mockPrismaService.recipeItem.groupBy.mockResolvedValue([]);
+
+    const result = await service.listCatalog();
+    const codes = result.items[0].issues.map((issue) => issue.code);
+
+    expect(codes).toContain('EQUIVALENCE_NUTRIENT_MISSING');
   });
 
   it('汇总数字与实际体检结果一致', async () => {

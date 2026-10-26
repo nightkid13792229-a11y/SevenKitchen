@@ -236,6 +236,7 @@ import { WeightGoalPlanController } from './interfaces/controllers/weight-goal-p
 import { AdminWeightGoalPlanController } from './interfaces/controllers/admin-weight-goal-plan.controller';
 import { ProcurementSkuService } from './application/ingredient/procurement-sku.service';
 import { AdminSupplementShopController } from './interfaces/controllers/admin-supplement-shop.controller';
+import { AdminSupplementEquivalenceController } from './interfaces/controllers/admin-supplement-equivalence.controller';
 import { TastingPackConfigService } from './application/tasting-pack/tasting-pack-config.service';
 import { TastingPackPricingService } from './application/tasting-pack/tasting-pack-pricing.service';
 import { TastingPackService } from './application/tasting-pack/tasting-pack.service';
@@ -247,6 +248,9 @@ import {
 } from './interfaces/controllers/tasting-pack.controller';
 import { SupplementCatalogService } from './application/supplement-shop/supplement-catalog.service';
 import { SupplementShopConfigService } from './application/supplement-shop/supplement-shop-config.service';
+import { SupplementDosageService } from './application/supplement-shop/supplement-dosage.service';
+import { SupplementEquivalenceService } from './application/supplement-shop/supplement-equivalence.service';
+import { SupplementCandidateService } from './application/supplement-shop/supplement-candidate.service';
 import { SupplementPricingService } from './application/supplement-shop/supplement-pricing.service';
 import { BusinessCalendarService } from './application/supplement-shop/business-calendar.service';
 import { SupplementSchedulingService } from './application/supplement-shop/supplement-scheduling.service';
@@ -445,6 +449,7 @@ validatePrismaConfig();
     FeedbackController,
     ProcurementSkuController,
     AdminSupplementShopController,
+    AdminSupplementEquivalenceController,
     AdminTastingPackController,
     PublicTastingPackController,
     SupplementsController,
@@ -898,6 +903,9 @@ validatePrismaConfig();
     ProcurementSkuService,
     SupplementCatalogService,
     SupplementShopConfigService,
+    SupplementDosageService,
+    SupplementEquivalenceService,
+    SupplementCandidateService,
     TastingPackConfigService,
     TastingPackPricingService,
     TastingPackService,

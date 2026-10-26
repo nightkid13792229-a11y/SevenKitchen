@@ -991,6 +991,10 @@ model Ingredient {
   /// 内容物是否油性（鱼油、鱼肝油等）：分装标签效期取更保守的一档
   isOilBased                    Boolean                       @default(false) @map("is_oil_based")
   supplementRetailEnabled       Boolean                       @default(false) @map("supplement_retail_enabled")
+  /// 补剂等价组：一个原料最多归一个主组（2026-10-26）
+  equivalenceGroupId            String?                       @map("equivalence_group_id")
+  /// 组内推荐顺序：0 优先；排序第一的成员是“参考原料”
+  equivalencePriority           Int                           @default(0) @map("equivalence_priority")
   shelfLifeMonths               Int?                          @map("shelf_life_months")
   storageCondition              String?                       @map("storage_condition") @db.VarChar(200)
   openedShelfLifeDays           Int?                          @map("opened_shelf_life_days")
@@ -1014,11 +1018,13 @@ model Ingredient {
   procurementSkuPriceHistories  ProcurementSkuPriceHistory[]
   allergenTags                  IngredientAllergenTag[]
   supplementPackagingRules      SupplementPackagingRule[]
+  equivalenceGroup              SupplementEquivalenceGroup?   @relation(fields: [equivalenceGroupId], references: [id], onDelete: SetNull)
 
   @@unique([name, brand, productModel])
   @@index([type])
   @@index([procurementStrategy])
   @@index([name])
+  @@index([equivalenceGroupId])
   @@map("ingredient")
 }
 
@@ -1075,6 +1081,66 @@ model RecommendedProduct {
   @@index([ingredientId])
   @@index([isActive])
   @@map("recommended_product")
+}
+
+/// 补剂等价组的审核状态。
+/// 只有 APPROVED 且 isActive 的组参与线上替换；任何成员/营养素变更都会退回 DRAFT。
+enum SupplementEquivalenceStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  DISABLED
+}
+
+/// 补剂原料等价组（2026-10-26）
+///
+/// 组定义在**原料层**，按“营养素 × 形态/来源”划分：
+/// 钙·矿物盐（碳酸钙/柠檬酸钙/鸡蛋壳粉）可互换，钙·骨源（骨粉）单独一组。
+/// 一个原料最多归一个组；组不直接存用量，用量由 D4 的“锁目标、实时解析”计算。
+model SupplementEquivalenceGroup {
+  id            String                      @id @default(uuid())
+  code          String                      @unique @db.VarChar(64)
+  name          String                      @db.VarChar(100)
+  /// 标准营养素用 fieldPath（如 minerals.calcium）；自定义成分为 custom:<规范化名称>
+  nutrientKey   String                      @map("nutrient_key") @db.VarChar(100)
+  nutrientLabel String                      @map("nutrient_label") @db.VarChar(50)
+  nutrientUnit  String                      @map("nutrient_unit") @db.VarChar(20)
+  /// 形态/来源（矿物盐、骨源、螯合、天然…）；人读 + 筛选，不做硬限制
+  formCategory  String?                     @map("form_category") @db.VarChar(50)
+  description   String?
+  rationale     String?
+  /// 依据：URL 或可点开的文献条目（字符串数组）
+  evidenceUrls  Json?                       @map("evidence_urls")
+  status        SupplementEquivalenceStatus @default(DRAFT)
+  reviewedBy    String?                     @map("reviewed_by") @db.VarChar(100)
+  reviewedAt    DateTime?                   @map("reviewed_at")
+  reviewNote    String?                     @map("review_note")
+  isActive      Boolean                     @default(true) @map("is_active")
+  sortOrder     Int                         @default(0) @map("sort_order")
+  createdAt     DateTime                    @default(now()) @map("created_at")
+  updatedAt     DateTime                    @updatedAt @map("updated_at")
+  ingredients   Ingredient[]
+  auditLogs     SupplementEquivalenceGroupAudit[]
+
+  @@index([nutrientKey])
+  @@index([status])
+  @@index([isActive])
+  @@map("supplement_equivalence_group")
+}
+
+/// 等价组变更审计（只追加）：建组/改信息/成员增减/审核/停用。
+model SupplementEquivalenceGroupAudit {
+  id           String                     @id @default(uuid())
+  groupId      String                     @map("group_id")
+  action       String                     @db.VarChar(30)
+  changes      Json?
+  operatorId   String?                    @map("operator_id")
+  operatorName String?                    @map("operator_name") @db.VarChar(100)
+  createdAt    DateTime                   @default(now()) @map("created_at")
+  group        SupplementEquivalenceGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId, createdAt])
+  @@map("supplement_equivalence_group_audit")
 }
 
 model ProcurementSku {
@@ -2173,6 +2239,8 @@ model DIYSheet {
   packagePlan     Json?    @map("package_plan")
   purchaseList    Json     @map("purchase_list")
   productionSteps String?  @map("production_steps")
+  /// 顾客在制作单里选的补剂原料（2026-10-26）
+  supplementSelections Json? @map("supplement_selections")
   /// 首次下单补剂时冻结：食谱版本 / 整张制作单快照 / 冻结时间
   recipeVersion   Int?     @map("recipe_version")
   snapshot        Json?    @map("snapshot")
@@ -4423,6 +4491,8 @@ model FeedbackReply {
 model SupplementShopConfig {
   id                        String                       @id @default("singleton") @map("id")
   enabled                   Boolean                      @default(false) @map("enabled")
+  /// 补剂等价组候选总开关：审核完再打开；出问题可一键关闭（2026-10-26）
+  equivalenceEnabled        Boolean                      @default(false) @map("equivalence_enabled")
 
   // ---- 定价 ----
   markupMultiplier          Decimal                      @default(2.5) @map("markup_multiplier") @db.Decimal(6, 2)
@@ -4974,6 +5044,12 @@ model SupplementOrderItem {
   id                String                 @id @default(uuid()) @map("id")
   orderId           String                 @map("order_id")
   ingredientId      String                 @map("ingredient_id")
+  /// 对应的食谱行（新协议；旧订单为空）
+  recipeItemId      String?                @map("recipe_item_id")
+  /// 食谱原本的补剂原料（顾客可能换成了同组另一条原料）
+  sourceIngredientId String?               @map("source_ingredient_id")
+  /// 目标/浓度/服务端算量/提交量/来源/组的快照（2026-10-26）
+  dosageSnapshot    Json?                  @map("dosage_snapshot")
 
   // ---- 下单时的商品快照 ----
   name              String                 @map("name") @db.VarChar(200)

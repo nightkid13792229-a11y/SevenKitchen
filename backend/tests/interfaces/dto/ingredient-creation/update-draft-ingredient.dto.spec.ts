@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
+import { INGREDIENT_CARD_FIELD_KEYS } from 'src/domain/ingredient-creation/ingredient-card-fields';
 import { UpdateDraftIngredientDto } from 'src/interfaces/dto/ingredient-creation/update-draft.dto';
 
 /**
@@ -10,6 +11,10 @@ import { UpdateDraftIngredientDto } from 'src/interfaces/dto/ingredient-creation
  * 显式 `null`（人还没填完），`0` 是合法值而不是空值。可食部在草稿里存的是
  * 比例 `edibleYieldRate`（0–1）；公共名 `edibleYieldPercent`（0–100）只用于
  * 页面与 `manualFields`，绝不能作为草稿字段落库，否则会多除一次 100。
+ *
+ * 注意：只断言「没有校验错误」是不够的 —— whitelist 会把 DTO 没声明的键
+ * 静默剥掉，字段全丢光也照样零错误。所以全量用例还要逐个确认字段真的在
+ * 实例上，并确认拼错的键确实被剥掉。
  */
 
 // jest 以 ts-jest 的 isolatedModules 跑（只转译、不做类型检查）：导出不存在时
@@ -58,6 +63,8 @@ const fullFields = {
   openedShelfLifeDays: 3,
   isOilBased: false,
   manualFields: ['edibleYieldPercent', 'name'],
+  // 故意的拼写错误：契约外的键必须被 whitelist 剥掉，不能原样落进 payload
+  storagCondition: '-18℃ 冷冻',
 };
 
 async function errorsOf(extra: Record<string, unknown>): Promise<string[]> {
@@ -77,8 +84,19 @@ async function validated(
 }
 
 describe('UpdateDraftIngredientDto', () => {
-  it('接受 30 项全量', async () => {
+  it('接受 30 项全量，且每一项都真的落在实例上', async () => {
     expect(await errorsOf(fullFields)).toEqual([]);
+
+    const payload = await validated(fullFields);
+    for (const key of INGREDIENT_CARD_FIELD_KEYS) {
+      // 可食部的公共名只出现在 manualFields；草稿里存的是比例 edibleYieldRate
+      if (key === 'edibleYieldPercent') continue;
+      // 用带键名的对象断言：字段被 whitelist 剥掉时会直接指出是哪一个
+      expect({ [key]: payload[key] }).toEqual({ [key]: expect.anything() });
+    }
+    expect(payload.manualFields).toEqual(['edibleYieldPercent', 'name']);
+    // 拼错的契约外键必须被剥掉，而不是原样落进服务层的 payload
+    expect(payload.storagCondition).toBeUndefined();
   });
 
   it('可食部比例越界被拒', async () => {
@@ -105,13 +123,26 @@ describe('UpdateDraftIngredientDto', () => {
     expect(payload.evil).toBeUndefined();
   });
 
-  it('manualFields 只接受契约内的键', async () => {
+  it('manualFields 收下契约内全部 30 个键，契约外的键被拒', async () => {
     expect(await errorsOf({ manualFields: ['nope'] })).toContain(
       'manualFields',
     );
-    expect(await errorsOf({ manualFields: ['edibleYieldPercent'] })).toEqual(
-      [],
-    );
+
+    // 逐个键都要通过：只钉 2 个键拦不住「只认旧 7 键」的白名单回退，
+    // 也拦不住误用 AI 可写 26 键（漏掉 safetyStock / tags 等 4 项）。
+    const rejected: string[] = [];
+    for (const field of INGREDIENT_CARD_FIELD_KEYS) {
+      const errors = await errorsOf({ manualFields: [field] });
+      if (errors.length > 0) {
+        rejected.push(`${field} → ${errors.join(', ')}`);
+      }
+    }
+    expect(rejected).toEqual([]);
+
+    // 一次全给也必须通过（真实页面就是整份回传）
+    expect(
+      await errorsOf({ manualFields: [...INGREDIENT_CARD_FIELD_KEYS] }),
+    ).toEqual([]);
   });
 
   it('四个必填字段仍然必填', async () => {
@@ -152,5 +183,10 @@ describe('UpdateDraftIngredientDto', () => {
     );
     expect(await errorsOf({ isOilBased: 'no' })).toContain('isOilBased');
     expect(await errorsOf({ tags: '水产' })).toContain('tags');
+  });
+
+  it('库存数值边界：safetyStock 为负被拒，0 是合法值', async () => {
+    expect(await errorsOf({ safetyStock: -1 })).toContain('safetyStock');
+    expect(await errorsOf({ safetyStock: 0 })).toEqual([]);
   });
 });

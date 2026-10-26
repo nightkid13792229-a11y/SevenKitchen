@@ -30,6 +30,7 @@ import type {
 
 interface CliArgs {
   limit: number | null;
+  batchSize: number;
   apply: boolean;
   report: string | null;
   help: boolean;
@@ -53,6 +54,7 @@ Usage:
 
 Options:
   --limit N       只处理前 N 条 CNF 记录（按 id 升序）
+  --batch-size N  每批读取条数（默认 200，控制内存）
   --apply         真正写库（只更新 normalizedNutrition 一列）；不传则 dry-run
   --report <path> 把 JSON 报告写到指定路径
   --help, -h      显示本帮助
@@ -72,6 +74,7 @@ const PROGRESS_INTERVAL = 100;
 function parseArgs(argv: string[]): CliArgs {
   const args: CliArgs = {
     limit: null,
+    batchSize: 200,
     apply: false,
     report: null,
     help: false,
@@ -90,6 +93,14 @@ function parseArgs(argv: string[]): CliArgs {
         throw new Error('--limit 需要一个正整数');
       }
       args.limit = parsed;
+      i += 1;
+    } else if (flag === '--batch-size') {
+      const raw = argv[i + 1];
+      const parsed = raw === undefined ? Number.NaN : Number(raw);
+      if (!Number.isInteger(parsed) || parsed <= 0) {
+        throw new Error('--batch-size 需要一个正整数');
+      }
+      args.batchSize = parsed;
       i += 1;
     } else if (flag === '--report') {
       const path = argv[i + 1];
@@ -256,96 +267,118 @@ async function main(): Promise<void> {
 
   const prisma = new PrismaClient();
   try {
-    const records = await prisma.nutritionSourceRecord.findMany({
-      where: { sourceType: 'CNF' },
-      select: {
-        id: true,
-        foodName: true,
-        rawData: true,
-        normalizedNutrition: true,
-      },
-      orderBy: { id: 'asc' },
-      take: args.limit ?? undefined,
-    });
-    console.log(`CNF 记录：${records.length} 条（${mode}）。`);
-
-    for (const record of records) {
-      report.scanned += 1;
-      if (report.scanned % PROGRESS_INTERVAL === 0) {
-        console.log(
-          `  进度 ${report.scanned}/${records.length}（changed ${report.changed}，skipped ${report.skipped.length}）`,
-        );
+    console.log(`CNF 记录：分批读取，batch=${args.batchSize}（${mode}）。`);
+    let lastId: string | null = null;
+    let remaining = args.limit ?? Number.POSITIVE_INFINITY;
+    while (remaining > 0) {
+      const take = Math.min(args.batchSize, remaining);
+      const records: Array<{
+        id: string;
+        foodName: string;
+        rawData: unknown;
+        normalizedNutrition: unknown;
+      }> = await prisma.nutritionSourceRecord.findMany({
+        where: {
+          sourceType: 'CNF',
+          ...(lastId ? { id: { gt: lastId } } : {}),
+        },
+        select: {
+          id: true,
+          foodName: true,
+          rawData: true,
+          normalizedNutrition: true,
+        },
+        orderBy: { id: 'asc' },
+        take,
+      });
+      if (records.length === 0) {
+        break;
       }
 
-      let existing: NutritionProfileV2 | null;
-      if (record.normalizedNutrition === null) {
-        existing = null;
-      } else if (isNutritionProfileV2(record.normalizedNutrition)) {
-        existing = record.normalizedNutrition;
-      } else {
-        report.skipped.push({
-          id: record.id,
-          reason: 'normalizedNutrition 不是 NutritionProfileV2',
-        });
-        continue;
+      for (const record of records) {
+        report.scanned += 1;
+        if (report.scanned % PROGRESS_INTERVAL === 0) {
+          console.log(
+            `  进度 ${report.scanned}（changed ${report.changed}，skipped ${report.skipped.length}）`,
+          );
+        }
+
+        let existing: NutritionProfileV2 | null;
+        if (record.normalizedNutrition === null) {
+          existing = null;
+        } else if (isNutritionProfileV2(record.normalizedNutrition)) {
+          existing = record.normalizedNutrition;
+        } else {
+          report.skipped.push({
+            id: record.id,
+            reason: 'normalizedNutrition 不是 NutritionProfileV2',
+          });
+          continue;
+        }
+
+        const parsed = extractCnfAmounts(record.rawData);
+        if (!parsed.amounts) {
+          report.skipped.push({
+            id: record.id,
+            reason: parsed.reason ?? 'rawData.amounts 解析失败',
+          });
+          continue;
+        }
+
+        let merged: NutritionProfileV2;
+        try {
+          const built = buildCnfNutritionProfile({
+            amounts: parsed.amounts,
+            codeMap,
+            food: {
+              foodCode: resolveFoodCode(record.rawData, existing),
+              description: record.foodName,
+            },
+          });
+          merged = mergeCnfMinerals(existing, built);
+        } catch (error) {
+          report.skipped.push({
+            id: record.id,
+            reason: error instanceof Error ? error.message : String(error),
+          });
+          continue;
+        }
+
+        if (hasMineralValue(existing)) {
+          report.mineralsBefore += 1;
+        }
+        if (hasMineralValue(merged)) {
+          report.mineralsAfter += 1;
+        }
+
+        const changed = stableStringify(existing) !== stableStringify(merged);
+        if (changed) {
+          report.changed += 1;
+        }
+
+        if (
+          report.samples.length < SAMPLE_LIMIT &&
+          merged.minerals.calcium !== null
+        ) {
+          report.samples.push({
+            id: record.id,
+            name: record.foodName,
+            calcium: merged.minerals.calcium,
+          });
+        }
+
+        if (args.apply && changed) {
+          await prisma.nutritionSourceRecord.update({
+            where: { id: record.id },
+            data: { normalizedNutrition: toJsonInput(merged) },
+          });
+        }
       }
 
-      const parsed = extractCnfAmounts(record.rawData);
-      if (!parsed.amounts) {
-        report.skipped.push({
-          id: record.id,
-          reason: parsed.reason ?? 'rawData.amounts 解析失败',
-        });
-        continue;
-      }
-
-      let merged: NutritionProfileV2;
-      try {
-        const built = buildCnfNutritionProfile({
-          amounts: parsed.amounts,
-          codeMap,
-          food: {
-            foodCode: resolveFoodCode(record.rawData, existing),
-            description: record.foodName,
-          },
-        });
-        merged = mergeCnfMinerals(existing, built);
-      } catch (error) {
-        report.skipped.push({
-          id: record.id,
-          reason: error instanceof Error ? error.message : String(error),
-        });
-        continue;
-      }
-
-      if (hasMineralValue(existing)) {
-        report.mineralsBefore += 1;
-      }
-      if (hasMineralValue(merged)) {
-        report.mineralsAfter += 1;
-      }
-
-      const changed = stableStringify(existing) !== stableStringify(merged);
-      if (changed) {
-        report.changed += 1;
-      }
-
-      if (
-        report.samples.length < SAMPLE_LIMIT &&
-        merged.minerals.calcium !== null
-      ) {
-        report.samples.push({
-          id: record.id,
-          name: record.foodName,
-          calcium: merged.minerals.calcium,
-        });
-      }
-
-      if (args.apply && changed) {
-        await prisma.nutritionSourceRecord.update({
-          where: { id: record.id },
-          data: { normalizedNutrition: toJsonInput(merged) },
-        });
+      lastId = records[records.length - 1].id;
+      remaining -= records.length;
+      if (records.length < take) {
+        break;
       }
     }
   } finally {

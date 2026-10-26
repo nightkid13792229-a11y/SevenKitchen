@@ -1,11 +1,12 @@
 <template>
-  <div class="ai-agent-page">
+  <div ref="pageRef" class="ai-agent-page">
     <header class="ai-agent-header">
       <div>
         <h2 class="ai-agent-header__title">AI 添加原料（Agent）</h2>
         <p class="ai-agent-header__subtitle">
-          说一句话，AI 会在这份草稿上查库、写原料卡与营养档案、跑终检；
-          跑完一轮后右侧出现「原料卡 / 营养档案」，你核对、改完就能提交。
+          说一句话，AI 会在这份草稿上查库、写原料卡与营养档案；
+          跑完一轮后右侧出现「原料档案 / 营养档案」，你核对、改完，
+          两页各跑一次核验，才能授权写入正式库。
         </p>
       </div>
       <el-button text @click="goBackToList">返回原料列表</el-button>
@@ -384,8 +385,21 @@
             >
               冲突 {{ conflictCount }} 项
             </el-tag>
-            <el-tag size="small" :type="checkTagType" effect="plain">
-              检查：{{ checkSummary.label }}
+            <el-tag
+              size="small"
+              :type="commitResult || gate.ready ? 'success' : 'info'"
+              effect="plain"
+              :title="
+                commitResult
+                  ? '已经写入正式库'
+                  : gate.ready
+                    ? '两页核验都已通过，可以授权'
+                    : gate.reasons[0]
+              "
+            >
+              授权：{{
+                commitResult ? '已写入' : gate.ready ? '可写入' : '还差条件'
+              }}
             </el-tag>
           </div>
         </div>
@@ -404,8 +418,28 @@
         <div v-else-if="draftLoading" v-loading="true" class="review-loading" />
 
         <div v-else-if="draft" class="review-panel__body">
-          <el-tabs v-model="activeTab" class="review-tabs">
-            <el-tab-pane label="原料卡" name="ingredient">
+          <div class="review-tabs-shell">
+            <el-tabs v-model="activeTab" class="review-tabs">
+              <el-tab-pane label="原料档案" name="ingredient">
+                <el-alert
+                  v-if="staleNotice('INGREDIENT')"
+                  class="review-stale"
+                  type="warning"
+                  :closable="false"
+                  show-icon
+                  :title="staleNotice('INGREDIENT') || ''"
+                >
+                  <div class="review-stale__body">
+                    <span>授权只认当前草稿版本的报告。</span>
+                    <el-button
+                      size="small"
+                      @click="openCheckDialog('INGREDIENT')"
+                    >
+                      重跑核验
+                    </el-button>
+                  </div>
+                </el-alert>
+
               <el-form
                 class="ingredient-form"
                 :disabled="Boolean(commitResult) || saving || submitting"
@@ -425,8 +459,11 @@
                       class="ingredient-cell"
                       :class="{
                         'ingredient-cell--empty': isIngredientCellEmpty(cell),
-                        'ingredient-cell--after-create': cell.isAfterCreate
+                        'ingredient-cell--after-create': cell.isAfterCreate,
+                        'ingredient-cell--located':
+                          locatedField === cell.key
                       }"
+                      :data-field-key="cell.key"
                     >
                       <div class="ingredient-cell__head">
                         <span
@@ -560,6 +597,25 @@
             </el-tab-pane>
 
             <el-tab-pane label="营养档案" name="profiles">
+              <el-alert
+                v-if="staleNotice('NUTRITION')"
+                class="review-stale"
+                type="warning"
+                :closable="false"
+                show-icon
+                :title="staleNotice('NUTRITION') || ''"
+              >
+                <div class="review-stale__body">
+                  <span>授权只认当前草稿版本的报告。</span>
+                  <el-button
+                    size="small"
+                    @click="openCheckDialog('NUTRITION')"
+                  >
+                    重跑核验
+                  </el-button>
+                </div>
+              </el-alert>
+
               <el-empty
                 v-if="profileGroups.length === 0"
                 description="草稿里还没有营养档案。先让 AI 查库写入，或继续对话补数据。"
@@ -595,25 +651,23 @@
                   </el-tag>
                 </header>
 
-                <div class="profile-filter" role="group" aria-label="营养档案筛子">
-                  <el-check-tag
-                    :checked="profileFilterMode === 'ALL'"
-                    @change="selectProfileFilter('ALL')"
+                <div class="profile-filter">
+                  <el-radio-group
+                    :model-value="profileFilterMode"
+                    size="small"
+                    aria-label="营养档案筛子"
+                    @update:model-value="handleProfileFilterChange"
                   >
-                    全部 {{ group.counts.all }}
-                  </el-check-tag>
-                  <el-check-tag
-                    :checked="profileFilterMode === 'FILLED'"
-                    @change="selectProfileFilter('FILLED')"
-                  >
-                    只看有值 {{ group.counts.filled }}
-                  </el-check-tag>
-                  <el-check-tag
-                    :checked="profileFilterMode === 'MISSING'"
-                    @change="selectProfileFilter('MISSING')"
-                  >
-                    只看缺口 {{ group.counts.missing }}
-                  </el-check-tag>
+                    <el-radio-button value="ALL">
+                      全部 {{ group.counts.all }}
+                    </el-radio-button>
+                    <el-radio-button value="FILLED">
+                      只看有值 {{ group.counts.filled }}
+                    </el-radio-button>
+                    <el-radio-button value="MISSING">
+                      只看缺口 {{ group.counts.missing }}
+                    </el-radio-button>
+                  </el-radio-group>
                 </div>
 
                 <div
@@ -627,6 +681,10 @@
                       v-for="row in section.rows"
                       :key="row.fieldPath"
                       class="profile-row"
+                      :class="{
+                        'profile-row--located': locatedField === row.fieldPath
+                      }"
+                      :data-field-path="row.fieldPath"
                     >
                       <span class="profile-row__label" :title="row.fieldPath">
                         {{ row.label }}
@@ -666,7 +724,18 @@
                 清空一格会保留证据行、值变成空（显示「待补」），不会写成 0。
               </p>
             </el-tab-pane>
-          </el-tabs>
+            </el-tabs>
+
+            <el-button
+              class="review-tabs__check"
+              size="small"
+              :loading="checkDialogLoading"
+              :disabled="Boolean(commitResult) || submitting"
+              @click="openCheckDialog()"
+            >
+              核验此页
+            </el-button>
+          </div>
 
           <div class="review-feedback">
             <el-alert
@@ -680,34 +749,23 @@
             </el-alert>
 
             <el-alert
+              v-if="checksError"
+              type="warning"
+              :closable="false"
+              show-icon
+              title="核验状态读取失败（授权按钮会保持置灰）"
+            >
+              <p class="review-error-text">{{ checksError }}</p>
+            </el-alert>
+
+            <el-alert
               v-if="submitError"
               type="error"
               :closable="false"
               show-icon
-              title="提交失败（后端返回原文）"
+              title="授权失败（后端返回原文）"
             >
               <p class="review-error-text">{{ submitError }}</p>
-            </el-alert>
-
-            <el-alert
-              v-if="checkSummary.state === 'BLOCK'"
-              type="error"
-              :closable="false"
-              show-icon
-              title="终检有阻断项，已阻止提交"
-            >
-              <ul class="review-blocking">
-                <li
-                  v-for="item in checkSummary.blocking"
-                  :key="`${item.code}-${item.fieldPath ?? ''}`"
-                >
-                  <code>{{ item.code }}</code
-                  >：{{ item.message }}
-                  <span v-if="item.fieldPath" class="review-blocking__path">
-                    （{{ item.fieldPath }}）
-                  </span>
-                </li>
-              </ul>
             </el-alert>
 
             <el-alert
@@ -727,14 +785,17 @@
               show-icon
               :title="
                 verified
-                  ? '已提交，原料与营养档案已确认可用'
-                  : '已提交，营养档案当前是「待验证」'
+                  ? '已写入，原料与营养档案已确认可用'
+                  : '已写入正式库，营养档案当前是「待验证」'
               "
             >
               <p class="review-commit-result">
                 原料 {{ shortId(commitResult.ingredientId) }} ·
                 营养档案
                 {{ commitResult.nutritionFoodIds.map(shortId).join('、') }}
+              </p>
+              <p class="review-commit-result">
+                授权时间 {{ formatCheckedAt(commitResult.authorizedAt) }}
               </p>
               <p v-if="!verified" class="review-error-text">
                 {{
@@ -751,10 +812,10 @@
               type="primary"
               size="large"
               :loading="submitting"
-              :disabled="!canSubmit"
-              @click="handleSubmit"
+              :disabled="!canAuthorize"
+              @click="handleAuthorize"
             >
-              提交
+              授权写入正式库
             </el-button>
             <el-button
               v-if="commitResult"
@@ -766,8 +827,22 @@
             >
               确认可用
             </el-button>
-            <span class="review-footer__hint">{{ submitHint }}</span>
+            <span class="review-footer__hint">{{ authorizeHint }}</span>
           </footer>
+
+          <CheckReportDialog
+            v-model="checkDialogVisible"
+            :domain="checkDialogDomain"
+            :run="checkDialogRun"
+            :loading="checkDialogLoading"
+            :error="checkDialogError"
+            :stale="checkDialogStale"
+            :exception-codes="exceptionCodes"
+            :saving-exception="savingException"
+            @rerun="runCheckForDomain(checkDialogDomain)"
+            @locate="locateToField"
+            @exception="handleRegisterException"
+          />
         </div>
       </el-card>
     </div>
@@ -777,6 +852,7 @@
 <script setup lang="ts">
 import {
   computed,
+  h,
   nextTick,
   onBeforeUnmount,
   onMounted,
@@ -786,10 +862,11 @@ import {
   watch
 } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { ingredientCreationApi } from '@/api/ingredientCreation'
 import { nutritionFoodApi } from '@/api/ingredients'
 import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole'
+import { useUserStore } from '@/store/user'
 import {
   INGREDIENT_CARD_FIELDS,
   INGREDIENT_CARD_FIELD_GROUPS,
@@ -798,10 +875,15 @@ import {
 import { INGREDIENT_NUTRITION_TAB_DEFINITIONS } from '@/constants/ingredientNutrition'
 import { getApiErrorMessage } from '@/utils/apiError'
 import type {
-  CommitIngredientCreationResult,
-  FinalCheckResult,
+  AuthorizeBlockedReason,
+  AuthorizeResult,
+  CheckDomain,
+  CheckItem,
+  CheckRunView,
+  ExceptionRecord,
   IngredientCreationDraft,
   IngredientCreationDraftPayload,
+  IngredientDraftChecksView,
   ProfileDraft
 } from '@/types/ingredientCreation'
 import {
@@ -809,7 +891,6 @@ import {
   countPendingRows,
   countPlanConflicts,
   markIngredientFieldManual,
-  toCheckSummary,
   toCommitInput,
   toIngredientCard,
   toIngredientDraft,
@@ -820,6 +901,15 @@ import {
   type ProfileGroup
 } from './draftReview'
 import { toolLabel } from './stepView'
+import {
+  checkDomainLabel,
+  formatCheckedAt,
+  gateState,
+  toAuthorizeReasons,
+  toCheckRunSummary,
+  toLocateTarget
+} from './checkReportView'
+import CheckReportDialog from './components/CheckReportDialog.vue'
 import {
   buildIngredientCardCells,
   ingredientCellValuesEqual,
@@ -853,9 +943,10 @@ import {
 /**
  * Agent 审核页：
  * - 左边是受控循环的对话与工具记录；
- * - 跑完一轮后右边出现「原料卡 / 营养档案」两个标签，数据全部来自草稿；
+ * - 跑完一轮后右边出现「原料档案 / 营养档案」两个标签，数据全部来自草稿；
  * - 原料卡与营养格改动都 PATCH 草稿，人工改过的字段带标记，AI 不再覆盖；
- * - 底部提交先跑终检、有阻断就停；提交成功后才出现「确认可用」。
+ * - 每页「核验此页」落一份按域报告；授权只认两页都新鲜、无阻断、
+ *   可例外项都已登记例外的报告，写入成功后才出现「确认可用」。
  */
 interface AgentRunRecord {
   id: number
@@ -876,7 +967,9 @@ interface AgentRunRecord {
 
 const router = useRouter()
 const isAdmin = useIsAdmin()
+const userStore = useUserStore()
 
+const pageRef = ref<HTMLElement | null>(null)
 const inputText = ref('')
 const bodyRef = ref<HTMLElement | null>(null)
 /** 点「都不对，我直接说」时把焦点放回输入框（自由输入，不把这句话当答案发出去）。 */
@@ -955,12 +1048,28 @@ const ingredientForm = reactive<IngredientCardForm>(toIngredientCard(null))
 /** 最近一次从后端读到的原料卡：用来判断人到底改了没有。 */
 const loadedCard = ref<IngredientCardForm | null>(null)
 
-const checkResult = ref<FinalCheckResult | null>(null)
-/** 终检出现阻断后禁止提交，直到人再改草稿（改动会把 checkResult 清空）。 */
-const checkBlocked = ref(false)
+/** 两域最新报告 + 是否对应当前草稿；任何一次草稿保存后都要重新拉。 */
+const checksView = ref<IngredientDraftChecksView | null>(null)
+const checksLoading = ref(false)
+const checksError = ref('')
+/** 并发 GET /checks 时只让最后一次落地，避免旧响应盖掉新报告。 */
+let checksSeq = 0
+
+/** 核验弹窗：只渲染与发事件，判定逻辑在 checkReportView.ts。 */
+const checkDialogVisible = ref(false)
+const checkDialogDomain = ref<CheckDomain>('INGREDIENT')
+const checkDialogRun = ref<CheckRunView | null>(null)
+const checkDialogLoading = ref(false)
+const checkDialogError = ref('')
+const savingException = ref(false)
+
+/** 刚定位到的格子（原料 key 或营养 fieldPath），短暂高亮后自动熄灭。 */
+const locatedField = ref<string | null>(null)
+let locateTimer: ReturnType<typeof setTimeout> | null = null
+
 const submitError = ref('')
 const submitting = ref(false)
-const commitResult = ref<CommitIngredientCreationResult | null>(null)
+const commitResult = ref<AuthorizeResult | null>(null)
 
 const verifyError = ref('')
 const verifying = ref(false)
@@ -1062,39 +1171,91 @@ const pendingCount = computed(() => countPendingRows(profileGroups.value))
 const conflictCount = computed(() =>
   countPlanConflicts(draft.value?.payload)
 )
-const checkSummary = computed(() => toCheckSummary(checkResult.value))
-const checkTagType = computed<'success' | 'danger' | 'info'>(() => {
-  if (checkSummary.value.state === 'PASS') return 'success'
-  if (checkSummary.value.state === 'BLOCK') return 'danger'
-  return 'info'
+
+/** 两页摘要：`fresh` 只认服务端 GET /checks 的判断，不在前端重算哈希。 */
+const ingredientCheck = computed(() =>
+  toCheckRunSummary(
+    checksView.value?.ingredient ?? null,
+    checksView.value?.fresh.ingredient === true
+  )
+)
+const nutritionCheck = computed(() =>
+  toCheckRunSummary(
+    checksView.value?.nutrition ?? null,
+    checksView.value?.fresh.nutrition === true
+  )
+)
+
+/** 已登记例外的 code（去重）；弹窗据此标「已登记例外」。 */
+const exceptionCodes = computed<string[]>(() => {
+  const records = draft.value?.payload.verify?.exceptions ?? []
+  const codes = records
+    .map((record) => (typeof record?.code === 'string' ? record.code.trim() : ''))
+    .filter(Boolean)
+  return [...new Set(codes)]
 })
 
-const canSubmit = computed(
+const gate = computed(() =>
+  gateState({
+    ingredient: ingredientCheck.value,
+    nutrition: nutritionCheck.value,
+    exceptions: draft.value?.payload.verify?.exceptions ?? [],
+    saving: saving.value
+  })
+)
+
+const canAuthorize = computed(
   () =>
     Boolean(draft.value) &&
     !commitResult.value &&
     !submitting.value &&
-    !saving.value &&
-    !checkBlocked.value &&
-    ingredientTextValue('name').trim().length > 0 &&
-    (draft.value?.payload.profiles?.length ?? 0) > 0
+    gate.value.ready
 )
 
-const submitHint = computed(() => {
+const authorizeHint = computed(() => {
   if (commitResult.value) {
     return verified.value
       ? '已确认可用，配方里现在能选到这些档案。'
-      : '提交已完成；确认可用后才会进入配方链路。'
+      : '已写入正式库；确认可用后才会进入配方链路。'
   }
-  if (checkBlocked.value) {
-    return '终检有阻断项，已禁止提交；按明细修改草稿后可再试。'
+  if (checksLoading.value) {
+    return '正在读取两页的核验状态…'
   }
-  if (!ingredientTextValue('name').trim()) return '原料名称还没填。'
-  if ((draft.value?.payload.profiles?.length ?? 0) === 0) {
-    return '还没有营养档案，先让 AI 写入再提交。'
+  if (!gate.value.ready) {
+    return gate.value.reasons[0] ?? '授权条件还没满足。'
   }
-  if (saving.value) return '正在保存草稿…'
-  return '提交会先跑终检；有阻断项就停下，不会写正式数据。'
+  return '授权前，所有内容只在草稿里；写入后原料与档案都是「待验证」。'
+})
+
+/**
+ * 页签上的过期横幅：
+ * - 从没跑过 → 说「还没核验」，不假装是过期；
+ * - 跑过但改过草稿 → 用任务要求的原话「报告已过期，改过之后要重跑」。
+ */
+function staleNotice(domain: CheckDomain): string {
+  const view = checksView.value
+  if (!view) {
+    return ''
+  }
+
+  const fresh =
+    domain === 'INGREDIENT' ? view.fresh.ingredient : view.fresh.nutrition
+  if (fresh) {
+    return ''
+  }
+
+  const run = domain === 'INGREDIENT' ? view.ingredient : view.nutrition
+  return run ? '报告已过期，改过之后要重跑' : '这一页还没核验，跑一次才能授权'
+}
+
+const checkDialogStale = computed(() => {
+  if (!checkDialogRun.value) {
+    return false
+  }
+  // 拿不到 fresh 时按「过期」显示：宁可多提示一次重跑，也不让人误以为能授权。
+  return checkDialogDomain.value === 'INGREDIENT'
+    ? checksView.value?.fresh.ingredient !== true
+    : checksView.value?.fresh.nutrition !== true
 })
 
 function stepTagType(
@@ -1159,6 +1320,10 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
+  if (locateTimer) {
+    clearTimeout(locateTimer)
+    locateTimer = null
+  }
 })
 
 /** 后端返回的草稿统一在这里落状态；`resetForm` 只在首次加载/新一轮后使用。 */
@@ -1171,15 +1336,73 @@ function applyDraft(
 
   if (options.resetForm) {
     Object.assign(ingredientForm, loadedCard.value)
-    checkResult.value = updated.payload.checks ?? null
-    checkBlocked.value = false
     pendingCells.clear()
+  }
+}
+
+/**
+ * 读两域最新报告与 fresh。
+ *
+ * 任何一次草稿保存后都要调用：授权按钮与页签横幅都只认这份服务端判断。
+ * 这里吞掉错误（只记 `checksError`），不能因为报告接口抖动就把一次成功的
+ * 草稿保存标成失败。
+ */
+async function refreshChecks(
+  draftId?: string
+): Promise<IngredientDraftChecksView | null> {
+  const id = draftId ?? draft.value?.id
+  if (!id) {
+    checksView.value = null
+    return null
+  }
+
+  const seq = ++checksSeq
+  checksLoading.value = true
+  checksError.value = ''
+
+  try {
+    const view = await ingredientCreationApi.getDraftChecks(id)
+    if (seq === checksSeq && draft.value?.id === id) {
+      checksView.value = view
+    }
+    return view
+  } catch (error) {
+    if (seq === checksSeq) {
+      checksError.value = getApiErrorMessage(
+        error,
+        '核验报告加载失败，请稍后重试'
+      )
+    }
+    return null
+  } finally {
+    if (seq === checksSeq) {
+      checksLoading.value = false
+    }
+  }
+}
+
+/**
+ * 草稿刚保存成功、还没拿到新报告之前，先把本地 fresh 标成 false。
+ *
+ * 这样即使紧接着的 GET /checks 失败，授权按钮也不会拿着「保存前」的
+ * fresh=true 放行；页签横幅会如实说报告已过期。
+ */
+function markChecksStale() {
+  const view = checksView.value
+  if (!view) {
+    return
+  }
+  checksView.value = {
+    ...view,
+    fresh: { ingredient: false, nutrition: false }
   }
 }
 
 async function loadDraft(draftId: string) {
   draftLoading.value = true
   draftError.value = ''
+  // 换草稿时先清掉上一份的报告，避免用别人的 fresh 判定这一页。
+  checksView.value = null
   try {
     const updated = await ingredientCreationApi.getDraft(draftId)
     applyDraft(updated, { resetForm: true })
@@ -1189,6 +1412,7 @@ async function loadDraft(draftId: string) {
     state.pendingQuestion = readPendingQuestion(
       updated.payload.pendingQuestion
     )
+    await refreshChecks(draftId)
   } catch (error) {
     draftError.value = getApiErrorMessage(error, '草稿加载失败，请稍后重试')
   } finally {
@@ -1512,8 +1736,6 @@ async function saveIngredientCell(key: IngredientCardFieldKey) {
   )
   const draftId = draft.value.id
   const step = draft.value.step
-  checkResult.value = null
-  checkBlocked.value = false
 
   await enqueueSave(async () => {
     const updated = await ingredientCreationApi.patchDraft(draftId, step, {
@@ -1525,6 +1747,9 @@ async function saveIngredientCell(key: IngredientCardFieldKey) {
     const nextCard = toIngredientCard(updated.payload, updated.name)
     loadedCard.value = nextCard
     Object.assign(ingredientForm, nextCard)
+    // 草稿一变，两页报告就过期了：先本地置灰，再刷新页签横幅与授权按钮。
+    markChecksStale()
+    await refreshChecks(updated.id)
   })
 }
 
@@ -1587,8 +1812,6 @@ async function handleCellChange(
   }
 
   pendingCells.set(key, nextValue)
-  checkResult.value = null
-  checkBlocked.value = false
 
   const draftId = draft.value.id
   const step = draft.value.step
@@ -1604,6 +1827,9 @@ async function handleCellChange(
     })
     draft.value = updated
     pendingCells.delete(key)
+    // 营养页改一格也会让两页报告同时过期。
+    markChecksStale()
+    await refreshChecks(updated.id)
   })
 
   if (!ok) {
@@ -1615,6 +1841,15 @@ function selectProfileFilter(mode: ProfileFilterMode) {
   profileFilterMode.value = mode
 }
 
+/** el-radio-group 的值是 string | number | boolean，只认三个已知模式。 */
+function handleProfileFilterChange(
+  value: string | number | boolean | undefined
+) {
+  if (value === 'ALL' || value === 'FILLED' || value === 'MISSING') {
+    profileFilterMode.value = value
+  }
+}
+
 function tabSections(group: ProfileGroup) {
   return INGREDIENT_NUTRITION_TAB_DEFINITIONS.map((tab) => ({
     key: tab.key,
@@ -1623,13 +1858,285 @@ function tabSections(group: ProfileGroup) {
   })).filter((section) => section.rows.length > 0)
 }
 
-/** 提交：先跑终检，有 blocking 就停在页面上；通过才调 commit。 */
-async function handleSubmit() {
-  if (!draft.value || submitting.value) {
+/** 例外记录的操作人：有登录名用登录名，刷新后取不到就按约定落 `admin`。 */
+function currentUsername(): string {
+  const name = userStore.userInfo?.username
+  return typeof name === 'string' && name.trim() ? name.trim() : 'admin'
+}
+
+/** 打开弹窗并立刻重跑当前页：弹窗先显示「正在跑规则…」，再换报告。 */
+function openCheckDialog(domain?: CheckDomain) {
+  if (!draft.value) {
     return
   }
-  if (!canSubmit.value) {
-    ElMessage.warning(submitHint.value)
+  const target =
+    domain ?? (activeTab.value === 'profiles' ? 'NUTRITION' : 'INGREDIENT')
+  checkDialogDomain.value = target
+  checkDialogRun.value = null
+  checkDialogError.value = ''
+  checkDialogVisible.value = true
+  void runCheckForDomain(target)
+}
+
+/** 跑某一页的核验并落库；成功后刷新页签横幅与授权闸门。 */
+async function runCheckForDomain(domain: CheckDomain) {
+  const draftId = draft.value?.id
+  if (!draftId || checkDialogLoading.value) {
+    return
+  }
+
+  checkDialogDomain.value = domain
+  checkDialogLoading.value = true
+  checkDialogError.value = ''
+
+  try {
+    const run = await ingredientCreationApi.runDomainCheck(draftId, domain)
+    if (draft.value?.id !== draftId) {
+      return
+    }
+    checkDialogRun.value = run
+    await refreshChecks(draftId)
+  } catch (error) {
+    checkDialogError.value = getApiErrorMessage(
+      error,
+      '核验没跑成，请稍后重试'
+    )
+  } finally {
+    checkDialogLoading.value = false
+  }
+}
+
+/**
+ * 定位到字段：关弹窗、切到对应页签、短暂高亮那一格。
+ *
+ * 营养页如果正在「只看有值 / 只看缺口」，目标行可能被筛掉，所以定位时
+ * 先切回「全部」；同一 fieldPath 在生 / 熟两份档案里都可能存在，全部高亮
+ * 并把第一处滚到视野中间。
+ */
+async function locateToField(item: CheckItem) {
+  const target = toLocateTarget(item)
+  checkDialogVisible.value = false
+  if (!target) {
+    return
+  }
+
+  if (target.tab === 'profiles') {
+    profileFilterMode.value = 'ALL'
+  }
+  activeTab.value = target.tab
+  locatedField.value = target.key
+  // 切页签 / 切筛子后 TabPane 才挂载，等两拍再查目标格子。
+  await nextTick()
+  await nextTick()
+
+  const selector =
+    target.tab === 'ingredient'
+      ? `[data-field-key="${CSS.escape(target.key)}"]`
+      : `[data-field-path="${CSS.escape(target.fieldPath)}"]`
+  const element = pageRef.value?.querySelector<HTMLElement>(selector)
+  element?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+
+  if (locateTimer) {
+    clearTimeout(locateTimer)
+  }
+  locateTimer = setTimeout(() => {
+    locatedField.value = null
+    locateTimer = null
+  }, 2600)
+}
+
+/**
+ * 登记例外：理由必填 → 按 code 去重写入 `payload.verify.exceptions`
+ * → 刷新核验状态 → 重跑当前页核验，弹窗里换成新报告。
+ */
+async function handleRegisterException(item: CheckItem) {
+  if (!draft.value || savingException.value) {
+    return
+  }
+
+  const draftId = draft.value.id
+  const step = draft.value.step
+  let reason = ''
+
+  try {
+    const result = await ElMessageBox.prompt(
+      `请写明为什么「${item.code}」可以例外。这句话会记进审计，授权后也能查到。`,
+      `登记例外 · ${item.code}`,
+      {
+        confirmButtonText: '登记并重跑',
+        cancelButtonText: '取消',
+        inputType: 'textarea',
+        inputPlaceholder:
+          '例如：本地库没有可食部数据，按供应商提供的 60% 登记',
+        inputValidator: (value) =>
+          typeof value === 'string' && value.trim().length > 0
+            ? true
+            : '理由必填：没有理由的例外不允许登记'
+      }
+    )
+    reason = String(result.value ?? '').trim()
+  } catch {
+    return
+  }
+
+  if (!reason || !draft.value || draft.value.id !== draftId) {
+    return
+  }
+
+  const record: ExceptionRecord = {
+    code: item.code,
+    reason,
+    approvedBy: currentUsername(),
+    approvedAt: new Date().toISOString()
+  }
+  // 同 code 只留一条：重复登记视为「换理由」，不往数组里叠重复项。
+  const existing = draft.value.payload.verify?.exceptions ?? []
+  const index = existing.findIndex((entry) => entry.code === record.code)
+  const exceptions =
+    index >= 0
+      ? existing.map((entry, i) => (i === index ? record : entry))
+      : [...existing, record]
+
+  savingException.value = true
+  checkDialogError.value = ''
+
+  try {
+    const updated = await ingredientCreationApi.patchDraft(draftId, step, {
+      verify: { exceptions }
+    })
+    draft.value = updated
+    markChecksStale()
+    await refreshChecks(draftId)
+    ElMessage.success('已登记例外，正在重跑核验')
+    await runCheckForDomain(checkDialogDomain.value)
+  } catch (error) {
+    checkDialogError.value = getApiErrorMessage(
+      error,
+      '登记例外失败，请稍后重试'
+    )
+  } finally {
+    savingException.value = false
+  }
+}
+
+/**
+ * 把「输入框里还没失焦保存」的原料卡改动补存一次。
+ *
+ * 授权写的是库里的草稿，不是请求体；不补存的话，屏幕上看到的最后一格改动
+ * 会被漏掉。返回 false 表示保存失败，调用方不要继续授权。
+ */
+async function flushIngredientCard(): Promise<boolean> {
+  if (!draft.value || !hasUnsavedIngredientChanges.value) {
+    return true
+  }
+
+  let card: IngredientCardForm = ingredientForm
+  for (const field of INGREDIENT_CARD_FIELDS) {
+    if (isIngredientCellChanged(field.key)) {
+      card = markIngredientFieldManual(card, field.key)
+    }
+  }
+  ingredientForm.manualFields = card.manualFields
+
+  const ingredient = toIngredientDraftFromCells(
+    draft.value.payload.ingredient,
+    ingredientForm
+  )
+  const draftId = draft.value.id
+  const step = draft.value.step
+
+  return enqueueSave(async () => {
+    const updated = await ingredientCreationApi.patchDraft(draftId, step, {
+      ingredient
+    })
+    draft.value = updated
+    const nextCard = toIngredientCard(updated.payload, updated.name)
+    loadedCard.value = nextCard
+    Object.assign(ingredientForm, nextCard)
+    markChecksStale()
+    await refreshChecks(updated.id)
+  })
+}
+
+/** 授权前的二次确认：写什么、两份报告什么样、写完是什么状态。 */
+async function confirmAuthorize(profileCount: number): Promise<boolean> {
+  const summaries = [
+    `原料档案：阻断 ${ingredientCheck.value?.blocking ?? 0} · 不合格 ${
+      ingredientCheck.value?.exceptionable ?? 0
+    } · 提醒 ${ingredientCheck.value?.warning ?? 0}`,
+    `营养档案：阻断 ${nutritionCheck.value?.blocking ?? 0} · 不合格 ${
+      nutritionCheck.value?.exceptionable ?? 0
+    } · 提醒 ${nutritionCheck.value?.warning ?? 0}`
+  ]
+  const lines = [
+    `写入 1 条原料 + ${profileCount} 份营养档案。`,
+    ...summaries,
+    `已登记例外：${exceptionCodes.value.join('、') || '无'}`,
+    '写入后原料与营养档案都是「待验证」，确认可用是另一个动作。'
+  ]
+
+  try {
+    await ElMessageBox.confirm(
+      h('div', [
+        h('p', '确认授权后，以下内容会写入正式库：'),
+        h(
+          'ul',
+          lines.map((line, index) => h('li', { key: index }, line))
+        )
+      ]),
+      '授权写入正式库',
+      {
+        confirmButtonText: '确认写入',
+        cancelButtonText: '再看看',
+        type: 'warning'
+      }
+    )
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** 400 的 reasons 只在弹窗里列明细：拦截器已经弹过后端 message，不再重复 toast。 */
+async function showAuthorizeBlocked(
+  reasons: AuthorizeBlockedReason[]
+): Promise<void> {
+  const items = reasons.map((reason, index) => {
+    const domain = reason.domain
+      ? `（${checkDomainLabel(reason.domain)}）`
+      : ''
+    return h('li', { key: `${reason.code}-${index}` }, [
+      h('code', reason.code),
+      `${domain}：${reason.detail || '后端没有给出细节'}`
+    ])
+  })
+
+  try {
+    await ElMessageBox.alert(
+      h('div', [
+        h('p', '正式库没有被写入。下面这些条件还没满足：'),
+        h('ul', items)
+      ]),
+      '授权未通过',
+      { confirmButtonText: '知道了', type: 'warning' }
+    )
+  } catch {
+    // 直接点右上角关掉也算看过，不把 close 当成授权失败再抛一次。
+  }
+}
+
+/**
+ * 授权写入正式库：校验闸门 → 补存 / 刷新核验 → 二次确认 → 调 authorize。
+ *
+ * 例外与阻断的原因不在这里拼接：后端 400 的 `reasons` 原样列出，
+ * 本地闸门只负责把按钮置灰并写第一条原因。
+ */
+async function handleAuthorize() {
+  if (!draft.value || submitting.value || commitResult.value) {
+    return
+  }
+  if (!gate.value.ready) {
+    ElMessage.warning(gate.value.reasons[0] ?? '授权条件还没满足')
     return
   }
 
@@ -1641,51 +2148,66 @@ async function handleSubmit() {
   try {
     await saveQueue
     if (saveFailed.value) {
-      submitError.value = saveError.value || '草稿还有没保存成功的改动，不能提交'
+      submitError.value =
+        saveError.value || '草稿还有没保存成功的改动，不能授权'
       return
     }
 
-    const check = await ingredientCreationApi.runCheck(draft.value.id)
-    checkResult.value = check
-    if (check.blocking.length > 0) {
-      checkBlocked.value = true
-      submitError.value = `终检有 ${check.blocking.length} 项阻断，已阻止提交`
+    if (hasUnsavedIngredientChanges.value) {
+      const flushed = await flushIngredientCard()
+      if (!flushed) {
+        submitError.value =
+          saveError.value || '原料卡还有没保存成功的改动，不能授权'
+        return
+      }
+    }
+
+    const draftId = draft.value.id
+    await refreshChecks(draftId)
+    if (checksError.value) {
+      submitError.value = `核验状态读取失败，不能授权：${checksError.value}`
       return
     }
-    checkBlocked.value = false
+    if (!gate.value.ready) {
+      ElMessage.warning(gate.value.reasons[0] ?? '授权条件还没满足')
+      return
+    }
 
     const input = toCommitInput(
       draft.value.payload,
-      // 以当前表单为准：刚改完还没离开输入框的字段也要一起提交。
+      // 以当前表单为准：主档案下标与确认弹窗里的份数都按它算。
       toIngredientDraft(ingredientForm)
     )
     if (!input) {
-      submitError.value = '草稿还缺原料名或营养档案，不能提交'
+      submitError.value = '草稿还缺原料名或营养档案，不能授权'
       return
     }
 
-    const result = await ingredientCreationApi.commit(draft.value.id, input)
+    const confirmed = await confirmAuthorize(input.profiles.length)
+    if (!confirmed) {
+      return
+    }
+
+    const result = await ingredientCreationApi.authorize(draftId, {
+      primaryProfileIndex: input.primaryProfileIndex
+    })
     commitResult.value = result
-    ElMessage.success('提交成功，营养档案已创建为「待验证」')
+    ElMessage.success('已写入正式库，营养档案当前是「待验证」')
   } catch (error) {
-    submitError.value = getApiErrorMessage(error, '提交失败，请稍后重试')
-    const rawBlocking = (
-      error as { response?: { data?: { blocking?: unknown } } }
-    )?.response?.data?.blocking
-    if (Array.isArray(rawBlocking)) {
-      checkBlocked.value = true
-      checkResult.value = {
-        blocking: rawBlocking as FinalCheckResult['blocking'],
-        exceptionable: [],
-        warnings: []
-      }
+    const reasons = toAuthorizeReasons(error)
+    if (reasons.length > 0) {
+      await showAuthorizeBlocked(reasons)
+      // 报告可能刚好变旧（例如别的标签页改过草稿），刷新后按钮会同步置灰。
+      await refreshChecks(draft.value?.id)
+    } else {
+      submitError.value = getApiErrorMessage(error, '授权失败，请稍后重试')
     }
   } finally {
     submitting.value = false
   }
 }
 
-/** 确认可用：对提交返回的每个 nutritionFoodId 一个一个验证，失败逐条留原文。 */
+/** 确认可用：对授权返回的每个 nutritionFoodId 一个一个验证，失败逐条留原文。 */
 async function handleVerify() {
   if (!isAdmin.value) {
     ElMessage.warning(ADMIN_ONLY_TIP)
@@ -1694,7 +2216,7 @@ async function handleVerify() {
 
   const nutritionFoodIds = commitResult.value?.nutritionFoodIds ?? []
   if (nutritionFoodIds.length === 0) {
-    verifyError.value = '这次提交没有返回营养档案，无法确认可用'
+    verifyError.value = '这次授权没有返回营养档案，无法确认可用'
     return
   }
 
@@ -2415,6 +2937,21 @@ function goBackToList() {
   min-height: 120px;
 }
 
+.review-tabs-shell {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.review-tabs__check {
+  position: absolute;
+  top: 8px;
+  right: 16px;
+  z-index: 2;
+}
+
 .review-tabs {
   display: flex;
   flex: 1;
@@ -2424,7 +2961,8 @@ function goBackToList() {
 
 .review-tabs :deep(.el-tabs__header) {
   margin: 0;
-  padding: 0 16px;
+  /* 给右上角的「核验此页」留位，最后那个页签不会被按钮压住。 */
+  padding: 0 116px 0 16px;
 }
 
 .review-tabs :deep(.el-tabs__content) {
@@ -2432,6 +2970,18 @@ function goBackToList() {
   min-height: 0;
   padding: 12px 16px;
   overflow-y: auto;
+}
+
+.review-stale {
+  margin-bottom: 10px;
+}
+
+.review-stale__body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
 }
 
 .review-alert {
@@ -2501,6 +3051,21 @@ function goBackToList() {
 
 .ingredient-cell--after-create {
   background: var(--el-fill-color-light);
+}
+
+/* 「定位到字段」落点：短暂高亮，人一眼能看到是哪一格。 */
+.ingredient-cell--located {
+  border-color: var(--el-color-primary);
+  border-style: solid;
+  background: var(--el-color-primary-light-9);
+  box-shadow: 0 0 0 3px var(--el-color-primary-light-7);
+  animation: locate-pulse 1.1s ease-in-out 2;
+}
+
+@keyframes locate-pulse {
+  50% {
+    box-shadow: 0 0 0 6px var(--el-color-primary-light-8);
+  }
 }
 
 .ingredient-cell--after-create .ingredient-cell__label,
@@ -2607,7 +3172,13 @@ function goBackToList() {
   margin-bottom: 8px;
 }
 
-.profile-filter :deep(.el-check-tag) {
+.profile-filter :deep(.el-radio-group) {
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.profile-filter :deep(.el-radio-button__inner) {
+  padding: 5px 10px;
   font-size: 12px;
 }
 
@@ -2635,6 +3206,18 @@ function goBackToList() {
   padding: 3px 0;
   border-bottom: 1px dashed var(--el-border-color-lighter);
   font-size: 12px;
+}
+
+.profile-row--located {
+  background: var(--el-color-warning-light-9);
+  box-shadow: inset 3px 0 0 var(--el-color-warning);
+  animation: locate-pulse-row 1.1s ease-in-out 2;
+}
+
+@keyframes locate-pulse-row {
+  50% {
+    background: var(--el-color-warning-light-7);
+  }
 }
 
 .profile-row:last-child {
@@ -2673,17 +3256,6 @@ function goBackToList() {
   flex-direction: column;
   gap: 8px;
   padding: 0 16px 8px;
-}
-
-.review-blocking {
-  margin: 4px 0 0;
-  padding-left: 18px;
-  font-size: 12px;
-  line-height: 1.7;
-}
-
-.review-blocking__path {
-  color: var(--el-text-color-secondary);
 }
 
 .review-commit-result {

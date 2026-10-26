@@ -224,6 +224,72 @@ export interface FinalCheckResult {
   warnings: CheckItem[]
 }
 
+// ==================== 按域核验与授权闸门 ====================
+
+/** 核验的两个域：原料档案 / 营养档案。 */
+export type CheckDomain = 'INGREDIENT' | 'NUTRITION'
+
+/** 报告由谁触发：AI 自检不算授权依据，人点「核验此页」才算。 */
+export type CheckTrigger = 'AGENT' | 'USER'
+
+/** 一次核验的计数（三档固定）。 */
+export interface CheckRunCounts {
+  blocking: number
+  exceptionable: number
+  warning: number
+}
+
+/**
+ * 一份落库的核验报告。
+ *
+ * `payloadHash` 记录「检查的是哪一份草稿内容」，`rulesVersion` 记录规则版本；
+ * 授权闸门会同时比这两个值，改过草稿或规则升级后旧报告都不能再用。
+ */
+export interface CheckRunView {
+  id: string
+  draftId: string
+  domain: CheckDomain
+  trigger: CheckTrigger
+  rulesVersion: string
+  payloadHash: string
+  result: FinalCheckResult
+  counts: CheckRunCounts
+  createdBy: string
+  createdAt: string
+}
+
+/** `GET drafts/:id/checks`：两域各自最新一份报告 + 是否仍对应当前草稿。 */
+export interface IngredientDraftChecksView {
+  ingredient: CheckRunView | null
+  nutrition: CheckRunView | null
+  fresh: {
+    ingredient: boolean
+    nutrition: boolean
+  }
+}
+
+/** 授权被拒的机器可读原因码（后端 `AuthorizeBlockedReasonCode`）。 */
+export type AuthorizeBlockedReasonCode =
+  | 'CHECK_MISSING'
+  | 'CHECK_STALE'
+  | 'CHECK_VERSION'
+  | 'CHECK_BLOCKING'
+  | 'CHECK_EXCEPTIONABLE'
+  | 'SOURCE_PENDING'
+
+/** 授权被拒的一条原因；`domain` 只在能归到某一页时出现。 */
+export interface AuthorizeBlockedReason {
+  code: AuthorizeBlockedReasonCode
+  domain?: CheckDomain
+  detail: string
+}
+
+/** `POST drafts/:id/authorize` 的返回值：提交结果 + 授权时间。 */
+export interface AuthorizeResult extends CommitIngredientCreationResult {
+  /** 授权时间（ISO）；与提交时间分开，方便审计对账。 */
+  authorizedAt: string
+}
+
 /** AI 提案快照的站点。 */
 export type ProposalSnapshotKind = 'INTAKE' | 'CANDIDATES' | 'MERGE' | 'CHECK'
 

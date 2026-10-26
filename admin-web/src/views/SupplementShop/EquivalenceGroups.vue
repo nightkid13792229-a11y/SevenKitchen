@@ -317,6 +317,15 @@
             placeholder="为什么这些原料可以互换；边界依据"
           />
         </el-form-item>
+        <el-form-item label="依据说明">
+          <el-input
+            v-model="form.evidenceSummary"
+            type="textarea"
+            :rows="3"
+            placeholder="用一两句话说明：这些原料为什么可以互换、边界在哪、有什么注意"
+          />
+          <div class="form-tip">会显示在组详情里，给审核人和后来的人看。</div>
+        </el-form-item>
         <el-form-item label="依据链接">
           <el-input
             v-model="form.evidenceText"
@@ -384,6 +393,9 @@
 
         <el-descriptions :column="2" border size="small" class="detail-desc">
           <el-descriptions-item label="组定义">{{ detail.description || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="依据说明" :span="2">
+            {{ detail.evidenceSummary || '未填写' }}
+          </el-descriptions-item>
           <el-descriptions-item label="分组依据">{{ detail.rationale || '-' }}</el-descriptions-item>
           <el-descriptions-item label="审核人">{{ detail.reviewedBy || '-' }}</el-descriptions-item>
           <el-descriptions-item label="审核时间">{{ formatTime(detail.reviewedAt) }}</el-descriptions-item>
@@ -491,7 +503,16 @@
               <el-tag size="small" effect="plain">{{ actionLabel(log.action) }}</el-tag>
               <span class="muted">{{ log.operatorName || log.operatorId || '系统' }}</span>
             </div>
-            <pre v-if="log.changes" class="audit-json">{{ prettyJson(log.changes) }}</pre>
+            <div v-if="auditLines(log).length" class="audit-summary">
+              <div v-for="(line, lineIndex) in auditLines(log)" :key="lineIndex" class="audit-summary-line">
+                {{ line }}
+              </div>
+            </div>
+            <el-collapse v-if="log.changes" class="audit-raw-collapse">
+              <el-collapse-item title="原始数据（排查用）" :name="log.id">
+                <pre class="audit-json">{{ prettyJson(log.changes) }}</pre>
+              </el-collapse-item>
+            </el-collapse>
           </el-timeline-item>
         </el-timeline>
       </div>
@@ -557,6 +578,7 @@ const form = reactive({
   formCategory: '',
   description: '',
   rationale: '',
+  evidenceSummary: '',
   evidenceText: '',
   sortOrder: 0,
 });
@@ -624,6 +646,102 @@ function prettyJson(value: unknown) {
   } catch {
     return String(value);
   }
+}
+
+function memberName(id: string) {
+  const member = detail.value?.members.find((item) => item.id === id);
+  return member?.name || String(id).slice(0, 8);
+}
+
+function formatAuditValue(value: unknown) {
+  if (value === null || value === undefined || value === '') return '—';
+  if (Array.isArray(value)) return value.join('、');
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+/** 把审计 JSON 翻成人话；原始数据收进折叠区，不再直接铺代码块 */
+function auditLines(log: any): string[] {
+  const changes = log?.changes || {};
+
+  if (log?.action === 'CREATE') {
+    const source =
+      changes.source === 'taxonomy-draft-import'
+        ? '系统按草案导入'
+        : '手动创建';
+    const ids = Array.isArray(changes.memberIds) ? changes.memberIds : [];
+    const names = ids.map(memberName).filter(Boolean);
+    return [
+      `来源：${source}`,
+      names.length
+        ? `成员：${names.join('、')}`
+        : `成员：${changes.assigned ?? 0} 个`,
+    ];
+  }
+
+  if (log?.action === 'STATUS_CHANGE') {
+    const lines = [
+      `状态：${statusLabel(changes.from || '未知')} → ${statusLabel(changes.to || '未知')}`,
+    ];
+    if (changes.reviewNote) lines.push(`审核说明：${changes.reviewNote}`);
+    return lines;
+  }
+
+  if (log?.action === 'MEMBER_ADD') {
+    const names =
+      Array.isArray(changes.names) && changes.names.length
+        ? changes.names
+        : (changes.ingredientIds || []).map(memberName);
+    const lines = [`加入成员：${names.filter(Boolean).join('、') || '—'}`];
+    if (changes.movedFromGroupIds?.length) {
+      lines.push(`从其他组移入：${changes.movedFromGroupIds.length} 个`);
+    }
+    return lines;
+  }
+
+  if (log?.action === 'MEMBER_REMOVE') {
+    const names = changes.name
+      ? [changes.name]
+      : (changes.ingredientIds || []).map(memberName);
+    const lines = [`移出成员：${names.filter(Boolean).join('、') || '—'}`];
+    if (changes.movedToGroupId) lines.push('已移到其他等价组');
+    return lines;
+  }
+
+  if (log?.action === 'UPDATE') {
+    const before = changes.before || {};
+    const after = changes.after || {};
+    const labels: Record<string, string> = {
+      code: '编码',
+      name: '名称',
+      nutrientKey: '营养素',
+      nutrientLabel: '营养素名称',
+      nutrientUnit: '单位',
+      formCategory: '形态/来源',
+      description: '组定义',
+      rationale: '分组依据',
+      evidenceSummary: '依据说明',
+      status: '状态',
+      sortOrder: '排序',
+    };
+    const lines: string[] = [];
+    for (const key of Object.keys(after)) {
+      if (key === 'evidenceUrls') {
+        lines.push('依据链接已更新');
+        continue;
+      }
+      const label = labels[key];
+      if (!label) continue;
+      const oldValue = formatAuditValue(before[key]);
+      const newValue = formatAuditValue(after[key]);
+      if (oldValue !== newValue) {
+        lines.push(`${label}：${oldValue} → ${newValue}`);
+      }
+    }
+    return lines.length ? lines : ['已保存'];
+  }
+
+  return ['已更新'];
 }
 
 function normalizeCustomName(value: string) {
@@ -700,6 +818,7 @@ function resetForm() {
   form.formCategory = '';
   form.description = '';
   form.rationale = '';
+  form.evidenceSummary = '';
   form.evidenceText = '';
   form.sortOrder = 0;
 }
@@ -740,6 +859,7 @@ async function openEdit(id: string) {
     form.formCategory = group.formCategory || '';
     form.description = group.description || '';
     form.rationale = group.rationale || '';
+    form.evidenceSummary = group.evidenceSummary || '';
     form.evidenceText = (group.evidenceUrls || []).join('\n');
     form.sortOrder = group.sortOrder;
     formVisible.value = true;
@@ -779,6 +899,7 @@ async function handleSave() {
     formCategory: form.formCategory.trim() || null,
     description: form.description.trim() || null,
     rationale: form.rationale.trim() || null,
+    evidenceSummary: form.evidenceSummary.trim() || null,
     evidenceUrls: evidenceList(),
     sortOrder: form.sortOrder,
   };
@@ -1150,6 +1271,30 @@ onMounted(reload);
   display: flex;
   gap: 8px;
   align-items: center;
+}
+.audit-summary {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.audit-summary-line {
+  color: #303133;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.audit-raw-collapse {
+  margin-top: 4px;
+}
+.audit-raw-collapse :deep(.el-collapse-item__header) {
+  height: 28px;
+  line-height: 28px;
+  font-size: 12px;
+  color: #909399;
+  border-bottom: none;
+}
+.audit-raw-collapse :deep(.el-collapse-item__wrap) {
+  border-bottom: none;
 }
 .audit-json {
   margin: 6px 0 0;

@@ -1106,6 +1106,8 @@ model SupplementEquivalenceGroup {
   formCategory  String?                     @map("form_category") @db.VarChar(50)
   description   String?
   rationale     String?
+  /// 依据说明：一两句话说明“这些原料为什么可以互换/边界在哪”
+  evidenceSummary String?                   @map("evidence_summary")
   /// 依据：URL 或可点开的文献条目（字符串数组）
   evidenceUrls  Json?                       @map("evidence_urls")
   status        SupplementEquivalenceStatus @default(DRAFT)

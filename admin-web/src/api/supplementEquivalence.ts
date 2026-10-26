@@ -62,6 +62,7 @@ export interface EquivalenceGroupDetail {
   formCategory: string | null;
   description: string | null;
   rationale: string | null;
+  evidenceSummary: string | null;
   evidenceUrls: string[] | null;
   status: EquivalenceGroupStatus;
   isActive: boolean;
@@ -103,6 +104,7 @@ export interface UpsertEquivalenceGroupPayload {
   formCategory?: string | null;
   description?: string | null;
   rationale?: string | null;
+  evidenceSummary?: string | null;
   evidenceUrls?: string[];
   sortOrder?: number;
 }

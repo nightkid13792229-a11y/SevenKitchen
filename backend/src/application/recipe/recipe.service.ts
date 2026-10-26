@@ -1553,14 +1553,30 @@ export class RecipeService {
             },
           },
           orderBy: { updatedAt: 'desc' },
-          take: 1,
         },
       },
     });
     if (!series) {
       throw new NotFoundException('系列不存在');
     }
-    const recipe = series.recipes[0];
+    /**
+     * 一个系列有多个生命阶段时，用哪一份起名？
+     *
+     * 菜的身份（主蛋白、主碳水）各阶段相同，只有配比不同，所以取哪份名字都差不多；
+     * 但**配比不同会推出不同的价值点**（幼犬版蛋白更高）。
+     * 因此固定用「普通成年犬」这一版当基准——它是这套配方最有代表性的一份；
+     * 没有这一版时退到已发布版本，再退到最近更新的一份。
+     */
+    const pickCanonicalRecipe = (list: typeof series.recipes) => {
+      const adult = list.find(
+        (item) => item.seriesLifeStage === 'HIGH_ACTIVITY_ADULT',
+      );
+      if (adult) return adult;
+      const published = list.find((item) => item.status === 'PUBLIC');
+      return published ?? list[0];
+    };
+
+    const recipe = pickCanonicalRecipe(series.recipes);
     if (!recipe) {
       throw new BadRequestException('这个系列还没有配方，先设计再起名');
     }
@@ -1576,7 +1592,21 @@ export class RecipeService {
       }))
       .filter((item) => Boolean(item.name));
 
+    // 在架产品线的名字：既要让模型避重，也要在服务端兜一次
+    const existing = await this.prisma.recipeSeries.findMany({
+      where: {
+        deletedAt: null,
+        customerDogId: null,
+        businessStatus: { not: 'PRIVATE_CUSTOM' },
+        NOT: { id: seriesId },
+      },
+      select: { name: true },
+      orderBy: { updatedAt: 'desc' },
+      take: 200,
+    });
+
     return this.recipeNamingService.generate({
+      existingNames: existing.map((item) => item.name).filter(Boolean),
       foodItems,
       energyDensityKcalPerKg: recipe.energyDensityKcalPerKg ?? null,
       moisturePercent: nutrition?.moisture_pct ?? null,

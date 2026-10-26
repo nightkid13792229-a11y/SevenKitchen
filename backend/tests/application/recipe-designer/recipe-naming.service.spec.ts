@@ -6,6 +6,9 @@ jest.mock('src/application/recipe-designer/deepseek-chat', () => ({
   callDeepSeekJson: (...args: unknown[]) => callDeepSeekJson(...args),
 }));
 
+import { readFileSync } from 'fs';
+import { join } from 'path';
+
 import {
   RecipeNamingService,
   buildRecipeNamingSystemPrompt,
@@ -140,15 +143,68 @@ describe('RecipeNamingService 配置回退', () => {
 describe('命名提示词', () => {
   it('要求把主蛋白放在食材段最后（碳水/辅料在前）', () => {
     const prompt = buildRecipeNamingSystemPrompt();
-    expect(prompt).toContain('主蛋白放在最后');
+    expect(prompt).toContain('主蛋白在最后');
     expect(prompt).toContain('红薯鸡胸肉');
     // 不能出现"主蛋白放第一位"这种反向指令
     expect(prompt).not.toContain('主蛋白放第一位');
   });
 
+  it('只要 2 条候选，且两条的价值点不能重复', () => {
+    const prompt = buildRecipeNamingSystemPrompt();
+    expect(prompt).toContain('candidates 数组，2 条');
+    expect(prompt).toContain('价值点不能重复');
+    expect(prompt).not.toContain('reason: string');
+  })
+
   it('保留 12 字硬约束与禁止虚构', () => {
     const prompt = buildRecipeNamingSystemPrompt();
     expect(prompt).toContain('12 个字');
     expect(prompt).toContain('不得虚构');
+  });
+});
+
+describe('重名检测', () => {
+  it('与在架名字相同会被标出来', async () => {
+    callDeepSeekJson.mockResolvedValue({
+      candidates: [
+        { name: '均衡营养|三文鱼南瓜', valuePoint: '均衡营养', ingredients: '三文鱼南瓜' },
+        { name: '高蛋白|鸡胸红薯', valuePoint: '高蛋白', ingredients: '鸡胸红薯' },
+      ],
+    });
+
+    const service = new RecipeNamingService({
+      getEnabledDeepSeekRuntimeConfig: jest.fn().mockResolvedValue({
+        baseUrl: 'https://example.invalid',
+        model: 'm',
+        apiKey: 'k',
+        requestTimeoutMs: 1000,
+        provider: 'deepseek',
+      }),
+    } as never);
+
+    const result = await service.generate({
+      ...input,
+      existingNames: ['均衡营养|三文鱼南瓜'],
+    });
+
+    expect(result.candidates[0].duplicate).toBe(true);
+    expect(result.candidates[1].duplicate).toBe(false);
+  });
+
+  it('不把在架名字塞给模型（会拖慢），查重交给服务端', () => {
+    expect(buildRecipeNamingSystemPrompt()).not.toContain('existingNames');
+  });
+});
+
+describe('系列取哪一份配方起名（契约）', () => {
+  it('后端选阶段的代码里，普通成年犬优先于其它阶段', () => {
+    const source = readFileSync(
+      join(__dirname, '../../../src/application/recipe/recipe.service.ts'),
+      'utf8',
+    );
+    expect(source).toContain("item.seriesLifeStage === 'HIGH_ACTIVITY_ADULT'");
+    expect(source).toContain('pickCanonicalRecipe');
+    // 不能再退回"随便取最近更新的一份"当唯一规则
+    expect(source).not.toContain('const recipe = series.recipes[0];');
   });
 });

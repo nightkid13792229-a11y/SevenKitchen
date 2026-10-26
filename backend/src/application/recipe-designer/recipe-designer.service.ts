@@ -138,6 +138,7 @@ import {
 } from './recipe-ai-wizard.service';
 import { IngredientPreparationHistoryService } from '../recipe/ingredient-preparation-history.service';
 import { isPreparationRequiredFoodCategory } from '../../domain/recipe-designer/preparation-field.constants';
+import { pickCoverBadgeNames } from '../../domain/recipe-designer/cover-badge-policy';
 import {
   PREPARATION_METHOD_MAX_CONTENT_LENGTH,
   isPreparationMethodWithinContentLimit,
@@ -4625,11 +4626,9 @@ export class RecipeDesignerService {
       select: { healthTag: { select: { name: true } } },
       orderBy: { sortOrder: 'asc' },
     });
-    return rows
-      .map((row) => row.healthTag?.name)
-      .filter(
-        (name): name is string => typeof name === 'string' && name.length > 0,
-      );
+    return pickCoverBadgeNames(
+      rows.map((row) => row.healthTag?.name),
+    );
   }
 
   private buildSeriesReleaseReadinessForSeries(

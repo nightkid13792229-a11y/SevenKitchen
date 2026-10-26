@@ -12,7 +12,7 @@ describe('AI 命名字段', () => {
     expect(fieldSource).toContain(
       'countLength(item.name) <= RECIPE_NAME_MAX_LENGTH'
     )
-    expect(fieldSource).not.toContain('.slice(0,')
+    expect(fieldSource).not.toContain('candidate.name.slice')
   })
 
   it('命中禁用词的候选保留，但提示合规存疑', () => {
@@ -33,6 +33,17 @@ describe('AI 命名字段', () => {
   })
 
 
+
+  it('候选只显示名字，不再显示"依据"那一行', () => {
+    expect(fieldSource).not.toContain('cand-reason')
+    expect(fieldSource).toContain('.slice(0, 2)')
+  })
+
+  it('点「采用」直接落库，不再要求二次点保存', () => {
+    expect(fieldSource).toContain('recipeDesignerApi.renameSeries')
+    expect(fieldSource).toContain("emit('saved', name)")
+    expect(fieldSource).not.toContain('再点一次保存')
+  })
 
   it('接口路径与后端一致，且只生成不落库', () => {
     expect(apiSource).toContain("'/admin/recipe-designer/naming/availability'")
@@ -90,8 +101,9 @@ describe('系列发布抽屉里的命名', () => {
     expect(releaseDrawerSource).toContain(':series-id="seriesId"')
   })
 
-  it('改完点「保存名称」才写库，并通知父级刷新', () => {
-    expect(releaseDrawerSource).toContain('保存名称')
+  it('采用或失焦即写库，不再有「保存名称」按钮', () => {
+    expect(releaseDrawerSource).not.toContain('保存名称')
     expect(releaseDrawerSource).toContain("emit('saved')")
+    expect(releaseDrawerSource).toContain('@saved="onNameAdopted"')
   })
 })

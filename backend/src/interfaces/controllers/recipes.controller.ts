@@ -63,6 +63,7 @@ import {
 } from '../../domain/dog/allergen-vocabulary';
 import { AllergenVocabularyService } from '../../application/health/allergen-vocabulary.service';
 import { RecipeCoverImageService } from '../../application/recipe-designer/recipe-cover-image.service';
+import { pickCoverBadgeNames } from '../../domain/recipe-designer/cover-badge-policy';
 import { DiySheetService } from '../../application/recipe/diy-sheet.service';
 import { CustomRecipeDeliveryService } from '../../application/custom-recipe/custom-recipe-delivery.service';
 import { SupplementCandidateService } from '../../application/supplement-shop/supplement-candidate.service';
@@ -1477,9 +1478,7 @@ export class RecipesController {
       include: { healthTag: { select: { name: true } } },
       orderBy: { sortOrder: 'asc' },
     });
-    return rows
-      .map((row) => row.healthTag?.name)
-      .filter((name): name is string => Boolean(name));
+    return pickCoverBadgeNames(rows.map((row) => row.healthTag?.name));
   }
 
   /**

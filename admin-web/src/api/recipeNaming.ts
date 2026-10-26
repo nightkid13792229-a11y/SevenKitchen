@@ -13,9 +13,12 @@ export interface RecipeNameCandidate {
   name: string
   valuePoint: string
   ingredients: string
-  reason: string
+  /** 已不再要求模型输出 */
+  reason?: string
   /** 命中现有禁用词表：只是提醒，不拒绝（词表尚未完善） */
   complianceWarning: boolean
+  /** 与在架食谱同名 */
+  duplicate?: boolean
 }
 
 export interface RecipeNameCandidatesResult {

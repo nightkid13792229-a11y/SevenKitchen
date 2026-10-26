@@ -231,7 +231,7 @@
               :closable="false"
               show-icon
               title="还是临时名称，不能发布"
-              description="先把上面改成正式名称（例如「均衡营养｜三文鱼南瓜」），再点保存名称。"
+              description="先把上面改成正式名称（例如「均衡营养｜三文鱼南瓜」），改完离开输入框就会自动保存。"
             />
 
             <!-- 2026-10-27：系列名是唯一名字，整系列发布前必须定下来 -->
@@ -240,14 +240,8 @@
                 <AiNameField
                   v-model="nameDraft"
                   :series-id="seriesId"
+                  @saved="onNameAdopted"
                 />
-                <el-button
-                  v-if="nameDirty"
-                  size="small"
-                  type="primary"
-                  :loading="nameSaving"
-                  @click="saveName"
-                >保存名称</el-button>
               </div>
               <div class="series-release__hint">
                 价值点在前、食材在后，最多 12 个字——多了标签印不下。
@@ -309,7 +303,7 @@
                 class="series-release__select"
               >
                 <el-option
-                  v-for="tag in healthTags"
+                  v-for="tag in eligibleHealthTags"
                   :key="tag.id"
                   :label="tag.name"
                   :value="tag.id"
@@ -320,6 +314,12 @@
                 <el-button link type="primary" @click="loadHealthTags">
                   重新加载
                 </el-button>
+              </div>
+              <div
+                v-else-if="hiddenBadgeNames.length > 0"
+                class="series-release__hint series-release__hint--warning"
+              >
+                旧角标「{{ hiddenBadgeNames.join('、') }}」已隐藏；重新选择合规角标并保存后会替换。
               </div>
               <div v-else class="series-release__hint">
                 最多 2 个；不选就不显示。未设置角标时，封面左下角将没有文字。
@@ -619,9 +619,8 @@ const visible = computed({
 
 const isAdmin = useIsAdmin()
 
-/** 系列名草稿：改完点「保存名称」才写库 */
+/** 系列名草稿：采用候选或失焦即写库，没有单独按钮 */
 const nameDraft = ref('')
-const nameSaving = ref(false)
 const nameDirty = computed(
   () => nameDraft.value.trim() !== String(props.seriesName ?? '').trim()
 )
@@ -634,33 +633,17 @@ watch(
   { immediate: true }
 )
 
+/** 采用 AI 候选后名称已经落库，这里只把界面上的值对齐并通知父级 */
+function onNameAdopted(name: string) {
+  nameDraft.value = name
+  emit('saved')
+}
+
 /** 临时名（「未命名系列 · …」）会印在标签上，后端也会拦 */
 const isTemporaryName = computed(() =>
   String(props.seriesName ?? '').trim().startsWith('未命名')
 )
 
-async function saveName() {
-  const name = nameDraft.value.trim()
-  if (!name) {
-    ElMessage.warning('请填写食谱名称')
-    return
-  }
-  if ([...name].length > 12) {
-    ElMessage.warning('食谱名称最多 12 个字，超了标签印不下')
-    return
-  }
-  nameSaving.value = true
-  try {
-    await recipeDesignerApi.renameSeries(props.seriesId, { name })
-    ElMessage.success('名称已更新')
-    nameDraft.value = name
-    emit('saved')
-  } catch {
-    ElMessage.error('改名失败，请重试')
-  } finally {
-    nameSaving.value = false
-  }
-}
 
 const readiness = ref<SeriesReleaseReadiness | null>(null)
 const loading = ref(false)
@@ -673,6 +656,8 @@ const error = ref('')
 const healthTags = ref<RecipeHealthTag[]>([])
 const healthTagsLoading = ref(false)
 const healthTagsError = ref('')
+/** 库里已有、但按新白名单不再允许的旧角标（只提示，保存后替换） */
+const hiddenBadgeNames = ref<string[]>([])
 
 const form = reactive<SeriesReleaseForm>(emptySeriesReleaseForm())
 const baseline = ref<SeriesReleaseForm>(emptySeriesReleaseForm())
@@ -805,12 +790,18 @@ const coverageStageCount = computed(() => {
   return published + newlyPublished
 })
 
+/** 角标下拉只显示白名单内的词（后端按词名算好 coverBadgeEligible） */
+const eligibleHealthTags = computed(() =>
+  healthTags.value.filter((tag) => tag.coverBadgeEligible === true)
+)
+
 /** 顾客预览里的封面角标文案：选中角标名以「 · 」连接，空则不渲染 */
 const coverBadgeText = computed(() =>
   form.coverBadgeHealthTagIds
     .map(
       (healthTagId) =>
-        healthTags.value.find((tag) => tag.id === healthTagId)?.name || ''
+        eligibleHealthTags.value.find((tag) => tag.id === healthTagId)?.name ||
+        ''
     )
     .filter(Boolean)
     .join(' · ')
@@ -880,16 +871,22 @@ async function loadReadiness(hydrate = true): Promise<void> {
   error.value = ''
   try {
     // 门槛与封面角标并行拉取；角标失败不阻断发布检查（表单回落到空角标）
-    const [result, coverBadgeHealthTagIds] = await Promise.all([
+    const [result, badgeResponse] = await Promise.all([
       recipeDesignerApi.getSeriesReleaseReadiness(props.seriesId),
-      recipeSeriesCoverBadgeApi.get(props.seriesId) // 系列级角标单独存储，与 readiness 并行拉取
-        .then((response) =>
-          (response?.badges ?? []).map((badge) => badge.healthTagId)
-        )
-        .catch(() => [] as string[])
+      recipeSeriesCoverBadgeApi
+        .get(props.seriesId) // 系列级角标单独存储，与 readiness 并行拉取
+        .catch(() => ({
+          seriesId: props.seriesId,
+          badges: [],
+          hiddenBadges: [],
+        })),
     ])
     if (seq !== requestSeq) return
     readiness.value = result
+    const coverBadgeHealthTagIds = (badgeResponse?.badges ?? []).map(
+      (badge) => badge.healthTagId
+    )
+    hiddenBadgeNames.value = badgeResponse?.hiddenBadges ?? []
     // 首次打开 / 保存成功后用服务器结果覆盖表单；
     // 手动刷新时如果还有未保存编辑，只刷新检查结果，不吞掉用户输入。
     if (hydrate || !formHydrated) {
@@ -1446,6 +1443,10 @@ watch(
   font-size: 12px;
   line-height: 1.6;
   color: #606266;
+}
+
+.series-release__hint--warning {
+  color: #e6a23c;
 }
 
 .series-release__hint {

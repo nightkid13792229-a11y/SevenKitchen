@@ -1762,6 +1762,7 @@ const coverBadgeOptionGroups = computed(() => {
     id: string;
     name: string;
     parentId?: string | null;
+    coverBadgeEligible?: boolean;
   }>;
   const groups = tags.filter((tag) => !tag.parentId);
   const children = tags.filter((tag) => tag.parentId);
@@ -1769,7 +1770,10 @@ const coverBadgeOptionGroups = computed(() => {
     .map((group) => ({
       label: group.name,
       options: children
-        .filter((child) => child.parentId === group.id)
+        .filter(
+          (child) =>
+            child.parentId === group.id && child.coverBadgeEligible === true
+        )
         .map((child) => ({ value: child.id, label: child.name })),
     }))
     .filter((group) => group.options.length > 0);

@@ -110,6 +110,10 @@ import type { IngredientPreparationMethodHistoryDto } from '../dto/recipes/admin
 import type { Ingredient } from '../../domain/ingredient';
 import { resolveOrderProductionPhotos } from './order-production-photos';
 import { scanForbiddenClaims } from '../../application/recipe-designer/recipe-copywriting-compliance';
+import {
+  COVER_BADGE_ALLOWED_NAMES,
+  isCoverBadgeEligibleName,
+} from '../../domain/recipe-designer/cover-badge-policy';
 
 const CUSTOMER_TEST_USER_ID = 'production-experience-customer-test-user';
 const CUSTOMER_TEST_USER_PHONE = '19900000001';
@@ -4248,7 +4252,12 @@ export class AdminController {
     const healthTags = await this.prisma.recipeHealthTag.findMany({
       orderBy: [{ sort: 'asc' }, { name: 'asc' }],
     });
-    return ApiResponseDto.success(healthTags);
+    return ApiResponseDto.success(
+      healthTags.map((tag) => ({
+        ...tag,
+        coverBadgeEligible: isCoverBadgeEligibleName(tag.name),
+      })),
+    );
   }
 
   @Get('health-tags/hierarchy')
@@ -4264,7 +4273,11 @@ export class AdminController {
     const rootTags: any[] = [];
 
     allTags.forEach((tag) => {
-      tagMap.set(tag.id, { ...tag, children: [] });
+      tagMap.set(tag.id, {
+        ...tag,
+        coverBadgeEligible: isCoverBadgeEligibleName(tag.name),
+        children: [],
+      });
     });
 
     allTags.forEach((tag) => {
@@ -4287,7 +4300,12 @@ export class AdminController {
       where: { parentId: null },
       orderBy: [{ sort: 'asc' }, { name: 'asc' }],
     });
-    return ApiResponseDto.success(rootTags);
+    return ApiResponseDto.success(
+      rootTags.map((tag) => ({
+        ...tag,
+        coverBadgeEligible: isCoverBadgeEligibleName(tag.name),
+      })),
+    );
   }
 
   @Get('health-tags/:id')
@@ -4418,13 +4436,30 @@ export class AdminController {
       include: { healthTag: { select: { id: true, name: true, parentId: true } } },
       orderBy: { sortOrder: 'asc' },
     });
+    const badges: Array<{
+      healthTagId: string;
+      name: string;
+      sortOrder: number;
+    }> = [];
+    const hiddenBadges: string[] = [];
+    for (const row of rows) {
+      const name = row.healthTag?.name ?? '';
+      if (!name) continue;
+      if (isCoverBadgeEligibleName(name)) {
+        badges.push({
+          healthTagId: row.healthTagId,
+          name,
+          sortOrder: row.sortOrder,
+        });
+      } else {
+        hiddenBadges.push(name);
+      }
+    }
+
     return ApiResponseDto.success({
       seriesId,
-      badges: rows.map((row) => ({
-        healthTagId: row.healthTagId,
-        name: row.healthTag?.name ?? '',
-        sortOrder: row.sortOrder,
-      })),
+      badges,
+      hiddenBadges,
     });
   }
 
@@ -4467,6 +4502,19 @@ export class AdminController {
         return ApiResponseDto.error(
           400,
           `以下标签不在合规词表中，无法作为封面角标：${missing.join('、')}`,
+        );
+      }
+
+      // 2026-10-27：角标只允许老板确认的 6 个词；「含…」/工艺特性/FEDIAF 2021 一律拒绝
+      const ineligible = found.filter(
+        (tag) => !isCoverBadgeEligibleName(tag.name),
+      );
+      if (ineligible.length > 0) {
+        return ApiResponseDto.error(
+          400,
+          `以下词不能作为封面角标：${ineligible
+            .map((tag) => tag.name)
+            .join('、')}。只允许：${COVER_BADGE_ALLOWED_NAMES.join('、')}`,
         );
       }
 

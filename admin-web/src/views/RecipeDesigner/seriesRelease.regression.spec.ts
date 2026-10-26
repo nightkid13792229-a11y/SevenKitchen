@@ -121,7 +121,8 @@ describe('系列发布抽屉', () => {
 
   it('打开即并行拉门槛与封面角标，并展示阶段清单 / 最新版本 / 阻断与提醒', () => {
     expect(drawer).toContain('recipeDesignerApi.getSeriesReleaseReadiness(')
-    expect(drawer).toContain('recipeSeriesCoverBadgeApi.get(')
+    expect(drawer).toContain('recipeSeriesCoverBadgeApi')
+    expect(drawer).toContain('.get(props.seriesId)')
     expect(drawer).toContain('Promise.all')
     expect(drawer).toContain('buildSeriesReleaseForm(')
     expect(drawer).toContain('v-for="stage in readiness.stages"')
@@ -156,6 +157,9 @@ describe('系列发布抽屉', () => {
     expect(drawer).toContain(':src="form.coverImageUrl"')
     expect(drawer).toContain('v-model="form.sellingPoint"')
     expect(drawer).toContain('v-model="form.coverBadgeHealthTagIds"')
+    expect(drawer).toContain('eligibleHealthTags')
+    expect(drawer).toContain('coverBadgeEligible')
+    expect(drawer).toContain('hiddenBadges')
     expect(drawer).toContain(':multiple-limit="2"')
     expect(drawer).toContain('recipeHealthTagApi.list()')
     expect(drawer).toContain('recipeSeriesCoverBadgeApi')

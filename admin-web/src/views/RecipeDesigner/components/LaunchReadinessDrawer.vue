@@ -91,14 +91,11 @@
         <div v-if="readiness.seriesId" class="launch-readiness__series-block">
           <div class="launch-readiness__series-row">
             <span class="launch-readiness__series-k">食谱名称</span>
-            <AiNameField v-model="nameDraft" :series-id="readiness.seriesId" />
-            <el-button
-              v-if="nameDirty"
-              size="small"
-              type="primary"
-              :loading="nameSaving"
-              @click="saveName"
-            >保存名称</el-button>
+            <AiNameField
+              v-model="nameDraft"
+              :series-id="readiness.seriesId"
+              @saved="(name: string) => { nameDraft = name; loadReadiness() }"
+            />
           </div>
 
           <QuickTaxonomyPicker
@@ -510,7 +507,6 @@ const visible = computed({
 
 /** 名称草稿：改完点「保存名称」才写库 */
 const nameDraft = ref('')
-const nameSaving = ref(false)
 const nameDirty = computed(
   () => nameDraft.value.trim() !== String(props.draftName ?? '').trim()
 )
@@ -643,28 +639,6 @@ async function loadReadiness(): Promise<void> {
   }
 }
 
-async function saveName() {
-  if (!readiness.value?.seriesId) return
-  const name = nameDraft.value.trim()
-  if (!name) {
-    ElMessage.warning('请填写食谱名称')
-    return
-  }
-  if ([...name].length > 12) {
-    ElMessage.warning('食谱名称最多 12 个字，超了标签印不下')
-    return
-  }
-  nameSaving.value = true
-  try {
-    await recipeDesignerApi.renameSeries(readiness.value.seriesId, { name })
-    ElMessage.success('名称已更新')
-    await loadReadiness()
-  } catch {
-    ElMessage.error('改名失败，请重试')
-  } finally {
-    nameSaving.value = false
-  }
-}
 
 async function loadSeriesReadiness(): Promise<void> {
   if (!props.seriesId || props.orderId) {

@@ -566,8 +566,18 @@
                 :image-size="64"
               />
 
+              <el-empty
+                v-else-if="visibleProfileGroups.length === 0"
+                description="当前筛子下没有可显示的营养字段。"
+                :image-size="64"
+              >
+                <el-button size="small" @click="selectProfileFilter('ALL')">
+                  显示全部
+                </el-button>
+              </el-empty>
+
               <section
-                v-for="group in profileGroups"
+                v-for="group in visibleProfileGroups"
                 :key="group.profileIndex"
                 class="profile-group"
               >
@@ -584,6 +594,27 @@
                     待补 {{ group.pendingCount }} 项
                   </el-tag>
                 </header>
+
+                <div class="profile-filter" role="group" aria-label="营养档案筛子">
+                  <el-check-tag
+                    :checked="profileFilterMode === 'ALL'"
+                    @change="selectProfileFilter('ALL')"
+                  >
+                    全部 {{ group.counts.all }}
+                  </el-check-tag>
+                  <el-check-tag
+                    :checked="profileFilterMode === 'FILLED'"
+                    @change="selectProfileFilter('FILLED')"
+                  >
+                    只看有值 {{ group.counts.filled }}
+                  </el-check-tag>
+                  <el-check-tag
+                    :checked="profileFilterMode === 'MISSING'"
+                    @change="selectProfileFilter('MISSING')"
+                  >
+                    只看缺口 {{ group.counts.missing }}
+                  </el-check-tag>
+                </div>
 
                 <div
                   v-for="section in tabSections(group)"
@@ -798,6 +829,12 @@ import {
   type IngredientCardCell
 } from './ingredientCardView'
 import {
+  filterProfileRows,
+  groupVisibleOnFilter,
+  profileFilterCounts,
+  type ProfileFilterMode
+} from './profileFilters'
+import {
   answerInputFromPendingQuestion,
   askOptionAiBadge,
   askOptionTitle,
@@ -911,6 +948,8 @@ const draft = ref<IngredientCreationDraft | null>(null)
 const draftLoading = ref(false)
 const draftError = ref('')
 const activeTab = ref<'ingredient' | 'profiles'>('ingredient')
+/** 营养档案筛子：全局一个模式，切换生 / 熟档案时计数跟着当前组走。 */
+const profileFilterMode = ref<ProfileFilterMode>('ALL')
 
 const ingredientForm = reactive<IngredientCardForm>(toIngredientCard(null))
 /** 最近一次从后端读到的原料卡：用来判断人到底改了没有。 */
@@ -1003,6 +1042,21 @@ const sourceNames = computed(() => {
 const profileGroups = computed<ProfileGroup[]>(() =>
   toProfileRows(draft.value?.payload, sourceNames.value)
 )
+
+/**
+ * 营养页当前可见的档案组：组内行按筛子过滤，整组没有可见行就不渲染。
+ * 计数取过滤前的全量行，三个筛子的数字始终是这份档案的 60 项口径。
+ */
+const visibleProfileGroups = computed(() => {
+  const mode = profileFilterMode.value
+  return profileGroups.value
+    .filter((group) => groupVisibleOnFilter(group, mode))
+    .map((group) => ({
+      ...group,
+      rows: filterProfileRows(group.rows, mode),
+      counts: profileFilterCounts(group.rows)
+    }))
+})
 
 const pendingCount = computed(() => countPendingRows(profileGroups.value))
 const conflictCount = computed(() =>
@@ -1555,6 +1609,10 @@ async function handleCellChange(
   if (!ok) {
     pendingCells.delete(key)
   }
+}
+
+function selectProfileFilter(mode: ProfileFilterMode) {
+  profileFilterMode.value = mode
 }
 
 function tabSections(group: ProfileGroup) {
@@ -2540,6 +2598,17 @@ function goBackToList() {
   font-size: 12px;
   color: var(--el-text-color-secondary);
   word-break: break-all;
+}
+
+.profile-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.profile-filter :deep(.el-check-tag) {
+  font-size: 12px;
 }
 
 .profile-section + .profile-section {

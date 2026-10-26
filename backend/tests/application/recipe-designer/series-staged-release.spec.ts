@@ -85,6 +85,11 @@ describe('RecipeDesignerService · staged series release', () => {
       findUnique: jest.fn(),
       update: jest.fn(),
     },
+    // 2026-10-27 发布门禁「已归类」：这些用例都假设系列已可发布，
+    // 默认给一条归属，避免被新门禁打成阻断。
+    recipeSeriesTaxonomy: {
+      count: jest.fn().mockResolvedValue(1),
+    },
     $transaction: jest.fn(),
   } as any;
 

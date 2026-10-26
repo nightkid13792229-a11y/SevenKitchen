@@ -95,6 +95,10 @@ describe('RecipeDesignerService', () => {
       update: jest.fn(),
       count: jest.fn(),
     },
+    // 2026-10-27 发布门禁「已归类」：默认当作已归类，避免所有就绪用例被新门禁打成阻断
+    recipeSeriesTaxonomy: {
+      count: jest.fn().mockResolvedValue(1),
+    },
     recipeItem: {
       findMany: jest.fn(),
     },

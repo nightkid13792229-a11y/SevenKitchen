@@ -65,6 +65,7 @@ import {
   type DraftLaunchReadiness,
   type LaunchReadinessAssessmentSnapshot,
 } from '../../domain/recipe-designer/launch-readiness';
+import { assertRecipeNameLength } from '../../domain/recipe-designer/series-name';
 import {
   buildSeriesReleaseReadiness,
   type SeriesReleaseReadiness,
@@ -2490,9 +2491,16 @@ export class RecipeDesignerService {
     access: RecipeDesignerAccessInput,
   ) {
     const context = normalizeRecipeDesignerAccessContext(access);
-    const name = dto.name.trim();
-    if (!name) {
+    const rawName = dto.name.trim();
+    if (!rawName) {
       throw new BadRequestException('请填写系列名称');
+    }
+    // 长度硬上限 12：超了标签印不下（见 domain/recipe-designer/series-name.ts）
+    let name: string;
+    try {
+      name = assertRecipeNameLength(rawName);
+    } catch (error) {
+      throw new BadRequestException((error as Error).message);
     }
 
     // W2：食谱设计器不再向所有用户开放。

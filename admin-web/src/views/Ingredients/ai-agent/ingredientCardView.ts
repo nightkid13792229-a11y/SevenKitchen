@@ -15,6 +15,7 @@ import {
   type IngredientCardFieldKey,
   type IngredientFieldGroup
 } from '@/constants/ingredientCardFields'
+import { CFCT_CLASS_OPTIONS } from '@/types/ingredient'
 import type { IngredientDraft } from '@/types/ingredientCreation'
 import {
   toIngredientCard,
@@ -69,6 +70,15 @@ const FIELD_BY_KEY: ReadonlyMap<
 const GROUP_LABEL_BY_KEY: ReadonlyMap<IngredientFieldGroup, string> = new Map(
   INGREDIENT_CARD_FIELD_GROUPS.map((group) => [group.key, group.label] as const)
 )
+
+/**
+ * CFCT 分类是「受控词表 + 允许新建」：目录把它标成 text（后端只校验字符串），
+ * 但页面必须给下拉，避免同一件事写出「水产类」和「水产」两种值。
+ */
+const CFCT_CLASS_FIELD_OPTIONS: readonly {
+  label: string
+  value: string
+}[] = CFCT_CLASS_OPTIONS.map((value) => ({ label: value, value }))
 
 function finiteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
@@ -265,9 +275,9 @@ function hintFor(
     }
   }
   if (field.valueType === 'multiplier') {
-    return formatMultiplierHint(value) ?? undefined
+    return formatMultiplierHint(value) ?? field.hint
   }
-  return undefined
+  return field.hint
 }
 
 /**
@@ -285,13 +295,15 @@ export function buildIngredientCardCells(
   return INGREDIENT_CARD_FIELDS.map((field) => {
     const value = draftFieldValue(draft, field)
     const isManual = manual.has(field.key)
+    // 目录把 CFCT 分类标成 text（后端只校验字符串），页面按受控词表下拉渲染。
+    const isCfctClass = field.key === 'cfctClass'
 
     return {
       key: field.key,
       group: field.group,
       groupLabel: GROUP_LABEL_BY_KEY.get(field.group) ?? field.group,
       label: field.label,
-      kind: kindFor(field.valueType),
+      kind: isCfctClass ? 'select' : kindFor(field.valueType),
       value,
       display: formatCellDisplay(field.key, value),
       isManual,
@@ -301,7 +313,7 @@ export function buildIngredientCardCells(
         : isEmptyIngredientCardValue(value)
           ? null
           : 'AI',
-      options: field.options,
+      options: isCfctClass ? CFCT_CLASS_FIELD_OPTIONS : field.options,
       unit: field.unit ?? (field.valueType === 'percent' ? '%' : undefined),
       hint: hintFor(field, value)
     }

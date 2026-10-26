@@ -460,6 +460,8 @@
                         :model-value="ingredientCellText(cell)"
                         :disabled="isIngredientCellDisabled(cell)"
                         :clearable="isIngredientCellClearable(cell)"
+                        :filterable="cell.key === 'cfctClass'"
+                        :allow-create="cell.key === 'cfctClass'"
                         placeholder="空"
                         class="ingredient-cell__control"
                         @update:model-value="

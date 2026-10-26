@@ -3,6 +3,7 @@ import {
   INGREDIENT_CARD_FIELDS,
   INGREDIENT_CARD_FIELD_GROUPS
 } from '@/constants/ingredientCardFields'
+import { CFCT_CLASS_OPTIONS } from '@/types/ingredient'
 import type { IngredientDraft } from '@/types/ingredientCreation'
 import { toIngredientCard, toIngredientDraft } from './draftReview'
 import {
@@ -134,6 +135,30 @@ describe('buildIngredientCardCells', () => {
 
     expect(cellOf(cells, 'tags').value).toEqual(['高蛋白', '冷冻'])
     expect(cellOf(cells, 'tags').display).toBe('高蛋白、冷冻')
+  })
+
+  it('CFCT 分类用词表下拉（15 项），不退回自由文本', () => {
+    const cells = buildIngredientCardCells(BASE_INGREDIENT, [])
+    const cfctClass = cellOf(cells, 'cfctClass')
+
+    expect(cfctClass.kind).toBe('select')
+    expect(cfctClass.options).toHaveLength(15)
+    expect(cfctClass.options?.map((option) => option.value)).toEqual([
+      ...CFCT_CLASS_OPTIONS
+    ])
+    expect(cfctClass.options?.[0]).toEqual({
+      label: CFCT_CLASS_OPTIONS[0],
+      value: CFCT_CLASS_OPTIONS[0]
+    })
+  })
+
+  it('目录自带的 hint 会透出：可食部显示 0–100 口径', () => {
+    const cells = buildIngredientCardCells(
+      { ...BASE_INGREDIENT, edibleYieldRate: 0.75 },
+      []
+    )
+
+    expect(cellOf(cells, 'edibleYieldPercent').hint).toContain('0–100')
   })
 
   it('未知枚举值原样展示，选项里补上当前值，不静默清空', () => {

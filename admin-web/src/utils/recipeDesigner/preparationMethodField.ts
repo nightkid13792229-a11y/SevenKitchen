@@ -38,26 +38,39 @@ export function resolvePreparationMethodDisplayText(
 /**
  * 把用户输入解析成要保存的值。
  *
- * - 与字典名称完全一致 → 保存字典 id（保留字典改名后自动跟随的能力）；
- * - 其余情况 → 保存归一化后的自由文本（逗号统一成顿号，与后端一致）。
+ * 2026-10-26 起不再把「与字典名称完全一致」的文字保存成字典 id：
+ * 这个字段统一保存自由文本，字典只用于老数据展示兜底。
  */
 export function resolvePreparationMethodCommitText(
   rawText: string | null | undefined,
-  options: PreparationMethodOption[]
+  _options: PreparationMethodOption[] = []
 ): PreparationMethodCommit {
   const text = normalizePreparationMethodText(String(rawText ?? ''))
   if (!text) {
     return { value: null, text: '' }
   }
 
-  const exact = options.find(
-    (option) => String(option.name ?? '').trim() === text
-  )
-  if (exact) {
-    return { value: exact.id, text: String(exact.name ?? '').trim() }
-  }
-
   return { value: text, text }
+}
+
+/**
+ * 历史下拉：按最后一段过滤，最多返回 3 条。
+ *
+ * 例：输入「牛里脊/生/去」→ 匹配历史「牛里脊/生/去油」；
+ * 输入为空 → 返回最近 3 条。
+ */
+export function filterPreparationHistory(
+  texts: string[],
+  query: string | null | undefined,
+  limit = 3
+): string[] {
+  const queryText = String(query ?? '').trim()
+  const segments = queryText.split(/[\/、,，]/)
+  const keyword = (segments[segments.length - 1] ?? '').trim().toLowerCase()
+  const matched = keyword
+    ? texts.filter((text) => text.toLowerCase().includes(keyword))
+    : texts
+  return matched.slice(0, limit)
 }
 
 /**

@@ -163,38 +163,20 @@
                 -->
                 <div class="item-controls">
                   <div class="item-preparation-inline">
-                    <span class="preparation-label" title="原料预处理">预处理</span>
+                    <span class="preparation-label" :title="PREPARATION_FIELD_LABEL">{{ PREPARATION_FIELD_LABEL }}</span>
                     <!--
-                      2026-10-26：改成可编辑输入框（带字典建议）。
-                      原下拉框点开时输入框是空的，AI 填的整句没法直接改，且
-                      只有按回车才保存；现在点进去就是原文字，回车 / 失焦都保存。
+                      2026-10-26：输入框直接显示原文字，历史文案作为下拉建议。
+                      不再从字典选择，也不再显示「人工/自动」来源标签。
                     -->
                     <PreparationMethodField
                       class="preparation-method-field"
                       :model-value="element.preparationMethod || ''"
                       :label="element.preparationMethodLabel || ''"
-                      :options="preparationMethodOptions"
+                      :ingredient-id="element.ingredientId"
+                      :legacy-options="preparationMethodOptions"
                       :tabindex="-1"
                       @change="(value: string | null) => onPreparationMethodChange(element, value)"
                     />
-                    <el-button
-                      class="preparation-manage-btn"
-                      size="small"
-                      text
-                      :icon="Setting"
-                      :tabindex="-1"
-                      title="管理预处理方式"
-                      @click="openPreparationMethodManager"
-                    >管理</el-button>
-                    <el-tag
-                      v-if="element.preparationSource"
-                      size="small"
-                      :type="element.preparationSource === 'MANUAL' ? 'warning' : 'info'"
-                      effect="plain"
-                    >
-                      {{ element.preparationSource === 'MANUAL' ? '人工' : '自动' }}
-                    </el-tag>
-                    <span v-else class="preparation-source-empty">未设置</span>
                   </div>
                   <div class="weight-editor">
                     <el-input-number
@@ -346,15 +328,6 @@
     />
 
     <!--
-      预处理方式字典管理（2026-10-22）：在编辑器内以弹窗维护，
-      管理完立即刷新当前草稿的预处理选项，不跳走页面。
-    -->
-    <PreparationMethodManagerDialog
-      v-model="preparationMethodManagerVisible"
-      @changed="onPreparationMethodsChanged"
-    />
-
-    <!--
       上线检查（2026-10-22）：读取后端共享发布门槛（发布 / 加入待提交同一套判断）。
       产品线与本单设计都可用；只在当前页打开抽屉，不跳转路由。
     -->
@@ -385,11 +358,10 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown, ArrowLeft, CircleCheck, CircleCheckFilled, Delete, EditPen, Loading, MagicStick, Rank, RefreshLeft, RefreshRight, Setting, WarningFilled } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowLeft, CircleCheck, CircleCheckFilled, Delete, EditPen, Loading, MagicStick, Rank, RefreshLeft, RefreshRight, WarningFilled } from '@element-plus/icons-vue'
 import draggable from 'vuedraggable'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import type { CreateRecipeSeriesStageDraftPayload } from '@/api/recipeDesigner'
-import type { PreparationMethod } from '@/api/preparationMethods'
 import { nutritionFoodApi, type NutritionFoodDetail } from '@/api/ingredients'
 import { orderRecipeDesignApi } from '@/api/orderRecipeDesign'
 import type {
@@ -420,7 +392,7 @@ import DogInsightPanel from './components/DogInsightPanel.vue'
 import AiDesignSuggestionPanel from './components/AiDesignSuggestionPanel.vue'
 import SupplementTargetDialog from './components/SupplementTargetDialog.vue'
 import PreparationMethodField from './components/PreparationMethodField.vue'
-import PreparationMethodManagerDialog from './components/PreparationMethodManagerDialog.vue'
+import { PREPARATION_FIELD_LABEL } from '@/constants/preparationField'
 import LaunchReadinessDrawer from './components/LaunchReadinessDrawer.vue'
 import RecipeAgentDrawer from './components/RecipeAgentDrawer.vue'
 import type { DesignRecipeAssessmentResult } from '@/utils/recipeDesigner/assessmentTypes'
@@ -999,53 +971,9 @@ const preparationMethodOptions = computed(
   () => draft.value?.preparationMethodOptions ?? []
 )
 
-/** 预处理方式字典管理弹窗（在编辑器内打开，不跳转页面） */
-const preparationMethodManagerVisible = ref(false)
-
-function openPreparationMethodManager() {
-  preparationMethodManagerVisible.value = true
-}
-
 /**
- * 字典增删改后刷新当前草稿的预处理选项。
- *
- * 以接口返回的最新列表为准（删除立即生效）；同时把当前行里已经选用、
- * 但字典中暂时不存在的值（手填 / 刚被删除）合并回选项，避免下拉框
- * 把预处理方式显示成裸 id。
- */
-function onPreparationMethodsChanged(methods: PreparationMethod[]) {
-  const optionById = new Map<string, { id: string; name: string }>()
-
-  for (const method of methods) {
-    const id = String(method.id ?? '').trim()
-    const name = String(method.name ?? '').trim()
-    if (!id || !name) continue
-    optionById.set(id, { id, name })
-  }
-
-  for (const item of items.value) {
-    const method = String(item.preparationMethod ?? '').trim()
-    if (!method) continue
-
-    const option = optionById.get(method)
-    if (option) {
-      item.preparationMethodLabel = option.name
-    } else {
-      optionById.set(method, {
-        id: method,
-        name: String(item.preparationMethodLabel || method)
-      })
-    }
-  }
-
-  if (draft.value) {
-    draft.value.preparationMethodOptions = [...optionById.values()]
-  }
-}
-
-/**
- * 修改原料预处理方式：可从字典选择，也允许手填。
- * 只把改动写回该原料；不从历史食谱自动复制默认值。
+ * 修改原料「部位 / 状态 / 预处理」：只保存自由文本。
+ * 字典只用于老数据展示兜底，不再把文字反查成字典 id。
  */
 function onPreparationMethodChange(
   item: DesignerItem,
@@ -1057,8 +985,6 @@ function onPreparationMethodChange(
 
   item.preparationMethod = nextMethod ?? undefined
   item.preparationMethodLabel = nextMethod
-    ? preparationMethodOptions.value.find((option) => option.id === nextMethod)?.name ?? nextMethod
-    : null
   item.preparationSource = nextMethod || item.preparationNote ? 'MANUAL' : null
   itemsRevision.value += 1
   enqueue({
@@ -2121,14 +2047,6 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   font-size: 11px;
   color: #909399;
-}
-.preparation-manage-btn {
-  flex-shrink: 0;
-  padding: 0 4px;
-}
-.preparation-source-empty {
-  font-size: 11px;
-  color: #c0c4cc;
 }
 .item-preparation-hint {
   flex-basis: 100%;

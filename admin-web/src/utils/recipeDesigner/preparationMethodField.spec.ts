@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyPreparationMethodSuggestion,
+  filterPreparationHistory,
   filterPreparationMethodOptions,
   resolvePreparationMethodCommitText,
   resolvePreparationMethodDisplayText
@@ -47,16 +48,16 @@ describe('预处理输入框 · 提交文字', () => {
     })
   })
 
-  it('输入与字典名称完全一致时保存字典 id', () => {
+  it('输入与字典名称完全一致时也保存自由文本，不再保存字典 id', () => {
     expect(resolvePreparationMethodCommitText('去皮', options)).toEqual({
-      value: 'method-peel',
+      value: '去皮',
       text: '去皮'
     })
   })
 
-  it('名称前后有空格也能匹配字典', () => {
+  it('名称前后有空格时只归一化文字，不反查字典', () => {
     expect(resolvePreparationMethodCommitText('  去骨  ', options)).toEqual({
-      value: 'method-bone',
+      value: '去骨',
       text: '去骨'
     })
   })
@@ -107,6 +108,34 @@ describe('预处理输入框 · 下拉建议', () => {
     expect(
       filterPreparationMethodOptions(english, 'dice').map((item) => item.name)
     ).toEqual(['Dice'])
+  })
+})
+
+describe('预处理输入框 · 历史下拉', () => {
+  const history = [
+    '牛里脊/生/去油',
+    '牛里脊/生/去筋膜',
+    '牛里脊/熟/切块',
+    '牛腩/生/切块'
+  ]
+
+  it('空输入返回最近 3 条', () => {
+    expect(filterPreparationHistory(history, '')).toEqual([
+      '牛里脊/生/去油',
+      '牛里脊/生/去筋膜',
+      '牛里脊/熟/切块'
+    ])
+  })
+
+  it('按最后一段过滤，支持斜杠', () => {
+    expect(filterPreparationHistory(history, '牛里脊/生/去')).toEqual([
+      '牛里脊/生/去油',
+      '牛里脊/生/去筋膜'
+    ])
+  })
+
+  it('最多返回 3 条', () => {
+    expect(filterPreparationHistory(history, '', 3)).toHaveLength(3)
   })
 })
 

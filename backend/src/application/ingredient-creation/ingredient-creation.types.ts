@@ -314,6 +314,8 @@ export interface CheckItem {
   code: string;
   message: string;
   fieldPath?: string;
+  /** 给 AI 与人看的一句建议动作（设计 §8.2）。 */
+  suggestion?: string;
 }
 
 /** ④ 终检结果：拦死 / 可例外 / 提醒。 */

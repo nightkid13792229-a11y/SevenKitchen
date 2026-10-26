@@ -111,6 +111,7 @@ export interface NutritionMeta {
     | 'CNF'
     | 'COFID'
     | 'CIQUAL'
+    | 'KO_RDA'
     | 'SUPPLEMENT_LABEL'
     | 'MANUAL'
     | null;

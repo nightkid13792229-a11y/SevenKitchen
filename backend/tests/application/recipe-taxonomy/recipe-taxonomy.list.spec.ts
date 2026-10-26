@@ -62,6 +62,7 @@ describe('RecipeTaxonomyService.listSeries', () => {
       expect.objectContaining({
         where: {
           deletedAt: null,
+          customerDogId: null,
           designMode: undefined,
           businessStatus: { not: 'PRIVATE_CUSTOM' },
           taxonomyLinks: { none: {} },
@@ -117,6 +118,7 @@ describe('RecipeTaxonomyService.listSeries', () => {
       expect.objectContaining({
         where: {
           deletedAt: null,
+          customerDogId: null,
           designMode: undefined,
           businessStatus: { not: 'PRIVATE_CUSTOM' },
           taxonomyLinks: {
@@ -142,6 +144,16 @@ describe('RecipeTaxonomyService.listSeries', () => {
     expect(result.items[0].links[0].nodeName).toBe('鳕鱼');
   });
 
+  it('默认排除顾客狗绑定的系列：顾客自己设计的草稿不能被当成产品线', async () => {
+    const { prisma, service } = createService({ rows: [seriesRow()] });
+    await service.listSeries({});
+    expect(prisma.recipeSeries.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ customerDogId: null }),
+      }),
+    );
+  });
+
   it('默认排除定制与订单设计：范围写进查询条件', async () => {
     const { prisma, service } = createService({ rows: [seriesRow()] });
 
@@ -151,6 +163,7 @@ describe('RecipeTaxonomyService.listSeries', () => {
       expect.objectContaining({
         where: {
           deletedAt: null,
+          customerDogId: null,
           designMode: undefined,
           businessStatus: { not: 'PRIVATE_CUSTOM' },
         },
@@ -167,6 +180,7 @@ describe('RecipeTaxonomyService.listSeries', () => {
       expect.objectContaining({
         where: {
           deletedAt: null,
+          customerDogId: null,
           designMode: 'CATALOG',
           businessStatus: 'PRIVATE_CUSTOM',
         },
@@ -183,6 +197,7 @@ describe('RecipeTaxonomyService.listSeries', () => {
       expect.objectContaining({
         where: {
           deletedAt: null,
+          customerDogId: null,
           designMode: undefined,
           businessStatus: { not: 'PRIVATE_CUSTOM' },
           name: { contains: '三文鱼', mode: 'insensitive' },

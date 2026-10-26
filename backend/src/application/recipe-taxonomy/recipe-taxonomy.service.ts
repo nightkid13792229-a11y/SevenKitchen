@@ -222,8 +222,14 @@ export class RecipeTaxonomyService {
   }
 
   /**
-   * 需求分类只服务产品线整理：默认排除「定制」与订单设计。
-   * 定制食谱是某只狗的私有版本，不进货架，混进来只会把清单撑大。
+   * 需求分类只服务产品线整理。
+   *
+   * 排除三类，缺一不可：
+   *   · 绑定到某只顾客狗的系列（`customer_dog_id`）—— 这才是"定制/顾客自己设计"
+   *     的真实判据。光看 `business_status` 不够：顾客设计出来的系列状态是草稿，
+   *     名字长得像"卡的鲜食食谱 10/21"，会被当成产品线混进来。
+   *   · 业务状态为「定制」的系列；
+   *   · 订单设计（`design_mode = ORDER`）。
    */
   private buildScopeWhere(query: {
     designMode?: 'CATALOG' | 'ORDER';
@@ -231,6 +237,7 @@ export class RecipeTaxonomyService {
   }): Prisma.RecipeSeriesWhereInput {
     return {
       deletedAt: null,
+      customerDogId: null,
       designMode: query.designMode ?? undefined,
       businessStatus: query.businessStatus ?? { not: 'PRIVATE_CUSTOM' },
     };

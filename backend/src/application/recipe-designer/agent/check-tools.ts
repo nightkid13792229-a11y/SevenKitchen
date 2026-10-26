@@ -23,6 +23,7 @@ import {
   SUGGESTED_FOOD_CATEGORIES,
   summarizeFoodCategoryCoverage,
 } from '../../../domain/recipe-designer/food-category-map';
+import { isPreparationRequiredFoodCategory } from '../../../domain/recipe-designer/preparation-field.constants';
 import type {
   BaseFoodCategory,
   FoodCategory,
@@ -94,7 +95,7 @@ const READY_CHECK_LABELS = {
   COVERAGE: '分类检查',
   COPY: '文案',
   PRODUCTION_STEPS: '制作步骤',
-  PREPARATION: '预处理',
+  PREPARATION: '部位 / 状态 / 预处理',
   TAGS: '健康标签',
 } as const;
 
@@ -813,23 +814,30 @@ export function createCheckTools(deps: CheckToolDeps): RecipeAgentCheckTools {
         );
       }
 
-      // PREPARATION：每条原料都要有预处理方式。
+      // PREPARATION：只有必填食材类别要求填写；补剂/油脂/调味/乳制品/未分类豁免。
       const missingPreparation = draft.items.filter(
-        (item) => !isNonEmptyString(item.preparationMethod),
+        (item) =>
+          isPreparationRequiredFoodCategory(item.category) &&
+          item.ingredientType !== 'SUPPLEMENT' &&
+          !isNonEmptyString(item.preparationMethod),
       );
       if (missingPreparation.length > 0) {
         checks.push(
           buildReadyCheck(
             'PREPARATION',
             'FAIL',
-            `${missingPreparation.length} 条原料没写预处理方式：${missingPreparation
+            `${missingPreparation.length} 条食材没写部位 / 状态 / 预处理：${missingPreparation
               .map((item) => item.name || item.id)
               .join('、')}。`,
           ),
         );
       } else {
         checks.push(
-          buildReadyCheck('PREPARATION', 'PASS', '每条原料都有预处理方式。'),
+          buildReadyCheck(
+            'PREPARATION',
+            'PASS',
+            '必填食材都有部位 / 状态 / 预处理。',
+          ),
         );
       }
 

@@ -870,6 +870,48 @@ describe('check tools', () => {
     ).toEqual(expect.arrayContaining(['PREPARATION', 'PRODUCTION_STEPS']));
   });
 
+  it('不要求补剂/调味/油脂/乳制品填写预处理', async () => {
+    const base = fakeDraftSnapshot();
+    const draft = fakeDraftSnapshot({
+      items: base.items.map((item, index) => {
+        if (index === 0) {
+          return {
+            ...item,
+            category: 'SEASONING' as const,
+            preparationMethod: null,
+          };
+        }
+        if (index === 1) {
+          return {
+            ...item,
+            category: 'OIL' as const,
+            preparationMethod: null,
+          };
+        }
+        if (index === 2) {
+          return {
+            ...item,
+            category: 'SUPPLEMENT' as const,
+            ingredientType: 'SUPPLEMENT' as const,
+            preparationMethod: null,
+          };
+        }
+        return item;
+      }),
+    });
+    const tools = createCheckTools({
+      port: createFakeRecipeAgentPort({ draft }),
+      draftId: 'draft-1',
+      tagPolicy,
+    });
+    const result = await tools.check_ready();
+    if (!result.ok) return;
+    const preparation = result.data.checks.find(
+      (check) => check.key === 'PREPARATION',
+    );
+    expect(preparation?.status).toBe('PASS');
+  });
+
   it('marginPercent 缺失但能补算时按补算结果判 WARN', async () => {
     const tools = createCheckTools({
       port: createFakeRecipeAgentPort({

@@ -283,6 +283,7 @@
       :series-name="releaseDrawerSeriesName"
       @released="handleSeriesReleased"
       @updated="handleSeriesUpdated"
+      @saved="handleSeriesUpdated"
     />
   </div>
 </template>

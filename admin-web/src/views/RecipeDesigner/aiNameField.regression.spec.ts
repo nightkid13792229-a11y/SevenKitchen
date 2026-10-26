@@ -88,3 +88,18 @@ describe('上线检查抽屉里的命名与归类', () => {
     expect(quickSource).toContain('双拼')
   })
 })
+
+import releaseDrawerSource from '@/views/RecipeDesigner/components/SeriesReleaseDrawer.vue?raw'
+
+describe('系列发布抽屉里的命名', () => {
+  it('发布设置里有「食谱名称」，用的是同一个 AI 字段', () => {
+    expect(releaseDrawerSource).toContain('食谱名称')
+    expect(releaseDrawerSource).toContain('AiNameField')
+    expect(releaseDrawerSource).toContain(':series-id="seriesId"')
+  })
+
+  it('改完点「保存名称」才写库，并通知父级刷新', () => {
+    expect(releaseDrawerSource).toContain('保存名称')
+    expect(releaseDrawerSource).toContain("emit('saved')")
+  })
+})

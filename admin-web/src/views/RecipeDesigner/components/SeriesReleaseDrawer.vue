@@ -212,6 +212,26 @@
             label-position="left"
             class="series-release__form"
           >
+            <!-- 2026-10-27：系列名是唯一名字，整系列发布前必须定下来 -->
+            <el-form-item label="食谱名称" required>
+              <div class="series-release__name-row">
+                <AiNameField
+                  v-model="nameDraft"
+                  :series-id="seriesId"
+                />
+                <el-button
+                  v-if="nameDirty"
+                  size="small"
+                  type="primary"
+                  :loading="nameSaving"
+                  @click="saveName"
+                >保存名称</el-button>
+              </div>
+              <div class="series-release__hint">
+                价值点在前、食材在后，最多 12 个字——多了标签印不下。
+              </div>
+            </el-form-item>
+
             <el-form-item label="封面图" required>
               <div class="series-release__cover">
                 <el-upload
@@ -477,6 +497,7 @@ import {
   WarningFilled
 } from '@element-plus/icons-vue'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
+import AiNameField from './AiNameField.vue'
 import { recipeApi } from '@/api/recipes'
 import {
   recipeHealthTagApi,
@@ -528,6 +549,8 @@ const emit = defineEmits<{
   (e: 'released', result: SeriesReleaseResult): void
   /** 整系列下架 / 状态变化后通知父级刷新列表与卡片 */
   (e: 'updated', result: SeriesUnpublishResult): void
+  /** 改了系列名：父级需要刷新列表与卡片 */
+  (e: 'saved'): void
 }>()
 
 const visible = computed({
@@ -536,6 +559,44 @@ const visible = computed({
 })
 
 const isAdmin = useIsAdmin()
+
+/** 系列名草稿：改完点「保存名称」才写库 */
+const nameDraft = ref('')
+const nameSaving = ref(false)
+const nameDirty = computed(
+  () => nameDraft.value.trim() !== String(props.seriesName ?? '').trim()
+)
+
+watch(
+  () => props.seriesName,
+  (value) => {
+    nameDraft.value = value ?? ''
+  },
+  { immediate: true }
+)
+
+async function saveName() {
+  const name = nameDraft.value.trim()
+  if (!name) {
+    ElMessage.warning('请填写食谱名称')
+    return
+  }
+  if ([...name].length > 12) {
+    ElMessage.warning('食谱名称最多 12 个字，超了标签印不下')
+    return
+  }
+  nameSaving.value = true
+  try {
+    await recipeDesignerApi.renameSeries(props.seriesId, { name })
+    ElMessage.success('名称已更新')
+    nameDraft.value = name
+    emit('saved')
+  } catch {
+    ElMessage.error('改名失败，请重试')
+  } finally {
+    nameSaving.value = false
+  }
+}
 
 const readiness = ref<SeriesReleaseReadiness | null>(null)
 const loading = ref(false)

@@ -31,8 +31,7 @@ import { PREPARATION_FIELD_PLACEHOLDER } from '@/constants/preparationField'
 import {
   resolvePreparationHistorySuggestions,
   resolvePreparationMethodCommitText,
-  resolvePreparationMethodDisplayText,
-  type PreparationMethodOption
+  resolvePreparationMethodDisplayText
 } from '@/utils/recipeDesigner/preparationMethodField'
 
 /**
@@ -48,8 +47,6 @@ const props = withDefaults(
     modelValue?: string | null
     label?: string | null
     ingredientId?: string | null
-    /** 只用于老数据把字典 id 显示成中文，不作为下拉建议。 */
-    legacyOptions?: PreparationMethodOption[]
     placeholder?: string
     tabindex?: string | number
   }>(),
@@ -57,7 +54,6 @@ const props = withDefaults(
     modelValue: '',
     label: '',
     ingredientId: '',
-    legacyOptions: () => [],
     placeholder: PREPARATION_FIELD_PLACEHOLDER,
     tabindex: -1
   }
@@ -78,11 +74,7 @@ interface PreparationMethodSuggestion {
 const historyCache = new Map<string, string[]>()
 
 const text = ref(
-  resolvePreparationMethodDisplayText(
-    props.modelValue,
-    props.label,
-    props.legacyOptions
-  )
+  resolvePreparationMethodDisplayText(props.modelValue, props.label)
 )
 const committedText = ref(text.value)
 const lastCommittedValue = ref<string | null>(
@@ -93,10 +85,10 @@ const focusText = ref(text.value)
 const historyTexts = ref<string[]>([])
 
 watch(
-  () => [props.modelValue, props.label, props.legacyOptions] as const,
-  ([value, label, options]) => {
+  () => [props.modelValue, props.label] as const,
+  ([value, label]) => {
     if (editing.value) return
-    const nextText = resolvePreparationMethodDisplayText(value, label, options)
+    const nextText = resolvePreparationMethodDisplayText(value, label)
     text.value = nextText
     committedText.value = nextText
     lastCommittedValue.value = value ? String(value) : null

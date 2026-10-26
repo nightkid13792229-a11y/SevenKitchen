@@ -610,7 +610,6 @@ export interface DesignRecipeDraftDetail {
   } | null
   items: DesignerItem[]
   /** 可选烹饪方式（后端真实列表） */
-  preparationMethodOptions?: Array<{ id: string; name: string }>
 }
 
 /**

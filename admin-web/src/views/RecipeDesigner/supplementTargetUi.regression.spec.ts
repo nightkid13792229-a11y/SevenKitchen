@@ -197,7 +197,7 @@ describe('设计器 · 部位 / 状态 / 预处理可直接编辑（2026-10-26�
     expect(editor).toContain(':model-value="element.preparationMethod')
     expect(editor).toContain(':label="element.preparationMethodLabel')
     expect(editor).toContain(':ingredient-id="element.ingredientId"')
-    expect(editor).toContain(':legacy-options="preparationMethodOptions"')
+    expect(editor).not.toContain(':legacy-options="preparationMethodOptions"')
     expect(editor).not.toContain(':options="preparationMethodOptions"')
     expect(editor).not.toContain('<el-select')
   })

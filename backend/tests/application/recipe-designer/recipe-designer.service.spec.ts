@@ -1865,11 +1865,7 @@ describe('RecipeDesignerService', () => {
       'a6409a79-402b-41d1-bfe1-031a67da0876',
     );
     expect(result.items[1].preparationMethodLabel).toBe('蒸熟、压泥');
-    expect(result.preparationMethodOptions).toEqual([
-      { id: 'a6409a79-402b-41d1-bfe1-031a67da0876', name: '去油' },
-      { id: 'method-2', name: '打碎' },
-      { id: 'method-3', name: '去骨' },
-    ]);
+    expect(result).not.toHaveProperty('preparationMethodOptions');
   });
 
   it('returns draft items in canonical category display order, not AI add order', async () => {

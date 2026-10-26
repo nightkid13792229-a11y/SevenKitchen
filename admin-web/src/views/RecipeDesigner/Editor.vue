@@ -173,7 +173,6 @@
                       :model-value="element.preparationMethod || ''"
                       :label="element.preparationMethodLabel || ''"
                       :ingredient-id="element.ingredientId"
-                      :legacy-options="preparationMethodOptions"
                       :tabindex="-1"
                       @change="(value: string | null) => onPreparationMethodChange(element, value)"
                     />
@@ -966,10 +965,6 @@ function isSupplementOption(option: RecipeDesignerIngredientOption): boolean {
 }
 
 // ---------- 原料预处理（2026-10-22） ----------
-
-const preparationMethodOptions = computed(
-  () => draft.value?.preparationMethodOptions ?? []
-)
 
 /**
  * 修改原料「部位 / 状态 / 预处理」：只保存自由文本。

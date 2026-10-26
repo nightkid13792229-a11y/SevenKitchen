@@ -9996,18 +9996,12 @@ export class RecipeDesignerService {
     return new Map(methods.map((method) => [method.id, method.name] as const));
   }
 
-  private async loadPreparationMethodOptions() {
-    const methods = await this.prisma.preparationMethod.findMany({
-      select: { id: true, name: true },
-      orderBy: [{ sort: 'asc' }, { name: 'asc' }],
-    });
-    return methods.map((method) => ({ id: method.id, name: method.name }));
-  }
-
   /**
    * 为草稿明细补充展示用字段（不改变原始存储值，小程序兼容）：
-   * - items[].preparationMethodLabel：烹饪方式文字名（UUID 解析为名称，旧文本原样保留）
-   * - preparationMethodOptions：全部可选烹饪方式（供编辑器下拉使用）
+   * - items[].preparationMethodLabel：文字名（UUID 解析为名称，旧文本原样保留）
+   *
+   * 2026-10-26 Phase 3：不再返回 preparationMethodOptions。
+   * 旧字典 ID 已回填，编辑器改由历史文案做建议。
    */
   private async withPreparationMethodLabels<T extends DesignRecipeWithItems>(
     draft: T,
@@ -10015,10 +10009,8 @@ export class RecipeDesignerService {
     const methodMap = await this.loadPreparationMethodNameMap(
       (draft.items ?? []).map((item) => item.preparationMethod),
     );
-    const preparationMethodOptions = await this.loadPreparationMethodOptions();
     return {
       ...draft,
-      preparationMethodOptions,
       items: (draft.items ?? []).map((item) => ({
         ...item,
         preparationMethodLabel:

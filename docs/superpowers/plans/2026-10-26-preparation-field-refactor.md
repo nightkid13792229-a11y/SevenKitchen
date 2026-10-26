@@ -1,6 +1,8 @@
-# 原料「部位 / 状态 / 预处理」字段重构实施计划（Phase 1）
+# 原料「部位 / 状态 / 预处理」字段重构实施计划（Phase 1–3，已执行）
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **实施状态（2026-10-26 更新）：** Phase 1、Phase 2、Phase 3 已执行并上线；订单「打碎/切丁」口感模块已作为后续独立任务下线。剩余未决项见文末「未完成/未决」。
+>
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 把原料预处理字段统一为「部位 / 状态 / 预处理」，用最近发布/交付历史做自动带出和 3 条下拉建议，去掉字典管理/来源标签，并按食材类别收窄上线检查。
 
@@ -13,7 +15,7 @@
 ## Global Constraints
 
 - 不重命名数据库列 `preparation_method`，不重写历史 JSON 快照。
-- 订单「打碎/切丁」口感模块本次不碰。
+- 订单「打碎/切丁」口感模块：原计划本次不碰；2026-10-26 已作为独立任务下线（见 Phase 3 补充）。
 - 用户可见全称固定为 `部位 / 状态 / 预处理`；表单/详情/DIY 用全称。
 - 字段是单一自由文本，最长 100 字；不强制三段校验。
 - 历史只包含：`Recipe.status=PUBLIC` 且非定制；以及有当前有效交付（`revokedAt=null`、`replacedByDeliveryId=null`）的定制食谱。不含设计草稿。
@@ -56,7 +58,7 @@
   }
   ```
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 覆盖：
 - 只包含 `Recipe.status=PUBLIC && isCustomRecipe=false` 的 `RecipeItem`；
@@ -75,12 +77,12 @@ it('dedupes normalized text and limits to 3')
 it('getLatestTextMap picks the newest text per ingredient')
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd backend && npx jest tests/application/recipe/ingredient-preparation-history.service.spec.ts --runInBand`
 Expected: FAIL（服务不存在）
 
-- [ ] **Step 3: Implement the service**
+- [x] **Step 3: Implement the service**
 
 Prisma 查询要点：
 ```ts
@@ -123,12 +125,12 @@ this.prisma.recipeItem.findMany({
 - 排序：`lastUsedAt desc`，再 `usageCount desc`，再 `text.localeCompare`；
 - `limit` 为空返回全部；`getLatestTextMap` 用同一查询按 `ingredientId` 分组取第一条。
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `cd backend && npx jest tests/application/recipe/ingredient-preparation-history.service.spec.ts --runInBand`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/application/recipe/ingredient-preparation-history.service.ts backend/src/app.module.ts backend/tests/application/recipe/ingredient-preparation-history.service.spec.ts
@@ -149,7 +151,7 @@ git commit -m "feat(recipe): add ingredient preparation history service"
 - Consumes: `IngredientPreparationHistoryService.getHistory`
 - Produces: `RecipeService.getIngredientPreparationMethodHistory(ingredientId, limit?)`；HTTP `GET /admin/ingredients/:id/preparation-method-history?limit=3`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 在现有 history spec 里加：
 - `limit=3` 只返回 3 条；
@@ -157,24 +159,24 @@ git commit -m "feat(recipe): add ingredient preparation history service"
 - 不传 `limit` 返回全部；
 - 定制/橱窗历史都包含（由 Task 1 保证，可在 controller 层只测透传）。
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd backend && npx jest tests/recipe.service.preparation-method-history.spec.ts --runInBand`
 Expected: FAIL（limit 未生效 / 未委托）
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 - `RecipeService` 注入 `IngredientPreparationHistoryService`（构造参数末尾 `@Optional()`，避免旧测试按位置实例化失败）；
 - `getIngredientPreparationMethodHistory(ingredientId, limit?)` 调 `history.getHistory`，把 `lastUsedAt: Date` 转 ISO；
 - `AdminController` 增加 `@Query('limit') limit?: string`，解析正整数，最大 50；
 - 前端 API `getIngredientPreparationMethodHistory(ingredientId, limit?)` 增加 `params: { limit }`（无值不传）。
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `cd backend && npx jest tests/recipe.service.preparation-method-history.spec.ts --runInBand`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/application/recipe/recipe.service.ts backend/src/interfaces/controllers/admin.controller.ts admin-web/src/api/recipes.ts backend/tests/recipe.service.preparation-method-history.spec.ts
@@ -193,7 +195,7 @@ git commit -m "feat(recipe): expose preparation history limit"
 - Consumes: `IngredientPreparationHistoryService.getLatestText` / `getLatestTextMap`
 - Produces: `resolveDesignItemPreparationMethod` 返回历史原文；发布兜底默认值同样使用历史原文。
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 更新/新增：
 - 新增原料且没有显式预处理时，取历史最新文案；
@@ -204,12 +206,12 @@ git commit -m "feat(recipe): expose preparation history limit"
 
 现有测试 `aligns the auto-generated preparation method...` 改名为 `uses the latest history text without rewriting the basis`，期望值改为原文。
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd backend && npx jest tests/application/recipe-designer/recipe-designer.service.spec.ts --runInBand`
 Expected: FAIL（仍走旧 `recipeItem` 查询/自动改写）
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 - 构造函数末尾加 `@Optional() private readonly ingredientPreparationHistoryService?: IngredientPreparationHistoryService`；
 - `resolveDesignItemPreparationMethod`：显式值优先；否则 `getLatestText(ingredientId)`；`normalizePreparationMethod` 后返回；
@@ -220,12 +222,12 @@ Expected: FAIL（仍走旧 `recipeItem` 查询/自动改写）
 - 给 `AddRecipeDesignItemDto` / `UpdateRecipeDesignItemDto` 的 `preparationMethod` 加 `@MaxLength(100)`，和数据库 `VarChar(100)` 对齐；
 - 保留 `domain/recipe-designer/preparation-basis.ts` 仅供只读巡检脚本使用，不再从写路径调用。
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `cd backend && npx jest tests/application/recipe-designer/recipe-designer.service.spec.ts --runInBand`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/application/recipe-designer/recipe-designer.service.ts backend/tests/application/recipe-designer/recipe-designer.service.spec.ts
@@ -248,19 +250,19 @@ git commit -m "feat(recipe-designer): use history text for preparation autofill"
 - 新增 `PREPARATION_REQUIRED_FOOD_CATEGORIES`
 - 域函数只在 `item.preparationRequired` 时检查空值
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 - 10 类食材（PROTEIN/ORGAN/AQUATIC/EGG/CARB/VEGETABLE/MUSHROOM/NUTS/LEGUME/FRUIT）空值产生 `PREPARATION_METHOD_REQUIRED`；
 - SUPPLEMENT/FAT/SEASONING/DAIRY/UNCLASSIFIED 空值不产生 blocker；
 - 非空时全部通过；
 - 服务层 `launchItems` 正确计算 `preparationRequired`。
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd backend && npx jest tests/domain/recipe-designer/launch-readiness-branch.spec.ts tests/application/recipe-designer/launch-readiness.spec.ts --runInBand`
 Expected: FAIL
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 - 在 `food-category-map.ts` 或 `launch-readiness.ts` 增加类别常量；
 - `LaunchReadinessItemInput.preparationRequired`；
@@ -268,12 +270,12 @@ Expected: FAIL
 - `RecipeDesignerService` 的 `launchItems` 用 `resolveDraftItemDisplayCategory(item)` 计算；
 - 消息改为 `食材「X」未填写部位 / 状态 / 预处理，不能发布或加入待提交`。
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `cd backend && npx jest tests/domain/recipe-designer/launch-readiness-branch.spec.ts tests/application/recipe-designer/launch-readiness.spec.ts --runInBand`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/domain/recipe-designer/launch-readiness.ts backend/src/application/recipe-designer/recipe-designer.service.ts backend/tests/domain/recipe-designer/launch-readiness-branch.spec.ts backend/tests/application/recipe-designer/launch-readiness.spec.ts
@@ -288,30 +290,30 @@ git commit -m "feat(recipe-designer): require preparation only for selected food
 - Modify: `backend/src/application/recipe-designer/agent/check-tools.ts`
 - Test: `backend/tests/application/recipe-designer/agent/check-tools.spec.ts`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 - 10 类食材空值 → PREPARATION FAIL；
 - 补剂/油脂/调味/乳制品/未分类空值 → PREPARATION PASS；
 - 消息使用新术语。
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd backend && npx jest tests/application/recipe-designer/agent/check-tools.spec.ts --runInBand`
 Expected: FAIL
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 - 复用 `PREPARATION_REQUIRED_FOOD_CATEGORIES`；
 - `draft.items.filter(item => isPreparationRequired(item) && !isNonEmptyString(item.preparationMethod))`；
 - 标签 `PREPARATION: '部位 / 状态 / 预处理'`；
 - pass 消息改为「必填食材都有部位 / 状态 / 预处理」。
 
-- [ ] **Step 4: Run test**
+- [x] **Step 4: Run test**
 
 Run: `cd backend && npx jest tests/application/recipe-designer/agent/check-tools.spec.ts --runInBand`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/application/recipe-designer/agent/check-tools.ts backend/tests/application/recipe-designer/agent/check-tools.spec.ts
@@ -337,7 +339,7 @@ git commit -m "feat(recipe-agent): align preparation check with launch readiness
 - `resolvePreparationMethodDisplayText(value, label, options)` 保留，`options` 只用于 legacy ID 显示
 - 新增 `filterPreparationHistory(texts: string[], query: string): string[]`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 - 新标签「部位 / 状态 / 预处理」出现在编辑器；
 - 不再有 `PreparationMethodManagerDialog`、`preparation-manage-btn`、`preparationSource === 'MANUAL'` 标签；
@@ -346,12 +348,12 @@ git commit -m "feat(recipe-agent): align preparation check with launch readiness
 - 组件按 `ingredientId` 拉历史，不显示来源标签；
 - legacy 选项只用于显示，不出现在下拉建议里。
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd admin-web && npx vitest run src/utils/recipeDesigner/preparationMethodField.spec.ts src/views/RecipeDesigner/supplementTargetUi.regression.spec.ts`
 Expected: FAIL
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 - `PreparationMethodField`：
   - 聚焦时调用 `recipeApi.getIngredientPreparationMethodHistory(ingredientId, 3)`；模块级 `Map` 缓存；
@@ -366,12 +368,12 @@ Expected: FAIL
 - 删除不再使用的组件/API 文件；
 - 更新回归测试中的旧 class/文案断言。
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `cd admin-web && npx vitest run src/utils/recipeDesigner/preparationMethodField.spec.ts src/views/RecipeDesigner/supplementTargetUi.regression.spec.ts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add admin-web/src/views/RecipeDesigner/Editor.vue admin-web/src/views/RecipeDesigner/components/PreparationMethodField.vue admin-web/src/utils/recipeDesigner/preparationMethodField.ts admin-web/src/utils/recipeDesigner/preparationMethodField.spec.ts admin-web/src/views/RecipeDesigner/supplementTargetUi.regression.spec.ts
@@ -387,7 +389,7 @@ git commit -m "feat(admin-web): use preparation history suggestions in designer"
 - Modify: `admin-web/src/utils/preparationBasis.ts`
 - Test: `admin-web/src/utils/__tests__/preparationBasis.spec.ts`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 - `牛里脊/生/去油` + RAW → 无提示；
 - `牛里脊/熟/去油` + RAW → 提示；
@@ -397,24 +399,24 @@ git commit -m "feat(admin-web): use preparation history suggestions in designer"
 - 提示文案使用「部位 / 状态 / 预处理」；
 - 后端只读巡检保持旧口径（不作为门禁）；Phase 1 只要求前端黄字提示识别新格式。
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd admin-web && npx vitest run src/utils/__tests__/preparationBasis.spec.ts`
 Expected: FAIL
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 - 分段正则支持 `/`、`、`、`,`、`，`；
 - 状态 token：`生/熟/干/生重/熟重/干重`；
 - 营养状态映射：RAW→生、COOKED→熟、DRIED/AIR_DRIED→干；
 - 提示文案更新；不修改输入内容。
 
-- [ ] **Step 4: Run test**
+- [x] **Step 4: Run test**
 
 Run: `cd admin-web && npx vitest run src/utils/__tests__/preparationBasis.spec.ts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add admin-web/src/utils/preparationBasis.ts admin-web/src/utils/__tests__/preparationBasis.spec.ts
@@ -432,30 +434,30 @@ git commit -m "feat(admin-web): warn on preparation state mismatch for 生/熟/�
 - Test: `admin-web/src/views/RecipeDesigner/launchReadiness.regression.spec.ts`
 - Test: `admin-web/src/views/Recipes/recipeFormReadonly.regression.spec.ts`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 - RecipeForm 表头/表单 label/历史标题/占位/空状态使用新术语；
 - AgentDrawer 工具结果字段标签使用新术语；
 - 上线检查 label 改为「部位/状态/预处理完整」；
 - 「制备方法」不再作为原料字段出现（订单模块除外）。
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd admin-web && npx vitest run src/views/RecipeDesigner/launchReadiness.regression.spec.ts src/views/Recipes/recipeFormReadonly.regression.spec.ts`
 Expected: FAIL
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 - 文案替换；历史标题改为「历史记录」；
 - 保留 `preparationBasisHint` 黄字提示；
 - 不删除 `preparationNote` 数据，但不再新增 UI。
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `cd admin-web && npx vitest run src/views/RecipeDesigner/launchReadiness.regression.spec.ts src/views/Recipes/recipeFormReadonly.regression.spec.ts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add admin-web/src/views/Recipes/RecipeForm.vue admin-web/src/views/RecipeDesigner/components/RecipeAgentDrawer.vue admin-web/src/utils/recipeDesigner/launchReadiness.ts
@@ -479,28 +481,28 @@ git commit -m "feat(admin-web): rename ingredient preparation labels"
 - Test: `miniapp/src/pages/diy-sheet.regression.spec.ts`
 - Test: `miniapp/src/components/recipe/RecipeIngredientTables.spec.ts`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 - 食谱详情两个表头、DIY 食材表头/打印表头、采购预览列名使用新术语；
 - 补剂「添加时机」保持不变；
 - 不改接口字段/逻辑。
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd miniapp && npx vitest run src/pages/diy-sheet.regression.spec.ts src/components/recipe/RecipeIngredientTables.spec.ts`
 Expected: FAIL
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 - 只改中文文案；全称优先；打印/采购列如果过挤，先用全称并允许换行（后续实际预览再定）。
 - 保留 `preparation_methods` 等接口键不变。
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `cd miniapp && npx vitest run src/pages/diy-sheet.regression.spec.ts src/components/recipe/RecipeIngredientTables.spec.ts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add miniapp/src/pages/recipe-detail/index.vue miniapp/src/pages/diy-sheet/index.vue miniapp/src/components/recipe/RecipeIngredientUsageTable.vue miniapp/src/pages/staff-production/detail.vue miniapp/src/pages/staff-production/print-task.vue miniapp/src/utils/canvas-printer.ts miniapp/src/pages/staff-production/utils/canvas-printer.ts miniapp/src/pages/staff-purchasing/preview.vue
@@ -520,29 +522,29 @@ git commit -m "feat(miniapp): rename ingredient preparation label"
 - Test: `backend/tests/application/recipe-designer/agent/tool-registry.spec.ts`
 - Test: `backend/tests/application/recipe-designer/agent/recipe-agent-run.service.spec.ts`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 - `search_recipes` / `get_recipe` / `set_preparation` 描述使用新术语；
 - SYSTEM_PROMPT 使用新术语，并说明黄字状态提示交给 AI/人复核；
 - 不再用「制备方法」指代原料字段。
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd backend && npx jest tests/application/recipe-designer/agent/tool-registry.spec.ts tests/application/recipe-designer/agent/recipe-agent-run.service.spec.ts --runInBand`
 Expected: FAIL
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 - 工具描述/参数 description/prompt 替换；
 - `set_preparation` 继续只接受中文文案；
 - 不加新的代码级状态校验；prompt 里只提示 AI 复核。
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `cd backend && npx jest tests/application/recipe-designer/agent/tool-registry.spec.ts tests/application/recipe-designer/agent/recipe-agent-run.service.spec.ts --runInBand`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/application/recipe-designer/agent/tool-registry.ts backend/src/application/recipe-designer/agent/recipe-agent-run.service.ts backend/src/interfaces/dto/diy-sheets.dto.ts backend/src/domain/recipe/types.ts backend/src/domain/pricing/pricing.service.ts
@@ -553,7 +555,7 @@ git commit -m "docs(recipe-agent): align preparation terminology"
 
 ### Task 11: 整体验证
 
-- [ ] **Step 1: Backend targeted tests**
+- [x] **Step 1: Backend targeted tests**
 
 Run:
 ```bash
@@ -561,7 +563,7 @@ cd backend && npx jest tests/application/recipe tests/application/recipe-designe
 ```
 Expected: 0 failures.
 
-- [ ] **Step 2: Admin tests + type-check + build**
+- [x] **Step 2: Admin tests + type-check + build**
 
 Run:
 ```bash
@@ -569,7 +571,7 @@ cd admin-web && npm test && npx vue-tsc -b && npm run build
 ```
 Expected: 0 failures, build success.
 
-- [ ] **Step 3: Miniapp tests**
+- [x] **Step 3: Miniapp tests**
 
 Run:
 ```bash
@@ -577,7 +579,7 @@ cd miniapp && npm test
 ```
 Expected: 0 failures.
 
-- [ ] **Step 4: Manual acceptance**
+- [x] **Step 4: Manual acceptance**
 
 - 新增一个主蛋白原料：自动带出最近历史；下拉最多 3 条，无来源标签；
 - 改写为「牛里脊/熟/去油」但档案是生：出现黄字提示，保存内容不被改写；
@@ -585,21 +587,36 @@ Expected: 0 failures.
 - 长标签 + 220–260px 输入框不挤坏行；
 - 食谱详情/DIY/打印/采购显示新术语。
 
-- [ ] **Step 5: Commit verification fixes only**
+- [x] **Step 5: Commit verification fixes only**
 
 如手动验收发现布局/文案问题，按小修复提交，不扩大范围。
 
 ---
 
-## Phase 2（本计划不执行）
+## Phase 2（已执行 · 2026-10-26）
 
-- 回填可编辑原料项的旧字典 ID；
-- 下线字典管理 API，字典表转只读；
-- 移除设计器 `preparationMethodOptions`；
-- 历史 JSON 快照保持只读解析。
+实施结果：
+- 36 条纯字典 ID 回填成中文（设计器 24 + 正式食谱 12）；
+- 2 条混合旧值按老板确认删掉未知 ID，保留可读文案；
+- 管理接口 `/admin/preparation-methods` 已下线（404），字典表转只读；
+- 158 份历史发布快照未改写，继续由 legacy resolver 解析。
 
-## Phase 3（本计划不执行）
 
-- 清理 `preparationSource` / `preparationNote`；
-- 评估字典表下线；
-- 订单口感模块单独下线。
+
+## Phase 3（已执行 · 2026-10-26）
+
+实施结果：
+- `preparationSource` / `preparationNote` 两列已删除（备份后执行迁移）；
+- 设计器 `preparationMethodOptions` 兼容字段已移除；
+- 订单「打碎/切丁」模块已独立下线：DTO、枚举、OrderItem、数据库列、结算/员工端展示全部清理；
+- 字典表保留只读，未删除。
+
+
+
+
+## 未完成/未决（2026-10-26）
+
+- **字典表最终下线**：阻塞。仍有 158 份历史发布快照存字典 ID；当前保持只读，不重写快照。
+- **窄列命名**：生产打印暂用紧凑「部位/状态/预处理」，采购/DIY 用全称；是否统一改短名「原料处理」未拍板。
+- **AI 状态一致性提示词**：已于 2026-10-26 补充到系统提示词（只提醒、不改写、不阻断）。
+- **订单口感手工回归**：单元测试和构建通过；真实下单/结算/员工端完整手点回归待安排。

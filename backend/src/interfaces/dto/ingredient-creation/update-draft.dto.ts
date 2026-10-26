@@ -2,11 +2,19 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsIn,
+  IsInt,
   IsNotEmpty,
+  IsNumber,
   IsObject,
   IsOptional,
+  IsPositive,
   IsString,
+  Length,
+  Max,
+  MaxLength,
+  Min,
   ValidateNested,
 } from 'class-validator';
 import type {
@@ -18,14 +26,31 @@ import type {
   MergePlan,
   NutritionEvidenceEntry,
 } from '../../../application/ingredient-creation/ingredient-creation.types';
+import { IngredientProcurementStrategy } from '../../../domain/ingredient/enums';
+import type { SupplementAddTiming } from '../../../domain/ingredient/supplement-add-timing';
+import {
+  INGREDIENT_CARD_FIELD_KEYS,
+  type IngredientCardFieldKey,
+} from '../../../domain/ingredient-creation/ingredient-card-fields';
 import type { PreparationState } from '../../../domain/ingredient-creation/preparation-state';
 import type { CoverageCategory } from '../../../domain/ingredient-creation/state-coverage';
 import {
+  BASE_UNITS,
   COVERAGE_CATEGORIES,
   CREATION_STEPS,
+  INGREDIENT_TYPES,
   PREPARATION_STATES,
 } from './ingredient-creation.constants';
 import { NutritionEvidenceEntryDto } from './nutrition-evidence-entry.dto';
+
+/** 与 Prisma 的 `IngredientProcurementStrategy` 枚举保持一致。 */
+const PROCUREMENT_STRATEGIES = Object.values(IngredientProcurementStrategy);
+
+/** 与 `SupplementProperties.add_timing` 的受控词表一致。 */
+const ADD_TIMINGS = [
+  'BEFORE_MIXING',
+  'BEFORE_MEAL',
+] as const satisfies readonly SupplementAddTiming[];
 
 /**
  * 起手口径卡的可 patch 片段。
@@ -120,6 +145,246 @@ export class UpdateDraftProfileDto {
 }
 
 /**
+ * 草稿里「标准原料预填值」的校验口径。
+ *
+ * 为什么不再只拿 `IngredientDraft` 当类型：interface 在运行时不存在，
+ * whitelist 一个键也看不见 —— 前端多传的脏键会原样落进 payload，长度、范围、
+ * 枚举也没人挡。这里按字段契约把 30 项显式声明出来。
+ *
+ * 约定：
+ * - 4 个必填项（名称 / 类型 / 基准单位 / 展示名）是建原料的最小信息；
+ * - 其余全部可选：向导是分步填的，没填是 `undefined`，人清空过的是 `null`；
+ *   `@IsOptional()` 对两者都跳过校验，正好就是「允许显式 null」；
+ * - `0` 是合法值（0 元采购价、0 损耗），校验用 `@Min(0)` 而不是「非空」；
+ * - 可食部存**比例** `edibleYieldRate`（0–1）；公共名 `edibleYieldPercent`
+ *   （0–100）只用于页面展示与 `manualFields`，不是草稿字段（多传会被 whitelist 剥掉）。
+ */
+export class UpdateDraftIngredientDto implements IngredientDraft {
+  // BASIC
+  @ApiProperty({ description: '中文规范名', example: '冷冻三文鱼' })
+  @IsString()
+  @Length(1, 100)
+  name!: string;
+
+  @ApiPropertyOptional({ description: '英文名', nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  nameEn?: string | null;
+
+  @ApiProperty({ description: '原料类型', enum: INGREDIENT_TYPES })
+  @IsIn(INGREDIENT_TYPES)
+  type!: IngredientDraft['type'];
+
+  @ApiPropertyOptional({
+    description: '原料类别',
+    enum: COVERAGE_CATEGORIES,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsIn(COVERAGE_CATEGORIES)
+  category?: CoverageCategory | null;
+
+  @ApiPropertyOptional({ description: '备注', nullable: true })
+  @IsOptional()
+  @IsString()
+  notes?: string | null;
+
+  // MEASURE
+  @ApiProperty({ description: '基准单位', enum: BASE_UNITS })
+  @IsIn(BASE_UNITS)
+  baseUnit!: IngredientDraft['baseUnit'];
+
+  @ApiProperty({ description: '展示名（如 克 / 毫升 / 片）' })
+  @IsString()
+  @Length(1, 50)
+  unitDisplayLabel!: string;
+
+  @ApiPropertyOptional({ description: '单块重量（g）', nullable: true })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  weightG?: number | null;
+
+  @ApiPropertyOptional({ description: '最大容量（g）', nullable: true })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  maxCapacityG?: number | null;
+
+  // NUTRITION
+  @ApiPropertyOptional({ description: 'CFCT 分类', nullable: true })
+  @IsOptional()
+  @IsString()
+  cfctClass?: string | null;
+
+  /**
+   * 可食部**比例**（0–1），不是百分数。
+   *
+   * 页面上的 75% 由前端换算成 0.75 再传；这里再挡一道 0–1，
+   * 多除/少除一次 100 都能在接口层被拒，而不是悄悄写进库里。
+   */
+  @ApiPropertyOptional({
+    description:
+      '可食部比例（0–1）；百分数公共名 edibleYieldPercent 只用于页面',
+    nullable: true,
+    minimum: 0,
+    maximum: 1,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  edibleYieldRate?: number | null;
+
+  @ApiPropertyOptional({ description: '主要营养价值', nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  mainNutrientsDesc?: string | null;
+
+  // PURCHASE
+  @ApiPropertyOptional({
+    description: '采购策略',
+    enum: PROCUREMENT_STRATEGIES,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsIn(PROCUREMENT_STRATEGIES)
+  procurementStrategy?: string | null;
+
+  @ApiPropertyOptional({
+    description: '采购单位（最多 50 字）',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  purchaseUnit?: string | null;
+
+  @ApiPropertyOptional({
+    description: '采购单位换算成基准单位的倍数（必须大于 0）',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  purchaseToBaseRatio?: number | null;
+
+  @ApiPropertyOptional({
+    description: '当前采购价（元 / 采购单位）',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  currentPricePerPurchaseUnit?: number | null;
+
+  @ApiPropertyOptional({ description: '品牌', nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  brand?: string | null;
+
+  @ApiPropertyOptional({ description: '规格', nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  productModel?: string | null;
+
+  @ApiPropertyOptional({ description: '采购渠道', nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  purchaseChannel?: string | null;
+
+  // STOCK（原料建完、有了库存记录才有；本阶段只读展示，仍允许回传保存）
+  @ApiPropertyOptional({ description: '安全库存', nullable: true })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  safetyStock?: number | null;
+
+  @ApiPropertyOptional({ description: '补货点', nullable: true })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  reorderPoint?: number | null;
+
+  @ApiPropertyOptional({ description: '目标库存', nullable: true })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  targetStock?: number | null;
+
+  // USAGE
+  @ApiPropertyOptional({ description: '是否用于 DIY', nullable: true })
+  @IsOptional()
+  @IsBoolean()
+  diyEnabled?: boolean | null;
+
+  @ApiPropertyOptional({
+    description: '添加时机',
+    enum: ADD_TIMINGS,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsIn(ADD_TIMINGS)
+  addTiming?: string | null;
+
+  @ApiPropertyOptional({
+    description: '生产损耗倍数（1–2，1.05 表示 5%）',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(2)
+  productionLossRate?: number | null;
+
+  @ApiPropertyOptional({ description: '标签分类', type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
+
+  // STORAGE
+  @ApiPropertyOptional({ description: '保质期（月）', nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  shelfLifeMonths?: number | null;
+
+  @ApiPropertyOptional({ description: '储存条件', nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  storageCondition?: string | null;
+
+  @ApiPropertyOptional({ description: '开封后效期（天）', nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  openedShelfLifeDays?: number | null;
+
+  @ApiPropertyOptional({ description: '内容物是否油性', nullable: true })
+  @IsOptional()
+  @IsBoolean()
+  isOilBased?: boolean | null;
+
+  // 人工改动标记：只收契约内的公共字段名（可食部用公共名 edibleYieldPercent）
+  @ApiPropertyOptional({
+    description: '人工审核时改过的字段（公共字段名）',
+    enum: INGREDIENT_CARD_FIELD_KEYS,
+    isArray: true,
+  })
+  @IsOptional()
+  @IsArray()
+  @IsIn(INGREDIENT_CARD_FIELD_KEYS, { each: true })
+  manualFields?: IngredientCardFieldKey[];
+}
+
+/**
  * 草稿 payload 的可写入键。
  *
  * **故意不声明 `proposalHistory`**：`whitelist` 会在管道里把它剥掉；
@@ -164,10 +429,15 @@ export class UpdateDraftPayloadDto {
   @IsObject()
   checks?: FinalCheckResult;
 
-  @ApiPropertyOptional({ description: '标准原料预填值' })
+  @ApiPropertyOptional({
+    description: '标准原料预填值',
+    type: () => UpdateDraftIngredientDto,
+  })
   @IsOptional()
   @IsObject()
-  ingredient?: IngredientDraft;
+  @ValidateNested()
+  @Type(() => UpdateDraftIngredientDto)
+  ingredient?: UpdateDraftIngredientDto;
 
   @ApiPropertyOptional({ description: '人工例外' })
   @IsOptional()

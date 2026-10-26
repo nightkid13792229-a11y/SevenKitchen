@@ -22,12 +22,16 @@ import {
   type IngredientAgentRunResult,
   type IngredientAgentStreamEvent,
 } from '../../application/ingredient-creation/ingredient-draft-agent.service';
-import { IngredientCreationCandidateService } from '../../application/ingredient-creation/ingredient-creation-candidate.service';
-import { IngredientCreationCheckService } from '../../application/ingredient-creation/ingredient-creation-check.service';
+import type { CheckRunView } from '../../application/ingredient-creation/ingredient-check-run.service';
 import {
-  IngredientCreationCommitService,
-  type CommitIngredientCreationResult,
-} from '../../application/ingredient-creation/ingredient-creation-commit.service';
+  IngredientCreationAuthorizeService,
+  type AuthorizeResult,
+} from '../../application/ingredient-creation/ingredient-creation-authorize.service';
+import { IngredientCreationCandidateService } from '../../application/ingredient-creation/ingredient-creation-candidate.service';
+import {
+  IngredientCreationCheckService,
+  type IngredientDraftChecksView,
+} from '../../application/ingredient-creation/ingredient-creation-check.service';
 import { IngredientCreationDraftService } from '../../application/ingredient-creation/ingredient-creation-draft.service';
 import {
   IngredientCreationIntakeService,
@@ -51,12 +55,13 @@ import { AuthGuard, CurrentUser } from '../auth';
 import type { RequestUser } from '../auth';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import {
+  AuthorizeIngredientCreationDto,
   ClassifyIntakeDto,
-  CommitIngredientCreationDto,
   CreateDraftDto,
   CreateMergePlanDto,
   FindCandidatesDto,
   ResolveMergeConflictDto,
+  RunDraftCheckDto,
   RunIngredientAgentDto,
   SearchOnlineCandidatesDto,
   UpdateDraftDto,
@@ -79,7 +84,8 @@ function stripProposalHistory(
  * AI 辅助新建标准原料的后台接口。
  *
  * 只做参数校验、编排与转发：草稿读写走草稿服务，缝合 / 人工裁决走缝合服务，
- * 终检与提交前置检查走终检服务。控制器不碰 Prisma、不重算任何营养规则。
+ * 终检与按域核验走终检服务，提交前的四条件闸门走授权服务。控制器不碰 Prisma、
+ * 不重算任何营养规则，也不保留任何绕过闸门的提交通路。
  */
 @ApiTags('Admin Ingredient Creation')
 @ApiBearerAuth()
@@ -93,7 +99,7 @@ export class IngredientCreationController {
     private readonly onlineService: IngredientCreationOnlineService,
     private readonly mergeService: IngredientCreationMergeService,
     private readonly checkService: IngredientCreationCheckService,
-    private readonly commitService: IngredientCreationCommitService,
+    private readonly authorizeService: IngredientCreationAuthorizeService,
     private readonly auditService: IngredientCreationAuditService,
     private readonly intakeService: IngredientCreationIntakeService,
     private readonly agentService: IngredientDraftAgentService,
@@ -311,46 +317,74 @@ export class IngredientCreationController {
     return new ApiResponseDto(0, 'Success', result);
   }
 
-  @Post('drafts/:id/commit')
-  @ApiOperation({ summary: '终检无拦死项后一次性提交原料、档案与映射' })
-  async commit(
+  @Post('drafts/:id/checks')
+  @ApiOperation({
+    summary:
+      '按域核验（原料 / 营养），落一条带草稿内容哈希的报告；触发人固定为当前登录人',
+  })
+  async runDomainCheck(
     @Param('id') id: string,
-    @Body() dto: CommitIngredientCreationDto,
+    @Body() dto: RunDraftCheckDto,
     @CurrentUser() user: RequestUser,
-  ): Promise<ApiResponseDto<CommitIngredientCreationResult>> {
-    // 提交接口不盲信前端：先跑服务端终检，有拦死项直接 400。
-    await this.checkService.assertCommitAllowed(id);
+  ): Promise<ApiResponseDto<CheckRunView>> {
+    // 触发方式与操作人由服务端定死：前端不能自称 AGENT，也不能替别人签名。
+    const run = await this.checkService.runDomain(
+      id,
+      dto.domain,
+      'USER',
+      user.userId,
+    );
 
-    const result = await this.commitService.commit({
+    return new ApiResponseDto(0, 'Success', run);
+  }
+
+  @Get('drafts/:id/checks')
+  @ApiOperation({
+    summary: '两域各自的最新核验报告，并用当前草稿内容判断是否过期',
+  })
+  async getLatestChecks(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<IngredientDraftChecksView>> {
+    const view = await this.checkService.latestChecks(id);
+    return new ApiResponseDto(0, 'Success', view);
+  }
+
+  @Post('drafts/:id/authorize')
+  @ApiOperation({
+    summary:
+      '四条件授权闸门（核验新鲜 / 规则版本 / 无拦死项 / 例外已登记）；全过才提交，否则 400 并列出全部原因',
+  })
+  async authorize(
+    @Param('id') id: string,
+    @Body() dto: AuthorizeIngredientCreationDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<AuthorizeResult>> {
+    const result = await this.authorizeService.authorize({
       draftId: id,
       userId: user.userId,
-      ingredient: {
-        name: dto.ingredient.name,
-        nameEn: dto.ingredient.nameEn ?? null,
-        type: dto.ingredient.type,
-        category: dto.ingredient.category ?? null,
-        baseUnit: dto.ingredient.baseUnit,
-        unitDisplayLabel: dto.ingredient.unitDisplayLabel,
-        cfctClass: dto.ingredient.cfctClass ?? null,
-        edibleYieldRate: dto.ingredient.edibleYieldRate ?? null,
-      },
-      profiles: dto.profiles.map((profile) => ({
-        preparationState: profile.preparationState,
-        sourceRecordId: profile.sourceRecordId,
-        entries: profile.entries.map((entry) => ({
-          fieldPath: entry.fieldPath,
-          finalValue: entry.finalValue,
-          unit: entry.unit,
-          status: entry.status,
-          sourceRecordId: entry.sourceRecordId,
-          sourceValue: entry.sourceValue,
-          sourceUnit: entry.sourceUnit ?? null,
-          formula: entry.formula ?? null,
-          confirmedBy: entry.confirmedBy ?? null,
-          confirmedAt: entry.confirmedAt ?? null,
-        })),
-        notes: profile.notes ?? null,
-      })),
+      primaryProfileIndex: dto.primaryProfileIndex,
+    });
+
+    return new ApiResponseDto(0, 'Success', result);
+  }
+
+  @Post('drafts/:id/commit')
+  @ApiOperation({
+    summary: '同 authorize：四条件闸门通过才一次性提交原料、档案与映射',
+  })
+  async commit(
+    @Param('id') id: string,
+    // 只收主档案下标：旧调用方仍可带全量 body（ingredient / profiles 会被
+    // whitelist 剥掉），但那些字段不参与校验、更不参与写入——写入的只能是
+    // 草稿里被核验过的那一份。
+    @Body() dto: AuthorizeIngredientCreationDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<AuthorizeResult>> {
+    // 刻意不保留绕过闸门的直写入口：直接调 API 也必须先过四条件，
+    // 否则提交前的核验只是页面上的建议，挡不住任何绕过前端的调用。
+    const result = await this.authorizeService.authorize({
+      draftId: id,
+      userId: user.userId,
       primaryProfileIndex: dto.primaryProfileIndex,
     });
 

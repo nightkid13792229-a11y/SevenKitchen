@@ -7,6 +7,9 @@
  */
 import api from './index'
 import type {
+  AuthorizeResult,
+  CheckDomain,
+  CheckRunView,
   CommitIngredientCreationInput,
   CommitIngredientCreationResult,
   CreationStep,
@@ -14,6 +17,7 @@ import type {
   IngredientAgentRunResult,
   IngredientCreationDraft,
   IngredientCreationDraftPayload,
+  IngredientDraftChecksView,
   IntakeClassification,
   IntakeCurrentIngredient,
   IntakeHistoryTurn,
@@ -50,11 +54,34 @@ export const ingredientCreationApi = {
   ): Promise<IngredientCreationDraft> =>
     api.patch(`${BASE}/drafts/${id}`, { step, payload }),
 
-  /** ④ 跑服务端终检；前端只展示，不自己判定通过 */
+  /** ④ 跑服务端终检；前端只展示，不自己判定通过（旧的整份终检，授权不看它） */
   runCheck: (id: string): Promise<FinalCheckResult> =>
     api.post(`${BASE}/drafts/${id}/check`),
 
-  /** 一次性提交原料、营养档案与映射 */
+  /**
+   * 按域核验并落一份报告（trigger 固定 USER、createdBy 由服务端取登录人）。
+   *
+   * 授权只认这份报告：`POST /check` 不落库、也不算「人核验过」。
+   */
+  runDomainCheck: (id: string, domain: CheckDomain): Promise<CheckRunView> =>
+    api.post(`${BASE}/drafts/${id}/checks`, { domain }),
+
+  /** 两域各自最新报告 + 是否仍对应当前草稿（改过一格就会变成 false）。 */
+  getDraftChecks: (id: string): Promise<IngredientDraftChecksView> =>
+    api.get(`${BASE}/drafts/${id}/checks`),
+
+  /**
+   * 授权写入正式库：后端四条件全过才写，否则 400 且 body 顶层带 `reasons`。
+   *
+   * 只传主档案下标；原料与档案一律由服务端从当前草稿读，前端不能替它选数据。
+   */
+  authorize: (
+    id: string,
+    input: { primaryProfileIndex: number }
+  ): Promise<AuthorizeResult> =>
+    api.post(`${BASE}/drafts/${id}/authorize`, input),
+
+  /** 旧提交入口（后端已与 authorize 共用同一闸门）；页面只调 authorize。 */
   commit: (
     id: string,
     input: CommitIngredientCreationInput

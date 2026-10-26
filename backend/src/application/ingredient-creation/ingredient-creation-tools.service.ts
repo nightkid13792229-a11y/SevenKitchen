@@ -1,5 +1,6 @@
 import { createHash } from 'crypto';
 import { Injectable, Logger } from '@nestjs/common';
+import { isIngredientCardFieldKey } from '../../domain/ingredient-creation/ingredient-card-fields';
 import {
   classifyCookingMethod,
   normalizePreparationState,
@@ -830,6 +831,23 @@ function readIngredientEditorCard(
   };
 }
 
+/**
+ * 读草稿原料卡上的人工标记（`manualFields`）。
+ *
+ * 不能用 `readIngredientEditorCard` 的结果：那份只为 AI 编辑器卡服务，
+ * 只认 7 个可写键，人把「品牌」标记成人工核对时会被静默过滤掉。
+ */
+function readStoredIngredientManualFields(
+  stored: Record<string, unknown>,
+): IngredientCardField[] {
+  const raw = stored.manualFields;
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return [...new Set(raw.filter((field) => isIngredientCardFieldKey(field)))];
+}
+
 type IngredientFieldValue = string | number | null;
 
 type IngredientFieldValidation =
@@ -1648,10 +1666,18 @@ export class IngredientCreationToolsService {
     }
 
     const draft = await this.draftService.get(draftId);
+    const stored = isRecord(draft.payload.ingredient)
+      ? draft.payload.ingredient
+      : {};
     const current = readIngredientEditorCard(draft);
+    // 草稿 patch 是浅合并（`payload = payload || $1::jsonb`）：只传 9 个编辑器
+    // 字段会把人工填的其余字段（brand / weightG / shelfLifeMonths …）整张卡
+    // 覆盖掉。先铺开草稿里的完整原料卡，再用规范化后的编辑器字段覆盖可见的
+    // 9 项；循环里只改 AI 本次写入的字段。
     const next: IngredientDraft = {
+      ...stored,
       ...current,
-      manualFields: [...(current.manualFields ?? [])],
+      manualFields: readStoredIngredientManualFields(stored),
     };
     const previousBaseUnit = current.baseUnit;
     const applied: IngredientCardField[] = [];

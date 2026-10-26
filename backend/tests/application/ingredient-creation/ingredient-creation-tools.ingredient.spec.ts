@@ -202,6 +202,63 @@ describe('IngredientCreationToolsService · writeIngredient 原料卡', () => {
     });
   });
 
+  it('草稿是 30 字段全量卡时：只改写入字段，其余字段与 manualFields 原样保留', async () => {
+    const fullCard = {
+      name: '冷冻三文鱼',
+      nameEn: 'Frozen salmon',
+      type: 'FOOD',
+      category: 'MEAT_ORGAN',
+      notes: '带皮',
+      baseUnit: 'G',
+      unitDisplayLabel: '克',
+      weightG: 150,
+      maxCapacityG: 500,
+      cfctClass: '禽肉类及制品',
+      edibleYieldRate: 0.95,
+      mainNutrientsDesc: '蛋白质、脂肪',
+      procurementStrategy: 'DAILY_PURCHASE',
+      purchaseUnit: '袋',
+      purchaseToBaseRatio: 1000,
+      currentPricePerPurchaseUnit: 128,
+      brand: '××',
+      productModel: '1kg/袋',
+      purchaseChannel: '京东',
+      safetyStock: 2,
+      reorderPoint: 3,
+      targetStock: 10,
+      diyEnabled: false,
+      addTiming: 'BEFORE_MIXING',
+      productionLossRate: 1.05,
+      tags: ['水产'],
+      shelfLifeMonths: 12,
+      storageCondition: '-18℃ 冷冻',
+      openedShelfLifeDays: 3,
+      isOilBased: false,
+      manualFields: ['brand'],
+    };
+
+    const { tools, draftService } = createTools({ ingredient: fullCard });
+
+    const result = await executeIngredient(tools, {
+      cfctClass: '畜肉类及制品',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.body.applied).toEqual(['cfctClass']);
+
+    const ingredient = (draftService.patch.mock.calls[0][2] as any)
+      .ingredient as Record<string, unknown>;
+    // 整张卡逐字段比对：只有 cfctClass 变，品牌 / 重量 / 保质期等一律不能丢。
+    expect(ingredient).toEqual({
+      ...fullCard,
+      cfctClass: '畜肉类及制品',
+    });
+    expect(ingredient.manualFields).toEqual(['brand']);
+    expect(ingredient.brand).toBe('××');
+    expect(ingredient.weightG).toBe(150);
+    expect(ingredient.shelfLifeMonths).toBe(12);
+  });
+
   it('草稿没有原料卡时用草稿名与起手卡兜底', async () => {
     const { tools, draftService } = createTools({
       intake: {

@@ -1,4 +1,5 @@
 import type { IngredientCreationDraft as PrismaIngredientCreationDraft } from '@prisma/client';
+import type { IngredientCardFieldKey } from '../../domain/ingredient-creation/ingredient-card-fields';
 import type {
   CookingMethod,
   PreparationState,
@@ -61,30 +62,66 @@ export interface ExceptionRecord {
 /**
  * 原料卡上允许人改、AI 也能写的字段。
  *
+ * 直接复用字段契约的 30 个公共键，不再在这里手写一份字面量清单：少一项就等于
+ * 草稿收不下这个字段，多一项则与页面、AI 工具对不上。
+ *
  * 用**公共字段名**（而不是入库键名）标记人工改动：可食部在库里存成比例
  * `edibleYieldRate`，但工具与页面都以百分数 `edibleYieldPercent` 交流，
  * 标记也统一用后者，避免同一件事两套名字。
  */
-export type IngredientCardField =
-  | 'name'
-  | 'nameEn'
-  | 'category'
-  | 'baseUnit'
-  | 'unitDisplayLabel'
-  | 'cfctClass'
-  | 'edibleYieldPercent';
+export type IngredientCardField = IngredientCardFieldKey;
 
-/** ⑤ 标准原料档案的预填值；拿不准的保持 null，标「待补」，不阻断保存。 */
+/**
+ * ⑤ 标准原料档案的预填值；拿不准的保持 null，标「待补」，不阻断保存。
+ *
+ * 字段与 `INGREDIENT_CARD_FIELDS` 一一对应：除 4 个必填项外全部可选 ——
+ * 向导按分组逐步填，没走到的分组就是 `undefined`（不是「人清空了」），
+ * 人明确清空的才是 `null`。旧调用方（AI 字段工具、提交服务）只构造其中
+ * 一部分字段，也照样成立。
+ *
+ * 可食部的公共名是 `edibleYieldPercent`（0–100），**草稿里存的是比例**
+ * `edibleYieldRate`（0–1）；换算只在 `toIngredientDraft` / `toIngredientCard`
+ * 两处发生，这里不重复换算。
+ */
 export interface IngredientDraft {
+  // BASIC
   name: string;
   nameEn?: string | null;
   type: 'FOOD';
   /** 与 ① 起手卡同一套类别词表；终检的「必需生熟」按它判断。 */
   category?: CoverageCategory | null;
+  notes?: string | null;
+  // MEASURE
   baseUnit: 'G' | 'ML' | 'PCS';
   unitDisplayLabel: string;
-  cfctClass: string | null;
-  edibleYieldRate: number | null;
+  weightG?: number | null;
+  maxCapacityG?: number | null;
+  // NUTRITION
+  cfctClass?: string | null;
+  edibleYieldRate?: number | null;
+  mainNutrientsDesc?: string | null;
+  // PURCHASE
+  procurementStrategy?: string | null;
+  purchaseUnit?: string | null;
+  purchaseToBaseRatio?: number | null;
+  currentPricePerPurchaseUnit?: number | null;
+  brand?: string | null;
+  productModel?: string | null;
+  purchaseChannel?: string | null;
+  // STOCK（原料建完、有了库存记录才谈得上；本阶段只读回传）
+  safetyStock?: number | null;
+  reorderPoint?: number | null;
+  targetStock?: number | null;
+  // USAGE
+  diyEnabled?: boolean | null;
+  addTiming?: string | null;
+  productionLossRate?: number | null;
+  tags?: string[];
+  // STORAGE
+  shelfLifeMonths?: number | null;
+  storageCondition?: string | null;
+  openedShelfLifeDays?: number | null;
+  isOilBased?: boolean | null;
   /**
    * 人工审核时改过的字段（只存在草稿里，不写正式表）。
    *
@@ -277,6 +314,8 @@ export interface CheckItem {
   code: string;
   message: string;
   fieldPath?: string;
+  /** 给 AI 与人看的一句建议动作（设计 §8.2）。 */
+  suggestion?: string;
 }
 
 /** ④ 终检结果：拦死 / 可例外 / 提醒。 */

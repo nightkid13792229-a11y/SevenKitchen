@@ -1,4 +1,5 @@
 export * from './agent-run.dto';
+export * from './authorize.dto';
 export * from './classify-intake.dto';
 export * from './commit.dto';
 export * from './create-draft.dto';
@@ -6,5 +7,6 @@ export * from './find-candidates.dto';
 export * from './merge.dto';
 export * from './nutrition-evidence-entry.dto';
 export * from './resolve-merge.dto';
+export * from './run-draft-check.dto';
 export * from './search-online-candidates.dto';
 export * from './update-draft.dto';

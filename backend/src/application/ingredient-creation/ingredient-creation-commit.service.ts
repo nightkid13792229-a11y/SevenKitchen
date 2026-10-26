@@ -12,6 +12,11 @@ import { createEmptyNutritionProfile } from '../../domain/ingredient/nutrition-p
 import { findNutritionField } from '../../domain/ingredient/nutrition-field-catalog';
 import { normalizeLegacyNutritionSourceType } from '../../domain/ingredient/nutrition-source-contract';
 import type { NutritionProfileV2 } from '../../domain/ingredient/types';
+import {
+  EDIBLE_YIELD_RATE_PROPERTY_KEY,
+  INGREDIENT_CARD_FIELD_KEYS,
+  INGREDIENT_PROPERTY_KEY_BY_FIELD,
+} from '../../domain/ingredient-creation/ingredient-card-fields';
 import type { PreparationState } from '../../domain/ingredient-creation/preparation-state';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { IngredientCreationDraftService } from './ingredient-creation-draft.service';
@@ -167,6 +172,19 @@ function readNonEmptyString(value: unknown): string | null {
 }
 
 /**
+ * 「有值」的唯一口径：`null` / `undefined` / 空字符串 / 纯空白算没填。
+ *
+ * `0` 与 `false` 是有效值（0 元采购价、不做油性处理），必须照写，
+ * 不能被 `if (value)` 这类真值判断吞掉。
+ */
+function hasValue<T>(value: T | null | undefined): value is T {
+  if (value === null || value === undefined) {
+    return false;
+  }
+  return typeof value === 'string' ? value.trim().length > 0 : true;
+}
+
+/**
  * 原料名的唯一口径：NFKC（全角→半角）→ 连续空白压成一个 → 去首尾空白。
  *
  * 查重、咨询锁、入库都用这一份：否则 `"鸡肝 "` 能绕过查重建出第二条。
@@ -296,15 +314,15 @@ function findAiProposalForProfile(
     : null;
 }
 
-const INGREDIENT_CARD_FIELDS = new Set<IngredientCardField>([
-  'name',
-  'nameEn',
-  'category',
-  'baseUnit',
-  'unitDisplayLabel',
-  'cfctClass',
-  'edibleYieldPercent',
-]);
+/**
+ * 原料卡人工字段白名单：直接取字段契约的 30 个公共键。
+ *
+ * 不能在这里手写一份更短的清单：人把「品牌」标记成人工核对后，提交审计里
+ * 会静默丢掉这个标记，事后查不到是谁改的。
+ */
+const INGREDIENT_CARD_FIELD_SET: ReadonlySet<string> = new Set(
+  INGREDIENT_CARD_FIELD_KEYS,
+);
 
 /** 读原料卡上的人工改动标记；脏值过滤掉，顺序按入库顺序保留。 */
 function readIngredientManualFields(
@@ -322,7 +340,7 @@ function readIngredientManualFields(
     ...new Set(
       raw.filter((field): field is IngredientCardField =>
         typeof field === 'string'
-          ? INGREDIENT_CARD_FIELDS.has(field as IngredientCardField)
+          ? INGREDIENT_CARD_FIELD_SET.has(field)
           : false,
       ),
     ),
@@ -788,38 +806,104 @@ export class IngredientCreationCommitService {
     const properties: Record<string, unknown> = {
       ingredientCreationDraftId: draftId,
     };
-    const nameEn = ingredient.nameEn?.trim();
-    if (nameEn) {
-      properties.name_en = nameEn;
+    // 6 个进 JSON 的字段按同一张映射表写入；契约外的键根本不会出现在这里。
+    for (const [field, propertyKey] of Object.entries(
+      INGREDIENT_PROPERTY_KEY_BY_FIELD,
+    )) {
+      const value = ingredient[field as keyof IngredientDraft];
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (trimmed) {
+          properties[propertyKey] = trimmed;
+        }
+      } else if (hasValue(value)) {
+        properties[propertyKey] = value;
+      }
     }
-    if (ingredient.category) {
-      properties.coverage_category = ingredient.category;
+    // 可食部已经是 0–1 的比例：原样落库，绝不再 ÷100（换算只在前端表单一次）。
+    if (hasValue(ingredient.edibleYieldRate)) {
+      properties[EDIBLE_YIELD_RATE_PROPERTY_KEY] = ingredient.edibleYieldRate;
     }
-    const cfctClass = ingredient.cfctClass?.trim();
-    if (cfctClass) {
-      properties.cfct_class = cfctClass;
-    }
-    if (typeof ingredient.edibleYieldRate === 'number') {
-      properties.edible_yield_rate = ingredient.edibleYieldRate;
-    }
+
+    // 字符串列统一 trim：纯空白等于没填，不能顶掉采购单位的回退。
+    const unitDisplayLabel =
+      readNonEmptyString(ingredient.unitDisplayLabel) ?? ingredient.baseUnit;
+    const purchaseUnit =
+      readNonEmptyString(ingredient.purchaseUnit) ?? unitDisplayLabel;
 
     const data: Prisma.IngredientUncheckedCreateInput = {
       name: ingredient.name,
       type: ingredient.type,
       baseUnit: ingredient.baseUnit,
-      unitDisplayLabel: ingredient.unitDisplayLabel,
+      unitDisplayLabel,
       // 向导提交的原料还没确认采购口径：与手工新建一致，默认不参与采购/DIY 推荐。
+      // 采购开关本阶段始终关闭（打开它需要单独的产品决策）。
       diyEnabled: false,
       procurementEnabled: false,
       brand: null,
       productModel: null,
-      purchaseUnit: ingredient.unitDisplayLabel?.trim() || ingredient.baseUnit,
+      purchaseUnit,
       purchaseToBaseRatio: 1,
       currentPricePerPurchaseUnit: 0,
       properties: properties as Prisma.InputJsonValue,
       nutritionProfile:
         primaryNutritionData as unknown as Prisma.InputJsonValue,
     };
+
+    // 只有真有值的列才覆盖默认值：undefined / null / '' / 纯空白一律保持上面的默认，
+    // 0 与 false 是有效值，照常写入。字符串列写入前一律 trim。
+    const notes = readNonEmptyString(ingredient.notes);
+    if (notes !== null) {
+      data.notes = notes;
+    }
+    const procurementStrategy = readNonEmptyString(
+      ingredient.procurementStrategy,
+    );
+    if (procurementStrategy !== null) {
+      data.procurementStrategy =
+        procurementStrategy as Prisma.IngredientUncheckedCreateInput['procurementStrategy'];
+    }
+    if (hasValue(ingredient.weightG)) {
+      data.weightG = ingredient.weightG;
+    }
+    if (hasValue(ingredient.maxCapacityG)) {
+      data.maxCapacityG = ingredient.maxCapacityG;
+    }
+    const brand = readNonEmptyString(ingredient.brand);
+    if (brand !== null) {
+      data.brand = brand;
+    }
+    const productModel = readNonEmptyString(ingredient.productModel);
+    if (productModel !== null) {
+      data.productModel = productModel;
+    }
+    const purchaseChannel = readNonEmptyString(ingredient.purchaseChannel);
+    if (purchaseChannel !== null) {
+      data.purchaseChannel = purchaseChannel;
+    }
+    if (hasValue(ingredient.purchaseToBaseRatio)) {
+      data.purchaseToBaseRatio = ingredient.purchaseToBaseRatio;
+    }
+    if (hasValue(ingredient.currentPricePerPurchaseUnit)) {
+      data.currentPricePerPurchaseUnit = ingredient.currentPricePerPurchaseUnit;
+    }
+    if (hasValue(ingredient.diyEnabled)) {
+      data.diyEnabled = ingredient.diyEnabled;
+    }
+    if (hasValue(ingredient.shelfLifeMonths)) {
+      data.shelfLifeMonths = ingredient.shelfLifeMonths;
+    }
+    const storageCondition = readNonEmptyString(ingredient.storageCondition);
+    if (storageCondition !== null) {
+      data.storageCondition = storageCondition;
+    }
+    if (hasValue(ingredient.openedShelfLifeDays)) {
+      data.openedShelfLifeDays = ingredient.openedShelfLifeDays;
+    }
+    if (hasValue(ingredient.isOilBased)) {
+      data.isOilBased = ingredient.isOilBased;
+    }
+    // safetyStock / reorderPoint / targetStock / tags：本阶段不写（AFTER_CREATE）。
 
     try {
       return await tx.ingredient.create({ data });

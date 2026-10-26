@@ -5244,6 +5244,39 @@ model IngredientCreationAudit {
   @@map("ingredient_creation_audit")
 }
 
+/// AI 辅助新建标准原料 · 按域核验报告
+///
+/// 每跑一次某一域（`INGREDIENT` / `NUTRITION`）的核验落一条。`payload_hash` 是
+/// 当时草稿 payload 的**内容哈希**：授权与页面刷新时拿当前草稿重算，只有相等才
+/// 认这份报告（同一毫秒两次改动也不会误判成新鲜，设计 M1）。
+///
+/// 只由 `IngredientCheckRunService.runDomain()` 写入；只追加、不修改，方便事后
+/// 复盘「当时按哪版规则、对着哪份内容、报了什么」。
+model IngredientCheckRun {
+  id String @id @default(uuid()) @map("id")
+  /// 草稿 id（草稿永久保留，这里不设外键，跟 ingredient_creation_audit 一致）
+  draftId String @map("draft_id")
+  /// 核验域：INGREDIENT / NUTRITION
+  domain String @db.VarChar(20)
+  /// 触发方式：AGENT / USER
+  trigger String @db.VarChar(20)
+  /// 规则版本号；规则一改就必须升版本，旧报告自然不被信任
+  rulesVersion String @map("rules_version") @db.VarChar(40)
+  /// 发起核验时的草稿 payload 内容哈希（SHA-256 hex）
+  payloadHash String @map("payload_hash") @db.VarChar(64)
+  /// 三档问题明细（CheckItem[]）
+  result Json
+  blockingCount      Int @default(0) @map("blocking_count")
+  exceptionableCount Int @default(0) @map("exceptionable_count")
+  warningCount       Int @default(0) @map("warning_count")
+  /// 谁触发的这次核验（controller 固定取当前登录人）
+  createdBy String   @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([draftId, domain, createdAt])
+  @@map("ingredient_check_run")
+}
+
 enum RecipeAgentSessionStatus {
   RUNNING
   WAITING_USER

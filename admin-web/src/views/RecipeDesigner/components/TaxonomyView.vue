@@ -135,7 +135,11 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { recipeTaxonomyApi } from '@/api/recipeTaxonomy'
 import { buildTaxonomyChips, type TaxonomyChip } from '@/utils/recipeDesigner/taxonomyChips'
-import type { TaxonomyKindView, TaxonomySeriesItem } from '@/types/recipeDesigner'
+import type {
+  TaxonomyKindView,
+  TaxonomyNodeView,
+  TaxonomySeriesItem,
+} from '@/types/recipeDesigner'
 import TaxonomyClassifyDialog from './TaxonomyClassifyDialog.vue'
 import TaxonomyNodeDialog from './TaxonomyNodeDialog.vue'
 import { useIsAdmin } from '@/composables/useAdminRole'

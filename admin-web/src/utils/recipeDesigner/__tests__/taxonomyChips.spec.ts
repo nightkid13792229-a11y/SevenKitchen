@@ -28,8 +28,8 @@ describe('buildTaxonomyChips', () => {
   it('已归分类显示「分类 节点」，未归分类显示虚线占位', () => {
     const chips = buildTaxonomyChips(item, kinds)
     expect(chips.map((chip) => chip.missing)).toEqual([false, true, false])
-    expect(chips[0].label).toBe('主蛋白 三文鱼')
-    expect(chips[1].label).toBe('健康需求 未归类')
+    expect(chips[0]?.label).toBe('主蛋白 三文鱼')
+    expect(chips[1]?.label).toBe('健康需求 未归类')
   })
 
   it('顺序按分类 sort，不受 links 返回顺序影响', () => {

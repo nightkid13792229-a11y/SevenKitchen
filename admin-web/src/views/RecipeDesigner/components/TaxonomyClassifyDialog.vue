@@ -145,7 +145,7 @@ async function save() {
   saving.value = true
   try {
     if (props.seriesIds.length === 1) {
-      await recipeTaxonomyApi.replaceLinks(props.seriesIds[0], nodeIds)
+      await recipeTaxonomyApi.replaceLinks(props.seriesIds[0]!, nodeIds)
     } else {
       await recipeTaxonomyApi.batchLinks(props.seriesIds, nodeIds)
     }

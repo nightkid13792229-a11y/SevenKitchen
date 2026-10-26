@@ -57,7 +57,6 @@ import { ApiResponseDto } from '../dto/common/response.dto';
 import {
   AuthorizeIngredientCreationDto,
   ClassifyIntakeDto,
-  CommitIngredientCreationDto,
   CreateDraftDto,
   CreateMergePlanDto,
   FindCandidatesDto,
@@ -375,9 +374,10 @@ export class IngredientCreationController {
   })
   async commit(
     @Param('id') id: string,
-    // 旧 DTO 只为兼容已上线的调用方（仍会校验必填形状）；其中 ingredient /
-    // profiles 一律忽略——写入的只能是草稿里被核验过的那一份。
-    @Body() dto: CommitIngredientCreationDto,
+    // 只收主档案下标：旧调用方仍可带全量 body（ingredient / profiles 会被
+    // whitelist 剥掉），但那些字段不参与校验、更不参与写入——写入的只能是
+    // 草稿里被核验过的那一份。
+    @Body() dto: AuthorizeIngredientCreationDto,
     @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<AuthorizeResult>> {
     // 刻意不保留绕过闸门的直写入口：直接调 API 也必须先过四条件，

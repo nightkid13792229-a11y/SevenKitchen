@@ -380,6 +380,45 @@ describe('IngredientCreationAuthorizeService', () => {
     });
   });
 
+  it('一域登记了例外、另一域有 blocking → 例外不能掩盖另一域的阻断', async () => {
+    // 原料域的可例外项已被 verify.exceptions 覆盖；营养域仍有拦死项。
+    draft = createDraft({
+      verify: {
+        exceptions: [
+          {
+            code: 'EDIBLE_RANGE',
+            reason: '按供应商实测可食部 0.95 处理',
+            approvedBy: 'admin-1',
+            approvedAt: '2026-10-26T07:30:00.000Z',
+          },
+        ],
+      },
+    });
+    runs.INGREDIENT = runRow('INGREDIENT', {
+      result: {
+        blocking: [],
+        exceptionable: [checkItem('EDIBLE_RANGE')],
+        warnings: [],
+      },
+    });
+    runs.NUTRITION = runRow('NUTRITION', {
+      result: {
+        blocking: [checkItem('MACRO_SUM_OVER_100')],
+        exceptionable: [],
+        warnings: [],
+      },
+    });
+
+    const reasons = reasonsOf(
+      await rejectionOf(service.authorize(authorizeInput)),
+    );
+
+    expect(reasons).toEqual([
+      expect.objectContaining({ code: 'CHECK_BLOCKING', domain: 'NUTRITION' }),
+    ]);
+    expect(commitService.commit).not.toHaveBeenCalled();
+  });
+
   it('一次收齐所有未满足条件，而不是只报第一条', async () => {
     // 原料域没跑过；营养域报告是旧内容、有拦死项、还有没登记例外的可例外项。
     runs.NUTRITION = runRow('NUTRITION', {

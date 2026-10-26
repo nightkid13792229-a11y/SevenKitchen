@@ -34,8 +34,9 @@ export interface IngredientDraftChecksView {
  * 复用同一份结果），本服务只保留接口层的入口；按域核验的编排与落库在
  * `IngredientCheckRunService`，这里只做转发，保证「报告只有一个写入口」。
  *
- * 提交前也走同一套终检（`assertCommitAllowed`）：拦死项存在时直接 400，
- * 不盲信前端传来的「我检查过了」。
+ * 提交路径不再使用本服务的 `assertCommitAllowed`：授权闸门
+ * （`IngredientCreationAuthorizeService`）还要求报告新鲜、版本一致、例外已登记，
+ * 只查 blocking 的旧检查不足以放行写入。
  */
 @Injectable()
 export class IngredientCreationCheckService {
@@ -55,9 +56,9 @@ export class IngredientCreationCheckService {
   }
 
   /**
-   * 提交前置检查：跑同一套终检，有拦死项就 400 并带回阻断项。
-   *
-   * 返回值只表达「允许提交」；真正的写入由 `IngredientCreationCommitService` 负责。
+   * @deprecated 不是授权闸门（只查 blocking，不含新鲜度 / 版本 / 例外），
+   * 勿用于任何提交路径。提交前必须走 `IngredientCreationAuthorizeService`；
+   * 该方法先保留，只给仍需要单跑终检的内部场景参考。
    */
   async assertCommitAllowed(draftId: string): Promise<void> {
     const draft = await this.draftService.get(draftId);

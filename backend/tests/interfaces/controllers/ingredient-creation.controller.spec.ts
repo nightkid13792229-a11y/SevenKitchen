@@ -673,7 +673,7 @@ describe('IngredientCreationController', () => {
   });
 
   describe('commit', () => {
-    it('授权闸门通过后调用 authorize 一次，返回提交结果 + authorizedAt', async () => {
+    it('带全量旧 body 也能通过，且 body 的 ingredient / profiles 被忽略', async () => {
       authorizeService.authorize.mockResolvedValue({
         ingredientId: 'ing-1',
         nutritionFoodIds: ['nf-1', 'nf-2'],
@@ -762,25 +762,6 @@ describe('IngredientCreationController', () => {
       expect(response.body.reasons).toEqual(reasons);
     });
 
-    it.each([
-      ['procurementStrategy', '长期采购'],
-      ['addTiming', '冷却后'],
-      ['productionLossRate', 0.05],
-      ['purchaseToBaseRatio', 0],
-      ['brand', 'x'.repeat(101)],
-      ['purchaseUnit', 'x'.repeat(51)],
-      ['unitDisplayLabel', 'x'.repeat(51)],
-    ])('原料卡字段 %s 非法 → 400', async (field, value) => {
-      await authorizedPost('/drafts/draft-1/commit')
-        .send({
-          ...commitBody,
-          ingredient: { ...commitBody.ingredient, [field]: value },
-        })
-        .expect(400);
-
-      expect(authorizeService.authorize).not.toHaveBeenCalled();
-    });
-
     it('闸门报 CHECK_BLOCKING 时 400，且不调用提交', async () => {
       const reasons = [
         {
@@ -804,94 +785,7 @@ describe('IngredientCreationController', () => {
       expect(authorizeService.authorize).toHaveBeenCalledTimes(1);
     });
 
-    it('同一 preparationState 出现两份 → 400，且不调用任何服务', async () => {
-      const duplicatedBody = {
-        ...commitBody,
-        profiles: [
-          commitBody.profiles[0],
-          { ...commitBody.profiles[1], preparationState: 'RAW' },
-        ],
-      };
-
-      await authorizedPost('/drafts/draft-1/commit')
-        .send(duplicatedBody)
-        .expect(400);
-
-      expect(authorizeService.authorize).not.toHaveBeenCalled();
-    });
-
-    it('commit 缺 ingredient 字段 → 400', async () => {
-      await authorizedPost('/drafts/draft-1/commit')
-        .send({
-          profiles: commitBody.profiles,
-          primaryProfileIndex: 0,
-        })
-        .expect(400);
-
-      expect(authorizeService.authorize).not.toHaveBeenCalled();
-    });
-
-    it('profiles 为空 → 400', async () => {
-      await authorizedPost('/drafts/draft-1/commit')
-        .send({
-          ingredient: commitBody.ingredient,
-          profiles: [],
-          primaryProfileIndex: 0,
-        })
-        .expect(400);
-
-      expect(authorizeService.authorize).not.toHaveBeenCalled();
-    });
-
-    it('entry 的 finalValue 是字符串 → 400，不做隐式转换', async () => {
-      await authorizedPost('/drafts/draft-1/commit')
-        .send({
-          ...commitBody,
-          profiles: [
-            {
-              ...commitBody.profiles[0],
-              entries: [{ ...evidenceEntry, finalValue: '20.4' }],
-            },
-          ],
-        })
-        .expect(400);
-
-      expect(authorizeService.authorize).not.toHaveBeenCalled();
-    });
-
-    it('entry 的 fieldPath 不是字符串 → 400', async () => {
-      await authorizedPost('/drafts/draft-1/commit')
-        .send({
-          ...commitBody,
-          profiles: [
-            {
-              ...commitBody.profiles[0],
-              entries: [{ ...evidenceEntry, fieldPath: 123 }],
-            },
-          ],
-        })
-        .expect(400);
-
-      expect(authorizeService.authorize).not.toHaveBeenCalled();
-    });
-
-    it('entry 是 null → 400，不落 500', async () => {
-      await authorizedPost('/drafts/draft-1/commit')
-        .send({
-          ...commitBody,
-          profiles: [
-            {
-              ...commitBody.profiles[0],
-              entries: [null],
-            },
-          ],
-        })
-        .expect(400);
-
-      expect(authorizeService.authorize).not.toHaveBeenCalled();
-    });
-
-    it('缺失字段用 null 仍然放行', async () => {
+    it('只传 primaryProfileIndex 即可提交（轻量 DTO）', async () => {
       authorizeService.authorize.mockResolvedValue({
         ingredientId: 'ing-1',
         nutritionFoodIds: ['nf-1'],
@@ -899,40 +793,21 @@ describe('IngredientCreationController', () => {
         authorizedAt: '2026-10-26T08:00:00.000Z',
       });
 
-      const nullEntry = {
-        fieldPath: 'macros.crudeProtein',
-        finalValue: null,
-        unit: 'g',
-        status: 'DIRECT',
-        sourceRecordId: null,
-        sourceValue: null,
-        sourceUnit: null,
-        formula: null,
-        confirmedBy: null,
-        confirmedAt: null,
-      };
-
       await authorizedPost('/drafts/draft-1/commit')
-        .send({
-          ingredient: commitBody.ingredient,
-          profiles: [
-            {
-              preparationState: 'RAW',
-              sourceRecordId: 'src-primary',
-              entries: [nullEntry],
-              notes: null,
-            },
-          ],
-          primaryProfileIndex: 0,
-        })
+        .send({ primaryProfileIndex: 0 })
         .expect(201);
 
-      expect(authorizeService.authorize).toHaveBeenCalledTimes(1);
       expect(authorizeService.authorize).toHaveBeenCalledWith({
         draftId: 'draft-1',
         userId: 'admin-1',
         primaryProfileIndex: 0,
       });
+    });
+
+    it('commit 缺 primaryProfileIndex → 400，且不调授权服务', async () => {
+      await authorizedPost('/drafts/draft-1/commit').send({}).expect(400);
+
+      expect(authorizeService.authorize).not.toHaveBeenCalled();
     });
   });
 

@@ -891,6 +891,7 @@ import {
   countPendingRows,
   countPlanConflicts,
   markIngredientFieldManual,
+  resolveRawPrimaryProfileIndex,
   toCommitInput,
   toIngredientCard,
   toIngredientDraft,
@@ -1186,14 +1187,23 @@ const nutritionCheck = computed(() =>
   )
 )
 
-/** 已登记例外的 code（去重）；弹窗据此标「已登记例外」。 */
-const exceptionCodes = computed<string[]>(() => {
+/** 已登记例外的完整记录；授权确认里要连理由一起列出来（设计 §8.2）。 */
+const registeredExceptions = computed<ExceptionRecord[]>(() => {
   const records = draft.value?.payload.verify?.exceptions ?? []
-  const codes = records
-    .map((record) => (typeof record?.code === 'string' ? record.code.trim() : ''))
-    .filter(Boolean)
-  return [...new Set(codes)]
+  return records.filter(
+    (record): record is ExceptionRecord =>
+      Boolean(record) &&
+      typeof record.code === 'string' &&
+      record.code.trim().length > 0
+  )
 })
+
+/** 已登记例外的 code（去重）；弹窗据此标「已登记例外」。 */
+const exceptionCodes = computed<string[]>(() => [
+  ...new Set(
+    registeredExceptions.value.map((record) => record.code.trim()).filter(Boolean)
+  )
+])
 
 const gate = computed(() =>
   gateState({
@@ -1858,10 +1868,29 @@ function tabSections(group: ProfileGroup) {
   })).filter((section) => section.rows.length > 0)
 }
 
-/** 例外记录的操作人：有登录名用登录名，刷新后取不到就按约定落 `admin`。 */
-function currentUsername(): string {
-  const name = userStore.userInfo?.username
-  return typeof name === 'string' && name.trim() ? name.trim() : 'admin'
+/**
+ * 例外记录的操作人：优先登录名，其次 `userId`（刷新后仍从 JWT 恢复），
+ * 两者都取不到时显式写 `unknown`。
+ *
+ * 不能用字面量 `admin` 兜底：刷新后 `username` 会丢失，所有人都记成 admin，
+ * 事后就追不到是谁批的例外了。
+ */
+function currentApprover(): string {
+  const info = userStore.userInfo
+  const name = typeof info?.username === 'string' ? info.username.trim() : ''
+  if (name) {
+    return name
+  }
+
+  const userId = info?.userId
+  if (typeof userId === 'string' && userId.trim()) {
+    return userId.trim()
+  }
+  if (typeof userId === 'number') {
+    return String(userId)
+  }
+
+  return 'unknown'
 }
 
 /** 打开弹窗并立刻重跑当前页：弹窗先显示「正在跑规则…」，再换报告。 */
@@ -1955,7 +1984,6 @@ async function handleRegisterException(item: CheckItem) {
   }
 
   const draftId = draft.value.id
-  const step = draft.value.step
   let reason = ''
 
   try {
@@ -1986,34 +2014,48 @@ async function handleRegisterException(item: CheckItem) {
   const record: ExceptionRecord = {
     code: item.code,
     reason,
-    approvedBy: currentUsername(),
+    approvedBy: currentApprover(),
     approvedAt: new Date().toISOString()
   }
-  // 同 code 只留一条：重复登记视为「换理由」，不往数组里叠重复项。
-  const existing = draft.value.payload.verify?.exceptions ?? []
-  const index = existing.findIndex((entry) => entry.code === record.code)
-  const exceptions =
-    index >= 0
-      ? existing.map((entry, i) => (i === index ? record : entry))
-      : [...existing, record]
 
   savingException.value = true
   checkDialogError.value = ''
 
   try {
-    const updated = await ingredientCreationApi.patchDraft(draftId, step, {
-      verify: { exceptions }
+    // 走同一条保存队列：并发保存（尤其营养格）不能把刚写的 verify.exceptions
+    // 用旧 payload 覆盖掉。合并也放在队列任务里按最新草稿重算。
+    const ok = await enqueueSave(async () => {
+      const current = draft.value
+      if (!current || current.id !== draftId) {
+        throw new Error('草稿已经切换，登记例外已取消')
+      }
+
+      // 同 code 只留一条：重复登记视为「换理由」，不往数组里叠重复项。
+      const existing = current.payload.verify?.exceptions ?? []
+      const index = existing.findIndex((entry) => entry.code === record.code)
+      const exceptions =
+        index >= 0
+          ? existing.map((entry, i) => (i === index ? record : entry))
+          : [...existing, record]
+
+      const updated = await ingredientCreationApi.patchDraft(
+        draftId,
+        current.step,
+        { verify: { exceptions } }
+      )
+      draft.value = updated
+      markChecksStale()
+      await refreshChecks(updated.id)
     })
-    draft.value = updated
-    markChecksStale()
-    await refreshChecks(draftId)
+
+    if (!ok) {
+      checkDialogError.value =
+        saveError.value || '登记例外失败，请稍后重试'
+      return
+    }
+
     ElMessage.success('已登记例外，正在重跑核验')
     await runCheckForDomain(checkDialogDomain.value)
-  } catch (error) {
-    checkDialogError.value = getApiErrorMessage(
-      error,
-      '登记例外失败，请稍后重试'
-    )
   } finally {
     savingException.value = false
   }
@@ -2068,10 +2110,22 @@ async function confirmAuthorize(profileCount: number): Promise<boolean> {
       nutritionCheck.value?.exceptionable ?? 0
     } · 提醒 ${nutritionCheck.value?.warning ?? 0}`
   ]
+  const exceptions = registeredExceptions.value
+  const exceptionLines =
+    exceptions.length > 0
+      ? [
+          '已登记例外（理由随授权存档）：',
+          ...exceptions.map((record) => {
+            const reason =
+              typeof record.reason === 'string' ? record.reason.trim() : ''
+            return `· ${record.code}：${reason || '（未填写理由）'}`
+          })
+        ]
+      : ['已登记例外：无']
   const lines = [
     `写入 1 条原料 + ${profileCount} 份营养档案。`,
     ...summaries,
-    `已登记例外：${exceptionCodes.value.join('、') || '无'}`,
+    ...exceptionLines,
     '写入后原料与营养档案都是「待验证」，确认可用是另一个动作。'
   ]
 
@@ -2183,13 +2237,28 @@ async function handleAuthorize() {
       return
     }
 
-    const confirmed = await confirmAuthorize(input.profiles.length)
+    // authorize 要的是草稿原始 profiles 的下标；toCommitInput 给的是可用档案
+    // 过滤后的下标，前面有脏档案时会错位，必须映射回原始数组再传。
+    const rawProfiles = Array.isArray(draft.value.payload.profiles)
+      ? draft.value.payload.profiles
+      : []
+    const primaryProfileIndex = resolveRawPrimaryProfileIndex(
+      draft.value.payload,
+      input.profiles[input.primaryProfileIndex]
+    )
+    if (primaryProfileIndex < 0) {
+      submitError.value =
+        '选中的主档案不在草稿的原始档案里，刷新页面后再试'
+      return
+    }
+
+    const confirmed = await confirmAuthorize(rawProfiles.length)
     if (!confirmed) {
       return
     }
 
     const result = await ingredientCreationApi.authorize(draftId, {
-      primaryProfileIndex: input.primaryProfileIndex
+      primaryProfileIndex
     })
     commitResult.value = result
     ElMessage.success('已写入正式库，营养档案当前是「待验证」')

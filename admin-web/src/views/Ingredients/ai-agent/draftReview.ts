@@ -604,6 +604,25 @@ function usableCommitProfiles(
 }
 
 /**
+ * 把「可用档案列表」里选中的对象映射回草稿**原始** `payload.profiles` 的下标。
+ *
+ * 后端 authorize 按原始数组下标挑主档案，明确不做过滤重排；前端若直接传
+ * 可用列表（过滤掉脏档案后）的下标，前面有脏档案时会指向空或错位，甚至
+ * 把另一份档案当成主档案写进正式表。对象引用来自同一份 payload，用
+ * `indexOf` 精确映射；找不到时返回 -1，调用方必须停下报错，不能猜。
+ */
+export function resolveRawPrimaryProfileIndex(
+  payload: IngredientCreationDraftPayload | null | undefined,
+  chosen: ProfileDraft | null | undefined
+): number {
+  if (!chosen) {
+    return -1
+  }
+  const profiles = Array.isArray(payload?.profiles) ? payload.profiles : []
+  return profiles.indexOf(chosen)
+}
+
+/**
  * 提交入参：原料卡 + 原始顺序的档案 + 主档案下标。
  *
  * `ingredientOverride` 给页面用：表单里刚改、可能还没 PATCH 完的原料卡以表单为准；

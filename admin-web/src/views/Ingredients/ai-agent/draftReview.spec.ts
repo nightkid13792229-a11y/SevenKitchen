@@ -12,6 +12,7 @@ import {
   countPendingRows,
   countPlanConflicts,
   markIngredientFieldManual,
+  resolveRawPrimaryProfileIndex,
   toCheckSummary,
   toCommitInput,
   toIngredientCard,
@@ -445,6 +446,39 @@ describe('审核页 · 顶部检查状态与提交入参', () => {
 
   it('没有任何营养档案时不给提交入参', () => {
     expect(toCommitInput({ ingredient: payload.ingredient })).toBeNull()
+  })
+
+  it('主档案下标按草稿原始 profiles 计：脏档案排在最前面也不偏移', () => {
+    const dirtyProfile = {
+      ...rawProfile,
+      sourceRecordId: ''
+    }
+    const profiles = [dirtyProfile, rawProfile, cookedProfile]
+
+    // 可用列表过滤掉脏档案后，熟档案在列表里的下标是 1。
+    const input = toCommitInput({
+      ingredient: payload.ingredient,
+      profiles,
+      mergePlan: {
+        ...payload.mergePlan!,
+        primarySourceRecordId: 'src-cooked'
+      }
+    })
+    expect(input?.profiles.map((item) => item.preparationState)).toEqual([
+      'RAW',
+      'COOKED'
+    ])
+    expect(input?.primaryProfileIndex).toBe(1)
+
+    // 但 authorize 要的是原始数组下标：熟档案是第 3 份，下标 2。
+    const chosen = input?.profiles[input.primaryProfileIndex]
+    expect(resolveRawPrimaryProfileIndex({ profiles }, chosen)).toBe(2)
+    expect(resolveRawPrimaryProfileIndex({ profiles }, cookedProfile)).toBe(2)
+
+    // 找不到对象时返回 -1，页面据此报错，绝不猜一个下标写库。
+    expect(
+      resolveRawPrimaryProfileIndex({ profiles }, { ...cookedProfile })
+    ).toBe(-1)
   })
 
   it('用表单里的原料卡覆盖 payload：AI 还没写原料卡也能提交', () => {

@@ -159,18 +159,27 @@ export function toCheckRunSummary(
   const warningItems = isRecord(result) ? readItems(result.warnings) : []
   const counts: unknown = run.counts
 
+  // counts 与明细可能不一致（历史数据 / 报告写坏）：取两者较大值，宁可多挡一次，
+  // 也不能因为 count 说 0 就放过 result 里真实存在的阻断项。
+  const countBlocking = isRecord(counts)
+    ? readCount(counts.blocking, blockingItems.length)
+    : blockingItems.length
+  const countExceptionable = isRecord(counts)
+    ? readCount(counts.exceptionable, exceptionableItems.length)
+    : exceptionableItems.length
+  const countWarning = isRecord(counts)
+    ? readCount(counts.warning, warningItems.length)
+    : warningItems.length
+
   return {
     domain: isCheckDomain(run.domain) ? run.domain : 'INGREDIENT',
     fresh: fresh === true,
-    blocking: isRecord(counts)
-      ? readCount(counts.blocking, blockingItems.length)
-      : blockingItems.length,
-    exceptionable: isRecord(counts)
-      ? readCount(counts.exceptionable, exceptionableItems.length)
-      : exceptionableItems.length,
-    warning: isRecord(counts)
-      ? readCount(counts.warning, warningItems.length)
-      : warningItems.length,
+    blocking: Math.max(countBlocking, blockingItems.length),
+    exceptionable: Math.max(
+      countExceptionable,
+      exceptionableItems.length
+    ),
+    warning: Math.max(countWarning, warningItems.length),
     checkedAt: typeof run.createdAt === 'string' ? run.createdAt : null,
     rulesVersion:
       typeof run.rulesVersion === 'string' ? run.rulesVersion : null,
@@ -239,9 +248,13 @@ export function gateState(input: GateInput): GateState {
     const exceptionableItems = Array.isArray(summary.exceptionableItems)
       ? summary.exceptionableItems
       : []
-    const blocking = readCount(summary.blocking, blockingItems.length)
-    const exceptionable = readCount(
-      summary.exceptionable,
+    // fail-closed：result 明细里的阻断项必须算数，count 说 0 也不能放行。
+    const blocking = Math.max(
+      readCount(summary.blocking, blockingItems.length),
+      blockingItems.length
+    )
+    const exceptionable = Math.max(
+      readCount(summary.exceptionable, exceptionableItems.length),
       exceptionableItems.length
     )
 

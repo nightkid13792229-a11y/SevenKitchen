@@ -132,6 +132,25 @@ describe('授权闸门 gateState', () => {
     expect(gate.reasons[0]).toContain('重跑核验')
   })
 
+  it('counts 说 0 但结果里有阻断项 → 按结果挡住（fail-closed）', () => {
+    const run = makeRun({
+      result: {
+        blocking: [{ code: 'NAME_REQUIRED', message: '名称为空' }],
+        exceptionable: [],
+        warnings: []
+      },
+      counts: { blocking: 0, exceptionable: 0, warning: 0 }
+    })
+    const ingredient = freshSummary(run)
+    const nutrition = freshSummary(makeRun({ domain: 'NUTRITION' }))
+
+    // 摘要里的计数可能来自脏报告，但明细里有 blocking 就必须挡住。
+    const gate = gateState({ ingredient, nutrition, exceptions: [] })
+
+    expect(gate.ready).toBe(false)
+    expect(gate.reasons[0]).toContain('阻断')
+  })
+
   it('有阻断项 → 不可点，原因里带阻断数量', () => {
     const ingredient = freshSummary(
       makeRun({

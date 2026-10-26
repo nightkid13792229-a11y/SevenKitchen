@@ -303,6 +303,54 @@
     "fdcId": 2043,
     "name": "Minerals"
   },
+  "301": {
+    "fdcId": 1087,
+    "name": "Calcium, Ca"
+  },
+  "303": {
+    "fdcId": 1089,
+    "name": "Iron, Fe"
+  },
+  "304": {
+    "fdcId": 1090,
+    "name": "Magnesium, Mg"
+  },
+  "305": {
+    "fdcId": 1091,
+    "name": "Phosphorus, P"
+  },
+  "306": {
+    "fdcId": 1092,
+    "name": "Potassium, K"
+  },
+  "307": {
+    "fdcId": 1093,
+    "name": "Sodium, Na"
+  },
+  "309": {
+    "fdcId": 1095,
+    "name": "Zinc, Zn"
+  },
+  "312": {
+    "fdcId": 1098,
+    "name": "Copper, Cu"
+  },
+  "313": {
+    "fdcId": 1099,
+    "name": "Fluoride, F"
+  },
+  "314": {
+    "fdcId": 1101,
+    "name": "Manganese, Mn"
+  },
+  "315": {
+    "fdcId": 1103,
+    "name": "Selenium, Se"
+  },
+  "317": {
+    "fdcId": 1100,
+    "name": "Iodine, I"
+  },
   "319": {
     "fdcId": 1105,
     "name": "Retinol"

@@ -759,9 +759,18 @@ export class AdminController {
   @ApiParam({ name: 'id', description: 'Ingredient ID' })
   async getIngredientPreparationMethodHistory(
     @Param('id') id: string,
+    @Query('limit') limit?: string,
   ): Promise<ApiResponseDto<IngredientPreparationMethodHistoryDto[]>> {
+    const parsed = limit === undefined ? undefined : Number(limit);
+    const effectiveLimit =
+      parsed !== undefined && Number.isInteger(parsed) && parsed > 0
+        ? Math.min(parsed, 50)
+        : undefined;
     const history =
-      await this.recipeService.getIngredientPreparationMethodHistory(id);
+      await this.recipeService.getIngredientPreparationMethodHistory(
+        id,
+        effectiveLimit,
+      );
     return ApiResponseDto.success(history);
   }
 

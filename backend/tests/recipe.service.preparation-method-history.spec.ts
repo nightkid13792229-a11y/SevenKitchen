@@ -12,11 +12,16 @@ describe('RecipeService preparation method behavior', () => {
     preparationMethod: { findMany: jest.fn() },
   } as any;
 
+  const history = {
+    getHistory: jest.fn(),
+  };
+
   let service: RecipeService;
 
   beforeEach(() => {
     jest.resetAllMocks();
-    service = new RecipeService(prisma);
+    history.getHistory.mockResolvedValue([]);
+    service = new RecipeService(prisma, undefined, history as any);
   });
 
   it('translates legacy preparation methods in admin recipe detail', async () => {
@@ -147,135 +152,41 @@ describe('RecipeService preparation method behavior', () => {
     expect(result.items[0].preparationMethod).toBe(`${steamId}, ${peelId}`);
   });
 
-  it('aggregates normalized ingredient history from standard recipes only', async () => {
-    prisma.recipeItem.findMany.mockResolvedValue([
+  it('delegates ingredient history and maps lastUsedAt to ISO', async () => {
+    history.getHistory.mockResolvedValue([
       {
-        preparationMethod: `${peelId}, ${steamId}`,
-        recipe: { updatedAt: new Date('2026-04-10T00:00:00.000Z') },
-      },
-      {
-        preparationMethod: '去皮，蒸熟',
-        recipe: { updatedAt: new Date('2026-04-09T00:00:00.000Z') },
-      },
-      {
-        preparationMethod: '切丁',
-        recipe: { updatedAt: new Date('2026-04-08T00:00:00.000Z') },
-      },
-      {
-        preparationMethod: null,
-        recipe: { updatedAt: new Date('2026-04-07T00:00:00.000Z') },
+        text: '去皮、蒸熟',
+        usageCount: 2,
+        lastUsedAt: new Date('2026-04-10T00:00:00.000Z'),
       },
     ]);
-    prisma.preparationMethod.findMany.mockResolvedValue([
-      { id: peelId, name: '去皮' },
-      { id: steamId, name: '蒸熟' },
-    ]);
 
-    const result =
-      await service.getIngredientPreparationMethodHistory('ingredient-1');
+    const result = await service.getIngredientPreparationMethodHistory(
+      'ingredient-1',
+      3,
+    );
 
-    expect(prisma.recipeItem.findMany).toHaveBeenCalledWith({
-      where: {
-        ingredientId: 'ingredient-1',
-        recipe: { isCustomRecipe: false },
-      },
-      select: {
-        preparationMethod: true,
-        recipe: { select: { updatedAt: true } },
-      },
-    });
+    expect(history.getHistory).toHaveBeenCalledWith('ingredient-1', 3);
     expect(result).toEqual([
       {
         text: '去皮、蒸熟',
         usageCount: 2,
         lastUsedAt: '2026-04-10T00:00:00.000Z',
       },
-      {
-        text: '切丁',
-        usageCount: 1,
-        lastUsedAt: '2026-04-08T00:00:00.000Z',
-      },
     ]);
   });
 
-  it('omits unresolved legacy preparation methods from ingredient history', async () => {
-    prisma.recipeItem.findMany.mockResolvedValue([
-      {
-        preparationMethod: missingId,
-        recipe: { updatedAt: new Date('2026-04-11T00:00:00.000Z') },
-      },
-    ]);
-    prisma.preparationMethod.findMany.mockResolvedValue([]);
+  it('passes no limit through when the caller does not ask for one', async () => {
+    await service.getIngredientPreparationMethodHistory('ingredient-1');
 
-    const result =
-      await service.getIngredientPreparationMethodHistory('ingredient-2');
-
-    expect(result).toEqual([]);
+    expect(history.getHistory).toHaveBeenCalledWith('ingredient-1', undefined);
   });
 
-  it('keeps only readable segments from partially unresolved ingredient history', async () => {
-    prisma.recipeItem.findMany.mockResolvedValue([
-      {
-        preparationMethod: `${steamId}, ${peelId}`,
-        recipe: { updatedAt: new Date('2026-04-12T00:00:00.000Z') },
-      },
-    ]);
-    prisma.preparationMethod.findMany.mockResolvedValue([
-      { id: peelId, name: '去皮' },
-    ]);
+  it('returns empty when the history service is unavailable', async () => {
+    const withoutHistory = new RecipeService(prisma);
 
-    const result =
-      await service.getIngredientPreparationMethodHistory('ingredient-4');
-
-    expect(result).toEqual([
-      {
-        text: '去皮',
-        usageCount: 1,
-        lastUsedAt: '2026-04-12T00:00:00.000Z',
-      },
-    ]);
-  });
-
-  it('sorts ingredient history by lastUsedAt, then usageCount, then text', async () => {
-    prisma.recipeItem.findMany.mockResolvedValue([
-      {
-        preparationMethod: 'beta',
-        recipe: { updatedAt: new Date('2026-04-10T00:00:00.000Z') },
-      },
-      {
-        preparationMethod: 'alpha',
-        recipe: { updatedAt: new Date('2026-04-10T00:00:00.000Z') },
-      },
-      {
-        preparationMethod: 'gamma',
-        recipe: { updatedAt: new Date('2026-04-10T00:00:00.000Z') },
-      },
-      {
-        preparationMethod: 'gamma',
-        recipe: { updatedAt: new Date('2026-04-09T00:00:00.000Z') },
-      },
-    ]);
-    prisma.preparationMethod.findMany.mockResolvedValue([]);
-
-    const result =
-      await service.getIngredientPreparationMethodHistory('ingredient-3');
-
-    expect(result).toEqual([
-      {
-        text: 'gamma',
-        usageCount: 2,
-        lastUsedAt: '2026-04-10T00:00:00.000Z',
-      },
-      {
-        text: 'alpha',
-        usageCount: 1,
-        lastUsedAt: '2026-04-10T00:00:00.000Z',
-      },
-      {
-        text: 'beta',
-        usageCount: 1,
-        lastUsedAt: '2026-04-10T00:00:00.000Z',
-      },
-    ]);
+    await expect(
+      withoutHistory.getIngredientPreparationMethodHistory('ingredient-1'),
+    ).resolves.toEqual([]);
   });
 });

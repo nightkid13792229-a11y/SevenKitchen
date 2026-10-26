@@ -10,6 +10,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
+import { IngredientPreparationHistoryService } from './ingredient-preparation-history.service';
 import { normalizeImageUrlProtocol } from '../../utils/image-url.util';
 import { Prisma, RecipeSeriesBusinessStatus } from '@prisma/client';
 import {
@@ -59,6 +60,8 @@ export class RecipeService {
     private readonly prisma: PrismaService,
     @Optional()
     private readonly recipeCopywritingService?: RecipeCopywritingService,
+    @Optional()
+    private readonly ingredientPreparationHistoryService?: IngredientPreparationHistoryService,
   ) {}
 
   private readonly recipeDetailInclude = {
@@ -1913,75 +1916,19 @@ export class RecipeService {
 
   async getIngredientPreparationMethodHistory(
     ingredientId: string,
+    limit?: number,
   ): Promise<IngredientPreparationMethodHistoryDto[]> {
-    const rows = await this.prisma.recipeItem.findMany({
-      where: {
+    const entries =
+      (await this.ingredientPreparationHistoryService?.getHistory(
         ingredientId,
-        recipe: { isCustomRecipe: false },
-      },
-      select: {
-        preparationMethod: true,
-        recipe: { select: { updatedAt: true } },
-      },
-    });
+        limit,
+      )) ?? [];
 
-    const methodMap = await this.loadPreparationMethodNameMap(
-      rows.map(
-        (row: { preparationMethod: string | null }) => row.preparationMethod,
-      ),
-    );
-
-    const aggregated = new Map<
-      string,
-      { text: string; usageCount: number; lastUsedAt: Date }
-    >();
-
-    for (const row of rows) {
-      const readable = resolvePreparationMethodText(
-        row.preparationMethod,
-        methodMap,
-        { preserveUnresolvedLegacy: false },
-      );
-      const normalized = normalizePreparationMethodHistoryText(readable);
-      if (!normalized) {
-        continue;
-      }
-
-      const existing = aggregated.get(normalized);
-      if (existing) {
-        existing.usageCount += 1;
-        if (row.recipe.updatedAt > existing.lastUsedAt) {
-          existing.lastUsedAt = row.recipe.updatedAt;
-        }
-        continue;
-      }
-
-      aggregated.set(normalized, {
-        text: normalized,
-        usageCount: 1,
-        lastUsedAt: row.recipe.updatedAt,
-      });
-    }
-
-    return [...aggregated.values()]
-      .sort((left, right) => {
-        const byLastUsed =
-          right.lastUsedAt.getTime() - left.lastUsedAt.getTime();
-        if (byLastUsed !== 0) {
-          return byLastUsed;
-        }
-
-        const byUsage = right.usageCount - left.usageCount;
-        if (byUsage !== 0) {
-          return byUsage;
-        }
-
-        return left.text.localeCompare(right.text);
-      })
-      .map((item) => ({
-        ...item,
-        lastUsedAt: item.lastUsedAt.toISOString(),
-      }));
+    return entries.map((entry) => ({
+      text: entry.text,
+      usageCount: entry.usageCount,
+      lastUsedAt: entry.lastUsedAt.toISOString(),
+    }));
   }
 
   /**

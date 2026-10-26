@@ -138,9 +138,13 @@ export const recipeApi = {
   /**
    * Get ingredient preparation method history
    */
-  getIngredientPreparationMethodHistory: (ingredientId: string) => {
+  getIngredientPreparationMethodHistory: (
+    ingredientId: string,
+    limit?: number,
+  ) => {
     return request.get<IngredientPreparationMethodHistoryItem[]>(
       `/admin/ingredients/${ingredientId}/preparation-method-history`,
+      limit ? { params: { limit } } : undefined,
     );
   },
 

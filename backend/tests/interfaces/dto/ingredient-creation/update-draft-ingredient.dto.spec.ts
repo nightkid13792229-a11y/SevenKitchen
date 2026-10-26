@@ -44,7 +44,7 @@ const fullFields = {
   cfctClass: '鱼虾蟹贝类',
   edibleYieldRate: 0.75,
   mainNutrientsDesc: '高蛋白、低脂',
-  procurementStrategy: '长期采购',
+  procurementStrategy: 'DAILY_PURCHASE',
   purchaseUnit: '袋',
   purchaseToBaseRatio: 1000,
   currentPricePerPurchaseUnit: 128,
@@ -55,8 +55,9 @@ const fullFields = {
   reorderPoint: 3,
   targetStock: 10,
   diyEnabled: true,
-  addTiming: '冷却后',
-  productionLossRate: 0.05,
+  addTiming: 'BEFORE_MEAL',
+  // 生产损耗率是倍数（1.05 = 5%），不是 0–1 的比率。
+  productionLossRate: 1.05,
   tags: ['水产'],
   shelfLifeMonths: 12,
   storageCondition: '-18℃ 冷冻',
@@ -169,11 +170,46 @@ describe('UpdateDraftIngredientDto', () => {
         shelfLifeMonths: null,
         isOilBased: null,
         currentPricePerPurchaseUnit: 0,
-        productionLossRate: 0,
+        productionLossRate: 1.05,
+        procurementStrategy: null,
+        addTiming: null,
         diyEnabled: false,
         tags: [],
       }),
     ).toEqual([]);
+  });
+
+  it('采购策略 / 添加时机只收受控词表', async () => {
+    expect(await errorsOf({ procurementStrategy: '长期采购' })).toContain(
+      'procurementStrategy',
+    );
+    expect(await errorsOf({ procurementStrategy: 'HYBRID' })).toEqual([]);
+    expect(await errorsOf({ addTiming: '冷却后' })).toContain('addTiming');
+    expect(await errorsOf({ addTiming: 'BEFORE_MIXING' })).toEqual([]);
+  });
+
+  it('生产损耗率是 1–2 的倍数，不是 0–1 的比率', async () => {
+    expect(await errorsOf({ productionLossRate: 0.05 })).toContain(
+      'productionLossRate',
+    );
+    expect(await errorsOf({ productionLossRate: 1.05 })).toEqual([]);
+    expect(await errorsOf({ productionLossRate: 2.1 })).toContain(
+      'productionLossRate',
+    );
+  });
+
+  it('采购字段长度与除数约束对齐数据库', async () => {
+    expect(await errorsOf({ brand: 'x'.repeat(101) })).toContain('brand');
+    expect(await errorsOf({ productModel: 'x'.repeat(101) })).toContain(
+      'productModel',
+    );
+    expect(await errorsOf({ purchaseUnit: 'x'.repeat(51) })).toContain(
+      'purchaseUnit',
+    );
+    expect(await errorsOf({ purchaseToBaseRatio: 0 })).toContain(
+      'purchaseToBaseRatio',
+    );
+    expect(await errorsOf({ purchaseToBaseRatio: 1000 })).toEqual([]);
   });
 
   it('负数、小数形式的整数与错类型的布尔值被拒', async () => {

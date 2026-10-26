@@ -172,13 +172,16 @@ function readNonEmptyString(value: unknown): string | null {
 }
 
 /**
- * 「有值」的唯一口径：`null` / `undefined` / 空字符串算没填。
+ * 「有值」的唯一口径：`null` / `undefined` / 空字符串 / 纯空白算没填。
  *
  * `0` 与 `false` 是有效值（0 元采购价、不做油性处理），必须照写，
  * 不能被 `if (value)` 这类真值判断吞掉。
  */
 function hasValue<T>(value: T | null | undefined): value is T {
-  return value !== null && value !== undefined && value !== '';
+  if (value === null || value === undefined) {
+    return false;
+  }
+  return typeof value === 'string' ? value.trim().length > 0 : true;
 }
 
 /**
@@ -822,20 +825,24 @@ export class IngredientCreationCommitService {
       properties[EDIBLE_YIELD_RATE_PROPERTY_KEY] = ingredient.edibleYieldRate;
     }
 
+    // 字符串列统一 trim：纯空白等于没填，不能顶掉采购单位的回退。
+    const unitDisplayLabel =
+      readNonEmptyString(ingredient.unitDisplayLabel) ?? ingredient.baseUnit;
+    const purchaseUnit =
+      readNonEmptyString(ingredient.purchaseUnit) ?? unitDisplayLabel;
+
     const data: Prisma.IngredientUncheckedCreateInput = {
       name: ingredient.name,
       type: ingredient.type,
       baseUnit: ingredient.baseUnit,
-      unitDisplayLabel: ingredient.unitDisplayLabel,
+      unitDisplayLabel,
       // 向导提交的原料还没确认采购口径：与手工新建一致，默认不参与采购/DIY 推荐。
       // 采购开关本阶段始终关闭（打开它需要单独的产品决策）。
       diyEnabled: false,
       procurementEnabled: false,
       brand: null,
       productModel: null,
-      purchaseUnit: hasValue(ingredient.purchaseUnit)
-        ? ingredient.purchaseUnit
-        : ingredient.unitDisplayLabel?.trim() || ingredient.baseUnit,
+      purchaseUnit,
       purchaseToBaseRatio: 1,
       currentPricePerPurchaseUnit: 0,
       properties: properties as Prisma.InputJsonValue,
@@ -843,14 +850,18 @@ export class IngredientCreationCommitService {
         primaryNutritionData as unknown as Prisma.InputJsonValue,
     };
 
-    // 只有真有值的列才覆盖默认值：undefined / null / '' 一律保持上面的默认，
-    // 0 与 false 是有效值，照常写入。
-    if (hasValue(ingredient.notes)) {
-      data.notes = ingredient.notes;
+    // 只有真有值的列才覆盖默认值：undefined / null / '' / 纯空白一律保持上面的默认，
+    // 0 与 false 是有效值，照常写入。字符串列写入前一律 trim。
+    const notes = readNonEmptyString(ingredient.notes);
+    if (notes !== null) {
+      data.notes = notes;
     }
-    if (hasValue(ingredient.procurementStrategy)) {
+    const procurementStrategy = readNonEmptyString(
+      ingredient.procurementStrategy,
+    );
+    if (procurementStrategy !== null) {
       data.procurementStrategy =
-        ingredient.procurementStrategy as Prisma.IngredientUncheckedCreateInput['procurementStrategy'];
+        procurementStrategy as Prisma.IngredientUncheckedCreateInput['procurementStrategy'];
     }
     if (hasValue(ingredient.weightG)) {
       data.weightG = ingredient.weightG;
@@ -858,14 +869,17 @@ export class IngredientCreationCommitService {
     if (hasValue(ingredient.maxCapacityG)) {
       data.maxCapacityG = ingredient.maxCapacityG;
     }
-    if (hasValue(ingredient.brand)) {
-      data.brand = ingredient.brand;
+    const brand = readNonEmptyString(ingredient.brand);
+    if (brand !== null) {
+      data.brand = brand;
     }
-    if (hasValue(ingredient.productModel)) {
-      data.productModel = ingredient.productModel;
+    const productModel = readNonEmptyString(ingredient.productModel);
+    if (productModel !== null) {
+      data.productModel = productModel;
     }
-    if (hasValue(ingredient.purchaseChannel)) {
-      data.purchaseChannel = ingredient.purchaseChannel;
+    const purchaseChannel = readNonEmptyString(ingredient.purchaseChannel);
+    if (purchaseChannel !== null) {
+      data.purchaseChannel = purchaseChannel;
     }
     if (hasValue(ingredient.purchaseToBaseRatio)) {
       data.purchaseToBaseRatio = ingredient.purchaseToBaseRatio;
@@ -879,8 +893,9 @@ export class IngredientCreationCommitService {
     if (hasValue(ingredient.shelfLifeMonths)) {
       data.shelfLifeMonths = ingredient.shelfLifeMonths;
     }
-    if (hasValue(ingredient.storageCondition)) {
-      data.storageCondition = ingredient.storageCondition;
+    const storageCondition = readNonEmptyString(ingredient.storageCondition);
+    if (storageCondition !== null) {
+      data.storageCondition = storageCondition;
     }
     if (hasValue(ingredient.openedShelfLifeDays)) {
       data.openedShelfLifeDays = ingredient.openedShelfLifeDays;

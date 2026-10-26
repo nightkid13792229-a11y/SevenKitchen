@@ -90,6 +90,8 @@ const commitBody = {
     weightG: 150,
     purchaseToBaseRatio: 1000,
     productionLossRate: 1.05,
+    procurementStrategy: 'DAILY_PURCHASE',
+    addTiming: 'BEFORE_MEAL',
   },
   profiles: [
     {
@@ -645,6 +647,8 @@ describe('IngredientCreationController', () => {
           weightG: 150,
           purchaseToBaseRatio: 1000,
           productionLossRate: 1.05,
+          procurementStrategy: 'DAILY_PURCHASE',
+          addTiming: 'BEFORE_MEAL',
         },
       });
       expect(input.profiles).toHaveLength(2);
@@ -653,6 +657,24 @@ describe('IngredientCreationController', () => {
         nutritionFoodIds: ['nf-1', 'nf-2'],
         auditId: 'audit-1',
       });
+    });
+
+    it.each([
+      ['procurementStrategy', '长期采购'],
+      ['addTiming', '冷却后'],
+      ['productionLossRate', 0.05],
+      ['purchaseToBaseRatio', 0],
+      ['brand', 'x'.repeat(101)],
+      ['purchaseUnit', 'x'.repeat(51)],
+    ])('原料卡字段 %s 非法 → 400', async (field, value) => {
+      await authorizedPost('/drafts/draft-1/commit')
+        .send({
+          ...commitBody,
+          ingredient: { ...commitBody.ingredient, [field]: value },
+        })
+        .expect(400);
+
+      expect(commitService.commit).not.toHaveBeenCalled();
     });
 
     it('终检有 blocking 时 commit 服务一次都不调用', async () => {

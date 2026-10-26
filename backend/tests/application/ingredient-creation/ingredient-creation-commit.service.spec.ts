@@ -744,8 +744,9 @@ describe('IngredientCreationCommitService', () => {
         cfctClass: '鱼虾蟹贝类',
         edibleYieldRate: 0.75,
         mainNutrientsDesc: '高蛋白',
-        addTiming: '冷却后',
-        productionLossRate: 0.05,
+        addTiming: 'BEFORE_MEAL',
+        // 生产损耗率是倍数（1.05 = 5%），不是 0–1 的比率。
+        productionLossRate: 1.05,
         nameEn: 'Atlantic Salmon',
       },
       profiles: [rawProfile],
@@ -779,8 +780,8 @@ describe('IngredientCreationCommitService', () => {
       cfct_class: '鱼虾蟹贝类',
       edible_yield_rate: 0.75,
       main_nutrients_desc: '高蛋白',
-      add_timing: '冷却后',
-      production_loss_rate: 0.05,
+      add_timing: 'BEFORE_MEAL',
+      production_loss_rate: 1.05,
     });
 
     // 库存三项本阶段不写：不能因为「有同名字段」就顺手落列。
@@ -819,6 +820,41 @@ describe('IngredientCreationCommitService', () => {
     expect(row.procurementEnabled).toBe(false);
     expect(row.properties).toEqual({
       ingredientCreationDraftId: 'draft-1',
+    });
+  });
+
+  it('字符串列写入前 trim，纯空白按没填处理', async () => {
+    const { service, store } = await createHarness();
+
+    const result = await service.commit({
+      draftId: 'draft-1',
+      userId: 'admin-1',
+      ingredient: {
+        ...baseIngredient,
+        unitDisplayLabel: ' 克 ',
+        // 纯空白的采购单位不能顶掉 unitDisplayLabel 的回退
+        purchaseUnit: '   ',
+        brand: '  ××水产  ',
+        productModel: '   ',
+        purchaseChannel: ' 京东 ',
+        storageCondition: '  -18℃  ',
+        notes: '  分装冷冻  ',
+        nameEn: '  Atlantic Salmon  ',
+      },
+      profiles: [rawProfile],
+      primaryProfileIndex: 0,
+    });
+
+    const row = store.ingredients.find((i) => i.id === result.ingredientId)!;
+    expect(row.unitDisplayLabel).toBe('克');
+    expect(row.purchaseUnit).toBe('克');
+    expect(row.brand).toBe('××水产');
+    expect(row.productModel).toBeNull();
+    expect(row.purchaseChannel).toBe('京东');
+    expect(row.storageCondition).toBe('-18℃');
+    expect(row.notes).toBe('分装冷冻');
+    expect(row.properties).toMatchObject({
+      name_en: 'Atlantic Salmon',
     });
   });
 

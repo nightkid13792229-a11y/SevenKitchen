@@ -9,6 +9,7 @@ import {
   IsNumber,
   IsObject,
   IsOptional,
+  IsPositive,
   IsString,
   Length,
   Max,
@@ -25,6 +26,8 @@ import type {
   MergePlan,
   NutritionEvidenceEntry,
 } from '../../../application/ingredient-creation/ingredient-creation.types';
+import { IngredientProcurementStrategy } from '../../../domain/ingredient/enums';
+import type { SupplementAddTiming } from '../../../domain/ingredient/supplement-add-timing';
 import {
   INGREDIENT_CARD_FIELD_KEYS,
   type IngredientCardFieldKey,
@@ -39,6 +42,15 @@ import {
   PREPARATION_STATES,
 } from './ingredient-creation.constants';
 import { NutritionEvidenceEntryDto } from './nutrition-evidence-entry.dto';
+
+/** 与 Prisma 的 `IngredientProcurementStrategy` 枚举保持一致。 */
+const PROCUREMENT_STRATEGIES = Object.values(IngredientProcurementStrategy);
+
+/** 与 `SupplementProperties.add_timing` 的受控词表一致。 */
+const ADD_TIMINGS = [
+  'BEFORE_MIXING',
+  'BEFORE_MEAL',
+] as const satisfies readonly SupplementAddTiming[];
 
 /**
  * 起手口径卡的可 patch 片段。
@@ -232,23 +244,31 @@ export class UpdateDraftIngredientDto implements IngredientDraft {
   mainNutrientsDesc?: string | null;
 
   // PURCHASE
-  @ApiPropertyOptional({ description: '采购策略', nullable: true })
+  @ApiPropertyOptional({
+    description: '采购策略',
+    enum: PROCUREMENT_STRATEGIES,
+    nullable: true,
+  })
   @IsOptional()
-  @IsString()
+  @IsIn(PROCUREMENT_STRATEGIES)
   procurementStrategy?: string | null;
 
-  @ApiPropertyOptional({ description: '采购单位', nullable: true })
+  @ApiPropertyOptional({
+    description: '采购单位（最多 50 字）',
+    nullable: true,
+  })
   @IsOptional()
   @IsString()
+  @MaxLength(50)
   purchaseUnit?: string | null;
 
   @ApiPropertyOptional({
-    description: '采购单位换算成基准单位的倍数',
+    description: '采购单位换算成基准单位的倍数（必须大于 0）',
     nullable: true,
   })
   @IsOptional()
   @IsNumber()
-  @Min(0)
+  @IsPositive()
   purchaseToBaseRatio?: number | null;
 
   @ApiPropertyOptional({
@@ -263,13 +283,13 @@ export class UpdateDraftIngredientDto implements IngredientDraft {
   @ApiPropertyOptional({ description: '品牌', nullable: true })
   @IsOptional()
   @IsString()
-  @MaxLength(200)
+  @MaxLength(100)
   brand?: string | null;
 
   @ApiPropertyOptional({ description: '规格', nullable: true })
   @IsOptional()
   @IsString()
-  @MaxLength(200)
+  @MaxLength(100)
   productModel?: string | null;
 
   @ApiPropertyOptional({ description: '采购渠道', nullable: true })
@@ -303,15 +323,23 @@ export class UpdateDraftIngredientDto implements IngredientDraft {
   @IsBoolean()
   diyEnabled?: boolean | null;
 
-  @ApiPropertyOptional({ description: '添加时机', nullable: true })
+  @ApiPropertyOptional({
+    description: '添加时机',
+    enum: ADD_TIMINGS,
+    nullable: true,
+  })
   @IsOptional()
-  @IsString()
+  @IsIn(ADD_TIMINGS)
   addTiming?: string | null;
 
-  @ApiPropertyOptional({ description: '生产损耗率（0–1）', nullable: true })
+  @ApiPropertyOptional({
+    description: '生产损耗倍数（1–2，1.05 表示 5%）',
+    nullable: true,
+  })
   @IsOptional()
   @IsNumber()
-  @Min(0)
+  @Min(1)
+  @Max(2)
   productionLossRate?: number | null;
 
   @ApiPropertyOptional({ description: '标签分类', type: [String] })

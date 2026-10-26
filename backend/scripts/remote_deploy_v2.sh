@@ -252,6 +252,15 @@ else
     # 不 fail：seed 失败不该拦住整个部署（服务本身还能跑，只是少几个下拉选项）
     warn "Option dictionary seeding failed — 服务照常部署，但后台下拉可能是空的"
   fi
+
+  # 需求分类节点词典（2026-10-26）：只补缺失节点，不覆盖运营改过的定义与排序。
+  # 不 fail：词典没灌进去只影响"按需求分类"页面为空，不影响服务启动。
+  info "Seeding recipe taxonomy nodes (idempotent)..."
+  if pnpm ts-node -r tsconfig-paths/register prisma/seed-recipe-taxonomy.ts --apply; then
+    ok "Recipe taxonomy seeded"
+  else
+    warn "Recipe taxonomy seeding failed — 服务照常部署，但需求分类树可能是空的"
+  fi
 fi
 echo ""
 

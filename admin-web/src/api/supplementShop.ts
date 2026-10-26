@@ -126,6 +126,8 @@ export type SupplementShippingMode = 'FLAT_RATE' | 'TEMPLATE';
 
 export interface SupplementShopConfig {
   enabled: boolean;
+  /** 补剂等价组候选总开关（审核完再打开） */
+  equivalenceEnabled?: boolean;
   markupMultiplier: number;
   serviceFeeMode: SupplementServiceFeeMode;
   serviceFeeAmount: number;
@@ -251,6 +253,11 @@ export const ISSUE_LABELS: Record<string, string> = {
   STORAGE_MISSING: '缺储存条件',
   UNIT_INCONSISTENT: '单位不一致',
   DUPLICATE_NAME: '同名重复',
+  EQUIVALENCE_UNGROUPED: '未归等价组',
+  EQUIVALENCE_GROUP_NOT_APPROVED: '组未审核',
+  EQUIVALENCE_GROUP_SINGLETON: '组仅 1 个',
+  EQUIVALENCE_NUTRIENT_MISSING: '缺组营养素',
+  EQUIVALENCE_UNIT_MISMATCH: '组单位不符',
 };
 
 // ---------------- 补剂订单（后台工作台） ----------------

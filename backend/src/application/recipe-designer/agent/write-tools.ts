@@ -422,7 +422,7 @@ export function createWriteTools(deps: WriteToolDeps): RecipeAgentWriteTools {
       }
       return okWrite(
         written.value,
-        `已设置原料预处理方式「${method}」；${STALE_NOTE}`,
+        `已设置原料部位 / 状态 / 预处理「${method}」；${STALE_NOTE}`,
       );
     },
 

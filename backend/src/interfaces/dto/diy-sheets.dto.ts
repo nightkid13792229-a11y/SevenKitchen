@@ -38,7 +38,7 @@ export class PurchaseListItemDto {
   @ApiProperty({ description: '显示单位' })
   displayUnit!: string;
 
-  @ApiPropertyOptional({ description: '制备方法' })
+  @ApiPropertyOptional({ description: '部位 / 状态 / 预处理' })
   preparationMethod?: string;
 
   @ApiProperty({ description: '格式化显示 - 理论用量' })

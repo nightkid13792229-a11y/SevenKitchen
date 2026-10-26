@@ -107,7 +107,7 @@ export interface RecipeAgentDraftPort {
   /** 删掉一条原料；成功后内容版本 +1。 */
   removeItem(itemId: string): Promise<void>;
 
-  /** 设预处理方式和备注；成功后内容版本 +1。 */
+  /** 设部位 / 状态 / 预处理和备注；成功后内容版本 +1。 */
   setPreparation(
     itemId: string,
     input: { method: string; note?: string | null },

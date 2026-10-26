@@ -2283,7 +2283,7 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
       if (!row) {
         throw new RecipeAgentPortError(
           'INVALID_ARGUMENT',
-          '预处理方式不能用字典 ID；请传中文文案。',
+          '部位 / 状态 / 预处理不能用字典 ID；请传中文文案。',
         );
       }
       return row.name;
@@ -2293,7 +2293,7 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
     if (/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(trimmed)) {
       throw new RecipeAgentPortError(
         'INVALID_ARGUMENT',
-        '预处理方式看起来是字典 ID 片段；请传中文文案。',
+        '部位 / 状态 / 预处理看起来是字典 ID 片段；请传中文文案。',
       );
     }
 
@@ -2720,7 +2720,7 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
     if (!method) {
       throw new RecipeAgentPortError(
         'INVALID_ARGUMENT',
-        '预处理方式不能为空；请传中文文案。',
+        '部位 / 状态 / 预处理不能为空；请传中文文案。',
       );
     }
 

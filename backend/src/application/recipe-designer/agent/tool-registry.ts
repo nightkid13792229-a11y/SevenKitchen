@@ -279,7 +279,7 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
   {
     name: 'get_recipe',
     description:
-      '只读查看任意一道食谱或设计草稿的完整详情（原料、文案、营养、制作步骤、图片等）；recipeId 或 draftId 至少一个，可读其他设计师的草稿。预处理字段已解析成中文文案，可直接复制。只返回配方内容，不会返回客户/订单/狗信息。',
+      '只读查看任意一道食谱或设计草稿的完整详情（原料、文案、营养、制作步骤、图片等）；recipeId 或 draftId 至少一个，可读其他设计师的草稿。部位 / 状态 / 预处理字段已解析成中文文案，可直接复制。只返回配方内容，不会返回客户/订单/狗信息。',
     parameters: {
       type: 'object',
       properties: {
@@ -367,7 +367,7 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
         preparationMethod: {
           type: 'string',
           description:
-            '预处理方式，中文文案，如「去皮切块」；不要传字典 ID。',
+            '部位 / 状态 / 预处理，中文文案，如「牛里脊/生/去油」；不要传字典 ID。',
         },
       },
       required: ['nutritionFoodId', 'weightG'],
@@ -436,12 +436,12 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
   {
     name: 'set_preparation',
     description:
-      '设置某条原料的预处理方式和备注；写制作流程前补齐处理方式。method 必须是中文文案（如「焯水切丁」），不要传字典 ID。',
+      '设置某条原料的部位 / 状态 / 预处理和备注；写制作流程前补齐处理方式。method 必须是中文文案（如「牛里脊/生/去油」），不要传字典 ID。',
     parameters: {
       type: 'object',
       properties: {
         itemId: { type: 'string', description: '草稿原料条目 ID。' },
-        method: { type: 'string', description: '预处理方式，如「焯水切丁」。' },
+        method: { type: 'string', description: '部位 / 状态 / 预处理，如「牛里脊/生/去油」。' },
         note: {
           type: ['string', 'null'],
           maxLength: 500,
@@ -567,7 +567,7 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
   {
     name: 'check_ready',
     description:
-      '可选的交付前自检：检查原料、营养评估、文案、制作步骤和预处理是否齐备；结果只供参考，不阻断本轮结束，审批状态由后端注入，模型不能传。',
+      '可选的交付前自检：检查原料、营养评估、文案、制作步骤和部位 / 状态 / 预处理是否齐备；结果只供参考，不阻断本轮结束，审批状态由后端注入，模型不能传。',
     parameters: {
       type: 'object',
       properties: {},

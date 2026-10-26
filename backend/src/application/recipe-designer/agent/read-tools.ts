@@ -255,7 +255,7 @@ function summarizeIngredient(detail: AgentIngredientDetail): string {
       : '';
   const preparation =
     detail.preparationMethods.length > 0
-      ? `；预处理：${detail.preparationMethods.join('、')}`
+      ? `；部位 / 状态 / 预处理：${detail.preparationMethods.join('、')}`
       : '';
   return `${detail.name}：${detail.cfctClass ?? '未分类'}，当前档案「${detail.nutritionProfileName}」${verified}${profiles}${preparation}。`;
 }

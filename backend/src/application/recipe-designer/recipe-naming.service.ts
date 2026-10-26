@@ -19,6 +19,16 @@ import { getForbiddenClaimPatterns, scanForbiddenClaims } from './recipe-copywri
 
 export const RECIPE_NAMING_AGENT_PURPOSE = 'RECIPE_NAMING';
 
+/**
+ * 命名没有单独配置时，复用这些用途的模型配置。
+ *
+ * 为什么不是回退到 `DEFAULT`：`DEFAULT_AGENT_PURPOSE = 'DEFAULT'` 只是一个
+ * 名义上的兜底，生产库**从来没有这一行**（只有 RECIPE_DESIGN / RECIPE_COPYWRITING
+ * 等具名用途）。所以"回退到默认"实际上等于"没有配置"，按钮永远是灰的。
+ * 这里按顺序找一个**确实存在**的文本模型用途。
+ */
+const RECIPE_NAMING_FALLBACK_PURPOSES = ['RECIPE_COPYWRITING', 'RECIPE_DESIGN'];
+
 /** 名称硬上限：与生产标签的单行宽度对齐。 */
 export const RECIPE_NAME_MAX_LENGTH = 12;
 
@@ -63,20 +73,35 @@ export class RecipeNamingService {
 
   async isAvailable(): Promise<boolean> {
     try {
-      await this.agentProviderConfigService.getEnabledDeepSeekRuntimeConfig({
-        purpose: RECIPE_NAMING_AGENT_PURPOSE,
-      });
+      await this.resolveRuntimeConfig();
       return true;
     } catch {
       return false;
     }
   }
 
+  /** 依次尝试：命名专用配置 → 文案/设计用途 → 名义默认（会抛原始错误） */
+  private async resolveRuntimeConfig() {
+    const purposes = [
+      RECIPE_NAMING_AGENT_PURPOSE,
+      ...RECIPE_NAMING_FALLBACK_PURPOSES,
+    ];
+    let lastError: unknown = null;
+    for (const purpose of purposes) {
+      try {
+        return await this.agentProviderConfigService.getEnabledDeepSeekRuntimeConfig(
+          { purpose, fallbackToDefault: false },
+        );
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (lastError) throw lastError;
+    throw new BadRequestException('DeepSeek Agent 设置未启用');
+  }
+
   async generate(input: RecipeNamingInput): Promise<RecipeNamingResult> {
-    const config =
-      await this.agentProviderConfigService.getEnabledDeepSeekRuntimeConfig({
-        purpose: RECIPE_NAMING_AGENT_PURPOSE,
-      });
+    const config = await this.resolveRuntimeConfig();
 
     const parsed = await callDeepSeekJson({
       baseUrl: config.baseUrl,

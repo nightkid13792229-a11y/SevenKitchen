@@ -101,3 +101,35 @@ describe('RecipeNamingService.generate', () => {
     );
   });
 });
+
+describe('RecipeNamingService 配置回退', () => {
+  beforeEach(() => callDeepSeekJson.mockReset());
+
+  it('没有 RECIPE_NAMING 配置时，回退到文案用途，而不是判定不可用', async () => {
+    const provider = {
+      getEnabledDeepSeekRuntimeConfig: jest.fn(async ({ purpose }: any) => {
+        if (purpose === 'RECIPE_COPYWRITING') {
+          return {
+            baseUrl: 'https://example.invalid',
+            model: 'm',
+            apiKey: 'k',
+            requestTimeoutMs: 1000,
+            provider: 'deepseek',
+          };
+        }
+        throw new Error('未配置');
+      }),
+    };
+    const service = new RecipeNamingService(provider as never);
+
+    expect(await service.isAvailable()).toBe(true);
+  });
+
+  it('所有用途都没配置时才判定不可用', async () => {
+    const provider = {
+      getEnabledDeepSeekRuntimeConfig: jest.fn().mockRejectedValue(new Error('未配置')),
+    };
+    const service = new RecipeNamingService(provider as never);
+    expect(await service.isAvailable()).toBe(false);
+  });
+});

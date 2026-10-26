@@ -1,3 +1,4 @@
+import type { CheckDomain } from '../../../application/ingredient-creation/ingredient-check-run.service';
 import type {
   CreationStep,
   IngredientDraft,
@@ -40,3 +41,14 @@ export const BASE_UNITS = [
   'ML',
   'PCS',
 ] as const satisfies readonly IngredientDraft['baseUnit'][];
+
+/**
+ * 按域核验的两页。
+ *
+ * 与 `CheckDomain` 用 `satisfies` 绑定：多一个少一个都会在编译期报错。
+ * 触发方式（AGENT / USER）**不**放进请求体——由服务端按调用入口固定。
+ */
+export const CHECK_DOMAINS = [
+  'INGREDIENT',
+  'NUTRITION',
+] as const satisfies readonly CheckDomain[];

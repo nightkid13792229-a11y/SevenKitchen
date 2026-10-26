@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { IngredientCheckRunService } from '../../../src/application/ingredient-creation/ingredient-check-run.service';
 import { IngredientCreationCheckService } from '../../../src/application/ingredient-creation/ingredient-creation-check.service';
 import { IngredientCreationDraftService } from '../../../src/application/ingredient-creation/ingredient-creation-draft.service';
 import type {
@@ -177,6 +178,11 @@ describe('IngredientCreationCheckService', () => {
   let service: IngredientCreationCheckService;
   let prisma: { nutritionSourceRecord: { findMany: jest.Mock } };
   let draftService: { get: jest.Mock };
+  let checkRunService: {
+    runDomain: jest.Mock;
+    latestRuns: jest.Mock;
+    isFresh: jest.Mock;
+  };
 
   beforeEach(async () => {
     prisma = {
@@ -187,6 +193,13 @@ describe('IngredientCreationCheckService', () => {
     draftService = {
       get: jest.fn().mockResolvedValue(createDraft()),
     };
+    checkRunService = {
+      runDomain: jest.fn(),
+      latestRuns: jest
+        .fn()
+        .mockResolvedValue({ INGREDIENT: null, NUTRITION: null }),
+      isFresh: jest.fn().mockReturnValue(false),
+    };
     runFinalCheckMock.mockReset();
     runFinalCheckMock.mockReturnValue(emptyCheckResult);
 
@@ -195,6 +208,8 @@ describe('IngredientCreationCheckService', () => {
         IngredientCreationCheckService,
         { provide: PrismaService, useValue: prisma },
         { provide: IngredientCreationDraftService, useValue: draftService },
+        // 按域核验的落库由 check-run service 负责；这里只测转发与过期判定。
+        { provide: IngredientCheckRunService, useValue: checkRunService },
       ],
     }).compile();
 
@@ -458,5 +473,65 @@ describe('IngredientCreationCheckService', () => {
     ).resolves.toBeUndefined();
 
     expect(runFinalCheckMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('按域核验只转发：触发方式与操作人原样交给报告服务', async () => {
+    const run = { id: 'run-1' } as never;
+    checkRunService.runDomain.mockResolvedValue(run);
+
+    await expect(
+      service.runDomain('draft-1', 'INGREDIENT', 'USER', 'admin-2'),
+    ).resolves.toBe(run);
+
+    expect(checkRunService.runDomain).toHaveBeenCalledWith(
+      'draft-1',
+      'INGREDIENT',
+      'USER',
+      'admin-2',
+    );
+  });
+
+  it('latestChecks 用当前草稿判断两域报告是否新鲜', async () => {
+    const ingredientRun = { id: 'run-ingredient' } as never;
+    const nutritionRun = { id: 'run-nutrition' } as never;
+    checkRunService.latestRuns.mockResolvedValue({
+      INGREDIENT: ingredientRun,
+      NUTRITION: nutritionRun,
+    });
+    checkRunService.isFresh.mockImplementation(
+      (run: { id: string }) => run.id === 'run-ingredient',
+    );
+
+    const view = await service.latestChecks('draft-1');
+
+    expect(draftService.get).toHaveBeenCalledWith('draft-1');
+    expect(view).toEqual({
+      ingredient: ingredientRun,
+      nutrition: nutritionRun,
+      fresh: { ingredient: true, nutrition: false },
+    });
+    // 过期判定拿的是「当前草稿」，不是报告里的快照。
+    expect(checkRunService.isFresh).toHaveBeenCalledWith(
+      ingredientRun,
+      expect.objectContaining({ id: 'draft-1' }),
+    );
+  });
+
+  it('latestChecks 没有报告的一域 fresh 为 false', async () => {
+    const ingredientRun = { id: 'run-ingredient' } as never;
+    checkRunService.latestRuns.mockResolvedValue({
+      INGREDIENT: ingredientRun,
+      NUTRITION: null,
+    });
+    checkRunService.isFresh.mockReturnValue(true);
+
+    const view = await service.latestChecks('draft-1');
+
+    expect(view).toEqual({
+      ingredient: ingredientRun,
+      nutrition: null,
+      fresh: { ingredient: true, nutrition: false },
+    });
+    expect(checkRunService.isFresh).toHaveBeenCalledTimes(1);
   });
 });

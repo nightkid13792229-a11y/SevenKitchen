@@ -22,8 +22,12 @@ import {
   type IngredientAgentRunResult,
   type IngredientAgentStreamEvent,
 } from '../../application/ingredient-creation/ingredient-draft-agent.service';
+import type { CheckRunView } from '../../application/ingredient-creation/ingredient-check-run.service';
 import { IngredientCreationCandidateService } from '../../application/ingredient-creation/ingredient-creation-candidate.service';
-import { IngredientCreationCheckService } from '../../application/ingredient-creation/ingredient-creation-check.service';
+import {
+  IngredientCreationCheckService,
+  type IngredientDraftChecksView,
+} from '../../application/ingredient-creation/ingredient-creation-check.service';
 import {
   IngredientCreationCommitService,
   type CommitIngredientCreationResult,
@@ -57,6 +61,7 @@ import {
   CreateMergePlanDto,
   FindCandidatesDto,
   ResolveMergeConflictDto,
+  RunDraftCheckDto,
   RunIngredientAgentDto,
   SearchOnlineCandidatesDto,
   UpdateDraftDto,
@@ -309,6 +314,38 @@ export class IngredientCreationController {
   ): Promise<ApiResponseDto<FinalCheckResult>> {
     const result = await this.checkService.runCheck(id);
     return new ApiResponseDto(0, 'Success', result);
+  }
+
+  @Post('drafts/:id/checks')
+  @ApiOperation({
+    summary:
+      '按域核验（原料 / 营养），落一条带草稿内容哈希的报告；触发人固定为当前登录人',
+  })
+  async runDomainCheck(
+    @Param('id') id: string,
+    @Body() dto: RunDraftCheckDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<CheckRunView>> {
+    // 触发方式与操作人由服务端定死：前端不能自称 AGENT，也不能替别人签名。
+    const run = await this.checkService.runDomain(
+      id,
+      dto.domain,
+      'USER',
+      user.userId,
+    );
+
+    return new ApiResponseDto(0, 'Success', run);
+  }
+
+  @Get('drafts/:id/checks')
+  @ApiOperation({
+    summary: '两域各自的最新核验报告，并用当前草稿内容判断是否过期',
+  })
+  async getLatestChecks(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<IngredientDraftChecksView>> {
+    const view = await this.checkService.latestChecks(id);
+    return new ApiResponseDto(0, 'Success', view);
   }
 
   @Post('drafts/:id/commit')

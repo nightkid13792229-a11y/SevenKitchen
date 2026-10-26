@@ -142,6 +142,8 @@ describe('IngredientCreationController', () => {
     checkService = {
       runCheck: jest.fn(),
       assertCommitAllowed: jest.fn(),
+      runDomain: jest.fn(),
+      latestChecks: jest.fn(),
     };
     commitService = {
       commit: jest.fn(),
@@ -610,6 +612,61 @@ describe('IngredientCreationController', () => {
       expect(checkService.runCheck).toHaveBeenCalledTimes(1);
       expect(checkService.runCheck).toHaveBeenCalledWith('draft-1');
       expect(response.body.data).toEqual(result);
+    });
+  });
+
+  describe('按域核验', () => {
+    it('POST checks 固定用 USER + 当前登录人触发，前端传 trigger 会被丢掉', async () => {
+      const run = {
+        id: 'run-1',
+        draftId: 'draft-1',
+        domain: 'INGREDIENT',
+        trigger: 'USER',
+        rulesVersion: 'ingredient-card-v1',
+        payloadHash: 'hash-1',
+        result: { blocking: [], exceptionable: [], warnings: [] },
+        counts: { blocking: 0, exceptionable: 0, warning: 0 },
+        createdBy: 'admin-1',
+        createdAt: '2026-10-26T08:00:00.000Z',
+      };
+      checkService.runDomain.mockResolvedValue(run);
+
+      const response = await authorizedPost('/drafts/draft-1/checks')
+        .send({ domain: 'INGREDIENT', trigger: 'AGENT' })
+        .expect(201);
+
+      expect(checkService.runDomain).toHaveBeenCalledWith(
+        'draft-1',
+        'INGREDIENT',
+        'USER',
+        'admin-1',
+      );
+      expect(response.body.data).toEqual(run);
+    });
+
+    it('POST checks 域不在词表里 → 400', async () => {
+      await authorizedPost('/drafts/draft-1/checks')
+        .send({ domain: 'OVEN' })
+        .expect(400);
+
+      expect(checkService.runDomain).not.toHaveBeenCalled();
+    });
+
+    it('GET checks 返回两域报告与过期判定', async () => {
+      const view = {
+        ingredient: null,
+        nutrition: null,
+        fresh: { ingredient: false, nutrition: false },
+      };
+      checkService.latestChecks.mockResolvedValue(view);
+
+      const response = await http()
+        .get(`${BASE_PATH}/drafts/draft-1/checks`)
+        .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
+        .expect(200);
+
+      expect(checkService.latestChecks).toHaveBeenCalledWith('draft-1');
+      expect(response.body.data).toEqual(view);
     });
   });
 

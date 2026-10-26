@@ -6,5 +6,6 @@ export * from './find-candidates.dto';
 export * from './merge.dto';
 export * from './nutrition-evidence-entry.dto';
 export * from './resolve-merge.dto';
+export * from './run-draft-check.dto';
 export * from './search-online-candidates.dto';
 export * from './update-draft.dto';

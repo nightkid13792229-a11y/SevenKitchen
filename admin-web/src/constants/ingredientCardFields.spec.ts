@@ -7,6 +7,93 @@ import {
 } from './ingredientCardFields'
 
 /**
+ * 30 个键的完整有序清单（与后端目录逐项一致）。
+ *
+ * 单独抄一份、不从目录推导：这样「少一项 / 顺序被调 / 键写错」都必须红，
+ * 否则前端手抄本漂移了也没人发现。
+ */
+const EXPECTED_KEYS_IN_ORDER: readonly string[] = [
+  'name',
+  'nameEn',
+  'type',
+  'category',
+  'notes',
+  'baseUnit',
+  'unitDisplayLabel',
+  'weightG',
+  'maxCapacityG',
+  'cfctClass',
+  'edibleYieldPercent',
+  'mainNutrientsDesc',
+  'procurementStrategy',
+  'purchaseUnit',
+  'purchaseToBaseRatio',
+  'currentPricePerPurchaseUnit',
+  'brand',
+  'productModel',
+  'purchaseChannel',
+  'safetyStock',
+  'reorderPoint',
+  'targetStock',
+  'diyEnabled',
+  'addTiming',
+  'productionLossRate',
+  'tags',
+  'shelfLifeMonths',
+  'storageCondition',
+  'openedShelfLifeDays',
+  'isOilBased',
+]
+
+/**
+ * 30 行期望值：`[key, group, label, stage, valueType]`。
+ *
+ * 这张表把每一项的分组和值类型也钉死 —— 只比首尾键的话，
+ * 「单块重量」和「最大容量」标签互换、中间字段换组、或者 25 个字段的
+ * valueType 写错，测试都不会红。
+ */
+const EXPECTED_FIELD_ROWS: ReadonlyArray<
+  readonly [string, string, string, string, string]
+> = [
+  ['name', 'BASIC', '名称', 'CREATABLE', 'text'],
+  ['nameEn', 'BASIC', '英文名', 'CREATABLE', 'text'],
+  ['type', 'BASIC', '类型', 'CREATABLE', 'select'],
+  ['category', 'BASIC', '类别', 'CREATABLE', 'select'],
+  ['notes', 'BASIC', '备注', 'CREATABLE', 'text'],
+  ['baseUnit', 'MEASURE', '基准单位', 'CREATABLE', 'select'],
+  ['unitDisplayLabel', 'MEASURE', '展示名', 'CREATABLE', 'text'],
+  ['weightG', 'MEASURE', '单块重量', 'CREATABLE', 'number'],
+  ['maxCapacityG', 'MEASURE', '最大容量', 'CREATABLE', 'number'],
+  ['cfctClass', 'NUTRITION', 'CFCT 分类', 'CREATABLE', 'text'],
+  ['edibleYieldPercent', 'NUTRITION', '可食部', 'CREATABLE', 'percent'],
+  ['mainNutrientsDesc', 'NUTRITION', '主要营养价值', 'CREATABLE', 'text'],
+  ['procurementStrategy', 'PURCHASE', '采购策略', 'CREATABLE', 'select'],
+  ['purchaseUnit', 'PURCHASE', '采购单位', 'CREATABLE', 'text'],
+  ['purchaseToBaseRatio', 'PURCHASE', '换算倍数', 'CREATABLE', 'number'],
+  [
+    'currentPricePerPurchaseUnit',
+    'PURCHASE',
+    '当前采购价',
+    'CREATABLE',
+    'number',
+  ],
+  ['brand', 'PURCHASE', '品牌', 'CREATABLE', 'text'],
+  ['productModel', 'PURCHASE', '规格', 'CREATABLE', 'text'],
+  ['purchaseChannel', 'PURCHASE', '采购渠道', 'CREATABLE', 'text'],
+  ['safetyStock', 'STOCK', '安全库存', 'AFTER_CREATE', 'number'],
+  ['reorderPoint', 'STOCK', '补货点', 'AFTER_CREATE', 'number'],
+  ['targetStock', 'STOCK', '目标库存', 'AFTER_CREATE', 'number'],
+  ['diyEnabled', 'USAGE', '用于 DIY', 'CREATABLE', 'boolean'],
+  ['addTiming', 'USAGE', '添加时机', 'CREATABLE', 'select'],
+  ['productionLossRate', 'USAGE', '生产损耗率', 'CREATABLE', 'multiplier'],
+  ['tags', 'USAGE', '标签分类', 'AFTER_CREATE', 'tags'],
+  ['shelfLifeMonths', 'STORAGE', '保质期', 'CREATABLE', 'number'],
+  ['storageCondition', 'STORAGE', '储存条件', 'CREATABLE', 'text'],
+  ['openedShelfLifeDays', 'STORAGE', '开封后效期', 'CREATABLE', 'number'],
+  ['isOilBased', 'STORAGE', '内容物油性', 'CREATABLE', 'boolean'],
+]
+
+/**
  * 前端原料字段目录（对应后端 `ingredient-card-fields.ts`）。
  *
  * 这组断言锁住三件会悄悄咬人的事：
@@ -20,6 +107,24 @@ describe('前端原料字段目录', () => {
     expect(INGREDIENT_CARD_FIELDS).toHaveLength(30)
     expect(INGREDIENT_CARD_FIELD_GROUPS).toHaveLength(7)
     expect(new Set(INGREDIENT_CARD_FIELDS.map((f) => f.key)).size).toBe(30)
+  })
+
+  it('30 个键的顺序与后端完全一致', () => {
+    expect(INGREDIENT_CARD_FIELDS.map((f) => f.key)).toEqual(
+      EXPECTED_KEYS_IN_ORDER,
+    )
+  })
+
+  it('30 项逐项钉死：分组、标签、阶段、值类型', () => {
+    expect(
+      INGREDIENT_CARD_FIELDS.map((f) => [
+        f.key,
+        f.group,
+        f.label,
+        f.stage,
+        f.valueType,
+      ]),
+    ).toEqual(EXPECTED_FIELD_ROWS)
   })
 
   it('建完之后补的正好 4 项', () => {

@@ -4,12 +4,14 @@ import {
 } from 'src/domain/recipe-designer/launch-readiness';
 
 const item = {
+  id: 'item-1',
   ingredientId: 'i1',
   name: '三文鱼',
-  includeInAssessment: true,
+  included: true,
+  isSupplement: false,
   preparationMethod: '切块',
   preparationRequired: true,
-};
+} as never;
 
 const assessment = {
   overallStatus: 'COMPLIANT',

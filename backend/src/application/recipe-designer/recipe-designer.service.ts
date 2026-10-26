@@ -8831,6 +8831,7 @@ export class RecipeDesignerService {
 
     const readiness = buildDraftLaunchReadiness({
       draftId: draft.id,
+      seriesId: draft.seriesId ?? null,
       designMode,
       requirePresentation,
       name: options.name ?? draft.series?.name ?? draft.name,

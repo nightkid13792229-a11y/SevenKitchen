@@ -112,6 +112,12 @@ export interface DraftLaunchReadinessSummary {
 
 export interface DraftLaunchReadiness {
   draftId: string;
+  /**
+   * 草稿所属系列（2026-10-27）。
+   * 上线检查抽屉要用它做两件事：按系列起名、按系列挂需求分类。
+   * 历史独立草稿没有系列，为 null。
+   */
+  seriesId: string | null;
   /** CATALOG（产品线）| ORDER（订单绑定），历史系列缺省按 CATALOG */
   designMode: string;
   ready: boolean;
@@ -174,6 +180,7 @@ export interface LaunchReadinessOrderInput {
 
 export interface BuildDraftLaunchReadinessInput {
   draftId: string;
+  seriesId?: string | null;
   designMode: string;
   /** 已解析的名称（系列名优先，其次草稿名；发布时可用最终食谱名） */
   name?: string | null;
@@ -504,6 +511,7 @@ export const buildDraftLaunchReadiness = (
 
   return {
     draftId: input.draftId,
+    seriesId: input.seriesId ?? null,
     designMode: input.designMode,
     ready: blockers.length === 0,
     blockers,

@@ -23,8 +23,16 @@ import type {
  * - `refuseRate`（廢棄率）只属于导入记录，**不写进 profile**。
  */
 
-export const TFDA_SOURCE_CODE = 'TFDA';
-export const TFDA_SOURCE_PROVIDER = 'Taiwan Food and Drug Administration';
+/** legacy `sourceType` 枚举值（`NutritionMeta.sourceType` 里这一库就叫 TFDA）。 */
+export const TFDA_SOURCE_TYPE = 'TFDA';
+/**
+ * 登记口径，来自 `nutrition-source-contract.ts` 的 `NUTRITION_SOURCE_DEFINITIONS`。
+ * **不是** `'TFDA'`：后者只是 legacy sourceType，`getNutritionSourceDefinition('TFDA')`
+ * 解析不出来，只有 `normalizeLegacyNutritionSourceType` 才能把它映射到这里。
+ */
+export const TFDA_SOURCE_CODE = 'TFDA_FOOD_NUTRITION_DATABASE';
+export const TFDA_SOURCE_PROVIDER =
+  'Taiwan Food and Drug Administration Food Nutrition Database';
 export const TFDA_SOURCE_TITLE =
   'Taiwan Food Nutrition Database (TFDA) 2026-10';
 export const TFDA_SOURCE_VERSION = 'TFDA_2026_10';
@@ -296,8 +304,8 @@ export function buildTfdaNutritionProfile(
   const sourceForms: Record<string, NutritionSourceForm> = {};
 
   profile.meta.rawBasisType = TFDA_BASIS_TYPE;
-  // sourceType 枚举里这一库就叫 'TFDA'，与 sourceCode 同值。
-  profile.meta.sourceType = TFDA_SOURCE_CODE;
+  // sourceType 是 legacy 枚举值；sourceCode 必须是登记码，两者不同。
+  profile.meta.sourceType = TFDA_SOURCE_TYPE;
   profile.meta.sourceCode = TFDA_SOURCE_CODE;
   profile.meta.sourceProvider = TFDA_SOURCE_PROVIDER;
   profile.meta.sourceTitle = TFDA_SOURCE_TITLE;

@@ -81,9 +81,10 @@ export class CommitIngredientDto implements IngredientDraft {
   @IsIn(BASE_UNITS)
   baseUnit!: IngredientDraft['baseUnit'];
 
-  @ApiProperty({ description: '单位展示名', example: '克' })
+  @ApiProperty({ description: '单位展示名（最多 50 字）', example: '克' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(50)
   unitDisplayLabel!: string;
 
   @ApiPropertyOptional({ description: '单块重量（g）', nullable: true })

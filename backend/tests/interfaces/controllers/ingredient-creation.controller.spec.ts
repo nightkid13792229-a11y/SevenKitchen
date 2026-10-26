@@ -666,6 +666,7 @@ describe('IngredientCreationController', () => {
       ['purchaseToBaseRatio', 0],
       ['brand', 'x'.repeat(101)],
       ['purchaseUnit', 'x'.repeat(51)],
+      ['unitDisplayLabel', 'x'.repeat(51)],
     ])('原料卡字段 %s 非法 → 400', async (field, value) => {
       await authorizedPost('/drafts/draft-1/commit')
         .send({

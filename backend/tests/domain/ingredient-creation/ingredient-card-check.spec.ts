@@ -241,6 +241,17 @@ describe('runIngredientCardCheck', () => {
       'SHELF_LIFE_RANGE',
       'STORAGE_EMPTY',
     ]);
+    expect(INGREDIENT_CARD_RULES).toEqual([
+      { code: 'NAME_REQUIRED', level: 'blocking' },
+      { code: 'NAME_DUPLICATE', level: 'blocking' },
+      { code: 'BASE_UNIT_INVALID', level: 'blocking' },
+      { code: 'UNIT_LABEL_REQUIRED', level: 'blocking' },
+      { code: 'PURCHASE_RATIO_INVALID', level: 'blocking' },
+      { code: 'PURCHASE_PRICE_NEGATIVE', level: 'blocking' },
+      { code: 'EDIBLE_RANGE', level: 'exceptionable' },
+      { code: 'SHELF_LIFE_RANGE', level: 'exceptionable' },
+      { code: 'STORAGE_EMPTY', level: 'warning' },
+    ]);
     expect(
       INGREDIENT_CARD_RULES.find((rule) => rule.code === 'NAME_REQUIRED')
         ?.level,

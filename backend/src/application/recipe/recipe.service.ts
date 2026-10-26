@@ -22,6 +22,7 @@ import {
   RECIPE_LIFE_STAGE_LABELS,
 } from '../../domain/recipe/enums';
 import { RecipeCopywritingService } from '../recipe-designer/recipe-copywriting.service';
+import { RecipeNamingService, type RecipeNamingResult } from '../recipe-designer/recipe-naming.service';
 import type { RecipeCopywritingResult } from '../recipe-designer/recipe-copywriting.service';
 import { UserRole } from '../../domain/user/enums';
 import {
@@ -61,6 +62,8 @@ export class RecipeService {
     private readonly prisma: PrismaService,
     @Optional()
     private readonly recipeCopywritingService?: RecipeCopywritingService,
+    @Optional()
+    private readonly recipeNamingService?: RecipeNamingService,
     @Optional()
     @Inject(IngredientPreparationHistoryService)
     private readonly ingredientPreparationHistoryService?: IngredientPreparationHistoryService,
@@ -1519,6 +1522,71 @@ export class RecipeService {
   /** AI 文案生成是否可用（后台据此决定按钮是否置灰） */
   async isRecipeCopywritingAvailable(): Promise<boolean> {
     return (await this.recipeCopywritingService?.isAvailable()) ?? false;
+  }
+
+  /** AI 命名是否可用（后台据此决定按钮是否置灰） */
+  async isRecipeNamingAvailable(): Promise<boolean> {
+    return (await this.recipeNamingService?.isAvailable()) ?? false;
+  }
+
+  /**
+   * 给某个系列生成名字候选（只生成，不落库）。
+   *
+   * 取该系列**最近更新的一份配方**作为事实来源：同一个系列的各生命阶段
+   * 主料与工艺相同，用哪一版读出来的价值点都一样。
+   */
+  async generateSeriesNameCandidates(
+    seriesId: string,
+  ): Promise<RecipeNamingResult> {
+    if (!this.recipeNamingService) {
+      throw new BadRequestException('AI 命名服务不可用');
+    }
+
+    const series = await this.prisma.recipeSeries.findUnique({
+      where: { id: seriesId },
+      include: {
+        recipes: {
+          include: {
+            items: {
+              include: { ingredient: true },
+              orderBy: { sortOrder: 'asc' },
+            },
+          },
+          orderBy: { updatedAt: 'desc' },
+          take: 1,
+        },
+      },
+    });
+    if (!series) {
+      throw new NotFoundException('系列不存在');
+    }
+    const recipe = series.recipes[0];
+    if (!recipe) {
+      throw new BadRequestException('这个系列还没有配方，先设计再起名');
+    }
+
+    const detailed = (recipe.nutritionDetailedData as any) || {};
+    const nutrition = detailed.summary || detailed;
+
+    const foodItems = recipe.items
+      .filter((item) => item.ingredient?.type === 'FOOD')
+      .map((item) => ({
+        name: item.ingredient?.name || '',
+        ratio: item.ratioPercent ?? null,
+      }))
+      .filter((item) => Boolean(item.name));
+
+    return this.recipeNamingService.generate({
+      foodItems,
+      energyDensityKcalPerKg: recipe.energyDensityKcalPerKg ?? null,
+      moisturePercent: nutrition?.moisture_pct ?? null,
+      fatPercentDm: nutrition?.fat_dm_pct ?? null,
+      proteinPercentDm: nutrition?.protein_dm_pct ?? null,
+      lifeStageLabels: ((recipe.applicableLifeStages as string[]) || [])
+        .map((stage) => RECIPE_LIFE_STAGE_LABELS[stage] || stage)
+        .filter(Boolean),
+      currentName: series.name,
+    });
   }
 
   async updateRecipe(

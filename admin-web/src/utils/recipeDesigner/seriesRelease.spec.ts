@@ -1,21 +1,29 @@
 import { describe, expect, it } from 'vitest'
-import type { SeriesReleaseReadiness } from '@/types/recipeDesigner'
+import type {
+  SeriesReleaseIssue,
+  SeriesReleaseReadiness
+} from '@/types/recipeDesigner'
 import {
   buildSeriesReleaseForm,
   buildSeriesReleaseSettingsPatch,
   canUnpublishSeries,
   cloneSeriesReleaseForm,
+  emptySeriesReleaseForm,
   formatSeriesReleaseLatestVersion,
   formatSeriesReleaseStageVersion,
   groupSeriesReleaseIssues,
+  isSeriesReleaseBadgesDirty,
   isSeriesReleaseFormDirty,
   isSeriesReleasePrimaryActionAvailable,
   isSeriesReleaseStagePendingUpdate,
+  resolveSeriesReleaseActionableStages,
+  resolveSeriesReleaseDefaultSelectedStageCodes,
   resolveSeriesReleasePendingStageCount,
   resolveSeriesReleaseState,
-  seriesReleasePrimaryActionLabel,
+  seriesReleasePrimaryActionVerb,
   seriesReleaseProgress,
   seriesReleaseStageHint,
+  seriesReleaseStageScopeLabel,
   seriesReleaseStageStatusLabel,
   seriesReleaseStageTagType,
   seriesReleaseStateLabel,
@@ -28,13 +36,9 @@ const readiness: SeriesReleaseReadiness = {
   businessStatus: 'PUBLIC',
   releaseState: 'NEEDS_UPDATE',
   ready: false,
+  canRelease: false,
   hasPendingUpdates: true,
   pendingStageCodes: ['HIGH_ACTIVITY_ADULT'],
-  requiredLifeStages: [
-    'PUPPY_UNDER_14_WEEKS',
-    'HIGH_ACTIVITY_ADULT'
-  ],
-  requiredStages: [],
   stages: [
     {
       stageCode: 'PUPPY_UNDER_14_WEEKS',
@@ -45,7 +49,7 @@ const readiness: SeriesReleaseReadiness = {
       publishedRecipeVersion: null,
       hasPendingUpdate: false,
       designDraftId: 'draft-1',
-      required: true
+      actionable: true
     },
     {
       stageCode: 'PUPPY_14_WEEKS_PLUS',
@@ -56,7 +60,7 @@ const readiness: SeriesReleaseReadiness = {
       publishedRecipeVersion: null,
       hasPendingUpdate: false,
       designDraftId: null,
-      required: false
+      actionable: false
     },
     {
       stageCode: 'HIGH_ACTIVITY_ADULT',
@@ -67,89 +71,119 @@ const readiness: SeriesReleaseReadiness = {
       publishedRecipeVersion: 4,
       hasPendingUpdate: true,
       designDraftId: null,
-      required: true
+      actionable: true
     }
   ],
   presentation: {
     coverImageUrl: 'https://cdn.example.com/cover.jpg',
     coverTitle: '旧标题',
     sellingPoint: '旧卖点',
-    targetHealthTags: ['tag-1']
+    targetHealthTags: ['tag-1'],
+    coverBadges: ['低脂']
   },
   blockers: [
     {
-      code: 'REQUIRED_STAGE_NOT_READY',
-      message: '「14 周以上幼犬」阶段还不就绪',
-      scope: 'STAGE',
-      stageCode: 'PUPPY_14_WEEKS_PLUS'
+      code: 'COVER_IMAGE_REQUIRED',
+      message: '请上传产品线封面图后再发布',
+      scope: 'PRESENTATION',
+      field: 'coverImageUrl'
     },
     {
-      code: 'COVER_TITLE_REQUIRED',
-      message: '请填写封面标题',
+      code: 'SELLING_POINT_REQUIRED',
+      message: '请填写一句话卖点',
       scope: 'PRESENTATION',
-      field: 'coverTitle'
+      field: 'sellingPoint'
     }
   ],
   warnings: [
     {
-      code: 'TARGET_HEALTH_TAGS_MISSING',
-      message: '未设置目标健康标签',
+      code: 'COVER_BADGE_MISSING',
+      message: '未设置封面角标',
       scope: 'PRESENTATION',
-      field: 'targetHealthTags'
+      field: 'coverBadges'
     }
   ],
   summary: {
-    requiredStageCount: 5,
-    readyStageCount: 3,
-    publishedStageCount: 2,
-    designedStageCount: 4,
-    pendingStageCount: 1
+    totalStageCount: 3,
+    publishableStageCount: 1,
+    pendingStageCount: 1,
+    publishedStageCount: 1,
+    upToDateStageCount: 0,
+    designedStageCount: 2,
+    actionableStageCount: 2
   }
 }
 
 describe('seriesRelease 表单与差异', () => {
-  it('readiness → 表单：必填阶段与展示资料归一成可编辑值', () => {
-    expect(buildSeriesReleaseForm(readiness)).toEqual({
-      requiredLifeStages: ['PUPPY_UNDER_14_WEEKS', 'HIGH_ACTIVITY_ADULT'],
-      coverImageUrl: 'https://cdn.example.com/cover.jpg',
-      coverTitle: '旧标题',
-      sellingPoint: '旧卖点',
-      targetHealthTags: ['tag-1']
+  it('hydrates cover, selling point and badge ids', () => {
+    const form = buildSeriesReleaseForm(
+      {
+        presentation: {
+          coverImageUrl: ' x ',
+          sellingPoint: ' 卖点 ',
+          coverBadges: ['低脂']
+        }
+      } as any,
+      ['tag-1']
+    )
+    expect(form).toEqual({
+      coverImageUrl: 'x',
+      sellingPoint: '卖点',
+      coverBadgeHealthTagIds: ['tag-1']
+    })
+  })
+
+  it('角标 id 缺省时回落到空数组，不再带必填阶段 / 标题 / 目标标签', () => {
+    const form = buildSeriesReleaseForm({
+      presentation: { coverImageUrl: null, sellingPoint: null }
+    } as any)
+    expect(form.coverBadgeHealthTagIds).toEqual([])
+    expect(form).not.toHaveProperty('requiredLifeStages')
+    expect(form).not.toHaveProperty('coverTitle')
+    expect(form).not.toHaveProperty('targetHealthTags')
+  })
+
+  it('空白表单只含三个展示字段', () => {
+    expect(emptySeriesReleaseForm()).toEqual({
+      coverImageUrl: '',
+      sellingPoint: '',
+      coverBadgeHealthTagIds: []
     })
   })
 
   it('没有改动时 patch 为空、dirty 为 false', () => {
-    const baseline = buildSeriesReleaseForm(readiness)
+    const baseline = buildSeriesReleaseForm(readiness, ['tag-1'])
     const form = cloneSeriesReleaseForm(baseline)
     expect(buildSeriesReleaseSettingsPatch(form, baseline)).toEqual({})
+    expect(isSeriesReleaseBadgesDirty(form, baseline)).toBe(false)
     expect(isSeriesReleaseFormDirty(form, baseline)).toBe(false)
   })
 
-  it('只提交真正变化的字段，文本 trim 后保存', () => {
-    const baseline = buildSeriesReleaseForm(readiness)
+  it('patches only cover and selling point', () => {
+    const patch = buildSeriesReleaseSettingsPatch(
+      { coverImageUrl: 'new', sellingPoint: '', coverBadgeHealthTagIds: [] },
+      { coverImageUrl: 'old', sellingPoint: 'old', coverBadgeHealthTagIds: [] }
+    )
+    expect(patch).toEqual({ coverImageUrl: 'new', sellingPoint: null })
+  })
+
+  it('文本 trim 后只提交真正变化的字段', () => {
+    const baseline = {
+      coverImageUrl: 'https://old.example.com/cover.jpg',
+      sellingPoint: '旧卖点',
+      coverBadgeHealthTagIds: ['tag-1']
+    }
     const form = {
       ...cloneSeriesReleaseForm(baseline),
-      requiredLifeStages: [
-        'PUPPY_UNDER_14_WEEKS',
-        'HIGH_ACTIVITY_ADULT',
-        'REPRODUCTION'
-      ],
-      coverTitle: '  新标题  '
+      coverImageUrl: '  https://new.example.com/cover.jpg  '
     }
-
     expect(buildSeriesReleaseSettingsPatch(form, baseline)).toEqual({
-      requiredLifeStages: [
-        'PUPPY_UNDER_14_WEEKS',
-        'HIGH_ACTIVITY_ADULT',
-        'REPRODUCTION'
-      ],
-      coverTitle: '新标题'
+      coverImageUrl: 'https://new.example.com/cover.jpg'
     })
-    expect(isSeriesReleaseFormDirty(form, baseline)).toBe(true)
   })
 
   it('清空展示文本时显式发 null，而不是空字符串', () => {
-    const baseline = buildSeriesReleaseForm(readiness)
+    const baseline = buildSeriesReleaseForm(readiness, ['tag-1'])
     const form = {
       ...cloneSeriesReleaseForm(baseline),
       coverImageUrl: '   ',
@@ -162,48 +196,66 @@ describe('seriesRelease 表单与差异', () => {
     })
   })
 
-  it('健康标签顺序变化不算修改（按集合比较）', () => {
-    const baseline = buildSeriesReleaseForm({
-      ...readiness,
-      presentation: {
-        ...readiness.presentation,
-        targetHealthTags: ['tag-1', 'tag-2']
-      }
-    })
+  it('角标顺序变化不算修改（按集合比较）', () => {
+    const baseline = buildSeriesReleaseForm(readiness, ['tag-1', 'tag-2'])
     const form = {
       ...cloneSeriesReleaseForm(baseline),
-      targetHealthTags: ['tag-2', 'tag-1']
+      coverBadgeHealthTagIds: ['tag-2', 'tag-1']
     }
+    expect(isSeriesReleaseBadgesDirty(form, baseline)).toBe(false)
     expect(isSeriesReleaseFormDirty(form, baseline)).toBe(false)
+  })
+
+  it('counts badge changes as dirty', () => {
+    const a = { coverImageUrl: '', sellingPoint: '', coverBadgeHealthTagIds: [] }
+    const b = { ...a, coverBadgeHealthTagIds: ['tag-1'] }
+    expect(isSeriesReleaseBadgesDirty(b, a)).toBe(true)
+    expect(buildSeriesReleaseSettingsPatch(b, a)).toEqual({})
+    expect(isSeriesReleaseFormDirty(a, b)).toBe(true)
+  })
+
+  it('封面或卖点单独变化也算 dirty', () => {
+    const baseline = {
+      coverImageUrl: 'https://old.example.com/cover.jpg',
+      sellingPoint: '旧卖点',
+      coverBadgeHealthTagIds: []
+    }
+    expect(
+      isSeriesReleaseFormDirty(
+        { ...baseline, coverImageUrl: 'https://new.example.com/cover.jpg' },
+        baseline
+      )
+    ).toBe(true)
+    expect(
+      isSeriesReleaseFormDirty({ ...baseline, sellingPoint: '新卖点' }, baseline)
+    ).toBe(true)
   })
 })
 
 describe('seriesRelease 进度与版本', () => {
-  it('必填阶段 3/5 → 60%', () => {
-    expect(seriesReleaseProgress(readiness)).toEqual({
-      ready: 3,
+  it('shows published progress over all stages', () => {
+    expect(
+      seriesReleaseProgress({
+        summary: { publishedStageCount: 2, totalStageCount: 5 }
+      } as any)
+    ).toEqual({
+      published: 2,
       total: 5,
-      percent: 60,
-      label: '3/5 个必填阶段就绪'
+      percent: 40,
+      label: '已上线 2/5 个阶段'
     })
   })
 
-  it('没有配置必填阶段时明确提示，而不是显示 0% 就绪', () => {
+  it('没有阶段时进度为 0%，不出现 NaN', () => {
     expect(
       seriesReleaseProgress({
-        summary: {
-          requiredStageCount: 0,
-          readyStageCount: 0,
-          publishedStageCount: 0,
-          designedStageCount: 0,
-          pendingStageCount: 0
-        }
-      })
+        summary: { publishedStageCount: 0, totalStageCount: 0 }
+      } as any)
     ).toEqual({
-      ready: 0,
+      published: 0,
       total: 0,
       percent: 0,
-      label: '还没有选择必填生命阶段'
+      label: '已上线 0/0 个阶段'
     })
   })
 
@@ -257,13 +309,28 @@ describe('seriesRelease 状态 / 问题分组', () => {
   })
 
   it('问题按 系列设置 / 展示资料 / 生命阶段 固定顺序分组', () => {
-    const groups = groupSeriesReleaseIssues(readiness.blockers)
+    const issues: SeriesReleaseIssue[] = [
+      {
+        code: 'STAGE_ISSUE',
+        message: '阶段问题',
+        scope: 'STAGE',
+        stageCode: 'PUPPY_14_WEEKS_PLUS'
+      },
+      { code: 'PRESENTATION_ISSUE', message: '展示问题', scope: 'PRESENTATION' },
+      { code: 'SERIES_ISSUE', message: '系列问题', scope: 'SERIES' }
+    ]
+    const groups = groupSeriesReleaseIssues(issues)
     expect(groups.map((group) => group.scope)).toEqual([
+      'SERIES',
       'PRESENTATION',
       'STAGE'
     ])
-    expect(groups.map((group) => group.label)).toEqual(['展示资料', '生命阶段'])
-    expect(groups[1]?.issues[0]?.stageCode).toBe('PUPPY_14_WEEKS_PLUS')
+    expect(groups.map((group) => group.label)).toEqual([
+      '系列设置',
+      '展示资料',
+      '生命阶段'
+    ])
+    expect(groups[2]?.issues[0]?.stageCode).toBe('PUPPY_14_WEEKS_PLUS')
   })
 })
 
@@ -359,43 +426,93 @@ describe('seriesRelease 重新发布 / 下架', () => {
     expect(isSeriesReleaseStagePendingUpdate(null)).toBe(false)
   })
 
-  it('主按钮文案随状态切换：发布系列 / 重新发布系列', () => {
+  it('labels action verb and scope', () => {
     expect(
-      seriesReleasePrimaryActionLabel({ releaseState: 'UNPUBLISHED' })
-    ).toBe('发布系列')
+      seriesReleasePrimaryActionVerb({ releaseState: 'UNPUBLISHED' } as any)
+    ).toBe('发布')
     expect(
-      seriesReleasePrimaryActionLabel({ releaseState: 'NEEDS_UPDATE' })
-    ).toBe('重新发布系列')
+      seriesReleasePrimaryActionVerb({ releaseState: 'NEEDS_UPDATE' } as any)
+    ).toBe('更新')
     expect(
-      seriesReleasePrimaryActionLabel({ releaseState: 'PUBLISHED' })
-    ).toBe('重新发布系列')
+      seriesReleasePrimaryActionVerb({ releaseState: 'PUBLISHED' } as any)
+    ).toBe('更新')
+    // 旧后端缺少 releaseState 时按 businessStatus 兜底
+    expect(
+      seriesReleasePrimaryActionVerb({ businessStatus: 'DRAFT' } as any)
+    ).toBe('发布')
+
+    expect(seriesReleaseStageScopeLabel({ status: 'READY' } as any)).toBe(
+      '待发布'
+    )
+    expect(
+      seriesReleaseStageScopeLabel({
+        status: 'PUBLIC',
+        hasPendingUpdate: true
+      } as any)
+    ).toBe('有更新')
+    expect(
+      seriesReleaseStageScopeLabel({
+        status: 'PUBLIC',
+        hasPendingUpdate: false
+      } as any)
+    ).toBe('已是最新')
+    expect(seriesReleaseStageScopeLabel({ status: 'DRAFT' } as any)).toBe(
+      '未入库'
+    )
+    expect(seriesReleaseStageScopeLabel({ status: 'EMPTY' } as any)).toBe(
+      '未设计'
+    )
   })
 
-  it('已上线（最新）且没有待更新时隐藏主按钮', () => {
+  it('uses canRelease to decide whether the primary action is available', () => {
     expect(
-      isSeriesReleasePrimaryActionAvailable({
-        ready: false,
-        releaseState: 'NEEDS_UPDATE'
-      })
+      isSeriesReleasePrimaryActionAvailable({ canRelease: false } as any)
     ).toBe(false)
     expect(
-      isSeriesReleasePrimaryActionAvailable({
-        ready: true,
-        releaseState: 'UNPUBLISHED'
-      })
+      isSeriesReleasePrimaryActionAvailable({ canRelease: true } as any)
     ).toBe(true)
+    expect(isSeriesReleasePrimaryActionAvailable(null)).toBe(false)
+  })
+
+  it('收集可操作阶段（READY / PUBLIC 有更新）', () => {
+    const stages = [
+      { stageCode: 'A', status: 'READY', actionable: true },
+      { stageCode: 'B', status: 'PUBLIC', hasPendingUpdate: false, actionable: false },
+      { stageCode: 'C', status: 'PUBLIC', hasPendingUpdate: true, actionable: true }
+    ]
     expect(
-      isSeriesReleasePrimaryActionAvailable({
-        ready: true,
-        releaseState: 'NEEDS_UPDATE'
-      })
-    ).toBe(true)
-    expect(
-      isSeriesReleasePrimaryActionAvailable({
-        ready: true,
-        releaseState: 'PUBLISHED'
-      })
-    ).toBe(false)
+      resolveSeriesReleaseActionableStages({ stages } as any).map(
+        (stage) => stage.stageCode
+      )
+    ).toEqual(['A', 'C'])
+    expect(resolveSeriesReleaseActionableStages(null)).toEqual([])
+  })
+
+  it('defaults selection to none for first release and all actionable for update', () => {
+    const readiness = {
+      releaseState: 'UNPUBLISHED',
+      stages: [{ stageCode: 'A', actionable: true }]
+    } as any
+    expect(resolveSeriesReleaseDefaultSelectedStageCodes(readiness)).toEqual([])
+    const update = {
+      releaseState: 'PUBLISHED',
+      stages: [
+        { stageCode: 'A', actionable: true },
+        { stageCode: 'B', actionable: false }
+      ]
+    } as any
+    expect(resolveSeriesReleaseDefaultSelectedStageCodes(update)).toEqual(['A'])
+    const needsUpdate = {
+      releaseState: 'NEEDS_UPDATE',
+      stages: [
+        { stageCode: 'A', actionable: true },
+        { stageCode: 'B', actionable: true }
+      ]
+    } as any
+    expect(resolveSeriesReleaseDefaultSelectedStageCodes(needsUpdate)).toEqual([
+      'A',
+      'B'
+    ])
   })
 
   it('只有已上线 / 待重新发布的系列可以下架', () => {

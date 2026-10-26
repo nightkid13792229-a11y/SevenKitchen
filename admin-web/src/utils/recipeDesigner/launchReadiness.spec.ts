@@ -178,6 +178,7 @@ function readinessFixture(
 ): DraftLaunchReadiness {
   return {
     draftId: 'draft-1',
+    seriesId: null,
     designMode: 'CATALOG',
     ready: true,
     blockers: [],

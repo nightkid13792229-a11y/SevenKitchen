@@ -167,6 +167,42 @@ export function isSeriesReleaseStagePendingUpdate(
   return latest > published
 }
 
+/** 「发布范围」里每个阶段的中文口径 */
+export type SeriesReleaseStageScopeLabel =
+  | '待发布'
+  | '有更新'
+  | '已是最新'
+  | '未入库'
+  | '未设计'
+
+/**
+ * 阶段在发布范围里的状态：
+ *  · READY                     → 待发布
+ *  · PUBLIC + hasPendingUpdate → 有更新
+ *  · PUBLIC 且已最新           → 已是最新
+ *  · DRAFT（有设计稿未入仓）   → 未入库
+ *  · EMPTY                     → 未设计
+ */
+export function seriesReleaseStageScopeLabel(
+  stage:
+    | (Pick<SeriesReleaseStageReadiness, 'status'> &
+        SeriesReleaseStageUpdateView)
+    | null
+    | undefined
+): SeriesReleaseStageScopeLabel {
+  if (stage?.status === 'PUBLIC') {
+    return isSeriesReleaseStagePendingUpdate(stage) ? '有更新' : '已是最新'
+  }
+  switch (stage?.status) {
+    case 'READY':
+      return '待发布'
+    case 'DRAFT':
+      return '未入库'
+    default:
+      return '未设计'
+  }
+}
+
 /** 待更新阶段数：优先用后端 summary，缺失时按阶段列表兜底 */
 export function resolveSeriesReleasePendingStageCount(
   readiness: SeriesReleaseStateSource | null | undefined
@@ -239,19 +275,57 @@ export function seriesReleasePrimaryActionLabel(
     : '重新发布系列'
 }
 
+/** 主按钮动词（2026-10-26）：「发布」/「更新」 */
+export function seriesReleasePrimaryActionVerb(
+  readiness: SeriesReleaseStateSource | null | undefined
+): '发布' | '更新' {
+  return resolveSeriesReleaseState(readiness) === 'UNPUBLISHED'
+    ? '发布'
+    : '更新'
+}
+
 /**
- * 主按钮是否展示：门槛就绪、且**已上线（最新）**时没有可发的版本，直接隐藏。
+ * 主按钮是否可用：只看后端 `canRelease`。
  *
- * 待重新发布（NEEDS_UPDATE）仍要展示，因为最新草稿还没发给顾客。
+ * `canRelease` = 展示资料齐全（封面图 + 卖点）且至少一个可操作阶段；
+ * 已全部最新的系列也是 false，不再依赖前端自行判断。
  */
 export function isSeriesReleasePrimaryActionAvailable(
   readiness:
-    | (SeriesReleaseStateSource & { ready?: boolean | null })
+    | { canRelease?: boolean | null }
     | null
     | undefined
 ): boolean {
-  if (readiness?.ready !== true) return false
-  return resolveSeriesReleaseState(readiness) !== 'PUBLISHED'
+  return readiness?.canRelease === true
+}
+
+/** 全部可操作阶段（READY 待发布 + PUBLIC 有更新） */
+export function resolveSeriesReleaseActionableStages(
+  readiness:
+    | { stages?: SeriesReleaseStageReadiness[] | null }
+    | null
+    | undefined
+): SeriesReleaseStageReadiness[] {
+  return (readiness?.stages ?? []).filter((stage) => stage.actionable === true)
+}
+
+/**
+ * 打开抽屉时的默认勾选：
+ *  · 首次发布没有勾选框，发布范围由后端取全部 READY，因此返回 []；
+ *  · 更新默认全选可操作阶段，运营可以再取消。
+ */
+export function resolveSeriesReleaseDefaultSelectedStageCodes(
+  readiness:
+    | (SeriesReleaseStateSource & {
+        stages?: SeriesReleaseStageReadiness[] | null
+      })
+    | null
+    | undefined
+): string[] {
+  if (resolveSeriesReleaseState(readiness) === 'UNPUBLISHED') return []
+  return resolveSeriesReleaseActionableStages(readiness).map(
+    (stage) => stage.stageCode
+  )
 }
 
 /** 下架按钮是否展示：只有「已上线（最新）」或「待重新发布」的系列才能下架 */
@@ -263,11 +337,9 @@ export function canUnpublishSeries(
 
 /** readiness → 发布设置表单（文本统一 trim，数组归一） */
 export interface SeriesReleaseForm {
-  requiredLifeStages: string[]
   coverImageUrl: string
-  coverTitle: string
   sellingPoint: string
-  targetHealthTags: string[]
+  coverBadgeHealthTagIds: string[]
 }
 
 function normalizeText(value: unknown): string {
@@ -296,30 +368,20 @@ function isSameStringSet(left: unknown, right: unknown): boolean {
 
 export function emptySeriesReleaseForm(): SeriesReleaseForm {
   return {
-    requiredLifeStages: [],
     coverImageUrl: '',
-    coverTitle: '',
     sellingPoint: '',
-    targetHealthTags: []
+    coverBadgeHealthTagIds: []
   }
 }
 
 export function buildSeriesReleaseForm(
-  readiness:
-    | Pick<SeriesReleaseReadiness, 'requiredLifeStages' | 'presentation'>
-    | null
-    | undefined
+  readiness: Pick<SeriesReleaseReadiness, 'presentation'> | null | undefined,
+  coverBadgeHealthTagIds: string[] = []
 ): SeriesReleaseForm {
   return {
-    requiredLifeStages: normalizeStringList(
-      readiness?.requiredLifeStages ?? []
-    ),
     coverImageUrl: normalizeText(readiness?.presentation?.coverImageUrl),
-    coverTitle: normalizeText(readiness?.presentation?.coverTitle),
     sellingPoint: normalizeText(readiness?.presentation?.sellingPoint),
-    targetHealthTags: normalizeStringList(
-      readiness?.presentation?.targetHealthTags ?? []
-    )
+    coverBadgeHealthTagIds: normalizeStringList(coverBadgeHealthTagIds)
   }
 }
 
@@ -327,17 +389,18 @@ export function cloneSeriesReleaseForm(
   form: SeriesReleaseForm
 ): SeriesReleaseForm {
   return {
-    requiredLifeStages: [...form.requiredLifeStages],
     coverImageUrl: form.coverImageUrl,
-    coverTitle: form.coverTitle,
     sellingPoint: form.sellingPoint,
-    targetHealthTags: [...form.targetHealthTags]
+    coverBadgeHealthTagIds: [...form.coverBadgeHealthTagIds]
   }
 }
 
 /**
  * 只返回真正变化的字段（patch semantics）。
  * 显式清空时文本按 null 发送，避免把空串写进数据库。
+ *
+ * 封面角标不在这个接口里：由 `recipeSeriesCoverBadgeApi.save` 单独保存，
+ * 所以 patch 只包含封面图 / 一句话卖点。
  */
 export function buildSeriesReleaseSettingsPatch(
   form: SeriesReleaseForm,
@@ -345,18 +408,7 @@ export function buildSeriesReleaseSettingsPatch(
 ): UpdateRecipeSeriesReleaseSettingsPayload {
   const patch: UpdateRecipeSeriesReleaseSettingsPayload = {}
 
-  if (!isSameStringSet(form.requiredLifeStages, baseline.requiredLifeStages)) {
-    patch.requiredLifeStages = normalizeStringList(form.requiredLifeStages)
-  }
-  if (!isSameStringSet(form.targetHealthTags, baseline.targetHealthTags)) {
-    patch.targetHealthTags = normalizeStringList(form.targetHealthTags)
-  }
-
-  const textFields = [
-    'coverImageUrl',
-    'coverTitle',
-    'sellingPoint'
-  ] as const
+  const textFields = ['coverImageUrl', 'sellingPoint'] as const
   for (const key of textFields) {
     const current = normalizeText(form[key])
     const previous = normalizeText(baseline[key])
@@ -367,29 +419,42 @@ export function buildSeriesReleaseSettingsPatch(
   return patch
 }
 
+export function isSeriesReleaseBadgesDirty(
+  form: SeriesReleaseForm,
+  baseline: SeriesReleaseForm
+): boolean {
+  return !isSameStringSet(
+    form.coverBadgeHealthTagIds,
+    baseline.coverBadgeHealthTagIds
+  )
+}
+
 export function hasSeriesReleaseSettingsPatch(
   patch: UpdateRecipeSeriesReleaseSettingsPayload
 ): boolean {
   return Object.keys(patch).length > 0
 }
 
+/** 设置或角标任一变化都算 dirty（两者分开保存，不能互相吞掉） */
 export function isSeriesReleaseFormDirty(
   form: SeriesReleaseForm,
   baseline: SeriesReleaseForm
 ): boolean {
-  return hasSeriesReleaseSettingsPatch(
-    buildSeriesReleaseSettingsPatch(form, baseline)
+  return (
+    hasSeriesReleaseSettingsPatch(
+      buildSeriesReleaseSettingsPatch(form, baseline)
+    ) || isSeriesReleaseBadgesDirty(form, baseline)
   )
 }
 
 export interface SeriesReleaseProgress {
-  ready: number
+  published: number
   total: number
   percent: number
   label: string
 }
 
-/** 必填阶段进度（3/5 → 60%）；没配置必填阶段时明确显示未配置 */
+/** 已上线阶段进度（2/5 → 40%）；分母是全量阶段，不是必填阶段 */
 export function seriesReleaseProgress(
   readiness:
     | Pick<SeriesReleaseReadiness, 'summary'>
@@ -398,20 +463,20 @@ export function seriesReleaseProgress(
 ): SeriesReleaseProgress {
   const total = Math.max(
     0,
-    Number(readiness?.summary?.requiredStageCount) || 0
+    Math.trunc(Number(readiness?.summary?.totalStageCount) || 0)
   )
-  const ready = Math.min(
+  const published = Math.min(
     total,
-    Math.max(0, Number(readiness?.summary?.readyStageCount) || 0)
+    Math.max(
+      0,
+      Math.trunc(Number(readiness?.summary?.publishedStageCount) || 0)
+    )
   )
   return {
-    ready,
+    published,
     total,
-    percent: total > 0 ? Math.round((ready / total) * 100) : 0,
-    label:
-      total > 0
-        ? `${ready}/${total} 个必填阶段就绪`
-        : '还没有选择必填生命阶段'
+    percent: total > 0 ? Math.round((published / total) * 100) : 0,
+    label: `已上线 ${published}/${total} 个阶段`
   }
 }
 

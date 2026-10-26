@@ -8,7 +8,7 @@
     <template #header>
       <div class="series-release__heading">
         <div class="series-release__heading-text">
-          <span class="series-release__title">系列发布</span>
+          <span class="series-release__title">发布 / 更新</span>
           <span class="series-release__subtitle">
             {{ seriesName || '产品线' }} · 整条系列一次性发布
           </span>
@@ -20,12 +20,8 @@
           <el-tag size="small" :type="releaseStateTagType" effect="dark">
             {{ releaseStateLabel }}
           </el-tag>
-          <el-tag
-            size="small"
-            :type="readiness.ready ? 'success' : 'danger'"
-            effect="dark"
-          >
-            {{ readiness.ready ? '可发布' : '未就绪' }}
+          <el-tag size="small" :type="availabilityTag.type" effect="dark">
+            {{ availabilityTag.label }}
           </el-tag>
         </template>
         <el-tag v-else-if="error" size="small" type="danger" effect="dark">
@@ -87,12 +83,12 @@
         <div
           class="series-release__overview"
           :class="{
-            'is-ready': readiness.ready,
-            'is-blocked': !readiness.ready
+            'is-ready': readiness.canRelease,
+            'is-blocked': !readiness.canRelease
           }"
         >
           <el-icon class="series-release__overview-icon">
-            <CircleCheckFilled v-if="readiness.ready" />
+            <CircleCheckFilled v-if="readiness.canRelease" />
             <CircleCloseFilled v-else />
           </el-icon>
           <div class="series-release__overview-text">
@@ -105,11 +101,12 @@
               >
                 {{ releaseStateLabel }}
               </el-tag>
-              <span>{{ readiness.ready ? '满足发布条件' : '还不能发布' }}</span>
+              <span>
+                {{ readiness.canRelease ? '满足发布条件' : '还不能发布' }}
+              </span>
             </div>
             <div class="series-release__overview-sub">
-              必填阶段 {{ progress.label }} · 已发布
-              {{ readiness.summary.publishedStageCount }} 个阶段
+              {{ progress.label }}
               <template v-if="pendingStageCount > 0">
                 · 待更新 {{ pendingStageCount }} 个阶段
               </template>
@@ -127,7 +124,7 @@
 
         <section class="series-release__section">
           <div class="series-release__section-title">
-            阶段清单
+            发布范围
             <span class="series-release__count">{{ progress.label }}</span>
             <span
               v-if="pendingStageCount > 0"
@@ -135,16 +132,23 @@
             >
               待更新 {{ pendingStageCount }} 个阶段
             </span>
-            <el-button
-              v-if="readiness"
-              link
-              type="primary"
-              size="small"
-              @click="toggleAllStages"
-            >{{ allStagesSelected ? '清空必做' : '全选必做' }}</el-button>
+            <template v-if="!isFirstRelease && actionableStageCodes.length > 0">
+              <el-button
+                link
+                type="primary"
+                size="small"
+                @click="selectAllActionableStages"
+              >全选</el-button>
+              <el-button
+                link
+                type="primary"
+                size="small"
+                @click="clearSelectedStages"
+              >清空</el-button>
+            </template>
           </div>
           <el-checkbox-group
-            v-model="form.requiredLifeStages"
+            v-model="selectedStageCodes"
             class="series-release__stages"
           >
             <div
@@ -152,15 +156,19 @@
               :key="stage.stageCode"
               class="series-release__stage"
               :class="{
-                'is-required': form.requiredLifeStages.includes(stage.stageCode),
-                'is-ready': stage.status === 'READY' || stage.status === 'PUBLIC',
+                'is-selected':
+                  !isFirstRelease &&
+                  selectedStageCodes.includes(stage.stageCode),
+                'is-actionable': !isFirstRelease && stage.actionable,
+                'is-inactive': stage.status === 'DRAFT' || stage.status === 'EMPTY',
                 'is-pending': isSeriesReleaseStagePendingUpdate(stage)
               }"
             >
               <el-checkbox
+                v-if="!isFirstRelease && stage.actionable"
                 :value="stage.stageCode"
                 class="series-release__stage-check"
-                :title="`把「${stage.label}」设为必做阶段`"
+                :title="`勾选后本次更新「${stage.label}」`"
               />
               <div class="series-release__stage-main">
                 <div class="series-release__stage-name">
@@ -174,15 +182,6 @@
                 </div>
               </div>
               <el-tag
-                v-if="isSeriesReleaseStagePendingUpdate(stage)"
-                class="series-release__stage-pending"
-                type="warning"
-                size="small"
-                effect="dark"
-              >
-                有更新
-              </el-tag>
-              <el-tag
                 :type="seriesReleaseStageTagType(stage.status)"
                 size="small"
                 effect="plain"
@@ -190,6 +189,9 @@
               >
                 {{ seriesReleaseStageStatusLabel(stage.status) }}
               </el-tag>
+              <span class="series-release__stage-scope">
+                {{ seriesReleaseStageScopeLabel(stage) }}
+              </span>
               <span
                 v-if="stage.status !== 'EMPTY'"
                 class="series-release__stage-version"
@@ -198,10 +200,20 @@
               </span>
             </div>
           </el-checkbox-group>
+          <div class="series-release__range-note">
+            发布后覆盖
+            {{ coverageStageCount }} / {{ readiness.summary.totalStageCount }}
+            个阶段；未设计阶段不影响发布。
+            <template v-if="isFirstRelease">
+              本次发布范围是已经就绪（待发布）的
+              {{ readiness.summary.publishableStageCount }} 个阶段；只要有 1 个就绪就能发布，不要求全部阶段齐全。
+            </template>
+            <template v-else>
+              默认勾选全部可操作阶段（待发布 + 有更新）；未勾选的「有更新」阶段会保留到下次，未入库 / 未设计不影响发布。
+            </template>
+          </div>
           <div class="series-release__hint">
-            勾选必须一起发布的阶段；只有达到「待发布」或「已发布」的阶段才算就绪。
-            未勾选但已经保存进系列仓库的阶段也会一并发布，避免留下顾客看不到的隐藏草稿。
-            已发布阶段出现「有更新」时，重新发布只会把每个阶段的最新一版发给顾客。
+            「有更新」表示已上线阶段存在更新的草稿，勾选后会一起更新给顾客；「已是最新」「未入库」「未设计」只作覆盖参考，不会阻断发布。
           </div>
         </section>
 
@@ -212,6 +224,36 @@
             label-position="left"
             class="series-release__form"
           >
+            <el-alert
+              v-if="isTemporaryName"
+              class="series-release__temp-name"
+              type="warning"
+              :closable="false"
+              show-icon
+              title="还是临时名称，不能发布"
+              description="先把上面改成正式名称（例如「均衡营养｜三文鱼南瓜」），再点保存名称。"
+            />
+
+            <!-- 2026-10-27：系列名是唯一名字，整系列发布前必须定下来 -->
+            <el-form-item label="食谱名称" required>
+              <div class="series-release__name-row">
+                <AiNameField
+                  v-model="nameDraft"
+                  :series-id="seriesId"
+                />
+                <el-button
+                  v-if="nameDirty"
+                  size="small"
+                  type="primary"
+                  :loading="nameSaving"
+                  @click="saveName"
+                >保存名称</el-button>
+              </div>
+              <div class="series-release__hint">
+                价值点在前、食材在后，最多 12 个字——多了标签印不下。
+              </div>
+            </el-form-item>
+
             <el-form-item label="封面图" required>
               <div class="series-release__cover">
                 <el-upload
@@ -253,36 +295,17 @@
               </div>
             </el-form-item>
 
-            <el-form-item label="封面标题" required>
-              <el-input
-                v-model="form.coverTitle"
-                :maxlength="RECIPE_PRESENTATION_LIMITS.coverTitle"
-                show-word-limit
-                placeholder="上线后显示在封面上的标题"
-              />
-            </el-form-item>
-
-            <el-form-item label="一句话卖点" required>
-              <el-input
-                v-model="form.sellingPoint"
-                type="textarea"
-                :rows="2"
-                :maxlength="RECIPE_PRESENTATION_LIMITS.sellingPoint"
-                show-word-limit
-                placeholder="例如：鲜肉低敏，日常维持"
-              />
-            </el-form-item>
-
-            <el-form-item label="目标健康标签">
+            <el-form-item label="封面角标">
               <el-select
-                v-model="form.targetHealthTags"
+                v-model="form.coverBadgeHealthTagIds"
                 multiple
+                :multiple-limit="2"
                 filterable
                 clearable
                 collapse-tags
                 collapse-tags-tooltip
                 :loading="healthTagsLoading"
-                placeholder="选择顾客可筛选的健康标签（可多选）"
+                placeholder="从合规词表选择（最多 2 个）"
                 class="series-release__select"
               >
                 <el-option
@@ -299,8 +322,19 @@
                 </el-button>
               </div>
               <div v-else class="series-release__hint">
-                未设置仍可发布，但顾客无法按健康需求筛选到这条产品线。
+                最多 2 个；不选就不显示。未设置角标时，封面左下角将没有文字。
               </div>
+            </el-form-item>
+
+            <el-form-item label="一句话卖点" required>
+              <el-input
+                v-model="form.sellingPoint"
+                type="textarea"
+                :rows="2"
+                :maxlength="RECIPE_PRESENTATION_LIMITS.sellingPoint"
+                show-word-limit
+                placeholder="例如：鲜肉低敏，日常维持"
+              />
             </el-form-item>
           </el-form>
 
@@ -311,6 +345,9 @@
             >
               {{ dirty ? '有未保存的发布设置' : '发布设置已保存' }}
             </span>
+            <span class="series-release__save-tip">
+              保存后立即对已上线阶段生效，无需再点发布。
+            </span>
             <el-button
               type="primary"
               :loading="saving"
@@ -319,6 +356,37 @@
             >
               保存发布设置
             </el-button>
+          </div>
+        </section>
+
+        <section class="series-release__section">
+          <div class="series-release__section-title">顾客看到的样子</div>
+          <div class="series-release__preview">
+            <div class="series-release__preview-cover">
+              <img
+                v-if="form.coverImageUrl"
+                :src="form.coverImageUrl"
+                alt="顾客看到的系列封面"
+              />
+              <div v-else class="series-release__preview-placeholder">
+                封面图
+              </div>
+              <span
+                v-if="coverBadgeText"
+                class="series-release__preview-badge"
+              >{{ coverBadgeText }}</span>
+            </div>
+            <div class="series-release__preview-info">
+              <div class="series-release__preview-name">
+                {{ seriesName || '未命名系列' }}
+              </div>
+              <div class="series-release__preview-selling">
+                {{ form.sellingPoint || '还没有填写一句话卖点' }}
+              </div>
+            </div>
+          </div>
+          <div class="series-release__hint">
+            预览用当前表单实时渲染；角标只显示选中的项，没选就不显示，不回退旧封面标题。
           </div>
         </section>
 
@@ -425,18 +493,25 @@
           <template v-else-if="dirty">
             发布设置还有未保存的修改，请先点「保存发布设置」
           </template>
-          <template v-else-if="!readiness.ready">
-            还有 {{ readiness.blockers.length }} 项阻断，全部解决后才能发布整条产品线
+          <template v-else-if="readiness.blockers.length > 0">
+            还有 {{ readiness.blockers.length }} 项阻断，全部解决后才能发布 / 更新
           </template>
-          <template v-else-if="releaseState === 'PUBLISHED'">
-            系列已上线，所有阶段都是最新版本，无需重新发布
+          <template v-else-if="releaseStageCount === 0">
+            <template
+              v-if="actionableStageCodes.length === 0 && releaseState === 'PUBLISHED'"
+            >
+              系列已上线，所有阶段都是最新版本，无需重新发布
+            </template>
+            <template v-else-if="actionableStageCodes.length === 0">
+              还没有可发布的阶段
+            </template>
+            <template v-else>请至少勾选一个要更新的阶段</template>
           </template>
           <template v-else-if="pendingStageCount > 0">
-            有 {{ pendingStageCount }} 个阶段存在更新草稿，重新发布后顾客才能看到最新版本
+            有 {{ pendingStageCount }} 个阶段存在更新草稿，更新后顾客才能看到最新版本
           </template>
           <template v-else>
-            发布后顾客即可看到整条产品线，共
-            {{ readiness.summary.readyStageCount }} 个必填阶段就绪
+            将{{ actionVerb }} {{ releaseStageCount }} 个阶段，发布后顾客立即可见
           </template>
         </span>
         <div class="series-release__footer-actions">
@@ -451,10 +526,10 @@
             下架整个系列
           </el-button>
           <el-button
-            v-if="isAdmin && readiness.ready && releaseActionAvailable"
+            v-if="isAdmin"
             type="success"
             :loading="releasing"
-            :disabled="dirty || unpublishing"
+            :disabled="dirty || !readiness.canRelease || (isUpdate && selectedStageCodes.length === 0) || unpublishing || releasing"
             @click="handleRelease"
           >
             {{ releaseActionLabel }}
@@ -477,9 +552,11 @@ import {
   WarningFilled
 } from '@element-plus/icons-vue'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
+import AiNameField from './AiNameField.vue'
 import { recipeApi } from '@/api/recipes'
 import {
   recipeHealthTagApi,
+  recipeSeriesCoverBadgeApi,
   type RecipeHealthTag
 } from '@/api/recipeHealthTags'
 import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole'
@@ -497,14 +574,17 @@ import {
   formatSeriesReleaseStageVersion,
   groupSeriesReleaseIssues,
   hasSeriesReleaseSettingsPatch,
+  isSeriesReleaseBadgesDirty,
   isSeriesReleaseFormDirty,
-  isSeriesReleasePrimaryActionAvailable,
   isSeriesReleaseStagePendingUpdate,
+  resolveSeriesReleaseActionableStages,
+  resolveSeriesReleaseDefaultSelectedStageCodes,
   resolveSeriesReleasePendingStageCount,
   resolveSeriesReleaseState,
-  seriesReleasePrimaryActionLabel,
+  seriesReleasePrimaryActionVerb,
   seriesReleaseProgress,
   seriesReleaseStageHint,
+  seriesReleaseStageScopeLabel,
   seriesReleaseStageStatusLabel,
   seriesReleaseStageTagType,
   seriesReleaseStateLabel,
@@ -528,6 +608,8 @@ const emit = defineEmits<{
   (e: 'released', result: SeriesReleaseResult): void
   /** 整系列下架 / 状态变化后通知父级刷新列表与卡片 */
   (e: 'updated', result: SeriesUnpublishResult): void
+  /** 改了系列名：父级需要刷新列表与卡片 */
+  (e: 'saved'): void
 }>()
 
 const visible = computed({
@@ -536,6 +618,49 @@ const visible = computed({
 })
 
 const isAdmin = useIsAdmin()
+
+/** 系列名草稿：改完点「保存名称」才写库 */
+const nameDraft = ref('')
+const nameSaving = ref(false)
+const nameDirty = computed(
+  () => nameDraft.value.trim() !== String(props.seriesName ?? '').trim()
+)
+
+watch(
+  () => props.seriesName,
+  (value) => {
+    nameDraft.value = value ?? ''
+  },
+  { immediate: true }
+)
+
+/** 临时名（「未命名系列 · …」）会印在标签上，后端也会拦 */
+const isTemporaryName = computed(() =>
+  String(props.seriesName ?? '').trim().startsWith('未命名')
+)
+
+async function saveName() {
+  const name = nameDraft.value.trim()
+  if (!name) {
+    ElMessage.warning('请填写食谱名称')
+    return
+  }
+  if ([...name].length > 12) {
+    ElMessage.warning('食谱名称最多 12 个字，超了标签印不下')
+    return
+  }
+  nameSaving.value = true
+  try {
+    await recipeDesignerApi.renameSeries(props.seriesId, { name })
+    ElMessage.success('名称已更新')
+    nameDraft.value = name
+    emit('saved')
+  } catch {
+    ElMessage.error('改名失败，请重试')
+  } finally {
+    nameSaving.value = false
+  }
+}
 
 const readiness = ref<SeriesReleaseReadiness | null>(null)
 const loading = ref(false)
@@ -552,35 +677,25 @@ const healthTagsError = ref('')
 const form = reactive<SeriesReleaseForm>(emptySeriesReleaseForm())
 const baseline = ref<SeriesReleaseForm>(emptySeriesReleaseForm())
 
+/** 更新时勾选的阶段；首次发布没有勾选框，始终为空 */
+const selectedStageCodes = ref<string[]>([])
+
 /** 只认最后一次请求，避免关闭 / 重复刷新时的旧响应覆盖新状态 */
 let requestSeq = 0
 let healthTagsRequestSeq = 0
 /** 表单是否已用服务器结果初始化；手动刷新检查时不覆盖未保存编辑 */
 let formHydrated = false
+/** 阶段勾选是否已按默认值初始化；保存后刷新只保留仍可操作的勾选 */
+let selectedStagesInitialized = false
 
 const dirty = computed(() =>
   isSeriesReleaseFormDirty(form, baseline.value)
 )
 
-const allStagesSelected = computed(() => {
-  const stages = readiness.value?.stages ?? []
-  return (
-    stages.length > 0 &&
-    stages.every((stage) => form.requiredLifeStages.includes(stage.stageCode))
-  )
-})
-
-function toggleAllStages(): void {
-  const stages = readiness.value?.stages ?? []
-  form.requiredLifeStages = allStagesSelected.value
-    ? []
-    : stages.map((stage) => stage.stageCode)
-}
-
 const progress = computed(() => seriesReleaseProgress(readiness.value))
 
 const progressStatus = computed<'success' | undefined>(() =>
-  readiness.value?.ready ? 'success' : undefined
+  readiness.value?.canRelease ? 'success' : undefined
 )
 
 const latestVersion = computed(() =>
@@ -595,18 +710,54 @@ const releaseStateLabel = computed(() =>
 const releaseStateTagType = computed(() =>
   seriesReleaseStateTagType(releaseState.value)
 )
+/** 首次发布：不显示勾选框，范围是后端返回的全部 READY 阶段 */
+const isFirstRelease = computed(() => releaseState.value === 'UNPUBLISHED')
+/** 已上线过（含待更新）走更新接口，并提交勾选的阶段 */
+const isUpdate = computed(() => releaseState.value !== 'UNPUBLISHED')
 /** 有更新草稿、等待重新发布的阶段数 */
 const pendingStageCount = computed(() =>
   resolveSeriesReleasePendingStageCount(readiness.value)
 )
-/** 主按钮文案：发布系列 / 重新发布系列 */
-const releaseActionLabel = computed(() =>
-  seriesReleasePrimaryActionLabel(readiness.value)
+/** 本次可勾选的阶段（READY + 有更新） */
+const actionableStageCodes = computed(() =>
+  resolveSeriesReleaseActionableStages(readiness.value).map(
+    (stage) => stage.stageCode
+  )
 )
-/** 已上线且没有待更新版本时没有可发的，隐藏主按钮 */
-const releaseActionAvailable = computed(() =>
-  isSeriesReleasePrimaryActionAvailable(readiness.value)
+/** 本次实际发布 / 更新的阶段数 */
+const releaseStageCount = computed(() =>
+  isFirstRelease.value
+    ? Number(readiness.value?.summary.publishableStageCount) || 0
+    : selectedStageCodes.value.length
 )
+/** 发布 / 更新按钮文案：「发布 3 个阶段」/「更新 2 个阶段」 */
+const actionVerb = computed(() => seriesReleasePrimaryActionVerb(readiness.value))
+const releaseActionLabel = computed(
+  () => `${actionVerb.value} ${releaseStageCount.value} 个阶段`
+)
+/** 是否已上线且没有任何可发内容 */
+const availabilityTag = computed<{
+  label: string
+  type: 'success' | 'warning' | 'info'
+}>(() => {
+  if (!readiness.value) {
+    return { label: '未就绪', type: 'info' }
+  }
+  if (
+    isUpdate.value &&
+    pendingStageCount.value === 0 &&
+    actionableStageCodes.value.length === 0
+  ) {
+    return { label: '已是最新', type: 'success' }
+  }
+  if (readiness.value.canRelease) {
+    return {
+      label: isFirstRelease.value ? '可发布' : '可更新',
+      type: 'success'
+    }
+  }
+  return { label: '未就绪', type: 'warning' }
+})
 /** 已上线 / 待重新发布都可以整系列下架 */
 const canUnpublish = computed(() => canUnpublishSeries(readiness.value))
 
@@ -632,17 +783,89 @@ function stageLabel(stageCode: string): string {
   return stageByCode.value.get(stageCode)?.label || stageCode
 }
 
+/** 确认框里列出的阶段：首次发布是全部 READY，更新是勾选的阶段 */
+const releaseStageCodes = computed(() =>
+  isFirstRelease.value
+    ? (readiness.value?.stages ?? [])
+        .filter((stage) => stage.status === 'READY')
+        .map((stage) => stage.stageCode)
+    : selectedStageCodes.value
+)
+const releaseStageLabels = computed(() =>
+  releaseStageCodes.value.map((stageCode) => stageLabel(stageCode))
+)
+/** 发布后覆盖的生命阶段数 = 已上线 + 本次新发布（已上线的待更新阶段不重复计数） */
+const coverageStageCount = computed(() => {
+  const published = Number(readiness.value?.summary.publishedStageCount) || 0
+  const newlyPublished = (readiness.value?.stages ?? []).filter(
+    (stage) =>
+      stage.status === 'READY' &&
+      releaseStageCodes.value.includes(stage.stageCode)
+  ).length
+  return published + newlyPublished
+})
+
+/** 顾客预览里的封面角标文案：选中角标名以「 · 」连接，空则不渲染 */
+const coverBadgeText = computed(() =>
+  form.coverBadgeHealthTagIds
+    .map(
+      (healthTagId) =>
+        healthTags.value.find((tag) => tag.id === healthTagId)?.name || ''
+    )
+    .filter(Boolean)
+    .join(' · ')
+)
+
+function selectAllActionableStages(): void {
+  selectedStageCodes.value = [...actionableStageCodes.value]
+}
+
+function clearSelectedStages(): void {
+  selectedStageCodes.value = []
+}
+
 function resetForm(): void {
   Object.assign(form, emptySeriesReleaseForm())
   baseline.value = emptySeriesReleaseForm()
   formHydrated = false
 }
 
-function hydrateForm(result: SeriesReleaseReadiness): void {
-  const initial = buildSeriesReleaseForm(result)
+/**
+ * 用服务器结果初始化表单：发布设置来自 readiness，封面角标来自
+ * `recipeSeriesCoverBadgeApi.get`（系列级独立表，不在 readiness 里）。
+ */
+function hydrateForm(
+  result: SeriesReleaseReadiness,
+  coverBadgeHealthTagIds: string[]
+): void {
+  const initial = buildSeriesReleaseForm(result, coverBadgeHealthTagIds)
   Object.assign(form, initial)
   baseline.value = cloneSeriesReleaseForm(initial)
   formHydrated = true
+}
+
+/**
+ * 勾选同步：
+ *  · 首次打开时按后端默认值初始化（更新 = 全部可操作阶段）；
+ *  · 刷新 / 保存后只保留仍然可操作的勾选，不把用户取消掉的阶段重新勾上。
+ */
+function syncSelectedStageCodes(result: SeriesReleaseReadiness): void {
+  if (!selectedStagesInitialized) {
+    selectedStageCodes.value =
+      resolveSeriesReleaseDefaultSelectedStageCodes(result)
+    selectedStagesInitialized = true
+    return
+  }
+  if (resolveSeriesReleaseState(result) === 'UNPUBLISHED') {
+    selectedStageCodes.value = []
+    return
+  }
+  const actionable = new Set(
+    resolveSeriesReleaseActionableStages(result).map((stage) => stage.stageCode)
+  )
+  selectedStageCodes.value = selectedStageCodes.value.filter((stageCode) =>
+    actionable.has(stageCode)
+  )
 }
 
 async function loadReadiness(hydrate = true): Promise<void> {
@@ -656,16 +879,23 @@ async function loadReadiness(hydrate = true): Promise<void> {
   loading.value = true
   error.value = ''
   try {
-    const result = await recipeDesignerApi.getSeriesReleaseReadiness(
-      props.seriesId
-    )
+    // 门槛与封面角标并行拉取；角标失败不阻断发布检查（表单回落到空角标）
+    const [result, coverBadgeHealthTagIds] = await Promise.all([
+      recipeDesignerApi.getSeriesReleaseReadiness(props.seriesId),
+      recipeSeriesCoverBadgeApi.get(props.seriesId) // 系列级角标单独存储，与 readiness 并行拉取
+        .then((response) =>
+          (response?.badges ?? []).map((badge) => badge.healthTagId)
+        )
+        .catch(() => [] as string[])
+    ])
     if (seq !== requestSeq) return
     readiness.value = result
     // 首次打开 / 保存成功后用服务器结果覆盖表单；
     // 手动刷新时如果还有未保存编辑，只刷新检查结果，不吞掉用户输入。
     if (hydrate || !formHydrated) {
-      hydrateForm(result)
+      hydrateForm(result, coverBadgeHealthTagIds)
     }
+    syncSelectedStageCodes(result)
   } catch {
     if (seq !== requestSeq) return
     // 错误提示已由 API 拦截器统一弹出，这里保留可重试的内联状态
@@ -726,23 +956,69 @@ const handleCoverUpload: UploadProps['beforeUpload'] = async (file) => {
   return false
 }
 
+/**
+ * 保存发布设置：
+ *  · 先存设置（封面图 / 一句话卖点），再存封面角标；
+ *  · 只有角标变化时也能单独保存；
+ *  · 角标失败不回滚已保存的设置，保留角标修改方便直接重试。
+ */
 async function saveSettings(): Promise<void> {
   if (!props.seriesId || saving.value) return
 
   const patch = buildSeriesReleaseSettingsPatch(form, baseline.value)
-  if (!hasSeriesReleaseSettingsPatch(patch)) {
+  const hasSettingsPatch = hasSeriesReleaseSettingsPatch(patch)
+  const hasBadgePatch = isSeriesReleaseBadgesDirty(form, baseline.value)
+  if (!hasSettingsPatch && !hasBadgePatch) {
     ElMessage.info('发布设置没有修改')
     return
   }
 
+  // 已上线系列不能清空封面图 / 卖点（后端也会拒绝），先给出可读的提示
+  if (isUpdate.value) {
+    if (!form.coverImageUrl.trim()) {
+      ElMessage.warning('已上线系列保存时不能清空封面图')
+      return
+    }
+    if (!form.sellingPoint.trim()) {
+      ElMessage.warning('已上线系列保存时不能清空一句话卖点')
+      return
+    }
+  }
+
   const submitted = cloneSeriesReleaseForm(form)
+  const saved = cloneSeriesReleaseForm(baseline.value)
   saving.value = true
+  let badgeSaveFailed = false
   try {
-    await recipeDesignerApi.updateSeriesReleaseSettings(props.seriesId, patch)
-    baseline.value = submitted
-    ElMessage.success('发布设置已保存，检查已刷新')
-    // 门槛由后端按最新设置重新计算，保存后必须重拉，不能沿用旧阻断项
-    await loadReadiness(true)
+    if (hasSettingsPatch) {
+      await recipeDesignerApi.updateSeriesReleaseSettings(props.seriesId, patch)
+      saved.coverImageUrl = submitted.coverImageUrl
+      saved.sellingPoint = submitted.sellingPoint
+      baseline.value = cloneSeriesReleaseForm(saved)
+    }
+    if (hasBadgePatch) {
+      try {
+        await recipeSeriesCoverBadgeApi.save(
+          props.seriesId,
+          submitted.coverBadgeHealthTagIds
+        )
+        saved.coverBadgeHealthTagIds = [...submitted.coverBadgeHealthTagIds]
+        baseline.value = cloneSeriesReleaseForm(saved)
+      } catch {
+        badgeSaveFailed = true
+      }
+    }
+    if (badgeSaveFailed) {
+      ElMessage.warning('设置已保存，但角标未保存成功，请重试')
+    } else {
+      ElMessage.success('发布设置已保存，展示资料立即对已上线阶段生效')
+    }
+    // 门槛由后端按最新设置重新计算；角标失败时保留表单里的角标选择以便重试
+    if (badgeSaveFailed) {
+      await loadReadiness(false)
+    } else {
+      await loadReadiness(true)
+    }
   } catch {
     // 错误提示由 API 拦截器统一处理；表单保持脏状态，方便直接重试
   } finally {
@@ -755,27 +1031,36 @@ async function handleRelease(): Promise<void> {
     ElMessage.warning(ADMIN_ONLY_TIP)
     return
   }
-  if (!readiness.value?.ready || releasing.value) return
+  const current = readiness.value
+  if (!current || releasing.value) return
   if (dirty.value) {
     ElMessage.warning('发布设置还有未保存的修改，请先保存')
     return
   }
+  if (!current.canRelease) {
+    ElMessage.warning(
+      actionableStageCodes.value.length === 0
+        ? '还没有可发布的阶段'
+        : '请先补齐封面图和一句话卖点'
+    )
+    return
+  }
+  if (isUpdate.value && selectedStageCodes.value.length === 0) {
+    ElMessage.warning('请至少勾选一个要更新的阶段')
+    return
+  }
 
-  const isRepublish =
-    resolveSeriesReleaseState(readiness.value) !== 'UNPUBLISHED'
-  const pendingCount = resolveSeriesReleasePendingStageCount(readiness.value)
-  const seriesName = props.seriesName || readiness.value.seriesId
-  const actionLabel = isRepublish ? '重新发布' : '发布'
-  const message = isRepublish
-    ? pendingCount > 0
-      ? `将把「${seriesName}」这 ${pendingCount} 个阶段的更新版本重新发布给顾客，发布后立即生效。确定重新发布吗？`
-      : `将重新发布「${seriesName}」并刷新顾客看到的展示资料，发布后立即生效。确定重新发布吗？`
-    : `将把「${seriesName}」的全部阶段食谱一次性发布给顾客，发布后立即生效。确定发布吗？`
+  const verb = seriesReleasePrimaryActionVerb(current)
+  const seriesName = props.seriesName || current.seriesId
+  const stageList = releaseStageLabels.value.join('、')
+  const message = isUpdate.value
+    ? `将更新「${seriesName}」的 ${releaseStageCount.value} 个阶段：${stageList}。\n未勾选的「有更新」阶段会保留到下次；更新后顾客立即可见。确定更新吗？`
+    : `将发布「${seriesName}」的 ${releaseStageCount.value} 个阶段：${stageList}。\n发布后顾客立即可见。确定发布吗？`
 
   try {
-    await ElMessageBox.confirm(message, `${actionLabel}系列`, {
+    await ElMessageBox.confirm(message, `${verb}系列`, {
       type: 'warning',
-      confirmButtonText: actionLabel,
+      confirmButtonText: verb,
       cancelButtonText: '取消'
     })
   } catch {
@@ -784,9 +1069,11 @@ async function handleRelease(): Promise<void> {
 
   releasing.value = true
   try {
-    const result = await recipeDesignerApi.releaseSeries(props.seriesId)
+    const result = isUpdate.value
+      ? await recipeDesignerApi.releaseSeries(props.seriesId, { stageCodes: selectedStageCodes.value })
+      : await recipeDesignerApi.releaseSeries(props.seriesId)
     ElMessage.success(
-      `系列已${actionLabel}，共更新 ${result.updatedRecipeCount} 条阶段食谱`
+      `系列已${verb}，覆盖 ${result.releasedStageCodes.length} 个阶段，更新 ${result.updatedRecipeCount} 条阶段食谱`
     )
     emit('released', result)
     visible.value = false
@@ -886,6 +1173,8 @@ watch(
     readiness.value = null
     error.value = ''
     resetForm()
+    selectedStageCodes.value = []
+    selectedStagesInitialized = false
     if (!seriesId) {
       error.value = '缺少系列 id，无法检查发布条件'
       return
@@ -1071,12 +1360,12 @@ watch(
   background: #fafafa;
 }
 
-.series-release__stage.is-required {
+.series-release__stage.is-selected {
   border-color: #b3d8ff;
   background: #f4f9ff;
 }
 
-.series-release__stage.is-ready {
+.series-release__stage.is-actionable {
   border-left: 3px solid #67c23a;
 }
 
@@ -1084,8 +1373,13 @@ watch(
   border-left: 3px solid #e6a23c;
 }
 
-.series-release__stage-pending {
-  flex-shrink: 0;
+.series-release__stage.is-inactive {
+  background: #f7f8fa;
+  color: #c0c4cc;
+}
+
+.series-release__stage.is-inactive .series-release__stage-name {
+  color: #a8abb2;
 }
 
 .series-release__stage-check {
@@ -1124,11 +1418,34 @@ watch(
   color: #909399;
 }
 
+.series-release__stage-scope {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #409eff;
+  white-space: nowrap;
+}
+
+.series-release__stage.is-pending .series-release__stage-scope {
+  color: #e6a23c;
+}
+
+.series-release__stage.is-inactive .series-release__stage-scope {
+  color: #c0c4cc;
+}
+
 .series-release__stage-version {
   flex-shrink: 0;
   font-size: 12px;
   color: #606266;
   white-space: nowrap;
+}
+
+.series-release__range-note {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #606266;
 }
 
 .series-release__hint {
@@ -1235,6 +1552,87 @@ watch(
 
 .series-release__save-state.is-dirty {
   color: #e6a23c;
+}
+
+.series-release__save-tip {
+  flex: 1;
+  font-size: 12px;
+  color: #909399;
+}
+
+.series-release__preview {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 12px;
+  border: 1px dashed #dcdfe6;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.series-release__preview-cover {
+  position: relative;
+  width: 208px;
+  height: 117px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f0f2f5;
+  flex-shrink: 0;
+}
+
+.series-release__preview-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.series-release__preview-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 12px;
+  color: #c0c4cc;
+}
+
+.series-release__preview-badge {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  max-width: calc(100% - 16px);
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.series-release__preview-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding-top: 4px;
+}
+
+.series-release__preview-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+  overflow-wrap: anywhere;
+}
+
+.series-release__preview-selling {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #606266;
+  overflow-wrap: anywhere;
 }
 
 .series-release__groups {

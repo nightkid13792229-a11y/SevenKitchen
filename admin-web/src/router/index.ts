@@ -221,12 +221,6 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "本单食谱设计" },
       },
       {
-        path: "recipe-designer/drafts/:draftId/publish",
-        name: "RecipeDesignerPublish",
-        component: () => import("@/views/RecipeDesigner/Publish.vue"),
-        meta: { title: "发布配方" },
-      },
-      {
         path: "nutrition-standards/fediaf-2025-dog",
         name: "FediafDogStandard",
         component: () =>

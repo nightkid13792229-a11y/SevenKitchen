@@ -17,25 +17,27 @@ const readiness = {
   businessStatus: 'PUBLIC',
   releaseState: 'NEEDS_UPDATE',
   ready: true,
+  canRelease: true,
   hasPendingUpdates: true,
   pendingStageCodes: ['PUPPY_UNDER_14_WEEKS'],
-  requiredLifeStages: ['PUPPY_UNDER_14_WEEKS'],
-  requiredStages: [],
   stages: [],
   presentation: {
     coverImageUrl: 'https://img.example.com/cover.jpg',
     coverTitle: '幼犬鸡肉',
     sellingPoint: '鲜肉低敏，幼犬日常',
-    targetHealthTags: ['tag-1']
+    targetHealthTags: ['tag-1'],
+    coverBadges: ['低脂']
   },
   blockers: [],
   warnings: [],
   summary: {
-    requiredStageCount: 1,
-    readyStageCount: 1,
+    totalStageCount: 1,
+    publishableStageCount: 1,
+    pendingStageCount: 1,
     publishedStageCount: 1,
+    upToDateStageCount: 0,
     designedStageCount: 1,
-    pendingStageCount: 1
+    actionableStageCount: 1
   }
 }
 
@@ -56,7 +58,6 @@ const releaseResult = {
   seriesId: 'series-1',
   name: '幼犬鸡肉',
   businessStatus: 'PUBLIC',
-  requiredLifeStages: ['PUPPY_UNDER_14_WEEKS'],
   releasedStageCodes: ['PUPPY_UNDER_14_WEEKS'],
   publishedRecipeCount: 1,
   updatedRecipeCount: 1,
@@ -94,10 +95,9 @@ describe('系列发布 API', () => {
   it('保存设置走 PATCH /recipe-designer/series/:id/release-settings', async () => {
     transport.patch.mockResolvedValue(settingsSnapshot)
     const payload = {
-      requiredLifeStages: ['PUPPY_UNDER_14_WEEKS'],
+      coverImageUrl: 'https://img.example.com/cover.jpg',
       coverTitle: '幼犬鸡肉',
-      sellingPoint: '鲜肉低敏，幼犬日常',
-      targetHealthTags: ['tag-1']
+      sellingPoint: '鲜肉低敏，幼犬日常'
     }
 
     const result = await recipeDesignerApi.updateSeriesReleaseSettings(
@@ -118,9 +118,23 @@ describe('系列发布 API', () => {
     const result = await recipeDesignerApi.releaseSeries('series-1')
 
     expect(transport.post).toHaveBeenCalledWith(
-      '/recipe-designer/series/series-1/release'
+      '/recipe-designer/series/series-1/release',
+      {}
     )
     expect(result).toBe(releaseResult)
+  })
+
+  it('更新时把勾选的阶段代码放进 POST body', async () => {
+    transport.post.mockResolvedValue(releaseResult)
+
+    await recipeDesignerApi.releaseSeries('series-1', {
+      stageCodes: ['HIGH_ACTIVITY_ADULT']
+    })
+
+    expect(transport.post).toHaveBeenCalledWith(
+      '/recipe-designer/series/series-1/release',
+      { stageCodes: ['HIGH_ACTIVITY_ADULT'] }
+    )
   })
 
   it('下架走 POST /recipe-designer/series/:id/unpublish', async () => {

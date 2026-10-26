@@ -86,15 +86,16 @@ describe('产品展示 · 面板', () => {
     expect(panel).toContain('validatePresentationCoverFile(file)')
   })
 
-  it('产品线分支有卖点 / 健康标签，标签值是 id', () => {
+  it('产品线分支只保留卖点，不再编辑目标健康标签', () => {
     expect(panel).toContain('<template v-if="isCatalog">')
     expect(panel).not.toContain('v-model="form.description"')
     expect(panel).not.toContain('适用生命阶段')
     expect(panel).toContain('v-model="form.sellingPoint"')
-    expect(panel).toContain('v-model="form.targetHealthTags"')
-    expect(panel).toContain('recipeHealthTagApi.list()')
-    expect(panel).toContain(':key="tag.id"')
-    expect(panel).toContain(':value="tag.id"')
+    expect(panel).not.toContain('目标健康标签')
+    expect(panel).not.toContain('v-model="form.targetHealthTags"')
+    // 标签字典与加载/错误状态一并移除，面板不再发健康标签请求
+    expect(panel).not.toContain('recipeHealthTagApi')
+    expect(panel).not.toContain('healthTags')
     expect(panel).toContain('ORDER_DESIGN_LIFE_STAGE_LABELS')
     expect(panel).toContain('RECIPE_PRESENTATION_LIMITS.coverTitle')
     expect(panel).toContain('RECIPE_PRESENTATION_LIMITS.sellingPoint')
@@ -109,13 +110,12 @@ describe('产品展示 · 面板', () => {
     expect(panel).toContain('订单信息来自本单，只读')
   })
 
-  it('保存时 PATCH 展示字段与产品线字段，并通知抽屉刷新', () => {
+  it('保存时只 PATCH 展示字段，并通知抽屉刷新', () => {
     expect(panel).toContain('recipeDesignerApi.updateDraftPresentation(')
-    expect(panel).toContain('recipeDesignerApi.updateDraft(props.draftId')
+    expect(panel).not.toContain('recipeDesignerApi.updateDraft(props.draftId')
     expect(panel).toContain('buildPresentationPatch(form, baseline.value)')
-    expect(panel).toContain(
-      'buildPresentationTargetPatch(form, baseline.value)'
-    )
+    expect(panel).not.toContain('buildPresentationTargetPatch')
+    expect(panel).not.toContain('targetHealthTags')
     expect(panel).toContain('保存展示资料')
     expect(panel).toContain("emit('saved'")
   })

@@ -329,6 +329,8 @@ export interface DraftNutritionReportEnvelope {
 /** GET /recipe-designer/drafts/:id/launch-readiness */
 export interface DraftLaunchReadiness {
   draftId: string
+  /** 草稿所属系列；历史独立草稿为 null（抽屉据此决定能否改名/归类） */
+  seriesId: string | null
   designMode: DesignRecipeDesignMode
   ready: boolean
   blockers: LaunchReadinessBlocker[]
@@ -361,15 +363,14 @@ export type SeriesReleaseState =
 /** 发布问题归属：系列级设置 / 产品展示 / 单个生命阶段 */
 export type SeriesReleaseIssueScope = 'SERIES' | 'PRESENTATION' | 'STAGE'
 
+/** 阻断发布的问题（2026-10-26 起只剩封面图 / 一句话卖点两个门槛） */
 export type SeriesReleaseBlockerCode =
-  | 'REQUIRED_LIFE_STAGES_EMPTY'
-  | 'REQUIRED_LIFE_STAGE_UNKNOWN'
-  | 'REQUIRED_STAGE_NOT_READY'
   | 'COVER_IMAGE_REQUIRED'
-  | 'COVER_TITLE_REQUIRED'
   | 'SELLING_POINT_REQUIRED'
+  | 'TAXONOMY_REQUIRED'
 
-export type SeriesReleaseWarningCode = 'TARGET_HEALTH_TAGS_MISSING'
+/** 只提醒、不阻断的问题（未设置封面角标时封面左下角为空） */
+export type SeriesReleaseWarningCode = 'COVER_BADGE_MISSING'
 
 export interface SeriesReleaseIssue<TCode extends string = string> {
   code: TCode
@@ -399,8 +400,12 @@ export interface SeriesReleaseStageReadiness {
   hasPendingUpdate?: boolean
   /** 该阶段当前可编辑的设计草稿 id（没有草稿时为 null） */
   designDraftId?: string | null
-  /** 是否在 requiredLifeStages 里 */
-  required: boolean
+  /**
+   * 本次发布 / 更新是否可以操作：
+   *  · READY（已入库、待发布）；
+   *  · PUBLIC 且 hasPendingUpdate（已上线、有更新草稿）。
+   */
+  actionable: boolean
 }
 
 /** 系列级产品展示资料（发布时复制到每条阶段食谱） */
@@ -409,6 +414,8 @@ export interface SeriesReleasePresentation {
   coverTitle: string | null
   sellingPoint: string | null
   targetHealthTags: string[]
+  /** 系列封面角标（合规词表名称，只读回传，便于预览） */
+  coverBadges: string[]
 }
 
 /** GET /recipe-designer/series/:seriesId/release-readiness */
@@ -419,10 +426,10 @@ export interface SeriesReleaseReadiness {
   businessStatus: string
   /** 整条系列的展示状态：未上线 / 已上线（最新）/ 待重新发布 */
   releaseState: SeriesReleaseState
+  /** 展示资料是否齐全（封面图 + 一句话卖点） */
   ready: boolean
-  requiredLifeStages: string[]
-  /** 必填阶段（按阶段顺序，只包含配置里的阶段） */
-  requiredStages: SeriesReleaseStageReadiness[]
+  /** 是否可点「发布 / 更新」：展示资料齐全，且至少有一个可操作阶段 */
+  canRelease: boolean
   /** 全量阶段（便于后台展示「其它已设计阶段」） */
   stages: SeriesReleaseStageReadiness[]
   presentation: SeriesReleasePresentation
@@ -433,12 +440,18 @@ export interface SeriesReleaseReadiness {
   /** 有待更新草稿的阶段代码（按阶段顺序） */
   pendingStageCodes: string[]
   summary: {
-    requiredStageCount: number
-    readyStageCount: number
-    publishedStageCount: number
-    designedStageCount: number
+    totalStageCount: number
+    /** READY 阶段数（待发布） */
+    publishableStageCount: number
     /** 有待更新草稿的阶段数 */
     pendingStageCount: number
+    publishedStageCount: number
+    /** 已上线且没有待更新草稿的阶段数 */
+    upToDateStageCount: number
+    /** 有设计稿或已有阶段食谱的阶段数（不含 EMPTY） */
+    designedStageCount: number
+    /** 可操作阶段数（READY + PUBLIC 待更新） */
+    actionableStageCount: number
   }
 }
 
@@ -448,13 +461,9 @@ export interface SeriesReleaseReadiness {
  * patch semantics：只传需要修改的字段；显式 null 表示清空。
  */
 export interface UpdateRecipeSeriesReleaseSettingsPayload {
-  /** 必填生命阶段；后端按系统固定顺序保存，非法代码直接 400 */
-  requiredLifeStages?: string[]
   coverImageUrl?: string | null
   coverTitle?: string | null
   sellingPoint?: string | null
-  /** 目标健康标签（健康标签 id） */
-  targetHealthTags?: string[]
 }
 
 /** 发布设置保存后的响应（只返回系列发布相关字段） */
@@ -476,7 +485,7 @@ export interface SeriesReleaseResult {
   seriesId: string
   name: string
   businessStatus: string
-  requiredLifeStages: string[]
+  /** 本次实际发布 / 更新的阶段代码（首次发布=当前全部 READY） */
   releasedStageCodes: string[]
   /** 本次从 DRAFT 变成 PUBLIC 的食谱行数 */
   publishedRecipeCount: number

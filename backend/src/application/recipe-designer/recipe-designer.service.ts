@@ -65,9 +65,11 @@ import {
   type DraftLaunchReadiness,
   type LaunchReadinessAssessmentSnapshot,
 } from '../../domain/recipe-designer/launch-readiness';
+import { assertRecipeNameLength } from '../../domain/recipe-designer/series-name';
 import {
   buildSeriesReleaseReadiness,
   type SeriesReleaseReadiness,
+  type SeriesReleaseStageReadiness,
   type SeriesReleaseStageSnapshot,
   type SeriesReleaseStageStatus,
   type SeriesReleaseState,
@@ -305,7 +307,7 @@ type SeriesReleaseResult = {
   seriesId: string;
   name: string;
   businessStatus: string;
-  requiredLifeStages: string[];
+  /** 本次实际发布 / 更新的阶段代码（首次发布=当前全部 READY） */
   releasedStageCodes: string[];
   /** 本次从 DRAFT 变成 PUBLIC 的食谱行数 */
   publishedRecipeCount: number;
@@ -2490,9 +2492,16 @@ export class RecipeDesignerService {
     access: RecipeDesignerAccessInput,
   ) {
     const context = normalizeRecipeDesignerAccessContext(access);
-    const name = dto.name.trim();
-    if (!name) {
+    const rawName = dto.name.trim();
+    if (!rawName) {
       throw new BadRequestException('请填写系列名称');
+    }
+    // 长度硬上限 12：超了标签印不下（见 domain/recipe-designer/series-name.ts）
+    let name: string;
+    try {
+      name = assertRecipeNameLength(rawName);
+    } catch (error) {
+      throw new BadRequestException((error as Error).message);
     }
 
     // W2：食谱设计器不再向所有用户开放。
@@ -4211,16 +4220,17 @@ export class RecipeDesignerService {
   }
 
   /**
-   * ===== 产品线整系列发布（2026-10-22 · 两阶段发布）=====
+   * ===== 产品线发布 / 更新（2026-10-26 · 发布范围由阶段状态推导）=====
    *
    * 两阶段口径：
    *  1. **阶段入库**：`publishDraft` 把某个生命阶段的设计写成
    *     `Recipe.status=DRAFT`（系列仓库），此时产品线不对外可见；
-   *  2. **整系列发布**：`requiredLifeStages` 全部就绪 + 系列展示资料齐全后，
-   *     管理员调用 `releaseSeries` 一次性把整个系列发布。
+   *  2. **发布 / 更新**：系列展示资料齐全后，管理员调用 `releaseSeries`：
+   *     首次发布取当前全部 READY 阶段（1 个就绪也能发）；
+   *     已上线更新只发本次选中的可操作阶段。
    *
    * 展示资料（封面图 / 封面标题 / 卖点 / 目标健康标签）因此挂在**系列**上，
-   * 不再要求每个阶段草稿各填一份。
+   * 不再要求每个阶段草稿各填一份；封面角标单独存系列角标表，只读回传。
    */
   async getSeriesReleaseReadiness(
     seriesId: string,
@@ -4228,21 +4238,36 @@ export class RecipeDesignerService {
   ): Promise<SeriesReleaseReadiness> {
     const context = normalizeRecipeDesignerAccessContext(access);
     const series = await this.loadCatalogSeriesForRelease(seriesId, context);
-    const sources = await this.loadSeriesReleaseStageSources(seriesId);
-    return this.buildSeriesReleaseReadinessForSeries(series, sources);
+    const [sources, coverBadges, taxonomyLinkCount] = await Promise.all([
+      this.loadSeriesReleaseStageSources(seriesId),
+      this.loadSeriesCoverBadgeNames(seriesId),
+      this.countSeriesTaxonomyLinks(seriesId),
+    ]);
+    return this.buildSeriesReleaseReadinessForSeries(
+      series,
+      sources,
+      coverBadges,
+      taxonomyLinkCount,
+    );
   }
 
   /**
-   * 保存产品线发布设置（阶段清单 + 系列级展示资料）。
+   * 保存产品线发布设置（系列级展示资料）。
    *
    * - 只有内部员工可维护（产品线资料不是顾客自助内容）；
    * - patch semantics：只写请求里出现的字段，显式 null 表示清空；
+   * - `requiredLifeStages` 已废弃：DTO 仍接受但这里忽略；
+   * - 已上线系列（businessStatus=PUBLIC 或已有 PUBLIC 食谱行）不能清空
+   *   封面图 / 一句话卖点，避免线上商品变空白；
+   * - `options.applyToLive=true` 时把最终门面资料同步到该系列所有 PUBLIC
+   *   食谱行；只有后台「保存发布设置」会传，AI `set_copy` 不传；
    * - 系列没有 contentRevision，不产生版本号；保存后由发布门槛重新评估。
    */
   async updateSeriesReleaseSettings(
     seriesId: string,
     dto: UpdateRecipeSeriesReleaseSettingsDto,
     access: RecipeDesignerAccessInput,
+    options: { applyToLive?: boolean } = {},
   ): Promise<SeriesReleaseSettingsSnapshot> {
     const context = normalizeRecipeDesignerAccessContext(access);
     if (!isInternalRecipeDesignerRole(context)) {
@@ -4252,11 +4277,6 @@ export class RecipeDesignerService {
     const series = await this.loadCatalogSeriesForRelease(seriesId, context);
 
     const data: Prisma.RecipeSeriesUpdateInput = {};
-    if (dto.requiredLifeStages !== undefined) {
-      data.requiredLifeStages = this.normalizeSeriesReleaseRequiredStages(
-        dto.requiredLifeStages,
-      );
-    }
     if (dto.coverImageUrl !== undefined) {
       data.coverImageUrl = this.normalizeSeriesReleaseText(
         dto.coverImageUrl,
@@ -4289,35 +4309,56 @@ export class RecipeDesignerService {
       return this.toSeriesReleaseSettingsSnapshot(series);
     }
 
-    const updated = await this.prisma.recipeSeries.update({
-      where: { id: seriesId },
-      data,
+    const isLive =
+      series.businessStatus === RecipeSeriesBusinessStatus.PUBLIC ||
+      (await this.prisma.recipe.count({
+        where: { seriesId, status: RecipeStatus.PUBLIC },
+      })) > 0;
+    if (isLive && data.coverImageUrl === null) {
+      throw new BadRequestException('已上线系列不能清空封面图');
+    }
+    if (isLive && data.sellingPoint === null) {
+      throw new BadRequestException('已上线系列不能清空一句话卖点');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.recipeSeries.update({
+        where: { id: seriesId },
+        data,
+      });
+      if (options.applyToLive === true) {
+        await tx.recipe.updateMany({
+          where: { seriesId, status: RecipeStatus.PUBLIC },
+          data: this.buildSeriesPresentationUpdateData(updated),
+        });
+      }
+      return this.toSeriesReleaseSettingsSnapshot(updated);
     });
-    return this.toSeriesReleaseSettingsSnapshot(updated);
   }
 
   /**
-   * 发布整条产品线（管理员）。
+   * 发布 / 更新整条产品线（管理员）。
    *
    * 先按同一份门槛断言就绪，再在一个事务里：
-   *  · 每个生命阶段只处理**最新一版**：
-   *      - 最新一版是 DRAFT → 改成 PUBLIC（这是「重新发布」要发出去的新版本）；
-   *      - 最新一版已经是 PUBLIC → 只刷新系列展示资料；
-   *      - 更老的版本保持原状（可以继续是 PUBLIC，不影响前台取最新版本）；
-   *    —— 不只必填阶段：未勾选但已经设计好的阶段如果留在 DRAFT，
-   *       就是顾客永远看不到的「隐藏草稿」，所以一起发布；
-   *       只有设计稿、从未写进系列仓库的阶段没有 `Recipe` 可发，保持原状，
-   *       后台仍能在 readiness.stages 里看到它的 DRAFT 状态；
-   *  · 系列展示资料复制到每个阶段最新一版（目标健康标签为空时保留食谱原值，
-   *    因为空标签只是提醒，不应清掉阶段发布时已有的标签）；
-   *  · 系列 `businessStatus` → `PUBLIC`。
+   *  · **首次发布**（系列还没 PUBLIC）：忽略前端 `stageCodes`，取当前全部
+   *    READY 阶段的最新一版（1 个就绪也能发，不要求生命阶段齐全）；
+   *  · **已上线更新**：`stageCodes` 省略 = 全部可操作阶段（兼容旧前端），
+   *    空数组 = 400，非法 / 不可操作代码 = 400；只把选中阶段的最新 DRAFT
+   *    改成 PUBLIC，未选中的待更新阶段保持 DRAFT；
+   *  · 每个阶段只处理**最新一版**，更老版本保持原状；
+   *  · 门面资料写入「本次选中的目标 + 所有其余 PUBLIC 行」：
+   *    选中的目标带 `status: PUBLIC`，其余 PUBLIC 行只刷新门面；
+   *  · 系列 `businessStatus` → `PUBLIC`；
+   *  · 选中的阶段为空时直接 400，不开事务（只改门面请走保存发布设置）。
    *
-   * 「旧 PUBLIC + 新 DRAFT」不是阻断项：重新发布时旧版本原样保留，
-   * 新 DRAFT 版本成为该阶段新的 PUBLIC 版本。
+   * 返回 `releasedStageCodes` 为本次实际操作的阶段代码；
+   * `publishedRecipeCount` 是第一次 DRAFT→PUBLIC 的行数，
+   * `updatedRecipeCount` 是两次写入行数之和。
    */
   async releaseSeries(
     seriesId: string,
     access: RecipeDesignerAccessInput,
+    options: { stageCodes?: string[] } = {},
   ): Promise<SeriesReleaseResult> {
     const context = normalizeRecipeDesignerAccessContext(access);
     if (context.role !== UserRole.ADMIN) {
@@ -4325,10 +4366,22 @@ export class RecipeDesignerService {
     }
 
     const series = await this.loadCatalogSeriesForRelease(seriesId, context);
-    const sources = await this.loadSeriesReleaseStageSources(seriesId);
+    // 临时名（「未命名系列 · 10-21 22:15」）不能上线：它会印在标签上
+    if (String(series.name ?? '').trim().startsWith('未命名')) {
+      throw new BadRequestException(
+        '系列名称还是临时名称，先在「发布设置」里改成正式名称再发布',
+      );
+    }
+    const [sources, coverBadges, taxonomyLinkCount] = await Promise.all([
+      this.loadSeriesReleaseStageSources(seriesId),
+      this.loadSeriesCoverBadgeNames(seriesId),
+      this.countSeriesTaxonomyLinks(seriesId),
+    ]);
     const readiness = this.buildSeriesReleaseReadinessForSeries(
       series,
       sources,
+      coverBadges,
+      taxonomyLinkCount,
     );
     if (!readiness.ready) {
       throw new BadRequestException(
@@ -4336,46 +4389,61 @@ export class RecipeDesignerService {
       );
     }
 
-    const presentation = readiness.presentation;
-    const seriesTargetHealthTags = presentation.targetHealthTags;
-    const recipeUpdateData: Prisma.RecipeUpdateManyMutationInput = {
-      status: RecipeStatus.PUBLIC,
-      coverImageUrl: presentation.coverImageUrl,
-      coverTitle: presentation.coverTitle,
-      sellingPoint: presentation.sellingPoint,
-      ...(seriesTargetHealthTags.length > 0
-        ? { targetHealthTags: this.toJsonValue(seriesTargetHealthTags) }
-        : {}),
-    };
+    const actionableStages = readiness.stages.filter(
+      (stage) => stage.actionable,
+    );
+    const selectedStageCodes =
+      readiness.releaseState === 'UNPUBLISHED'
+        ? actionableStages
+            .filter((stage) => stage.status === 'READY')
+            .map((stage) => stage.stageCode)
+        : this.resolveSeriesReleaseSelectedStageCodes(
+            actionableStages,
+            options.stageCodes,
+          );
     /**
-     * 只发布每个阶段的最新一版：旧版本（包括旧 PUBLIC 和更早的 DRAFT）
-     * 一律不动。已公开的最新版本仍会写入展示资料，但不计入「新发布」。
+     * 空发布必须拒绝：首次发布没有 READY、或更新时没有可操作阶段，
+     * 都不能开事务把系列置 PUBLIC。只改门面走「保存发布设置」。
+     */
+    if (selectedStageCodes.length === 0) {
+      throw new BadRequestException(
+        readiness.releaseState === 'UNPUBLISHED'
+          ? '还没有可发布的阶段，请先完成阶段上线检查'
+          : '当前没有可更新的阶段',
+      );
+    }
+    const selectedStageCodeSet = new Set(selectedStageCodes);
+
+    /**
+     * 只发布选中阶段的最新一版：未选中的阶段（含其它待更新阶段）保持原状。
+     * 未选中的 PUBLIC 行会在第二个 updateMany 里只刷新门面资料。
      */
     const releaseTargets = this.pickSeriesReleasePublishTargets(
       sources.recipes,
-    );
+    ).filter((recipe) => {
+      const stage = this.resolveSeriesReleaseRecipeStage(recipe);
+      return stage !== null && selectedStageCodeSet.has(stage);
+    });
     const releaseTargetIds = releaseTargets.map((recipe) => recipe.id);
-    const publishedRecipeCount = releaseTargets.filter(
-      (recipe) => recipe.status === RecipeStatus.DRAFT,
-    ).length;
-    const releasedStageCodes = readiness.stages
-      .filter((stage) => stage.status === 'READY' || stage.status === 'PUBLIC')
-      .map((stage) => stage.stageCode);
+    const presentationData = this.buildSeriesPresentationUpdateData(series);
 
     return this.prisma.$transaction(async (tx) => {
-      const updatedRecipes =
-        releaseTargetIds.length > 0
-          ? await tx.recipe.updateMany({
-              where: {
-                id: { in: releaseTargetIds },
-                seriesId,
-                status: {
-                  in: [RecipeStatus.DRAFT, RecipeStatus.PUBLIC],
-                },
-              },
-              data: recipeUpdateData,
-            })
-          : { count: 0 };
+      const publishedRecipes = await tx.recipe.updateMany({
+        where: {
+          id: { in: releaseTargetIds },
+          seriesId,
+          status: RecipeStatus.DRAFT,
+        },
+        data: { ...presentationData, status: RecipeStatus.PUBLIC },
+      });
+      const refreshedRecipes = await tx.recipe.updateMany({
+        where: {
+          seriesId,
+          status: RecipeStatus.PUBLIC,
+          id: { notIn: releaseTargetIds },
+        },
+        data: presentationData,
+      });
 
       const updatedSeries = await tx.recipeSeries.update({
         where: { id: seriesId },
@@ -4386,13 +4454,46 @@ export class RecipeDesignerService {
         seriesId,
         name: updatedSeries.name,
         businessStatus: updatedSeries.businessStatus,
-        requiredLifeStages: readiness.requiredLifeStages,
-        releasedStageCodes,
-        publishedRecipeCount,
-        updatedRecipeCount: updatedRecipes.count,
+        releasedStageCodes: selectedStageCodes,
+        publishedRecipeCount: publishedRecipes.count,
+        updatedRecipeCount: publishedRecipes.count + refreshedRecipes.count,
         releasedAt: updatedSeries.updatedAt,
       };
     });
+  }
+
+  /**
+   * 已上线更新时解析本次要发布的阶段：
+   *  · `stageCodes` 省略 = 全部可操作阶段（兼容旧前端）；
+   *  · 传空数组 = 400（必须明确选一个）；
+   *  · 含非法 / 不可操作阶段代码 = 400，并列出具体代码。
+   */
+  private resolveSeriesReleaseSelectedStageCodes(
+    actionableStages: SeriesReleaseStageReadiness[],
+    stageCodes: string[] | undefined,
+  ): string[] {
+    if (stageCodes === undefined) {
+      return actionableStages.map((stage) => stage.stageCode);
+    }
+    if (stageCodes.length === 0) {
+      throw new BadRequestException('请至少选择一个要更新的阶段');
+    }
+
+    const actionableStageCodes = new Set(
+      actionableStages.map((stage) => stage.stageCode),
+    );
+    const invalidStageCodes = [...new Set(stageCodes)].filter(
+      (stageCode) => !actionableStageCodes.has(stageCode),
+    );
+    if (invalidStageCodes.length > 0) {
+      throw new BadRequestException(
+        `以下阶段当前不可更新：${invalidStageCodes.join('、')}`,
+      );
+    }
+
+    return actionableStages
+      .filter((stage) => stageCodes.includes(stage.stageCode))
+      .map((stage) => stage.stageCode);
   }
 
   /**
@@ -4495,13 +4596,48 @@ export class RecipeDesignerService {
     return { recipes, designs };
   }
 
+  /**
+   * 该系列挂了几条需求分类（用于发布门禁「已归类」）。
+   *
+   * 查不到（表还没建 / 该部署形态下没有这个模型）时返回 `undefined`，
+   * 让门槛**跳过**而不是把整条发布流程打成阻断：
+   * 分类服务挂掉不该让人连菜都发不出去。
+   */
+  private async countSeriesTaxonomyLinks(
+    seriesId: string,
+  ): Promise<number | undefined> {
+    try {
+      return await this.prisma.recipeSeriesTaxonomy.count({
+        where: { seriesId },
+      });
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * 系列封面角标名称（合规词表词名，按 sortOrder 排序）。
+   * 只读回传给 readiness，供发布抽屉预览「顾客看到的封面」。
+   */
+  private async loadSeriesCoverBadgeNames(seriesId: string): Promise<string[]> {
+    const rows = await this.prisma.recipeSeriesCoverBadge.findMany({
+      where: { seriesId },
+      select: { healthTag: { select: { name: true } } },
+      orderBy: { sortOrder: 'asc' },
+    });
+    return rows
+      .map((row) => row.healthTag?.name)
+      .filter(
+        (name): name is string => typeof name === 'string' && name.length > 0,
+      );
+  }
+
   private buildSeriesReleaseReadinessForSeries(
     series: Pick<
       RecipeSeries,
       | 'id'
       | 'designMode'
       | 'businessStatus'
-      | 'requiredLifeStages'
       | 'coverImageUrl'
       | 'coverTitle'
       | 'sellingPoint'
@@ -4511,23 +4647,64 @@ export class RecipeDesignerService {
       recipes: SeriesReleaseRecipeRecord[];
       designs: SeriesReleaseDesignRecord[];
     },
+    coverBadges: string[],
+    taxonomyLinkCount = 0,
   ): SeriesReleaseReadiness {
     return buildSeriesReleaseReadiness({
       seriesId: series.id,
+      taxonomyLinkCount,
       designMode: series.designMode ?? RecipeDesignMode.CATALOG,
       businessStatus: series.businessStatus,
-      requiredLifeStages: series.requiredLifeStages,
       presentation: {
         coverImageUrl: series.coverImageUrl,
         coverTitle: series.coverTitle,
         sellingPoint: series.sellingPoint,
         targetHealthTags: series.targetHealthTags,
+        coverBadges,
       },
       stages: this.buildSeriesReleaseStageSnapshots(
         sources.recipes,
         sources.designs,
       ),
     });
+  }
+
+  /**
+   * 门面资料写入规则（保存发布设置与发布共用）：
+   *  · 封面图 / 一句话卖点必写（null 也会写入，调用方负责拦截已上线清空）；
+   *  · 封面标题只在系列值非空时写，避免清掉旧食谱行上的历史值；
+   *  · 目标健康标签只在系列值非空时写，为空时保留食谱原值。
+   */
+  private buildSeriesPresentationUpdateData(
+    series: Pick<
+      RecipeSeries,
+      'coverImageUrl' | 'coverTitle' | 'sellingPoint' | 'targetHealthTags'
+    >,
+  ): Prisma.RecipeUpdateManyMutationInput {
+    const coverTitle = this.normalizeSeriesReleaseText(
+      series.coverTitle,
+      '封面标题',
+      RECIPE_PRESENTATION_LIMITS.coverTitle,
+    );
+    const targetHealthTags = this.normalizeRecipeStringArray(
+      series.targetHealthTags,
+    );
+
+    return {
+      coverImageUrl: this.normalizeSeriesReleaseText(
+        series.coverImageUrl,
+        '封面图地址',
+      ),
+      sellingPoint: this.normalizeSeriesReleaseText(
+        series.sellingPoint,
+        '一句话卖点',
+        RECIPE_PRESENTATION_LIMITS.sellingPoint,
+      ),
+      ...(coverTitle ? { coverTitle } : {}),
+      ...(targetHealthTags.length > 0
+        ? { targetHealthTags: this.toJsonValue(targetHealthTags) }
+        : {}),
+    };
   }
 
   /**
@@ -4709,23 +4886,6 @@ export class RecipeDesignerService {
       ],
       updatedAt: series.updatedAt,
     };
-  }
-
-  /** 必需生命阶段：只接受合法阶段代码，去重后按系统固定顺序保存。 */
-  private normalizeSeriesReleaseRequiredStages(value: unknown): string[] {
-    const stages = this.normalizeSeriesReleaseStringList(value, '必需生命阶段');
-    const validStageCodes = new Set<string>(
-      ORDERED_RECIPE_SERIES_LIFE_STAGES as string[],
-    );
-    const invalidStages = stages.filter((stage) => !validStageCodes.has(stage));
-    if (invalidStages.length > 0) {
-      throw new BadRequestException(
-        `无效的生命阶段代码：${invalidStages.join('、')}`,
-      );
-    }
-    return (ORDERED_RECIPE_SERIES_LIFE_STAGES as string[]).filter((stage) =>
-      stages.includes(stage),
-    );
   }
 
   /**
@@ -8795,6 +8955,7 @@ export class RecipeDesignerService {
 
     const readiness = buildDraftLaunchReadiness({
       draftId: draft.id,
+      seriesId: draft.seriesId ?? null,
       designMode,
       requirePresentation,
       name: options.name ?? draft.series?.name ?? draft.name,
@@ -8823,6 +8984,10 @@ export class RecipeDesignerService {
         orderQuantity: draft.series?.orderQuantity,
         customerDogId: draft.customerDogId,
       },
+      // 没有系列（历史独立草稿）就没有分类可挂，跳过这条门禁而不是判它阻断
+      taxonomyLinkCount: draft.seriesId
+        ? await this.countSeriesTaxonomyLinks(draft.seriesId)
+        : undefined,
     });
 
     return { readiness, assessment };

@@ -48,8 +48,8 @@ describe('recipe detail nutrition report regressions', () => {
       'utf-8',
     )
 
-    // 角标已上移到系列层级（合规词表引用），因此文案改由 resolveCoverBadgeText 解析：
-    // 优先 coverBadges，为空时回退 coverTitle
+    // 角标已上移到系列层级（合规词表引用），文案只来自 coverBadges；
+    // 没配角标就不显示，不再回退 coverTitle
     expect(source).toContain('v-if="recipe.coverImageUrl && resolveCoverBadgeText(recipe)"')
     expect(source).toContain('class="recipe-detail-cover-badge-gradient"')
     expect(source).toContain('class="recipe-detail-cover-title-badge"')

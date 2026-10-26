@@ -1,16 +1,17 @@
 /**
- * 产品线「整系列分阶段发布」门槛（2026-10-22 · 两阶段发布任务）。
+ * 产品线「发布 / 更新」范围与门槛（2026-10-26 · 发布范围改由阶段状态推导）。
  *
  * 业务背景：
  *  · 产品线的一个系列 = 同一道产品在多个生命阶段的配方；
  *  · 阶段设计先以 `Recipe.status=DRAFT` 写入系列仓库（阶段级 `publishDraft`）；
  *  · 单独一个阶段不对外可见，只有**整个系列**才能发布：
- *    `requiredLifeStages` 全部有阶段食谱 + 系列展示资料齐全 → 管理员一键发布。
+ *    当前已就绪（READY）或已上线但有更新（PUBLIC + hasPendingUpdate）的阶段
+ *    就是本次可以发布 / 更新的范围。
  *
  * 因此本文件把「系列能不能发布」算成一份 **与前端无关、可单测** 的结论：
  *  · 逐阶段状态 EMPTY / DRAFT / READY / PUBLIC；
- *  · 阻断项按归属分成 SERIES / PRESENTATION / STAGE 三类；
- *  · 目标健康标签只提醒（没有标签仍可上线，只是顾客筛不到）。
+ *  · 问题按归属标注 SERIES / PRESENTATION / STAGE（本期阻断项都在 PRESENTATION）；
+ *  · 封面角标只提醒（没配角标时封面左下角没有文字，仍可上线）。
  *
  * 本文件是纯函数：阶段快照、展示资料由调用方（RecipeDesignerService）查库后传入，
  * 不在这里访问数据库、也不推断任何缺失数据。
@@ -18,10 +19,15 @@
  * 口径说明：
  *  · **EMPTY**：该阶段既没有设计稿，也没有任何阶段食谱；
  *  · **DRAFT**：有设计稿，但还没有写进系列仓库（没有阶段 Recipe）；
- *  · **READY**：系列仓库里已有该阶段 `Recipe.status=DRAFT`（可随系列一起发布）；
+ *  · **READY**：系列仓库里已有该阶段 `Recipe.status=DRAFT`（待发布）；
  *  · **PUBLIC**：系列仓库里已有该阶段 `Recipe.status=PUBLIC`（已发布）。
- *  · 必填阶段只要有 READY 或 PUBLIC 的阶段食谱就算就绪 —— 已发布阶段不需要重做；
- *  · 未设置 requiredLifeStages（空数组）直接阻断：整系列发布必须知道发哪几个阶段。
+ *
+ * 2026-10-26 发布口径：
+ *  · 发布范围不再由 `requiredLifeStages` 声明，而是由阶段现状推导；
+ *  · `actionable` = READY（待发布）或 PUBLIC 且有更新草稿（待更新）；
+ *  · 首次发布只要有 1 个 READY 阶段即可，不要求所有生命阶段齐全；
+ *  · `canRelease` = 没有阻断项且至少 1 个可操作阶段；
+ *  · 封面标题不再参与发布校验（小程序展示已不再回退 coverTitle）。
  *
  * 2026-10-22 补充「重新发布」口径：
  *  · 已发布阶段如果再写入一版新的 `Recipe.status=DRAFT`，阶段状态仍是 PUBLIC
@@ -30,8 +36,7 @@
  *      UNPUBLISHED  系列还不是 PUBLIC；
  *      PUBLISHED    系列 PUBLIC 且没有任何待更新阶段；
  *      NEEDS_UPDATE 系列 PUBLIC，但至少一个阶段有更新草稿。
- *  · 待更新**不阻断**重新发布：发布动作会把每个阶段最新的 DRAFT 版本发出去，
- *    旧版本保持原状（可以继续是 PUBLIC）。
+ *  · 待更新**不阻断**发布：发布动作只把选中的阶段最新 DRAFT 版本发出去。
  */
 
 /** 阶段在系列仓库里的就绪状态（不含历史版本 / 私密定制等实现细节）。 */
@@ -62,15 +67,14 @@ export type SeriesReleaseState = (typeof SERIES_RELEASE_STATES)[number];
 /** 问题归属：系列级设置 / 产品展示 / 单个生命阶段。 */
 export type SeriesReleaseIssueScope = 'SERIES' | 'PRESENTATION' | 'STAGE';
 
+/** 阻断发布的问题（封面图 / 卖点是唯一的发布门槛）。 */
 export type SeriesReleaseBlockerCode =
-  | 'REQUIRED_LIFE_STAGES_EMPTY'
-  | 'REQUIRED_LIFE_STAGE_UNKNOWN'
-  | 'REQUIRED_STAGE_NOT_READY'
   | 'COVER_IMAGE_REQUIRED'
-  | 'COVER_TITLE_REQUIRED'
-  | 'SELLING_POINT_REQUIRED';
+  | 'SELLING_POINT_REQUIRED'
+  | 'TAXONOMY_REQUIRED';
 
-export type SeriesReleaseWarningCode = 'TARGET_HEALTH_TAGS_MISSING';
+/** 只提醒、不阻断的问题（未设置封面角标时封面左下角为空）。 */
+export type SeriesReleaseWarningCode = 'COVER_BADGE_MISSING';
 
 export interface SeriesReleaseIssue<TCode extends string = string> {
   code: TCode;
@@ -88,9 +92,13 @@ export type SeriesReleaseWarning = SeriesReleaseIssue<SeriesReleaseWarningCode>;
 /** 系列级产品展示资料（发布时复制到每条 Recipe）。 */
 export interface SeriesReleasePresentation {
   coverImageUrl?: string | null;
+  /** 保留字段：小程序已不再回退展示，发布也不再要求 */
   coverTitle?: string | null;
   sellingPoint?: string | null;
+  /** 保留字段：本期前台不展示、发布不校验 */
   targetHealthTags?: string[] | null;
+  /** 系列封面角标（合规词表名称，只读回传，便于发布抽屉预览） */
+  coverBadges?: string[] | null;
 }
 
 /** 一个生命阶段在系列仓库里的现状（由服务层查库后传入）。 */
@@ -116,8 +124,12 @@ export interface SeriesReleaseStageSnapshot {
 }
 
 export interface SeriesReleaseStageReadiness extends SeriesReleaseStageSnapshot {
-  /** 是否在 requiredLifeStages 里 */
-  required: boolean;
+  /**
+   * 本次发布 / 更新是否可以操作：
+   *  · READY（已入库、待发布）；
+   *  · PUBLIC 且 hasPendingUpdate（已上线、有更新草稿）。
+   */
+  actionable: boolean;
 }
 
 export interface BuildSeriesReleaseReadinessInput {
@@ -126,8 +138,12 @@ export interface BuildSeriesReleaseReadinessInput {
   designMode: string;
   /** 系列业务状态 DRAFT | PUBLIC | PRIVATE_CUSTOM；缺省按 DRAFT 处理 */
   businessStatus?: string | null;
-  requiredLifeStages?: string[] | null;
   presentation?: SeriesReleasePresentation | null;
+  /**
+   * 该系列挂了几个需求分类（2026-10-27）。
+   * 只数条数，不区分分类种类：双拼菜不挂主蛋白、只挂场景，也算已归类。
+   */
+  taxonomyLinkCount?: number;
   /** 全量阶段快照，顺序即后台展示顺序 */
   stages: SeriesReleaseStageSnapshot[];
 }
@@ -144,10 +160,10 @@ export interface SeriesReleaseReadiness {
    *  · NEEDS_UPDATE 系列 PUBLIC 且至少一个阶段有更新草稿。
    */
   releaseState: SeriesReleaseState;
+  /** 展示资料是否齐全（封面图 + 一句话卖点） */
   ready: boolean;
-  requiredLifeStages: string[];
-  /** 必填阶段（按传入阶段快照的顺序，只包含配置里的阶段） */
-  requiredStages: SeriesReleaseStageReadiness[];
+  /** 是否可点「发布 / 更新」：展示资料齐全，且至少有一个可操作阶段 */
+  canRelease: boolean;
   /** 全量阶段（便于后台展示「其它已设计阶段」） */
   stages: SeriesReleaseStageReadiness[];
   presentation: {
@@ -155,6 +171,7 @@ export interface SeriesReleaseReadiness {
     coverTitle: string | null;
     sellingPoint: string | null;
     targetHealthTags: string[];
+    coverBadges: string[];
   };
   blockers: SeriesReleaseBlocker[];
   warnings: SeriesReleaseWarning[];
@@ -163,12 +180,18 @@ export interface SeriesReleaseReadiness {
   /** 有待更新草稿的阶段代码（按阶段顺序） */
   pendingStageCodes: string[];
   summary: {
-    requiredStageCount: number;
-    readyStageCount: number;
-    publishedStageCount: number;
-    designedStageCount: number;
+    totalStageCount: number;
+    /** READY 阶段数（待发布） */
+    publishableStageCount: number;
     /** 有待更新草稿的阶段数 */
     pendingStageCount: number;
+    publishedStageCount: number;
+    /** 已上线且没有待更新草稿的阶段数 */
+    upToDateStageCount: number;
+    /** 有设计稿或已有阶段食谱的阶段数（不含 EMPTY） */
+    designedStageCount: number;
+    /** 可操作阶段数（READY + PUBLIC 待更新） */
+    actionableStageCount: number;
   };
 }
 
@@ -217,18 +240,11 @@ const resolveStagePendingUpdate = (
   return latestRecipeVersion > publishedRecipeVersion;
 };
 
-const isStageReady = (status: SeriesReleaseStageStatus): boolean =>
-  status === 'READY' || status === 'PUBLIC';
-
-const describeStageStatus = (status: SeriesReleaseStageStatus): string => {
-  if (status === 'EMPTY') {
-    return '还没有任何设计稿或阶段食谱';
-  }
-  if (status === 'DRAFT') {
-    return '阶段设计还停留在设计器草稿，尚未保存为系列仓库的阶段食谱';
-  }
-  return '';
-};
+/** 可操作阶段：待发布（READY）或已上线待更新（PUBLIC + hasPendingUpdate）。 */
+const isStageActionable = (
+  status: SeriesReleaseStageStatus,
+  hasPendingUpdate: boolean,
+): boolean => status === 'READY' || (status === 'PUBLIC' && hasPendingUpdate);
 
 export const buildSeriesReleaseReadiness = (
   input: BuildSeriesReleaseReadinessInput,
@@ -236,7 +252,6 @@ export const buildSeriesReleaseReadiness = (
   const blockers: SeriesReleaseBlocker[] = [];
   const warnings: SeriesReleaseWarning[] = [];
 
-  const requiredLifeStages = normalizeStringList(input.requiredLifeStages);
   const businessStatus =
     normalizeText(input.businessStatus).toUpperCase() || 'DRAFT';
   const presentation = input.presentation ?? {};
@@ -244,30 +259,26 @@ export const buildSeriesReleaseReadiness = (
   const coverTitle = normalizeText(presentation.coverTitle) || null;
   const sellingPoint = normalizeText(presentation.sellingPoint) || null;
   const targetHealthTags = normalizeStringList(presentation.targetHealthTags);
-
-  const stageByCode = new Map(
-    input.stages.map((stage) => [stage.stageCode, stage]),
-  );
-  const requiredStageCodeSet = new Set(requiredLifeStages);
+  const coverBadges = normalizeStringList(presentation.coverBadges);
 
   const stages: SeriesReleaseStageReadiness[] = input.stages.map((stage) => {
     const latestRecipeVersion = normalizeVersion(stage.latestRecipeVersion);
     const publishedRecipeVersion = normalizeVersion(
       stage.publishedRecipeVersion,
     );
+    const hasPendingUpdate = resolveStagePendingUpdate(
+      stage,
+      latestRecipeVersion,
+      publishedRecipeVersion,
+    );
     return {
       ...stage,
       latestRecipeVersion,
       publishedRecipeVersion,
-      hasPendingUpdate: resolveStagePendingUpdate(
-        stage,
-        latestRecipeVersion,
-        publishedRecipeVersion,
-      ),
-      required: requiredStageCodeSet.has(stage.stageCode),
+      hasPendingUpdate,
+      actionable: isStageActionable(stage.status, hasPendingUpdate),
     };
   });
-  const requiredStages = stages.filter((stage) => stage.required);
 
   const pendingStages = stages.filter((stage) => stage.hasPendingUpdate);
   const hasPendingUpdates = pendingStages.length > 0;
@@ -279,57 +290,12 @@ export const buildSeriesReleaseReadiness = (
         : 'PUBLISHED'
       : 'UNPUBLISHED';
 
-  if (requiredLifeStages.length === 0) {
-    blockers.push({
-      code: 'REQUIRED_LIFE_STAGES_EMPTY',
-      scope: 'SERIES',
-      message: '还没有选择必需的适用生命阶段，不能发布整条产品线',
-      field: 'requiredLifeStages',
-    });
-  }
-
-  for (const stageCode of requiredLifeStages) {
-    const stage = stageByCode.get(stageCode);
-    if (!stage) {
-      blockers.push({
-        code: 'REQUIRED_LIFE_STAGE_UNKNOWN',
-        scope: 'STAGE',
-        message: `必填生命阶段「${stageCode}」不是有效的阶段代码，请重新选择`,
-        field: 'requiredLifeStages',
-        stageCode,
-      });
-      continue;
-    }
-
-    if (isStageReady(stage.status)) {
-      continue;
-    }
-
-    const stageLabel = stage.label || stageCode;
-    const statusHint = describeStageStatus(stage.status);
-    blockers.push({
-      code: 'REQUIRED_STAGE_NOT_READY',
-      scope: 'STAGE',
-      message: `「${stageLabel}」阶段还不就绪${statusHint ? `：${statusHint}` : ''}；请先完成该阶段设计并发布为阶段食谱`,
-      field: 'requiredLifeStages',
-      stageCode,
-    });
-  }
-
   if (!coverImageUrl) {
     blockers.push({
       code: 'COVER_IMAGE_REQUIRED',
       scope: 'PRESENTATION',
       message: '请上传产品线封面图后再发布',
       field: 'coverImageUrl',
-    });
-  }
-  if (!coverTitle) {
-    blockers.push({
-      code: 'COVER_TITLE_REQUIRED',
-      scope: 'PRESENTATION',
-      message: '请填写封面标题（最多 20 个字符）',
-      field: 'coverTitle',
     });
   }
   if (!sellingPoint) {
@@ -340,45 +306,79 @@ export const buildSeriesReleaseReadiness = (
       field: 'sellingPoint',
     });
   }
-  if (targetHealthTags.length === 0) {
-    warnings.push({
-      code: 'TARGET_HEALTH_TAGS_MISSING',
-      scope: 'PRESENTATION',
-      message: '未设置目标健康标签，上线后顾客无法按健康需求筛选到这条产品线',
-      field: 'targetHealthTags',
+
+  // 需求分类门禁（2026-10-27）：只卡产品线。
+  // 定制系列不进橱窗、也不参与货架分组，因此不计算这条。
+  const isProductLine =
+    normalizeText(input.designMode).toUpperCase() !== 'ORDER' &&
+    businessStatus !== 'PRIVATE_CUSTOM';
+  if (
+    isProductLine &&
+    typeof input.taxonomyLinkCount === 'number' &&
+    input.taxonomyLinkCount <= 0
+  ) {
+    blockers.push({
+      code: 'TAXONOMY_REQUIRED',
+      scope: 'SERIES',
+      field: 'taxonomy',
+      message:
+        '这道菜还没有任何需求分类，发布后它进不了货架分组。在「快速归类」里挂一个即可',
     });
   }
+
+  if (coverBadges.length === 0) {
+    warnings.push({
+      code: 'COVER_BADGE_MISSING',
+      scope: 'PRESENTATION',
+      message: '未设置封面角标，封面左下角将没有文字（不影响发布）',
+      field: 'coverBadges',
+    });
+  }
+
+  const totalStageCount = stages.length;
+  const publishableStageCount = stages.filter(
+    (stage) => stage.status === 'READY',
+  ).length;
+  const publishedStages = stages.filter((stage) => stage.status === 'PUBLIC');
+  const upToDateStageCount = publishedStages.filter(
+    (stage) => !stage.hasPendingUpdate,
+  ).length;
+  const designedStageCount = stages.filter(
+    (stage) => stage.status !== 'EMPTY',
+  ).length;
+  const actionableStageCount = stages.filter(
+    (stage) => stage.actionable,
+  ).length;
+
+  const ready = blockers.length === 0;
 
   return {
     seriesId: input.seriesId,
     designMode: input.designMode,
     businessStatus,
     releaseState,
-    ready: blockers.length === 0,
-    requiredLifeStages,
-    requiredStages,
+    ready,
+    canRelease: ready && actionableStageCount > 0,
     stages,
     presentation: {
       coverImageUrl,
       coverTitle,
       sellingPoint,
       targetHealthTags,
+      coverBadges,
     },
     blockers,
     warnings,
     hasPendingUpdates,
     pendingStageCodes,
     summary: {
-      requiredStageCount: requiredLifeStages.length,
-      readyStageCount: requiredStages.filter((stage) =>
-        isStageReady(stage.status),
-      ).length,
-      publishedStageCount: requiredStages.filter(
-        (stage) => stage.status === 'PUBLIC',
-      ).length,
-      designedStageCount: stages.filter((stage) => stage.status !== 'EMPTY')
-        .length,
+      totalStageCount,
+      publishableStageCount,
       pendingStageCount: pendingStages.length,
+      publishedStageCount: publishedStages.length,
+      upToDateStageCount,
+      designedStageCount,
+      actionableStageCount,
     },
   };
 };

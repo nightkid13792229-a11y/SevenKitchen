@@ -60,6 +60,12 @@
           @click="openLaunchReadiness"
         >上线检查</el-button>
         <el-button
+          v-if="draft?.seriesId && !orderId"
+          text
+          :type="seriesReleaseVisible ? 'primary' : 'default'"
+          @click="openSeriesRelease"
+        >发布 / 更新</el-button>
+        <el-button
           text
           :type="aiPanelVisible ? 'primary' : 'default'"
           @click="aiPanelVisible = !aiPanelVisible"
@@ -336,8 +342,22 @@
       :draft-name="draft?.series?.name || draft?.name || ''"
       :order-id="orderId"
       :design-id="designId"
+      :series-id="seriesId"
       @published="handleStagePublished"
       @staged="handleOrderStaged"
+      @open-series-release="openSeriesReleaseFromCheck"
+    />
+
+    <!--
+      发布 / 更新（2026-10-26）：与列表页共用同一个系列发布抽屉。
+      仅产品线系列显示；订单设计沿用本单交付流程。
+    -->
+    <SeriesReleaseDrawer
+      v-if="draft?.seriesId && !orderId"
+      v-model="seriesReleaseVisible"
+      :series-id="seriesId"
+      :series-name="seriesDisplayName"
+      @released="handleSeriesReleased"
     />
 
     <!--
@@ -393,6 +413,7 @@ import SupplementTargetDialog from './components/SupplementTargetDialog.vue'
 import PreparationMethodField from './components/PreparationMethodField.vue'
 import { PREPARATION_FIELD_LABEL } from '@/constants/preparationField'
 import LaunchReadinessDrawer from './components/LaunchReadinessDrawer.vue'
+import SeriesReleaseDrawer from './components/SeriesReleaseDrawer.vue'
 import RecipeAgentDrawer from './components/RecipeAgentDrawer.vue'
 import type { DesignRecipeAssessmentResult } from '@/utils/recipeDesigner/assessmentTypes'
 import {
@@ -649,6 +670,8 @@ const aiPanelVisible = ref(false)
  */
 const launchReadinessVisible = ref(false)
 const launchCheckOpening = ref(false)
+/** 系列发布 / 更新抽屉：与列表页共用，仅产品线系列可用 */
+const seriesReleaseVisible = ref(false)
 /**
  * 旧版纯文本制作步骤（如果有）。
  * 设计草稿接口当前不返回该字段；没有时传空串，编辑器不显示旧版提示，
@@ -1666,6 +1689,32 @@ async function openLaunchReadiness() {
   }
 }
 
+/** 打开发布 / 更新抽屉（仅产品线系列；订单设计沿用本单交付流程） */
+function openSeriesRelease(): void {
+  if (!draft.value?.seriesId || orderId) return
+  seriesReleaseVisible.value = true
+}
+
+/** 从上线检查切到发布 / 更新：先关检查抽屉，避免两层抽屉叠加 */
+function openSeriesReleaseFromCheck(): void {
+  launchReadinessVisible.value = false
+  openSeriesRelease()
+}
+
+/** 发布 / 更新成功后刷新当前草稿与上线检查所需数据 */
+async function handleSeriesReleased(): Promise<void> {
+  // 刷新会整体替换本地草稿：先把编辑中的修改落盘，避免被服务器版本覆盖
+  await flushNow()
+  if (hasPending()) {
+    await waitForSaveIdle()
+  }
+  if (hasPending() || saveStatus.value === 'error') {
+    ElMessage.warning('系列已发布，但当前草稿还有改动未保存成功；请等待保存完成后再刷新')
+    return
+  }
+  await loadDraft()
+}
+
 function backToOrderWorkspace() {
   if (!orderId) return
   router.push(`/order-design/${encodeURIComponent(orderId)}`)
@@ -1682,14 +1731,6 @@ async function handleOrderStaged() {
 function handleStagePublished() {
   launchReadinessVisible.value = false
   router.push('/recipe-designer')
-}
-
-function goPublish() {
-  if (orderId) {
-    ElMessage.warning('本单设计请用「加入本单待提交」，由管理员最终提交交付')
-    return
-  }
-  router.push(`/recipe-designer/drafts/${currentDraftId.value}/publish`)
 }
 
 function goBack() {

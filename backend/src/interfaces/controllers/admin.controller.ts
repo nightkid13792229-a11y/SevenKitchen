@@ -4607,6 +4607,33 @@ export class AdminController {
     return ApiResponseDto.success({ available });
   }
 
+  @Get('recipe-designer/naming/availability')
+  @ApiOperation({ summary: 'AI 命名为可用' })
+  async getRecipeNamingAvailability(): Promise<ApiResponseDto<any>> {
+    const available = await this.recipeService.isRecipeNamingAvailable();
+    return ApiResponseDto.success({ available });
+  }
+
+  @Post('recipe-designer/series/:seriesId/name-candidates')
+  @ApiOperation({ summary: 'AI 生成食谱名称候选（只生成，不落库）' })
+  async generateSeriesNameCandidates(
+    @Param('seriesId') seriesId: string,
+  ): Promise<ApiResponseDto<any>> {
+    try {
+      const result =
+        await this.recipeService.generateSeriesNameCandidates(seriesId);
+      return ApiResponseDto.success(result);
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      throw error;
+    }
+  }
+
   @Post('recipes/:id/ai-copywriting')
   @ApiOperation({ summary: 'AI 生成合规卖点与说明（只生成，不落库）' })
   @ApiParam({ name: 'id', description: 'Recipe ID' })

@@ -29,6 +29,8 @@ export type SupplementShippingMode = 'FLAT_RATE' | 'TEMPLATE';
 
 export interface SupplementShopConfigDto {
   enabled: boolean;
+  /** 补剂等价组候选总开关；审核完再打开（2026-10-26） */
+  equivalenceEnabled?: boolean;
   markupMultiplier: number;
   serviceFeeMode: SupplementServiceFeeMode;
   serviceFeeAmount: number;
@@ -304,6 +306,9 @@ export class SupplementShopConfigService {
   private toWriteData(dto: UpdateSupplementShopConfigDto) {
     return {
       ...(dto.enabled !== undefined && { enabled: dto.enabled }),
+      ...(dto.equivalenceEnabled !== undefined && {
+        equivalenceEnabled: dto.equivalenceEnabled,
+      }),
       ...(dto.markupMultiplier !== undefined && {
         markupMultiplier: dto.markupMultiplier,
       }),
@@ -398,6 +403,7 @@ export class SupplementShopConfigService {
 
   private toDto(row: {
     enabled: boolean;
+    equivalenceEnabled?: boolean;
     markupMultiplier: unknown;
     serviceFeeMode: string;
     serviceFeeAmount: unknown;
@@ -433,6 +439,7 @@ export class SupplementShopConfigService {
   }): SupplementShopConfigDto {
     return {
       enabled: row.enabled,
+      equivalenceEnabled: row.equivalenceEnabled === true,
       markupMultiplier: Number(row.markupMultiplier),
       serviceFeeMode: row.serviceFeeMode as SupplementServiceFeeMode,
       serviceFeeAmount: Number(row.serviceFeeAmount),

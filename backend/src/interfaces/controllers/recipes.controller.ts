@@ -65,6 +65,8 @@ import { AllergenVocabularyService } from '../../application/health/allergen-voc
 import { RecipeCoverImageService } from '../../application/recipe-designer/recipe-cover-image.service';
 import { DiySheetService } from '../../application/recipe/diy-sheet.service';
 import { CustomRecipeDeliveryService } from '../../application/custom-recipe/custom-recipe-delivery.service';
+import { SupplementCandidateService } from '../../application/supplement-shop/supplement-candidate.service';
+import { computeSheetTotalWeightG } from '../../application/supplement-shop/supplement-sheet-weight.util';
 import { OrderService } from '../../application/order/order.service';
 import {
   GenerateDiySheetDto,
@@ -121,6 +123,7 @@ export class RecipesController {
     private readonly orderService: OrderService,
     private readonly allergenVocabulary: AllergenVocabularyService,
     private readonly deliveryService: CustomRecipeDeliveryService,
+    private readonly supplementCandidateService: SupplementCandidateService,
   ) {}
 
   private buildPublicRecipeWhere(
@@ -1849,6 +1852,78 @@ export class RecipesController {
     return ApiResponseDto.success({
       available: await this.recipeCoverImageService.isAvailable(),
     });
+  }
+
+  /**
+   * 补剂可替代候选（2026-10-26）。
+   *
+   * 候选、换算用量都由服务端算；客户端只展示。声明在 `@Get(':id')` 之前，
+   * 避免被通配路由吃掉（本文件踩过这个坑）。
+   */
+  @Get(':id/supplement-candidates')
+  @ApiOperation({ summary: '补剂可替代候选（服务端计算用量）' })
+  @ApiQuery({
+    name: 'totalWeightG',
+    required: false,
+    description: '这批食物总重（g）；没有制作单时必填',
+  })
+  @ApiQuery({
+    name: 'diySheetId',
+    required: false,
+    description: '制作单 ID：优先用制作单的包规/天数算总重',
+  })
+  @ApiQuery({ name: 'orderId', required: false, description: '定制订单号（锁定交付版本）' })
+  @ApiQuery({ name: 'shareToken', required: false })
+  async getSupplementCandidates(
+    @Param('id') id: string,
+    @Query('totalWeightG') totalWeightGRaw?: string,
+    @Query('diySheetId') diySheetId?: string,
+    @Query('orderId') orderId?: string,
+    @Query('shareToken') shareToken?: string,
+    @Req() req?: any,
+  ): Promise<ApiResponseDto<unknown>> {
+    const recipe = await this.getAccessibleRecipe(id, shareToken, req, orderId);
+    if (!recipe) {
+      throw new NotFoundException('Recipe not found');
+    }
+
+    let totalWeightG = Number(totalWeightGRaw);
+    let weightSource: 'DIY_SHEET' | 'QUERY' = 'QUERY';
+
+    if (diySheetId) {
+      const user = this.getRequestUser(req);
+      const userId = user?.customerId || user?.userId;
+      const sheet = await this.prisma.dIYSheet.findUnique({
+        where: { id: diySheetId },
+        select: {
+          userId: true,
+          packagePlan: true,
+          dailyIntakeG: true,
+          cycleDays: true,
+        },
+      });
+      if (sheet && userId && sheet.userId === userId) {
+        const fromSheet = computeSheetTotalWeightG(sheet);
+        if (fromSheet > 0) {
+          totalWeightG = fromSheet;
+          weightSource = 'DIY_SHEET';
+        }
+      }
+    }
+
+    if (!Number.isFinite(totalWeightG) || totalWeightG <= 0) {
+      throw new BadRequestException('缺少这批食物的总重，无法计算补剂用量');
+    }
+
+    return ApiResponseDto.success(
+      await this.supplementCandidateService.resolveForRecipe({
+        recipeBusinessId: id,
+        recipeVersion: recipe.version,
+        totalWeightG,
+        weightSource,
+        audience: 'CUSTOMER',
+      }),
+    );
   }
 
   @Get(':id')

@@ -210,6 +210,26 @@ describe('SupplementCandidateService', () => {
     expect(item.unavailableReason).toBe('暂时买不到，找 Seven爸爸');
   });
 
+  it('returns the ratio fallback when a supplement has no targets', () => {
+    const item = service.resolveForRecipeItem({
+      recipeItem: recipeItem({
+        supplementTargets: [],
+        nutrientTargetKey: null,
+        nutrientTargetValue: null,
+        ratioPercent: 1,
+      }),
+      ingredient: supplement(),
+      group: null,
+      totalWeightG: 3000,
+      equivalenceEnabled: true,
+      audience: 'CUSTOMER',
+    });
+
+    expect(item.fallbackAmount).toBeCloseTo(30, 6);
+    expect(item.defaultIngredient.dosage.status).toBe('NO_TARGETS');
+    expect(item.candidates).toEqual([]);
+  });
+
   it('never crosses groups', () => {
     const boneMeal = supplement({
       id: 'ing-bone',
@@ -325,7 +345,8 @@ describe('SupplementCandidateService', () => {
     );
 
     const result = await serviceWithPrisma.resolveForRecipe({
-      recipeVersionId: 'recipe-1',
+      recipeBusinessId: 'recipe-1',
+      recipeVersion: 1,
       totalWeightG: 3000,
       weightSource: 'QUERY',
       audience: 'CUSTOMER',

@@ -10,6 +10,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { IngredientType } from '../../domain/ingredient/enums';
 import { PrismaService } from '../../infrastructure/prisma.service';
+import { SupplementDosageService } from './supplement-dosage.service';
 import { isSupplementUnitOneToOne } from './supplement-unit.util';
 
 /** 物理形态（与 prisma schema 的 IngredientPhysicalForm 对齐） */
@@ -23,7 +24,12 @@ export type SupplementCatalogIssueCode =
   | 'STORAGE_MISSING'
   | 'UNIT_INCONSISTENT'
   | 'UNIT_INCOMPATIBLE'
-  | 'DUPLICATE_NAME';
+  | 'DUPLICATE_NAME'
+  | 'EQUIVALENCE_UNGROUPED'
+  | 'EQUIVALENCE_GROUP_NOT_APPROVED'
+  | 'EQUIVALENCE_GROUP_SINGLETON'
+  | 'EQUIVALENCE_NUTRIENT_MISSING'
+  | 'EQUIVALENCE_UNIT_MISMATCH';
 
 export interface SupplementCatalogIssue {
   code: SupplementCatalogIssueCode;
@@ -68,6 +74,15 @@ export interface SupplementCatalogItem {
   issues: SupplementCatalogIssue[];
   /** 已上架 且 无 ERROR 级问题 */
   readyToSell: boolean;
+  /** 所属等价组（未归组为 null） */
+  equivalenceGroup: {
+    id: string;
+    code: string;
+    name: string;
+    status: string;
+    isActive: boolean;
+    memberCount: number;
+  } | null;
 }
 
 export interface SupplementCatalogSummary {
@@ -118,7 +133,10 @@ const PHYSICAL_FORM_CODES: IngredientPhysicalFormCode[] = [
 
 @Injectable()
 export class SupplementCatalogService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly dosage: SupplementDosageService,
+  ) {}
 
   /**
    * 拉出全部补剂档案 + 体检结果。
@@ -147,6 +165,21 @@ export class SupplementCatalogService {
         storageCondition: true,
         openedShelfLifeDays: true,
         properties: true,
+        nutritionProfile: true,
+        equivalenceGroupId: true,
+        equivalenceGroup: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            status: true,
+            isActive: true,
+            nutrientKey: true,
+            nutrientLabel: true,
+            nutrientUnit: true,
+            _count: { select: { ingredients: true } },
+          },
+        },
       },
     });
 
@@ -388,6 +421,19 @@ export class SupplementCatalogService {
       storageCondition: string | null;
       openedShelfLifeDays: number | null;
       properties: unknown;
+      nutritionProfile: unknown;
+      equivalenceGroupId: string | null;
+      equivalenceGroup: {
+        id: string;
+        code: string;
+        name: string;
+        status: string;
+        isActive: boolean;
+        nutrientKey: string;
+        nutrientLabel: string;
+        nutrientUnit: string;
+        _count: { ingredients: number };
+      } | null;
     },
     context: {
       recipeReferenceCount: number;
@@ -488,6 +534,49 @@ export class SupplementCatalogService {
       });
     }
 
+    const equipGroup = ingredient.equivalenceGroup;
+    if (!equipGroup) {
+      issues.push({
+        code: 'EQUIVALENCE_UNGROUPED',
+        level: 'WARN',
+        message: '未归入等价组：缺货时无法推荐同营养替代原料',
+      });
+    } else {
+      if (equipGroup.status !== 'APPROVED' || equipGroup.isActive === false) {
+        issues.push({
+          code: 'EQUIVALENCE_GROUP_NOT_APPROVED',
+          level: 'WARN',
+          message: `所在等价组「${equipGroup.name}」还未审核通过，不参与替换`,
+        });
+      }
+      if (equipGroup._count.ingredients <= 1) {
+        issues.push({
+          code: 'EQUIVALENCE_GROUP_SINGLETON',
+          level: 'WARN',
+          message: `所在等价组「${equipGroup.name}」只有 1 个成员，等于不能替换`,
+        });
+      }
+      const resolution = this.dosage.resolveConcentration(ingredient, {
+        fieldPath: equipGroup.nutrientKey,
+        label: equipGroup.nutrientLabel,
+        unit: equipGroup.nutrientUnit,
+        targetValuePerKg: 1,
+      });
+      if (resolution.status === 'UNIT_MISMATCH') {
+        issues.push({
+          code: 'EQUIVALENCE_UNIT_MISMATCH',
+          level: 'WARN',
+          message: `等价组「${equipGroup.name}」要求 ${equipGroup.nutrientLabel}（${equipGroup.nutrientUnit}），档案浓度单位是 ${resolution.actualUnit || '未知'}，该原料不参与替换`,
+        });
+      } else if (resolution.status !== 'OK') {
+        issues.push({
+          code: 'EQUIVALENCE_NUTRIENT_MISSING',
+          level: 'WARN',
+          message: `等价组「${equipGroup.name}」要求的 ${equipGroup.nutrientLabel} 浓度缺失，该原料不参与替换`,
+        });
+      }
+    }
+
     const hasError = issues.some((issue) => issue.level === 'ERROR');
 
     return {
@@ -516,6 +605,16 @@ export class SupplementCatalogService {
       recipeReferenceCount: context.recipeReferenceCount,
       producible: context.producible,
       issues,
+      equivalenceGroup: equipGroup
+        ? {
+            id: equipGroup.id,
+            code: equipGroup.code,
+            name: equipGroup.name,
+            status: equipGroup.status,
+            isActive: equipGroup.isActive,
+            memberCount: equipGroup._count.ingredients,
+          }
+        : null,
       readyToSell: ingredient.supplementRetailEnabled && !hasError,
     };
   }

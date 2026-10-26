@@ -70,6 +70,12 @@ export class DIYSheetStorageService {
             packagePlan: dto.packagePlan as any,
             purchaseList: dto.purchaseList as any,
             productionSteps: dto.productionSteps,
+            ...(dto.recipeVersion !== undefined && {
+              recipeVersion: dto.recipeVersion,
+            }),
+            ...(dto.supplementSelections !== undefined && {
+              supplementSelections: dto.supplementSelections as any,
+            }),
           },
         });
         return this.toResponseDto(updated);
@@ -90,6 +96,10 @@ export class DIYSheetStorageService {
         packagePlan: dto.packagePlan as any,
         purchaseList: dto.purchaseList as any, // Prisma Json类型需要使用any
         productionSteps: dto.productionSteps,
+        recipeVersion: dto.recipeVersion ?? null,
+        ...(dto.supplementSelections !== undefined && {
+          supplementSelections: dto.supplementSelections as any,
+        }),
       },
     });
 
@@ -162,6 +172,9 @@ export class DIYSheetStorageService {
       packagePlan: existing.packagePlan ?? null,
       purchaseList: existing.purchaseList ?? null,
       productionSteps: existing.productionSteps ?? null,
+      ...(dto.recipeVersion !== undefined && {
+        recipeVersion: existing.recipeVersion ?? null,
+      }),
     };
     const right = {
       recipeName: dto.recipeName,
@@ -172,6 +185,9 @@ export class DIYSheetStorageService {
       packagePlan: dto.packagePlan ?? null,
       purchaseList: dto.purchaseList ?? null,
       productionSteps: dto.productionSteps ?? null,
+      ...(dto.recipeVersion !== undefined && {
+        recipeVersion: dto.recipeVersion,
+      }),
     };
     return stableStringify(left) === stableStringify(right);
   }
@@ -194,6 +210,7 @@ export class DIYSheetStorageService {
       snapshotAt: sheet.snapshotAt
         ? sheet.snapshotAt.toISOString()
         : null,
+      supplementSelections: sheet.supplementSelections ?? null,
       createdAt: sheet.createdAt.toISOString(),
       updatedAt: sheet.updatedAt.toISOString(),
     };

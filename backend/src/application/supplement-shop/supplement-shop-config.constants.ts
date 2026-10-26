@@ -11,6 +11,7 @@
  */
 export const SUPPLEMENT_SHOP_CONFIG_DEFAULTS = {
   enabled: false,
+  equivalenceEnabled: false,
   markupMultiplier: 2.5,
   serviceFeeMode: 'PER_ORDER',
   serviceFeeAmount: 10,
@@ -41,8 +42,8 @@ export const SUPPLEMENT_SHOP_CONFIG_DEFAULTS = {
 } as const;
 
 /**
- * 首发目标值。与 DEFAULTS 的差异只在 enabled（上线后由运营手动打开）。
- * 差异检查不包含 enabled：暂停营业不是配置错误。
+ * 首发目标值。与 DEFAULTS 的差异只在运营开关（上线后手动打开）。
+ * 差异检查不包含 enabled / equivalenceEnabled：开关状态不是配置错误。
  */
 export const SUPPLEMENT_SHOP_LAUNCH_TARGETS = {
   ...SUPPLEMENT_SHOP_CONFIG_DEFAULTS,
@@ -98,8 +99,14 @@ export function diffSupplementLaunchTargets(
   for (const [key, target] of Object.entries(
     SUPPLEMENT_SHOP_LAUNCH_TARGETS,
   ) as Array<[SupplementShopConfigTargetKey, unknown]>) {
-    // enabled 是运营开关；aftersalePolicy 是自由文案，不属于首发数值目标
-    if (key === 'enabled' || key === 'aftersalePolicy') continue;
+    // enabled / equivalenceEnabled 是运营开关；aftersalePolicy 是自由文案
+    if (
+      key === 'enabled' ||
+      key === 'equivalenceEnabled' ||
+      key === 'aftersalePolicy'
+    ) {
+      continue;
+    }
     const current = config[key];
     if (normalize(current) !== normalize(target)) {
       result.push({

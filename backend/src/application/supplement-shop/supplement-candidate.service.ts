@@ -45,6 +45,8 @@ export interface SupplementCandidateItem {
     dosage: SupplementDosageResult;
   };
   candidates: SupplementCandidate[];
+  /** 无营养目标、但食谱行配了固定比例时的兜底用量（g）；否则 null */
+  fallbackAmount: number | null;
   unavailableReason: string | null;
   preparationMethod: string | null;
   addTimingLabel: string | null;
@@ -67,13 +69,19 @@ export class SupplementCandidateService {
   ) {}
 
   async resolveForRecipe(input: {
-    recipeVersionId: string;
+    recipeBusinessId: string;
+    recipeVersion: number;
     totalWeightG: number;
     weightSource: 'DIY_SHEET' | 'QUERY';
     audience: 'CUSTOMER';
   }): Promise<SupplementCandidateResponse> {
     const recipe = await this.prisma.recipe.findUnique({
-      where: { id: input.recipeVersionId },
+      where: {
+        recipeId_version: {
+          recipeId: input.recipeBusinessId,
+          version: input.recipeVersion,
+        },
+      },
       include: {
         items: {
           include: { ingredient: true },
@@ -209,6 +217,14 @@ export class SupplementCandidateService {
       });
     }
 
+    const ratioPercent = Number(input.recipeItem?.ratioPercent);
+    const fallbackAmount =
+      targets.length === 0 &&
+      Number.isFinite(ratioPercent) &&
+      ratioPercent > 0
+        ? (input.totalWeightG * ratioPercent) / 100
+        : null;
+
     return {
       recipeItemId: input.recipeItem.id,
       sourceIngredientId: input.ingredient.id,
@@ -234,6 +250,7 @@ export class SupplementCandidateService {
         dosage: sourceDosage,
       },
       candidates,
+      fallbackAmount,
       unavailableReason:
         candidates.length > 0
           ? null

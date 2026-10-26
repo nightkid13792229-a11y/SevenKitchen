@@ -146,6 +146,13 @@ describe('命名提示词', () => {
     expect(prompt).not.toContain('主蛋白放第一位');
   });
 
+  it('只要 2 条候选，且两条的价值点不能重复', () => {
+    const prompt = buildRecipeNamingSystemPrompt();
+    expect(prompt).toContain('只需要 2 条候选');
+    expect(prompt).toContain('价值点不能重复');
+    expect(prompt).not.toContain('reason: string');
+  })
+
   it('保留 12 字硬约束与禁止虚构', () => {
     const prompt = buildRecipeNamingSystemPrompt();
     expect(prompt).toContain('12 个字');

@@ -40,7 +40,6 @@
       >
         <div class="cand-main">
           <div class="cand-name">{{ candidate.name }}</div>
-          <div class="cand-reason">{{ candidate.reason }}</div>
           <div v-if="candidate.complianceWarning" class="cand-warn">
             这句话合规存疑，用之前请自己看一眼
           </div>
@@ -114,10 +113,11 @@ async function generate() {
   generating.value = true
   try {
     const result = await recipeNamingApi.candidates(props.seriesId)
-    // 超长的直接丢掉，不截断：截断会造出一个意思不通的名字
-    candidates.value = (result.candidates || []).filter(
-      (item) => countLength(item.name) <= RECIPE_NAME_MAX_LENGTH
-    )
+    // 超长的直接丢掉，不截断：截断会造出一个意思不通的名字。
+    // 后端已经只要 2 条，这里再兜一次底。
+    candidates.value = (result.candidates || [])
+      .filter((item) => countLength(item.name) <= RECIPE_NAME_MAX_LENGTH)
+      .slice(0, 2)
     if (candidates.value.length === 0) {
       ElMessage.warning('AI 没给出可用的名字（可能都超了 12 字），再试一次')
     }
@@ -221,11 +221,6 @@ async function use(name: string) {
 .cand-name {
   font-size: 13px;
   font-weight: 600;
-}
-.cand-reason {
-  font-size: 10.5px;
-  color: #97a1ad;
-  margin-top: 2px;
 }
 .cand-warn {
   font-size: 10.5px;

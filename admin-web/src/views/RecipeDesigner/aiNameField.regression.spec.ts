@@ -12,7 +12,7 @@ describe('AI 命名字段', () => {
     expect(fieldSource).toContain(
       'countLength(item.name) <= RECIPE_NAME_MAX_LENGTH'
     )
-    expect(fieldSource).not.toContain('.slice(0,')
+    expect(fieldSource).not.toContain('candidate.name.slice')
   })
 
   it('命中禁用词的候选保留，但提示合规存疑', () => {
@@ -33,6 +33,11 @@ describe('AI 命名字段', () => {
   })
 
 
+
+  it('候选只显示名字，不再显示"依据"那一行', () => {
+    expect(fieldSource).not.toContain('cand-reason')
+    expect(fieldSource).toContain('.slice(0, 2)')
+  })
 
   it('点「采用」直接落库，不再要求二次点保存', () => {
     expect(fieldSource).toContain('recipeDesignerApi.renameSeries')

@@ -51,6 +51,7 @@ export interface RecipeNameCandidate {
   name: string;
   valuePoint: string;
   ingredients: string;
+  /** 已不再要求模型输出，保留字段兼容历史响应 */
   reason: string;
   /** 命中了现有禁用词表：保留候选但提醒，不拒绝（词表尚未完善） */
   complianceWarning: boolean;
@@ -192,10 +193,10 @@ export function buildRecipeNamingSystemPrompt(): string {
     '- 拿不准某个价值点是否成立时，换一个更保守的说法（例如「均衡营养」）。',
     '',
     '输出必须是 JSON 对象：',
-    'candidates: 数组，3 条候选，每条包含：',
+    'candidates: 数组，**只需要 2 条候选**，每条包含：',
     '  name: string，完整名字，格式「价值点｜食材」，≤12 字；',
     '  valuePoint: string，你选的价值点；',
-    '  ingredients: string，你用的食材；',
-    '  reason: string，一句话说明这个价值点是从哪个输入事实推出来的。',
+    '  ingredients: string，你用的食材。',
+    '两条候选的**价值点不能重复**，要给出两个不同的理由（例如一个讲配方构成、一个讲适用场景）。',
   ].join('\n');
 }

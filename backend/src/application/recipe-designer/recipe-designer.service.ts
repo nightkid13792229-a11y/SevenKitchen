@@ -90,7 +90,6 @@ import type {
   CreateRecipeSeriesStageDraftDto,
   DeleteRecipeSeriesDto,
   RecipeDesignerSeriesStatusFilter,
-  RecipePreparationSource,
   ReplaceRecipeDesignItemDto,
   ListRecipeDesignerIngredientOptionsDto,
   ListRecipeDesignerSeriesDto,
@@ -104,10 +103,7 @@ import type {
   UpdateRecipeProductionStepsDto,
   UpdateRecipeSeriesReleaseSettingsDto,
 } from '../../interfaces/dto/recipe-designer/recipe-designer.dto';
-import {
-  RECIPE_PREPARATION_NOTE_MAX_LENGTH,
-  RECIPE_PRESENTATION_LIMITS,
-} from '../../interfaces/dto/recipe-designer/recipe-designer.dto';
+import { RECIPE_PRESENTATION_LIMITS } from '../../interfaces/dto/recipe-designer/recipe-designer.dto';
 import {
   formatProductionStepsText,
   readProductionSteps,
@@ -346,8 +342,6 @@ const DESIGN_RECIPE_ITEM_CLIENT_SELECT = {
   includeInAssessment: true,
   ratioPercent: true,
   preparationMethod: true,
-  preparationNote: true,
-  preparationSource: true,
   nutrientTargetKey: true,
   nutrientTargetValue: true,
   sortOrder: true,
@@ -425,8 +419,6 @@ const DESIGN_RECIPE_LIST_SELECT = {
       includeInAssessment: true,
       ratioPercent: true,
       preparationMethod: true,
-      preparationNote: true,
-      preparationSource: true,
       nutrientTargetKey: true,
       nutrientTargetValue: true,
       supplementTargets: true,
@@ -660,8 +652,6 @@ type DesignRecipeItemWithFood = {
   includeInAssessment: boolean;
   ratioPercent: number | null;
   preparationMethod: string | null;
-  preparationNote?: string | null;
-  preparationSource?: string | null;
   nutrientTargetKey: string | null;
   nutrientTargetValue: number | null;
   supplementTargets?: unknown;
@@ -854,8 +844,6 @@ type RecipeSeriesCopyableRecipeItem = {
   exampleWeight?: number | null;
   ratioPercent?: number | null;
   preparationMethod?: string | null;
-  preparationNote?: string | null;
-  preparationSource?: string | null;
   nutrientTargetKey?: string | null;
   nutrientTargetValue?: number | null;
   supplementTargets?: unknown;
@@ -3860,12 +3848,6 @@ export class RecipeDesignerService {
         preparationMethod: this.sanitizeCopiedPreparationMethod(
           item.preparationMethod,
         ),
-        preparationNote: this.normalizeStoredPreparationNote(
-          item.preparationNote,
-        ),
-        preparationSource: this.normalizeStoredPreparationSource(
-          item.preparationSource,
-        ),
         nutrientTargetKey: item.nutrientTargetKey ?? null,
         nutrientTargetValue: item.nutrientTargetValue ?? null,
         ...(supplementTargets.length > 0
@@ -3966,12 +3948,6 @@ export class RecipeDesignerService {
       includeInAssessment: item.includeInAssessment,
       ratioPercent: item.ratioPercent,
       preparationMethod: item.preparationMethod,
-      preparationNote: this.normalizeStoredPreparationNote(
-        item.preparationNote,
-      ),
-      preparationSource: this.normalizeStoredPreparationSource(
-        item.preparationSource,
-      ),
       nutrientTargetKey: item.nutrientTargetKey,
       nutrientTargetValue: item.nutrientTargetValue,
       ...(supplementTargets.length > 0
@@ -4080,12 +4056,6 @@ export class RecipeDesignerService {
         ratioPercent: item.ratioPercent ?? null,
         preparationMethod: this.sanitizeCopiedPreparationMethod(
           item.preparationMethod,
-        ),
-        preparationNote: this.normalizeStoredPreparationNote(
-          item.preparationNote,
-        ),
-        preparationSource: this.normalizeStoredPreparationSource(
-          item.preparationSource,
         ),
         nutrientTargetKey: item.nutrientTargetKey ?? null,
         nutrientTargetValue: item.nutrientTargetValue ?? null,
@@ -6000,12 +5970,6 @@ export class RecipeDesignerService {
               includeInAssessment: item.includeInAssessment,
               ratioPercent: item.ratioPercent,
               preparationMethod: item.preparationMethod,
-              preparationNote: this.normalizeStoredPreparationNote(
-                item.preparationNote,
-              ),
-              preparationSource: this.normalizeStoredPreparationSource(
-                item.preparationSource,
-              ),
               nutrientTargetKey: item.nutrientTargetKey,
               nutrientTargetValue: item.nutrientTargetValue,
               ...(supplementTargets.length > 0
@@ -6150,12 +6114,9 @@ export class RecipeDesignerService {
         dto.preparationMethod,
         ingredientId,
       );
-    const preparationData = this.buildPreparationCreateData({
-      explicitMethod: dto.preparationMethod,
-      explicitNote: dto.preparationNote,
-      explicitSource: this.parsePreparationSourceInput(dto.preparationSource),
-      resolvedMethod: resolvedPreparationMethod,
-    });
+    const preparationData = {
+      preparationMethod: resolvedPreparationMethod,
+    };
     const shouldPersistNutrientTarget =
       await this.isIngredientIdSupplement(ingredientId);
     /**
@@ -6309,22 +6270,14 @@ export class RecipeDesignerService {
       }
     }
 
-    const changesPreparation =
-      dto.preparationMethod !== undefined ||
-      dto.preparationNote !== undefined ||
-      dto.preparationSource !== undefined;
-    const preparationData = changesPreparation
-      ? this.buildPreparationUpdateData({
-          explicitMethod: dto.preparationMethod,
-          explicitNote: dto.preparationNote,
-          explicitSource: this.parsePreparationSourceInput(
-            dto.preparationSource,
-          ),
-          currentMethod: draft.preparationMethod,
-          currentNote: draft.preparationNote,
-          currentSource: draft.preparationSource,
-        })
-      : {};
+    const preparationData =
+      dto.preparationMethod !== undefined
+        ? {
+            preparationMethod: this.normalizePreparationMethod(
+              dto.preparationMethod,
+            ),
+          }
+        : {};
 
     const data = {
       ...(dto.weightG !== undefined ? { weightG: dto.weightG } : {}),
@@ -6388,25 +6341,14 @@ export class RecipeDesignerService {
     const weightG = dto.weightG ?? current.weightG;
     const preparationMethod =
       dto.preparationMethod ?? current.preparationMethod;
-    const preparationNote =
-      dto.preparationNote !== undefined
-        ? dto.preparationNote
-        : current.preparationNote;
-    const preparationSource =
-      dto.preparationSource !== undefined
-        ? dto.preparationSource
-        : this.normalizeStoredPreparationSource(current.preparationSource);
     const resolvedPreparationMethod =
       await this.resolveDesignItemPreparationMethod(
         preparationMethod,
         ingredientId,
       );
-    const preparationData = this.buildPreparationCreateData({
-      explicitMethod: preparationMethod,
-      explicitNote: preparationNote,
-      explicitSource: this.parsePreparationSourceInput(preparationSource),
-      resolvedMethod: resolvedPreparationMethod,
-    });
+    const preparationData = {
+      preparationMethod: resolvedPreparationMethod,
+    };
 
     /**
      * 换入补剂时必须带目标定义；换入普通原料时目标字段全部清空，
@@ -7453,8 +7395,6 @@ export class RecipeDesignerService {
         nutritionFoodId: item.nutritionFoodId,
         weightG: this.normalizeComparableNumber(item.weightG),
         preparationMethod: this.normalizeComparableText(item.preparationMethod),
-        preparationNote: this.normalizeComparableText(item.preparationNote),
-        preparationSource: this.normalizeComparableText(item.preparationSource),
         nutrientTargetKey: this.normalizeComparableText(item.nutrientTargetKey),
         nutrientTargetValue: this.normalizeComparableNumber(
           item.nutrientTargetValue,
@@ -7473,8 +7413,6 @@ export class RecipeDesignerService {
             left.ingredientId.localeCompare(right.ingredientId),
             left.nutritionFoodId.localeCompare(right.nutritionFoodId),
             left.preparationMethod.localeCompare(right.preparationMethod),
-            left.preparationNote.localeCompare(right.preparationNote),
-            left.preparationSource.localeCompare(right.preparationSource),
             left.nutrientTargetKey.localeCompare(right.nutrientTargetKey),
             left.supplementTargets.localeCompare(right.supplementTargets),
           ].find((result) => result !== 0) ?? 0
@@ -7797,11 +7735,6 @@ export class RecipeDesignerService {
           preparationMethod: this.normalizePreparationMethod(
             item.preparationMethod,
           ),
-          ...this.resolveSnapshotPreparation({
-            note: item.preparationNote,
-            source: item.preparationSource,
-            usedAutomaticFallback: false,
-          }),
           ratioPercent: this.resolvePrivateRecipeItemRatio(
             item,
             draft.totalWeightG,
@@ -7967,12 +7900,6 @@ export class RecipeDesignerService {
       // 否则正式食谱只能靠后台保存时回填默认档案，导致生熟状态被改写。
       nutritionFoodId: this.resolvePublishedNutritionFoodId(item, ingredientId),
       preparationMethod,
-      ...this.resolveSnapshotPreparation({
-        note: item.preparationNote,
-        source: item.preparationSource,
-        usedAutomaticFallback:
-          !explicitPreparationMethod && Boolean(preparationMethod),
-      }),
       ratioPercent: isSupplement
         ? null
         : (publishedFoodRatioMap.get(item.id) ??
@@ -8793,7 +8720,6 @@ export class RecipeDesignerService {
       isSupplement: boolean;
       preparationRequired: boolean;
       preparationMethod?: string | null;
-      preparationNote?: string | null;
       supplementTargets?: unknown;
     }> = [];
     for (const item of draft.items) {
@@ -8836,7 +8762,6 @@ export class RecipeDesignerService {
         isSupplement,
         preparationRequired,
         preparationMethod: item.preparationMethod,
-        preparationNote: item.preparationNote,
         supplementTargets,
       });
     }
@@ -9490,10 +9415,7 @@ export class RecipeDesignerService {
         includeInAssessment: true,
         nutritionFoodId: true,
         ingredientId: true,
-        // 预处理更新需要在同一次查询里带回当前值，避免再把 AUTO 误翻成 MANUAL
         preparationMethod: true,
-        preparationNote: true,
-        preparationSource: true,
         designRecipe: {
           select: {
             id: true,
@@ -9524,8 +9446,6 @@ export class RecipeDesignerService {
       nutritionFoodId: item.nutritionFoodId,
       ingredientId: item.ingredientId,
       preparationMethod: item.preparationMethod,
-      preparationNote: item.preparationNote,
-      preparationSource: item.preparationSource,
     };
   }
 
@@ -9806,143 +9726,6 @@ export class RecipeDesignerService {
 
   private normalizePreparationMethod(value: string | null | undefined) {
     return normalizePreparationMethodHistoryText(value) ?? null;
-  }
-
-  /**
-   * 预处理补充说明（2026-10-22 · Task 4）。
-   *
-   * 写入路径严格限制 500 字符（DTO 也会拦一次，服务层保证内部调用不越界）；
-   * 存量数据读取/复制用 `normalizeStoredPreparationNote`，只截断不抛错。
-   */
-  private normalizePreparationNote(value: string | null | undefined) {
-    const trimmed = value?.trim();
-    if (!trimmed) {
-      return null;
-    }
-    if (trimmed.length > RECIPE_PREPARATION_NOTE_MAX_LENGTH) {
-      throw new BadRequestException(
-        `原料预处理补充说明不能超过 ${RECIPE_PREPARATION_NOTE_MAX_LENGTH} 个字符`,
-      );
-    }
-    return trimmed;
-  }
-
-  private normalizeStoredPreparationNote(value: string | null | undefined) {
-    const trimmed = value?.trim();
-    return trimmed
-      ? trimmed.slice(0, RECIPE_PREPARATION_NOTE_MAX_LENGTH)
-      : null;
-  }
-
-  private parsePreparationSourceInput(
-    value: RecipePreparationSource | null | undefined,
-  ): RecipePreparationSource | null | undefined {
-    if (value === undefined) {
-      return undefined;
-    }
-    if (value === null) {
-      return null;
-    }
-    if (value === 'AUTO' || value === 'MANUAL') {
-      return value;
-    }
-    throw new BadRequestException('原料预处理来源只能是 AUTO 或 MANUAL');
-  }
-
-  private normalizeStoredPreparationSource(
-    value: unknown,
-  ): RecipePreparationSource | null {
-    return value === 'AUTO' || value === 'MANUAL' ? value : null;
-  }
-
-  /**
-   * 新增原料时的预处理默认来源：
-   * - 显式填写了 method 或补充说明 → MANUAL（调用方显式传 AUTO 时尊重调用方）；
-   * - 只有系统按原料历史/档案自动解析出的 method → AUTO；
-   * - 什么都没有 → null。
-   */
-  private buildPreparationCreateData(input: {
-    explicitMethod: string | null | undefined;
-    explicitNote: string | null | undefined;
-    explicitSource: RecipePreparationSource | null | undefined;
-    resolvedMethod: string | null;
-  }) {
-    const explicitMethod = this.normalizePreparationMethod(
-      input.explicitMethod,
-    );
-    const method = this.normalizePreparationMethod(input.resolvedMethod);
-    const note = this.normalizePreparationNote(input.explicitNote);
-    const hasExplicitContent = Boolean(explicitMethod) || Boolean(note);
-    const preparationSource = hasExplicitContent
-      ? (input.explicitSource ?? 'MANUAL')
-      : method
-        ? (input.explicitSource ?? 'AUTO')
-        : null;
-
-    return {
-      preparationMethod: method,
-      preparationNote: note,
-      preparationSource,
-    };
-  }
-
-  /**
-   * 修改原料时的预处理字段（2026-10-22 · Task 4）。
-   *
-   * 只有传了 method / note / source 才写这几列；保存队列回传未修改的旧值时
-   * 不把 AUTO 误翻成 MANUAL（内容没变就保留原来源）。
-   */
-  private buildPreparationUpdateData(input: {
-    explicitMethod: string | null | undefined;
-    explicitNote: string | null | undefined;
-    explicitSource: RecipePreparationSource | null | undefined;
-    currentMethod: string | null | undefined;
-    currentNote: string | null | undefined;
-    currentSource: string | null | undefined;
-  }) {
-    const currentMethod = this.normalizePreparationMethod(input.currentMethod);
-    const currentNote = this.normalizeStoredPreparationNote(input.currentNote);
-    const nextMethod =
-      input.explicitMethod !== undefined
-        ? this.normalizePreparationMethod(input.explicitMethod)
-        : currentMethod;
-    const nextNote =
-      input.explicitNote !== undefined
-        ? this.normalizePreparationNote(input.explicitNote)
-        : currentNote;
-    const contentChanged =
-      nextMethod !== currentMethod || nextNote !== currentNote;
-
-    let preparationSource: RecipePreparationSource | null;
-    if (input.explicitSource !== undefined) {
-      preparationSource = input.explicitSource;
-    } else if (contentChanged) {
-      preparationSource = nextMethod || nextNote ? 'MANUAL' : null;
-    } else {
-      preparationSource = this.normalizeStoredPreparationSource(
-        input.currentSource,
-      );
-    }
-
-    return {
-      preparationMethod: nextMethod,
-      preparationNote: nextNote,
-      preparationSource,
-    };
-  }
-
-  /** 发布/私密快照写库前的预处理字段（保留显式来源，自动兜底标 AUTO）。 */
-  private resolveSnapshotPreparation(input: {
-    note: string | null | undefined;
-    source: string | null | undefined;
-    usedAutomaticFallback: boolean;
-  }) {
-    return {
-      preparationNote: this.normalizeStoredPreparationNote(input.note),
-      preparationSource:
-        this.normalizeStoredPreparationSource(input.source) ??
-        (input.usedAutomaticFallback ? 'AUTO' : null),
-    };
   }
 
   /** 制作步骤读取（GET / 私有快照展示）：坏条目丢弃，避免脏数据锁死编辑器。 */

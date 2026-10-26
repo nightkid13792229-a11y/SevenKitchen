@@ -482,14 +482,6 @@ export class RecipeDesignSupplementTargetDto {
   targetValuePerKg?: number;
 }
 
-/** 原料预处理来源：AUTO = 系统默认带出；MANUAL = 人工修改。 */
-export const RECIPE_PREPARATION_SOURCES = ['AUTO', 'MANUAL'] as const;
-
-export type RecipePreparationSource =
-  (typeof RECIPE_PREPARATION_SOURCES)[number];
-
-export const RECIPE_PREPARATION_NOTE_MAX_LENGTH = 500;
-
 export class AddRecipeDesignItemDto {
   @IsOptional()
   @IsString()
@@ -507,15 +499,6 @@ export class AddRecipeDesignItemDto {
   @IsString()
   @MaxLength(100)
   preparationMethod?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(RECIPE_PREPARATION_NOTE_MAX_LENGTH)
-  preparationNote?: string;
-
-  @IsOptional()
-  @IsIn(RECIPE_PREPARATION_SOURCES)
-  preparationSource?: RecipePreparationSource;
 
   @IsOptional()
   @IsString()
@@ -553,15 +536,6 @@ export class UpdateRecipeDesignItemDto {
   @IsString()
   @MaxLength(100)
   preparationMethod?: string | null;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(RECIPE_PREPARATION_NOTE_MAX_LENGTH)
-  preparationNote?: string | null;
-
-  @IsOptional()
-  @IsIn(RECIPE_PREPARATION_SOURCES)
-  preparationSource?: RecipePreparationSource | null;
 
   @IsOptional()
   @IsString()
@@ -612,15 +586,6 @@ export class ReplaceRecipeDesignItemDto {
   @IsString()
   @MaxLength(100)
   preparationMethod?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(RECIPE_PREPARATION_NOTE_MAX_LENGTH)
-  preparationNote?: string | null;
-
-  @IsOptional()
-  @IsIn(RECIPE_PREPARATION_SOURCES)
-  preparationSource?: RecipePreparationSource | null;
 }
 
 export class ReorderRecipeDesignItemDto {

@@ -504,7 +504,6 @@ export interface SeriesUnpublishResult {
 }
 
 /** 原料预处理来源：AUTO = 系统带出；MANUAL = 人工修改 */
-export type DesignerPreparationSource = 'AUTO' | 'MANUAL'
 
 export interface DesignerItem {
   id: string
@@ -557,9 +556,7 @@ export interface DesignerItem {
   /** 后端解析后的烹饪方式文字名（UUID 已解析为名称，旧文本原样保留） */
   preparationMethodLabel?: string | null
   /** 原料预处理补充说明（2026-10-22） */
-  preparationNote?: string | null
   /** 原料预处理来源：AUTO = 系统带出；MANUAL = 人工修改 */
-  preparationSource?: DesignerPreparationSource | null
   nutrientTargetKey?: string | null
   nutrientTargetValue?: number | null
   /** 补剂目标营养素定义与计算值 */

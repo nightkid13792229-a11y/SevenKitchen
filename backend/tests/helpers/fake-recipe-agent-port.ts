@@ -36,7 +36,6 @@ const DEFAULT_ITEMS: readonly AgentDraftItem[] = [
     weightG: 450,
     ratioPercent: 50,
     preparationMethod: '去皮切块',
-    preparationNote: '去掉可见脂肪',
   },
   {
     id: 'item-2',
@@ -49,7 +48,6 @@ const DEFAULT_ITEMS: readonly AgentDraftItem[] = [
     weightG: 60,
     ratioPercent: 6.67,
     preparationMethod: '去筋膜切丁',
-    preparationNote: null,
   },
   {
     id: 'item-3',
@@ -62,7 +60,6 @@ const DEFAULT_ITEMS: readonly AgentDraftItem[] = [
     weightG: 160,
     ratioPercent: 17.78,
     preparationMethod: '提前浸泡',
-    preparationNote: '浸泡 20 分钟',
   },
   {
     id: 'item-4',
@@ -75,7 +72,6 @@ const DEFAULT_ITEMS: readonly AgentDraftItem[] = [
     weightG: 120,
     ratioPercent: 13.33,
     preparationMethod: '去皮切块',
-    preparationNote: null,
   },
   {
     id: 'item-5',
@@ -88,7 +84,6 @@ const DEFAULT_ITEMS: readonly AgentDraftItem[] = [
     weightG: 40,
     ratioPercent: 4.44,
     preparationMethod: '焯水切丁',
-    preparationNote: null,
   },
   {
     id: 'item-6',
@@ -101,7 +96,6 @@ const DEFAULT_ITEMS: readonly AgentDraftItem[] = [
     weightG: 30,
     ratioPercent: 3.33,
     preparationMethod: '研磨成粉',
-    preparationNote: null,
   },
   {
     id: 'item-7',
@@ -114,7 +108,6 @@ const DEFAULT_ITEMS: readonly AgentDraftItem[] = [
     weightG: 40,
     ratioPercent: 4.44,
     preparationMethod: '直接拌入',
-    preparationNote: '出锅后放凉至 40°C 以下再加',
   },
   {
     id: 'item-8',
@@ -127,7 +120,6 @@ const DEFAULT_ITEMS: readonly AgentDraftItem[] = [
     weightG: 40,
     ratioPercent: 4.26,
     preparationMethod: '去刺切丁',
-    preparationNote: null,
   },
 ];
 
@@ -631,7 +623,6 @@ export function createFakeRecipeAgentPort(
         ratioPercent: null,
         // 缺省给「生」，免得后续 check_ready 因为新加的原料没预处理而误挂。
         preparationMethod: input.preparationMethod?.trim() || '生',
-        preparationNote: null,
       };
       state.draft = {
         ...state.draft,
@@ -703,15 +694,13 @@ export function createFakeRecipeAgentPort(
   const setPreparation = jest.fn(
     async (
       itemId: string,
-      input: { method: string; note?: string | null },
+      input: { method: string },
     ): Promise<AgentDraftItem> => {
       const index = findItemIndex(itemId);
       const existing = state.draft.items[index];
       return commitItem(index, {
         ...existing,
         preparationMethod: input.method,
-        preparationNote:
-          input.note === undefined ? existing.preparationNote : input.note,
       });
     },
   );

@@ -24,7 +24,6 @@ export interface AgentDraftItem {
   weightG: number;
   ratioPercent: number | null;
   preparationMethod: string | null;
-  preparationNote: string | null;
 }
 
 /** 评估报告里的一条指标。 */
@@ -375,7 +374,6 @@ export interface AgentRecipeItemRead {
   ingredientType: 'FOOD' | 'SUPPLEMENT';
   weightG: number;
   preparationMethod: string | null;
-  preparationNote: string | null;
   category: FoodCategory;
 }
 

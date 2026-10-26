@@ -61,8 +61,6 @@ describe('设计器 · 添加补剂必须先选择目标营养素', () => {
     expect(editor).toContain('recipeDesignerApi.updateItem(dialogState.itemId, {')
     expect(editor).toContain('supplementTargets: payloadTargets')
     expect(designerApiSource).toContain('supplementTargets?: RecipeDesignSupplementTargetPayload[]')
-    expect(designerApiSource).toContain('preparationNote?: string | null')
-    expect(designerApiSource).toContain("preparationSource?: 'AUTO' | 'MANUAL' | null")
   })
 
   it('明细行展示目标标签与实际添加浓度，并允许修改目标', () => {
@@ -165,22 +163,16 @@ describe('设计器 · 原料预处理控件内联与 Tab 顺序', () => {
     expect(editor).toContain(':tabindex="-1"')
   })
 
-  it('行内不再提供预处理补充说明输入，但后端字段与类型保持兼容', () => {
+  it('行内不再提供预处理补充说明输入', () => {
     expect(editor).not.toContain('preparation-note-input')
     expect(editor).not.toContain('onPreparationNoteChange')
     expect(editor).not.toContain('补充说明')
-    expect(designerTypesSource).toContain('preparationNote?: string | null')
-    expect(designerApiSource).toContain('preparationNote?: string | null')
     expect(designerTypesSource).toContain('preparationMethod?: string')
   })
 
   it('预处理修改通过 updateItem 持久化，不复制历史默认值', () => {
     expect(editor).toContain('data: { preparationMethod: nextMethod }')
     expect(editor).not.toContain('historicalPreparation')
-    expect(designerTypesSource).toContain('preparationNote?: string | null')
-    expect(designerTypesSource).toContain(
-      "preparationSource?: DesignerPreparationSource | null"
-    )
   })
 
   it('同一原料排队的多个字段修改会合并，不会互相覆盖', () => {

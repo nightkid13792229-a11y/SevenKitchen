@@ -39,7 +39,6 @@ export const MAX_PRODUCTION_STEPS = 30;
 /** 系列名上限（规格书要求「代码查非空」，长度按 200 卡住模型乱写）。 */
 const MAX_COPY_NAME_LENGTH = 200;
 /** 预处理备注上限。 */
-const MAX_PREPARATION_NOTE_LENGTH = 500;
 
 const STALE_AFTER_WRITE = ['ASSESSMENT', 'READY'] as const;
 const STALE_NOTE = '评估与交付检查已过期，需要重跑。';
@@ -71,7 +70,6 @@ export interface RemoveIngredientArgs {
 export interface SetPreparationArgs {
   itemId: string;
   method: string;
-  note?: string | null;
 }
 
 export interface SetCopyArgs {
@@ -393,29 +391,8 @@ export function createWriteTools(deps: WriteToolDeps): RecipeAgentWriteTools {
         return fail('INVALID_ARGUMENT', 'method 必须是非空字符串。');
       }
 
-      let note: string | null | undefined;
-      if (raw.note !== undefined) {
-        if (raw.note === null) {
-          note = null;
-        } else if (typeof raw.note === 'string') {
-          const trimmedNote = raw.note.trim();
-          if (trimmedNote.length > MAX_PREPARATION_NOTE_LENGTH) {
-            return fail(
-              'INVALID_ARGUMENT',
-              `note 不能超过 ${MAX_PREPARATION_NOTE_LENGTH} 字。`,
-            );
-          }
-          note = trimmedNote || null;
-        } else {
-          return fail('INVALID_ARGUMENT', 'note 必须是字符串或 null。');
-        }
-      }
-
       const written = await callPort(() =>
-        port.setPreparation(itemId, {
-          method,
-          ...(note !== undefined ? { note } : {}),
-        }),
+        port.setPreparation(itemId, { method }),
       );
       if (!written.ok) {
         return fail(written.code ?? 'INVALID_ARGUMENT', written.message);

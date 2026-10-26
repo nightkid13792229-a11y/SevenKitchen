@@ -6605,8 +6605,6 @@ describe('RecipeDesignerService', () => {
                 includeInAssessment: true,
                 ratioPercent: 80,
                 preparationMethod: '熟制',
-                preparationNote: null,
-                preparationSource: null,
                 nutrientTargetKey: null,
                 nutrientTargetValue: null,
                 sortOrder: 0,

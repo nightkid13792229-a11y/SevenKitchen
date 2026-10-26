@@ -759,10 +759,6 @@ model RecipeItem {
   ingredientId           String                        @map("ingredient_id")
   nutritionFoodId        String?                       @map("nutrition_food_id")
   preparationMethod      String?                       @map("preparation_method")
-  /// 原料预处理的补充说明（部位/规格等自由文本）
-  preparationNote        String?                       @map("preparation_note") @db.VarChar(500)
-  /// 预处理来源：AUTO（营养档案/原料默认带出）| MANUAL（人工修改）
-  preparationSource      String?                       @map("preparation_source") @db.VarChar(20)
   ratioPercent           Float?                        @map("ratio_percent")
   nutrientTargetKey      String?                       @map("nutrient_target_key")
   nutrientTargetValue    Float?                        @map("nutrient_target_value")
@@ -4231,10 +4227,6 @@ model DesignRecipeItem {
   includeInAssessment Boolean       @default(true) @map("include_in_assessment")
   ratioPercent        Float?        @map("ratio_percent")
   preparationMethod   String?       @map("preparation_method") @db.VarChar(100)
-  /// 原料预处理的补充说明（部位/规格等自由文本）
-  preparationNote     String?       @map("preparation_note") @db.VarChar(500)
-  /// 预处理来源：AUTO（营养档案/原料默认带出）| MANUAL（人工修改）
-  preparationSource   String?       @map("preparation_source") @db.VarChar(20)
   nutrientTargetKey   String?       @map("nutrient_target_key")
   nutrientTargetValue Float?        @map("nutrient_target_value")
   supplementTargets   Json?         @map("supplement_targets")

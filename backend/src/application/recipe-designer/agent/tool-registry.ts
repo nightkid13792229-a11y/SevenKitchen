@@ -436,17 +436,12 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
   {
     name: 'set_preparation',
     description:
-      '设置某条原料的部位 / 状态 / 预处理和备注；写制作流程前补齐处理方式。method 必须是中文文案（如「牛里脊/生/去油」），不要传字典 ID。',
+      '设置某条原料的部位 / 状态 / 预处理；写制作流程前补齐处理方式。method 必须是中文文案（如「牛里脊/生/去油」），不要传字典 ID。',
     parameters: {
       type: 'object',
       properties: {
         itemId: { type: 'string', description: '草稿原料条目 ID。' },
         method: { type: 'string', description: '部位 / 状态 / 预处理，如「牛里脊/生/去油」。' },
-        note: {
-          type: ['string', 'null'],
-          maxLength: 500,
-          description: '预处理备注，可选，最多 500 字。',
-        },
       },
       required: ['itemId', 'method'],
       additionalProperties: false,

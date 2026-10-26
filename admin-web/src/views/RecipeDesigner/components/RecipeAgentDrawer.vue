@@ -892,7 +892,6 @@ const FIELD_LABELS: Record<string, string> = {
   totalWeightG: '总重',
   ratioPercent: '占比',
   preparationMethod: '部位 / 状态 / 预处理',
-  preparationNote: '预处理备注',
   nutritionFoodId: '营养档案 ID',
   ingredientId: '原料 ID',
   itemId: '草稿项 ID',

@@ -64,8 +64,6 @@ function writtenItem(overrides: Record<string, unknown> = {}) {
     includeInAssessment: true,
     ratioPercent: 0,
     preparationMethod: null,
-    preparationNote: null,
-    preparationSource: 'AUTO',
     nutrientTargetKey: null,
     nutrientTargetValue: null,
     sortOrder: 1,
@@ -250,8 +248,7 @@ describe('RecipeDesignerAgentAdapter 写方法', () => {
         weightG: 120,
         ratioPercent: null,
         preparationMethod: '生',
-        preparationNote: null,
-      };
+        };
       expect(result).toEqual(expected);
     });
 
@@ -642,11 +639,11 @@ describe('RecipeDesignerAgentAdapter 写方法', () => {
   });
 
   describe('setPreparation', () => {
-    it('调用 service.updateItem 并标记 MANUAL，备注缺省不传、保留原备注', async () => {
+    it('调用 service.updateItem，只写部位 / 状态 / 预处理', async () => {
       const service = serviceMock();
       const prisma = prismaMock();
       service.updateItem.mockResolvedValue(
-        writtenItem({ preparationMethod: '蒸', preparationSource: 'MANUAL' }),
+        writtenItem({ preparationMethod: '蒸' }),
       );
       const adapter = createAdapter(service, prisma);
 
@@ -654,52 +651,10 @@ describe('RecipeDesignerAgentAdapter 写方法', () => {
 
       expect(service.updateItem).toHaveBeenCalledWith(
         'item-1',
-        {
-          preparationMethod: '蒸',
-          preparationSource: 'MANUAL',
-        },
+        { preparationMethod: '蒸' },
         ACCESS,
       );
       expect(result.preparationMethod).toBe('蒸');
-    });
-
-    it('备注显式传 null 时原样传 null', async () => {
-      const service = serviceMock();
-      const prisma = prismaMock();
-      const adapter = createAdapter(service, prisma);
-
-      await adapter.setPreparation('item-1', { method: '蒸', note: null });
-
-      expect(service.updateItem).toHaveBeenCalledWith(
-        'item-1',
-        {
-          preparationMethod: '蒸',
-          preparationNote: null,
-          preparationSource: 'MANUAL',
-        },
-        ACCESS,
-      );
-    });
-
-    it('备注显式传字符串时原样传字符串', async () => {
-      const service = serviceMock();
-      const prisma = prismaMock();
-      const adapter = createAdapter(service, prisma);
-
-      await adapter.setPreparation('item-1', {
-        method: '蒸',
-        note: '水开后蒸 15 分钟',
-      });
-
-      expect(service.updateItem).toHaveBeenCalledWith(
-        'item-1',
-        {
-          preparationMethod: '蒸',
-          preparationNote: '水开后蒸 15 分钟',
-          preparationSource: 'MANUAL',
-        },
-        ACCESS,
-      );
     });
 
     it('模型传预处理字典 ID 时，解析成中文再落库', async () => {
@@ -714,10 +669,7 @@ describe('RecipeDesignerAgentAdapter 写方法', () => {
 
       expect(service.updateItem).toHaveBeenCalledWith(
         'item-1',
-        {
-          preparationMethod: '熟重',
-          preparationSource: 'MANUAL',
-        },
+        { preparationMethod: '熟重' },
         ACCESS,
       );
     });
@@ -731,19 +683,7 @@ describe('RecipeDesignerAgentAdapter 写方法', () => {
         adapter.setPreparation('item-1', {
           method: '11111111-1111-4111-8111-111111111111',
         }),
-      ).rejects.toMatchObject({
-        name: 'RecipeAgentPortError',
-        code: 'INVALID_ARGUMENT',
-      });
-      await expect(
-        adapter.setPreparation('item-1', {
-          method: '11111111-1111-4111-',
-        }),
-      ).rejects.toMatchObject({
-        name: 'RecipeAgentPortError',
-        code: 'INVALID_ARGUMENT',
-      });
-      expect(service.updateItem).not.toHaveBeenCalled();
+      ).rejects.toThrow('部位 / 状态 / 预处理不能用字典 ID');
     });
   });
 

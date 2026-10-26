@@ -48,7 +48,6 @@ function draftItem(input: {
     ratioPercent: null,
     preparationMethod: input.preparationMethod ?? '切块',
     preparationMethodLabel: input.preparationMethodLabel ?? null,
-    preparationNote: null,
     nutrientTargetKey: null,
     nutrientTargetValue: null,
     sortOrder: 1,
@@ -139,7 +138,6 @@ function publishedItem(input: {
     nutritionFoodId: `nf-${input.name}`,
     exampleWeight: input.weightG,
     preparationMethod: input.preparationMethod ?? '切块',
-    preparationNote: null,
     sortOrder: 1,
     ingredient: {
       id: `ing-${input.name}`,
@@ -224,7 +222,6 @@ function designItem(input: {
     nutritionFoodId: `nf-${input.name}`,
     weightG: input.weightG,
     preparationMethod: input.preparationMethod ?? '切块',
-    preparationNote: null,
     ingredient: {
       id: `ing-${input.name}`,
       name: input.name,

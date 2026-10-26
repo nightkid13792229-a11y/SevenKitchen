@@ -79,8 +79,6 @@ export interface DesignRecipeItemPayload {
   nutritionFoodId: string
   weightG: number
   preparationMethod?: string
-  preparationNote?: string | null
-  preparationSource?: 'AUTO' | 'MANUAL' | null
   nutrientTargetKey?: string
   nutrientTargetValue?: number
   /** 补剂目标营养素；补剂不传且档案没有默认目标时后端会 400 */
@@ -92,8 +90,6 @@ export interface DesignRecipeItemPayload {
 export interface UpdateDesignRecipeItemPayload {
   weightG?: number
   preparationMethod?: string | null
-  preparationNote?: string | null
-  preparationSource?: 'AUTO' | 'MANUAL' | null
   nutrientTargetKey?: string | null
   nutrientTargetValue?: number | null
   supplementTargets?: RecipeDesignSupplementTargetPayload[]

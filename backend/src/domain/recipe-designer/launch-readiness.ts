@@ -26,8 +26,7 @@ import { PREPARATION_FIELD_LABEL } from './preparation-field.constants';
  *    非空 `fieldPath` 和大于 0 的每 kg 目标值。每 kg 目标值在库里叫
  *    `targetValue`，早期/接口层叫 `targetValuePerKg`，两者都认（同一含义）。
  *    **不接受**只靠营养档案默认目标或按移除补剂后的缺口反推（no inference）。
- *  · **预处理方式**：每个参与评估的原料都必须有非空 `preparationMethod`。
- *    `preparationNote` 只是补充说明，不能替代预处理方式。
+ *  · **预处理方式**：必填类别的原料必须有非空 `preparationMethod`。
  *  · **制作步骤**：结构化步骤里至少有一条有效步骤，否则不能发布 / 加入待提交。
  *  · **评估未完全合规**：只是提醒（发布时仍需审核说明），不是硬阻断。
  *
@@ -135,7 +134,6 @@ export interface LaunchReadinessItemInput {
   preparationRequired?: boolean;
   preparationMethod?: string | null;
   /** 仅用于文档说明；判断时只认 preparationMethod */
-  preparationNote?: string | null;
   supplementTargets?: unknown;
 }
 
@@ -231,7 +229,7 @@ export const hasValidSupplementTargets = (value: unknown): boolean => {
   });
 };
 
-/** 预处理方式必须是非空字符串；preparationNote 不能替代。 */
+/** 预处理方式必须是非空字符串。 */
 export const hasPreparationMethod = (value: unknown): boolean =>
   normalizeText(value).length > 0;
 

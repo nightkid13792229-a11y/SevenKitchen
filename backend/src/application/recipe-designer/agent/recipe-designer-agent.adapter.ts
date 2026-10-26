@@ -943,7 +943,6 @@ interface PublishedRecipeItemRow {
   nutritionFoodId: string | null;
   exampleWeight: number | null;
   preparationMethod: string | null;
-  preparationNote: string | null;
   ingredient: {
     name: string | null;
     type: string | null;
@@ -994,7 +993,6 @@ interface DesignRecipeItemRow {
   nutritionFoodId: string | null;
   weightG: number;
   preparationMethod: string | null;
-  preparationNote: string | null;
   ingredient: {
     name: string;
     type: string;
@@ -1046,7 +1044,6 @@ const PUBLISHED_RECIPE_ITEM_SELECT = {
   nutritionFoodId: true,
   exampleWeight: true,
   preparationMethod: true,
-  preparationNote: true,
   ingredient: {
     select: { name: true, type: true, properties: true },
   },
@@ -1107,7 +1104,6 @@ const DESIGN_RECIPE_ITEM_SELECT = {
   nutritionFoodId: true,
   weightG: true,
   preparationMethod: true,
-  preparationNote: true,
   ingredient: {
     select: { name: true, type: true, properties: true },
   },
@@ -1203,7 +1199,6 @@ const toPublishedRecipeItemRead = (
     ingredientType,
     weightG: toFiniteNumber(item.exampleWeight) ?? 0,
     preparationMethod: item.preparationMethod ?? null,
-    preparationNote: item.preparationNote ?? null,
     category: classifyFoodCategory({
       name,
       cfctClass: readCfctClass(ingredient?.properties),
@@ -1240,7 +1235,6 @@ const toDesignRecipeItemRead = (
     ingredientType,
     weightG: toFiniteNumber(item.weightG) ?? 0,
     preparationMethod: item.preparationMethod ?? null,
-    preparationNote: item.preparationNote ?? null,
     category: classifyFoodCategory({
       name,
       cfctClass: readCfctClass(ingredient?.properties),
@@ -1272,7 +1266,6 @@ const toDraftRecipeItemRead = (item: AgentDraftItem): AgentRecipeItemRead => ({
     (item.category === 'SUPPLEMENT' ? 'SUPPLEMENT' : 'FOOD'),
   weightG: item.weightG,
   preparationMethod: item.preparationMethod,
-  preparationNote: item.preparationNote,
   category: item.category,
 });
 
@@ -1416,7 +1409,6 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
         ratioPercent: null,
         preparationMethod:
           preparationMethodLabel ?? item.preparationMethod ?? null,
-        preparationNote: item.preparationNote ?? null,
       };
     });
 
@@ -2604,7 +2596,6 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
       weightG: item.weightG,
       ratioPercent: null,
       preparationMethod: item.preparationMethod ?? null,
-      preparationNote: item.preparationNote ?? null,
     };
   }
 
@@ -2712,7 +2703,7 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
 
   async setPreparation(
     itemId: string,
-    input: { method: string; note?: string | null },
+    input: { method: string },
   ): Promise<AgentDraftItem> {
     await this.assertItemInDraft(itemId);
 
@@ -2724,20 +2715,11 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
       );
     }
 
-    const patch: {
-      preparationMethod: string;
-      preparationNote?: string | null;
-      preparationSource: 'MANUAL';
-    } = {
-      preparationMethod: method,
-      preparationSource: 'MANUAL',
-    };
-    // 只有显式传了 note 才写；省略表示“保留原备注”，不能静默清空。
-    if (input.note !== undefined) {
-      patch.preparationNote = input.note;
-    }
-
-    const item = await this.service.updateItem(itemId, patch, this.access);
+    const item = await this.service.updateItem(
+      itemId,
+      { preparationMethod: method },
+      this.access,
+    );
 
     return this.toAgentItem(item);
   }

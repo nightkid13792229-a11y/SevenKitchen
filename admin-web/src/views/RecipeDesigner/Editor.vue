@@ -832,8 +832,6 @@ async function recreateItem(snapshot: DesignerItem) {
     weightG: Number(snapshot.weightG ?? 0),
     includeInAssessment: snapshot.includeInAssessment,
     preparationMethod: snapshot.preparationMethod,
-    preparationNote: snapshot.preparationNote ?? undefined,
-    preparationSource: snapshot.preparationSource ?? undefined,
     nutrientTargetKey: snapshot.nutrientTargetKey ?? undefined,
     nutrientTargetValue: snapshot.nutrientTargetValue ?? undefined,
     ...(supplementTargets.length > 0
@@ -980,7 +978,6 @@ function onPreparationMethodChange(
 
   item.preparationMethod = nextMethod ?? undefined
   item.preparationMethodLabel = nextMethod
-  item.preparationSource = nextMethod || item.preparationNote ? 'MANUAL' : null
   itemsRevision.value += 1
   enqueue({
     kind: 'updateItem',

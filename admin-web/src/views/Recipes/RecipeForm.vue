@@ -819,7 +819,7 @@
             v-model="ingredientForm.preparationMethodText"
             type="textarea"
             :rows="3"
-            maxlength="12"
+            maxlength="20"
             placeholder="如：牛里脊/生/去油"
           />
           <div

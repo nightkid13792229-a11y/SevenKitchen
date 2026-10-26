@@ -9,7 +9,7 @@
       :debounce="0"
       :tabindex="tabindex"
       :placeholder="placeholder"
-      maxlength="12"
+      maxlength="20"
       clearable
       @select="handleSelect"
       @change="handleChange"

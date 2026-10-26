@@ -1,3 +1,5 @@
+import { PREPARATION_FIELD_LABEL } from './preparation-field.constants';
+
 /**
  * 食谱设计草稿「可发布 / 可下单」统一门槛（2026-10-22 · 发布门槛任务）。
  *
@@ -126,6 +128,11 @@ export interface LaunchReadinessItemInput {
   /** includeInAssessment !== false */
   included: boolean;
   isSupplement: boolean;
+  /**
+   * 是否需要「部位 / 状态 / 预处理」。
+   * 缺省 true（保守）；服务层按食材类别计算后显式传入。
+   */
+  preparationRequired?: boolean;
   preparationMethod?: string | null;
   /** 仅用于文档说明；判断时只认 preparationMethod */
   preparationNote?: string | null;
@@ -263,11 +270,14 @@ export const buildDraftLaunchReadiness = (
   }
 
   for (const item of includedItems) {
-    if (!hasPreparationMethod(item.preparationMethod)) {
+    if (
+      (item.preparationRequired ?? true) &&
+      !hasPreparationMethod(item.preparationMethod)
+    ) {
       blockers.push({
         code: 'PREPARATION_METHOD_REQUIRED',
         scope: 'COMMON',
-        message: `食材「${item.name}」未填写预处理方式，不能发布或加入待提交`,
+        message: `食材「${item.name}」未填写${PREPARATION_FIELD_LABEL}，不能发布或加入待提交`,
         itemId: item.id,
         field: 'preparationMethod',
       });

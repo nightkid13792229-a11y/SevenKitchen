@@ -504,18 +504,20 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
     expect(computedFromDefinitions.ready).toBe(true);
   });
 
-  it('requires a preparation method on every included item (note alone is not enough)', async () => {
-    const readiness = await readinessFor({
+  it('requires a preparation method on required food items but not exempt ones', async () => {
+    const required = await readinessFor({
       items: [
         foodItem({
           preparationMethod: null,
-          preparationNote: '去皮、切块',
+          ingredient: {
+            ...foodItem().ingredient,
+            properties: { cfct_class: '禽肉类及制品' },
+          },
         }),
       ],
     });
-
-    expect(readiness.ready).toBe(false);
-    expect(readiness.blockers).toEqual(
+    expect(required.ready).toBe(false);
+    expect(required.blockers).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           code: 'PREPARATION_METHOD_REQUIRED',
@@ -524,6 +526,38 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
         }),
       ]),
     );
+
+    const seasoning = await readinessFor({
+      items: [
+        foodItem({
+          preparationMethod: null,
+          ingredient: {
+            ...foodItem().ingredient,
+            name: '食盐',
+            properties: { cfct_class: '调味品类' },
+          },
+          nutritionFood: {
+            ...foodItem().nutritionFood,
+            name: '食盐',
+            displayNameZh: '食盐',
+          },
+        }),
+      ],
+    });
+    expect(
+      seasoning.blockers.some(
+        (blocker) => blocker.code === 'PREPARATION_METHOD_REQUIRED',
+      ),
+    ).toBe(false);
+
+    const supplement = await readinessFor({
+      items: [supplementItem({ preparationMethod: null })],
+    });
+    expect(
+      supplement.blockers.some(
+        (blocker) => blocker.code === 'PREPARATION_METHOD_REQUIRED',
+      ),
+    ).toBe(false);
   });
 
   it('requires at least one valid production step', async () => {

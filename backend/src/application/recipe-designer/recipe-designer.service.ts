@@ -139,6 +139,7 @@ import {
   type AiWizardDraftSummary,
 } from './recipe-ai-wizard.service';
 import { IngredientPreparationHistoryService } from '../recipe/ingredient-preparation-history.service';
+import { isPreparationRequiredFoodCategory } from '../../domain/recipe-designer/preparation-field.constants';
 import {
   SupplementTargetService,
   type SupplementTargetDefinition,
@@ -8790,6 +8791,7 @@ export class RecipeDesignerService {
       name: string;
       included: boolean;
       isSupplement: boolean;
+      preparationRequired: boolean;
       preparationMethod?: string | null;
       preparationNote?: string | null;
       supplementTargets?: unknown;
@@ -8797,6 +8799,11 @@ export class RecipeDesignerService {
     for (const item of draft.items) {
       const isSupplement =
         this.resolveIngredientType(item) === IngredientType.SUPPLEMENT;
+      const preparationRequired =
+        !isSupplement &&
+        isPreparationRequiredFoodCategory(
+          this.resolveDraftItemDisplayCategory(item),
+        );
       let supplementTargets: unknown = item.supplementTargets;
       if (isSupplement && assessment && assessment.totalWeightG > 0) {
         try {
@@ -8827,6 +8834,7 @@ export class RecipeDesignerService {
         name: this.resolveIngredientDisplayName(item),
         included: this.isItemIncludedInAssessment(item),
         isSupplement,
+        preparationRequired,
         preparationMethod: item.preparationMethod,
         preparationNote: item.preparationNote,
         supplementTargets,

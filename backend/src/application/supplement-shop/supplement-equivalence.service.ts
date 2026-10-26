@@ -31,6 +31,7 @@ export interface UpsertEquivalenceGroupInput {
   formCategory?: string | null;
   description?: string | null;
   rationale?: string | null;
+  evidenceSummary?: string | null;
   evidenceUrls?: string[];
   sortOrder?: number;
 }
@@ -339,6 +340,9 @@ export class SupplementEquivalenceService {
     }
     if (input.rationale !== undefined) {
       data.rationale = input.rationale?.trim() || null;
+    }
+    if (input.evidenceSummary !== undefined) {
+      data.evidenceSummary = input.evidenceSummary?.trim() || null;
     }
     if (input.evidenceUrls !== undefined) {
       data.evidenceUrls = input.evidenceUrls as Prisma.InputJsonValue;
@@ -846,6 +850,7 @@ export class SupplementEquivalenceService {
       formCategory: input.formCategory?.trim() || null,
       description: input.description?.trim() || null,
       rationale: input.rationale?.trim() || null,
+      evidenceSummary: input.evidenceSummary?.trim() || null,
       evidenceUrls: (input.evidenceUrls ?? [])
         .map((item) => String(item ?? '').trim())
         .filter(Boolean),
@@ -861,6 +866,7 @@ export class SupplementEquivalenceService {
       nutrientLabel: group.nutrientLabel,
       nutrientUnit: group.nutrientUnit,
       formCategory: group.formCategory,
+      evidenceSummary: group.evidenceSummary,
       status: group.status,
     };
   }

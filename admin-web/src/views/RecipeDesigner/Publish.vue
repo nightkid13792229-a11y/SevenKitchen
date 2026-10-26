@@ -198,7 +198,10 @@
             <el-form-item label="发布名称">
               <template v-if="draft?.seriesId">
                 <div class="publish-name-row">
-                  <el-input :model-value="seriesDisplayName" readonly class="publish-name-input" />
+                  <AiNameField
+                    v-model="seriesNameDraft"
+                    :series-id="draft.seriesId"
+                  />
                   <el-tag
                     v-if="seriesNameIsTemporary"
                     size="small"
@@ -207,7 +210,15 @@
                   >
                     临时名称
                   </el-tag>
-                  <el-button size="small" text type="primary" @click="openRenameDialog">改名</el-button>
+                  <el-button
+                    v-if="seriesNameDirty"
+                    size="small"
+                    type="primary"
+                    :loading="renaming"
+                    @click="saveSeriesName"
+                  >
+                    保存名称
+                  </el-button>
                 </div>
               </template>
               <el-input
@@ -245,7 +256,7 @@
 
     <!-- 系列改名（合并命名模型：发布名自动跟随系列名） -->
     <el-dialog v-model="renameDialogVisible" title="重命名系列" width="420px">
-      <el-input v-model="renameForm.name" maxlength="60" show-word-limit />
+      <el-input v-model="renameForm.name" maxlength="12" show-word-limit />
       <template #footer>
         <el-button @click="renameDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="renaming" @click="confirmRename">保存</el-button>
@@ -255,12 +266,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import type { DesignRecipeDraftDetail } from '@/types/recipeDesigner'
 import { isTemporarySeriesName } from '@/utils/recipeDesigner/seriesName'
+import AiNameField from './components/AiNameField.vue'
 import { useUserStore } from '@/store/user'
 import { buildPublishNutritionReport } from './publishReport'
 
@@ -295,6 +307,20 @@ const seriesNameIsTemporary = computed(
   () => Boolean(draft.value?.seriesId) && isTemporarySeriesName(seriesDisplayName.value)
 )
 
+/** 发布名称的本地草稿：改完点「保存名称」才真正写库 */
+const seriesNameDraft = ref('')
+const seriesNameDirty = computed(
+  () => seriesNameDraft.value.trim() !== seriesDisplayName.value.trim()
+)
+
+watch(
+  seriesDisplayName,
+  (value) => {
+    seriesNameDraft.value = value
+  },
+  { immediate: true }
+)
+
 const renameDialogVisible = ref(false)
 const renameForm = reactive({ name: '' })
 const renaming = ref(false)
@@ -304,19 +330,22 @@ function openRenameDialog() {
   renameDialogVisible.value = true
 }
 
-async function confirmRename() {
-  const name = renameForm.name.trim()
+async function applyRename(name: string): Promise<boolean> {
   if (!name) {
     ElMessage.warning('请填写系列名称')
-    return
+    return false
+  }
+  if ([...name].length > 12) {
+    ElMessage.warning('食谱名称最多 12 个字，超了标签印不下')
+    return false
   }
   if (isTemporarySeriesName(name)) {
     ElMessage.warning('请填写正式系列名称（不能以「未命名」开头）')
-    return
+    return false
   }
   if (!draft.value?.seriesId) {
     ElMessage.error('该草稿不属于任何系列，无法改名')
-    return
+    return false
   }
   renaming.value = true
   try {
@@ -325,11 +354,23 @@ async function confirmRename() {
     draft.value.name = name
     renameDialogVisible.value = false
     ElMessage.success('系列名称已更新，发布名将随新名称生效')
+    return true
   } catch {
     ElMessage.error('改名失败，请重试')
+    return false
   } finally {
     renaming.value = false
   }
+}
+
+/** 改名弹窗里的确认（沿用原入口） */
+async function confirmRename() {
+  await applyRename(renameForm.name.trim())
+}
+
+/** 发布页名称行里的「保存名称」 */
+async function saveSeriesName() {
+  await applyRename(seriesNameDraft.value.trim())
 }
 
 const isAdmin = computed(() => userStore.userInfo?.role === 'ADMIN')

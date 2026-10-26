@@ -34,6 +34,12 @@ describe('AI 命名字段', () => {
 
 
 
+  it('点「采用」直接落库，不再要求二次点保存', () => {
+    expect(fieldSource).toContain('recipeDesignerApi.renameSeries')
+    expect(fieldSource).toContain("emit('saved', name)")
+    expect(fieldSource).not.toContain('再点一次保存')
+  })
+
   it('接口路径与后端一致，且只生成不落库', () => {
     expect(apiSource).toContain("'/admin/recipe-designer/naming/availability'")
     expect(apiSource).toContain(

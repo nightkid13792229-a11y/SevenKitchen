@@ -240,6 +240,7 @@
                 <AiNameField
                   v-model="nameDraft"
                   :series-id="seriesId"
+                  @saved="onNameAdopted"
                 />
                 <el-button
                   v-if="nameDirty"
@@ -633,6 +634,12 @@ watch(
   },
   { immediate: true }
 )
+
+/** 采用 AI 候选后名称已经落库，这里只把界面上的值对齐并通知父级 */
+function onNameAdopted(name: string) {
+  nameDraft.value = name
+  emit('saved')
+}
 
 /** 临时名（「未命名系列 · …」）会印在标签上，后端也会拦 */
 const isTemporaryName = computed(() =>

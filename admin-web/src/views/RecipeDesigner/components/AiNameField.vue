@@ -46,7 +46,13 @@
           </div>
         </div>
         <span class="cand-len">{{ countLength(candidate.name) }} 字</span>
-        <el-button size="small" text type="primary" @click="use(candidate.name)">
+        <el-button
+          size="small"
+          text
+          type="primary"
+          :loading="adopting === candidate.name"
+          @click="use(candidate.name)"
+        >
           采用
         </el-button>
       </div>
@@ -59,6 +65,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { recipeDesignerApi } from '@/api/recipeDesigner'
 import {
   RECIPE_NAME_MAX_LENGTH,
   recipeNamingApi,
@@ -73,10 +80,14 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (event: 'update:modelValue', value: string): void
+  /** 采用候选并已成功写库 */
+  (event: 'saved', name: string): void
 }>()
 
 const available = ref(true)
 const generating = ref(false)
+/** 正在保存的候选名（只让那一条转圈） */
+const adopting = ref('')
 const candidates = ref<RecipeNameCandidate[]>([])
 
 /** 按"字"数，与后端同一口径：中文、数字、符号都算 1 个字 */
@@ -117,8 +128,20 @@ async function generate() {
   }
 }
 
-function use(name: string) {
+/** 点「采用」= 直接落库。名字是用户一眼就能定的东西，不该再点第二次。 */
+async function use(name: string) {
   emit('update:modelValue', name)
+  if (!props.seriesId) return
+  adopting.value = name
+  try {
+    await recipeDesignerApi.renameSeries(props.seriesId, { name })
+    ElMessage.success('名称已保存')
+    emit('saved', name)
+  } catch (error: any) {
+    ElMessage.error(error?.message || '保存失败，请重试')
+  } finally {
+    adopting.value = ''
+  }
 }
 </script>
 

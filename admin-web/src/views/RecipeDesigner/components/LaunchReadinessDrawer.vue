@@ -91,7 +91,11 @@
         <div v-if="readiness.seriesId" class="launch-readiness__series-block">
           <div class="launch-readiness__series-row">
             <span class="launch-readiness__series-k">食谱名称</span>
-            <AiNameField v-model="nameDraft" :series-id="readiness.seriesId" />
+            <AiNameField
+              v-model="nameDraft"
+              :series-id="readiness.seriesId"
+              @saved="(name: string) => { nameDraft = name; loadReadiness() }"
+            />
             <el-button
               v-if="nameDirty"
               size="small"

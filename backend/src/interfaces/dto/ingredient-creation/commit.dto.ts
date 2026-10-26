@@ -4,6 +4,7 @@ import {
   ArrayNotEmpty,
   ArrayUnique,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsNotEmpty,
@@ -11,6 +12,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -24,8 +26,15 @@ import {
 } from './ingredient-creation.constants';
 import { NutritionEvidenceEntryDto } from './nutrition-evidence-entry.dto';
 
-/** ⑤ 标准原料预填值。 */
-export class CommitIngredientDto {
+/**
+ * ⑤ 标准原料预填值。
+ *
+ * 与草稿的 `UpdateDraftIngredientDto` 共用同一份字段契约：26 个 `CREATABLE`
+ * 字段全部收下；库存三项与标签（`AFTER_CREATE`）本阶段不提交、不写入。
+ * 4 个 `AFTER_CREATE` 字段故意不声明，`whitelist` 会剥掉，服务层也不读。
+ */
+export class CommitIngredientDto implements IngredientDraft {
+  // BASIC
   @ApiProperty({ description: '原料名称', example: '鸡肝' })
   @IsString()
   @IsNotEmpty()
@@ -49,6 +58,12 @@ export class CommitIngredientDto {
   @IsIn(COVERAGE_CATEGORIES)
   category?: IngredientDraft['category'];
 
+  @ApiPropertyOptional({ description: '备注', nullable: true })
+  @IsOptional()
+  @IsString()
+  notes?: string | null;
+
+  // MEASURE
   @ApiProperty({ description: '基准单位', enum: BASE_UNITS })
   @IsIn(BASE_UNITS)
   baseUnit!: IngredientDraft['baseUnit'];
@@ -58,15 +73,126 @@ export class CommitIngredientDto {
   @IsNotEmpty()
   unitDisplayLabel!: string;
 
+  @ApiPropertyOptional({ description: '单块重量（g）', nullable: true })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  weightG?: number | null;
+
+  @ApiPropertyOptional({ description: '最大容量（g）', nullable: true })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  maxCapacityG?: number | null;
+
+  // NUTRITION
   @ApiPropertyOptional({ description: 'CFCT 分类', nullable: true })
   @IsOptional()
   @IsString()
   cfctClass?: string | null;
 
-  @ApiPropertyOptional({ description: '可食部比例', nullable: true })
+  /**
+   * 可食部**比例**（0–1），不是百分数：前端把 75% 换算成 0.75 再传，
+   * 服务端原样落 `properties.edible_yield_rate`，绝不再除一次 100。
+   */
+  @ApiPropertyOptional({ description: '可食部比例（0–1）', nullable: true })
   @IsOptional()
   @IsNumber()
   edibleYieldRate?: number | null;
+
+  @ApiPropertyOptional({ description: '主要营养价值', nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  mainNutrientsDesc?: string | null;
+
+  // PURCHASE
+  @ApiPropertyOptional({ description: '采购策略', nullable: true })
+  @IsOptional()
+  @IsString()
+  procurementStrategy?: string | null;
+
+  @ApiPropertyOptional({ description: '采购单位', nullable: true })
+  @IsOptional()
+  @IsString()
+  purchaseUnit?: string | null;
+
+  @ApiPropertyOptional({
+    description: '采购单位换算成基准单位的倍数',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  purchaseToBaseRatio?: number | null;
+
+  @ApiPropertyOptional({
+    description: '当前采购价（元 / 采购单位）',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  currentPricePerPurchaseUnit?: number | null;
+
+  @ApiPropertyOptional({ description: '品牌', nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  brand?: string | null;
+
+  @ApiPropertyOptional({ description: '规格', nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  productModel?: string | null;
+
+  @ApiPropertyOptional({ description: '采购渠道', nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  purchaseChannel?: string | null;
+
+  // USAGE
+  @ApiPropertyOptional({ description: '是否用于 DIY', nullable: true })
+  @IsOptional()
+  @IsBoolean()
+  diyEnabled?: boolean | null;
+
+  @ApiPropertyOptional({ description: '添加时机', nullable: true })
+  @IsOptional()
+  @IsString()
+  addTiming?: string | null;
+
+  @ApiPropertyOptional({ description: '生产损耗率（0–1）', nullable: true })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  productionLossRate?: number | null;
+
+  // STORAGE
+  @ApiPropertyOptional({ description: '保质期（月）', nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  shelfLifeMonths?: number | null;
+
+  @ApiPropertyOptional({ description: '储存条件', nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  storageCondition?: string | null;
+
+  @ApiPropertyOptional({ description: '开封后效期（天）', nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  openedShelfLifeDays?: number | null;
+
+  @ApiPropertyOptional({ description: '内容物是否油性', nullable: true })
+  @IsOptional()
+  @IsBoolean()
+  isOilBased?: boolean | null;
 }
 
 /** ③ 一份营养档案（生 / 熟各最多一份）。 */

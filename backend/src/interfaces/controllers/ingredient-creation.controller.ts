@@ -324,16 +324,9 @@ export class IngredientCreationController {
     const result = await this.commitService.commit({
       draftId: id,
       userId: user.userId,
-      ingredient: {
-        name: dto.ingredient.name,
-        nameEn: dto.ingredient.nameEn ?? null,
-        type: dto.ingredient.type,
-        category: dto.ingredient.category ?? null,
-        baseUnit: dto.ingredient.baseUnit,
-        unitDisplayLabel: dto.ingredient.unitDisplayLabel,
-        cfctClass: dto.ingredient.cfctClass ?? null,
-        edibleYieldRate: dto.ingredient.edibleYieldRate ?? null,
-      },
+      // 整份原料卡透传：字段契约已在 DTO 里校验/白名单，服务层按「有值才写」
+      // 落库；这里不再逐字段挑选，否则每加一个字段都要记得改两处。
+      ingredient: dto.ingredient,
       profiles: dto.profiles.map((profile) => ({
         preparationState: profile.preparationState,
         sourceRecordId: profile.sourceRecordId,

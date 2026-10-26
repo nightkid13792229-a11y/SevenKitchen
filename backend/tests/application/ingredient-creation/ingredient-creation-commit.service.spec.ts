@@ -232,6 +232,14 @@ const ingredientDraft: IngredientDraft = {
   edibleYieldRate: 0.95,
 };
 
+/** 只带必填项的原料卡：全量字段用例在它上面逐项覆盖。 */
+const baseIngredient: IngredientDraft = {
+  name: '冷冻三文鱼',
+  type: 'FOOD',
+  baseUnit: 'G',
+  unitDisplayLabel: '克',
+};
+
 const sourceRecords: SourceRecordFixture[] = [
   {
     id: 'src-usda-raw',
@@ -707,6 +715,137 @@ describe('IngredientCreationCommitService', () => {
       name_en: 'Chicken liver',
       coverage_category: 'MEAT_ORGAN',
     });
+  });
+
+  it('写入全量采购 / 计量 / 储存字段，该进 properties 的 7 项也不再漏', async () => {
+    const { service, store } = await createHarness();
+
+    const result = await service.commit({
+      draftId: 'draft-1',
+      userId: 'admin-1',
+      ingredient: {
+        ...baseIngredient,
+        notes: '分装冷冻',
+        procurementStrategy: 'STOCK_REPLENISHMENT',
+        brand: '××水产',
+        productModel: '1kg/袋',
+        purchaseChannel: '京东',
+        purchaseUnit: '袋',
+        purchaseToBaseRatio: 1000,
+        currentPricePerPurchaseUnit: 128,
+        weightG: 150,
+        maxCapacityG: 500,
+        shelfLifeMonths: 12,
+        storageCondition: '-18℃ 冷冻',
+        openedShelfLifeDays: 3,
+        isOilBased: false,
+        diyEnabled: true,
+        category: 'OTHER',
+        cfctClass: '鱼虾蟹贝类',
+        edibleYieldRate: 0.75,
+        mainNutrientsDesc: '高蛋白',
+        addTiming: '冷却后',
+        productionLossRate: 0.05,
+        nameEn: 'Atlantic Salmon',
+      },
+      profiles: [rawProfile],
+      primaryProfileIndex: 0,
+    });
+
+    const row = store.ingredients.find((i) => i.id === result.ingredientId)!;
+    expect(row).toMatchObject({
+      notes: '分装冷冻',
+      procurementStrategy: 'STOCK_REPLENISHMENT',
+      brand: '××水产',
+      productModel: '1kg/袋',
+      purchaseChannel: '京东',
+      purchaseUnit: '袋',
+      purchaseToBaseRatio: 1000,
+      currentPricePerPurchaseUnit: 128,
+      weightG: 150,
+      maxCapacityG: 500,
+      shelfLifeMonths: 12,
+      storageCondition: '-18℃ 冷冻',
+      openedShelfLifeDays: 3,
+      isOilBased: false,
+      diyEnabled: true,
+      // 采购开关是另一个决策：本阶段始终关着。
+      procurementEnabled: false,
+    });
+    expect(row.properties).toMatchObject({
+      ingredientCreationDraftId: 'draft-1',
+      name_en: 'Atlantic Salmon',
+      coverage_category: 'OTHER',
+      cfct_class: '鱼虾蟹贝类',
+      edible_yield_rate: 0.75,
+      main_nutrients_desc: '高蛋白',
+      add_timing: '冷却后',
+      production_loss_rate: 0.05,
+    });
+
+    // 库存三项本阶段不写：不能因为「有同名字段」就顺手落列。
+    expect(row.safetyStock).toBeUndefined();
+    expect(row.reorderPoint).toBeUndefined();
+    expect(row.targetStock).toBeUndefined();
+  });
+
+  it('没传的字段保持默认，0 不被当成空', async () => {
+    const { service, store } = await createHarness();
+
+    const result = await service.commit({
+      draftId: 'draft-1',
+      userId: 'admin-1',
+      ingredient: { ...baseIngredient, currentPricePerPurchaseUnit: 0 },
+      profiles: [rawProfile],
+      primaryProfileIndex: 0,
+    });
+
+    const row = store.ingredients.find((i) => i.id === result.ingredientId)!;
+    expect(row.brand).toBeNull();
+    expect(row.productModel).toBeNull();
+    expect(row.purchaseUnit).toBe('克');
+    expect(row.purchaseToBaseRatio).toBe(1);
+    expect(row.currentPricePerPurchaseUnit).toBe(0);
+    expect(row.diyEnabled).toBe(false);
+    expect(row.procurementEnabled).toBe(false);
+    expect(row.properties).toEqual({
+      ingredientCreationDraftId: 'draft-1',
+    });
+  });
+
+  it('契约外的键不会落进 properties', async () => {
+    const { service, store } = await createHarness();
+
+    const result = await service.commit({
+      draftId: 'draft-1',
+      userId: 'admin-1',
+      ingredient: { ...baseIngredient, rawPageHtml: '<html>' } as never,
+      profiles: [rawProfile],
+      primaryProfileIndex: 0,
+    });
+
+    const row = store.ingredients.find((i) => i.id === result.ingredientId)!;
+    expect(row.properties).not.toHaveProperty('rawPageHtml');
+    expect(row).not.toHaveProperty('rawPageHtml');
+  });
+
+  it('manualFields 里 brand 这类新字段也能进审计（不只是旧的 7 键）', async () => {
+    const draft = buildDraft({
+      ingredient: {
+        ...baseIngredient,
+        manualFields: ['brand', 'name'],
+      },
+    });
+    const { service, prisma } = await createHarness({ draft });
+
+    await service.commit({
+      ...baseInput,
+      ingredient: { ...baseIngredient, brand: '××水产' },
+    });
+
+    const changes = prisma.ingredientCreationAudit.create.mock.calls[0][0].data
+      .changes as { ingredientFields: string[] };
+    expect(changes.ingredientFields).toEqual(['brand', 'name']);
   });
 
   it('没有提案快照时退回草稿的缝合方案，status=MANUAL 的行仍算人工裁决', async () => {

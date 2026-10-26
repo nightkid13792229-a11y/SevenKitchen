@@ -739,6 +739,7 @@ model RecipeSeries {
   designs        DesignRecipe[]
   coverBadges    RecipeSeriesCoverBadge[]
   orderDesign    OrderRecipeDesign?         @relation("OrderRecipeDesignSeries")
+  taxonomyLinks  RecipeSeriesTaxonomy[]
 
   @@index([status])
   @@index([businessStatus])
@@ -5372,4 +5373,68 @@ model RecipeDesignAgentSnapshot {
 
   @@index([designRecipeId, createdAt])
   @@map("recipe_design_agent_snapshot")
+}
+
+// ===== 食谱需求分类（2026-10-26）=====
+//
+// 三张独立表，与食谱完全解耦：分类（kind）/ 节点（node）/ 归属（link）。
+// 食谱表不加任何分类字段，以后加分类、改节点名、重排顺序都只动这三张表。
+
+enum TaxonomyNodeStatus {
+  ACTIVE
+  DISABLED
+
+  @@map("taxonomy_node_status")
+}
+
+model RecipeTaxonomyKind {
+  id        String   @id @default(uuid()) @map("id")
+  code      String   @unique @map("code") @db.VarChar(40)
+  name      String   @map("name") @db.VarChar(50)
+  sort      Int      @default(0) @map("sort")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  nodes RecipeTaxonomyNode[]
+
+  @@map("recipe_taxonomy_kind")
+}
+
+model RecipeTaxonomyNode {
+  id         String             @id @default(uuid()) @map("id")
+  kindId     String             @map("kind_id")
+  parentId   String?            @map("parent_id")
+  name       String             @map("name") @db.VarChar(50)
+  definition String             @map("definition") @db.VarChar(200)
+  sort       Int                @default(0) @map("sort")
+  status     TaxonomyNodeStatus @default(ACTIVE) @map("status")
+  createdAt  DateTime           @default(now()) @map("created_at")
+  updatedAt  DateTime           @updatedAt @map("updated_at")
+
+  kind     RecipeTaxonomyKind   @relation(fields: [kindId], references: [id], onDelete: Restrict)
+  parent   RecipeTaxonomyNode?  @relation("TaxonomyNodeHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children RecipeTaxonomyNode[] @relation("TaxonomyNodeHierarchy")
+  links    RecipeSeriesTaxonomy[]
+
+  @@index([kindId, parentId, sort])
+  @@index([parentId])
+  @@map("recipe_taxonomy_node")
+}
+
+/// 系列与节点的归属关系：跨分类可多挂，同一分类最多一条（由唯一约束兜底）。
+model RecipeSeriesTaxonomy {
+  id        String   @id @default(uuid()) @map("id")
+  seriesId  String   @map("series_id")
+  kindId    String   @map("kind_id")
+  nodeId    String   @map("node_id")
+  createdBy String?  @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  series RecipeSeries       @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  node   RecipeTaxonomyNode @relation(fields: [nodeId], references: [id], onDelete: Restrict)
+
+  @@unique([seriesId, kindId])
+  @@index([nodeId])
+  @@index([kindId])
+  @@map("recipe_series_taxonomy")
 }

@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>需求分类 · 原型</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 26px;
+    background: #eef1f5;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    color: #303133; font-size: 13px;
+  }
+  .stage-wrap { display: flex; gap: 24px; align-items: flex-start; }
+  .frame { width: 980px; background: #fff; border-radius: 10px; box-shadow: 0 6px 26px rgba(0,0,0,.10); overflow: hidden; }
+  .frame.rel { position: relative; }
+  .frame-label {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 16px; background: #f7f9fc; border-bottom: 1px solid #e4e8ef;
+    font-size: 12px; color: #6b7785; letter-spacing: .3px;
+  }
+  .frame-label b { color: #409eff; }
+
+  .page { padding: 16px 18px 18px; }
+  .page-head { display: flex; align-items: flex-start; margin-bottom: 12px; }
+  .page-head h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: .5px; }
+  .page-head p { margin: 4px 0 0; font-size: 11.5px; color: #909399; }
+  .page-head .btn-primary {
+    margin-left: auto; background: #409eff; color: #fff; border: 0;
+    padding: 6px 14px; border-radius: 4px; font-size: 12.5px; white-space: nowrap;
+  }
+
+  .panel { border: 1px solid #e4e8ef; border-radius: 6px; overflow: hidden; }
+  .panel-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 13px; border-bottom: 1px solid #e4e8ef; background: #fff;
+  }
+  .panel-head .title { font-weight: 600; font-size: 13.5px; white-space: nowrap; }
+  .search {
+    width: 186px; padding: 5px 9px; border: 1px solid #dcdfe6; border-radius: 4px;
+    color: #a8b0bb; font-size: 11.5px; background: #fff; white-space: nowrap; overflow: hidden;
+  }
+  .seg { display: inline-flex; border: 1px solid #dcdfe6; border-radius: 4px; overflow: hidden; flex: none; }
+  .seg span {
+    padding: 5px 10px; font-size: 11.5px; color: #606266; background: #fff;
+    border-left: 1px solid #e4e8ef; white-space: nowrap;
+  }
+  .seg span:first-child { border-left: 0; }
+  .seg span.on { background: #409eff; color: #fff; }
+  .seg.hl { border-color: #b3d8ff; box-shadow: 0 0 0 3px rgba(64,158,255,.10); }
+  .push-right { margin-left: auto; }
+
+  .body-split { display: flex; height: 452px; }
+
+  /* 左树 */
+  .tree { width: 250px; border-right: 1px solid #e4e8ef; padding: 7px 0; background: #fcfdfe; overflow: hidden; }
+  .tree-item { display: flex; align-items: center; gap: 6px; padding: 5.5px 12px; font-size: 12px; color: #4a5568; white-space: nowrap; }
+  .tree-item.l1 { font-weight: 600; color: #303133; }
+  .tree-item.sel { background: #ecf5ff; color: #2f7fd4; box-shadow: inset 3px 0 0 #409eff; font-weight: 600; }
+  .tree-item .caret { width: 9px; color: #b3bfcc; font-size: 9px; }
+  .tree-item .cnt { margin-left: auto; color: #a8b3c0; font-size: 10.5px; font-weight: 400; }
+  .tree-item.l2 { padding-left: 28px; }
+  .tree-item.l3 { padding-left: 46px; color: #6b7785; }
+  .tree-item.l4 { padding-left: 62px; color: #8b97a4; font-size: 11.5px; }
+  .tree-divider { height: 1px; background: #eef1f5; margin: 6px 12px; }
+  .inbox {
+    display: flex; align-items: center; gap: 6px; margin: 5px 12px 9px; padding: 7px 10px;
+    border: 1px dashed #ecc58f; background: #fdf6ec; border-radius: 5px; font-size: 12px; color: #b88230;
+  }
+  .inbox b { margin-left: auto; }
+
+  /* 右侧列表 */
+  .list { flex: 1; padding: 11px 13px; background: #fbfcfe; overflow: hidden; }
+  .list-bar { display: flex; align-items: center; font-size: 11.5px; color: #909399; margin-bottom: 9px; }
+  .list-bar .act { margin-left: auto; color: #409eff; font-size: 12px; }
+  .row {
+    display: flex; align-items: center; gap: 10px;
+    background: #fff; border: 1px solid #e9edf3; border-radius: 6px;
+    padding: 10px 12px; margin-bottom: 7px;
+  }
+  .row-main { flex: 1; min-width: 0; }
+  .row-name { font-size: 13px; font-weight: 600; margin-bottom: 5px; white-space: nowrap; }
+  .st { font-size: 10.5px; padding: 1px 6px; border-radius: 3px; background: #f0f9eb; color: #529b2e; border: 1px solid #dcf0cf; font-weight: 400; vertical-align: 1px; }
+  .st.draft { background: #f4f4f5; color: #909399; border-color: #e9e9eb; }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .chip { font-size: 10.5px; padding: 1.5px 6px; border-radius: 3px; background: #f0f6ff; color: #3a7cc2; border: 1px solid #d9e9fb; white-space: nowrap; }
+  .chip .k { color: #96b2d2; }
+  .chip.health { background: #f2f9ec; color: #4f9330; border-color: #dcf0cf; }
+  .chip.health .k { color: #96c37c; }
+  .chip.season { background: #fdf7ee; color: #b88230; border-color: #f6e5cb; }
+  .chip.season .k { color: #cfa76a; }
+  .chip.empty { background: #f7f8fa; color: #b6bec8; border-color: #e8ebef; border-style: dashed; }
+  .row-op { width: 40px; text-align: right; color: #409eff; font-size: 11.5px; white-space: nowrap; }
+
+  /* 弹窗 */
+  .clone-host { filter: blur(1.6px) saturate(.85); opacity: .55; pointer-events: none; }
+  .overlay { position: absolute; inset: 0; background: rgba(22,30,42,.34); display: flex; align-items: center; justify-content: center; }
+  .dialog { width: 540px; background: #fff; border-radius: 8px; box-shadow: 0 14px 44px rgba(0,0,0,.26); overflow: hidden; }
+  .dlg-head { padding: 14px 18px 11px; border-bottom: 1px solid #eef1f5; }
+  .dlg-head h3 { margin: 0 0 4px; font-size: 14.5px; }
+  .dlg-head .sub { font-size: 11.5px; color: #909399; }
+  .dlg-body { padding: 4px 0 6px; }
+  .pick { display: flex; align-items: flex-start; gap: 9px; padding: 5.5px 18px; font-size: 12px; }
+  .pick .box { width: 13px; height: 13px; border: 1px solid #c0c8d3; border-radius: 50%; margin-top: 1.5px; flex: none; }
+  .pick .box.on { background: #fff; border: 4px solid #409eff; }
+  .pick .txt { flex: 1; line-height: 1.45; }
+  .pick .txt small { display: block; color: #a4aeb9; font-size: 10.5px; margin-top: 1px; }
+  .pick.kind { font-weight: 600; color: #303133; padding-top: 9px; padding-bottom: 3px; }
+  .pick.kind .hint { font-weight: 400; font-size: 10.5px; color: #a4aeb9; margin-left: 6px; }
+  .pick.child { padding-left: 34px; }
+  .pick.child.sel { background: #f2f8ff; }
+  .dlg-foot { display: flex; align-items: center; padding: 11px 18px; border-top: 1px solid #eef1f5; background: #fcfdfe; }
+  .dlg-foot .note { font-size: 11px; color: #9aa4af; }
+  .btns { margin-left: auto; display: flex; gap: 8px; }
+  .btn { padding: 6px 15px; border-radius: 4px; font-size: 12.5px; border: 1px solid #dcdfe6; background: #fff; color: #606266; }
+  .btn.primary { background: #409eff; border-color: #409eff; color: #fff; }
+</style>
+</head>
+<body>
+<div class="stage-wrap">
+
+  <!-- ① 主视图 -->
+  <div class="frame" id="frame1">
+    <div class="frame-label"><b>①</b> 食谱列表&设计 · 顶部加一个「按需求分类」视图</div>
+    <div class="page">
+      <div class="page-head">
+        <div>
+          <h1>食谱列表 &amp; 设计</h1>
+          <p>为爱犬档案定制鲜食配方系列，配餐员设计、管理员审核发布</p>
+        </div>
+        <button class="btn-primary">+ 新建食谱</button>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <span class="title">食谱设计</span>
+          <input class="search" placeholder="搜索系列 / 原料 / 爱犬" />
+          <div class="seg"><span class="on">产品线食谱</span><span>订单定制</span></div>
+          <div class="seg"><span class="on">全部</span><span>草稿</span><span>已发布</span></div>
+          <div class="seg hl push-right"><span>按系列</span><span class="on">按需求分类</span></div>
+        </div>
+
+        <div class="body-split">
+          <div class="tree">
+            <div class="inbox">📥 未归类 <b>12 道</b></div>
+            <div class="tree-item l1 sel"><span class="caret">▾</span>主蛋白<span class="cnt">14</span></div>
+            <div class="tree-item l2"><span class="caret">▸</span>畜类<span class="cnt">3</span></div>
+            <div class="tree-item l2"><span class="caret">▸</span>禽类<span class="cnt">5</span></div>
+            <div class="tree-item l2"><span class="caret">▾</span>鱼类<span class="cnt">6</span></div>
+            <div class="tree-item l3 sel"><span class="caret"></span>三文鱼<span class="cnt">4</span></div>
+            <div class="tree-item l3"><span class="caret"></span>鳕鱼<span class="cnt">1</span></div>
+            <div class="tree-item l3"><span class="caret"></span>青花鱼<span class="cnt">1</span></div>
+            <div class="tree-divider"></div>
+            <div class="tree-item l1"><span class="caret">▸</span>健康需求<span class="cnt">7</span></div>
+            <div class="tree-divider"></div>
+            <div class="tree-item l1"><span class="caret">▸</span>场景<span class="cnt">2</span></div>
+            <div class="tree-divider"></div>
+            <div class="tree-item l1"><span class="caret">▸</span>季节<span class="cnt">3</span></div>
+            <div class="tree-divider"></div>
+            <div class="tree-item l1"><span class="caret">▸</span>工艺形态<span class="cnt">14</span></div>
+          </div>
+
+          <div class="list">
+            <div class="list-bar">鱼类 / 三文鱼 · 共 4 道<span class="act">批量归类</span></div>
+
+            <div class="row">
+              <div class="row-main">
+                <div class="row-name">三文鱼 · 南瓜糙米 <span class="st">已发布</span></div>
+                <div class="chips">
+                  <span class="chip"><i class="k">主蛋白</i> 三文鱼</span>
+                  <span class="chip health"><i class="k">健康需求</i> 皮肤毛发·瘙痒</span>
+                  <span class="chip season"><i class="k">季节</i> 应季</span>
+                </div>
+              </div>
+              <div class="row-op">归类</div>
+            </div>
+
+            <div class="row">
+              <div class="row-main">
+                <div class="row-name">三文鱼 · 山药小米 <span class="st">已发布</span></div>
+                <div class="chips">
+                  <span class="chip"><i class="k">主蛋白</i> 三文鱼</span>
+                  <span class="chip season"><i class="k">场景</i> 日常主食</span>
+                </div>
+              </div>
+              <div class="row-op">归类</div>
+            </div>
+
+            <div class="row">
+              <div class="row-main">
+                <div class="row-name">三文鱼 · 低温慢煮 <span class="st draft">草稿</span></div>
+                <div class="chips">
+                  <span class="chip"><i class="k">主蛋白</i> 三文鱼</span>
+                  <span class="chip empty">健康需求 未归类</span>
+                  <span class="chip empty">场景 未归类</span>
+                </div>
+              </div>
+              <div class="row-op">归类</div>
+            </div>
+
+            <div class="row">
+              <div class="row-main">
+                <div class="row-name">三文鱼 · 鸭胸鹿腿 <span class="st">已发布</span></div>
+                <div class="chips">
+                  <span class="chip"><i class="k">主蛋白</i> 三文鱼</span>
+                  <span class="chip"><i class="k">工艺</i> 蒸煮鲜食</span>
+                </div>
+              </div>
+              <div class="row-op">归类</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ② 弹窗 -->
+  <div class="frame rel" id="frame2">
+    <div class="frame-label"><b>②</b> 单道归类 · 同一分类单选，跨分类可多选</div>
+    <div class="page clone-host"></div>
+    <div class="overlay">
+      <div class="dialog">
+        <div class="dlg-head">
+          <h3>归类 · 三文鱼 · 南瓜糙米</h3>
+          <div class="sub">每个分类最多选一个节点，不同分类可以同时选；留空也允许</div>
+        </div>
+        <div class="dlg-body">
+          <div class="pick kind">主蛋白<span class="hint">单选 · 只到物种</span></div>
+          <div class="pick child sel"><span class="box on"></span><span class="txt">鱼类 › 三文鱼</span></div>
+          <div class="pick child"><span class="box"></span><span class="txt">禽类 › 鸡</span></div>
+
+          <div class="pick kind">健康需求<span class="hint">单选 · 可空</span></div>
+          <div class="pick child"><span class="box"></span><span class="txt">消化 › 软便<small>主人反馈排便不成形、偏稀，但未确诊疾病</small></span></div>
+          <div class="pick child sel"><span class="box on"></span><span class="txt">皮肤毛发 › 瘙痒<small>主人反馈频繁抓挠、啃咬自己</small></span></div>
+
+          <div class="pick kind">场景<span class="hint">单选 · 可空</span></div>
+          <div class="pick child"><span class="box"></span><span class="txt">日常主食</span></div>
+          <div class="pick child"><span class="box"></span><span class="txt">出行</span></div>
+
+          <div class="pick kind">季节<span class="hint">单选 · 可空</span></div>
+          <div class="pick child sel"><span class="box on"></span><span class="txt">应季<small>跟随当季食材变化，不固定归属某个季节</small></span></div>
+
+          <div class="pick kind">工艺形态<span class="hint">单选</span></div>
+          <div class="pick child sel"><span class="box on"></span><span class="txt">蒸煮鲜食<small>低温蒸煮熟制后冷冻配送</small></span></div>
+        </div>
+        <div class="dlg-foot">
+          <span class="note">只写归属关系，不改配方、不触发发布</span>
+          <div class="btns">
+            <button class="btn">取消</button>
+            <button class="btn primary">保存归类</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<script>
+  document.querySelector('#frame2 .clone-host').innerHTML =
+    document.querySelector('#frame1 .page').innerHTML;
+</script>
+</body>
+</html>

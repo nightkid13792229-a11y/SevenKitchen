@@ -51,6 +51,8 @@ import { CustomerMessageController } from './interfaces/controllers/customer-mes
 import { CustomerMessageService } from './application/message/customer-message.service';
 import { AdminPlatformOptionsController } from './interfaces/controllers/admin-platform-options.controller';
 import { PlatformOptionsService } from './application/platform-options/platform-options.service';
+import { RecipeTaxonomyService } from './application/recipe-taxonomy/recipe-taxonomy.service';
+import { AdminRecipeTaxonomyController } from './interfaces/controllers/admin-recipe-taxonomy.controller';
 import { CustomRecipeViewService } from './application/custom-recipe/custom-recipe-view.service';
 import { OrderDesignSubmitService } from './application/custom-recipe/order-design-submit.service';
 import { CustomRecipeDeliveryService } from './application/custom-recipe/custom-recipe-delivery.service';
@@ -385,6 +387,7 @@ validatePrismaConfig();
     CustomerMessageController,
     PlatformOptionsController,
     AdminPlatformOptionsController,
+    AdminRecipeTaxonomyController,
     DogsController,
     RecipesController,
     HealthController,
@@ -485,6 +488,7 @@ validatePrismaConfig();
   providers: [
     CustomerMessageService,
     PlatformOptionsService,
+    RecipeTaxonomyService,
     CustomRecipeViewService,
     CustomRecipeDeliveryService,
     OrderDesignSubmitService,

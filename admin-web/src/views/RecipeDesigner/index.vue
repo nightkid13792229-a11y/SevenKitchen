@@ -103,14 +103,27 @@
               <el-radio-button value="PUBLIC">已发布</el-radio-button>
               <el-radio-button value="PRIVATE_CUSTOM">定制</el-radio-button>
             </el-radio-group>
+            <!-- 2026-10-26 需求分类：按系列 / 按需求分类 两种看法，数据源互不影响 -->
+            <el-radio-group v-model="viewMode" size="small">
+              <el-radio-button value="SERIES">按系列</el-radio-button>
+              <el-radio-button value="TAXONOMY">按需求分类</el-radio-button>
+            </el-radio-group>
           </div>
         </div>
       </template>
 
-      <el-empty v-if="loading && series.length === 0" description="加载中…" />
-      <el-empty v-else-if="!loading && series.length === 0" :description="emptyDescription" />
+      <TaxonomyView v-if="viewMode === 'TAXONOMY'" />
 
-      <div v-loading="loading" class="series-grid">
+      <el-empty
+        v-if="viewMode === 'SERIES' && loading && series.length === 0"
+        description="加载中…"
+      />
+      <el-empty
+        v-else-if="viewMode === 'SERIES' && !loading && series.length === 0"
+        :description="emptyDescription"
+      />
+
+      <div v-if="viewMode === 'SERIES'" v-loading="loading" class="series-grid">
         <div v-for="card in series" :key="card.id" class="series-card">
           <div class="series-card-head">
             <div class="series-name-wrap">
@@ -210,7 +223,7 @@
           </div>
         </div>
       </div>
-      <div v-if="seriesHasMore" class="loadmore-tip">
+      <div v-if="viewMode === 'SERIES' && seriesHasMore" class="loadmore-tip">
         <div ref="loadMoreSentinel" class="load-more-sentinel" />
         <el-button size="small" text :loading="loadingMore" @click="loadSeries(false)">
           {{ loadingMore ? '加载中…' : '加载更多系列' }}
@@ -285,6 +298,7 @@ import {
 import { dogApi } from '@/api/dogs'
 import { customRecipeApi } from '@/api/customRecipe'
 import SeriesReleaseDrawer from './components/SeriesReleaseDrawer.vue'
+import TaxonomyView from './components/TaxonomyView.vue'
 import {
   FEDIAF_DOG_SCENARIO_LABELS,
   type FediafDogScenario,
@@ -312,6 +326,8 @@ const creating = ref(false)
 const renaming = ref(false)
 const series = ref<RecipeDesignerSeriesCard[]>([])
 const designModeFilter = ref<'CATALOG' | 'ORDER'>('CATALOG')
+/** 2026-10-26：列表与需求分类是同一页的两种看法 */
+const viewMode = ref<'SERIES' | 'TAXONOMY'>('SERIES')
 const statusFilter = ref<RecipeDesignerSeriesStatusFilter | undefined>(undefined)
 const searchKeyword = ref('')
 const seriesPage = ref(1)

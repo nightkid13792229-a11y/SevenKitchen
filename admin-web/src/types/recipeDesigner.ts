@@ -1176,3 +1176,48 @@ export interface RecipeAgentSessionView {
   /** 最近一次交付确认卡；没有交付过时为 null / 缺省 */
   delivery?: RecipeAgentDelivery | null
 }
+
+// ===== 需求分类（2026-10-26 第一阶段）=====
+
+export interface TaxonomyNodeView {
+  id: string
+  kindId: string
+  parentId: string | null
+  name: string
+  definition: string
+  sort: number
+  status: 'ACTIVE' | 'DISABLED'
+  /** 直接归到本节点的系列数 */
+  seriesCount: number
+  /** 含子孙系列的合计，父节点用 */
+  rollupSeriesCount: number
+  children: TaxonomyNodeView[]
+}
+
+export interface TaxonomyKindView {
+  id: string
+  code: string
+  name: string
+  sort: number
+  nodes: TaxonomyNodeView[]
+  rollupSeriesCount: number
+}
+
+export interface TaxonomySeriesLink {
+  kindId: string
+  kindCode: string
+  kindName: string
+  nodeId: string
+  nodeName: string
+}
+
+export interface TaxonomySeriesItem {
+  id: string
+  name: string
+  businessStatus: string
+  referenceDogName: string | null
+  updatedAt: string
+  links: TaxonomySeriesLink[]
+  /** 还没归的分类 code，顺序与分类 sort 一致 */
+  missingKindCodes: string[]
+}

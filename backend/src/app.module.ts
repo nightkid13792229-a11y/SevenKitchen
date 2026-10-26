@@ -85,6 +85,7 @@ import { InMemoryOrderRepository } from './infrastructure/repositories/in-memory
 import { FileBackedOrderRepository } from './infrastructure/repositories/file-backed-order.repository';
 import { PrismaOrderRepository } from './infrastructure/repositories/prisma-order.repository';
 import { PrismaService } from './infrastructure/prisma.service';
+import { IngredientPreparationHistoryService } from './application/recipe/ingredient-preparation-history.service';
 import { RecipeService } from './application/recipe/recipe.service';
 import { CoverImageService } from './application/recipe/cover-image.service';
 import { RecipeCoverImageService } from './application/recipe-designer/recipe-cover-image.service';

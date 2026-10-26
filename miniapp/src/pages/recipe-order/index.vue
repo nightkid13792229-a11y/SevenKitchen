@@ -758,8 +758,7 @@ interface OverheadCostDetail {
   calculation: string
 }
 
-// 制作要求枚举
-type PreparationMethod = 'CHOPPED' | 'DICED'
+// 烹饪方式枚举
 type CookingMethod = 'RAW' | 'COOKED'
 
 const recipeId = ref('')
@@ -877,8 +876,7 @@ let pricePreviewDebounceTimer: ReturnType<typeof setTimeout> | null = null
 // 显示的每日饭量
 const displayDailyIntakeG = ref(0)
 
-// 制作要求（默认值：打碎、生）
-const preparationMethod = ref<PreparationMethod | null>('CHOPPED')
+// 烹饪方式（默认值：生）
 const cookingMethod = ref<CookingMethod | null>('RAW')
 
 // 价格明细展开状态
@@ -1712,12 +1710,6 @@ function invalidatePackagePlanPricingPreview() {
   resetPricePreviewState()
 }
 
-// 选择制作工艺
-function selectPreparationMethod(method: PreparationMethod) {
-  preparationMethod.value = method
-  loadPricePreview()
-}
-
 // 选择烹饪工艺
 function selectCookingMethod(method: CookingMethod) {
   cookingMethod.value = method
@@ -1757,7 +1749,6 @@ function buildPricingPreviewItem() {
     packagePlan: normalizedPackagePlan.value,
     cycleDays: selectedCycleDays.value || undefined,
     dailyIntakeG: displayDailyIntakeG.value,
-    preparationMethod: preparationMethod.value || undefined,
     cookingMethod: cookingMethod.value || undefined,
   }
 }
@@ -1889,7 +1880,6 @@ async function continueBuyNow() {
     totalGrams: totalGrams.value,
     ingredientSourcePlan: selectedSourcePlan.value,
     ingredientSourcePlanLabel: sourcePlanLabel.value,
-    preparationMethod: preparationMethod.value || 'CHOPPED',
     cookingMethod: cookingMethod.value || 'RAW',
     amountProduct: pricePreview.value?.amountProduct || 0,
     amountShipping: pricePreview.value?.amountShipping || 0,

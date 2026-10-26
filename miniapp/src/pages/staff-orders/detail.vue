@@ -139,7 +139,7 @@
           <text class="usage-item-meta">
             {{ item.dog?.name || '未绑定狗狗' }} · {{ formatGrams(item.quantityG) }} · {{ formatPackagePlan(item) }}
           </text>
-          <text class="usage-item-meta" v-if="item.preparationMethod || item.cookingMethod || item.vacuumBagSpec">
+          <text class="usage-item-meta" v-if="item.cookingMethod || item.vacuumBagSpec">
             {{ formatPreparation(item) }}
           </text>
           <button
@@ -638,7 +638,6 @@ interface OrderItemDetail {
   packagePlan?: Array<{ packageSpecG: number; packageCount: number }> | null
   ingredientSourcePlan?: string | null
   dailyIntakeG?: number
-  preparationMethod?: string | null
   cookingMethod?: string | null
   customRequirements?: string | null
   vacuumBagSpec?: string | null
@@ -973,7 +972,6 @@ function formatPackagePlan(item: OrderItemDetail): string {
 
 function formatPreparation(item: OrderItemDetail): string {
   return [
-    item.preparationMethod ? `制备: ${formatMethod(item.preparationMethod)}` : '',
     item.cookingMethod ? `熟制: ${formatMethod(item.cookingMethod)}` : '',
     item.vacuumBagSpec ? `真空袋: ${item.vacuumBagSpec}` : '',
     item.ingredientSourcePlan ? `原料方案: ${formatIngredientSourcePlan(item.ingredientSourcePlan)}` : '',

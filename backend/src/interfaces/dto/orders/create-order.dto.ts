@@ -18,7 +18,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { OrderType } from '../../../domain';
-import { PreparationMethod, CookingMethod } from '../../../domain/order';
+import { CookingMethod } from '../../../domain/order';
 
 const INGREDIENT_SOURCE_PLAN_CODES = [
   'ORGANIC',
@@ -98,14 +98,6 @@ export class CreateOrderItemDto {
   @IsNumber()
   @Min(1)
   dailyIntakeG?: number;
-
-  @ApiPropertyOptional({
-    description: 'Preparation method',
-    enum: PreparationMethod,
-  })
-  @IsOptional()
-  @IsEnum(PreparationMethod)
-  preparationMethod?: PreparationMethod;
 
   @ApiPropertyOptional({
     description: 'Cooking method',

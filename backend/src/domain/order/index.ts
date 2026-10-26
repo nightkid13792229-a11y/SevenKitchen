@@ -2,7 +2,6 @@
  * Order Domain Exports
  */
 
-export * from './preparation-method.enum';
 export * from './cooking-method.enum';
 export * from './enums';
 export * from './order.entity';

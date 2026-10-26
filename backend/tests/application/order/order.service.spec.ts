@@ -16,7 +16,6 @@ import type { AddressRepository } from 'src/domain/address/address.repository';
 import {
   Order,
   OrderItem,
-  PreparationMethod,
   CookingMethod,
 } from 'src/domain/order';
 import { AftersaleType, OrderType, OrderStatus, calculateDogEnergy } from 'src/domain';
@@ -1653,7 +1652,7 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
       expect(snapshotItem.name).toBe(mainSupplement.name);
     });
 
-    it('should preserve item-level preparation and cooking methods from preview snapshot into the created order item', async () => {
+    it('should preserve item-level cooking method from preview snapshot into the created order item', async () => {
       const recipe = createMockRecipe();
       const ingredient = createMockIngredient();
       const dog = createMockDog();
@@ -1695,7 +1694,6 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
             quantityG: 1000,
             packageSpecG: 200,
             packageCount: 5,
-            preparationMethod: PreparationMethod.DICED,
             cookingMethod: CookingMethod.COOKED,
           },
         ],
@@ -1704,7 +1702,6 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
       const snapshotInput = mockPricingSnapshotRepository.create.mock.calls[0][0] as any;
       expect(snapshotInput.requestParams.items[0]).toEqual(
         expect.objectContaining({
-          preparationMethod: PreparationMethod.DICED,
           cookingMethod: CookingMethod.COOKED,
         }),
       );
@@ -1728,9 +1725,6 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
       });
 
       const savedOrder = orderRepository.save.mock.calls[0][0] as Order;
-      expect(savedOrder.items[0].preparationMethod).toBe(
-        PreparationMethod.DICED,
-      );
       expect(savedOrder.items[0].cookingMethod).toBe(CookingMethod.COOKED);
     });
   });

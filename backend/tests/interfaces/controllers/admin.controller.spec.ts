@@ -939,7 +939,6 @@ describe('AdminController', () => {
             packageSpecG: 94,
             packagePlan: [{ packageSpecG: 94, packageCount: 21 }],
             ingredientSourcePlan: 'WHOLESALE',
-            preparationMethod: 'CHOPPED',
             cookingMethod: 'RAW',
             customRequirements: null,
             dailyIntakeG: 282,

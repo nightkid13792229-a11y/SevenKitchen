@@ -32,8 +32,8 @@ describe('checkout direct-buy storage contract', () => {
     expect(source).toContain('ingredientSourcePlanLabel')
   })
 
-  it('preserves preparation and cooking methods from stored config', () => {
-    expect(source).toContain('preparationMethod')
+  it('preserves cooking method from stored config', () => {
+    expect(source).not.toContain('preparationMethod')
     expect(source).toContain('cookingMethod')
   })
 

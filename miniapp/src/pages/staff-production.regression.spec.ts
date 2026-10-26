@@ -190,7 +190,7 @@ describe('staff production scheduling guardrails', () => {
 
   it('shows the inline SKU source column before preparation in production task print preview', () => {
     const sourceHeaderIndex = printTaskSource.indexOf('<view class="table-cell source">SKU / 品牌 / 渠道 / 规格</view>');
-    const methodHeaderIndex = printTaskSource.indexOf('<view class="table-cell method">制备</view>');
+    const methodHeaderIndex = printTaskSource.indexOf('<view class="table-cell method">部位/状态/预处理</view>');
     const sourceCellIndex = printTaskSource.indexOf('<view class="table-cell source">', sourceHeaderIndex + 1);
     const methodCellIndex = printTaskSource.indexOf('<view class="table-cell method">', methodHeaderIndex + 1);
 

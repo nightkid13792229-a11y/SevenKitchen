@@ -171,7 +171,6 @@ model OrderItem {
   /// 试吃装商品 ID（鲜食订单为 null）。便于按商品统计销量
   tastingPackId        String?   @map("tasting_pack_id")
   cookingMethod        String?   @map("cooking_method") @db.VarChar(20)
-  preparationMethod    String?   @map("preparation_method") @db.VarChar(20)
   dogId                String?   @map("dog_id")
   vacuumBagSpec        String?   @map("vacuum_bag_spec") @db.VarChar(20)
   order                Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)

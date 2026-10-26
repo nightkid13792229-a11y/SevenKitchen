@@ -13,7 +13,6 @@ import { PricingBreakdownSnapshot } from '../../domain/order/pricing-breakdown-s
 import type { OrderRepository } from '../../domain/order/order.repository';
 import { OrderStatus, OrderType } from '../../domain';
 import { normalizeIngredientSourcePlan } from '../../domain/order/ingredient-source-plan';
-import { PreparationMethod } from '../../domain/order/preparation-method.enum';
 import { CookingMethod } from '../../domain/order/cooking-method.enum';
 
 interface OrderData {
@@ -39,7 +38,6 @@ interface OrderData {
     packageSpecG: number;
     packagePlan?: Array<{ packageSpecG: number; packageCount: number }> | null;
     ingredientSourcePlan?: string | null;
-    preparationMethod?: string | null;
     cookingMethod?: string | null;
     customRequirements: string | null;
     dailyIntakeG?: number | null; // 试吃装为 null（现货没有"每日饭量"）
@@ -61,14 +59,6 @@ interface OrderData {
     createdAt: string;
     ingredientPriceVersionHash?: string | null;
   };
-}
-
-function normalizeStoredPreparationMethod(
-  value: string | null | undefined,
-): PreparationMethod | null {
-  return Object.values(PreparationMethod).includes(value as PreparationMethod)
-    ? (value as PreparationMethod)
-    : null;
 }
 
 function normalizeStoredCookingMethod(
@@ -165,7 +155,6 @@ export class FileBackedOrderRepository
           itemData.ingredientSourcePlan
             ? normalizeIngredientSourcePlan(itemData.ingredientSourcePlan)
             : null,
-          normalizeStoredPreparationMethod(itemData.preparationMethod),
           normalizeStoredCookingMethod(itemData.cookingMethod),
         ),
     );
@@ -275,7 +264,6 @@ export class FileBackedOrderRepository
         packageSpecG: item.packageSpecG,
         packagePlan: item.packagePlan ?? null,
         ingredientSourcePlan: item.ingredientSourcePlan ?? null,
-        preparationMethod: item.preparationMethod ?? null,
         cookingMethod: item.cookingMethod ?? null,
         customRequirements: item.customRequirements,
         dailyIntakeG: item.dailyIntakeG,
@@ -508,8 +496,7 @@ export class FileBackedOrderRepository
           packageSpecG: item.packageSpecG,
           packagePlan: item.packagePlan ?? null,
           ingredientSourcePlan: item.ingredientSourcePlan ?? null,
-          preparationMethod: item.preparationMethod ?? null,
-          cookingMethod: item.cookingMethod ?? null,
+            cookingMethod: item.cookingMethod ?? null,
           customRequirements: item.customRequirements,
           dailyIntakeG: item.dailyIntakeG,
           vacuumBagSpec: item.vacuumBagSpec,

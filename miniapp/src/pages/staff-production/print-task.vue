@@ -65,7 +65,7 @@
               <view class="compact-table-row compact-table-header">
                 <view class="table-cell source">SKU / 品牌 / 渠道 / 规格</view>
                 <view class="table-cell amount">用量</view>
-                <view class="table-cell method">制备</view>
+                <view class="table-cell method">部位/状态/预处理</view>
               </view>
               <view
                 v-for="(ingredient, index) in parsedIngredients"

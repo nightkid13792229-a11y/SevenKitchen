@@ -26,7 +26,6 @@ import {
   Order,
   OrderItem,
   PricingBreakdownSnapshot,
-  PreparationMethod,
   CookingMethod,
   normalizeIngredientSourcePlan,
   normalizePackagePlan,
@@ -128,7 +127,6 @@ export interface CreateOrderItemDto {
   cycleDays?: number; // Order cycle days
   dailyIntakeG?: number; // Daily food intake in grams
   customRequirements?: string | null;
-  preparationMethod?: PreparationMethod | null;
   cookingMethod?: CookingMethod | null;
 }
 
@@ -1402,7 +1400,6 @@ export class OrderService {
       null,
       itemParams.packagePlan ?? null,
       requestParams.ingredientSourcePlan ?? null,
-      itemParams.preparationMethod ?? null,
       itemParams.cookingMethod ?? null,
     );
     console.log(
@@ -1573,8 +1570,7 @@ export class OrderService {
         null, // allocatedAt
         [{ packageSpecG: packSpecG, packageCount: totalPacks }],
         null, // ingredientSourcePlan
-        null, // preparationMethod
-        null, // cookingMethod
+          null, // cookingMethod
         tastingPackId,
       );
 
@@ -1993,7 +1989,6 @@ export class OrderService {
         null,
         packageInput.packagePlan ?? null,
         ingredientSourcePlan,
-        itemDto.preparationMethod ?? null,
         itemDto.cookingMethod ?? null,
       );
 
@@ -2463,7 +2458,6 @@ export class OrderService {
             quantityG: packageInput.quantityG,
             packageCount: packageInput.packageCount,
             packageSpecG: packageInput.packageSpecG,
-            preparationMethod: itemDto.preparationMethod ?? null,
             cookingMethod: itemDto.cookingMethod ?? null,
             ...(packageInput.packagePlan
               ? { packagePlan: packageInput.packagePlan }
@@ -3380,7 +3374,6 @@ export class OrderService {
           null, // allocatedAt
           item.packagePlan ?? null,
           item.ingredientSourcePlan ?? null,
-          item.preparationMethod ?? null,
           item.cookingMethod ?? null,
         ),
     );
@@ -3581,8 +3574,7 @@ export class OrderService {
         null, // allocatedAt
         [{ packageSpecG: packSpecG, packageCount: totalPacks }],
         null, // ingredientSourcePlan
-        null, // preparationMethod
-        null, // cookingMethod
+          null, // cookingMethod
         sourceItem.tastingPackId,
       );
 
@@ -4227,7 +4219,6 @@ export class OrderService {
         quantityG: true,
         dailyIntakeG: true,
         ingredientSourcePlan: true,
-        preparationMethod: true,
         cookingMethod: true,
         customRequirements: true,
         productionBatchId: true,
@@ -4284,8 +4275,6 @@ export class OrderService {
           packageSpecG: summary.primaryPackageSpecG,
           packagePlan,
           dailyIntakeG: orderItem.dailyIntakeG ?? undefined,
-          preparationMethod:
-            orderItem.preparationMethod as PreparationMethod | null,
           cookingMethod: orderItem.cookingMethod as CookingMethod | null,
           customRequirements: orderItem.customRequirements ?? null,
         },

@@ -383,6 +383,49 @@ describe('IngredientCheckRunService', () => {
         'NUTRITION_PROFILE_MISSING',
       ]);
     });
+
+    it('只有 mergePlan、没有 profiles 也算缺档案（有意为之：营养页按生/熟档案渲染，旧合并路径只留给提交前置检查）', async () => {
+      // 边界钉死：mergePlan 合法也不回退到证据账本。营养页此时是空的、人无法审核，
+      // 报缺档案是 fail-closed，避免授权走到注定失败的提交；旧的 mergePlan 评估
+      // 路径仍由 runCheck / assertCommitAllowed 使用，没有丢。
+      draft = createDraft({
+        payload: {
+          mergePlan: {
+            primarySourceRecordId: 'src-primary',
+            rows: [
+              {
+                fieldPath: 'macros.crudeProtein',
+                value: 20,
+                unit: 'g',
+                status: 'DIRECT',
+                sourceRecordId: 'src-primary',
+                sourceValue: 20,
+                sourceUnit: 'g',
+              },
+            ],
+            conflicts: [],
+            missingFields: [],
+          },
+        },
+      });
+      const evaluate = jest.spyOn(
+        IngredientDraftFinalCheckEvaluator.prototype,
+        'evaluate',
+      );
+
+      const run = await service.runDomain('draft-1', 'NUTRITION', 'USER');
+
+      expect(evaluate).not.toHaveBeenCalled();
+      expect(run.result.blocking.map((item) => item.code)).toEqual([
+        'NUTRITION_PROFILE_MISSING',
+      ]);
+      expect(run.counts).toEqual({
+        blocking: 1,
+        exceptionable: 0,
+        warning: 0,
+      });
+      expect(prisma.ingredientCheckRun.create).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('isFresh', () => {

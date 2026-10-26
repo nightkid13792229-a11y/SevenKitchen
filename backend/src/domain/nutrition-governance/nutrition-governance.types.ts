@@ -13,6 +13,7 @@ export type NutritionGovernanceSourceType =
   | 'COFID'
   | 'CIQUAL'
   | 'CNF'
+  | 'KO_RDA'
   | 'SUPPLEMENT_LABEL'
   | 'MANUAL';
 

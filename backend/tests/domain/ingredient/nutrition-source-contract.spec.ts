@@ -12,6 +12,14 @@ describe('nutrition source contract', () => {
     });
   });
 
+  it('maps legacy KO_RDA source type to the registered Korean RDA source metadata', () => {
+    expect(normalizeLegacyNutritionSourceType('KO_RDA')).toEqual({
+      sourceKind: 'FOOD_DATABASE',
+      sourceCode: 'KO_RDA_FOOD_COMPOSITION_TABLE',
+      sourceProvider: 'Rural Development Administration, Republic of Korea',
+    });
+  });
+
   it('keeps supplement labels distinct from food databases', () => {
     expect(normalizeLegacyNutritionSourceType('SUPPLEMENT_LABEL')).toEqual({
       sourceKind: 'PRODUCT_LABEL',

@@ -158,6 +158,8 @@ export function getSourcePriority(
       return 2;
     case 'CNF':
       return 2;
+    case 'KO_RDA':
+      return 2;
     case 'COFID':
       return 2;
     case 'CIQUAL':

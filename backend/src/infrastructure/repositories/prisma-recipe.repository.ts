@@ -15,6 +15,7 @@ import type {
 } from '../../domain/recipe/recipe.repository';
 import { getRecipeLifeStageLabel } from '../../domain/recipe/enums';
 import { PrismaService } from '../prisma.service';
+import { pickCoverBadgeNames } from '../../domain/recipe-designer/cover-badge-policy';
 
 const DEFAULT_SHOWCASE_LIFE_STAGE_PRIORITY: Record<string, number> = {
   HIGH_ACTIVITY_ADULT: 0,
@@ -415,9 +416,11 @@ export class PrismaRecipeRepository implements RecipeRepository {
       // 因此系列级封面角标在这里显式带上，避免首页卡片拿不到角标。
       data: paginatedRecipes.map((r) => ({
         ...this.mapToDomain(r),
-        coverBadges: ((r as any).series?.coverBadges || [])
-          .map((badge: any) => badge.healthTag?.name)
-          .filter((name: any): name is string => Boolean(name)),
+        coverBadges: pickCoverBadgeNames(
+          ((r as any).series?.coverBadges || []).map(
+            (badge: any) => badge.healthTag?.name,
+          ),
+        ),
       })),
       total,
       page,

@@ -10,6 +10,8 @@ export interface RecipeHealthTag {
   parentId: string | null
   sort: number
   color: string | null
+  /** 2026-10-27：是否允许用作封面角标（后端按白名单计算） */
+  coverBadgeEligible?: boolean
   children?: RecipeHealthTag[]
 }
 
@@ -91,8 +93,14 @@ export interface SeriesCoverBadge {
 }
 
 export const recipeSeriesCoverBadgeApi = {
-  get: (seriesId: string): Promise<{ seriesId: string; badges: SeriesCoverBadge[] }> =>
-    api.get(`/admin/recipe-series/${seriesId}/cover-badges`),
+  get: (
+    seriesId: string,
+  ): Promise<{
+    seriesId: string
+    badges: SeriesCoverBadge[]
+    /** 已在库但不允许作为角标的旧词；后台只做提示，保存后会被替换 */
+    hiddenBadges?: string[]
+  }> => api.get(`/admin/recipe-series/${seriesId}/cover-badges`),
 
   /** 保存即覆盖：传空数组等于清空角标 */
   save: (seriesId: string, healthTagIds: string[]): Promise<{ seriesId: string; badges: SeriesCoverBadge[] }> =>

@@ -199,7 +199,9 @@ describe('RecipeDesignerService · staged series release', () => {
     it('includes cover badge names in readiness presentation', async () => {
       prisma.recipeSeriesCoverBadge.findMany.mockResolvedValue([
         { healthTag: { name: '低脂' } },
+        { healthTag: { name: '含鸭胸' } },
         { healthTag: { name: '易消化' } },
+        { healthTag: { name: '鲜肉现制' } },
       ]);
 
       const readiness = await service.getSeriesReleaseReadiness(

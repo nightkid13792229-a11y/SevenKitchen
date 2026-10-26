@@ -9,8 +9,8 @@ import request from 'supertest';
 import { IngredientCreationCandidateService } from '../../../src/application/ingredient-creation/ingredient-creation-candidate.service';
 import { IngredientDraftAgentService } from '../../../src/application/ingredient-creation/ingredient-draft-agent.service';
 import { IngredientCreationAuditService } from '../../../src/application/ingredient-creation/ingredient-creation-audit.service';
+import { IngredientCreationAuthorizeService } from '../../../src/application/ingredient-creation/ingredient-creation-authorize.service';
 import { IngredientCreationCheckService } from '../../../src/application/ingredient-creation/ingredient-creation-check.service';
-import { IngredientCreationCommitService } from '../../../src/application/ingredient-creation/ingredient-creation-commit.service';
 import { IngredientCreationDraftService } from '../../../src/application/ingredient-creation/ingredient-creation-draft.service';
 import { IngredientCreationIntakeService } from '../../../src/application/ingredient-creation/ingredient-creation-intake.service';
 import { IngredientCreationMergeService } from '../../../src/application/ingredient-creation/ingredient-creation-merge.service';
@@ -118,7 +118,7 @@ describe('IngredientCreationController', () => {
   let onlineService: ServiceMock;
   let mergeService: ServiceMock;
   let checkService: ServiceMock;
-  let commitService: ServiceMock;
+  let authorizeService: ServiceMock;
   let auditService: ServiceMock;
   let jwtAuthService: { validateToken: jest.Mock };
 
@@ -141,12 +141,11 @@ describe('IngredientCreationController', () => {
     };
     checkService = {
       runCheck: jest.fn(),
-      assertCommitAllowed: jest.fn(),
       runDomain: jest.fn(),
       latestChecks: jest.fn(),
     };
-    commitService = {
-      commit: jest.fn(),
+    authorizeService = {
+      authorize: jest.fn(),
     };
     auditService = {
       getByIngredientId: jest.fn(),
@@ -173,7 +172,10 @@ describe('IngredientCreationController', () => {
         },
         { provide: IngredientCreationMergeService, useValue: mergeService },
         { provide: IngredientCreationCheckService, useValue: checkService },
-        { provide: IngredientCreationCommitService, useValue: commitService },
+        {
+          provide: IngredientCreationAuthorizeService,
+          useValue: authorizeService,
+        },
         { provide: IngredientCreationAuditService, useValue: auditService },
         {
           provide: IngredientCreationIntakeService,
@@ -671,26 +673,21 @@ describe('IngredientCreationController', () => {
   });
 
   describe('commit', () => {
-    it('先做提交前置检查，再调用 commit 服务一次', async () => {
-      checkService.assertCommitAllowed.mockResolvedValue(undefined);
-      commitService.commit.mockResolvedValue({
+    it('授权闸门通过后调用 authorize 一次，返回提交结果 + authorizedAt', async () => {
+      authorizeService.authorize.mockResolvedValue({
         ingredientId: 'ing-1',
         nutritionFoodIds: ['nf-1', 'nf-2'],
         auditId: 'audit-1',
+        authorizedAt: '2026-10-26T08:00:00.000Z',
       });
 
       const response = await authorizedPost('/drafts/draft-1/commit')
         .send(commitBody)
         .expect(201);
 
-      expect(checkService.assertCommitAllowed).toHaveBeenCalledTimes(1);
-      expect(checkService.assertCommitAllowed).toHaveBeenCalledWith('draft-1');
-      expect(commitService.commit).toHaveBeenCalledTimes(1);
-      expect(
-        checkService.assertCommitAllowed.mock.invocationCallOrder[0],
-      ).toBeLessThan(commitService.commit.mock.invocationCallOrder[0]);
+      expect(authorizeService.authorize).toHaveBeenCalledTimes(1);
 
-      const input = commitService.commit.mock.calls[0][0];
+      const input = authorizeService.authorize.mock.calls[0][0];
       expect(input).toMatchObject({
         draftId: 'draft-1',
         userId: 'admin-1',
@@ -713,7 +710,37 @@ describe('IngredientCreationController', () => {
         ingredientId: 'ing-1',
         nutritionFoodIds: ['nf-1', 'nf-2'],
         auditId: 'audit-1',
+        authorizedAt: '2026-10-26T08:00:00.000Z',
       });
+    });
+
+    it('没有新鲜核验报告 → 400，reasons 原样透出（不再直写正式表）', async () => {
+      const reasons = [
+        {
+          code: 'CHECK_MISSING',
+          domain: 'INGREDIENT',
+          detail: '原料域还没有核验报告，先跑一次核验',
+        },
+        {
+          code: 'CHECK_MISSING',
+          domain: 'NUTRITION',
+          detail: '营养域还没有核验报告，先跑一次核验',
+        },
+      ];
+      authorizeService.authorize.mockRejectedValue(
+        new BadRequestException({
+          message: '授权前还有未满足的条件',
+          reasons,
+        }),
+      );
+
+      const response = await authorizedPost('/drafts/draft-1/commit')
+        .send(commitBody)
+        .expect(400);
+
+      expect(authorizeService.authorize).toHaveBeenCalledTimes(1);
+      expect(response.body.message).toBe('授权前还有未满足的条件');
+      expect(response.body.reasons).toEqual(reasons);
     });
 
     it.each([
@@ -732,15 +759,21 @@ describe('IngredientCreationController', () => {
         })
         .expect(400);
 
-      expect(commitService.commit).not.toHaveBeenCalled();
+      expect(authorizeService.authorize).not.toHaveBeenCalled();
     });
 
-    it('终检有 blocking 时 commit 服务一次都不调用', async () => {
-      const blocking = [{ code: 'UNIT_NOT_ALLOWED', message: '单位不合法' }];
-      checkService.assertCommitAllowed.mockRejectedValue(
+    it('闸门报 CHECK_BLOCKING 时 400，且不调用提交', async () => {
+      const reasons = [
+        {
+          code: 'CHECK_BLOCKING',
+          domain: 'INGREDIENT',
+          detail: '原料域还有 1 个拦死项：UNIT_NOT_ALLOWED',
+        },
+      ];
+      authorizeService.authorize.mockRejectedValue(
         new BadRequestException({
-          message: '终检存在阻断项，不能提交',
-          blocking,
+          message: '授权前还有未满足的条件',
+          reasons,
         }),
       );
 
@@ -748,8 +781,8 @@ describe('IngredientCreationController', () => {
         .send(commitBody)
         .expect(400);
 
-      expect(commitService.commit).not.toHaveBeenCalled();
-      expect(response.body.blocking).toEqual(blocking);
+      expect(response.body.reasons).toEqual(reasons);
+      expect(authorizeService.authorize).toHaveBeenCalledTimes(1);
     });
 
     it('同一 preparationState 出现两份 → 400，且不调用任何服务', async () => {
@@ -765,8 +798,7 @@ describe('IngredientCreationController', () => {
         .send(duplicatedBody)
         .expect(400);
 
-      expect(checkService.assertCommitAllowed).not.toHaveBeenCalled();
-      expect(commitService.commit).not.toHaveBeenCalled();
+      expect(authorizeService.authorize).not.toHaveBeenCalled();
     });
 
     it('commit 缺 ingredient 字段 → 400', async () => {
@@ -777,7 +809,7 @@ describe('IngredientCreationController', () => {
         })
         .expect(400);
 
-      expect(commitService.commit).not.toHaveBeenCalled();
+      expect(authorizeService.authorize).not.toHaveBeenCalled();
     });
 
     it('profiles 为空 → 400', async () => {
@@ -789,7 +821,7 @@ describe('IngredientCreationController', () => {
         })
         .expect(400);
 
-      expect(commitService.commit).not.toHaveBeenCalled();
+      expect(authorizeService.authorize).not.toHaveBeenCalled();
     });
 
     it('entry 的 finalValue 是字符串 → 400，不做隐式转换', async () => {
@@ -805,7 +837,7 @@ describe('IngredientCreationController', () => {
         })
         .expect(400);
 
-      expect(commitService.commit).not.toHaveBeenCalled();
+      expect(authorizeService.authorize).not.toHaveBeenCalled();
     });
 
     it('entry 的 fieldPath 不是字符串 → 400', async () => {
@@ -821,7 +853,7 @@ describe('IngredientCreationController', () => {
         })
         .expect(400);
 
-      expect(commitService.commit).not.toHaveBeenCalled();
+      expect(authorizeService.authorize).not.toHaveBeenCalled();
     });
 
     it('entry 是 null → 400，不落 500', async () => {
@@ -837,15 +869,15 @@ describe('IngredientCreationController', () => {
         })
         .expect(400);
 
-      expect(commitService.commit).not.toHaveBeenCalled();
+      expect(authorizeService.authorize).not.toHaveBeenCalled();
     });
 
     it('缺失字段用 null 仍然放行', async () => {
-      checkService.assertCommitAllowed.mockResolvedValue(undefined);
-      commitService.commit.mockResolvedValue({
+      authorizeService.authorize.mockResolvedValue({
         ingredientId: 'ing-1',
         nutritionFoodIds: ['nf-1'],
         auditId: 'audit-1',
+        authorizedAt: '2026-10-26T08:00:00.000Z',
       });
 
       const nullEntry = {
@@ -876,15 +908,66 @@ describe('IngredientCreationController', () => {
         })
         .expect(201);
 
-      expect(commitService.commit).toHaveBeenCalledTimes(1);
+      expect(authorizeService.authorize).toHaveBeenCalledTimes(1);
       expect(
-        commitService.commit.mock.calls[0][0].profiles[0].entries[0],
+        authorizeService.authorize.mock.calls[0][0].profiles[0].entries[0],
       ).toMatchObject({
         finalValue: null,
         sourceRecordId: null,
         sourceValue: null,
         sourceUnit: null,
       });
+    });
+  });
+
+  describe('authorize', () => {
+    it('POST authorize 走同一闸门，返回提交结果 + authorizedAt', async () => {
+      authorizeService.authorize.mockResolvedValue({
+        ingredientId: 'ing-1',
+        nutritionFoodIds: ['nf-1'],
+        auditId: 'audit-1',
+        authorizedAt: '2026-10-26T08:00:00.000Z',
+      });
+
+      const response = await authorizedPost('/drafts/draft-1/authorize')
+        .send(commitBody)
+        .expect(201);
+
+      expect(authorizeService.authorize).toHaveBeenCalledWith(
+        expect.objectContaining({
+          draftId: 'draft-1',
+          userId: 'admin-1',
+          primaryProfileIndex: 0,
+        }),
+      );
+      expect(response.body.data).toEqual({
+        ingredientId: 'ing-1',
+        nutritionFoodIds: ['nf-1'],
+        auditId: 'audit-1',
+        authorizedAt: '2026-10-26T08:00:00.000Z',
+      });
+    });
+
+    it('POST authorize 未过闸门 → 400，reasons 原样透出', async () => {
+      const reasons = [
+        {
+          code: 'CHECK_EXCEPTIONABLE',
+          domain: 'INGREDIENT',
+          detail: '原料域有可例外项没有登记理由：EDIBLE_RANGE',
+        },
+      ];
+      authorizeService.authorize.mockRejectedValue(
+        new BadRequestException({
+          message: '授权前还有未满足的条件',
+          reasons,
+        }),
+      );
+
+      const response = await authorizedPost('/drafts/draft-1/authorize')
+        .send(commitBody)
+        .expect(400);
+
+      expect(response.body.reasons).toEqual(reasons);
     });
   });
 

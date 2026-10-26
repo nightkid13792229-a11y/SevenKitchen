@@ -16,8 +16,8 @@ import {
 } from '../../../src/application/ingredient-creation/ingredient-draft-agent.service';
 import { IngredientCreationAuditService } from '../../../src/application/ingredient-creation/ingredient-creation-audit.service';
 import { IngredientCreationCandidateService } from '../../../src/application/ingredient-creation/ingredient-creation-candidate.service';
+import { IngredientCreationAuthorizeService } from '../../../src/application/ingredient-creation/ingredient-creation-authorize.service';
 import { IngredientCreationCheckService } from '../../../src/application/ingredient-creation/ingredient-creation-check.service';
-import { IngredientCreationCommitService } from '../../../src/application/ingredient-creation/ingredient-creation-commit.service';
 import { IngredientCreationDraftService } from '../../../src/application/ingredient-creation/ingredient-creation-draft.service';
 import { IngredientCreationIntakeService } from '../../../src/application/ingredient-creation/ingredient-creation-intake.service';
 import { IngredientCreationMergeService } from '../../../src/application/ingredient-creation/ingredient-creation-merge.service';
@@ -2278,7 +2278,7 @@ describe('POST /api/v1/admin/ingredient-creation/agent/run', () => {
         { provide: IngredientCreationOnlineService, useValue: {} },
         { provide: IngredientCreationMergeService, useValue: {} },
         { provide: IngredientCreationCheckService, useValue: {} },
-        { provide: IngredientCreationCommitService, useValue: {} },
+        { provide: IngredientCreationAuthorizeService, useValue: {} },
         { provide: IngredientCreationAuditService, useValue: {} },
         { provide: IngredientCreationIntakeService, useValue: {} },
         { provide: IngredientDraftAgentService, useValue: agentService },

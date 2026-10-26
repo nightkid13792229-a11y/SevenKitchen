@@ -4,8 +4,8 @@ import request from 'supertest';
 import { IngredientCreationAuditService } from '../../../src/application/ingredient-creation/ingredient-creation-audit.service';
 import { IngredientDraftAgentService } from '../../../src/application/ingredient-creation/ingredient-draft-agent.service';
 import { IngredientCreationCandidateService } from '../../../src/application/ingredient-creation/ingredient-creation-candidate.service';
+import { IngredientCreationAuthorizeService } from '../../../src/application/ingredient-creation/ingredient-creation-authorize.service';
 import { IngredientCreationCheckService } from '../../../src/application/ingredient-creation/ingredient-creation-check.service';
-import { IngredientCreationCommitService } from '../../../src/application/ingredient-creation/ingredient-creation-commit.service';
 import { IngredientCreationDraftService } from '../../../src/application/ingredient-creation/ingredient-creation-draft.service';
 import { IngredientCreationIntakeService } from '../../../src/application/ingredient-creation/ingredient-creation-intake.service';
 import { IngredientCreationMergeService } from '../../../src/application/ingredient-creation/ingredient-creation-merge.service';
@@ -54,8 +54,8 @@ describe('IngredientCreationController audits', () => {
           useValue: { runCheck: jest.fn(), assertCommitAllowed: jest.fn() },
         },
         {
-          provide: IngredientCreationCommitService,
-          useValue: { commit: jest.fn() },
+          provide: IngredientCreationAuthorizeService,
+          useValue: { authorize: jest.fn() },
         },
         {
           provide: IngredientCreationAuditService,

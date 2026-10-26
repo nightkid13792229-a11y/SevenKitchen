@@ -15,6 +15,7 @@ import { RECIPE_REPOSITORY_TOKEN } from 'src/recipes.controller';
 import { InMemoryRecipeRepository } from 'src/infrastructure/repositories/in-memory-recipe.repository';
 import { DiySheetService } from 'src/application/recipe/diy-sheet.service';
 import { CustomRecipeDeliveryService } from 'src/application/custom-recipe/custom-recipe-delivery.service';
+import { SupplementCandidateService } from 'src/application/supplement-shop/supplement-candidate.service';
 import { RecipeCoverImageService } from 'src/application/recipe-designer/recipe-cover-image.service';
 import {
   DogService,
@@ -147,6 +148,14 @@ describe('RecipesController (e2e)', () => {
           provide: CustomRecipeDeliveryService,
           useValue: {
             resolveDeliveredRecipeVersion: jest.fn(async () => null),
+          },
+        },
+        {
+          // 2026-10-26：SupplementCandidateService 注入到 RecipesController；
+          // 本 spec 不测补剂候选路由，给一个空结果桩即可。
+          provide: SupplementCandidateService,
+          useValue: {
+            resolveForRecipe: jest.fn(async () => []),
           },
         },
         {

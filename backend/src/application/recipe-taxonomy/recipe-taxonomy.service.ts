@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma, type RecipeSeriesBusinessStatus } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import {
   buildTaxonomyTree,
@@ -26,7 +27,7 @@ export interface ListTaxonomySeriesQuery {
   /** CATALOG=产品线（默认），ORDER=订单设计 */
   designMode?: 'CATALOG' | 'ORDER';
   /** DRAFT / PUBLIC / PRIVATE_CUSTOM；缺省时排除定制 */
-  businessStatus?: string;
+  businessStatus?: RecipeSeriesBusinessStatus;
 }
 
 export interface TaxonomySeriesItem {
@@ -57,7 +58,12 @@ export class RecipeTaxonomyService {
   constructor(private readonly prisma: PrismaService) {}
 
   /** 完整分类树（含每个节点的直接归属数与含子孙的总数），计数口径与列表一致。 */
-  async getTree(scope: { designMode?: 'CATALOG' | 'ORDER'; businessStatus?: string } = {}): Promise<TaxonomyKindView[]> {
+  async getTree(
+    scope: {
+      designMode?: 'CATALOG' | 'ORDER';
+      businessStatus?: RecipeSeriesBusinessStatus;
+    } = {},
+  ): Promise<TaxonomyKindView[]> {
     const [kinds, nodes, grouped] = await Promise.all([
       this.prisma.recipeTaxonomyKind.findMany({ orderBy: { sort: 'asc' } }),
       this.prisma.recipeTaxonomyNode.findMany({ orderBy: { sort: 'asc' } }),
@@ -70,7 +76,8 @@ export class RecipeTaxonomyService {
 
     const directCounts: Record<string, number> = {};
     for (const row of grouped) {
-      directCounts[row.nodeId] = row._count._all;
+      const count = (row as { _count?: { _all?: number } })._count;
+      directCounts[row.nodeId] = count?._all ?? 0;
     }
 
     return buildTaxonomyTree(
@@ -220,8 +227,8 @@ export class RecipeTaxonomyService {
    */
   private buildScopeWhere(query: {
     designMode?: 'CATALOG' | 'ORDER';
-    businessStatus?: string;
-  }) {
+    businessStatus?: RecipeSeriesBusinessStatus;
+  }): Prisma.RecipeSeriesWhereInput {
     return {
       deletedAt: null,
       designMode: query.designMode ?? undefined,

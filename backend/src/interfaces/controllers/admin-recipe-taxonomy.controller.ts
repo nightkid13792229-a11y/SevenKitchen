@@ -11,6 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiSecurity, ApiTags } from '@nestjs/swagger';
+import type { RecipeSeriesBusinessStatus } from '@prisma/client';
 
 import { RecipeTaxonomyService } from '../../application/recipe-taxonomy/recipe-taxonomy.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
@@ -46,7 +47,7 @@ export class AdminRecipeTaxonomyController {
     return ApiResponseDto.success({
       kinds: await this.taxonomy.getTree({
         designMode: query.designMode,
-        businessStatus: query.businessStatus,
+        businessStatus: query.businessStatus as RecipeSeriesBusinessStatus,
       }),
     });
   }
@@ -61,7 +62,7 @@ export class AdminRecipeTaxonomyController {
       page: query.page,
       pageSize: query.pageSize,
       designMode: query.designMode,
-      businessStatus: query.businessStatus,
+      businessStatus: query.businessStatus as RecipeSeriesBusinessStatus,
     });
     return ApiResponseDto.success(result);
   }

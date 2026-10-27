@@ -1,7 +1,7 @@
 /**
  * Agent 工具箱（P0a Task 6）。
  *
- * 只做组装，不加任何业务规则：把 Task 5 的 21 个工具定义和
+ * 只做组装，不加任何业务规则：把 Task 5 的 22 个工具定义和
  * `createAgentToolHandlers` 造出的同名 handler 合成一个对象，
  * 交给 P0b 的 Agent 运行时逐轮调用。
  *

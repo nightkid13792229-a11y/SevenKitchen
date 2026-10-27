@@ -28,10 +28,10 @@ function createFakeControlPort(
 }
 
 describe('tool registry', () => {
-  it('21 个工具，名字唯一，finish_draft 已下线', () => {
+  it('22 个工具，名字唯一，finish_draft 已下线', () => {
     const names = AGENT_TOOL_DEFINITIONS.map((t) => t.name);
-    expect(names).toHaveLength(21);
-    expect(new Set(names).size).toBe(21);
+    expect(names).toHaveLength(22);
+    expect(new Set(names).size).toBe(22);
     expect(names).not.toContain('finish_draft');
     expect(names).toEqual(
       expect.arrayContaining([
@@ -41,6 +41,7 @@ describe('tool registry', () => {
         'get_catalog_usage',
         'search_recipes',
         'get_recipe',
+        'get_dog_recipe_history',
         'web_search',
         'web_fetch',
         'add_ingredient',

@@ -13,6 +13,7 @@ import type {
   AgentAssessmentView,
   AgentCatalogUsage,
   AgentCopyPatch,
+  AgentDogRecipeHistory,
   AgentDraftItem,
   AgentDraftSnapshot,
   AgentIngredientCandidate,
@@ -79,6 +80,20 @@ export interface RecipeAgentDraftPort {
     recipeId?: string;
     draftId?: string;
   }): Promise<AgentRecipeDetail | null>;
+
+  /**
+   * 当前设计这只狗**真实吃过 / 交付过**的食谱历史。
+   *
+   * 只读当前草稿绑定的狗狗（不接受 dogId，防止越权查别的狗）；
+   * 产品线 / 没绑定订单的草稿返回 `{ dogName: null, total: 0, recipes: [] }`。
+   * 数据来自鲜食订单快照 + 已完成定制单的交付快照，与「爱犬设计洞察」同源。
+   */
+  getDogRecipeHistory(input: {
+    /** 按菜名或原料名过滤，例如「牛肉」「西兰花」 */
+    keyword?: string;
+    /** 最多返回几道，默认 8，上限 20 */
+    limit?: number;
+  }): Promise<AgentDogRecipeHistory>;
 
   /** 往当前草稿追加一条真实原料；成功后内容版本 +1。 */
   addItem(

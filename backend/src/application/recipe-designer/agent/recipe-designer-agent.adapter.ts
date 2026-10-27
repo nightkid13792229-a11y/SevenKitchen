@@ -49,6 +49,7 @@ import {
   type AgentCatalogUsageRecipe,
   type AgentCopyPatch,
   type AgentDesignContext,
+  type AgentDogRecipeHistory,
   type AgentDraftItem,
   type AgentDraftSnapshot,
   type AgentIngredientCandidate,
@@ -74,6 +75,18 @@ export interface RecipeAgentActor {
   userId: string;
   role?: string | null;
   customerId?: string | null;
+}
+
+/** 历史食谱默认 / 最多返回几道；与工具定义里的 limit 保持一致。 */
+const DOG_HISTORY_DEFAULT_LIMIT = 8;
+const DOG_HISTORY_MAX_LIMIT = 20;
+
+function normalizeDogHistoryLimit(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return DOG_HISTORY_DEFAULT_LIMIT;
+  }
+  return Math.min(parsed, DOG_HISTORY_MAX_LIMIT);
 }
 
 /** `getDraft` 的返回形状（service 的 `DesignRecipeWithItems` 未导出）。 */
@@ -2439,6 +2452,69 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
       row.items.map(toPublishedRecipeItemRead),
     );
     return this.toPublishedRecipeDetail(row, items);
+  }
+
+  /**
+   * 这只狗真实吃过 / 交付过的食谱历史（2026-10-28）。
+   *
+   * 只认当前草稿绑定的订单狗狗：不接受外部 dogId，防止 AI 越权查别的狗。
+   * 数据直接复用「爱犬设计洞察」的 historyRecipes（鲜食快照 + 定制交付快照），
+   * 不在这里另写一套查询，避免 AI 与页面看到两份不同的历史。
+   */
+  async getDogRecipeHistory(input: {
+    keyword?: string;
+    limit?: number;
+  }): Promise<AgentDogRecipeHistory> {
+    const design = await this.prisma.orderRecipeDesign.findUnique({
+      where: { designDraftId: this.draftId },
+      select: {
+        dogId: true,
+        order: { select: { dog: { select: { name: true } } } },
+      },
+    });
+
+    const dogId = String(design?.dogId ?? '').trim();
+    if (!dogId) {
+      // 产品线设计没有狗；顾客自助食谱不在 AI 范围。不要回退到全站搜索。
+      return { dogName: null, total: 0, recipes: [] };
+    }
+
+    const keyword = String(input.keyword ?? '')
+      .trim()
+      .toLowerCase();
+    const limit = normalizeDogHistoryLimit(input.limit);
+
+    const history = await this.service.getDogRecipeHistory(dogId, this.access);
+    const filtered = keyword
+      ? history.filter(
+          (recipe) =>
+            recipe.name.toLowerCase().includes(keyword) ||
+            (recipe.ingredients ?? []).some((item) =>
+              String(item.name ?? '')
+                .toLowerCase()
+                .includes(keyword),
+            ),
+        )
+      : history;
+
+    return {
+      dogName: design?.order?.dog?.name ?? null,
+      total: filtered.length,
+      recipes: filtered.slice(0, limit).map((recipe) => ({
+        id: String(recipe.id),
+        name: recipe.name,
+        kind: recipe.kind,
+        date: recipe.date ?? null,
+        status: String(recipe.status ?? ''),
+        ingredients: Array.from(
+          new Set(
+            (recipe.ingredients ?? [])
+              .map((item) => String(item.name ?? '').trim())
+              .filter(Boolean),
+          ),
+        ),
+      })),
+    };
   }
 
   /**

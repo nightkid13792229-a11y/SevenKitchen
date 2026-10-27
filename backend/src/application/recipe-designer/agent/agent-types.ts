@@ -480,6 +480,35 @@ export interface AgentRecipeSearchPage {
   hasMore: boolean;
 }
 
+/**
+ * 这只狗**真实吃过 / 交付过**的一道食谱（2026-10-28）。
+ *
+ * 数据来自当前订单绑定狗狗的鲜食订单快照 + 已完成定制单的交付快照，
+ * 与「爱犬设计洞察」的历史食谱同源；只给身份、日期、来源和原料名，
+ * 不含客户、订单、附件。
+ */
+export interface AgentDogRecipeHistoryItem {
+  id: string;
+  name: string;
+  /** FINISHED = 鲜食订单快照；CUSTOM = 已完成定制单的交付快照；ORDER = 本单其他份 */
+  kind: 'FINISHED' | 'CUSTOM' | 'ORDER';
+  /** 使用 / 交付时间（ISO）；订单没有可用日期时为 null */
+  date: string | null;
+  status: string;
+  /** 原料名（快照顺序，去重） */
+  ingredients: string[];
+}
+
+/** `get_dog_recipe_history` 的结果。 */
+export interface AgentDogRecipeHistory {
+  /** 当前设计绑定的狗狗名；产品线 / 未绑定订单的草稿为 null */
+  dogName: string | null;
+  /** 过滤后的总条数，可能大于 `recipes.length`（已按 limit 截断） */
+  total: number;
+  recipes: AgentDogRecipeHistoryItem[];
+}
+
+
 /** 所有工具统一使用的错误码；英文大写，给人看的话用中文。 */
 export type AgentToolErrorCode =
   | 'INVALID_ARGUMENT'

@@ -491,3 +491,25 @@ async handleGenerateAiCover():
 - 后端草稿食材查询的 `take` 数量（20 是上限保护，可按测试调整）。
 - 测试的组织方式（领域纯函数 + 服务单测 + 控制器单测 + 前端纯函数 + 源码契约）。
 - 控制器 / 服务文件的具体命名（建议见 6.2，可改，但路径必须保持 `/admin/recipe-series/:id/ai-cover`）。
+
+## 16. 补充（2026-10-27 晚上）：智谱配置入口
+
+上线后在真实后台核对发现：生产环境**从来没有** `provider=ZHIPU / purpose=RECIPE_COVER_IMAGE` 这一行配置，而原「AI / Agent 配置」只支持 DeepSeek（provider 写死），无法补这一行 —— 旧的「编辑食谱」页 AI 封面也因此一直是灰的。这不是本期代码的回归，是 2026-10-18 生图功能留下的配置缺口。
+
+因此补一个只给管理员用的配置入口（老板 2026-10-27 要求「入口做好，我自己填 Key」）：
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/v1/admin/nutrition-governance/agent-providers/zhipu-image` | 读取（只回 Key 末四位） |
+| PUT | 同上 | 保存 enabled / baseUrl / model / apiKey / clearApiKey |
+| POST | 同上 `/test` | 连接测试：只 ping `glm-4-flash` 文本模型，**不生成图片、不花 0.1 元** |
+
+规则：
+
+- Key 沿用 `agent_provider_config` 的 AES-256-GCM 加密存储，接口只回 `apiKeyLast4`，永不回明文；
+- 启用（enabled=true）前必须有 Key，后端 400；
+- 后台「AI / Agent 配置」新增「智谱封面图」卡片（启用 / Base URL / glm-image / API Key / 保存 / 连接测试 / 清除 Key），并提示 Key 在 bigmodel.cn 创建；
+- DeepSeek 用途表不再显示 `RECIPE_COVER_IMAGE`（那一行是文本配置，不会生图），避免点错配置抽屉；
+- 配好并启用后，`RecipeCoverImageService.isAvailable()` 返回 true，「发布 / 更新」抽屉的「AI 生成图片」变亮（重新打开抽屉即可）。
+
+验证：后端新增 9 项配置服务测试 + 4 项路由契约测试；admin-web 新增 3 项纯函数测试 + 4 项入口契约测试；全量测试与构建通过。

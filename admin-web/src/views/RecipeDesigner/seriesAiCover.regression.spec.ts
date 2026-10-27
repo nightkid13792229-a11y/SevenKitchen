@@ -49,6 +49,17 @@ describe('系列 AI 封面 · 源码契约', () => {
     expect(drawerSource).toContain('SERIES_AI_COVER_TIMEOUT_MESSAGE')
   })
 
+  it('切换系列 / 重新打开时复位 AI 状态', () => {
+    const watchBlock = drawerSource.slice(
+      drawerSource.indexOf('() => [props.modelValue, props.seriesId]')
+    )
+    const resetIndex = watchBlock.indexOf("aiCoverPreviewUrl.value = ''")
+    const closeIndex = watchBlock.indexOf('if (!open)')
+    expect(resetIndex).toBeGreaterThan(-1)
+    // 复位必须在 open/close 分支之前：切换系列（open 仍为 true）也要清掉旧预览
+    expect(resetIndex).toBeLessThan(closeIndex)
+  })
+
   it('生成不阻断保存发布设置', () => {
     expect(drawerSource).toContain(':disabled="saving || uploading || !dirty"')
     expect(drawerSource).not.toContain('aiCoverGenerating || !dirty')

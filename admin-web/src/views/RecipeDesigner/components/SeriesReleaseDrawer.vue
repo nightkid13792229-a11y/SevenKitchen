@@ -1360,20 +1360,23 @@ async function handleBeforeClose(done: () => void): Promise<void> {
 watch(
   () => [props.modelValue, props.seriesId] as const,
   ([open, seriesId]) => {
+    // AI 封面的状态只在「当前这一次打开 / 这个系列」内有效：
+    // 关闭、重新打开、甚至在打开状态下切换系列，都要清掉旧预览 / 旧错误。
+    aiCoverRequestSeq += 1
+    aiCoverGenerating.value = false
+    aiCoverPreviewUrl.value = ''
+    aiCoverError.value = ''
+    aiCoverAvailable.value = null
+
     if (!open) {
       // 关闭后到达的响应不再写回，避免下次打开先闪一眼旧结果
       requestSeq += 1
       healthTagsRequestSeq += 1
-      aiCoverRequestSeq += 1
       loading.value = false
       saving.value = false
       uploading.value = false
       releasing.value = false
       unpublishing.value = false
-      aiCoverGenerating.value = false
-      aiCoverPreviewUrl.value = ''
-      aiCoverError.value = ''
-      aiCoverAvailable.value = null
       error.value = ''
       return
     }

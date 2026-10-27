@@ -336,12 +336,11 @@ export class SeriesCoverImageService {
 2. `designMode === RecipeDesignMode.ORDER` → `BadRequestException('订单定制系列不支持 AI 封面生成')`。
 3. `name.trim()` 为空或以 `未命名` 开头 → `BadRequestException('系列名称还是临时名称，先改成正式名称再生成封面')`。
 4. `!isAvailable()` → 与单食谱入口同一句配置指引（照 `recipes.controller.ts:2075` 的文案）。
-5. 计算 `isLive`：`businessStatus === RecipeSeriesBusinessStatus.PUBLIC` 或 `recipe.count({ where: { seriesId, status: RecipeStatus.PUBLIC } }) > 0`。
-6. `shouldSave = options.save === true && !isLive`。
-7. `loadFoodNames(seriesId)`（私有方法）：`designRecipe.findMany({ where: { seriesId }, orderBy: { updatedAt: 'desc' }, take: 20, select: { items: { orderBy: { sortOrder: 'asc' }, select: { ingredient: { select: { name: true, type: true } }, nutritionFood: { select: { name: true } } } } } })`；逐份找第一份有可用食材的，排除 `IngredientType.SUPPLEMENT`、去重、最多 5 个、优先 `ingredient.name` 再退回 `nutritionFood.name`；都没有返回 `[]`。
-8. `coverImageService.generate({ recipeName: name, foodNames, layout: 'COVER_16_9' })`。
-9. `shouldSave` 时 `prisma.recipeSeries.update({ where: { id: seriesId }, data: { coverImageUrl: result.url } })`。
-10. 返回 `{ ...result, saved: shouldSave, foodNames }`。
+5. `loadFoodNames(seriesId)`（私有方法）：`designRecipe.findMany({ where: { seriesId }, orderBy: { updatedAt: 'desc' }, take: 20, select: { items: { orderBy: { sortOrder: 'asc' }, select: { ingredient: { select: { name: true, type: true } }, nutritionFood: { select: { name: true } } } } } })`；逐份找第一份有可用食材的，排除 `IngredientType.SUPPLEMENT`、去重、最多 5 个、优先 `ingredient.name` 再退回 `nutritionFood.name`；都没有返回 `[]`。
+6. `coverImageService.generate({ recipeName: name, foodNames, layout: 'COVER_16_9' })`。
+7. **生成后、写库前**计算 `isLive`：`businessStatus === RecipeSeriesBusinessStatus.PUBLIC` 或 `recipe.count({ where: { seriesId, status: RecipeStatus.PUBLIC } }) > 0`；`shouldSave = options.save === true && !isLive`（生图 20–40 秒，这期间可能被别的标签页发布，必须在这时再判一次）。
+8. `shouldSave` 时 `prisma.recipeSeries.update({ where: { id: seriesId }, data: { coverImageUrl: result.url } })`。
+9. 返回 `{ ...result, saved: shouldSave, foodNames }`。
 
 **不要**写 `recipe.updateMany`、不要碰 `applyToLive`、不要写角标表。
 

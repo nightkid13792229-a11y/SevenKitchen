@@ -8,7 +8,10 @@ import type {
   AgentRecipeSearchPage,
   AgentRecipeSummary,
 } from 'src/application/recipe-designer/agent/agent-types';
-import { createFakeRecipeAgentPort } from '../../../helpers/fake-recipe-agent-port';
+import {
+  createFakeRecipeAgentPort,
+  fakeDraftSnapshot,
+} from '../../../helpers/fake-recipe-agent-port';
 
 function createFakeWebTools(
   overrides: Partial<RecipeAgentWebPort> = {},
@@ -132,6 +135,48 @@ describe('read tools', () => {
     expect(result.data.totalWeightG).toBe(940);
     expect(result.data.items).toHaveLength(8);
     expect(result.summary).toContain('8 种原料');
+  });
+
+  it('get_draft 摘要把订单背景/不在范围标出来', async () => {
+    const orderPort = createFakeRecipeAgentPort({
+      draft: fakeDraftSnapshot({
+        context: {
+          kind: 'ORDER',
+          order: {
+            orderNo: 'CR202610270001',
+            quantity: 1,
+          } as any,
+          dog: {
+            name: 'ID',
+            allergyRecords: [{ allergen: '鸡肉' }, { allergen: '牛肉' }],
+          } as any,
+          unavailableReason: null,
+        },
+      }),
+    });
+    const orderResult = await createReadTools(orderPort, 'draft-1').get_draft();
+    expect(orderResult.ok).toBe(true);
+    if (!orderResult.ok) return;
+    expect(orderResult.summary).toContain('订单定制');
+    expect(orderResult.summary).toContain('CR202610270001');
+    expect(orderResult.summary).toContain('ID');
+    expect(orderResult.summary).toContain('2 条过敏');
+
+    const outOfScopePort = createFakeRecipeAgentPort({
+      draft: fakeDraftSnapshot({
+        context: {
+          kind: 'OUT_OF_SCOPE',
+          reason: '顾客自助食谱不在 AI 设计范围。',
+        },
+      }),
+    });
+    const outOfScopeResult = await createReadTools(
+      outOfScopePort,
+      'draft-1',
+    ).get_draft();
+    expect(outOfScopeResult.ok).toBe(true);
+    if (!outOfScopeResult.ok) return;
+    expect(outOfScopeResult.summary).toContain('不在 AI 设计范围');
   });
 
   it('search_ingredients 把条件传给端口，无结果也返回 ok', async () => {

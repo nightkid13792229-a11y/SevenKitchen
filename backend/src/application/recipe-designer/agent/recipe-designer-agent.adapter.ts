@@ -42,14 +42,18 @@ import { resolveNutritionProfileDisplayName } from '../../nutrition-food/nutriti
 import type { RecipeDesignerService } from '../recipe-designer.service';
 import {
   RecipeAgentPortError,
+  type AgentAllergenWarning,
   type AgentAssessmentEntry,
   type AgentAssessmentView,
   type AgentCatalogUsage,
   type AgentCatalogUsageRecipe,
   type AgentCopyPatch,
+  type AgentDesignContext,
   type AgentDraftItem,
   type AgentDraftSnapshot,
   type AgentIngredientCandidate,
+  type AgentOrderContext,
+  type AgentOrderDogContext,
   type AgentIngredientDetail,
   type AgentIngredientKeyNutrients,
   type AgentIngredientNutritionBasis,
@@ -230,18 +234,14 @@ const buildKeyNutrients = (
     return emptyKeyNutrients();
   }
   return {
-    proteinPer100g: readProfileValuePer100g(
-      profile,
-      'macros.crudeProtein',
-    ).valuePer100g,
+    proteinPer100g: readProfileValuePer100g(profile, 'macros.crudeProtein')
+      .valuePer100g,
     fatPer100g: readProfileValuePer100g(profile, 'macros.crudeFat')
       .valuePer100g,
     calciumMgPer100g: readProfileValuePer100g(profile, 'minerals.calcium')
       .valuePer100g,
-    phosphorusMgPer100g: readProfileValuePer100g(
-      profile,
-      'minerals.phosphorus',
-    ).valuePer100g,
+    phosphorusMgPer100g: readProfileValuePer100g(profile, 'minerals.phosphorus')
+      .valuePer100g,
   };
 };
 
@@ -365,6 +365,36 @@ const buildNutritionSummary = (
   };
 };
 
+/** 读落库的过敏提示；形状不对的条目直接跳过，不让脏数据进模型。 */
+const readAllergenWarnings = (value: unknown): AgentAllergenWarning[] => {
+  if (!Array.isArray(value)) return [];
+
+  const warnings: AgentAllergenWarning[] = [];
+  for (const raw of value) {
+    if (!isRecord(raw)) continue;
+    const level =
+      raw.level === 'CONFIRMED'
+        ? 'CONFIRMED'
+        : raw.level === 'WARNING'
+          ? 'WARNING'
+          : null;
+    if (!level) continue;
+
+    const itemId = typeof raw.itemId === 'string' ? raw.itemId : '';
+    const itemName = typeof raw.itemName === 'string' ? raw.itemName : '';
+    if (!itemId && !itemName) continue;
+
+    warnings.push({
+      itemId,
+      itemName,
+      allergen: typeof raw.allergen === 'string' ? raw.allergen : '',
+      level,
+      message: typeof raw.message === 'string' ? raw.message : '',
+    });
+  }
+  return warnings;
+};
+
 /** 只有评估版本与当前内容版本一致时，才把旧报告当作“最近一次评估”。 */
 const buildLastAssessment = (
   draft: ServiceDraft,
@@ -399,9 +429,7 @@ const buildLastAssessment = (
       marginPercent: null,
       unit: typeof raw.unit === 'string' ? raw.unit : null,
       basis:
-        typeof raw.expressionBasis === 'string'
-          ? raw.expressionBasis
-          : null,
+        typeof raw.expressionBasis === 'string' ? raw.expressionBasis : null,
     });
   }
 
@@ -410,6 +438,10 @@ const buildLastAssessment = (
     energyDensityKcalPerKg !== null && draft.totalWeightG > 0
       ? (energyDensityKcalPerKg * draft.totalWeightG) / 1000
       : null;
+  const summary = isRecord(draft.assessmentSummary)
+    ? draft.assessmentSummary
+    : null;
+  const allergenWarnings = readAllergenWarnings(summary?.allergenWarnings);
 
   return {
     contentRevision: draft.contentRevision,
@@ -423,6 +455,7 @@ const buildLastAssessment = (
     totalEnergyKcal,
     energyDensityKcalPerKg,
     totalWeightG: draft.totalWeightG,
+    allergenWarnings,
   };
 };
 
@@ -691,9 +724,7 @@ const readNutritionBasis = (
       : null;
   return {
     basisType:
-      meta && typeof meta.rawBasisType === 'string'
-        ? meta.rawBasisType
-        : null,
+      meta && typeof meta.rawBasisType === 'string' ? meta.rawBasisType : null,
     servingWeightG: toFiniteNumber(meta?.servingWeightG),
     usageUnit,
   };
@@ -1351,6 +1382,183 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
 
   // ---- 读方法：四个读方法都已接真实数据 ----
 
+  /**
+   * 设计上下文：只按当前草稿的绑定关系决定要不要带订单/狗狗。
+   *
+   * - 有订单号 → ORDER：订单 + 狗狗档案（只读设计必需字段）；
+   * - 没订单但绑了顾客狗狗 → OUT_OF_SCOPE：顾客自助食谱，AI 不做；
+   * - 两个都没有 → PRODUCT：产品线，不带顾客数据。
+   *
+   * 参考犬（referenceDogId）不算绑定：它只用于定生命阶段。
+   */
+  private async buildDesignContext(
+    draft: ServiceDraft,
+  ): Promise<AgentDesignContext> {
+    const orderId = draft.series?.orderId?.trim() || null;
+    const customerDogId = draft.customerDogId?.trim() || null;
+    const designMode = draft.series?.designMode?.trim() || null;
+
+    if (orderId) {
+      return this.loadOrderContext(orderId, customerDogId);
+    }
+    if (designMode === 'ORDER') {
+      return {
+        kind: 'ORDER',
+        order: null,
+        dog: null,
+        unavailableReason: '订单定制草稿缺少订单号，请人工核对后再设计。',
+      };
+    }
+    if (customerDogId) {
+      return {
+        kind: 'OUT_OF_SCOPE',
+        reason:
+          '顾客自助食谱不在 AI 设计范围；请在产品线或订单定制食谱里使用 AI。',
+      };
+    }
+    return { kind: 'PRODUCT' };
+  }
+
+  /** 读订单 + 订单上的狗狗；读不到时返回明确原因，让模型停下来问人。 */
+  private async loadOrderContext(
+    orderId: string,
+    customerDogId: string | null,
+  ): Promise<AgentDesignContext> {
+    const order = await this.prisma.customRecipeOrder.findUnique({
+      where: { id: orderId },
+      select: {
+        id: true,
+        orderId: true,
+        dogId: true,
+        status: true,
+        recipeQuantity: true,
+        targetGoal: true,
+        needsHealthManagement: true,
+        additionalNotes: true,
+        allergies: true,
+        allergyText: true,
+        medicalConditions: true,
+        preferredIngredients: true,
+        dislikedIngredients: true,
+        currentFoodMain: true,
+        currentFoodOther: true,
+        changeReasons: true,
+        changeReasonOther: true,
+        stomachConditions: true,
+        stomachOther: true,
+        allergyStatus: true,
+        requestedProteinCodes: true,
+      },
+    });
+
+    if (!order) {
+      return {
+        kind: 'ORDER',
+        order: null,
+        dog: null,
+        unavailableReason: '订单不存在或已删除，请人工核对后再设计。',
+      };
+    }
+
+    const orderContext: AgentOrderContext = {
+      // 对外单号（CR…）给人看；内部 uuid 只用于定位。
+      orderNo: order.orderId || order.id,
+      status: String(order.status),
+      quantity: order.recipeQuantity,
+      targetGoal: String(order.targetGoal),
+      needsHealthManagement: order.needsHealthManagement,
+      notes: order.additionalNotes ?? null,
+      allergies: order.allergies ?? [],
+      allergyText: order.allergyText ?? null,
+      medicalConditions: order.medicalConditions ?? [],
+      preferredIngredients: order.preferredIngredients ?? [],
+      dislikedIngredients: order.dislikedIngredients ?? [],
+      currentFoodMain: order.currentFoodMain ?? null,
+      currentFoodOther: order.currentFoodOther ?? null,
+      changeReasons: (order.changeReasons ?? []).map((value) => String(value)),
+      changeReasonOther: order.changeReasonOther ?? null,
+      stomachConditions: (order.stomachConditions ?? []).map((value) =>
+        String(value),
+      ),
+      stomachOther: order.stomachOther ?? null,
+      allergyStatus: String(order.allergyStatus),
+      requestedProteinCodes: order.requestedProteinCodes ?? [],
+    };
+
+    const dogId = order.dogId || customerDogId;
+    if (!dogId) {
+      return {
+        kind: 'ORDER',
+        order: orderContext,
+        dog: null,
+        unavailableReason: '订单没有绑定狗狗，请人工核对后再设计。',
+      };
+    }
+
+    const dog = await this.prisma.dog.findUnique({
+      where: { id: dogId },
+      select: {
+        name: true,
+        breedId: true,
+        customBreedName: true,
+        birthday: true,
+        gender: true,
+        isNeutered: true,
+        currentWeightKg: true,
+        allergyRecords: {
+          select: { allergen: true, certainty: true, source: true },
+        },
+        allergyFoods: true,
+        pickyFoods: true,
+        preferredFoods: true,
+        medicalHistory: true,
+      },
+    });
+
+    if (!dog) {
+      return {
+        kind: 'ORDER',
+        order: orderContext,
+        dog: null,
+        unavailableReason: '订单绑定的狗狗档案不存在，请人工核对后再设计。',
+      };
+    }
+
+    const breed = dog.breedId
+      ? await this.prisma.dogBreed.findUnique({
+          where: { id: dog.breedId },
+          select: { name: true },
+        })
+      : null;
+
+    const dogContext: AgentOrderDogContext = {
+      name: dog.name,
+      breedName: breed?.name ?? dog.customBreedName ?? null,
+      birthday: dog.birthday ? dog.birthday.toISOString().slice(0, 10) : null,
+      gender: dog.gender ? String(dog.gender) : null,
+      neutered: dog.isNeutered,
+      currentWeightKg: Number.isFinite(dog.currentWeightKg)
+        ? dog.currentWeightKg
+        : null,
+      allergyRecords: (dog.allergyRecords ?? []).map((record) => ({
+        allergen: record.allergen,
+        certainty: String(record.certainty),
+        source: record.source ? String(record.source) : null,
+      })),
+      allergyFoods: dog.allergyFoods ?? null,
+      pickyFoods: dog.pickyFoods ?? null,
+      preferredFoods: dog.preferredFoods ?? null,
+      medicalHistory: dog.medicalHistory ?? null,
+    };
+
+    return {
+      kind: 'ORDER',
+      order: orderContext,
+      dog: dogContext,
+      unavailableReason: null,
+    };
+  }
+
   async getDraft(draftId: string): Promise<AgentDraftSnapshot> {
     const [draft, productionSteps] = await Promise.all([
       this.service.getDraft(draftId, this.access),
@@ -1369,6 +1577,8 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
           },
         })
       : null;
+
+    const context = await this.buildDesignContext(draft);
 
     const items: AgentDraftItem[] = draft.items.map((item) => {
       // service 的本地类型没声明 category/status，但 Prisma include 里查了。
@@ -1461,6 +1671,7 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
       designMode: readDesignMode(draft.series?.designMode),
       orderId: draft.series?.orderId ?? null,
       orderQuantity: draft.series?.orderQuantity ?? null,
+      context,
       name: series?.name ?? draft.name,
       scenario: draft.fediafDogScenario,
       contentRevision: draft.contentRevision,
@@ -1572,8 +1783,11 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
           keyNutrientsByFoodId.get(profile.nutritionFoodId) ??
           emptyKeyNutrients(),
         nutrientMatch:
-          (option as { nutrientMatch?: AgentIngredientCandidate['nutrientMatch'] })
-            .nutrientMatch ?? null,
+          (
+            option as {
+              nutrientMatch?: AgentIngredientCandidate['nutrientMatch'];
+            }
+          ).nutrientMatch ?? null,
         category: classifyFoodCategory({
           name: option.name,
           cfctClass,
@@ -2865,7 +3079,7 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
     this.assertDraft(draftId);
 
     try {
-      const { contentRevision, assessment } =
+      const { contentRevision, assessment, allergenWarnings } =
         await this.service.assessDraftForAgent(draftId, this.access);
 
       const entries: AgentAssessmentEntry[] = assessment.groupedEntries.map(
@@ -2896,6 +3110,9 @@ export class RecipeDesignerAgentAdapter implements RecipeAgentDraftPort {
         totalEnergyKcal: assessment.totalEnergyKcal,
         energyDensityKcalPerKg: assessment.energyDensityKcalPerKg,
         totalWeightG: assessment.totalWeightG,
+        allergenWarnings: (allergenWarnings ?? []).map((warning) => ({
+          ...warning,
+        })),
       };
     } catch (error) {
       if (error instanceof ConflictException) {

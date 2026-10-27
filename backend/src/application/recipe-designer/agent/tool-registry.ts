@@ -143,7 +143,7 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
   {
     name: 'get_draft',
     description:
-      '读取当前草稿的原料、克数、占比、文案、内容版本和上次评估；每次开始或内容被改过后先读它。',
+      '读取当前草稿的原料、克数、占比、文案、内容版本、上次评估和设计上下文 context；每次开始或内容被改过后先读它。context.kind=PRODUCT 是产品线（不谈订单/狗）；ORDER 带订单与狗狗档案（过敏、备注、目标、份数）；OUT_OF_SCOPE 是顾客自助食谱，不在 AI 设计范围。',
     parameters: NO_ARGS_SCHEMA,
   },
   {

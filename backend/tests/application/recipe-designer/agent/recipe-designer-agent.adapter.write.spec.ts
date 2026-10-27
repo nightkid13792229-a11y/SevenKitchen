@@ -943,6 +943,7 @@ describe('RecipeDesignerAgentAdapter 写方法', () => {
         totalEnergyKcal: 4000,
         energyDensityKcalPerKg: 2000,
         totalWeightG: 2000,
+        allergenWarnings: [],
         entries: [
           {
             key: 'crudeProtein',
@@ -1001,6 +1002,43 @@ describe('RecipeDesignerAgentAdapter 写方法', () => {
           },
         ],
       });
+    });
+
+    it('把过敏提示一并映射进评估结果', async () => {
+      const service = serviceMock();
+      const prisma = prismaMock();
+      service.assessDraftForAgent.mockResolvedValue({
+        contentRevision: 7,
+        assessment: {
+          totalEnergyKcal: null,
+          energyDensityKcalPerKg: null,
+          totalWeightG: 1000,
+          groupedEntries: [],
+        },
+        allergenWarnings: [
+          {
+            itemId: 'item-1',
+            itemName: '鸡肝',
+            allergen: '鸡肉',
+            level: 'WARNING',
+            message: '「鸡肝」含需注意的过敏原「鸡肉」（可疑/待排查），请与顾客确认',
+          },
+        ],
+      });
+      const adapter = createAdapter(service, prisma);
+
+      const view = await adapter.runAssessment('draft-1');
+
+      expect(view.allergenWarnings).toEqual([
+        {
+          itemId: 'item-1',
+          itemName: '鸡肝',
+          allergen: '鸡肉',
+          level: 'WARNING',
+          message:
+            '「鸡肝」含需注意的过敏原「鸡肉」（可疑/待排查），请与顾客确认',
+        },
+      ]);
     });
 
     it('评估期间草稿被改（409 Conflict）时转成 ASSESSMENT_STALE', async () => {

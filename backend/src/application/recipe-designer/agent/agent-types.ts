@@ -44,6 +44,16 @@ export interface AgentAssessmentEntry {
   basis?: string | null;
 }
 
+/** 配方命中狗狗过敏原的一条提示。 */
+export interface AgentAllergenWarning {
+  itemId: string;
+  itemName: string;
+  allergen: string;
+  /** CONFIRMED = 确诊，WARNING = 可疑/待排查 */
+  level: 'CONFIRMED' | 'WARNING';
+  message: string;
+}
+
 /** 某一份草稿在某一个内容版本上的评估结果。 */
 export interface AgentAssessmentView {
   contentRevision: number;
@@ -59,7 +69,71 @@ export interface AgentAssessmentView {
   /** 每公斤配方的能量密度；没有总能量时用它 × 总重 / 1000。 */
   energyDensityKcalPerKg?: number | null;
   totalWeightG?: number;
+  /** 配方命中的狗狗过敏原（2026-10-27）；空数组 = 没命中。 */
+  allergenWarnings?: AgentAllergenWarning[];
 }
+
+/** 订单里给设计用的必需信息；不含主人、支付、附件。 */
+export interface AgentOrderContext {
+  /** 对外订单号（CR…），不是内部 uuid。 */
+  orderNo: string;
+  status: string;
+  quantity: number;
+  targetGoal: string;
+  needsHealthManagement: boolean;
+  notes: string | null;
+  allergies: string[];
+  allergyText: string | null;
+  medicalConditions: string[];
+  preferredIngredients: string[];
+  dislikedIngredients: string[];
+  currentFoodMain: string | null;
+  currentFoodOther: string | null;
+  changeReasons: string[];
+  changeReasonOther: string | null;
+  stomachConditions: string[];
+  stomachOther: string | null;
+  allergyStatus: string;
+  requestedProteinCodes: string[];
+}
+
+/** 订单绑定狗狗的设计必需资料；不含主人信息。 */
+export interface AgentOrderDogContext {
+  name: string;
+  breedName: string | null;
+  /** ISO 日期（yyyy-mm-dd）；未知为 null。 */
+  birthday: string | null;
+  gender: string | null;
+  neutered: boolean | null;
+  currentWeightKg: number | null;
+  allergyRecords: Array<{
+    allergen: string;
+    certainty: string;
+    source: string | null;
+  }>;
+  allergyFoods: string | null;
+  pickyFoods: string | null;
+  preferredFoods: string | null;
+  medicalHistory: string | null;
+}
+
+/**
+ * `get_draft` 的设计上下文。
+ *
+ * - PRODUCT：产品线（不绑订单、不绑顾客狗狗）；
+ * - ORDER：订单定制（订单 + 狗狗档案）；
+ * - OUT_OF_SCOPE：顾客自助食谱（绑狗但没订单，不在 AI 设计范围）。
+ */
+export type AgentDesignContext =
+  | { kind: 'PRODUCT' }
+  | { kind: 'OUT_OF_SCOPE'; reason: string }
+  | {
+      kind: 'ORDER';
+      order: AgentOrderContext | null;
+      dog: AgentOrderDogContext | null;
+      /** 订单/狗读不到时给出原因，模型必须停下来问人。 */
+      unavailableReason: string | null;
+    };
 
 /** `get_draft` 返回的完整草稿快照。 */
 export interface AgentDraftSnapshot {
@@ -74,6 +148,8 @@ export interface AgentDraftSnapshot {
   orderId?: string | null;
   /** ORDER 模式本单要做几份；产品线设计为 null。 */
   orderQuantity?: number | null;
+  /** 设计上下文：产品线为空、订单定制带订单/狗狗、顾客自助标记为不在范围。 */
+  context: AgentDesignContext;
   name: string;
   scenario: string;
   contentRevision: number;

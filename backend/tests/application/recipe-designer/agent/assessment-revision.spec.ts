@@ -16,6 +16,7 @@ function makeService(updateMany: jest.Mock) {
     entries: [],
   });
   service.buildAssessmentUpdateData = jest.fn().mockReturnValue({ isCompliant: true });
+  service.buildDraftAllergenWarnings = jest.fn().mockResolvedValue([]);
   service.prisma = { designRecipe: { updateMany } };
   return service;
 }
@@ -32,6 +33,32 @@ describe('assessDraftForAgent', () => {
       where: { id: 'draft-1', contentRevision: 7 },
       data: { isCompliant: true, assessmentContentRevision: 7 },
     });
+  });
+
+  it('把过敏提示和评估结果一起返回', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const service = makeService(updateMany);
+    const warnings = [
+      {
+        itemId: 'item-1',
+        itemName: '鸡肝',
+        allergen: '鸡肉',
+        level: 'WARNING',
+        message: '命中疑似过敏原「鸡肉」',
+      },
+    ];
+    service.buildDraftAllergenWarnings.mockResolvedValue(warnings);
+
+    const result = await service.assessDraftForAgent('draft-1', {
+      userId: 'u1',
+      role: 'STAFF',
+    });
+
+    expect(result.allergenWarnings).toEqual(warnings);
+    expect(service.buildAssessmentUpdateData).toHaveBeenCalledWith(
+      expect.anything(),
+      warnings,
+    );
   });
 
   it('评估期间草稿被改（count=0）→ 冲突，不返回新鲜结果', async () => {

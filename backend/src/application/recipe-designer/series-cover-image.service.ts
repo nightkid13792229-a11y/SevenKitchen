@@ -21,7 +21,7 @@ const MAX_DRAFT_SCAN = 20;
 
 /** 和单食谱入口保持同一句配置指引，运营看到的是同一个去处 */
 const AI_COVER_NOT_CONFIGURED_MESSAGE =
-  'AI 生图还没配置：请到后台「AI 设置」里添加 purpose=RECIPE_COVER_IMAGE、provider=ZHIPU 的一条并启用';
+  'AI 生图还没配置：请到后台「AI / Agent 配置」的「智谱封面图」填 Key 并启用';
 
 export interface SeriesCoverGenerationResult {
   /** 一定是 COS 地址（已转存），不是智谱临时链接 */

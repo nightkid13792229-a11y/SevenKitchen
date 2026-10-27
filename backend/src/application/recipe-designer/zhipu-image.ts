@@ -1,4 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
+import {
+  buildZhipuApiUrl,
+  extractZhipuErrorDetail,
+} from '../../infrastructure/services/zhipu-api';
 
 /**
  * 智谱 glm-image 生图客户端（2026-10-18）
@@ -52,7 +56,7 @@ interface ZhipuImageResponse {
 export async function callZhipuImage(
   options: ZhipuImageOptions,
 ): Promise<{ url: string }> {
-  const url = `${options.baseUrl.replace(/\/+$/, '')}${ZHIPU_IMAGE_PATH}`;
+  const url = buildZhipuApiUrl(options.baseUrl, ZHIPU_IMAGE_PATH);
 
   const controller = new AbortController();
   const timeout = setTimeout(
@@ -91,9 +95,7 @@ export async function callZhipuImage(
        * 拿不到结构化错误时退回状态码 + 响应片段 —— **别只说"失败了"**，
        * 管理员看到"401 / 无效的 API Key"才知道该改哪儿。
        */
-      const detail =
-        parsed?.message ||
-        (raw ? raw.slice(0, 200) : `HTTP ${response.status}`);
+      const detail = extractZhipuErrorDetail(raw, response.status);
       throw new BadRequestException(`生图失败：${detail}`);
     }
 

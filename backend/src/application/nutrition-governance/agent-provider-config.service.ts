@@ -6,6 +6,10 @@ import {
   randomBytes,
 } from 'crypto';
 import { PrismaService } from '../../infrastructure/prisma.service';
+import {
+  buildZhipuApiUrl,
+  extractZhipuErrorDetail,
+} from '../../infrastructure/services/zhipu-api';
 
 export const NUTRITION_AGENT_PURPOSE = 'NUTRITION_CANDIDATE_REVIEW';
 /** 全局默认用途：所有未单独指定用途的 AI/Agent 都回退到这里 */
@@ -188,11 +192,12 @@ export class AgentProviderConfigService {
     const baseUrl = this.normalizeZhipuBaseUrl(
       config.baseUrl || DEFAULT_ZHIPU_IMAGE_SETTINGS.baseUrl,
     );
+    const url = buildZhipuApiUrl(baseUrl, '/paas/v4/chat/completions');
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
 
     try {
-      const response = await fetch(`${baseUrl}/api/paas/v4/chat/completions`, {
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -209,7 +214,7 @@ export class AgentProviderConfigService {
       const raw = await response.text();
       if (!response.ok) {
         throw new BadRequestException(
-          `智谱连接失败：${extractZhipuError(raw, response.status)}`,
+          `智谱连接失败：${extractZhipuErrorDetail(raw, response.status)}`,
         );
       }
 
@@ -603,19 +608,6 @@ export class AgentProviderConfigService {
   }
 }
 
-function extractZhipuError(raw: string, status: number): string {
-  try {
-    const parsed = JSON.parse(raw);
-    const message = parsed?.error?.message || parsed?.message;
-    if (typeof message === 'string' && message.trim()) {
-      return message.trim();
-    }
-  } catch {
-    // 不是 JSON：退回原文片段
-  }
-  const text = String(raw ?? '').trim().slice(0, 200);
-  return text || `HTTP ${status}`;
-}
 
 function normalizeBaseUrl(value: string): string {
   const trimmed = normalizeRequiredText(value, 'DeepSeek Base URL 不能为空');

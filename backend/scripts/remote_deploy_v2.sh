@@ -243,6 +243,20 @@ else
   ok "Database migrations applied"
   echo ""
 
+  # 营养库覆盖率门禁（2026-10-28）：低于基线就不部署，避免"数据坏了照常上线"。
+  if [ -f scripts/audit-nutrition-coverage.ts ]; then
+    info "Checking nutrition coverage baseline (read-only)..."
+    if pnpm ts-node -r tsconfig-paths/register scripts/audit-nutrition-coverage.ts --assert; then
+      ok "Nutrition coverage baseline passed"
+    else
+      fail "Nutrition coverage below baseline — aborting deploy"
+      exit 1
+    fi
+    echo ""
+  else
+    warn "Coverage audit script not found — skipping gate"
+  fi
+
   # ==========================================================================
   # 选项字典的初始内容（2026-10-16 加）
   #

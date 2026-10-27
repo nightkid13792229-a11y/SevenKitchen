@@ -30,15 +30,13 @@ describe('生产损耗率读全局配置', () => {
    * 手工构造。
    *
    * ⚠️ 参数**个数和顺序**要对上构造函数：
-   * `prisma, targetProvider, searchGovernance?, aiDesignSuggestion?,
-   *  recipeAiWizard?, allergenVocabulary?, globalConfigService?` —— 一共 7 个。
+   * `prisma, targetProvider, searchGovernance?, allergenVocabulary?,
+   *  globalConfigService?` —— 一共 5 个。
    */
   function makeService(prisma: unknown, config: unknown) {
     return new RecipeDesignerService(
       prisma as never,
       { getTargets: jest.fn() } as never,
-      undefined,
-      undefined,
       undefined,
       undefined,
       config as never,

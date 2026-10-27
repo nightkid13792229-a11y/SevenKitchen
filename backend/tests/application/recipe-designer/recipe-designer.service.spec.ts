@@ -3,7 +3,6 @@ import { Prisma } from '@prisma/client';
 import { Test } from '@nestjs/testing';
 import { RecipeDesignerService } from '../../../src/application/recipe-designer/recipe-designer.service';
 import { IngredientPreparationHistoryService } from '../../../src/application/recipe/ingredient-preparation-history.service';
-import { AiDesignSuggestionService } from '../../../src/application/recipe-designer/ai-design-suggestion.service';
 import { SupplementTargetService } from '../../../src/application/recipe-designer/supplement-target.service';
 import { SearchGovernanceService } from '../../../src/application/search-governance/search-governance.service';
 import { PrismaService } from '../../../src/infrastructure/prisma.service';
@@ -118,10 +117,6 @@ describe('RecipeDesignerService', () => {
     expandQuery: jest.fn(),
     recordSearchEvent: jest.fn(),
   };
-  const aiDesignSuggestion = {
-    isAvailable: jest.fn(),
-    generate: jest.fn(),
-  };
   const preparationHistory = {
     getLatestText: jest.fn(),
     getLatestTextMap: jest.fn(),
@@ -141,7 +136,6 @@ describe('RecipeDesignerService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: 'FediafTargetProvider', useValue: targetProvider },
         { provide: SearchGovernanceService, useValue: searchGovernance },
-        { provide: AiDesignSuggestionService, useValue: aiDesignSuggestion },
         {
           provide: IngredientPreparationHistoryService,
           useValue: preparationHistory,
@@ -10045,17 +10039,6 @@ describe('RecipeDesignerService', () => {
       prisma.customRecipeOrder.findMany.mockResolvedValue([]);
       prisma.medicalRecord.findMany.mockResolvedValue([]);
       prisma.checkupRecord.findMany.mockResolvedValue([]);
-      aiDesignSuggestion.isAvailable.mockResolvedValue(true);
-      aiDesignSuggestion.generate.mockResolvedValue({
-        summary: '测试建议',
-        ingredientSuggestions: [],
-        avoidIngredients: [],
-        nutritionFocus: [],
-        supplementSuggestions: [],
-        reuseSuggestions: [],
-        warnings: [],
-        provider: 'deepseek',
-      });
     });
 
     it('returns assessment inputs for local computation', async () => {
@@ -10141,7 +10124,6 @@ describe('RecipeDesignerService', () => {
       expect(result.designHistory.designCount).toBe(1);
       expect(result.designHistory.ingredients[0].name).toBe('牛肉');
       expect(result.orderSummary.recipeNames).toEqual(['旺财套餐']);
-      expect(result.aiEnabled).toBe(true);
       expect(prisma.dogBreed.findUnique).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: 'breed-1' } }),
       );
@@ -10427,7 +10409,6 @@ describe('RecipeDesignerService', () => {
           { provide: PrismaService, useValue: prisma },
           { provide: 'FediafTargetProvider', useValue: targetProvider },
           { provide: SearchGovernanceService, useValue: searchGovernance },
-          { provide: AiDesignSuggestionService, useValue: aiDesignSuggestion },
           { provide: TencentCosService, useValue: cos },
         ],
       }).compile();
@@ -10722,56 +10703,6 @@ describe('RecipeDesignerService', () => {
         staffAccess,
       );
       expect(result).toEqual({ isCustomer: false, hasDesignHistory: true });
-    });
-
-    it('generates AI suggestions with draft context', async () => {
-      prisma.recipeSeries.findMany.mockResolvedValue([]);
-      prisma.designRecipe.findUnique.mockResolvedValue(
-        draft({
-          id: 'design-1',
-          createdBy: 'staff-1',
-          fediafDogScenario: 'ADULT_MER_110',
-          items: [
-            {
-              id: 'item-1',
-              nutritionFoodId: 'food-1',
-              weightG: 100,
-              includeInAssessment: true,
-              sortOrder: 0,
-              nutritionFood: {
-                name: 'chicken',
-                displayNameZh: '鸡胸肉',
-                nutritionData: { version: 2, tabs: { macros: {} } },
-              },
-              ingredient: { name: '鸡胸肉', type: 'FOOD' },
-            },
-          ],
-        }),
-      );
-
-      const result = await (service as any).generateAiDesignSuggestions(
-        'dog-1',
-        staffAccess,
-        'design-1',
-      );
-
-      expect(aiDesignSuggestion.generate).toHaveBeenCalledTimes(1);
-      const input = aiDesignSuggestion.generate.mock.calls[0][0];
-      expect(input.dog.name).toBe('旺财');
-      expect(input.designHistory.designCount).toBe(0);
-      expect(input.currentDraft).not.toBeNull();
-      expect(input.currentDraft.name).toBe('成犬鸡肉配方');
-      expect(input.currentDraft.items[0].name).toBe('鸡胸肉');
-      expect(result.summary).toBe('测试建议');
-    });
-
-    it('rejects AI suggestions for customer role', async () => {
-      await expect(
-        (service as any).generateAiDesignSuggestions('dog-1', {
-          userId: 'customer-1',
-          role: 'CUSTOMER',
-        }),
-      ).rejects.toThrow(BadRequestException);
     });
   });
 });

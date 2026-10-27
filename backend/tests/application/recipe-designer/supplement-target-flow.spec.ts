@@ -245,8 +245,6 @@ function makeService(prisma: any, targetProvider: any) {
     undefined,
     undefined,
     undefined,
-    undefined,
-    undefined,
     supplementTargetService,
   );
 }

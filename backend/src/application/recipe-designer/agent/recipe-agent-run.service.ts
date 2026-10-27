@@ -32,7 +32,7 @@ import type {
 
 import { PrismaService } from '../../../infrastructure/prisma.service';
 import { AgentProviderConfigService } from '../../nutrition-governance/agent-provider-config.service';
-import { RECIPE_DESIGN_AGENT_PURPOSE } from '../ai-design-suggestion.service';
+import { RECIPE_DESIGN_AGENT_PURPOSE } from '../recipe-design-agent-purpose';
 import {
   callDeepSeekTools,
   type DeepSeekToolCall,

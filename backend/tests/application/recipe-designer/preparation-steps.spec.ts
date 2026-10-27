@@ -208,8 +208,6 @@ describe('原料预处理与结构化制作步骤（Task 4）', () => {
       undefined,
       undefined,
       undefined,
-      undefined,
-      undefined,
       preparationHistory,
     );
   });

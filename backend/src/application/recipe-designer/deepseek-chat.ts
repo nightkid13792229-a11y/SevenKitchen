@@ -50,7 +50,7 @@ export interface DeepSeekChatUsage {
 
 /**
  * 调用 DeepSeek Chat Completions 并解析 JSON 输出。
- * 供 AI 设计建议相关服务复用（营养方案 / 食材推荐 / 审核 / SOP）。
+ * 供多个 AI 服务复用（食谱文案 / 命名 / 健康分析 / 原料识别等）。
  */
 export async function callDeepSeekJson(
   options: DeepSeekChatOptions,

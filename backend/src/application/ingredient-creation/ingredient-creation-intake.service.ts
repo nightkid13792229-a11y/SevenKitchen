@@ -9,7 +9,7 @@ import {
   DEFAULT_AGENT_PURPOSE,
   type DeepSeekRuntimeConfig,
 } from '../nutrition-governance/agent-provider-config.service';
-import { RECIPE_DESIGN_AGENT_PURPOSE } from '../recipe-designer/ai-design-suggestion.service';
+import { RECIPE_DESIGN_AGENT_PURPOSE } from '../recipe-designer/recipe-design-agent-purpose';
 import {
   callDeepSeekJson,
   normalizeOptionalText,

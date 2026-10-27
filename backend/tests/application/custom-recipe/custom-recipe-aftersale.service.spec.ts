@@ -1227,14 +1227,45 @@ describe('CustomRecipeAftersaleService · 代客发起调整（2026-10-27）', (
     ).rejects.toThrow(/请写一句这次要调整什么/);
   });
 
-  it('★ 已有进行中的调整时不再开一条（后台不出现两条一样的待办）', async () => {
-    const { service } = createService({
-      openAftersale: { id: 'aftersale-open' },
+  it('★ 已有进行中的调整时复用那一条，不重复建单（重复点击不报错）', async () => {
+    const { service, prisma } = createService({
+      openAftersale: {
+        id: 'aftersale-open',
+        status: 'ACCEPTED',
+        source: 'CUSTOMER',
+        deliveryBatchId: 'batch-1',
+        deliveryItemIds: ['item-1'],
+        deliveryId: null,
+      },
     });
 
-    await expect(service.createByStaff(baseInput)).rejects.toThrow(
-      /已经有一条进行中的调整/,
-    );
+    const result = await service.createByStaff(baseInput);
+
+    expect(result.id).toBe('aftersale-open');
+    expect(result.resumed).toBe(true);
+    // 不能再插一条
+    expect(prisma.customRecipeAftersale.create).not.toHaveBeenCalled();
+  });
+
+  it('复用顾客还没受理的那条时顺手受理（否则改稿会用不了）', async () => {
+    const { service, prisma } = createService({
+      openAftersale: {
+        id: 'aftersale-pending',
+        status: 'PENDING',
+        source: 'CUSTOMER',
+        deliveryBatchId: 'batch-1',
+        deliveryItemIds: ['item-1'],
+        deliveryId: null,
+      },
+    });
+
+    const result = await service.createByStaff(baseInput);
+
+    expect(result.status).toBe('ACCEPTED');
+    const arg = (prisma.customRecipeAftersale.update as jest.Mock).mock
+      .calls[0][0];
+    expect(arg.data.status).toBe('ACCEPTED');
+    expect(arg.data.handlerId).toBe('staff-1');
   });
 
   it('★ 老订单（没有订单设计槽位）：拒绝建单，并指路「重新交付」', async () => {

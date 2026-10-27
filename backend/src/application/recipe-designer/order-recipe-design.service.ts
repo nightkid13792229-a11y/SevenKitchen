@@ -410,17 +410,41 @@ export class OrderRecipeDesignService {
     /**
      * 售后改稿必须开新版本：旧 Recipe 行保持冻结，交付页继续读旧快照；
      * 只有重新交付时才把订单/批次切到新 Recipe。
+     *
+     * ## 但草稿已经是「可编辑」时不能再开修订（2026-10-28 修）
+     *
+     * 「订单设计」流程里的草稿在交付后仍是 NEEDS_REVIEW（交付的是它当时
+     * 生成的私密 Recipe 快照，草稿本身没被正式发布）。此时再调用
+     * `createRevisionDraft` 会被守卫挡下 ——「只有已发布食谱可以创建修订草稿」，
+     * 结果就是员工在后台一点「修改食谱」就报错，改稿根本走不下去。
+     *
+     * 口径：
+     *   · 草稿已 PUBLISHED（老的正式食谱）→ 照旧开修订，把线上那版冻结；
+     *   · 草稿还没发布过（本单设计的工作稿）→ **直接复用**，
+     *     它本来就是可编辑的，再复制一份只会让"当前该改哪一份"变得含糊。
      */
-    const revision = await this.recipeDesignerService.createRevisionDraft(
-      slot.designDraftId,
-      { userId: input.operatorId, role: 'ADMIN' },
-    );
+    const slotDraft = await this.prisma.designRecipe.findUnique({
+      where: { id: slot.designDraftId },
+      select: { id: true, status: true },
+    });
+    if (!slotDraft) {
+      throw new NotFoundException('设计槽位指向的草稿已不存在');
+    }
+
+    const workingDraftId = this.isPublishedDraftStatus(slotDraft.status)
+      ? (
+          await this.recipeDesignerService.createRevisionDraft(
+            slot.designDraftId,
+            { userId: input.operatorId, role: 'ADMIN' },
+          )
+        ).id
+      : slotDraft.id;
 
     await this.prisma.orderRecipeDesign.update({
       where: { id: slot.id },
       data: {
         status: OrderRecipeDesignStatus.EDITING,
-        designDraftId: revision.id,
+        designDraftId: workingDraftId,
         revisionDeliveryItemId: selectedDeliveryItemId || null,
       },
     });
@@ -430,10 +454,15 @@ export class OrderRecipeDesignService {
       orderUuid: aftersale.order.id,
       designId: slot.id,
       seriesId: slot.seriesId,
-      draftId: revision.id,
+      draftId: workingDraftId,
       deliveryItemId: selectedDeliveryItemId || null,
       recipeId: deliveryRecipeId,
     };
+  }
+
+  /** 草稿是否已是「正式发布」状态（只有这种才需要另开修订） */
+  private isPublishedDraftStatus(status: string | null | undefined): boolean {
+    return String(status ?? '').toUpperCase() === 'PUBLISHED';
   }
 
   async stageDraft(

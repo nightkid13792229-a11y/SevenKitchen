@@ -872,7 +872,11 @@ async function submitStaffAdjustment() {
     } else {
       window.open(url, '_blank');
     }
-    ElMessage.success('已发起调整，正在打开设计器');
+    ElMessage.success(
+      aftersale.resumed
+        ? '这张单已经有一条进行中的调整，正在打开设计器继续处理'
+        : '已发起调整，正在打开设计器',
+    );
     emit('refresh');
   } catch (error) {
     designerWindow?.close();

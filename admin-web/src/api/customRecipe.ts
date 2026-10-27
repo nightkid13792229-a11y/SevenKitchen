@@ -432,6 +432,8 @@ export interface StaffAftersaleResult {
   source: string;
   deliveryBatchId: string | null;
   deliveryItemIds: string[];
+  /** true = 复用了一条已经存在的进行中调整（重复点击不报错） */
+  resumed?: boolean;
 }
 
 export interface AdminAftersaleItem {

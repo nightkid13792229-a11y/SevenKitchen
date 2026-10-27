@@ -291,6 +291,8 @@ export class CustomRecipeAftersaleService {
     source: string;
     deliveryBatchId: string | null;
     deliveryItemIds: string[];
+    /** true = 复用了一条已经存在的进行中调整（重复点击不报错） */
+    resumed?: boolean;
   }> {
     const now = input.now ?? new Date();
 
@@ -316,29 +318,6 @@ export class CustomRecipeAftersaleService {
     }
 
     const trimmed = (input.description || '').trim();
-    if (!trimmed) {
-      throw new BadRequestException(
-        '请写一句这次要调整什么 —— 顾客会看到这句话',
-      );
-    }
-
-    /**
-     * 一次只能有一条进行中的调整：顾客已经提过一条时，员工应当直接处理那一条，
-     * 再开一条只会让售后列表出现两条一模一样的待办。
-     */
-    const open = await this.prisma.customRecipeAftersale.findFirst({
-      where: {
-        orderId: order.id,
-        type: 'ADJUST_RECIPE',
-        status: { in: ['PENDING', 'ACCEPTED', 'PROCESSING'] },
-      },
-      select: { id: true },
-    });
-    if (open) {
-      throw new BadRequestException(
-        '这张订单已经有一条进行中的调整，请在售后列表里打开那条继续处理',
-      );
-    }
 
     const { deliveryId, deliveryBatchId, deliveryItemIds, recipeRequests } =
       await this.resolveAftersaleTargets(order.id, {
@@ -360,6 +339,72 @@ export class CustomRecipeAftersaleService {
         select: { items: { select: { id: true }, orderBy: { id: 'asc' } } },
       });
       targetItemIds = (batch?.items ?? []).map((item) => item.id);
+    }
+
+    /**
+     * 一次只能有一条进行中的调整。**但重复点击不该报错**（2026-10-28 修）：
+     *
+     * 第一次已经建好单、后面的步骤却没走完（比如设计器打不开）时，
+     * 老板最自然的动作就是再点一次 —— 如果这里抛「已有一条进行中的调整」，
+     * 他会以为功能坏了。所以改成**复用那一条**：
+     *   · 还没受理的（顾客提的）顺手受理，处理人 = 当前操作人；
+     *   · 缺份数/批次的补齐（老记录可能是「整单」口径）；
+     *   · 说明已存在就保留原话，不覆盖顾客自己写的诉求。
+     */
+    const open = await this.prisma.customRecipeAftersale.findFirst({
+      where: {
+        orderId: order.id,
+        type: 'ADJUST_RECIPE',
+        status: { in: ['PENDING', 'ACCEPTED', 'PROCESSING'] },
+      },
+      select: {
+        id: true,
+        status: true,
+        source: true,
+        deliveryBatchId: true,
+        deliveryItemIds: true,
+        deliveryId: true,
+      },
+    });
+    if (open) {
+      const needsTargets =
+        (open.deliveryItemIds ?? []).length === 0 && targetItemIds.length > 0;
+      const needsBatch = !open.deliveryBatchId && Boolean(deliveryBatchId);
+      if (open.status === 'PENDING' || needsTargets || needsBatch) {
+        await this.prisma.customRecipeAftersale.update({
+          where: { id: open.id },
+          data: {
+            ...(open.status === 'PENDING'
+              ? {
+                  status: 'ACCEPTED',
+                  handlerId: input.operatorId,
+                  acceptedAt: now,
+                }
+              : {}),
+            ...(needsTargets ? { deliveryItemIds: targetItemIds } : {}),
+            ...(needsBatch ? { deliveryBatchId } : {}),
+          },
+        });
+      }
+      return {
+        id: open.id,
+        status: open.status === 'PENDING' ? 'ACCEPTED' : open.status,
+        statusLabel:
+          CUSTOM_RECIPE_AFTERSALE_STATUS_LABELS[
+            open.status === 'PENDING' ? 'ACCEPTED' : open.status
+          ],
+        source: open.source ?? 'STAFF',
+        deliveryBatchId: deliveryBatchId ?? open.deliveryBatchId ?? null,
+        deliveryItemIds:
+          targetItemIds.length > 0 ? targetItemIds : open.deliveryItemIds ?? [],
+        resumed: true,
+      };
+    }
+
+    if (!trimmed) {
+      throw new BadRequestException(
+        '请写一句这次要调整什么 —— 顾客会看到这句话',
+      );
     }
 
     /**
@@ -413,6 +458,7 @@ export class CustomRecipeAftersaleService {
       source: created.source,
       deliveryBatchId: created.deliveryBatchId ?? null,
       deliveryItemIds: created.deliveryItemIds ?? [],
+      resumed: false,
     };
   }
 

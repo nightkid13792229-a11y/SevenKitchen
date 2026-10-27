@@ -112,7 +112,7 @@
                   {{ aiCoverLoading ? '生成中（约 20 秒）…' : 'AI 生成封面图' }}
                 </el-button>
                 <span v-if="!aiCoverAvailable" class="ai-cover-tip">
-                  未配置：请到「AI 设置」添加 purpose=RECIPE_COVER_IMAGE、provider=ZHIPU 并启用
+                  未配置：请到「AI / Agent 配置」的「智谱封面图」填 Key 并启用
                 </span>
                 <span v-else class="ai-cover-tip">
                   按食谱名与食材生成，只预览不保存

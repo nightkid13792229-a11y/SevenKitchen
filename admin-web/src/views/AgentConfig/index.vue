@@ -88,7 +88,8 @@
           target="_blank"
           rel="noopener"
         >bigmodel.cn → API Keys</a>
-        创建；保存并启用后，重新打开「发布 / 更新」抽屉即可看到按钮变亮。
+        创建。Base URL 填 https://open.bigmodel.cn 即可（系统会自动补 /api）；
+        保存并启用后，重新打开「发布 / 更新」抽屉即可看到按钮变亮。
       </p>
 
       <el-form label-width="120px" class="zhipu-form">

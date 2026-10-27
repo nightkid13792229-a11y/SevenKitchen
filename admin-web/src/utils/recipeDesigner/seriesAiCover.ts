@@ -43,7 +43,7 @@ export function resolveSeriesAiCoverUnavailableReason(
   if (ctx.busy) return '正在保存，请稍候…'
   if (ctx.available === null) return '正在检查 AI 生图是否可用…'
   if (ctx.available === false) {
-    return 'AI 自动封面未启用：到「AI 设置」添加 purpose=RECIPE_COVER_IMAGE、provider=ZHIPU 并启用。'
+    return 'AI 自动封面未启用：到「AI / Agent 配置」的「智谱封面图」填 Key 并启用。'
   }
 
   const name = String(ctx.savedSeriesName ?? '').trim()

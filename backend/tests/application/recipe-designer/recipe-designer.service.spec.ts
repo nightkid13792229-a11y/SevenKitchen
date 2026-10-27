@@ -9868,8 +9868,18 @@ describe('RecipeDesignerService', () => {
       // 正式食谱（recipe 表）也必须一起改名。
       // 旧实现漏了这一步，导致小程序工作台（读 recipe.name）永远显示旧名，
       // 而 Web 编辑页又禁止改系列食谱的名字 —— 形成死循环。
+      //
+      // 但**已交付过的私密食谱不能改名**（2026-10-28）：
+      // 交付快照里存的是交付当时的名字，改名会让「历史订单写着鸭肉、
+      // 点开原料却是兔里脊」。重交时快照会按最新草稿重写名字，
+      // 所以"改名后重交"仍然生效。
       expect(prisma.recipe.updateMany).toHaveBeenCalledWith({
-        where: { seriesId: 'series-1', name: { not: 'ID的兔肉定制' } },
+        where: {
+          seriesId: 'series-1',
+          name: { not: 'ID的兔肉定制' },
+          deliveryItems: { none: {} },
+          deliveries: { none: {} },
+        },
         data: { name: 'ID的兔肉定制' },
       });
     });
@@ -10270,6 +10280,23 @@ describe('RecipeDesignerService', () => {
                 },
               },
             },
+          },
+          /**
+           * 2026-10-28：历史食谱要读交付快照 —— 私密 Recipe 行会被改名 /
+           * 重新生成快照就地覆盖，直接读它会「历史跟着后来改的一起变」。
+           */
+          deliveryBatches: {
+            orderBy: { version: 'desc' },
+            take: 1,
+            select: {
+              items: { select: { recipeId: true, contentSnapshot: true } },
+            },
+          },
+          deliveries: {
+            where: { replacedByDeliveryId: null },
+            orderBy: { version: 'desc' },
+            take: 1,
+            select: { recipeId: true, contentSnapshot: true },
           },
         },
       });

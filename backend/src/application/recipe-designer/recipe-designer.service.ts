@@ -4129,9 +4129,29 @@ export class RecipeDesignerService {
         });
       }
 
-      // 正式食谱：该系列下**所有版本行**一起改名，保持与系列名一致
+      /**
+       * 正式食谱：该系列下**未交付过**的版本行一起改名，保持与系列名一致。
+       *
+       * ⚠️ **已经交付过的私密食谱不改名**（2026-10-28 修）。
+       *
+       * 改名此前会连带把**已交付的定制食谱**一起改掉，于是出现
+       * 「历史订单里写着鸭肉高蛋白定制餐，点开原料却是兔里脊」——
+       * 名字跟着系列走、原料却冻结在交付那一刻，两边对不上。
+       * 交付快照（`custom_recipe_delivery_item.content_snapshot`）
+       * 里存的是交付当时真实的名字，那才是顾客手里那份的历史。
+       *
+       * 客户重新改稿重交时，`createOrUpdatePrivateRecipeSnapshot`
+       * 会把名字按最新草稿重写一次 —— 所以"改名后重交"仍然生效，
+       * 只有"改名但不重交"不会去篡改已经交出去的那一版。
+       */
       await tx.recipe.updateMany({
-        where: { seriesId, name: { not: name } },
+        where: {
+          seriesId,
+          name: { not: name },
+          // 批次交付 / 老单份交付 任一存在 = 已经交到顾客手里了
+          deliveryItems: { none: {} },
+          deliveries: { none: {} },
+        },
         data: { name },
       });
 
@@ -10445,6 +10465,34 @@ export class RecipeDesignerService {
     };
   }
 
+  /**
+   * 从交付快照里只挑出「历史食谱」要用的三样：名字、原料、宏量行。
+   *
+   * 快照整份有采购清单/制作步骤/喂食参数，几十 KB —— 历史列表不该背着它们，
+   * 这里裁完再往下传。
+   */
+  private pickDeliveredHistorySnapshot(snapshot: unknown): {
+    recipe: { name: string | null; items: unknown[] };
+    nutrition: { reportRows: unknown[] };
+  } | null {
+    if (!snapshot || typeof snapshot !== 'object') return null;
+    const record = snapshot as Record<string, any>;
+    const recipe = (record.recipe ?? null) as Record<string, any> | null;
+    if (!recipe) return null;
+    const nutrition = (record.nutrition ?? null) as Record<string, any> | null;
+    return {
+      recipe: {
+        name: typeof recipe.name === 'string' ? recipe.name : null,
+        items: Array.isArray(recipe.items) ? recipe.items : [],
+      },
+      nutrition: {
+        reportRows: Array.isArray(nutrition?.reportRows)
+          ? nutrition.reportRows
+          : [],
+      },
+    };
+  }
+
   // ============ Web 食谱设计器配套：爱犬设计洞察 ============
 
   async getDogDesignInsight(
@@ -10542,7 +10590,7 @@ export class RecipeDesignerService {
      * 一并取营养报告与食谱项（名称/示例重量），供 builder 归一化明细；
      * 问卷答案/附件等整单内容不进入洞察。
      */
-    const customRecipeHistoryOrders =
+    const rawCustomRecipeHistoryOrders =
       await this.prisma.customRecipeOrder.findMany({
         where: {
           dogId,
@@ -10568,8 +10616,54 @@ export class RecipeDesignerService {
               },
             },
           },
+          /**
+           * 交付快照（2026-10-28）：历史食谱的名字与原料以**交付那一刻**为准。
+           *
+           * 私密 Recipe 行是活行 —— 改名、重新生成私密食谱快照都会就地覆盖它，
+           * 直接读会出现「历史里写着鸭肉高蛋白定制餐，点开原料还是兔里脊」。
+           */
+          deliveryBatches: {
+            orderBy: { version: 'desc' },
+            take: 1,
+            select: {
+              items: { select: { recipeId: true, contentSnapshot: true } },
+            },
+          },
+          deliveries: {
+            where: { replacedByDeliveryId: null },
+            orderBy: { version: 'desc' },
+            take: 1,
+            select: { recipeId: true, contentSnapshot: true },
+          },
         },
       });
+
+    /**
+     * 给每张定制单挂上「交付那一刻的快照」。
+     *
+     * 只取与本单当前食谱同一条的那份快照（多份订单里其它份不在此列），
+     * 老的单份交付走 `deliveries`。
+     */
+    const customRecipeHistoryOrders = rawCustomRecipeHistoryOrders.map(
+      (order) => {
+        const batchItem = order.deliveryBatches?.[0]?.items?.find(
+          (item) => item.recipeId === order.recipe?.id,
+        );
+        const legacyDelivery =
+          !batchItem &&
+          order.deliveries?.[0] &&
+          order.deliveries[0].recipeId === order.recipe?.id
+            ? order.deliveries[0]
+            : null;
+        const snapshot = batchItem?.contentSnapshot ?? legacyDelivery?.contentSnapshot;
+        return {
+          ...order,
+          deliveredSnapshot: snapshot
+            ? this.pickDeliveredHistorySnapshot(snapshot)
+            : null,
+        };
+      },
+    );
 
     // 「最近吃过的食材」：订单至少推进到冷冻中（FREEZING），且最近 N 天内实际食用
     const recentWindowStart = new Date(

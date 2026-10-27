@@ -99,8 +99,8 @@ export class RecipeCoverImageService {
         provider: ZHIPU_PROVIDER,
       });
 
-    // 系列封面：先把食谱数据翻成英文画面描述，提示词里不再出现原始中文名/百分比
-    const visualBrief = input.ingredients?.length
+    // 系列封面：先让 DeepSeek 写整段摄影 brief，提示词里不再出现原始中文名/百分比
+    const imageBrief = input.ingredients?.length
       ? await this.visualBriefService.build(input.ingredients)
       : undefined;
 
@@ -109,7 +109,7 @@ export class RecipeCoverImageService {
       lifeStageLabels: input.lifeStageLabels,
       foodNames: input.foodNames,
       ingredients: input.ingredients,
-      visualBrief,
+      imageBrief,
     });
 
     /**

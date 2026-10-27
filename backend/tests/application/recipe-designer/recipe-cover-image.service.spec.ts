@@ -31,7 +31,9 @@ describe('RecipeCoverImageService · cover layout', () => {
   };
   const visualBriefService = {
     build: jest.fn().mockResolvedValue(
-      'a generous hero portion of pale-pink poultry breast, skin removed',
+      'A high-end editorial food photograph on a light oak table. ' +
+        'A large pale-pink duck breast in the foreground, oat groats behind; ' +
+        'soft side light, warm neutral grade.',
     ),
   };
   const originalFetch = global.fetch;
@@ -57,7 +59,9 @@ describe('RecipeCoverImageService · cover layout', () => {
     // 通过 any 构造：让 RED 是行为失败（尺寸 / 压缩），不是 TS 参数个数报错
     visualBriefService.build.mockClear();
     visualBriefService.build.mockResolvedValue(
-      'a generous hero portion of pale-pink poultry breast, skin removed',
+      'A high-end editorial food photograph on a light oak table. ' +
+        'A large pale-pink duck breast in the foreground, oat groats behind; ' +
+        'soft side light, warm neutral grade.',
     );
     service = new (RecipeCoverImageService as any)(
       configService,
@@ -129,7 +133,7 @@ describe('RecipeCoverImageService · cover layout', () => {
     expect(visualBriefService.build).toHaveBeenCalledWith(ingredients);
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(body.prompt).toContain(
-      'a generous hero portion of pale-pink poultry breast, skin removed',
+      'A high-end editorial food photograph on a light oak table',
     );
     expect(body.prompt).not.toContain('鸭胸');
     expect(body.prompt).not.toContain('100%');

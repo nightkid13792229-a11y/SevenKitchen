@@ -97,6 +97,7 @@ const READY_CHECK_LABELS = {
   PRODUCTION_STEPS: '制作步骤',
   PREPARATION: '部位 / 状态 / 预处理',
   TAGS: '健康标签',
+  ALLERGENS: '过敏原',
 } as const;
 
 /** `check_coverage` 的结果；`missing` 是真实的基础类缺口，不受确认记录影响。 */
@@ -377,7 +378,16 @@ function summarizeAssessment(view: AgentAssessmentView): string {
   if (view.deficient > 0) parts.push(`${view.deficient} 项不足`);
   if (view.excess > 0) parts.push(`${view.excess} 项超标`);
   if (view.missingData > 0) parts.push(`${view.missingData} 项缺数据`);
-  return `${parts.join('，')}。`;
+  const text = `${parts.join('，')}。`;
+  const allergenWarnings = view.allergenWarnings ?? [];
+  if (allergenWarnings.length === 0) return text;
+
+  const allergens = Array.from(
+    new Set(
+      allergenWarnings.map((warning) => warning.allergen).filter(Boolean),
+    ),
+  ).join('、');
+  return `${text} 过敏提示 ${allergenWarnings.length} 条：${allergens}；必须逐条告知用户，并替换原料或请人确认。`;
 }
 
 function buildReadyCheck(
@@ -695,6 +705,45 @@ export function createCheckTools(deps: CheckToolDeps): RecipeAgentCheckTools {
             ),
           );
         }
+      }
+
+      // ALLERGENS：配方命中的狗狗过敏原。只提示、不硬拦（与人工评估口径一致），
+      // 但交付前必须逐条确认或替换；没有评估结果时无法判断，给 WARN 让模型重跑。
+      const allergenWarnings = assessment?.allergenWarnings ?? [];
+      if (draft.context.kind !== 'ORDER') {
+        checks.push(
+          buildReadyCheck(
+            'ALLERGENS',
+            'PASS',
+            '产品线食谱未绑定狗狗，不做过敏核对。',
+          ),
+        );
+      } else if (!assessment) {
+        checks.push(
+          buildReadyCheck(
+            'ALLERGENS',
+            'WARN',
+            '还没跑评估，无法核对配料是否命中狗狗过敏原；先跑 run_assessment。',
+          ),
+        );
+      } else if (allergenWarnings.length > 0) {
+        const detail = allergenWarnings
+          .map(
+            (warning) =>
+              `${warning.itemName || warning.itemId}：${warning.allergen}`,
+          )
+          .join('、');
+        checks.push(
+          buildReadyCheck(
+            'ALLERGENS',
+            'WARN',
+            `配方命中 ${allergenWarnings.length} 条狗狗过敏原（${detail}）；交付前必须逐条确认或替换。`,
+          ),
+        );
+      } else {
+        checks.push(
+          buildReadyCheck('ALLERGENS', 'PASS', '配方没有命中狗狗的过敏原。'),
+        );
       }
 
       // MARGIN：INFO 条目只是参考；缺失的余量先补算，补不出来的如实说。

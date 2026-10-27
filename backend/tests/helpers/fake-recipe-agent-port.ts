@@ -346,6 +346,7 @@ export function fakeDraftSnapshot(
     designMode: 'CATALOG',
     orderId: null,
     orderQuantity: null,
+    context: { kind: 'PRODUCT' },
     name: '鸭肉南瓜成犬餐',
     scenario: '成犬 110ME',
     contentRevision: 4,
@@ -409,6 +410,7 @@ export function fakeAssessment(
     deficient: 0,
     excess: 0,
     missingData: 0,
+    allergenWarnings: [],
     entries: [
       {
         key: 'protein',
@@ -455,6 +457,9 @@ function cloneDraft(draft: AgentDraftSnapshot): AgentDraftSnapshot {
       ? {
           ...draft.lastAssessment,
           entries: draft.lastAssessment.entries.map((entry) => ({ ...entry })),
+          allergenWarnings: (draft.lastAssessment.allergenWarnings ?? []).map(
+            (warning) => ({ ...warning }),
+          ),
         }
       : null,
   };
@@ -464,6 +469,9 @@ function cloneAssessment(view: AgentAssessmentView): AgentAssessmentView {
   return {
     ...view,
     entries: view.entries.map((entry) => ({ ...entry })),
+    allergenWarnings: (view.allergenWarnings ?? []).map((warning) => ({
+      ...warning,
+    })),
   };
 }
 

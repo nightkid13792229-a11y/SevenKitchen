@@ -184,6 +184,29 @@ describe('check tools', () => {
     expect(result.summary).toContain('34/34');
   });
 
+  it('run_assessment 的摘要带过敏提示', async () => {
+    const port = createFakeRecipeAgentPort({
+      assessment: fakeAssessment({
+        allergenWarnings: [
+          {
+            itemId: 'item-1',
+            itemName: '鸡肝',
+            allergen: '鸡肉',
+            level: 'WARNING',
+            message: '「鸡肝」含需注意的过敏原「鸡肉」（可疑/待排查），请与顾客确认',
+          },
+        ],
+      }),
+    });
+    const tools = createCheckTools({ port, draftId: 'draft-1', tagPolicy });
+    const result = await tools.run_assessment();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.allergenWarnings).toHaveLength(1);
+    expect(result.summary).toContain('过敏');
+    expect(result.summary).toContain('鸡肉');
+  });
+
   it('run_assessment 也补算评估里缺失的余量', async () => {
     const port = createFakeRecipeAgentPort({
       assessment: fakeAssessment({
@@ -256,6 +279,38 @@ describe('check tools', () => {
     const result = await tools.check_ready();
     if (!result.ok) return;
     expect(result.data.status).toBe('BLOCKED');
+  });
+
+  it('命中过敏原时 check_ready 给 WARN，不阻断交付', async () => {
+    const port = createFakeRecipeAgentPort({
+      draft: fakeDraftSnapshot({
+        context: {
+          kind: 'ORDER',
+          order: null,
+          dog: null,
+          unavailableReason: null,
+        },
+      }),
+      assessment: fakeAssessment({
+        allergenWarnings: [
+          {
+            itemId: 'item-1',
+            itemName: '鸡肝',
+            allergen: '鸡肉',
+            level: 'WARNING',
+            message: '「鸡肝」含需注意的过敏原「鸡肉」（可疑/待排查），请与顾客确认',
+          },
+        ],
+      }),
+    });
+    const tools = createCheckTools({ port, draftId: 'draft-1', tagPolicy });
+    const result = await tools.check_ready();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const check = result.data.checks.find((c) => c.key === 'ALLERGENS');
+    expect(check?.status).toBe('WARN');
+    expect(check?.detail).toContain('鸡肉');
+    expect(result.data.status).toBe('PASS_WITH_WARNINGS');
   });
 
   it('正好 20% 余量算 PASS；19.9% 是 PASS_WITH_WARNINGS', async () => {

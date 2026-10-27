@@ -534,7 +534,7 @@ describe('RecipeAgentRunService', () => {
     expect(content).toContain('顾客文案');
   });
 
-  it('SYSTEM_PROMPT 要求食谱检索可读全库，但不含客户/订单信息', () => {
+  it('SYSTEM_PROMPT 要求食谱检索可读全库，但只读配方内容、不碰主人隐私', () => {
     const content = buildRecipeAgentSystemPrompt(
       new Date('2026-01-02T03:04:05.000Z'),
     );
@@ -543,7 +543,21 @@ describe('RecipeAgentRunService', () => {
     expect(content).toContain('未发布设计草稿');
     expect(content).toContain('顾客定制');
     expect(content).toContain('不要传字典 ID');
-    expect(content).toContain('客户/订单/狗狗/主人');
+    expect(content).toContain('只读配方内容');
+    expect(content).toContain('不要向用户索取主人姓名');
+  });
+
+  it('SYSTEM_PROMPT 按 context.kind 区分产品线/订单/顾客自助', () => {
+    const content = buildRecipeAgentSystemPrompt(
+      new Date('2026-01-02T03:04:05.000Z'),
+    );
+    expect(content).toContain('get_draft.context.kind');
+    expect(content).toContain('PRODUCT=产品线');
+    expect(content).toContain('ORDER=订单定制');
+    expect(content).toContain('OUT_OF_SCOPE');
+    expect(content).toContain('unavailableReason');
+    expect(content).toContain('allergenWarnings');
+    expect(content).toContain('顾客填写的数据');
   });
 
   it('start 只把本轮用户消息作为 user，刚追加的那条不会重复进历史 transcript', async () => {
@@ -670,6 +684,55 @@ describe('RecipeAgentRunService', () => {
     expect(sessionService.createSession).not.toHaveBeenCalled();
     expect(sessionService.appendMessage).not.toHaveBeenCalled();
     expect(sessionService.listMessages).not.toHaveBeenCalled();
+  });
+
+  it('start 拒绝“顾客自助食谱”（绑了狗狗但没有订单）', async () => {
+    const designerService = {
+      getDraft: jest.fn().mockResolvedValue({
+        draftId: DRAFT_ID,
+        customerDogId: 'dog-1',
+        series: { designMode: 'CATALOG', orderId: null },
+      }),
+    };
+    const { service, sessionService } = makeRunService({
+      handlers: {},
+      designerService,
+    });
+
+    await expect(
+      service.start({
+        draftId: DRAFT_ID,
+        actor: ACTOR,
+        message: '开始',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(sessionService.createSession).not.toHaveBeenCalled();
+    expect(sessionService.appendMessage).not.toHaveBeenCalled();
+  });
+
+  it('start 拒绝缺少订单号的订单定制草稿，不退回产品线猜', async () => {
+    const designerService = {
+      getDraft: jest.fn().mockResolvedValue({
+        draftId: DRAFT_ID,
+        customerDogId: 'dog-1',
+        series: { designMode: 'ORDER', orderId: null },
+      }),
+    };
+    const { service, sessionService } = makeRunService({
+      handlers: {},
+      designerService,
+    });
+
+    await expect(
+      service.start({
+        draftId: DRAFT_ID,
+        actor: ACTOR,
+        message: '开始',
+      }),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('订单'),
+    });
+    expect(sessionService.createSession).not.toHaveBeenCalled();
   });
 
   it('本轮自然收尾时不会把已 COMPLETED 的会话改回 WAITING_USER', async () => {

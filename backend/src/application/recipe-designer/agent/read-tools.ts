@@ -224,6 +224,25 @@ function summarizeDraft(draft: AgentDraftSnapshot): string {
     `草稿「${draft.name}」：${draft.items.length} 种原料，共 ${draft.totalWeightG}g`,
     `内容版本 v${draft.contentRevision}`,
   ];
+  const context = draft.context;
+  if (context.kind === 'ORDER') {
+    const orderNo = context.order?.orderNo;
+    const dogName = context.dog?.name;
+    const allergyCount = context.dog?.allergyRecords?.length ?? 0;
+    const details = [
+      orderNo ? `订单 ${orderNo}` : '订单资料缺失',
+      dogName ? `狗狗 ${dogName}` : null,
+      allergyCount > 0 ? `${allergyCount} 条过敏` : null,
+    ].filter(Boolean);
+    parts.push(`订单定制（${details.join('，')}）`);
+    if (context.unavailableReason) {
+      parts.push(`背景读取失败：${context.unavailableReason}`);
+    }
+  } else if (context.kind === 'OUT_OF_SCOPE') {
+    parts.push(context.reason);
+  } else {
+    parts.push('产品线设计（不带订单/狗档案）');
+  }
   const assessment = draft.lastAssessment;
   if (!assessment) {
     parts.push('还没跑评估');
@@ -269,7 +288,9 @@ function describeRecipeScope(input: {
   if (input.search) parts.push(`关键词「${input.search}」`);
   if (input.ingredientName) parts.push(`原料「${input.ingredientName}」`);
   if (input.lifeStage) parts.push(`生命阶段「${input.lifeStage}」`);
-  return parts.length > 0 ? parts.join('、') : '全部食谱（已发布、未发布草稿、顾客定制）';
+  return parts.length > 0
+    ? parts.join('、')
+    : '全部食谱（已发布、未发布草稿、顾客定制）';
 }
 
 /** 把只读来源翻成模型能直接写给人看的中文。 */

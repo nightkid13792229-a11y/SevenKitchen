@@ -667,6 +667,8 @@ describe('RecipeDesignerAgentAdapter read', () => {
     expect(draft.designMode).toBe('CATALOG');
     expect(draft.orderId).toBeNull();
     expect(draft.orderQuantity).toBeNull();
+    // 产品线：不绑订单、不绑顾客狗狗，context 只有类型。
+    expect(draft.context).toEqual({ kind: 'PRODUCT' });
     expect(draft.name).toBe('鸭肉南瓜餐');
     expect(draft.scenario).toBe('ADULT_MER_110');
     expect(draft.contentRevision).toBe(4);
@@ -692,8 +694,9 @@ describe('RecipeDesignerAgentAdapter read', () => {
     expect(draft.nutritionSummary?.fatWetPercent).toBeCloseTo(9.4013, 3);
   });
 
-  it('getDraft 把 ORDER 设计的订单上下文映射进快照', async () => {
+  it('getDraft 把 ORDER 设计的订单与狗狗背景映射进快照', async () => {
     const draft: any = serviceDraft();
+    draft.customerDogId = 'dog-1';
     draft.series = {
       id: 'series-1',
       name: '订单定制餐',
@@ -710,6 +713,53 @@ describe('RecipeDesignerAgentAdapter read', () => {
     };
     const prisma = {
       recipeSeries: { findUnique: jest.fn().mockResolvedValue(null) },
+      customRecipeOrder: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'order-2026-001',
+          orderId: 'CR202610270001',
+          dogId: 'dog-1',
+          status: 'IN_PROGRESS',
+          recipeQuantity: 3,
+          targetGoal: 'MAINTAIN',
+          needsHealthManagement: false,
+          additionalNotes: '食谱设计要高蛋白。',
+          allergies: [],
+          allergyText: '鸡肉、牛肉',
+          medicalConditions: ['PANCREATITIS'],
+          preferredIngredients: ['兔肉'],
+          dislikedIngredients: ['南瓜'],
+          currentFoodMain: 'HOMEMADE',
+          currentFoodOther: null,
+          changeReasons: ['MEDICAL'],
+          changeReasonOther: null,
+          stomachConditions: ['NORMAL'],
+          stomachOther: null,
+          allergyStatus: 'HAS_ALLERGY',
+          requestedProteinCodes: ['RABBIT'],
+        }),
+      },
+      dog: {
+        findUnique: jest.fn().mockResolvedValue({
+          name: 'ID',
+          breedId: 'breed-1',
+          birthday: new Date('2025-08-15T00:00:00.000Z'),
+          gender: 'FEMALE',
+          isNeutered: false,
+          currentWeightKg: 8.2,
+          allergyRecords: [
+            { allergen: '鸡肉', certainty: 'SUSPECTED', source: 'OWNER' },
+            { allergen: '牛肉', certainty: 'CONFIRMED', source: 'VET' },
+          ],
+          allergyFoods: null,
+          pickyFoods: '不吃南瓜',
+          preferredFoods: '兔肉',
+          medicalHistory: '胰腺炎恢复期',
+          customBreedName: null,
+        }),
+      },
+      dogBreed: {
+        findUnique: jest.fn().mockResolvedValue({ name: '柯基' }),
+      },
     };
 
     const snapshot = await createAdapter(service, prisma).getDraft('draft-1');
@@ -717,6 +767,104 @@ describe('RecipeDesignerAgentAdapter read', () => {
     expect(snapshot.designMode).toBe('ORDER');
     expect(snapshot.orderId).toBe('order-2026-001');
     expect(snapshot.orderQuantity).toBe(3);
+    expect(snapshot.context).toMatchObject({
+      kind: 'ORDER',
+      unavailableReason: null,
+      order: {
+        orderNo: 'CR202610270001',
+        status: 'IN_PROGRESS',
+        quantity: 3,
+        targetGoal: 'MAINTAIN',
+        needsHealthManagement: false,
+        notes: '食谱设计要高蛋白。',
+        allergies: [],
+        allergyText: '鸡肉、牛肉',
+        medicalConditions: ['PANCREATITIS'],
+        preferredIngredients: ['兔肉'],
+        dislikedIngredients: ['南瓜'],
+        currentFoodMain: 'HOMEMADE',
+        currentFoodOther: null,
+        changeReasons: ['MEDICAL'],
+        changeReasonOther: null,
+        stomachConditions: ['NORMAL'],
+        stomachOther: null,
+        allergyStatus: 'HAS_ALLERGY',
+        requestedProteinCodes: ['RABBIT'],
+      },
+      dog: {
+        name: 'ID',
+        breedName: '柯基',
+        birthday: '2025-08-15',
+        gender: 'FEMALE',
+        neutered: false,
+        currentWeightKg: 8.2,
+        allergyRecords: [
+          { allergen: '鸡肉', certainty: 'SUSPECTED', source: 'OWNER' },
+          { allergen: '牛肉', certainty: 'CONFIRMED', source: 'VET' },
+        ],
+        allergyFoods: null,
+        pickyFoods: '不吃南瓜',
+        preferredFoods: '兔肉',
+        medicalHistory: '胰腺炎恢复期',
+      },
+    });
+    // 只给设计必需字段：订单金额、主人信息、附件不进模型上下文。
+    expect(JSON.stringify(snapshot.context)).not.toContain('ownerId');
+    expect(JSON.stringify(snapshot.context)).not.toContain('amount');
+    expect(JSON.stringify(snapshot.context)).not.toContain('attachments');
+  });
+
+  it('getDraft 对“绑了顾客狗狗但没有订单”的顾客自助食谱标记为不在范围', async () => {
+    const draft: any = serviceDraft();
+    draft.customerDogId = 'dog-1';
+    const service = {
+      getDraft: jest.fn().mockResolvedValue(draft),
+      getDraftProductionSteps: jest
+        .fn()
+        .mockResolvedValue({ draftId: 'draft-1', productionSteps: [] }),
+    };
+    const prisma = {
+      recipeSeries: { findUnique: jest.fn().mockResolvedValue(null) },
+    };
+
+    const snapshot = await createAdapter(service, prisma).getDraft('draft-1');
+
+    expect(snapshot.context).toMatchObject({ kind: 'OUT_OF_SCOPE' });
+    expect((snapshot.context as any).reason).toContain('顾客自助食谱');
+    // 不在范围时不去查订单/狗狗。
+    expect((prisma as any).customRecipeOrder).toBeUndefined();
+  });
+
+  it('getDraft 在 ORDER 草稿的订单读不到时给出明确原因，不猜', async () => {
+    const draft: any = serviceDraft();
+    draft.customerDogId = 'dog-1';
+    draft.series = {
+      id: 'series-1',
+      name: '订单定制餐',
+      referenceDogId: 'dog-1',
+      designMode: 'ORDER',
+      orderId: 'order-2026-001',
+      orderQuantity: 3,
+    };
+    const service = {
+      getDraft: jest.fn().mockResolvedValue(draft),
+      getDraftProductionSteps: jest
+        .fn()
+        .mockResolvedValue({ draftId: 'draft-1', productionSteps: [] }),
+    };
+    const prisma = {
+      recipeSeries: { findUnique: jest.fn().mockResolvedValue(null) },
+      customRecipeOrder: { findUnique: jest.fn().mockResolvedValue(null) },
+    };
+
+    const snapshot = await createAdapter(service, prisma).getDraft('draft-1');
+
+    expect(snapshot.context).toMatchObject({
+      kind: 'ORDER',
+      order: null,
+      dog: null,
+    });
+    expect((snapshot.context as any).unavailableReason).toContain('订单');
   });
 
   it('getDraft 在没有系列时把设计上下文设为 null', async () => {
@@ -736,6 +884,7 @@ describe('RecipeDesignerAgentAdapter read', () => {
     expect(snapshot.designMode).toBeNull();
     expect(snapshot.orderId).toBeNull();
     expect(snapshot.orderQuantity).toBeNull();
+    expect(snapshot.context).toEqual({ kind: 'PRODUCT' });
   });
 
   it('animalSpecies 只从蛋白/内脏类识别，果蔬菌不误判', async () => {

@@ -6856,7 +6856,10 @@ export class RecipeDesignerService {
       );
     }
 
-    const assessmentData = this.buildAssessmentUpdateData(result);
+    const assessmentData = this.buildAssessmentUpdateData(
+      result,
+      allergenWarnings,
+    );
     await this.prisma.designRecipe.updateMany({
       where: { id, contentRevision: draft.contentRevision },
       data: {
@@ -6883,6 +6886,7 @@ export class RecipeDesignerService {
   ): Promise<{
     contentRevision: number;
     assessment: DesignRecipeAssessmentResult;
+    allergenWarnings: DraftAllergenWarning[];
   }> {
     const draft = await this.getDraft(id, access);
     if (this.isPublishedDraft(draft)) {
@@ -6892,17 +6896,22 @@ export class RecipeDesignerService {
       draft.fediafDogScenario,
     );
     const result = await this.assessLoadedDraft(draft, targets);
+    const allergenWarnings = await this.buildDraftAllergenWarnings(draft);
     const { count } = await this.prisma.designRecipe.updateMany({
       where: { id, contentRevision: draft.contentRevision },
       data: {
-        ...this.buildAssessmentUpdateData(result),
+        ...this.buildAssessmentUpdateData(result, allergenWarnings),
         assessmentContentRevision: draft.contentRevision,
       },
     });
     if (count === 0) {
       throw new ConflictException('草稿在评估期间被修改，请重新评估');
     }
-    return { contentRevision: draft.contentRevision, assessment: result };
+    return {
+      contentRevision: draft.contentRevision,
+      assessment: result,
+      allergenWarnings,
+    };
   }
 
   /**
@@ -9757,7 +9766,10 @@ export class RecipeDesignerService {
     );
   }
 
-  private buildAssessmentUpdateData(result: DesignRecipeAssessmentResult) {
+  private buildAssessmentUpdateData(
+    result: DesignRecipeAssessmentResult,
+    allergenWarnings: DraftAllergenWarning[] = [],
+  ) {
     const missingDataReport = result.groupedEntries
       .filter((entry) => entry.status === 'MISSING_DATA')
       .map((entry) => ({
@@ -9778,6 +9790,9 @@ export class RecipeDesignerService {
         summary: result.summary,
         rawSummary: result.rawSummary,
         rawEntryCount: result.entries.length,
+        // 过敏提示随评估一起落库：Agent 的 get_draft.lastAssessment / check_ready
+        // 都从这里读，不需要每次重新跑词表匹配。
+        allergenWarnings,
       }),
       missingDataReport: this.toJsonValue(missingDataReport),
       isCompliant,

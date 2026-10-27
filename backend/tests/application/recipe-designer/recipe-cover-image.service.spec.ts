@@ -29,6 +29,11 @@ describe('RecipeCoverImageService · cover layout', () => {
       filename: 'ai-cover-miniapp-cover.jpg',
     }),
   };
+  const visualBriefService = {
+    build: jest.fn().mockResolvedValue(
+      'a generous hero portion of pale-pink poultry breast, skin removed',
+    ),
+  };
   const originalFetch = global.fetch;
   let fetchMock: jest.Mock;
   let service: RecipeCoverImageService;
@@ -50,10 +55,15 @@ describe('RecipeCoverImageService · cover layout', () => {
       });
     global.fetch = fetchMock as unknown as typeof fetch;
     // 通过 any 构造：让 RED 是行为失败（尺寸 / 压缩），不是 TS 参数个数报错
+    visualBriefService.build.mockClear();
+    visualBriefService.build.mockResolvedValue(
+      'a generous hero portion of pale-pink poultry breast, skin removed',
+    );
     service = new (RecipeCoverImageService as any)(
       configService,
       cosService,
       imageOptimizationService,
+      visualBriefService,
     );
   });
 
@@ -69,6 +79,8 @@ describe('RecipeCoverImageService · cover layout', () => {
     );
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(body.size).toBe('1280x1280');
+    expect(body.watermark_enabled).toBe(false);
+    expect(visualBriefService.build).not.toHaveBeenCalled();
     expect(imageOptimizationService.optimizeForUpload).not.toHaveBeenCalled();
     expect(cosService.uploadImage).toHaveBeenCalledWith(
       Buffer.from([1, 2, 3]),
@@ -86,6 +98,8 @@ describe('RecipeCoverImageService · cover layout', () => {
 
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(body.size).toBe('1728x960');
+    expect(body.watermark_enabled).toBe(false);
+    expect(visualBriefService.build).not.toHaveBeenCalled();
     expect(imageOptimizationService.optimizeForUpload).toHaveBeenCalledWith(
       Buffer.from([1, 2, 3]),
       'recipe-cover',
@@ -95,5 +109,30 @@ describe('RecipeCoverImageService · cover layout', () => {
       'ai-cover-miniapp-cover.jpg',
       'recipes/covers',
     );
+  });
+
+  it('有食材时先翻成画面描述：提示词不含原始中文名/百分比，水印关闭', async () => {
+    const ingredients = [
+      {
+        name: '鸭胸',
+        preparationMethod: '鸭胸/熟/去皮',
+        ratioPercent: 100,
+      },
+    ];
+
+    await service.generate({
+      recipeName: '鸭肉南瓜燕麦',
+      layout: 'COVER_16_9',
+      ingredients,
+    });
+
+    expect(visualBriefService.build).toHaveBeenCalledWith(ingredients);
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.prompt).toContain(
+      'a generous hero portion of pale-pink poultry breast, skin removed',
+    );
+    expect(body.prompt).not.toContain('鸭胸');
+    expect(body.prompt).not.toContain('100%');
+    expect(body.watermark_enabled).toBe(false);
   });
 });

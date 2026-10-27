@@ -195,7 +195,41 @@ git commit -m "feat(series-ai-cover): render 16:9 cover without changing the squ
 
 - [ ] **Step 1: 写失败测试**
 
-测试用 mock：`prisma.recipeSeries.findUnique/update`、`prisma.recipe.count`、`prisma.designRecipe.findMany`、`coverImageService.isAvailable/generate`。
+测试用 mock：
+
+```ts
+const series = (overrides: Record<string, unknown> = {}) => ({
+  id: 'series-1',
+  name: '鸡肉南瓜餐',
+  status: 'ACTIVE',
+  deletedAt: null,
+  designMode: 'CATALOG',
+  businessStatus: 'DRAFT',
+  ...overrides,
+});
+
+const prisma = {
+  recipeSeries: { findUnique: jest.fn(), update: jest.fn() },
+  recipe: { count: jest.fn() },
+  designRecipe: { findMany: jest.fn() },
+};
+const coverImageService = { isAvailable: jest.fn(), generate: jest.fn() };
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  prisma.recipeSeries.findUnique.mockResolvedValue(series());
+  prisma.recipe.count.mockResolvedValue(0);
+  prisma.designRecipe.findMany.mockResolvedValue([]);
+  prisma.recipeSeries.update.mockResolvedValue(series());
+  coverImageService.isAvailable.mockResolvedValue(true);
+  coverImageService.generate.mockResolvedValue({
+    url: 'https://cos.example.com/ai.jpg',
+    provider: 'ZHIPU',
+    model: 'glm-image',
+  });
+  service = new SeriesCoverImageService(prisma as any, coverImageService as any);
+});
+```
 
 必须覆盖：
 

@@ -11,9 +11,9 @@ import { isTemporarySeriesName } from './seriesName'
  * 抽屉只负责把状态喂进来、把结果渲染出去。
  */
 
-/** 生图约 20–40 秒；后端给智谱 90 秒，前端留 120 秒兜底 */
-export const SERIES_AI_COVER_TIMEOUT_MS = 120_000
-export const SERIES_AI_COVER_TIMEOUT_MESSAGE = '生成超时（120 秒），请点重试'
+/** glm-image 高峰实测 2–2.5 分钟；后端等 200 秒，前端留 240 秒兜底 */
+export const SERIES_AI_COVER_TIMEOUT_MS = 240_000
+export const SERIES_AI_COVER_TIMEOUT_MESSAGE = '生成超时（240 秒），请点重试'
 
 export interface SeriesAiCoverContext {
   isAdmin: boolean

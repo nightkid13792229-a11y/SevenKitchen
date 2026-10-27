@@ -98,7 +98,7 @@ export class RecipeCoverVisualBriefService {
       );
     }
 
-    const brief = sanitizeBrief(parsed.brief);
+    let brief = sanitizeBrief(parsed.brief);
     if (!brief) {
       throw new BadRequestException(
         '封面画面描述生成失败：文本模型没有返回摄影描述',
@@ -133,6 +133,19 @@ export class RecipeCoverVisualBriefService {
       );
     }
 
+    // DeepSeek 的 brief 有时只写 6/10：结构化清单里有、正文没写到的，
+    // 直接补进最终 prompt；否则生图模型只看正文，永远不会画全。
+    const missingVisuals = structured
+      .map((item) =>
+        sanitizeBrief((item as { visual?: unknown })?.visual),
+      )
+      .filter((visual) => visual && !coversVisual(brief, visual));
+    if (missingVisuals.length > 0) {
+      brief = sanitizeBrief(
+        `${brief} The scene also includes ${missingVisuals.join('; ')}.`,
+      );
+    }
+
     this.cache.set(cacheKey, brief);
     this.logger.log(`[cover-brief] ${brief}`);
     return brief;
@@ -152,6 +165,26 @@ export function buildRecipeCoverVisualSystemPrompt(): string {
     'Keep the brief under 90 words.',
     'Return JSON only: {"brief":"...","ingredients":[{"index":0,"visual":"...","placement":"..."}],"missing":[]}',
   ].join(' ');
+}
+
+const VISUAL_STOPWORDS = new Set([
+  'the', 'and', 'with', 'fresh', 'raw', 'large', 'small', 'pale', 'pink',
+  'deep', 'red', 'orange', 'green', 'brown', 'golden', 'some', 'pieces',
+  'slices', 'cubes', 'florets', 'wedges', 'mound', 'dish', 'glass', 'soft',
+  'light', 'thin', 'thick', 'whole', 'cut', 'cooked', 'prepped', 'a', 'of',
+  'in', 'on', 'to', 'for', 'its', 'their', 'his', 'her', 'as', 'at', 'by',
+  'or', 'an', 'is', 'are', 'premium', 'editorial',
+]);
+
+/** brief 是否已经覆盖这条食材：外观描述里的关键词全部出现才算覆盖 */
+function coversVisual(brief: string, visual: string): boolean {
+  const words = visual
+    .toLowerCase()
+    .split(/[^a-z]+/)
+    .filter((word) => word.length >= 3 && !VISUAL_STOPWORDS.has(word));
+  if (words.length === 0) return true;
+  const text = brief.toLowerCase();
+  return words.every((word) => text.includes(word));
 }
 
 function sanitizeBrief(value: unknown): string {

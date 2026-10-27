@@ -66,7 +66,10 @@ import {
   type NutritionValidationAgentReview,
   type NutritionCandidateReviewProvider,
 } from './nutrition-candidate-review.provider';
-import { AgentProviderConfigService } from './agent-provider-config.service';
+import {
+  AgentProviderConfigService,
+  type UpdateZhipuImageSettingsInput,
+} from './agent-provider-config.service';
 import { TrustedNutritionWebSearchService } from './trusted-nutrition-web-search.service';
 import {
   mapCfctRowToSourceInput,
@@ -1160,6 +1163,24 @@ export class NutritionGovernanceService {
       userId,
       purpose,
     );
+  }
+
+  async getZhipuImageSettings() {
+    return this.getAgentProviderConfigService().getZhipuImageSettings();
+  }
+
+  async updateZhipuImageSettings(
+    input: UpdateZhipuImageSettingsInput,
+    userId: string,
+  ) {
+    return this.getAgentProviderConfigService().updateZhipuImageSettings(
+      input,
+      userId,
+    );
+  }
+
+  async testZhipuImageSettings() {
+    return this.getAgentProviderConfigService().testZhipuImageSettings();
   }
 
   async testAgentSettings(purpose?: string) {

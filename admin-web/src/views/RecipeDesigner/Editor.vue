@@ -827,12 +827,38 @@ function applyOrderByIds(ids: string[]) {
   items.value = next
 }
 
-/** 撤销删除后服务器上原料已不存在时，用原信息重新创建原料（生成新 id 并替换本地引用） */
+/**
+ * 撤销删除后服务器上原料已不存在时，用原信息重新创建原料（生成新 id 并替换本地引用）。
+ *
+ * ⚠️ 补剂目标必须**连原值一起带回去**（2026-10-28）。
+ * 目标浓度是「本份提供量 ÷ 配方总重 × 1000」，而总重取的是上一次评估回写的缓存；
+ * 删除/撤销后它可能明显偏小，重算会把目标放大几十上百倍
+ * （实测：海藻粉碘目标 144,834 μg，正常应 ~918）。
+ */
 async function recreateItem(snapshot: DesignerItem) {
   if (!draft.value) return
   const supplementTargets = normalizeSupplementTargetDefinitions(
     snapshot.supplementTargets
   )
+  /** 旧目标值（落库口径是 `targetValue`，本地装饰用 `targetValuePerKg`） */
+  const storedTargetValues = new Map<string, number>()
+  if (Array.isArray(snapshot.supplementTargets)) {
+    for (const raw of snapshot.supplementTargets) {
+      if (!raw || typeof raw !== 'object') continue
+      const record = raw as {
+        fieldPath?: unknown
+        targetValue?: unknown
+        targetValuePerKg?: unknown
+      }
+      const fieldPath =
+        typeof record.fieldPath === 'string' ? record.fieldPath.trim() : ''
+      if (!fieldPath) continue
+      const value = Number(record.targetValue ?? record.targetValuePerKg)
+      if (Number.isFinite(value) && value > 0) {
+        storedTargetValues.set(fieldPath, value)
+      }
+    }
+  }
   const payload = {
     ingredientId: snapshot.ingredientId ?? snapshot.ingredient?.id,
     nutritionFoodId: snapshot.nutritionFoodId ?? '',
@@ -846,7 +872,10 @@ async function recreateItem(snapshot: DesignerItem) {
           supplementTargets: supplementTargets.map((target) => ({
             fieldPath: target.fieldPath,
             label: target.label,
-            unit: target.unit
+            unit: target.unit,
+            ...(storedTargetValues.has(target.fieldPath)
+              ? { targetValue: storedTargetValues.get(target.fieldPath) }
+              : {})
           }))
         }
       : {})

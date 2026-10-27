@@ -90,7 +90,7 @@
         <div class="detail-row">
           <span>当前含量</span>
           <b>{{ detailCurrentText }}</b>
-          <span v-if="detailTotalG != null" class="detail-sub">（全配方合计 {{ detailTotalG }} 克）</span>
+          <span v-if="detailTotalG != null" class="detail-sub">（全配方合计 {{ detailTotalText }}）</span>
         </div>
         <div class="detail-row">
           <span>标准范围</span>
@@ -167,7 +167,7 @@
             <tr class="total-row">
               <td>合计</td>
               <td>{{ detailTotalWeightG != null ? detailTotalWeightG + ' 克' : '—' }}</td>
-              <td>{{ detailTotalG != null ? detailTotalG + ' 克' : '—' }}</td>
+              <td>{{ detailTotalText ?? '—' }}</td>
               <td>100%</td>
             </tr>
           </tbody>
@@ -243,6 +243,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, Search } from '@element-plus/icons-vue'
 import type { DesignRecipeAssessmentResult, GroupedAssessmentEntry } from '@/utils/recipeDesigner/assessmentTypes'
 import type { AssessmentNutrientContributor } from '@/utils/recipeDesigner/assessmentTypes'
+import { formatNutrientAmount } from '@/utils/nutrientAmount'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import { buildAssessmentBar } from '@/utils/recipeDesigner/assessmentBar'
 import type {
@@ -415,7 +416,11 @@ function amountText(entry: GroupedAssessmentEntry): string {
   }
   const unit = entry.unit || ''
   const basis = basisLabel(entry)
-  return `${Number(entry.currentValue).toFixed(1)} ${unit}${basis ? '/' + basis : ''}`
+  /**
+   * 与分项明细同一套精度：微量的营养素（镁等）按 1 位小数会显示成 0.0，
+   * 这里也交给 `formatNutrientAmount`。
+   */
+  return `${formatNutrientAmount(entry.currentValue, unit)}${basis ? '/' + basis : ''}`
 }
 
 function rangeText(entry: GroupedAssessmentEntry): string {
@@ -589,7 +594,14 @@ const detailTotalG = computed<number | null>(() => {
   const contributors = activeEntry.value?.contributors ?? []
   if (!contributors.length) return null
   const total = contributors.reduce((sum, c) => sum + (typeof c.amount === 'number' ? c.amount : 0), 0)
-  return Number(total.toFixed(1))
+  return total
+})
+
+/** 合计文案：与分项同一套精度，避免「分项 0.065、合计 0.1」对不上 */
+const detailTotalText = computed(() => {
+  const entry = activeEntry.value
+  if (!entry || detailTotalG.value == null) return null
+  return formatNutrientAmount(detailTotalG.value, entry.unit)
 })
 
 /** 全配方原料用量合计（克） */
@@ -708,10 +720,11 @@ const detailContributors = computed<DetailContributor[]>(() => {
       dirty:
         draftWeight != null && weightG != null && Math.abs(draftWeight - weightG) >= 0.05,
       updating: updatingWeightItemId.value === contributor.itemId,
-      amountText:
-        amount == null
-          ? '无数据'
-          : `${Number(amount).toFixed(1)} ${contributor.unit || ''}`,
+      /**
+       * 用统一的营养素格式化：镁这类单份 0.005–0.03 g 的项，
+       * 原来的 `toFixed(1)` 会把整列压成「0.0」。
+       */
+      amountText: formatNutrientAmount(amount, contributor.unit),
       pctText: pct == null ? '—' : `${Number(pct).toFixed(1)}%`,
       pctWidth: pct == null ? 0 : Math.min(Math.max(pct, 0), 100)
     }

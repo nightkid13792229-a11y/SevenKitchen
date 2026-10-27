@@ -208,12 +208,22 @@ export function useRecipeDesignerAssessment() {
     await runAssess(scenario, draftId, items)
   }
 
+  /**
+   * 这一次「补档案」是否已经试过。
+   *
+   * 撤销删除后原料会拿到**新的服务器 id**（删除 + 重建），按 id 索引的营养档案
+   * 一时间对不上；不补就会把「没有档案」的原料发去评估，面板整片变成
+   * 缺数据/空值（2026-10-27 实测：撤销后 1–2 秒内的评估结果就是这样）。
+   * 只补一次，避免 refreshInputs 触发 loading 监听 → 再评估 → 再补的循环。
+   */
+  let profileRefreshAttempted = false
+
   async function runAssess(
     scenario: FediafDogScenario,
     draftId: string,
     items: DesignerItem[]
   ): Promise<void> {
-    const engineItems = buildEngineItems(draftId, items).filter(
+    let engineItems = buildEngineItems(draftId, items).filter(
       (item) => item.weightG > 0
     )
 
@@ -224,8 +234,30 @@ export function useRecipeDesignerAssessment() {
     if (engineItems.length === 0) {
       assessment.value = null
       assessError.value = null
+      profileRefreshAttempted = false
       return
     }
+
+    /**
+     * 档案不齐（刚撤销/新增，服务端还没把新 id 的档案给回来）：
+     * 先补一次档案再算，**绝不拿半份档案去评估** —— 那会把面板刷成一片
+     * 「缺数据」，用户以为配方算不出来了。
+     */
+    if (engineItems.some((item) => !item.nutritionProfile)) {
+      if (!profileRefreshAttempted) {
+        profileRefreshAttempted = true
+        await refreshInputs(draftId)
+        engineItems = buildEngineItems(draftId, items).filter(
+          (item) => item.weightG > 0
+        )
+      }
+      if (engineItems.some((item) => !item.nutritionProfile)) {
+        // 还是缺：保留上一次的结果，等下一次编辑或档案回来再算
+        assessError.value = '营养档案还在更新，稍后会自动重算'
+        return
+      }
+    }
+    profileRefreshAttempted = false
 
     const seq = ++requestSeq
     assessing.value = true

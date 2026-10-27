@@ -8338,6 +8338,17 @@ export class RecipeDesignerService {
     const targetService = this.requireSupplementTargetService();
 
     let definitions: SupplementTargetDefinition[];
+    /**
+     * 客户端带回的**原目标值**（撤销删除重建原料时用）。
+     *
+     * 目标浓度 = 本份提供的营养素 ÷ 配方总重 × 1000。总重取的是草稿上一次
+     * 评估回写的缓存，删除/撤销之后可能明显偏小 —— 分母一小，目标就被
+     * 放大几十上百倍（2026-10-27 实测：碘目标被写成 144,834 μg，应为 ~918）。
+     * 所以「原样恢复」时直接沿用原值，不再重算。
+     */
+    const presetTargetValues = this.readPresetSupplementTargetValues(
+      input.explicitTargets,
+    );
     if (input.explicitTargets !== undefined) {
       if (input.explicitTargets === null) {
         throw new BadRequestException(
@@ -8390,6 +8401,24 @@ export class RecipeDesignerService {
       );
     }
 
+    /**
+     * 所有目标都带着原值（= 原样恢复）时，直接用原值，不重算。
+     * 部分带值时仍然整体重算，避免同一条记录里一半是旧值一半是新值。
+     */
+    const allPreset =
+      definitions.length > 0 &&
+      definitions.every((definition) =>
+        presetTargetValues.has(definition.fieldPath),
+      );
+    if (allPreset) {
+      return definitions.map((definition) =>
+        this.toDesignSupplementTarget(
+          definition,
+          presetTargetValues.get(definition.fieldPath) ?? null,
+        ),
+      );
+    }
+
     const computed = targetService.computeTargets(
       profile,
       definitions,
@@ -8399,6 +8428,34 @@ export class RecipeDesignerService {
     return computed.map((target) =>
       this.toDesignSupplementTarget(target, target.targetValuePerKg),
     );
+  }
+
+  /**
+   * 从显式目标里读出「客户端带回来的原值」。
+   *
+   * ⚠️ 只认 `targetValue`（**落库口径**，撤销重建时原样带回来），
+   * **不认 `targetValuePerKg`**（客户端自己算的浓度，历史规则明确忽略 ——
+   * 浓度必须由服务端按当前配方总重算，不能被前端指定）。
+   *
+   * 只接受有限正数：0 或空值等于没有，不能当成「原值就是 0」。
+   */
+  private readPresetSupplementTargetValues(
+    explicitTargets: unknown,
+  ): Map<string, number> {
+    const presets = new Map<string, number>();
+    if (!Array.isArray(explicitTargets)) return presets;
+    for (const raw of explicitTargets) {
+      if (!raw || typeof raw !== 'object') continue;
+      const record = raw as Record<string, unknown>;
+      const fieldPath =
+        typeof record.fieldPath === 'string' ? record.fieldPath.trim() : '';
+      if (!fieldPath) continue;
+      const value = Number(record.targetValue);
+      if (Number.isFinite(value) && value > 0) {
+        presets.set(fieldPath, value);
+      }
+    }
+    return presets;
   }
 
   private resolveSupplementTargetTotalWeightG(input: {

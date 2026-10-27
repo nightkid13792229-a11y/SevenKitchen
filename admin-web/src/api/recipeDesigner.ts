@@ -3,6 +3,10 @@
  * 对应 backend /api/v1/recipe-designer/*
  */
 import api from './index'
+import {
+  SERIES_AI_COVER_TIMEOUT_MESSAGE,
+  SERIES_AI_COVER_TIMEOUT_MS,
+} from '@/utils/recipeDesigner/seriesAiCover'
 import type {
   AiDesignSuggestion,
   AssessmentTarget,
@@ -26,6 +30,7 @@ import type {
   RecipeDesignerSeriesCard,
   RecipeDesignerSeriesStatusFilter,
   RecipeReviewResult,
+  SeriesAiCoverResult,
   SeriesReleaseReadiness,
   SeriesReleaseResult,
   SeriesReleaseSettingsSnapshot,
@@ -174,6 +179,21 @@ export const recipeDesignerApi = {
    */
   unpublishSeries: (seriesId: string): Promise<SeriesUnpublishResult> =>
     api.post(`/recipe-designer/series/${seriesId}/unpublish`),
+  /**
+   * AI 生成产品线封面（2026-10-27，仅管理员）。
+   *
+   * `save` 由前端按「封面为空 + 系列未上线」决定；后端仍会兜底：
+   * 已上线系列即使传 true 也不落库（响应 saved=false，前端转预览）。
+   * 生图约 20–40 秒，超时放宽到 120 秒，避免默认 30 秒误判失败。
+   */
+  generateSeriesAiCover: (
+    seriesId: string,
+    payload: { save?: boolean } = {},
+  ): Promise<SeriesAiCoverResult> =>
+    api.post(`/admin/recipe-series/${seriesId}/ai-cover`, payload, {
+      timeout: SERIES_AI_COVER_TIMEOUT_MS,
+      timeoutErrorMessage: SERIES_AI_COVER_TIMEOUT_MESSAGE,
+    }),
 
   // 草稿
   getDraft: (draftId: string): Promise<DesignRecipeDraftDetail> =>

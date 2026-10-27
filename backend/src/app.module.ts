@@ -54,6 +54,7 @@ import { PlatformOptionsService } from './application/platform-options/platform-
 import { RecipeTaxonomyService } from './application/recipe-taxonomy/recipe-taxonomy.service';
 import { RecipeNamingService } from './application/recipe-designer/recipe-naming.service';
 import { AdminRecipeTaxonomyController } from './interfaces/controllers/admin-recipe-taxonomy.controller';
+import { AdminRecipeSeriesCoverController } from './interfaces/controllers/admin-recipe-series-cover.controller';
 import { CustomRecipeViewService } from './application/custom-recipe/custom-recipe-view.service';
 import { OrderDesignSubmitService } from './application/custom-recipe/order-design-submit.service';
 import { CustomRecipeDeliveryService } from './application/custom-recipe/custom-recipe-delivery.service';
@@ -92,6 +93,7 @@ import { IngredientPreparationHistoryService } from './application/recipe/ingred
 import { RecipeService } from './application/recipe/recipe.service';
 import { CoverImageService } from './application/recipe/cover-image.service';
 import { RecipeCoverImageService } from './application/recipe-designer/recipe-cover-image.service';
+import { SeriesCoverImageService } from './application/recipe-designer/series-cover-image.service';
 import { InMemoryAddressRepository } from './infrastructure/repositories/in-memory-address.repository';
 import { PrismaAddressRepository } from './infrastructure/repositories/prisma-address.repository';
 import { RECIPE_REPOSITORY_TOKEN } from './interfaces/controllers/recipes.controller';
@@ -389,6 +391,7 @@ validatePrismaConfig();
     PlatformOptionsController,
     AdminPlatformOptionsController,
     AdminRecipeTaxonomyController,
+    AdminRecipeSeriesCoverController,
     DogsController,
     RecipesController,
     HealthController,
@@ -561,6 +564,7 @@ validatePrismaConfig();
     IngredientPreparationHistoryService,
     CoverImageService,
     RecipeCoverImageService,
+    SeriesCoverImageService,
     AddressService,
     {
       provide: ADDRESS_REPOSITORY,

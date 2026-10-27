@@ -512,6 +512,18 @@ export interface SeriesUnpublishResult {
   unpublishedAt: string
 }
 
+/** AI 生成系列封面的结果（2026-10-27，POST /admin/recipe-series/:id/ai-cover） */
+export interface SeriesAiCoverResult {
+  /** 一定是 COS 地址（已转存），不是智谱临时链接 */
+  url: string
+  provider: string
+  model: string
+  /** true = 已写入系列；false = 只返回预览（已上线系列永远是 false） */
+  saved: boolean
+  /** 实际喂给提示词的食材（最多 5 个） */
+  foodNames: string[]
+}
+
 /** 原料预处理来源：AUTO = 系统带出；MANUAL = 人工修改 */
 
 export interface DesignerItem {

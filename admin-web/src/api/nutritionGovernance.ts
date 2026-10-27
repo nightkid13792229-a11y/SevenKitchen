@@ -19,7 +19,10 @@ import type {
   NutritionSourceRecord,
   RankFoodCandidatesWithAgentPayload,
   SupplementNutritionDraft,
-  UpdateAgentProviderSettingsPayload
+  UpdateAgentProviderSettingsPayload,
+  UpdateZhipuImageSettingsPayload,
+  ZhipuImageSettings,
+  ZhipuImageTestResult
 } from '@/types/nutritionGovernance'
 
 export const nutritionGovernanceApi = {
@@ -71,6 +74,25 @@ export const nutritionGovernanceApi = {
     api.put('/admin/nutrition-governance/agent-settings', data, {
       params: purpose ? { purpose } : {}
     }),
+
+  /** 智谱封面图配置：只读写 provider=ZHIPU / purpose=RECIPE_COVER_IMAGE 这一行 */
+  getZhipuImageSettings: (): Promise<ZhipuImageSettings> =>
+    api.get('/admin/nutrition-governance/agent-providers/zhipu-image'),
+
+  updateZhipuImageSettings: (
+    data: UpdateZhipuImageSettingsPayload
+  ): Promise<ZhipuImageSettings> =>
+    api.put('/admin/nutrition-governance/agent-providers/zhipu-image', data),
+
+  /**
+   * 连接测试只 ping 文本模型：验证 Key 通不通，不生成图片、不花 0.1 元。
+   */
+  testZhipuImageSettings: (): Promise<ZhipuImageTestResult> =>
+    api.post(
+      '/admin/nutrition-governance/agent-providers/zhipu-image/test',
+      {},
+      { timeout: 30000 }
+    ),
 
   /**
    * 测试连接（会用配置里的模型真跑一次调用）。

@@ -64,6 +64,85 @@
       </div>
     </el-card>
 
+    <!--
+      智谱封面图（2026-10-27）：
+      与上面的 DeepSeek 文本配置是两套 Key/模型，必须单独一行（provider=ZHIPU）。
+      这里只让运营填 Key / 启用；真正出图在「发布 / 更新 → 封面图」。
+    -->
+    <el-card shadow="never" class="section">
+      <template #header>
+        <div class="card-header">
+          <span>智谱封面图（食谱封面图生成）</span>
+          <el-tag :type="zhipuStatus.type" effect="plain">
+            {{ zhipuStatus.label }}
+          </el-tag>
+        </div>
+      </template>
+
+      <p class="zhipu-hint">
+        用于「发布 / 更新 → 封面图 → AI 生成图片」和旧「编辑食谱」页的 AI 封面。
+        生成一张约 0.1 元；连接测试只验证 Key，不生成图片、不花钱。
+        Key 在
+        <a
+          href="https://bigmodel.cn/usercenter/proj-mgmt/apikeys"
+          target="_blank"
+          rel="noopener"
+        >bigmodel.cn → API Keys</a>
+        创建；保存并启用后，重新打开「发布 / 更新」抽屉即可看到按钮变亮。
+      </p>
+
+      <el-form label-width="120px" class="zhipu-form">
+        <el-form-item label="启用">
+          <el-switch v-model="zhipuForm.enabled" />
+        </el-form-item>
+        <el-form-item label="Base URL">
+          <el-input
+            v-model="zhipuForm.baseUrl"
+            placeholder="https://open.bigmodel.cn"
+          />
+        </el-form-item>
+        <el-form-item label="模型">
+          <el-input v-model="zhipuForm.model" placeholder="glm-image" />
+        </el-form-item>
+        <el-form-item label="API Key">
+          <el-input
+            v-model="zhipuForm.apiKey"
+            type="password"
+            show-password
+            autocomplete="off"
+            :placeholder="zhipuKeyPlaceholder"
+          />
+          <div v-if="zhipuSettings?.apiKeyConfigured" class="zhipu-key-actions">
+            <el-button
+              link
+              type="danger"
+              :loading="zhipuSaving"
+              @click="clearZhipuKey"
+            >
+              清除已保存的 Key
+            </el-button>
+          </div>
+        </el-form-item>
+        <el-form-item>
+          <el-button
+            type="primary"
+            :loading="zhipuSaving"
+            @click="saveZhipuSettings"
+          >
+            保存
+          </el-button>
+          <el-button
+            :loading="zhipuTesting"
+            :disabled="!zhipuSettings?.apiKeyConfigured"
+            @click="testZhipuSettings"
+          >
+            连接测试
+          </el-button>
+          <span class="zhipu-note">先保存，再测试；测试不会生成图片。</span>
+        </el-form-item>
+      </el-form>
+    </el-card>
+
     <!-- 配置抽屉（可复用，按用途传参） -->
     <AgentSettingsDrawer
       v-model="drawerVisible"
@@ -80,8 +159,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { nutritionGovernanceApi } from '@/api/nutritionGovernance'
 import {
   AGENT_DEFAULT_PURPOSE,
@@ -89,7 +168,17 @@ import {
   agentPurposeLabel
 } from '@/constants/agentPurposes'
 import AgentSettingsDrawer from './components/AgentSettingsDrawer.vue'
-import type { AgentProviderSettings, UpdateAgentProviderSettingsPayload } from '@/types/nutritionGovernance'
+import {
+  buildZhipuImageSettingsPayload,
+  resolveZhipuImageStatus,
+  validateZhipuImageForm,
+  type ZhipuImageForm
+} from '@/utils/agentConfig/zhipuImage'
+import type {
+  AgentProviderSettings,
+  UpdateAgentProviderSettingsPayload,
+  ZhipuImageSettings
+} from '@/types/nutritionGovernance'
 
 interface PurposeRow {
   purpose: string
@@ -112,9 +201,112 @@ const drawerLoading = ref(false)
 const drawerSaving = ref(false)
 const drawerTesting = ref(false)
 
+/** 生图用途走下面的「智谱封面图」卡片；DeepSeek 列表里不再出现，避免点错配置抽屉 */
 const purposeRows = computed(() =>
-  AGENT_PURPOSES.map((meta) => rows.value[meta.purpose]!).filter(Boolean)
+  AGENT_PURPOSES.filter((meta) => meta.purpose !== 'RECIPE_COVER_IMAGE')
+    .map((meta) => rows.value[meta.purpose]!)
+    .filter(Boolean)
 )
+
+const zhipuSettings = ref<ZhipuImageSettings | null>(null)
+const zhipuForm = reactive<ZhipuImageForm>({
+  enabled: false,
+  baseUrl: 'https://open.bigmodel.cn',
+  model: 'glm-image',
+  apiKey: ''
+})
+const zhipuSaving = ref(false)
+const zhipuTesting = ref(false)
+
+const zhipuStatus = computed(() => resolveZhipuImageStatus(zhipuSettings.value))
+const zhipuKeyPlaceholder = computed(() =>
+  zhipuSettings.value?.apiKeyConfigured
+    ? `已配置（末四位 ${zhipuSettings.value.apiKeyLast4 ?? '****'}），留空不修改`
+    : '粘贴智谱开放平台（bigmodel.cn）的 API Key'
+)
+
+/** 服务器永远只回末四位；输入框每次都用空串，绝不回填明文 */
+function applyZhipuForm(settings: ZhipuImageSettings | null) {
+  zhipuForm.enabled = Boolean(settings?.enabled)
+  zhipuForm.baseUrl = settings?.baseUrl || 'https://open.bigmodel.cn'
+  zhipuForm.model = settings?.model || 'glm-image'
+  zhipuForm.apiKey = ''
+}
+
+async function loadZhipuSettings() {
+  try {
+    const settings = await nutritionGovernanceApi.getZhipuImageSettings()
+    zhipuSettings.value = settings
+    applyZhipuForm(settings)
+  } catch {
+    // 拦截器已提示
+  }
+}
+
+async function saveZhipuSettings() {
+  const invalid = validateZhipuImageForm(zhipuForm, zhipuSettings.value)
+  if (invalid) {
+    ElMessage.warning(invalid)
+    return
+  }
+
+  zhipuSaving.value = true
+  try {
+    const saved = await nutritionGovernanceApi.updateZhipuImageSettings(
+      buildZhipuImageSettingsPayload(zhipuForm)
+    )
+    zhipuSettings.value = saved
+    applyZhipuForm(saved)
+    ElMessage.success('智谱封面图配置已保存')
+  } catch {
+    // 拦截器已提示
+  } finally {
+    zhipuSaving.value = false
+  }
+}
+
+async function testZhipuSettings() {
+  zhipuTesting.value = true
+  try {
+    const result = await nutritionGovernanceApi.testZhipuImageSettings()
+    ElMessage.success(result?.message || '智谱 Key 有效')
+  } catch {
+    // 拦截器已提示
+  } finally {
+    zhipuTesting.value = false
+  }
+}
+
+async function clearZhipuKey() {
+  try {
+    await ElMessageBox.confirm(
+      '清除后，AI 封面会暂时用不了，直到重新填写 Key。确定清除？',
+      '清除智谱 API Key',
+      {
+        type: 'warning',
+        confirmButtonText: '清除',
+        cancelButtonText: '取消'
+      }
+    )
+  } catch {
+    return
+  }
+
+  zhipuSaving.value = true
+  try {
+    const saved = await nutritionGovernanceApi.updateZhipuImageSettings({
+      enabled: false,
+      clearApiKey: true
+    })
+    zhipuSettings.value = saved
+    applyZhipuForm(saved)
+    ElMessage.success('已清除智谱 API Key')
+  } catch {
+    // 拦截器已提示
+  } finally {
+    zhipuSaving.value = false
+  }
+}
 
 async function loadAll() {
   loading.value = true
@@ -122,6 +314,7 @@ async function loadAll() {
     const defaultSettings = await nutritionGovernanceApi.getAgentSettings(AGENT_DEFAULT_PURPOSE)
     const map: Record<string, PurposeRow> = {}
     for (const meta of AGENT_PURPOSES) {
+      if (meta.purpose === 'RECIPE_COVER_IMAGE') continue
       let settings: AgentProviderSettings | null = null
       try {
         settings = await nutritionGovernanceApi.getAgentSettings(meta.purpose)
@@ -180,7 +373,10 @@ async function handleTest(payload: UpdateAgentProviderSettingsPayload) {
   }
 }
 
-onMounted(loadAll)
+onMounted(() => {
+  void loadAll()
+  void loadZhipuSettings()
+})
 </script>
 
 <style scoped>
@@ -223,5 +419,25 @@ onMounted(loadAll)
   color: #606266;
   font-size: 12.5px;
   line-height: 1.5;
+}
+.zhipu-hint {
+  margin: 0 0 14px;
+  color: #606266;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+.zhipu-form {
+  max-width: 720px;
+}
+.zhipu-form .el-input {
+  max-width: 420px;
+}
+.zhipu-key-actions {
+  margin-top: 4px;
+}
+.zhipu-note {
+  margin-left: 10px;
+  color: #909399;
+  font-size: 12px;
 }
 </style>

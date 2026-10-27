@@ -16,6 +16,7 @@
 import type { FoodCategory } from '../../../domain/recipe-designer/food-category-map';
 import type {
   AgentCatalogUsage,
+  AgentDogRecipeHistory,
   AgentDraftSnapshot,
   AgentIngredientCandidate,
   AgentIngredientDetail,
@@ -45,6 +46,7 @@ const DEFAULT_RECIPE_PAGE_SIZE = 20;
 const MIN_RECIPE_PAGE_SIZE = 1;
 const MAX_RECIPE_PAGE_SIZE = 50;
 const MAX_RECIPE_PAGE = 1000;
+const DOG_HISTORY_MAX_LIMIT = 20;
 
 type IngredientType = 'FOOD' | 'SUPPLEMENT';
 
@@ -67,6 +69,11 @@ interface SearchRecipesArgs {
 interface GetRecipeArgs {
   recipeId?: string;
   draftId?: string;
+}
+
+interface DogRecipeHistoryArgs {
+  keyword?: string;
+  limit?: number;
 }
 
 interface GetIngredientArgs {
@@ -343,6 +350,43 @@ function summarizeRecipeDetail(detail: AgentRecipeDetail): string {
   return `${label}：${detail.items.length} 种原料，共 ${totalWeightG}g，${detail.productionSteps.length} 步制作步骤；只读详情，不含客户/订单信息。`;
 }
 
+function dogHistoryKindLabel(
+  kind: AgentDogRecipeHistory['recipes'][number]['kind'],
+): string {
+  if (kind === 'CUSTOM') return '定制食谱';
+  if (kind === 'ORDER') return '本单其他份';
+  return '鲜食订单';
+}
+
+function summarizeDogRecipeHistory(
+  history: AgentDogRecipeHistory,
+  keyword?: string,
+): string {
+  if (!history.dogName) {
+    return '当前设计没有绑定狗狗（产品线设计或未绑定订单），查不到这只狗的历史食谱；不要用全站食谱搜索代替。';
+  }
+
+  const scope = keyword ? `匹配「${keyword}」的` : '';
+  if (history.total === 0) {
+    return `「${history.dogName}」的历史食谱里没有${scope}记录；不要拿全站食谱补位，直接告诉用户没有这笔历史。`;
+  }
+
+  const preview = history.recipes
+    .slice(0, 5)
+    .map((recipe) => {
+      const date = recipe.date ? recipe.date.slice(0, 10) : '日期未知';
+      const ingredients = recipe.ingredients.slice(0, 10).join('、');
+      return `${date}「${recipe.name}」（${dogHistoryKindLabel(recipe.kind)}）${
+        ingredients ? `：${ingredients}` : ''
+      }`;
+    })
+    .join('；');
+  const remaining = history.total - history.recipes.length;
+  return `「${history.dogName}」共 ${history.total} 道${scope}历史食谱：${preview}。${
+    remaining > 0 ? `另有 ${remaining} 道未展开。` : ''
+  }数据来自这只狗的真实订单/交付快照，不是全站食谱库。`;
+}
+
 /**
  * 造只读工具。
  *
@@ -370,6 +414,9 @@ export function createReadTools(
   get_recipe(
     args: GetRecipeArgs | null,
   ): Promise<AgentToolResult<AgentRecipeDetail>>;
+  get_dog_recipe_history(
+    args?: DogRecipeHistoryArgs | null,
+  ): Promise<AgentToolResult<AgentDogRecipeHistory>>;
   web_search(
     args?: WebSearchArgs | null,
   ): Promise<AgentToolResult<AgentWebSearchResult>>;
@@ -689,6 +736,45 @@ export function createReadTools(
         );
       }
       return ok(detail, summarizeRecipeDetail(detail));
+    },
+
+    async get_dog_recipe_history(
+      args: DogRecipeHistoryArgs | null = {},
+    ): Promise<AgentToolResult<AgentDogRecipeHistory>> {
+      const raw = asRawArgs(args);
+      if (!raw) {
+        return fail('INVALID_ARGUMENT', '参数必须是对象。');
+      }
+
+      const keywordValue = raw.keyword;
+      if (keywordValue !== undefined && typeof keywordValue !== 'string') {
+        return fail('INVALID_ARGUMENT', 'keyword 必须是字符串。');
+      }
+      const limitValue = raw.limit;
+      if (
+        limitValue !== undefined &&
+        (typeof limitValue !== 'number' ||
+          !Number.isInteger(limitValue) ||
+          limitValue < 1 ||
+          limitValue > DOG_HISTORY_MAX_LIMIT)
+      ) {
+        return fail(
+          'INVALID_ARGUMENT',
+          `limit 必须是 1–${DOG_HISTORY_MAX_LIMIT} 的整数。`,
+        );
+      }
+
+      const keyword =
+        typeof keywordValue === 'string' ? keywordValue.trim() : '';
+      const input: DogRecipeHistoryArgs = {};
+      if (keyword) input.keyword = keyword;
+      if (typeof limitValue === 'number') input.limit = limitValue;
+
+      const history = await port.getDogRecipeHistory(input);
+      return ok(
+        history,
+        summarizeDogRecipeHistory(history, keyword || undefined),
+      );
     },
 
     async web_search(

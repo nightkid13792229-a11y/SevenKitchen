@@ -10976,6 +10976,24 @@ export class RecipeDesignerService {
   }
 
   /**
+   * 这只狗的历史食谱（AI 只读工具用，2026-10-28）。
+   *
+   * 直接复用「爱犬设计洞察」的同一份历史：
+   *   · 鲜食订单快照（`order_item.recipe_snapshot`）；
+   *   · 已完成定制单的**交付快照**（不是会被改名的活行）。
+   *
+   * 为什么不让 AI 自己查全站食谱：那会把别的狗 / 目录里的菜当成这只狗
+   * 吃过的东西（2026-10-28 线上实例）。这里保证 AI 与页面看到同一份数据。
+   */
+  async getDogRecipeHistory(
+    dogId: string,
+    access: RecipeDesignerAccessInput,
+  ): Promise<DogDesignInsight['historyRecipes']> {
+    const insight = await this.getDogDesignInsight(dogId, access);
+    return insight.historyRecipes ?? [];
+  }
+
+  /**
    * 设计洞察里的附件 → 短时签名 URL（2026-10-22）。
    *
    * 库里存的是 COS key（老数据可能是公开 URL）。就诊/体检/定制单附件

@@ -17,6 +17,15 @@ import {
 export { RECIPE_COVER_IMAGE_PURPOSE, ZHIPU_PROVIDER };
 
 /**
+ * 封面生图至少等 200 秒（2026-10-28）。
+ *
+ * 实测 glm-image 在高峰期一笔要 137–156 秒；智谱配置里的 90 秒
+ * 会在图已经生成、但还没返回时就先超时，钱花了图也丢了。
+ * 取 max(配置值, 200 秒)，运营把配置调小也不会再卡掉封面。
+ */
+const COVER_IMAGE_REQUEST_TIMEOUT_MS = 200_000;
+
+/**
  * 封面图的画面比例（2026-10-27）。
  *
  * - `SQUARE`：旧「编辑食谱」页的单食谱封面，方图，行为保持不变；
@@ -126,7 +135,10 @@ export class RecipeCoverImageService {
       baseUrl: config.baseUrl,
       model: config.model,
       apiKey: config.apiKey,
-      requestTimeoutMs: config.requestTimeoutMs,
+      requestTimeoutMs: Math.max(
+        config.requestTimeoutMs,
+        COVER_IMAGE_REQUEST_TIMEOUT_MS,
+      ),
       prompt,
       size,
       quality: 'hd',

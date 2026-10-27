@@ -12,6 +12,7 @@ import type {
   AgentAssessmentView,
   AgentCatalogUsage,
   AgentCopyPatch,
+  AgentDogRecipeHistory,
   AgentDraftItem,
   AgentDraftSnapshot,
   AgentIngredientCandidate,
@@ -743,6 +744,14 @@ export function createFakeRecipeAgentPort(
     },
   );
 
+  const getDogRecipeHistory = jest.fn(
+    async (): Promise<AgentDogRecipeHistory> => ({
+      dogName: '测试狗',
+      total: 0,
+      recipes: [],
+    }),
+  );
+
   const port: RecipeAgentDraftPort = {
     getDraft,
     searchIngredients,
@@ -750,6 +759,7 @@ export function createFakeRecipeAgentPort(
     getCatalogUsage,
     searchRecipes,
     getRecipeDetail,
+    getDogRecipeHistory,
     addItem,
     replaceItem,
     updateWeight,

@@ -2,7 +2,7 @@
  * Agent 工具注册表（P0a Task 5）。
  *
  * 把 Task 2–4 的读/写/查工具和 Task 5 的控制工具组装成一张表：
- * `AGENT_TOOL_DEFINITIONS` 是给模型看的 21 个工具定义（含只读食谱目录与联网搜索/抓取），
+ * `AGENT_TOOL_DEFINITIONS` 是给模型看的 22 个工具定义（含只读食谱目录与联网搜索/抓取），
  * `createAgentToolHandlers` 返回同名 handler。
  *
  * **审批安全边界**：`check_ready` / `check_coverage` 的
@@ -133,7 +133,7 @@ const NO_ARGS_SCHEMA = {
 } as const;
 
 /**
- * 21 个工具定义。描述用中文一句话说清“什么时候用”；
+ * 22 个工具定义。描述用中文一句话说清“什么时候用”；
  * 参数 schema 与 Task 2–4 的运行时校验保持一致。
  *
  * 联网两个工具不设意图/域名/关键词限制；网页内容在提示词里明确为
@@ -294,6 +294,31 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
         },
       },
       anyOf: [{ required: ['recipeId'] }, { required: ['draftId'] }],
+      required: [],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'get_dog_recipe_history',
+    description:
+      '查**当前这张订单的狗狗**真实吃过 / 交付过的历史食谱（鲜食订单快照 + 已完成定制单的交付快照），返回日期、来源和原料名。问「这只狗最近一次 / 上次 / 以前吃过什么（某类蛋白、某类蔬菜）」必须先调它；不要用 search_recipes 的全站食谱库冒充这只狗的历史。',
+    parameters: {
+      type: 'object',
+      properties: {
+        keyword: {
+          type: 'string',
+          maxLength: 60,
+          description:
+            '按菜名或原料名过滤，例如「牛肉」「西兰花」；不传则返回最近几道。',
+        },
+        limit: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 20,
+          default: 8,
+          description: '最多返回几道，1–20，默认 8；总数仍会返回。',
+        },
+      },
       required: [],
       additionalProperties: false,
     },
@@ -637,7 +662,7 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
 ];
 
 /**
- * 造全部 21 个 handler。
+ * 造全部 22 个 handler。
  *
  * `check_ready` 是唯一从 `getApprovalState()` 注入审批状态的入口；
  * 交付确认卡（`finish_draft`）已下线，不再有对应 handler。
@@ -668,6 +693,8 @@ export function createAgentToolHandlers(
     get_catalog_usage: (args) => readTools.get_catalog_usage(args as never),
     search_recipes: (args) => readTools.search_recipes(args as never),
     get_recipe: (args) => readTools.get_recipe(args as never),
+    get_dog_recipe_history: (args) =>
+      readTools.get_dog_recipe_history(args as never),
     web_search: (args) => readTools.web_search(args as never),
     web_fetch: (args) => readTools.web_fetch(args as never),
     add_ingredient: (args) => writeTools.add_ingredient(args as never),

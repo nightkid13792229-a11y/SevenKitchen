@@ -1,5 +1,5 @@
 /**
- * 中国食物成分表（CFCT）标准版第 6 版第一册主表视觉提取数据导入脚本
+ * 中国食物成分表（CFCT）标准版第 6 版第一册 / 第二册主表视觉提取数据导入脚本
  * （默认 dry-run，不写库）。
  *
  * 视觉提取 / OCR 校验 / 人工复核在离线阶段完成，本脚本只负责：
@@ -8,6 +8,7 @@
  *
  * 口径：
  * - 默认不写库；只有显式 `--apply` 才创建记录；
+ * - 只有显式 `--volume 2` 才切到第二册，缺省第一册；
  * - 只创建、绝不更新：已存在的 `sourceKey` 或同名食品一律跳过；
  * - `--limit` 在查库 / 写库之前截断，便于先小批量试跑；
  * - 查重名时去掉 `［］[]（）()、,，` 和空白后比较，避免全半角 / 别名括号
@@ -15,7 +16,7 @@
  *
  * Usage:
  *   npx ts-node -r tsconfig-paths/register scripts/import-cfct-vision.ts \
- *     --json <path> [--limit N] [--apply] [--report <path>]
+ *     --json <path> [--volume 1|2] [--limit N] [--apply] [--report <path>]
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
@@ -31,10 +32,10 @@ import { config as loadEnv } from 'dotenv';
 import type { NutritionProfileV2 } from '../src/domain/ingredient/types';
 import {
   buildCfctVisionProfile,
-  CFCT_SOURCE_TITLE,
-  CFCT_SOURCE_VERSION,
   CFCT_SOURCE_TYPE,
+  CFCT_VOLUME_META,
   type CfctVisionFood,
+  type CfctVolume,
 } from '../src/domain/nutrition-governance/cfct-vision-normalize';
 
 loadEnv();
@@ -42,20 +43,21 @@ process.env.DATABASE_URL ??=
   'postgresql://postgres:postgres@localhost:5432/sevenkitchen';
 
 const SOURCE_TYPE = NutritionGovernanceSourceType.CFCT;
-const DATA_TYPE = 'cfct_v6_vol1_vision';
 const PROGRESS_INTERVAL = 100;
 const REPORT_TOP_LIMIT = 20;
 const SAMPLE_LIMIT = 5;
 
 const USAGE = `
-中国食物成分表 第6版 第一册（CFCT vol.1）视觉提取数据导入（默认 dry-run，不写库）
+中国食物成分表 第6版 第一册 / 第二册（CFCT vol.1 / vol.2）视觉提取数据导入
+（默认 dry-run，不写库）
 
 Usage:
   npx ts-node -r tsconfig-paths/register scripts/import-cfct-vision.ts \\
-    --json <path> [--limit N] [--apply] [--report <path>]
+    --json <path> [--volume 1|2] [--limit N] [--apply] [--report <path>]
 
 Options:
   --json <path>   视觉提取结果 JSON（形如 {"foods":[...]}，必填）
+  --volume <1|2>  卷册：1 = 第一册（默认），2 = 第二册
   --limit N       只处理前 N 个食品（按文件顺序，在查库 / 写库之前截断）
   --apply         真正写库（只 create，绝不 update）；不传则 dry-run
   --report <path> 把 JSON 报告写到指定路径（目录不存在会自动创建）
@@ -77,6 +79,7 @@ type CfctVisionSkipReason = 'existing_key' | 'existing_name';
 
 interface CliArgs {
   jsonPath: string | null;
+  volume: CfctVolume;
   apply: boolean;
   limit: number | null;
   reportPath: string | null;
@@ -122,6 +125,10 @@ export function buildCfctVisionSourceKey(code: string): string {
   return `${CFCT_SOURCE_TYPE}:${code}`;
 }
 
+export function buildCfctVisionDataType(volume: CfctVolume): string {
+  return `cfct_v6_vol${volume}_vision`;
+}
+
 /**
  * 纯函数跳过判定（不碰数据库），便于脚本外单独验证查重口径。
  * 先判 key，再判名称；两者都不命中才返回 null。
@@ -146,6 +153,7 @@ export function findCfctVisionSkipReason(
 function parseArgs(argv: string[]): CliArgs {
   const args: CliArgs = {
     jsonPath: null,
+    volume: 1,
     apply: false,
     limit: null,
     reportPath: null,
@@ -162,6 +170,14 @@ function parseArgs(argv: string[]): CliArgs {
     }
     if (flag === '--apply') {
       args.apply = true;
+      continue;
+    }
+    if (flag === '--volume') {
+      if (next !== '1' && next !== '2') {
+        throw new Error('--volume 只接受 1 或 2');
+      }
+      args.volume = next === '1' ? 1 : 2;
+      index += 1;
       continue;
     }
     if (flag === '--json') {
@@ -289,6 +305,7 @@ async function main(): Promise<void> {
   // --limit 在查库 / 写库之前截断。
   const foods = args.limit === null ? allFoods : allFoods.slice(0, args.limit);
   const mode = args.apply ? 'apply' : 'dry-run';
+  const volumeMeta = CFCT_VOLUME_META[args.volume];
 
   const report: CfctVisionImportReport = {
     scanned: 0,
@@ -298,7 +315,7 @@ async function main(): Promise<void> {
   };
 
   console.log(
-    `CFCT vol.1 视觉数据导入开始（${mode}）：${foods.length} 个食品（文件共 ${allFoods.length} 个，${CFCT_SOURCE_VERSION}）。`,
+    `CFCT vol.${args.volume} 视觉数据导入开始（${mode}）：${foods.length} 个食品（文件共 ${allFoods.length} 个，${volumeMeta.version}）。`,
   );
 
   const prisma = new PrismaClient();
@@ -342,7 +359,7 @@ async function main(): Promise<void> {
         continue;
       }
 
-      const profile = buildCfctVisionProfile(food);
+      const profile = buildCfctVisionProfile(food, args.volume);
 
       if (args.apply) {
         try {
@@ -350,10 +367,10 @@ async function main(): Promise<void> {
             data: {
               sourceType: SOURCE_TYPE,
               sourceKey: buildCfctVisionSourceKey(food.code),
-              sourceTitle: CFCT_SOURCE_TITLE,
+              sourceTitle: volumeMeta.title,
               foodName: food.name,
               foodNameEn: null,
-              dataType: DATA_TYPE,
+              dataType: buildCfctVisionDataType(args.volume),
               category: null,
               rawData: buildRawData(food),
               normalizedNutrition: toJson(profile),
@@ -379,7 +396,7 @@ async function main(): Promise<void> {
     await prisma.$disconnect();
   }
 
-  console.log(`\nCFCT vol.1 视觉数据导入（${mode}）`);
+  console.log(`\nCFCT vol.${args.volume} 视觉数据导入（${mode}）`);
   console.log(`  JSON：${jsonPath}`);
   console.log(`  扫描食品：${report.scanned}`);
   console.log(

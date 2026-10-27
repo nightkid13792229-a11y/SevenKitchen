@@ -6,6 +6,7 @@ import {
   CFCT_SOURCE_TITLE,
   CFCT_SOURCE_VERSION,
   CFCT_VISION_NUTRIENT_MAP,
+  CFCT_VOLUME_META,
   type CfctVisionFood,
 } from 'src/domain/nutrition-governance/cfct-vision-normalize';
 
@@ -173,6 +174,35 @@ describe('buildCfctVisionProfile', () => {
       sourceCode: 'CFCT',
       sourceProvider: 'China Food Composition Tables',
     });
+  });
+
+  it('defaults to volume 1 title and version', () => {
+    const profile = buildCfctVisionProfile(food({ energyKcal: 338 }));
+
+    expect(CFCT_VOLUME_META[1]).toEqual({
+      title: '中国食物成分表 标准版 第6版 第一册',
+      version: 'CFCT_V6_VOL1_2018',
+    });
+    expect(profile.meta.sourceTitle).toBe(CFCT_VOLUME_META[1].title);
+    expect(profile.meta.sourceVersion).toBe(CFCT_VOLUME_META[1].version);
+    expect(profile.meta.sourceTitle).toBe(CFCT_SOURCE_TITLE);
+    expect(profile.meta.sourceVersion).toBe(CFCT_SOURCE_VERSION);
+  });
+
+  it('uses volume 2 title and version without changing source identity', () => {
+    const profile = buildCfctVisionProfile(food({ energyKcal: 338 }), 2);
+
+    expect(CFCT_VOLUME_META[2]).toEqual({
+      title: '中国食物成分表 标准版 第6版 第二册',
+      version: 'CFCT_V6_VOL2_2019',
+    });
+    expect(profile.meta.sourceTitle).toBe(CFCT_VOLUME_META[2].title);
+    expect(profile.meta.sourceVersion).toBe(CFCT_VOLUME_META[2].version);
+    // 卷册只影响标题 / 版本，来源身份与 externalId 必须保持不变。
+    expect(profile.meta.sourceType).toBe('CFCT');
+    expect(profile.meta.sourceCode).toBe('CFCT');
+    expect(profile.meta.sourceProvider).toBe(CFCT_SOURCE_PROVIDER);
+    expect(profile.meta.externalId).toBe('CFCT:011101');
   });
 
   it('maps every column to a unique nutrition catalogue field', () => {

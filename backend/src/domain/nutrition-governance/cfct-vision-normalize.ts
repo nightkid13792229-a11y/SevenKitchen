@@ -28,8 +28,26 @@ export const CFCT_SOURCE_TYPE = 'CFCT' as const;
 export const CFCT_SOURCE_CODE = 'CFCT' as const;
 export const CFCT_SOURCE_PROVIDER =
   '中国疾病预防控制中心营养与健康所 / 北京大学医学出版社';
-export const CFCT_SOURCE_TITLE = '中国食物成分表 标准版 第6版 第一册';
-export const CFCT_SOURCE_VERSION = 'CFCT_V6_VOL1_2018';
+
+export type CfctVolume = 1 | 2;
+
+export const CFCT_VOLUME_META: Record<
+  CfctVolume,
+  { title: string; version: string }
+> = {
+  1: {
+    title: '中国食物成分表 标准版 第6版 第一册',
+    version: 'CFCT_V6_VOL1_2018',
+  },
+  2: {
+    title: '中国食物成分表 标准版 第6版 第二册',
+    version: 'CFCT_V6_VOL2_2019',
+  },
+};
+
+/** 第一册标题 / 版本的旧导出别名，保持既有调用方不变。 */
+export const CFCT_SOURCE_TITLE = CFCT_VOLUME_META[1].title;
+export const CFCT_SOURCE_VERSION = CFCT_VOLUME_META[1].version;
 
 /** 印刷版主表的基准是每 100 克可食部。 */
 const CFCT_BASIS_TYPE = 'PER_100_G';
@@ -147,9 +165,11 @@ function resolveCfctSourceDefinition() {
  */
 export function buildCfctVisionProfile(
   food: CfctVisionFood,
+  volume: CfctVolume = 1,
 ): NutritionProfileV2 {
   const profile = createEmptyNutritionProfile();
   const definition = resolveCfctSourceDefinition();
+  const volumeMeta = CFCT_VOLUME_META[volume];
   const sourceForms: Record<string, NutritionSourceForm> = {};
   const conversionNotes: Record<string, string> = {};
 
@@ -157,8 +177,8 @@ export function buildCfctVisionProfile(
   profile.meta.sourceType = CFCT_SOURCE_TYPE;
   profile.meta.sourceCode = definition.sourceCode;
   profile.meta.sourceProvider = CFCT_SOURCE_PROVIDER;
-  profile.meta.sourceTitle = CFCT_SOURCE_TITLE;
-  profile.meta.sourceVersion = CFCT_SOURCE_VERSION;
+  profile.meta.sourceTitle = volumeMeta.title;
+  profile.meta.sourceVersion = volumeMeta.version;
   profile.meta.externalId = `${CFCT_SOURCE_TYPE}:${food.code}`;
   profile.meta.confidenceLevel = 'MEDIUM';
 

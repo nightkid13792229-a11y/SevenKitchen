@@ -56,6 +56,9 @@ export function resolveSeriesAiCoverUnavailableReason(
 
 /** 封面下方那行小字：不可用原因优先，否则解释点下去会发生什么 */
 export function resolveSeriesAiCoverHint(ctx: SeriesAiCoverContext): string {
+  // 非管理员看不到生图按钮，也不该看到「AI 会怎么生成」这行提示
+  if (!ctx.isAdmin) return ''
+
   const reason = resolveSeriesAiCoverUnavailableReason(ctx)
   if (reason) return reason
 

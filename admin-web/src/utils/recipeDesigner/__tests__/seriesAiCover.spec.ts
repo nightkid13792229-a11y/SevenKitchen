@@ -77,6 +77,8 @@ describe('seriesAiCover', () => {
     expect(
       resolveSeriesAiCoverHint({ ...base, available: false }),
     ).toContain('AI 设置');
+    // 非管理员整个生图入口都不显示，连提示也不该出现（设计稿 5.1）
+    expect(resolveSeriesAiCoverHint({ ...base, isAdmin: false })).toBe('');
   });
 
   it('超时常量与文案固定', () => {

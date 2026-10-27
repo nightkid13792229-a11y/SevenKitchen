@@ -154,17 +154,18 @@ describe('后台 · 线下退款并取消', () => {
     expect(orderDetail).toContain('v-if="canOfflineRefund"')
     expect(orderDetail).toContain('@click="openOfflineRefundDialog"')
     expect(orderDetail).toContain('v-if="canCancelOrder"')
-    // 取消入口必须排除线下单，否则会误调微信退款
-    expect(orderDetail).toContain('!isOfflinePaidOrder.value')
+    // 取消入口只排除「实收 > 0 的线下单」；0 元赠送单仍可直接取消
+    expect(orderDetail).toContain('!shouldUseOfflineRefundForCancel(')
   })
 
-  it('★ 旧「取消订单」逻辑里再兜一层：线下单直接拦下，不去调微信退款', () => {
+  it('★ 旧「取消订单」逻辑里再兜一层：线下已收款的单不去调微信退款', () => {
     const start = orderDetail.indexOf('const cancelOrder = async')
     const end = orderDetail.indexOf('const resolveDefaultOfflineRefundMethod')
     expect(start).toBeGreaterThan(-1)
     const block = orderDetail.slice(start, end > start ? end : start + 2000)
 
-    expect(block).toContain('isOfflinePaidOrder.value')
+    expect(block).toContain('shouldUseOfflineRefundForCancel(')
+    expect(block).toContain('offlineRefundCap.value')
     expect(block).toContain('系统不会调用微信退款')
     expect(block).toContain('return')
   })

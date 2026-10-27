@@ -343,3 +343,22 @@ export function canOfflineRefundCustomRecipeOrder(order: {
 
   return !order?.offlineRefundedAt && !order?.cancelledAt
 }
+
+/**
+ * 取消这张单时，是否必须**先登记线下退款**（而不是直接取消）。
+ *
+ * 只有真的收到过钱的线下单才需要：0 元赠送单实收为 0，线下退款弹窗
+ * 根本没有可退金额，必须允许直接取消。
+ *
+ * ⚠️ 页面上的「按钮是否显示」和「点击后拦不拦」必须共用这一条。
+ * 2026-10-28 的线上卡点就是两处各写一份：按钮按「0 元放行」显示，
+ * 点击却按「所有线下单都拦」处理 —— 点了只弹提示，永远取消不掉。
+ */
+export function shouldUseOfflineRefundForCancel(
+  isOfflinePaid: boolean,
+  offlineRefundCap: number,
+): boolean {
+  if (!isOfflinePaid) return false
+  const cap = Number(offlineRefundCap)
+  return Number.isFinite(cap) && cap > 0
+}

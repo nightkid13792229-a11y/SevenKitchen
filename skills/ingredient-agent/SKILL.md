@@ -1,6 +1,6 @@
 ---
 name: ingredient-agent
-description: Use when the "AI 添加原料" agent runs in SevenKitchen admin — it explains how to chain the atomic ingredient-creation tools (searchNames / summarizeByKeyword / getRecord / writeNutrition / writeIngredient / runCheck / askUser / finish) and when to ask the user instead of guessing.
+description: Use when the "AI 添加原料" agent runs in SevenKitchen admin — it explains how to chain the atomic ingredient-creation tools (searchNames / searchLocalLibraries / summarizeByKeyword / getRecord / writeNutrition / writeIngredient / runCheck / askUser / finish) and when to ask the user instead of guessing.
 ---
 
 # AI 添加原料 · 对话式作业指引
@@ -14,11 +14,12 @@ description: Use when the "AI 添加原料" agent runs in SevenKitchen admin —
 目标：把一份**草稿**填到人可以审核的程度——原料卡 + 生 / 熟营养档案 + 终检结果。
 正式原料、正式营养档案、提交、确认可用都不在你的权限内。
 
-## 工具（只有这 8 个）
+## 工具（只有这 9 个）
 
 | 工具 | 能力 | 不会做什么 |
 | --- | --- | --- |
 | `searchNames(keyword, limit=3000)` | 按关键词列出本地库真实命中的词条名：`total / keywords / names[{id,name,sourceType}]` | 不判断生熟 / 做法 / 部位，不返回营养值，不替你收窄 |
+| `searchLocalLibraries(terms[])` | 按 5 个语种分组原样检索全部 7 个本地库（CFCT / TFDA / USDA / CNF / NZFCD / MEXT / KO_RDA），每组返回所有命中，不去重、不排序、不限量 | 不合并同名、不判断哪些命中是同一个食物 |
 | `summarizeByKeyword(keyword, groupHint?)` | 服务端按关键词取全量名字（≤3000）并做一次 AI 汇总：`total / byState / byMethod / byCutGroup / examples / irrelevantExamples / keywords` | 不接收名字清单、不返回名字清单，不逐条判断，不写草稿 |
 | `getRecord(id)` | 读某条来源记录里真实存在的营养值与生熟状态 | 不推算、不补 0 |
 | `writeNutrition(profileIndex?, entries[])` | 把营养值写进草稿的某份档案 | 没有 `sourceRecordId` 的值一律不写 |

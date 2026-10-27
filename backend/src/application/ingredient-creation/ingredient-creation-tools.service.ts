@@ -16,7 +16,12 @@ import {
   type NutritionFieldDefinition,
 } from '../../domain/ingredient/nutrition-field-catalog';
 import { PrismaService } from '../../infrastructure/prisma.service';
-import { IngredientCreationCandidateService } from './ingredient-creation-candidate.service';
+import {
+  IngredientCreationCandidateService,
+  RAW_SEARCH_LANGUAGES,
+  type RawSearchLanguage,
+  type RawSearchTerm,
+} from './ingredient-creation-candidate.service';
 import { IngredientCreationCheckService } from './ingredient-creation-check.service';
 import { IngredientCreationDraftService } from './ingredient-creation-draft.service';
 import { IngredientNameClassifierService } from './ingredient-name-classifier.service';
@@ -150,6 +155,51 @@ const SEARCH_NAMES_TOOL: AgentToolDefinition = {
         },
       },
       required: ['keyword'],
+      additionalProperties: false,
+    },
+  },
+};
+
+/**
+ * 原子工具：按 5 个语种分组原样检索 7 个本地库，返回所有命中（只读）。
+ *
+ * 工具只负责「代码知道哪个库用哪个语言」：生成 5 组词、各查各的库、原样
+ * 返回。不去重、不排序、不限量、不做语义合并 —— 哪些是同一个食物由模型判断。
+ */
+const SEARCH_LOCAL_LIBRARIES_TOOL: AgentToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'searchLocalLibraries',
+    description:
+      '按语种分组检索本地营养库（只读）。本地 7 个库与语言：CFCT 简体中文（中国大陆）、TFDA 繁体中文（台湾）、USDA 英文（美国）、CNF 英文（加拿大）、NZFCD 英文（新西兰）、MEXT 日文（日本）、KO_RDA 韩文（韩国）。terms 必须覆盖 5 个语种（zh-Hans / zh-Hant / en / ja / ko），每个语种至少 1 个词；每个词只查对应语种的库（en 同时查 USDA / CNF / NZFCD）。查全部 7 个本地库；原样返回所有命中，不去重、不排序、不限量；由你判断哪些是同一个食物。',
+    parameters: {
+      type: 'object',
+      properties: {
+        terms: {
+          type: 'array',
+          minItems: 5,
+          description:
+            '5 个语种的检索词，每个语种至少 1 个；同一语种可以给多个词，每个词单独返回一组。',
+          items: {
+            type: 'object',
+            properties: {
+              term: {
+                type: 'string',
+                description: '该语种下的检索词，不能为空。',
+              },
+              language: {
+                type: 'string',
+                enum: [...RAW_SEARCH_LANGUAGES],
+                description:
+                  '该词的语种：zh-Hans 简体中文、zh-Hant 繁体中文、en 英文、ja 日文、ko 韩文。',
+              },
+            },
+            required: ['term', 'language'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['terms'],
       additionalProperties: false,
     },
   },
@@ -1078,6 +1128,7 @@ export class IngredientCreationToolsService {
   getDefinitions(): readonly AgentToolDefinition[] {
     return [
       SEARCH_NAMES_TOOL,
+      SEARCH_LOCAL_LIBRARIES_TOOL,
       SUMMARIZE_BY_KEYWORD_TOOL,
       GET_RECORD_TOOL,
       WRITE_NUTRITION_TOOL,
@@ -1134,6 +1185,8 @@ export class IngredientCreationToolsService {
     switch (input.name) {
       case 'searchNames':
         return this.searchNames(input.args);
+      case 'searchLocalLibraries':
+        return this.searchLocalLibraries(input.args);
       case 'summarizeByKeyword':
         return this.summarizeByKeyword(input.args);
       case 'getRecord':
@@ -1216,6 +1269,110 @@ export class IngredientCreationToolsService {
         sourceRecordIds: [],
       },
     };
+  }
+
+  /**
+   * 工具：按 5 个语种分组原样检索 7 个本地库（只读）。
+   *
+   * 这里只校验「5 个语种齐不齐、词空不空」，然后把每个词交给它语种对应的
+   * 库；命中多少、哪些是同一个食物都不在工具里判断。
+   */
+  private async searchLocalLibraries(
+    args: Record<string, unknown>,
+  ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
+    const parsed = this.parseRawSearchTerms(args.terms);
+    if (!parsed.ok) {
+      return this.error(parsed.error);
+    }
+
+    const result = await this.candidateService.searchRawByLanguage({
+      terms: parsed.terms,
+    });
+    const hitCount = result.groups.reduce((sum, group) => sum + group.total, 0);
+
+    return {
+      ok: true,
+      content: okContent({
+        groups: result.groups,
+        hint:
+          hitCount === 0
+            ? '本地 7 库没有命中，可换词/换语言，或走在线库'
+            : '原样返回，未去重；请自己判断',
+      }),
+      progress: {
+        writtenFieldPaths: [],
+        // 与 searchNames 同理：只列名字、没读来源记录，不能上报 id，
+        // 否则后续 getRecord 会被误判成「早就见过」。
+        sourceRecordIds: [],
+      },
+    };
+  }
+
+  /**
+   * 校验工具入参里的 terms：词非空、语种合法、5 个语种一个都不能少。
+   *
+   * schema 的 minItems 只是第一道闸；模型仍可能漏语种或传空词，所以这里
+   * 返回可读错误文本，让模型自己补齐后重试。
+   */
+  private parseRawSearchTerms(
+    raw: unknown,
+  ): { ok: true; terms: RawSearchTerm[] } | { ok: false; error: string } {
+    if (!Array.isArray(raw) || raw.length === 0) {
+      return {
+        ok: false,
+        error: `searchLocalLibraries 需要 terms 数组：5 个语种（${RAW_SEARCH_LANGUAGES.join(
+          '、',
+        )}）各至少 1 个词。`,
+      };
+    }
+
+    const terms: RawSearchTerm[] = [];
+    const seen = new Set<RawSearchLanguage>();
+
+    for (const [index, entry] of raw.entries()) {
+      if (!isRecord(entry)) {
+        return {
+          ok: false,
+          error: `searchLocalLibraries 的 terms[${index}] 必须是 {term, language} 对象。`,
+        };
+      }
+
+      const term = normalizeText(entry.term);
+      if (!term) {
+        return {
+          ok: false,
+          error: `searchLocalLibraries 的 terms[${index}].term 不能为空。`,
+        };
+      }
+
+      const rawLanguage = normalizeText(entry.language);
+      if (!RAW_SEARCH_LANGUAGES.includes(rawLanguage as RawSearchLanguage)) {
+        return {
+          ok: false,
+          error: `searchLocalLibraries 的 terms[${index}].language 只能是 ${RAW_SEARCH_LANGUAGES.join(
+            '、',
+          )}；收到「${rawLanguage || '（空）'}」。`,
+        };
+      }
+
+      const language = rawLanguage as RawSearchLanguage;
+      seen.add(language);
+      terms.push({ term, language });
+    }
+
+    const missing = RAW_SEARCH_LANGUAGES.filter(
+      (language) => !seen.has(language),
+    );
+    if (missing.length > 0) {
+      return {
+        ok: false,
+        error: `searchLocalLibraries 需要 5 个语种（${RAW_SEARCH_LANGUAGES.join(
+          '、',
+        )}）各至少 1 个词；缺少：${missing.join('、')}。`,
+      };
+    }
+
+    return { ok: true, terms };
   }
 
   /**

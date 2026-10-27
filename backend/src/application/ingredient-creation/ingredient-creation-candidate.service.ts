@@ -71,6 +71,128 @@ export interface ListNutritionNamesResult {
 }
 
 /**
+ * 原文多语种检索支持的语种。
+ *
+ * 只有这 5 个：本地 7 库按语种分成 5 组，同一语种可能对应多个库（en）。
+ */
+export const RAW_SEARCH_LANGUAGES = [
+  'zh-Hans',
+  'zh-Hant',
+  'en',
+  'ja',
+  'ko',
+] as const;
+
+export type RawSearchLanguage = (typeof RAW_SEARCH_LANGUAGES)[number];
+
+/** 一个语种下的一条检索词。 */
+export interface RawSearchTerm {
+  term: string;
+  language: RawSearchLanguage;
+}
+
+export interface RawSearchInput {
+  terms: RawSearchTerm[];
+}
+
+/** 一条原样返回的命中；不去重、不算分、不带 alsoIn。 */
+export interface RawSearchMatch {
+  id: string;
+  name: string;
+  sourceType: string;
+}
+
+/** 一个检索词一组；`total` 就是这一组原样的命中条数。 */
+export interface RawSearchGroup {
+  term: string;
+  language: RawSearchLanguage;
+  sourceTypes: string[];
+  total: number;
+  matches: RawSearchMatch[];
+}
+
+export interface RawSearchResult {
+  groups: RawSearchGroup[];
+}
+
+/**
+ * 语种 → 本地库。
+ *
+ * 只用于决定「这个词该查哪些库」：中文简繁分属 CFCT / TFDA，英文同时查
+ * USDA / CNF / NZFCD，日文查 MEXT，韩文查 KO_RDA。
+ */
+const RAW_SEARCH_LANGUAGE_SOURCE_TYPES: Readonly<
+  Record<RawSearchLanguage, readonly NutritionGovernanceSourceType[]>
+> = {
+  'zh-Hans': ['CFCT'],
+  'zh-Hant': ['TFDA'],
+  en: ['USDA', 'CNF', 'NZFCD'],
+  ja: ['MEXT'],
+  ko: ['KO_RDA'],
+};
+
+/** 入参不合法时抛它；工具层会把它转成给模型看的 ok:false 文本。 */
+export class RawLibrarySearchValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RawLibrarySearchValidationError';
+  }
+}
+
+/**
+ * 校验并归一化检索词：每个词非空、语种合法、5 个语种一个都不能少。
+ *
+ * 重复语种 / 重复词不折叠 —— 模型让查几次就查几次，这是「原样检索」的一部分。
+ */
+function normalizeRawSearchTerms(
+  input: RawSearchInput | null | undefined,
+): RawSearchTerm[] {
+  const rawTerms = Array.isArray(input?.terms) ? input.terms : [];
+  if (rawTerms.length === 0) {
+    throw new RawLibrarySearchValidationError(
+      `terms 不能为空：必须覆盖 5 个语种（${RAW_SEARCH_LANGUAGES.join('、')}），每个语种至少 1 个词。`,
+    );
+  }
+
+  const normalized: RawSearchTerm[] = [];
+  const seen = new Set<RawSearchLanguage>();
+
+  rawTerms.forEach((raw, index) => {
+    const term = typeof raw?.term === 'string' ? raw.term.trim() : '';
+    if (!term) {
+      throw new RawLibrarySearchValidationError(
+        `terms[${index}].term 不能为空。`,
+      );
+    }
+
+    const language = raw?.language as RawSearchLanguage | undefined;
+    if (!RAW_SEARCH_LANGUAGES.includes(language as RawSearchLanguage)) {
+      throw new RawLibrarySearchValidationError(
+        `terms[${index}].language 只能是 ${RAW_SEARCH_LANGUAGES.join(
+          '、',
+        )}；收到「${String(language ?? '')}」。`,
+      );
+    }
+
+    seen.add(language as RawSearchLanguage);
+    normalized.push({ term, language: language as RawSearchLanguage });
+  });
+
+  const missing = RAW_SEARCH_LANGUAGES.filter(
+    (language) => !seen.has(language),
+  );
+  if (missing.length > 0) {
+    throw new RawLibrarySearchValidationError(
+      `terms 必须覆盖 5 个语种（${RAW_SEARCH_LANGUAGES.join(
+        '、',
+      )}），缺少：${missing.join('、')}。`,
+    );
+  }
+
+  return normalized;
+}
+
+/**
  * 候选检索只查登记表里的 L1 本地主库。
  *
  * 这里必须用 `in` 而不是 `notIn`：NEVO/MANUAL/SUPPLEMENT_LABEL 等不在 L1 的
@@ -807,6 +929,50 @@ export class IngredientCreationCandidateService {
       keywords: query.keywords,
       notice: expansions.notice,
     };
+  }
+
+  /**
+   * 按语种原样检索本地库：**只摆命中，不做任何整理**。
+   *
+   * 每个词查它语种对应的库（en 同时查 USDA / CNF / NZFCD），命中的每条记录
+   * 都原样返回：不去重、不算分、不限量、不合并同名（没有 alsoIn）。哪些是
+   * 同一个食物、该用哪条，由模型自己判断。
+   *
+   * 5 个语种必须各至少出现一次，且每个词非空；不合法时抛
+   * `RawLibrarySearchValidationError`，由工具层转成给模型看的错误文本。
+   */
+  async searchRawByLanguage(input: RawSearchInput): Promise<RawSearchResult> {
+    const terms = normalizeRawSearchTerms(input);
+
+    // 并发查所有组：串行会让 5 个语种叠加 DB 延迟。
+    const groups = await Promise.all(
+      terms.map(async (entry): Promise<RawSearchGroup> => {
+        const sourceTypes = RAW_SEARCH_LANGUAGE_SOURCE_TYPES[entry.language];
+        const records = await this.prisma.nutritionSourceRecord.findMany({
+          where: {
+            status: 'ACTIVE',
+            sourceType: { in: [...sourceTypes] },
+            foodName: { contains: entry.term, mode: 'insensitive' },
+          },
+          select: { id: true, foodName: true, sourceType: true },
+          orderBy: [{ sourceType: 'asc' }, { foodName: 'asc' }],
+        });
+
+        return {
+          term: entry.term,
+          language: entry.language,
+          sourceTypes: [...sourceTypes],
+          total: records.length,
+          matches: records.map((record) => ({
+            id: record.id,
+            name: record.foodName,
+            sourceType: record.sourceType,
+          })),
+        };
+      }),
+    );
+
+    return { groups };
   }
 
   /**

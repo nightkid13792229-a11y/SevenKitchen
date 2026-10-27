@@ -42,6 +42,11 @@ export interface NutritionLibrary {
   local: boolean;
   /** 线上可信域名（裸域名，不带协议/路径）。 */
   onlineHosts: string[];
+  /**
+   * 线上发现优先级：有值才参与 `DEFAULT_DISCOVERY_HOSTS`，数字越小越先。
+   * 用来在 `MAX_DISCOVERY_HOSTS` 限制下按地区挑出有代表性的库。
+   */
+  discoveryPriority?: number;
   role: NutritionLibraryRole;
   language: NutritionLibraryLanguage;
 }
@@ -59,6 +64,7 @@ export const NUTRITION_LIBRARIES: readonly NutritionLibrary[] = [
     license: 'Public Domain',
     local: true,
     onlineHosts: ['fdc.nal.usda.gov', 'nal.usda.gov'],
+    discoveryPriority: 10,
     role: 'L1',
     language: 'en',
   },
@@ -71,6 +77,7 @@ export const NUTRITION_LIBRARIES: readonly NutritionLibrary[] = [
     license: 'OGL-C',
     local: true,
     onlineHosts: ['canada.ca', 'inspection.canada.ca', 'cnf-fce.ca'],
+    discoveryPriority: 20,
     role: 'L1',
     language: 'en',
   },
@@ -83,6 +90,7 @@ export const NUTRITION_LIBRARIES: readonly NutritionLibrary[] = [
     license: '免费商用（不得修改/转让）',
     local: true,
     onlineHosts: ['foodcomposition.co.nz', 'foodstandards.govt.nz'],
+    discoveryPriority: 30,
     role: 'L1',
     language: 'en',
   },
@@ -95,6 +103,7 @@ export const NUTRITION_LIBRARIES: readonly NutritionLibrary[] = [
     license: '注明出处可商用（≈CC BY）',
     local: true,
     onlineHosts: [],
+    discoveryPriority: 50,
     role: 'L1',
     language: 'ja',
   },
@@ -107,6 +116,7 @@ export const NUTRITION_LIBRARIES: readonly NutritionLibrary[] = [
     license: 'OGDL 1.0',
     local: true,
     onlineHosts: [],
+    discoveryPriority: 70,
     role: 'L1',
     language: 'zh',
   },
@@ -119,6 +129,7 @@ export const NUTRITION_LIBRARIES: readonly NutritionLibrary[] = [
     license: 'KOGL Type 1',
     local: true,
     onlineHosts: [],
+    discoveryPriority: 80,
     role: 'L1',
     language: 'ko',
   },
@@ -159,6 +170,7 @@ export const NUTRITION_LIBRARIES: readonly NutritionLibrary[] = [
     license: 'OGL v3',
     local: false,
     onlineHosts: ['gov.uk'],
+    discoveryPriority: 60,
     role: 'L2',
     language: 'en',
   },
@@ -183,6 +195,7 @@ export const NUTRITION_LIBRARIES: readonly NutritionLibrary[] = [
     license: '待核验',
     local: false,
     onlineHosts: ['fineli.fi'],
+    discoveryPriority: 90,
     role: 'L2',
     language: 'fi',
   },
@@ -211,6 +224,7 @@ export const NUTRITION_LIBRARIES: readonly NutritionLibrary[] = [
     license: 'CC BY 3.0 AU/DULA',
     local: false,
     onlineHosts: ['foodstandards.gov.au'],
+    discoveryPriority: 40,
     role: 'CANDIDATE',
     language: 'en',
   },

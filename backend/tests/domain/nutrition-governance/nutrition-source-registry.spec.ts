@@ -1,4 +1,5 @@
 import { NutritionGovernanceSourceType } from '@prisma/client';
+import { DEFAULT_DISCOVERY_HOSTS } from '../../../src/application/nutrition-governance/trusted-nutrition-web-search.service';
 import { getNutritionSourceDefinition } from '../../../src/domain/ingredient/nutrition-source-contract';
 import {
   getNutritionLibrary,
@@ -122,6 +123,23 @@ describe('nutrition source registry', () => {
     expect(
       NUTRITION_LIBRARIES.flatMap((library) => library.onlineHosts),
     ).not.toContain('r.jina.ai');
+  });
+
+  it('discovery 默认域名覆盖 US / CA / NZ / AU，且不含抓取代理', () => {
+    expect(DEFAULT_DISCOVERY_HOSTS).toEqual(
+      expect.arrayContaining([
+        'fdc.nal.usda.gov',
+        'canada.ca',
+        'foodcomposition.co.nz',
+        'foodstandards.gov.au',
+      ]),
+    );
+    expect(DEFAULT_DISCOVERY_HOSTS).not.toContain('r.jina.ai');
+    expect(DEFAULT_DISCOVERY_HOSTS.length).toBeLessThanOrEqual(6);
+
+    for (const host of DEFAULT_DISCOVERY_HOSTS) {
+      expect(ONLINE_TRUSTED_HOSTS).toContain(host);
+    }
   });
 
   it('getNutritionLibrary 只按数据库 sourceType 查找，空值返回 undefined', () => {

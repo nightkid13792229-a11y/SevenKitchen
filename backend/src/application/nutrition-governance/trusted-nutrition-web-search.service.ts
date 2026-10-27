@@ -4,7 +4,10 @@ import { createEmptyNutritionProfile } from '../../domain/ingredient/nutrition-p
 import type { NutritionProfileV2 } from '../../domain/ingredient/types';
 import type { NutritionSourceCode } from '../../domain/ingredient/nutrition-source-contract';
 import type { NutritionSourceInput } from '../../domain/nutrition-governance/nutrition-governance.types';
-import { ONLINE_TRUSTED_HOSTS } from '../../domain/nutrition-governance/nutrition-source-registry';
+import {
+  NUTRITION_LIBRARIES,
+  ONLINE_TRUSTED_HOSTS,
+} from '../../domain/nutrition-governance/nutrition-source-registry';
 
 /**
  * 线上可信域名唯一来源是登记表（`ONLINE_TRUSTED_HOSTS`）。
@@ -18,12 +21,37 @@ const DEFAULT_TRUSTED_HOSTS = [...ONLINE_TRUSTED_HOSTS, TRUSTED_PROXY_HOST];
 const URL_PATTERN = /https?:\/\/[^\s"'<>，。；、)）\]]+/giu;
 const MAX_FETCHED_BYTES = 2_000_000;
 const WEB_FETCH_TIMEOUT_MS = 20000;
-const MAX_DISCOVERY_HOSTS = 4;
+const MAX_DISCOVERY_HOSTS = 6;
 const MAX_DISCOVERED_SOURCE_URLS = 6;
 const TRUSTED_WEB_SEARCH_URL = 'https://lite.duckduckgo.com/lite/';
 
-/** Discovery 只从登记表的可信域名里取；代理域名不参与 site: 搜索。 */
-const DEFAULT_DISCOVERY_HOSTS = [...ONLINE_TRUSTED_HOSTS];
+function isTrustedProxyHost(host: string): boolean {
+  return host === TRUSTED_PROXY_HOST || host.endsWith(`.${TRUSTED_PROXY_HOST}`);
+}
+
+/**
+ * Discovery 默认域名：登记表里声明了 `discoveryPriority` 的库，
+ * 每个库取第一个可信域名，按优先级排序、去重、截到 6 个。
+ *
+ * 用优先级而不是数组顺序，保证 `MAX_DISCOVERY_HOSTS` 限制下
+ * 美国 / 加拿大 / 新西兰 / 澳大利亚都有代表域名。
+ * 代理域名不参与 site: 搜索。
+ */
+export const DEFAULT_DISCOVERY_HOSTS = [
+  ...new Set(
+    NUTRITION_LIBRARIES.filter(
+      (library) => library.discoveryPriority !== undefined,
+    )
+      .sort(
+        (left, right) =>
+          (left.discoveryPriority ?? 0) - (right.discoveryPriority ?? 0),
+      )
+      .flatMap((library) => {
+        const host = library.onlineHosts[0];
+        return host && !isTrustedProxyHost(host) ? [host] : [];
+      }),
+  ),
+].slice(0, MAX_DISCOVERY_HOSTS);
 
 type TrustedUrlDiscoveryMode =
   | 'explicit-url'

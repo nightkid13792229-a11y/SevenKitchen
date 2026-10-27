@@ -36,13 +36,9 @@
 
 ---
 
-## 三、三套名单的现状（代码实测）
+## 三、一份登记表（2026-10-28 已落地）
 
-| 位置 | 内容 | 问题 |
-|---|---|---|
-| 数据库枚举 `NutritionGovernanceSourceType` | USDA、NZFCD、NEVO、TFDA、CFCT、MEXT、COFID、CIQUAL、CNF、SUPPLEMENT_LABEL、MANUAL | 含非食材（补剂标签/人工）；无 AFCD/AUSNUT |
-| 导入策略 `source-policy.ts` | USDA_FDC、NZFCD、NEVO、MEXT、AFCD、AUSNUT、CNF、COFID、CIQUAL、CFCT | `USDA_FDC` 与库里 `USDA` 不一致；AFCD/AUSNUT 库里没有 |
-| 线上可信域名 `trusted-nutrition-web-search.service.ts` | fdc.nal.usda.gov、nal.usda.gov、foodstandards.gov.au、foodstandards.govt.nz、foodcomposition.co.nz、canada.ca、inspection.canada.ca、cnf-fce.ca、frida.fooddata.dk、fineli.fi、r.jina.ai | 缺 MEXT/CFCT/CoFID/Ciqual/NEVO/TFDA；含代理域名 `r.jina.ai`（不是来源库） |
+白名单现在只有一份：`backend/src/domain/nutrition-governance/nutrition-source-registry.ts`，共 15 个库——L1 本地主库 7 个、L2 线上长尾 5 个、CANDIDATE 候选 3 个。候选检索只查 L1；导入策略、线上可信域名与 discovery 域名都从登记表派生；`r.jina.ai` 只是抓取通道，不算来源库。
 
 ---
 

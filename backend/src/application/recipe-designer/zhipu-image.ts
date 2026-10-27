@@ -126,33 +126,100 @@ export async function callZhipuImage(
  * · 顾客在交付页第一眼看到的就是这张图，要能看出"这是给我家狗做的饭"
  * · 所以强调**鲜食、碗装、俯拍、干净背景**，避免出现文字与品牌
  */
-export function buildRecipeCoverPrompt(input: {
-  recipeName: string;
-  lifeStageLabels?: string[];
-  foodNames?: string[];
-}): string {
-  const foods = (input.foodNames || []).filter(Boolean).slice(0, 5);
-  const stages = (input.lifeStageLabels || []).filter(Boolean).slice(0, 2);
-  // 食材里本来就有蛋时不禁止；没有蛋时明确禁止，避免模型"顺手"加一个生蛋黄
-  const hasEgg = foods.some((name) => /蛋/.test(name));
+export interface RecipeCoverIngredient {
+  name: string;
+  /** 「部位/状态/预处理」整串，原样传给模型，不拆分 */
+  preparationMethod?: string | null;
+  /** 用量占比（整份配方的百分比；调用方已归一化） */
+  ratioPercent?: number | null;
+}
 
-  return [
-    'A professional editorial food photograph of a freshly cooked homemade dog meal in a shallow light-grey ceramic bowl.',
-    'The bowl is centered with generous margin and fully visible, shot from a 45-degree angle.',
-    foods.length
-      ? `Inside the bowl: gently cooked ${foods.join(', ')}, cut into bite-sized pieces and lightly mixed.`
-      : '',
-    stages.length ? `For ${stages.join(' / ')} dogs.` : '',
-    // 只作为概念，明确不要渲染成文字（模型对"菜名"很容易画出标题）
-    input.recipeName
-      ? `Dish concept: ${input.recipeName} (use only as a concept, do not render any text).`
-      : '',
-    'Soft natural window light from the left, gentle shadows, light oak table, minimal styling, warm and appetizing, premium and clean.',
-    // 实测第一版画成了大块生肉 + 生蛋黄：这里把"熟食"和"不要生肉/猫粮/罐头"写死
-    'No raw meat, no kibble, no canned food, no bones, no text, no letters, no watermark, no logo, no human hands, no packaging.',
-    hasEgg ? '' : 'No egg.',
-    'Photorealistic, high detail, shallow depth of field.',
-  ]
-    .filter(Boolean)
-    .join(' ');
+export interface BuildRecipeCoverPromptInput {
+  /** 仅用于日志/兼容旧入口；不再写进提示词，避免模型画标题 */
+  recipeName?: string;
+  /** 旧入口：没有部位/占比时只传名字 */
+  foodNames?: string[];
+  /** 新入口：系列封面的完整食材数据 */
+  ingredients?: RecipeCoverIngredient[];
+  /** 旧入口传过；现在不再写进提示词 */
+  lifeStageLabels?: string[];
+}
+
+const MAX_PROMPT_LENGTH = 1000;
+
+/**
+ * 拼封面图的提示词（2026-10-27 老板口径）
+ *
+ * · 食材的「部位/状态/预处理」原样带上，不拆分；
+ * · 状态是熟/干，也按「生 + 预处理」画（提示词里明确覆盖）；
+ * · 只统一调色/光线，不规定角度、碗、背景，让模型自由发挥；
+ * · 不出现任何文字；视觉分量大致按占比。
+ */
+export function buildRecipeCoverPrompt(
+  input: BuildRecipeCoverPromptInput,
+): string {
+  const ingredients = (input.ingredients || []).filter(
+    (item) => String(item?.name ?? '').trim(),
+  );
+  const foodNames = (input.foodNames || []).filter(Boolean);
+  const hasEgg = (ingredients.length ? ingredients.map((i) => i.name) : foodNames)
+    .some((name) => /蛋/.test(name));
+
+  const sorted = ingredients
+    .map((item) => ({
+      name: String(item.name).trim(),
+      preparationMethod: String(item.preparationMethod ?? '').trim(),
+      ratioPercent: Number(item.ratioPercent),
+    }))
+    .sort((a, b) => (b.ratioPercent || 0) - (a.ratioPercent || 0));
+
+  const build = (rows: typeof sorted): string => {
+    const ingredientList = rows.length
+      ? rows
+          .map((row) => {
+            const prep = row.preparationMethod
+              ? `（${row.preparationMethod}）`
+              : '';
+            const ratio = Number.isFinite(row.ratioPercent)
+              ? ` ${Math.round(row.ratioPercent)}%`
+              : '';
+            return `${row.name}${prep}${ratio}`;
+          })
+          .join('；')
+      : '';
+
+    const legacyList = !rows.length && foodNames.length
+      ? foodNames.join(', ')
+      : '';
+
+    const sentences = [
+      'Commercial food photography for a premium fresh dog food brand.',
+      ingredientList
+        ? `Show every ingredient below raw and freshly prepped, in its natural, recognizable form and correct cut, with the visual amount roughly matching its percentage: ${ingredientList}.`
+        : '',
+      legacyList
+        ? `Show these ingredients raw and freshly prepped, in their natural, recognizable forms: ${legacyList}.`
+        : '',
+      ingredientList
+        ? 'Even if a description mentions a cooked or dried state, show the ingredient raw and fresh.'
+        : '',
+      // 只做取景安全，不规定角度/碗/背景：陈列交给模型自由发挥
+      'Arrange and style the scene freely for the most appetizing 16:9 composition; keep the ingredients inside the frame with a little breathing room.',
+      'Clean, uncluttered setting. Soft natural daylight, warm neutral color grading, true-to-life colors, gentle contrast, consistent premium look.',
+      'Ultra-detailed, fresh, appetizing, high-end commercial food photography.',
+      'No text, no letters, no numbers, no labels, no logos, no watermarks, no packaging, no human hands.',
+      'No cooked/seared/grilled/stewed look. No blood pools, no slime, no supplements or pills.',
+      hasEgg ? '' : 'No egg.',
+    ];
+
+    return sentences.filter(Boolean).join(' ');
+  };
+
+  let prompt = build(sorted);
+  // 智谱 prompt 上限 1000 字符；超了先丢占比最小的（列表已按占比降序）
+  while (prompt.length > MAX_PROMPT_LENGTH && sorted.length > 0) {
+    sorted.pop();
+    prompt = build(sorted);
+  }
+  return prompt;
 }

@@ -254,6 +254,7 @@
                   class="series-release__cover-upload"
                   :show-file-list="false"
                   :before-upload="handleCoverUpload"
+                  :disabled="uploading || aiCoverGenerating"
                   accept="image/jpeg,image/png,image/webp"
                 >
                   <div
@@ -269,23 +270,71 @@
                       <el-icon><Plus /></el-icon>
                       <span>上传封面图</span>
                     </div>
-                    <div v-if="uploading" class="series-release__cover-mask">
-                      上传中…
+                    <div
+                      v-if="uploading || aiCoverGenerating"
+                      class="series-release__cover-mask"
+                    >
+                      {{
+                        aiCoverGenerating
+                          ? 'AI 正在生成封面…（约 20–40 秒）'
+                          : '上传中…'
+                      }}
                     </div>
                   </div>
                 </el-upload>
                 <div class="series-release__cover-side">
+                  <div v-if="isAdmin" class="series-release__ai-cover-actions">
+                    <el-button
+                      size="small"
+                      :loading="aiCoverGenerating"
+                      :disabled="
+                        aiCoverGenerating || !!aiCoverUnavailableReason
+                      "
+                      @click="handleGenerateAiCover"
+                    >
+                      {{ aiCoverButtonLabel }}
+                    </el-button>
+                  </div>
                   <el-button
                     v-if="form.coverImageUrl"
                     link
                     type="danger"
+                    :disabled="aiCoverGenerating || uploading"
                     @click="form.coverImageUrl = ''"
                   >移除封面</el-button>
+                  <span v-if="aiCoverHint" class="series-release__hint">
+                    {{ aiCoverHint }}
+                  </span>
                   <span class="series-release__hint">
                     建议 16:9 横图，JPG / PNG / WebP，不超过 5MB。
                     发布时会复制到每条阶段食谱。
                   </span>
                 </div>
+              </div>
+              <div v-if="aiCoverPreviewUrl" class="series-release__ai-preview">
+                <img :src="aiCoverPreviewUrl" alt="AI 生成封面预览" />
+                <div class="series-release__ai-preview-actions">
+                  <el-button
+                    size="small"
+                    type="primary"
+                    @click="applyAiCoverPreview"
+                  >用这张</el-button>
+                  <el-button
+                    size="small"
+                    @click="aiCoverPreviewUrl = ''"
+                  >不要</el-button>
+                </div>
+                <span class="series-release__hint">
+                  点「用这张」后，还要点「保存发布设置」才会生效。
+                </span>
+              </div>
+              <div v-if="aiCoverError" class="series-release__ai-error">
+                <span>{{ aiCoverError }}</span>
+                <el-button
+                  link
+                  type="primary"
+                  @click="handleGenerateAiCover"
+                >重试</el-button>
               </div>
             </el-form-item>
 
@@ -560,10 +609,20 @@ import {
   type RecipeHealthTag
 } from '@/api/recipeHealthTags'
 import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole'
+import { getApiErrorMessage } from '@/utils/apiError'
 import {
   RECIPE_PRESENTATION_LIMITS,
   validatePresentationCoverFile
 } from '@/utils/recipeDesigner/presentation'
+import {
+  SERIES_AI_COVER_TIMEOUT_MESSAGE,
+  buildSeriesAiCoverSaveFlag,
+  resolveSeriesAiCoverButtonLabel,
+  resolveSeriesAiCoverHint,
+  resolveSeriesAiCoverUnavailableReason,
+  type SeriesAiCoverContext
+} from '@/utils/recipeDesigner/seriesAiCover'
+import { isTemporarySeriesName } from '@/utils/recipeDesigner/seriesName'
 import {
   buildSeriesReleaseForm,
   buildSeriesReleaseSettingsPatch,
@@ -625,23 +684,33 @@ const nameDirty = computed(
   () => nameDraft.value.trim() !== String(props.seriesName ?? '').trim()
 )
 
+/**
+ * 已成功写库的系列名。
+ *
+ * 列表页打开抽屉后，父组件的 `seriesName` prop 不会随之刷新；
+ * 用本地状态接住 AiNameField 的 saved 事件，AI 按钮和临时名提示才不会停在旧名字。
+ */
+const savedSeriesName = ref(String(props.seriesName ?? '').trim())
+
 watch(
   () => props.seriesName,
   (value) => {
     nameDraft.value = value ?? ''
+    savedSeriesName.value = String(value ?? '').trim()
   },
   { immediate: true }
 )
 
-/** 采用 AI 候选后名称已经落库，这里只把界面上的值对齐并通知父级 */
+/** 采用 AI 候选 / 输入框失焦后名称已经落库，这里只把界面上的值对齐并通知父级 */
 function onNameAdopted(name: string) {
   nameDraft.value = name
+  savedSeriesName.value = String(name ?? '').trim()
   emit('saved')
 }
 
 /** 临时名（「未命名系列 · …」）会印在标签上，后端也会拦 */
 const isTemporaryName = computed(() =>
-  String(props.seriesName ?? '').trim().startsWith('未命名')
+  isTemporarySeriesName(savedSeriesName.value)
 )
 
 
@@ -652,6 +721,13 @@ const uploading = ref(false)
 const releasing = ref(false)
 const unpublishing = ref(false)
 const error = ref('')
+
+/** AI 系列封面（2026-10-27）：可用性 / 生成中 / 预览 / 失败 */
+const aiCoverAvailable = ref<boolean | null>(null)
+const aiCoverGenerating = ref(false)
+const aiCoverPreviewUrl = ref('')
+const aiCoverError = ref('')
+let aiCoverRequestSeq = 0
 
 const healthTags = ref<RecipeHealthTag[]>([])
 const healthTagsLoading = ref(false)
@@ -699,6 +775,39 @@ const releaseStateTagType = computed(() =>
 const isFirstRelease = computed(() => releaseState.value === 'UNPUBLISHED')
 /** 已上线过（含待更新）走更新接口，并提交勾选的阶段 */
 const isUpdate = computed(() => releaseState.value !== 'UNPUBLISHED')
+
+/**
+ * AI 封面按钮状态（2026-10-27）。
+ *
+ * `busy` 把上传 / 保存 / 发布 / 下架都算进来：生成要花钱，
+ * 也不该和另一个写封面的动作打架。生成中不阻断其它字段与保存。
+ */
+const aiCoverContext = computed<SeriesAiCoverContext>(() => ({
+  isAdmin: isAdmin.value,
+  available: aiCoverAvailable.value,
+  generating: aiCoverGenerating.value,
+  busy:
+    uploading.value ||
+    saving.value ||
+    releasing.value ||
+    unpublishing.value,
+  savedSeriesName: savedSeriesName.value,
+  hasCover: Boolean(form.coverImageUrl.trim()),
+  isLive: isUpdate.value
+}))
+const aiCoverUnavailableReason = computed(() =>
+  resolveSeriesAiCoverUnavailableReason(aiCoverContext.value)
+)
+const aiCoverHint = computed(() =>
+  resolveSeriesAiCoverHint(aiCoverContext.value)
+)
+const aiCoverButtonLabel = computed(() =>
+  resolveSeriesAiCoverButtonLabel(
+    aiCoverContext.value.hasCover,
+    aiCoverGenerating.value
+  )
+)
+
 /** 有更新草稿、等待重新发布的阶段数 */
 const pendingStageCount = computed(() =>
   resolveSeriesReleasePendingStageCount(readiness.value)
@@ -928,6 +1037,25 @@ function refreshReadiness(): void {
 }
 
 /**
+ * AI 生图能不能用（2026-10-27）。
+ *
+ * 只有管理员需要知道；查失败按「不可用」处理，不弹错 ——
+ * 生图入口不该因为一次查询失败就在抽屉里报红。
+ */
+async function loadAiCoverAvailability(): Promise<void> {
+  if (!isAdmin.value) {
+    aiCoverAvailable.value = null
+    return
+  }
+  try {
+    const res = await recipeApi.getAiCoverAvailability()
+    aiCoverAvailable.value = Boolean(res?.available)
+  } catch {
+    aiCoverAvailable.value = false
+  }
+}
+
+/**
  * 复用食谱管理的图片上传接口；上传只拿到 URL，点「保存发布设置」后才落库。
  * 返回 false 阻止 el-upload 自己再发一次请求。
  */
@@ -951,6 +1079,84 @@ const handleCoverUpload: UploadProps['beforeUpload'] = async (file) => {
     uploading.value = false
   }
   return false
+}
+
+/**
+ * AI 生成系列封面（2026-10-27）。
+ *
+ * - 空封面 + 未上线：生成后直接存系列（后端只写 coverImageUrl，不推线上）；
+ * - 已有封面 / 已上线：只出预览，点「用这张」才替换表单，最终由「保存发布设置」落库；
+ * - 失败 / 超时保留原封面，只记错误 + 提供重试，**不自动重试**。
+ */
+async function handleGenerateAiCover(): Promise<void> {
+  if (!props.seriesId || aiCoverGenerating.value) return
+  if (aiCoverUnavailableReason.value) return
+
+  const hasCover = Boolean(form.coverImageUrl.trim())
+  const save = buildSeriesAiCoverSaveFlag({
+    hasCover,
+    isLive: isUpdate.value
+  })
+  if (hasCover) {
+    try {
+      await ElMessageBox.confirm(
+        '重新生成需要再调用一次 AI（约 0.1 元/张）。生成后先看预览，点「用这张」才会替换当前封面。继续？',
+        '重新生成封面',
+        {
+          type: 'warning',
+          confirmButtonText: '继续生成',
+          cancelButtonText: '取消'
+        }
+      )
+    } catch {
+      return
+    }
+  }
+
+  const seq = ++aiCoverRequestSeq
+  aiCoverGenerating.value = true
+  aiCoverError.value = ''
+  try {
+    const result = await recipeDesignerApi.generateSeriesAiCover(
+      props.seriesId,
+      { save }
+    )
+    if (seq !== aiCoverRequestSeq) return
+    if (result.saved) {
+      form.coverImageUrl = result.url
+      // 服务器已经写库：表单和基线一起更新，避免「保存发布设置」误以为有未保存修改
+      baseline.value = cloneSeriesReleaseForm({
+        ...baseline.value,
+        coverImageUrl: result.url
+      })
+      ElMessage.success('AI 封面已生成并保存')
+      // 刷新「缺封面」阻断项；hydrate=false，不覆盖其它未保存编辑
+      void loadReadiness(false)
+    } else {
+      aiCoverPreviewUrl.value = result.url
+      ElMessage.success('已生成预览，确认后才会替换')
+    }
+  } catch (error: any) {
+    if (seq !== aiCoverRequestSeq) return
+    // 全局拦截器已经弹过一次；这里只保留可回看的红字
+    aiCoverError.value =
+      error?.code === 'ECONNABORTED'
+        ? SERIES_AI_COVER_TIMEOUT_MESSAGE
+        : `AI 生成失败：${getApiErrorMessage(error, '请点重试')}`
+  } finally {
+    if (seq === aiCoverRequestSeq) {
+      aiCoverGenerating.value = false
+    }
+  }
+}
+
+/** 用预览替换抽屉里的封面；真正落库 / 上线仍由「保存发布设置」完成 */
+function applyAiCoverPreview(): void {
+  if (!aiCoverPreviewUrl.value) return
+  form.coverImageUrl = aiCoverPreviewUrl.value
+  aiCoverPreviewUrl.value = ''
+  aiCoverError.value = ''
+  ElMessage.success('封面已替换，记得点「保存发布设置」')
 }
 
 /**
@@ -1158,11 +1364,16 @@ watch(
       // 关闭后到达的响应不再写回，避免下次打开先闪一眼旧结果
       requestSeq += 1
       healthTagsRequestSeq += 1
+      aiCoverRequestSeq += 1
       loading.value = false
       saving.value = false
       uploading.value = false
       releasing.value = false
       unpublishing.value = false
+      aiCoverGenerating.value = false
+      aiCoverPreviewUrl.value = ''
+      aiCoverError.value = ''
+      aiCoverAvailable.value = null
       error.value = ''
       return
     }
@@ -1178,6 +1389,7 @@ watch(
     }
     void loadReadiness(true)
     void loadHealthTags()
+    void loadAiCoverAvailability()
   },
   { immediate: true }
 )
@@ -1526,6 +1738,48 @@ watch(
   align-items: flex-start;
   gap: 6px;
   padding-top: 4px;
+}
+
+.series-release__ai-cover-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.series-release__ai-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 8px;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.series-release__ai-preview img {
+  width: 160px;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #f0f2f5;
+}
+
+.series-release__ai-preview-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.series-release__ai-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #f56c6c;
 }
 
 .series-release__select {

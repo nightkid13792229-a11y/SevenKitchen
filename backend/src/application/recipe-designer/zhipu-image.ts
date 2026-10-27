@@ -183,6 +183,7 @@ export function buildRecipeCoverPrompt(
   if (imageBrief) {
     const guard = [
       'No text, no words, no letters, no numbers, no labels, no captions, no infographic, no typography, no watermark, no logo, no packaging, no human hands.',
+      'Only the ingredients described in the brief; no extra food or garnish. No boiled eggs. Keep every ingredient inside the frame; no cropped food.',
       'No cooked/seared/grilled/stewed look. No blood pools, no slime, no supplements or pills.',
       hasEgg ? '' : 'No egg.',
     ]

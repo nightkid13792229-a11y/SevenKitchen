@@ -98,7 +98,7 @@ export class RecipeCoverVisualBriefService {
       );
     }
 
-    let brief = sanitizeBrief(parsed.brief);
+    const brief = sanitizeBrief(parsed.brief);
     if (!brief) {
       throw new BadRequestException(
         '封面画面描述生成失败：文本模型没有返回摄影描述',
@@ -133,19 +133,6 @@ export class RecipeCoverVisualBriefService {
       );
     }
 
-    // DeepSeek 的 brief 有时只写 6/10：结构化清单里有、正文没写到的，
-    // 直接补进最终 prompt；否则生图模型只看正文，永远不会画全。
-    const missingVisuals = structured
-      .map((item) =>
-        sanitizeBrief((item as { visual?: unknown })?.visual),
-      )
-      .filter((visual) => visual && !coversVisual(brief, visual));
-    if (missingVisuals.length > 0) {
-      brief = sanitizeBrief(
-        `${brief} The scene also includes ${missingVisuals.join('; ')}.`,
-      );
-    }
-
     this.cache.set(cacheKey, brief);
     this.logger.log(`[cover-brief] ${brief}`);
     return brief;
@@ -157,37 +144,16 @@ export function buildRecipeCoverVisualSystemPrompt(): string {
     'You are a commercial food photographer and food stylist.',
     'Design ONE editorial food photograph for a premium fresh dog food brand. The final brief must be a single natural paragraph, under 110 words, with no lists, colons, labels, numbers or duplicates.',
     'Show every ingredient exactly once, raw and freshly prepped, in its correct cut and part. Use the ratios only to decide the amounts; never write numbers. Use the preparation text: if it says skin removed, say skinless; if it says cubed or diced, say cubes or diced.',
+    'Use only the ingredients in the input; do not add any extra food such as rice, beans or bread unless they are listed.',
     'Composition: slice or fan the main protein on a small ceramic platter in the foreground as the hero; arrange the other ingredients in small separate bowls or neat piles around it, in depth. Never show a whole raw breast or one giant piece of meat.',
-    'Make every ingredient visually distinct and recognizable: grains as grains (oat groats are pale plump grains, not buckwheat or beans), pumpkin as bright orange cubes, organs in separate small dishes, eggs cracked, oil in one small dish. Do not invent extra ingredients or duplicate bowls or eggs.',
-    'Use only non-food props: linen and one empty ceramic bowl; no forks.',
+    'Make every ingredient visually distinct and recognizable: oat groats are pale beige plump grains, not dark brown buckwheat or beans; pumpkin as bright orange cubes; oil in one small dish. Put duck heart, duck gizzard and duck liver on three separate small dishes, never on one plate or in one bowl; three dishes total. Use exactly one egg in total: one cracked raw egg with a runny yolk and clear white; no second whole egg in its shell, no boiled egg halves. Keep pumpkin cubes and carrot pieces in two separate small dishes; never put them in one bowl; the carrots are not pumpkin. Broccoli is a tree-like green head with florets; never substitute leafy greens, spinach or bok choy. The main protein is rosy-red, darker than chicken; slice it thinly and fan the slices. Keep every bowl and the broccoli inside the frame with a little margin; do not crop any ingredient. Do not invent extra ingredients or duplicate bowls or eggs.',
+    'Use only non-food props: linen; no empty bowl, no forks.',
     'Scene: a real kitchen, a light oak table by a window, soft natural side light, warm neutral color grading, shallow depth of field, high-end commercial food photography.',
     'Use the English food names naturally; do not write them as labels.',
     'Even if the preparation says cooked or dried, show it raw and fresh; never write cooked, steamed, grilled or lightly cooked.',
     'The photograph must contain no text, letters, numbers, labels, captions, packaging, logos, watermarks or human hands; it must not look like an infographic.',
     'Return JSON only: {"brief":"...","ingredients":[{"index":0,"visual":"...","placement":"..."}],"missing":[]}',
   ].join(' ');
-}
-
-const VISUAL_STOPWORDS = new Set([
-  'the', 'and', 'with', 'fresh', 'raw', 'large', 'small', 'pale', 'pink',
-  'deep', 'red', 'orange', 'green', 'brown', 'golden', 'some', 'pieces',
-  'slices', 'cubes', 'florets', 'wedges', 'mound', 'dish', 'bowl', 'platter',
-  'glass', 'soft', 'light', 'thin', 'thick', 'whole', 'cut', 'cooked',
-  'prepped', 'skinless', 'trimmed', 'cracked', 'lightly', 'steamed',
-  'boiled', 'grilled', 'seared', 'roasted', 'fried', 'yolk', 'white',
-  'one', 'two', 'a', 'of', 'in', 'on', 'to', 'for', 'its', 'their', 'his',
-  'her', 'as', 'at', 'by', 'or', 'an', 'is', 'are', 'premium', 'editorial',
-]);
-
-/** brief 是否已经覆盖这条食材：外观描述里的关键词全部出现才算覆盖 */
-function coversVisual(brief: string, visual: string): boolean {
-  const words = visual
-    .toLowerCase()
-    .split(/[^a-z]+/)
-    .filter((word) => word.length >= 3 && !VISUAL_STOPWORDS.has(word));
-  if (words.length === 0) return true;
-  const text = brief.toLowerCase();
-  return words.every((word) => text.includes(word));
 }
 
 function sanitizeBrief(value: unknown): string {

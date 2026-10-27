@@ -111,24 +111,6 @@ describe('RecipeCoverVisualBriefService', () => {
     expect(brief).not.toContain(':');
   });
 
-  it('正文 brief 漏掉的食材会补进最终 prompt', async () => {
-    callDeepSeekJson.mockResolvedValue({
-      brief: 'A photo with a pale-pink duck breast and oat groats.',
-      ingredients: [
-        { index: 0, visual: 'a pale-pink duck breast', placement: 'foreground' },
-        { index: 1, visual: 'a mound of oat groats', placement: 'middle' },
-        { index: 2, visual: 'duck heart', placement: 'background' },
-      ],
-      missing: [],
-    });
-    const { service } = createService();
-
-    const brief = await service.build(ingredients);
-
-    expect(brief).toContain('duck heart');
-    expect(brief).toContain('The scene also includes');
-  });
-
   it('有食材没被安排进画面（missing 非空）就报错', async () => {
     callDeepSeekJson.mockResolvedValue({
       ...parsed,

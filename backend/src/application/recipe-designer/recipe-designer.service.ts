@@ -10583,18 +10583,27 @@ export class RecipeDesignerService {
     });
 
     /**
-     * 历史食谱清单里的定制单（2026-10-22）。
+     * 历史食谱清单里的定制单（2026-10-22；2026-10-28 收紧）。
      *
-     * 只取**已关联正式食谱**（`recipeId` 非空）且未取消的定制单：
-     * 没有关联食谱的单一律没有食谱可展示。除身份字段外，
-     * 一并取营养报告与食谱项（名称/示例重量），供 builder 归一化明细；
-     * 问卷答案/附件等整单内容不进入洞察。
+     * ## 只收「已完成」的定制单
+     *
+     * 这个面板回答的是「**这只狗真真正正吃过什么**」。交付 ≠ 吃过：
+     * 顾客收到后不认可、正在改的那一份，狗可能连一顿都没吃过，
+     * 把它列进历史会误导营养师（老板 2026-10-28 口径）。
+     *
+     * 「已完成」= 顾客点「确认收到」或交付满确认期无异议自动确认
+     * （`CustomRecipeScheduler` 每小时跑一次）。这条口径天然排除了：
+     *   · 刚交付、还没确认的；
+     *   · **有未处理完调整的**（调度器`decideAutoComplete`明确跳过）。
+     *
+     * 除身份字段外，一并取营养报告与食谱项（名称/示例重量），供 builder
+     * 归一化明细；问卷答案/附件等整单内容不进入洞察。
      */
     const rawCustomRecipeHistoryOrders =
       await this.prisma.customRecipeOrder.findMany({
         where: {
           dogId,
-          status: { not: CustomRecipeStatus.CANCELLED },
+          status: CustomRecipeStatus.COMPLETED,
           recipeId: { not: null },
         },
         orderBy: { createdAt: 'desc' },

@@ -139,7 +139,8 @@ describe('DogDesignInsight · 历史食谱清单', () => {
       [
         {
           id: 'cro-1',
-          status: 'DELIVERED',
+          // 2026-10-28：只有「已完成」的定制单进历史
+          status: 'COMPLETED',
           createdAt: '2026-10-01T00:00:00.000Z',
           deliveredAt: '2026-10-05T00:00:00.000Z',
           recipe: {
@@ -188,7 +189,7 @@ describe('DogDesignInsight · 历史食谱清单', () => {
         name: '定制鲜食 A',
         kind: 'CUSTOM',
         date: '2026-10-05T00:00:00.000Z',
-        status: 'DELIVERED',
+        status: 'COMPLETED',
         ingredients: [{ name: '鸭肉', amount: '100g' }],
         macros: [
           {
@@ -280,7 +281,8 @@ describe('DogDesignInsight · 历史食谱清单', () => {
       [
         {
           id: 'cro-1',
-          status: 'DELIVERED',
+          // 只有完成的定制单进历史（2026-10-28）
+          status: 'COMPLETED',
           createdAt: '2026-10-01T00:00:00.000Z',
           recipe: { id: 'recipe-4', name: '最新的定制' },
         },
@@ -445,7 +447,7 @@ describe('DogDesignInsight · 历史食谱清单', () => {
       [
         {
           id: 'cro-1',
-          status: 'DELIVERED',
+          status: 'COMPLETED',
           createdAt: '2026-10-01T00:00:00.000Z',
           deliveredAt: '2026-10-02T00:00:00.000Z',
           // 活行：改名 + 换原料之后的样子
@@ -494,6 +496,34 @@ describe('DogDesignInsight · 历史食谱清单', () => {
         weightPercent: '14.21%',
       },
     ]);
+  });
+
+  /**
+   * 老板 2026-10-28 口径：交付 ≠ 吃过。
+   * 顾客不认可、正在改的那份可能连一顿都没做过，不能算「历史」。
+   */
+  it('★ 只交付、还没完成的定制单不算历史（正在调整的那一份）', () => {
+    const result = buildDogHistoryRecipes(
+      [],
+      [
+        {
+          id: 'cro-delivered',
+          status: 'DELIVERED',
+          createdAt: '2026-10-27T15:00:00.000Z',
+          deliveredAt: '2026-10-27T15:15:00.000Z',
+          recipe: { id: 'recipe-rabbit', name: '兔肉高蛋白定制餐' },
+        },
+        {
+          id: 'cro-completed',
+          status: 'COMPLETED',
+          createdAt: '2026-09-01T00:00:00.000Z',
+          deliveredAt: '2026-09-02T00:00:00.000Z',
+          recipe: { id: 'recipe-old', name: '以前在用的一份' },
+        },
+      ],
+    );
+
+    expect(result.map((row) => row.name)).toEqual(['以前在用的一份']);
   });
 
   it('没有任何历史时返回空数组', () => {

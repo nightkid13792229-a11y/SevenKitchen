@@ -10183,7 +10183,8 @@ describe('RecipeDesignerService', () => {
       prisma.customRecipeOrder.findMany.mockResolvedValue([
         {
           id: 'cro-1',
-          status: 'DELIVERED',
+          // 2026-10-28：只有「已完成」的定制单进历史（交付 ≠ 吃过）
+          status: 'COMPLETED',
           createdAt: new Date('2026-10-01T00:00:00.000Z'),
           deliveredAt: new Date('2026-10-05T00:00:00.000Z'),
           recipe: {
@@ -10220,7 +10221,7 @@ describe('RecipeDesignerService', () => {
           name: '定制鲜食 A',
           kind: 'CUSTOM',
           date: '2026-10-05T00:00:00.000Z',
-          status: 'DELIVERED',
+          status: 'COMPLETED',
           ingredients: [{ name: '鸭肉', amount: '100g' }],
           macros: [
             {
@@ -10259,7 +10260,7 @@ describe('RecipeDesignerService', () => {
       expect(prisma.customRecipeOrder.findMany).toHaveBeenCalledWith({
         where: {
           dogId: 'dog-1',
-          status: { not: 'CANCELLED' },
+          status: 'COMPLETED',
           recipeId: { not: null },
         },
         orderBy: { createdAt: 'desc' },

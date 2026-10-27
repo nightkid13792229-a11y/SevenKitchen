@@ -857,10 +857,12 @@ export function buildSameOrderHistoryRecipes(
  *
  * 数据来源：
  *  - `orderItems`：鲜食订单明细（已完成/已发货等均可），食谱名取自 `recipeSnapshot`；
- *  - `customRecipeOrders`：已关联正式 `Recipe` 的定制单。
+ *  - `customRecipeOrders`：**已完成**的定制单（2026-10-28 起只认完成）。
  *
  * 规则：
  *  - 已取消订单不算「用过」，空食谱名不展示；
+ *  - 定制单只有「已完成」才算「用过」：交付 ≠ 吃过。顾客不认可、正在改的那份
+ *    可能连一顿都没做过，列进历史会误导营养师（老板 2026-10-28 口径）；
  *  - 去重键 = 食谱身份（快照/Recipe id，缺失时退回名字）+ 来源，保留最近一次使用；
  *    明细跟随被保留的那一次，不跨次合并；
  *  - 按使用时间倒序，没有日期的排最后。
@@ -919,6 +921,13 @@ export function buildDogHistoryRecipes(
 
   for (const order of customRecipeOrders ?? []) {
     if (isCancelledOrderStatus(order.status)) continue;
+    /**
+     * 只认「已完成」的定制单（2026-10-28）。
+     *
+     * SQL 层已经过滤过一次，这里再守一道：历史面板回答的是
+     * 「这只狗真真正正吃过什么」，交付了但还没被接受的不算。
+     */
+    if (String(order.status ?? '').toUpperCase() !== 'COMPLETED') continue;
     const recipe = order.recipe;
     const snapshot = order.deliveredSnapshot;
     const snapshotName = firstString(snapshot?.recipe?.name);

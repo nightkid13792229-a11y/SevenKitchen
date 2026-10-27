@@ -6,6 +6,7 @@ describe('AgentProviderConfigService', () => {
   const mockPrisma = {
     agentProviderConfig: {
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
       upsert: jest.fn(),
     },
   } as any;
@@ -102,6 +103,68 @@ describe('AgentProviderConfigService', () => {
     const update = mockPrisma.agentProviderConfig.upsert.mock.calls[0][0].update;
     expect(update).not.toHaveProperty('apiKeyEncrypted');
     expect(update).not.toHaveProperty('apiKeyLast4');
+  });
+
+  it('默认 DeepSeek 关闭时，可回退到任意一条已启用的 DeepSeek（封面画面描述用）', async () => {
+    mockPrisma.agentProviderConfig.findUnique.mockResolvedValue(null);
+    mockPrisma.agentProviderConfig.upsert.mockImplementation(async ({ create }) => ({
+      ...create,
+      id: 'config-1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }));
+
+    await service.updateSettings(
+      { enabled: true, apiKey: 'sk-deepseek-secret-1234' },
+      'admin-1',
+    );
+    const encrypted =
+      mockPrisma.agentProviderConfig.upsert.mock.calls[0][0].create
+        .apiKeyEncrypted;
+
+    mockPrisma.agentProviderConfig.findUnique.mockResolvedValue({
+      id: 'config-default',
+      purpose: 'DEFAULT',
+      provider: 'DEEPSEEK',
+      enabled: false,
+      baseUrl: 'https://api.deepseek.com',
+      model: 'deepseek-v4-flash',
+      reviewModel: 'deepseek-v4-pro',
+      apiKeyEncrypted: encrypted,
+      apiKeyLast4: '1234',
+      maxConcurrency: 1,
+      requestTimeoutMs: 90000,
+      retryCount: 2,
+    });
+    mockPrisma.agentProviderConfig.findFirst.mockResolvedValue({
+      id: 'config-copywriting',
+      purpose: 'RECIPE_COPYWRITING',
+      provider: 'DEEPSEEK',
+      enabled: true,
+      baseUrl: 'https://api.deepseek.com',
+      model: 'deepseek-v4-flash',
+      reviewModel: 'deepseek-v4-pro',
+      apiKeyEncrypted: encrypted,
+      apiKeyLast4: '1234',
+      maxConcurrency: 1,
+      requestTimeoutMs: 90000,
+      retryCount: 2,
+    });
+
+    const runtime = await service.getEnabledDeepSeekRuntimeConfig({
+      fallbackToAnyPurpose: true,
+    });
+
+    expect(runtime.model).toBe('deepseek-v4-flash');
+    expect(runtime.apiKey).toBe('sk-deepseek-secret-1234');
+    expect(mockPrisma.agentProviderConfig.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          provider: 'DEEPSEEK',
+          enabled: true,
+        }),
+      }),
+    );
   });
 
   it('saves a separate review model for higher-risk Agent tasks', async () => {

@@ -41,8 +41,22 @@ export class RecipeCoverVisualBriefService {
       (row) => !this.cache.has(this.cacheKey(row)),
     );
     if (hasMissing) {
-      const config =
-        await this.agentProviderConfigService.getEnabledDeepSeekRuntimeConfig();
+      let config: Awaited<
+        ReturnType<
+          AgentProviderConfigService['getEnabledDeepSeekRuntimeConfig']
+        >
+      >;
+      try {
+        config =
+          await this.agentProviderConfigService.getEnabledDeepSeekRuntimeConfig({
+            // 老板可能只启用了某个专用 DeepSeek 用途、没启用全局默认
+            fallbackToAnyPurpose: true,
+          });
+      } catch (error: any) {
+        throw new BadRequestException(
+          `封面画面描述生成失败：${error?.message || '文本模型未配置'}。请到后台「AI / Agent 配置」启用 DeepSeek（任一用途或全局默认）`,
+        );
+      }
 
       let parsed: Record<string, unknown>;
       try {

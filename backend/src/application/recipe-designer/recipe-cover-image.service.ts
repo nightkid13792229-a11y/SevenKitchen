@@ -1,11 +1,21 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { AgentProviderConfigService } from '../nutrition-governance/agent-provider-config.service';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
+import { ImageOptimizationService } from '../../infrastructure/services/image-optimization.service';
 import { buildRecipeCoverPrompt, callZhipuImage } from './zhipu-image';
 
 /** 生图用途的 provider 配置标识（后台 AI 设置里那条） */
 export const RECIPE_COVER_IMAGE_PURPOSE = 'RECIPE_COVER_IMAGE';
 export const ZHIPU_PROVIDER = 'ZHIPU';
+
+/**
+ * 封面图的画面比例（2026-10-27）。
+ *
+ * - `SQUARE`：旧「编辑食谱」页的单食谱封面，方图，行为保持不变；
+ * - `COVER_16_9`：产品线系列封面，小程序首页/详情页是横图，
+ *   方图会被上下裁掉近一半，所以单独出 16:9 再压成 750×422。
+ */
+export type RecipeCoverLayout = 'SQUARE' | 'COVER_16_9';
 
 export interface GenerateRecipeCoverInput {
   recipeName: string;
@@ -15,6 +25,8 @@ export interface GenerateRecipeCoverInput {
   foodNames?: string[];
   /** 传了就以平台身份标识给智谱（官方建议，便于内容安全干预） */
   customerId?: string | null;
+  /** 画面比例，缺省 = SQUARE（旧入口零变化） */
+  layout?: RecipeCoverLayout;
 }
 
 /**
@@ -49,6 +61,7 @@ export class RecipeCoverImageService {
   constructor(
     private readonly agentProviderConfigService: AgentProviderConfigService,
     private readonly cosService: TencentCosService,
+    private readonly imageOptimizationService: ImageOptimizationService,
   ) {}
 
   /** 后台按钮要根据它决定"能不能点" —— 没配就不让点，而不是点了才报错 */
@@ -81,6 +94,13 @@ export class RecipeCoverImageService {
       foodNames: input.foodNames,
     });
 
+    /**
+     * 1728x960 是智谱官方推荐的横图档位（1.8:1，最接近 16:9），
+     * 不赌「自定义精确 16:9」：最终反正会压到 750×422。
+     */
+    const layout: RecipeCoverLayout = input.layout ?? 'SQUARE';
+    const size = layout === 'COVER_16_9' ? '1728x960' : '1280x1280';
+
     this.logger.log(`[cover] 开始生成：${input.recipeName}`);
 
     // ① 生图（拿临时链接）
@@ -90,7 +110,7 @@ export class RecipeCoverImageService {
       apiKey: config.apiKey,
       requestTimeoutMs: config.requestTimeoutMs,
       prompt,
-      size: '1280x1280',
+      size,
       quality: 'hd',
       // 官方要求 6-128 字符；拿不到顾客 id 就不传（不传比传个假的强）
       userId: input.customerId && input.customerId.length >= 6
@@ -102,9 +122,22 @@ export class RecipeCoverImageService {
     const buffer = await this.downloadTemporaryImage(temporaryUrl);
 
     // ③ 转存到我们自己的 COS
+    //    16:9 封面走和手动上传完全同一套压缩（750×422、≤160KB），
+    //    顾客侧加载速度和现有封面一致；方图保持原样，旧入口零变化。
+    let uploadBuffer = buffer;
+    let uploadFilename = `ai-cover-${Date.now()}.jpg`;
+    if (layout === 'COVER_16_9') {
+      const optimized = await this.imageOptimizationService.optimizeForUpload(
+        buffer,
+        'recipe-cover',
+      );
+      uploadBuffer = optimized.buffer;
+      uploadFilename = optimized.filename;
+    }
+
     const uploaded = await this.cosService.uploadImage(
-      buffer,
-      `ai-cover-${Date.now()}.jpg`,
+      uploadBuffer,
+      uploadFilename,
       'recipes/covers',
     );
 

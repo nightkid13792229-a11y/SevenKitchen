@@ -6,7 +6,11 @@ import {
 } from '../nutrition-governance/agent-provider-config.service';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import { ImageOptimizationService } from '../../infrastructure/services/image-optimization.service';
-import { buildRecipeCoverPrompt, callZhipuImage } from './zhipu-image';
+import {
+  buildRecipeCoverPrompt,
+  callZhipuImage,
+  type RecipeCoverIngredient,
+} from './zhipu-image';
 
 /** 生图用途的 provider 配置标识（后台「智谱封面图」那条） */
 export { RECIPE_COVER_IMAGE_PURPOSE, ZHIPU_PROVIDER };
@@ -24,8 +28,10 @@ export interface GenerateRecipeCoverInput {
   recipeName: string;
   /** 适用生命阶段的中文标签，只用于提示词 */
   lifeStageLabels?: string[];
-  /** 主要食材名，只用于提示词 */
+  /** 旧入口：只传食材名（没有占比/预处理） */
   foodNames?: string[];
+  /** 新入口：系列封面的完整食材数据（名字 / 部位状态预处理 / 占比） */
+  ingredients?: RecipeCoverIngredient[];
   /** 传了就以平台身份标识给智谱（官方建议，便于内容安全干预） */
   customerId?: string | null;
   /** 画面比例，缺省 = SQUARE（旧入口零变化） */
@@ -95,6 +101,7 @@ export class RecipeCoverImageService {
       recipeName: input.recipeName,
       lifeStageLabels: input.lifeStageLabels,
       foodNames: input.foodNames,
+      ingredients: input.ingredients,
     });
 
     /**

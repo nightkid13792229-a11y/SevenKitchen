@@ -3135,6 +3135,15 @@ model CustomRecipeAftersale {
   recipeRequests Json?  @map("recipe_requests")
   /// 类型 —— 取值来自选项集 `custom_recipe_aftersale_type`
   type          String   @map("type") @db.VarChar(48)
+  /// 谁发起的这一条（2026-10-27）。
+  ///
+  /// - `CUSTOMER`：顾客在小程序提交；
+  /// - `STAFF`：员工在后台「代客发起调整」——老板改稿后重新交付，
+  ///   不必等顾客自己提单（顾客不方便/不会用时唯一的路）。
+  ///
+  /// 员工发起的**不占顾客免费次数、不受售后窗口限制**，创建时直接进入 ACCEPTED，
+  /// 处理人就是发起人，链路照旧走「改稿 → 重新交付 → 完成」。
+  source        String   @default("CUSTOMER") @map("source") @db.VarChar(16)
   status        CustomRecipeAftersaleStatus @default(PENDING)
   description   String   @db.VarChar(1000)
   photos        String[] @default([])

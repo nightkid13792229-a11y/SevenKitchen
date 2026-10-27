@@ -4129,9 +4129,29 @@ export class RecipeDesignerService {
         });
       }
 
-      // 正式食谱：该系列下**所有版本行**一起改名，保持与系列名一致
+      /**
+       * 正式食谱：该系列下**未交付过**的版本行一起改名，保持与系列名一致。
+       *
+       * ⚠️ **已经交付过的私密食谱不改名**（2026-10-28 修）。
+       *
+       * 改名此前会连带把**已交付的定制食谱**一起改掉，于是出现
+       * 「历史订单里写着鸭肉高蛋白定制餐，点开原料却是兔里脊」——
+       * 名字跟着系列走、原料却冻结在交付那一刻，两边对不上。
+       * 交付快照（`custom_recipe_delivery_item.content_snapshot`）
+       * 里存的是交付当时真实的名字，那才是顾客手里那份的历史。
+       *
+       * 客户重新改稿重交时，`createOrUpdatePrivateRecipeSnapshot`
+       * 会把名字按最新草稿重写一次 —— 所以"改名后重交"仍然生效，
+       * 只有"改名但不重交"不会去篡改已经交出去的那一版。
+       */
       await tx.recipe.updateMany({
-        where: { seriesId, name: { not: name } },
+        where: {
+          seriesId,
+          name: { not: name },
+          // 批次交付 / 老单份交付 任一存在 = 已经交到顾客手里了
+          deliveryItems: { none: {} },
+          deliveries: { none: {} },
+        },
         data: { name },
       });
 
@@ -8318,6 +8338,17 @@ export class RecipeDesignerService {
     const targetService = this.requireSupplementTargetService();
 
     let definitions: SupplementTargetDefinition[];
+    /**
+     * 客户端带回的**原目标值**（撤销删除重建原料时用）。
+     *
+     * 目标浓度 = 本份提供的营养素 ÷ 配方总重 × 1000。总重取的是草稿上一次
+     * 评估回写的缓存，删除/撤销之后可能明显偏小 —— 分母一小，目标就被
+     * 放大几十上百倍（2026-10-27 实测：碘目标被写成 144,834 μg，应为 ~918）。
+     * 所以「原样恢复」时直接沿用原值，不再重算。
+     */
+    const presetTargetValues = this.readPresetSupplementTargetValues(
+      input.explicitTargets,
+    );
     if (input.explicitTargets !== undefined) {
       if (input.explicitTargets === null) {
         throw new BadRequestException(
@@ -8370,6 +8401,24 @@ export class RecipeDesignerService {
       );
     }
 
+    /**
+     * 所有目标都带着原值（= 原样恢复）时，直接用原值，不重算。
+     * 部分带值时仍然整体重算，避免同一条记录里一半是旧值一半是新值。
+     */
+    const allPreset =
+      definitions.length > 0 &&
+      definitions.every((definition) =>
+        presetTargetValues.has(definition.fieldPath),
+      );
+    if (allPreset) {
+      return definitions.map((definition) =>
+        this.toDesignSupplementTarget(
+          definition,
+          presetTargetValues.get(definition.fieldPath) ?? null,
+        ),
+      );
+    }
+
     const computed = targetService.computeTargets(
       profile,
       definitions,
@@ -8379,6 +8428,34 @@ export class RecipeDesignerService {
     return computed.map((target) =>
       this.toDesignSupplementTarget(target, target.targetValuePerKg),
     );
+  }
+
+  /**
+   * 从显式目标里读出「客户端带回来的原值」。
+   *
+   * ⚠️ 只认 `targetValue`（**落库口径**，撤销重建时原样带回来），
+   * **不认 `targetValuePerKg`**（客户端自己算的浓度，历史规则明确忽略 ——
+   * 浓度必须由服务端按当前配方总重算，不能被前端指定）。
+   *
+   * 只接受有限正数：0 或空值等于没有，不能当成「原值就是 0」。
+   */
+  private readPresetSupplementTargetValues(
+    explicitTargets: unknown,
+  ): Map<string, number> {
+    const presets = new Map<string, number>();
+    if (!Array.isArray(explicitTargets)) return presets;
+    for (const raw of explicitTargets) {
+      if (!raw || typeof raw !== 'object') continue;
+      const record = raw as Record<string, unknown>;
+      const fieldPath =
+        typeof record.fieldPath === 'string' ? record.fieldPath.trim() : '';
+      if (!fieldPath) continue;
+      const value = Number(record.targetValue);
+      if (Number.isFinite(value) && value > 0) {
+        presets.set(fieldPath, value);
+      }
+    }
+    return presets;
   }
 
   private resolveSupplementTargetTotalWeightG(input: {
@@ -10445,6 +10522,34 @@ export class RecipeDesignerService {
     };
   }
 
+  /**
+   * 从交付快照里只挑出「历史食谱」要用的三样：名字、原料、宏量行。
+   *
+   * 快照整份有采购清单/制作步骤/喂食参数，几十 KB —— 历史列表不该背着它们，
+   * 这里裁完再往下传。
+   */
+  private pickDeliveredHistorySnapshot(snapshot: unknown): {
+    recipe: { name: string | null; items: unknown[] };
+    nutrition: { reportRows: unknown[] };
+  } | null {
+    if (!snapshot || typeof snapshot !== 'object') return null;
+    const record = snapshot as Record<string, any>;
+    const recipe = (record.recipe ?? null) as Record<string, any> | null;
+    if (!recipe) return null;
+    const nutrition = (record.nutrition ?? null) as Record<string, any> | null;
+    return {
+      recipe: {
+        name: typeof recipe.name === 'string' ? recipe.name : null,
+        items: Array.isArray(recipe.items) ? recipe.items : [],
+      },
+      nutrition: {
+        reportRows: Array.isArray(nutrition?.reportRows)
+          ? nutrition.reportRows
+          : [],
+      },
+    };
+  }
+
   // ============ Web 食谱设计器配套：爱犬设计洞察 ============
 
   async getDogDesignInsight(
@@ -10535,18 +10640,27 @@ export class RecipeDesignerService {
     });
 
     /**
-     * 历史食谱清单里的定制单（2026-10-22）。
+     * 历史食谱清单里的定制单（2026-10-22；2026-10-28 收紧）。
      *
-     * 只取**已关联正式食谱**（`recipeId` 非空）且未取消的定制单：
-     * 没有关联食谱的单一律没有食谱可展示。除身份字段外，
-     * 一并取营养报告与食谱项（名称/示例重量），供 builder 归一化明细；
-     * 问卷答案/附件等整单内容不进入洞察。
+     * ## 只收「已完成」的定制单
+     *
+     * 这个面板回答的是「**这只狗真真正正吃过什么**」。交付 ≠ 吃过：
+     * 顾客收到后不认可、正在改的那一份，狗可能连一顿都没吃过，
+     * 把它列进历史会误导营养师（老板 2026-10-28 口径）。
+     *
+     * 「已完成」= 顾客点「确认收到」或交付满确认期无异议自动确认
+     * （`CustomRecipeScheduler` 每小时跑一次）。这条口径天然排除了：
+     *   · 刚交付、还没确认的；
+     *   · **有未处理完调整的**（调度器`decideAutoComplete`明确跳过）。
+     *
+     * 除身份字段外，一并取营养报告与食谱项（名称/示例重量），供 builder
+     * 归一化明细；问卷答案/附件等整单内容不进入洞察。
      */
-    const customRecipeHistoryOrders =
+    const rawCustomRecipeHistoryOrders =
       await this.prisma.customRecipeOrder.findMany({
         where: {
           dogId,
-          status: { not: CustomRecipeStatus.CANCELLED },
+          status: CustomRecipeStatus.COMPLETED,
           recipeId: { not: null },
         },
         orderBy: { createdAt: 'desc' },
@@ -10568,8 +10682,54 @@ export class RecipeDesignerService {
               },
             },
           },
+          /**
+           * 交付快照（2026-10-28）：历史食谱的名字与原料以**交付那一刻**为准。
+           *
+           * 私密 Recipe 行是活行 —— 改名、重新生成私密食谱快照都会就地覆盖它，
+           * 直接读会出现「历史里写着鸭肉高蛋白定制餐，点开原料还是兔里脊」。
+           */
+          deliveryBatches: {
+            orderBy: { version: 'desc' },
+            take: 1,
+            select: {
+              items: { select: { recipeId: true, contentSnapshot: true } },
+            },
+          },
+          deliveries: {
+            where: { replacedByDeliveryId: null },
+            orderBy: { version: 'desc' },
+            take: 1,
+            select: { recipeId: true, contentSnapshot: true },
+          },
         },
       });
+
+    /**
+     * 给每张定制单挂上「交付那一刻的快照」。
+     *
+     * 只取与本单当前食谱同一条的那份快照（多份订单里其它份不在此列），
+     * 老的单份交付走 `deliveries`。
+     */
+    const customRecipeHistoryOrders = rawCustomRecipeHistoryOrders.map(
+      (order) => {
+        const batchItem = order.deliveryBatches?.[0]?.items?.find(
+          (item) => item.recipeId === order.recipe?.id,
+        );
+        const legacyDelivery =
+          !batchItem &&
+          order.deliveries?.[0] &&
+          order.deliveries[0].recipeId === order.recipe?.id
+            ? order.deliveries[0]
+            : null;
+        const snapshot = batchItem?.contentSnapshot ?? legacyDelivery?.contentSnapshot;
+        return {
+          ...order,
+          deliveredSnapshot: snapshot
+            ? this.pickDeliveredHistorySnapshot(snapshot)
+            : null,
+        };
+      },
+    );
 
     // 「最近吃过的食材」：订单至少推进到冷冻中（FREEZING），且最近 N 天内实际食用
     const recentWindowStart = new Date(

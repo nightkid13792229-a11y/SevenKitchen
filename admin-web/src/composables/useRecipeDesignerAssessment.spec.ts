@@ -2,7 +2,8 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 
 vi.mock('@/api/recipeDesigner', () => ({
   recipeDesignerApi: {
-    getAssessmentInputs: vi.fn()
+    getAssessmentInputs: vi.fn(),
+    assessItems: vi.fn()
   }
 }))
 
@@ -11,6 +12,7 @@ import { recipeDesignerApi } from '@/api/recipeDesigner'
 import type { AssessmentTarget, DesignerItem } from '@/types/recipeDesigner'
 
 const mockedGetAssessmentInputs = recipeDesignerApi.getAssessmentInputs as ReturnType<typeof vi.fn>
+const mockedAssessItems = recipeDesignerApi.assessItems as ReturnType<typeof vi.fn>
 
 const TARGET: AssessmentTarget = {
   nutrientKey: 'protein',
@@ -197,5 +199,85 @@ describe('useRecipeDesignerAssessment 缓存校验（跨阶段复制/切换阶�
     ])
 
     expect(mockedGetAssessmentInputs).toHaveBeenCalledTimes(2)
+  })
+})
+
+/**
+ * 档案不齐时不发评估请求（2026-10-28）
+ *
+ * 撤销删除 = 服务器删掉再重建，原料 id 会变；按 id 索引的营养档案一时间对不上。
+ * 若此时把「没有档案」的原料发去评估，面板会整片变成缺数据/空值 ——
+ * 用户看到的是「配方算不出来了」，而其实只是档案还没回来。
+ */
+describe('useRecipeDesignerAssessment 档案齐备性（撤销删除后）', () => {
+  const scenario = 'ADULT_MER_110' as const
+
+  function inputsWith(draftId: string, itemIds: string[]) {
+    return {
+      draftId,
+      name: '测试配方',
+      scenario,
+      nutritionStandard: 'FEDIAF_2025',
+      targets: [TARGET],
+      items: itemIds.map((id) => ({
+        id,
+        name: `原料-${id}`,
+        ingredientType: 'FOOD',
+        weightG: 50,
+        nutritionProfile: { meta: {}, macros: {} }
+      }))
+    }
+  }
+
+  beforeEach(() => {
+    mockedGetAssessmentInputs.mockReset()
+    mockedAssessItems.mockReset()
+    mockedAssessItems.mockResolvedValue({ groupedEntries: [], entries: [] })
+  })
+
+  it('★ 缺档案时先补一次再算：补到了就正常发一次评估', async () => {
+    const draftId = 'draft-profile-refill'
+    mockedGetAssessmentInputs.mockResolvedValue(inputsWith(draftId, ['a']))
+    const { loadInputs, compute } = useRecipeDesignerAssessment()
+    await loadInputs(draftId, scenario, [{ id: 'a', weightG: 50 }])
+
+    // 撤销重建：b 是新 id，缓存里还没有
+    mockedGetAssessmentInputs.mockResolvedValue(inputsWith(draftId, ['a', 'b']))
+    await compute(scenario, draftId, [
+      { id: 'a', weightG: 50 } as DesignerItem,
+      { id: 'b', weightG: 10 } as DesignerItem
+    ])
+
+    // 补了一次档案 + 发了一次评估
+    expect(mockedGetAssessmentInputs).toHaveBeenCalledTimes(2)
+    expect(mockedAssessItems).toHaveBeenCalledTimes(1)
+    const firstCall = mockedAssessItems.mock.calls[0]
+    expect(firstCall).toBeDefined()
+    const payload = firstCall![0] as { items: Array<{ nutritionProfile?: unknown }> }
+    expect(payload.items.every((item) => Boolean(item.nutritionProfile))).toBe(true)
+  })
+
+  it('★ 补完还是缺：不发评估、保留上一次结果（不把面板刷成空）', async () => {
+    const draftId = 'draft-profile-still-missing'
+    mockedGetAssessmentInputs.mockResolvedValue(inputsWith(draftId, ['a']))
+    const { loadInputs, compute, assessment, assessError } =
+      useRecipeDesignerAssessment()
+    await loadInputs(draftId, scenario, [{ id: 'a', weightG: 50 }])
+
+    // 先算一次，面板上有结果
+    await compute(scenario, draftId, [{ id: 'a', weightG: 50 } as DesignerItem])
+    expect(mockedAssessItems).toHaveBeenCalledTimes(1)
+    const previous = assessment.value
+
+    // 新原料 b 始终补不到档案
+    await compute(scenario, draftId, [
+      { id: 'a', weightG: 50 } as DesignerItem,
+      { id: 'b', weightG: 10 } as DesignerItem
+    ])
+
+    // 不再发第二次评估，结果保持上一次的
+    expect(mockedAssessItems).toHaveBeenCalledTimes(1)
+    expect(assessment.value).toBe(previous)
+    expect(assessError.value).toContain('营养档案')
   })
 })

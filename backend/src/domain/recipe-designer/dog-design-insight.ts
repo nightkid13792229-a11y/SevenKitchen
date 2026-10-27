@@ -283,6 +283,17 @@ interface InsightCustomRecipeOrderLike {
   status?: string | null;
   createdAt?: string | Date | null;
   deliveredAt?: string | Date | null;
+  /**
+   * 交付那一刻冻结的快照（2026-10-28）。
+   *
+   * 私密 `Recipe` 行是**活的**：改名、重新生成私密食谱快照都会就地覆盖它，
+   * 于是「历史订单食谱」会随着后来的修改一起变 —— 名字改成鸭肉、原料却
+   * 还是兔里脊（或者反过来）。历史要读**交付快照**：顾客手里那份就是它。
+   */
+  deliveredSnapshot?: {
+    recipe?: { name?: string | null; items?: unknown } | null;
+    nutrition?: { reportRows?: unknown } | null;
+  } | null;
   recipe?: {
     id?: string | null;
     recipeId?: string | null;
@@ -715,6 +726,30 @@ function normalizeHistorySnapshotIngredients(
   return rows;
 }
 
+/**
+ * 交付快照里的原料（`recipe.items[]`）：name + weightG。
+ *
+ * 与 `normalizeHistorySnapshotIngredients` 的区别只在重量字段名：
+ * 交付快照写的是 `weightG`（示例重量），旧订单快照写的是 `example_weight`。
+ */
+function normalizeDeliverySnapshotIngredients(
+  value: unknown,
+): DogHistoryRecipeIngredient[] {
+  if (!Array.isArray(value)) return [];
+  const rows: DogHistoryRecipeIngredient[] = [];
+  for (const item of value) {
+    const record = resolveSnapshotRecord(item);
+    if (!record) continue;
+    const name = firstString(record.name);
+    if (!name) continue;
+    rows.push({
+      name,
+      amount: formatHistoryWeightAmount(record.weightG),
+    });
+  }
+  return rows;
+}
+
 /** 定制单关联 `Recipe.items` 兜底：ingredient.name + exampleWeight */
 function normalizeHistoryCustomRecipeIngredients(
   value: unknown,
@@ -822,10 +857,12 @@ export function buildSameOrderHistoryRecipes(
  *
  * 数据来源：
  *  - `orderItems`：鲜食订单明细（已完成/已发货等均可），食谱名取自 `recipeSnapshot`；
- *  - `customRecipeOrders`：已关联正式 `Recipe` 的定制单。
+ *  - `customRecipeOrders`：**已完成**的定制单（2026-10-28 起只认完成）。
  *
  * 规则：
  *  - 已取消订单不算「用过」，空食谱名不展示；
+ *  - 定制单只有「已完成」才算「用过」：交付 ≠ 吃过。顾客不认可、正在改的那份
+ *    可能连一顿都没做过，列进历史会误导营养师（老板 2026-10-28 口径）；
  *  - 去重键 = 食谱身份（快照/Recipe id，缺失时退回名字）+ 来源，保留最近一次使用；
  *    明细跟随被保留的那一次，不跨次合并；
  *  - 按使用时间倒序，没有日期的排最后。
@@ -884,16 +921,54 @@ export function buildDogHistoryRecipes(
 
   for (const order of customRecipeOrders ?? []) {
     if (isCancelledOrderStatus(order.status)) continue;
+    /**
+     * 只认「已完成」的定制单（2026-10-28）。
+     *
+     * SQL 层已经过滤过一次，这里再守一道：历史面板回答的是
+     * 「这只狗真真正正吃过什么」，交付了但还没被接受的不算。
+     */
+    if (String(order.status ?? '').toUpperCase() !== 'COMPLETED') continue;
     const recipe = order.recipe;
-    const name = firstString(recipe?.name);
+    const snapshot = order.deliveredSnapshot;
+    const snapshotName = firstString(snapshot?.recipe?.name);
+    /**
+     * 名字/原料**优先读交付快照**（2026-10-28）：
+     * 私密 Recipe 行会被后续改名、重新生成快照就地覆盖，
+     * 直接读它会让「历史」跟着后来的修改一起变。
+     */
+    const name = snapshotName || firstString(recipe?.name);
     if (!name) continue;
     const recipeId = firstString(recipe?.id, recipe?.recipeId);
-    const details = normalizeHistoryRecipeDetails({
+    const recipeDetails = normalizeHistoryRecipeDetails({
       nutritionDetailedData: recipe?.nutritionDetailedData,
       fallbackIngredients: normalizeHistoryCustomRecipeIngredients(
         recipe?.items,
       ),
     });
+    const snapshotIngredients = normalizeDeliverySnapshotIngredients(
+      snapshot?.recipe?.items,
+    );
+    const snapshotMacros = normalizeHistoryReportMacros(
+      snapshot?.nutrition?.reportRows,
+    );
+    /**
+     * 旧快照（2026-10-28 之前交付）没有 `reportRows`，只能退到活行的营养报告。
+     * 但活行可能已经被改过 —— 原料名单和快照对不上时就不借它的数字，
+     * 宁可这一栏空着，也不能把另一版食谱的营养贴到历史里。
+     */
+    const recipeIngredientNames = (recipe?.items ?? [])
+      .map((item) => String(item?.ingredient?.name ?? '').trim())
+      .filter(Boolean)
+      .sort()
+      .join('|');
+    const snapshotIngredientNames = snapshotIngredients
+      .map((item) => item.name.trim())
+      .filter(Boolean)
+      .sort()
+      .join('|');
+    const contentMatchesSnapshot =
+      snapshotIngredientNames.length > 0 &&
+      snapshotIngredientNames === recipeIngredientNames;
     add(
       {
         id: recipeId || firstString(order.id) || name,
@@ -902,8 +977,23 @@ export function buildDogHistoryRecipes(
         // 交付时间才是「真正用上」的时间；还没交付则退回下单时间
         date: toIsoString(order.deliveredAt ?? order.createdAt),
         status: firstString(order.status),
-        ingredients: details.ingredients,
-        macros: details.macros,
+        /**
+         * 快照里有的就用快照：原料是交付那一刻的名单；
+         * 只有**旧快照**（2026-10-28 之前交付、没写 reportRows）才回退到活行。
+         */
+        ingredients:
+          snapshotIngredients.length > 0
+            ? snapshotIngredients
+            : recipeDetails.ingredients,
+        macros:
+          snapshotMacros.length > 0
+            ? snapshotMacros
+            : // 没有快照（还没交付 / 老数据）= 行为不变，仍读活行
+              !snapshot
+              ? recipeDetails.macros
+              : contentMatchesSnapshot
+                ? recipeDetails.macros
+                : [],
       },
       recipeId,
     );

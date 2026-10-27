@@ -1527,6 +1527,8 @@ export class CustomRecipeDeliveryService {
           : null,
         // 2026-10-18：核心营养 8 项（交付第 1 页的 4×2 网格）
         macros: toSnapshotMacros(input.recipe.nutritionDetailedData),
+        // 2026-10-28：宏量报告行原样冻结，供「历史订单食谱」回看交付当时那张表
+        reportRows: toSnapshotReportRows(input.recipe.nutritionDetailedData),
       },
       /**
        * 采购清单（批次 2.2）—— 这套算法原先在**小程序页面里**，
@@ -1724,6 +1726,33 @@ function round1(value: number): number {
  *
  * ⚠️ 缺失就给 null，不给 0 —— `0%` 和"没算"是两回事。
  */
+function toSnapshotReportRows(
+  detailed: unknown,
+): Array<{
+  key?: string;
+  name: string;
+  dryMatterLabel: string;
+  energyPercentLabel: string;
+  weightPercentLabel: string;
+}> | null {
+  const report =
+    detailed && typeof detailed === 'object'
+      ? (detailed as Record<string, any>).report
+      : null;
+  const rows = report?.macroRows;
+  if (!Array.isArray(rows)) return null;
+  const normalized = rows
+    .map((row: any) => ({
+      ...(typeof row?.key === 'string' ? { key: row.key } : {}),
+      name: String(row?.name ?? '').trim(),
+      dryMatterLabel: String(row?.dryMatterLabel ?? '').trim(),
+      energyPercentLabel: String(row?.energyPercentLabel ?? '').trim(),
+      weightPercentLabel: String(row?.weightPercentLabel ?? '').trim(),
+    }))
+    .filter((row) => row.name);
+  return normalized.length > 0 ? normalized : null;
+}
+
 function toSnapshotMacros(
   detailed: unknown,
 ): Record<string, number | null> | null {

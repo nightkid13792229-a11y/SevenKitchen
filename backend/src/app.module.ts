@@ -93,6 +93,7 @@ import { IngredientPreparationHistoryService } from './application/recipe/ingred
 import { RecipeService } from './application/recipe/recipe.service';
 import { CoverImageService } from './application/recipe/cover-image.service';
 import { RecipeCoverImageService } from './application/recipe-designer/recipe-cover-image.service';
+import { RecipeCoverVisualBriefService } from './application/recipe-designer/recipe-cover-visual-brief.service';
 import { SeriesCoverImageService } from './application/recipe-designer/series-cover-image.service';
 import { InMemoryAddressRepository } from './infrastructure/repositories/in-memory-address.repository';
 import { PrismaAddressRepository } from './infrastructure/repositories/prisma-address.repository';
@@ -562,6 +563,7 @@ validatePrismaConfig();
     IngredientPreparationHistoryService,
     CoverImageService,
     RecipeCoverImageService,
+    RecipeCoverVisualBriefService,
     SeriesCoverImageService,
     AddressService,
     {

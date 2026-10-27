@@ -424,6 +424,18 @@ export interface AdminAftersaleRecipeRequest {
 }
 
 /** 后台待办里的一条售后 */
+/** 员工代客发起的调整单（2026-10-27） */
+export interface StaffAftersaleResult {
+  id: string;
+  status: string;
+  statusLabel: string;
+  source: string;
+  deliveryBatchId: string | null;
+  deliveryItemIds: string[];
+  /** true = 复用了一条已经存在的进行中调整（重复点击不报错） */
+  resumed?: boolean;
+}
+
 export interface AdminAftersaleItem {
   id: string;
   orderId: string;
@@ -433,6 +445,9 @@ export interface AdminAftersaleItem {
   orderStatus: string;
   type: string;
   typeLabel: string;
+  /** 谁发起的：CUSTOMER = 顾客在小程序提交；STAFF = 员工代客发起（2026-10-27） */
+  source?: 'CUSTOMER' | 'STAFF';
+  sourceLabel?: string;
   status: string;
   statusLabel: string;
   description: string;
@@ -969,6 +984,21 @@ export const customRecipeApi = {
 
   rejectAftersale: (id: string, payload: { reason: string }) =>
     api.post(`/admin/custom-recipe/aftersales/${id}/reject`, payload),
+
+  /**
+   * 代客发起调整（2026-10-27）。
+   *
+   * 顾客不满意但不会/不方便在小程序提单时，员工替顾客开一条调整单，
+   * 创建即「已受理」；随后用 `recipeDesignerApi.reopenAftersaleDesign`
+   * 打开设计器改稿，改完回售后页「重新交付并完成」。
+   *
+   * 不占顾客免费次数、不受售后窗口限制 —— 口径由后端保证。
+   */
+  createStaffAftersale: (
+    orderId: string,
+    payload: { description: string; deliveryItemIds?: string[] },
+  ): Promise<StaffAftersaleResult> =>
+    api.post(`${BASE}/orders/${orderId}/aftersales`, payload),
 
   // ---------- 退款申请（2026-10-25）----------
 

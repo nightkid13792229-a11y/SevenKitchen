@@ -6,6 +6,7 @@ import {
 } from '../nutrition-governance/agent-provider-config.service';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import { ImageOptimizationService } from '../../infrastructure/services/image-optimization.service';
+import { RecipeCoverVisualBriefService } from './recipe-cover-visual-brief.service';
 import {
   buildRecipeCoverPrompt,
   callZhipuImage,
@@ -71,6 +72,7 @@ export class RecipeCoverImageService {
     private readonly agentProviderConfigService: AgentProviderConfigService,
     private readonly cosService: TencentCosService,
     private readonly imageOptimizationService: ImageOptimizationService,
+    private readonly visualBriefService: RecipeCoverVisualBriefService,
   ) {}
 
   /** 后台按钮要根据它决定"能不能点" —— 没配就不让点，而不是点了才报错 */
@@ -97,11 +99,17 @@ export class RecipeCoverImageService {
         provider: ZHIPU_PROVIDER,
       });
 
+    // 系列封面：先把食谱数据翻成英文画面描述，提示词里不再出现原始中文名/百分比
+    const visualBrief = input.ingredients?.length
+      ? await this.visualBriefService.build(input.ingredients)
+      : undefined;
+
     const prompt = buildRecipeCoverPrompt({
       recipeName: input.recipeName,
       lifeStageLabels: input.lifeStageLabels,
       foodNames: input.foodNames,
       ingredients: input.ingredients,
+      visualBrief,
     });
 
     /**
@@ -126,6 +134,8 @@ export class RecipeCoverImageService {
       userId: input.customerId && input.customerId.length >= 6
         ? input.customerId.slice(0, 128)
         : undefined,
+      // 封面不加水印；智谱默认 true，必须在请求里显式关
+      watermarkEnabled: false,
     });
 
     // ② 下载（临时链接 30 天后失效，必须现在就取下来）

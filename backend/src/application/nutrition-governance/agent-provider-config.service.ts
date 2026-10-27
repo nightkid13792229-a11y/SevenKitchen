@@ -377,12 +377,34 @@ export class AgentProviderConfigService {
     purpose?: string;
     /** 指定用途未配置时是否回退到全局默认（默认 true） */
     fallbackToDefault?: boolean;
+    /**
+     * 默认/指定用途关闭时，是否回退到**任意一条已启用的 DeepSeek**（2026-10-28）。
+     *
+     * 用于封面画面描述这类「只要有个文本模型就行」的小任务：
+     * 老板只启用了某个专用用途、没启用全局默认时，不该因此挡住生图。
+     */
+    fallbackToAnyPurpose?: boolean;
   } = {}): Promise<DeepSeekRuntimeConfig> {
     const purpose = input.purpose || DEFAULT_AGENT_PURPOSE;
-    const config = await this.findDeepSeekConfig(
+    let config = await this.findDeepSeekConfig(
       purpose,
       input.fallbackToDefault ?? true,
     );
+
+    if (
+      input.fallbackToAnyPurpose &&
+      (!config?.enabled || !config.apiKeyEncrypted)
+    ) {
+      const fallback = await this.prisma.agentProviderConfig.findFirst({
+        where: {
+          provider: DEEPSEEK_PROVIDER,
+          enabled: true,
+          apiKeyEncrypted: { not: null },
+        },
+        orderBy: { updatedAt: 'desc' },
+      });
+      if (fallback) config = fallback;
+    }
 
     if (!config?.enabled) {
       throw new BadRequestException('DeepSeek Agent 设置未启用');

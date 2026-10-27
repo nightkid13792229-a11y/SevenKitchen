@@ -418,6 +418,53 @@ describe('补剂显式目标设计器流程（Task 3）', () => {
       expect(createData.nutrientTargetValue).toBe(10);
     });
 
+    /**
+     * 2026-10-27 事故：撤销删除会把补剂**重建**，前端把原目标定义带回来
+     * （只带 fieldPath/label/unit，丢了原值）。服务端于是按「草稿上一次评估
+     * 回写的总重」重算浓度，而删除/撤销后那个总重明显偏小 ——
+     * 海藻粉碘目标被写成 144,834 μg（正常应 ~918），鱼油 EPA 58 g。
+     *
+     * 现在：客户端带回 `targetValue`（落库口径的原值）时原样沿用。
+     */
+    it('★ 撤销重建：带回原 targetValue 时原样沿用，不按可能过期的总重重算', async () => {
+      // 总重 1.55 g —— 正是事故现场那个明显偏小的缓存值
+      mockAddItemDraft(1.55);
+      mockSupplementProfile({
+        id: 'food-fiber',
+        name: '纤维素粉',
+        nutritionData: fiberProfile(),
+        defaultSupplementTargets: null,
+      });
+
+      await service.addItem(
+        'design-1',
+        {
+          ingredientId: 'ingredient-fiber',
+          nutritionFoodId: 'food-fiber',
+          weightG: 0.5,
+          supplementTargets: [
+            {
+              fieldPath: 'macros.insolubleFiber',
+              label: '不可溶性纤维',
+              unit: 'g',
+              // 撤销重建时客户端带回来的原值
+              targetValue: 225,
+            },
+          ],
+        },
+        STAFF_ACCESS,
+      );
+
+      const createData = prisma.designRecipeItem.create.mock.calls[0][0].data;
+      expect(createData.supplementTargets).toEqual([
+        expect.objectContaining({
+          fieldPath: 'macros.insolubleFiber',
+          // 原样保留；若按 1.55 g 重算会变成 322.58
+          targetValue: 225,
+        }),
+      ]);
+    });
+
     it('accepts a derived EPA+DHA target as a single fieldPath', async () => {
       mockAddItemDraft(1000);
       mockSupplementProfile({

@@ -99,6 +99,27 @@ describe('buildRecipeCoverPrompt', () => {
     expect(prompt.length).toBeLessThanOrEqual(1000);
   });
 
+  it('有画面描述时走固定模板：不再出现原始中文名和百分比', () => {
+    const prompt = buildRecipeCoverPrompt({
+      recipeName: '鸭肉南瓜燕麦',
+      ingredients,
+      visualBrief:
+        'a generous hero portion of a pale-pink duck breast, skin removed; ' +
+        'a moderate amount of a mound of pale oat groats',
+    });
+
+    expect(prompt).toContain(
+      'a generous hero portion of a pale-pink duck breast',
+    );
+    expect(prompt).not.toContain('鸭胸肉');
+    expect(prompt).not.toContain('45%');
+    expect(prompt).not.toContain('16:9');
+    expect(prompt).toContain('light oak kitchen table');
+    expect(prompt).toContain('All ingredients are visible');
+    expect(prompt).toContain('No text');
+    expect(prompt.length).toBeLessThanOrEqual(1000);
+  });
+
   it('没有食材数据时也能生成（不崩）', () => {
     const prompt = buildRecipeCoverPrompt({ recipeName: '鸡肉南瓜' });
 

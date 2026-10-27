@@ -86,6 +86,8 @@ describe('OrderRecipeDesignService', () => {
     },
     designRecipe: {
       deleteMany: jest.fn(),
+      /** 售后改稿要先看草稿是不是已发布，决定「开修订」还是「直接复用」 */
+      findUnique: jest.fn(),
     },
     recipeSeries: {
       deleteMany: jest.fn(),
@@ -532,6 +534,11 @@ describe('OrderRecipeDesignService', () => {
         recipeId: 'recipe-row-1',
         status: 'DELIVERED',
       });
+      // 已发布的正式草稿：照旧开修订，把线上那版冻结
+      prisma.designRecipe.findUnique.mockResolvedValue({
+        id: 'draft-1',
+        status: 'PUBLISHED',
+      });
 
       const result = await service.reopenForAftersale({
         aftersaleId: 'aftersale-1',
@@ -555,6 +562,54 @@ describe('OrderRecipeDesignService', () => {
         data: {
           status: 'EDITING',
           designDraftId: 'draft-revision-1',
+          revisionDeliveryItemId: 'delivery-item-1',
+        },
+      });
+    });
+
+    it('★ 草稿还没发布（本单设计的工作稿）时直接复用，不再开修订', async () => {
+      prisma.customRecipeAftersale.findUnique.mockResolvedValue({
+        id: 'aftersale-1',
+        orderId: 'order-uuid',
+        status: 'ACCEPTED',
+        deliveryItemIds: ['delivery-item-1'],
+        order: {
+          id: 'order-uuid',
+          orderId: 'CR202610220001',
+          status: 'DELIVERED',
+        },
+      });
+      prisma.customRecipeDeliveryItem.findUnique.mockResolvedValue({
+        id: 'delivery-item-1',
+        batchId: 'batch-1',
+        recipeId: 'recipe-row-1',
+      });
+      prisma.orderRecipeDesign.findFirst.mockResolvedValue({
+        id: 'design-1',
+        seriesId: 'series-1',
+        designDraftId: 'draft-1',
+        recipeId: 'recipe-row-1',
+        status: 'DELIVERED',
+      });
+      // 「订单设计」流程交付后草稿仍是 NEEDS_REVIEW —— 此前这里会 400：
+      // 「只有已发布食谱可以创建修订草稿」，员工一点「修改食谱」就报错
+      prisma.designRecipe.findUnique.mockResolvedValue({
+        id: 'draft-1',
+        status: 'NEEDS_REVIEW',
+      });
+
+      const result = await service.reopenForAftersale({
+        aftersaleId: 'aftersale-1',
+        operatorId: 'admin-1',
+      });
+
+      expect(result.draftId).toBe('draft-1');
+      expect(recipeDesignerService.createRevisionDraft).not.toHaveBeenCalled();
+      expect(prisma.orderRecipeDesign.update).toHaveBeenCalledWith({
+        where: { id: 'design-1' },
+        data: {
+          status: 'EDITING',
+          designDraftId: 'draft-1',
           revisionDeliveryItemId: 'delivery-item-1',
         },
       });

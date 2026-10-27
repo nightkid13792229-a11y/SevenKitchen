@@ -747,6 +747,7 @@ import {
   isMultiRecipeOrderQuantity,
   isOfflinePaidCustomRecipeOrder,
   normalizeRecipeQuantity,
+  shouldUseOfflineRefundForCancel,
 } from '@/constants/customRecipeOrder';
 import {
   CUSTOM_RECIPE_GOAL_SET,
@@ -1028,6 +1029,16 @@ const offlineRefundCap = computed(() => {
 });
 
 /**
+ * 0 元赠送单：线下已收款，但实收是 0。
+ *
+ * 它没有款可退，线下退款入口本来就不显示；取消必须直接走「取消订单」。
+ * 文案与点击行为共用这一个判断，避免两处再分叉（2026-10-28 修）。
+ */
+const isZeroAmountGiftOrder = computed(
+  () => isOfflinePaidOrder.value && offlineRefundCap.value <= 0,
+);
+
+/**
  * 是否显示「线下退款并取消」。
  *
  * 线下已收款 + 还能取消（未交付/未取消/未登记过）+ 管理员。
@@ -1055,9 +1066,7 @@ const isCancellableStatus = computed(() => {
 });
 
 const cancelOrderLabel = computed(() =>
-  isOfflinePaidOrder.value && offlineRefundCap.value <= 0
-    ? '取消赠送订单'
-    : '取消订单',
+  isZeroAmountGiftOrder.value ? '取消赠送订单' : '取消订单',
 );
 
 /**
@@ -1069,9 +1078,12 @@ const canCancelOrder = computed(
   () =>
     isAdmin.value &&
     isCancellableStatus.value &&
-    // 线下单有实收金额时必须走「线下退款并取消」；
-    // 0 元赠送单没有款可退，允许直接取消。
-    (!isOfflinePaidOrder.value || offlineRefundCap.value <= 0),
+    // 只有「实收 > 0 的线下单」才必须走「线下退款并取消」；
+    // 0 元赠送单没有款可退，允许直接取消（与点击处理共用同一条规则）。
+    !shouldUseOfflineRefundForCancel(
+      isOfflinePaidOrder.value,
+      offlineRefundCap.value,
+    ),
 );
 
 /** 下单时填写的过敏 vs 档案最新：两份口径不同，必须分开显示并提示差异 */
@@ -1533,10 +1545,15 @@ const cancelOrder = async () => {
   /**
    * 线下收款单不能走这里（2026-10-21 · 代客订单 Task 5）。
    *
-   * 按钮已换成「线下退款并取消」，这里再兜一层：
-   * 旧页面缓存/误触都不能让线下单去调微信原路退款。
+   * 但 0 元赠送单例外：没有实收金额，线下退款弹窗根本不显示，
+   * 必须允许直接取消，否则按钮点了只会弹提示（2026-10-28 修）。
    */
-  if (isOfflinePaidOrder.value) {
+  if (
+    shouldUseOfflineRefundForCancel(
+      isOfflinePaidOrder.value,
+      offlineRefundCap.value,
+    )
+  ) {
     ElMessage.warning(
       '线下收款订单请使用「线下退款并取消」登记，系统不会调用微信退款',
     );
@@ -1547,8 +1564,10 @@ const cancelOrder = async () => {
     const { value } = await ElMessageBox.prompt(
       order.value!.status === 'PENDING_PAYMENT'
         ? '取消该订单？未付款的订单会释放当天名额。'
-        : '取消该订单？系统会立即发起微信原路退款（退款失败则不会取消），并释放当天名额。',
-      '取消订单',
+        : isZeroAmountGiftOrder.value
+          ? '取消这张 0 元赠送单？没有款可退，不会调用微信退款；取消后会释放当天名额。'
+          : '取消该订单？系统会立即发起微信原路退款（退款失败则不会取消），并释放当天名额。',
+      isZeroAmountGiftOrder.value ? '取消赠送订单' : '取消订单',
       {
         confirmButtonText: '确认取消',
         cancelButtonText: '再想想',

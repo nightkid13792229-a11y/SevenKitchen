@@ -1,6 +1,11 @@
 /**
  * 营养库覆盖率审计（只读）。
  *
+ * **聚合在 SQL 完成；绝不把 normalizedNutrition 整列 / 27k 份 profile 读进 Node。**
+ * 2026-10-28 生产 OOM 事故的根因就是 `findMany` 全量 profile；这里只允许两条
+ * 聚合查询（per-source 计数 + sourceCode 分布），任何查询返回整列 profile 都会
+ * 被 `assertNoFullProfiles` 直接拒绝。
+ *
  * 按 L1 来源输出：记录数、唯一 sourceKey 数、能量 / 蛋白 / 至少一种矿物质 /
  * 至少一种维生素覆盖率、`sourceCode` 可解析比例；并调用
  * `evaluateNutritionCoverage` 给出验收违规项。
@@ -17,17 +22,12 @@
 
 import { mkdir, writeFile } from 'fs/promises';
 import { dirname, resolve } from 'path';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { config as loadEnv } from 'dotenv';
 import {
   getNutritionSourceDefinition,
   normalizeLegacyNutritionSourceType,
 } from '../src/domain/ingredient/nutrition-source-contract';
-import { normalizeNutritionProfile } from '../src/domain/ingredient/nutrition-profile.utils';
-import type {
-  NutritionProfile,
-  NutritionProfileV2,
-} from '../src/domain/ingredient/types';
 import {
   evaluateNutritionCoverage,
   type NutritionCoverageReport,
@@ -42,22 +42,53 @@ loadEnv({ path: process.env.ENV_FILE || '.env' });
 
 const prisma = new PrismaClient();
 
-interface SourceAccumulator {
+interface PerSourceAggregateRow {
+  sourceType: string;
   records: number;
-  uniqueKeys: Set<string>;
-  energyRecords: number;
-  proteinRecords: number;
-  mineralRecords: number;
-  vitaminRecords: number;
-  resolvableSourceCodeRecords: number;
+  uniqueKeys: number;
+  energy: number;
+  protein: number;
+  mineral: number;
+  vitamin: number;
 }
 
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
+interface SourceCodeAggregateRow {
+  sourceType: string;
+  code: string;
+  n: number;
 }
 
-function hasAnyFiniteValue(group: object | undefined): boolean {
-  return Object.values(group ?? {}).some(isFiniteNumber);
+/**
+ * OOM 守门：两条查询都只允许返回计数列。
+ *
+ * 如果哪天有人把 `normalized_nutrition` 整列加进 SELECT，结果行里就会出现
+ * `normalizedNutrition` / 营养档案对象；这里立刻报错，避免再走一遍
+ * 「27k profiles 进 Node」。
+ */
+function assertNoFullProfiles<T extends object>(
+  queryName: string,
+  rows: readonly T[],
+): void {
+  for (const row of rows) {
+    if ('normalizedNutrition' in row || 'normalized_nutrition' in row) {
+      throw new Error(
+        `${queryName}: aggregate query returned full normalizedNutrition rows; refusing to continue (OOM risk)`,
+      );
+    }
+
+    // 不依赖列名：任何看起来像 NutritionProfile 的对象都不允许被聚合查询带回来。
+    for (const value of Object.values(row as Record<string, unknown>)) {
+      if (
+        typeof value === 'object' &&
+        value !== null &&
+        ('macros' in value || 'minerals' in value || 'vitamins' in value)
+      ) {
+        throw new Error(
+          `${queryName}: aggregate query returned nutrition profile payloads; refusing to continue (OOM risk)`,
+        );
+      }
+    }
+  }
 }
 
 /**
@@ -68,15 +99,12 @@ function hasAnyFiniteValue(group: object | undefined): boolean {
  * 判，再用 `normalizeLegacyNutritionSourceType` 兜住 legacy 值；sourceCode 缺失时
  * 回落到登记表里该 sourceType 的注册口径。非空的未知值仍算不可解析。
  */
-function isSourceCodeResolvable(
-  sourceType: string,
-  profile: NutritionProfileV2 | null,
-): boolean {
-  const profileSourceCode = profile?.meta.sourceCode?.trim();
-  if (profileSourceCode) {
+function isSourceCodeResolvable(sourceType: string, code: string): boolean {
+  const sourceCode = code.trim();
+  if (sourceCode) {
     return Boolean(
-      getNutritionSourceDefinition(profileSourceCode) ??
-      normalizeLegacyNutritionSourceType(profileSourceCode),
+      getNutritionSourceDefinition(sourceCode) ??
+      normalizeLegacyNutritionSourceType(sourceCode),
     );
   }
 
@@ -84,77 +112,8 @@ function isSourceCodeResolvable(
   return Boolean(getNutritionSourceDefinition(library?.sourceCode));
 }
 
-function toProfile(value: unknown): NutritionProfileV2 | null {
-  if (!value || typeof value !== 'object') {
-    return null;
-  }
-  return normalizeNutritionProfile(value as NutritionProfile);
-}
-
-function accumulate(
-  accumulators: Map<string, SourceAccumulator>,
-  record: {
-    sourceType: string;
-    sourceKey: string;
-    normalizedNutrition: unknown;
-  },
-): void {
-  let accumulator = accumulators.get(record.sourceType);
-  if (!accumulator) {
-    accumulator = {
-      records: 0,
-      uniqueKeys: new Set<string>(),
-      energyRecords: 0,
-      proteinRecords: 0,
-      mineralRecords: 0,
-      vitaminRecords: 0,
-      resolvableSourceCodeRecords: 0,
-    };
-    accumulators.set(record.sourceType, accumulator);
-  }
-
-  const profile = toProfile(record.normalizedNutrition);
-
-  accumulator.records += 1;
-  accumulator.uniqueKeys.add(record.sourceKey);
-  if (isFiniteNumber(profile?.macros.energyKcal)) {
-    accumulator.energyRecords += 1;
-  }
-  if (isFiniteNumber(profile?.macros.crudeProtein)) {
-    accumulator.proteinRecords += 1;
-  }
-  if (hasAnyFiniteValue(profile?.minerals)) {
-    accumulator.mineralRecords += 1;
-  }
-  if (hasAnyFiniteValue(profile?.vitamins)) {
-    accumulator.vitaminRecords += 1;
-  }
-  if (isSourceCodeResolvable(record.sourceType, profile)) {
-    accumulator.resolvableSourceCodeRecords += 1;
-  }
-}
-
 function ratio(part: number, total: number): number {
   return total === 0 ? 0 : part / total;
-}
-
-function toSourceReport(
-  sourceType: string,
-  accumulator: SourceAccumulator,
-): NutritionCoverageSourceReport {
-  return {
-    sourceType,
-    records: accumulator.records,
-    uniqueKeys: accumulator.uniqueKeys.size,
-    energyRate: ratio(accumulator.energyRecords, accumulator.records),
-    proteinRate: ratio(accumulator.proteinRecords, accumulator.records),
-    mineralRate: ratio(accumulator.mineralRecords, accumulator.records),
-    vitaminRate: ratio(accumulator.vitaminRecords, accumulator.records),
-    resolvableSourceCodeRate: ratio(
-      accumulator.resolvableSourceCodeRecords,
-      accumulator.records,
-    ),
-  };
 }
 
 function formatRate(rate: number): string {
@@ -242,6 +201,66 @@ function resolveJsonPath(args: readonly string[]): string | null {
   return value;
 }
 
+/**
+ * 两条聚合查询：per-source 计数 + sourceCode 分布。
+ *
+ * `source_type::text IN (...)` 而不是直接 `IN (enum)`：本地库可能还没应用
+ * KO_RDA 枚举迁移，直接按枚举比较会 22P02；转 text 后生产与本地都能跑。
+ */
+async function loadAggregates() {
+  const sourceTypeList = Prisma.join([...LOCAL_LIBRARY_SOURCE_TYPES]);
+
+  const perSourceRows = await prisma.$queryRaw<PerSourceAggregateRow[]>(
+    Prisma.sql`
+      SELECT source_type::text AS "sourceType",
+             count(*)::int AS "records",
+             count(DISTINCT source_key)::int AS "uniqueKeys",
+             count(*) FILTER (
+               WHERE normalized_nutrition->'macros'->>'energyKcal' IS NOT NULL
+             )::int AS "energy",
+             count(*) FILTER (
+               WHERE normalized_nutrition->'macros'->>'crudeProtein' IS NOT NULL
+             )::int AS "protein",
+             count(*) FILTER (
+               WHERE (normalized_nutrition->'minerals'->>'calcium') IS NOT NULL
+                  OR (normalized_nutrition->'minerals'->>'iron') IS NOT NULL
+                  OR (normalized_nutrition->'minerals'->>'zinc') IS NOT NULL
+                  OR (normalized_nutrition->'minerals'->>'selenium') IS NOT NULL
+             )::int AS "mineral",
+             count(*) FILTER (
+               WHERE (normalized_nutrition->'vitamins'->>'vitaminB1') IS NOT NULL
+                  OR (normalized_nutrition->'vitamins'->>'vitaminB2') IS NOT NULL
+                  OR (normalized_nutrition->'vitamins'->>'vitaminC') IS NOT NULL
+             )::int AS "vitamin"
+      FROM nutrition_source_record
+      WHERE status = 'ACTIVE'
+        AND source_type::text IN (${sourceTypeList})
+      GROUP BY source_type
+      ORDER BY source_type
+    `,
+  );
+  assertNoFullProfiles('per-source aggregates', perSourceRows);
+
+  const sourceCodeRows = await prisma.$queryRaw<SourceCodeAggregateRow[]>(
+    Prisma.sql`
+      SELECT source_type::text AS "sourceType",
+             COALESCE(
+               normalized_nutrition->'meta'->>'sourceCode',
+               ''
+             ) AS "code",
+             count(*)::int AS "n"
+      FROM nutrition_source_record
+      WHERE status = 'ACTIVE'
+        AND source_type::text IN (${sourceTypeList})
+      GROUP BY 1, 2
+      ORDER BY 1, 2
+    `,
+  );
+  assertNoFullProfiles('source-code aggregates', sourceCodeRows);
+
+  return { perSourceRows, sourceCodeRows };
+}
+
 async function main() {
   if (!process.env.DATABASE_URL) {
     throw new Error(
@@ -253,39 +272,61 @@ async function main() {
   const shouldAssert = args.includes('--assert');
   const jsonPath = resolveJsonPath(args);
 
-  // 不在 where 里写 sourceType in [...L1]：本地库若还没应用新的枚举迁移
-  // （例如缺 KO_RDA），Postgres 会直接报 22P02。这里先扫 ACTIVE，再在 JS 里
-  // 按登记表过滤；报告只列实际有记录的来源，缺失的 L1 由验收函数报出来。
-  const records = (
-    await prisma.nutritionSourceRecord.findMany({
-      where: { status: 'ACTIVE' },
-      select: {
-        sourceType: true,
-        sourceKey: true,
-        normalizedNutrition: true,
-      },
-      orderBy: [{ sourceType: 'asc' }, { sourceKey: 'asc' }],
-    })
-  ).filter((record) => LOCAL_LIBRARY_SOURCE_TYPES.includes(record.sourceType));
+  const { perSourceRows, sourceCodeRows } = await loadAggregates();
 
-  const accumulators = new Map<string, SourceAccumulator>();
-  for (const record of records) {
-    accumulate(accumulators, record);
+  const resolvableBySourceType = new Map<string, number>();
+  for (const row of sourceCodeRows) {
+    if (!isSourceCodeResolvable(row.sourceType, row.code)) {
+      continue;
+    }
+    resolvableBySourceType.set(
+      row.sourceType,
+      (resolvableBySourceType.get(row.sourceType) ?? 0) + row.n,
+    );
   }
 
+  const aggregateBySourceType = new Map(
+    perSourceRows.map((row) => [row.sourceType, row]),
+  );
+  const sources = LOCAL_LIBRARY_SOURCE_TYPES.flatMap(
+    (sourceType): NutritionCoverageSourceReport[] => {
+      const aggregate = aggregateBySourceType.get(sourceType);
+      if (!aggregate) {
+        return [];
+      }
+
+      return [
+        {
+          sourceType,
+          records: aggregate.records,
+          uniqueKeys: aggregate.uniqueKeys,
+          energyRate: ratio(aggregate.energy, aggregate.records),
+          proteinRate: ratio(aggregate.protein, aggregate.records),
+          mineralRate: ratio(aggregate.mineral, aggregate.records),
+          vitaminRate: ratio(aggregate.vitamin, aggregate.records),
+          resolvableSourceCodeRate: ratio(
+            resolvableBySourceType.get(sourceType) ?? 0,
+            aggregate.records,
+          ),
+        },
+      ];
+    },
+  );
   const report: NutritionCoverageReport = {
     generatedAt: new Date().toISOString(),
-    sources: LOCAL_LIBRARY_SOURCE_TYPES.flatMap((sourceType) => {
-      const accumulator = accumulators.get(sourceType);
-      return accumulator ? [toSourceReport(sourceType, accumulator)] : [];
-    }),
+    sources,
   };
   const violations = evaluateNutritionCoverage(report);
 
-  console.log('营养库覆盖率审计（只读）');
+  console.log('营养库覆盖率审计（只读，SQL 聚合）');
   console.log(`数据库: ${describeDatabase(process.env.DATABASE_URL)}`);
   console.log('状态过滤: ACTIVE；只统计登记表 L1 来源');
-  console.log(`扫描记录: ${records.length}`);
+  console.log(
+    `聚合查询行数: per-source=${perSourceRows.length} / source-code=${sourceCodeRows.length}`,
+  );
+  console.log(
+    `扫描记录: ${sources.reduce((sum, source) => sum + source.records, 0)}`,
+  );
   console.log('');
   printTable(report);
   console.log('');

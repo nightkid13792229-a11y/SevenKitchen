@@ -389,6 +389,19 @@
             >
               {{ designEntryLabel }}
             </el-button>
+            <!--
+              代客发起调整（2026-10-27）：
+              已交付的单，顾客不会/不方便在小程序提单时，老板从这里开一张调整单并直接改稿。
+            -->
+            <el-button
+              v-if="canInitiateAdjustment"
+              type="warning"
+              plain
+              :loading="adjustSubmitting"
+              @click="openAdjustDialog"
+            >
+              代客发起调整
+            </el-button>
             <span
               v-if="legacyOrderWithoutDesignSlots"
               class="design-workspace-note"
@@ -656,6 +669,46 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 代客发起调整：先写一句给顾客看的说明，再进入设计器改稿 -->
+    <el-dialog
+      v-model="adjustDialogVisible"
+      title="代客发起调整"
+      width="520px"
+      :close-on-click-modal="false"
+    >
+      <el-alert
+        type="info"
+        :closable="false"
+        show-icon
+        title="这是商家主动发起的调整"
+        description="不占用顾客的免费调整次数，也不受售后受理期限制。发起后会直接打开设计器改稿；改完回「售后处理」页点「重新交付并完成」即可交回给顾客。"
+      />
+
+      <el-form label-width="90px" class="offline-refund-form">
+        <el-form-item label="调整说明">
+          <el-input
+            v-model="adjustDescription"
+            type="textarea"
+            :rows="3"
+            maxlength="200"
+            show-word-limit
+            placeholder="例如：狗狗体重下降，把兔里脊换成鸭胸，蛋白比例上调"
+          />
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="adjustDialogVisible = false">再想想</el-button>
+        <el-button
+          type="primary"
+          :loading="adjustSubmitting"
+          @click="submitStaffAdjustment"
+        >
+          发起并去改稿
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -675,6 +728,7 @@ import type {
 } from '@/api/customRecipe';
 import { dogApi } from '@/api/dogs';
 import { orderRecipeDesignApi } from '@/api/orderRecipeDesign';
+import { recipeDesignerApi } from '@/api/recipeDesigner';
 import type { OrderDesignWorkspace } from '@/types/orderRecipeDesign';
 import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole';
 import {
@@ -757,6 +811,78 @@ const canStartDesign = computed(() => {
   const status = String(order.value?.status || '');
   return Boolean(status) && !['PENDING_PAYMENT', 'CANCELLED'].includes(status);
 });
+
+// ---------- 代客发起调整（2026-10-27）----------
+
+/**
+ * 已交付（含已自动完成）的订单才需要这个入口。
+ *
+ * 未交付的单直接在订单设计工作台改就行，不需要走调整单 ——
+ * 多开一条只会让售后列表多一条「没有顾客诉求」的记录。
+ */
+const canInitiateAdjustment = computed(() => {
+  if (!isAdmin.value) return false;
+  const status = String(order.value?.status || '');
+  return status === 'DELIVERED' || status === 'COMPLETED';
+});
+
+const adjustDialogVisible = ref(false);
+const adjustDescription = ref('');
+const adjustSubmitting = ref(false);
+
+function openAdjustDialog() {
+  adjustDescription.value = '';
+  adjustDialogVisible.value = true;
+}
+
+/**
+ * 发起调整 → 直接打开设计器改稿。
+ *
+ * 三步顺序不能变：先建单（售后页才有记录可重交）→ 再 reopen（把已交付的
+ * 槽位改回编辑中并开新版本草稿）→ 最后跳设计器。
+ *
+ * ⚠️ 空窗口必须在**点击的同步栈**里先开：建单和 reopen 都要 await，
+ * 等完再 window.open 会被浏览器当成非用户触发的弹窗直接拦掉。
+ */
+async function submitStaffAdjustment() {
+  if (!order.value || adjustSubmitting.value) return;
+  const description = adjustDescription.value.trim();
+  if (!description) {
+    ElMessage.warning('请写一句这次要调整什么，顾客会看到这句话');
+    return;
+  }
+
+  const orderId = order.value.orderId;
+  const designerWindow = window.open('', '_blank');
+  adjustSubmitting.value = true;
+  try {
+    const aftersale = await customRecipeApi.createStaffAftersale(orderId, {
+      description,
+    });
+    const reopened = await recipeDesignerApi.reopenAftersaleDesign(aftersale.id);
+
+    adjustDialogVisible.value = false;
+    const url =
+      `/recipe-designer/series/${reopened.seriesId}/drafts/${reopened.draftId}` +
+      `?orderId=${encodeURIComponent(reopened.orderId)}` +
+      `&designId=${encodeURIComponent(reopened.designId)}` +
+      `&aftersaleId=${encodeURIComponent(aftersale.id)}`;
+    if (designerWindow) {
+      designerWindow.location.href = url;
+    } else {
+      window.open(url, '_blank');
+    }
+    ElMessage.success('已发起调整，正在打开设计器');
+    emit('refresh');
+  } catch (error) {
+    designerWindow?.close();
+    toastApiError(error, '发起调整失败，请重试', (message) =>
+      ElMessage.error(message),
+    );
+  } finally {
+    adjustSubmitting.value = false;
+  }
+}
 
 /**
  * 订单绑定食谱设计（2026-10-22 · Task 5）。

@@ -1445,6 +1445,53 @@ export class AdminCustomRecipeController {
     return ApiResponseDto.success({ items });
   }
 
+  /**
+   * 代客发起调整（2026-10-27）。
+   *
+   * 顾客不满意但不会/不方便在小程序提交调整单时，老板直接在后台开一条，
+   * 然后走既有链路：售后页「修改食谱」→ 改稿 → 加入本单待提交 →
+   * 售后页「重新交付并完成」。
+   *
+   * 只有管理员能做：这条链的终点是给顾客重新交付（与 `redeliver-batch` 同一口径）。
+   */
+  @Post('orders/:orderId/aftersales')
+  @UseGuards(AdminGuard)
+  @ApiOperation({
+    summary: 'Create a recipe adjustment on behalf of the customer',
+  })
+  async createAftersaleByStaff(
+    @Req() req: any,
+    @Param('orderId') orderId: string,
+    @Body('description') description: string,
+    @Body('deliveryItemIds') deliveryItemIds?: unknown,
+  ) {
+    /**
+     * 不传 = 最新批次全部份（单份订单就是唯一那份）；
+     * 传了必须是**非空字符串数组**，空数组当成表单没填完。
+     */
+    let ids: string[] | null = null;
+    if (deliveryItemIds !== undefined && deliveryItemIds !== null) {
+      if (!Array.isArray(deliveryItemIds) || deliveryItemIds.length === 0) {
+        throw new BadRequestException('请至少选择一份要调整的食谱');
+      }
+      ids = deliveryItemIds.map((value) =>
+        typeof value === 'string' ? value.trim() : '',
+      );
+      if (ids.some((id) => id.length === 0)) {
+        throw new BadRequestException('要调整的食谱参数不正确，请刷新后重试');
+      }
+    }
+
+    return ApiResponseDto.success(
+      await this.aftersaleService.createByStaff({
+        orderIdOrId: orderId,
+        operatorId: this.currentOperatorId(req),
+        description,
+        deliveryItemIds: ids,
+      }),
+    );
+  }
+
   /** 受理 */
   @Post('aftersales/:id/accept')
   @ApiOperation({ summary: 'Accept an aftersale request' })

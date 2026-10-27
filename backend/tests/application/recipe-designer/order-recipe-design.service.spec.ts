@@ -3,7 +3,6 @@ import { Test } from '@nestjs/testing';
 import { OrderRecipeDesignService } from '../../../src/application/recipe-designer/order-recipe-design.service';
 import { RecipeDesignerService } from '../../../src/application/recipe-designer/recipe-designer.service';
 import { OrderRecipeTemplateService } from '../../../src/application/recipe-designer/order-recipe-template.service';
-import { AiDesignSuggestionService } from '../../../src/application/recipe-designer/ai-design-suggestion.service';
 import { CustomRecipeService } from '../../../src/application/custom-recipe/custom-recipe.service';
 import { SearchGovernanceService } from '../../../src/application/search-governance/search-governance.service';
 import { PrismaService } from '../../../src/infrastructure/prisma.service';
@@ -881,10 +880,6 @@ describe('RecipeDesignerService · order-bound clone', () => {
     expandQuery: jest.fn(),
     recordSearchEvent: jest.fn(),
   };
-  const aiDesignSuggestion = {
-    isAvailable: jest.fn(),
-    generate: jest.fn(),
-  };
 
   function buildSourceRecipe(overrides: AnyRow = {}): AnyRow {
     return {
@@ -933,7 +928,6 @@ describe('RecipeDesignerService · order-bound clone', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: 'FediafTargetProvider', useValue: targetProvider },
         { provide: SearchGovernanceService, useValue: searchGovernance },
-        { provide: AiDesignSuggestionService, useValue: aiDesignSuggestion },
       ],
     }).compile();
 
@@ -1176,10 +1170,6 @@ describe('RecipeDesignerService · publishOrderDesignSlot', () => {
     expandQuery: jest.fn(),
     recordSearchEvent: jest.fn(),
   };
-  const aiDesignSuggestion = {
-    isAvailable: jest.fn(),
-    generate: jest.fn(),
-  };
 
   function buildDraft(overrides: AnyRow = {}): AnyRow {
     return {
@@ -1281,7 +1271,6 @@ describe('RecipeDesignerService · publishOrderDesignSlot', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: 'FediafTargetProvider', useValue: targetProvider },
         { provide: SearchGovernanceService, useValue: searchGovernance },
-        { provide: AiDesignSuggestionService, useValue: aiDesignSuggestion },
       ],
     }).compile();
 

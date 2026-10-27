@@ -195,35 +195,6 @@ export class BatchReorderDesignItemsDto {
   order!: Array<{ id: string; sortOrder: number }>;
 }
 
-export class AiDesignSuggestDto {
-  @IsOptional()
-  @IsString()
-  draftId?: string;
-}
-
-export class AiNutritionPlanGenerateDto {
-  @IsOptional()
-  @IsString()
-  draftId?: string;
-
-  @IsOptional()
-  @IsString()
-  userNotes?: string;
-}
-
-export class AiNutritionPlanAcceptDto {
-  @IsBoolean()
-  accepted!: boolean;
-
-  @IsOptional()
-  @IsString()
-  note?: string | null;
-
-  /** 修改后的营养方案（与生成结果结构一致；不传则沿用当前方案） */
-  @IsOptional()
-  plan?: Record<string, unknown> | null;
-}
-
 export class CreateRecipeSeriesStageDraftDto {
   @IsIn(RECIPE_DESIGNER_SCENARIOS)
   scenario!: RecipeDesignerScenario;

@@ -67,11 +67,6 @@
         >发布 / 更新</el-button>
         <el-button
           text
-          :type="aiPanelVisible ? 'primary' : 'default'"
-          @click="aiPanelVisible = !aiPanelVisible"
-        >🤖 AI 设计建议</el-button>
-        <el-button
-          text
           :type="agentDrawerVisible ? 'primary' : 'default'"
           :icon="MagicStick"
           :disabled="!draft"
@@ -298,15 +293,6 @@
       </div>
     </div>
 
-    <!-- AI 设计建议：右侧独立抽屉（不占编辑区布局，内容过长在抽屉内滚动） -->
-    <AiDesignSuggestionPanel
-      v-if="draft && aiPanelVisible"
-      :dog-id="referenceDogId"
-      :draft-id="draft?.id"
-      @add-item="handleAiAddItem"
-      @close="aiPanelVisible = false"
-    />
-
     <!-- 系列改名（合并命名模型：编辑页与列表、发布页共用同一个系列名） -->
     <el-dialog v-model="renameDialogVisible" title="重命名系列" width="420px">
       <el-input v-model="renameForm.name" maxlength="60" show-word-limit />
@@ -408,7 +394,6 @@ import AssessmentPanel from './components/AssessmentPanel.vue'
 import GaugePanel from './components/GaugePanel.vue'
 import MacroCompositionPanel from './components/MacroCompositionPanel.vue'
 import DogInsightPanel from './components/DogInsightPanel.vue'
-import AiDesignSuggestionPanel from './components/AiDesignSuggestionPanel.vue'
 import SupplementTargetDialog from './components/SupplementTargetDialog.vue'
 import PreparationMethodField from './components/PreparationMethodField.vue'
 import { PREPARATION_FIELD_LABEL } from '@/constants/preparationField'
@@ -662,7 +647,6 @@ async function refreshInputsKeepingScroll() {
 }
 
 const referenceDogId = ref<string | null>(null)
-const aiPanelVisible = ref(false)
 
 /**
  * 上线检查抽屉：产品线与本单设计共用同一套后端门槛。
@@ -1416,31 +1400,6 @@ async function handleRevert() {
     // 错误提示由拦截器统一处理
   } finally {
     reverting.value = false
-  }
-}
-
-/** AI 面板一键添加（推荐食材已由后端匹配好 ingredientId / nutritionFoodId） */
-async function handleAiAddItem(payload: {
-  name: string
-  ingredientId?: string
-  nutritionFoodId?: string
-  weightG?: number
-}) {
-  if (!draft.value) return
-  if (!payload.nutritionFoodId) return
-  const itemPayload = {
-    ingredientId: payload.ingredientId,
-    nutritionFoodId: payload.nutritionFoodId,
-    weightG: payload.weightG ?? 100,
-    includeInAssessment: true,
-  }
-  try {
-    const created = await recipeDesignerApi.addItem(draft.value.id, itemPayload)
-    items.value = [...items.value, created]
-    recordHistory({ type: 'add', item: created })
-    await refreshInputsKeepingScroll()
-  } catch {
-    // 拦截器已提示
   }
 }
 

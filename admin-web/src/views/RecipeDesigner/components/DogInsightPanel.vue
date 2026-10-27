@@ -265,7 +265,7 @@
       >
         <el-option v-for="dog in dogOptions" :key="dog.id" :label="dogLabel(dog)" :value="dog.id" />
       </el-select>
-      <div class="form-tip">参考爱犬仅作为设计参考：其档案与历史食材会在本面板展示，AI 设计建议也会结合该犬档案生成；正式食谱发布后与犬解耦，不影响其他犬使用</div>
+      <div class="form-tip">参考爱犬仅作为设计参考：其档案与历史食材会在本面板展示，AI 设计对话也会结合该犬档案生成；正式食谱发布后与犬解耦，不影响其他犬使用</div>
       <template #footer>
         <el-button @click="dogPickerVisible = false">取消</el-button>
         <el-button type="primary" :loading="savingDog" @click="saveDog">保存</el-button>

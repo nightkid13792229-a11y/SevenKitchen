@@ -261,11 +261,19 @@
                     class="series-release__cover-box"
                     :class="{ 'is-empty': !form.coverImageUrl }"
                   >
-                    <img
+                    <div
                       v-if="form.coverImageUrl"
-                      :src="form.coverImageUrl"
-                      alt="系列封面图预览"
-                    />
+                      class="series-release__cover-preview"
+                      @click.stop="openCoverPreview(form.coverImageUrl)"
+                    >
+                      <img
+                        :src="form.coverImageUrl"
+                        alt="系列封面图预览"
+                      />
+                      <span class="series-release__cover-zoom">
+                        点击看大图
+                      </span>
+                    </div>
                     <div v-else class="series-release__cover-placeholder">
                       <el-icon><Plus /></el-icon>
                       <span>上传封面图</span>
@@ -295,13 +303,29 @@
                       {{ aiCoverButtonLabel }}
                     </el-button>
                   </div>
-                  <el-button
+                  <div
                     v-if="form.coverImageUrl"
-                    link
-                    type="danger"
-                    :disabled="aiCoverGenerating || uploading"
-                    @click="form.coverImageUrl = ''"
-                  >移除封面</el-button>
+                    class="series-release__cover-actions"
+                  >
+                    <el-upload
+                      :show-file-list="false"
+                      :before-upload="handleCoverUpload"
+                      :disabled="uploading || aiCoverGenerating"
+                      accept="image/jpeg,image/png,image/webp"
+                    >
+                      <el-button
+                        link
+                        type="primary"
+                        :disabled="uploading || aiCoverGenerating"
+                      >更换封面</el-button>
+                    </el-upload>
+                    <el-button
+                      link
+                      type="danger"
+                      :disabled="aiCoverGenerating || uploading"
+                      @click="form.coverImageUrl = ''"
+                    >移除封面</el-button>
+                  </div>
                   <span v-if="aiCoverHint" class="series-release__hint">
                     {{ aiCoverHint }}
                   </span>
@@ -312,7 +336,12 @@
                 </div>
               </div>
               <div v-if="aiCoverPreviewUrl" class="series-release__ai-preview">
-                <img :src="aiCoverPreviewUrl" alt="AI 生成封面预览" />
+                <img
+                  :src="aiCoverPreviewUrl"
+                  alt="AI 生成封面预览"
+                  class="series-release__ai-preview-image"
+                  @click="openCoverPreview(aiCoverPreviewUrl)"
+                />
                 <div class="series-release__ai-preview-actions">
                   <el-button
                     size="small"
@@ -416,6 +445,8 @@
                 v-if="form.coverImageUrl"
                 :src="form.coverImageUrl"
                 alt="顾客看到的系列封面"
+                class="series-release__preview-cover-image"
+                @click="openCoverPreview(form.coverImageUrl)"
               />
               <div v-else class="series-release__preview-placeholder">
                 封面图
@@ -586,6 +617,25 @@
         </div>
       </div>
     </template>
+
+    <!-- 点击封面缩略图看大图（2026-10-27） -->
+    <el-dialog
+      v-model="coverPreviewVisible"
+      title="封面图预览"
+      width="720px"
+      append-to-body
+      class="series-release__cover-preview-dialog"
+    >
+      <img
+        v-if="coverPreviewUrl"
+        :src="coverPreviewUrl"
+        class="series-release__cover-preview-large"
+        alt="封面图大图"
+      />
+      <template #footer>
+        <el-button @click="coverPreviewVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </el-drawer>
 </template>
 
@@ -728,6 +778,21 @@ const aiCoverGenerating = ref(false)
 const aiCoverPreviewUrl = ref('')
 const aiCoverError = ref('')
 let aiCoverRequestSeq = 0
+
+/** 点封面缩略图看大图：主封面 / AI 预览 / 顾客预览共用同一个弹窗 */
+const coverPreviewUrl = ref('')
+const coverPreviewVisible = computed({
+  get: () => Boolean(coverPreviewUrl.value),
+  set: (visible: boolean) => {
+    if (!visible) coverPreviewUrl.value = ''
+  }
+})
+
+function openCoverPreview(url?: string | null): void {
+  const target = String(url ?? '').trim()
+  if (!target) return
+  coverPreviewUrl.value = target
+}
 
 const healthTags = ref<RecipeHealthTag[]>([])
 const healthTagsLoading = ref(false)
@@ -1367,6 +1432,7 @@ watch(
     aiCoverPreviewUrl.value = ''
     aiCoverError.value = ''
     aiCoverAvailable.value = null
+    coverPreviewUrl.value = ''
 
     if (!open) {
       // 关闭后到达的响应不再写回，避免下次打开先闪一眼旧结果
@@ -1722,6 +1788,52 @@ watch(
 
 .series-release__cover-placeholder .el-icon {
   font-size: 22px;
+}
+
+.series-release__cover-preview {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  cursor: zoom-in;
+}
+
+.series-release__cover-zoom {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.6;
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+
+.series-release__cover-preview:hover .series-release__cover-zoom {
+  opacity: 1;
+}
+
+.series-release__cover-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.series-release__ai-preview-image,
+.series-release__preview-cover-image {
+  cursor: zoom-in;
+}
+
+.series-release__cover-preview-large {
+  display: block;
+  width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  background: #f5f7fa;
+  border-radius: 8px;
 }
 
 .series-release__cover-mask {

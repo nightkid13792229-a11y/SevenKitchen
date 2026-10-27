@@ -116,8 +116,6 @@ describe('RecipeDesignerService · draft presentation', () => {
       prisma as PrismaService,
       targetProvider as any,
       { expandQuery: jest.fn(), recordSearchEvent: jest.fn() } as any,
-      { isAvailable: jest.fn(), generate: jest.fn() } as any,
-      undefined,
       undefined,
       undefined,
       undefined,

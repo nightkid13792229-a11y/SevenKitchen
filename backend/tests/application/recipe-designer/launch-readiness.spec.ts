@@ -261,18 +261,11 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
     expandQuery: jest.fn(),
     recordSearchEvent: jest.fn(),
   };
-  const aiDesignSuggestion = {
-    isAvailable: jest.fn(),
-    generate: jest.fn(),
-  };
-
   beforeEach(() => {
     service = new RecipeDesignerService(
       prisma as PrismaService,
       targetProvider as any,
       searchGovernance as any,
-      aiDesignSuggestion as any,
-      undefined,
       undefined,
       undefined,
       undefined,

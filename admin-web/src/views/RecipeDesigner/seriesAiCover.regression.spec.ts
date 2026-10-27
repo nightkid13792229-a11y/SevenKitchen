@@ -60,6 +60,18 @@ describe('系列 AI 封面 · 源码契约', () => {
     expect(resetIndex).toBeLessThan(closeIndex)
   })
 
+  it('点击封面缩略图看大图，且不触发上传', () => {
+    expect(drawerSource).toContain('openCoverPreview')
+    expect(drawerSource).toContain('coverPreviewVisible')
+    expect(drawerSource).toContain(
+      '@click.stop="openCoverPreview(form.coverImageUrl)"'
+    )
+    expect(drawerSource).toContain('series-release__cover-preview-large')
+    expect(drawerSource).toContain('封面图预览')
+    // 换图仍然要能走上传：缩略图点击被 stop 后，必须另有一个「更换封面」入口
+    expect(drawerSource).toContain('更换封面')
+  })
+
   it('生成不阻断保存发布设置', () => {
     expect(drawerSource).toContain(':disabled="saving || uploading || !dirty"')
     expect(drawerSource).not.toContain('aiCoverGenerating || !dirty')

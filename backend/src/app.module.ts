@@ -294,10 +294,8 @@ import { RecipeAgentSessionService } from './application/recipe-designer/agent/r
 import { SupplementTargetService } from './application/recipe-designer/supplement-target.service';
 import { OrderRecipeDesignService } from './application/recipe-designer/order-recipe-design.service';
 import { OrderRecipeTemplateService } from './application/recipe-designer/order-recipe-template.service';
-import { AiDesignSuggestionService } from './application/recipe-designer/ai-design-suggestion.service';
 import { RecipeCopywritingService } from './application/recipe-designer/recipe-copywriting.service';
 import { KnowledgeBaseService } from './application/recipe-designer/knowledge-base.service';
-import { RecipeAiWizardService } from './application/recipe-designer/recipe-ai-wizard.service';
 import {
   SupplementLabelExtractionService,
   SUPPLEMENT_LABEL_OCR_PROVIDER,
@@ -876,10 +874,8 @@ validatePrismaConfig();
     // Nutrition Food Service (Recipe Designer)
     NutritionFoodService,
     SupplementLabelExtractionService,
-    AiDesignSuggestionService,
     RecipeCopywritingService,
     KnowledgeBaseService,
-    RecipeAiWizardService,
     {
       provide: SUPPLEMENT_LABEL_OCR_PROVIDER,
       useClass: TencentCloudSupplementLabelOcrProvider,

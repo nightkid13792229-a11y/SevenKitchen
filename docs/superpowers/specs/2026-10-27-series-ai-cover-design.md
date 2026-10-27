@@ -248,8 +248,8 @@
 2. `designMode=CATALOG` → 否则 400「订单定制系列不支持 AI 封面生成」。
 3. 系列名非空、且不以「未命名」开头 → 否则 400「系列名称还是临时名称，先改成正式名称再生成封面」。
 4. `RecipeCoverImageService.isAvailable()` → false 则 400「AI 生图还没配置：请到后台「AI 设置」里添加 purpose=RECIPE_COVER_IMAGE、provider=ZHIPU 的一条并启用」。
-5. 判断系列是否已上线（`businessStatus=PUBLIC` 或存在 PUBLIC 食谱行）：已上线则 `save` 强制按 `false` 处理。
-6. 查食材 → 调生图 → 转存 COS（失败按 `zhipu-image.ts` / `downloadTemporaryImage` 的现有文案抛出）。
+5. 查食材 → 调生图 → 转存 COS（失败按 `zhipu-image.ts` / `downloadTemporaryImage` 的现有文案抛出）。
+6. **写库前**再判一次系列是否已上线（`businessStatus=PUBLIC` 或存在 PUBLIC 食谱行）：已上线则 `save` 强制按 `false` 处理。
 7. `save=true` 且系列未上线时再写库（见 6.5）；写库失败返回 400/500，不吞错。
 
 ### 6.4 提示词素材：系列名 + 最近一份「有原料」的草稿
@@ -277,7 +277,8 @@ prisma.recipeSeries.update({
 - **不碰** `Recipe` 行、不碰 `coverTitle` / `sellingPoint` / `targetHealthTags`、不碰角标表、不碰 `businessStatus`。
 - **不传** `applyToLive`（那是「保存发布设置」和 `releaseSeries` 的事）。
 - `save=false` 时一次写库都不做；返回的 URL 只用于前端预览。
-- `save` 由前端按「封面为空 + 系列未上线」决定；后端**同时兜底**：系列已上线就强制不落库（第 6.3 节第 5 步），响应里 `saved=false`。
+- `save` 由前端按「封面为空 + 系列未上线」决定；后端**同时兜底**：系列已上线就强制不落库（第 6.3 节第 6 步），响应里 `saved=false`。
+- 「是否已上线」在**写库前**再判一次（不是生成前）：生图要 20–40 秒，这期间另一个标签页可能刚好发布了这条系列。
 - 这样即使前端状态过期（例如另一个标签页刚发布了这条系列），也不会出现「系列有了新封面、线上还是旧封面、保存按钮又不变脏」的死角。
 
 ### 6.6 生图与转存（复用 + 一个小扩展）

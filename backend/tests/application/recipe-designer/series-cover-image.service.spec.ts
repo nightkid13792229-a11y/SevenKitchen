@@ -173,6 +173,24 @@ describe('SeriesCoverImageService', () => {
     expect(result.saved).toBe(false);
   });
 
+  it('生成期间系列被发布：不落库，返回预览', async () => {
+    // 模拟另一个标签页在 20–40 秒的生图期间把系列发布了：
+    // 生成前是 DRAFT，生成完成后已经有 PUBLIC 食谱行。
+    coverImageService.generate.mockImplementation(async () => {
+      prisma.recipe.count.mockResolvedValue(1);
+      return {
+        url: 'https://cos.example.com/ai.jpg',
+        provider: 'ZHIPU',
+        model: 'glm-image',
+      };
+    });
+
+    const result = await service.generateForSeries('series-1', { save: true });
+
+    expect(prisma.recipeSeries.update).not.toHaveBeenCalled();
+    expect(result.saved).toBe(false);
+  });
+
   it('save=false：只预览，不写库', async () => {
     const result = await service.generateForSeries('series-1');
 

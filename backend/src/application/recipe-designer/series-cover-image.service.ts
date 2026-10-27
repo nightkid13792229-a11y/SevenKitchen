@@ -104,8 +104,7 @@ export class SeriesCoverImageService {
       throw new BadRequestException(AI_COVER_NOT_CONFIGURED_MESSAGE);
     }
 
-    const isLive = await this.isSeriesLive(series);
-    const shouldSave = options.save === true && !isLive;
+    const saveRequested = options.save === true;
     const foodNames = await this.loadFoodNames(seriesId);
 
     // 不传 lifeStageLabels：系列封面是整条产品线的门面，不属于某个阶段
@@ -114,6 +113,15 @@ export class SeriesCoverImageService {
       foodNames,
       layout: 'COVER_16_9',
     });
+
+    /**
+     * 写库前再判一次「是否已上线」（不是生成前）。
+     *
+     * 生图要 20–40 秒，这期间另一个标签页可能刚好把系列发布了；
+     * 生成前的结论放到这时用，就会造出「系列有新封面、线上还是旧图、
+     * 保存按钮又不变脏」的死角。多一次 count 换掉这个窗口。
+     */
+    const shouldSave = saveRequested && !(await this.isSeriesLive(series));
 
     if (shouldSave) {
       // 只写系列这一列；线上同步交给「保存发布设置」

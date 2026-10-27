@@ -148,6 +148,8 @@ export interface BuildRecipeCoverPromptInput {
   ingredients?: RecipeCoverIngredient[];
   /** 文本模型生成的英文画面描述；有它就不再往提示词里放原始食材名/百分比 */
   visualBrief?: string;
+  /** DeepSeek 写的整段摄影 brief（含构图/光线/背景），直接作为图片提示词主体 */
+  imageBrief?: string;
   /** 旧入口传过；现在不再写进提示词 */
   lifeStageLabels?: string[];
 }
@@ -171,6 +173,31 @@ export function buildRecipeCoverPrompt(
   const foodNames = (input.foodNames || []).filter(Boolean);
   const hasEgg = (ingredients.length ? ingredients.map((i) => i.name) : foodNames)
     .some((name) => /蛋/.test(name));
+
+  /**
+   * DeepSeek 已经写好整段摄影 brief（2026-10-28）：
+   * 它包含了主次、构图、光线、背景和全部食材；这里只追加固定的
+   * 「无文字 / 生鲜 / 无补剂」护栏，不再套一层旧模板。
+   */
+  const imageBrief = String(input.imageBrief ?? '').trim();
+  if (imageBrief) {
+    const guard = [
+      'No text, no words, no letters, no numbers, no labels, no captions, no infographic, no typography, no watermark, no logo, no packaging, no human hands.',
+      'No cooked/seared/grilled/stewed look. No blood pools, no slime, no supplements or pills.',
+      hasEgg ? '' : 'No egg.',
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    let brief = imageBrief;
+    let prompt = `${brief} ${guard}`;
+    // 智谱 prompt 上限 1000 字符：超了先从 brief 的最后一句开始丢
+    while (prompt.length > MAX_PROMPT_LENGTH && brief.includes('. ')) {
+      brief = brief.slice(0, brief.lastIndexOf('. '));
+      prompt = `${brief} ${guard}`;
+    }
+    return prompt;
+  }
 
   /**
    * 有画面描述时走固定模板：模板永远不变，只有 {{visualBrief}} 随配方变化。

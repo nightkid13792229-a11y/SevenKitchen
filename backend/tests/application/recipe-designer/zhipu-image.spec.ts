@@ -120,6 +120,24 @@ describe('buildRecipeCoverPrompt', () => {
     expect(prompt.length).toBeLessThanOrEqual(1000);
   });
 
+  it('有整段摄影 brief 时直接用它：不再拼旧模板/原始食材', () => {
+    const prompt = buildRecipeCoverPrompt({
+      recipeName: '鸭肉南瓜燕麦',
+      ingredients,
+      imageBrief:
+        'A high-end editorial food photograph on a light oak table by a window. ' +
+        'A large pale-pink duck breast in the foreground, with oat groats behind it; ' +
+        'soft side light, warm neutral grade, shallow depth of field.',
+    });
+
+    expect(prompt).toContain('A high-end editorial food photograph');
+    expect(prompt).toContain('No text');
+    expect(prompt).not.toContain('鸭胸肉');
+    expect(prompt).not.toContain('45%');
+    expect(prompt).not.toMatch(/\d/);
+    expect(prompt.length).toBeLessThanOrEqual(1000);
+  });
+
   it('没有食材数据时也能生成（不崩）', () => {
     const prompt = buildRecipeCoverPrompt({ recipeName: '鸡肉南瓜' });
 

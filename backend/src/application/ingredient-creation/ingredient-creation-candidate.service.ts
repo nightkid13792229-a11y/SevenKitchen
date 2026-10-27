@@ -8,6 +8,7 @@ import {
 } from '../../domain/ingredient-creation/preparation-state';
 import { NUTRITION_FIELD_CATALOG } from '../../domain/ingredient/nutrition-field-catalog';
 import type { NutritionGovernanceSourceType } from '../../domain/nutrition-governance/nutrition-governance.types';
+import { LOCAL_LIBRARY_SOURCE_TYPES } from '../../domain/nutrition-governance/nutrition-source-registry';
 import {
   normalizeNameForMatch,
   scoreIngredientSourceNameMatch,
@@ -65,10 +66,14 @@ export interface ListNutritionNamesResult {
   notice?: string | null;
 }
 
-/** 补剂标签不是食材来源，不进候选。 */
-const NON_FOOD_SOURCE_TYPES: readonly NutritionGovernanceSourceType[] = [
-  'SUPPLEMENT_LABEL',
-];
+/**
+ * 候选检索只查登记表里的 L1 本地主库。
+ *
+ * 这里必须用 `in` 而不是 `notIn`：NEVO/MANUAL/SUPPLEMENT_LABEL 等不在 L1 的
+ * 来源都不该进入候选（NEVO 只保留线上长尾）。
+ */
+const CANDIDATE_SEARCH_SOURCE_TYPES: readonly NutritionGovernanceSourceType[] =
+  LOCAL_LIBRARY_SOURCE_TYPES as readonly NutritionGovernanceSourceType[];
 
 /**
  * 名字对不上的下限。与营养治理工作台一致：来源优先级本身只值 0.1~0.15，
@@ -743,7 +748,7 @@ export class IngredientCreationCandidateService {
     const records = await this.prisma.nutritionSourceRecord.findMany({
       where: {
         status: 'ACTIVE',
-        sourceType: { notIn: [...NON_FOOD_SOURCE_TYPES] },
+        sourceType: { in: [...CANDIDATE_SEARCH_SOURCE_TYPES] },
       },
       select: {
         id: true,
@@ -900,7 +905,7 @@ export class IngredientCreationCandidateService {
     const records = await this.prisma.nutritionSourceRecord.findMany({
       where: {
         status: 'ACTIVE',
-        sourceType: { notIn: [...NON_FOOD_SOURCE_TYPES] },
+        sourceType: { in: [...CANDIDATE_SEARCH_SOURCE_TYPES] },
       },
       select: {
         id: true,

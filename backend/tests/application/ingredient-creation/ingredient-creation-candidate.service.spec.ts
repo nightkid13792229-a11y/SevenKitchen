@@ -9,6 +9,7 @@ import type { CandidateSearchResult } from '../../../src/application/ingredient-
 import { auditNutritionProfileForImport } from '../../../src/application/standard-ingredient-import/nutrition-audit';
 import { PrismaService } from '../../../src/infrastructure/prisma.service';
 import type { NutritionGovernanceSourceType } from '../../../src/domain/nutrition-governance/nutrition-governance.types';
+import { LOCAL_LIBRARY_SOURCE_TYPES } from '../../../src/domain/nutrition-governance/nutrition-source-registry';
 import type { PreparationState } from '../../../src/domain/ingredient-creation/preparation-state';
 
 interface AliasFixture {
@@ -121,7 +122,7 @@ function buildNormalizedNutrition(
 /**
  * 内存版 Prisma 假实现：只覆盖候选检索用到的 `findMany`。
  *
- * 按 `where` 里的 status / sourceType.notIn / id.in 过滤，
+ * 按 `where` 里的 status / sourceType.in / sourceType.notIn / id.in 过滤，
  * 并按 `select` 投影——服务如果漏了某条过滤条件，测试就会看到不该出现的词条。
  */
 function createPrismaMock(fixtures: SourceRecordFixture[]) {
@@ -140,6 +141,11 @@ function createPrismaMock(fixtures: SourceRecordFixture[]) {
 
     if (where.status) {
       matched = matched.filter((row) => row.status === where.status);
+    }
+    if (where.sourceType?.in) {
+      matched = matched.filter((row) =>
+        where.sourceType.in.includes(row.sourceType),
+      );
     }
     if (where.sourceType?.notIn) {
       matched = matched.filter(
@@ -183,6 +189,7 @@ async function createService(
   return {
     service: moduleRef.get(IngredientCreationCandidateService),
     aliases,
+    prisma,
   };
 }
 
@@ -920,6 +927,46 @@ describe('IngredientCreationCandidateService', () => {
       });
 
       expect(candidateIds(result)).toEqual(['usda-active', 'cnf-active']);
+    });
+  });
+
+  describe('listNutritionNames 来源白名单', () => {
+    it('只查登记表里的 L1 本地库：NEVO 不返回，USDA 返回', async () => {
+      const { service, prisma } = await createService([
+        {
+          id: 'usda-beef',
+          sourceType: 'USDA',
+          foodName: 'Beef, ground, raw',
+          foodNameEn: 'Beef, ground, raw',
+        },
+        {
+          id: 'nevo-beef',
+          sourceType: 'NEVO',
+          foodName: 'Beef, ground, raw',
+          foodNameEn: 'Beef, ground, raw',
+        },
+      ]);
+
+      const result = await service.listNutritionNames({ keyword: 'Beef' });
+
+      expect(result.names).toEqual([
+        {
+          id: 'usda-beef',
+          name: 'Beef, ground, raw',
+          sourceType: 'USDA',
+        },
+      ]);
+      expect(result.total).toBe(1);
+      expect(prisma.nutritionSourceRecord.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            status: 'ACTIVE',
+            sourceType: {
+              in: [...LOCAL_LIBRARY_SOURCE_TYPES],
+            },
+          }),
+        }),
+      );
     });
   });
 });

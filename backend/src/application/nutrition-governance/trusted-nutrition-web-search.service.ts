@@ -4,20 +4,16 @@ import { createEmptyNutritionProfile } from '../../domain/ingredient/nutrition-p
 import type { NutritionProfileV2 } from '../../domain/ingredient/types';
 import type { NutritionSourceCode } from '../../domain/ingredient/nutrition-source-contract';
 import type { NutritionSourceInput } from '../../domain/nutrition-governance/nutrition-governance.types';
+import { ONLINE_TRUSTED_HOSTS } from '../../domain/nutrition-governance/nutrition-source-registry';
 
-const DEFAULT_TRUSTED_HOSTS = [
-  'fdc.nal.usda.gov',
-  'nal.usda.gov',
-  'foodstandards.gov.au',
-  'foodstandards.govt.nz',
-  'foodcomposition.co.nz',
-  'canada.ca',
-  'inspection.canada.ca',
-  'cnf-fce.ca',
-  'frida.fooddata.dk',
-  'fineli.fi',
-  'r.jina.ai',
-];
+/**
+ * 线上可信域名唯一来源是登记表（`ONLINE_TRUSTED_HOSTS`）。
+ *
+ * `r.jina.ai` 是抓取通道，不是营养来源库，所以只追加到 trusted hosts，
+ * 不进登记表的 onlineHosts，也不进 discovery hosts。
+ */
+const TRUSTED_PROXY_HOST = 'r.jina.ai';
+const DEFAULT_TRUSTED_HOSTS = [...ONLINE_TRUSTED_HOSTS, TRUSTED_PROXY_HOST];
 
 const URL_PATTERN = /https?:\/\/[^\s"'<>，。；、)）\]]+/giu;
 const MAX_FETCHED_BYTES = 2_000_000;
@@ -26,15 +22,8 @@ const MAX_DISCOVERY_HOSTS = 4;
 const MAX_DISCOVERED_SOURCE_URLS = 6;
 const TRUSTED_WEB_SEARCH_URL = 'https://lite.duckduckgo.com/lite/';
 
-const DEFAULT_DISCOVERY_HOSTS = [
-  'foodstandards.gov.au',
-  'foodcomposition.co.nz',
-  'foodstandards.govt.nz',
-  'canada.ca',
-  'frida.fooddata.dk',
-  'fineli.fi',
-  'nal.usda.gov',
-];
+/** Discovery 只从登记表的可信域名里取；代理域名不参与 site: 搜索。 */
+const DEFAULT_DISCOVERY_HOSTS = [...ONLINE_TRUSTED_HOSTS];
 
 type TrustedUrlDiscoveryMode =
   | 'explicit-url'

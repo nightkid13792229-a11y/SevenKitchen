@@ -1,4 +1,5 @@
 import {
+  PRIMARY_OFFICIAL_NUTRITION_SOURCES,
   rankNutritionSourceCandidates,
   toApprovedNutritionSource,
   type ApprovedNutritionSource,
@@ -317,18 +318,6 @@ function hasCfctSourceToken(value: unknown): boolean {
   );
 }
 
-const primaryOfficialNutritionSources = [
-  'USDA_FDC',
-  'NZFCD',
-  'NEVO',
-  'MEXT',
-  'AFCD',
-  'AUSNUT',
-  'CNF',
-  'COFID',
-  'CIQUAL',
-];
-
 const exhaustedSearchStatuses = new Set([
   'searched_no_match',
   'state_mismatch',
@@ -366,7 +355,7 @@ function hasCompleteCfctFallbackSearchEvidence(
     return false;
   }
 
-  return primaryOfficialNutritionSources.every((source) => {
+  return PRIMARY_OFFICIAL_NUTRITION_SOURCES.every((source) => {
     const entry = entriesBySource.get(source);
     return (
       entry !== undefined &&

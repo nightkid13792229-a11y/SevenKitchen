@@ -28,6 +28,18 @@ const GAP_AMOUNTS = [
   { nutrientCode: '646', value: 0.6 }, // 多不饱和脂肪酸
 ] as const;
 
+/** 验收项 4 允许改写的 8 个字段（脚本默认白名单）。 */
+const TARGET_FIELD_PATHS = [
+  'macros.carbohydrate',
+  'macros.fiber',
+  'vitamins.vitaminC',
+  'vitamins.vitaminB9',
+  'vitamins.choline',
+  'fattyAcids.saturatedFattyAcids',
+  'fattyAcids.monounsaturatedFattyAcids',
+  'fattyAcids.polyunsaturatedFattyAcids',
+] as const;
+
 function buildCnf(
   amounts: ReadonlyArray<{ nutrientCode: string; value: number }>,
 ) {
@@ -70,6 +82,46 @@ function buildExisting(): NutritionProfileV2 {
     rawBasisType: 'PER_100_G',
   });
   return existing;
+}
+
+/**
+ * 模拟生产 dry-run 里那 4 个“已有非空值、但重建值不同”的字段
+ * （配方里的维生素 D 与 DHA/EPA/DPA 修正值）。
+ */
+function buildExistingWithReviewedValues(): NutritionProfileV2 {
+  const existing = buildExisting();
+  existing.vitamins.vitaminD = 500;
+  existing.fattyAcids.dha = 120;
+  existing.fattyAcids.epa = 80;
+  existing.fattyAcids.dpa = 20;
+  existing.meta.sourceForms!['vitamins.vitaminD'] = {
+    sourceNutrientId: 1110,
+    sourceNutrientName: 'Vitamin D (D2 + D3), IU',
+    originalValue: 500,
+    originalUnit: 'IU',
+  };
+  existing.meta.sourceForms!['fattyAcids.dha'] = {
+    sourceNutrientId: 1272,
+    sourceNutrientName: 'PUFA 22:6 n-3 (DHA)',
+    originalValue: 0.12,
+    originalUnit: 'g',
+  };
+  return existing;
+}
+
+function buildBuiltWithDifferentReviewedValues() {
+  const built = buildCnf(GAP_AMOUNTS);
+  built.vitamins.vitaminD = 999;
+  built.fattyAcids.dha = 888;
+  built.fattyAcids.epa = 777;
+  built.fattyAcids.dpa = 666;
+  built.meta.sourceForms!['vitamins.vitaminD'] = {
+    sourceNutrientId: 1110,
+    sourceNutrientName: 'built vitamin D',
+    originalValue: 999,
+    originalUnit: 'IU',
+  };
+  return built;
 }
 
 describe('mergeCnfProfile', () => {
@@ -220,6 +272,71 @@ describe('mergeCnfProfile', () => {
     const once = mergeCnfProfile(buildExisting(), built);
     const twice = mergeCnfProfile(once, built);
     expect(twice).toEqual(once);
+  });
+});
+
+describe('mergeCnfProfile 字段白名单（onlyFieldPaths）', () => {
+  it('给了白名单就只改白名单字段，维生素 D / DHA / EPA / DPA 的已有值保持不动', () => {
+    const existing = buildExistingWithReviewedValues();
+    const built = buildBuiltWithDifferentReviewedValues();
+
+    // 不给白名单时会被重建值覆盖（证明 fixture 里两边确实不同）。
+    const unrestricted = mergeCnfProfile(existing, built);
+    expect(unrestricted.vitamins.vitaminD).toBe(999);
+    expect(unrestricted.fattyAcids.dha).toBe(888);
+
+    const merged = mergeCnfProfile(existing, built, TARGET_FIELD_PATHS);
+
+    // 8 个目标字段照常补上。
+    expect(merged.macros.carbohydrate).toBeCloseTo(12.5);
+    expect(merged.macros.fiber).toBeCloseTo(3.2);
+    expect(merged.vitamins.vitaminC).toBeCloseTo(4.1);
+    expect(merged.vitamins.vitaminB9).toBeCloseTo(0.023);
+    expect(merged.vitamins.choline).toBeCloseTo(15.7);
+    expect(merged.fattyAcids.saturatedFattyAcids).toBeCloseTo(1.9);
+    expect(merged.fattyAcids.monounsaturatedFattyAcids).toBeCloseTo(0.8);
+    expect(merged.fattyAcids.polyunsaturatedFattyAcids).toBeCloseTo(0.6);
+
+    // 白名单外的差异一律不写：数值和 sourceForms 都是 existing 原值。
+    expect(merged.vitamins.vitaminD).toBe(500);
+    expect(merged.fattyAcids.dha).toBe(120);
+    expect(merged.fattyAcids.epa).toBe(80);
+    expect(merged.fattyAcids.dpa).toBe(20);
+    expect(merged.meta.sourceForms!['vitamins.vitaminD']).toEqual(
+      existing.meta.sourceForms!['vitamins.vitaminD'],
+    );
+    expect(merged.meta.sourceForms!['fattyAcids.dha']).toEqual(
+      existing.meta.sourceForms!['fattyAcids.dha'],
+    );
+
+    // 变更清单也只会是这 8 个字段（脚本 perField 正好 8 条）。
+    expect(diffCnfProfileFields(existing, merged).changed.sort()).toEqual(
+      [...TARGET_FIELD_PATHS].sort(),
+    );
+  });
+
+  it('部分白名单只拷贝选中的那几个字段', () => {
+    const existing = buildExisting();
+    const built = buildCnf(GAP_AMOUNTS);
+
+    const merged = mergeCnfProfile(existing, built, ['macros.carbohydrate']);
+
+    expect(merged.macros.carbohydrate).toBeCloseTo(12.5);
+    expect(merged.macros.fiber).toBeNull();
+    expect(merged.vitamins.vitaminC).toBeNull();
+    expect(merged.vitamins.vitaminB9).toBeNull();
+    expect(merged.vitamins.choline).toBeNull();
+    expect(merged.fattyAcids.saturatedFattyAcids).toBeNull();
+    expect(merged.meta.sourceForms!['macros.carbohydrate']).toBeDefined();
+    expect(merged.meta.sourceForms!['macros.fiber']).toBeUndefined();
+    expect(merged.meta.sourceForms!['vitamins.vitaminC']).toBeUndefined();
+  });
+
+  it('空白名单什么都不拷贝（等于 existing）', () => {
+    const existing = buildExisting();
+    const merged = mergeCnfProfile(existing, buildCnf(GAP_AMOUNTS), []);
+    expect(merged).toEqual(existing);
+    expect(diffCnfProfileFields(existing, merged).changed).toHaveLength(0);
   });
 });
 

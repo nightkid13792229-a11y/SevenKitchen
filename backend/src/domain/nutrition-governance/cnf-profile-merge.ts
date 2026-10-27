@@ -49,6 +49,7 @@ function readTabValue(
 /**
  * 把一个 tab 里 built 的非空数值写进 existing。
  *
+ * - 给了白名单（allowedFieldPaths）时只拷贝名单内的字段，其余字段原样保留。
  * - built 里为 null / undefined / 非有限数的字段一律跳过（绝不把 existing 清空）。
  * - existing 里有、built 里没有的字段原样保留（浅拷贝，不写回 existing）。
  * - 返回新对象；同时把真正拷贝的字段路径记进 copiedFieldPaths。
@@ -58,15 +59,20 @@ function mergeTab<T extends NutritionTab>(
   existingTab: T,
   builtTab: T,
   copiedFieldPaths: string[],
+  allowedFieldPaths: ReadonlySet<string> | null,
 ): T {
   const nextTab: T = { ...existingTab };
   for (const fieldKey of Object.keys(builtTab)) {
+    const fieldPath = `${tabKey}.${fieldKey}`;
+    if (allowedFieldPaths && !allowedFieldPaths.has(fieldPath)) {
+      continue;
+    }
     const value = builtTab[fieldKey];
     if (!isFiniteNumber(value)) {
       continue;
     }
     nextTab[fieldKey as keyof T] = value as T[keyof T];
-    copiedFieldPaths.push(`${tabKey}.${fieldKey}`);
+    copiedFieldPaths.push(fieldPath);
   }
   return nextTab;
 }
@@ -108,12 +114,17 @@ function isBlank(value: unknown): boolean {
 }
 
 /**
- * 把 CNF 重新归一化出来的 profile 全量合并进现有 profile。
+ * 把 CNF 重新归一化出来的 profile 合并进现有 profile。
  *
  * 与 `mergeCnfMinerals` 的区别：不再只合并 minerals，而是把
  * macros / minerals / vitamins / fattyAcids / aminoAcids 五个 tab 里
- * built 有的非空数值全部写进 existing（碳水 205、纤维 291、维生素 C 401、
+ * built 有的非空数值合并进去（碳水 205、纤维 291、维生素 C 401、
  * 叶酸 417、胆碱 421、饱和/单不饱和/多不饱和脂肪酸 606/645/646 就是靠这一步补上来的）。
+ *
+ * `onlyFieldPaths`（验收项 4 之后加的收紧开关）：给了字段白名单就只拷贝名单内的
+ * 字段及其 `sourceForms` / `conversionNotes`，名单外的字段即使 built 里有值、
+ * 且与 existing 不同，也原样保留 existing —— 用来避免顺手改掉维生素 D、DHA/EPA/DPA
+ * 这类“已有非空值但重建值不同”的字段。不传则维持“built 有值就覆盖”的老行为。
  *
  * 约束：
  * - 绝不把 existing 的数值清空（built 为 null 时跳过）。
@@ -129,7 +140,9 @@ function isBlank(value: unknown): boolean {
 export function mergeCnfProfile(
   existing: NutritionProfileV2,
   built: NutritionProfileV2,
+  onlyFieldPaths?: readonly string[],
 ): NutritionProfileV2 {
+  const allowedFieldPaths = onlyFieldPaths ? new Set(onlyFieldPaths) : null;
   const copiedFieldPaths: string[] = [];
 
   const macros = mergeTab(
@@ -137,30 +150,35 @@ export function mergeCnfProfile(
     existing.macros,
     built.macros,
     copiedFieldPaths,
+    allowedFieldPaths,
   );
   const minerals = mergeTab(
     'minerals',
     existing.minerals,
     built.minerals,
     copiedFieldPaths,
+    allowedFieldPaths,
   );
   const vitamins = mergeTab(
     'vitamins',
     existing.vitamins,
     built.vitamins,
     copiedFieldPaths,
+    allowedFieldPaths,
   );
   const fattyAcids = mergeTab(
     'fattyAcids',
     existing.fattyAcids,
     built.fattyAcids,
     copiedFieldPaths,
+    allowedFieldPaths,
   );
   const aminoAcids = mergeTab(
     'aminoAcids',
     existing.aminoAcids,
     built.aminoAcids,
     copiedFieldPaths,
+    allowedFieldPaths,
   );
 
   const builtSourceForms = built.meta.sourceForms ?? {};

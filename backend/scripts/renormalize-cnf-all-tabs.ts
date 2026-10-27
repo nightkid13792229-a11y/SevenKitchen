@@ -48,6 +48,8 @@ import { USDA_NUTRIENT_MAP } from '../src/domain/nutrition-governance/usda-nutri
 interface CliArgs {
   limit: number | null;
   batchSize: number;
+  /** null = 用默认的 TARGET_CNF_FIELDS（验收项 4 的 8 个字段）。 */
+  fields: string[] | null;
   apply: boolean;
   report: string | null;
   help: boolean;
@@ -67,6 +69,8 @@ interface RenormalizeAllTabsReport {
   scanned: number;
   updated: number;
   changedFields: number;
+  /** 本次允许改写的字段白名单（默认就是验收项 4 的 8 个）。 */
+  fields: string[];
   perField: Record<string, number>;
   perFieldGained: Record<string, number>;
   coverageBefore: Record<string, number>;
@@ -84,14 +88,18 @@ interface RenormalizeAllTabsReport {
 
 const USAGE = `
 CNF 全字段回填（默认 dry-run，不写库）
+默认只回填验收项 4 的 8 个字段（碳水/纤维/维生素 C/叶酸/胆碱/饱和·单不饱和·多不饱和脂肪酸），
+其余字段一律不动；需要别的字段请显式 --fields。
 
 Usage:
   npx ts-node -r tsconfig-paths/register scripts/renormalize-cnf-all-tabs.ts \\
-    [--limit N] [--batch-size N] [--apply] [--report <path>]
+    [--limit N] [--batch-size N] [--fields a,b,c] [--apply] [--report <path>]
 
 Options:
   --limit N       只处理前 N 条 CNF 记录（按 id 升序）
   --batch-size N  每批读取条数（默认 200，控制内存）
+  --fields        逗号分隔的字段路径白名单（默认就是验收项 4 的 8 个字段，
+                  例如 --fields macros.carbohydrate,vitamins.choline）
   --apply         真正写库（只更新 normalizedNutrition 一列）；不传则 dry-run
   --report <path> 把 JSON 报告写到指定路径
   --help, -h      显示本帮助
@@ -100,7 +108,8 @@ Options:
   scanned         扫描记录数
   updated         normalizedNutrition 有变化的记录数（apply 时为实际写库条数）
   changedFields   字段级变化总数（一条记录变 3 个字段算 3）
-  perField        每个字段路径变化的记录数 { "macros.carbohydrate": 5993 }
+  fields          本次允许改写的字段白名单
+  perField        每个字段路径变化的记录数 { "macros.carbohydrate": 5993 }（只含白名单字段）
   perFieldGained  每个字段路径“从空变有值”的记录数（验收项 4 的证据）
   coverageBefore  回填前每个字段有值的记录数（只计可解析记录）
   coverageAfter   回填后每个字段有值的记录数（只计可解析记录）
@@ -145,10 +154,29 @@ const ALL_FIELD_PATHS: string[] = (
   FIELD_KEYS_BY_TAB[tabKey].map((fieldKey) => `${tabKey}.${fieldKey}`),
 );
 
+/**
+ * 脚本默认白名单：验收项 4 这一个 commit 只允许改这 8 个字段。
+ *
+ * 生产 dry-run 发现，如果不给白名单，重建值会顺手改掉 4 个“已有非空值、但重建值不同”
+ * 的字段：vitamins.vitaminD 201 条、fattyAcids.dha 9 条、epa 7 条、dpa 5 条。
+ * 这些不是本项要修的缺口，所以默认只碰下面 8 个；要改别的字段得显式 --fields。
+ */
+const TARGET_CNF_FIELDS: readonly string[] = [
+  'macros.carbohydrate', // 205 碳水
+  'macros.fiber', // 291 总膳食纤维
+  'vitamins.vitaminC', // 401 维生素 C
+  'vitamins.vitaminB9', // 417 叶酸
+  'vitamins.choline', // 421 胆碱
+  'fattyAcids.saturatedFattyAcids', // 606 饱和脂肪
+  'fattyAcids.monounsaturatedFattyAcids', // 645 单不饱和脂肪
+  'fattyAcids.polyunsaturatedFattyAcids', // 646 多不饱和脂肪
+];
+
 function parseArgs(argv: string[]): CliArgs {
   const args: CliArgs = {
     limit: null,
     batchSize: 200,
+    fields: null,
     apply: false,
     report: null,
     help: false,
@@ -180,6 +208,28 @@ function parseArgs(argv: string[]): CliArgs {
         );
       }
       args.batchSize = parsed;
+      i += 1;
+    } else if (flag === '--fields') {
+      const raw = argv[i + 1];
+      if (!raw) {
+        throw new Error('--fields 需要逗号分隔的字段路径');
+      }
+      const fields = raw
+        .split(',')
+        .map((field) => field.trim())
+        .filter((field) => field !== '');
+      if (fields.length === 0) {
+        throw new Error('--fields 至少要有一个字段路径');
+      }
+      const unknownFields = fields.filter(
+        (field) => !ALL_FIELD_PATHS.includes(field),
+      );
+      if (unknownFields.length > 0) {
+        throw new Error(
+          `--fields 里有未知字段：${unknownFields.join(', ')}（可用字段见 USAGE 或 nutrition-profile.constants）`,
+        );
+      }
+      args.fields = [...new Set(fields)];
       i += 1;
     } else if (flag === '--report') {
       const path = argv[i + 1];
@@ -313,7 +363,7 @@ function bump(counts: Record<string, number>, fieldPath: string): void {
 function resolveTargetCodeMappings(
   codeMap: Record<string, CnfCodeMapEntry>,
 ): TargetCodeMapping[] {
-  return ITEM4_TARGET_CODES.map((nutrientCode) => {
+  const mappings = ITEM4_TARGET_CODES.map((nutrientCode) => {
     const entry = codeMap[nutrientCode];
     if (!entry) {
       throw new Error(
@@ -330,6 +380,20 @@ function resolveTargetCodeMappings(
     }
     return { nutrientCode, fdcId: entry.fdcId, fieldPath: mapping.fieldPath };
   });
+
+  // 8 个编码推算出的字段必须正好等于默认白名单，否则说明映射或白名单被改歪了。
+  const derivedFieldPaths = new Set(mappings.map((item) => item.fieldPath));
+  const expectedFieldPaths = new Set(TARGET_CNF_FIELDS);
+  if (
+    derivedFieldPaths.size !== expectedFieldPaths.size ||
+    [...derivedFieldPaths].some((path) => !expectedFieldPaths.has(path))
+  ) {
+    throw new Error(
+      `映射表推算的字段（${[...derivedFieldPaths].join(', ')}）与 TARGET_CNF_FIELDS（${TARGET_CNF_FIELDS.join(', ')}）不一致`,
+    );
+  }
+
+  return mappings;
 }
 
 function formatCount(value: number): string {
@@ -366,10 +430,12 @@ async function main(): Promise<void> {
   const mode = args.apply ? 'apply' : 'dry-run';
   // 先校验映射表（少一条就不该连库跑），再开 Prisma。
   const targetCodeMappings = resolveTargetCodeMappings(codeMap);
+  const fields = args.fields ?? [...TARGET_CNF_FIELDS];
   const report: RenormalizeAllTabsReport = {
     scanned: 0,
     updated: 0,
     changedFields: 0,
+    fields,
     perField: {},
     perFieldGained: {},
     coverageBefore: Object.fromEntries(
@@ -384,6 +450,7 @@ async function main(): Promise<void> {
 
   console.log(`CNF 全字段回填（${mode}）`);
   console.log(`  映射表：${codeMapPath}`);
+  console.log(`  允许改写的字段（${fields.length} 个）：${fields.join(', ')}`);
 
   const prisma = new PrismaClient();
   try {
@@ -459,7 +526,7 @@ async function main(): Promise<void> {
               description: record.foodName,
             },
           });
-          merged = mergeCnfProfile(existing, built);
+          merged = mergeCnfProfile(existing, built, fields);
         } catch (error) {
           report.skippedCount += 1;
           if (report.skipped.length < SKIPPED_SAMPLE_LIMIT) {

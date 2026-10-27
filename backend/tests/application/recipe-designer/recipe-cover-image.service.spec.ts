@@ -64,6 +64,9 @@ describe('RecipeCoverImageService · cover layout', () => {
   it('默认方图：1280x1280、原图直传、不走压缩', async () => {
     const result = await service.generate({ recipeName: '鸡肉南瓜餐' });
 
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'https://open.bigmodel.cn/api/paas/v4/images/generations',
+    );
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(body.size).toBe('1280x1280');
     expect(imageOptimizationService.optimizeForUpload).not.toHaveBeenCalled();

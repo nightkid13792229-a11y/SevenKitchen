@@ -2072,7 +2072,7 @@ export class RecipesController {
   > {
     if (!(await this.recipeCoverImageService.isAvailable())) {
       throw new BadRequestException(
-        'AI 生图还没配置：请到后台「AI 设置」里添加 purpose=RECIPE_COVER_IMAGE、provider=ZHIPU 的一条并启用',
+        'AI 生图还没配置：请到后台「AI / Agent 配置」的「智谱封面图」填 Key 并启用',
       );
     }
 

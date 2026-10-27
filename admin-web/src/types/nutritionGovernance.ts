@@ -58,6 +58,35 @@ export interface AgentProviderSettings {
   retryCount: number;
 }
 
+/** 智谱封面图配置（2026-10-27）：只回末四位 Key，永不回明文 */
+export interface ZhipuImageSettings {
+  purpose: string;
+  provider: "ZHIPU";
+  enabled: boolean;
+  baseUrl: string;
+  model: string;
+  apiKeyConfigured: boolean;
+  apiKeyLast4: string | null;
+  requestTimeoutMs: number;
+  updatedAt: string | null;
+}
+
+export interface UpdateZhipuImageSettingsPayload {
+  enabled?: boolean;
+  baseUrl?: string;
+  model?: string;
+  apiKey?: string;
+  clearApiKey?: boolean;
+  requestTimeoutMs?: number;
+}
+
+export interface ZhipuImageTestResult {
+  ok: boolean;
+  provider: string;
+  model: string;
+  message: string;
+}
+
 export interface UpdateAgentProviderSettingsPayload {
   enabled?: boolean;
   baseUrl?: string;

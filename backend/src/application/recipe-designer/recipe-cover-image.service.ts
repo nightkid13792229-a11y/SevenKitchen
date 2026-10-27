@@ -1,12 +1,15 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { AgentProviderConfigService } from '../nutrition-governance/agent-provider-config.service';
+import {
+  AgentProviderConfigService,
+  RECIPE_COVER_IMAGE_PURPOSE,
+  ZHIPU_PROVIDER,
+} from '../nutrition-governance/agent-provider-config.service';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import { ImageOptimizationService } from '../../infrastructure/services/image-optimization.service';
 import { buildRecipeCoverPrompt, callZhipuImage } from './zhipu-image';
 
-/** 生图用途的 provider 配置标识（后台 AI 设置里那条） */
-export const RECIPE_COVER_IMAGE_PURPOSE = 'RECIPE_COVER_IMAGE';
-export const ZHIPU_PROVIDER = 'ZHIPU';
+/** 生图用途的 provider 配置标识（后台「智谱封面图」那条） */
+export { RECIPE_COVER_IMAGE_PURPOSE, ZHIPU_PROVIDER };
 
 /**
  * 封面图的画面比例（2026-10-27）。

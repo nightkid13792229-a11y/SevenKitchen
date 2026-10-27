@@ -47,6 +47,7 @@ import {
   RankFoodCandidatesWithAgentDto,
   ReviewCandidateWithAgentDto,
   UpdateAgentSettingsDto,
+  UpdateZhipuImageSettingsDto,
 } from '../dto/nutrition-governance/nutrition-governance.dto';
 
 const SUPPLEMENT_LABEL_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -224,6 +225,42 @@ export class NutritionGovernanceController {
       purpose,
     );
     return new ApiResponseDto(0, 'Agent 设置已保存', result);
+  }
+
+  /**
+   * 智谱封面图配置（2026-10-27）：只读写 provider=ZHIPU / purpose=RECIPE_COVER_IMAGE。
+   * 和上面的 DeepSeek agent-settings 是两套配置，互不影响。
+   */
+  @Get('agent-providers/zhipu-image')
+  @ApiOperation({ summary: '获取智谱封面图配置' })
+  @ApiResponse({ status: 200, description: '智谱封面图配置' })
+  async getZhipuImageSettings(): Promise<ApiResponseDto<unknown>> {
+    const result = await this.nutritionGovernanceService.getZhipuImageSettings();
+    return new ApiResponseDto(0, 'Success', result);
+  }
+
+  @Put('agent-providers/zhipu-image')
+  @ApiOperation({ summary: '保存智谱封面图配置（只回末四位 Key）' })
+  @ApiResponse({ status: 200, description: '智谱封面图配置已保存' })
+  async updateZhipuImageSettings(
+    @Body() dto: UpdateZhipuImageSettingsDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<unknown>> {
+    const result =
+      await this.nutritionGovernanceService.updateZhipuImageSettings(
+        dto,
+        user.userId,
+      );
+    return new ApiResponseDto(0, '智谱封面图配置已保存', result);
+  }
+
+  @Post('agent-providers/zhipu-image/test')
+  @ApiOperation({ summary: '测试智谱 Key（只 ping 文本模型，不生成图片）' })
+  @ApiResponse({ status: 201, description: '智谱连接测试完成' })
+  async testZhipuImageSettings(): Promise<ApiResponseDto<unknown>> {
+    const result =
+      await this.nutritionGovernanceService.testZhipuImageSettings();
+    return new ApiResponseDto(0, '智谱连接测试完成', result);
   }
 
   @Post('candidates/batch-agent-review')

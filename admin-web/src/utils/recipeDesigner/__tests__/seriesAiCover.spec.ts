@@ -50,7 +50,7 @@ describe('seriesAiCover', () => {
     ).toContain('正式名称');
     expect(
       resolveSeriesAiCoverUnavailableReason({ ...base, available: false }),
-    ).toContain('AI 设置');
+    ).toContain('智谱封面图');
     expect(
       resolveSeriesAiCoverUnavailableReason({ ...base, available: null }),
     ).toContain('检查');
@@ -76,7 +76,7 @@ describe('seriesAiCover', () => {
     );
     expect(
       resolveSeriesAiCoverHint({ ...base, available: false }),
-    ).toContain('AI 设置');
+    ).toContain('智谱封面图');
     // 非管理员整个生图入口都不显示，连提示也不该出现（设计稿 5.1）
     expect(resolveSeriesAiCoverHint({ ...base, isAdmin: false })).toBe('');
   });

@@ -413,6 +413,46 @@ export class UpdateAgentSettingsDto {
   retryCount?: number;
 }
 
+export class UpdateZhipuImageSettingsDto {
+  @ApiPropertyOptional({ description: '是否启用智谱封面图生成' })
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
+
+  @ApiPropertyOptional({ description: '智谱 API Base URL' })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  baseUrl?: string;
+
+  @ApiPropertyOptional({ description: '生图模型名', example: 'glm-image' })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  model?: string;
+
+  @ApiPropertyOptional({ description: '智谱 API Key。留空则保留现有密钥。' })
+  @IsOptional()
+  @IsString()
+  apiKey?: string;
+
+  @ApiPropertyOptional({ description: '是否清除现有 API Key' })
+  @IsOptional()
+  @IsBoolean()
+  clearApiKey?: boolean;
+
+  @ApiPropertyOptional({
+    description: '请求超时时间，毫秒',
+    minimum: 5000,
+    maximum: 300000,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(5000)
+  @Max(300000)
+  requestTimeoutMs?: number;
+}
+
 export class BatchAgentReviewCandidatesDto {
   @ApiPropertyOptional({ description: '最大处理数量', minimum: 1, maximum: 500 })
   @IsOptional()

@@ -133,16 +133,25 @@ export function buildRecipeCoverPrompt(input: {
 }): string {
   const foods = (input.foodNames || []).filter(Boolean).slice(0, 5);
   const stages = (input.lifeStageLabels || []).filter(Boolean).slice(0, 2);
+  // 食材里本来就有蛋时不禁止；没有蛋时明确禁止，避免模型"顺手"加一个生蛋黄
+  const hasEgg = foods.some((name) => /蛋/.test(name));
 
   return [
-    'A top-down photograph of a freshly prepared homemade pet meal in a clean ceramic bowl.',
-    foods.length ? `Main ingredients: ${foods.join(', ')}.` : '',
+    'A professional editorial food photograph of a freshly cooked homemade dog meal in a shallow light-grey ceramic bowl.',
+    'The bowl is centered with generous margin and fully visible, shot from a 45-degree angle.',
+    foods.length
+      ? `Inside the bowl: gently cooked ${foods.join(', ')}, cut into bite-sized pieces and lightly mixed.`
+      : '',
     stages.length ? `For ${stages.join(' / ')} dogs.` : '',
-    input.recipeName ? `Dish concept: ${input.recipeName}.` : '',
-    // 刻意排除文字/水印：模型画出来的字基本是乱的，反而显得不专业
-    'Natural daylight, soft shadows, warm and appetizing, minimal styling, plain background.',
-    'No text, no watermark, no logo, no human hands, no packaging.',
-    'Photorealistic, high detail.',
+    // 只作为概念，明确不要渲染成文字（模型对"菜名"很容易画出标题）
+    input.recipeName
+      ? `Dish concept: ${input.recipeName} (use only as a concept, do not render any text).`
+      : '',
+    'Soft natural window light from the left, gentle shadows, light oak table, minimal styling, warm and appetizing, premium and clean.',
+    // 实测第一版画成了大块生肉 + 生蛋黄：这里把"熟食"和"不要生肉/猫粮/罐头"写死
+    'No raw meat, no kibble, no canned food, no bones, no text, no letters, no watermark, no logo, no human hands, no packaging.',
+    hasEgg ? '' : 'No egg.',
+    'Photorealistic, high detail, shallow depth of field.',
   ]
     .filter(Boolean)
     .join(' ');

@@ -969,4 +969,71 @@ describe('IngredientCreationCandidateService', () => {
       );
     });
   });
+
+  describe('listNutritionNames 同名折叠', () => {
+    it('同名不同来源只返回一条，alsoIn 列出其它 L1 来源', async () => {
+      const { service } = await createService([
+        {
+          id: 'cnf-beef',
+          sourceType: 'CNF',
+          foodName: 'Beef, ground, raw',
+          foodNameEn: 'Beef, ground, raw',
+        },
+        {
+          id: 'usda-beef',
+          sourceType: 'USDA',
+          foodName: 'beef ground raw',
+          foodNameEn: 'beef ground raw',
+        },
+      ]);
+
+      const result = await service.listNutritionNames({ keyword: 'Beef' });
+
+      // total 是折叠前的真实命中数；names 是折叠后的候选。
+      expect(result.total).toBe(2);
+      expect(result.names).toEqual([
+        {
+          id: 'usda-beef',
+          name: 'beef ground raw',
+          sourceType: 'USDA',
+          alsoIn: ['CNF'],
+        },
+      ]);
+    });
+
+    it('limit 作用在折叠后的结果上，total 仍是折叠前的命中数', async () => {
+      const fixtures = ['A', 'B', 'C'].flatMap((suffix) => [
+        {
+          id: `usda-beef-${suffix}`,
+          sourceType: 'USDA' as const,
+          foodName: `Beef ${suffix}`,
+          foodNameEn: `Beef ${suffix}`,
+        },
+        {
+          id: `cnf-beef-${suffix}`,
+          sourceType: 'CNF' as const,
+          foodName: `Beef ${suffix}`,
+          foodNameEn: `Beef ${suffix}`,
+        },
+      ]);
+      const { service } = await createService(fixtures);
+
+      const result = await service.listNutritionNames({
+        keyword: 'Beef',
+        limit: 2,
+      });
+
+      // 6 条真实命中 → 折叠成 3 组 → limit 截到 2 组。
+      expect(result.total).toBe(6);
+      expect(result.names).toHaveLength(2);
+      expect(result.names.map((entry) => entry.name)).toEqual([
+        'Beef A',
+        'Beef B',
+      ]);
+      expect(result.names.map((entry) => entry.alsoIn)).toEqual([
+        ['CNF'],
+        ['CNF'],
+      ]);
+    });
+  });
 });

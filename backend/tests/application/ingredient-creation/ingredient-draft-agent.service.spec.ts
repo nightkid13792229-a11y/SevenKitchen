@@ -413,6 +413,7 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
       id: 'rec-liver-raw',
       name: 'Chicken, liver, raw',
       sourceType: 'USDA_FDC',
+      alsoIn: [],
     });
 
     // 第二次请求必须把工具结果作为 role=tool 的消息带给模型。

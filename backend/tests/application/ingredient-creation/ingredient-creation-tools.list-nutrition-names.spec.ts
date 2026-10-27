@@ -8,7 +8,12 @@ const DRAFT_ID = 'draft-1';
 const RUN_ID = 'run-1';
 
 function createTools() {
-  const names = Array.from({ length: 3000 }, (_, index) => ({
+  const names: Array<{
+    id: string;
+    name: string;
+    sourceType: string;
+    alsoIn?: string[];
+  }> = Array.from({ length: 3000 }, (_, index) => ({
     id: `rec-${index}`,
     name: `Beef item ${index}`,
     sourceType: index % 2 === 0 ? 'USDA_FDC' : 'CFCT',
@@ -68,7 +73,7 @@ async function executeTool(
 }
 
 describe('IngredientCreationToolsService · searchNames', () => {
-  it('返回 total 与最多 3000 条词条名，只带 id / name / sourceType，不返回营养值', async () => {
+  it('返回 total 与最多 3000 条词条名，只带 id / name / sourceType / alsoIn，不返回营养值', async () => {
     const { tools, listNutritionNames } = createTools();
 
     const result = await executeTool(tools, 'searchNames', {
@@ -86,9 +91,11 @@ describe('IngredientCreationToolsService · searchNames', () => {
       id: 'rec-0',
       name: 'Beef item 0',
       sourceType: 'USDA_FDC',
+      alsoIn: [],
     });
-    // 只有 id / name / sourceType：任何营养字段 / 分类 / 复核都不能出现。
+    // 只有 id / name / sourceType / alsoIn：任何营养字段 / 分类 / 复核都不能出现。
     expect(Object.keys(result.body.names[0]).sort()).toEqual([
+      'alsoIn',
       'id',
       'name',
       'sourceType',
@@ -99,6 +106,48 @@ describe('IngredientCreationToolsService · searchNames', () => {
     expect(result.body).not.toHaveProperty('narrowing');
     expect(result.body).not.toHaveProperty('reviewSummary');
     expect(result.body.names[0]).not.toHaveProperty('classification');
+  });
+
+  it('同名折叠的 alsoIn 原样带给模型（没有其它来源时是空数组）', async () => {
+    const { tools, listNutritionNames } = createTools();
+    listNutritionNames.mockResolvedValueOnce({
+      total: 2,
+      names: [
+        {
+          id: 'usda-beef',
+          name: 'Beef, ground, raw',
+          sourceType: 'USDA',
+          alsoIn: ['CNF'],
+        },
+        {
+          id: 'cfct-pork',
+          name: 'Pork, raw',
+          sourceType: 'CFCT',
+        },
+      ],
+      keywords: ['牛肉', 'beef'],
+    });
+
+    const result = await executeTool(tools, 'searchNames', {
+      keyword: '牛肉',
+    });
+
+    expect(result.body.total).toBe(2);
+    expect(result.body.returnedCount).toBe(2);
+    expect(result.body.names).toEqual([
+      {
+        id: 'usda-beef',
+        name: 'Beef, ground, raw',
+        sourceType: 'USDA',
+        alsoIn: ['CNF'],
+      },
+      {
+        id: 'cfct-pork',
+        name: 'Pork, raw',
+        sourceType: 'CFCT',
+        alsoIn: [],
+      },
+    ]);
   });
 
   it('limit 上限 3000；传更大也只按 3000 取，传非法值回落 3000', async () => {

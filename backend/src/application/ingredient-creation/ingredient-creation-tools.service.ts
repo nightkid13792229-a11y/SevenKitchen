@@ -124,16 +124,17 @@ const NAME_SUMMARY_CACHE_MAX_ENTRIES = 200;
 /**
  * 原子工具 1：按关键词列出本地营养库真实命中的词条名。
  *
- * **只摆事实**：id / name / sourceType + 真实命中总数。不判断生熟、做法、
- * 部位，不返回营养值，也不替模型收窄。发现 3000 条还是 3 条，由模型看
- * `total` 后自己决定下一步（summarizeByKeyword / askUser）。
+ * **只摆事实**：id / name / sourceType / alsoIn + 真实命中总数。不判断生熟、做法、
+ * 部位，不返回营养值，也不替模型收窄。同名记录按归一化名字折叠（同组一条，
+ * `alsoIn` 列出其它来源库）；发现 3000 条还是 3 条，由模型看 `total` 后自己
+ * 决定下一步（summarizeByKeyword / askUser）。
  */
 const SEARCH_NAMES_TOOL: AgentToolDefinition = {
   type: 'function',
   function: {
     name: 'searchNames',
     description:
-      '按关键词列出本地营养库真实命中的词条名（只读，最多 3000 条）。只返回 id / name / sourceType 与真实命中总数 total，**不判断生熟 / 做法 / 部位，不返回营养值，也不做收窄**。模糊词（如「牛肉」「山药」）先看 total：命中多就先 summarizeByKeyword(keyword) 看分布（服务端取全量名字、只回汇总），再按 skills/ingredient-agent/SKILL.md 的指引用 askUser 收窄。中文词会自动走词典 / AI 翻译展开成外文词。',
+      '按关键词列出本地营养库真实命中的词条名（只读，最多 3000 条）。同名记录按归一化名字折叠后只返回一条，alsoIn 列出也有这个名字的其它来源库；total 是折叠前的真实命中总数。只返回 id / name / sourceType / alsoIn 与 total，**不判断生熟 / 做法 / 部位，不返回营养值，也不做收窄**。模糊词（如「牛肉」「山药」）先看 total：命中多就先 summarizeByKeyword(keyword) 看分布（服务端取全量名字、只回汇总），再按 skills/ingredient-agent/SKILL.md 的指引用 askUser 收窄。中文词会自动走词典 / AI 翻译展开成外文词。',
     parameters: {
       type: 'object',
       properties: {
@@ -1190,6 +1191,7 @@ export class IngredientCreationToolsService {
       id: entry.id,
       name: entry.name,
       sourceType: entry.sourceType,
+      alsoIn: entry.alsoIn ?? [],
     }));
 
     return {
@@ -1205,7 +1207,7 @@ export class IngredientCreationToolsService {
         hint:
           names.length === 0
             ? '本地库没有按这个名字命中的词条：可以换中文名 / 英文名再试，或如实告诉用户库里缺数据；不要编造词条。'
-            : `共 ${result.total} 条真实命中，返回 ${names.length} 条名字。这只是名字清单；命中多时先 summarizeByKeyword(keyword) 看分布（服务端取全量名字、只回汇总），再决定是否 askUser 收窄。`,
+            : `共 ${result.total} 条真实命中，按名称折叠后返回 ${names.length} 条名字。这只是名字清单；命中多时先 summarizeByKeyword(keyword) 看分布（服务端取全量名字、只回汇总），再决定是否 askUser 收窄。`,
       }),
       progress: {
         writtenFieldPaths: [],
@@ -1296,8 +1298,8 @@ export class IngredientCreationToolsService {
   /**
    * 缓存键 = keyword + 名字集合哈希。
    *
-   * 名字排序后仍保留重复项：同名记录条数变了（`total` 变）也要算 miss。
-   * 名字集合来自每次实时检索，所以库更新后不会继续用旧分布。
+   * 名字集合来自实时检索（已经按归一化名字折叠），名字变了就 miss；
+   * 库更新后不会继续用旧分布。
    */
   private nameSummaryCacheKey(
     keyword: string,

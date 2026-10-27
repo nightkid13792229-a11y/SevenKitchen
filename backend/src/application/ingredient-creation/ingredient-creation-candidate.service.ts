@@ -7,6 +7,7 @@ import {
   type PreparationState,
 } from '../../domain/ingredient-creation/preparation-state';
 import { NUTRITION_FIELD_CATALOG } from '../../domain/ingredient/nutrition-field-catalog';
+import { collapseCandidateNames } from '../../domain/nutrition-governance/candidate-name-dedup';
 import type { NutritionGovernanceSourceType } from '../../domain/nutrition-governance/nutrition-governance.types';
 import { LOCAL_LIBRARY_SOURCE_TYPES } from '../../domain/nutrition-governance/nutrition-source-registry';
 import {
@@ -50,16 +51,19 @@ export interface ListNutritionNamesInput {
   limit?: number;
 }
 
-/** 一条真实命中的词条名；只有摆事实需要的三列。 */
+/** 一条真实命中的词条名；只有摆事实需要的列 + 同名来源提示。 */
 export interface NutritionNameRow {
   id: string;
   name: string;
   sourceType: string;
+  /** 同一归一化名字在其它 L1 来源也出现时，按登记表顺序列出这些来源。 */
+  alsoIn?: string[];
 }
 
 export interface ListNutritionNamesResult {
-  /** 截断前的真实命中总数。 */
+  /** 折叠 / 截断前的真实命中总数。 */
   total: number;
+  /** 同名折叠、再按 limit 截断后的候选；长度只反映这一层。 */
   names: NutritionNameRow[];
   /** 本次实际用过的检索词（中文 + 词典展开 + AI 翻译）。 */
   keywords: string[];
@@ -719,6 +723,10 @@ export class IngredientCreationCandidateService {
   /**
    * 只按名字摆事实：返回真实命中的词条名（最多 3000 条），**不做分类**。
    *
+   * 同名（归一化后）记录只返回一条，代表按登记表来源优先级选，`alsoIn`
+   * 列出其它来源库；`total` 仍是折叠前的真实命中数，`names` 是折叠后再按
+   * `limit` 截断的结果。
+   *
    * 中文关键词仍先查词典、词典没有就让模型翻译；翻译词真的命中来源才写回词典
    * （与 `findCandidates` 同一套 alias 服务与落库策略）。
    *
@@ -783,13 +791,19 @@ export class IngredientCreationCandidateService {
         left.record.id.localeCompare(right.record.id),
     );
 
-    return {
-      total: matched.length,
-      names: matched.slice(0, limit).map(({ record }) => ({
+    // 先折叠同名（同组只留一条 + alsoIn），再按 limit 截断：
+    // limit 是「候选组数」的上限，不是原始记录数。total 仍是折叠前的真实命中数。
+    const collapsed = collapseCandidateNames(
+      matched.map(({ record }) => ({
         id: record.id,
         name: record.foodName,
         sourceType: record.sourceType,
       })),
+    );
+
+    return {
+      total: matched.length,
+      names: collapsed.slice(0, limit),
       keywords: query.keywords,
       notice: expansions.notice,
     };

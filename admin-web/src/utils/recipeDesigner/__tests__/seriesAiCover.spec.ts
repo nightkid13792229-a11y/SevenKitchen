@@ -82,7 +82,7 @@ describe('seriesAiCover', () => {
   });
 
   it('超时常量与文案固定', () => {
-    expect(SERIES_AI_COVER_TIMEOUT_MS).toBe(120000);
-    expect(SERIES_AI_COVER_TIMEOUT_MESSAGE).toContain('120');
+    expect(SERIES_AI_COVER_TIMEOUT_MS).toBe(240000);
+    expect(SERIES_AI_COVER_TIMEOUT_MESSAGE).toContain('240');
   });
 });

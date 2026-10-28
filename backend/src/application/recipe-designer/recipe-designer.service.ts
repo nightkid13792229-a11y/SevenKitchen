@@ -1,3 +1,4 @@
+import { CoverTrashService } from './cover-trash.service';
 import {
   BadRequestException,
   ConflictException,
@@ -1540,6 +1541,9 @@ export class RecipeDesignerService {
     @Optional()
     @Inject(IngredientPreparationHistoryService)
     private readonly ingredientPreparationHistoryService?: IngredientPreparationHistoryService,
+    /** 旧封面回收站（2026-10-28）：保存 / 发布成功后引用安全地移入 7 天回收站 */
+    @Optional()
+    private readonly coverTrashService?: CoverTrashService,
   ) {}
 
   /**
@@ -4306,6 +4310,10 @@ export class RecipeDesignerService {
       return this.toSeriesReleaseSettingsSnapshot(series);
     }
 
+    const oldCoverUrl = series.coverImageUrl
+      ? String(series.coverImageUrl)
+      : null;
+
     const isLive =
       series.businessStatus === RecipeSeriesBusinessStatus.PUBLIC ||
       (await this.prisma.recipe.count({
@@ -4318,7 +4326,7 @@ export class RecipeDesignerService {
       throw new BadRequestException('已上线系列不能清空一句话卖点');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const snapshot = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.recipeSeries.update({
         where: { id: seriesId },
         data,
@@ -4331,6 +4339,19 @@ export class RecipeDesignerService {
       }
       return this.toSeriesReleaseSettingsSnapshot(updated);
     });
+
+    if (
+      dto.coverImageUrl !== undefined &&
+      oldCoverUrl &&
+      oldCoverUrl !== snapshot.coverImageUrl
+    ) {
+      await this.trashOldCover(
+        oldCoverUrl,
+        dto.coverImageUrl ? 'REPLACED' : 'REMOVED',
+      );
+    }
+
+    return snapshot;
   }
 
   /**
@@ -5889,6 +5910,10 @@ export class RecipeDesignerService {
     const draft = await this.getDraft(id, access);
     this.validateDraftPresentation(dto);
 
+    const oldCoverUrl = draft.coverImageUrl
+      ? String(draft.coverImageUrl)
+      : null;
+
     const data: Prisma.DesignRecipeUpdateInput = {};
     if (dto.coverImageUrl !== undefined) {
       data.coverImageUrl = dto.coverImageUrl;
@@ -5926,7 +5951,32 @@ export class RecipeDesignerService {
       select: DRAFT_PRESENTATION_SELECT,
     });
 
-    return this.toDraftPresentationSnapshot(updated);
+    const snapshot = this.toDraftPresentationSnapshot(updated);
+    if (
+      dto.coverImageUrl !== undefined &&
+      oldCoverUrl &&
+      oldCoverUrl !== snapshot.coverImageUrl
+    ) {
+      await this.trashOldCover(
+        oldCoverUrl,
+        dto.coverImageUrl ? 'REPLACED' : 'REMOVED',
+      );
+    }
+    return snapshot;
+  }
+
+  /** 保存成功后再扔旧图；失败只记录，不回滚已保存内容 */
+  private async trashOldCover(
+    url: string,
+    reason: 'REPLACED' | 'REMOVED',
+  ): Promise<void> {
+    try {
+      await this.coverTrashService?.trashIfUnreferenced(url, reason);
+    } catch (error: any) {
+      console.warn(
+        `[cover-cleanup] failed to trash ${url}: ${error?.message || error}`,
+      );
+    }
   }
 
   /**

@@ -15,8 +15,12 @@ export const NUTRITION_AGENT_PURPOSE = 'NUTRITION_CANDIDATE_REVIEW';
 /** 全局默认用途：所有未单独指定用途的 AI/Agent 都回退到这里 */
 export const DEFAULT_AGENT_PURPOSE = 'DEFAULT';
 export const DEEPSEEK_PROVIDER = 'DEEPSEEK';
-/** 食谱封面图生成（智谱 glm-image）：独立于 DeepSeek 文本配置 */
+/** 火山方舟（Seedream 生图） */
+export const ARK_PROVIDER = 'ARK';
+/** 食谱封面图生成（Seedream 5.0 Pro）：独立于 DeepSeek 文本配置 */
 export const RECIPE_COVER_IMAGE_PURPOSE = 'RECIPE_COVER_IMAGE';
+/** 食谱封面提示词生成（DeepSeek）：独立于全局默认 */
+export const RECIPE_COVER_PROMPT_PURPOSE = 'RECIPE_COVER_PROMPT';
 export const ZHIPU_PROVIDER = 'ZHIPU';
 
 /** 智谱封面图的默认值：只用于「还没配过」时的展示与创建 */

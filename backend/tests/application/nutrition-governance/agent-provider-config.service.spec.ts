@@ -1,5 +1,10 @@
 import { BadRequestException } from '@nestjs/common';
-import { AgentProviderConfigService } from 'src/application/nutrition-governance/agent-provider-config.service';
+import {
+  AgentProviderConfigService,
+  ARK_PROVIDER,
+  RECIPE_COVER_IMAGE_PURPOSE,
+  RECIPE_COVER_PROMPT_PURPOSE,
+} from 'src/application/nutrition-governance/agent-provider-config.service';
 
 describe('AgentProviderConfigService', () => {
   const originalEnv = { ...process.env };
@@ -165,6 +170,60 @@ describe('AgentProviderConfigService', () => {
         }),
       }),
     );
+  });
+
+  it('封面 DeepSeek 用途未配置时不回退全局默认', async () => {
+    mockPrisma.agentProviderConfig.findUnique.mockResolvedValue(null);
+    await expect(
+      service.getEnabledDeepSeekRuntimeConfig({
+        purpose: RECIPE_COVER_PROMPT_PURPOSE,
+        fallbackToDefault: false,
+      }),
+    ).rejects.toThrow('未启用');
+  });
+
+  it('ARK 封面用途返回运行时配置', async () => {
+    mockPrisma.agentProviderConfig.findUnique.mockResolvedValue(null);
+    mockPrisma.agentProviderConfig.upsert.mockImplementation(
+      async ({ create }) => ({
+        ...create,
+        id: 'config-key',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+    );
+    await service.updateSettings(
+      { enabled: true, apiKey: 'sk-ark-secret-1234' },
+      'admin-1',
+      RECIPE_COVER_PROMPT_PURPOSE,
+    );
+    const encrypted =
+      mockPrisma.agentProviderConfig.upsert.mock.calls[0][0].create
+        .apiKeyEncrypted;
+
+    mockPrisma.agentProviderConfig.findUnique.mockResolvedValue({
+      id: 'config-ark',
+      purpose: RECIPE_COVER_IMAGE_PURPOSE,
+      provider: ARK_PROVIDER,
+      enabled: true,
+      baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+      model: 'doubao-seedream-5-0-pro-260628',
+      reviewModel: null,
+      apiKeyEncrypted: encrypted,
+      apiKeyLast4: '1234',
+      maxConcurrency: 1,
+      requestTimeoutMs: 120000,
+      retryCount: 0,
+    });
+
+    const runtime = await service.getEnabledProviderRuntimeConfig({
+      purpose: RECIPE_COVER_IMAGE_PURPOSE,
+      provider: ARK_PROVIDER,
+    });
+
+    expect(runtime.model).toBe('doubao-seedream-5-0-pro-260628');
+    expect(runtime.apiKey).toBe('sk-ark-secret-1234');
+    expect(runtime.baseUrl).toBe('https://ark.cn-beijing.volces.com/api/v3');
   });
 
   it('saves a separate review model for higher-risk Agent tasks', async () => {

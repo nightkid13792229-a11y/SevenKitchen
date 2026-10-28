@@ -400,3 +400,35 @@ export interface ListSupplementDraftsParams {
   status?: SupplementNutritionDraftStatus;
   ingredientId?: string;
 }
+
+// AI 食谱封面（2026-10-28）：DeepSeek + Seedream 5.0 Pro，独立于系统默认
+export interface RecipeCoverProviderSettings {
+  enabled: boolean
+  configured: boolean
+  baseUrl: string
+  model: string
+  apiKeyLast4: string | null
+}
+
+export interface RecipeCoverConfig {
+  deepseek: RecipeCoverProviderSettings
+  ark: RecipeCoverProviderSettings
+  promptTemplate: string
+  ready: boolean
+}
+
+export interface UpdateRecipeCoverConfigPayload {
+  deepseek: {
+    enabled: boolean
+    baseUrl: string
+    model: string
+    apiKey?: string
+  }
+  ark: {
+    enabled: boolean
+    baseUrl: string
+    model: string
+    apiKey?: string
+  }
+  promptTemplate: string
+}

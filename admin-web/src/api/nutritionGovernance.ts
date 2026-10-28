@@ -21,6 +21,8 @@ import type {
   SupplementNutritionDraft,
   UpdateAgentProviderSettingsPayload,
   UpdateZhipuImageSettingsPayload,
+  RecipeCoverConfig,
+  UpdateRecipeCoverConfigPayload,
   ZhipuImageSettings,
   ZhipuImageTestResult
 } from '@/types/nutritionGovernance'
@@ -76,6 +78,14 @@ export const nutritionGovernanceApi = {
     }),
 
   /** 智谱封面图配置：只读写 provider=ZHIPU / purpose=RECIPE_COVER_IMAGE 这一行 */
+  getRecipeCoverConfig: (): Promise<RecipeCoverConfig> =>
+    api.get('/admin/nutrition-governance/agent-providers/recipe-cover'),
+
+  updateRecipeCoverConfig: (
+    data: UpdateRecipeCoverConfigPayload
+  ): Promise<RecipeCoverConfig> =>
+    api.put('/admin/nutrition-governance/agent-providers/recipe-cover', data),
+
   getZhipuImageSettings: (): Promise<ZhipuImageSettings> =>
     api.get('/admin/nutrition-governance/agent-providers/zhipu-image'),
 

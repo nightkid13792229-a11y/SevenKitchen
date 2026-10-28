@@ -65,84 +65,41 @@
     </el-card>
 
     <!--
-      智谱封面图（2026-10-27）：
-      与上面的 DeepSeek 文本配置是两套 Key/模型，必须单独一行（provider=ZHIPU）。
-      这里只让运营填 Key / 启用；真正出图在「发布 / 更新 → 封面图」。
+      AI 食谱封面（2026-10-28）：DeepSeek 写提示词、Seedream 5.0 Pro 生图。
+      与上面的 DeepSeek 文本配置、智谱旧配置都是独立的 Key/用途。
+      真正生成在「发布 / 更新 → 封面图」和「上线检查 → 订单展示」。
     -->
     <el-card shadow="never" class="section">
       <template #header>
         <div class="card-header">
-          <span>智谱封面图（食谱封面图生成）</span>
-          <el-tag :type="zhipuStatus.type" effect="plain">
-            {{ zhipuStatus.label }}
+          <span>AI 食谱封面</span>
+          <el-tag :type="recipeCoverStatus.type" effect="plain">
+            {{ recipeCoverStatus.label }}
           </el-tag>
         </div>
       </template>
 
       <p class="zhipu-hint">
-        用于「发布 / 更新 → 封面图 → AI 生成图片」和旧「编辑食谱」页的 AI 封面。
-        生成一张约 0.1 元；连接测试只验证 Key，不生成图片、不花钱。
-        Key 在
-        <a
-          href="https://bigmodel.cn/usercenter/proj-mgmt/apikeys"
-          target="_blank"
-          rel="noopener"
-        >bigmodel.cn → API Keys</a>
-        创建。Base URL 填 https://open.bigmodel.cn 即可（系统会自动补 /api）；
-        保存并启用后，重新打开「发布 / 更新」抽屉即可看到按钮变亮。
+        DeepSeek 负责把配方食材写成摄影提示词，火山方舟 Seedream 5.0 Pro 负责生图。
+        两个模型都启用、保存 Key，且系统提示词非空时，两个页面的 AI 生成按钮才可用。
+        生成一张约 0.2 元。
       </p>
 
-      <el-form label-width="120px" class="zhipu-form">
-        <el-form-item label="启用">
-          <el-switch v-model="zhipuForm.enabled" />
-        </el-form-item>
-        <el-form-item label="Base URL">
-          <el-input
-            v-model="zhipuForm.baseUrl"
-            placeholder="https://open.bigmodel.cn"
-          />
-        </el-form-item>
-        <el-form-item label="模型">
-          <el-input v-model="zhipuForm.model" placeholder="glm-image" />
-        </el-form-item>
-        <el-form-item label="API Key">
-          <el-input
-            v-model="zhipuForm.apiKey"
-            type="password"
-            show-password
-            autocomplete="off"
-            :placeholder="zhipuKeyPlaceholder"
-          />
-          <div v-if="zhipuSettings?.apiKeyConfigured" class="zhipu-key-actions">
-            <el-button
-              link
-              type="danger"
-              :loading="zhipuSaving"
-              @click="clearZhipuKey"
-            >
-              清除已保存的 Key
-            </el-button>
-          </div>
-        </el-form-item>
-        <el-form-item>
-          <el-button
-            type="primary"
-            :loading="zhipuSaving"
-            @click="saveZhipuSettings"
-          >
-            保存
-          </el-button>
-          <el-button
-            :loading="zhipuTesting"
-            :disabled="!zhipuSettings?.apiKeyConfigured"
-            @click="testZhipuSettings"
-          >
-            连接测试
-          </el-button>
-          <span class="zhipu-note">先保存，再测试；测试不会生成图片。</span>
-        </el-form-item>
-      </el-form>
+      <div class="recipe-cover-status">
+        <span>DeepSeek：{{ recipeCoverConfig?.deepseek.configured ? '已配置' : '未配置' }}</span>
+        <span>Seedream：{{ recipeCoverConfig?.ark.configured ? '已配置' : '未配置' }}</span>
+        <span>提示词：{{ recipeCoverConfig?.promptTemplate ? '已配置' : '使用默认' }}</span>
+      </div>
+
+      <el-button type="primary" @click="recipeCoverDrawerVisible = true">
+        配置
+      </el-button>
     </el-card>
+
+    <RecipeCoverConfigDrawer
+      v-model="recipeCoverDrawerVisible"
+      @saved="loadRecipeCoverConfig"
+    />
 
     <!-- 配置抽屉（可复用，按用途传参） -->
     <AgentSettingsDrawer
@@ -169,6 +126,7 @@ import {
   agentPurposeLabel
 } from '@/constants/agentPurposes'
 import AgentSettingsDrawer from './components/AgentSettingsDrawer.vue'
+import RecipeCoverConfigDrawer from './RecipeCoverConfigDrawer.vue'
 import {
   buildZhipuImageSettingsPayload,
   resolveZhipuImageStatus,
@@ -177,6 +135,7 @@ import {
 } from '@/utils/agentConfig/zhipuImage'
 import type {
   AgentProviderSettings,
+  RecipeCoverConfig,
   UpdateAgentProviderSettingsPayload,
   ZhipuImageSettings
 } from '@/types/nutritionGovernance'
@@ -193,6 +152,21 @@ interface PurposeRow {
 
 const loading = ref(false)
 const rows = ref<Record<string, PurposeRow>>({})
+
+const recipeCoverDrawerVisible = ref(false)
+const recipeCoverConfig = ref<RecipeCoverConfig | null>(null)
+const recipeCoverStatus = computed(() => ({
+  label: recipeCoverConfig.value?.ready ? '可用' : '未就绪',
+  type: recipeCoverConfig.value?.ready ? 'success' : 'info'
+}))
+
+async function loadRecipeCoverConfig() {
+  try {
+    recipeCoverConfig.value = await nutritionGovernanceApi.getRecipeCoverConfig()
+  } catch {
+    recipeCoverConfig.value = null
+  }
+}
 
 const drawerVisible = ref(false)
 const drawerPurpose = ref('')
@@ -375,6 +349,7 @@ async function handleTest(payload: UpdateAgentProviderSettingsPayload) {
 }
 
 onMounted(() => {
+  void loadRecipeCoverConfig()
   void loadAll()
   void loadZhipuSettings()
 })
@@ -426,6 +401,13 @@ onMounted(() => {
   color: #606266;
   font-size: 12.5px;
   line-height: 1.6;
+}
+.recipe-cover-status {
+  display: flex;
+  gap: 20px;
+  margin: 0 0 14px;
+  color: #606266;
+  font-size: 13px;
 }
 .zhipu-form {
   max-width: 720px;

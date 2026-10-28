@@ -850,6 +850,115 @@ describe('PurchasingService procurement sku separation', () => {
     ]);
   });
 
+  it('previews PCS supplement demand measured in 滴 without rejecting the unit', async () => {
+    const order = {
+      id: 'order-vitamin-d3',
+      targetProductionDate: new Date('2026-10-28T00:00:00.000Z'),
+      pricingBreakdownSnapshot: {
+        ingredientDetails: [
+          {
+            ingredientId: 'ingredient-vitamin-d3',
+            name: '维生素D3滴剂',
+            type: 'SUPPLEMENT',
+            purchaseAmount: 11.18520576,
+            unit: '滴',
+            displayUnit: '滴',
+            cost: 0.3,
+          },
+        ],
+      },
+      items: [
+        {
+          recipeSnapshot: {
+            items: [
+              {
+                ingredient_id: 'ingredient-vitamin-d3',
+                ingredient_type: 'SUPPLEMENT',
+                sort_order: 1,
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const orderRepository = {
+      findByTargetProductionDateRange: jest
+        .fn()
+        .mockResolvedValue({ list: [order] }),
+    } as any;
+    const ingredientRepository = {
+      findByIds: jest.fn().mockResolvedValue([
+        {
+          id: 'ingredient-vitamin-d3',
+          name: '维生素D3滴剂',
+          type: 'SUPPLEMENT',
+          procurementStrategy: 'STOCK_REPLENISHMENT',
+          baseUnit: 'PCS',
+          unitDisplayLabel: '滴',
+          purchaseUnit: '瓶',
+          purchaseToBaseRatio: 2108,
+          currentPricePerPurchaseUnit: 56.54,
+        },
+      ]),
+      findAll: jest.fn().mockResolvedValue([]),
+    } as any;
+    const inventoryService = {
+      getAvailabilityByIngredientIds: jest.fn().mockResolvedValue(
+        new Map([
+          [
+            'ingredient-vitamin-d3',
+            {
+              ingredientId: 'ingredient-vitamin-d3',
+              onHandQuantityG: 5,
+              allocatedQuantityG: 2,
+              availableQuantityG: 3,
+            },
+          ],
+        ]),
+      ),
+      inboundFromPurchaseRecords: jest.fn(),
+    } as any;
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        PurchasingService,
+        { provide: ORDER_REPOSITORY, useValue: orderRepository },
+        {
+          provide: ORDER_STATUS_HISTORY_REPOSITORY,
+          useValue: { append: jest.fn() },
+        },
+        { provide: INGREDIENT_REPOSITORY, useValue: ingredientRepository },
+        { provide: InventoryService, useValue: inventoryService },
+        {
+          provide: ProcurementSkuService,
+          useValue: { batchFindActive: jest.fn().mockResolvedValue({}) },
+        },
+        {
+          provide: RecommendedProductService,
+          useValue: { batchFindActive: jest.fn().mockResolvedValue({}) },
+        },
+        { provide: PURCHASE_LIST_REPOSITORY, useValue: {} },
+        { provide: PURCHASE_RECORD_REPOSITORY, useValue: {} },
+      ],
+    }).compile();
+
+    const service = moduleRef.get(PurchasingService);
+    const preview = await service.previewPurchaseRequirements('2026-10-28');
+
+    expect(preview.items).toEqual([
+      expect.objectContaining({
+        ingredientId: 'ingredient-vitamin-d3',
+        quantityUnit: '滴',
+        displayUnit: '滴',
+        grossQuantityNeeded: 11.185,
+        stockDeductedQuantity: 3,
+        purchaseShortageQuantity: 8.185,
+        quantityNeeded: 8.185,
+        usesInventory: true,
+      }),
+    ]);
+  });
+
   it('keeps same-ingredient purchase requirements separated by procurement sku snapshot', async () => {
     const orderRepository = {
       findByTargetProductionDateRange: jest.fn().mockResolvedValue({

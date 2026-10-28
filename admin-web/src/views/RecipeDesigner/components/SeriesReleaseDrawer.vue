@@ -1165,7 +1165,7 @@ async function handleGenerateAiCover(): Promise<void> {
   if (hasCover) {
     try {
       await ElMessageBox.confirm(
-        '重新生成需要再调用一次 AI（约 0.1 元/张）。生成后先看预览，点「用这张」才会替换当前封面。继续？',
+        '重新生成需要再调用一次 AI（约 0.2 元/张）。生成后先看预览，点「用这张」才会替换当前封面。继续？',
         '重新生成封面',
         {
           type: 'warning',

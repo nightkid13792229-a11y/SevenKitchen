@@ -43,7 +43,7 @@ describe('系列 AI 封面 · 源码契约', () => {
   })
 
   it('覆盖前确认、按 saved 分支、超时用中文常量', () => {
-    expect(drawerSource).toContain('约 0.1 元/张')
+    expect(drawerSource).toContain('约 0.2 元/张')
     expect(drawerSource).toContain('result.saved')
     expect(drawerSource).toContain("error?.code === 'ECONNABORTED'")
     expect(drawerSource).toContain('SERIES_AI_COVER_TIMEOUT_MESSAGE')

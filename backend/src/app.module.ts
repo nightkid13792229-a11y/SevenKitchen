@@ -92,6 +92,8 @@ import { PrismaService } from './infrastructure/prisma.service';
 import { IngredientPreparationHistoryService } from './application/recipe/ingredient-preparation-history.service';
 import { RecipeService } from './application/recipe/recipe.service';
 import { CoverImageService } from './application/recipe/cover-image.service';
+import { DesignRecipeCoverImageService } from './application/recipe-designer/design-recipe-cover-image.service';
+import { DesignRecipeCoverController } from './interfaces/controllers/design-recipe-cover.controller';
 import { CoverReferenceService } from './application/recipe-designer/cover-reference.service';
 import { CoverTrashService } from './application/recipe-designer/cover-trash.service';
 import { RecipeCoverConfigService } from './application/recipe-designer/recipe-cover-config.service';
@@ -389,6 +391,7 @@ validatePrismaConfig();
     LabelModule,
   ],
   controllers: [
+    DesignRecipeCoverController,
     CustomerMessageController,
     PlatformOptionsController,
     AdminPlatformOptionsController,
@@ -567,6 +570,7 @@ validatePrismaConfig();
     CoverImageService,
     CoverReferenceService,
     CoverTrashService,
+    DesignRecipeCoverImageService,
     RecipeCoverConfigService,
     RecipeCoverImageService,
     RecipeCoverVisualBriefService,

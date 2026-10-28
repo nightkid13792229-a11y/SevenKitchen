@@ -93,6 +93,8 @@ import { IngredientPreparationHistoryService } from './application/recipe/ingred
 import { RecipeService } from './application/recipe/recipe.service';
 import { CoverImageService } from './application/recipe/cover-image.service';
 import { AiCoverPreviewService } from './application/recipe-designer/ai-cover-preview.service';
+import { RecipeCoverSettingsService } from './application/recipe-designer/recipe-cover-settings.service';
+import { RecipeCoverConfigController } from './interfaces/controllers/recipe-cover-config.controller';
 import { AiCoverPreviewController } from './interfaces/controllers/ai-cover-preview.controller';
 import { DesignRecipeCoverImageService } from './application/recipe-designer/design-recipe-cover-image.service';
 import { DesignRecipeCoverController } from './interfaces/controllers/design-recipe-cover.controller';
@@ -395,6 +397,7 @@ validatePrismaConfig();
   controllers: [
     DesignRecipeCoverController,
     AiCoverPreviewController,
+    RecipeCoverConfigController,
     CustomerMessageController,
     PlatformOptionsController,
     AdminPlatformOptionsController,
@@ -574,6 +577,7 @@ validatePrismaConfig();
     CoverReferenceService,
     CoverTrashService,
     AiCoverPreviewService,
+    RecipeCoverSettingsService,
     DesignRecipeCoverImageService,
     RecipeCoverConfigService,
     RecipeCoverImageService,

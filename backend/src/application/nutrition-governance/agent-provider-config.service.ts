@@ -82,6 +82,22 @@ export interface ZhipuImageSettingsView {
   updatedAt: string | null;
 }
 
+export interface ProviderSettingsView {
+  enabled: boolean;
+  configured: boolean;
+  baseUrl: string;
+  model: string;
+  apiKeyLast4: string | null;
+}
+
+export interface UpdateProviderSettingsInput {
+  enabled?: boolean;
+  baseUrl?: string;
+  model?: string;
+  apiKey?: string;
+  clearApiKey?: boolean;
+}
+
 export interface UpdateZhipuImageSettingsInput {
   enabled?: boolean;
   baseUrl?: string;
@@ -283,6 +299,88 @@ export class AgentProviderConfigService {
       throw new BadRequestException('智谱 Base URL 格式无效');
     }
     return trimmed.replace(/\/+$/, '');
+  }
+
+  /**
+   * 通用 provider 配置视图 / 保存（2026-10-28）。
+   * 用于「AI 食谱封面」：DeepSeek（RECIPE_COVER_PROMPT）与 ARK（RECIPE_COVER_IMAGE），
+   * 两个用途都不回退全局默认。
+   */
+  async getProviderSettings(
+    purpose: string,
+    provider: string,
+  ): Promise<ProviderSettingsView> {
+    const config = await this.prisma.agentProviderConfig.findUnique({
+      where: { purpose_provider: { purpose, provider } },
+    });
+    const defaults = providerDefaults(provider);
+    return {
+      enabled: config?.enabled ?? false,
+      configured: Boolean(config?.apiKeyEncrypted),
+      baseUrl: config?.baseUrl ?? defaults.baseUrl,
+      model: config?.model ?? defaults.model,
+      apiKeyLast4: config?.apiKeyLast4 ?? null,
+    };
+  }
+
+  async updateProviderSettings(
+    purpose: string,
+    provider: string,
+    input: UpdateProviderSettingsInput,
+    userId?: string,
+  ): Promise<ProviderSettingsView> {
+    const current = await this.prisma.agentProviderConfig.findUnique({
+      where: { purpose_provider: { purpose, provider } },
+    });
+    const defaults = providerDefaults(provider);
+    const baseUrl = normalizeBaseUrl(
+      input.baseUrl ?? current?.baseUrl ?? defaults.baseUrl,
+    );
+    const model = normalizeRequiredText(
+      input.model ?? current?.model ?? defaults.model,
+      '模型不能为空',
+    );
+    validateBaseUrl(baseUrl);
+    const enabled = input.enabled ?? current?.enabled ?? false;
+    const keyUpdate = this.resolveApiKeyUpdate(input);
+    const nextKey =
+      keyUpdate.apiKeyEncrypted !== undefined
+        ? keyUpdate.apiKeyEncrypted
+        : current?.apiKeyEncrypted ?? null;
+    if (enabled && !nextKey) {
+      throw new BadRequestException('启用前请先配置 API Key');
+    }
+
+    const saved = await this.prisma.agentProviderConfig.upsert({
+      where: { purpose_provider: { purpose, provider } },
+      create: {
+        purpose,
+        provider,
+        enabled,
+        baseUrl,
+        model,
+        maxConcurrency: 1,
+        requestTimeoutMs: defaults.requestTimeoutMs,
+        retryCount: 0,
+        updatedBy: userId ?? null,
+        ...keyUpdate,
+      },
+      update: {
+        enabled,
+        baseUrl,
+        model,
+        updatedBy: userId ?? null,
+        ...keyUpdate,
+      },
+    });
+
+    return {
+      enabled: saved.enabled,
+      configured: Boolean(saved.apiKeyEncrypted),
+      baseUrl: saved.baseUrl,
+      model: saved.model,
+      apiKeyLast4: saved.apiKeyLast4 ?? null,
+    };
   }
 
   async getSettings(purpose?: string): Promise<AgentProviderSettingsView> {
@@ -685,4 +783,23 @@ function getEncryptionKey(): Buffer {
   const material =
     configured || process.env.JWT_SECRET || 'sevenkitchen-dev-agent-config-key';
   return createHash('sha256').update(material).digest();
+}
+
+function providerDefaults(provider: string): {
+  baseUrl: string;
+  model: string;
+  requestTimeoutMs: number;
+} {
+  if (provider === ARK_PROVIDER) {
+    return {
+      baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+      model: 'doubao-seedream-5-0-pro-260628',
+      requestTimeoutMs: 120000,
+    };
+  }
+  return {
+    baseUrl: 'https://api.deepseek.com',
+    model: 'deepseek-flash',
+    requestTimeoutMs: 90000,
+  };
 }

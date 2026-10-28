@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import panelSource from '@/views/RecipeDesigner/components/PresentationPanel.vue?raw'
+import fieldSource from '@/views/RecipeDesigner/components/AICoverField.vue?raw'
 import drawerSource from '@/views/RecipeDesigner/components/LaunchReadinessDrawer.vue?raw'
 import editorSource from '@/views/RecipeDesigner/Editor.vue?raw'
 import apiSource from '@/api/recipeDesigner.ts?raw'
@@ -76,14 +77,18 @@ describe('产品展示 · API 与类型契约', () => {
 describe('产品展示 · 面板', () => {
   const panel = clean(panelSource)
 
-  it('两种分支都有封面图上传与封面标题，上传复用 recipeApi.uploadImage', () => {
-    expect(panel).toContain(
-      'const result = await recipeApi.uploadImage(file)'
-    )
-    expect(panel).toContain('封面图')
+  it('两种分支都有 AI 封面组件与封面标题，组件已导入', () => {
+    expect(panel).toContain("import AICoverField from './AICoverField.vue'")
+    expect(panel).toContain('<AICoverField')
+    expect(panel).toContain(':entity-id="draftId"')
+    expect(panel).toContain(':baseline-value="baseline.coverImageUrl"')
     expect(panel).toContain('封面标题')
     expect(panel).toContain('v-model="form.coverTitle"')
-    expect(panel).toContain('validatePresentationCoverFile(file)')
+    expect(panel).not.toContain('recipeApi.uploadImage')
+    const field = clean(fieldSource)
+    expect(field).toContain('AI 生成封面')
+    expect(field).toContain('AI 封面预览')
+    expect(field).toContain("entityType === 'design'")
   })
 
   it('产品线分支只保留卖点，不再编辑目标健康标签', () => {

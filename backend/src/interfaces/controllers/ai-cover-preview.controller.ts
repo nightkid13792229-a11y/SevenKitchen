@@ -26,9 +26,16 @@ export class AiCoverPreviewController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: '丢弃未采用的 AI 封面预览 / 上传' })
   async discardPreview(
-    @Body() dto: { url?: string },
+    @Body() dto: { url?: string; reason?: string },
   ): Promise<ApiResponseDto<{ trashed: boolean }>> {
-    const result = await this.aiCoverPreviewService.discard(String(dto?.url ?? ''));
+    const reason =
+      dto?.reason === 'UPLOAD_DISCARDED'
+        ? 'UPLOAD_DISCARDED'
+        : 'PREVIEW_DISCARDED';
+    const result = await this.aiCoverPreviewService.discard(
+      String(dto?.url ?? ''),
+      reason,
+    );
     return ApiResponseDto.success(result);
   }
 }

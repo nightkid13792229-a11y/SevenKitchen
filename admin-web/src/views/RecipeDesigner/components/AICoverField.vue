@@ -64,7 +64,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onBeforeUnmount, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { recipeApi } from '@/api/recipes'
@@ -75,6 +75,7 @@ const props = defineProps<{
   entityType: 'design' | 'series'
   entityId: string
   isAdmin?: boolean
+  baselineValue?: string
 }>()
 
 const emit = defineEmits<{
@@ -86,6 +87,10 @@ const uploading = ref(false)
 const previewVisible = ref(false)
 const previewUrl = ref('')
 const largeVisible = ref(false)
+const pendingUrl = ref('')
+const pendingReason = ref<'PREVIEW_DISCARDED' | 'UPLOAD_DISCARDED'>(
+  'PREVIEW_DISCARDED'
+)
 
 async function generate() {
   if (!props.isAdmin || generating.value) return
@@ -108,6 +113,8 @@ async function generate() {
 
 function applyPreview() {
   if (!previewUrl.value) return
+  pendingUrl.value = previewUrl.value
+  pendingReason.value = 'PREVIEW_DISCARDED'
   emit('update:modelValue', previewUrl.value)
   previewUrl.value = ''
   previewVisible.value = false
@@ -119,13 +126,34 @@ function discardPreview() {
   previewUrl.value = ''
   previewVisible.value = false
   if (url) {
-    void recipeDesignerApi.discardAiCoverPreview(url).catch(() => undefined)
+    void recipeDesignerApi
+      .discardAiCoverPreview(url, 'PREVIEW_DISCARDED')
+      .catch(() => undefined)
   }
 }
 
 function remove() {
+  if (pendingUrl.value && props.modelValue === pendingUrl.value) {
+    void recipeDesignerApi
+      .discardAiCoverPreview(pendingUrl.value, pendingReason.value)
+      .catch(() => undefined)
+    pendingUrl.value = ''
+  }
   emit('update:modelValue', '')
 }
+
+onBeforeUnmount(() => {
+  if (previewUrl.value) discardPreview()
+  if (
+    pendingUrl.value &&
+    props.modelValue === pendingUrl.value &&
+    props.baselineValue !== pendingUrl.value
+  ) {
+    void recipeDesignerApi
+      .discardAiCoverPreview(pendingUrl.value, pendingReason.value)
+      .catch(() => undefined)
+  }
+})
 
 async function handleUpload(file: File) {
   if (!file.type.startsWith('image/')) {
@@ -139,6 +167,8 @@ async function handleUpload(file: File) {
   uploading.value = true
   try {
     const result = await recipeApi.uploadImage(file)
+    pendingUrl.value = result.url
+    pendingReason.value = 'UPLOAD_DISCARDED'
     emit('update:modelValue', result.url)
     ElMessage.success('封面图上传成功，保存后生效')
   } catch (error: any) {

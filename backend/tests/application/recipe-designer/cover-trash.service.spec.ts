@@ -13,6 +13,8 @@ describe('CoverTrashService', () => {
   const cosService = {
     copyImageToTrash: jest.fn(),
     deleteImageByUrl: jest.fn(),
+    deleteImageByUrlStrict: jest.fn(),
+    isOwnedImageUrl: jest.fn(),
   };
   const service = new CoverTrashService(
     prisma as never,
@@ -23,6 +25,7 @@ describe('CoverTrashService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     referenceService.isReferenced.mockResolvedValue(false);
+    cosService.isOwnedImageUrl.mockReturnValue(true);
     cosService.copyImageToTrash.mockResolvedValue(
       'https://img.sevenkitchen.cloud/recipes/covers/trash/1.jpg',
     );
@@ -66,6 +69,7 @@ describe('CoverTrashService', () => {
   });
 
   it('非本站 COS 地址：拒绝，不碰外部对象', async () => {
+    cosService.isOwnedImageUrl.mockReturnValue(false);
     await expect(
       service.trashIfUnreferenced(
         'https://example.com/recipes/covers/a.jpg',
@@ -88,11 +92,11 @@ describe('CoverTrashService', () => {
     prisma.coverTrash.findMany.mockResolvedValue([
       { id: 't1', trashUrl: 'https://img.sevenkitchen.cloud/recipes/covers/trash/1.jpg' },
     ]);
-    cosService.deleteImageByUrl.mockResolvedValue(undefined);
+    cosService.deleteImageByUrlStrict.mockResolvedValue(undefined);
     prisma.coverTrash.update.mockResolvedValue({ id: 't1' });
 
     await expect(service.cleanupExpired()).resolves.toBe(1);
-    expect(cosService.deleteImageByUrl).toHaveBeenCalledWith(
+    expect(cosService.deleteImageByUrlStrict).toHaveBeenCalledWith(
       'https://img.sevenkitchen.cloud/recipes/covers/trash/1.jpg',
     );
     expect(prisma.coverTrash.update).toHaveBeenCalledWith({

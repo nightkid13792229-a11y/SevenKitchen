@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   SERIES_AI_COVER_TIMEOUT_MESSAGE,
   SERIES_AI_COVER_TIMEOUT_MS,
-  buildSeriesAiCoverSaveFlag,
   resolveSeriesAiCoverButtonLabel,
   resolveSeriesAiCoverHint,
   resolveSeriesAiCoverUnavailableReason,
@@ -20,27 +19,6 @@ const base: SeriesAiCoverContext = {
 };
 
 describe('seriesAiCover', () => {
-  it('按钮文案随状态变化', () => {
-    expect(resolveSeriesAiCoverButtonLabel(false, false)).toBe('AI 生成图片');
-    expect(resolveSeriesAiCoverButtonLabel(true, false)).toBe('重新生成');
-    expect(resolveSeriesAiCoverButtonLabel(false, true)).toBe('生成中…');
-  });
-
-  it('只有未上线 + 空封面才直接保存', () => {
-    expect(
-      buildSeriesAiCoverSaveFlag({ hasCover: false, isLive: false }),
-    ).toBe(true);
-    expect(buildSeriesAiCoverSaveFlag({ hasCover: true, isLive: false })).toBe(
-      false,
-    );
-    expect(buildSeriesAiCoverSaveFlag({ hasCover: false, isLive: true })).toBe(
-      false,
-    );
-    expect(buildSeriesAiCoverSaveFlag({ hasCover: true, isLive: true })).toBe(
-      false,
-    );
-  });
-
   it('不可用原因按优先级返回', () => {
     expect(
       resolveSeriesAiCoverUnavailableReason({
@@ -50,7 +28,7 @@ describe('seriesAiCover', () => {
     ).toContain('正式名称');
     expect(
       resolveSeriesAiCoverUnavailableReason({ ...base, available: false }),
-    ).toContain('智谱封面图');
+    ).toContain('AI 食谱封面');
     expect(
       resolveSeriesAiCoverUnavailableReason({ ...base, available: null }),
     ).toContain('检查');
@@ -67,7 +45,7 @@ describe('seriesAiCover', () => {
   });
 
   it('提示文案随封面 / 上线状态变化', () => {
-    expect(resolveSeriesAiCoverHint(base)).toContain('自动保存');
+    expect(resolveSeriesAiCoverHint(base)).toContain('预览');
     expect(resolveSeriesAiCoverHint({ ...base, isLive: true })).toContain(
       '预览',
     );
@@ -76,13 +54,13 @@ describe('seriesAiCover', () => {
     );
     expect(
       resolveSeriesAiCoverHint({ ...base, available: false }),
-    ).toContain('智谱封面图');
+    ).toContain('AI 食谱封面');
     // 非管理员整个生图入口都不显示，连提示也不该出现（设计稿 5.1）
     expect(resolveSeriesAiCoverHint({ ...base, isAdmin: false })).toBe('');
   });
 
   it('超时常量与文案固定', () => {
-    expect(SERIES_AI_COVER_TIMEOUT_MS).toBe(240000);
-    expect(SERIES_AI_COVER_TIMEOUT_MESSAGE).toContain('240');
+    expect(SERIES_AI_COVER_TIMEOUT_MS).toBe(300000);
+    expect(SERIES_AI_COVER_TIMEOUT_MESSAGE).toContain('300');
   });
 });

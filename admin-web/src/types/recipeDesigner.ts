@@ -518,8 +518,6 @@ export interface SeriesAiCoverResult {
   url: string
   provider: string
   model: string
-  /** true = 已写入系列；false = 只返回预览（已上线系列永远是 false） */
-  saved: boolean
   /** 实际喂给提示词的食材（最多 5 个） */
   foodNames: string[]
 }

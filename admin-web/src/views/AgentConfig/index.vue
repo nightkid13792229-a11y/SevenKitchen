@@ -351,7 +351,6 @@ async function handleTest(payload: UpdateAgentProviderSettingsPayload) {
 onMounted(() => {
   void loadRecipeCoverConfig()
   void loadAll()
-  void loadZhipuSettings()
 })
 </script>
 

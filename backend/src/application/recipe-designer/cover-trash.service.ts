@@ -12,8 +12,6 @@ export type CoverTrashReason =
   | 'UPLOAD_DISCARDED';
 
 const TRASH_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
-const OUR_COVER_URL_PATTERN =
-  /^https:\/\/(?:img\.sevenkitchen\.cloud|sevenkitchen-mvp-123-1392823718\.cos\.ap-chengdu\.myqcloud\.com)\/recipes\//;
 
 /**
  * 旧封面回收站：
@@ -37,7 +35,7 @@ export class CoverTrashService {
   ): Promise<boolean> {
     const sourceUrl = String(url ?? '').trim();
     if (!sourceUrl) return false;
-    if (!OUR_COVER_URL_PATTERN.test(sourceUrl)) {
+    if (!this.cosService.isOwnedImageUrl(sourceUrl)) {
       throw new BadRequestException('封面地址不是本站 COS 地址');
     }
     if (sourceUrl.includes('/trash/')) return false;
@@ -76,7 +74,7 @@ export class CoverTrashService {
     let deleted = 0;
     for (const row of rows) {
       try {
-        await this.cosService.deleteImageByUrl(row.trashUrl);
+        await this.cosService.deleteImageByUrlStrict(row.trashUrl);
         await this.prisma.coverTrash.update({
           where: { id: row.id },
           data: { status: 'DELETED' },

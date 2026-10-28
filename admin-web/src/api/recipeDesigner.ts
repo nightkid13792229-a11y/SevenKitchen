@@ -199,8 +199,11 @@ export const recipeDesignerApi = {
       timeoutErrorMessage: SERIES_AI_COVER_TIMEOUT_MESSAGE,
     }),
 
-  discardAiCoverPreview: (url: string): Promise<{ trashed: boolean }> =>
-    api.delete('/admin/ai-covers/preview', { data: { url } }),
+  discardAiCoverPreview: (
+    url: string,
+    reason: 'PREVIEW_DISCARDED' | 'UPLOAD_DISCARDED' = 'PREVIEW_DISCARDED'
+  ): Promise<{ trashed: boolean }> =>
+    api.delete('/admin/ai-covers/preview', { data: { url, reason } }),
 
   // 草稿
   getDraft: (draftId: string): Promise<DesignRecipeDraftDetail> =>

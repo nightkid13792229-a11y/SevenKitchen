@@ -30,8 +30,8 @@ describe('RecipesController.getAccessibleRecipe · delivered version pin', () =>
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
       deliveryService as any,
+      {} as any,
       {} as any,
     );
     const req = {

@@ -7,14 +7,17 @@ import { CoverTrashService } from './cover-trash.service';
 export class AiCoverPreviewService {
   constructor(private readonly coverTrashService: CoverTrashService) {}
 
-  async discard(url: string): Promise<{ trashed: boolean }> {
+  async discard(
+    url: string,
+    reason: 'PREVIEW_DISCARDED' | 'UPLOAD_DISCARDED' = 'PREVIEW_DISCARDED',
+  ): Promise<{ trashed: boolean }> {
     const normalized = String(url ?? '').trim();
     if (!normalized) {
       throw new BadRequestException('封面地址不能为空');
     }
     const trashed = await this.coverTrashService.trashIfUnreferenced(
       normalized,
-      'PREVIEW_DISCARDED',
+      reason,
     );
     return { trashed };
   }

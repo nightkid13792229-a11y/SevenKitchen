@@ -11,9 +11,9 @@ import { isTemporarySeriesName } from './seriesName'
  * 抽屉只负责把状态喂进来、把结果渲染出去。
  */
 
-/** glm-image 高峰实测 2–2.5 分钟；后端等 200 秒，前端留 240 秒兜底 */
-export const SERIES_AI_COVER_TIMEOUT_MS = 240_000
-export const SERIES_AI_COVER_TIMEOUT_MESSAGE = '生成超时（240 秒），请点重试'
+/** DeepSeek + Seedream 总预算 290 秒；前端留 300 秒兜底 */
+export const SERIES_AI_COVER_TIMEOUT_MS = 300_000
+export const SERIES_AI_COVER_TIMEOUT_MESSAGE = '生成超时（300 秒），请点重试'
 
 export interface SeriesAiCoverContext {
   isAdmin: boolean
@@ -43,7 +43,7 @@ export function resolveSeriesAiCoverUnavailableReason(
   if (ctx.busy) return '正在保存，请稍候…'
   if (ctx.available === null) return '正在检查 AI 生图是否可用…'
   if (ctx.available === false) {
-    return 'AI 自动封面未启用：到「AI / Agent 配置」的「智谱封面图」填 Key 并启用。'
+    return 'AI 自动封面未启用：到「AI / Agent 配置」的「AI 食谱封面」配置 DeepSeek 与 Seedream。'
   }
 
   const name = String(ctx.savedSeriesName ?? '').trim()
@@ -68,7 +68,7 @@ export function resolveSeriesAiCoverHint(ctx: SeriesAiCoverContext): string {
   if (ctx.isLive) {
     return '生成后先看预览，确认后点「保存发布设置」才会生效。'
   }
-  return '按系列名和最近一份草稿的食材生成，约 20–40 秒；生成后自动保存到系列。'
+  return '按系列名和最近一份草稿的食材生成，约 20–40 秒；生成后先预览，点「用这张」再保存。'
 }
 
 export function resolveSeriesAiCoverButtonLabel(
@@ -77,17 +77,4 @@ export function resolveSeriesAiCoverButtonLabel(
 ): string {
   if (generating) return '生成中…'
   return hasCover ? '重新生成' : 'AI 生成图片'
-}
-
-/**
- * `save=true` 只用于「未上线系列 + 空封面」的首生成。
- *
- * 已上线系列走预览：写完系列不会让「保存发布设置」变脏，
- * 运营就没有入口把新封面推上线。后端也会再兜一层。
- */
-export function buildSeriesAiCoverSaveFlag(input: {
-  hasCover: boolean
-  isLive: boolean
-}): boolean {
-  return !input.hasCover && !input.isLive
 }

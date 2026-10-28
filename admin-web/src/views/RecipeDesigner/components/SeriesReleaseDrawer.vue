@@ -322,8 +322,8 @@
                     <el-button
                       link
                       type="danger"
-                      :disabled="aiCoverGenerating || uploading"
-                      @click="form.coverImageUrl = ''"
+                      :disabled="isUpdate || aiCoverGenerating || uploading"
+                      @click="removeCover"
                     >移除封面</el-button>
                   </div>
                   <span v-if="aiCoverHint" class="series-release__hint">
@@ -650,6 +650,7 @@ import {
   Refresh,
   WarningFilled
 } from '@element-plus/icons-vue'
+import { nutritionGovernanceApi } from '@/api/nutritionGovernance'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import AiNameField from './AiNameField.vue'
 import { recipeApi } from '@/api/recipes'
@@ -666,7 +667,6 @@ import {
 } from '@/utils/recipeDesigner/presentation'
 import {
   SERIES_AI_COVER_TIMEOUT_MESSAGE,
-  buildSeriesAiCoverSaveFlag,
   resolveSeriesAiCoverButtonLabel,
   resolveSeriesAiCoverHint,
   resolveSeriesAiCoverUnavailableReason,
@@ -776,6 +776,10 @@ const error = ref('')
 const aiCoverAvailable = ref<boolean | null>(null)
 const aiCoverGenerating = ref(false)
 const aiCoverPreviewUrl = ref('')
+const pendingCoverUrl = ref('')
+const pendingCoverReason = ref<'PREVIEW_DISCARDED' | 'UPLOAD_DISCARDED'>(
+  'PREVIEW_DISCARDED'
+)
 const aiCoverError = ref('')
 let aiCoverRequestSeq = 0
 
@@ -1113,8 +1117,8 @@ async function loadAiCoverAvailability(): Promise<void> {
     return
   }
   try {
-    const res = await recipeApi.getAiCoverAvailability()
-    aiCoverAvailable.value = Boolean(res?.available)
+    const config = await nutritionGovernanceApi.getRecipeCoverConfig()
+    aiCoverAvailable.value = Boolean(config?.ready)
   } catch {
     aiCoverAvailable.value = false
   }
@@ -1134,6 +1138,8 @@ const handleCoverUpload: UploadProps['beforeUpload'] = async (file) => {
   uploading.value = true
   try {
     const result = await recipeApi.uploadImage(file)
+    pendingCoverUrl.value = result.url
+    pendingCoverReason.value = 'UPLOAD_DISCARDED'
     form.coverImageUrl = result.url
     ElMessage.success('封面图上传成功，保存发布设置后生效')
   } catch (uploadError: any) {
@@ -1158,10 +1164,6 @@ async function handleGenerateAiCover(): Promise<void> {
   if (aiCoverUnavailableReason.value) return
 
   const hasCover = Boolean(form.coverImageUrl.trim())
-  const save = buildSeriesAiCoverSaveFlag({
-    hasCover,
-    isLive: isUpdate.value
-  })
   if (hasCover) {
     try {
       await ElMessageBox.confirm(
@@ -1189,20 +1191,8 @@ async function handleGenerateAiCover(): Promise<void> {
       props.seriesId
     )
     if (seq !== aiCoverRequestSeq) return
-    if (result.saved) {
-      form.coverImageUrl = result.url
-      // 服务器已经写库：表单和基线一起更新，避免「保存发布设置」误以为有未保存修改
-      baseline.value = cloneSeriesReleaseForm({
-        ...baseline.value,
-        coverImageUrl: result.url
-      })
-      ElMessage.success('AI 封面已生成并保存')
-      // 刷新「缺封面」阻断项；hydrate=false，不覆盖其它未保存编辑
-      void loadReadiness(false)
-    } else {
-      aiCoverPreviewUrl.value = result.url
-      ElMessage.success('已生成预览，确认后才会替换')
-    }
+    aiCoverPreviewUrl.value = result.url
+    ElMessage.success('已生成预览，确认后才会替换')
   } catch (error: any) {
     if (seq !== aiCoverRequestSeq) return
     // 全局拦截器已经弹过一次；这里只保留可回看的红字
@@ -1222,17 +1212,31 @@ function discardAiCoverPreview(): void {
   const url = aiCoverPreviewUrl.value
   aiCoverPreviewUrl.value = ''
   if (url) {
-    void recipeDesignerApi.discardAiCoverPreview(url).catch(() => undefined)
+    void recipeDesignerApi
+      .discardAiCoverPreview(url, 'PREVIEW_DISCARDED')
+      .catch(() => undefined)
   }
 }
 
 /** 用预览替换抽屉里的封面；真正落库 / 上线仍由「保存发布设置」完成 */
 function applyAiCoverPreview(): void {
   if (!aiCoverPreviewUrl.value) return
+  pendingCoverUrl.value = aiCoverPreviewUrl.value
+  pendingCoverReason.value = 'PREVIEW_DISCARDED'
   form.coverImageUrl = aiCoverPreviewUrl.value
   aiCoverPreviewUrl.value = ''
   aiCoverError.value = ''
   ElMessage.success('封面已替换，记得点「保存发布设置」')
+}
+
+function removeCover(): void {
+  if (pendingCoverUrl.value && form.coverImageUrl === pendingCoverUrl.value) {
+    void recipeDesignerApi
+      .discardAiCoverPreview(pendingCoverUrl.value, pendingCoverReason.value)
+      .catch(() => undefined)
+    pendingCoverUrl.value = ''
+  }
+  form.coverImageUrl = ''
 }
 
 /**
@@ -1274,6 +1278,7 @@ async function saveSettings(): Promise<void> {
       saved.coverImageUrl = submitted.coverImageUrl
       saved.sellingPoint = submitted.sellingPoint
       baseline.value = cloneSeriesReleaseForm(saved)
+      pendingCoverUrl.value = ''
     }
     if (hasBadgePatch) {
       try {
@@ -1443,9 +1448,19 @@ watch(
     if (aiCoverPreviewUrl.value) {
       const previewUrl = aiCoverPreviewUrl.value
       void recipeDesignerApi
-        .discardAiCoverPreview(previewUrl)
+        .discardAiCoverPreview(previewUrl, 'PREVIEW_DISCARDED')
         .catch(() => undefined)
     }
+    if (
+      pendingCoverUrl.value &&
+      form.coverImageUrl === pendingCoverUrl.value &&
+      baseline.value.coverImageUrl !== pendingCoverUrl.value
+    ) {
+      void recipeDesignerApi
+        .discardAiCoverPreview(pendingCoverUrl.value, pendingCoverReason.value)
+        .catch(() => undefined)
+    }
+    pendingCoverUrl.value = ''
     aiCoverPreviewUrl.value = ''
     aiCoverError.value = ''
     aiCoverAvailable.value = null

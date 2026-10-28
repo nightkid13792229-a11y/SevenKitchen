@@ -20,6 +20,7 @@
             entity-type="design"
             :entity-id="draftId"
             :is-admin="isAdmin"
+            :baseline-value="baseline.coverImageUrl"
           />
         </el-form-item>
 
@@ -86,7 +87,7 @@
         <el-button
           type="primary"
           :loading="saving"
-          :disabled="saving || uploading || !dirty"
+          :disabled="saving || !dirty"
           @click="savePresentation"
         >保存展示资料</el-button>
       </div>
@@ -97,10 +98,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import type { UploadProps } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import AICoverField from './AICoverField.vue'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
-import { recipeApi } from '@/api/recipes'
 import type {
   DesignRecipeDesignMode,
   DesignRecipeDraftDetail
@@ -117,7 +116,6 @@ import {
   isPresentationDirty,
   normalizePresentationDesignMode,
   resolveOrderPresentationInfo,
-  validatePresentationCoverFile,
   type RecipePresentationForm
 } from '@/utils/recipeDesigner/presentation'
 
@@ -144,7 +142,6 @@ const form = reactive<RecipePresentationForm>(emptyPresentationForm())
 const baseline = ref<RecipePresentationForm>(emptyPresentationForm())
 const loading = ref(false)
 const saving = ref(false)
-const uploading = ref(false)
 const error = ref('')
 
 /** 只认最后一次加载，避免切换草稿时旧响应覆盖新表单 */
@@ -213,32 +210,6 @@ async function loadDraft(): Promise<void> {
       loading.value = false
     }
   }
-}
-
-/**
- * 复用食谱管理的图片上传接口；上传只拿到 URL，点「保存展示资料」后才落库。
- * 返回 false 阻止 el-upload 自己再发一次请求。
- */
-const handleCoverUpload: UploadProps['beforeUpload'] = async (file) => {
-  const validation = validatePresentationCoverFile(file)
-  if (validation) {
-    ElMessage.error(validation)
-    return false
-  }
-
-  uploading.value = true
-  try {
-    const result = await recipeApi.uploadImage(file)
-    form.coverImageUrl = result.url
-    ElMessage.success('封面图上传成功，保存后生效')
-  } catch (uploadError: any) {
-    if (!uploadError?.__apiErrorToasted) {
-      ElMessage.error(uploadError?.message || '封面图上传失败')
-    }
-  } finally {
-    uploading.value = false
-  }
-  return false
 }
 
 /**

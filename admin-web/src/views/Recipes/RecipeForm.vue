@@ -2255,7 +2255,6 @@ const removeDetailImage = async (index: number) => {
 const removeCoverImage = async () => {
   if (!form.coverImageUrl) return;
   // 删封面时把 AI 预览也清掉 —— 否则会看到一个"用这张"按钮配着空封面
-  aiCoverPreviewUrl.value = '';
 
   // 从URL中提取key
   const match = form.coverImageUrl.match(/\/recipes\/(.+)$/);
@@ -2948,44 +2947,8 @@ const aiDraft = reactive({
 });
 
 // ===== AI 封面图（2026-10-18）=====
-const aiCoverAvailable = ref(false);
-const aiCoverLoading = ref(false);
-const aiCoverPreviewUrl = ref('');
 
-async function checkAiCoverAvailability() {
-  try {
-    const res = await recipeApi.getAiCoverAvailability();
-    aiCoverAvailable.value = Boolean(res?.available);
-  } catch {
-    aiCoverAvailable.value = false;
-  }
-}
 
-async function handleGenerateAiCover() {
-  if (!recipeId.value || aiCoverLoading.value) return;
-
-  aiCoverLoading.value = true;
-  try {
-    const result = await recipeApi.generateAiCover(recipeId.value);
-    if (result?.url) {
-      // 只放预览 —— 顾客看不到任何变化，直到管理员点「用这张」
-      aiCoverPreviewUrl.value = result.url;
-      ElMessage.success('生成好了，确认后再替换');
-    }
-  } catch (error: any) {
-    // 后端把原因写清楚了（未配置/超时/链接过期），直接透出来
-    ElMessage.error(error?.message || '生成失败，请重试');
-  } finally {
-    aiCoverLoading.value = false;
-  }
-}
-
-function applyAiCover() {
-  if (!aiCoverPreviewUrl.value) return;
-  form.coverImageUrl = aiCoverPreviewUrl.value;
-  aiCoverPreviewUrl.value = '';
-  ElMessage.success('已替换封面，记得保存');
-}
 
 async function checkAiCopywritingAvailability() {
   try {
@@ -3047,7 +3010,6 @@ onMounted(async () => {
   loadMetadata();
   loadAvailableIngredients();
   checkAiCopywritingAvailability();
-  checkAiCoverAvailability();
   if (isEdit.value) {
     await loadRecipeDetail();
   }

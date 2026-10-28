@@ -18,13 +18,13 @@ describe('RecipesController.getSupplementCandidates', () => {
     const controller = new RecipesController(
       {} as any,
       {} as any,
-      {} as any,
       prisma as any,
       {} as any,
       {} as any,
       {} as any,
       {} as any,
       candidateService as any,
+      {} as any,
     );
     jest
       .spyOn(controller as any, 'getAccessibleRecipe')

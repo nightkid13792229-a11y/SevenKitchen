@@ -1,5 +1,4 @@
 import {
-  Body,
   Controller,
   HttpCode,
   HttpStatus,
@@ -23,7 +22,7 @@ import { AdminGuard } from '../guards/role.guard';
  *   · 路由只服务「系列封面」这一件事；
  *   · 不动 `AdminController` 的构造函数（现有测试按位置 new，动一次要改 18 处）。
  *
- * 权限：仅管理员。生图**要花钱**（约 0.1 元/张），不该让员工随手点。
+ * 权限：仅管理员。生图**要花钱**（约 0.2 元/张），不该让员工随手点。
  */
 @ApiTags('Admin Recipe Series')
 @ApiSecurity('bearer')
@@ -42,16 +41,12 @@ export class AdminRecipeSeriesCoverController {
   @Post(':seriesId/ai-cover')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'AI 生成产品线封面（默认只预览，save=true 且未上线时写入系列）',
+    summary: 'AI 生成产品线封面（只返回预览，保存由发布设置负责）',
   })
   async generateSeriesAiCover(
     @Param('seriesId') seriesId: string,
-    @Body() dto: { save?: boolean },
   ): Promise<ApiResponseDto<SeriesCoverGenerationResult>> {
-    const result = await this.seriesCoverImageService.generateForSeries(
-      seriesId,
-      { save: dto?.save === true },
-    );
+    const result = await this.seriesCoverImageService.generateForSeries(seriesId);
     return ApiResponseDto.success(result);
   }
 }

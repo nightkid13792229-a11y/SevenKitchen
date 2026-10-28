@@ -8,9 +8,8 @@ import { AdminRecipeSeriesCoverController } from 'src/interfaces/controllers/adm
 
 const result = {
   url: 'https://cos.example.com/recipes/covers/a.jpg',
-  provider: 'ZHIPU',
-  model: 'glm-image',
-  saved: false,
+  provider: 'ARK',
+  model: 'doubao-seedream-5-0-pro-260628',
   foodNames: ['鸡胸肉'],
 };
 
@@ -39,20 +38,14 @@ describe('AdminRecipeSeriesCoverController', () => {
     );
   });
 
-  it('save 默认 false，显式 true 透传', async () => {
+  it('只传 seriesId，不再有 save 参数', async () => {
     const service = { generateForSeries: jest.fn().mockResolvedValue(result) };
     const controller = new AdminRecipeSeriesCoverController(service as any);
 
-    const empty = await controller.generateSeriesAiCover('series-1', {});
-    expect(service.generateForSeries).toHaveBeenCalledWith('series-1', {
-      save: false,
-    });
-    expect(empty.data).toEqual(result);
-
-    await controller.generateSeriesAiCover('series-1', { save: true });
-    expect(service.generateForSeries).toHaveBeenLastCalledWith('series-1', {
-      save: true,
-    });
+    const response = await controller.generateSeriesAiCover('series-1');
+    expect(service.generateForSeries).toHaveBeenCalledWith('series-1');
+    expect(response.data).toEqual(result);
+    expect(response.data).not.toHaveProperty('saved');
   });
 
   it('服务抛错不被吞', async () => {
@@ -62,7 +55,7 @@ describe('AdminRecipeSeriesCoverController', () => {
     const controller = new AdminRecipeSeriesCoverController(service as any);
 
     await expect(
-      controller.generateSeriesAiCover('series-1', {}),
+      controller.generateSeriesAiCover('series-1'),
     ).rejects.toThrow('boom');
   });
 });

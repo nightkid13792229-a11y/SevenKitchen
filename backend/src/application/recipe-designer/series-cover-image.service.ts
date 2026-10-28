@@ -40,15 +40,13 @@ const INVISIBLE_INGREDIENT_NAMES = new Set([
 
 /** 和单食谱入口保持同一句配置指引，运营看到的是同一个去处 */
 const AI_COVER_NOT_CONFIGURED_MESSAGE =
-  'AI 生图还没配置：请到后台「AI / Agent 配置」的「智谱封面图」填 Key 并启用';
+  'AI 生图还没配置：请到后台「AI / Agent 配置」的「AI 食谱封面」配置 DeepSeek 与 Seedream';
 
 export interface SeriesCoverGenerationResult {
   /** 一定是 COS 地址（已转存），不是智谱临时链接 */
   url: string;
   provider: string;
   model: string;
-  /** true = 已写入系列；false = 只返回预览 */
-  saved: boolean;
   /** 实际喂给提示词的食材名（用于前端 / 排错） */
   foodNames: string[];
   /** 本次用了哪个生命阶段的配方（回退时可能是非优先阶段） */
@@ -97,7 +95,6 @@ export class SeriesCoverImageService {
 
   async generateForSeries(
     seriesId: string,
-    options: { save?: boolean } = {},
   ): Promise<SeriesCoverGenerationResult> {
     const series = await this.prisma.recipeSeries.findUnique({
       where: { id: seriesId },
@@ -141,7 +138,6 @@ export class SeriesCoverImageService {
       );
     }
 
-    const saveRequested = options.save === true;
     const foodNames = source.ingredients.map((item) => item.name);
 
     // 不传 lifeStageLabels：系列封面是整条产品线的门面，不属于某个阶段
@@ -152,41 +148,19 @@ export class SeriesCoverImageService {
       layout: 'COVER_16_9',
     });
 
-    /**
-     * 写库前再判一次「是否已上线」（不是生成前）。
-     *
-     * 生图要 20–40 秒，这期间另一个标签页可能刚好把系列发布了；
-     * 生成前的结论放到这时用，就会造出「系列有新封面、线上还是旧图、
-     * 保存按钮又不变脏」的死角。多一次 count 换掉这个窗口。
-     */
-    const shouldSave = saveRequested && !(await this.isSeriesLive(series));
-
-    if (shouldSave) {
-      // 只写系列这一列；线上同步交给「保存发布设置」
-      await this.prisma.recipeSeries.update({
-        where: { id: seriesId },
-        data: { coverImageUrl: result.url },
-      });
-    }
-
     this.logger.log(
-      `[series-cover] ${seriesId} stage=${source.stageCode ?? '-'} saved=${shouldSave} ingredients=${foodNames.join('/') || '(none)'}`,
+      `[series-cover] ${seriesId} stage=${source.stageCode ?? '-'} ingredients=${foodNames.join('/') || '(none)'}`,
     );
 
+    // 只返回预览；落库 / 同步线上由「保存发布设置」负责
     return {
       ...result,
-      saved: shouldSave,
       foodNames,
       stageCode: source.stageCode,
     };
   }
 
-  /**
-   * 系列算不算「已上线」：系列状态 PUBLIC，或已经存在 PUBLIC 食谱行。
-   *
-   * 两者取或：老数据里可能系列还是 DRAFT 但已有 PUBLISHED 阶段，
-   * 和 `updateSeriesReleaseSettings` 的判断口径保持一致。
-   */
+
   private async isSeriesLive(series: {
     id: string;
     businessStatus: RecipeSeriesBusinessStatus;

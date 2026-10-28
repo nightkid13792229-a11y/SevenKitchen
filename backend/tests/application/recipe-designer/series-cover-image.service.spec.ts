@@ -342,51 +342,14 @@ describe('SeriesCoverImageService', () => {
     );
   });
 
-  it('未上线 + save=true：只写系列封面，返回 saved=true', async () => {
-    const result = await service.generateForSeries('series-1', { save: true });
-    expect(prisma.recipeSeries.update).toHaveBeenCalledWith({
-      where: { id: 'series-1' },
-      data: { coverImageUrl: 'https://cos.example.com/ai.jpg' },
-    });
-    expect(result.saved).toBe(true);
-  });
-
-  it('已上线 + save=true：强制预览，不落库', async () => {
-    prisma.recipeSeries.findUnique.mockResolvedValue(
-      series({ businessStatus: 'PUBLIC' }),
-    );
-    const result = await service.generateForSeries('series-1', { save: true });
-    expect(prisma.recipeSeries.update).not.toHaveBeenCalled();
-    expect(result.saved).toBe(false);
-  });
-
-  it('生成期间系列被发布：写库前再判一次，不落库', async () => {
-    coverImageService.generate.mockImplementation(async () => {
-      prisma.recipe.count.mockResolvedValue(1);
-      return {
-        url: 'https://cos.example.com/ai.jpg',
-        provider: 'ZHIPU',
-        model: 'glm-image',
-      };
-    });
-
-    const result = await service.generateForSeries('series-1', { save: true });
-
-    expect(prisma.recipeSeries.update).not.toHaveBeenCalled();
-    expect(result.saved).toBe(false);
-  });
-
-  it('save=false：只预览，不写库', async () => {
+  it('永远只返回预览，不写系列', async () => {
     const result = await service.generateForSeries('series-1');
+
+    expect(result.url).toBe('https://cos.example.com/ai.jpg');
+    expect(result.foodNames).toEqual(['鸡胸肉']);
     expect(prisma.recipeSeries.update).not.toHaveBeenCalled();
-    expect(result.saved).toBe(false);
+    expect(result).not.toHaveProperty('saved');
   });
 
-  it('生图失败：错误原样抛出，不写库', async () => {
-    coverImageService.generate.mockRejectedValue(new Error('生图超时'));
-    await expect(
-      service.generateForSeries('series-1', { save: true }),
-    ).rejects.toThrow('生图超时');
-    expect(prisma.recipeSeries.update).not.toHaveBeenCalled();
-  });
+
 });

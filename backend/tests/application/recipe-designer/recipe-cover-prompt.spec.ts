@@ -1,4 +1,4 @@
-import { buildRecipeCoverPrompt } from 'src/application/recipe-designer/zhipu-image';
+import { buildRecipeCoverPrompt } from 'src/application/recipe-designer/recipe-cover-prompt';
 
 /**
  * 封面提示词（2026-10-27 老板口径）

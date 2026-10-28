@@ -1,21 +1,28 @@
 import { RecipeCoverImageService } from 'src/application/recipe-designer/recipe-cover-image.service';
 
 /**
- * 生图布局（2026-10-27）：
- *  · 默认（SQUARE）= 旧单食谱入口：1280x1280、原图直传，行为一点都不能变；
- *  · COVER_16_9 = 新的系列封面：1728x960，再走 recipe-cover 压缩成 750x422 / ≤160KB。
- *
- * 用真实的 callZhipuImage + 假 fetch 跑整条链路，断言的是「实际发出去的请求」，
- * 不是「mock 被调用过」。
+ * 封面生图（2026-10-28 重构）：
+ *  · DeepSeek 写 brief（visualBriefService 已 mock）；
+ *  · Seedream 5.0 Pro：2048x1152、watermark:false、response_format:url；
+ *  · 750×422 压缩后存 COS；不再调用智谱。
  */
-describe('RecipeCoverImageService · cover layout', () => {
+describe('RecipeCoverImageService · Seedream', () => {
   const configService = {
     getEnabledProviderRuntimeConfig: jest.fn().mockResolvedValue({
-      provider: 'ZHIPU',
-      model: 'glm-image',
-      baseUrl: 'https://open.bigmodel.cn',
+      provider: 'ARK',
+      model: 'doubao-seedream-5-0-pro-260628',
+      baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
       apiKey: 'key',
-      requestTimeoutMs: 90000,
+      requestTimeoutMs: 120000,
+      maxConcurrency: 1,
+      retryCount: 0,
+    }),
+    getEnabledDeepSeekRuntimeConfig: jest.fn().mockResolvedValue({
+      provider: 'deepseek',
+      baseUrl: 'https://api.deepseek.com',
+      model: 'deepseek-flash',
+      apiKey: 'deepseek-key',
+      requestTimeoutMs: 30000,
     }),
   };
   const cosService = {
@@ -31,10 +38,11 @@ describe('RecipeCoverImageService · cover layout', () => {
   };
   const visualBriefService = {
     build: jest.fn().mockResolvedValue(
-      'A high-end editorial food photograph on a light oak table. ' +
-        'A large pale-pink duck breast in the foreground, oat groats behind; ' +
-        'soft side light, warm neutral grade.',
+      'A high-end commercial food photograph on a light oak table, with sliced duck breast and oat groats.',
     ),
+  };
+  const recipeCoverConfigService = {
+    getPromptTemplate: jest.fn().mockResolvedValue('system prompt'),
   };
   const originalFetch = global.fetch;
   let fetchMock: jest.Mock;
@@ -42,32 +50,50 @@ describe('RecipeCoverImageService · cover layout', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    configService.getEnabledProviderRuntimeConfig.mockResolvedValue({
+      provider: 'ARK',
+      model: 'doubao-seedream-5-0-pro-260628',
+      baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+      apiKey: 'key',
+      requestTimeoutMs: 120000,
+      maxConcurrency: 1,
+      retryCount: 0,
+    });
+    configService.getEnabledDeepSeekRuntimeConfig.mockResolvedValue({
+      provider: 'deepseek',
+      baseUrl: 'https://api.deepseek.com',
+      model: 'deepseek-flash',
+      apiKey: 'deepseek-key',
+      requestTimeoutMs: 30000,
+    });
+    visualBriefService.build.mockResolvedValue(
+      'A high-end commercial food photograph on a light oak table, with sliced duck breast and oat groats.',
+    );
+    recipeCoverConfigService.getPromptTemplate.mockResolvedValue('system prompt');
+    imageOptimizationService.optimizeForUpload.mockResolvedValue({
+      buffer: Buffer.from('optimized'),
+      filename: 'ai-cover-miniapp-cover.jpg',
+    });
+
     fetchMock = jest
       .fn()
-      // ① 智谱生图：返回临时链接
       .mockResolvedValueOnce({
         ok: true,
         text: async () =>
-          JSON.stringify({ data: [{ url: 'https://temp.example.com/a.jpg' }] }),
+          JSON.stringify({ data: [{ url: 'https://ark-temp.example.com/a.jpg' }] }),
       })
-      // ② 下载临时图：返回 3 字节
       .mockResolvedValueOnce({
         ok: true,
         arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
       });
     global.fetch = fetchMock as unknown as typeof fetch;
-    // 通过 any 构造：让 RED 是行为失败（尺寸 / 压缩），不是 TS 参数个数报错
-    visualBriefService.build.mockClear();
-    visualBriefService.build.mockResolvedValue(
-      'A high-end editorial food photograph on a light oak table. ' +
-        'A large pale-pink duck breast in the foreground, oat groats behind; ' +
-        'soft side light, warm neutral grade.',
-    );
+
     service = new (RecipeCoverImageService as any)(
       configService,
       cosService,
       imageOptimizationService,
       visualBriefService,
+      recipeCoverConfigService,
     );
   });
 
@@ -75,35 +101,37 @@ describe('RecipeCoverImageService · cover layout', () => {
     global.fetch = originalFetch;
   });
 
-  it('默认方图：1280x1280、原图直传、不走压缩', async () => {
-    const result = await service.generate({ recipeName: '鸡肉南瓜餐' });
+  it('有食材时先让 DeepSeek 写 brief，再用 Seedream 2048x1152 / watermark:false', async () => {
+    const ingredients = [
+      { name: '鸭胸', preparationMethod: '鸭胸/生/去皮', ratioPercent: 100 },
+    ];
 
-    expect(fetchMock.mock.calls[0][0]).toBe(
-      'https://open.bigmodel.cn/api/paas/v4/images/generations',
-    );
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body.size).toBe('1280x1280');
-    expect(body.watermark_enabled).toBe(false);
-    expect(visualBriefService.build).not.toHaveBeenCalled();
-    expect(imageOptimizationService.optimizeForUpload).not.toHaveBeenCalled();
-    expect(cosService.uploadImage).toHaveBeenCalledWith(
-      Buffer.from([1, 2, 3]),
-      expect.stringContaining('ai-cover-'),
-      'recipes/covers',
-    );
-    expect(result.url).toBe('https://cos.example.com/recipes/covers/ai.jpg');
-  });
-
-  it('16:9 封面：1728x960、先走 recipe-cover 压缩再上传', async () => {
-    await service.generate({
-      recipeName: '鸡肉南瓜餐',
+    const result = await service.generate({
+      recipeName: '鸭肉南瓜燕麦',
+      ingredients,
       layout: 'COVER_16_9',
     });
 
+    expect(visualBriefService.build).toHaveBeenCalledWith(ingredients);
+    expect(configService.getEnabledProviderRuntimeConfig).toHaveBeenCalledWith({
+      purpose: 'RECIPE_COVER_IMAGE',
+      provider: 'ARK',
+    });
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'https://ark.cn-beijing.volces.com/api/v3/images/generations',
+    );
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body.size).toBe('1728x960');
-    expect(body.watermark_enabled).toBe(false);
-    expect(visualBriefService.build).not.toHaveBeenCalled();
+    expect(body).toMatchObject({
+      model: 'doubao-seedream-5-0-pro-260628',
+      size: '2048x1152',
+      response_format: 'url',
+      watermark: false,
+    });
+    expect(body.prompt).toContain(
+      'A high-end commercial food photograph on a light oak table',
+    );
+    expect(body.prompt).not.toContain('鸭胸');
+    expect(body.prompt).toContain('No text');
     expect(imageOptimizationService.optimizeForUpload).toHaveBeenCalledWith(
       Buffer.from([1, 2, 3]),
       'recipe-cover',
@@ -113,30 +141,35 @@ describe('RecipeCoverImageService · cover layout', () => {
       'ai-cover-miniapp-cover.jpg',
       'recipes/covers',
     );
+    expect(result).toMatchObject({
+      url: 'https://cos.example.com/recipes/covers/ai.jpg',
+      provider: 'ARK',
+      model: 'doubao-seedream-5-0-pro-260628',
+    });
   });
 
-  it('有食材时先翻成画面描述：提示词不含原始中文名/百分比，水印关闭', async () => {
-    const ingredients = [
-      {
-        name: '鸭胸',
-        preparationMethod: '鸭胸/熟/去皮',
-        ratioPercent: 100,
-      },
-    ];
-
-    await service.generate({
-      recipeName: '鸭肉南瓜燕麦',
-      layout: 'COVER_16_9',
-      ingredients,
+  it('DeepSeek / Ark / 提示词任一缺失时不可用', async () => {
+    await expect(service.isAvailable()).resolves.toBe(true);
+    expect(configService.getEnabledDeepSeekRuntimeConfig).toHaveBeenCalledWith({
+      purpose: 'RECIPE_COVER_PROMPT',
+      fallbackToDefault: false,
     });
 
-    expect(visualBriefService.build).toHaveBeenCalledWith(ingredients);
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body.prompt).toContain(
-      'A high-end editorial food photograph on a light oak table',
+    configService.getEnabledDeepSeekRuntimeConfig.mockRejectedValueOnce(
+      new Error('not configured'),
     );
-    expect(body.prompt).not.toContain('鸭胸');
-    expect(body.prompt).not.toContain('100%');
-    expect(body.watermark_enabled).toBe(false);
+    await expect(service.isAvailable()).resolves.toBe(false);
+  });
+
+  it('没有食材时走旧 prompt 兼容路径，但仍然用 Seedream', async () => {
+    await service.generate({
+      recipeName: '鸡肉南瓜',
+      foodNames: ['鸡肉', '南瓜'],
+    });
+
+    expect(visualBriefService.build).not.toHaveBeenCalled();
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.prompt).toContain('鸡肉');
+    expect(body.size).toBe('2048x1152');
   });
 });

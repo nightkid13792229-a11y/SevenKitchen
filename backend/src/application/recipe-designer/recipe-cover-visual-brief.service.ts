@@ -1,10 +1,14 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 
-import { AgentProviderConfigService } from '../nutrition-governance/agent-provider-config.service';
+import {
+  AgentProviderConfigService,
+  RECIPE_COVER_PROMPT_PURPOSE,
+} from '../nutrition-governance/agent-provider-config.service';
+import { RecipeCoverConfigService } from './recipe-cover-config.service';
 import { callDeepSeekJson } from './deepseek-chat';
-import type { RecipeCoverIngredient } from './zhipu-image';
+import type { RecipeCoverIngredient } from './recipe-cover-prompt';
 
-/** brief 上限；加上固定的无文字护栏后仍要在智谱 1000 字符以内 */
+/** brief 上限；Seedream prompt 仍有总长度上限，保持简短 */
 const MAX_BRIEF_LENGTH = 700;
 
 /**
@@ -25,6 +29,7 @@ export class RecipeCoverVisualBriefService {
 
   constructor(
     private readonly agentProviderConfigService: AgentProviderConfigService,
+    private readonly recipeCoverConfigService: RecipeCoverConfigService,
   ) {}
 
   async build(ingredients: RecipeCoverIngredient[]): Promise<string> {
@@ -57,14 +62,16 @@ export class RecipeCoverVisualBriefService {
     try {
       config =
         await this.agentProviderConfigService.getEnabledDeepSeekRuntimeConfig({
-          // 老板可能只启用了某个专用 DeepSeek 用途、没启用全局默认
-          fallbackToAnyPurpose: true,
+          purpose: RECIPE_COVER_PROMPT_PURPOSE,
+          fallbackToDefault: false,
         });
     } catch (error: any) {
       throw new BadRequestException(
-        `封面画面描述生成失败：${error?.message || '文本模型未配置'}。请到后台「AI / Agent 配置」启用 DeepSeek（任一用途或全局默认）`,
+        `封面画面描述生成失败：${error?.message || '文本模型未配置'}。请到后台「AI / Agent 配置 → AI 食谱封面」配置 DeepSeek`,
       );
     }
+
+    const systemPrompt = await this.recipeCoverConfigService.getPromptTemplate();
 
     let parsed: Record<string, unknown>;
     try {
@@ -73,7 +80,7 @@ export class RecipeCoverVisualBriefService {
         model: config.model,
         apiKey: config.apiKey,
         requestTimeoutMs: config.requestTimeoutMs,
-        systemPrompt: buildRecipeCoverVisualSystemPrompt(),
+        systemPrompt,
         temperature: 0.7,
         maxTokens: 1800,
         extraBody: { thinking: { type: 'disabled' } },
@@ -137,23 +144,6 @@ export class RecipeCoverVisualBriefService {
     this.logger.log(`[cover-brief] ${brief}`);
     return brief;
   }
-}
-
-export function buildRecipeCoverVisualSystemPrompt(): string {
-  return [
-    'You are a commercial food photographer and food stylist.',
-    'Design ONE editorial food photograph for a premium fresh dog food brand. The final brief must be a single natural paragraph, under 110 words, with no lists, colons, labels, numbers or duplicates.',
-    'Show every ingredient exactly once, raw and freshly prepped, in its correct cut and part. Use the ratios only to decide the amounts; never write numbers. Use the preparation text: if it says skin removed, say skinless; if it says cubed or diced, say cubes or diced.',
-    'Use only the ingredients in the input; do not add any extra food such as rice, beans or bread unless they are listed.',
-    'Composition: slice or fan the main protein on a small ceramic platter in the foreground as the hero; arrange the other ingredients in small separate bowls or neat piles around it, in depth. Never show a whole raw breast or one giant piece of meat.',
-    'Make every ingredient visually distinct and recognizable: oat groats are pale beige plump grains, not dark brown buckwheat or beans; pumpkin as bright orange cubes; oil in one small dish. Put duck heart, duck gizzard and duck liver on three separate small dishes, never on one plate or in one bowl; three dishes total. Use exactly one egg in total: one cracked raw egg with a runny yolk and clear white; no second whole egg in its shell, no boiled egg halves. Keep pumpkin cubes and carrot pieces in two separate small dishes; never put them in one bowl; the carrots are not pumpkin. Broccoli is a tree-like green head with florets; never substitute leafy greens, spinach or bok choy. The main protein is rosy-red, darker than chicken; slice it thinly and fan the slices. Keep every bowl and the broccoli inside the frame with a little margin; do not crop any ingredient. Do not invent extra ingredients or duplicate bowls or eggs.',
-    'Use only non-food props: linen; no empty bowl, no forks.',
-    'Scene: a real kitchen, a light oak table by a window, soft natural side light, warm neutral color grading, shallow depth of field, high-end commercial food photography.',
-    'Use the English food names naturally; do not write them as labels.',
-    'Even if the preparation says cooked or dried, show it raw and fresh; never write cooked, steamed, grilled or lightly cooked.',
-    'The photograph must contain no text, letters, numbers, labels, captions, packaging, logos, watermarks or human hands; it must not look like an infographic.',
-    'Return JSON only: {"brief":"...","ingredients":[{"index":0,"visual":"...","placement":"..."}],"missing":[]}',
-  ].join(' ');
 }
 
 function sanitizeBrief(value: unknown): string {

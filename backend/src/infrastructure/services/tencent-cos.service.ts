@@ -395,6 +395,28 @@ export class TencentCosService {
   }
 
   /**
+   * 旧封面进回收站：读取原图 → 上传到 recipes/covers/trash/ → 删原对象。
+   * 只负责对象操作；引用检查由 CoverTrashService 做。
+   */
+  async copyImageToTrash(url: string): Promise<string> {
+    const source = String(url ?? '').trim();
+    if (!source) {
+      throw new BadRequestException('封面地址为空');
+    }
+    if (source.includes('/trash/')) {
+      return source;
+    }
+    const { buffer } = await this.getObjectBuffer(source);
+    const uploaded = await this.uploadImage(
+      buffer,
+      `cover-trash-${Date.now()}.jpg`,
+      'recipes/covers/trash',
+    );
+    await this.deleteImageByUrl(source);
+    return uploaded.url;
+  }
+
+  /**
    * Delete image from COS by URL
    * @param url Full URL of the file (e.g., https://cdn.sevenkitchen.cloud/avatars/123/xxx.jpg)
    */

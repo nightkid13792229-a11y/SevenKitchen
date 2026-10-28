@@ -5433,3 +5433,18 @@ model RecipeCoverConfig {
 
   @@map("recipe_cover_config")
 }
+
+/// 旧封面回收站：7 天后删除，支持引用安全（2026-10-28）
+model CoverTrash {
+  id         String   @id @default(uuid())
+  sourceUrl  String   @map("source_url") @db.VarChar(1000)
+  trashUrl   String   @map("trash_url") @db.VarChar(1000)
+  reason     String   @db.VarChar(40)
+  movedAt    DateTime @default(now()) @map("moved_at")
+  deleteAfter DateTime @map("delete_after")
+  status     String   @default("PENDING") @db.VarChar(20)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([deleteAfter])
+  @@map("cover_trash")
+}

@@ -13,7 +13,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { RecipeCoverImageService } from './recipe-cover-image.service';
-import type { RecipeCoverIngredient } from './zhipu-image';
+import type { RecipeCoverIngredient } from './recipe-cover-prompt';
 
 /**
  * 阶段优先级（老板 2026-10-27 定）：

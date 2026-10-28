@@ -92,6 +92,9 @@ import { PrismaService } from './infrastructure/prisma.service';
 import { IngredientPreparationHistoryService } from './application/recipe/ingredient-preparation-history.service';
 import { RecipeService } from './application/recipe/recipe.service';
 import { CoverImageService } from './application/recipe/cover-image.service';
+import { CoverReferenceService } from './application/recipe-designer/cover-reference.service';
+import { CoverTrashService } from './application/recipe-designer/cover-trash.service';
+import { RecipeCoverConfigService } from './application/recipe-designer/recipe-cover-config.service';
 import { RecipeCoverImageService } from './application/recipe-designer/recipe-cover-image.service';
 import { RecipeCoverVisualBriefService } from './application/recipe-designer/recipe-cover-visual-brief.service';
 import { SeriesCoverImageService } from './application/recipe-designer/series-cover-image.service';
@@ -562,6 +565,9 @@ validatePrismaConfig();
     RecipeService,
     IngredientPreparationHistoryService,
     CoverImageService,
+    CoverReferenceService,
+    CoverTrashService,
+    RecipeCoverConfigService,
     RecipeCoverImageService,
     RecipeCoverVisualBriefService,
     SeriesCoverImageService,

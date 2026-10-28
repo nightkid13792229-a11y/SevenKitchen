@@ -44,9 +44,20 @@ function createService() {
       requestTimeoutMs: 1000,
     }),
   };
+  const config = {
+    getPromptTemplate: jest
+      .fn()
+      .mockResolvedValue(
+        'You are a commercial food photographer and food stylist.',
+      ),
+  };
   return {
-    service: new RecipeCoverVisualBriefService(provider as never),
+    service: new RecipeCoverVisualBriefService(
+      provider as never,
+      config as never,
+    ),
     provider,
+    config,
   };
 }
 

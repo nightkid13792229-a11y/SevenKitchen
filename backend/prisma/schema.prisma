@@ -5423,3 +5423,13 @@ model RecipeSeriesTaxonomy {
   @@index([kindId])
   @@map("recipe_series_taxonomy")
 }
+
+/// AI 食谱封面的 DeepSeek 系统提示词（单例，2026-10-28）
+model RecipeCoverConfig {
+  id             String   @id @default("singleton")
+  promptTemplate String   @map("prompt_template") @db.Text
+  updatedBy      String?  @map("updated_by")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("recipe_cover_config")
+}

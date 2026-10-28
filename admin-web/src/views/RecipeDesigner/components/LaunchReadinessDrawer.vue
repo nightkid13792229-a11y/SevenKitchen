@@ -221,6 +221,7 @@
           <PresentationPanel
             :draft-id="draftId"
             :design-mode="readiness.designMode"
+            :is-admin="isAdmin"
             @saved="handlePresentationSaved"
             @dirty-change="(value: boolean) => (presentationDirty = value)"
           />

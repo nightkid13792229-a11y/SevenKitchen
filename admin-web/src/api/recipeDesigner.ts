@@ -182,12 +182,25 @@ export const recipeDesignerApi = {
    */
   generateSeriesAiCover: (
     seriesId: string,
-    payload: { save?: boolean } = {},
   ): Promise<SeriesAiCoverResult> =>
-    api.post(`/admin/recipe-series/${seriesId}/ai-cover`, payload, {
+    api.post(`/admin/recipe-series/${seriesId}/ai-cover`, {}, {
       timeout: SERIES_AI_COVER_TIMEOUT_MS,
       timeoutErrorMessage: SERIES_AI_COVER_TIMEOUT_MESSAGE,
     }),
+
+  generateDraftAiCover: (draftId: string): Promise<{
+    url: string
+    provider: string
+    model: string
+    foodNames: string[]
+  }> =>
+    api.post(`/recipe-designer/drafts/${draftId}/ai-cover`, {}, {
+      timeout: SERIES_AI_COVER_TIMEOUT_MS,
+      timeoutErrorMessage: SERIES_AI_COVER_TIMEOUT_MESSAGE,
+    }),
+
+  discardAiCoverPreview: (url: string): Promise<{ trashed: boolean }> =>
+    api.delete('/admin/ai-covers/preview', { data: { url } }),
 
   // 草稿
   getDraft: (draftId: string): Promise<DesignRecipeDraftDetail> =>

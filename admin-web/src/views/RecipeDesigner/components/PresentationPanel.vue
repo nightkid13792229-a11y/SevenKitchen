@@ -15,43 +15,12 @@
       <el-form label-width="112px" label-position="left" class="presentation-form">
         <!-- 两种设计分支都要：封面图 + 封面标题 -->
         <el-form-item label="封面图" required>
-          <div class="presentation-cover">
-            <el-upload
-              class="presentation-cover__upload"
-              :show-file-list="false"
-              :before-upload="handleCoverUpload"
-              accept="image/jpeg,image/png,image/webp"
-            >
-              <div
-                class="presentation-cover__box"
-                :class="{ 'is-empty': !form.coverImageUrl }"
-              >
-                <img
-                  v-if="form.coverImageUrl"
-                  :src="form.coverImageUrl"
-                  alt="封面图预览"
-                />
-                <div v-else class="presentation-cover__placeholder">
-                  <el-icon><Plus /></el-icon>
-                  <span>上传封面图</span>
-                </div>
-                <div v-if="uploading" class="presentation-cover__mask">
-                  上传中…
-                </div>
-              </div>
-            </el-upload>
-            <div class="presentation-cover__side">
-              <el-button
-                v-if="form.coverImageUrl"
-                link
-                type="danger"
-                @click="form.coverImageUrl = ''"
-              >移除封面</el-button>
-              <span class="presentation-hint">
-                建议 16:9 横图，JPG / PNG / WebP，不超过 5MB。
-              </span>
-            </div>
-          </div>
+          <AICoverField
+            v-model="form.coverImageUrl"
+            entity-type="design"
+            :entity-id="draftId"
+            :is-admin="isAdmin"
+          />
         </el-form-item>
 
         <el-form-item label="封面标题" required>
@@ -155,6 +124,7 @@ import {
 const props = defineProps<{
   draftId: string
   designMode?: DesignRecipeDesignMode | null
+  isAdmin?: boolean
 }>()
 
 const emit = defineEmits<{

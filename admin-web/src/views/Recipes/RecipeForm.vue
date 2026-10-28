@@ -95,38 +95,6 @@
                 </el-button>
               </div>
 
-              <!--
-                AI 生成封面图（2026-10-18）
-
-                ⚠️ 没配置时**按钮置灰 + 说明去哪配** —— 不让"点了才报错"。
-                生成约 20 秒，所以要有明确的加载态。
-                **只预览不保存**：生图有随机性，出来不像的可以直接重来，不会把原图冲掉。
-              -->
-              <div class="ai-cover-row">
-                <el-button
-                  size="small"
-                  :loading="aiCoverLoading"
-                  :disabled="!aiCoverAvailable || aiCoverLoading"
-                  @click="handleGenerateAiCover"
-                >
-                  {{ aiCoverLoading ? '生成中（约 20 秒）…' : 'AI 生成封面图' }}
-                </el-button>
-                <span v-if="!aiCoverAvailable" class="ai-cover-tip">
-                  未配置：请到「AI / Agent 配置」的「智谱封面图」填 Key 并启用
-                </span>
-                <span v-else class="ai-cover-tip">
-                  按食谱名与食材生成，只预览不保存
-                </span>
-              </div>
-
-              <!-- 生成结果的预览：确认了才替换封面 -->
-              <div v-if="aiCoverPreviewUrl" class="ai-cover-preview">
-                <img :src="aiCoverPreviewUrl" class="cover-image" />
-                <div class="image-actions">
-                  <el-button size="small" type="primary" @click="applyAiCover">用这张</el-button>
-                  <el-button size="small" @click="aiCoverPreviewUrl = ''">不要</el-button>
-                </div>
-              </div>
             </div>
             <div class="upload-tips">
               <el-icon color="#909399"><InfoFilled /></el-icon>

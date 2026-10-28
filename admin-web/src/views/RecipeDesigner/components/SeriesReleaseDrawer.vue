@@ -350,7 +350,7 @@
                   >用这张</el-button>
                   <el-button
                     size="small"
-                    @click="aiCoverPreviewUrl = ''"
+                    @click="discardAiCoverPreview"
                   >不要</el-button>
                 </div>
                 <span class="series-release__hint">
@@ -1178,13 +1178,15 @@ async function handleGenerateAiCover(): Promise<void> {
     }
   }
 
+  if (aiCoverPreviewUrl.value) {
+    discardAiCoverPreview()
+  }
   const seq = ++aiCoverRequestSeq
   aiCoverGenerating.value = true
   aiCoverError.value = ''
   try {
     const result = await recipeDesignerApi.generateSeriesAiCover(
-      props.seriesId,
-      { save }
+      props.seriesId
     )
     if (seq !== aiCoverRequestSeq) return
     if (result.saved) {
@@ -1212,6 +1214,15 @@ async function handleGenerateAiCover(): Promise<void> {
     if (seq === aiCoverRequestSeq) {
       aiCoverGenerating.value = false
     }
+  }
+}
+
+/** 丢弃预览：未采用的图进回收站，不留孤儿 */
+function discardAiCoverPreview(): void {
+  const url = aiCoverPreviewUrl.value
+  aiCoverPreviewUrl.value = ''
+  if (url) {
+    void recipeDesignerApi.discardAiCoverPreview(url).catch(() => undefined)
   }
 }
 
@@ -1429,6 +1440,12 @@ watch(
     // 关闭、重新打开、甚至在打开状态下切换系列，都要清掉旧预览 / 旧错误。
     aiCoverRequestSeq += 1
     aiCoverGenerating.value = false
+    if (aiCoverPreviewUrl.value) {
+      const previewUrl = aiCoverPreviewUrl.value
+      void recipeDesignerApi
+        .discardAiCoverPreview(previewUrl)
+        .catch(() => undefined)
+    }
     aiCoverPreviewUrl.value = ''
     aiCoverError.value = ''
     aiCoverAvailable.value = null

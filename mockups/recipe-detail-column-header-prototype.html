@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>配方明细 · 列头原型</title>
+<style>
+  :root {
+    --ink: #303133;
+    --ink-2: #606266;
+    --muted: #909399;
+    --faint: #a8b0bb;
+    --line: #e4e7ed;
+    --line-2: #ebeef5;
+    --primary: #409eff;
+    --primary-soft: #ecf5ff;
+    --warn: #e6a23c;
+    --danger: #f56c6c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 36px 44px 52px;
+    background: #eef1f5;
+    color: var(--ink);
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .doc { max-width: 1760px; margin: 0 auto; }
+
+  .eyebrow { font-size: 11px; letter-spacing: .18em; color: #7c8ba1; }
+  h1 { margin: 8px 0 8px; font-size: 24px; font-weight: 600; letter-spacing: -.01em; }
+  .lede { margin: 0; max-width: 900px; font-size: 13px; line-height: 1.75; color: #5f6b7a; }
+  .lede b { color: #303133; font-weight: 600; }
+  .meta { margin-top: 12px; font-size: 11.5px; color: #97a1ad; }
+  .meta code { font-family: "SFMono-Regular", Menlo, monospace; font-size: 10.5px; }
+
+  .sec { display: flex; align-items: baseline; gap: 10px; margin: 32px 0 12px; }
+  .sec h2 { margin: 0; font-size: 14px; font-weight: 600; }
+  .sec .hint { font-size: 11.5px; color: var(--muted); }
+  .sec .rule { flex: 1; height: 1px; background: #dfe4ea; transform: translateY(-3px); }
+
+  /* ---------- 对照 ---------- */
+  .compare { display: flex; gap: 28px; align-items: flex-start; }
+  .cap { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12px; color: #6b7785; }
+  .cap .no {
+    width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center;
+    justify-content: center; font-size: 10.5px; font-weight: 600; color: #8a94a6;
+    background: #e3e8ef;
+  }
+  .cap.after .no { background: #409eff; color: #fff; }
+  .cap b { color: #303133; font-weight: 600; }
+  .cap .tagline { color: #97a1ad; font-size: 11px; }
+  .rec {
+    font-size: 10px; line-height: 1; padding: 3px 6px; border-radius: 3px;
+    color: #2f7fd4; background: #ecf5ff; border: 1px solid #d6e9fb;
+  }
+
+  .panel {
+    width: 860px;
+    background: #fff;
+    border: 1px solid #dfe4ea;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 3px 14px rgba(24, 40, 66, .06);
+  }
+  .panel.after { border-color: #cfe3fb; box-shadow: 0 4px 18px rgba(64, 158, 255, .12); }
+
+  .pane-title {
+    height: 36px;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #fafafa;
+    border-bottom: 1px solid var(--line-2);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: .01em;
+  }
+  .pane-title .count { font-size: 11.5px; font-weight: 400; color: var(--muted); }
+
+  /* 列表 */
+  .list { padding: 6px; background: #fff; }
+  .row {
+    display: grid;
+    align-items: center;
+    column-gap: 5px;
+    padding: 8px;
+    margin-bottom: 5px;
+    background: #fff;
+    border: 1px solid var(--line-2);
+    border-radius: 6px;
+    font-size: 12px;
+  }
+  .row:last-child { margin-bottom: 0; }
+  .list.after .row { grid-template-columns: 18px 38px minmax(0, 1fr) 240px 84px 50px 56px 30px; }
+  .list.before .row { grid-template-columns: 18px 38px minmax(0, 1fr) 352px 84px 50px 56px 30px; }
+  .row.off { opacity: .6; }
+
+  /* 列头 */
+  .col-head {
+    display: grid;
+    grid-template-columns: 18px 38px minmax(0, 1fr) 240px 84px 50px 56px 30px;
+    column-gap: 5px;
+    align-items: center;
+    height: 32px;
+    padding: 0 15px;
+    background: #f7f8fa;
+    border-bottom: 1px solid var(--line);
+    font-size: 12px;
+    color: #7f8a9a;
+    letter-spacing: .02em;
+  }
+  .col-head .c { white-space: nowrap; }
+  .col-head .mid { text-align: center; }
+  .col-head .right { text-align: right; }
+  .col-head .q {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 11px; height: 11px; margin-left: 2px; border: 1px solid #c3cbd6;
+    border-radius: 50%; font-size: 8px; line-height: 1; color: #aab4c1;
+    vertical-align: 1px;
+  }
+
+  /* 单元格 */
+  .drag { color: #c0c4cc; display: flex; align-items: center; }
+  .cell-type { display: flex; justify-content: center; }
+  .tag {
+    font-size: 10.5px; line-height: 1; padding: 3px 6px; border-radius: 3px; white-space: nowrap;
+  }
+  .tag.food { color: #409eff; background: #ecf5ff; }
+  .tag.supp { color: #e6a23c; background: #fdf6ec; }
+
+  .name { min-width: 0; }
+  .name .n { font-size: 13px; font-weight: 500; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .name .p { margin-top: 2px; font-size: 11px; line-height: 1.35; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .prep { min-width: 0; }
+  .prep-line { display: flex; align-items: center; gap: 6px; }
+  .prep-label { flex: none; font-size: 11px; color: var(--muted); }
+  .input {
+    flex: 1; min-width: 0; height: 24px; padding: 0 6px;
+    display: flex; align-items: center;
+    border: 1px solid #dcdfe6; border-radius: 4px; background: #fff;
+    font-size: 12px; color: var(--ink);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .list.before .input { flex: 0 0 240px; }
+  .input .ph { color: #c0c4cc; }
+  .prep-count { margin-top: 2px; font-size: 10px; line-height: 1.3; color: #b3bcc7; }
+
+  .w { display: flex; align-items: center; gap: 3px; justify-content: flex-end; }
+  .w .num {
+    width: 70px; height: 24px; display: flex; align-items: center; justify-content: center;
+    border: 1px solid #dcdfe6; border-radius: 4px; font-size: 12px; color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .w .unit { font-size: 12px; color: var(--muted); }
+
+  .ratio { text-align: right; font-size: 12px; font-weight: 500; color: var(--ink-2); font-variant-numeric: tabular-nums; padding-right: 2px; }
+
+  .swcell { display: flex; justify-content: center; }
+  .sw { width: 30px; height: 16px; border-radius: 8px; background: #dcdfe6; position: relative; flex: none; }
+  .sw::after {
+    content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px;
+    border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.18);
+    transition: left .15s;
+  }
+  .sw.on { background: var(--primary); }
+  .sw.on::after { left: 16px; }
+
+  .act { display: flex; justify-content: center; color: #f56c6c; opacity: .85; }
+
+  .supp {
+    grid-column: 1 / -1;
+    display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+    padding: 3px 0 0 22px;
+  }
+  .chip {
+    font-size: 10.5px; line-height: 1; padding: 4px 6px; border-radius: 3px;
+    color: #b88230; background: #fdf6ec; border: 1px solid #f5dab1;
+  }
+  .link { font-size: 11px; color: var(--primary); }
+
+  /* ---------- 规格 ---------- */
+  .spec-wrap { display: flex; gap: 28px; align-items: flex-start; }
+  .spec { flex: 1; background: #fff; border: 1px solid #dfe4ea; border-radius: 8px; overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th {
+    text-align: left; font-weight: 500; color: #7d8899; background: #f7f8fa;
+    padding: 9px 14px; border-bottom: 1px solid var(--line); font-size: 11.5px;
+  }
+  td { padding: 8px 14px; border-bottom: 1px solid #f0f2f5; color: var(--ink-2); }
+  tr:last-child td { border-bottom: none; }
+  td.k { color: var(--ink); font-weight: 500; white-space: nowrap; }
+  td.num { font-variant-numeric: tabular-nums; color: #7d8899; white-space: nowrap; }
+  .pill-note { font-size: 10.5px; color: #97a1ad; }
+
+  .changes { width: 520px; background: #f8fbff; border: 1px solid #d9e8fb; border-radius: 8px; padding: 14px 16px; }
+  .changes h3 { margin: 0 0 8px; font-size: 12.5px; font-weight: 600; color: #3b5675; }
+  .changes ul { margin: 0; padding-left: 16px; }
+  .changes li { font-size: 12px; line-height: 1.65; color: #56708f; margin-bottom: 4px; }
+  .changes li b { color: #2f4a68; font-weight: 600; }
+
+  /* ---------- 行为 ---------- */
+  .cards { display: flex; gap: 14px; }
+  .card {
+    flex: 1; background: #fff; border: 1px solid #dfe4ea; border-radius: 8px; padding: 13px 15px;
+  }
+  .card .t { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; margin-bottom: 6px; }
+  .card .t .i {
+    width: 16px; height: 16px; border-radius: 4px; background: #ecf5ff; color: #409eff;
+    font-size: 10px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center;
+  }
+  .card p { margin: 0; font-size: 11.5px; line-height: 1.65; color: #6b7785; }
+
+
+  /* ---------- 实时更新 ---------- */
+  .live {
+    display: flex; align-items: center; gap: 18px;
+    background: #fff; border: 1px solid #dfe4ea; border-radius: 8px; padding: 18px 22px;
+  }
+  .live-side { flex: 1; min-width: 0; }
+  .live-cap { font-size: 11px; color: #97a1ad; margin-bottom: 7px; }
+  .live-bar {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    height: 40px; padding: 0 12px; background: #fafafa;
+    border: 1px solid #ebeef5; border-radius: 6px;
+    font-size: 13px; font-weight: 600;
+  }
+  .live-bar .live-total { font-size: 11.5px; font-weight: 400; color: #909399; white-space: nowrap; }
+  .live-bar .live-total b { color: #303133; font-weight: 600; font-size: 12.5px; }
+  .live-bar.hot { border-color: #cfe3fb; background: #f5faff; }
+  .live-bar.hot .live-total b { color: #2f7fd4; }
+  .live-arrow { flex: none; color: #b6c0cc; font-size: 18px; }
+  .live-edit { flex: none; width: 250px; }
+  .live-input {
+    display: flex; align-items: center; gap: 4px;
+    width: 100px; height: 30px; padding: 0 8px;
+    border: 1px solid #409eff; border-radius: 4px;
+    box-shadow: 0 0 0 2px rgba(64,158,255,.12);
+    font-size: 13px; font-variant-numeric: tabular-nums; background: #fff;
+  }
+  .live-input .caret { width: 1px; height: 14px; background: #409eff; animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .live-note { margin: 10px 2px 0; font-size: 11.5px; color: #7d8899; }
+
+  .foot { margin-top: 30px; font-size: 11px; color: #9aa4b1; }
+
+</style>
+</head>
+<body>
+<div class="doc">
+
+  <div class="eyebrow">七号厨房 · 后台原型</div>
+  <h1>配方明细 · 加一行列头</h1>
+  <p class="lede">
+    配方编辑器中间的「配方明细」，现在只有每行自己的一点小字（比如「部位 / 状态 / 预处理」），
+    右边的重量、百分比、开关、删除都没有名字。加一行列头以后，<b>每个数字和开关都对得上名字</b>，
+    还能顺手把每行重复的那串小字收起来，给原料名多让出约 110px；标题行的计数也拆成食材、补剂。
+  </p>
+  <div class="meta">2026-10-29 · 仅原型，不动线上代码 · 尺寸按 2560px 宽屏下配方明细栏（约 845px）绘制</div>
+
+  <div class="sec">
+    <h2>一、改前 / 改后</h2>
+    <span class="hint">同一批原料，只多了一行列头</span>
+    <div class="rule"></div>
+  </div>
+
+  <div class="compare">
+    <div>
+      <div class="cap"><span class="no">1</span><b>现在</b><span class="tagline">列没有名字，只能靠猜</span></div>
+      <div class="panel" data-panel="before">
+        <div class="pane-title"><span>配方明细</span><span class="count">原料 7 种 · 总重 986 g</span></div>
+        <div class="list before" data-list="before"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="cap after"><span class="no">2</span><b>加列头后</b><span class="rec">推荐</span><span class="tagline">列头常驻，数字右对齐，开关有名字</span></div>
+      <div class="panel after" data-panel="after">
+        <div class="pane-title"><span>配方明细</span><span class="count">原料 7 种（食材 5 · 补剂 2）· 总重 986 g</span></div>
+        <div class="col-head">
+          <div class="c mid"></div>
+          <div class="c mid">类型</div>
+          <div class="c">原料 / 营养档案</div>
+          <div class="c">预处理方式 <span class="q" title="按「部位 / 状态 / 预处理」顺序填写，例如：牛里脊/生/去油">?</span></div>
+          <div class="c mid">用量</div>
+          <div class="c right">占比</div>
+          <div class="c mid">计入评估</div>
+          <div class="c mid"></div>
+        </div>
+        <div class="list after" data-list="after"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <h2>二、列宽与对齐</h2>
+    <span class="hint">列宽固定，只有「原料 / 营养档案」吃剩余空间</span>
+    <div class="rule"></div>
+  </div>
+
+  <div class="spec-wrap">
+    <div class="spec">
+      <table>
+        <thead>
+          <tr><th style="width:150px">列</th><th style="width:150px">宽度</th><th style="width:80px">对齐</th><th>说明</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="k">排序</td><td class="num">18px</td><td>居中</td><td>拖拽手柄；列头不写字，只留手柄</td></tr>
+          <tr><td class="k">类型</td><td class="num">38px</td><td>居中</td><td>食材 / 补剂，颜色区分</td></tr>
+          <tr><td class="k">原料 / 营养档案</td><td class="num">自适应（≥ 220px）</td><td>左</td><td>第一行原料名，第二行营养档案</td></tr>
+          <tr><td class="k">预处理方式</td><td class="num">240px</td><td>左</td><td>行内那串「部位 / 状态 / 预处理」小字收到列头里</td></tr>
+          <tr><td class="k">用量</td><td class="num">84px</td><td>右</td><td>单位跟在数字后（g / 勺 / 粒），随原料变</td></tr>
+          <tr><td class="k">占比</td><td class="num">50px</td><td>右</td><td>占总重（食材 + 按克或毫升计的补剂）的百分比</td></tr>
+          <tr><td class="k">计入评估</td><td class="num">56px</td><td>居中</td><td>关掉后整行置灰，不参与营养评估</td></tr>
+          <tr><td class="k">操作</td><td class="num">30px</td><td>居中</td><td>删除这一行；列头不写字，只留图标</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="changes">
+      <h3>除列头外，一起改的四件事</h3>
+      <ul>
+        <li><b>去掉每行的「部位 / 状态 / 预处理」小字</b>：列头已经说明；把鼠标放到列头上能看到填写格式。原料名因此多出约 110px。</li>
+        <li><b>数字列右对齐</b>：用量和占比从个位数到三位数都对齐，竖着扫一眼就能比大小。</li>
+        <li><b>开关列写明「计入评估」</b>：现在很多人不知道这个开关是干嘛的；关掉后整行变灰，不参与营养评估。</li>
+        <li><b>标题行的数字拆开</b>：原来只有「原料 7 种 · 总重」；现在食材、补剂各多少种分开写。总重和占比的算法不变，还是食材 + 按克或毫升计的补剂（粒 / 片 / 勺不计），改用量时当场就变。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="sec">
+    <h2>三、几种情况</h2>
+    <span class="hint">什么时候显示、什么时候不显示</span>
+    <div class="rule"></div>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="t"><span class="i">A</span>列表往下滚时</div>
+      <p>列头固定在列表上方不动，只有原料行滚动。加到十几二十种原料时，往下翻也始终知道哪一列是什么。</p>
+    </div>
+    <div class="card">
+      <div class="t"><span class="i">B</span>配方是空的时候</div>
+      <p>不显示列头，只留「从左侧原料库点击食材加入配方」这句提示。没有内容的空表格看着像坏了。</p>
+    </div>
+    <div class="card">
+      <div class="t"><span class="i">C</span>窗口比较窄时</div>
+      <p>这一页五栏本来就允许横向滚动。列头和原料行同宽一起移动，不会出现「列头对不上数字」；优先压缩的是原料名列。</p>
+    </div>
+  </div>
+
+
+  <div class="sec">
+    <h2>四、改用量时，总数当场变</h2>
+    <span class="hint">不用点保存，也不用刷新</span>
+    <div class="rule"></div>
+  </div>
+
+  <div class="live">
+    <div class="live-side">
+      <div class="live-cap">改之前 · 鸭肉 360 g</div>
+      <div class="live-bar"><span>配方明细</span><span class="live-total">总重 <b>986 g</b></span></div>
+    </div>
+    <div class="live-arrow">→</div>
+    <div class="live-edit">
+      <div class="live-cap">把用量改成 370</div>
+      <div class="live-input">370<span class="caret"></span></div>
+    </div>
+    <div class="live-arrow">→</div>
+    <div class="live-side">
+      <div class="live-cap">还没离开输入框，总数已经变了</div>
+      <div class="live-bar hot"><span>配方明细</span><span class="live-total">总重 <b>996 g</b></span></div>
+    </div>
+  </div>
+  <p class="live-note">同一时间，鸭肉的占比从 36.5% 变成 37.1%；保存仍然是自动的，不用手动点。</p>
+
+  <div class="foot">原型文件：mockups/recipe-detail-column-header-prototype.html · 列头样式为建议稿，可再调</div>
+</div>
+
+<script>
+  const ITEMS = [
+    { name: '鸭肉', profile: '鸭肉 · 生', type: 'food', prep: '鸭胸/生/切块', weight: 360, ratio: '36.5%', on: true },
+    { name: '南瓜', profile: '南瓜 · 蒸熟', type: 'food', prep: '南瓜/生/去皮切块', weight: 225, ratio: '22.8%', on: true },
+    { name: '燕麦', profile: '燕麦片 · 生', type: 'food', prep: '燕麦片/生/煮软', weight: 180, ratio: '18.3%', on: true },
+    { name: '鸡胸肉', profile: '鸡胸肉 · 生', type: 'food', prep: '鸡胸/生/切丁', weight: 168, ratio: '17.0%', on: true },
+    { name: '亚麻籽油', profile: '亚麻籽油', type: 'food', prep: '亚麻籽油/生/直接拌入', weight: 45, ratio: '4.6%', on: true },
+    { name: '钙粉', profile: '碳酸钙', type: 'supp', prep: '碳酸钙/粉状/直接添加', weight: 8, ratio: '', on: true, supp: '钙 1.8 g/kg' },
+    { name: '复合维生素', profile: '犬用复合维生素', type: 'supp', prep: '粉状/直接添加', weight: 2, ratio: '', on: false }
+  ]
+
+  const GRIP = '<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><circle cx="5" cy="3.2" r="1.1"/><circle cx="9" cy="3.2" r="1.1"/><circle cx="5" cy="7" r="1.1"/><circle cx="9" cy="7" r="1.1"/><circle cx="5" cy="10.8" r="1.1"/><circle cx="9" cy="10.8" r="1.1"/></svg>'
+  const TRASH = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M9 7V5h6v2M7 7l1 12h8l1-12M10 11v5M14 11v5"/></svg>'
+
+  function contentLength(text) {
+    return text.split('/').join('').length
+  }
+
+  function rowHTML(it, withLabel) {
+    const prep = it.prep
+      ? `<span class="prep-text">${it.prep}</span>`
+      : `<span class="ph">牛里脊/生/去油</span>`
+    const label = withLabel ? '<span class="prep-label">部位 / 状态 / 预处理</span>' : ''
+    const supp = it.supp
+      ? `<div class="supp"><span class="chip">${it.supp}</span><span class="link">修改目标</span></div>`
+      : ''
+    return `
+      <div class="row ${it.on ? '' : 'off'}">
+        <div class="drag">${GRIP}</div>
+        <div class="cell-type"><span class="tag ${it.type === 'food' ? 'food' : 'supp'}">${it.type === 'food' ? '食材' : '补剂'}</span></div>
+        <div class="name"><div class="n">${it.name}</div><div class="p">${it.profile}</div></div>
+        <div class="prep">
+          <div class="prep-line">${label}<div class="input">${prep}</div></div>
+          <div class="prep-count">${contentLength(it.prep)}/20 字（不含符号）</div>
+        </div>
+        <div class="w"><span class="num">${it.weight}</span><span class="unit">g</span></div>
+        <div class="ratio">${it.ratio}</div>
+        <div class="swcell"><span class="sw ${it.on ? 'on' : ''}"></span></div>
+        <div class="act">${TRASH}</div>
+        ${supp}
+      </div>`
+  }
+
+  document.querySelectorAll('[data-list]').forEach((el) => {
+    const withLabel = el.dataset.list === 'before'
+    el.innerHTML = ITEMS.map((it) => rowHTML(it, withLabel)).join('')
+  })
+</script>
+</body>
+</html>

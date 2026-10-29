@@ -131,121 +131,145 @@
       <div class="pane pane-items">
         <div class="pane-title">
           配方明细
-          <span class="item-count">原料 {{ items.length }} 种 · 总重 {{ includedTotalWeightText }}</span>
+          <span class="item-count">
+            原料 {{ items.length }} 种<span v-if="items.length">（食材 {{ foodItemCount }} · 补剂 {{ supplementItemCount }}）</span> · 总重 {{ includedTotalWeightText }}
+          </span>
         </div>
         <div v-loading="initialLoading" class="item-list">
           <el-empty v-if="!initialLoading && items.length === 0" description="从左侧原料库点击食材加入配方" />
-          <draggable
-            v-model="items"
-            item-key="id"
-            handle=".drag-handle"
-            animation="150"
-            ghost-class="drag-ghost"
-            @start="handleReorderStart"
-            @end="handleReorder"
-          >
-            <template #item="{ element, index }">
-              <div class="item-row" :class="{ 'item-row-excluded': element.includeInAssessment === false }">
-                <div class="drag-handle">
-                  <el-icon><Rank /></el-icon>
-                </div>
-                <span class="item-type-tag" :class="itemTypeTagClass(element)">{{ itemTypeLabel(element) }}</span>
-                <div class="item-main">
-                  <div class="item-name">{{ itemDisplayName(element) }}</div>
-                  <div class="item-meta">
-                    <span class="item-profile-name">{{ itemProfileName(element) }}</span>
-                  </div>
-                </div>
-                <!--
-                  预处理方式与重量 / 占比 / 开关 / 删除同排（2026-10-22）：
-                  名称和营养档案留在左侧；名称下面不再放预处理控件。
-                  Tab 顺序只保留每行的重量输入：其余控件显式 tabindex=-1
-                  （ElAutocomplete / ElSwitch 均支持 tabindex prop，ElButton 透传原生属性）。
-                -->
-                <div class="item-controls">
-                  <div class="item-preparation-inline">
-                    <span class="preparation-label" :title="PREPARATION_FIELD_LABEL">{{ PREPARATION_FIELD_LABEL }}</span>
+          <template v-if="items.length > 0">
+            <!--
+              列头（2026-10-29）：只在有原料时出现；
+              排序 / 操作两列按老板要求不写字，只留位置。
+            -->
+            <div class="item-col-head">
+              <div class="col-cell" aria-hidden="true"></div>
+              <div class="col-cell col-center">类型</div>
+              <div class="col-cell">原料 / 营养档案</div>
+              <div
+                class="col-cell"
+                title="按「部位 / 状态 / 预处理」顺序填写，例如：牛里脊/生/去油"
+              >预处理方式<span class="col-hint">?</span></div>
+              <div class="col-cell col-center">用量</div>
+              <div class="col-cell col-right">占比</div>
+              <div class="col-cell col-center">计入评估</div>
+              <div class="col-cell" aria-hidden="true"></div>
+            </div>
+            <div class="item-list-body">
+              <draggable
+                v-model="items"
+                item-key="id"
+                handle=".drag-handle"
+                animation="150"
+                ghost-class="drag-ghost"
+                @start="handleReorderStart"
+                @end="handleReorder"
+              >
+                <template #item="{ element, index }">
+                  <div class="item-row" :class="{ 'item-row-excluded': element.includeInAssessment === false }">
+                    <div class="drag-handle">
+                      <el-icon><Rank /></el-icon>
+                    </div>
+                    <span class="item-type-tag" :class="itemTypeTagClass(element)">{{ itemTypeLabel(element) }}</span>
+                    <div class="item-main">
+                      <div class="item-name">{{ itemDisplayName(element) }}</div>
+                      <div class="item-meta">
+                        <span class="item-profile-name">{{ itemProfileName(element) }}</span>
+                      </div>
+                    </div>
                     <!--
-                      2026-10-26：输入框直接显示原文字，历史文案作为下拉建议。
-                      不再从字典选择，也不再显示「人工/自动」来源标签。
+                      预处理方式与重量 / 占比 / 开关 / 删除同排（2026-10-22）：
+                      名称和营养档案留在左侧；名称下面不再放预处理控件。
+                      Tab 顺序只保留每行的重量输入：其余控件显式 tabindex=-1
+                      （ElAutocomplete / ElSwitch 均支持 tabindex prop，ElButton 透传原生属性）。
                     -->
-                    <PreparationMethodField
-                      class="preparation-method-field"
-                      :model-value="element.preparationMethod || ''"
-                      :label="element.preparationMethodLabel || ''"
-                      :ingredient-id="element.ingredientId"
-                      :tabindex="-1"
-                      @change="(value: string | null) => onPreparationMethodChange(element, value)"
-                    />
-                  </div>
-                  <div class="weight-editor">
-                    <el-input-number
-                      :model-value="element.weightG"
-                      :min="0"
-                      :precision="2"
-                      :controls="false"
-                      size="small"
-                      class="weight-input"
-                      @update:model-value="(value: number | undefined) => onWeightChange(element, value)"
-                    />
-                    <span class="weight-unit">{{ itemUnitLabel(element) }}</span>
-                  </div>
-                  <div class="item-ratio-column">
-                    <span v-if="shouldShowWeightRatio(element)" class="item-ratio">{{ weightRatioLabel(element) }}</span>
-                  </div>
-                  <div class="item-action-stack">
-                    <el-switch
-                      :model-value="element.includeInAssessment !== false"
-                      size="small"
-                      :tabindex="-1"
-                      @change="(value: string | number | boolean) => onToggleInclude(element, Boolean(value))"
-                    />
-                    <el-button
-                      size="small"
-                      text
-                      type="danger"
-                      :icon="Delete"
-                      :tabindex="-1"
-                      @click="handleRemoveItem(element)"
-                    />
-                  </div>
-                </div>
-                <span
-                  v-if="itemPreparationHint(element)"
-                  class="item-preparation-hint"
-                >{{ itemPreparationHint(element) }}</span>
+                    <div class="item-controls">
+                      <div class="item-preparation-inline">
+                        <!-- 宽屏由列头说明（见 --item-grid）；窄屏列头收起时才显示 -->
+                        <span class="preparation-label" :title="PREPARATION_FIELD_LABEL">{{ PREPARATION_FIELD_LABEL }}</span>
+                        <!--
+                          2026-10-26：输入框直接显示原文字，历史文案作为下拉建议。
+                          不再从字典选择，也不再显示「人工/自动」来源标签。
+                        -->
+                        <PreparationMethodField
+                          class="preparation-method-field"
+                          :model-value="element.preparationMethod || ''"
+                          :label="element.preparationMethodLabel || ''"
+                          :ingredient-id="element.ingredientId"
+                          :tabindex="-1"
+                          @change="(value: string | null) => onPreparationMethodChange(element, value)"
+                        />
+                      </div>
+                      <div class="weight-editor">
+                        <el-input-number
+                          :model-value="element.weightG"
+                          :min="0"
+                          :precision="2"
+                          :controls="false"
+                          size="small"
+                          class="weight-input"
+                          @update:model-value="(value: number | undefined) => onWeightChange(element, value)"
+                        />
+                        <span class="weight-unit">{{ itemUnitLabel(element) }}</span>
+                      </div>
+                      <div class="item-ratio-column">
+                        <span v-if="shouldShowWeightRatio(element)" class="item-ratio">{{ weightRatioLabel(element) }}</span>
+                      </div>
+                      <div class="item-action-stack">
+                        <el-switch
+                          :model-value="element.includeInAssessment !== false"
+                          size="small"
+                          :tabindex="-1"
+                          @change="(value: string | number | boolean) => onToggleInclude(element, Boolean(value))"
+                        />
+                        <el-button
+                          size="small"
+                          text
+                          type="danger"
+                          :icon="Delete"
+                          :tabindex="-1"
+                          @click="handleRemoveItem(element)"
+                        />
+                      </div>
+                    </div>
+                    <span
+                      v-if="itemPreparationHint(element)"
+                      class="item-preparation-hint"
+                    >{{ itemPreparationHint(element) }}</span>
 
-                <!--
-                  补剂目标营养素 + 当前实际添加浓度（2026-10-22）：
-                  浓度按「评估总重量」实时计算，改用量 / 配方总重 / 目标后自动重算。
-                -->
-                <div v-if="isSupplementItem(element)" class="item-supplement-row">
-                  <template v-if="itemSupplementTargetViews(element).length">
-                    <el-tag
-                      v-for="target in itemSupplementTargetViews(element)"
-                      :key="target.fieldPath"
-                      size="small"
-                      :type="target.valuePerKg === null ? 'danger' : 'warning'"
-                      effect="plain"
-                      :title="target.valuePerKg === null ? '当前档案缺该字段或配方总重量未知，无法计算添加浓度' : '每 kg 配方实际添加浓度'"
-                    >
-                      {{ target.text }}
-                    </el-tag>
-                  </template>
-                  <span v-else class="item-target-missing">
-                    未设置目标营养素（保存 / 发布会被拒绝）
-                  </span>
-                  <el-button
-                    size="small"
-                    text
-                    type="primary"
-                    :tabindex="-1"
-                    @click="openSupplementTargetEditor(element)"
-                  >修改目标</el-button>
-                </div>
-              </div>
-            </template>
-          </draggable>
+                    <!--
+                      补剂目标营养素 + 当前实际添加浓度（2026-10-22）：
+                      浓度按「评估总重量」实时计算，改用量 / 配方总重 / 目标后自动重算。
+                    -->
+                    <div v-if="isSupplementItem(element)" class="item-supplement-row">
+                      <template v-if="itemSupplementTargetViews(element).length">
+                        <el-tag
+                          v-for="target in itemSupplementTargetViews(element)"
+                          :key="target.fieldPath"
+                          size="small"
+                          :type="target.valuePerKg === null ? 'danger' : 'warning'"
+                          effect="plain"
+                          :title="target.valuePerKg === null ? '当前档案缺该字段或配方总重量未知，无法计算添加浓度' : '每 kg 配方实际添加浓度'"
+                        >
+                          {{ target.text }}
+                        </el-tag>
+                      </template>
+                      <span v-else class="item-target-missing">
+                        未设置目标营养素（保存 / 发布会被拒绝）
+                      </span>
+                      <el-button
+                        size="small"
+                        text
+                        type="primary"
+                        :tabindex="-1"
+                        @click="openSupplementTargetEditor(element)"
+                      >修改目标</el-button>
+                    </div>
+                  </div>
+                </template>
+              </draggable>
+            </div>
+          </template>
         </div>
       </div>
 
@@ -694,6 +718,13 @@ const includedTotalWeightText = computed(() => {
   if (total >= 1000) return `${(total / 1000).toFixed(2)}kg`
   return `${Math.round(total)}g`
 })
+
+/**
+ * 标题里的原料计数（2026-10-29）：总数之外，再拆出食材 / 补剂各多少种。
+ * 补剂判定沿用 isSupplementItem，与每行的类型标签保持一致。
+ */
+const foodItemCount = computed(() => items.value.filter((item) => !isSupplementItem(item)).length)
+const supplementItemCount = computed(() => items.value.length - foodItemCount.value)
 
 // ---------- 明细列表显示 ----------
 
@@ -2149,5 +2180,92 @@ onBeforeUnmount(() => {
 .dog-pane {
   padding: 0 12px;
   box-sizing: border-box;
+}
+
+/* ---------- 配方明细列头 + 固定列宽（2026-10-29） ---------- */
+/* 列头与原料行共用这一组列宽。这一栏窄到放不下时，
+   由文件末尾的容器查询退回原来的「换行 + 行内小字」布局。 */
+.pane-items {
+  --item-grid: 22px 40px minmax(0, 1fr) 240px 84px 50px 56px 34px;
+  container-type: inline-size;
+  container-name: pane-items;
+}
+.item-list {
+  /* 列头要贴在滚动区顶部，所以左右内边距挪到 .item-list-body；
+     列头与行的内容都从 15px 起（6 内边距 + 1 边框 + 8 行内边距）。 */
+  padding: 0;
+}
+.item-list-body {
+  padding: 6px;
+}
+.item-col-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: var(--item-grid);
+  column-gap: 5px;
+  align-items: center;
+  height: 30px;
+  padding: 0 15px;
+  background: #f7f8fa;
+  border-bottom: 1px solid #e4e7ed;
+  font-size: 11.5px;
+  color: #7f8a9a;
+  letter-spacing: .02em;
+}
+.item-col-head .col-center { text-align: center; }
+.item-col-head .col-right { text-align: right; }
+.col-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 11px;
+  height: 11px;
+  margin-left: 3px;
+  border: 1px solid #c3cbd6;
+  border-radius: 50%;
+  font-size: 8px;
+  line-height: 1;
+  color: #aab4c1;
+  vertical-align: 1px;
+}
+.item-row {
+  display: grid;
+  grid-template-columns: var(--item-grid);
+  column-gap: 5px;
+  align-items: center;
+}
+/* 宽屏：预处理/用量/占比/开关/删除不再包成一整块，直接成为网格里的列 */
+.item-controls,
+.item-action-stack {
+  display: contents;
+}
+.drag-handle { justify-self: center; }
+.item-type-tag { justify-self: center; }
+.item-preparation-inline { width: 100%; }
+.preparation-label { display: none; }
+.item-ratio-column { width: auto; }
+.item-preparation-hint,
+.item-supplement-row { grid-column: 1 / -1; }
+.item-row :deep(.el-switch),
+.item-row :deep(.el-button) { justify-self: center; }
+
+/* 这一栏窄于 760px 时（窄窗口 / 小屏）：
+   列头收起，回到原来的换行布局，行内小字也恢复，保证控件不丢。 */
+@container pane-items (max-width: 760px) {
+  .item-col-head { display: none; }
+  .item-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  .item-controls { display: flex; }
+  .item-action-stack { display: flex; }
+  .item-preparation-inline { width: auto; }
+  .preparation-label { display: inline; }
+  .item-ratio-column { width: 46px; }
+  .item-row :deep(.el-switch),
+  .item-row :deep(.el-button) { justify-self: auto; }
 }
 </style>

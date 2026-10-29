@@ -1052,8 +1052,14 @@ export async function streamIngredientAgent(
     return state
   }
 
-  // ask 之后不会有 reply：有待答问题也算「正常收尾」，不能报成断流。
-  if (!state.reply && !state.error && !state.pendingQuestion) {
+  // 两种「正常收尾」都没有 reply：等用户回答（ask）与等用户确认方案（plan）。
+  // 少判一种，页面就会把正常结束画成红色失败。
+  if (
+    !state.reply &&
+    !state.error &&
+    !state.pendingQuestion &&
+    !state.pendingPlan
+  ) {
     state = {
       ...state,
       error: `连接意外结束：没有收到 AI 的最终回复。已保留收到的 ${state.steps.length} 个步骤，请重试。`

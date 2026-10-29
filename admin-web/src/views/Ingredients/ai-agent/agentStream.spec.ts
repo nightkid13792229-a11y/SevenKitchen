@@ -639,6 +639,50 @@ describe('ask 事件 · 先问人再动手', () => {
     expect(state.error).toBeNull()
   })
 
+  it('plan 之后紧接着 done：不算「没有最终回复」的断流错误', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            const encoder = new TextEncoder()
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  type: 'plan',
+                  draftId: 'draft-egg',
+                  plan: {
+                    status: 'PENDING',
+                    keywords: [{ term: '鸡蛋清', language: 'zh' }],
+                    libraries: ['USDA'],
+                    findings: 'USDA 3 条',
+                    candidates: [],
+                    chosenRecordId: null,
+                    chosenRecordName: null,
+                    rationale: '',
+                    proposedAt: '2026-10-29T00:00:00.000Z',
+                    approvedAt: null,
+                    approvedBy: null,
+                    editedByUser: false
+                  }
+                })}\n\n`
+              )
+            )
+            controller.enqueue(encoder.encode('data: {"type":"done"}\n\n'))
+            controller.close()
+          }
+        })
+        return new Response(body, { status: 200 })
+      })
+    )
+
+    const state = await streamIngredientAgent({ text: '鸡蛋清' })
+
+    expect(state.pendingPlan).toMatchObject({ status: 'PENDING' })
+    expect(state.done).toBe(true)
+    expect(state.error).toBeNull()
+  })
+
   it('点选项 = 用当前 draftId 把选项文本发出去', async () => {
     let state = reduceAgentEvents(createAgentStreamState(), {
       type: 'ask',

@@ -12,6 +12,19 @@
           class="rename-series-btn"
           @click="openRenameDialog"
         >改名</el-button>
+        <!--
+          设计模式标识（2026-10-29）：产品线 / 订单定制一目了然。
+          订单定制还会在下方显示本单横幅；这里的标签保证两种模式都有明确归属。
+        -->
+        <el-tag
+          size="small"
+          effect="plain"
+          :type="isOrderDesign ? 'warning' : 'primary'"
+          class="design-mode-tag"
+          :title="isOrderDesign
+            ? '订单定制食谱：绑定顾客订单，不上橱窗'
+            : '产品线食谱：按生命阶段设计，入仓后可整系列发布'"
+        >{{ isOrderDesign ? '订单定制' : '产品线' }}</el-tag>
         <span v-if="draft?.seriesLifeStage" class="stage-tag">
           {{ stageLabel }}
         </span>
@@ -513,6 +526,10 @@ const currentDraftId = ref(draftId)
 const agentDrawerVisible = ref(false)
 
 const draft = ref<DesignRecipeDraftDetail | null>(null)
+/** 当前设计模式：路由带订单号，或系列本身标记为 ORDER，都算订单定制 */
+const isOrderDesign = computed(
+  () => Boolean(orderId) || draft.value?.series?.designMode === 'ORDER'
+)
 const items = ref<DesignerItem[]>([])
 /** 原料对象内部字段变更的修订号；watch 必须显式读它，否则改开关不会触发评估 */
 const itemsRevision = ref(0)
@@ -1997,6 +2014,9 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.design-mode-tag {
+  flex-shrink: 0;
 }
 .stage-tag {
   color: #909399;

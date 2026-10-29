@@ -513,5 +513,7 @@ export interface IngredientAgentRunResult {
 /** `POST agent/run` 的入参；第一轮不传 `draftId`，之后带上上一轮的。 */
 export interface RunIngredientAgentInput {
   draftId?: string
+  /** 本次要建的线路；有 draftId 时后端以草稿为准，会忽略它。 */
+  line?: 'FOOD' | 'SUPPLEMENT'
   text: string
 }

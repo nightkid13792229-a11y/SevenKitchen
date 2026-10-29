@@ -414,6 +414,28 @@
             已查到：{{ state.pendingPlan.findings }}
           </p>
 
+          <div
+            v-if="state.pendingPlan.candidates.length > 0"
+            class="agent-plan__row"
+          >
+            <span class="agent-plan__label">用哪条</span>
+            <el-radio-group v-model="chosenRecordKey" class="agent-plan__radios">
+              <el-radio
+                v-for="candidate in state.pendingPlan.candidates"
+                :key="candidate.recordId || candidate.name"
+                :value="candidate.recordId || candidate.name"
+              >
+                {{ candidate.name }}
+                <span v-if="candidate.sourceType" class="agent-plan__meta">
+                  {{ candidate.sourceType }}
+                </span>
+                <span v-if="candidate.state" class="agent-plan__meta">
+                  {{ candidate.state }}
+                </span>
+              </el-radio>
+            </el-radio-group>
+          </div>
+
           <div class="agent-plan__row">
             <span class="agent-plan__label">搜索词</span>
             <div class="agent-plan__keywords">
@@ -1146,6 +1168,8 @@ const planDraft = reactive<{ keywords: SearchPlanKeyword[]; libraries: string[] 
   { keywords: [], libraries: [] }
 )
 const planConfirming = ref(false)
+/** 方案卡里选中的候选记录（key = recordId 或名字）。 */
+const chosenRecordKey = ref('')
 
 watch(
   () => state.pendingPlan,
@@ -1155,6 +1179,8 @@ watch(
     }
     planDraft.keywords = plan.keywords.map((item) => ({ ...item }))
     planDraft.libraries = [...plan.libraries]
+    chosenRecordKey.value =
+      plan.chosenRecordId ?? plan.candidates[0]?.recordId ?? ''
   },
   { immediate: true }
 )
@@ -1182,6 +1208,10 @@ async function confirmPlan() {
     return
   }
 
+  const picked = (plan.candidates ?? []).find(
+    (item) => (item.recordId || item.name) === chosenRecordKey.value
+  )
+
   planConfirming.value = true
   try {
     await ingredientCreationApi.confirmSearchPlan(draftId, {
@@ -1191,7 +1221,9 @@ async function confirmPlan() {
           language: item.language.trim() || 'zh'
         }))
         .filter((item) => item.term.length > 0),
-      libraries: [...planDraft.libraries]
+      libraries: [...planDraft.libraries],
+      ...(picked?.recordId ? { chosenRecordId: picked.recordId } : {}),
+      ...(picked?.name ? { chosenRecordName: picked.name } : {})
     })
     state.pendingPlan = null
     inputText.value = '检索方案已确认，请按方案继续。'
@@ -3369,6 +3401,18 @@ function goBackToList() {
 .agent-plan__lang {
   width: 72px;
   flex-shrink: 0;
+}
+
+.agent-plan__radios {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.agent-plan__meta {
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 
 .agent-plan__why {

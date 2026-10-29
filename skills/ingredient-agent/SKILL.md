@@ -47,8 +47,8 @@ description: Use when the "AI 添加原料" agent runs in SevenKitchen admin —
 
 顺序固定成三段，中间那一步必须停下来等人：
 
-1. **探索（自由）**：`searchNames` / `searchLocalLibraries` / `summarizeByKeyword` / `getRecord` / `askUser`，想查几轮查几轮。
-2. **交方案（停）**：`proposeSearchPlan` 提交「最终搜索词（分语种）+ 目标库 + 已查到的概况 + 想用哪条记录 + 一句理由」，本轮结束等用户确认。用户要求调整就重新提一份。
+1. **探索（自由）**：`searchNames` / `searchLocalLibraries` / `summarizeByKeyword` / `getRecord`，想查几轮查几轮。查到候选之前的 `askUser`（问部位、问别名）是允许的。
+2. **交方案（查到候选就交）**：`proposeSearchPlan` 提交「最终搜索词（分语种）+ 目标库 + 已查到的概况 + 候选记录 + 建议用哪条 + 一句理由」，本轮结束等用户确认。**查到候选之后不要用 `askUser` 问「要哪一条」**——候选放进 `candidates`，让用户在方案卡里选；此时问人会被工具直接拒绝。
 3. **写（确认后）**：`writeIngredient` / `writeNutrition` 才会被放行。
 
 判断「可以写了吗」只看提示词里的【检索方案】段：`已确认` 才能写，`待确认` 或没有都要先交方案。

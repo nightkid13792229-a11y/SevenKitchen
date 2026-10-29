@@ -118,6 +118,9 @@ describe('reduceAgentEvents · 检索方案', () => {
         keywords: [{ term: '鸡蛋清', language: 'zh' }],
         libraries: ['CFCT', 'USDA'],
         findings: 'CFCT 0 条',
+        candidates: [
+          { recordId: 'rec-1', name: 'Egg, white, raw', sourceType: 'USDA', state: 'RAW' }
+        ],
         chosenRecordId: null,
         chosenRecordName: null,
         rationale: '',
@@ -132,6 +135,9 @@ describe('reduceAgentEvents · 检索方案', () => {
       status: 'PENDING',
       libraries: ['CFCT', 'USDA']
     })
+    expect(state.pendingPlan?.candidates).toEqual([
+      { recordId: 'rec-1', name: 'Egg, white, raw', sourceType: 'USDA', state: 'RAW' }
+    ])
     expect(state.draftId).toBe('draft-1')
     expect(state.done).toBe(false)
   })

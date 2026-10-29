@@ -464,7 +464,45 @@ const ASK_USER_PLAIN_OPTION_MAX_COUNT = 5;
 /** 「都不对，我直接说」：列候选时最后一条固定兜底。 */
 const CANDIDATE_GROUP_FALLBACK_OPTION = '都不对，我直接说';
 /** 单个选项核实的最长等待；多个选项并发，整体不会超过这个值太多。 */
-const ASK_OPTION_VERIFY_TIMEOUT_MS = 800;
+const ASK_OPTION_VERIFY_TIMEOUT_MS = 1500;
+/**
+ * 已经查到候选、却还没交方案时，用提问代替方案会被拒绝。
+ *
+ * 这条不是提醒而是硬拦：用户要的是「先看检索方案」，不是「先选哪一条」。
+ */
+/** 查库结果里是否真有命中；零命中不算「查到了」。 */
+function didSearchHit(content: string): boolean {
+  try {
+    const body: unknown = JSON.parse(content);
+    if (!isRecord(body)) {
+      return false;
+    }
+    if (body.found === true) {
+      return true;
+    }
+    if (typeof body.total === 'number' && body.total > 0) {
+      return true;
+    }
+    if (Array.isArray(body.names) && body.names.length > 0) {
+      return true;
+    }
+    return Boolean(body.record);
+  } catch {
+    return false;
+  }
+}
+
+const ASK_AFTER_SEARCH_MESSAGE =
+  '已经查到候选了：先把检索方案（关键词、目标库、建议用哪条）交给用户确认，不要用提问代替方案。';
+
+/** 查库类工具：跑完命中了候选，就在草稿上留个记号。 */
+const SEARCH_TOOL_NAMES = new Set([
+  'searchNames',
+  'searchLocalLibraries',
+  'summarizeByKeyword',
+  'getRecord',
+]);
+
 /** 未收录选项在页面上的后缀：让用户点之前就知道会去线上找。 */
 const ASK_OPTION_MISSING_SUFFIX = '（库里未收录，选了会去线上找）';
 
@@ -482,7 +520,7 @@ const PROPOSE_SEARCH_PLAN_TOOL: AgentToolDefinition = {
   function: {
     name: 'proposeSearchPlan',
     description:
-      '把「最终要怎么查、想用哪条记录」交给用户确认。提交后本轮立刻结束，等用户确认或修改。写原料卡 / 写营养之前必须先提交并获得确认；查库、汇总、读来源、向用户提问都不需要先确认。通常先至少查一轮、拿到命中情况再提交，findings 才不会空；用户要求调整时，重新调用一次本工具提交新方案。',
+      '把「最终要怎么查、想用哪条记录」交给用户确认。提交后本轮立刻结束，等用户确认或修改。**查到候选之后必须用它，不要用 askUser 问「要哪一条」**——候选放进 candidates，让用户在方案卡里选。写原料卡 / 写营养之前必须先提交并获得确认；只读的查库、汇总、读来源不需要先确认。通常先查一轮拿到命中情况再提交，findings 才不会空；用户要求调整时重新提交一份新方案。',
     parameters: {
       type: 'object',
       properties: {
@@ -519,6 +557,26 @@ const PROPOSE_SEARCH_PLAN_TOOL: AgentToolDefinition = {
           description:
             '已经查到了什么（各库命中概况、候选状态），帮用户判断；最多 300 字。',
         },
+        candidates: {
+          type: 'array',
+          maxItems: 5,
+          description:
+            '列给用户挑的候选来源记录（最多 5 条），按推荐程度排序；主选也放进 chosenRecordId。',
+          items: {
+            type: 'object',
+            properties: {
+              recordId: { type: 'string', description: '来源记录 id（可选）。' },
+              name: { type: 'string', description: '记录名，最多 100 字。' },
+              sourceType: {
+                type: 'string',
+                description: '来源库，例如 USDA / TFDA。',
+              },
+              state: { type: 'string', description: '生 / 熟，不知道就省略。' },
+            },
+            required: ['name'],
+            additionalProperties: false,
+          },
+        },
         chosenRecordId: {
           type: 'string',
           description: '打算用的来源记录 id；还没定就省略。',
@@ -549,7 +607,7 @@ const ASK_USER_TOOL: AgentToolDefinition = {
   function: {
     name: 'askUser',
     description:
-      '向用户提一个必须由人决定的问题，并结束本轮等待回答。一次只问一个问题，给 2–5 个具体可点的选项；列候选词条时最多 5 条 + 最后一条「都不对，我直接说」（共 6 个）。工具**不检查你是否先收窄**：什么时候该先问状态、部位，由 skills/ingredient-agent/SKILL.md 的作业指引决定。拿不准就问，不要自己猜。',
+      '向用户提一个必须由人决定的问题，并结束本轮等待回答。一次只问一个问题，给 2–5 个具体可点的选项；列候选词条时最多 5 条 + 最后一条「都不对，我直接说」（共 6 个）。**查到候选之后不要用它问「要哪一条记录」——那是检索方案，应放进 proposeSearchPlan 的 candidates**；已经查到候选又没交方案时，调用本工具会被拒绝。它适合问「方案还形不成」的信息，例如部位、别名、要不要换名字。',
     parameters: {
       type: 'object',
       properties: {
@@ -1242,6 +1300,24 @@ export class IngredientCreationToolsService {
       };
     }
 
+    // 查库命中了就留个记号：后面 askUser 据此判断「该交方案了」。
+    if (
+      execution.ok &&
+      SEARCH_TOOL_NAMES.has(input.name) &&
+      didSearchHit(execution.content)
+    ) {
+      try {
+        const draft = await this.draftService.get(input.draftId);
+        if (!draft.payload.searchProbe) {
+          await this.draftService.patch(input.draftId, draft.step, {
+            searchProbe: { hitAt: new Date().toISOString() },
+          });
+        }
+      } catch {
+        // 记号写不进去不影响工具结果；最坏情况只是少拦一次提问。
+      }
+    }
+
     const durationMs = Date.now() - startedAt;
     const logLine =
       `[agent-tool] tool=${input.name} ok=${execution.ok} durationMs=${durationMs} ` +
@@ -1271,6 +1347,15 @@ export class IngredientCreationToolsService {
       const draft = await this.draftService.get(input.draftId);
       if (!hasApprovedSearchPlan(draft.payload.searchPlan)) {
         return this.error(SEARCH_PLAN_REQUIRED_MESSAGE);
+      }
+    }
+
+    // 查到候选之后，问人只能用于「方案还形不成」；不能拿它代替方案。
+    if (input.name === 'askUser') {
+      const draft = await this.draftService.get(input.draftId);
+      const probed = Boolean(draft.payload.searchProbe);
+      if (probed && !hasApprovedSearchPlan(draft.payload.searchPlan)) {
+        return this.error(ASK_AFTER_SEARCH_MESSAGE);
       }
     }
 

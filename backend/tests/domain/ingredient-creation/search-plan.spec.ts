@@ -82,6 +82,32 @@ describe('buildPendingSearchPlan', () => {
     expect(result.ok).toBe(false);
   });
 
+  it('备选记录一并收进方案', () => {
+    const plan = pendingPlan({
+      candidates: [
+        { recordId: 'r1', name: 'Egg, white, raw, fresh', sourceType: 'USDA', state: 'RAW' },
+        { name: 'Egg, white, dried', sourceType: 'USDA' },
+      ],
+    });
+
+    expect(plan.candidates).toHaveLength(2);
+    expect(plan.candidates[0]).toMatchObject({
+      recordId: 'r1',
+      name: 'Egg, white, raw, fresh',
+      state: 'RAW',
+    });
+  });
+
+  it('备选最多 5 条', () => {
+    const plan = pendingPlan({
+      candidates: Array.from({ length: 8 }, (_, index) => ({
+        name: `候选 ${index + 1}`,
+      })),
+    });
+
+    expect(plan.candidates).toHaveLength(5);
+  });
+
   it('白名单就是 7 个本地库', () => {
     expect(SEARCH_PLAN_LIBRARIES).toEqual([
       'CFCT',

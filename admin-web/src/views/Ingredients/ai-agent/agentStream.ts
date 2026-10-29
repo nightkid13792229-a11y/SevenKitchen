@@ -345,6 +345,18 @@ export function readSearchPlan(value: unknown): SearchPlan | null {
     keywords,
     libraries,
     findings: readText(value.findings),
+    candidates: Array.isArray(value.candidates)
+      ? value.candidates
+          .filter((item): item is Record<string, unknown> => isRecord(item))
+          .map((item) => ({
+            recordId: readText(item.recordId) || null,
+            name: readText(item.name),
+            sourceType: readText(item.sourceType) || null,
+            state: readText(item.state) || null
+          }))
+          .filter((item) => item.name.length > 0)
+          .slice(0, 5)
+      : [],
     chosenRecordId: readText(value.chosenRecordId) || null,
     chosenRecordName: readText(value.chosenRecordName) || null,
     rationale: readText(value.rationale),

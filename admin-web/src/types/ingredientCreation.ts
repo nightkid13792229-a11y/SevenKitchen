@@ -501,6 +501,14 @@ export interface SearchPlanKeyword {
 
 export type SearchPlanStatus = 'PENDING' | 'APPROVED'
 
+/** 方案里列给人挑的候选来源记录。 */
+export interface SearchPlanCandidate {
+  recordId: string | null
+  name: string
+  sourceType: string | null
+  state: string | null
+}
+
 /**
  * AI 查完库后交给用户确认的「最终怎么查」。
  *
@@ -511,6 +519,7 @@ export interface SearchPlan {
   keywords: SearchPlanKeyword[]
   libraries: string[]
   findings: string
+  candidates: SearchPlanCandidate[]
   chosenRecordId: string | null
   chosenRecordName: string | null
   rationale: string

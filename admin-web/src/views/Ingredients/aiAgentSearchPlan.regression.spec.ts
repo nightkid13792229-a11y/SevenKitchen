@@ -28,6 +28,12 @@ describe('AI 添加原料 · 检索方案确认', () => {
     expect(page).toContain('addPlanKeyword')
   })
 
+  it('候选记录可以在卡里改选', () => {
+    expect(page).toContain('chosenRecordKey')
+    expect(page).toContain('candidates')
+    expect(page).toContain('chosenRecordId')
+  })
+
   it('确认走 confirmSearchPlan，并自动继续一轮', () => {
     expect(page).toContain('confirmSearchPlan')
     expect(page).toContain('检索方案已确认，请按方案继续。')

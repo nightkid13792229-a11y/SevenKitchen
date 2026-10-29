@@ -1211,7 +1211,7 @@ function buildDraftPromptLines(draft: IngredientCreationDraft): string[] {
   const searchPlan = readSearchPlan(draft.payload.searchPlan);
   if (!searchPlan) {
     lines.push(
-      '【检索方案】还没有提交过。查库、汇总、读来源、问人都可以自由做；**要写原料卡或营养之前**，必须先调用 proposeSearchPlan 提交方案并等用户确认。通常先查一轮、把命中情况写进 findings，再提交。',
+      '【检索方案】还没有提交过。查库、汇总、读来源可以自由做；**一旦查到候选，就先调用 proposeSearchPlan 提交方案**（把候选放进 candidates、主选放进 chosenRecordId），不要在交方案前用 askUser 问「要哪一条」。要写原料卡或营养之前，方案必须已确认。',
     );
   } else if (searchPlan.status === 'PENDING') {
     lines.push(
@@ -1246,7 +1246,8 @@ function buildSystemPrompt(
     '',
     '硬规则（工具层写死，绕不过）：',
     '- 只能读写草稿。系统没有提交、确认可用、批准例外的工具；不要假装能做，也不要建议用户让你做。',
-    '- **写原料卡 / 写营养之前必须先交检索方案**：调用 proposeSearchPlan，把最终搜索词、目标库、已经查到的概况、想用哪条记录交给用户，等确认后再写。查库、汇总、读来源、问人都**不需要**先确认。',
+    '- **写原料卡 / 写营养之前必须先交检索方案**：调用 proposeSearchPlan，把最终搜索词、目标库、已经查到的概况、候选记录、想用哪条交给用户，等确认后再写。只读的查库、汇总、读来源**不需要**先确认。',
+    '- **查到候选之后不要用 askUser 问「要哪一条」**：那是检索方案的一部分，放进 proposeSearchPlan 的 candidates，让用户在方案卡里选。已经查到候选却还没交方案时，askUser 会被拒绝。',
     '- 每条营养写入都必须带 sourceRecordId。没有来源的数值一律不写：先 searchNames 找词条、getRecord 读来源。',
     '- 字段必须在营养字段目录里，单位必须与目录一致。工具报错就按错误文本改参数后重试；连续改不出来就停下，说明卡在哪。',
     '- 不要编造营养数值。只写来源记录里有的值，或用户明确给出的值。',

@@ -26,12 +26,23 @@ export interface SearchPlanKeyword {
 
 export type SearchPlanStatus = 'PENDING' | 'APPROVED';
 
+/** 方案里列给人挑的候选来源记录（最多 5 条）。 */
+export interface SearchPlanCandidate {
+  recordId: string | null;
+  name: string;
+  sourceType: string | null;
+  /** 生 / 熟；来源没给就 null。 */
+  state: string | null;
+}
+
 export interface SearchPlan {
   status: SearchPlanStatus;
   keywords: SearchPlanKeyword[];
   libraries: SearchPlanLibrary[];
   /** 已经查到了什么（各库命中概况），给人判断用。 */
   findings: string;
+  /** 列给人挑的候选（最多 5 条）；主选仍看 chosenRecordId。 */
+  candidates: SearchPlanCandidate[];
   /** 打算用哪条来源记录；还没定就是 null。 */
   chosenRecordId: string | null;
   chosenRecordName: string | null;
@@ -67,6 +78,7 @@ const FINDINGS_MAX = 300;
 const RATIONALE_MAX = 120;
 const RECORD_ID_MAX = 64;
 const RECORD_NAME_MAX = 100;
+const CANDIDATES_MAX = 5;
 
 const LIBRARY_SET = new Set<string>(SEARCH_PLAN_LIBRARIES);
 
@@ -149,6 +161,34 @@ function readLibraries(
   return { ok: true, libraries };
 }
 
+function readCandidates(input: unknown): SearchPlanCandidate[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  const candidates: SearchPlanCandidate[] = [];
+  for (const raw of input) {
+    if (candidates.length >= CANDIDATES_MAX) {
+      break;
+    }
+    if (!isRecord(raw)) {
+      continue;
+    }
+    const name = readText(raw.name, RECORD_NAME_MAX);
+    if (!name) {
+      continue;
+    }
+    candidates.push({
+      recordId: readText(raw.recordId, RECORD_ID_MAX) || null,
+      name,
+      sourceType: readText(raw.sourceType, 20) || null,
+      state: readText(raw.state, 20) || null,
+    });
+  }
+
+  return candidates;
+}
+
 function sameKeywords(
   left: readonly SearchPlanKeyword[],
   right: readonly SearchPlanKeyword[],
@@ -197,6 +237,7 @@ export function buildPendingSearchPlan(
       keywords: keywords.keywords,
       libraries: libraries.libraries,
       findings: readText(input.findings, FINDINGS_MAX),
+      candidates: readCandidates(input.candidates),
       chosenRecordId: chosenRecordId || null,
       chosenRecordName:
         readText(input.chosenRecordName, RECORD_NAME_MAX) || null,
@@ -303,6 +344,7 @@ export function readSearchPlan(value: unknown): SearchPlan | null {
     keywords,
     libraries,
     findings: readText(value.findings, FINDINGS_MAX),
+    candidates: readCandidates(value.candidates),
     chosenRecordId: readText(value.chosenRecordId, RECORD_ID_MAX) || null,
     chosenRecordName: readText(value.chosenRecordName, RECORD_NAME_MAX) || null,
     rationale: readText(value.rationale, RATIONALE_MAX),

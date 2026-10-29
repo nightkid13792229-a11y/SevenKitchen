@@ -19,7 +19,10 @@ const VALID_ARGS = {
   rationale: '英文名在 USDA 更统一',
 };
 
-function createHarness(payload: Record<string, unknown> = {}) {
+function createHarness(
+  payload: Record<string, unknown> = {},
+  names: Array<{ id: string; name: string; sourceType: string }> = [],
+) {
   const draft = {
     id: DRAFT_ID,
     name: '鸡蛋清',
@@ -53,7 +56,14 @@ function createHarness(payload: Record<string, unknown> = {}) {
   };
 
   const tools = new IngredientCreationToolsService(
-    { findCandidates: jest.fn(), listNutritionNames: jest.fn() } as unknown as IngredientCreationCandidateService,
+    {
+      findCandidates: jest.fn(async () => ({ candidates: [] })),
+      listNutritionNames: jest.fn(async () => ({
+        total: names.length,
+        names,
+        keywords: ['鸡蛋清'],
+      })),
+    } as unknown as IngredientCreationCandidateService,
     draftService as unknown as IngredientCreationDraftService,
     { runCheck: jest.fn() } as unknown as IngredientCreationCheckService,
     prisma as unknown as PrismaService,
@@ -184,5 +194,75 @@ describe('IngredientCreationToolsService · 检索方案', () => {
     expect(String(result.error)).toContain('检索方案');
     expect(draftService.patch).not.toHaveBeenCalled();
     expect(prisma.nutritionSourceRecord.findUnique).not.toHaveBeenCalled();
+  });
+});
+
+describe('IngredientCreationToolsService · 查到候选后不许用提问代替方案', () => {
+  const NAMES = [
+    { id: 'rec-1', name: 'Egg, white, raw, fresh', sourceType: 'USDA' },
+    { id: 'rec-2', name: 'Egg, white, dried', sourceType: 'USDA' },
+  ];
+
+  it('查名字命中 → 在草稿上记下「查到过候选」', async () => {
+    const { tools, draftService } = createHarness({}, NAMES);
+
+    await call(tools, 'searchNames', { keyword: '鸡蛋清' });
+
+    expect(draftService.patch).toHaveBeenCalledWith(
+      DRAFT_ID,
+      'INTAKE',
+      expect.objectContaining({
+        searchProbe: expect.objectContaining({ hitAt: expect.any(String) }),
+      }),
+    );
+  });
+
+  it('零命中不记记号（否则连澄清问题都问不了）', async () => {
+    const { tools, draftService } = createHarness({}, []);
+
+    await call(tools, 'searchNames', { keyword: '不存在的名字' });
+
+    expect(draftService.patch).not.toHaveBeenCalled();
+  });
+
+  it('查到候选、还没交方案 → 拒绝提问', async () => {
+    const { tools, draftService } = createHarness({
+      searchProbe: { hitAt: '2026-10-29T00:00:00.000Z' },
+    });
+
+    const result = await call(tools, 'askUser', {
+      question: '要建哪一种？',
+      options: ['生鲜', '干燥'],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(String(result.error)).toContain('检索方案');
+    expect(draftService.patch).not.toHaveBeenCalled();
+  });
+
+  it('还没查到候选 → 允许提问澄清', async () => {
+    const { tools } = createHarness();
+
+    const result = await call(tools, 'askUser', {
+      question: '你说的是哪个部位？',
+      options: ['里脊', '五花'],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.pendingQuestion).toBeTruthy();
+  });
+
+  it('方案已确认 → 提问恢复可用', async () => {
+    const { tools } = createHarness({
+      searchProbe: { hitAt: '2026-10-29T00:00:00.000Z' },
+      searchPlan: APPROVED_PLAN,
+    });
+
+    const result = await call(tools, 'askUser', {
+      question: '要不要再补一份熟档案？',
+      options: ['要', '不用'],
+    });
+
+    expect(result.ok).toBe(true);
   });
 });

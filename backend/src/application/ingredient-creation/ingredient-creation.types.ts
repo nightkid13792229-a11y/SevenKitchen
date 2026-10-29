@@ -435,6 +435,12 @@ export interface IngredientCreationDraftPayload {
    * `PENDING` 时写草稿的工具会被拒绝；`APPROVED` 之后才放行。
    */
   searchPlan?: SearchPlan | null;
+  /**
+   * 查库命中过的记号：有它、又还没确认方案时，`askUser` 会被拒绝。
+   *
+   * 零命中不记——那时候问「要不要换名字 / 要不要去线上找」是合理的。
+   */
+  searchProbe?: { hitAt: string } | null;
 }
 
 /**

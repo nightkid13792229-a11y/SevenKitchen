@@ -14,17 +14,18 @@ const page = stripComments(listSource)
 
 describe('食谱设计列表 · 订单定制食谱（2026-10-22）', () => {
   it('提供产品线 / 订单定制切换，并把 designMode 传给列表接口', () => {
-    expect(page).toContain("route.query.mode")
-    expect(page).toContain('<el-radio-button value="ORDER">订单定制食谱</el-radio-button>')
+    expect(page).toContain('designModeOptions')
+    expect(page).toContain("label: '订单定制食谱'")
     expect(page).toContain('designMode: designModeFilter.value')
     expect(apiSource).toContain("designMode?: 'CATALOG' | 'ORDER'")
   })
 
-  it('设计模式写进地址栏：刷新后仍然停在订单定制，不会跳回产品线', () => {
-    expect(page).toContain("String(route.query.mode || '').trim().toUpperCase()")
-    expect(page).toContain("query.mode = 'ORDER'")
-    expect(page).toContain('delete query.mode')
-    expect(page).toContain('router.replace({ query })')
+  it('模式 / 状态 / 搜索统一登记到地址栏同步，刷新后恢复', () => {
+    expect(page).toContain('useQueryFilterSync(')
+    expect(page).toContain('mode: designModeFilter')
+    expect(page).toContain('status: statusFilter')
+    expect(page).toContain('search: searchKeyword')
+    expect(page).toContain('statusFilterOptions')
   })
 
   it('订单卡展示订单号、狗狗、份数和交付状态，并禁止新建/删除等产品线操作', () => {

@@ -94,14 +94,18 @@
               </template>
             </el-input>
             <el-radio-group v-model="designModeFilter" size="small" @change="onDesignModeChange">
-              <el-radio-button value="CATALOG">产品线食谱</el-radio-button>
-              <el-radio-button value="ORDER">订单定制食谱</el-radio-button>
+              <el-radio-button
+                v-for="option in designModeOptions"
+                :key="option.value"
+                :value="option.value"
+              >{{ option.label }}</el-radio-button>
             </el-radio-group>
             <el-radio-group v-model="statusFilter" size="small" @change="onStatusFilterChange">
-              <el-radio-button :value="undefined">全部</el-radio-button>
-              <el-radio-button value="DRAFT">草稿</el-radio-button>
-              <el-radio-button value="PUBLIC">已发布</el-radio-button>
-              <el-radio-button value="PRIVATE_CUSTOM">定制</el-radio-button>
+              <el-radio-button
+                v-for="option in statusFilterOptions"
+                :key="option.label"
+                :value="option.value"
+              >{{ option.label }}</el-radio-button>
             </el-radio-group>
             <!-- 2026-10-26 需求分类：按系列 / 按需求分类 两种看法，数据源互不影响 -->
             <el-radio-group v-model="viewMode" size="small">
@@ -303,6 +307,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { MoreFilled, Plus, Search } from '@element-plus/icons-vue'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import { resolveCopySourceStages } from '@/utils/recipeDesigner/copySourceStages'
+import { useQueryFilterSync } from '@/composables/useQueryFilterSync'
 import { resolveDogScenarioFromDetail } from '@/utils/recipeDesigner/dogScenario'
 import {
   buildTemporarySeriesName,
@@ -338,21 +343,47 @@ const loadingMore = ref(false)
 const creating = ref(false)
 const renaming = ref(false)
 const series = ref<RecipeDesignerSeriesCard[]>([])
-/**
- * 设计模式筛选：从 URL 的 ?mode=ORDER 恢复。
- *
- * 之前只存在组件内存里，刷新页面会重新挂载、回到默认的「产品线食谱」。
- * 写进 URL 后刷新 / 前进后退 / 收藏都能保持当前模式。
- */
-const designModeFilter = ref<'CATALOG' | 'ORDER'>(
-  String(route.query.mode || '').trim().toUpperCase() === 'ORDER'
-    ? 'ORDER'
-    : 'CATALOG'
-)
+/** 产品线 / 订单定制的选项；新增模式只需要改这里 */
+const designModeOptions = [
+  { value: 'CATALOG' as const, label: '产品线食谱' },
+  { value: 'ORDER' as const, label: '订单定制食谱' }
+]
+/** 状态筛选项；新增状态只需要改这里，地址栏同步会自动跟着走 */
+const statusFilterOptions: Array<{
+  value: RecipeDesignerSeriesStatusFilter | undefined
+  label: string
+}> = [
+  { value: undefined, label: '全部' },
+  { value: 'DRAFT', label: '草稿' },
+  { value: 'PUBLIC', label: '已发布' },
+  { value: 'PRIVATE_CUSTOM', label: '定制' }
+]
+const designModeFilter = ref<'CATALOG' | 'ORDER'>('CATALOG')
 /** 2026-10-26：列表与需求分类是同一页的两种看法 */
 const viewMode = ref<'SERIES' | 'TAXONOMY'>('SERIES')
 const statusFilter = ref<RecipeDesignerSeriesStatusFilter | undefined>(undefined)
 const searchKeyword = ref('')
+
+/**
+ * 筛选条件统一同步到地址栏（2026-10-30）：
+ * 刷新、分享、从订单带入都能恢复到同一组筛选；新增筛选项只要登记一行。
+ */
+useQueryFilterSync(
+  {
+    mode: designModeFilter,
+    status: statusFilter,
+    search: searchKeyword
+  },
+  {
+    defaults: { mode: 'CATALOG', status: undefined, search: '' },
+    validators: {
+      mode: (value) =>
+        designModeOptions.some((option) => option.value === value),
+      status: (value) =>
+        statusFilterOptions.some((option) => option.value === value)
+    }
+  }
+)
 const seriesPage = ref(1)
 const seriesHasMore = ref(true)
 const SERIES_PAGE_SIZE = 20
@@ -542,14 +573,6 @@ function onStatusFilterChange() {
 /** 切换产品线 / 订单定制：回到第一页并清空状态筛选，避免两种上下文混用 */
 function onDesignModeChange() {
   statusFilter.value = undefined
-  // 把当前模式写进地址栏：刷新后不会跳回「产品线食谱」
-  const query = { ...route.query }
-  if (designModeFilter.value === 'ORDER') {
-    query.mode = 'ORDER'
-  } else {
-    delete query.mode
-  }
-  void router.replace({ query })
   void loadSeries(true)
 }
 

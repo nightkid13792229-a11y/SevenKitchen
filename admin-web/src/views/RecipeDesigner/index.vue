@@ -550,9 +550,8 @@ async function createSeries() {
   // 一键创建：不再弹「参考爱犬 / 默认阶段」。
   // 产品线默认普通成年犬；参考爱犬只在从订单带入时使用，阶段由后端/编辑器再切。
   const referenceDogId = pendingReferenceDogId.value || undefined
-  const name = buildTemporarySeriesName({
-    dogName: pendingReferenceDogName.value || undefined
-  })
+  // 临时名固定 12 个字（含日期时间）；狗名放在卡片标签上，不塞进名字
+  const name = buildTemporarySeriesName()
   creating.value = true
   try {
     const card = await recipeDesignerApi.createSeries({

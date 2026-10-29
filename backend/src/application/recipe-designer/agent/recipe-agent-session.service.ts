@@ -158,6 +158,31 @@ export class RecipeAgentSessionService {
     });
   }
 
+  /**
+   * 记录「本轮起点」：把当前累计值快照到 runStart*。
+   * 每次用户发新消息（start / resume）都会调用；之后
+   * 本次 = 当前累计 - runStart，草稿累计仍然看 stepCount / promptTokens。
+   */
+  async beginRunCounters(sessionId: string): Promise<void> {
+    const session = await this.prisma.recipeDesignAgentSession.findUnique({
+      where: { id: sessionId },
+      select: {
+        stepCount: true,
+        promptTokens: true,
+        completionTokens: true,
+      },
+    });
+    if (!session) return;
+    await this.prisma.recipeDesignAgentSession.update({
+      where: { id: sessionId },
+      data: {
+        runStartStepCount: session.stepCount,
+        runStartPromptTokens: session.promptTokens,
+        runStartCompletionTokens: session.completionTokens,
+      },
+    });
+  }
+
   async incrementStep(sessionId: string): Promise<void> {
     await this.prisma.recipeDesignAgentSession.update({
       where: { id: sessionId },
@@ -173,6 +198,22 @@ export class RecipeAgentSessionService {
         designRecipeId,
         status: { in: ['RUNNING', 'WAITING_USER'] },
       },
+      orderBy: { startedAt: 'desc' },
+    });
+    return session ? this.toSessionRecord(session) : null;
+  }
+
+  /**
+   * 草稿最近一次会话（不看状态）。
+   *
+   * 2026-10-29 起「一个草稿一本会话」：停止/失败后重新开始也续写这一本，
+   * 这样抽屉能看到全部聊天记录，模型每轮也能读到同一份历史。
+   */
+  async getLatestSession(
+    designRecipeId: string,
+  ): Promise<AgentSessionRecord | null> {
+    const session = await this.prisma.recipeDesignAgentSession.findFirst({
+      where: { designRecipeId },
       orderBy: { startedAt: 'desc' },
     });
     return session ? this.toSessionRecord(session) : null;
@@ -223,6 +264,9 @@ export class RecipeAgentSessionService {
       stepCount: session.stepCount,
       promptTokens: session.promptTokens,
       completionTokens: session.completionTokens,
+      runStartStepCount: session.runStartStepCount,
+      runStartPromptTokens: session.runStartPromptTokens,
+      runStartCompletionTokens: session.runStartCompletionTokens,
       startedAt: session.startedAt,
       endedAt: session.endedAt,
       lastError: session.lastError,

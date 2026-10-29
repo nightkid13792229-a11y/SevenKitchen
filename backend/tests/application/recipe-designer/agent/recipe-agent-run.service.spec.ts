@@ -94,6 +94,8 @@ function finalResponse(content: string): DeepSeekToolsResult {
 function makeSessionService() {
   return {
     assertNoActiveRun: jest.fn().mockResolvedValue(undefined),
+    getLatestSession: jest.fn().mockResolvedValue(null),
+    beginRunCounters: jest.fn().mockResolvedValue(undefined),
     createSession: jest.fn().mockResolvedValue({
       id: SESSION_ID,
       designRecipeId: DRAFT_ID,
@@ -347,6 +349,44 @@ describe('RecipeAgentRunService', () => {
     // start 的消息是 system + 本次用户输入；第二轮带上 assistant/tool。
     expect(messageRoles[0]).toEqual(['system', 'user']);
     expect(messageRoles[1]).toEqual(['system', 'user', 'assistant', 'tool']);
+  });
+
+  it('一草稿一会话：停止后重新开始续写同一本，不再新建会话', async () => {
+    const sessionService = makeSessionService();
+    sessionService.getLatestSession.mockResolvedValue({
+      id: SESSION_ID,
+      designRecipeId: DRAFT_ID,
+      status: 'STOPPED',
+      stepCount: 12,
+    });
+
+    const { service } = makeRunService({
+      handlers: {},
+      responses: [finalResponse('继续干活')],
+      sessionService,
+    });
+
+    const result = await service.start({
+      draftId: DRAFT_ID,
+      actor: ACTOR,
+      message: '继续',
+    });
+
+    expect(result).toEqual({ sessionId: SESSION_ID });
+    expect(sessionService.createSession).not.toHaveBeenCalled();
+    expect(sessionService.transitionStatus).toHaveBeenCalledWith(
+      SESSION_ID,
+      ['COMPLETED', 'STOPPED', 'FAILED', 'INTERRUPTED'],
+      'RUNNING',
+    );
+    expect(sessionService.beginRunCounters).toHaveBeenCalledWith(SESSION_ID);
+
+    await service.waitForIdle(SESSION_ID);
+    expect(messageCalls(sessionService)[0]).toMatchObject({
+      sessionId: SESSION_ID,
+      role: 'USER',
+      content: '继续',
+    });
   });
 
   it('SYSTEM_PROMPT 不再要求 finish_draft 交付门禁，check_ready 只是可选自检', async () => {
@@ -1829,6 +1869,8 @@ describe('RecipeAgentRunService', () => {
       ['WAITING_USER'],
       'RUNNING',
     );
+    // 回答提问也算新的一次：本次步数 / token 从这条消息重新起算
+    expect(sessionService.beginRunCounters).toHaveBeenCalledWith(SESSION_ID);
     expect(getDraft).toHaveBeenCalledTimes(1);
     expect(sessionService.transitionStatus).toHaveBeenLastCalledWith(
       SESSION_ID,

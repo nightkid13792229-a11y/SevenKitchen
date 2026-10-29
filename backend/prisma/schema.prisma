@@ -5298,6 +5298,10 @@ model RecipeDesignAgentSession {
   stepCount        Int                       @default(0) @map("step_count")
   promptTokens     Int                       @default(0) @map("prompt_tokens")
   completionTokens Int                       @default(0) @map("completion_tokens")
+  /** 本轮开始时（每次用户发新消息）的累计值快照：本次 = 当前累计 - 本轮起点 */
+  runStartStepCount        Int                @default(0) @map("run_start_step_count")
+  runStartPromptTokens     Int                @default(0) @map("run_start_prompt_tokens")
+  runStartCompletionTokens Int                @default(0) @map("run_start_completion_tokens")
   startedAt        DateTime                  @default(now()) @map("started_at")
   endedAt          DateTime?                 @map("ended_at")
   lastError        String?                   @map("last_error")

@@ -24,6 +24,10 @@ export interface AgentSessionRecord {
   stepCount: number;
   promptTokens: number;
   completionTokens: number;
+  /** 本轮开始时的累计值快照（一草稿一会话后用于区分「本次」与「草稿累计」） */
+  runStartStepCount: number;
+  runStartPromptTokens: number;
+  runStartCompletionTokens: number;
   startedAt: Date;
   endedAt: Date | null;
   lastError: string | null;

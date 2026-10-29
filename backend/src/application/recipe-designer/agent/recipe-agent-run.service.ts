@@ -255,15 +255,38 @@ export class RecipeAgentRunService implements OnModuleInit {
       this.assertAgentScope(draft);
       await this.sessionService.assertNoActiveRun(input.draftId);
 
-      const session = await this.sessionService.createSession({
-        designRecipeId: input.draftId,
-        createdBy: input.actor.userId,
-        skillName: 'recipe-design',
-        skillVersion: 'v1',
-      });
-      const sessionId = session.id;
+      // 一个草稿一本会话（2026-10-29）：停止 / 失败 / 中断之后重新开始，
+      // 续写同一本会话，而不是新建。这样抽屉能看到全部聊天记录，
+      // 下一轮模型调用也能读到同一份历史。
+      const existing = await this.sessionService.getLatestSession(input.draftId);
+      let sessionId: string;
+      let reused = false;
+      if (existing) {
+        const claimed = await this.sessionService.transitionStatus(
+          existing.id,
+          ['COMPLETED', 'STOPPED', 'FAILED', 'INTERRUPTED'],
+          'RUNNING',
+        );
+        if (!claimed) {
+          throw new ConflictException('会话已经结束或被停止');
+        }
+        sessionId = existing.id;
+        reused = true;
+      } else {
+        const session = await this.sessionService.createSession({
+          designRecipeId: input.draftId,
+          createdBy: input.actor.userId,
+          skillName: 'recipe-design',
+          skillVersion: 'v1',
+        });
+        sessionId = session.id;
+      }
 
       try {
+        // 续写老会话时先记下本轮起点；失败按会话失败处理，避免留下假 RUNNING。
+        if (reused) {
+          await this.sessionService.beginRunCounters(sessionId);
+        }
         await this.sessionService.appendMessage({
           sessionId,
           role: 'USER',
@@ -342,8 +365,9 @@ export class RecipeAgentRunService implements OnModuleInit {
         if (!claimed) {
           throw new ConflictException('会话已经结束或被停止');
         }
-
         try {
+          // 回答 AI 的提问也算「新的一次」：本次步数 / token 从这条消息重新起算。
+          await this.sessionService.beginRunCounters(input.sessionId);
           await this.sessionService.appendMessage({
             sessionId: input.sessionId,
             role: 'USER',

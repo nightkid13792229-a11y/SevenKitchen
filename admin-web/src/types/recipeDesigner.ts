@@ -987,6 +987,10 @@ export interface RecipeAgentSession {
   stepCount: number
   promptTokens: number
   completionTokens: number
+  /** 本轮开始时的累计快照：本次 = 当前累计 - 本轮起点（老响应可能没有） */
+  runStartStepCount?: number | null
+  runStartPromptTokens?: number | null
+  runStartCompletionTokens?: number | null
   startedAt: string
   endedAt: string | null
   lastError: string | null

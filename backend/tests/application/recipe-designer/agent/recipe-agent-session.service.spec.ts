@@ -12,6 +12,7 @@ function makePrisma() {
     recipeDesignAgentSession: {
       create: jest.fn().mockResolvedValue({ id: 's1' }),
       findFirst: jest.fn().mockResolvedValue(null),
+      findUnique: jest.fn().mockResolvedValue(null),
       update: jest.fn(),
       updateMany: jest.fn().mockResolvedValue({ count: 2 }),
     },
@@ -80,6 +81,67 @@ describe('RecipeAgentSessionService', () => {
     await expect(service.assertNoActiveRun('draft-1')).rejects.toBeInstanceOf(
       ConflictException,
     );
+  });
+
+  it('getLatestSession 取该草稿最近一次会话（不看状态，停止的也要）', async () => {
+    const { prisma } = makePrisma();
+    prisma.recipeDesignAgentSession.findFirst.mockResolvedValue({
+      id: 's1',
+      designRecipeId: 'draft-1',
+      status: 'STOPPED',
+      skillName: 'recipe-design',
+      skillVersion: 'v1',
+      stepCount: 3,
+      promptTokens: 100,
+      completionTokens: 20,
+      runStartStepCount: 1,
+      runStartPromptTokens: 40,
+      runStartCompletionTokens: 8,
+      startedAt: new Date(),
+      endedAt: new Date(),
+      lastError: null,
+      createdBy: 'user-1',
+    });
+    const service = new RecipeAgentSessionService(prisma as any);
+
+    const session = await service.getLatestSession('draft-1');
+
+    expect(prisma.recipeDesignAgentSession.findFirst).toHaveBeenCalledWith({
+      where: { designRecipeId: 'draft-1' },
+      orderBy: { startedAt: 'desc' },
+    });
+    expect(session?.id).toBe('s1');
+    expect(session?.runStartStepCount).toBe(1);
+    expect(session?.runStartPromptTokens).toBe(40);
+  });
+
+  it('beginRunCounters 把本轮起点记成当前累计', async () => {
+    const { prisma } = makePrisma();
+    prisma.recipeDesignAgentSession.findUnique.mockResolvedValue({
+      stepCount: 7,
+      promptTokens: 900,
+      completionTokens: 120,
+    });
+    const service = new RecipeAgentSessionService(prisma as any);
+
+    await service.beginRunCounters('s1');
+
+    expect(prisma.recipeDesignAgentSession.findUnique).toHaveBeenCalledWith({
+      where: { id: 's1' },
+      select: {
+        stepCount: true,
+        promptTokens: true,
+        completionTokens: true,
+      },
+    });
+    expect(prisma.recipeDesignAgentSession.update).toHaveBeenCalledWith({
+      where: { id: 's1' },
+      data: {
+        runStartStepCount: 7,
+        runStartPromptTokens: 900,
+        runStartCompletionTokens: 120,
+      },
+    });
   });
 
   it('markInterruptedRuns 只把 RUNNING 改成 INTERRUPTED', async () => {

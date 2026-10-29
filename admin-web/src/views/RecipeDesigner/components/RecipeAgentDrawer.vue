@@ -35,9 +35,13 @@
     <div class="agent-drawer">
       <div v-if="session" class="agent-meta">
         <span :class="{ 'agent-meta__warning': currentRunSteps >= 25 }">
-          本次 {{ currentRunSteps }}/{{ MAX_RUN_STEPS }} 次工具调用 · 会话累计 {{ session.stepCount }}
+          本次 {{ currentRunSteps }}/{{ MAX_RUN_STEPS }} 次工具调用 · 草稿累计 {{ session.stepCount }} 次
         </span>
-        <span>输入 {{ session.promptTokens }} / 输出 {{ session.completionTokens }} tokens</span>
+        <span>
+          本次 输入 {{ currentRunUsage.perRunTokensAvailable ? currentRunUsage.promptTokens : '—' }}
+          / 输出 {{ currentRunUsage.perRunTokensAvailable ? currentRunUsage.completionTokens : '—' }} tokens
+          · 草稿累计 输入 {{ session.promptTokens }} / 输出 {{ session.completionTokens }}
+        </span>
       </div>
 
       <div class="agent-conversation-shell">
@@ -250,6 +254,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
+import { resolveAgentRunUsage } from '../agentRunUsage'
 import { NUTRITION_FIELD_CATALOG } from '@/utils/recipeDesigner/nutritionFieldCatalog'
 import { formatDateTime } from '@/utils/date'
 import type {
@@ -312,10 +317,10 @@ type AgentConversationBlock = AgentToolsBlock | AgentMessageBlock
 const running = computed(() => session.value?.status === 'RUNNING')
 
 /**
- * 本次运行已用的工具调用数：从最后一条用户消息之后开始数。
- * 会话的 stepCount 是累计值，不能直接拿来和 200 次上限比。
+ * 老后端兜底：从最后一条用户消息之后数工具调用。
+ * 新后端用会话里的「本轮起点」算，见 resolveAgentRunUsage。
  */
-const currentRunSteps = computed(() => {
+const stepsSinceLastUser = computed(() => {
   const lastUserIndex = messages.value
     .map((message) => message.role)
     .lastIndexOf('USER')
@@ -323,6 +328,16 @@ const currentRunSteps = computed(() => {
     .slice(lastUserIndex + 1)
     .filter((message) => message.role === 'TOOL').length
 })
+
+/**
+ * 本次 vs 草稿累计（2026-10-29）：
+ * 一草稿一会话后，会话的 stepCount / tokens 是草稿累计；
+ * 「本次」由后端在每次用户发消息时记下的起点算差值。
+ */
+const currentRunUsage = computed(() =>
+  resolveAgentRunUsage(session.value, stepsSinceLastUser.value)
+)
+const currentRunSteps = computed(() => currentRunUsage.value.steps)
 
 /**
  * 对话流按「块」渲染：

@@ -47,10 +47,15 @@ const DRAFT_LIST_LIMIT = 20;
 export class IngredientCreationDraftService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** 起手：落一条 `step = INTAKE` 的空草稿（payload 由后续站点自己补）。 */
+  /**
+   * 起手：落一条 `step = INTAKE` 的空草稿（payload 由后续站点自己补）。
+   *
+   * 类型由调用方给：本期只有食材线会调到这里，补剂线由起草服务的守卫先挡住。
+   * 收窄成两个值而不是整个 `IngredientType`，是为了让「包装」不可能从这条入口进来。
+   */
   async create(input: {
     name: string;
-    type: 'FOOD';
+    type: 'FOOD' | 'SUPPLEMENT';
     createdBy: string;
   }): Promise<IngredientCreationDraft> {
     const draft = await this.prisma.ingredientCreationDraft.create({

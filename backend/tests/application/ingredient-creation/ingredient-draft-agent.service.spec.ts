@@ -227,7 +227,11 @@ function createHarness(options: HarnessOptions = {}) {
 
   const draftService = {
     create: jest.fn(
-      async (input: { name: string; type: 'FOOD'; createdBy: string }) => {
+      async (input: {
+        name: string;
+        type: 'FOOD' | 'SUPPLEMENT';
+        createdBy: string;
+      }) => {
         draft = createDraft({
           id: 'draft-created',
           name: input.name,
@@ -2337,6 +2341,33 @@ describe('IngredientDraftAgentService · 流式事件', () => {
 
     expect(events.map((event) => event.type)).toEqual(['error']);
     expect(events[0].message).toBeTruthy();
+  });
+});
+
+describe('IngredientDraftAgentService · 线路守卫', () => {
+  it('草稿是补剂 → 拒绝，不调模型、不写字段', async () => {
+    const fetchMock = jest.fn();
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+    const harness = createHarness({
+      draft: createDraft({ type: 'SUPPLEMENT' }),
+    });
+
+    await expect(
+      harness.agent.run({ draftId: DRAFT_ID, text: '鱼油', userId: 'admin-1' }),
+    ).rejects.toThrow(LINE_NOT_OPEN_MESSAGE);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(harness.draftService.patch).not.toHaveBeenCalled();
+  });
+
+  it('新建时传补剂 → 拒绝，且不建草稿', async () => {
+    const harness = createHarness({ draft: null });
+
+    await expect(
+      harness.agent.run({ text: '鱼油', line: 'SUPPLEMENT', userId: 'admin-1' }),
+    ).rejects.toThrow(LINE_NOT_OPEN_MESSAGE);
+
+    expect(harness.draftService.create).not.toHaveBeenCalled();
   });
 });
 

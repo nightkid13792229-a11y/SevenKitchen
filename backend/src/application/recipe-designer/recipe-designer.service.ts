@@ -7214,10 +7214,26 @@ export class RecipeDesignerService {
       displayName?: string | null;
     },
   ) {
+    /**
+     * ⚠️ 分母必须是「当前配料的合计」，不能再用 `draft.totalWeightG`。
+     *
+     * 那个字段只在评估落库时刷新；人工改完克数、没再跑评估时就还是旧值。
+     * 2026-10-28 的事故就是它：克数合计 311g，草稿总重还停在 385.2g，
+     * 配比被写成 85÷385.2=22.07%（应为 27.56%），车间少投料 20%，
+     * 补剂浓度也一起偏低 19%。
+     */
+    const totalWeightG = this.resolveIncludedItemsTotalWeightG(draft);
+    const publishedFoodRatioMap = this.buildPublishedFoodRatioMap(
+      draft.items
+        .filter((item) => this.isItemIncludedInAssessment(item))
+        .map((item) => ({ item })),
+    );
     const privateSupplementTargetMap =
-      await this.buildPrivateSnapshotSupplementTargetMap(draft);
+      await this.buildPrivateSnapshotSupplementTargetMap(draft, totalWeightG);
     const itemCreates = this.buildPrivateRecipeSnapshotItemCreateData(
       draft,
+      totalWeightG,
+      publishedFoodRatioMap,
       privateSupplementTargetMap,
     );
     const customOrderId = options.customOrderId;
@@ -7933,6 +7949,8 @@ export class RecipeDesignerService {
 
   private buildPrivateRecipeSnapshotItemCreateData(
     draft: DesignRecipeWithItems,
+    totalWeightG: number,
+    publishedFoodRatioMap: Map<string, number>,
     privateSupplementTargetMap: Map<
       string,
       PublishedSupplementNutrientTarget[]
@@ -7959,10 +7977,9 @@ export class RecipeDesignerService {
           preparationMethod: this.normalizePreparationMethod(
             item.preparationMethod,
           ),
-          ratioPercent: this.resolvePrivateRecipeItemRatio(
-            item,
-            draft.totalWeightG,
-          ),
+          ratioPercent: isSupplement
+            ? this.resolveSupplementSnapshotRatio(item, totalWeightG)
+            : (publishedFoodRatioMap.get(item.id) ?? null),
           nutrientTargetKey: isSupplement
             ? (primaryTarget?.nutrientTargetKey ?? null)
             : item.nutrientTargetKey,
@@ -7992,17 +8009,51 @@ export class RecipeDesignerService {
   }
 
   /**
-   * 私密快照的补剂目标（2026-10-22 · Task 3）。
-   *
-   * 只认显式目标 / 营养档案默认目标，并按当前配方总重量重算每 kg 添加浓度。
-   * 不再按「档案里第一个有值的营养字段」兜底 —— 那会把功能性补剂的目标
-   * 悄悄换成别的营养素；没有目标时直接 400 阻断。
+   * 补剂在快照里的配比只用于展示与兜底（真正定量走补剂目标），
+   * 分母同样取「当前配料的合计」，不再取可能过期的草稿总重。
+   */
+  private resolveSupplementSnapshotRatio(
+    item: DesignRecipeItemWithFood,
+    totalWeightG: number,
+  ): number | null {
+    const total = Number(totalWeightG);
+    const weight = Number(item.weightG);
+    if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(weight)) {
+      return null;
+    }
+    return Math.round((weight / total) * 10000) / 100;
+  }
+
+  /**
+   * 当前参与评估的配料合计（按有效重量：油按密度折克、按粒的补剂按每粒克重）。
+   * 与评估引擎的 totalWeightG 同一口径，用来替代可能过期的 draft.totalWeightG。
+   */
+  private resolveIncludedItemsTotalWeightG(
+    draft: DesignRecipeWithItems,
+  ): number {
+    return draft.items
+      .filter((item) => this.isItemIncludedInAssessment(item))
+      .reduce(
+        (sum, item) =>
+          sum +
+          getProfileEffectiveWeightG(
+            this.toAssessmentNutritionProfile(item),
+            item.weightG,
+          ),
+        0,
+      );
+  }
+
+  /**
+   * 私密快照的补剂目标：只认显式目标 / 营养档案默认目标。
+   * 分母用「当前配料的合计」，不再用可能过期的草稿总重。
    */
   private async buildPrivateSnapshotSupplementTargetMap(
     draft: DesignRecipeWithItems,
+    totalWeightG: number,
   ): Promise<Map<string, PublishedSupplementNutrientTarget[]>> {
     const result = new Map<string, PublishedSupplementNutrientTarget[]>();
-    if (draft.totalWeightG <= 0) return result;
+    if (totalWeightG <= 0) return result;
 
     for (const item of draft.items) {
       if (
@@ -8024,7 +8075,7 @@ export class RecipeDesignerService {
         this.toAssessmentNutritionProfile(item),
         definitions,
         item.weightG,
-        draft.totalWeightG,
+        totalWeightG,
       );
       result.set(
         item.id,
@@ -8032,22 +8083,6 @@ export class RecipeDesignerService {
       );
     }
     return result;
-  }
-
-  private resolvePrivateRecipeItemRatio(
-    item: DesignRecipeItemWithFood,
-    totalWeightG: number,
-  ) {
-    const existingRatio = Number(item.ratioPercent);
-    if (Number.isFinite(existingRatio) && existingRatio > 0) {
-      return existingRatio;
-    }
-    const total = Number(totalWeightG);
-    const weight = Number(item.weightG);
-    if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(weight)) {
-      return null;
-    }
-    return Math.round((weight / total) * 10000) / 100;
   }
 
   /**

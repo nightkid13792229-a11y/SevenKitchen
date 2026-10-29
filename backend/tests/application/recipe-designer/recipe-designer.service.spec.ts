@@ -6940,6 +6940,70 @@ describe('RecipeDesignerService', () => {
         }),
       );
     });
+
+    it('derives private snapshot ratios from current weights, not the stale draft total', async () => {
+      // 2026-10-28 事故回归：草稿总重停在 500g（上次评估值），
+      // 两条食材实际合计只有 300g。配比必须按 300g 归一，
+      // 否则车间会按 100/500=20% 少投料。
+      prisma.designRecipe.findUnique.mockResolvedValue(
+        draft({
+          id: 'design-stale-total',
+          name: 'Star 过期总重食谱',
+          createdBy: 'customer-1',
+          customerDogId: 'dog-1',
+          isCompliant: true,
+          totalWeightG: 500,
+          energyDensityKcalPerKg: 1200,
+          missingDataReport: [],
+          calculatedNutrition: { energyDensityKcalPerKg: 1200 },
+          items: [
+            item({
+              id: 'item-chicken',
+              ingredientId: 'ingredient-chicken',
+              nutritionFoodId: 'food-chicken',
+              weightG: 100,
+              ingredient: { id: 'ingredient-chicken', type: 'FOOD' },
+            }),
+            item({
+              id: 'item-rice',
+              ingredientId: 'ingredient-rice',
+              nutritionFoodId: 'food-rice',
+              weightG: 200,
+              ingredient: { id: 'ingredient-rice', type: 'FOOD' },
+            }),
+          ],
+        }),
+      );
+      prisma.recipe.findFirst.mockResolvedValue(null);
+      prisma.recipe.create.mockResolvedValue({
+        id: 'private-row-stale',
+        recipeId: 'private-recipe-stale',
+        version: 1,
+        customerDogId: 'dog-1',
+      });
+
+      await service.createPrivateRecipeSnapshot(
+        'design-stale-total',
+        { target: 'ORDER' } as any,
+        { userId: 'customer-1', role: 'CUSTOMER' },
+      );
+
+      const createdItems = prisma.recipe.create.mock.calls.at(-1)?.[0]?.data
+        ?.items?.create as Array<{
+        ingredientId: string;
+        ratioPercent: number | null;
+      }>;
+      const byIngredient = new Map(
+        createdItems.map((entry) => [entry.ingredientId, entry.ratioPercent]),
+      );
+
+      expect(byIngredient.get('ingredient-chicken')).toBeCloseTo(33.33, 2);
+      expect(byIngredient.get('ingredient-rice')).toBeCloseTo(66.67, 2);
+      expect(
+        (byIngredient.get('ingredient-chicken') ?? 0) +
+          (byIngredient.get('ingredient-rice') ?? 0),
+      ).toBeCloseTo(100, 1);
+    });
   });
 
   describe('recipe designer series workbench', () => {

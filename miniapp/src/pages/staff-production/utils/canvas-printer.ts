@@ -19,6 +19,12 @@ export interface TaskDetail {
     items?: RecipeItem[];
     production_loss_rate?: number;
   };
+  /** 后端算好的用量表（按克数推导）；老版本接口没有该字段时走本地计算 */
+  plannedIngredientsUsage?: Array<{
+    ingredientId: string;
+    requiredAmount: number;
+    unit?: string;
+  }>;
   createdBy?: string; // 创建人
 }
 
@@ -491,10 +497,17 @@ function parseIngredients(taskDetail: TaskDetail): ParsedIngredient[] {
   const productionLossRate = recipeSnapshot.production_loss_rate || 1.1;
 
   const theoreticalWeight = totalProductionG * productionLossRate;
+  const plannedById = new Map(
+    (taskDetail.plannedIngredientsUsage || []).map((entry) => [
+      entry.ingredientId,
+      entry,
+    ]),
+  );
 
   return recipeSnapshot.items.map((item) => {
     let amount = 0;
     let unit = 'g';
+    const planned = plannedById.get(item.ingredient_id);
 
     const typeMap: Record<string, string> = {
       'FOOD': '食材',
@@ -507,7 +520,10 @@ function parseIngredients(taskDetail: TaskDetail): ParsedIngredient[] {
       ? item.preparation_methods.join('、')
       : '';
 
-    if (item.ingredient_type === 'SUPPLEMENT') {
+    if (planned && Number.isFinite(planned.requiredAmount)) {
+      amount = planned.requiredAmount;
+      unit = planned.unit || 'g';
+    } else if (item.ingredient_type === 'SUPPLEMENT') {
       const supplementAmount = calculateSupplementAmountForProduction(item, theoreticalWeight);
       amount = supplementAmount.amount;
       unit = supplementAmount.unit;

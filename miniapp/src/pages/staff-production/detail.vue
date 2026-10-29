@@ -406,9 +406,19 @@ const parsedIngredients = computed(() => {
   // 例如：260.63g × 1.07 = 278.87g（需要准备278.87g原料才能得到260.63g成品）
   const theoreticalWeight = totalProductionG * productionLossRate;
 
+  // 后端已经算好的用量表优先（按克数推导，不受快照里过期配比影响）；
+  // 老版本后端没有这个字段时，仍走下面的本地计算。
+  const plannedUsage = (taskDetail.value as any)?.plannedIngredientsUsage as
+    | Array<{ ingredientId: string; requiredAmount: number; unit?: string }>
+    | undefined;
+  const plannedById = new Map(
+    (plannedUsage || []).map((entry) => [entry.ingredientId, entry]),
+  );
+
   return recipeSnapshot.items.map((item: any) => {
     let amount = 0;
     let unit = 'g';
+    const planned = plannedById.get(item.ingredient_id || item.ingredientId);
 
     // 映射原料类型（食材/补剂/包装）
     const typeMap: Record<string, string> = {
@@ -423,8 +433,11 @@ const parsedIngredients = computed(() => {
       ? item.preparation_methods.join('、')
       : '';
 
-    // 根据原料类型计算用量
-    if (item.ingredient_type === 'SUPPLEMENT') {
+    // 用量：优先用后端算好的，其次本地算
+    if (planned && Number.isFinite(planned.requiredAmount)) {
+      amount = planned.requiredAmount;
+      unit = planned.unit || 'g';
+    } else if (item.ingredient_type === 'SUPPLEMENT') {
       const supplementAmount = calculateSupplementAmountForProduction(item, theoreticalWeight);
       amount = supplementAmount.amount;
       unit = supplementAmount.unit;
@@ -432,15 +445,6 @@ const parsedIngredients = computed(() => {
       // 食材和包材：按配比计算
       amount = theoreticalWeight * (item.ratio / 100);
       unit = 'g';
-
-      // 🔍 调试日志
-      console.log(`[食材/包材] ${item.name}:`, {
-        productionLossRate: productionLossRate,
-        totalProductionG: totalProductionG,
-        theoreticalWeight: theoreticalWeight,
-        ratio: item.ratio,
-        calculatedAmount: amount
-      });
     }
 
     const standardIngredientName = item.standardIngredientName || item.name || '';
@@ -953,6 +957,9 @@ const printTask = () => {
     completedAt: taskDetail.value.completedAt,
     orderItems: taskDetail.value.orderItems || [],
     recipeSnapshot: taskDetail.value.recipeSnapshot,
+    // 后端算好的用量表一起带去打印页，保证屏幕与纸质单据同源
+    plannedIngredientsUsage: (taskDetail.value as any)
+      .plannedIngredientsUsage,
     createdBy: taskDetail.value.createdBy || '厨房管理员',
   };
 

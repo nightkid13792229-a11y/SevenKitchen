@@ -7,7 +7,7 @@
       </div>
       <div class="header-actions">
         <el-button
-          v-if="designModeFilter === 'CATALOG' || pendingReferenceDogId"
+          v-if="filters.mode === 'CATALOG' || pendingReferenceDogId"
           type="primary"
           :icon="Plus"
           :loading="creating"
@@ -84,7 +84,7 @@
           <span>食谱设计</span>
           <div class="card-header-controls">
             <el-input
-              v-model="searchKeyword"
+              v-model="filters.search"
               class="series-search"
               placeholder="搜索系列名称 / 原料 / 参考爱犬"
               clearable
@@ -93,14 +93,14 @@
                 <el-icon><Search /></el-icon>
               </template>
             </el-input>
-            <el-radio-group v-model="designModeFilter" size="small" @change="onDesignModeChange">
+            <el-radio-group v-model="filters.mode" size="small" @change="onDesignModeChange">
               <el-radio-button
                 v-for="option in designModeOptions"
                 :key="option.value"
                 :value="option.value"
               >{{ option.label }}</el-radio-button>
             </el-radio-group>
-            <el-radio-group v-model="statusFilter" size="small" @change="onStatusFilterChange">
+            <el-radio-group v-model="filters.status" size="small" @change="onStatusFilterChange">
               <el-radio-button
                 v-for="option in statusFilterOptions"
                 :key="option.label"
@@ -118,8 +118,8 @@
 
       <TaxonomyView
         v-if="viewMode === 'TAXONOMY'"
-        :design-mode="designModeFilter"
-        :status="statusFilter"
+        :design-mode="filters.mode"
+        :status="filters.status"
       />
 
       <el-empty
@@ -159,7 +159,7 @@
             </span>
             <span class="updated-at">更新于 {{ formatTime(card.updatedAt) }}</span>
           </div>
-          <div v-if="designModeFilter === 'ORDER'" class="order-meta">
+          <div v-if="filters.mode === 'ORDER'" class="order-meta">
             <el-tag size="small" type="success" effect="plain">订单定制</el-tag>
             <span v-if="card.orderNo">订单 {{ card.orderNo }}</span>
             <span v-if="card.orderDogName">🐶 {{ card.orderDogName }}</span>
@@ -198,7 +198,7 @@
             </div>
           </div>
 
-          <div v-if="designModeFilter === 'CATALOG'" class="release-progress">
+          <div v-if="filters.mode === 'CATALOG'" class="release-progress">
             <el-tag size="small" type="info" effect="plain">
               已发布 {{ stageProgressLabel(card) }} 阶段
             </el-tag>
@@ -223,7 +223,7 @@
             </span>
           </div>
 
-          <div v-if="designModeFilter === 'CATALOG'" class="series-card-actions">
+          <div v-if="filters.mode === 'CATALOG'" class="series-card-actions">
             <el-button size="small" text type="primary" @click="openSeriesReleaseDrawer(card)">{{ seriesReleaseEntryLabel(card) }}</el-button>
             <el-button size="small" text @click="handleCardCommand('duplicate', card)">复制系列</el-button>
             <el-button size="small" text @click="handleCardCommand('rename', card)">重命名</el-button>
@@ -307,7 +307,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { MoreFilled, Plus, Search } from '@element-plus/icons-vue'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import { resolveCopySourceStages } from '@/utils/recipeDesigner/copySourceStages'
-import { useQueryFilterSync } from '@/composables/useQueryFilterSync'
+import { useFilterQueryState } from '@/composables/useFilterQueryState'
 import { resolveDogScenarioFromDetail } from '@/utils/recipeDesigner/dogScenario'
 import {
   buildTemporarySeriesName,
@@ -358,32 +358,21 @@ const statusFilterOptions: Array<{
   { value: 'PUBLIC', label: '已发布' },
   { value: 'PRIVATE_CUSTOM', label: '定制' }
 ]
-const designModeFilter = ref<'CATALOG' | 'ORDER'>('CATALOG')
+/**
+ * 列表筛选的唯一状态源（2026-10-30）。
+ * 新增一类筛选：只在下面加一个字段，地址栏同步 + 刷新恢复会自动生效，
+ * 不需要再补第二处登记。
+ */
+const filters = reactive({
+  mode: 'CATALOG' as 'CATALOG' | 'ORDER',
+  status: undefined as RecipeDesignerSeriesStatusFilter | undefined,
+  search: ''
+})
 /** 2026-10-26：列表与需求分类是同一页的两种看法 */
 const viewMode = ref<'SERIES' | 'TAXONOMY'>('SERIES')
-const statusFilter = ref<RecipeDesignerSeriesStatusFilter | undefined>(undefined)
-const searchKeyword = ref('')
 
-/**
- * 筛选条件统一同步到地址栏（2026-10-30）：
- * 刷新、分享、从订单带入都能恢复到同一组筛选；新增筛选项只要登记一行。
- */
-useQueryFilterSync(
-  {
-    mode: designModeFilter,
-    status: statusFilter,
-    search: searchKeyword
-  },
-  {
-    defaults: { mode: 'CATALOG', status: undefined, search: '' },
-    validators: {
-      mode: (value) =>
-        designModeOptions.some((option) => option.value === value),
-      status: (value) =>
-        statusFilterOptions.some((option) => option.value === value)
-    }
-  }
-)
+useFilterQueryState(filters)
+
 const seriesPage = ref(1)
 const seriesHasMore = ref(true)
 const SERIES_PAGE_SIZE = 20
@@ -510,9 +499,9 @@ async function loadSeries(reset = true) {
   }
   try {
     const res = await recipeDesignerApi.listSeries({
-      designMode: designModeFilter.value,
-      status: statusFilter.value,
-      search: searchKeyword.value.trim() || undefined,
+      designMode: filters.mode,
+      status: filters.status,
+      search: filters.search.trim() || undefined,
       page: reset ? 1 : seriesPage.value + 1,
       pageSize: SERIES_PAGE_SIZE,
     })
@@ -572,12 +561,12 @@ function onStatusFilterChange() {
 
 /** 切换产品线 / 订单定制：回到第一页并清空状态筛选，避免两种上下文混用 */
 function onDesignModeChange() {
-  statusFilter.value = undefined
+  filters.status = undefined
   void loadSeries(true)
 }
 
 /** 名称搜索：输入停顿 300ms 后自动搜索（清空按钮立即生效） */
-watch(searchKeyword, () => {
+watch(() => filters.search, () => {
   if (searchTimer) clearTimeout(searchTimer)
   searchTimer = setTimeout(() => {
     void loadSeries(true)
@@ -585,13 +574,13 @@ watch(searchKeyword, () => {
 })
 
 const emptyDescription = computed(() => {
-  if (designModeFilter.value === 'ORDER') {
-    return searchKeyword.value.trim()
-      ? `没有找到包含「${searchKeyword.value.trim()}」的订单定制系列`
+  if (filters.mode === 'ORDER') {
+    return filters.search.trim()
+      ? `没有找到包含「${filters.search.trim()}」的订单定制系列`
       : '还没有订单定制系列；请从订单设计工作台创建设计'
   }
-  return searchKeyword.value.trim()
-    ? `没有找到名称、原料或爱犬包含「${searchKeyword.value.trim()}」的设计系列`
+  return filters.search.trim()
+    ? `没有找到名称、原料或爱犬包含「${filters.search.trim()}」的设计系列`
     : '还没有设计系列，点击右上角「新建食谱」开始'
 })
 
@@ -632,7 +621,7 @@ async function createSeries() {
 async function openStage(card: RecipeDesignerSeriesCard, stage: RecipeDesignerSeriesStage) {
   // 订单定制列表进入时，把业务订单号带进编辑器：锁狗、显示本单进度。
   entryOrderId.value =
-    designModeFilter.value === 'ORDER' && card.orderNo ? card.orderNo : ''
+    filters.mode === 'ORDER' && card.orderNo ? card.orderNo : ''
   if (stage.draftId) {
     // 已有草稿：若草稿为空且该阶段有已发布配方，走后端"自动带入已发布原料"，
     // 避免进入历史遗留的空草稿；否则直接进入该草稿（已发布草稿由编辑器自动创建修订版）

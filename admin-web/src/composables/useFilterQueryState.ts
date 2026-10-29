@@ -52,39 +52,47 @@ export function isSameQuery(a: LocationQuery, b: LocationQuery): boolean {
   return true
 }
 
-export function useQueryFilterSync(
-  refs: Record<string, Ref<any>>,
-  options: QueryFilterSyncOptions
+/**
+ * 把「一整份筛选状态对象」自动同步到地址栏。
+ *
+ * 这是比逐个登记更省事的方式：新增一类筛选时，只要在 state 里加一个字段，
+ * 这里会自动遍历它 —— 不需要再登记 ref、默认值或读写逻辑。
+ * `state` 的初始值会作为默认值：等于默认值时不写进地址栏。
+ */
+export function useFilterQueryState<T extends Record<string, unknown>>(
+  state: T
 ): void {
   const route = useRoute()
   const router = useRouter()
+  const defaults: Record<string, unknown> = { ...state }
 
   // 地址栏优先：刷新、分享链接、从订单带入时按 URL 恢复
-  for (const [key, filterRef] of Object.entries(refs)) {
+  for (const key of Object.keys(state)) {
     const raw = route.query[key]
-    if (typeof raw !== 'string' || !raw) continue
-    const validator = options.validators?.[key]
-    if (validator && !validator(raw)) continue
-    filterRef.value = raw
+    if (typeof raw === 'string' && raw) {
+      ;(state as Record<string, unknown>)[key] = raw
+    }
   }
 
   let timer: ReturnType<typeof setTimeout> | null = null
   watch(
-    () =>
-      Object.entries(refs)
-        .map(([key, filterRef]) => `${key}=${String(filterRef.value ?? '')}`)
-        .join('&'),
+    () => state,
     () => {
       if (timer) clearTimeout(timer)
       timer = setTimeout(() => {
         const values = Object.fromEntries(
-          Object.entries(refs).map(([key, filterRef]) => [key, filterRef.value])
+          Object.keys(state).map((key) => [key, state[key]])
         )
-        const nextQuery = buildFilterQuery(route.query, values, options.defaults)
+        const nextQuery = buildFilterQuery(
+          route.query,
+          values,
+          defaults as Record<string, string | undefined>
+        )
         if (isSameQuery(nextQuery, route.query)) return
         void router.replace({ query: nextQuery })
-      }, options.debounceMs ?? 200)
-    }
+      }, 200)
+    },
+    { deep: true }
   )
 
   onBeforeUnmount(() => {

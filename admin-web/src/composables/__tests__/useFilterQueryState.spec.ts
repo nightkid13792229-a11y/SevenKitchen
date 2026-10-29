@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildFilterQuery, isSameQuery } from '../useQueryFilterSync'
+import { buildFilterQuery, isSameQuery } from '../useFilterQueryState'
 
 const defaults = { mode: 'CATALOG', status: undefined, search: '' }
 

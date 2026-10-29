@@ -14,8 +14,8 @@ describe('需求分类视图', () => {
     expect(viewSource).toContain('designMode?:')
     expect(viewSource).toContain('status?:')
     expect(viewSource).toContain('scopeParams()')
-    expect(indexSource).toContain(':design-mode="designModeFilter"')
-    expect(indexSource).toContain(':status="statusFilter"')
+    expect(indexSource).toContain(':design-mode="filters.mode"')
+    expect(indexSource).toContain(':status="filters.status"')
   })
 
   it('没归的分类显示占位，而不是不显示', () => {

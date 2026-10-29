@@ -366,7 +366,15 @@
 
     <!-- 系列改名（合并命名模型：编辑页与列表、发布页共用同一个系列名） -->
     <el-dialog v-model="renameDialogVisible" title="重命名系列" width="420px">
-      <el-input v-model="renameForm.name" maxlength="60" show-word-limit />
+      <el-input
+        v-model="renameForm.name"
+        maxlength="12"
+        show-word-limit
+        placeholder="例如：均衡营养|三文鱼南瓜"
+      />
+      <div class="rename-hint">
+        价值点在前、食材在后，最多 12 个字——多了标签印不下。
+      </div>
       <template #footer>
         <el-button @click="renameDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="renaming" @click="confirmRename">保存</el-button>
@@ -461,6 +469,7 @@ import DogInsightPanel from './components/DogInsightPanel.vue'
 import SupplementTargetDialog from './components/SupplementTargetDialog.vue'
 import PreparationMethodField from './components/PreparationMethodField.vue'
 import { PREPARATION_FIELD_LABEL } from '@/constants/preparationField'
+import { isTemporarySeriesName } from '@/utils/recipeDesigner/seriesName'
 import {
   DEFAULT_PANE_WIDTHS,
   PANE_MAX_WIDTH,
@@ -696,7 +705,9 @@ const renameForm = reactive({ name: '' })
 const renaming = ref(false)
 
 function openRenameDialog() {
-  renameForm.name = seriesDisplayName.value === '加载中…' ? '' : seriesDisplayName.value
+  const current = seriesDisplayName.value === '加载中…' ? '' : seriesDisplayName.value
+  // 临时名只是占位，清空让用户直接填正式名称
+  renameForm.name = isTemporarySeriesName(current) ? '' : current
   renameDialogVisible.value = true
 }
 
@@ -2022,6 +2033,12 @@ onBeforeUnmount(() => {
 }
 .design-mode-tag {
   flex-shrink: 0;
+}
+.rename-hint {
+  margin-top: 6px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #909399;
 }
 .stage-tag {
   color: #909399;

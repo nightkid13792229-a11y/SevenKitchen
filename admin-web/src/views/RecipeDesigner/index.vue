@@ -237,7 +237,15 @@
 
     <!-- 重命名 -->
     <el-dialog v-model="renameDialogVisible" title="重命名系列" width="420px">
-      <el-input v-model="renameForm.name" maxlength="60" show-word-limit />
+      <el-input
+        v-model="renameForm.name"
+        maxlength="12"
+        show-word-limit
+        placeholder="例如：均衡营养|三文鱼南瓜"
+      />
+      <div class="form-tip">
+        价值点在前、食材在后，最多 12 个字——多了标签印不下。
+      </div>
       <template #footer>
         <el-button @click="renameDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="renaming" @click="confirmRename">保存</el-button>
@@ -629,7 +637,8 @@ async function handleCardCommand(command: string, card: RecipeDesignerSeriesCard
     }
   } else if (command === 'rename') {
     renameForm.id = card.id
-    renameForm.name = card.name
+    // 临时名（未命名…）只是占位，直接清空，让用户填正式名称
+    renameForm.name = isTemporarySeriesName(card.name) ? '' : card.name
     renameDialogVisible.value = true
   } else if (command === 'delete') {
     try {

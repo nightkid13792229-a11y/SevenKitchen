@@ -9888,6 +9888,28 @@ describe('RecipeDesignerService', () => {
       expect(prisma.recipeSeries.update).not.toHaveBeenCalled();
     });
 
+    it('refuses to rename a series to more than 12 characters', async () => {
+      prisma.recipeSeries.findUnique.mockResolvedValue(
+        seriesRecord({
+          id: 'series-1',
+          name: '成犬鸡肉配方',
+          createdBy: 'staff-1',
+          designs: undefined,
+          recipes: undefined,
+        }),
+      );
+
+      await expect(
+        service.renameSeries(
+          'series-1',
+          { name: '这个系列名称明显超过十二个字' },
+          { userId: 'staff-1', role: 'STAFF' },
+        ),
+      ).rejects.toThrow('食谱名称最多 12 个字');
+
+      expect(prisma.recipeSeries.update).not.toHaveBeenCalled();
+    });
+
     it('renames a series and syncs all of its draft names with fresh versions', async () => {
       prisma.recipeSeries.findUnique.mockResolvedValue(
         seriesRecord({

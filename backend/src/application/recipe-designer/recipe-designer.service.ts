@@ -4089,9 +4089,16 @@ export class RecipeDesignerService {
     access: RecipeDesignerAccessInput,
   ) {
     const context = normalizeRecipeDesignerAccessContext(access);
-    const name = dto.name.trim();
-    if (!name) {
+    const rawName = dto.name.trim();
+    if (!rawName) {
       throw new BadRequestException('请填写系列名称');
+    }
+    // 改名是设置正式名称：和新建一样按标签 12 字硬上限拦（2026-10-29）
+    let name: string;
+    try {
+      name = assertRecipeNameLength(rawName);
+    } catch (error) {
+      throw new BadRequestException((error as Error).message);
     }
 
     const series = await this.prisma.recipeSeries.findUnique({

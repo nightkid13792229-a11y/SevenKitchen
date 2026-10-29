@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { resolveLineEntry } from './lineEntry'
+import {
+  applyLineAction,
+  createLineEntryState,
+  resolveLineEntry,
+  toLineEntryInput
+} from './lineEntry'
 
 /**
  * 线路决议：进页面第一刻就决定这半页显示哪副身体。
@@ -88,6 +93,64 @@ describe('resolveLineEntry', () => {
       line: null,
       locked: true,
       rejected: true
+    })
+  })
+})
+
+/**
+ * 页面上的线路状态流转。
+ *
+ * 这一组用例是补 2026-10-29 评审的洞：入口预选如果每帧都从 URL 重算，
+ * 用户点「改回食材 / 换线路」就会立刻被 URL 拉回去——按钮看着在、点了没用。
+ * 预选只消费一次，之后以用户动作为准。
+ */
+describe('线路状态流转', () => {
+  it('入口预选大小写不敏感', () => {
+    expect(resolveLineEntry({ entryLine: 'supplement' })).toMatchObject({
+      line: 'SUPPLEMENT',
+      source: 'ENTRY'
+    })
+    expect(resolveLineEntry({ entryLine: ' food ' })).toMatchObject({
+      line: 'FOOD',
+      source: 'ENTRY'
+    })
+  })
+
+  it('预选补剂后改回食材 → 食材线（用户动作压过预选）', () => {
+    const state = applyLineAction(createLineEntryState('SUPPLEMENT'), {
+      type: 'PICK',
+      line: 'FOOD'
+    })
+
+    expect(resolveLineEntry(toLineEntryInput(state))).toMatchObject({
+      line: 'FOOD',
+      source: 'USER'
+    })
+  })
+
+  it('换线路 → 回到未定，预选不再把它拉回去', () => {
+    const state = applyLineAction(createLineEntryState('SUPPLEMENT'), {
+      type: 'RESET'
+    })
+
+    expect(resolveLineEntry(toLineEntryInput(state))).toMatchObject({
+      line: null,
+      source: null
+    })
+  })
+
+  it('建出草稿后锁死，之后的选择不再生效', () => {
+    const locked = applyLineAction(createLineEntryState(null), {
+      type: 'LOCK',
+      line: 'FOOD'
+    })
+    const afterPick = applyLineAction(locked, {
+      type: 'PICK',
+      line: 'SUPPLEMENT'
+    })
+
+    expect(resolveLineEntry(toLineEntryInput(afterPick))).toMatchObject({
+      line: 'FOOD'
     })
   })
 })

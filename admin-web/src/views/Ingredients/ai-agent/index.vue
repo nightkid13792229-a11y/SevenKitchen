@@ -61,7 +61,7 @@
           补剂和食材的字段、计量口径、核验规则都不一样，这条线正在单独做。
           这半页不会保存任何东西。
         </p>
-        <el-button v-if="canSwitchLine" type="primary" @click="resetLine">
+        <el-button v-if="canSwitchLine" type="primary" @click="revertToFood">
           改回食材
         </el-button>
       </el-card>
@@ -930,7 +930,15 @@ import {
 } from '@/constants/ingredientCardFields'
 import { INGREDIENT_NUTRITION_TAB_DEFINITIONS } from '@/constants/ingredientNutrition'
 import { getApiErrorMessage } from '@/utils/apiError'
-import { LINE_LABELS, resolveLineEntry, type IngredientLine } from './lineEntry'
+import {
+  LINE_LABELS,
+  applyLineAction,
+  createLineEntryState,
+  resolveLineEntry,
+  toLineEntryInput,
+  type IngredientLine,
+  type LineEntryState
+} from './lineEntry'
 import type {
   AuthorizeBlockedReason,
   AuthorizeResult,
@@ -1052,39 +1060,41 @@ const state = reactive({
  * `pick` 是用户在这半页里点的；`locked` 一旦有草稿就写死（草稿的线不能改）。
  * 判定规则在 lineEntry.ts，这里只负责把三样输入递进去。
  */
-const entry = reactive<{
-  pick: IngredientLine | null
-  locked: IngredientLine | null
-}>({
-  pick: null,
-  locked: null
-})
-
-const lineDecision = computed(() =>
-  resolveLineEntry({
-    userPick: entry.locked ?? entry.pick,
-    entryLine: typeof route.query.line === 'string' ? route.query.line : null
-  })
+const entryState = reactive<LineEntryState>(
+  // 入口预选**只消费一次**：之后 URL 不再参与判定，否则「改回食材」会被它拉回去。
+  createLineEntryState(
+    typeof route.query.line === 'string' ? route.query.line : null
+  )
 )
+
+const lineDecision = computed(() => resolveLineEntry(toLineEntryInput(entryState)))
 const line = computed(() => lineDecision.value.line)
 /** 还没建草稿、也没在跑，才允许改主意。 */
 const canSwitchLine = computed(
-  () => entry.locked === null && !state.running && !state.draftId
+  () => entryState.locked === null && !state.running && !state.draftId
 )
 
 function pickLine(next: IngredientLine) {
-  if (entry.locked !== null || state.running) {
+  if (!canSwitchLine.value) {
     return
   }
-  entry.pick = next
+  Object.assign(
+    entryState,
+    applyLineAction(entryState, { type: 'PICK', line: next })
+  )
 }
 
-/** 从闸门卡退回起手卡；只在还没锁定的时候可用。 */
+/** 闸门卡上的「改回食材」：直接落到食材线，而不是回到起手卡。 */
+function revertToFood() {
+  pickLine('FOOD')
+}
+
+/** 食材线返回起手卡；只在还没锁定的时候可用。 */
 function resetLine() {
   if (!canSwitchLine.value) {
     return
   }
-  entry.pick = null
+  Object.assign(entryState, applyLineAction(entryState, { type: 'RESET' }))
 }
 
 /**
@@ -1604,7 +1614,12 @@ async function handleRun() {
     applyState(finalState)
     if (finalState.draftId) {
       // 草稿一建出来，线路就定了：之后只能另起一份，不能在这半页里改。
-      entry.locked = sentLine
+      if (sentLine) {
+        Object.assign(
+          entryState,
+          applyLineAction(entryState, { type: 'LOCK', line: sentLine })
+        )
+      }
       // 每跑完一轮都重新读草稿：右边两个标签永远显示服务端最新版本。
       await loadDraft(finalState.draftId)
     }

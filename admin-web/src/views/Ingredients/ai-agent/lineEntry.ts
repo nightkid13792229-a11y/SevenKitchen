@@ -42,9 +42,19 @@ const PACKAGING_NOTICE = '这份记录是包装原料，这个页面不处理包
 const DRAFT_NOTICE = '已按草稿类型纠正'
 const INGREDIENT_NOTICE = '已按原料类型纠正'
 
-/** 只认两个值：其它（含空串、包装、脏数据）一律当作「没说」。 */
+/**
+ * 只认两个值：其它（含空串、包装、脏数据）一律当作「没说」。
+ *
+ * 大小写不敏感：文档与外部入口可能写成 `?line=supplement`，这里归一成大写。
+ */
 function toLine(value: string | null | undefined): IngredientLine | null {
-  return value === 'FOOD' || value === 'SUPPLEMENT' ? value : null
+  if (typeof value !== 'string') {
+    return null
+  }
+  const normalized = value.trim().toUpperCase()
+  return normalized === 'FOOD' || normalized === 'SUPPLEMENT'
+    ? (normalized as IngredientLine)
+    : null
 }
 
 /** 有值但不是食材/补剂：例如包装。空值不算拒绝，只算「没有」。 */
@@ -58,6 +68,52 @@ function isUnsupportedType(value: string | null | undefined): boolean {
 /** 用户/入口这次实际想要的那条线；都没有时返回 null。 */
 function askedLine(input: LineEntryInput): IngredientLine | null {
   return toLine(input.userPick ?? null) ?? toLine(input.entryLine ?? null)
+}
+
+/** 页面持有的线路状态：用户点过什么、是否已经锁死。 */
+export interface LineEntryState {
+  pick: IngredientLine | null
+  locked: IngredientLine | null
+}
+
+export type LineAction =
+  | { type: 'PICK'; line: IngredientLine }
+  | { type: 'RESET' }
+  | { type: 'LOCK'; line: IngredientLine }
+
+/**
+ * 用入口预选初始化状态——**只消费一次**。
+ *
+ * 之后 URL 不再参与判定：否则页面每重算一次，用户刚点的「改回食材」就会被
+ * 预选覆盖回去，按钮看着在、点了没用。
+ */
+export function createLineEntryState(
+  entryLine?: string | null
+): LineEntryState {
+  return { pick: toLine(entryLine), locked: null }
+}
+
+/** 状态迁移：锁定后一切动作无效；RESET 只清用户的选择。 */
+export function applyLineAction(
+  state: LineEntryState,
+  action: LineAction
+): LineEntryState {
+  if (state.locked) {
+    return state
+  }
+  if (action.type === 'PICK') {
+    return { ...state, pick: action.line }
+  }
+  if (action.type === 'RESET') {
+    return { ...state, pick: null }
+  }
+  return { ...state, locked: action.line }
+}
+
+/** 把页面状态折成决议函数的入参（锁定优先于用户手选）。 */
+export function toLineEntryInput(state: LineEntryState): LineEntryInput {
+  const chosen = state.locked ?? state.pick
+  return chosen ? { userPick: chosen } : {}
 }
 
 export function resolveLineEntry(input: LineEntryInput): LineDecision {

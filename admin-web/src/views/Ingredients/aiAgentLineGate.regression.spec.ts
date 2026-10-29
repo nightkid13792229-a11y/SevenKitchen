@@ -42,6 +42,16 @@ describe('AI 添加原料 · 线路闸门', () => {
     expect(page).toContain("line.value === 'FOOD'")
   })
 
+  it('入口预选只消费一次，不从 URL 每帧重算', () => {
+    expect(page).toContain('createLineEntryState')
+    expect(page).toContain('toLineEntryInput')
+    expect(page).not.toContain('entryLine:')
+  })
+
+  it('「改回食材」直接落到食材线', () => {
+    expect(page).toContain('@click="revertToFood"')
+  })
+
   it('旧判断页的地址被重定向到唯一入口', () => {
     expect(routerSource).toContain('path: "ingredients/ai-create"')
     expect(routerSource).toContain('redirect')

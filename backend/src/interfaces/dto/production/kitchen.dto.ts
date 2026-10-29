@@ -117,6 +117,25 @@ export class PackagingUnitDetailDto {
   @IsOptional()
   ingredientsUsageSnapshot?: any; // 原料用量快照
 
+  /**
+   * 后端算好的「这一锅用多少原料」。
+   * 小程序优先渲染这份，不再自己按百分比乘；老版本小程序没有该字段时
+   * 仍走本地计算，保证灰度期可用。
+   */
+  @IsOptional()
+  plannedIngredientsUsage?: Array<{
+    ingredientId: string;
+    name: string;
+    type: 'FOOD' | 'SUPPLEMENT' | 'PACKAGING';
+    requiredAmount: number;
+    unit: string;
+    calculation: string;
+  }>;
+
+  @IsOptional()
+  @IsNumber()
+  plannedFoodInputWeightG?: number;
+
   @IsOptional()
   recipeSnapshot?: any; // 食谱快照（包含原料列表）
 }

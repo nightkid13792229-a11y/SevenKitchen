@@ -13,8 +13,12 @@
  * 这里按**车间界面一致的口径**实现，供扣减原料库存使用：
  *
  *   投料毛重 = 锅净产出 × 损耗率
- *   食材/包材：投料毛重 × 配比%
+ *   食材/包材：**克数 ÷ 食材克数合计**（没有克数才退回存着的配比%）× 投料毛重
  *   补剂：按营养素目标定量（与成本核算同一个函数），没有目标时才回退到配比
+ *
+ * 为什么食材优先用克数：快照里的 `ratio` 是发布时写死的，分母一旦过期
+ * （2026-10-28：克数合计 311g、配比按 385.2g 算），车间就会少投料 20%。
+ * 克数不随分母变化，所以有克数就一定能算对。
  *
  * 补剂损耗率取「该补剂自己的损耗率」，没设时才用全局配置值 ——
  * 与成本核算保持一致（实测 33 种补剂里 30 种已显式设过）。
@@ -65,6 +69,21 @@ export function calculateProductionUsage(
     ? recipeSnapshot.items
     : [];
 
+  /**
+   * 食材克数合计：配比优先按「克数 ÷ 食材合计」现算。
+   *
+   * 快照里存的 `ratio` 是发布时写死的；一旦当时的分母过期（2026-10-28：
+   * 克数合计 311g、存的配比却按 385.2g 算），车间就会少投料。
+   * 克数不随分母变化，所以只要快照里有 `example_weight`，就用克数推导；
+   * 没有克数的老数据才退回存着的配比。
+   */
+  const foodWeightTotalG = recipeItems.reduce((sum, item) => {
+    const rawType = String(item?.ingredient_type || 'FOOD').toUpperCase();
+    if (rawType === 'SUPPLEMENT' || rawType === 'PACKAGING') return sum;
+    const weight = Number(item?.example_weight ?? item?.exampleWeight);
+    return Number.isFinite(weight) && weight > 0 ? sum + weight : sum;
+  }, 0);
+
   for (const item of recipeItems) {
     const ingredientId = item?.ingredient_id || item?.ingredientId;
     if (!ingredientId) continue;
@@ -103,12 +122,20 @@ export function calculateProductionUsage(
       continue;
     }
 
-    const ratio = positive(item?.ratio);
+    const exampleWeightG = Number(item?.example_weight ?? item?.exampleWeight);
+    const derivedRatio =
+      type === 'FOOD' &&
+      foodWeightTotalG > 0 &&
+      Number.isFinite(exampleWeightG) &&
+      exampleWeightG > 0
+        ? (exampleWeightG / foodWeightTotalG) * 100
+        : null;
+    const ratio = derivedRatio ?? positive(item?.ratio);
     if (!ratio) {
       skipped.push({
         ingredientId,
         name,
-        reason: '配方快照里没有配比',
+        reason: '配方快照里既没有克数也没有配比',
       });
       continue;
     }
@@ -125,9 +152,20 @@ export function calculateProductionUsage(
       type,
       requiredAmount,
       unit: 'g',
-      calculation: `投料毛重 ${round2(foodInputWeightG)}g（净产出 ${round2(
-        totalProductionG,
-      )}g × 损耗率 ${lossRate}）× 配比 ${ratio}% = ${requiredAmount}g`,
+      calculation:
+        derivedRatio !== null
+          ? `投料毛重 ${round2(foodInputWeightG)}g（净产出 ${round2(
+              totalProductionG,
+            )}g × 损耗率 ${lossRate}）× 克数占比 ${round2(
+              derivedRatio,
+            )}%（${exampleWeightG}g ÷ 食材合计 ${round2(
+              foodWeightTotalG,
+            )}g）= ${requiredAmount}g`
+          : `投料毛重 ${round2(foodInputWeightG)}g（净产出 ${round2(
+              totalProductionG,
+            )}g × 损耗率 ${lossRate}）× 配比 ${round2(
+              ratio,
+            )}% = ${requiredAmount}g`,
     });
   }
 

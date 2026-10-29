@@ -1,8 +1,10 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
   HttpCode,
+  Logger,
   Param,
   Patch,
   Post,
@@ -17,6 +19,10 @@ import {
   IngredientCreationAuditService,
   type IngredientCreationAuditView,
 } from '../../application/ingredient-creation/ingredient-creation-audit.service';
+import {
+  decideRequestedLine,
+  type RequestedLineDecision,
+} from '../../application/ingredient-creation/ingredient-line';
 import {
   IngredientDraftAgentService,
   type IngredientAgentRunResult,
@@ -93,6 +99,8 @@ function stripProposalHistory(
 @UseGuards(AuthGuard, AdminGuard)
 @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 export class IngredientCreationController {
+  private readonly logger = new Logger(IngredientCreationController.name);
+
   constructor(
     private readonly draftService: IngredientCreationDraftService,
     private readonly candidateService: IngredientCreationCandidateService,
@@ -104,6 +112,48 @@ export class IngredientCreationController {
     private readonly intakeService: IngredientCreationIntakeService,
     private readonly agentService: IngredientDraftAgentService,
   ) {}
+
+  /**
+   * 起草请求该走哪条线。
+   *
+   * 必须在**写出响应头之前**判定：流式接口一旦 flush，服务里再抛错就只能变成
+   * 一条 SSE error 事件，页面拿不到 400。判定本身在 `ingredient-line` 里。
+   */
+  private decideLine(dto: RunIngredientAgentDto): RequestedLineDecision {
+    const decision = decideRequestedLine({
+      draftId: dto.draftId,
+      line: dto.line,
+    });
+
+    if (decision.action === 'REJECT') {
+      throw new BadRequestException(decision.message);
+    }
+
+    if (decision.action === 'CREATE' && decision.compatDefault) {
+      // 过渡期：老页面还没带线路。下个版本收紧为必填，这里只留一条痕迹。
+      this.logger.warn(
+        '[ingredient-agent] 请求未带线路，按食材处理（过渡兼容）',
+      );
+    }
+
+    return decision;
+  }
+
+  /** 组起草入参：有草稿就以草稿为准（不带 line），新建才带。 */
+  private buildRunInput(
+    dto: RunIngredientAgentDto,
+    userId: string,
+    decision: RequestedLineDecision,
+    onEvent?: (event: IngredientAgentStreamEvent) => void,
+  ) {
+    return {
+      ...(dto.draftId ? { draftId: dto.draftId } : {}),
+      text: dto.text,
+      userId,
+      ...(decision.action === 'CREATE' ? { line: decision.line } : {}),
+      ...(onEvent ? { onEvent } : {}),
+    };
+  }
 
   @Post('intake/classify')
   @ApiOperation({
@@ -129,11 +179,10 @@ export class IngredientCreationController {
     @Body() dto: RunIngredientAgentDto,
     @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<IngredientAgentRunResult>> {
-    const result = await this.agentService.run({
-      draftId: dto.draftId,
-      text: dto.text,
-      userId: user.userId,
-    });
+    const decision = this.decideLine(dto);
+    const result = await this.agentService.run(
+      this.buildRunInput(dto, user.userId, decision),
+    );
 
     return new ApiResponseDto(0, 'Success', result);
   }
@@ -149,6 +198,9 @@ export class IngredientCreationController {
     @CurrentUser() user: RequestUser,
     @Res() res: Response,
   ): Promise<void> {
+    // 先判定再开流：补剂线没开放时必须能返回真正的 400。
+    const decision = this.decideLine(dto);
+
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
@@ -171,12 +223,9 @@ export class IngredientCreationController {
     };
 
     try {
-      await this.agentService.run({
-        draftId: dto.draftId,
-        text: dto.text,
-        userId: user.userId,
-        onEvent: send,
-      });
+      await this.agentService.run(
+        this.buildRunInput(dto, user.userId, decision, send),
+      );
     } catch {
       // 服务在抛错前已经发过 error 事件；这里只负责收尾，避免重复推一条。
     } finally {

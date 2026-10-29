@@ -1,5 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
+import {
+  INGREDIENT_LINES,
+  type IngredientLine,
+} from '../../../application/ingredient-creation/ingredient-line';
 
 /** `POST agent/run`：给一句话，让 AI 在草稿上受控地调工具。 */
 export class RunIngredientAgentDto {
@@ -12,6 +22,15 @@ export class RunIngredientAgentDto {
   @IsNotEmpty()
   @MaxLength(64)
   draftId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      '本次要建的原料线路：FOOD 食材 / SUPPLEMENT 补剂。有 draftId 时忽略；缺省按 FOOD 处理（过渡兼容）',
+    enum: INGREDIENT_LINES,
+  })
+  @IsOptional()
+  @IsIn(INGREDIENT_LINES)
+  line?: IngredientLine;
 
   @ApiProperty({
     description: '用户原话，例如「帮我加鸡肝」',

@@ -16,6 +16,7 @@ import {
   type IngredientAgentRunResult,
 } from '../../../src/application/ingredient-creation/ingredient-draft-agent.service';
 import { IngredientCreationAuditService } from '../../../src/application/ingredient-creation/ingredient-creation-audit.service';
+import { LINE_NOT_OPEN_MESSAGE } from '../../../src/application/ingredient-creation/ingredient-line';
 import { IngredientCreationCandidateService } from '../../../src/application/ingredient-creation/ingredient-creation-candidate.service';
 import { IngredientCreationAuthorizeService } from '../../../src/application/ingredient-creation/ingredient-creation-authorize.service';
 import { IngredientCreationCheckService } from '../../../src/application/ingredient-creation/ingredient-creation-check.service';
@@ -2445,6 +2446,80 @@ describe('POST /api/v1/admin/ingredient-creation/agent/run', () => {
       .expect(400);
 
     expect(agentService.run).not.toHaveBeenCalled();
+  });
+
+  it('流式接口选了补剂 → 400，且不调用起草服务', async () => {
+    const response = await http()
+      .post(AGENT_STREAM_PATH)
+      .set('Authorization', 'Bearer admin-token')
+      .send({ line: 'SUPPLEMENT', text: '鱼油' })
+      .expect(400);
+
+    expect(response.body.message).toBe(LINE_NOT_OPEN_MESSAGE);
+    expect(agentService.run).not.toHaveBeenCalled();
+  });
+
+  it('非流式接口同样拒绝补剂', async () => {
+    const response = await http()
+      .post(AGENT_PATH)
+      .set('Authorization', 'Bearer admin-token')
+      .send({ line: 'SUPPLEMENT', text: '鱼油' })
+      .expect(400);
+
+    expect(response.body.message).toBe(LINE_NOT_OPEN_MESSAGE);
+    expect(agentService.run).not.toHaveBeenCalled();
+  });
+
+  it('带草稿时忽略线路，照常起草且不多传字段', async () => {
+    agentService.run.mockResolvedValue({
+      draftId: DRAFT_ID,
+      reply: '已填好。',
+      toolCalls: [],
+      steps: 1,
+      toolCallCount: 0,
+      transcript: [],
+      mode: 'FUNCTION_CALLING',
+      stopReason: null,
+      report: buildRunReport(),
+    } as IngredientAgentRunResult);
+
+    await http()
+      .post(AGENT_PATH)
+      .set('Authorization', 'Bearer admin-token')
+      .send({ draftId: DRAFT_ID, line: 'SUPPLEMENT', text: '鸡肝' })
+      .expect(201);
+
+    expect(agentService.run).toHaveBeenCalledWith({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+  });
+
+  it('过渡期旧页面不带线路 → 照常按食材起草', async () => {
+    agentService.run.mockResolvedValue({
+      draftId: DRAFT_ID,
+      reply: '已填好。',
+      toolCalls: [],
+      steps: 1,
+      toolCallCount: 0,
+      transcript: [],
+      mode: 'FUNCTION_CALLING',
+      stopReason: null,
+      report: buildRunReport(),
+    } as IngredientAgentRunResult);
+
+    await http()
+      .post(AGENT_PATH)
+      .set('Authorization', 'Bearer admin-token')
+      .send({ text: '鸡肝' })
+      .expect(201);
+
+    expect(agentService.run).toHaveBeenCalledWith({
+      text: '鸡肝',
+      userId: 'admin-1',
+      line: 'FOOD',
+    });
   });
 
   it('流式接口未登录 → 401', async () => {

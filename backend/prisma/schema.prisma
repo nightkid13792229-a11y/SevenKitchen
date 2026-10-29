@@ -935,7 +935,11 @@ enum ProductionBatchSource {
 model PackagingUnit {
   id                       String              @id @default(uuid()) @map("id")
   productionBatchId        String              @map("production_batch_id")
-  recipeSnapshot           Json                @map("recipe_snapshot")
+  /// 订单锅不再复制整份配方：留空，改由 recipeSnapshotRefOrderItemId 指向来源
+  /// 订单明细的 recipe_snapshot。备货锅（试吃装）没有订单，仍在这里存一份。
+  recipeSnapshot           Json?               @map("recipe_snapshot")
+  /// 订单锅的配方来源：指向提供配方的 order_item（引用，不复制）
+  recipeSnapshotRefOrderItemId String?         @map("recipe_snapshot_ref_order_item_id")
   totalProductionG         Float               @map("total_production_g")
   sourceOrderItemIds       String[]            @map("source_order_item_ids")
   createdAt                DateTime            @default(now()) @map("created_at")
@@ -958,6 +962,7 @@ model PackagingUnit {
 
   @@index([productionBatchId])
   @@index([status])
+  @@index([recipeSnapshotRefOrderItemId])
   @@map("packaging_unit")
 }
 

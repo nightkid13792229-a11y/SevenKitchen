@@ -372,6 +372,15 @@ export class ProductionService {
           new Date(),
         );
 
+        /**
+         * 订单锅不再复制整份配方：只记「配方从哪条订单明细取」。
+         * 这样上游修正订单快照后，锅跟着变，不用删批次重排。
+         * （试吃装备货批次没有订单，仍由备货服务把快照存在锅里。）
+         */
+        if (sourceOrderItemIds.length > 0) {
+          unit.recipeSnapshotRefOrderItemId = sourceOrderItemIds[0];
+        }
+
         // 将生肉重量分配信息附加到 unit 对象上（用于后续分装）
         (unit as any).rawMaterialAllocations = rawMaterialAllocations;
         (unit as any).productionGroupKey = productionGroupKey;

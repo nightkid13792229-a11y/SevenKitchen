@@ -2661,6 +2661,11 @@ model CustomRecipeOrder {
   paymentConfirmedAt    DateTime?                @map("payment_confirmed_at")
   /// 微信支付交易号（对账/客服排查用）
   paymentTransactionId  String?                  @map("payment_transaction_id")
+  /// 微信「虚拟发货」信息上传时间（2026-10-30）。
+  /// 定制食谱交付的是电子食谱/采购清单/报告，没有快递单号；
+  /// 交付成功后按 logistics_type=3（虚拟商品）上报微信，避免资金一直冻结。
+  /// 非空 = 已成功上报（幂等标记，重复交付不重复上传）。
+  wechatShippingUploadedAt DateTime?            @map("wechat_shipping_uploaded_at")
 
   // ===== 2026-10-21 收款渠道与实收（Task 1）=====
   //

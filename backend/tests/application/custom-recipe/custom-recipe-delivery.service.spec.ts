@@ -70,6 +70,7 @@ function createService(options: {
   dog?: unknown;
   existingDeliveryCount?: number;
   config?: Record<string, unknown>;
+  wechatShipping?: unknown;
 }) {
   const txProxy = {
     $queryRaw: jest.fn().mockResolvedValue([{ id: 'order-uuid' }]),
@@ -145,6 +146,8 @@ function createService(options: {
   const service = new CustomRecipeDeliveryService(
     prisma as unknown as PrismaService,
     configService as unknown as CustomRecipeConfigService,
+    undefined,
+    options.wechatShipping as any,
   );
 
   // 唯一约束那条检查走的是 prisma.customRecipeOrder.findFirst 的第二次调用
@@ -177,6 +180,25 @@ describe('CustomRecipeDeliveryService', () => {
       expect(snapshot.schemaVersion).toBe(1);
       expect(snapshot.recipe.name).toBe('豆豆的减重食谱');
       expect(snapshot.recipe.items).toHaveLength(2);
+    });
+
+    it('交付成功后自动上报微信虚拟发货（定制食谱）', async () => {
+      const uploadVirtualForCustomRecipeOrder = jest
+        .fn()
+        .mockResolvedValue({ success: true });
+      const { service } = createService({
+        wechatShipping: { uploadVirtualForCustomRecipeOrder },
+      });
+
+      await service.deliver({
+        orderIdOrId: 'CR202610160001',
+        recipeIdOrBizId: 'CR1759000000000',
+        deliveredBy: 'admin-1',
+      });
+
+      expect(uploadVirtualForCustomRecipeOrder).toHaveBeenCalledWith(
+        'order-pk-1',
+      );
     });
 
     it('★ 喂食量由**后端**算：每天需要 940 kcal ÷ 3620 kcal/kg × 1000 ≈ 259.7g', async () => {

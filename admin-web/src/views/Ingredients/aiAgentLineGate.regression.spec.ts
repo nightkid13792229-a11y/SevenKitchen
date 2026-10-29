@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import pageSource from './ai-agent/index.vue?raw'
 import streamSource from './ai-agent/agentStream.ts?raw'
+import routerSource from '@/router/index.ts?raw'
+import apiSource from '@/api/ingredientCreation.ts?raw'
 
 function clean(source: string) {
   return source.replace(/<!--[\s\S]*?-->/g, '')
@@ -38,5 +40,15 @@ describe('AI 添加原料 · 线路闸门', () => {
 
   it('线路没定或选了补剂时不能发送', () => {
     expect(page).toContain("line.value === 'FOOD'")
+  })
+
+  it('旧判断页的地址被重定向到唯一入口', () => {
+    expect(routerSource).toContain('path: "ingredients/ai-create"')
+    expect(routerSource).toContain('redirect')
+    expect(routerSource).not.toContain('IngredientAiCreate')
+  })
+
+  it('前端不再保留没有调用方的判断接口', () => {
+    expect(apiSource).not.toContain('classifyIntake')
   })
 })

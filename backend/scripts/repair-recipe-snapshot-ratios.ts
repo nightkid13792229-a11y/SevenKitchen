@@ -122,6 +122,12 @@ async function main() {
 
     const design = await prisma.designRecipe.findUnique({ where: { id: recipeId } });
     const oldTotal = Number(design?.totalWeightG ?? 0);
+    /**
+     * 设计稿已被删掉的老食谱拿不到「发布时用的旧总重」，这时没法换算补剂浓度。
+     * 这类食谱的配比合计一般在 97%~99%（差的是补剂占比），说明分母本身没错，
+     * 只需要把食材配比归一到 100%；补剂浓度保持原值。
+     */
+    const canRescaleSupplements = oldTotal > 0;
 
     const weighted = items.filter((i) => Number(i.exampleWeight) > 0);
     const allTotal = round2(
@@ -132,15 +138,20 @@ async function main() {
       foodItems.reduce((s, i) => s + Number(i.exampleWeight), 0),
     );
     if (foodTotal <= 0) throw new Error(`${recipeId} 没有食材克数，无法重算`);
-    if (oldTotal <= 0) throw new Error(`${recipeId} 旧总重为 0，无法换算补剂`);
 
-    const factor = oldTotal / allTotal;
+    const factor = canRescaleSupplements ? oldTotal / allTotal : 1;
 
     console.log(`\n=== ${recipe.name}（v${recipe.version}）`);
     console.log(
-      `食材合计 ${foodTotal}g ｜ 全部原料合计 ${allTotal}g ｜ 发布时用的旧总重 ${oldTotal}g`,
+      `食材合计 ${foodTotal}g ｜ 全部原料合计 ${allTotal}g ｜ 发布时用的旧总重 ${
+        canRescaleSupplements ? `${oldTotal}g` : '（设计稿已删除，未知）'
+      }`,
     );
-    console.log(`补剂换算倍数：${round2(factor * 100) / 100}\n`);
+    console.log(
+      `补剂换算倍数：${round2(factor * 100) / 100}${
+        canRescaleSupplements ? '' : '（不换算，保持原值）'
+      }\n`,
+    );
     console.log('食材配比：');
     console.log('  原料                     克数      旧配比 →  新配比');
     for (const item of foodItems) {
@@ -233,14 +244,17 @@ async function main() {
         });
       }
       for (const item of supplementUpdates) {
+        if (!canRescaleSupplements) break;
         const data: Record<string, unknown> = { supplementTargets: item.next };
         if (item.legacy !== null) data.nutrientTargetValue = item.legacy;
         await tx.recipeItem.update({ where: { id: item.id }, data });
       }
-      await tx.designRecipe.update({
-        where: { id: recipeId },
-        data: { totalWeightG: allTotal },
-      });
+      if (canRescaleSupplements) {
+        await tx.designRecipe.update({
+          where: { id: recipeId },
+          data: { totalWeightG: allTotal },
+        });
+      }
       for (const oi of relatedOrderItems) {
         const snapshot = JSON.parse(JSON.stringify(oi.recipeSnapshot));
         const snapItems: any[] = Array.isArray(snapshot.items) ? snapshot.items : [];
@@ -252,7 +266,7 @@ async function main() {
           const type = String(s.ingredient_type ?? 'FOOD').toUpperCase();
           if (type === 'FOOD' && Number(s.example_weight) > 0) {
             s.ratio = round2((Number(s.example_weight) / snapFoodTotal) * 100);
-          } else if (type === 'SUPPLEMENT') {
+          } else if (type === 'SUPPLEMENT' && canRescaleSupplements) {
             const { next } = scaleTargets(s.supplement_targets, factor);
             s.supplement_targets = next;
             if (s.nutrient_target_value !== null && s.nutrient_target_value !== undefined) {

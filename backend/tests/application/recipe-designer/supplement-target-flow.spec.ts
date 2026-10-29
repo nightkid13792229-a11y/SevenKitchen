@@ -727,12 +727,13 @@ describe('补剂显式目标设计器流程（Task 3）', () => {
       expect(publishedSupplement).toEqual(
         expect.objectContaining({
           nutrientTargetKey: 'fiber',
-          nutrientTargetValue: 20,
+          // 分母是食材合计 4900g（不含 100g 补剂）：100 ÷ 4900 × 1000
+          nutrientTargetValue: 20.41,
           supplementTargets: [
             {
               fieldPath: 'macros.fiber',
               label: '膳食纤维',
-              targetValuePerKg: 20,
+              targetValuePerKg: 20.41,
               unit: 'g',
             },
           ],
@@ -825,12 +826,13 @@ describe('补剂显式目标设计器流程（Task 3）', () => {
       expect(itemCreate).toEqual(
         expect.objectContaining({
           nutrientTargetKey: 'fiber',
-          nutrientTargetValue: 20,
+          // 分母是食材合计 4900g（不含 100g 补剂）：100 ÷ 4900 × 1000
+          nutrientTargetValue: 20.41,
           supplementTargets: [
             {
               fieldPath: 'macros.fiber',
               label: '膳食纤维',
-              targetValuePerKg: 20,
+              targetValuePerKg: 20.41,
               unit: 'g',
             },
           ],

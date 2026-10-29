@@ -7222,14 +7222,20 @@ export class RecipeDesignerService {
      * 配比被写成 85÷385.2=22.07%（应为 27.56%），车间少投料 20%，
      * 补剂浓度也一起偏低 19%。
      */
-    const totalWeightG = this.resolveIncludedItemsTotalWeightG(draft);
+    const totalWeightG = this.resolveIncludedItemsTotalWeightG(draft.items);
+    const supplementBasisWeightG = this.resolveSupplementTargetBasisWeightG(
+      draft.items,
+    );
     const publishedFoodRatioMap = this.buildPublishedFoodRatioMap(
       draft.items
         .filter((item) => this.isItemIncludedInAssessment(item))
         .map((item) => ({ item })),
     );
     const privateSupplementTargetMap =
-      await this.buildPrivateSnapshotSupplementTargetMap(draft, totalWeightG);
+      await this.buildPrivateSnapshotSupplementTargetMap(
+        draft,
+        supplementBasisWeightG,
+      );
     const itemCreates = this.buildPrivateRecipeSnapshotItemCreateData(
       draft,
       totalWeightG,
@@ -7385,10 +7391,8 @@ export class RecipeDesignerService {
       (await this.ingredientPreparationHistoryService?.getLatestTextMap(
         ingredientItems.map(({ ingredientId }) => ingredientId),
       )) ?? new Map<string, string>();
-    const supplementTargetMap = await this.buildPublishedSupplementTargetMap(
-      draft,
-      assessment,
-    );
+    const supplementTargetMap =
+      await this.buildPublishedSupplementTargetMap(draft);
     const healthTagAssignments = this.buildPublishedHealthTagAssignments(
       draft.targetHealthTags,
     );
@@ -8025,13 +8029,54 @@ export class RecipeDesignerService {
   }
 
   /**
+   * 当前参与评估的**食材**有效重量合计（不含补剂）。
+   *
+   * 补剂浓度统一按「每 kg 食材」计：
+   *   · 文案写的就是「每kg食材添加 X」；
+   *   · 车间投放也是按食材净重乘回去的。
+   * 两者同基准，才不会再出现「标签写食材、公式算全部配料」的 0.7%–2% 偏差。
+   */
+  private resolveIncludedFoodTotalWeightG(
+    items: DesignRecipeWithItems['items'],
+  ): number {
+    return items
+      .filter(
+        (item) =>
+          this.isItemIncludedInAssessment(item) &&
+          this.resolveIngredientType(item) === IngredientType.FOOD,
+      )
+      .reduce(
+        (sum, item) =>
+          sum +
+          getProfileEffectiveWeightG(
+            this.toAssessmentNutritionProfile(item),
+            item.weightG,
+          ),
+        0,
+      );
+  }
+
+  /**
+   * 补剂浓度的分母：优先「每 kg 食材」；只有补剂、没有食材的极端配方
+   * 退回「全部配料合计」，避免把「无食材」当成错误。
+   */
+  private resolveSupplementTargetBasisWeightG(
+    items: DesignRecipeWithItems['items'],
+  ): number {
+    const foodWeightG = this.resolveIncludedFoodTotalWeightG(items);
+    return foodWeightG > 0
+      ? foodWeightG
+      : this.resolveIncludedItemsTotalWeightG(items);
+  }
+
+  /**
    * 当前参与评估的配料合计（按有效重量：油按密度折克、按粒的补剂按每粒克重）。
    * 与评估引擎的 totalWeightG 同一口径，用来替代可能过期的 draft.totalWeightG。
    */
   private resolveIncludedItemsTotalWeightG(
-    draft: DesignRecipeWithItems,
+    items: DesignRecipeWithItems['items'],
   ): number {
-    return draft.items
+    return items
       .filter((item) => this.isItemIncludedInAssessment(item))
       .reduce(
         (sum, item) =>
@@ -8046,14 +8091,14 @@ export class RecipeDesignerService {
 
   /**
    * 私密快照的补剂目标：只认显式目标 / 营养档案默认目标。
-   * 分母用「当前配料的合计」，不再用可能过期的草稿总重。
+   * 分母用「当前食材有效重量合计」（每 kg 食材），不用可能过期的草稿总重。
    */
   private async buildPrivateSnapshotSupplementTargetMap(
     draft: DesignRecipeWithItems,
-    totalWeightG: number,
+    foodWeightG: number,
   ): Promise<Map<string, PublishedSupplementNutrientTarget[]>> {
     const result = new Map<string, PublishedSupplementNutrientTarget[]>();
-    if (totalWeightG <= 0) return result;
+    if (foodWeightG <= 0) return result;
 
     for (const item of draft.items) {
       if (
@@ -8075,7 +8120,7 @@ export class RecipeDesignerService {
         this.toAssessmentNutritionProfile(item),
         definitions,
         item.weightG,
-        totalWeightG,
+        foodWeightG,
       );
       result.set(
         item.id,
@@ -8266,9 +8311,10 @@ export class RecipeDesignerService {
    */
   private async buildPublishedSupplementTargetMap(
     draft: DesignRecipeWithItems,
-    assessment: DesignRecipeAssessmentResult,
   ) {
     const result = new Map<string, PublishedSupplementNutrientTarget[]>();
+    // 每 kg 食材：与文案「每kg食材添加」、车间按食材净重投放同一基准
+    const foodWeightG = this.resolveSupplementTargetBasisWeightG(draft.items);
 
     for (const item of draft.items) {
       if (
@@ -8280,7 +8326,10 @@ export class RecipeDesignerService {
 
       result.set(
         item.id,
-        await this.resolvePublishedSupplementTargetsForItem(item, assessment),
+        await this.resolvePublishedSupplementTargetsForItem(
+          item,
+          foodWeightG,
+        ),
       );
     }
 
@@ -8293,11 +8342,11 @@ export class RecipeDesignerService {
    */
   private async resolvePublishedSupplementTargetsForItem(
     item: DesignRecipeItemWithFood,
-    assessment: DesignRecipeAssessmentResult,
+    foodWeightG: number,
   ): Promise<PublishedSupplementNutrientTarget[]> {
-    if (assessment.totalWeightG <= 0) {
+    if (foodWeightG <= 0) {
       throw new BadRequestException(
-        `补剂原料「${this.resolveIngredientDisplayName(item)}」无法在总重量为 0 的配方中生成营养目标`,
+        `补剂原料「${this.resolveIngredientDisplayName(item)}」无法在食材总重量为 0 的配方中生成营养目标`,
       );
     }
 
@@ -8313,7 +8362,7 @@ export class RecipeDesignerService {
       this.toAssessmentNutritionProfile(item),
       definitions,
       item.weightG,
-      assessment.totalWeightG,
+      foodWeightG,
     );
 
     return computed
@@ -9038,6 +9087,10 @@ export class RecipeDesignerService {
       preparationMethod?: string | null;
       supplementTargets?: unknown;
     }> = [];
+    // 补剂目标按「每 kg 食材」校验，与发布时同一基准
+    const launchFoodWeightG = this.resolveSupplementTargetBasisWeightG(
+      draft.items,
+    );
     for (const item of draft.items) {
       const isSupplement =
         this.resolveIngredientType(item) === IngredientType.SUPPLEMENT;
@@ -9047,7 +9100,7 @@ export class RecipeDesignerService {
           this.resolveDraftItemDisplayCategory(item),
         );
       let supplementTargets: unknown = item.supplementTargets;
-      if (isSupplement && assessment && assessment.totalWeightG > 0) {
+      if (isSupplement && assessment && launchFoodWeightG > 0) {
         try {
           const definitions =
             this.requireSupplementTargetService().validateTargets(
@@ -9060,7 +9113,7 @@ export class RecipeDesignerService {
                 this.toAssessmentNutritionProfile(item),
                 definitions,
                 item.weightG,
-                assessment.totalWeightG,
+                launchFoodWeightG,
               );
           }
         } catch (error) {

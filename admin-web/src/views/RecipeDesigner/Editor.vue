@@ -122,13 +122,23 @@
 
     <div class="editor-body">
       <!-- 左：原料库 -->
-      <div class="pane pane-library">
+      <div class="pane pane-library" :style="{ width: paneWidths.library + 'px' }">
         <div class="pane-title">原料库</div>
         <IngredientLibrary :scenario="draft?.fediafDogScenario" @add="handleAddOption" />
       </div>
 
+      <div
+        class="pane-splitter"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="调整原料库与配方明细的宽度"
+        title="拖动调整栏宽，双击恢复默认"
+        @pointerdown="startPaneResize('library-items', $event)"
+        @dblclick="resetPaneWidths('library-items')"
+      ></div>
+
       <!-- 中：配方编辑 -->
-      <div class="pane pane-items">
+      <div ref="itemsPaneRef" class="pane pane-items">
         <div class="pane-title">
           配方明细
           <span class="item-count">
@@ -273,8 +283,18 @@
         </div>
       </div>
 
+      <div
+        class="pane-splitter"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="调整配方明细与关键比例仪表的宽度"
+        title="拖动调整栏宽，双击恢复默认"
+        @pointerdown="startPaneResize('items-dashboard', $event)"
+        @dblclick="resetPaneWidths('items-dashboard')"
+      ></div>
+
       <!-- 中右：关键比例仪表盘 -->
-      <div class="pane pane-dashboard">
+      <div class="pane pane-dashboard" :style="{ width: paneWidths.dashboard + 'px' }">
         <!--
           「评估中」的细条（批次 5.3）：评估改成后端算之后，
           结果会比按键晚一点点到。不给提示的话，用户会以为数字没变。
@@ -285,8 +305,18 @@
         <MacroCompositionPanel :assessment="assessment" />
       </div>
 
+      <div
+        class="pane-splitter"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="调整关键比例仪表与营养评估的宽度"
+        title="拖动调整栏宽，双击恢复默认"
+        @pointerdown="startPaneResize('dashboard-assessment', $event)"
+        @dblclick="resetPaneWidths('dashboard-assessment')"
+      ></div>
+
       <!-- 右：营养评估 -->
-      <div class="pane pane-right">
+      <div class="pane pane-right" :style="{ width: paneWidths.assessment + 'px' }">
         <div class="pane-title">营养评估</div>
         <div class="assessment-pane">
           <AssessmentPanel
@@ -301,8 +331,18 @@
         </div>
       </div>
 
+      <div
+        class="pane-splitter"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="调整营养评估与爱犬信息的宽度"
+        title="拖动调整栏宽，双击恢复默认"
+        @pointerdown="startPaneResize('assessment-dog', $event)"
+        @dblclick="resetPaneWidths('assessment-dog')"
+      ></div>
+
       <!-- 最右：爱犬信息 -->
-      <div class="pane pane-dog">
+      <div class="pane pane-dog" :style="{ width: paneWidths.dog + 'px' }">
         <div class="pane-title">爱犬信息</div>
         <div class="dog-pane">
           <DogInsightPanel
@@ -421,6 +461,14 @@ import DogInsightPanel from './components/DogInsightPanel.vue'
 import SupplementTargetDialog from './components/SupplementTargetDialog.vue'
 import PreparationMethodField from './components/PreparationMethodField.vue'
 import { PREPARATION_FIELD_LABEL } from '@/constants/preparationField'
+import {
+  DEFAULT_PANE_WIDTHS,
+  PANE_MAX_WIDTH,
+  PANE_MIN_WIDTHS,
+  resizePaneWidths,
+  type PaneSplitterKey,
+  type PaneWidths
+} from '@/utils/recipeDesigner/paneResize'
 import LaunchReadinessDrawer from './components/LaunchReadinessDrawer.vue'
 import SeriesReleaseDrawer from './components/SeriesReleaseDrawer.vue'
 import RecipeAgentDrawer from './components/RecipeAgentDrawer.vue'
@@ -529,6 +577,108 @@ async function loadNutritionFoodDetail(
   return request
 }
 const initialLoading = ref(true)
+
+/* ---------- 五栏栏宽拖拽（2026-10-29） ---------- */
+const PANE_WIDTH_STORAGE_KEY = 'recipe-designer:pane-widths:v1'
+const paneWidths = reactive<PaneWidths>({ ...DEFAULT_PANE_WIDTHS })
+const itemsPaneRef = ref<HTMLElement | null>(null)
+let stopPaneResize: (() => void) | null = null
+
+/** 读回上次的栏宽；存储损坏或数值异常就按默认宽度，不打断页面 */
+function restorePaneWidths() {
+  try {
+    const raw = localStorage.getItem(PANE_WIDTH_STORAGE_KEY)
+    if (!raw) return
+    const saved = JSON.parse(raw) as Partial<PaneWidths>
+    for (const key of Object.keys(DEFAULT_PANE_WIDTHS) as (keyof PaneWidths)[]) {
+      const value = Number(saved?.[key])
+      if (Number.isFinite(value)) {
+        paneWidths[key] = Math.min(
+          Math.max(value, PANE_MIN_WIDTHS[key]),
+          PANE_MAX_WIDTH
+        )
+      }
+    }
+  } catch {
+    // 忽略：按默认栏宽继续
+  }
+}
+
+function persistPaneWidths() {
+  try {
+    localStorage.setItem(PANE_WIDTH_STORAGE_KEY, JSON.stringify(paneWidths))
+  } catch {
+    // 隐私模式 / 存储被禁用：拖动本身仍然生效，只是下次不记得
+  }
+}
+
+/**
+ * 拖动分界调整栏宽。
+ * 拖动过程始终以「按下时的宽度 + 总位移」计算，不累加每一帧，避免误差越拖越大。
+ */
+function startPaneResize(splitter: PaneSplitterKey, event: PointerEvent) {
+  if (event.button !== 0) return
+  event.preventDefault()
+  stopPaneResize?.()
+  const startX = event.clientX
+  const startWidths: PaneWidths = { ...paneWidths }
+  const itemsWidth = itemsPaneRef.value?.getBoundingClientRect().width ?? 0
+  const previousCursor = document.body.style.cursor
+  const previousUserSelect = document.body.style.userSelect
+  const splitterEl = event.currentTarget as HTMLElement | null
+  // 捕获指针：拖出浏览器窗口再松手也能正常收尾
+  try {
+    splitterEl?.setPointerCapture(event.pointerId)
+  } catch {
+    // 个别浏览器/合成事件不支持捕获，退回普通监听
+  }
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+
+  const handleMove = (moveEvent: PointerEvent) => {
+    Object.assign(
+      paneWidths,
+      resizePaneWidths(splitter, startWidths, moveEvent.clientX - startX, itemsWidth)
+    )
+  }
+  const finish = () => {
+    try {
+      splitterEl?.releasePointerCapture(event.pointerId)
+    } catch {
+      // 已经释放或浏览器不支持：忽略
+    }
+    document.body.style.cursor = previousCursor
+    document.body.style.userSelect = previousUserSelect
+    window.removeEventListener('pointermove', handleMove)
+    window.removeEventListener('pointerup', finish)
+    window.removeEventListener('pointercancel', finish)
+    stopPaneResize = null
+    persistPaneWidths()
+  }
+  stopPaneResize = finish
+  window.addEventListener('pointermove', handleMove)
+  window.addEventListener('pointerup', finish)
+  window.addEventListener('pointercancel', finish)
+}
+
+/** 双击分界：把这条分界两侧的栏恢复默认宽度 */
+function resetPaneWidths(splitter: PaneSplitterKey) {
+  if (splitter === 'library-items') {
+    paneWidths.library = DEFAULT_PANE_WIDTHS.library
+  }
+  if (splitter === 'items-dashboard') {
+    paneWidths.dashboard = DEFAULT_PANE_WIDTHS.dashboard
+  }
+  if (splitter === 'dashboard-assessment') {
+    paneWidths.dashboard = DEFAULT_PANE_WIDTHS.dashboard
+    paneWidths.assessment = DEFAULT_PANE_WIDTHS.assessment
+  }
+  if (splitter === 'assessment-dog') {
+    paneWidths.assessment = DEFAULT_PANE_WIDTHS.assessment
+    paneWidths.dog = DEFAULT_PANE_WIDTHS.dog
+  }
+  persistPaneWidths()
+}
 /** 切换生命阶段中 */
 const switchingStage = ref(false)
 
@@ -1786,6 +1936,7 @@ function handleKeydown(event: KeyboardEvent) {
 }
 
 onMounted(() => {
+  restorePaneWidths()
   registerBeforeUnload()
   window.addEventListener('keydown', handleKeydown)
   void loadDraft()
@@ -1793,6 +1944,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  stopPaneResize?.()
   window.removeEventListener('keydown', handleKeydown)
   if (hasPending()) {
     void flushNow()
@@ -1939,32 +2091,59 @@ onBeforeUnmount(() => {
 }
 .pane-library {
   width: 250px;
-  border-right: 1px solid #e4e7ed;
+  min-width: 200px;
   flex-shrink: 0;
 }
 .pane-items {
   flex: 1;
   min-width: 320px;
-  border-right: 1px solid #e4e7ed;
   /* 不参与压缩：否则窗口变窄时这一栏会被挤到只剩几十像素，
-     原料名（.item-main）连同用量输入框一起被压没（实测名字列只剩 24px）。 */
+     原料名（.item-main）连同用量输入框一起被压没（实测名字列只剩 24px）。
+     宽度的增减由两侧的分界线拖动决定，见 .pane-splitter。 */
   flex-shrink: 0;
 }
 .pane-dashboard {
   width: 300px;
+  min-width: 240px;
   flex-shrink: 0;
-  border-right: 1px solid #e4e7ed;
   background: #fafbfc;
   overflow-y: auto;
 }
 .pane-right {
   width: 330px;
+  min-width: 280px;
   flex-shrink: 0;
-  border-right: 1px solid #e4e7ed;
 }
 .pane-dog {
   width: 300px;
+  min-width: 240px;
   flex-shrink: 0;
+}
+
+/* 五栏之间的拖动分界（2026-10-29）：平时是一条 1px 分隔线，悬停变蓝 */
+.pane-splitter {
+  position: relative;
+  flex: 0 0 7px;
+  align-self: stretch;
+  background: #fff;
+  cursor: col-resize;
+  touch-action: none;
+}
+.pane-splitter::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+  background: #e4e7ed;
+  transition: background-color .15s, width .15s, left .15s;
+}
+.pane-splitter:hover::before,
+.pane-splitter:active::before {
+  left: 2px;
+  width: 3px;
+  background: #409eff;
 }
 .assessing-bar {
   height: 2px;

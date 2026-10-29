@@ -338,7 +338,17 @@ const loadingMore = ref(false)
 const creating = ref(false)
 const renaming = ref(false)
 const series = ref<RecipeDesignerSeriesCard[]>([])
-const designModeFilter = ref<'CATALOG' | 'ORDER'>('CATALOG')
+/**
+ * 设计模式筛选：从 URL 的 ?mode=ORDER 恢复。
+ *
+ * 之前只存在组件内存里，刷新页面会重新挂载、回到默认的「产品线食谱」。
+ * 写进 URL 后刷新 / 前进后退 / 收藏都能保持当前模式。
+ */
+const designModeFilter = ref<'CATALOG' | 'ORDER'>(
+  String(route.query.mode || '').trim().toUpperCase() === 'ORDER'
+    ? 'ORDER'
+    : 'CATALOG'
+)
 /** 2026-10-26：列表与需求分类是同一页的两种看法 */
 const viewMode = ref<'SERIES' | 'TAXONOMY'>('SERIES')
 const statusFilter = ref<RecipeDesignerSeriesStatusFilter | undefined>(undefined)
@@ -532,6 +542,14 @@ function onStatusFilterChange() {
 /** 切换产品线 / 订单定制：回到第一页并清空状态筛选，避免两种上下文混用 */
 function onDesignModeChange() {
   statusFilter.value = undefined
+  // 把当前模式写进地址栏：刷新后不会跳回「产品线食谱」
+  const query = { ...route.query }
+  if (designModeFilter.value === 'ORDER') {
+    query.mode = 'ORDER'
+  } else {
+    delete query.mode
+  }
+  void router.replace({ query })
   void loadSeries(true)
 }
 

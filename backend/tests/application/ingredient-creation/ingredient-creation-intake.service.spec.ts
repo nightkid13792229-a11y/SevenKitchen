@@ -13,6 +13,7 @@ import {
 } from '../../../src/application/ingredient-creation/ingredient-creation-intake.service';
 import { IngredientCreationAuditService } from '../../../src/application/ingredient-creation/ingredient-creation-audit.service';
 import { IngredientDraftAgentService } from '../../../src/application/ingredient-creation/ingredient-draft-agent.service';
+import { IngredientSearchPlanService } from '../../../src/application/ingredient-creation/ingredient-search-plan.service';
 import { IngredientCreationCandidateService } from '../../../src/application/ingredient-creation/ingredient-creation-candidate.service';
 import { IngredientCreationAuthorizeService } from '../../../src/application/ingredient-creation/ingredient-creation-authorize.service';
 import { IngredientCreationCheckService } from '../../../src/application/ingredient-creation/ingredient-creation-check.service';
@@ -822,6 +823,7 @@ describe('POST /api/v1/admin/ingredient-creation/intake/classify', () => {
           provide: IngredientDraftAgentService,
           useValue: { run: jest.fn() },
         },
+        { provide: IngredientSearchPlanService, useValue: {} },
         {
           provide: JwtAuthService,
           useValue: {

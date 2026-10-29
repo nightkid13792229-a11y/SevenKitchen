@@ -1484,7 +1484,7 @@ function summarizeDraftProgress(
  * `NO_PROGRESS` 的文案必须含「没有新进展」，这是线上排查与用户提示的锚点。
  */
 function buildStopReply(input: {
-  reason: Exclude<IngredientAgentStopReason, 'waiting_user'>;
+  reason: Exclude<IngredientAgentStopReason, 'waiting_user' | 'waiting_plan'>;
   steps: number;
   toolCallCount: number;
   seenSourceCount: number;
@@ -1492,7 +1492,7 @@ function buildStopReply(input: {
   lastCheck: AgentCheckSummary | null;
 }): string {
   const reasonText: Record<
-    Exclude<IngredientAgentStopReason, 'waiting_user'>,
+    Exclude<IngredientAgentStopReason, 'waiting_user' | 'waiting_plan'>,
     string
   > = {
     NO_PROGRESS: `连续 ${INGREDIENT_AGENT_MAX_NO_PROGRESS} 次工具调用没有新进展，我停了下来`,
@@ -2172,7 +2172,11 @@ export class IngredientDraftAgentService {
           `[ingredient-agent] waitingPlan runId=${runId} draft=${draft.id} ` +
             `keywords=${pendingPlan.keywords.map((item) => item.term).join('/')} libraries=${pendingPlan.libraries.join('/')}`,
         );
-      } else if (stopReason && stopReason !== 'waiting_user') {
+      } else if (
+        stopReason &&
+        stopReason !== 'waiting_user' &&
+        stopReason !== 'waiting_plan'
+      ) {
         // 停止时读最终草稿：reply 里的「已完成 / 还剩」必须与库里一致。
         let finalDraft = draft;
         try {

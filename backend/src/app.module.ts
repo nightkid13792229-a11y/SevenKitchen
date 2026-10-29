@@ -217,6 +217,7 @@ import { IngredientCreationAuditService } from './application/ingredient-creatio
 import { IngredientCreationCandidateService } from './application/ingredient-creation/ingredient-creation-candidate.service';
 import { IngredientCreationAuthorizeService } from './application/ingredient-creation/ingredient-creation-authorize.service';
 import { IngredientCheckRunService } from './application/ingredient-creation/ingredient-check-run.service';
+import { IngredientSearchPlanService } from './application/ingredient-creation/ingredient-search-plan.service';
 import { IngredientCreationCheckService } from './application/ingredient-creation/ingredient-creation-check.service';
 import { IngredientCreationCommitService } from './application/ingredient-creation/ingredient-creation-commit.service';
 import { IngredientCreationIntakeService } from './application/ingredient-creation/ingredient-creation-intake.service';
@@ -965,6 +966,7 @@ validatePrismaConfig();
     IngredientCreationMergeService,
     IngredientCreationCheckService,
     IngredientCheckRunService,
+    IngredientSearchPlanService,
     IngredientCreationAuthorizeService,
     IngredientCreationCommitService,
     IngredientCreationIntakeService,

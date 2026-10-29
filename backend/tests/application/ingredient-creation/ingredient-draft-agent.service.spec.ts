@@ -16,6 +16,7 @@ import {
   type IngredientAgentRunResult,
 } from '../../../src/application/ingredient-creation/ingredient-draft-agent.service';
 import { IngredientCreationAuditService } from '../../../src/application/ingredient-creation/ingredient-creation-audit.service';
+import { IngredientSearchPlanService } from '../../../src/application/ingredient-creation/ingredient-search-plan.service';
 import { LINE_NOT_OPEN_MESSAGE } from '../../../src/application/ingredient-creation/ingredient-line';
 import { IngredientCreationCandidateService } from '../../../src/application/ingredient-creation/ingredient-creation-candidate.service';
 import { IngredientCreationAuthorizeService } from '../../../src/application/ingredient-creation/ingredient-creation-authorize.service';
@@ -2459,6 +2460,7 @@ describe('POST /api/v1/admin/ingredient-creation/agent/run', () => {
         { provide: IngredientCreationAuditService, useValue: {} },
         { provide: IngredientCreationIntakeService, useValue: {} },
         { provide: IngredientDraftAgentService, useValue: agentService },
+        { provide: IngredientSearchPlanService, useValue: {} },
         {
           provide: JwtAuthService,
           useValue: {

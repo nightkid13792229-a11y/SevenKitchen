@@ -8,6 +8,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { IngredientCreationCandidateService } from '../../../src/application/ingredient-creation/ingredient-creation-candidate.service';
 import { IngredientDraftAgentService } from '../../../src/application/ingredient-creation/ingredient-draft-agent.service';
+import { IngredientSearchPlanService } from '../../../src/application/ingredient-creation/ingredient-search-plan.service';
 import { IngredientCreationAuditService } from '../../../src/application/ingredient-creation/ingredient-creation-audit.service';
 import { IngredientCreationAuthorizeService } from '../../../src/application/ingredient-creation/ingredient-creation-authorize.service';
 import { IngredientCreationCheckService } from '../../../src/application/ingredient-creation/ingredient-creation-check.service';
@@ -185,6 +186,7 @@ describe('IngredientCreationController', () => {
           provide: IngredientDraftAgentService,
           useValue: { run: jest.fn() },
         },
+        { provide: IngredientSearchPlanService, useValue: {} },
         { provide: JwtAuthService, useValue: jwtAuthService },
         AuthGuard,
         AdminGuard,

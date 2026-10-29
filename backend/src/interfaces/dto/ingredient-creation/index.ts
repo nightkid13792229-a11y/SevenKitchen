@@ -10,3 +10,4 @@ export * from './resolve-merge.dto';
 export * from './run-draft-check.dto';
 export * from './search-online-candidates.dto';
 export * from './update-draft.dto';
+export * from './confirm-search-plan.dto';

@@ -5,6 +5,7 @@ import type {
   PreparationState,
 } from '../../domain/ingredient-creation/preparation-state';
 import type { CoverageCategory } from '../../domain/ingredient-creation/state-coverage';
+import type { SearchPlan } from '../../domain/ingredient-creation/search-plan';
 import type { NameClassification } from './ingredient-name-classifier.service';
 
 /**
@@ -428,6 +429,12 @@ export interface IngredientCreationDraftPayload {
    * 然后置为 null。null / 缺失都表示「现在没有待回答的问题」。
    */
   pendingQuestion?: PendingQuestion | null;
+  /**
+   * 检索方案：AI 查完库后交给人确认的「最终怎么查」。
+   *
+   * `PENDING` 时写草稿的工具会被拒绝；`APPROVED` 之后才放行。
+   */
+  searchPlan?: SearchPlan | null;
 }
 
 /**

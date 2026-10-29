@@ -39,6 +39,7 @@ import {
   type IngredientDraftChecksView,
 } from '../../application/ingredient-creation/ingredient-creation-check.service';
 import { IngredientCreationDraftService } from '../../application/ingredient-creation/ingredient-creation-draft.service';
+import { IngredientSearchPlanService } from '../../application/ingredient-creation/ingredient-search-plan.service';
 import {
   IngredientCreationIntakeService,
   type IntakeClassification,
@@ -62,6 +63,7 @@ import type { RequestUser } from '../auth';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import {
   AuthorizeIngredientCreationDto,
+  ConfirmSearchPlanDto,
   ClassifyIntakeDto,
   CreateDraftDto,
   CreateMergePlanDto,
@@ -111,6 +113,7 @@ export class IngredientCreationController {
     private readonly auditService: IngredientCreationAuditService,
     private readonly intakeService: IngredientCreationIntakeService,
     private readonly agentService: IngredientDraftAgentService,
+    private readonly searchPlanService: IngredientSearchPlanService,
   ) {}
 
   /**
@@ -233,6 +236,31 @@ export class IngredientCreationController {
         res.end();
       }
     }
+  }
+
+  @Post('drafts/:id/search-plan/confirm')
+  @ApiOperation({
+    summary:
+      '确认（可修改）AI 提交的检索方案；确认之后 AI 才能写原料卡与营养',
+  })
+  async confirmSearchPlan(
+    @Param('id') id: string,
+    @Body() dto: ConfirmSearchPlanDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<unknown>> {
+    // 只把「可改的字段」交给服务；确认人固定取当前登录人，前端不能替别人签名。
+    const plan = await this.searchPlanService.confirm(
+      id,
+      {
+        keywords: dto.keywords,
+        libraries: dto.libraries,
+        chosenRecordId: dto.chosenRecordId,
+        chosenRecordName: dto.chosenRecordName,
+      },
+      { userId: user.userId },
+    );
+
+    return new ApiResponseDto(0, 'Success', plan);
   }
 
   @Get('audits/:ingredientId')

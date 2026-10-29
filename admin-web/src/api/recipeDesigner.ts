@@ -53,6 +53,8 @@ export interface RecipeDesignerSeriesListResult {
   page: number
   pageSize: number
   hasMore: boolean
+  /** 总条数（2026-10-30 分页）：旧后端可能没有，前端需要兜底 */
+  total?: number
 }
 
 export interface CreateRecipeSeriesStageDraftPayload {

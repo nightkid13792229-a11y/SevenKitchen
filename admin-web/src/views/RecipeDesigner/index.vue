@@ -231,11 +231,18 @@
           </div>
         </div>
       </div>
-      <div v-if="viewMode === 'SERIES' && seriesHasMore" class="loadmore-tip">
-        <div ref="loadMoreSentinel" class="load-more-sentinel" />
-        <el-button size="small" text :loading="loadingMore" @click="loadSeries(false)">
-          {{ loadingMore ? '加载中…' : '加载更多系列' }}
-        </el-button>
+      <div
+        v-if="viewMode === 'SERIES' && seriesTotal > SERIES_PAGE_SIZE"
+        class="series-pagination"
+      >
+        <el-pagination
+          background
+          layout="prev, pager, next, total"
+          :total="seriesTotal"
+          :page-size="SERIES_PAGE_SIZE"
+          :current-page="seriesPage"
+          @current-change="handleSeriesPageChange"
+        />
       </div>
     </el-card>
 
@@ -339,7 +346,6 @@ const multiOrderProgress = ref<{
 const entryOrderId = ref('')
 
 const loading = ref(false)
-const loadingMore = ref(false)
 const creating = ref(false)
 const renaming = ref(false)
 const series = ref<RecipeDesignerSeriesCard[]>([])
@@ -374,10 +380,8 @@ const viewMode = ref<'SERIES' | 'TAXONOMY'>('SERIES')
 useFilterQueryState(filters)
 
 const seriesPage = ref(1)
-const seriesHasMore = ref(true)
-const SERIES_PAGE_SIZE = 20
-const loadMoreSentinel = ref<HTMLElement | null>(null)
-let seriesObserver: IntersectionObserver | null = null
+const seriesTotal = ref(0)
+const SERIES_PAGE_SIZE = 24
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 /** 从订单入口带入的参考爱犬：不弹窗，点“新建食谱”时直接使用。 */
@@ -480,65 +484,58 @@ function openSeriesReleaseDrawer(card: RecipeDesignerSeriesCard): void {
 
 /** 发布成功后刷新列表：卡片状态与阶段进度立即反映整系列已发布 */
 async function handleSeriesReleased(): Promise<void> {
-  await loadSeries(true)
+  await loadSeries(seriesPage.value)
 }
 
 /** 下架 / 系列状态变化后刷新列表，卡片入口文案与进度同步更新 */
 async function handleSeriesUpdated(): Promise<void> {
-  await loadSeries(true)
+  await loadSeries(seriesPage.value)
 }
 
-async function loadSeries(reset = true) {
-  if (reset) {
-    seriesPage.value = 1
-    seriesHasMore.value = true
-    loading.value = true
-  } else {
-    if (loadingMore.value || !seriesHasMore.value) return
-    loadingMore.value = true
-  }
+async function loadSeries(targetPage = seriesPage.value) {
+  const page = Math.max(1, targetPage)
+  seriesPage.value = page
+  loading.value = true
   try {
     const res = await recipeDesignerApi.listSeries({
       designMode: filters.mode,
       status: filters.status,
       search: filters.search.trim() || undefined,
-      page: reset ? 1 : seriesPage.value + 1,
-      pageSize: SERIES_PAGE_SIZE,
+      page,
+      pageSize: SERIES_PAGE_SIZE
     })
-    const items = Array.isArray(res) ? res : res.items
-    series.value = reset ? items : [...series.value, ...items]
-    seriesPage.value = reset ? 1 : seriesPage.value + 1
-    seriesHasMore.value = Array.isArray(res) ? false : Boolean(res.hasMore)
+    if (Array.isArray(res)) {
+      series.value = res
+      seriesTotal.value = res.length
+    } else {
+      series.value = res.items
+      if (typeof res.total === 'number') {
+        seriesTotal.value = res.total
+      } else {
+        // 兼容旧后端：至少能判断还有没有下一页
+        seriesTotal.value =
+          (page - 1) * SERIES_PAGE_SIZE +
+          res.items.length +
+          (res.hasMore ? 1 : 0)
+      }
+      // 删除 / 下架后当前页可能空了：自动回到上一页
+      if (res.items.length === 0 && page > 1) {
+        await loadSeries(page - 1)
+        return
+      }
+    }
   } catch {
     series.value = []
+    seriesTotal.value = 0
   } finally {
     loading.value = false
-    loadingMore.value = false
   }
 }
 
-/** 用 IntersectionObserver 监听底部哨兵，接近时自动加载下一页（不依赖具体滚动容器） */
-function setupSeriesObserver() {
-  if (typeof IntersectionObserver === 'undefined') return
-  if (seriesObserver) seriesObserver.disconnect()
-  seriesObserver = new IntersectionObserver(
-    (entries) => {
-      for (const entry of entries) {
-        if (entry.isIntersecting && seriesHasMore.value && !loadingMore.value) {
-          void loadSeries(false)
-        }
-      }
-    },
-    { rootMargin: '120px' }
-  )
-  if (loadMoreSentinel.value) seriesObserver.observe(loadMoreSentinel.value)
-}
-
-function teardownSeriesObserver() {
-  if (seriesObserver) {
-    seriesObserver.disconnect()
-    seriesObserver = null
-  }
+/** 翻页：换页后回到页面顶部 */
+function handleSeriesPageChange(page: number) {
+  void loadSeries(page)
+  window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 /** 状态筛选变化：重置到第一页重新加载 */
@@ -556,20 +553,20 @@ function orderStatusLabel(status: string): string {
 }
 
 function onStatusFilterChange() {
-  void loadSeries(true)
+  void loadSeries(1)
 }
 
 /** 切换产品线 / 订单定制：回到第一页并清空状态筛选，避免两种上下文混用 */
 function onDesignModeChange() {
   filters.status = undefined
-  void loadSeries(true)
+  void loadSeries(1)
 }
 
 /** 名称搜索：输入停顿 300ms 后自动搜索（清空按钮立即生效） */
 watch(() => filters.search, () => {
   if (searchTimer) clearTimeout(searchTimer)
   searchTimer = setTimeout(() => {
-    void loadSeries(true)
+    void loadSeries(1)
   }, 300)
 })
 
@@ -609,7 +606,7 @@ async function createSeries() {
     if (targetDraftId) {
       router.push(draftRoute(card.id, targetDraftId))
     } else {
-      await loadSeries(true)
+      await loadSeries(1)
     }
   } catch {
     // 错误提示由拦截器统一处理
@@ -661,7 +658,7 @@ async function handleCardCommand(command: string, card: RecipeDesignerSeriesCard
     try {
       await recipeDesignerApi.duplicateSeries(card.id)
       ElMessage.success('系列已复制')
-      await loadSeries(true)
+      await loadSeries(1)
     } catch {
       // 已提示
     }
@@ -686,7 +683,7 @@ async function handleCardCommand(command: string, card: RecipeDesignerSeriesCard
         confirmUserVisibleRemoval: true
       })
       ElMessage.success('系列已删除')
-      await loadSeries(true)
+      await loadSeries(seriesPage.value)
     } catch (error) {
       if (error === 'cancel' || error === 'close') return
       // 其它错误已由拦截器提示
@@ -705,7 +702,7 @@ async function confirmRename() {
     await recipeDesignerApi.renameSeries(renameForm.id, { name })
     ElMessage.success('已重命名')
     renameDialogVisible.value = false
-    await loadSeries(true)
+    await loadSeries(seriesPage.value)
   } finally {
     renaming.value = false
   }
@@ -737,7 +734,7 @@ async function handleStageCommand(
     try {
       await recipeDesignerApi.duplicateSeriesStage(card.id, stage.lifeStage)
       ElMessage.success('已复制为新系列')
-      await loadSeries(true)
+      await loadSeries(1)
     } catch {
       // 拦截器已提示
     } finally {
@@ -893,8 +890,7 @@ function openDogHealth(dogId: string) {
 }
 
 onMounted(async () => {
-  await loadSeries(true)
-  setupSeriesObserver()
+  await loadSeries(1)
   void applyEntryQuery()
   // 健康信息变更提醒（2026-10-04 第四期）。
   // 不 await：它是辅助信息，不该拖慢设计系列列表的首屏。
@@ -902,7 +898,6 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  teardownSeriesObserver()
   if (searchTimer) clearTimeout(searchTimer)
 })</script>
 
@@ -988,6 +983,11 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   gap: 16px;
   min-height: 120px;
+}
+.series-pagination {
+  display: flex;
+  justify-content: center;
+  margin-top: 18px;
 }
 .loadmore-tip {
   text-align: center;

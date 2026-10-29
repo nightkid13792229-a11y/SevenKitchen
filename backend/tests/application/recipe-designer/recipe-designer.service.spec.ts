@@ -7323,6 +7323,7 @@ describe('RecipeDesignerService', () => {
             status: 'ACTIVE',
             deletedAt: null,
             createdBy: 'customer-1',
+            AND: [{ designMode: 'CATALOG' }],
           },
         }),
       );
@@ -7354,6 +7355,7 @@ describe('RecipeDesignerService', () => {
                 'recipe-series-backfill',
               ],
             },
+            AND: [{ designMode: 'CATALOG' }],
           },
         }),
       );
@@ -7654,8 +7656,9 @@ describe('RecipeDesignerService', () => {
       prisma.recipeSeries.findMany.mockResolvedValue([
         seriesRecord({ id: 'series-page-1' }),
         seriesRecord({ id: 'series-page-2' }),
-        seriesRecord({ id: 'series-page-3' }),
       ]);
+      // 总数 5：第 2 页（每页 2）之后还有第 3 页
+      prisma.recipeSeries.count.mockResolvedValue(5);
 
       await expect(
         service.listSeries(
@@ -7667,14 +7670,16 @@ describe('RecipeDesignerService', () => {
           page: 2,
           pageSize: 2,
           hasMore: true,
+          total: 5,
           items: expect.any(Array),
         }),
       );
 
+      expect(prisma.recipeSeries.count).toHaveBeenCalled();
       expect(prisma.recipeSeries.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           skip: 2,
-          take: 3,
+          take: 2,
           orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
           include: expect.objectContaining({
             designs: expect.objectContaining({

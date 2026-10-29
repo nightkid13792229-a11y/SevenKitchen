@@ -2351,41 +2351,52 @@ export class RecipeDesignerService {
     const searchWhere = search
       ? await this.buildSeriesKeywordWhere(search)
       : undefined;
-    const series = (await this.prisma.recipeSeries.findMany({
-      where: {
-        ...(await this.buildSeriesVisibilityWhere(context)),
-        ...(query.status ? { businessStatus: query.status } : {}),
-        ...(searchWhere ?? {}),
-      },
-      include: {
-        designs: {
-          select: DESIGN_RECIPE_SERIES_LIST_SELECT,
-          orderBy: { updatedAt: 'desc' },
-        },
-        recipes: {
-          select: RECIPE_SERIES_WORKBENCH_RECIPE_SELECT,
-          orderBy: { updatedAt: 'desc' },
-        },
-      },
-      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-      ...(usePagination
-        ? {
-            skip: (page - 1) * pageSize,
-            take: pageSize + 1,
-          }
-        : {}),
-    })) as RecipeSeriesWorkbenchRecord[];
-
-    const hasMore = usePagination && series.length > pageSize;
-    const visibleSeries = hasMore ? series.slice(0, pageSize) : series;
     /**
      * 列表上下文（2026-10-22）：
      *  · CATALOG：产品线设计（默认，保持原行为）；
      *  · ORDER：订单绑定设计，单独入口展示，不混入产品线。
      * 历史系列 `designMode` 为空，按 CATALOG 处理（与数据库默认值一致）。
+     *
+     * 2026-10-30：模式过滤下推到数据库。之前先在内存过滤再分页，
+     * 一页 24 条里混着另一模式时会被过滤掉，页数和总数都不准。
      */
     const designMode = query.designMode ?? RecipeDesignMode.CATALOG;
-    const modeSeries = visibleSeries.filter(
+    // designMode 在库里有默认值 CATALOG（非空），直接等值过滤即可
+    const designModeWhere: Prisma.RecipeSeriesWhereInput = { designMode };
+    const where: Prisma.RecipeSeriesWhereInput = {
+      ...(await this.buildSeriesVisibilityWhere(context)),
+      ...(query.status ? { businessStatus: query.status } : {}),
+      ...(searchWhere ?? {}),
+      AND: [designModeWhere],
+    };
+    const [series, total] = (await Promise.all([
+      this.prisma.recipeSeries.findMany({
+        where,
+        include: {
+          designs: {
+            select: DESIGN_RECIPE_SERIES_LIST_SELECT,
+            orderBy: { updatedAt: 'desc' },
+          },
+          recipes: {
+            select: RECIPE_SERIES_WORKBENCH_RECIPE_SELECT,
+            orderBy: { updatedAt: 'desc' },
+          },
+        },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        ...(usePagination
+          ? {
+              skip: (page - 1) * pageSize,
+              take: pageSize,
+            }
+          : {}),
+      }),
+      usePagination
+        ? this.prisma.recipeSeries.count({ where })
+        : Promise.resolve(0),
+    ])) as [RecipeSeriesWorkbenchRecord[], number];
+
+    const hasMore = usePagination ? page * pageSize < total : false;
+    const modeSeries = series.filter(
       (record) =>
         (record.designMode ?? RecipeDesignMode.CATALOG) === designMode,
     );
@@ -2403,7 +2414,7 @@ export class RecipeDesignerService {
           record.createdBy === context.userId,
         ),
       );
-      return usePagination ? { items, page, pageSize, hasMore } : items;
+      return usePagination ? { items, page, pageSize, hasMore, total } : items;
     }
 
     const referenceDogNameById =
@@ -2461,11 +2472,11 @@ export class RecipeDesignerService {
         };
       });
       return usePagination
-        ? { items: orderItems, page, pageSize, hasMore }
+        ? { items: orderItems, page, pageSize, hasMore, total }
         : orderItems;
     }
 
-    return usePagination ? { items, page, pageSize, hasMore } : items;
+    return usePagination ? { items, page, pageSize, hasMore, total } : items;
   }
 
   async createSeries(

@@ -15,6 +15,10 @@ import {
 } from '../nutrition-governance/agent-provider-config.service';
 import { IngredientCreationDraftService } from './ingredient-creation-draft.service';
 import {
+  LINE_NOT_OPEN_MESSAGE,
+  type IngredientLine,
+} from './ingredient-line';
+import {
   AI_NOT_CONFIGURED_MESSAGE,
   AI_TEMPORARILY_UNAVAILABLE_MESSAGE,
   INGREDIENT_INTAKE_AGENT_PURPOSE,
@@ -327,6 +331,8 @@ export type IngredientAgentStreamEvent =
 
 export interface RunIngredientAgentInput {
   draftId?: string;
+  /** 本次要建的线路；有 draftId 时忽略，缺省按 FOOD（过渡兼容）。 */
+  line?: IngredientLine;
   text: string;
   userId: string;
   /**
@@ -1647,14 +1653,25 @@ export class IngredientDraftAgentService {
     const tokenBudget = resolveIngredientAgentTokenBudget();
     const runId = randomUUID();
 
+    // 本期只有食材线：补剂先在建草稿之前挡住，绝不让它写成食材档案。
+    const requestedLine = input.line ?? 'FOOD';
+    if (requestedLine !== 'FOOD') {
+      throw new BadRequestException(LINE_NOT_OPEN_MESSAGE);
+    }
+
     // 没有 draftId 时先建草稿；从这里开始，AI 的所有写入都只落在这份草稿上。
     const draft = input.draftId
       ? await this.draftService.get(input.draftId)
       : await this.draftService.create({
           name: deriveDraftName(text),
-          type: 'FOOD',
+          type: requestedLine,
           createdBy: input.userId,
         });
+
+    // 草稿本身的类型也要守：补剂草稿连一个字段都不该被写。
+    if (draft.type !== 'FOOD') {
+      throw new BadRequestException(LINE_NOT_OPEN_MESSAGE);
+    }
 
     const toolDefinitions = this.toolsService.getDefinitions();
     const toolNames = this.toolsService.availableToolNames();

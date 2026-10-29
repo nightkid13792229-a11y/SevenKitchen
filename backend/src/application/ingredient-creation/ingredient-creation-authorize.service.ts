@@ -10,6 +10,7 @@ import {
   type CommitIngredientCreationResult,
 } from './ingredient-creation-commit.service';
 import { IngredientCreationDraftService } from './ingredient-creation-draft.service';
+import { LINE_NOT_OPEN_MESSAGE } from './ingredient-line';
 import type {
   IngredientCreationDraft,
   IngredientDraft,
@@ -176,6 +177,10 @@ export class IngredientCreationAuthorizeService {
 
   async authorize(input: AuthorizeInput): Promise<AuthorizeResult> {
     const draft = await this.draftService.get(input.draftId);
+    // 本期只放行食材线：补剂草稿连核验报告都不该看，更不该提交。
+    if (draft.type !== 'FOOD') {
+      throw new BadRequestException(LINE_NOT_OPEN_MESSAGE);
+    }
     // 先确认草稿里有可写的东西：缺原料卡 / 缺可用档案时不用再查核验报告。
     const material = this.readDraftMaterial(draft);
     const runs = await this.checkRunService.latestRuns(input.draftId);

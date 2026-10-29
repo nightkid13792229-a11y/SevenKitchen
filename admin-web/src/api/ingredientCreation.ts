@@ -18,30 +18,12 @@ import type {
   IngredientCreationDraft,
   IngredientCreationDraftPayload,
   IngredientDraftChecksView,
-  IntakeClassification,
-  IntakeCurrentIngredient,
-  IntakeHistoryTurn,
   RunIngredientAgentInput
 } from '@/types/ingredientCreation'
 
 const BASE = '/admin/ingredient-creation'
 
 export const ingredientCreationApi = {
-  /**
-   * 第一步：判断一句话说的是食材还是补剂。
-   *
-   * `history` 是最近几轮对话（最多 6 条），`current` 是已经判出的原料；
-   * 后端靠这两项区分「新原料」和「纠正上一条」。
-   * `UNKNOWN` 不是错误：后端会在 `reply` 里追问，并给可点的补全建议。
-   * AI 未启用 / 不可用时后端返回 503 + 中文提示，由页面原样显示成对话气泡。
-   */
-  classifyIntake: (
-    text: string,
-    history: IntakeHistoryTurn[] = [],
-    current?: IntakeCurrentIngredient
-  ): Promise<IntakeClassification> =>
-    api.post(`${BASE}/intake/classify`, { text, history, current }),
-
   /** 读取草稿（刷新后按 draftId 恢复现场） */
   getDraft: (id: string): Promise<IngredientCreationDraft> =>
     api.get(`${BASE}/drafts/${id}`),

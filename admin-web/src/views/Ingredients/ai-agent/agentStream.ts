@@ -5,6 +5,7 @@
  * 工具调用就推一条事件，`parseSseChunk` 处理分片，`reduceAgentEvents` 把事件
  * 归并成可渲染的状态。三个函数都是纯的（只有 stream 会发请求），方便测试。
  */
+import type { IngredientLine } from './lineEntry'
 import {
   aiVerdictLabel,
   aiVerdictTagType,
@@ -881,7 +882,7 @@ export interface StreamIngredientAgentOptions {
  * 已归并的步骤保留在 `state.steps` 里（页面同时通过 `onState` 实时收到）。
  */
 export async function streamIngredientAgent(
-  input: { draftId?: string; text: string },
+  input: { draftId?: string; text: string; line?: IngredientLine },
   options: StreamIngredientAgentOptions = {}
 ): Promise<AgentStreamState> {
   let state = createAgentStreamState()

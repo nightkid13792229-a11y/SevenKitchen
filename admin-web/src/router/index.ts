@@ -75,16 +75,15 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "原料管理" },
       },
       {
+        // 旧地址：判断食材/补剂的半成品页已下线，统一落到 Agent 页。
         path: "ingredients/ai-create",
-        name: "IngredientAiCreate",
-        component: () => import("@/views/Ingredients/ai-create/index.vue"),
-        meta: { title: "AI 添加原料" },
+        redirect: { name: "IngredientAiAgent" },
       },
       {
         path: "ingredients/ai-agent",
         name: "IngredientAiAgent",
         component: () => import("@/views/Ingredients/ai-agent/index.vue"),
-        meta: { title: "AI 添加原料（Agent）" },
+        meta: { title: "AI 添加原料" },
       },
       {
         path: "supplement-shop/catalog",

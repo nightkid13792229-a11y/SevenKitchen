@@ -2,17 +2,72 @@
   <div ref="pageRef" class="ai-agent-page">
     <header class="ai-agent-header">
       <div>
-        <h2 class="ai-agent-header__title">AI 添加原料（Agent）</h2>
+        <h2 class="ai-agent-header__title">AI 添加原料</h2>
         <p class="ai-agent-header__subtitle">
-          说一句话，AI 会在这份草稿上查库、写原料卡与营养档案；
-          跑完一轮后右侧出现「原料档案 / 营养档案」，你核对、改完，
-          两页各跑一次核验，才能授权写入正式库。
+          <template v-if="line === 'FOOD'">
+            说一句话，AI 会在这份草稿上查库、写原料卡与营养档案；
+            跑完一轮后右侧出现「原料档案 / 营养档案」，你核对、改完，
+            两页各跑一次核验，才能授权写入正式库。
+          </template>
+          <template v-else>
+            先定这次加的是食材还是补剂，再往下做。
+          </template>
         </p>
       </div>
-      <el-button text @click="goBackToList">返回原料列表</el-button>
+      <div class="ai-agent-header__actions">
+        <el-tag
+          v-if="line"
+          :type="line === 'SUPPLEMENT' ? 'warning' : 'success'"
+          effect="plain"
+        >
+          {{ LINE_LABELS[line] }}
+        </el-tag>
+        <el-button v-if="canSwitchLine" text @click="resetLine">
+          换线路
+        </el-button>
+        <el-button text @click="goBackToList">返回原料列表</el-button>
+      </div>
     </header>
 
-    <div class="ai-agent-layout">
+    <div v-if="!line" class="line-gate">
+      <el-card shadow="never">
+        <h3 class="line-gate__title">这次添加的是哪一类原料</h3>
+        <p class="line-gate__hint">
+          食材按每 100g 从营养库取数；补剂按每粒从商品标签取数。
+          两条线的字段和核验都不一样，选错了后面会白填。
+        </p>
+        <div class="line-gate__options">
+          <button class="line-gate__option" type="button" @click="pickLine('FOOD')">
+            <b>食材类原料</b>
+            <span>肉类、内脏、水产、蛋、蔬果、谷物</span>
+          </button>
+          <button
+            class="line-gate__option line-gate__option--muted"
+            type="button"
+            @click="pickLine('SUPPLEMENT')"
+          >
+            <b>补剂类原料</b>
+            <span>矿物质、维生素、鱼油、益生菌</span>
+            <el-tag size="small" type="info" effect="plain">暂未开放</el-tag>
+          </button>
+        </div>
+      </el-card>
+    </div>
+
+    <div v-else-if="line === 'SUPPLEMENT'" class="line-gate">
+      <el-card shadow="never">
+        <h3 class="line-gate__title">补剂线还没开放</h3>
+        <p class="line-gate__hint">
+          补剂和食材的字段、计量口径、核验规则都不一样，这条线正在单独做。
+          这半页不会保存任何东西。
+        </p>
+        <el-button v-if="canSwitchLine" type="primary" @click="revertToFood">
+          改回食材
+        </el-button>
+      </el-card>
+    </div>
+
+    <div v-else class="ai-agent-layout">
       <el-card class="agent-panel" shadow="never">
         <div class="agent-panel__head">
           <span class="agent-panel__dot" aria-hidden="true"></span>
@@ -862,7 +917,7 @@ import {
   ref,
   watch
 } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ingredientCreationApi } from '@/api/ingredientCreation'
 import { nutritionFoodApi } from '@/api/ingredients'
@@ -875,6 +930,15 @@ import {
 } from '@/constants/ingredientCardFields'
 import { INGREDIENT_NUTRITION_TAB_DEFINITIONS } from '@/constants/ingredientNutrition'
 import { getApiErrorMessage } from '@/utils/apiError'
+import {
+  LINE_LABELS,
+  applyLineAction,
+  createLineEntryState,
+  resolveLineEntry,
+  toLineEntryInput,
+  type IngredientLine,
+  type LineEntryState
+} from './lineEntry'
 import type {
   AuthorizeBlockedReason,
   AuthorizeResult,
@@ -968,6 +1032,7 @@ interface AgentRunRecord {
   finishedAt: number | null
 }
 
+const route = useRoute()
 const router = useRouter()
 const isAdmin = useIsAdmin()
 const userStore = useUserStore()
@@ -988,6 +1053,49 @@ const state = reactive({
    */
   pendingQuestion: null as AgentPendingQuestion | null
 })
+
+/**
+ * 这次任务走哪一条线。
+ *
+ * `pick` 是用户在这半页里点的；`locked` 一旦有草稿就写死（草稿的线不能改）。
+ * 判定规则在 lineEntry.ts，这里只负责把三样输入递进去。
+ */
+const entryState = reactive<LineEntryState>(
+  // 入口预选**只消费一次**：之后 URL 不再参与判定，否则「改回食材」会被它拉回去。
+  createLineEntryState(
+    typeof route.query.line === 'string' ? route.query.line : null
+  )
+)
+
+const lineDecision = computed(() => resolveLineEntry(toLineEntryInput(entryState)))
+const line = computed(() => lineDecision.value.line)
+/** 还没建草稿、也没在跑，才允许改主意。 */
+const canSwitchLine = computed(
+  () => entryState.locked === null && !state.running && !state.draftId
+)
+
+function pickLine(next: IngredientLine) {
+  if (!canSwitchLine.value) {
+    return
+  }
+  Object.assign(
+    entryState,
+    applyLineAction(entryState, { type: 'PICK', line: next })
+  )
+}
+
+/** 闸门卡上的「改回食材」：直接落到食材线，而不是回到起手卡。 */
+function revertToFood() {
+  pickLine('FOOD')
+}
+
+/** 食材线返回起手卡；只在还没锁定的时候可用。 */
+function resetLine() {
+  if (!canSwitchLine.value) {
+    return
+  }
+  Object.assign(entryState, applyLineAction(entryState, { type: 'RESET' }))
+}
 
 /**
  * 选项按钮的展示视图：文本用后端给的 displayLabel（未收录时带后缀），
@@ -1097,6 +1205,7 @@ const saving = computed(() => savingCount.value > 0)
 
 const canRun = computed(
   () =>
+    line.value === 'FOOD' &&
     !state.running &&
     !saving.value &&
     !commitResult.value &&
@@ -1443,10 +1552,15 @@ async function loadDraft(draftId: string) {
 }
 
 async function handleRun() {
+  // 线路没定、或者选了补剂，一个请求都不发：闸门不是提示，是硬拦。
+  if (line.value !== 'FOOD') {
+    return
+  }
   const text = inputText.value.trim()
   if (!text || state.running || saving.value || commitResult.value) {
     return
   }
+  const sentLine = line.value
 
   inputText.value = ''
   // 这一句要么是新指令，要么是在回答上一轮的问题；两种情况问题都已消费。
@@ -1487,7 +1601,8 @@ async function handleRun() {
     const finalState = await streamIngredientAgent(
       {
         ...(state.draftId ? { draftId: state.draftId } : {}),
-        text
+        text,
+        ...(sentLine ? { line: sentLine } : {})
       },
       {
         onState: (next) => {
@@ -1498,6 +1613,13 @@ async function handleRun() {
     )
     applyState(finalState)
     if (finalState.draftId) {
+      // 草稿一建出来，线路就定了：之后只能另起一份，不能在这半页里改。
+      if (sentLine) {
+        Object.assign(
+          entryState,
+          applyLineAction(entryState, { type: 'LOCK', line: sentLine })
+        )
+      }
       // 每跑完一轮都重新读草稿：右边两个标签永远显示服务端最新版本。
       await loadDraft(finalState.draftId)
     }
@@ -2364,6 +2486,68 @@ function goBackToList() {
   font-size: 13px;
   line-height: 1.7;
   color: var(--el-text-color-secondary);
+}
+
+.ai-agent-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.line-gate {
+  max-width: 720px;
+}
+
+.line-gate__title {
+  margin: 0;
+  font-size: 18px;
+  color: var(--el-text-color-primary);
+}
+
+.line-gate__hint {
+  margin: 8px 0 18px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--el-text-color-secondary);
+}
+
+.line-gate__options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.line-gate__option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 18px 16px;
+  text-align: left;
+  cursor: pointer;
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color);
+  border-radius: 8px;
+}
+
+.line-gate__option:hover {
+  border-color: var(--el-color-primary);
+}
+
+.line-gate__option b {
+  font-size: 16px;
+  color: var(--el-text-color-primary);
+}
+
+.line-gate__option span {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--el-text-color-secondary);
+}
+
+.line-gate__option--muted {
+  background: var(--el-fill-color-lighter);
 }
 
 .ai-agent-layout {

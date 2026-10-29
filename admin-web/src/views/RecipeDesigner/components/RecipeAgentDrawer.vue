@@ -44,6 +44,27 @@
         </span>
       </div>
 
+      <!--
+        爱犬信息参考（2026-10-29）：抽屉会盖住右侧「爱犬信息」栏，
+        这里放一份可折叠的同一面板，边聊边看，不用关抽屉。
+      -->
+      <div v-if="dogId" class="agent-dog-ref">
+        <el-collapse v-model="dogRefExpanded">
+          <el-collapse-item name="dog" title="爱犬信息（点开参考，不影响聊天）">
+            <div class="agent-dog-ref__body">
+              <DogInsightPanel
+                :dog-id="dogId"
+                :draft-id="draftId"
+                :series-id="seriesId"
+                :lock-reference-dog="lockReferenceDog"
+                :energy-density-kcal-per-kg="energyDensityKcalPerKg"
+                @dog-changed="(nextDogId: string | null) => emit('dog-changed', nextDogId)"
+              />
+            </div>
+          </el-collapse-item>
+        </el-collapse>
+      </div>
+
       <div class="agent-conversation-shell">
         <div
           ref="scrollRef"
@@ -254,6 +275,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
+import DogInsightPanel from './DogInsightPanel.vue'
 import { resolveAgentRunUsage } from '../agentRunUsage'
 import { NUTRITION_FIELD_CATALOG } from '@/utils/recipeDesigner/nutritionFieldCatalog'
 import { formatDateTime } from '@/utils/date'
@@ -268,11 +290,17 @@ import type {
 const props = defineProps<{
   modelValue: boolean
   draftId: string
+  /** 参考爱犬 / 本单绑定的狗狗；为空时不显示抽屉里的爱犬信息参考 */
+  dogId?: string | null
+  seriesId?: string
+  lockReferenceDog?: boolean
+  energyDensityKcalPerKg?: number | null
 }>()
 
 const emit = defineEmits<{
   (event: 'update:modelValue', value: boolean): void
   (event: 'refresh'): void
+  (event: 'dog-changed', dogId: string | null): void
 }>()
 
 const visible = computed({
@@ -280,6 +308,8 @@ const visible = computed({
   set: (value: boolean) => emit('update:modelValue', value)
 })
 
+/** 抽屉里的爱犬信息参考：默认收起，需要时点开 */
+const dogRefExpanded = ref<string[]>([])
 const session = ref<RecipeAgentSession | null>(null)
 const messages = ref<RecipeAgentMessage[]>([])
 const approvals = ref<RecipeAgentApproval[]>([])
@@ -1991,6 +2021,34 @@ onBeforeUnmount(stopPolling)
   padding: 0 0 8px;
   color: #909399;
   font-size: 12px;
+}
+
+.agent-dog-ref {
+  flex-shrink: 0;
+  margin-bottom: 8px;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  background: #fafbfc;
+}
+.agent-dog-ref :deep(.el-collapse) {
+  border: none;
+}
+.agent-dog-ref :deep(.el-collapse-item__header) {
+  height: 36px;
+  padding: 0 12px;
+  background: transparent;
+  border-bottom: none;
+  font-size: 12.5px;
+  color: #606266;
+}
+.agent-dog-ref :deep(.el-collapse-item__wrap) {
+  background: transparent;
+  border-bottom: none;
+}
+.agent-dog-ref__body {
+  max-height: 46vh;
+  overflow-y: auto;
+  padding: 0 10px 10px;
 }
 
 .agent-meta__warning {

@@ -108,6 +108,39 @@ describe('parseSseChunk', () => {
   })
 })
 
+describe('reduceAgentEvents · 检索方案', () => {
+  it('收到 plan 事件 → 记下待确认方案与草稿号', () => {
+    const state = reduceAgentEvents(createAgentStreamState(), {
+      type: 'plan',
+      draftId: 'draft-1',
+      plan: {
+        status: 'PENDING',
+        keywords: [{ term: '鸡蛋清', language: 'zh' }],
+        libraries: ['CFCT', 'USDA'],
+        findings: 'CFCT 0 条',
+        chosenRecordId: null,
+        chosenRecordName: null,
+        rationale: '',
+        proposedAt: '2026-10-29T00:00:00.000Z',
+        approvedAt: null,
+        approvedBy: null,
+        editedByUser: false
+      }
+    })
+
+    expect(state.pendingPlan).toMatchObject({
+      status: 'PENDING',
+      libraries: ['CFCT', 'USDA']
+    })
+    expect(state.draftId).toBe('draft-1')
+    expect(state.done).toBe(false)
+  })
+
+  it('没有 plan 事件时 pendingPlan 为 null', () => {
+    expect(createAgentStreamState().pendingPlan).toBeNull()
+  })
+})
+
 describe('reduceAgentEvents', () => {
   it('step_start 后立即进入「执行中」，带上中文工具名与摘要', () => {
     const state = reduceAgentEvents(createAgentStreamState(), stepStart())

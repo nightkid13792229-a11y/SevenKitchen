@@ -402,6 +402,83 @@
           </div>
         </div>
 
+        <div v-if="state.pendingPlan" class="agent-plan">
+          <div class="agent-plan__head">
+            <span class="agent-run__role agent-run__role--ai">AI</span>
+            <b>检索方案，待你确认</b>
+          </div>
+          <p class="agent-plan__hint">
+            查库阶段已经跑完。确认之后我才开始写原料卡和营养档案；要改就直接在下面说，我会重新提一份。
+          </p>
+          <p v-if="state.pendingPlan.findings" class="agent-plan__findings">
+            已查到：{{ state.pendingPlan.findings }}
+          </p>
+
+          <div class="agent-plan__row">
+            <span class="agent-plan__label">搜索词</span>
+            <div class="agent-plan__keywords">
+              <div
+                v-for="(item, index) in planDraft.keywords"
+                :key="`kw-${index}`"
+                class="agent-plan__keyword"
+              >
+                <el-input
+                  v-model="item.language"
+                  class="agent-plan__lang"
+                  size="small"
+                  maxlength="10"
+                  aria-label="语种"
+                />
+                <el-input
+                  v-model="item.term"
+                  size="small"
+                  maxlength="40"
+                  aria-label="搜索词"
+                />
+                <el-button
+                  link
+                  type="danger"
+                  :disabled="planDraft.keywords.length <= 1"
+                  @click="removePlanKeyword(index)"
+                >
+                  删
+                </el-button>
+              </div>
+              <el-button link type="primary" @click="addPlanKeyword">
+                加一个词
+              </el-button>
+            </div>
+          </div>
+
+          <div class="agent-plan__row">
+            <span class="agent-plan__label">目标库</span>
+            <el-checkbox-group v-model="planDraft.libraries">
+              <el-checkbox
+                v-for="library in SEARCH_PLAN_LIBRARIES"
+                :key="library"
+                :value="library"
+              >
+                {{ library }}
+              </el-checkbox>
+            </el-checkbox-group>
+          </div>
+
+          <p v-if="state.pendingPlan.rationale" class="agent-plan__why">
+            理由：{{ state.pendingPlan.rationale }}
+          </p>
+
+          <div class="agent-plan__actions">
+            <el-button
+              type="primary"
+              :loading="planConfirming"
+              :disabled="!planCanConfirm"
+              @click="confirmPlan"
+            >
+              确认并按方案继续
+            </el-button>
+          </div>
+        </div>
+
         <div class="agent-composer">
           <el-input
             ref="composerRef"
@@ -949,8 +1026,11 @@ import type {
   IngredientCreationDraft,
   IngredientCreationDraftPayload,
   IngredientDraftChecksView,
-  ProfileDraft
+  ProfileDraft,
+  SearchPlan,
+  SearchPlanKeyword
 } from '@/types/ingredientCreation'
+import { SEARCH_PLAN_LIBRARIES } from '@/types/ingredientCreation'
 import {
   applyProfileCellEdit,
   countPendingRows,
@@ -1051,8 +1131,77 @@ const state = reactive({
    * AI 正在等你回答的问题。SSE `ask` 事件、草稿 payload（刷新恢复）、
    * 非流式 `runAgent` 返回值三个来源都归一到这个字段。
    */
-  pendingQuestion: null as AgentPendingQuestion | null
+  pendingQuestion: null as AgentPendingQuestion | null,
+  /** AI 交了检索方案、等用户确认；确认前后端会拒绝写草稿。 */
+  pendingPlan: null as SearchPlan | null
 })
+
+/**
+ * 方案卡上的可编辑副本。
+ *
+ * 不能直接改 `state.pendingPlan`：那份是服务端推来的快照，确认时要拿它做
+ * 「人改过没有」的对比，页面只改副本、提交时把副本发回去。
+ */
+const planDraft = reactive<{ keywords: SearchPlanKeyword[]; libraries: string[] }>(
+  { keywords: [], libraries: [] }
+)
+const planConfirming = ref(false)
+
+watch(
+  () => state.pendingPlan,
+  (plan) => {
+    if (!plan) {
+      return
+    }
+    planDraft.keywords = plan.keywords.map((item) => ({ ...item }))
+    planDraft.libraries = [...plan.libraries]
+  },
+  { immediate: true }
+)
+
+const planCanConfirm = computed(
+  () =>
+    planDraft.keywords.some((item) => item.term.trim().length > 0) &&
+    planDraft.libraries.length > 0 &&
+    !planConfirming.value
+)
+
+function addPlanKeyword() {
+  planDraft.keywords.push({ term: '', language: 'en' })
+}
+
+function removePlanKeyword(index: number) {
+  planDraft.keywords.splice(index, 1)
+}
+
+/** 人确认方案 → 落库 → 自动继续一轮，让 AI 开始写。 */
+async function confirmPlan() {
+  const draftId = state.draftId
+  const plan = state.pendingPlan
+  if (!draftId || !plan || !planCanConfirm.value) {
+    return
+  }
+
+  planConfirming.value = true
+  try {
+    await ingredientCreationApi.confirmSearchPlan(draftId, {
+      keywords: planDraft.keywords
+        .map((item) => ({
+          term: item.term.trim(),
+          language: item.language.trim() || 'zh'
+        }))
+        .filter((item) => item.term.length > 0),
+      libraries: [...planDraft.libraries]
+    })
+    state.pendingPlan = null
+    inputText.value = '检索方案已确认，请按方案继续。'
+    await handleRun()
+  } catch (error) {
+    ElMessage.error(getApiErrorMessage(error, '确认失败，请稍后重试'))
+  } finally {
+    planConfirming.value = false
+  }
+}
 
 /**
  * 这次任务走哪一条线。
@@ -1565,6 +1714,7 @@ async function handleRun() {
   inputText.value = ''
   // 这一句要么是新指令，要么是在回答上一轮的问题；两种情况问题都已消费。
   state.pendingQuestion = null
+  state.pendingPlan = null
   state.running = true
   const run = reactive<AgentRunRecord>({
     id: ++runSeq,
@@ -1590,6 +1740,7 @@ async function handleRun() {
     run.report = next.report
     run.error = next.error
     state.pendingQuestion = next.pendingQuestion
+    state.pendingPlan = next.pendingPlan
     if (next.draftId) {
       state.draftId = next.draftId
     }
@@ -3155,6 +3306,79 @@ function goBackToList() {
     opacity: 1;
     transform: scale(1);
   }
+}
+
+.agent-plan {
+  margin: 12px 0;
+  padding: 14px 16px;
+  background: var(--el-fill-color-lighter);
+  border: 1px solid var(--el-border-color);
+  border-radius: 8px;
+}
+
+.agent-plan__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--el-text-color-primary);
+}
+
+.agent-plan__hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--el-text-color-secondary);
+}
+
+.agent-plan__findings {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--el-text-color-regular);
+}
+
+.agent-plan__row {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.agent-plan__label {
+  flex-shrink: 0;
+  width: 52px;
+  padding-top: 4px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.agent-plan__keywords {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.agent-plan__keyword {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.agent-plan__lang {
+  width: 72px;
+  flex-shrink: 0;
+}
+
+.agent-plan__why {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.agent-plan__actions {
+  margin-top: 14px;
 }
 
 .agent-composer {

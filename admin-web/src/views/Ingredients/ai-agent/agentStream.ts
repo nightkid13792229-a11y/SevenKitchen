@@ -6,6 +6,7 @@
  * 归并成可渲染的状态。三个函数都是纯的（只有 stream 会发请求），方便测试。
  */
 import type { IngredientLine } from './lineEntry'
+import type { SearchPlan } from '@/types/ingredientCreation'
 import {
   aiVerdictLabel,
   aiVerdictTagType,
@@ -217,6 +218,12 @@ export type AgentStreamEvent =
       /** 问人也是本轮正常结束：报告一并带回。 */
       report?: AgentRunReport
     }
+  | {
+      type: 'plan'
+      plan: SearchPlan
+      draftId: string
+      report?: AgentRunReport
+    }
   | { type: 'done'; report?: AgentRunReport }
   | { type: 'error'; message: string; report?: AgentRunReport }
 
@@ -283,6 +290,8 @@ export interface AgentStreamState {
   done: boolean
   /** 当前在等用户回答的问题；没有时为 null。 */
   pendingQuestion: AgentPendingQuestion | null
+  /** 当前在等用户确认的检索方案；没有时为 null。 */
+  pendingPlan: SearchPlan | null
   /** 本轮运行报告；旧后端没有时为 null。 */
   report: AgentRunReport | null
 }
@@ -296,7 +305,53 @@ export function createAgentStreamState(): AgentStreamState {
     error: null,
     done: false,
     pendingQuestion: null,
+    pendingPlan: null,
     report: null
+  }
+}
+
+/**
+ * 读后端推来的检索方案；认不出来就当没有（旧后端 / 脏数据都不该让页面崩）。
+ *
+ * 与后端 `readSearchPlan` 同口径：只认 PENDING / APPROVED，关键词与目标库必须
+ * 是真数组，其余字段按字符串兜底。
+ */
+export function readSearchPlan(value: unknown): SearchPlan | null {
+  if (!isRecord(value)) {
+    return null
+  }
+  const status = value.status
+  if (status !== 'PENDING' && status !== 'APPROVED') {
+    return null
+  }
+
+  const keywords = Array.isArray(value.keywords)
+    ? value.keywords
+        .filter((item): item is Record<string, unknown> => isRecord(item))
+        .map((item) => ({
+          term: readText(item.term),
+          language: readText(item.language)
+        }))
+        .filter((item) => item.term.length > 0)
+    : []
+  const libraries = Array.isArray(value.libraries)
+    ? value.libraries
+        .map((item) => readText(item))
+        .filter((item) => item.length > 0)
+    : []
+
+  return {
+    status,
+    keywords,
+    libraries,
+    findings: readText(value.findings),
+    chosenRecordId: readText(value.chosenRecordId) || null,
+    chosenRecordName: readText(value.chosenRecordName) || null,
+    rationale: readText(value.rationale),
+    proposedAt: readText(value.proposedAt),
+    approvedAt: readText(value.approvedAt) || null,
+    approvedBy: readText(value.approvedBy) || null,
+    editedByUser: value.editedByUser === true
   }
 }
 
@@ -778,6 +833,19 @@ export function reduceAgentEvents(
       return {
         ...state,
         pendingQuestion: pending,
+        draftId: readText(event.draftId) || state.draftId,
+        report: readAgentRunReport(event.report) ?? state.report
+      }
+    }
+
+    case 'plan': {
+      const plan = readSearchPlan(event.plan)
+      if (!plan) {
+        return state
+      }
+      return {
+        ...state,
+        pendingPlan: plan,
         draftId: readText(event.draftId) || state.draftId,
         report: readAgentRunReport(event.report) ?? state.report
       }

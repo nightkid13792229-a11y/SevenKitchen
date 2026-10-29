@@ -18,12 +18,25 @@ import type {
   IngredientCreationDraft,
   IngredientCreationDraftPayload,
   IngredientDraftChecksView,
-  RunIngredientAgentInput
+  RunIngredientAgentInput,
+  ConfirmSearchPlanInput,
+  SearchPlan
 } from '@/types/ingredientCreation'
 
 const BASE = '/admin/ingredient-creation'
 
 export const ingredientCreationApi = {
+  /**
+   * 确认（可修改）AI 提交的检索方案；确认后 AI 才能写原料卡与营养。
+   *
+   * 只传人改过的东西；确认人与时间由服务端按当前登录人写。
+   */
+  confirmSearchPlan: (
+    id: string,
+    input: ConfirmSearchPlanInput = {}
+  ): Promise<SearchPlan> =>
+    api.post(`${BASE}/drafts/${id}/search-plan/confirm`, input),
+
   /** 读取草稿（刷新后按 draftId 恢复现场） */
   getDraft: (id: string): Promise<IngredientCreationDraft> =>
     api.get(`${BASE}/drafts/${id}`),

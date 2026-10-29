@@ -481,3 +481,49 @@ export interface RunIngredientAgentInput {
   line?: 'FOOD' | 'SUPPLEMENT'
   text: string
 }
+
+/** 本地营养库白名单（与后端同一份；页面用来渲染可勾选的库）。 */
+export const SEARCH_PLAN_LIBRARIES = [
+  'CFCT',
+  'TFDA',
+  'USDA',
+  'CNF',
+  'NZFCD',
+  'MEXT',
+  'KO_RDA'
+] as const
+
+/** 检索方案里的一个搜索词。 */
+export interface SearchPlanKeyword {
+  term: string
+  language: string
+}
+
+export type SearchPlanStatus = 'PENDING' | 'APPROVED'
+
+/**
+ * AI 查完库后交给用户确认的「最终怎么查」。
+ *
+ * `PENDING` 时后端会拒绝写草稿；`APPROVED` 之后才放行。
+ */
+export interface SearchPlan {
+  status: SearchPlanStatus
+  keywords: SearchPlanKeyword[]
+  libraries: string[]
+  findings: string
+  chosenRecordId: string | null
+  chosenRecordName: string | null
+  rationale: string
+  proposedAt: string
+  approvedAt: string | null
+  approvedBy: string | null
+  editedByUser: boolean
+}
+
+/** 人确认时能改的东西；不传 = 沿用 AI 提交的。 */
+export interface ConfirmSearchPlanInput {
+  keywords?: SearchPlanKeyword[]
+  libraries?: string[]
+  chosenRecordId?: string
+  chosenRecordName?: string
+}

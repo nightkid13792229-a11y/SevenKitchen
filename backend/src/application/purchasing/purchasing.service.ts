@@ -1485,18 +1485,47 @@ export class PurchasingService {
     );
   }
 
+  /**
+   * 取这张订单的原料口径。
+   *
+   * 重做单是 0 元单、没有自己的定价快照；它是「同样的东西再做一份」，
+   * 直接复用原单的原料明细（数量 + 成本口径），否则采购会整单漏算。
+   */
+  private async resolveOrderPricingBreakdown(order: Order): Promise<any | null> {
+    if (order.pricingBreakdownSnapshot) {
+      return order.pricingBreakdownSnapshot as any;
+    }
+    if (!order.remakeFromOrderId) {
+      return null;
+    }
+    const original = await this.orderRepository.findById(
+      order.remakeFromOrderId,
+    );
+    const originalBreakdown = original?.pricingBreakdownSnapshot as any;
+    if (!originalBreakdown) {
+      this.logger.warn(
+        `重做单 ${order.id} 找不到原单 ${order.remakeFromOrderId} 的定价快照，采购将漏算它的原料`,
+      );
+      return null;
+    }
+    return originalBreakdown;
+  }
+
   private async buildIngredientLookupFromOrders(
     orders: Order[],
   ): Promise<Map<string, any>> {
+    const detailsByOrder = await Promise.all(
+      orders.map(async (order) => {
+        const breakdown = await this.resolveOrderPricingBreakdown(order);
+        return ((breakdown as any)?.ingredientDetails || []) as any[];
+      }),
+    );
     const ingredientIds = Array.from(
       new Set(
-        orders.flatMap((order) => {
-          const ingredientDetails =
-            (order.pricingBreakdownSnapshot as any)?.ingredientDetails || [];
-          return ingredientDetails
-            .map((detail: any) => detail?.ingredientId)
-            .filter(Boolean);
-        }),
+        detailsByOrder
+          .flat()
+          .map((detail: any) => detail?.ingredientId)
+          .filter(Boolean),
       ),
     );
 
@@ -1541,14 +1570,14 @@ export class PurchasingService {
     const ingredientMap = new Map<string, PurchaseRequirement>();
 
     for (const order of orders) {
-      if (!order.pricingBreakdownSnapshot) {
+      const pricingBreakdown = await this.resolveOrderPricingBreakdown(order);
+      if (!pricingBreakdown) {
         this.logger.warn(
           `Order ${order.id} has no pricing breakdown snapshot, skipping`,
         );
         continue;
       }
 
-      const pricingBreakdown = order.pricingBreakdownSnapshot as any;
       const ingredientDetails = pricingBreakdown.ingredientDetails || [];
 
       const recipeSnapshotMap = new Map<string, any>();
@@ -2288,15 +2317,14 @@ export class PurchasingService {
     const ingredientMap = new Map<string, PurchaseRequirement>();
 
     for (const order of orders) {
-      // 检查订单是否有定价快照
-      if (!order.pricingBreakdownSnapshot) {
+      const pricingBreakdown = await this.resolveOrderPricingBreakdown(order);
+      if (!pricingBreakdown) {
         this.logger.warn(
           `Order ${order.id} has no pricing breakdown snapshot, skipping`,
         );
         continue;
       }
 
-      const pricingBreakdown = order.pricingBreakdownSnapshot as any;
       const ingredientDetails = pricingBreakdown.ingredientDetails || [];
 
       // 创建recipeSnapshot的映射，用于获取sort_order
@@ -2997,11 +3025,11 @@ export class PurchasingService {
     const ingredientCostMap = new Map<string, number>();
 
     for (const order of orders) {
-      if (!order.pricingBreakdownSnapshot) {
+      const pricingBreakdown = await this.resolveOrderPricingBreakdown(order);
+      if (!pricingBreakdown) {
         continue;
       }
 
-      const pricingBreakdown = order.pricingBreakdownSnapshot as any;
       const ingredientDetails = pricingBreakdown.ingredientDetails || [];
 
       for (const detail of ingredientDetails) {

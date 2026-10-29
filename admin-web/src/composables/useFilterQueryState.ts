@@ -12,7 +12,7 @@ import { useRoute, useRouter, type LocationQuery } from 'vue-router'
 
 export interface QueryFilterSyncOptions {
   /** 每个筛选的默认值；等于默认值时不写进地址栏，保持地址干净 */
-  defaults: Record<string, string | undefined>
+  defaults: Record<string, string | number | boolean | undefined>
   /** 地址栏里的非法值（比如已删除的旧状态）直接忽略 */
   validators?: Record<string, (value: string) => boolean>
   /** 输入类筛选的写地址节流，默认 200ms */
@@ -27,12 +27,14 @@ export interface QueryFilterSyncOptions {
 export function buildFilterQuery(
   base: LocationQuery,
   values: Record<string, unknown>,
-  defaults: Record<string, string | undefined>
+  defaults: Record<string, string | number | boolean | undefined>
 ): LocationQuery {
   const query: LocationQuery = { ...base }
   for (const [key, raw] of Object.entries(values)) {
     const value = String(raw ?? '').trim()
-    if (!value || value === (defaults[key] ?? '')) {
+    // 默认值可能是数字/布尔（比如页码），统一按字符串比较
+    const defaultValue = String(defaults[key] ?? '')
+    if (!value || value === defaultValue) {
       delete query[key]
     } else {
       query[key] = value
@@ -66,12 +68,24 @@ export function useFilterQueryState<T extends Record<string, unknown>>(
   const router = useRouter()
   const defaults: Record<string, unknown> = { ...state }
 
-  // 地址栏优先：刷新、分享链接、从订单带入时按 URL 恢复
+  // 地址栏优先：刷新、分享链接、从订单带入时按 URL 恢复。
+  // 按默认值的类型还原：数字（页码）转 Number，布尔转 Boolean，其余按字符串。
   for (const key of Object.keys(state)) {
     const raw = route.query[key]
-    if (typeof raw === 'string' && raw) {
-      ;(state as Record<string, unknown>)[key] = raw
+    if (typeof raw !== 'string' || !raw) continue
+    const defaultValue = defaults[key]
+    if (typeof defaultValue === 'number') {
+      const numeric = Number(raw)
+      if (Number.isFinite(numeric)) {
+        ;(state as Record<string, unknown>)[key] = numeric
+      }
+      continue
     }
+    if (typeof defaultValue === 'boolean') {
+      ;(state as Record<string, unknown>)[key] = raw === 'true' || raw === '1'
+      continue
+    }
+    ;(state as Record<string, unknown>)[key] = raw
   }
 
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -86,7 +100,7 @@ export function useFilterQueryState<T extends Record<string, unknown>>(
         const nextQuery = buildFilterQuery(
           route.query,
           values,
-          defaults as Record<string, string | undefined>
+          defaults as Record<string, string | number | boolean | undefined>
         )
         if (isSameQuery(nextQuery, route.query)) return
         void router.replace({ query: nextQuery })

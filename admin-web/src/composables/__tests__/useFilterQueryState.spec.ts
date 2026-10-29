@@ -40,6 +40,14 @@ describe('buildFilterQuery', () => {
     ).toEqual({})
   })
 
+  it('页码这类数字字段：默认 1 不写，翻页后写进地址栏', () => {
+    const defaultsWithPage = { ...defaults, page: 1 }
+    expect(buildFilterQuery({}, { page: 1 }, defaultsWithPage)).toEqual({})
+    expect(buildFilterQuery({}, { page: 3 }, defaultsWithPage)).toEqual({
+      page: '3'
+    })
+  })
+
   it('新增筛选项不需要改函数：只要传进来就会同步', () => {
     expect(
       buildFilterQuery(

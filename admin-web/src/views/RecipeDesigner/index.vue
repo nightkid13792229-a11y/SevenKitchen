@@ -240,7 +240,7 @@
           layout="prev, pager, next, total"
           :total="seriesTotal"
           :page-size="SERIES_PAGE_SIZE"
-          :current-page="seriesPage"
+          :current-page="filters.page"
           @current-change="handleSeriesPageChange"
         />
       </div>
@@ -372,14 +372,15 @@ const statusFilterOptions: Array<{
 const filters = reactive({
   mode: 'CATALOG' as 'CATALOG' | 'ORDER',
   status: undefined as RecipeDesignerSeriesStatusFilter | undefined,
-  search: ''
+  search: '',
+  // 页码也是筛选状态的一部分：刷新后停在第 N 页
+  page: 1
 })
 /** 2026-10-26：列表与需求分类是同一页的两种看法 */
 const viewMode = ref<'SERIES' | 'TAXONOMY'>('SERIES')
 
 useFilterQueryState(filters)
 
-const seriesPage = ref(1)
 const seriesTotal = ref(0)
 const SERIES_PAGE_SIZE = 24
 let searchTimer: ReturnType<typeof setTimeout> | null = null
@@ -484,17 +485,17 @@ function openSeriesReleaseDrawer(card: RecipeDesignerSeriesCard): void {
 
 /** 发布成功后刷新列表：卡片状态与阶段进度立即反映整系列已发布 */
 async function handleSeriesReleased(): Promise<void> {
-  await loadSeries(seriesPage.value)
+  await loadSeries(filters.page)
 }
 
 /** 下架 / 系列状态变化后刷新列表，卡片入口文案与进度同步更新 */
 async function handleSeriesUpdated(): Promise<void> {
-  await loadSeries(seriesPage.value)
+  await loadSeries(filters.page)
 }
 
-async function loadSeries(targetPage = seriesPage.value) {
-  const page = Math.max(1, targetPage)
-  seriesPage.value = page
+async function loadSeries(targetPage = filters.page) {
+  const page = Math.max(1, Number(targetPage) || 1)
+  filters.page = page
   loading.value = true
   try {
     const res = await recipeDesignerApi.listSeries({
@@ -553,12 +554,14 @@ function orderStatusLabel(status: string): string {
 }
 
 function onStatusFilterChange() {
+  filters.page = 1
   void loadSeries(1)
 }
 
 /** 切换产品线 / 订单定制：回到第一页并清空状态筛选，避免两种上下文混用 */
 function onDesignModeChange() {
   filters.status = undefined
+  filters.page = 1
   void loadSeries(1)
 }
 
@@ -566,6 +569,7 @@ function onDesignModeChange() {
 watch(() => filters.search, () => {
   if (searchTimer) clearTimeout(searchTimer)
   searchTimer = setTimeout(() => {
+    filters.page = 1
     void loadSeries(1)
   }, 300)
 })
@@ -683,7 +687,7 @@ async function handleCardCommand(command: string, card: RecipeDesignerSeriesCard
         confirmUserVisibleRemoval: true
       })
       ElMessage.success('系列已删除')
-      await loadSeries(seriesPage.value)
+      await loadSeries(filters.page)
     } catch (error) {
       if (error === 'cancel' || error === 'close') return
       // 其它错误已由拦截器提示
@@ -702,7 +706,7 @@ async function confirmRename() {
     await recipeDesignerApi.renameSeries(renameForm.id, { name })
     ElMessage.success('已重命名')
     renameDialogVisible.value = false
-    await loadSeries(seriesPage.value)
+    await loadSeries(filters.page)
   } finally {
     renaming.value = false
   }
@@ -890,7 +894,8 @@ function openDogHealth(dogId: string) {
 }
 
 onMounted(async () => {
-  await loadSeries(1)
+  // 地址栏里可能带着 page=3：按恢复的页码加载
+  await loadSeries(filters.page)
   void applyEntryQuery()
   // 健康信息变更提醒（2026-10-04 第四期）。
   // 不 await：它是辅助信息，不该拖慢设计系列列表的首屏。

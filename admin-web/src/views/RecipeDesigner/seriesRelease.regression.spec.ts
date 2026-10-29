@@ -364,7 +364,7 @@ describe('食谱设计器列表 · 系列发布入口', () => {
       index.indexOf('async function handleSeriesReleased'),
       index.indexOf('}', index.indexOf('async function handleSeriesReleased'))
     )
-    expect(releasedFn).toContain('await loadSeries(seriesPage.value)')
+    expect(releasedFn).toContain('await loadSeries(filters.page)')
   })
 
   it('卡片入口按 businessStatus 切换文案，有数据时才显示待更新数量', () => {
@@ -378,7 +378,7 @@ describe('食谱设计器列表 · 系列发布入口', () => {
       index.indexOf('async function handleSeriesUpdated'),
       index.indexOf('async function handleSeriesUpdated') + 200
     )
-    expect(updatedFn).toContain('await loadSeries(seriesPage.value)')
+    expect(updatedFn).toContain('await loadSeries(filters.page)')
   })
 
   it('不破坏现有阶段打开 / 复制 / 重命名 / 删除', () => {

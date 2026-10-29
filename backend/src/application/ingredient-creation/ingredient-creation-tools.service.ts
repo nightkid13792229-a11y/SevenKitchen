@@ -10,6 +10,13 @@ import {
   resolveDefaultPrimaryState,
   type CoverageCategory,
 } from '../../domain/ingredient-creation/state-coverage';
+import {
+  SEARCH_PLAN_LIBRARIES,
+  SEARCH_PLAN_REQUIRED_MESSAGE,
+  buildPendingSearchPlan,
+  hasApprovedSearchPlan,
+  type SearchPlan,
+} from '../../domain/ingredient-creation/search-plan';
 import { normalizeUnit } from '../../domain/ingredient-creation/unit-guard';
 import {
   NUTRITION_FIELD_CATALOG,
@@ -61,6 +68,11 @@ export interface AgentToolExecution {
    * 起草循环据此把 stopReason 置为 `waiting_user`。
    */
   pendingQuestion?: PendingQuestion;
+  /**
+   * 只有 `proposeSearchPlan` 成功时会填：本轮必须立刻结束，等用户确认方案。
+   * 起草循环据此把 stopReason 置为 `waiting_plan`。
+   */
+  pendingPlan?: SearchPlan;
   /**
    * 只有 `finish` 成功时会填：模型主动结束本轮。
    * `reply` 是模型随 finish 一起给出的结论（可为 null）。
@@ -455,6 +467,76 @@ const CANDIDATE_GROUP_FALLBACK_OPTION = '都不对，我直接说';
 const ASK_OPTION_VERIFY_TIMEOUT_MS = 800;
 /** 未收录选项在页面上的后缀：让用户点之前就知道会去线上找。 */
 const ASK_OPTION_MISSING_SUFFIX = '（库里未收录，选了会去线上找）';
+
+/**
+ * 原子工具：提交检索方案。
+ *
+ * 与「问人」同一机制：提交后本轮立刻结束，等用户确认。区别是它带结构化内容
+ * （关键词 / 目标库 / 命中概况 / 想用哪条记录），页面据此渲染确认卡。
+ *
+ * 闸门意义：**写原料卡与营养之前必须先有人确认方案**。查库、汇总、读来源、
+ * 问人都不需要确认——探索是自由的，落地才要人点头。
+ */
+const PROPOSE_SEARCH_PLAN_TOOL: AgentToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'proposeSearchPlan',
+    description:
+      '把「最终要怎么查、想用哪条记录」交给用户确认。提交后本轮立刻结束，等用户确认或修改。写原料卡 / 写营养之前必须先提交并获得确认；查库、汇总、读来源、向用户提问都不需要先确认。用户要求调整时，重新调用一次本工具提交新方案。',
+    parameters: {
+      type: 'object',
+      properties: {
+        keywords: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 6,
+          description: '最终要用的搜索词，按语种列出来。',
+          items: {
+            type: 'object',
+            properties: {
+              term: {
+                type: 'string',
+                description: '搜索词；最多 40 字。',
+              },
+              language: {
+                type: 'string',
+                description: '语种标记，例如 zh / en / ja / ko。',
+              },
+            },
+            required: ['term', 'language'],
+            additionalProperties: false,
+          },
+        },
+        libraries: {
+          type: 'array',
+          minItems: 1,
+          maxItems: SEARCH_PLAN_LIBRARIES.length,
+          items: { type: 'string', enum: [...SEARCH_PLAN_LIBRARIES] },
+          description: '要查的目标库，从白名单里选。',
+        },
+        findings: {
+          type: 'string',
+          description:
+            '已经查到了什么（各库命中概况、候选状态），帮用户判断；最多 300 字。',
+        },
+        chosenRecordId: {
+          type: 'string',
+          description: '打算用的来源记录 id；还没定就省略。',
+        },
+        chosenRecordName: {
+          type: 'string',
+          description: '打算用的记录名，方便用户认；还没定就省略。',
+        },
+        rationale: {
+          type: 'string',
+          description: '为什么这么查，一句话；最多 120 字。',
+        },
+      },
+      required: ['keywords', 'libraries'],
+      additionalProperties: false,
+    },
+  },
+};
 
 /**
  * 原子工具 7：问人。
@@ -1135,6 +1217,7 @@ export class IngredientCreationToolsService {
       WRITE_INGREDIENT_TOOL,
       RUN_CHECK_TOOL,
       ASK_USER_TOOL,
+      PROPOSE_SEARCH_PLAN_TOOL,
       FINISH_TOOL,
     ];
   }
@@ -1182,6 +1265,15 @@ export class IngredientCreationToolsService {
   private async dispatch(
     input: ExecuteAgentToolInput,
   ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
+    // 写草稿前的唯一闸门：检索方案必须先有人确认。
+    // 查库类工具保持自由——拦探索只会让方案变瞎；写才是真正落东西。
+    if (input.name === 'writeNutrition' || input.name === 'writeIngredient') {
+      const draft = await this.draftService.get(input.draftId);
+      if (!hasApprovedSearchPlan(draft.payload.searchPlan)) {
+        return this.error(SEARCH_PLAN_REQUIRED_MESSAGE);
+      }
+    }
+
     switch (input.name) {
       case 'searchNames':
         return this.searchNames(input.args);
@@ -1199,6 +1291,8 @@ export class IngredientCreationToolsService {
         return this.runCheck(input.draftId);
       case 'askUser':
         return this.askUser(input.draftId, input.args);
+      case 'proposeSearchPlan':
+        return this.proposeSearchPlan(input.draftId, input.args);
       case 'finish':
         return this.finish(input.args);
       default:
@@ -2294,6 +2388,48 @@ export class IngredientCreationToolsService {
         awaitingUser: true,
       }),
       pendingQuestion,
+    };
+  }
+
+  /**
+   * 工具：提交检索方案并结束本轮。
+   *
+   * 只写草稿里的方案（待确认），不写原料卡、不写营养；用户确认走另一个接口。
+   */
+  private async proposeSearchPlan(
+    draftId: string,
+    args: Record<string, unknown>,
+  ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
+    const built = buildPendingSearchPlan(args);
+    if (!built.ok) {
+      return this.error(built.error);
+    }
+
+    // 想指定的来源记录必须真实存在，否则确认后写营养会被这条 id 卡住。
+    if (built.plan.chosenRecordId) {
+      const record = await this.prisma.nutritionSourceRecord.findUnique({
+        where: { id: built.plan.chosenRecordId },
+        select: { id: true, status: true },
+      });
+      if (!record || record.status !== 'ACTIVE') {
+        return this.error(
+          `来源记录 ${built.plan.chosenRecordId} 不存在或已停用；先 getRecord 确认后再写进方案。`,
+        );
+      }
+    }
+
+    const draft = await this.draftService.get(draftId);
+    await this.draftService.patch(draftId, draft.step, {
+      searchPlan: built.plan,
+    });
+
+    return {
+      ok: true,
+      content: okContent({
+        searchPlan: built.plan,
+        awaitingApproval: true,
+      }),
+      pendingPlan: built.plan,
     };
   }
 

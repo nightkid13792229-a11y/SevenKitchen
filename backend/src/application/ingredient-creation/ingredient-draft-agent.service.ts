@@ -10,6 +10,10 @@ import { NUTRITION_FIELD_CATALOG } from '../../domain/ingredient/nutrition-field
 import { hashDraftPayload } from '../../domain/ingredient-creation/draft-payload-hash';
 import type { PreparationState } from '../../domain/ingredient-creation/preparation-state';
 import {
+  readSearchPlan,
+  type SearchPlan,
+} from '../../domain/ingredient-creation/search-plan';
+import {
   AgentProviderConfigService,
   type DeepSeekRuntimeConfig,
 } from '../nutrition-governance/agent-provider-config.service';
@@ -162,14 +166,16 @@ export interface AgentTranscriptEntry {
  *
  * - `TOOL_CALL_LIMIT` / `TIMEOUT` / `TOKEN_BUDGET`：硬保险丝；
  * - `NO_PROGRESS`：连续多次工具调用没有新进展的软停止；
- * - `waiting_user`：`askUser` 成功，循环正常结束、等用户回答（不是失败）。
+ * - `waiting_user`：`askUser` 成功，循环正常结束、等用户回答（不是失败）；
+ * - `waiting_plan`：`proposeSearchPlan` 成功，等用户确认检索方案（不是失败）。
  */
 export type IngredientAgentStopReason =
   | 'TOOL_CALL_LIMIT'
   | 'TIMEOUT'
   | 'TOKEN_BUDGET'
   | 'NO_PROGRESS'
-  | 'waiting_user';
+  | 'waiting_user'
+  | 'waiting_plan';
 
 export interface IngredientAgentRunResult {
   draftId: string;
@@ -191,6 +197,8 @@ export interface IngredientAgentRunResult {
    * 正常跑完时为 null。
    */
   pendingQuestion?: PendingQuestion | null;
+  /** 本轮停下来等确认的检索方案；非流式接口靠它渲染方案卡。 */
+  pendingPlan?: SearchPlan | null;
 }
 
 /**
@@ -302,6 +310,17 @@ export type IngredientAgentStreamEvent =
       record?: IngredientAgentStreamRecord;
       /** 本次工具耗时；页面展开步骤时显示。 */
       durationMs?: number;
+    }
+  /**
+   * AI 交了检索方案，本轮结束等用户确认。
+   *
+   * 与 `ask` 同构：页面据此渲染方案卡；确认动作走单独接口，模型不能自己确认。
+   */
+  | {
+      type: 'plan';
+      plan: SearchPlan;
+      draftId: string;
+      report?: AgentRunReport;
     }
   | {
       type: 'reply';
@@ -568,7 +587,11 @@ function buildAgentRunReport(input: {
 function resolveAgentRunOutcome(
   stopReason: IngredientAgentStopReason | null,
 ): IngredientAgentRunOutcome {
-  if (!stopReason || stopReason === 'waiting_user') {
+  if (
+    !stopReason ||
+    stopReason === 'waiting_user' ||
+    stopReason === 'waiting_plan'
+  ) {
     return 'FINISHED';
   }
   if (stopReason === 'NO_PROGRESS') {
@@ -1185,6 +1208,31 @@ function buildDraftPromptLines(draft: IngredientCreationDraft): string[] {
     );
   }
 
+  const searchPlan = readSearchPlan(draft.payload.searchPlan);
+  if (!searchPlan) {
+    lines.push(
+      '【检索方案】还没有提交过。查库、汇总、读来源、问人都可以自由做；**要写原料卡或营养之前**，必须先调用 proposeSearchPlan 提交方案并等用户确认。',
+    );
+  } else if (searchPlan.status === 'PENDING') {
+    lines.push(
+      `【检索方案·待用户确认】关键词=${searchPlan.keywords
+        .map((item) => `${item.term}(${item.language})`)
+        .join('、')} 目标库=${searchPlan.libraries.join(
+        '、',
+      )}；还没确认，不要写草稿。用户要求调整就重新调用 proposeSearchPlan。`,
+    );
+  } else {
+    lines.push(
+      `【检索方案·已确认】关键词=${searchPlan.keywords
+        .map((item) => `${item.term}(${item.language})`)
+        .join('、')} 目标库=${searchPlan.libraries.join('、')}${
+        searchPlan.chosenRecordName
+          ? ` 计划使用=${searchPlan.chosenRecordName}`
+          : ''
+      }；已确认，可以按这个方案查库并写草稿。`,
+    );
+  }
+
   return lines;
 }
 
@@ -1198,6 +1246,7 @@ function buildSystemPrompt(
     '',
     '硬规则（工具层写死，绕不过）：',
     '- 只能读写草稿。系统没有提交、确认可用、批准例外的工具；不要假装能做，也不要建议用户让你做。',
+    '- **写原料卡 / 写营养之前必须先交检索方案**：调用 proposeSearchPlan，把最终搜索词、目标库、已经查到的概况、想用哪条记录交给用户，等确认后再写。查库、汇总、读来源、问人都**不需要**先确认。',
     '- 每条营养写入都必须带 sourceRecordId。没有来源的数值一律不写：先 searchNames 找词条、getRecord 读来源。',
     '- 字段必须在营养字段目录里，单位必须与目录一致。工具报错就按错误文本改参数后重试；连续改不出来就停下，说明卡在哪。',
     '- 不要编造营养数值。只写来源记录里有的值，或用户明确给出的值。',
@@ -1530,6 +1579,22 @@ export class IngredientDraftAgentService {
         });
         return result;
       }
+
+      if (result.stopReason === 'waiting_plan' && result.pendingPlan) {
+        // 交方案：推一条 plan 让页面渲染确认卡，再收尾。
+        this.emitEvent(effectiveInput.onEvent, {
+          type: 'plan',
+          plan: result.pendingPlan,
+          draftId: result.draftId,
+          report: result.report,
+        });
+        this.emitEvent(effectiveInput.onEvent, {
+          type: 'done',
+          report: result.report,
+        });
+        return result;
+      }
+
       this.emitEvent(effectiveInput.onEvent, {
         type: 'reply',
         reply: result.reply,
@@ -1711,6 +1776,7 @@ export class IngredientDraftAgentService {
     let reply = '';
     let stopReason: IngredientAgentStopReason | null = null;
     let pendingQuestion: PendingQuestion | null = null;
+    let pendingPlan: SearchPlan | null = null;
     let lastCheck: AgentCheckSummary | null = null;
     /** 已经出现过的「工具 + 参数」指纹：没出现过的调用本身就是新探索。 */
     const seenCallSignatures = new Set<string>();
@@ -1928,6 +1994,13 @@ export class IngredientDraftAgentService {
               break runLoop;
             }
 
+            // 方案交出去就停：确认与修改都由人和接口完成，模型不能自己确认。
+            if (execution.pendingPlan) {
+              pendingPlan = execution.pendingPlan;
+              stopReason = 'waiting_plan';
+              break runLoop;
+            }
+
             if (Date.now() >= deadline) {
               stopReason = 'TIMEOUT';
               break runLoop;
@@ -2086,6 +2159,19 @@ export class IngredientDraftAgentService {
           `[ingredient-agent] waitingUser runId=${runId} draft=${draft.id} ` +
             `question="${truncate(pendingQuestion.question, 80)}" options=${pendingQuestion.options.length}`,
         );
+      } else if (stopReason === 'waiting_plan' && pendingPlan) {
+        // 交方案不是失败：本轮正常结束，回复说清楚在等什么。
+        reply = '检索方案已提交：确认之后我再写原料卡和营养档案。';
+        transcript.push({
+          step: steps,
+          type: 'reply',
+          atMs: Date.now() - startedAt,
+          summary: reply,
+        });
+        this.logger.log(
+          `[ingredient-agent] waitingPlan runId=${runId} draft=${draft.id} ` +
+            `keywords=${pendingPlan.keywords.map((item) => item.term).join('/')} libraries=${pendingPlan.libraries.join('/')}`,
+        );
       } else if (stopReason && stopReason !== 'waiting_user') {
         // 停止时读最终草稿：reply 里的「已完成 / 还剩」必须与库里一致。
         let finalDraft = draft;
@@ -2121,7 +2207,11 @@ export class IngredientDraftAgentService {
 
       // 查库零命中时兜一句：工具调用成功不代表找到数据，回复必须明确说「没找到」。
       // 等用户回答时不追加：问题后面不该跟一句「没找到」，那是下一轮的事。
-      if (missedSearchKeywords.length > 0 && stopReason !== 'waiting_user') {
+      if (
+        missedSearchKeywords.length > 0 &&
+        stopReason !== 'waiting_user' &&
+        stopReason !== 'waiting_plan'
+      ) {
         reply = appendMissedSearchNotice(reply, missedSearchKeywords);
       }
 
@@ -2157,6 +2247,7 @@ export class IngredientDraftAgentService {
         stopReason,
         report,
         pendingQuestion,
+        pendingPlan,
       };
     } catch (error) {
       // 模型 / 工具异常也留一份报告：日志与 SSE error 事件用同一份数据。

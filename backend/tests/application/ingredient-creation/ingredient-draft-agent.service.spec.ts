@@ -42,6 +42,21 @@ import { IngredientCreationController } from '../../../src/interfaces/controller
 import { AdminGuard } from '../../../src/interfaces/guards/role.guard';
 
 const DRAFT_ID = 'draft-1';
+
+/** 写草稿的前提：已经有人确认过检索方案（单独测守卫的用例会覆盖它）。 */
+const APPROVED_SEARCH_PLAN = {
+  status: 'APPROVED',
+  keywords: [{ term: '鸡肝', language: 'zh' }],
+  libraries: ['CFCT'],
+  findings: '',
+  chosenRecordId: null,
+  chosenRecordName: null,
+  rationale: '',
+  proposedAt: '2026-10-23T00:00:00.000Z',
+  approvedAt: '2026-10-23T00:00:01.000Z',
+  approvedBy: 'admin-1',
+  editedByUser: false,
+};
 const BASE_URL = 'https://api.deepseek.test';
 const MODEL = 'deepseek-v4-flash';
 const REVIEW_MODEL = 'deepseek-v4-pro';
@@ -225,6 +240,15 @@ function createHarness(options: HarnessOptions = {}) {
   let draft: IngredientCreationDraft | null =
     options.draft === undefined ? createDraft() : options.draft;
 
+  // 默认让草稿带上「已确认的检索方案」：绝大多数用例关心的是起草行为，
+  // 方案闸门由 ingredient-creation-tools.search-plan.spec.ts 单独覆盖。
+  if (draft && !draft.payload.searchPlan) {
+    draft = {
+      ...draft,
+      payload: { ...draft.payload, searchPlan: APPROVED_SEARCH_PLAN },
+    };
+  }
+
   const draftService = {
     create: jest.fn(
       async (input: {
@@ -236,7 +260,7 @@ function createHarness(options: HarnessOptions = {}) {
           id: 'draft-created',
           name: input.name,
           createdBy: input.createdBy,
-          payload: {},
+          payload: { searchPlan: APPROVED_SEARCH_PLAN },
         });
         return draft;
       },
@@ -2341,6 +2365,40 @@ describe('IngredientDraftAgentService · 流式事件', () => {
 
     expect(events.map((event) => event.type)).toEqual(['error']);
     expect(events[0].message).toBeTruthy();
+  });
+});
+
+describe('IngredientDraftAgentService · 检索方案闸门', () => {
+  it('提交方案后本轮结束，并推 plan 事件', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall('proposeSearchPlan', {
+            keywords: [{ term: '鸡蛋清', language: 'zh' }],
+            libraries: ['CFCT'],
+            findings: 'CFCT 2 条',
+          }),
+        ),
+      );
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+    const harness = createHarness();
+    const events: any[] = [];
+
+    const result = await harness.agent.run(
+      { draftId: DRAFT_ID, text: '鸡蛋清', userId: 'admin-1' },
+      (event) => events.push(event),
+    );
+
+    expect(result.stopReason).toBe('waiting_plan');
+    expect(result.pendingPlan).toMatchObject({ status: 'PENDING' });
+    expect(events.map((event) => event.type)).toEqual([
+      'step_start',
+      'step_end',
+      'plan',
+      'done',
+    ]);
+    expect(events[2].plan).toMatchObject({ status: 'PENDING' });
   });
 });
 

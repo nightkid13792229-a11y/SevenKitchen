@@ -8,6 +8,21 @@ import { NUTRITION_FIELD_CATALOG } from '../../../src/domain/ingredient/nutritio
 import type { PrismaService } from '../../../src/infrastructure/prisma.service';
 
 const DRAFT_ID = 'draft-1';
+
+/** 写草稿的前提：已经有人确认过检索方案。 */
+const APPROVED_SEARCH_PLAN = {
+  status: 'APPROVED',
+  keywords: [{ term: '鸡肝', language: 'zh' }],
+  libraries: ['CFCT'],
+  findings: '',
+  chosenRecordId: null,
+  chosenRecordName: null,
+  rationale: '',
+  proposedAt: '2026-10-24T00:00:00.000Z',
+  approvedAt: '2026-10-24T00:00:01.000Z',
+  approvedBy: 'admin-1',
+  editedByUser: false,
+};
 const RUN_ID = 'run-1';
 
 interface SourceRecordFixture {
@@ -37,7 +52,7 @@ function createTools(
     },
   };
 
-  let payload = { ...draftPayload };
+  let payload = { searchPlan: APPROVED_SEARCH_PLAN, ...draftPayload };
   const draftService = {
     get: jest.fn(async () => ({
       id: DRAFT_ID,
@@ -182,7 +197,7 @@ afterEach(() => {
 });
 
 describe('IngredientCreationToolsService · 工具清单（原子能力）', () => {
-  it('只有 9 个原子工具，没有任何提交 / 确认 / 批准工具', () => {
+  it('只有 10 个原子工具，没有任何提交 / 确认 / 批准工具', () => {
     const { tools } = createTools();
 
     expect(tools.availableToolNames()).toEqual([
@@ -194,6 +209,7 @@ describe('IngredientCreationToolsService · 工具清单（原子能力）', () 
       'writeIngredient',
       'runCheck',
       'askUser',
+      'proposeSearchPlan',
       'finish',
     ]);
 

@@ -7,6 +7,21 @@ import type { PrismaService } from '../../../src/infrastructure/prisma.service';
 const DRAFT_ID = 'draft-1';
 const RUN_ID = 'run-1';
 
+/** 写草稿的前提：已经有人确认过检索方案。 */
+const APPROVED_SEARCH_PLAN = {
+  status: 'APPROVED',
+  keywords: [{ term: '鸡肝', language: 'zh' }],
+  libraries: ['CFCT'],
+  findings: '',
+  chosenRecordId: null,
+  chosenRecordName: null,
+  rationale: '',
+  proposedAt: '2026-10-24T00:00:00.000Z',
+  approvedAt: '2026-10-24T00:00:01.000Z',
+  approvedBy: 'admin-1',
+  editedByUser: false,
+};
+
 interface DraftFixture {
   id: string;
   name: string;
@@ -24,7 +39,7 @@ function createTools(draftPayload: Record<string, unknown> = {}) {
     name: '鸡肝',
     type: 'FOOD',
     step: 'INGREDIENT',
-    payload: draftPayload,
+    payload: { searchPlan: APPROVED_SEARCH_PLAN, ...draftPayload },
     createdBy: 'admin-1',
     createdAt: new Date('2026-10-24T00:00:00.000Z'),
     updatedAt: new Date('2026-10-24T00:00:00.000Z'),

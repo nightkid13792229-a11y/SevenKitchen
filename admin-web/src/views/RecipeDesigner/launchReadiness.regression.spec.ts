@@ -152,7 +152,7 @@ describe('上线检查抽屉 · 加载 / 刷新 / 状态', () => {
     expect(clean(helperSource)).toContain('上架文案')
   })
 
-  it('CATALOG 抽屉只读展示系列资料，并可直接打开发布 / 更新', () => {
+  it('CATALOG 抽屉只读展示系列资料，并提示去食谱列表发布 / 更新', () => {
     expect(drawer).toContain('seriesId?: string')
     // 真正决定是否拉系列资料的是加载函数里的 guard，不是 ORDER 提交按钮
     expect(drawer).toContain('if (!props.seriesId || props.orderId)')
@@ -165,12 +165,12 @@ describe('上线检查抽屉 · 加载 / 刷新 / 状态', () => {
     expect(drawer).toContain('seriesReadiness')
     expect(drawer).toContain('seriesLoading')
     expect(drawer).toContain('seriesError')
-    expect(drawer).toContain("emit('open-series-release')")
+    expect(drawer).toContain("emit('go-to-series-list')")
     expect(drawer).toContain('系列资料（共用）')
     expect(drawer).toContain('presentation.coverImageUrl')
     expect(drawer).toContain('presentation.sellingPoint')
     expect(drawer).toContain('presentation.coverBadges')
-    expect(drawer).toContain('去发布 / 更新')
+    expect(drawer).toContain('去食谱列表发布 / 更新')
     expect(drawer).toContain('未设置（封面左下角为空）')
     expect(drawer).toContain('✓')
     expect(drawer).toContain('✗')
@@ -232,7 +232,7 @@ describe('编辑器 · 上线检查入口', () => {
     expect(editor).toContain(':draft-id="currentDraftId"')
   })
 
-  it('把系列 id 传给上线检查，并能从检查结果切到发布 / 更新', () => {
+  it('把系列 id 传给上线检查，并能从检查结果切到食谱列表', () => {
     const tagStart = editor.indexOf('<LaunchReadinessDrawer')
     expect(tagStart).toBeGreaterThan(-1)
     const tagEnd = editor.indexOf('/>', tagStart)
@@ -240,7 +240,7 @@ describe('编辑器 · 上线检查入口', () => {
     const drawerTag = editor.slice(tagStart, tagEnd)
 
     expect(drawerTag).toContain(':series-id="seriesId"')
-    expect(drawerTag).toContain('@open-series-release="openSeriesReleaseFromCheck"')
+    expect(drawerTag).toContain('@go-to-series-list="goToSeriesListFromCheck"')
   })
 
   it('没保存成功的修改会阻止打开，并提示等保存完成后再试', () => {

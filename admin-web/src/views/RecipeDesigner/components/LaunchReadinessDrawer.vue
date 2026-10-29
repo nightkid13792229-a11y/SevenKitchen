@@ -137,8 +137,8 @@
               size="small"
               type="primary"
               plain
-              @click="emit('open-series-release')"
-            >去发布 / 更新</el-button>
+              @click="emit('go-to-series-list')"
+            >去食谱列表发布 / 更新</el-button>
           </div>
 
           <div v-if="seriesLoading" class="launch-readiness__series-loading">
@@ -498,7 +498,7 @@ const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
   (e: 'published'): void
   (e: 'staged'): void
-  (e: 'open-series-release'): void
+  (e: 'go-to-series-list'): void
 }>()
 
 const visible = computed({

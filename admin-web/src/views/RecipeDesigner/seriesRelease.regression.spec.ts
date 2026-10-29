@@ -391,44 +391,33 @@ describe('食谱设计器列表 · 系列发布入口', () => {
   })
 })
 
-describe('编辑器 · 产品线主按钮', () => {
+describe('编辑器 · 发布入口收口到食谱列表', () => {
   const editor = clean(editorSource)
+  const list = clean(indexSource)
 
-  it('单阶段入仓动作移入上线检查，编辑器头部不再直接入仓', () => {
-    expect(editor).not.toContain('保存到系列仓库')
-    expect(editor).not.toContain('发布到产品线')
-  })
-
-  it('顶部提供「发布 / 更新」入口并挂载共用发布抽屉', () => {
-    expect(editor).toContain(
+  it('编辑器不再挂载系列发布抽屉，也不再有顶部发布入口', () => {
+    expect(editor).not.toContain(
       "import SeriesReleaseDrawer from './components/SeriesReleaseDrawer.vue'"
     )
-    expect(editor).toContain('发布 / 更新')
-    expect(editor).toContain('v-if="draft?.seriesId && !orderId"')
-    expect(editor).toContain('seriesReleaseVisible')
-    expect(editor).toContain(':series-id="seriesId"')
-    expect(editor).toContain(':series-name="seriesDisplayName"')
-    expect(editor).toContain('@released="handleSeriesReleased"')
+    expect(editor).not.toContain('seriesReleaseVisible')
+    expect(editor).not.toContain('handleSeriesReleased')
+    expect(editor).not.toContain('发布 / 更新')
   })
 
-  it('上线检查可以切到发布 / 更新，发布后刷新当前草稿', () => {
-    expect(editor).toContain(
-      '@open-series-release="openSeriesReleaseFromCheck"'
-    )
-    const fnStart = editor.indexOf('async function handleSeriesReleased')
+  it('列表页仍是系列发布的唯一入口', () => {
+    expect(list).toContain('<SeriesReleaseDrawer')
+    expect(list).toContain('openSeriesReleaseDrawer(card)')
+    expect(list).toContain('seriesReleaseEntryLabel')
+  })
+
+  it('上线检查里的发布入口改成去食谱列表，不再刷新当前草稿', () => {
+    expect(editor).toContain('@go-to-series-list="goToSeriesListFromCheck"')
+    const fnStart = editor.indexOf('function goToSeriesListFromCheck')
     expect(fnStart).toBeGreaterThan(-1)
     const fnEnd = editor.indexOf('\n}\n', fnStart)
     const handler = editor.slice(fnStart, fnEnd)
-
-    // 刷新会整体替换本地草稿，必须先落盘并拦住未保存成功的场景
-    expect(handler).toContain('await flushNow()')
-    expect(handler).toContain('if (hasPending())')
-    expect(handler).toContain(
-      "if (hasPending() || saveStatus.value === 'error')"
-    )
-    expect(handler).toMatch(
-      /ElMessage\.warning\([\s\S]*?未保存成功[\s\S]*?\)\s*return/
-    )
-    expect(handler).toContain('await loadDraft(')
+    expect(handler).toContain('launchReadinessVisible.value = false')
+    expect(handler).toContain("router.push('/recipe-designer')")
+    expect(handler).not.toContain('loadDraft')
   })
 })

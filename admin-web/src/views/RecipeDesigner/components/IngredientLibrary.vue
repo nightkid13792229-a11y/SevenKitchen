@@ -190,7 +190,7 @@ function debouncedSearch() {
   searchTimer = setTimeout(() => {
     page.value = 1
     allOptions.value = []
-    load()
+    load({ autoSwitch: true })
   }, 300)
 }
 
@@ -208,11 +208,13 @@ function handleScroll(event: Event) {
   }
 }
 
-async function load() {
+async function load(options: { autoSwitch?: boolean } = {}) {
   loading.value = true
+  const searchTerm = keyword.value.trim()
+  let switched = false
   try {
     const res = await recipeDesignerApi.listIngredientOptions({
-      search: keyword.value.trim() || undefined,
+      search: searchTerm || undefined,
       category: category.value || undefined,
       type: activeTab.value === 'supplement' ? 'SUPPLEMENT' : 'FOOD',
       page: page.value,
@@ -224,10 +226,47 @@ async function load() {
       foodCategories.value = res.foodCategories ?? []
       supplementCategories.value = res.supplementCategories ?? []
     }
+    // 2026-10-29：搜索时当前页签一个都没有、另一类有，就自动切过去。
+    if (options.autoSwitch && page.value === 1 && searchTerm && res.data.length === 0) {
+      switched = await switchToTabWithMatches(searchTerm)
+    }
   } catch {
     allOptions.value = []
   } finally {
-    loading.value = false
+    // 已经切了页签时交给新页签的加载收尾，避免空状态闪一下
+    if (!switched) loading.value = false
+  }
+}
+
+/**
+ * 搜索兜底切换（2026-10-29）：
+ * 当前页签在该关键词下没有任何结果时，探一下另一类；只要另一类有，就切过去，
+ * 这样搜「钙粉」不用先手动点「补剂」。
+ * 只在这一种情况下切：两类都有结果时保持用户当前页签，手动点过的页签也不会被抢回。
+ *
+ * 注意：探测不带分类条件 —— 分类属于某一类，带上它会把另一类误判成「没有」。
+ * 切换后 activeTab 的 watcher 会清空分类并按新页签重新加载。
+ */
+async function switchToTabWithMatches(searchTerm: string): Promise<boolean> {
+  const fromTab = activeTab.value
+  const otherTab = fromTab === 'food' ? 'supplement' : 'food'
+  try {
+    const res = await recipeDesignerApi.listIngredientOptions({
+      search: searchTerm,
+      type: otherTab === 'supplement' ? 'SUPPLEMENT' : 'FOOD',
+      page: 1,
+      pageSize: 1
+    })
+    if (!res.data?.length) return false
+    // 探测期间用户改了关键词或手动换了页签，就不要抢
+    if (keyword.value.trim() !== searchTerm) return false
+    if (activeTab.value !== fromTab) return false
+    activeTab.value = otherTab
+    ElMessage.info(`已自动切到「${otherTab === 'supplement' ? '补剂' : '食材'}」`)
+    return true
+  } catch {
+    // 探测失败就维持当前页签，不影响正常搜索
+    return false
   }
 }
 

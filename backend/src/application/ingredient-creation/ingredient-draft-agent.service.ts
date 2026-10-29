@@ -1211,7 +1211,7 @@ function buildDraftPromptLines(draft: IngredientCreationDraft): string[] {
   const searchPlan = readSearchPlan(draft.payload.searchPlan);
   if (!searchPlan) {
     lines.push(
-      '【检索方案】还没有提交过。查库、汇总、读来源、问人都可以自由做；**要写原料卡或营养之前**，必须先调用 proposeSearchPlan 提交方案并等用户确认。',
+      '【检索方案】还没有提交过。查库、汇总、读来源、问人都可以自由做；**要写原料卡或营养之前**，必须先调用 proposeSearchPlan 提交方案并等用户确认。通常先查一轮、把命中情况写进 findings，再提交。',
     );
   } else if (searchPlan.status === 'PENDING') {
     lines.push(

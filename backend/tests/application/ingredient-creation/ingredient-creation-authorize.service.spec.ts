@@ -6,6 +6,7 @@ import {
   type AuthorizeInput,
 } from '../../../src/application/ingredient-creation/ingredient-creation-authorize.service';
 import { IngredientCreationCommitService } from '../../../src/application/ingredient-creation/ingredient-creation-commit.service';
+import { LINE_NOT_OPEN_MESSAGE } from '../../../src/application/ingredient-creation/ingredient-line';
 import { IngredientCreationDraftService } from '../../../src/application/ingredient-creation/ingredient-creation-draft.service';
 import {
   CHECK_RULES_VERSION,
@@ -204,6 +205,16 @@ describe('IngredientCreationAuthorizeService', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  it('草稿是补剂 → 400，且不查报告、不提交', async () => {
+    draft = { ...draft, type: 'SUPPLEMENT' };
+
+    await expect(service.authorize(authorizeInput)).rejects.toThrow(
+      LINE_NOT_OPEN_MESSAGE,
+    );
+    expect(prisma.ingredientCheckRun.findFirst).not.toHaveBeenCalled();
+    expect(commitService.commit).not.toHaveBeenCalled();
   });
 
   it('没有任何核验报告 → 两域各一条 CHECK_MISSING，commit 一次都不调', async () => {

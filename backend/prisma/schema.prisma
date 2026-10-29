@@ -4020,7 +4020,6 @@ model NutritionSourceRecord {
   updatedAt           DateTime                         @updatedAt @map("updated_at")
   candidates          IngredientNutritionCandidate[]
   supplementDrafts    SupplementNutritionDraft[]
-  nameAliases         IngredientNameAlias[]
   classification      NutritionRecordClassification?
 
   @@unique([sourceType, sourceKey])
@@ -4059,39 +4058,6 @@ model NutritionRecordClassification {
   @@index([method])
   @@index([cutGroup])
   @@map("nutrition_record_classification")
-}
-
-/// 中文 → 外文检索词的词典来源。
-enum IngredientNameAliasSource {
-  /// 从代码里手写的别名表导入
-  MANUAL_SEED
-  /// 模型翻译后经检索命中，自动沉淀
-  AI_TRANSLATION
-  /// 人工纠正
-  HUMAN_CORRECTION
-}
-
-/// 会自己长的中英（及其它语种）食材别名词典。
-///
-/// 检索时中文词先查这张表；表里没有就交给模型翻译，翻译结果命中来源后
-/// 再写回这里。`hitCount` 记录被检索使用的次数，越大越靠前。
-model IngredientNameAlias {
-  id             String                    @id @default(uuid()) @map("id")
-  zhTerm         String                    @map("zh_term") @db.VarChar(100)
-  foreignTerm    String                    @map("foreign_term") @db.VarChar(200)
-  language       String                    @map("language") @db.VarChar(10)
-  source         IngredientNameAliasSource @map("source")
-  hitCount       Int                       @default(0) @map("hit_count")
-  lastHitAt      DateTime?                 @map("last_hit_at")
-  /// 第一次命中的来源记录；只记第一次，后续命中不覆盖。
-  sourceRecordId String?                   @map("source_record_id")
-  createdAt      DateTime                  @default(now()) @map("created_at")
-  updatedAt      DateTime                  @updatedAt @map("updated_at")
-  sourceRecord   NutritionSourceRecord?    @relation(fields: [sourceRecordId], references: [id], onDelete: SetNull)
-
-  @@unique([zhTerm, foreignTerm, language])
-  @@index([sourceRecordId])
-  @@map("ingredient_name_alias")
 }
 
 model IngredientNutritionCandidate {

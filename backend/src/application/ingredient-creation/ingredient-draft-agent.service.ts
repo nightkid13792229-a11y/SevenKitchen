@@ -3,6 +3,7 @@ import {
   HttpException,
   Injectable,
   Logger,
+  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
@@ -29,6 +30,10 @@ import {
   INGREDIENT_INTAKE_AGENT_PURPOSES,
 } from './ingredient-creation-intake.service';
 import { trackAgentProgress } from './agent-progress';
+import {
+  IngredientSkillService,
+  type IngredientSkill,
+} from './ingredient-skill.service';
 import {
   IngredientCreationToolsService,
   type AgentCheckSummary,
@@ -516,7 +521,7 @@ function buildToolCallRecord(
   missedSearchKeywords: string[],
 ): AgentToolCallRecord {
   const result = parseToolResult(execution.content);
-  if (name === 'searchNames') {
+  if (name === 'searchLibraries') {
     const outcome = readSearchOutcome(execution.content);
     if (outcome) {
       if (outcome.found) {
@@ -647,9 +652,26 @@ export function buildToolStepSummary(
   args: Record<string, unknown>,
 ): string {
   switch (name) {
-    case 'searchNames': {
-      const keyword = readTextValue(args.keyword) || '（未填关键词）';
-      return oneLine(`查名字 ${keyword}`);
+    case 'searchLibraries': {
+      const groups = Array.isArray(args.groups) ? args.groups : [];
+      const parts = groups
+        .filter(isRecord)
+        .map((group) => {
+          const library = readTextValue(group.library);
+          const terms = (Array.isArray(group.terms) ? group.terms : [])
+            .map((term) => readTextValue(term))
+            .filter(Boolean)
+            .join('/');
+          return `${library}:${terms}`;
+        })
+        .filter(Boolean);
+      return oneLine(
+        parts.length > 0 ? `按库查名字 ${parts.join('；')}` : '按库查名字',
+      );
+    }
+    case 'loadSkill': {
+      const name = readTextValue(args.name) || '（未填技能名）';
+      return oneLine(`读技能 ${name}`);
     }
     case 'summarizeByKeyword': {
       const keyword = readTextValue(args.keyword) || '（未填关键词）';
@@ -680,7 +702,7 @@ export function buildToolStepSummary(
         );
       return oneLine(`改原料卡 ${parts.join(' · ') || '（无字段）'}`);
     }
-    case 'runCheck':
+    case 'selfCheck':
       return '跑终检';
     case 'askUser':
       return oneLine(
@@ -717,7 +739,7 @@ export function buildToolResultSummary(
   }
 
   switch (name) {
-    case 'searchNames': {
+    case 'searchLibraries': {
       const total =
         typeof result.total === 'number' && Number.isFinite(result.total)
           ? Math.floor(result.total)
@@ -766,7 +788,7 @@ export function buildToolResultSummary(
         ? `更新 ${changed} 个字段，跳过 ${skipped} 个`
         : `更新 ${changed} 个字段`;
     }
-    case 'runCheck': {
+    case 'selfCheck': {
       const counts = isRecord(result.counts) ? result.counts : {};
       if (result.passed === true) {
         const warnings =
@@ -791,7 +813,7 @@ function readToolFound(
   name: string,
   execution: { ok: boolean; content: string },
 ): boolean | undefined {
-  if (name !== 'searchNames' || !execution.ok) {
+  if (name !== 'searchLibraries' || !execution.ok) {
     return undefined;
   }
   return readSearchOutcome(execution.content)?.found;
@@ -817,7 +839,7 @@ function buildSearchStepEvidence(
   name: string,
   execution: { ok: boolean; content: string },
 ): SearchStepEvidence | null {
-  if (name !== 'searchNames' || !execution.ok) {
+  if (name !== 'searchLibraries' || !execution.ok) {
     return null;
   }
   const parsed = parseToolResult(execution.content);
@@ -830,8 +852,11 @@ function buildSearchStepEvidence(
   }
 
   const matches: IngredientAgentStreamMatch[] = [];
+  const firstKeyword = Array.isArray(parsed.keywords)
+    ? readTextValue(parsed.keywords[0])
+    : '';
   const matchedKeyword = truncate(
-    readTextValue(parsed.keyword),
+    firstKeyword || readTextValue(parsed.keyword),
     STEP_KEYWORD_MAX,
   );
   if (Array.isArray(parsed.names)) {
@@ -1236,10 +1261,56 @@ function buildDraftPromptLines(draft: IngredientCreationDraft): string[] {
   return lines;
 }
 
+/** 系统提示里要用的技能素材：常驻正文 + 清单。 */
+interface SkillPrompt {
+  always: Array<{ name: string; body: string }>;
+  catalog: string[];
+}
+
+const EMPTY_SKILL_PROMPT: SkillPrompt = { always: [], catalog: [] };
+
+function buildSkillPrompt(
+  skillService?: IngredientSkillService,
+): SkillPrompt {
+  if (!skillService) {
+    return EMPTY_SKILL_PROMPT;
+  }
+  return {
+    always: skillService
+      .always()
+      .map((skill: IngredientSkill) => ({ name: skill.name, body: skill.body })),
+    catalog: skillService.catalogLines(),
+  };
+}
+
+/** 常驻技能全文 + 清单；没有技能时也要说清楚，别让模型以为有。 */
+function buildSkillPromptLines(skillPrompt: SkillPrompt): string[] {
+  if (skillPrompt.always.length === 0 && skillPrompt.catalog.length === 0) {
+    return ['【技能】本轮没有加载到任何技能，按工具描述与用户要求作业。', ''];
+  }
+
+  const lines: string[] = [];
+  if (skillPrompt.always.length > 0) {
+    lines.push('【技能·常驻】以下是必须遵守的作业方法（已全文加载）：');
+    for (const skill of skillPrompt.always) {
+      lines.push(`## ${skill.name}`, skill.body, '');
+    }
+  }
+  if (skillPrompt.catalog.length > 0) {
+    lines.push(
+      '【技能清单】需要时调用 loadSkill({ name }) 取全文，不要凭记忆猜步骤：',
+      ...skillPrompt.catalog,
+      '',
+    );
+  }
+  return lines;
+}
+
 function buildSystemPrompt(
   draft: IngredientCreationDraft,
   mode: IngredientAgentMode,
   toolNames: readonly string[],
+  skillPrompt: SkillPrompt = EMPTY_SKILL_PROMPT,
 ): string {
   const lines = [
     '你是宠物鲜食后台的「AI 添加原料」助手。你的工作是通过工具把一份**草稿**填好；正式原料与营养档案不在你的权限内。',
@@ -1248,22 +1319,15 @@ function buildSystemPrompt(
     '- 只能读写草稿。系统没有提交、确认可用、批准例外的工具；不要假装能做，也不要建议用户让你做。',
     '- **写原料卡 / 写营养之前必须先交检索方案**：调用 proposeSearchPlan，把最终搜索词、目标库、已经查到的概况、候选记录、想用哪条交给用户，等确认后再写。只读的查库、汇总、读来源**不需要**先确认。',
     '- **查到候选之后不要用 askUser 问「要哪一条」**：那是检索方案的一部分，放进 proposeSearchPlan 的 candidates，让用户在方案卡里选。已经查到候选却还没交方案时，askUser 会被拒绝。',
-    '- 每条营养写入都必须带 sourceRecordId。没有来源的数值一律不写：先 searchNames 找词条、getRecord 读来源。',
+    '- 每条营养写入都必须带 sourceRecordId。没有来源的数值一律不写：先用检索工具找词条、getRecord 读来源。',
     '- 字段必须在营养字段目录里，单位必须与目录一致。工具报错就按错误文本改参数后重试；连续改不出来就停下，说明卡在哪。',
     '- 不要编造营养数值。只写来源记录里有的值，或用户明确给出的值。',
     '- 你可以自由决定工具调用顺序；调用 finish 结束本轮。',
     '',
-    '作业指引（完整版：skills/ingredient-agent/SKILL.md）：',
-    '- 模糊词（牛肉 / 山药 / 鸡肝）先 searchNames 看 total；命中多就先 summarizeByKeyword(keyword) 看分布（服务端已拿到全部名字、只回汇总，**不要自己抄名字列表**），再按「状态 → 部位 → 具体词条」的顺序用 askUser 收窄。不要自己按关键词猜部位。',
-    '- 生熟可以多选：用户说「生 + 熟都要」就分别找生、熟来源，建两份档案；不要替用户默认只做生。',
-    '- 候选多时按组给，每组最多 5 条 + 最后一条「都不对，我直接说」；该组只剩 1 条时直接用它，并在结论里说明理由。',
-    '- 拿不准就问（部位 / 加工态 / 种类有歧义、多个候选难分、主次不明），不要自己挑一条凑合。一次只问一个问题，给 2–5 个具体可点选项。',
-    '- 用户已经选定部位组时，用 summarizeByKeyword(keyword, groupHint) 只看该组，不要拿几条名字凑子集，也不要自己按关键词数。',
-    '- summarizeByKeyword 返回 degraded=true 时，据实说明「AI 分类不可用，数字是粗算」，不要把粗算当精确分类。',
-    '- searchNames 返回 found=false 时，必须明确说「没有找到匹配词条」并列出 keywords 里已尝试的关键词；不要写成「成功找到」。',
-    '- 最终结论用一两句中文：改了什么、还缺什么、下一步建议；找不到数据时先说「没找到」。不要粘贴 JSON。',
     `- 本轮预算：最多 ${INGREDIENT_AGENT_MAX_TOOL_CALLS} 次工具调用 / ${INGREDIENT_AGENT_TIMEOUT_MS / 1000} 秒；连续 ${INGREDIENT_AGENT_MAX_NO_PROGRESS} 次工具调用没有新进展会被系统停止。`,
     `可用工具：${toolNames.join('、')}`,
+    '',
+    ...buildSkillPromptLines(skillPrompt),
     '',
     '【营养字段目录】fieldPath 形如「表名.字段名」，单位必须用括号里的目录单位：',
     ...buildCatalogPromptLines(),
@@ -1423,9 +1487,13 @@ function buildInitialMessages(
   mode: IngredientAgentMode,
   toolNames: readonly string[],
   pendingQuestion: PendingQuestion | null = null,
+  skillPrompt: SkillPrompt = EMPTY_SKILL_PROMPT,
 ): AgentMessage[] {
   return [
-    { role: 'system', content: buildSystemPrompt(draft, mode, toolNames) },
+    {
+      role: 'system',
+      content: buildSystemPrompt(draft, mode, toolNames, skillPrompt),
+    },
     { role: 'user', content: buildUserPrompt(text, pendingQuestion) },
   ];
 }
@@ -1545,6 +1613,8 @@ export class IngredientDraftAgentService {
     private readonly agentProviderConfig: AgentProviderConfigService,
     private readonly toolsService: IngredientCreationToolsService,
     private readonly draftService: IngredientCreationDraftService,
+    @Optional()
+    private readonly skillService?: IngredientSkillService,
   ) {}
 
   /**
@@ -1761,12 +1831,14 @@ export class IngredientDraftAgentService {
     }
 
     let mode: IngredientAgentMode = 'FUNCTION_CALLING';
+    const skillPrompt = buildSkillPrompt(this.skillService);
     let messages = buildInitialMessages(
       draft,
       text,
       mode,
       toolNames,
       previousQuestion,
+      skillPrompt,
     );
     let steps = 0;
     let toolCallCount = 0;
@@ -1857,6 +1929,7 @@ export class IngredientDraftAgentService {
               mode,
               toolNames,
               previousQuestion,
+              skillPrompt,
             );
             steps -= 1;
             this.logger.warn(

@@ -21,7 +21,7 @@ function stepStart(index = 1): AgentStreamEvent {
   return {
     type: 'step_start',
     index,
-    name: 'searchNames',
+    name: 'searchLibraries',
     summary: '查名字 西洋菜'
   }
 }
@@ -69,7 +69,7 @@ afterEach(() => {
 describe('parseSseChunk', () => {
   it('只消费完整帧，半帧留在 rest 里', () => {
     const buffer =
-      'data: {"type":"step_start","index":1,"name":"searchNames","summary":"查名字 西洋菜"}\n\n' +
+      'data: {"type":"step_start","index":1,"name":"searchLibraries","summary":"查名字 西洋菜"}\n\n' +
       'data: {"type":"step_end","index":1,'
 
     const parsed = parseSseChunk(buffer)
@@ -84,7 +84,7 @@ describe('parseSseChunk', () => {
     const buffer = [
       ': keep-alive',
       '',
-      'data: {"type":"step_start","index":1,"name":"runCheck","summary":"跑终检"}',
+      'data: {"type":"step_start","index":1,"name":"selfCheck","summary":"AI 自检"}',
       '',
       'data: {"type":"step_end","index":1,"ok":true,"resultSummary":"终检通过"}',
       '',
@@ -154,7 +154,7 @@ describe('reduceAgentEvents', () => {
     expect(state.steps).toHaveLength(1)
     expect(state.steps[0]).toMatchObject({
       index: 1,
-      name: 'searchNames',
+      name: 'searchLibraries',
       label: '查名字',
       summary: '查名字 西洋菜',
       status: 'running',
@@ -390,7 +390,7 @@ describe('reduceAgentEvents', () => {
       tokensOut: 6_000,
       durationMs: 38_000,
       stopReason: null,
-      tools: ['searchNames', 'finish'],
+      tools: ['searchLibraries', 'finish'],
       failedTools: [],
       result: 'FINISHED'
     }
@@ -496,7 +496,7 @@ describe('streamIngredientAgent · 实时渲染', () => {
     )
 
     push(
-      'data: {"type":"step_start","index":1,"name":"searchNames","summary":"查名字 西洋菜"}\n\n'
+      'data: {"type":"step_start","index":1,"name":"searchLibraries","summary":"查名字 西洋菜"}\n\n'
     )
     await new Promise((resolve) => setTimeout(resolve, 0))
 
@@ -531,7 +531,7 @@ describe('streamIngredientAgent · 网络中断', () => {
       start(controller) {
         controller.enqueue(
           encoder.encode(
-            'data: {"type":"step_start","index":1,"name":"searchNames","summary":"查名字 西洋菜"}\n\n'
+            'data: {"type":"step_start","index":1,"name":"searchLibraries","summary":"查名字 西洋菜"}\n\n'
           )
         )
       },

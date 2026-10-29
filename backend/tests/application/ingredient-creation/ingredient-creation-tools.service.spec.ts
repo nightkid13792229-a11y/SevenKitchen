@@ -201,13 +201,13 @@ describe('IngredientCreationToolsService · 工具清单（原子能力）', () 
     const { tools } = createTools();
 
     expect(tools.availableToolNames()).toEqual([
-      'searchNames',
-      'searchLocalLibraries',
+      'searchLibraries',
+      'loadSkill',
       'summarizeByKeyword',
       'getRecord',
       'writeNutrition',
       'writeIngredient',
-      'runCheck',
+      'selfCheck',
       'askUser',
       'proposeSearchPlan',
       'finish',
@@ -226,17 +226,17 @@ describe('IngredientCreationToolsService · 工具清单（原子能力）', () 
     }
   });
 
-  it('searchNames 定义里没有 state / states / group 这类流程参数', () => {
+  it('searchLibraries 的定义只收「库 + 词」，没有流程参数', () => {
     const { tools } = createTools();
     const definition = tools
       .getDefinitions()
-      .find((tool) => tool.function.name === 'searchNames');
+      .find((tool) => tool.function.name === 'searchLibraries');
 
     const properties = definition?.function.parameters.properties as Record<
       string,
       unknown
     >;
-    expect(Object.keys(properties).sort()).toEqual(['keyword', 'limit']);
+    expect(Object.keys(properties)).toEqual(['groups']);
   });
 });
 

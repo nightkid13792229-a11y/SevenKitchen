@@ -218,10 +218,10 @@ import { IngredientCreationCandidateService } from './application/ingredient-cre
 import { IngredientCreationAuthorizeService } from './application/ingredient-creation/ingredient-creation-authorize.service';
 import { IngredientCheckRunService } from './application/ingredient-creation/ingredient-check-run.service';
 import { IngredientSearchPlanService } from './application/ingredient-creation/ingredient-search-plan.service';
+import { IngredientSkillService } from './application/ingredient-creation/ingredient-skill.service';
 import { IngredientCreationCheckService } from './application/ingredient-creation/ingredient-creation-check.service';
 import { IngredientCreationCommitService } from './application/ingredient-creation/ingredient-creation-commit.service';
 import { IngredientCreationIntakeService } from './application/ingredient-creation/ingredient-creation-intake.service';
-import { IngredientNameAliasService } from './application/ingredient-creation/ingredient-name-alias.service';
 import { IngredientNameClassifierService } from './application/ingredient-creation/ingredient-name-classifier.service';
 import { IngredientDraftAgentService } from './application/ingredient-creation/ingredient-draft-agent.service';
 import { IngredientCreationToolsService } from './application/ingredient-creation/ingredient-creation-tools.service';
@@ -967,10 +967,10 @@ validatePrismaConfig();
     IngredientCreationCheckService,
     IngredientCheckRunService,
     IngredientSearchPlanService,
+    IngredientSkillService,
     IngredientCreationAuthorizeService,
     IngredientCreationCommitService,
     IngredientCreationIntakeService,
-    IngredientNameAliasService,
     IngredientNameClassifierService,
     IngredientDraftAgentService,
     IngredientCreationToolsService,

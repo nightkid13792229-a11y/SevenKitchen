@@ -25,12 +25,6 @@ import type {
   CandidateSearchCoverage,
   CandidateSearchResult,
 } from './ingredient-creation.types';
-import {
-  AI_TRANSLATION_UNAVAILABLE_NOTICE,
-  IngredientNameAliasService,
-  type AiTranslationHit,
-  type AiTranslationResult,
-} from './ingredient-name-alias.service';
 
 export interface FindCandidatesInput {
   /** 中文规范名（必填）。 */
@@ -506,6 +500,26 @@ function classifyMatchMethod(
  * 两种情况都压到 `DIFFERENT_PART_SCORE` 并带备注，不当同名命中。
  * 同时保留最高分那一对（关键词 / 词条名 / 匹配方式），供页面展示匹配依据。
  */
+/** 数一条记录里非空数值的个数：模型据此比较候选的完整度。 */
+function countFilledNutritionValues(value: unknown): number {
+  if (typeof value === 'number') {
+    return 1;
+  }
+  if (Array.isArray(value)) {
+    return value.reduce<number>(
+      (sum, item) => sum + countFilledNutritionValues(item),
+      0,
+    );
+  }
+  if (typeof value === 'object' && value !== null) {
+    return Object.values(value as Record<string, unknown>).reduce<number>(
+      (sum, item) => sum + countFilledNutritionValues(item),
+      0,
+    );
+  }
+  return 0;
+}
+
 function scoreSourceRecord(
   query: QueryAnalysis,
   record: SourceRecordMeta,
@@ -798,17 +812,29 @@ function buildEmptyResult(
   };
 }
 
-/** 一次查询里，某个中文词拿到的模型翻译结果。 */
-interface QueryAiTranslation {
-  zhTerm: string;
-  result: AiTranslationResult;
+/** 按库检索的一条命中：原样给模型看，不做同名折叠。 */
+export interface LibrarySearchHit {
+  id: string;
+  name: string;
+  sourceType: string;
+  /** 来源库自己的主键（如 USDA FDC id），同名多条时靠它区分版本。 */
+  sourceKey: string;
+  dataType: string | null;
+  /** 该记录已填的营养字段数，供模型比较完整度。 */
+  filledFieldCount: number;
 }
 
-interface QueryExpansions {
-  terms: QueryTerm[];
-  aiTranslations: QueryAiTranslation[];
-  /** 词典没有、模型也不可用时的降级提示；正常情况为 null。 */
-  notice: string | null;
+export interface LibrarySearchResult {
+  library: string;
+  /** 命中总数（截断前）。 */
+  total: number;
+  hits: LibrarySearchHit[];
+}
+
+export interface LibrarySearchInput {
+  library: string;
+  terms: readonly string[];
+  limit?: number;
 }
 
 /**
@@ -835,12 +861,94 @@ interface QueryExpansions {
  */
 @Injectable()
 export class IngredientCreationCandidateService {
+  /**
+   * 按**指定库**检索：模型给「库 + 该库的词组」，代码只负责按库查、打分、截断。
+   *
+   * 三条刻意的边界：
+   * - 不做语种分流（库是模型指定的）；
+   * - 不做同义扩展、不查词典（扩展是模型的活）；
+   * - **不折叠同名**：同名多条可能是不同批次/版本，全部原样返回，由模型判断。
+   */
+  async searchByLibrary(
+    input: LibrarySearchInput,
+  ): Promise<LibrarySearchResult> {
+    const library = input.library.trim().toUpperCase();
+    const terms = [
+      ...new Set(
+        input.terms
+          .map((term) => term.trim())
+          .filter((term) => term.length > 0),
+      ),
+    ];
+    const limit = Math.min(Math.max(input.limit ?? 20, 1), 50);
+
+    const rows = await this.prisma.nutritionSourceRecord.findMany({
+      where: {
+        status: 'ACTIVE',
+        sourceType: library as never,
+        OR: terms.flatMap((term) => [
+          { foodName: { contains: term, mode: 'insensitive' as const } },
+          { foodNameEn: { contains: term, mode: 'insensitive' as const } },
+        ]),
+      },
+      select: {
+        id: true,
+        foodName: true,
+        foodNameEn: true,
+        sourceType: true,
+        sourceKey: true,
+        dataType: true,
+        normalizedNutrition: true,
+      },
+    });
+
+    const scored = rows
+      .map((row) => {
+        let best = 0;
+        for (const term of terms) {
+          for (const name of [row.foodName, row.foodNameEn]) {
+            if (!name) {
+              continue;
+            }
+            const { score } = scoreIngredientSourceNameMatch({
+              ingredientName: term,
+              sourceFoodName: name,
+              sourceType: row.sourceType,
+              allowStaticChineseEnglishAliases: false,
+            });
+            if (score > best) {
+              best = score;
+            }
+          }
+        }
+        return { row, score: best };
+      })
+      .filter((entry) => entry.score >= MIN_MATCH_SCORE)
+      .sort(
+        (left, right) =>
+          right.score - left.score ||
+          left.row.foodName.localeCompare(right.row.foodName) ||
+          left.row.id.localeCompare(right.row.id),
+      );
+
+    return {
+      library,
+      total: scored.length,
+      hits: scored.slice(0, limit).map(({ row }) => ({
+        id: row.id,
+        name: row.foodName,
+        sourceType: row.sourceType,
+        sourceKey: row.sourceKey,
+        dataType: row.dataType ?? null,
+        filledFieldCount: countFilledNutritionValues(row.normalizedNutrition),
+      })),
+    };
+  }
+
+
   private readonly logger = new Logger(IngredientCreationCandidateService.name);
 
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly aliasService: IngredientNameAliasService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   /**
    * 只按名字摆事实：返回真实命中的词条名（最多 3000 条），**不做分类**。
@@ -864,15 +972,14 @@ export class IngredientCreationCandidateService {
       return { total: 0, names: [], keywords: [], notice: null };
     }
 
-    const chineseNames = baseNames.filter((name) => HAN_SCRIPT.test(name));
-    const expansions = await this.resolveQueryExpansions(chineseNames);
+    // 不做词典 / AI 翻译扩展：中文词怎么扩，是模型在检索前自己决定的事。
     const query = buildQueryAnalysis(
       {
         name: input.keyword,
         ...(input.nameEn ? { nameEn: input.nameEn } : {}),
         state: 'RAW',
       },
-      expansions.terms,
+      [],
     );
 
     const records = await this.prisma.nutritionSourceRecord.findMany({
@@ -889,22 +996,11 @@ export class IngredientCreationCandidateService {
     });
 
     const matched: Array<{ record: SourceRecordMeta; score: number }> = [];
-    const firstSourceRecordIdByTerm = new Map<string, string>();
     for (const record of records) {
       const match = scoreSourceRecord(query, record);
       if (!match) continue;
       matched.push({ record, score: match.score });
-      for (const term of match.matchedTerms) {
-        if (!firstSourceRecordIdByTerm.has(term)) {
-          firstSourceRecordIdByTerm.set(term, record.id);
-        }
-      }
     }
-
-    await this.recordAiTranslationHits(
-      expansions.aiTranslations,
-      firstSourceRecordIdByTerm,
-    );
 
     matched.sort(
       (left, right) =>
@@ -913,21 +1009,16 @@ export class IngredientCreationCandidateService {
         left.record.id.localeCompare(right.record.id),
     );
 
-    // 先折叠同名（同组只留一条 + alsoIn），再按 limit 截断：
-    // limit 是「候选组数」的上限，不是原始记录数。total 仍是折叠前的真实命中数。
-    const collapsed = collapseCandidateNames(
-      matched.map(({ record }) => ({
+    // 不折叠同名：同名多条可能是不同版本，全部原样给出。
+    return {
+      total: matched.length,
+      names: matched.slice(0, limit).map(({ record }) => ({
         id: record.id,
         name: record.foodName,
         sourceType: record.sourceType,
       })),
-    );
-
-    return {
-      total: matched.length,
-      names: collapsed.slice(0, limit),
       keywords: query.keywords,
-      notice: expansions.notice,
+      notice: null,
     };
   }
 
@@ -976,93 +1067,6 @@ export class IngredientCreationCandidateService {
   }
 
   /**
-   * 中文词 → 外文检索词。
-   *
-   * 词典命中：一次取出该中文词的所有外文词（可能多个同义词），并累加使用次数。
-   * 词典没有：交给模型翻译 2-4 个候选词；模型不可用时只返回空展开 + 提示。
-   */
-  private async resolveQueryExpansions(
-    chineseNames: readonly string[],
-  ): Promise<QueryExpansions> {
-    if (chineseNames.length === 0) {
-      return { terms: [], aiTranslations: [], notice: null };
-    }
-
-    const aliases = await this.aliasService.findAliases(chineseNames);
-    const terms: QueryTerm[] = aliases.map((alias) => ({
-      text: alias.foreignTerm,
-      matchedBy: 'DICTIONARY',
-    }));
-
-    // 「表命中」= 这个中文词在词典里查到了，本次检索确实用了它。
-    if (aliases.length > 0) {
-      await this.aliasService.markAliasesHit(aliases.map((alias) => alias.id));
-    }
-
-    const covered = new Set(aliases.map((alias) => alias.zhTerm));
-    const missing = chineseNames.filter((name) => !covered.has(name));
-    const aiTranslations: QueryAiTranslation[] = [];
-    let unavailable = false;
-
-    for (const zhTerm of missing) {
-      const result = await this.aliasService.translateToForeignTerms(zhTerm);
-      if (!result) {
-        unavailable = true;
-        continue;
-      }
-      aiTranslations.push({ zhTerm, result });
-      for (const translation of result.translations) {
-        terms.push({
-          text: translation.term,
-          matchedBy: 'AI_TRANSLATION',
-        });
-      }
-    }
-
-    return {
-      terms,
-      aiTranslations,
-      notice:
-        unavailable && aiTranslations.length === 0
-          ? AI_TRANSLATION_UNAVAILABLE_NOTICE
-          : null,
-    };
-  }
-
-  /**
-   * 只写「真的命中了来源」的翻译词；每个词记第一次命中的来源记录。
-   * 写词典失败不能把已经查到的候选打掉，所以这里只记日志。
-   */
-  private async recordAiTranslationHits(
-    aiTranslations: readonly QueryAiTranslation[],
-    firstSourceRecordIdByTerm: ReadonlyMap<string, string>,
-  ): Promise<void> {
-    for (const { zhTerm, result } of aiTranslations) {
-      const hits: AiTranslationHit[] = [];
-      for (const translation of result.translations) {
-        const sourceRecordId = firstSourceRecordIdByTerm.get(translation.term);
-        if (!sourceRecordId) continue;
-        hits.push({ ...translation, sourceRecordId });
-      }
-      if (hits.length === 0) continue;
-
-      try {
-        await this.aliasService.recordAiTranslation({
-          zhTerm,
-          translations: hits,
-        });
-      } catch (error) {
-        const reason = error instanceof Error ? error.message : String(error);
-        this.logger.warn(
-          `[ingredient-candidate] 写词典失败 zh=${zhTerm} terms=${hits
-            .map((hit) => hit.term)
-            .join(',')}: ${reason}`,
-        );
-      }
-    }
-  }
-
-  /**
    * @param limit 最多返回多少条候选（默认 50）；截断前已按匹配分、
    * 状态一致、覆盖率、词条名排好序，同样的库状态下结果确定。
    */
@@ -1075,10 +1079,8 @@ export class IngredientCreationCandidateService {
       return buildEmptyResult(input.state);
     }
 
-    // 先把中文词展开成外文词：词典优先，词典没有才问模型。
-    const chineseNames = baseNames.filter((name) => HAN_SCRIPT.test(name));
-    const expansions = await this.resolveQueryExpansions(chineseNames);
-    const query = buildQueryAnalysis(input, expansions.terms);
+    // 不做词典 / AI 翻译扩展：扩展由模型负责。
+    const query = buildQueryAnalysis(input, []);
 
     // 第一段只取元数据：库里有约 1.96 万条来源，整份 normalizedNutrition 是
     // 200MB 量级，必须先按名字筛完，再去取营养档案（见下一段）。
@@ -1097,27 +1099,14 @@ export class IngredientCreationCandidateService {
 
     const matched: Array<{ record: SourceRecordMeta; match: MatchOutcome }> =
       [];
-    /** 每个查询词第一次命中的来源记录；写词典时记 sourceRecordId 用。 */
-    const firstSourceRecordIdByTerm = new Map<string, string>();
     for (const record of records) {
       const match = scoreSourceRecord(query, record);
       if (!match) continue;
       matched.push({ record, match });
-      for (const term of match.matchedTerms) {
-        if (!firstSourceRecordIdByTerm.has(term)) {
-          firstSourceRecordIdByTerm.set(term, record.id);
-        }
-      }
     }
 
-    // 翻译的词一个都没命中 → 不写词典（避免把错译沉淀进去）。
-    await this.recordAiTranslationHits(
-      expansions.aiTranslations,
-      firstSourceRecordIdByTerm,
-    );
-
     if (matched.length === 0) {
-      return buildEmptyResult(input.state, query.keywords, expansions.notice);
+      return buildEmptyResult(input.state, query.keywords, null);
     }
 
     // 第二段只取名字对得上的词条的营养档案：生熟状态要靠 meta.sampleState，
@@ -1214,10 +1203,6 @@ export class IngredientCreationCandidateService {
       excludedCount,
       coverage: summarizeCoverage(input.state, rows),
       keywords: query.keywords,
-      // 名字命中了但全被生熟/做法筛掉，也把降级提示带上。
-      ...(rows.length === 0 && expansions.notice
-        ? { notice: expansions.notice }
-        : {}),
     };
   }
 }

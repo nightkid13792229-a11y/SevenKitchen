@@ -6,6 +6,7 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import { Test, type TestingModule } from '@nestjs/testing';
+import { resolve } from 'node:path';
 import request from 'supertest';
 import {
   INGREDIENT_AGENT_MAX_TOOL_CALLS,
@@ -16,6 +17,7 @@ import {
   type IngredientAgentRunResult,
 } from '../../../src/application/ingredient-creation/ingredient-draft-agent.service';
 import { IngredientCreationAuditService } from '../../../src/application/ingredient-creation/ingredient-creation-audit.service';
+import { IngredientSkillService } from '../../../src/application/ingredient-creation/ingredient-skill.service';
 import { IngredientSearchPlanService } from '../../../src/application/ingredient-creation/ingredient-search-plan.service';
 import { LINE_NOT_OPEN_MESSAGE } from '../../../src/application/ingredient-creation/ingredient-line';
 import { IngredientCreationCandidateService } from '../../../src/application/ingredient-creation/ingredient-creation-candidate.service';
@@ -65,7 +67,7 @@ const AGENT_PATH = '/api/v1/admin/ingredient-creation/agent/run';
 const AGENT_STREAM_PATH = '/api/v1/admin/ingredient-creation/agent/stream';
 
 const EMPTY_CANDIDATE_RESULT: CandidateSearchResult = {
-  keywords: ['西洋菜', 'watercress'],
+  keywords: ['西洋菜'],
   candidates: [],
   excludedCount: 0,
   coverage: {
@@ -305,6 +307,18 @@ function createHarness(options: HarnessOptions = {}) {
       names: options.names ?? [],
       keywords: options.namesKeywords ?? ['鸡肝'],
     })),
+    searchByLibrary: jest.fn(async ({ library }: { library: string }) => ({
+      library,
+      total: options.namesTotal ?? options.names?.length ?? 0,
+      hits: (options.names ?? []).map((entry) => ({
+        id: entry.id,
+        name: entry.name,
+        sourceType: entry.sourceType,
+        sourceKey: entry.id,
+        dataType: null,
+        filledFieldCount: 10,
+      })),
+    })),
   };
 
   const checkService = {
@@ -347,6 +361,7 @@ function createHarness(options: HarnessOptions = {}) {
     configService as unknown as AgentProviderConfigService,
     tools,
     draftService as unknown as IngredientCreationDraftService,
+    new IngredientSkillService(),
   );
 
   return {
@@ -386,11 +401,11 @@ afterEach(() => {
 });
 
 describe('IngredientDraftAgentService · 原子工具循环', () => {
-  it('模型第一步 searchNames 时工具被调用，名字结果回灌给下一步', async () => {
+  it('模型第一步 searchLibraries 时工具被调用，名字结果回灌给下一步', async () => {
     const fetchMock = jest
       .fn()
       .mockResolvedValueOnce(
-        chatResponse(assistantToolCall('searchNames', { keyword: '鸡肝' })),
+        chatResponse(assistantToolCall('searchLibraries', { groups: [{ library: 'CFCT', terms: ['鸡肝'] }] })),
       )
       .mockResolvedValueOnce(
         chatResponse(assistantReply('本地库找到两条生鸡肝来源。')),
@@ -419,9 +434,9 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
       userId: 'admin-1',
     });
 
-    expect(harness.candidateService.listNutritionNames).toHaveBeenCalledWith({
-      keyword: '鸡肝',
-      limit: 3000,
+    expect(harness.candidateService.searchByLibrary).toHaveBeenCalledWith({
+      library: 'CFCT',
+      terms: ['鸡肝'],
     });
     expect(result).toMatchObject({
       draftId: DRAFT_ID,
@@ -429,8 +444,8 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
       steps: 2,
       toolCalls: [
         {
-          name: 'searchNames',
-          args: { keyword: '鸡肝' },
+          name: 'searchLibraries',
+          args: { groups: [{ library: 'CFCT', terms: ['鸡肝'] }] },
           ok: true,
         },
       ],
@@ -443,7 +458,6 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
       id: 'rec-liver-raw',
       name: 'Chicken, liver, raw',
       sourceType: 'USDA_FDC',
-      alsoIn: [],
     });
 
     // 第二次请求必须把工具结果作为 role=tool 的消息带给模型。
@@ -458,7 +472,7 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
     expect(toolMessage.content).toContain('42');
 
     expect(logSpy).toHaveBeenCalledWith(
-      expect.stringContaining('tool=searchNames'),
+      expect.stringContaining('tool=searchLibraries'),
     );
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('durationMs='));
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('ok=true'));
@@ -468,7 +482,7 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
     const fetchMock = jest
       .fn()
       .mockResolvedValueOnce(
-        chatResponse(assistantToolCall('searchNames', { keyword: '西洋菜' })),
+        chatResponse(assistantToolCall('searchLibraries', { groups: [{ library: 'CFCT', terms: ['西洋菜'] }] })),
       )
       .mockResolvedValueOnce(chatResponse(assistantReply('已完成。')));
     global.fetch = fetchMock as unknown as typeof global.fetch;
@@ -487,11 +501,10 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
     expect(result.toolCalls[0]?.result).toMatchObject({
       found: false,
       total: 0,
-      keywords: ['西洋菜', 'watercress'],
+      keywords: ['西洋菜'],
     });
     expect(result.reply).toContain('没有找到匹配词条');
     expect(result.reply).toContain('西洋菜');
-    expect(result.reply).toContain('watercress');
   });
 
   it('模型写非法单位时返回错误文本，模型改对后 runCheck 通过', async () => {
@@ -530,7 +543,7 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
         ),
       )
       .mockResolvedValueOnce(
-        chatResponse(assistantToolCall('runCheck', {}, 'call_check')),
+        chatResponse(assistantToolCall('selfCheck', {}, 'call_check')),
       )
       .mockResolvedValueOnce(
         chatResponse(assistantReply('已按来源填好粗蛋白，终检通过。')),
@@ -568,7 +581,7 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
       ok: true,
     });
     expect((result.toolCalls[1]?.result as any).applied).toBe(1);
-    expect(result.toolCalls[2]).toMatchObject({ name: 'runCheck', ok: true });
+    expect(result.toolCalls[2]).toMatchObject({ name: 'selfCheck', ok: true });
 
     // 错误文本必须作为 role=tool 的消息回灌给模型，否则它没法自纠。
     const secondRequest = requestBody(fetchMock, 1);
@@ -618,7 +631,7 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
       ok: false,
     });
     expect(result.toolCalls[0].error).toContain('未知工具');
-    expect(result.toolCalls[0].error).toContain('searchNames');
+    expect(result.toolCalls[0].error).toContain('searchLibraries');
     expect(result.toolCalls[0].error).toContain('finish');
 
     const secondRequest = requestBody(fetchMock, 1);
@@ -641,9 +654,9 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
       fetchMock.mockResolvedValueOnce(
         chatResponse(
           assistantToolCall(
-            'searchNames',
+            'searchLibraries',
             // 每次关键词都不同：调用指纹不同，才不会被「无进展」软停止提前打断。
-            { keyword: `鸡肝-${index + 1}` },
+            { groups: [{ library: 'CFCT', terms: [`鸡肝-${index + 1}`] }] },
             `call_${index + 1}`,
           ),
         ),
@@ -653,15 +666,19 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
 
     const harness = createHarness();
     // 每次检索都返回一个没出现过的来源 id，确保每一步都算新进展。
-    harness.candidateService.listNutritionNames.mockImplementation(async () => {
+    harness.candidateService.searchByLibrary.mockImplementation(async () => {
       sourceSequence += 1;
       return {
+        library: 'CFCT',
         total: 1,
-        names: [
+        hits: [
           {
             id: `rec-${sourceSequence}`,
             name: `Chicken liver ${sourceSequence}`,
             sourceType: 'USDA_FDC',
+            sourceKey: `rec-${sourceSequence}`,
+            dataType: null,
+            filledFieldCount: 10,
           },
         ],
         keywords: ['鸡肝'],
@@ -684,7 +701,7 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
     expect(result.reply).toContain('还没做完');
     expect(result.toolCalls[INGREDIENT_AGENT_MAX_TOOL_CALLS - 1]).toMatchObject(
       {
-        name: 'searchNames',
+        name: 'searchLibraries',
         ok: true,
       },
     );
@@ -703,7 +720,7 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
       fetchMock.mockResolvedValueOnce(
         chatResponse(
           assistantToolCall(
-            'searchNames',
+            'searchLibraries',
             { keyword: '不存在的原料' },
             `call_${index + 1}`,
           ),
@@ -1237,7 +1254,7 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
         ),
       )
       .mockResolvedValueOnce(
-        chatResponse(assistantToolCall('runCheck', {}, 'call_check')),
+        chatResponse(assistantToolCall('selfCheck', {}, 'call_check')),
       )
       .mockResolvedValueOnce(
         chatResponse(assistantReply('已建生档案并填好粗蛋白，终检通过。')),
@@ -1273,6 +1290,8 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
         unit: 'g',
       }),
     ]);
+    // eslint-disable-next-line no-console
+    if (!result.toolCalls.every((call) => call.ok)) console.error(JSON.stringify(result.toolCalls.map((c) => ({ name: c.name, error: c.error }))));
     expect(result.toolCalls.every((call) => call.ok)).toBe(true);
     expect(result.steps).toBe(3);
   });
@@ -1318,7 +1337,7 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
       .fn()
       .mockResolvedValueOnce(
         chatResponse(
-          assistantToolCall('searchNames', { keyword: '鸡肝' }, 'call_search'),
+          assistantToolCall('searchLibraries', { groups: [{ library: 'CFCT', terms: ['鸡肝'] }] }, 'call_search'),
         ),
       )
       .mockResolvedValueOnce(
@@ -1360,7 +1379,7 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
         ),
       )
       .mockResolvedValueOnce(
-        chatResponse(assistantToolCall('runCheck', {}, 'call_check_1')),
+        chatResponse(assistantToolCall('selfCheck', {}, 'call_check_1')),
       )
       .mockResolvedValueOnce(
         chatResponse(
@@ -1382,7 +1401,7 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
         ),
       )
       .mockResolvedValueOnce(
-        chatResponse(assistantToolCall('runCheck', {}, 'call_check_2')),
+        chatResponse(assistantToolCall('selfCheck', {}, 'call_check_2')),
       )
       .mockResolvedValueOnce(
         chatResponse(
@@ -1449,12 +1468,12 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
 
     expect(result.steps).toBe(7);
     expect(result.toolCalls.map((call) => call.name)).toEqual([
-      'searchNames',
+      'searchLibraries',
       'writeNutrition',
       'writeNutrition',
-      'runCheck',
+      'selfCheck',
       'writeNutrition',
-      'runCheck',
+      'selfCheck',
       'finish',
     ]);
     expect((result.toolCalls[1]?.result as any).failed[0].error).toContain(
@@ -1476,12 +1495,12 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
     expect(fetchMock).toHaveBeenCalledTimes(7);
   });
 
-  it('模型调用链：searchNames → getRecord → writeNutrition → finish', async () => {
+  it('模型调用链：searchLibraries → getRecord → writeNutrition → finish', async () => {
     const fetchMock = jest
       .fn()
       .mockResolvedValueOnce(
         chatResponse(
-          assistantToolCall('searchNames', { keyword: '鸡肝' }, 'call_search'),
+          assistantToolCall('searchLibraries', { groups: [{ library: 'CFCT', terms: ['鸡肝'] }] }, 'call_search'),
         ),
       )
       .mockResolvedValueOnce(
@@ -1560,7 +1579,7 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
 
     expect(result.steps).toBe(4);
     expect(result.toolCalls.map((call) => call.name)).toEqual([
-      'searchNames',
+      'searchLibraries',
       'getRecord',
       'writeNutrition',
       'finish',
@@ -1593,16 +1612,16 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
     expect(result.reply).toContain('19.5');
   });
 
-  it('回归：searchNames 列出三条后连续读三个不同记录，不会被判成没有进展', async () => {
-    // 事故复现：第三轮 searchNames + 3×getRecord（三个不同 id）被 NO_PROGRESS 停止。
+  it('回归：searchLibraries 列出三条后连续读三个不同记录，不会被判成没有进展', async () => {
+    // 事故复现：第三轮 searchLibraries + 3×getRecord（三个不同 id）被 NO_PROGRESS 停止。
     // 三个只读调用参数各不相同，必须继续跑完并由模型正常收尾。
     const fetchMock = jest
       .fn()
       .mockResolvedValueOnce(
         chatResponse(
           assistantToolCall(
-            'searchNames',
-            { keyword: '鹌鹑肉' },
+            'searchLibraries',
+            { groups: [{ library: 'CFCT', terms: ['鹌鹑肉'] }] },
             'call_search',
           ),
         ),
@@ -1646,7 +1665,7 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(5);
     expect(result.toolCalls.map((call) => call.name)).toEqual([
-      'searchNames',
+      'searchLibraries',
       'getRecord',
       'getRecord',
       'getRecord',
@@ -1724,7 +1743,7 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
       'writeNutrition',
       'finish',
     ]);
-    expect(harness.candidateService.listNutritionNames).not.toHaveBeenCalled();
+    expect(harness.candidateService.searchByLibrary).not.toHaveBeenCalled();
     expect(result.steps).toBe(3);
     // finish 没给 summary、assistant 也没正文 → 中性收尾。
     expect(result.reply).toBe('本轮已完成。');
@@ -1778,7 +1797,7 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
       .fn()
       .mockResolvedValueOnce(
         chatResponse(
-          assistantToolCall('searchNames', { keyword: '鸡肝' }, 'call_1'),
+          assistantToolCall('searchLibraries', { groups: [{ library: 'CFCT', terms: ['鸡肝'] }] }, 'call_1'),
           { total_tokens: 120, prompt_tokens: 100, completion_tokens: 20 },
         ),
       )
@@ -1818,7 +1837,7 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
       tokensIn: 160,
       tokensOut: 40,
       stopReason: null,
-      tools: ['searchNames', 'finish'],
+      tools: ['searchLibraries', 'finish'],
       failedTools: [],
       result: 'FINISHED',
     });
@@ -1875,7 +1894,7 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
       .fn()
       .mockResolvedValueOnce(
         chatResponse(
-          assistantToolCall('searchNames', { keyword: '鸡肝' }, 'call_1'),
+          assistantToolCall('searchLibraries', { groups: [{ library: 'CFCT', terms: ['鸡肝'] }] }, 'call_1'),
           { total_tokens: 50, prompt_tokens: 40, completion_tokens: 10 },
         ),
       )
@@ -1914,7 +1933,7 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
       tokensIn: 40,
       tokensOut: 10,
       stopReason: 'ERROR',
-      tools: ['searchNames'],
+      tools: ['searchLibraries'],
       failedTools: [],
       result: 'ERROR',
     });
@@ -1926,7 +1945,7 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
     expect(reportLog).toContain('"result":"ERROR"');
   });
 
-  it('系统提示词引用 skill 要点：原子工具 + 模糊词先汇总 + 生熟多选 + 来源必填', async () => {
+  it('系统提示词带上技能清单与常驻技能全文', async () => {
     const fetchMock = jest
       .fn()
       .mockResolvedValueOnce(chatResponse(assistantReply('好的。')));
@@ -1940,15 +1959,19 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
     });
 
     const system = String(requestBody(fetchMock, 0).messages[0].content);
-    expect(system).toContain('skills/ingredient-agent/SKILL.md');
-    expect(system).toContain('searchNames');
-    expect(system).toContain('summarizeByKeyword');
-    expect(system).toContain('生 + 熟都要');
-    expect(system).toContain('都不对，我直接说');
+    // 常驻技能全文（core）必须真的在提示里，而不是只给一个文件路径。
+    expect(system).toContain('【技能·常驻】');
+    expect(system).toContain('写原料卡 / 写营养之前');
+    // 清单里要有可加载的技能名，并告诉模型用 loadSkill 取全文。
+    expect(system).toContain('【技能清单】');
+    expect(system).toContain('name-expansion');
+    expect(system).toContain('record-selection');
+    expect(system).toContain('loadSkill');
+    // 工具名与硬约束。
+    expect(system).toContain('searchLibraries');
+    expect(system).toContain('selfCheck');
     expect(system).toContain('sourceRecordId');
-    expect(system).toContain('finish');
-    expect(system).not.toContain('searchLocalNutrition');
-    expect(system).not.toContain('candidateNarrowing');
+    expect(system).not.toContain('skills/ingredient-agent/SKILL.md');
   });
 });
 
@@ -2187,11 +2210,11 @@ describe('IngredientDraftAgentService · 流式事件', () => {
       .fn()
       .mockResolvedValueOnce(
         chatResponse(
-          assistantToolCall('searchNames', { keyword: '鸡肝' }, 'call_1'),
+          assistantToolCall('searchLibraries', { groups: [{ library: 'CFCT', terms: ['鸡肝'] }] }, 'call_1'),
         ),
       )
       .mockResolvedValueOnce(
-        chatResponse(assistantToolCall('runCheck', {}, 'call_2')),
+        chatResponse(assistantToolCall('selfCheck', {}, 'call_2')),
       )
       .mockResolvedValueOnce(
         chatResponse(
@@ -2229,7 +2252,7 @@ describe('IngredientDraftAgentService · 流式事件', () => {
     expect(events[0]).toMatchObject({
       type: 'step_start',
       index: 1,
-      name: 'searchNames',
+      name: 'searchLibraries',
     });
     expect(events[1]).toMatchObject({
       type: 'step_end',
@@ -2253,7 +2276,7 @@ describe('IngredientDraftAgentService · 流式事件', () => {
       .fn()
       .mockResolvedValueOnce(
         chatResponse(
-          assistantToolCall('searchNames', { keyword: '鸡肝' }, 'call_1'),
+          assistantToolCall('searchLibraries', { groups: [{ library: 'CFCT', terms: ['鸡肝'] }] }, 'call_1'),
         ),
       )
       .mockResolvedValueOnce(
@@ -2298,7 +2321,7 @@ describe('IngredientDraftAgentService · 流式事件', () => {
       type: 'step_end',
       ok: true,
       found: true,
-      keywords: ['鸡肝', 'Chicken liver'],
+      keywords: ['鸡肝'],
       candidateCount: 7,
       totalCandidates: 7,
     });
@@ -2323,7 +2346,7 @@ describe('IngredientDraftAgentService · 流式事件', () => {
       .fn()
       .mockResolvedValueOnce(
         chatResponse(
-          assistantToolCall('searchNames', { keyword: '西洋菜' }, 'call_1'),
+          assistantToolCall('searchLibraries', { groups: [{ library: 'CFCT', terms: ['西洋菜'] }] }, 'call_1'),
         ),
       )
       .mockResolvedValueOnce(chatResponse(assistantReply('没找到。')));
@@ -2345,7 +2368,7 @@ describe('IngredientDraftAgentService · 流式事件', () => {
       ok: true,
       found: false,
       matches: [],
-      keywords: ['西洋菜', 'watercress'],
+      keywords: ['西洋菜'],
     });
   });
 

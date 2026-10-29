@@ -63,6 +63,18 @@ function createHarness(
         names,
         keywords: ['鸡蛋清'],
       })),
+      searchByLibrary: jest.fn(async ({ library }: { library: string }) => ({
+        library,
+        total: names.length,
+        hits: names.map((entry) => ({
+          id: entry.id,
+          name: entry.name,
+          sourceType: entry.sourceType,
+          sourceKey: entry.id,
+          dataType: null,
+          filledFieldCount: 10,
+        })),
+      })),
     } as unknown as IngredientCreationCandidateService,
     draftService as unknown as IngredientCreationDraftService,
     { runCheck: jest.fn() } as unknown as IngredientCreationCheckService,
@@ -206,7 +218,9 @@ describe('IngredientCreationToolsService · 查到候选后不许用提问代替
   it('查名字命中 → 在草稿上记下「查到过候选」', async () => {
     const { tools, draftService } = createHarness({}, NAMES);
 
-    await call(tools, 'searchNames', { keyword: '鸡蛋清' });
+    await call(tools, 'searchLibraries', {
+      groups: [{ library: 'CFCT', terms: ['鸡蛋清'] }],
+    });
 
     expect(draftService.patch).toHaveBeenCalledWith(
       DRAFT_ID,
@@ -220,7 +234,9 @@ describe('IngredientCreationToolsService · 查到候选后不许用提问代替
   it('零命中不记记号（否则连澄清问题都问不了）', async () => {
     const { tools, draftService } = createHarness({}, []);
 
-    await call(tools, 'searchNames', { keyword: '不存在的名字' });
+    await call(tools, 'searchLibraries', {
+      groups: [{ library: 'CFCT', terms: ['不存在的名字'] }],
+    });
 
     expect(draftService.patch).not.toHaveBeenCalled();
   });

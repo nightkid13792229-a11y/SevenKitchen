@@ -439,10 +439,26 @@ describe('IngredientCreationToolsService · 进展信号只认真读', () => {
       normalizedNutrition: {},
     }));
 
+    const searchByLibrary = jest.fn(async ({ library }: { library: string }) => ({
+      library,
+      total: 2,
+      hits: [
+        {
+          id: 'rec-1',
+          name: 'Chicken, liver, raw',
+          sourceType: 'USDA_FDC',
+          sourceKey: 'rec-1',
+          dataType: null,
+          filledFieldCount: 10,
+        },
+      ],
+    }));
+
     const tools = new IngredientCreationToolsService(
       {
         findCandidates: jest.fn(),
         listNutritionNames,
+        searchByLibrary,
       } as unknown as IngredientCreationCandidateService,
       {
         get: jest.fn(),
@@ -465,11 +481,11 @@ describe('IngredientCreationToolsService · 进展信号只认真读', () => {
     return tools.execute({ runId: RUN_ID, draftId: DRAFT_ID, name, args });
   }
 
-  it('searchNames 只列清单不算已读；getRecord 才算真正读了这条记录', async () => {
+  it('searchLibraries 只列清单不算已读；getRecord 才算真正读了这条记录', async () => {
     const { tools } = createProgressTools();
 
-    const searched = await executeTool(tools, 'searchNames', {
-      keyword: '鸡肝',
+    const searched = await executeTool(tools, 'searchLibraries', {
+      groups: [{ library: 'CFCT', terms: ['鸡肝'] }],
     });
     expect(searched.ok).toBe(true);
     // 只列了名字、没读记录：不能上报成「已见过的来源」。

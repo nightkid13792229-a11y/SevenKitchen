@@ -232,13 +232,14 @@ export function matchMethodLabel(method: string): string {
 
 /** 已知工具的中文名；新增工具没登记时按原始名显示，不隐藏。 */
 const TOOL_LABELS: Record<string, string> = {
-  searchNames: '查名字',
+  searchLibraries: '查名字',
+  loadSkill: '读技能',
   summarizeNames: '汇总名字',
   summarizeByKeyword: '按关键词汇总',
   getRecord: '读来源记录',
   writeNutrition: '写营养',
   writeIngredient: '改原料卡',
-  runCheck: '跑终检',
+  selfCheck: 'AI 自检',
   askUser: '向你提问',
   finish: '结束本轮'
 }
@@ -413,7 +414,7 @@ function searchMessage(input: {
 }
 
 /**
- * 从 searchNames 的工具结果里读出「匹配依据」。
+ * 从 searchLibraries 的工具结果里读出「匹配依据」。
  *
  * - 关键词同时取后端回传的 keywords 与本次参数里的 keyword；
  * - 只有 found=true 或确有词条才算命中，工具 ok 不算；
@@ -671,7 +672,7 @@ function summarizeBatchUpdate(args: AnyArgs): string {
 
 function summarize(name: string, args: AnyArgs): string {
   switch (name) {
-    case 'searchNames':
+    case 'searchLibraries':
       return summarizeSearch(args)
     case 'summarizeNames':
     case 'summarizeByKeyword': {
@@ -686,7 +687,7 @@ function summarize(name: string, args: AnyArgs): string {
       return summarizeBatchUpdate(args)
     case 'writeIngredient':
       return summarizeIngredientFields(asRecord(args.fields))
-    case 'runCheck':
+    case 'selfCheck':
       return '检查整份草稿'
     case 'askUser':
       return oneLine(readText(args.question) || '（未填问题）')
@@ -723,7 +724,7 @@ export function toStepView(
     const ok = call?.ok === true
     // 查库零命中时，摘要与标签都要说「没有找到」，不能因为工具 ok 就写成功。
     const search =
-      name === 'searchNames' && ok ? toSearchEvidence(call?.result, args) : null
+      name === 'searchLibraries' && ok ? toSearchEvidence(call?.result, args) : null
     let summary = summarize(name, args)
     let statusLabel = ok ? '成功' : '失败'
     let statusType: 'success' | 'warning' | 'danger' = ok

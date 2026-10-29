@@ -1,6 +1,7 @@
 import { createHash } from 'crypto';
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { isIngredientCardFieldKey } from '../../domain/ingredient-creation/ingredient-card-fields';
+import { IngredientSkillService } from './ingredient-skill.service';
 import {
   classifyCookingMethod,
   normalizePreparationState,
@@ -16,6 +17,7 @@ import {
   buildPendingSearchPlan,
   hasApprovedSearchPlan,
   type SearchPlan,
+  type SearchPlanLibrary,
 } from '../../domain/ingredient-creation/search-plan';
 import { normalizeUnit } from '../../domain/ingredient-creation/unit-guard';
 import {
@@ -146,6 +148,69 @@ const NAME_SUMMARY_CACHE_MAX_ENTRIES = 200;
  * `alsoIn` 列出其它来源库）；发现 3000 条还是 3 条，由模型看 `total` 后自己
  * 决定下一步（summarizeByKeyword / askUser）。
  */
+/** 按库检索：模型给「库 + 该库的词组」，代码只按库查。 */
+const SEARCH_LIBRARIES_TOOL: AgentToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'searchLibraries',
+    description:
+      '按**指定营养库**检索原料名（只读）。每个库交一组检索词，代码只在该库里查；不做语种分流、不做同义扩展、不合并同名。返回每个库的命中总数与前 20 条（id / 名字 / 来源 key / 已填营养项）。某库命中为 0 或偏少时，看别的库返回的名字，换词再查一次。',
+    parameters: {
+      type: 'object',
+      properties: {
+        groups: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 7,
+          description: '每个库一组；同一个库只出现一次。',
+          items: {
+            type: 'object',
+            properties: {
+              library: {
+                type: 'string',
+                enum: [...SEARCH_PLAN_LIBRARIES],
+                description: '目标营养库。',
+              },
+              terms: {
+                type: 'array',
+                minItems: 1,
+                maxItems: 10,
+                items: { type: 'string' },
+                description: '该库要用的检索词（正名、俗称、外语名都可以）。',
+              },
+            },
+            required: ['library', 'terms'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['groups'],
+      additionalProperties: false,
+    },
+  },
+};
+
+/** 读取技能全文：系统提示里只有清单。 */
+const LOAD_SKILL_TOOL: AgentToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'loadSkill',
+    description:
+      '读取一项作业技能的全文（技能清单在系统提示里）。需要按某个技能的步骤作业时调用；常驻技能已经全文给出，不用再读。',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: '技能名，来自系统提示里的技能清单。',
+        },
+      },
+      required: ['name'],
+      additionalProperties: false,
+    },
+  },
+};
+
 const SEARCH_NAMES_TOOL: AgentToolDefinition = {
   type: 'function',
   function: {
@@ -429,12 +494,12 @@ const WRITE_INGREDIENT_TOOL: AgentToolDefinition = {
 };
 
 /** 原子工具 6：跑现有终检，只读。 */
-const RUN_CHECK_TOOL: AgentToolDefinition = {
+const SELF_CHECK_TOOL: AgentToolDefinition = {
   type: 'function',
   function: {
-    name: 'runCheck',
+    name: 'selfCheck',
     description:
-      '对当前草稿跑一次服务端终检（只读）。返回拦死 / 可例外 / 提醒三档结果；passed=true 表示没有拦死项。',
+      '对当前草稿跑一次 AI 自检（只读，**不代表授权**）。返回拦死 / 可例外 / 提醒三档；passed=true 只说明没有拦死项，真正放行仍要用户跑两页核验并授权。',
     parameters: {
       type: 'object',
       properties: {},
@@ -486,6 +551,15 @@ function didSearchHit(content: string): boolean {
     if (Array.isArray(body.names) && body.names.length > 0) {
       return true;
     }
+    if (Array.isArray(body.groups)) {
+      return body.groups.some((group) => {
+        if (!isRecord(group)) {
+          return false;
+        }
+        const total = group.total;
+        return typeof total === 'number' && total > 0;
+      });
+    }
     return Boolean(body.record);
   } catch {
     return false;
@@ -497,8 +571,7 @@ const ASK_AFTER_SEARCH_MESSAGE =
 
 /** 查库类工具：跑完命中了候选，就在草稿上留个记号。 */
 const SEARCH_TOOL_NAMES = new Set([
-  'searchNames',
-  'searchLocalLibraries',
+  'searchLibraries',
   'summarizeByKeyword',
   'getRecord',
 ]);
@@ -1263,17 +1336,19 @@ export class IngredientCreationToolsService {
     private readonly checkService: IngredientCreationCheckService,
     private readonly prisma: PrismaService,
     private readonly nameClassifierService?: IngredientNameClassifierService,
+    @Optional()
+    private readonly skillService?: IngredientSkillService,
   ) {}
 
   getDefinitions(): readonly AgentToolDefinition[] {
     return [
-      SEARCH_NAMES_TOOL,
-      SEARCH_LOCAL_LIBRARIES_TOOL,
+      SEARCH_LIBRARIES_TOOL,
+      LOAD_SKILL_TOOL,
       SUMMARIZE_BY_KEYWORD_TOOL,
       GET_RECORD_TOOL,
       WRITE_NUTRITION_TOOL,
       WRITE_INGREDIENT_TOOL,
-      RUN_CHECK_TOOL,
+      SELF_CHECK_TOOL,
       ASK_USER_TOOL,
       PROPOSE_SEARCH_PLAN_TOOL,
       FINISH_TOOL,
@@ -1360,10 +1435,10 @@ export class IngredientCreationToolsService {
     }
 
     switch (input.name) {
-      case 'searchNames':
-        return this.searchNames(input.args);
-      case 'searchLocalLibraries':
-        return this.searchLocalLibraries(input.args);
+      case 'searchLibraries':
+        return this.searchLibraries(input.args);
+      case 'loadSkill':
+        return this.loadSkill(input.args);
       case 'summarizeByKeyword':
         return this.summarizeByKeyword(input.args);
       case 'getRecord':
@@ -1372,8 +1447,8 @@ export class IngredientCreationToolsService {
         return this.writeNutrition(input.draftId, input.args);
       case 'writeIngredient':
         return this.writeIngredient(input.draftId, input.args);
-      case 'runCheck':
-        return this.runCheck(input.draftId);
+      case 'selfCheck':
+        return this.selfCheck(input.draftId);
       case 'askUser':
         return this.askUser(input.draftId, input.args);
       case 'proposeSearchPlan':
@@ -1385,6 +1460,136 @@ export class IngredientCreationToolsService {
           `未知工具「${input.name}」。可用工具只有：${this.availableToolNames().join('、')}。`,
         );
     }
+  }
+
+  /** 按库检索：只按模型给的库与词查，不做任何扩展。 */
+  private async searchLibraries(
+    args: Record<string, unknown>,
+  ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
+    const rawGroups = args.groups;
+    if (!Array.isArray(rawGroups) || rawGroups.length === 0) {
+      return this.error('searchLibraries 需要 groups 数组，至少一组。');
+    }
+    if (rawGroups.length > SEARCH_PLAN_LIBRARIES.length) {
+      return this.error(`groups 最多 ${SEARCH_PLAN_LIBRARIES.length} 组。`);
+    }
+
+    const seen = new Set<string>();
+    const groups: Array<{ library: SearchPlanLibrary; terms: string[] }> = [];
+
+    for (const raw of rawGroups) {
+      if (!isRecord(raw)) {
+        return this.error('groups 的每一项必须是 { library, terms }。');
+      }
+      const library = normalizeText(raw.library).toUpperCase();
+      if (!(SEARCH_PLAN_LIBRARIES as readonly string[]).includes(library)) {
+        return this.error(
+          `目标库「${library || String(raw.library)}」不在白名单；可选：${SEARCH_PLAN_LIBRARIES.join('、')}。`,
+        );
+      }
+      if (seen.has(library)) {
+        return this.error(`目标库「${library}」重复出现，每组只写一次。`);
+      }
+      seen.add(library);
+
+      if (!Array.isArray(raw.terms)) {
+        return this.error(`目标库「${library}」的 terms 必须是数组。`);
+      }
+      const terms = [
+        ...new Set(
+          raw.terms
+            .map((term) => normalizeText(term))
+            .filter((term) => term.length > 0),
+        ),
+      ];
+      if (terms.length === 0) {
+        return this.error(`目标库「${library}」至少要有一个检索词。`);
+      }
+      if (terms.length > 10) {
+        return this.error(`目标库「${library}」最多 10 个检索词。`);
+      }
+
+      groups.push({ library: library as SearchPlanLibrary, terms });
+    }
+
+    const results = await Promise.all(
+      groups.map((group) =>
+        this.candidateService.searchByLibrary({
+          library: group.library,
+          terms: group.terms,
+        }),
+      ),
+    );
+
+    const empty = results
+      .filter((result) => result.total === 0)
+      .map((result) => result.library);
+
+    return {
+      ok: true,
+      content: okContent({
+        groups: results.map((result) => ({
+          library: result.library,
+          total: result.total,
+          hits: result.hits,
+        })),
+        // 扁平视图：模型写方案、回话时常用；与 groups 是同一批数据。
+        total: results.reduce((sum, result) => sum + result.total, 0),
+        found: results.some((result) => result.total > 0),
+        keywords: [
+          ...new Set(groups.flatMap((group) => group.terms)),
+        ],
+        names: results.flatMap((result) =>
+          result.hits.map((hit) => ({
+            id: hit.id,
+            name: hit.name,
+            sourceType: hit.sourceType,
+          })),
+        ),
+        hint:
+          empty.length === 0
+            ? '每库都命中了；同名多条是不同版本，逐条看，不要按名字合并。'
+            : `${empty.join('、')} 没有命中：看别的库返回的名字，换词再查一次。`,
+      }),
+      progress: {
+        writtenFieldPaths: [],
+        // 只列名字不读记录，不能上报 id，否则后续 getRecord 会被误判成「早就见过」。
+        sourceRecordIds: [],
+      },
+    };
+  }
+
+  /** 读取技能全文；常驻技能已在系统提示里，不用调用。 */
+  private loadSkill(
+    args: Record<string, unknown>,
+  ): Omit<AgentToolExecution, 'durationMs'> {
+    const name = normalizeText(args.name);
+    if (!name) {
+      return this.error('loadSkill 需要非空的 name。');
+    }
+    if (!this.skillService) {
+      return this.error('本实例没有加载技能，按系统提示与工具描述作业。');
+    }
+
+    const skill = this.skillService.load(name);
+    if (!skill) {
+      const available = this.skillService
+        .list()
+        .map((entry) => entry.name)
+        .join('、');
+      return this.error(
+        `没有名为「${name}」的技能。可用技能：${available || '（无）'}。`,
+      );
+    }
+
+    return {
+      ok: true,
+      content: okContent({
+        name: skill.name,
+        description: skill.description,
+        body: skill.body,
+      }),
+    };
   }
 
   /**
@@ -2297,7 +2502,7 @@ export class IngredientCreationToolsService {
   }
 
   /** 工具 6：跑现有终检服务，只返回三档摘要；服务报错也变成错误文本。 */
-  private async runCheck(
+  private async selfCheck(
     draftId: string,
   ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
     try {
@@ -2328,7 +2533,7 @@ export class IngredientCreationToolsService {
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      return this.error(`runCheck 跑不了：${message}`);
+      return this.error(`selfCheck 跑不了：${message}`);
     }
   }
 

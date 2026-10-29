@@ -26,16 +26,16 @@ function onlyStep(toolCalls: ToolCalls): AgentStepView {
  * 失败原因都收在这一层验证。
  */
 describe('toStepView', () => {
-  it('searchNames 映射成「查名字」，摘要就是关键词（不再有生熟参数）', () => {
+  it('searchLibraries 映射成「查名字」，摘要就是关键词（不再有生熟参数）', () => {
     const view = onlyStep([
       {
-        name: 'searchNames',
+        name: 'searchLibraries',
         args: { keyword: '鸡肝' },
         ok: true
       }
     ])
 
-    expect(view.name).toBe('searchNames')
+    expect(view.name).toBe('searchLibraries')
     expect(view.label).toBe('查名字')
     expect(view.summary).toBe('鸡肝')
     expect(view.ok).toBe(true)
@@ -145,12 +145,12 @@ describe('toStepView', () => {
     expect(view.ok).toBe(true)
   })
 
-  it('runCheck 映射成「跑终检」', () => {
+  it('selfCheck 映射成「AI 自检」', () => {
     const view = onlyStep([
-      { name: 'runCheck', args: {}, ok: false, error: '终检服务超时' }
+      { name: 'selfCheck', args: {}, ok: false, error: '终检服务超时' }
     ])
 
-    expect(view.label).toBe('跑终检')
+    expect(view.label).toBe('AI 自检')
     expect(view.ok).toBe(false)
     expect(view.error).toBe('终检服务超时')
   })
@@ -158,7 +158,7 @@ describe('toStepView', () => {
   it('查本地库命中时展开匹配依据：关键词、词条名、匹配方式与分数', () => {
     const view = onlyStep([
       {
-        name: 'searchNames',
+        name: 'searchLibraries',
         args: { keyword: '西洋菜' },
         ok: true,
         result: {
@@ -192,7 +192,7 @@ describe('toStepView', () => {
   it('查本地库候选带 AI 复核时逐条显示 相关/存疑/不相关 标签与一句理由', () => {
     const view = onlyStep([
       {
-        name: 'searchNames',
+        name: 'searchLibraries',
         args: { keyword: '山药' },
         ok: true,
         result: {
@@ -256,7 +256,7 @@ describe('toStepView', () => {
   it('AI 复核缺失或 verdict 非法时不假装有判断', () => {
     const view = onlyStep([
       {
-        name: 'searchNames',
+        name: 'searchLibraries',
         args: { keyword: '山药' },
         ok: true,
         result: {
@@ -288,7 +288,7 @@ describe('toStepView', () => {
   it('查库结果带 AI 分类：状态 / 加工方式 / 部位与依据词一起展示', () => {
     const view = onlyStep([
       {
-        name: 'searchNames',
+        name: 'searchLibraries',
         args: { keyword: '牛肉' },
         ok: true,
         result: {
@@ -332,7 +332,7 @@ describe('toStepView', () => {
   it('查本地库零命中时明确写“没有找到匹配词条”，不写成功', () => {
     const view = onlyStep([
       {
-        name: 'searchNames',
+        name: 'searchLibraries',
         args: { keyword: '西洋菜' },
         ok: true,
         result: {
@@ -393,7 +393,7 @@ describe('查本地库 · 部位分组概览', () => {
   it('工具结果带 groups / totalCandidates / reviewSummary：页面能画分组与条数', () => {
     const view = onlyStep([
       {
-        name: 'searchNames',
+        name: 'searchLibraries',
         args: { keyword: '牛肉' },
         ok: true,
         result: {

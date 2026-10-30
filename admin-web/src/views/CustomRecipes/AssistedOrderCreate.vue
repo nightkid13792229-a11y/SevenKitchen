@@ -414,7 +414,7 @@
 
         <div v-if="isGiftOrder && quote" class="gift-badge-line">
           <el-tag type="success" effect="plain">
-            本单赠送 · {{ giftReasonLabel }}
+            本单赠送{{ form.payment.giftReason ? ` · ${giftReasonLabel}` : '' }}
           </el-tag>
           <span class="muted">实收 ¥0.00（系统报价仅作记录）</span>
         </div>

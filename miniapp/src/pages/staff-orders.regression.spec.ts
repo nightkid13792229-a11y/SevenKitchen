@@ -210,10 +210,27 @@ describe('staff order detail · 状态改版', () => {
 
   it('主操作贴在状态下面，按状态挑一个', () => {
     expect(detailSource).toContain("label: '确认收款', run: confirmPayment");
-    expect(detailSource).toContain("label: '开始制作', run: startProduction");
+    // 2026-10-30：生产制作统一在工作台「生产管理」里开工，这页不再给按钮
+    expect(detailSource).not.toContain("label: '开始制作'");
     expect(detailSource).toContain("label: '填写运单并发货', run: shipOrder");
     expect(detailSource).toContain("label: '退款 / 退差价', run: adminRefundOrder");
     expect(detailSource).toContain('class="action-bar"');
+  });
+
+  it('★ 商品卡不再显示食谱封面，食材/补剂没数据就不占位置', () => {
+    expect(detailSource).not.toContain('class="product-cover"');
+    expect(detailSource).toContain('v-if="hasFoodUsage"');
+    expect(detailSource).toContain('v-if="hasSupplementUsage"');
+  });
+
+  it('★ 管理员备注开产后不再显示', () => {
+    expect(detailSource).toContain('v-if="remarkVisible"');
+    expect(detailSource).toContain("['INIT', 'PENDING_PAYMENT', 'PAID', 'PURCHASING']");
+  });
+
+  it('★ 从列表带 action=ship 进来会自动打开发货弹窗', () => {
+    expect(detailSource).toContain("options.action === 'ship'");
+    expect(detailSource).toContain('if (autoShip && canShip.value) shipOrder()');
   });
 
   it('制作中不给按钮，只给一句提示（这步不归这个页面管）', () => {

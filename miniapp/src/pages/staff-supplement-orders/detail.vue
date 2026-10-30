@@ -490,7 +490,12 @@ onLoad((options) => {
     uni.showToast({ title: '缺少订单参数', icon: 'none' })
     return
   }
-  void fetchOrder()
+
+  // 订单中心卡片上点了「发货」→ 加载完直接弹填单号
+  const autoShip = options?.action === 'ship'
+  void fetchOrder().then(() => {
+    if (autoShip && order.value?.status === 'PACKED') handleShip()
+  })
 })
 </script>
 

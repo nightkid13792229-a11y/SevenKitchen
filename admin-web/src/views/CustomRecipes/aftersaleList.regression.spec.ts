@@ -8,7 +8,8 @@ import { describe, expect, it } from 'vitest'
 import page from '@/views/CustomRecipes/AftersaleList.vue?raw'
 import apiSource from '@/api/customRecipe.ts?raw'
 import routerSource from '@/router/index.ts?raw'
-import layoutSource from '@/layouts/MainLayout.vue?raw'
+import containerSource from '@/views/AftersaleCenter/index.vue?raw'
+import menuSource from '@/constants/adminMenu.ts?raw'
 
 /**
  * 售后待办页 · 守卫（2026-10-16，批次 3.1）
@@ -84,8 +85,8 @@ describe('售后待办页 · 顺序与动作都由后端定', () => {
 
   it('路由与菜单都挂上了', () => {
     expect(routerSource).toContain('custom-recipes/aftersales')
-    expect(routerSource).toContain('AftersaleList.vue')
-    expect(layoutSource).toContain('/custom-recipes/aftersales')
+    expect(containerSource).toContain('AftersaleList.vue')
+    expect(menuSource).toContain('/aftersale-center')
   })
 
   it('API 层调的是后台地址（不是顾客端那个）', () => {

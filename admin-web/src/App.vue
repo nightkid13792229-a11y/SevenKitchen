@@ -23,4 +23,21 @@ body,
     'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
     'Noto Color Emoji';
 }
+
+/*
+ * 合并入口后的「页中页」：容器已经有 tab 标题，内层页面原来的大标题就不要再重复一遍。
+ * 只隐藏标题/描述，操作按钮（刷新、新建、日期切换、保存）都保留。
+ * 约定：容器里包一层 .embedded-section，见 AftersaleCenter / Finance / Purchasing /
+ * SupplementShop / TastingPack / NutritionStandards / Settings 等页面。
+ */
+.embedded-section .page-header > h1,
+.embedded-section .page-header > h2,
+.embedded-section .page-header > div:first-child,
+.embedded-section .el-page-header {
+  display: none !important;
+}
+
+.embedded-section .page-header {
+  margin-bottom: 12px;
+}
 </style>

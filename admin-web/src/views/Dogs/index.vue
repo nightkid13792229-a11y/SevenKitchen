@@ -2,8 +2,7 @@
   <div class="dogs-list-page">
     <!-- Header -->
     <div class="page-header">
-      <h2>档案管理</h2>
-      <div class="header-actions">
+      <div v-if="activeTab === 'dogs'" class="header-actions">
         <el-button type="primary" @click="handleCreate">
           <el-icon><Plus /></el-icon>
           新增档案
@@ -11,8 +10,10 @@
       </div>
     </div>
 
-    <!-- Filters -->
-    <div class="filter-bar">
+    <el-tabs v-model="activeTab" class="dogs-tabs" @tab-change="syncTab">
+      <el-tab-pane label="档案列表" name="dogs">
+        <!-- Filters -->
+        <div class="filter-bar">
       <el-input
         v-model="searchText"
         placeholder="搜索姓名 / ID"
@@ -170,21 +171,51 @@
         @size-change="handleSizeChange"
         @current-change="handlePageChange"
       />
-    </div>
+        </div>
+      </el-tab-pane>
+
+      <el-tab-pane label="品种" name="breeds" lazy>
+        <div class="embedded-section">
+          <Breeds />
+        </div>
+      </el-tab-pane>
+    </el-tabs>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
 import { dogApi } from '@/api/dogs'
 import type { DogProfile, DogBreed } from '@/types/dog'
 import { calculateAge, ActivityLevelLabels, LifeStageLabels } from '@/types/dog'
 import { ActivityLevel, LifeStageOverride } from '@/types/dog'
+import Breeds from '@/views/Breeds/index.vue'
 
 const router = useRouter()
+const route = useRoute()
+
+const activeTab = ref<'dogs' | 'breeds'>(route.query.tab === 'breeds' ? 'breeds' : 'dogs')
+
+function syncTab(name: string | number) {
+  const next = name === 'breeds' ? 'breeds' : 'dogs'
+  const query = { ...route.query }
+  if (next === 'breeds') {
+    query.tab = 'breeds'
+  } else {
+    delete query.tab
+  }
+  router.replace({ path: '/dogs', query })
+}
+
+watch(
+  () => route.query.tab,
+  (value) => {
+    activeTab.value = value === 'breeds' ? 'breeds' : 'dogs'
+  },
+)
 
 // Data
 const loading = ref(false)
@@ -350,7 +381,7 @@ onMounted(() => {
 
 .page-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   margin-bottom: 20px;
 }

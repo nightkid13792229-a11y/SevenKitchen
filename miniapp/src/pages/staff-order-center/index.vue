@@ -94,7 +94,12 @@
         </view>
 
         <!-- 入口：没东西可看就整块不出现，不置灰 -->
-        <view v-if="canOpenRecipe(item) || canOpenDog(item)" class="order-actions">
+        <view
+          v-if="canShipItem(item) || canOpenRecipe(item) || canOpenDog(item)"
+          class="order-actions"
+        >
+          <!-- 待发货的单直接在列表上发货（老板 2026-10-30：以前列表就有这个） -->
+          <text v-if="canShipItem(item)" class="entry primary" @tap.stop="openShip(item)">发货</text>
           <text v-if="canOpenRecipe(item)" class="entry" @tap.stop="openRecipe(item)">
             {{ recipeEntryLabel(item) }}
           </text>
@@ -117,6 +122,8 @@ interface OrderCenterItem {
   orderNo: string
   type: 'FOOD' | 'CUSTOM_RECIPE' | 'SUPPLEMENT'
   statusLabel: string
+  /** 统一状态组（TO_SHIP = 待发货）；列表上据此决定要不要给「发货」 */
+  statusGroup: string
   /** 卡片主行显示的食谱名；空 = 这单没绑定食谱（多数补剂单） */
   recipeName: string | null
   createdAt: string
@@ -261,6 +268,30 @@ function loadMore() {
   load(false)
 }
 
+/**
+ * 只有「待发货」才给发货按钮：鲜食是急冻完成，补剂是分装完成。
+ * 定制单没有发货环节（食谱是线上交付）。
+ */
+function canShipItem(item: OrderCenterItem) {
+  return item.statusGroup === 'TO_SHIP' && item.type !== 'CUSTOM_RECIPE'
+}
+
+/**
+ * 发货不在列表里直接弹窗：餐饮类的发货要选快递公司、要走地址校验，
+ * 复制一套必然和详情页对不上。这里直接跳到详情并**自动打开**发货弹窗。
+ */
+function openShip(item: OrderCenterItem) {
+  if (item.type === 'SUPPLEMENT') {
+    uni.navigateTo({
+      url: `/pages/staff-supplement-orders/detail?id=${encodeURIComponent(item.id)}&action=ship`,
+    })
+    return
+  }
+  uni.navigateTo({
+    url: `/pages/staff-orders/detail?id=${encodeURIComponent(item.id)}&action=ship`,
+  })
+}
+
 function canOpenRecipe(item: OrderCenterItem) {
   return Boolean(item.itemId || item.recipeId)
 }
@@ -375,6 +406,7 @@ onMounted(() => load())
 
 .order-actions { display: flex; justify-content: flex-end; margin-top: 16rpx; padding-top: 14rpx; border-top: 1rpx solid #f2f3f5; }
 .entry { margin-left: 14rpx; padding: 8rpx 20rpx; border-radius: 24rpx; background: #f5f6f8; color: #2b5040; font-size: 22rpx; }
+.entry.primary { background: #1e3a2f; color: #fff; font-weight: 600; }
 
 .state { padding: 120rpx 0; text-align: center; color: #909399; font-size: 24rpx; }
 .load-more { padding: 20rpx; text-align: center; color: #2b5040; font-size: 24rpx; }

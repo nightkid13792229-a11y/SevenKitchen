@@ -77,9 +77,9 @@
       <div class="quick-title">常用入口</div>
       <div class="quick-links">
         <el-button type="primary" plain @click="$router.push('/order-center')">订单中心</el-button>
-        <el-button plain @click="$router.push('/supplement-shop/orders')">补剂订单</el-button>
-        <el-button plain @click="$router.push('/supplement-shop/aftersales')">补剂售后</el-button>
-        <el-button plain @click="$router.push('/supplement-shop/config')">商城设置</el-button>
+        <el-button plain @click="$router.push('/order-center?type=SUPPLEMENT')">补剂订单</el-button>
+        <el-button plain @click="$router.push('/aftersale-center?tab=supplement')">补剂售后</el-button>
+        <el-button plain @click="$router.push('/settings/pricing?tab=supplement')">商城设置</el-button>
       </div>
     </el-card>
   </div>

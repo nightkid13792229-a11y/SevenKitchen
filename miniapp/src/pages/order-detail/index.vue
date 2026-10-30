@@ -597,75 +597,68 @@
       </view>
 
       <!--
-        ① 取消订单：仅"已付款"（尚未进入采购）阶段。
-        此时我们还没为这一单产生任何成本，顾客可以随时整单取消、全额退款。
+        售后与修改（2026-10-30 三块合一）。
+        取消 / 锁定期提示 / 售后服务原本是三张互斥的卡，顾客要在页面
+        中段找三处；现在同一张卡按状态给一组按钮，规则不变。
       -->
       <view
-        class="section cancel-order-section"
-        v-if="canCancelOrder(order.status)"
+        class="section aftersale-hub-section"
+        v-if="hasAftersaleHub"
       >
-        <view class="section-title">取消订单</view>
-        <text class="section-note">
-          订单尚未进入采购，现在取消不产生任何费用，将全额原路退回。
-        </text>
-        <view class="aftersale-buttons">
-          <button
-            class="btn-aftersale"
-            @tap="applyAftersaleType('REFUND')"
-          >
-            <text class="btn-text">取消订单</text>
-          </button>
-        </view>
-      </view>
+        <view class="section-title">售后与修改</view>
 
-      <!--
-        ② 锁定期（采购中/生产中/急冻中）：已开始为这一单投入，
-        不再提供自助取消或退款，改为引导联系客服。
-        投诉建议仍然保留在下方板块里。
-      -->
-      <view
-        class="section aftersale-locked-section"
-        v-else-if="isAftersaleLocked(order.status)"
-      >
-        <view class="section-title">需要修改或取消？</view>
-        <text class="section-note">
-          订单已进入采购与制作，食材按您的预约单独采买，无法自助取消。
-          如有特殊情况请联系客服协助。
-        </text>
-        <button class="btn-aftersale" @tap="contactService">
-          <text class="btn-text">联系客服</text>
-        </button>
-      </view>
+        <template v-if="canCancelOrder(order.status)">
+          <text class="section-note">
+            订单尚未进入采购，现在取消不产生任何费用，将全额原路退回。
+          </text>
+          <view class="aftersale-buttons">
+            <button
+              class="btn-aftersale"
+              @tap="applyAftersaleType('REFUND')"
+            >
+              <text class="btn-text">取消订单</text>
+            </button>
+          </view>
+        </template>
 
-      <!-- ③ 售后服务：已发货 / 已完成（破损、变质等品质问题） -->
-      <view
-        class="section aftersale-section"
-        v-if="canApplyAftersale(order.status, order.completedAt)"
-      >
-        <view class="section-title">售后服务</view>
-        <view class="aftersale-buttons">
-          <button
-            v-if="canApplyRefund(order.status, order.completedAt)"
-            class="btn-aftersale"
-            @tap="applyAftersaleType('REFUND')"
-          >
-            <text class="btn-text">申请退款</text>
+        <template v-else-if="isAftersaleLocked(order.status)">
+          <text class="section-note">
+            订单已进入采购与制作，食材按您的预约单独采买，无法自助取消。
+            如有特殊情况请联系客服协助。
+          </text>
+          <button class="btn-aftersale" @tap="contactService">
+            <text class="btn-text">联系客服</text>
           </button>
-          <button
-            v-if="canApplyRemake(order.status, order.completedAt)"
-            class="btn-aftersale"
-            @tap="applyAftersaleType('REMAKE')"
-          >
-            <text class="btn-text">申请重做</text>
-          </button>
-          <button
-            v-if="canApplyComplaint(order.status)"
-            class="btn-aftersale"
-            @tap="applyAftersaleType('COMPLAINT')"
-          >
-            <text class="btn-text">投诉建议</text>
-          </button>
-        </view>
+        </template>
+
+        <template v-else>
+          <text class="section-note">
+            收到后有问题，可以在这里申请退款、重做，或直接告诉我们。
+          </text>
+          <view class="aftersale-buttons">
+            <button
+              v-if="canApplyRefund(order.status, order.completedAt)"
+              class="btn-aftersale"
+              @tap="applyAftersaleType('REFUND')"
+            >
+              <text class="btn-text">申请退款</text>
+            </button>
+            <button
+              v-if="canApplyRemake(order.status, order.completedAt)"
+              class="btn-aftersale"
+              @tap="applyAftersaleType('REMAKE')"
+            >
+              <text class="btn-text">申请重做</text>
+            </button>
+            <button
+              v-if="canApplyComplaint(order.status)"
+              class="btn-aftersale"
+              @tap="applyAftersaleType('COMPLAINT')"
+            >
+              <text class="btn-text">投诉建议</text>
+            </button>
+          </view>
+        </template>
       </view>
 
       <!-- 售后信息（AFTERSALE状态显示） -->
@@ -872,7 +865,7 @@
     <!-- 底部操作按钮 -->
     <!-- Phase 9: Simplified action buttons aligned with e-commerce standards -->
     <!-- Phase 9.1: Added FREEZING and AFTERSALE status actions -->
-    <view class="bottom-actions" v-if="order">
+    <view class="bottom-actions" v-if="order && hasBottomActions">
       <!-- 待付款状态 -->
       <view v-if="order.status === 'PENDING_PAYMENT'" class="action-buttons">
         <button class="btn-action btn-cancel" @tap="cancelOrder">
@@ -1190,6 +1183,35 @@ const userInfo = ref({
 
 const isStaffOrAdmin = computed(() => {
   return userInfo.value.role === 'STAFF' || userInfo.value.role === 'ADMIN';
+});
+
+/** 售后与修改卡：三个互斥状态任一成立就显示（2026-10-30） */
+const hasAftersaleHub = computed(() => {
+  const current = order.value;
+  if (!current) return false;
+  return (
+    canCancelOrder(current.status) ||
+    isAftersaleLocked(current.status) ||
+    canApplyAftersale(current.status, current.completedAt)
+  );
+});
+
+/**
+ * 底部操作栏（2026-10-30）。
+ *
+ * 锁定期与售后中原来会渲染一条空的白栏，挡内容还看着像坏了；
+ * 现在只有真的会出按钮的状态才渲染。
+ */
+const hasBottomActions = computed(() => {
+  const status = order.value?.status;
+  if (!status) return false;
+  return [
+    'PENDING_PAYMENT',
+    'PAID',
+    'SHIPPED',
+    'COMPLETED',
+    'CANCELLED',
+  ].includes(status);
 });
 
 const paymentExpired = computed(() => {

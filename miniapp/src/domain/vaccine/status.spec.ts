@@ -257,8 +257,8 @@ describe('疫苗 · 抗体检测替代那一行（原型 F）', () => {
     titer: { testedAt: '2026-10-15', nextReviewAt: '2029-10-15' },
   });
 
-  it('左边那一列写"下次评估"，不写"已完成"（时间是评估时间，不是打针时间）', () => {
-    expect(stepWindowText(covered)).toEqual({ main: '2029/10/15', sub: '下次评估' });
+  it('左边那一列写"建议复查"，不写"已完成"（时间是复查时间，不是打针时间）', () => {
+    expect(stepWindowText(covered)).toEqual({ main: '2029/10/15', sub: '建议复查' });
   });
 
   /*
@@ -273,8 +273,8 @@ describe('疫苗 · 抗体检测替代那一行（原型 F）', () => {
     });
   });
 
-  it('这张卡是它的时候，"什么时候"写成下次评估', () => {
-    expect(stepWhenText(covered)).toBe('建议下次评估 2029/10/15');
+  it('这张卡是它的时候，"什么时候"写成建议复查', () => {
+    expect(stepWhenText(covered)).toBe('建议复查 2029/10/15');
   });
 
   it('🔴 短话必须是后端换过的那句，不能还是"幼犬从 6~8 周开始…"', () => {

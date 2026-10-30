@@ -96,8 +96,10 @@ export interface VaccineIgnoredStep {
   key: string
   kindLabel: string
   label: string
-  /** NOT_NOW（这次先不打）/ STOPPED（不再接种了） */
+  /** NOT_NOW（推迟 30 天）/ STOPPED（长期停） */
   reason: string
+  /** NOT_NOW 的 30 天到期日；STOPPED 为空 */
+  snoozeUntil?: string | null
 }
 
 /** 主接口：一次给全（技术方案 3.1） */

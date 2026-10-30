@@ -176,7 +176,8 @@ describe('疫苗 · 下一针（NextCard，原型 A/B/C/F/I/K/G）', () => {
   })
 
   it('抗体检测入口只对能被替代的那一类出现（核心 = titerable）', () => {
-    expect(card).toContain('v-if="next.titerable"')
+    expect(card).toContain('v-if="canTiter"')
+    expect(card).toContain('titerable')
   })
 
   it('K 屏：没有待办时写"暂无需要接种的项目"，并给"查看已忽略的 N 项"', () => {
@@ -294,7 +295,14 @@ describe('疫苗 · 口径修订（老板 2026-10-17 定）', () => {
       readFileSync(resolve(process.cwd(), '../backend/src/domain/health/vaccine/engine.ts'), 'utf-8'),
     )
     // 间隔一律由引擎算，不再读记录上存的那个日期（否则老记录会继续按 3 年走 ✗）
-    expect(engine).toContain('addYears(latest.date, 1)')
+    expect(engine).toContain('addYears(latest.date, CORE_TITER_REVIEW_YEARS)')
+    const table = stripComments(
+      readFileSync(
+        resolve(process.cwd(), '../backend/src/domain/health/vaccine/schedule-table.ts'),
+        'utf-8',
+      ),
+    )
+    expect(table).toContain('CORE_TITER_REVIEW_YEARS = 1')
     expect(engine).not.toContain('addYears(latest.date, 3)')
   })
 
@@ -313,21 +321,23 @@ describe('疫苗 · 口径修订（老板 2026-10-17 定）', () => {
 describe('疫苗 · 两个忽略原因的区别要说出来（老板 2026-10-16 拍板）', () => {
   const sheet = read('IgnoreSheet.vue')
 
-  it('🔴 两行小字必须写清"选哪个会连带停掉一整类"', () => {
+  it('🔴 两行小字必须写清"30 天"和"整类"', () => {
     /*
-     * 两个选项**行为不同**（保留）：这次先不打 = 只跳这一针；不再接种了 = 整类都停。
+     * 两个选项**行为不同**（2026-10-30 F5 起）：
+     *   这次先不打 = 这一类推迟 30 天，30 天后重新提醒；
+     *   不再接种了 = 这一类长期停（随时可恢复）。
      * 危险在于它们看起来只是"选个原因" —— 家长点「不再接种了」会以为只是这次不点，
      * 结果整个类别从计划里消失 ✗。所以这个区别必须写在脸上。
-     * ⚠️ 别把这两行改回含糊的话（例如"之后还会提醒"）。
+     * ⚠️ 别把这两行改回含糊的话（例如"只跳过这一针"）。
      */
-    expect(sheet).toContain('只跳过这一针，以后该打还会提醒')
+    expect(sheet).toContain('这一类推迟 30 天，30 天后重新提醒')
     expect(sheet).toContain('这一类都不再提醒（随时可以恢复）')
   })
 
-  it('行为本身不动：NOT_NOW 只跳这一针、STOPPED 停整类', () => {
-    // 这两个值不能变得更"一致" —— 决策记录 2026-10-16 明确保留差异
+  it('NOT_NOW 只推迟 30 天、STOPPED 长期停（不是同一个行为）', () => {
     expect(sheet).toContain("value: 'NOT_NOW'")
     expect(sheet).toContain("value: 'STOPPED'")
+    expect(sheet).not.toContain('这一针怎么办？')
   })
 });
 
@@ -678,9 +688,9 @@ describe('疫苗 · 抗体检测的入口位置（需求 R9：能记录、不主
     expect(editor).not.toContain('toggleTarget')
   })
 
-  it('需要它的那一处仍然明说：「下一针」展开里的「先做抗体检测」（核心那一针能省掉）', () => {
-    expect(card).toContain('先做抗体检测')
-    expect(card).toContain('v-if="next.titerable"')
+  it('需要它的那一处仍然明说：「下一针」里的「先测抗体」（核心那一针能省掉）', () => {
+    expect(card).toContain('先测抗体')
+    expect(card).toContain('v-if="canTiter"')
   })
 });
 
@@ -909,10 +919,10 @@ describe('疫苗 · 识别结果逐条核对（ScanConfirm，原型 E）', () =>
 describe('疫苗 · 忽略时选原因（IgnoreSheet，原型 J）', () => {
   const sheet = read('IgnoreSheet.vue')
 
-  it('两个选项：这次先不打 / 不再接种了（行为一致，只记原因）', () => {
+  it('两个选项：这次先不打（30 天）/ 不再接种了（长期）', () => {
     expect(sheet).toContain("value: 'NOT_NOW', label: '这次先不打'")
     expect(sheet).toContain("value: 'STOPPED', label: '不再接种了'")
-    expect(sheet).toContain('这一针怎么办？')
+    expect(sheet).toContain('这一类怎么安排？')
   })
 
   it('确认后交给上层（decision: SKIP + reason），本组件不管计划', () => {

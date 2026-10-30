@@ -36,6 +36,8 @@
         <view class="vk-records__body">
           <text class="vk-records__name">{{ entryTitle(entry) }}</text>
           <text v-if="entryNote(entry)" class="vk-records__note">{{ entryNote(entry) }}</text>
+          <!-- 2026-10-30（F6/#3）：只含部分核心病种 → 明说不能顶核心一针 -->
+          <text v-if="coverageNote(entry)" class="vk-records__warn">{{ coverageNote(entry) }}</text>
           <!-- 这一条为什么要改（后端算好的，以前只在后端算、界面不显示） -->
           <text v-if="conflictOf(entry)" class="vk-records__warn">
             {{ conflictOf(entry)!.reason }}
@@ -98,7 +100,11 @@ import type {
   VaccineTimelineEntry,
 } from '../../domain/vaccine/types'
 import { formatDateTime } from '../../utils/date'
-import { antibodyEntryTitle, formatFullDate } from '../../domain/vaccine/status'
+import {
+  antibodyEntryTitle,
+  formatFullDate,
+  partialCoreNote,
+} from '../../domain/vaccine/status'
 
 const props = withDefaults(defineProps<{
   records?: VaccineRecord[]
@@ -262,6 +268,12 @@ function entryNote(entry: VaccineTimelineEntry): string {
     return nextReview ? `下次评估 ${formatFullDate(nextReview)}` : ''
   }
   return String(entry.record.notes || '')
+}
+
+/** 2026-10-30（F6/#3）：单苗/二联只防一部分核心病种，提示不能顶核心一针 */
+function coverageNote(entry: VaccineTimelineEntry): string {
+  if (entry.type !== 'record') return ''
+  return partialCoreNote(entry.record)
 }
 
 /**

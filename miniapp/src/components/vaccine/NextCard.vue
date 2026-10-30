@@ -23,6 +23,13 @@
            这张卡只做"记录这一针"一件事；上传疫苗本在底部固定栏里（那里是全局入口）。 -->
       <view v-if="!expanded" class="vk-next__acts">
         <text class="vk-next__btn vk-next__btn--solid" @tap="onRecord">记录这一针</text>
+        <!-- 2026-10-30（F12/Q7）：20 周后“打 / 测抗体”是两个平等选择，
+             不能在收起状态只给“打”、把“测”藏进详情。 -->
+        <text
+          v-if="canTiter"
+          class="vk-next__btn vk-next__btn--solid"
+          @tap="onAntibody"
+        >先测抗体</text>
       </view>
     </template>
 
@@ -55,7 +62,7 @@
 
       <view class="vk-next__detail-acts">
         <text class="vk-next__act vk-next__act--primary" @tap="onRecord">记录这一针</text>
-        <text v-if="next.titerable" class="vk-next__act" @tap="onAntibody">先做抗体检测</text>
+        <text v-if="canTiter" class="vk-next__act vk-next__act--primary" @tap="onAntibody">先测抗体</text>
       </view>
       <view class="vk-next__detail-acts">
         <text class="vk-next__act vk-next__act--ghost" @tap="onIgnore">忽略这一针</text>
@@ -83,7 +90,7 @@
       <view v-for="item in ignoredItems" :key="item.key" class="vk-next__ignored-row">
         <view class="vk-next__ignored-body">
           <text class="vk-next__ignored-name">{{ item.kindLabel }}{{ item.label }}</text>
-          <text v-if="reasonLabel(item.reason)" class="vk-next__ignored-reason">{{ reasonLabel(item.reason) }}</text>
+          <text v-if="reasonLabel(item.reason)" class="vk-next__ignored-reason">{{ ignoredReasonText(item) }}</text>
         </view>
         <text class="vk-next__restore" @tap="onRestore(item.key)">恢复</text>
       </view>
@@ -104,11 +111,14 @@ import {
 const props = withDefaults(defineProps<{
   /** 下一针；没有任何待办时是 null */
   next?: VaccineStep | null
+  /** 狗狗当前周龄（Q7：≥20 周才给“测抗体”这个平等选择） */
+  ageWeeks?: number
   /** 已忽略的项（E 类：不再接种） */
   ignoredItems?: VaccineIgnoredStep[]
   ignoredCount?: number
 }>(), {
   next: null,
+  ageWeeks: 0,
   ignoredItems: () => [],
   ignoredCount: 0,
 })
@@ -124,6 +134,23 @@ const emit = defineEmits<{
 
 const expanded = ref(false)
 const ignoredOpen = ref(false)
+
+/** 2026-10-30（F12/Q7）：核心可测抗体，但只有 ≥20 周才把“测”摆成平等入口 */
+const canTiter = computed(
+  () => Boolean(props.next?.titerable) && (props.ageWeeks || 0) >= 20,
+)
+
+/**
+ * 2026-10-30（F5）：NOT_NOW 写清 30 天后哪天回来；STOPPED 不写日期。
+ * 抽成函数而不是在 <text> 里塞 <template>，小程序端更稳。
+ */
+function ignoredReasonText(item: VaccineIgnoredStep): string {
+  const reason = reasonLabel(item.reason)
+  if (item.reason === 'NOT_NOW' && item.snoozeUntil) {
+    return `${reason} · ${formatFullDate(item.snoozeUntil)} 再提醒`
+  }
+  return reason
+}
 
 /** 三种底色：待接种的亮绿 / 尽快补种的警示红 / 半年内没事的深绿（原型三套） */
 const tone = computed(() => {

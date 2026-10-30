@@ -31,6 +31,7 @@
       <template v-else>
       <NextCard
         :next="nextStep"
+        :age-weeks="planData?.ageWeeks || 0"
         :ignored-items="ignoredItems"
         :ignored-count="ignoredCount"
         @record="onRecordStep"

@@ -24,6 +24,7 @@ import type {
   AntibodyTest,
   VaccineKind,
   VaccineLayer,
+  VaccineRecord,
   VaccineStep,
   VaccineStepStatus,
 } from './types'
@@ -55,6 +56,11 @@ const STEP_STATUS_META: Record<
 
 /** 角标文案：后端给的优先（它知道"这一针为什么不用打"） */
 export function stepStatusLabel(step: VaccineStep): string {
+  /*
+   * 2026-10-30（F1/V1/V11）：抗体检测那一行的角标是"建议复查"，
+   * 不是"已完成"——"已完成"说的是检测这件事，家长要看的却是"下一步该复查"。
+   */
+  if (step?.titer) return '建议复查'
   const fromServer = String(step?.statusLabel || '').trim()
   if (fromServer) return fromServer
   const meta = STEP_STATUS_META[step?.status]
@@ -87,7 +93,7 @@ export function stepStatusTone(step: VaccineStep): VaccineStatusTone {
  */
 export function stepPlanTitle(step: VaccineStep): string {
   const kind = String(step?.kindShort || step?.kindLabel || '').trim()
-  const label = String(step?.label || '').trim()
+  const label = titerLabel(step)
   if (!kind) return label
   if (!label) return kind
   // "第 1 针 / 第 2 针…" 是序号，不是信息
@@ -159,9 +165,19 @@ function formatYearMonth(value: string | null | undefined): string {
  *   · 已完成（DONE）       → `2025/06/02` + `已完成`
  */
 export function stepWindowText(step: VaccineStep): { main: string; sub: string } {
-  // 被抗体检测替代的那一行：时间是**下次评估**，不是"已完成"（原型 F）
+  /*
+   * 被抗体检测替代的那一行：时间是**下次复查**，不是"已完成"（原型 F）。
+   * 2026-10-30（F1/V1）：复查日已经过了，左边写"尽快 / 已过"，不能再写
+   * "下次评估 2025/05" —— 那是把过去说成未来。
+   */
   if (step.titer) {
-    return { main: formatFullDate(step.titer.nextReviewAt), sub: '下次评估' }
+    if (step.status === 'OVERDUE') {
+      return { main: '尽快', sub: '已过' }
+    }
+    return {
+      main: formatFullDate(step.titer.nextReviewAt),
+      sub: '建议复查',
+    }
   }
   if (step.status === 'OVERDUE') {
     return {
@@ -197,7 +213,10 @@ export function stepWindowText(step: VaccineStep): { main: string; sub: string }
  */
 export function stepWhenText(step: VaccineStep): string {
   if (step.titer) {
-    return `建议下次评估 ${formatFullDate(step.titer.nextReviewAt)}`
+    if (step.status === 'OVERDUE') {
+      return `建议复查（原建议 ${formatYearMonth(step.titer.nextReviewAt)}，已过）`
+    }
+    return `建议复查 ${formatFullDate(step.titer.nextReviewAt)}`
   }
   if (step.status === 'OVERDUE') {
     if (step.missedWindowStart) {
@@ -243,6 +262,16 @@ export function stepRowNote(step: VaccineStep): { text: string; overdue: boolean
    *    家长一眼能看出这是**照抄报告**、不是我们判的（结果本身以兽医判读为准）。
    */
   if (step.titer) {
+    /*
+     * 2026-10-30（F1/V1）：复查日过了还写"这次不用打"，等于把"该复查"说成
+     * "不用管"；过期行改成"上次检测…，建议复查"。
+     */
+    if (step.status === 'OVERDUE') {
+      return {
+        text: `上次检测 ${formatFullDate(step.titer.testedAt)}，建议复查`,
+        overdue: true,
+      }
+    }
     return {
       text: `这次不用打：报告上写着抗体检测合格（${formatFullDate(step.titer.testedAt)}）`,
       overdue: false,
@@ -261,14 +290,46 @@ export function stepRowNote(step: VaccineStep): { text: string; overdue: boolean
 /** 计划行标题：`核心疫苗 · 第 1 针`（类别 · 步骤名） */
 export function stepTitle(step: VaccineStep): string {
   const kindLabel = String(step?.kindLabel || '').trim()
-  const label = String(step?.label || '').trim()
+  const label = titerLabel(step)
   if (kindLabel && label) return `${kindLabel} · ${label}`
   return kindLabel || label
 }
 
+/**
+ * 2026-10-30（F1/V1/V11）：抗体检测那一行后端叫"评估"，页面叫"抗体复查"。
+ * 只改显示，不动后端的 label（记录/契约仍用"评估"）。
+ */
+function titerLabel(step: VaccineStep): string {
+  const label = String(step?.label || '').trim()
+  return step?.titer && label === '评估' ? '抗体复查' : label
+}
+
+/** 核心三项的成分代码（后端 components 的机器值） */
+const CORE_COMPONENT_CODES = ['cdv', 'cav', 'cpv'] as const
+
+/**
+ * 2026-10-30（F6/#3）：只含部分核心病种的记录，页面要明说"不能顶核心一针"。
+ * 空字符串 = 不提示（完整核心 / 非核心 / 没成分）。
+ */
+export function partialCoreNote(
+  record: Pick<VaccineRecord, 'components' | 'componentLabels'>,
+): string {
+  const components = Array.isArray(record?.components) ? record.components : []
+  if (components.length === 0) return ''
+  const coreCount = CORE_COMPONENT_CODES.filter((code) =>
+    components.includes(code),
+  ).length
+  if (coreCount === 0 || coreCount === CORE_COMPONENT_CODES.length) return ''
+  const labels = Array.isArray(record?.componentLabels)
+    ? record.componentLabels.filter(Boolean)
+    : []
+  const names = labels.length > 0 ? labels.join('、') : '部分核心病种'
+  return `这针只防${names}，不能顶核心一针；建议补打或咨询兽医。`
+}
+
 /* ══ 忽略（"不做"）的原因 ═════════════════════════════════════════════════ */
 
-/** 两个选项行为一致，区别只是把"为什么"记下来（需求 R5） */
+/** NOT_NOW 只推迟 30 天；STOPPED 是长期停（两者都不是删计划，随时可恢复） */
 const IGNORE_REASON_LABELS: Record<string, string> = {
   NOT_NOW: '这次先不打',
   STOPPED: '不再接种了',

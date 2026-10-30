@@ -238,13 +238,13 @@ export class LabelV10Service {
     if (additiveItems.length > 0) {
       ctx.font = `bold ${mm(this.F.additive)}px "Chinese-Bold"`;
       const prefixWidth = ctx.measureText('添加剂组成：').width;
-      const addLayout = this.buildAdditiveLines(
+      const addLines = this.packAdditive(
         ctx,
         additiveItems,
-        contentW - prefixWidth,
+        contentW,
+        prefixWidth,
       );
-      const addRows = Math.max(1, Math.ceil(addLayout.lines.length / addLayout.columns));
-      h += mm(0.9) + addRows * lh(this.F.additive);
+      h += mm(0.9) + addLines.length * lh(this.F.additive);
     }
 
     // 保证值
@@ -253,12 +253,43 @@ export class LabelV10Service {
 
     // 烹饪
     h += mm(1.7) + mm(this.F.section * 1.2) + mm(1.0);
-    h += lh(this.F.warn);
-    h += mm(1.0) + lh(this.F.cookHead) + mm(0.6) + mm(0.9);
-    h += specs.length * (lh(this.F.cook) + mm(0.5));
-    h += mm(0.9) + lh(this.F.ban);
+    h += specs.length * (lh(this.F.cook) + mm(0.6));
+    h += mm(0.4) + lh(this.F.ban);
+    h += mm(1.2) + lh(this.F.warn);
 
-    return { height: h };
+    // 烹饪行是单行横排，超宽会被裁掉；这里换算成高度惩罚，让字号自动降档
+    const widest = this.cookingRowWidth(ctx, specs);
+    const overWidth = widest > contentW;
+
+    return { height: overWidth ? Number.POSITIVE_INFINITY : h };
+  }
+
+  private cookingRowWidth(
+    ctx: CanvasRenderingContext2D,
+    specs: Spec[],
+  ): number {
+    const methodNames = ['蒸', '炖', '低温慢煮'];
+    const methods: Array<'steam' | 'stew' | 'sousvide'> = [
+      'steam',
+      'stew',
+      'sousvide',
+    ];
+    let widest = 0;
+    for (const spec of specs) {
+      const times = this.cookingTimesFor(spec.packageSpecG);
+      ctx.font = `bold ${mm(this.F.cook)}px "Chinese-Bold"`;
+      let width = ctx.measureText(`${spec.packageSpecG}克/袋`).width;
+      ctx.font = `${mm(this.F.cook)}px "Chinese"`;
+      width += mm(12) - mm(4);
+      methods.forEach((key, index) => {
+        width += ctx.measureText(`${methodNames[index]} ${times[key]}`).width;
+        if (index < methods.length - 1) {
+          width += mm(2);
+        }
+      });
+      widest = Math.max(widest, width);
+    }
+    return widest;
   }
 
   private ingredientHeight(
@@ -337,13 +368,14 @@ export class LabelV10Service {
     ctx.textBaseline = 'top';
 
     // 品牌 + 狗名
-    ctx.font = `bold ${mm(this.F.brand)}px "Chinese-Bold"`;
-    ctx.fillText(labelData.brandName, left, y);
     if (labelData.dogName) {
-      ctx.textAlign = 'right';
-      ctx.fillText(labelData.dogName, right, y);
-      ctx.textAlign = 'left';
+      ctx.font = `bold ${mm(this.F.brand)}px "Chinese-Bold"`;
+      ctx.fillText(labelData.dogName, left, y);
     }
+    ctx.font = `${mm(this.F.brand)}px "Chinese"`;
+    ctx.textAlign = 'right';
+    ctx.fillText(labelData.brandName, right, y);
+    ctx.textAlign = 'left';
     y += lh(this.F.brand);
 
     // 食谱名
@@ -427,21 +459,15 @@ export class LabelV10Service {
       ctx.font = `${mm(this.F.additive)}px "Chinese"`;
 
       const availW = contentW - prefixW;
-      const addLayout = this.buildAdditiveLines(ctx, additiveItems, availW);
-      addLayout.lines.forEach((line, index) => {
-        const col = Math.min(
-          addLayout.columns - 1,
-          Math.floor(index / addLayout.perColumn),
-        );
-        const row = index - col * addLayout.perColumn;
+      const addLines = this.packAdditive(ctx, additiveItems, contentW, prefixW);
+      addLines.forEach((line, index) => {
         ctx.fillText(
           line,
-          left + prefixW + col * (addLayout.colW + mm(2)),
-          y + row * lh(this.F.additive),
+          index === 0 ? left + prefixW : left,
+          y + index * lh(this.F.additive),
         );
       });
-      const addRows = Math.max(1, Math.ceil(addLayout.lines.length / addLayout.columns));
-      y += addRows * lh(this.F.additive);
+      y += addLines.length * lh(this.F.additive);
     }
 
     // 保证值
@@ -475,30 +501,9 @@ export class LabelV10Service {
       contentW,
       lineHeight,
     );
-    ctx.font = `bold ${mm(this.F.warn)}px "Chinese-Bold"`;
-    ctx.fillStyle = '#111111';
-    ctx.fillText('本产品为生状态鲜食，必须要烹饪后才可饲喂！', left, y);
-    y += lh(this.F.warn) + mm(1.0);
-
-    // 三列表头 + 每规格一行
-    const labelColW = mm(15);
-    const methodColW = (contentW - labelColW) / 3;
-    const headers = ['蒸', '炖', '低温慢煮'];
-    ctx.font = `${mm(this.F.cookHead)}px "Chinese"`;
-    ctx.fillStyle = '#555555';
-    headers.forEach((text, index) => {
-      ctx.fillText(text, left + labelColW + index * methodColW, y + mm(0.4));
-    });
-    y += lh(this.F.cookHead) + mm(0.6);
-
-    // 表头下的细线，让三列关系一眼可见
-    ctx.strokeStyle = '#CCCCC8';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(left, y);
-    ctx.lineTo(left + contentW, y);
-    ctx.stroke();
-    y += mm(0.9);
+    const labelColW = mm(12);
+    const methods: Array<'steam' | 'stew' | 'sousvide'> = ['steam', 'stew', 'sousvide'];
+    const methodNames = ['蒸', '炖', '低温慢煮'];
 
     specs.forEach((spec) => {
       const times = this.cookingTimesFor(spec.packageSpecG);
@@ -507,20 +512,32 @@ export class LabelV10Service {
       ctx.fillText(`${spec.packageSpecG}克/袋`, left, y);
 
       ctx.font = `${mm(this.F.cook)}px "Chinese"`;
-      [
-        times.steam,
-        times.stew,
-        times.sousvide,
-      ].forEach((text, index) => {
-        ctx.fillText(text, left + labelColW + index * methodColW, y);
+      let x = left + labelColW;
+      methods.forEach((key, index) => {
+        const text = `${methodNames[index]} ${times[key]}`;
+        ctx.fillText(text, x, y);
+        x += ctx.measureText(text).width + mm(2);
       });
-      y += lh(this.F.cook) + mm(0.5);
+      y += lh(this.F.cook) + mm(0.6);
     });
 
     y += mm(0.4);
     ctx.font = `${mm(this.F.ban)}px "Chinese"`;
     ctx.fillStyle = '#111111';
     ctx.fillText('不建议微波、煎、炒等高温烹饪方式。', left, y);
+    y += lh(this.F.ban) + mm(1.2);
+
+    // 生食警示放在板块最下方
+    ctx.font = `bold ${mm(this.F.warn)}px "Chinese-Bold"`;
+    ctx.fillStyle = '#111111';
+    const warnLines = this.wrapByWidth(
+      ctx,
+      '本产品为生状态鲜食，必须要烹饪后才可饲喂！',
+      contentW,
+    );
+    warnLines.forEach((line, index) => {
+      ctx.fillText(line, left, y + index * lh(this.F.warn));
+    });
   }
 
   private drawSection(
@@ -581,39 +598,36 @@ export class LabelV10Service {
     return lines.length > 0 ? lines : [''];
   }
 
-  /** 添加剂按宽度换行，条目多时自动分两列 */
-  private buildAdditiveLines(
+  /**
+   * 添加剂换行：首行从「添加剂组成：」之后开始，续行回到左边距整行排。
+   * 这样续行能用满整行宽度，条目多时省下一两行。
+   */
+  private packAdditive(
     ctx: CanvasRenderingContext2D,
     items: string[],
-    maxWidth: number,
-  ): { columns: number; colW: number; perColumn: number; lines: string[] } {
+    contentW: number,
+    prefixW: number,
+  ): string[] {
     ctx.font = `${mm(this.F.additive)}px "Chinese"`;
-    // 恒为单列：两列时测量与绘制的行数容易不一致，先保证不重叠
-    const columns = 1;
-    const colW = (maxWidth - mm(2) * (columns - 1)) / columns;
-    const perColumn = Math.ceil(items.length / columns);
     const lines: string[] = [];
+    let current = '';
+    let firstLine = true;
 
-    for (let col = 0; col < columns; col++) {
-      const slice = items.slice(col * perColumn, (col + 1) * perColumn);
-      if (slice.length === 0) {
-        continue;
-      }
-      let current = '';
-      for (const item of slice) {
-        const candidate = current ? `${current}、${item}` : item;
-        if (current && ctx.measureText(candidate).width > colW) {
-          lines.push(current);
-          current = item;
-        } else {
-          current = candidate;
-        }
-      }
-      if (current) {
+    for (const item of items) {
+      const limit = firstLine ? contentW - prefixW : contentW;
+      const candidate = current ? `${current}、${item}` : item;
+      if (current && ctx.measureText(candidate).width > limit) {
         lines.push(current);
+        current = item;
+        firstLine = false;
+      } else {
+        current = candidate;
       }
     }
-    return { columns, colW, perColumn, lines };
+    if (current) {
+      lines.push(current);
+    }
+    return lines;
   }
 
   private valueRows(labelData: LabelDataDto): string[][] {
@@ -634,7 +648,7 @@ export class LabelV10Service {
       ],
     ];
     const energy = nutrition.energyDensityKcalPerKg
-      ? `能量 ${nutrition.energyDensityKcalPerKg} kcal/kg（计算值）`
+      ? `能量密度 ${nutrition.energyDensityKcalPerKg} kcal/kg（计算值）`
       : '';
     if (energy) {
       rows.push([energy, '', '']);

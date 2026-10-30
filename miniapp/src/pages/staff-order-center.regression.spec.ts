@@ -90,6 +90,14 @@ describe('staff order center · 食谱 / 狗狗入口', () => {
     expect(orderCenter).not.toContain('item.customerName')
     expect(orderCenter).not.toContain('item.customerPhone')
   })
+
+  it('★ 卡片上只留下单时间，并且用小字说明是「下单时间」', () => {
+    expect(orderCenter).toContain('class="time-label"')
+    expect(orderCenter).toContain('下单时间')
+    // 生产日/分装日不再放到卡片上
+    expect(orderCenter).not.toContain('item.scheduledDate')
+    expect(orderCenter).not.toContain("'分装'")
+  })
 })
 
 describe('staff order center · 两个只读页', () => {

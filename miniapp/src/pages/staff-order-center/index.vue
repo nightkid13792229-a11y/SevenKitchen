@@ -74,12 +74,12 @@
           <text v-if="item.subtypeLabel && item.type === 'FOOD'" class="mini-tag subtype">
             {{ item.subtypeLabel }}
           </text>
-          <text v-if="item.scheduledDate" class="mini-tag schedule">
-            {{ item.type === 'SUPPLEMENT' ? '分装' : '生产' }} {{ item.scheduledDate }}
-          </text>
         </view>
 
+        <!-- 只保留「下单时间」（老板 2026-10-30）：生产日/分装日不再放到卡片上，
+             一个小标签说明这是下单时间，免得跟别的日期混淆 -->
         <view class="order-bottom">
+          <text class="time-label">下单时间</text>
           <text class="meta">{{ formatTime(item.createdAt) }}</text>
           <text v-if="item.amountTotal !== null" class="amount">
             ¥{{ Number(item.amountTotal || 0).toFixed(2) }}
@@ -355,9 +355,10 @@ onMounted(() => load())
 .mini-tag.aftersale { background: #fdf6ec; color: #b88230; }
 .mini-tag.gift { background: #eaf5ec; color: #2e7d4f; }
 .mini-tag.subtype { background: #f2f3f5; color: #606266; }
-.mini-tag.schedule { background: #f2f3f5; color: #606266; }
 
 .order-bottom { display: flex; align-items: center; margin-top: 10rpx; }
+/* 小字说明：这是「下单时间」，不是生产日 */
+.time-label { margin-right: 8rpx; padding: 2rpx 10rpx; border-radius: 6rpx; background: #f2f3f5; color: #909399; font-size: 20rpx; }
 .meta { color: #909399; font-size: 22rpx; }
 .amount { margin-left: auto; color: #1e3a2f; font-size: 28rpx; font-weight: 600; }
 

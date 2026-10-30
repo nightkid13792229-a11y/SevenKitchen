@@ -184,7 +184,7 @@
           </text>
           <text v-else class="order-meta">{{ foodMetaText(order) }}</text>
 
-          <text v-if="order._orderType === 'custom' && customOrderSubtitle(order)" class="order-note">
+          <text v-if="order._orderType === 'custom' && customRefundText(order)" class="order-note">
             {{ customRefundText(order) }}
           </text>
 
@@ -1876,13 +1876,6 @@ function getRecipeName(order: FoodOrderRow): string {
   return order.firstItem.recipeSnapshot.name || '';
 }
 
-function getRecipeCoverImage(order: FoodOrderRow): string {
-  if (!order.firstItem || !order.firstItem.recipeSnapshot) {
-    return '';
-  }
-  return order.firstItem.recipeSnapshot.coverImageUrl || '';
-}
-
 function getTotalMeals(order: FoodOrderRow): number {
   if (!order.firstItem) {
     return 0;
@@ -1900,44 +1893,6 @@ function getMealWeight(order: FoodOrderRow): number {
   // ✅ 修复：直接返回用户配置的包装规格（每袋重量 = 每餐饭量）
   // 这是用户下单时确认并支付的数据，而不是系统推荐值
   return firstItem.packageSpecG || 0;
-}
-
-function formatPackagePlan(item: {
-  packagePlan?: Array<{ packageSpecG: number; packageCount: number }>;
-  packageSpecG?: number;
-  packageCount?: number;
-}): string {
-  const packagePlanRows = (item.packagePlan || [])
-    .map((row) => {
-      const packageSpecG = Number(row?.packageSpecG);
-      const packageCount = Number(row?.packageCount);
-      if (
-        !Number.isFinite(packageSpecG) ||
-        !Number.isFinite(packageCount) ||
-        packageSpecG <= 0 ||
-        packageCount <= 0
-      ) {
-        return '';
-      }
-      return `${packageSpecG}g×${packageCount}袋`;
-    })
-    .filter(Boolean);
-
-  if (packagePlanRows.length > 0) {
-    return packagePlanRows.join('，');
-  }
-
-  return `${item.packageSpecG || 0}g×${item.packageCount || 0}袋`;
-}
-
-function formatAddress(address?: { regionText?: string }): string {
-  if (!address || !address.regionText) {
-    return '';
-  }
-
-  // 只显示第一个地区（市级）
-  const regions = address.regionText.split(/\s+/);
-  return regions[0] || address.regionText;
 }
 
 /**
@@ -3060,6 +3015,7 @@ onUnmounted(() => {
 
 .filter-pill {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: baseline;
   gap: 4rpx;
   height: 60rpx;

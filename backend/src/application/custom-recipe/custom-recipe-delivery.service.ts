@@ -1007,11 +1007,19 @@ export class CustomRecipeDeliveryService {
    *   · 多份批次先查明细，老单份交付再查 `custom_recipe_delivery`；
    *   · 查不到就返回 null —— 调用方返回 404，**绝不回退最新版**。
    */
-  async resolveDeliveredRecipeVersion(input: {
-    orderNo: string;
-    recipeBusinessId: string;
-    customerId: string;
-  }): Promise<{ version: number; source: 'BATCH' | 'SINGLE' } | null> {
+  async resolveDeliveredRecipeVersion(
+    input: {
+      orderNo: string;
+      recipeBusinessId: string;
+      customerId: string;
+    },
+    /**
+     * 员工端（STAFF/ADMIN）从订单中心点「看食谱」时用得上（2026-10-30）：
+     * 员工不是这张单的顾客，`customerId` 天然对不上。
+     * 放开归属校验**只对员工**生效，且入口本身已被 StaffGuard 挡过。
+     */
+    options: { staffBypass?: boolean } = {},
+  ): Promise<{ version: number; source: 'BATCH' | 'SINGLE' } | null> {
     const orderNo = String(input.orderNo ?? '').trim();
     const recipeBusinessId = String(input.recipeBusinessId ?? '').trim();
     const customerId = String(input.customerId ?? '').trim();
@@ -1021,7 +1029,8 @@ export class CustomRecipeDeliveryService {
       where: { orderId: orderNo },
       select: { id: true, customerId: true },
     });
-    if (!order || order.customerId !== customerId) return null;
+    if (!order) return null;
+    if (!options.staffBypass && order.customerId !== customerId) return null;
 
     const batchItem = await this.prisma.customRecipeDeliveryItem.findFirst({
       where: {

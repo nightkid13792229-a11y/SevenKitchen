@@ -638,11 +638,20 @@ export class RecipesController {
       if (!user || !customerId) return null;
 
       const delivered =
-        await this.deliveryService.resolveDeliveredRecipeVersion({
-          orderNo: pinnedOrderNo,
-          recipeBusinessId: id,
-          customerId,
-        });
+        await this.deliveryService.resolveDeliveredRecipeVersion(
+          {
+            orderNo: pinnedOrderNo,
+            recipeBusinessId: id,
+            customerId,
+          },
+          /**
+           * 员工从后台「订单中心」点进来时，他不是这张单的顾客，
+           * 归属校验必然失败。只对 STAFF/ADMIN 放开（2026-10-30）。
+           */
+          {
+            staffBypass: user.role === 'STAFF' || user.role === 'ADMIN',
+          },
+        );
       if (!delivered) return null;
 
       return this.recipeRepository.findByIdAndVersion(

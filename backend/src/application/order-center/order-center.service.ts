@@ -50,6 +50,19 @@ export interface OrderCenterItem {
   completedAt: string | null;
   hasOpenAftersale: boolean;
   aftersaleLabel: string | null;
+  /**
+   * 员工端「看食谱 / 看狗狗」的跳转依据（2026-10-30）。
+   *
+   * 为什么放在读模型里：员工在列表上就要能一键进详情，
+   * 不能让小程序再拿订单号去换一次 id（多一次请求、还容易对不上）。
+   * 三个字段都可能为空，前端只在有值时才显示入口，**不置灰**。
+   */
+  /** 鲜食单的订单项 id：取「下单那一版」的食谱快照要靠它 */
+  itemId: string | null;
+  /** 可打开的食谱 id；空 = 这单没有可看的食谱（多数补剂单） */
+  recipeId: string | null;
+  /** 可打开的狗狗档案 id；空 = 这单没关联狗 */
+  dogId: string | null;
 }
 
 const GROUP_LABELS: Record<UnifiedStatusGroup, string> = {
@@ -72,6 +85,69 @@ const GROUP_LABELS: Record<UnifiedStatusGroup, string> = {
 @Injectable()
 export class OrderCenterService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * 员工端「下单那一版食谱」快照（只读，2026-10-30）。
+   *
+   * 为什么不复用顾客侧的 `/orders/items/:itemId/snapshot`：
+   *   · 那个接口**没有鉴权**；
+   *   · 它是遍历所有订单去找 item（代码里自己标了 inefficient）。
+   *
+   * 员工入口的输入就是 itemId，直接按主键取一条最快；
+   * 顺手把订单号 / 顾客 / 狗狗 / 下单时间一起带出来，
+   * 小程序只发一次请求就能把整页渲染完。
+   *
+   * 这里是**历史快照**：库存、价格、配方都是下单那一刻的，
+   * 不代表当前最新配方 —— 页面必须把这句话写给员工看。
+   */
+  async getItemSnapshot(itemId: string) {
+    const item = await this.prisma.orderItem.findUnique({
+      where: { id: itemId },
+      select: {
+        id: true,
+        orderId: true,
+        dogId: true,
+        quantityG: true,
+        packageCount: true,
+        packageSpecG: true,
+        dailyIntakeG: true,
+        recipeSnapshot: true,
+        order: {
+          select: {
+            orderNo: true,
+            createdAt: true,
+            targetProductionDate: true,
+            customer: { select: { nickname: true } },
+          },
+        },
+      },
+    });
+    if (!item) return null;
+
+    const dog = item.dogId
+      ? await this.prisma.dog.findUnique({
+          where: { id: item.dogId },
+          select: { id: true, name: true },
+        })
+      : null;
+
+    return {
+      itemId: item.id,
+      orderId: item.orderId,
+      orderNo: item.order.orderNo,
+      customerName: item.order.customer?.nickname ?? null,
+      createdAt: item.order.createdAt.toISOString(),
+      targetProductionDate: item.order.targetProductionDate
+        ? TimezoneUtil.shanghaiDateKey(item.order.targetProductionDate)
+        : null,
+      dog: dog ? { id: dog.id, name: dog.name } : null,
+      quantityG: item.quantityG,
+      packageCount: item.packageCount,
+      packageSpecG: item.packageSpecG,
+      dailyIntakeG: item.dailyIntakeG,
+      snapshot: item.recipeSnapshot,
+    };
+  }
 
   async list(query: OrderCenterQuery, actor: { role?: string } = {}) {
     const page = Math.max(1, Number(query.page) || 1);
@@ -96,6 +172,18 @@ export class OrderCenterService {
     const supplementOpenIds = await this.resolveSupplementOpenCaseIds(
       query.aftersale,
     );
+    /**
+     * 定制的售后走的是**自己那张表**（`custom_recipe_aftersale`：改稿/退款），
+     * 不是鲜食的订单状态、也不是补剂的售后单。
+     *
+     * 2026-10-30 之前这里直接返回空 → 「只看售后」一开，
+     * 定制的售后单会**静默消失**，员工会以为没有单子。现在补上。
+     *
+     * ⚠️ 无论有没有开「只看售后」都要查：卡片上的「售后处理中」标记
+     * 跟筛选是两回事（和补剂的标记口径保持一致）。
+     */
+    const customOpenCaseMap = await this.resolveCustomOpenCaseMap();
+    const customOpenIds = Array.from(customOpenCaseMap.keys());
 
     const [
       foodRows,
@@ -138,6 +226,18 @@ export class OrderCenterService {
               completedAt: true,
               targetProductionDate: true,
               shippingAddressSnapshot: true,
+              dogId: true,
+              /**
+               * 为什么要带 items：鲜食单的「下单那一版食谱」只存在
+               * `order_item.recipe_snapshot` 里，没有别的表能还原。
+               * 一次下单只有一项（下单链路写死了单商品），取第一条即可。
+               */
+              items: {
+                // dogId 也带上：订单级 dogId 理论上够用，但订单项这一份才是
+                // 「这道食谱是给哪只狗的」，两边不一致时以订单项为准
+                select: { id: true, dogId: true, recipeSnapshot: true },
+                take: 1,
+              },
             },
             orderBy: { createdAt: 'desc' },
             take: fetchSize,
@@ -161,7 +261,13 @@ export class OrderCenterService {
                     ],
                   }
                 : {}),
-              ...(query.aftersale ? { id: { in: [] } } : {}),
+              ...(query.aftersale
+                ? {
+                    id: {
+                      in: customOpenIds.length ? customOpenIds : ['__none__'],
+                    },
+                  }
+                : {}),
               ...(onlyGift ? { isGift: true } : {}),
             },
             select: {
@@ -176,6 +282,9 @@ export class OrderCenterService {
               cancelledAt: true,
               /** 赠送单标记（2026-10-30）：列表要标出来，否则 ¥0 像价格异常 */
               isGift: true,
+              /** 交付后的食谱（未交付为 null）：员工端「看食谱」靠它 */
+              recipeId: true,
+              dogId: true,
             },
             orderBy: { createdAt: 'desc' },
             take: fetchSize,
@@ -223,6 +332,9 @@ export class OrderCenterService {
               shippedAt: true,
               completedAt: true,
               shippingAddressSnapshot: true,
+              /** 补剂单可能从食谱/制作单带过来；为空就是纯补剂单，前端不显示入口 */
+              recipeId: true,
+              dogId: true,
             },
             orderBy: { createdAt: 'desc' },
             take: fetchSize,
@@ -235,7 +347,11 @@ export class OrderCenterService {
         : 0,
       want('CUSTOM_RECIPE')
         ? this.prisma.customRecipeOrder.count({
-            where: this.customCountWhere(query, keywordUserIds),
+            where: this.customCountWhere(
+              query,
+              keywordUserIds,
+              customOpenIds,
+            ),
           })
         : 0,
       want('SUPPLEMENT')
@@ -281,7 +397,9 @@ export class OrderCenterService {
 
     const items: OrderCenterItem[] = [
       ...foodRows.map((row) => this.mapFood(row, userMap)),
-      ...customRows.map((row) => this.mapCustom(row, userMap)),
+      ...customRows.map((row) =>
+        this.mapCustom(row, userMap, customOpenCaseMap),
+      ),
       ...supplementRows.map((row) =>
         this.mapSupplement(row, userMap, openCaseMap),
       ),
@@ -377,8 +495,27 @@ export class OrderCenterService {
     return Array.from(new Set(rows.map((row) => row.orderId)));
   }
 
+  /**
+   * 定制售后的未完结单：orderId → 状态。
+   *
+   * `custom_recipe_aftersale` 的未完结态是 PENDING / ACCEPTED / PROCESSING
+   * （RESOLVED、REJECTED 已结束，不该再出现在「只看售后」里）。
+   */
+  private async resolveCustomOpenCaseMap(): Promise<Map<string, string>> {
+    const rows = await this.prisma.customRecipeAftersale.findMany({
+      where: { status: { in: ['PENDING', 'ACCEPTED', 'PROCESSING'] } },
+      select: { orderId: true, status: true },
+    });
+    const map = new Map<string, string>();
+    for (const row of rows) map.set(row.orderId, row.status);
+    return map;
+  }
+
   private mapFood(row: any, users: Map<string, any>): OrderCenterItem {
     const group = this.foodGroup(row.status, row.shippedAt);
+    /** 鲜食单一项一道食谱；下单链路写死单商品，这里取第一条 */
+    const firstItem = Array.isArray(row.items) ? row.items[0] : null;
+    const snapshot = (firstItem?.recipeSnapshot ?? null) as any;
     return this.baseItem({
       type: 'FOOD',
       id: row.id,
@@ -400,11 +537,20 @@ export class OrderCenterService {
       amount: Number(row.amountTotal ?? 0),
       hasOpenAftersale: row.status === 'AFTERSALE',
       aftersaleLabel: row.status === 'AFTERSALE' ? '售后中' : null,
+      itemId: firstItem?.id ?? null,
+      /** 注意：鲜食要看的是 `recipeSnapshot`（下单那一版），不是这条 recipeId */
+      recipeId: snapshot?.id ?? null,
+      dogId: row.dogId ?? firstItem?.dogId ?? null,
     });
   }
 
-  private mapCustom(row: any, users: Map<string, any>): OrderCenterItem {
+  private mapCustom(
+    row: any,
+    users: Map<string, any>,
+    openCaseMap: Map<string, string>,
+  ): OrderCenterItem {
     const group = this.customGroup(row.status);
+    const openStatus = openCaseMap.get(row.id);
     return this.baseItem({
       type: 'CUSTOM_RECIPE',
       id: row.id,
@@ -418,8 +564,19 @@ export class OrderCenterService {
       scheduledDate: null,
       amount: Number(row.amount ?? 0),
       isGift: row.isGift === true,
-      hasOpenAftersale: false,
-      aftersaleLabel: null,
+      hasOpenAftersale: Boolean(openStatus),
+      aftersaleLabel: openStatus
+        ? openStatus === 'PENDING'
+          ? '售后待处理'
+          : '售后处理中'
+        : null,
+      itemId: null,
+      /**
+       * 定制单下单时还没有食谱（营养师下单后才设计），
+       * 所以这里只可能是**交付后**的食谱；未交付为 null，前端不显示入口。
+       */
+      recipeId: row.recipeId ?? null,
+      dogId: row.dogId ?? null,
     });
   }
 
@@ -452,6 +609,9 @@ export class OrderCenterService {
         : row.status === 'AFTERSALE'
           ? '售后中'
           : null,
+      itemId: null,
+      recipeId: row.recipeId ?? null,
+      dogId: row.dogId ?? null,
     });
   }
 
@@ -470,6 +630,9 @@ export class OrderCenterService {
     hasOpenAftersale: boolean;
     aftersaleLabel: string | null;
     isGift?: boolean;
+    itemId: string | null;
+    recipeId: string | null;
+    dogId: string | null;
   }): OrderCenterItem {
     const user = input.users.get(input.userId);
     const address = (input.row.shippingAddressSnapshot ?? {}) as Record<
@@ -503,6 +666,9 @@ export class OrderCenterService {
         null,
       hasOpenAftersale: input.hasOpenAftersale,
       aftersaleLabel: input.aftersaleLabel,
+      itemId: input.itemId,
+      recipeId: input.recipeId,
+      dogId: input.dogId,
     };
   }
 
@@ -635,6 +801,7 @@ export class OrderCenterService {
   private customCountWhere(
     query: OrderCenterQuery,
     userIds: string[] | null,
+    openIds: string[],
   ) {
     return {
       ...this.buildDateWhere(query),
@@ -662,7 +829,9 @@ export class OrderCenterService {
             ],
           }
         : {}),
-      ...(query.aftersale ? { id: { in: [] } } : {}),
+      ...(query.aftersale
+        ? { id: { in: openIds.length ? openIds : ['__none__'] } }
+        : {}),
       // 总数必须跟着「只看赠送单」一起收窄，否则页码会按 7 条算
       ...(query.gift ? { isGift: true } : {}),
     };

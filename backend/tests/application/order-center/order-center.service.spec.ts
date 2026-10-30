@@ -14,6 +14,28 @@ function foodRow(overrides: any = {}) {
     completedAt: null,
     targetProductionDate: new Date('2026-10-21T00:00:00Z'),
     shippingAddressSnapshot: null,
+    dogId: 'd1',
+    items: [
+      { id: 'f1-item', recipeSnapshot: { id: 'r1', name: '鸡肉餐' } },
+    ],
+    ...overrides,
+  };
+}
+
+function customRow(overrides: any = {}) {
+  return {
+    id: 'c1',
+    orderId: 'CR-1',
+    customerId: 'u1',
+    status: 'IN_PROGRESS',
+    amount: 299,
+    createdAt: new Date('2026-10-21T00:00:00Z'),
+    paymentConfirmedAt: new Date('2026-10-21T00:10:00Z'),
+    deliveredAt: null,
+    cancelledAt: null,
+    isGift: false,
+    recipeId: null,
+    dogId: 'd1',
     ...overrides,
   };
 }
@@ -41,6 +63,9 @@ describe('OrderCenterService', () => {
     customRecipeOrder: { findMany: jest.fn(), count: jest.fn() },
     supplementOrder: { findMany: jest.fn(), count: jest.fn() },
     aftersaleCase: { findMany: jest.fn() },
+    customRecipeAftersale: { findMany: jest.fn() },
+    orderItem: { findUnique: jest.fn() },
+    dog: { findUnique: jest.fn() },
     user: { findMany: jest.fn() },
   };
   let service: OrderCenterService;
@@ -54,6 +79,7 @@ describe('OrderCenterService', () => {
     prisma.supplementOrder.findMany.mockResolvedValue([supplementRow()]);
     prisma.supplementOrder.count.mockResolvedValue(1);
     prisma.aftersaleCase.findMany.mockResolvedValue([]);
+    prisma.customRecipeAftersale.findMany.mockResolvedValue([]);
     prisma.user.findMany.mockResolvedValue([
       { id: 'u1', nickname: '张三', phone: '13800000000', role: 'CUSTOMER' },
     ]);
@@ -144,5 +170,99 @@ describe('OrderCenterService', () => {
     const result = await service.list({ pageSize: 20 });
 
     expect(result.items.every((item) => item.customerRole === null)).toBe(true);
+  });
+
+  it('★ 鲜食单带出 itemId / 下单快照的食谱 id / 狗狗 id', async () => {
+    const result = await service.list({ pageSize: 20 });
+    const food = result.items.find((item) => item.type === 'FOOD');
+
+    expect(food?.itemId).toBe('f1-item');
+    expect(food?.recipeId).toBe('r1');
+    expect(food?.dogId).toBe('d1');
+  });
+
+  it('★ 补剂单没关联食谱/狗狗时两个 id 都是 null（前端就不显示入口）', async () => {
+    const result = await service.list({ pageSize: 20 });
+    const supplement = result.items.find((item) => item.type === 'SUPPLEMENT');
+
+    expect(supplement?.recipeId).toBeNull();
+    expect(supplement?.dogId).toBeNull();
+  });
+
+  it('★ 定制单交付前没有食谱可看，交付后才有', async () => {
+    prisma.customRecipeOrder.findMany.mockResolvedValue([customRow()]);
+    prisma.customRecipeOrder.count.mockResolvedValue(1);
+
+    const before = await service.list({ pageSize: 20 });
+    expect(
+      before.items.find((item) => item.type === 'CUSTOM_RECIPE')?.recipeId,
+    ).toBeNull();
+
+    prisma.customRecipeOrder.findMany.mockResolvedValue([
+      customRow({ recipeId: 'r9' }),
+    ]);
+    const after = await service.list({ pageSize: 20 });
+    expect(
+      after.items.find((item) => item.type === 'CUSTOM_RECIPE')?.recipeId,
+    ).toBe('r9');
+  });
+
+  it('★ 只看售后时，定制的售后单必须被查出来（以前是 id in []，直接漏掉）', async () => {
+    prisma.customRecipeAftersale.findMany.mockResolvedValue([
+      { orderId: 'c1', status: 'PENDING' },
+    ]);
+
+    await service.list({ pageSize: 20, aftersale: true });
+
+    const customWhere = prisma.customRecipeOrder.findMany.mock.calls[0][0].where;
+    expect(customWhere.id).toEqual({ in: ['c1'] });
+  });
+
+  it('★ 定制售后未完结时，卡片上要有「售后处理中」标记', async () => {
+    prisma.customRecipeOrder.findMany.mockResolvedValue([customRow()]);
+    prisma.customRecipeOrder.count.mockResolvedValue(1);
+    prisma.customRecipeAftersale.findMany.mockResolvedValue([
+      { orderId: 'c1', status: 'PROCESSING' },
+    ]);
+
+    const result = await service.list({ pageSize: 20 });
+    const custom = result.items.find((item) => item.type === 'CUSTOM_RECIPE');
+
+    expect(custom?.hasOpenAftersale).toBe(true);
+    expect(custom?.aftersaleLabel).toBe('售后处理中');
+  });
+
+  it('★ 员工端食谱快照按 itemId 直查，带订单与狗狗信息', async () => {
+    prisma.orderItem.findUnique.mockResolvedValue({
+      id: 'f1-item',
+      orderId: 'f1',
+      dogId: 'd1',
+      quantityG: 1400,
+      packageCount: 14,
+      packageSpecG: 100,
+      dailyIntakeG: 200,
+      recipeSnapshot: { id: 'r1', name: '鸡肉餐', version: 3, items: [] },
+      order: {
+        orderNo: 'SK-1',
+        createdAt: new Date('2026-10-30T06:30:00Z'),
+        targetProductionDate: new Date('2026-10-31T00:00:00Z'),
+        customer: { nickname: '张三' },
+      },
+    });
+    prisma.dog.findUnique.mockResolvedValue({ id: 'd1', name: '旺财' });
+
+    const data = await service.getItemSnapshot('f1-item');
+
+    expect(data?.orderNo).toBe('SK-1');
+    expect(data?.customerName).toBe('张三');
+    expect(data?.dog).toEqual({ id: 'd1', name: '旺财' });
+    expect(data?.targetProductionDate).toBe('2026-10-31');
+    expect((data?.snapshot as any).version).toBe(3);
+  });
+
+  it('itemId 不存在时返回 null，不抛异常', async () => {
+    prisma.orderItem.findUnique.mockResolvedValue(null);
+
+    await expect(service.getItemSnapshot('nope')).resolves.toBeNull();
   });
 });

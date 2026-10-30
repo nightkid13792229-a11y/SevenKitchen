@@ -17,6 +17,18 @@
       }
     },
     {
+      "path": "pages/staff-recipe-snapshot/index",
+      "style": {
+        "navigationBarTitleText": "食谱快照"
+      }
+    },
+    {
+      "path": "pages/staff-dog-profile/index",
+      "style": {
+        "navigationBarTitleText": "狗狗档案"
+      }
+    },
+    {
       "path": "pages/me/index",
       "style": {
         "navigationBarTitleText": "我的"

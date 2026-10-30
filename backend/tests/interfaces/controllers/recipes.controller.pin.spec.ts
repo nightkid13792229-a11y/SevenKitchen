@@ -57,16 +57,42 @@ describe('RecipesController.getAccessibleRecipe · delivered version pin', () =>
     );
 
     expect(result).toBe(pinnedRecipe);
-    expect(deliveryService.resolveDeliveredRecipeVersion).toHaveBeenCalledWith({
-      orderNo: 'CR202610230224',
-      recipeBusinessId: 'recipe-biz',
-      customerId: 'user-1',
-    });
+    expect(deliveryService.resolveDeliveredRecipeVersion).toHaveBeenCalledWith(
+      {
+        orderNo: 'CR202610230224',
+        recipeBusinessId: 'recipe-biz',
+        customerId: 'user-1',
+      },
+      // 顾客身份进来时不放开归属校验
+      { staffBypass: false },
+    );
     expect(recipeRepository.findByIdAndVersion).toHaveBeenCalledWith(
       'recipe-biz',
       2,
     );
     expect(recipeRepository.findById).not.toHaveBeenCalled();
+  });
+
+  it('★ 员工从订单中心进来时放开归属校验，才能看到顾客那张交付版本', async () => {
+    const { controller, deliveryService, req } = build({
+      latest: { id: 'recipe-biz', version: 5 },
+      pinned: pinnedRecipe,
+      delivered: { version: 2, source: 'BATCH' },
+    });
+    req.user = { userId: 'staff-1', customerId: 'staff-1', role: 'STAFF' } as any;
+
+    const result = await (controller as any).getAccessibleRecipe(
+      'recipe-biz',
+      undefined,
+      req,
+      'CR202610230224',
+    );
+
+    expect(result).toBe(pinnedRecipe);
+    expect(deliveryService.resolveDeliveredRecipeVersion).toHaveBeenCalledWith(
+      expect.objectContaining({ customerId: 'staff-1' }),
+      { staffBypass: true },
+    );
   });
 
   it('returns null instead of falling back to latest when no delivery matches', async () => {

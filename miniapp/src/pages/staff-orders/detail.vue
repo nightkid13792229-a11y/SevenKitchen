@@ -6,140 +6,148 @@
     </view>
 
     <!-- 订单详情内容 -->
-    <view v-else-if="order" class="detail-content">
-      <!-- 顶部状态栏 -->
-      <view class="status-header" :style="{ background: statusGradient }">
-        <view class="status-info">
-          <text class="status-text">{{ getStatusText(order) }}</text>
-          <text class="order-id-text">订单 {{ displayOrderNo }}</text>
-        </view>
-      </view>
-
-      <!-- 订单信息 -->
-      <view class="section">
-        <view class="section-title">📦 订单信息</view>
-        <view class="info-list">
-          <view class="info-item">
-            <text class="info-label">订单号</text>
-            <view class="info-value-with-action">
-              <text class="info-value">{{ displayOrderNo }}</text>
-              <text class="action-link" @tap="copyOrderId">复制</text>
+    <view v-else-if="order" class="detail-content" :class="{ 'is-voided': isCancelled }">
+      <!-- 顶部：状态 + 四段进度（2026-10-30 改版） -->
+      <view class="hero" :class="heroTone">
+        <view class="hero-row">
+          <view class="hero-main">
+            <text class="hero-status">{{ getStatusText(order) }}</text>
+            <text class="hero-sub">{{ heroSubline }}</text>
+            <view class="hero-no-row">
+              <text class="hero-no">{{ displayOrderNo }}</text>
+              <text class="hero-copy" @tap="copyOrderId">复制</text>
             </view>
           </view>
-          <view class="info-item">
-            <text class="info-label">订单状态</text>
-            <text class="info-value" :style="{ color: getStatusColor(order) }">
-              {{ getStatusText(order) }}
-            </text>
-          </view>
-          <view class="info-item">
-            <text class="info-label">创建时间</text>
-            <text class="info-value">{{ formatDateTime(order.createdAt) }}</text>
-          </view>
-          <view class="info-item">
-            <text class="info-label">支付方式</text>
-            <text class="info-value">{{ getPaymentMethod(order.paymentMethod) }}</text>
+          <text v-if="heroTag" class="hero-tag">{{ heroTag }}</text>
+        </view>
+
+        <view class="steps">
+          <view
+            v-for="(step, index) in progressSteps"
+            :key="index"
+            class="step"
+            :class="{ done: step.done, current: step.current }"
+          >
+            <view class="step-line"></view>
+            <view class="step-dot"></view>
+            <text class="step-name">{{ step.name }}</text>
+            <text class="step-time">{{ step.time }}</text>
           </view>
         </view>
       </view>
 
-      <!-- 客户信息 -->
-      <view class="section" v-if="orderCustomerName || orderCustomerPhone">
-        <view class="section-title">👤 客户信息</view>
-        <view class="info-list">
-          <view class="info-item">
-            <text class="info-label">姓名</text>
-            <text class="info-value">{{ orderCustomerName || '未记录客户' }}</text>
-          </view>
-          <view class="info-item">
-            <text class="info-label">手机</text>
-            <text class="info-value">{{ formatPhoneForStaffOrder(orderCustomerPhone) }}</text>
-            <text class="action-link" @tap="copyPhone">复制</text>
-          </view>
+      <!-- 主操作：贴着状态放，不用滑到最底下才够得着 -->
+      <view v-if="primaryAction || canAdjustAmount" class="action-bar">
+        <button
+          v-if="primaryAction"
+          class="action-btn primary"
+          @tap="primaryAction.run"
+        >
+          {{ primaryAction.label }}
+        </button>
+        <button v-if="canAdjustAmount" class="action-btn ghost" @tap="openAmountPanel">改价</button>
+      </view>
+      <view v-else-if="stageHint" class="stage-hint">{{ stageHint }}</view>
+
+      <!-- 售后信息：以前只有顶部变红，为什么退、到哪一步都看不到 -->
+      <view v-if="isAftersale" class="aftersale-card">
+        <view class="aftersale-head">
+          <text class="aftersale-title">售后信息</text>
+          <text class="aftersale-state" :class="{ settled: refundSucceeded }">
+            {{ refundSucceeded ? '已退款' : '处理中' }}
+          </text>
+        </view>
+        <view class="aftersale-row">
+          <text class="aftersale-k">类型</text>
+          <text class="aftersale-v">{{ aftersaleTypeLabel }}</text>
+        </view>
+        <view v-if="order.aftersaleReason" class="aftersale-row">
+          <text class="aftersale-k">理由</text>
+          <text class="aftersale-v">{{ order.aftersaleReason }}</text>
+        </view>
+        <view v-if="order.aftersaleSince" class="aftersale-row">
+          <text class="aftersale-k">提交</text>
+          <text class="aftersale-v">{{ formatDateTime(order.aftersaleSince) }}</text>
+        </view>
+        <view v-if="refundRecordSummary" class="aftersale-row">
+          <text class="aftersale-k">退款</text>
+          <text class="aftersale-v">{{ refundRecordSummary }}</text>
         </view>
       </view>
 
-      <!-- 狗狗信息 -->
-      <view class="section" v-if="firstOrderItem && firstOrderItem.dog">
-        <view class="section-title">🐕 狗狗信息</view>
-        <view class="info-list">
-          <view class="info-item">
-            <text class="info-label">名称</text>
-            <text class="info-value">{{ firstOrderItem.dog.name }}</text>
+      <!-- 已取消：整单作废，别照着做 -->
+      <view v-if="isCancelled" class="voided-bar">
+        <text class="voided-title">本单已取消</text>
+        <text class="voided-reason">{{ order.cancellationReason || '未填写取消原因' }}</text>
+      </view>
+
+      <!-- 物流：发了货才有，客服随时能念给顾客 -->
+      <view v-if="shippingInfoVisible" class="card">
+        <view class="card-title">物流</view>
+        <view class="ship-row">
+          <view class="ship-main">
+            <text class="ship-carrier">{{ carrierLabel }}</text>
+            <text class="ship-no">{{ order.trackingNumber }}</text>
           </view>
-          <view class="info-item">
-            <text class="info-label">品种</text>
-            <text class="info-value">{{ firstOrderItem.dog.breedName || '未知' }}</text>
-          </view>
-          <view class="info-item">
-            <text class="info-label">体重</text>
-            <text class="info-value">{{ firstOrderItem.dog.weightKg || '--' }}kg</text>
-          </view>
-          <view class="info-item">
-            <text class="info-label">每日餐数</text>
-            <text class="info-value">{{ firstOrderItem.dog.mealsPerDay || '--' }}餐</text>
-          </view>
+          <text class="ship-copy" @tap="copyTrackingNumber">复制单号</text>
         </view>
-        <view class="inline-actions">
-          <button class="address-action-btn secondary" @tap="editDogProfile">编辑狗狗档案</button>
-          <button class="address-action-btn secondary" @tap="openDogSwitcher">切换狗狗</button>
+        <view class="ship-meta">
+          <text v-if="order.shippedAt">{{ formatDateTime(order.shippedAt) }} 已交快递</text>
+          <text v-else-if="estimatedShippingText">预计 {{ estimatedShippingText }} 发货</text>
         </view>
       </view>
 
-      <!-- 商品详情 -->
-      <view class="section" v-if="firstOrderItem">
-        <view class="section-title">🍽️ 商品详情</view>
-        <view class="product-card">
+      <!-- 商品与用量 -->
+      <view v-if="firstOrderItem" class="card" :class="{ 'card-voided': isCancelled }">
+        <view class="card-title">商品与用量</view>
+        <view class="product">
           <image
             v-if="firstOrderItem.recipeSnapshot && firstOrderItem.recipeSnapshot.coverImageUrl"
             class="product-cover"
             :src="firstOrderItem.recipeSnapshot.coverImageUrl"
             mode="aspectFill"
           />
+          <view v-else class="product-cover placeholder">菜</view>
           <view class="product-info">
             <text class="product-name">{{ firstOrderItem.recipeSnapshot?.name || '自定义食谱' }}</text>
-            <view class="product-specs">
-              <text class="spec-item">分装明细: {{ formatPackagePlan(firstOrderItem) }}</text>
-              <text class="spec-item">总净重: {{ formatGrams(firstOrderItem.quantityG) }}</text>
-              <text class="spec-item" v-if="firstOrderItem.dailyIntakeG">
-                每日摄入: {{ formatGrams(firstOrderItem.dailyIntakeG) }}
+            <view class="product-for">
+              <text>{{ dogLine }}</text>
+              <text v-if="!isCancelled" class="product-link" @tap="openDogSwitcher">换</text>
+            </view>
+            <view class="specs">
+              <text class="spec">{{ formatPackagePlan(firstOrderItem) }}</text>
+              <text v-if="firstOrderItem.dailyIntakeG" class="spec">
+                每日 {{ formatGrams(firstOrderItem.dailyIntakeG) }}
               </text>
             </view>
           </view>
         </view>
-        <view class="inline-actions" v-if="canEditPackagePlan && firstOrderItem.id">
-          <button class="address-action-btn secondary" @tap="openPackagePanel(firstOrderItem)">修改订单规格</button>
-        </view>
-      </view>
 
-      <!-- 制作用量 -->
-      <view class="section" v-if="orderItems.length">
-        <view class="section-title">制作用量</view>
-        <view class="usage-summary">
+        <view v-if="orderItems.length" class="usage">
           <view class="usage-stat">
-            <text class="usage-label">总净重</text>
             <text class="usage-value">{{ formatGrams(totalQuantityG) }}</text>
+            <text class="usage-label">总净重</text>
           </view>
           <view class="usage-stat">
+            <text class="usage-value">{{ totalPackageCount }} 袋</text>
             <text class="usage-label">总袋数</text>
-            <text class="usage-value">{{ totalPackageCount }}袋</text>
           </view>
           <view class="usage-stat">
-            <text class="usage-label">食材</text>
             <text class="usage-value">{{ foodUsageLabel }}</text>
+            <text class="usage-label">食材</text>
           </view>
           <view class="usage-stat">
-            <text class="usage-label">补剂</text>
             <text class="usage-value">{{ supplementUsageLabel }}</text>
+            <text class="usage-label">补剂</text>
           </view>
         </view>
 
-        <view class="usage-item" v-for="item in orderItems" :key="item.id || item.recipeSnapshot?.id">
+        <view v-for="item in orderItems" :key="item.id || item.recipeSnapshot?.id" class="usage-item">
           <text class="usage-item-title">{{ item.recipeSnapshot?.name || '自定义食谱' }}</text>
           <text class="usage-item-meta">
             {{ item.dog?.name || '未绑定狗狗' }} · {{ formatGrams(item.quantityG) }} · {{ formatPackagePlan(item) }}
           </text>
-          <text class="usage-item-meta" v-if="item.cookingMethod || item.vacuumBagSpec">
+          <text v-if="item.cookingMethod || item.vacuumBagSpec" class="usage-item-meta">
             {{ formatPreparation(item) }}
           </text>
           <button
@@ -151,9 +159,9 @@
           </button>
         </view>
 
-        <view class="ingredient-summary" v-if="ingredientUsageRows.length">
+        <view v-if="ingredientUsageRows.length" class="ingredient-summary">
           <text class="ingredient-title">原料汇总</text>
-          <view class="ingredient-row" v-for="row in ingredientUsageRows" :key="row.key">
+          <view v-for="row in ingredientUsageRows" :key="row.key" class="ingredient-row">
             <text class="ingredient-name">{{ row.name }}</text>
             <text class="ingredient-type">{{ row.typeLabel }}</text>
             <text class="ingredient-amount">{{ row.amountLabel }}</text>
@@ -161,39 +169,66 @@
         </view>
       </view>
 
-      <!-- 备餐图 -->
-      <view class="section" v-if="hasProductionPhotos">
-        <view class="section-title-row">
-          <view>
-            <view class="section-title compact">备餐图</view>
-            <text class="section-subtitle" v-if="order.productionPhotos?.uploadedAt">
-              上传时间：{{ formatDateTime(order.productionPhotos.uploadedAt) }}
-            </text>
-          </view>
-          <button
-            v-if="shareToken"
-            class="address-action-btn secondary photo-share-btn"
-            open-type="share"
-            data-share-type="photos"
-          >
-            一键分享
+      <!-- 顾客与收货 -->
+      <view class="card">
+        <view class="card-title">顾客与收货</view>
+        <view class="kv">
+          <text class="kv-key">顾客</text>
+          <text class="kv-value">
+            {{ orderCustomerName || '未记录顾客' }}
+            <text v-if="orderCustomerPhone" class="kv-sub">{{ formatPhoneForStaffOrder(orderCustomerPhone) }}</text>
+          </text>
+        </view>
+        <view class="kv">
+          <text class="kv-key">收货</text>
+          <text v-if="order.address" class="kv-value">
+            {{ order.address.recipientName }}
+            <text class="kv-sub">{{ formatPhoneForStaffOrder(getOrderAddressPhone(order.address)) }}</text>
+            {{ getOrderAddressRegionText(order.address) }} {{ getOrderAddressDetail(order.address) }}
+          </text>
+          <text v-else class="kv-value muted">暂未录入收货地址</text>
+          <text v-if="order.address" class="kv-action" @tap="copyFullAddress">复制</text>
+        </view>
+
+        <view v-if="canEditAddress" class="address-actions">
+          <button v-if="order.address" class="address-action-btn secondary" @tap="copyFullAddress">复制地址</button>
+          <button class="address-action-btn secondary" @tap="openAddressSelect">
+            {{ order.address ? '更换地址' : '选择已有地址' }}
+          </button>
+          <button class="address-action-btn primary" @tap="openCreateAddressForm">录入新地址</button>
+          <button v-if="order.address" class="address-action-btn secondary" @tap="openEditAddressForm">
+            编辑地址
           </button>
         </view>
-        <view class="production-photo-grid">
-          <image
-            v-for="(photo, index) in order.productionPhotos?.photos || []"
-            :key="`${photo}-${index}`"
-            class="production-photo"
-            :src="normalizeImageUrl(photo)"
-            mode="aspectFill"
-            @tap="previewProductionPhoto(index)"
-          />
+        <text v-else class="address-lock-hint">已发货后不可修改</text>
+      </view>
+
+      <!-- 费用：商品 / 运费 / 实收，账要算得平 -->
+      <view class="card">
+        <view class="card-title">
+          费用
+          <text class="card-note">{{ paymentMethodLabel }}</text>
+        </view>
+        <view class="fee">
+          <text class="fee-key">商品</text>
+          <text class="fee-value">¥{{ formatAmount(productAmount) }}</text>
+        </view>
+        <view class="fee">
+          <text class="fee-key">运费</text>
+          <text class="fee-value">¥{{ formatAmount(order.amountShipping) }}</text>
+        </view>
+        <view class="fee total">
+          <text class="fee-key">实收</text>
+          <text class="fee-value">¥{{ formatAmount(order.totalAmount || order.amountTotal) }}</text>
         </view>
       </view>
 
       <!-- 管理员备注 -->
-      <view class="section remark-section">
-        <view class="section-title">管理员备注</view>
+      <view class="card">
+        <view class="card-title">
+          管理员备注
+          <text class="card-note">仅员工可见</text>
+        </view>
         <textarea
           v-model="remarkDraft"
           class="remark-textarea"
@@ -202,7 +237,7 @@
           placeholder="填写分装要求、制作顺序、特殊提醒"
         />
         <view class="remark-meta">
-          <text class="remark-hint">仅员工/管理员可见，会同步到生产制作单和打印版</text>
+          <text class="remark-hint">会同步到生产制作单和打印版</text>
           <text class="remark-count">{{ remarkDraft.length }}/200</text>
         </view>
         <view class="remark-actions">
@@ -223,62 +258,37 @@
         </view>
       </view>
 
-      <!-- 收货地址 -->
-      <view class="section">
-        <view class="section-title">📍 收货地址</view>
-        <view class="address-card">
-          <template v-if="order.address">
-            <view class="address-header">
-              <text class="recipient-name">{{ order.address.recipientName }}</text>
-              <text class="recipient-phone">{{ formatPhoneForStaffOrder(getOrderAddressPhone(order.address)) }}</text>
-            </view>
-            <text class="address-text"
-              >{{ getOrderAddressRegionText(order.address) }} {{ getOrderAddressDetail(order.address) }}</text
-            >
-          </template>
-          <view v-else class="address-empty">
-            <text class="address-empty-text">暂未录入收货地址</text>
-          </view>
-          <view v-if="canEditAddress" class="address-actions">
-            <button v-if="order.address" class="address-action-btn secondary" @tap="copyFullAddress">复制地址</button>
-            <button class="address-action-btn secondary" @tap="openAddressSelect">
-              {{ order.address ? '更换地址' : '选择已有地址' }}
-            </button>
-            <button class="address-action-btn primary" @tap="openCreateAddressForm">录入新地址</button>
-            <button v-if="order.address" class="address-action-btn secondary" @tap="openEditAddressForm">
-              编辑地址
-            </button>
-          </view>
-          <text v-else class="address-lock-hint">已发货后不可修改</text>
+      <!-- 备餐图 -->
+      <view v-if="hasProductionPhotos" class="card">
+        <view class="card-title-row">
+          <view class="card-title compact">备餐图</view>
+          <button
+            v-if="shareToken"
+            class="address-action-btn secondary photo-share-btn"
+            open-type="share"
+            data-share-type="photos"
+          >
+            一键分享
+          </button>
+        </view>
+        <text v-if="order.productionPhotos?.uploadedAt" class="section-subtitle">
+          上传时间：{{ formatDateTime(order.productionPhotos.uploadedAt) }}
+        </text>
+        <view class="production-photo-grid">
+          <image
+            v-for="(photo, index) in order.productionPhotos?.photos || []"
+            :key="`${photo}-${index}`"
+            class="production-photo"
+            :src="normalizeImageUrl(photo)"
+            mode="aspectFill"
+            @tap="previewProductionPhoto(index)"
+          />
         </view>
       </view>
 
-      <!-- 费用明细 -->
-      <view class="section">
-        <view class="section-title">💰 费用明细</view>
-        <view class="fee-list">
-          <view class="fee-item">
-            <text class="fee-label">商品费用</text>
-            <text class="fee-value">¥{{ formatAmount(order.totalAmount || order.amountTotal) }}</text>
-          </view>
-          <view class="fee-item">
-            <text class="fee-label">运费</text>
-            <text class="fee-value">¥{{ formatAmount(order.amountShipping) }}</text>
-          </view>
-          <view class="fee-item total">
-            <text class="fee-label">总计</text>
-            <text class="fee-value">¥{{ formatAmount(order.totalAmount || order.amountTotal) }}</text>
-          </view>
-        </view>
-      </view>
-
-      <!-- 操作按钮 -->
-      <view class="action-section">
-        <button v-if="canConfirmPayment" class="action-btn primary" @tap="confirmPayment">确认收款</button>
-        <button v-if="canStartProduction" class="action-btn orange" @tap="startProduction">开始制作</button>
-        <button v-if="canShip" class="action-btn cyan" @tap="shipOrder">发货</button>
-        <button v-if="canAdjustAmount" class="action-btn orange" @tap="openAmountPanel">修改价格</button>
-        <button v-if="canAdminRefund" class="action-btn red" @tap="adminRefundOrder">管理员退款/退差价</button>
+      <!-- 危险操作：退款不该跟日常动作并排 -->
+      <view v-if="canAdminRefund && primaryAction?.key !== 'refund'" class="danger-zone">
+        <text class="danger-btn" @tap="adminRefundOrder">退款 / 退差价</text>
       </view>
     </view>
 
@@ -569,6 +579,14 @@ interface OrderDetail {
   totalAmount?: number
   amountTotal?: number
   amountShipping?: number
+  /** 商品小计（不含运费）；费用明细要拆开算，不能拿总额冒充商品费 */
+  amountProduct?: number
+  aftersaleType?: string | null
+  aftersaleReason?: string | null
+  aftersaleSince?: string | null
+  estimatedShippingDate?: string | null
+  paymentRemainingSeconds?: number | null
+  paymentDeadline?: string | null
   createdAt?: string
   paymentMethod?: string
   paymentStatus?: string | null
@@ -733,21 +751,11 @@ const addressForm = ref({
 })
 
 // 计算状态渐变色
-const statusGradient = computed(() => {
-  if (!order.value) return '#999'
-  const colorMap: Record<string, string> = {
-    PENDING_PAYMENT: 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)',
-    PAID: 'linear-gradient(135deg, #52c41a 0%, #389e0d 100%)',
-    PURCHASING: 'linear-gradient(135deg, #faad14 0%, #d48806 100%)',
-    IN_PRODUCTION: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)',
-    FREEZING: 'linear-gradient(135deg, #722ed1 0%, #531dab 100%)',
-    SHIPPED: 'linear-gradient(135deg, #13c2c2 0%, #08979c 100%)',
-    COMPLETED: 'linear-gradient(135deg, #52c41a 0%, #389e0d 100%)',
-    CANCELLED: 'linear-gradient(135deg, #999 0%, #666 100%)',
-    AFTERSALE: 'linear-gradient(135deg, #f5222d 0%, #cf1322 100%)',
-  }
-  return colorMap[order.value.status] || '#999'
-})
+/**
+ * 顶部配色只在 heroTone 里定（正常绿 / 售后红 / 已取消灰）。
+ * 这里原先那张"七色彩虹"映射已删除 —— 员工记不住，也和订单列表的
+ * "绿=鲜食"打架（2026-10-30）。
+ */
 
 // 操作权限判断
 const canConfirmPayment = computed(() => {
@@ -792,6 +800,184 @@ const canAdminRefund = computed(() => {
   const paid = order.value.paymentStatus === 'SUCCESS' || Boolean(order.value.paidAt)
   const refunded = order.value.refundStatus?.success === true
   return user?.role === 'ADMIN' && paid && order.value.paymentMethod === 'WECHAT_PAY' && !refunded
+})
+
+/* ===== 2026-10-30 改版：状态 → 颜色 / 四段进度 / 主操作 ===== */
+
+const isCancelled = computed(() => order.value?.status === 'CANCELLED')
+const isAftersale = computed(() => order.value?.status === 'AFTERSALE')
+const refundSucceeded = computed(() => order.value?.refundStatus?.success === true)
+
+/**
+ * 正常流程一律品牌绿；**只有**售后（红）和已取消（灰）换色。
+ * 以前七种颜色（橙黄蓝紫青…）员工记不住，而且绿色在订单列表里
+ * 代表"鲜食"，到这页又代表"已支付"，同一个绿两个意思。
+ */
+const heroTone = computed(() => {
+  if (isAftersale.value) return 'is-exception'
+  if (isCancelled.value) return 'is-cancelled'
+  return ''
+})
+
+const heroSubline = computed(() => {
+  const o = order.value
+  if (!o) return ''
+  switch (o.status) {
+    case 'INIT':
+      return '等待确认，还没进入付款'
+    case 'PENDING_PAYMENT':
+      return '顾客还没付钱'
+    case 'PAID':
+      return '钱已到账，可以开始制作'
+    case 'PURCHASING':
+      return '原料采购中'
+    case 'IN_PRODUCTION':
+      return '正在制作'
+    case 'FREEZING':
+      return '已经冻好，可以直接发货'
+    case 'SHIPPED':
+      return '已交快递'
+    case 'COMPLETED':
+      return '这单已经结束'
+    case 'CANCELLED':
+      return '这单已作废，不要照着做'
+    case 'AFTERSALE':
+      return o.aftersaleReason ? `顾客反馈：${o.aftersaleReason}` : '顾客提出了售后'
+    default:
+      return ''
+  }
+})
+
+const heroTag = computed(() => {
+  const o = order.value
+  if (!o) return ''
+  if (o.status === 'PENDING_PAYMENT' && o.paymentRemainingSeconds) {
+    const minutes = Math.ceil(Number(o.paymentRemainingSeconds) / 60)
+    return minutes > 0 ? `${minutes} 分钟内需付款` : '即将关闭'
+  }
+  if (isCancelled.value && o.cancelledAt) return `${formatShortDate(o.cancelledAt)} 取消`
+  if (isAftersale.value && o.aftersaleSince) return `${formatShortDate(o.aftersaleSince)} 提出`
+  return ''
+})
+
+/**
+ * 四段进度：下单 → 支付 → 制作 → 发货。
+ *
+ * 十个状态收敛成四格，员工不用记"采购中/急冻中/制作中"的差别，
+ * 只关心"走到第几格、下一步该谁动"。
+ */
+const progressSteps = computed(() => {
+  const o = order.value
+  if (!o) return []
+  const paidDone =
+    Boolean(o.paidAt) ||
+    ['PAID', 'PURCHASING', 'IN_PRODUCTION', 'FREEZING', 'SHIPPED', 'COMPLETED'].includes(o.status)
+  const madeDone = Boolean(o.shippedAt) || ['FREEZING', 'SHIPPED', 'COMPLETED'].includes(o.status)
+  const shippedDone = Boolean(o.shippedAt) || ['SHIPPED', 'COMPLETED'].includes(o.status)
+
+  const rows = [
+    { name: '下单', done: true, time: formatShortDate(o.createdAt) },
+    {
+      name: '支付',
+      done: paidDone,
+      time: paidDone ? (o.paidAt ? formatShortDate(o.paidAt) : '已完成') : '待付款',
+    },
+    {
+      name: '制作',
+      done: madeDone,
+      time: madeDone ? '已完成' : o.status === 'IN_PRODUCTION' ? '进行中' : paidDone ? '待开始' : '—',
+    },
+    {
+      name: '发货',
+      done: shippedDone,
+      time: shippedDone ? formatShortDate(o.shippedAt) : o.status === 'FREEZING' ? '待发货' : '—',
+    },
+  ]
+
+  const firstOpen = rows.findIndex((row) => !row.done)
+  return rows.map((row, index) => ({
+    ...row,
+    current: !isCancelled.value && firstOpen === index,
+  }))
+})
+
+/** 主操作只跟"这一步该干的活"有关；没有就给一句提示，不放点不动的按钮 */
+const primaryAction = computed<{ key: string; label: string; run: () => void } | null>(() => {
+  if (canConfirmPayment.value) return { key: 'confirm', label: '确认收款', run: confirmPayment }
+  if (canStartProduction.value) return { key: 'produce', label: '开始制作', run: startProduction }
+  if (canShip.value) return { key: 'ship', label: '填写运单并发货', run: shipOrder }
+  if (canAdminRefund.value) return { key: 'refund', label: '退款 / 退差价', run: adminRefundOrder }
+  return null
+})
+
+const stageHint = computed(() => {
+  const o = order.value
+  if (!o) return ''
+  if (o.status === 'IN_PRODUCTION') {
+    return '制作进度在「生产任务」里推进，做完会自动进入「急冻中 / 待发货」。'
+  }
+  if (o.status === 'SHIPPED') return '已经交给快递，后续物流以快递为准。'
+  if (o.status === 'COMPLETED') return '这单已经结束，不需要再操作。'
+  return ''
+})
+
+const aftersaleTypeLabel = computed(() => {
+  const type = order.value?.aftersaleType
+  if (!type) return '未填写'
+  const map: Record<string, string> = {
+    REFUND: '退款',
+    RESHIP: '免费补发',
+    REMAKE: '重做',
+    COMPLAINT: '投诉',
+    RESOLVED: '已协商解决',
+  }
+  return map[type] || type
+})
+
+const refundRecordSummary = computed(() => (refundSucceeded.value ? '已原路退回' : ''))
+
+const shippingInfoVisible = computed(() =>
+  Boolean(order.value?.trackingNumber || order.value?.carrierCode),
+)
+
+const carrierLabel = computed(() => {
+  const code = order.value?.carrierCode
+  if (!code) return '快递'
+  const hit = (carriers as Array<{ code: string; name: string }>).find((item) => item.code === code)
+  return hit?.name || code
+})
+
+const estimatedShippingText = computed(() =>
+  order.value?.estimatedShippingDate ? formatShortDate(order.value.estimatedShippingDate) : '',
+)
+
+const dogLine = computed(() => {
+  const dog: any = firstOrderItem.value?.dog
+  if (!dog) return '未绑定狗狗'
+  const parts = [dog.name]
+  if (dog.breedName) parts.push(dog.breedName)
+  if (dog.weightKg) parts.push(`${dog.weightKg}kg`)
+  return parts.filter(Boolean).join(' · ')
+})
+
+/**
+ * 费用明细要算得平：商品 + 运费 = 实收。
+ * 以前"商品费用"和"总计"用的是同一个数，看着就像算错钱。
+ */
+const productAmount = computed(() => {
+  const o = order.value
+  if (!o) return 0
+  if (typeof o.amountProduct === 'number') return o.amountProduct
+  const total = Number(o.totalAmount ?? o.amountTotal ?? 0)
+  const shipping = Number(o.amountShipping ?? 0)
+  return Math.max(0, total - shipping)
+})
+
+const paymentMethodLabel = computed(() => {
+  const o = order.value
+  if (!o) return ''
+  const base = getPaymentMethod(o.paymentMethod)
+  return refundSucceeded.value ? `${base} · 已退款` : base
 })
 
 const orderItems = computed<OrderItemDetail[]>(() => {
@@ -1084,26 +1270,6 @@ function getStatusText(orderOrStatus: OrderDetail | string): string {
   return statusMap[status] || status
 }
 
-function getStatusColor(orderOrStatus: OrderDetail | string): string {
-  const status = typeof orderOrStatus === 'string' ? orderOrStatus : orderOrStatus.status
-  if (typeof orderOrStatus !== 'string' && isRefundedOrder(orderOrStatus)) {
-    return '#16a34a'
-  }
-  const colorMap: Record<string, string> = {
-    INIT: '#999',
-    PENDING_PAYMENT: '#ff9800',
-    PAID: '#52c41a',
-    PURCHASING: '#faad14',
-    IN_PRODUCTION: '#1890ff',
-    FREEZING: '#722ed1',
-    SHIPPED: '#13c2c2',
-    COMPLETED: '#52c41a',
-    CANCELLED: '#999',
-    AFTERSALE: '#f5222d',
-  }
-  return colorMap[status] || '#999'
-}
-
 function isRefundedOrder(currentOrder: OrderDetail): boolean {
   return currentOrder.status === 'CANCELLED' && currentOrder.refundStatus?.success === true
 }
@@ -1118,6 +1284,26 @@ function getPaymentMethod(method?: string): string {
 }
 
 // 操作
+function formatShortDate(value?: string | null): string {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${month}-${day}`
+}
+
+function copyTrackingNumber() {
+  const no = order.value?.trackingNumber
+  if (!no) return
+  uni.setClipboardData({
+    data: no,
+    success: () => {
+      uni.showToast({ title: '单号已复制', icon: 'success' })
+    },
+  })
+}
+
 function copyPhone() {
   if (!orderCustomerPhone.value) return
   uni.setClipboardData({
@@ -2684,4 +2870,131 @@ async function saveAddressForm() {
     border: none;
   }
 }
+
+/* ===== 2026-10-30 改版：状态头 / 进度线 / 主操作 / 售后卡 ===== */
+
+.hero {
+  margin: 24rpx 32rpx 0;
+  border-radius: 28rpx;
+  padding: 28rpx 30rpx 24rpx;
+  background: linear-gradient(135deg, #1e3a2f 0%, #2b5040 100%);
+}
+.hero.is-exception {
+  background: linear-gradient(135deg, #8e2a20 0%, #c0392b 100%);
+}
+.hero.is-cancelled {
+  background: linear-gradient(135deg, #6b7280 0%, #8b93a1 100%);
+}
+.hero-row { display: flex; align-items: flex-start; justify-content: space-between; }
+.hero-main { flex: 1; min-width: 0; }
+.hero-status { display: block; font-size: 44rpx; font-weight: 700; color: #fff; }
+.hero-sub { display: block; margin-top: 8rpx; font-size: 22rpx; line-height: 1.5; color: rgba(255, 255, 255, 0.78); }
+.hero-no-row { display: flex; align-items: center; gap: 12rpx; margin-top: 10rpx; }
+.hero-no { font-size: 20rpx; color: rgba(255, 255, 255, 0.55); font-family: Menlo, Consolas, monospace; }
+.hero-copy {
+  padding: 2rpx 12rpx; border-radius: 16rpx; font-size: 18rpx;
+  color: rgba(255, 255, 255, 0.85); background: rgba(255, 255, 255, 0.16);
+}
+.hero-tag {
+  flex: none; margin-left: 16rpx; padding: 6rpx 16rpx; border-radius: 40rpx;
+  background: rgba(255, 255, 255, 0.18); color: #fff; font-size: 20rpx; white-space: nowrap;
+}
+
+.steps { display: flex; margin-top: 28rpx; }
+.step { flex: 1; position: relative; }
+.step-line { position: absolute; left: 0; right: 0; top: 8rpx; height: 3rpx; background: rgba(255, 255, 255, 0.22); }
+.step.done .step-line { background: rgba(255, 255, 255, 0.9); }
+.step-dot {
+  width: 18rpx; height: 18rpx; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.32); position: relative; z-index: 1; margin-bottom: 14rpx;
+}
+.step.done .step-dot { background: #fff; }
+.step.current .step-dot { background: #fff; box-shadow: 0 0 0 8rpx rgba(255, 255, 255, 0.22); }
+.step-name { display: block; font-size: 20rpx; color: rgba(255, 255, 255, 0.55); }
+.step.done .step-name, .step.current .step-name { color: #fff; }
+.step-time { display: block; margin-top: 2rpx; font-size: 18rpx; color: rgba(255, 255, 255, 0.5); }
+.step.done .step-time { color: rgba(255, 255, 255, 0.72); }
+
+.action-bar { display: flex; gap: 16rpx; margin: 20rpx 32rpx 0; }
+.action-bar .action-btn { width: auto; flex: 1; height: 88rpx; border-radius: 22rpx; font-size: 30rpx; font-weight: 600; }
+.action-bar .action-btn.primary { background: #1e3a2f; color: #fff; }
+.action-bar .action-btn.ghost {
+  flex: none; width: 150rpx; background: #fff; color: #2b5040;
+  border: 1rpx solid #dfe4e1; font-size: 24rpx; font-weight: 400;
+}
+.stage-hint {
+  margin: 20rpx 32rpx 0; padding: 20rpx 24rpx; border-radius: 20rpx;
+  background: #eef2ef; color: #5d6a64; font-size: 22rpx; line-height: 1.6;
+}
+
+.aftersale-card {
+  margin: 20rpx 32rpx 0; padding: 24rpx 26rpx;
+  background: #fff; border: 1rpx solid #f3d9d4; border-radius: 24rpx;
+}
+.aftersale-head { display: flex; align-items: center; justify-content: space-between; }
+.aftersale-title { font-size: 26rpx; font-weight: 600; color: #c0392b; }
+.aftersale-state { padding: 4rpx 16rpx; border-radius: 20rpx; background: #fdecea; color: #c0392b; font-size: 20rpx; }
+.aftersale-state.settled { background: #eef6f0; color: #2e7d4f; }
+.aftersale-row { display: flex; margin-top: 14rpx; }
+.aftersale-k { width: 72rpx; flex: none; font-size: 22rpx; color: #a08b88; }
+.aftersale-v { flex: 1; font-size: 24rpx; color: #4a3b39; line-height: 1.5; }
+
+.voided-bar { margin: 20rpx 32rpx 0; padding: 20rpx 24rpx; border-radius: 20rpx; background: #f1f2f4; }
+.voided-title { display: block; font-size: 26rpx; font-weight: 600; color: #5b636e; }
+.voided-reason { display: block; margin-top: 6rpx; font-size: 22rpx; color: #8b93a1; }
+.is-voided .card-voided { opacity: 0.55; }
+
+.card {
+  margin: 20rpx 32rpx; padding: 26rpx 28rpx;
+  background: #fff; border-radius: 24rpx;
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.06);
+}
+.card-title { display: flex; align-items: center; gap: 14rpx; font-size: 28rpx; font-weight: 600; color: #1e3a2f; }
+.card-title::before { content: ""; width: 6rpx; height: 24rpx; border-radius: 4rpx; background: #1e3a2f; }
+.card-note { margin-left: auto; font-size: 20rpx; font-weight: 400; color: #909399; }
+.card-title-row { display: flex; align-items: center; justify-content: space-between; }
+
+.product { display: flex; gap: 20rpx; margin-top: 20rpx; }
+.product-cover { width: 120rpx; height: 120rpx; border-radius: 18rpx; flex: none; }
+.product-cover.placeholder {
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #d8e6d9, #b7cfba); color: #1e3a2f; font-size: 32rpx;
+}
+.product-info { flex: 1; min-width: 0; }
+.product-name { font-size: 30rpx; font-weight: 600; color: #1f2d27; }
+.product-for { display: flex; align-items: center; gap: 12rpx; margin-top: 8rpx; font-size: 22rpx; color: #909399; }
+.product-link { padding: 0 12rpx; border-radius: 16rpx; background: #eef2ef; color: #2b5040; font-size: 20rpx; }
+.specs { display: flex; flex-wrap: wrap; gap: 10rpx; margin-top: 12rpx; }
+.spec { padding: 4rpx 14rpx; border-radius: 10rpx; background: #f4f6f5; color: #5a6560; font-size: 20rpx; }
+
+.usage { display: flex; margin-top: 22rpx; padding-top: 20rpx; border-top: 1rpx solid #f2f3f5; }
+.usage .usage-stat { flex: 1; text-align: center; }
+.usage .usage-value { display: block; font-size: 28rpx; font-weight: 600; color: #1e3a2f; }
+.usage .usage-label { display: block; margin-top: 6rpx; font-size: 20rpx; color: #909399; }
+
+.kv { display: flex; align-items: flex-start; margin-top: 18rpx; }
+.kv-key { width: 80rpx; flex: none; font-size: 22rpx; color: #909399; }
+.kv-value { flex: 1; font-size: 24rpx; color: #303133; line-height: 1.6; }
+.kv-sub { margin-left: 8rpx; color: #909399; font-size: 22rpx; }
+.kv-value.muted { color: #b0b4bb; }
+.kv-action { flex: none; margin-left: 12rpx; font-size: 20rpx; color: #2b5040; }
+
+.fee { display: flex; justify-content: space-between; padding: 12rpx 0; font-size: 24rpx; }
+.fee-key { color: #606266; }
+.fee-value { color: #303133; }
+.fee.total { margin-top: 6rpx; padding-top: 18rpx; border-top: 1rpx solid #f2f3f5; }
+.fee.total .fee-key { font-weight: 600; color: #1e3a2f; }
+.fee.total .fee-value { font-size: 30rpx; font-weight: 700; color: #1e3a2f; }
+
+.ship-row { display: flex; align-items: center; margin-top: 18rpx; padding: 18rpx 20rpx; background: #f7f9f8; border-radius: 16rpx; }
+.ship-main { flex: 1; min-width: 0; }
+.ship-carrier { display: block; font-size: 22rpx; color: #5a6560; }
+.ship-no { display: block; margin-top: 4rpx; font-size: 26rpx; font-weight: 600; color: #1f2d27; font-family: Menlo, Consolas, monospace; }
+.ship-copy { flex: none; padding: 8rpx 20rpx; border: 1rpx solid #dfe4e1; border-radius: 30rpx; background: #fff; font-size: 20rpx; color: #2b5040; }
+.ship-meta { display: flex; justify-content: space-between; margin-top: 12rpx; font-size: 20rpx; color: #909399; }
+
+.danger-zone { margin: 32rpx 32rpx 0; padding-top: 24rpx; border-top: 1rpx solid #f0f1f2; text-align: center; }
+.danger-btn { font-size: 24rpx; color: #c0392b; }
+
+.section-subtitle { display: block; margin-top: 8rpx; font-size: 20rpx; color: #909399; }
 </style>

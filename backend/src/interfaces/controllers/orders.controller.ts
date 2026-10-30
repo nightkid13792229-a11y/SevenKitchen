@@ -1197,6 +1197,24 @@ export class OrdersController {
     }
   }
 
+  /**
+   * 订单项里展示的"品种"（2026-10-30）。
+   *
+   * 以前只取 `customBreedName`（顾客自己填的"其他品种"）——
+   * 正经登记过品种的狗，这里全都是 undefined，
+   * 员工在详情页只能看到"给 么鸡 · 6.4kg"，不知道是什么狗。
+   */
+  private async resolveDogBreedName(dog: any): Promise<string | undefined> {
+    if (!dog) return undefined;
+    if (dog.customBreedName) return dog.customBreedName;
+    if (!dog.breedId) return undefined;
+    const breed = await this.prisma.dogBreed.findUnique({
+      where: { id: dog.breedId },
+      select: { name: true },
+    });
+    return breed?.name ?? undefined;
+  }
+
   private async mapOrderItemToDto(
     item: OrderItem,
     totalPrice?: number,
@@ -1209,7 +1227,7 @@ export class OrdersController {
         dogInfo = {
           id: dog.id,
           name: dog.name,
-          breedName: dog.customBreedName ?? undefined,
+          breedName: await this.resolveDogBreedName(dog),
           weightKg: dog.currentWeightKg,
           gender: dog.gender,
         };
@@ -1259,7 +1277,7 @@ export class OrdersController {
           dogInfo = {
             id: dog.id,
             name: dog.name,
-            breedName: dog.customBreedName ?? undefined,
+            breedName: await this.resolveDogBreedName(dog),
             weightKg: dog.currentWeightKg,
             gender: dog.gender,
             mealsPerDay: dog.mealsPerDay,

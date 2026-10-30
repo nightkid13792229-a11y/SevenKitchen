@@ -95,7 +95,8 @@ describe('staff order mobile operations', () => {
   });
 
   it('shows production usage, package plan, and ingredient totals on staff order detail', () => {
-    expect(detailSource).toContain('制作用量');
+    // 2026-10-30 改版：制作用量并进「商品与用量」一张卡
+    expect(detailSource).toContain('商品与用量');
     expect(detailSource).toContain('原料汇总');
     expect(detailSource).toContain('ingredientUsageRows');
     expect(detailSource).toContain('formatPackagePlan');
@@ -138,7 +139,8 @@ describe('staff order mobile operations', () => {
     expect(detailSource).toContain('openAmountPanel');
     expect(detailSource).toContain('saveAmountAdjustment');
     expect(detailSource).toContain('isOfflinePaidOrder');
-    expect(detailSource).toContain('修改价格');
+    // 2026-10-30 改版：主操作搬到状态下面，按钮文案收成「改价」
+    expect(detailSource).toContain('改价');
     expect(detailSource).toContain('openRefundPanel');
     expect(detailSource).toContain('refundAmountDraft');
     expect(detailSource).toContain('saveRefundAdjustment');
@@ -178,5 +180,69 @@ describe('staff order detail · 鲜食订单详情', () => {
 
   it('复制按钮复制的是页面上显示的那个号', () => {
     expect(detailSource).toContain('const value = displayOrderNo.value');
+  });
+});
+
+/**
+ * 2026-10-30 改版：顶部状态 / 四段进度 / 主操作 / 售后卡。
+ *
+ * 老板的原话：十个状态、七种顶部颜色，员工记不住；
+ * 售后中只有顶部变红，为什么退、到哪一步都看不到。
+ */
+describe('staff order detail · 状态改版', () => {
+  it('顶部只有三种配色：正常绿 / 售后红 / 已取消灰', () => {
+    expect(detailSource).toContain("if (isAftersale.value) return 'is-exception'");
+    expect(detailSource).toContain("if (isCancelled.value) return 'is-cancelled'");
+    expect(detailSource).toContain('.hero.is-exception');
+    expect(detailSource).toContain('.hero.is-cancelled');
+    // 彩虹色映射已删除
+    expect(detailSource).not.toContain('#722ed1');
+    expect(detailSource).not.toContain('#13c2c2');
+  });
+
+  it('四段进度：下单 → 支付 → 制作 → 发货', () => {
+    expect(detailSource).toContain("name: '下单'");
+    expect(detailSource).toContain("name: '支付'");
+    expect(detailSource).toContain("name: '制作'");
+    expect(detailSource).toContain("name: '发货'");
+    expect(detailSource).toContain('const firstOpen = rows.findIndex((row) => !row.done)');
+  });
+
+  it('主操作贴在状态下面，按状态挑一个', () => {
+    expect(detailSource).toContain("label: '确认收款', run: confirmPayment");
+    expect(detailSource).toContain("label: '开始制作', run: startProduction");
+    expect(detailSource).toContain("label: '填写运单并发货', run: shipOrder");
+    expect(detailSource).toContain("label: '退款 / 退差价', run: adminRefundOrder");
+    expect(detailSource).toContain('class="action-bar"');
+  });
+
+  it('制作中不给按钮，只给一句提示（这步不归这个页面管）', () => {
+    expect(detailSource).toContain('stageHint');
+    expect(detailSource).toContain('制作进度在「生产任务」里推进');
+  });
+
+  it('售后中能看见类型 / 理由 / 提交时间 / 退款状态', () => {
+    expect(detailSource).toContain('aftersale-card');
+    expect(detailSource).toContain('order.aftersaleReason');
+    expect(detailSource).toContain('order.aftersaleSince');
+    expect(detailSource).toContain('aftersaleTypeLabel');
+  });
+
+  it('已取消整单作废：灰顶 + 一段说明 + 商品卡压暗', () => {
+    expect(detailSource).toContain('本单已取消');
+    expect(detailSource).toContain('order.cancellationReason');
+    expect(detailSource).toContain('card-voided');
+  });
+
+  it('费用拆开算：商品用 amountProduct，不再拿总额冒充商品费', () => {
+    expect(detailSource).toContain('amountProduct');
+    expect(detailSource).toContain('const productAmount = computed');
+    expect(detailSource).not.toContain("'商品费用'");
+  });
+
+  it('发货后能看到快递公司和运单号，并能一键复制', () => {
+    expect(detailSource).toContain('shippingInfoVisible');
+    expect(detailSource).toContain('copyTrackingNumber');
+    expect(detailSource).toContain('carrierLabel');
   });
 });

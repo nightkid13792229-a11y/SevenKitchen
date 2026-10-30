@@ -228,10 +228,10 @@ export class LabelV10Service {
     h += mm(1.3) + mm(this.F.title * 1.18);
     h += mm(1.2) + 1;
     h += mm(1.1);
-    h += 3 * lh(this.F.meta) + 2 * mm(0.55);
+    h += 2 * lh(this.F.meta) + mm(0.55);
 
     // 原料
-    h += mm(1.7) + mm(this.F.section * 1.2) + mm(0.9);
+    h += mm(1.7) + mm(this.F.section) + mm(0.75) + mm(0.9);
     h += this.ingredientHeight(ctx, ingredientItems, contentW, lineHeight);
 
     // 添加剂
@@ -248,7 +248,7 @@ export class LabelV10Service {
     }
 
     // 保证值
-    h += mm(1.7) + mm(this.F.section * 1.2) + mm(0.9);
+    h += mm(1.7) + mm(this.F.section) + mm(0.75) + mm(0.9);
     h += this.valueRows(labelData).length * lh(this.F.value);
 
     // 烹饪
@@ -395,23 +395,24 @@ export class LabelV10Service {
     y += 1 + mm(1.1);
 
     // 三行元信息
-    const metaRows: Array<[string, string]> = [
-      ['净含量', this.buildNetContent(specs)],
-      ['生产日期', this.formatDate(labelData.productionTime)],
-      ['保质期', this.buildShelfLife(labelData)],
-    ];
     ctx.textBaseline = 'alphabetic';
-    for (const [label, value] of metaRows) {
+    const drawMeta = (label: string, value: string, x: number) => {
       const baseline = y + mm(this.F.meta * 0.82);
       ctx.font = `${mm(this.F.metaLabel)}px "Chinese"`;
       ctx.fillStyle = '#5A5A5A';
-      ctx.fillText(label, left, baseline);
+      ctx.fillText(label, x, baseline);
       const labelW = ctx.measureText(label).width + mm(1);
       ctx.font = `bold ${mm(this.F.meta)}px "Chinese-Bold"`;
       ctx.fillStyle = '#111111';
-      ctx.fillText(value, left + labelW, baseline);
-      y += lh(this.F.meta) + mm(0.55);
-    }
+      ctx.fillText(value, x + labelW, baseline);
+    };
+
+    // 净含量独占一行（多规格时较长），日期与保质期并排一行
+    drawMeta('净含量', this.buildNetContent(specs), left);
+    y += lh(this.F.meta) + mm(0.55);
+    drawMeta('生产日期', this.formatDate(labelData.productionTime), left);
+    drawMeta('保质期', this.buildShelfLife(labelData), left + contentW / 2);
+    y += lh(this.F.meta);
     ctx.textBaseline = 'top';
     y -= mm(0.55);
 
@@ -563,7 +564,7 @@ export class LabelV10Service {
       ctx.textAlign = 'left';
     }
 
-    const lineY = top + mm(this.F.section * 1.2) - mm(0.4);
+    const lineY = top + mm(this.F.section) + mm(0.75);
     ctx.strokeStyle = '#BDBDB8';
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -571,7 +572,7 @@ export class LabelV10Service {
     ctx.lineTo(left + contentW, lineY);
     ctx.stroke();
 
-    return top + mm(this.F.section * 1.2) + mm(0.9);
+    return lineY + mm(0.9);
   }
 
   // ---------------- 文本工具 ----------------

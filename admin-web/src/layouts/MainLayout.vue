@@ -81,7 +81,11 @@
             <template #title>
               <el-icon><component :is="group.icon" /></el-icon>
               <span>{{ group.label }}</span>
-              <span v-if="groupBadge(group)" class="menu-badge">
+              <span
+                v-if="groupBadge(group)"
+                class="menu-badge"
+                :title="badgeTip(group.badgeKeys)"
+              >
                 {{ formatBadge(groupBadge(group)) }}
               </span>
             </template>
@@ -94,6 +98,13 @@
             >
               <el-icon><component :is="item.icon" /></el-icon>
               <span>{{ item.label }}</span>
+              <span
+                v-if="itemBadge(item)"
+                class="menu-badge child-badge"
+                :title="badgeTip(item.badgeKeys)"
+              >
+                {{ formatBadge(itemBadge(item)) }}
+              </span>
               <el-tooltip
                 v-if="item.disabled"
                 :content="item.disabledTip || '功能还没上线'"
@@ -234,6 +245,7 @@ import {
   resolveMenuGroup,
   resolveMenuLocation,
   searchMenuItems,
+  menuBadgeLabels,
   type AdminMenuGroup,
   type FlatMenuItem,
   type MenuBadgeKey,
@@ -290,15 +302,34 @@ const searchResults = computed(() => searchMenuItems(searchQuery.value))
 
 const badgeCounts = reactive<Record<MenuBadgeKey, number>>({
   orders: 0,
-  stock: 0,
-  finance: 0,
+  supplementOrders: 0,
+  production: 0,
+  inventory: 0,
+  purchasing: 0,
+  reimbursement: 0,
 })
 
 let badgeTimer: ReturnType<typeof setInterval> | undefined
 
+function sumBadge(keys?: MenuBadgeKey[]): number {
+  if (!keys?.length) return 0
+  return keys.reduce((sum, key) => sum + (badgeCounts[key] || 0), 0)
+}
+
 function groupBadge(group: AdminMenuGroup): number {
-  if (!group.badgeKey) return 0
-  return badgeCounts[group.badgeKey] || 0
+  return sumBadge(group.badgeKeys)
+}
+
+function itemBadge(item: { badgeKeys?: MenuBadgeKey[] }): number {
+  return sumBadge(item.badgeKeys)
+}
+
+/** 悬停提示：说清这个数字由哪几件事组成，避免"只看到 1、不知道是哪一项" */
+function badgeTip(keys?: MenuBadgeKey[]): string {
+  if (!keys?.length) return ''
+  return keys
+    .map((key) => `${menuBadgeLabels[key]} ${badgeCounts[key] || 0}`)
+    .join(' · ')
 }
 
 function formatBadge(count: number): string {
@@ -309,9 +340,12 @@ async function loadBadges() {
   try {
     const data = await workbenchApi.summary()
     const badges = data?.badges
-    badgeCounts.orders = (badges?.orders || 0) + (badges?.supplementOrders || 0)
-    badgeCounts.stock = (badges?.production || 0) + (badges?.inventory || 0)
-    badgeCounts.finance = (badges?.purchasing || 0) + (badges?.reimbursement || 0)
+    badgeCounts.orders = badges?.orders || 0
+    badgeCounts.supplementOrders = badges?.supplementOrders || 0
+    badgeCounts.production = badges?.production || 0
+    badgeCounts.inventory = badges?.inventory || 0
+    badgeCounts.purchasing = badges?.purchasing || 0
+    badgeCounts.reimbursement = badges?.reimbursement || 0
   } catch {
     // 角标只是锦上添花，接口不可用时不打扰用户
   }
@@ -672,6 +706,7 @@ const handleCommand = async (command: string) => {
 
 .menu-badge {
   margin-left: auto;
+  flex: none;
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
@@ -682,6 +717,11 @@ const handleCommand = async (command: string) => {
   font-weight: 700;
   line-height: 18px;
   text-align: center;
+}
+
+.child-badge {
+  margin-left: auto;
+  margin-right: 2px;
 }
 
 .soon-tag {

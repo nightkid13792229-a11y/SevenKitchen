@@ -34,7 +34,23 @@ import {
  * · 合并页面时，旧地址在 router 里保留 redirect，书签不会失效。
  */
 
-export type MenuBadgeKey = 'orders' | 'stock' | 'finance'
+export type MenuBadgeKey =
+  | 'orders'
+  | 'supplementOrders'
+  | 'production'
+  | 'inventory'
+  | 'purchasing'
+  | 'reimbursement'
+
+/** 角标文案：展开后每个入口的角标、以及分组角标的悬停提示都用它 */
+export const menuBadgeLabels: Record<MenuBadgeKey, string> = {
+  orders: '订单待处理',
+  supplementOrders: '补剂订单待处理',
+  production: '生产/分装待处理',
+  inventory: '库存待盘点',
+  purchasing: '采购单待处理',
+  reimbursement: '报销待审核',
+}
 
 export interface AdminMenuItem {
   key: string
@@ -48,14 +64,16 @@ export interface AdminMenuItem {
   /** 未上线：保留入口但灰显、不可点 */
   disabled?: boolean
   disabledTip?: string
-  badgeKey?: MenuBadgeKey
+  /** 这个入口自己的待办角标（可多个来源相加） */
+  badgeKeys?: MenuBadgeKey[]
 }
 
 export interface AdminMenuGroup {
   key: string
   label: string
   icon: Component
-  badgeKey?: MenuBadgeKey
+  /** 分组角标 = 这些来源相加；展开后子入口会各自显示自己的数字 */
+  badgeKeys?: MenuBadgeKey[]
   items: AdminMenuItem[]
 }
 
@@ -73,7 +91,7 @@ export const adminMenuGroups: AdminMenuGroup[] = [
     key: 'orders',
     label: '订单与售后',
     icon: List,
-    badgeKey: 'orders',
+    badgeKeys: ['orders', 'supplementOrders'],
     items: [
       {
         key: 'order-center',
@@ -86,6 +104,7 @@ export const adminMenuGroups: AdminMenuGroup[] = [
           '/custom-recipes/assisted-order',
           '/supplement-shop/orders',
         ],
+        badgeKeys: ['orders', 'supplementOrders'],
       },
       {
         key: 'aftersale-center',
@@ -210,7 +229,7 @@ export const adminMenuGroups: AdminMenuGroup[] = [
     key: 'goods',
     label: '商品与库存',
     icon: Box,
-    badgeKey: 'stock',
+    badgeKeys: ['production', 'inventory'],
     items: [
       {
         key: 'supplement-shop',
@@ -234,6 +253,7 @@ export const adminMenuGroups: AdminMenuGroup[] = [
         path: '/inventory',
         icon: Box,
         keywords: ['库存', '盘点', '安全库存', '补货'],
+        badgeKeys: ['inventory'],
       },
       {
         key: 'production',
@@ -241,6 +261,7 @@ export const adminMenuGroups: AdminMenuGroup[] = [
         path: '/production',
         icon: Operation,
         keywords: ['生产', '批次', '制作'],
+        badgeKeys: ['production'],
       },
     ],
   },
@@ -248,7 +269,7 @@ export const adminMenuGroups: AdminMenuGroup[] = [
     key: 'finance',
     label: '采购与财务',
     icon: Money,
-    badgeKey: 'finance',
+    badgeKeys: ['purchasing', 'reimbursement'],
     items: [
       {
         key: 'purchasing',
@@ -256,6 +277,7 @@ export const adminMenuGroups: AdminMenuGroup[] = [
         path: '/purchasing',
         icon: List,
         keywords: ['采购', '采购单', '采购历史', '进货'],
+        badgeKeys: ['purchasing'],
         aliases: ['/purchasing/lists', '/purchasing/history'],
       },
       {
@@ -264,6 +286,7 @@ export const adminMenuGroups: AdminMenuGroup[] = [
         path: '/purchasing/reimbursements',
         icon: Money,
         keywords: ['报销', '费用', '付款'],
+        badgeKeys: ['reimbursement'],
         aliases: ['/purchasing/reimbursements/'],
       },
       {

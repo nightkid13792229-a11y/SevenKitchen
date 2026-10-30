@@ -101,13 +101,6 @@
       <view v-if="firstOrderItem" class="card" :class="{ 'card-voided': isCancelled }">
         <view class="card-title">商品与用量</view>
         <view class="product">
-          <image
-            v-if="firstOrderItem.recipeSnapshot && firstOrderItem.recipeSnapshot.coverImageUrl"
-            class="product-cover"
-            :src="firstOrderItem.recipeSnapshot.coverImageUrl"
-            mode="aspectFill"
-          />
-          <view v-else class="product-cover placeholder">菜</view>
           <view class="product-info">
             <text class="product-name">{{ firstOrderItem.recipeSnapshot?.name || '自定义食谱' }}</text>
             <view class="product-for">
@@ -132,11 +125,11 @@
             <text class="usage-value">{{ totalPackageCount }} 袋</text>
             <text class="usage-label">总袋数</text>
           </view>
-          <view class="usage-stat">
+          <view v-if="hasFoodUsage" class="usage-stat">
             <text class="usage-value">{{ foodUsageLabel }}</text>
             <text class="usage-label">食材</text>
           </view>
-          <view class="usage-stat">
+          <view v-if="hasSupplementUsage" class="usage-stat">
             <text class="usage-value">{{ supplementUsageLabel }}</text>
             <text class="usage-label">补剂</text>
           </view>
@@ -232,8 +225,8 @@
         </view>
       </view>
 
-      <!-- 管理员备注 -->
-      <view class="card">
+      <!-- 管理员备注：只在开产前有用；开产后制作单已经带走了备注 -->
+      <view v-if="remarkVisible" class="card">
         <view class="card-title">
           管理员备注
           <text class="card-note">仅员工可见</text>
@@ -570,9 +563,13 @@ onMounted(() => {
   const options = currentPage.options || {}
 
   orderId.value = options.id || ''
-  if (orderId.value) {
-    loadOrderDetail()
-  }
+  if (!orderId.value) return
+
+  // 订单中心卡片上点了「发货」→ 直接落到这一单并把发货弹窗打开
+  const autoShip = options.action === 'ship'
+  loadOrderDetail().then(() => {
+    if (autoShip && canShip.value) shipOrder()
+  })
 })
 
 interface OrderDetail {
@@ -770,6 +767,10 @@ const canConfirmPayment = computed(() => {
   return order.value && order.value.status === 'PENDING_PAYMENT'
 })
 
+/**
+ * ⚠️ 2026-10-30 起本页不再用这两个：生产制作统一在工作台「生产管理」里开工。
+ * 保留是为了后台以后要在这页加回来时不用重写接口调用。
+ */
 const canStartProduction = computed(() => {
   return order.value && (order.value.status === 'PAID' || order.value.status === 'PURCHASING')
 })
@@ -870,7 +871,8 @@ const heroSubline = computed(() => {
     case 'PENDING_PAYMENT':
       return '顾客还没付钱'
     case 'PAID':
-      return '钱已到账，可以开始制作'
+      // 这页不再有「开始制作」，文案不能再引着人去点
+      return '钱已到账，等生产管理里开工'
     case 'PURCHASING':
       return '原料采购中'
     case 'IN_PRODUCTION':
@@ -946,7 +948,10 @@ const progressSteps = computed(() => {
 /** 主操作只跟"这一步该干的活"有关；没有就给一句提示，不放点不动的按钮 */
 const primaryAction = computed<{ key: string; label: string; run: () => void } | null>(() => {
   if (canConfirmPayment.value) return { key: 'confirm', label: '确认收款', run: confirmPayment }
-  if (canStartProduction.value) return { key: 'produce', label: '开始制作', run: startProduction }
+  /**
+   * 这里**不给**「开始制作」：生产制作统一在「工作台 → 生产管理」里开工
+   * （2026-10-30 老板定）。这页只负责收款、发货、退款。
+   */
   if (canShip.value) return { key: 'ship', label: '填写运单并发货', run: shipOrder }
   /**
    * 退款只有当它是"这一步该做的事"时才做主按钮（售后中）。
@@ -959,6 +964,21 @@ const primaryAction = computed<{ key: string; label: string; run: () => void } |
   return null
 })
 
+/**
+ * 管理员备注只在**开产前**有意义：开产后制作单已经带走备注，
+ * 这页继续摆一个输入框，只会让人以为改了能同步过去。
+ */
+const remarkVisible = computed(() =>
+  ['INIT', 'PENDING_PAYMENT', 'PAID', 'PURCHASING'].includes(order.value?.status || ''),
+)
+
+const hasFoodUsage = computed(() =>
+  rawIngredientDetails.value.some((detail: any) => detail?.type === 'FOOD'),
+)
+const hasSupplementUsage = computed(() =>
+  rawIngredientDetails.value.some((detail: any) => detail?.type === 'SUPPLEMENT'),
+)
+
 const addressLockHint = computed(() => {
   const status = order.value?.status
   if (status === 'CANCELLED') return '本单已取消，地址不能再改'
@@ -969,6 +989,9 @@ const addressLockHint = computed(() => {
 const stageHint = computed(() => {
   const o = order.value
   if (!o) return ''
+  if (o.status === 'PAID' || o.status === 'PURCHASING') {
+    return '原料齐了就等工作台「生产管理」里开工，这页不用点。'
+  }
   if (o.status === 'IN_PRODUCTION') {
     return '制作进度在「生产任务」里推进，做完会自动进入「急冻中 / 待发货」。'
   }

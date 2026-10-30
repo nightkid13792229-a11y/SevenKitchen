@@ -107,9 +107,16 @@ describe('staff order center · 食谱 / 狗狗入口', () => {
   })
 
   it('没有可看的食谱/狗狗时整块入口不出现，而不是置灰', () => {
-    expect(orderCenter).toContain('v-if="canOpenRecipe(item) || canOpenDog(item)"')
+    expect(orderCenter).toContain('v-if="canShipItem(item) || canOpenRecipe(item) || canOpenDog(item)"')
     expect(orderCenter).toContain('return Boolean(item.itemId || item.recipeId)')
     expect(orderCenter).toContain('return Boolean(item.dogId)')
+  })
+
+  it('★ 待发货的单在列表上就能点「发货」', () => {
+    expect(orderCenter).toContain("item.statusGroup === 'TO_SHIP'")
+    expect(orderCenter).toContain('function openShip(item: OrderCenterItem)')
+    expect(orderCenter).toContain('&action=ship')
+    expect(orderCenter).toContain('class="entry primary"')
   })
 
   it('入口点击不会连带触发整张卡片的跳转', () => {

@@ -1,0 +1,2397 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>鲜食订单详情 · 优化原型（现状 / 整理后）</title>
+    <style>
+      :root {
+        --bg: #f0f3e9;
+        --surface: #fbfcf7;
+        --primary: #1e3a2f;
+        --primary-2: #24493a;
+        --primary-tint: #eef3ea;
+        --gold: #b08d4f;
+        --gold-soft: #f6efe0;
+        --ink: #26261f;
+        --ink-2: #6b6653;
+        --ink-3: #968f6d;
+        --line: #e3e6d4;
+        --danger: #b4553f;
+        --danger-soft: #f7e9e3;
+        --page: #ecefe3;
+      }
+
+      * {
+        box-sizing: border-box;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      body {
+        margin: 0;
+        padding: 52px 40px 80px;
+        background:
+          radial-gradient(1200px 600px at 20% -10%, #f7f8ef 0%, rgba(247, 248, 239, 0) 60%),
+          var(--page);
+        color: var(--ink);
+        font-family: -apple-system, BlinkMacSystemFont, "PingFang SC",
+          "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      }
+
+      .doc {
+        max-width: 1660px;
+        margin: 0 auto;
+      }
+
+      /* ============ 文档头部 ============ */
+      .doc-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 40px;
+        padding-bottom: 26px;
+        border-bottom: 1px solid #d8ddc9;
+        margin-bottom: 44px;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 12px;
+        border-radius: 999px;
+        background: var(--primary);
+        color: var(--gold-soft);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+      }
+
+      .doc-head h1 {
+        margin: 16px 0 8px;
+        font-size: 34px;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+        color: var(--primary);
+      }
+
+      .doc-head p {
+        margin: 0;
+        max-width: 620px;
+        font-size: 14px;
+        line-height: 1.7;
+        color: var(--ink-2);
+      }
+
+      .doc-meta {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        max-width: 420px;
+      }
+
+      .meta-chip {
+        padding: 7px 13px;
+        border-radius: 999px;
+        border: 1px solid #d8ddc9;
+        background: rgba(255, 255, 255, 0.55);
+        font-size: 12px;
+        color: var(--ink-2);
+        white-space: nowrap;
+      }
+
+      /* ============ 行与说明 ============ */
+      .row {
+        display: flex;
+        gap: 44px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+      }
+
+      .compare {
+        display: grid;
+        grid-template-columns: 375px 375px minmax(0, 1fr);
+        gap: 56px;
+        align-items: start;
+      }
+
+      .row + .row {
+        margin-top: 76px;
+      }
+
+      .row-head {
+        width: 100%;
+        display: flex;
+        align-items: baseline;
+        gap: 14px;
+        margin-bottom: 4px;
+      }
+
+      .row-title {
+        font-size: 20px;
+        font-weight: 800;
+        color: var(--primary);
+        letter-spacing: -0.01em;
+      }
+
+      .row-sub {
+        font-size: 13px;
+        color: var(--ink-3);
+      }
+
+      .frame {
+        margin: 0;
+      }
+
+      .frame figcaption {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 16px;
+        font-size: 13px;
+        color: var(--ink-2);
+        line-height: 1.5;
+      }
+
+      .tag {
+        flex: 0 0 auto;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+      }
+
+      .tag-before {
+        background: #e6e1d6;
+        color: #7a6a4f;
+      }
+
+      .tag-after {
+        background: var(--primary);
+        color: var(--gold-soft);
+      }
+
+      /* ============ 手机外壳 ============ */
+      .phone {
+        position: relative;
+        width: 375px;
+        height: 812px;
+        border-radius: 46px;
+        background: var(--bg);
+        overflow: hidden;
+        box-shadow: 0 0 0 9px #17251e, 0 0 0 10px #2d3d34,
+          0 26px 60px rgba(20, 35, 28, 0.26);
+      }
+
+      .phone-wrap {
+        position: relative;
+      }
+
+      .statusbar {
+        height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 24px 0 30px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #151a12;
+      }
+
+      .sb-right {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        letter-spacing: 0.02em;
+      }
+
+      .navbar {
+        position: relative;
+        height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 17px;
+        font-weight: 600;
+        color: #151a12;
+      }
+
+      .nav-back {
+        position: absolute;
+        left: 20px;
+        top: 50%;
+        transform: translateY(-52%);
+        font-size: 22px;
+        font-weight: 400;
+        color: #2a2f26;
+      }
+
+      .wx-capsule {
+        position: absolute;
+        right: 7px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 87px;
+        height: 32px;
+        border-radius: 16px;
+        border: 1px solid rgba(20, 30, 24, 0.12);
+        background: rgba(255, 255, 255, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: space-around;
+        font-size: 13px;
+        color: #2a2f26;
+        letter-spacing: 0.1em;
+      }
+
+      .wx-capsule .div {
+        width: 1px;
+        height: 16px;
+        background: rgba(20, 30, 24, 0.14);
+      }
+
+      .nav-cs {
+        position: absolute;
+        right: 99px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--gold-soft);
+        border: 1px solid rgba(176, 141, 79, 0.42);
+        font-size: 13px;
+      }
+
+      .screen {
+        position: relative;
+        height: 724px;
+        overflow: hidden;
+        background: var(--bg);
+      }
+
+      .homebar {
+        position: absolute;
+        bottom: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 134px;
+        height: 5px;
+        border-radius: 99px;
+        background: rgba(20, 25, 18, 0.28);
+        z-index: 40;
+      }
+
+      /* ============ 现状：类型 + 状态两层筛选 ============ */
+      .type-tabs {
+        display: flex;
+        gap: 2px;
+        margin: 4px 10px 0;
+        padding: 3px;
+        border-radius: 999px;
+        background: #f1ead9;
+      }
+
+      .type-tab {
+        flex: 1;
+        text-align: center;
+        padding: 6px 0;
+        border-radius: 999px;
+        font-size: 12px;
+        color: #6e5f4b;
+        white-space: nowrap;
+      }
+
+      .type-tab.active {
+        background: #fffdf7;
+        box-shadow: 0 2px 7px rgba(30, 58, 47, 0.08);
+        color: var(--primary);
+        font-weight: 700;
+      }
+
+      .status-tabs {
+        display: flex;
+        padding: 5px 10px 0;
+        overflow: hidden;
+        white-space: nowrap;
+      }
+
+      .stab {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: baseline;
+        gap: 2px;
+        padding: 7px 9px;
+        border-bottom: 2px solid transparent;
+        font-size: 13px;
+        color: var(--ink-2);
+      }
+
+      .stab.active {
+        color: var(--primary);
+        font-weight: 700;
+        border-bottom-color: #c6a15b;
+      }
+
+      .stab .cnt {
+        font-size: 10px;
+        color: #9a927f;
+      }
+
+      .stab.active .cnt {
+        color: #b08d4f;
+      }
+
+      .list {
+        padding: 10px 10px 0;
+      }
+
+      .card {
+        background: var(--surface);
+        border-radius: 8px;
+        padding: 12px;
+        margin-bottom: 10px;
+        box-shadow: 0 1px 4px rgba(30, 46, 36, 0.06);
+      }
+
+      .chead {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        padding-bottom: 8px;
+        margin-bottom: 8px;
+        border-bottom: 1px solid #eef1e2;
+      }
+
+      .ctype {
+        flex: 0 0 auto;
+        padding: 1px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 700;
+      }
+
+      .ctype-food {
+        background: #e8f5e9;
+        color: #2e7d32;
+      }
+
+      .ctype-supp {
+        background: #f3e8ff;
+        color: #7c3aed;
+      }
+
+      .ctype-custom {
+        background: #fff1e3;
+        color: #b45309;
+      }
+
+      .cstripe {
+        width: 2px;
+        height: 13px;
+        border-radius: 99px;
+        background: #2e7d32;
+      }
+
+      .cstripe-supp {
+        background: #7c3aed;
+      }
+
+      .ctime {
+        flex: 1;
+        min-width: 0;
+        font-size: 12px;
+        color: #8a7a66;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .cstatus {
+        flex: 0 0 auto;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .summary {
+        font-size: 13px;
+        color: var(--ink);
+        margin-bottom: 8px;
+      }
+
+      .dogs {
+        font-size: 14px;
+        font-weight: 500;
+        margin-bottom: 8px;
+      }
+
+      .items {
+        padding-left: 6px;
+        margin-bottom: 8px;
+      }
+
+      .rheader {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 4px;
+      }
+
+      .cover {
+        flex: 0 0 auto;
+        width: 40px;
+        height: 40px;
+        border-radius: 4px;
+        background-size: cover;
+        background-position: center;
+      }
+
+      .rname {
+        flex: 1;
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1.35;
+      }
+
+      .meal {
+        font-size: 13px;
+        color: var(--ink);
+      }
+
+      .addr {
+        padding-left: 6px;
+        margin-bottom: 8px;
+        font-size: 13px;
+      }
+
+      .supp-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 0;
+        font-size: 13px;
+      }
+
+      .supp-name {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .supp-amt {
+        font-size: 12px;
+        color: var(--ink-2);
+      }
+
+      .supp-price {
+        min-width: 60px;
+        text-align: right;
+        color: var(--danger);
+      }
+
+      .amount {
+        display: flex;
+        justify-content: flex-end;
+        align-items: baseline;
+        gap: 4px;
+        padding-top: 5px;
+      }
+
+      .alabel {
+        font-size: 13px;
+        color: var(--ink);
+      }
+
+      .aval {
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--danger);
+      }
+
+      .actions {
+        display: flex;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+        padding-top: 9px;
+        border-top: 1px solid #eef1e2;
+      }
+
+      .btn {
+        height: 30px;
+        min-width: 76px;
+        padding: 0 11px;
+        border: 0;
+        border-radius: 15px;
+        font-size: 12px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        white-space: nowrap;
+        font-family: inherit;
+      }
+
+      .btn.primary {
+        background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+        color: #f3eddd;
+      }
+
+      .btn.sec {
+        background: #eef2e4;
+        color: var(--ink);
+      }
+
+      .csbar {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        padding: 9px 14px 28px;
+        background: var(--surface);
+        box-shadow: 0 -4px 14px rgba(30, 46, 36, 0.08);
+        z-index: 30;
+      }
+
+      .csbtn {
+        width: 100%;
+        height: 40px;
+        border-radius: 999px;
+        background: var(--gold-soft);
+        color: #8a6b33;
+        border: 1px solid rgba(176, 141, 79, 0.4);
+        font-size: 13px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+      }
+
+      /* ============ 优化后：一行筛选 ============ */
+      .filterbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 12px 8px;
+        background: var(--bg);
+        position: relative;
+        z-index: 12;
+      }
+
+      .pills {
+        display: flex;
+        gap: 6px;
+        overflow: hidden;
+        flex: 1;
+        min-width: 0;
+        -webkit-mask-image: linear-gradient(
+          90deg,
+          #000 0,
+          #000 calc(100% - 10px),
+          transparent 100%
+        );
+        mask-image: linear-gradient(
+          90deg,
+          #000 0,
+          #000 calc(100% - 10px),
+          transparent 100%
+        );
+      }
+
+      .pill {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: baseline;
+        gap: 3px;
+        height: 30px;
+        padding: 0 11px;
+        border-radius: 999px;
+        background: #fffdf7;
+        border: 1px solid rgba(30, 58, 47, 0.08);
+        color: var(--ink-2);
+        font-size: 12.5px;
+        line-height: 30px;
+        white-space: nowrap;
+      }
+
+      .pill b {
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--gold);
+        transform: translateY(-4px);
+      }
+
+      .pill.active {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: var(--gold-soft);
+        font-weight: 700;
+      }
+
+      .pill.active b {
+        color: var(--gold-bright, #d8bc85);
+      }
+
+      .filter-btn {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        height: 30px;
+        padding: 0 10px;
+        border-radius: 999px;
+        background: transparent;
+        border: 1px solid rgba(30, 58, 47, 0.14);
+        font-size: 12px;
+        color: var(--primary);
+        font-weight: 600;
+      }
+
+      .funnel {
+        width: 10px;
+        height: 10px;
+        position: relative;
+      }
+
+      .funnel::before {
+        content: "";
+        position: absolute;
+        inset: 0 0 auto 0;
+        height: 1.6px;
+        background: var(--primary);
+        border-radius: 2px;
+        box-shadow: 0 4px 0 -0.2px var(--primary);
+      }
+
+      .funnel::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 1.6px;
+        transform: translateX(-50%);
+        width: 5px;
+        height: 5px;
+        background: var(--primary);
+        clip-path: polygon(0 0, 100% 0, 50% 100%);
+      }
+
+      /* 优化后的列表与卡片 */
+      .list2 {
+        padding: 2px 12px 0;
+      }
+
+      .card2 {
+        background: var(--surface);
+        border-radius: 16px;
+        padding: 14px;
+        margin-bottom: 10px;
+        box-shadow: 0 1px 5px rgba(30, 46, 36, 0.05);
+        position: relative;
+      }
+
+      .c2-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 7px;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11px;
+        font-weight: 700;
+        color: #2e7d32;
+      }
+
+      .chip .dot {
+        width: 5px;
+        height: 5px;
+        border-radius: 99px;
+        background: #2e7d32;
+      }
+
+      .chip-supp {
+        color: #7c3aed;
+      }
+
+      .chip-supp .dot {
+        background: #7c3aed;
+      }
+
+      .chip-custom {
+        color: #b45309;
+      }
+
+      .chip-custom .dot {
+        background: #b45309;
+      }
+
+      .chip-alert {
+        color: var(--danger);
+      }
+
+      .chip-alert .dot {
+        background: var(--danger);
+      }
+
+      .c2-date {
+        font-size: 11px;
+        color: var(--ink-3);
+      }
+
+      .c2-titlerow {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin-bottom: 3px;
+      }
+
+      .c2-title {
+        flex: 1;
+        min-width: 0;
+        margin: 0;
+        font-size: 15.5px;
+        font-weight: 700;
+        line-height: 1.35;
+        color: var(--ink);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .c2-price {
+        flex: 0 0 auto;
+        font-size: 17px;
+        font-weight: 800;
+        color: var(--danger);
+        letter-spacing: -0.01em;
+      }
+
+      .c2-price small {
+        font-size: 11px;
+        font-weight: 600;
+        margin-right: 1px;
+      }
+
+      .c2-meta {
+        font-size: 11.5px;
+        color: var(--ink-2);
+        line-height: 1.5;
+      }
+
+      /* 进度条 */
+      .steps {
+        display: flex;
+        margin: 13px 0 6px;
+      }
+
+      .step {
+        flex: 1;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .step:not(:last-child)::after {
+        content: "";
+        position: absolute;
+        top: 5px;
+        left: calc(50% + 11px);
+        right: calc(-50% + 11px);
+        height: 2px;
+        border-radius: 2px;
+        background: var(--line);
+      }
+
+      .step.done:not(:last-child)::after {
+        background: #9db9a8;
+      }
+
+      .sdot {
+        width: 12px;
+        height: 12px;
+        border-radius: 99px;
+        border: 2px solid #dedfcc;
+        background: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 7px;
+        color: #fff;
+        position: relative;
+        z-index: 1;
+      }
+
+      .step.done .sdot {
+        background: var(--primary);
+        border-color: var(--primary);
+      }
+
+      .step.cur .sdot {
+        border-color: var(--gold);
+        background: #fffdf7;
+        box-shadow: 0 0 0 3px rgba(176, 141, 79, 0.18);
+      }
+
+      .slabel {
+        font-size: 10.5px;
+        color: #b3ae98;
+        white-space: nowrap;
+      }
+
+      .step.done .slabel {
+        color: var(--ink-2);
+      }
+
+      .step.cur .slabel {
+        color: var(--primary);
+        font-weight: 700;
+      }
+
+      .eta {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 6px;
+        padding: 7px 10px;
+        border-radius: 9px;
+        background: var(--gold-soft);
+        font-size: 11.5px;
+        color: #7a5f2e;
+        line-height: 1.4;
+      }
+
+      .eta b {
+        font-weight: 800;
+        color: #6b4f1d;
+      }
+
+      .eta-ico {
+        font-size: 11px;
+        opacity: 0.75;
+      }
+
+      .c2-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 11px;
+      }
+
+      .order-no {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 10.5px;
+        color: var(--ink-3);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .copy {
+        padding: 1px 5px;
+        border-radius: 4px;
+        border: 1px solid var(--line);
+        color: var(--ink-2);
+        font-size: 9px;
+        transform: scale(0.96);
+      }
+
+      .link {
+        font-size: 11.5px;
+        font-weight: 700;
+        color: var(--primary);
+        white-space: nowrap;
+      }
+
+      .c2-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .btn2 {
+        height: 32px;
+        min-width: 84px;
+        padding: 0 14px;
+        border: 0;
+        border-radius: 999px;
+        font-size: 12.5px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-family: inherit;
+        white-space: nowrap;
+      }
+
+      .btn2.primary {
+        background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+        color: #f3eddd;
+      }
+
+      .btn2.ghost {
+        background: #fffdf7;
+        border: 1px solid rgba(30, 58, 47, 0.16);
+        color: var(--ink);
+      }
+
+      /* 待付款倒计时 */
+      .paybar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 9px;
+        padding: 8px 10px;
+        border-radius: 9px;
+        background: #fdf3e6;
+        border: 1px solid #f0e0c8;
+        font-size: 11.5px;
+        color: #8a5a1c;
+      }
+
+      .paybar b {
+        font-size: 12.5px;
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
+        color: #a8520f;
+      }
+
+      .paybar .pbtn {
+        flex: 0 0 auto;
+        height: 26px;
+        padding: 0 11px;
+        border-radius: 999px;
+        background: #a8520f;
+        color: #fff8ef;
+        font-size: 11.5px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+      }
+
+      /* 物流摘要 */
+      .logi {
+        display: flex;
+        gap: 8px;
+        margin-top: 9px;
+        padding: 8px 10px;
+        border-radius: 9px;
+        background: #f2f6ee;
+        border: 1px solid #e2e9d8;
+      }
+
+      .logi-ico {
+        font-size: 13px;
+        line-height: 1.2;
+      }
+
+      .logi-main {
+        font-size: 12px;
+        color: var(--ink);
+        line-height: 1.45;
+      }
+
+      .logi-sub {
+        margin-top: 2px;
+        font-size: 10.5px;
+        color: var(--ink-3);
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* 售后状态条 */
+      .refundbar {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin-top: 10px;
+        padding: 9px 11px;
+        border-radius: 9px;
+        background: var(--danger-soft);
+        font-size: 11.5px;
+        color: #8f3b28;
+        line-height: 1.45;
+      }
+
+      /* 已完成（低权重） */
+      .done-all {
+        opacity: 0.92;
+      }
+
+      /* ============ 标注 ============ */
+      .pin-rail {
+        position: absolute;
+        left: -30px;
+        top: 0;
+        bottom: 0;
+        width: 22px;
+        z-index: 35;
+        pointer-events: none;
+      }
+
+      .pin {
+        position: absolute;
+        left: 0;
+        z-index: 35;
+        width: 22px;
+        height: 22px;
+        border-radius: 99px;
+        background: var(--danger);
+        color: #fff;
+        font-size: 12px;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 8px rgba(180, 85, 63, 0.45), 0 0 0 3px #f0f3e9;
+        font-style: normal;
+      }
+
+      .pin::after {
+        content: "";
+        position: absolute;
+        left: 22px;
+        top: 50%;
+        width: 12px;
+        height: 1px;
+        background: rgba(180, 85, 63, 0.45);
+      }
+
+      /* ============ 图例 ============ */
+      .legend {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+        padding-top: 4px;
+      }
+
+      .metrics {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+        border-radius: 16px;
+        padding: 19px 8px;
+        margin-top: 6px;
+      }
+
+      .metric {
+        position: relative;
+        text-align: center;
+      }
+
+      .metric + .metric::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 8%;
+        height: 84%;
+        width: 1px;
+        background: rgba(246, 239, 224, 0.16);
+      }
+
+      .m-val {
+        font-size: 19px;
+        font-weight: 800;
+        color: #fbf7ec;
+        letter-spacing: -0.01em;
+      }
+
+      .m-val s {
+        text-decoration: none;
+        font-size: 13px;
+        font-weight: 600;
+        color: #d8bc85;
+        margin: 0 6px;
+      }
+
+      .m-key {
+        margin-top: 7px;
+        font-size: 11px;
+        color: rgba(246, 239, 224, 0.68);
+        line-height: 1.5;
+      }
+
+      .legend-item {
+        display: flex;
+        gap: 11px;
+        padding: 16px 18px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.62);
+        border: 1px solid #dde2d0;
+      }
+
+      .legend-num {
+        flex: 0 0 auto;
+        width: 22px;
+        height: 22px;
+        border-radius: 99px;
+        background: var(--danger);
+        color: #fff;
+        font-size: 12px;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .legend-body strong {
+        display: block;
+        font-size: 13px;
+        margin-bottom: 5px;
+        color: var(--primary);
+      }
+
+      .legend-body span {
+        font-size: 12px;
+        line-height: 1.65;
+        color: var(--ink-2);
+      }
+
+      /* ============ 状态行 ============ */
+      .state-row {
+        display: flex;
+        gap: 30px;
+        flex-wrap: nowrap;
+        flex-wrap: wrap;
+      }
+
+      /* 空状态 */
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 132px 34px 0;
+        text-align: center;
+      }
+
+      .empty-art {
+        position: relative;
+        width: 96px;
+        height: 96px;
+        border-radius: 999px;
+        background: radial-gradient(circle at 32% 28%, #fbfcf7 0%, #e6ecdc 70%);
+        border: 1px solid #dde4d2;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 34px;
+        color: #b9bda6;
+        margin-bottom: 22px;
+      }
+
+      .empty-title {
+        font-size: 16px;
+        font-weight: 800;
+        color: var(--primary);
+        margin-bottom: 8px;
+      }
+
+      .empty-text {
+        font-size: 12.5px;
+        line-height: 1.7;
+        color: var(--ink-2);
+        max-width: 250px;
+      }
+
+      .empty-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 24px;
+      }
+
+      /* 筛选面板 */
+      .scrim {
+        position: absolute;
+        inset: 0;
+        background: rgba(20, 30, 24, 0.42);
+        z-index: 20;
+      }
+
+      .sheet {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 25;
+        background: var(--surface);
+        border-radius: 20px 20px 0 0;
+        padding: 8px 16px 30px;
+        box-shadow: 0 -10px 40px rgba(20, 30, 24, 0.18);
+      }
+
+      .sheet-grip {
+        width: 36px;
+        height: 4px;
+        border-radius: 99px;
+        background: #d9dcc9;
+        margin: 4px auto 14px;
+      }
+
+      .sheet-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 4px;
+      }
+
+      .sheet-title {
+        font-size: 15px;
+        font-weight: 800;
+        color: var(--primary);
+      }
+
+      .sheet-reset {
+        font-size: 12px;
+        color: var(--ink-2);
+      }
+
+      .sheet-label {
+        margin: 18px 0 10px;
+        font-size: 11.5px;
+        font-weight: 700;
+        color: var(--ink-3);
+        letter-spacing: 0.04em;
+      }
+
+      .opts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .opt {
+        height: 32px;
+        padding: 0 15px;
+        border-radius: 999px;
+        background: #f4f6ec;
+        border: 1px solid transparent;
+        font-size: 12.5px;
+        color: var(--ink-2);
+        display: inline-flex;
+        align-items: center;
+      }
+
+      .opt.on {
+        background: var(--primary-tint);
+        border-color: rgba(30, 58, 47, 0.4);
+        color: var(--primary);
+        font-weight: 700;
+      }
+
+      .sheet-foot {
+        display: flex;
+        gap: 10px;
+        margin-top: 24px;
+      }
+
+      .sheet-foot .btn2 {
+        height: 42px;
+        flex: 1;
+        border-radius: 999px;
+      }
+
+      /* ============ 改动说明 ============ */
+      .mixed {
+        display: grid;
+        grid-template-columns: 375px minmax(0, 1fr);
+        gap: 56px;
+        align-items: start;
+        width: 100%;
+      }
+
+      .mixed-notes {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .mnote {
+        padding: 18px 20px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.62);
+        border: 1px solid #dde2d0;
+      }
+
+      .mnote .change-no {
+        font-family: inherit;
+      }
+
+      .mnote h4 {
+        margin: 7px 0 6px;
+        font-size: 13.5px;
+        color: var(--primary);
+      }
+
+      .mnote p {
+        margin: 0;
+        font-size: 12.5px;
+        line-height: 1.7;
+        color: var(--ink-2);
+      }
+
+      .type-table {
+        grid-column: 1 / -1;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.62);
+        border: 1px solid #dde2d0;
+        padding: 6px 20px 4px;
+      }
+
+      .tt-row {
+        display: grid;
+        grid-template-columns: 132px minmax(0, 1fr) minmax(0, 1fr);
+        gap: 16px;
+        align-items: center;
+        padding: 13px 0;
+        border-bottom: 1px solid #e7e9dc;
+        font-size: 12px;
+        color: var(--ink-2);
+      }
+
+      .tt-row:last-child {
+        border-bottom: 0;
+      }
+
+      .tt-head {
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        color: var(--ink-3);
+        padding-bottom: 9px;
+      }
+
+      .tt-type {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12.5px;
+        font-weight: 700;
+        color: var(--ink);
+      }
+
+      .rollout {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        padding: 18px 20px;
+        border-radius: 14px;
+        background: var(--primary-tint);
+        border: 1px solid #dde4d2;
+      }
+
+      .ro-step strong {
+        display: block;
+        font-size: 12.5px;
+        color: var(--primary);
+        margin-bottom: 6px;
+      }
+
+      .ro-step span {
+        font-size: 11.5px;
+        line-height: 1.65;
+        color: var(--ink-2);
+      }
+
+      .ro-tag {
+        display: inline-block;
+        margin-bottom: 8px;
+        padding: 2px 8px;
+        border-radius: 5px;
+        background: var(--primary);
+        color: var(--gold-soft);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+      }
+
+      .noted {
+        grid-column: 1 / -1;
+        padding: 14px 18px;
+        border-radius: 12px;
+        border: 1px dashed #cfd6be;
+        font-size: 12px;
+        line-height: 1.75;
+        color: var(--ink-2);
+      }
+
+      .noted b {
+        color: var(--primary);
+      }
+
+      .changes {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+        margin-top: 8px;
+      }
+
+      .change {
+        padding: 20px 22px;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.62);
+        border: 1px solid #dde2d0;
+      }
+
+      .change-no {
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        color: var(--gold);
+      }
+
+      .change h4 {
+        margin: 8px 0 7px;
+        font-size: 14.5px;
+        color: var(--primary);
+      }
+
+      .change p {
+        margin: 0;
+        font-size: 12.5px;
+        line-height: 1.75;
+        color: var(--ink-2);
+      }
+
+      .change p + p {
+        margin-top: 8px;
+      }
+
+      .why {
+        color: #8a6b33;
+      }
+
+      .footnote {
+        margin-top: 48px;
+        padding-top: 20px;
+        border-top: 1px solid #d8ddc9;
+        font-size: 12px;
+        line-height: 1.8;
+        color: var(--ink-3);
+        max-width: 900px;
+      }
+
+      /* 让局部内容可滚动（原型不需要滚动，但避免裁切突兀） */
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+      }
+    
+      /* ===== 详情页专用 ===== */
+      .dd-screen {
+        padding: 12px 10px 0;
+        height: 724px;
+        overflow: hidden;
+      }
+
+      .dd-type-tag {
+        display: inline-block;
+        padding: 5px 10px;
+        border-radius: 4px;
+        background: #fbfcf7;
+        color: #b08d4f;
+        font-size: 13px;
+        margin-bottom: 10px;
+      }
+
+      /* 现状：蓝色 6 步进度条（沿用 OrderProgressBar 的旧配色） */
+      .legacy-progress {
+        display: flex;
+        background: #ffffff;
+        border-radius: 8px;
+        padding: 18px 6px 14px;
+        margin-bottom: 10px;
+      }
+
+      .lp-step {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 5px;
+        position: relative;
+      }
+
+      .lp-icon {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        border: 1.5px solid #e8e8e8;
+        background: #f5f5f5;
+        color: #999;
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1;
+      }
+
+      .lp-step.done .lp-icon,
+      .lp-step.now .lp-icon {
+        border-color: #1890ff;
+      }
+
+      .lp-step.done .lp-icon {
+        background: #e6f7ff;
+        color: #1890ff;
+      }
+
+      .lp-step.now .lp-icon {
+        background: #1890ff;
+        color: #fff;
+      }
+
+      .lp-label {
+        font-size: 9px;
+        color: #999;
+        white-space: nowrap;
+        transform: scale(0.94);
+      }
+
+      .lp-step.done .lp-label,
+      .lp-step.now .lp-label {
+        color: #1890ff;
+      }
+
+      .lp-line {
+        position: absolute;
+        top: 13px;
+        left: calc(50% + 14px);
+        width: calc(100% - 28px);
+        height: 1.5px;
+        background: #e8e8e8;
+      }
+
+      .lp-step.done .lp-line {
+        background: #1890ff;
+      }
+
+      .oc-card {
+        background: #fbfcf7;
+        border-radius: 8px;
+        padding: 12px;
+        margin-bottom: 10px;
+      }
+
+      .oc-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .oc-title {
+        font-size: 17px;
+        font-weight: 700;
+        line-height: 1.35;
+      }
+
+      .oc-sub {
+        margin-top: 4px;
+        font-size: 11.5px;
+        color: #6b6653;
+      }
+
+      .oc-status {
+        flex: 0 0 auto;
+        font-size: 13px;
+        font-weight: 700;
+        color: #1890ff;
+      }
+
+      .oc-goods {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid #eef1e2;
+      }
+
+      .oc-cover {
+        width: 40px;
+        height: 40px;
+        border-radius: 4px;
+        background-size: cover;
+        background-position: center;
+        flex: 0 0 auto;
+      }
+
+      .oc-amount {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        margin-top: 10px;
+        font-size: 12.5px;
+        color: #26261f;
+      }
+
+      .oc-amount b {
+        font-size: 16px;
+        color: #b4553f;
+      }
+
+      .oc-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 9px 8px;
+        margin-top: 12px;
+        padding-top: 10px;
+        border-top: 1px solid #eef1e2;
+      }
+
+      .oc-cell b {
+        display: block;
+        font-size: 10.5px;
+        font-weight: 400;
+        color: #8a7a66;
+        margin-bottom: 2px;
+      }
+
+      .oc-cell span {
+        font-size: 12px;
+        color: #26261f;
+        word-break: break-all;
+      }
+
+      /* 通用详情区块 */
+      .sec {
+        background: #fbfcf7;
+        border-radius: 10px;
+        padding: 13px 12px;
+        margin-bottom: 10px;
+      }
+
+      .sec-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 9px;
+      }
+
+      .sec-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: #26261f;
+      }
+
+      .rline {
+        display: flex;
+        gap: 8px;
+        font-size: 12.5px;
+        padding: 3.5px 0;
+      }
+
+      .rline .k {
+        flex: 0 0 70px;
+        color: #8a7a66;
+      }
+
+      .rline .v {
+        flex: 1;
+        min-width: 0;
+        color: #26261f;
+      }
+
+      .empty-bar {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 34px;
+        background: #fbfcf7;
+        border-top: 1px solid #e5e8d4;
+        box-shadow: 0 -2px 8px rgba(30, 46, 36, 0.06);
+      }
+
+      .empty-bar span {
+        position: absolute;
+        left: 12px;
+        top: 9px;
+        font-size: 10px;
+        color: #b9b29a;
+      }
+
+      /* 优化后 */
+      .hero {
+        background: #fbfcf7;
+        border-radius: 16px;
+        padding: 14px;
+        margin-bottom: 10px;
+      }
+
+      .hero-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .hero-status {
+        font-size: 12px;
+        font-weight: 700;
+        color: #1e3a2f;
+      }
+
+      .hero-title {
+        margin: 8px 0 3px;
+        font-size: 17px;
+        font-weight: 700;
+        line-height: 1.35;
+      }
+
+      .hero-meta {
+        font-size: 11.5px;
+        color: #6b6653;
+      }
+
+      .hero-price {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        margin-top: 10px;
+        font-size: 11.5px;
+        color: #6b6653;
+      }
+
+      .hero-price b {
+        font-size: 19px;
+        font-weight: 800;
+        color: #b4553f;
+      }
+
+      .photo-grid {
+        display: flex;
+        gap: 6px;
+      }
+
+      .photo {
+        flex: 1;
+        height: 62px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #dfe6d3, #cbd6bd);
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        padding-bottom: 5px;
+        font-size: 9px;
+        color: #5b6b4f;
+      }
+
+      .fold-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: #fbfcf7;
+        border-radius: 10px;
+        padding: 13px 12px;
+        font-size: 12.5px;
+        color: #26261f;
+        margin-bottom: 10px;
+      }
+
+      .settle-note {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        background: #f6efe0;
+        border-radius: 10px;
+        padding: 10px 11px;
+        font-size: 11.5px;
+        line-height: 1.55;
+        color: #7a5f2e;
+      }
+
+      .dd-bottom {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        padding: 8px 12px 22px;
+        background: #fbfcf7;
+        box-shadow: 0 -4px 14px rgba(30, 46, 36, 0.08);
+        display: flex;
+        gap: 8px;
+      }
+
+      .dd-bottom .btn2 {
+        flex: 1;
+        height: 38px;
+      }
+
+      .naming {
+        width: 100%;
+        background: rgba(255, 255, 255, 0.62);
+        border: 1px solid #dde2d0;
+        border-radius: 14px;
+        padding: 4px 20px;
+        margin-bottom: 18px;
+      }
+
+      .nm-row {
+        display: grid;
+        grid-template-columns: 300px 220px minmax(0, 1fr);
+        gap: 18px;
+        align-items: center;
+        padding: 13px 0;
+        border-bottom: 1px solid #e7e9dc;
+        font-size: 12.5px;
+        color: var(--ink-2);
+      }
+
+      .nm-row:last-child {
+        border-bottom: 0;
+      }
+
+      .nm-row b {
+        color: var(--primary);
+        font-size: 13.5px;
+      }
+
+      .nm-head {
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        color: var(--ink-3);
+        padding: 10px 0 9px;
+      }
+
+      .hero-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 11px;
+        padding-top: 9px;
+        border-top: 1px solid #eef1e2;
+        font-size: 10.5px;
+        color: #968f6d;
+      }
+
+      .step.is-waiting .sdot {
+        border-color: #e0a04a;
+        background: #fffdf7;
+        box-shadow: 0 0 0 3px rgba(224, 160, 74, 0.16);
+      }
+
+      .step.is-waiting .slabel {
+        color: #a8520f;
+        font-weight: 700;
+      }
+</style>
+  </head>
+  <body>
+    <div class="doc">
+      <header class="doc-head">
+        <div>
+          <span class="eyebrow">SEVENKITCHEN · 小程序 · 顾客视角走查</span>
+          <h1>「鲜食订单详情」优化原型</h1>
+          <p>
+            同一个订单：左边是现在打开看到的样子，右边是整理之后的。目标很具体 ——
+            打开就知道<strong>这单到哪一步</strong>、<strong>什么时候到</strong>、<strong>我要做什么</strong>，
+            不用往下滚三屏才找到"我买了什么"。
+          </p>
+        </div>
+        <div class="doc-meta">
+          <span class="meta-chip">375 × 812</span>
+          <span class="meta-chip">沿用深墨绿 + 金</span>
+          <span class="meta-chip">成品鲜食 → 鲜食</span>
+          <span class="meta-chip">2026-10-30</span>
+        </div>
+      </header>
+
+      <!-- ===================== 一、同屏对照 ===================== -->
+      <section class="row">
+        <div class="row-head">
+          <span class="row-title">一、同屏对照</span>
+          <span class="row-sub">左：现状（按现有页面还原）　右：整理后</span>
+        </div>
+
+        <div class="compare">
+          <!-- ---------- 现状 ---------- -->
+          <figure class="frame">
+            <figcaption>
+              <span class="tag tag-before">现状</span>
+              六类信息各说两遍；进度条是旧的蓝色六步；底部一条空栏
+            </figcaption>
+            <div class="phone">
+              <div class="statusbar"><span>9:41</span><span class="sb-right">●●● ▮ 100%</span></div>
+              <div class="navbar">
+                <span class="nav-back">‹</span>
+                <span>订单详情</span>
+                <span class="wx-capsule"><span>···</span><span class="div"></span><span>◎</span></span>
+              </div>
+              <div class="screen dd-screen">
+                <div class="dd-type-tag">鲜食制作订单</div>
+
+                <div class="legacy-progress">
+                  <div class="lp-step done"><div class="lp-icon">✓</div><div class="lp-label">已付款</div><div class="lp-line"></div></div>
+                  <div class="lp-step done"><div class="lp-icon">🛒</div><div class="lp-label">采购中</div><div class="lp-line"></div></div>
+                  <div class="lp-step now"><div class="lp-icon">👨‍🍳</div><div class="lp-label">生产中</div><div class="lp-line"></div></div>
+                  <div class="lp-step"><div class="lp-icon">❄️</div><div class="lp-label">急冻中</div><div class="lp-line"></div></div>
+                  <div class="lp-step"><div class="lp-icon">🚚</div><div class="lp-label">已发货</div><div class="lp-line"></div></div>
+                  <div class="lp-step"><div class="lp-icon">✅</div><div class="lp-label">已完成</div></div>
+                </div>
+
+                <div class="oc-card">
+                  <div class="oc-head">
+                    <div>
+                      <div class="oc-title">羊肚菌芦笋糙米牛肉</div>
+                      <div class="oc-sub">微信订单中心可查看的商品订单详情</div>
+                    </div>
+                    <span class="oc-status">生产中</span>
+                  </div>
+                  <div class="oc-goods">
+                    <div class="oc-cover" style="background-image: url(assets/orders-proto/a.jpg)"></div>
+                    <div style="flex:1;min-width:0">
+                      <div class="oc-title" style="font-size:14px">羊肚菌芦笋糙米牛肉 × 30 袋</div>
+                      <div class="oc-sub">咖喱 · 6.5kg · 预售 11月2日发货</div>
+                    </div>
+                  </div>
+                  <div class="oc-amount"><span>实付/应付金额</span><b>¥486.00</b></div>
+                  <div class="oc-grid">
+                    <div class="oc-cell"><b>订单编号</b><span>3f9c1e2a-8b4d-4a7e-9c2f-1d5e6b7a8c90</span></div>
+                    <div class="oc-cell"><b>下单时间</b><span>2026-10-29 20:14</span></div>
+                    <div class="oc-cell"><b>购买账号</b><span>赛文爸爸</span></div>
+                    <div class="oc-cell"><b>联系电话</b><span>186****8025</span></div>
+                  </div>
+                </div>
+
+                <div class="sec">
+                  <div class="sec-title">基本信息</div>
+                  <div class="rline"><span class="k">订单编号:</span><span class="v">SK20261029-004</span><span class="link">复制</span></div>
+                  <div class="rline"><span class="k">订单状态:</span><span class="v" style="color:#1890ff">生产中</span></div>
+                  <div class="rline"><span class="k">下单时间:</span><span class="v">2026-10-29 20:14</span></div>
+                  <div class="rline"><span class="k">目标制作日期:</span><span class="v">2026-11-01</span><span class="link">修改</span></div>
+                  <div class="rline"><span class="k">收货地址:</span><span class="v">赛文爸爸 186****8025 成都市 高新区…</span></div>
+                  <div class="rline"><span class="k">订单金额:</span><span class="v" style="color:#b4553f">¥486.00</span></div>
+                </div>
+
+                <div class="sec" style="margin-bottom:0">
+                  <div class="sec-title">购买人与配送</div>
+                  <div class="rline"><span class="k">购买人</span><span class="v">赛文爸爸</span></div>
+                  <div class="rline"><span class="k">联系方式</span><span class="v">186****8025</span></div>
+                  <div class="rline"><span class="k">收货人</span><span class="v">赛文爸爸</span></div>
+                </div>
+
+                <div class="empty-bar"><span>↑ 这条是空的，但一直占着</span></div>
+              </div>
+              <div class="homebar"></div>
+            </div>
+          </figure>
+
+          <!-- ---------- 优化后 ---------- -->
+          <figure class="frame">
+            <figcaption>
+              <span class="tag tag-after">整理后</span>
+              一张主卡说清"到哪步、什么时候到、买了什么"，其余按需展开
+            </figcaption>
+            <div class="phone-wrap">
+              <div class="phone">
+                <div class="statusbar"><span>9:41</span><span class="sb-right">●●● ▮ 100%</span></div>
+                <div class="navbar">
+                  <span class="nav-back">‹</span>
+                  <span>鲜食订单详情</span>
+                  <span class="wx-capsule"><span>···</span><span class="div"></span><span>◎</span></span>
+                </div>
+                <div class="screen dd-screen">
+                  <div class="hero">
+                    <div class="hero-top">
+                      <span class="chip"><i class="dot"></i>鲜食</span>
+                      <span class="hero-status">制作中</span>
+                    </div>
+                    <div class="hero-title">羊肚菌芦笋糙米牛肉</div>
+                    <div class="hero-meta">咖喱 · 6.5kg · 共 30 袋 · 300g/袋</div>
+
+                    <div class="steps">
+                      <div class="step done"><span class="sdot">✓</span><span class="slabel">已付款</span></div>
+                      <div class="step cur"><span class="sdot"></span><span class="slabel">制作中</span></div>
+                      <div class="step"><span class="sdot"></span><span class="slabel">已发货</span></div>
+                      <div class="step"><span class="sdot"></span><span class="slabel">已签收</span></div>
+                    </div>
+
+                    <div class="eta">
+                      <span class="eta-ico">⏱</span>
+                      <span>预计 <b>11月2日</b> 发出 · 顺丰冷链，次日达</span>
+                    </div>
+
+                    <div class="hero-price">
+                      <span>实付金额</span>
+                      <b>¥486.00</b>
+                    </div>
+                    <div class="hero-foot">
+                      <span>订单号 SK20261029-004 <span class="copy">复制</span></span>
+                      <span>下单 10-29 20:14</span>
+                    </div>
+                  </div>
+
+                  <div class="sec">
+                    <div class="sec-head">
+                      <span class="sec-title">收货信息</span>
+                      <span class="link">复制地址</span>
+                    </div>
+                    <div class="rline"><span class="k">收货人</span><span class="v">赛文爸爸 · 186****8025</span></div>
+                    <div class="rline"><span class="k">地址</span><span class="v">成都市高新区天府三街 199 号</span></div>
+                    <div class="rline"><span class="k">预计发货</span><span class="v">11月2日</span></div>
+                  </div>
+
+                  <div class="sec">
+                    <div class="sec-head">
+                      <span class="sec-title">制作照片</span>
+                      <span class="link">全部 6 张 ›</span>
+                    </div>
+                    <div class="photo-grid">
+                      <div class="photo">原料到位</div>
+                      <div class="photo">称重分锅</div>
+                      <div class="photo">装袋急冻</div>
+                    </div>
+                  </div>
+
+                  <div class="sec">
+                    <div class="sec-head"><span class="sec-title">需要修改或取消？</span></div>
+                    <div style="font-size:11.5px;line-height:1.55;color:#6b6653;margin-bottom:10px">
+                      订单已进入制作，食材按你的预约单独采购，无法自助取消。有特殊情况找我们。
+                    </div>
+                    <button class="btn2 ghost" style="height:34px;width:100%">联系客服</button>
+                  </div>
+
+                  <div class="fold-row">
+                    <span>服务与售后说明（配送 / 售后）</span>
+                    <span style="color:#968f6d">›</span>
+                  </div>
+                </div>
+                <div class="homebar"></div>
+              </div>
+
+              <div class="pin-rail">
+                <i class="pin" style="top: 150px">1</i>
+                <i class="pin" style="top: 208px">2</i>
+                <i class="pin" style="top: 330px">3</i>
+                <i class="pin" style="top: 505px">4</i>
+              </div>
+            </div>
+          </figure>
+
+          <!-- ---------- 图例 ---------- -->
+          <div class="legend">
+            <div class="legend-item">
+              <span class="legend-num">1</span>
+              <div class="legend-body">
+                <strong>一张主卡 = 一张脸</strong>
+                <span>进度、商品名、袋数克数、实付、预计发货，全在第一张卡里说完。</span>
+              </div>
+            </div>
+            <div class="legend-item">
+              <span class="legend-num">2</span>
+              <div class="legend-body">
+                <strong>四步进度，跟列表一致</strong>
+                <span>已付款 · 制作中 · 已发货 · 已签收，去掉"采购中 / 急冻中"这种内部词，也换回墨绿金。</span>
+              </div>
+            </div>
+            <div class="legend-item">
+              <span class="legend-num">3</span>
+              <div class="legend-body">
+                <strong>六类信息只说一遍</strong>
+                <span>单号、状态、下单时间、账号电话、地址、预计制作，原来每样都占两个区块。</span>
+              </div>
+            </div>
+            <div class="legend-item">
+              <span class="legend-num">4</span>
+              <div class="legend-body">
+                <strong>没动作就不占底部</strong>
+                <span>制作中、售后中不再渲染空白操作栏；说明收进一行，点开才展开。</span>
+              </div>
+            </div>
+
+            <div class="metrics">
+              <div class="metric">
+                <div class="m-val">10<s>→</s>5<span style="font-size: 11px"> 块</span></div>
+                <div class="m-key">同一屏的区块数</div>
+              </div>
+              <div class="metric">
+                <div class="m-val">6<s>→</s>0<span style="font-size: 11px"> 类</span></div>
+                <div class="m-key">说了两遍的信息</div>
+              </div>
+              <div class="metric">
+                <div class="m-val">有<s>→</s>无</div>
+                <div class="m-key">底部空白操作栏</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== 二、三个关键状态 ===================== -->
+      <section class="row" style="margin-top: 84px">
+        <div class="row-head">
+          <span class="row-title">二、三个关键状态</span>
+          <span class="row-sub">待付款 / 已发货 / 已完成且成品有调整</span>
+        </div>
+
+        <div class="state-row">
+          <!-- 待付款 -->
+          <figure class="frame">
+            <figcaption><span class="tag tag-after">待付款</span>倒计时 + 付款就在底部</figcaption>
+            <div class="phone">
+              <div class="statusbar"><span>9:41</span><span class="sb-right">●●● ▮ 100%</span></div>
+              <div class="navbar">
+                <span class="nav-back">‹</span><span>鲜食订单详情</span>
+                <span class="wx-capsule"><span>···</span><span class="div"></span><span>◎</span></span>
+              </div>
+              <div class="screen dd-screen" style="padding-bottom:80px">
+                <div class="hero">
+                  <div class="hero-top">
+                    <span class="chip"><i class="dot"></i>鲜食</span>
+                    <span class="hero-status" style="color:#a8520f">待付款</span>
+                  </div>
+                  <div class="hero-title">羊肚菌芦笋糙米牛肉</div>
+                  <div class="hero-meta">咖喱 · 6.5kg · 共 30 袋 · 300g/袋</div>
+                  <div class="steps">
+                    <div class="step cur is-waiting"><span class="sdot"></span><span class="slabel">待付款</span></div>
+                    <div class="step"><span class="sdot"></span><span class="slabel">制作中</span></div>
+                    <div class="step"><span class="sdot"></span><span class="slabel">已发货</span></div>
+                    <div class="step"><span class="sdot"></span><span class="slabel">已签收</span></div>
+                  </div>
+                  <div class="eta" style="background:#fdf3e6">
+                    <span class="eta-ico">⏳</span>
+                    <span style="color:#8a5a1c">订单将在 <b style="color:#a8520f">23 分钟</b> 后自动关闭</span>
+                  </div>
+                  <div class="hero-price"><span>应付金额</span><b>¥486.00</b></div>
+                    <div class="hero-foot">
+                      <span>订单号 SK20261030-011 <span class="copy">复制</span></span>
+                      <span>下单 10-30 20:14</span>
+                    </div>
+                </div>
+
+                <div class="sec">
+                  <div class="sec-head"><span class="sec-title">收货信息</span><span class="link">修改地址</span></div>
+                  <div class="rline"><span class="k">收货人</span><span class="v">赛文爸爸 · 186****8025</span></div>
+                  <div class="rline"><span class="k">地址</span><span class="v">成都市高新区天府三街 199 号</span></div>
+                  <div class="rline"><span class="k">预计制作</span><span class="v">11月1日</span></div>
+                </div>
+
+                <div class="fold-row"><span>服务与售后说明</span><span style="color:#968f6d">›</span></div>
+              </div>
+              <div class="dd-bottom">
+                <button class="btn2 ghost">取消订单</button>
+                <button class="btn2 primary">立即支付 ¥486.00</button>
+              </div>
+              <div class="homebar"></div>
+            </div>
+          </figure>
+
+          <!-- 已发货 -->
+          <figure class="frame">
+            <figcaption><span class="tag tag-after">已发货</span>物流一句话说完，再给两个动作</figcaption>
+            <div class="phone">
+              <div class="statusbar"><span>9:41</span><span class="sb-right">●●● ▮ 100%</span></div>
+              <div class="navbar">
+                <span class="nav-back">‹</span><span>鲜食订单详情</span>
+                <span class="wx-capsule"><span>···</span><span class="div"></span><span>◎</span></span>
+              </div>
+              <div class="screen dd-screen" style="padding-bottom:80px">
+                <div class="hero">
+                  <div class="hero-top">
+                    <span class="chip"><i class="dot"></i>鲜食</span>
+                    <span class="hero-status">已发货</span>
+                  </div>
+                  <div class="hero-title">兔里脊大米土豆</div>
+                  <div class="hero-meta">咖喱 · 6.5kg · 共 20 袋 · 300g/袋</div>
+                  <div class="steps">
+                    <div class="step done"><span class="sdot">✓</span><span class="slabel">已付款</span></div>
+                    <div class="step done"><span class="sdot">✓</span><span class="slabel">制作中</span></div>
+                    <div class="step cur"><span class="sdot"></span><span class="slabel">已发货</span></div>
+                    <div class="step"><span class="sdot"></span><span class="slabel">已签收</span></div>
+                  </div>
+                  <div class="logi" style="margin-top:10px">
+                    <span class="logi-ico">🚚</span>
+                    <div>
+                      <div class="logi-main">顺丰速运 · 已到达成都双流分拨中心</div>
+                      <div class="logi-sub">今天 09:12 · SF1234567890</div>
+                    </div>
+                  </div>
+                  <div class="hero-price"><span>实付金额</span><b>¥324.00</b></div>
+                    <div class="hero-foot">
+                      <span>订单号 SK20261026-002 <span class="copy">复制</span></span>
+                      <span>下单 10-26 09:02</span>
+                    </div>
+                </div>
+
+                <div class="sec">
+                  <div class="sec-head"><span class="sec-title">收货信息</span><span class="link">复制地址</span></div>
+                  <div class="rline"><span class="k">收货人</span><span class="v">赛文爸爸 · 186****8025</span></div>
+                  <div class="rline"><span class="k">地址</span><span class="v">成都市高新区天府三街 199 号</span></div>
+                </div>
+
+                <div class="fold-row"><span>服务与售后说明</span><span style="color:#968f6d">›</span></div>
+              </div>
+              <div class="dd-bottom">
+                <button class="btn2 ghost">申请售后</button>
+                <button class="btn2 primary">确认收货</button>
+              </div>
+              <div class="homebar"></div>
+            </div>
+          </figure>
+
+          <!-- 已完成的成品调整 -->
+          <figure class="frame">
+            <figcaption><span class="tag tag-after">已完成 · 有调整</span>只有真退钱时才出现结算块</figcaption>
+            <div class="phone">
+              <div class="statusbar"><span>9:41</span><span class="sb-right">●●● ▮ 100%</span></div>
+              <div class="navbar">
+                <span class="nav-back">‹</span><span>鲜食订单详情</span>
+                <span class="wx-capsule"><span>···</span><span class="div"></span><span>◎</span></span>
+              </div>
+              <div class="screen dd-screen" style="padding-bottom:80px">
+                <div class="hero">
+                  <div class="hero-top">
+                    <span class="chip"><i class="dot"></i>鲜食</span>
+                    <span class="hero-status" style="color:#8a7a66">已完成</span>
+                  </div>
+                  <div class="hero-title">小米山药猪肉</div>
+                  <div class="hero-meta">咖喱 · 6.5kg · 共 16 袋 · 300g/袋</div>
+                  <div class="steps">
+                    <div class="step done"><span class="sdot">✓</span><span class="slabel">已付款</span></div>
+                    <div class="step done"><span class="sdot">✓</span><span class="slabel">制作中</span></div>
+                    <div class="step done"><span class="sdot">✓</span><span class="slabel">已发货</span></div>
+                    <div class="step done"><span class="sdot">✓</span><span class="slabel">已签收</span></div>
+                  </div>
+                  <div class="hero-price"><span>实付金额</span><b>¥288.00</b></div>
+                    <div class="hero-foot">
+                      <span>订单号 SK20261012-008 <span class="copy">复制</span></span>
+                      <span>下单 10-12 18:40</span>
+                    </div>
+                </div>
+
+                <div class="sec">
+                  <div class="sec-head"><span class="sec-title">成品调整</span><span class="link">查看明细</span></div>
+                  <div class="settle-note">
+                    <span>↩</span>
+                    <span>这单成品比计划少了 <b>20g</b>（约 1 袋），已按比例退 <b>¥12.00</b>，原路退回微信支付。</span>
+                  </div>
+                </div>
+
+                <div class="sec">
+                  <div class="sec-head"><span class="sec-title">收货信息</span><span class="link">复制地址</span></div>
+                  <div class="rline"><span class="k">收货人</span><span class="v">赛文爸爸 · 186****8025</span></div>
+                  <div class="rline"><span class="k">地址</span><span class="v">成都市高新区天府三街 199 号</span></div>
+                </div>
+              </div>
+              <div class="dd-bottom">
+                <button class="btn2 ghost">申请售后</button>
+                <button class="btn2 primary">再来一份</button>
+              </div>
+              <div class="homebar"></div>
+            </div>
+          </figure>
+        </div>
+      </section>
+
+      <!-- ===================== 三、改名与改动 ===================== -->
+      <section class="row" style="margin-top: 84px">
+        <div class="row-head">
+          <span class="row-title">三、改名与改动清单</span>
+          <span class="row-sub">每一条都对着代码和现有规则核过</span>
+        </div>
+
+        <div class="naming">
+          <div class="nm-row nm-head"><span>现在</span><span>改成</span><span>影响面</span></div>
+          <div class="nm-row">
+            <span>成品鲜食（卡片 / 筛选里的类型名）</span>
+            <span><b>鲜食</b></span>
+            <span>一个文案源 + 3 条测试断言，约 1 小时</span>
+          </div>
+          <div class="nm-row">
+            <span>订单详情（页面标题）</span>
+            <span><b>鲜食订单详情</b></span>
+            <span>和「定制订单详情」「补剂订单详情」对齐</span>
+          </div>
+          <div class="nm-row">
+            <span>鲜食制作订单（页首标签）</span>
+            <span><b>鲜食订单</b></span>
+            <span>同一个东西不再三种叫法</span>
+          </div>
+        </div>
+
+        <div class="changes">
+          <div class="change">
+            <div class="change-no">01</div>
+            <h4>首屏合并成一张主卡</h4>
+            <p>进度 + 商品 + 袋数克数 + 实付 + 预计发货，都在第一张卡。</p>
+            <p class="why">为什么：现在商品被"订单中心卡 / 基本信息 / 购买人与配送"三张表压在下面。</p>
+          </div>
+          <div class="change">
+            <div class="change-no">02</div>
+            <h4>六类信息去重</h4>
+            <p>单号、状态、下单时间、账号电话、收货地址、预计制作，每样只留一处。</p>
+            <p class="why">为什么：现在每样都出现两次，顾客要对照着看才知道哪个是真的。</p>
+          </div>
+          <div class="change">
+            <div class="change-no">03</div>
+            <h4>进度改四步、换回品牌色</h4>
+            <p>已付款 · 制作中 · 已发货 · 已签收，和列表页一致；去掉采购中/急冻中。</p>
+            <p class="why">为什么：现在这条是旧的蓝色六步，和全站墨绿金不搭，词也是内部工序。待付款时第一步显示"待付款"而不是"已付款"（列表页同样要改）。</p>
+          </div>
+          <div class="change">
+            <div class="change-no">04</div>
+            <h4>订单号统一成可读短号</h4>
+            <p>顶部那张卡不再显示 36 位长 ID，统一用 SK20261029-004 并可复制。</p>
+            <p class="why">为什么：顾客要报单号给客服，长 ID 念不出来也抄不下来。</p>
+          </div>
+          <div class="change">
+            <div class="change-no">05</div>
+            <h4>没有动作就不出现底部栏</h4>
+            <p>制作中、售后中不再有一条空白操作栏。</p>
+            <p class="why">为什么：现在这四个状态底部是一条有阴影的空栏，看着像页面坏了。</p>
+          </div>
+          <div class="change">
+            <div class="change-no">06</div>
+            <h4>售后入口合成一处</h4>
+            <p>中部三段（取消 / 锁定提示 / 售后）和底部按钮栏合并成一张卡 + 一条底栏。</p>
+            <p class="why">为什么：同一个动作现在有两套按钮，规则也分在两个地方写。</p>
+          </div>
+          <div class="change">
+            <div class="change-no">07</div>
+            <h4>生产结算改成说人话</h4>
+            <p>有调整才出现，写"少了 20g，退了 ¥12"；没有调整整块不显示。</p>
+            <p class="why">为什么：现在"计划成品 / 实际成品 / 成品缺口 / 待结算"是商家账目，顾客看不出跟自己有什么关系。数据和规则不变。</p>
+          </div>
+          <div class="change">
+            <div class="change-no">08</div>
+            <h4>商品卡只留顾客要的</h4>
+            <p>食谱名、袋数、总重、分装明细；版本号 v3、营养标准、原料来源收进"查看食谱"。</p>
+            <p class="why">为什么：这些是内部规格，顾客核对的是"是不是我买的那份、多少袋"。</p>
+          </div>
+          <div class="change">
+            <div class="change-no">09</div>
+            <h4>说明折叠、物流跳转</h4>
+            <p>"商家说明"五条收成一行，点开看；物流从字段列表改成"查看轨迹"，跳到已有页面。</p>
+            <p class="why">为什么：说明占了整整一屏；轨迹要单独接快递接口，这轮先复用现成页面。</p>
+          </div>
+        </div>
+      </section>
+
+      <p class="footnote">
+        说明：原型里的订单、金额、单号、物流轨迹为示例数据；配色与字号取自小程序现有变量。
+        这套改动以改前端为主，只有"物流轨迹"需要另接接口，本轮不做，改为跳转现有「物流与食用提醒」页。
+        页面有 26 个用例、106 条源码断言，重排时只新增不改名，与「我的订单」那次同一套做法。
+      </p>
+    </div>
+</body>
+</html>

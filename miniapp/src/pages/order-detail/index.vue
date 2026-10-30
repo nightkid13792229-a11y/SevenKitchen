@@ -151,8 +151,11 @@
       </view>
 
       <view class="section merchant-note-section">
-        <view class="section-title">商家说明</view>
-        <view class="merchant-note-list">
+        <view class="merchant-note-toggle" @tap="toggleMerchantNotes">
+          <text class="section-title" style="margin-bottom: 0">服务说明</text>
+          <text class="merchant-note-arrow">{{ merchantNotesExpanded ? '收起' : '查看' }} ›</text>
+        </view>
+        <view v-if="merchantNotesExpanded" class="merchant-note-list">
           <view class="merchant-note-item">
             <text class="merchant-note-label">订单备注</text>
             <text class="merchant-note-value">{{
@@ -232,22 +235,17 @@
       </view>
 
       <view
-        v-if="shouldShowFinancialSummary"
+        v-if="shouldShowFinancialSummary && hasPendingSettlementAmount"
         class="section settlement-section"
       >
-        <view class="section-title">生产结算</view>
+        <view class="section-title">成品调整</view>
         <view class="settlement-card" :class="settlementAdjustmentClass">
           <view class="settlement-header">
             <text class="settlement-title">{{ formatAdjustmentText() }}</text>
-            <text class="settlement-status">{{
-              orderFinancialSummary?.settlementStatus === 'SETTLED'
-                ? '已结算'
-                : '待结算'
-            }}</text>
           </view>
-          <text class="settlement-desc">{{ settlementDescription }}</text>
+          <text class="settlement-desc">{{ settlementPlainText }}</text>
           <view
-            v-if="orderFinancialSummary?.latestSettlement"
+            v-if="orderFinancialSummary?.latestSettlement && settlementDetailExpanded"
             class="settlement-metrics"
           >
             <view class="settlement-metric">
@@ -381,6 +379,18 @@
         </view>
       </view>
 
+      <!-- 怎么喂、怎么存：已发货/已完成给一个入口，复用现成页面 -->
+      <view
+        v-if="order.status === 'SHIPPED' || order.status === 'COMPLETED'"
+        class="section reminder-section"
+        @tap="goShippingNotice"
+      >
+        <view class="reminder-row">
+          <text class="reminder-title">怎么喂、怎么存</text>
+          <text class="reminder-link">食用与保存提醒 ›</text>
+        </view>
+      </view>
+
       <view class="section service-section">
         <view class="section-title">客服</view>
         <button
@@ -425,18 +435,31 @@
             :key="item.id"
             class="order-item-card"
           >
-            <!-- 第1层：食谱基本信息 -->
+            <!-- 第1层：食谱基本信息（版本/营养标准收进「规格与来源」） -->
             <view class="item-header">
               <text class="recipe-name">{{ item.recipeSnapshot?.name }}</text>
               <text v-if="isStockOrder" class="nutrition-standard"
                 >现货 · 试吃装</text
               >
-              <text v-else class="recipe-version"
-                >v{{ item.recipeSnapshot?.version }}</text
-              >
-              <text class="nutrition-standard">{{
-                getNutritionStandardLabel(item.recipeSnapshot?.nutrition_standard || '')
-              }}</text>
+              <text class="spec-toggle" @tap.stop="toggleItemSpec(item.id)">
+                {{ isItemSpecExpanded(item.id) ? '收起' : '规格与来源' }} ›
+              </text>
+            </view>
+
+            <view
+              v-if="isItemSpecExpanded(item.id)"
+              class="item-spec-fold"
+            >
+              <view class="package-row">
+                <text class="package-label">食谱版本:</text>
+                <text class="package-value">v{{ item.recipeSnapshot?.version }}</text>
+              </view>
+              <view class="package-row">
+                <text class="package-label">营养标准:</text>
+                <text class="package-value">{{
+                  getNutritionStandardLabel(item.recipeSnapshot?.nutrition_standard || '')
+                }}</text>
+              </view>
             </view>
 
             <!-- 试吃装：列出这一套包含哪几道菜 -->
@@ -1186,6 +1209,66 @@ const isStaffOrAdmin = computed(() => {
 });
 
 /** 售后与修改卡：三个互斥状态任一成立就显示（2026-10-30） */
+/** 有未处理的退款/补款时才值得给顾客看这张卡（2026-10-30） */
+const hasPendingSettlementAmount = computed(() => {
+  const summary = orderFinancialSummary.value?.adjustmentSummary;
+  if (!summary) return false;
+  return (
+    Number(summary.pendingRefundAmount || 0) > 0 ||
+    Number(summary.pendingExtraPaymentAmount || 0) > 0
+  );
+});
+
+/** 成品调整的人话：少了多少克、退多少钱；补款同理 */
+const settlementPlainText = computed(() => {
+  const summary = orderFinancialSummary.value;
+  if (!summary) return '';
+  const refund = Number(summary.adjustmentSummary?.pendingRefundAmount || 0);
+  const extra = Number(
+    summary.adjustmentSummary?.pendingExtraPaymentAmount || 0,
+  );
+  const shortageG = Math.round(
+    Number(summary.latestSettlement?.shortageG || 0),
+  );
+
+  if (refund > 0) {
+    return shortageG > 0
+      ? `这单成品比计划少了 ${shortageG}g，会退你 ¥${formatAmount(refund)}，原路退回。`
+      : `这单会退你 ¥${formatAmount(refund)}，原路退回。`;
+  }
+  if (extra > 0) {
+    return `这单需要补 ¥${formatAmount(extra)}，客服会联系你确认方式。`;
+  }
+  return '';
+});
+
+const settlementDetailExpanded = ref(false);
+/** 每个商品行的「规格与来源」是否展开（2026-10-30） */
+const expandedItemSpecs = ref<Record<string, boolean>>({});
+
+function toggleItemSpec(itemId: string): void {
+  if (!itemId) return;
+  expandedItemSpecs.value[itemId] = !expandedItemSpecs.value[itemId];
+}
+
+function isItemSpecExpanded(itemId: string): boolean {
+  return Boolean(expandedItemSpecs.value[itemId]);
+}
+
+const merchantNotesExpanded = ref(false);
+
+function toggleMerchantNotes(): void {
+  merchantNotesExpanded.value = !merchantNotesExpanded.value;
+}
+
+function goShippingNotice(): void {
+  const current = order.value;
+  if (!current) return;
+  uni.navigateTo({
+    url: `/pages/order-shipping-notice/index?orderId=${current.id}`,
+  });
+}
+
 const hasAftersaleHub = computed(() => {
   const current = order.value;
   if (!current) return false;
@@ -4954,5 +5037,53 @@ async function applyRefund() {
 .hero-time {
   font-size: 20rpx;
   color: #968f6d;
+}
+
+/* 规格与来源（2026-10-30） */
+.spec-toggle {
+  margin-left: auto;
+  font-size: 20rpx;
+  color: #6b6653;
+}
+
+.item-spec-fold {
+  margin-bottom: 16rpx;
+  padding: 12rpx 16rpx;
+  border-radius: 10rpx;
+  background: #f6f8ef;
+}
+
+.merchant-note-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.merchant-note-arrow {
+  font-size: 22rpx;
+  color: #968f6d;
+}
+
+.reminder-section {
+  padding: 0;
+}
+
+.reminder-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 26rpx 24rpx;
+}
+
+.reminder-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #26261f;
+}
+
+.reminder-link {
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #1e3a2f;
 }
 </style>

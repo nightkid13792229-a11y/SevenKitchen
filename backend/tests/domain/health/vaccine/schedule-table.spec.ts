@@ -337,15 +337,16 @@ describe('免疫程序表 · 用例从表生成（技术方案 5.1）', () => {
 });
 
 describe('程序表 · 三条硬口径的专项断言（需求 A.3 / 5.2）', () => {
-  it('一针未打、起针窗口已过 → 窗口挪到今天，宽度不变，并带出原窗口', () => {
+  it('一针未打、起针窗口已过（20 周）→ 补一针，宽度不变，并带出原窗口', () => {
     const birthday = addWeeks(TODAY, -20); // 20 周龄、零记录
     const steps = matchRecords(
       materializeSteps({ birthday, records: [], today: TODAY }),
       [],
       { today: TODAY },
     );
-    const first = steps.find((step) => step.key === 'core-puppy-1');
+    const first = steps.find((step) => step.key === 'core-catchup');
     expect(first).toBeDefined();
+    expect(first!.label).toBe('补一针');
     expect(toDateText(first!.windowStart)).toBe(toDateText(TODAY));
     expect(toDateText(first!.windowEnd)).toBe(toDateText(addWeeks(TODAY, 2)));
     expect(first!.missedWindowStart).toBeDefined();
@@ -368,7 +369,7 @@ describe('程序表 · 三条硬口径的专项断言（需求 A.3 / 5.2）', ()
   });
 
   it('打了几针之后，后续窗口按**实际接种日**滚动（需求 A.3 第 2 条）', () => {
-    const birthday = addWeeks(TODAY, -20);
+    const birthday = addWeeks(TODAY, -14);
     // 第一针实打在第 9 周（比理想日晚 3 周）
     const records: VaccineRecordLike[] = [
       {
@@ -477,6 +478,11 @@ describe('程序表 · 三条硬口径的专项断言（需求 A.3 / 5.2）', ()
         vaccineName: '卫佳伍',
         vaccinationDate: toDateText(addWeeks(birthday, 16)),
       },
+      {
+        id: 'r4',
+        vaccineName: '卫佳伍',
+        vaccinationDate: toDateText(addWeeks(birthday, 28)),
+      },
     ];
     const view = matchRecords(
       materializeSteps({ birthday, records, today: TODAY }),
@@ -489,7 +495,7 @@ describe('程序表 · 三条硬口径的专项断言（需求 A.3 / 5.2）', ()
     // 成年加强 = 最后一针实际接种日 + 3 年
     expect(toDateText(adult!.windowStart)).toBe(
       toDateText(
-        addYears(addWeeks(birthday, 16), CORE_SCHEDULE.adultIntervalYears),
+        addYears(addWeeks(birthday, 28), CORE_SCHEDULE.adultIntervalYears),
       ),
     );
   });

@@ -117,7 +117,7 @@ describe('修法 A · 加强针逾期 → 带出它自己那一段"原建议时�
     expect(plan.next!.missedWindowEnd).toBe('2024-10-17');
   });
 
-  it('真狗 测15（20 周、2 针卫佳伍）→ 第 3 针/第 4 针各自带出**各自**的原窗口', () => {
+  it('真狗 测15（20 周、2 针卫佳伍）→ 补一针，带出下一步的原窗口', () => {
     const plan = view(
       '2026-05-24',
       [
@@ -128,15 +128,12 @@ describe('修法 A · 加强针逾期 → 带出它自己那一段"原建议时�
     );
 
     // 上一针 2026-07-26 → 第 3 针窗口 = +2 周 ~ +4 周 = 08-09 ~ 08-23
-    expect(plan.next!.key).toBe('core-puppy-3');
+    // 20 周、明显落后 → 按 CORE_LATE_START 补一针；原窗口仍来自第 3 针
+    expect(plan.next!.key).toBe('core-catchup');
+    expect(plan.next!.label).toBe('补一针');
     expect(plan.next!.missedWindowStart).toBe('2026-08-09');
     expect(plan.next!.missedWindowEnd).toBe('2026-08-23');
-    // 再往后一针（窗口从第 3 针的理想终点滚）＝ 09-06 ~ 09-20
-    expect(row(plan.plan, 'core-puppy-4')!.missedWindowStart).toBe('2026-09-06');
-    expect(row(plan.plan, 'core-puppy-4')!.missedWindowEnd).toBe('2026-09-20');
-    // 窗口正开着的那一针（第 5 针 10/04 ~ 10/18）**不该**带原窗口
-    expect(row(plan.plan, 'core-puppy-5')!.status).toBe('DUE');
-    expect(row(plan.plan, 'core-puppy-5')!.missedWindowStart).toBeUndefined();
+    expect(plan.next!.status).toBe('OVERDUE');
   });
 
   it('钩端年度加强逾期（上一针 2025-05-10，还没到 18 个月）→ 原窗口 2026-05-10 ~ 06-09', () => {
@@ -166,6 +163,7 @@ describe('修法 A · 加强针逾期 → 带出它自己那一段"原建议时�
         rec('r2', '卫佳伍', '2022-11-10', { kinds: ['core'] }),
         rec('r3', '卫佳伍', '2022-12-01', { kinds: ['core'] }),
         rec('r4', '卫佳伍', '2023-01-05', { kinds: ['core'] }),
+        rec('r6', '卫佳伍', '2023-03-01', { kinds: ['core'] }),
         rec('r5', '狂犬疫苗', '2025-09-01', { kinds: ['rabies'] }),
       ],
       new Date('2026-10-16T00:00:00'),
@@ -174,9 +172,9 @@ describe('修法 A · 加强针逾期 → 带出它自己那一段"原建议时�
     const adult = row(plan.plan, 'core-adult-1');
     expect(adult).toBeDefined();
     expect(adult!.status).toBe('OVERDUE');
-    expect(adult!.windowStart).toBe('2026-01-05'); // = 最后一针 2023-01-05 + 3 年
-    expect(adult!.missedWindowStart).toBe('2026-01-05');
-    expect(adult!.missedWindowEnd).toBe('2026-04-05'); // +90 天
+    expect(adult!.windowStart).toBe('2026-03-01'); // = 26 周那一针 2023-03-01 + 3 年
+    expect(adult!.missedWindowStart).toBe('2026-03-01');
+    expect(adult!.missedWindowEnd).toBe('2026-05-30'); // +90 天
   });
 
   it('真狗 测49 的早期核心（4 周龄那一针没打上）→ 原窗口 2026-07-05 ~ 07-19', () => {
@@ -371,6 +369,7 @@ describe('修法 A · 不许碰的两类（挪到今天 / 窗口还没过去）'
         rec('r4', '钩端螺旋体', '2023-12-10', { kinds: ['lepto'] }),
         rec('r5', '钩端螺旋体', '2026-03-10', { kinds: ['lepto'] }),
         rec('r6', '卫佳伍', '2023-10-20', { kinds: ['core'] }),
+        rec('r7', '卫佳伍', '2024-03-01', { kinds: ['core'] }),
       ],
       TODAY,
     );
@@ -378,7 +377,7 @@ describe('修法 A · 不许碰的两类（挪到今天 / 窗口还没过去）'
       plan.plan.map((item) => [item.kind, item.label, item.windowStart]),
     ).toEqual([
       ['rabies', '每年一次', '2026-11-20'],
-      ['core', '加强（每 3 年）', '2027-01-15'],
+      ['core', '加强（每 3 年）', '2027-03-01'],
       ['lepto', '每年一次', '2027-03-10'],
     ]);
     expect(plan.plan.every((item) => !item.missedWindowStart)).toBe(true);

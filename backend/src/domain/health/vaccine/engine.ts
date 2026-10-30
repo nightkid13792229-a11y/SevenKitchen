@@ -546,105 +546,136 @@ function buildCoreSteps(
   }
 
   const lastDose = claimer.last();
-  // 首免算不算完成：**最后一针核心苗打在 16 周龄或以后**（WSAVA："最重要的一针"）
-  const seriesComplete = Boolean(
-    lastDose && weeksBetween(birthday, lastDose) >= CORE_SCHEDULE.finishWeeks,
-  );
+  const lastDoseWeeks = lastDose
+    ? weeksBetween(birthday, lastDose)
+    : null;
+  const seriesComplete =
+    lastDose !== null &&
+    lastDoseWeeks !== null &&
+    lastDoseWeeks >= CORE_SCHEDULE.finishWeeks;
 
-  /* ── 已满 26 周、系列没完成 → 只补一针（需求 5.2 / 验收"6 岁零记录"）── */
-  if (ageWeeksToday >= CORE_SCHEDULE.booster26Weeks && !seriesComplete) {
+  /**
+   * 26 周或以后那一针的窗口：
+   *   - 年龄下限 26 周；
+   *   - **距上一针至少 2 周**（2026-10-30 老板纠正：25 周补的，最早 27 周）；
+   *   - 窗口终点仍是 30 周（26 周窗口 4 周），起点晚了就缩短。
+   * 不挪到今天：26 周已经过了就如实写“尽快补种”，不要和上一针挤在一起。
+   */
+  const buildMissing26w = (last: Date | undefined): StepDraft => {
+    const ageFloor = addWeeks(birthday, CORE_SCHEDULE.booster26Weeks);
+    const intervalFloor = last
+      ? addWeeks(last, CORE_SCHEDULE.intervalWeeksMin)
+      : ageFloor;
+    const windowStart = laterOf(ageFloor, intervalFloor);
+    const windowEnd = addWeeks(
+      birthday,
+      CORE_SCHEDULE.booster26Weeks + CORE_SCHEDULE.booster26WindowWeeks,
+    );
+    claimer.claim('core-26w', windowStart, windowEnd, {
+      isFirstOfKind: false,
+      lateToleranceWeeks: CORE_SCHEDULE.intervalWeeksMax,
+    });
+    return {
+      key: 'core-26w',
+      kind: 'core',
+      label: '26 周补强',
+      series: 'BOOSTER',
+      windowKind: 'AGE',
+      windowStart,
+      windowEnd,
+      hint: CORE_SCHEDULE.booster26Hint,
+      basis: CORE_SCHEDULE.booster26Basis,
+      titerable: true,
+      inDefaultPlan: true,
+    };
+  };
+
+  /**
+   * 下一步首免是不是**已经明显过期**？
+   *   · 16 周、8/12 周打过、现在正好该打第 4 针 → 还没过期，继续按首免表排；
+   *   · 25 周、0/10 周记录 → 下一步的窗口早过了 → 走“补一针”。
+   * 这样不会把“正好在 16 周窗口里”的狗误判成晚起步。
+   */
+  const isBehindPrimarySchedule = () => {
+    const next = primary.find((step) => !claimer.isClaimed(step.key));
+    if (!next) return false;
+    const originalEnd = next.missedWindowEnd ?? next.windowEnd;
+    // 给 4 周宽限：16 周窗口刚过 1~2 天，不该直接变成“晚起步”；
+    // 明显落后（如 20 周只有 2 针、25 周零记录）才走补一针。
+    return (
+      addWeeks(originalEnd, CORE_SCHEDULE.intervalWeeksMax).getTime() <
+      today.getTime()
+    );
+  };
+
+  /* ── 已满 16 周、首免没完成、下一步已明显过期 → 补一针 ── */
+  if (
+    ageWeeksToday >= CORE_SCHEDULE.finishWeeks &&
+    !seriesComplete &&
+    isBehindPrimarySchedule()
+  ) {
     const target =
       primary.find((step) => !claimer.isClaimed(step.key)) ??
       primary[primary.length - 1];
     const width = target.windowEnd.getTime() - target.windowStart.getTime();
     const windowStart = laterOf(target.windowStart, today);
+    const isLateStartYoung =
+      ageWeeksToday < CORE_SCHEDULE.booster26Weeks;
     const catchUp: StepDraft = {
       ...target,
       key: 'core-catchup',
       label: CORE_SCHEDULE.catchUpLabel,
       series: 'BOOSTER',
-      hint: CORE_SCHEDULE.catchUpHint,
-    basis: CORE_SCHEDULE.catchUpBasis,
-      // ⚠️ 用**原窗口**，不是"已经挪到今天之后"的那个窗口：
-      //    首免第 1 针自己可能已经被 `moveToTodayIfMissed` 挪过一次
+      hint: isLateStartYoung
+        ? CORE_SCHEDULE.lateStartHint
+        : CORE_SCHEDULE.catchUpHint,
+      basis: isLateStartYoung
+        ? CORE_SCHEDULE.lateStartBasis
+        : CORE_SCHEDULE.catchUpBasis,
+      // ⚠️ 用**原窗口**，不是"已经挪到今天之后"的那个窗口
       missedWindowStart: target.missedWindowStart ?? target.windowStart,
       missedWindowEnd: target.missedWindowEnd ?? target.windowEnd,
       windowStart,
       windowEnd: new Date(windowStart.getTime() + width),
     };
-    return withCoreAdults(catchUp.windowStart, [catchUp]);
+
+    // 补的时候已经 ≥26 周：这一针本身就是“26 周或以后”，之后直接 3 年。
+    if (!isLateStartYoung) {
+      return withCoreAdults(catchUp.windowStart, [catchUp]);
+    }
+
+    // 补的时候还 <26 周：之后仍要 26 周或以后一针/抗体（且距这一针 ≥2 周）。
+    const booster = buildMissing26w(windowStart);
+    return withCoreAdults(booster.windowStart, [catchUp, booster]);
   }
 
-  /* ── 已满 26 周、系列已完成 ────────────────────────────────── */
-  if (ageWeeksToday >= CORE_SCHEDULE.booster26Weeks) {
-    const lastDoseWeeks = lastDose ? weeksBetween(birthday, lastDose) : null;
-    const boosterStillRelevant =
-      lastDoseWeeks !== null &&
-      lastDoseWeeks < CORE_SCHEDULE.booster26Weeks &&
-      ageWeeksToday < 52;
-    if (boosterStillRelevant) {
-      // 26 周补强：窗口已过就如实写"尽快补种"（不挪到今天 —— 这一类已经打过针了）
-      const boosterStart = addWeeks(birthday, CORE_SCHEDULE.booster26Weeks);
-      const boosterEnd = addWeeks(
-        birthday,
-        CORE_SCHEDULE.booster26Weeks + CORE_SCHEDULE.booster26WindowWeeks,
-      );
-      claimer.claim('core-26w', boosterStart, boosterEnd, {
-        isFirstOfKind: false,
-        lateToleranceWeeks: CORE_SCHEDULE.intervalWeeksMax,
-      });
-      const booster: StepDraft = {
-        key: 'core-26w',
-        kind: 'core',
-        label: '26 周补强',
-        series: 'BOOSTER',
-        windowKind: 'AGE',
-        windowStart: boosterStart,
-        windowEnd: boosterEnd,
-        hint: CORE_SCHEDULE.booster26Hint,
-    basis: CORE_SCHEDULE.booster26Basis,
-        titerable: true,
-        inDefaultPlan: true,
-      };
-      return withCoreAdults(booster.windowStart, [booster]);
-    }
-    // 26 周补强的窗口早就过去了（狗已经 1 岁以上）→ 直接进每 3 年
+  /* ── 系列已完成：最后一针 <26 周 → 26 周补强不能因年龄被丢 ── */
+  if (
+    seriesComplete &&
+    lastDoseWeeks !== null &&
+    lastDoseWeeks < CORE_SCHEDULE.booster26Weeks
+  ) {
+    const booster = buildMissing26w(lastDose as Date);
+    /*
+     * 16~26 周：保留首免表（都已完成的那些行），再排 26 周；
+     * ≥26 周：首免表不必再下发，当前就是 26 周补强。
+     */
+    const base =
+      ageWeeksToday < CORE_SCHEDULE.booster26Weeks
+        ? [...primary, booster]
+        : [booster];
+    return withCoreAdults(booster.windowStart, base);
+  }
+
+  /* ── 系列已完成、最后一针 ≥26 周 → 这一针已顶 26 周，直接成年 ── */
+  if (seriesComplete) {
     return withCoreAdults(lastDose as Date, []);
   }
 
-  /* ── 幼犬期：整段展开（首免系列 + 26 周补强 + 之后每 3 年）────────── */
+  /* ── <16 周：正常幼犬系列 + 26 周补强 + 成年 ── */
   const steps: StepDraft[] = [...primary];
-  const boosterStart = addWeeks(birthday, CORE_SCHEDULE.booster26Weeks);
-  const boosterEnd = addWeeks(
-    birthday,
-    CORE_SCHEDULE.booster26Weeks + CORE_SCHEDULE.booster26WindowWeeks,
-  );
-  const boosterMatched = claimer.claim('core-26w', boosterStart, boosterEnd, {
-    isFirstOfKind: false,
-    lateToleranceWeeks: CORE_SCHEDULE.intervalWeeksMax,
-  });
-  let booster: StepDraft = {
-    key: 'core-26w',
-    kind: 'core',
-    label: '26 周补强',
-    series: 'BOOSTER',
-    windowKind: 'AGE',
-    windowStart: boosterStart,
-    windowEnd: boosterEnd,
-    hint: CORE_SCHEDULE.booster26Hint,
-    basis: CORE_SCHEDULE.booster26Basis,
-    titerable: true,
-    inDefaultPlan: true,
-  };
-  booster = moveToTodayIfMissed(
-    booster,
-    boosterMatched,
-    today,
-    claimer.hasDoses(),
-  );
+  const booster = buildMissing26w(lastDose ?? undefined);
   steps.push(booster);
-
-  // 成年加强的锚点：上一针实际接种日与 26 周补强的理想日，取**较晚**的那个
   const adultAnchor = laterOf(
     lastDose ?? booster.windowStart,
     booster.windowStart,

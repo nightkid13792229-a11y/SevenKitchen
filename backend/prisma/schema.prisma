@@ -1427,7 +1427,9 @@ model AntibodyTestRecord {
   /// 报告上的原始数值与单位（可空，不强求）
   value        String?             @map("value")
   unit         String?             @map("unit")
-  /// 下次评估时间（合格时算：检测日 + 3 年）
+  /// 下次评估时间（合格 = 检测日 + 1 年；与引擎共用 CORE_TITER_REVIEW_YEARS）。
+  /// 2026-10-30（#1）：**读取时不再用这一列**，按 1 年重算；老数据可能存着 3 年，
+  /// 保留只为审计，不再展示。
   nextReviewAt DateTime?           @map("next_review_at") @db.Date
   notes        String?             @map("notes")
   attachments  String[]            @default([]) @map("attachments")

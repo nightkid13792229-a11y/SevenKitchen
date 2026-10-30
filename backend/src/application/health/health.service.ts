@@ -18,6 +18,7 @@ import {
   VaccineRecordListResponseDto,
 } from '../../interfaces/dto/health/vaccine-response.dto';
 import {
+  CORE_TITER_REVIEW_YEARS,
   VACCINE_KIND_LABELS,
   type VaccineKind,
 } from '../../domain/health/vaccine/schedule-table';
@@ -406,25 +407,24 @@ export class HealthService {
   }
 
   /**
-   * 下次评估时间：**合格 = 检测日 + 3 年**（技术方案 1.2）。
+   * 下次评估时间：**合格 = 检测日 + CORE_TITER_REVIEW_YEARS（当前 1 年）**。
+   *
+   * 2026-10-30（四块地基 #1）：复查日**只由这里和引擎共用的常量算一次**；
+   * 记录区、免疫计划都读同一个值；不再接受调用方显式传 `nextReviewAt`
+   * （旧字段保留只为兼容，传了也会被忽略）。
    *
    * 不合格 / 未判读留空 —— 那两种情况下一针照常按计划打，没有"下次评估"这一说。
-   * 调用方显式传了就以他为准（兽医可能给别的复查节奏）。
    */
   private computeAntibodyNextReviewAt(
     result: string,
     testedAt: string,
-    explicit?: string,
   ): Date | null {
-    if (explicit) {
-      const date = new Date(explicit);
-      return Number.isNaN(date.getTime()) ? null : date;
-    }
-    if (result !== 'PASS') return null;
+    const normalized = String(result || '').trim().toUpperCase();
+    if (normalized !== 'PASS') return null;
     const base = new Date(testedAt);
     if (Number.isNaN(base.getTime())) return null;
     const next = new Date(base.getTime());
-    next.setFullYear(next.getFullYear() + 3);
+    next.setFullYear(next.getFullYear() + CORE_TITER_REVIEW_YEARS);
     return next;
   }
 
@@ -444,11 +444,7 @@ export class HealthService {
         result: result as 'PASS' | 'FAIL' | 'UNKNOWN',
         value: dto.value ?? null,
         unit: dto.unit ?? null,
-        nextReviewAt: this.computeAntibodyNextReviewAt(
-          result,
-          dto.testedAt,
-          dto.nextReviewAt,
-        ),
+        nextReviewAt: this.computeAntibodyNextReviewAt(result, dto.testedAt),
         notes: dto.notes ?? null,
         attachments: dto.attachments ?? [],
       },
@@ -501,19 +497,18 @@ export class HealthService {
     /**
      * ⚠️ `undefined` = 别动它（与疫苗记录的改法一致）。
      *
-     * 下次评估时间：结果或检测日一变就**重算**（合格才有），
-     * 除非调用方显式给了 `nextReviewAt`。
+     * 下次评估时间：结果或检测日一变就**重算**（合格才有）。
+     * 2026-10-30（#1）：不再接受显式 `nextReviewAt`——复查日只能由
+     * `computeAntibodyNextReviewAt` 按共用常量算，避免出现第三个日期。
      */
     const testedAtText =
       dto.testedAt ??
       `${record.testedAt.getFullYear()}-${String(record.testedAt.getMonth() + 1).padStart(2, '0')}-${String(record.testedAt.getDate()).padStart(2, '0')}`;
     const result = String(dto.result ?? record.result).trim().toUpperCase();
     const nextReviewAt =
-      dto.nextReviewAt !== undefined
-        ? this.computeAntibodyNextReviewAt(result, testedAtText, dto.nextReviewAt)
-        : dto.result !== undefined || dto.testedAt !== undefined
-          ? this.computeAntibodyNextReviewAt(result, testedAtText)
-          : undefined;
+      dto.result !== undefined || dto.testedAt !== undefined
+        ? this.computeAntibodyNextReviewAt(result, testedAtText)
+        : undefined;
 
     const updated = await this.prisma.antibodyTestRecord.update({
       where: { id },
@@ -575,7 +570,16 @@ export class HealthService {
         HealthService.ANTIBODY_RESULT_LABELS[record.result] || record.result,
       value: record.value,
       unit: record.unit,
-      nextReviewAt: record.nextReviewAt,
+      /*
+       * 2026-10-30（#1）：复查日**不再读 record.nextReviewAt**。
+       * 老记录里可能存着当年按 3 年算的日期；读它就会出现
+       * “记录区 2029 / 计划区 2027” 两个日期。这里按同一个常量重算，
+       * 记录区与计划区永远同一个值。字段保留只为审计，不再展示。
+       */
+      nextReviewAt: this.computeAntibodyNextReviewAt(
+        record.result,
+        this.toDayText(record.testedAt),
+      ),
       notes: record.notes,
       attachments: record.attachments ?? [],
       createdAt: record.createdAt,

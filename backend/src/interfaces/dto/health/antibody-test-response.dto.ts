@@ -40,7 +40,11 @@ export class AntibodyTestResponseDto {
   @Expose()
   unit!: string | null;
 
-  /** 下次评估时间（合格 = 检测日 + 3 年；不合格 / 未判读为空） */
+  /**
+   * 下次评估时间（合格 = 检测日 + 1 年；与免疫计划共用同一个常量；
+   * 不合格 / 未判读为空）。2026-10-30（#1）：不再读记录上存的值，
+   * 避免记录区与计划区出现两个日期。
+   */
   @Expose()
   @Transform(({ value }) =>
     value ? TimezoneUtil.toShanghaiDateString(value) : null,

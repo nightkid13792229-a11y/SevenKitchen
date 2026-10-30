@@ -50,8 +50,9 @@ export class CreateAntibodyTestDto {
   unit?: string;
 
   /**
-   * 下次评估时间。**不传时由后端算**：合格 = 检测日 + 3 年；
-   * 不合格 / 未判读留空（下一针照常按计划打）。
+   * ⚠️ 已废弃（2026-10-30 · 四块地基 #1）：复查日由系统按
+   * `CORE_TITER_REVIEW_YEARS`（当前 1 年）算；**传了会被忽略**。
+   * 字段保留只为兼容老客户端，避免形成“第三个复查日”。
    */
   @IsOptional()
   @IsDateString()

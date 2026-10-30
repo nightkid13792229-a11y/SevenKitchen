@@ -27,6 +27,7 @@
 import {
   CORE_EARLY_SCHEDULE,
   CORE_SCHEDULE,
+  CORE_TITER_REVIEW_YEARS,
   LEPTO_SCHEDULE,
   RABIES_SCHEDULE,
   VACCINE_KIND_LABELS,
@@ -1252,9 +1253,9 @@ function findCoreTiterCover(
    * 为什么：2026-10-17 老板把口径从"3 年"改成"**1 年后复查**"——
    * 而老记录上如果**存过一个显式的复查日期**（按当时的 3 年算出来的），
    * 读它就会出现"新政策对老记录不生效"✗：家长明明录的是新报告，看到的还是 3 年后。
-   * 所以政策只留一个出口：**检测日 + 1 年**（要改就改这一行）✓
+   * 所以政策只留一个出口：**检测日 + CORE_TITER_REVIEW_YEARS**（要改就改那个常量）✓
    */
-  const nextReviewAt = addYears(latest.date, 1);
+  const nextReviewAt = addYears(latest.date, CORE_TITER_REVIEW_YEARS);
   return { testedAt: latest.date, nextReviewAt };
 }
 

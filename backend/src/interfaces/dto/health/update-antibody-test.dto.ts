@@ -34,6 +34,7 @@ export class UpdateAntibodyTestDto {
   @IsString()
   unit?: string;
 
+  /** ⚠️ 已废弃（2026-10-30 · #1）：复查日由系统按 1 年算；传了会被忽略。 */
   @IsOptional()
   @IsDateString()
   nextReviewAt?: string;

@@ -27,6 +27,7 @@ import {
   classifyRecordKinds,
   classifyVaccineKinds,
   findProductByText,
+  inferSingleAntigenComponents,
   kindsOfComponents,
   normalizeVaccineComponent,
   type VaccineComponent,
@@ -930,23 +931,16 @@ export class HealthService {
   }
 
   /**
-   * 一条记录的归类从哪来（2026-10-05）。
+   * 这一针**含哪些病种**（2026-10-06 定；2026-10-30 #3 收紧）。
    *
    * 优先级：
-   *   ① 调用方显式传的（界面选的、AI 判的）—— 过滤掉非法值；
-   *   ② 没传就按名字推一次（老客户端兼容）；
-   *   ③ 推不出来就是**未归类**（空数组），**绝不硬塞成核心苗**。
+   *   ① 调用方显式传的（顾客勾的）——过滤词表外的值、去重；
+   *   ② 没传就按名字查产品库（库里有，就用它的真实成分）；
+   *   ③ 产品库没有、但名字是**单一病种**（"细小单苗""犬瘟热"）→
+   *      推断一个成分建议（cpv/cdv/…）；归类仍是 other，单苗顶不了核心；
+   *   ④ 都得不到 → 空数组（未登记成分），**绝不猜**。
    *
-   * 第 ③ 条是这次的关键：以前推不出来默认当核心苗，一针驱虫药
-   * 「拜宠清」也能把核心苗的某一针标记成已完成，我们从此不再提醒。
-   */
-  /**
-   * 这一针**含哪些病种**（2026-10-06 老板定的新模型）。
-   *
-   * 优先级：
-   *   ① 调用方显式传的（顾客勾的）—— 过滤掉词表以外的值，去重；
-   *   ② 没传就按名字查产品库（库里有就是它的成分）；
-   *   ③ 都得不到 → 空数组（未登记成分），**绝不猜**。
+   * 第 ③ 条只推断**一个**成分，不推断联苗；两个病种以上一律要求补勾。
    */
   private resolveComponents(
     explicit: unknown,
@@ -962,21 +956,25 @@ export class HealthService {
       return Array.from(new Set(given));
     }
 
-    return findProductByText(vaccineName)
-      ? [...(findProductByText(vaccineName) as { components: VaccineComponent[] })
-          .components]
-      : [];
+    const product = findProductByText(vaccineName);
+    if (product) {
+      return [...product.components];
+    }
+
+    return inferSingleAntigenComponents(vaccineName);
   }
 
   /**
-   * 类别**一律由后端算**（技术方案 1.1.2 的写入规则）。
+   * 类别**一律由后端算**（技术方案 1.1.2；2026-10-30 #3 收紧）。
    *
-   * 需求第六节：**每条记录保存时必须归类**，且必须落到会被排期的三类之一；
-   * 归不了类就不保存（不允许"存了但不影响计划"的记录）。
+   *   ① `components` 非空（产品库 / 家长勾 / 单病种推断）→ 由成分推导；
+   *      单苗只含一种 → `other`，**不再算 core**（V4）。
+   *   ② `components` 为空 → 名字只保留狂犬/钩端/可选苗；
+   *      单苗/联苗不再按名字判 core。
+   *   ③ 两条都不成立 → **抛 400**，请家长补勾「含哪些疫苗」。
    *
-   *   ① `components` 非空（查到了产品，或家长勾了病种）→ 由病种推导类别（唯一事实）
-   *   ② `components` 为空、但名字能按字面判类别（"狂犬""六联"）→ 用字面规则
-   *   ③ 两条都不成立 → **抛 400**，并告诉家长该怎么办（勾"含哪些疫苗"）
+   * “归不了类就不保存”仍然成立：认不出、又不补勾的，不存成一条
+   * “看起来存了但不影响计划”的记录。
    */
   private requireKinds(
     components: VaccineComponent[],

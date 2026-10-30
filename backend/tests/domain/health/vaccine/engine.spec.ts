@@ -390,7 +390,7 @@ describe('引擎 · 抗体检测（需求 R9 / 技术方案 1.2）', () => {
 describe('引擎 · 冲突提示（需求 R13 / R15 / 冲突 A7）', () => {
   it('核心苗打在 4 周龄之前 → 提示（含"是否计数交给兽医"）', () => {
     const birthday = dog(20);
-    const tooEarly = record('r1', '犬六联', addWeeks(birthday, 3));
+    const tooEarly = record('r1', '卫佳伍', addWeeks(birthday, 3));
     const view = build(birthday, [tooEarly]);
     const conflict = view.conflicts.find((item) => item.recordId === 'r1');
     expect(conflict?.reason).toContain('4 周龄之前');
@@ -399,14 +399,14 @@ describe('引擎 · 冲突提示（需求 R13 / R15 / 冲突 A7）', () => {
 
   it('正好 4 周龄那一针不报"过早"（指南里的正规产品就从 4 周起）', () => {
     const birthday = dog(20);
-    const early = record('r1', '犬六联', addWeeks(birthday, 4));
+    const early = record('r1', '卫佳伍', addWeeks(birthday, 4));
     const view = build(birthday, [early]);
     expect(view.conflicts.some((item) => item.recordId === 'r1')).toBe(false);
   });
 
   it('接种日早于生日 → 说"比生日还早"（多半是年份写错）', () => {
     const birthday = dog(20);
-    const before = record('r1', '犬六联', addWeeks(birthday, -1));
+    const before = record('r1', '卫佳伍', addWeeks(birthday, -1));
     const view = build(birthday, [before]);
     const conflict = view.conflicts.find((item) => item.recordId === 'r1');
     expect(conflict?.reason).toContain('比狗狗生日还早');
@@ -433,7 +433,7 @@ describe('引擎 · 冲突提示（需求 R13 / R15 / 冲突 A7）', () => {
 
   it('措辞里不出现"必须""立刻"（需求 R14）', () => {
     const birthday = dog(20);
-    const tooEarly = record('r1', '犬六联', addWeeks(birthday, 3));
+    const tooEarly = record('r1', '卫佳伍', addWeeks(birthday, 3));
     const view = build(birthday, [tooEarly]);
     for (const conflict of view.conflicts) {
       expect(conflict.reason).not.toContain('必须');

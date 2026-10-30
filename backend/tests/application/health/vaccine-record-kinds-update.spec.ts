@@ -12,7 +12,8 @@ import { UpdateVaccineDto } from '../../../src/interfaces/dto/health/update-vacc
  *
  *   · `kinds` **不再接受入参**（DTO 里已经删掉这个字段）
  *   · 有 `components`（顾客勾的病种）→ 由它推导类别（唯一事实）
- *   · 没有 `components` → 按名字字面判（"狂犬""六联"）
+ *   · 没有 `components` → 产品库/单病种推断；联苗（六联等）不猜 core，
+ *     要求补勾「含哪些疫苗」
  *   · 两条都不成立 → **不保存**（需求 R6：不允许"存了但不影响计划"的记录）
  *
  * 所以旧用例里"顾客改成狂犬疫苗 → patch 里带 kinds"这一类**已经失效**：
@@ -88,17 +89,30 @@ describe('疫苗记录 · 类别由后端算（2026-10-15）', () => {
     return { service, vaccineRepo };
   }
 
-  it('新建时只有名字 + 日期：按名字字面判出类别（"六联" → 核心）', async () => {
+  it('新建时只有名字 + 日期：产品库认得的（卫佳伍）→ 核心', async () => {
     const { service, vaccineRepo } = createService();
 
     const result = await service.createVaccineRecord(CUSTOMER_ID, {
       dogId: DOG_ID,
-      vaccineName: '犬六联',
+      vaccineName: '卫佳伍',
       vaccinationDate: '2026-05-10',
     } as any);
 
     expect(vaccineRepo.create.mock.calls[0][0].kinds).toEqual(['core']);
     expect(result.kinds).toEqual(['core']);
+  });
+
+  it('联名六联没勾成分 → 不猜核心，要求补勾', async () => {
+    const { service, vaccineRepo } = createService();
+
+    await expect(
+      service.createVaccineRecord(CUSTOMER_ID, {
+        dogId: DOG_ID,
+        vaccineName: '犬六联',
+        vaccinationDate: '2026-05-10',
+      } as any),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(vaccineRepo.create).not.toHaveBeenCalled();
   });
 
   it('勾了病种 → 类别由病种推导（组合苗能同时占两类）', async () => {

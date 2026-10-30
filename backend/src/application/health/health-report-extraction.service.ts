@@ -84,6 +84,8 @@ import {
   buildProductMatchReference,
   classifyVaccineKinds,
   findProductByText,
+  inferSingleAntigenComponents,
+  kindsOfComponents,
   kindsOfProductName,
   normalizeProductText,
   suggestProductsForPartialName,
@@ -1281,22 +1283,26 @@ export function normalizeDrafts(
            */
           const matchedProduct = findProductByText(vaccineName);
           /**
-           * 归类**一律查我们自己的产品表**（2026-10-06 老板拍板）。
+           * 归类以**成分**为唯一事实（2026-10-30 · 四块地基 #3）。
            *
-           * 老板原话："AI 只负责认产品，分类永远由兽医审过的表定义。"
-           *
-           * 分类直接决定"这一针算哪一步、隔多久再打"，判错就把免疫计划带偏
-           * （实测：「宠必威® 幼犬保」被判成 core，而它是 core_early）。
-           *
-           * `classifyVaccineKinds` 是**唯一**一份分类定义：
-           *   ① 先查已审核的产品目录（按真实成分算，组合苗能同时占好几类）
-           *   ② 目录里没有的，才退回按病名/联数判（狂犬、钩端、犬瘟细小…）
-           *   ③ 都认不出来 → **空数组**，界面老实说"没匹配到"并请顾客自己选
-           * —— 绝不猜成核心苗（猜错会让系统以为那一针打完了，从此不再提醒）。
+           *   ① 产品库认得出 → 用它的真实成分；
+           *      产品库没有、但名字是单一病种（"细小单苗"）→ 推断一个成分；
+           *   ② 有成分 → kindsOfComponents（单苗 → other，绝不 core）；
+           *   ③ 没成分 → 名字只保留狂犬/钩端/可选苗；联苗（六联等）不猜 core，
+           *      空数组交回界面，请顾客补勾。
            *
            * AI 在这条路上只负责一件事：把本子上的名字照抄准确。
            */
-          const kinds = classifyVaccineKinds(vaccineName);
+          const components = matchedProduct
+            ? [...matchedProduct.components]
+            : inferSingleAntigenComponents(vaccineName);
+          const kinds =
+            components.length > 0
+              ? kindsOfComponents({
+                  components,
+                  earlySeries: matchedProduct?.earlySeries,
+                })
+              : classifyVaccineKinds(vaccineName);
           return {
             vaccineName,
             productName: matchedProduct ? matchedProduct.name : '',
@@ -1319,7 +1325,7 @@ export function normalizeDrafts(
              * 这支苗含哪些病种（2026-10-06）—— 界面拿它回填"病种"，
              * 顾客看到的、以后改的也都是病种。
              */
-            components: matchedProduct ? [...matchedProduct.components] : [],
+            components,
             vaccinationDate: normalizeDraftDate(item?.vaccinationDate),
             // ⚠️ `nextDueDate` 整个不用了（老板 2026-10-15 定）：不识别、不显示、
             // 不提交、不参与计划、不报冲突 —— 所以这里也不再有这个字段。

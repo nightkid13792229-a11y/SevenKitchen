@@ -523,17 +523,24 @@ export function kindsOfComponents(product: {
   );
   const hasEarlyPair =
     product.components.includes('cdv') && product.components.includes('cpv');
+  const hasLepto = product.components.includes('lepto');
   const hasRabies = product.components.includes('rabies');
 
-  if (product.earlySeries || (hasEarlyPair && !hasAllCore && !hasRabies)) {
-    return ['core_early'];
-  }
-
+  /*
+   * 2026-10-30（#3）：先按成分定，不再让"早期苗"把同一支苗里的
+   * 钩端/狂犬一起吞掉。但**带狂犬的二联不归早期苗**——
+   * 汪倍护这类是"二联+狂犬"的狂犬组合，不是 4 周龄抢跑苗；
+   * 以前 `!hasRabies` 这个条件就是为它留的。
+   */
   const kinds: VaccineKind[] = [];
-  if (hasAllCore) {
+  const isEarlySeries =
+    product.earlySeries || (hasEarlyPair && !hasAllCore && !hasRabies);
+  if (isEarlySeries) {
+    kinds.push('core_early');
+  } else if (hasAllCore) {
     kinds.push('core');
   }
-  if (product.components.includes('lepto')) {
+  if (hasLepto) {
     kinds.push('lepto');
   }
   if (hasRabies) {
@@ -1498,35 +1505,51 @@ export function normalizeVaccineKind(value: unknown): VaccineKind | null {
 }
 
 /**
- * 核心苗的常见写法（联数 + 病名）。
+ * 2026-10-30（四块地基 #3）：**名字不再直接判 core / core_early**。
  *
- * 必须有这一步：产品目录里进口苗为主，顾客写"六联""犬瘟热"是常态；
- * 少了它这些记录会掉成"未归类"，被挡在计划外面。
+ * 为什么：单病种名字（"细小单苗""犬瘟单苗"）以前会被 /细小|犬瘟/ 判成 core，
+ * 于是一只只打了细小单苗的狗被当成"核心一针已完成"，后面漏提醒（V4）。
+ * WSAVA 的核心是犬瘟+细小+腺病毒三件齐全；名字无法证明"三件齐全"，
+ * 所以这里只保留两类**低歧义**的字面判定：
+ *   · 狂犬 / 钩端（单病种，名字通常就是它）
+ *   · 明确的可选苗（犬窝咳、副流感…）→ other
+ * 其余（单苗、二联、四联、六联…）→ 不归类，交给"补勾成分"。
  *
- * ⚠️ **副流感不在这条里**（2026-10-06 按 WSAVA 2024 修正）：犬的核心疫苗
- * 只有犬瘟、腺病毒、细小三支；副流感属非核心（与博德特氏菌同归"犬窝咳"）。
- * 以前把副流感算核心，会让一支"副流感单苗"顶掉核心苗的某一针。
- *
- * "联数"（二联…九联）仍然算核心：联苗按惯例都覆盖那三种核心病。
+ * 产品库仍然可以按名字给出 core —— 那是按**真实成分**算的，不是猜名字。
  */
-const CORE_NAME_PATTERN =
-  /犬瘟|细小|腺病毒|传染性肝炎|distemper|parvo|adenovirus|[四五六七八九]联/i;
+const COMBO_NAME_PATTERN = /[二三四五六七八九]联|联苗|多联/i;
 
 /**
- * 「二联 / 三联」**不算核心苗**（2026-10-16 收紧）。
+ * 单病种名字 → 一个**成分建议**（不是"算核心"）。
  *
- * 为什么改：中文习惯里"犬二联"= 犬瘟 + 细小（**没有腺病毒**），
- * "犬三联"写法各家不一（可能含腺病毒，也可能含副流感）。
- * 而核心疫苗的判据是**犬瘟 + 细小 + 腺病毒三件齐全**（WSAVA 2024）。
+ * 用途：扫描/手写只写了"细小单苗"时，别把记录直接挡在门外；
+ * 推断出 [cpv] 存进 components，归类自然是 other（单苗顶不了核心），
+ * 页面上也能看到"只防细小"。
  *
- * ⚠️ 两个方向的错后果不对称：算成"打过核心苗了" → **狗漏打**；
- *    算成"没打过" → 最多多提醒一次。所以看不准的一律**不判核心**。
- *
- * 这类苗归 `core_early`（"只防犬瘟+细小"那一档，与产品目录里
- * components = [cdv, cpv] 的国产苗同一种归类）；家长也可以在记录上
- * 勾"含哪些疫苗"来精确化，勾完就按病种重算。
+ * 只在**恰好命中一个**病种、且不是联苗时推断；两个以上（"犬瘟+细小"）
+ * 一律不猜，要求家长补勾。
  */
-const CORE_EARLY_LIKE_PATTERN = /[二三]联/;
+const SINGLE_ANTIGEN_COMPONENTS: Array<{
+  pattern: RegExp;
+  component: VaccineComponent;
+}> = [
+  { pattern: /犬瘟|瘟热|distemper|cdv/i, component: 'cdv' },
+  { pattern: /细小|parvo|cpv/i, component: 'cpv' },
+  { pattern: /腺病毒|传染性肝炎|adenovirus|cav/i, component: 'cav' },
+  { pattern: /副流感|parainfluenza|cpi/i, component: 'cpi' },
+  { pattern: /狂犬|rabies/i, component: 'rabies' },
+  { pattern: /钩端|lepto/i, component: 'lepto' },
+];
+
+export function inferSingleAntigenComponents(name: string): VaccineComponent[] {
+  const text = String(name || '').toLowerCase();
+  if (!text || NON_DOG_VACCINE_PATTERN.test(text)) return [];
+  if (COMBO_NAME_PATTERN.test(text)) return [];
+  const hits = SINGLE_ANTIGEN_COMPONENTS.filter(({ pattern }) =>
+    pattern.test(text),
+  );
+  return hits.length === 1 ? [hits[0].component] : [];
+}
 
 /**
  * 非核心、而且我们**没有**接种程序的（犬窝咳、冠状病毒、莱姆病…）。
@@ -1540,8 +1563,11 @@ const OTHER_NAME_PATTERN =
 /** 钩端螺旋体的字面写法（含我们核过成分、确定含钩端的商品名） */
 const LEPTO_NAME_PATTERN = /钩端螺旋体|钩端|lepto|卫佳捌|优乐康|乐必妥/i;
 
-/** 早期核心疫苗的字面写法（4 周龄抢跑那一针） */
-const CORE_EARLY_NAME_PATTERN = /幼犬保|早期苗|抢跑/i;
+/*
+ * 早期核心疫苗（幼犬保）不再按名字判 core_early：
+ * 产品库里的 4 周龄抢跑苗带 `earlySeries: true`，会按真实成分归到
+ * core_early；名字认不出、又没勾成分的，一律要求补勾（见 #3）。
+ */
 
 /**
  * 猫（以及其他**非犬**）疫苗的写法（2026-10-16 补，B1 跑分实测出来的）。
@@ -1567,24 +1593,24 @@ const NON_DOG_VACCINE_PATTERN =
  * 一条记录（一个名字）能算作哪几类。
  *
  * 必须返回数组：**一支组合苗可以同时顶好几个种类**。
- * 典型是硕腾卫佳捌 —— 它既是核心苗，又含钩端螺旋体；
- * 顾客打了它，核心苗那一步和钩端螺旋体那一步都该算完成。
+ * 典型是硕腾卫佳捌 —— 它既是核心苗，又含钩端螺旋体。
  *
- * 判定顺序（需求第六节）：
- *   ⓿ 认得出是**猫 / 其他物种**的写法 → **空数组**（本模块只做犬，2026-10-16 补）
- *   ① 已审核的**产品目录**里查得到的 → 按它真实的成分算（唯一事实）
- *   ② 目录里没有的 → 按名字**字面**判（狂犬 / 钩端 / 核心 / 早期 / 其他）
- *   ③ 都判不出 → **空数组**（未归类，不算数）—— 绝不猜成核心苗：
- *      猜错的后果是"系统以为那一针打完了"，从此不再提醒。
+ * 判定顺序（2026-10-30 · 四块地基 #3）：
+ *   ⓿ 认得出是**猫 / 其他物种**的写法 → **空数组**（本模块只做犬）
+ *   ① 产品库认得出 → 按**真实成分**（`kindsOfComponents`，不是手写 kinds）
+ *   ② 名字里明确写了**狂犬 / 钩端** → 对应类（单病种，歧义低）
+ *   ③ 明确的可选苗（犬窝咳、副流感…）→ other
+ *   ④ 其余（单苗、二联、四联、六联…）→ **空数组**：
+ *      绝不猜 core / core_early；让家长补勾成分，或选产品库里的产品。
+ *      猜错的后果是"系统以为那一针打完了"，从此不再提醒（V4）。
  */
 export function classifyVaccineKinds(name: string): VaccineKind[] {
   const text = String(name || '').toLowerCase();
 
   /*
-   * ⓿ 物种这一关必须在字面判定**之前**（2026-10-16）：
-   *    否则"猫三联"会被 /[二三]联/ 判成犬的 core_early ✗（实测过，见上面那条注释）。
-   *    狂犬苗是犬猫共用的 —— 所以这里只拦"猫专有"的说法，不拦"猫"这个字 ✓：
-   *    「犬、猫狂犬病灭活疫苗」照旧走下面 → rabies ✓（有测试钉着）。
+   * ⓿ 物种这一关必须在字面判定**之前**：
+   *    狂犬苗是犬猫共用的 —— 只拦"猫专有"的说法，不拦"猫"这个字。
+   *    「犬、猫狂犬病灭活疫苗」照旧走下面 → rabies ✓。
    */
   if (NON_DOG_VACCINE_PATTERN.test(text)) {
     return [];
@@ -1592,33 +1618,29 @@ export function classifyVaccineKinds(name: string): VaccineKind[] {
 
   const kinds = new Set<VaccineKind>();
 
-  // ① 产品目录（按真实成分；组合苗能一次占好几类）
+  // ① 产品目录：按真实成分算（组合苗能一次占好几类）
   for (const product of findProductsInName(text)) {
-    for (const kind of product.kinds) {
+    for (const kind of kindsOfComponents({
+      components: product.components,
+      earlySeries: product.earlySeries,
+    })) {
       kinds.add(kind);
     }
   }
 
-  // ② 目录里没有的，按字面判
+  // ② 名字里明确的单病种，保留（歧义低）
   if (/狂犬|rabies/.test(text)) {
     kinds.add('rabies');
   }
   if (LEPTO_NAME_PATTERN.test(text)) {
     kinds.add('lepto');
   }
-  if (CORE_EARLY_NAME_PATTERN.test(text) || CORE_EARLY_LIKE_PATTERN.test(text)) {
-    kinds.add('core_early');
-  }
-  // 早期苗不算 core（周期完全不同）；已经在 core_early 里的不再补 core
-  if (CORE_NAME_PATTERN.test(text) && !kinds.has('core_early')) {
-    kinds.add('core');
-  }
-  // 非核心、而且我们没有接种程序的（犬窝咳、冠状、莱姆…）→ other：
-  // 如实记下来，但**不参与计划**，绝不能让它们把核心苗的某一针"算完成"。
+  // ③ 非核心、而且我们没有接种程序的可选苗 → other
   if (OTHER_NAME_PATTERN.test(text)) {
     kinds.add('other');
   }
 
+  // ④ 其余不猜；空数组由调用方提示"补勾成分"
   return [...kinds];
 }
 
@@ -1630,14 +1652,15 @@ export function classifyVaccineName(name: string): VaccineKind {
 }
 
 /**
- * 一条**记录**最终算哪几类（写入时算一次，读取时按下面的规则复核一次）。
+ * 一条**记录**最终算哪几类（读取时复核）。
  *
- * 技术方案 1.1.2 的读取规则：
- *   「若 `components` 为空、而这个名字现在能在产品库里认出来了
- *     （产品库后来补齐了），**按产品库重算一次**」——
- *   这样产品库变强，老记录跟着变准，不会留下"当年判错、永远判错"的记录。
+ * 2026-10-30（四块地基 #3）：**components 是唯一事实**，读取顺序：
+ *   ① 记录上有 components → 由成分推（不再看存下来的 kinds）
+ *   ② 没有 components、但名字能在产品库认出 → 按产品库的真实成分推
+ *   ③ 都没有 → 名字字面只保留狂犬/钩端/可选苗；**不猜 core**
  *
- * 其余情况一律以**记录自己存的 kinds** 为准（那是写入时按同一套规则算出来的）。
+ * 为什么不再信 `record.kinds`：它是写入时的缓存；产品库/口径变了以后，
+ * 缓存会和成分打架。V4 的"细小单苗算核心"就是缓存/字面规则留下的。
  */
 export function classifyRecordKinds(record: {
   vaccineName?: string;
@@ -1645,35 +1668,19 @@ export function classifyRecordKinds(record: {
   kinds?: unknown;
 }): VaccineKind[] {
   const name = String(record?.vaccineName || '');
-  const storedKinds = Array.isArray(record?.kinds)
-    ? record.kinds
-        .map((item) => normalizeVaccineKind(item))
-        .filter((item): item is VaccineKind => item !== null)
-    : [];
   const storedComponents = Array.isArray(record?.components)
     ? record.components
         .map((item) => normalizeVaccineComponent(item))
         .filter((item): item is VaccineComponent => item !== null)
     : [];
 
+  // ① 成分是唯一事实
+  if (storedComponents.length > 0) {
+    return kindsOfComponents({ components: storedComponents });
+  }
+
+  // ② 没勾成分：产品库认得出就按真实成分（不是手写 kinds）
   const product = findProductByText(name);
-
-  // 读时重算：当时没勾成分、名字现在产品库认得出 → 以产品库为准
-  if (product && storedComponents.length === 0) {
-    const recomputed = kindsOfComponents({
-      components: product.components,
-      earlySeries: product.earlySeries,
-    });
-    // 只有重算得出结果时才覆盖（产品库给出空结果属于异常，保持原样更安全）
-    if (recomputed.length > 0) {
-      return recomputed;
-    }
-  }
-
-  if (storedKinds.length > 0) {
-    return storedKinds;
-  }
-
   if (product && product.components.length > 0) {
     return kindsOfComponents({
       components: product.components,
@@ -1681,6 +1688,7 @@ export function classifyRecordKinds(record: {
     });
   }
 
+  // ③ 都没有：名字只保留低歧义的单病种，不猜 core
   return classifyVaccineKinds(name);
 }
 

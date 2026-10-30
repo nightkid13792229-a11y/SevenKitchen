@@ -174,7 +174,7 @@ function walkKind(kind: VaccineKind, birthday: Date): Instance[] {
 
 /** 哪支苗用来记"这一步打过了"（字面归类就够，不依赖产品库） */
 const NAME_BY_KIND: Record<string, string> = {
-  core: '犬六联',
+  core: '卫佳伍',
   rabies: '狂犬疫苗',
   lepto: '钩端螺旋体',
   core_early: '宠必威幼犬保',
@@ -373,7 +373,7 @@ describe('程序表 · 三条硬口径的专项断言（需求 A.3 / 5.2）', ()
     const records: VaccineRecordLike[] = [
       {
         id: 'r1',
-        vaccineName: '犬六联',
+        vaccineName: '卫佳伍',
         vaccinationDate: toDateText(addWeeks(birthday, 9)),
       },
     ];
@@ -393,17 +393,17 @@ describe('程序表 · 三条硬口径的专项断言（需求 A.3 / 5.2）', ()
     const records: VaccineRecordLike[] = [
       {
         id: 'r1',
-        vaccineName: '犬六联',
+        vaccineName: '卫佳伍',
         vaccinationDate: toDateText(addWeeks(birthday, 8)),
       },
       {
         id: 'r2',
-        vaccineName: '犬六联',
+        vaccineName: '卫佳伍',
         vaccinationDate: toDateText(addWeeks(birthday, 12)),
       },
       {
         id: 'r3',
-        vaccineName: '犬六联',
+        vaccineName: '卫佳伍',
         vaccinationDate: toDateText(addWeeks(birthday, 16)),
       },
     ];
@@ -427,17 +427,17 @@ describe('程序表 · 三条硬口径的专项断言（需求 A.3 / 5.2）', ()
     const records: VaccineRecordLike[] = [
       {
         id: 'r1',
-        vaccineName: '犬六联',
+        vaccineName: '卫佳伍',
         vaccinationDate: toDateText(addWeeks(birthday, 8)),
       },
       {
         id: 'r2',
-        vaccineName: '犬六联',
+        vaccineName: '卫佳伍',
         vaccinationDate: toDateText(addWeeks(birthday, 12)),
       },
       {
         id: 'r3',
-        vaccineName: '犬六联',
+        vaccineName: '卫佳伍',
         vaccinationDate: toDateText(addWeeks(birthday, 14)),
       },
     ];
@@ -464,17 +464,17 @@ describe('程序表 · 三条硬口径的专项断言（需求 A.3 / 5.2）', ()
     const records: VaccineRecordLike[] = [
       {
         id: 'r1',
-        vaccineName: '犬六联',
+        vaccineName: '卫佳伍',
         vaccinationDate: toDateText(addWeeks(birthday, 8)),
       },
       {
         id: 'r2',
-        vaccineName: '犬六联',
+        vaccineName: '卫佳伍',
         vaccinationDate: toDateText(addWeeks(birthday, 12)),
       },
       {
         id: 'r3',
-        vaccineName: '犬六联',
+        vaccineName: '卫佳伍',
         vaccinationDate: toDateText(addWeeks(birthday, 16)),
       },
     ];
@@ -578,17 +578,17 @@ function addMonthsHelper(date: Date, months: number): Date {
   return copy;
 }
 
-describe('字面归类 · 看不准的联苗不判核心（2026-10-16 收紧）', () => {
-  it('"犬二联 / 犬三联" 不算核心苗 —— 错算成"打了核心"会让狗漏打', () => {
+describe('字面归类 · 名字不再猜核心/早期（2026-10-30 #3 收紧）', () => {
+  it('"犬二联 / 犬三联" 名字不判核心，也不判早期', () => {
     expect(classifyVaccineKinds('犬二联')).not.toContain('core');
     expect(classifyVaccineKinds('犬三联')).not.toContain('core');
-    // 归到"只防犬瘟+细小"那一档（与目录里 cdv+cpv 的国产苗一致）
-    expect(classifyVaccineKinds('犬二联')).toContain('core_early');
+    expect(classifyVaccineKinds('犬二联')).not.toContain('core_early');
   });
 
-  it('"四联及以上" 仍算核心（按惯例含那三种核心病）', () => {
-    expect(classifyVaccineKinds('犬四联')).toContain('core');
-    expect(classifyVaccineKinds('六联')).toContain('core');
+  it('"四联及以上" 名字也不再算核心；产品库认得的才算', () => {
+    expect(classifyVaccineKinds('犬四联')).not.toContain('core');
+    expect(classifyVaccineKinds('六联')).not.toContain('core');
+    expect(classifyVaccineKinds('卫佳伍')).toContain('core');
   });
 });
 

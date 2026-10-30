@@ -138,13 +138,14 @@ describe('原型 C · 3 岁，记录齐全（生日 2023-08-30）', () => {
 });
 
 describe('原型 D · 手动记一条（最短路径：只写名称 + 日期）', () => {
-  it('"六联"这种叫法能归类（核心），不用填产品名', () => {
-    expect(classifyVaccineKinds('六联')).toContain('core');
+  it('产品库里的名字（卫佳伍）能归类；六联要补成分', () => {
+    expect(classifyVaccineKinds('六联')).not.toContain('core');
+    expect(classifyVaccineKinds('卫佳伍')).toContain('core');
   });
 
-  it('写下"六联 + 日期"就落到核心首免那一步上', () => {
+  it('写下"卫佳伍 + 日期"就落到核心首免那一步上', () => {
     const birthday = '2026-08-30';
-    const dose = rec('r1', '犬六联', '2026-10-12');
+    const dose = rec('r1', '卫佳伍', '2026-10-12');
     const steps = matchRecords(
       materializeSteps({
         birthday: new Date(`${birthday}T00:00:00`),

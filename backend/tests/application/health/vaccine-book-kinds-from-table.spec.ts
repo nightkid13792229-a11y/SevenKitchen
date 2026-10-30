@@ -67,9 +67,16 @@ describe('疫苗本 · 归类一律查产品表（2026-10-06）', () => {
     expect(drafts[0].kinds).not.toContain('core');
   });
 
-  it('自由文本仍然按病名/联数判（六联、犬瘟热这类手写写法）', () => {
-    expect(normalizeDrafts('VACCINE_BOOK', bookWith('六联'))[0].kinds).toContain('core');
+  it('自由文本不再按联数/病名猜 core；狂犬仍可归 rabies', () => {
+    expect(normalizeDrafts('VACCINE_BOOK', bookWith('六联'))[0].kinds).toEqual([]);
     expect(normalizeDrafts('VACCINE_BOOK', bookWith('狂犬疫苗'))[0].kinds).toContain('rabies');
+  });
+
+  it('单病种名字推断一个成分 → kinds other，不再算 core', () => {
+    const draft = normalizeDrafts('VACCINE_BOOK', bookWith('细小单苗'))[0];
+    expect(draft.components).toEqual(['cpv']);
+    expect(draft.kinds).toEqual(['other']);
+    expect(draft.productVerified).toBe(true);
   });
 
   it('AI 瞎填的归类字段被完全忽略（哪怕填了个合法值）', () => {
@@ -105,7 +112,7 @@ describe('疫苗本 · 归类一律查产品表（2026-10-06）', () => {
   });
 
   it('普通苗、日期正常 → 直接算数（productVerified = true）', () => {
-    const drafts = normalizeDrafts('VACCINE_BOOK', bookWith('犬六联'));
+    const drafts = normalizeDrafts('VACCINE_BOOK', bookWith('卫佳伍'));
     expect(drafts[0].productVerified).toBe(true);
   });
 });
@@ -137,10 +144,12 @@ describe('疫苗本 · 提示词不再让 AI 判分类（2026-10-06）', () => {
     expect(source).not.toContain('"vaccineName": "犬四联", "kinds": ["core"]');
   });
 
-  it('草稿映射里用的是产品表那条函数，不是 AI 给的字段', () => {
+  it('草稿映射用成分/产品表，不是 AI 给的 kinds；单病种只推断一个成分', () => {
     const source = readService();
 
-    expect(source).toContain('const kinds = classifyVaccineKinds(vaccineName);');
+    expect(source).toContain('inferSingleAntigenComponents(vaccineName)');
+    expect(source).toContain('kindsOfComponents({');
+    expect(source).toContain('classifyVaccineKinds(vaccineName)');
     expect(source).not.toContain('normalizeKinds(item?.kinds)');
     // 那个只服务于"信 AI 判定"的闭集校验函数已经删掉
     expect(source).not.toContain('export function normalizeKinds');
@@ -236,15 +245,16 @@ describe('分类口径 · 副流感改回非核心（2026-10-06）', () => {
     }
   });
 
-  it('但联苗仍然算核心（联苗按惯例覆盖那三种核心病）', () => {
-    for (const name of ['犬四联', '犬八联', '卫佳伍', '六联']) {
-      expect(classifyVaccineKinds(name)).toContain('core');
+  it('联苗名字不再直接算核心；产品库认得的（卫佳伍）才算', () => {
+    for (const name of ['犬四联', '犬八联', '六联']) {
+      expect(classifyVaccineKinds(name)).not.toContain('core');
     }
+    expect(classifyVaccineKinds('卫佳伍')).toContain('core');
   });
 
-  it('犬瘟 / 细小 / 腺病毒 单拎出来仍然算核心', () => {
+  it('犬瘟 / 细小 / 腺病毒 单拎出来不再算核心（V4）', () => {
     for (const name of ['犬瘟热', '细小病毒', '犬腺病毒']) {
-      expect(classifyVaccineKinds(name)).toContain('core');
+      expect(classifyVaccineKinds(name)).not.toContain('core');
     }
   });
 });
@@ -320,9 +330,10 @@ describe('核心覆盖 · 由成分回答（2026-10-15）', () => {
     expect(classifyVaccineKinds('卫佳细')).toEqual(['other']);
   });
 
-  it('手写叫法按字面归类：六联/四联算核心，需求第六节允许这么记', () => {
-    expect(classifyVaccineKinds('犬六联')).toContain('core');
-    expect(classifyVaccineKinds('犬四联')).toContain('core');
+  it('手写六联/四联不再按名字算核心；产品库/成分才决定', () => {
+    expect(classifyVaccineKinds('犬六联')).not.toContain('core');
+    expect(classifyVaccineKinds('犬四联')).not.toContain('core');
+    expect(classifyVaccineKinds('卫佳伍')).toContain('core');
   });
 
   it('病种勾全三种核心病 → 由成分推成核心类', () => {

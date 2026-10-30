@@ -119,7 +119,8 @@ describe('引擎 · 按疫苗类别判定，不按狗的年龄标签（需求 5.
       records: [
         record('r1', '钩端螺旋体', addWeeks(birthday, 8)),
         record('r2', '钩端螺旋体', addWeeks(birthday, 12)),
-        record('r3', '钩端螺旋体', last),
+        record('r3', '钩端螺旋体', addYears(last, -1)),
+        record('r4', '钩端螺旋体', last),
       ],
       today: TODAY,
     });

@@ -852,18 +852,30 @@ function buildLeptoSteps(
   /*
    * "上一针本身就是重启第 1 针" → 下一步接着排「重启免疫 第 2 针」。
    *
-   * ⚠️ 两个条件缺一不可：
-   *   ① 它和再上一针相隔 ≥18 个月（说明它是"重启"而不是常规年度加强）
-   *   ② 它离今天**不超过 3 个月** —— 重启第 2 针的窗口只开到第 1 针之后 4 周，
-   *      隔了半年还回头催"第 2 针"多半是错的（那一针很可能打了、只是没记）。
-   *      没有 ② 的话，一本只记了"首免两针 + 几年后一针"的老本子会被误判成
-   *      "上一针是重启针"（实测：6 年前的两针 + 半年前一针）。
+   * 判据只有一条：它和再上一针相隔 ≥18 个月（说明它是重启，不是常规年度加强）。
+   *
+   * ⚠️ 2026-10-30（B4/V5）删掉原来的"离今天不超过 3 个月"：
+   *    那个条件会让"2023/09 首针 → 2025/06 重启第 1 针 → 重启第 2 针没记"
+   *    的狗在 16 个月后又被拿 2023 年的老第 2 针当门面，说"原建议 2023/09 已过"。
+   *    重启第 2 针没打就是没打，过多久都该显示它（带原窗口），而不是退回老首免。
    */
   const lastDoseWasRestart =
     lastDose !== null &&
     previousDose !== null &&
-    monthsBetween(previousDose, lastDose) >= LEPTO_SCHEDULE.restartMonths &&
-    monthsBetween(lastDose, today) <= 3;
+    monthsBetween(previousDose, lastDose) >= LEPTO_SCHEDULE.restartMonths;
+
+  /*
+   * 上一针是「重启第 2 针」：它和前一针隔 2~4 周，而前一针之前又隔了 ≥18 个月。
+   * 这时年度就从这一针重新起算；旧的primary第2针（没记录）不许再当门面。
+   */
+  const thirdDose = doses.length > 2 ? doses[doses.length - 3] : null;
+  const lastDoseWasRestartSecond =
+    lastDose !== null &&
+    previousDose !== null &&
+    thirdDose !== null &&
+    (lastDose.getTime() - previousDose.getTime()) / 86400000 >= 14 &&
+    (lastDose.getTime() - previousDose.getTime()) / 86400000 <= 28 &&
+    monthsBetween(thirdDose, previousDose) >= LEPTO_SCHEDULE.restartMonths;
 
   /*
    * 年度加强的锚点 = **这只狗实际打过的最后一针钩端**（需求 A.3 第 2 条）。
@@ -877,8 +889,15 @@ function buildLeptoSteps(
     claimer,
   );
 
-  if (!stale && !lastDoseWasRestart) {
+  if (!stale && !lastDoseWasRestart && !lastDoseWasRestartSecond) {
     return [...primary, ...repeats].sort(
+      (a, b) => a.windowStart.getTime() - b.windowStart.getTime(),
+    );
+  }
+
+  // 重启第 2 针已打 → 年度从它重新起算；旧 primary 不再出现
+  if (lastDoseWasRestartSecond) {
+    return repeats.sort(
       (a, b) => a.windowStart.getTime() - b.windowStart.getTime(),
     );
   }
@@ -898,7 +917,13 @@ function buildLeptoSteps(
   );
   // 找不到"最后一针之后还没打的步骤" = 这一类没有待办 → 不动它
   if (targetIndex < 0) return all;
-  const head = all.slice(0, targetIndex);
+  /*
+   * B4/V5：只保留**已经认领（打过）**的历史步骤；
+   * 旧的"第 2 针"如果一直没记录，不许再挡在重启步骤前面。
+   */
+  const head = all
+    .slice(0, targetIndex)
+    .filter((step) => claimer.isClaimed(step.key));
 
   if (stale) {
     const restartOne: StepDraft = {

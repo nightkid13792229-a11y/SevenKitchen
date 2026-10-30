@@ -142,7 +142,8 @@ describe('修法 A · 加强针逾期 → 带出它自己那一段"原建议时�
       [
         rec('r1', '优乐康', '2021-09-01', { kinds: ['lepto'] }),
         rec('r2', '优乐康', '2021-09-22', { kinds: ['lepto'] }),
-        rec('r3', '优乐康', '2025-05-10', { kinds: ['lepto'] }),
+        rec('r3', '优乐康', '2024-06-01', { kinds: ['lepto'] }),
+        rec('r4', '优乐康', '2025-05-10', { kinds: ['lepto'] }),
       ],
       new Date('2026-10-16T00:00:00'),
     );
@@ -368,6 +369,7 @@ describe('修法 A · 不许碰的两类（挪到今天 / 窗口还没过去）'
         rec('r3', '钩端螺旋体', '2023-11-20', { kinds: ['lepto'] }),
         rec('r4', '钩端螺旋体', '2023-12-10', { kinds: ['lepto'] }),
         rec('r5', '钩端螺旋体', '2026-03-10', { kinds: ['lepto'] }),
+        rec('r8', '钩端螺旋体', '2026-04-01', { kinds: ['lepto'] }),
         rec('r6', '卫佳伍', '2023-10-20', { kinds: ['core'] }),
         rec('r7', '卫佳伍', '2024-03-01', { kinds: ['core'] }),
       ],
@@ -378,7 +380,7 @@ describe('修法 A · 不许碰的两类（挪到今天 / 窗口还没过去）'
     ).toEqual([
       ['rabies', '每年一次', '2026-11-20'],
       ['core', '加强（每 3 年）', '2027-03-01'],
-      ['lepto', '每年一次', '2027-03-10'],
+      ['lepto', '每年一次', '2027-04-01'],
     ]);
     expect(plan.plan.every((item) => !item.missedWindowStart)).toBe(true);
     expect(plan.next!.missedWindowStart).toBeUndefined();

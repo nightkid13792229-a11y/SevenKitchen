@@ -14,6 +14,7 @@
 
 import {
   CORE_SCHEDULE,
+  RABIES_SCHEDULE,
   RHYTHM_ALL_IGNORED,
   VACCINE_KIND_LABELS,
   VACCINE_KIND_SHORT_LABELS,
@@ -418,11 +419,32 @@ export function buildConflicts(input: {
     });
   }
 
-  // ② 核心苗打在 4 周龄之前 / 早于生日
+  // ② 核心苗打在建议起始周龄（6 周）之前 / 4 周龄之前 / 早于生日
   const minimumAge = addWeeks(birthday, CORE_SCHEDULE.startWeeks - 2); // 4 周龄
+  const suggestedStart = addWeeks(birthday, CORE_SCHEDULE.startWeeks); // 6 周龄
   for (const item of prepared) {
     if (!item.kinds.includes('core')) continue;
-    if (item.date.getTime() >= minimumAge.getTime()) continue;
+    if (item.date.getTime() >= minimumAge.getTime()) {
+      /*
+       * 2026-10-30（V10）：4~6 周龄之间不是"绝对禁忌"，但也不按首免计数；
+       * 以前这里什么都不说，家长记了 5 周那一针却像没记。
+       */
+      if (
+        item.date.getTime() > minimumAge.getTime() &&
+        item.date.getTime() < suggestedStart.getTime()
+      ) {
+        conflicts.push({
+          kind: 'core',
+          recordId: item.record.id,
+          recordDate: toDateText(item.date),
+          vaccineName: item.record.vaccineName,
+          reason: `这一针打在建议起始周龄（${CORE_SCHEDULE.startWeeks} 周）之前`,
+          suggestion:
+            '本程序未把它计入核心首免；请把记录带给兽医看，由他判断这一针是否计数、后续怎么排。',
+        });
+      }
+      continue;
+    }
 
     if (item.date.getTime() < birthday.getTime()) {
       conflicts.push({
@@ -466,6 +488,38 @@ export function buildConflicts(input: {
       reason: `与上一针狂犬相隔约 ${Math.max(1, Math.round(daysApart / 30))} 个月，短于一年`,
       suggestion:
         '国内狂犬通常每年一次。这次间隔偏短，建议与兽医确认是否按当地要求执行。',
+    });
+  }
+
+  // ③b 狂犬打在建议起始周龄（12 周）之前 → 明说为什么不计数（V10）
+  const rabiesSuggestedStart = addWeeks(
+    birthday,
+    RABIES_SCHEDULE.firstDoseWeeks,
+  );
+  for (const item of prepared) {
+    if (!item.kinds.includes('rabies')) continue;
+    if (item.date.getTime() >= rabiesSuggestedStart.getTime()) continue;
+
+    if (item.date.getTime() < birthday.getTime()) {
+      conflicts.push({
+        kind: 'rabies',
+        recordId: item.record.id,
+        recordDate: toDateText(item.date),
+        vaccineName: item.record.vaccineName,
+        reason: `这一针的接种日期（${toDateText(item.date)}）比狗狗生日还早`,
+        suggestion: '请核对疫苗本上的日期（最常见的错法是把年份写错）。',
+      });
+      continue;
+    }
+
+    conflicts.push({
+      kind: 'rabies',
+      recordId: item.record.id,
+      recordDate: toDateText(item.date),
+      vaccineName: item.record.vaccineName,
+      reason: `这一针打在建议起始周龄（${RABIES_SCHEDULE.firstDoseWeeks} 周）之前`,
+      suggestion:
+        '本程序未把它计入狂犬首针；请与兽医或当地免疫要求确认这一针是否有效、后续怎么补。',
     });
   }
 

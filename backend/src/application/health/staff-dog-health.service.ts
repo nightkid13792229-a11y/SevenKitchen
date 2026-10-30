@@ -102,8 +102,18 @@ export class StaffDogHealthService {
    *   · 看得到全部记录（不限于"最近 5 条"）
    *   · **看得到报告原件**（顾客侧只有本人能看）
    *   · 看得到 AI 分析（含未审核条目），并明确标出哪些还没审
+   *
+   * ⚠️ `includeAnalysis: false` 是给「快速看一眼」的场景用的（2026-10-30）：
+   * AI 分析要走大模型，**一次十几秒到几十秒**。员工在订单卡片上点「看狗狗」
+   * 只是想确认品种/体重/过敏/病史，等 15 秒等不来就超时了
+   * （线上表现：nginx 499，小程序一直转圈）。
+   * 小程序那个只读页一律传 false；后台营养师页保持默认（带分析）。
    */
-  async getHealthOverview(dogId: string): Promise<StaffHealthOverview> {
+  async getHealthOverview(
+    dogId: string,
+    options: { includeAnalysis?: boolean } = {},
+  ): Promise<StaffHealthOverview> {
+    const includeAnalysis = options.includeAnalysis !== false;
     const dog = await this.prisma.dog.findUnique({
       where: { id: dogId },
       include: {
@@ -129,11 +139,13 @@ export class StaffDogHealthService {
 
     // AI 分析：营养师视角，不受顾客侧开关限制
     let analysis: any = null;
-    try {
-      analysis = await this.analysisService.analyzeForStaff(dogId);
-    } catch (error: any) {
-      // 分析失败不能连带把整个健康档案打不开 —— 记录本身才是关键
-      analysis = { error: error?.message || '分析生成失败' };
+    if (includeAnalysis) {
+      try {
+        analysis = await this.analysisService.analyzeForStaff(dogId);
+      } catch (error: any) {
+        // 分析失败不能连带把整个健康档案打不开 —— 记录本身才是关键
+        analysis = { error: error?.message || '分析生成失败' };
+      }
     }
 
     const attachments: StaffAttachmentItem[] = [];

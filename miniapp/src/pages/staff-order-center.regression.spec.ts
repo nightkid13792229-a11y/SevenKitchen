@@ -102,4 +102,8 @@ describe('staff order center · 两个只读页', () => {
     expect(dogPage).not.toContain("method: 'DELETE'")
     expect(dogPage).not.toContain('uni.showModal')
   })
+
+  it('★ 狗狗档案页关掉 AI 分析（否则要等十几秒，15 秒就超时）', () => {
+    expect(dogPage).toContain("includeAnalysis: '0'")
+  })
 })

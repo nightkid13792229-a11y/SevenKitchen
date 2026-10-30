@@ -179,6 +179,21 @@ describe('StaffDogHealthService', () => {
       expect(overview.analysis.audience).toBe('nutritionist')
     })
 
+    it('★ 传 includeAnalysis:false 时不跑大模型（员工端「看狗狗」要秒开）', async () => {
+      const { service, analysis } = createService(createPrisma())
+
+      const overview = await service.getHealthOverview(DOG_ID, {
+        includeAnalysis: false,
+      })
+
+      expect(analysis.analyzeForStaff).not.toHaveBeenCalled()
+      expect(overview.analysis).toBeNull()
+      // 关掉分析不能把别的数据一起丢掉
+      expect(overview.dog.name).toBe('面包')
+      expect(overview.attachments).toHaveLength(2)
+      expect(overview.allergies).toHaveLength(1)
+    })
+
     it('分析失败不会连带把整个档案打不开（记录本身才是关键）', async () => {
       const prisma = createPrisma()
       const timeline = {

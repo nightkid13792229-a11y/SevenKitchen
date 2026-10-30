@@ -188,6 +188,15 @@ async function load() {
     const res = await request({
       url: `/admin/dogs/${encodeURIComponent(dogId.value)}/health-overview`,
       method: 'GET',
+      /**
+       * ⚠️ 一定要关掉 AI 分析（2026-10-30 修）。
+       *
+       * 这个接口默认会跑一遍大模型健康分析，**要十几秒到几十秒**，
+       * 而请求超时是 15 秒 —— 线上就表现成"一直加载中"
+       * （nginx 日志里是 499：客户端等不及先断了）。
+       * 员工在这里只是想快速确认品种/体重/过敏/病史，不需要 AI。
+       */
+      data: { includeAnalysis: '0' },
     })
     if (res.code === 0 && res.data) {
       overview.value = res.data

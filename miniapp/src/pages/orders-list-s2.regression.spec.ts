@@ -29,6 +29,20 @@ describe('统一订单列表 · S2（2026-10-25）', () => {
     expect(page).not.toContain('payingCustomId');
   });
 
+  it('★ 待付款卡上能直接取消，不用进详情（2026-10-30）', () => {
+    expect(page).toContain('cancelOrderFromList');
+    expect(page).toContain('/orders/${order.id}/cancel');
+    expect(template).toContain('cancelOrderFromList(order)');
+    expect(template).toContain('取消订单');
+    expect(template).toContain('cancellingId === order.id');
+  });
+
+  it('★ 待付款卡显示自动关闭倒计时（2026-10-30）', () => {
+    expect(page).toContain('paymentCountdownText');
+    expect(page).toContain('paymentLoadedAt');
+    expect(template).toContain('paymentCountdownText(order)');
+  });
+
   it('★ 生产不再输出完整订单 DEBUG', () => {
     expect(page).toContain('const DEBUG = false;');
   });

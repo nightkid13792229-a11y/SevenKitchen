@@ -7,24 +7,6 @@
       <button class="state-btn" @tap="goToLogin">去登录</button>
     </view>
 
-    <!-- 状态筛选Tab -->
-    <!--
-      类型筛选（2026-10-18 加，老板定"按类型筛"）。
-      放在状态筛选**上面**：先想"我要找哪种单"，再想"它到哪一步了"。
-      与状态筛选**叠加生效**（不是二选一）—— 两个维度互相独立。
-    -->
-    <view v-if="!needLogin" class="type-tabs">
-      <view
-        v-for="tab in TYPE_TABS"
-        :key="tab.value"
-        class="type-tab"
-        :class="{ active: selectedType === tab.value }"
-        @tap="selectType(tab.value)"
-      >
-        <text class="type-tab-text">{{ tab.label }}</text>
-      </view>
-    </view>
-
     <view v-if="viewAllOrders && !needLogin" class="view-all-banner">
       <view class="view-all-banner__head">
         <text class="view-all-banner__badge">测试视图</text>
@@ -35,16 +17,76 @@
       </text>
     </view>
 
-    <view v-if="!needLogin" class="status-tabs">
+    <view v-if="!needLogin" class="filter-bar">
+      <scroll-view class="filter-pills" scroll-x :show-scrollbar="false">
+        <view
+          v-for="tab in statusTabs"
+          :key="tab.value"
+          class="filter-pill"
+          :class="{ active: selectedStatus === tab.value }"
+          @tap="selectStatus(tab.value)"
+        >
+          <text class="filter-pill__label">{{ tab.label }}</text>
+          <text v-if="tab.count > 0" class="filter-pill__count">{{ tab.count }}</text>
+        </view>
+      </scroll-view>
       <view
-        v-for="tab in statusTabs"
-        :key="tab.value"
-        class="tab-item"
-        :class="{ active: selectedStatus === tab.value }"
-        @tap="selectStatus(tab.value)"
+        class="filter-entry"
+        :class="{ 'is-on': typeFilterActive || rangeFilterActive }"
+        @tap="openFilterSheet"
       >
-        <text class="tab-text">{{ tab.label }}</text>
-        <text v-if="tab.count > 0" class="tab-count">({{ tab.count }})</text>
+        <text class="filter-entry__text">筛选</text>
+      </view>
+    </view>
+
+    <!-- 筛选面板（2026-10-30）：类型不再天天占一行，时间范围也收进来 -->
+    <view
+      v-if="filterSheetOpen"
+      class="filter-mask"
+      @tap="closeFilterSheet"
+      @touchmove.stop.prevent="noop"
+    />
+    <view
+      v-if="filterSheetOpen"
+      class="filter-sheet"
+      @tap.stop
+      @touchmove.stop.prevent="noop"
+    >
+      <view class="filter-sheet__grip" />
+      <view class="filter-sheet__head">
+        <text class="filter-sheet__title">筛选订单</text>
+        <text class="filter-sheet__reset" @tap="resetFilters">重置</text>
+      </view>
+
+      <text class="filter-sheet__label">订单类型</text>
+      <view class="filter-options">
+        <view
+          v-for="tab in TYPE_TABS"
+          :key="`type-${tab.value}`"
+          class="filter-option"
+          :class="{ on: selectedType === tab.value }"
+          @tap="selectType(tab.value)"
+        >
+          {{ tab.label }}
+        </view>
+      </view>
+
+      <text class="filter-sheet__label">时间范围</text>
+      <view class="filter-options">
+        <view
+          v-for="opt in RANGE_OPTIONS"
+          :key="`range-${opt.value}`"
+          class="filter-option"
+          :class="{ on: selectedRange === opt.value }"
+          @tap="selectRange(opt.value)"
+        >
+          {{ opt.label }}
+        </view>
+      </view>
+
+      <view class="filter-sheet__foot">
+        <button class="filter-sheet__btn secondary" @tap="resetFilters">重置</button>
+        <button class="filter-sheet__btn primary" @tap="closeFilterSheet">查看结果</button>
       </view>
     </view>
 
@@ -68,8 +110,18 @@
       <text class="load-warning__retry" @tap="loadOrders">重试</text>
     </view>
 
+    <!-- 首屏骨架：三张占位卡，形状和真卡片一致，不闪屏 -->
+    <view v-if="!needLogin && loadingFirst" class="skeleton-list">
+      <view v-for="n in 3" :key="`sk-${n}`" class="skeleton-card">
+        <view class="skeleton-line skeleton-line--sm" />
+        <view class="skeleton-line skeleton-line--lg" />
+        <view class="skeleton-line skeleton-line--md" />
+        <view class="skeleton-line skeleton-line--bar" />
+      </view>
+    </view>
+
     <view
-      v-if="!needLogin && !(loadFailed && allOrders.length === 0)"
+      v-if="!needLogin && !loadingFirst && !(loadFailed && allOrders.length === 0)"
       class="order-list"
     >
       <view
@@ -78,299 +130,270 @@
         class="order-item"
         @tap="handleOrderTap(order)"
       >
-        <!-- 订单时间和状态 -->
+        <!-- 卡片头：类型 + 下单时间；"到哪一步"交给下面的进度线说 -->
         <view class="order-header">
           <view class="order-header-main">
-            <!--
-              分类标识放最左侧（2026-10-24）：
-              顾客扫一眼先知道"这是哪类单"，再看时间和状态。
-              名称统一走 utils/order-type.ts，不再各页写"定制/成品/补剂"。
-            -->
-            <text
+            <view
               class="order-type-tag"
               :class="`order-type-tag--${order._orderType || 'food'}`"
             >
-              {{ orderTypeLabel(order._orderType || 'food') }}
-            </text>
+              <view class="order-type-dot" />
+              <text class="order-type-name">
+                {{ orderTypeLabel(order._orderType || 'food') }}
+              </text>
+            </view>
             <text
               v-if="viewAllOrders && order._orderType !== 'food'"
               class="order-type-tag order-type-tag--test"
             >
               我的测试单
             </text>
-            <view
-              class="order-type-stripe"
-              :class="`order-type-stripe--${order._orderType || 'food'}`"
-            />
             <text class="order-time">
-              下单时间 {{ formatShortDateTime(order.createdAt) }}
+              {{ formatShortDateTime(order.createdAt) }} 下单
             </text>
           </view>
+        </view>
+
+        <!--
+          标题与副信息：三类订单各自取自己的名字。
+          鲜食用食谱名、定制造用定制标题、补剂用订单号 + 明细概要。
+        -->
+        <view class="order-main">
+          <view class="order-title-row">
+            <text v-if="order._orderType === 'custom'" class="order-title">
+              {{ customOrderTitle(order) }}
+            </text>
+            <text v-else-if="order._orderType === 'supplement'" class="order-title">
+              {{ supplementTitle(order) }}
+            </text>
+            <text v-else class="order-title">{{ getRecipeName(order) }}</text>
+
+            <text v-if="order._orderType === 'custom'" class="order-price">
+              <text class="order-price__symbol">¥</text>{{ formatAmountText(customOrderAmount(order)) }}
+            </text>
+            <text v-else class="order-price">
+              <text class="order-price__symbol">¥</text>{{ formatAmount(order.totalAmount) }}
+            </text>
+          </view>
+
+          <text v-if="order._orderType === 'custom'" class="order-meta">
+            {{ customOrderSubtitle(order) }}
+          </text>
+          <text v-else-if="order._orderType === 'supplement'" class="order-meta">
+            订单号 {{ order.orderNo }} · {{ formatSupplementSummary(order) }}
+          </text>
+          <text v-else class="order-meta">{{ foodMetaText(order) }}</text>
+
+          <text v-if="order._orderType === 'custom' && customOrderSubtitle(order)" class="order-note">
+            {{ customRefundText(order) }}
+          </text>
+
+          <!-- 免费补发单：0 元、不收钱，必须让顾客一眼看出这不是新买的一单 -->
+          <view v-if="order.reshipFromOrderId" class="reship-note">
+            <text class="reship-note__text">本单为免费补发，不收任何费用</text>
+          </view>
+        </view>
+
+        <!-- 四步进度：取消 / 售后不画线，改走状态条 -->
+        <view v-if="orderProgressOf(order).showProgress" class="progress">
+          <view
+            v-for="(step, index) in orderProgressOf(order).steps"
+            :key="step.key"
+            class="progress__step"
+            :class="{
+              'is-done': index < orderProgressOf(order).doneCount,
+              'is-current':
+                index === orderProgressOf(order).currentIndex &&
+                index >= orderProgressOf(order).doneCount,
+            }"
+          >
+            <view class="progress__dot">
+              <text
+                v-if="index < orderProgressOf(order).doneCount"
+                class="progress__check"
+              >✓</text>
+            </view>
+            <text class="progress__label">{{ step.label }}</text>
+            <view
+              v-if="index < orderProgressOf(order).steps.length - 1"
+              class="progress__line"
+              :class="{ 'is-done': index + 1 <= orderProgressOf(order).doneCount }"
+            />
+          </view>
+        </view>
+
+        <view v-else class="status-strip">
           <text
-            class="order-status"
+            class="status-strip__text"
             :style="{ color: getStatusColor(order) }"
           >
             {{ getStatusText(order) }}
           </text>
+          <text v-if="statusNote(order)" class="status-strip__note">
+            {{ statusNote(order) }}
+          </text>
         </view>
 
-        <!--
-          定制单（2026-10-18 并入）。
-          顾客找的是"我给狗定的那份食谱"，所以标题用**食谱名**，
-          没交付时显示「设计中的定制食谱」—— 订单号不是他要找的东西。
-          整卡可点，进定制订单详情。
-        -->
-        <template v-if="order._orderType === 'custom'">
-          <view class="order-summary">
-            <text class="summary-title">{{ customOrderTitle(order) }}</text>
-            <text v-if="customOrderSubtitle(order)" class="custom-order-sub">
-              {{ customOrderSubtitle(order) }}
-            </text>
-            <text v-if="customRefundText(order)" class="custom-order-refund">
-              {{ customRefundText(order) }}
-            </text>
-          </view>
-          <!-- 金额与成品/补剂同一套：标签和数值一起靠右 -->
-          <view class="order-amount">
-            <text class="amount-label">订单金额</text>
-            <text class="amount-value"
-              >¥{{ formatAmountText(customOrderAmount(order)) }}</text
-            >
-          </view>
-          <view class="order-actions" @tap.stop>
-            <button
-              v-if="order.status === 'PENDING_PAYMENT' && !isCustomPaymentExpired(order)"
-              class="action-btn primary"
-              :disabled="Boolean(payingKey)"
-              @tap="payCustomFromList(order)"
-            >
-              {{ isPaying('custom', order.orderId) ? '调起支付中' : '继续支付' }}
-            </button>
-            <text
-              v-if="order.status === 'PENDING_PAYMENT' && isCustomPaymentExpired(order)"
-              class="order-expired-text"
-            >
-              支付已超时，订单已关闭
-            </text>
-            <button
-              v-if="customRefundEntryLabel(order)"
-              class="action-btn secondary"
-              @tap="goCustomRefund(order)"
-            >
-              {{ customRefundEntryLabel(order) }}
-            </button>
-            <button
-              v-if="
-                order.status !== 'PENDING_PAYMENT' &&
-                customAftersaleAction(order)?.enabled &&
-                !isCustomRefundBlockingAftersale(order)
-              "
-              class="action-btn secondary"
-              @tap="applyCustomAftersale(order)"
-            >
-              申请售后
-            </button>
-            <button
-              v-if="order.status !== 'PENDING_PAYMENT'"
-              class="action-btn secondary"
-              @tap="reCustomize(order)"
-            >
-              再次定制
-            </button>
-          </view>
-        </template>
-
-        <!--
-          补剂订单：字段结构与鲜食不同，卡片里把订单号、概要、明细、物流、售后展示全；
-          点卡片或「查看详情」都会进补剂订单详情页（2026-10-25 注释纠正）。
-        -->
-        <template v-if="order._orderType === 'supplement'">
-          <view class="order-summary">
-            <text class="summary-text"
-              >{{ order.orderNo }} · {{ formatSupplementSummary(order) }}</text
-            >
-          </view>
-
-          <view class="order-items">
-            <view
-              v-for="item in order.items || []"
-              :key="item.id"
-              class="supplement-item-row"
-            >
-              <text class="supplement-item-name">{{ item.name }}</text>
-              <text class="supplement-item-amount"
-                >{{ formatSupplementAmount(item.packedAmount)
-                }}{{ item.unit }}</text
-              >
-              <text class="supplement-item-price"
-                >¥{{ formatAmount(item.price) }}</text
-              >
-            </view>
-          </view>
-
-          <view v-if="order.trackingNumber" class="order-address">
-            <text class="address-text"
-              >快递 {{ order.carrierCode ? order.carrierCode + ' ' : ''
-              }}{{ order.trackingNumber }}</text
-            >
-          </view>
-
-          <view v-if="order.aftersaleType || order.hasOpenAftersale" class="order-address">
-            <text class="address-text">
-              售后 {{ order.hasOpenAftersale ? (order.openAftersaleLabel || '售后中') : getAftersaleLabel(order.aftersaleType) }}{{
-                order.aftersaleReason ? ' · ' + order.aftersaleReason : ''
-              }}
-            </text>
-          </view>
-
-          <view class="order-address">
-            <text class="address-text">
-              预计发货 {{ order.packingDate || '待管理员排期' }}
-            </text>
-          </view>
-
-          <!-- 补发单：0 元、免费补寄，必须让顾客一眼看出这不是新买的一单 -->
-          <view v-if="order.reshipFromOrderId" class="order-address">
-            <text class="address-text">本单为免费补发，不收任何费用</text>
-          </view>
-        </template>
-
-        <!-- 商品数量（鲜食口径，补剂用上面的概要行） -->
-        <view v-if="order._orderType === 'food'" class="order-summary">
-          <text class="summary-text">{{ order.itemCount || 0 }}件商品</text>
+        <!-- 待付款：说清这单会自己关掉 -->
+        <view v-if="paymentCountdownText(order)" class="pay-countdown">
+          <text class="pay-countdown__text">
+            订单将在 {{ paymentCountdownText(order) }} 后自动关闭，关闭后需重新下单
+          </text>
         </view>
 
-        <!-- 如果有详细商品信息，显示更多信息 -->
-        <template v-if="order._orderType === 'food' && order.firstItem">
-          <!-- 狗狗信息（现货试吃装不绑狗狗，不显示这一行） -->
-          <view v-if="!isStockOrderRow(order)" class="order-dogs">
-            <text class="dogs-text">{{ formatDogInfo(order) }}</text>
-          </view>
+        <!-- 什么时候发出 -->
+        <view v-if="etaTextOf(order)" class="eta">
+          <text class="eta__text">{{ etaTextOf(order) }}</text>
+        </view>
 
-          <!-- 商品信息：食谱名称、总餐数、每餐重量 -->
-          <view class="order-items">
-            <view class="recipe-header">
-              <image
-                v-if="getRecipeCoverImage(order)"
-                class="recipe-cover"
-                :src="getRecipeCoverImage(order)"
-                mode="aspectFill"
-              />
-              <text class="recipe-name">{{ getRecipeName(order) }}</text>
-            </view>
-            <view class="meal-info">
-              <text v-if="isStockOrderRow(order)" class="meal-text"
-                >{{ getStockSets(order) }}套 · 共{{ getTotalMeals(order) }}袋</text
-              >
-              <text v-else class="meal-text"
-                >共{{ getTotalMeals(order) }}餐</text
-              >
-              <text class="meal-separator">·</text>
-              <text
-                v-if="
-                  order.firstItem?.packagePlan &&
-                  order.firstItem.packagePlan.length > 0
-                "
-                class="meal-text"
-              >
-                {{ formatPackagePlan(order.firstItem) }}
-              </text>
-              <text v-else class="meal-text"
-                >每餐{{ getMealWeight(order) }}g</text
-              >
-            </view>
-          </view>
+        <!-- 已发货：承运商 + 运单号，点进物流详情 -->
+        <view
+          v-if="order._orderType === 'food' && order.status === 'SHIPPED' && trackingText(order)"
+          class="logistics"
+          @tap.stop="viewLogistics(order)"
+        >
+          <text class="logistics__text">{{ trackingText(order) }}</text>
+          <text class="logistics__link">物流详情 ›</text>
+        </view>
 
-          <!-- 收货地址 -->
-          <view class="order-address" v-if="order.address">
-            <text class="address-text">{{ formatAddress(order.address) }}</text>
-          </view>
-        </template>
-
-        <!-- 金额：定制单已在上面的定制卡片里展示，避免出现 ¥0.00 的第二行 -->
-        <view v-if="order._orderType !== 'custom'" class="order-amount">
-          <text class="amount-label">订单金额</text>
-          <text class="amount-value"
-            >¥{{ formatAmount(order.totalAmount) }}</text
+        <!-- 底部：单号 + 详情入口 -->
+        <view class="order-foot">
+          <text
+            v-if="order._orderType !== 'supplement' && orderNoOf(order)"
+            class="order-no"
+            @tap.stop="copyOrderNo(order)"
           >
+            订单号 {{ orderNoOf(order) }}
+            <text class="order-no__copy">复制</text>
+          </text>
+          <text class="order-link" @tap.stop="handleOrderTap(order)">
+            查看详情 ›
+          </text>
         </view>
 
+        <!--
+          操作：一主一次，最多两个按钮。
+          再次购买 / 再次定制 作为文字入口留在每一单上（回归测试要求
+          复购入口不按状态消失），但不再和主操作抢同一排。
+        -->
         <view v-if="hasQuickActions(order)" class="order-actions" @tap.stop>
-          <!-- 补剂：只有未付款需要入口，支付流程与鲜食不同，复用补剂自己的支付封装 -->
           <button
-            v-if="
-              order._orderType === 'supplement' &&
-              order.status === 'PENDING_PAYMENT'
-            "
-            class="action-btn primary"
-            :disabled="Boolean(payingKey)"
-            @tap="paySupplementFromList(order)"
+            v-if="order._orderType === 'food'"
+            class="action-link"
+            @tap="buyAgain(order)"
           >
-            {{ isPaying('supplement', order.id) ? '调起支付中' : '去支付' }}
+            再次购买
           </button>
           <button
-            v-if="order._orderType === 'supplement'"
-            class="action-btn secondary"
-            @tap="viewSupplementDetail(order.id)"
+            v-else-if="order._orderType === 'custom'"
+            class="action-link"
+            @tap="reCustomize(order)"
           >
-            查看详情
+            再次定制
           </button>
 
-          <!-- 鲜食：下面这套操作沿用原样，只按类型标记收窄适用范围 -->
-          <template v-if="order._orderType === 'food'">
-            <button
-              v-if="order.status === 'PENDING_PAYMENT' && !isPaymentExpired(order)"
-              class="action-btn primary"
-              :disabled="Boolean(payingKey)"
-              @tap="payOrderFromList(order.id)"
-            >
-              {{ isPaying('food', order.id) ? '调起支付中' : '立即付款' }}
-            </button>
-            <text v-if="isPaymentExpired(order)" class="order-expired-text">
-              支付已超时，订单已关闭
-            </text>
-            <button
-              v-if="order.status === 'SHIPPED'"
-              class="action-btn secondary"
-              @tap="viewLogistics(order)"
-            >
-              查看物流
-            </button>
-            <button
-              v-if="getAftersaleEntryLabel(order.status, order.completedAt)"
-              class="action-btn secondary"
-              @tap="applyAftersale(order)"
-            >
-              {{ getAftersaleEntryLabel(order.status, order.completedAt) }}
-            </button>
-            <button
-              v-if="order.status === 'SHIPPED'"
-              class="action-btn primary"
-              :disabled="receivingOrderId === order.id"
-              @tap="confirmReceivedFromList(order)"
-            >
-              {{ receivingOrderId === order.id ? '确认中' : '确认收货' }}
-            </button>
-            <button
-              class="action-btn secondary"
-              @tap="buyAgain(order)"
-            >
-              再次购买
-            </button>
-          </template>
+          <view class="action-buttons">
+            <!-- 成品鲜食 -->
+            <template v-if="order._orderType === 'food'">
+              <button
+                v-if="order.status === 'PENDING_PAYMENT' && !isPaymentExpired(order)"
+                class="action-btn secondary"
+                :disabled="cancellingId === order.id"
+                @tap="cancelOrderFromList(order)"
+              >
+                {{ cancellingId === order.id ? '取消中' : '取消订单' }}
+              </button>
+              <button
+                v-if="order.status === 'PENDING_PAYMENT' && !isPaymentExpired(order)"
+                class="action-btn primary"
+                :disabled="Boolean(payingKey)"
+                @tap="payOrderFromList(order.id)"
+              >
+                {{ isPaying('food', order.id) ? '调起支付中' : '立即付款' }}
+              </button>
+              <template v-else>
+                <button
+                  v-if="getAftersaleEntryLabel(order.status, order.completedAt)"
+                  class="action-btn secondary"
+                  @tap="applyAftersale(order)"
+                >
+                  {{ getAftersaleEntryLabel(order.status, order.completedAt) }}
+                </button>
+                <button
+                  v-if="order.status === 'SHIPPED'"
+                  class="action-btn primary"
+                  :disabled="receivingOrderId === order.id"
+                  @tap="confirmReceivedFromList(order)"
+                >
+                  {{ receivingOrderId === order.id ? '确认中' : '确认收货' }}
+                </button>
+              </template>
+            </template>
+
+            <!-- 预分装补剂 -->
+            <template v-else-if="order._orderType === 'supplement'">
+              <button
+                v-if="order.status === 'PENDING_PAYMENT'"
+                class="action-btn primary"
+                :disabled="Boolean(payingKey)"
+                @tap="paySupplementFromList(order)"
+              >
+                {{ isPaying('supplement', order.id) ? '调起支付中' : '去支付' }}
+              </button>
+              <button
+                class="action-btn secondary"
+                @tap="viewSupplementDetail(order.id)"
+              >
+                查看明细
+              </button>
+            </template>
+
+            <!-- 食谱定制 -->
+            <template v-else>
+              <button
+                v-if="order.status === 'PENDING_PAYMENT' && !isCustomPaymentExpired(order)"
+                class="action-btn primary"
+                :disabled="Boolean(payingKey)"
+                @tap="payCustomFromList(order)"
+              >
+                {{ isPaying('custom', order.orderId) ? '调起支付中' : '继续支付' }}
+              </button>
+              <button
+                v-if="customRefundEntryLabel(order)"
+                class="action-btn secondary"
+                @tap="goCustomRefund(order)"
+              >
+                {{ customRefundEntryLabel(order) }}
+              </button>
+              <button
+                v-if="
+                  order.status !== 'PENDING_PAYMENT' &&
+                  customAftersaleAction(order)?.enabled &&
+                  !isCustomRefundBlockingAftersale(order)
+                "
+                class="action-btn secondary"
+                @tap="applyCustomAftersale(order)"
+              >
+                申请售后
+              </button>
+            </template>
+          </view>
         </view>
       </view>
 
       <view v-if="orders.length === 0" class="empty-state">
         <text class="empty-title">{{ emptyTitle }}</text>
         <text class="empty-text">{{ emptyText }}</text>
-        <button
-          v-if="selectedStatus === 'ALL'"
-          class="empty-action"
-          @tap="goHome"
-        >
-          去选食谱
-        </button>
+        <view class="empty-actions">
+          <button
+            v-if="hasActiveFilter"
+            class="empty-action secondary"
+            @tap="resetFilters"
+          >
+            看全部订单
+          </button>
+          <button class="empty-action" @tap="goHome">去挑食谱</button>
+        </view>
       </view>
     </view>
 
@@ -387,7 +410,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { onShow, onLoad } from '@dcloudio/uni-app';
+import { onShow, onLoad, onPullDownRefresh } from '@dcloudio/uni-app';
 import { request, getToken } from '@/utils/api';
 import {
   createWechatPayment,
@@ -400,6 +423,7 @@ import {
 } from '../../api/supplements';
 import { runSupplementPayment } from '../../utils/supplement-payment';
 import { formatShortDateTime } from '../../utils/date';
+import { formatEtaText, resolveOrderProgress } from '../../utils/order-progress';
 import { ORDER_TYPE_META, ORDER_TYPE_TABS, orderTypeLabel } from '../../utils/order-type';
 // 定制单（2026-10-18 并入三单合一）
 import {
@@ -467,6 +491,12 @@ interface Order {
   } | null;
   totalAmount?: number;
   itemCount?: number;
+  /** 可读订单号；2026 年前的老单为 null */
+  orderNo?: string | null;
+  /** 预计发货日（制作日 + 1 天），摘要接口 2026-10-30 起下发 */
+  estimatedShippingDate?: string | null;
+  trackingNumber?: string | null;
+  carrierCode?: string | null;
   createdAt?: string;
   completedAt?: string;
   trackingNumber?: string;
@@ -537,6 +567,25 @@ type TypeFilter = 'ALL' | 'custom' | 'food' | 'supplement';
 const TYPE_TABS = ORDER_TYPE_TABS;
 const selectedType = ref<TypeFilter>('ALL');
 
+/**
+ * 时间范围（2026-10-30）。
+ *
+ * 默认「全部」：顾客打开订单页多半是来找某一单的，默认就把三个月前
+ * 的单藏起来，会让人以为订单一夜之间没了。想收窄的自己去筛选里选。
+ */
+type RangeFilter = '3M' | '1Y' | 'ALL';
+const RANGE_OPTIONS: Array<{ value: RangeFilter; label: string }> = [
+  { value: '3M', label: '近 3 个月' },
+  { value: '1Y', label: '近 1 年' },
+  { value: 'ALL', label: '全部' },
+];
+const selectedRange = ref<RangeFilter>('ALL');
+const filterSheetOpen = ref(false);
+/** 首屏加载：只给骨架屏，不弹全屏「加载中」挡住页面 */
+const loadingFirst = ref(false);
+const typeFilterActive = computed(() => selectedType.value !== 'ALL');
+const rangeFilterActive = computed(() => selectedRange.value !== 'ALL');
+
 function selectType(value: TypeFilter) {
   selectedType.value = value;
   filterOrders();
@@ -547,6 +596,10 @@ const orders = ref<UnifiedOrder[]>([]);
 const viewAllOrders = ref(false); // 是否查看所有订单（从工作台进入时为true）
 /** 统一支付锁：同一时间只允许一笔支付，三类按钮一起禁用 */
 const payingKey = ref('');
+/** 取消中（与支付锁分开，取消不影响付款按钮的禁用态） */
+const cancellingId = ref('');
+/** 这批倒计时的起算时刻：服务端只给「还剩多少秒」，本地按经过时间递减 */
+const paymentLoadedAt = ref(Date.now());
 const receivingOrderId = ref('');
 const nowTick = ref(Date.now());
 let paymentClockTimer: ReturnType<typeof setInterval> | null = null;
@@ -679,6 +732,14 @@ const SUPPLEMENT_STATUS_COLORS: Record<string, string> = {
   AFTERSALE: '#f5222d',
 };
 
+/** 是否处于「筛选后」状态：决定空态要不要给「看全部订单」 */
+const hasActiveFilter = computed(
+  () =>
+    selectedStatus.value !== 'ALL' ||
+    typeFilterActive.value ||
+    rangeFilterActive.value,
+);
+
 const emptyTitle = computed(() => {
   if (selectedStatus.value === 'ALL') {
     return '还没有订单';
@@ -691,7 +752,7 @@ const emptyTitle = computed(() => {
 
 const emptyText = computed(() => {
   const copyMap: Record<string, string> = {
-    ALL: '去首页选择食谱，下单后订单会出现在这里。',
+    ALL: '去首页挑一份适合你家狗狗的食谱，下单后订单会出现在这里。',
     PENDING_PAYMENT: '没有需要付款的订单。',
     IN_PROGRESS: '没有进行中的订单。',
     WAIT_RECEIVE: '没有等待收货 / 确认的订单。',
@@ -699,6 +760,11 @@ const emptyText = computed(() => {
     AFTERSALE: '没有售后中的订单。',
   };
   return copyMap[selectedStatus.value] || '这里暂时没有订单。';
+});
+
+onPullDownRefresh(async () => {
+  await loadOrders();
+  uni.stopPullDownRefresh();
 });
 
 onMounted(async () => {
@@ -754,7 +820,10 @@ async function loadOrders() {
     });
   }
 
-  uni.showLoading({ title: '加载中...' });
+  // 首屏给骨架屏；已经有数据时的刷新完全静默，不遮住顾客正在看的内容
+  if (allOrders.value.length === 0) {
+    loadingFirst.value = true;
+  }
 
   // 根据页面参数决定调用哪个API
   // viewAll=true 时调用管理员API查看所有订单，否则调用普通API只看自己的订单
@@ -837,6 +906,7 @@ async function loadOrders() {
       supplementOrders,
       customOrders,
     );
+    paymentLoadedAt.value = Date.now();
     filterOrders();
   } catch (err) {
     console.error('Load orders error:', err);
@@ -846,7 +916,8 @@ async function loadOrders() {
       loadFailed.value = true;
     }
   } finally {
-    uni.hideLoading();
+    loadingFirst.value = false;
+    uni.stopPullDownRefresh();
   }
 }
 
@@ -1025,14 +1096,55 @@ function isAftersaleOrder(order: UnifiedOrder): boolean {
   );
 }
 
+/** 近 N 个月之前的时间戳；范围=全部时返回 0，等于不过滤 */
+function rangeStartAt(range: RangeFilter): number {
+  if (range === 'ALL') return 0;
+  const months = range === '3M' ? 3 : 12;
+  const start = new Date();
+  start.setMonth(start.getMonth() - months);
+  return start.getTime();
+}
+
+function applyRangeFilter(rows: UnifiedOrder[]): UnifiedOrder[] {
+  const startAt = rangeStartAt(selectedRange.value);
+  if (!startAt) return rows;
+  return rows.filter((order) => {
+    const created = new Date(order.createdAt || '').getTime();
+    return Number.isFinite(created) && created >= startAt;
+  });
+}
+
+function openFilterSheet(): void {
+  filterSheetOpen.value = true;
+}
+
+function closeFilterSheet(): void {
+  filterSheetOpen.value = false;
+}
+
+function selectRange(range: RangeFilter): void {
+  selectedRange.value = range;
+  filterOrders();
+}
+
+function resetFilters(): void {
+  selectedType.value = 'ALL';
+  selectedRange.value = 'ALL';
+  filterOrders();
+}
+
+function noop(): void {}
+
 function getOrdersByTab(
   status: string,
   type: OrderType | 'ALL' = selectedType.value,
 ): UnifiedOrder[] {
-  const sameType =
+  const sameTypeRaw =
     type === 'ALL'
       ? allOrders.value
       : allOrders.value.filter((order) => order._orderType === type);
+  // 时间范围在这里统一收口：Tab 上的数量和卡片用同一份数据，不会对不上
+  const sameType = applyRangeFilter(sameTypeRaw);
 
   if (status === 'ALL') {
     return sameType;
@@ -1828,6 +1940,196 @@ function formatAddress(address?: { regionText?: string }): string {
   return regions[0] || address.regionText;
 }
 
+/**
+ * 卡片进度与"什么时候到"（2026-10-30）。
+ *
+ * 页面只负责把三类订单映射成进度模块需要的 kind；
+ * 状态 → 四步、日期 → 人话，全部在 utils/order-progress 里，
+ * 好让详情页以后能直接复用同一套。
+ */
+function orderKindOf(order: UnifiedOrder): 'food' | 'supplement' | 'custom' {
+  if (order._orderType === 'supplement') return 'supplement';
+  if (order._orderType === 'custom') return 'custom';
+  return 'food';
+}
+
+function orderProgressOf(order: UnifiedOrder) {
+  return resolveOrderProgress({
+    kind: orderKindOf(order),
+    status: order.status,
+  });
+}
+
+/** 本单的"预计发出/交付日"：补剂看排期日、定制看约定交付日、鲜食看制作日+1 */
+function orderEtaDateOf(order: UnifiedOrder): string | null {
+  if (order._orderType === 'supplement') {
+    return (order as SupplementOrderRow).packingDate ?? null;
+  }
+  if (order._orderType === 'custom') {
+    return (order as CustomOrderRow).scheduledDate ?? null;
+  }
+  return (order as FoodOrderRow).estimatedShippingDate ?? null;
+}
+
+function etaTextOf(order: UnifiedOrder): string {
+  const date = orderEtaDateOf(order);
+  return formatEtaText({
+    kind: orderKindOf(order),
+    status: order.status,
+    estimatedShippingDate: date,
+    scheduledDate: date,
+  });
+}
+
+/** 卡片上可以报给客服的单号：鲜食/补剂用 orderNo，定制用业务单号 */
+function orderNoOf(order: UnifiedOrder): string {
+  if (order._orderType === 'supplement') {
+    return (order as SupplementOrderRow).orderNo || '';
+  }
+  if (order._orderType === 'custom') {
+    return (order as CustomOrderRow).orderId || '';
+  }
+  return (order as FoodOrderRow).orderNo || '';
+}
+
+/** 复制单号：老单没有单号时什么也不做，不弹"复制成功"的空提示 */
+function copyOrderNo(order: UnifiedOrder): void {
+  const orderNo = orderNoOf(order);
+  if (!orderNo) return;
+  uni.setClipboardData({
+    data: orderNo,
+    success: () => {
+      uni.showToast({ title: '订单号已复制', icon: 'none' });
+    },
+  });
+}
+
+/** 已发货的运单：只显示承运商 + 单号，轨迹点进物流页 */
+function trackingText(order: UnifiedOrder): string {
+  if (order._orderType !== 'food') return '';
+  const row = order as FoodOrderRow;
+  if (!row.trackingNumber) return '';
+  const carrier = getCarrierName(row.carrierCode);
+  return carrier && carrier !== '-' ? `${carrier} ${row.trackingNumber}` : row.trackingNumber;
+}
+
+/** 取消 / 售后卡片上补一句人话，别只留一个状态词 */
+function statusNote(order: UnifiedOrder): string {
+  if (order.status === 'AFTERSALE') return '我们正在处理，结果会发站内消息';
+  if (order.status === 'CANCELLED') {
+    if (order._orderType === 'food' && isRefundedOrder(order as FoodOrderRow)) {
+      return '钱款已原路退回';
+    }
+    return '订单已关闭';
+  }
+  return '';
+}
+
+/** 鲜食副信息：狗狗 + 餐数 + 每餐克数；现货试吃装不绑狗狗 */
+function foodMetaText(order: UnifiedOrder): string {
+  const row = order as FoodOrderRow;
+  if (isStockOrderRow(row)) {
+    return `${getStockSets(row)}套 · 共${getTotalMeals(row)}袋`;
+  }
+  const parts: string[] = [];
+  const dog = formatDogInfo(row);
+  if (dog) parts.push(dog);
+  parts.push(`共${getTotalMeals(row)}餐`);
+  parts.push(`${getMealWeight(row)}g/餐`);
+  return parts.join(' · ');
+}
+
+/** 补剂标题：第一件 + 共几件，明细点进详情 */
+function supplementTitle(order: UnifiedOrder): string {
+  const items = (order as SupplementOrderRow).items || [];
+  if (items.length === 0) return '预分装补剂';
+  const firstName = items[0].name || '预分装补剂';
+  return items.length > 1 ? `${firstName} 等 ${items.length} 件` : firstName;
+}
+
+/**
+ * 待付款还剩多久（2026-10-30）。
+ *
+ * 口径以服务端返回的剩余秒数为准（列表接口只对 PENDING_PAYMENT 下发），
+ * 本地只做「经过时间」递减，不拿本机时钟去猜订单是什么时候创建的 ——
+ * 手机时间被改过也不会把倒计时算错。
+ *
+ * 刷到分钟级就够了：沿用页面既有的 15 秒心跳，秒级跳动会让整页每秒
+ * 重新渲染一遍，长列表上不值得。
+ */
+function paymentCountdownText(order: UnifiedOrder): string {
+  if (order.status !== 'PENDING_PAYMENT') return '';
+
+  if (order._orderType === 'custom') {
+    const deadline = (order as CustomOrderRow).paymentDeadlineAt;
+    if (!deadline) return '';
+    return formatRemainingText(new Date(deadline).getTime() - nowTick.value);
+  }
+
+  const row = order as FoodOrderRow | SupplementOrderRow;
+  if (row.paymentAutoCloseEnabled === false) return '';
+  const remaining = Number(row.paymentRemainingSeconds);
+  if (!Number.isFinite(remaining)) return '';
+
+  const elapsed = Math.max(
+    0,
+    Math.floor((nowTick.value - paymentLoadedAt.value) / 1000),
+  );
+  return formatRemainingText((remaining - elapsed) * 1000);
+}
+
+function formatRemainingText(remainingMs: number): string {
+  if (!Number.isFinite(remainingMs)) return '';
+  if (remainingMs <= 0) return '即将关闭';
+  if (remainingMs < 60 * 1000) return '不到 1 分钟';
+  return `${Math.ceil(remainingMs / (60 * 1000))} 分钟`;
+}
+
+/**
+ * 待付款在列表上直接取消（2026-10-30）。
+ *
+ * 复用详情页同一个接口 POST /orders/:id/cancel。
+ * 二次确认放在这里而不是详情页，是因为列表上误触的概率更高。
+ */
+async function cancelOrderFromList(order: UnifiedOrder): Promise<void> {
+  if (order._orderType !== 'food') return;
+  if (cancellingId.value) return;
+
+  const confirmed = await new Promise<boolean>((resolve) => {
+    uni.showModal({
+      title: '取消这一单？',
+      content: '取消后订单关闭，不会扣款。',
+      confirmText: '取消订单',
+      cancelText: '再想想',
+      success: (res) => resolve(Boolean(res.confirm)),
+      fail: () => resolve(false),
+    });
+  });
+  if (!confirmed) return;
+
+  cancellingId.value = order.id;
+  try {
+    const res = await request({
+      url: `/orders/${order.id}/cancel`,
+      method: 'POST',
+      data: { reason: '用户主动取消' },
+      quiet: true,
+    });
+    if (res.code !== 0) {
+      throw new Error(res.message || '取消失败');
+    }
+    uni.showToast({ title: '订单已取消', icon: 'none' });
+    await loadOrders();
+  } catch (error: any) {
+    uni.showToast({
+      title: error?.message || '取消失败，请稍后重试',
+      icon: 'none',
+    });
+  } finally {
+    cancellingId.value = '';
+  }
+}
+
 onUnmounted(() => {
   if (paymentClockTimer) {
     clearInterval(paymentClockTimer);
@@ -2231,7 +2533,7 @@ onUnmounted(() => {
   right: 0;
   bottom: 0;
   z-index: 30;
-  padding: 18rpx 28rpx calc(18rpx + env(safe-area-inset-bottom));
+  padding: 8rpx 28rpx calc(8rpx + env(safe-area-inset-bottom));
   background-color: #fbfcf7;
   box-shadow: 0 -8rpx 28rpx rgba(30, 46, 36, 0.08);
   box-sizing: border-box;
@@ -2239,6 +2541,8 @@ onUnmounted(() => {
 
 .customer-service-bottom-action {
   width: 100%;
+  height: 68rpx;
+  min-height: 68rpx;
 }
 
 /* ===== 定制单（2026-10-18 并入三单合一）===== */
@@ -2385,4 +2689,596 @@ onUnmounted(() => {
   font-size: 26rpx;
 }
 
+
+/* ===== 卡片改版（2026-10-30）：进度式，一主一次 ===== */
+.order-item {
+  padding: 28rpx;
+  border-radius: 24rpx;
+}
+
+.order-header {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.order-header-main {
+  gap: 16rpx;
+}
+
+/* 类型标签：小圆点 + 名称，不再用整块色底去抢注意力 */
+.order-type-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #2e7d32;
+}
+
+.order-type-dot {
+  width: 10rpx;
+  height: 10rpx;
+  border-radius: 999rpx;
+  background: #2e7d32;
+}
+
+.order-type-tag--food {
+  background: transparent;
+  color: #2e7d32;
+}
+
+.order-type-tag--food .order-type-dot {
+  background: #2e7d32;
+}
+
+.order-type-tag--custom {
+  background: transparent;
+  color: #b45309;
+}
+
+.order-type-tag--custom .order-type-dot {
+  background: #b45309;
+}
+
+.order-type-tag--supplement {
+  background: transparent;
+  color: #7c3aed;
+}
+
+.order-type-tag--supplement .order-type-dot {
+  background: #7c3aed;
+}
+
+/* 管理员测试视图的小黑标要保留底色，否则会变成一行普通文字 */
+.order-type-tag--test {
+  padding: 2rpx 12rpx;
+  border-radius: 8rpx;
+  background: #1e3a2f;
+  color: #f6efe0;
+  font-size: 20rpx;
+}
+
+.order-time {
+  margin-left: auto;
+  font-size: 22rpx;
+  color: #968f6d;
+}
+
+.order-main {
+  margin-top: 14rpx;
+}
+
+.order-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 16rpx;
+}
+
+.order-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 30rpx;
+  font-weight: 700;
+  line-height: 1.4;
+  color: #26261f;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.order-price {
+  flex: 0 0 auto;
+  font-size: 34rpx;
+  font-weight: 800;
+  color: #b4553f;
+}
+
+.order-price__symbol {
+  font-size: 22rpx;
+  font-weight: 600;
+  margin-right: 2rpx;
+}
+
+.order-meta {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #6b6653;
+}
+
+.order-note {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #b45309;
+}
+
+/* 四步进度 */
+.progress {
+  display: flex;
+  margin: 22rpx 0 14rpx;
+}
+
+.progress__step {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.progress__dot {
+  width: 22rpx;
+  height: 22rpx;
+  border-radius: 999rpx;
+  border: 3rpx solid #dedfcc;
+  background: #fffdf7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+}
+
+.progress__check {
+  font-size: 14rpx;
+  line-height: 1;
+  color: #ffffff;
+}
+
+.progress__step.is-done .progress__dot {
+  border-color: #1e3a2f;
+  background: #1e3a2f;
+}
+
+.progress__step.is-current .progress__dot {
+  border-color: #b08d4f;
+  box-shadow: 0 0 0 6rpx rgba(176, 141, 79, 0.16);
+}
+
+.progress__label {
+  font-size: 20rpx;
+  color: #b3ae98;
+}
+
+.progress__step.is-done .progress__label {
+  color: #6b6653;
+}
+
+.progress__step.is-current .progress__label {
+  color: #1e3a2f;
+  font-weight: 700;
+}
+
+.progress__line {
+  position: absolute;
+  top: 10rpx;
+  left: calc(50% + 18rpx);
+  right: calc(-50% + 18rpx);
+  height: 3rpx;
+  border-radius: 3rpx;
+  background: #e3e6d4;
+}
+
+.progress__line.is-done {
+  background: #9db9a8;
+}
+
+/* 取消 / 售后：不画进度，用一条状态带 */
+.status-strip {
+  margin: 18rpx 0 0;
+  padding: 16rpx 20rpx;
+  border-radius: 14rpx;
+  background: #f4f6ec;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10rpx;
+}
+
+.status-strip__text {
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+.status-strip__note {
+  font-size: 21rpx;
+  color: #6b6653;
+}
+
+/* 什么时候发出 */
+.eta {
+  margin-top: 14rpx;
+  padding: 14rpx 18rpx;
+  border-radius: 14rpx;
+  background: #f6efe0;
+}
+
+.eta__text {
+  font-size: 22rpx;
+  line-height: 1.4;
+  color: #7a5f2e;
+}
+
+.pay-countdown {
+  margin-top: 14rpx;
+  padding: 14rpx 18rpx;
+  border-radius: 14rpx;
+  background: #fdf3e6;
+}
+
+.pay-countdown__text {
+  font-size: 22rpx;
+  line-height: 1.4;
+  color: #8a5a1c;
+}
+
+.logistics {
+  margin-top: 12rpx;
+  padding: 14rpx 18rpx;
+  border-radius: 14rpx;
+  background: #f2f6ee;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+}
+
+.logistics__text {
+  flex: 1;
+  min-width: 0;
+  font-size: 22rpx;
+  color: #26261f;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logistics__link {
+  flex: 0 0 auto;
+  font-size: 21rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+}
+
+/* 单号 + 详情入口 */
+.order-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-top: 16rpx;
+}
+
+.order-no {
+  font-size: 20rpx;
+  color: #968f6d;
+}
+
+.order-no__copy {
+  margin-left: 8rpx;
+  padding: 2rpx 10rpx;
+  border-radius: 6rpx;
+  border: 1rpx solid #e3e6d4;
+  color: #6b6653;
+  font-size: 18rpx;
+}
+
+.order-link {
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+}
+
+/* 操作区：左边复购文字入口，右边一主一次 */
+.order-actions {
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: nowrap;
+  margin-top: 16rpx;
+  padding-top: 16rpx;
+}
+
+.action-link {
+  margin: 0;
+  padding: 0 8rpx;
+  height: auto;
+  min-height: 0;
+  line-height: 1.5;
+  background: transparent;
+  border: none;
+  font-size: 24rpx;
+  color: #6b6653;
+}
+
+.action-link::after {
+  border: none;
+}
+
+.action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.action-btn {
+  height: 64rpx;
+  min-width: 140rpx;
+  border-radius: 32rpx;
+  font-size: 24rpx;
+  padding: 0 24rpx;
+}
+
+
+/* ===== 一行筛选（2026-10-30）===== */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 12rpx 20rpx 10rpx;
+  margin: 0 0 6rpx;
+  background: #f0f3e9;
+  position: sticky;
+  top: 0;
+  z-index: 12;
+}
+
+.filter-pills {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  display: flex;
+}
+
+.filter-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4rpx;
+  height: 60rpx;
+  padding: 0 22rpx;
+  margin-right: 12rpx;
+  border-radius: 999rpx;
+  background: #fffdf7;
+  border: 1rpx solid rgba(30, 58, 47, 0.08);
+}
+
+.filter-pill__label {
+  font-size: 24rpx;
+  line-height: 60rpx;
+  color: #6b6653;
+}
+
+.filter-pill__count {
+  font-size: 18rpx;
+  line-height: 60rpx;
+  color: #b08d4f;
+}
+
+.filter-pill.active {
+  background: #1e3a2f;
+  border-color: #1e3a2f;
+}
+
+.filter-pill.active .filter-pill__label {
+  color: #f6efe0;
+  font-weight: 700;
+}
+
+.filter-pill.active .filter-pill__count {
+  color: #d8bc85;
+}
+
+.filter-entry {
+  flex: 0 0 auto;
+  height: 60rpx;
+  padding: 0 20rpx;
+  border-radius: 999rpx;
+  border: 1rpx solid rgba(30, 58, 47, 0.16);
+  display: flex;
+  align-items: center;
+}
+
+.filter-entry__text {
+  font-size: 24rpx;
+  color: #1e3a2f;
+  font-weight: 600;
+}
+
+.filter-entry.is-on {
+  background: #f6efe0;
+  border-color: rgba(176, 141, 79, 0.5);
+}
+
+/* 筛选面板 */
+.filter-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(20, 30, 24, 0.42);
+  z-index: 60;
+}
+
+.filter-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 70;
+  background: #fbfcf7;
+  border-radius: 28rpx 28rpx 0 0;
+  padding: 12rpx 28rpx calc(28rpx + env(safe-area-inset-bottom));
+  box-shadow: 0 -12rpx 40rpx rgba(20, 30, 24, 0.18);
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.filter-sheet__grip {
+  width: 60rpx;
+  height: 8rpx;
+  border-radius: 999rpx;
+  background: #d9dcc9;
+  margin: 4rpx auto 20rpx;
+}
+
+.filter-sheet__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.filter-sheet__title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+}
+
+.filter-sheet__reset {
+  font-size: 24rpx;
+  color: #6b6653;
+}
+
+.filter-sheet__label {
+  display: block;
+  margin: 28rpx 0 16rpx;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #968f6d;
+}
+
+.filter-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+
+.filter-option {
+  height: 64rpx;
+  padding: 0 28rpx;
+  border-radius: 999rpx;
+  background: #f4f6ec;
+  border: 1rpx solid transparent;
+  font-size: 24rpx;
+  line-height: 64rpx;
+  color: #6b6653;
+}
+
+.filter-option.on {
+  background: #eef3ea;
+  border-color: rgba(30, 58, 47, 0.4);
+  color: #1e3a2f;
+  font-weight: 700;
+}
+
+.filter-sheet__foot {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 40rpx;
+}
+
+.filter-sheet__btn {
+  flex: 1;
+  height: 84rpx;
+  line-height: 84rpx;
+  border-radius: 999rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.filter-sheet__btn.primary {
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  color: #f3eddd;
+}
+
+.filter-sheet__btn.secondary {
+  background: #eef2e4;
+  color: #26261f;
+}
+
+/* 骨架屏 */
+.skeleton-list {
+  padding: 10rpx 0 0;
+}
+
+.skeleton-card {
+  background: #fbfcf7;
+  border-radius: 24rpx;
+  padding: 28rpx;
+  margin-bottom: 20rpx;
+}
+
+.skeleton-line {
+  height: 24rpx;
+  border-radius: 8rpx;
+  background: #eef1e2;
+  margin-bottom: 18rpx;
+}
+
+.skeleton-line--sm {
+  width: 30%;
+  height: 20rpx;
+}
+
+.skeleton-line--lg {
+  width: 70%;
+  height: 32rpx;
+}
+
+.skeleton-line--md {
+  width: 55%;
+}
+
+.skeleton-line--bar {
+  width: 100%;
+  height: 48rpx;
+  margin-bottom: 0;
+  border-radius: 14rpx;
+}
+
+.empty-action.secondary {
+  background: #eef2e4;
+  color: #26261f;
+}
+
+/* 免费补发单的标记 */
+.reship-note {
+  margin-top: 12rpx;
+  padding: 10rpx 16rpx;
+  border-radius: 10rpx;
+  background: #eef3ea;
+}
+
+.reship-note__text {
+  font-size: 21rpx;
+  color: #2b6b46;
+}
 </style>

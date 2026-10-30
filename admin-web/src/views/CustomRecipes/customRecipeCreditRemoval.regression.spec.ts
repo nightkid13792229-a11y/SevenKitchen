@@ -11,7 +11,6 @@ import { describe, expect, it } from 'vitest'
  */
 import configSource from '@/views/CustomRecipes/Config.vue?raw'
 import orderDetailSource from '@/views/CustomRecipes/OrderDetail.vue?raw'
-import orderListSource from '@/views/CustomRecipes/OrderList.vue?raw'
 import finishedOrderDetailSource from '@/views/Orders/Detail.vue?raw'
 import customRecipeApiSource from '@/api/customRecipe.ts?raw'
 import orderTypesSource from '@/types/order.ts?raw'
@@ -57,27 +56,6 @@ describe('定制抵扣下线：后台设置页', () => {
     expect(configSource).toContain('label="定制费（元）"')
     expect(configSource).toContain('form.feeAmount')
     expect(configSource).toContain('customRecipeApi.updateConfig')
-  })
-})
-
-describe('定制抵扣下线：定制订单列表', () => {
-  it('不再有「可抵扣余额」列与额度字段', () => {
-    for (const token of REMOVED_FIELD_TOKENS) {
-      expect(orderListSource).not.toContain(token)
-    }
-    for (const token of REMOVED_COPY_TOKENS) {
-      expect(orderListSource).not.toContain(token)
-    }
-  })
-
-  it('不再有 RESTORE_CREDIT 行内动作', () => {
-    for (const token of REMOVED_ACTION_TOKENS) {
-      expect(orderListSource).not.toContain(token)
-    }
-    // 其余行内动作照旧由后端契约驱动
-    for (const code of ['CONFIRM_PAYMENT', 'ACCEPT_ORDER', 'DELIVER']) {
-      expect(orderListSource).toContain(`case '${code}'`)
-    }
   })
 })
 

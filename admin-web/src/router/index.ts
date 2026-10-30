@@ -141,11 +141,9 @@ const routes: RouteRecordRaw[] = [
         redirect: redirectTo("/aftersale-center", { tab: "supplement" }),
       },
       {
-        // 订单中心的补剂钻取页：不在菜单里，但详情动线还在用。
+        // 补剂订单已并入订单中心（2026-10-31）：旧地址保留跳转，带上订单号关键词。
         path: "supplement-shop/orders",
-        name: "SupplementShopOrders",
-        component: () => import("@/views/SupplementShop/Orders.vue"),
-        meta: { title: "补剂订单" },
+        redirect: redirectTo("/order-center", { type: "SUPPLEMENT" }),
       },
       {
         path: "supplement-shop/orders/:id/labels",

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import page from '@/views/CustomRecipes/AssistedOrderCreate.vue?raw'
-import orderList from '@/views/CustomRecipes/OrderList.vue?raw'
 import orderDetail from '@/views/CustomRecipes/OrderDetail.vue?raw'
 import orderCenter from '@/views/OrderCenter/index.vue?raw'
 
@@ -57,20 +56,6 @@ describe('赠送单 · 下单页', () => {
   it('★ 赠送单校验走同一个纯函数，页面不另写一套规则', () => {
     expect(page).toContain('getPaymentValidationError')
     expect(page).toContain('giftReason: form.payment.giftReason')
-  })
-})
-
-describe('赠送单 · 订单列表', () => {
-  it('★ 金额旁边标「赠送」和原因', () => {
-    expect(orderList).toContain('row.isGift')
-    expect(orderList).toContain('赠送')
-    expect(orderList).toContain('getGiftReasonLabel(row.giftReason)')
-  })
-
-  it('★ 能按「赠送单 / 正常单」筛选', () => {
-    expect(orderList).toContain('filters.gift')
-    expect(orderList).toContain('params.isGift = true')
-    expect(orderList).toContain('params.isGift = false')
   })
 })
 

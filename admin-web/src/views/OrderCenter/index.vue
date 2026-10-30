@@ -193,6 +193,21 @@
         @close="customDrawerVisible = false"
       />
     </el-drawer>
+
+    <!-- 补剂订单详情：从订单中心直接打开，不再跳隐藏的补剂订单页 -->
+    <el-drawer
+      v-model="supplementDrawerVisible"
+      title="补剂订单"
+      size="92%"
+      direction="rtl"
+      destroy-on-close
+    >
+      <SupplementOrdersPanel
+        v-if="supplementDrawerVisible"
+        embedded
+        :initial-keyword="supplementDrawerKeyword"
+      />
+    </el-drawer>
   </div>
 </template>
 
@@ -207,6 +222,7 @@ import type {
   UnifiedStatusGroup,
 } from '@/api/orderCenter'
 import OrderDetail from '@/views/CustomRecipes/OrderDetail.vue'
+import SupplementOrdersPanel from '@/views/SupplementShop/components/SupplementOrdersPanel.vue'
 import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole'
 import {
   INTERNAL_CUSTOMER_BADGE,
@@ -226,6 +242,10 @@ const dateRange = ref<[string, string] | null>(null)
 const customDrawerVisible = ref(false)
 const customDrawerOrderId = ref('')
 
+/** 补剂订单抽屉（2026-10-31 合并入口）：按订单号筛出这一单，操作仍在原面板里 */
+const supplementDrawerVisible = ref(false)
+const supplementDrawerKeyword = ref('')
+
 const route = useRoute();
 const initialType = String(route.query.type || '');
 /** 深链 /order-center?type=CUSTOM_RECIPE&orderId=CR...：列表加载完后自动开抽屉 */
@@ -236,7 +256,7 @@ const query = reactive<OrderCenterQuery>({
     : undefined,
   status: undefined,
   dateField: 'created',
-  keyword: '',
+  keyword: String(route.query.keyword || '').trim(),
   aftersale: String(route.query.aftersale || '') === '1',
   gift: false,
   page: 1,
@@ -389,6 +409,13 @@ function openCustomOrder(orderId: string) {
   customDrawerVisible.value = true
 }
 
+function openSupplementOrder(orderNo: string) {
+  const keyword = String(orderNo || '').trim()
+  if (!keyword) return
+  supplementDrawerKeyword.value = keyword
+  supplementDrawerVisible.value = true
+}
+
 function openOrder(row: OrderCenterItem) {
   if (row.type === 'FOOD') {
     router.push(`/orders/${row.id}`)
@@ -399,7 +426,8 @@ function openOrder(row: OrderCenterItem) {
     openCustomOrder(row.orderNo)
     return
   }
-  router.push({ path: '/supplement-shop/orders', query: { keyword: row.orderNo } })
+  // 补剂订单也在订单中心里开抽屉，不再跳隐藏页
+  openSupplementOrder(row.orderNo)
 }
 
 /** 去代客下单页（仅管理员；按钮对其他人置灰并说明原因） */

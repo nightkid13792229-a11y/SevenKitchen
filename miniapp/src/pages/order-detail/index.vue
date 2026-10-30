@@ -17,111 +17,47 @@
 
     <view v-else-if="order" class="order-detail">
       <!-- 订单类型标签 -->
-      <view class="order-type-tag">鲜食制作订单</view>
-
-      <!-- 订单进度条 -->
-      <view class="progress-section">
-        <OrderProgressBar :status="order.status" />
-      </view>
-
-      <view class="section order-center-section">
-        <view class="order-center-header">
-          <view class="order-center-title-block">
-            <text class="order-center-title">{{ orderCenterTitle }}</text>
-            <text class="order-center-subtitle"
-              >微信订单中心可查看的商品订单详情</text
-            >
-          </view>
+      <!-- 首屏主卡（2026-10-30）：进度、商品、金额、预计发货一次说完 -->
+      <view class="section hero-section">
+        <view class="hero-top">
+          <view class="hero-kind"><view class="hero-kind-dot" /><text>鲜食</text></view>
           <text
-            class="order-center-status"
-              :style="{ color: getStatusColor(order) }"
-            >
-              {{ getStatusText(order) }}
-          </text>
-        </view>
-
-        <view class="order-center-goods">
-          <view class="goods-main">
-            <image
-              v-if="orderCenterCover"
-              class="goods-cover"
-              :src="orderCenterCover"
-              mode="aspectFill"
-            />
-            <view v-else class="goods-cover-placeholder">
-              <text>{{ orderCenterTitle.charAt(0) }}</text>
-            </view>
-            <view class="goods-text">
-              <text class="goods-name">{{ orderCenterTitle }}</text>
-              <text class="goods-desc">{{ orderCenterDescription }}</text>
-            </view>
-          </view>
-          <view class="goods-amount-row">
-            <text class="goods-amount-label">实付/应付金额</text>
-            <text class="goods-amount-value"
-              >¥{{ formatAmount(order.amountTotal || order.totalAmount) }}</text
-            >
-          </view>
-        </view>
-
-        <view class="order-center-grid">
-          <view class="order-center-cell">
-            <text class="cell-label">订单编号</text>
-            <text class="cell-value">{{ order.id }}</text>
-          </view>
-          <view class="order-center-cell">
-            <text class="cell-label">下单时间</text>
-            <text class="cell-value">{{
-              formatDateTime(order.createdAt)
-            }}</text>
-          </view>
-          <view class="order-center-cell">
-            <text class="cell-label">购买账号</text>
-            <text class="cell-value">{{ customerDisplayName }}</text>
-          </view>
-          <view class="order-center-cell">
-            <text class="cell-label">联系电话</text>
-            <text class="cell-value">{{ customerPhoneText }}</text>
-          </view>
-        </view>
-      </view>
-
-      <!-- 订单基本信息 -->
-      <view class="section info-section">
-        <view class="section-title">基本信息</view>
-        <view class="info-row">
-          <text class="label">订单编号:</text>
-          <text class="value order-id">{{ order.orderNo || formatOrderId(order.id) }}</text>
-          <button class="btn-copy" @tap="copyOrderId">复制</button>
-        </view>
-        <view class="info-row">
-          <text class="label">订单状态:</text>
-          <text
-            class="value status"
+            class="hero-status"
             :style="{ color: getStatusColor(order) }"
-          >
-            {{ getStatusText(order) }}
+          >{{ getStatusText(order) }}</text>
+        </view>
+
+        <text class="hero-title">{{ orderCenterTitle }}</text>
+        <text class="hero-meta">{{ orderCenterDescription }}</text>
+
+        <OrderProgressSteps
+          class="hero-progress"
+          kind="food"
+          :status="order.status"
+        />
+
+        <view v-if="heroEtaText" class="hero-eta">
+          <text class="hero-eta__text">{{ heroEtaText }}</text>
+        </view>
+
+        <view class="hero-price-row">
+          <text class="hero-price-label">实付金额</text>
+          <text class="hero-price-value">¥{{ formatAmount(order.amountTotal || order.totalAmount) }}</text>
+        </view>
+
+        <view class="hero-foot">
+          <text class="hero-no" @tap="copyOrderId">
+            订单号 {{ order.orderNo || formatOrderId(order.id) }}
+            <text class="hero-no__copy">复制</text>
           </text>
+          <text class="hero-time">{{ formatDateTime(order.createdAt) }}</text>
         </view>
-        <view class="info-row">
-          <text class="label">下单时间:</text>
-          <text class="value">{{ formatDateTime(order.createdAt) }}</text>
-        </view>
-        <view class="info-row" v-if="order.targetProductionDate">
-          <text class="label">目标制作日期:</text>
-          <text class="value">{{
-            formatDate(order.targetProductionDate)
-          }}</text>
-          <picker
-            v-if="canEditDate"
-            mode="date"
-            :value="selectedDate"
-            :start="minDateStr"
-            @change="onDateSelected"
-          >
-            <view class="btn-edit">修改</view>
-          </picker>
-        </view>
+      </view>
+
+      <!-- 收货与配送（2026-10-30 合并：地址、预计时间、购买人） -->
+      <view class="section delivery-section">
+        <view class="section-title">收货与配送</view>
+
         <view class="info-row address-row">
           <text class="label">收货地址:</text>
           <view class="address-content">
@@ -179,62 +115,38 @@
             </template>
           </view>
         </view>
-        <view class="info-row">
-          <text class="label">订单金额:</text>
-          <text class="value amount"
-            >¥{{ formatAmount(order.amountTotal || order.totalAmount) }}</text
-          >
-        </view>
-      </view>
 
-      <view class="section buyer-section">
-        <view class="section-title">购买人与配送</view>
-        <view class="buyer-card">
-          <view class="buyer-row">
-            <text class="buyer-label">购买人</text>
-            <text class="buyer-value">{{ customerDisplayName }}</text>
-          </view>
-          <view class="buyer-row">
-            <text class="buyer-label">联系方式</text>
-            <text class="buyer-value">{{ customerPhoneText }}</text>
-          </view>
-          <view class="buyer-row">
-            <text class="buyer-label">收货人</text>
-            <text class="buyer-value">{{
-              order.address?.recipientName || '-'
-            }}</text>
-          </view>
-          <view class="buyer-row">
-            <text class="buyer-label">收货电话</text>
-            <text class="buyer-value">{{
-              order.address ? getOrderAddressPhone(order.address) : '-'
-            }}</text>
-          </view>
-          <view class="buyer-row address-line">
-            <text class="buyer-label">收货地址</text>
-            <text class="buyer-value">{{ fullAddressText }}</text>
-          </view>
-          <view v-if="!isStockOrder" class="buyer-row">
-            <text class="buyer-label">预计制作</text>
-            <text class="buyer-value">{{
-              formatDate(order.targetProductionDate)
-            }}</text>
-          </view>
-          <view v-else class="buyer-row">
-            <text class="buyer-label">发货方式</text>
-            <text class="buyer-value">现货，付款后尽快发出</text>
-          </view>
-          <!-- 补发单：0 元补寄，要讲清楚"不用再付钱、也不是又下了一单" -->
-          <view v-if="isReshipOrder" class="buyer-row">
-            <text class="buyer-label">订单性质</text>
-            <text class="buyer-value">免费补发（不收费）</text>
-          </view>
-          <view class="buyer-row">
-            <text class="buyer-label">预计发货</text>
-            <text class="buyer-value">{{
-              formatDate(order.estimatedShippingDate)
-            }}</text>
-          </view>
+        <view class="info-row" v-if="order.targetProductionDate">
+          <text class="label">目标制作日期:</text>
+          <text class="value">{{
+            formatDate(order.targetProductionDate)
+          }}</text>
+          <picker
+            v-if="canEditDate"
+            mode="date"
+            :value="selectedDate"
+            :start="minDateStr"
+            @change="onDateSelected"
+          >
+            <view class="btn-edit">修改</view>
+          </picker>
+        </view>
+
+        <view class="info-row">
+          <text class="label">预计发货:</text>
+          <text class="value">{{ formatDate(order.estimatedShippingDate) }}</text>
+        </view>
+        <view v-if="isStockOrder" class="info-row">
+          <text class="label">发货方式:</text>
+          <text class="value">现货，付款后尽快发出</text>
+        </view>
+        <view class="info-row">
+          <text class="label">购买人:</text>
+          <text class="value">{{ customerDisplayName }} {{ customerPhoneText }}</text>
+        </view>
+        <view v-if="isReshipOrder" class="info-row">
+          <text class="label">订单性质:</text>
+          <text class="value">免费补发（不收费）</text>
         </view>
       </view>
 
@@ -1065,6 +977,7 @@ import {
   type WechatPaymentResult,
 } from '../../api/orders';
 import OrderProgressBar from '../../components/OrderProgressBar.vue';
+import OrderProgressSteps from '../../components/OrderProgressSteps.vue';
 import { normalizeImageUrl } from '../../utils/config';
 import { formatDateTime } from '../../utils/date';
 import { getNutritionStandardLabel } from '../../utils/label-mapping';
@@ -1527,6 +1440,36 @@ const orderCenterDescription = computed(() => {
     totalQuantityKg.value > 0 ? `约${totalQuantityKg.value}kg` : '',
   ].filter(Boolean);
   return parts.join(' · ') || '宠物鲜食定制商品';
+});
+
+/** 「11月2日」这种顾客读得出来的日期 */
+function formatMonthDay(value?: string | null): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return `${date.getMonth() + 1}月${date.getDate()}日`;
+}
+
+/**
+ * 首屏那一行"什么时候到"（2026-10-30）。
+ *
+ * 没排产说"等待排期"，不要拼出"预计 —— 月 —— 日"；
+ * 已完成/已取消不占这一行。
+ */
+const heroEtaText = computed(() => {
+  const current = order.value;
+  if (!current) return '';
+  if (
+    current.status === 'COMPLETED' ||
+    current.status === 'CANCELLED' ||
+    current.status === 'AFTERSALE'
+  ) {
+    return '';
+  }
+  if (current.status === 'PENDING_PAYMENT') return '付款后开始制作';
+  if (current.status === 'SHIPPED') return '已发出，等待签收';
+  const day = formatMonthDay(current.estimatedShippingDate);
+  return day ? `预计 ${day} 发出` : '等待排期';
 });
 
 const customerDisplayName = computed(() => {
@@ -4876,5 +4819,118 @@ async function applyRefund() {
 
 .btn-share-photos::after {
   border: none;
+}
+
+/* ===== 首屏主卡（2026-10-30）===== */
+.hero-section {
+  padding: 28rpx 24rpx;
+}
+
+.hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.hero-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 8rpx;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #2e7d32;
+}
+
+.hero-kind-dot {
+  width: 10rpx;
+  height: 10rpx;
+  border-radius: 999rpx;
+  background: #2e7d32;
+}
+
+.hero-status {
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.hero-title {
+  display: block;
+  margin-top: 14rpx;
+  font-size: 36rpx;
+  font-weight: 700;
+  line-height: 1.35;
+  color: #26261f;
+}
+
+.hero-meta {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: #6b6653;
+}
+
+.hero-progress {
+  margin: 26rpx 0 10rpx;
+}
+
+.hero-eta {
+  margin-top: 10rpx;
+  padding: 14rpx 18rpx;
+  border-radius: 12rpx;
+  background: #f6efe0;
+}
+
+.hero-eta__text {
+  font-size: 22rpx;
+  line-height: 1.4;
+  color: #7a5f2e;
+}
+
+.hero-price-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 18rpx;
+}
+
+.hero-price-label {
+  font-size: 24rpx;
+  color: #6b6653;
+}
+
+.hero-price-value {
+  font-size: 38rpx;
+  font-weight: 800;
+  color: #b4553f;
+}
+
+.hero-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-top: 16rpx;
+  padding-top: 14rpx;
+  border-top: 1rpx solid #eef1e2;
+}
+
+.hero-no {
+  font-size: 20rpx;
+  color: #968f6d;
+}
+
+.hero-no__copy {
+  margin-left: 8rpx;
+  padding: 2rpx 10rpx;
+  border-radius: 6rpx;
+  border: 1rpx solid #e3e6d4;
+  font-size: 18rpx;
+  color: #6b6653;
+}
+
+.hero-time {
+  font-size: 20rpx;
+  color: #968f6d;
 }
 </style>

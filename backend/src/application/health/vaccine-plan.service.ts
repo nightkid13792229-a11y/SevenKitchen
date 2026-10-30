@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../../infrastructure/prisma.service';
 import {
   buildPlanView,
+  kindOfStepKey,
   materializeSteps,
   parseDateText,
   toDateText,
@@ -31,9 +32,17 @@ import {
  *      原来拿"默认计划表"校验，非默认步骤（如早产儿那几针）会被 400 拒掉
  */
 
-/** 忽略的原因（需求：忽略时问一句原因，两个选项行为一致，只是把"为什么"记下来） */
+/**
+ * 忽略的原因（2026-10-30 #2 起，两种行为**不再一样**）：
+ *   · NOT_NOW  = 这一类推迟 30 天，到期后重新出现；
+ *   · STOPPED  = 这一类长期不再提醒，直到手动恢复。
+ */
 export const VACCINE_DECISION_REASONS = ['NOT_NOW', 'STOPPED'] as const;
 export type VaccineDecisionReason = (typeof VACCINE_DECISION_REASONS)[number];
+
+/** “这次先不打”的默认推迟天数（产品口径；老板 2026-10-30 确认） */
+const SNOOZE_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class VaccinePlanService {
@@ -61,15 +70,7 @@ export class VaccinePlanService {
       dogId,
       birthday: toDateText(dog.birthday),
       records: records.map((record) => this.toRecordLike(record)),
-      decisions: Object.fromEntries(
-        decisions.map((item) => [
-          item.stepKey,
-          {
-            decision: item.decision as VaccineDecisionValue,
-            reason: item.reason,
-          },
-        ]),
-      ) as Record<string, VaccineDecisionLike>,
+      decisions: this.toDecisionMap(decisions),
       antibodyTests: antibodyTests.map((test) => ({
         id: test.id,
         testedAt: toDateText(test.testedAt),
@@ -99,55 +100,87 @@ export class VaccinePlanService {
     const normalized = String(decision || '')
       .trim()
       .toUpperCase();
-    if (!['ACCEPT', 'DEFER', 'SKIP'].includes(normalized)) {
+    if (normalized !== 'SKIP') {
       throw new BadRequestException(
-        '决定只能是 ACCEPT（按建议）/ DEFER（推迟）/ SKIP（不做）',
+        '现在只支持 SKIP（这次先不打 / 不再接种了）',
       );
     }
 
-    const normalizedReason = this.normalizeReason(reason);
-
-    // 步骤标识必须是**这只狗**程序里真实存在的
+    // 步骤标识必须是**这只狗**程序里真实存在的，并且由它决定挂到哪一类
     const records = await this.prisma.vaccineRecord.findMany({
       where: { dogId },
     });
-    const validKeys = new Set(
-      materializeSteps({
-        birthday: dog.birthday,
-        records: records.map((record) => this.toRecordLike(record)),
-        today: new Date(),
-      }).map((step) => step.key),
-    );
-    if (!validKeys.has(stepKey)) {
+    const step = materializeSteps({
+      birthday: dog.birthday,
+      records: records.map((record) => this.toRecordLike(record)),
+      today: new Date(),
+    }).find((item) => item.key === stepKey);
+    if (!step) {
       throw new BadRequestException('这一步不在当前免疫程序里');
     }
+    const kind = step.kind;
+
+    /*
+     * 2026-10-30（#2）：决定改挂类别，“这次先不打”= 这一类推迟 30 天。
+     * 没填原因时按 NOT_NOW 处理（旧客户端可能不带 reason），
+     * 不再让它变成永久静默。
+     */
+    const normalizedReason = this.normalizeReason(reason) ?? 'NOT_NOW';
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const snoozeUntil =
+      normalizedReason === 'NOT_NOW'
+        ? new Date(today.getTime() + SNOOZE_DAYS * DAY_MS)
+        : null;
 
     const saved = await this.prisma.vaccineDecision.upsert({
-      where: { dogId_stepKey: { dogId, stepKey } },
+      where: { dogId_kind: { dogId, kind } },
       create: {
         dogId,
+        kind,
         stepKey,
-        decision: normalized,
+        decision: 'SKIP',
         reason: normalizedReason,
+        snoozeUntil,
       },
-      update: { decision: normalized, reason: normalizedReason },
+      update: {
+        stepKey,
+        decision: 'SKIP',
+        reason: normalizedReason,
+        snoozeUntil,
+      },
     });
 
     return {
       dogId,
+      kind: saved.kind,
       stepKey: saved.stepKey,
       decision: saved.decision,
       reason: saved.reason,
+      snoozeUntil: saved.snoozeUntil ? toDateText(saved.snoozeUntil) : null,
     };
   }
 
-  /** 清掉某一步的决定（顾客改主意了 → 一键恢复） */
+  /** 清掉某一类的决定（顾客改主意了 → 一键恢复） */
   async clearDecision(customerId: string, dogId: string, stepKey: string) {
-    await this.requireOwnedDog(customerId, dogId);
+    const dog = await this.requireOwnedDog(customerId, dogId);
 
-    await this.prisma.vaccineDecision.deleteMany({ where: { dogId, stepKey } });
+    const records = await this.prisma.vaccineRecord.findMany({
+      where: { dogId },
+    });
+    const step = materializeSteps({
+      birthday: dog.birthday,
+      records: records.map((record) => this.toRecordLike(record)),
+      today: new Date(),
+    }).find((item) => item.key === stepKey);
+    const kind = step?.kind ?? kindOfStepKey(stepKey);
+    if (!kind) {
+      throw new BadRequestException('这一步不在当前免疫程序里');
+    }
 
-    return { dogId, stepKey, decision: null };
+    await this.prisma.vaccineDecision.deleteMany({ where: { dogId, kind } });
+
+    return { dogId, kind, stepKey, decision: null };
   }
 
   /** 这只狗当前所有的决定（`ignored` 之外，前端"已忽略的 N 项"也可能要它） */
@@ -159,16 +192,67 @@ export class VaccinePlanService {
     return {
       dogId,
       decisions: Object.fromEntries(
-        rows.map((row) => [
-          row.stepKey,
-          {
-            decision: row.decision,
-            reason: row.reason,
-            updatedAt: row.updatedAt,
-          },
-        ]),
+        rows.map((row) => {
+          const kind =
+            row.kind ??
+            (row.stepKey ? kindOfStepKey(row.stepKey) : null);
+          return [
+            kind ?? row.stepKey ?? row.id,
+            {
+              kind,
+              stepKey: row.stepKey,
+              decision: row.decision,
+              reason: row.reason,
+              snoozeUntil: row.snoozeUntil
+                ? toDateText(row.snoozeUntil)
+                : null,
+              updatedAt: row.updatedAt,
+            },
+          ];
+        }),
       ),
     };
+  }
+
+  /**
+   * 决定行 → 引擎要的“按类别”映射（#2）。
+   *
+   * 新行有 `kind`；旧行只有 `stepKey`，按前缀回填；同一类只取最新一行。
+   * 旧 NOT_NOW 没有 `snoozeUntil` 时，从 `updatedAt` 起算 30 天，
+   * 避免老数据变成永久静默。
+   */
+  private toDecisionMap(
+    rows: Array<{
+      kind?: string | null;
+      stepKey?: string | null;
+      decision: string;
+      reason: string | null;
+      snoozeUntil?: Date | null;
+      updatedAt?: Date;
+    }>,
+  ): Record<string, VaccineDecisionLike> {
+    const sorted = [...rows].sort(
+      (a, b) =>
+        (b.updatedAt?.getTime() ?? 0) - (a.updatedAt?.getTime() ?? 0),
+    );
+    const map: Record<string, VaccineDecisionLike> = {};
+    for (const row of sorted) {
+      const kind =
+        row.kind ?? (row.stepKey ? kindOfStepKey(row.stepKey) : null);
+      if (!kind || map[kind]) continue;
+      const updatedAt = row.updatedAt ?? new Date();
+      const snoozeUntil = row.snoozeUntil
+        ? toDateText(row.snoozeUntil)
+        : row.reason === 'NOT_NOW'
+          ? toDateText(new Date(updatedAt.getTime() + SNOOZE_DAYS * DAY_MS))
+          : null;
+      map[kind] = {
+        decision: row.decision as VaccineDecisionValue,
+        reason: row.reason,
+        snoozeUntil,
+      };
+    }
+    return map;
   }
 
   /**

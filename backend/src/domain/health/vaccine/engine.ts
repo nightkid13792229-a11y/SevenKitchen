@@ -165,6 +165,11 @@ export type VaccineDecisionValue = 'ACCEPT' | 'DEFER' | 'SKIP';
 export interface VaccineDecisionLike {
   decision: VaccineDecisionValue;
   reason?: string | null;
+  /**
+   * “这次先不打”的到期日（`YYYY-MM-DD` 或 Date）。
+   * 没有值 = 旧数据，按仍有效处理；到期后这一类重新出现。
+   */
+  snoozeUntil?: string | Date | null;
 }
 
 export interface MaterializeInput {
@@ -231,6 +236,8 @@ export interface VaccinePlanView {
       kindLabel: string;
       label: string;
       reason: string | null;
+      /** “这次先不打”的到期日（#2）；STOPPED 为空 */
+      snoozeUntil?: string | null;
     }>;
   };
   rhythm: string;
@@ -1075,7 +1082,7 @@ export function matchRecords(
 
   return steps.map((step) => {
     const matched = claimedByKey.get(step.key) ?? null;
-    const decision = decisions[step.key]?.decision;
+    const decision = decisionForStep(decisions, step);
     const kindStopped = stoppedKinds.has(step.kind);
     let status: StepStatus;
     if (matched) {
@@ -1135,14 +1142,52 @@ export function matchRecords(
       matchedRecordId: matched?.record.id ?? null,
       matchedRecordDate: matched?.date ?? null,
       // 事实优先：真打了就是 DONE，不算忽略
-      skipped: !matched && (decision === 'SKIP' || kindStopped),
+      skipped:
+        !matched && (isDecisionActive(decision, today) || kindStopped),
     };
   });
 }
 
 
-/** 从步骤 key 的前缀认类别（`core-puppy-1` → core、`lepto-repeat-2` → lepto） */
-function kindOfStepKey(key: string): VaccineKind | null {
+/**
+ * 2026-10-30（#2）：决定可以挂在**类别**上（`core`），也可以挂旧的步骤 key。
+ * 新数据一律用类别；旧数据/兼容路径用 stepKey。
+ */
+function decisionForStep(
+  decisions: Record<string, VaccineDecisionLike>,
+  step: { key: string; kind: VaccineKind },
+): VaccineDecisionLike | undefined {
+  return decisions[step.kind] ?? decisions[step.key];
+}
+
+/**
+ * 一条决定现在生效吗？
+ *
+ *   · STOPPED：长期有效；
+ *   · NOT_NOW：到 `snoozeUntil` 当天为止；到期后这一类重新出现；
+ *   · 旧数据没有 `snoozeUntil`：按仍有效处理（迁移会补上 30 天）。
+ */
+function isDecisionActive(
+  decision: VaccineDecisionLike | undefined,
+  today: Date,
+): boolean {
+  if (!decision || decision.decision !== 'SKIP') return false;
+  if (decision.reason === 'STOPPED') return true;
+  if (decision.reason !== 'NOT_NOW') return false;
+  if (!decision.snoozeUntil) return true;
+  const until =
+    decision.snoozeUntil instanceof Date
+      ? startOfDay(decision.snoozeUntil)
+      : parseDateText(String(decision.snoozeUntil));
+  if (!until) return true;
+  return until.getTime() > today.getTime();
+}
+
+/**
+ * 从步骤 key 的前缀认类别（`core-puppy-1` → core、`lepto-repeat-2` → lepto）。
+ * 也用于把旧的 stepKey 决定回填到类别（#2）。
+ */
+export function kindOfStepKey(key: string): VaccineKind | null {
   if (key.startsWith('core_early')) return 'core_early';
   if (key.startsWith('core')) return 'core';
   if (key.startsWith('rabies')) return 'rabies';

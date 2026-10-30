@@ -83,7 +83,10 @@ export class VaccinePlanController {
 
   @Put(':dogId/vaccine-plan/decisions/:stepKey')
   @UseGuards(AuthGuard)
-  @ApiOperation({ summary: 'Record the owner decision for one schedule step' })
+  @ApiOperation({
+    summary:
+      'Record the owner decision for one category (the step key is mapped to its category)',
+  })
   @ApiSecurity('X-Customer-Id')
   @ApiHeader({
     name: 'X-Customer-Id',
@@ -93,7 +96,8 @@ export class VaccinePlanController {
   @ApiParam({ name: 'dogId', description: 'Dog ID' })
   @ApiParam({
     name: 'stepKey',
-    description: 'Schedule step key, e.g. core-puppy-1',
+    description:
+      'Schedule step key, e.g. core-puppy-1；后端会把它归到 core / rabies / lepto 类别',
   })
   @ApiBody({
     schema: {
@@ -101,13 +105,14 @@ export class VaccinePlanController {
       properties: {
         decision: {
           type: 'string',
-          enum: ['ACCEPT', 'DEFER', 'SKIP'],
-          description: '按建议 / 推迟 / 不做',
+          enum: ['SKIP'],
+          description: '不做（#2 起只支持 SKIP）',
         },
         reason: {
           type: 'string',
           enum: ['NOT_NOW', 'STOPPED'],
-          description: '忽略的原因：这次先不打 / 不再接种了（可空）',
+          description:
+            'NOT_NOW = 整类推迟 30 天；STOPPED = 整类长期停（不传按 NOT_NOW）',
         },
       },
     },
@@ -131,7 +136,10 @@ export class VaccinePlanController {
 
   @Delete(':dogId/vaccine-plan/decisions/:stepKey')
   @UseGuards(AuthGuard)
-  @ApiOperation({ summary: 'Clear the owner decision for one schedule step' })
+  @ApiOperation({
+    summary:
+      'Clear the owner decision for one category (the step key is mapped to its category)',
+  })
   @ApiSecurity('X-Customer-Id')
   @ApiHeader({
     name: 'X-Customer-Id',

@@ -37,13 +37,13 @@ describe('疫苗计划服务', () => {
       vaccineDecision: {
         findMany: jest.fn(() => Promise.resolve(rows)),
         deleteMany: jest.fn(({ where }: any) => {
-          const index = rows.findIndex((row) => row.stepKey === where.stepKey);
+          const index = rows.findIndex((row) => row.kind === where.kind);
           if (index >= 0) rows.splice(index, 1);
           return Promise.resolve({ count: 1 });
         }),
         upsert: jest.fn(({ where, create }: any) => {
           const existing = rows.find(
-            (row) => row.stepKey === where.dogId_stepKey.stepKey,
+            (row) => row.kind === where.dogId_kind.kind,
           );
           if (existing) {
             Object.assign(existing, create);
@@ -106,7 +106,7 @@ describe('疫苗计划服务', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('决定只认 ACCEPT / DEFER / SKIP', async () => {
+  it('决定现在只认 SKIP（ACCEPT / DEFER 已废弃）', async () => {
     const { service } = createService();
 
     await expect(
@@ -129,7 +129,7 @@ describe('疫苗计划服务', () => {
 
     await expect(
       service.setDecision(CUSTOMER_ID, DOG_ID, 'rabies-1', 'SKIP', null),
-    ).resolves.toMatchObject({ reason: null });
+    ).resolves.toMatchObject({ reason: 'NOT_NOW' });
   });
 
   it('🔴 冲突 A1：忽略两项之后 `ignored.count` 是真实值（不是恒为 0）', async () => {
@@ -137,16 +137,22 @@ describe('疫苗计划服务', () => {
     rows.push({
       id: 'd-1',
       dogId: DOG_ID,
+      kind: 'core',
       stepKey: 'core-catchup',
       decision: 'SKIP',
       reason: 'STOPPED',
+      snoozeUntil: null,
+      updatedAt: new Date(),
     });
     rows.push({
       id: 'd-2',
       dogId: DOG_ID,
+      kind: 'rabies',
       stepKey: 'rabies-1',
       decision: 'SKIP',
       reason: 'NOT_NOW',
+      snoozeUntil: new Date(Date.now() + 10 * 86400000),
+      updatedAt: new Date(),
     });
 
     const view = await service.getPlan(CUSTOMER_ID, DOG_ID);
@@ -168,9 +174,12 @@ describe('疫苗计划服务', () => {
     rows.push({
       id: 'd-1',
       dogId: DOG_ID,
+      kind: 'rabies',
       stepKey: 'rabies-1',
       decision: 'SKIP',
       reason: 'NOT_NOW',
+      snoozeUntil: new Date(Date.now() + 10 * 86400000),
+      updatedAt: new Date(),
     });
 
     await service.clearDecision(CUSTOMER_ID, DOG_ID, 'rabies-1');
@@ -274,5 +283,114 @@ describe('疫苗计划服务', () => {
     expect(view.plan.find((step) => step.kind === 'rabies')!.status).not.toBe(
       'DONE',
     );
+  });
+
+  it('“这次先不打” → 类别 core + 30 天到期日', async () => {
+    const { service, prisma } = createService();
+
+    const result = await service.setDecision(
+      CUSTOMER_ID,
+      DOG_ID,
+      'core-catchup',
+      'SKIP',
+      'NOT_NOW',
+    );
+
+    expect(result).toMatchObject({
+      kind: 'core',
+      stepKey: 'core-catchup',
+      reason: 'NOT_NOW',
+    });
+    const create = prisma.vaccineDecision.upsert.mock.calls[0][0].create;
+    expect(create.kind).toBe('core');
+    expect(create.snoozeUntil).toBeInstanceOf(Date);
+    const days =
+      (create.snoozeUntil.getTime() - Date.now()) / (24 * 60 * 60 * 1000);
+    expect(days).toBeGreaterThan(29);
+    expect(days).toBeLessThan(31);
+  });
+
+  it('核心 NOT_NOW：整类消失，ignored 只算 1 项', async () => {
+    const { service, rows } = createService({
+      dog: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: DOG_ID,
+          ownerId: CUSTOMER_ID,
+          birthday: new Date('2026-08-30T00:00:00.000Z'),
+        }),
+      },
+    });
+    rows.push({
+      id: 'd-1',
+      dogId: DOG_ID,
+      kind: 'core',
+      stepKey: 'core-puppy-1',
+      decision: 'SKIP',
+      reason: 'NOT_NOW',
+      snoozeUntil: new Date(Date.now() + 10 * 86400000),
+      updatedAt: new Date(),
+    });
+
+    const view = await service.getPlan(CUSTOMER_ID, DOG_ID);
+
+    expect(view.plan.some((step) => step.kind === 'core')).toBe(false);
+    expect(view.ignored.count).toBe(1);
+    expect(view.ignored.items[0].reason).toBe('NOT_NOW');
+    expect(view.ignored.items[0].snoozeUntil).toBeTruthy();
+  });
+
+  it('推迟到期后核心回来', async () => {
+    const { service, rows } = createService({
+      dog: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: DOG_ID,
+          ownerId: CUSTOMER_ID,
+          birthday: new Date('2026-08-30T00:00:00.000Z'),
+        }),
+      },
+    });
+    rows.push({
+      id: 'd-1',
+      dogId: DOG_ID,
+      kind: 'core',
+      stepKey: 'core-puppy-1',
+      decision: 'SKIP',
+      reason: 'NOT_NOW',
+      snoozeUntil: new Date(Date.now() - 86400000),
+      updatedAt: new Date(),
+    });
+
+    const view = await service.getPlan(CUSTOMER_ID, DOG_ID);
+
+    expect(view.plan.some((step) => step.kind === 'core')).toBe(true);
+    expect(view.ignored.count).toBe(0);
+  });
+
+  it('按 stepKey 恢复 → 清掉整个类别', async () => {
+    const { service, rows } = createService({
+      dog: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: DOG_ID,
+          ownerId: CUSTOMER_ID,
+          birthday: new Date('2026-08-30T00:00:00.000Z'),
+        }),
+      },
+    });
+    rows.push({
+      id: 'd-1',
+      dogId: DOG_ID,
+      kind: 'core',
+      stepKey: 'core-puppy-1',
+      decision: 'SKIP',
+      reason: 'NOT_NOW',
+      snoozeUntil: new Date(Date.now() + 10 * 86400000),
+      updatedAt: new Date(),
+    });
+
+    await service.clearDecision(CUSTOMER_ID, DOG_ID, 'core-puppy-1');
+
+    expect(rows).toHaveLength(0);
+    const view = await service.getPlan(CUSTOMER_ID, DOG_ID);
+    expect(view.plan.some((step) => step.kind === 'core')).toBe(true);
   });
 });

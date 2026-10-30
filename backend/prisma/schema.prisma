@@ -1394,16 +1394,23 @@ model DogHealthShareToken {
 model VaccineDecision {
   id        String   @id @default(uuid()) @map("id")
   dogId     String   @map("dog_id")
-  /// 步骤标识，如 core-puppy-1 / rabies-2
+  /// 2026-10-30（#2）：决定挂在**类别**上（core / core_early / rabies / lepto），
+  /// 不再挂在会随记录变化的 stepKey 上。
+  kind      String   @map("kind")
+  /// 旧字段：最近一次操作对应的步骤；保留给旧接口/回滚兼容。
   stepKey   String   @map("step_key")
-  /// ACCEPT / DEFER / SKIP
+  /// ACCEPT / DEFER / SKIP（#2 只用 SKIP）
   decision  String   @map("decision")
   /// 忽略的原因：NOT_NOW（这次先不打）/ STOPPED（不再接种了）；可空
   reason    String?  @map("reason")
+  /// “这次先不打”的到期日；STOPPED 为空。到期后这一类重新出现。
+  snoozeUntil DateTime? @map("snooze_until") @db.Date
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   dog       Dog      @relation(fields: [dogId], references: [id], onDelete: Cascade)
 
+  @@unique([dogId, kind])
+  /// 保留旧唯一键，旧版本代码（按 stepKey upsert）仍能工作
   @@unique([dogId, stepKey])
   @@index([dogId])
   @@map("vaccine_decision")

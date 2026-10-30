@@ -135,11 +135,11 @@ export function selectPlanSteps(steps: MatchedStep[]): MatchedStep[] {
     /**
      * 该类"当前这一步" = 第一个**既没完成、也没被忽略**的步骤。
      *
-     * ⚠️ 2026-10-16 修：原来找的是"第一个没完成的"，于是被忽略的那一步会一直
-     *    挡在前面 —— 「这次先不打」和「不再接种了」在页面上变得一模一样
-     *    （都永久安静），可按钮上写的是"之后还会提醒" ✗。两种含义必须分得开：
-     *      · NOT_NOW（这次先不打）→ 跳过这一步，**后面那一步照常来**（可能是一年后）
-     *      · STOPPED（不再接种了）→ 整类都标成 skipped（在引擎里做），这里就找不到当前步了
+     * 2026-10-30（#2）：决定改挂**类别**，所以一条 NOT_NOW 会让整类暂时
+     * 没有"当前步"：
+     *   · NOT_NOW（这次先不打）→ 整类推迟 30 天，30 天后重新出现；
+     *   · STOPPED（不再接种了）→ 整类长期隐藏。
+     * 两种都由引擎把该类的步骤标成 `skipped`；这里只需要跳过它们。
      */
     const currentIndex = list.findIndex(
       (step) => step.status !== 'DONE' && !step.skipped,
@@ -277,21 +277,40 @@ export function buildIgnored(
     kindLabel: string;
     label: string;
     reason: string | null;
+    snoozeUntil?: string | null;
   }>;
 } {
-  const items = steps
-    .filter(
-      (step) =>
-        decisions[step.key]?.decision === 'SKIP' && step.status !== 'DONE',
-    )
+  /*
+   * 2026-10-30（#2）：决定挂在类别上，所以“已忽略 N 项”按**类别**数，
+   * 一个类别只出一行（取这一类最早被跳过的那一步做展示）。
+   * 旧数据按 stepKey 存的，也兼容：只有那一步被跳过，就只出一行。
+   */
+  const byKind = new Map<VaccineKind, MatchedStep>();
+  for (const step of steps) {
+    if (step.status === 'DONE' || !step.skipped) continue;
+    if (!byKind.has(step.kind)) {
+      byKind.set(step.kind, step);
+    }
+  }
+
+  const items = [...byKind.values()]
     .sort((a, b) => a.windowStart.getTime() - b.windowStart.getTime())
-    .map((step) => ({
-      key: step.key,
-      kindLabel: VACCINE_KIND_LABELS[step.kind],
-      label: step.label,
-      // `reason` 原样带出：NOT_NOW（这次先不打）/ STOPPED（不再接种了）
-      reason: decisions[step.key]?.reason ?? null,
-    }));
+    .map((step) => {
+      const decision = decisions[step.kind] ?? decisions[step.key];
+      const snooze = decision?.snoozeUntil;
+      return {
+        key: step.key,
+        kindLabel: VACCINE_KIND_LABELS[step.kind],
+        label: step.label,
+        // `reason` 原样带出：NOT_NOW（这次先不打）/ STOPPED（不再接种了）
+        reason: decision?.reason ?? null,
+        snoozeUntil: snooze
+          ? snooze instanceof Date
+            ? toDateText(snooze)
+            : String(snooze).slice(0, 10)
+          : null,
+      };
+    });
 
   return { count: items.length, items };
 }

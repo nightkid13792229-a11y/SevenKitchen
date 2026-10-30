@@ -370,7 +370,17 @@ export const SupplementAddTimingLabels: Record<string, string> = {
 };
 
 // 食材属性
-export interface FoodProperties {
+/** 标签合规信息：决定该原料在标签上出现在哪一段、写成什么 */
+export interface LabelProperties {
+  /** 标签类型：饲料原料写进「原料组成」；饲料添加剂写进「添加剂组成」 */
+  label_category?: 'FEED_MATERIAL' | 'FEED_ADDITIVE';
+  /** 标签名称（合规写法，可多个）：不要带片/胶囊/粉等剂型 */
+  label_names?: string[];
+  /** 名称依据：如「饲料添加剂品种目录（2023 版）」 */
+  label_name_source?: string;
+}
+
+export interface FoodProperties extends LabelProperties {
   cfct_class: string; // CFCT分类 (e.g. "畜肉类", "蔬菜类")
   edible_yield_rate: number; // 可食部/出肉率 (0.1-1.0)
   main_nutrients_desc: string; // 主要营养价值
@@ -390,7 +400,7 @@ export interface PurchaseLinkConfig {
 }
 
 // 补剂属性
-export interface SupplementProperties {
+export interface SupplementProperties extends LabelProperties {
   category_type: string; // 营养分类
   add_timing?: string; // 添加时机
   active_nutrients?: Record<string, ActiveNutrientValue>; // 兼容旧数据
@@ -403,7 +413,7 @@ export interface SupplementProperties {
 }
 
 // 包材属性
-export interface PackagingProperties {
+export interface PackagingProperties extends LabelProperties {
   is_consumable: boolean; // true=消耗品(随单扣减), false=固定资产
   linked_item_id?: string; // 关联配件
   supplier_name?: string | null;

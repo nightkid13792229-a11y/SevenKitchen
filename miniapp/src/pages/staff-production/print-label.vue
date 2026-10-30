@@ -649,7 +649,10 @@ async function previewLabel(order: OrderPrintConfig) {
     uni.showLoading({ title: '生成预览中...' });
 
     // 准备标签数据
-    const labelData = prepareLabelData(order);
+    const { data: labelData, labelIssues } = prepareLabelData(order);
+    if (!guardLabelInfoCompleteness(labelIssues)) {
+      return;
+    }
 
     // 调用后端API生成标签图片(确保预览和打印完全一致)
     console.log(`[PrintLabel] 调用后端API生成预览图片`);
@@ -693,7 +696,7 @@ function closePreview() {
 }
 
 // 准备标签数据
-function prepareLabelData(order: OrderPrintConfig): LabelData {
+function prepareLabelData(order: OrderPrintConfig): { data: LabelData; labelIssues: string[] } {
   // 调试：输出完整的recipeSnapshot结构
   console.log('[PrintLabel] recipeSnapshot完整结构:', JSON.stringify(order.recipeSnapshot, null, 2));
   console.log('[PrintLabel] nutrition_detailed_data是否存在:', !!order.recipeSnapshot?.nutrition_detailed_data);
@@ -731,23 +734,45 @@ function prepareLabelData(order: OrderPrintConfig): LabelData {
   console.log('[PrintLabel] 提取的nutritionAnalysis:', nutritionAnalysis);
 
   return {
-    brandName: 'seven的厨房',
-    recipeName: order.recipeName,
-    nutritionStandard: order.recipeSnapshot?.nutrition_standard || 'FEDIAF_2021',
-    lifeStages,
-    healthTags,
-    dogName: order.dogName,
-    foodIngredients,
-    supplementIngredients,
-    weightPerPack,
-    packageCount,
-    totalWeight,
-    packagePlan: packagePlan.length > 0 ? packagePlan : undefined,
-    nutritionAnalysis,
-    shelfLife: getShelfLifeText(),
-    cookingMethod: '', // 不再使用真空袋规格
-    productionTime: order.productionDate || formatDateTime(order.createdAt)
+    data: {
+      brandName: 'seven的厨房',
+      recipeName: order.recipeName,
+      nutritionStandard: order.recipeSnapshot?.nutrition_standard || 'FEDIAF_2021',
+      lifeStages,
+      healthTags,
+      dogName: order.dogName,
+      foodIngredients,
+      supplementIngredients,
+      weightPerPack,
+      packageCount,
+      totalWeight,
+      packagePlan: packagePlan.length > 0 ? packagePlan : undefined,
+      nutritionAnalysis,
+      shelfLife: getShelfLifeText(),
+      cookingMethod: '', // 不再使用真空袋规格
+      productionTime: order.productionDate || formatDateTime(order.createdAt),
+      // 只有这一单的原料全部带标签分类时，才按新口径输出「添加剂组成」
+      additiveIngredients: formatted.hasLabelCategory
+        ? formatted.additiveIngredients
+        : undefined,
+      ingredientIds: formatted.ingredientIds
+    } as LabelData,
+    labelIssues: formatted.labelIssues
   };
+}
+
+/** 打印前拦截：原料缺标签信息就不允许出标签 */
+function guardLabelInfoCompleteness(issues: string[]): boolean {
+  if (!issues.length) {
+    return true;
+  }
+  uni.showModal({
+    title: '无法打印：缺少标签信息',
+    content: `以下原料还没在后台填写「标签类型」或「标签名称」，打出来的标签会不合规：\n\n${issues.join('、')}\n\n请到后台「原料库」补全后再打印。`,
+    showCancel: false,
+    confirmText: '知道了'
+  });
+  return false;
 }
 
 // 格式化日期（只显示年月日，不显示时分）
@@ -805,7 +830,11 @@ async function printSingleOrder(order: OrderPrintConfig) {
 
       try {
         // 准备标签数据
-        const labelData = prepareLabelData(order);
+        const { data: labelData, labelIssues } = prepareLabelData(order);
+        if (!guardLabelInfoCompleteness(labelIssues)) {
+          uni.hideLoading();
+          return;
+        }
 
         // 调用后端API生成标签图片
         console.log(`[PrintLabel] 调用后端API生成标签图片`);

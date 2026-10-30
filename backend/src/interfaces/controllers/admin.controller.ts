@@ -2007,6 +2007,11 @@ export class AdminController {
       properties: {
         carrierCode: { type: 'string', example: 'SF' },
         trackingNumber: { type: 'string', example: 'SF1234567890' },
+        actualShippingFee: {
+          type: 'number',
+          example: 12.5,
+          description: '实际运费（元，两位小数，选填）；用于财务成本统计',
+        },
       },
       required: ['carrierCode', 'trackingNumber'],
     },
@@ -2020,14 +2025,34 @@ export class AdminController {
   @ApiResponse({ status: 404, description: 'Order not found' })
   async shipOrder(
     @Param('orderId') orderId: string,
-    @Body() body: { carrierCode: string; trackingNumber: string },
+    @Body()
+    body: {
+      carrierCode: string;
+      trackingNumber: string;
+      actualShippingFee?: number | string | null;
+    },
   ): Promise<ApiResponseDto<OrderDto> | ApiResponseDto<null>> {
     try {
+      // 实际运费：选填，最多两位小数；不合法就拒绝，别静默存进去
+      let actualShippingFee: number | null = null;
+      const rawFee = body.actualShippingFee;
+      if (rawFee !== undefined && rawFee !== null && String(rawFee).trim() !== '') {
+        const parsed = Number(rawFee);
+        if (!Number.isFinite(parsed) || parsed < 0) {
+          return ApiResponseDto.error(400, '实际运费必须是不小于 0 的数字');
+        }
+        if (Math.abs(parsed - Number(parsed.toFixed(2))) > 1e-9) {
+          return ApiResponseDto.error(400, '实际运费最多保留两位小数');
+        }
+        actualShippingFee = Number(parsed.toFixed(2));
+      }
+
       const order = await this.orderService.shipOrder(
         orderId,
         body.trackingNumber,
         body.carrierCode,
         null, // Admin ID not available in current implementation
+        actualShippingFee,
       );
 
       // Map to DTO (simplified)

@@ -15,6 +15,7 @@ describe('OrderService shipping notifications', () => {
   let shippingNotificationService: {
     sendForOrder: jest.Mock;
   };
+  let prisma: { preparationMethod: { findMany: jest.Mock }; order: { update: jest.Mock } };
 
   function createFreezingOrder(): Order {
     return Order.fromPrismaData({
@@ -70,6 +71,11 @@ describe('OrderService shipping notifications', () => {
       }),
     };
 
+    prisma = {
+      preparationMethod: { findMany: jest.fn() },
+      order: { update: jest.fn().mockResolvedValue({}) },
+    };
+
     service = new OrderService(
       orderRepository as any,
       statusHistoryRepository as any,
@@ -82,7 +88,7 @@ describe('OrderService shipping notifications', () => {
       {} as any,
       {} as any,
       {} as any,
-      { preparationMethod: { findMany: jest.fn() } } as any,
+      prisma as any,
       undefined,
       shippingNotificationService as unknown as ShippingNotificationService,
     );
@@ -109,5 +115,26 @@ describe('OrderService shipping notifications', () => {
     expect(shippingNotificationService.sendForOrder).toHaveBeenCalledWith(
       'order-1',
     );
+  });
+
+  it('★ 录了实际运费就按两位小数落库（2026-10-31）', async () => {
+    const order = createFreezingOrder();
+    orderRepository.findById.mockResolvedValue(order);
+
+    await service.shipOrder('order-1', 'SF1234567890', 'SF', 'admin-1', 12.5);
+
+    expect(prisma.order.update).toHaveBeenCalledWith({
+      where: { id: 'order-1' },
+      data: { actualShippingFee: '12.50' },
+    });
+  });
+
+  it('★ 没填运费就不写这一列，别把老单改成 0', async () => {
+    const order = createFreezingOrder();
+    orderRepository.findById.mockResolvedValue(order);
+
+    await service.shipOrder('order-1', 'SF1234567890', 'SF', 'admin-1');
+
+    expect(prisma.order.update).not.toHaveBeenCalled();
   });
 });

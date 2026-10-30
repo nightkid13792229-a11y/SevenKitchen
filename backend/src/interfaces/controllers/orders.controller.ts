@@ -1107,6 +1107,11 @@ export class OrdersController {
       ? await this.orderService.getOrderRefundRecords(order.id)
       : [];
 
+    const actualShippingFeeRow = await this.prisma.order.findUnique({
+      where: { id: order.id },
+      select: { actualShippingFee: true },
+    });
+
     return {
       id: order.id,
       orderNo: order.orderNo ?? null,
@@ -1151,6 +1156,11 @@ export class OrdersController {
       // Phase 8.14: Shipping tracking fields
       trackingNumber: order.trackingNumber ?? null,
       carrierCode: order.carrierCode ?? null,
+      /** 实际运费（2026-10-31）：纯记账字段，不在领域实体里，单独取一次 */
+      actualShippingFee:
+        actualShippingFeeRow?.actualShippingFee != null
+          ? Number(actualShippingFeeRow.actualShippingFee)
+          : null,
       shippedAt: order.shippedAt ? order.shippedAt.toISOString() : null,
       // Phase 8.15: Order completion
       completedAt: order.completedAt ? order.completedAt.toISOString() : null,

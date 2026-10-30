@@ -217,10 +217,23 @@ describe('staff order detail · 状态改版', () => {
     expect(detailSource).toContain('class="action-bar"');
   });
 
-  it('★ 商品卡不再显示食谱封面，食材/补剂没数据就不占位置', () => {
+  it('★ 商品卡：去封面图、去「换狗」，总净重并进规格那一行（2026-10-31）', () => {
     expect(detailSource).not.toContain('class="product-cover"');
-    expect(detailSource).toContain('v-if="hasFoodUsage"');
-    expect(detailSource).toContain('v-if="hasSupplementUsage"');
+    expect(detailSource).not.toContain('class="product-link"');
+    expect(detailSource).not.toContain('openDogSwitcher>换');
+    // 规格 / 每日 / 总净重 三种写法放在同一排
+    expect(detailSource).toContain('class="specs"');
+    expect(detailSource).toContain('总净重 {{ formatGrams(totalQuantityG) }}');
+    // 下面那排大数字（总净重/总袋数/食材/补剂）整块去掉
+    expect(detailSource).not.toContain('class="usage"');
+    expect(detailSource).not.toContain('hasFoodUsage');
+  });
+
+  it('★ 发货弹窗能录实际运费（两位小数），并传给后端', () => {
+    expect(detailSource).toContain('actualShippingFeeDraft');
+    expect(detailSource).toContain('实际运费（元）');
+    expect(detailSource).toContain("type=\"digit\"");
+    expect(detailSource).toContain('{ actualShippingFee }');
   });
 
   it('★ 管理员备注开产后不再显示', () => {

@@ -3025,6 +3025,14 @@ export class OrderService {
     trackingNumber: string,
     carrierCode: string,
     actorId?: string | null,
+    /**
+     * 实际付给快递的运费（2026-10-31）。
+     *
+     * 为什么不塞进 Order 实体：这是一个**纯记账字段**，不参与任何状态流转，
+     * 而实体是位置参数构造的、动一次要改所有 new Order(...) 调用点。
+     * 这里直接落库，读的时候按需取。
+     */
+    actualShippingFee?: number | null,
   ): Promise<Order> {
     const order = await this.orderRepository.findById(orderId);
     if (!order) {
@@ -3034,6 +3042,14 @@ export class OrderService {
     const fromStatus = order.status;
     order.markAsShipped(trackingNumber, carrierCode);
     const savedOrder = await this.orderRepository.save(order);
+
+    if (typeof actualShippingFee === 'number' && Number.isFinite(actualShippingFee)) {
+      // 存成两位小数的字符串，避开浮点误差
+      await this.prisma.order.update({
+        where: { id: savedOrder.id },
+        data: { actualShippingFee: actualShippingFee.toFixed(2) },
+      });
+    }
 
     // Log status transition
     await this.logStatusTransition(

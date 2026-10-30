@@ -94,6 +94,7 @@
         <view class="ship-meta">
           <text v-if="order.shippedAt">{{ formatDateTime(order.shippedAt) }} 已交快递</text>
           <text v-else-if="estimatedShippingText">预计 {{ estimatedShippingText }} 发货</text>
+          <text v-if="typeof order.actualShippingFee === 'number'">实际运费 ¥{{ formatAmount(order.actualShippingFee) }}</text>
         </view>
       </view>
 
@@ -105,33 +106,15 @@
             <text class="product-name">{{ firstOrderItem.recipeSnapshot?.name || '自定义食谱' }}</text>
             <view class="product-for">
               <text>{{ dogLine }}</text>
-              <text v-if="!isCancelled" class="product-link" @tap="openDogSwitcher">换</text>
             </view>
             <view class="specs">
               <text class="spec">{{ formatPackagePlan(firstOrderItem) }}</text>
               <text v-if="firstOrderItem.dailyIntakeG" class="spec">
                 每日 {{ formatGrams(firstOrderItem.dailyIntakeG) }}
               </text>
+              <!-- 总净重跟规格同一行、同一种写法（2026-10-31 老板要求） -->
+              <text class="spec">总净重 {{ formatGrams(totalQuantityG) }}</text>
             </view>
-          </view>
-        </view>
-
-        <view v-if="orderItems.length" class="usage">
-          <view class="usage-stat">
-            <text class="usage-value">{{ formatGrams(totalQuantityG) }}</text>
-            <text class="usage-label">总净重</text>
-          </view>
-          <view class="usage-stat">
-            <text class="usage-value">{{ totalPackageCount }} 袋</text>
-            <text class="usage-label">总袋数</text>
-          </view>
-          <view v-if="hasFoodUsage" class="usage-stat">
-            <text class="usage-value">{{ foodUsageLabel }}</text>
-            <text class="usage-label">食材</text>
-          </view>
-          <view v-if="hasSupplementUsage" class="usage-stat">
-            <text class="usage-value">{{ supplementUsageLabel }}</text>
-            <text class="usage-label">补剂</text>
           </view>
         </view>
 
@@ -416,6 +399,16 @@
           <text class="form-label">物流单号</text>
           <input v-model="trackingNumber" class="form-input" placeholder="请输入物流单号" :maxlength="50" />
         </view>
+        <view class="form-item">
+          <text class="form-label">实际运费（元）</text>
+          <input
+            v-model="actualShippingFeeDraft"
+            class="form-input"
+            type="digit"
+            placeholder="选填，例如 12.50（用于财务统计）"
+            :maxlength="8"
+          />
+        </view>
         <button class="address-save-btn" :disabled="isShipping" @tap="confirmShipping">
           {{ isShipping ? '发货中...' : '确认发货' }}
         </button>
@@ -612,6 +605,8 @@ interface OrderDetail {
   } | null
   trackingNumber?: string | null
   carrierCode?: string | null
+  /** 实际运费（发货时录入，元）；老订单为 null */
+  actualShippingFee?: number | null
   shippedAt?: string | null
   productionPhotos?: {
     unitId: string
@@ -709,6 +704,8 @@ const switchingDog = ref(false)
 const showShippingModal = ref(false)
 const selectedCarrierIndex = ref(0)
 const trackingNumber = ref('')
+/** 实际运费草稿（元，最多两位小数）；空 = 不记录 */
+const actualShippingFeeDraft = ref('')
 const isShipping = ref(false)
 const showShippingShareFallback = ref(false)
 const shippedShareOrderId = ref('')
@@ -972,12 +969,6 @@ const remarkVisible = computed(() =>
   ['INIT', 'PENDING_PAYMENT', 'PAID', 'PURCHASING'].includes(order.value?.status || ''),
 )
 
-const hasFoodUsage = computed(() =>
-  rawIngredientDetails.value.some((detail: any) => detail?.type === 'FOOD'),
-)
-const hasSupplementUsage = computed(() =>
-  rawIngredientDetails.value.some((detail: any) => detail?.type === 'SUPPLEMENT'),
-)
 
 const addressLockHint = computed(() => {
   const status = order.value?.status
@@ -1123,8 +1114,6 @@ const ingredientUsageRows = computed(() => {
   })
 })
 
-const foodUsageLabel = computed(() => formatUsageTotalByType('FOOD'))
-const supplementUsageLabel = computed(() => formatUsageTotalByType('SUPPLEMENT'))
 const packageDraftTotalG = computed(() => {
   return packageRows.value.reduce((sum, row) => {
     return sum + readPositiveInteger(row.packageSpecG) * readPositiveInteger(row.packageCount)
@@ -1653,6 +1642,10 @@ async function shipOrder() {
   }
   selectedCarrierIndex.value = 0
   trackingNumber.value = order.value.trackingNumber || ''
+  actualShippingFeeDraft.value =
+    typeof order.value.actualShippingFee === 'number'
+      ? order.value.actualShippingFee.toFixed(2)
+      : ''
   showShippingModal.value = true
 }
 
@@ -1675,6 +1668,17 @@ async function confirmShipping() {
     })
     return
   }
+  // 实际运费：选填；填了就必须是最多两位小数的非负数
+  const feeText = String(actualShippingFeeDraft.value || '').trim()
+  let actualShippingFee: number | undefined
+  if (feeText) {
+    if (!/^\d+(\.\d{1,2})?$/.test(feeText)) {
+      uni.showToast({ title: '运费最多两位小数，例如 12.50', icon: 'none' })
+      return
+    }
+    actualShippingFee = Number(feeText)
+  }
+
   const orderId = order.value.id
   isShipping.value = true
   try {
@@ -1684,6 +1688,7 @@ async function confirmShipping() {
       data: {
         carrierCode: carriers[selectedCarrierIndex.value].code,
         trackingNumber: tracking,
+        ...(actualShippingFee !== undefined ? { actualShippingFee } : {}),
       },
     })
     shippedShareOrderId.value = orderId

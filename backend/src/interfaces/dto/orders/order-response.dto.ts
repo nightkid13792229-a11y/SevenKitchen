@@ -321,6 +321,14 @@ export class OrderDto {
   })
   trackingNumber?: string | null;
 
+  /** 实际运费（发货时录入，元，两位小数；用于财务成本统计，2026-10-31） */
+  @ApiPropertyOptional({
+    description: 'Actual shipping fee paid to the carrier (CNY)',
+    example: 12.5,
+    nullable: true,
+  })
+  actualShippingFee?: number | null;
+
   @ApiPropertyOptional({
     description: 'Shipping carrier code (Phase 8.14)',
     example: 'SF',

@@ -16,6 +16,10 @@ model Order {
   targetProductionDate         DateTime?                   @map("target_production_date")
   amountProduct                Decimal                     @map("amount_product")
   amountShipping               Decimal                     @map("amount_shipping")
+  /// 实际付给快递的运费（发货时人工录入，2026-10-31）。
+  /// 注意和 `amount_shipping` 不是一回事：那个是**向顾客收**的运费，
+  /// 这个是**我们实际支出**的运费，用于财务成本统计。
+  actualShippingFee            Decimal?                    @map("actual_shipping_fee") @db.Decimal(10, 2)
   amountTotal                  Decimal                     @map("amount_total")
   totalAmount                  Decimal?                    @map("total_amount")
   pricingBreakdownSnapshot     Json?                       @map("pricing_breakdown_snapshot")

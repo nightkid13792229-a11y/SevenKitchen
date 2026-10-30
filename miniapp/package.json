@@ -9,7 +9,8 @@
     "predev:mp-weixin": "node scripts/check-env.js",
     "preview": "bash scripts/mp-weixin-dev.sh",
     "rebuild": "bash scripts/ensure-compile.sh",
-    "test": "vitest run"
+    "test": "vitest run",
+    "trial": "bash ../scripts/upload-trial.sh"
   },
   "dependencies": {
     "vue": "^3.0.0"

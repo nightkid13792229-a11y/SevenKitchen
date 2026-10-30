@@ -13,6 +13,8 @@ import { describe, expect, it } from 'vitest'
 import page from '@/views/OrderCenter/index.vue?raw'
 import routerSource from '@/router/index.ts?raw'
 import aftersalePage from '@/views/CustomRecipes/AftersaleList.vue?raw'
+import aftersaleCenterSource from '@/views/AftersaleCenter/index.vue?raw'
+import settingsPricingSource from '@/views/Settings/Pricing.vue?raw'
 
 /** 剥注释后再断言 —— 注释里常引用被删掉的旧实现（本项目栽过多次） */
 function stripComments(source: string): string {
@@ -115,10 +117,10 @@ describe('路由与售后入口（2026-10-21）', () => {
   it('★ /custom-recipes 重定向到订单中心，不再挂 OrderList', () => {
     expect(cleanRouter).toContain('redirect: "/order-center?type=CUSTOM_RECIPE"')
     expect(cleanRouter).not.toContain('CustomRecipes/OrderList.vue')
-    // 排期 / 售后 / 设置仍保留
+    // 排期仍在；售后 / 设置已并入容器页（2026-10-30 导航整理）
     expect(cleanRouter).toContain('CustomRecipes/ScheduleCalendar.vue')
-    expect(cleanRouter).toContain('CustomRecipes/AftersaleList.vue')
-    expect(cleanRouter).toContain('CustomRecipes/Config.vue')
+    expect(aftersaleCenterSource).toContain('CustomRecipes/AftersaleList.vue')
+    expect(settingsPricingSource).toContain('CustomRecipes/Config.vue')
   })
 
   it('★ 售后「查看订单」深链到订单中心抽屉', () => {

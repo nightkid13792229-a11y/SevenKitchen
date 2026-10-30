@@ -1,206 +1,128 @@
 <template>
   <el-container class="main-layout">
-    <el-aside width="200px" class="sidebar">
+    <el-aside width="224px" class="sidebar">
       <div class="logo">七号厨房后台</div>
-      <el-menu
-        :default-active="activeMenu"
-        router
-        background-color="#304156"
-        text-color="#bfcbd9"
-        active-text-color="#409eff"
-      >
-        <el-menu-item index="/dashboard">
-          <el-icon><DataBoard /></el-icon>
-          <span>仪表盘</span>
-        </el-menu-item>
-        <el-menu-item index="/dogs">
-          <el-icon><PriceTag /></el-icon>
-          <span>档案管理</span>
-        </el-menu-item>
-        <el-menu-item index="/breeds">
-          <el-icon><Star /></el-icon>
-          <span>品种管理</span>
-        </el-menu-item>
-        <el-menu-item index="/users">
-          <el-icon><User /></el-icon>
-          <span>用户管理</span>
-        </el-menu-item>
-        <el-menu-item index="/ingredients">
-          <el-icon><Goods /></el-icon>
-          <span>原料管理</span>
-        </el-menu-item>
-        <el-menu-item index="/supplement-shop/dashboard">
-          <el-icon><List /></el-icon>
-          <span>补剂看板</span>
-        </el-menu-item>
-        <el-menu-item index="/supplement-shop/catalog">
-          <el-icon><FirstAidKit /></el-icon>
-          <span>补剂上架清单</span>
-        </el-menu-item>
-        <el-menu-item index="/supplement-shop/equivalence-groups">
-          <el-icon><Connection /></el-icon>
-          <span>补剂等价组</span>
-        </el-menu-item>
-        <el-menu-item index="/supplement-shop/packing-summary">
-          <el-icon><List /></el-icon>
-          <span>分装汇总</span>
-        </el-menu-item>
-        <el-menu-item index="/supplement-shop/packaging">
-          <el-icon><Box /></el-icon>
-          <span>补剂包材</span>
-        </el-menu-item>
-        <el-menu-item index="/supplement-shop/aftersales">
-          <el-icon><List /></el-icon>
-          <span>补剂售后</span>
-        </el-menu-item>
-        <el-menu-item index="/supplement-shop/config">
-          <el-icon><PriceTag /></el-icon>
-          <span>补剂商城设置</span>
-        </el-menu-item>
-        <el-menu-item index="/order-center">
-          <el-icon><List /></el-icon>
-          <span>订单中心</span>
-        </el-menu-item>
-        <el-menu-item index="/tasting-pack/config">
-          <el-icon><Dish /></el-icon>
-          <span>试吃装设置</span>
-        </el-menu-item>
-        <el-menu-item index="/tasting-pack/packs">
-          <el-icon><Dish /></el-icon>
-          <span>试吃装商品</span>
-        </el-menu-item>
-        <el-menu-item index="/tasting-pack/stock">
-          <el-icon><Box /></el-icon>
-          <span>试吃装库存</span>
-        </el-menu-item>
-        <el-menu-item index="/tasting-pack/production-plans">
-          <el-icon><Operation /></el-icon>
-          <span>试吃装备货</span>
-        </el-menu-item>
-        <el-menu-item index="/search-governance">
-          <el-icon><Search /></el-icon>
-          <span>搜索治理</span>
-        </el-menu-item>
-        <el-menu-item index="/agent-config">
-          <el-icon><Setting /></el-icon>
-          <span>AI / Agent 配置</span>
-        </el-menu-item>
-        <el-menu-item index="/recipe-designer">
-          <el-icon><Food /></el-icon>
-          <span>食谱列表 &amp; 设计</span>
-        </el-menu-item>
-        <el-sub-menu index="nutrition-standards">
-          <template #title>
-            <el-icon><DocumentChecked /></el-icon>
-            <span>营养标准</span>
+
+      <div ref="searchWrapRef" class="sidebar-search">
+        <el-input
+          ref="searchInputRef"
+          v-model="searchQuery"
+          placeholder="搜索功能 / 订单 / 顾客"
+          clearable
+          @focus="searchOpen = true"
+          @input="searchOpen = true"
+          @keydown.enter.prevent="chooseFirstSearchResult"
+          @keydown.esc="closeSearch"
+        >
+          <template #prefix>
+            <el-icon><Search /></el-icon>
           </template>
-          <el-menu-item index="/nutrition-standards/fediaf-2025-dog"
-            >FEDIAF 2025 犬标准</el-menu-item
-          >
-          <el-menu-item index="/nutrition-standards/ingredient-readiness"
-            >原料计算就绪度</el-menu-item
-          >
-          <el-menu-item index="/nutrition-standards/fediaf-target-preview"
-            >FEDIAF 目标预览</el-menu-item
-          >
-        </el-sub-menu>
-        <el-menu-item index="/reviews">
-          <el-icon><Star /></el-icon>
-          <span>评价管理</span>
-        </el-menu-item>
-        <el-menu-item index="/refunds">
-          <el-icon><Money /></el-icon>
-          <span>退款管理</span>
-        </el-menu-item>
-        <el-menu-item index="/custom-recipes/schedule">
+        </el-input>
 
-          <el-icon><Calendar /></el-icon>
-
-          <span>排期日历</span>
-
-        </el-menu-item>
-
-        <el-menu-item index="/custom-recipes/aftersales">
-          <el-icon><List /></el-icon>
-          <span>售后待办</span>
-        </el-menu-item>
-
-        <el-menu-item index="/custom-recipes/refunds">
-          <el-icon><Money /></el-icon>
-          <span>退款申请</span>
-        </el-menu-item>
-
-        <el-menu-item index="/custom-recipes/config">
-          <el-icon><Setting /></el-icon>
-          <span>食谱定制设置</span>
-        </el-menu-item>
-        <el-menu-item index="/platform-options">
-          <el-icon><Collection /></el-icon>
-          <span>选项字典</span>
-        </el-menu-item>
-        <el-menu-item index="/analytics/dog-profile">
-          <el-icon><DataBoard /></el-icon>
-          <span>狗档案转化分析</span>
-        </el-menu-item>
-        <el-menu-item index="/weight-goal-plan">
-          <el-icon><TrendCharts /></el-icon>
-          <span>体重管理计划</span>
-        </el-menu-item>
-        <el-menu-item index="/inventory">
-          <el-icon><Box /></el-icon>
-          <span>库存管理</span>
-        </el-menu-item>
-        <el-menu-item index="/production">
-          <el-icon><Operation /></el-icon>
-          <span>生产管理</span>
-        </el-menu-item>
-        <el-menu-item index="/global-config">
-          <el-icon><Setting /></el-icon>
-          <span>全局配置</span>
-        </el-menu-item>
-        <el-menu-item index="/payment-config">
-          <el-icon><Money /></el-icon>
-          <span>支付配置</span>
-        </el-menu-item>
-        <el-menu-item index="/customer-service-config">
-          <el-icon><User /></el-icon>
-          <span>客服配置</span>
-        </el-menu-item>
-        <el-menu-item index="/customer-service">
-          <el-icon><User /></el-icon>
-          <span>客服会话</span>
-        </el-menu-item>
-        <el-sub-menu index="purchasing">
-          <template #title>
-            <el-icon><List /></el-icon>
-            <span>采购管理</span>
-          </template>
-          <el-menu-item index="/purchasing/lists">采购单管理</el-menu-item>
-          <el-menu-item index="/purchasing/reimbursements">报销管理</el-menu-item>
-          <el-menu-item index="/purchasing/history">采购历史</el-menu-item>
-        </el-sub-menu>
-        <el-sub-menu index="finance">
-          <template #title>
-            <el-icon><Money /></el-icon>
-            <span>财务中心</span>
-          </template>
-          <el-menu-item index="/finance/overview">财务总览</el-menu-item>
-          <el-menu-item index="/finance/expense-bills"
-            >费用与待支付</el-menu-item
+        <div v-if="searchOpen && searchQuery.trim()" class="search-panel">
+          <div v-if="searchResults.length === 0" class="search-empty">
+            没找到。试试“订单”“退款”“档案”“FEDIAF”
+          </div>
+          <button
+            v-for="item in searchResults"
+            :key="item.key"
+            type="button"
+            class="search-item"
+            :class="{ 'is-disabled': item.disabled }"
+            @mousedown.prevent="chooseSearchItem(item)"
           >
-          <el-menu-item index="/finance/expense-analysis"
-            >费用分析</el-menu-item
+            <el-icon class="search-item-icon">
+              <component :is="item.icon" />
+            </el-icon>
+            <span class="search-item-label">{{ item.label }}</span>
+            <span class="search-item-group">{{ item.groupLabel }}</span>
+            <span v-if="item.disabled" class="search-item-soon">未启用</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="sidebar-scroll">
+        <div class="pinned-block">
+          <div class="section-label">常用</div>
+          <button
+            v-for="item in pinnedMenuItems"
+            :key="item.key"
+            type="button"
+            class="pin-item"
+            :class="{ 'is-active': activeMenu === item.path }"
+            @click="goTo(item)"
           >
-          <el-menu-item index="/finance/contribution-analysis"
-            >经营贡献分析</el-menu-item
+            <el-icon><component :is="item.icon" /></el-icon>
+            <span>{{ item.label }}</span>
+          </button>
+        </div>
+
+        <el-menu
+          ref="menuRef"
+          :default-active="activeMenu"
+          :default-openeds="openedGroups"
+          unique-opened
+          router
+          background-color="#304156"
+          text-color="#bfcbd9"
+          active-text-color="#409eff"
+          class="sidebar-menu"
+        >
+          <el-menu-item :index="dashboardItem.path">
+            <el-icon><component :is="dashboardItem.icon" /></el-icon>
+            <span>{{ dashboardItem.label }}</span>
+          </el-menu-item>
+
+          <el-sub-menu
+            v-for="group in adminMenuGroups"
+            :key="group.key"
+            :index="group.key"
           >
-        </el-sub-menu>
-      </el-menu>
+            <template #title>
+              <el-icon><component :is="group.icon" /></el-icon>
+              <span>{{ group.label }}</span>
+              <span v-if="groupBadge(group)" class="menu-badge">
+                {{ formatBadge(groupBadge(group)) }}
+              </span>
+            </template>
+
+            <el-menu-item
+              v-for="item in group.items"
+              :key="item.key"
+              :index="item.path"
+              :disabled="item.disabled"
+            >
+              <el-icon><component :is="item.icon" /></el-icon>
+              <span>{{ item.label }}</span>
+              <el-tooltip
+                v-if="item.disabled"
+                :content="item.disabledTip || '功能还没上线'"
+                placement="right"
+              >
+                <span class="soon-tag">未启用</span>
+              </el-tooltip>
+            </el-menu-item>
+          </el-sub-menu>
+        </el-menu>
+      </div>
+
+      <div class="sidebar-foot">
+        <span>七号厨房 · 内部后台</span>
+      </div>
     </el-aside>
 
     <el-container>
       <el-header class="header">
         <div class="header-title">
+          <el-breadcrumb v-if="breadcrumbs.length > 1" separator="/" class="breadcrumb">
+            <el-breadcrumb-item
+              v-for="(crumb, index) in breadcrumbs"
+              :key="`${crumb.label}-${index}`"
+              :to="crumb.to && index < breadcrumbs.length - 1 ? { path: crumb.to } : undefined"
+            >
+              {{ crumb.label }}
+            </el-breadcrumb-item>
+          </el-breadcrumb>
           <h2>{{ currentPageTitle }}</h2>
         </div>
         <div class="header-actions">
@@ -297,78 +219,207 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useUserStore } from '@/store/user'
 import { authApi } from '@/api'
+import { workbenchApi } from '@/api/workbench'
 import {
-  DataBoard,
-  Food,
-  List,
-  Box,
-  Operation,
-  User,
-  ArrowDown,
-  PriceTag,
-  Goods,
-  Star,
-  Setting,
-  EditPen,
-  Money,
-  DocumentChecked,
-  Search,
-  FirstAidKit,
-  Dish,
-  TrendCharts,
-  Lock,
-  Collection,
-  Bell,
-  Calendar,
-  Connection
-} from '@element-plus/icons-vue'
+  adminMenuGroups,
+  dashboardItem,
+  pinnedMenuItems,
+  resolveActiveMenuPath,
+  resolveMenuGroup,
+  resolveMenuLocation,
+  searchMenuItems,
+  type AdminMenuGroup,
+  type FlatMenuItem,
+  type MenuBadgeKey,
+} from '@/constants/adminMenu'
+import { ArrowDown, Lock, Search, User } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 
-const activeMenu = computed(() => route.path)
-const currentPageTitle = computed(() => route.meta.title as string || '后台管理')
+const menuRef = ref<{ open: (index: string) => void }>()
+const searchWrapRef = ref<HTMLElement>()
+const searchInputRef = ref<{ focus: () => void }>()
+const searchQuery = ref('')
+const searchOpen = ref(false)
+const openedGroups = ref<string[]>([])
+
+const activeMenu = computed(() => resolveActiveMenuPath(route.path))
+const currentLocation = computed(() => resolveMenuLocation(route.path))
+const activeGroup = computed(() => resolveMenuGroup(currentLocation.value))
+
+const currentPageTitle = computed(
+  () => (route.meta.title as string) || currentLocation.value?.label || '后台管理',
+)
+
+interface BreadcrumbItem {
+  label: string
+  to?: string
+}
+
+const breadcrumbs = computed<BreadcrumbItem[]>(() => {
+  const item = currentLocation.value
+  if (!item || item.groupKey === 'dashboard') {
+    return [{ label: item?.label || currentPageTitle.value }]
+  }
+
+  const group = activeGroup.value
+  const crumbs: BreadcrumbItem[] = [
+    { label: group?.label || item.groupLabel, to: group?.items[0]?.path },
+    { label: item.label, to: item.path },
+  ]
+
+  if (route.path !== item.path) {
+    const title = String(route.meta.title || '')
+    if (title && title !== item.label) crumbs.push({ label: title })
+  } else if (item.key === 'dogs' && route.query.tab === 'breeds') {
+    crumbs.push({ label: '品种' })
+  }
+
+  return crumbs
+})
+
+const searchResults = computed(() => searchMenuItems(searchQuery.value))
+
+const badgeCounts = reactive<Record<MenuBadgeKey, number>>({
+  orders: 0,
+  stock: 0,
+  finance: 0,
+})
+
+let badgeTimer: ReturnType<typeof setInterval> | undefined
+
+function groupBadge(group: AdminMenuGroup): number {
+  if (!group.badgeKey) return 0
+  return badgeCounts[group.badgeKey] || 0
+}
+
+function formatBadge(count: number): string {
+  return count > 99 ? '99+' : String(count)
+}
+
+async function loadBadges() {
+  try {
+    const data = await workbenchApi.summary()
+    const badges = data?.badges
+    badgeCounts.orders = (badges?.orders || 0) + (badges?.supplementOrders || 0)
+    badgeCounts.stock = (badges?.production || 0) + (badges?.inventory || 0)
+    badgeCounts.finance = (badges?.purchasing || 0) + (badges?.reimbursement || 0)
+  } catch {
+    // 角标只是锦上添花，接口不可用时不打扰用户
+  }
+}
+
+function openGroupForCurrentRoute() {
+  const key = activeGroup.value?.key
+  openedGroups.value = key ? [key] : []
+  if (!key) return
+  nextTick(() => {
+    menuRef.value?.open(key)
+  })
+}
+
+watch(activeGroup, openGroupForCurrentRoute, { immediate: true })
+
+function closeSearch() {
+  searchOpen.value = false
+}
+
+function chooseSearchItem(item: FlatMenuItem) {
+  if (item.disabled) {
+    ElMessage.info(item.disabledTip || '功能还没上线')
+    return
+  }
+  searchOpen.value = false
+  searchQuery.value = ''
+  router.push(item.path)
+}
+
+function chooseFirstSearchResult() {
+  const first = searchResults.value.find((item) => !item.disabled)
+  if (first) chooseSearchItem(first)
+}
+
+function goTo(item: FlatMenuItem) {
+  if (item.disabled) {
+    ElMessage.info(item.disabledTip || '功能还没上线')
+    return
+  }
+  router.push(item.path)
+}
+
+function onGlobalKeydown(event: KeyboardEvent) {
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+    event.preventDefault()
+    searchOpen.value = true
+    nextTick(() => searchInputRef.value?.focus())
+  }
+  if (event.key === 'Escape') closeSearch()
+}
+
+function onDocumentClick(event: MouseEvent) {
+  if (!searchWrapRef.value) return
+  if (!searchWrapRef.value.contains(event.target as Node)) closeSearch()
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onGlobalKeydown)
+  document.addEventListener('click', onDocumentClick)
+  loadBadges()
+  badgeTimer = setInterval(loadBadges, 60_000)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onGlobalKeydown)
+  document.removeEventListener('click', onDocumentClick)
+  if (badgeTimer) clearInterval(badgeTimer)
+})
+
+/* ---------- 修改密码 / 退出登录（保持原逻辑） ---------- */
+
 const changePasswordVisible = ref(false)
 const changePasswordLoading = ref(false)
 const changePasswordFormRef = ref<FormInstance>()
 const changePasswordForm = reactive({
   currentPassword: '',
   newPassword: '',
-  confirmPassword: ''
+  confirmPassword: '',
 })
 
-const validateConfirmPassword = (_rule: unknown, value: string, callback: (error?: Error) => void) => {
+const validateConfirmPassword = (
+  _rule: unknown,
+  value: string,
+  callback: (error?: Error) => void,
+) => {
   if (!value) {
     callback(new Error('请再次输入新密码'))
     return
   }
-
   if (value !== changePasswordForm.newPassword) {
     callback(new Error('两次输入的新密码不一致'))
     return
   }
-
   callback()
 }
 
 const changePasswordRules: FormRules = {
   currentPassword: [
-    { required: true, message: '请输入当前密码', trigger: 'blur' }
+    { required: true, message: '请输入当前密码', trigger: 'blur' },
   ],
   newPassword: [
     { required: true, message: '请输入新密码', trigger: 'blur' },
-    { min: 8, max: 64, message: '新密码长度需为8-64位', trigger: 'blur' }
+    { min: 8, max: 64, message: '新密码长度需为8-64位', trigger: 'blur' },
   ],
   confirmPassword: [
-    { validator: validateConfirmPassword, trigger: 'blur' }
-  ]
+    { validator: validateConfirmPassword, trigger: 'blur' },
+  ],
 }
 
 const resetChangePasswordForm = () => {
@@ -390,7 +441,7 @@ const submitChangePassword = async () => {
     changePasswordLoading.value = true
     await authApi.changePassword({
       currentPassword: changePasswordForm.currentPassword,
-      newPassword: changePasswordForm.newPassword
+      newPassword: changePasswordForm.newPassword,
     })
     ElMessage.success('密码修改成功')
     changePasswordVisible.value = false
@@ -430,6 +481,8 @@ const handleCommand = async (command: string) => {
 .sidebar {
   background-color: #304156;
   height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .logo {
@@ -440,6 +493,215 @@ const handleCommand = async (command: string) => {
   font-weight: bold;
   color: #fff;
   background-color: #2b3a4b;
+  flex: none;
+}
+
+.sidebar-search {
+  position: relative;
+  flex: none;
+  padding: 10px 10px 6px;
+  background: #304156;
+  z-index: 20;
+}
+
+.sidebar-search :deep(.el-input__wrapper) {
+  background: #1b2836;
+  box-shadow: 0 0 0 1px #33475c inset;
+  border-radius: 7px;
+}
+
+.sidebar-search :deep(.el-input__inner) {
+  color: #dbe4ee;
+  font-size: 12px;
+}
+
+.sidebar-search :deep(.el-input__inner::placeholder) {
+  color: #8fa3b8;
+}
+
+.sidebar-search :deep(.el-input__prefix) {
+  color: #8fa3b8;
+}
+
+.search-panel {
+  position: absolute;
+  top: 42px;
+  left: 10px;
+  right: 10px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+  padding: 4px;
+  z-index: 3000;
+}
+
+.search-empty {
+  padding: 12px 10px;
+  color: #909399;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.search-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #303133;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.search-item:hover {
+  background: #f2f6fc;
+}
+
+.search-item.is-disabled {
+  color: #a8abb2;
+  cursor: not-allowed;
+}
+
+.search-item-icon {
+  color: #909399;
+  flex: none;
+}
+
+.search-item-label {
+  font-weight: 600;
+}
+
+.search-item-group {
+  margin-left: auto;
+  color: #b1b3b8;
+  font-size: 11px;
+}
+
+.search-item-soon {
+  color: #b1b3b8;
+  font-size: 11px;
+  border: 1px solid #dcdfe6;
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+.sidebar-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 8px;
+  scrollbar-width: thin;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 3px;
+}
+
+.pinned-block {
+  padding: 4px 8px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  margin-bottom: 4px;
+}
+
+.section-label {
+  color: #7f8fa3;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  padding: 6px 8px;
+}
+
+.pin-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  height: 34px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #c0c4cc;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pin-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+.pin-item.is-active {
+  background: #1b4f86;
+  color: #fff;
+}
+
+.sidebar-menu {
+  border-right: none;
+  background: transparent;
+}
+
+.sidebar-menu :deep(.el-menu-item),
+.sidebar-menu :deep(.el-sub-menu__title) {
+  height: 42px;
+  line-height: 42px;
+  font-size: 13px;
+}
+
+.sidebar-menu :deep(.el-menu-item.is-active) {
+  background: #1b4f86;
+  color: #fff;
+}
+
+.sidebar-menu :deep(.el-sub-menu .el-menu-item) {
+  min-width: 0;
+  padding-left: 44px !important;
+}
+
+.menu-badge {
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #f56c6c;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+.soon-tag {
+  margin-left: auto;
+  padding: 0 4px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 3px;
+  color: #8fa3b8;
+  font-size: 10px;
+  line-height: 16px;
+}
+
+.sidebar-foot {
+  flex: none;
+  height: 30px;
+  line-height: 30px;
+  padding: 0 12px;
+  color: #6f8096;
+  font-size: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .header {
@@ -449,12 +711,39 @@ const handleCommand = async (command: string) => {
   justify-content: space-between;
   align-items: center;
   padding: 0 20px;
+  height: 64px;
+}
+
+.header-title {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
+.breadcrumb {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.breadcrumb :deep(.el-breadcrumb__inner),
+.breadcrumb :deep(.el-breadcrumb__inner a) {
+  color: #909399;
+  font-weight: 400;
+}
+
+.breadcrumb :deep(.el-breadcrumb__item:last-child .el-breadcrumb__inner) {
+  color: #606266;
 }
 
 .header-title h2 {
-  margin: 0;
+  margin: 1px 0 0;
   font-size: 18px;
+  line-height: 24px;
   color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .user-dropdown {
@@ -468,5 +757,6 @@ const handleCommand = async (command: string) => {
 .main-content {
   background-color: #f0f2f5;
   padding: 20px;
+  overflow-y: auto;
 }
 </style>

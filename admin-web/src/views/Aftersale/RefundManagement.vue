@@ -6,7 +6,7 @@
         <p>保存每次微信退款尝试，按微信成功记录确认钱款是否已原路退回。补剂售后单独按 case 退款。</p>
       </div>
       <div>
-        <el-button @click="$router.push('/supplement-shop/aftersales')">补剂售后</el-button>
+        <el-button @click="$router.push('/aftersale-center?tab=supplement')">补剂售后</el-button>
         <el-button type="primary" :loading="loading" @click="loadRefunds">刷新</el-button>
       </div>
     </div>

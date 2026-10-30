@@ -3,14 +3,15 @@ import { describe, expect, it } from 'vitest'
 import page from '@/views/CustomRecipes/RefundRequests.vue?raw'
 import api from '@/api/customRecipe.ts?raw'
 import router from '@/router/index.ts?raw'
-import layout from '@/layouts/MainLayout.vue?raw'
+import container from '@/views/AftersaleCenter/index.vue?raw'
+import menu from '@/constants/adminMenu.ts?raw'
 
 describe('后台退款申请（2026-10-25）', () => {
   it('★ 有独立的退款申请页、路由和菜单', () => {
     expect(page).toContain('退款申请')
     expect(router).toContain('custom-recipes/refunds')
-    expect(router).toContain('RefundRequests.vue')
-    expect(layout).toContain('/custom-recipes/refunds')
+    expect(container).toContain('RefundRequests.vue')
+    expect(menu).toContain('/aftersale-center')
   })
 
   it('★ 审核通过会直接退款；失败不能伪装成功', () => {

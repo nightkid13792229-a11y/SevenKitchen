@@ -49,6 +49,12 @@
             >{{ layerLabel(step.layer) }}</text>
             <!-- 每一项都能展开：为什么这么排（依据）/ 能打什么（常见产品） -->
             <text class="vk-plan__more">{{ isOpen(step.key) ? '收起' : '详情 ›' }}</text>
+            <!-- 2026-10-30（F8）：当前这一行可以直接记；点按钮不展开详情 -->
+            <text
+              v-if="step.key === nextKey && step.status !== 'DONE'"
+              class="vk-plan__record"
+              @tap.stop="onRecord(step)"
+            >记录这一针</text>
           </view>
           <text
             v-if="rowNote(step).text"
@@ -91,6 +97,10 @@ import {
   stepWindowText,
 } from '../../domain/vaccine/status'
 
+const emit = defineEmits<{
+  (event: 'record', step: VaccineStep): void
+}>()
+
 const props = withDefaults(defineProps<{
   /** 免疫计划（后端已按时间从近到远排好） */
   plan?: VaccineStep[]
@@ -113,6 +123,10 @@ const plan = computed(() => props.plan || [])
  * 点击这个按钮之后，可以看到该计划的疫苗分类的定义、依据和常见疫苗推荐。"
  */
 const openKey = ref('')
+
+function onRecord(step: VaccineStep) {
+  emit('record', step)
+}
 
 function isOpen(key: string): boolean {
   return openKey.value === key
@@ -190,6 +204,14 @@ function layerLabel(layer: VaccineLayer) {
 .vk-plan__row--far .vk-plan__when-main,
 .vk-plan__row--far .vk-plan__when-sub {
   color: $vk-text-faint;
+}
+
+.vk-plan__record {
+  flex: 0 0 auto;
+  margin-left: 8rpx;
+  font-size: $vk-font-sub;
+  font-weight: 700;
+  color: $vk-brand;
 }
 
 .vk-plan__more {

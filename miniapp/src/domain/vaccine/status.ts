@@ -186,7 +186,10 @@ export function stepWindowText(step: VaccineStep): { main: string; sub: string }
     }
   }
   if (step.status === 'DONE') {
-    return { main: formatFullDate(step.windowStart), sub: '已完成' }
+    return {
+      main: formatFullDate(step.matchedRecordDate || step.windowStart),
+      sub: '已完成',
+    }
   }
   if (step.status === 'DUE') {
     return {
@@ -228,7 +231,7 @@ export function stepWhenText(step: VaccineStep): string {
     return '建议尽快安排'
   }
   if (step.status === 'DONE') {
-    return `已于 ${formatFullDate(step.windowStart)} 完成`
+    return `已于 ${formatFullDate(step.matchedRecordDate || step.windowStart)} 完成`
   }
   if (step.status === 'DUE') {
     const start = formatShortDate(step.windowStart)

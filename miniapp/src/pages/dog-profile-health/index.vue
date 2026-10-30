@@ -145,6 +145,15 @@
              不挂载就一个都出不去 ✓
              书签层已经把它过滤掉了，这里是**第二道**：
              就算哪天有人从别处把当前书签设成 'vaccine'，请求也不会漏出去 ✓ -->
+        <view
+          v-else-if="activeHealthTab === 'vaccine' && vaccineFeature.failed"
+          class="section-card"
+        >
+          <text class="section-card__title">疫苗板块暂时没打开</text>
+          <text class="section-card__desc">刚才没连上开关服务。你的记录还在，不会丢；点下面重试。</text>
+          <text class="section-card__retry" @tap="retryVaccineFeature">重试</text>
+        </view>
+
         <template v-else-if="shouldMountVaccineSection(activeHealthTab, vaccineFeature)">
           <!-- ⚠️ v-if="dogId"：必须**拿到狗狗 id 之后**才挂载（2026-10-11 修）✗
                小程序里 props 不会随后续赋值重绑 → 板块永远不取数（老板看到"0 条"就是这个）✓ -->
@@ -451,7 +460,8 @@ async function loadVaccineFeatureFlag(force = false) {
 watch(
   () => vaccineFeature.value.enabled,
   (enabled) => {
-    if (enabled || activeHealthTab.value !== 'vaccine') {
+    // F10：请求失败时保留书签，页面里给重试；不要把它当成"被关掉"切走
+    if (enabled || vaccineFeature.value.failed || activeHealthTab.value !== 'vaccine') {
       return
     }
 
@@ -743,6 +753,14 @@ onShow(() => {
   if (!dogs.value.length) {
     armStartupWatchdog()
     void loadDogs()
+  }
+
+  /*
+   * F9：从建档页返回时，生日可能刚填上；疫苗板块不会重新挂载，
+   * 这里主动重拉一次计划与记录（没有生日时也能把新记录刷出来）。
+   */
+  if (dogId.value && activeHealthTab.value === 'vaccine') {
+    vaccineSectionRef.value?.reload?.()
   }
 })
 
@@ -1253,6 +1271,8 @@ const recordsSectionRef = ref<{
  */
 const vaccineSectionRef = ref<{
   startScan?: () => void
+  /** 从建档页返回 / 页面重新显示时，重拉计划与记录（F9） */
+  reload?: () => void
   /** 底部「上传疫苗本」选到"抗体检测报告"时 → 开抗体录入卡 */
   addAntibodyTest?: () => void
   addRecord?: () => void
@@ -1524,6 +1544,10 @@ function goBack() {
  *
  * 页面在分包 pages/dog-health 里（重页面不进主包）。
  */
+function retryVaccineFeature() {
+  void loadVaccineFeatureFlag(true)
+}
+
 function goHealthTimeline() {
   if (!dogId.value) {
     return
@@ -1720,6 +1744,14 @@ function goToDogCreate() {
   font-size: 23rpx;
   line-height: 1.6;
   color: #6b6653;
+}
+
+.section-card__retry {
+  display: inline-block;
+  margin-top: 20rpx;
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #3f6b4f;
 }
 
 /*

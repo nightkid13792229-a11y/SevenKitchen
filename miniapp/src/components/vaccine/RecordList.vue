@@ -8,6 +8,8 @@
       <view class="vk-records__bar" />
       <text class="vk-records__title">接种记录</text>
       <text v-if="entries.length > 0" class="vk-records__meta">{{ entries.length }} 条</text>
+      <!-- 2026-10-30（F3/V5）：补记以前打过的针（老疫苗本） -->
+      <text class="vk-records__backfill" @tap="onBackfill">补记以前打过的针</text>
       <!-- 2026-10-16 撤掉了记录区那条抗体检测的常驻入口：
            它等于每次打开都在招呼家长"要不要测一个"，与"不主动提示"冲突（需求 R9）。
            现在只从**家长主动打开的**「记一条」里进（卡里有类型切换），
@@ -123,6 +125,7 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
+  (event: 'add-record'): void
   (event: 'edit-record', record: VaccineRecord): void
   (event: 'edit-test', test: AntibodyTest): void
   (event: 'verify-record', record: VaccineRecord): void
@@ -276,6 +279,11 @@ function coverageNote(entry: VaccineTimelineEntry): string {
   return partialCoreNote(entry.record)
 }
 
+/** 2026-10-30（F3）：补记入口交给上层打开同一个录入器 */
+function onBackfill() {
+  emit('add-record')
+}
+
 /**
  * 这一条对应的"为什么要改"。
  *
@@ -378,6 +386,13 @@ async function onEntryTap(entry: VaccineTimelineEntry) {
   font-size: $vk-font-section;
   font-weight: 700;
   color: $vk-record-title;
+}
+
+.vk-records__backfill {
+  margin-left: auto;
+  font-size: $vk-font-sub;
+  font-weight: 600;
+  color: $vk-brand;
 }
 
 .vk-records__meta {

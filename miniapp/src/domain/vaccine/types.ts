@@ -76,6 +76,8 @@ export interface VaccineStep {
   kindShort?: string
   /** 卡片上那行**短话**（后端按程序表逐行下发；原型 B/F/I 卡上那句） */
   hint?: string
+  /** 已完成步骤的实际接种日（B7/V13；页面显示它，不显示计划日） */
+  matchedRecordDate?: string
   /** 这一针被抗体检测替代了（原型 F）：时间含义变成"下次评估" */
   titer?: {
     testedAt: string

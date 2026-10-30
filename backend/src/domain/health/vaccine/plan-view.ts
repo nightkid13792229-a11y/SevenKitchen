@@ -64,6 +64,8 @@ export interface PlanStepDto {
   layer: 'MUST' | 'SUGGEST';
   windowStart: string;
   windowEnd: string;
+  /** 已完成步骤的实际接种日（B7/V13；不是计划窗口日） */
+  matchedRecordDate?: string;
   /** 只在"起针窗口过了、被挪到今天"时有值 */
   missedWindowStart?: string;
   missedWindowEnd?: string;
@@ -219,6 +221,9 @@ export function toStepDto(
     layer: step.layer,
     windowStart: toDateText(step.windowStart),
     windowEnd: toDateText(step.windowEnd),
+    ...(step.matchedRecordDate
+      ? { matchedRecordDate: toDateText(step.matchedRecordDate) }
+      : {}),
     ...(step.missedWindowStart && step.missedWindowEnd
       ? {
           missedWindowStart: toDateText(step.missedWindowStart),

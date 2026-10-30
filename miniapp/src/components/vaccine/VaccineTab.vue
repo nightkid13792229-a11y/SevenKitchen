@@ -28,8 +28,8 @@
         <text class="vk-state__btn" @tap="goFillBirthday">去填生日</text>
       </view>
 
-      <template v-else>
       <NextCard
+        v-if="planData?.birthday"
         :next="nextStep"
         :age-weeks="planData?.ageWeeks || 0"
         :ignored-items="ignoredItems"
@@ -105,7 +105,13 @@
       @scanned="onAntibodyScanned"
     />
 
-      <PlanTimeline :plan="planSteps" :rhythm="rhythm" :next-key="nextKey" />
+      <PlanTimeline
+        v-if="planData?.birthday"
+        :plan="planSteps"
+        :rhythm="rhythm"
+        :next-key="nextKey"
+        @record="onRecordStep"
+      />
 
       <RecordList
         :records="records"
@@ -118,8 +124,8 @@
         @verify-record="onVerifyRecord"
         @preview="previewAttachments"
         @remove-attachment="onRemoveAttachment"
+        @add-record="onBackfillRecord"
       />
-      </template>
     </template>
 
     <!-- 忽略时问一句原因（这次先不打 / 不再接种了）-->
@@ -774,6 +780,15 @@ function onAddManualRecord() {
   editorHeading.value = '补一条接种记录'
 }
 
+/**
+ * 2026-10-30（F3/V5）：补记以前打过的针。
+ * 走同一个录入器（日期可以选过去），保存后整屏重拉，重启/26 周等会重算。
+ */
+function onBackfillRecord() {
+  addRecord()
+  editorHeading.value = '补记以前打过的针'
+}
+
 function onScanDiscard() {
   scanRows.value = []
 }
@@ -904,6 +919,8 @@ defineExpose({
    *    按"不留死接口"的纪律摘掉；哪天要做下拉刷新，加回来一行的事 ✓。
    */
   startScan,
+  /** 从建档页返回 / 页面重新显示时，重拉计划与记录（F9） */
+  reload,
   /** 底部「记一条」→ 打开录入器 */
   addRecord,
   /** 底部「上传疫苗本 / 报告」选到"抗体检测报告"时 → 开抗体录入卡 */

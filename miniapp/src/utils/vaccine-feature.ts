@@ -14,6 +14,8 @@
  *   开 → 一切照旧 ✓
  *   关 → **「疫苗」书签不出现**（其余书签照常用），且**一个疫苗接口都不请求**；
  *        如果此刻正停在疫苗书签上 → 优雅退回第一个书签（不白屏、不报错）
+ *   请求失败（断网/超时/500）→ **书签保留**，但**板块内容不挂载、一个疫苗接口都不请求**；
+ *        页面里给“重试”。这样不会因为一次网络抖动让书签凭空消失，也不会在没确认开关时给建议。
  *
  * ══ 拉不到开关时，默认开还是默认关？→ **默认关**（这个方向是刻意选的）══
  *
@@ -21,9 +23,9 @@
  * 两种默认值的代价**不对称**：
  *   · 拉不到就默认"开"：断网 / 后端挂了 / 接口 500 的时候，家长照样看到疫苗板块，
  *     看到的是**可能存在错误的接种建议** ✗ —— 这正是最坏的结果（狗会漏打或错打）；
- *   · 拉不到就默认"关"：家长少一个书签，改天网络好了自然回来 ✓ ——
- *     最坏的结果只是"这个功能今天用不了"。
- * 少一个功能是可恢复的，给错建议不是 —— 所以**拉不到一律按关**（fail-safe）。
+ *   · 拉不到就默认"关"：数据不挂载、不给建议 ✓，但书签可以保留、页面给重试。
+ * 少一个功能是可恢复的，给错建议不是 —— 所以**拉不到时绝不挂载板块**（fail-safe）；
+ * 只是 2026-10-30（F10）起，书签不再跟着消失，避免家长以为入口没了。
  *
  * ⚠️ 注意别把这条和**后端**的默认值搞混：后端读不到那一行时默认 **开**
  *    （swagger 之外的理由在 GlobalConfigService.getVaccineFeatureFlag 里写着：
@@ -35,13 +37,19 @@
 import { request } from './api'
 
 export interface VaccineFeatureFlag {
-  /** true = 疫苗书签正常出现；false = 整个板块不出现 */
+  /** true = 疫苗书签正常出现；false = 整个板块不出现（或暂时打不开） */
   enabled: boolean
   /** 关掉时后端给的一句人话（空串 = 不解释） */
   notice: string
+  /**
+   * 2026-10-30（F10/V12）：请求失败（断网/超时/500）。
+   * 此时**保留疫苗书签**，但**不挂载 VaccineTab、不请求任何疫苗数据**；
+   * 页面里给"重试"。这样既不会书签凭空消失，也不会在没确认开关时给出建议。
+   */
+  failed?: boolean
 }
 
-/** 拉不到开关时用它：**关**（理由见文件头） */
+/** 拉不到开关、也还没确认失败时的初始值：**关**（理由见文件头） */
 export const VACCINE_FEATURE_FAILSAFE: VaccineFeatureFlag = {
   enabled: false,
   notice: '',
@@ -84,9 +92,14 @@ export function readVaccineFeatureFlag(payload: unknown): VaccineFeatureFlag {
 /**
  * 问一次后端：疫苗板块现在开着吗？
  *
- * **不抛错**：任何失败（断网、超时、500、返回看不懂）都返回 fail-safe（关）。
+ * **不抛错**：任何失败（断网、超时、500）都返回 `failed` 状态（书签保留、板块不挂载）。
  * 调用方不需要 try/catch，也不会因为这一句问不到而白屏 ✓
  */
+/** 请求失败时的状态：书签保留，但板块内容不挂载（只给重试） */
+export function vaccineFeatureFailed(notice = ''): VaccineFeatureFlag {
+  return { ...VACCINE_FEATURE_FAILSAFE, notice, failed: true }
+}
+
 export async function fetchVaccineFeatureFlag(): Promise<VaccineFeatureFlag> {
   try {
     const response = await request<{ enabled?: unknown; notice?: unknown }>({
@@ -99,22 +112,22 @@ export async function fetchVaccineFeatureFlag(): Promise<VaccineFeatureFlag> {
     });
     return readVaccineFeatureFlag(response);
   } catch (error) {
-    console.warn('[VaccineFeature] 开关拉不到，按「关」处理：', error);
-    return { ...VACCINE_FEATURE_FAILSAFE };
+    console.warn('[VaccineFeature] 开关拉不到，保留书签并提示重试：', error);
+    return vaccineFeatureFailed('暂时没连上开关服务，请重试');
   }
 }
 
 /**
  * 按开关过滤书签（纯函数）。
  *
- * 关掉时**只**去掉疫苗那一个：其余书签一个不少、顺序也不变 ✓
- * （老板要的是"能关掉疫苗板块"，不是"借着关板块把页面改一遍" ✗）
+ * 关掉时**只**去掉疫苗那一个；请求失败时**保留**（页面给重试）。
+ * 其余书签一个不少、顺序也不变 ✓
  */
 export function resolveVisibleHealthTabs<T extends { key: string }>(
   tabs: readonly T[],
   flag: VaccineFeatureFlag,
 ): T[] {
-  if (flag.enabled) {
+  if (flag.enabled || flag.failed) {
     return [...tabs];
   }
   return tabs.filter((tab) => tab.key !== VACCINE_TAB_KEY);
@@ -134,5 +147,5 @@ export function shouldMountVaccineSection(
   activeTab: string,
   flag: VaccineFeatureFlag,
 ): boolean {
-  return flag.enabled && activeTab === VACCINE_TAB_KEY;
+  return flag.enabled && !flag.failed && activeTab === VACCINE_TAB_KEY;
 }

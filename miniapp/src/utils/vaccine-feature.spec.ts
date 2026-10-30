@@ -160,20 +160,21 @@ describe('疫苗开关 · 真的去问后端（接口失败 = 关）', () => {
     expect(uniMock.showToast).not.toHaveBeenCalled()
   })
 
-  it('🔴 请求失败 → 按**关**处理（宁可少一个功能，也不要给错建议）', async () => {
+  it('🔴 请求失败 → 保留书签但不挂载板块，并给重试提示', async () => {
     uniMock.request.mockImplementation((options: any) => {
       options.fail({ errMsg: 'request:fail timeout' })
       return Promise.resolve()
     })
 
-    await expect(fetchVaccineFeatureFlag()).resolves.toEqual(
-      VACCINE_FEATURE_FAILSAFE,
-    )
+    const flag = await fetchVaccineFeatureFlag()
+    expect(flag.enabled).toBe(false)
+    expect(flag.failed).toBe(true)
+    expect(flag.notice).toContain('重试')
     expect(VACCINE_FEATURE_FAILSAFE.enabled).toBe(false)
     expect(uniMock.showToast).not.toHaveBeenCalled()
   })
 
-  it('后端挂了（500 / 业务码非 0）→ 也是关，而且不抛错', async () => {
+  it('后端挂了（500 / 业务码非 0）→ 也不抛错，保留书签并重试', async () => {
     uniMock.request.mockImplementation((options: any) => {
       options.success({
         statusCode: 500,
@@ -182,8 +183,8 @@ describe('疫苗开关 · 真的去问后端（接口失败 = 关）', () => {
       return Promise.resolve()
     })
 
-    await expect(fetchVaccineFeatureFlag()).resolves.toEqual(
-      VACCINE_FEATURE_FAILSAFE,
-    )
+    const flag = await fetchVaccineFeatureFlag()
+    expect(flag.enabled).toBe(false)
+    expect(flag.failed).toBe(true)
   })
 })

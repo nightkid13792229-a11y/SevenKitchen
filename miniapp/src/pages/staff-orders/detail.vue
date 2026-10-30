@@ -11,7 +11,7 @@
       <view class="status-header" :style="{ background: statusGradient }">
         <view class="status-info">
           <text class="status-text">{{ getStatusText(order) }}</text>
-          <text class="order-id-text">订单 #{{ orderId.slice(-8) }}</text>
+          <text class="order-id-text">订单 {{ displayOrderNo }}</text>
         </view>
       </view>
 
@@ -22,7 +22,7 @@
           <view class="info-item">
             <text class="info-label">订单号</text>
             <view class="info-value-with-action">
-              <text class="info-value">{{ order.id }}</text>
+              <text class="info-value">{{ displayOrderNo }}</text>
               <text class="action-link" @tap="copyOrderId">复制</text>
             </view>
           </view>
@@ -559,6 +559,8 @@ onMounted(() => {
 
 interface OrderDetail {
   id: string
+  /** 新订单号（SK20261030-003）；老数据可能为空 */
+  orderNo?: string | null
   status: string
   cancellationReason?: string | null
   refundStatus?: {
@@ -660,6 +662,17 @@ interface PackagePlanDraftRow {
 }
 
 const order = ref<OrderDetail | null>(null)
+/**
+ * 页面上显示/复制用的订单号（2026-10-30）。
+ *
+ * 以前这里显示的是 `order.id`（一串 uuid），顶部又显示 `id.slice(-8)`，
+ * 同一个页面两个"订单号"，而且都**不是**新订单号 SK20261030-003 那种格式，
+ * 员工照着念 / 复制给顾客全对不上。
+ * 老订单没有 orderNo（历史数据），只能退回 id，不能显示空白。
+ */
+const displayOrderNo = computed(
+  () => order.value?.orderNo || order.value?.id || '',
+)
 const loading = ref(false)
 const customerAddresses = ref<StaffOrderAddress[]>([])
 const customerDogs = ref<StaffOrderDog[]>([])
@@ -919,10 +932,18 @@ function shortOrderId(orderId: string): string {
   return orderId ? orderId.slice(-8).toUpperCase() : '-'
 }
 
+/**
+ * 弹窗里展示订单号也统一成新格式（2026-10-30）。
+ * 老订单没有 orderNo 时退回短 id —— 聊胜于无，但至少新单不会显示 uuid。
+ */
+function orderNoText(currentOrder: OrderDetail): string {
+  return currentOrder.orderNo || shortOrderId(currentOrder.id)
+}
+
 function getOrderConfirmContent(currentOrder: OrderDetail): string {
   return [
     '确认收到该订单款项？',
-    `订单：#${shortOrderId(currentOrder.id)}`,
+    `订单：${orderNoText(currentOrder)}`,
     `客户：${getOrderCustomerText(currentOrder)}`,
     `商品：${getOrderProductText(currentOrder)}`,
     `金额：¥${formatAmount(currentOrder.totalAmount || currentOrder.amountTotal)}`,
@@ -1111,9 +1132,10 @@ function copyPhone() {
 }
 
 function copyOrderId() {
-  if (!order.value?.id) return
+  const value = displayOrderNo.value
+  if (!value) return
   uni.setClipboardData({
-    data: order.value.id,
+    data: value,
     success: () => {
       uni.showToast({
         title: '订单号已复制',
@@ -1637,7 +1659,7 @@ async function saveRefundAdjustment() {
     content: [
       '该操作不可撤销。',
       '确认后会直接调用微信原路退款。',
-      `订单：${order.value.id.slice(-8)}`,
+      `订单：${displayOrderNo.value}`,
       `金额：¥${formatAmount(refundAmount)}`,
     ].join('\n'),
     confirmText: '确认退款',

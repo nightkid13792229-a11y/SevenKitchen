@@ -150,3 +150,33 @@ describe('staff order mobile operations', () => {
     expect(ordersApiSource).toContain('switchOrderDog');
   });
 });
+
+/**
+ * 2026-10-30：页面改名 + 订单号对齐新格式。
+ *
+ * 老板看到的两个问题：
+ *   ① 三类订单的详情页标题都叫「订单详情」，分不清是哪一类；
+ *   ② 页面里的"订单号"是 uuid（顶部又截了后 8 位），和新的 SK20261030-003 对不上。
+ */
+describe('staff order detail · 鲜食订单详情', () => {
+  const pagesJson = readFileSync(resolve(__dirname, '../pages.json'), 'utf8');
+
+  it('标题改成「鲜食订单详情」，和定制/补剂两个详情页区分开', () => {
+    expect(pagesJson).toContain('"navigationBarTitleText": "鲜食订单详情"');
+    expect(pagesJson).toContain('"navigationBarTitleText": "补剂订单详情"');
+    expect(pagesJson).toContain('"navigationBarTitleText": "定制订单详情"');
+  });
+
+  it('订单号显示 orderNo（新格式），老数据才退回 id', () => {
+    expect(detailSource).toContain("order.value?.orderNo || order.value?.id");
+    expect(detailSource).toContain('{{ displayOrderNo }}');
+    // 顶部和「订单信息」必须是同一个号，不能再一个 uuid 一个截断
+    // 顶部那行以前写的是「订单 #xxxx」（uuid 后 8 位），现在不能再用这种写法
+    expect(detailSource).not.toContain('订单 #{{ orderId.slice(-8) }}');
+    expect(detailSource).not.toContain('{{ order.id }}');
+  });
+
+  it('复制按钮复制的是页面上显示的那个号', () => {
+    expect(detailSource).toContain('const value = displayOrderNo.value');
+  });
+});

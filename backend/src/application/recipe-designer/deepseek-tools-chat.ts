@@ -14,6 +14,11 @@ export interface DeepSeekToolCall {
 export interface DeepSeekToolsMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content?: string | null;
+  /**
+   * 思考模式必须把上一轮 assistant 的 reasoning_content 原样带回。
+   * 取数那一轮关闭思考时没有该字段，回传空串即可让下一轮开启思考。
+   */
+  reasoning_content?: string | null;
   tool_calls?: DeepSeekToolCall[];
   tool_call_id?: string;
 }

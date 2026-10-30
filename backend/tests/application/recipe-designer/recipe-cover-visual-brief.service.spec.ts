@@ -140,7 +140,7 @@ describe('RecipeCoverVisualBriefService · 工具取食材', () => {
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: expect.any(String) },
-          { role: 'assistant', content: null, tool_calls: [toolCall] },
+          { role: 'assistant', content: null, reasoning_content: '', tool_calls: [toolCall] },
           {
             role: 'tool',
             tool_call_id: 'call-1',
@@ -216,6 +216,21 @@ describe('RecipeCoverVisualBriefService · 工具取食材', () => {
     );
 
     expect(prompt).toBe('鸡胸、牛肝、虾仁，放在一张木桌上。');
+  });
+
+  it('只取正文：去掉“中文封面提示词”标题和“负面提示词”整段', async () => {
+    mockToolFlow(
+      '**中文封面提示词：**\n\n一张顶尖杂志级的食物照片，鸡胸、牛肝、大米。\n\n**负面提示词：**\n熟食、文字、logo、水印。',
+    );
+    const { service } = createService();
+
+    const prompt = await service.build(
+      jest.fn().mockResolvedValue(ingredients),
+    );
+
+    expect(prompt).toBe('一张顶尖杂志级的食物照片，鸡胸、牛肝、大米。');
+    expect(prompt).not.toContain('负面提示词');
+    expect(prompt).not.toContain('**');
   });
 
   it('长提示词不再按字数截断', async () => {

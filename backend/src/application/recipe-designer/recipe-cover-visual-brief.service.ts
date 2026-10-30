@@ -136,7 +136,14 @@ export class RecipeCoverVisualBriefService {
 
     const messages: DeepSeekToolsMessage[] = [
       ...baseMessages,
-      { role: 'assistant', content: null, tool_calls: [toolCall] },
+      {
+        role: 'assistant',
+        content: null,
+        // 第二轮开启思考时，DeepSeek 要求把上一轮 assistant 的 reasoning_content 带回；
+        // 取数那一轮是关闭状态，回传空串即可。
+        reasoning_content: '',
+        tool_calls: [toolCall],
+      },
       {
         role: 'tool',
         tool_call_id: toolCall.id,
@@ -222,12 +229,30 @@ function cleanPreparation(value: string): string {
     .join('、');
 }
 
-/** 保留中文；只去代码块、提示词前缀、包裹引号，不按字数截断 */
+/**
+ * 保留中文；去掉代码块、标题、包裹引号，以及模型自己加的“负面提示词”整段。
+ * 不按字数截断。
+ */
 function sanitizePrompt(value: unknown): string {
-  return String(value ?? '')
+  let text = String(value ?? '')
     .replace(/^```[a-zA-Z]*\s*/, '')
     .replace(/```\s*$/, '')
-    .replace(/^(?:提示词|画面描述|Prompt)\s*[:：]\s*/i, '')
+    .trim();
+
+  // 模型偶尔会附一段“负面提示词”；只保留前面的正文
+  const negativeIndex = text.search(
+    /(?:^|\n)\s*(?:\*\*)?\s*(?:负面提示词|反向提示词|Negative prompt)\s*[:：]/i,
+  );
+  if (negativeIndex > 0) {
+    text = text.slice(0, negativeIndex);
+  }
+
+  return text
+    .replace(
+      /^[^\n]{0,40}?(?:中文封面提示词|封面提示词|画面描述|提示词|Prompt)\s*[:：]\s*(?:\*\*)?\s*/i,
+      '',
+    )
+    .replace(/\*\*/g, '')
     .replace(/^["'“”‘’]+/, '')
     .replace(/["'“”‘’]+$/, '')
     .replace(/\s+/g, ' ')

@@ -14,6 +14,10 @@ const dogPage = readFileSync(
   resolve(__dirname, 'staff-dog-profile/index.vue'),
   'utf8',
 )
+const supplementDetail = readFileSync(
+  resolve(__dirname, 'staff-supplement-orders/detail.vue'),
+  'utf8',
+)
 
 describe('staff order center · 三类订单一眼分开', () => {
   it('三类各一个颜色（卡片左侧色条 + 类型标签同色）', () => {
@@ -59,6 +63,35 @@ describe('staff order center · 售后单独筛', () => {
   it('卡片上标出未完结售后和赠送单（¥0 不会被当成价格出错）', () => {
     expect(orderCenter).toContain('item.hasOpenAftersale')
     expect(orderCenter).toContain('item.isGift')
+  })
+
+  it('★ 已结束的售后也要标出来（退款成功后订单会变成「已取消」）', () => {
+    // 有文案就显示，不再只看 hasOpenAftersale
+    expect(orderCenter).toContain('v-if="item.aftersaleLabel"')
+    expect(orderCenter).toContain(':class="item.hasOpenAftersale ? \'aftersale\' : \'aftersale-closed\'"')
+    expect(orderCenter).toContain('.mini-tag.aftersale-closed')
+  })
+})
+
+describe('staff order center · 补剂订单详情里的售后记录', () => {
+  it('★ 补剂订单详情列出这单的全部售后（诉求 / 原因 / 补发单）', () => {
+    expect(supplementDetail).toContain('售后记录')
+    expect(supplementDetail).toContain('order.aftersaleCases')
+    expect(supplementDetail).toContain('requestedReason')
+    expect(supplementDetail).toContain('reshipOrderNo')
+    expect(supplementDetail).toContain('aftersaleTypeText')
+  })
+
+  it('★ 售后状态用跟后台一致的说法，进行中才高亮', () => {
+    expect(supplementDetail).toContain("RESOLVED: '已解决'")
+    expect(supplementDetail).toContain("REJECTED: '已驳回'")
+    expect(supplementDetail).toContain("CANCELLED: '已撤回'")
+    expect(supplementDetail).toContain("? 'is-open' : 'is-closed'")
+  })
+
+  it('★ 员工端不展示退款金额（后端已脱敏，前端也别画出来）', () => {
+    expect(supplementDetail).not.toContain('record.refundAmount')
+    expect(supplementDetail).not.toContain('refundOutNo')
   })
 })
 

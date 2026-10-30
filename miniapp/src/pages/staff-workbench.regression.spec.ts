@@ -41,14 +41,15 @@ describe('staff workbench compact icon grid', () => {
     const moduleConfig = source.match(/const workbenchModules[\s\S]*?\n\]\)/)?.[0] || ''
 
     // 2026-10-21：鲜食 / 定制 / 补剂收口到「订单中心」一个入口；
-    // 补剂侧再拆出「分装备料」与「补剂售后」两个现场高频动作。
+    // 补剂侧再拆出「分装备料」这个现场高频动作。
     // 旧的「订单管理」「补剂订单」两个并列入口随之撤掉。
+    // 2026-10-30：补剂售后也收进订单中心（勾「只看售后」+ 订单详情的售后记录），
+    // 工作台从 10 个格子回到 9 个，正好三行。
     expect([...moduleConfig.matchAll(/title: '([^']+)'/g)].map((match) => match[1])).toEqual([
       '采购管理',
       '生产管理',
       '订单中心',
       '分装备料',
-      '补剂售后',
       '客户与狗狗',
       '库存管理',
       '食谱管理',
@@ -89,6 +90,25 @@ describe('staff workbench compact icon grid', () => {
     expect(subPackage.pages.map((page: { path: string }) => page.path)).toEqual(
       expect.arrayContaining(['index', 'detail']),
     )
+  })
+
+  it('★ 补剂售后不再单独占格子：页面和路由一起撤掉，售后统一从订单中心看', () => {
+    const pagesConfig = JSON.parse(
+      readFileSync(resolve(__dirname, '../pages.json'), 'utf8'),
+    )
+    const moduleConfig = source.match(/const workbenchModules[\s\S]*?\n\]\)/)?.[0] || ''
+
+    expect(moduleConfig).not.toContain('supplementAftersales')
+    expect(moduleConfig).not.toContain('补剂售后')
+    expect(source).not.toContain('/pages/staff-supplement-aftersales')
+
+    // 页面文件也必须一起删掉，别留一个没有入口的死页面
+    expect(
+      existsSync(resolve(__dirname, 'staff-supplement-aftersales/index.vue')),
+    ).toBe(false)
+    expect(
+      pagesConfig.pages.map((page: { path: string }) => page.path),
+    ).not.toContain('pages/staff-supplement-aftersales/index')
   })
 
   it('uses bundled image assets instead of the retired header and module UI', () => {

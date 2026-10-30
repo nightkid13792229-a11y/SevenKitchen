@@ -75,6 +75,7 @@ describe('SupplementOrderService', () => {
       findMany: jest.fn(),
       count: jest.fn(),
     },
+    aftersaleCase: { findMany: jest.fn() },
     orderSequence: { upsert: jest.fn() },
     $transaction: jest.fn(),
   } as any;
@@ -169,6 +170,7 @@ describe('SupplementOrderService', () => {
     );
     mockPrismaService.supplementOrder.findMany.mockResolvedValue([]);
     mockPrismaService.supplementOrder.count.mockResolvedValue(0);
+    mockPrismaService.aftersaleCase.findMany.mockResolvedValue([]);
     mockShippingService.calculateShippingFeePreview.mockResolvedValue({
       amountShipping: 8,
       templateId: 'tpl',
@@ -475,6 +477,93 @@ describe('SupplementOrderService', () => {
       expect(mockPrismaService.supplementOrder.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ skip: 0, take: 100 }),
       );
+    });
+
+    it('★ 订单详情带出这单的全部售后记录（含已结束的）', async () => {
+      await service.createOrder('user-1', {
+        addressId: 'addr-1',
+        lines: [{ ingredientId: KELP_ID, amount: 10 }],
+      });
+      mockPrismaService.aftersaleCase.findMany.mockResolvedValue([
+        {
+          id: 'case-2',
+          caseNo: 'AS20261030002',
+          status: 'PROCESSING',
+          requestType: 'RESHIP',
+          requestedReason: '袋子破了',
+          resolutionType: null,
+          reshipOrderNo: null,
+          createdAt: new Date('2026-10-30T03:00:00Z'),
+          refundAmount: null,
+        },
+        {
+          id: 'case-1',
+          caseNo: 'AS20261030001',
+          status: 'RESOLVED',
+          requestType: 'REFUND',
+          requestedReason: '不想要了',
+          resolutionType: 'REFUND',
+          reshipOrderNo: null,
+          createdAt: new Date('2026-10-29T03:00:00Z'),
+          refundAmount: 50,
+        },
+      ]);
+
+      const view = await service.getOrderById('order-uuid-1', {
+        role: 'STAFF',
+      });
+
+      expect(view.aftersaleCases?.map((item) => item.caseNo)).toEqual([
+        'AS20261030002',
+        'AS20261030001',
+      ]);
+      expect(view.aftersaleCases?.[1].requestedReason).toBe('不想要了');
+    });
+
+    it('★ 员工端在售后记录里看不到退款金额，管理员能看', async () => {
+      await service.createOrder('user-1', {
+        addressId: 'addr-1',
+        lines: [{ ingredientId: KELP_ID, amount: 10 }],
+      });
+      mockPrismaService.aftersaleCase.findMany.mockResolvedValue([
+        {
+          id: 'case-1',
+          caseNo: 'AS20261030001',
+          status: 'RESOLVED',
+          requestType: 'REFUND',
+          requestedReason: '不想要了',
+          resolutionType: 'REFUND',
+          reshipOrderNo: null,
+          createdAt: new Date('2026-10-29T03:00:00Z'),
+          refundAmount: 50,
+        },
+      ]);
+
+      const staffView = await service.getOrderById('order-uuid-1', {
+        role: 'STAFF',
+      });
+      const adminView = await service.getOrderById('order-uuid-1', {
+        role: 'ADMIN',
+      });
+
+      expect(staffView.aftersaleCases?.[0].refundAmount).toBeNull();
+      expect(adminView.aftersaleCases?.[0].refundAmount).toBe(50);
+    });
+
+    it('★ 没有售后单表时订单详情照常打开（只是没有售后区块）', async () => {
+      await service.createOrder('user-1', {
+        addressId: 'addr-1',
+        lines: [{ ingredientId: KELP_ID, amount: 10 }],
+      });
+      mockPrismaService.aftersaleCase.findMany.mockRejectedValue(
+        new Error('relation "aftersale_case" does not exist'),
+      );
+
+      const view = await service.getOrderById('order-uuid-1', {
+        role: 'STAFF',
+      });
+
+      expect(view.aftersaleCases).toEqual([]);
     });
   });
 });

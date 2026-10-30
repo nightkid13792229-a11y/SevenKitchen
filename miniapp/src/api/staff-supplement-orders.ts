@@ -74,7 +74,31 @@ export interface StaffSupplementOrder {
   carrierCode: string | null;
   shippedAt: string | null;
   createdAt: string;
+  /**
+   * 这单的全部售后记录（新→旧，2026-10-30）。
+   *
+   * 补剂售后从工作台收口到订单中心后，卡片上只能看到「有没有售后」；
+   * 诉求、原因、补发单号这些细节都靠这里。员工端后端已脱敏，
+   * refundAmount 恒为 null，前端不要展示金额。
+   */
+  aftersaleCases?: StaffSupplementAftersaleCase[];
   items?: StaffSupplementOrderItem[];
+}
+
+/** 订单详情里的一条售后记录（员工视角：只看流程，不看钱） */
+export interface StaffSupplementAftersaleCase {
+  id: string;
+  caseNo: string;
+  /** PENDING / PROCESSING / RESOLVED / REJECTED / CANCELLED */
+  status: string;
+  /** REFUND / RESHIP / OTHER */
+  requestType: string;
+  requestedReason: string;
+  resolutionType: string | null;
+  reshipOrderNo: string | null;
+  createdAt: string;
+  /** 员工端恒为 null */
+  refundAmount: number | null;
 }
 
 export interface StaffSupplementOrderPage {

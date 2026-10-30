@@ -107,12 +107,62 @@ describe('OrderCenterService', () => {
 
   it('补剂有未完结退款 → 标记退款中', async () => {
     prisma.aftersaleCase.findMany.mockResolvedValue([
-      { orderId: 's1', requestType: 'REFUND' },
+      { orderId: 's1', status: 'PROCESSING', requestType: 'REFUND' },
     ]);
     const result = await service.list({ pageSize: 20 });
     const supplement = result.items.find((item) => item.type === 'SUPPLEMENT');
     expect(supplement?.hasOpenAftersale).toBe(true);
     expect(supplement?.aftersaleLabel).toBe('退款中');
+  });
+
+  it('★ 已结束的售后也要在订单中心看得见（退款成功会把订单改成已取消）', async () => {
+    prisma.supplementOrder.findMany.mockResolvedValue([
+      supplementRow({ status: 'CANCELLED' }),
+    ]);
+    prisma.aftersaleCase.findMany.mockResolvedValue([
+      { orderId: 's1', status: 'RESOLVED', requestType: 'REFUND' },
+    ]);
+
+    const result = await service.list({
+      type: 'SUPPLEMENT',
+      pageSize: 20,
+      aftersale: true,
+    });
+
+    const supplement = result.items.find((item) => item.type === 'SUPPLEMENT');
+    expect(supplement).toBeTruthy();
+    // 已结束不再是「退款中」，但要让员工知道这单退过款
+    expect(supplement?.hasOpenAftersale).toBe(false);
+    expect(supplement?.aftersaleLabel).toBe('售后已解决');
+
+    // 筛选条件用的是「所有提过售后的订单」，不再只看未完结的
+    const where = prisma.supplementOrder.findMany.mock.calls[0][0].where;
+    expect(where.id).toEqual({ in: ['s1'] });
+  });
+
+  it('★ 已驳回的售后带灰标，且不会因为订单本身正常就消失', async () => {
+    prisma.aftersaleCase.findMany.mockResolvedValue([
+      { orderId: 's1', status: 'REJECTED', requestType: 'RESHIP' },
+    ]);
+
+    const result = await service.list({ type: 'SUPPLEMENT', pageSize: 20 });
+
+    const supplement = result.items.find((item) => item.type === 'SUPPLEMENT');
+    expect(supplement?.hasOpenAftersale).toBe(false);
+    expect(supplement?.aftersaleLabel).toBe('售后已驳回');
+  });
+
+  it('★ 一单多条售后时，卡片只取最新那条', async () => {
+    // 查询按 createdAt 倒序，所以数组第一条就是最新
+    prisma.aftersaleCase.findMany.mockResolvedValue([
+      { orderId: 's1', status: 'PROCESSING', requestType: 'RESHIP' },
+      { orderId: 's1', status: 'REJECTED', requestType: 'REFUND' },
+    ]);
+
+    const result = await service.list({ type: 'SUPPLEMENT', pageSize: 20 });
+
+    const supplement = result.items.find((item) => item.type === 'SUPPLEMENT');
+    expect(supplement?.aftersaleLabel).toBe('售后中');
   });
 
   it('按顾客姓名搜索时把用户 ID 放进 OR，而不是和订单号 AND', async () => {

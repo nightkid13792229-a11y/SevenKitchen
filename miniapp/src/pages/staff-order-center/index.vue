@@ -67,8 +67,15 @@
         </view>
 
         <view class="tags-row">
-          <text v-if="item.hasOpenAftersale" class="mini-tag aftersale">
-            {{ item.aftersaleLabel || '售后中' }}
+          <!-- 售后标签（2026-10-30）：进行中橙色、已结束灰色。
+               已结束的也要标出来——退款成功后订单会变成「已取消」，
+               不标的话员工根本看不出这单退过款。 -->
+          <text
+            v-if="item.aftersaleLabel"
+            class="mini-tag"
+            :class="item.hasOpenAftersale ? 'aftersale' : 'aftersale-closed'"
+          >
+            {{ item.aftersaleLabel }}
           </text>
           <text v-if="item.isGift" class="mini-tag gift">赠送</text>
           <text v-if="item.subtypeLabel && item.type === 'FOOD'" class="mini-tag subtype">
@@ -114,7 +121,9 @@ interface OrderCenterItem {
   recipeName: string | null
   createdAt: string
   amountTotal: number | null
+  /** 是否有未完结的售后（待受理/处理中）：决定标签是橙色还是灰色 */
   hasOpenAftersale: boolean
+  /** 售后标签文案；空 = 这单从来没提过售后。已结束的也会出现（2026-10-30） */
   aftersaleLabel: string | null
   isGift: boolean
   subtypeLabel: string | null
@@ -353,6 +362,8 @@ onMounted(() => load())
 .tags-row { display: flex; flex-wrap: wrap; margin-top: 10rpx; }
 .mini-tag { margin: 0 10rpx 6rpx 0; padding: 3rpx 10rpx; border-radius: 6rpx; font-size: 20rpx; }
 .mini-tag.aftersale { background: #fdf6ec; color: #b88230; }
+/* 已结束的售后：灰底，跟"还在处理"一眼分开，别抢注意力 */
+.mini-tag.aftersale-closed { background: #f2f3f5; color: #909399; }
 .mini-tag.gift { background: #eaf5ec; color: #2e7d4f; }
 .mini-tag.subtype { background: #f2f3f5; color: #606266; }
 

@@ -207,12 +207,6 @@
       }
     },
     {
-      "path": "pages/staff-supplement-aftersales/index",
-      "style": {
-        "navigationBarTitleText": "补剂售后"
-      }
-    },
-    {
       "path": "pages/recipe-designer/list",
       "style": {
         "navigationBarTitleText": "食谱设计器"

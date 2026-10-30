@@ -48,7 +48,13 @@ export interface OrderCenterItem {
   scheduledDate: string | null;
   shippedAt: string | null;
   completedAt: string | null;
+  /** 是否有**未完结**的售后（待受理 / 处理中）；有才标成橙色 */
   hasOpenAftersale: boolean;
+  /**
+   * 卡片上的售后文案，2026-10-30 起补剂也带「已结束」的：
+   * 退款中 / 售后中（进行中）· 售后已解决 / 售后已驳回 / 售后已撤回（已结束）。
+   * 为空 = 这单从来没提过售后。
+   */
   aftersaleLabel: string | null;
   /**
    * 这道订单的食谱名（2026-10-30）。
@@ -81,6 +87,25 @@ const GROUP_LABELS: Record<UnifiedStatusGroup, string> = {
   SHIPPED: '已发货',
   COMPLETED: '已完成',
   CANCELLED: '已取消',
+};
+
+/** 卡片标签用的售后摘要：一单取最新那条 */
+interface SupplementCaseBrief {
+  status: string;
+  requestType: string;
+}
+
+/**
+ * 已结束的售后在卡片上怎么说（2026-10-30）。
+ *
+ * 进行中的沿用原来的「退款中 / 售后中」，口径不动；
+ * 这里只补「已经结束」的写法 —— 以前这些单根本不出现在订单中心，
+ * 现在会带着灰标出现，员工一眼能分清是「还在处理」还是「早就结完了」。
+ */
+const CLOSED_AFTERSALE_LABELS: Record<string, string> = {
+  RESOLVED: '售后已解决',
+  REJECTED: '售后已驳回',
+  CANCELLED: '售后已撤回',
 };
 
 /**
@@ -177,9 +202,20 @@ export class OrderCenterService {
     const onlyGift = query.gift === true;
     const wantRows = (type: OrderCenterType) =>
       onlyGift ? type === 'CUSTOM_RECIPE' : want(type);
-    const supplementOpenIds = await this.resolveSupplementOpenCaseIds(
-      query.aftersale,
-    );
+    /**
+     * 补剂售后收口到订单中心（2026-10-30）。
+     *
+     * 以前这里只取「待受理 / 处理中」的售后单，于是**已经处理完的售后**
+     * 在订单中心里彻底看不见 —— 退款成功还会把订单改成「已取消」，
+     * 卡片上连「这单退过款」都没有。补剂售后独立页撤掉之后，
+     * 订单中心就是员工唯一能看到售后的地方，所以口径改成：
+     * **这单提过售后就会出现**，再用卡片标签区分「进行中 / 已结束」。
+     *
+     * 一单可能有多条售后（被驳回后重新申请、退款后又补发），
+     * 卡片上取最新那条；完整历史在补剂订单详情的「售后记录」里。
+     */
+    const supplementCaseIndex = await this.resolveSupplementCaseIndex();
+    const supplementAftersaleIds = Array.from(supplementCaseIndex.keys());
     /**
      * 定制的售后走的是**自己那张表**（`custom_recipe_aftersale`：改稿/退款），
      * 不是鲜食的订单状态、也不是补剂的售后单。
@@ -323,8 +359,8 @@ export class OrderCenterService {
               ...(query.aftersale
                 ? {
                     id: {
-                      in: supplementOpenIds.length
-                        ? supplementOpenIds
+                      in: supplementAftersaleIds.length
+                        ? supplementAftersaleIds
                         : ['__none__'],
                     },
                   }
@@ -371,7 +407,7 @@ export class OrderCenterService {
             where: this.supplementCountWhere(
               query,
               keywordUserIds,
-              supplementOpenIds,
+              supplementAftersaleIds,
             ),
           })
         : 0,
@@ -392,28 +428,13 @@ export class OrderCenterService {
       : [];
     const userMap = new Map(users.map((user) => [user.id, user]));
 
-    const supplementIds = supplementRows.map((row) => row.id);
-    const openCaseRows = supplementIds.length
-      ? await this.prisma.aftersaleCase.findMany({
-          where: {
-            orderType: 'SUPPLEMENT',
-            orderId: { in: supplementIds },
-            status: { in: ['PENDING', 'PROCESSING'] },
-          },
-          select: { orderId: true, requestType: true },
-        })
-      : [];
-    const openCaseMap = new Map(
-      openCaseRows.map((row) => [row.orderId, row.requestType]),
-    );
-
     const items: OrderCenterItem[] = [
       ...foodRows.map((row) => this.mapFood(row, userMap)),
       ...customRows.map((row) =>
         this.mapCustom(row, userMap, customOpenCaseMap),
       ),
       ...supplementRows.map((row) =>
-        this.mapSupplement(row, userMap, openCaseMap),
+        this.mapSupplement(row, userMap, supplementCaseIndex),
       ),
     ]
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -493,18 +514,35 @@ export class OrderCenterService {
     return users.map((user) => user.id);
   }
 
-  private async resolveSupplementOpenCaseIds(
-    onlyOpen: boolean | undefined,
-  ): Promise<string[]> {
-    if (!onlyOpen) return [];
+  /**
+   * 补剂售后索引：orderId → 最新那条售后单（状态 + 诉求）。
+   *
+   * 取**全状态**，不只未完结的：补剂售后独立页撤掉后，
+   * 「只看售后」是员工查历史退过款 / 补过发的唯一入口。
+   * 一单可能有多条（驳回后重提），按创建时间倒序，只留最新那条做卡片标签；
+   * 完整历史在补剂订单详情的「售后记录」里看。
+   *
+   * 代价是每次列表都扫一遍补剂售后单（按 orderType 过滤）。
+   * 目前售后单是个位数量级；哪天到几千条，再改成只查当前页的订单。
+   */
+  private async resolveSupplementCaseIndex(): Promise<
+    Map<string, SupplementCaseBrief>
+  > {
     const rows = await this.prisma.aftersaleCase.findMany({
-      where: {
-        orderType: 'SUPPLEMENT',
-        status: { in: ['PENDING', 'PROCESSING'] },
-      },
-      select: { orderId: true },
+      where: { orderType: 'SUPPLEMENT' },
+      orderBy: { createdAt: 'desc' },
+      select: { orderId: true, status: true, requestType: true },
     });
-    return Array.from(new Set(rows.map((row) => row.orderId)));
+    const index = new Map<string, SupplementCaseBrief>();
+    for (const row of rows) {
+      if (!index.has(row.orderId)) {
+        index.set(row.orderId, {
+          status: row.status,
+          requestType: row.requestType,
+        });
+      }
+    }
+    return index;
   }
 
   /**
@@ -598,10 +636,12 @@ export class OrderCenterService {
   private mapSupplement(
     row: any,
     users: Map<string, any>,
-    openCaseMap: Map<string, string>,
+    caseIndex: Map<string, SupplementCaseBrief>,
   ): OrderCenterItem {
     const group = this.supplementGroup(row.status, row.shippedAt);
-    const openType = openCaseMap.get(row.id);
+    const caseInfo = caseIndex.get(row.id);
+    const caseOpen =
+      caseInfo?.status === 'PENDING' || caseInfo?.status === 'PROCESSING';
     return this.baseItem({
       type: 'SUPPLEMENT',
       id: row.id,
@@ -616,11 +656,13 @@ export class OrderCenterService {
         ? TimezoneUtil.shanghaiDateKey(row.packingDate)
         : null,
       amount: Number(row.amountTotal ?? 0),
-      hasOpenAftersale: Boolean(openType) || row.status === 'AFTERSALE',
-      aftersaleLabel: openType
-        ? openType === 'REFUND'
-          ? '退款中'
-          : '售后中'
+      hasOpenAftersale: caseOpen || row.status === 'AFTERSALE',
+      aftersaleLabel: caseInfo
+        ? caseOpen
+          ? caseInfo.requestType === 'REFUND'
+            ? '退款中'
+            : '售后中'
+          : (CLOSED_AFTERSALE_LABELS[caseInfo.status] ?? '售后已结束')
         : row.status === 'AFTERSALE'
           ? '售后中'
           : null,

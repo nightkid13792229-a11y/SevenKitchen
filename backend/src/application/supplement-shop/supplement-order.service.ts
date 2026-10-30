@@ -206,7 +206,30 @@ export interface SupplementOrderView {
   carrierCode: string | null;
   shippedAt: string | null;
   createdAt: string;
+  /**
+   * 这单的全部售后记录（2026-10-30，新→旧）。
+   *
+   * 为什么放在订单详情里：补剂售后独立页撤掉后，订单中心卡片只知道
+   * 「这单有没有售后、到哪一步」，具体的诉求 / 原因 / 补发单号，
+   * 以及「一单提过两条售后」这种情况，都靠这里展开。
+   * 员工端脱敏：不给退款金额。
+   */
+  aftersaleCases?: SupplementOrderAftersaleCaseView[];
   items: SupplementOrderItemView[];
+}
+
+/** 订单详情里的一条售后记录（员工只看流程，不看钱） */
+export interface SupplementOrderAftersaleCaseView {
+  id: string;
+  caseNo: string;
+  status: string;
+  requestType: string;
+  requestedReason: string;
+  resolutionType: string | null;
+  reshipOrderNo: string | null;
+  createdAt: string;
+  /** 仅管理员可见；员工端为 null */
+  refundAmount: number | null;
 }
 
 export interface SupplementLabel {
@@ -547,7 +570,62 @@ export class SupplementOrderService {
     const [view] = await this.decorateOpenAftersale([
       this.toOrderView(order, actor.role === 'STAFF'),
     ]);
+    view.aftersaleCases = await this.loadAftersaleCases(
+      orderId,
+      actor.role === 'STAFF',
+    );
     return view;
+  }
+
+  /**
+   * 这单的全部售后记录（2026-10-30）。
+   *
+   * 和 `decorateOpenAftersale` 一样用可选链兜底：旧库/测试环境没有
+   * `aftersale_case` 表时，订单详情照常打开，只是没有售后区块，
+   * 不能因为查售后把整页拖黑。
+   * 员工端不给退款金额 —— 和售后列表的口径保持一致。
+   */
+  private async loadAftersaleCases(
+    orderId: string,
+    redact: boolean,
+  ): Promise<SupplementOrderAftersaleCaseView[]> {
+    try {
+      const rows = await (this.prisma as any).aftersaleCase?.findMany?.({
+        where: { orderType: 'SUPPLEMENT', orderId },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          caseNo: true,
+          status: true,
+          requestType: true,
+          requestedReason: true,
+          resolutionType: true,
+          reshipOrderNo: true,
+          createdAt: true,
+          refundAmount: true,
+        },
+      });
+      if (!Array.isArray(rows)) return [];
+      return rows.map((row: any) => ({
+        id: row.id,
+        caseNo: row.caseNo,
+        status: row.status,
+        requestType: row.requestType,
+        requestedReason: row.requestedReason ?? '',
+        resolutionType: row.resolutionType ?? null,
+        reshipOrderNo: row.reshipOrderNo ?? null,
+        createdAt:
+          row.createdAt instanceof Date
+            ? row.createdAt.toISOString()
+            : String(row.createdAt ?? ''),
+        refundAmount:
+          redact || row.refundAmount === null || row.refundAmount === undefined
+            ? null
+            : Number(row.refundAmount),
+      }));
+    } catch {
+      return [];
+    }
   }
 
   // ---------------- 后台：收款 / 分装 / 发货 / 售后 ----------------

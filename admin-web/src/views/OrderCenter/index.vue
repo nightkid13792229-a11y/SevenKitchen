@@ -82,7 +82,9 @@
           />
         </el-form-item>
         <el-form-item>
-          <el-checkbox v-model="query.aftersale">只看售后中</el-checkbox>
+          <!-- 2026-10-30：补剂售后改成「提过就算」，已解决/已驳回的也会出现，
+               所以文案不能再写「只看售后中」 -->
+          <el-checkbox v-model="query.aftersale">只看有售后</el-checkbox>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">查询</el-button>

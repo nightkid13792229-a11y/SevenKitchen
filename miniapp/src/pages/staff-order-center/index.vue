@@ -60,9 +60,10 @@
           <text class="status">{{ item.statusLabel }}</text>
         </view>
 
-        <view class="order-main">
-          <text class="customer">{{ item.customerName || '顾客' }}</text>
-          <text v-if="item.customerPhone" class="phone">{{ item.customerPhone }}</text>
+        <!-- 主行显示食谱名，不显示顾客名/手机号（老板 2026-10-30 定的口径）：
+             员工是按"要做什么菜"干活的；没有绑定食谱（多数补剂单）就整行不显示 -->
+        <view v-if="item.recipeName" class="order-main">
+          <text class="recipe-name">{{ item.recipeName }}</text>
         </view>
 
         <view class="tags-row">
@@ -109,8 +110,8 @@ interface OrderCenterItem {
   orderNo: string
   type: 'FOOD' | 'CUSTOM_RECIPE' | 'SUPPLEMENT'
   statusLabel: string
-  customerName: string | null
-  customerPhone: string | null
+  /** 卡片主行显示的食谱名；空 = 这单没绑定食谱（多数补剂单） */
+  recipeName: string | null
   createdAt: string
   amountTotal: number | null
   hasOpenAftersale: boolean
@@ -347,8 +348,7 @@ onMounted(() => load())
 .status { flex: none; margin-left: 14rpx; color: #b88230; font-size: 23rpx; }
 
 .order-main { display: flex; align-items: baseline; margin-top: 16rpx; }
-.customer { font-size: 29rpx; font-weight: 600; color: #1e3a2f; }
-.phone { margin-left: 14rpx; color: #909399; font-size: 23rpx; }
+.recipe-name { font-size: 29rpx; font-weight: 600; color: #1e3a2f; }
 
 .tags-row { display: flex; flex-wrap: wrap; margin-top: 10rpx; }
 .mini-tag { margin: 0 10rpx 6rpx 0; padding: 3rpx 10rpx; border-radius: 6rpx; font-size: 20rpx; }

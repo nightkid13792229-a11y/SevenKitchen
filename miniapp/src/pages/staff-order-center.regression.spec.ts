@@ -83,6 +83,13 @@ describe('staff order center · 食谱 / 狗狗入口', () => {
     expect(orderCenter).toContain('@tap.stop="openRecipe(item)"')
     expect(orderCenter).toContain('@tap.stop="openDog(item)"')
   })
+
+  it('★ 卡片主行显示食谱名，不再显示顾客名和手机号', () => {
+    expect(orderCenter).toContain('v-if="item.recipeName"')
+    expect(orderCenter).toContain('{{ item.recipeName }}')
+    expect(orderCenter).not.toContain('item.customerName')
+    expect(orderCenter).not.toContain('item.customerPhone')
+  })
 })
 
 describe('staff order center · 两个只读页', () => {
@@ -105,5 +112,13 @@ describe('staff order center · 两个只读页', () => {
 
   it('★ 狗狗档案页关掉 AI 分析（否则要等十几秒，15 秒就超时）', () => {
     expect(dogPage).toContain("includeAnalysis: '0'")
+  })
+
+  it('★ 狗狗档案页去掉健康标签和饮食板块，补上每日餐数与活动量', () => {
+    expect(dogPage).not.toContain('健康标签')
+    expect(dogPage).not.toContain('爱吃')
+    expect(dogPage).not.toContain('不吃')
+    expect(dogPage).toContain('dog.mealsPerDay')
+    expect(dogPage).toContain('dog.activityLevelLabel')
   })
 })

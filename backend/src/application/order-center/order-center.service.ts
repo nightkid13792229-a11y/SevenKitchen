@@ -51,6 +51,14 @@ export interface OrderCenterItem {
   hasOpenAftersale: boolean;
   aftersaleLabel: string | null;
   /**
+   * 这道订单的食谱名（2026-10-30）。
+   *
+   * 老板要求列表卡片**不显示顾客名和手机号**，改显示食谱名 —— 员工是按
+   * "要做什么菜"干活的，不是按"谁买的"。
+   * 拿不到就返回 null（补剂单大多没有绑定食谱），前端整行不显示，不要占位。
+   */
+  recipeName: string | null;
+  /**
    * 员工端「看食谱 / 看狗狗」的跳转依据（2026-10-30）。
    *
    * 为什么放在读模型里：员工在列表上就要能一键进详情，
@@ -284,6 +292,8 @@ export class OrderCenterService {
               isGift: true,
               /** 交付后的食谱（未交付为 null）：员工端「看食谱」靠它 */
               recipeId: true,
+              /** 卡片上要显示的是食谱名，不是顾客名 */
+              recipe: { select: { name: true } },
               dogId: true,
             },
             orderBy: { createdAt: 'desc' },
@@ -334,6 +344,8 @@ export class OrderCenterService {
               shippingAddressSnapshot: true,
               /** 补剂单可能从食谱/制作单带过来；为空就是纯补剂单，前端不显示入口 */
               recipeId: true,
+              /** 补剂单自带了食谱名快照，不用再连表 */
+              recipeName: true,
               dogId: true,
             },
             orderBy: { createdAt: 'desc' },
@@ -540,6 +552,8 @@ export class OrderCenterService {
       itemId: firstItem?.id ?? null,
       /** 注意：鲜食要看的是 `recipeSnapshot`（下单那一版），不是这条 recipeId */
       recipeId: snapshot?.id ?? null,
+      /** 卡片主行显示的是食谱名（老板 2026-10-30 定的口径） */
+      recipeName: snapshot?.name ?? null,
       dogId: row.dogId ?? firstItem?.dogId ?? null,
     });
   }
@@ -576,6 +590,7 @@ export class OrderCenterService {
        * 所以这里只可能是**交付后**的食谱；未交付为 null，前端不显示入口。
        */
       recipeId: row.recipeId ?? null,
+      recipeName: row.recipe?.name ?? null,
       dogId: row.dogId ?? null,
     });
   }
@@ -611,6 +626,8 @@ export class OrderCenterService {
           : null,
       itemId: null,
       recipeId: row.recipeId ?? null,
+      /** 补剂单没有绑定食谱时这里是空，卡片上那行直接不显示 */
+      recipeName: row.recipeName ?? null,
       dogId: row.dogId ?? null,
     });
   }
@@ -632,6 +649,7 @@ export class OrderCenterService {
     isGift?: boolean;
     itemId: string | null;
     recipeId: string | null;
+    recipeName: string | null;
     dogId: string | null;
   }): OrderCenterItem {
     const user = input.users.get(input.userId);
@@ -668,6 +686,7 @@ export class OrderCenterService {
       aftersaleLabel: input.aftersaleLabel,
       itemId: input.itemId,
       recipeId: input.recipeId,
+      recipeName: input.recipeName,
       dogId: input.dogId,
     };
   }

@@ -25,14 +25,9 @@
           <text class="fact">{{ dog.ageText || '—' }}</text>
           <text class="fact">{{ formatNumber(dog.currentWeightKg) }}kg</text>
           <text class="fact">BCS {{ formatNumber(dog.bcsScore) }}</text>
-        </view>
-      </view>
-
-      <!-- 健康标签 -->
-      <view v-if="effectiveTags.length" class="card">
-        <text class="card-title">健康标签</text>
-        <view class="chips">
-          <text v-for="tag in effectiveTags" :key="tag" class="chip">{{ tag }}</text>
+          <!-- 每日餐数 / 活动量：算口粮的口径，员工在这里就该看得到（2026-10-30 补） -->
+          <text v-if="dog.mealsPerDay" class="fact">每天 {{ dog.mealsPerDay }} 餐</text>
+          <text v-if="dog.activityLevelLabel" class="fact">{{ dog.activityLevelLabel }}</text>
         </view>
       </view>
 
@@ -95,22 +90,7 @@
         </view>
       </view>
 
-      <!-- 吃这件事 -->
-      <view class="card">
-        <text class="card-title">饮食</text>
-        <view class="row">
-          <text class="label">爱吃</text>
-          <text class="value">{{ likedText }}</text>
-        </view>
-        <view class="row">
-          <text class="label">不吃</text>
-          <text class="value">{{ dislikedText }}</text>
-        </view>
-        <view class="row">
-          <text class="label">病史/备注</text>
-          <text class="value">{{ dog.medicalHistory || '—' }}</text>
-        </view>
-      </view>
+      <!-- 吃这件事：老板 2026-10-30 明确不要在这一页展示（饮食偏好在详情/后台看） -->
 
       <view class="foot">
         <text class="foot-text">
@@ -149,18 +129,6 @@ const recentCheckups = computed<any[]>(() =>
     ? overview.value.recentCheckups
     : [],
 )
-const effectiveTags = computed<string[]>(() =>
-  Array.isArray(overview.value?.effectiveTags) ? overview.value.effectiveTags : [],
-)
-
-const likedText = computed(() => {
-  const list = overview.value?.dietPreferences?.liked
-  return Array.isArray(list) && list.length ? list.join('、') : dog.value.preferredFoods || '—'
-})
-const dislikedText = computed(() => {
-  const list = overview.value?.dietPreferences?.disliked
-  return Array.isArray(list) && list.length ? list.join('、') : dog.value.pickyFoods || '—'
-})
 
 function formatNumber(value: any) {
   if (value === null || value === undefined || value === '') return '—'
@@ -240,8 +208,6 @@ onLoad((options: any) => {
 .card-title { font-size: 27rpx; font-weight: 600; color: #1e3a2f; }
 .card-note { color: #909399; font-size: 21rpx; }
 
-.chips { display: flex; flex-wrap: wrap; margin-top: 16rpx; }
-.chip { margin: 0 12rpx 12rpx 0; padding: 8rpx 18rpx; border-radius: 24rpx; background: #e8f1ec; color: #1e3a2f; font-size: 22rpx; }
 
 .record { padding: 16rpx 0; border-top: 1rpx solid #f2f3f5; }
 .record:first-of-type { border-top: none; }
@@ -251,10 +217,6 @@ onLoad((options: any) => {
 .record-body { display: block; margin-top: 8rpx; color: #606266; font-size: 23rpx; line-height: 1.6; }
 .record-tag { display: inline-block; margin-top: 10rpx; padding: 4rpx 12rpx; border-radius: 6rpx; background: #fdf6ec; color: #b88230; font-size: 20rpx; }
 
-.row { display: flex; justify-content: space-between; align-items: flex-start; padding: 12rpx 0; }
-.row + .row { border-top: 1rpx solid #f2f3f5; }
-.label { flex: none; color: #909399; font-size: 24rpx; }
-.value { margin-left: 24rpx; color: #303133; font-size: 25rpx; text-align: right; }
 
 .empty { padding: 28rpx 0; color: #909399; font-size: 24rpx; }
 .foot { padding: 16rpx 0 0; text-align: center; }

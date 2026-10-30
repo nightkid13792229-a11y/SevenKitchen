@@ -35,6 +35,7 @@ function customRow(overrides: any = {}) {
     cancelledAt: null,
     isGift: false,
     recipeId: null,
+    recipe: null,
     dogId: 'd1',
     ...overrides,
   };
@@ -187,6 +188,37 @@ describe('OrderCenterService', () => {
 
     expect(supplement?.recipeId).toBeNull();
     expect(supplement?.dogId).toBeNull();
+  });
+
+  it('★ 卡片主行显示食谱名：鲜食取快照名、补剂没绑食谱就为空', async () => {
+    prisma.supplementOrder.findMany.mockResolvedValue([
+      supplementRow({ recipeName: '关节养护' }),
+    ]);
+
+    const result = await service.list({ pageSize: 20 });
+    const food = result.items.find((item) => item.type === 'FOOD');
+    const supplement = result.items.find((item) => item.type === 'SUPPLEMENT');
+
+    expect(food?.recipeName).toBe('鸡肉餐');
+    expect(supplement?.recipeName).toBe('关节养护');
+
+    prisma.supplementOrder.findMany.mockResolvedValue([supplementRow()]);
+    const bare = await service.list({ pageSize: 20 });
+    expect(
+      bare.items.find((item) => item.type === 'SUPPLEMENT')?.recipeName,
+    ).toBeNull();
+  });
+
+  it('★ 定制单的食谱名来自交付的食谱，未交付为空', async () => {
+    prisma.customRecipeOrder.findMany.mockResolvedValue([
+      customRow({ recipeId: 'r9', recipe: { name: '低脂护心餐' } }),
+    ]);
+    prisma.customRecipeOrder.count.mockResolvedValue(1);
+
+    const result = await service.list({ pageSize: 20 });
+    const custom = result.items.find((item) => item.type === 'CUSTOM_RECIPE');
+
+    expect(custom?.recipeName).toBe('低脂护心餐');
   });
 
   it('★ 定制单交付前没有食谱可看，交付后才有', async () => {

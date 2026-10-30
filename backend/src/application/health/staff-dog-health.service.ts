@@ -15,6 +15,20 @@ import {
 } from '../../domain/recipe-designer/knowledge-base/tag-vocabulary';
 
 /**
+ * 活动量中文（与小程序顾客侧 `ACTIVITY_LEVEL_LABELS` 同一套说法）。
+ *
+ * 为什么不把这个映射丢给前端：员工端只读页不想为了五个词再复制一份；
+ * 而且两边口径必须一致，放在后端只有一处可改。
+ */
+const ACTIVITY_LEVEL_LABELS: Record<string, string> = {
+  RESTING: '休息',
+  LOW: '低活动',
+  NORMAL: '正常活动',
+  HIGH: '高活动',
+  WORKING: '工作犬',
+};
+
+/**
  * 营养师端 · 健康档案（2026-10-01，第八期）。
  *
  * ── 老板第 22–25 条 ────────────────────────────────────────
@@ -57,6 +71,12 @@ export interface StaffHealthOverview {
     ageText: string;
     currentWeightKg: number;
     bcsScore: number;
+    /** 每日餐数（2026-10-30）：算口粮要用，员工在档案页就该看到 */
+    mealsPerDay: number | null;
+    /** 活动量代码（RESTING / LOW / NORMAL / HIGH / WORKING） */
+    activityLevel: string | null;
+    /** 活动量中文（休息 / 低活动 / 正常活动 / 高活动 / 工作犬） */
+    activityLevelLabel: string | null;
     preferredFoods: string;
     pickyFoods: string;
     medicalHistory: string;
@@ -206,6 +226,9 @@ export class StaffDogHealthService {
         ageText: summary.dog.ageText,
         currentWeightKg: dog.currentWeightKg,
         bcsScore: dog.bcsScore,
+        mealsPerDay: dog.mealsPerDay ?? null,
+        activityLevel: dog.activityLevel ?? null,
+        activityLevelLabel: ACTIVITY_LEVEL_LABELS[dog.activityLevel] ?? null,
         preferredFoods: dog.preferredFoods || '',
         pickyFoods: dog.pickyFoods || '',
         medicalHistory: dog.medicalHistory || '',

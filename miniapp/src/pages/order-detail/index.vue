@@ -275,6 +275,10 @@
           <text class="label">预计发货:</text>
           <text class="value">{{ formatDate(effectiveShippingDate) }}</text>
         </view>
+        <view class="info-row">
+          <text class="label">配送说明:</text>
+          <text class="value">{{ orderDetailDeliveryNote }}</text>
+        </view>
         <view v-if="isStockOrder" class="info-row">
           <text class="label">发货方式:</text>
           <text class="value">现货，付款后尽快发出</text>
@@ -285,27 +289,14 @@
         </view>
       </view>
 
-      <view class="section merchant-note-section">
+      <!-- 服务说明：订单备注已挪到商品下面，配送说明在「收货与配送」，
+           售后说明删除；这里只留后台可配的补充文案 -->
+      <view
+        v-if="customerServiceConfig.orderDetailMerchantNote || customerServiceConfig.welcomeMessage"
+        class="section merchant-note-section"
+      >
         <view class="section-title">服务说明</view>
         <view class="merchant-note-list">
-          <view class="merchant-note-item">
-            <text class="merchant-note-label">订单备注</text>
-            <text class="merchant-note-value">{{
-              customerRequirementText
-            }}</text>
-          </view>
-          <view class="merchant-note-item">
-            <text class="merchant-note-label">配送说明</text>
-            <text class="merchant-note-value">{{
-              orderDetailDeliveryNote
-            }}</text>
-          </view>
-          <view class="merchant-note-item">
-            <text class="merchant-note-label">售后说明</text>
-            <text class="merchant-note-value">{{
-              orderDetailAftersaleNote
-            }}</text>
-          </view>
           <view
             class="merchant-note-item"
             v-if="customerServiceConfig.orderDetailMerchantNote"
@@ -491,7 +482,6 @@
       </view>
 
       <view class="section service-section">
-        <view class="section-title">客服</view>
         <button
           class="btn-service-contact"
           :class="{ secondary: !customerServiceConfig.enabled }"
@@ -1486,12 +1476,6 @@ const orderDetailDeliveryNote = computed(() => {
   );
 });
 
-const orderDetailAftersaleNote = computed(() => {
-  return (
-    customerServiceConfig.value.orderDetailAftersaleNote ||
-    '如需退款、重做或反馈问题，可在订单详情页售后区域提交申请。'
-  );
-});
 
 // 判断是否有编辑权限（订单所有者或管理员，不包括员工）
 const canEditOrder = computed(() => {

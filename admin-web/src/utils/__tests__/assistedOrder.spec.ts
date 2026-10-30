@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  ASSISTED_GIFT_REASON_OPTIONS,
   ASSISTED_PAYMENT_CHANNELS,
   ASSISTED_TARGET_GOAL_CODES,
   PROTEIN_OPTIONS,
@@ -12,6 +13,8 @@ import {
   formatDogAge,
   formatDogWeight,
   formatMoney,
+  getGiftReasonLabel,
+  getGiftValidationError,
   getPaymentValidationError,
   isInternalCustomer,
   requiresInternalConfirmation,
@@ -542,5 +545,201 @@ describe('已选身份卡', () => {
     expect(identity.customerPhone).toBe('未填写手机号')
     expect(identity.dogId).toBeNull()
     expect(identity.dogName).toBe('')
+  })
+})
+
+/**
+ * 赠送单（2026-10-30）
+ *
+ * ## 背景（线上真实卡点）
+ *
+ * 老板要给老客户下一张「赠送定制食谱单」，但页面上没有「赠送」这个选项：
+ * 只能把实收改成 0，再手写一段「实收差异原因」，收款方式还得选一个
+ * 「线下微信」—— 等于给一笔不存在的钱登记了渠道。
+ *
+ * 赠送是常规动作（老客户回馈 / 售后补偿 / 朋友人情），所以它必须是一个
+ * **显式结算方式**：金额固定 0、不记渠道、原因必填。
+ */
+function makeGiftForm(
+  overrides: Partial<AssistedOrderFormState> = {},
+): AssistedOrderFormState {
+  return makeForm({
+    ...overrides,
+    payment: {
+      collected: true,
+      isGift: true,
+      giftReason: 'REPEAT_CUSTOMER',
+      giftNote: '',
+      channel: 'OFFLINE_WECHAT',
+      // 故意留一个非 0 金额：赠送单的载荷不能把它带过去
+      amount: 900,
+      externalRef: '',
+      overrideReason: '',
+      ...(overrides.payment ?? {}),
+    },
+  })
+}
+
+describe('赠送单 · 原因', () => {
+  it('★ 原因必选，且只能是四个 code', () => {
+    expect(getGiftValidationError({ giftReason: '', giftNote: '' })).toBe(
+      '请选择赠送原因',
+    )
+    expect(
+      getGiftValidationError({ giftReason: '瞎填', giftNote: '说明' }),
+    ).toBe('请选择赠送原因')
+  })
+
+  it('★ 选「其他」必须补说明', () => {
+    expect(
+      getGiftValidationError({ giftReason: 'OTHER', giftNote: '   ' }),
+    ).toBe('赠送原因选「其他」时必须补充说明')
+    expect(
+      getGiftValidationError({ giftReason: 'OTHER', giftNote: '朋友家狗试吃' }),
+    ).toBeNull()
+  })
+
+  it('★ 其余三个原因不需要说明', () => {
+    for (const reason of [
+      'REPEAT_CUSTOMER',
+      'AFTERSALE_COMPENSATION',
+      'FRIEND_SERVICE',
+    ]) {
+      expect(getGiftValidationError({ giftReason: reason, giftNote: '' })).toBeNull()
+    }
+  })
+
+  it('★ 四个中文文案齐全（页面选择器直接渲染）', () => {
+    expect(ASSISTED_GIFT_REASON_OPTIONS.map((item) => item.label)).toEqual([
+      '老客户回馈',
+      '售后补偿',
+      '朋友人情',
+      '其他',
+    ])
+    expect(getGiftReasonLabel('REPEAT_CUSTOMER')).toBe('老客户回馈')
+    expect(getGiftReasonLabel('AFTERSALE_COMPENSATION')).toBe('售后补偿')
+    expect(getGiftReasonLabel('FRIEND_SERVICE')).toBe('朋友人情')
+    expect(getGiftReasonLabel(null)).toBe('未填写原因')
+  })
+})
+
+describe('赠送单 · 校验与载荷', () => {
+  it('★ 赠送单不再要求「实收与报价一致」', () => {
+    expect(
+      getPaymentValidationError({
+        collected: true,
+        amount: 900,
+        payableAmount: 299,
+        overrideReason: '',
+        isGift: true,
+        giftReason: 'REPEAT_CUSTOMER',
+      }),
+    ).toBeNull()
+  })
+
+  it('★ 赠送单缺原因仍然挡住提交', () => {
+    expect(
+      getPaymentValidationError({
+        collected: true,
+        amount: 0,
+        payableAmount: 299,
+        overrideReason: '',
+        isGift: true,
+        giftReason: '',
+      }),
+    ).toBe('请选择赠送原因')
+  })
+
+  it('★ 载荷：金额固定 0，不带渠道/流水号/差异原因', () => {
+    const payload = buildAssistedOrderPayload(makeGiftForm(), {
+      proteinMode: 'DIETITIAN',
+      quotePayable: 299,
+    })
+
+    expect(payload.payment).toEqual({
+      collected: true,
+      isGift: true,
+      giftReason: 'REPEAT_CUSTOMER',
+      giftNote: null,
+      amount: 0,
+    })
+    expect(payload.payment).not.toHaveProperty('channel')
+    expect(payload.payment).not.toHaveProperty('overrideReason')
+    expect(payload.payment).not.toHaveProperty('externalRef')
+  })
+
+  it('★ 载荷：需求问卷与正常单完全一致（不能因为是赠送就少字段）', () => {
+    const normal = buildAssistedOrderPayload(makeForm(), {
+      proteinMode: 'DIETITIAN',
+      quotePayable: 900,
+    })
+    const gift = buildAssistedOrderPayload(makeGiftForm(), {
+      proteinMode: 'DIETITIAN',
+      quotePayable: 299,
+    })
+
+    const { payment: normalPayment, ...normalRest } = normal
+    const { payment: giftPayment, ...giftRest } = gift
+    expect(normalPayment).not.toEqual(giftPayment)
+    expect(giftRest).toEqual(normalRest)
+  })
+
+  it('★ 载荷：赠送原因统一成大写 code，说明去空格', () => {
+    const payload = buildAssistedOrderPayload(
+      makeGiftForm({
+        payment: {
+          collected: true,
+          isGift: true,
+          giftReason: 'other',
+          giftNote: '  朋友家狗狗试吃  ',
+          channel: 'OFFLINE_WECHAT',
+          amount: 900,
+          externalRef: '',
+          overrideReason: '',
+        },
+      } as any),
+      { proteinMode: 'DIETITIAN', quotePayable: 299 },
+    )
+
+    expect(payload.payment.giftReason).toBe('OTHER')
+    expect(payload.payment.giftNote).toBe('朋友家狗狗试吃')
+  })
+
+  it('★ 赠送单缺原因时拼载荷直接抛错（不让脏数据出门）', () => {
+    expect(() =>
+      buildAssistedOrderPayload(
+        makeGiftForm({
+          payment: {
+            collected: true,
+            isGift: true,
+            giftReason: '',
+            giftNote: '',
+            channel: 'OFFLINE_WECHAT',
+            amount: 0,
+            externalRef: '',
+            overrideReason: '',
+          },
+        }),
+        { proteinMode: 'DIETITIAN', quotePayable: 299 },
+      ),
+    ).toThrow('请选择赠送原因')
+  })
+
+  it('★ 正常单不会被误标成赠送', () => {
+    const payload = buildAssistedOrderPayload(makeForm(), {
+      proteinMode: 'DIETITIAN',
+      quotePayable: 900,
+    })
+    expect(payload.payment.isGift ?? false).toBe(false)
+    expect(payload.payment.amount).toBe(900)
+  })
+
+  it('★ 提交前汇总校验能直接给出赠送原因的问题', () => {
+    const issues = collectAssistedOrderIssues(makeGiftForm(), {
+      maxQuantity: 5,
+      proteinMode: 'DIETITIAN',
+      quotePayable: 299,
+    })
+    expect(issues).toEqual([])
   })
 })

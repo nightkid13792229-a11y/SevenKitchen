@@ -443,17 +443,49 @@ export class AssistedOrderPaymentDTO {
   @IsBoolean()
   collected!: boolean;
 
-  @ApiProperty({
-    description: '线下收款渠道（不含 WECHAT_ONLINE）',
+  @ApiPropertyOptional({
+    description: '是否赠送单（0 元）。赠送单不填收款渠道与实收金额',
+  })
+  @IsOptional()
+  @IsBoolean()
+  isGift?: boolean;
+
+  @ApiPropertyOptional({
+    description: '赠送原因 code（赠送单必填）',
+    enum: [
+      'REPEAT_CUSTOMER',
+      'AFTERSALE_COMPENSATION',
+      'FRIEND_SERVICE',
+      'OTHER',
+    ],
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  giftReason?: string | null;
+
+  @ApiPropertyOptional({
+    description: '赠送补充说明（原因为 OTHER 时必填）',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  giftNote?: string | null;
+
+  @ApiPropertyOptional({
+    description: '线下收款渠道（不含 WECHAT_ONLINE）；赠送单可不填',
     enum: ['OFFLINE_WECHAT', 'OFFLINE_ALIPAY', 'OTHER'],
   })
+  @IsOptional()
   @IsIn(['OFFLINE_WECHAT', 'OFFLINE_ALIPAY', 'OTHER'])
-  channel!: string;
+  channel?: string | null;
 
-  @ApiProperty({ description: '实际收到的金额（元）' })
+  @ApiPropertyOptional({ description: '实际收到的金额（元）；赠送单可不填' })
+  @IsOptional()
   @IsNumber()
   @Min(0)
-  amount!: number;
+  amount?: number | null;
 
   @ApiPropertyOptional({
     description: '线下微信/支付宝流水号或备注（可选）',

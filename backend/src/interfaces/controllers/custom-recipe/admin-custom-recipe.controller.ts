@@ -331,6 +331,7 @@ export class AdminCustomRecipeController {
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
     @Query('search') search?: string,
+    @Query('isGift') isGift?: string,
     @Query('page', new ParseIntPipe({ optional: true })) page = 1,
     @Query('pageSize', new ParseIntPipe({ optional: true })) pageSize = 20,
   ) {
@@ -339,6 +340,8 @@ export class AdminCustomRecipeController {
       dateFrom: dateFrom ? new Date(dateFrom) : undefined,
       dateTo: dateTo ? new Date(dateTo) : undefined,
       search,
+      // 只认 'true' / 'false'；传别的值当没传，避免把列表筛成空的
+      isGift: isGift === 'true' ? true : isGift === 'false' ? false : undefined,
       page,
       pageSize,
     });
@@ -425,8 +428,16 @@ export class AdminCustomRecipeController {
         allergyReportDrafts: dto.allergyReportDrafts,
         attachmentKeys: dto.attachmentKeys,
         attachmentUrls: dto.attachmentUrls,
+        /**
+         * 逐字段搬运，别整体透传：DTO 的 `whitelist` 已经挡掉未知字段，
+         * 但漏搬一个字段就是线上「填了赠送却按正常收款校验」那种 bug。
+         * 赠送三件套（2026-10-30）必须一起带上。
+         */
         payment: {
           collected: dto.payment.collected,
+          isGift: dto.payment.isGift,
+          giftReason: dto.payment.giftReason,
+          giftNote: dto.payment.giftNote,
           channel: dto.payment.channel,
           amount: dto.payment.amount,
           externalRef: dto.payment.externalRef,

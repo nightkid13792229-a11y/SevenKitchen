@@ -39,6 +39,8 @@ export interface OrderCenterItem {
   statusLabel: string;
   subtypeLabel: string | null;
   amountTotal: number | null;
+  /** 赠送单（2026-10-30）：金额 0，列表上必须标出来，否则像价格出错 */
+  isGift?: boolean;
   createdAt: string;
   paidAt: string | null;
   scheduledDate: string | null;
@@ -158,6 +160,8 @@ export class OrderCenterService {
               paymentConfirmedAt: true,
               deliveredAt: true,
               cancelledAt: true,
+              /** 赠送单标记（2026-10-30）：列表要标出来，否则 ¥0 像价格异常 */
+              isGift: true,
             },
             orderBy: { createdAt: 'desc' },
             take: fetchSize,
@@ -399,6 +403,7 @@ export class OrderCenterService {
       subtypeLabel: '定制食谱',
       scheduledDate: null,
       amount: Number(row.amount ?? 0),
+      isGift: row.isGift === true,
       hasOpenAftersale: false,
       aftersaleLabel: null,
     });
@@ -450,6 +455,7 @@ export class OrderCenterService {
     amount: number;
     hasOpenAftersale: boolean;
     aftersaleLabel: string | null;
+    isGift?: boolean;
   }): OrderCenterItem {
     const user = input.users.get(input.userId);
     const address = (input.row.shippingAddressSnapshot ?? {}) as Record<
@@ -469,6 +475,7 @@ export class OrderCenterService {
       statusLabel: GROUP_LABELS[input.group],
       subtypeLabel: input.subtypeLabel,
       amountTotal: input.amount,
+      isGift: input.isGift === true,
       createdAt: input.row.createdAt.toISOString(),
       paidAt:
         input.row.paidAt?.toISOString?.() ??

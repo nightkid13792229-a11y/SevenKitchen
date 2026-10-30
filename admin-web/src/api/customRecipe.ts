@@ -137,6 +137,12 @@ export interface CustomRecipeOrderDetail {
   externalPaymentRef?: string | null
   actualPaidAmount?: number | null
   priceOverrideReason?: string | null
+  /** 赠送单（2026-10-30）：金额固定 0、不记收款渠道 */
+  isGift?: boolean
+  /** 赠送原因 code：REPEAT_CUSTOMER / AFTERSALE_COMPENSATION / FRIEND_SERVICE / OTHER */
+  giftReason?: string | null
+  /** 赠送补充说明（原因为 OTHER 时必填） */
+  giftNote?: string | null
   /** 线下退款登记（手工退现金/转账，不调用微信退款） */
   refundChannel?: string | null
   offlineRefundedAt?: string | null
@@ -518,12 +524,32 @@ export type AssistedPaymentChannel =
   | 'OFFLINE_ALIPAY'
   | 'OTHER'
 
+/**
+ * 赠送原因（2026-10-30）。
+ *
+ * 固定成四个 code：赠送是常规动作，「送了几份、为什么送」要能按原因筛出来。
+ * 中文文案在 `utils/assistedOrder.ts`，与后端 code 一一对应。
+ */
+export type AssistedGiftReason =
+  | 'REPEAT_CUSTOMER'
+  | 'AFTERSALE_COMPENSATION'
+  | 'FRIEND_SERVICE'
+  | 'OTHER'
+
 export type AssistedAllergyStatus = 'HAS_ALLERGY' | 'NO_ALLERGY'
 
 export interface AssistedOrderPayment {
   collected: boolean
-  channel: AssistedPaymentChannel
-  amount: number
+  /** 赠送单：金额固定 0、不记收款渠道与流水号 */
+  isGift?: boolean
+  /** 赠送原因 code（赠送单必填） */
+  giftReason?: AssistedGiftReason | null
+  /** 赠送补充说明（原因为 OTHER 时必填） */
+  giftNote?: string | null
+  /** 赠送单可不填 */
+  channel?: AssistedPaymentChannel | null
+  /** 赠送单可不填 */
+  amount?: number | null
   externalRef?: string | null
   overrideReason?: string | null
 }
@@ -696,7 +722,7 @@ export interface AdminRefundRequest {
 }
 
 export const customRecipeApi = {
-  /** 订单列表（分页 + 状态/日期/关键词筛选） */
+  /** 订单列表（分页 + 状态/日期/关键词/赠送筛选） */
   listOrders: (params: {
     page?: number
     pageSize?: number
@@ -704,6 +730,8 @@ export const customRecipeApi = {
     search?: string
     dateFrom?: string
     dateTo?: string
+    /** true = 只看赠送单；不传 = 全部 */
+    isGift?: boolean
   }) => api.get<CustomRecipeOrderListResult>(`${BASE}/orders`, { params }),
 
   // ---------- 代客下单（2026-10-21 · Task 4）----------

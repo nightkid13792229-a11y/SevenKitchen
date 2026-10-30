@@ -124,6 +124,16 @@
           <template #default="{ row }">
             <span v-if="row.amountTotal === null" class="muted">—</span>
             <span v-else>¥{{ formatMoney(row.amountTotal) }}</span>
+            <!-- 赠送单金额是 0 元：不标出来会被当成价格异常 -->
+            <el-tag
+              v-if="row.isGift"
+              type="success"
+              size="small"
+              effect="plain"
+              class="gift-tag"
+            >
+              赠送
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column label="下单时间" width="165">

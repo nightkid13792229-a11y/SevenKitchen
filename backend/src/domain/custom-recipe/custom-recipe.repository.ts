@@ -95,6 +95,8 @@ export interface CustomRecipeOrderQuery {
   dateFrom?: Date;
   dateTo?: Date;
   search?: string;
+  /** true = 只看赠送单，false = 只看正常单，undefined = 全部 */
+  isGift?: boolean;
   page?: number;
   pageSize?: number;
 }

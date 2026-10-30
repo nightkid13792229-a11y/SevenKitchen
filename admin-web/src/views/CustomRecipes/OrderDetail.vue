@@ -130,23 +130,44 @@
         -->
         <template v-if="isOfflinePaidOrder">
           <el-divider />
-          <h3>线下收款</h3>
+          <!--
+            赠送单（2026-10-30）：没有这笔钱，就不该显示收款方式。
+            以前赠送只能靠「实收 0 + 差异原因」表达，详情页因此会挂一个
+            假的「收款方式：线下微信」，对账时看着像收过钱。
+          -->
+          <h3>{{ order.isGift ? '赠送（0 元）' : '线下收款' }}</h3>
           <div class="info-group">
-            <div class="info-item">
-              <label>收款方式</label>
-              <span>{{ paymentChannelText }}</span>
-            </div>
-            <div
-              class="info-item"
-              v-if="order.actualPaidAmount !== null && order.actualPaidAmount !== undefined"
-            >
-              <label>实收金额</label>
-              <span class="amount">¥{{ Number(order.actualPaidAmount).toFixed(2) }}</span>
-            </div>
-            <div class="info-item" v-if="order.externalPaymentRef">
-              <label>收款备注</label>
-              <span>{{ order.externalPaymentRef }}</span>
-            </div>
+            <template v-if="order.isGift">
+              <div class="info-item">
+                <label>赠送原因</label>
+                <span>{{ giftReasonText }}</span>
+              </div>
+              <div class="info-item" v-if="order.giftNote">
+                <label>补充说明</label>
+                <span>{{ order.giftNote }}</span>
+              </div>
+              <div class="info-item">
+                <label>实收金额</label>
+                <span class="amount">¥0.00</span>
+              </div>
+            </template>
+            <template v-else>
+              <div class="info-item">
+                <label>收款方式</label>
+                <span>{{ paymentChannelText }}</span>
+              </div>
+              <div
+                class="info-item"
+                v-if="order.actualPaidAmount !== null && order.actualPaidAmount !== undefined"
+              >
+                <label>实收金额</label>
+                <span class="amount">¥{{ Number(order.actualPaidAmount).toFixed(2) }}</span>
+              </div>
+              <div class="info-item" v-if="order.externalPaymentRef">
+                <label>收款备注</label>
+                <span>{{ order.externalPaymentRef }}</span>
+              </div>
+            </template>
           </div>
           <p v-if="offlineRefundCap > 0" class="offline-refund-tip">
             这是线下收款订单，退款不走微信原路退回。
@@ -749,6 +770,7 @@ import {
   normalizeRecipeQuantity,
   shouldUseOfflineRefundForCancel,
 } from '@/constants/customRecipeOrder';
+import { getGiftReasonLabel } from '@/utils/assistedOrder';
 import {
   CUSTOM_RECIPE_GOAL_SET,
   CUSTOM_RECIPE_STATUS_SET,
@@ -1002,6 +1024,9 @@ const isOfflinePaidOrder = computed(() =>
 const paymentChannelText = computed(() =>
   getCustomRecipePaymentChannelText(order.value?.paymentChannel),
 );
+
+/** 赠送原因中文（未知/老数据给出可读兜底，不显示英文 code） */
+const giftReasonText = computed(() => getGiftReasonLabel(order.value?.giftReason));
 
 /** 线下退款的登记记录（有登记过才显示那一块） */
 const hasOfflineRefundInfo = computed(

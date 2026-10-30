@@ -7,7 +7,9 @@
  */
 
 import type {
+  AssistedAllergyStatus,
   AssistedCustomerDogSearchItem,
+  AssistedGiftReason,
   AssistedPaymentChannel,
   CreateAssistedOrderPayload,
 } from '@/api/customRecipe'
@@ -23,6 +25,32 @@ export const ASSISTED_PAYMENT_CHANNELS: ReadonlyArray<{
   { value: 'OFFLINE_ALIPAY', label: '线下支付宝' },
   { value: 'OTHER', label: '其他（现金等）' },
 ]
+
+/**
+ * 赠送原因（2026-10-30）。
+ *
+ * 固定四项、不让人自由写一段话：赠送是常规动作，
+ * 「这个月送了几份、为什么送」必须能按原因筛出来。
+ * 选「其他」时必须补一句说明，否则报表里只剩一堆「其他」。
+ */
+export const ASSISTED_GIFT_REASON_OPTIONS: ReadonlyArray<{
+  value: AssistedGiftReason
+  label: string
+}> = [
+  { value: 'REPEAT_CUSTOMER', label: '老客户回馈' },
+  { value: 'AFTERSALE_COMPENSATION', label: '售后补偿' },
+  { value: 'FRIEND_SERVICE', label: '朋友人情' },
+  { value: 'OTHER', label: '其他' },
+]
+
+/** 赠送原因 code → 中文（订单列表/详情展示用，未知值原样返回） */
+export function getGiftReasonLabel(reason: unknown): string {
+  const value = String(reason ?? '').trim().toUpperCase()
+  const matched = ASSISTED_GIFT_REASON_OPTIONS.find(
+    (option) => option.value === value,
+  )
+  return matched?.label ?? (value || '未填写原因')
+}
 
 /**
  * 代客下单只开放三个体重管理方向。
@@ -70,6 +98,12 @@ export interface AssistedOrderFormState {
   additionalNotes: string
   payment: {
     collected: boolean
+    /** 赠送单：金额固定 0、不记收款渠道与流水号 */
+    isGift?: boolean
+    /** 赠送原因 code；赠送单必填 */
+    giftReason?: AssistedGiftReason | ''
+    /** 赠送补充说明；原因为 OTHER 时必填 */
+    giftNote?: string
     channel: AssistedPaymentChannel
     amount: number | null
     externalRef: string
@@ -284,22 +318,52 @@ export function shouldSyncActualAmount(
   return round2(amount) === round2(previousPayable)
 }
 
+/** 赠送原因校验：必选四项之一；选「其他」时必须补说明 */
+export function getGiftValidationError(input: {
+  giftReason: unknown
+  giftNote: unknown
+}): string | null {
+  const reason = String(input.giftReason ?? '').trim().toUpperCase()
+  const known = ASSISTED_GIFT_REASON_OPTIONS.some(
+    (option) => option.value === reason,
+  )
+  if (!known) return '请选择赠送原因'
+
+  const note = String(input.giftNote ?? '').trim()
+  if (reason === 'OTHER' && !note) {
+    return '赠送原因选「其他」时必须补充说明'
+  }
+
+  return null
+}
+
 /**
  * 收款校验（与后端 `AssistedOrderService.resolvePayment` 同一口径）。
  *
  * 返回 null = 合法；返回字符串 = 给员工看的具体原因。
+ * 赠送单单独分支：金额固定 0，不存在「实收与报价不一致」，只校验原因。
  */
 export function getPaymentValidationError(input: {
   collected: boolean
   amount: unknown
   payableAmount: number | null
   overrideReason: string
+  isGift?: boolean
+  giftReason?: unknown
+  giftNote?: unknown
 }): string | null {
   if (
     input.payableAmount === null ||
     !Number.isFinite(input.payableAmount)
   ) {
     return '请先获取服务端报价'
+  }
+
+  if (input.isGift === true) {
+    return getGiftValidationError({
+      giftReason: input.giftReason,
+      giftNote: input.giftNote,
+    })
   }
 
   const amount = Number(input.amount)
@@ -391,6 +455,9 @@ export function collectAssistedOrderIssues(
     amount: form.payment.amount,
     payableAmount: options.quotePayable,
     overrideReason: form.payment.overrideReason,
+    isGift: form.payment.isGift === true,
+    giftReason: form.payment.giftReason,
+    giftNote: form.payment.giftNote,
   })
   if (paymentError) issues.push(paymentError)
 
@@ -414,6 +481,33 @@ export function buildAssistedOrderPayload(
     throw new Error('请先回答狗狗是否对部分食物过敏')
   }
 
+  /**
+   * 赠送单的载荷：金额固定 0，不带收款渠道/流水号。
+   *
+   * 页面不该把「赠送前填过的金额」带过去 —— 后端也会强制归零，
+   * 但载荷里留着 299 会让以后看日志的人以为这单收了钱。
+   */
+  if (form.payment.isGift === true) {
+    const giftError = getGiftValidationError({
+      giftReason: form.payment.giftReason,
+      giftNote: form.payment.giftNote,
+    })
+    if (giftError) throw new Error(giftError)
+
+    return {
+      ...buildRequirementPayload(form, options),
+      payment: {
+        collected: true,
+        isGift: true,
+        giftReason: String(form.payment.giftReason || '')
+          .trim()
+          .toUpperCase() as AssistedGiftReason,
+        giftNote: String(form.payment.giftNote || '').trim() || null,
+        amount: 0,
+      },
+    }
+  }
+
   const amount = Number(form.payment.amount)
   if (!Number.isFinite(amount)) {
     throw new Error('请输入实收金额')
@@ -423,6 +517,28 @@ export function buildAssistedOrderPayload(
   const differs =
     Math.round(amount * 100) !== Math.round(options.quotePayable * 100)
 
+  return {
+    ...buildRequirementPayload(form, options),
+    payment: {
+      collected: form.payment.collected,
+      channel: form.payment.channel,
+      amount,
+      externalRef: String(form.payment.externalRef || '').trim() || null,
+      overrideReason: differs ? overrideReason || null : null,
+    },
+  }
+}
+
+/**
+ * 需求问卷部分（与钱无关）。
+ *
+ * 抽出来是因为赠送/正常收款两条分支必须拼**同一份**需求，
+ * 任何一条漏字段都会让设计器收到一张信息不全的单。
+ */
+function buildRequirementPayload(
+  form: AssistedOrderFormState,
+  options: { proteinMode: ProteinChoiceMode; quotePayable: number },
+): Omit<CreateAssistedOrderPayload, 'payment'> {
   return {
     customerId: form.customerId,
     dogId: form.dogId,
@@ -437,7 +553,8 @@ export function buildAssistedOrderPayload(
       form.allergyStatus === 'HAS_ALLERGY'
         ? String(form.allergyText || '').trim() || null
         : null,
-    allergyStatus: form.allergyStatus,
+    // 调用方已校验只可能是二选一；这里只是把收窄后的类型交回编译器
+    allergyStatus: form.allergyStatus as AssistedAllergyStatus,
     currentFoodMain: String(form.currentFoodMain || '').trim() || null,
     currentFoodOther:
       form.currentFoodMain === 'OTHER'
@@ -446,12 +563,5 @@ export function buildAssistedOrderPayload(
     changeReasons: [...form.changeReasons],
     stomachConditions: [...form.stomachConditions],
     additionalNotes: String(form.additionalNotes || '').trim() || null,
-    payment: {
-      collected: form.payment.collected,
-      channel: form.payment.channel,
-      amount,
-      externalRef: String(form.payment.externalRef || '').trim() || null,
-      overrideReason: differs ? overrideReason || null : null,
-    },
   }
 }

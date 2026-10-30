@@ -2682,6 +2682,20 @@ model CustomRecipeOrder {
   /// 实收与系统报价不一致时，管理员必须填写的原因
   priceOverrideReason   String?                  @map("price_override_reason") @db.VarChar(200)
 
+  // ===== 2026-10-30 赠送单（老客户回馈 / 售后补偿 / 朋友人情）=====
+  //
+  // 赠送**不能**靠「实收恰好为 0」去推断：以后改一次优惠、退一次款，
+  // 正常单就会被误判成赠送；也查不出「这个月送了几份、为什么送」。
+  // `isGift = true` 时金额固定 0、不记收款渠道与流水号，
+  // 但订单照常排期、设计、交付、写狗狗档案。
+
+  /// 是否为赠送单（0 元）。赠送单不记收款渠道与流水号
+  isGift                Boolean                  @default(false) @map("is_gift")
+  /// 赠送原因 code：REPEAT_CUSTOMER / AFTERSALE_COMPENSATION / FRIEND_SERVICE / OTHER
+  giftReason            String?                  @map("gift_reason") @db.VarChar(30)
+  /// 赠送补充说明（选填；原因为 OTHER 时必填）
+  giftNote              String?                  @map("gift_note") @db.VarChar(200)
+
   inProgressAt          DateTime?                @map("in_progress_at")
   deliveredAt           DateTime?                @map("delivered_at")
   /// 关单时间与原因（超时自动关单 / 人工关闭）

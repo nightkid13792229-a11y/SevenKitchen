@@ -80,6 +80,15 @@
             />
           </el-select>
         </el-form-item>
+        <el-form-item label="类型">
+          <!-- 赠送单要能单独捞出来（2026-10-30）：按月看「送了几份」
+               不能靠金额是 0 去猜，退款单也会是 0 -->
+          <el-select v-model="filters.gift" placeholder="全部" @change="handleGiftFilterChange">
+            <el-option label="全部" value=""></el-option>
+            <el-option label="赠送单" value="true"></el-option>
+            <el-option label="正常单" value="false"></el-option>
+          </el-select>
+        </el-form-item>
         <el-form-item label="日期范围">
           <el-date-picker
             v-model="dateRange"
@@ -164,9 +173,15 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="amount" label="金额" width="80">
+        <el-table-column prop="amount" label="金额" width="120">
           <template #default="{ row }">
             ¥{{ row.amount }}
+            <el-tag v-if="row.isGift" type="success" size="small" effect="plain">
+              赠送
+            </el-tag>
+            <div v-if="row.isGift" class="gift-reason">
+              {{ getGiftReasonLabel(row.giftReason) }}
+            </div>
           </template>
         </el-table-column>
         <el-table-column label="创建时间" width="160">
@@ -251,6 +266,7 @@ import {
   useOptionSet,
 } from '@/composables/useOptionSet';
 import { getEstimatedDeliveryInfo } from '@/utils/customRecipe';
+import { getGiftReasonLabel } from '@/utils/assistedOrder';
 import { toastApiError } from '@/utils/apiError';
 
 const router = useRouter();
@@ -310,6 +326,8 @@ function focusTodoQueue(status: string) {
 const filters = reactive({
   status: '',
   search: '',
+  /** '' = 全部；'true' = 只看赠送单；'false' = 只看正常单 */
+  gift: '',
 });
 
 const dateRange = ref<any[]>([]);
@@ -343,6 +361,8 @@ const loadOrders = async () => {
 
     if (filters.status) params.status = filters.status;
     if (filters.search) params.search = filters.search;
+    if (filters.gift === 'true') params.isGift = true;
+    if (filters.gift === 'false') params.isGift = false;
     if (dateRange.value && dateRange.value.length === 2) {
       params.dateFrom = dateRange.value[0];
       params.dateTo = dateRange.value[1];
@@ -379,9 +399,15 @@ const handleDateRangeChange = () => {
   loadStatistics();
 };
 
+const handleGiftFilterChange = () => {
+  pagination.page = 1;
+  loadOrders();
+};
+
 const resetFilters = () => {
   filters.status = '';
   filters.search = '';
+  filters.gift = '';
   dateRange.value = [];
   pagination.page = 1;
   loadOrders();
@@ -593,6 +619,13 @@ const getGoalText = (goal: string) => {
 
 .filter-form {
   margin-bottom: 0;
+}
+
+/* 赠送单：金额旁边标原因，避免「¥0」被当成异常 */
+.gift-reason {
+  color: #909399;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .table-card {

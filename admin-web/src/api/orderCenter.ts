@@ -36,6 +36,8 @@ export interface OrderCenterItem {
   statusLabel: string
   subtypeLabel: string | null
   amountTotal: number | null
+  /** 赠送单（2026-10-30）：金额 0，列表上要标出来 */
+  isGift?: boolean
   createdAt: string
   paidAt: string | null
   scheduledDate: string | null

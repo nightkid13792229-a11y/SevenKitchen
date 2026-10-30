@@ -982,6 +982,11 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       ];
     }
 
+    // 赠送单单独筛（2026-10-30）：按月看「送了几份」不能靠金额猜
+    if (typeof query.isGift === 'boolean') {
+      where.isGift = query.isGift;
+    }
+
     const page = query.page || 1;
     const pageSize = query.pageSize || 20;
     const skip = (page - 1) * pageSize;

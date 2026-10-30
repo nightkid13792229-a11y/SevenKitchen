@@ -10,7 +10,7 @@
     <view v-if="viewAllOrders && !needLogin" class="view-all-banner">
       <view class="view-all-banner__head">
         <text class="view-all-banner__badge">测试视图</text>
-        <text class="view-all-banner__title">全部顾客成品鲜食 + 我的定制/补剂测试单</text>
+        <text class="view-all-banner__title">全部顾客鲜食 + 我的定制/补剂测试单</text>
       </view>
       <text class="view-all-banner__desc">
         这里不是普通顾客的“我的订单”；定制/补剂卡片上的「我的测试单」来自当前管理员账号。
@@ -270,7 +270,7 @@
           </button>
 
           <view class="action-buttons">
-            <!-- 成品鲜食 -->
+            <!-- 鲜食 -->
             <template v-if="order._orderType === 'food'">
               <button
                 v-if="order.status === 'PENDING_PAYMENT' && !isPaymentExpired(order)"
@@ -538,7 +538,7 @@ const selectedStatus = ref<string>('ALL');
 /**
  * 类型筛选（2026-10-24 文案收口）。
  *
- * 名称统一走 `utils/order-type.ts`：食谱定制 / 成品鲜食 / 预分装补剂。
+ * 名称统一走 `utils/order-type.ts`：食谱定制 / 鲜食 / 预分装补剂。
  * 以前这里写死"定制 / 成品 / 补剂"，和卡片角标、专属列表各一份。
  */
 type TypeFilter = 'ALL' | 'custom' | 'food' | 'supplement';

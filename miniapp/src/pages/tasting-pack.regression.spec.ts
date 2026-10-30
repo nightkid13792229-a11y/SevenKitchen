@@ -102,7 +102,10 @@ describe('试吃装 · 我的订单', () => {
 
   it('详情页现货不显示目标制作日期，改显示发货方式', () => {
     expect(detailSource).toContain('现货，付款后尽快发出')
-    expect(detailSource).toContain('v-if="!isStockOrder" class="buyer-row"')
+    // 2026-10-30 改版：制作日期与发货方式都并入「收货与配送」，仍按现货切换
+    expect(detailSource).toContain(
+      'v-if="!isStockOrder && order.targetProductionDate"',
+    )
   })
 })
 

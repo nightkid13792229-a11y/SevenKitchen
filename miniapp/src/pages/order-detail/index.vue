@@ -116,7 +116,7 @@
           </view>
         </view>
 
-        <view class="info-row" v-if="order.targetProductionDate">
+        <view class="info-row" v-if="!isStockOrder && order.targetProductionDate">
           <text class="label">目标制作日期:</text>
           <text class="value">{{
             formatDate(order.targetProductionDate)

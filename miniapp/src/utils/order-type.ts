@@ -13,7 +13,7 @@ export type CustomerOrderType = 'custom' | 'food' | 'supplement';
 export type OrderTypeFilter = CustomerOrderType | 'ALL';
 
 export interface OrderTypeMeta {
-  /** 顾客端完整名称：食谱定制 / 成品鲜食 / 预分装补剂 */
+  /** 顾客端完整名称：食谱定制 / 鲜食 / 预分装补剂 */
   label: string;
   /** 与色条、角标一致的类型色调 */
   tone: CustomerOrderType;
@@ -21,7 +21,7 @@ export interface OrderTypeMeta {
 
 export const ORDER_TYPE_META: Record<CustomerOrderType, OrderTypeMeta> = {
   custom: { label: '食谱定制', tone: 'custom' },
-  food: { label: '成品鲜食', tone: 'food' },
+  food: { label: '鲜食', tone: 'food' },
   supplement: { label: '预分装补剂', tone: 'supplement' },
 };
 

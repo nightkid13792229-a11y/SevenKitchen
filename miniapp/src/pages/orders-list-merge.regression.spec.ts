@@ -74,7 +74,7 @@ describe('我的订单合并补剂订单', () => {
     expect(source).not.toMatch(
       /viewAllOrders\.value\s*\n?\s*\? Promise\.resolve\(\[\]\)/,
     )
-    expect(template).toContain('全部顾客成品鲜食')
+    expect(template).toContain('全部顾客鲜食')
     expect(template).toContain('我的测试单')
   })
 

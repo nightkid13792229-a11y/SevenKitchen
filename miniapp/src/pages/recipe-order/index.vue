@@ -41,11 +41,11 @@
         mode="aspectFill"
       />
       <view v-else class="recipe-cover-placeholder">
-        <text class="hero-placeholder-text">成品鲜食</text>
+        <text class="hero-placeholder-text">鲜食</text>
       </view>
 
       <view class="recipe-info-body">
-        <text class="recipe-info-title">{{ recipe.name || '成品鲜食' }}</text>
+        <text class="recipe-info-title">{{ recipe.name || '鲜食' }}</text>
 
         <!-- 一句话卖点：价值主张要和价格出现在同一个决策页上 -->
         <view v-if="recipe.sellingPoint" class="recipe-selling-point">

@@ -28,6 +28,12 @@ export interface OrderProgress {
   doneCount: number;
   /** 是否显示进度线：已取消 / 售后中 / 未知状态不显示 */
   showProgress: boolean;
+  /**
+   * 待付款：第一步还没发生。
+   * 此时第一步的标签是「待付款」而不是「已付款」—— 否则顾客会以为
+   * 自己已经付过钱了。
+   */
+  isWaiting: boolean;
 }
 
 const STEP_KEYS: OrderStepKey[] = ['PAID', 'MAKING', 'SHIPPED', 'RECEIVED'];
@@ -81,15 +87,22 @@ export function resolveOrderProgress(input: {
   status: string;
 }): OrderProgress {
   const labels = STEP_LABELS[input.kind] || STEP_LABELS.food;
+  const isWaiting = input.status === 'PENDING_PAYMENT';
   const steps = STEP_KEYS.map((key, index) => ({
     key,
-    label: labels[index],
+    label: isWaiting && index === 0 ? '待付款' : labels[index],
   }));
   const state = PROGRESS_BY_STATUS[input.kind]?.[input.status];
 
   // 已取消 / 售后中 / 未知状态：不画进度线，由卡片改用状态条表达
   if (!state) {
-    return { steps, currentIndex: 0, doneCount: 0, showProgress: false };
+    return {
+      steps,
+      currentIndex: 0,
+      doneCount: 0,
+      showProgress: false,
+      isWaiting: false,
+    };
   }
 
   return {
@@ -97,6 +110,7 @@ export function resolveOrderProgress(input: {
     currentIndex: state.currentIndex,
     doneCount: state.doneCount,
     showProgress: true,
+    isWaiting,
   };
 }
 

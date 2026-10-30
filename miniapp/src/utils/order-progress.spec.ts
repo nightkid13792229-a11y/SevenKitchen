@@ -30,6 +30,25 @@ describe('resolveOrderProgress', () => {
     expect(progress.doneCount).toBe(0);
   });
 
+  it('calls the first step "待付款" while the order is unpaid', () => {
+    const waiting = resolveOrderProgress({
+      kind: 'food',
+      status: 'PENDING_PAYMENT',
+    });
+    expect(waiting.isWaiting).toBe(true);
+    expect(waiting.steps[0].label).toBe('待付款');
+
+    const paid = resolveOrderProgress({ kind: 'food', status: 'PAID' });
+    expect(paid.isWaiting).toBe(false);
+    expect(paid.steps[0].label).toBe('已付款');
+
+    const waitingSupplement = resolveOrderProgress({
+      kind: 'supplement',
+      status: 'PENDING_PAYMENT',
+    });
+    expect(waitingSupplement.steps[0].label).toBe('待付款');
+  });
+
   it('advances shipped and completed food orders', () => {
     expect(
       resolveOrderProgress({ kind: 'food', status: 'SHIPPED' }),

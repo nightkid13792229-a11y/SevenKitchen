@@ -194,34 +194,11 @@
           </view>
         </view>
 
-        <!-- 四步进度：取消 / 售后不画线，改走状态条 -->
-        <view v-if="orderProgressOf(order).showProgress" class="progress">
-          <view
-            v-for="(step, index) in orderProgressOf(order).steps"
-            :key="step.key"
-            class="progress__step"
-            :class="{
-              'is-done': index < orderProgressOf(order).doneCount,
-              'is-current':
-                index === orderProgressOf(order).currentIndex &&
-                index >= orderProgressOf(order).doneCount,
-            }"
-          >
-            <view class="progress__dot">
-              <text
-                v-if="index < orderProgressOf(order).doneCount"
-                class="progress__check"
-              >✓</text>
-            </view>
-            <text class="progress__label">{{ step.label }}</text>
-            <view
-              v-if="index < orderProgressOf(order).steps.length - 1"
-              class="progress__line"
-              :class="{ 'is-done': index + 1 <= orderProgressOf(order).doneCount }"
-            />
-          </view>
-        </view>
-
+        <OrderProgressSteps
+          v-if="orderProgressOf(order).showProgress"
+          :kind="orderKindOf(order)"
+          :status="order.status"
+        />
         <view v-else class="status-strip">
           <text
             class="status-strip__text"
@@ -452,6 +429,7 @@ import {
   getAftersaleEntryLabel,
 } from '../../utils/order-aftersale';
 import CustomerServiceInlineButton from '../../components/CustomerServiceInlineButton.vue';
+import OrderProgressSteps from '../../components/OrderProgressSteps.vue';
 
 const { ensure: ensureGoalOptions, labelOf: goalLabel } = useOptionSet(
   CUSTOM_RECIPE_GOAL_SET,
@@ -2772,79 +2750,6 @@ onUnmounted(() => {
   font-size: 22rpx;
   line-height: 1.5;
   color: #b45309;
-}
-
-/* 四步进度 */
-.progress {
-  display: flex;
-  margin: 22rpx 0 14rpx;
-}
-
-.progress__step {
-  flex: 1;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10rpx;
-}
-
-.progress__dot {
-  width: 22rpx;
-  height: 22rpx;
-  border-radius: 999rpx;
-  border: 3rpx solid #dedfcc;
-  background: #fffdf7;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  z-index: 1;
-  box-sizing: border-box;
-}
-
-.progress__check {
-  font-size: 14rpx;
-  line-height: 1;
-  color: #ffffff;
-}
-
-.progress__step.is-done .progress__dot {
-  border-color: #1e3a2f;
-  background: #1e3a2f;
-}
-
-.progress__step.is-current .progress__dot {
-  border-color: #b08d4f;
-  box-shadow: 0 0 0 6rpx rgba(176, 141, 79, 0.16);
-}
-
-.progress__label {
-  font-size: 20rpx;
-  color: #b3ae98;
-}
-
-.progress__step.is-done .progress__label {
-  color: #6b6653;
-}
-
-.progress__step.is-current .progress__label {
-  color: #1e3a2f;
-  font-weight: 700;
-}
-
-.progress__line {
-  position: absolute;
-  top: 10rpx;
-  left: calc(50% + 18rpx);
-  right: calc(-50% + 18rpx);
-  height: 3rpx;
-  border-radius: 3rpx;
-  background: #e3e6d4;
-}
-
-.progress__line.is-done {
-  background: #9db9a8;
 }
 
 /* 取消 / 售后：不画进度，用一条状态带 */

@@ -117,6 +117,12 @@ export class LabelDataDto {
   @ApiProperty({ description: '保质期说明' })
   shelfLife!: string;
 
+  @ApiProperty({
+    description: '保质期月数（冷冻 -18℃ 下的月数），不传按 6 个月',
+    required: false,
+  })
+  shelfLifeMonths?: number;
+
   @ApiProperty({ description: '烹饪方法', required: false })
   cookingMethod?: CookingMethodDto | string;
 

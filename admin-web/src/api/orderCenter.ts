@@ -18,6 +18,8 @@ export interface OrderCenterQuery {
   dateField?: 'created' | 'packing'
   keyword?: string
   aftersale?: boolean
+  /** 只看赠送单（2026-10-30）；只对食谱定制生效 */
+  gift?: boolean
   page?: number
   pageSize?: number
 }

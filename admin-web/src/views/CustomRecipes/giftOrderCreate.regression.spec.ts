@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import page from '@/views/CustomRecipes/AssistedOrderCreate.vue?raw'
 import orderList from '@/views/CustomRecipes/OrderList.vue?raw'
 import orderDetail from '@/views/CustomRecipes/OrderDetail.vue?raw'
+import orderCenter from '@/views/OrderCenter/index.vue?raw'
 
 /**
  * 赠送单的下单入口与展示（2026-10-30）
@@ -83,5 +84,23 @@ describe('赠送单 · 订单详情', () => {
   it('★ 0 元赠送单的退款/取消文案仍然保留', () => {
     expect(orderDetail).toContain('0 元赠送单')
     expect(orderDetail).toContain('取消赠送订单')
+  })
+})
+
+describe('赠送单 · 订单中心（老板实际看的那张列表）', () => {
+  it('★ 金额旁标「赠送」，¥0 不会被当成价格异常', () => {
+    expect(orderCenter).toContain('row.isGift')
+    expect(orderCenter).toContain('赠送')
+  })
+
+  it('★ 只在「食谱定制」下提供「只看赠送单」', () => {
+    expect(orderCenter).toContain('query.type === \'CUSTOM_RECIPE\'')
+    expect(orderCenter).toContain('只看赠送单')
+    expect(orderCenter).toContain('query.gift')
+  })
+
+  it('★ 切走类型时清掉赠送筛选，避免鲜食列表被筛空', () => {
+    expect(orderCenter).toContain('handleTypeChange')
+    expect(orderCenter).toContain('query.gift = false')
   })
 })

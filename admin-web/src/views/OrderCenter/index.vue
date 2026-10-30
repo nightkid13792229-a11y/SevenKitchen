@@ -23,12 +23,26 @@
 
     <el-card shadow="never" class="filter-card">
       <div class="type-row">
-        <el-radio-group v-model="query.type" @change="handleSearch">
+        <div class="type-left">
+        <el-radio-group v-model="query.type" @change="handleTypeChange">
           <el-radio-button :value="undefined">全部</el-radio-button>
           <el-radio-button value="FOOD">鲜食</el-radio-button>
           <el-radio-button value="CUSTOM_RECIPE">食谱定制</el-radio-button>
           <el-radio-button value="SUPPLEMENT">补剂</el-radio-button>
         </el-radio-group>
+        <!--
+          赠送单筛选（2026-10-30）：赠送是定制单的结算方式，
+          鲜食/补剂没有这个概念，所以只在「食谱定制」下出现。
+        -->
+        <el-checkbox
+          v-if="query.type === 'CUSTOM_RECIPE'"
+          v-model="query.gift"
+          class="gift-filter"
+          @change="handleSearch"
+        >
+          只看赠送单
+        </el-checkbox>
+        </div>
         <div class="counts">
           <span>鲜食 {{ counts.FOOD }}</span>
           <span>食谱定制 {{ counts.CUSTOM_RECIPE }}</span>
@@ -222,6 +236,7 @@ const query = reactive<OrderCenterQuery>({
   dateField: 'created',
   keyword: '',
   aftersale: String(route.query.aftersale || '') === '1',
+  gift: false,
   page: 1,
   pageSize: 20,
 })
@@ -320,6 +335,14 @@ function formatTime(value: string | null) {
   return date.toLocaleString('zh-CN', { hour12: false })
 }
 
+/** 切换类型：离开食谱定制时，赠送筛选必须一起清掉 */
+function handleTypeChange() {
+  if (query.type !== 'CUSTOM_RECIPE') {
+    query.gift = false
+  }
+  handleSearch()
+}
+
 async function load() {
   loading.value = true
   try {
@@ -328,6 +351,8 @@ async function load() {
       dateFrom: dateRange.value?.[0],
       dateTo: dateRange.value?.[1],
       keyword: query.keyword?.trim() || undefined,
+      // 只有食谱定制会带这个参数，其余类型传了也不该生效
+      gift: query.type === 'CUSTOM_RECIPE' ? query.gift || undefined : undefined,
     })
     items.value = result.items
     total.value = result.total
@@ -412,6 +437,7 @@ watch(
 .subtitle { margin: 6px 0 0; color: #909399; font-size: 13px; }
 .filter-card { margin-bottom: 12px; }
 .type-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.type-left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .counts { display: flex; gap: 14px; color: #606266; font-size: 13px; }
 .filter-form { margin-top: 12px; }
 .muted { color: #909399; font-size: 12px; }

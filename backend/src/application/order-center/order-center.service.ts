@@ -21,6 +21,8 @@ export interface OrderCenterQuery {
   dateField?: 'created' | 'packing';
   keyword?: string;
   aftersale?: boolean;
+  /** 只看赠送单（2026-10-30）；只对食谱定制生效 */
+  gift?: boolean;
   page?: number;
   pageSize?: number;
 }
@@ -80,6 +82,17 @@ export class OrderCenterService {
     const dateWhere = this.buildDateWhere(query);
     const want = (type: OrderCenterType) =>
       !query.type || query.type === type;
+
+    /**
+     * 「只看赠送单」只对食谱定制有意义（2026-10-30）。
+     *
+     * 赠送是定制单的结算方式，鲜食/补剂没有这个概念；
+     * 开关打开时列表只查定制单且只查 isGift，但顶部三个数量仍按原口径统计，
+     * 否则切到这个筛选，鲜食/补剂会显示 0，像是数据丢了。
+     */
+    const onlyGift = query.gift === true;
+    const wantRows = (type: OrderCenterType) =>
+      onlyGift ? type === 'CUSTOM_RECIPE' : want(type);
     const supplementOpenIds = await this.resolveSupplementOpenCaseIds(
       query.aftersale,
     );
@@ -92,7 +105,7 @@ export class OrderCenterService {
       customTotal,
       supplementTotal,
     ] = await Promise.all([
-      want('FOOD')
+      wantRows('FOOD')
         ? this.prisma.order.findMany({
             where: {
               ...dateWhere,
@@ -130,7 +143,7 @@ export class OrderCenterService {
             take: fetchSize,
           })
         : Promise.resolve([]),
-      want('CUSTOM_RECIPE')
+      wantRows('CUSTOM_RECIPE')
         ? this.prisma.customRecipeOrder.findMany({
             where: {
               ...dateWhere,
@@ -149,6 +162,7 @@ export class OrderCenterService {
                   }
                 : {}),
               ...(query.aftersale ? { id: { in: [] } } : {}),
+              ...(onlyGift ? { isGift: true } : {}),
             },
             select: {
               id: true,
@@ -167,7 +181,7 @@ export class OrderCenterService {
             take: fetchSize,
           })
         : Promise.resolve([]),
-      want('SUPPLEMENT')
+      wantRows('SUPPLEMENT')
         ? this.prisma.supplementOrder.findMany({
             where: {
               ...(query.dateField === 'packing' && (query.dateFrom || query.dateTo)
@@ -649,6 +663,8 @@ export class OrderCenterService {
           }
         : {}),
       ...(query.aftersale ? { id: { in: [] } } : {}),
+      // 总数必须跟着「只看赠送单」一起收窄，否则页码会按 7 条算
+      ...(query.gift ? { isGift: true } : {}),
     };
   }
 

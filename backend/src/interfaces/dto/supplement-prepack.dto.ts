@@ -193,6 +193,14 @@ export class OrderCenterQueryDto {
   @IsBoolean()
   aftersale?: boolean;
 
+  @ApiPropertyOptional({
+    description: '只看赠送单（2026-10-30）；只在食谱定制里生效',
+  })
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true' || value === '1')
+  @IsBoolean()
+  gift?: boolean;
+
   @ApiPropertyOptional({ default: 1 })
   @IsOptional()
   @Type(() => Number)

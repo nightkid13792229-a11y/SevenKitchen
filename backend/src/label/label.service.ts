@@ -219,7 +219,10 @@ export class LabelService {
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
     const ingredientItems = this.buildIngredientItems(labelData);
-    const mode = this.resolveLabelRenderMode(ingredientItems);
+    const mode = this.resolveLabelRenderMode(
+      ingredientItems,
+      this.buildAdditiveItems(labelData),
+    );
 
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(0, 0, width, height);
@@ -292,8 +295,15 @@ export class LabelService {
     return buffer.toString('base64');
   }
 
-  private resolveLabelRenderMode(ingredientItems: string[]): LabelRenderMode {
-    return ingredientItems.length > 16 ? 'compact' : 'regular';
+  private resolveLabelRenderMode(
+    ingredientItems: string[],
+    additiveItems: string[] = [],
+  ): LabelRenderMode {
+    // 原料多、或添加剂条目多到要换行的，一律走紧凑字号，避免撑破 70×100
+    const additiveRows = this.countAdditiveLines(additiveItems);
+    return ingredientItems.length > 16 || additiveRows >= 2
+      ? 'compact'
+      : 'regular';
   }
 
   private drawLabelHeader(
@@ -897,23 +907,67 @@ export class LabelService {
       .filter(Boolean);
   }
 
+  /** 粗略估算一段文字的毫米宽度：汉字按一个字宽，字母数字按 0.55 字宽 */
+  private estimateWidthMm(text: string): number {
+    const fontSize = LABEL_LAYOUT.fontSize.compactBody;
+    let width = 0;
+    for (const ch of Array.from(text)) {
+      width += /[\u4e00-\u9fa5]/.test(ch) ? fontSize : fontSize * 0.55;
+    }
+    return width;
+  }
+
   /**
-   * 估算添加剂段的行数。
-   * 按每个汉字一个字号宽度粗略折算，用于排版前的高度预算；
-   * 与真正绘制时的换行结果可能有 ±1 行偏差，但不影响是否放得下的判断。
+   * 添加剂段的行排版：条数多时自动分两列。
+   * 测量与绘制共用同一份结果，保证高度预算和实际输出一致。
    */
+  private resolveAdditiveLayout(
+    items: string[],
+    widthMm: number,
+  ): { lines: string[]; columns: number; colWidthMm: number } {
+    const columns = items.length > 5 ? 2 : 1;
+    const gapMm = 2;
+    const colWidthMm = (widthMm - gapMm * (columns - 1)) / columns;
+    const perColumn = Math.ceil(items.length / columns);
+
+    const lines: string[] = [];
+    for (let col = 0; col < columns; col++) {
+      const slice = items.slice(col * perColumn, (col + 1) * perColumn);
+      if (slice.length === 0) {
+        continue;
+      }
+      let current = '';
+      let count = 0;
+      for (const item of slice) {
+        const candidate = current ? `${current}、${item}` : item;
+        if (current && this.estimateWidthMm(candidate) > colWidthMm) {
+          lines.push(current);
+          current = item;
+          count++;
+        } else {
+          current = candidate;
+        }
+      }
+      if (current) {
+        lines.push(current);
+        count++;
+      }
+      // 用占位把列与列隔开，绘制时按 lines 的实际顺序分配列
+      void count;
+    }
+    return { lines, columns, colWidthMm };
+  }
+
   private countAdditiveLines(items: string[]): number {
-    const text = items.join('、');
-    const charCount = Array.from(text).length;
     const usableWidthMm =
       LABEL_LAYOUT.canvas.width -
       LABEL_LAYOUT.margin.left -
       LABEL_LAYOUT.margin.right;
-    const perLine = Math.max(
-      1,
-      Math.floor(usableWidthMm / LABEL_LAYOUT.fontSize.compactBody),
+    const { lines, columns } = this.resolveAdditiveLayout(
+      items,
+      usableWidthMm - 1,
     );
-    return Math.max(1, Math.ceil(charCount / perLine));
+    return Math.max(1, Math.ceil(lines.length / columns));
   }
 
   /** 绘制「添加剂组成」：标题 + 一段连续文字，只列名称不带占比 */
@@ -936,20 +990,24 @@ export class LabelService {
     ctx.fillStyle = '#222222';
     ctx.textAlign = 'left';
 
-    const lines = this.wrapTextByWidth(
-      ctx,
-      items.join('、'),
-      width - mmToPx(1),
+    const usableMm = (width - mmToPx(1)) / MM_TO_PX;
+    const { lines, columns, colWidthMm } = this.resolveAdditiveLayout(
+      items,
+      usableMm,
     );
+    const perColumn = Math.ceil(lines.length / columns);
     lines.forEach((line, index) => {
+      const col = Math.min(columns - 1, Math.floor(index / perColumn));
+      const row = index - col * perColumn;
       ctx.fillText(
         line,
-        left + mmToPx(0.5),
-        contentY + index * mmToPx(2.6),
+        left + mmToPx(0.5) + mmToPx((colWidthMm + 2) * col),
+        contentY + row * mmToPx(2.6),
       );
     });
 
-    return contentY + lines.length * mmToPx(2.6);
+    const rows = Math.max(1, Math.ceil(lines.length / columns));
+    return contentY + rows * mmToPx(2.6);
   }
 
   private buildIngredientItems(labelData: LabelDataDto): string[] {

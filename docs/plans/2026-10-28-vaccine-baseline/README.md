@@ -55,7 +55,7 @@ npx ts-node -r tsconfig-paths/register scripts/vaccine-plan-baseline.ts
 - 归类/组合：`C-CAT`、`C-COMBO`、`C-SINGLE`。
 - 空输入：`C-NO-BIRTHDAY`、`C-NO-RECORD-ADULT`。
 - 晚起步边界（V17）：`C-NO-RECORD-25W`、`C-NO-RECORD-17W`。
-- 16 周首免的 25 周狗（1% 兜底守卫）：`C-16W-25W`（26 周补强必须仍在）。
+- 16 周首免的 25 周狗（极少数兜底守卫）：`C-16W-25W`（26 周补强必须仍在）。
 
 ## 说明
 

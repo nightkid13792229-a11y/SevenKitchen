@@ -11,7 +11,7 @@
       <view class="hero" :class="heroTone">
         <view class="hero-row">
           <view class="hero-main">
-            <text class="hero-status">{{ getStatusText(order) }}</text>
+            <text class="hero-status">{{ heroStatusLabel }}</text>
             <text class="hero-sub">{{ heroSubline }}</text>
             <view class="hero-no-row">
               <text class="hero-no">{{ displayOrderNo }}</text>
@@ -142,6 +142,15 @@
           </view>
         </view>
 
+        <!-- 一单一道食谱时，上面那张商品卡已经写全了，不再重复一遍 -->
+        <view
+          v-if="orderItems.length === 1 && canEditPackagePlan && firstOrderItem.id"
+          class="inline-actions"
+        >
+          <button class="mini-inline-btn" @tap="openPackagePanel(firstOrderItem)">修改订单规格</button>
+        </view>
+
+        <view v-if="orderItems.length > 1" class="usage-list">
         <view v-for="item in orderItems" :key="item.id || item.recipeSnapshot?.id" class="usage-item">
           <text class="usage-item-title">{{ item.recipeSnapshot?.name || '自定义食谱' }}</text>
           <text class="usage-item-meta">
@@ -157,6 +166,7 @@
           >
             修改订单规格
           </button>
+        </view>
         </view>
 
         <view v-if="ingredientUsageRows.length" class="ingredient-summary">
@@ -187,7 +197,6 @@
             {{ getOrderAddressRegionText(order.address) }} {{ getOrderAddressDetail(order.address) }}
           </text>
           <text v-else class="kv-value muted">暂未录入收货地址</text>
-          <text v-if="order.address" class="kv-action" @tap="copyFullAddress">复制</text>
         </view>
 
         <view v-if="canEditAddress" class="address-actions">
@@ -200,7 +209,7 @@
             编辑地址
           </button>
         </view>
-        <text v-else class="address-lock-hint">已发货后不可修改</text>
+        <text v-else class="address-lock-hint">{{ addressLockHint }}</text>
       </view>
 
       <!-- 费用：商品 / 运费 / 实收，账要算得平 -->
@@ -233,7 +242,6 @@
           v-model="remarkDraft"
           class="remark-textarea"
           maxlength="200"
-          auto-height
           placeholder="填写分装要求、制作顺序、特殊提醒"
         />
         <view class="remark-meta">
@@ -819,6 +827,40 @@ const heroTone = computed(() => {
   return ''
 })
 
+/**
+ * 顶部大字必须和「订单中心」列表用同一套说法。
+ *
+ * 之前这里用的是专业状态名：列表说「待发货」，详情说「急冻中」——
+ * 同一张单两个叫法，员工对不上号（2026-10-30 自检发现）。
+ */
+const heroStatusLabel = computed(() => {
+  const o = order.value
+  if (!o) return ''
+  if (refundSucceeded.value && o.status !== 'CANCELLED') return '已退款'
+  switch (o.status) {
+    case 'INIT':
+      return '待确认'
+    case 'PENDING_PAYMENT':
+      return '待付款'
+    case 'PAID':
+    case 'PURCHASING':
+    case 'IN_PRODUCTION':
+      return '处理中'
+    case 'FREEZING':
+      return '待发货'
+    case 'SHIPPED':
+      return '已发货'
+    case 'COMPLETED':
+      return '已完成'
+    case 'CANCELLED':
+      return '已取消'
+    case 'AFTERSALE':
+      return '售后中'
+    default:
+      return getStatusText(o.status)
+  }
+})
+
 const heroSubline = computed(() => {
   const o = order.value
   if (!o) return ''
@@ -906,8 +948,22 @@ const primaryAction = computed<{ key: string; label: string; run: () => void } |
   if (canConfirmPayment.value) return { key: 'confirm', label: '确认收款', run: confirmPayment }
   if (canStartProduction.value) return { key: 'produce', label: '开始制作', run: startProduction }
   if (canShip.value) return { key: 'ship', label: '填写运单并发货', run: shipOrder }
-  if (canAdminRefund.value) return { key: 'refund', label: '退款 / 退差价', run: adminRefundOrder }
+  /**
+   * 退款只有当它是"这一步该做的事"时才做主按钮（售后中）。
+   * 已发货 / 已完成 / 已取消的单，退款应该待在底部危险区，
+   * 否则一进页面就是一个巨大的"退款"，像在催人退钱。
+   */
+  if (canAdminRefund.value && isAftersale.value) {
+    return { key: 'refund', label: '退款 / 退差价', run: adminRefundOrder }
+  }
   return null
+})
+
+const addressLockHint = computed(() => {
+  const status = order.value?.status
+  if (status === 'CANCELLED') return '本单已取消，地址不能再改'
+  if (status === 'COMPLETED') return '这单已结束，地址不能再改'
+  return '已发货后不可修改'
 })
 
 const stageHint = computed(() => {
@@ -957,7 +1013,7 @@ const dogLine = computed(() => {
   const parts = [dog.name]
   if (dog.breedName) parts.push(dog.breedName)
   if (dog.weightKg) parts.push(`${dog.weightKg}kg`)
-  return parts.filter(Boolean).join(' · ')
+  return `给 ${parts.filter(Boolean).join(' · ')}`
 })
 
 /**
@@ -1243,7 +1299,10 @@ function getOrderAddressPhone(address: NonNullable<OrderDetail['address']>): str
 }
 
 function getOrderAddressRegionText(address: NonNullable<OrderDetail['address']>): string {
-  return address.regionText || formatRegionText(address.region)
+  const raw = address.regionText || formatRegionText(address.region)
+  // 直辖市（上海市 上海市 浦东新区）会把省和市显示两遍，相邻重复段去掉
+  const parts = String(raw || '').split(/\s+/).filter(Boolean)
+  return parts.filter((part, index) => index === 0 || part !== parts[index - 1]).join(' ')
 }
 
 function getOrderAddressDetail(address: NonNullable<OrderDetail['address']>): string {
@@ -1276,9 +1335,13 @@ function isRefundedOrder(currentOrder: OrderDetail): boolean {
 
 function getPaymentMethod(method?: string): string {
   const methodMap: Record<string, string> = {
+    // 真实枚举（后端存的）：WECHAT_PAY / OFFLINE / OFFLINE_WECHAT
+    WECHAT_PAY: '微信支付',
+    OFFLINE: '线下收款',
+    OFFLINE_WECHAT: '线下收款（微信）',
+    // 历史数据/其它渠道
     WECHAT: '微信支付',
     ALIPAY: '支付宝',
-    OFFLINE: '线下支付',
   }
   return method ? methodMap[method] || method : '未支付'
 }
@@ -2409,7 +2472,8 @@ async function saveAddressForm() {
 
 .remark-textarea {
   width: 100%;
-  min-height: 180rpx;
+  height: 200rpx;
+  min-height: 200rpx;
   padding: 24rpx;
   box-sizing: border-box;
   border: 2rpx solid #eef1e2;
@@ -2522,6 +2586,10 @@ async function saveAddressForm() {
   flex-wrap: wrap;
   gap: 16rpx;
   margin-top: 20rpx;
+}
+.address-actions .address-action-btn {
+  flex: 1 0 44%;
+  margin: 0;
 }
 
 .address-action-btn {

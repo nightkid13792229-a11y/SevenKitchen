@@ -28,7 +28,7 @@
         </view>
 
         <text class="hero-title">{{ orderCenterTitle }}</text>
-        <text class="hero-meta">{{ orderCenterDescription }}</text>
+        <text class="hero-meta">{{ heroMetaText }}</text>
 
         <OrderProgressSteps
           class="hero-progress"
@@ -51,6 +51,145 @@
             <text class="hero-no__copy">复制</text>
           </text>
           <text class="hero-time">{{ formatDateTime(order.createdAt) }}</text>
+        </view>
+      </view>
+
+      <!-- 商品信息 -->
+      <view class="section items-section">
+        <view class="section-title">商品信息</view>
+
+        <!-- 按狗狗分组 -->
+        <view
+          v-for="group in groupedItems"
+          :key="group.dogId"
+          class="dog-group"
+        >
+          <!-- 订单商品列表 -->
+          <view
+            v-for="item in group.items"
+            :key="item.id"
+            class="order-item-card"
+          >
+            <!-- 第1层：食谱名 -->
+            <view class="item-header">
+              <text class="recipe-name">{{ item.recipeSnapshot?.name }}</text>
+              <text v-if="isStockOrder" class="nutrition-standard"
+                >现货 · 试吃装</text
+              >
+            </view>
+
+            <!-- 试吃装：列出这一套包含哪几道菜 -->
+            <view v-if="isStockOrder && stockDishes.length" class="package-info-card">
+              <view class="package-row">
+                <text class="package-label">包含菜品:</text>
+                <text class="package-value">{{ stockDishes.length }} 道</text>
+              </view>
+              <view
+                v-for="dish in stockDishes"
+                :key="dish.recipeId"
+                class="package-row"
+              >
+                <text class="package-label">·</text>
+                <text class="package-value">{{ dish.name }}</text>
+              </view>
+              <view v-if="stockPackCode" class="package-row">
+                <text class="package-label">商品编号:</text>
+                <text class="package-value">{{ stockPackCode }}</text>
+              </view>
+            </view>
+            <!-- 第2层：订购信息 -->
+            <view class="package-info-card">
+              <view class="package-row">
+                <text class="package-label">总净重:</text>
+                <text class="package-value"
+                  >{{ Math.round(item.quantityG) }}g</text
+                >
+              </view>
+              <view
+                class="package-row"
+                v-if="item.packagePlan && item.packagePlan.length > 0"
+              >
+                <text class="package-label">分装明细:</text>
+                <text class="package-value">{{ formatPackagePlan(item) }}</text>
+              </view>
+              <template v-else>
+                <view class="package-row">
+                  <text class="package-label">总袋数:</text>
+                  <text class="package-value">{{ item.packageCount }}袋</text>
+                </view>
+                <view class="package-row">
+                  <text class="package-label">每袋重量:</text>
+                  <text class="package-value">{{ item.packageSpecG }}g/袋</text>
+                </view>
+              </template>
+              <view
+                class="package-row"
+                v-if="order.amountTotal && getTotalPackageCount()"
+              >
+                <text class="package-label">单价:</text>
+                <text class="package-value price"
+                  >¥{{ calculatePricePerPackage() }}/袋</text
+                >
+              </view>
+            </view>
+
+            <!-- 第4层：原料清单（可展开/收起） -->
+            <view
+              class="ingredients-section"
+              v-if="
+                item.recipeSnapshot?.items &&
+                item.recipeSnapshot.items.length > 0
+              "
+            >
+              <view
+                class="ingredients-header"
+                @tap="toggleIngredients(item.id)"
+              >
+                <view class="ingredients-title-row">
+                  <text class="ingredients-title">原料清单</text>
+                  <text class="ingredients-count"
+                    >（共{{ item.recipeSnapshot.items.length }}种）</text
+                  >
+                </view>
+                <text class="expand-icon">{{
+                  expandedIngredients[item.id] ? '收起' : '展开'
+                }}</text>
+              </view>
+
+              <view
+                class="ingredients-content"
+                :class="{ expanded: expandedIngredients[item.id] }"
+                v-if="expandedIngredients[item.id]"
+              >
+                <view
+                  v-for="(category, idx) in getGroupedIngredients(
+                    item.recipeSnapshot.items,
+                  )"
+                  :key="idx"
+                  class="ingredient-category"
+                >
+                  <view class="category-title"
+                    >【{{ category.typeName }}】</view
+                  >
+                  <view
+                    v-for="(ingredient, iIdx) in category.items"
+                    :key="iIdx"
+                    class="ingredient-item"
+                    @longpress="showIngredientDetail(ingredient, item)"
+                  >
+                    <text class="ingredient-text">{{
+                      formatIngredientDisplay(ingredient, item)
+                    }}</text>
+                  </view>
+                </view>
+              </view>
+            </view>
+          </view>
+        </view>
+
+        <view v-if="customerRequirementText" class="order-note-row">
+          <text class="order-note-label">你的备注</text>
+          <text class="order-note-text">{{ customerRequirementText }}</text>
         </view>
       </view>
 
@@ -134,15 +273,11 @@
 
         <view class="info-row">
           <text class="label">预计发货:</text>
-          <text class="value">{{ formatDate(order.estimatedShippingDate) }}</text>
+          <text class="value">{{ formatDate(effectiveShippingDate) }}</text>
         </view>
         <view v-if="isStockOrder" class="info-row">
           <text class="label">发货方式:</text>
           <text class="value">现货，付款后尽快发出</text>
-        </view>
-        <view class="info-row">
-          <text class="label">购买人:</text>
-          <text class="value">{{ customerDisplayName }} {{ customerPhoneText }}</text>
         </view>
         <view v-if="isReshipOrder" class="info-row">
           <text class="label">订单性质:</text>
@@ -151,11 +286,8 @@
       </view>
 
       <view class="section merchant-note-section">
-        <view class="merchant-note-toggle" @tap="toggleMerchantNotes">
-          <text class="section-title" style="margin-bottom: 0">服务说明</text>
-          <text class="merchant-note-arrow">{{ merchantNotesExpanded ? '收起' : '查看' }} ›</text>
-        </view>
-        <view v-if="merchantNotesExpanded" class="merchant-note-list">
+        <view class="section-title">服务说明</view>
+        <view class="merchant-note-list">
           <view class="merchant-note-item">
             <text class="merchant-note-label">订单备注</text>
             <text class="merchant-note-value">{{
@@ -303,39 +435,6 @@
         </view>
       </view>
 
-      <view v-if="isStaffOrAdmin" class="section remark-section">
-        <view class="section-title">管理员备注</view>
-        <textarea
-          v-model="remarkDraft"
-          class="remark-textarea"
-          maxlength="200"
-          auto-height
-          placeholder="填写分装要求、制作顺序、特殊提醒"
-        />
-        <view class="remark-meta">
-          <text class="remark-hint"
-            >仅员工/管理员可见，会同步到生产制作单和打印版</text
-          >
-          <text class="remark-count">{{ remarkDraft.length }}/200</text>
-        </view>
-        <view class="remark-actions">
-          <button
-            class="remark-btn secondary"
-            :disabled="savingAdminRemark || !canClearAdminRemark"
-            @tap="clearAdminRemark"
-          >
-            清空
-          </button>
-          <button
-            class="remark-btn primary"
-            :disabled="savingAdminRemark || !isAdminRemarkDirty"
-            @tap="saveAdminRemark"
-          >
-            {{ savingAdminRemark ? '保存中...' : '保存备注' }}
-          </button>
-        </view>
-      </view>
-
       <!-- 待付款状态下的在线支付 -->
       <view
         class="section payment-guide-section"
@@ -402,182 +501,6 @@
         </button>
       </view>
 
-      <!-- 商品信息 -->
-      <view class="section items-section">
-        <view class="section-title">商品信息</view>
-
-        <!-- 按狗狗分组 -->
-        <view
-          v-for="group in groupedItems"
-          :key="group.dogId"
-          class="dog-group"
-        >
-          <!-- 狗狗信息卡片（现货订单不绑狗狗，整块隐藏） -->
-          <view v-if="!isStockOrder" class="dog-info-card">
-            <view class="dog-info">
-              <text class="dog-name">{{ group.dogName }}</text>
-              <text
-                class="dog-gender"
-                :class="group.dogGender === 'MALE' ? 'male' : 'female'"
-              >
-                {{ group.dogGender === 'MALE' ? '公' : '母' }}
-              </text>
-              <text class="dog-divider">|</text>
-              <text class="dog-detail">{{ group.dogBreedName }}</text>
-              <text class="dog-divider">|</text>
-              <text class="dog-detail">{{ group.dogWeightKg }}kg</text>
-            </view>
-          </view>
-
-          <!-- 订单商品列表 -->
-          <view
-            v-for="item in group.items"
-            :key="item.id"
-            class="order-item-card"
-          >
-            <!-- 第1层：食谱基本信息（版本/营养标准收进「规格与来源」） -->
-            <view class="item-header">
-              <text class="recipe-name">{{ item.recipeSnapshot?.name }}</text>
-              <text v-if="isStockOrder" class="nutrition-standard"
-                >现货 · 试吃装</text
-              >
-              <text class="spec-toggle" @tap.stop="toggleItemSpec(item.id)">
-                {{ isItemSpecExpanded(item.id) ? '收起' : '规格与来源' }} ›
-              </text>
-            </view>
-
-            <view
-              v-if="isItemSpecExpanded(item.id)"
-              class="item-spec-fold"
-            >
-              <view class="package-row">
-                <text class="package-label">食谱版本:</text>
-                <text class="package-value">v{{ item.recipeSnapshot?.version }}</text>
-              </view>
-              <view class="package-row">
-                <text class="package-label">营养标准:</text>
-                <text class="package-value">{{
-                  getNutritionStandardLabel(item.recipeSnapshot?.nutrition_standard || '')
-                }}</text>
-              </view>
-            </view>
-
-            <!-- 试吃装：列出这一套包含哪几道菜 -->
-            <view v-if="isStockOrder && stockDishes.length" class="package-info-card">
-              <view class="package-row">
-                <text class="package-label">包含菜品:</text>
-                <text class="package-value">{{ stockDishes.length }} 道</text>
-              </view>
-              <view
-                v-for="dish in stockDishes"
-                :key="dish.recipeId"
-                class="package-row"
-              >
-                <text class="package-label">·</text>
-                <text class="package-value">{{ dish.name }}</text>
-              </view>
-              <view v-if="stockPackCode" class="package-row">
-                <text class="package-label">商品编号:</text>
-                <text class="package-value">{{ stockPackCode }}</text>
-              </view>
-            </view>
-            <!-- 第2层：订购信息 -->
-            <view class="package-info-card">
-              <view class="package-row">
-                <text class="package-label">总净重:</text>
-                <text class="package-value"
-                  >{{ Math.round(item.quantityG) }}g</text
-                >
-              </view>
-              <view
-                class="package-row"
-                v-if="item.packagePlan && item.packagePlan.length > 0"
-              >
-                <text class="package-label">分装明细:</text>
-                <text class="package-value">{{ formatPackagePlan(item) }}</text>
-              </view>
-              <template v-else>
-                <view class="package-row">
-                  <text class="package-label">总袋数:</text>
-                  <text class="package-value">{{ item.packageCount }}袋</text>
-                </view>
-                <view class="package-row">
-                  <text class="package-label">每袋重量:</text>
-                  <text class="package-value">{{ item.packageSpecG }}g/袋</text>
-                </view>
-              </template>
-              <view class="package-row" v-if="item.ingredientSourcePlan">
-                <text class="package-label">原料方案:</text>
-                <text class="package-value">{{
-                  formatIngredientSourcePlan(item.ingredientSourcePlan)
-                }}</text>
-              </view>
-              <view
-                class="package-row"
-                v-if="order.amountTotal && getTotalPackageCount()"
-              >
-                <text class="package-label">单价:</text>
-                <text class="package-value price"
-                  >¥{{ calculatePricePerPackage() }}/袋</text
-                >
-              </view>
-            </view>
-
-            <!-- 第4层：原料清单（可展开/收起） -->
-            <view
-              class="ingredients-section"
-              v-if="
-                item.recipeSnapshot?.items &&
-                item.recipeSnapshot.items.length > 0
-              "
-            >
-              <view
-                class="ingredients-header"
-                @tap="toggleIngredients(item.id)"
-              >
-                <view class="ingredients-title-row">
-                  <text class="ingredients-title">原料清单</text>
-                  <text class="ingredients-count"
-                    >（共{{ item.recipeSnapshot.items.length }}种）</text
-                  >
-                </view>
-                <text class="expand-icon">{{
-                  expandedIngredients[item.id] ? '收起' : '展开'
-                }}</text>
-              </view>
-
-              <view
-                class="ingredients-content"
-                :class="{ expanded: expandedIngredients[item.id] }"
-                v-if="expandedIngredients[item.id]"
-              >
-                <view
-                  v-for="(category, idx) in getGroupedIngredients(
-                    item.recipeSnapshot.items,
-                  )"
-                  :key="idx"
-                  class="ingredient-category"
-                >
-                  <view class="category-title"
-                    >【{{ category.typeName }}】</view
-                  >
-                  <view
-                    v-for="(ingredient, iIdx) in category.items"
-                    :key="iIdx"
-                    class="ingredient-item"
-                    @longpress="showIngredientDetail(ingredient, item)"
-                  >
-                    <text class="ingredient-text">{{
-                      formatIngredientDisplay(ingredient, item)
-                    }}</text>
-                  </view>
-                </view>
-              </view>
-            </view>
-          </view>
-        </view>
-      </view>
-
       <!-- 原料照片（所有状态下都显示，如果有照片的话） -->
       <view
         class="section production-photos-section"
@@ -620,68 +543,35 @@
       </view>
 
       <!--
-        售后与修改（2026-10-30 三块合一）。
-        取消 / 锁定期提示 / 售后服务原本是三张互斥的卡，顾客要在页面
-        中段找三处；现在同一张卡按状态给一组按钮，规则不变。
+        售后（2026-10-31）。
+        只保留真的能点的动作：退款 / 重做 / 投诉。锁定期的解释和
+        重复的客服入口都去掉了——客服入口页面里已经有一个。
       -->
-      <view
-        class="section aftersale-hub-section"
-        v-if="hasAftersaleHub"
-      >
-        <view class="section-title">售后与修改</view>
-
-        <template v-if="canCancelOrder(order.status)">
-          <text class="section-note">
-            订单尚未进入采购，现在取消不产生任何费用，将全额原路退回。
-          </text>
-          <view class="aftersale-buttons">
-            <button
-              class="btn-aftersale"
-              @tap="applyAftersaleType('REFUND')"
-            >
-              <text class="btn-text">取消订单</text>
-            </button>
-          </view>
-        </template>
-
-        <template v-else-if="isAftersaleLocked(order.status)">
-          <text class="section-note">
-            订单已进入采购与制作，食材按您的预约单独采买，无法自助取消。
-            如有特殊情况请联系客服协助。
-          </text>
-          <button class="btn-aftersale" @tap="contactService">
-            <text class="btn-text">联系客服</text>
+      <view v-if="showAftersaleActions" class="section aftersale-section">
+        <view class="section-title">售后</view>
+        <view class="aftersale-buttons">
+          <button
+            v-if="canApplyRefund(order.status, order.completedAt)"
+            class="btn-aftersale"
+            @tap="applyAftersaleType('REFUND')"
+          >
+            <text class="btn-text">申请退款</text>
           </button>
-        </template>
-
-        <template v-else>
-          <text class="section-note">
-            收到后有问题，可以在这里申请退款、重做，或直接告诉我们。
-          </text>
-          <view class="aftersale-buttons">
-            <button
-              v-if="canApplyRefund(order.status, order.completedAt)"
-              class="btn-aftersale"
-              @tap="applyAftersaleType('REFUND')"
-            >
-              <text class="btn-text">申请退款</text>
-            </button>
-            <button
-              v-if="canApplyRemake(order.status, order.completedAt)"
-              class="btn-aftersale"
-              @tap="applyAftersaleType('REMAKE')"
-            >
-              <text class="btn-text">申请重做</text>
-            </button>
-            <button
-              v-if="canApplyComplaint(order.status)"
-              class="btn-aftersale"
-              @tap="applyAftersaleType('COMPLAINT')"
-            >
-              <text class="btn-text">投诉建议</text>
-            </button>
-          </view>
-        </template>
+          <button
+            v-if="canApplyRemake(order.status, order.completedAt)"
+            class="btn-aftersale"
+            @tap="applyAftersaleType('REMAKE')"
+          >
+            <text class="btn-text">申请重做</text>
+          </button>
+          <button
+            v-if="canApplyComplaint(order.status)"
+            class="btn-aftersale"
+            @tap="applyAftersaleType('COMPLAINT')"
+          >
+            <text class="btn-text">投诉建议</text>
+          </button>
+        </view>
       </view>
 
       <!-- 售后信息（AFTERSALE状态显示） -->
@@ -941,9 +831,6 @@
 
       <!-- 已发货状态 -->
       <view v-else-if="order.status === 'SHIPPED'" class="action-buttons">
-        <button class="btn-action btn-secondary" @tap="applyAftersale">
-          申请售后
-        </button>
         <button class="btn-action btn-primary" @tap="confirmReceived">
           确认收货
         </button>
@@ -1006,8 +893,6 @@ import {
   canApplyRemake,
   canApplyComplaint,
   canApplyAftersale,
-  canCancelOrder,
-  isAftersaleLocked,
 } from '../../utils/order-aftersale';
 import {
   getSourcePlanLabel,
@@ -1177,8 +1062,6 @@ const requestingShippingNotification = ref(false);
 const paymentRemainingSeconds = ref<number | null>(null);
 let paymentTimer: ReturnType<typeof setInterval> | null = null;
 let addressModalClosingTimer: ReturnType<typeof setTimeout> | null = null;
-const remarkDraft = ref('');
-const savingAdminRemark = ref(false);
 const customerAddresses = ref<StaffOrderAddress[]>([]);
 const addressSelectVisible = ref(false);
 const addressFormVisible = ref(false);
@@ -1208,7 +1091,7 @@ const isStaffOrAdmin = computed(() => {
   return userInfo.value.role === 'STAFF' || userInfo.value.role === 'ADMIN';
 });
 
-/** 售后与修改卡：三个互斥状态任一成立就显示（2026-10-30） */
+
 /** 有未处理的退款/补款时才值得给顾客看这张卡（2026-10-30） */
 const hasPendingSettlementAmount = computed(() => {
   const summary = orderFinancialSummary.value?.adjustmentSummary;
@@ -1243,41 +1126,6 @@ const settlementPlainText = computed(() => {
 });
 
 const settlementDetailExpanded = ref(false);
-/** 每个商品行的「规格与来源」是否展开（2026-10-30） */
-const expandedItemSpecs = ref<Record<string, boolean>>({});
-
-function toggleItemSpec(itemId: string): void {
-  if (!itemId) return;
-  expandedItemSpecs.value[itemId] = !expandedItemSpecs.value[itemId];
-}
-
-function isItemSpecExpanded(itemId: string): boolean {
-  return Boolean(expandedItemSpecs.value[itemId]);
-}
-
-const merchantNotesExpanded = ref(false);
-
-function toggleMerchantNotes(): void {
-  merchantNotesExpanded.value = !merchantNotesExpanded.value;
-}
-
-function goShippingNotice(): void {
-  const current = order.value;
-  if (!current) return;
-  uni.navigateTo({
-    url: `/pages/order-shipping-notice/index?orderId=${current.id}`,
-  });
-}
-
-const hasAftersaleHub = computed(() => {
-  const current = order.value;
-  if (!current) return false;
-  return (
-    canCancelOrder(current.status) ||
-    isAftersaleLocked(current.status) ||
-    canApplyAftersale(current.status, current.completedAt)
-  );
-});
 
 /**
  * 底部操作栏（2026-10-30）。
@@ -1390,16 +1238,6 @@ function syncPaymentTimer() {
   }, 1000);
 }
 
-const normalizedRemarkDraft = computed(() => remarkDraft.value.trim());
-const currentAdminRemark = computed(() =>
-  (order.value?.adminRemark ?? '').trim(),
-);
-const isAdminRemarkDirty = computed(() => {
-  return normalizedRemarkDraft.value !== currentAdminRemark.value;
-});
-const canClearAdminRemark = computed(() => {
-  return Boolean(normalizedRemarkDraft.value || currentAdminRemark.value);
-});
 
 const addressRegionText = computed(() => {
   return [
@@ -1561,6 +1399,46 @@ function formatMonthDay(value?: string | null): string {
  * 没排产说"等待排期"，不要拼出"预计 —— 月 —— 日"；
  * 已完成/已取消不占这一行。
  */
+/**
+ * 预计发货日（2026-10-31）。
+ *
+ * 顾客接口会返回 estimatedShippingDate，但管理员/员工走的是
+ * /admin/orders/:id，那个接口没有这个字段——于是老板在后台视角
+ * 看到的是"-"。这里按同一条规则（制作日 + 1 天）兜底，两边一致。
+ */
+const effectiveShippingDate = computed(() => {
+  const current = order.value;
+  if (!current) return null;
+  if (current.estimatedShippingDate) return current.estimatedShippingDate;
+  if (!current.targetProductionDate) return null;
+  const date = new Date(current.targetProductionDate);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setDate(date.getDate() + 1);
+  return date.toISOString();
+});
+
+/** 售后动作只在真的能申请时出现（已发货 / 已完成） */
+const showAftersaleActions = computed(() => {
+  const status = order.value?.status;
+  return status === 'SHIPPED' || status === 'COMPLETED';
+});
+
+/** 主卡副信息：狗狗 + 袋数 + 净重；现货单只给商品口径 */
+const heroMetaText = computed(() => {
+  const current = order.value;
+  if (!current) return '';
+  if (isStockOrder.value) return orderCenterDescription.value;
+
+  const group = groupedItems.value[0];
+  const parts: string[] = [];
+  if (group?.dogName) parts.push(group.dogName);
+  if (group?.dogBreedName) parts.push(group.dogBreedName);
+  if (Number(group?.dogWeightKg) > 0) parts.push(`${group.dogWeightKg}kg`);
+  if (totalPackageCount.value > 0) parts.push(`${totalPackageCount.value}袋`);
+  if (totalQuantityKg.value > 0) parts.push(`约${totalQuantityKg.value}kg`);
+  return parts.join(' · ');
+});
+
 const heroEtaText = computed(() => {
   const current = order.value;
   if (!current) return '';
@@ -1573,25 +1451,11 @@ const heroEtaText = computed(() => {
   }
   if (current.status === 'PENDING_PAYMENT') return '付款后开始制作';
   if (current.status === 'SHIPPED') return '已发出，等待签收';
-  const day = formatMonthDay(current.estimatedShippingDate);
+  const day = formatMonthDay(effectiveShippingDate.value);
   return day ? `预计 ${day} 发出` : '等待排期';
 });
 
-const customerDisplayName = computed(() => {
-  return (
-    order.value?.customer?.nickname?.trim() ||
-    order.value?.address?.recipientName ||
-    '微信用户'
-  );
-});
 
-const customerPhoneText = computed(() => {
-  return (
-    order.value?.customer?.phone ||
-    (order.value?.address ? getOrderAddressPhone(order.value.address) : '') ||
-    '未填写'
-  );
-});
 
 const fullAddressText = computed(() => {
   if (!order.value?.address) return '暂未录入收货地址';
@@ -1962,7 +1826,6 @@ async function loadOrderDetail(quiet = false) {
       order.value = res.data;
       orderId.value = res.data.id || orderId.value;
       syncPaymentTimer();
-      remarkDraft.value = res.data.adminRemark || '';
       console.log('[Order Detail] Order loaded:', {
         id: order.value.id,
         status: order.value.status,
@@ -2091,70 +1954,6 @@ async function subscribeShippingNotification() {
   }
 }
 
-async function saveAdminRemark() {
-  if (
-    !order.value ||
-    !isStaffOrAdmin.value ||
-    savingAdminRemark.value ||
-    !isAdminRemarkDirty.value
-  ) {
-    return;
-  }
-
-  try {
-    savingAdminRemark.value = true;
-    uni.showLoading({ title: '保存中...' });
-
-    const res = await updateAdminOrderRemark(
-      order.value.id,
-      normalizedRemarkDraft.value || null,
-    );
-
-    if (res.code !== 0 || !res.data) {
-      throw new Error(res.message || '保存失败');
-    }
-
-    order.value = {
-      ...order.value,
-      ...res.data,
-      adminRemark: res.data.adminRemark ?? null,
-    };
-    remarkDraft.value = res.data.adminRemark || '';
-
-    uni.showToast({
-      title: '备注已保存',
-      icon: 'success',
-    });
-  } catch (error: any) {
-    console.error('[Order Detail] Update admin remark error:', error);
-    uni.showToast({
-      title: error?.message || '保存失败',
-      icon: 'none',
-    });
-  } finally {
-    savingAdminRemark.value = false;
-    uni.hideLoading();
-  }
-}
-
-function clearAdminRemark() {
-  if (!canClearAdminRemark.value || savingAdminRemark.value) {
-    return;
-  }
-
-  uni.showModal({
-    title: '清空备注',
-    content: '确定要清空管理员备注吗？',
-    success: async (res) => {
-      if (!res.confirm) {
-        return;
-      }
-
-      remarkDraft.value = '';
-      await saveAdminRemark();
-    },
-  });
-}
 
 // 更换收货地址
 function changeAddress() {
@@ -3301,9 +3100,6 @@ function previewProductionPhotos(index: number) {
 }
 
 // 申请售后（底部按钮统一入口，默认聚焦"申请退款"，不再默认成"投诉"）
-function applyAftersale() {
-  applyAftersaleType('REFUND');
-}
 
 // 申请退款（旧函数，保留向后兼容）
 async function applyRefund() {
@@ -4260,13 +4056,6 @@ async function applyRefund() {
 }
 
 /* 狗狗信息卡片 */
-.dog-info-card {
-  padding: 16rpx;
-  background-color: #fbfcf7;
-  border-radius: 12rpx;
-  margin-bottom: 16rpx;
-}
-
 .dog-info {
   display: flex;
   align-items: center;
@@ -4457,7 +4246,10 @@ async function applyRefund() {
 }
 
 .ingredient-category {
-  margin-bottom: 16rpx;
+  margin-bottom: 18rpx;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 16rpx;
 }
 
 .ingredient-category:last-child {
@@ -4465,18 +4257,26 @@ async function applyRefund() {
 }
 
 .category-title {
-  font-size: 24rpx;
-  font-weight: bold;
-  color: #26261f;
-  margin-bottom: 12rpx;
-  padding-left: 4rpx;
+  grid-column: 1 / -1;
+  display: inline-block;
+  justify-self: start;
+  font-size: 20rpx;
+  font-weight: 700;
+  color: #8a6b33;
+  background: #f6efe0;
+  border-radius: 6rpx;
+  padding: 2rpx 12rpx;
+  margin-bottom: 10rpx;
 }
 
 .ingredient-item {
-  font-size: 24rpx;
+  font-size: 22rpx;
   color: #26261f;
-  line-height: 36rpx;
-  padding: 4rpx 12rpx;
+  line-height: 34rpx;
+  padding: 3rpx 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   border-radius: 4rpx;
   transition: background-color 0.2s;
 }
@@ -5040,12 +4840,6 @@ async function applyRefund() {
 }
 
 /* 规格与来源（2026-10-30） */
-.spec-toggle {
-  margin-left: auto;
-  font-size: 20rpx;
-  color: #6b6653;
-}
-
 .item-spec-fold {
   margin-bottom: 16rpx;
   padding: 12rpx 16rpx;
@@ -5085,5 +4879,59 @@ async function applyRefund() {
   font-size: 22rpx;
   font-weight: 700;
   color: #1e3a2f;
+}
+
+/* ===== 收货地址操作：一行胶囊（2026-10-31）===== */
+.address-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.address-actions {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.btn-copy-address,
+.btn-edit {
+  height: 48rpx;
+  line-height: 48rpx;
+  padding: 0 20rpx;
+  margin: 0;
+  border-radius: 999rpx;
+  font-size: 20rpx;
+  background: #eef2e4;
+  color: #26261f;
+  border: none;
+}
+
+.btn-edit-secondary {
+  background: #f6efe0;
+  color: #8a6b33;
+}
+
+/* 订单备注：直接显示在商品下面 */
+.order-note-row {
+  margin-top: 16rpx;
+  padding: 12rpx 16rpx;
+  border-radius: 10rpx;
+  background: #f6f8ef;
+}
+
+.order-note-label {
+  font-size: 20rpx;
+  color: #8a7a66;
+  margin-right: 10rpx;
+}
+
+.order-note-text {
+  font-size: 22rpx;
+  color: #26261f;
+  line-height: 1.5;
 }
 </style>

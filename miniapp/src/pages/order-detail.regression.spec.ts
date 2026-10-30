@@ -52,14 +52,14 @@ describe('order detail runtime regressions', () => {
     expect(source).toContain('ingredientSourcePlan?: string | null')
   })
 
-  it('renders customer-facing labels instead of internal order item enums', () => {
+  it('does not leak internal order item enums to the customer', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/order-detail/index.vue'),
       'utf-8',
     )
 
-    expect(source).toContain('getNutritionStandardLabel(item.recipeSnapshot?.nutrition_standard || \'\')')
-    expect(source).toContain('formatIngredientSourcePlan(item.ingredientSourcePlan)')
+    // 2026-10-31：顾客页不再展示营养标准、原料方案与版本号，
+    // 这几项属于内部规格，需要时去食谱详情看。
     expect(source).not.toContain('{{ item.recipeSnapshot?.nutrition_standard }}')
     expect(source).not.toContain('{{ item.ingredientSourcePlan }}')
   })

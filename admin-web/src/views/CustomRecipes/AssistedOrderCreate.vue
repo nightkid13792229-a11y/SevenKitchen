@@ -475,7 +475,7 @@
             <span class="field-hint">默认等于服务端应付</span>
           </el-form-item>
 
-          <el-form-item v-if="form.payment.collected" label="线下流水号/备注">
+          <el-form-item v-if="form.payment.collected" label="线下流水号/备注（选填）">
             <el-input
               v-model="form.payment.externalRef"
               maxlength="100"

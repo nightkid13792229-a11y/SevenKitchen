@@ -44,19 +44,6 @@
         </view>
       </view>
 
-      <!-- 还没结束的问题 -->
-      <view v-if="ongoingConditions.length" class="card">
-        <text class="card-title">进行中的问题</text>
-        <view v-for="(item, index) in ongoingConditions" :key="index" class="record">
-          <view class="record-head">
-            <text class="record-title">{{ item.diagnosis || '未写明' }}</text>
-            <text class="record-date">{{ item.date || '' }}</text>
-          </view>
-          <text v-if="item.chiefComplaint" class="record-body">{{ item.chiefComplaint }}</text>
-          <text v-if="item.status" class="record-tag">{{ item.status }}</text>
-        </view>
-      </view>
-
       <!-- 最近就诊 -->
       <view class="card">
         <view class="card-head">
@@ -71,6 +58,9 @@
           </view>
           <text v-if="item.chiefComplaint" class="record-body">{{ item.chiefComplaint }}</text>
           <text v-if="item.treatment" class="record-body">医嘱：{{ item.treatment }}</text>
+          <!-- 还没好的（治疗中/慢性）必须在记录上标出来：老板去掉了原来那块
+               「进行中」卡片，这条信号不能跟着一起消失 -->
+          <text v-if="isOngoingStatus(item.status)" class="record-tag">{{ item.status }}</text>
         </view>
       </view>
 
@@ -116,11 +106,6 @@ const counts = computed(() => overview.value?.counts || {})
 const allergies = computed<any[]>(() =>
   Array.isArray(overview.value?.allergies) ? overview.value.allergies : [],
 )
-const ongoingConditions = computed<any[]>(() =>
-  Array.isArray(overview.value?.ongoingConditions)
-    ? overview.value.ongoingConditions
-    : [],
-)
 const recentVisits = computed<any[]>(() =>
   Array.isArray(overview.value?.recentVisits) ? overview.value.recentVisits : [],
 )
@@ -129,6 +114,14 @@ const recentCheckups = computed<any[]>(() =>
     ? overview.value.recentCheckups
     : [],
 )
+
+/**
+ * 只有"还没好"的结局才标红：治疗中 / 慢性 / 家长还没标结果。
+ * 已康复的不标 —— 否则每条记录都挂个标签，等于没标。
+ */
+function isOngoingStatus(status?: string | null) {
+  return ['治疗中', '慢性', '未标注结果'].includes(String(status || ''))
+}
 
 function formatNumber(value: any) {
   if (value === null || value === undefined || value === '') return '—'

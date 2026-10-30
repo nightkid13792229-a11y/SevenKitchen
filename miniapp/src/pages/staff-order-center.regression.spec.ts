@@ -121,4 +121,11 @@ describe('staff order center · 两个只读页', () => {
     expect(dogPage).toContain('dog.mealsPerDay')
     expect(dogPage).toContain('dog.activityLevelLabel')
   })
+
+  it('★ 不再单开「进行中的问题」，但"还没好"要标在就诊记录上', () => {
+    expect(dogPage).not.toContain('进行中的问题')
+    expect(dogPage).not.toContain('ongoingConditions')
+    expect(dogPage).toContain('isOngoingStatus(item.status)')
+    expect(dogPage).toContain("['治疗中', '慢性', '未标注结果']")
+  })
 })

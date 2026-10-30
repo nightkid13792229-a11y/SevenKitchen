@@ -236,8 +236,15 @@ export class LabelV10Service {
 
     // 添加剂
     if (additiveItems.length > 0) {
-      const addLines = this.buildAdditiveLines(ctx, additiveItems, contentW);
-      h += mm(0.9) + addLines.length * lh(this.F.additive);
+      ctx.font = `bold ${mm(this.F.additive)}px "Chinese-Bold"`;
+      const prefixWidth = ctx.measureText('添加剂组成：').width;
+      const addLayout = this.buildAdditiveLines(
+        ctx,
+        additiveItems,
+        contentW - prefixWidth,
+      );
+      const addRows = Math.max(1, Math.ceil(addLayout.lines.length / addLayout.columns));
+      h += mm(0.9) + addRows * lh(this.F.additive);
     }
 
     // 保证值
@@ -247,7 +254,8 @@ export class LabelV10Service {
     // 烹饪
     h += mm(1.7) + mm(this.F.section * 1.2) + mm(1.0);
     h += lh(this.F.warn);
-    h += mm(1.0) + (specs.length + 1) * lh(this.F.cook) + (specs.length) * mm(0.5);
+    h += mm(1.0) + lh(this.F.cookHead) + mm(0.6) + mm(0.9);
+    h += specs.length * (lh(this.F.cook) + mm(0.5));
     h += mm(0.9) + lh(this.F.ban);
 
     return { height: h };
@@ -360,16 +368,19 @@ export class LabelV10Service {
       ['生产日期', this.formatDate(labelData.productionTime)],
       ['保质期', this.buildShelfLife(labelData)],
     ];
+    ctx.textBaseline = 'alphabetic';
     for (const [label, value] of metaRows) {
+      const baseline = y + mm(this.F.meta * 0.82);
       ctx.font = `${mm(this.F.metaLabel)}px "Chinese"`;
       ctx.fillStyle = '#5A5A5A';
-      ctx.fillText(label, left, y);
+      ctx.fillText(label, left, baseline);
       const labelW = ctx.measureText(label).width + mm(1);
       ctx.font = `bold ${mm(this.F.meta)}px "Chinese-Bold"`;
       ctx.fillStyle = '#111111';
-      ctx.fillText(value, left + labelW, y);
+      ctx.fillText(value, left + labelW, baseline);
       y += lh(this.F.meta) + mm(0.55);
     }
+    ctx.textBaseline = 'top';
     y -= mm(0.55);
 
     // 原料组成
@@ -416,11 +427,21 @@ export class LabelV10Service {
       ctx.font = `${mm(this.F.additive)}px "Chinese"`;
 
       const availW = contentW - prefixW;
-      const addLines = this.buildAdditiveLines(ctx, additiveItems, availW);
-      addLines.forEach((line, index) => {
-        ctx.fillText(line, left + prefixW, y + index * lh(this.F.additive));
+      const addLayout = this.buildAdditiveLines(ctx, additiveItems, availW);
+      addLayout.lines.forEach((line, index) => {
+        const col = Math.min(
+          addLayout.columns - 1,
+          Math.floor(index / addLayout.perColumn),
+        );
+        const row = index - col * addLayout.perColumn;
+        ctx.fillText(
+          line,
+          left + prefixW + col * (addLayout.colW + mm(2)),
+          y + row * lh(this.F.additive),
+        );
       });
-      y += addLines.length * lh(this.F.additive);
+      const addRows = Math.max(1, Math.ceil(addLayout.lines.length / addLayout.columns));
+      y += addRows * lh(this.F.additive);
     }
 
     // 保证值
@@ -460,21 +481,30 @@ export class LabelV10Service {
     y += lh(this.F.warn) + mm(1.0);
 
     // 三列表头 + 每规格一行
-    const labelColW = mm(11);
+    const labelColW = mm(15);
     const methodColW = (contentW - labelColW) / 3;
     const headers = ['蒸', '炖', '低温慢煮'];
     ctx.font = `${mm(this.F.cookHead)}px "Chinese"`;
     ctx.fillStyle = '#555555';
     headers.forEach((text, index) => {
-      ctx.fillText(text, left + labelColW + index * methodColW, y);
+      ctx.fillText(text, left + labelColW + index * methodColW, y + mm(0.4));
     });
-    y += lh(this.F.cook);
+    y += lh(this.F.cookHead) + mm(0.6);
+
+    // 表头下的细线，让三列关系一眼可见
+    ctx.strokeStyle = '#CCCCC8';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(left, y);
+    ctx.lineTo(left + contentW, y);
+    ctx.stroke();
+    y += mm(0.9);
 
     specs.forEach((spec) => {
       const times = this.cookingTimesFor(spec.packageSpecG);
       ctx.font = `bold ${mm(this.F.cook)}px "Chinese-Bold"`;
       ctx.fillStyle = '#111111';
-      ctx.fillText(`${spec.packageSpecG}g`, left, y);
+      ctx.fillText(`${spec.packageSpecG}克/袋`, left, y);
 
       ctx.font = `${mm(this.F.cook)}px "Chinese"`;
       [
@@ -556,9 +586,10 @@ export class LabelV10Service {
     ctx: CanvasRenderingContext2D,
     items: string[],
     maxWidth: number,
-  ): string[] {
+  ): { columns: number; colW: number; perColumn: number; lines: string[] } {
     ctx.font = `${mm(this.F.additive)}px "Chinese"`;
-    const columns = items.length > 6 ? 2 : 1;
+    // 恒为单列：两列时测量与绘制的行数容易不一致，先保证不重叠
+    const columns = 1;
     const colW = (maxWidth - mm(2) * (columns - 1)) / columns;
     const perColumn = Math.ceil(items.length / columns);
     const lines: string[] = [];
@@ -582,7 +613,7 @@ export class LabelV10Service {
         lines.push(current);
       }
     }
-    return lines;
+    return { columns, colW, perColumn, lines };
   }
 
   private valueRows(labelData: LabelDataDto): string[][] {

@@ -3020,19 +3020,23 @@ export class OrderService {
    * Phase 9: Simplified shipping flow
    * Transitions IN_PRODUCTION → SHIPPED
    */
+  /**
+   * 发货（2026-10-31 改版）。
+   *
+   * 两种发货类型：
+   *   · NORMAL        —— 正常寄快递：必须给快递公司、单号、实际运费
+   *   · NOT_REQUIRED  —— 无需发货（自用/内部单）：直接结案，不产生物流信息，
+   *                      也不给顾客发发货通知
+   */
   async shipOrder(
     orderId: string,
-    trackingNumber: string,
-    carrierCode: string,
+    options: {
+      shippingType?: 'NORMAL' | 'NOT_REQUIRED';
+      trackingNumber?: string;
+      carrierCode?: string;
+      actualShippingFee?: number | null;
+    },
     actorId?: string | null,
-    /**
-     * 实际付给快递的运费（2026-10-31）。
-     *
-     * 为什么不塞进 Order 实体：这是一个**纯记账字段**，不参与任何状态流转，
-     * 而实体是位置参数构造的、动一次要改所有 new Order(...) 调用点。
-     * 这里直接落库，读的时候按需取。
-     */
-    actualShippingFee?: number | null,
   ): Promise<Order> {
     const order = await this.orderRepository.findById(orderId);
     if (!order) {
@@ -3040,9 +3044,33 @@ export class OrderService {
     }
 
     const fromStatus = order.status;
+    const shippingType =
+      options.shippingType === 'NOT_REQUIRED' ? 'NOT_REQUIRED' : 'NORMAL';
+
+    if (shippingType === 'NOT_REQUIRED') {
+      order.markAsNoShippingRequired();
+      const savedOrder = await this.orderRepository.save(order);
+
+      await this.logStatusTransition(
+        savedOrder,
+        fromStatus,
+        OrderStatus.COMPLETED,
+        'admin',
+        actorId,
+        { shippingType },
+      );
+
+      // 自用单不寄快递，自然也不该给顾客发「已发货」通知
+      return savedOrder;
+    }
+
+    const trackingNumber = String(options.trackingNumber || '').trim();
+    const carrierCode = String(options.carrierCode || '').trim();
+
     order.markAsShipped(trackingNumber, carrierCode);
     const savedOrder = await this.orderRepository.save(order);
 
+    const actualShippingFee = options.actualShippingFee;
     if (typeof actualShippingFee === 'number' && Number.isFinite(actualShippingFee)) {
       // 存成两位小数的字符串，避开浮点误差
       await this.prisma.order.update({
@@ -3058,7 +3086,11 @@ export class OrderService {
       OrderStatus.SHIPPED,
       'admin',
       actorId,
-      { trackingNumber, carrierCode },
+      {
+        trackingNumber,
+        carrierCode,
+        ...(typeof actualShippingFee === 'number' ? { actualShippingFee } : {}),
+      },
     );
 
     await this.sendShippingNotificationSafely(savedOrder.id);

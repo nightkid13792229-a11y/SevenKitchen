@@ -128,6 +128,8 @@ export class PrismaOrderRepository implements OrderRepository {
             remakeFromOrderId: order.remakeFromOrderId ?? null,
             // 免费补发：本单指向的原单（正常订单为 null）
             reshipFromOrderId: order.reshipFromOrderId ?? null,
+            // 无需发货（2026-10-31）：自用单，不邮寄
+            noShippingRequired: order.noShippingRequired ?? false,
             // Phase 9.1: Freezing and Aftersale fields
             aftersaleType: order.aftersaleType ?? null,
             freezingSince: order.freezingSince ?? null,
@@ -206,6 +208,8 @@ export class PrismaOrderRepository implements OrderRepository {
           paidAt: order.paidAt ?? null,
           paymentStatus: order.paymentStatus ?? null,
           adminRemark: order.adminRemark ?? null,
+          // 无需发货（2026-10-31）：自用单，不邮寄
+          noShippingRequired: order.noShippingRequired ?? false,
           // Phase 9.1: Freezing and Aftersale fields
           freezingSince: order.freezingSince ?? null,
           aftersaleType: order.aftersaleType ?? null,

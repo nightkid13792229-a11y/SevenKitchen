@@ -345,6 +345,16 @@ export class AdminSupplementShopController {
     @Body() dto: ShipSupplementOrderDto,
     @Req() request: { user?: { role?: string; userId?: string } },
   ) {
+    // 与鲜食单同一口径：正常发货必须有单号和实际运费；无需发货则都不用填
+    if (dto.shippingType !== 'NOT_REQUIRED') {
+      if (!String(dto.trackingNumber || '').trim()) {
+        return ApiResponseDto.error(400, '请填写快递单号');
+      }
+      if (dto.actualShippingFee === undefined || dto.actualShippingFee === null) {
+        return ApiResponseDto.error(400, '请填写实际运费');
+      }
+    }
+
     return ApiResponseDto.success(
       await this.redactForStaff(
         await this.supplementOrderService.shipOrder(id, dto, {

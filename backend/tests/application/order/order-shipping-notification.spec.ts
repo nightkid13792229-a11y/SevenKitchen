@@ -98,7 +98,11 @@ describe('OrderService shipping notifications', () => {
     const order = createFreezingOrder();
     orderRepository.findById.mockResolvedValue(order);
 
-    await service.shipOrder('order-1', 'SF1234567890', 'SF', 'admin-1');
+    await service.shipOrder(
+      'order-1',
+      { trackingNumber: 'SF1234567890', carrierCode: 'SF' },
+      'admin-1',
+    );
 
     expect(orderRepository.save).toHaveBeenCalledWith(order);
     expect(statusHistoryRepository.append).toHaveBeenCalledWith(
@@ -121,7 +125,11 @@ describe('OrderService shipping notifications', () => {
     const order = createFreezingOrder();
     orderRepository.findById.mockResolvedValue(order);
 
-    await service.shipOrder('order-1', 'SF1234567890', 'SF', 'admin-1', 12.5);
+    await service.shipOrder(
+      'order-1',
+      { trackingNumber: 'SF1234567890', carrierCode: 'SF', actualShippingFee: 12.5 },
+      'admin-1',
+    );
 
     expect(prisma.order.update).toHaveBeenCalledWith({
       where: { id: 'order-1' },
@@ -129,11 +137,32 @@ describe('OrderService shipping notifications', () => {
     });
   });
 
+  it('★ 选「无需发货」：直接结案，不发通知、不写运费', async () => {
+    const order = createFreezingOrder();
+    orderRepository.findById.mockResolvedValue(order);
+
+    const saved = await service.shipOrder(
+      'order-1',
+      { shippingType: 'NOT_REQUIRED' },
+      'admin-1',
+    );
+
+    expect(saved.status).toBe(OrderStatus.COMPLETED);
+    expect(saved.noShippingRequired).toBe(true);
+    expect(saved.trackingNumber ?? null).toBeNull();
+    expect(prisma.order.update).not.toHaveBeenCalled();
+    expect(shippingNotificationService.sendForOrder).not.toHaveBeenCalled();
+  });
+
   it('★ 没填运费就不写这一列，别把老单改成 0', async () => {
     const order = createFreezingOrder();
     orderRepository.findById.mockResolvedValue(order);
 
-    await service.shipOrder('order-1', 'SF1234567890', 'SF', 'admin-1');
+    await service.shipOrder(
+      'order-1',
+      { trackingNumber: 'SF1234567890', carrierCode: 'SF' },
+      'admin-1',
+    );
 
     expect(prisma.order.update).not.toHaveBeenCalled();
   });

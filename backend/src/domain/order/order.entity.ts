@@ -96,6 +96,11 @@ export class Order {
      * 补发单是现货，直接从成品库存取货，只需要一张 0 元订单承载发货流程。
      */
     public reshipFromOrderId: string | null = null,
+    /**
+     * 无需发货（2026-10-31）：自用/内部订单不邮寄。
+     * 发货时选「无需发货」→ 直接结案，没有快递单号与实际运费。
+     */
+    public noShippingRequired = false,
   ) {
     // Compute totalAmount from amountTotal if not provided
     if (this.totalAmount === undefined) {
@@ -152,6 +157,7 @@ export class Order {
       data.orderNo ?? null,
       data.remakeFromOrderId ?? null,
       data.reshipFromOrderId ?? null,
+      Boolean(data.noShippingRequired),
     );
   }
 
@@ -275,6 +281,15 @@ export class Order {
       [OrderStatus.CANCELLED]: [],
     };
 
+    // 无需发货的自用单：急冻完成后直接结案，不经过 SHIPPED（2026-10-31）
+    if (
+      this.noShippingRequired &&
+      this.status === OrderStatus.FREEZING &&
+      newStatus === OrderStatus.COMPLETED
+    ) {
+      return true;
+    }
+
     const allowedNextStates = validTransitions[this.status] || [];
     if (allowedNextStates.includes(newStatus)) {
       return true;
@@ -374,6 +389,29 @@ export class Order {
     this.carrierCode = carrierCode.trim();
     this.shippedAt = new Date();
     this.transitionTo(OrderStatus.SHIPPED);
+  }
+
+  /**
+   * 无需发货：自用/内部订单不邮寄（2026-10-31）。
+   *
+   * 不产生快递单号、不记录实际运费、**不触发顾客发货通知**，
+   * 直接从「急冻完成」结案。不走 markAsShipped 是因为那会要求单号和承运商。
+   */
+  markAsNoShippingRequired(): void {
+    const allowed =
+      this.type === OrderType.TASTING_PACK
+        ? [OrderStatus.PAID, OrderStatus.FREEZING]
+        : [OrderStatus.FREEZING];
+
+    if (!allowed.includes(this.status)) {
+      throw new InvalidStateTransitionError(
+        `Cannot mark order as no-shipping-required from status: ${this.status}`,
+      );
+    }
+
+    this.noShippingRequired = true;
+    this.completedAt = new Date();
+    this.transitionTo(OrderStatus.COMPLETED);
   }
 
   /**

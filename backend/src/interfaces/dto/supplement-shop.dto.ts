@@ -210,16 +210,36 @@ export class PackSupplementOrderDto {
 }
 
 export class ShipSupplementOrderDto {
-  @ApiProperty({ description: '快递单号' })
+  /**
+   * 发货类型（2026-10-31，与鲜食单统一）：
+   *   NORMAL        —— 正常寄快递（默认）
+   *   NOT_REQUIRED  —— 无需发货（自用单），直接结案
+   */
+  @ApiPropertyOptional({ enum: ['NORMAL', 'NOT_REQUIRED'], default: 'NORMAL' })
+  @IsOptional()
+  @IsIn(['NORMAL', 'NOT_REQUIRED'])
+  shippingType?: 'NORMAL' | 'NOT_REQUIRED';
+
+  @ApiPropertyOptional({ description: '快递单号（正常发货必填）' })
+  @IsOptional()
   @IsString()
   @MaxLength(64)
-  trackingNumber!: string;
+  trackingNumber?: string;
 
   @ApiPropertyOptional({ description: '快递公司编码，如 SF / YTO / ZTO' })
   @IsOptional()
   @IsString()
   @MaxLength(40)
   carrierCode?: string;
+
+  @ApiPropertyOptional({
+    description: '实际运费（元，两位小数，正常发货必填）',
+    example: 12.5,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  actualShippingFee?: number;
 }
 
 export class ConfirmSupplementPaymentDto {

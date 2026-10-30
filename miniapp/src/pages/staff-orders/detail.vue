@@ -381,6 +381,23 @@
           <text class="modal-close" @tap="closeShippingModal">×</text>
         </view>
         <view class="form-item">
+          <text class="form-label">发货类型</text>
+          <view class="ship-type-row">
+            <text
+              class="ship-type-option"
+              :class="{ active: shippingType === 'NORMAL' }"
+              @tap="shippingType = 'NORMAL'"
+            >正常发货</text>
+            <text
+              class="ship-type-option"
+              :class="{ active: shippingType === 'NOT_REQUIRED' }"
+              @tap="shippingType = 'NOT_REQUIRED'"
+            >无需发货</text>
+          </view>
+        </view>
+
+        <block v-if="shippingType === 'NORMAL'">
+        <view class="form-item">
           <text class="form-label">物流公司</text>
           <picker
             mode="selector"
@@ -405,10 +422,15 @@
             v-model="actualShippingFeeDraft"
             class="form-input"
             type="digit"
-            placeholder="选填，例如 12.50（用于财务统计）"
+            placeholder="必填，例如 12.50（用于财务统计）"
             :maxlength="8"
           />
         </view>
+        </block>
+
+        <text v-else class="address-lock-hint">
+          自用单不寄快递：确认后这单直接结案，不产生物流单号，也不会给顾客发发货通知。
+        </text>
         <button class="address-save-btn" :disabled="isShipping" @tap="confirmShipping">
           {{ isShipping ? '发货中...' : '确认发货' }}
         </button>
@@ -706,6 +728,8 @@ const selectedCarrierIndex = ref(0)
 const trackingNumber = ref('')
 /** 实际运费草稿（元，最多两位小数）；空 = 不记录 */
 const actualShippingFeeDraft = ref('')
+/** 发货类型：正常发货 / 无需发货（自用单，2026-10-31） */
+const shippingType = ref<'NORMAL' | 'NOT_REQUIRED'>('NORMAL')
 const isShipping = ref(false)
 const showShippingShareFallback = ref(false)
 const shippedShareOrderId = ref('')
@@ -1641,6 +1665,7 @@ async function shipOrder() {
     return
   }
   selectedCarrierIndex.value = 0
+  shippingType.value = 'NORMAL'
   trackingNumber.value = order.value.trackingNumber || ''
   actualShippingFeeDraft.value =
     typeof order.value.actualShippingFee === 'number'
@@ -1660,18 +1685,25 @@ function onCarrierChange(event: any) {
 
 async function confirmShipping() {
   if (!order.value || isShipping.value) return
-  const tracking = trackingNumber.value.trim()
-  if (tracking.length < 5) {
-    uni.showToast({
-      title: '请输入有效物流单号',
-      icon: 'none',
-    })
-    return
-  }
-  // 实际运费：选填；填了就必须是最多两位小数的非负数
-  const feeText = String(actualShippingFeeDraft.value || '').trim()
+
+  const isNoShipping = shippingType.value === 'NOT_REQUIRED'
+
+  let tracking = ''
   let actualShippingFee: number | undefined
-  if (feeText) {
+
+  if (!isNoShipping) {
+    tracking = trackingNumber.value.trim()
+    if (tracking.length < 5) {
+      uni.showToast({ title: '请输入有效物流单号', icon: 'none' })
+      return
+    }
+
+    // 实际运费：必填，最多两位小数（2026-10-31 起不再选填）
+    const feeText = String(actualShippingFeeDraft.value || '').trim()
+    if (!feeText) {
+      uni.showToast({ title: '请填写实际运费', icon: 'none' })
+      return
+    }
     if (!/^\d+(\.\d{1,2})?$/.test(feeText)) {
       uni.showToast({ title: '运费最多两位小数，例如 12.50', icon: 'none' })
       return
@@ -1685,12 +1717,22 @@ async function confirmShipping() {
     await request({
       url: `/admin/orders/${orderId}/ship`,
       method: 'POST',
-      data: {
-        carrierCode: carriers[selectedCarrierIndex.value].code,
-        trackingNumber: tracking,
-        ...(actualShippingFee !== undefined ? { actualShippingFee } : {}),
-      },
+      data: isNoShipping
+        ? { shippingType: 'NOT_REQUIRED' }
+        : {
+            shippingType: 'NORMAL',
+            carrierCode: carriers[selectedCarrierIndex.value].code,
+            trackingNumber: tracking,
+            actualShippingFee,
+          },
     })
+    if (isNoShipping) {
+      showShippingModal.value = false
+      uni.showToast({ title: '已结案（无需发货）', icon: 'success' })
+      await loadOrderDetail()
+      return
+    }
+
     shippedShareOrderId.value = orderId
     shippedShareTitle.value = `SevenKitchen 已发货｜${carriers[selectedCarrierIndex.value].name} ${tracking}`
     shippedShareImage.value = order.value.firstItem?.recipeSnapshot?.coverImageUrl || ''
@@ -3081,6 +3123,13 @@ async function saveAddressForm() {
 .fee.total { margin-top: 6rpx; padding-top: 18rpx; border-top: 1rpx solid #f2f3f5; }
 .fee.total .fee-key { font-weight: 600; color: #1e3a2f; }
 .fee.total .fee-value { font-size: 30rpx; font-weight: 700; color: #1e3a2f; }
+
+.ship-type-row { display: flex; gap: 16rpx; }
+.ship-type-option {
+  flex: 1; height: 72rpx; border-radius: 12rpx; line-height: 72rpx; text-align: center;
+  background: #f5f6f8; color: #606266; font-size: 26rpx; border: 2rpx solid transparent;
+}
+.ship-type-option.active { background: #e8f1ec; color: #1e3a2f; border-color: #1e3a2f; font-weight: 600; }
 
 .ship-row { display: flex; align-items: center; margin-top: 18rpx; padding: 18rpx 20rpx; background: #f7f9f8; border-radius: 16rpx; }
 .ship-main { flex: 1; min-width: 0; }

@@ -237,11 +237,23 @@ export const staffSupplementOrderApi = {
     });
   },
 
-  ship(orderId: string, trackingNumber: string, carrierCode?: string) {
+  /**
+   * 发货（2026-10-31 与鲜食单统一）：
+   * NORMAL 必须给单号 + 实际运费；NOT_REQUIRED 是自用单，直接结案。
+   */
+  ship(
+    orderId: string,
+    payload: {
+      shippingType: 'NORMAL' | 'NOT_REQUIRED';
+      trackingNumber?: string;
+      carrierCode?: string;
+      actualShippingFee?: number;
+    },
+  ) {
     return request<StaffSupplementOrder>({
       url: `/admin/supplement-shop/orders/${orderId}/ship`,
       method: 'POST',
-      data: { trackingNumber, carrierCode },
+      data: payload,
     });
   },
 

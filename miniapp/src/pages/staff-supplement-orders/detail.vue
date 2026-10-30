@@ -201,7 +201,7 @@
           :disabled="submitting"
           @tap="handleShip"
         >
-          填单号发货
+          发货
         </button>
 
         <button
@@ -222,6 +222,61 @@
         </button>
       </view>
     </template>
+
+    <!-- 发货弹窗（2026-10-31 与鲜食单统一：发货类型 / 快递公司 / 单号 / 实际运费） -->
+    <view v-if="shipVisible" class="modal-mask" @tap="closeShip">
+      <view class="modal-panel" @tap.stop>
+        <view class="modal-title">填写发货信息</view>
+
+        <text class="form-label">发货类型</text>
+        <view class="ship-type-row">
+          <text
+            class="ship-type-option"
+            :class="{ active: shipType === 'NORMAL' }"
+            @tap="shipType = 'NORMAL'"
+          >正常发货</text>
+          <text
+            class="ship-type-option"
+            :class="{ active: shipType === 'NOT_REQUIRED' }"
+            @tap="shipType = 'NOT_REQUIRED'"
+          >无需发货</text>
+        </view>
+
+        <block v-if="shipType === 'NORMAL'">
+          <text class="form-label">物流公司</text>
+          <picker
+            mode="selector"
+            :range="carriers"
+            range-key="name"
+            :value="shipCarrierIndex"
+            @change="onShipCarrierChange"
+          >
+            <view class="form-picker">{{ carriers[shipCarrierIndex].name }}</view>
+          </picker>
+
+          <text class="form-label">物流单号</text>
+          <input v-model="shipTracking" class="form-input" placeholder="请输入物流单号" :maxlength="50" />
+
+          <text class="form-label">实际运费（元）</text>
+          <input
+            v-model="shipFee"
+            class="form-input"
+            type="digit"
+            placeholder="必填，例如 12.50（用于财务统计）"
+            :maxlength="8"
+          />
+        </block>
+
+        <text v-else class="ship-hint">
+          自用单不寄快递：确认后这单直接结案，不产生物流单号。
+        </text>
+
+        <button class="primary-btn" :disabled="submitting" @tap="confirmShip">
+          {{ submitting ? '提交中…' : '确认发货' }}
+        </button>
+        <button class="secondary-btn" :disabled="submitting" @tap="closeShip">取消</button>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -239,6 +294,21 @@ const orderId = ref('')
 const order = ref<StaffSupplementOrder | null>(null)
 const loading = ref(false)
 const submitting = ref(false)
+
+/** 发货弹窗状态（2026-10-31） */
+const shipVisible = ref(false)
+const shipType = ref<'NORMAL' | 'NOT_REQUIRED'>('NORMAL')
+const shipCarrierIndex = ref(0)
+const shipTracking = ref('')
+const shipFee = ref('')
+const carriers = [
+  { name: '顺丰速运', code: 'SF' },
+  { name: '京东物流', code: 'JD' },
+  { name: '圆通速递', code: 'YTO' },
+  { name: '中通快递', code: 'ZTO' },
+  { name: '韵达速递', code: 'YD' },
+  { name: 'EMS', code: 'EMS' },
+]
 
 /** 每个补剂一条：同一补剂的多袋共用同一批号与原瓶到期日 */
 const packForm = reactive<Array<{ batchNo: string; sourceExpiryDate: string }>>([])
@@ -419,34 +489,73 @@ function handlePack() {
 }
 
 function handleShip() {
-  uni.showModal({
-    title: '填快递单号',
-    editable: true,
-    placeholderText: '请输入快递单号',
-    success: async (res) => {
-      if (!res.confirm) return
-      const trackingNumber = (res.content || '').trim()
-      if (!trackingNumber) {
-        uni.showToast({ title: '单号不能为空', icon: 'none' })
-        return
-      }
-      submitting.value = true
-      try {
-        const response = await staffSupplementOrderApi.ship(orderId.value, trackingNumber)
-        if (response.code === 0) {
-          uni.showToast({ title: '已发货', icon: 'success' })
-          await fetchOrder()
-        } else {
-          uni.showToast({ title: response.message || '发货失败', icon: 'none' })
-        }
-      } catch (error) {
-        console.error('[SupplementOrderDetail] 发货失败:', error)
-        uni.showToast({ title: '发货失败', icon: 'none' })
-      } finally {
-        submitting.value = false
-      }
-    },
-  })
+  shipType.value = 'NORMAL'
+  shipCarrierIndex.value = 0
+  shipTracking.value = order.value?.trackingNumber || ''
+  shipFee.value = ''
+  shipVisible.value = true
+}
+
+function closeShip() {
+  if (submitting.value) return
+  shipVisible.value = false
+}
+
+function onShipCarrierChange(event: any) {
+  shipCarrierIndex.value = Number(event?.detail?.value || 0)
+}
+
+async function confirmShip() {
+  if (submitting.value) return
+  const isNoShipping = shipType.value === 'NOT_REQUIRED'
+
+  let fee: number | undefined
+  const tracking = shipTracking.value.trim()
+
+  if (!isNoShipping) {
+    if (tracking.length < 5) {
+      uni.showToast({ title: '请输入有效物流单号', icon: 'none' })
+      return
+    }
+    const feeText = String(shipFee.value || '').trim()
+    if (!feeText) {
+      uni.showToast({ title: '请填写实际运费', icon: 'none' })
+      return
+    }
+    if (!/^\d+(\.\d{1,2})?$/.test(feeText)) {
+      uni.showToast({ title: '运费最多两位小数，例如 12.50', icon: 'none' })
+      return
+    }
+    fee = Number(feeText)
+  }
+
+  submitting.value = true
+  try {
+    const response = isNoShipping
+      ? await staffSupplementOrderApi.ship(orderId.value, { shippingType: 'NOT_REQUIRED' })
+      : await staffSupplementOrderApi.ship(orderId.value, {
+          shippingType: 'NORMAL',
+          trackingNumber: tracking,
+          carrierCode: carriers[shipCarrierIndex.value].code,
+          actualShippingFee: fee,
+        })
+
+    if (response.code === 0) {
+      uni.showToast({
+        title: isNoShipping ? '已结案（无需发货）' : '已发货',
+        icon: 'success',
+      })
+      shipVisible.value = false
+      await fetchOrder()
+    } else {
+      uni.showToast({ title: response.message || '发货失败', icon: 'none' })
+    }
+  } catch (error) {
+    console.error('[SupplementOrderDetail] 发货失败:', error)
+    uni.showToast({ title: '发货失败', icon: 'none' })
+  } finally {
+    submitting.value = false
+  }
 }
 
 function handleCancel() {
@@ -835,4 +944,30 @@ onLoad((options) => {
 .action-bar {
   padding: 0 24rpx;
 }
+
+/* ===== 发货弹窗（2026-10-31，与鲜食单同一套字段） ===== */
+.modal-mask {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex; align-items: flex-end;
+}
+.modal-panel {
+  width: 100%; background: #fff;
+  border-radius: 28rpx 28rpx 0 0;
+  padding: 32rpx 32rpx calc(32rpx + env(safe-area-inset-bottom));
+}
+.modal-title { font-size: 32rpx; font-weight: 700; color: #1e3a2f; margin-bottom: 24rpx; }
+.form-label { display: block; margin: 20rpx 0 10rpx; font-size: 24rpx; color: #606266; }
+.form-input, .form-picker {
+  height: 80rpx; line-height: 80rpx; padding: 0 20rpx;
+  background: #f6f7f6; border-radius: 10rpx; font-size: 28rpx; color: #303133;
+}
+.ship-type-row { display: flex; gap: 16rpx; }
+.ship-type-option {
+  flex: 1; height: 72rpx; line-height: 72rpx; text-align: center;
+  background: #f5f6f8; color: #606266; font-size: 26rpx;
+  border-radius: 12rpx; border: 2rpx solid transparent;
+}
+.ship-type-option.active { background: #e8f1ec; color: #1e3a2f; border-color: #1e3a2f; font-weight: 600; }
+.ship-hint { display: block; margin: 20rpx 0; font-size: 24rpx; color: #909399; line-height: 1.6; }
 </style>

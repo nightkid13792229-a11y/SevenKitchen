@@ -486,6 +486,13 @@ export class OrderDto {
 }
 
 export class AdminOrderDto extends OrderDto {
+  /** 无需发货（自用/内部单）：发货时选「无需发货」后为 true（2026-10-31） */
+  @ApiPropertyOptional({
+    description: 'Order does not require shipping (internal/self order)',
+    example: false,
+  })
+  noShippingRequired?: boolean;
+
   @ApiPropertyOptional({
     description: 'Internal admin remark for production staff',
     example: '客户要求本批次拆分打包，并优先安排上午制作',

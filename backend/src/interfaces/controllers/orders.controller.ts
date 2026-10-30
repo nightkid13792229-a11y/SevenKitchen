@@ -1107,11 +1107,6 @@ export class OrdersController {
       ? await this.orderService.getOrderRefundRecords(order.id)
       : [];
 
-    const actualShippingFeeRow = await this.prisma.order.findUnique({
-      where: { id: order.id },
-      select: { actualShippingFee: true },
-    });
-
     return {
       id: order.id,
       orderNo: order.orderNo ?? null,
@@ -1156,11 +1151,13 @@ export class OrdersController {
       // Phase 8.14: Shipping tracking fields
       trackingNumber: order.trackingNumber ?? null,
       carrierCode: order.carrierCode ?? null,
-      /** 实际运费（2026-10-31）：纯记账字段，不在领域实体里，单独取一次 */
-      actualShippingFee:
-        actualShippingFeeRow?.actualShippingFee != null
-          ? Number(actualShippingFeeRow.actualShippingFee)
-          : null,
+      /**
+       * ⚠️ 这里**故意不返回** actualShippingFee（实际运费）。
+       *
+       * 这个 mapper 是被顾客端 `GET /orders/:id` 复用的，
+       * 成本价一旦出现在顾客接口里，等于把进价公开了（2026-10-31 老板要求）。
+       * 员工端走 `mapOrderToAdminDto`，那边才有这个字段。
+       */
       shippedAt: order.shippedAt ? order.shippedAt.toISOString() : null,
       // Phase 8.15: Order completion
       completedAt: order.completedAt ? order.completedAt.toISOString() : null,

@@ -233,7 +233,10 @@ describe('staff order detail · 状态改版', () => {
     expect(detailSource).toContain('actualShippingFeeDraft');
     expect(detailSource).toContain('实际运费（元）');
     expect(detailSource).toContain("type=\"digit\"");
-    expect(detailSource).toContain('{ actualShippingFee }');
+    // 正常发货必填运费；无需发货走另一条分支
+    expect(detailSource).toContain('actualShippingFee,');
+    expect(detailSource).toContain("shippingType: 'NOT_REQUIRED'");
+    expect(detailSource).toContain('发货类型');
   });
 
   it('★ 管理员备注开产后不再显示', () => {

@@ -20,6 +20,9 @@ model Order {
   /// 注意和 `amount_shipping` 不是一回事：那个是**向顾客收**的运费，
   /// 这个是**我们实际支出**的运费，用于财务成本统计。
   actualShippingFee            Decimal?                    @map("actual_shipping_fee") @db.Decimal(10, 2)
+  /// 无需发货（2026-10-31）：自用/内部订单不邮寄，发货时选「无需发货」直接结案。
+  /// 这类单没有快递单号、没有实际运费，也不触发发货通知。
+  noShippingRequired           Boolean                     @default(false) @map("no_shipping_required")
   amountTotal                  Decimal                     @map("amount_total")
   totalAmount                  Decimal?                    @map("total_amount")
   pricingBreakdownSnapshot     Json?                       @map("pricing_breakdown_snapshot")
@@ -5004,6 +5007,11 @@ model SupplementOrder {
   carrierCode               String?               @map("carrier_code") @db.VarChar(40)
   shippedAt                 DateTime?             @map("shipped_at")
   completedAt               DateTime?             @map("completed_at")
+
+  /// 实际运费（2026-10-31）：与实际支出对齐鲜食单口径，供财务统计
+  actualShippingFee         Decimal?              @map("actual_shipping_fee") @db.Decimal(10, 2)
+  /// 无需发货（2026-10-31）：自用单不邮寄
+  noShippingRequired        Boolean               @default(false) @map("no_shipping_required")
 
   createdAt                 DateTime              @default(now()) @map("created_at")
   updatedAt                 DateTime              @updatedAt @map("updated_at")

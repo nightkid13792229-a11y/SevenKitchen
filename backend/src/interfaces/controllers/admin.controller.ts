@@ -2010,10 +2010,16 @@ export class AdminController {
         actualShippingFee: {
           type: 'number',
           example: 12.5,
-          description: '实际运费（元，两位小数，选填）；用于财务成本统计',
+          description: '实际运费（元，两位小数）；正常发货时必填',
+        },
+        shippingType: {
+          type: 'string',
+          enum: ['NORMAL', 'NOT_REQUIRED'],
+          example: 'NORMAL',
+          description: '发货类型：正常发货 / 无需发货（自用单）',
         },
       },
-      required: ['carrierCode', 'trackingNumber'],
+      required: [],
     },
   })
   @ApiResponse({
@@ -2027,32 +2033,51 @@ export class AdminController {
     @Param('orderId') orderId: string,
     @Body()
     body: {
-      carrierCode: string;
-      trackingNumber: string;
+      carrierCode?: string;
+      trackingNumber?: string;
       actualShippingFee?: number | string | null;
+      shippingType?: 'NORMAL' | 'NOT_REQUIRED';
     },
   ): Promise<ApiResponseDto<OrderDto> | ApiResponseDto<null>> {
     try {
-      // 实际运费：选填，最多两位小数；不合法就拒绝，别静默存进去
-      let actualShippingFee: number | null = null;
-      const rawFee = body.actualShippingFee;
-      if (rawFee !== undefined && rawFee !== null && String(rawFee).trim() !== '') {
-        const parsed = Number(rawFee);
-        if (!Number.isFinite(parsed) || parsed < 0) {
-          return ApiResponseDto.error(400, '实际运费必须是不小于 0 的数字');
-        }
-        if (Math.abs(parsed - Number(parsed.toFixed(2))) > 1e-9) {
-          return ApiResponseDto.error(400, '实际运费最多保留两位小数');
-        }
-        actualShippingFee = Number(parsed.toFixed(2));
+      const shippingType = body.shippingType === 'NOT_REQUIRED' ? 'NOT_REQUIRED' : 'NORMAL';
+
+      // 无需发货：快递公司 / 单号 / 运费一律不看，直接结案
+      if (shippingType === 'NOT_REQUIRED') {
+        const order = await this.orderService.shipOrder(
+          orderId,
+          { shippingType },
+          null,
+        );
+        return ApiResponseDto.success(
+          (await this.mapOrderToAdminDto(order)) as unknown as OrderDto,
+        );
       }
+
+      const carrierCode = String(body.carrierCode || '').trim();
+      const trackingNumber = String(body.trackingNumber || '').trim();
+      if (!carrierCode || !trackingNumber) {
+        return ApiResponseDto.error(400, '正常发货必须选择快递公司并填写单号');
+      }
+
+      // 实际运费：必填，最多两位小数
+      const rawFee = body.actualShippingFee;
+      if (rawFee === undefined || rawFee === null || String(rawFee).trim() === '') {
+        return ApiResponseDto.error(400, '请填写实际运费');
+      }
+      const parsedFee = Number(rawFee);
+      if (!Number.isFinite(parsedFee) || parsedFee < 0) {
+        return ApiResponseDto.error(400, '实际运费必须是不小于 0 的数字');
+      }
+      if (Math.abs(parsedFee - Number(parsedFee.toFixed(2))) > 1e-9) {
+        return ApiResponseDto.error(400, '实际运费最多保留两位小数');
+      }
+      const actualShippingFee = Number(parsedFee.toFixed(2));
 
       const order = await this.orderService.shipOrder(
         orderId,
-        body.trackingNumber,
-        body.carrierCode,
+        { shippingType, carrierCode, trackingNumber, actualShippingFee },
         null, // Admin ID not available in current implementation
-        actualShippingFee,
       );
 
       // Map to DTO (simplified)
@@ -2354,6 +2379,17 @@ export class AdminController {
   }
 
   private async mapOrderToAdminDto(order: any): Promise<AdminOrderDto> {
+    /**
+     * 实际运费 / 无需发货是**纯记账字段**，不在领域实体上，这里单独取一次。
+     * 只有员工端 mapper 才带上它们 —— 顾客端那个 mapper 故意不返回（成本价）。
+     */
+    const costRow = this.prisma.order?.findUnique
+      ? await this.prisma.order.findUnique({
+          where: { id: order.id },
+          select: { actualShippingFee: true, noShippingRequired: true },
+        })
+      : null;
+
     const addressSource = order.shippingAddressSnapshot ?? order.address;
     const currentAddress = order.address;
     const addressPhone =
@@ -2419,6 +2455,12 @@ export class AdminController {
         : undefined,
       trackingNumber: order.trackingNumber ?? null,
       carrierCode: order.carrierCode ?? null,
+      // 实际运费 / 无需发货：只有员工端能看到（顾客端 mapper 故意不返回）
+      actualShippingFee:
+        costRow?.actualShippingFee != null
+          ? Number(costRow.actualShippingFee)
+          : null,
+      noShippingRequired: costRow?.noShippingRequired === true,
       shippedAt: order.shippedAt ? order.shippedAt.toISOString() : null,
       completedAt: order.completedAt ? order.completedAt.toISOString() : null,
       cancelledAt: order.cancelledAt ? order.cancelledAt.toISOString() : null,

@@ -917,9 +917,20 @@ export class SupplementOrderService {
   }
 
   /** 发货：只有已完成分装的订单才能填单号；PACKED 有未完结退款时拒绝 */
+  /**
+   * 补剂发货（2026-10-31 与鲜食统一口径）。
+   *
+   *   · NORMAL        —— 正常寄快递：单号必填，实际运费必填
+   *   · NOT_REQUIRED  —— 无需发货（自用单）：直接结案，不产生物流信息
+   */
   async shipOrder(
     orderId: string,
-    dto: { trackingNumber: string; carrierCode?: string },
+    dto: {
+      shippingType?: 'NORMAL' | 'NOT_REQUIRED';
+      trackingNumber?: string;
+      carrierCode?: string;
+      actualShippingFee?: number | null;
+    },
     actor: { type: 'STAFF' | 'ADMIN' | 'SYSTEM'; id?: string | null } = {
       type: 'STAFF',
     },
@@ -933,10 +944,49 @@ export class SupplementOrderService {
       );
     }
 
+    // 无需发货：自用单直接结案，没有单号也没有运费
+    if (dto.shippingType === 'NOT_REQUIRED') {
+      await this.prisma.supplementOrder.update({
+        where: { id: orderId },
+        data: {
+          status: 'COMPLETED',
+          completedAt: new Date(),
+          noShippingRequired: true,
+          trackingNumber: null,
+          carrierCode: null,
+          shippedAt: null,
+          actualShippingFee: null,
+        },
+      });
+
+      try {
+        await this.prisma.supplementOrderEvent.create({
+          data: {
+            orderId,
+            type: 'COMPLETED',
+            fromValue: 'PACKED',
+            toValue: 'COMPLETED',
+            actorType: actor.type,
+            actorId: actor.id ?? null,
+            metadata: { shippingType: 'NOT_REQUIRED' },
+          },
+        });
+      } catch {
+        // 审计失败不影响结案
+      }
+
+      return this.getOrderById(orderId);
+    }
+
     const trackingNumber = (dto.trackingNumber || '').trim();
     if (!trackingNumber) {
       throw new BadRequestException('请填写快递单号');
     }
+
+    const actualShippingFee =
+      typeof dto.actualShippingFee === 'number' && Number.isFinite(dto.actualShippingFee)
+        ? Number(dto.actualShippingFee.toFixed(2))
+        : null;
 
     await this.prisma.supplementOrder.update({
       where: { id: orderId },
@@ -944,6 +994,7 @@ export class SupplementOrderService {
         status: 'SHIPPED',
         trackingNumber,
         carrierCode: dto.carrierCode?.trim() || null,
+        actualShippingFee: actualShippingFee === null ? null : actualShippingFee.toFixed(2),
         shippedAt: new Date(),
       },
     });

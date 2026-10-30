@@ -112,7 +112,10 @@ describe('RecipeCoverImageService · Seedream', () => {
       layout: 'COVER_16_9',
     });
 
-    expect(visualBriefService.build).toHaveBeenCalledWith(ingredients);
+    expect(visualBriefService.build).toHaveBeenCalledTimes(1);
+    const loader = visualBriefService.build.mock.calls[0][0];
+    expect(typeof loader).toBe('function');
+    await expect(loader()).resolves.toEqual(ingredients);
     expect(configService.getEnabledProviderRuntimeConfig).toHaveBeenCalledWith({
       purpose: 'RECIPE_COVER_IMAGE',
       provider: 'ARK',
@@ -131,7 +134,7 @@ describe('RecipeCoverImageService · Seedream', () => {
       'A high-end commercial food photograph on a light oak table',
     );
     expect(body.prompt).not.toContain('鸭胸');
-    expect(body.prompt).toContain('No text');
+    expect(body.prompt).toContain('画面中不要出现任何文字、标签或 LOGO。');
     expect(imageOptimizationService.optimizeForUpload).toHaveBeenCalledWith(
       Buffer.from([1, 2, 3]),
       'recipe-cover',
@@ -146,6 +149,24 @@ describe('RecipeCoverImageService · Seedream', () => {
       provider: 'ARK',
       model: 'doubao-seedream-5-0-pro-260628',
     });
+  });
+
+  it('可以直接传取数函数：由写提示词的服务在工具调用时取食材', async () => {
+    const ingredients = [
+      { name: '鸡胸', preparationMethod: '去骨', ratioPercent: 22.5 },
+    ];
+    const loadIngredients = jest.fn().mockResolvedValue(ingredients);
+
+    await service.generate({
+      recipeName: '青口贝虾仁鸡胸',
+      loadIngredients,
+      layout: 'COVER_16_9',
+    });
+
+    expect(visualBriefService.build).toHaveBeenCalledWith(loadIngredients);
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'https://ark.cn-beijing.volces.com/api/v3/images/generations',
+    );
   });
 
   it('DeepSeek / Ark / 提示词任一缺失时不可用', async () => {

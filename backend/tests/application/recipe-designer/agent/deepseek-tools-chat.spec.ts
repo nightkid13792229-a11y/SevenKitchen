@@ -103,6 +103,31 @@ describe('callDeepSeekTools', () => {
     expect(body).not.toHaveProperty('response_format');
   });
 
+  it('可以强制指定工具，并显式开启 thinking', async () => {
+    global.fetch = jest.fn().mockResolvedValue(
+      jsonResponse({ choices: [{ message: { content: '好了' } }] }),
+    ) as unknown as typeof fetch;
+
+    await callDeepSeekTools({
+      ...BASE_OPTIONS,
+      toolChoice: {
+        type: 'function',
+        function: { name: 'get_recipe_ingredients' },
+      },
+      thinking: 'enabled',
+    });
+
+    const fetchMock = global.fetch as unknown as jest.Mock;
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.tool_choice).toEqual({
+      type: 'function',
+      function: { name: 'get_recipe_ingredients' },
+    });
+    // 开启思考 = 不传 thinking 字段，交给 DeepSeek 默认开启
+    expect(body).not.toHaveProperty('thinking');
+  });
+
   it('500 后成功：重试一次（共 2 次）', async () => {
     global.fetch = jest
       .fn()

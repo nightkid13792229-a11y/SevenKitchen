@@ -120,22 +120,33 @@ describe('buildRecipeCoverPrompt', () => {
     expect(prompt.length).toBeLessThanOrEqual(1000);
   });
 
-  it('有整段摄影 brief 时直接用它：不再拼旧模板/原始食材', () => {
+  it('有整段摄影 brief 时直接用它：只追加一句中文负面要求', () => {
     const prompt = buildRecipeCoverPrompt({
       recipeName: '鸭肉南瓜燕麦',
       ingredients,
       imageBrief:
-        'A high-end editorial food photograph on a light oak table by a window. ' +
-        'A large pale-pink duck breast in the foreground, with oat groats behind it; ' +
-        'soft side light, warm neutral grade, shallow depth of field.',
+        '一张顶尖杂志级的食物照片，浅色木桌，前景是去骨鸡胸，周围摆着牛肝和虾仁。',
     });
 
-    expect(prompt).toContain('A high-end editorial food photograph');
-    expect(prompt).toContain('No text');
+    expect(prompt).toContain('一张顶尖杂志级的食物照片');
+    expect(prompt).toContain('画面中不要出现任何文字、标签或 LOGO。');
+    expect(prompt).not.toContain('No text');
+    expect(prompt).not.toContain('supplements');
     expect(prompt).not.toContain('鸭胸肉');
     expect(prompt).not.toContain('45%');
-    expect(prompt).not.toMatch(/\d/);
-    expect(prompt.length).toBeLessThanOrEqual(1000);
+  });
+
+  it('整段摄影 brief 再长也不按字数截断', () => {
+    const imageBrief = `一张顶尖杂志级的食物照片，${'食材新鲜、光线柔和。'.repeat(200)}`;
+
+    const prompt = buildRecipeCoverPrompt({
+      recipeName: '鸭肉南瓜燕麦',
+      ingredients,
+      imageBrief,
+    });
+
+    expect(prompt).toContain(imageBrief);
+    expect(prompt.length).toBeGreaterThan(1000);
   });
 
   it('没有食材数据时也能生成（不崩）', () => {

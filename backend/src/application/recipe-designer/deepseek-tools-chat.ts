@@ -45,6 +45,16 @@ export interface DeepSeekToolsOptions {
   requestTimeoutMs: number;
   messages: DeepSeekToolsMessage[];
   tools: DeepSeekToolDefinition[];
+  /**
+   * 工具选择策略：默认 auto；封面取数时第一轮强制指定工具，
+   * 第二轮设为 none，保证拿到数据后只写提示词。
+   */
+  toolChoice?:
+    | 'auto'
+    | 'none'
+    | { type: 'function'; function: { name: string } };
+  /** 是否开启 DeepSeek 思考模式；默认关闭，保持既有调用方行为 */
+  thinking?: 'enabled' | 'disabled';
   temperature?: number;
   maxTokens?: number;
   /**
@@ -91,11 +101,13 @@ export async function callDeepSeekTools(
             model: options.model,
             messages: options.messages,
             tools: options.tools,
-            tool_choice: 'auto',
+            tool_choice: options.toolChoice ?? 'auto',
             // DeepSeek 新模型默认开启 thinking（effort=high）：工具调用场景
             // 会把大量时间/配额花在思维链上，实测单轮可达数分钟。
-            // 与健康报告抽取一致，显式关闭；需要推理时由业务提示词约束。
-            thinking: { type: 'disabled' },
+            // 默认仍显式关闭；要开启时不传该字段，交给模型默认值。
+            ...(options.thinking === 'enabled'
+              ? {}
+              : { thinking: { type: 'disabled' } }),
             temperature: options.temperature ?? 0.3,
             max_tokens: options.maxTokens ?? 16384,
           }),

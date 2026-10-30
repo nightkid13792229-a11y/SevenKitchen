@@ -1,38 +1,61 @@
 import { BadRequestException } from '@nestjs/common';
 
-const callDeepSeekJson = jest.fn();
+const callDeepSeekTools = jest.fn();
 
-jest.mock('src/application/recipe-designer/deepseek-chat', () => ({
-  callDeepSeekJson: (...args: unknown[]) => callDeepSeekJson(...args),
+jest.mock('src/application/recipe-designer/deepseek-tools-chat', () => ({
+  callDeepSeekTools: (...args: unknown[]) => callDeepSeekTools(...args),
 }));
 
 import { RecipeCoverVisualBriefService } from 'src/application/recipe-designer/recipe-cover-visual-brief.service';
 
+const systemPrompt = [
+  '你是一名顶尖的商业食物摄影师兼食物造型师，服务于一个高端鲜食狗粮品牌。',
+  '',
+  '先调用 get_recipe_ingredients 读取当前食谱的食材。',
+  '',
+  '再用中文写一段用于让文生图模型生成食谱封面的提示词。',
+  '',
+  '画面中不要出现任何文字、标签或 LOGO。',
+  '',
+  '只需要返回提示词即可。',
+].join('\n');
+
 const ingredients = [
-  { name: '鸭胸', preparationMethod: '鸭胸/熟/去皮', ratioPercent: 47 },
-  { name: '燕麦米', preparationMethod: '生', ratioPercent: 16 },
-  { name: '南瓜', preparationMethod: '生/去皮切块', ratioPercent: 8 },
+  { name: '鸡胸', preparationMethod: '生/去骨', ratioPercent: 22.5 },
+  {
+    name: '牛肝',
+    preparationMethod: '去油、生重、打碎、充分搅拌',
+    ratioPercent: 4.5,
+  },
+  { name: '大米', preparationMethod: '熟', ratioPercent: 0 },
+  { name: '红薯', preparationMethod: '熟/去皮', ratioPercent: 0 },
+  { name: '火麻籽', preparationMethod: '火麻仁/干/去壳', ratioPercent: 0 },
+  { name: '食用盐', preparationMethod: '干重、充分搅拌', ratioPercent: 0 },
+  { name: '南美对虾虾仁', preparationMethod: '', ratioPercent: 0 },
 ];
 
-const cleanBrief =
-  'A high-end editorial food photograph on a light oak table by a window. ' +
-  'A large pale-pink duck breast in the foreground, with oat groats and ' +
-  'orange pumpkin cubes behind it; soft side light, warm neutral grade, ' +
-  'shallow depth of field.';
+const expectedToolResult = [
+  '鸡胸（去骨）',
+  '牛肝（去油、打碎、充分搅拌）',
+  '大米',
+  '红薯（去皮）',
+  '火麻籽（火麻仁、去壳）',
+  '食用盐（充分搅拌）',
+  '南美对虾虾仁',
+].join('\n');
 
-const parsed = {
-  brief: cleanBrief,
-  ingredients: [
-    {
-      index: 0,
-      visual: 'a large pale-pink duck breast',
-      placement: 'foreground hero',
-    },
-    { index: 1, visual: 'a mound of oat groats', placement: 'middle' },
-    { index: 2, visual: 'orange pumpkin cubes', placement: 'middle' },
-  ],
-  missing: [],
+const toolCall = {
+  id: 'call-1',
+  type: 'function' as const,
+  function: {
+    name: 'get_recipe_ingredients',
+    arguments: '{}',
+  },
 };
+
+const finalPrompt =
+  '一块去骨鸡胸、少量牛肝、大米、去皮红薯、去壳火麻籽、一点盐和虾仁，' +
+  '放在一张干净的木桌上，拍成顶尖杂志级的商业食物照片。';
 
 function createService() {
   const provider = {
@@ -45,11 +68,7 @@ function createService() {
     }),
   };
   const config = {
-    getPromptTemplate: jest
-      .fn()
-      .mockResolvedValue(
-        'You are a commercial food photographer and food stylist.',
-      ),
+    getPromptTemplate: jest.fn().mockResolvedValue(systemPrompt),
   };
   return {
     service: new RecipeCoverVisualBriefService(
@@ -61,120 +80,178 @@ function createService() {
   };
 }
 
-describe('RecipeCoverVisualBriefService', () => {
+function mockToolFlow(content = finalPrompt) {
+  callDeepSeekTools
+    .mockResolvedValueOnce({
+      content: null,
+      toolCalls: [toolCall],
+      usage: null,
+    })
+    .mockResolvedValueOnce({
+      content,
+      toolCalls: [],
+      usage: null,
+    });
+}
+
+describe('RecipeCoverVisualBriefService · 工具取食材', () => {
   beforeEach(() => {
-    callDeepSeekJson.mockReset();
+    callDeepSeekTools.mockReset();
   });
 
-  it('让 DeepSeek 写整张照片的 brief：输入带占比，输出是一段摄影描述', async () => {
-    callDeepSeekJson.mockResolvedValue(parsed);
+  it('先强制调用 get_recipe_ingredients，拿到食材后再写提示词', async () => {
+    mockToolFlow();
+    const loadIngredients = jest.fn().mockResolvedValue(ingredients);
     const { service } = createService();
 
-    const brief = await service.build(ingredients);
+    const prompt = await service.build(loadIngredients);
 
-    expect(brief).toBe(cleanBrief);
-    expect(callDeepSeekJson).toHaveBeenCalledWith(
+    expect(prompt).toBe(finalPrompt);
+    expect(loadIngredients).toHaveBeenCalledTimes(1);
+
+    expect(callDeepSeekTools).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({
-        temperature: 0.7,
-        systemPrompt: expect.stringContaining(
-          'commercial food photographer',
-        ),
-        userPayload: {
-          scene: expect.objectContaining({
-            mustShowAll: true,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: expect.any(String) },
+        ],
+        tools: [
+          expect.objectContaining({
+            type: 'function',
+            function: expect.objectContaining({
+              name: 'get_recipe_ingredients',
+            }),
           }),
-          ingredients: [
-            { index: 0, name: '鸭胸', preparation: '鸭胸/熟/去皮', ratio: 47 },
-            { index: 1, name: '燕麦米', preparation: '生', ratio: 16 },
-            { index: 2, name: '南瓜', preparation: '生/去皮切块', ratio: 8 },
-          ],
+        ],
+        toolChoice: {
+          type: 'function',
+          function: { name: 'get_recipe_ingredients' },
         },
+        thinking: 'disabled',
+        temperature: 0.3,
+        maxTokens: 1000,
+      }),
+    );
+
+    expect(callDeepSeekTools).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: expect.any(String) },
+          { role: 'assistant', content: null, tool_calls: [toolCall] },
+          {
+            role: 'tool',
+            tool_call_id: 'call-1',
+            content: expectedToolResult,
+          },
+        ],
+        toolChoice: 'none',
+        thinking: 'enabled',
+        temperature: 0.7,
+        maxTokens: 8000,
       }),
     );
   });
 
-  it('同一组食材 + 占比走缓存：第二次不再调用模型', async () => {
-    callDeepSeekJson.mockResolvedValue(parsed);
+  it('工具结果只给名称和处理方式：不给占比，熟/生/干只保留切割部位信息', async () => {
+    mockToolFlow();
     const { service } = createService();
 
-    await service.build(ingredients);
-    await service.build(ingredients);
+    await service.build(jest.fn().mockResolvedValue(ingredients));
 
-    expect(callDeepSeekJson).toHaveBeenCalledTimes(1);
+    const secondCall = callDeepSeekTools.mock.calls[1][0];
+    const toolMessage = secondCall.messages[3];
+    expect(toolMessage.content).toBe(expectedToolResult);
+    expect(toolMessage.content).not.toMatch(/\d/);
+    expect(toolMessage.content).not.toContain('熟');
+    expect(toolMessage.content).not.toContain('生/');
+    expect(toolMessage.content).not.toContain('22.5');
   });
 
-  it('把 brief 里的中文、数字、百分号、引号、冒号清掉', async () => {
-    callDeepSeekJson.mockResolvedValue({
-      ...parsed,
-      brief:
-        '现场 47% "a pale-pink duck breast": 在 light oak table, soft light.',
+  it('模型没有调用工具时直接报错，不拿空数据去写', async () => {
+    callDeepSeekTools.mockResolvedValueOnce({
+      content: '我直接写一段',
+      toolCalls: [],
+      usage: null,
     });
+    const loadIngredients = jest.fn().mockResolvedValue(ingredients);
     const { service } = createService();
 
-    const brief = await service.build(ingredients);
-
-    expect(brief).toContain('a pale-pink duck breast');
-    expect(brief).toContain('light oak table');
-    expect(brief).not.toMatch(/[\u4e00-\u9fff]/);
-    expect(brief).not.toMatch(/\d/);
-    expect(brief).not.toContain('%');
-    expect(brief).not.toContain('"');
-    expect(brief).not.toContain(':');
+    await expect(service.build(loadIngredients)).rejects.toThrow(
+      '模型没有读取食材',
+    );
+    expect(loadIngredients).not.toHaveBeenCalled();
+    expect(callDeepSeekTools).toHaveBeenCalledTimes(1);
   });
 
-  it('有食材没被安排进画面（missing 非空）就报错', async () => {
-    callDeepSeekJson.mockResolvedValue({
-      ...parsed,
-      missing: [2],
-    });
+  it('食材为空时在工具结果处报错，不再调用第二次模型', async () => {
+    mockToolFlow();
     const { service } = createService();
 
-    await expect(service.build(ingredients)).rejects.toThrow(
-      '有食材没被安排进画面',
-    );
+    await expect(
+      service.build(jest.fn().mockResolvedValue([])),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(callDeepSeekTools).toHaveBeenCalledTimes(1);
   });
 
-  it('结构化清单缺一条也报错，不拿残缺 brief 去生图', async () => {
-    callDeepSeekJson.mockResolvedValue({
-      ...parsed,
-      ingredients: parsed.ingredients.slice(0, 2),
-    });
+  it('模型没有返回提示词时报错', async () => {
+    mockToolFlow('   ');
     const { service } = createService();
 
-    await expect(service.build(ingredients)).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
+    await expect(
+      service.build(jest.fn().mockResolvedValue(ingredients)),
+    ).rejects.toThrow('没有返回提示词');
   });
 
-  it('brief 为空时报错', async () => {
-    callDeepSeekJson.mockResolvedValue({
-      ...parsed,
-      brief: '   ',
-    });
+  it('中文保留，只去掉代码块、提示词前缀和包裹引号', async () => {
+    mockToolFlow(
+      '```text\n提示词：鸡胸、牛肝、虾仁，放在一张木桌上。\n```',
+    );
     const { service } = createService();
 
-    await expect(service.build(ingredients)).rejects.toBeInstanceOf(
-      BadRequestException,
+    const prompt = await service.build(
+      jest.fn().mockResolvedValue(ingredients),
     );
+
+    expect(prompt).toBe('鸡胸、牛肝、虾仁，放在一张木桌上。');
   });
 
-  it('模型调用失败：报“封面画面描述生成失败”，不缓存', async () => {
-    callDeepSeekJson.mockRejectedValue(
-      new BadRequestException('DeepSeek Agent 设置未启用'),
-    );
+  it('长提示词不再按字数截断', async () => {
+    const longPrompt = `顶尖杂志级食物照片，${'食材丰富、光线柔和。'.repeat(120)}`;
+    mockToolFlow(longPrompt);
     const { service } = createService();
 
-    await expect(service.build(ingredients)).rejects.toThrow(
-      '封面画面描述生成失败',
+    const prompt = await service.build(
+      jest.fn().mockResolvedValue(ingredients),
     );
-    expect(callDeepSeekJson).toHaveBeenCalledTimes(1);
+
+    expect(prompt.length).toBeGreaterThan(1000);
+    expect(prompt).toBe(longPrompt.trim());
   });
 
-  it('没有食材直接报错', async () => {
+  it('不做缓存：同一份食材连续生成两次，会重新取数、重新调用模型', async () => {
+    mockToolFlow();
+    mockToolFlow();
+    const loadIngredients = jest.fn().mockResolvedValue(ingredients);
     const { service } = createService();
-    await expect(service.build([])).rejects.toBeInstanceOf(
-      BadRequestException,
+
+    await service.build(loadIngredients);
+    await service.build(loadIngredients);
+
+    expect(loadIngredients).toHaveBeenCalledTimes(2);
+    expect(callDeepSeekTools).toHaveBeenCalledTimes(4);
+  });
+
+  it('文本模型未配置时给出可操作的错误', async () => {
+    const { service, provider } = createService();
+    provider.getEnabledDeepSeekRuntimeConfig.mockRejectedValue(
+      new Error('未启用'),
     );
-    expect(callDeepSeekJson).not.toHaveBeenCalled();
+
+    await expect(
+      service.build(jest.fn().mockResolvedValue(ingredients)),
+    ).rejects.toThrow('封面提示词生成失败');
   });
 });

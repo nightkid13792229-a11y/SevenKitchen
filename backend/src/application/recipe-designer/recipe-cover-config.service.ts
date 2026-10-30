@@ -2,23 +2,30 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 
 import { PrismaService } from '../../infrastructure/prisma.service';
 
-/** DeepSeek 写 Seedream prompt 的系统提示词默认值（2026-10-28） */
+/** DeepSeek 写 Seedream 提示词的系统提示词默认值（2026-10-31） */
 export const DEFAULT_RECIPE_COVER_PROMPT = [
-  'You are a commercial food photographer and food stylist.',
-  'Design ONE editorial food photograph for a premium fresh dog food brand. The final brief must be a single natural paragraph, under 110 words, with no lists, colons, labels, numbers or duplicates.',
-  'Show every ingredient exactly once, raw and freshly prepped, in its correct cut and part. Use the ratios only to decide the amounts; never write numbers. Use the preparation text: if it says skin removed, say skinless; if it says cubed or diced, say cubes or diced.',
-  'Use only the ingredients in the input; do not add any extra food such as rice, beans or bread unless they are listed.',
-  'Composition: slice or fan the main protein on a small ceramic platter in the foreground as the hero; arrange the other ingredients in small separate bowls or neat piles around it, in depth. Never show a whole raw breast or one giant piece of meat.',
-  'Make every ingredient visually distinct and recognizable: oat groats are pale beige plump grains, not dark brown buckwheat or beans; pumpkin as bright orange cubes; oil in one small dish. Put duck heart, duck gizzard and duck liver on three separate small dishes, never on one plate or in one bowl; three dishes total. Use exactly one egg in total: one cracked raw egg with a runny yolk and clear white; no second whole egg in its shell, no boiled egg halves. Keep pumpkin cubes and carrot pieces in two separate small dishes; never put them in one bowl; the carrots are not pumpkin. Broccoli is a tree-like green head with florets; never substitute leafy greens, spinach or bok choy. The main protein is rosy-red, darker than chicken; slice it thinly and fan the slices. Keep every bowl and the broccoli inside the frame with a little margin; do not crop any ingredient. Do not invent extra ingredients or duplicate bowls or eggs.',
-  'Use only non-food props: linen; no empty bowl, no forks.',
-  'Scene: a real kitchen, a light oak table by a window, soft natural side light, warm neutral color grading, shallow depth of field, high-end commercial food photography.',
-  'Use the English food names naturally; do not write them as labels.',
-  'Even if the preparation says cooked or dried, show it raw and fresh; never write cooked, steamed, grilled or lightly cooked.',
-  'The photograph must contain no text, letters, numbers, labels, captions, packaging, logos, watermarks or human hands; it must not look like an infographic.',
-  'Return JSON only: {"brief":"...","ingredients":[{"index":0,"visual":"...","placement":"..."}],"missing":[]}',
-].join(' ');
+  '你是一名顶尖的商业食物摄影师兼食物造型师，服务于一个高端鲜食狗粮品牌。',
+  '',
+  '先调用 get_recipe_ingredients 读取当前食谱的食材。',
+  '',
+  '再用中文写一段用于让文生图模型生成食谱封面的提示词：把这些食材全部拍成一张顶尖杂志级的商业食物照片，所有食材都是新鲜的、一律画成生的（清单里写熟或干也一样），并按清单里的方式预处理。',
+  '',
+  '画面中不要出现任何文字、标签或 LOGO。',
+  '',
+  '只需要返回提示词即可。',
+].join('\n');
 
 const MAX_PROMPT_LENGTH = 6000;
+
+/**
+ * 旧默认提示词里的配方私货（鸭心/鸭肝/南瓜/西兰花）。
+ * 线上 singleton 还存着这段时，视为“没被人改过”，自动回退新默认，
+ * 避免新工具流程拿到旧提示词后把 JSON 当封面提示词发给生图模型。
+ */
+const LEGACY_PROMPT_MARKERS = [
+  'Put duck heart, duck gizzard and duck liver',
+  'Broccoli is a tree-like green head',
+];
 
 @Injectable()
 export class RecipeCoverConfigService {
@@ -28,7 +35,12 @@ export class RecipeCoverConfigService {
     const row = await this.prisma.recipeCoverConfig.findUnique({
       where: { id: 'singleton' },
     });
-    return String(row?.promptTemplate ?? '').trim() || DEFAULT_RECIPE_COVER_PROMPT;
+    const stored = String(row?.promptTemplate ?? '').trim();
+    if (!stored) return DEFAULT_RECIPE_COVER_PROMPT;
+    if (LEGACY_PROMPT_MARKERS.some((marker) => stored.includes(marker))) {
+      return DEFAULT_RECIPE_COVER_PROMPT;
+    }
+    return stored;
   }
 
   async updatePromptTemplate(

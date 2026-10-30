@@ -20,7 +20,9 @@ describe('RecipeCoverConfigService', () => {
   it('没有配置时返回默认提示词', async () => {
     prisma.recipeCoverConfig.findUnique.mockResolvedValue(null);
     const prompt = await service.getPromptTemplate();
-    expect(prompt).toContain('commercial food photographer');
+    expect(prompt).toContain('get_recipe_ingredients');
+    expect(prompt).toContain('一律画成生的');
+    expect(prompt).toContain('文字、标签或 LOGO');
     expect(prompt).toBe(DEFAULT_RECIPE_COVER_PROMPT);
   });
 
@@ -28,6 +30,17 @@ describe('RecipeCoverConfigService', () => {
     prisma.recipeCoverConfig.findUnique.mockResolvedValue({
       promptTemplate: '   ',
     });
+    await expect(service.getPromptTemplate()).resolves.toBe(
+      DEFAULT_RECIPE_COVER_PROMPT,
+    );
+  });
+
+  it('线上残留的旧默认提示词（带鸭心/南瓜/西兰花私货）自动回退到新默认', async () => {
+    prisma.recipeCoverConfig.findUnique.mockResolvedValue({
+      promptTemplate:
+        'You are a commercial food photographer. Put duck heart, duck gizzard and duck liver on three separate small dishes. Broccoli is a tree-like green head.',
+    });
+
     await expect(service.getPromptTemplate()).resolves.toBe(
       DEFAULT_RECIPE_COVER_PROMPT,
     );

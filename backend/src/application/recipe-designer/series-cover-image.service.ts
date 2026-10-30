@@ -145,6 +145,8 @@ export class SeriesCoverImageService {
       recipeName,
       foodNames,
       ingredients: source.ingredients,
+      // 模型调用 get_recipe_ingredients 时才把该阶段的食材交给它
+      loadIngredients: async () => source.ingredients,
       layout: 'COVER_16_9',
     });
 

@@ -4,56 +4,66 @@ import {
   AgentProviderConfigService,
   RECIPE_COVER_PROMPT_PURPOSE,
 } from '../nutrition-governance/agent-provider-config.service';
+import {
+  callDeepSeekTools,
+  type DeepSeekToolCall,
+  type DeepSeekToolDefinition,
+  type DeepSeekToolsMessage,
+} from './deepseek-tools-chat';
 import { RecipeCoverConfigService } from './recipe-cover-config.service';
-import { callDeepSeekJson } from './deepseek-chat';
 import type { RecipeCoverIngredient } from './recipe-cover-prompt';
 
-/** brief 上限；Seedream prompt 仍有总长度上限，保持简短 */
-const MAX_BRIEF_LENGTH = 700;
+const INGREDIENT_TOOL_NAME = 'get_recipe_ingredients';
+const USER_TRIGGER = '生成封面提示词。';
+
+/** 只读工具：模型需要先取当前食谱的食材，才能写提示词 */
+const INGREDIENT_TOOL: DeepSeekToolDefinition = {
+  type: 'function',
+  function: {
+    name: INGREDIENT_TOOL_NAME,
+    description: '返回当前食谱的食材，每行一种；括号里是处理方式。',
+    parameters: {
+      type: 'object',
+      properties: {},
+      additionalProperties: false,
+    },
+  },
+};
+
+/** 封面要一律画生的：这些状态词从工具结果里去掉，只保留切割/部位信息 */
+const RAW_STATE_TOKENS = new Set([
+  '生',
+  '熟',
+  '干',
+  '生重',
+  '熟重',
+  '干重',
+  '煮熟',
+  '蒸熟',
+  '烤',
+  '煎',
+  '炸',
+]);
 
 /**
- * 让 DeepSeek 当「摄影指导」，而不是逐食材翻译（2026-10-28）
+ * 让 DeepSeek 当「摄影指导」（2026-10-31 工具取数版）
  *
- * 旧做法：把每个食材单独翻成外观词，生图模型拿到的是一串并列短语，
- * 没有主次、没有构图、没有光线；结果就是素材库感的平铺。
- *
- * 新做法：把完整食材（含占比）和固定场景交给 DeepSeek，让它输出
- * **一整段摄影 brief**：前景主角、中景配角、背景点缀、镜头/光线/道具，
- * 并要求所有食材都出现。生图模型只负责按这段 brief 画。
+ * 模型不再被动接收食材 JSON，而是先调用 `get_recipe_ingredients`
+ * 取当前草稿 / 系列的食材（名称 + 处理方式，不含占比），再写一段
+ * 中文封面提示词。这样提示词里没有数据结构，也没有百分比可抄。
  */
 @Injectable()
 export class RecipeCoverVisualBriefService {
   private readonly logger = new Logger(RecipeCoverVisualBriefService.name);
-  /** 同一组食材 + 占比复用同一段 brief，避免每次重写导致风格漂移 */
-  private readonly cache = new Map<string, string>();
 
   constructor(
     private readonly agentProviderConfigService: AgentProviderConfigService,
     private readonly recipeCoverConfigService: RecipeCoverConfigService,
   ) {}
 
-  async build(ingredients: RecipeCoverIngredient[]): Promise<string> {
-    const rows = ingredients
-      .map((item) => ({
-        name: String(item?.name ?? '').trim(),
-        preparationMethod: String(item?.preparationMethod ?? '').trim(),
-        ratioPercent: Number(item?.ratioPercent) || 0,
-      }))
-      .filter((item) => Boolean(item.name));
-
-    if (rows.length === 0) {
-      throw new BadRequestException('没有可用于生成封面的食材');
-    }
-
-    const cacheKey = rows
-      .map(
-        (row) =>
-          `${row.name}|${row.preparationMethod}|${Math.round(row.ratioPercent)}`,
-      )
-      .join(';');
-    const cached = this.cache.get(cacheKey);
-    if (cached) return cached;
-
+  async build(
+    loadIngredients: () => Promise<RecipeCoverIngredient[]>,
+  ): Promise<string> {
     let config: Awaited<
       ReturnType<
         AgentProviderConfigService['getEnabledDeepSeekRuntimeConfig']
@@ -67,98 +77,159 @@ export class RecipeCoverVisualBriefService {
         });
     } catch (error: any) {
       throw new BadRequestException(
-        `封面画面描述生成失败：${error?.message || '文本模型未配置'}。请到后台「AI / Agent 配置 → AI 食谱封面」配置 DeepSeek`,
+        `封面提示词生成失败：${error?.message || '文本模型未配置'}。请到后台「AI / Agent 配置 → AI 食谱封面」配置 DeepSeek`,
       );
     }
 
     const systemPrompt = await this.recipeCoverConfigService.getPromptTemplate();
+    const baseMessages: DeepSeekToolsMessage[] = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: USER_TRIGGER },
+    ];
 
-    let parsed: Record<string, unknown>;
+    let first: Awaited<ReturnType<typeof callDeepSeekTools>>;
     try {
-      parsed = await callDeepSeekJson({
+      first = await callDeepSeekTools({
         baseUrl: config.baseUrl,
         model: config.model,
         apiKey: config.apiKey,
         requestTimeoutMs: config.requestTimeoutMs,
-        systemPrompt,
-        temperature: 0.7,
-        maxTokens: 1800,
-        extraBody: { thinking: { type: 'disabled' } },
-        userPayload: {
-          scene: {
-            surface: 'light oak kitchen table by a window',
-            style:
-              'commercial food photography, editorial, warm neutral color grading, shallow depth of field',
-            mustShowAll: true,
-          },
-          ingredients: rows.map((row, index) => ({
-            index,
-            name: row.name,
-            preparation: row.preparationMethod,
-            ratio: row.ratioPercent,
-          })),
+        messages: baseMessages,
+        tools: [INGREDIENT_TOOL],
+        toolChoice: {
+          type: 'function',
+          function: { name: INGREDIENT_TOOL_NAME },
         },
+        // 取数是确定性的，不需要思考，避免白等
+        thinking: 'disabled',
+        temperature: 0.3,
+        maxTokens: 1000,
       });
     } catch (error: any) {
       throw new BadRequestException(
-        `封面画面描述生成失败：${error?.message || '文本模型调用失败'}`,
+        `封面提示词生成失败：${error?.message || '文本模型调用失败'}`,
       );
     }
 
-    const brief = sanitizeBrief(parsed.brief);
-    if (!brief) {
+    const toolCall = this.pickIngredientToolCall(first.toolCalls);
+    if (!toolCall) {
       throw new BadRequestException(
-        '封面画面描述生成失败：文本模型没有返回摄影描述',
+        '封面提示词生成失败：模型没有读取食材',
       );
     }
 
-    const missing = Array.isArray(parsed.missing)
-      ? parsed.missing
-          .map((index) => Number(index))
-          .filter((index) => Number.isInteger(index) && index >= 0)
-      : [];
-    if (missing.length > 0) {
+    const ingredients = await loadIngredients();
+    const rows = ingredients
+      .map((item) => ({
+        name: String(item?.name ?? '').trim(),
+        preparationMethod: String(item?.preparationMethod ?? '').trim(),
+      }))
+      .filter((item) => Boolean(item.name));
+
+    if (rows.length === 0) {
+      throw new BadRequestException('这个食谱没有可用于生成封面的食材');
+    }
+
+    const toolResult = rows
+      .map((row) => formatIngredientLine(row.name, row.preparationMethod))
+      .join('\n');
+
+    const messages: DeepSeekToolsMessage[] = [
+      ...baseMessages,
+      { role: 'assistant', content: null, tool_calls: [toolCall] },
+      {
+        role: 'tool',
+        tool_call_id: toolCall.id,
+        content: toolResult,
+      },
+    ];
+
+    let second: Awaited<ReturnType<typeof callDeepSeekTools>>;
+    try {
+      second = await callDeepSeekTools({
+        baseUrl: config.baseUrl,
+        model: config.model,
+        apiKey: config.apiKey,
+        requestTimeoutMs: config.requestTimeoutMs,
+        messages,
+        tools: [INGREDIENT_TOOL],
+        toolChoice: 'none',
+        // 写提示词这一步按老板要求先开着 thinking
+        thinking: 'enabled',
+        temperature: 0.7,
+        maxTokens: 8000,
+      });
+    } catch (error: any) {
       throw new BadRequestException(
-        '封面画面描述生成失败：有食材没被安排进画面',
+        `封面提示词生成失败：${error?.message || '文本模型调用失败'}`,
       );
     }
 
-    // 结构化清单是「每个食材都要有位置」的核对表；缺一条就不往下走
-    const structured = Array.isArray(parsed.ingredients)
-      ? parsed.ingredients
-      : [];
-    const seen = new Set<number>();
-    for (const item of structured) {
-      const index = Number((item as { index?: unknown })?.index);
-      if (Number.isInteger(index) && index >= 0 && index < rows.length) {
-        seen.add(index);
-      }
-    }
-    if (seen.size < rows.length) {
+    const prompt = sanitizePrompt(second.content);
+    if (!prompt) {
       throw new BadRequestException(
-        '封面画面描述生成失败：文本模型返回格式不正确',
+        '封面提示词生成失败：文本模型没有返回提示词',
       );
     }
 
-    this.cache.set(cacheKey, brief);
-    this.logger.log(`[cover-brief] ${brief}`);
-    return brief;
+    this.logUsage(first.usage, second.usage);
+    this.logger.log(`[cover-brief] ${prompt}`);
+    return prompt;
+  }
+
+  private pickIngredientToolCall(
+    toolCalls: DeepSeekToolCall[],
+  ): DeepSeekToolCall | null {
+    return (
+      toolCalls.find(
+        (call) => call.function.name === INGREDIENT_TOOL_NAME,
+      ) ??
+      toolCalls[0] ??
+      null
+    );
+  }
+
+  private logUsage(
+    first: { promptTokens: number; completionTokens: number } | null,
+    second: { promptTokens: number; completionTokens: number } | null,
+  ): void {
+    if (!first && !second) return;
+    const promptTokens =
+      (first?.promptTokens ?? 0) + (second?.promptTokens ?? 0);
+    const completionTokens =
+      (first?.completionTokens ?? 0) + (second?.completionTokens ?? 0);
+    this.logger.log(
+      `[cover-tokens] prompt=${promptTokens} completion=${completionTokens}`,
+    );
   }
 }
 
-function sanitizeBrief(value: unknown): string {
+/**
+ * 工具结果用自然的一行一种：名称（处理方式）。
+ * 不带占比、不带数字；熟/生/干等状态词去掉，封面一律画生的。
+ */
+function formatIngredientLine(name: string, preparation: string): string {
+  const cleaned = cleanPreparation(preparation);
+  return cleaned ? `${name}（${cleaned}）` : name;
+}
+
+function cleanPreparation(value: string): string {
   return String(value ?? '')
-    .replace(/[\u4e00-\u9fff]/g, ' ')
-    .replace(/\d+(?:\.\d+)?/g, ' ')
-    .replace(/%/g, ' ')
-    .replace(
-      /\b(?:lightly cooked|steamed|boiled|grilled|seared|roasted|fried|cooked)\b/gi,
-      'raw',
-    )
-    .replace(/["'“”‘’`]/g, ' ')
-    .replace(/[：:]/g, ' ')
+    .split(/[\/、]/)
+    .map((token) => token.trim())
+    .filter(Boolean)
+    .filter((token) => !RAW_STATE_TOKENS.has(token))
+    .join('、');
+}
+
+/** 保留中文；只去代码块、提示词前缀、包裹引号，不按字数截断 */
+function sanitizePrompt(value: unknown): string {
+  return String(value ?? '')
+    .replace(/^```[a-zA-Z]*\s*/, '')
+    .replace(/```\s*$/, '')
+    .replace(/^(?:提示词|画面描述|Prompt)\s*[:：]\s*/i, '')
+    .replace(/^["'“”‘’]+/, '')
+    .replace(/["'“”‘’]+$/, '')
     .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, MAX_BRIEF_LENGTH)
     .trim();
 }

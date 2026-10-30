@@ -32,6 +32,11 @@ export interface GenerateRecipeCoverInput {
   foodNames?: string[];
   /** 系列 / 定制封面的完整食材数据（名字 / 部位状态预处理 / 占比） */
   ingredients?: RecipeCoverIngredient[];
+  /**
+   * 工具取数：写提示词的服务在模型调用 `get_recipe_ingredients` 时才取。
+   * 草稿 / 系列各自绑定自己的取数逻辑（权限、阶段优先级仍在后端）。
+   */
+  loadIngredients?: () => Promise<RecipeCoverIngredient[]>;
   /** 兼容旧字段；Seedream 不传终端用户 */
   customerId?: string | null;
   layout?: RecipeCoverLayout;
@@ -89,9 +94,15 @@ export class RecipeCoverImageService {
         provider: ARK_PROVIDER,
       });
 
-    // 系列 / 定制：DeepSeek 先把结构化食材写成摄影 brief；旧入口才走 foodNames
-    const imageBrief = input.ingredients?.length
-      ? await this.visualBriefService.build(input.ingredients)
+    // 系列 / 定制：DeepSeek 通过工具取食材再写封面提示词；旧入口才走 foodNames
+    const inlineIngredients = input.ingredients ?? [];
+    const loadIngredients =
+      input.loadIngredients ??
+      (inlineIngredients.length
+        ? async () => inlineIngredients
+        : undefined);
+    const imageBrief = loadIngredients
+      ? await this.visualBriefService.build(loadIngredients)
       : undefined;
 
     const prompt = buildRecipeCoverPrompt({

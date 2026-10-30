@@ -53,6 +53,8 @@ export class DesignRecipeCoverImageService {
     const generated = await this.coverImageService.generate({
       recipeName: String((draft as any)?.name ?? '定制食谱'),
       ingredients,
+      // 模型调用 get_recipe_ingredients 时才把这份草稿的食材交给它
+      loadIngredients: async () => ingredients,
       layout: 'COVER_16_9',
     });
 

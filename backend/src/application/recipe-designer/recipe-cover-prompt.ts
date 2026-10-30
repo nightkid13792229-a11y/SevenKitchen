@@ -42,29 +42,13 @@ export function buildRecipeCoverPrompt(
     .some((name) => /蛋/.test(name));
 
   /**
-   * DeepSeek 已经写好整段摄影 brief（2026-10-28）：
-   * 它包含了主次、构图、光线、背景和全部食材；这里只追加固定的
-   * 「无文字 / 生鲜 / 无补剂」护栏，不再套一层旧模板。
+   * DeepSeek 已经写好整段封面提示词（2026-10-31）：
+   * 不再套模板、不再补英文护栏，只追加老板指定的一句中文负面要求；
+   * 也不再按字数截断（Seedream 不需要智谱那条 1000 字符上限）。
    */
   const imageBrief = String(input.imageBrief ?? '').trim();
   if (imageBrief) {
-    const guard = [
-      'No text, no words, no letters, no numbers, no labels, no captions, no infographic, no typography, no watermark, no logo, no packaging, no human hands.',
-      'Only the ingredients described in the brief; no extra food or garnish. No boiled eggs. Keep every ingredient inside the frame; no cropped food.',
-      'No cooked/seared/grilled/stewed look. No blood pools, no slime, no supplements or pills.',
-      hasEgg ? '' : 'No egg.',
-    ]
-      .filter(Boolean)
-      .join(' ');
-
-    let brief = imageBrief;
-    let prompt = `${brief} ${guard}`;
-    // 智谱 prompt 上限 1000 字符：超了先从 brief 的最后一句开始丢
-    while (prompt.length > MAX_PROMPT_LENGTH && brief.includes('. ')) {
-      brief = brief.slice(0, brief.lastIndexOf('. '));
-      prompt = `${brief} ${guard}`;
-    }
-    return prompt;
+    return `${imageBrief} 画面中不要出现任何文字、标签或 LOGO。`.trim();
   }
 
   /**

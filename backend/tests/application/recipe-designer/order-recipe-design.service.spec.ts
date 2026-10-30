@@ -106,6 +106,8 @@ describe('OrderRecipeDesignService', () => {
       id: 'draft-revision-1',
       seriesId: 'series-1',
     }),
+    /** 换阶段走既有草稿更新（原地改阶段，不动原料） */
+    updateDraft: jest.fn(),
   };
   const orderRecipeTemplateService = {
     compareOrderTemplateStage: jest.fn(),
@@ -810,6 +812,148 @@ describe('OrderRecipeDesignService', () => {
       ).rejects.toThrow('请至少填写一个制作步骤');
 
       expect(prisma.orderRecipeDesign.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('switchStage', () => {
+    const access = { userId: 'staff-1', role: 'STAFF' };
+
+    function slotWithDraft(overrides: AnyRow = {}): AnyRow {
+      return buildSlot({
+        designDraft: {
+          name: 'Foxy定制 · 鸡肉南瓜',
+          updatedAt: new Date('2026-10-22T01:30:00.000Z'),
+          seriesId: 'series-1',
+          fediafDogScenario: 'ADULT_MER_95',
+        },
+        ...overrides,
+      });
+    }
+
+    it('changes the stage of the same draft and clears the warning when it now matches the dog', async () => {
+      prisma.orderRecipeDesign.findUnique.mockResolvedValue(slotWithDraft());
+      orderRecipeTemplateService.compareStage.mockResolvedValue({
+        matches: true,
+        templateStage: 'HIGH_ACTIVITY_ADULT',
+        dogStage: 'HIGH_ACTIVITY_ADULT',
+        warning: null,
+      });
+
+      const result = await service.switchStage({
+        orderId: 'CR202610220001',
+        designId: 'design-1',
+        scenario: 'ADULT_MER_110',
+        access,
+      });
+
+      // 原地换阶段：改的就是这份草稿，订单卡片的指向不会错位
+      expect(recipeDesignerService.updateDraft).toHaveBeenCalledWith(
+        'draft-1',
+        { scenario: 'ADULT_MER_110' },
+        access,
+      );
+      // 原料一条都不删
+      expect(prisma.designRecipeItem.deleteMany).not.toHaveBeenCalled();
+      // 提示按新阶段重算：对上了就清空
+      expect(prisma.orderRecipeDesign.update).toHaveBeenCalledWith({
+        where: { id: 'design-1' },
+        data: { stageWarning: null },
+      });
+      expect(result).toEqual({
+        designId: 'design-1',
+        draftId: 'draft-1',
+        status: 'EDITING',
+        scenario: 'ADULT_MER_110',
+        lifeStage: 'HIGH_ACTIVITY_ADULT',
+        stageWarning: null,
+      });
+    });
+
+    it('sends a READY slot back to EDITING and drops the staged private recipe', async () => {
+      prisma.orderRecipeDesign.findUnique.mockResolvedValue(
+        slotWithDraft({ status: 'READY', recipeId: 'recipe-row-9' }),
+      );
+      orderRecipeTemplateService.compareStage.mockResolvedValue({
+        matches: false,
+        templateStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        dogStage: 'HIGH_ACTIVITY_ADULT',
+        warning: STAGE_WARNING,
+      });
+
+      const result = await service.switchStage({
+        orderId: 'CR202610220001',
+        designId: 'design-1',
+        scenario: 'ADULT_MER_110',
+        access,
+      });
+
+      // 旧阶段算出来的暂存私密食谱必须清掉，否则交付的还是旧阶段那份
+      expect(prisma.recipe.deleteMany).toHaveBeenCalledWith({
+        where: { id: 'recipe-row-9', sourceDesignRecipeId: 'draft-1' },
+      });
+      expect(prisma.orderRecipeDesign.update).toHaveBeenCalledWith({
+        where: { id: 'design-1' },
+        data: { status: 'EDITING', recipeId: null },
+      });
+      expect(result.status).toBe('EDITING');
+      expect(result.stageWarning).toBe(STAGE_WARNING);
+      // 换完阶段仍需重新「加入本单待提交」，不能顺手把它标回 READY
+      expect(prisma.orderRecipeDesign.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({ data: { status: 'READY' } }),
+      );
+    });
+
+    it('rejects a slot that is already delivered', async () => {
+      prisma.orderRecipeDesign.findUnique.mockResolvedValue(
+        slotWithDraft({ status: 'DELIVERED', recipeId: 'recipe-row-9' }),
+      );
+
+      await expect(
+        service.switchStage({
+          orderId: 'CR202610220001',
+          designId: 'design-1',
+          scenario: 'ADULT_MER_110',
+          access,
+        }),
+      ).rejects.toThrow('不能切换生命阶段');
+
+      expect(recipeDesignerService.updateDraft).not.toHaveBeenCalled();
+      expect(prisma.orderRecipeDesign.update).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when the draft is already on that stage', async () => {
+      prisma.orderRecipeDesign.findUnique.mockResolvedValue(
+        slotWithDraft({
+          status: 'READY',
+          recipeId: 'recipe-row-9',
+          stageWarning: null,
+        }),
+      );
+
+      const result = await service.switchStage({
+        orderId: 'CR202610220001',
+        designId: 'design-1',
+        scenario: 'ADULT_MER_95',
+        access,
+      });
+
+      expect(recipeDesignerService.updateDraft).not.toHaveBeenCalled();
+      expect(prisma.recipe.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.orderRecipeDesign.update).not.toHaveBeenCalled();
+      expect(result.status).toBe('READY');
+    });
+
+    it('rejects a stage code the product does not support', async () => {
+      await expect(
+        service.switchStage({
+          orderId: 'CR202610220001',
+          designId: 'design-1',
+          scenario: 'SENIOR_ONLY',
+          access,
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(prisma.orderRecipeDesign.findUnique).not.toHaveBeenCalled();
     });
   });
 

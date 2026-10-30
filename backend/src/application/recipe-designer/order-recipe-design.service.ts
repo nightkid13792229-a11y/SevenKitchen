@@ -24,6 +24,10 @@ import {
   OrderRecipeDesignStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma.service';
+import {
+  SCENARIO_TO_SERIES_LIFE_STAGE,
+  type FediafDogScenarioForSeries,
+} from '../../domain/recipe/recipe-series';
 import { CustomRecipeService } from '../custom-recipe/custom-recipe.service';
 import { OrderRecipeTemplateService } from './order-recipe-template.service';
 import { RecipeDesignerService } from './recipe-designer.service';
@@ -73,6 +77,33 @@ export interface StageOrderDesignResult {
   /** 私密食谱 `recipe.id`（与 `order_recipe_design.recipe_id` 一致） */
   recipeId: string;
   readyCount: number;
+}
+
+/**
+ * 更换本单设计的生命阶段（2026-10-30）。
+ *
+ * 与产品线的「切换阶段」不同：订单定制是单份设计，换阶段直接改**同一份草稿**
+ * （原料 / 排序 / 克数 / 展示资料一律不动），所以订单卡片指向的草稿不会变，
+ * 「编辑器里看到的」「加入待提交取走的」「最终交付给顾客的」永远是同一份。
+ */
+export interface SwitchOrderDesignStageInput {
+  orderId: string;
+  designId: string;
+  /** FEDIAF 情境代码（与产品线阶段下拉同一套代码） */
+  scenario: string;
+  access: { userId: string; role?: string | null };
+}
+
+export interface SwitchOrderDesignStageResult {
+  designId: string;
+  draftId: string;
+  /** READY 的槽位换阶段后会退回 EDITING，需要重新加入待提交 */
+  status: OrderRecipeDesignStatus;
+  scenario: string;
+  /** 换阶段后草稿的系列生命阶段代码 */
+  lifeStage: string;
+  /** 与新阶段比对后重算的提示；null = 与本单狗狗阶段一致 */
+  stageWarning: string | null;
 }
 
 interface OrderDesignContext {
@@ -534,6 +565,136 @@ export class OrderRecipeDesignService {
         normalizedSlot.status === OrderRecipeDesignStatus.READY
           ? counts.ready
           : counts.ready + 1,
+    };
+  }
+
+  /**
+   * 切换本单设计的生命阶段（2026-10-30）。
+   *
+   * 为什么是「原地换」而不是「另开一份阶段性草稿」：
+   * 订单卡片（`order_recipe_design.designDraftId`）锁着这一份草稿，
+   * 另开草稿就会让「界面看到的」和「加入待提交取走的」不是同一份。
+   *
+   * 口径：
+   *  · 只改草稿的 `fediafDogScenario` / `seriesLifeStage` / `applicableLifeStages`，
+   *    原料、排序、克数、展示资料全部保留；
+   *  · READY 的槽位先退回 EDITING 并清掉按旧阶段生成的暂存私密食谱，
+   *    免得交付时带出旧阶段的配比；
+   *  · 已交付（DELIVERED）不允许换，走售后改稿重新打开后再换；
+   *  · 换完按新阶段与本单狗狗重新比对，`stageWarning` 跟着重算。
+   */
+  async switchStage(
+    input: SwitchOrderDesignStageInput,
+  ): Promise<SwitchOrderDesignStageResult> {
+    const order = await this.resolveOrder(input.orderId);
+    const requested = String(input.scenario ?? '').trim();
+    const scenario = requested as FediafDogScenarioForSeries;
+    const lifeStage = SCENARIO_TO_SERIES_LIFE_STAGE[scenario];
+    if (!lifeStage) {
+      throw new BadRequestException('暂不支持这个生命阶段');
+    }
+
+    const slot = await this.prisma.orderRecipeDesign.findUnique({
+      where: { id: input.designId },
+      select: {
+        id: true,
+        orderId: true,
+        seriesId: true,
+        designDraftId: true,
+        recipeId: true,
+        status: true,
+        stageWarning: true,
+        designDraft: {
+          select: {
+            id: true,
+            seriesId: true,
+            fediafDogScenario: true,
+          },
+        },
+      },
+    });
+    const normalizedSlot = this.assertSlotBelongsToOrder(slot, order.id);
+
+    if (normalizedSlot.status === OrderRecipeDesignStatus.DELIVERED) {
+      throw new BadRequestException(
+        '这份食谱已经交付，不能切换生命阶段；如需改稿请走售后',
+      );
+    }
+    if (normalizedSlot.status === OrderRecipeDesignStatus.REMOVED) {
+      throw new NotFoundException('待提交食谱不存在');
+    }
+    if (!normalizedSlot.designDraft) {
+      throw new NotFoundException('设计槽位指向的草稿已不存在');
+    }
+    // 与 stageDraft 同一口径：已交付订单只有在售后改回 EDITING 后才放行
+    if (normalizedSlot.status !== OrderRecipeDesignStatus.EDITING) {
+      this.assertOrderAllowsDesign(order);
+    }
+
+    // 已经是这个阶段：不重复 +1 内容版本，也不动槽位
+    if (normalizedSlot.designDraft.fediafDogScenario === scenario) {
+      return {
+        designId: normalizedSlot.id,
+        draftId: normalizedSlot.designDraftId,
+        status: normalizedSlot.status,
+        scenario,
+        lifeStage,
+        stageWarning: normalizedSlot.stageWarning,
+      };
+    }
+
+    const comparison = await this.orderRecipeTemplateService.compareStage(
+      lifeStage,
+      order.dogId,
+    );
+
+    /**
+     * 先撤掉待提交产物再改草稿：即便后面的更新失败，
+     * 也只会留下一份「编辑中、需要重新加入」的槽位，
+     * 绝不会留下「READY 但内容是旧阶段」的隐患。
+     */
+    if (normalizedSlot.status === OrderRecipeDesignStatus.READY) {
+      await this.prisma.$transaction(async (tx) => {
+        if (normalizedSlot.recipeId) {
+          await tx.recipe.deleteMany({
+            where: {
+              id: normalizedSlot.recipeId,
+              sourceDesignRecipeId: normalizedSlot.designDraftId,
+            },
+          });
+        }
+        await tx.orderRecipeDesign.update({
+          where: { id: normalizedSlot.id },
+          data: {
+            status: OrderRecipeDesignStatus.EDITING,
+            recipeId: null,
+          },
+        });
+      });
+    }
+
+    // 原地换阶段：复用草稿更新（同步系列阶段 / 适用阶段，并把内容版本 +1）
+    await this.recipeDesignerService.updateDraft(
+      normalizedSlot.designDraftId,
+      { scenario },
+      input.access,
+    );
+
+    await this.prisma.orderRecipeDesign.update({
+      where: { id: normalizedSlot.id },
+      data: { stageWarning: comparison.warning },
+    });
+
+    return {
+      designId: normalizedSlot.id,
+      draftId: normalizedSlot.designDraftId,
+      status:
+        normalizedSlot.status === OrderRecipeDesignStatus.READY
+          ? OrderRecipeDesignStatus.EDITING
+          : normalizedSlot.status,
+      scenario,
+      lifeStage,
+      stageWarning: comparison.warning,
     };
   }
 

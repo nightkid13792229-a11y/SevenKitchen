@@ -28,7 +28,7 @@
         <span v-if="draft?.seriesLifeStage" class="stage-tag">
           {{ stageLabel }}
         </span>
-        <el-dropdown v-if="draft && !orderId" trigger="click" @command="handleSwitchStage">
+        <el-dropdown v-if="stageSwitchVisible" trigger="click" @command="handleSwitchStage">
           <el-button size="small" class="stage-switch-btn" :loading="switchingStage">
             切换阶段<el-icon class="el-icon--right"><ArrowDown /></el-icon>
           </el-button>
@@ -38,9 +38,9 @@
                 v-for="(label, key) in FEDIAF_DOG_SCENARIO_LABELS"
                 :key="key"
                 :command="key"
-                :disabled="key === draft.fediafDogScenario"
+                :disabled="key === draft?.fediafDogScenario"
               >
-                {{ label }}<span v-if="key === draft.fediafDogScenario" class="stage-current">（当前）</span>
+                {{ label }}<span v-if="key === draft?.fediafDogScenario" class="stage-current">（当前）</span>
               </el-dropdown-item>
             </el-dropdown-menu>
           </template>
@@ -543,6 +543,18 @@ const draft = ref<DesignRecipeDraftDetail | null>(null)
 /** 当前设计模式：路由带订单号，或系列本身标记为 ORDER，都算订单定制 */
 const isOrderDesign = computed(
   () => Boolean(orderId) || draft.value?.series?.designMode === 'ORDER'
+)
+/**
+ * 顶部「切换阶段」入口（2026-10-30）。
+ *
+ * 产品线：沿用「按阶段另开一份草稿」；订单定制：原地换这一份草稿的阶段，
+ * 所以两种模式都要给入口。已交付的那一份不给换（要改只能走售后改稿重新打开）。
+ */
+const stageSwitchVisible = computed(
+  () =>
+    Boolean(draft.value) &&
+    (!orderId ||
+      (Boolean(designId) && currentOrderSlot.value?.status !== 'DELIVERED'))
 )
 const items = ref<DesignerItem[]>([])
 /** 原料对象内部字段变更的修订号；watch 必须显式读它，否则改开关不会触发评估 */
@@ -1553,6 +1565,11 @@ async function loadDraft(targetDraftId?: string) {
 async function handleSwitchStage(scenario: string) {
   if (!draft.value || switchingStage.value) return
   if (scenario === draft.value.fediafDogScenario) return
+  // 订单定制：原地换这一份草稿的阶段，不另开阶段草稿（2026-10-30）
+  if (orderId) {
+    await switchOrderDesignStage(scenario)
+    return
+  }
   const targetLabel = FEDIAF_DOG_SCENARIO_LABELS[scenario as FediafDogScenario] ?? scenario
   try {
     await ElMessageBox.confirm(
@@ -1581,6 +1598,66 @@ async function handleSwitchStage(scenario: string) {
     })
     await loadDraft(next.id)
     ElMessage.success(`已切换到「${targetLabel}」`)
+  } catch {
+    // 错误提示由拦截器统一处理
+  } finally {
+    switchingStage.value = false
+  }
+}
+
+/**
+ * 本单设计换生命阶段（2026-10-30）：原地改这一份草稿的阶段，原料不动。
+ *
+ * 为什么不能像产品线那样另开阶段草稿：订单卡片锁着这一份草稿，
+ * 另开一份会出现「界面看到的是新的、加入待提交取走的是旧的」。
+ *
+ * 已加入待提交的那份，后端会先退回「编辑中」并清掉按旧阶段生成的暂存食谱，
+ * 所以提示里必须说清楚「需要重新加入」，否则会以为已经交过了。
+ */
+async function switchOrderDesignStage(scenario: string) {
+  if (!draft.value || !orderId) return
+  const targetLabel =
+    FEDIAF_DOG_SCENARIO_LABELS[scenario as FediafDogScenario] ?? scenario
+  const wasReady = currentOrderSlot.value?.status === 'READY'
+
+  try {
+    await ElMessageBox.confirm(
+      [
+        `确认把这份设计改为「${targetLabel}」阶段吗？`,
+        '原料、克数与展示资料保持不变，营养评估会按新阶段重新计算。',
+        wasReady
+          ? '这一份已经加入过本单待提交，换阶段后会退回「编辑中」，需要重新点一次「加入本单待提交」。'
+          : ''
+      ]
+        .filter(Boolean)
+        .join('\n'),
+      '切换生命阶段',
+      {
+        type: 'warning',
+        confirmButtonText: '确认切换',
+        cancelButtonText: '取消'
+      }
+    )
+  } catch {
+    return
+  }
+
+  switchingStage.value = true
+  try {
+    // 先把还在保存队列里的克数 / 排序刷完，否则紧接着刷新草稿会把它们丢掉
+    await flushNow()
+    if (hasPending() || saveStatus.value === 'error') {
+      ElMessage.warning('还有改动尚未保存成功，请稍候再试')
+      return
+    }
+    const result = await orderRecipeDesignApi.switchStage(orderId, designId, scenario)
+    await loadDraft(currentDraftId.value)
+    await loadOrderDesignWorkspace()
+    ElMessage.success(
+      result.status === 'EDITING' && wasReady
+        ? `已切换到「${targetLabel}」，请重新加入本单待提交`
+        : `已切换到「${targetLabel}」`
+    )
   } catch {
     // 错误提示由拦截器统一处理
   } finally {

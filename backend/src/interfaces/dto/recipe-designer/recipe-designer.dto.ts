@@ -98,6 +98,17 @@ export class CreateOrderDesignFromTemplateDto {
   name?: string;
 }
 
+/**
+ * 订单绑定食谱设计（2026-10-30）：把这一份设计的生命阶段换成另一个。
+ *
+ * 与产品线的 `CreateRecipeSeriesStageDraftDto` 用同一套情境代码；
+ * 订单定制是原地换阶段（原料不动），不是另开一份阶段草稿。
+ */
+export class SwitchOrderDesignStageDto {
+  @IsIn(RECIPE_DESIGNER_SCENARIOS)
+  scenario!: RecipeDesignerScenario;
+}
+
 export class ListRecipeDesignerSeriesDto {
   @IsOptional()
   @IsIn(RECIPE_DESIGNER_SERIES_STATUS_FILTERS)

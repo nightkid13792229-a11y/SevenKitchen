@@ -15,6 +15,7 @@ import type {
   OrderTemplateStageComparison,
   RecipeTemplateSummary,
   StageOrderDesignResult,
+  SwitchOrderDesignStageResult,
 } from '@/types/orderRecipeDesign'
 
 export interface RecipeTemplateListQuery {
@@ -68,6 +69,21 @@ export const orderRecipeDesignApi = {
   ): Promise<StageOrderDesignResult> =>
     api.post(
       `/recipe-designer/orders/${segment(orderId)}/designs/${segment(designId)}/ready`,
+    ),
+
+  /**
+   * 切换这份设计的生命阶段（原地换：原料 / 展示资料不动）。
+   *
+   * 已加入待提交的那份会退回「编辑中」，需要重新加入；已交付的会被后端拒绝。
+   */
+  switchStage: (
+    orderId: string,
+    designId: string,
+    scenario: string,
+  ): Promise<SwitchOrderDesignStageResult> =>
+    api.patch(
+      `/recipe-designer/orders/${segment(orderId)}/designs/${segment(designId)}/stage`,
+      { scenario },
     ),
 
   /** 移除尚未最终交付的槽位 */

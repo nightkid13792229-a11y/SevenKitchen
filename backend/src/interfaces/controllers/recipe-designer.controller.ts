@@ -34,6 +34,7 @@ import {
   BatchReorderDesignItemsDto,
   CreateOrderDesignFromTemplateDto,
   CreatePrivateRecipeSnapshotDto,
+  SwitchOrderDesignStageDto,
   CopyRecipeSeriesStageIngredientsDto,
   CreateRecipeDesignerSupplementOptionDto,
   CreateRecipeDesignDraftDto,
@@ -263,6 +264,33 @@ export class RecipeDesignerController {
       user.userId,
     );
     return ApiResponseDto.success(staged);
+  }
+
+  /**
+   * 切换本单设计的生命阶段（2026-10-30）。
+   *
+   * 订单定制是「原地换阶段」：只改这一份草稿的阶段，原料 / 展示资料不动；
+   * 已经加入待提交的会退回编辑中，需要重新加入（管理员再操作一次）。
+   * 权限与编辑原料一致，员工也可以换；已交付的这份不许换（走售后改稿）。
+   */
+  @Patch('orders/:orderId/designs/:designId/stage')
+  @UseGuards(StaffGuard)
+  @ApiOperation({
+    summary: 'Switch the life stage of an order-bound design draft in place',
+  })
+  async switchOrderDesignStage(
+    @Param('orderId') orderId: string,
+    @Param('designId') designId: string,
+    @Body() dto: SwitchOrderDesignStageDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.orderRecipeDesignService.switchStage({
+      orderId,
+      designId,
+      scenario: dto.scenario,
+      access: { userId: user.userId, role: user.role },
+    });
+    return ApiResponseDto.success(result);
   }
 
   /** 移除一个尚未最终交付的槽位（EDITING / READY）。 */

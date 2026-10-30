@@ -1244,6 +1244,44 @@ describe('OrdersController (e2e)', () => {
       });
     });
 
+    it('should expose order number, shipping ETA and tracking on the summary', async () => {
+      const customerId = 'test-customer-id';
+      const order = createTestOrder({
+        id: 'order-eta-1',
+        customerId,
+        status: OrderStatus.SHIPPED,
+        items: [
+          createTestOrderItem({
+            id: 'item-eta-1',
+            orderId: 'order-eta-1',
+          }),
+        ],
+        amountProduct: 250,
+        amountTotal: 250,
+      });
+      order.orderNo = 'SK20261030-001';
+      order.targetProductionDate = new Date('2026-11-01T00:00:00.000Z');
+      order.trackingNumber = 'SF1234567890';
+      order.carrierCode = 'SF';
+      await orderRepository.save(order);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/orders')
+        .set('X-Customer-Id', customerId)
+        .expect(200);
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+      const summary = response.body.data.find(
+        (s: { id: string }) => s.id === 'order-eta-1',
+      );
+      expect(summary).toMatchObject({
+        orderNo: 'SK20261030-001',
+        estimatedShippingDate: '2026-11-02T00:00:00.000Z',
+        trackingNumber: 'SF1234567890',
+        carrierCode: 'SF',
+      });
+    });
+
     it('should not leak other customer orders', async () => {
       const customerId1 = 'customer-a';
       const customerId2 = 'customer-b';

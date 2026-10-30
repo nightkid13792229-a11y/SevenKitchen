@@ -41,6 +41,7 @@ import type { OrderRepository } from '../../domain/order/order.repository';
 import type { DogRepository } from '../../domain/dog/dog.repository';
 import type { ProductionBatchRepository } from '../../domain/production/production.repository';
 import { Order, OrderItem } from '../../domain/order';
+import { computeEstimatedShippingDate } from '../../domain/order/estimated-shipping';
 import { OrderStatus } from '../../domain';
 import {
   InvalidStateTransitionError,
@@ -1084,17 +1085,10 @@ export class OrdersController {
     console.log('[Order Detail] order.amountProduct:', order.amountProduct);
     console.log('[Order Detail] order.amountShipping:', order.amountShipping);
 
-    // 计算预计发货日期（制作日期 + 1天）
-    let estimatedShippingDate = null;
-    if (order.targetProductionDate) {
-      const shippingDate = new Date(order.targetProductionDate);
-      shippingDate.setDate(shippingDate.getDate() + 1);
-      estimatedShippingDate = shippingDate.toISOString();
-      console.log(
-        '[Order Detail] Estimated shipping date:',
-        estimatedShippingDate,
-      );
-    }
+    // 预计发货日：制作日期 + 1 天（口径与列表共用同一函数，2026-10-30）
+    const estimatedShippingDate = computeEstimatedShippingDate(
+      order.targetProductionDate,
+    );
 
     const productionPhotos = await this.getOrderProductionPhotos(order);
     const paymentWindow =
@@ -1358,6 +1352,14 @@ export class OrdersController {
       aftersaleType: order.aftersaleType ?? null,
       // 补发单：顾客列表要能标出"这是免费补寄的一单"，否则会被当成又下了一单
       reshipFromOrderId: order.reshipFromOrderId ?? null,
+      // 2026-10-30：列表卡片要能报单号、给出预计发货日、显示运单。
+      // 老订单 orderNo 可能为 null，前端整行不渲染。
+      orderNo: order.orderNo ?? null,
+      estimatedShippingDate: computeEstimatedShippingDate(
+        order.targetProductionDate,
+      ),
+      trackingNumber: order.trackingNumber ?? null,
+      carrierCode: order.carrierCode ?? null,
       totalAmount: order.totalAmount ?? order.amountTotal,
       itemCount: order.items.length,
       createdAt: order.createdAt.toISOString(),

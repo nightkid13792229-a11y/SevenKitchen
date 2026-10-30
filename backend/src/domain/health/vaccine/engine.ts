@@ -219,6 +219,10 @@ export interface MatchedStep extends MaterializedStep {
     testedAt: string;
     nextReviewAt: string;
   };
+  /** 最近一次 CORE 抗体检测不合格（#1/V3）：这一步是补一针 */
+  titerFail?: {
+    testedAt: string;
+  };
   /** 顾客点过"不做"（`VaccineDecision.decision === 'SKIP'`） */
   skipped: boolean;
 }
@@ -1240,68 +1244,151 @@ export function pickNext(steps: MatchedStep[]): MatchedStep | null {
 /** 最后一针核心疫苗之后，至少隔这么久再测（需求 R9 的依据栏） */
 const TITER_AFTER_DOSE_DAYS = 28;
 
+function latestCoreTiterTest(
+  tests: AntibodyTestLike[],
+): { test: AntibodyTestLike; date: Date } | null {
+  return (
+    tests
+      .filter(
+        (test) => Array.isArray(test.targets) && test.targets.includes('CORE'),
+      )
+      .map((test) => ({ test, date: parseDateText(test.testedAt) }))
+      .filter(
+        (item): item is { test: AntibodyTestLike; date: Date } =>
+          Boolean(item.date),
+      )
+      .sort(
+        (a, b) =>
+          b.date.getTime() - a.date.getTime() ||
+          String(b.test.id).localeCompare(String(a.test.id)),
+      )[0] ?? null
+  );
+}
+
+function lastCoreDoseTime(records: PreparedRecord[]): number | undefined {
+  return records
+    .filter((item) => item.kinds.includes('core'))
+    .map((item) => item.date.getTime())
+    .sort((a, b) => b - a)[0];
+}
+
+/**
+ * 检测证据是否成立（#1）：
+ *   ① 检测时狗已满 20 周龄（20 周前 MDA 可能还在）；
+ *   ② 最后一针核心疫苗之后至少 4 周（刚打完就测，测到的是刚打进去的抗体）。
+ */
+function isTiterEvidenceValid(
+  date: Date,
+  birthday: Date,
+  records: PreparedRecord[],
+): boolean {
+  if (date.getTime() < addWeeks(birthday, 20).getTime()) return false;
+  const lastCoreDose = lastCoreDoseTime(records);
+  return (
+    lastCoreDose === undefined ||
+    date.getTime() >= lastCoreDose + TITER_AFTER_DOSE_DAYS * DAY_MS
+  );
+}
+
+/**
+ * 最近一次 CORE 检测是 PASS、且证据成立 → 抗体替代核心。
+ *
+ * ⚠️ 2026-10-30（#1）：**只看最近一次 CORE 检测**。
+ *    以前是“在所有 PASS 里找最近的”，于是一条旧的 PASS 会盖过一条新的 FAIL。
+ *    Q2 的口径是“只对最新一份生效”，所以先取最新，再看它是 PASS 还是 FAIL。
+ */
 function findCoreTiterCover(
   tests: AntibodyTestLike[],
   birthday: Date,
   records: PreparedRecord[],
 ): { testedAt: Date; nextReviewAt: Date } | null {
-  const minimumAge = addWeeks(birthday, 20);
-  const lastCoreDose = records
-    .filter((item) => item.kinds.includes('core'))
-    .map((item) => item.date.getTime())
-    .sort((a, b) => b - a)[0];
+  const latest = latestCoreTiterTest(tests);
+  if (!latest || latest.test.result !== 'PASS') return null;
+  if (!isTiterEvidenceValid(latest.date, birthday, records)) return null;
+  return {
+    testedAt: latest.date,
+    nextReviewAt: addYears(latest.date, CORE_TITER_REVIEW_YEARS),
+  };
+}
 
-  const eligible = tests
-    .filter(
-      (test) => Array.isArray(test.targets) && test.targets.includes('CORE'),
-    )
-    .filter((test) => test.result === 'PASS')
-    .map((test) => ({ test, date: parseDateText(test.testedAt) }))
-    .filter((item): item is { test: AntibodyTestLike; date: Date } =>
-      Boolean(item.date),
-    )
-    .filter((item) => item.date.getTime() >= minimumAge.getTime())
-    /**
-     * 两个条件缺一不可（需求 R9 的依据栏写得很清楚，2026-10-16 补上第二条）：
-     *   ① 检测时狗已满 20 周龄 —— WSAVA 2024："presence of antibody in the serum
-     *      of an animal **over 20 weeks of age** is held to indicate protection"；
-     *      20 周前母源抗体（MDA）可能还在，测出来的"有抗体"未必是它自己的免疫力。
-     *   ② **最后一针核心疫苗之后至少 4 周**再测 —— 刚打完就测，测到的是刚打进去的
-     *      抗体，等于拿"刚打的这一针"去证明"不用打这一针"，逻辑上自相矛盾。
-     *
-     * ⚠️ 原来只判了"在最后一针之后"（`> lastCoreDose`），没判这 4 周 ——
-     *    打完针第 2 天做的检测也会被算作"已替代"。
-     */
-    .filter(
-      (item) =>
-        lastCoreDose === undefined ||
-        item.date.getTime() >= lastCoreDose + TITER_AFTER_DOSE_DAYS * DAY_MS,
-    )
-    .sort((a, b) => b.date.getTime() - a.date.getTime());
+/**
+ * 最近一次 CORE 检测是 FAIL、且证据成立 → 核心补一针（Q2 已定，2026-10-29）。
+ */
+function findCoreTiterFail(
+  tests: AntibodyTestLike[],
+  birthday: Date,
+  records: PreparedRecord[],
+): { testedAt: Date } | null {
+  const latest = latestCoreTiterTest(tests);
+  if (!latest || latest.test.result !== 'FAIL') return null;
+  if (!isTiterEvidenceValid(latest.date, birthday, records)) return null;
+  return { testedAt: latest.date };
+}
 
-  if (eligible.length === 0) return null;
-  const latest = eligible[0];
-  /**
-   * ⚠️ 2026-10-17 老板定：抗体合格**改成 1 年后复查**（原来是 3 年）。
-   *
-   * 为什么改：**指南里根本没有"抗体管几年"这个说法** —— WSAVA 只说两件事：
-   * 「20 周龄以上、血清里有抗体 → 认为有保护」和「阴性 → 4 周后复测」。
-   * 原来的 3 年是**从疫苗的 3 年免疫期平移过来的**（我们的产品决定，不是资料）。
-   * 老板的口径：**宁可复查勤一点**，也不要让狗在无保护状态下被漏掉 ✓。
-   *
-   * 「1 年后复查」和「保护期只有 1 年」**不是一回事** —— 页面上写的也是"建议复查"，
-   * 不是"抗体到期了"（原来那句"管 3 年"容易被读成后者 ✗）。
-   */
-  /**
-   * ⚠️ **间隔一律由这里算**（不再读记录上存的那个复查日期）。
-   *
-   * 为什么：2026-10-17 老板把口径从"3 年"改成"**1 年后复查**"——
-   * 而老记录上如果**存过一个显式的复查日期**（按当时的 3 年算出来的），
-   * 读它就会出现"新政策对老记录不生效"✗：家长明明录的是新报告，看到的还是 3 年后。
-   * 所以政策只留一个出口：**检测日 + CORE_TITER_REVIEW_YEARS**（要改就改那个常量）✓
-   */
-  const nextReviewAt = addYears(latest.date, CORE_TITER_REVIEW_YEARS);
-  return { testedAt: latest.date, nextReviewAt };
+/** 抗体合格 → 计划里只留**一个**“评估”行（V1/V11） */
+function makeTiterReviewStep(
+  base: MatchedStep,
+  cover: { testedAt: Date; nextReviewAt: Date },
+  today: Date,
+): MatchedStep {
+  const due = cover.nextReviewAt.getTime() <= today.getTime();
+  return {
+    ...base,
+    key: 'core-titer-review',
+    label: '评估',
+    windowStart: cover.nextReviewAt,
+    windowEnd: cover.nextReviewAt,
+    missedWindowStart: undefined,
+    missedWindowEnd: undefined,
+    movedToToday: false,
+    status: due ? 'OVERDUE' : 'DONE',
+    statusLabel: due ? '建议复查' : '已完成',
+    hint: due
+      ? `该复查抗体了（上次检测 ${toDateText(cover.testedAt)}）`
+      : `这次不用打：抗体检测合格（${toDateText(cover.testedAt)}）`,
+    titer: {
+      testedAt: toDateText(cover.testedAt),
+      nextReviewAt: toDateText(cover.nextReviewAt),
+    },
+    titerFail: undefined,
+    basis:
+      `已用抗体检测替代：${toDateText(cover.testedAt)} 的抗体检测结果为合格，` +
+      `核心疫苗这一针不用打；建议复查 ${toDateText(cover.nextReviewAt)}。` +
+      `是否接种请以执业兽医的意见为准。`,
+    matchedRecordId: null,
+    matchedRecordDate: null,
+    skipped: false,
+  };
+}
+
+/** 抗体不合格 → 计划里只留**一个**“补一针”行（V3） */
+function makeTiterFailStep(
+  base: MatchedStep,
+  fail: { testedAt: Date },
+  today: Date,
+): MatchedStep {
+  return {
+    ...base,
+    key: 'core-titer-fail-catchup',
+    label: '补一针',
+    windowStart: today,
+    windowEnd: addWeeks(today, 2),
+    missedWindowStart: undefined,
+    missedWindowEnd: undefined,
+    movedToToday: false,
+    status: 'OVERDUE',
+    statusLabel: '尽快补种',
+    hint: `上次抗体不合格（${toDateText(fail.testedAt)}），补一针`,
+    basis:
+      `${toDateText(fail.testedAt)} 的核心抗体检测结果为不合格，` +
+      `建议补一针核心疫苗；之后是否再测，请以执业兽医的意见为准。`,
+    titer: undefined,
+    titerFail: { testedAt: toDateText(fail.testedAt) },
+    titerable: false,
+    matchedRecordId: null,
+    matchedRecordDate: null,
+    skipped: false,
+  };
 }
 
 export function buildPlanView(input: BuildPlanViewInput): VaccinePlanView {
@@ -1335,41 +1422,37 @@ export function buildPlanView(input: BuildPlanViewInput): VaccinePlanView {
   // 计划：每一类的**当前一步**（核心首免系列整段展开）—— 见 plan-view 的说明
   const planned = selectPlanSteps(steps);
 
-  // 抗体检测替代核心当前那一针（需求 R9）
+  // 抗体检测替代/补一针（需求 R9；#1 V1/V3/V11）
   const titerCover = findCoreTiterCover(tests, birthday, prepared);
+  const titerFail = titerCover
+    ? null
+    : findCoreTiterFail(tests, birthday, prepared);
   const titerCoveredKeys = new Set<string>();
-  const planWithTiter = titerCover
-    ? planned.map((step) => {
-        if (step.kind !== 'core' || step.status === 'DONE') return step;
-        titerCoveredKeys.add(step.key);
-        const { missedWindowStart, missedWindowEnd, ...rest } = step;
-        void missedWindowStart;
-        void missedWindowEnd;
-        return {
-          ...rest,
-          // 这一针不用打，所以"时间"的含义变成**下次评估时间**（原型 F：
-          // 那一行写的是"2029/10/15 下次评估"）
-          windowStart: titerCover.nextReviewAt,
-          windowEnd: titerCover.nextReviewAt,
-          status: 'DONE' as StepStatus,
-          statusLabel: '已完成',
-          label: '评估',
-          // ⚠️ hint 必须一起换掉：它是卡片/计划行上那行短字，
-          //    不换的话，一只核心已被抗体检测替代的狗，界面上还会写着
-          //    "幼犬从 6~8 周龄开始…"（2026-10-16 自查发现）
-          hint: `这次不用打：抗体检测合格（${toDateText(titerCover.testedAt)}）`,
-          // 前端据此把这一行画成"2029/10/15 · 下次评估"，而不是普通已完成（原型 F）
-          titer: {
-            testedAt: toDateText(titerCover.testedAt),
-            nextReviewAt: toDateText(titerCover.nextReviewAt),
-          },
-          basis:
-            `已用抗体检测替代：${toDateText(titerCover.testedAt)} 的抗体检测结果为合格，` +
-            `核心疫苗这一针不用打；下次评估 ${toDateText(titerCover.nextReviewAt)}。` +
-            `是否接种请以执业兽医的意见为准。`,
-        };
-      })
-    : planned;
+  let planWithTiter = planned;
+  if (titerCover) {
+    /*
+     * V11：只留**一个**“评估”行。
+     * 以前是 planned.map，把核心首免的每一步都换成“评估”，出现多行重复。
+     */
+    const base = planned.find((step) => step.kind === 'core');
+    if (base) {
+      const review = makeTiterReviewStep(base, titerCover, today);
+      titerCoveredKeys.add(review.key);
+      planWithTiter = [
+        ...planned.filter((step) => step.kind !== 'core'),
+        review,
+      ];
+    }
+  } else if (titerFail) {
+    // V3：最新一次 CORE 抗体不合格 → 补一针（只留一个“补一针”行）
+    const base = planned.find((step) => step.kind === 'core');
+    if (base) {
+      planWithTiter = [
+        ...planned.filter((step) => step.kind !== 'core'),
+        makeTiterFailStep(base, titerFail, today),
+      ];
+    }
+  }
 
   const preferredBrand = resolvePreferredBrand(
     input.records.map((record) => record.vaccineName),

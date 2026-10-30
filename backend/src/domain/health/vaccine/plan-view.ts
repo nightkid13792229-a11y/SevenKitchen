@@ -81,6 +81,10 @@ export interface PlanStepDto {
     testedAt: string;
     nextReviewAt: string;
   };
+  /** 最近一次 CORE 抗体检测不合格（#1/V3）：这一步是补一针 */
+  titerFail?: {
+    testedAt: string;
+  };
   /** 这一步为什么在这个时间 */
   basis?: string;
   /** 这一项能不能用抗体检测替代 */
@@ -224,6 +228,7 @@ export function toStepDto(
     statusLabel: step.statusLabel,
     hint: step.hint,
     ...(step.titer ? { titer: step.titer } : {}),
+    ...(step.titerFail ? { titerFail: step.titerFail } : {}),
     basis: step.basis,
     /**
      * 能不能用抗体检测替代（需求 R9：**20 周龄之前不做**）。

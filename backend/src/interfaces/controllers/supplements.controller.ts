@@ -22,6 +22,8 @@ import { SupplementNotificationService } from '../../application/supplement-shop
 import { SupplementQuoteRequestDto } from '../dto/supplement-shop.dto';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { AuthGuard } from '../auth/auth.guard';
+import { CurrentUser } from '../auth';
+import type { RequestUser } from '../auth';
 
 @ApiTags('Supplements')
 @Controller('api/v1/supplements')
@@ -82,13 +84,20 @@ export class SupplementsController {
   @ApiOperation({
     summary: '按 DIY 制作单的补剂清单报价（价格由服务端现算）',
   })
-  async quote(@Body() dto: SupplementQuoteRequestDto) {
+  async quote(
+    @CurrentUser() user: RequestUser,
+    @Body() dto: SupplementQuoteRequestDto,
+  ) {
     return ApiResponseDto.success(
-      await this.supplementOrderService.quote({
-        lines: dto.lines,
-        portionMultiplier: dto.portionMultiplier,
-        cycleDays: dto.cycleDays,
-      }),
+      await this.supplementOrderService.quote(
+        {
+          lines: dto.lines,
+          portionMultiplier: dto.portionMultiplier,
+          cycleDays: dto.cycleDays,
+          diySheetId: dto.diySheetId,
+        },
+        user.userId,
+      ),
     );
   }
 }

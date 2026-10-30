@@ -131,13 +131,8 @@ async function handlePrint() {
 }
 
 function goBack() {
-  // 从「订单管理 → 补剂订单」标签进来的，要退回那个标签页；
-  // 否则用户会落到另一条菜单路径上，得自己重新找一遍订单。
-  if (route.query.from === 'orders') {
-    router.push({ path: '/supplement-shop/orders' });
-    return;
-  }
-  router.push('/supplement-shop/orders');
+  // 补剂订单已并入订单中心：打完标签回到补剂筛选，不用自己重新找。
+  router.push({ path: '/order-center', query: { type: 'SUPPLEMENT' } });
 }
 
 onMounted(load);

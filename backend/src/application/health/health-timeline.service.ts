@@ -85,6 +85,14 @@ export interface HealthVisitSummaryResponse {
     exams: string
     /** 体征：体温、体重、BCS（2026-10-02 新增） */
     vitals: string
+    /**
+     * 这条病历的结局：治疗中 / 慢性 / 已康复 / 未标注结果（2026-10-30 新增）。
+     *
+     * 为什么加：员工端原来单开一块「进行中的问题」，和「最近就诊」重复显示同一条
+     * （老板看到同一只狗、"脂肪瘤"出现两遍）。去掉那一块之后，
+     * "还没好的"这件事必须留在就诊记录上，否则慢性病会被悄悄略过。
+     */
+    status: string
     veterinarian: string
     attachmentCount: number
   }[]
@@ -336,6 +344,8 @@ export class HealthTimelineService {
         medications: record.medications || [],
         notes: record.notes || '',
         veterinarian: record.veterinarian || '',
+        /** 结局（治疗中/慢性/已康复/未标注），员工端就靠它标"还没好" */
+        status: formatMedicalStatus(record.status),
         attachmentCount: record.attachments.length,
       })),
       recentCheckups: checkups.slice(0, SUMMARY_RECENT_LIMIT).map((record) => {

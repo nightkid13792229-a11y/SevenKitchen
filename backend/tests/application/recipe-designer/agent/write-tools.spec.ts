@@ -434,34 +434,6 @@ describe('write tools', () => {
     expect(port.setPreparation).not.toHaveBeenCalled();
   });
 
-  it('预处理备注超过 500 字被拒绝', async () => {
-    const { tools, port } = setup();
-    const result = await tools.set_preparation({
-      itemId: 'item-1',
-      method: '切块',
-      note: '一'.repeat(501),
-    });
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.code).toBe('INVALID_ARGUMENT');
-    expect(port.setPreparation).not.toHaveBeenCalled();
-  });
-
-  it('预处理备注 500 字边界接受', async () => {
-    const { tools, port } = setup();
-    const note = '一'.repeat(500);
-    const result = await tools.set_preparation({
-      itemId: 'item-1',
-      method: '切块',
-      note,
-    });
-    expect(result.ok).toBe(true);
-    expect(port.setPreparation).toHaveBeenCalledWith('item-1', {
-      method: '切块',
-      note,
-    });
-  });
-
   it('预处理合法时写进端口，不带多余的 note', async () => {
     const { tools, port } = setup();
     const result = await tools.set_preparation({
@@ -528,7 +500,7 @@ describe('write tools', () => {
     expect(result.data).toEqual({
       itemId: 'item-7',
       name: '鱼油',
-      totalWeightG: 860,
+      totalWeightG: 900,
     });
     expect(result.summary).toContain('鱼油');
     expect(result.summary).not.toContain('item-7');

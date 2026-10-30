@@ -185,6 +185,19 @@
           </template>
         </el-table-column>
 
+        <el-table-column label="等价组" min-width="160">
+          <template #default="{ row }">
+            <template v-if="row.equivalenceGroup">
+              <div>{{ row.equivalenceGroup.name }}</div>
+              <div class="cell-sub">
+                {{ row.equivalenceGroup.status === 'APPROVED' ? '已通过' : '未通过' }}
+                · {{ row.equivalenceGroup.memberCount }} 个成员
+              </div>
+            </template>
+            <span v-else class="cell-sub">未归组</span>
+          </template>
+        </el-table-column>
+
         <el-table-column label="数据体检" min-width="200">
           <template #default="{ row }">
             <el-tag v-if="row.issues.length === 0" type="success" size="small">正常</el-tag>

@@ -5,7 +5,6 @@
 
 import { RecipeSnapshot } from '../recipe/types';
 import { ValidationError } from '../common/errors';
-import { PreparationMethod } from './preparation-method.enum';
 import { CookingMethod } from './cooking-method.enum';
 import type { IngredientSourcePlanCode, OrderPackagePlanItem } from './index';
 
@@ -29,7 +28,6 @@ export class OrderItem {
     public readonly allocatedAt: Date | null = null, // Phase 8.11: Timestamp when item was allocated to a batch
     public readonly packagePlan: OrderPackagePlanItem[] | null = null,
     public readonly ingredientSourcePlan: IngredientSourcePlanCode | null = null,
-    public readonly preparationMethod: PreparationMethod | null = null,
     public readonly cookingMethod: CookingMethod | null = null,
     /** 试吃装商品 ID；鲜食订单为 null */
     public readonly tastingPackId: string | null = null,

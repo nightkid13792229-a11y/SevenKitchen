@@ -521,7 +521,6 @@ export class StaffCustomerServiceController {
             packageSpecG: item.packageSpecG,
             packagePlan: item.packagePlan,
             ingredientSourcePlan: item.ingredientSourcePlan,
-            preparationMethod: item.preparationMethod,
             cookingMethod: item.cookingMethod,
             customRequirements: item.customRequirements,
             dailyIntakeG: item.dailyIntakeG,

@@ -52,11 +52,57 @@
           <text class="info-label">快递</text>
           <text class="info-value">{{ order.trackingNumber }}</text>
         </view>
-        <view v-if="order.aftersaleReason" class="info-row">
+        <!-- 旧的售后字段：新售后单已经有了独立的「售后记录」区块，
+             两边都在就不再重复显示一遍 -->
+        <view
+          v-if="order.aftersaleReason && !(order.aftersaleCases || []).length"
+          class="info-row"
+        >
           <text class="info-label">售后</text>
           <text class="info-value info-value--warn">
             {{ order.aftersaleType === 'REFUND' ? '退款' : '重做' }} · {{ order.aftersaleReason }}
           </text>
+        </view>
+      </view>
+
+      <!-- 售后记录（2026-10-30）：补剂售后从工作台收口到订单中心后，
+           这里是员工看「这单提过几次售后、到哪一步、为什么」的地方。
+           一单可能有好几条（比如先被驳回、后来又退款），按时间倒序全列出来。 -->
+      <view v-if="(order.aftersaleCases || []).length" class="card">
+        <view class="section-head">
+          <text class="section-title">售后记录</text>
+          <text class="section-sub">
+            {{ (order.aftersaleCases || []).length }} 条
+          </text>
+        </view>
+
+        <view
+          v-for="record in order.aftersaleCases || []"
+          :key="record.id"
+          class="aftersale-row"
+        >
+          <view class="aftersale-head">
+            <text class="aftersale-no">{{ record.caseNo }}</text>
+            <text class="aftersale-status" :class="aftersaleTone(record.status)">
+              {{ aftersaleStatusText(record.status) }}
+            </text>
+          </view>
+          <view class="info-row">
+            <text class="info-label">诉求</text>
+            <text class="info-value">{{ aftersaleTypeText(record.requestType) }}</text>
+          </view>
+          <view class="info-row">
+            <text class="info-label">原因</text>
+            <text class="info-value">{{ record.requestedReason || '—' }}</text>
+          </view>
+          <view v-if="record.reshipOrderNo" class="info-row">
+            <text class="info-label">补发单</text>
+            <text class="info-value">{{ record.reshipOrderNo }}</text>
+          </view>
+          <view class="info-row">
+            <text class="info-label">申请</text>
+            <text class="info-value">{{ formatTime(record.createdAt) }}</text>
+          </view>
         </view>
       </view>
 
@@ -217,6 +263,33 @@ function statusClass(value: string) {
   if (value === 'AFTERSALE' || value === 'CANCELLED') return 'status-tag--muted'
   if (value === 'SHIPPED' || value === 'COMPLETED') return 'status-tag--done'
   return 'status-tag--doing'
+}
+
+/** 售后单的说法跟后台「补剂售后」页保持一致，别在这里另造一套词 */
+const AFTERSALE_STATUS_TEXT: Record<string, string> = {
+  PENDING: '待受理',
+  PROCESSING: '处理中',
+  RESOLVED: '已解决',
+  REJECTED: '已驳回',
+  CANCELLED: '已撤回',
+}
+const AFTERSALE_TYPE_TEXT: Record<string, string> = {
+  REFUND: '退款',
+  RESHIP: '补发',
+  OTHER: '其他',
+}
+
+function aftersaleStatusText(value: string) {
+  return AFTERSALE_STATUS_TEXT[value] || value
+}
+
+function aftersaleTypeText(value: string) {
+  return AFTERSALE_TYPE_TEXT[value] || value
+}
+
+/** 只有「待受理 / 处理中」用橙色；已结束的一律灰色，不抢注意力 */
+function aftersaleTone(value: string) {
+  return value === 'PENDING' || value === 'PROCESSING' ? 'is-open' : 'is-closed'
 }
 
 const canPack = computed(() =>
@@ -417,7 +490,12 @@ onLoad((options) => {
     uni.showToast({ title: '缺少订单参数', icon: 'none' })
     return
   }
-  void fetchOrder()
+
+  // 订单中心卡片上点了「发货」→ 加载完直接弹填单号
+  const autoShip = options?.action === 'ship'
+  void fetchOrder().then(() => {
+    if (autoShip && order.value?.status === 'PACKED') handleShip()
+  })
 })
 </script>
 
@@ -555,6 +633,40 @@ onLoad((options) => {
 
 .info-value--warn {
   color: #a97c33;
+}
+
+/* 售后记录（2026-10-30）：一条一条分开，多条时能看出是两次不同的申请 */
+.aftersale-row {
+  margin-top: 16rpx;
+}
+.aftersale-row + .aftersale-row {
+  padding-top: 18rpx;
+  border-top: 1rpx solid #f2f4ea;
+}
+.aftersale-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10rpx;
+}
+.aftersale-no {
+  font-size: 26rpx;
+  color: #26261f;
+  font-family: monospace;
+}
+.aftersale-status {
+  flex: none;
+  padding: 4rpx 14rpx;
+  border-radius: 16rpx;
+  font-size: 22rpx;
+}
+.aftersale-status.is-open {
+  background: #fdf6ec;
+  color: #b88230;
+}
+.aftersale-status.is-closed {
+  background: #f0f2f5;
+  color: #8a8f99;
 }
 
 .total-value {

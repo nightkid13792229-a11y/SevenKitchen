@@ -66,10 +66,38 @@ export interface RenderableOrderView {
 }
 
 /** 定制订单详情（只列页面用得到的字段） */
+/** 已交付/制作中订单的退款申请（2026-10-25） */
+export interface CustomRecipeRefundRequestView {
+  id: string;
+  orderId: string;
+  status: 'PENDING' | 'PROCESSING' | 'REFUNDED' | 'REJECTED' | 'FAILED' | string;
+  statusLabel: string;
+  reasonCode: string;
+  reasonLabel: string;
+  description: string;
+  photos: string[];
+  amount: number;
+  adminNote: string | null;
+  refundStatus: string | null;
+  refundOutNo: string | null;
+  refundId: string | null;
+  createdAt: string;
+  reviewedAt: string | null;
+}
+
 export interface CustomRecipeOrderDetail {
   orderId: string;
   dogId?: string;
   dogName?: string;
+  /** 定制对象档案（2026-10-24）：列表卡与详情页共用 */
+  dogBreedName?: string | null;
+  dogWeightKg?: number | null;
+  dogBirthday?: string | null;
+  dogBcsScore?: number | null;
+  dogActivityLevel?: string | null;
+  dogMealsPerDay?: number | null;
+  /** 本单份数（1–5） */
+  recipeQuantity?: number | null;
   status: string;
   /** 后端下发的可渲染形态；老后端不返回 */
   renderable?: RenderableOrderView | null;
@@ -86,6 +114,8 @@ export interface CustomRecipeOrderDetail {
   createdAt?: string | null;
   paymentConfirmedAt?: string | null;
   deliveredAt?: string | null;
+  /** 最新一条退款申请（2026-10-25）；没有为 null */
+  refundRequest?: CustomRecipeRefundRequestView | null;
   /** 交付摘要（批次 2.4）；未交付时为 null */
   delivery?: DeliverySummary | null;
   /**
@@ -188,6 +218,8 @@ export interface OrderDelivery {
   version: number;
   deliveredAt: string;
   confirmedAt?: string | null;
+  /** 这只狗（2026-10-24）：交付页预选 DIY / 成品下单用 */
+  dogId?: string | null;
   itemCodes: string[];
   content: DeliveryContent;
   autoCompleteAt?: string | null;
@@ -257,6 +289,8 @@ export interface DeliveryBatchContent {
   version: number;
   deliveredAt: string;
   confirmedAt?: string | null;
+  /** 这只狗（2026-10-24）：交付页预选 DIY / 成品下单用 */
+  dogId?: string | null;
   /** 批次级交付物并集；判断"这一份有没有采购单"要用 `items[].itemCodes` */
   itemCodes: string[];
   items: DeliveryBatchContentItem[];
@@ -380,7 +414,10 @@ export async function fetchCustomRecipeQuote(
  * 直到他自己去翻订单才发现 —— 那可能是几天后了。
  * （我第一版就漏了它，是从页面里搬代码时丢的。）
  */
-export async function cancelOrder(orderId: string): Promise<{
+export async function cancelOrder(
+  orderId: string,
+  reason?: string,
+): Promise<{
   ok: boolean;
   message?: string;
   refundStatus?: string | null;
@@ -390,6 +427,7 @@ export async function cancelOrder(orderId: string): Promise<{
   const res: any = await request({
     url: `/custom-recipe/orders/${encodeURIComponent(orderId)}/cancel`,
     method: 'POST',
+    data: reason ? { reason } : {},
   });
   if (res?.code === 0) {
     return {
@@ -400,6 +438,51 @@ export async function cancelOrder(orderId: string): Promise<{
     };
   }
   return { ok: false, message: res?.message };
+}
+
+
+/**
+ * 已交付/制作中订单：提交退款申请（2026-10-25）。
+ */
+export async function createCustomRecipeRefundRequest(
+  orderId: string,
+  input: {
+    reasonCode: string;
+    reasonLabel: string;
+    description: string;
+    photos?: string[];
+  },
+): Promise<CustomRecipeRefundRequestView> {
+  const res: any = await request({
+    url: `/custom-recipe/orders/${encodeURIComponent(orderId)}/refund-request`,
+    method: 'POST',
+    data: {
+      reasonCode: input.reasonCode,
+      reasonLabel: input.reasonLabel,
+      description: input.description,
+      photos: input.photos ?? [],
+    },
+  });
+  if (res?.code !== 0 || !res?.data?.id) {
+    throw new Error(res?.message || '退款申请提交失败，请重试');
+  }
+  return res.data as CustomRecipeRefundRequestView;
+}
+
+/** 顾客查看最新一条退款申请。 */
+export async function fetchCustomRecipeRefundRequest(
+  orderId: string,
+): Promise<CustomRecipeRefundRequestView | null> {
+  const res: any = await request({
+    url: `/custom-recipe/orders/${encodeURIComponent(orderId)}/refund-request`,
+    method: 'GET',
+    quiet: true,
+    suppressErrorToast: true,
+  } as any);
+  if (res?.code === 0) {
+    return (res.data?.request ?? null) as CustomRecipeRefundRequestView | null;
+  }
+  return null;
 }
 
 /**
@@ -584,8 +667,18 @@ export interface AftersaleItem {
   typeLabel: string;
   status: string;
   statusLabel: string;
+  /** 顾客端状态：已撤销 / 已交付（后端算好） */
+  customerStatusLabel?: string;
   description: string;
   photos: string[];
+  deliveryBatchId?: string | null;
+  deliveryItemIds?: string[];
+  items?: Array<{
+    deliveryItemId: string;
+    recipeId: string | null;
+    recipeName: string | null;
+  }>;
+  recipeRequests?: AftersaleRecipeRequest[];
   createdAt: string;
   resolvedAt?: string | null;
   handleNote?: string | null;
@@ -614,6 +707,8 @@ export interface AftersaleItem {
 export interface AftersaleRecipeRequest {
   deliveryItemId: string;
   description: string;
+  /** 这一份自己的附件；旧记录没有时为 [] */
+  photos?: string[];
 }
 
 /** 售后类型选项（来自选项字典） */
@@ -840,7 +935,13 @@ export async function uploadCustomRecipeDraftAttachment(
 export async function uploadAftersaleAttachment(
   orderId: string,
   filePath: string,
-): Promise<{ url: string }> {
+): Promise<{
+  id: string;
+  url: string;
+  fileName: string;
+  fileSize: number;
+  fileType: string;
+}> {
   return new Promise((resolve, reject) => {
     const token = getToken();
     uni.uploadFile({
@@ -857,12 +958,20 @@ export async function uploadAftersaleAttachment(
             reject(new Error(parsed?.message || '上传失败'));
             return;
           }
-          const url = String(parsed?.data?.url || '').trim();
+          const data = parsed?.data ?? {};
+          /** 后端同时保留 fileUrl（旧）和 url（兼容），两处都读 */
+          const url = String(data.fileUrl || data.url || '').trim();
           if (!url) {
             reject(new Error('上传失败，请重试'));
             return;
           }
-          resolve({ url });
+          resolve({
+            id: String(data.id || ''),
+            url,
+            fileName: String(data.fileName || ''),
+            fileSize: Number(data.fileSize || 0),
+            fileType: String(data.fileType || ''),
+          });
         } catch {
           reject(new Error('上传失败，请重试'));
         }
@@ -870,4 +979,16 @@ export async function uploadAftersaleAttachment(
       fail: () => reject(new Error('上传失败，请检查网络')),
     });
   });
+}
+
+/** 删除附件（连 COS 文件一起删） */
+export async function deleteAftersaleAttachment(
+  attachmentId: string,
+): Promise<{ ok: boolean; message?: string }> {
+  const res: any = await request({
+    url: `/custom-recipe/attachments/${encodeURIComponent(attachmentId)}`,
+    method: 'DELETE',
+  });
+  if (res?.code === 0) return { ok: true };
+  return { ok: false, message: res?.message };
 }

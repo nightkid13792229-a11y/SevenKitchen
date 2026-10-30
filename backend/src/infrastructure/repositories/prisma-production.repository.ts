@@ -25,7 +25,10 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
       include: { packagingUnits: true },
     });
     if (!record) return null;
-    return this.mapToDomain(record);
+    const snapshotByRef = await this.loadSnapshotRefs(
+      record.packagingUnits || [],
+    );
+    return this.mapToDomain(record, snapshotByRef);
   }
 
   async findByProductionDate(date: Date): Promise<ProductionBatch[]> {
@@ -46,7 +49,7 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
       include: { packagingUnits: true },
       orderBy: { createdAt: 'desc' },
     });
-    return records.map((r: any) => this.mapToDomain(r));
+    return this.mapRecords(records);
   }
 
   async findByStatus(status: string): Promise<ProductionBatch[]> {
@@ -55,7 +58,7 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
       include: { packagingUnits: true },
       orderBy: { createdAt: 'desc' },
     });
-    return records.map((r: any) => this.mapToDomain(r));
+    return this.mapRecords(records);
   }
 
   async findAll(): Promise<ProductionBatch[]> {
@@ -63,7 +66,7 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
       include: { packagingUnits: true },
       orderBy: { createdAt: 'desc' },
     });
-    return records.map((r: any) => this.mapToDomain(r));
+    return this.mapRecords(records);
   }
 
   /**
@@ -160,7 +163,12 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
             data: batch.packagingUnits.map((unit) => ({
               id: unit.id,
               productionBatchId: batch.id, // Set the batchId here
-              recipeSnapshot: unit.recipeSnapshot as any,
+              // 订单锅只存引用，配方从来源订单明细取；备货锅仍存整份
+              recipeSnapshot: unit.recipeSnapshotRefOrderItemId
+                ? null
+                : (unit.recipeSnapshot as any),
+              recipeSnapshotRefOrderItemId:
+                unit.recipeSnapshotRefOrderItemId ?? null,
               totalProductionG: unit.totalProductionG,
               sourceOrderItemIds: unit.sourceOrderItemIds,
               // Phase 8.12: Kitchen task fields (defaults)
@@ -217,7 +225,10 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
       this.logger.error(`Failed to load batch after save: ${batch.id}`);
       return batch;
     }
-    return this.mapToDomain(saved);
+    const snapshotByRef = await this.loadSnapshotRefs(
+      saved.packagingUnits || [],
+    );
+    return this.mapToDomain(saved, snapshotByRef);
   }
 
   // Phase 8.12: Kitchen task operations
@@ -226,7 +237,8 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
       where: { id },
     });
     if (!record) return null;
-    return this.mapPackagingUnitToDomain(record);
+    const snapshotByRef = await this.loadSnapshotRefs([record]);
+    return this.mapPackagingUnitToDomain(record, snapshotByRef);
   }
 
   async updatePackagingUnit(unit: PackagingUnit): Promise<PackagingUnit> {
@@ -258,7 +270,8 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
       );
       return unit;
     }
-    return this.mapPackagingUnitToDomain(saved);
+    const snapshotByRef = await this.loadSnapshotRefs([saved]);
+    return this.mapPackagingUnitToDomain(saved, snapshotByRef);
   }
 
   async findBatchesByPackagingUnitStatus(
@@ -287,7 +300,7 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
         include: { packagingUnits: true },
       });
 
-      return batches.map((b) => this.mapToDomain(b));
+      return this.mapRecords(batches);
     } catch (error: any) {
       this.logger.error('Error in findBatchesByPackagingUnitStatus:', {
         message: error?.message,
@@ -381,7 +394,37 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
     this.logger.log(`Deleted production batch ${batchId}`);
   }
 
-  private mapPackagingUnitToDomain(pu: any): PackagingUnit {
+  /** 批量取「引用快照」：订单锅的配方从来源订单明细读，不复制 */
+  private async loadSnapshotRefs(units: any[]): Promise<Map<string, any>> {
+    const refs = Array.from(
+      new Set(
+        units
+          .map((unit) => unit?.recipeSnapshotRefOrderItemId)
+          .filter(
+            (ref): ref is string =>
+              typeof ref === 'string' && ref.length > 0,
+          ),
+      ),
+    );
+    if (refs.length === 0) return new Map();
+    const items = await this.prisma.orderItem.findMany({
+      where: { id: { in: refs } },
+      select: { id: true, recipeSnapshot: true },
+    });
+    return new Map(items.map((item) => [item.id, item.recipeSnapshot]));
+  }
+
+  /** 批量映射；同一批锅只查一次引用，避免 N+1 */
+  private async mapRecords(records: any[]): Promise<ProductionBatch[]> {
+    const units = records.flatMap((record) => record.packagingUnits || []);
+    const snapshotByRef = await this.loadSnapshotRefs(units);
+    return records.map((record) => this.mapToDomain(record, snapshotByRef));
+  }
+
+  private mapPackagingUnitToDomain(
+    pu: any,
+    snapshotByRef?: Map<string, any>,
+  ): PackagingUnit {
     // Ensure sourceOrderItemIds is always an array
     let sourceOrderItemIds: string[] = [];
     if (Array.isArray(pu.sourceOrderItemIds)) {
@@ -420,10 +463,21 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
       }
     }
 
+    /**
+     * 订单锅：配方从来源订单明细取（引用），不读自己身上的副本。
+     * 备货锅没有引用，仍读自己存的快照；两者都没有时给空对象，
+     * 让调用方按「快照缺失」处理，而不是抛构造错误。
+     */
+    const recipeSnapshotRefOrderItemId =
+      pu.recipeSnapshotRefOrderItemId ?? null;
+    const recipeSnapshot = (recipeSnapshotRefOrderItemId
+      ? snapshotByRef?.get(recipeSnapshotRefOrderItemId) ??
+        pu.recipeSnapshot
+      : pu.recipeSnapshot) as unknown as RecipeSnapshot;
     const unit = new PackagingUnit(
       pu.id,
       pu.productionBatchId,
-      pu.recipeSnapshot as unknown as RecipeSnapshot,
+      recipeSnapshot ?? ({} as RecipeSnapshot),
       pu.totalProductionG,
       sourceOrderItemIds,
       pu.createdAt,
@@ -448,12 +502,16 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
       // 备货锅的分装计划（订单锅为 null）
       pu.stockPortionPlan ?? null,
     );
+    unit.recipeSnapshotRefOrderItemId = recipeSnapshotRefOrderItemId;
     return unit;
   }
 
-  private mapToDomain(record: any): ProductionBatch {
+  private mapToDomain(
+    record: any,
+    snapshotByRef?: Map<string, any>,
+  ): ProductionBatch {
     const packagingUnits = (record.packagingUnits || []).map((pu: any) =>
-      this.mapPackagingUnitToDomain(pu),
+      this.mapPackagingUnitToDomain(pu, snapshotByRef),
     );
 
     const batch = new ProductionBatch(

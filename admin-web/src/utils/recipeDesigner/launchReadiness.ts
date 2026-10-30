@@ -16,7 +16,7 @@ import type {
 export const LAUNCH_READINESS_FIELD_LABELS: Record<string, string> = {
   name: '名称',
   items: '原料',
-  preparationMethod: '预处理方式',
+  preparationMethod: '部位 / 状态 / 预处理',
   supplementTargets: '补剂目标',
   assessment: '配方评估',
   totalWeightG: '总重量',
@@ -146,7 +146,7 @@ const LAUNCH_PASSED_CHECK_DEFINITIONS: Array<
   },
   {
     code: 'PREPARATION_METHOD_REQUIRED',
-    label: '原料预处理完整',
+    label: '部位/状态/预处理完整',
     scope: 'COMMON'
   },
   { code: 'PRODUCTION_STEPS_REQUIRED', label: '制作步骤已填写', scope: 'COMMON' },
@@ -163,6 +163,11 @@ const LAUNCH_PASSED_CHECK_DEFINITIONS: Array<
   {
     code: 'DESCRIPTION_REQUIRED',
     label: '详情描述已填写',
+    scope: 'CATALOG'
+  },
+  {
+    code: 'TAXONOMY_REQUIRED',
+    label: '已归类（至少一个需求分类）',
     scope: 'CATALOG'
   },
   {

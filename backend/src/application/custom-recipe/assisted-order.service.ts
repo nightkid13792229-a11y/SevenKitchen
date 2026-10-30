@@ -56,14 +56,41 @@ export const ASSISTED_PAYMENT_CHANNELS = [
 
 export type AssistedPaymentChannel = (typeof ASSISTED_PAYMENT_CHANNELS)[number];
 
+/**
+ * 赠送原因（2026-10-30）。
+ *
+ * 固定成四个 code 而不是让员工自由写一段话：赠送是常规动作，
+ * 「这个月送了几份、为什么送」必须能按原因筛出来。
+ * `OTHER` 必须补一句说明，避免报表里只剩一堆「其他」。
+ */
+export const ASSISTED_GIFT_REASONS = [
+  'REPEAT_CUSTOMER',
+  'AFTERSALE_COMPENSATION',
+  'FRIEND_SERVICE',
+  'OTHER',
+] as const;
+
+export type AssistedGiftReason = (typeof ASSISTED_GIFT_REASONS)[number];
+
 /** 线下收款入参（对应请求体里的 `payment`） */
 export interface AssistedOrderPaymentInput {
   /** 是否已收款：true 直接建 PAID 单，false 建待付款单 */
   collected: boolean;
-  /** 线下收款渠道 */
-  channel: AssistedPaymentChannel | string;
-  /** 实际收到的金额（元） */
-  amount: number;
+  /**
+   * 是否赠送单（0 元）。
+   *
+   * 赠送单没有这笔钱：`channel` / `amount` / `externalRef` 一律不生效，
+   * 金额固定 0，原因由 `giftReason` 记录。
+   */
+  isGift?: boolean;
+  /** 赠送原因 code；`isGift = true` 时必填 */
+  giftReason?: AssistedGiftReason | string | null;
+  /** 赠送补充说明；原因为 `OTHER` 时必填 */
+  giftNote?: string | null;
+  /** 线下收款渠道；赠送单可为空 */
+  channel?: AssistedPaymentChannel | string | null;
+  /** 实际收到的金额（元）；赠送单可为空 */
+  amount?: number | null;
   /** 线下微信/支付宝流水号或备注；可选 */
   externalRef?: string | null;
   /** 实收与系统报价不一致时的原因（管理员必填） */
@@ -105,6 +132,10 @@ export interface AssistedOrderResult {
   paymentChannel: string | null;
   recipeQuantity: number;
   assistedForGuest: boolean;
+  /** 是否赠送单（0 元） */
+  isGift?: boolean;
+  /** 赠送原因 code（仅赠送单有值） */
+  giftReason?: string | null;
   /** 付款后档案同步结果；失败不影响订单已付款 */
   healthSync: { synced: boolean; reason?: string };
 }
@@ -291,12 +322,19 @@ export class AssistedOrderService {
         /**
          * 已收款：订单金额 = 实际收到的钱（退款/对账以它为准）；
          * 未收款：仍是系统应付，实收字段留空，等后台确认收款时再写。
+         *
+         * 赠送单：实收固定 0，但**必须写 0 而不是留空** ——
+         * 下游「0 元赠送单」的退款口径与取消文案都按 actualPaidAmount 判断。
          */
         amount: payment.collected ? payment.amount : quote.payableAmount,
         actualPaidAmount: payment.collected ? payment.amount : null,
         paymentChannel: payment.collected ? payment.channel : null,
         externalPaymentRef: payment.collected ? payment.externalRef : null,
         priceOverrideReason: payment.collected ? payment.overrideReason : null,
+        /** 赠送单要能单独统计/筛选，不能靠「实收恰好 0」反推 */
+        isGift: payment.isGift,
+        giftReason: payment.giftReason,
+        giftNote: payment.giftNote,
         paymentConfirmedAt: collectedAt,
         status: payment.collected
           ? CustomRecipeStatus.PAID
@@ -339,7 +377,13 @@ export class AssistedOrderService {
 
     this.logger.log(
       `[AssistedOrder] 员工 ${staffId} 为顾客 ${customerId} 创建代客订单 ` +
-        `${order.orderId}（${recipeQuantity} 份，${payment.collected ? '已收款' : '待收款'}）`,
+        `${order.orderId}（${recipeQuantity} 份，${
+          payment.isGift
+            ? `赠送·${payment.giftReason}`
+            : payment.collected
+              ? '已收款'
+              : '待收款'
+        }）`,
     );
 
     return {
@@ -351,6 +395,8 @@ export class AssistedOrderService {
       paymentChannel: payment.collected ? payment.channel : null,
       recipeQuantity,
       assistedForGuest: customer.isGuest === true,
+      isGift: payment.isGift,
+      giftReason: payment.giftReason,
       healthSync,
     };
   }
@@ -454,7 +500,10 @@ export class AssistedOrderService {
     payableAmount: number,
   ): {
     collected: boolean;
-    channel: AssistedPaymentChannel;
+    isGift: boolean;
+    giftReason: AssistedGiftReason | null;
+    giftNote: string | null;
+    channel: AssistedPaymentChannel | null;
     amount: number;
     externalRef: string | null;
     overrideReason: string | null;
@@ -465,6 +514,51 @@ export class AssistedOrderService {
 
     if (typeof raw.collected !== 'boolean') {
       throw new BadRequestException('请确认是否已收款');
+    }
+
+    /**
+     * 赠送单（2026-10-30）。
+     *
+     * 「赠送」必须走显式分支，不能再靠「实收填 0 + 写差异原因」：
+     *  · 赠送单没有这笔钱 ⇒ 收款渠道/流水号一律不收，避免订单上留下假渠道；
+     *  · 赠送单一定是已成交 ⇒ `collected` 必须是 true，否则会挂一张
+     *    待付款的 0 元单，顾客侧永远等不到收款确认；
+     *  · 原因是必填枚举，报表才能回答「这个月送了几份、为什么送」。
+     */
+    if (raw.isGift === true) {
+      if (raw.collected !== true) {
+        throw new BadRequestException('赠送单必须是已成交状态，不能选未收款');
+      }
+
+      const reason = this.normalizeOptional(raw.giftReason)?.toUpperCase();
+      if (
+        !reason ||
+        !(ASSISTED_GIFT_REASONS as readonly string[]).includes(reason)
+      ) {
+        throw new BadRequestException('请选择赠送原因');
+      }
+
+      const giftNote = this.normalizeOptional(raw.giftNote);
+      if (giftNote && giftNote.length > 200) {
+        throw new BadRequestException('赠送补充说明不能超过 200 个字符');
+      }
+      if (reason === 'OTHER' && !giftNote) {
+        throw new BadRequestException(
+          '赠送原因选「其他」时必须补充说明',
+        );
+      }
+
+      return {
+        collected: true,
+        isGift: true,
+        giftReason: reason as AssistedGiftReason,
+        giftNote,
+        channel: null,
+        amount: 0,
+        externalRef: null,
+        // 赠送的解释在 giftReason/giftNote 上，不塞进「改价原因」
+        overrideReason: null,
+      };
     }
 
     const channel = this.normalizeOptional(raw.channel);
@@ -501,6 +595,9 @@ export class AssistedOrderService {
 
     return {
       collected: raw.collected,
+      isGift: false,
+      giftReason: null,
+      giftNote: null,
       channel: channel as AssistedPaymentChannel,
       amount,
       externalRef,

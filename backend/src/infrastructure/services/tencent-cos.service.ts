@@ -395,9 +395,60 @@ export class TencentCosService {
   }
 
   /**
+   * 旧封面进回收站：读取原图 → 上传到 recipes/covers/trash/ → 删原对象。
+   * 只负责对象操作；引用检查由 CoverTrashService 做。
+   */
+  async copyImageToTrash(url: string): Promise<string> {
+    const source = String(url ?? '').trim();
+    if (!source) {
+      throw new BadRequestException('封面地址为空');
+    }
+    if (source.includes('/trash/')) {
+      return source;
+    }
+    const { buffer } = await this.getObjectBuffer(source);
+    const uploaded = await this.uploadImage(
+      buffer,
+      `cover-trash-${Date.now()}.jpg`,
+      'recipes/covers/trash',
+    );
+    await this.deleteImageByUrl(source);
+    return uploaded.url;
+  }
+
+  /**
    * Delete image from COS by URL
    * @param url Full URL of the file (e.g., https://cdn.sevenkitchen.cloud/avatars/123/xxx.jpg)
    */
+  /** 严格删除（抛错）：回收站清理用，失败不能标记为已删除 */
+  async deleteImageByUrlStrict(url: string): Promise<void> {
+    const key = this.extractKey(url);
+    if (!key) throw new BadRequestException('图片地址无效');
+    await this.deleteImage(key);
+  }
+
+  /**
+   * 判断 URL 是否属于本项目 COS：host 必须匹配 CDN 域名或 bucket 域名，
+   * 且 key 在 recipes/ 前缀下。用于回收站，避免误删外部对象。
+   */
+  isOwnedImageUrl(url: string): boolean {
+    try {
+      const parsed = new URL(String(url));
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+        return false;
+      }
+      const key = this.extractKey(parsed.toString());
+      if (!key || !key.startsWith('recipes/')) return false;
+      const cdn = String(this.cdnDomain ?? '')
+        .replace(/^https?:\/\//, '')
+        .replace(/\/+$/, '');
+      const bucketHost = `${this.bucket}.cos.${this.region}.myqcloud.com`;
+      return parsed.host === cdn || parsed.host === bucketHost;
+    } catch {
+      return false;
+    }
+  }
+
   async deleteImageByUrl(url: string): Promise<void> {
     if (!url) {
       console.log('[TencentCosService] No URL provided, skipping deletion');

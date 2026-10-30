@@ -163,6 +163,51 @@
           </template>
         </el-table-column>
 
+        <el-table-column label="标签类型" width="118">
+          <template #default="{ row }">
+            <el-tag
+              v-if="row.properties?.label_category === 'FEED_MATERIAL'"
+              type="success"
+            >
+              饲料原料
+            </el-tag>
+            <el-tag
+              v-else-if="row.properties?.label_category === 'FEED_ADDITIVE'"
+              type="primary"
+            >
+              饲料添加剂
+            </el-tag>
+            <el-tag v-else-if="row.type === 'PACKAGING'" type="info">
+              不适用
+            </el-tag>
+            <el-tag v-else type="danger">未设置</el-tag>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="标签名称" min-width="200">
+          <template #default="{ row }">
+            <template v-if="row.type === 'PACKAGING'">
+              <span class="text-muted">不适用</span>
+            </template>
+            <template
+              v-else-if="
+                Array.isArray(row.properties?.label_names) &&
+                row.properties.label_names.length
+              "
+            >
+              <el-tag
+                v-for="nm in row.properties.label_names"
+                :key="nm"
+                size="small"
+                style="margin-right: 4px"
+              >
+                {{ nm }}
+              </el-tag>
+            </template>
+            <span v-else class="text-danger">未填写</span>
+          </template>
+        </el-table-column>
+
         <el-table-column label="采购策略" width="120">
           <template #default="{ row }">
             <el-tag :type="getProcurementStrategyTagType(row.procurementStrategy)">

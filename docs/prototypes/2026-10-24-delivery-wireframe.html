@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>交付两页 · 内容与交互线框（灰稿）</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 32px 24px 64px;
+    background: #ededed;
+    color: #1d1d1d;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .doc-title { font-size: 22px; font-weight: 700; margin: 0 0 6px; letter-spacing: 1px; }
+  .doc-sub { font-size: 13px; color: #666; margin: 0 0 28px; line-height: 1.7; }
+  .grid { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+
+  .shot { width: 375px; }
+  .shot-cap { font-size: 12px; color: #555; margin: 0 0 8px; font-weight: 600; }
+  .shot-cap span { color: #999; font-weight: 400; }
+
+  .frame {
+    width: 375px;
+    background: #fff;
+    border: 2px solid #2b2b2b;
+    border-radius: 26px;
+    overflow: hidden;
+  }
+  .statusbar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 18px 4px; font-size: 11px; color: #333;
+  }
+  .statusbar .right { letter-spacing: 2px; }
+  .nav {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 14px 10px; border-bottom: 1px dashed #cfcfcf;
+  }
+  .nav .back { font-size: 16px; }
+  .nav .title { font-size: 14px; font-weight: 600; }
+  .nav .capsule {
+    width: 74px; height: 24px; border: 1px solid #bbb; border-radius: 999px;
+    display: flex; align-items: center; justify-content: space-evenly; font-size: 10px; color: #666;
+  }
+  .body { padding: 10px 12px 16px; }
+
+  .block {
+    border: 1.5px solid #b9b9b9;
+    border-radius: 12px;
+    background: #fafafa;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+  }
+  .block.cond { border-style: dashed; background: #f7f7f7; }
+  .block.plain { border: 0; background: transparent; padding: 0; }
+  .blabel { font-size: 10px; color: #8a8a8a; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .bname { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+  .note {
+    font-size: 10px; color: #777; line-height: 1.6; margin-top: 6px;
+    border-top: 1px dashed #d6d6d6; padding-top: 5px;
+  }
+  .note b { color: #444; font-weight: 600; }
+
+  /* cover */
+  .cover {
+    height: 168px; border-radius: 14px; border: 1.5px solid #a9a9a9;
+    background: repeating-linear-gradient(135deg, #e9e9e9 0 10px, #f2f2f2 10px 20px);
+    position: relative; padding: 12px; display: flex; flex-direction: column; justify-content: flex-end;
+    margin-bottom: 10px;
+  }
+  .cover .ph { position: absolute; top: 10px; left: 12px; font-size: 10px; color: #888; }
+  .cover .badge {
+    position: absolute; top: 10px; right: 10px; font-size: 9px; color: #555;
+    border: 1px solid #aaa; border-radius: 999px; padding: 2px 8px; background: #fff;
+  }
+  .cover h1 { font-size: 21px; margin: 0 0 4px; letter-spacing: 0.5px; }
+  .cover .sub { font-size: 11px; color: #555; line-height: 1.6; }
+
+  /* feeding */
+  .cells { display: flex; gap: 8px; }
+  .cell {
+    flex: 1; border: 1px solid #c9c9c9; border-radius: 10px; background: #fff;
+    padding: 10px 4px; text-align: center;
+  }
+  .cell .v { font-size: 21px; font-weight: 700; letter-spacing: 0.5px; }
+  .cell .u { font-size: 10px; color: #777; margin-top: 2px; }
+
+  /* rows / table */
+  .thead { display: flex; font-size: 10px; color: #888; padding: 0 2px 6px; border-bottom: 1px solid #cfcfcf; }
+  .tr { display: flex; align-items: baseline; padding: 7px 2px; border-bottom: 1px dashed #e0e0e0; font-size: 12px; }
+  .tr:last-child { border-bottom: 0; }
+  .grow { flex: 1; }
+  .w1 { width: 88px; }
+  .w2 { width: 92px; text-align: right; }
+  .w3 { width: 68px; color: #666; }
+  .num { font-weight: 700; }
+  .total { display: flex; justify-content: space-between; border-top: 1px solid #cfcfcf; margin-top: 6px; padding-top: 7px; font-size: 12px; font-weight: 700; }
+
+  /* supplement rows */
+  .supp { display: flex; align-items: baseline; padding: 7px 0; border-bottom: 1px dashed #e0e0e0; font-size: 12px; }
+  .supp:last-child { border-bottom: 0; }
+  .supp .how { font-size: 10px; color: #777; }
+
+  /* nutrition */
+  .nutri-grid { display: flex; flex-wrap: wrap; margin-top: 8px; border-top: 1px solid #dcdcdc; padding-top: 8px; }
+  .nutri-cell { width: 25%; text-align: center; padding: 4px 0; }
+  .nutri-cell .v { font-size: 14px; font-weight: 700; }
+  .nutri-cell .l { font-size: 9px; color: #888; }
+
+  /* buttons */
+  .btn {
+    border: 1.5px solid #444; border-radius: 999px; background: #fff;
+    text-align: center; font-size: 12px; font-weight: 700; padding: 9px 10px; color: #222;
+  }
+  .btn.primary { background: #d7d7d7; border-color: #333; }
+  .btn.ghost { border-style: dashed; border-color: #999; color: #555; font-weight: 500; }
+  .btn.small { font-size: 11px; padding: 7px 10px; }
+  .bottom-bar {
+    position: sticky; bottom: 0; display: flex; gap: 8px; align-items: center;
+    padding: 8px 12px 12px; background: #fff; border-top: 1px solid #d5d5d5;
+  }
+  .bottom-bar .btn.ghost { flex: 0 0 104px; }
+  .bottom-bar .btn.primary { flex: 1; }
+
+  .two-col { display: flex; gap: 8px; }
+  .two-col .btn { flex: 1; }
+
+  .kv { display: flex; justify-content: space-between; font-size: 12px; padding: 6px 0; border-bottom: 1px dashed #e3e3e3; }
+  .kv:last-child { border-bottom: 0; }
+  .kv .k { color: #666; }
+  .kv .v { font-weight: 700; }
+
+  .step { display: flex; gap: 8px; padding: 6px 0; font-size: 12px; line-height: 1.55; }
+  .step .i {
+    flex: 0 0 18px; height: 18px; border: 1px solid #999; border-radius: 50%;
+    font-size: 10px; display: flex; align-items: center; justify-content: center; color: #555;
+  }
+
+  .footer-note { font-size: 10px; color: #888; text-align: center; line-height: 1.7; padding: 8px 4px 2px; }
+  .service-link { text-align: center; font-size: 12px; font-weight: 600; padding: 8px 0 2px; text-decoration: underline; }
+
+  .tag { display: inline-block; font-size: 9px; border: 1px solid #aaa; border-radius: 4px; padding: 1px 5px; color: #666; margin-left: 4px; }
+</style>
+</head>
+<body>
+
+<div class="doc-title">交付两页 · 内容与交互线框（灰稿）</div>
+<p class="doc-sub">
+  数据来自定制单 CR202610230224（3 份里的第 1 份）。<br />
+  灰稿只排“放什么、什么顺序、点了去哪”，不涉及颜色、字号、动效。<br />
+  实线框＝确定要留的区块；虚线框＝缺少数据或还没拍板的区块，会写明条件。
+</p>
+
+<div class="grid">
+
+  <!-- ================= 第 1 页 · 屏幕 1 ================= -->
+  <div class="shot" id="p1a">
+    <p class="shot-cap">第 1 页「我的专属食谱」 <span>屏幕 1 / 2</span></p>
+    <div class="frame">
+      <div class="statusbar"><span>9:41</span><span class="right">●●● ⚡</span></div>
+      <div class="nav">
+        <span class="back">‹</span><span class="title">我的专属食谱</span><span class="capsule">•••　◎</span>
+      </div>
+      <div class="body">
+
+        <div class="cover">
+          <span class="ph">封面图（营养师上传）</span>
+          <span class="badge">第 2 版 · 2026-10-23 交付</span>
+          <h1>三份验收 · 第1份</h1>
+          <div class="sub">为 咖喱 定制<br />雪纳瑞（迷你） · 2 岁 · 6.5kg</div>
+        </div>
+
+        <div class="block cond">
+          <div class="blabel">区块 ① · Seven爸爸的一句话</div>
+          <div style="font-size:12px;color:#666">（这单没写，整块不显示）</div>
+          <div class="note"><b>交互：</b>默认两行，“展开/收起”点整块切换。<b>署名：</b>末尾加“—— Seven爸爸”。</div>
+        </div>
+
+        <div class="block">
+          <div class="blabel">区块 ② · 每天怎么喂</div>
+          <div class="cells">
+            <div class="cell"><div class="v">240.2</div><div class="u">克 / 天</div></div>
+            <div class="cell"><div class="v">2</div><div class="u">餐 / 天</div></div>
+            <div class="cell"><div class="v">120.1</div><div class="u">克 / 餐</div></div>
+          </div>
+          <div style="font-size:11px;color:#666;margin-top:8px">这份量是按 7 天配的</div>
+          <div class="note"><b>保留：</b>顾客每天最需要的三个数，放最前。<b>缺数据时：</b>整块换成一句说明＋“找 Seven爸爸补档案”。</div>
+        </div>
+
+        <div class="block">
+          <div class="blabel">区块 ③ · 配方组成（原“食材”）</div>
+          <div class="thead"><span class="grow">食材</span><span class="w2">占比</span></div>
+          <div class="tr"><span class="grow">牛霖</span><span class="w2 num">37%</span></div>
+          <div class="tr"><span class="grow">牛心</span><span class="w2 num">6%</span></div>
+          <div class="tr"><span class="grow">牛肝</span><span class="w2 num">3%</span></div>
+          <div class="tr"><span class="grow">鸡蛋</span><span class="w2 num">12%</span></div>
+          <div class="tr" style="color:#888"><span class="grow">…… 共 11 种</span><span class="w2 num">—</span></div>
+          <div class="note"><b>改名：</b>改叫“配方组成”，回答“里面有什么”，不跟第 2 页的采购清单撞名。<br /><b>只给占比：</b>克数在第 2 页。<b>新增：</b>“共 11 种”。</div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 第 1 页 · 屏幕 2 ================= -->
+  <div class="shot" id="p1b">
+    <p class="shot-cap">第 1 页「我的专属食谱」 <span>屏幕 2 / 2（继续向下）</span></p>
+    <div class="frame">
+      <div class="statusbar"><span>9:41</span><span class="right">●●● ⚡</span></div>
+      <div class="body">
+
+        <div class="block">
+          <div class="blabel">区块 ③续 · 配方组成（剩余行）</div>
+          <div class="tr"><span class="grow">三文鱼</span><span class="w2 num">6%</span></div>
+          <div class="tr"><span class="grow">燕麦</span><span class="w2 num">12%</span></div>
+          <div class="tr"><span class="grow">山药</span><span class="w2 num">9%</span></div>
+          <div class="tr"><span class="grow">紫甘蓝</span><span class="w2 num">6%</span></div>
+          <div class="tr"><span class="grow">秋葵</span><span class="w2 num">6%</span></div>
+          <div class="tr"><span class="grow">生葵花籽仁</span><span class="w2 num">2%</span></div>
+          <div class="tr"><span class="grow">食用盐</span><span class="w2 num">&lt;1%</span></div>
+          <div class="note"><b>要修：</b>食用盐现在是 0.12%，四舍五入会显示成“0%”，容易被读成“没放盐”。改成“&lt;1%”。</div>
+        </div>
+
+        <div class="block">
+          <div class="blabel">区块 ④ · 每天要加的补剂</div>
+          <div class="supp"><span class="grow">鸡蛋壳粉</span><span class="how">充分搅拌</span></div>
+          <div class="supp"><span class="grow">葡萄糖酸锌片</span><span class="how">打粉</span></div>
+          <div class="supp"><span class="grow">海藻粉</span><span class="how">充分搅拌</span></div>
+          <div class="note"><b>只写名称 + 怎么加，不写用量</b>：用量和买法在第 2 页，避免同一组数字出现两遍。<br /><b>原来那行“每 kg 食材添加 2192 毫克”删掉</b>——顾客看不懂。</div>
+        </div>
+
+        <div class="block">
+          <div class="blabel">区块 ⑤ · 核心营养成分</div>
+          <div style="font-size:11px;color:#555;margin-bottom:2px">✓ 符合 FEDIAF 2021 犬营养标准</div>
+          <div class="nutri-grid">
+            <div class="nutri-cell"><div class="v">32%</div><div class="l">蛋白质</div></div>
+            <div class="nutri-cell"><div class="v">9%</div><div class="l">脂肪</div></div>
+            <div class="nutri-cell"><div class="v">6%</div><div class="l">灰分</div></div>
+            <div class="nutri-cell"><div class="v">68%</div><div class="l">含水量</div></div>
+            <div class="nutri-cell"><div class="v">3%</div><div class="l">膳食纤维</div></div>
+            <div class="nutri-cell"><div class="v">22%</div><div class="l">碳水</div></div>
+            <div class="nutri-cell"><div class="v">1.2</div><div class="l">kcal/g</div></div>
+            <div class="nutri-cell"><div class="v">1.2</div><div class="l">钙磷比</div></div>
+          </div>
+          <div class="note"><b>顺序调整：</b>从“食材后面”挪到“补剂后面”，作为整页的品质背书；先看怎么喂，再看为什么这么配。<br /><b>缺数据：</b>整块不显示（这单本地快照没有，灰稿用示例值）。</div>
+        </div>
+
+        <div class="footer-note">这份内容在交付时已存档，之后调整配方不会改变你现在看到的版本。</div>
+      </div>
+
+      <div class="bottom-bar">
+        <div class="btn ghost">找 Seven爸爸</div>
+        <div class="btn primary">开始采购与制作</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 第 2 页 · 屏幕 1 ================= -->
+  <div class="shot" id="p2a">
+    <p class="shot-cap">第 2 页「采购与制作」 <span>屏幕 1 / 2</span></p>
+    <div class="frame">
+      <div class="statusbar"><span>9:41</span><span class="right">●●● ⚡</span></div>
+      <div class="nav">
+        <span class="back">‹</span><span class="title">采购与制作</span><span class="capsule">•••　◎</span>
+      </div>
+      <div class="body">
+
+        <div class="block plain">
+          <div style="font-size:18px;font-weight:700;letter-spacing:0.5px">三份验收 · 第1份</div>
+          <div style="font-size:11px;color:#666;margin-top:4px">第 2 版 · 2026-10-23 交付</div>
+          <div style="font-size:11px;color:#555;margin-top:4px">本次共交付 3 份 · 可在订单详情切换查看</div>
+          <div class="note"><b>删掉：</b>原来这里又写一遍大标题“采购与制作”，和导航栏重复。</div>
+        </div>
+
+        <div class="block">
+          <div class="blabel">区块 ① · 这一批要做多少</div>
+          <div class="kv"><span class="k">每天</span><span class="v">240.2 克，分 2 餐</span></div>
+          <div class="kv"><span class="k">这批做</span><span class="v">7 天</span></div>
+          <div class="kv"><span class="k">总净重</span><span class="v">1681.4 克<span style="color:#777;font-weight:400">（只算食材）</span></span></div>
+          <div class="kv"><span class="k">每餐</span><span class="v">120.1 克</span></div>
+          <div class="note"><b>要修：</b>现在的“总净重 1712.3 克”把 3 样补剂（共 30.9 克）算进去了。改成只算食材。</div>
+        </div>
+
+        <div class="block">
+          <div class="blabel">区块 ② · 要准备的食材（原“每种食材要用多少”）</div>
+          <div class="thead">
+            <span class="grow">食材</span><span class="w3">处理</span><span class="w2">净用量（克）</span>
+          </div>
+          <div class="tr"><span class="grow">牛霖</span><span class="w3">去油</span><span class="w2 num">618.2 克</span></div>
+          <div class="tr"><span class="grow">牛心</span><span class="w3">去油</span><span class="w2 num">103 克</span></div>
+          <div class="tr"><span class="grow">牛肝</span><span class="w3">去油</span><span class="w2 num">51.5 克</span></div>
+          <div class="tr"><span class="grow">鸡蛋</span><span class="w3">去壳</span><span class="w2 num">206.1 克</span></div>
+          <div class="tr"><span class="grow">三文鱼</span><span class="w3">去皮</span><span class="w2 num">103 克</span></div>
+          <div class="tr"><span class="grow">燕麦</span><span class="w3">生重</span><span class="w2 num">206.1 克</span></div>
+          <div class="tr" style="color:#888"><span class="grow">…… 共 11 种</span><span class="w3">—</span><span class="w2">—</span></div>
+          <div class="total"><span>合计</span><span>1681.4 克</span></div>
+          <div class="note">
+            <b>只留食材：</b>3 样补剂从这里挪走（它们原来混在这一列，下面又列一遍）。<br />
+            <b>每行都带“克”：</b>不是只在表头写单位。<br />
+            <b>列名：</b>“制备方法” → “处理”。<b>删掉：</b>“我们没法替你估”那句内部口径。
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 第 2 页 · 屏幕 2 ================= -->
+  <div class="shot" id="p2b">
+    <p class="shot-cap">第 2 页「采购与制作」 <span>屏幕 2 / 2（继续向下）</span></p>
+    <div class="frame">
+      <div class="statusbar"><span>9:41</span><span class="right">●●● ⚡</span></div>
+      <div class="body">
+
+        <div class="block">
+          <div class="blabel">区块 ③ · 要加的补剂</div>
+          <div class="supp"><span class="grow">鸡蛋壳粉</span><span class="num">10.3 克</span></div>
+          <div style="font-size:10px;color:#777;margin:0 0 4px">充分搅拌 · <span style="text-decoration:underline">换一个 / 去买 ›</span></div>
+          <div class="supp"><span class="grow">葡萄糖酸锌片</span><span class="num">10.3 克</span></div>
+          <div style="font-size:10px;color:#777;margin:0 0 4px">打粉</div>
+          <div class="supp"><span class="grow">海藻粉</span><span class="num">10.3 克</span></div>
+          <div style="font-size:10px;color:#777;margin:0 0 8px">充分搅拌</div>
+          <div class="btn primary">一键买齐预分装补剂（3 样 · 共 30.9 克）</div>
+          <div style="text-align:center;font-size:10px;color:#777;margin-top:6px">不知道买哪个？<span style="text-decoration:underline">问 Seven爸爸</span></div>
+          <div class="note"><b>“换一个 / 去买”只在有可替换产品时出现</b>（这单没有，所以灰稿里用虚线感画）。<br /><b>“一键买齐”只在每样补剂都能下单时出现</b>，和现在规则一致。</div>
+        </div>
+
+        <div class="block">
+          <div class="blabel">区块 ④ · 怎么做</div>
+          <div class="step"><span class="i">1</span><span>牛霖逆纹切小块，牛心牛肝去油切丁（10 分钟，厨房秤）</span></div>
+          <div class="step"><span class="i">2</span><span>食材与补剂混合均匀，按每餐重量分装（15 分钟，搅拌盆）</span></div>
+          <div class="step"><span class="i">3</span><span>冷冻保存，喂食前彻底解冻（-18℃，冷冻室）</span></div>
+        </div>
+
+        <div class="block cond">
+          <div class="blabel">区块 ⑤ · 怎么存</div>
+          <div style="font-size:12px;color:#666">（营养师没填就不显示）</div>
+        </div>
+
+        <div class="block">
+          <div class="blabel">区块 ⑥ · 制作设备（全局配置，示例）</div>
+          <div class="kv"><span class="k">厨房秤</span><span class="v" style="font-weight:400">称重更准 · 去买 ›</span></div>
+          <div class="kv"><span class="k">搅拌盆</span><span class="v" style="font-weight:400">混合更匀 · 去买 ›</span></div>
+        </div>
+
+        <div class="block cond">
+          <div class="blabel">区块 ⑦ · 不想自己做？（待拍板）</div>
+          <div style="font-size:12px;color:#555">“这份配方也能做成成品，冷链到家。”</div>
+          <div class="btn ghost" style="margin-top:8px">看看成品鲜食</div>
+          <div class="note"><b>位置：</b>放在“怎么做”之后——顾客刚看完做饭步骤，正是最想偷懒的时候。<br /><b>文案二选一：</b>“用这份配方订购成品”（要能按配方生产）／“看看成品鲜食”（通用）。</div>
+        </div>
+
+        <div class="two-col" style="margin-top:2px">
+          <div class="btn small">保存为图片（买菜 / 打印）</div>
+          <div class="btn small">返回专属食谱</div>
+        </div>
+
+        <div class="footer-note">这份内容在交付时已存档，之后调整配方不会改变你现在看到的版本。</div>
+        <div class="service-link">还有问题？找 Seven爸爸 ›</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

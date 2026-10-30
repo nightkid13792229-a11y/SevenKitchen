@@ -137,6 +137,12 @@ export interface CustomRecipeOrderDetail {
   externalPaymentRef?: string | null
   actualPaidAmount?: number | null
   priceOverrideReason?: string | null
+  /** 赠送单（2026-10-30）：金额固定 0、不记收款渠道 */
+  isGift?: boolean
+  /** 赠送原因 code：REPEAT_CUSTOMER / AFTERSALE_COMPENSATION / FRIEND_SERVICE / OTHER */
+  giftReason?: string | null
+  /** 赠送补充说明（原因为 OTHER 时必填） */
+  giftNote?: string | null
   /** 线下退款登记（手工退现金/转账，不调用微信退款） */
   refundChannel?: string | null
   offlineRefundedAt?: string | null
@@ -419,9 +425,23 @@ export interface AdminAftersaleSelectedRecipe {
 export interface AdminAftersaleRecipeRequest {
   deliveryItemId: string;
   description: string;
+  /** 这一份自己的附件（2026-10-25）；旧记录没有时为空 */
+  photos?: string[];
 }
 
 /** 后台待办里的一条售后 */
+/** 员工代客发起的调整单（2026-10-27） */
+export interface StaffAftersaleResult {
+  id: string;
+  status: string;
+  statusLabel: string;
+  source: string;
+  deliveryBatchId: string | null;
+  deliveryItemIds: string[];
+  /** true = 复用了一条已经存在的进行中调整（重复点击不报错） */
+  resumed?: boolean;
+}
+
 export interface AdminAftersaleItem {
   id: string;
   orderId: string;
@@ -431,6 +451,9 @@ export interface AdminAftersaleItem {
   orderStatus: string;
   type: string;
   typeLabel: string;
+  /** 谁发起的：CUSTOMER = 顾客在小程序提交；STAFF = 员工代客发起（2026-10-27） */
+  source?: 'CUSTOMER' | 'STAFF';
+  sourceLabel?: string;
   status: string;
   statusLabel: string;
   description: string;
@@ -501,12 +524,32 @@ export type AssistedPaymentChannel =
   | 'OFFLINE_ALIPAY'
   | 'OTHER'
 
+/**
+ * 赠送原因（2026-10-30）。
+ *
+ * 固定成四个 code：赠送是常规动作，「送了几份、为什么送」要能按原因筛出来。
+ * 中文文案在 `utils/assistedOrder.ts`，与后端 code 一一对应。
+ */
+export type AssistedGiftReason =
+  | 'REPEAT_CUSTOMER'
+  | 'AFTERSALE_COMPENSATION'
+  | 'FRIEND_SERVICE'
+  | 'OTHER'
+
 export type AssistedAllergyStatus = 'HAS_ALLERGY' | 'NO_ALLERGY'
 
 export interface AssistedOrderPayment {
   collected: boolean
-  channel: AssistedPaymentChannel
-  amount: number
+  /** 赠送单：金额固定 0、不记收款渠道与流水号 */
+  isGift?: boolean
+  /** 赠送原因 code（赠送单必填） */
+  giftReason?: AssistedGiftReason | null
+  /** 赠送补充说明（原因为 OTHER 时必填） */
+  giftNote?: string | null
+  /** 赠送单可不填 */
+  channel?: AssistedPaymentChannel | null
+  /** 赠送单可不填 */
+  amount?: number | null
   externalRef?: string | null
   overrideReason?: string | null
 }
@@ -655,8 +698,31 @@ export type CustomRecipeIntakeOptionSets = Record<
 
 const BASE = '/admin/custom-recipe'
 
+/** 后台退款申请（2026-10-25） */
+export interface AdminRefundRequest {
+  id: string;
+  orderId: string;
+  orderStatus: string | null;
+  status: string;
+  statusLabel: string;
+  reasonCode: string;
+  reasonLabel: string;
+  description: string;
+  photos: string[];
+  amount: number;
+  adminNote: string | null;
+  refundStatus: string | null;
+  refundOutNo: string | null;
+  refundId: string | null;
+  createdAt: string;
+  reviewedAt: string | null;
+  dogName: string | null;
+  customerName: string | null;
+  customerPhone: string | null;
+}
+
 export const customRecipeApi = {
-  /** 订单列表（分页 + 状态/日期/关键词筛选） */
+  /** 订单列表（分页 + 状态/日期/关键词/赠送筛选） */
   listOrders: (params: {
     page?: number
     pageSize?: number
@@ -664,6 +730,8 @@ export const customRecipeApi = {
     search?: string
     dateFrom?: string
     dateTo?: string
+    /** true = 只看赠送单；不传 = 全部 */
+    isGift?: boolean
   }) => api.get<CustomRecipeOrderListResult>(`${BASE}/orders`, { params }),
 
   // ---------- 代客下单（2026-10-21 · Task 4）----------
@@ -944,6 +1012,34 @@ export const customRecipeApi = {
 
   rejectAftersale: (id: string, payload: { reason: string }) =>
     api.post(`/admin/custom-recipe/aftersales/${id}/reject`, payload),
+
+  /**
+   * 代客发起调整（2026-10-27）。
+   *
+   * 顾客不满意但不会/不方便在小程序提单时，员工替顾客开一条调整单，
+   * 创建即「已受理」；随后用 `recipeDesignerApi.reopenAftersaleDesign`
+   * 打开设计器改稿，改完回售后页「重新交付并完成」。
+   *
+   * 不占顾客免费次数、不受售后窗口限制 —— 口径由后端保证。
+   */
+  createStaffAftersale: (
+    orderId: string,
+    payload: { description: string; deliveryItemIds?: string[] },
+  ): Promise<StaffAftersaleResult> =>
+    api.post(`${BASE}/orders/${orderId}/aftersales`, payload),
+
+  // ---------- 退款申请（2026-10-25）----------
+
+  listRefundRequests: (
+    params?: { status?: string },
+  ): Promise<{ items: AdminRefundRequest[] }> =>
+    api.get('/admin/custom-recipe/refund-requests', { params }),
+
+  approveRefundRequest: (id: string, payload: { note?: string }) =>
+    api.post(`/admin/custom-recipe/refund-requests/${id}/approve`, payload),
+
+  rejectRefundRequest: (id: string, payload: { reason: string }) =>
+    api.post(`/admin/custom-recipe/refund-requests/${id}/reject`, payload),
 
   /** 保存食谱定制设置（仅管理员） */
   updateConfig: (payload: Partial<CustomRecipeConfig>) =>

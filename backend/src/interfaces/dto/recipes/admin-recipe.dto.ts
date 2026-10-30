@@ -14,6 +14,8 @@ import {
   MaxLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { IsPreparationMethodContentLength } from './preparation-method-content.validator';
+
 import {
   RecipeStatus,
   RecipeHealthTag,
@@ -65,6 +67,8 @@ export class RecipeItemDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(20)
+  @IsPreparationMethodContentLength()
   preparationMethod?: string;
 
   @IsOptional()
@@ -374,6 +378,14 @@ export interface RecipeDetailResponseDto extends RecipeSummaryResponseDto {
   nutritionStandard: NutritionStandard;
   nutritionDetailedData?: NutritionDetailedData;
   productionSteps?: string;
+  /** 结构化制作步骤（2026-10-24）：老 productionSteps 保留给旧页面 */
+  productionStepsList?: Array<{
+    sortOrder: number;
+    instruction: string;
+    durationMinutes: number | null;
+    temperatureC: number | null;
+    equipment: string | null;
+  }>;
   productionLossRate: number;
   batchLaborHours?: number;
   /** 私密定制：给哪个客户做的（W4-B，编辑页需要回填） */

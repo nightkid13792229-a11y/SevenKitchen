@@ -48,8 +48,14 @@ export const AGENT_PURPOSES: AgentPurposeMeta[] = [
   },
   {
     purpose: 'RECIPE_DESIGN',
-    label: '食谱设计建议',
-    description: '为定制食谱生成 AI 设计建议（推荐食材/营养注意等）',
+    label: 'AI 食谱设计对话',
+    description: '配方编辑页的对话式食谱设计 Agent（设计配方、生成封面、填写食谱信息）',
+    defaultModel: 'deepseek-v4-pro',
+  },
+  {
+    purpose: 'INGREDIENT_INTAKE',
+    label: 'AI 添加原料',
+    description: '原料识别、营养词条匹配与草稿起草（对话式 Agent）',
     defaultModel: 'deepseek-v4-pro',
   },
   {

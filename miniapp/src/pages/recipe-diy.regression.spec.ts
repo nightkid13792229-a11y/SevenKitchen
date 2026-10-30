@@ -26,10 +26,20 @@ describe('recipe diy regressions', () => {
     )?.[0] || ''
 
     expect(source).toContain("const initialDogId = ref('')")
-    expect(mountedSource).toContain("initialDogId.value = options.dogId || ''")
+    // 2026-10-24：onLoad 先收 dogId，比 onMounted 翻页面栈可靠
+    expect(source).toContain('onLoad((options) => {')
+    expect(source).toContain('routeDogId.value = options?.dogId')
+    expect(mountedSource).toContain("initialDogId.value = routeDogId.value || options.dogId || ''")
     expect(loadDogsSource).toContain('const preferredDogId = initialDogId.value || uni.getStorageSync(\'dogId\') || \'\'')
     expect(loadDogsSource).toContain('const preferredDog = res.data.find((dog: Dog) => dog.id === preferredDogId) || res.data[0]')
     expect(loadDogsSource).toContain('await selectDog(preferredDog.id)')
+    // 来源提示条已按 2026-10-24 要求拿掉；版本锁仍靠 orderId
+    expect(source).not.toContain('custom-source-banner')
+    expect(source).not.toContain('来自你的定制食谱')
+    // 选中的爱犬排第一位并滚到它
+    expect(source).toContain('const orderedDogs = computed')
+    expect(source).toContain('v-for="dog in orderedDogs"')
+    expect(source).toContain('scroll-into-view')
   })
 
   it('offers a quick switch to the selected dog matched life-stage recipe version', () => {
@@ -247,19 +257,25 @@ describe('recipe diy regressions', () => {
   })
 
   /**
-   * 本页不放客服入口；底部只有「生成制作单」一个按钮。
+   * 2026-10-24 改口径：底栏 = 「找 Seven爸爸」（紧凑）+「生成制作单」，
+   * 仍然只有**一颗主按钮**；客服入口只放一个，不做第二处。
    */
-  it('keeps the bottom bar to a single full-width action', () => {
+  it('keeps one primary action plus one compact service entry', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/recipe-diy/index.vue'),
       'utf-8',
     )
     const templateSource = source.slice(0, source.indexOf('<script setup'))
 
-    expect(source).not.toContain('CustomerServiceInlineButton')
-    expect(templateSource).not.toContain('CustomerServiceInlineButton')
-    expect(templateSource).not.toContain('bottom-bar-row')
-    expect(source).toContain('.btn-generate {\n  width: 100%;')
+    expect(templateSource).toContain('CustomerServiceInlineButton')
+    // 只出现一次：底栏一个入口，不在页面别处再放一个
+    expect(
+      templateSource.match(/CustomerServiceInlineButton/g)?.length ?? 0,
+    ).toBe(1)
+    expect(templateSource).toContain('compact')
+    expect(templateSource).toContain('生成制作单')
+    expect(source).toContain('.btn-generate {')
+    expect(source).toContain('flex: 1;')
     // 按钮不可用时仍会说明原因
     expect(templateSource).toContain('generateBlockReason')
   })

@@ -68,7 +68,6 @@ import { OrderStatusHistory } from 'src/domain/order/order-status-history.entity
 import { PrismaService } from 'src/infrastructure/prisma.service';
 import { RecipeService } from 'src/application/recipe/recipe.service';
 import {
-  PreparationMethod,
   CookingMethod,
 } from 'src/domain/order';
 import { WechatPaymentService } from 'src/application/payment/wechat-payment.service';
@@ -548,7 +547,6 @@ describe('OrdersController (e2e)', () => {
     packageSpecG?: number;
     customRequirements?: string | null;
     dailyIntakeG?: number;
-    preparationMethod?: PreparationMethod | null;
     cookingMethod?: CookingMethod | null;
   }): OrderItem {
     return new OrderItem(
@@ -566,7 +564,6 @@ describe('OrdersController (e2e)', () => {
       null,
       null,
       null,
-      params.preparationMethod ?? null,
       params.cookingMethod ?? null,
     );
   }
@@ -1181,7 +1178,6 @@ describe('OrdersController (e2e)', () => {
             id: 'item-id-1',
             orderId: 'order-id-1',
             recipeSnapshot,
-            preparationMethod: PreparationMethod.DICED,
             cookingMethod: CookingMethod.COOKED,
           }),
         ],
@@ -1245,6 +1241,44 @@ describe('OrdersController (e2e)', () => {
         paymentMethod: 'WECHAT_PAY',
         transactionId: '4200000000000000001',
         paymentStatus: 'SUCCESS',
+      });
+    });
+
+    it('should expose order number, shipping ETA and tracking on the summary', async () => {
+      const customerId = 'test-customer-id';
+      const order = createTestOrder({
+        id: 'order-eta-1',
+        customerId,
+        status: OrderStatus.SHIPPED,
+        items: [
+          createTestOrderItem({
+            id: 'item-eta-1',
+            orderId: 'order-eta-1',
+          }),
+        ],
+        amountProduct: 250,
+        amountTotal: 250,
+      });
+      order.orderNo = 'SK20261030-001';
+      order.targetProductionDate = new Date('2026-11-01T00:00:00.000Z');
+      order.trackingNumber = 'SF1234567890';
+      order.carrierCode = 'SF';
+      await orderRepository.save(order);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/orders')
+        .set('X-Customer-Id', customerId)
+        .expect(200);
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+      const summary = response.body.data.find(
+        (s: { id: string }) => s.id === 'order-eta-1',
+      );
+      expect(summary).toMatchObject({
+        orderNo: 'SK20261030-001',
+        estimatedShippingDate: '2026-11-02T00:00:00.000Z',
+        trackingNumber: 'SF1234567890',
+        carrierCode: 'SF',
       });
     });
 
@@ -1410,7 +1444,6 @@ describe('OrdersController (e2e)', () => {
         id: 'item-id-3',
         orderId: 'test-order-id-3',
         recipeSnapshot,
-        preparationMethod: PreparationMethod.CHOPPED,
         cookingMethod: CookingMethod.COOKED,
       });
       const order = createTestOrder({
@@ -1433,9 +1466,6 @@ describe('OrdersController (e2e)', () => {
       expect(response.body.data).toBeDefined();
       expect(response.body.data.id).toBe(order.id);
       expect(response.body.data.status).toBe(OrderStatus.INIT);
-      expect(response.body.data.items[0].preparationMethod).toBe(
-        PreparationMethod.CHOPPED,
-      );
       expect(response.body.data.items[0].cookingMethod).toBe(
         CookingMethod.COOKED,
       );
@@ -2082,8 +2112,7 @@ describe('OrdersController (e2e)', () => {
               recipeId,
               packagePlan,
               dailyIntakeG: 300,
-              preparationMethod: PreparationMethod.DICED,
-              cookingMethod: CookingMethod.RAW,
+                cookingMethod: CookingMethod.RAW,
             },
           ],
         })
@@ -2114,8 +2143,7 @@ describe('OrdersController (e2e)', () => {
                 packageSpecG: 200,
                 packagePlan,
                 dailyIntakeG: 300,
-                preparationMethod: PreparationMethod.DICED,
-                cookingMethod: CookingMethod.RAW,
+                    cookingMethod: CookingMethod.RAW,
               }),
             ],
           }),

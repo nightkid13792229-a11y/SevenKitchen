@@ -200,6 +200,137 @@ export class WechatShippingUploadService {
     };
   }
 
+  /**
+   * 定制食谱：交付后按「虚拟商品」上报微信发货信息（2026-10-30）。
+   *
+   * 为什么不是快递：定制单交付的是电子食谱 / 采购清单 / 营养报告，
+   * 没有物流单号；微信侧对应 `logistics_type=3`（虚拟商品）。
+   * 不上报的话，微信会把货款一直冻在「待发货」。
+   *
+   * 幂等：成功后在订单上记 `wechatShippingUploadedAt`，重复交付不再上报
+   * （微信每笔支付单只允许一次重新发货）。
+   */
+  async uploadVirtualForCustomRecipeOrder(
+    orderId: string,
+  ): Promise<WechatShippingUploadResult> {
+    const order = await this.prisma.customRecipeOrder.findUnique({
+      where: { id: orderId },
+      include: { customer: true },
+    });
+
+    if (!order) {
+      return {
+        success: false,
+        skipped: true,
+        message: `定制订单不存在：${orderId}`,
+      };
+    }
+
+    if (order.wechatShippingUploadedAt) {
+      return {
+        success: true,
+        skipped: true,
+        message: '微信虚拟发货信息已上传，无需重复',
+      };
+    }
+
+    const paidOnline =
+      order.paymentChannel === 'WECHAT_ONLINE' ||
+      (order.paymentChannel == null && Boolean(order.paymentTransactionId));
+    if (!paidOnline) {
+      return {
+        success: true,
+        skipped: true,
+        message: '非微信在线支付订单，无需上报虚拟发货',
+      };
+    }
+
+    if (!order.paymentTransactionId) {
+      return {
+        success: false,
+        skipped: true,
+        message: '订单缺少微信支付交易号，无法上报虚拟发货',
+      };
+    }
+
+    if (
+      order.status !== 'DELIVERED' &&
+      order.status !== 'COMPLETED'
+    ) {
+      return {
+        success: false,
+        skipped: true,
+        message: '订单尚未交付，不能上报虚拟发货',
+      };
+    }
+
+    const paymentConfig = await this.prisma.paymentConfig.upsert({
+      where: { id: 'singleton' },
+      create: {},
+      update: {},
+      select: { appId: true, mchId: true },
+    });
+    if (!paymentConfig.mchId) {
+      return {
+        success: false,
+        skipped: true,
+        message: '后台支付配置缺少微信支付商户号，无法上报虚拟发货',
+      };
+    }
+
+    const payerOpenid = await this.resolveShippingPayerOpenid(
+      order.customerId,
+      paymentConfig.appId,
+      order.customer.wechatOpenid,
+    );
+    if (!payerOpenid) {
+      return {
+        success: false,
+        skipped: true,
+        message: '订单用户缺少微信 openid，无法上报虚拟发货',
+      };
+    }
+
+    const payload: WechatShippingInfoPayload = {
+      order_key: {
+        order_number_type: 2,
+        mchid: paymentConfig.mchId,
+        transaction_id: order.paymentTransactionId,
+      },
+      // 3 = 虚拟商品（无实体配送）
+      logistics_type: 3,
+      delivery_mode: 1,
+      is_all_delivered: true,
+      shipping_list: [
+        {
+          item_desc: '定制食谱',
+        },
+      ],
+      upload_time: this.formatWechatTimestamp(new Date()),
+      payer: { openid: payerOpenid },
+    };
+
+    const response = await this.wechatService.uploadShippingInfo(
+      payload,
+      paymentConfig.appId || undefined,
+    );
+
+    await this.prisma.customRecipeOrder.update({
+      where: { id: order.id },
+      data: { wechatShippingUploadedAt: new Date() },
+    });
+
+    this.logger.log(
+      `Uploaded WeChat virtual shipping info for custom recipe order ${order.id}`,
+    );
+
+    return {
+      success: true,
+      message: '微信虚拟发货信息已上传',
+      response,
+    };
+  }
+
   async queryShippingOrderStatus(
     orderId: string,
   ): Promise<WechatShippingOrderStatusResult> {

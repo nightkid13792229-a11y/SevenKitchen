@@ -1,46 +1,52 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { AgentProviderConfigService } from '../nutrition-governance/agent-provider-config.service';
+import {
+  AgentProviderConfigService,
+  ARK_PROVIDER,
+  RECIPE_COVER_IMAGE_PURPOSE,
+  RECIPE_COVER_PROMPT_PURPOSE,
+} from '../nutrition-governance/agent-provider-config.service';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
-import { buildRecipeCoverPrompt, callZhipuImage } from './zhipu-image';
+import { ImageOptimizationService } from '../../infrastructure/services/image-optimization.service';
+import { RecipeCoverConfigService } from './recipe-cover-config.service';
+import { RecipeCoverVisualBriefService } from './recipe-cover-visual-brief.service';
+import {
+  buildRecipeCoverPrompt,
+  type RecipeCoverIngredient,
+} from './recipe-cover-prompt';
+import { callSeedreamImage } from './seedream-image';
 
-/** 生图用途的 provider 配置标识（后台 AI 设置里那条） */
-export const RECIPE_COVER_IMAGE_PURPOSE = 'RECIPE_COVER_IMAGE';
-export const ZHIPU_PROVIDER = 'ZHIPU';
+/** 生图用途的 provider 配置标识（后台「AI 食谱封面」那条） */
+export { RECIPE_COVER_IMAGE_PURPOSE, ARK_PROVIDER };
+
+/** 封面生图至少等 200 秒；Seedream 实测 30–60 秒，留足余量 */
+const COVER_IMAGE_REQUEST_TIMEOUT_MS = 200_000;
+
+/** 画面比例：COVER_16_9 走 750×422 压缩；SQUARE 仅兼容旧调用 */
+export type RecipeCoverLayout = 'SQUARE' | 'COVER_16_9';
 
 export interface GenerateRecipeCoverInput {
   recipeName: string;
-  /** 适用生命阶段的中文标签，只用于提示词 */
+  /** 兼容旧入口；新链路只用 ingredients */
   lifeStageLabels?: string[];
-  /** 主要食材名，只用于提示词 */
+  /** 兼容旧入口；系列 / 定制都用 ingredients */
   foodNames?: string[];
-  /** 传了就以平台身份标识给智谱（官方建议，便于内容安全干预） */
+  /** 系列 / 定制封面的完整食材数据（名字 / 部位状态预处理 / 占比） */
+  ingredients?: RecipeCoverIngredient[];
+  /** 兼容旧字段；Seedream 不传终端用户 */
   customerId?: string | null;
+  layout?: RecipeCoverLayout;
 }
 
 /**
- * AI 生成食谱封面图（2026-10-18）
- *
- * ## 三步，一步都不能省
+ * AI 生成食谱封面（DeepSeek prompt + Seedream 5.0 Pro）
  *
  * ```
- * ① 调智谱生图  → 拿到一个**临时链接**
- * ② 立刻下载    → 转成 Buffer
- * ③ 上传 COS    → 换成**我们自己的**地址
+ * ① DeepSeek 写 Seedream prompt（视觉 brief + 固定约束）
+ * ② Seedream 5.0 Pro 生图（2048×1152，watermark:false）
+ * ③ 立刻下载 → 750×422 压缩 → 转存 COS
  * ```
  *
- * ## ⚠️ 为什么必须有第 ②③ 步
- *
- * 智谱官方原文：**"The temporary link expires after 30 days, please store it promptly."**
- *
- * 如果图省事把 ① 返回的 url 直接存进数据库，**30 天后所有封面图会变空白** ——
- * 而且是**静默失效**：没有任何报错，顾客只是看到一片空白。
- *
- * 所以第 ②③ 步不是"优化"，是**正确性要求**。
- *
- * ## 失败会对顾客造成什么
- *
- * 不会。这个功能只被后台管理员手动触发，失败就是"这次没生成出来，再点一次"。
- * 已有的封面图不受影响。
+ * 不把临时 URL 存库：所有结果立即转存 COS。
  */
 @Injectable()
 export class RecipeCoverImageService {
@@ -49,15 +55,23 @@ export class RecipeCoverImageService {
   constructor(
     private readonly agentProviderConfigService: AgentProviderConfigService,
     private readonly cosService: TencentCosService,
+    private readonly imageOptimizationService: ImageOptimizationService,
+    private readonly visualBriefService: RecipeCoverVisualBriefService,
+    private readonly recipeCoverConfigService: RecipeCoverConfigService,
   ) {}
 
-  /** 后台按钮要根据它决定"能不能点" —— 没配就不让点，而不是点了才报错 */
+  /** DeepSeek / Ark / 提示词三者都就绪才可用 */
   async isAvailable(): Promise<boolean> {
     try {
+      await this.agentProviderConfigService.getEnabledDeepSeekRuntimeConfig({
+        purpose: RECIPE_COVER_PROMPT_PURPOSE,
+        fallbackToDefault: false,
+      });
       await this.agentProviderConfigService.getEnabledProviderRuntimeConfig({
         purpose: RECIPE_COVER_IMAGE_PURPOSE,
-        provider: ZHIPU_PROVIDER,
+        provider: ARK_PROVIDER,
       });
+      await this.recipeCoverConfigService.getPromptTemplate();
       return true;
     } catch {
       return false;
@@ -72,39 +86,58 @@ export class RecipeCoverImageService {
     const config =
       await this.agentProviderConfigService.getEnabledProviderRuntimeConfig({
         purpose: RECIPE_COVER_IMAGE_PURPOSE,
-        provider: ZHIPU_PROVIDER,
+        provider: ARK_PROVIDER,
       });
+
+    // 系列 / 定制：DeepSeek 先把结构化食材写成摄影 brief；旧入口才走 foodNames
+    const imageBrief = input.ingredients?.length
+      ? await this.visualBriefService.build(input.ingredients)
+      : undefined;
 
     const prompt = buildRecipeCoverPrompt({
       recipeName: input.recipeName,
       lifeStageLabels: input.lifeStageLabels,
       foodNames: input.foodNames,
+      ingredients: input.ingredients,
+      imageBrief,
     });
+
+    const layout: RecipeCoverLayout = input.layout ?? 'SQUARE';
 
     this.logger.log(`[cover] 开始生成：${input.recipeName}`);
 
-    // ① 生图（拿临时链接）
-    const { url: temporaryUrl } = await callZhipuImage({
+    // ① Seedream 生图；size 是 API 参数，不是提示词约束
+    const { url: temporaryUrl } = await callSeedreamImage({
       baseUrl: config.baseUrl,
       model: config.model,
       apiKey: config.apiKey,
-      requestTimeoutMs: config.requestTimeoutMs,
+      requestTimeoutMs: Math.max(
+        config.requestTimeoutMs,
+        COVER_IMAGE_REQUEST_TIMEOUT_MS,
+      ),
       prompt,
-      size: '1280x1280',
-      quality: 'hd',
-      // 官方要求 6-128 字符；拿不到顾客 id 就不传（不传比传个假的强）
-      userId: input.customerId && input.customerId.length >= 6
-        ? input.customerId.slice(0, 128)
-        : undefined,
+      size: '2048x1152',
+      watermark: false,
     });
 
-    // ② 下载（临时链接 30 天后失效，必须现在就取下来）
+    // ② 立刻下载临时图
     const buffer = await this.downloadTemporaryImage(temporaryUrl);
 
-    // ③ 转存到我们自己的 COS
+    // ③ 转存 COS；16:9 走 750×422 / ≤160KB
+    let uploadBuffer = buffer;
+    let uploadFilename = `ai-cover-${Date.now()}.jpg`;
+    if (layout === 'COVER_16_9') {
+      const optimized = await this.imageOptimizationService.optimizeForUpload(
+        buffer,
+        'recipe-cover',
+      );
+      uploadBuffer = optimized.buffer;
+      uploadFilename = optimized.filename;
+    }
+
     const uploaded = await this.cosService.uploadImage(
-      buffer,
-      `ai-cover-${Date.now()}.jpg`,
+      uploadBuffer,
+      uploadFilename,
       'recipes/covers',
     );
 
@@ -117,12 +150,6 @@ export class RecipeCoverImageService {
     };
   }
 
-  /**
-   * 下载临时图。
-   *
-   * 单独兜一层错：智谱给的链接**可能已经过期**（比如生成后隔了很久才下载），
-   * 这时要报"链接失效，请重新生成"，而不是抛一个看不懂的网络错误。
-   */
   private async downloadTemporaryImage(url: string): Promise<Buffer> {
     try {
       const response = await fetch(url);

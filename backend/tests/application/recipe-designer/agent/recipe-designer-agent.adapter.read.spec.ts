@@ -67,7 +67,6 @@ function simpleItem(input: {
     includeInAssessment: input.includeInAssessment ?? true,
     ratioPercent: 0,
     preparationMethod: null,
-    preparationNote: null,
     nutrientTargetKey: null,
     nutrientTargetValue: null,
     sortOrder: 1,
@@ -111,6 +110,196 @@ function ingredientOptionRow(input: { id: string; name: string }) {
   };
 }
 
+const PROFILE_VERIFIED_AT = new Date('2026-10-01T08:00:00.000Z');
+const PROFILE_CREATED_AT = new Date('2026-09-01T08:00:00.000Z');
+const PROFILE_UPDATED_AT = new Date('2026-10-02T08:00:00.000Z');
+const INGREDIENT_CREATED_AT = new Date('2026-08-01T08:00:00.000Z');
+const INGREDIENT_UPDATED_AT = new Date('2026-10-03T08:00:00.000Z');
+
+const SWEET_POTATO_RAW_NUTRITION = {
+  meta: { rawBasisType: 'PER_100_G' },
+  macros: { moisture: 75, crudeProtein: 1.6, crudeFat: 0.2 },
+  minerals: { calcium: 30, phosphorus: 40 },
+};
+const SWEET_POTATO_COOKED_NUTRITION = {
+  meta: { rawBasisType: 'PER_100_G' },
+  macros: { moisture: 80, crudeProtein: 1.4, crudeFat: 0.1 },
+  minerals: { calcium: 25, phosphorus: 35 },
+};
+
+/** 红薯的两个档案：生（主） + 水煮（次），模拟真实生产数据。 */
+function sweetPotatoOption() {
+  return {
+    id: 'ing-sweet',
+    name: '红薯',
+    type: 'FOOD',
+    defaultNutritionFoodId: 'nf-raw',
+    nutritionProfiles: [
+      {
+        mappingId: 'map-raw',
+        nutritionFoodId: 'nf-raw',
+        name: '甘薯（生，未加工）',
+        nameEn: 'Sweet potato, raw',
+        displayNameZh: '甘薯（生，未加工）',
+        category: 'OTHER',
+        dataSource: 'CFCT',
+        status: 'VERIFIED',
+        preparationState: 'raw',
+        preparationStateLabel: '生',
+        yieldRate: 1,
+        isPrimary: true,
+        notes: '主档案',
+      },
+      {
+        mappingId: 'map-cooked',
+        nutritionFoodId: 'nf-cooked',
+        name: '甘薯（水煮，去皮）',
+        nameEn: 'Sweet potato, boiled',
+        displayNameZh: '甘薯（水煮，去皮）',
+        category: 'OTHER',
+        dataSource: 'CFCT',
+        status: 'VERIFIED',
+        preparationState: 'boiled',
+        preparationStateLabel: '水煮',
+        yieldRate: 0.85,
+        isPrimary: false,
+        notes: '水煮后',
+      },
+    ],
+  };
+}
+
+/** Prisma `ingredient.findFirst` 的详情行：全字段 + 同原料的两个档案。 */
+function sweetPotatoIngredientRow() {
+  return {
+    id: 'ing-sweet',
+    name: '红薯',
+    type: 'FOOD',
+    procurementStrategy: 'DAILY_PURCHASE',
+    diyEnabled: true,
+    procurementEnabled: true,
+    brand: '田间',
+    productModel: 'SP-1',
+    purchaseChannel: '批发市场',
+    notes: '内部备注：优先本地采购',
+    baseUnit: 'G',
+    unitDisplayLabel: 'g',
+    nutritionProfile: { legacy: 'raw-json' },
+    purchaseUnit: 'kg',
+    purchaseToBaseRatio: 1000,
+    currentPricePerPurchaseUnit: 8.5,
+    effectivePricePerPurchaseUnit: 7.9,
+    weightG: 500,
+    maxCapacityG: 2000,
+    safetyStock: 10,
+    reorderPoint: 20,
+    targetStock: 50,
+    physicalForm: 'POWDER',
+    isOilBased: false,
+    supplementRetailEnabled: false,
+    shelfLifeMonths: 12,
+    storageCondition: '阴凉干燥',
+    openedShelfLifeDays: 30,
+    properties: { cfct_class: '薯类及制品', cfct_code: '05-1-101' },
+    createdAt: INGREDIENT_CREATED_AT,
+    updatedAt: INGREDIENT_UPDATED_AT,
+    tags: [
+      {
+        tag: {
+          id: 'tag-1',
+          name: '高纤',
+          description: '膳食纤维较高',
+          parentId: null,
+          sort: 1,
+          color: '#4caf50',
+        },
+      },
+    ],
+    recommendedProducts: [
+      {
+        id: 'rp-1',
+        name: '红薯粉',
+        brand: '田间',
+        productModel: 'SP-POWDER',
+        purchaseChannel: '批发市场',
+        purchaseLink: { url: 'https://example.test/sweet-potato' },
+        imageUrl: 'https://example.test/sweet-potato.png',
+        activeNutrients: ['膳食纤维'],
+        displayUnit: '袋',
+        isActive: true,
+        sortOrder: 1,
+        createdAt: INGREDIENT_CREATED_AT,
+        updatedAt: INGREDIENT_UPDATED_AT,
+      },
+    ],
+    allergenTags: [],
+    nutritionFoodMappings: [
+      {
+        id: 'map-raw',
+        nutritionFoodId: 'nf-raw',
+        yieldRate: 1,
+        isPrimary: true,
+        notes: '主档案',
+        createdAt: PROFILE_CREATED_AT,
+        updatedAt: PROFILE_UPDATED_AT,
+        nutritionFood: {
+          id: 'nf-raw',
+          name: 'sweet_potato_raw',
+          nameEn: 'Sweet potato, raw',
+          displayNameZh: '甘薯（生，未加工）',
+          category: 'OTHER',
+          dataSource: 'CFCT',
+          externalId: '05-1-101',
+          version: 2,
+          status: 'VERIFIED',
+          preparationState: 'raw',
+          preparationStateLabel: '生',
+          ediblePortionLabel: '去皮',
+          processingLabel: '未加工',
+          nutritionData: SWEET_POTATO_RAW_NUTRITION,
+          defaultSupplementTargets: null,
+          notes: '生档案备注',
+          verifiedBy: 'u-verifier',
+          verifiedAt: PROFILE_VERIFIED_AT,
+          createdAt: PROFILE_CREATED_AT,
+          updatedAt: PROFILE_UPDATED_AT,
+        },
+      },
+      {
+        id: 'map-cooked',
+        nutritionFoodId: 'nf-cooked',
+        yieldRate: 0.85,
+        isPrimary: false,
+        notes: '水煮后',
+        createdAt: PROFILE_CREATED_AT,
+        updatedAt: PROFILE_UPDATED_AT,
+        nutritionFood: {
+          id: 'nf-cooked',
+          name: 'sweet_potato_boiled',
+          nameEn: 'Sweet potato, boiled',
+          displayNameZh: '甘薯（水煮，去皮）',
+          category: 'OTHER',
+          dataSource: 'CFCT',
+          externalId: '05-1-102',
+          version: 1,
+          status: 'VERIFIED',
+          preparationState: 'boiled',
+          preparationStateLabel: '水煮',
+          ediblePortionLabel: '去皮',
+          processingLabel: '水煮',
+          nutritionData: SWEET_POTATO_COOKED_NUTRITION,
+          defaultSupplementTargets: null,
+          notes: '水煮档案备注',
+          verifiedBy: 'u-verifier',
+          verifiedAt: PROFILE_VERIFIED_AT,
+          createdAt: PROFILE_CREATED_AT,
+          updatedAt: PROFILE_UPDATED_AT,
+        },
+      },
+    ],
+  };
+}
+
 /**
  * 一份判分用的真实草稿形状：7 类原料 900g 的配方，但 items 现算只有 821g。
  *
@@ -127,6 +316,14 @@ function serviceDraft() {
     assessmentContentRevision: 4,
     totalWeightG: 900,
     seriesId: 'series-1',
+    series: {
+      id: 'series-1',
+      name: '鸭肉南瓜餐',
+      referenceDogId: null,
+      designMode: 'CATALOG',
+      orderId: null,
+      orderQuantity: null,
+    },
     fediafDogScenario: 'ADULT_MER_110',
     coverTitle: '草稿封面标题',
     sellingPoint: '草稿卖点',
@@ -169,7 +366,6 @@ function serviceDraft() {
         includeInAssessment: true,
         ratioPercent: 50,
         preparationMethod: '去皮切块',
-        preparationNote: null,
         nutrientTargetKey: null,
         nutrientTargetValue: null,
         sortOrder: 1,
@@ -199,7 +395,6 @@ function serviceDraft() {
         includeInAssessment: true,
         ratioPercent: 5,
         preparationMethod: '去筋膜切丁',
-        preparationNote: null,
         nutrientTargetKey: null,
         nutrientTargetValue: null,
         sortOrder: 2,
@@ -229,7 +424,6 @@ function serviceDraft() {
         includeInAssessment: true,
         ratioPercent: 15,
         preparationMethod: '提前浸泡',
-        preparationNote: '浸泡 20 分钟',
         nutrientTargetKey: null,
         nutrientTargetValue: null,
         sortOrder: 3,
@@ -259,7 +453,6 @@ function serviceDraft() {
         includeInAssessment: true,
         ratioPercent: 11,
         preparationMethod: '去皮切块',
-        preparationNote: null,
         nutrientTargetKey: null,
         nutrientTargetValue: null,
         sortOrder: 4,
@@ -289,7 +482,6 @@ function serviceDraft() {
         includeInAssessment: true,
         ratioPercent: 5,
         preparationMethod: '焯水切丁',
-        preparationNote: null,
         nutrientTargetKey: null,
         nutrientTargetValue: null,
         sortOrder: 5,
@@ -319,7 +511,6 @@ function serviceDraft() {
         includeInAssessment: true,
         ratioPercent: 3,
         preparationMethod: '研磨成粉',
-        preparationNote: null,
         nutrientTargetKey: null,
         nutrientTargetValue: null,
         sortOrder: 6,
@@ -349,7 +540,6 @@ function serviceDraft() {
         includeInAssessment: true,
         ratioPercent: 1,
         preparationMethod: '直接拌入',
-        preparationNote: '出锅后放凉再加',
         nutrientTargetKey: null,
         nutrientTargetValue: null,
         sortOrder: 7,
@@ -473,6 +663,12 @@ describe('RecipeDesignerAgentAdapter read', () => {
     });
     expect(draft.draftId).toBe('draft-1');
     expect(draft.seriesId).toBe('series-1');
+    // 产品线设计：designMode=CATALOG，没有订单上下文。
+    expect(draft.designMode).toBe('CATALOG');
+    expect(draft.orderId).toBeNull();
+    expect(draft.orderQuantity).toBeNull();
+    // 产品线：不绑订单、不绑顾客狗狗，context 只有类型。
+    expect(draft.context).toEqual({ kind: 'PRODUCT' });
     expect(draft.name).toBe('鸭肉南瓜餐');
     expect(draft.scenario).toBe('ADULT_MER_110');
     expect(draft.contentRevision).toBe(4);
@@ -496,6 +692,199 @@ describe('RecipeDesignerAgentAdapter read', () => {
     // 不是 calculatedNutrition 里的 600g / 90g。
     expect(draft.nutritionSummary?.moisturePercent).toBeCloseTo(61.3447, 3);
     expect(draft.nutritionSummary?.fatWetPercent).toBeCloseTo(9.4013, 3);
+  });
+
+  it('getDraft 把 ORDER 设计的订单与狗狗背景映射进快照', async () => {
+    const draft: any = serviceDraft();
+    draft.customerDogId = 'dog-1';
+    draft.series = {
+      id: 'series-1',
+      name: '订单定制餐',
+      referenceDogId: 'dog-1',
+      designMode: 'ORDER',
+      orderId: 'order-2026-001',
+      orderQuantity: 3,
+    };
+    const service = {
+      getDraft: jest.fn().mockResolvedValue(draft),
+      getDraftProductionSteps: jest
+        .fn()
+        .mockResolvedValue({ draftId: 'draft-1', productionSteps: [] }),
+    };
+    const prisma = {
+      recipeSeries: { findUnique: jest.fn().mockResolvedValue(null) },
+      customRecipeOrder: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'order-2026-001',
+          orderId: 'CR202610270001',
+          dogId: 'dog-1',
+          status: 'IN_PROGRESS',
+          recipeQuantity: 3,
+          targetGoal: 'MAINTAIN',
+          needsHealthManagement: false,
+          additionalNotes: '食谱设计要高蛋白。',
+          allergies: [],
+          allergyText: '鸡肉、牛肉',
+          medicalConditions: ['PANCREATITIS'],
+          preferredIngredients: ['兔肉'],
+          dislikedIngredients: ['南瓜'],
+          currentFoodMain: 'HOMEMADE',
+          currentFoodOther: null,
+          changeReasons: ['MEDICAL'],
+          changeReasonOther: null,
+          stomachConditions: ['NORMAL'],
+          stomachOther: null,
+          allergyStatus: 'HAS_ALLERGY',
+          requestedProteinCodes: ['RABBIT'],
+        }),
+      },
+      dog: {
+        findUnique: jest.fn().mockResolvedValue({
+          name: 'ID',
+          breedId: 'breed-1',
+          birthday: new Date('2025-08-15T00:00:00.000Z'),
+          gender: 'FEMALE',
+          isNeutered: false,
+          currentWeightKg: 8.2,
+          allergyRecords: [
+            { allergen: '鸡肉', certainty: 'SUSPECTED', source: 'OWNER' },
+            { allergen: '牛肉', certainty: 'CONFIRMED', source: 'VET' },
+          ],
+          allergyFoods: null,
+          pickyFoods: '不吃南瓜',
+          preferredFoods: '兔肉',
+          medicalHistory: '胰腺炎恢复期',
+          customBreedName: null,
+        }),
+      },
+      dogBreed: {
+        findUnique: jest.fn().mockResolvedValue({ name: '柯基' }),
+      },
+    };
+
+    const snapshot = await createAdapter(service, prisma).getDraft('draft-1');
+
+    expect(snapshot.designMode).toBe('ORDER');
+    expect(snapshot.orderId).toBe('order-2026-001');
+    expect(snapshot.orderQuantity).toBe(3);
+    expect(snapshot.context).toMatchObject({
+      kind: 'ORDER',
+      unavailableReason: null,
+      order: {
+        orderNo: 'CR202610270001',
+        status: 'IN_PROGRESS',
+        quantity: 3,
+        targetGoal: 'MAINTAIN',
+        needsHealthManagement: false,
+        notes: '食谱设计要高蛋白。',
+        allergies: [],
+        allergyText: '鸡肉、牛肉',
+        medicalConditions: ['PANCREATITIS'],
+        preferredIngredients: ['兔肉'],
+        dislikedIngredients: ['南瓜'],
+        currentFoodMain: 'HOMEMADE',
+        currentFoodOther: null,
+        changeReasons: ['MEDICAL'],
+        changeReasonOther: null,
+        stomachConditions: ['NORMAL'],
+        stomachOther: null,
+        allergyStatus: 'HAS_ALLERGY',
+        requestedProteinCodes: ['RABBIT'],
+      },
+      dog: {
+        name: 'ID',
+        breedName: '柯基',
+        birthday: '2025-08-15',
+        gender: 'FEMALE',
+        neutered: false,
+        currentWeightKg: 8.2,
+        allergyRecords: [
+          { allergen: '鸡肉', certainty: 'SUSPECTED', source: 'OWNER' },
+          { allergen: '牛肉', certainty: 'CONFIRMED', source: 'VET' },
+        ],
+        allergyFoods: null,
+        pickyFoods: '不吃南瓜',
+        preferredFoods: '兔肉',
+        medicalHistory: '胰腺炎恢复期',
+      },
+    });
+    // 只给设计必需字段：订单金额、主人信息、附件不进模型上下文。
+    expect(JSON.stringify(snapshot.context)).not.toContain('ownerId');
+    expect(JSON.stringify(snapshot.context)).not.toContain('amount');
+    expect(JSON.stringify(snapshot.context)).not.toContain('attachments');
+  });
+
+  it('getDraft 对“绑了顾客狗狗但没有订单”的顾客自助食谱标记为不在范围', async () => {
+    const draft: any = serviceDraft();
+    draft.customerDogId = 'dog-1';
+    const service = {
+      getDraft: jest.fn().mockResolvedValue(draft),
+      getDraftProductionSteps: jest
+        .fn()
+        .mockResolvedValue({ draftId: 'draft-1', productionSteps: [] }),
+    };
+    const prisma = {
+      recipeSeries: { findUnique: jest.fn().mockResolvedValue(null) },
+    };
+
+    const snapshot = await createAdapter(service, prisma).getDraft('draft-1');
+
+    expect(snapshot.context).toMatchObject({ kind: 'OUT_OF_SCOPE' });
+    expect((snapshot.context as any).reason).toContain('顾客自助食谱');
+    // 不在范围时不去查订单/狗狗。
+    expect((prisma as any).customRecipeOrder).toBeUndefined();
+  });
+
+  it('getDraft 在 ORDER 草稿的订单读不到时给出明确原因，不猜', async () => {
+    const draft: any = serviceDraft();
+    draft.customerDogId = 'dog-1';
+    draft.series = {
+      id: 'series-1',
+      name: '订单定制餐',
+      referenceDogId: 'dog-1',
+      designMode: 'ORDER',
+      orderId: 'order-2026-001',
+      orderQuantity: 3,
+    };
+    const service = {
+      getDraft: jest.fn().mockResolvedValue(draft),
+      getDraftProductionSteps: jest
+        .fn()
+        .mockResolvedValue({ draftId: 'draft-1', productionSteps: [] }),
+    };
+    const prisma = {
+      recipeSeries: { findUnique: jest.fn().mockResolvedValue(null) },
+      customRecipeOrder: { findUnique: jest.fn().mockResolvedValue(null) },
+    };
+
+    const snapshot = await createAdapter(service, prisma).getDraft('draft-1');
+
+    expect(snapshot.context).toMatchObject({
+      kind: 'ORDER',
+      order: null,
+      dog: null,
+    });
+    expect((snapshot.context as any).unavailableReason).toContain('订单');
+  });
+
+  it('getDraft 在没有系列时把设计上下文设为 null', async () => {
+    const draft: any = serviceDraft();
+    draft.seriesId = null;
+    draft.series = null;
+    const service = {
+      getDraft: jest.fn().mockResolvedValue(draft),
+      getDraftProductionSteps: jest
+        .fn()
+        .mockResolvedValue({ draftId: 'draft-1', productionSteps: [] }),
+    };
+
+    const adapter = createAdapter(service, {});
+    const snapshot = await adapter.getDraft('draft-1');
+
+    expect(snapshot.designMode).toBeNull();
+    expect(snapshot.orderId).toBeNull();
+    expect(snapshot.orderQuantity).toBeNull();
+    expect(snapshot.context).toEqual({ kind: 'PRODUCT' });
   });
 
   it('animalSpecies 只从蛋白/内脏类识别，果蔬菌不误判', async () => {
@@ -744,6 +1133,8 @@ describe('RecipeDesignerAgentAdapter read', () => {
       min: 20,
       max: null,
       marginPercent: null,
+      unit: null,
+      basis: null,
     });
     expect(draft.lastAssessment?.compliant).toBe(1);
     expect(draft.lastAssessment?.deficient).toBe(1);
@@ -1009,7 +1400,7 @@ describe('RecipeDesignerAgentAdapter read', () => {
     expect(healthTagPolicy(snapshot).isAllowedTag('低脂')).toBe(false);
   });
 
-  it('searchIngredients 只收已验证档案，并按七类过滤', async () => {
+  it('searchIngredients 返回所有有档案的原料，verified 跟随默认档案，并按七类过滤', async () => {
     const service = {
       listIngredientOptions: jest.fn().mockResolvedValue({
         data: [
@@ -1073,13 +1464,82 @@ describe('RecipeDesignerAgentAdapter read', () => {
       limit: 10,
     });
 
-    expect(result.map((c) => c.ingredientId)).toEqual(['i1']);
+    expect(result.map((c) => c.ingredientId)).toEqual(['i1', 'i2']);
+    expect(result[1].verified).toBe(false);
+    expect(result[1].nutritionProfiles).toHaveLength(1);
     expect(result[0].cfctClass).toBe('菌藻类');
     expect(result[0].keyNutrients).toEqual({
       proteinPer100g: 18,
       fatPer100g: 5,
       calciumMgPer100g: 20,
       phosphorusMgPer100g: 180,
+    });
+  });
+
+  it('searchIngredients 按 nutrientKey 搜索时把匹配量带回给模型', async () => {
+    const service = {
+      getDraft: jest.fn().mockResolvedValue({
+        fediafDogScenario: 'ADULT_MER_110',
+      }),
+      listIngredientOptions: jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'i-zinc',
+            name: '牛肝',
+            type: 'FOOD',
+            defaultNutritionFoodId: 'nf-zinc',
+            nutrientMatch: {
+              nutrientKey: 'zinc',
+              label: '锌',
+              amount: 8.2,
+              unit: 'mg',
+              basis: 'PER_100_G',
+              basisLabel: '每100g',
+              displayText: '8.2 mg / 100g',
+              score: 8.2,
+            },
+            nutritionProfiles: [
+              {
+                nutritionFoodId: 'nf-zinc',
+                name: '牛肝',
+                category: 'OTHER',
+                status: 'VERIFIED',
+                isPrimary: true,
+              },
+            ],
+          },
+        ],
+      }),
+    };
+    const prisma = {
+      ingredient: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([
+            { id: 'i-zinc', properties: { cfct_class: '畜肉类及制品' } },
+          ]),
+      },
+      nutritionFood: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const adapter = createAdapter(service, prisma);
+
+    const result = await adapter.searchIngredients({
+      nutrientKey: 'zinc',
+      type: 'FOOD',
+    });
+
+    expect(service.getDraft).toHaveBeenCalled();
+    expect(service.listIngredientOptions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nutrientKey: 'zinc',
+        scenario: 'ADULT_MER_110',
+        type: 'FOOD',
+      }),
+    );
+    expect(result[0].nutrientMatch).toMatchObject({
+      nutrientKey: 'zinc',
+      amount: 8.2,
+      unit: 'mg',
     });
   });
 
@@ -1152,35 +1612,344 @@ describe('RecipeDesignerAgentAdapter read', () => {
     expect(calls.every((args) => args.pageSize === 50)).toBe(true);
   });
 
-  it('getIngredient 找不到返回 null，找到时带价格/过敏原', async () => {
+  it('searchIngredients 返回红薯的生 + 水煮全部营养档案，不只默认档案', async () => {
+    const service = {
+      listIngredientOptions: jest.fn().mockResolvedValue({
+        data: [sweetPotatoOption()],
+        hasMore: false,
+      }),
+    };
     const prisma = {
+      ingredient: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'ing-sweet',
+            properties: { cfct_class: '薯类及制品' },
+          },
+        ]),
+      },
       nutritionFood: {
-        findUnique: jest
+        findMany: jest
           .fn()
-          .mockResolvedValueOnce(null)
-          .mockResolvedValueOnce({
+          .mockResolvedValue([
+            { id: 'nf-raw', nutritionData: SWEET_POTATO_RAW_NUTRITION },
+          ]),
+      },
+    };
+    const adapter = createAdapter(service, prisma);
+
+    const result = await adapter.searchIngredients({
+      search: '红薯',
+      limit: 10,
+    });
+
+    expect(result).toHaveLength(1);
+    const candidate = result[0] as any;
+    expect(candidate.nutritionFoodId).toBe('nf-raw');
+    expect(candidate.nutritionProfileName).toBe('甘薯（生，未加工）');
+    expect(candidate.verified).toBe(true);
+    expect(candidate.nutritionProfiles).toEqual([
+      {
+        nutritionFoodId: 'nf-raw',
+        name: '甘薯（生，未加工）',
+        displayNameZh: '甘薯（生，未加工）',
+        status: 'VERIFIED',
+        category: 'OTHER',
+        dataSource: 'CFCT',
+        isPrimary: true,
+        preparationState: 'raw',
+        preparationStateLabel: '生',
+        verified: true,
+      },
+      {
+        nutritionFoodId: 'nf-cooked',
+        name: '甘薯（水煮，去皮）',
+        displayNameZh: '甘薯（水煮，去皮）',
+        status: 'VERIFIED',
+        category: 'OTHER',
+        dataSource: 'CFCT',
+        isPrimary: false,
+        preparationState: 'boiled',
+        preparationStateLabel: '水煮',
+        verified: true,
+      },
+    ]);
+    expect(candidate.keyNutrients).toMatchObject({
+      proteinPer100g: 1.6,
+      fatPer100g: 0.2,
+      calciumMgPer100g: 30,
+      phosphorusMgPer100g: 40,
+    });
+  });
+
+  it('searchIngredients 默认档案未验证但有其它档案时仍返回，verified 跟随默认档案', async () => {
+    const option = sweetPotatoOption();
+    option.nutritionProfiles[0].status = 'PENDING';
+    const service = {
+      listIngredientOptions: jest.fn().mockResolvedValue({
+        data: [option],
+        hasMore: false,
+      }),
+    };
+    const prisma = {
+      ingredient: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([{ id: 'ing-sweet', properties: {} }]),
+      },
+      nutritionFood: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+
+    const result = await createAdapter(service, prisma).searchIngredients({
+      search: '红薯',
+    });
+
+    expect(result).toHaveLength(1);
+    const candidate = result[0] as any;
+    expect(candidate.verified).toBe(false);
+    expect(candidate.nutritionProfiles).toHaveLength(2);
+    expect(candidate.nutritionProfiles[1]).toMatchObject({
+      nutritionFoodId: 'nf-cooked',
+      status: 'VERIFIED',
+      verified: true,
+    });
+  });
+
+  it('getIngredient 按 ingredientId 返回全部档案和全部原料只读字段', async () => {
+    const prisma = {
+      ingredient: {
+        findFirst: jest.fn().mockResolvedValue(sweetPotatoIngredientRow()),
+      },
+    };
+    const adapter = createAdapter({}, prisma);
+
+    const detail = (await adapter.getIngredient({
+      ingredientId: 'ing-sweet',
+    })) as any;
+
+    expect(prisma.ingredient.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'ing-sweet' },
+        select: expect.objectContaining({
+          brand: true,
+          productModel: true,
+          purchaseChannel: true,
+          notes: true,
+          procurementStrategy: true,
+          diyEnabled: true,
+          procurementEnabled: true,
+          nutritionProfile: true,
+          purchaseToBaseRatio: true,
+          currentPricePerPurchaseUnit: true,
+          effectivePricePerPurchaseUnit: true,
+          weightG: true,
+          maxCapacityG: true,
+          safetyStock: true,
+          reorderPoint: true,
+          targetStock: true,
+          physicalForm: true,
+          isOilBased: true,
+          supplementRetailEnabled: true,
+          shelfLifeMonths: true,
+          storageCondition: true,
+          openedShelfLifeDays: true,
+          properties: true,
+          tags: expect.any(Object),
+          recommendedProducts: expect.any(Object),
+          createdAt: true,
+          updatedAt: true,
+        }),
+      }),
+    );
+
+    expect(detail).toMatchObject({
+      ingredientId: 'ing-sweet',
+      nutritionFoodId: 'nf-raw',
+      name: '红薯',
+      nutritionProfileName: '甘薯（生，未加工）',
+      type: 'FOOD',
+      baseUnit: 'G',
+      unitDisplayLabel: 'g',
+      cfctClass: '薯类及制品',
+      nutritionCategory: 'OTHER',
+      category: 'CARB',
+      verified: true,
+      brand: '田间',
+      productModel: 'SP-1',
+      purchaseChannel: '批发市场',
+      notes: '内部备注：优先本地采购',
+      procurementStrategy: 'DAILY_PURCHASE',
+      diyEnabled: true,
+      procurementEnabled: true,
+      nutritionProfile: { legacy: 'raw-json' },
+      purchaseToBaseRatio: 1000,
+      currentPricePerPurchaseUnit: 8.5,
+      effectivePricePerPurchaseUnit: 7.9,
+      pricePerPurchaseUnit: 8.5,
+      purchaseUnit: 'kg',
+      weightG: 500,
+      maxCapacityG: 2000,
+      safetyStock: 10,
+      reorderPoint: 20,
+      targetStock: 50,
+      physicalForm: 'POWDER',
+      isOilBased: false,
+      supplementRetailEnabled: false,
+      shelfLifeMonths: 12,
+      storageCondition: '阴凉干燥',
+      openedShelfLifeDays: 30,
+      properties: { cfct_class: '薯类及制品', cfct_code: '05-1-101' },
+      tags: [
+        {
+          id: 'tag-1',
+          name: '高纤',
+          description: '膳食纤维较高',
+          parentId: null,
+          sort: 1,
+          color: '#4caf50',
+        },
+      ],
+      recommendedProducts: [
+        {
+          id: 'rp-1',
+          name: '红薯粉',
+          brand: '田间',
+          productModel: 'SP-POWDER',
+          purchaseChannel: '批发市场',
+          purchaseLink: { url: 'https://example.test/sweet-potato' },
+          imageUrl: 'https://example.test/sweet-potato.png',
+          activeNutrients: ['膳食纤维'],
+          displayUnit: '袋',
+          isActive: true,
+          sortOrder: 1,
+          createdAt: INGREDIENT_CREATED_AT,
+          updatedAt: INGREDIENT_UPDATED_AT,
+        },
+      ],
+      createdAt: INGREDIENT_CREATED_AT,
+      updatedAt: INGREDIENT_UPDATED_AT,
+    });
+    expect(detail.nutritionProfiles).toHaveLength(2);
+    expect(detail.nutritionProfiles[0]).toEqual({
+      nutritionFoodId: 'nf-raw',
+      mappingId: 'map-raw',
+      name: '甘薯（生，未加工）',
+      displayNameZh: '甘薯（生，未加工）',
+      status: 'VERIFIED',
+      category: 'OTHER',
+      dataSource: 'CFCT',
+      externalId: '05-1-101',
+      version: 2,
+      preparationState: 'raw',
+      preparationStateLabel: '生',
+      ediblePortionLabel: '去皮',
+      processingLabel: '未加工',
+      nutritionData: SWEET_POTATO_RAW_NUTRITION,
+      defaultSupplementTargets: null,
+      notes: '生档案备注',
+      verifiedBy: 'u-verifier',
+      verifiedAt: PROFILE_VERIFIED_AT,
+      createdAt: PROFILE_CREATED_AT,
+      updatedAt: PROFILE_UPDATED_AT,
+      isPrimary: true,
+      verified: true,
+      yieldRate: 1,
+      mappingNotes: '主档案',
+    });
+    expect(detail.nutritionProfiles[1]).toMatchObject({
+      nutritionFoodId: 'nf-cooked',
+      mappingId: 'map-cooked',
+      name: '甘薯（水煮，去皮）',
+      displayNameZh: '甘薯（水煮，去皮）',
+      preparationState: 'boiled',
+      preparationStateLabel: '水煮',
+      isPrimary: false,
+      yieldRate: 0.85,
+      mappingNotes: '水煮后',
+    });
+    expect(detail.nutritionSummary).toEqual({
+      moisture: 75,
+      crudeProtein: 1.6,
+      crudeFat: 0.2,
+    });
+  });
+
+  it('getIngredient 按水煮 nutritionFoodId 选中熟档案，同时返回生档案', async () => {
+    const prisma = {
+      ingredient: {
+        findFirst: jest.fn().mockResolvedValue(sweetPotatoIngredientRow()),
+      },
+    };
+    const adapter = createAdapter({}, prisma);
+
+    const detail = (await adapter.getIngredient({
+      nutritionFoodId: 'nf-cooked',
+    })) as any;
+
+    expect(prisma.ingredient.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          nutritionFoodMappings: { some: { nutritionFoodId: 'nf-cooked' } },
+        },
+      }),
+    );
+    expect(detail.nutritionFoodId).toBe('nf-cooked');
+    expect(detail.nutritionProfileName).toBe('甘薯（水煮，去皮）');
+    expect(detail.verified).toBe(true);
+    expect(detail.nutritionProfiles.map((p: any) => p.nutritionFoodId)).toEqual(
+      ['nf-raw', 'nf-cooked'],
+    );
+    expect(detail.nutritionProfiles.map((p: any) => p.isPrimary)).toEqual([
+      true,
+      false,
+    ]);
+    expect(detail.nutritionSummary).toEqual({
+      moisture: 80,
+      crudeProtein: 1.4,
+      crudeFat: 0.1,
+    });
+  });
+
+  function duckIngredientRow() {
+    return {
+      id: 'i1',
+      name: '鸭腿肉',
+      type: 'FOOD',
+      baseUnit: 'G',
+      properties: { cfct_class: '禽肉类及制品' },
+      currentPricePerPurchaseUnit: 30,
+      purchaseUnit: 'kg',
+      tags: [],
+      recommendedProducts: [],
+      allergenTags: [{ allergenTag: { name: '鸭肉' } }],
+      nutritionFoodMappings: [
+        {
+          id: 'map1',
+          nutritionFoodId: 'nf1',
+          yieldRate: 1,
+          isPrimary: true,
+          notes: null,
+          nutritionFood: {
             id: 'nf1',
             name: '鸭腿肉',
             displayNameZh: '鸭腿肉',
             status: 'VERIFIED',
             category: 'MEAT',
+            dataSource: 'CFCT',
             nutritionData: { macros: { crudeProtein: 18, crudeFat: 6 } },
-            mappings: [
-              {
-                ingredientId: 'i1',
-                isPrimary: true,
-                ingredient: {
-                  id: 'i1',
-                  name: '鸭腿肉',
-                  type: 'FOOD',
-                  properties: { cfct_class: '禽肉类及制品' },
-                  currentPricePerPurchaseUnit: 30,
-                  purchaseUnit: 'kg',
-                  allergenTags: [{ allergenTag: { name: '鸭肉' } }],
-                },
-              },
-            ],
-          }),
+          },
+        },
+      ],
+    };
+  }
+
+  it('getIngredient 找不到返回 null，找到时带价格/过敏原', async () => {
+    const prisma = {
+      ingredient: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce(duckIngredientRow()),
       },
     };
     const adapter = createAdapter({}, prisma);
@@ -1191,21 +1960,77 @@ describe('RecipeDesignerAgentAdapter read', () => {
     const detail = await adapter.getIngredient({ nutritionFoodId: 'nf1' });
 
     expect(detail?.category).toBe('PROTEIN');
+    expect(detail?.baseUnit).toBe('G');
     expect(detail?.allergenNames).toEqual(['鸭肉']);
     expect(detail?.pricePerPurchaseUnit).toBe(30);
+    // 食物详情只给宏量，矿物质/维生素交给评估报告算总账。
+    expect(detail?.nutritionSummary).toEqual({ crudeProtein: 18, crudeFat: 6 });
+    expect(detail?.nutritionBasis).toBeUndefined();
+  });
+
+  it('getIngredient 补剂返回矿物质/维生素明细和计量基准', async () => {
+    const row = duckIngredientRow();
+    const prisma = {
+      ingredient: {
+        findFirst: jest.fn().mockResolvedValue({
+          ...row,
+          id: 'i2',
+          name: '碳酸钙粉',
+          type: 'SUPPLEMENT',
+          baseUnit: 'PCS',
+          properties: {},
+          currentPricePerPurchaseUnit: 120,
+          purchaseUnit: '瓶',
+          unitDisplayLabel: '粒',
+          allergenTags: [],
+          nutritionFoodMappings: [
+            {
+              id: 'map2',
+              nutritionFoodId: 'nf2',
+              yieldRate: 1,
+              isPrimary: true,
+              notes: null,
+              nutritionFood: {
+                id: 'nf2',
+                name: '碳酸钙粉',
+                displayNameZh: '碳酸钙粉',
+                status: 'VERIFIED',
+                category: 'MINERAL',
+                dataSource: 'MANUAL',
+                nutritionData: {
+                  meta: { rawBasisType: 'PER_SERVING', servingWeightG: 1.2 },
+                  macros: { moisture: 1 },
+                  minerals: { calcium: 50000 },
+                  vitamins: { vitaminD: 10000 },
+                },
+              },
+            },
+          ],
+        }),
+      },
+    };
+    const adapter = createAdapter({}, prisma);
+
+    const detail = await adapter.getIngredient({ nutritionFoodId: 'nf2' });
+
+    expect(detail?.type).toBe('SUPPLEMENT');
+    expect(detail?.baseUnit).toBe('PCS');
+    expect(detail?.nutritionSummary.moisture).toBe(1);
+    expect(detail?.nutritionSummary['minerals.calcium']).toBe(50000);
+    expect(detail?.nutritionSummary['vitamins.vitaminD']).toBe(10000);
+    expect(detail?.nutritionBasis).toEqual({
+      basisType: 'PER_SERVING',
+      servingWeightG: 1.2,
+      usageUnit: '粒',
+    });
   });
 
   it('getIngredient 没有采购原料映射时返回 null', async () => {
     const prisma = {
-      nutritionFood: {
-        findUnique: jest.fn().mockResolvedValue({
-          id: 'nf1',
-          name: '鸭腿肉',
-          displayNameZh: '鸭腿肉',
-          status: 'VERIFIED',
-          category: 'MEAT',
-          nutritionData: { macros: { crudeProtein: 18 } },
-          mappings: [],
+      ingredient: {
+        findFirst: jest.fn().mockResolvedValue({
+          ...duckIngredientRow(),
+          nutritionFoodMappings: [],
         }),
       },
     };

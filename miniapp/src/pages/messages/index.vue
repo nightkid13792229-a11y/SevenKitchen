@@ -10,11 +10,19 @@
     <template v-else>
       <view v-if="unreadCount > 0" class="read-all-bar">
         <text class="read-all-text">{{ unreadCount }} 条未读</text>
-        <text class="read-all-action" @tap="handleReadAll">全部已读</text>
+        <text class="read-all-action" @tap="handleReadAll">
+          {{ readingAll ? '处理中...' : '全部已读' }}
+        </text>
       </view>
 
-      <view v-if="loading" class="state-block">
+      <view v-if="loading && !messages.length" class="state-block">
         <text class="state-text">加载中...</text>
+      </view>
+
+      <view v-else-if="loadError && !messages.length" class="state-block">
+        <text class="state-title">消息加载失败</text>
+        <text class="state-text">请检查网络后重试</text>
+        <button class="state-btn" @tap="loadFirstPage">重新加载</button>
       </view>
 
       <view v-else-if="!messages.length" class="state-block">
@@ -22,45 +30,54 @@
         <text class="state-text">交付、售后、物流有进展时会在这里通知你</text>
       </view>
 
-      <view v-else class="message-list">
-        <view
-          v-for="item in messages"
-          :key="item.id"
-          class="message-item"
-          :class="{ 'message-item--unread': !item.read }"
-          @tap="openMessage(item)"
-        >
-          <view class="message-icon" :class="`message-icon--${iconKey(item.category)}`">
-            <text class="message-icon-text">{{ iconText(item.category) }}</text>
-          </view>
-          <view class="message-body">
-            <view class="message-title-row">
-              <text v-if="!item.read" class="message-dot" />
-              <text class="message-title">{{ item.title }}</text>
-            </view>
-            <text class="message-text">{{ item.body }}</text>
-            <text class="message-time">{{ formatTime(item.createdAt) }}</text>
-          </view>
+      <template v-else>
+        <view v-if="loadError" class="load-error-bar" @tap="loadFirstPage">
+          <text class="load-error-text">{{ loadError }}，点击重试</text>
         </view>
 
-        <view v-if="hasMore" class="load-more" @tap="loadMore">
-          <text class="load-more-text">加载更多</text>
+        <view class="message-list">
+          <view
+            v-for="item in messages"
+            :key="item.id"
+            class="message-item"
+            :class="{ 'message-item--unread': !item.read }"
+            @tap="openMessage(item)"
+          >
+            <view class="message-icon" :class="`message-icon--${iconKey(item.category)}`">
+              <text class="message-icon-text">{{ iconText(item.category) }}</text>
+            </view>
+            <view class="message-body">
+              <view class="message-title-row">
+                <text v-if="!item.read" class="message-dot" />
+                <text class="message-title">{{ item.title }}</text>
+              </view>
+              <text class="message-text">{{ item.body }}</text>
+              <text class="message-time">{{ formatTime(item.createdAt) }}</text>
+            </view>
+          </view>
+
+          <view v-if="hasMore" class="load-more" @tap="loadMore">
+            <text class="load-more-text">
+              {{ loadingMore ? '加载中...' : loadMoreError ? '加载失败，点击重试' : '加载更多' }}
+            </text>
+          </view>
         </view>
-      </view>
+      </template>
     </template>
   </view>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { onLoad, onPullDownRefresh, onShow } from '@dcloudio/uni-app';
 import {
   fetchMessages,
-  fetchUnreadMessageCount,
+  fetchUnreadMessageCountStrict,
   markAllMessagesRead,
   markMessageRead,
   type CustomerMessage,
 } from '@/api/messages';
+import { AUTH_EXPIRED_EVENT } from '@/utils/api';
 import { storeUnreadMessageCount } from '@/utils/unread-message-badge';
 
 /**
@@ -91,8 +108,31 @@ const messages = ref<CustomerMessage[]>([]);
 const unreadCount = ref(0);
 const offset = ref(0);
 const hasMore = ref(false);
+const loadingMore = ref(false);
+const loadError = ref('');
+const loadMoreError = ref('');
+const readingAll = ref(false);
+let hasShownOnce = false;
 
 const canLoad = computed(() => hasToken.value);
+
+function isAuthError(error: any): boolean {
+  const message = String(error?.message || error || '');
+  return message.includes('Authentication required') || message.includes('401');
+}
+
+function handleAuthExpired() {
+  hasToken.value = false;
+  messages.value = [];
+  hasMore.value = false;
+  offset.value = 0;
+  loadError.value = '';
+  loadMoreError.value = '';
+  loading.value = false;
+  loadingMore.value = false;
+  readingAll.value = false;
+  unreadCount.value = storeUnreadMessageCount(0);
+}
 
 function iconKey(category: string): string {
   switch (category) {
@@ -135,10 +175,18 @@ function formatTime(iso: string): string {
 }
 
 async function refreshUnread() {
-  if (!hasToken.value) return;
-  unreadCount.value = storeUnreadMessageCount(
-    await fetchUnreadMessageCount(),
-  );
+  if (!hasToken.value) {
+    unreadCount.value = storeUnreadMessageCount(0);
+    return;
+  }
+  try {
+    unreadCount.value = storeUnreadMessageCount(
+      await fetchUnreadMessageCountStrict(),
+    );
+  } catch (error) {
+    // 未读数失败时保留旧值，不能把“读取失败”当成 0 条未读
+    console.warn('[Messages] 刷新未读数失败:', error);
+  }
 }
 
 async function loadFirstPage() {
@@ -147,6 +195,8 @@ async function loadFirstPage() {
     return;
   }
   loading.value = true;
+  loadError.value = '';
+  loadMoreError.value = '';
   try {
     const result = await fetchMessages({
       limit: PAGE_SIZE,
@@ -156,20 +206,45 @@ async function loadFirstPage() {
     hasMore.value = result.hasMore;
     offset.value = result.items.length;
     await refreshUnread();
+  } catch (error) {
+    if (isAuthError(error)) {
+      handleAuthExpired();
+    } else {
+      console.warn('[Messages] 加载消息失败:', error);
+      loadError.value = '消息加载失败';
+    }
   } finally {
     loading.value = false;
   }
 }
 
 async function loadMore() {
-  if (!hasMore.value) return;
-  const result = await fetchMessages({
-    limit: PAGE_SIZE,
-    offset: offset.value,
-  });
-  messages.value = [...messages.value, ...result.items];
-  hasMore.value = result.hasMore;
-  offset.value = messages.value.length;
+  if (loadingMore.value || !hasMore.value) return;
+  loadingMore.value = true;
+  loadMoreError.value = '';
+  try {
+    const result = await fetchMessages({
+      limit: PAGE_SIZE,
+      offset: offset.value,
+    });
+    const existing = new Set(messages.value.map((item) => item.id));
+    messages.value = [
+      ...messages.value,
+      ...result.items.filter((item) => !existing.has(item.id)),
+    ];
+    // offset 按服务端返回条数推进，不能按去重后的列表长度，否则会回退
+    offset.value += result.items.length;
+    hasMore.value = result.hasMore;
+  } catch (error) {
+    if (isAuthError(error)) {
+      handleAuthExpired();
+    } else {
+      console.warn('[Messages] 加载更多失败:', error);
+      loadMoreError.value = '加载更多失败，点击重试';
+    }
+  } finally {
+    loadingMore.value = false;
+  }
 }
 
 /**
@@ -178,12 +253,20 @@ async function loadMore() {
  * 先跳后标会让红点"晚一拍"消失，顾客会以为没点中。
  */
 async function openMessage(item: CustomerMessage) {
-  if (!item.read) {
+  const wasUnread = !item.read;
+  const previousUnread = unreadCount.value;
+  if (wasUnread) {
     item.read = true;
     unreadCount.value = storeUnreadMessageCount(
-      Math.max(0, unreadCount.value - 1),
+      Math.max(0, previousUnread - 1),
     );
-    void markMessageRead(item.id).catch(() => false);
+    // 网络失败回滚本地已读，避免“页面已读、服务端未读”
+    void markMessageRead(item.id).catch(() => {
+      if (!wasUnread) return;
+      item.read = false;
+      unreadCount.value = storeUnreadMessageCount(previousUnread);
+      uni.showToast({ title: '已读状态未保存', icon: 'none' });
+    });
   }
 
   const id = item.linkId ? encodeURIComponent(item.linkId) : '';
@@ -210,7 +293,13 @@ async function openMessage(item: CustomerMessage) {
       }
       return;
     case 'SHIPPING':
-      uni.navigateTo({ url: '/pages/order-shipping-notice/index' });
+      if (id) {
+        uni.navigateTo({
+          url: `/pages/order-shipping-notice/index?orderId=${id}`,
+        });
+      } else {
+        uni.showToast({ title: '物流信息暂不可用', icon: 'none' });
+      }
       return;
     case 'SUPPLEMENT_ORDER':
       if (id) {
@@ -226,10 +315,17 @@ async function openMessage(item: CustomerMessage) {
 }
 
 async function handleReadAll() {
-  const changed = await markAllMessagesRead().catch(() => 0);
-  if (changed >= 0) {
+  if (readingAll.value) return;
+  readingAll.value = true;
+  try {
+    await markAllMessagesRead();
     messages.value = messages.value.map((item) => ({ ...item, read: true }));
     unreadCount.value = storeUnreadMessageCount(0);
+  } catch (error) {
+    console.warn('[Messages] 全部已读失败:', error);
+    uni.showToast({ title: '全部已读失败，请重试', icon: 'none' });
+  } finally {
+    readingAll.value = false;
   }
 }
 
@@ -241,23 +337,61 @@ const goLogin = () => {
 
 onLoad(() => {
   hasToken.value = Boolean(uni.getStorageSync('token'));
+  if (!hasToken.value) {
+    loading.value = false;
+    return;
+  }
   void loadFirstPage();
 });
 
-// 从别的页面返回时刷新未读（比如刚在详情页提了售后）
+/**
+ * 从消息指向的页面/订单页返回时，必须重拉第一页：
+ * 只刷新未读数会出现“上面写 1 条未读、下面没有这条消息”。
+ */
 onShow(() => {
   const token = Boolean(uni.getStorageSync('token'));
-  if (token !== hasToken.value) {
-    hasToken.value = token;
+  if (!token) {
+    if (hasToken.value) {
+      handleAuthExpired();
+    } else {
+      loading.value = false;
+    }
+    return;
+  }
+
+  const tokenChanged = token !== hasToken.value;
+  hasToken.value = token;
+
+  if (tokenChanged) {
+    hasShownOnce = true;
     void loadFirstPage();
     return;
   }
-  void refreshUnread();
+
+  if (!hasShownOnce) {
+    // onLoad 已经拉过第一页，首次 onShow 只补未读数，避免双请求
+    hasShownOnce = true;
+    void refreshUnread();
+    return;
+  }
+
+  void loadFirstPage();
+});
+
+onMounted(() => {
+  uni.$on(AUTH_EXPIRED_EVENT, handleAuthExpired);
+});
+
+onUnmounted(() => {
+  uni.$off(AUTH_EXPIRED_EVENT, handleAuthExpired);
 });
 
 onPullDownRefresh(async () => {
-  await loadFirstPage();
-  uni.stopPullDownRefresh();
+  try {
+    await loadFirstPage();
+  } finally {
+    uni.stopPullDownRefresh();
+  }
 });
 </script>
 
@@ -314,6 +448,20 @@ onPullDownRefresh(async () => {
 .read-all-action {
   font-size: 22rpx;
   font-weight: 700;
+  color: #b45309;
+}
+
+.load-error-bar {
+  margin: 0 24rpx 12rpx;
+  padding: 16rpx 20rpx;
+  border-radius: 12rpx;
+  background: #fff7ed;
+  border: 1rpx solid #f1dcc2;
+}
+
+.load-error-text {
+  font-size: 22rpx;
+  line-height: 1.5;
   color: #b45309;
 }
 

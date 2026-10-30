@@ -11,6 +11,18 @@ const labelConfigSource = readFileSync(resolve(__dirname, 'staff-production/util
 const labelRendererSource = readFileSync(resolve(__dirname, 'staff-production/utils/label-renderer.ts'), 'utf8');
 const jcingPrinterSource = readFileSync(resolve(__dirname, 'staff-production/utils/jcing-printer.ts'), 'utf8');
 const sharedJcingPrinterSource = readFileSync(resolve(__dirname, '../utils/jcing-printer.ts'), 'utf8');
+const canvasPrinterSource = readFileSync(resolve(__dirname, 'staff-production/utils/canvas-printer.ts'), 'utf8');
+const sharedCanvasPrinterSource = readFileSync(resolve(__dirname, '../utils/canvas-printer.ts'), 'utf8');
+
+describe('生产打印 · 预处理列长文案', () => {
+  it('生产打印和共享打印都按长度缩字号并最多拆 3 行', () => {
+    for (const source of [canvasPrinterSource, sharedCanvasPrinterSource]) {
+      expect(source).toContain('drawPreparationMethodText');
+      expect(source).toContain("chars.length <= 18 ? 1 : chars.length <= 36 ? 2 : 3");
+      expect(source).toContain('部位 / 状态 / 预处理');
+    }
+  });
+});
 
 describe('staff production scheduling guardrails', () => {
   it('shows auto-schedule based on unscheduled purchasing orders instead of existing batches', () => {
@@ -190,7 +202,7 @@ describe('staff production scheduling guardrails', () => {
 
   it('shows the inline SKU source column before preparation in production task print preview', () => {
     const sourceHeaderIndex = printTaskSource.indexOf('<view class="table-cell source">SKU / 品牌 / 渠道 / 规格</view>');
-    const methodHeaderIndex = printTaskSource.indexOf('<view class="table-cell method">制备</view>');
+    const methodHeaderIndex = printTaskSource.indexOf('<view class="table-cell method">部位/状态/预处理</view>');
     const sourceCellIndex = printTaskSource.indexOf('<view class="table-cell source">', sourceHeaderIndex + 1);
     const methodCellIndex = printTaskSource.indexOf('<view class="table-cell method">', methodHeaderIndex + 1);
 

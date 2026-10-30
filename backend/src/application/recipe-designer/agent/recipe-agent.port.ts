@@ -13,11 +13,14 @@ import type {
   AgentAssessmentView,
   AgentCatalogUsage,
   AgentCopyPatch,
+  AgentDogRecipeHistory,
   AgentDraftItem,
   AgentDraftSnapshot,
   AgentIngredientCandidate,
   AgentIngredientDetail,
   AgentProductionStep,
+  AgentRecipeDetail,
+  AgentRecipeSearchPage,
 } from './agent-types';
 
 export interface RecipeAgentDraftPort {
@@ -32,9 +35,16 @@ export interface RecipeAgentDraftPort {
     limit?: number;
   }): Promise<AgentIngredientCandidate[]>;
 
-  /** 某个原料的详情；找不到返回 `null`。 */
+  /**
+   * 某个原料的详情；找不到返回 `null`。
+   *
+   * `nutritionFoodId` 或 `ingredientId` 至少给一个：
+   * - 按 `nutritionFoodId` 选中该营养档案，并返回同原料的全部档案；
+   * - 按 `ingredientId` 选中主/默认档案，并返回全部档案。
+   */
   getIngredient(input: {
-    nutritionFoodId: string;
+    nutritionFoodId?: string;
+    ingredientId?: string;
   }): Promise<AgentIngredientDetail | null>;
 
   /** 目录使用情况：某主蛋白 / 某套原料用过几次、跟哪几道重合。 */
@@ -42,6 +52,48 @@ export interface RecipeAgentDraftPort {
     mainProteinName?: string;
     ingredientNames?: string[];
   }): Promise<AgentCatalogUsage>;
+
+  /**
+   * 只读搜索全部食谱。
+   *
+   * - 公开、定制、未公开的正式食谱版本都可查；同一 recipeId 只返回最高版本；
+   * - 其他设计师未归档的设计草稿也纳入；当前草稿单独返回；
+   * - 绝不返回客户 / 订单 / 狗 / 主人字段；
+   * - 结果分页，绝不整表返回给模型。
+   */
+  searchRecipes(input: {
+    search?: string;
+    ingredientName?: string;
+    lifeStage?: string;
+    page: number;
+    limit: number;
+  }): Promise<AgentRecipeSearchPage>;
+
+  /**
+   * 只读一道食谱 / 草稿的完整详情。
+   *
+   * `recipeId` 可以是任意 `Recipe.id` 或逻辑 `recipeId`（公开 / 定制 / 未公开）；
+   * `draftId` 可以是当前草稿或任意未归档设计草稿。找不到返回 null。
+   * 返回内容只含配方，不含客户 / 订单 / 狗 / 主人字段。
+   */
+  getRecipeDetail(input: {
+    recipeId?: string;
+    draftId?: string;
+  }): Promise<AgentRecipeDetail | null>;
+
+  /**
+   * 当前设计这只狗**真实吃过 / 交付过**的食谱历史。
+   *
+   * 只读当前草稿绑定的狗狗（不接受 dogId，防止越权查别的狗）；
+   * 产品线 / 没绑定订单的草稿返回 `{ dogName: null, total: 0, recipes: [] }`。
+   * 数据来自鲜食订单快照 + 已完成定制单的交付快照，与「爱犬设计洞察」同源。
+   */
+  getDogRecipeHistory(input: {
+    /** 按菜名或原料名过滤，例如「牛肉」「西兰花」 */
+    keyword?: string;
+    /** 最多返回几道，默认 8，上限 20 */
+    limit?: number;
+  }): Promise<AgentDogRecipeHistory>;
 
   /** 往当前草稿追加一条真实原料；成功后内容版本 +1。 */
   addItem(
@@ -70,10 +122,10 @@ export interface RecipeAgentDraftPort {
   /** 删掉一条原料；成功后内容版本 +1。 */
   removeItem(itemId: string): Promise<void>;
 
-  /** 设预处理方式和备注；成功后内容版本 +1。 */
+  /** 设部位 / 状态 / 预处理；成功后内容版本 +1。 */
   setPreparation(
     itemId: string,
-    input: { method: string; note?: string | null },
+    input: { method: string },
   ): Promise<AgentDraftItem>;
 
   /** 写文案字段；成功后内容版本 +1。 */
@@ -92,10 +144,11 @@ export interface RecipeAgentDraftPort {
 /**
  * Agent 控制端口（P0a Task 5）。
  *
- * 管“人”这一侧：提问、申请例外/缺类确认、生成交付确认卡。
+ * 管“人”这一侧：提问、申请例外/缺类确认；`finishDraft` 仅保留给旧会话
+ * 兼容，新运行不再调用，也不会生成新的交付快照。
  *
  * **审批状态只能由后端从会话/数据库读取**（spec 4.3 / 5.2）：
- * `getApprovalState` 是 `check_ready` / `finish_draft` 唯一的审批来源，
+ * `getApprovalState` 是 `check_ready` 唯一的审批来源，
  * 模型只能 `request_exception`，不能把 `exceptionApproved` 设成 true。
  */
 export interface RecipeAgentControlPort {
@@ -111,7 +164,10 @@ export interface RecipeAgentControlPort {
     detail?: string;
   }): Promise<void>;
 
-  /** 生成交付确认卡；`warnings` 逐条列出需要人确认的警告。 */
+  /**
+   * @deprecated 旧会话兼容：写交付快照并置 COMPLETED。
+   * 新运行不再调用（`finish_draft` 工具已下线），不要再新增调用方。
+   */
   finishDraft(input: { summary: string; warnings: string[] }): Promise<void>;
 
   /** 当前会话/数据库里的审批状态；模型不可传入，也不可覆盖。 */

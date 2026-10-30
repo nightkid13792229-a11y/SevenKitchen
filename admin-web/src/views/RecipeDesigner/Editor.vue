@@ -12,10 +12,23 @@
           class="rename-series-btn"
           @click="openRenameDialog"
         >改名</el-button>
+        <!--
+          设计模式标识（2026-10-29）：产品线 / 订单定制一目了然。
+          订单定制还会在下方显示本单横幅；这里的标签保证两种模式都有明确归属。
+        -->
+        <el-tag
+          size="small"
+          effect="plain"
+          :type="isOrderDesign ? 'warning' : 'primary'"
+          class="design-mode-tag"
+          :title="isOrderDesign
+            ? '订单定制食谱：绑定顾客订单，不上橱窗'
+            : '产品线食谱：按生命阶段设计，入仓后可整系列发布'"
+        >{{ isOrderDesign ? '订单定制' : '产品线' }}</el-tag>
         <span v-if="draft?.seriesLifeStage" class="stage-tag">
           {{ stageLabel }}
         </span>
-        <el-dropdown v-if="draft && !orderId" trigger="click" @command="handleSwitchStage">
+        <el-dropdown v-if="stageSwitchVisible" trigger="click" @command="handleSwitchStage">
           <el-button size="small" class="stage-switch-btn" :loading="switchingStage">
             切换阶段<el-icon class="el-icon--right"><ArrowDown /></el-icon>
           </el-button>
@@ -25,9 +38,9 @@
                 v-for="(label, key) in FEDIAF_DOG_SCENARIO_LABELS"
                 :key="key"
                 :command="key"
-                :disabled="key === draft.fediafDogScenario"
+                :disabled="key === draft?.fediafDogScenario"
               >
-                {{ label }}<span v-if="key === draft.fediafDogScenario" class="stage-current">（当前）</span>
+                {{ label }}<span v-if="key === draft?.fediafDogScenario" class="stage-current">（当前）</span>
               </el-dropdown-item>
             </el-dropdown-menu>
           </template>
@@ -59,11 +72,6 @@
           title="公共门槛 + 展示资料 + 分支条件（产品线文案或订单信息）"
           @click="openLaunchReadiness"
         >上线检查</el-button>
-        <el-button
-          text
-          :type="aiPanelVisible ? 'primary' : 'default'"
-          @click="aiPanelVisible = !aiPanelVisible"
-        >🤖 AI 设计建议</el-button>
         <el-button
           text
           :type="agentDrawerVisible ? 'primary' : 'default'"
@@ -121,160 +129,179 @@
 
     <div class="editor-body">
       <!-- 左：原料库 -->
-      <div class="pane pane-library">
+      <div class="pane pane-library" :style="{ width: paneWidths.library + 'px' }">
         <div class="pane-title">原料库</div>
         <IngredientLibrary :scenario="draft?.fediafDogScenario" @add="handleAddOption" />
       </div>
 
+      <div
+        class="pane-splitter"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="调整原料库与配方明细的宽度"
+        title="拖动调整栏宽，双击恢复默认"
+        @pointerdown="startPaneResize('library-items', $event)"
+        @dblclick="resetPaneWidths('library-items')"
+      ></div>
+
       <!-- 中：配方编辑 -->
-      <div class="pane pane-items">
+      <div ref="itemsPaneRef" class="pane pane-items">
         <div class="pane-title">
           配方明细
-          <span class="item-count">原料 {{ items.length }} 种 · 总重 {{ includedTotalWeightText }}</span>
+          <span class="item-count">
+            原料 {{ items.length }} 种<span v-if="items.length">（食材 {{ foodItemCount }} · 补剂 {{ supplementItemCount }}）</span> · 总重 {{ includedTotalWeightText }}
+          </span>
         </div>
         <div v-loading="initialLoading" class="item-list">
           <el-empty v-if="!initialLoading && items.length === 0" description="从左侧原料库点击食材加入配方" />
-          <draggable
-            v-model="items"
-            item-key="id"
-            handle=".drag-handle"
-            animation="150"
-            ghost-class="drag-ghost"
-            @start="handleReorderStart"
-            @end="handleReorder"
-          >
-            <template #item="{ element, index }">
-              <div class="item-row" :class="{ 'item-row-excluded': element.includeInAssessment === false }">
-                <div class="drag-handle">
-                  <el-icon><Rank /></el-icon>
-                </div>
-                <span class="item-type-tag" :class="itemTypeTagClass(element)">{{ itemTypeLabel(element) }}</span>
-                <div class="item-main">
-                  <div class="item-name">{{ itemDisplayName(element) }}</div>
-                  <div class="item-meta">
-                    <span class="item-profile-name">{{ itemProfileName(element) }}</span>
-                  </div>
-                </div>
-                <!--
-                  预处理方式与重量 / 占比 / 开关 / 删除同排（2026-10-22）：
-                  名称和营养档案留在左侧；名称下面不再放预处理控件。
-                  Tab 顺序只保留每行的重量输入：其余控件显式 tabindex=-1
-                  （ElSelect / ElSwitch 均支持 tabindex prop，ElButton 透传原生属性）。
-                -->
-                <div class="item-controls">
-                  <div class="item-preparation-inline">
-                    <span class="preparation-label" title="原料预处理">预处理</span>
-                    <el-select
-                      :model-value="element.preparationMethod || ''"
-                      class="preparation-method-select"
-                      size="small"
-                      filterable
-                      allow-create
-                      default-first-option
-                      clearable
-                      :tabindex="-1"
-                      placeholder="选择或输入"
-                      @change="(value: string | undefined) => onPreparationMethodChange(element, value)"
-                    >
-                      <el-option
-                        v-for="option in preparationMethodOptions"
-                        :key="option.id"
-                        :label="option.name"
-                        :value="option.id"
-                      />
-                    </el-select>
-                    <el-button
-                      class="preparation-manage-btn"
-                      size="small"
-                      text
-                      :icon="Setting"
-                      :tabindex="-1"
-                      title="管理预处理方式"
-                      @click="openPreparationMethodManager"
-                    >管理</el-button>
-                    <el-tag
-                      v-if="element.preparationSource"
-                      size="small"
-                      :type="element.preparationSource === 'MANUAL' ? 'warning' : 'info'"
-                      effect="plain"
-                    >
-                      {{ element.preparationSource === 'MANUAL' ? '人工' : '自动' }}
-                    </el-tag>
-                    <span v-else class="preparation-source-empty">未设置</span>
-                  </div>
-                  <div class="weight-editor">
-                    <el-input-number
-                      :model-value="element.weightG"
-                      :min="0"
-                      :precision="2"
-                      :controls="false"
-                      size="small"
-                      class="weight-input"
-                      @update:model-value="(value: number | undefined) => onWeightChange(element, value)"
-                    />
-                    <span class="weight-unit">{{ itemUnitLabel(element) }}</span>
-                  </div>
-                  <div class="item-ratio-column">
-                    <span v-if="shouldShowWeightRatio(element)" class="item-ratio">{{ weightRatioLabel(element) }}</span>
-                  </div>
-                  <div class="item-action-stack">
-                    <el-switch
-                      :model-value="element.includeInAssessment !== false"
-                      size="small"
-                      :tabindex="-1"
-                      @change="(value: string | number | boolean) => onToggleInclude(element, Boolean(value))"
-                    />
-                    <el-button
-                      size="small"
-                      text
-                      type="danger"
-                      :icon="Delete"
-                      :tabindex="-1"
-                      @click="handleRemoveItem(element)"
-                    />
-                  </div>
-                </div>
-                <span
-                  v-if="itemPreparationHint(element)"
-                  class="item-preparation-hint"
-                >{{ itemPreparationHint(element) }}</span>
+          <template v-if="items.length > 0">
+            <!--
+              列头（2026-10-29）：只在有原料时出现；
+              排序 / 操作两列按老板要求不写字，只留位置。
+            -->
+            <div class="item-col-head">
+              <div class="col-cell" aria-hidden="true"></div>
+              <div class="col-cell col-center">类型</div>
+              <div class="col-cell">原料 / 营养档案</div>
+              <div
+                class="col-cell"
+                title="按「部位 / 状态 / 预处理」顺序填写，例如：牛里脊/生/去油"
+              >预处理方式<span class="col-hint">?</span></div>
+              <div class="col-cell col-center">用量</div>
+              <div class="col-cell col-right">占比</div>
+              <div class="col-cell col-center">计入评估</div>
+              <div class="col-cell" aria-hidden="true"></div>
+            </div>
+            <div class="item-list-body">
+              <draggable
+                v-model="items"
+                item-key="id"
+                handle=".drag-handle"
+                animation="150"
+                ghost-class="drag-ghost"
+                @start="handleReorderStart"
+                @end="handleReorder"
+              >
+                <template #item="{ element, index }">
+                  <div class="item-row" :class="{ 'item-row-excluded': element.includeInAssessment === false }">
+                    <div class="drag-handle">
+                      <el-icon><Rank /></el-icon>
+                    </div>
+                    <span class="item-type-tag" :class="itemTypeTagClass(element)">{{ itemTypeLabel(element) }}</span>
+                    <div class="item-main">
+                      <div class="item-name">{{ itemDisplayName(element) }}</div>
+                      <div class="item-meta">
+                        <span class="item-profile-name">{{ itemProfileName(element) }}</span>
+                      </div>
+                    </div>
+                    <!--
+                      预处理方式与重量 / 占比 / 开关 / 删除同排（2026-10-22）：
+                      名称和营养档案留在左侧；名称下面不再放预处理控件。
+                      Tab 顺序只保留每行的重量输入：其余控件显式 tabindex=-1
+                      （ElAutocomplete / ElSwitch 均支持 tabindex prop，ElButton 透传原生属性）。
+                    -->
+                    <div class="item-controls">
+                      <div class="item-preparation-inline">
+                        <!-- 宽屏由列头说明（见 --item-grid）；窄屏列头收起时才显示 -->
+                        <span class="preparation-label" :title="PREPARATION_FIELD_LABEL">{{ PREPARATION_FIELD_LABEL }}</span>
+                        <!--
+                          2026-10-26：输入框直接显示原文字，历史文案作为下拉建议。
+                          不再从字典选择，也不再显示「人工/自动」来源标签。
+                        -->
+                        <PreparationMethodField
+                          class="preparation-method-field"
+                          :model-value="element.preparationMethod || ''"
+                          :label="element.preparationMethodLabel || ''"
+                          :ingredient-id="element.ingredientId"
+                          :tabindex="-1"
+                          @change="(value: string | null) => onPreparationMethodChange(element, value)"
+                        />
+                      </div>
+                      <div class="weight-editor">
+                        <el-input-number
+                          :model-value="element.weightG"
+                          :min="0"
+                          :precision="2"
+                          :controls="false"
+                          size="small"
+                          class="weight-input"
+                          @update:model-value="(value: number | undefined) => onWeightChange(element, value)"
+                        />
+                        <span class="weight-unit">{{ itemUnitLabel(element) }}</span>
+                      </div>
+                      <div class="item-ratio-column">
+                        <span v-if="shouldShowWeightRatio(element)" class="item-ratio">{{ weightRatioLabel(element) }}</span>
+                      </div>
+                      <div class="item-action-stack">
+                        <el-switch
+                          :model-value="element.includeInAssessment !== false"
+                          size="small"
+                          :tabindex="-1"
+                          @change="(value: string | number | boolean) => onToggleInclude(element, Boolean(value))"
+                        />
+                        <el-button
+                          size="small"
+                          text
+                          type="danger"
+                          :icon="Delete"
+                          :tabindex="-1"
+                          @click="handleRemoveItem(element)"
+                        />
+                      </div>
+                    </div>
+                    <span
+                      v-if="itemPreparationHint(element)"
+                      class="item-preparation-hint"
+                    >{{ itemPreparationHint(element) }}</span>
 
-                <!--
-                  补剂目标营养素 + 当前实际添加浓度（2026-10-22）：
-                  浓度按「评估总重量」实时计算，改用量 / 配方总重 / 目标后自动重算。
-                -->
-                <div v-if="isSupplementItem(element)" class="item-supplement-row">
-                  <template v-if="itemSupplementTargetViews(element).length">
-                    <el-tag
-                      v-for="target in itemSupplementTargetViews(element)"
-                      :key="target.fieldPath"
-                      size="small"
-                      :type="target.valuePerKg === null ? 'danger' : 'warning'"
-                      effect="plain"
-                      :title="target.valuePerKg === null ? '当前档案缺该字段或配方总重量未知，无法计算添加浓度' : '每 kg 配方实际添加浓度'"
-                    >
-                      {{ target.text }}
-                    </el-tag>
-                  </template>
-                  <span v-else class="item-target-missing">
-                    未设置目标营养素（保存 / 发布会被拒绝）
-                  </span>
-                  <el-button
-                    size="small"
-                    text
-                    type="primary"
-                    :tabindex="-1"
-                    @click="openSupplementTargetEditor(element)"
-                  >修改目标</el-button>
-                </div>
-              </div>
-            </template>
-          </draggable>
+                    <!--
+                      补剂目标营养素 + 当前实际添加浓度（2026-10-22）：
+                      浓度按「评估总重量」实时计算，改用量 / 配方总重 / 目标后自动重算。
+                    -->
+                    <div v-if="isSupplementItem(element)" class="item-supplement-row">
+                      <template v-if="itemSupplementTargetViews(element).length">
+                        <el-tag
+                          v-for="target in itemSupplementTargetViews(element)"
+                          :key="target.fieldPath"
+                          size="small"
+                          :type="target.valuePerKg === null ? 'danger' : 'warning'"
+                          effect="plain"
+                          :title="target.valuePerKg === null ? '当前档案缺该字段或配方总重量未知，无法计算添加浓度' : '每 kg 配方实际添加浓度'"
+                        >
+                          {{ target.text }}
+                        </el-tag>
+                      </template>
+                      <span v-else class="item-target-missing">
+                        未设置目标营养素（保存 / 发布会被拒绝）
+                      </span>
+                      <el-button
+                        size="small"
+                        text
+                        type="primary"
+                        :tabindex="-1"
+                        @click="openSupplementTargetEditor(element)"
+                      >修改目标</el-button>
+                    </div>
+                  </div>
+                </template>
+              </draggable>
+            </div>
+          </template>
         </div>
       </div>
 
+      <div
+        class="pane-splitter"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="调整配方明细与关键比例仪表的宽度"
+        title="拖动调整栏宽，双击恢复默认"
+        @pointerdown="startPaneResize('items-dashboard', $event)"
+        @dblclick="resetPaneWidths('items-dashboard')"
+      ></div>
+
       <!-- 中右：关键比例仪表盘 -->
-      <div class="pane pane-dashboard">
+      <div class="pane pane-dashboard" :style="{ width: paneWidths.dashboard + 'px' }">
         <!--
           「评估中」的细条（批次 5.3）：评估改成后端算之后，
           结果会比按键晚一点点到。不给提示的话，用户会以为数字没变。
@@ -285,8 +312,18 @@
         <MacroCompositionPanel :assessment="assessment" />
       </div>
 
+      <div
+        class="pane-splitter"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="调整关键比例仪表与营养评估的宽度"
+        title="拖动调整栏宽，双击恢复默认"
+        @pointerdown="startPaneResize('dashboard-assessment', $event)"
+        @dblclick="resetPaneWidths('dashboard-assessment')"
+      ></div>
+
       <!-- 右：营养评估 -->
-      <div class="pane pane-right">
+      <div class="pane pane-right" :style="{ width: paneWidths.assessment + 'px' }">
         <div class="pane-title">营养评估</div>
         <div class="assessment-pane">
           <AssessmentPanel
@@ -301,8 +338,18 @@
         </div>
       </div>
 
+      <div
+        class="pane-splitter"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="调整营养评估与爱犬信息的宽度"
+        title="拖动调整栏宽，双击恢复默认"
+        @pointerdown="startPaneResize('assessment-dog', $event)"
+        @dblclick="resetPaneWidths('assessment-dog')"
+      ></div>
+
       <!-- 最右：爱犬信息 -->
-      <div class="pane pane-dog">
+      <div class="pane pane-dog" :style="{ width: paneWidths.dog + 'px' }">
         <div class="pane-title">爱犬信息</div>
         <div class="dog-pane">
           <DogInsightPanel
@@ -317,18 +364,17 @@
       </div>
     </div>
 
-    <!-- AI 设计建议：右侧独立抽屉（不占编辑区布局，内容过长在抽屉内滚动） -->
-    <AiDesignSuggestionPanel
-      v-if="draft && aiPanelVisible"
-      :dog-id="referenceDogId"
-      :draft-id="draft?.id"
-      @add-item="handleAiAddItem"
-      @close="aiPanelVisible = false"
-    />
-
     <!-- 系列改名（合并命名模型：编辑页与列表、发布页共用同一个系列名） -->
     <el-dialog v-model="renameDialogVisible" title="重命名系列" width="420px">
-      <el-input v-model="renameForm.name" maxlength="60" show-word-limit />
+      <el-input
+        v-model="renameForm.name"
+        maxlength="12"
+        show-word-limit
+        placeholder="例如：均衡营养|三文鱼南瓜"
+      />
+      <div class="rename-hint">
+        价值点在前、食材在后，最多 12 个字——多了标签印不下。
+      </div>
       <template #footer>
         <el-button @click="renameDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="renaming" @click="confirmRename">保存</el-button>
@@ -352,15 +398,6 @@
     />
 
     <!--
-      预处理方式字典管理（2026-10-22）：在编辑器内以弹窗维护，
-      管理完立即刷新当前草稿的预处理选项，不跳走页面。
-    -->
-    <PreparationMethodManagerDialog
-      v-model="preparationMethodManagerVisible"
-      @changed="onPreparationMethodsChanged"
-    />
-
-    <!--
       上线检查（2026-10-22）：读取后端共享发布门槛（发布 / 加入待提交同一套判断）。
       产品线与本单设计都可用；只在当前页打开抽屉，不跳转路由。
     -->
@@ -370,18 +407,25 @@
       :draft-name="draft?.series?.name || draft?.name || ''"
       :order-id="orderId"
       :design-id="designId"
+      :series-id="seriesId"
       @published="handleStagePublished"
       @staged="handleOrderStaged"
+      @go-to-series-list="goToSeriesListFromCheck"
     />
 
     <!--
       AI 食谱设计 Agent（P2）：对话式抽屉。
-      运行中每 1.5 秒轮询会话；工具步骤可折叠；停止后才能接管。
+      运行中每 1.5 秒轮询会话；连续工具步骤合并为可折叠执行记录；
+      交付确认卡只读展示，复核与发布统一走头部「上线检查」。
     -->
     <RecipeAgentDrawer
       v-model="agentDrawerVisible"
       :draft-id="currentDraftId"
-      :draft-name="draft?.series?.name || draft?.name || ''"
+      :dog-id="referenceDogId"
+      :series-id="seriesId"
+      :lock-reference-dog="Boolean(route.query.orderId)"
+      :energy-density-kcal-per-kg="assessment?.energyDensityKcalPerKg ?? null"
+      @dog-changed="(dogId: string | null) => (referenceDogId = dogId)"
       @refresh="loadDraft()"
     />
   </div>
@@ -391,11 +435,10 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown, ArrowLeft, CircleCheck, CircleCheckFilled, Delete, EditPen, Loading, MagicStick, Rank, RefreshLeft, RefreshRight, Setting, WarningFilled } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowLeft, CircleCheck, CircleCheckFilled, Delete, EditPen, Loading, MagicStick, Rank, RefreshLeft, RefreshRight, WarningFilled } from '@element-plus/icons-vue'
 import draggable from 'vuedraggable'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import type { CreateRecipeSeriesStageDraftPayload } from '@/api/recipeDesigner'
-import type { PreparationMethod } from '@/api/preparationMethods'
 import { nutritionFoodApi, type NutritionFoodDetail } from '@/api/ingredients'
 import { orderRecipeDesignApi } from '@/api/orderRecipeDesign'
 import type {
@@ -423,9 +466,18 @@ import AssessmentPanel from './components/AssessmentPanel.vue'
 import GaugePanel from './components/GaugePanel.vue'
 import MacroCompositionPanel from './components/MacroCompositionPanel.vue'
 import DogInsightPanel from './components/DogInsightPanel.vue'
-import AiDesignSuggestionPanel from './components/AiDesignSuggestionPanel.vue'
 import SupplementTargetDialog from './components/SupplementTargetDialog.vue'
-import PreparationMethodManagerDialog from './components/PreparationMethodManagerDialog.vue'
+import PreparationMethodField from './components/PreparationMethodField.vue'
+import { PREPARATION_FIELD_LABEL } from '@/constants/preparationField'
+import { isTemporarySeriesName } from '@/utils/recipeDesigner/seriesName'
+import {
+  DEFAULT_PANE_WIDTHS,
+  PANE_MAX_WIDTH,
+  PANE_MIN_WIDTHS,
+  resizePaneWidths,
+  type PaneSplitterKey,
+  type PaneWidths
+} from '@/utils/recipeDesigner/paneResize'
 import LaunchReadinessDrawer from './components/LaunchReadinessDrawer.vue'
 import RecipeAgentDrawer from './components/RecipeAgentDrawer.vue'
 import type { DesignRecipeAssessmentResult } from '@/utils/recipeDesigner/assessmentTypes'
@@ -488,6 +540,22 @@ const currentDraftId = ref(draftId)
 const agentDrawerVisible = ref(false)
 
 const draft = ref<DesignRecipeDraftDetail | null>(null)
+/** 当前设计模式：路由带订单号，或系列本身标记为 ORDER，都算订单定制 */
+const isOrderDesign = computed(
+  () => Boolean(orderId) || draft.value?.series?.designMode === 'ORDER'
+)
+/**
+ * 顶部「切换阶段」入口（2026-10-30）。
+ *
+ * 产品线：沿用「按阶段另开一份草稿」；订单定制：原地换这一份草稿的阶段，
+ * 所以两种模式都要给入口。已交付的那一份不给换（要改只能走售后改稿重新打开）。
+ */
+const stageSwitchVisible = computed(
+  () =>
+    Boolean(draft.value) &&
+    (!orderId ||
+      (Boolean(designId) && currentOrderSlot.value?.status !== 'DELIVERED'))
+)
 const items = ref<DesignerItem[]>([])
 /** 原料对象内部字段变更的修订号；watch 必须显式读它，否则改开关不会触发评估 */
 const itemsRevision = ref(0)
@@ -533,6 +601,108 @@ async function loadNutritionFoodDetail(
   return request
 }
 const initialLoading = ref(true)
+
+/* ---------- 五栏栏宽拖拽（2026-10-29） ---------- */
+const PANE_WIDTH_STORAGE_KEY = 'recipe-designer:pane-widths:v1'
+const paneWidths = reactive<PaneWidths>({ ...DEFAULT_PANE_WIDTHS })
+const itemsPaneRef = ref<HTMLElement | null>(null)
+let stopPaneResize: (() => void) | null = null
+
+/** 读回上次的栏宽；存储损坏或数值异常就按默认宽度，不打断页面 */
+function restorePaneWidths() {
+  try {
+    const raw = localStorage.getItem(PANE_WIDTH_STORAGE_KEY)
+    if (!raw) return
+    const saved = JSON.parse(raw) as Partial<PaneWidths>
+    for (const key of Object.keys(DEFAULT_PANE_WIDTHS) as (keyof PaneWidths)[]) {
+      const value = Number(saved?.[key])
+      if (Number.isFinite(value)) {
+        paneWidths[key] = Math.min(
+          Math.max(value, PANE_MIN_WIDTHS[key]),
+          PANE_MAX_WIDTH
+        )
+      }
+    }
+  } catch {
+    // 忽略：按默认栏宽继续
+  }
+}
+
+function persistPaneWidths() {
+  try {
+    localStorage.setItem(PANE_WIDTH_STORAGE_KEY, JSON.stringify(paneWidths))
+  } catch {
+    // 隐私模式 / 存储被禁用：拖动本身仍然生效，只是下次不记得
+  }
+}
+
+/**
+ * 拖动分界调整栏宽。
+ * 拖动过程始终以「按下时的宽度 + 总位移」计算，不累加每一帧，避免误差越拖越大。
+ */
+function startPaneResize(splitter: PaneSplitterKey, event: PointerEvent) {
+  if (event.button !== 0) return
+  event.preventDefault()
+  stopPaneResize?.()
+  const startX = event.clientX
+  const startWidths: PaneWidths = { ...paneWidths }
+  const itemsWidth = itemsPaneRef.value?.getBoundingClientRect().width ?? 0
+  const previousCursor = document.body.style.cursor
+  const previousUserSelect = document.body.style.userSelect
+  const splitterEl = event.currentTarget as HTMLElement | null
+  // 捕获指针：拖出浏览器窗口再松手也能正常收尾
+  try {
+    splitterEl?.setPointerCapture(event.pointerId)
+  } catch {
+    // 个别浏览器/合成事件不支持捕获，退回普通监听
+  }
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+
+  const handleMove = (moveEvent: PointerEvent) => {
+    Object.assign(
+      paneWidths,
+      resizePaneWidths(splitter, startWidths, moveEvent.clientX - startX, itemsWidth)
+    )
+  }
+  const finish = () => {
+    try {
+      splitterEl?.releasePointerCapture(event.pointerId)
+    } catch {
+      // 已经释放或浏览器不支持：忽略
+    }
+    document.body.style.cursor = previousCursor
+    document.body.style.userSelect = previousUserSelect
+    window.removeEventListener('pointermove', handleMove)
+    window.removeEventListener('pointerup', finish)
+    window.removeEventListener('pointercancel', finish)
+    stopPaneResize = null
+    persistPaneWidths()
+  }
+  stopPaneResize = finish
+  window.addEventListener('pointermove', handleMove)
+  window.addEventListener('pointerup', finish)
+  window.addEventListener('pointercancel', finish)
+}
+
+/** 双击分界：把这条分界两侧的栏恢复默认宽度 */
+function resetPaneWidths(splitter: PaneSplitterKey) {
+  if (splitter === 'library-items') {
+    paneWidths.library = DEFAULT_PANE_WIDTHS.library
+  }
+  if (splitter === 'items-dashboard') {
+    paneWidths.dashboard = DEFAULT_PANE_WIDTHS.dashboard
+  }
+  if (splitter === 'dashboard-assessment') {
+    paneWidths.dashboard = DEFAULT_PANE_WIDTHS.dashboard
+    paneWidths.assessment = DEFAULT_PANE_WIDTHS.assessment
+  }
+  if (splitter === 'assessment-dog') {
+    paneWidths.assessment = DEFAULT_PANE_WIDTHS.assessment
+    paneWidths.dog = DEFAULT_PANE_WIDTHS.dog
+  }
+  persistPaneWidths()
+}
 /** 切换生命阶段中 */
 const switchingStage = ref(false)
 
@@ -547,7 +717,9 @@ const renameForm = reactive({ name: '' })
 const renaming = ref(false)
 
 function openRenameDialog() {
-  renameForm.name = seriesDisplayName.value === '加载中…' ? '' : seriesDisplayName.value
+  const current = seriesDisplayName.value === '加载中…' ? '' : seriesDisplayName.value
+  // 临时名只是占位，清空让用户直接填正式名称
+  renameForm.name = isTemporarySeriesName(current) ? '' : current
   renameDialogVisible.value = true
 }
 
@@ -675,7 +847,6 @@ async function refreshInputsKeepingScroll() {
 }
 
 const referenceDogId = ref<string | null>(null)
-const aiPanelVisible = ref(false)
 
 /**
  * 上线检查抽屉：产品线与本单设计共用同一套后端门槛。
@@ -722,6 +893,13 @@ const includedTotalWeightText = computed(() => {
   return `${Math.round(total)}g`
 })
 
+/**
+ * 标题里的原料计数（2026-10-29）：总数之外，再拆出食材 / 补剂各多少种。
+ * 补剂判定沿用 isSupplementItem，与每行的类型标签保持一致。
+ */
+const foodItemCount = computed(() => items.value.filter((item) => !isSupplementItem(item)).length)
+const supplementItemCount = computed(() => items.value.length - foodItemCount.value)
+
 // ---------- 明细列表显示 ----------
 
 function itemTypeLabel(item: DesignerItem): string {
@@ -755,12 +933,12 @@ function itemProfileName(item: DesignerItem): string {
   )
 }
 
-/** 制备方法文案（后端已把字典 ID 解析成中文） */
+/** 部位 / 状态 / 预处理文案（后端已把字典 ID 解析成中文） */
 function itemPreparationText(item: DesignerItem): string {
   return String(item.preparationMethodLabel || item.preparationMethod || '').trim()
 }
 
-/** 制备方法的称重口径与所选营养档案不一致时给出提示 */
+/** 部位 / 状态 / 预处理的称重口径与所选营养档案不一致时给出提示 */
 function itemPreparationHint(item: DesignerItem): string | null {
   return preparationBasisMismatchHint(
     itemPreparationText(item),
@@ -854,20 +1032,44 @@ function applyOrderByIds(ids: string[]) {
   items.value = next
 }
 
-/** 撤销删除后服务器上原料已不存在时，用原信息重新创建原料（生成新 id 并替换本地引用） */
+/**
+ * 撤销删除后服务器上原料已不存在时，用原信息重新创建原料（生成新 id 并替换本地引用）。
+ *
+ * ⚠️ 补剂目标必须**连原值一起带回去**（2026-10-28）。
+ * 目标浓度是「本份提供量 ÷ 配方总重 × 1000」，而总重取的是上一次评估回写的缓存；
+ * 删除/撤销后它可能明显偏小，重算会把目标放大几十上百倍
+ * （实测：海藻粉碘目标 144,834 μg，正常应 ~918）。
+ */
 async function recreateItem(snapshot: DesignerItem) {
   if (!draft.value) return
   const supplementTargets = normalizeSupplementTargetDefinitions(
     snapshot.supplementTargets
   )
+  /** 旧目标值（落库口径是 `targetValue`，本地装饰用 `targetValuePerKg`） */
+  const storedTargetValues = new Map<string, number>()
+  if (Array.isArray(snapshot.supplementTargets)) {
+    for (const raw of snapshot.supplementTargets) {
+      if (!raw || typeof raw !== 'object') continue
+      const record = raw as {
+        fieldPath?: unknown
+        targetValue?: unknown
+        targetValuePerKg?: unknown
+      }
+      const fieldPath =
+        typeof record.fieldPath === 'string' ? record.fieldPath.trim() : ''
+      if (!fieldPath) continue
+      const value = Number(record.targetValue ?? record.targetValuePerKg)
+      if (Number.isFinite(value) && value > 0) {
+        storedTargetValues.set(fieldPath, value)
+      }
+    }
+  }
   const payload = {
     ingredientId: snapshot.ingredientId ?? snapshot.ingredient?.id,
     nutritionFoodId: snapshot.nutritionFoodId ?? '',
     weightG: Number(snapshot.weightG ?? 0),
     includeInAssessment: snapshot.includeInAssessment,
     preparationMethod: snapshot.preparationMethod,
-    preparationNote: snapshot.preparationNote ?? undefined,
-    preparationSource: snapshot.preparationSource ?? undefined,
     nutrientTargetKey: snapshot.nutrientTargetKey ?? undefined,
     nutrientTargetValue: snapshot.nutrientTargetValue ?? undefined,
     ...(supplementTargets.length > 0
@@ -875,7 +1077,10 @@ async function recreateItem(snapshot: DesignerItem) {
           supplementTargets: supplementTargets.map((target) => ({
             fieldPath: target.fieldPath,
             label: target.label,
-            unit: target.unit
+            unit: target.unit,
+            ...(storedTargetValues.has(target.fieldPath)
+              ? { targetValue: storedTargetValues.get(target.fieldPath) }
+              : {})
           }))
         }
       : {})
@@ -1000,61 +1205,13 @@ function isSupplementOption(option: RecipeDesignerIngredientOption): boolean {
 
 // ---------- 原料预处理（2026-10-22） ----------
 
-const preparationMethodOptions = computed(
-  () => draft.value?.preparationMethodOptions ?? []
-)
-
-/** 预处理方式字典管理弹窗（在编辑器内打开，不跳转页面） */
-const preparationMethodManagerVisible = ref(false)
-
-function openPreparationMethodManager() {
-  preparationMethodManagerVisible.value = true
-}
-
 /**
- * 字典增删改后刷新当前草稿的预处理选项。
- *
- * 以接口返回的最新列表为准（删除立即生效）；同时把当前行里已经选用、
- * 但字典中暂时不存在的值（手填 / 刚被删除）合并回选项，避免下拉框
- * 把预处理方式显示成裸 id。
- */
-function onPreparationMethodsChanged(methods: PreparationMethod[]) {
-  const optionById = new Map<string, { id: string; name: string }>()
-
-  for (const method of methods) {
-    const id = String(method.id ?? '').trim()
-    const name = String(method.name ?? '').trim()
-    if (!id || !name) continue
-    optionById.set(id, { id, name })
-  }
-
-  for (const item of items.value) {
-    const method = String(item.preparationMethod ?? '').trim()
-    if (!method) continue
-
-    const option = optionById.get(method)
-    if (option) {
-      item.preparationMethodLabel = option.name
-    } else {
-      optionById.set(method, {
-        id: method,
-        name: String(item.preparationMethodLabel || method)
-      })
-    }
-  }
-
-  if (draft.value) {
-    draft.value.preparationMethodOptions = [...optionById.values()]
-  }
-}
-
-/**
- * 修改原料预处理方式：可从字典选择，也允许手填。
- * 只把改动写回该原料；不从历史食谱自动复制默认值。
+ * 修改原料「部位 / 状态 / 预处理」：只保存自由文本。
+ * 字典只用于老数据展示兜底，不再把文字反查成字典 id。
  */
 function onPreparationMethodChange(
   item: DesignerItem,
-  value: string | undefined
+  value: string | null | undefined
 ) {
   const nextMethod = String(value ?? '').trim() || null
   const currentMethod = String(item.preparationMethod ?? '').trim() || null
@@ -1062,9 +1219,6 @@ function onPreparationMethodChange(
 
   item.preparationMethod = nextMethod ?? undefined
   item.preparationMethodLabel = nextMethod
-    ? preparationMethodOptions.value.find((option) => option.id === nextMethod)?.name ?? nextMethod
-    : null
-  item.preparationSource = nextMethod || item.preparationNote ? 'MANUAL' : null
   itemsRevision.value += 1
   enqueue({
     kind: 'updateItem',
@@ -1411,6 +1565,11 @@ async function loadDraft(targetDraftId?: string) {
 async function handleSwitchStage(scenario: string) {
   if (!draft.value || switchingStage.value) return
   if (scenario === draft.value.fediafDogScenario) return
+  // 订单定制：原地换这一份草稿的阶段，不另开阶段草稿（2026-10-30）
+  if (orderId) {
+    await switchOrderDesignStage(scenario)
+    return
+  }
   const targetLabel = FEDIAF_DOG_SCENARIO_LABELS[scenario as FediafDogScenario] ?? scenario
   try {
     await ElMessageBox.confirm(
@@ -1439,6 +1598,66 @@ async function handleSwitchStage(scenario: string) {
     })
     await loadDraft(next.id)
     ElMessage.success(`已切换到「${targetLabel}」`)
+  } catch {
+    // 错误提示由拦截器统一处理
+  } finally {
+    switchingStage.value = false
+  }
+}
+
+/**
+ * 本单设计换生命阶段（2026-10-30）：原地改这一份草稿的阶段，原料不动。
+ *
+ * 为什么不能像产品线那样另开阶段草稿：订单卡片锁着这一份草稿，
+ * 另开一份会出现「界面看到的是新的、加入待提交取走的是旧的」。
+ *
+ * 已加入待提交的那份，后端会先退回「编辑中」并清掉按旧阶段生成的暂存食谱，
+ * 所以提示里必须说清楚「需要重新加入」，否则会以为已经交过了。
+ */
+async function switchOrderDesignStage(scenario: string) {
+  if (!draft.value || !orderId) return
+  const targetLabel =
+    FEDIAF_DOG_SCENARIO_LABELS[scenario as FediafDogScenario] ?? scenario
+  const wasReady = currentOrderSlot.value?.status === 'READY'
+
+  try {
+    await ElMessageBox.confirm(
+      [
+        `确认把这份设计改为「${targetLabel}」阶段吗？`,
+        '原料、克数与展示资料保持不变，营养评估会按新阶段重新计算。',
+        wasReady
+          ? '这一份已经加入过本单待提交，换阶段后会退回「编辑中」，需要重新点一次「加入本单待提交」。'
+          : ''
+      ]
+        .filter(Boolean)
+        .join('\n'),
+      '切换生命阶段',
+      {
+        type: 'warning',
+        confirmButtonText: '确认切换',
+        cancelButtonText: '取消'
+      }
+    )
+  } catch {
+    return
+  }
+
+  switchingStage.value = true
+  try {
+    // 先把还在保存队列里的克数 / 排序刷完，否则紧接着刷新草稿会把它们丢掉
+    await flushNow()
+    if (hasPending() || saveStatus.value === 'error') {
+      ElMessage.warning('还有改动尚未保存成功，请稍候再试')
+      return
+    }
+    const result = await orderRecipeDesignApi.switchStage(orderId, designId, scenario)
+    await loadDraft(currentDraftId.value)
+    await loadOrderDesignWorkspace()
+    ElMessage.success(
+      result.status === 'EDITING' && wasReady
+        ? `已切换到「${targetLabel}」，请重新加入本单待提交`
+        : `已切换到「${targetLabel}」`
+    )
   } catch {
     // 错误提示由拦截器统一处理
   } finally {
@@ -1480,31 +1699,6 @@ async function handleRevert() {
     // 错误提示由拦截器统一处理
   } finally {
     reverting.value = false
-  }
-}
-
-/** AI 面板一键添加（推荐食材已由后端匹配好 ingredientId / nutritionFoodId） */
-async function handleAiAddItem(payload: {
-  name: string
-  ingredientId?: string
-  nutritionFoodId?: string
-  weightG?: number
-}) {
-  if (!draft.value) return
-  if (!payload.nutritionFoodId) return
-  const itemPayload = {
-    ingredientId: payload.ingredientId,
-    nutritionFoodId: payload.nutritionFoodId,
-    weightG: payload.weightG ?? 100,
-    includeInAssessment: true,
-  }
-  try {
-    const created = await recipeDesignerApi.addItem(draft.value.id, itemPayload)
-    items.value = [...items.value, created]
-    recordHistory({ type: 'add', item: created })
-    await refreshInputsKeepingScroll()
-  } catch {
-    // 拦截器已提示
   }
 }
 
@@ -1753,6 +1947,16 @@ async function openLaunchReadiness() {
   }
 }
 
+/** 打开发布 / 更新抽屉（仅产品线系列；订单设计沿用本单交付流程） */
+/**
+ * 上线检查 → 去食谱列表发布 / 更新。
+ * 发布是整条系列的动作，统一收在按系列组织的列表页，编辑器不再提供第二个入口。
+ */
+function goToSeriesListFromCheck(): void {
+  launchReadinessVisible.value = false
+  void router.push('/recipe-designer')
+}
+
 function backToOrderWorkspace() {
   if (!orderId) return
   router.push(`/order-design/${encodeURIComponent(orderId)}`)
@@ -1769,14 +1973,6 @@ async function handleOrderStaged() {
 function handleStagePublished() {
   launchReadinessVisible.value = false
   router.push('/recipe-designer')
-}
-
-function goPublish() {
-  if (orderId) {
-    ElMessage.warning('本单设计请用「加入本单待提交」，由管理员最终提交交付')
-    return
-  }
-  router.push(`/recipe-designer/drafts/${currentDraftId.value}/publish`)
 }
 
 function goBack() {
@@ -1813,6 +2009,7 @@ function handleKeydown(event: KeyboardEvent) {
 }
 
 onMounted(() => {
+  restorePaneWidths()
   registerBeforeUnload()
   window.addEventListener('keydown', handleKeydown)
   void loadDraft()
@@ -1820,6 +2017,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  stopPaneResize?.()
   window.removeEventListener('keydown', handleKeydown)
   if (hasPending()) {
     void flushNow()
@@ -1910,6 +2108,15 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.design-mode-tag {
+  flex-shrink: 0;
+}
+.rename-hint {
+  margin-top: 6px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #909399;
+}
 .stage-tag {
   color: #909399;
   font-size: 12px;
@@ -1966,32 +2173,59 @@ onBeforeUnmount(() => {
 }
 .pane-library {
   width: 250px;
-  border-right: 1px solid #e4e7ed;
+  min-width: 200px;
   flex-shrink: 0;
 }
 .pane-items {
   flex: 1;
   min-width: 320px;
-  border-right: 1px solid #e4e7ed;
   /* 不参与压缩：否则窗口变窄时这一栏会被挤到只剩几十像素，
-     原料名（.item-main）连同用量输入框一起被压没（实测名字列只剩 24px）。 */
+     原料名（.item-main）连同用量输入框一起被压没（实测名字列只剩 24px）。
+     宽度的增减由两侧的分界线拖动决定，见 .pane-splitter。 */
   flex-shrink: 0;
 }
 .pane-dashboard {
   width: 300px;
+  min-width: 240px;
   flex-shrink: 0;
-  border-right: 1px solid #e4e7ed;
   background: #fafbfc;
   overflow-y: auto;
 }
 .pane-right {
   width: 330px;
+  min-width: 280px;
   flex-shrink: 0;
-  border-right: 1px solid #e4e7ed;
 }
 .pane-dog {
   width: 300px;
+  min-width: 240px;
   flex-shrink: 0;
+}
+
+/* 五栏之间的拖动分界（2026-10-29）：平时是一条 1px 分隔线，悬停变蓝 */
+.pane-splitter {
+  position: relative;
+  flex: 0 0 7px;
+  align-self: stretch;
+  background: #fff;
+  cursor: col-resize;
+  touch-action: none;
+}
+.pane-splitter::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+  background: #e4e7ed;
+  transition: background-color .15s, width .15s, left .15s;
+}
+.pane-splitter:hover::before,
+.pane-splitter:active::before {
+  left: 2px;
+  width: 3px;
+  background: #409eff;
 }
 .assessing-bar {
   height: 2px;
@@ -2127,17 +2361,6 @@ onBeforeUnmount(() => {
   font-size: 11px;
   color: #909399;
 }
-.preparation-method-select {
-  width: 118px;
-}
-.preparation-manage-btn {
-  flex-shrink: 0;
-  padding: 0 4px;
-}
-.preparation-source-empty {
-  font-size: 11px;
-  color: #c0c4cc;
-}
 .item-preparation-hint {
   flex-basis: 100%;
   padding-left: 22px;
@@ -2218,5 +2441,92 @@ onBeforeUnmount(() => {
 .dog-pane {
   padding: 0 12px;
   box-sizing: border-box;
+}
+
+/* ---------- 配方明细列头 + 固定列宽（2026-10-29） ---------- */
+/* 列头与原料行共用这一组列宽。这一栏窄到放不下时，
+   由文件末尾的容器查询退回原来的「换行 + 行内小字」布局。 */
+.pane-items {
+  --item-grid: 22px 40px minmax(0, 1fr) 240px 84px 50px 56px 34px;
+  container-type: inline-size;
+  container-name: pane-items;
+}
+.item-list {
+  /* 列头要贴在滚动区顶部，所以左右内边距挪到 .item-list-body；
+     列头与行的内容都从 15px 起（6 内边距 + 1 边框 + 8 行内边距）。 */
+  padding: 0;
+}
+.item-list-body {
+  padding: 6px;
+}
+.item-col-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: var(--item-grid);
+  column-gap: 5px;
+  align-items: center;
+  height: 30px;
+  padding: 0 15px;
+  background: #f7f8fa;
+  border-bottom: 1px solid #e4e7ed;
+  font-size: 11.5px;
+  color: #7f8a9a;
+  letter-spacing: .02em;
+}
+.item-col-head .col-center { text-align: center; }
+.item-col-head .col-right { text-align: right; }
+.col-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 11px;
+  height: 11px;
+  margin-left: 3px;
+  border: 1px solid #c3cbd6;
+  border-radius: 50%;
+  font-size: 8px;
+  line-height: 1;
+  color: #aab4c1;
+  vertical-align: 1px;
+}
+.item-row {
+  display: grid;
+  grid-template-columns: var(--item-grid);
+  column-gap: 5px;
+  align-items: center;
+}
+/* 宽屏：预处理/用量/占比/开关/删除不再包成一整块，直接成为网格里的列 */
+.item-controls,
+.item-action-stack {
+  display: contents;
+}
+.drag-handle { justify-self: center; }
+.item-type-tag { justify-self: center; }
+.item-preparation-inline { width: 100%; }
+.preparation-label { display: none; }
+.item-ratio-column { width: auto; }
+.item-preparation-hint,
+.item-supplement-row { grid-column: 1 / -1; }
+.item-row :deep(.el-switch),
+.item-row :deep(.el-button) { justify-self: center; }
+
+/* 这一栏窄于 760px 时（窄窗口 / 小屏）：
+   列头收起，回到原来的换行布局，行内小字也恢复，保证控件不丢。 */
+@container pane-items (max-width: 760px) {
+  .item-col-head { display: none; }
+  .item-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  .item-controls { display: flex; }
+  .item-action-stack { display: flex; }
+  .item-preparation-inline { width: auto; }
+  .preparation-label { display: inline; }
+  .item-ratio-column { width: 46px; }
+  .item-row :deep(.el-switch),
+  .item-row :deep(.el-button) { justify-self: auto; }
 }
 </style>

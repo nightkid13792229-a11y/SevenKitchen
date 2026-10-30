@@ -217,6 +217,7 @@ export type LaunchReadinessWarningCode =
   | 'MISSING_NUTRITION_DATA'
   | 'NUTRIENT_OUT_OF_RANGE'
   | 'TARGET_HEALTH_TAGS_MISSING'
+  | 'AI_DELIVERY_WARNING'
 
 export interface LaunchReadinessIssue<TCode extends string = string> {
   code: TCode
@@ -328,6 +329,8 @@ export interface DraftNutritionReportEnvelope {
 /** GET /recipe-designer/drafts/:id/launch-readiness */
 export interface DraftLaunchReadiness {
   draftId: string
+  /** 草稿所属系列；历史独立草稿为 null（抽屉据此决定能否改名/归类） */
+  seriesId: string | null
   designMode: DesignRecipeDesignMode
   ready: boolean
   blockers: LaunchReadinessBlocker[]
@@ -360,15 +363,14 @@ export type SeriesReleaseState =
 /** 发布问题归属：系列级设置 / 产品展示 / 单个生命阶段 */
 export type SeriesReleaseIssueScope = 'SERIES' | 'PRESENTATION' | 'STAGE'
 
+/** 阻断发布的问题（2026-10-26 起只剩封面图 / 一句话卖点两个门槛） */
 export type SeriesReleaseBlockerCode =
-  | 'REQUIRED_LIFE_STAGES_EMPTY'
-  | 'REQUIRED_LIFE_STAGE_UNKNOWN'
-  | 'REQUIRED_STAGE_NOT_READY'
   | 'COVER_IMAGE_REQUIRED'
-  | 'COVER_TITLE_REQUIRED'
   | 'SELLING_POINT_REQUIRED'
+  | 'TAXONOMY_REQUIRED'
 
-export type SeriesReleaseWarningCode = 'TARGET_HEALTH_TAGS_MISSING'
+/** 只提醒、不阻断的问题（未设置封面角标时封面左下角为空） */
+export type SeriesReleaseWarningCode = 'COVER_BADGE_MISSING'
 
 export interface SeriesReleaseIssue<TCode extends string = string> {
   code: TCode
@@ -398,8 +400,12 @@ export interface SeriesReleaseStageReadiness {
   hasPendingUpdate?: boolean
   /** 该阶段当前可编辑的设计草稿 id（没有草稿时为 null） */
   designDraftId?: string | null
-  /** 是否在 requiredLifeStages 里 */
-  required: boolean
+  /**
+   * 本次发布 / 更新是否可以操作：
+   *  · READY（已入库、待发布）；
+   *  · PUBLIC 且 hasPendingUpdate（已上线、有更新草稿）。
+   */
+  actionable: boolean
 }
 
 /** 系列级产品展示资料（发布时复制到每条阶段食谱） */
@@ -408,6 +414,8 @@ export interface SeriesReleasePresentation {
   coverTitle: string | null
   sellingPoint: string | null
   targetHealthTags: string[]
+  /** 系列封面角标（合规词表名称，只读回传，便于预览） */
+  coverBadges: string[]
 }
 
 /** GET /recipe-designer/series/:seriesId/release-readiness */
@@ -418,10 +426,10 @@ export interface SeriesReleaseReadiness {
   businessStatus: string
   /** 整条系列的展示状态：未上线 / 已上线（最新）/ 待重新发布 */
   releaseState: SeriesReleaseState
+  /** 展示资料是否齐全（封面图 + 一句话卖点） */
   ready: boolean
-  requiredLifeStages: string[]
-  /** 必填阶段（按阶段顺序，只包含配置里的阶段） */
-  requiredStages: SeriesReleaseStageReadiness[]
+  /** 是否可点「发布 / 更新」：展示资料齐全，且至少有一个可操作阶段 */
+  canRelease: boolean
   /** 全量阶段（便于后台展示「其它已设计阶段」） */
   stages: SeriesReleaseStageReadiness[]
   presentation: SeriesReleasePresentation
@@ -432,12 +440,18 @@ export interface SeriesReleaseReadiness {
   /** 有待更新草稿的阶段代码（按阶段顺序） */
   pendingStageCodes: string[]
   summary: {
-    requiredStageCount: number
-    readyStageCount: number
-    publishedStageCount: number
-    designedStageCount: number
+    totalStageCount: number
+    /** READY 阶段数（待发布） */
+    publishableStageCount: number
     /** 有待更新草稿的阶段数 */
     pendingStageCount: number
+    publishedStageCount: number
+    /** 已上线且没有待更新草稿的阶段数 */
+    upToDateStageCount: number
+    /** 有设计稿或已有阶段食谱的阶段数（不含 EMPTY） */
+    designedStageCount: number
+    /** 可操作阶段数（READY + PUBLIC 待更新） */
+    actionableStageCount: number
   }
 }
 
@@ -447,13 +461,9 @@ export interface SeriesReleaseReadiness {
  * patch semantics：只传需要修改的字段；显式 null 表示清空。
  */
 export interface UpdateRecipeSeriesReleaseSettingsPayload {
-  /** 必填生命阶段；后端按系统固定顺序保存，非法代码直接 400 */
-  requiredLifeStages?: string[]
   coverImageUrl?: string | null
   coverTitle?: string | null
   sellingPoint?: string | null
-  /** 目标健康标签（健康标签 id） */
-  targetHealthTags?: string[]
 }
 
 /** 发布设置保存后的响应（只返回系列发布相关字段） */
@@ -475,7 +485,7 @@ export interface SeriesReleaseResult {
   seriesId: string
   name: string
   businessStatus: string
-  requiredLifeStages: string[]
+  /** 本次实际发布 / 更新的阶段代码（首次发布=当前全部 READY） */
   releasedStageCodes: string[]
   /** 本次从 DRAFT 变成 PUBLIC 的食谱行数 */
   publishedRecipeCount: number
@@ -502,8 +512,17 @@ export interface SeriesUnpublishResult {
   unpublishedAt: string
 }
 
+/** AI 生成系列封面的结果（2026-10-27，POST /admin/recipe-series/:id/ai-cover） */
+export interface SeriesAiCoverResult {
+  /** 一定是 COS 地址（已转存），不是智谱临时链接 */
+  url: string
+  provider: string
+  model: string
+  /** 实际喂给提示词的食材（最多 5 个） */
+  foodNames: string[]
+}
+
 /** 原料预处理来源：AUTO = 系统带出；MANUAL = 人工修改 */
-export type DesignerPreparationSource = 'AUTO' | 'MANUAL'
 
 export interface DesignerItem {
   id: string
@@ -556,9 +575,7 @@ export interface DesignerItem {
   /** 后端解析后的烹饪方式文字名（UUID 已解析为名称，旧文本原样保留） */
   preparationMethodLabel?: string | null
   /** 原料预处理补充说明（2026-10-22） */
-  preparationNote?: string | null
   /** 原料预处理来源：AUTO = 系统带出；MANUAL = 人工修改 */
-  preparationSource?: DesignerPreparationSource | null
   nutrientTargetKey?: string | null
   nutrientTargetValue?: number | null
   /** 补剂目标营养素定义与计算值 */
@@ -609,7 +626,6 @@ export interface DesignRecipeDraftDetail {
   } | null
   items: DesignerItem[]
   /** 可选烹饪方式（后端真实列表） */
-  preparationMethodOptions?: Array<{ id: string; name: string }>
 }
 
 /**
@@ -839,7 +855,6 @@ export interface DogDesignInsight {
     requestedProteinCodes: string[]
     createdAt: string | null
   } | null
-  aiEnabled: boolean
 }
 
 export interface UpdateDogDesignNotesPayload {
@@ -847,162 +862,6 @@ export interface UpdateDogDesignNotesPayload {
   pickyFoods?: string | null
   preferredFoods?: string | null
   medicalHistory?: string | null
-}
-
-/**
- * AI 设计建议（POST /recipe-designer/dogs/:dogId/design-insight/ai-suggest）
- */
-export interface AiDesignSuggestion {
-  summary: string
-  ingredientSuggestions: Array<{ name: string; reason: string }>
-  avoidIngredients: Array<{ name: string; reason: string }>
-  nutritionFocus: Array<{ point: string; reason: string }>
-  supplementSuggestions: Array<{ name: string; reason: string }>
-  reuseSuggestions: Array<{ name: string; reason: string }>
-  warnings: string[]
-  provider: string
-}
-
-/**
- * AI 设计建议四步向导类型（对应 backend recipe-ai-wizard）
- */
-
-// 步骤一：营养方案
-export interface NutritionPlanCitation {
-  id: string
-  source: string
-  chapter?: string
-}
-
-export interface NutritionFocusPoint {
-  point: string
-  reason: string
-  citationIds?: string[]
-}
-
-export interface MacroRatioPlan {
-  protein: string
-  fat: string
-  carbohydrate: string
-  note?: string
-}
-
-export interface NutritionPlanResult {
-  summary: string
-  caloriesPerDayKcal: number | null
-  caloriesBasis: string
-  mealsPerDay: number | null
-  macroRatio: MacroRatioPlan | null
-  nutritionFocus: NutritionFocusPoint[]
-  precautions: NutritionFocusPoint[]
-  citations: NutritionPlanCitation[]
-  warnings: string[]
-}
-
-// 步骤二：食材推荐
-export interface IngredientRecommendationItem {
-  name: string
-  category: string
-  categoryLabel: string
-  inLibrary: boolean
-  ingredientId?: string
-  nutritionFoodId?: string
-  suggestedWeightG: number | null
-  reason: string
-  avoidRecent?: boolean
-}
-
-export interface IngredientRecommendationResult {
-  framework: {
-    templateName: string
-    covered: string[]
-    missing: string[]
-    note?: string
-  }
-  recommendations: IngredientRecommendationItem[]
-  avoidIngredients: Array<{ name: string; reason: string }>
-  diversityNotes: string[]
-  warnings: string[]
-}
-
-// 步骤三：食谱审核
-export type ReviewIssueLevel = 'error' | 'warning' | 'info'
-export type ReviewIssueCategory =
-  | 'structure'
-  | 'ratio'
-  | 'diversity'
-  | 'plan'
-  | 'nutrition'
-
-export interface ReviewIssue {
-  level: ReviewIssueLevel
-  category: ReviewIssueCategory
-  message: string
-  suggestion?: string
-  suggestedIngredient?: {
-    name: string
-    category?: string
-    weightG?: number
-  }
-}
-
-export interface RecipeReviewResult {
-  overall: 'pass' | 'attention' | 'risk'
-  summary: string
-  issues: ReviewIssue[]
-  planDeviations: Array<{ item: string; expected: string; actual: string }>
-  warnings: string[]
-}
-
-// 步骤四：制作 SOP
-export interface SopStep {
-  title: string
-  description: string
-  ingredients?: string[]
-  temperature?: string
-  duration?: string
-  equipment?: string
-  qualityCheck?: string
-}
-
-export interface SopStage {
-  stage: string
-  steps: SopStep[]
-}
-
-export interface SopResult {
-  production: SopStage[]
-  customer: SopStage[]
-  warnings: string[]
-}
-
-// 向导持久化数据（GET /recipe-designer/drafts/:id/ai-design-data）
-export interface RecipeAiDesignData {
-  nutritionPlan?: {
-    result: NutritionPlanResult
-    accepted: boolean
-    acceptedAt?: string
-    note?: string
-  } | null
-  nutritionPlanHistory: Array<{
-    result: NutritionPlanResult
-    note?: string
-    createdAt: string
-  }>
-  ingredientRecommendations: Array<{
-    result: IngredientRecommendationResult
-    createdAt: string
-  }>
-  reviewResults: Array<{
-    result: RecipeReviewResult
-    createdAt: string
-  }>
-  sop?: {
-    result: SopResult
-    accepted: boolean
-    acceptedAt?: string
-  } | null
-  updatedAt: string
 }
 
 export interface IngredientNutrientMatch {
@@ -1101,6 +960,24 @@ export type RecipeAgentSessionStatus =
 
 export type RecipeAgentMessageRole = 'USER' | 'ASSISTANT' | 'TOOL'
 
+export type RecipeAgentApprovalType =
+  | 'COMPLIANCE_EXCEPTION'
+  | 'CATEGORY_OMISSION'
+
+export type RecipeAgentApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
+
+export interface RecipeAgentApproval {
+  id: string
+  sessionId: string
+  type: RecipeAgentApprovalType
+  status: RecipeAgentApprovalStatus
+  reason: string
+  detail?: unknown
+  decidedBy?: string | null
+  decidedAt?: string | null
+  createdAt: string
+}
+
 export interface RecipeAgentSession {
   id: string
   designRecipeId: string
@@ -1110,6 +987,10 @@ export interface RecipeAgentSession {
   stepCount: number
   promptTokens: number
   completionTokens: number
+  /** 本轮开始时的累计快照：本次 = 当前累计 - 本轮起点（老响应可能没有） */
+  runStartStepCount?: number | null
+  runStartPromptTokens?: number | null
+  runStartCompletionTokens?: number | null
   startedAt: string
   endedAt: string | null
   lastError: string | null
@@ -1130,7 +1011,79 @@ export interface RecipeAgentMessage {
   createdAt: string
 }
 
+/**
+ * Agent 交付确认卡。
+ *
+ * 后端在 Agent 产出交付内容时生成；`summary` 是给人工复核的交付说明，
+ * `warnings` 是必须让人看见但不能自动阻断的提醒。
+ */
+export interface RecipeAgentDelivery {
+  summary: string
+  warnings: string[]
+  /** 交付内容对应的草稿内容版本 */
+  contentRevision: number
+  /** ISO 时间 */
+  createdAt: string
+}
+
+/** 会话所属的设计模式：CATALOG = 产品线；ORDER = 本单定制 */
+export type RecipeAgentSessionMode = {
+  designMode: 'CATALOG' | 'ORDER'
+  /** ORDER 模式绑定的订单号；产品线设计缺省 / null */
+  orderId?: string | null
+}
+
 export interface RecipeAgentSessionView {
   session: RecipeAgentSession
   messages: RecipeAgentMessage[]
+  approvals?: RecipeAgentApproval[]
+  /** 会话所属的设计模式；旧响应没有这个字段时按产品线处理 */
+  mode?: RecipeAgentSessionMode | null
+  /** 最近一次交付确认卡；没有交付过时为 null / 缺省 */
+  delivery?: RecipeAgentDelivery | null
+}
+
+// ===== 需求分类（2026-10-26 第一阶段）=====
+
+export interface TaxonomyNodeView {
+  id: string
+  kindId: string
+  parentId: string | null
+  name: string
+  definition: string
+  sort: number
+  status: 'ACTIVE' | 'DISABLED'
+  /** 直接归到本节点的系列数 */
+  seriesCount: number
+  /** 含子孙系列的合计，父节点用 */
+  rollupSeriesCount: number
+  children: TaxonomyNodeView[]
+}
+
+export interface TaxonomyKindView {
+  id: string
+  code: string
+  name: string
+  sort: number
+  nodes: TaxonomyNodeView[]
+  rollupSeriesCount: number
+}
+
+export interface TaxonomySeriesLink {
+  kindId: string
+  kindCode: string
+  kindName: string
+  nodeId: string
+  nodeName: string
+}
+
+export interface TaxonomySeriesItem {
+  id: string
+  name: string
+  businessStatus: string
+  referenceDogName: string | null
+  updatedAt: string
+  links: TaxonomySeriesLink[]
+  /** 还没归的分类 code，顺序与分类 sort 一致 */
+  missingKindCodes: string[]
 }

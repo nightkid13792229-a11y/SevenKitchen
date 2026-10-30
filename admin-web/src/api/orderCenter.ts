@@ -18,6 +18,8 @@ export interface OrderCenterQuery {
   dateField?: 'created' | 'packing'
   keyword?: string
   aftersale?: boolean
+  /** 只看赠送单（2026-10-30）；只对食谱定制生效 */
+  gift?: boolean
   page?: number
   pageSize?: number
 }
@@ -36,6 +38,8 @@ export interface OrderCenterItem {
   statusLabel: string
   subtypeLabel: string | null
   amountTotal: number | null
+  /** 赠送单（2026-10-30）：金额 0，列表上要标出来 */
+  isGift?: boolean
   createdAt: string
   paidAt: string | null
   scheduledDate: string | null

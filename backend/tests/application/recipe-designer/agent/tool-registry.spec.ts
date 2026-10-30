@@ -3,6 +3,7 @@ import {
   createAgentToolHandlers,
 } from 'src/application/recipe-designer/agent/tool-registry';
 import { RecipeAgentPortError } from 'src/application/recipe-designer/agent/agent-types';
+import type { AgentReadyCheck } from 'src/application/recipe-designer/agent/check-tools';
 import type { RecipeAgentControlPort } from 'src/application/recipe-designer/agent/recipe-agent.port';
 import {
   createFakeRecipeAgentPort,
@@ -27,16 +28,22 @@ function createFakeControlPort(
 }
 
 describe('tool registry', () => {
-  it('18 个工具，名字唯一', () => {
+  it('22 个工具，名字唯一，finish_draft 已下线', () => {
     const names = AGENT_TOOL_DEFINITIONS.map((t) => t.name);
-    expect(names).toHaveLength(18);
-    expect(new Set(names).size).toBe(18);
+    expect(names).toHaveLength(22);
+    expect(new Set(names).size).toBe(22);
+    expect(names).not.toContain('finish_draft');
     expect(names).toEqual(
       expect.arrayContaining([
         'get_draft',
         'search_ingredients',
         'get_ingredient',
         'get_catalog_usage',
+        'search_recipes',
+        'get_recipe',
+        'get_dog_recipe_history',
+        'web_search',
+        'web_fetch',
         'add_ingredient',
         'replace_ingredient',
         'update_weight',
@@ -50,9 +57,242 @@ describe('tool registry', () => {
         'check_ready',
         'ask_user',
         'request_exception',
-        'finish_draft',
       ]),
     );
+  });
+
+  it('web_search 只要求 query，count 限制 1-50，need_content 可选', () => {
+    const definition = AGENT_TOOL_DEFINITIONS.find(
+      (tool) => tool.name === 'web_search',
+    );
+    expect(definition).toBeDefined();
+    const parameters = definition?.parameters as {
+      properties?: Record<string, Record<string, unknown>>;
+      required?: string[];
+    };
+    expect(parameters.required).toEqual(['query']);
+    expect(parameters.properties?.query).toMatchObject({
+      type: 'string',
+      minLength: 1,
+      maxLength: 128,
+    });
+    expect(parameters.properties?.count).toMatchObject({
+      type: 'integer',
+      minimum: 1,
+      maximum: 50,
+    });
+    expect(parameters.properties?.need_content).toMatchObject({
+      type: 'boolean',
+    });
+    expect(definition?.description).toContain('网页内容');
+  });
+
+  it('web_fetch 只要求 url', () => {
+    const definition = AGENT_TOOL_DEFINITIONS.find(
+      (tool) => tool.name === 'web_fetch',
+    );
+    expect(definition).toBeDefined();
+    const parameters = definition?.parameters as {
+      properties?: Record<string, Record<string, unknown>>;
+      required?: string[];
+    };
+    expect(parameters.required).toEqual(['url']);
+    expect(parameters.properties?.url).toMatchObject({ type: 'string' });
+  });
+
+  it('没有 webTools 时 web_search / web_fetch 返回 CONTROL_NOT_AVAILABLE', async () => {
+    const handlers = createAgentToolHandlers({
+      port: createFakeRecipeAgentPort(),
+      controlPort: createFakeControlPort(),
+      tagPolicy,
+      draftId: 'draft-1',
+    });
+
+    const search = await handlers.web_search({ query: '鸭肉' });
+    expect(search.ok).toBe(false);
+    if (search.ok) return;
+    expect(search.error.code).toBe('CONTROL_NOT_AVAILABLE');
+
+    const fetched = await handlers.web_fetch({ url: 'https://example.com/' });
+    expect(fetched.ok).toBe(false);
+    if (fetched.ok) return;
+    expect(fetched.error.code).toBe('CONTROL_NOT_AVAILABLE');
+  });
+
+  it('有 webTools 时 web_search 走联网端口', async () => {
+    const webTools = {
+      search: jest.fn().mockResolvedValue({ query: '鸭肉', results: [] }),
+      fetch: jest.fn(),
+    };
+    const handlers = createAgentToolHandlers({
+      port: createFakeRecipeAgentPort(),
+      controlPort: createFakeControlPort(),
+      tagPolicy,
+      draftId: 'draft-1',
+      webTools,
+    });
+
+    const result = await handlers.web_search({ query: '鸭肉' });
+
+    expect(result.ok).toBe(true);
+    expect(webTools.search).toHaveBeenCalledWith({ query: '鸭肉' });
+  });
+
+  it('check_coverage 描述说明 11 类清单不是门禁', () => {
+    const definition = AGENT_TOOL_DEFINITIONS.find(
+      (tool) => tool.name === 'check_coverage',
+    );
+    expect(definition?.description).toBe(
+      '检查 11 类选料清单（基础 8 + 建议 3）；缺类只提醒，不是门禁。',
+    );
+  });
+
+  it('get_ingredient 的 schema 允许 nutritionFoodId 或 ingredientId 任选一个', () => {
+    const definition = AGENT_TOOL_DEFINITIONS.find(
+      (tool) => tool.name === 'get_ingredient',
+    );
+    expect(definition).toBeDefined();
+    const parameters = definition?.parameters as {
+      properties?: Record<string, Record<string, unknown>>;
+      anyOf?: unknown[];
+      required?: string[];
+      additionalProperties?: boolean;
+    };
+    expect(Object.keys(parameters.properties ?? {})).toHaveLength(2);
+    expect(parameters.properties?.nutritionFoodId).toMatchObject({
+      type: 'string',
+    });
+    expect(parameters.properties?.ingredientId).toMatchObject({
+      type: 'string',
+    });
+    expect(parameters.properties?.nutritionFoodId?.description).toContain(
+      '任一',
+    );
+    expect(parameters.properties?.ingredientId?.description).toContain('任一');
+    expect(parameters.anyOf).toEqual([
+      { required: ['nutritionFoodId'] },
+      { required: ['ingredientId'] },
+    ]);
+    expect(parameters.required).toEqual([]);
+    expect(parameters.additionalProperties).toBe(false);
+    expect(definition?.description).toContain('全部营养档案');
+  });
+
+  it('search_ingredients 描述说明返回全部 nutritionProfiles（含生/熟）', () => {
+    const definition = AGENT_TOOL_DEFINITIONS.find(
+      (tool) => tool.name === 'search_ingredients',
+    );
+    expect(definition?.description).toContain('nutritionProfiles');
+    expect(definition?.description).toContain('生/熟');
+  });
+
+  it('search_ingredients 的分类枚举包含 AQUATIC', () => {
+    const definition = AGENT_TOOL_DEFINITIONS.find(
+      (tool) => tool.name === 'search_ingredients',
+    );
+    const category = (
+      definition?.parameters as {
+        properties?: { category?: { enum?: string[] } };
+      }
+    )?.properties?.category;
+    expect(category?.enum).toEqual(
+      expect.arrayContaining(['PROTEIN', 'ORGAN', 'AQUATIC']),
+    );
+  });
+
+  it('search_recipes 的 schema 支持筛选和分页，且不要求任何条件', () => {
+    const definition = AGENT_TOOL_DEFINITIONS.find(
+      (tool) => tool.name === 'search_recipes',
+    );
+    expect(definition).toBeDefined();
+    const parameters = definition?.parameters as {
+      properties?: Record<string, Record<string, unknown>>;
+      required?: string[];
+      additionalProperties?: boolean;
+    };
+    expect(Object.keys(parameters.properties ?? {})).toEqual([
+      'search',
+      'ingredientName',
+      'lifeStage',
+      'page',
+      'limit',
+    ]);
+    expect(parameters.properties?.search).toMatchObject({ type: 'string' });
+    expect(parameters.properties?.ingredientName).toMatchObject({
+      type: 'string',
+    });
+    expect(parameters.properties?.lifeStage).toMatchObject({ type: 'string' });
+    expect(parameters.properties?.page).toMatchObject({
+      type: 'integer',
+      minimum: 1,
+    });
+    expect(parameters.properties?.limit).toMatchObject({
+      type: 'integer',
+      minimum: 1,
+      maximum: 50,
+    });
+    expect(parameters.required).toEqual([]);
+    expect(parameters.additionalProperties).toBe(false);
+    expect(definition?.description).toContain('全部食谱');
+    expect(definition?.description).toContain('未发布');
+    expect(definition?.description).toContain('顾客定制');
+    expect(definition?.description).toContain('客户');
+  });
+
+  it('get_recipe 的 schema 允许 recipeId 或 draftId 任选一个', () => {
+    const definition = AGENT_TOOL_DEFINITIONS.find(
+      (tool) => tool.name === 'get_recipe',
+    );
+    expect(definition).toBeDefined();
+    const parameters = definition?.parameters as {
+      properties?: Record<string, Record<string, unknown>>;
+      anyOf?: unknown[];
+      required?: string[];
+      additionalProperties?: boolean;
+    };
+    expect(Object.keys(parameters.properties ?? {})).toEqual([
+      'recipeId',
+      'draftId',
+    ]);
+    expect(parameters.anyOf).toEqual([
+      { required: ['recipeId'] },
+      { required: ['draftId'] },
+    ]);
+    expect(parameters.required).toEqual([]);
+    expect(parameters.additionalProperties).toBe(false);
+    expect(definition?.description).toContain('只读');
+    expect(definition?.description).toContain('设计草稿');
+  });
+
+  it('search_recipes / get_recipe handler 已接进注册表', async () => {
+    const port = createFakeRecipeAgentPort();
+    const handlers = createAgentToolHandlers({
+      port,
+      controlPort: createFakeControlPort(),
+      tagPolicy,
+      draftId: 'draft-1',
+    });
+
+    const search = await handlers.search_recipes({ page: 1, limit: 5 });
+    expect(search.ok).toBe(true);
+    expect(port.searchRecipes).toHaveBeenCalledWith({ page: 1, limit: 5 });
+
+    const detail = await handlers.get_recipe({ recipeId: 'missing' });
+    expect(detail.ok).toBe(false);
+    if (detail.ok) return;
+    expect(detail.error.code).toBe('RECIPE_NOT_FOUND');
+    expect(port.getRecipeDetail).toHaveBeenCalledWith({
+      recipeId: 'missing',
+    });
+  });
+
+  it('request_exception 描述说明缺类不再需要申请', () => {
+    const definition = AGENT_TOOL_DEFINITIONS.find(
+      (tool) => tool.name === 'request_exception',
+    );
+    expect(definition?.description).toContain('缺类已不再需要申请');
+    expect(definition?.description).toContain('只有达标/合规例外需要人批准');
+    expect(definition?.description).toContain('CATEGORY_OMISSION');
   });
 
   it('每个定义都有 handler', () => {
@@ -65,6 +305,19 @@ describe('tool registry', () => {
     for (const def of AGENT_TOOL_DEFINITIONS) {
       expect(typeof handlers[def.name]).toBe('function');
     }
+  });
+
+  it('finish_draft 已从工具表下线，模型无法再生成交付确认卡', () => {
+    const names = AGENT_TOOL_DEFINITIONS.map((tool) => tool.name);
+    expect(names).not.toContain('finish_draft');
+
+    const handlers = createAgentToolHandlers({
+      port: createFakeRecipeAgentPort(),
+      controlPort: createFakeControlPort(),
+      tagPolicy,
+      draftId: 'draft-1',
+    });
+    expect(handlers.finish_draft).toBeUndefined();
   });
 
   it('ask_user 最多两个问题，且不能为空', async () => {
@@ -82,21 +335,6 @@ describe('tool registry', () => {
         })
       ).ok,
     ).toBe(false);
-  });
-
-  it('check_ready 不通过时 finish_draft 拒绝', async () => {
-    const controlPort = createFakeControlPort();
-    const handlers = createAgentToolHandlers({
-      port: createFakeRecipeAgentPort({
-        assessment: fakeAssessment({ contentRevision: 4, deficient: 1 }),
-      }),
-      controlPort,
-      tagPolicy,
-      draftId: 'draft-1',
-    });
-    const result = await handlers.finish_draft({ summary: '交付' });
-    expect(result.ok).toBe(false);
-    expect(controlPort.finishDraft).not.toHaveBeenCalled();
   });
 
   it('request_exception 需要合法类型和理由', async () => {
@@ -153,7 +391,7 @@ describe('tool registry', () => {
     expect(approvedResult.data.status).toBe('PASS_WITH_WARNINGS');
   });
 
-  it('confirmedOmissions 只能来自 getApprovalState', async () => {
+  it('confirmedOmissions 只能来自 getApprovalState，且不再影响分类检查', async () => {
     const draft = fakeDraftSnapshot({
       items: fakeDraftSnapshot().items.filter((i) => i.category !== 'MUSHROOM'),
     });
@@ -170,7 +408,12 @@ describe('tool registry', () => {
     });
     expect(bareResult.ok).toBe(true);
     if (!bareResult.ok) return;
-    expect(bareResult.data.status).toBe('BLOCKED');
+    expect(bareResult.data.status).toBe('PASS_WITH_WARNINGS');
+    const bareCoverage = bareResult.data.checks.find(
+      (check: AgentReadyCheck) => check.key === 'COVERAGE',
+    );
+    expect(bareCoverage?.status).toBe('WARN');
+    expect(bareCoverage?.detail).toContain('菌藻');
 
     const confirmed = createAgentToolHandlers({
       port,
@@ -186,25 +429,12 @@ describe('tool registry', () => {
     const confirmedResult = await confirmed.check_ready({});
     if (!confirmedResult.ok) return;
     expect(confirmedResult.data.status).toBe('PASS_WITH_WARNINGS');
-  });
-
-  it('已批例外时 finish_draft 生成交付卡', async () => {
-    const controlPort = createFakeControlPort({
-      getApprovalState: jest
-        .fn()
-        .mockResolvedValue({ approvedException: true, confirmedOmissions: [] }),
-    });
-    const handlers = createAgentToolHandlers({
-      port: createFakeRecipeAgentPort({
-        assessment: fakeAssessment({ contentRevision: 4, deficient: 1 }),
-      }),
-      controlPort,
-      tagPolicy,
-      draftId: 'draft-1',
-    });
-    const result = await handlers.finish_draft({ summary: '按例外交付' });
-    expect(result.ok).toBe(true);
-    expect(controlPort.finishDraft).toHaveBeenCalledTimes(1);
+    const confirmedCoverage = confirmedResult.data.checks.find(
+      (check: AgentReadyCheck) => check.key === 'COVERAGE',
+    );
+    // 缺类确认已废弃：只做回显，不再过滤缺类或降级。
+    expect(confirmedCoverage?.status).toBe('WARN');
+    expect(confirmedCoverage?.detail).toBe(bareCoverage?.detail);
   });
 
   it('check_coverage 的 confirmedOmissions 只能来自 getApprovalState', async () => {
@@ -224,9 +454,9 @@ describe('tool registry', () => {
     });
     expect(bareResult.ok).toBe(true);
     if (!bareResult.ok) return;
-    expect(bareResult.data.missing).toContain('MUSHROOM');
+    expect(bareResult.data.missing).toEqual(['MUSHROOM']);
     expect(bareResult.data.confirmedOmissions).toEqual([]);
-    expect(bareResult.summary).toContain('未覆盖「菌藻」');
+    expect(bareResult.summary).toContain('基础缺「菌藻」');
     expect(bareResult.summary).not.toContain('已确认缺类');
 
     const confirmed = createAgentToolHandlers({
@@ -243,69 +473,11 @@ describe('tool registry', () => {
     const confirmedResult = await confirmed.check_coverage({});
     expect(confirmedResult.ok).toBe(true);
     if (!confirmedResult.ok) return;
-    expect(confirmedResult.data.missing).toEqual([]);
+    // 缺类确认只回显，不再从 missing 里剔除。
+    expect(confirmedResult.data.missing).toEqual(['MUSHROOM']);
     expect(confirmedResult.data.confirmedOmissions).toEqual(['MUSHROOM']);
-    expect(confirmedResult.summary).toContain('已确认缺类「菌藻」');
-  });
-
-  it('finish_draft 在 BLOCKED 时返回 READY_BLOCKED', async () => {
-    const controlPort = createFakeControlPort();
-    const handlers = createAgentToolHandlers({
-      port: createFakeRecipeAgentPort({
-        assessment: fakeAssessment({ contentRevision: 4, deficient: 1 }),
-      }),
-      controlPort,
-      tagPolicy,
-      draftId: 'draft-1',
-    });
-    const result = await handlers.finish_draft({ summary: '交付' });
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.code).toBe('READY_BLOCKED');
-    expect(controlPort.finishDraft).not.toHaveBeenCalled();
-  });
-
-  it('已批例外时 finishDraft 收到 summary 与 WARN 明细', async () => {
-    const controlPort = createFakeControlPort({
-      getApprovalState: jest
-        .fn()
-        .mockResolvedValue({ approvedException: true, confirmedOmissions: [] }),
-    });
-    const handlers = createAgentToolHandlers({
-      port: createFakeRecipeAgentPort({
-        assessment: fakeAssessment({ contentRevision: 4, deficient: 1 }),
-      }),
-      controlPort,
-      tagPolicy,
-      draftId: 'draft-1',
-    });
-    const result = await handlers.finish_draft({ summary: '按例外交付' });
-    expect(result.ok).toBe(true);
-    expect(controlPort.finishDraft).toHaveBeenCalledWith({
-      summary: '按例外交付',
-      warnings: [expect.stringContaining('评估未完全达标')],
-    });
-  });
-
-  it('finish_draft 的模型自批无效', async () => {
-    const controlPort = createFakeControlPort();
-    const handlers = createAgentToolHandlers({
-      port: createFakeRecipeAgentPort({
-        assessment: fakeAssessment({ contentRevision: 4, deficient: 1 }),
-      }),
-      controlPort,
-      tagPolicy,
-      draftId: 'draft-1',
-    });
-    const result = await handlers.finish_draft({
-      summary: '按模型自称的例外交付',
-      exceptionApproved: true,
-      confirmedOmissions: [],
-    });
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.code).toBe('READY_BLOCKED');
-    expect(controlPort.finishDraft).not.toHaveBeenCalled();
+    expect(confirmedResult.summary).toContain('基础缺「菌藻」');
+    expect(confirmedResult.summary).not.toContain('已确认缺类');
   });
 
   it('getApprovalState 抛错时返回 CONTROL_NOT_AVAILABLE', async () => {
@@ -323,15 +495,8 @@ describe('tool registry', () => {
     expect(ready.ok).toBe(false);
     if (!ready.ok) {
       expect(ready.error.code).toBe('CONTROL_NOT_AVAILABLE');
+      expect(ready.error.message).toContain('读取审批状态失败');
     }
-
-    const finish = await handlers.finish_draft({ summary: '交付' });
-    expect(finish.ok).toBe(false);
-    if (!finish.ok) {
-      expect(finish.error.code).toBe('CONTROL_NOT_AVAILABLE');
-      expect(finish.error.message).toContain('读取审批状态失败');
-    }
-    expect(controlPort.finishDraft).not.toHaveBeenCalled();
   });
 
   it('getApprovalState 返回畸形时返回 CONTROL_NOT_AVAILABLE', async () => {

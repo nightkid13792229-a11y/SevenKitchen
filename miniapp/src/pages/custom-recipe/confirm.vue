@@ -8,7 +8,8 @@
     <view v-else-if="loadError" class="state-card">
       <text class="state-title">{{ loadError }}</text>
       <text class="state-desc">返回定制页修改后再试</text>
-      <button class="state-btn" @tap="backToCustom">返回定制页</button>
+      <button class="state-btn" @tap="retryLoad">重试</button>
+      <button class="state-btn state-btn--ghost" @tap="backToCustom">返回定制页</button>
     </view>
 
     <template v-else>
@@ -18,7 +19,13 @@
           <text class="title-text">定制对象</text>
         </view>
         <view class="dog-card">
-          <view class="dog-avatar">🐕</view>
+          <image
+            v-if="dogAvatar"
+            class="dog-avatar dog-avatar--image"
+            :src="dogAvatar"
+            mode="aspectFill"
+          />
+          <view v-else class="dog-avatar">🐕</view>
           <view class="dog-info">
             <text class="dog-name">{{ dogName }}</text>
             <text class="dog-line">{{ dogLine }}</text>
@@ -229,16 +236,33 @@
         </view>
       </view>
 
+      <view v-if="singleFeeMissing" class="fee-missing">
+        定制费用没读取出来，请返回重试或联系 Seven爸爸。
+      </view>
+      <text class="refund-policy">
+        支付后未开始制作可全额退款；开始制作后如需退款，请联系 Seven爸爸审核。
+      </text>
+
       <view class="bottom-space" />
 
       <view class="bottom-bar">
-        <button
-          class="btn-submit"
-          :disabled="!canSubmit"
-          @tap="submitConfirmedOrder(true)"
-        >
-          {{ payButtonText }}
-        </button>
+        <view class="bottom-main">
+          <view v-if="optionLoadingText" class="option-wait-note">
+            <text class="option-wait-text">{{ optionLoadingText }}</text>
+            <text
+              v-if="optionsFailed"
+              class="option-wait-retry"
+              @tap="retryOptions"
+            >重试</text>
+          </view>
+          <button
+            class="btn-submit"
+            :disabled="!canSubmit"
+            @tap="submitConfirmedOrder"
+          >
+            {{ payButtonText }}
+          </button>
+        </view>
       </view>
       </template>
 
@@ -251,8 +275,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onUnmounted } from 'vue';
-import { onLoad } from '@dcloudio/uni-app';
+import { computed, ref, watch, onUnmounted } from 'vue';
+import { onBackPress, onLoad } from '@dcloudio/uni-app';
 import { dogApi } from '@/api/dogs';
 import {
   fetchCustomRecipeQuote,
@@ -274,6 +298,11 @@ import {
 } from '@/utils/custom-recipe-pricing';
 import { useOptionSet } from '@/utils/option-set';
 import { getStoredUser } from '@/utils/account';
+import { resolveDogAvatarSrc } from '@/utils/dog-avatar';
+import {
+  clearCustomRecipeSubmitKey,
+  getOrCreateCustomRecipeSubmitKey,
+} from '@/utils/custom-recipe-submit-key';
 import {
   isCustomRecipeDraftExpired,
   loadCustomRecipeDraft,
@@ -283,17 +312,15 @@ import {
 } from '@/utils/custom-recipe-draft';
 import { refreshCustomRecipeDraftMedia } from '@/utils/custom-recipe-media';
 import {
+  loadCustomRecipeMultiChoice,
+  saveCustomRecipeMultiChoice,
+} from '@/utils/custom-recipe-multi-choice';
+import {
   requestCustomRecipeOrderSubscription,
   runCustomRecipePayment,
+  type CustomRecipePayOutcome,
 } from '@/utils/custom-recipe-payment';
-import {
-  buildPaymentTimeoutHint,
-  formatAmount,
-  formatDate,
-  isPaymentExpired,
-  resolvePaymentDeadlineAt,
-} from '@/utils/custom-recipe-order';
-import { CUSTOM_RECIPE_STATUS_SET } from '@/utils/option-set';
+import { formatAmount } from '@/utils/custom-recipe-order';
 
 const dogId = ref('');
 const draft = ref<CustomRecipeDraft | null>(null);
@@ -306,8 +333,6 @@ const submitting = ref(false);
 /** 订单创建后的页面状态：确认页合并支付页，不再跳提交成功页 */
 const createdOrder = ref<any>(null);
 const postPaying = ref(false);
-const nowTick = ref(Date.now());
-let paymentClockTimer: ReturnType<typeof setInterval> | null = null;
 /** 本次确认页的幂等键：网络超时重试时后端返回同一张订单 */
 const clientRequestId = ref('');
 
@@ -331,16 +356,34 @@ const deliveryLoading = ref(false);
 const deliveryError = ref('');
 let deliveryRequestSeq = 0;
 
+// 不用“解构别名”：ref-scope 守卫对跨行解构别名有误判风险，拆成显式常量
+const currentFoodSet = useOptionSet('custom_recipe_current_food');
 const { ensure: ensureCurrentFoodOptions, labelOf: currentFoodLabel } =
-  useOptionSet('custom_recipe_current_food');
-const { ensure: ensureChangeReasonOptions, labelOf: changeReasonLabel } =
-  useOptionSet('custom_recipe_change_reason');
-const { ensure: ensureStomachOptions, labelOf: stomachLabel } =
-  useOptionSet('custom_recipe_stomach');
-const { ensure: ensureGoalOptions, labelOf: goalLabel } =
-  useOptionSet('custom_recipe_goal');
-const { ensure: ensureStatusOptions, labelOf: statusLabel } =
-  useOptionSet(CUSTOM_RECIPE_STATUS_SET);
+  currentFoodSet;
+const currentFoodOptions = currentFoodSet.items;
+const currentFoodLoading = currentFoodSet.loading;
+const currentFoodFailed = currentFoodSet.failed;
+
+const changeReasonSet = useOptionSet('custom_recipe_change_reason');
+const {
+  ensure: ensureChangeReasonOptions,
+  labelOf: changeReasonLabel,
+} = changeReasonSet;
+const changeReasonOptions = changeReasonSet.items;
+const changeReasonLoading = changeReasonSet.loading;
+const changeReasonFailed = changeReasonSet.failed;
+
+const stomachSet = useOptionSet('custom_recipe_stomach');
+const { ensure: ensureStomachOptions, labelOf: stomachLabel } = stomachSet;
+const stomachOptions = stomachSet.items;
+const stomachLoading = stomachSet.loading;
+const stomachFailed = stomachSet.failed;
+
+const goalSet = useOptionSet('custom_recipe_goal');
+const { ensure: ensureGoalOptions, labelOf: goalLabel } = goalSet;
+const goalOptions = goalSet.items;
+const goalLoading = goalSet.loading;
+const goalFailed = goalSet.failed;
 
 const form = computed<Record<string, any>>(
   () => (draft.value?.form || {}) as Record<string, any>,
@@ -366,11 +409,56 @@ const dogLine = computed(() => {
   return parts.join(' · ') || '档案信息以定制页为准';
 });
 
+const dogAvatar = computed(() =>
+  resolveDogAvatarSrc(dog.value?.avatarUrl || dog.value?.avatar),
+);
+
+/**
+ * 确认页展示的选项字典。支付前必须等它们读到：
+ * 否则摘要会出现空白/“、”，顾客在看不到自己选了什么的情况下付钱。
+ */
+const optionsLoading = computed(
+  () =>
+    currentFoodLoading.value ||
+    changeReasonLoading.value ||
+    stomachLoading.value ||
+    goalLoading.value,
+);
+const optionsFailed = computed(
+  () =>
+    currentFoodFailed.value ||
+    changeReasonFailed.value ||
+    stomachFailed.value ||
+    goalFailed.value,
+);
+const optionsReady = computed(
+  () =>
+    !optionsLoading.value &&
+    !optionsFailed.value &&
+    currentFoodOptions.value.length > 0 &&
+    changeReasonOptions.value.length > 0 &&
+    goalOptions.value.length > 0,
+);
+
+const optionLoadingText = computed(() =>
+  optionsFailed.value
+    ? '定制选项没加载出来'
+    : optionsLoading.value
+      ? '正在读取定制选项…'
+      : !optionsReady.value
+        ? '定制选项暂不可用'
+        : '',
+);
+
 const goalText = computed(() => {
   const target = String(form.value.targetGoal || '');
   if (!target) return '待确认';
   // 中文只来自后端选项字典，前端不再新增一份「目标 → 中文」映射
-  return goalLabel(target);
+  const label = goalLabel(target);
+  if (label) return label;
+  if (goalLoading.value) return '读取中…';
+  if (goalFailed.value) return '读取失败';
+  return '待确认';
 });
 
 const allergyDisplay = computed(() => {
@@ -379,7 +467,7 @@ const allergyDisplay = computed(() => {
     const text = String(form.value.allergyText || '').trim();
     return text || '有过敏（未填写具体食物）';
   }
-  return '未回答';
+  return '未填写';
 });
 
 const hasAllergyForDisplay = computed(
@@ -417,6 +505,11 @@ const currentFoodText = computed(() => {
   if (!code) return '未填写';
   const label = currentFoodLabel(code);
   const other = String(form.value.currentFoodOther || '').trim();
+  if (!label) {
+    if (currentFoodLoading.value) return '读取中…';
+    if (currentFoodFailed.value) return '读取失败';
+    return other || '待确认';
+  }
   return other ? `${label}（${other}）` : label;
 });
 
@@ -426,9 +519,15 @@ const changeReasonText = computed(() => {
     : [];
   const other = String(form.value.changeReasonOther || '').trim();
   if (codes.length === 0 && !other) return '未填写';
-  return `${codes.map((code: string) => changeReasonLabel(code)).join('、')}${
-    other ? `（${other}）` : ''
-  }`;
+  const labels = codes
+    .map((code: string) => changeReasonLabel(code))
+    .filter(Boolean);
+  if (codes.length > 0 && labels.length === 0) {
+    if (changeReasonLoading.value) return '读取中…';
+    if (changeReasonFailed.value) return '读取失败';
+    return other || '待确认';
+  }
+  return `${labels.join('、')}${other ? `（${other}）` : ''}`;
 });
 
 const stomachText = computed(() => {
@@ -437,9 +536,13 @@ const stomachText = computed(() => {
     : [];
   const other = String(form.value.stomachOther || '').trim();
   if (codes.length === 0 && !other) return '未填写';
-  return `${codes.map((code: string) => stomachLabel(code)).join('、')}${
-    other ? `（${other}）` : ''
-  }`;
+  const labels = codes.map((code: string) => stomachLabel(code)).filter(Boolean);
+  if (codes.length > 0 && labels.length === 0) {
+    if (stomachLoading.value) return '读取中…';
+    if (stomachFailed.value) return '读取失败';
+    return other || '待确认';
+  }
+  return `${labels.join('、')}${other ? `（${other}）` : ''}`;
 });
 
 const notesText = computed(
@@ -534,10 +637,16 @@ const quoteReady = computed(
     (Boolean(currentQuote.value) && !quoteLoading.value && !quoteError.value),
 );
 
+const singleFeeMissing = computed(
+  () => !multiRecipeEnabled.value && !(Number(config.value?.feeAmount) > 0),
+);
+
 const canSubmit = computed(
   () =>
     !submitting.value &&
+    optionsReady.value &&
     quoteReady.value &&
+    !singleFeeMissing.value &&
     !proteinSelectionError.value,
 );
 
@@ -565,6 +674,7 @@ const discountText = computed(() => {
 
 const payButtonText = computed(() => {
   if (submitting.value) return '提交中…';
+  if (singleFeeMissing.value) return '费用读取失败，请返回重试';
   if (!multiRecipeEnabled.value) return `确认并支付 ¥${feeText.value}`;
   if (!currentQuote.value) return '确认并支付';
   return `确认并支付 ¥${formatAmount(currentQuote.value.payableAmount)}`;
@@ -582,64 +692,6 @@ const deliveryText = computed(() => {
   const [, month, day] = parts;
   return `预计 ${month} 月 ${day} 日（含）之前交付`;
 });
-
-const postStatus = computed(() =>
-  String(createdOrder.value?.status || 'PENDING_PAYMENT'),
-);
-const postIsPaid = computed(() => postStatus.value === 'PAID');
-const postIsClosed = computed(() =>
-  ['CANCELLED', 'CLOSED', 'REFUNDED'].includes(postStatus.value),
-);
-const postDeadline = computed(() =>
-  resolvePaymentDeadlineAt({
-    paymentDeadlineAt: createdOrder.value?.paymentDeadlineAt ?? null,
-    createdAt: createdOrder.value?.createdAt ?? null,
-    paymentTimeoutMinutes: Number(config.value?.paymentTimeoutMinutes) || 0,
-    now: nowTick.value,
-  }),
-);
-const postPaymentExpired = computed(() =>
-  isPaymentExpired(postDeadline.value, nowTick.value),
-);
-const postTitle = computed(() =>
-  !createdOrder.value
-    ? '确认订单'
-    : postIsPaid.value
-      ? '支付成功'
-      : postIsClosed.value
-        ? '订单已关闭'
-        : postPaymentExpired.value
-          ? '支付已超时'
-          : '订单已提交',
-);
-const postDesc = computed(() =>
-  postIsPaid.value
-    ? '我们已收到付款，营养师会按排期开始设计。'
-    : postIsClosed.value
-      ? '这张订单已经关闭，可以返回定制页重新下单。'
-      : postPaymentExpired.value
-        ? '支付已超时，订单正在关闭，不能再继续支付。'
-        : '订单已创建，完成支付后我们才会开始排期设计。',
-);
-const postFeeText = computed(() =>
-  formatAmount(createdOrder.value?.amount ?? config.value?.feeAmount ?? 0),
-);
-const postDeliveryText = computed(() =>
-  formatDate(createdOrder.value?.estimatedDeliveryDate, '排期中'),
-);
-const postStatusText = computed(() =>
-  postPaymentExpired.value && !postIsPaid.value && !postIsClosed.value
-    ? '支付超时'
-    : statusLabel(postStatus.value) || postStatus.value,
-);
-const postPaymentHint = computed(() =>
-  buildPaymentTimeoutHint({
-    paymentDeadlineAt: createdOrder.value?.paymentDeadlineAt ?? null,
-    createdAt: createdOrder.value?.createdAt ?? null,
-    paymentTimeoutMinutes: Number(config.value?.paymentTimeoutMinutes) || 0,
-    now: nowTick.value,
-  }),
-);
 
 /**
  * 取后端报价。
@@ -733,6 +785,27 @@ function changeRecipeQuantity(delta: number) {
   void loadDeliveryDate(next);
 }
 
+/** 份数/蛋白选择变化就记住，供下次进确认页恢复 */
+watch(
+  [recipeQuantity, proteinMode, selectedProteinCodes],
+  () => {
+    if (!multiRecipeEnabled.value) return;
+    const customerId = getDraftCustomerId();
+    if (!customerId || !dogId.value) return;
+    saveCustomRecipeMultiChoice(
+      customerId,
+      dogId.value,
+      {
+        quantity: recipeQuantity.value,
+        proteinMode: proteinMode.value,
+        proteinCodes: selectedProteinCodes.value,
+      },
+      maxRecipeQuantity.value,
+    );
+  },
+  { deep: true },
+);
+
 function selectProteinMode(mode: ProteinChoiceMode) {
   if (proteinMode.value === mode) return;
   proteinMode.value = mode;
@@ -780,23 +853,53 @@ async function loadConfirmData() {
     return;
   }
   draft.value = loaded;
+  clientRequestId.value = getOrCreateCustomRecipeSubmitKey(
+    customerId,
+    dogId.value,
+  );
   // 旧本地草稿里的媒体代理 URL 可能已随后端重启失效，先按 key 刷新
   await refreshCustomRecipeDraftMedia(loaded.form);
-  void ensureCurrentFoodOptions();
-  void ensureChangeReasonOptions();
-  void ensureStomachOptions();
-  void ensureGoalOptions();
-  void ensureStatusOptions();
 
   try {
-    const [dogRes, configRes, deliveryRes] = await Promise.all([
-      dogApi.detail(dogId.value).catch(() => null) as any,
+    const [dogRes, configRes, initialDelivery] = await Promise.all([
+      dogApi.detail(dogId.value).catch((error) => {
+        console.warn('[CustomRecipe] 读取狗狗详情失败:', error);
+        return null;
+      }) as any,
       fetchPublicConfig(),
-      fetchNextDeliveryDate(),
+      // 交付日期只是参考信息：单独兜底，不能因为它失败把整页挡住
+      fetchNextDeliveryDate().catch((error) => {
+        console.warn('[CustomRecipe] 读取交付日期失败:', error);
+        return null;
+      }),
     ]);
-    dog.value = dogRes?.data?.profile || dogRes?.data || dogRes || null;
+
+    const dogProfile =
+      dogRes?.data?.profile || dogRes?.data || dogRes || null;
+    if (!dogProfile) {
+      // 狗狗是这一单的对象；读不到就不允许在“不知道给谁买”的状态下付款
+      loadError.value = '狗狗信息读取失败，请重试';
+      return;
+    }
+    if (!configRes) {
+      loadError.value = '读取定制设置失败，请重试';
+      return;
+    }
+
+    dog.value = dogProfile;
     config.value = configRes;
-    delivery.value = deliveryRes;
+    delivery.value = initialDelivery;
+    deliveryError.value = initialDelivery
+      ? ''
+      : '交付日期读取失败，下单后以订单为准';
+
+    // 摘要里的中文来自选项字典；必须等它读到（或明确失败）再放开支付
+    await Promise.all([
+      ensureCurrentFoodOptions(),
+      ensureChangeReasonOptions(),
+      ensureStomachOptions(),
+      ensureGoalOptions(),
+    ]);
 
     /**
      * 多份开关只认 `=== true`：后端默认关闭，关闭时份数固定 1、整块隐藏，
@@ -806,8 +909,25 @@ async function loadConfirmData() {
       maxRecipeQuantity.value = resolveMaxRecipeQuantity(
         configRes.maxRecipeQuantity,
       );
-      recipeQuantity.value = 1;
-      void loadQuote(1);
+      const savedChoice = loadCustomRecipeMultiChoice(
+        customerId,
+        dogId.value,
+        maxRecipeQuantity.value,
+      );
+      if (savedChoice) {
+        recipeQuantity.value = savedChoice.quantity;
+        proteinMode.value = savedChoice.proteinMode;
+        selectedProteinCodes.value = savedChoice.proteinCodes;
+      } else {
+        recipeQuantity.value = 1;
+        proteinMode.value = 'DIETITIAN';
+        selectedProteinCodes.value = [];
+      }
+      void loadQuote(recipeQuantity.value);
+      // 恢复的份数 > 1 时，初始交期是按 1 份拿的，要按真实份数重取
+      if (recipeQuantity.value > 1) {
+        void loadDeliveryDate(recipeQuantity.value);
+      }
     } else {
       maxRecipeQuantity.value = 1;
       recipeQuantity.value = 1;
@@ -823,6 +943,20 @@ async function loadConfirmData() {
   } finally {
     loading.value = false;
   }
+}
+
+function retryLoad() {
+  void loadConfirmData();
+}
+
+/** 选项失败时只重试选项，不重新读草稿/狗狗/报价 */
+function retryOptions() {
+  void Promise.all([
+    ensureCurrentFoodOptions(),
+    ensureChangeReasonOptions(),
+    ensureStomachOptions(),
+    ensureGoalOptions(),
+  ]);
 }
 
 function backToCustom() {
@@ -875,8 +1009,9 @@ async function payCreatedOrder() {
   if (!orderId) return;
 
   postPaying.value = true;
+  let outcome: CustomRecipePayOutcome = 'FAILED';
   try {
-    const outcome = await runCustomRecipePayment(orderId);
+    outcome = await runCustomRecipePayment(orderId);
 
     if (outcome === 'PAID') {
       // 已付款：报告已进档案；保留上次的选择，但清掉上一单的报告/附件草稿
@@ -885,24 +1020,39 @@ async function payCreatedOrder() {
         dogId.value,
       );
       uni.showToast({ title: '支付成功', icon: 'success' });
-    } else if (outcome === 'CLOSED') {
-      uni.showToast({ title: '订单已关闭，请重新下单', icon: 'none' });
-    } else if (outcome === 'CANCELLED') {
-      uni.showToast({ title: '已取消支付，可继续支付', icon: 'none' });
-    } else {
-      // 不做人工收款兜底；支付通道不可用时让顾客在订单详情稍后重试
-      uni.showToast({ title: '微信支付暂不可用，请稍后重试', icon: 'none' });
     }
   } catch (error: any) {
-    uni.showToast({
-      title: error?.message || '支付失败，请稍后重试',
-      icon: 'none',
-    });
+    outcome = 'FAILED';
+    console.warn('[CustomRecipe] 支付异常:', error);
   } finally {
     postPaying.value = false;
-    // 不再保留“订单已提交信息页”：创建订单/支付结束后统一进订单详情
-    redirectToCreatedOrder();
   }
+
+  if (outcome === 'PAID') {
+    redirectToCreatedOrder();
+    return;
+  }
+
+  /**
+   * 订单已经创建，只是支付没完成。跳订单详情前先用弹窗把“订单已创建”
+   * 讲清楚，避免顾客以为下单失败又去下一单。
+   */
+  const content =
+    outcome === 'CANCELLED'
+      ? '订单已创建，本次支付已取消。可以在订单详情继续支付。'
+      : outcome === 'CLOSED'
+        ? '订单已关闭，不能再继续支付。可以返回定制页重新下单。'
+        : '订单已创建，但微信支付没有完成。可以在订单详情继续支付，或联系 Seven爸爸。';
+  await new Promise<void>((resolve) => {
+    uni.showModal({
+      title: '订单已创建',
+      content,
+      showCancel: false,
+      confirmText: '看订单',
+      complete: () => resolve(),
+    });
+  });
+  redirectToCreatedOrder();
 }
 
 function redirectToCreatedOrder() {
@@ -929,7 +1079,7 @@ async function cleanupDiscardedAllergyReports(reports: any[]) {
   }
 }
 
-async function submitConfirmedOrder(payAfterSubmit = true) {
+async function submitConfirmedOrder() {
   if (submitting.value) return;
   const invalid = validateBeforeSubmit();
   if (invalid) {
@@ -958,10 +1108,11 @@ async function submitConfirmedOrder(payAfterSubmit = true) {
    * 确认页加载时已经缓存了 orderNotifyTemplateId，这里直接传给 helper，
    * helper 会同步调用 uni.requestSubscribeMessage 弹出授权窗。
    */
+  // 先把守卫立起来，再发起订阅/网络请求，堵住第二次点击的窗口
+  submitting.value = true;
   const subscriptionRequest = requestCustomRecipeOrderSubscription(
     String(config.value?.orderNotifyTemplateId || ''),
   );
-  submitting.value = true;
   uni.showLoading({ title: '提交中…' });
   try {
     await subscriptionRequest;
@@ -1016,6 +1167,13 @@ async function submitConfirmedOrder(payAfterSubmit = true) {
       dogId.value,
       orderId,
     );
+    // 订单已创建：这把幂等键完成使命；下一次新单用新 key。
+    // 如果响应丢失/页面刷新，key 还在，重进会复用并拿回同一张订单。
+    clearCustomRecipeSubmitKey(
+      getDraftCustomerId(),
+      dogId.value,
+      clientRequestId.value,
+    );
 
     /**
      * 2026-10-21：订单创建成功后**不再立刻清本地草稿**。
@@ -1033,9 +1191,7 @@ async function submitConfirmedOrder(payAfterSubmit = true) {
     // 先关 loading，再拉起微信支付；否则支付弹窗会被遮罩/loading 干扰。
     uni.hideLoading();
     submitting.value = false;
-    if (payAfterSubmit) {
-      await payCreatedOrder();
-    }
+    await payCreatedOrder();
   } catch (error: any) {
     uni.showToast({
       title: error?.message || '提交失败，请稍后重试',
@@ -1048,13 +1204,9 @@ async function submitConfirmedOrder(payAfterSubmit = true) {
 }
 
 onLoad((options: any) => {
-  paymentClockTimer = setInterval(() => {
-    nowTick.value = Date.now();
-  }, 15000);
   dogId.value = String(options?.dogId || '').trim();
-  clientRequestId.value = `cr-${Date.now().toString(36)}-${Math.random()
-    .toString(36)
-    .slice(2, 12)}`;
+  // key 在 loadConfirmData 里按“顾客 + 狗”从本地取/建，页面刷新也能复用
+  clientRequestId.value = '';
   if (!dogId.value) {
     loadError.value = '缺少狗狗信息';
     loading.value = false;
@@ -1063,14 +1215,16 @@ onLoad((options: any) => {
   void loadConfirmData();
 });
 
+onBackPress(() => {
+  if (!submitting.value && !postPaying.value) return false;
+  uni.showToast({ title: '订单正在处理，请稍候', icon: 'none' });
+  return true;
+});
+
 onUnmounted(() => {
   // 页面已离开，晚到的报价/交期响应不再写回
   quoteRequestSeq += 1;
   deliveryRequestSeq += 1;
-  if (paymentClockTimer) {
-    clearInterval(paymentClockTimer);
-    paymentClockTimer = null;
-  }
 });
 </script>
 
@@ -1112,6 +1266,13 @@ onUnmounted(() => {
   font-size: 26rpx;
 }
 
+.state-btn--ghost {
+  margin-top: 14rpx;
+  color: #1e3a2f;
+  background: #ffffff;
+  border: 1rpx solid #d9dfcf;
+}
+
 .section {
   margin-bottom: 22rpx;
   padding: 26rpx 24rpx;
@@ -1147,6 +1308,11 @@ onUnmounted(() => {
   text-align: center;
   font-size: 38rpx;
   background: #f2efe4;
+}
+
+.dog-avatar--image {
+  display: block;
+  flex: none;
 }
 
 .dog-name {
@@ -1455,6 +1621,24 @@ onUnmounted(() => {
   color: #8a7a63;
 }
 
+.fee-missing {
+  margin: 20rpx 0 0;
+  padding: 16rpx 20rpx;
+  border-radius: 12rpx;
+  background: #fff7ed;
+  color: #b45309;
+  font-size: 23rpx;
+  line-height: 1.6;
+}
+
+.refund-policy {
+  display: block;
+  margin: 18rpx 2rpx 0;
+  font-size: 21rpx;
+  line-height: 1.6;
+  color: #8a7a63;
+}
+
 .bottom-space {
   height: 20rpx;
 }
@@ -1470,6 +1654,30 @@ onUnmounted(() => {
   background: #fbfcf7;
   border-top: 1rpx solid #e3e6d4;
   box-shadow: 0 -2rpx 16rpx rgba(30, 46, 36, 0.06);
+}
+
+.bottom-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.option-wait-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  padding-bottom: 8rpx;
+}
+
+.option-wait-text {
+  font-size: 22rpx;
+  color: #b45309;
+}
+
+.option-wait-retry {
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #1e5b35;
 }
 
 .bottom-left {

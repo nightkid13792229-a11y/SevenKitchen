@@ -1,11 +1,17 @@
 import { BadRequestException } from '@nestjs/common';
-import { AgentProviderConfigService } from 'src/application/nutrition-governance/agent-provider-config.service';
+import {
+  AgentProviderConfigService,
+  ARK_PROVIDER,
+  RECIPE_COVER_IMAGE_PURPOSE,
+  RECIPE_COVER_PROMPT_PURPOSE,
+} from 'src/application/nutrition-governance/agent-provider-config.service';
 
 describe('AgentProviderConfigService', () => {
   const originalEnv = { ...process.env };
   const mockPrisma = {
     agentProviderConfig: {
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
       upsert: jest.fn(),
     },
   } as any;
@@ -102,6 +108,122 @@ describe('AgentProviderConfigService', () => {
     const update = mockPrisma.agentProviderConfig.upsert.mock.calls[0][0].update;
     expect(update).not.toHaveProperty('apiKeyEncrypted');
     expect(update).not.toHaveProperty('apiKeyLast4');
+  });
+
+  it('默认 DeepSeek 关闭时，可回退到任意一条已启用的 DeepSeek（封面画面描述用）', async () => {
+    mockPrisma.agentProviderConfig.findUnique.mockResolvedValue(null);
+    mockPrisma.agentProviderConfig.upsert.mockImplementation(async ({ create }) => ({
+      ...create,
+      id: 'config-1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }));
+
+    await service.updateSettings(
+      { enabled: true, apiKey: 'sk-deepseek-secret-1234' },
+      'admin-1',
+    );
+    const encrypted =
+      mockPrisma.agentProviderConfig.upsert.mock.calls[0][0].create
+        .apiKeyEncrypted;
+
+    mockPrisma.agentProviderConfig.findUnique.mockResolvedValue({
+      id: 'config-default',
+      purpose: 'DEFAULT',
+      provider: 'DEEPSEEK',
+      enabled: false,
+      baseUrl: 'https://api.deepseek.com',
+      model: 'deepseek-v4-flash',
+      reviewModel: 'deepseek-v4-pro',
+      apiKeyEncrypted: encrypted,
+      apiKeyLast4: '1234',
+      maxConcurrency: 1,
+      requestTimeoutMs: 90000,
+      retryCount: 2,
+    });
+    mockPrisma.agentProviderConfig.findFirst.mockResolvedValue({
+      id: 'config-copywriting',
+      purpose: 'RECIPE_COPYWRITING',
+      provider: 'DEEPSEEK',
+      enabled: true,
+      baseUrl: 'https://api.deepseek.com',
+      model: 'deepseek-v4-flash',
+      reviewModel: 'deepseek-v4-pro',
+      apiKeyEncrypted: encrypted,
+      apiKeyLast4: '1234',
+      maxConcurrency: 1,
+      requestTimeoutMs: 90000,
+      retryCount: 2,
+    });
+
+    const runtime = await service.getEnabledDeepSeekRuntimeConfig({
+      fallbackToAnyPurpose: true,
+    });
+
+    expect(runtime.model).toBe('deepseek-v4-flash');
+    expect(runtime.apiKey).toBe('sk-deepseek-secret-1234');
+    expect(mockPrisma.agentProviderConfig.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          provider: 'DEEPSEEK',
+          enabled: true,
+        }),
+      }),
+    );
+  });
+
+  it('封面 DeepSeek 用途未配置时不回退全局默认', async () => {
+    mockPrisma.agentProviderConfig.findUnique.mockResolvedValue(null);
+    await expect(
+      service.getEnabledDeepSeekRuntimeConfig({
+        purpose: RECIPE_COVER_PROMPT_PURPOSE,
+        fallbackToDefault: false,
+      }),
+    ).rejects.toThrow('未启用');
+  });
+
+  it('ARK 封面用途返回运行时配置', async () => {
+    mockPrisma.agentProviderConfig.findUnique.mockResolvedValue(null);
+    mockPrisma.agentProviderConfig.upsert.mockImplementation(
+      async ({ create }) => ({
+        ...create,
+        id: 'config-key',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+    );
+    await service.updateSettings(
+      { enabled: true, apiKey: 'sk-ark-secret-1234' },
+      'admin-1',
+      RECIPE_COVER_PROMPT_PURPOSE,
+    );
+    const encrypted =
+      mockPrisma.agentProviderConfig.upsert.mock.calls[0][0].create
+        .apiKeyEncrypted;
+
+    mockPrisma.agentProviderConfig.findUnique.mockResolvedValue({
+      id: 'config-ark',
+      purpose: RECIPE_COVER_IMAGE_PURPOSE,
+      provider: ARK_PROVIDER,
+      enabled: true,
+      baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+      model: 'doubao-seedream-5-0-pro-260628',
+      reviewModel: null,
+      apiKeyEncrypted: encrypted,
+      apiKeyLast4: '1234',
+      maxConcurrency: 1,
+      requestTimeoutMs: 120000,
+      retryCount: 0,
+    });
+
+    const runtime = await service.getEnabledProviderRuntimeConfig({
+      purpose: RECIPE_COVER_IMAGE_PURPOSE,
+      provider: ARK_PROVIDER,
+    });
+
+    expect(runtime.model).toBe('doubao-seedream-5-0-pro-260628');
+    expect(runtime.apiKey).toBe('sk-ark-secret-1234');
+    expect(runtime.baseUrl).toBe('https://ark.cn-beijing.volces.com/api/v3');
   });
 
   it('saves a separate review model for higher-risk Agent tasks', async () => {

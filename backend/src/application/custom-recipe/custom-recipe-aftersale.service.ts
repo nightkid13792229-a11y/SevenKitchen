@@ -26,6 +26,8 @@ import {
 export interface CustomRecipeAftersaleRecipeRequest {
   deliveryItemId: string;
   description: string;
+  /** 这一份自己的附件（2026-10-25）；旧记录没有时为 [] */
+  photos: string[];
 }
 
 /** 响应里"这次涉及哪几份"的统一形状（顾客端与后台共用） */
@@ -136,6 +138,347 @@ export class CustomRecipeAftersaleService {
      * 先解析"选了哪几份"，但真正的归属校验要等拿到批次明细之后 ——
      * 多份订单的交付在批次表里，不在老的单份交付表。
      */
+    const {
+      deliveryId,
+      deliveryBatchId,
+      deliveryItemIds,
+      recipeRequests,
+      deliveredAt,
+    } = await this.resolveAftersaleTargets(order.id, input);
+
+    /**
+     * 窗口校验。超窗口**不允许新提**，但见下方：已提的照常处理到底。
+     */
+    const windowDays = await this.getWindowDays();
+    if (windowDays > 0 && deliveredAt) {
+      const closesAt = new Date(
+        deliveredAt.getTime() + windowDays * 24 * 60 * 60 * 1000,
+      );
+      if (now.getTime() > closesAt.getTime()) {
+        throw new BadRequestException(
+          `已超过售后受理期（交付后 ${windowDays} 天内），如需帮助请联系客服`,
+        );
+      }
+    }
+
+    /**
+     * 免费次数校验（2026-10-18 · 需求 2.5.9「能提 2 次」）。
+     *
+     * ⚠️ 此前**完全没有这道校验** —— 顾客可以无限提，后台待办会一直涨。
+     *
+     * 撤回的不计数（2.5.9：「撤回算不算用掉 → 不算」）。
+     */
+    const quota = await this.getQuota(order.id, input.customerId);
+    if (quota.freeRevisionsLeft <= 0) {
+      throw new BadRequestException(
+        quota.reason ||
+          `免费调整次数已用完（共 ${quota.freeRevisionCount} 次），如需帮助请联系客服`,
+      );
+    }
+
+    /**
+     * 同一条售后单不许重复提。
+     *
+     * 为什么拦：顾客提完没看到变化，很可能再提一次 ——
+     * 后台就会出现两条一模一样的待办，客服还得自己去重。
+     * 只拦"还没处理完的"，已解决的可以再提（同一个问题复发了）。
+     */
+    const open = await this.prisma.customRecipeAftersale.findFirst({
+      where: {
+        orderId: order.id,
+        type: 'ADJUST_RECIPE',
+        status: { in: ['PENDING', 'ACCEPTED', 'PROCESSING'] },
+      },
+      select: { id: true },
+    });
+    if (open) {
+      throw new BadRequestException(
+        '你已经提交过一次调整，我们正在处理中。有新情况可以直接在客服里补充',
+      );
+    }
+
+    const trimmed = (input.description || '').trim();
+    if (!trimmed) {
+      throw new BadRequestException('请说一下遇到的具体情况');
+    }
+
+    const typeLabel = await this.resolveTypeLabel(input.type);
+
+    /**
+     * 顶层 photos 存所有份的并集：老页面/后台列表仍按整单附件看，
+     * 每份的精确归属在 `recipeRequests[].photos` 里。
+     */
+    const allPhotos = Array.from(
+      new Set([
+        ...(input.photos ?? []),
+        ...recipeRequests.flatMap((request) => request.photos),
+      ]),
+    );
+
+    const created = await this.prisma.customRecipeAftersale
+      .create({
+        data: {
+        orderId: order.id,
+        deliveryId,
+        deliveryBatchId,
+        deliveryItemIds,
+        /** 没有逐份说明时不写这一列（保持 NULL = 老口径只有一句共用说明） */
+        ...(recipeRequests.length > 0
+          ? {
+              recipeRequests:
+                recipeRequests as unknown as Prisma.InputJsonValue,
+            }
+          : {}),
+          type: input.type,
+          description: trimmed,
+          photos: allPhotos,
+        },
+      })
+      .catch((error: any) => {
+        if (error?.code === 'P2002') {
+          throw new ConflictException(
+            '你已经提交过一次调整，我们正在处理中。有新情况可以直接在客服里补充',
+          );
+        }
+        throw error;
+      });
+
+    return {
+      id: created.id,
+      type: created.type,
+      typeLabel,
+      status: created.status,
+      statusLabel: CUSTOM_RECIPE_AFTERSALE_STATUS_LABELS[created.status],
+      /** 多份订单：这次售后针对哪一批 / 哪几份（老订单均为空） */
+      deliveryBatchId: created.deliveryBatchId ?? null,
+      deliveryItemIds: created.deliveryItemIds ?? [],
+      recipeRequests,
+    };
+  }
+
+  /**
+   * 员工代客发起调整（2026-10-27）。
+   *
+   * ## 它补的是哪条路
+   *
+   * 此前「已交付 → 改稿 → 重交」这条链只挂在**顾客提交的售后单**上：
+   * 顾客不满意但不会/不方便在小程序提单时，老板改好了也没有入口交回去。
+   *
+   * 这里允许员工替顾客开一张调整单，**直接进入 ACCEPTED**（处理人 = 发起人），
+   * 后面的链路一个字都不改：售后页「修改食谱」→ 设计器改稿 → 加入本单待提交
+   * → 售后页「重新交付并完成」。
+   *
+   * ## 三条与顾客提交不同的口径
+   *
+   * · **不占顾客免费次数**（商家主动改稿不该消耗顾客权益）；
+   * · **不受售后窗口限制**（已自动完成的单也能改）；
+   * · **创建即受理**，不占用「待受理」待办位。
+   *
+   * 其余规则与顾客提交完全一致：一次只能有一条进行中的调整、必须说明改什么。
+   */
+  async createByStaff(input: {
+    orderIdOrId: string;
+    operatorId: string;
+    /** 给顾客看的调整说明（顾客端会显示成「调整总结」的正文） */
+    description: string;
+    /** 要调整哪几份；不传 = 最新批次里的全部份（单份订单即唯一那份） */
+    deliveryItemIds?: string[] | null;
+    now?: Date;
+  }): Promise<{
+    id: string;
+    status: string;
+    statusLabel: string;
+    source: string;
+    deliveryBatchId: string | null;
+    deliveryItemIds: string[];
+    /** true = 复用了一条已经存在的进行中调整（重复点击不报错） */
+    resumed?: boolean;
+  }> {
+    const now = input.now ?? new Date();
+
+    const order = await this.prisma.customRecipeOrder.findFirst({
+      where: {
+        OR: [{ orderId: input.orderIdOrId }, { id: input.orderIdOrId }],
+      },
+      select: { id: true, orderId: true, status: true, deliveredAt: true },
+    });
+    if (!order) {
+      throw new NotFoundException(`定制订单不存在: ${input.orderIdOrId}`);
+    }
+    if (order.status === CustomRecipeStatus.CANCELLED) {
+      throw new BadRequestException('订单已取消，不能发起调整');
+    }
+    if (
+      order.status !== CustomRecipeStatus.DELIVERED &&
+      order.status !== CustomRecipeStatus.COMPLETED
+    ) {
+      throw new BadRequestException(
+        '只有已经交付的订单才能代客发起调整；未交付的订单直接在设计器里改即可',
+      );
+    }
+
+    const trimmed = (input.description || '').trim();
+
+    const { deliveryId, deliveryBatchId, deliveryItemIds, recipeRequests } =
+      await this.resolveAftersaleTargets(order.id, {
+        deliveryItemIds: input.deliveryItemIds,
+        recipeRequests: null,
+      });
+
+    /**
+     * 多份订单没指定份数时，「整单」= 最新批次里的**全部份**。
+     *
+     * 顾客那条老口径里空数组表示「整单售后」，但改稿必须落到具体某一份
+     * （`reopen-design` 要按 deliveryItemId 找交付明细）。所以这里补一次解析，
+     * 否则员工发起的调整单会是一条「没有关联可修改食谱」的死单。
+     */
+    let targetItemIds = deliveryItemIds;
+    if (targetItemIds.length === 0 && deliveryBatchId) {
+      const batch = await this.prisma.customRecipeDeliveryBatch.findUnique({
+        where: { id: deliveryBatchId },
+        select: { items: { select: { id: true }, orderBy: { id: 'asc' } } },
+      });
+      targetItemIds = (batch?.items ?? []).map((item) => item.id);
+    }
+
+    /**
+     * 一次只能有一条进行中的调整。**但重复点击不该报错**（2026-10-28 修）：
+     *
+     * 第一次已经建好单、后面的步骤却没走完（比如设计器打不开）时，
+     * 老板最自然的动作就是再点一次 —— 如果这里抛「已有一条进行中的调整」，
+     * 他会以为功能坏了。所以改成**复用那一条**：
+     *   · 还没受理的（顾客提的）顺手受理，处理人 = 当前操作人；
+     *   · 缺份数/批次的补齐（老记录可能是「整单」口径）；
+     *   · 说明已存在就保留原话，不覆盖顾客自己写的诉求。
+     */
+    const open = await this.prisma.customRecipeAftersale.findFirst({
+      where: {
+        orderId: order.id,
+        type: 'ADJUST_RECIPE',
+        status: { in: ['PENDING', 'ACCEPTED', 'PROCESSING'] },
+      },
+      select: {
+        id: true,
+        status: true,
+        source: true,
+        deliveryBatchId: true,
+        deliveryItemIds: true,
+        deliveryId: true,
+      },
+    });
+    if (open) {
+      const needsTargets =
+        (open.deliveryItemIds ?? []).length === 0 && targetItemIds.length > 0;
+      const needsBatch = !open.deliveryBatchId && Boolean(deliveryBatchId);
+      if (open.status === 'PENDING' || needsTargets || needsBatch) {
+        await this.prisma.customRecipeAftersale.update({
+          where: { id: open.id },
+          data: {
+            ...(open.status === 'PENDING'
+              ? {
+                  status: 'ACCEPTED',
+                  handlerId: input.operatorId,
+                  acceptedAt: now,
+                }
+              : {}),
+            ...(needsTargets ? { deliveryItemIds: targetItemIds } : {}),
+            ...(needsBatch ? { deliveryBatchId } : {}),
+          },
+        });
+      }
+      return {
+        id: open.id,
+        status: open.status === 'PENDING' ? 'ACCEPTED' : open.status,
+        statusLabel:
+          CUSTOM_RECIPE_AFTERSALE_STATUS_LABELS[
+            open.status === 'PENDING' ? 'ACCEPTED' : open.status
+          ],
+        source: open.source ?? 'STAFF',
+        deliveryBatchId: deliveryBatchId ?? open.deliveryBatchId ?? null,
+        deliveryItemIds:
+          targetItemIds.length > 0 ? targetItemIds : open.deliveryItemIds ?? [],
+        resumed: true,
+      };
+    }
+
+    if (!trimmed) {
+      throw new BadRequestException(
+        '请写一句这次要调整什么 —— 顾客会看到这句话',
+      );
+    }
+
+    /**
+     * 先确认这份交付后面**确实有一份可回改的设计草稿**，再落库。
+     *
+     * 走「订单设计」新流程的订单才有槽位；老订单没有，只能回订单页用
+     * 「重新交付」换食谱 —— 那种单如果在这里建了调整单，紧接着的
+     * 「修改食谱」必然报错，售后列表就多一条永远处理不完的记录。
+     */
+    const targetRecipeId = await this.resolveDeliveredRecipeId({
+      deliveryItemId: targetItemIds[0] ?? null,
+      deliveryId,
+    });
+    const slotCount = targetRecipeId
+      ? await this.prisma.orderRecipeDesign.count({
+          where: { orderId: order.id, recipeId: targetRecipeId },
+        })
+      : 0;
+    if (slotCount === 0) {
+      throw new BadRequestException(
+        '这张订单是「订单设计」之前下的单，没有可回改的设计草稿；请在订单页用「重新交付」换一份食谱',
+      );
+    }
+
+    const created = await this.prisma.customRecipeAftersale.create({
+      data: {
+        orderId: order.id,
+        deliveryId,
+        deliveryBatchId,
+        deliveryItemIds: targetItemIds,
+        ...(recipeRequests.length > 0
+          ? {
+              recipeRequests:
+                recipeRequests as unknown as Prisma.InputJsonValue,
+            }
+          : {}),
+        type: 'ADJUST_RECIPE',
+        source: 'STAFF',
+        status: 'ACCEPTED',
+        description: trimmed,
+        photos: [],
+        handlerId: input.operatorId,
+        acceptedAt: now,
+      },
+    });
+
+    return {
+      id: created.id,
+      status: created.status,
+      statusLabel: CUSTOM_RECIPE_AFTERSALE_STATUS_LABELS[created.status],
+      source: created.source,
+      deliveryBatchId: created.deliveryBatchId ?? null,
+      deliveryItemIds: created.deliveryItemIds ?? [],
+      resumed: false,
+    };
+  }
+
+  /**
+   * 解析「这次售后针对哪一次交付、哪几份」。
+   *
+   * 顾客提交与员工代客发起**共用同一套判定**：多份订单看最新批次，
+   * 老订单看当前有效的那一次单份交付。抽出来是为了不出现
+   * 「顾客能选份、员工只能整单」这种两套口径。
+   */
+  private async resolveAftersaleTargets(
+    orderId: string,
+    input: { deliveryItemIds?: string[] | null; recipeRequests?: unknown },
+  ): Promise<{
+    deliveryId: string | null;
+    deliveryBatchId: string | null;
+    deliveryItemIds: string[];
+    recipeRequests: CustomRecipeAftersaleRecipeRequest[];
+    deliveredAt: Date | null;
+  }> {
     const selection = this.parseDeliveryItemIds(input.deliveryItemIds);
     const requestShape = this.parseRecipeRequestsShape(input.recipeRequests);
 
@@ -146,7 +489,7 @@ export class CustomRecipeAftersaleService {
      * 老订单没有批次，仍走下面的单份交付路径，响应与以前完全一致。
      */
     const latestBatch = await this.prisma.customRecipeDeliveryBatch.findFirst({
-      where: { orderId: order.id },
+      where: { orderId },
       orderBy: { version: 'desc' },
       select: {
         id: true,
@@ -158,7 +501,7 @@ export class CustomRecipeAftersaleService {
     let deliveryId: string | null = null;
     let deliveryBatchId: string | null = null;
     let deliveryItemIds: string[] = [];
-    let recipeRequests: CustomRecipeAftersaleRecipeRequest[] = [];
+    const recipeRequests: CustomRecipeAftersaleRecipeRequest[] = [];
     let deliveredAt: Date | null = null;
 
     if (latestBatch) {
@@ -206,9 +549,15 @@ export class CustomRecipeAftersaleService {
           );
         }
 
+        const rawPhotos = Array.isArray(raw.photos) ? raw.photos : [];
+        const requestPhotos = rawPhotos
+          .map((photo) => String(photo ?? '').trim())
+          .filter((photo): photo is string => photo.length > 0);
+
         recipeRequests.push({
           deliveryItemId: itemId,
           description: requestDescription,
+          photos: requestPhotos,
         });
       }
 
@@ -218,7 +567,9 @@ export class CustomRecipeAftersaleService {
        */
       deliveryItemIds = selection.provided
         ? selection.ids
-        : Array.from(new Set(recipeRequests.map((item) => item.deliveryItemId)));
+        : Array.from(
+            new Set(recipeRequests.map((item) => item.deliveryItemId)),
+          );
     } else {
       /**
        * 老的单份交付路径**一个字都不改**：没批次时行为与以前一致。
@@ -232,7 +583,7 @@ export class CustomRecipeAftersaleService {
       }
 
       const currentDelivery = await this.prisma.customRecipeDelivery.findFirst({
-        where: { orderId: order.id, replacedByDeliveryId: null },
+        where: { orderId, replacedByDeliveryId: null },
         orderBy: { version: 'desc' },
         select: { id: true, deliveredAt: true },
       });
@@ -245,102 +596,39 @@ export class CustomRecipeAftersaleService {
       deliveredAt = currentDelivery.deliveredAt;
     }
 
-    /**
-     * 窗口校验。超窗口**不允许新提**，但见下方：已提的照常处理到底。
-     */
-    const windowDays = await this.getWindowDays();
-    if (windowDays > 0 && deliveredAt) {
-      const closesAt = new Date(
-        deliveredAt.getTime() + windowDays * 24 * 60 * 60 * 1000,
-      );
-      if (now.getTime() > closesAt.getTime()) {
-        throw new BadRequestException(
-          `已超过售后受理期（交付后 ${windowDays} 天内），如需帮助请联系客服`,
-        );
-      }
-    }
-
-    /**
-     * 免费次数校验（2026-10-18 · 需求 2.5.9「能提 2 次」）。
-     *
-     * ⚠️ 此前**完全没有这道校验** —— 顾客可以无限提，后台待办会一直涨。
-     *
-     * 撤回的不计数（2.5.9：「撤回算不算用掉 → 不算」）。
-     */
-    const quota = await this.getQuota(order.id, input.customerId);
-    if (quota.freeRevisionsLeft <= 0) {
-      throw new BadRequestException(
-        quota.reason ||
-          `免费调整次数已用完（共 ${quota.freeRevisionCount} 次），如需帮助请联系客服`,
-      );
-    }
-
-    /**
-     * 同一条售后单不许重复提。
-     *
-     * 为什么拦：顾客提完没看到变化，很可能再提一次 ——
-     * 后台就会出现两条一模一样的待办，客服还得自己去重。
-     * 只拦"还没处理完的"，已解决的可以再提（同一个问题复发了）。
-     */
-    const open = await this.prisma.customRecipeAftersale.findFirst({
-      where: {
-        orderId: order.id,
-        status: { in: ['PENDING', 'ACCEPTED', 'PROCESSING'] },
-      },
-      select: { id: true },
-    });
-    if (open) {
-      throw new BadRequestException(
-        '你已经提交过售后，我们正在处理中。有新情况可以直接在客服里补充',
-      );
-    }
-
-    const trimmed = (input.description || '').trim();
-    if (!trimmed) {
-      throw new BadRequestException('请说一下遇到的具体情况');
-    }
-
-    const typeLabel = await this.resolveTypeLabel(input.type);
-
-    const created = await this.prisma.customRecipeAftersale
-      .create({
-        data: {
-        orderId: order.id,
-        deliveryId,
-        deliveryBatchId,
-        deliveryItemIds,
-        /** 没有逐份说明时不写这一列（保持 NULL = 老口径只有一句共用说明） */
-        ...(recipeRequests.length > 0
-          ? {
-              recipeRequests:
-                recipeRequests as unknown as Prisma.InputJsonValue,
-            }
-          : {}),
-          type: input.type,
-          description: trimmed,
-          photos: input.photos ?? [],
-        },
-      })
-      .catch((error: any) => {
-        if (error?.code === 'P2002') {
-          throw new ConflictException(
-            '你已经提交过售后，我们正在处理中。有新情况可以直接在客服里补充',
-          );
-        }
-        throw error;
-      });
-
     return {
-      id: created.id,
-      type: created.type,
-      typeLabel,
-      status: created.status,
-      statusLabel: CUSTOM_RECIPE_AFTERSALE_STATUS_LABELS[created.status],
-      /** 多份订单：这次售后针对哪一批 / 哪几份（老订单均为空） */
-      deliveryBatchId: created.deliveryBatchId ?? null,
-      deliveryItemIds: created.deliveryItemIds ?? [],
+      deliveryId,
+      deliveryBatchId,
+      deliveryItemIds,
       recipeRequests,
+      deliveredAt,
     };
+  }
+
+  /**
+   * 这次调整要落到哪一份**食谱**上（用来确认后面有可回改的设计草稿）。
+   *
+   * 批次交付看交付明细，老订单看单份交付记录 —— 两条路的落点不同。
+   */
+  private async resolveDeliveredRecipeId(input: {
+    deliveryItemId: string | null;
+    deliveryId: string | null;
+  }): Promise<string | null> {
+    if (input.deliveryItemId) {
+      const item = await this.prisma.customRecipeDeliveryItem.findUnique({
+        where: { id: input.deliveryItemId },
+        select: { recipeId: true },
+      });
+      return item?.recipeId ?? null;
+    }
+    if (input.deliveryId) {
+      const delivery = await this.prisma.customRecipeDelivery.findUnique({
+        where: { id: input.deliveryId },
+        select: { recipeId: true },
+      });
+      return delivery?.recipeId ?? null;
+    }
+    return null;
   }
 
   /**
@@ -362,7 +650,11 @@ export class CustomRecipeAftersaleService {
     }
 
     const rows = await this.prisma.customRecipeAftersale.findMany({
-      where: { orderId: order.id },
+      /**
+       * 只返回“调整”类：这一页只做食谱调整。
+       * 历史的问题/其他意见/退款单不混进调整记录，避免顾客以为它们也是调整。
+       */
+      where: { orderId: order.id, type: 'ADJUST_RECIPE' },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -374,8 +666,16 @@ export class CustomRecipeAftersaleService {
       id: row.id,
       type: row.type,
       typeLabel: labels[row.type] ?? row.type,
+      /**
+       * 谁发起的（2026-10-27）。顾客端据此把「商家主动帮你调整」和
+       * 「你自己提的」区分开；顾客手工提单时的文案一个字都不用改。
+       */
+      source: row.source ?? 'CUSTOMER',
+      sourceLabel: row.source === 'STAFF' ? '商家发起' : '顾客发起',
       status: row.status,
       statusLabel: CUSTOM_RECIPE_AFTERSALE_STATUS_LABELS[row.status],
+      /** 顾客端状态：撤回显示“已撤销”，完成显示“已交付”，不直接复用后台的“已解决/未受理” */
+      customerStatusLabel: this.customerStatusLabel(row),
       description: row.description,
       photos: row.photos ?? [],
       createdAt: row.createdAt,
@@ -526,6 +826,9 @@ export class CustomRecipeAftersaleService {
           orderStatus: row.order.status,
           type: row.type,
           typeLabel: labels[row.type] ?? row.type,
+          /** 顾客提交 / 商家代客发起（2026-10-27）—— 后台列表要能一眼分开 */
+          source: row.source ?? 'CUSTOMER',
+          sourceLabel: row.source === 'STAFF' ? '商家发起' : '顾客发起',
           status: row.status,
           statusLabel: CUSTOM_RECIPE_AFTERSALE_STATUS_LABELS[row.status],
           description: row.description,
@@ -814,14 +1117,29 @@ export class CustomRecipeAftersaleService {
       : 2;
 
     const rows = await this.prisma.customRecipeAftersale.findMany({
-      where: { orderId: order.id },
-      select: { id: true, status: true, rejectReason: true, createdAt: true },
+      /**
+       * 只统计“调整”类：
+       * - 旧的问题/其他意见/退款单不占调整次数，也不挡住调整提交；
+       * - 顾客撤回、商家驳回（都是 REJECTED）都不算一次，没有实际调整。
+       */
+      where: { orderId: order.id, type: 'ADJUST_RECIPE' },
+      select: {
+        id: true,
+        status: true,
+        rejectReason: true,
+        createdAt: true,
+        source: true,
+      },
     });
 
-    /** 撤回过的 (`rejectReason = '顾客自行撤回'`) 不计数 */
-    const withdrawn = (row: { rejectReason: string | null }) =>
-      (row.rejectReason || '').includes('撤回');
-    const usedCount = rows.filter((row) => !withdrawn(row)).length;
+    /**
+     * 只数**顾客自己提的**（2026-10-27）：
+     * 员工代客发起是商家行为，不能扣顾客的免费次数；
+     * 但它仍然算「有进行中的调整」，不能再提一条（否则后台两条一模一样的待办）。
+     */
+    const usedCount = rows.filter(
+      (row) => row.source !== 'STAFF' && row.status !== 'REJECTED',
+    ).length;
     const freeRevisionsLeft = Math.max(0, freeRevisionCount - usedCount);
 
     const hasOpen = rows.some((row) =>
@@ -845,7 +1163,7 @@ export class CustomRecipeAftersaleService {
     } else if (windowDaysLeft !== null && windowDaysLeft <= 0) {
       reason = `已超过售后受理期（交付后 ${windowDays} 天内），如需帮助请联系客服`;
     } else if (hasOpen) {
-      reason = '你已经提交过售后，我们正在处理中';
+      reason = '你已经提交过一次调整，我们正在处理中';
     } else if (freeRevisionsLeft <= 0) {
       reason = `免费调整次数已用完（共 ${freeRevisionCount} 次），如需帮助请联系客服`;
     }
@@ -895,6 +1213,7 @@ export class CustomRecipeAftersaleService {
   private parseRecipeRequestsShape(value: unknown): Array<{
     deliveryItemId: unknown;
     description: unknown;
+    photos: unknown;
   }> {
     if (value === undefined || value === null) return [];
     if (!Array.isArray(value)) {
@@ -908,6 +1227,7 @@ export class CustomRecipeAftersaleService {
       return {
         deliveryItemId: record.deliveryItemId,
         description: record.description,
+        photos: record.photos,
       };
     });
   }
@@ -923,7 +1243,12 @@ export class CustomRecipeAftersaleService {
       const deliveryItemId = String(record.deliveryItemId ?? '').trim();
       const description = String(record.description ?? '').trim();
       if (!deliveryItemId || !description) return [];
-      return [{ deliveryItemId, description }];
+      const photos = Array.isArray(record.photos)
+        ? record.photos
+            .map((photo) => String(photo ?? '').trim())
+            .filter((photo): photo is string => photo.length > 0)
+        : [];
+      return [{ deliveryItemId, description, photos }];
     });
   }
 
@@ -992,6 +1317,28 @@ export class CustomRecipeAftersaleService {
         ),
       recipeRequests: this.readRecipeRequests(row.recipeRequests),
     };
+  }
+
+  /**
+   * 顾客端状态中文。
+   *
+   * 后台的 `statusLabel` 把 `REJECTED` 统一翻成“未受理”，
+   * 但顾客自己撤回也走 REJECTED —— 顾客看到的应当是“已撤销”。
+   * RESOLVED 在这页显示“已交付”，与“调整完成”语义一致。
+   */
+  private customerStatusLabel(row: {
+    status: string;
+    rejectReason?: string | null;
+  }): string {
+    if (row.status === 'RESOLVED') return '已交付';
+    if (row.status === 'REJECTED') {
+      return (row.rejectReason || '').includes('撤回') ? '已撤销' : '未受理';
+    }
+    return (
+      CUSTOM_RECIPE_AFTERSALE_STATUS_LABELS[
+        row.status as keyof typeof CUSTOM_RECIPE_AFTERSALE_STATUS_LABELS
+      ] ?? row.status
+    );
   }
 
   private async getWindowDays(): Promise<number> {

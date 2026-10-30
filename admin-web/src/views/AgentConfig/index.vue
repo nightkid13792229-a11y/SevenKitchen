@@ -64,6 +64,43 @@
       </div>
     </el-card>
 
+    <!--
+      AI 食谱封面（2026-10-28）：DeepSeek 写提示词、Seedream 5.0 Pro 生图。
+      与上面的 DeepSeek 文本配置、智谱旧配置都是独立的 Key/用途。
+      真正生成在「发布 / 更新 → 封面图」和「上线检查 → 订单展示」。
+    -->
+    <el-card shadow="never" class="section">
+      <template #header>
+        <div class="card-header">
+          <span>AI 食谱封面</span>
+          <el-tag :type="recipeCoverStatus.type" effect="plain">
+            {{ recipeCoverStatus.label }}
+          </el-tag>
+        </div>
+      </template>
+
+      <p class="zhipu-hint">
+        DeepSeek 负责把配方食材写成摄影提示词，火山方舟 Seedream 5.0 Pro 负责生图。
+        两个模型都启用、保存 Key，且系统提示词非空时，两个页面的 AI 生成按钮才可用。
+        生成一张约 0.2 元。
+      </p>
+
+      <div class="recipe-cover-status">
+        <span>DeepSeek：{{ recipeCoverConfig?.deepseek.configured ? '已配置' : '未配置' }}</span>
+        <span>Seedream：{{ recipeCoverConfig?.ark.configured ? '已配置' : '未配置' }}</span>
+        <span>提示词：{{ recipeCoverConfig?.promptTemplate ? '已配置' : '使用默认' }}</span>
+      </div>
+
+      <el-button type="primary" @click="recipeCoverDrawerVisible = true">
+        配置
+      </el-button>
+    </el-card>
+
+    <RecipeCoverConfigDrawer
+      v-model="recipeCoverDrawerVisible"
+      @saved="loadRecipeCoverConfig"
+    />
+
     <!-- 配置抽屉（可复用，按用途传参） -->
     <AgentSettingsDrawer
       v-model="drawerVisible"
@@ -80,8 +117,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { nutritionGovernanceApi } from '@/api/nutritionGovernance'
 import {
   AGENT_DEFAULT_PURPOSE,
@@ -89,7 +126,19 @@ import {
   agentPurposeLabel
 } from '@/constants/agentPurposes'
 import AgentSettingsDrawer from './components/AgentSettingsDrawer.vue'
-import type { AgentProviderSettings, UpdateAgentProviderSettingsPayload } from '@/types/nutritionGovernance'
+import RecipeCoverConfigDrawer from './RecipeCoverConfigDrawer.vue'
+import {
+  buildZhipuImageSettingsPayload,
+  resolveZhipuImageStatus,
+  validateZhipuImageForm,
+  type ZhipuImageForm
+} from '@/utils/agentConfig/zhipuImage'
+import type {
+  AgentProviderSettings,
+  RecipeCoverConfig,
+  UpdateAgentProviderSettingsPayload,
+  ZhipuImageSettings
+} from '@/types/nutritionGovernance'
 
 interface PurposeRow {
   purpose: string
@@ -104,6 +153,21 @@ interface PurposeRow {
 const loading = ref(false)
 const rows = ref<Record<string, PurposeRow>>({})
 
+const recipeCoverDrawerVisible = ref(false)
+const recipeCoverConfig = ref<RecipeCoverConfig | null>(null)
+const recipeCoverStatus = computed(() => ({
+  label: recipeCoverConfig.value?.ready ? '可用' : '未就绪',
+  type: recipeCoverConfig.value?.ready ? 'success' : 'info'
+}))
+
+async function loadRecipeCoverConfig() {
+  try {
+    recipeCoverConfig.value = await nutritionGovernanceApi.getRecipeCoverConfig()
+  } catch {
+    recipeCoverConfig.value = null
+  }
+}
+
 const drawerVisible = ref(false)
 const drawerPurpose = ref('')
 const drawerPurposeLabel = ref('')
@@ -112,9 +176,112 @@ const drawerLoading = ref(false)
 const drawerSaving = ref(false)
 const drawerTesting = ref(false)
 
+/** 生图用途走下面的「智谱封面图」卡片；DeepSeek 列表里不再出现，避免点错配置抽屉 */
 const purposeRows = computed(() =>
-  AGENT_PURPOSES.map((meta) => rows.value[meta.purpose]!).filter(Boolean)
+  AGENT_PURPOSES.filter((meta) => meta.purpose !== 'RECIPE_COVER_IMAGE')
+    .map((meta) => rows.value[meta.purpose]!)
+    .filter(Boolean)
 )
+
+const zhipuSettings = ref<ZhipuImageSettings | null>(null)
+const zhipuForm = reactive<ZhipuImageForm>({
+  enabled: false,
+  baseUrl: 'https://open.bigmodel.cn',
+  model: 'glm-image',
+  apiKey: ''
+})
+const zhipuSaving = ref(false)
+const zhipuTesting = ref(false)
+
+const zhipuStatus = computed(() => resolveZhipuImageStatus(zhipuSettings.value))
+const zhipuKeyPlaceholder = computed(() =>
+  zhipuSettings.value?.apiKeyConfigured
+    ? `已配置（末四位 ${zhipuSettings.value.apiKeyLast4 ?? '****'}），留空不修改`
+    : '粘贴智谱开放平台（bigmodel.cn）的 API Key'
+)
+
+/** 服务器永远只回末四位；输入框每次都用空串，绝不回填明文 */
+function applyZhipuForm(settings: ZhipuImageSettings | null) {
+  zhipuForm.enabled = Boolean(settings?.enabled)
+  zhipuForm.baseUrl = settings?.baseUrl || 'https://open.bigmodel.cn'
+  zhipuForm.model = settings?.model || 'glm-image'
+  zhipuForm.apiKey = ''
+}
+
+async function loadZhipuSettings() {
+  try {
+    const settings = await nutritionGovernanceApi.getZhipuImageSettings()
+    zhipuSettings.value = settings
+    applyZhipuForm(settings)
+  } catch {
+    // 拦截器已提示
+  }
+}
+
+async function saveZhipuSettings() {
+  const invalid = validateZhipuImageForm(zhipuForm, zhipuSettings.value)
+  if (invalid) {
+    ElMessage.warning(invalid)
+    return
+  }
+
+  zhipuSaving.value = true
+  try {
+    const saved = await nutritionGovernanceApi.updateZhipuImageSettings(
+      buildZhipuImageSettingsPayload(zhipuForm)
+    )
+    zhipuSettings.value = saved
+    applyZhipuForm(saved)
+    ElMessage.success('智谱封面图配置已保存')
+  } catch {
+    // 拦截器已提示
+  } finally {
+    zhipuSaving.value = false
+  }
+}
+
+async function testZhipuSettings() {
+  zhipuTesting.value = true
+  try {
+    const result = await nutritionGovernanceApi.testZhipuImageSettings()
+    ElMessage.success(result?.message || '智谱 Key 有效')
+  } catch {
+    // 拦截器已提示
+  } finally {
+    zhipuTesting.value = false
+  }
+}
+
+async function clearZhipuKey() {
+  try {
+    await ElMessageBox.confirm(
+      '清除后，AI 封面会暂时用不了，直到重新填写 Key。确定清除？',
+      '清除智谱 API Key',
+      {
+        type: 'warning',
+        confirmButtonText: '清除',
+        cancelButtonText: '取消'
+      }
+    )
+  } catch {
+    return
+  }
+
+  zhipuSaving.value = true
+  try {
+    const saved = await nutritionGovernanceApi.updateZhipuImageSettings({
+      enabled: false,
+      clearApiKey: true
+    })
+    zhipuSettings.value = saved
+    applyZhipuForm(saved)
+    ElMessage.success('已清除智谱 API Key')
+  } catch {
+    // 拦截器已提示
+  } finally {
+    zhipuSaving.value = false
+  }
+}
 
 async function loadAll() {
   loading.value = true
@@ -122,6 +289,7 @@ async function loadAll() {
     const defaultSettings = await nutritionGovernanceApi.getAgentSettings(AGENT_DEFAULT_PURPOSE)
     const map: Record<string, PurposeRow> = {}
     for (const meta of AGENT_PURPOSES) {
+      if (meta.purpose === 'RECIPE_COVER_IMAGE') continue
       let settings: AgentProviderSettings | null = null
       try {
         settings = await nutritionGovernanceApi.getAgentSettings(meta.purpose)
@@ -180,7 +348,10 @@ async function handleTest(payload: UpdateAgentProviderSettingsPayload) {
   }
 }
 
-onMounted(loadAll)
+onMounted(() => {
+  void loadRecipeCoverConfig()
+  void loadAll()
+})
 </script>
 
 <style scoped>
@@ -223,5 +394,32 @@ onMounted(loadAll)
   color: #606266;
   font-size: 12.5px;
   line-height: 1.5;
+}
+.zhipu-hint {
+  margin: 0 0 14px;
+  color: #606266;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+.recipe-cover-status {
+  display: flex;
+  gap: 20px;
+  margin: 0 0 14px;
+  color: #606266;
+  font-size: 13px;
+}
+.zhipu-form {
+  max-width: 720px;
+}
+.zhipu-form .el-input {
+  max-width: 420px;
+}
+.zhipu-key-actions {
+  margin-top: 4px;
+}
+.zhipu-note {
+  margin-left: 10px;
+  color: #909399;
+  font-size: 12px;
 }
 </style>

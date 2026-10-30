@@ -31,12 +31,10 @@ import { AuthGuard, CurrentUser, type RequestUser } from '../auth';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import {
   AddRecipeDesignItemDto,
-  AiDesignSuggestDto,
-  AiNutritionPlanAcceptDto,
-  AiNutritionPlanGenerateDto,
   BatchReorderDesignItemsDto,
   CreateOrderDesignFromTemplateDto,
   CreatePrivateRecipeSnapshotDto,
+  SwitchOrderDesignStageDto,
   CopyRecipeSeriesStageIngredientsDto,
   CreateRecipeDesignerSupplementOptionDto,
   CreateRecipeDesignDraftDto,
@@ -48,6 +46,7 @@ import {
   ListRecipeTemplatesDto,
   PublishRecipeDesignDraftDto,
   RenameRecipeSeriesDto,
+  ReleaseRecipeSeriesDto,
   ReorderRecipeDesignItemsDto,
   SetRecipeSeriesReferenceDogDto,
   UpdateDogDesignNotesDto,
@@ -267,6 +266,33 @@ export class RecipeDesignerController {
     return ApiResponseDto.success(staged);
   }
 
+  /**
+   * 切换本单设计的生命阶段（2026-10-30）。
+   *
+   * 订单定制是「原地换阶段」：只改这一份草稿的阶段，原料 / 展示资料不动；
+   * 已经加入待提交的会退回编辑中，需要重新加入（管理员再操作一次）。
+   * 权限与编辑原料一致，员工也可以换；已交付的这份不许换（走售后改稿）。
+   */
+  @Patch('orders/:orderId/designs/:designId/stage')
+  @UseGuards(StaffGuard)
+  @ApiOperation({
+    summary: 'Switch the life stage of an order-bound design draft in place',
+  })
+  async switchOrderDesignStage(
+    @Param('orderId') orderId: string,
+    @Param('designId') designId: string,
+    @Body() dto: SwitchOrderDesignStageDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.orderRecipeDesignService.switchStage({
+      orderId,
+      designId,
+      scenario: dto.scenario,
+      access: { userId: user.userId, role: user.role },
+    });
+    return ApiResponseDto.success(result);
+  }
+
   /** 移除一个尚未最终交付的槽位（EDITING / READY）。 */
   /**
    * 售后改稿：把已交付的这一份重新打开为可编辑槽位。
@@ -471,7 +497,7 @@ export class RecipeDesignerController {
   @Patch('series/:seriesId/release-settings')
   @UseGuards(StaffGuard)
   @ApiOperation({
-    summary: 'Patch required life stages and presentation of a recipe series',
+    summary: 'Patch presentation settings of a recipe series',
   })
   async updateSeriesReleaseSettings(
     @Param('seriesId') seriesId: string,
@@ -483,6 +509,9 @@ export class RecipeDesignerController {
         seriesId,
         dto,
         toRecipeDesignerAccessContext(user),
+        // 这是「人点保存发布设置」的唯一入口：立即同步线上阶段门面。
+        // AI set_copy 直接调服务、不传该选项，避免 AI 改文案立即影响线上。
+        { applyToLive: true },
       );
     return ApiResponseDto.success(settings);
   }
@@ -492,15 +521,17 @@ export class RecipeDesignerController {
   @Roles('ADMIN')
   @ApiOperation({
     summary:
-      'Release a whole recipe series after all required stages are ready',
+      'Release all READY series stages first time, or only selected stages on update',
   })
   async releaseSeries(
     @Param('seriesId') seriesId: string,
+    @Body() dto: ReleaseRecipeSeriesDto,
     @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<any>> {
     const result = await this.recipeDesignerService.releaseSeries(
       seriesId,
       toRecipeDesignerAccessContext(user),
+      { stageCodes: dto?.stageCodes },
     );
     return ApiResponseDto.success(result);
   }
@@ -999,139 +1030,6 @@ export class RecipeDesignerController {
     const result = await this.recipeDesignerService.updateDogDesignNotes(
       dogId,
       dto,
-      toRecipeDesignerAccessContext(user),
-    );
-    return ApiResponseDto.success(result);
-  }
-
-  @Post('dogs/:dogId/design-insight/ai-suggest')
-  @UseGuards(StaffGuard)
-  @ApiOperation({
-    summary:
-      'Generate AI recipe design suggestions from a dog profile and design history',
-  })
-  async generateAiDesignSuggestions(
-    @Param('dogId') dogId: string,
-    @Body() dto: AiDesignSuggestDto,
-    @CurrentUser() user: RequestUser,
-  ): Promise<ApiResponseDto<any>> {
-    const result = await this.recipeDesignerService.generateAiDesignSuggestions(
-      dogId,
-      toRecipeDesignerAccessContext(user),
-      dto.draftId,
-    );
-    return ApiResponseDto.success(result);
-  }
-
-  // ---------- AI 设计建议四步向导 ----------
-
-  /** 步骤一：生成营养方案 */
-  @Post('dogs/:dogId/design-insight/ai-nutrition-plan')
-  @UseGuards(StaffGuard)
-  @ApiOperation({
-    summary:
-      'Step 1: generate a nutrition plan with knowledge citations for a dog',
-  })
-  async generateAiNutritionPlan(
-    @Param('dogId') dogId: string,
-    @Body() dto: AiNutritionPlanGenerateDto,
-    @CurrentUser() user: RequestUser,
-  ): Promise<ApiResponseDto<any>> {
-    const result = await this.recipeDesignerService.generateAiNutritionPlan(
-      dogId,
-      dto.draftId,
-      toRecipeDesignerAccessContext(user),
-      dto.userNotes,
-    );
-    return ApiResponseDto.success(result);
-  }
-
-  /** 步骤一（共识）：认可 / 修改营养方案 */
-  @Post('drafts/:draftId/ai/nutrition-plan/accept')
-  @UseGuards(StaffGuard)
-  @ApiOperation({
-    summary: 'Accept or revise the nutrition plan for a draft',
-  })
-  async acceptAiNutritionPlan(
-    @Param('draftId') draftId: string,
-    @Body() dto: AiNutritionPlanAcceptDto,
-    @CurrentUser() user: RequestUser,
-  ): Promise<ApiResponseDto<any>> {
-    const result = await this.recipeDesignerService.acceptAiNutritionPlan(
-      draftId,
-      dto,
-      toRecipeDesignerAccessContext(user),
-    );
-    return ApiResponseDto.success(result);
-  }
-
-  /** 步骤二：食材推荐 */
-  @Post('drafts/:draftId/ai/ingredient-recommendation')
-  @UseGuards(StaffGuard)
-  @ApiOperation({
-    summary:
-      'Step 2: recommend ingredients based on the accepted nutrition plan',
-  })
-  async generateAiIngredientRecommendation(
-    @Param('draftId') draftId: string,
-    @CurrentUser() user: RequestUser,
-  ): Promise<ApiResponseDto<any>> {
-    const result =
-      await this.recipeDesignerService.generateAiIngredientRecommendation(
-        draftId,
-        toRecipeDesignerAccessContext(user),
-      );
-    return ApiResponseDto.success(result);
-  }
-
-  /** 步骤三：食谱审核 */
-  @Post('drafts/:draftId/ai/review')
-  @UseGuards(StaffGuard)
-  @ApiOperation({
-    summary:
-      'Step 3: review the recipe against the plan, framework and diversity',
-  })
-  async reviewAiRecipe(
-    @Param('draftId') draftId: string,
-    @CurrentUser() user: RequestUser,
-  ): Promise<ApiResponseDto<any>> {
-    const result = await this.recipeDesignerService.reviewAiRecipe(
-      draftId,
-      toRecipeDesignerAccessContext(user),
-    );
-    return ApiResponseDto.success(result);
-  }
-
-  /** 步骤四：生成制作 SOP */
-  @Post('drafts/:draftId/ai/sop')
-  @UseGuards(StaffGuard)
-  @ApiOperation({
-    summary: 'Step 4: generate production and customer SOP for the draft',
-  })
-  async generateAiSop(
-    @Param('draftId') draftId: string,
-    @CurrentUser() user: RequestUser,
-  ): Promise<ApiResponseDto<any>> {
-    const result = await this.recipeDesignerService.generateAiSop(
-      draftId,
-      toRecipeDesignerAccessContext(user),
-    );
-    return ApiResponseDto.success(result);
-  }
-
-  /** 读取配方草稿上的 AI 设计数据 */
-  @Get('drafts/:draftId/ai-design-data')
-  @UseGuards(StaffGuard)
-  @ApiOperation({
-    summary:
-      'Read persisted AI design data (plan / recommendations / reviews / SOP) of a draft',
-  })
-  async getAiDesignData(
-    @Param('draftId') draftId: string,
-    @CurrentUser() user: RequestUser,
-  ): Promise<ApiResponseDto<any>> {
-    const result = await this.recipeDesignerService.getAiDesignData(
-      draftId,
       toRecipeDesignerAccessContext(user),
     );
     return ApiResponseDto.success(result);

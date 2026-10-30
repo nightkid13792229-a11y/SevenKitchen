@@ -1,3 +1,4 @@
+import { RecipeCoverImageService } from '../../application/recipe-designer/recipe-cover-image.service';
 /**
  * Recipes Controller
  * Handles recipe related endpoints
@@ -62,8 +63,11 @@ import {
   type AllergenHit,
 } from '../../domain/dog/allergen-vocabulary';
 import { AllergenVocabularyService } from '../../application/health/allergen-vocabulary.service';
-import { RecipeCoverImageService } from '../../application/recipe-designer/recipe-cover-image.service';
+import { pickCoverBadgeNames } from '../../domain/recipe-designer/cover-badge-policy';
 import { DiySheetService } from '../../application/recipe/diy-sheet.service';
+import { CustomRecipeDeliveryService } from '../../application/custom-recipe/custom-recipe-delivery.service';
+import { SupplementCandidateService } from '../../application/supplement-shop/supplement-candidate.service';
+import { computeSheetTotalWeightG } from '../../application/supplement-shop/supplement-sheet-weight.util';
 import { OrderService } from '../../application/order/order.service';
 import {
   GenerateDiySheetDto,
@@ -114,11 +118,13 @@ export class RecipesController {
     @Inject(RECIPE_REPOSITORY_TOKEN)
     private readonly recipeRepository: RecipeRepository,
     private readonly diySheetService: DiySheetService,
-    private readonly recipeCoverImageService: RecipeCoverImageService,
     private readonly prisma: PrismaService,
     private readonly jwtAuthService: JwtAuthService,
     private readonly orderService: OrderService,
     private readonly allergenVocabulary: AllergenVocabularyService,
+    private readonly deliveryService: CustomRecipeDeliveryService,
+    private readonly supplementCandidateService: SupplementCandidateService,
+    private readonly recipeCoverImageService: RecipeCoverImageService,
   ) {}
 
   private buildPublicRecipeWhere(
@@ -614,7 +620,46 @@ export class RecipesController {
     id: string,
     shareToken?: string,
     req?: any,
+    orderNo?: string | null,
   ): Promise<Recipe | null> {
+    /**
+     * 交付版本锁定（2026-10-24 · 定制交付页重构）。
+     *
+     * 带 `orderId` 时，只认**交付记录里冻结的那一版**：
+     *   · 订单不属于当前用户 → null（连"有没有交付"都不泄露）；
+     *   · 交付记录里查不到这道食谱 → null；
+     *   · 按指定版本取不到 → null。
+     * **绝不回退最新版** —— 否则顾客会看到没交付给他的配方。
+     */
+    const pinnedOrderNo = String(orderNo ?? '').trim();
+    if (pinnedOrderNo) {
+      const user = this.getRequestUser(req);
+      const customerId = user?.customerId || user?.userId;
+      if (!user || !customerId) return null;
+
+      const delivered =
+        await this.deliveryService.resolveDeliveredRecipeVersion(
+          {
+            orderNo: pinnedOrderNo,
+            recipeBusinessId: id,
+            customerId,
+          },
+          /**
+           * 员工从后台「订单中心」点进来时，他不是这张单的顾客，
+           * 归属校验必然失败。只对 STAFF/ADMIN 放开（2026-10-30）。
+           */
+          {
+            staffBypass: user.role === 'STAFF' || user.role === 'ADMIN',
+          },
+        );
+      if (!delivered) return null;
+
+      return this.recipeRepository.findByIdAndVersion(
+        id,
+        delivered.version,
+      );
+    }
+
     const recipe = await this.recipeRepository.findById(id);
     if (!recipe) {
       return null;
@@ -1442,9 +1487,7 @@ export class RecipesController {
       include: { healthTag: { select: { name: true } } },
       orderBy: { sortOrder: 'asc' },
     });
-    return rows
-      .map((row) => row.healthTag?.name)
-      .filter((name): name is string => Boolean(name));
+    return pickCoverBadgeNames(rows.map((row) => row.healthTag?.name));
   }
 
   /**
@@ -1796,17 +1839,72 @@ export class RecipesController {
     );
   }
 
-  /**
-   * AI 生图能不能用（2026-10-18）。
-   *
-   * 后台按钮据此**置灰 + 说明**，而不是让管理员点了才报错。
-   * ⚠️ **必须声明在 `@Get(':id')` 之前**（2026-10-18 踩过）。
-   * 我一开始放在 `@Post(':id/ai-cover')` 旁边（文件很后面），
-   * 结果请求被 `GET /recipes/:id` 当成 `id='ai-cover-availability'` 吃掉，
-   * 返回 `{"code":404,"message":"Recipe not found"}` —— **接口永远调不通，而且不报错**。
-   *
-   * Nest 按**声明顺序**匹配路由，`@Get(':id')` 是通配，后面的一律被它抢走。
-   */
+    @Get(':id/supplement-candidates')
+  @ApiOperation({ summary: '补剂可替代候选（服务端计算用量）' })
+  @ApiQuery({
+    name: 'totalWeightG',
+    required: false,
+    description: '这批食物总重（g）；没有制作单时必填',
+  })
+  @ApiQuery({
+    name: 'diySheetId',
+    required: false,
+    description: '制作单 ID：优先用制作单的包规/天数算总重',
+  })
+  @ApiQuery({ name: 'orderId', required: false, description: '定制订单号（锁定交付版本）' })
+  @ApiQuery({ name: 'shareToken', required: false })
+  async getSupplementCandidates(
+    @Param('id') id: string,
+    @Query('totalWeightG') totalWeightGRaw?: string,
+    @Query('diySheetId') diySheetId?: string,
+    @Query('orderId') orderId?: string,
+    @Query('shareToken') shareToken?: string,
+    @Req() req?: any,
+  ): Promise<ApiResponseDto<unknown>> {
+    const recipe = await this.getAccessibleRecipe(id, shareToken, req, orderId);
+    if (!recipe) {
+      throw new NotFoundException('Recipe not found');
+    }
+
+    let totalWeightG = Number(totalWeightGRaw);
+    let weightSource: 'DIY_SHEET' | 'QUERY' = 'QUERY';
+
+    if (diySheetId) {
+      const user = this.getRequestUser(req);
+      const userId = user?.customerId || user?.userId;
+      const sheet = await this.prisma.dIYSheet.findUnique({
+        where: { id: diySheetId },
+        select: {
+          userId: true,
+          packagePlan: true,
+          dailyIntakeG: true,
+          cycleDays: true,
+        },
+      });
+      if (sheet && userId && sheet.userId === userId) {
+        const fromSheet = computeSheetTotalWeightG(sheet);
+        if (fromSheet > 0) {
+          totalWeightG = fromSheet;
+          weightSource = 'DIY_SHEET';
+        }
+      }
+    }
+
+    if (!Number.isFinite(totalWeightG) || totalWeightG <= 0) {
+      throw new BadRequestException('缺少这批食物的总重，无法计算补剂用量');
+    }
+
+    return ApiResponseDto.success(
+      await this.supplementCandidateService.resolveForRecipe({
+        recipeBusinessId: id,
+        recipeVersion: recipe.version,
+        totalWeightG,
+        weightSource,
+        audience: 'CUSTOMER',
+      }),
+    );
+  }
+
   @Get('ai-cover-availability')
   @UseGuards(AuthGuard, StaffGuard)
   @ApiSecurity('bearer')
@@ -1837,6 +1935,12 @@ export class RecipesController {
     required: false,
     description: 'Manual series life stage',
   })
+  @ApiQuery({
+    name: 'orderId',
+    required: false,
+    description:
+      '定制订单号：带上则按交付记录冻结的那一版取食谱（不带取最新版）',
+  })
   @ApiResponse({
     status: 200,
     description: 'Recipe detail',
@@ -1848,13 +1952,30 @@ export class RecipesController {
     @Query('shareToken') shareToken?: string,
     @Query('dogId') dogId?: string,
     @Query('lifeStage') lifeStage?: string,
+    @Query('orderId') orderId?: string,
     @Req() req?: any,
   ): Promise<ApiResponseDto<RecipeDetailDto> | ApiResponseDto<null>> {
+    const pinnedOrderId = String(orderId ?? '').trim();
     const accessibleRecipe = await this.getAccessibleRecipe(
       id,
       shareToken,
       req,
+      pinnedOrderId || null,
     );
+
+    /**
+     * 交付版本锁定：带 orderId 时只走这一版，**不落到下面的公开系列选择**
+     * （那条路会取最新版，正好是我们要避免的）。
+     */
+    if (pinnedOrderId) {
+      if (!accessibleRecipe) {
+        return ApiResponseDto.error(404, 'Recipe not found');
+      }
+      return ApiResponseDto.success(
+        await this.buildRecipeDetailWithOrderability(accessibleRecipe),
+      );
+    }
+
     if (accessibleRecipe && accessibleRecipe.status !== 'PUBLIC') {
       return ApiResponseDto.success(
         await this.buildRecipeDetailWithOrderability(accessibleRecipe),
@@ -1914,83 +2035,7 @@ export class RecipesController {
     return ApiResponseDto.success(null);
   }
 
-  /**
-   * AI 生成封面图（2026-10-18）
-   *
-   * ## 为什么不覆盖已有的图
-   *
-   * 这个接口**只返回生成好的地址，不写库**。要不要用这张、换不换，
-   * 由管理员在界面上确认后再保存。
-   *
-   * 理由：生图有随机性，出来一张不像的图就直接覆盖上去，
-   * 管理员得再来一遍、而且原图已经丢了。**先看再存**才是对的。
-   *
-   * ## 权限
-   *
-   * 与「交付食谱」「改配置」同级 —— 仅 ADMIN。
-   * 这个接口会**花钱**（每张约 0.1 元），不该让员工随手点。
-   */
-  @Post(':id/ai-cover')
-  @UseGuards(AuthGuard, AdminGuard)
-  @ApiSecurity('bearer')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'AI 生成食谱封面图（不写库，由界面确认后再保存）' })
-  @ApiParam({ name: 'id', description: 'Recipe ID' })
-  async generateAiCover(
-    @Param('id') id: string,
-  ): Promise<
-    ApiResponseDto<{ url: string; provider: string; model: string }>
-  > {
-    if (!(await this.recipeCoverImageService.isAvailable())) {
-      throw new BadRequestException(
-        'AI 生图还没配置：请到后台「AI 设置」里添加 purpose=RECIPE_COVER_IMAGE、provider=ZHIPU 的一条并启用',
-      );
-    }
-
-    const recipe = await this.prisma.recipe.findFirst({
-      where: { recipeId: id },
-      orderBy: { version: 'desc' },
-      include: {
-        items: {
-          include: { ingredient: { select: { name: true, type: true } } },
-        },
-      },
-    });
-
-    if (!recipe) {
-      throw new NotFoundException('Recipe not found');
-    }
-
-    /**
-     * 提示词只取**食材名**，不带重量与营养数据 ——
-     * 那些对画面没帮助，反而会让模型画出奇怪的东西。
-     * 补剂排除掉：它们不是"这道菜"的组成部分。
-     */
-    const foodNames = recipe.items
-      .filter((item) => item.ingredient?.type !== 'SUPPLEMENT')
-      .map((item) => item.ingredient?.name)
-      .filter((name): name is string => Boolean(name))
-      .slice(0, 5);
-
-    const result = await this.recipeCoverImageService.generate({
-      recipeName: recipe.name,
-      /**
-       * `Recipe` 没有 `lifeStage` 字段（那是旧记忆）——
-       * 实际是 `seriesLifeStage`（单值）与 `applicableLifeStages`（JSON 数组）。
-       * 优先用数组，取不到再退回 seriesLifeStage。
-       */
-      lifeStageLabels: Array.isArray(recipe.applicableLifeStages)
-        ? (recipe.applicableLifeStages as string[])
-        : recipe.seriesLifeStage
-          ? [recipe.seriesLifeStage]
-          : [],
-      foodNames,
-    });
-
-    return ApiResponseDto.success(result);
-  }
-
-  @Post(':id/share-token')
+    @Post(':id/share-token')
   @UseGuards(AuthGuard, StaffGuard)
   @ApiSecurity('bearer')
   @HttpCode(HttpStatus.OK)
@@ -2049,10 +2094,12 @@ export class RecipesController {
     @Req() req?: any,
   ): Promise<ApiResponseDto<DiySheetResponseDto> | ApiResponseDto<null>> {
     try {
+      const pinnedOrderId = String(dto.orderId ?? '').trim();
       const accessibleRecipe = await this.getAccessibleRecipe(
         recipeId,
         dto.shareToken,
         req,
+        pinnedOrderId || null,
       );
       if (!accessibleRecipe) {
         return ApiResponseDto.error(404, `Recipe not found: ${recipeId}`);
@@ -2061,17 +2108,25 @@ export class RecipesController {
       const sheetData = await this.diySheetService.generateDiySheet(
         recipeId,
         dto.dogId,
+        pinnedOrderId ? accessibleRecipe.version : undefined,
       );
 
-      // Count the generation only after the DIY sheet is successfully produced
-      const latestRecipe = await this.prisma.recipe.findFirst({
-        where: { recipeId },
+      /**
+       * 计数落在**实际取用的那一版**上：带 orderId 时是交付版本，
+       * 不带时才是最新版。计数错了不影响顾客，但运营看到的「生成次数」
+       * 会跑到一个没被用过的版本上。
+       */
+      const countedRecipe = await this.prisma.recipe.findFirst({
+        where: {
+          recipeId,
+          ...(pinnedOrderId ? { version: accessibleRecipe.version } : {}),
+        },
         orderBy: { version: 'desc' },
         select: { id: true },
       });
-      if (latestRecipe) {
+      if (countedRecipe) {
         await this.prisma.recipe.update({
-          where: { id: latestRecipe.id },
+          where: { id: countedRecipe.id },
           data: { diyGenCount: { increment: 1 } },
         });
       }

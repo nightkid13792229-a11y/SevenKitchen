@@ -177,7 +177,6 @@
   "src/utils/config.ts → import()（脚本里调用了 1 次，但文件里找不到定义）",
   "src/utils/config.ts → options()（脚本里调用了 1 次，但文件里找不到定义）",
   "src/utils/config.ts → recipe()（脚本里调用了 1 次，但文件里找不到定义）",
-  "src/utils/cover-badge.ts → source()（脚本里调用了 3 次，但文件里找不到定义）",
   "src/utils/custom-recipe-order.ts → from()（脚本里调用了 1 次，但文件里找不到定义）",
   "src/utils/custom-recipe-order.ts → input()（脚本里调用了 5 次，但文件里找不到定义）",
   "src/utils/diy-sheet-format.ts → amount()（脚本里调用了 1 次，但文件里找不到定义）",

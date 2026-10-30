@@ -151,6 +151,32 @@ describe('上线检查抽屉 · 加载 / 刷新 / 状态', () => {
     expect(clean(helperSource)).toContain('订单信息')
     expect(clean(helperSource)).toContain('上架文案')
   })
+
+  it('CATALOG 抽屉只读展示系列资料，并提示去食谱列表发布 / 更新', () => {
+    expect(drawer).toContain('seriesId?: string')
+    // 真正决定是否拉系列资料的是加载函数里的 guard，不是 ORDER 提交按钮
+    expect(drawer).toContain('if (!props.seriesId || props.orderId)')
+    expect(drawer).toContain(
+      "v-if=\"readiness.designMode !== 'ORDER' && seriesId\""
+    )
+    expect(drawer).toContain(
+      'recipeDesignerApi.getSeriesReleaseReadiness(props.seriesId)'
+    )
+    expect(drawer).toContain('seriesReadiness')
+    expect(drawer).toContain('seriesLoading')
+    expect(drawer).toContain('seriesError')
+    expect(drawer).toContain("emit('go-to-series-list')")
+    expect(drawer).toContain('系列资料（共用）')
+    expect(drawer).toContain('presentation.coverImageUrl')
+    expect(drawer).toContain('presentation.sellingPoint')
+    expect(drawer).toContain('presentation.coverBadges')
+    expect(drawer).toContain('去食谱列表发布 / 更新')
+    expect(drawer).toContain('未设置（封面左下角为空）')
+    expect(drawer).toContain('✓')
+    expect(drawer).toContain('✗')
+    // 展示资料是系列共用，抽屉里不出现可编辑的目标标签
+    expect(drawer).not.toContain('目标健康标签')
+  })
 })
 
 describe('编辑器 · 上线检查入口', () => {
@@ -204,6 +230,17 @@ describe('编辑器 · 上线检查入口', () => {
     expect(openBlock).not.toContain('goPublish')
     expect(editor).toContain('v-model="launchReadinessVisible"')
     expect(editor).toContain(':draft-id="currentDraftId"')
+  })
+
+  it('把系列 id 传给上线检查，并能从检查结果切到食谱列表', () => {
+    const tagStart = editor.indexOf('<LaunchReadinessDrawer')
+    expect(tagStart).toBeGreaterThan(-1)
+    const tagEnd = editor.indexOf('/>', tagStart)
+    expect(tagEnd).toBeGreaterThan(tagStart)
+    const drawerTag = editor.slice(tagStart, tagEnd)
+
+    expect(drawerTag).toContain(':series-id="seriesId"')
+    expect(drawerTag).toContain('@go-to-series-list="goToSeriesListFromCheck"')
   })
 
   it('没保存成功的修改会阻止打开，并提示等保存完成后再试', () => {

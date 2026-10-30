@@ -51,10 +51,15 @@ import { CustomerMessageController } from './interfaces/controllers/customer-mes
 import { CustomerMessageService } from './application/message/customer-message.service';
 import { AdminPlatformOptionsController } from './interfaces/controllers/admin-platform-options.controller';
 import { PlatformOptionsService } from './application/platform-options/platform-options.service';
+import { RecipeTaxonomyService } from './application/recipe-taxonomy/recipe-taxonomy.service';
+import { RecipeNamingService } from './application/recipe-designer/recipe-naming.service';
+import { AdminRecipeTaxonomyController } from './interfaces/controllers/admin-recipe-taxonomy.controller';
+import { AdminRecipeSeriesCoverController } from './interfaces/controllers/admin-recipe-series-cover.controller';
 import { CustomRecipeViewService } from './application/custom-recipe/custom-recipe-view.service';
 import { OrderDesignSubmitService } from './application/custom-recipe/order-design-submit.service';
 import { CustomRecipeDeliveryService } from './application/custom-recipe/custom-recipe-delivery.service';
 import { CustomRecipeAftersaleService } from './application/custom-recipe/custom-recipe-aftersale.service';
+import { CustomRecipeRefundService } from './application/custom-recipe/custom-recipe-refund.service';
 import { CustomRecipeSchedulerService } from './application/scheduler/custom-recipe-scheduler.service';
 import { SharedPhotosController } from './interfaces/controllers/shared-photos.controller';
 import { CustomRecipeService } from './application/custom-recipe/custom-recipe.service';
@@ -84,9 +89,21 @@ import { InMemoryOrderRepository } from './infrastructure/repositories/in-memory
 import { FileBackedOrderRepository } from './infrastructure/repositories/file-backed-order.repository';
 import { PrismaOrderRepository } from './infrastructure/repositories/prisma-order.repository';
 import { PrismaService } from './infrastructure/prisma.service';
+import { IngredientPreparationHistoryService } from './application/recipe/ingredient-preparation-history.service';
 import { RecipeService } from './application/recipe/recipe.service';
 import { CoverImageService } from './application/recipe/cover-image.service';
+import { AiCoverPreviewService } from './application/recipe-designer/ai-cover-preview.service';
+import { RecipeCoverSettingsService } from './application/recipe-designer/recipe-cover-settings.service';
+import { RecipeCoverConfigController } from './interfaces/controllers/recipe-cover-config.controller';
+import { AiCoverPreviewController } from './interfaces/controllers/ai-cover-preview.controller';
+import { DesignRecipeCoverImageService } from './application/recipe-designer/design-recipe-cover-image.service';
+import { DesignRecipeCoverController } from './interfaces/controllers/design-recipe-cover.controller';
+import { CoverReferenceService } from './application/recipe-designer/cover-reference.service';
+import { CoverTrashService } from './application/recipe-designer/cover-trash.service';
+import { RecipeCoverConfigService } from './application/recipe-designer/recipe-cover-config.service';
 import { RecipeCoverImageService } from './application/recipe-designer/recipe-cover-image.service';
+import { RecipeCoverVisualBriefService } from './application/recipe-designer/recipe-cover-visual-brief.service';
+import { SeriesCoverImageService } from './application/recipe-designer/series-cover-image.service';
 import { InMemoryAddressRepository } from './infrastructure/repositories/in-memory-address.repository';
 import { PrismaAddressRepository } from './infrastructure/repositories/prisma-address.repository';
 import { RECIPE_REPOSITORY_TOKEN } from './interfaces/controllers/recipes.controller';
@@ -94,6 +111,7 @@ import {
   OrderService,
   ORDER_REPOSITORY,
 } from './application/order/order.service';
+import { OrderSummaryService } from './application/order/order-summary.service';
 import { OrderSourcePlanService } from './application/order/order-source-plan.service';
 import {
   AddressService,
@@ -197,9 +215,14 @@ import { NutritionGovernanceService } from './application/nutrition-governance/n
 import { IngredientCreationController } from './interfaces/controllers/ingredient-creation.controller';
 import { IngredientCreationAuditService } from './application/ingredient-creation/ingredient-creation-audit.service';
 import { IngredientCreationCandidateService } from './application/ingredient-creation/ingredient-creation-candidate.service';
+import { IngredientCreationAuthorizeService } from './application/ingredient-creation/ingredient-creation-authorize.service';
+import { IngredientCheckRunService } from './application/ingredient-creation/ingredient-check-run.service';
+import { IngredientSearchPlanService } from './application/ingredient-creation/ingredient-search-plan.service';
+import { IngredientSkillService } from './application/ingredient-creation/ingredient-skill.service';
 import { IngredientCreationCheckService } from './application/ingredient-creation/ingredient-creation-check.service';
 import { IngredientCreationCommitService } from './application/ingredient-creation/ingredient-creation-commit.service';
 import { IngredientCreationIntakeService } from './application/ingredient-creation/ingredient-creation-intake.service';
+import { IngredientNameClassifierService } from './application/ingredient-creation/ingredient-name-classifier.service';
 import { IngredientDraftAgentService } from './application/ingredient-creation/ingredient-draft-agent.service';
 import { IngredientCreationToolsService } from './application/ingredient-creation/ingredient-creation-tools.service';
 import { IngredientCreationMergeService } from './application/ingredient-creation/ingredient-creation-merge.service';
@@ -231,6 +254,7 @@ import { WeightGoalPlanController } from './interfaces/controllers/weight-goal-p
 import { AdminWeightGoalPlanController } from './interfaces/controllers/admin-weight-goal-plan.controller';
 import { ProcurementSkuService } from './application/ingredient/procurement-sku.service';
 import { AdminSupplementShopController } from './interfaces/controllers/admin-supplement-shop.controller';
+import { AdminSupplementEquivalenceController } from './interfaces/controllers/admin-supplement-equivalence.controller';
 import { TastingPackConfigService } from './application/tasting-pack/tasting-pack-config.service';
 import { TastingPackPricingService } from './application/tasting-pack/tasting-pack-pricing.service';
 import { TastingPackService } from './application/tasting-pack/tasting-pack.service';
@@ -242,6 +266,9 @@ import {
 } from './interfaces/controllers/tasting-pack.controller';
 import { SupplementCatalogService } from './application/supplement-shop/supplement-catalog.service';
 import { SupplementShopConfigService } from './application/supplement-shop/supplement-shop-config.service';
+import { SupplementDosageService } from './application/supplement-shop/supplement-dosage.service';
+import { SupplementEquivalenceService } from './application/supplement-shop/supplement-equivalence.service';
+import { SupplementCandidateService } from './application/supplement-shop/supplement-candidate.service';
 import { SupplementPricingService } from './application/supplement-shop/supplement-pricing.service';
 import { BusinessCalendarService } from './application/supplement-shop/business-calendar.service';
 import { SupplementSchedulingService } from './application/supplement-shop/supplement-scheduling.service';
@@ -278,10 +305,8 @@ import { RecipeAgentSessionService } from './application/recipe-designer/agent/r
 import { SupplementTargetService } from './application/recipe-designer/supplement-target.service';
 import { OrderRecipeDesignService } from './application/recipe-designer/order-recipe-design.service';
 import { OrderRecipeTemplateService } from './application/recipe-designer/order-recipe-template.service';
-import { AiDesignSuggestionService } from './application/recipe-designer/ai-design-suggestion.service';
 import { RecipeCopywritingService } from './application/recipe-designer/recipe-copywriting.service';
 import { KnowledgeBaseService } from './application/recipe-designer/knowledge-base.service';
-import { RecipeAiWizardService } from './application/recipe-designer/recipe-ai-wizard.service';
 import {
   SupplementLabelExtractionService,
   SUPPLEMENT_LABEL_OCR_PROVIDER,
@@ -371,9 +396,14 @@ validatePrismaConfig();
     LabelModule,
   ],
   controllers: [
+    DesignRecipeCoverController,
+    AiCoverPreviewController,
+    RecipeCoverConfigController,
     CustomerMessageController,
     PlatformOptionsController,
     AdminPlatformOptionsController,
+    AdminRecipeTaxonomyController,
+    AdminRecipeSeriesCoverController,
     DogsController,
     RecipesController,
     HealthController,
@@ -440,6 +470,7 @@ validatePrismaConfig();
     FeedbackController,
     ProcurementSkuController,
     AdminSupplementShopController,
+    AdminSupplementEquivalenceController,
     AdminTastingPackController,
     PublicTastingPackController,
     SupplementsController,
@@ -473,10 +504,13 @@ validatePrismaConfig();
   providers: [
     CustomerMessageService,
     PlatformOptionsService,
+    RecipeTaxonomyService,
+    RecipeNamingService,
     CustomRecipeViewService,
     CustomRecipeDeliveryService,
     OrderDesignSubmitService,
     CustomRecipeAftersaleService,
+    CustomRecipeRefundService,
     CustomRecipeSchedulerService,
     DogService,
     {
@@ -536,10 +570,20 @@ validatePrismaConfig();
         ]
       : []),
     OrderService,
+    OrderSummaryService,
     OrderSourcePlanService,
     RecipeService,
+    IngredientPreparationHistoryService,
     CoverImageService,
+    CoverReferenceService,
+    CoverTrashService,
+    AiCoverPreviewService,
+    RecipeCoverSettingsService,
+    DesignRecipeCoverImageService,
+    RecipeCoverConfigService,
     RecipeCoverImageService,
+    RecipeCoverVisualBriefService,
+    SeriesCoverImageService,
     AddressService,
     {
       provide: ADDRESS_REPOSITORY,
@@ -851,10 +895,8 @@ validatePrismaConfig();
     // Nutrition Food Service (Recipe Designer)
     NutritionFoodService,
     SupplementLabelExtractionService,
-    AiDesignSuggestionService,
     RecipeCopywritingService,
     KnowledgeBaseService,
-    RecipeAiWizardService,
     {
       provide: SUPPLEMENT_LABEL_OCR_PROVIDER,
       useClass: TencentCloudSupplementLabelOcrProvider,
@@ -890,6 +932,9 @@ validatePrismaConfig();
     ProcurementSkuService,
     SupplementCatalogService,
     SupplementShopConfigService,
+    SupplementDosageService,
+    SupplementEquivalenceService,
+    SupplementCandidateService,
     TastingPackConfigService,
     TastingPackPricingService,
     TastingPackService,
@@ -920,8 +965,13 @@ validatePrismaConfig();
     IngredientCreationOnlineService,
     IngredientCreationMergeService,
     IngredientCreationCheckService,
+    IngredientCheckRunService,
+    IngredientSearchPlanService,
+    IngredientSkillService,
+    IngredientCreationAuthorizeService,
     IngredientCreationCommitService,
     IngredientCreationIntakeService,
+    IngredientNameClassifierService,
     IngredientDraftAgentService,
     IngredientCreationToolsService,
     FediafTargetSelectorService,

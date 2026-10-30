@@ -6,11 +6,30 @@ import {
   randomBytes,
 } from 'crypto';
 import { PrismaService } from '../../infrastructure/prisma.service';
+import {
+  buildZhipuApiUrl,
+  extractZhipuErrorDetail,
+} from '../../infrastructure/services/zhipu-api';
 
 export const NUTRITION_AGENT_PURPOSE = 'NUTRITION_CANDIDATE_REVIEW';
 /** 全局默认用途：所有未单独指定用途的 AI/Agent 都回退到这里 */
 export const DEFAULT_AGENT_PURPOSE = 'DEFAULT';
 export const DEEPSEEK_PROVIDER = 'DEEPSEEK';
+/** 火山方舟（Seedream 生图） */
+export const ARK_PROVIDER = 'ARK';
+/** 食谱封面图生成（Seedream 5.0 Pro）：独立于 DeepSeek 文本配置 */
+export const RECIPE_COVER_IMAGE_PURPOSE = 'RECIPE_COVER_IMAGE';
+/** 食谱封面提示词生成（DeepSeek）：独立于全局默认 */
+export const RECIPE_COVER_PROMPT_PURPOSE = 'RECIPE_COVER_PROMPT';
+export const ZHIPU_PROVIDER = 'ZHIPU';
+
+/** 智谱封面图的默认值：只用于「还没配过」时的展示与创建 */
+const DEFAULT_ZHIPU_IMAGE_SETTINGS = {
+  enabled: false,
+  baseUrl: 'https://open.bigmodel.cn',
+  model: 'glm-image',
+  requestTimeoutMs: 90000,
+} as const;
 
 const DEFAULT_DEEPSEEK_SETTINGS = {
   purpose: NUTRITION_AGENT_PURPOSE,
@@ -50,6 +69,44 @@ export interface UpdateAgentProviderSettingsInput {
   retryCount?: number;
 }
 
+/** 智谱封面图的配置视图：只回末四位，永不回明文 Key */
+export interface ZhipuImageSettingsView {
+  purpose: string;
+  provider: typeof ZHIPU_PROVIDER;
+  enabled: boolean;
+  baseUrl: string;
+  model: string;
+  apiKeyConfigured: boolean;
+  apiKeyLast4: string | null;
+  requestTimeoutMs: number;
+  updatedAt: string | null;
+}
+
+export interface ProviderSettingsView {
+  enabled: boolean;
+  configured: boolean;
+  baseUrl: string;
+  model: string;
+  apiKeyLast4: string | null;
+}
+
+export interface UpdateProviderSettingsInput {
+  enabled?: boolean;
+  baseUrl?: string;
+  model?: string;
+  apiKey?: string;
+  clearApiKey?: boolean;
+}
+
+export interface UpdateZhipuImageSettingsInput {
+  enabled?: boolean;
+  baseUrl?: string;
+  model?: string;
+  apiKey?: string;
+  clearApiKey?: boolean;
+  requestTimeoutMs?: number;
+}
+
 export interface DeepSeekRuntimeConfig {
   provider: 'deepseek';
   baseUrl: string;
@@ -64,6 +121,267 @@ export interface DeepSeekRuntimeConfig {
 @Injectable()
 export class AgentProviderConfigService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * 智谱封面图配置（2026-10-27）。
+   *
+   * 为什么单独一组方法：现有 agent-settings 是 DeepSeek 文本模型的配置，
+   * provider 写死 DEEPSEEK；生图用途必须读写 provider=ZHIPU 的**另一行**，
+   * 两者不能混。Key 沿用同一套加密存储，只回末四位。
+   */
+  async getZhipuImageSettings(): Promise<ZhipuImageSettingsView> {
+    const config = await this.findZhipuImageConfig();
+    return this.toZhipuImageSettingsView(config);
+  }
+
+  async updateZhipuImageSettings(
+    input: UpdateZhipuImageSettingsInput,
+    userId?: string,
+  ): Promise<ZhipuImageSettingsView> {
+    const current = await this.findZhipuImageConfig();
+    const baseUrl = this.normalizeZhipuBaseUrl(
+      input.baseUrl ?? current?.baseUrl ?? DEFAULT_ZHIPU_IMAGE_SETTINGS.baseUrl,
+    );
+    const model = String(
+      input.model ?? current?.model ?? DEFAULT_ZHIPU_IMAGE_SETTINGS.model,
+    ).trim();
+    if (!model) {
+      throw new BadRequestException('智谱模型不能为空');
+    }
+    const enabled = input.enabled ?? current?.enabled ?? false;
+    const requestTimeoutMs = clampInteger(
+      input.requestTimeoutMs ??
+        current?.requestTimeoutMs ??
+        DEFAULT_ZHIPU_IMAGE_SETTINGS.requestTimeoutMs,
+      5000,
+      300000,
+    );
+
+    const keyUpdate = this.resolveApiKeyUpdate(input);
+    const nextApiKey =
+      keyUpdate.apiKeyEncrypted !== undefined
+        ? keyUpdate.apiKeyEncrypted
+        : current?.apiKeyEncrypted ?? null;
+    if (enabled && !nextApiKey) {
+      throw new BadRequestException('请先填写智谱 API Key 再启用');
+    }
+
+    const data = {
+      enabled,
+      baseUrl,
+      model,
+      requestTimeoutMs,
+      updatedBy: userId ?? null,
+    };
+    const saved = await this.prisma.agentProviderConfig.upsert({
+      where: {
+        purpose_provider: {
+          purpose: RECIPE_COVER_IMAGE_PURPOSE,
+          provider: ZHIPU_PROVIDER,
+        },
+      },
+      create: {
+        purpose: RECIPE_COVER_IMAGE_PURPOSE,
+        provider: ZHIPU_PROVIDER,
+        ...data,
+        ...keyUpdate,
+      },
+      update: { ...data, ...keyUpdate },
+    });
+
+    return this.toZhipuImageSettingsView(saved);
+  }
+
+  /**
+   * 连接测试只 ping 一个便宜的文本模型：
+   * 验证 Key / Base URL 通不通，**不生成图片、不花 0.1 元**。
+   * 真正出图请到系列里点「AI 生成图片」。
+   */
+  async testZhipuImageSettings(): Promise<{
+    ok: boolean;
+    provider: typeof ZHIPU_PROVIDER;
+    model: string;
+    message: string;
+  }> {
+    const config = await this.findZhipuImageConfig();
+    if (!config?.apiKeyEncrypted) {
+      throw new BadRequestException('请先保存智谱 API Key 再测试');
+    }
+
+    const apiKey = this.decryptApiKey(config.apiKeyEncrypted);
+    const baseUrl = this.normalizeZhipuBaseUrl(
+      config.baseUrl || DEFAULT_ZHIPU_IMAGE_SETTINGS.baseUrl,
+    );
+    const url = buildZhipuApiUrl(baseUrl, '/paas/v4/chat/completions');
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'glm-4-flash',
+          messages: [{ role: 'user', content: 'ping' }],
+          max_tokens: 1,
+          temperature: 0,
+        }),
+        signal: controller.signal,
+      });
+      const raw = await response.text();
+      if (!response.ok) {
+        throw new BadRequestException(
+          `智谱连接失败：${extractZhipuErrorDetail(raw, response.status)}`,
+        );
+      }
+
+      return {
+        ok: true,
+        provider: ZHIPU_PROVIDER,
+        model: config.model,
+        message: '智谱 Key 有效（连接测试不生成图片，不花钱）',
+      };
+    } catch (error: any) {
+      if (error instanceof BadRequestException) throw error;
+      if (error?.name === 'AbortError') {
+        throw new BadRequestException(
+          '智谱连接超时（15 秒），请检查 Base URL 或网络',
+        );
+      }
+      throw new BadRequestException(
+        `智谱连接失败：${error?.message || '未知错误'}`,
+      );
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  private findZhipuImageConfig() {
+    return this.prisma.agentProviderConfig.findUnique({
+      where: {
+        purpose_provider: {
+          purpose: RECIPE_COVER_IMAGE_PURPOSE,
+          provider: ZHIPU_PROVIDER,
+        },
+      },
+    });
+  }
+
+  private toZhipuImageSettingsView(config: any | null): ZhipuImageSettingsView {
+    return {
+      purpose: RECIPE_COVER_IMAGE_PURPOSE,
+      provider: ZHIPU_PROVIDER,
+      enabled: config?.enabled ?? DEFAULT_ZHIPU_IMAGE_SETTINGS.enabled,
+      baseUrl: config?.baseUrl ?? DEFAULT_ZHIPU_IMAGE_SETTINGS.baseUrl,
+      model: config?.model ?? DEFAULT_ZHIPU_IMAGE_SETTINGS.model,
+      apiKeyConfigured: Boolean(config?.apiKeyEncrypted),
+      apiKeyLast4: config?.apiKeyLast4 ?? null,
+      requestTimeoutMs:
+        config?.requestTimeoutMs ??
+        DEFAULT_ZHIPU_IMAGE_SETTINGS.requestTimeoutMs,
+      updatedAt: config?.updatedAt
+        ? new Date(config.updatedAt).toISOString()
+        : null,
+    };
+  }
+
+  private normalizeZhipuBaseUrl(value: string): string {
+    const trimmed = String(value ?? '').trim();
+    if (!trimmed) {
+      throw new BadRequestException('智谱 Base URL 不能为空');
+    }
+    try {
+      new URL(trimmed);
+    } catch {
+      throw new BadRequestException('智谱 Base URL 格式无效');
+    }
+    return trimmed.replace(/\/+$/, '');
+  }
+
+  /**
+   * 通用 provider 配置视图 / 保存（2026-10-28）。
+   * 用于「AI 食谱封面」：DeepSeek（RECIPE_COVER_PROMPT）与 ARK（RECIPE_COVER_IMAGE），
+   * 两个用途都不回退全局默认。
+   */
+  async getProviderSettings(
+    purpose: string,
+    provider: string,
+  ): Promise<ProviderSettingsView> {
+    const config = await this.prisma.agentProviderConfig.findUnique({
+      where: { purpose_provider: { purpose, provider } },
+    });
+    const defaults = providerDefaults(provider);
+    return {
+      enabled: config?.enabled ?? false,
+      configured: Boolean(config?.apiKeyEncrypted),
+      baseUrl: config?.baseUrl ?? defaults.baseUrl,
+      model: config?.model ?? defaults.model,
+      apiKeyLast4: config?.apiKeyLast4 ?? null,
+    };
+  }
+
+  async updateProviderSettings(
+    purpose: string,
+    provider: string,
+    input: UpdateProviderSettingsInput,
+    userId?: string,
+  ): Promise<ProviderSettingsView> {
+    const current = await this.prisma.agentProviderConfig.findUnique({
+      where: { purpose_provider: { purpose, provider } },
+    });
+    const defaults = providerDefaults(provider);
+    const baseUrl = normalizeBaseUrl(
+      input.baseUrl ?? current?.baseUrl ?? defaults.baseUrl,
+    );
+    const model = normalizeRequiredText(
+      input.model ?? current?.model ?? defaults.model,
+      '模型不能为空',
+    );
+    validateBaseUrl(baseUrl);
+    const enabled = input.enabled ?? current?.enabled ?? false;
+    const keyUpdate = this.resolveApiKeyUpdate(input);
+    const nextKey =
+      keyUpdate.apiKeyEncrypted !== undefined
+        ? keyUpdate.apiKeyEncrypted
+        : current?.apiKeyEncrypted ?? null;
+    if (enabled && !nextKey) {
+      throw new BadRequestException('启用前请先配置 API Key');
+    }
+
+    const saved = await this.prisma.agentProviderConfig.upsert({
+      where: { purpose_provider: { purpose, provider } },
+      create: {
+        purpose,
+        provider,
+        enabled,
+        baseUrl,
+        model,
+        maxConcurrency: 1,
+        requestTimeoutMs: defaults.requestTimeoutMs,
+        retryCount: 0,
+        updatedBy: userId ?? null,
+        ...keyUpdate,
+      },
+      update: {
+        enabled,
+        baseUrl,
+        model,
+        updatedBy: userId ?? null,
+        ...keyUpdate,
+      },
+    });
+
+    return {
+      enabled: saved.enabled,
+      configured: Boolean(saved.apiKeyEncrypted),
+      baseUrl: saved.baseUrl,
+      model: saved.model,
+      apiKeyLast4: saved.apiKeyLast4 ?? null,
+    };
+  }
 
   async getSettings(purpose?: string): Promise<AgentProviderSettingsView> {
     const config = await this.findDeepSeekConfig(purpose);
@@ -109,7 +427,7 @@ export class AgentProviderConfigService {
 
     validateBaseUrl(baseUrl);
 
-    const keyUpdate = this.resolveApiKeyUpdate(input, current);
+    const keyUpdate = this.resolveApiKeyUpdate(input);
     const hasConfiguredKey = Boolean(
       keyUpdate.apiKeyEncrypted ?? current?.apiKeyEncrypted,
     );
@@ -161,12 +479,34 @@ export class AgentProviderConfigService {
     purpose?: string;
     /** 指定用途未配置时是否回退到全局默认（默认 true） */
     fallbackToDefault?: boolean;
+    /**
+     * 默认/指定用途关闭时，是否回退到**任意一条已启用的 DeepSeek**（2026-10-28）。
+     *
+     * 用于封面画面描述这类「只要有个文本模型就行」的小任务：
+     * 老板只启用了某个专用用途、没启用全局默认时，不该因此挡住生图。
+     */
+    fallbackToAnyPurpose?: boolean;
   } = {}): Promise<DeepSeekRuntimeConfig> {
     const purpose = input.purpose || DEFAULT_AGENT_PURPOSE;
-    const config = await this.findDeepSeekConfig(
+    let config = await this.findDeepSeekConfig(
       purpose,
       input.fallbackToDefault ?? true,
     );
+
+    if (
+      input.fallbackToAnyPurpose &&
+      (!config?.enabled || !config.apiKeyEncrypted)
+    ) {
+      const fallback = await this.prisma.agentProviderConfig.findFirst({
+        where: {
+          provider: DEEPSEEK_PROVIDER,
+          enabled: true,
+          apiKeyEncrypted: { not: null },
+        },
+        orderBy: { updatedAt: 'desc' },
+      });
+      if (fallback) config = fallback;
+    }
 
     if (!config?.enabled) {
       throw new BadRequestException('DeepSeek Agent 设置未启用');
@@ -335,10 +675,10 @@ export class AgentProviderConfigService {
     };
   }
 
-  private resolveApiKeyUpdate(
-    input: UpdateAgentProviderSettingsInput,
-    current: any | null,
-  ) {
+  private resolveApiKeyUpdate(input: {
+    apiKey?: string;
+    clearApiKey?: boolean;
+  }) {
     if (input.clearApiKey) {
       return { apiKeyEncrypted: null, apiKeyLast4: null };
     }
@@ -374,7 +714,7 @@ export class AgentProviderConfigService {
   private decryptApiKey(value: string): string {
     const [version, ivText, tagText, encryptedText] = value.split(':');
     if (version !== 'v1' || !ivText || !tagText || !encryptedText) {
-      throw new BadRequestException('DeepSeek API Key 加密格式无效');
+      throw new BadRequestException('API Key 加密格式无效');
     }
 
     const decipher = createDecipheriv(
@@ -391,6 +731,7 @@ export class AgentProviderConfigService {
     return decrypted.toString('utf8');
   }
 }
+
 
 function normalizeBaseUrl(value: string): string {
   const trimmed = normalizeRequiredText(value, 'DeepSeek Base URL 不能为空');
@@ -442,4 +783,23 @@ function getEncryptionKey(): Buffer {
   const material =
     configured || process.env.JWT_SECRET || 'sevenkitchen-dev-agent-config-key';
   return createHash('sha256').update(material).digest();
+}
+
+function providerDefaults(provider: string): {
+  baseUrl: string;
+  model: string;
+  requestTimeoutMs: number;
+} {
+  if (provider === ARK_PROVIDER) {
+    return {
+      baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+      model: 'doubao-seedream-5-0-pro-260628',
+      requestTimeoutMs: 120000,
+    };
+  }
+  return {
+    baseUrl: 'https://api.deepseek.com',
+    model: 'deepseek-flash',
+    requestTimeoutMs: 90000,
+  };
 }

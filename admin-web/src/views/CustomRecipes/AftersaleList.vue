@@ -49,6 +49,15 @@
           <el-tag type="info" size="small" effect="plain">
             {{ item.typeLabel }}
           </el-tag>
+          <!-- 商家主动发起的调整（2026-10-27）：不是顾客提的，别当成「顾客诉求」看 -->
+          <el-tag
+            v-if="item.source === 'STAFF'"
+            type="warning"
+            size="small"
+            effect="plain"
+          >
+            商家发起
+          </el-tag>
           <!-- 等了多久：客服一眼看出哪条催得急 -->
           <span class="waiting" :class="{ 'is-long': item.isUrgent }">
             等了 {{ formatWaiting(item.hoursWaiting) }}
@@ -86,6 +95,20 @@
               v-if="recipe.requestDescription"
               class="batch-recipe-request"
             >{{ recipe.requestDescription }}</span>
+            <div
+              v-if="recipe.requestPhotos && recipe.requestPhotos.length"
+              class="batch-recipe-photos"
+            >
+              <el-image
+                v-for="(photo, photoIndex) in recipe.requestPhotos"
+                :key="photoIndex"
+                :src="photo"
+                :preview-src-list="recipe.requestPhotos"
+                :initial-index="photoIndex"
+                fit="cover"
+                class="batch-recipe-photo"
+              />
+            </div>
             <el-button
               v-if="isAdmin && ['ACCEPTED', 'PROCESSING'].includes(item.status)"
               size="small"
@@ -97,7 +120,10 @@
             >修改食谱</el-button>
           </div>
         </div>
-        <div v-if="item.photos && item.photos.length" class="photos">
+        <div
+          v-if="item.photos && item.photos.length && !hasPerRecipePhotos(item)"
+          class="photos"
+        >
           <el-image
             v-for="(photo, index) in item.photos"
             :key="index"
@@ -327,6 +353,10 @@ const formatWaiting = (hours: number) => {
 const batchRecipesOf = (item: AdminAftersaleItem) =>
   buildAftersaleRecipeDetails(item);
 
+/** 新记录每份附件在 recipeRequests[].photos 里；旧记录才看整单 photos */
+const hasPerRecipePhotos = (item: AdminAftersaleItem) =>
+  batchRecipesOf(item).some((recipe) => recipe.requestPhotos.length > 0);
+
 /**
  * 按选中份重新交付（2026-10-21 · 多份售后改稿）。
  *
@@ -412,7 +442,11 @@ const redeliverSelectedRecipes = async (item: AdminAftersaleItem) => {
 
     const redeliveredCount =
       result?.selectedRecipes?.length ?? deliveryItemIds.length;
-    await resolveAfterRedelivery(item);
+    /**
+     * 把这次的新批次写回售后单（2026-10-27 补）：
+     * 「处理完成」不再是一次纯状态变更，顾客点「查看最新食谱」要知道是哪一版。
+     */
+    await resolveAfterRedelivery(item, result?.batchId);
     ElMessage.success(
       `已按选中的 ${redeliveredCount} 份重新交付，并完成售后`,
     );
@@ -454,7 +488,10 @@ const ensureAftersaleAccepted = async (item: AdminAftersaleItem) => {
  * 重新交付后自动完成售后。
  * 处理说明可改，默认带一句系统口径；顾客能直接看到改了什么。
  */
-const resolveAfterRedelivery = async (item: AdminAftersaleItem) => {
+const resolveAfterRedelivery = async (
+  item: AdminAftersaleItem,
+  linkedDeliveryId?: string,
+) => {
   const defaultNote =
     '已按你的要求调整并重新交付了一版食谱，请在小程序里查看最新交付内容。';
   let handleNote = defaultNote;
@@ -475,7 +512,10 @@ const resolveAfterRedelivery = async (item: AdminAftersaleItem) => {
     // 顾客端仍需要看到结果；取消编辑就用默认说明，不留下未完成的售后
   }
   try {
-    await customRecipeApi.resolveAftersale(item.id, { handleNote });
+    await customRecipeApi.resolveAftersale(item.id, {
+      handleNote,
+      ...(linkedDeliveryId ? { linkedDeliveryId } : {}),
+    });
   } catch (error) {
     // 交付已经成功，售后完成失败要提示但不能再报成交付失败
     toastApiError(error, '食谱已重新交付，但售后状态未自动完成，请手动处理', (message) =>
@@ -707,6 +747,20 @@ onMounted(load);
 .batch-recipe-request {
   color: var(--el-text-color-regular);
   white-space: pre-wrap;
+}
+
+.batch-recipe-photos {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.batch-recipe-photo {
+  width: 64px;
+  height: 64px;
+  border-radius: 6px;
 }
 
 .photos {

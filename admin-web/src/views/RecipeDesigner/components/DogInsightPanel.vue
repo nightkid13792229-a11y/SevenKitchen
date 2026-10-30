@@ -170,6 +170,10 @@
           >
             <div v-if="historyRecipes.length === 0 && sameOrderRecipes.length === 0" class="empty-tip">
               暂无历史订单食谱
+              <div class="empty-tip-note">
+                只有顾客确认收到（或交付满 7 天无异议自动确认）的定制食谱才算历史；
+                正在交付、调整中的不会出现在这里。
+              </div>
             </div>
             <div v-else class="history-recipe-list">
               <div v-if="sameOrderRecipes.length > 0" class="history-subsection">
@@ -265,7 +269,7 @@
       >
         <el-option v-for="dog in dogOptions" :key="dog.id" :label="dogLabel(dog)" :value="dog.id" />
       </el-select>
-      <div class="form-tip">参考爱犬仅作为设计参考：其档案与历史食材会在本面板展示，AI 设计建议也会结合该犬档案生成；正式食谱发布后与犬解耦，不影响其他犬使用</div>
+      <div class="form-tip">参考爱犬仅作为设计参考：其档案与历史食材会在本面板展示，AI 设计对话也会结合该犬档案生成；正式食谱发布后与犬解耦，不影响其他犬使用</div>
       <template #footer>
         <el-button @click="dogPickerVisible = false">取消</el-button>
         <el-button type="primary" :loading="savingDog" @click="saveDog">保存</el-button>
@@ -1185,6 +1189,13 @@ defineExpose({ loadInsight })
   font-size: 12px;
   color: #909399;
 }
+.empty-tip-note {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #9aa3af;
+  line-height: 1.6;
+}
+
 .empty-tip {
   font-size: 12px;
   color: #909399;

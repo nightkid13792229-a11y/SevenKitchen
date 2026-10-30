@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>交付页底栏 · 三个动作的两种主次</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 28px 24px 40px; background: #ededed; color: #1d1d1d;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .doc-title { font-size: 20px; font-weight: 700; margin: 0 0 6px; }
+  .doc-sub { font-size: 12px; color: #666; line-height: 1.7; margin: 0 0 22px; }
+  .row { display: flex; gap: 26px; flex-wrap: wrap; align-items: flex-start; }
+  .col { width: 375px; }
+  .cap { font-size: 12px; font-weight: 600; margin: 0 0 8px; color: #333; }
+  .cap span { font-weight: 400; color: #888; }
+  .phone {
+    width: 375px; background: #fff; border: 2px solid #2b2b2b; border-radius: 22px;
+    padding: 10px 10px 0; overflow: hidden;
+  }
+  .content-hint {
+    height: 74px; border-bottom: 1px dashed #d6d6d6; display: flex; align-items: center;
+    justify-content: center; color: #aaa; font-size: 11px; margin-bottom: 0;
+  }
+  .bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 2px 12px; background: #fff;
+  }
+  .btn {
+    height: 44px; border-radius: 999px; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; white-space: nowrap; letter-spacing: 0.2px;
+  }
+  .btn.ghost {
+    flex: 0 0 92px; border: 1px dashed #b5b5b5; color: #555; font-weight: 600; font-size: 12px;
+    background: #fafafa;
+  }
+  .btn.ghost .ic {
+    width: 16px; height: 16px; border: 1.5px solid #777; border-radius: 50%;
+    margin-right: 5px; display: inline-block; position: relative;
+  }
+  .btn.ghost .ic::after {
+    content: ''; position: absolute; left: 4px; top: 5px; width: 6px; height: 3px;
+    border-left: 1.5px solid #777; border-bottom: 1.5px solid #777; border-radius: 0 0 0 2px;
+  }
+  .btn.outline { flex: 1; border: 1.5px solid #3a3a3a; color: #222; background: #fff; }
+  .btn.filled { flex: 1.15; background: #333; color: #fff; border: 1.5px solid #333; }
+  .note { font-size: 11px; color: #666; line-height: 1.7; margin-top: 10px; }
+  .note b { color: #222; }
+  .tag { display: inline-block; font-size: 10px; border: 1px solid #aaa; border-radius: 4px; padding: 1px 6px; color: #666; margin-left: 6px; vertical-align: 2px; }
+</style>
+</head>
+<body>
+
+<div class="doc-title">交付页固定底栏 · 三个动作的两种主次</div>
+<p class="doc-sub">
+  两颗按钮的字数按 375pt 屏校过；只有一颗实心。虚线那颗是“找 Seven爸爸”，视觉最轻。<br />
+  定稿：`[找 Seven爸爸] [自己做] [订购成品]`，订购成品实心。灰稿只表示主次，上色时主按钮换品牌金/森林绿。
+</p>
+
+<div class="row">
+
+  <div class="col">
+    <p class="cap">定稿 · 方案 A<span>　订购成品为主 / 2026-10-24</span></p>
+    <div class="phone">
+      <div class="content-hint">页面内容（向上滚动）</div>
+      <div class="bar">
+        <div class="btn ghost"><i class="ic"></i>Seven爸爸</div>
+        <div class="btn outline">自己做</div>
+        <div class="btn filled">订购成品</div>
+      </div>
+    </div>
+    <p class="note">
+      <b>为什么推荐：</b>成品是更高价值的转化，对顾客也更省事；“自己做”仍是一眼可见的第二选择。<br />
+      <b>风险：</b>这一页叫“我的定制食谱”，主按钮却在卖成品，可能让人觉得“配方只是个引子”。
+    </p>
+  </div>
+
+  <div class="col">
+    <p class="cap">未采用（留档）<span>　自己做为主</span></p>
+    <div class="phone">
+      <div class="content-hint">页面内容（向上滚动）</div>
+      <div class="bar">
+        <div class="btn ghost"><i class="ic"></i>Seven爸爸</div>
+        <div class="btn outline">订购成品</div>
+        <div class="btn filled">自己做</div>
+      </div>
+    </div>
+    <p class="note">
+      <b>为什么可能选它：</b>顾客付了 ¥300 是来拿配方的，主操作先把配方用起来；卖成品退一档，页面更像服务、不像货架。<br />
+      <b>风险：</b>成品的点击率会低一些。
+    </p>
+  </div>
+
+</div>
+
+<p class="note" style="margin-top:22px;max-width:800px">
+  <b>小屏兜底：</b>如果真机上三颗按钮还是挤，底栏退成两行——上行一行小字“找 Seven爸爸 ›”，下行“采购与制作 | 订购成品”。结构不变，只换排法。<br />
+  <b>不做的事：</b>不加第四颗按钮；不把客服做成悬浮球（会挡内容，而且你们之前已经定过不用）。
+</p>
+
+</body>
+</html>

@@ -247,6 +247,9 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
     designRecipePublishSnapshot: {
       create: jest.fn(),
     },
+    recipeDesignAgentSnapshot: {
+      findFirst: jest.fn(),
+    },
     $transaction: jest.fn(),
   } as any;
 
@@ -258,18 +261,11 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
     expandQuery: jest.fn(),
     recordSearchEvent: jest.fn(),
   };
-  const aiDesignSuggestion = {
-    isAvailable: jest.fn(),
-    generate: jest.fn(),
-  };
-
   beforeEach(() => {
     service = new RecipeDesignerService(
       prisma as PrismaService,
       targetProvider as any,
       searchGovernance as any,
-      aiDesignSuggestion as any,
-      undefined,
       undefined,
       undefined,
       undefined,
@@ -290,6 +286,7 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
     prisma.designRecipePublishSnapshot.create.mockResolvedValue({
       id: 'snapshot-1',
     });
+    prisma.recipeDesignAgentSnapshot.findFirst.mockResolvedValue(null);
     prisma.recipeItem.findMany.mockResolvedValue([]);
     prisma.$transaction.mockImplementation(async (callback: any) =>
       callback(prisma),
@@ -500,18 +497,20 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
     expect(computedFromDefinitions.ready).toBe(true);
   });
 
-  it('requires a preparation method on every included item (note alone is not enough)', async () => {
-    const readiness = await readinessFor({
+  it('requires a preparation method on required food items but not exempt ones', async () => {
+    const required = await readinessFor({
       items: [
         foodItem({
           preparationMethod: null,
-          preparationNote: '去皮、切块',
+          ingredient: {
+            ...foodItem().ingredient,
+            properties: { cfct_class: '禽肉类及制品' },
+          },
         }),
       ],
     });
-
-    expect(readiness.ready).toBe(false);
-    expect(readiness.blockers).toEqual(
+    expect(required.ready).toBe(false);
+    expect(required.blockers).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           code: 'PREPARATION_METHOD_REQUIRED',
@@ -520,6 +519,38 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
         }),
       ]),
     );
+
+    const seasoning = await readinessFor({
+      items: [
+        foodItem({
+          preparationMethod: null,
+          ingredient: {
+            ...foodItem().ingredient,
+            name: '食盐',
+            properties: { cfct_class: '调味品类' },
+          },
+          nutritionFood: {
+            ...foodItem().nutritionFood,
+            name: '食盐',
+            displayNameZh: '食盐',
+          },
+        }),
+      ],
+    });
+    expect(
+      seasoning.blockers.some(
+        (blocker) => blocker.code === 'PREPARATION_METHOD_REQUIRED',
+      ),
+    ).toBe(false);
+
+    const supplement = await readinessFor({
+      items: [supplementItem({ preparationMethod: null })],
+    });
+    expect(
+      supplement.blockers.some(
+        (blocker) => blocker.code === 'PREPARATION_METHOD_REQUIRED',
+      ),
+    ).toBe(false);
   });
 
   it('requires at least one valid production step', async () => {
@@ -723,6 +754,89 @@ describe('RecipeDesignerService · shared launch readiness gate', () => {
     );
     // 产品线的健康标签提醒已随展示检查上移到系列发布门槛。
     expect(warningCodes).not.toContain('TARGET_HEALTH_TAGS_MISSING');
+  });
+
+  it('surfaces AI delivery warnings from the latest snapshot at the current revision', async () => {
+    prisma.recipeDesignAgentSnapshot.findFirst.mockResolvedValue({
+      snapshot: {
+        warnings: ['钙 19.1%（距下限）', '磷 9.3%（距上限）'],
+      },
+    });
+
+    const readiness = await readinessFor({ contentRevision: 7 });
+
+    expect(readiness.ready).toBe(true);
+    expect(readiness.blockers).toEqual([]);
+    expect(
+      readiness.warnings.filter(
+        (warning) => warning.code === 'AI_DELIVERY_WARNING',
+      ),
+    ).toEqual([
+      {
+        code: 'AI_DELIVERY_WARNING',
+        scope: 'COMMON',
+        message: 'AI 交付提醒：钙 19.1%（距下限）',
+      },
+      {
+        code: 'AI_DELIVERY_WARNING',
+        scope: 'COMMON',
+        message: 'AI 交付提醒：磷 9.3%（距上限）',
+      },
+    ]);
+    expect(prisma.recipeDesignAgentSnapshot.findFirst).toHaveBeenCalledWith({
+      where: { designRecipeId: 'draft-1', contentRevision: 7 },
+      orderBy: { createdAt: 'desc' },
+      select: { snapshot: true },
+    });
+  });
+
+  it('ignores AI delivery snapshots from a stale content revision', async () => {
+    prisma.recipeDesignAgentSnapshot.findFirst.mockImplementation(
+      async ({ where }: { where: { contentRevision?: number } }) =>
+        where.contentRevision === 7
+          ? { snapshot: { warnings: ['旧版本的提醒'] } }
+          : null,
+    );
+
+    const readiness = await readinessFor({ contentRevision: 8 });
+
+    expect(
+      readiness.warnings.filter(
+        (warning) => warning.code === 'AI_DELIVERY_WARNING',
+      ),
+    ).toEqual([]);
+    expect(prisma.recipeDesignAgentSnapshot.findFirst).toHaveBeenCalledWith({
+      where: { designRecipeId: 'draft-1', contentRevision: 8 },
+      orderBy: { createdAt: 'desc' },
+      select: { snapshot: true },
+    });
+  });
+
+  it('ignores malformed AI delivery snapshots', async () => {
+    prisma.recipeDesignAgentSnapshot.findFirst.mockResolvedValue({
+      snapshot: { warnings: 'not-an-array' },
+    });
+
+    const readiness = await readinessFor();
+
+    expect(
+      readiness.warnings.filter(
+        (warning) => warning.code === 'AI_DELIVERY_WARNING',
+      ),
+    ).toEqual([]);
+  });
+
+  it('dedupes AI delivery warnings by message', async () => {
+    prisma.recipeDesignAgentSnapshot.findFirst.mockResolvedValue({
+      snapshot: { warnings: ['钙偏低', '钙偏低', '磷偏低'] },
+    });
+
+    const readiness = await readinessFor();
+
+    const messages = readiness.warnings
+      .filter((warning) => warning.code === 'AI_DELIVERY_WARNING')
+      .map((warning) => warning.message);
+    expect(messages).toEqual(['AI 交付提醒：钙偏低', 'AI 交付提醒：磷偏低']);
   });
 
   it('summarizes persisted report state without generating a report on readiness', async () => {

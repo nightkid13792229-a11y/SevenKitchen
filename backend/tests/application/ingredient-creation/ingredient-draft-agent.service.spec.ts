@@ -6,20 +6,29 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import { Test, type TestingModule } from '@nestjs/testing';
+import { resolve } from 'node:path';
 import request from 'supertest';
 import {
+  INGREDIENT_AGENT_MAX_TOOL_CALLS,
+  INGREDIENT_AGENT_TIMEOUT_MS,
   IngredientDraftAgentService,
+  buildToolStepSummary,
+  type AgentRunReport,
   type IngredientAgentRunResult,
 } from '../../../src/application/ingredient-creation/ingredient-draft-agent.service';
 import { IngredientCreationAuditService } from '../../../src/application/ingredient-creation/ingredient-creation-audit.service';
+import { IngredientSkillService } from '../../../src/application/ingredient-creation/ingredient-skill.service';
+import { IngredientSearchPlanService } from '../../../src/application/ingredient-creation/ingredient-search-plan.service';
+import { LINE_NOT_OPEN_MESSAGE } from '../../../src/application/ingredient-creation/ingredient-line';
 import { IngredientCreationCandidateService } from '../../../src/application/ingredient-creation/ingredient-creation-candidate.service';
+import { IngredientCreationAuthorizeService } from '../../../src/application/ingredient-creation/ingredient-creation-authorize.service';
 import { IngredientCreationCheckService } from '../../../src/application/ingredient-creation/ingredient-creation-check.service';
-import { IngredientCreationCommitService } from '../../../src/application/ingredient-creation/ingredient-creation-commit.service';
 import { IngredientCreationDraftService } from '../../../src/application/ingredient-creation/ingredient-creation-draft.service';
 import { IngredientCreationIntakeService } from '../../../src/application/ingredient-creation/ingredient-creation-intake.service';
 import { IngredientCreationMergeService } from '../../../src/application/ingredient-creation/ingredient-creation-merge.service';
 import { IngredientCreationOnlineService } from '../../../src/application/ingredient-creation/ingredient-creation-online.service';
 import { IngredientCreationToolsService } from '../../../src/application/ingredient-creation/ingredient-creation-tools.service';
+import { buildKeywordNameSummary } from '../../../src/application/ingredient-creation/ingredient-name-summary';
 import type {
   CandidateSearchResult,
   FinalCheckResult,
@@ -29,47 +38,36 @@ import {
   AgentProviderConfigService,
   type DeepSeekRuntimeConfig,
 } from '../../../src/application/nutrition-governance/agent-provider-config.service';
+import { NUTRITION_FIELD_CATALOG } from '../../../src/domain/ingredient/nutrition-field-catalog';
 import { AuthGuard } from '../../../src/interfaces/auth/auth.guard';
 import { JwtAuthService } from '../../../src/interfaces/auth/jwt.service';
 import { IngredientCreationController } from '../../../src/interfaces/controllers/ingredient-creation.controller';
 import { AdminGuard } from '../../../src/interfaces/guards/role.guard';
 
 const DRAFT_ID = 'draft-1';
+
+/** 写草稿的前提：已经有人确认过检索方案（单独测守卫的用例会覆盖它）。 */
+const APPROVED_SEARCH_PLAN = {
+  status: 'APPROVED',
+  keywords: [{ term: '鸡肝', language: 'zh' }],
+  libraries: ['CFCT'],
+  findings: '',
+  chosenRecordId: null,
+  chosenRecordName: null,
+  rationale: '',
+  proposedAt: '2026-10-23T00:00:00.000Z',
+  approvedAt: '2026-10-23T00:00:01.000Z',
+  approvedBy: 'admin-1',
+  editedByUser: false,
+};
 const BASE_URL = 'https://api.deepseek.test';
 const MODEL = 'deepseek-v4-flash';
 const REVIEW_MODEL = 'deepseek-v4-pro';
 const AGENT_PATH = '/api/v1/admin/ingredient-creation/agent/run';
-
-const CANDIDATE_RESULT: CandidateSearchResult = {
-  keywords: ['鸡肝', 'Chicken liver'],
-  candidates: [
-    {
-      sourceRecordId: 'rec-liver-raw',
-      sourceType: 'USDA_FDC',
-      foodName: 'Chicken, liver, raw',
-      foodNameEn: 'Chicken, liver, raw',
-      preparationState: 'RAW',
-      cookingMethod: null,
-      coveragePercent: 82,
-      missingFields: ['minerals.iodine'],
-      matchScore: 0.9,
-      matchedBy: 'EN_PARTIAL',
-      matchedKeyword: 'Chicken liver',
-      matchedSourceName: 'Chicken, liver, raw',
-      notes: [],
-    },
-  ],
-  excludedCount: 0,
-  coverage: {
-    state: 'RAW',
-    candidateCount: 1,
-    bestCoveragePercent: 82,
-    bestMissingFieldCount: 1,
-  },
-};
+const AGENT_STREAM_PATH = '/api/v1/admin/ingredient-creation/agent/stream';
 
 const EMPTY_CANDIDATE_RESULT: CandidateSearchResult = {
-  keywords: ['西洋菜', 'watercress'],
+  keywords: ['西洋菜'],
   candidates: [],
   excludedCount: 0,
   coverage: {
@@ -86,6 +84,17 @@ const PASSING_CHECK: FinalCheckResult = {
   warnings: [],
 };
 
+const BLOCKING_CHECK: FinalCheckResult = {
+  blocking: [
+    {
+      code: 'REQUIRED_STATE_MISSING',
+      message: '缺少必需的熟档案（COOKED），需要补数据或登记例外。',
+    },
+  ],
+  exceptionable: [],
+  warnings: [],
+};
+
 function createDraft(
   overrides: Partial<IngredientCreationDraft> = {},
 ): IngredientCreationDraft {
@@ -98,6 +107,26 @@ function createDraft(
     createdBy: 'admin-1',
     createdAt: new Date('2026-10-23T00:00:00.000Z'),
     updatedAt: new Date('2026-10-23T00:00:00.000Z'),
+    ...overrides,
+  };
+}
+
+function buildRunReport(
+  overrides: Partial<AgentRunReport> = {},
+): AgentRunReport {
+  return {
+    runId: 'run-1',
+    draftId: DRAFT_ID,
+    text: '鸡肝',
+    steps: 1,
+    toolCalls: 0,
+    tokensIn: 0,
+    tokensOut: 0,
+    durationMs: 10,
+    stopReason: null,
+    tools: [],
+    failedTools: [],
+    result: 'FINISHED',
     ...overrides,
   };
 }
@@ -166,7 +195,14 @@ function assistantReply(content: string) {
   return { role: 'assistant', content };
 }
 
-function chatResponse(message: unknown, usage?: { total_tokens: number }) {
+function chatResponse(
+  message: unknown,
+  usage?: {
+    total_tokens?: number;
+    prompt_tokens?: number;
+    completion_tokens?: number;
+  },
+) {
   return {
     ok: true,
     status: 200,
@@ -187,12 +223,16 @@ function errorResponse(status: number, body: unknown) {
 
 interface HarnessOptions {
   draft?: IngredientCreationDraft | null;
+  names?: Array<{ id: string; name: string; sourceType: string }>;
+  namesTotal?: number;
+  namesKeywords?: string[];
   candidates?: CandidateSearchResult;
   checkResult?: FinalCheckResult;
   runtime?: DeepSeekRuntimeConfig;
   sourceRecords?: Array<{
     id: string;
     status: string;
+    sourceType?: string;
     foodName?: string;
     foodNameEn?: string | null;
     normalizedNutrition?: unknown;
@@ -203,14 +243,27 @@ function createHarness(options: HarnessOptions = {}) {
   let draft: IngredientCreationDraft | null =
     options.draft === undefined ? createDraft() : options.draft;
 
+  // 默认让草稿带上「已确认的检索方案」：绝大多数用例关心的是起草行为，
+  // 方案闸门由 ingredient-creation-tools.search-plan.spec.ts 单独覆盖。
+  if (draft && !draft.payload.searchPlan) {
+    draft = {
+      ...draft,
+      payload: { ...draft.payload, searchPlan: APPROVED_SEARCH_PLAN },
+    };
+  }
+
   const draftService = {
     create: jest.fn(
-      async (input: { name: string; type: 'FOOD'; createdBy: string }) => {
+      async (input: {
+        name: string;
+        type: 'FOOD' | 'SUPPLEMENT';
+        createdBy: string;
+      }) => {
         draft = createDraft({
           id: 'draft-created',
           name: input.name,
           createdBy: input.createdBy,
-          payload: {},
+          payload: { searchPlan: APPROVED_SEARCH_PLAN },
         });
         return draft;
       },
@@ -246,7 +299,26 @@ function createHarness(options: HarnessOptions = {}) {
   };
 
   const candidateService = {
-    findCandidates: jest.fn(async () => options.candidates ?? CANDIDATE_RESULT),
+    findCandidates: jest.fn(
+      async () => options.candidates ?? EMPTY_CANDIDATE_RESULT,
+    ),
+    listNutritionNames: jest.fn(async () => ({
+      total: options.namesTotal ?? options.names?.length ?? 0,
+      names: options.names ?? [],
+      keywords: options.namesKeywords ?? ['鸡肝'],
+    })),
+    searchByLibrary: jest.fn(async ({ library }: { library: string }) => ({
+      library,
+      total: options.namesTotal ?? options.names?.length ?? 0,
+      hits: (options.names ?? []).map((entry) => ({
+        id: entry.id,
+        name: entry.name,
+        sourceType: entry.sourceType,
+        sourceKey: entry.id,
+        dataType: null,
+        filledFieldCount: 10,
+      })),
+    })),
   };
 
   const checkService = {
@@ -264,8 +336,17 @@ function createHarness(options: HarnessOptions = {}) {
 
   const configService = {
     getEnabledDeepSeekRuntimeConfig: jest.fn(
-      async () => options.runtime ?? buildRuntime(),
+      async (_input: { purpose?: string; fallbackToDefault?: boolean } = {}) =>
+        options.runtime ?? buildRuntime(),
     ),
+  };
+
+  const nameClassifierService = {
+    summarizeNames: jest.fn(async (input: any) => ({
+      ...buildKeywordNameSummary(input.items),
+      degraded: false,
+      notice: null,
+    })),
   };
 
   const tools = new IngredientCreationToolsService(
@@ -273,12 +354,14 @@ function createHarness(options: HarnessOptions = {}) {
     draftService as unknown as IngredientCreationDraftService,
     checkService as unknown as IngredientCreationCheckService,
     prisma as never,
+    nameClassifierService as never,
   );
 
   const agent = new IngredientDraftAgentService(
     configService as unknown as AgentProviderConfigService,
     tools,
     draftService as unknown as IngredientCreationDraftService,
+    new IngredientSkillService(),
   );
 
   return {
@@ -289,6 +372,7 @@ function createHarness(options: HarnessOptions = {}) {
     checkService,
     prisma,
     configService,
+    nameClassifierService,
     currentDraft: () => draft,
   };
 }
@@ -311,66 +395,72 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  jest.useRealTimers();
   global.fetch = originalFetch;
   jest.restoreAllMocks();
 });
 
-describe('IngredientDraftAgentService · 工具循环', () => {
-  it('模型第一步请求 searchLocalNutrition 时工具被调用，结果回灌给下一步', async () => {
+describe('IngredientDraftAgentService · 原子工具循环', () => {
+  it('模型第一步 searchLibraries 时工具被调用，名字结果回灌给下一步', async () => {
     const fetchMock = jest
       .fn()
       .mockResolvedValueOnce(
-        chatResponse(
-          assistantToolCall('searchLocalNutrition', {
-            keyword: '鸡肝',
-            state: 'RAW',
-          }),
-        ),
+        chatResponse(assistantToolCall('searchLibraries', { groups: [{ library: 'CFCT', terms: ['鸡肝'] }] })),
       )
       .mockResolvedValueOnce(
-        chatResponse(assistantReply('本地库找到一条生鸡肝来源，覆盖率 82%。')),
+        chatResponse(assistantReply('本地库找到两条生鸡肝来源。')),
       );
     global.fetch = fetchMock as unknown as typeof global.fetch;
 
-    const harness = createHarness();
+    const harness = createHarness({
+      names: [
+        {
+          id: 'rec-liver-raw',
+          name: 'Chicken, liver, raw',
+          sourceType: 'USDA_FDC',
+        },
+        {
+          id: 'rec-liver-raw-2',
+          name: 'Chicken, liver, raw, simmered',
+          sourceType: 'CFCT',
+        },
+      ],
+      namesTotal: 42,
+      namesKeywords: ['鸡肝', 'Chicken liver'],
+    });
     const result = await harness.agent.run({
       draftId: DRAFT_ID,
       text: '帮我加鸡肝',
       userId: 'admin-1',
     });
 
-    expect(harness.candidateService.findCandidates).toHaveBeenCalledWith({
-      name: '鸡肝',
-      state: 'RAW',
+    expect(harness.candidateService.searchByLibrary).toHaveBeenCalledWith({
+      library: 'CFCT',
+      terms: ['鸡肝'],
     });
-
     expect(result).toMatchObject({
       draftId: DRAFT_ID,
-      reply: '本地库找到一条生鸡肝来源，覆盖率 82%。',
+      reply: '本地库找到两条生鸡肝来源。',
       steps: 2,
       toolCalls: [
         {
-          name: 'searchLocalNutrition',
-          args: { keyword: '鸡肝', state: 'RAW' },
+          name: 'searchLibraries',
+          args: { groups: [{ library: 'CFCT', terms: ['鸡肝'] }] },
           ok: true,
         },
       ],
     });
-    // 工具调用记录要带上结构化结果，页面才能展开「匹配依据」。
     expect(result.toolCalls[0]?.result).toMatchObject({
+      total: 42,
       found: true,
-      keywords: ['鸡肝', 'Chicken liver'],
-      candidates: [
-        {
-          foodName: 'Chicken, liver, raw',
-          matchedBy: 'EN_PARTIAL',
-          matchedKeyword: 'Chicken liver',
-          score: 0.9,
-        },
-      ],
+    });
+    expect((result.toolCalls[0]?.result as any).names[0]).toEqual({
+      id: 'rec-liver-raw',
+      name: 'Chicken, liver, raw',
+      sourceType: 'USDA_FDC',
     });
 
-    // 第二次请求必须把「工具返回」作为 role=tool 的消息带给模型。
+    // 第二次请求必须把工具结果作为 role=tool 的消息带给模型。
     const second = requestBody(fetchMock, 1);
     const toolMessage = second.messages.find(
       (message: any) => message.role === 'tool',
@@ -379,11 +469,10 @@ describe('IngredientDraftAgentService · 工具循环', () => {
     expect(toolMessage.tool_call_id).toBe('call_1');
     expect(toolMessage.content).toContain('rec-liver-raw');
     expect(toolMessage.content).toContain('Chicken, liver, raw');
-    expect(toolMessage.content).toContain('82');
+    expect(toolMessage.content).toContain('42');
 
-    // 工具调用要留日志：工具名、参数摘要、耗时、成功/失败。
     expect(logSpy).toHaveBeenCalledWith(
-      expect.stringContaining('tool=searchLocalNutrition'),
+      expect.stringContaining('tool=searchLibraries'),
     );
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('durationMs='));
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('ok=true'));
@@ -393,17 +482,16 @@ describe('IngredientDraftAgentService · 工具循环', () => {
     const fetchMock = jest
       .fn()
       .mockResolvedValueOnce(
-        chatResponse(
-          assistantToolCall('searchLocalNutrition', {
-            keyword: '西洋菜',
-            state: 'RAW',
-          }),
-        ),
+        chatResponse(assistantToolCall('searchLibraries', { groups: [{ library: 'CFCT', terms: ['西洋菜'] }] })),
       )
       .mockResolvedValueOnce(chatResponse(assistantReply('已完成。')));
     global.fetch = fetchMock as unknown as typeof global.fetch;
 
-    const harness = createHarness({ candidates: EMPTY_CANDIDATE_RESULT });
+    const harness = createHarness({
+      names: [],
+      namesTotal: 0,
+      namesKeywords: ['西洋菜', 'watercress'],
+    });
     const result = await harness.agent.run({
       draftId: DRAFT_ID,
       text: '帮我加西洋菜',
@@ -412,49 +500,50 @@ describe('IngredientDraftAgentService · 工具循环', () => {
 
     expect(result.toolCalls[0]?.result).toMatchObject({
       found: false,
-      candidateCount: 0,
-      keywords: ['西洋菜', 'watercress'],
+      total: 0,
+      keywords: ['西洋菜'],
     });
     expect(result.reply).toContain('没有找到匹配词条');
     expect(result.reply).toContain('西洋菜');
-    expect(result.reply).toContain('watercress');
   });
 
   it('模型写非法单位时返回错误文本，模型改对后 runCheck 通过', async () => {
+    const badEntry = {
+      profileIndex: 0,
+      entries: [
+        {
+          fieldPath: 'macros.crudeProtein',
+          value: 20,
+          unit: '两',
+          sourceRecordId: 'src-1',
+        },
+      ],
+    };
+    const fixedEntry = {
+      profileIndex: 0,
+      entries: [
+        {
+          fieldPath: 'macros.crudeProtein',
+          value: 20,
+          unit: 'g',
+          sourceRecordId: 'src-1',
+        },
+      ],
+    };
     const fetchMock = jest
       .fn()
       .mockResolvedValueOnce(
         chatResponse(
-          assistantToolCall(
-            'updateNutritionField',
-            {
-              profileIndex: 0,
-              fieldPath: 'macros.crudeProtein',
-              value: 20,
-              unit: '两',
-              sourceRecordId: 'src-1',
-            },
-            'call_bad_unit',
-          ),
+          assistantToolCall('writeNutrition', badEntry, 'call_bad_unit'),
         ),
       )
       .mockResolvedValueOnce(
         chatResponse(
-          assistantToolCall(
-            'updateNutritionField',
-            {
-              profileIndex: 0,
-              fieldPath: 'macros.crudeProtein',
-              value: 20,
-              unit: 'g',
-              sourceRecordId: 'src-1',
-            },
-            'call_fixed',
-          ),
+          assistantToolCall('writeNutrition', fixedEntry, 'call_fixed'),
         ),
       )
       .mockResolvedValueOnce(
-        chatResponse(assistantToolCall('runCheck', {}, 'call_check')),
+        chatResponse(assistantToolCall('selfCheck', {}, 'call_check')),
       )
       .mockResolvedValueOnce(
         chatResponse(assistantReply('已按来源填好粗蛋白，终检通过。')),
@@ -481,16 +570,18 @@ describe('IngredientDraftAgentService · 工具循环', () => {
 
     expect(result.toolCalls).toHaveLength(3);
     expect(result.toolCalls[0]).toMatchObject({
-      name: 'updateNutritionField',
+      name: 'writeNutrition',
       ok: false,
     });
-    expect(result.toolCalls[0].error).toContain('单位');
-    expect(result.toolCalls[0].error).toContain('两');
+    expect((result.toolCalls[0]?.result as any).failed[0].error).toContain(
+      '单位「两」不合法',
+    );
     expect(result.toolCalls[1]).toMatchObject({
-      name: 'updateNutritionField',
+      name: 'writeNutrition',
       ok: true,
     });
-    expect(result.toolCalls[2]).toMatchObject({ name: 'runCheck', ok: true });
+    expect((result.toolCalls[1]?.result as any).applied).toBe(1);
+    expect(result.toolCalls[2]).toMatchObject({ name: 'selfCheck', ok: true });
 
     // 错误文本必须作为 role=tool 的消息回灌给模型，否则它没法自纠。
     const secondRequest = requestBody(fetchMock, 1);
@@ -500,7 +591,6 @@ describe('IngredientDraftAgentService · 工具循环', () => {
     expect(feedback.content).toContain('单位');
     expect(feedback.content).toContain('两');
 
-    // 非法单位那次没有落库；改对后才写进草稿。
     const draft = harness.currentDraft();
     expect(draft?.payload.profiles?.[0].entries).toEqual([
       expect.objectContaining({
@@ -541,6 +631,8 @@ describe('IngredientDraftAgentService · 工具循环', () => {
       ok: false,
     });
     expect(result.toolCalls[0].error).toContain('未知工具');
+    expect(result.toolCalls[0].error).toContain('searchLibraries');
+    expect(result.toolCalls[0].error).toContain('finish');
 
     const secondRequest = requestBody(fetchMock, 1);
     const toolMessage = secondRequest.messages.find(
@@ -550,15 +642,21 @@ describe('IngredientDraftAgentService · 工具循环', () => {
     expect(result.steps).toBe(2);
   });
 
-  it('硬保险丝：单轮最多 80 次工具调用，到线即停并保留 transcript', async () => {
+  it('预算常量：工具调用 200 次 / 总时长 10 分钟', () => {
+    expect(INGREDIENT_AGENT_MAX_TOOL_CALLS).toBe(200);
+    expect(INGREDIENT_AGENT_TIMEOUT_MS).toBe(600_000);
+  });
+
+  it('硬保险丝：单轮最多 200 次工具调用，到线即停并保留 transcript', async () => {
     let sourceSequence = 0;
     const fetchMock = jest.fn();
-    for (let index = 0; index < 80; index += 1) {
+    for (let index = 0; index < INGREDIENT_AGENT_MAX_TOOL_CALLS; index += 1) {
       fetchMock.mockResolvedValueOnce(
         chatResponse(
           assistantToolCall(
-            'searchLocalNutrition',
-            { keyword: '鸡肝', state: 'RAW' },
+            'searchLibraries',
+            // 每次关键词都不同：调用指纹不同，才不会被「无进展」软停止提前打断。
+            { groups: [{ library: 'CFCT', terms: [`鸡肝-${index + 1}`] }] },
             `call_${index + 1}`,
           ),
         ),
@@ -567,17 +665,23 @@ describe('IngredientDraftAgentService · 工具循环', () => {
     global.fetch = fetchMock as unknown as typeof global.fetch;
 
     const harness = createHarness();
-    // 每次检索都返回一个没出现过的来源 id，避免触发「连续无进展」软停止。
-    harness.candidateService.findCandidates.mockImplementation(async () => {
+    // 每次检索都返回一个没出现过的来源 id，确保每一步都算新进展。
+    harness.candidateService.searchByLibrary.mockImplementation(async () => {
       sourceSequence += 1;
       return {
-        ...CANDIDATE_RESULT,
-        candidates: [
+        library: 'CFCT',
+        total: 1,
+        hits: [
           {
-            ...CANDIDATE_RESULT.candidates[0],
-            sourceRecordId: `rec-${sourceSequence}`,
+            id: `rec-${sourceSequence}`,
+            name: `Chicken liver ${sourceSequence}`,
+            sourceType: 'USDA_FDC',
+            sourceKey: `rec-${sourceSequence}`,
+            dataType: null,
+            filledFieldCount: 10,
           },
         ],
+        keywords: ['鸡肝'],
       };
     });
 
@@ -586,34 +690,69 @@ describe('IngredientDraftAgentService · 工具循环', () => {
       userId: 'admin-1',
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(80);
-    expect(result.steps).toBe(80);
-    expect(result.toolCallCount).toBe(80);
-    expect(result.toolCalls).toHaveLength(80);
+    expect(fetchMock).toHaveBeenCalledTimes(INGREDIENT_AGENT_MAX_TOOL_CALLS);
+    expect(result.steps).toBe(INGREDIENT_AGENT_MAX_TOOL_CALLS);
+    expect(result.toolCallCount).toBe(INGREDIENT_AGENT_MAX_TOOL_CALLS);
+    expect(result.toolCalls).toHaveLength(INGREDIENT_AGENT_MAX_TOOL_CALLS);
     expect(result.stopReason).toBe('TOOL_CALL_LIMIT');
     expect(result.reply).toContain('我跑到上限了');
-    expect(result.reply).toContain('80');
+    expect(result.reply).toContain(String(INGREDIENT_AGENT_MAX_TOOL_CALLS));
     expect(result.reply).toContain('已完成');
     expect(result.reply).toContain('还没做完');
-    expect(result.toolCalls[79]).toMatchObject({
-      name: 'searchLocalNutrition',
-      ok: true,
-    });
-    // 「带上已有 transcript」：每一步都留痕，不能只给一句上限提示。
+    expect(result.toolCalls[INGREDIENT_AGENT_MAX_TOOL_CALLS - 1]).toMatchObject(
+      {
+        name: 'searchLibraries',
+        ok: true,
+      },
+    );
     expect(
       result.transcript.filter((entry) => entry.type === 'tool_result'),
-    ).toHaveLength(80);
+    ).toHaveLength(INGREDIENT_AGENT_MAX_TOOL_CALLS);
     expect(result.transcript.some((entry) => entry.type === 'limit')).toBe(
       true,
     );
   });
 
-  it('总时长 3 分钟用完时停止，返回“我跑到上限了”，不报 503', async () => {
+  it('连续 3 次工具调用没有新进展时停止，报告 result=NO_PROGRESS', async () => {
+    const fetchMock = jest.fn();
+    // 第 1 次是没见过的调用（算新探索），后面 3 次参数完全相同才算「连续 3 次没有新进展」。
+    for (let index = 0; index < 4; index += 1) {
+      fetchMock.mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'searchLibraries',
+            { keyword: '不存在的原料' },
+            `call_${index + 1}`,
+          ),
+        ),
+      );
+    }
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness({ names: [], namesTotal: 0 });
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(result.steps).toBe(4);
+    expect(result.toolCallCount).toBe(4);
+    expect(result.stopReason).toBe('NO_PROGRESS');
+    expect(result.report).toMatchObject({
+      stopReason: 'NO_PROGRESS',
+      result: 'NO_PROGRESS',
+      steps: 4,
+      toolCalls: 4,
+    });
+  });
+
+  it('总时长 10 分钟用完时停止，返回“我跑到上限了”，不报 503', async () => {
     let now = 1_000_000;
     const nowSpy = jest.spyOn(Date, 'now').mockImplementation(() => now);
     const fetchMock = jest.fn(async () => {
-      // 模拟一次模型调用把 180 秒预算全部耗尽。
-      now += 181_000;
+      now += 601_000;
       throw Object.assign(new Error('aborted'), { name: 'AbortError' });
     });
     global.fetch = fetchMock as unknown as typeof global.fetch;
@@ -632,8 +771,339 @@ describe('IngredientDraftAgentService · 工具循环', () => {
       true,
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result.report).toMatchObject({
+      draftId: DRAFT_ID,
+      steps: 1,
+      toolCalls: 0,
+      tokensIn: 0,
+      tokensOut: 0,
+      stopReason: 'TIMEOUT',
+      result: 'TIMEOUT',
+      tools: [],
+      failedTools: [],
+    });
+    expect(result.report.durationMs).toBeGreaterThanOrEqual(601_000);
 
     nowSpy.mockRestore();
+  });
+
+  it('输出上限探测：从小到大，8192 合法就命中并缓存，不再试大值', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(chatResponse(assistantReply('第一次跑完。')))
+      .mockResolvedValueOnce(chatResponse(assistantReply('第二次跑完。')));
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    const first = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+    const second = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '再补一次',
+      userId: 'admin-1',
+    });
+
+    expect(first.reply).toBe('第一次跑完。');
+    expect(second.reply).toBe('第二次跑完。');
+    // 未探测成功前默认用 8192，第一档成功就不往上试。
+    expect(requestBody(fetchMock, 0).max_tokens).toBe(8192);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // 第二次 run 直接用缓存值，不重新探测。
+    expect(requestBody(fetchMock, 1).max_tokens).toBe(8192);
+
+    const logs = logSpy.mock.calls
+      .map((args) => args.map(String).join(' '))
+      .join('\n');
+    expect(logs).toContain('maxTokensProbe');
+    expect(logs).toContain('selected=8192');
+    expect(logs).toContain('tried=8192→16384→32768');
+  });
+
+  it('输出上限探测：8192 参数错误后升到 16384，后续调用沿用 16384', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        errorResponse(400, {
+          error: { message: 'max_tokens is too large for this model' },
+        }),
+      )
+      .mockResolvedValueOnce(chatResponse(assistantReply('第一次跑完。')))
+      .mockResolvedValueOnce(chatResponse(assistantReply('第二次跑完。')));
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    const first = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+    const second = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '再补一次',
+      userId: 'admin-1',
+    });
+
+    expect(first.reply).toBe('第一次跑完。');
+    expect(second.reply).toBe('第二次跑完。');
+    expect(requestBody(fetchMock, 0).max_tokens).toBe(8192);
+    expect(requestBody(fetchMock, 1).max_tokens).toBe(16384);
+    // 第二次 run 直接使用探测结果，不再从 8192 试错。
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(requestBody(fetchMock, 2).max_tokens).toBe(16384);
+
+    const logs = logSpy.mock.calls
+      .map((args) => args.map(String).join(' '))
+      .join('\n');
+    expect(logs).toContain('maxTokensProbe');
+    expect(logs).toContain('selected=16384');
+  });
+
+  it('输出上限探测：无效响应也算失败；全部失败后回落到 8192 并记 probeExhausted', async () => {
+    const invalidMessage = chatResponse({
+      role: 'assistant',
+      content: null,
+      tool_calls: [],
+    });
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(invalidMessage) // 8192：无效响应
+      .mockRejectedValueOnce(
+        Object.assign(new Error('aborted'), { name: 'AbortError' }),
+      ) // 16384：超时
+      .mockResolvedValueOnce(invalidMessage) // 32768：无效响应
+      .mockResolvedValueOnce(chatResponse(assistantReply('回落到 8192 跑完。')))
+      .mockResolvedValueOnce(
+        chatResponse(assistantReply('缓存后继续用 8192。')),
+      );
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    const first = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+    const second = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '再跑一次',
+      userId: 'admin-1',
+    });
+
+    expect(first.reply).toBe('回落到 8192 跑完。');
+    expect(second.reply).toBe('缓存后继续用 8192。');
+    expect(requestBody(fetchMock, 0).max_tokens).toBe(8192);
+    expect(requestBody(fetchMock, 1).max_tokens).toBe(16384);
+    expect(requestBody(fetchMock, 2).max_tokens).toBe(32768);
+    // 三档都失败后仍用 8192 发起最终请求，而不是把探测失败当成 500。
+    expect(requestBody(fetchMock, 3).max_tokens).toBe(8192);
+    expect(requestBody(fetchMock, 4).max_tokens).toBe(8192);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+
+    const allLogs = [...logSpy.mock.calls, ...errorSpy.mock.calls]
+      .map((args) => args.map(String).join(' '))
+      .join('\n');
+    expect(allLogs).toContain('maxTokensProbe');
+    expect(allLogs).toContain('probeExhausted');
+    expect(allLogs).toContain('8192');
+  });
+
+  it('缓存的 32768 返回无效响应时视为失败，降回 8192 并改缓存', async () => {
+    const invalidMessage = chatResponse({
+      role: 'assistant',
+      content: null,
+      tool_calls: [],
+    });
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(invalidMessage) // 8192 无效
+      .mockResolvedValueOnce(invalidMessage) // 16384 无效
+      .mockResolvedValueOnce(chatResponse(assistantReply('先用 32768 跑完。')))
+      .mockResolvedValueOnce(invalidMessage) // 缓存的 32768 这次无效
+      .mockResolvedValueOnce(chatResponse(assistantReply('降回 8192 跑完。')))
+      .mockResolvedValueOnce(chatResponse(assistantReply('继续用 8192。')));
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    const first = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+    const second = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '再跑一次',
+      userId: 'admin-1',
+    });
+    const third = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '第三次',
+      userId: 'admin-1',
+    });
+
+    expect(first.reply).toBe('先用 32768 跑完。');
+    expect(second.reply).toBe('降回 8192 跑完。');
+    expect(third.reply).toBe('继续用 8192。');
+    expect([
+      requestBody(fetchMock, 0).max_tokens,
+      requestBody(fetchMock, 1).max_tokens,
+      requestBody(fetchMock, 2).max_tokens,
+      requestBody(fetchMock, 3).max_tokens,
+      requestBody(fetchMock, 4).max_tokens,
+      requestBody(fetchMock, 5).max_tokens,
+    ]).toEqual([8192, 16384, 32768, 32768, 8192, 8192]);
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+
+    const allLogs = [...logSpy.mock.calls, ...warnSpy.mock.calls]
+      .map((args) => args.map(String).join(' '))
+      .join('\n');
+    expect(allLogs).toContain('cachedRejected');
+    expect(allLogs).toContain('selected=8192');
+  });
+
+  it('单次模型调用最多 90 秒：超时按失败升档重试，不跟随 600 秒总时长', async () => {
+    jest.useFakeTimers();
+    const abortedAt: number[] = [];
+    const startedAt = Date.now();
+    const fetchMock = jest.fn((_url: string, init: RequestInit) => {
+      if (fetchMock.mock.calls.length === 1) {
+        return new Promise<Response>((_resolve, reject) => {
+          const signal = init.signal as AbortSignal;
+          signal.addEventListener(
+            'abort',
+            () => {
+              abortedAt.push(Date.now() - startedAt);
+              reject(
+                Object.assign(new Error('aborted'), { name: 'AbortError' }),
+              );
+            },
+            { once: true },
+          );
+        });
+      }
+      return Promise.resolve(
+        chatResponse(assistantReply('超时后升到 16384 跑完。')),
+      );
+    });
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness({
+      runtime: { ...buildRuntime(), requestTimeoutMs: 600_000 },
+    });
+    const runPromise = harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+
+    await jest.advanceTimersByTimeAsync(89_999);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(abortedAt).toEqual([]);
+
+    // 第 90 秒：这一次请求被强制中止，按失败处理并升档重试。
+    await jest.advanceTimersByTimeAsync(1);
+    expect(abortedAt).toEqual([90_000]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(requestBody(fetchMock, 0).max_tokens).toBe(8192);
+    expect(requestBody(fetchMock, 1).max_tokens).toBe(16384);
+
+    const result = await runPromise;
+    expect(result.reply).toBe('超时后升到 16384 跑完。');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('连续单次超时最终让该步失败，不会一直等到 600 秒总时长', async () => {
+    jest.useFakeTimers();
+    const abortedAt: number[] = [];
+    const startedAt = Date.now();
+    const fetchMock = jest.fn((_url: string, init: RequestInit) => {
+      return new Promise<Response>((_resolve, reject) => {
+        const signal = init.signal as AbortSignal;
+        signal.addEventListener(
+          'abort',
+          () => {
+            abortedAt.push(Date.now() - startedAt);
+            reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+          },
+          { once: true },
+        );
+      });
+    });
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness({
+      runtime: {
+        ...buildRuntime(),
+        reviewModel: MODEL,
+        requestTimeoutMs: 600_000,
+      },
+    });
+    const runPromise = harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+    const rejection = expect(runPromise).rejects.toBeInstanceOf(
+      ServiceUnavailableException,
+    );
+
+    // 8192 / 16384 / 32768 / 回落 8192 各最多等 90 秒。
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      await jest.advanceTimersByTimeAsync(90_000);
+    }
+
+    await rejection;
+    expect(abortedAt).toEqual([90_000, 180_000, 270_000, 360_000]);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect([
+      requestBody(fetchMock, 0).max_tokens,
+      requestBody(fetchMock, 1).max_tokens,
+      requestBody(fetchMock, 2).max_tokens,
+      requestBody(fetchMock, 3).max_tokens,
+    ]).toEqual([8192, 16384, 32768, 8192]);
+  });
+
+  it('实际使用回落配置时 WARN 建议单独启用 INGREDIENT_INTAKE', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(assistantReply('回落到设计配置也跑完。')),
+      );
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const harness = createHarness();
+    harness.configService.getEnabledDeepSeekRuntimeConfig.mockImplementation(
+      async (
+        input: {
+          purpose?: string;
+          fallbackToDefault?: boolean;
+        } = {},
+      ) => {
+        if (
+          input.purpose === 'INGREDIENT_INTAKE' ||
+          input.purpose === 'DEFAULT'
+        ) {
+          throw new Error(`DeepSeek Agent 设置未启用：${input.purpose}`);
+        }
+        return buildRuntime();
+      },
+    );
+
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+
+    expect(result.reply).toBe('回落到设计配置也跑完。');
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('purpose=RECIPE_DESIGN'),
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('建议单独启用 INGREDIENT_INTAKE 配置'),
+    );
   });
 
   it('模型不支持 tools 时退化为 JSON 动作模式，并在报文里去掉 tools 参数', async () => {
@@ -699,12 +1169,17 @@ describe('IngredientDraftAgentService · 工具循环', () => {
       .mockResolvedValueOnce(
         chatResponse(
           assistantToolCall(
-            'updateNutritionField',
+            'writeNutrition',
             {
               profileIndex: 0,
-              fieldPath: 'macros.notAField',
-              value: 20,
-              unit: 'g',
+              entries: [
+                {
+                  fieldPath: 'macros.notAField',
+                  value: 20,
+                  unit: 'g',
+                  sourceRecordId: 'src-1',
+                },
+              ],
             },
             'call_bad_field',
           ),
@@ -713,13 +1188,17 @@ describe('IngredientDraftAgentService · 工具循环', () => {
       .mockResolvedValueOnce(
         chatResponse(
           assistantToolCall(
-            'updateNutritionField',
+            'writeNutrition',
             {
               profileIndex: 0,
-              fieldPath: 'macros.crudeProtein',
-              value: 20,
-              unit: 'g',
-              sourceRecordId: 'missing-source',
+              entries: [
+                {
+                  fieldPath: 'macros.crudeProtein',
+                  value: 20,
+                  unit: 'g',
+                  sourceRecordId: 'missing-source',
+                },
+              ],
             },
             'call_missing_source',
           ),
@@ -728,7 +1207,7 @@ describe('IngredientDraftAgentService · 工具循环', () => {
       .mockResolvedValueOnce(
         chatResponse(assistantReply('字段和来源都不对，我停下来问用户。')),
       );
-    global.fetch = fetchMock as unknown as typeof global.fetch;
+    global.fetch = fetchMock as unknown as typeof fetch;
 
     const harness = createHarness({ draft: draftWithProfile() });
     const result = await harness.agent.run({
@@ -738,13 +1217,14 @@ describe('IngredientDraftAgentService · 工具循环', () => {
     });
 
     expect(result.toolCalls).toHaveLength(2);
-    expect(result.toolCalls[0].ok).toBe(false);
-    expect(result.toolCalls[0].error).toContain('不在营养字段目录');
-    expect(result.toolCalls[1].ok).toBe(false);
-    expect(result.toolCalls[1].error).toContain('不存在');
+    expect((result.toolCalls[0]?.result as any).failed[0].error).toContain(
+      '不在营养字段目录',
+    );
+    expect((result.toolCalls[1]?.result as any).failed[0].error).toContain(
+      '不存在',
+    );
     expect(harness.currentDraft()?.payload.profiles?.[0].entries).toEqual([]);
 
-    // 两条错误都以 role=tool 的形式回灌给模型。
     const secondRequest = requestBody(fetchMock, 1);
     const feedback = secondRequest.messages.find(
       (message: any) => message.role === 'tool',
@@ -758,25 +1238,28 @@ describe('IngredientDraftAgentService · 工具循环', () => {
       .mockResolvedValueOnce(
         chatResponse(
           assistantToolCall(
-            'updateNutritionField',
+            'writeNutrition',
             {
-              profileIndex: 0,
-              fieldPath: 'macros.crudeProtein',
-              value: 20,
-              unit: 'g',
-              sourceRecordId: 'src-1',
+              entries: [
+                {
+                  fieldPath: 'macros.crudeProtein',
+                  value: 20,
+                  unit: 'g',
+                  sourceRecordId: 'src-1',
+                },
+              ],
             },
             'call_first_write',
           ),
         ),
       )
       .mockResolvedValueOnce(
-        chatResponse(assistantToolCall('runCheck', {}, 'call_check')),
+        chatResponse(assistantToolCall('selfCheck', {}, 'call_check')),
       )
       .mockResolvedValueOnce(
         chatResponse(assistantReply('已建生档案并填好粗蛋白，终检通过。')),
       );
-    global.fetch = fetchMock as unknown as typeof global.fetch;
+    global.fetch = fetchMock as unknown as typeof fetch;
 
     const harness = createHarness({
       draft: createDraft(),
@@ -807,32 +1290,70 @@ describe('IngredientDraftAgentService · 工具循环', () => {
         unit: 'g',
       }),
     ]);
+    // eslint-disable-next-line no-console
+    if (!result.toolCalls.every((call) => call.ok)) console.error(JSON.stringify(result.toolCalls.map((c) => ({ name: c.name, error: c.error }))));
     expect(result.toolCalls.every((call) => call.ok)).toBe(true);
     expect(result.steps).toBe(3);
   });
 
-  it('完整一轮：查库 → 单位改对 → 终检发现缺熟 → 补熟档案 → 通过', async () => {
+  it('没有来源的写入被拒：模型拿到错误文本后不会落库', async () => {
     const fetchMock = jest
       .fn()
       .mockResolvedValueOnce(
         chatResponse(
           assistantToolCall(
-            'searchLocalNutrition',
-            { keyword: '鸡肝', state: 'RAW' },
-            'call_search',
+            'writeNutrition',
+            {
+              entries: [
+                {
+                  fieldPath: 'macros.crudeProtein',
+                  value: 20,
+                  unit: 'g',
+                },
+              ],
+            },
+            'call_no_source',
           ),
+        ),
+      )
+      .mockResolvedValueOnce(chatResponse(assistantReply('先去查来源。')));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const harness = createHarness({ draft: createDraft() });
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+
+    expect((result.toolCalls[0]?.result as any).failed[0].error).toContain(
+      'sourceRecordId',
+    );
+    expect(harness.currentDraft()?.payload.profiles).toBeUndefined();
+  });
+
+  it('完整一轮：查名字 → 单位改对 → 终检缺熟 → 补熟档案 → 终检通过 → finish', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall('searchLibraries', { groups: [{ library: 'CFCT', terms: ['鸡肝'] }] }, 'call_search'),
         ),
       )
       .mockResolvedValueOnce(
         chatResponse(
           assistantToolCall(
-            'updateNutritionField',
+            'writeNutrition',
             {
               profileIndex: 0,
-              fieldPath: 'macros.crudeProtein',
-              value: 19.5,
-              unit: 'mg',
-              sourceRecordId: 'rec-liver-raw',
+              entries: [
+                {
+                  fieldPath: 'macros.crudeProtein',
+                  value: 19.5,
+                  unit: 'mg',
+                  sourceRecordId: 'rec-liver-raw',
+                },
+              ],
             },
             'call_bad_unit',
           ),
@@ -841,48 +1362,73 @@ describe('IngredientDraftAgentService · 工具循环', () => {
       .mockResolvedValueOnce(
         chatResponse(
           assistantToolCall(
-            'updateNutritionField',
+            'writeNutrition',
             {
               profileIndex: 0,
-              fieldPath: 'macros.crudeProtein',
-              value: 19.5,
-              unit: 'g',
-              sourceRecordId: 'rec-liver-raw',
+              entries: [
+                {
+                  fieldPath: 'macros.crudeProtein',
+                  value: 19.5,
+                  unit: 'g',
+                  sourceRecordId: 'rec-liver-raw',
+                },
+              ],
             },
             'call_fix_unit',
           ),
         ),
       )
       .mockResolvedValueOnce(
-        chatResponse(assistantToolCall('runCheck', {}, 'call_check_1')),
+        chatResponse(assistantToolCall('selfCheck', {}, 'call_check_1')),
       )
       .mockResolvedValueOnce(
         chatResponse(
           assistantToolCall(
-            'updateNutritionField',
+            'writeNutrition',
             {
               profileIndex: 1,
-              fieldPath: 'macros.crudeProtein',
-              value: 25.1,
-              unit: 'g',
-              sourceRecordId: 'rec-liver-cooked',
+              entries: [
+                {
+                  fieldPath: 'macros.crudeProtein',
+                  value: 25.1,
+                  unit: 'g',
+                  sourceRecordId: 'rec-liver-cooked',
+                },
+              ],
             },
             'call_cooked',
           ),
         ),
       )
       .mockResolvedValueOnce(
-        chatResponse(assistantToolCall('runCheck', {}, 'call_check_2')),
+        chatResponse(assistantToolCall('selfCheck', {}, 'call_check_2')),
       )
       .mockResolvedValueOnce(
         chatResponse(
-          assistantReply('生熟两份档案都填好粗蛋白，终检通过，请人工审核。'),
+          assistantToolCall(
+            'finish',
+            { summary: '生熟两份档案都填好粗蛋白，终检通过，请人工审核。' },
+            'call_finish',
+          ),
         ),
       );
-    global.fetch = fetchMock as unknown as typeof global.fetch;
+    global.fetch = fetchMock as unknown as typeof fetch;
 
     const harness = createHarness({
       draft: createDraft(),
+      names: [
+        {
+          id: 'rec-liver-raw',
+          name: 'Chicken, liver, raw',
+          sourceType: 'USDA_FDC',
+        },
+        {
+          id: 'rec-liver-cooked',
+          name: 'Chicken, liver, cooked, simmered',
+          sourceType: 'USDA_FDC',
+        },
+      ],
+      namesTotal: 2,
       sourceRecords: [
         {
           id: 'rec-liver-raw',
@@ -901,18 +1447,8 @@ describe('IngredientDraftAgentService · 工具循环', () => {
       ],
     });
 
-    // 第一次终检缺熟档案；补完之后第二次通过（只剩提醒）。
     harness.checkService.runCheck
-      .mockResolvedValueOnce({
-        blocking: [
-          {
-            code: 'REQUIRED_STATE_MISSING',
-            message: '缺少必需的熟档案（COOKED），需要补数据或登记例外。',
-          },
-        ],
-        exceptionable: [],
-        warnings: [],
-      })
+      .mockResolvedValueOnce(BLOCKING_CHECK)
       .mockResolvedValueOnce({
         blocking: [],
         exceptionable: [],
@@ -932,15 +1468,17 @@ describe('IngredientDraftAgentService · 工具循环', () => {
 
     expect(result.steps).toBe(7);
     expect(result.toolCalls.map((call) => call.name)).toEqual([
-      'searchLocalNutrition',
-      'updateNutritionField',
-      'updateNutritionField',
-      'runCheck',
-      'updateNutritionField',
-      'runCheck',
+      'searchLibraries',
+      'writeNutrition',
+      'writeNutrition',
+      'selfCheck',
+      'writeNutrition',
+      'selfCheck',
+      'finish',
     ]);
-    expect(result.toolCalls[1].ok).toBe(false);
-    expect(result.toolCalls[1].error).toContain('单位');
+    expect((result.toolCalls[1]?.result as any).failed[0].error).toContain(
+      '单位',
+    );
     expect(result.toolCalls.slice(2).every((call) => call.ok)).toBe(true);
     expect(result.reply).toContain('终检通过');
 
@@ -953,25 +1491,23 @@ describe('IngredientDraftAgentService · 工具循环', () => {
       19.5, 25.1,
     ]);
     expect(harness.checkService.runCheck).toHaveBeenCalledTimes(2);
+    // finish 之后不再请求模型。
+    expect(fetchMock).toHaveBeenCalledTimes(7);
   });
 
-  it('模型调用链：检索 → 读整条营养记录 → 用返回的数值写字段', async () => {
+  it('模型调用链：searchLibraries → getRecord → writeNutrition → finish', async () => {
     const fetchMock = jest
       .fn()
       .mockResolvedValueOnce(
         chatResponse(
-          assistantToolCall(
-            'searchLocalNutrition',
-            { keyword: '鸡肝', state: 'RAW' },
-            'call_search',
-          ),
+          assistantToolCall('searchLibraries', { groups: [{ library: 'CFCT', terms: ['鸡肝'] }] }, 'call_search'),
         ),
       )
       .mockResolvedValueOnce(
         chatResponse(
           assistantToolCall(
-            'getNutritionRecord',
-            { sourceRecordId: 'rec-liver-raw' },
+            'getRecord',
+            { id: 'rec-liver-raw' },
             'call_record',
           ),
         ),
@@ -979,25 +1515,42 @@ describe('IngredientDraftAgentService · 工具循环', () => {
       .mockResolvedValueOnce(
         chatResponse(
           assistantToolCall(
-            'updateNutritionField',
+            'writeNutrition',
             {
-              profileIndex: 0,
-              fieldPath: 'macros.crudeProtein',
-              value: 19.5,
-              unit: 'g',
-              sourceRecordId: 'rec-liver-raw',
+              entries: [
+                {
+                  fieldPath: 'macros.crudeProtein',
+                  value: 19.5,
+                  unit: 'g',
+                  sourceRecordId: 'rec-liver-raw',
+                },
+              ],
             },
             'call_write',
           ),
         ),
       )
       .mockResolvedValueOnce(
-        chatResponse(assistantReply('已把来源里的粗蛋白 19.5 g 写进草稿。')),
+        chatResponse(
+          assistantToolCall(
+            'finish',
+            { summary: '已把来源里的粗蛋白 19.5 g 写进草稿。' },
+            'call_finish',
+          ),
+        ),
       );
-    global.fetch = fetchMock as unknown as typeof global.fetch;
+    global.fetch = fetchMock as unknown as typeof fetch;
 
     const harness = createHarness({
       draft: createDraft(),
+      names: [
+        {
+          id: 'rec-liver-raw',
+          name: 'Chicken, liver, raw',
+          sourceType: 'USDA_FDC',
+        },
+      ],
+      namesTotal: 1,
       sourceRecords: [
         {
           id: 'rec-liver-raw',
@@ -1026,19 +1579,18 @@ describe('IngredientDraftAgentService · 工具循环', () => {
 
     expect(result.steps).toBe(4);
     expect(result.toolCalls.map((call) => call.name)).toEqual([
-      'searchLocalNutrition',
-      'getNutritionRecord',
-      'updateNutritionField',
+      'searchLibraries',
+      'getRecord',
+      'writeNutrition',
+      'finish',
     ]);
     expect(result.toolCalls.every((call) => call.ok)).toBe(true);
 
-    // 第一次请求的工具定义里必须有新工具。
     const first = requestBody(fetchMock, 0);
     expect(first.tools.map((tool: any) => tool.function.name)).toContain(
-      'getNutritionRecord',
+      'getRecord',
     );
 
-    // 读完整条记录后，下一次模型请求必须真的拿到 19.5 g 这个值。
     const third = requestBody(fetchMock, 2);
     const toolMessages = third.messages.filter(
       (message: any) => message.role === 'tool',
@@ -1048,7 +1600,6 @@ describe('IngredientDraftAgentService · 工具循环', () => {
     expect(toolMessages[1].content).toContain('19.5');
     expect(toolMessages[1].content).toContain('"unit":"g"');
 
-    // 最终草稿按来源值写入，且状态来自来源记录。
     const profiles = harness.currentDraft()?.payload.profiles ?? [];
     expect(profiles).toHaveLength(1);
     expect(profiles[0].preparationState).toBe('RAW');
@@ -1061,149 +1612,110 @@ describe('IngredientDraftAgentService · 工具循环', () => {
     expect(result.reply).toContain('19.5');
   });
 
-  it('AI 配置不可用时 503，不发起模型请求', async () => {
-    const fetchMock = jest.fn();
-    global.fetch = fetchMock as unknown as typeof global.fetch;
-
-    const harness = createHarness();
-    harness.configService.getEnabledDeepSeekRuntimeConfig.mockRejectedValue(
-      new Error('DeepSeek Agent 设置未启用'),
-    );
-
-    await expect(
-      harness.agent.run({
-        draftId: DRAFT_ID,
-        text: '鸡肝',
-        userId: 'admin-1',
-      }),
-    ).rejects.toMatchObject({
-      status: 503,
-      message:
-        'AI 当前不可用，请在「原料营养治理 → Agent 设置」里启用并配置模型',
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it('模型两次都调用失败时 503，文案沿用 intake 口径', async () => {
-    const fetchMock = jest.fn().mockRejectedValue(new Error('network down'));
-    global.fetch = fetchMock as unknown as typeof global.fetch;
-
-    const harness = createHarness();
-
-    let caught: unknown;
-    try {
-      await harness.agent.run({
-        draftId: DRAFT_ID,
-        text: '鸡肝',
-        userId: 'admin-1',
-      });
-    } catch (error) {
-      caught = error;
-    }
-
-    expect(caught).toBeInstanceOf(ServiceUnavailableException);
-    expect((caught as ServiceUnavailableException).getStatus()).toBe(503);
-    expect((caught as Error).message).toBe('AI 暂时不可用，请稍后重试');
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  it('连续 3 次工具调用没有新进展时停止，reply 含“没有新进展”并保留 transcript', async () => {
-    const fetchMock = jest.fn();
-    for (let index = 0; index < 4; index += 1) {
-      fetchMock.mockResolvedValueOnce(
-        chatResponse(
-          assistantToolCall(
-            'searchLocalNutrition',
-            { keyword: '鸡肝', state: 'RAW' },
-            `call_${index + 1}`,
-          ),
-        ),
-      );
-    }
-    global.fetch = fetchMock as unknown as typeof global.fetch;
-
-    const harness = createHarness();
-    const result = await harness.agent.run({
-      text: '帮我加鸡肝',
-      userId: 'admin-1',
-    });
-
-    // 第 1 次检索到新来源算进展，之后 3 次重复检索都不算 → 第 4 次后停止。
-    expect(fetchMock).toHaveBeenCalledTimes(4);
-    expect(result.steps).toBe(4);
-    expect(result.toolCallCount).toBe(4);
-    expect(result.toolCalls).toHaveLength(4);
-    expect(result.toolCalls.every((call) => call.ok)).toBe(true);
-    expect(result.stopReason).toBe('NO_PROGRESS');
-    expect(result.reply).toContain('没有新进展');
-    expect(result.reply).toContain('已完成');
-    expect(result.reply).toContain('还没做完');
-    expect(
-      result.transcript.filter((entry) => entry.type === 'tool_result'),
-    ).toHaveLength(4);
-    expect(result.transcript.some((entry) => entry.type === 'limit')).toBe(
-      true,
-    );
-  });
-
-  it('有进展时重置无进展计数，不提前停', async () => {
+  it('回归：searchLibraries 列出三条后连续读三个不同记录，不会被判成没有进展', async () => {
+    // 事故复现：第三轮 searchLibraries + 3×getRecord（三个不同 id）被 NO_PROGRESS 停止。
+    // 三个只读调用参数各不相同，必须继续跑完并由模型正常收尾。
     const fetchMock = jest
       .fn()
       .mockResolvedValueOnce(
         chatResponse(
           assistantToolCall(
-            'searchLocalNutrition',
-            { keyword: '鸡肝', state: 'RAW' },
-            'call_search_1',
+            'searchLibraries',
+            { groups: [{ library: 'CFCT', terms: ['鹌鹑肉'] }] },
+            'call_search',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(assistantToolCall('getRecord', { id: 'rec-a' }, 'call_a')),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(assistantToolCall('getRecord', { id: 'rec-b' }, 'call_b')),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(assistantToolCall('getRecord', { id: 'rec-c' }, 'call_c')),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(assistantReply('三份记录都读完了，先不动草稿。')),
+      );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const harness = createHarness({
+      draft: createDraft(),
+      names: [
+        { id: 'rec-a', name: 'Quail, meat only, raw', sourceType: 'USDA_FDC' },
+        { id: 'rec-b', name: 'Quail, meat and skin, raw', sourceType: 'CFCT' },
+        { id: 'rec-c', name: 'Quail, whole, raw', sourceType: 'CNF' },
+      ],
+      namesTotal: 3,
+      sourceRecords: ['rec-a', 'rec-b', 'rec-c'].map((id) => ({
+        id,
+        status: 'ACTIVE',
+        foodName: `Quail ${id}`,
+        foodNameEn: `Quail ${id}`,
+        normalizedNutrition: {},
+      })),
+    });
+
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '帮我加鹌鹑肉',
+      userId: 'admin-1',
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(result.toolCalls.map((call) => call.name)).toEqual([
+      'searchLibraries',
+      'getRecord',
+      'getRecord',
+      'getRecord',
+    ]);
+    expect(result.toolCalls.every((call) => call.ok)).toBe(true);
+    expect(
+      harness.prisma.nutritionSourceRecord.findUnique.mock.calls.map(
+        (call) => (call[0] as { where: { id: string } }).where.id,
+      ),
+    ).toEqual(['rec-a', 'rec-b', 'rec-c']);
+    expect(result.stopReason).toBeNull();
+    expect(result.report.result).toBe('FINISHED');
+    expect(result.reply).toContain('三份记录都读完了');
+  });
+
+  it('模型可以自由决定顺序：跳过检索，直接 getRecord → writeNutrition → finish', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall(
+            'getRecord',
+            { id: 'rec-liver-raw' },
+            'call_record',
           ),
         ),
       )
       .mockResolvedValueOnce(
         chatResponse(
           assistantToolCall(
-            'searchLocalNutrition',
-            { keyword: '鸡肝', state: 'RAW' },
-            'call_search_2',
-          ),
-        ),
-      )
-      .mockResolvedValueOnce(
-        chatResponse(
-          assistantToolCall(
-            'searchLocalNutrition',
-            { keyword: '鸡肝', state: 'RAW' },
-            'call_search_3',
-          ),
-        ),
-      )
-      .mockResolvedValueOnce(
-        chatResponse(
-          assistantToolCall(
-            'updateNutritionField',
+            'writeNutrition',
             {
               profileIndex: 0,
-              fieldPath: 'macros.crudeProtein',
-              value: 19.5,
-              unit: 'g',
-              sourceRecordId: 'rec-liver-raw',
+              entries: [
+                {
+                  fieldPath: 'macros.crudeProtein',
+                  value: 19.5,
+                  unit: 'g',
+                  sourceRecordId: 'rec-liver-raw',
+                },
+              ],
             },
             'call_write',
           ),
         ),
       )
       .mockResolvedValueOnce(
-        chatResponse(
-          assistantToolCall(
-            'searchLocalNutrition',
-            { keyword: '鸡肝', state: 'RAW' },
-            'call_search_4',
-          ),
-        ),
-      )
-      .mockResolvedValueOnce(
-        chatResponse(assistantReply('已写入粗蛋白 19.5 g。')),
+        chatResponse(assistantToolCall('finish', {}, 'call_finish')),
       );
-    global.fetch = fetchMock as unknown as typeof global.fetch;
+    global.fetch = fetchMock as unknown as typeof fetch;
 
     const harness = createHarness({
       draft: draftWithProfile(),
@@ -1212,90 +1724,104 @@ describe('IngredientDraftAgentService · 工具循环', () => {
           id: 'rec-liver-raw',
           status: 'ACTIVE',
           foodName: 'Chicken, liver, raw',
-          foodNameEn: 'Chicken, liver, raw',
-          normalizedNutrition: { meta: { sampleState: 'RAW' } },
+          normalizedNutrition: {
+            meta: { sampleState: 'RAW' },
+            macros: { crudeProtein: 19.5 },
+          },
         },
       ],
     });
+
     const result = await harness.agent.run({
       draftId: DRAFT_ID,
       text: '鸡肝',
       userId: 'admin-1',
     });
 
-    // 两次重复检索后有一次成功写入（进展），计数清零，所以还能继续跑到回复。
-    expect(fetchMock).toHaveBeenCalledTimes(6);
-    expect(result.steps).toBe(6);
-    expect(result.toolCallCount).toBe(5);
-    expect(result.stopReason).toBeNull();
-    expect(result.reply).toContain('19.5');
-    expect(result.transcript.some((entry) => entry.type === 'limit')).toBe(
-      false,
+    expect(result.toolCalls.map((call) => call.name)).toEqual([
+      'getRecord',
+      'writeNutrition',
+      'finish',
+    ]);
+    expect(harness.candidateService.searchByLibrary).not.toHaveBeenCalled();
+    expect(result.steps).toBe(3);
+    // finish 没给 summary、assistant 也没正文 → 中性收尾。
+    expect(result.reply).toBe('本轮已完成。');
+    expect(harness.currentDraft()?.payload.profiles?.[0].entries).toHaveLength(
+      1,
     );
   });
 
-  it('一次模型回复里的多个 tool_call 全部执行：steps 是轮次，toolCallCount 是动作数', async () => {
+  it('finish 与其它工具出现在同一条回复里：finish 之后的不再执行', async () => {
+    const fetchMock = jest.fn().mockResolvedValueOnce(
+      chatResponse(
+        assistantToolCalls([
+          {
+            name: 'finish',
+            args: { summary: '先结束。' },
+            id: 'call_finish',
+          },
+          {
+            name: 'writeNutrition',
+            args: {
+              entries: [
+                {
+                  fieldPath: 'macros.crudeProtein',
+                  value: 20,
+                  unit: 'g',
+                  sourceRecordId: 'src-1',
+                },
+              ],
+            },
+            id: 'call_after_finish',
+          },
+        ]),
+      ),
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const harness = createHarness({ draft: draftWithProfile() });
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+
+    expect(result.toolCalls.map((call) => call.name)).toEqual(['finish']);
+    expect(result.reply).toBe('先结束。');
+    expect(harness.currentDraft()?.payload.profiles?.[0].entries).toEqual([]);
+  });
+
+  it('运行报告：成功时返回完整 AgentRunReport（含 token 与工具）并写日志', async () => {
     const fetchMock = jest
       .fn()
       .mockResolvedValueOnce(
         chatResponse(
-          assistantToolCalls([
-            {
-              name: 'updateNutritionFields',
-              id: 'call_batch_1',
-              args: {
-                profileIndex: 0,
-                entries: [
-                  {
-                    fieldPath: 'macros.crudeProtein',
-                    value: 19.5,
-                    unit: 'g',
-                    sourceRecordId: 'rec-liver-raw',
-                  },
-                  {
-                    fieldPath: 'macros.energyKcal',
-                    value: 120,
-                    unit: 'kcal',
-                    sourceRecordId: 'rec-liver-raw',
-                  },
-                ],
-              },
-            },
-            {
-              name: 'updateNutritionFields',
-              id: 'call_batch_2',
-              args: {
-                profileIndex: 0,
-                entries: [
-                  {
-                    fieldPath: 'minerals.calcium',
-                    value: 120,
-                    unit: 'mg',
-                    sourceRecordId: 'rec-liver-raw',
-                  },
-                ],
-              },
-            },
-            { name: 'runCheck', id: 'call_check', args: {} },
-          ]),
+          assistantToolCall('searchLibraries', { groups: [{ library: 'CFCT', terms: ['鸡肝'] }] }, 'call_1'),
+          { total_tokens: 120, prompt_tokens: 100, completion_tokens: 20 },
         ),
       )
       .mockResolvedValueOnce(
-        chatResponse(assistantReply('批量写入 3 个字段，终检通过。')),
+        chatResponse(
+          assistantToolCall('finish', { summary: '好了。' }, 'call_2'),
+          {
+            total_tokens: 80,
+            prompt_tokens: 60,
+            completion_tokens: 20,
+          },
+        ),
       );
     global.fetch = fetchMock as unknown as typeof global.fetch;
 
     const harness = createHarness({
-      draft: createDraft(),
-      sourceRecords: [
+      names: [
         {
           id: 'rec-liver-raw',
-          status: 'ACTIVE',
-          foodName: 'Chicken, liver, raw',
-          foodNameEn: 'Chicken, liver, raw',
-          normalizedNutrition: { meta: { sampleState: 'RAW' } },
+          name: 'Chicken, liver, raw',
+          sourceType: 'USDA_FDC',
         },
       ],
+      namesTotal: 1,
     });
     const result = await harness.agent.run({
       draftId: DRAFT_ID,
@@ -1303,93 +1829,638 @@ describe('IngredientDraftAgentService · 工具循环', () => {
       userId: 'admin-1',
     });
 
-    expect(result.steps).toBe(2);
-    expect(result.toolCallCount).toBe(3);
-    expect(result.toolCalls.map((call) => call.name)).toEqual([
-      'updateNutritionFields',
-      'updateNutritionFields',
-      'runCheck',
-    ]);
-    expect(result.toolCalls.every((call) => call.ok)).toBe(true);
-    expect(result.stopReason).toBeNull();
+    expect(result.report).toMatchObject({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      steps: 2,
+      toolCalls: 2,
+      tokensIn: 160,
+      tokensOut: 40,
+      stopReason: null,
+      tools: ['searchLibraries', 'finish'],
+      failedTools: [],
+      result: 'FINISHED',
+    });
+    expect(typeof result.report.runId).toBe('string');
+    expect(result.report.runId.length).toBeGreaterThan(0);
+    expect(result.report.durationMs).toBeGreaterThanOrEqual(0);
 
-    const profiles = harness.currentDraft()?.payload.profiles ?? [];
-    expect(profiles).toHaveLength(1);
-    expect(profiles[0].entries).toHaveLength(3);
+    const reportLog = logSpy.mock.calls
+      .map((args) => args.map(String).join(' '))
+      .find((line) => line.includes('runReport'));
+    expect(reportLog).toBeDefined();
+    const reportJson = JSON.parse(
+      String(reportLog).slice(String(reportLog).indexOf('{')),
+    );
+    expect(reportJson).toMatchObject({
+      draftId: DRAFT_ID,
+      result: 'FINISHED',
+      tokensIn: 160,
+      tokensOut: 40,
+    });
   });
 
-  it('token 成本上限用完时停止，保留已完成的 transcript', async () => {
-    const previousBudget = process.env.INGREDIENT_AGENT_TOKEN_BUDGET;
-    process.env.INGREDIENT_AGENT_TOKEN_BUDGET = '100';
-
-    try {
-      let sourceSequence = 0;
-      const fetchMock = jest.fn();
-      for (let index = 0; index < 2; index += 1) {
-        fetchMock.mockResolvedValueOnce(
-          chatResponse(
-            assistantToolCall(
-              'searchLocalNutrition',
-              { keyword: '鸡肝', state: 'RAW' },
-              `call_${index + 1}`,
-            ),
-            { total_tokens: 60 },
-          ),
-        );
-      }
-      global.fetch = fetchMock as unknown as typeof global.fetch;
-
-      const harness = createHarness();
-      harness.candidateService.findCandidates.mockImplementation(async () => {
-        sourceSequence += 1;
-        return {
-          ...CANDIDATE_RESULT,
-          candidates: [
-            {
-              ...CANDIDATE_RESULT.candidates[0],
-              sourceRecordId: `rec-${sourceSequence}`,
-            },
-          ],
-        };
-      });
-
-      const result = await harness.agent.run({
-        text: '帮我加鸡肝',
-        userId: 'admin-1',
-      });
-
-      // 每次模型请求 60 tokens；第二次之后累计 120 > 100，停止。
-      expect(fetchMock).toHaveBeenCalledTimes(2);
-      expect(result.stopReason).toBe('TOKEN_BUDGET');
-      expect(result.toolCallCount).toBe(2);
-      expect(result.reply).toContain('我跑到上限了');
-      expect(result.reply).toContain('成本');
-      expect(
-        result.transcript.filter((entry) => entry.type === 'tool_result'),
-      ).toHaveLength(2);
-    } finally {
-      if (previousBudget === undefined) {
-        delete process.env.INGREDIENT_AGENT_TOKEN_BUDGET;
-      } else {
-        process.env.INGREDIENT_AGENT_TOKEN_BUDGET = previousBudget;
-      }
-    }
-  });
-
-  it('模型请求的 max_tokens 提到 8000，避免工具参数被截断', async () => {
+  it('运行报告：失败工具进 failedTools，整体仍算 FINISHED', async () => {
     const fetchMock = jest
       .fn()
-      .mockResolvedValueOnce(chatResponse(assistantReply('好。')));
-    global.fetch = fetchMock as unknown as typeof global.fetch;
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall('deleteIngredient', { id: 'x' }, 'call_bad'),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(assistantReply('没有这个工具，我停下来。')),
+      );
+    global.fetch = fetchMock as unknown as typeof fetch;
 
     const harness = createHarness();
-    await harness.agent.run({
+    const result = await harness.agent.run({
       draftId: DRAFT_ID,
       text: '鸡肝',
       userId: 'admin-1',
     });
 
-    expect(requestBody(fetchMock, 0).max_tokens).toBe(8000);
+    expect(result.report.result).toBe('FINISHED');
+    expect(result.report.tools).toEqual(['deleteIngredient']);
+    expect(result.report.failedTools).toHaveLength(1);
+    expect(result.report.failedTools[0]).toMatchObject({
+      name: 'deleteIngredient',
+    });
+    expect(result.report.failedTools[0].error).toContain('未知工具');
+  });
+
+  it('运行报告：模型失败时 result=ERROR，error 事件与日志都带报告', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall('searchLibraries', { groups: [{ library: 'CFCT', terms: ['鸡肝'] }] }, 'call_1'),
+          { total_tokens: 50, prompt_tokens: 40, completion_tokens: 10 },
+        ),
+      )
+      .mockResolvedValue(errorResponse(500, { error: { message: 'boom' } }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const harness = createHarness({
+      names: [
+        {
+          id: 'rec-liver-raw',
+          name: 'Chicken, liver, raw',
+          sourceType: 'USDA_FDC',
+        },
+      ],
+      namesTotal: 1,
+    });
+    const events: any[] = [];
+    await expect(
+      harness.agent.run(
+        { draftId: DRAFT_ID, text: '鸡肝', userId: 'admin-1' },
+        (event) => events.push(event),
+      ),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+
+    expect(events.map((event) => event.type)).toEqual([
+      'step_start',
+      'step_end',
+      'error',
+    ]);
+    const report: AgentRunReport = events[2].report;
+    expect(report).toMatchObject({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      steps: 2,
+      toolCalls: 1,
+      tokensIn: 40,
+      tokensOut: 10,
+      stopReason: 'ERROR',
+      tools: ['searchLibraries'],
+      failedTools: [],
+      result: 'ERROR',
+    });
+
+    const reportLog = logSpy.mock.calls
+      .map((args) => args.map(String).join(' '))
+      .find((line) => line.includes('runReport'));
+    expect(reportLog).toBeDefined();
+    expect(reportLog).toContain('"result":"ERROR"');
+  });
+
+  it('系统提示词带上技能清单与常驻技能全文', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(chatResponse(assistantReply('好的。')));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const harness = createHarness();
+    await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '牛肉',
+      userId: 'admin-1',
+    });
+
+    const system = String(requestBody(fetchMock, 0).messages[0].content);
+    // 常驻技能全文（core）必须真的在提示里，而不是只给一个文件路径。
+    expect(system).toContain('【技能·常驻】');
+    expect(system).toContain('写原料卡 / 写营养之前');
+    // 清单里要有可加载的技能名，并告诉模型用 loadSkill 取全文。
+    expect(system).toContain('【技能清单】');
+    expect(system).toContain('name-expansion');
+    expect(system).toContain('record-selection');
+    expect(system).toContain('loadSkill');
+    // 工具名与硬约束。
+    expect(system).toContain('searchLibraries');
+    expect(system).toContain('selfCheck');
+    expect(system).toContain('sourceRecordId');
+    expect(system).not.toContain('skills/ingredient-agent/SKILL.md');
+  });
+});
+
+describe('IngredientDraftAgentService · askUser（无流程闸门）', () => {
+  it('模型调用 askUser 时存下 pendingQuestion，事件以 ask + done 收尾', async () => {
+    const fetchMock = jest.fn().mockResolvedValueOnce(
+      chatResponse(
+        assistantToolCall('askUser', {
+          question: '你要生的还是熟的？',
+          options: ['生的', '熟的', '生 + 熟都要'],
+        }),
+      ),
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const harness = createHarness();
+    const events: any[] = [];
+    const result = await harness.agent.run(
+      {
+        draftId: DRAFT_ID,
+        text: '帮我加鸡肝',
+        userId: 'admin-1',
+      },
+      (event) => events.push(event),
+    );
+
+    expect(result.stopReason).toBe('waiting_user');
+    expect(result.pendingQuestion).toMatchObject({
+      question: '你要生的还是熟的？',
+      options: ['生的', '熟的', '生 + 熟都要'],
+    });
+    expect(result.toolCalls[0]?.name).toBe('askUser');
+    expect(harness.currentDraft()?.payload.pendingQuestion).toMatchObject({
+      question: '你要生的还是熟的？',
+    });
+
+    expect(events.map((event) => event.type)).toEqual([
+      'step_start',
+      'step_end',
+      'ask',
+      'done',
+    ]);
+    expect(events[2]).toMatchObject({
+      type: 'ask',
+      question: '你要生的还是熟的？',
+      options: ['生的', '熟的', '生 + 熟都要'],
+      draftId: DRAFT_ID,
+    });
+  });
+
+  it('旧草稿里有 narrowing.required=true 也不拦 askUser', async () => {
+    const fetchMock = jest.fn().mockResolvedValueOnce(
+      chatResponse(
+        assistantToolCall('askUser', {
+          question: '你要哪个部位？',
+          options: ['牛绞肉', '牛肩肉'],
+        }),
+      ),
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const harness = createHarness({
+      draft: createDraft({
+        payload: {
+          candidateNarrowing: {
+            required: true,
+            selectedGroupKey: null,
+            question: '要哪个部位？',
+            options: ['ground', 'chuck'],
+            choices: [],
+            groups: [],
+          } as never,
+        },
+      }),
+    });
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '牛肉',
+      userId: 'admin-1',
+    });
+
+    expect(result.stopReason).toBe('waiting_user');
+    expect(result.pendingQuestion?.question).toBe('你要哪个部位？');
+  });
+
+  it('带同一 draftId 回答时，提示词包含问题与回答，并清空 pendingQuestion', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(chatResponse(assistantReply('好的，按熟的来。')));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const harness = createHarness({
+      draft: createDraft({
+        payload: {
+          pendingQuestion: {
+            question: '你要生的还是熟的？',
+            options: ['生的', '熟的'],
+            askedAt: '2026-10-25T00:00:00.000Z',
+          },
+        },
+      }),
+    });
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '熟的',
+      userId: 'admin-1',
+    });
+
+    const body = requestBody(fetchMock, 0);
+    const userMessage = body.messages.find(
+      (message: any) => message.role === 'user',
+    );
+    expect(userMessage.content).toContain('你刚问：你要生的还是熟的？');
+    expect(userMessage.content).toContain('用户答：熟的');
+    expect(harness.currentDraft()?.payload.pendingQuestion).toBeNull();
+    expect(result.reply).toBe('好的，按熟的来。');
+  });
+
+  it('askUser 选项少于 2 个时返回错误文本，不写 pendingQuestion', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall('askUser', {
+            question: '选一个？',
+            options: ['只有一个'],
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(chatResponse(assistantReply('我重新问。')));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const harness = createHarness();
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+
+    expect(result.toolCalls[0]?.ok).toBe(false);
+    expect(result.toolCalls[0]?.error).toContain('2–5');
+    expect(harness.currentDraft()?.payload.pendingQuestion).toBeUndefined();
+    expect(result.stopReason).toBeNull();
+  });
+
+  it('ask 事件带选项的库内核实标记：未收录的保留并带后缀', async () => {
+    const fetchMock = jest.fn().mockResolvedValueOnce(
+      chatResponse(
+        assistantToolCall('askUser', {
+          question: '要哪一条？',
+          options: ['鸡肝', '鸭肝'],
+        }),
+      ),
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const harness = createHarness();
+    harness.candidateService.findCandidates.mockImplementation(
+      async (input: { name: string }) => ({
+        ...EMPTY_CANDIDATE_RESULT,
+        candidates:
+          input.name === '鸡肝'
+            ? [
+                {
+                  sourceRecordId: 'rec-liver-raw',
+                  sourceType: 'USDA_FDC',
+                  foodName: 'Chicken, liver, raw',
+                  foodNameEn: 'Chicken, liver, raw',
+                  preparationState: 'RAW',
+                  cookingMethod: null,
+                  coveragePercent: 80,
+                  missingFields: [],
+                  matchScore: 0.9,
+                  matchedBy: 'EN_EXACT',
+                  matchedKeyword: input.name,
+                  matchedSourceName: 'Chicken, liver, raw',
+                  notes: [],
+                },
+              ]
+            : [],
+      }),
+    );
+
+    const events: any[] = [];
+    await harness.agent.run(
+      {
+        draftId: DRAFT_ID,
+        text: '鸡肝还是鸭肝',
+        userId: 'admin-1',
+      },
+      (event) => events.push(event),
+    );
+
+    const ask = events.find((event) => event.type === 'ask');
+    expect(ask.optionChecks[0]).toMatchObject({
+      label: '鸡肝',
+      inLibrary: true,
+      matchedName: 'Chicken, liver, raw',
+    });
+    expect(ask.optionChecks[1]).toMatchObject({
+      label: '鸭肝',
+      inLibrary: false,
+    });
+    expect(ask.optionChecks[1].displayLabel).toContain('去线上找');
+  });
+
+  it('所有选项都查不到时也照常提问，不再退回错误文本', async () => {
+    const fetchMock = jest.fn().mockResolvedValueOnce(
+      chatResponse(
+        assistantToolCall('askUser', {
+          question: '要哪一条？',
+          options: ['不存在的甲', '不存在的乙'],
+        }),
+      ),
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const harness = createHarness();
+    const result = await harness.agent.run({
+      draftId: DRAFT_ID,
+      text: '不存在的原料',
+      userId: 'admin-1',
+    });
+
+    expect(result.stopReason).toBe('waiting_user');
+    expect(result.pendingQuestion?.options).toEqual([
+      '不存在的甲',
+      '不存在的乙',
+    ]);
+  });
+});
+
+describe('IngredientDraftAgentService · 流式事件', () => {
+  it('3 次工具调用按 step_start → step_end → … → reply → done 发事件', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall('searchLibraries', { groups: [{ library: 'CFCT', terms: ['鸡肝'] }] }, 'call_1'),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(assistantToolCall('selfCheck', {}, 'call_2')),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall('finish', { summary: '好了。' }, 'call_3'),
+        ),
+      );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const harness = createHarness({
+      names: [
+        {
+          id: 'rec-liver-raw',
+          name: 'Chicken, liver, raw',
+          sourceType: 'USDA_FDC',
+        },
+      ],
+      namesTotal: 1,
+    });
+    const events: any[] = [];
+    await harness.agent.run(
+      { draftId: DRAFT_ID, text: '鸡肝', userId: 'admin-1' },
+      (event) => events.push(event),
+    );
+
+    expect(events.map((event) => event.type)).toEqual([
+      'step_start',
+      'step_end',
+      'step_start',
+      'step_end',
+      'step_start',
+      'step_end',
+      'reply',
+      'done',
+    ]);
+    expect(events[0]).toMatchObject({
+      type: 'step_start',
+      index: 1,
+      name: 'searchLibraries',
+    });
+    expect(events[1]).toMatchObject({
+      type: 'step_end',
+      index: 1,
+      ok: true,
+      found: true,
+      resultSummary: '列出 1 条名字（返回 1 条）',
+    });
+    expect(events[4]).toMatchObject({
+      type: 'step_start',
+      name: 'finish',
+    });
+    expect(events[6]).toMatchObject({
+      type: 'reply',
+      reply: '好了。',
+    });
+  });
+
+  it('查库 step_end 带 matches / keywords，读记录带 record 摘要', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall('searchLibraries', { groups: [{ library: 'CFCT', terms: ['鸡肝'] }] }, 'call_1'),
+        ),
+      )
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall('getRecord', { id: 'rec-liver-raw' }, 'call_2'),
+        ),
+      )
+      .mockResolvedValueOnce(chatResponse(assistantReply('看完了。')));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const harness = createHarness({
+      names: [
+        {
+          id: 'rec-liver-raw',
+          name: 'Chicken, liver, raw',
+          sourceType: 'USDA_FDC',
+        },
+      ],
+      namesTotal: 7,
+      namesKeywords: ['鸡肝', 'Chicken liver'],
+      sourceRecords: [
+        {
+          id: 'rec-liver-raw',
+          status: 'ACTIVE',
+          sourceType: 'USDA',
+          foodName: 'Chicken, liver, raw',
+          normalizedNutrition: {
+            meta: { sampleState: 'RAW' },
+            macros: { crudeProtein: 19.5 },
+          },
+        },
+      ],
+    });
+    const events: any[] = [];
+    await harness.agent.run(
+      { draftId: DRAFT_ID, text: '鸡肝', userId: 'admin-1' },
+      (event) => events.push(event),
+    );
+
+    const searchEnd = events[1];
+    expect(searchEnd).toMatchObject({
+      type: 'step_end',
+      ok: true,
+      found: true,
+      keywords: ['鸡肝'],
+      candidateCount: 7,
+      totalCandidates: 7,
+    });
+    expect(searchEnd.matches).toEqual([
+      {
+        name: 'Chicken, liver, raw',
+        matchedBy: 'NAME',
+        matchedKeyword: '鸡肝',
+        score: null,
+      },
+    ]);
+    const recordEnd = events[3];
+    expect(recordEnd.record).toMatchObject({
+      name: 'Chicken, liver, raw',
+      sourceType: 'USDA',
+      valueCount: 1,
+    });
+  });
+
+  it('查库零命中时 step_end 带空 matches 与本次实际关键词', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall('searchLibraries', { groups: [{ library: 'CFCT', terms: ['西洋菜'] }] }, 'call_1'),
+        ),
+      )
+      .mockResolvedValueOnce(chatResponse(assistantReply('没找到。')));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const harness = createHarness({
+      names: [],
+      namesTotal: 0,
+      namesKeywords: ['西洋菜', 'watercress'],
+    });
+    const events: any[] = [];
+    await harness.agent.run(
+      { draftId: DRAFT_ID, text: '西洋菜', userId: 'admin-1' },
+      (event) => events.push(event),
+    );
+
+    expect(events[1]).toMatchObject({
+      type: 'step_end',
+      ok: true,
+      found: false,
+      matches: [],
+      keywords: ['西洋菜'],
+    });
+  });
+
+  it('模型失败时只发 error，不带 done；原异常仍按 503 抛出', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValue(errorResponse(500, { error: { message: 'boom' } }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const harness = createHarness();
+    const events: any[] = [];
+    await expect(
+      harness.agent.run(
+        { draftId: DRAFT_ID, text: '鸡肝', userId: 'admin-1' },
+        (event) => events.push(event),
+      ),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+
+    expect(events.map((event) => event.type)).toEqual(['error']);
+    expect(events[0].message).toBeTruthy();
+  });
+});
+
+describe('IngredientDraftAgentService · 检索方案闸门', () => {
+  it('提交方案后本轮结束，并推 plan 事件', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          assistantToolCall('proposeSearchPlan', {
+            keywords: [{ term: '鸡蛋清', language: 'zh' }],
+            libraries: ['CFCT'],
+            findings: 'CFCT 2 条',
+          }),
+        ),
+      );
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+    const harness = createHarness();
+    const events: any[] = [];
+
+    const result = await harness.agent.run(
+      { draftId: DRAFT_ID, text: '鸡蛋清', userId: 'admin-1' },
+      (event) => events.push(event),
+    );
+
+    expect(result.stopReason).toBe('waiting_plan');
+    expect(result.pendingPlan).toMatchObject({ status: 'PENDING' });
+    expect(events.map((event) => event.type)).toEqual([
+      'step_start',
+      'step_end',
+      'plan',
+      'done',
+    ]);
+    expect(events[2].plan).toMatchObject({ status: 'PENDING' });
+  });
+});
+
+describe('IngredientDraftAgentService · 线路守卫', () => {
+  it('草稿是补剂 → 拒绝，不调模型、不写字段', async () => {
+    const fetchMock = jest.fn();
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+    const harness = createHarness({
+      draft: createDraft({ type: 'SUPPLEMENT' }),
+    });
+
+    await expect(
+      harness.agent.run({ draftId: DRAFT_ID, text: '鱼油', userId: 'admin-1' }),
+    ).rejects.toThrow(LINE_NOT_OPEN_MESSAGE);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(harness.draftService.patch).not.toHaveBeenCalled();
+  });
+
+  it('新建时传补剂 → 拒绝，且不建草稿', async () => {
+    const harness = createHarness({ draft: null });
+
+    await expect(
+      harness.agent.run({ text: '鱼油', line: 'SUPPLEMENT', userId: 'admin-1' }),
+    ).rejects.toThrow(LINE_NOT_OPEN_MESSAGE);
+
+    expect(harness.draftService.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('buildToolStepSummary · 步骤标题', () => {
+  it('getRecord 只写「读来源记录」，不把 UUID 拼进标题', () => {
+    const summary = buildToolStepSummary('getRecord', {
+      id: 'ee93ecc5-3f7a-4f2b-9c1d-123456789abc',
+    });
+
+    expect(summary).toBe('读来源记录');
+    expect(summary).not.toContain('ee93ecc5');
   });
 });
 
@@ -1408,10 +2479,11 @@ describe('POST /api/v1/admin/ingredient-creation/agent/run', () => {
         { provide: IngredientCreationOnlineService, useValue: {} },
         { provide: IngredientCreationMergeService, useValue: {} },
         { provide: IngredientCreationCheckService, useValue: {} },
-        { provide: IngredientCreationCommitService, useValue: {} },
+        { provide: IngredientCreationAuthorizeService, useValue: {} },
         { provide: IngredientCreationAuditService, useValue: {} },
         { provide: IngredientCreationIntakeService, useValue: {} },
         { provide: IngredientDraftAgentService, useValue: agentService },
+        { provide: IngredientSearchPlanService, useValue: {} },
         {
           provide: JwtAuthService,
           useValue: {
@@ -1458,6 +2530,7 @@ describe('POST /api/v1/admin/ingredient-creation/agent/run', () => {
       transcript: [],
       mode: 'FUNCTION_CALLING',
       stopReason: null,
+      report: buildRunReport(),
     };
     agentService.run.mockResolvedValue(runResult);
 
@@ -1487,5 +2560,252 @@ describe('POST /api/v1/admin/ingredient-creation/agent/run', () => {
       .expect(400);
 
     expect(agentService.run).not.toHaveBeenCalled();
+  });
+
+  it('流式接口选了补剂 → 400，且不调用起草服务', async () => {
+    const response = await http()
+      .post(AGENT_STREAM_PATH)
+      .set('Authorization', 'Bearer admin-token')
+      .send({ line: 'SUPPLEMENT', text: '鱼油' })
+      .expect(400);
+
+    expect(response.body.message).toBe(LINE_NOT_OPEN_MESSAGE);
+    expect(agentService.run).not.toHaveBeenCalled();
+  });
+
+  it('非流式接口同样拒绝补剂', async () => {
+    const response = await http()
+      .post(AGENT_PATH)
+      .set('Authorization', 'Bearer admin-token')
+      .send({ line: 'SUPPLEMENT', text: '鱼油' })
+      .expect(400);
+
+    expect(response.body.message).toBe(LINE_NOT_OPEN_MESSAGE);
+    expect(agentService.run).not.toHaveBeenCalled();
+  });
+
+  it('带草稿时忽略线路，照常起草且不多传字段', async () => {
+    agentService.run.mockResolvedValue({
+      draftId: DRAFT_ID,
+      reply: '已填好。',
+      toolCalls: [],
+      steps: 1,
+      toolCallCount: 0,
+      transcript: [],
+      mode: 'FUNCTION_CALLING',
+      stopReason: null,
+      report: buildRunReport(),
+    } as IngredientAgentRunResult);
+
+    await http()
+      .post(AGENT_PATH)
+      .set('Authorization', 'Bearer admin-token')
+      .send({ draftId: DRAFT_ID, line: 'SUPPLEMENT', text: '鸡肝' })
+      .expect(201);
+
+    expect(agentService.run).toHaveBeenCalledWith({
+      draftId: DRAFT_ID,
+      text: '鸡肝',
+      userId: 'admin-1',
+    });
+  });
+
+  it('过渡期旧页面不带线路 → 照常按食材起草', async () => {
+    agentService.run.mockResolvedValue({
+      draftId: DRAFT_ID,
+      reply: '已填好。',
+      toolCalls: [],
+      steps: 1,
+      toolCallCount: 0,
+      transcript: [],
+      mode: 'FUNCTION_CALLING',
+      stopReason: null,
+      report: buildRunReport(),
+    } as IngredientAgentRunResult);
+
+    await http()
+      .post(AGENT_PATH)
+      .set('Authorization', 'Bearer admin-token')
+      .send({ text: '鸡肝' })
+      .expect(201);
+
+    expect(agentService.run).toHaveBeenCalledWith({
+      text: '鸡肝',
+      userId: 'admin-1',
+      line: 'FOOD',
+    });
+  });
+
+  it('流式接口未登录 → 401', async () => {
+    await http().post(AGENT_STREAM_PATH).send({ text: '鸡肝' }).expect(401);
+
+    expect(agentService.run).not.toHaveBeenCalled();
+  });
+
+  it('流式接口返回 text/event-stream，逐条 flush 事件并以 done 收尾', async () => {
+    agentService.run.mockImplementation(async (input: any) => {
+      expect(typeof input.onEvent).toBe('function');
+      input.onEvent({
+        type: 'step_start',
+        index: 1,
+        name: 'runCheck',
+        summary: '跑终检',
+      });
+      input.onEvent({
+        type: 'step_end',
+        index: 1,
+        ok: true,
+        resultSummary: '终检通过',
+      });
+      input.onEvent({
+        type: 'reply',
+        reply: '好了。',
+        draftId: DRAFT_ID,
+        steps: 2,
+        toolCallCount: 1,
+      });
+      input.onEvent({ type: 'done' });
+      return {
+        draftId: DRAFT_ID,
+        reply: '好了。',
+        toolCalls: [],
+        steps: 2,
+        toolCallCount: 1,
+        transcript: [],
+        mode: 'FUNCTION_CALLING',
+        stopReason: null,
+        report: buildRunReport({ steps: 2, toolCalls: 1 }),
+      } as IngredientAgentRunResult;
+    });
+
+    const response = await http()
+      .post(AGENT_STREAM_PATH)
+      .set('Authorization', 'Bearer admin-token')
+      .send({ draftId: DRAFT_ID, text: '鸡肝' })
+      .buffer(true)
+      .parse((res: any, callback: any) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+        res.on('end', () =>
+          callback(null, Buffer.concat(chunks).toString('utf8')),
+        );
+      })
+      .expect(200);
+
+    expect(String(response.headers['content-type'])).toContain(
+      'text/event-stream',
+    );
+    expect(agentService.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        draftId: DRAFT_ID,
+        text: '鸡肝',
+        userId: 'admin-1',
+        onEvent: expect.any(Function),
+      }),
+    );
+
+    const frames = String(response.body)
+      .split('\n\n')
+      .map((frame) => frame.trim())
+      .filter(Boolean);
+    const events = frames.map((frame) => {
+      expect(frame.startsWith('data: ')).toBe(true);
+      return JSON.parse(frame.slice('data: '.length));
+    });
+    expect(events.map((event) => event.type)).toEqual([
+      'step_start',
+      'step_end',
+      'reply',
+      'done',
+    ]);
+    expect(events[0]).toMatchObject({
+      type: 'step_start',
+      index: 1,
+      name: 'runCheck',
+    });
+    expect(events[1]).toMatchObject({
+      type: 'step_end',
+      index: 1,
+      ok: true,
+    });
+    expect(events[2]).toMatchObject({
+      type: 'reply',
+      draftId: DRAFT_ID,
+      steps: 2,
+      toolCallCount: 1,
+    });
+  });
+
+  it('控制器收到一条事件就写一帧（不攒到结束）', async () => {
+    const chunks: string[] = [];
+    const flush = jest.fn();
+    let ended = false;
+    const fakeResponse = {
+      setHeader: jest.fn(),
+      flushHeaders: jest.fn(),
+      on: jest.fn(),
+      flush,
+      write: jest.fn((chunk: string) => {
+        chunks.push(chunk);
+        return true;
+      }),
+      end: jest.fn(() => {
+        ended = true;
+      }),
+      get writableEnded() {
+        return ended;
+      },
+    };
+
+    agentService.run.mockImplementation(async (input: any) => {
+      input.onEvent({
+        type: 'step_start',
+        index: 1,
+        name: 'runCheck',
+        summary: '跑终检',
+      });
+      // 工具还没结束，第一帧必须已经写出去了。
+      expect(chunks).toHaveLength(1);
+      input.onEvent({
+        type: 'step_end',
+        index: 1,
+        ok: true,
+        resultSummary: '终检通过',
+      });
+      expect(chunks).toHaveLength(2);
+      input.onEvent({
+        type: 'reply',
+        reply: '好了。',
+        draftId: DRAFT_ID,
+        steps: 1,
+        toolCallCount: 1,
+      });
+      input.onEvent({ type: 'done' });
+      return {
+        draftId: DRAFT_ID,
+        reply: '好了。',
+        toolCalls: [],
+        steps: 1,
+        toolCallCount: 1,
+        transcript: [],
+        mode: 'FUNCTION_CALLING',
+        stopReason: null,
+        report: buildRunReport({ steps: 2, toolCalls: 1 }),
+      } as IngredientAgentRunResult;
+    });
+
+    const controller = app.get(IngredientCreationController);
+    await controller.streamAgent(
+      { draftId: DRAFT_ID, text: '鸡肝' },
+      { userId: 'admin-1', customerId: 'admin-1', role: 'ADMIN' },
+      fakeResponse as never,
+    );
+
+    expect(chunks).toHaveLength(4);
+    expect(flush).toHaveBeenCalledTimes(4);
+    expect(chunks[0]).toBe(
+      'data: {"type":"step_start","index":1,"name":"runCheck","summary":"跑终检"}\n\n',
+    );
+    expect(ended).toBe(true);
   });
 });

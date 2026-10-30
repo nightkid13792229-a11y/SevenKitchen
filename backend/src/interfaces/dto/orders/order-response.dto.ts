@@ -4,7 +4,7 @@
 
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { OrderStatus, OrderType } from '../../../domain';
-import { PreparationMethod, CookingMethod } from '../../../domain/order';
+import { CookingMethod } from '../../../domain/order';
 import type { RecipeSnapshot } from '../../../domain/recipe/types';
 
 export class OrderPackagePlanItemDto {
@@ -52,13 +52,6 @@ export class OrderItemDto {
     nullable: true,
   })
   ingredientSourcePlan?: string | null;
-
-  @ApiPropertyOptional({
-    description: 'Preparation method selected for this order item',
-    enum: PreparationMethod,
-    nullable: true,
-  })
-  preparationMethod?: PreparationMethod | null;
 
   @ApiPropertyOptional({
     description: 'Cooking method selected for this order item',
@@ -508,6 +501,45 @@ export class OrderSummaryDto {
   /** 免费补发：本单是哪张原单的补发单；普通订单为 null */
   reshipFromOrderId?: string | null;
   refundStatus?: OrderRefundStatusResponseDto | null;
+
+  /**
+   * 可读订单号（2026-10-30）。
+   * 顾客在列表上要能报出"哪一单"，所以摘要也带上；
+   * 2026 年之前的老订单可能没有，前端整行不渲染。
+   */
+  @ApiPropertyOptional({
+    description: 'Human-readable order number (null for legacy orders)',
+    example: 'SK20261030-001',
+    nullable: true,
+  })
+  orderNo?: string | null;
+
+  /**
+   * 预计发货日（2026-10-30）：制作日 + 1 天。
+   * 与订单详情页同一口径，未排产时为 null（前端显示"等待排期"）。
+   */
+  @ApiPropertyOptional({
+    description: 'Estimated shipping date (production date + 1 day)',
+    example: '2026-11-02T00:00:00.000Z',
+    nullable: true,
+  })
+  estimatedShippingDate?: string | null;
+
+  /** 已发货订单的运单号；未发货为 null */
+  @ApiPropertyOptional({
+    description: 'Shipping tracking number',
+    example: 'SF1234567890',
+    nullable: true,
+  })
+  trackingNumber?: string | null;
+
+  /** 承运商代码（SF / STO / YTO / ZTO / EMS） */
+  @ApiPropertyOptional({
+    description: 'Shipping carrier code',
+    example: 'SF',
+    nullable: true,
+  })
+  carrierCode?: string | null;
 
   @ApiProperty({ example: 299.99 })
   totalAmount!: number;

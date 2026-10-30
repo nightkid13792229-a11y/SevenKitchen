@@ -13,9 +13,10 @@ import {
 } from '../../../src/application/ingredient-creation/ingredient-creation-intake.service';
 import { IngredientCreationAuditService } from '../../../src/application/ingredient-creation/ingredient-creation-audit.service';
 import { IngredientDraftAgentService } from '../../../src/application/ingredient-creation/ingredient-draft-agent.service';
+import { IngredientSearchPlanService } from '../../../src/application/ingredient-creation/ingredient-search-plan.service';
 import { IngredientCreationCandidateService } from '../../../src/application/ingredient-creation/ingredient-creation-candidate.service';
+import { IngredientCreationAuthorizeService } from '../../../src/application/ingredient-creation/ingredient-creation-authorize.service';
 import { IngredientCreationCheckService } from '../../../src/application/ingredient-creation/ingredient-creation-check.service';
-import { IngredientCreationCommitService } from '../../../src/application/ingredient-creation/ingredient-creation-commit.service';
 import { IngredientCreationDraftService } from '../../../src/application/ingredient-creation/ingredient-creation-draft.service';
 import { IngredientCreationMergeService } from '../../../src/application/ingredient-creation/ingredient-creation-merge.service';
 import { IngredientCreationOnlineService } from '../../../src/application/ingredient-creation/ingredient-creation-online.service';
@@ -815,13 +816,14 @@ describe('POST /api/v1/admin/ingredient-creation/intake/classify', () => {
         { provide: IngredientCreationOnlineService, useValue: {} },
         { provide: IngredientCreationMergeService, useValue: {} },
         { provide: IngredientCreationCheckService, useValue: {} },
-        { provide: IngredientCreationCommitService, useValue: {} },
+        { provide: IngredientCreationAuthorizeService, useValue: {} },
         { provide: IngredientCreationAuditService, useValue: {} },
         { provide: IngredientCreationIntakeService, useValue: intakeService },
         {
           provide: IngredientDraftAgentService,
           useValue: { run: jest.fn() },
         },
+        { provide: IngredientSearchPlanService, useValue: {} },
         {
           provide: JwtAuthService,
           useValue: {

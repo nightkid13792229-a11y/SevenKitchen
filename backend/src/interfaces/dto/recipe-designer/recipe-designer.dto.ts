@@ -1,4 +1,6 @@
 import { Type } from 'class-transformer';
+import { IsPreparationMethodContentLength } from '../recipes/preparation-method-content.validator';
+
 import {
   ArrayMaxSize,
   ArrayMinSize,
@@ -96,6 +98,17 @@ export class CreateOrderDesignFromTemplateDto {
   name?: string;
 }
 
+/**
+ * 订单绑定食谱设计（2026-10-30）：把这一份设计的生命阶段换成另一个。
+ *
+ * 与产品线的 `CreateRecipeSeriesStageDraftDto` 用同一套情境代码；
+ * 订单定制是原地换阶段（原料不动），不是另开一份阶段草稿。
+ */
+export class SwitchOrderDesignStageDto {
+  @IsIn(RECIPE_DESIGNER_SCENARIOS)
+  scenario!: RecipeDesignerScenario;
+}
+
 export class ListRecipeDesignerSeriesDto {
   @IsOptional()
   @IsIn(RECIPE_DESIGNER_SERIES_STATUS_FILTERS)
@@ -191,35 +204,6 @@ export class UpdateDogDesignNotesDto {
 export class BatchReorderDesignItemsDto {
   @IsArray()
   order!: Array<{ id: string; sortOrder: number }>;
-}
-
-export class AiDesignSuggestDto {
-  @IsOptional()
-  @IsString()
-  draftId?: string;
-}
-
-export class AiNutritionPlanGenerateDto {
-  @IsOptional()
-  @IsString()
-  draftId?: string;
-
-  @IsOptional()
-  @IsString()
-  userNotes?: string;
-}
-
-export class AiNutritionPlanAcceptDto {
-  @IsBoolean()
-  accepted!: boolean;
-
-  @IsOptional()
-  @IsString()
-  note?: string | null;
-
-  /** 修改后的营养方案（与生成结果结构一致；不传则沿用当前方案） */
-  @IsOptional()
-  plan?: Record<string, unknown> | null;
 }
 
 export class CreateRecipeSeriesStageDraftDto {
@@ -419,15 +403,19 @@ export class UpdateRecipeDesignPresentationDto {
 }
 
 /**
- * 产品线发布设置（2026-10-22 · 两阶段发布）。
+ * 产品线发布设置（2026-10-26 · 系列级展示资料）。
  *
- * 阶段设计只以 `Recipe.status=DRAFT` 存入系列仓库；展示资料与必填阶段
- * 统一在系列上维护，保存后由 `release-readiness` 重新评估。
+ * 阶段设计只以 `Recipe.status=DRAFT` 存入系列仓库；展示资料统一在系列上
+ * 维护，保存后由 `release-readiness` 重新评估，并以 `applyToLive` 决定是否
+ * 立即同步到已上线食谱行。
  *
  * 全部字段可选（patch semantics）：没传的字段保持原值，显式 null 表示清空。
  */
 export class UpdateRecipeSeriesReleaseSettingsDto {
-  /** 必填生命阶段；按系统固定顺序保存，非法代码直接 400 */
+  /**
+   * @deprecated 2026-10-26：发布范围改由阶段状态推导。
+   * DTO 仍接受该字段以兼容旧前端，但服务层忽略、不再写库。
+   */
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(RECIPE_SERIES_RELEASE_STAGE_CODES.length)
@@ -457,6 +445,21 @@ export class UpdateRecipeSeriesReleaseSettingsDto {
 }
 
 /**
+ * 产品线发布 / 更新请求体（2026-10-26）。
+ *
+ * - 首次发布不需要 body：服务端取当前全部 READY 阶段，传了也忽略；
+ * - 已上线更新时传本次要更新的阶段代码；省略 = 全量更新（兼容旧前端），
+ *   空数组 = 400，非法 / 不可操作代码 = 400。
+ */
+export class ReleaseRecipeSeriesDto {
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(RECIPE_SERIES_RELEASE_STAGE_CODES.length)
+  @IsString({ each: true })
+  stageCodes?: string[];
+}
+
+/**
  * 补剂目标营养素（2026-10-22 · Task 3）。
  *
  * 一个目标永远只对应一个 `fieldPath`；组合用派生字段（如 `derived.epaDha`）。
@@ -482,14 +485,6 @@ export class RecipeDesignSupplementTargetDto {
   targetValuePerKg?: number;
 }
 
-/** 原料预处理来源：AUTO = 系统默认带出；MANUAL = 人工修改。 */
-export const RECIPE_PREPARATION_SOURCES = ['AUTO', 'MANUAL'] as const;
-
-export type RecipePreparationSource =
-  (typeof RECIPE_PREPARATION_SOURCES)[number];
-
-export const RECIPE_PREPARATION_NOTE_MAX_LENGTH = 500;
-
 export class AddRecipeDesignItemDto {
   @IsOptional()
   @IsString()
@@ -505,16 +500,9 @@ export class AddRecipeDesignItemDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(20)
+  @IsPreparationMethodContentLength()
   preparationMethod?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(RECIPE_PREPARATION_NOTE_MAX_LENGTH)
-  preparationNote?: string;
-
-  @IsOptional()
-  @IsIn(RECIPE_PREPARATION_SOURCES)
-  preparationSource?: RecipePreparationSource;
 
   @IsOptional()
   @IsString()
@@ -550,16 +538,9 @@ export class UpdateRecipeDesignItemDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(20)
+  @IsPreparationMethodContentLength()
   preparationMethod?: string | null;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(RECIPE_PREPARATION_NOTE_MAX_LENGTH)
-  preparationNote?: string | null;
-
-  @IsOptional()
-  @IsIn(RECIPE_PREPARATION_SOURCES)
-  preparationSource?: RecipePreparationSource | null;
 
   @IsOptional()
   @IsString()
@@ -608,16 +589,9 @@ export class ReplaceRecipeDesignItemDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(20)
+  @IsPreparationMethodContentLength()
   preparationMethod?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(RECIPE_PREPARATION_NOTE_MAX_LENGTH)
-  preparationNote?: string | null;
-
-  @IsOptional()
-  @IsIn(RECIPE_PREPARATION_SOURCES)
-  preparationSource?: RecipePreparationSource | null;
 }
 
 export class ReorderRecipeDesignItemDto {

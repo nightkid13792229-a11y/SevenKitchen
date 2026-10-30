@@ -2,6 +2,10 @@
   <button
     v-if="visible"
     class="customer-service-inline-button"
+    :class="{
+      'customer-service-inline-button--compact': compact,
+      'customer-service-inline-button--icon-only': iconOnly,
+    }"
     @tap="handleCustomerServiceTap"
   >
     <image
@@ -9,7 +13,7 @@
       src="/static/ui-icons/service-chat.png"
       mode="aspectFit"
     />
-    <text class="customer-service-inline-text">咨询客服</text>
+    <text v-if="!iconOnly" class="customer-service-inline-text">{{ label }}</text>
   </button>
 </template>
 
@@ -34,6 +38,12 @@ const props = withDefaults(
     title?: string
     path?: string
     imageUrl?: string
+    /** 按钮文案（2026-10-24 统一为 Seven爸爸） */
+    label?: string
+    /** 紧凑版：固定底栏里三颗按钮并列时用 */
+    compact?: boolean
+    /** 只要一个圆形图标，不显示文字（2026-10-24 制作单底栏用） */
+    iconOnly?: boolean
   }>(),
   {
     sourceType: 'GENERAL',
@@ -44,6 +54,9 @@ const props = withDefaults(
     title: '',
     path: '',
     imageUrl: '',
+    label: '找 Seven爸爸',
+    compact: false,
+    iconOnly: false,
   },
 )
 
@@ -105,6 +118,8 @@ onMounted(async () => {
   justify-content: center;
   box-sizing: border-box;
   line-height: 1;
+  max-width: 100%;
+  overflow: hidden;
   box-shadow: 0 6rpx 16rpx rgba(176, 141, 79, 0.18);
 }
 
@@ -125,9 +140,50 @@ onMounted(async () => {
 }
 
 .customer-service-inline-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 26rpx;
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
+}
+
+/* 紧凑版：与「自己做」「订购成品」并列在固定底栏里（2026-10-24） */
+.customer-service-inline-button--compact {
+  height: 76rpx;
+  min-width: 0;
+  flex: 0 0 176rpx;
+  padding: 0 12rpx;
+  margin: 0;
+  box-shadow: none;
+}
+
+.customer-service-inline-button--compact .customer-service-inline-icon {
+  width: 28rpx;
+  height: 28rpx;
+  margin-right: 6rpx;
+}
+
+.customer-service-inline-button--compact .customer-service-inline-text {
+  font-size: 22rpx;
+  font-weight: 600;
+}
+
+/* 圆形图标版：只留头像/图标，不占文字宽度 */
+.customer-service-inline-button--icon-only {
+  width: 76rpx;
+  height: 76rpx;
+  min-width: 0;
+  flex: 0 0 76rpx;
+  padding: 0;
+  border-radius: 50%;
+  box-shadow: none;
+}
+
+.customer-service-inline-button--icon-only .customer-service-inline-icon {
+  width: 38rpx;
+  height: 38rpx;
+  margin-right: 0;
 }
 </style>

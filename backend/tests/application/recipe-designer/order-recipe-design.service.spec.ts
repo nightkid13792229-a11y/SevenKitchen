@@ -3,7 +3,6 @@ import { Test } from '@nestjs/testing';
 import { OrderRecipeDesignService } from '../../../src/application/recipe-designer/order-recipe-design.service';
 import { RecipeDesignerService } from '../../../src/application/recipe-designer/recipe-designer.service';
 import { OrderRecipeTemplateService } from '../../../src/application/recipe-designer/order-recipe-template.service';
-import { AiDesignSuggestionService } from '../../../src/application/recipe-designer/ai-design-suggestion.service';
 import { CustomRecipeService } from '../../../src/application/custom-recipe/custom-recipe.service';
 import { SearchGovernanceService } from '../../../src/application/search-governance/search-governance.service';
 import { PrismaService } from '../../../src/infrastructure/prisma.service';
@@ -87,6 +86,8 @@ describe('OrderRecipeDesignService', () => {
     },
     designRecipe: {
       deleteMany: jest.fn(),
+      /** 售后改稿要先看草稿是不是已发布，决定「开修订」还是「直接复用」 */
+      findUnique: jest.fn(),
     },
     recipeSeries: {
       deleteMany: jest.fn(),
@@ -105,6 +106,8 @@ describe('OrderRecipeDesignService', () => {
       id: 'draft-revision-1',
       seriesId: 'series-1',
     }),
+    /** 换阶段走既有草稿更新（原地改阶段，不动原料） */
+    updateDraft: jest.fn(),
   };
   const orderRecipeTemplateService = {
     compareOrderTemplateStage: jest.fn(),
@@ -533,6 +536,11 @@ describe('OrderRecipeDesignService', () => {
         recipeId: 'recipe-row-1',
         status: 'DELIVERED',
       });
+      // 已发布的正式草稿：照旧开修订，把线上那版冻结
+      prisma.designRecipe.findUnique.mockResolvedValue({
+        id: 'draft-1',
+        status: 'PUBLISHED',
+      });
 
       const result = await service.reopenForAftersale({
         aftersaleId: 'aftersale-1',
@@ -556,6 +564,54 @@ describe('OrderRecipeDesignService', () => {
         data: {
           status: 'EDITING',
           designDraftId: 'draft-revision-1',
+          revisionDeliveryItemId: 'delivery-item-1',
+        },
+      });
+    });
+
+    it('★ 草稿还没发布（本单设计的工作稿）时直接复用，不再开修订', async () => {
+      prisma.customRecipeAftersale.findUnique.mockResolvedValue({
+        id: 'aftersale-1',
+        orderId: 'order-uuid',
+        status: 'ACCEPTED',
+        deliveryItemIds: ['delivery-item-1'],
+        order: {
+          id: 'order-uuid',
+          orderId: 'CR202610220001',
+          status: 'DELIVERED',
+        },
+      });
+      prisma.customRecipeDeliveryItem.findUnique.mockResolvedValue({
+        id: 'delivery-item-1',
+        batchId: 'batch-1',
+        recipeId: 'recipe-row-1',
+      });
+      prisma.orderRecipeDesign.findFirst.mockResolvedValue({
+        id: 'design-1',
+        seriesId: 'series-1',
+        designDraftId: 'draft-1',
+        recipeId: 'recipe-row-1',
+        status: 'DELIVERED',
+      });
+      // 「订单设计」流程交付后草稿仍是 NEEDS_REVIEW —— 此前这里会 400：
+      // 「只有已发布食谱可以创建修订草稿」，员工一点「修改食谱」就报错
+      prisma.designRecipe.findUnique.mockResolvedValue({
+        id: 'draft-1',
+        status: 'NEEDS_REVIEW',
+      });
+
+      const result = await service.reopenForAftersale({
+        aftersaleId: 'aftersale-1',
+        operatorId: 'admin-1',
+      });
+
+      expect(result.draftId).toBe('draft-1');
+      expect(recipeDesignerService.createRevisionDraft).not.toHaveBeenCalled();
+      expect(prisma.orderRecipeDesign.update).toHaveBeenCalledWith({
+        where: { id: 'design-1' },
+        data: {
+          status: 'EDITING',
+          designDraftId: 'draft-1',
           revisionDeliveryItemId: 'delivery-item-1',
         },
       });
@@ -759,6 +815,148 @@ describe('OrderRecipeDesignService', () => {
     });
   });
 
+  describe('switchStage', () => {
+    const access = { userId: 'staff-1', role: 'STAFF' };
+
+    function slotWithDraft(overrides: AnyRow = {}): AnyRow {
+      return buildSlot({
+        designDraft: {
+          name: 'Foxy定制 · 鸡肉南瓜',
+          updatedAt: new Date('2026-10-22T01:30:00.000Z'),
+          seriesId: 'series-1',
+          fediafDogScenario: 'ADULT_MER_95',
+        },
+        ...overrides,
+      });
+    }
+
+    it('changes the stage of the same draft and clears the warning when it now matches the dog', async () => {
+      prisma.orderRecipeDesign.findUnique.mockResolvedValue(slotWithDraft());
+      orderRecipeTemplateService.compareStage.mockResolvedValue({
+        matches: true,
+        templateStage: 'HIGH_ACTIVITY_ADULT',
+        dogStage: 'HIGH_ACTIVITY_ADULT',
+        warning: null,
+      });
+
+      const result = await service.switchStage({
+        orderId: 'CR202610220001',
+        designId: 'design-1',
+        scenario: 'ADULT_MER_110',
+        access,
+      });
+
+      // 原地换阶段：改的就是这份草稿，订单卡片的指向不会错位
+      expect(recipeDesignerService.updateDraft).toHaveBeenCalledWith(
+        'draft-1',
+        { scenario: 'ADULT_MER_110' },
+        access,
+      );
+      // 原料一条都不删
+      expect(prisma.designRecipeItem.deleteMany).not.toHaveBeenCalled();
+      // 提示按新阶段重算：对上了就清空
+      expect(prisma.orderRecipeDesign.update).toHaveBeenCalledWith({
+        where: { id: 'design-1' },
+        data: { stageWarning: null },
+      });
+      expect(result).toEqual({
+        designId: 'design-1',
+        draftId: 'draft-1',
+        status: 'EDITING',
+        scenario: 'ADULT_MER_110',
+        lifeStage: 'HIGH_ACTIVITY_ADULT',
+        stageWarning: null,
+      });
+    });
+
+    it('sends a READY slot back to EDITING and drops the staged private recipe', async () => {
+      prisma.orderRecipeDesign.findUnique.mockResolvedValue(
+        slotWithDraft({ status: 'READY', recipeId: 'recipe-row-9' }),
+      );
+      orderRecipeTemplateService.compareStage.mockResolvedValue({
+        matches: false,
+        templateStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        dogStage: 'HIGH_ACTIVITY_ADULT',
+        warning: STAGE_WARNING,
+      });
+
+      const result = await service.switchStage({
+        orderId: 'CR202610220001',
+        designId: 'design-1',
+        scenario: 'ADULT_MER_110',
+        access,
+      });
+
+      // 旧阶段算出来的暂存私密食谱必须清掉，否则交付的还是旧阶段那份
+      expect(prisma.recipe.deleteMany).toHaveBeenCalledWith({
+        where: { id: 'recipe-row-9', sourceDesignRecipeId: 'draft-1' },
+      });
+      expect(prisma.orderRecipeDesign.update).toHaveBeenCalledWith({
+        where: { id: 'design-1' },
+        data: { status: 'EDITING', recipeId: null },
+      });
+      expect(result.status).toBe('EDITING');
+      expect(result.stageWarning).toBe(STAGE_WARNING);
+      // 换完阶段仍需重新「加入本单待提交」，不能顺手把它标回 READY
+      expect(prisma.orderRecipeDesign.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({ data: { status: 'READY' } }),
+      );
+    });
+
+    it('rejects a slot that is already delivered', async () => {
+      prisma.orderRecipeDesign.findUnique.mockResolvedValue(
+        slotWithDraft({ status: 'DELIVERED', recipeId: 'recipe-row-9' }),
+      );
+
+      await expect(
+        service.switchStage({
+          orderId: 'CR202610220001',
+          designId: 'design-1',
+          scenario: 'ADULT_MER_110',
+          access,
+        }),
+      ).rejects.toThrow('不能切换生命阶段');
+
+      expect(recipeDesignerService.updateDraft).not.toHaveBeenCalled();
+      expect(prisma.orderRecipeDesign.update).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when the draft is already on that stage', async () => {
+      prisma.orderRecipeDesign.findUnique.mockResolvedValue(
+        slotWithDraft({
+          status: 'READY',
+          recipeId: 'recipe-row-9',
+          stageWarning: null,
+        }),
+      );
+
+      const result = await service.switchStage({
+        orderId: 'CR202610220001',
+        designId: 'design-1',
+        scenario: 'ADULT_MER_95',
+        access,
+      });
+
+      expect(recipeDesignerService.updateDraft).not.toHaveBeenCalled();
+      expect(prisma.recipe.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.orderRecipeDesign.update).not.toHaveBeenCalled();
+      expect(result.status).toBe('READY');
+    });
+
+    it('rejects a stage code the product does not support', async () => {
+      await expect(
+        service.switchStage({
+          orderId: 'CR202610220001',
+          designId: 'design-1',
+          scenario: 'SENIOR_ONLY',
+          access,
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(prisma.orderRecipeDesign.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
   describe('removeSlot', () => {
     it('removes an EDITING slot together with draft and series', async () => {
       prisma.orderRecipeDesign.findUnique.mockResolvedValue({
@@ -881,10 +1079,6 @@ describe('RecipeDesignerService · order-bound clone', () => {
     expandQuery: jest.fn(),
     recordSearchEvent: jest.fn(),
   };
-  const aiDesignSuggestion = {
-    isAvailable: jest.fn(),
-    generate: jest.fn(),
-  };
 
   function buildSourceRecipe(overrides: AnyRow = {}): AnyRow {
     return {
@@ -933,7 +1127,6 @@ describe('RecipeDesignerService · order-bound clone', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: 'FediafTargetProvider', useValue: targetProvider },
         { provide: SearchGovernanceService, useValue: searchGovernance },
-        { provide: AiDesignSuggestionService, useValue: aiDesignSuggestion },
       ],
     }).compile();
 
@@ -1021,8 +1214,6 @@ describe('RecipeDesignerService · order-bound clone', () => {
         includeInAssessment: true,
         ratioPercent: 40,
         preparationMethod: '蒸熟',
-        preparationNote: null,
-        preparationSource: null,
         nutrientTargetKey: null,
         nutrientTargetValue: null,
         sortOrder: 0,
@@ -1034,8 +1225,6 @@ describe('RecipeDesignerService · order-bound clone', () => {
         includeInAssessment: true,
         ratioPercent: 25,
         preparationMethod: null,
-        preparationNote: null,
-        preparationSource: null,
         nutrientTargetKey: null,
         nutrientTargetValue: null,
         sortOrder: 1,
@@ -1180,10 +1369,6 @@ describe('RecipeDesignerService · publishOrderDesignSlot', () => {
     expandQuery: jest.fn(),
     recordSearchEvent: jest.fn(),
   };
-  const aiDesignSuggestion = {
-    isAvailable: jest.fn(),
-    generate: jest.fn(),
-  };
 
   function buildDraft(overrides: AnyRow = {}): AnyRow {
     return {
@@ -1285,7 +1470,6 @@ describe('RecipeDesignerService · publishOrderDesignSlot', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: 'FediafTargetProvider', useValue: targetProvider },
         { provide: SearchGovernanceService, useValue: searchGovernance },
-        { provide: AiDesignSuggestionService, useValue: aiDesignSuggestion },
       ],
     }).compile();
 

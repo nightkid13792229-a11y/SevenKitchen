@@ -12,6 +12,7 @@ export type NutritionSourceCode =
   | 'TFDA_FOOD_NUTRITION_DATABASE'
   | 'CFCT'
   | 'CNF'
+  | 'KO_RDA_FOOD_COMPOSITION_TABLE'
   | 'AUSNUT'
   | 'NEVO'
   | 'JP_FOOD_TABLE'
@@ -53,6 +54,11 @@ export const NUTRITION_SOURCE_DEFINITIONS = [
     sourceKind: 'FOOD_DATABASE',
     sourceCode: 'CNF',
     sourceProvider: 'Canadian Nutrient File',
+  },
+  {
+    sourceKind: 'FOOD_DATABASE',
+    sourceCode: 'KO_RDA_FOOD_COMPOSITION_TABLE',
+    sourceProvider: 'Rural Development Administration, Republic of Korea',
   },
   {
     sourceKind: 'FOOD_DATABASE',
@@ -130,6 +136,7 @@ export function normalizeLegacyNutritionSourceType(
     NZFCD: 'NZFCD_FOODFILES',
     TFDA: 'TFDA_FOOD_NUTRITION_DATABASE',
     CFCT: 'CFCT',
+    KO_RDA: 'KO_RDA_FOOD_COMPOSITION_TABLE',
     SUPPLEMENT_LABEL: 'SUPPLEMENT_LABEL',
     LABEL: 'SUPPLEMENT_LABEL',
     LAB_REPORT: 'LAB_REPORT',

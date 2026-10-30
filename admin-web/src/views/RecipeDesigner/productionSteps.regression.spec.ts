@@ -92,7 +92,7 @@ describe('设计器 · 制作步骤编辑器（2026-10-22 · Task 7）', () => {
     expect(component).not.toContain('自动转换旧版')
   })
 
-  it('制作步骤已并入上线检查抽屉，不离开页面，且保留补剂与预处理 UI', () => {
+  it('制作步骤已并入上线检查抽屉，不离开页面，且保留补剂与原料处理 UI', () => {
     expect(launchDrawer).toContain('ProductionStepsEditor')
     expect(launchDrawer).toContain(':draft-id="draftId"')
     expect(launchDrawer).toContain('@saved="handleStepsSaved"')
@@ -106,9 +106,9 @@ describe('设计器 · 制作步骤编辑器（2026-10-22 · Task 7）', () => {
     // 原有补剂目标与原料预处理 UI 不得被替换
     expect(editor).toContain('SupplementTargetDialog')
     expect(editor).toContain('itemSupplementTargetViews')
-    expect(editor).toContain('原料预处理')
+    expect(editor).toContain('PREPARATION_FIELD_LABEL')
     expect(editor).toContain('onPreparationMethodChange')
-    expect(editor).toContain('PreparationMethodManagerDialog')
+    expect(editor).not.toContain('PreparationMethodManagerDialog')
   })
 
   it('类型与 API 载荷命名和路由契约一致', () => {

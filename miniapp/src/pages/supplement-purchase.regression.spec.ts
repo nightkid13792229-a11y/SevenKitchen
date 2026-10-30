@@ -379,13 +379,19 @@ describe('supplement purchase regressions', () => {
      * 2026-09-22：入口从清单卡片挪到底部固定栏，任何滚动位置都能点到。
      * 文案只有一行，不再有数量 / 发货方 / 价格预期等小字。
      */
-    it('入口在底部固定栏，且只有一行文案', () => {
+    it('入口在底部固定栏，补剂清单下方另有引导按钮（2026-10-24）', () => {
       const bottomBarAt = template.indexOf('class="bottom-actions"')
-      const entryAt = template.indexOf('@tap="handleBuySupplements"')
+      // 清单下方的引导按钮在前，底栏按钮在后 —— 取最后一个
+      const entryAt = template.lastIndexOf('@tap="handleBuySupplements"')
 
       expect(bottomBarAt).toBeGreaterThan(-1)
       expect(entryAt).toBeGreaterThan(bottomBarAt)
       expect(template).toContain('购买预分装补剂')
+      expect(template).toContain('supplement-buy-note')
+      expect(template).toContain('不想购买所有的商品补剂？')
+      expect(template).toContain('可以购买本次制作需要的')
+      expect(template).toContain('一次性预分装补剂')
+      expect(template).toContain('supplement-buy-note-line')
       expect(template).not.toContain('supplement-buy-card')
       expect(template).not.toContain('supplementEntryCountText')
       expect(template).not.toContain('结算页显示总价')
@@ -407,7 +413,13 @@ describe('supplement purchase regressions', () => {
     })
 
     it('把品牌规格带进购买草稿，供下单页小字展示', () => {
-      expect(source).toContain('specText: item.selectedProductDisplayText')
+      // 2026-10-26：购买行改由 supplement-candidates 生成，行内不带 amount
+      expect(source).toContain('buildSupplementPurchaseLines(')
+      const helper = readFileSync(
+        resolve(process.cwd(), 'src/pages/diy-sheet/supplement-candidates.ts'),
+        'utf-8',
+      )
+      expect(helper).toContain('specText:')
     })
   })
 

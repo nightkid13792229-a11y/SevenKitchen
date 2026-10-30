@@ -1075,6 +1075,85 @@ describe('RecipeService', () => {
       expect(result.sellingPoint).toBe('含鳕鱼与红薯，符合 FEDIAF 2025');
       expect(result.description).toBe('以鳕鱼提供动物蛋白。');
     });
+
+    /**
+     * 2026-10-24：最新设计器把制作步骤写进 productionStepsJson，
+     * 老 productionSteps 故意不动。顾客制作单要读结构化步骤，
+     * 否则新食谱的"制作步骤"板块会是空的。
+     */
+    it('returns structured production steps for the DIY sheet', async () => {
+      mockPrismaService.recipe.findUnique.mockResolvedValue({
+        id: 'row-1',
+        recipeId: 'recipe-1',
+        version: 1,
+        name: '燕麦鳕鱼猪肉',
+        status: RecipeStatus.PUBLIC,
+        energyDensityKcalPerKg: 1244,
+        productionLossRate: 1.07,
+        batchLaborHours: 2,
+        coverImageUrl: null,
+        coverTitle: null,
+        detailImages: [],
+        videoUrl: null,
+        description: null,
+        sellingPoint: null,
+        designSource: null,
+        nutritionStandard: 'FEDIAF_2021',
+        nutritionDetailedData: null,
+        salesCount: 0,
+        diyGenCount: 0,
+        likeCount: 0,
+        favoriteCount: 0,
+        viewCount: 0,
+        seriesId: null,
+        series: null,
+        seriesLifeStage: null,
+        applicableLifeStages: ['ADULT'],
+        targetHealthTags: [],
+        items: [],
+        healthTagAssignments: [],
+        // 老字段为空，只有结构化步骤
+        productionSteps: null,
+        productionStepsJson: [
+          {
+            sortOrder: 1,
+            instruction: '鸡胸肉切块',
+            durationMinutes: 5,
+            temperatureC: null,
+            equipment: null,
+          },
+          {
+            sortOrder: 2,
+            instruction: '低温慢煮',
+            durationMinutes: 30,
+            temperatureC: 75,
+            equipment: '慢煮机',
+          },
+        ],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      mockPrismaService.recipe.findMany.mockResolvedValue([]);
+
+      const result = await service.getRecipeById('row-1');
+
+      expect(result.productionStepsList).toEqual([
+        {
+          sortOrder: 1,
+          instruction: '鸡胸肉切块',
+          durationMinutes: 5,
+          temperatureC: null,
+          equipment: null,
+        },
+        {
+          sortOrder: 2,
+          instruction: '低温慢煮',
+          durationMinutes: 30,
+          temperatureC: 75,
+          equipment: '慢煮机',
+        },
+      ]);
+    });
   });
 
   describe('publishRecipe', () => {

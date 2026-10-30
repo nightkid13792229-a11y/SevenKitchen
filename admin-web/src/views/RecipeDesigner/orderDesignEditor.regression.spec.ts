@@ -69,6 +69,46 @@ describe('编辑器 · 管理员加入本单待提交', () => {
   })
 })
 
+describe('编辑器 · 本单设计换生命阶段（2026-10-30）', () => {
+  const source = clean(editor)
+
+  it('订单定制也提供「切换阶段」，不再只给产品线用', () => {
+    expect(source).not.toContain('v-if="draft && !orderId"')
+    expect(source).toContain('const stageSwitchVisible = computed(')
+    expect(source).toContain("currentOrderSlot.value?.status !== 'DELIVERED'")
+  })
+
+  it('本单换阶段走原地接口，不另开一份阶段草稿', () => {
+    const start = source.indexOf('async function handleSwitchStage')
+    expect(start).toBeGreaterThan(-1)
+    const block = source.slice(start, start + 900)
+    expect(block).toContain('if (orderId) {')
+    expect(block).toContain('await switchOrderDesignStage(scenario)')
+    expect(source).toContain(
+      'orderRecipeDesignApi.switchStage(orderId, designId, scenario)',
+    )
+  })
+
+  it('先落盘未保存的改动再换阶段，换完刷新草稿与本单槽位', () => {
+    const start = source.indexOf('async function switchOrderDesignStage')
+    expect(start).toBeGreaterThan(-1)
+    const block = source.slice(start, start + 2400)
+    expect(block).toContain('await flushNow()')
+    expect(block.indexOf('await flushNow()')).toBeLessThan(
+      block.indexOf('orderRecipeDesignApi.switchStage'),
+    )
+    expect(block).toContain('await loadDraft(')
+    expect(block).toContain('await loadOrderDesignWorkspace()')
+  })
+
+  it('已加入待提交的那份说清楚会退回编辑中、需要重新加入', () => {
+    const start = source.indexOf('async function switchOrderDesignStage')
+    const block = source.slice(start, start + 2400)
+    expect(block).toContain('退回「编辑中」')
+    expect(block).toContain('需要重新点一次「加入本单待提交」')
+  })
+})
+
 describe('订单页 · 开始设计 / 继续设计进入工作台', () => {
   const source = clean(orderDetail)
 

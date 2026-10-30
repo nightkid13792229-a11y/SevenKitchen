@@ -125,7 +125,7 @@
       <view v-if="foodItems.length > 0" class="ingredient-block">
         <view class="ingredient-table-header">
           <text class="header-name">食材</text>
-          <text class="header-method">制备方法</text>
+          <text class="header-method">部位 / 状态 / 预处理</text>
           <text class="header-ratio">占比</text>
         </view>
         <view
@@ -181,7 +181,7 @@
         </view>
         <view class="ingredient-table-header">
           <text class="header-name">物料</text>
-          <text class="header-method">制备方法</text>
+          <text class="header-method">部位 / 状态 / 预处理</text>
           <text class="header-ratio">占比</text>
         </view>
         <view
@@ -630,6 +630,8 @@ const recipe = ref<RecipeDetail>({
 const isFavorite = ref(false)
 const recipeId = ref('')
 const shareToken = ref('')
+/** 定制单号：带值时只看交付记录冻结的那一版（员工端入口用） */
+const pinnedOrderId = ref('')
 const dogId = ref<string | null>(null)
 /**
  * 选狗状态（2026-10-18 收进 composable）。
@@ -858,6 +860,7 @@ onMounted(async () => {
   const currentPage = pages[pages.length - 1] as any
   recipeId.value = currentPage.options?.recipeId || currentPage.options?.id || ''
   shareToken.value = currentPage.options?.shareToken || ''
+  pinnedOrderId.value = currentPage.options?.orderId || ''
   initialDogId.value = currentPage.options?.dogId || ''
   hasToken.value = Boolean(uni.getStorageSync('token'))
 
@@ -896,6 +899,16 @@ function loadRecipeDetail() {
   const data: any = {}
   if (shareToken.value) {
     data.shareToken = shareToken.value
+  }
+  /**
+   * 定制订单「看交付那一版」（2026-10-30）。
+   *
+   * 员工从工作台订单中心点进来时，会带上 `orderId=<定制单号>`；
+   * 后端据此只返回**交付记录冻结的那一版**，绝不回退最新版。
+   * 不带这个参数时行为不变（仍然是当前最新版）。
+   */
+  if (pinnedOrderId.value) {
+    data.orderId = pinnedOrderId.value
   }
   const activeDogId = selectedDogId.value || dogId.value
   if (activeDogId) {
@@ -1996,6 +2009,8 @@ function onReviewSubmitted() {
   width: 100%;
   text-align: center;
   display: block;
+  word-break: break-all;
+  line-height: 1.4;
 }
 
 .ingredient-ratio {

@@ -6,12 +6,10 @@ import { describe, expect, it } from 'vitest'
  * 而 `npm run build` 直接失败（构建的 tsconfig 里没有 node 类型）。
  * 这一轮加守卫时**又踩了一次** —— 所以把这句话写在文件头上。
  */
-import orderListSource from './OrderList.vue?raw'
 // 用 Vite 的 `?raw` 读源码：admin-web 的 vitest 是 node 环境（没有 jsdom），
 // Element Plus 页面挂不起来，所以接线用"读源码断言"锁住，
 // 真正的算法（过敏比对、倒计时）放在 utils 里由单测真跑。
 import orderDetail from '@/views/CustomRecipes/OrderDetail.vue?raw'
-import orderList from '@/views/CustomRecipes/OrderList.vue?raw'
 import config from '@/views/CustomRecipes/Config.vue?raw'
 import customRecipeApiSource from '@/api/customRecipe.ts?raw'
 
@@ -233,11 +231,6 @@ describe('退款与时效信息（第 5 条）', () => {
     expect(orderDetail).toContain('v-if="deliveryInfo.overdue"')
   })
 
-  it('列表页有「预计交付」列与超期标记', () => {
-    expect(orderList).toContain('<el-table-column label="预计交付" width="160">')
-    expect(orderList).toContain('getEstimatedDeliveryInfo(order.estimatedDeliveryDate, order.status)')
-    expect(orderList).toContain(":class=\"{ 'overdue-text': getDeliveryInfo(row).overdue }\"")
-  })
 })
 
 describe('状态文案只有一份字典（第 6 条）', () => {
@@ -253,26 +246,15 @@ describe('状态文案只有一份字典（第 6 条）', () => {
      * 现在中文只存在于后端的选项字典里，两个页面都来取。
      * 这条守卫因此比原来更强：**不只是"只有一份"，而是"那一份在后端"**。
      */
-    for (const source of [orderDetail, orderList]) {
-      expect(source).toContain('useOptionSet')
-      expect(source).toContain('CUSTOM_RECIPE_STATUS_SET')
-    }
+    expect(orderDetail).toContain('useOptionSet')
+    expect(orderDetail).toContain('CUSTOM_RECIPE_STATUS_SET')
     expect(orderDetail).toContain('statusLabel(order.value?.status)')
-    expect(orderList).toContain('statusLabel(row.status)')
   })
 
   it('★ 两个页面都不再自己维护状态 map（防"改一处漏一处"复发）', () => {
     expect(orderDetail).not.toContain("PENDING_PAYMENT: '待付款'")
-    expect(orderList).not.toContain("PENDING_PAYMENT: '待付款'")
     // 不许再从本地常量表取状态文案（退款文案那部分仍可用本地常量）
     expect(orderDetail).not.toContain('getCustomRecipeStatusText')
-    expect(orderList).not.toContain('getCustomRecipeStatusText')
-  })
-
-  it('★ 列表页的状态筛选选项也来自字典（加一档不用改前端）', () => {
-    // 此前是写死的六行 el-option
-    expect(orderList).not.toContain('<el-option label="待付款" value="PENDING_PAYMENT">')
-    expect(orderList).toContain('v-for="item in statusItems"')
   })
 })
 
@@ -292,8 +274,6 @@ describe('敏感按钮按角色显示（口径 2，第 7 条）', () => {
   })
 
   it('设置页入口对客服置灰并写明原因，而不是让人点了吃 403', () => {
-    expect(orderList).toContain('const isAdmin = useIsAdmin();')
-    expect(orderList).toContain(':content="`${ADMIN_ONLY_TIP}：食谱定制设置`"')
     expect(config).toContain('const isAdmin = useIsAdmin();')
     expect(config).toContain('只允许管理员修改，当前账号只能查看')
     expect(config).toContain(':disabled="!isAdmin"')
@@ -301,10 +281,9 @@ describe('敏感按钮按角色显示（口径 2，第 7 条）', () => {
 })
 
 describe('报错要具体（第 8 条）', () => {
-  it('三个页面都取后端返回的原因，不再只有"操作失败"', () => {
+  it('详情页与设置页都取后端返回的原因，不再只有"操作失败"', () => {
     expect(orderDetail).toContain("toastApiError(error, '交付失败', (message) => ElMessage.error(message))")
     expect(orderDetail).toContain("toastApiError(error, '加载订单详情失败', (message) => ElMessage.error(message))")
-    expect(orderList).toContain("toastApiError(error, '加载订单列表失败', (message) => ElMessage.error(message))")
     expect(config).toContain("getApiErrorMessage(error, '保存失败，请重试')")
     expect(config).toContain("toastApiError(error, '保存失败，请重试', (message) => ElMessage.error(message))")
     expect(orderDetail).not.toContain("ElMessage.error('操作失败')")
@@ -313,14 +292,12 @@ describe('报错要具体（第 8 条）', () => {
 
   it('用户点"取消"不算失败：取消提示交给 toastApiError 内部判断，不弹红色报错', () => {
     expect(orderDetail).not.toContain("if (error !== 'cancel')")
-    expect(orderList).not.toContain("if (error !== 'cancel')")
   })
 })
 
 describe('接口调用统一收在 api 层（铁律 2）', () => {
-  it('三个页面都不再自己拼 /admin/custom-recipe 路径', () => {
+  it('详情页与设置页都不再自己拼 /admin/custom-recipe 路径', () => {
     expect(orderDetail).not.toContain("'/admin/custom-recipe'")
-    expect(orderList).not.toContain("'/admin/custom-recipe'")
     expect(config).not.toContain("'/admin/custom-recipe'")
   })
 
@@ -332,48 +309,3 @@ describe('接口调用统一收在 api 层（铁律 2）', () => {
     expect(customRecipeApiSource).toContain('`${BASE}/orders/${orderId}/confirm-payment`')
   })
 })
-
-/**
- * 后台订单列表按钮必须来自后端契约（2026-10-16 批次 5.6）
- *
- * ## 事故经过（同一类 bug 在三个地方各出现一次）
- *
- * · 顾客端列表：`status === 'DELIVERED'` 决定「查看定制食谱」
- *   → 订单变已完成，**顾客找不到自己的食谱**
- * · 后台详情：`status === 'DELIVERED'` 决定"已交付食谱"区块
- *   → 顾客确认收货后，**老板看不到交付的是哪份**
- * · 后台列表：同一个判断决定「查看食谱」按钮 → 同样消失
- *
- * 三次都是同一个成因：**判定散在前端，改一处漏一处**。
- * 所以这里钉死：后台列表也只做 code → 处理函数的映射。
- */
-describe('后台订单列表按钮来自后端契约', () => {
-  const raw = orderListSource;
-  /** ⚠️ 先剥注释 —— 说明注释里引用了被删掉的旧判断（本项目栽过 6 次） */
-  const source = raw
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[^:])\/\/.*$/gm, '$1');
-
-  it('★ 不再用写死的状态判断决定按钮', () => {
-    const start = source.indexOf('操作');
-    const end = source.indexOf('</el-table-column>', start);
-    const block = source.slice(start, end > 0 ? end : start + 2000);
-    expect(block).not.toContain("row.status === 'PENDING_PAYMENT'");
-    expect(block).not.toContain("row.status === 'PAID'");
-    expect(block).not.toContain("row.status === 'DELIVERED'");
-  });
-
-  it('★ 按钮从 renderable.actions 渲染', () => {
-    expect(source).toContain('rowActions(row)');
-    expect(source).toContain('action.code');
-    expect(source).toContain('action.label');
-    expect(source).toContain('action.enabled');
-  });
-
-  it('★ 前端只做 code → 处理函数的映射', () => {
-    for (const code of ['CONFIRM_PAYMENT', 'ACCEPT_ORDER', 'DELIVER']) {
-      expect(source).toContain(`case '${code}'`);
-    }
-  });
-});

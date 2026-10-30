@@ -95,38 +95,6 @@
                 </el-button>
               </div>
 
-              <!--
-                AI 生成封面图（2026-10-18）
-
-                ⚠️ 没配置时**按钮置灰 + 说明去哪配** —— 不让"点了才报错"。
-                生成约 20 秒，所以要有明确的加载态。
-                **只预览不保存**：生图有随机性，出来不像的可以直接重来，不会把原图冲掉。
-              -->
-              <div class="ai-cover-row">
-                <el-button
-                  size="small"
-                  :loading="aiCoverLoading"
-                  :disabled="!aiCoverAvailable || aiCoverLoading"
-                  @click="handleGenerateAiCover"
-                >
-                  {{ aiCoverLoading ? '生成中（约 20 秒）…' : 'AI 生成封面图' }}
-                </el-button>
-                <span v-if="!aiCoverAvailable" class="ai-cover-tip">
-                  未配置：请到「AI 设置」添加 purpose=RECIPE_COVER_IMAGE、provider=ZHIPU 并启用
-                </span>
-                <span v-else class="ai-cover-tip">
-                  按食谱名与食材生成，只预览不保存
-                </span>
-              </div>
-
-              <!-- 生成结果的预览：确认了才替换封面 -->
-              <div v-if="aiCoverPreviewUrl" class="ai-cover-preview">
-                <img :src="aiCoverPreviewUrl" class="cover-image" />
-                <div class="image-actions">
-                  <el-button size="small" type="primary" @click="applyAiCover">用这张</el-button>
-                  <el-button size="small" @click="aiCoverPreviewUrl = ''">不要</el-button>
-                </div>
-              </div>
             </div>
             <div class="upload-tips">
               <el-icon color="#909399"><InfoFilled /></el-icon>
@@ -380,7 +348,7 @@
                 <div class="header-cell">原料名称</div>
                 <div class="header-cell">类型</div>
                 <div class="header-cell">营养状态</div>
-                <div class="header-cell">制备方法</div>
+                <div class="header-cell">部位 / 状态 / 预处理</div>
                 <div class="header-cell">示例重量</div>
                 <div class="header-cell">占比</div>
                 <div class="header-cell nutrient-target-header">营养目标</div>
@@ -814,16 +782,23 @@
           </el-select>
         </el-form-item>
 
-        <el-form-item label="制备方法">
+        <el-form-item label="部位 / 状态 / 预处理">
           <el-input
             v-model="ingredientForm.preparationMethodText"
             type="textarea"
             :rows="3"
-            placeholder="直接输入制备方法文案，如：去皮、蒸熟后压泥"
+            maxlength="20"
+            placeholder="如：牛里脊/生/去油"
           />
+          <div
+            class="preparation-length-hint"
+            :class="{ 'is-over': preparationMethodContentLength > PREPARATION_METHOD_MAX_CONTENT_LENGTH }"
+          >
+            {{ preparationMethodContentLength }}/{{ PREPARATION_METHOD_MAX_CONTENT_LENGTH }} 字（不含符号）
+          </div>
 
           <div style="margin-top: 8px">
-            <div style="font-size: 12px; color: #909399; margin-bottom: 6px">历史制备方法</div>
+            <div style="font-size: 12px; color: #909399; margin-bottom: 6px">历史记录</div>
             <el-skeleton
               v-if="ingredientPreparationMethodHistoryLoading"
               :rows="1"
@@ -847,8 +822,8 @@
               v-else
               :description="
                 ingredientForm.ingredientId
-                  ? '暂无历史制备方法'
-                  : '请选择原料后查看历史制备方法'
+                  ? '暂无历史记录'
+                  : '请选择原料后查看历史记录'
               "
               :image-size="40"
             />
@@ -972,35 +947,10 @@
           </el-form-item>
 
           <el-form-item label="替代补剂">
-            <el-select
-              v-model="ingredientForm.supplementAlternativeIngredientIds"
-              multiple
-              clearable
-              placeholder="可选：为这条补剂配置替代产品"
-              style="width: 100%"
-            >
-              <el-option
-                v-for="option in availableSupplementAlternativeOptions"
-                :key="option.id"
-                :label="formatIngredientDisplayLabel(option)"
-                :value="option.id"
-              >
-                <div style="display: flex; flex-direction: column; gap: 4px">
-                  <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
-                    <span style="font-weight: 500">{{ option.name }}</span>
-                    <span v-if="option.brand" style="color: #909399; font-size: 12px">
-                      {{ option.brand }}
-                    </span>
-                    <span v-if="option.productModel" style="color: #909399; font-size: 12px">
-                      {{ option.productModel }}
-                    </span>
-                  </div>
-                </div>
-              </el-option>
-            </el-select>
-            <div style="color: #909399; font-size: 12px; margin-top: 4px">
-              💡 用户在 DIY 制作单里可在这些补剂产品间切换，系统会按所选补剂的营养数据重算默认用量
-            </div>
+            <el-alert type="info" :closable="false" show-icon>
+              已由「补剂等价组」接管：组审核通过后，制作单会按组推荐同营养替代原料。
+              这里只保留历史配置，不再新增；验收完成后会删除这套旧机制。
+            </el-alert>
           </el-form-item>
         </template>
       </el-form>
@@ -1202,10 +1152,11 @@ import { recipeHealthTagApi, recipeSeriesCoverBadgeApi } from '@/api/recipeHealt
 import { inventoryApi } from '@/api';
 import { IngredientTypeLabels, type NutritionFoodMapping } from '@/types/ingredient';
 import { SUPPLEMENT_TARGET_FIELD_OPTIONS } from '@/constants/ingredientNutrition';
+import { getDefaultPreparationMethodFromHistory } from '@/utils/preparationMethodText';
 import {
-  appendPreparationMethodText,
-  getDefaultPreparationMethodFromHistory,
-} from '@/utils/preparationMethodText';
+  PREPARATION_METHOD_MAX_CONTENT_LENGTH,
+  countPreparationMethodContentCharacters,
+} from '@/utils/recipeDesigner/preparationMethodField';
 import {
   preparationBasisMismatchHint,
 } from '@/utils/preparationBasis';
@@ -1341,6 +1292,9 @@ const ingredientForm = reactive({
   supplementTargets: [] as SupplementTarget[],
   supplementAlternativeIngredientIds: [] as string[],
 });
+const preparationMethodContentLength = computed(() =>
+  countPreparationMethodContentCharacters(ingredientForm.preparationMethodText),
+);
 const ingredientPreparationMethodHistory = ref<
   IngredientPreparationMethodHistoryItem[]
 >([]);
@@ -1617,10 +1571,8 @@ const normalizeSupplementTargetsForSave = (): SupplementTarget[] => {
 };
 
 const applyPreparationMethodHistory = (historyText: string) => {
-  ingredientForm.preparationMethodText = appendPreparationMethodText(
-    ingredientForm.preparationMethodText,
-    historyText,
-  );
+  // 历史记录已经是完整句子；点击后替换，不追加。
+  ingredientForm.preparationMethodText = historyText;
 };
 
 watch(
@@ -1681,7 +1633,7 @@ watch(
       if (!isCurrentRequest) {
         return;
       }
-      ElMessage.error(error.message || '加载历史制备方法失败');
+      ElMessage.error(error.message || '加载历史记录失败');
     } finally {
       if (isCurrentRequest) {
         ingredientPreparationMethodHistoryLoading.value = false;
@@ -1778,6 +1730,7 @@ const coverBadgeOptionGroups = computed(() => {
     id: string;
     name: string;
     parentId?: string | null;
+    coverBadgeEligible?: boolean;
   }>;
   const groups = tags.filter((tag) => !tag.parentId);
   const children = tags.filter((tag) => tag.parentId);
@@ -1785,7 +1738,10 @@ const coverBadgeOptionGroups = computed(() => {
     .map((group) => ({
       label: group.name,
       options: children
-        .filter((child) => child.parentId === group.id)
+        .filter(
+          (child) =>
+            child.parentId === group.id && child.coverBadgeEligible === true
+        )
         .map((child) => ({ value: child.id, label: child.name })),
     }))
     .filter((group) => group.options.length > 0);
@@ -2299,7 +2255,6 @@ const removeDetailImage = async (index: number) => {
 const removeCoverImage = async () => {
   if (!form.coverImageUrl) return;
   // 删封面时把 AI 预览也清掉 —— 否则会看到一个"用这张"按钮配着空封面
-  aiCoverPreviewUrl.value = '';
 
   // 从URL中提取key
   const match = form.coverImageUrl.match(/\/recipes\/(.+)$/);
@@ -2745,6 +2700,16 @@ const saveIngredient = () => {
     return;
   }
 
+  if (
+    preparationMethodContentLength.value >
+    PREPARATION_METHOD_MAX_CONTENT_LENGTH
+  ) {
+    ElMessage.warning(
+      `部位 / 状态 / 预处理最多 ${PREPARATION_METHOD_MAX_CONTENT_LENGTH} 个字（不含符号）`,
+    );
+    return;
+  }
+
   // Create item object - 根据原料类型保存相应字段
   const item: RecipeItem = {
     id: existingItem?.id || '',
@@ -2753,7 +2718,9 @@ const saveIngredient = () => {
     ingredientName: ingredient.name,
     ingredientType: ingredient.type,
     preparationMethod:
-      ingredientForm.preparationMethodText.trim() || undefined,
+      ingredient.type === 'SUPPLEMENT'
+        ? undefined
+        : ingredientForm.preparationMethodText.trim() || undefined,
     // 食材类型：保存示例重量和占比
     ...(ingredient.type === 'FOOD' && {
       nutritionFoodId: ingredientForm.nutritionFoodId || undefined,
@@ -2915,7 +2882,7 @@ const formatPreparationMethods = (preparationMethod: string | undefined) => {
   return preparationMethod?.trim() || '-';
 };
 
-/** 制备方法的称重口径与营养状态不一致时给出提示；一致则返回 null */
+/** 部位 / 状态 / 预处理的称重口径与营养状态不一致时给出提示；一致则返回 null */
 const preparationBasisHint = (item: RecipeItem): string | null =>
   preparationBasisMismatchHint(
     item.preparationMethod,
@@ -2980,44 +2947,8 @@ const aiDraft = reactive({
 });
 
 // ===== AI 封面图（2026-10-18）=====
-const aiCoverAvailable = ref(false);
-const aiCoverLoading = ref(false);
-const aiCoverPreviewUrl = ref('');
 
-async function checkAiCoverAvailability() {
-  try {
-    const res = await recipeApi.getAiCoverAvailability();
-    aiCoverAvailable.value = Boolean(res?.available);
-  } catch {
-    aiCoverAvailable.value = false;
-  }
-}
 
-async function handleGenerateAiCover() {
-  if (!recipeId.value || aiCoverLoading.value) return;
-
-  aiCoverLoading.value = true;
-  try {
-    const result = await recipeApi.generateAiCover(recipeId.value);
-    if (result?.url) {
-      // 只放预览 —— 顾客看不到任何变化，直到管理员点「用这张」
-      aiCoverPreviewUrl.value = result.url;
-      ElMessage.success('生成好了，确认后再替换');
-    }
-  } catch (error: any) {
-    // 后端把原因写清楚了（未配置/超时/链接过期），直接透出来
-    ElMessage.error(error?.message || '生成失败，请重试');
-  } finally {
-    aiCoverLoading.value = false;
-  }
-}
-
-function applyAiCover() {
-  if (!aiCoverPreviewUrl.value) return;
-  form.coverImageUrl = aiCoverPreviewUrl.value;
-  aiCoverPreviewUrl.value = '';
-  ElMessage.success('已替换封面，记得保存');
-}
 
 async function checkAiCopywritingAvailability() {
   try {
@@ -3079,7 +3010,6 @@ onMounted(async () => {
   loadMetadata();
   loadAvailableIngredients();
   checkAiCopywritingAvailability();
-  checkAiCoverAvailability();
   if (isEdit.value) {
     await loadRecipeDetail();
   }
@@ -3887,5 +3817,14 @@ onMounted(async () => {
   font-size: 12px;
   line-height: 1.5;
   color: #e6a23c;
+}
+.preparation-length-hint {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #909399;
+}
+.preparation-length-hint.is-over {
+  color: #f56c6c;
 }
 </style>

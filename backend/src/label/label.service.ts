@@ -262,6 +262,18 @@ export class LabelService {
 
     y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
 
+    const additiveItems = this.buildAdditiveItems(labelData);
+    if (additiveItems.length > 0) {
+      y = this.drawAdditiveSection(
+        ctx,
+        additiveItems,
+        y,
+        contentLeft,
+        contentWidth,
+      );
+      y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
+    }
+
     if (labelData.nutritionAnalysis) {
       y = this.drawCompleteNutritionSection(
         ctx,
@@ -471,7 +483,7 @@ export class LabelService {
     let y = startY;
     y = this.drawSectionTitle(
       ctx,
-      '原料表',
+      '原料组成',
       y,
       left,
       layout.colWidth * layout.columns,
@@ -651,6 +663,13 @@ export class LabelService {
       ingredientLayout.bodyHeight;
 
     y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
+
+    const measureAdditives = this.buildAdditiveItems(labelData);
+    if (measureAdditives.length > 0) {
+      y += this.getSectionTitleHeight();
+      y += this.countAdditiveLines(measureAdditives) * mmToPx(2.6);
+      y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
+    }
 
     if (labelData.nutritionAnalysis) {
       y += this.measureCompleteNutritionSection(
@@ -868,6 +887,69 @@ export class LabelService {
       fontSize: LABEL_LAYOUT.fontSize.body,
       lineHeight: LABEL_LAYOUT.lineHeight.compact,
     };
+  }
+
+  /** 解析「添加剂组成」：只接受显式传入的合规名称，不传则不渲染该段 */
+  private buildAdditiveItems(labelData: LabelDataDto): string[] {
+    return (labelData.additiveIngredients || '')
+      .split('、')
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  /**
+   * 估算添加剂段的行数。
+   * 按每个汉字一个字号宽度粗略折算，用于排版前的高度预算；
+   * 与真正绘制时的换行结果可能有 ±1 行偏差，但不影响是否放得下的判断。
+   */
+  private countAdditiveLines(items: string[]): number {
+    const text = items.join('、');
+    const charCount = Array.from(text).length;
+    const usableWidthMm =
+      LABEL_LAYOUT.canvas.width -
+      LABEL_LAYOUT.margin.left -
+      LABEL_LAYOUT.margin.right;
+    const perLine = Math.max(
+      1,
+      Math.floor(usableWidthMm / LABEL_LAYOUT.fontSize.compactBody),
+    );
+    return Math.max(1, Math.ceil(charCount / perLine));
+  }
+
+  /** 绘制「添加剂组成」：标题 + 一段连续文字，只列名称不带占比 */
+  private drawAdditiveSection(
+    ctx: CanvasRenderingContext2D,
+    items: string[],
+    startY: number,
+    left: number,
+    width: number,
+  ): number {
+    const contentY = this.drawSectionTitle(
+      ctx,
+      '添加剂组成',
+      startY,
+      left,
+      width,
+    );
+
+    ctx.font = `${mmToPx(LABEL_LAYOUT.fontSize.compactBody)}px "Chinese"`;
+    ctx.fillStyle = '#222222';
+    ctx.textAlign = 'left';
+
+    const lines = this.wrapTextByWidth(
+      ctx,
+      items.join('、'),
+      width - mmToPx(1),
+    );
+    lines.forEach((line, index) => {
+      ctx.fillText(
+        line,
+        left + mmToPx(0.5),
+        contentY + index * mmToPx(2.6),
+      );
+    });
+
+    return contentY + lines.length * mmToPx(2.6);
   }
 
   private buildIngredientItems(labelData: LabelDataDto): string[] {

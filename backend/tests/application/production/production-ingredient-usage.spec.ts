@@ -68,6 +68,56 @@ describe('原料用量 · 食材', () => {
     expect(result.items[0].calculation).toContain('投料毛重');
   });
 
+  it('快照里存的配比过期时，按克数推导（2026-10-28 事故回归）', () => {
+    // 存的配比是按旧总重 385.2g 写的（猪里脊 22.07%），实际食材合计 308.4g。
+    // 若直接乘 22.07%，1050g 那锅只会投 243g；按克数推导应是 303.9g。
+    const result = calculateProductionUsage({
+      recipeSnapshot: buildSnapshot(
+        [
+          foodItem({
+            ingredient_id: 'ing-pork',
+            name: '猪里脊',
+            ratio: 22.07,
+            example_weight: 85,
+          }),
+          foodItem({
+            ingredient_id: 'ing-rice',
+            name: '糙米',
+            ratio: 23.36,
+            example_weight: 90,
+          }),
+          foodItem({
+            ingredient_id: 'ing-veg',
+            name: '蔬菜',
+            ratio: 34.64,
+            example_weight: 133.4,
+          }),
+        ],
+        1.05,
+      ),
+      totalProductionG: 1050,
+      supplementLossRate: 1.02,
+    });
+
+    const pork = result.items.find((item) => item.ingredientId === 'ing-pork');
+    expect(pork?.requiredAmount).toBeCloseTo(
+      (1050 * 1.05 * 85) / 308.4,
+      3,
+    );
+    expect(pork?.calculation).toContain('克数占比');
+  });
+
+  it('没有克数的老快照退回存着的配比', () => {
+    const result = calculateProductionUsage({
+      recipeSnapshot: buildSnapshot([foodItem({ ratio: 60 })]),
+      totalProductionG: 1000,
+      supplementLossRate: 1.02,
+    });
+
+    expect(result.items[0].requiredAmount).toBeCloseTo(642, 4);
+    expect(result.items[0].calculation).toContain('配比');
+  });
+
   it('少了损耗率这一步就会少扣 7% —— 用一条反向断言守住它', () => {
     const result = calculateProductionUsage({
       recipeSnapshot: buildSnapshot([foodItem({ ratio: 100 })]),

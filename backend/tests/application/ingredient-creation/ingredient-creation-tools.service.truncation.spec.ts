@@ -44,6 +44,24 @@ function createTools() {
     {} as never,
     {} as never,
     prisma as unknown as PrismaService,
+    {
+      classifyNames: jest.fn(async (input: any) => ({
+        results: input.items.map((item: { id: string }) => ({
+          id: item.id,
+          state: 'UNKNOWN',
+          method: 'NONE',
+          cutLabel: null,
+          cutGroup: null,
+          evidence: null,
+          confidence: null,
+        })),
+        counts: {
+          byState: { RAW: 0, COOKED: 0, UNKNOWN: input.items.length },
+          byMethod: { BOILED: 0, STEAMED: 0, GRILLED: 0, FRIED: 0, OTHER: 0, NONE: input.items.length },
+          byCutGroup: {},
+        },
+      })),
+    } as never,
   );
 }
 
@@ -56,15 +74,15 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-describe('IngredientCreationToolsService · getNutritionRecord 截断', () => {
+describe('IngredientCreationToolsService · getRecord 截断', () => {
   it('有值字段超过 80 时只返回前 80 个，并说明省略了多少', async () => {
     const tools = createTools();
 
     const execution = await tools.execute({
       runId: 'run-1',
       draftId: 'draft-1',
-      name: 'getNutritionRecord',
-      args: { sourceRecordId: 'rec-many-fields' },
+      name: 'getRecord',
+      args: { id: 'rec-many-fields' },
     });
 
     expect(execution.ok).toBe(true);

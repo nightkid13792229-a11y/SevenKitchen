@@ -29,7 +29,7 @@ async function expectOk<T>(
 }
 
 describe('recipe agent toolkit', () => {
-  it('把 18 个工具定义和同名 handler 组装在一起', () => {
+  it('把 22 个工具定义和同名 handler 组装在一起', () => {
     const toolkit = createRecipeAgentToolkit({
       port: createFakeRecipeAgentPort(),
       controlPort: createFakeControlPort(),
@@ -37,13 +37,14 @@ describe('recipe agent toolkit', () => {
       draftId: 'draft-1',
     });
 
-    expect(toolkit.definitions).toHaveLength(18);
+    expect(toolkit.definitions).toHaveLength(22);
+    expect(toolkit.handlers.finish_draft).toBeUndefined();
     for (const definition of toolkit.definitions) {
       expect(typeof toolkit.handlers[definition.name]).toBe('function');
     }
   });
 
-  it('一条完整链路：读草稿 → 查原料 → 加原料 → 写文案 → 评估 → 检查 → 交付', async () => {
+  it('一条完整链路：读草稿 → 查原料 → 加原料 → 写文案 → 评估 → 可选自检', async () => {
     const port = createFakeRecipeAgentPort({ assessment: null }); // 第一次评估前没有结果
     const controlPort = createFakeControlPort();
     const toolkit = createRecipeAgentToolkit({
@@ -67,8 +68,8 @@ describe('recipe agent toolkit', () => {
     );
     await expectOk(toolkit.handlers.run_assessment({}));
     await expectOk(toolkit.handlers.check_ready({}));
-    await expectOk(toolkit.handlers.finish_draft({ summary: '做好了' }));
 
-    expect(controlPort.finishDraft).toHaveBeenCalledTimes(1);
+    expect(toolkit.handlers.finish_draft).toBeUndefined();
+    expect(controlPort.finishDraft).not.toHaveBeenCalled();
   });
 });

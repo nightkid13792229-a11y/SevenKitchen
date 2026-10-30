@@ -562,29 +562,80 @@ export function getCookingTime(vacuumBagSpec: string) {
 export function formatIngredients(recipeSnapshot: any, totalWeightG = 0) {
   const foodIngredients: string[] = [];
   const supplementIngredients: string[] = [];
+  const additiveIngredients: string[] = [];
+  const ingredientIds: string[] = [];
+  // 只要有一条原料带了标签分类，就认为这单走"按标签分类分组"的新口径
+  let hasLabelCategory = false;
 
   if (!recipeSnapshot.items || !Array.isArray(recipeSnapshot.items)) {
-    return { foodIngredients: '', supplementIngredients: '' };
+    return {
+      foodIngredients: '',
+      supplementIngredients: '',
+      additiveIngredients: '',
+      ingredientIds: [],
+      labelIssues: [],
+      hasLabelCategory: false
+    };
   }
 
+  const labelIssues: string[] = [];
+
   recipeSnapshot.items.forEach((item: any) => {
+    const props = item.properties || {};
+    const labelCategory = props.label_category as string | undefined;
+    const labelNames: string[] = Array.isArray(props.label_names)
+      ? props.label_names.filter((n: unknown) => typeof n === 'string' && n.trim())
+      : [];
+    if (labelCategory) {
+      hasLabelCategory = true;
+    }
+    if (item.ingredient_id) {
+      ingredientIds.push(item.ingredient_id);
+    }
+
+    // 补剂/食材是否要出现在标签上，由标签分类决定；没有分类的走旧口径
+    const isAdditive = labelCategory === 'FEED_ADDITIVE';
+
+    if (isAdditive) {
+      if (labelNames.length === 0) {
+        labelIssues.push(item.name);
+      } else {
+        labelNames.forEach((n) => {
+          if (!additiveIngredients.includes(n)) {
+            additiveIngredients.push(n);
+          }
+        });
+      }
+      return;
+    }
+
     if (item.ingredient_type === 'FOOD' && item.ratio) {
       // ratio 已经是百分比值（如 25.51 表示 25.51%），直接格式化即可
       const percentage = Number(item.ratio).toFixed(2);
-      foodIngredients.push(`${item.name}${percentage}%`);
+      const displayName = labelNames[0] || item.name;
+      foodIngredients.push(`${displayName}${percentage}%`);
     } else if (item.ingredient_type === 'SUPPLEMENT') {
+      if (labelCategory && labelNames.length === 0) {
+        labelIssues.push(item.name);
+        return;
+      }
       const supplementAmount = calculateSupplementAmountForProduction(item, totalWeightG, {
         includeProductionLoss: true
       });
       if (supplementAmount.amount > 0) {
-        supplementIngredients.push(`${item.name}${formatSupplementAmount(supplementAmount.amount)}${supplementAmount.unit}`);
+        const displayName = labelNames[0] || item.name;
+        supplementIngredients.push(`${displayName}${formatSupplementAmount(supplementAmount.amount)}${supplementAmount.unit}`);
       }
     }
   });
 
   return {
     foodIngredients: foodIngredients.join('、'),
-    supplementIngredients: supplementIngredients.join('、')
+    supplementIngredients: supplementIngredients.join('、'),
+    additiveIngredients: additiveIngredients.join('、'),
+    ingredientIds,
+    labelIssues,
+    hasLabelCategory
   };
 }
 

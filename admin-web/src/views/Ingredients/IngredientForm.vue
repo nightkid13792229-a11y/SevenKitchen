@@ -693,6 +693,46 @@
       </el-form-item>
     </template>
 
+    <!-- 标签信息（合规）：决定这个原料在标签上出现在哪一段、写成什么 -->
+    <template v-if="formData.type !== IngredientType.PACKAGING">
+      <div class="section-title">标签信息</div>
+
+      <el-form-item label="标签类型" prop="label_category">
+        <el-radio-group v-model="formData.properties.label_category">
+          <el-radio value="FEED_MATERIAL">饲料原料</el-radio>
+          <el-radio value="FEED_ADDITIVE">饲料添加剂</el-radio>
+        </el-radio-group>
+        <div class="hint-text">
+          饲料原料写进「原料组成」，按加入量降序；饲料添加剂写进「添加剂组成」，只列名称。判断依据：先查《饲料原料目录》，查不到再查《饲料添加剂品种目录》。
+        </div>
+      </el-form-item>
+
+      <el-form-item label="标签名称" prop="label_names">
+        <el-select
+          v-model="formData.properties.label_names"
+          multiple
+          filterable
+          allow-create
+          default-first-option
+          :reserve-keyword="false"
+          placeholder="输入合规名称后回车，可填多个"
+          style="width: 420px"
+        />
+        <div class="hint-text">
+          用目录里的规范写法，不要带「片 / 胶囊 / 粉」这类剂型。复合补剂请按营养素逐个填写。
+        </div>
+      </el-form-item>
+
+      <el-form-item label="名称依据">
+        <el-input
+          v-model="formData.properties.label_name_source"
+          placeholder="如：饲料添加剂品种目录（2023 版）"
+          maxlength="120"
+          style="width: 420px"
+        />
+      </el-form-item>
+    </template>
+
     <!-- FOOD only child SKU management -->
     <template v-if="typeCapabilities.supportsChildSkus && isEdit">
       <div class="section-title section-title-with-tag">
@@ -3145,6 +3185,17 @@ const handleSubmit = async () => {
       formData.targetStock < formData.reorderPoint
     ) {
       throw new Error('目标库存必须大于或等于补货点')
+    }
+
+    // 标签信息（合规）验证：包材不参与
+    if (formData.type !== IngredientType.PACKAGING) {
+      if (!formData.properties.label_category) {
+        throw new Error('请选择标签类型（饲料原料 / 饲料添加剂）')
+      }
+      const labelNames = formData.properties.label_names
+      if (!Array.isArray(labelNames) || labelNames.length === 0) {
+        throw new Error('请填写标签名称')
+      }
     }
 
     // 类型特定属性验证

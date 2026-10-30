@@ -54,14 +54,37 @@
     <!-- 待付款单提醒（2026-10-04 新增）。
          口径是**不限制下单张数**（顾客养多只狗可以分别定制），所以这里只提醒
          "别忘了付这一单"，绝不做成"先付完才能再下单"的阻断。 -->
-    <view v-if="pendingOrder && !pendingOrderExpired" class="pending-banner">
+    <view v-if="pendingOrder" class="pending-banner">
       <view class="pending-banner__head">
-        <text class="pending-banner__title">你有一张待付款的定制单</text>
+        <text class="pending-banner__title">
+          {{ pendingOrderCount > 1 ? `你有 ${pendingOrderCount} 张待付款的定制单` : '你有一张待付款的定制单' }}
+        </text>
         <text v-if="pendingOrderRemainingText" class="pending-banner__time">{{ pendingOrderRemainingText }}</text>
       </view>
+
+      <view class="pending-banner__summary">
+        <text class="pending-banner__dog">{{ pendingOrder.dogName || '定制订单' }}</text>
+        <text class="pending-banner__amount">
+          {{ pendingOrder.amount === null ? '金额待确认' : `¥${formatAmount(pendingOrder.amount)}` }}
+        </text>
+      </view>
+      <text
+        v-if="pendingOrderCount > 1 && !pendingOrderIsCurrentDog"
+        class="pending-banner__hint"
+      >当前显示最急的一张</text>
+
       <text class="pending-banner__desc">
         超时未支付，订单会自动取消。定制张数不限，你也可以继续提交新的定制单。
       </text>
+
+      <view v-if="pendingOrderCount > 1" class="pending-banner__more">
+        <text>
+          {{ pendingOrderIsCurrentDog ? '另外还有' : '还有' }}
+          {{ otherPendingCount }} 张待付款
+        </text>
+        <text class="pending-banner__all" @tap="viewAllPendingOrders">查看全部 ›</text>
+      </view>
+
       <view class="pending-banner__actions">
         <button
           class="pending-banner__btn primary"
@@ -69,6 +92,25 @@
           @tap="continuePayPending"
         >{{ pendingPaying ? '处理中…' : '继续支付' }}</button>
         <button class="pending-banner__btn" @tap="viewPendingOrder">查看订单</button>
+      </view>
+    </view>
+
+    <!-- 长页面填写进度（2026-10-25）：
+         页面有 1-5 个板块，顾客容易不知道还差什么；顶部给一条可点的轻量进度条，
+         只覆盖 4 个必填门槛，选填的健康/备注不计入。 -->
+    <view v-if="hasSelectedDog" class="form-progress">
+      <view
+        v-for="(step, index) in formProgressSteps"
+        :key="step.selector"
+        class="form-progress__step"
+        :class="{
+          'form-progress__step--done': step.done,
+          'form-progress__step--active': step.active,
+        }"
+        @tap="scrollToCustomSection(step.selector)"
+      >
+        <text class="form-progress__dot">{{ step.done ? '✓' : index + 1 }}</text>
+        <text class="form-progress__label">{{ step.label }}</text>
       </view>
     </view>
 
@@ -82,6 +124,10 @@
          这个最常见的正常状态下，它下面五个分支一条都不成立，
          只剩内边距与白底，看上去就是一条空白。所以整张卡改成按内容出现。 -->
     <view v-if="showStatusSection" id="custom-status" class="section">
+      <text
+        v-if="validationTarget === '#custom-status'"
+        class="section-error"
+      >{{ validationMessage }}</text>
       <!-- 体重管理计划（阶段 D1）：进行中/维持期/已暂停都带出。
            计划是顾客当下真正在执行的方案，定制时必须看得见 ——
            否则他定的减重计划在定制页完全没有体现，等于白定。
@@ -214,7 +260,7 @@
       <!-- 无档案时的引导：原先只弹一句 toast，页面上没有任何建档入口，提交按钮永久不可用 -->
       <view v-else-if="dogOptions.length === 0" class="no-dog-hint">
         <text class="no-dog-hint-title">还没有狗狗档案</text>
-        <text class="no-dog-hint-desc">专属食谱需要先有狗狗档案，我们才能按它的体重和身体状况来定制。</text>
+        <text class="no-dog-hint-desc">定制食谱需要先有狗狗档案，我们才能按它的体重和身体状况来定制。</text>
         <button class="no-dog-hint-btn" @tap="goToCreateDog">创建狗狗档案</button>
       </view>
     </view>
@@ -229,6 +275,10 @@
         <text class="step-number">1</text>
         <text class="title-text">体重管理</text>
       </view>
+      <text
+        v-if="validationTarget === '#custom-weight'"
+        class="section-error"
+      >{{ validationMessage }}</text>
 
       <!-- 2026-10-19 老板定稿：
            ① 三选一（减重/维持/增重），不再按体况限制选项，选择权交给家长
@@ -279,6 +329,10 @@
         <text class="step-number">2</text>
         <text class="title-text">过敏信息</text>
       </view>
+      <text
+        v-if="validationTarget === '#custom-allergy'"
+        class="section-error"
+      >{{ validationMessage }}</text>
 
       <view class="health-item">
         <view class="goal-ask">
@@ -320,6 +374,15 @@
             </text>
           </view>
 
+        </template>
+
+        <!--
+          报告常显（2026-10-25 老板定）：不再用“有过敏”当前提。
+          题目由顾客自己答；报告、历史报告、本次上传都始终可见。
+          上传报告读到过敏原后，仍由顾客自己选“有过敏”才能把文本作为依据。
+        -->
+        <view class="allergy-report-area">
+          <text class="allergy-report-area__title">过敏检测报告（可选）</text>
           <!-- 拍检测报告自动读（2026-10-04 从健康管理搬来）。
                老板："将过敏源的记录放到定制食谱流程中。"
                :key 绑狗 ID：换狗时必须整个重挂载，否则"上一只狗扫描出来的
@@ -436,7 +499,7 @@
               </view>
             </view>
           </view>
-        </template>
+        </view>
 
       </view>
     </view>
@@ -498,10 +561,30 @@
         <text class="step-number">4</text>
         <text class="title-text">饲喂历史</text>
       </view>
+      <text
+        v-if="validationTarget === '#custom-intake'"
+        class="section-error"
+      >{{ validationMessage }}</text>
 
       <view class="intake-block">
         <text class="intake-question">现在主要喂什么<text class="intake-required">*</text></text>
-        <view class="intake-options">
+        <view
+          v-if="currentFoodOptionsLoading && !currentFoodOptions.length"
+          class="option-state"
+        >
+          <text class="option-state__text">选项加载中…</text>
+        </view>
+        <view
+          v-else-if="currentFoodOptionsFailed && !currentFoodOptions.length"
+          class="option-state option-state--error"
+        >
+          <text class="option-state__text">选项没加载出来</text>
+          <text class="option-state__retry" @tap="retryCurrentFoodOptions">重试</text>
+        </view>
+        <view v-else-if="!currentFoodOptions.length" class="option-state">
+          <text class="option-state__text">暂无可选项，请联系 Seven爸爸</text>
+        </view>
+        <view v-else class="intake-options">
           <text
             v-for="opt in currentFoodOptions"
             :key="opt.code"
@@ -527,7 +610,23 @@
 
       <view class="intake-block">
         <text class="intake-question">定制原因<text class="intake-required">*</text></text>
-        <view class="intake-options">
+        <view
+          v-if="changeReasonOptionsLoading && !changeReasonOptions.length"
+          class="option-state"
+        >
+          <text class="option-state__text">选项加载中…</text>
+        </view>
+        <view
+          v-else-if="changeReasonOptionsFailed && !changeReasonOptions.length"
+          class="option-state option-state--error"
+        >
+          <text class="option-state__text">选项没加载出来</text>
+          <text class="option-state__retry" @tap="retryChangeReasonOptions">重试</text>
+        </view>
+        <view v-else-if="!changeReasonOptions.length" class="option-state">
+          <text class="option-state__text">暂无可选项，请联系 Seven爸爸</text>
+        </view>
+        <view v-else class="intake-options">
           <text
             v-for="opt in changeReasonOptions"
             :key="opt.code"
@@ -554,7 +653,23 @@
 
       <view class="intake-block">
         <text class="intake-question">最近肠胃怎么样（可选）</text>
-        <view class="intake-options">
+        <view
+          v-if="stomachOptionsLoading && !stomachOptions.length"
+          class="option-state"
+        >
+          <text class="option-state__text">选项加载中…</text>
+        </view>
+        <view
+          v-else-if="stomachOptionsFailed && !stomachOptions.length"
+          class="option-state option-state--error"
+        >
+          <text class="option-state__text">选项没加载出来</text>
+          <text class="option-state__retry" @tap="retryStomachOptions">重试</text>
+        </view>
+        <view v-else-if="!stomachOptions.length" class="option-state">
+          <text class="option-state__text">暂无可选项</text>
+        </view>
+        <view v-else class="intake-options">
           <text
             v-for="opt in stomachOptions"
             :key="opt.code"
@@ -646,6 +761,7 @@
       导致底栏和按钮看起来半透明。cover-view 才能真正压在原生输入框之上。
     -->
     <cover-view v-if="hasSelectedDog" class="submit-section">
+      <cover-view v-if="validationMessage" class="form-error">{{ validationMessage }}</cover-view>
       <cover-view class="submit-btn" @tap="goToOrderConfirm">
         {{ navigatingToConfirm ? '正在进入…' : '确认订单' }}
       </cover-view>
@@ -670,9 +786,13 @@ import { runCustomRecipePayment } from '@/utils/custom-recipe-payment';
 import {
   formatAmount,
   formatRemainingMinutes,
-  isPaymentExpired,
   resolvePaymentDeadlineAt,
 } from '@/utils/custom-recipe-order';
+import {
+  countValidPendingOrders,
+  selectPendingOrder,
+  type PendingOrderView,
+} from '@/utils/custom-recipe-pending';
 import { navigateToDogCreate } from '@/utils/dog-profile-entry';
 import { getStoredUser } from '@/utils/account';
 import {
@@ -1288,7 +1408,12 @@ function applyCustomRecipeDraft(draft: ReturnType<typeof loadCustomRecipeDraft>)
   if (!Array.isArray(formData.value.reportDrafts)) {
     formData.value.reportDrafts = [];
   }
-  hasFoodAllergy.value = draft.hasFoodAllergy;
+  /**
+   * 过敏题**不从草稿恢复答案**（2026-10-25 老板：题目不预选）。
+   * 旧版本可能把系统自动选的“有过敏”写进了草稿；恢复它等于又替顾客答了。
+   * 过敏文本/报告仍从草稿恢复，顾客选“有过敏”后就能看到。
+   */
+  hasFoodAllergy.value = null;
   weightGoalChoice.value = draft.weightGoalChoice;
   prefilledAllergyText.value = draft.prefilledAllergyText || '';
 }
@@ -1363,15 +1488,33 @@ function focusStomachOther() {
 
 const {
   items: currentFoodOptions,
+  loading: currentFoodOptionsLoading,
+  failed: currentFoodOptionsFailed,
   ensure: ensureCurrentFoodOptions,
 } = useOptionSet('custom_recipe_current_food');
 const {
   items: changeReasonOptions,
+  loading: changeReasonOptionsLoading,
+  failed: changeReasonOptionsFailed,
   ensure: ensureChangeReasonOptions,
 } = useOptionSet('custom_recipe_change_reason');
-const { items: stomachOptions, ensure: ensureStomachOptions } = useOptionSet(
-  'custom_recipe_stomach',
-);
+const {
+  items: stomachOptions,
+  loading: stomachOptionsLoading,
+  failed: stomachOptionsFailed,
+  ensure: ensureStomachOptions,
+} = useOptionSet('custom_recipe_stomach');
+
+/** 选项字典加载失败时，页面给重试；不要把空列表当成“没有选项” */
+function retryCurrentFoodOptions() {
+  void ensureCurrentFoodOptions();
+}
+function retryChangeReasonOptions() {
+  void ensureChangeReasonOptions();
+}
+function retryStomachOptions() {
+  void ensureStomachOptions();
+}
 
 /** 单选当前食物；选「其他」时自动聚焦输入框 */
 function selectCurrentFood(code: string) {
@@ -1478,6 +1621,54 @@ async function refreshHealthSummary(dogId: string) {
     console.warn('[CustomRecipe] 刷新健康档案失败:', error);
     if (!healthSummary.value) healthSummaryLoadFailed.value = true;
   }
+}
+
+/**
+ * 从健康管理/体重计划页返回：刷新当前狗的门槛字段和过敏报告。
+ *
+ * 只改 selectedDog 的门槛字段 + 报告/计划，不动 formData 草稿；
+ * 不要调用 resetOrderFormForDog/onDogChange，否则会把顾客填的内容清空。
+ */
+async function refreshDogGateAndReports(dogId: string) {
+  if (!dogId) return;
+  try {
+    const res: any = await dogApi.detail(dogId);
+    if (String(formData.value.dogId || '') !== dogId) return;
+    const profile = res?.data;
+    if (profile) {
+      const confirmed = (value: unknown, fallback: unknown) =>
+        value === undefined ? Boolean(fallback) : Boolean(value);
+      selectedDog.value = {
+        ...selectedDog.value,
+        bcsScore: profile.bcsScore ?? selectedDog.value?.bcsScore,
+        activityLevel:
+          profile.activityLevel ?? selectedDog.value?.activityLevel,
+        mealsPerDay: profile.mealsPerDay ?? selectedDog.value?.mealsPerDay,
+        bcsScoreConfirmed: confirmed(
+          profile.bcsScoreConfirmed,
+          selectedDog.value?.bcsScoreConfirmed,
+        ),
+        activityLevelConfirmed: confirmed(
+          profile.activityLevelConfirmed,
+          selectedDog.value?.activityLevelConfirmed,
+        ),
+        mealsPerDayConfirmed: confirmed(
+          profile.mealsPerDayConfirmed,
+          selectedDog.value?.mealsPerDayConfirmed,
+        ),
+      };
+      // 门槛可能因为外部补确认而整体通过；方向按最新计划/体况再对齐一次
+      syncGoalWithPlan();
+    }
+  } catch (error) {
+    // 刷不到就保留旧值，不挡住顾客继续填
+    console.warn('[CustomRecipe] 刷新狗狗门槛失败:', error);
+  }
+
+  await Promise.all([
+    loadAllergyReports(dogId),
+    loadSelectedPlan(dogId),
+  ]);
 }
 
 /** 过敏文本输入框焦点（校验失败时定位用） */
@@ -1777,15 +1968,30 @@ const healthPrefillHint = computed(() => {
  * 口径：不限制下单张数 —— 顾客养多只狗可以分别定制，所以这里**不能**做成
  * "先付完这一单才能再下单"。只提示"别忘了付"并给两个入口。
  */
-const pendingOrder = ref<{ orderId: string; deadlineAt: number | null } | null>(
-  null,
-);
+const pendingOrders = ref<PendingOrderView[]>([]);
 const pendingPaying = ref(false);
 /** 到点隐藏待付款提醒，不等后台定时关单 */
 const nowTick = ref(Date.now());
 let paymentClockTimer: ReturnType<typeof setInterval> | null = null;
-const pendingOrderExpired = computed(() =>
-  isPaymentExpired(pendingOrder.value?.deadlineAt ?? null, nowTick.value),
+
+/**
+ * 优先当前狗狗的待付款；没有才显示最急的一张。
+ * 已过期的单不算张数、也不展示。
+ */
+const pendingOrder = computed(() =>
+  selectPendingOrder(pendingOrders.value, formData.value.dogId, nowTick.value),
+);
+const pendingOrderCount = computed(() =>
+  countValidPendingOrders(pendingOrders.value, nowTick.value),
+);
+const pendingOrderIsCurrentDog = computed(
+  () =>
+    Boolean(pendingOrder.value) &&
+    String(pendingOrder.value?.dogId || '') ===
+      String(formData.value.dogId || ''),
+);
+const otherPendingCount = computed(() =>
+  Math.max(0, pendingOrderCount.value - (pendingOrder.value ? 1 : 0)),
 );
 
 /** 剩余时间文案；拿不到截止时间就整段不显示，不猜 */
@@ -1811,7 +2017,7 @@ function ensureRecipeConfig(): Promise<void> {
 const loadPendingOrder = async () => {
   // 未登录时 /my-orders 必然 401，静默跳过即可
   if (!getToken()) {
-    pendingOrder.value = null;
+    pendingOrders.value = [];
     return;
   }
 
@@ -1821,7 +2027,8 @@ const loadPendingOrder = async () => {
     const data = await fetchMyOrders({
       status: 'PENDING_PAYMENT',
       page: 1,
-      pageSize: 1,
+      // 多取几张：页面优先当前狗狗，再取最急的；只取 1 张会漏掉其他狗/其他单
+      pageSize: 20,
     });
 
     /**
@@ -1829,25 +2036,36 @@ const loadPendingOrder = async () => {
      * 直接返回 `data`，不再有 `res.code`。是**架构守卫**（用了却没声明的名字）
      * 把它抓出来的：真机上这一行会直接崩。
      */
-    const first = Array.isArray(data?.orders) ? data.orders[0] : null;
-    if (!first?.orderId) {
-      pendingOrder.value = null;
-      return;
-    }
-
-    pendingOrder.value = {
-      orderId: String(first.orderId),
-      // 优先用后端下发的 paymentDeadlineAt，没有才用下单时间 + 配置超时估算
-      deadlineAt: resolvePaymentDeadlineAt({
-        paymentDeadlineAt: first.paymentDeadlineAt ?? null,
-        createdAt: first.createdAt ?? null,
-        paymentTimeoutMinutes: recipeConfig.value?.paymentTimeoutMinutes ?? 0,
-      }),
-    };
+    const rows = Array.isArray(data?.orders) ? data.orders : [];
+    pendingOrders.value = rows
+      .map((row: any) => {
+        const orderId = String(row?.orderId || '').trim();
+        if (!orderId) return null;
+        const dog = row?.dog || {};
+        const amount =
+          row?.amount === null || row?.amount === undefined
+            ? NaN
+            : Number(row.amount);
+        return {
+          orderId,
+          dogId: String(row?.dogId || dog.id || '').trim(),
+          dogName: String(row?.dogName || dog.name || '').trim(),
+          amount: Number.isFinite(amount) ? amount : null,
+          // 优先用后端下发的 paymentDeadlineAt，没有才用下单时间 + 配置超时估算
+          deadlineAt: resolvePaymentDeadlineAt({
+            paymentDeadlineAt: row?.paymentDeadlineAt ?? null,
+            createdAt: row?.createdAt ?? null,
+            paymentTimeoutMinutes:
+              recipeConfig.value?.paymentTimeoutMinutes ?? 0,
+          }),
+          createdAt: row?.createdAt ? String(row.createdAt) : null,
+        };
+      })
+      .filter(Boolean) as PendingOrderView[];
   } catch (error) {
     // 提醒读不到不影响下单：不打扰顾客，也不弹错
     console.warn('[CustomRecipe] 读取待付款订单失败:', error);
-    pendingOrder.value = null;
+    pendingOrders.value = [];
   }
 };
 
@@ -1855,13 +2073,6 @@ const loadPendingOrder = async () => {
 const continuePayPending = async () => {
   const orderId = pendingOrder.value?.orderId;
   if (!orderId || pendingPaying.value) return;
-
-  if (pendingOrderExpired.value) {
-    pendingOrder.value = null;
-    uni.showToast({ title: '支付已超时，订单已关闭', icon: 'none' });
-    void loadPendingOrder();
-    return;
-  }
 
   pendingPaying.value = true;
   try {
@@ -1903,6 +2114,13 @@ const viewPendingOrder = () => {
   });
 };
 
+/** 查看全部待付款：订单列表已支持 status=PENDING_PAYMENT */
+const viewAllPendingOrders = () => {
+  uni.navigateTo({
+    url: '/pages/orders-list/index?status=PENDING_PAYMENT',
+  });
+};
+
 // 生命周期
 onLoad((options: any) => {
   const dogId = String(options?.dogId || '').trim();
@@ -1922,9 +2140,12 @@ onShow(() => {
     void loadDogs();
   }
   void loadPendingOrder();
-  // 从健康管理补填回来：只刷新健康档案块，不覆盖顾客已填的草稿（需求 2.3.8）
+  // 从健康管理/体重计划返回：刷新档案块、门槛字段和过敏报告；
+  // 只更新只读/系统字段，不覆盖顾客已填的草稿（需求 2.3.8 + 2026-10-25 审计）
   if (formData.value.dogId) {
-    void refreshHealthSummary(formData.value.dogId);
+    const dogId = String(formData.value.dogId);
+    void refreshHealthSummary(dogId);
+    void refreshDogGateAndReports(dogId);
   }
 });
 
@@ -2276,11 +2497,9 @@ const loadDogArchiveInfo = async (dogId: string) => {
       formData.value.allergies = summaryAllergies;
       formData.value.allergyText = archiveAllergyText;
       prefilledAllergyText.value = formData.value.allergyText;
-      // 档案里已经有过敏信息 → 这一问默认答"有过敏"（本来就是事实，
-      // 让家长再答一遍反而是多一道题）；档案里没有就保持未答，等他选
-      if (formData.value.allergyText || summaryAllergies.length > 0) {
-        hasFoodAllergy.value = true;
-      }
+      // 2026-10-25 老板定：**题目不预选**。
+      // 档案里的过敏文本仍然带出来（顾客选“有过敏”后就在文本框里），
+      // 但“有/没有”这一答必须由顾客自己选，不能由系统代答。
       // 过敏可能刚从档案带出来，方向要跟着它算的体况对齐一次
       syncGoalWithPlan();
       // 口味偏好：档案里的两个字段（2026-09-27 才在「健康管理」页有了入口）
@@ -2526,18 +2745,15 @@ async function loadAllergyReports(dogId: string) {
   try {
     const res: any = await dogApi.allergyReports.list(dogId);
     if (res?.code !== 0) return;
+    // 慢响应保护：等待期间换了狗，旧狗的报告不能挂到新狗上
+    if (String(formData.value.dogId || '') !== dogId) return;
     allergyReports.value = Array.isArray(res?.data?.reports) ? res.data.reports : [];
     /**
-     * 档案里有历史报告 → 这一问默认答"有过敏"。
+     * 报告不再替顾客答“有过敏”（2026-10-25）。
      *
-     * 为什么：答"没有过敏"会把整块录入界面（含已上传报告的预览）收起来。
-     * 一只狗要是报告都传过了、却因为"档案里没有过敏记录"（例如报告全是阴性、
-     * 或下单还没提交）落在未作答状态，家长就再也看不到自己传过的原件了。
-     * 只在"还没作答"时兜底，不覆盖家长已经明确选过的答案。
+     * 报告可能是阴性或与食物无关；它是证据，不是答案。
+     * 报告区已改成常显，顾客仍自己答这一题。
      */
-    if (allergyReports.value.length > 0 && hasFoodAllergy.value === null) {
-      hasFoodAllergy.value = true;
-    }
   } catch {
     // 报告读不到不能挡住下单 —— 过敏信息与其余步骤都还能用
     allergyReports.value = [];
@@ -2584,10 +2800,13 @@ function onAllergensScanned(payload: { allergens?: string[] }) {
   }
   uni.showToast({
     title:
-      additions.length > 0
-        ? `已把 ${additions.length} 项填进过敏文本，请核对`
-        : '这些过敏原已经在过敏文本里了',
+      additions.length === 0
+        ? '这些过敏原已经在过敏文本里了'
+        : hasFoodAllergy.value === true
+          ? `已把 ${additions.length} 项填进过敏文本，请核对`
+          : `报告读到 ${additions.length} 项；先选“有过敏”才能核对`,
     icon: 'none',
+    duration: 3000,
   });
 }
 
@@ -2700,6 +2919,8 @@ interface CustomRecipeValidationResult {
 
 /** 防重复进入确认页；不是“未填完就置灰”，按钮始终可点。 */
 const navigatingToConfirm = ref(false);
+/** 点过“确认订单”后，把缺项错误常驻在对应板块/底部，而不是只闪 toast */
+const showValidation = ref(false);
 
 /**
  * 提交前校验（2026-10-19 老板确认）。
@@ -2803,9 +3024,70 @@ function validateCustomRecipeForm(): CustomRecipeValidationResult {
   return { valid: true };
 }
 
+/** 当前第一个缺项（只在点过确认后显示，避免一进页面就红） */
+const validationState = computed(() =>
+  showValidation.value ? validateCustomRecipeForm() : null,
+);
+const validationMessage = computed(
+  () => validationState.value?.title || '',
+);
+const validationTarget = computed(
+  () => validationState.value?.selector || '',
+);
+
+/**
+ * 四个必填门槛的完成度（2026-10-25）。
+ * 只用于顶部进度感，不参与提交校验；提交仍以 validateCustomRecipeForm 为准。
+ */
+const formProgressSteps = computed(() => {
+  const allergyText = String(formData.value.allergyText || '').trim();
+  const currentFood = String(formData.value.currentFoodMain || '').trim();
+  const currentFoodOther = String(formData.value.currentFoodOther || '').trim();
+  const changeReasons = Array.isArray(formData.value.changeReasons)
+    ? formData.value.changeReasons
+    : [];
+  const steps = [
+    {
+      label: '体况门槛',
+      selector: '#custom-status',
+      done: !gateBlocked.value,
+    },
+    {
+      label: '体重方向',
+      selector: '#custom-weight',
+      done: hasOpenPlan.value || weightGoalChoice.value !== null,
+    },
+    {
+      label: '过敏',
+      selector: '#custom-allergy',
+      done:
+        hasFoodAllergy.value === false ||
+        (hasFoodAllergy.value === true && Boolean(allergyText)),
+    },
+    {
+      label: '饲喂历史',
+      selector: '#custom-intake',
+      done:
+        Boolean(currentFood) &&
+        (currentFood !== 'OTHER' || Boolean(currentFoodOther)) &&
+        changeReasons.length > 0,
+    },
+  ];
+  const firstUndone = steps.findIndex((step) => !step.done);
+  return steps.map((step, index) => ({
+    ...step,
+    active: firstUndone === index,
+  }));
+});
+
 function scrollToCustomSection(selector?: string) {
   if (!selector) return;
-  uni.pageScrollTo({ selector, duration: 300 });
+  // 顶部有吸顶进度条，滚动时给它留出高度，别把板块标题盖住
+  uni.pageScrollTo({
+    selector,
+    offsetTop: uni.upx2px(96),
+    duration: 300,
+  });
 }
 
 function focusValidationTarget(focus?: IntakeValidationFocus) {
@@ -2844,11 +3126,13 @@ function goToOrderConfirm() {
   }
   const result = validateCustomRecipeForm();
   if (!result.valid) {
+    showValidation.value = true;
     uni.showToast({ title: result.title || '请先完善信息', icon: 'none' });
     scrollToCustomSection(result.selector);
     focusValidationTarget(result.focus);
     return;
   }
+  showValidation.value = false;
 
   const dogId = String(formData.value.dogId || '').trim();
   if (!dogId) {
@@ -2890,7 +3174,7 @@ const getBCSText = (bcsScore: number) => {
 
 .custom-recipe-page {
   min-height: 100vh;
-  padding: 24rpx 24rpx 200rpx;
+  padding: 24rpx 24rpx 240rpx;
   background: var(--sk-bg, #f0f3e9);
 }
 
@@ -3685,6 +3969,50 @@ const getBCSText = (bcsScore: number) => {
   color: #b03a2e;
 }
 
+.pending-banner__summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-top: 10rpx;
+}
+
+.pending-banner__dog {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+}
+
+.pending-banner__amount {
+  font-size: 28rpx;
+  font-weight: 800;
+  color: #b45309;
+}
+
+.pending-banner__hint {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 21rpx;
+  color: #8a7a66;
+}
+
+.pending-banner__more {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  color: #8a7a66;
+}
+
+.pending-banner__all {
+  flex: 0 0 auto;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #b08d4f;
+}
+
 .pending-banner__desc {
   display: block;
   margin-top: 10rpx;
@@ -3715,6 +4043,107 @@ const getBCSText = (bcsScore: number) => {
   color: var(--sk-gold-soft, #f6efe0);
   background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
   border: 1rpx solid var(--sk-gold-bright, #d8bc85);
+}
+
+/* ---------- 过敏检测报告（常显） ---------- */
+.allergy-report-area {
+  margin-top: 20rpx;
+  padding-top: 18rpx;
+  border-top: 1rpx dashed #e3e6d4;
+}
+
+.allergy-report-area__title {
+  display: block;
+  margin-bottom: 10rpx;
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #5f6b56;
+}
+
+/* ---------- 校验常驻错误 ---------- */
+.section-error {
+  display: block;
+  margin-bottom: 16rpx;
+  padding: 12rpx 16rpx;
+  border-radius: 10rpx;
+  background: #fff7ed;
+  color: #b45309;
+  font-size: 23rpx;
+  line-height: 1.6;
+}
+
+.form-error {
+  padding: 6rpx 12rpx 12rpx;
+  text-align: center;
+  color: #b45309;
+  font-size: 22rpx;
+  line-height: 1.5;
+}
+
+/* ---------- 长页面填写进度 ---------- */
+.form-progress {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: flex-start;
+  gap: 4rpx;
+  margin: 0 -24rpx 16rpx;
+  padding: 14rpx 18rpx 12rpx;
+  background: rgba(247, 248, 242, 0.97);
+  border-bottom: 1rpx solid #e6e8db;
+  backdrop-filter: blur(8px);
+}
+
+.form-progress__step {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4rpx;
+}
+
+.form-progress__dot {
+  width: 36rpx;
+  height: 36rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1rpx solid #d9dfcf;
+  background: #fffdf7;
+  color: #a79b86;
+  font-size: 18rpx;
+  font-weight: 700;
+}
+
+.form-progress__label {
+  font-size: 19rpx;
+  color: #a79b86;
+  white-space: nowrap;
+}
+
+.form-progress__step--done .form-progress__dot {
+  background: #e8f0e3;
+  border-color: #b9d0ad;
+  color: #1e5b35;
+}
+
+.form-progress__step--done .form-progress__label {
+  color: #1e5b35;
+}
+
+.form-progress__step--active .form-progress__dot {
+  background: #1e3a2f;
+  border-color: #1e3a2f;
+  color: #f6efe0;
+  box-shadow: 0 0 0 6rpx rgba(30, 58, 47, 0.12);
+}
+
+.form-progress__step--active .form-progress__label {
+  color: #1e3a2f;
+  font-weight: 700;
 }
 
 /* ---------- 底部提交 ---------- */
@@ -3843,6 +4272,36 @@ const getBCSText = (bcsScore: number) => {
   display: flex;
   flex-wrap: wrap;
   gap: 16rpx;
+}
+
+.option-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 12rpx;
+  background: #f7f8f2;
+}
+
+.option-state--error {
+  background: #fff7ed;
+}
+
+.option-state__text {
+  font-size: 23rpx;
+  color: #7a806f;
+}
+
+.option-state--error .option-state__text {
+  color: #b45309;
+}
+
+.option-state__retry {
+  flex: 0 0 auto;
+  font-size: 23rpx;
+  font-weight: 700;
+  color: #1e5b35;
 }
 
 .intake-option {

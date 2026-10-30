@@ -45,7 +45,7 @@ export interface SnapshotRecipeItem {
   name: string;
   /** 食材 id（2026-10-18 补；用途同上，老快照没有） */
   ingredientId?: string | null;
-  /** 制备方法（如"切丁煮熟"） */
+  /** 部位 / 状态 / 预处理（如"切丁煮熟"） */
   preparation?: string | null;
   /** 占比，如 32（表示 32%） */
   ratioPercent?: number | null;
@@ -112,6 +112,25 @@ export interface SnapshotNutrition {
   energyDensityKcalPerKg: number | null;
   /** 核心营养（蛋白质/脂肪/灰分/水分/纤维/碳水…），键值对 */
   macros?: Record<string, number | null> | null;
+  /**
+   * 宏量报告行（2026-10-28 加）：交付页那张「占干物质 / 占热量 / 占配方」
+   * 表格的原样行，含已格式化的标签。
+   *
+   * 为什么不从 `macros` 现算：这三列需要配方总重与总热量，
+   * 快照里只有每公斤口径的数字，事后算不回来。
+   * 加这个字段是为了让「历史订单食谱」能显示**交付当时**的那张表，
+   * 而不是拿后来被改过的活行去凑。
+   */
+  reportRows?: SnapshotMacroRow[] | null;
+}
+
+/** 宏量报告行（与 `nutritionDetailedData.report.macroRows` 同结构） */
+export interface SnapshotMacroRow {
+  key?: string;
+  name: string;
+  dryMatterLabel: string;
+  energyPercentLabel: string;
+  weightPercentLabel: string;
 }
 
 export interface SnapshotShoppingLine {

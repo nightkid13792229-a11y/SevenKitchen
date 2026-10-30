@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import page from '@/views/CustomRecipes/ScheduleCalendar.vue?raw'
 import apiSource from '@/api/customRecipe.ts?raw'
 import routerSource from '@/router/index.ts?raw'
-import layoutSource from '@/layouts/MainLayout.vue?raw'
+import menuSource from '@/constants/adminMenu.ts?raw'
 
 /**
  * 排期日历页 · 守卫（2026-10-16，批次 4.2）
@@ -111,7 +111,7 @@ describe('排期日历页 · 判定全在后端', () => {
   it('路由与菜单都挂上了', () => {
     expect(routerSource).toContain('custom-recipes/schedule')
     expect(routerSource).toContain('ScheduleCalendar.vue')
-    expect(layoutSource).toContain('/custom-recipes/schedule')
+    expect(menuSource).toContain('/custom-recipes/schedule')
   })
 
   it('API 层调的是后台地址', () => {

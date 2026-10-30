@@ -31,6 +31,7 @@ import type {
   NutritionMatchReason,
   NutritionSourceInput,
 } from '../../domain/nutrition-governance/nutrition-governance.types';
+import { LOCAL_LIBRARY_SOURCE_TYPES } from '../../domain/nutrition-governance/nutrition-source-registry';
 import {
   evaluateNutritionCandidateHardGates,
   resolveCandidateReviewGroup,
@@ -66,7 +67,10 @@ import {
   type NutritionValidationAgentReview,
   type NutritionCandidateReviewProvider,
 } from './nutrition-candidate-review.provider';
-import { AgentProviderConfigService } from './agent-provider-config.service';
+import {
+  AgentProviderConfigService,
+  type UpdateZhipuImageSettingsInput,
+} from './agent-provider-config.service';
 import { TrustedNutritionWebSearchService } from './trusted-nutrition-web-search.service';
 import {
   mapCfctRowToSourceInput,
@@ -74,7 +78,14 @@ import {
   type ReviewedCfctRow,
 } from '../../../prisma/import-cfct-private-source';
 
-const FOOD_SOURCE_TYPES = ['USDA', 'NZFCD', 'CFCT', 'MANUAL'] as const;
+/**
+ * 工作台候选生成允许的来源：登记表的 L1 本地库 + MANUAL（人工录入不是营养库）。
+ * 库名单以 `nutrition-source-registry` 为准，这里不再手写。
+ */
+const FOOD_SOURCE_TYPES: readonly NutritionGovernanceSourceType[] = [
+  ...(LOCAL_LIBRARY_SOURCE_TYPES as readonly NutritionGovernanceSourceType[]),
+  'MANUAL',
+];
 const MANAGED_INGREDIENT_TYPES = [
   IngredientType.FOOD,
   IngredientType.SUPPLEMENT,
@@ -1160,6 +1171,24 @@ export class NutritionGovernanceService {
       userId,
       purpose,
     );
+  }
+
+  async getZhipuImageSettings() {
+    return this.getAgentProviderConfigService().getZhipuImageSettings();
+  }
+
+  async updateZhipuImageSettings(
+    input: UpdateZhipuImageSettingsInput,
+    userId: string,
+  ) {
+    return this.getAgentProviderConfigService().updateZhipuImageSettings(
+      input,
+      userId,
+    );
+  }
+
+  async testZhipuImageSettings() {
+    return this.getAgentProviderConfigService().testZhipuImageSettings();
   }
 
   async testAgentSettings(purpose?: string) {

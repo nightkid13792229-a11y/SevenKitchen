@@ -1,3 +1,5 @@
+import { NUTRITION_LIBRARIES } from '../../domain/nutrition-governance/nutrition-source-registry';
+
 export type ApprovedNutritionSource =
   | 'USDA_FDC'
   | 'NZFCD'
@@ -49,20 +51,52 @@ export interface NutritionSourceScoreComponents {
   cfctFallbackOnlyPenalty: number;
 }
 
-const approvedNutritionSources: ApprovedNutritionSource[] = [
-  'USDA_FDC',
-  'NZFCD',
-  'NEVO',
-  'MEXT',
-  'AFCD',
-  'AUSNUT',
-  'CNF',
-  'COFID',
-  'CIQUAL',
-  'CFCT',
+/**
+ * 登记表口径码 → 导入策略既有 union 的映射。
+ *
+ * 白名单唯一来源是 `NUTRITION_LIBRARIES`；这张表只负责名称翻译
+ * （NZFCD_FOODFILES→NZFCD、JP_FOOD_TABLE→MEXT），不是第二份名单。
+ * 登记表里有、但 union 里没有的库（TFDA/KO_RDA/TACO/FINELI/FRIDA）
+ * 暂不进导入策略，保持既有类型契约。
+ */
+const APPROVED_SOURCE_BY_LIBRARY_CODE: Readonly<
+  Partial<Record<string, ApprovedNutritionSource>>
+> = {
+  USDA_FDC: 'USDA_FDC',
+  CNF: 'CNF',
+  NZFCD_FOODFILES: 'NZFCD',
+  JP_FOOD_TABLE: 'MEXT',
+  NEVO: 'NEVO',
+  COFID: 'COFID',
+  CIQUAL: 'CIQUAL',
+  CFCT: 'CFCT',
+  AFCD: 'AFCD',
+  AUSNUT: 'AUSNUT',
+};
+
+/**
+ * 导入策略认可的来源：登记表的投影视图，不是第二份白名单。
+ *
+ * 顺序沿用登记表；`Set` 去重。
+ */
+export const APPROVED_NUTRITION_SOURCES: readonly ApprovedNutritionSource[] = [
+  ...new Set(
+    NUTRITION_LIBRARIES.map(
+      (library) => APPROVED_SOURCE_BY_LIBRARY_CODE[library.sourceCode],
+    ).filter(
+      (source): source is ApprovedNutritionSource => source !== undefined,
+    ),
+  ),
 ];
 
 const cfctSource: ApprovedNutritionSource = 'CFCT';
+
+/**
+ * CFCT 是兜底库；导入清单要求先搜完其它认可来源。
+ * 这个视图同样从登记表投影而来，供 manifest 校验复用。
+ */
+export const PRIMARY_OFFICIAL_NUTRITION_SOURCES: readonly ApprovedNutritionSource[] =
+  APPROVED_NUTRITION_SOURCES.filter((source) => source !== cfctSource);
 
 const contradictoryStateTagPairs: [NutritionStateTag, NutritionStateTag][] = [
   ['raw', 'cooked'],
@@ -294,7 +328,7 @@ function hasContradictoryStateTags(stateTags: NutritionStateTag[]): boolean {
 export function toApprovedNutritionSource(
   source: string,
 ): ApprovedNutritionSource | undefined {
-  return approvedNutritionSources.find(
+  return APPROVED_NUTRITION_SOURCES.find(
     (approvedSource) => approvedSource === source,
   );
 }

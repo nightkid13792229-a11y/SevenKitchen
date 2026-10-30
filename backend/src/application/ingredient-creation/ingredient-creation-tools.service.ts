@@ -1,24 +1,53 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { createHash } from 'crypto';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { isIngredientCardFieldKey } from '../../domain/ingredient-creation/ingredient-card-fields';
+import { IngredientSkillService } from './ingredient-skill.service';
 import {
   classifyCookingMethod,
   normalizePreparationState,
   type PreparationState,
 } from '../../domain/ingredient-creation/preparation-state';
+import {
+  resolveDefaultPrimaryState,
+  type CoverageCategory,
+} from '../../domain/ingredient-creation/state-coverage';
+import {
+  SEARCH_PLAN_LIBRARIES,
+  SEARCH_PLAN_REQUIRED_MESSAGE,
+  buildPendingSearchPlan,
+  hasApprovedSearchPlan,
+  type SearchPlan,
+  type SearchPlanLibrary,
+} from '../../domain/ingredient-creation/search-plan';
 import { normalizeUnit } from '../../domain/ingredient-creation/unit-guard';
 import {
   NUTRITION_FIELD_CATALOG,
   type NutritionFieldDefinition,
 } from '../../domain/ingredient/nutrition-field-catalog';
 import { PrismaService } from '../../infrastructure/prisma.service';
-import { IngredientCreationCandidateService } from './ingredient-creation-candidate.service';
+import {
+  IngredientCreationCandidateService,
+  RAW_SEARCH_LANGUAGES,
+  type RawSearchLanguage,
+  type RawSearchTerm,
+} from './ingredient-creation-candidate.service';
 import { IngredientCreationCheckService } from './ingredient-creation-check.service';
 import { IngredientCreationDraftService } from './ingredient-creation-draft.service';
+import { IngredientNameClassifierService } from './ingredient-name-classifier.service';
+import {
+  buildKeywordNameSummary,
+  detectCutGroup,
+  type NameSummaryItem,
+  type SummarizeNamesResult,
+} from './ingredient-name-summary';
 import type {
   CheckItem,
   IngredientCardField,
   IngredientCreationDraft,
   IngredientDraft,
   NutritionEvidenceEntry,
+  PendingQuestion,
+  PendingQuestionOption,
   ProfileDraft,
 } from './ingredient-creation.types';
 
@@ -36,6 +65,21 @@ export interface AgentToolExecution {
   durationMs: number;
   /** 给起草循环判断「有没有新进展」用；不回灌给模型。 */
   progress?: AgentToolProgress;
+  /**
+   * 只有 `askUser` 成功时会填：本轮必须立刻结束，等用户回答。
+   * 起草循环据此把 stopReason 置为 `waiting_user`。
+   */
+  pendingQuestion?: PendingQuestion;
+  /**
+   * 只有 `proposeSearchPlan` 成功时会填：本轮必须立刻结束，等用户确认方案。
+   * 起草循环据此把 stopReason 置为 `waiting_plan`。
+   */
+  pendingPlan?: SearchPlan;
+  /**
+   * 只有 `finish` 成功时会填：模型主动结束本轮。
+   * `reply` 是模型随 finish 一起给出的结论（可为 null）。
+   */
+  finished?: { reply: string | null };
 }
 
 /** 终检摘要：停止时用来说明「还剩什么没做」。 */
@@ -76,33 +120,115 @@ export interface ExecuteAgentToolInput {
   args: Record<string, unknown>;
 }
 
-const SEARCH_CANDIDATE_LIMIT = 8;
+/** 名字清单一次最多返回多少条（与候选服务的上限一致）。 */
+const SEARCH_NAME_LIST_LIMIT = 3000;
 /** 单次最多回灌多少条营养值，避免把提示词撑爆。 */
 const MAX_NUTRITION_RECORD_VALUES = 80;
 /** 批量写入单次上限：60 个目录字段一次能装下，且给模型留余量。 */
 export const MAX_BATCH_NUTRITION_FIELDS = 70;
+const FINISH_REPLY_MAX = 500;
 const ARGS_LOG_MAX = 300;
 const ERROR_MESSAGE_MAX = 300;
 
-/** 候选摘要只给模型看「能不能用」，不带整份营养档案。 */
-const SEARCH_TOOL: AgentToolDefinition = {
+/**
+ * 汇总缓存 24 小时。
+ *
+ * 缓存键 = keyword + 名字集合哈希（见 `nameSummaryCacheKey`）；命中时不
+ * 重复调模型，但**仍然重新检索名字**（库变了哈希就变，自然 miss）。
+ */
+const NAME_SUMMARY_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+/** 进程内最多留 200 条汇总，避免长跑进程内存无界增长。 */
+const NAME_SUMMARY_CACHE_MAX_ENTRIES = 200;
+
+/**
+ * 原子工具 1：按关键词列出本地营养库真实命中的词条名。
+ *
+ * **只摆事实**：id / name / sourceType / alsoIn + 真实命中总数。不判断生熟、做法、
+ * 部位，不返回营养值，也不替模型收窄。同名记录按归一化名字折叠（同组一条，
+ * `alsoIn` 列出其它来源库）；发现 3000 条还是 3 条，由模型看 `total` 后自己
+ * 决定下一步（summarizeByKeyword / askUser）。
+ */
+/** 按库检索：模型给「库 + 该库的词组」，代码只按库查。 */
+const SEARCH_LIBRARIES_TOOL: AgentToolDefinition = {
   type: 'function',
   function: {
-    name: 'searchLocalNutrition',
+    name: 'searchLibraries',
     description:
-      '在本地营养库检索某个原料的候选来源（只读）。返回 found、keywords、候选条数，以及每条候选的来源记录 id、名称、生熟状态、必需营养素覆盖率、缺项与匹配依据（matchedBy / matchedKeyword / score）。注意：ok=true 只表示查询执行成功，found=false 表示没有找到匹配词条；这里只有元数据，拿到 sourceRecordId 后要用 getNutritionRecord 读取具体营养数值。',
+      '按**指定营养库**检索原料名（只读）。每个库交一组检索词，代码只在该库里查；不做语种分流、不做同义扩展、不合并同名。返回每个库的命中总数与前 20 条（id / 名字 / 来源 key / 已填营养项）。某库命中为 0 或偏少时，看别的库返回的名字，换词再查一次。',
+    parameters: {
+      type: 'object',
+      properties: {
+        groups: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 7,
+          description: '每个库一组；同一个库只出现一次。',
+          items: {
+            type: 'object',
+            properties: {
+              library: {
+                type: 'string',
+                enum: [...SEARCH_PLAN_LIBRARIES],
+                description: '目标营养库。',
+              },
+              terms: {
+                type: 'array',
+                minItems: 1,
+                maxItems: 10,
+                items: { type: 'string' },
+                description: '该库要用的检索词（正名、俗称、外语名都可以）。',
+              },
+            },
+            required: ['library', 'terms'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['groups'],
+      additionalProperties: false,
+    },
+  },
+};
+
+/** 读取技能全文：系统提示里只有清单。 */
+const LOAD_SKILL_TOOL: AgentToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'loadSkill',
+    description:
+      '读取一项作业技能的全文（技能清单在系统提示里）。需要按某个技能的步骤作业时调用；常驻技能已经全文给出，不用再读。',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: '技能名，来自系统提示里的技能清单。',
+        },
+      },
+      required: ['name'],
+      additionalProperties: false,
+    },
+  },
+};
+
+const SEARCH_NAMES_TOOL: AgentToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'searchNames',
+    description:
+      '按关键词列出本地营养库真实命中的词条名（只读，最多 3000 条）。同名记录按归一化名字折叠后只返回一条，alsoIn 列出也有这个名字的其它来源库；total 是折叠前的真实命中总数。只返回 id / name / sourceType / alsoIn 与 total，**不判断生熟 / 做法 / 部位，不返回营养值，也不做收窄**。模糊词（如「牛肉」「山药」）先看 total：命中多就先 summarizeByKeyword(keyword) 看分布（服务端取全量名字、只回汇总），再按 skills/ingredient-agent/SKILL.md 的指引用 askUser 收窄。中文词会自动走词典 / AI 翻译展开成外文词。',
     parameters: {
       type: 'object',
       properties: {
         keyword: {
           type: 'string',
-          description:
-            '要检索的中文名或英文名，例如「鸡肝」「Chicken liver」。',
+          description: '要检索的中文名或英文名，例如「牛肉」「Beef」。',
         },
-        state: {
-          type: 'string',
-          enum: ['RAW', 'COOKED'],
-          description: '找生档案还是熟档案；不传按 RAW。',
+        limit: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 3000,
+          description: '最多返回多少条，默认与上限都是 3000。',
         },
       },
       required: ['keyword'],
@@ -111,33 +237,115 @@ const SEARCH_TOOL: AgentToolDefinition = {
   },
 };
 
+/**
+ * 原子工具：按 5 个语种分组原样检索 7 个本地库，返回所有命中（只读）。
+ *
+ * 工具只负责「代码知道哪个库用哪个语言」：生成 5 组词、各查各的库、原样
+ * 返回。不去重、不排序、不限量、不做语义合并 —— 哪些是同一个食物由模型判断。
+ */
+const SEARCH_LOCAL_LIBRARIES_TOOL: AgentToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'searchLocalLibraries',
+    description:
+      '按语种分组检索本地营养库（只读）。本地 7 个库与语言：CFCT 简体中文（中国大陆）、TFDA 繁体中文（台湾）、USDA 英文（美国）、CNF 英文（加拿大）、NZFCD 英文（新西兰）、MEXT 日文（日本）、KO_RDA 韩文（韩国）。terms 必须覆盖 5 个语种（zh-Hans / zh-Hant / en / ja / ko），每个语种至少 1 个词；每个词只查对应语种的库（en 同时查 USDA / CNF / NZFCD）。查全部 7 个本地库；原样返回所有命中，不去重、不排序、不限量；由你判断哪些是同一个食物。',
+    parameters: {
+      type: 'object',
+      properties: {
+        terms: {
+          type: 'array',
+          minItems: 5,
+          description:
+            '5 个语种的检索词，每个语种至少 1 个；同一语种可以给多个词，每个词单独返回一组。',
+          items: {
+            type: 'object',
+            properties: {
+              term: {
+                type: 'string',
+                description: '该语种下的检索词，不能为空。',
+              },
+              language: {
+                type: 'string',
+                enum: [...RAW_SEARCH_LANGUAGES],
+                description:
+                  '该词的语种：zh-Hans 简体中文、zh-Hant 繁体中文、en 英文、ja 日文、ko 韩文。',
+              },
+            },
+            required: ['term', 'language'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['terms'],
+      additionalProperties: false,
+    },
+  },
+};
+
+/**
+ * 原子工具 2：按关键词在服务端汇总全量词条名（只读）。
+ *
+ * 为什么不再让模型传 names：线上「羊肉」那一轮，模型把 1,600 条名字抄进
+ * 工具参数，JSON 被截断（「工具参数不是合法 JSON」），重试只抄了几十条，
+ * 结果输入 79,893 token、耗时 75 秒，统计只覆盖几十条。
+ *
+ * 现在：服务端自己检索（上限 3000 条）、自己把名字拼进模型请求；名字只走
+ * 模型输入，模型只回汇总数字。缓存 24 小时，命中不重复调模型；模型失败
+ * 按名字关键词粗算并标 degraded，不抛错。
+ */
+const SUMMARIZE_BY_KEYWORD_TOOL: AgentToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'summarizeByKeyword',
+    description:
+      '按关键词让服务端取全量词条名（最多 3000 条）并做一次 AI 汇总（只读）。你只需要给 keyword，**不要把名字列表抄进参数**：服务端自己检索、自己拼请求，模型只回汇总数字。返回 total / byState（生熟未知）/ byMethod（做法）/ byCutGroup（部位条数）/ examples（每组 2–3 个代表名）/ irrelevantExamples 与 keywords，**不返回名字清单**。模糊词命中多时先用它看分布，再 askUser 收窄。可选 groupHint 只统计某个部位组，避免拿几条名字凑子集。汇总失败时 degraded=true 并带 notice（按名字关键词粗略计数），不要把降级数字当成精确分类。',
+    parameters: {
+      type: 'object',
+      properties: {
+        keyword: {
+          type: 'string',
+          description: '要汇总的关键词（中文或英文），例如「牛肉」「Beef」。',
+        },
+        groupHint: {
+          type: 'string',
+          description:
+            '可选。只统计某个部位组，用稳定英文 key：ground / tenderloin / loin / round / brisket / shank / chuck / rib / breast / thigh / wing / liver / heart / kidney / other。',
+        },
+      },
+      required: ['keyword'],
+      additionalProperties: false,
+    },
+  },
+};
+
+/** 原子工具 3：读某条来源记录里真实存在的营养素值（只读）。 */
 const GET_RECORD_TOOL: AgentToolDefinition = {
   type: 'function',
   function: {
-    name: 'getNutritionRecord',
+    name: 'getRecord',
     description:
-      '读取某条来源记录里真实存在的全部营养素值（只读）。返回按营养字段目录输出的 fieldPath / value / unit、目录里缺的字段与生熟状态；coverage 是目录字段中有值的比例（%）。拿到值之后，应当用 updateNutritionFields 把要写的字段一次性批量写入草稿（fieldPath 与 unit 原样照抄；单次最多 70 条）；只有补写单个字段时才用 updateNutritionField。没有值的字段不要编造、不要推算。',
+      '读取某条来源记录里真实存在的全部营养素值（只读）。返回按营养字段目录输出的 fieldPath / value / unit、目录里缺的字段与生熟状态；coverage 是目录字段中有值的比例（%）。拿到值之后用 writeNutrition 把要写的字段一次性批量写入草稿（fieldPath 与 unit 原样照抄；单次最多 70 条）。没有值的字段不要编造、不要推算。',
     parameters: {
       type: 'object',
       properties: {
-        sourceRecordId: {
+        id: {
           type: 'string',
-          description:
-            '来源记录 id（searchLocalNutrition 返回的 sourceRecordId）。',
+          description: '来源记录 id，来自 searchNames 返回的 names[].id。',
         },
       },
-      required: ['sourceRecordId'],
+      required: ['id'],
       additionalProperties: false,
     },
   },
 };
 
-const UPDATE_FIELD_TOOL: AgentToolDefinition = {
+/** 原子工具 4：批量写草稿里的营养档案；每条都必须带来源。 */
+const WRITE_NUTRITION_TOOL: AgentToolDefinition = {
   type: 'function',
   function: {
-    name: 'updateNutritionField',
+    name: 'writeNutrition',
     description:
-      '把一个营养数值写进草稿里某份营养档案的某个字段。字段必须在营养字段目录里、单位必须是目录单位；来源记录必须真实存在。任何校验失败都返回错误文本，按错误改正后可以重试。只写一个字段；一次要写多个字段时优先用 updateNutritionFields（一次最多 70 条），不要逐条调用本工具。',
+      '把营养数值写进草稿里某份营养档案（只写草稿）。entries 每条都必须带 sourceRecordId：**没有来源的营养值不能写入**。字段必须在营养字段目录里、单位必须与目录单位一致；非法输入会返回错误文本，按错误改正后重试。一次最多 70 条。profileIndex 可省略：草稿没有档案时按来源自动新建；只有一份档案时默认写这份；有多份档案时必须指定（或用来源 id 能唯一匹配到其中一份）。',
     parameters: {
       type: 'object',
       properties: {
@@ -145,53 +353,13 @@ const UPDATE_FIELD_TOOL: AgentToolDefinition = {
           type: 'integer',
           minimum: 0,
           description:
-            '营养档案下标，从 0 开始。等于当前档案数时，会按 sourceRecordId 自动新建一份档案。',
-        },
-        fieldPath: {
-          type: 'string',
-          description: '营养字段路径，例如 macros.crudeProtein。',
-        },
-        value: {
-          type: 'number',
-          description: '目录单位下的数值，必须是非负有限数字。',
-        },
-        unit: {
-          type: 'string',
-          description:
-            '目录单位：g / mg / μg / kcal / IU。必须与字段目录单位一致。',
-        },
-        sourceRecordId: {
-          type: 'string',
-          description:
-            '来源记录 id（searchLocalNutrition 返回的 sourceRecordId）。有来源时这一行标 DIRECT；没有来源则标 MANUAL。',
-        },
-      },
-      required: ['profileIndex', 'fieldPath', 'value', 'unit'],
-      additionalProperties: false,
-    },
-  },
-};
-
-const UPDATE_FIELDS_TOOL: AgentToolDefinition = {
-  type: 'function',
-  function: {
-    name: 'updateNutritionFields',
-    description:
-      '批量把多个营养数值写进草稿里某份营养档案（一次最多 70 条）。**优先用它**：读完 getNutritionRecord 后，把要写的值一次性全写进草稿，不要逐条调用 updateNutritionField。每条都按 updateNutritionField 的同一套规则校验；部分失败时已成功的字段仍会写入，失败项在 failed 里逐条返回（fieldPath + error），按错误改正失败项即可。',
-    parameters: {
-      type: 'object',
-      properties: {
-        profileIndex: {
-          type: 'integer',
-          minimum: 0,
-          description:
-            '营养档案下标，从 0 开始，对本批所有条目生效。等于当前档案数时，会按条目里的 sourceRecordId 自动新建一份档案。',
+            '营养档案下标，从 0 开始。省略时按草稿已有档案与来源自动判断；等于当前档案数时按来源新建一份。',
         },
         entries: {
           type: 'array',
           minItems: 1,
           maxItems: MAX_BATCH_NUTRITION_FIELDS,
-          description: `一次最多 ${MAX_BATCH_NUTRITION_FIELDS} 条字段写入。`,
+          description: `一次最多 ${MAX_BATCH_NUTRITION_FIELDS} 条字段写入；每条都必须带 sourceRecordId。`,
           items: {
             type: 'object',
             properties: {
@@ -211,15 +379,15 @@ const UPDATE_FIELDS_TOOL: AgentToolDefinition = {
               sourceRecordId: {
                 type: 'string',
                 description:
-                  '来源记录 id（searchLocalNutrition 返回的 sourceRecordId）。有来源时这一行标 DIRECT；没有来源则标 MANUAL。',
+                  '来源记录 id（getRecord 的 id / searchNames 的 names[].id）。无来源的数值不允许写入。',
               },
             },
-            required: ['fieldPath', 'value', 'unit'],
+            required: ['fieldPath', 'value', 'unit', 'sourceRecordId'],
             additionalProperties: false,
           },
         },
       },
-      required: ['profileIndex', 'entries'],
+      required: ['entries'],
       additionalProperties: false,
     },
   },
@@ -267,60 +435,71 @@ const INGREDIENT_NAME_EN_MAX = 200;
 const INGREDIENT_UNIT_LABEL_MAX = 50;
 const INGREDIENT_CFCT_CLASS_MAX = 100;
 
-const UPDATE_INGREDIENT_FIELDS_TOOL: AgentToolDefinition = {
+/** 原子工具 5：写草稿里的原料卡字段。 */
+const WRITE_INGREDIENT_TOOL: AgentToolDefinition = {
   type: 'function',
   function: {
-    name: 'updateIngredientFields',
+    name: 'writeIngredient',
     description:
-      '修改草稿里「原料卡」的字段（名称 / 英文名 / 类别 / 基准单位 / 展示名 / CFCT 分类 / 可食部）。只写草稿，不碰正式原料。类别只接受 MEAT_ORGAN / STARCHY_VEGETABLE / OTHER，基准单位只接受 G / ML / PCS，可食部按 0–100 的百分数传。人工审核时改过的字段不会被覆盖，会在 skipped 里逐条说明；要改的字段都写清，校验失败会返回错误文本，按提示改正后重试。',
+      '修改草稿里「原料卡」的字段（名称 / 英文名 / 类别 / 基准单位 / 展示名 / CFCT 分类 / 可食部），只写草稿，不碰正式原料。类别只接受 MEAT_ORGAN / STARCHY_VEGETABLE / OTHER，基准单位只接受 G / ML / PCS，可食部按 0–100 的百分数传。人工审核时改过的字段不会被覆盖，会在 skipped 里逐条说明；校验失败返回错误文本，按提示改正后重试。',
     parameters: {
       type: 'object',
       properties: {
-        name: {
-          type: 'string',
-          description: `原料中文名（1–${INGREDIENT_NAME_MAX} 字）。`,
-        },
-        nameEn: {
-          type: 'string',
-          description: '英文名；传空字符串表示清空。没有把握就留空，不要编造。',
-        },
-        category: {
-          type: 'string',
-          enum: INGREDIENT_CATEGORIES,
-          description:
-            '原料类别，用于判断必需的生熟档案：MEAT_ORGAN=肉/内脏/水产/蛋，STARCHY_VEGETABLE=根茎淀粉类蔬菜，OTHER=其他。',
-        },
-        baseUnit: {
-          type: 'string',
-          enum: INGREDIENT_BASE_UNITS,
-          description: '基准单位：G=克，ML=毫升，PCS=个/件。',
-        },
-        unitDisplayLabel: {
-          type: 'string',
-          description: `单位展示名，例如「克」「毫升」「个」（最多 ${INGREDIENT_UNIT_LABEL_MAX} 字）。`,
-        },
-        cfctClass: {
-          type: 'string',
-          description:
-            'CFCT 分类，例如「禽肉类及制品」；判不准传空字符串清空，不要硬填。',
-        },
-        edibleYieldPercent: {
-          type: 'number',
-          description:
-            '可食部百分比，必须大于 0 且不超过 100（例如带骨肉 85 表示 85%）；未知就不要传，留作待补。',
+        fields: {
+          type: 'object',
+          description: '要写的原料卡字段；至少一个。',
+          properties: {
+            name: {
+              type: 'string',
+              description: `原料中文名（1–${INGREDIENT_NAME_MAX} 字）。`,
+            },
+            nameEn: {
+              type: 'string',
+              description:
+                '英文名；传空字符串表示清空。没有把握就留空，不要编造。',
+            },
+            category: {
+              type: 'string',
+              enum: INGREDIENT_CATEGORIES,
+              description:
+                '原料类别，用于判断必需的生熟档案：MEAT_ORGAN=肉/内脏/水产/蛋，STARCHY_VEGETABLE=根茎淀粉类蔬菜，OTHER=其他。',
+            },
+            baseUnit: {
+              type: 'string',
+              enum: INGREDIENT_BASE_UNITS,
+              description: '基准单位：G=克，ML=毫升，PCS=个/件。',
+            },
+            unitDisplayLabel: {
+              type: 'string',
+              description: `单位展示名，例如「克」「毫升」「个」（最多 ${INGREDIENT_UNIT_LABEL_MAX} 字）。`,
+            },
+            cfctClass: {
+              type: 'string',
+              description:
+                'CFCT 分类，例如「禽肉类及制品」；判不准传空字符串清空，不要硬填。',
+            },
+            edibleYieldPercent: {
+              type: 'number',
+              description:
+                '可食部百分比，必须大于 0 且不超过 100（例如带骨肉 85 表示 85%）；未知就不要传，留作待补。',
+            },
+          },
+          additionalProperties: false,
         },
       },
+      required: ['fields'],
       additionalProperties: false,
     },
   },
 };
 
-const RUN_CHECK_TOOL: AgentToolDefinition = {
+/** 原子工具 6：跑现有终检，只读。 */
+const SELF_CHECK_TOOL: AgentToolDefinition = {
   type: 'function',
   function: {
-    name: 'runCheck',
+    name: 'selfCheck',
     description:
-      '对当前草稿跑一次服务端终检（只读）。返回拦死 / 可例外 / 提醒三档结果；passed=true 表示没有拦死项。',
+      '对当前草稿跑一次 AI 自检（只读，**不代表授权**）。返回拦死 / 可例外 / 提醒三档；passed=true 只说明没有拦死项，真正放行仍要用户跑两页核验并授权。',
     parameters: {
       type: 'object',
       properties: {},
@@ -328,6 +507,345 @@ const RUN_CHECK_TOOL: AgentToolDefinition = {
     },
   },
 };
+
+/**
+ * askUser 的文案上限。
+ *
+ * 超长**不再报错**：模型被长度卡住会缩短文案再试一次，白花一轮模型调用
+ * （线上就是这么卡住的）。这里直接截断，问题照常问出去。
+ *
+ * 截断保留前 `上限 - 3` 个字 + `…`（120 字上限 → 前 117 字 + …）；
+ * 词条名本身不截断，结构化字段里保留完整名称，展示层再做单行省略。
+ */
+const ASK_USER_QUESTION_MAX = 200;
+const ASK_USER_OPTION_MAX = 120;
+/** 省略号占位：与产品口径「120 字保留前 117 字 + …」对齐。 */
+const ASK_USER_TRUNCATE_MARGIN = 3;
+const ASK_USER_ELLIPSIS = '…';
+const ASK_USER_OPTION_MIN = 2;
+/** 普通问题最多 5 个选项；列词条时允许 5 条 + 最后一条自由输入。 */
+const ASK_USER_OPTION_MAX_COUNT = 6;
+const ASK_USER_PLAIN_OPTION_MAX_COUNT = 5;
+/** 「都不对，我直接说」：列候选时最后一条固定兜底。 */
+const CANDIDATE_GROUP_FALLBACK_OPTION = '都不对，我直接说';
+/** 单个选项核实的最长等待；多个选项并发，整体不会超过这个值太多。 */
+const ASK_OPTION_VERIFY_TIMEOUT_MS = 1500;
+/**
+ * 已经查到候选、却还没交方案时，用提问代替方案会被拒绝。
+ *
+ * 这条不是提醒而是硬拦：用户要的是「先看检索方案」，不是「先选哪一条」。
+ */
+/** 查库结果里是否真有命中；零命中不算「查到了」。 */
+function didSearchHit(content: string): boolean {
+  try {
+    const body: unknown = JSON.parse(content);
+    if (!isRecord(body)) {
+      return false;
+    }
+    if (body.found === true) {
+      return true;
+    }
+    if (typeof body.total === 'number' && body.total > 0) {
+      return true;
+    }
+    if (Array.isArray(body.names) && body.names.length > 0) {
+      return true;
+    }
+    if (Array.isArray(body.groups)) {
+      return body.groups.some((group) => {
+        if (!isRecord(group)) {
+          return false;
+        }
+        const total = group.total;
+        return typeof total === 'number' && total > 0;
+      });
+    }
+    return Boolean(body.record);
+  } catch {
+    return false;
+  }
+}
+
+const ASK_AFTER_SEARCH_MESSAGE =
+  '已经查到候选了：先把检索方案（关键词、目标库、建议用哪条）交给用户确认，不要用提问代替方案。';
+
+/** 查库类工具：跑完命中了候选，就在草稿上留个记号。 */
+const SEARCH_TOOL_NAMES = new Set([
+  'searchLibraries',
+  'summarizeByKeyword',
+  'getRecord',
+]);
+
+/** 未收录选项在页面上的后缀：让用户点之前就知道会去线上找。 */
+const ASK_OPTION_MISSING_SUFFIX = '（库里未收录，选了会去线上找）';
+
+/**
+ * 原子工具：提交检索方案。
+ *
+ * 与「问人」同一机制：提交后本轮立刻结束，等用户确认。区别是它带结构化内容
+ * （关键词 / 目标库 / 命中概况 / 想用哪条记录），页面据此渲染确认卡。
+ *
+ * 闸门意义：**写原料卡与营养之前必须先有人确认方案**。查库、汇总、读来源、
+ * 问人都不需要确认——探索是自由的，落地才要人点头。
+ */
+const PROPOSE_SEARCH_PLAN_TOOL: AgentToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'proposeSearchPlan',
+    description:
+      '把「最终要怎么查、想用哪条记录」交给用户确认。提交后本轮立刻结束，等用户确认或修改。**查到候选之后必须用它，不要用 askUser 问「要哪一条」**——候选放进 candidates，让用户在方案卡里选。写原料卡 / 写营养之前必须先提交并获得确认；只读的查库、汇总、读来源不需要先确认。通常先查一轮拿到命中情况再提交，findings 才不会空；用户要求调整时重新提交一份新方案。',
+    parameters: {
+      type: 'object',
+      properties: {
+        keywords: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 6,
+          description: '最终要用的搜索词，按语种列出来。',
+          items: {
+            type: 'object',
+            properties: {
+              term: {
+                type: 'string',
+                description: '搜索词；最多 40 字。',
+              },
+              language: {
+                type: 'string',
+                description: '语种标记，例如 zh / en / ja / ko。',
+              },
+            },
+            required: ['term', 'language'],
+            additionalProperties: false,
+          },
+        },
+        libraries: {
+          type: 'array',
+          minItems: 1,
+          maxItems: SEARCH_PLAN_LIBRARIES.length,
+          items: { type: 'string', enum: [...SEARCH_PLAN_LIBRARIES] },
+          description: '要查的目标库，从白名单里选。',
+        },
+        findings: {
+          type: 'string',
+          description:
+            '已经查到了什么（各库命中概况、候选状态），帮用户判断；最多 300 字。',
+        },
+        candidates: {
+          type: 'array',
+          maxItems: 5,
+          description:
+            '列给用户挑的候选来源记录（最多 5 条），按推荐程度排序；主选也放进 chosenRecordId。',
+          items: {
+            type: 'object',
+            properties: {
+              recordId: { type: 'string', description: '来源记录 id（可选）。' },
+              name: { type: 'string', description: '记录名，最多 100 字。' },
+              sourceType: {
+                type: 'string',
+                description: '来源库，例如 USDA / TFDA。',
+              },
+              state: { type: 'string', description: '生 / 熟，不知道就省略。' },
+            },
+            required: ['name'],
+            additionalProperties: false,
+          },
+        },
+        chosenRecordId: {
+          type: 'string',
+          description: '打算用的来源记录 id；还没定就省略。',
+        },
+        chosenRecordName: {
+          type: 'string',
+          description: '打算用的记录名，方便用户认；还没定就省略。',
+        },
+        rationale: {
+          type: 'string',
+          description: '为什么这么查，一句话；最多 120 字。',
+        },
+      },
+      required: ['keywords', 'libraries'],
+      additionalProperties: false,
+    },
+  },
+};
+
+/**
+ * 原子工具 7：问人。
+ *
+ * **没有流程闸门**：收窄 / 复核 / 候选选择顺序全部交给提示词 + skills。
+ * 工具只校验问题与选项的格式（非空、2–6 个、超长截断），然后结束本轮。
+ */
+const ASK_USER_TOOL: AgentToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'askUser',
+    description:
+      '向用户提一个必须由人决定的问题，并结束本轮等待回答。一次只问一个问题，给 2–5 个具体可点的选项；列候选词条时最多 5 条 + 最后一条「都不对，我直接说」（共 6 个）。**查到候选之后不要用它问「要哪一条记录」——那是检索方案，应放进 proposeSearchPlan 的 candidates**；已经查到候选又没交方案时，调用本工具会被拒绝。它适合问「方案还形不成」的信息，例如部位、别名、要不要换名字。',
+    parameters: {
+      type: 'object',
+      properties: {
+        question: {
+          type: 'string',
+          description: `要问用户的一句话，最多 ${ASK_USER_QUESTION_MAX} 个字（超长会自动截断，不影响提问）。一次只问一个问题。`,
+        },
+        options: {
+          type: 'array',
+          minItems: ASK_USER_OPTION_MIN,
+          maxItems: ASK_USER_OPTION_MAX_COUNT,
+          items: {
+            type: 'string',
+            description: `一个具体答案（最多 ${ASK_USER_OPTION_MAX} 个字，超长会自动截断），不要写「其他」这种空选项。普通问题最多 ${ASK_USER_PLAIN_OPTION_MAX_COUNT} 个；列候选时最多 5 条，最后一条固定写「${CANDIDATE_GROUP_FALLBACK_OPTION}」（共 6 个）。`,
+          },
+          description: `2–${ASK_USER_PLAIN_OPTION_MAX_COUNT} 个可直接点选的具体答案；列候选时允许 5 条 + 最后一条「${CANDIDATE_GROUP_FALLBACK_OPTION}」。`,
+        },
+      },
+      required: ['question', 'options'],
+      additionalProperties: false,
+    },
+  },
+};
+
+/**
+ * 原子工具 8：结束本轮。
+ *
+ * 模型可以随时调用；循环看到 `finished` 就停止，不再请求下一次模型。
+ * 最终结论可以写在 `summary`，也可以写在同一条 assistant 回复里。
+ */
+const FINISH_TOOL: AgentToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'finish',
+    description:
+      '结束本轮，不再调用其它工具。把给用户的最终结论写进 summary（一两句中文：做了什么、还缺什么、下一步建议），也可以同时写在回复正文里。不要在还有工具要调用时提前 finish。',
+    parameters: {
+      type: 'object',
+      properties: {
+        summary: {
+          type: 'string',
+          description: '给用户的最终结论；最多 500 字，超长会截断。',
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+};
+
+/** 按“字”截断 askUser 文案：连同省略号不超过 `max` 个字。 */
+function truncateAskCopy(value: string, max: number): string {
+  const chars = Array.from(value);
+  if (chars.length <= max) {
+    return value;
+  }
+  return `${chars.slice(0, max - ASK_USER_TRUNCATE_MARGIN).join('')}${ASK_USER_ELLIPSIS}`;
+}
+
+const COVERAGE_CATEGORIES: readonly CoverageCategory[] = [
+  'MEAT_ORGAN',
+  'STARCHY_VEGETABLE',
+  'OTHER',
+];
+
+function readCoverageCategory(value: unknown): CoverageCategory | null {
+  return typeof value === 'string' &&
+    (COVERAGE_CATEGORIES as readonly string[]).includes(value)
+    ? (value as CoverageCategory)
+    : null;
+}
+
+/**
+ * 核实 askUser 选项时用当前草稿的「目标状态」。
+ *
+ * 起手卡显式要求的生熟优先级最高；没有时再看原料卡类别（审核页可能刚改过）、
+ * 起手卡类别默认值、已有档案（只有一份时），最后按生档案查。
+ * 这只是选检索口径，不会把核实结果写回词典或草稿。
+ */
+function resolveAskTargetState(
+  draft: IngredientCreationDraft,
+): PreparationState {
+  const payload: unknown = draft.payload;
+
+  const intake =
+    isRecord(payload) && isRecord(payload.intake) ? payload.intake : null;
+  if (intake && Array.isArray(intake.requiredStates)) {
+    for (const raw of intake.requiredStates) {
+      const state = normalizeState(raw);
+      if (state) return state;
+    }
+  }
+
+  const ingredient =
+    isRecord(payload) && isRecord(payload.ingredient)
+      ? payload.ingredient
+      : null;
+  const ingredientCategory = readCoverageCategory(ingredient?.category);
+  if (ingredientCategory) {
+    return resolveDefaultPrimaryState(ingredientCategory);
+  }
+
+  const intakeCategory = readCoverageCategory(intake?.category);
+  if (intakeCategory) {
+    return resolveDefaultPrimaryState(intakeCategory);
+  }
+
+  const profileStates = new Set<PreparationState>();
+  const profiles =
+    isRecord(payload) && Array.isArray(payload.profiles)
+      ? payload.profiles
+      : [];
+  for (const profile of profiles) {
+    if (!isRecord(profile)) continue;
+    const state = normalizeState(profile.preparationState);
+    if (state) profileStates.add(state);
+  }
+  if (profileStates.size === 1) {
+    return [...profileStates][0];
+  }
+
+  return 'RAW';
+}
+
+/**
+ * 给一次核实套超时。超时 / 异常都返回 null（状态未知），
+ * 不能把「查不动」当成「库里没有」。
+ */
+async function settleWithin<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), timeoutMs);
+      }),
+    ]);
+  } catch {
+    return null;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/**
+ * 从选项文案里拆出候选名。兼容 `候选名 —— 相关：理由` 这种旧文案，
+ * 查库只拿候选名去匹配；没有这种后缀时整句就是候选名。
+ */
+function parseAskOptionLabel(label: string): {
+  candidateLabel: string;
+  displayLabel: string;
+} {
+  const match = label.match(
+    /^(.*?)\s*(?:——|—{1,2}|--)\s*(?:不相关|存疑|相关)\s*[:：]\s*(.*)$/u,
+  );
+  if (!match) {
+    return { candidateLabel: label.trim(), displayLabel: label.trim() };
+  }
+  return {
+    candidateLabel: match[1]?.trim() || label.trim(),
+    displayLabel: label.trim(),
+  };
+}
 
 /** 来源记录里本工具要用的列；`normalizedNutrition` 用来判生熟、读营养值。 */
 interface SourceRecordRow {
@@ -577,6 +1095,23 @@ function readIngredientEditorCard(
   };
 }
 
+/**
+ * 读草稿原料卡上的人工标记（`manualFields`）。
+ *
+ * 不能用 `readIngredientEditorCard` 的结果：那份只为 AI 编辑器卡服务，
+ * 只认 7 个可写键，人把「品牌」标记成人工核对时会被静默过滤掉。
+ */
+function readStoredIngredientManualFields(
+  stored: Record<string, unknown>,
+): IngredientCardField[] {
+  const raw = stored.manualFields;
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return [...new Set(raw.filter((field) => isIngredientCardFieldKey(field)))];
+}
+
 type IngredientFieldValue = string | number | null;
 
 type IngredientFieldValidation =
@@ -699,7 +1234,7 @@ interface ValidatedFieldArgs {
   field: NutritionFieldDefinition;
   fieldPath: string;
   value: number;
-  sourceRecordId: string | null;
+  sourceRecordId: string;
 }
 
 type FieldValidation =
@@ -707,9 +1242,9 @@ type FieldValidation =
   | { ok: false; fieldPath: string; error: string };
 
 /**
- * 单条字段的纯校验：字段目录 → 单位 → 数值。
+ * 单条字段的纯校验：字段目录 → 单位 → 数值 → 来源。
  *
- * 批量工具逐条调用它，错误文本与单条工具完全一致（模型换工具也能照旧自纠）。
+ * 批量工具逐条调用它，错误文本统一，模型照着改就能重试。
  */
 function validateFieldArgs(raw: Record<string, unknown>): FieldValidation {
   const fieldPath = normalizeText(raw.fieldPath);
@@ -750,42 +1285,73 @@ function validateFieldArgs(raw: Record<string, unknown>): FieldValidation {
     return { ok: false, fieldPath, error: 'value 不能是负数。' };
   }
 
+  const sourceRecordId = normalizeText(raw.sourceRecordId);
+  if (!sourceRecordId) {
+    return {
+      ok: false,
+      fieldPath,
+      error:
+        '缺少 sourceRecordId：没有来源的营养值不能写入草稿。请先用 searchNames 找词条、getRecord 读来源，再把来源 id 一并传入。',
+    };
+  }
+
   return {
     ok: true,
     field,
     fieldPath,
     value,
-    sourceRecordId: normalizeText(raw.sourceRecordId) || null,
+    sourceRecordId,
   };
 }
 
 /**
- * AI 起草可调用的**全部**写入口。
+ * AI 起草可调用的**全部原子工具**。
  *
  * 边界（架构文档第四节、第七节）：
  * - 只碰草稿：不写正式原料 / 营养档案，不提交、不确认可用；
- * - 每个写工具自己做校验，非法输入当场返回错误文本，由模型自己改；
+ * - 工具内部不做流程判断：先查名字、再汇总、再问人、再写入、再校验，
+ *   顺序由提示词 + `skills/ingredient-agent/SKILL.md` 决定；
+ * - 四条硬约束写死在实现里：只写草稿、写入必须带来源、字段 / 单位必须
+ *   合法（非法就地返回错误文本）、没有提交 / 确认可用的工具；
  * - 每次调用都记一条日志（工具名、参数摘要、耗时、成功/失败）。
  */
 @Injectable()
 export class IngredientCreationToolsService {
   private readonly logger = new Logger(IngredientCreationToolsService.name);
 
+  /**
+   * 汇总缓存（进程内，24 小时）。
+   *
+   * 键 = keyword + 名字集合哈希；只缓存成功结果，降级结果不缓存
+   * （模型恢复后还能重新汇总）。`Map` 的插入顺序就是淘汰顺序。
+   */
+  private readonly nameSummaryCache = new Map<
+    string,
+    { expiresAt: number; summary: SummarizeNamesResult }
+  >();
+
   constructor(
     private readonly candidateService: IngredientCreationCandidateService,
     private readonly draftService: IngredientCreationDraftService,
     private readonly checkService: IngredientCreationCheckService,
     private readonly prisma: PrismaService,
+    private readonly nameClassifierService?: IngredientNameClassifierService,
+    @Optional()
+    private readonly skillService?: IngredientSkillService,
   ) {}
 
   getDefinitions(): readonly AgentToolDefinition[] {
     return [
-      SEARCH_TOOL,
+      SEARCH_LIBRARIES_TOOL,
+      LOAD_SKILL_TOOL,
+      SUMMARIZE_BY_KEYWORD_TOOL,
       GET_RECORD_TOOL,
-      UPDATE_FIELD_TOOL,
-      UPDATE_FIELDS_TOOL,
-      UPDATE_INGREDIENT_FIELDS_TOOL,
-      RUN_CHECK_TOOL,
+      WRITE_NUTRITION_TOOL,
+      WRITE_INGREDIENT_TOOL,
+      SELF_CHECK_TOOL,
+      ASK_USER_TOOL,
+      PROPOSE_SEARCH_PLAN_TOOL,
+      FINISH_TOOL,
     ];
   }
 
@@ -807,6 +1373,24 @@ export class IngredientCreationToolsService {
         error: truncate(message, ERROR_MESSAGE_MAX),
         content: errorContent(truncate(message, ERROR_MESSAGE_MAX)),
       };
+    }
+
+    // 查库命中了就留个记号：后面 askUser 据此判断「该交方案了」。
+    if (
+      execution.ok &&
+      SEARCH_TOOL_NAMES.has(input.name) &&
+      didSearchHit(execution.content)
+    ) {
+      try {
+        const draft = await this.draftService.get(input.draftId);
+        if (!draft.payload.searchProbe) {
+          await this.draftService.patch(input.draftId, draft.step, {
+            searchProbe: { hitAt: new Date().toISOString() },
+          });
+        }
+      } catch {
+        // 记号写不进去不影响工具结果；最坏情况只是少拦一次提问。
+      }
     }
 
     const durationMs = Date.now() - startedAt;
@@ -832,19 +1416,45 @@ export class IngredientCreationToolsService {
   private async dispatch(
     input: ExecuteAgentToolInput,
   ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
+    // 写草稿前的唯一闸门：检索方案必须先有人确认。
+    // 查库类工具保持自由——拦探索只会让方案变瞎；写才是真正落东西。
+    if (input.name === 'writeNutrition' || input.name === 'writeIngredient') {
+      const draft = await this.draftService.get(input.draftId);
+      if (!hasApprovedSearchPlan(draft.payload.searchPlan)) {
+        return this.error(SEARCH_PLAN_REQUIRED_MESSAGE);
+      }
+    }
+
+    // 查到候选之后，问人只能用于「方案还形不成」；不能拿它代替方案。
+    if (input.name === 'askUser') {
+      const draft = await this.draftService.get(input.draftId);
+      const probed = Boolean(draft.payload.searchProbe);
+      if (probed && !hasApprovedSearchPlan(draft.payload.searchPlan)) {
+        return this.error(ASK_AFTER_SEARCH_MESSAGE);
+      }
+    }
+
     switch (input.name) {
-      case 'searchLocalNutrition':
-        return this.searchLocalNutrition(input.draftId, input.args);
-      case 'getNutritionRecord':
-        return this.getNutritionRecord(input.args);
-      case 'updateNutritionField':
-        return this.updateNutritionField(input.draftId, input.args);
-      case 'updateNutritionFields':
-        return this.updateNutritionFields(input.draftId, input.args);
-      case 'updateIngredientFields':
-        return this.updateIngredientFields(input.draftId, input.args);
-      case 'runCheck':
-        return this.runCheck(input.draftId);
+      case 'searchLibraries':
+        return this.searchLibraries(input.args);
+      case 'loadSkill':
+        return this.loadSkill(input.args);
+      case 'summarizeByKeyword':
+        return this.summarizeByKeyword(input.args);
+      case 'getRecord':
+        return this.getRecord(input.args);
+      case 'writeNutrition':
+        return this.writeNutrition(input.draftId, input.args);
+      case 'writeIngredient':
+        return this.writeIngredient(input.draftId, input.args);
+      case 'selfCheck':
+        return this.selfCheck(input.draftId);
+      case 'askUser':
+        return this.askUser(input.draftId, input.args);
+      case 'proposeSearchPlan':
+        return this.proposeSearchPlan(input.draftId, input.args);
+      case 'finish':
+        return this.finish(input.args);
       default:
         return this.error(
           `未知工具「${input.name}」。可用工具只有：${this.availableToolNames().join('、')}。`,
@@ -852,87 +1462,482 @@ export class IngredientCreationToolsService {
     }
   }
 
-  /** 工具 1：只读检索，复用现有候选服务（生熟过滤、烤煎排除、覆盖率都在那边）。 */
-  private async searchLocalNutrition(
-    draftId: string,
+  /** 按库检索：只按模型给的库与词查，不做任何扩展。 */
+  private async searchLibraries(
+    args: Record<string, unknown>,
+  ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
+    const rawGroups = args.groups;
+    if (!Array.isArray(rawGroups) || rawGroups.length === 0) {
+      return this.error('searchLibraries 需要 groups 数组，至少一组。');
+    }
+    if (rawGroups.length > SEARCH_PLAN_LIBRARIES.length) {
+      return this.error(`groups 最多 ${SEARCH_PLAN_LIBRARIES.length} 组。`);
+    }
+
+    const seen = new Set<string>();
+    const groups: Array<{ library: SearchPlanLibrary; terms: string[] }> = [];
+
+    for (const raw of rawGroups) {
+      if (!isRecord(raw)) {
+        return this.error('groups 的每一项必须是 { library, terms }。');
+      }
+      const library = normalizeText(raw.library).toUpperCase();
+      if (!(SEARCH_PLAN_LIBRARIES as readonly string[]).includes(library)) {
+        return this.error(
+          `目标库「${library || String(raw.library)}」不在白名单；可选：${SEARCH_PLAN_LIBRARIES.join('、')}。`,
+        );
+      }
+      if (seen.has(library)) {
+        return this.error(`目标库「${library}」重复出现，每组只写一次。`);
+      }
+      seen.add(library);
+
+      if (!Array.isArray(raw.terms)) {
+        return this.error(`目标库「${library}」的 terms 必须是数组。`);
+      }
+      const terms = [
+        ...new Set(
+          raw.terms
+            .map((term) => normalizeText(term))
+            .filter((term) => term.length > 0),
+        ),
+      ];
+      if (terms.length === 0) {
+        return this.error(`目标库「${library}」至少要有一个检索词。`);
+      }
+      if (terms.length > 10) {
+        return this.error(`目标库「${library}」最多 10 个检索词。`);
+      }
+
+      groups.push({ library: library as SearchPlanLibrary, terms });
+    }
+
+    const results = await Promise.all(
+      groups.map((group) =>
+        this.candidateService.searchByLibrary({
+          library: group.library,
+          terms: group.terms,
+        }),
+      ),
+    );
+
+    const empty = results
+      .filter((result) => result.total === 0)
+      .map((result) => result.library);
+
+    return {
+      ok: true,
+      content: okContent({
+        groups: results.map((result) => ({
+          library: result.library,
+          total: result.total,
+          hits: result.hits,
+        })),
+        // 扁平视图：模型写方案、回话时常用；与 groups 是同一批数据。
+        total: results.reduce((sum, result) => sum + result.total, 0),
+        found: results.some((result) => result.total > 0),
+        keywords: [
+          ...new Set(groups.flatMap((group) => group.terms)),
+        ],
+        names: results.flatMap((result) =>
+          result.hits.map((hit) => ({
+            id: hit.id,
+            name: hit.name,
+            sourceType: hit.sourceType,
+          })),
+        ),
+        hint:
+          empty.length === 0
+            ? '每库都命中了；同名多条是不同版本，逐条看，不要按名字合并。'
+            : `${empty.join('、')} 没有命中：看别的库返回的名字，换词再查一次。`,
+      }),
+      progress: {
+        writtenFieldPaths: [],
+        // 只列名字不读记录，不能上报 id，否则后续 getRecord 会被误判成「早就见过」。
+        sourceRecordIds: [],
+      },
+    };
+  }
+
+  /** 读取技能全文；常驻技能已在系统提示里，不用调用。 */
+  private loadSkill(
+    args: Record<string, unknown>,
+  ): Omit<AgentToolExecution, 'durationMs'> {
+    const name = normalizeText(args.name);
+    if (!name) {
+      return this.error('loadSkill 需要非空的 name。');
+    }
+    if (!this.skillService) {
+      return this.error('本实例没有加载技能，按系统提示与工具描述作业。');
+    }
+
+    const skill = this.skillService.load(name);
+    if (!skill) {
+      const available = this.skillService
+        .list()
+        .map((entry) => entry.name)
+        .join('、');
+      return this.error(
+        `没有名为「${name}」的技能。可用技能：${available || '（无）'}。`,
+      );
+    }
+
+    return {
+      ok: true,
+      content: okContent({
+        name: skill.name,
+        description: skill.description,
+        body: skill.body,
+      }),
+    };
+  }
+
+  /**
+   * 工具 1：只按名字摆事实（不分类、不返回营养值、不写入）。
+   *
+   * 命中多少条、都叫什么由模型自己看；后续是汇总、收窄还是换关键词，
+   * 都不在工具里做判断。
+   */
+  private async searchNames(
     args: Record<string, unknown>,
   ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
     const keyword = normalizeText(args.keyword);
     if (!keyword) {
-      return this.error('searchLocalNutrition 需要非空的 keyword。');
+      return this.error('searchNames 需要非空的 keyword。');
     }
-    if (args.state !== undefined && normalizeState(args.state) === null) {
-      return this.error('state 只能是 RAW 或 COOKED；不传按 RAW。');
-    }
-    const state = normalizeState(args.state) ?? 'RAW';
 
-    // 草稿不存在时先报 404，避免给一个不存在的草稿做检索。
-    await this.draftService.get(draftId);
+    const rawLimit = args.limit;
+    const numericLimit =
+      typeof rawLimit === 'number'
+        ? rawLimit
+        : typeof rawLimit === 'string' && rawLimit.trim()
+          ? Number(rawLimit)
+          : NaN;
+    const limit = Number.isFinite(numericLimit)
+      ? Math.min(
+          SEARCH_NAME_LIST_LIMIT,
+          Math.max(1, Math.floor(numericLimit)),
+        )
+      : SEARCH_NAME_LIST_LIMIT;
 
-    const result = await this.candidateService.findCandidates({
-      name: keyword,
-      state,
+    const result = await this.candidateService.listNutritionNames({
+      keyword,
+      limit,
     });
-
-    const candidates = result.candidates
-      .slice(0, SEARCH_CANDIDATE_LIMIT)
-      .map((candidate) => ({
-        sourceRecordId: candidate.sourceRecordId,
-        foodName: candidate.foodName,
-        foodNameEn: candidate.foodNameEn,
-        preparationState: candidate.preparationState,
-        coveragePercent: candidate.coveragePercent,
-        missingFields: candidate.missingFields,
-        notes: candidate.notes,
-        // 匹配依据：让页面与模型都能说清「为什么这条算命中」。
-        // 本地候选一定有；线上兜底结果没有名字匹配依据，补成 FUZZY。
-        matchedBy: candidate.matchedBy ?? 'FUZZY',
-        matchedKeyword: candidate.matchedKeyword ?? keyword,
-        matchedSourceName: candidate.matchedSourceName ?? candidate.foodName,
-        score: candidate.matchScore,
-      }));
-    const found = candidates.length > 0;
+    const names = result.names.map((entry) => ({
+      id: entry.id,
+      name: entry.name,
+      sourceType: entry.sourceType,
+      alsoIn: entry.alsoIn ?? [],
+    }));
 
     return {
       ok: true,
       content: okContent({
         keyword,
         keywords: result.keywords,
-        state,
-        // ok=true 只代表工具执行成功；found 才代表有没有数据。
-        found,
-        candidateCount: result.candidates.length,
-        returnedCount: candidates.length,
-        bestCoveragePercent: result.coverage.bestCoveragePercent,
-        candidates,
-        ...(found
-          ? {}
-          : {
-              hint: `本地库没有找到匹配词条。已尝试关键词：${result.keywords.join('、')}（状态 ${state}）。可以换中文名/英文名再试；仍然没有就如实告诉用户库里缺数据，不要编造数值，也不要把这次工具调用说成“成功找到”。`,
-            }),
+        total: result.total,
+        returnedCount: names.length,
+        found: names.length > 0,
+        names,
+        ...(result.notice ? { notice: result.notice } : {}),
+        hint:
+          names.length === 0
+            ? '本地库没有按这个名字命中的词条：可以换中文名 / 英文名再试，或如实告诉用户库里缺数据；不要编造词条。'
+            : `共 ${result.total} 条真实命中，按名称折叠后返回 ${names.length} 条名字。这只是名字清单；命中多时先 summarizeByKeyword(keyword) 看分布（服务端取全量名字、只回汇总），再决定是否 askUser 收窄。`,
       }),
       progress: {
         writtenFieldPaths: [],
-        sourceRecordIds: candidates.map(
-          (candidate) => candidate.sourceRecordId,
-        ),
+        // 只列名字清单、没有读过任何记录：上报 id 会让后面真正 getRecord 时
+        // 被误判成「早就见过」，连续三次就成了「没有新进展」（线上停摆即此）。
+        sourceRecordIds: [],
       },
     };
   }
 
   /**
-   * 工具 2：读某条来源记录里的全部真实营养值（只读）。
+   * 工具：按 5 个语种分组原样检索 7 个本地库（只读）。
+   *
+   * 这里只校验「5 个语种齐不齐、词空不空」，然后把每个词交给它语种对应的
+   * 库；命中多少、哪些是同一个食物都不在工具里判断。
+   */
+  private async searchLocalLibraries(
+    args: Record<string, unknown>,
+  ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
+    const parsed = this.parseRawSearchTerms(args.terms);
+    if (!parsed.ok) {
+      return this.error(parsed.error);
+    }
+
+    const result = await this.candidateService.searchRawByLanguage({
+      terms: parsed.terms,
+    });
+    const hitCount = result.groups.reduce((sum, group) => sum + group.total, 0);
+
+    return {
+      ok: true,
+      content: okContent({
+        groups: result.groups,
+        hint:
+          hitCount === 0
+            ? '本地 7 库没有命中，可换词/换语言，或走在线库'
+            : '原样返回，未去重；请自己判断',
+      }),
+      progress: {
+        writtenFieldPaths: [],
+        // 与 searchNames 同理：只列名字、没读来源记录，不能上报 id，
+        // 否则后续 getRecord 会被误判成「早就见过」。
+        sourceRecordIds: [],
+      },
+    };
+  }
+
+  /**
+   * 校验工具入参里的 terms：词非空、语种合法、5 个语种一个都不能少。
+   *
+   * schema 的 minItems 只是第一道闸；模型仍可能漏语种或传空词，所以这里
+   * 返回可读错误文本，让模型自己补齐后重试。
+   */
+  private parseRawSearchTerms(
+    raw: unknown,
+  ): { ok: true; terms: RawSearchTerm[] } | { ok: false; error: string } {
+    if (!Array.isArray(raw) || raw.length === 0) {
+      return {
+        ok: false,
+        error: `searchLocalLibraries 需要 terms 数组：5 个语种（${RAW_SEARCH_LANGUAGES.join(
+          '、',
+        )}）各至少 1 个词。`,
+      };
+    }
+
+    const terms: RawSearchTerm[] = [];
+    const seen = new Set<RawSearchLanguage>();
+
+    for (const [index, entry] of raw.entries()) {
+      if (!isRecord(entry)) {
+        return {
+          ok: false,
+          error: `searchLocalLibraries 的 terms[${index}] 必须是 {term, language} 对象。`,
+        };
+      }
+
+      const term = normalizeText(entry.term);
+      if (!term) {
+        return {
+          ok: false,
+          error: `searchLocalLibraries 的 terms[${index}].term 不能为空。`,
+        };
+      }
+
+      const rawLanguage = normalizeText(entry.language);
+      if (!RAW_SEARCH_LANGUAGES.includes(rawLanguage as RawSearchLanguage)) {
+        return {
+          ok: false,
+          error: `searchLocalLibraries 的 terms[${index}].language 只能是 ${RAW_SEARCH_LANGUAGES.join(
+            '、',
+          )}；收到「${rawLanguage || '（空）'}」。`,
+        };
+      }
+
+      const language = rawLanguage as RawSearchLanguage;
+      seen.add(language);
+      terms.push({ term, language });
+    }
+
+    const missing = RAW_SEARCH_LANGUAGES.filter(
+      (language) => !seen.has(language),
+    );
+    if (missing.length > 0) {
+      return {
+        ok: false,
+        error: `searchLocalLibraries 需要 5 个语种（${RAW_SEARCH_LANGUAGES.join(
+          '、',
+        )}）各至少 1 个词；缺少：${missing.join('、')}。`,
+      };
+    }
+
+    return { ok: true, terms };
+  }
+
+  /**
+   * 工具 2：按关键词汇总全量名字（只读）。
+   *
+   * 服务端自己做三步：
+   * 1. 调 `listNutritionNames` 取全量名字（上限 3000）；
+   * 2. 把名字拼进**自己发起**的模型请求（名字走输入，不走模型输出）；
+   * 3. 缓存汇总（keyword + 名字集合哈希，24 小时），命中不重复调模型。
+   *
+   * `groupHint` 只统计指定部位组：先按本地部位词表从全量名字里过滤，
+   * 再让模型汇总这一组 —— 模型不需要、也不可能拿到「别人的」子集。
+   */
+  private async summarizeByKeyword(
+    args: Record<string, unknown>,
+  ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
+    const keyword = normalizeText(args.keyword);
+    if (!keyword) {
+      return this.error('summarizeByKeyword 需要非空的 keyword。');
+    }
+    const groupHint = normalizeText(args.groupHint).toLowerCase() || null;
+
+    const result = await this.candidateService.listNutritionNames({
+      keyword,
+      limit: SEARCH_NAME_LIST_LIMIT,
+    });
+    const allItems: NameSummaryItem[] = result.names.map((entry) => ({
+      id: entry.id,
+      name: entry.name,
+    }));
+    const items = groupHint
+      ? allItems.filter((item) => detectCutGroup(item.name) === groupHint)
+      : allItems;
+
+    const summary =
+      groupHint && items.length === 0
+        ? {
+            ...buildKeywordNameSummary([]),
+            degraded: false,
+            notice: `关键词「${keyword}」下没有识别到部位组「${groupHint}」的名字；可以不带 groupHint 再汇总一次，或先 searchNames 看全部名字。`,
+          }
+        : await this.loadOrBuildKeywordSummary(keyword, items);
+
+    return {
+      ok: true,
+      content: okContent({
+        keyword,
+        keywords: result.keywords,
+        ...(groupHint ? { groupHint } : {}),
+        ...summary,
+      }),
+      progress: {
+        writtenFieldPaths: [],
+        sourceRecordIds: [],
+      },
+    };
+  }
+
+  /** 先查缓存（24 小时），miss 才调模型；只缓存成功结果。 */
+  private async loadOrBuildKeywordSummary(
+    keyword: string,
+    items: readonly NameSummaryItem[],
+  ): Promise<SummarizeNamesResult> {
+    const cacheKey = this.nameSummaryCacheKey(keyword, items);
+    const cached = this.readNameSummaryCache(cacheKey);
+    if (cached) {
+      this.logger.log(
+        `[agent-tool] 汇总命中缓存 target=${keyword} count=${items.length}`,
+      );
+      return cached;
+    }
+
+    const summary = await this.summarizeKeywordItems(keyword, items);
+    if (!summary.degraded) {
+      this.writeNameSummaryCache(cacheKey, summary);
+    }
+    return summary;
+  }
+
+  /**
+   * 缓存键 = keyword + 名字集合哈希。
+   *
+   * 名字集合来自实时检索（已经按归一化名字折叠），名字变了就 miss；
+   * 库更新后不会继续用旧分布。
+   */
+  private nameSummaryCacheKey(
+    keyword: string,
+    items: readonly NameSummaryItem[],
+  ): string {
+    const namesHash = createHash('sha256')
+      .update(
+        items
+          .map((item) => item.name)
+          .sort()
+          .join('\u0000'),
+      )
+      .digest('hex');
+    return `${keyword}\u0000${namesHash}`;
+  }
+
+  private readNameSummaryCache(key: string): SummarizeNamesResult | null {
+    const entry = this.nameSummaryCache.get(key);
+    if (!entry) {
+      return null;
+    }
+    if (entry.expiresAt <= Date.now()) {
+      this.nameSummaryCache.delete(key);
+      return null;
+    }
+    return entry.summary;
+  }
+
+  private writeNameSummaryCache(
+    key: string,
+    summary: SummarizeNamesResult,
+  ): void {
+    while (this.nameSummaryCache.size >= NAME_SUMMARY_CACHE_MAX_ENTRIES) {
+      const oldest = this.nameSummaryCache.keys().next().value;
+      if (!oldest) break;
+      this.nameSummaryCache.delete(oldest);
+    }
+    this.nameSummaryCache.set(key, {
+      expiresAt: Date.now() + NAME_SUMMARY_CACHE_TTL_MS,
+      summary,
+    });
+  }
+
+  /**
+   * 全部名字只发一次汇总请求；装配缺失 / 模型失败时退化为关键词粗略计数。
+   */
+  private async summarizeKeywordItems(
+    targetName: string,
+    names: readonly NameSummaryItem[],
+  ): Promise<SummarizeNamesResult> {
+    if (
+      !this.nameClassifierService ||
+      typeof this.nameClassifierService.summarizeNames !== 'function'
+    ) {
+      const keywordSummary = buildKeywordNameSummary(names);
+      return {
+        ...keywordSummary,
+        degraded: true,
+        notice:
+          'AI 汇总不可用（服务未装配），已按名字关键词粗略计数；生 / 熟 / 部位数字仅供参考，分类不可用。',
+      };
+    }
+
+    try {
+      return await this.nameClassifierService.summarizeNames({
+        targetName,
+        items: [...names],
+      });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `[agent-tool] 关键词汇总失败，按关键词降级 target=${targetName}: ${reason}`,
+      );
+      const keywordSummary = buildKeywordNameSummary(names);
+      return {
+        ...keywordSummary,
+        degraded: true,
+        notice:
+          'AI 汇总失败，已按名字关键词粗略计数；生 / 熟 / 部位数字仅供参考，分类不可用。',
+      };
+    }
+  }
+
+  /**
+   * 工具 3：读某条来源记录里的全部真实营养值（只读）。
    *
    * 只从 `normalizedNutrition` 搬值，不做换算、不推算、不补 0；
    * id 不存在 / 记录非 ACTIVE 都返回错误文本，不抛 500。
    */
-  private async getNutritionRecord(
+  private async getRecord(
     args: Record<string, unknown>,
   ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
-    const sourceRecordId = normalizeText(args.sourceRecordId);
+    const sourceRecordId =
+      normalizeText(args.id) || normalizeText(args.sourceRecordId);
     if (!sourceRecordId) {
       return this.error(
-        'getNutritionRecord 需要非空的 sourceRecordId。请先用 searchLocalNutrition 检索，再把候选的 sourceRecordId 传进来。',
+        'getRecord 需要非空的 id。请先用 searchNames 找到词条，再把 names[].id 传进来。',
       );
     }
 
@@ -941,6 +1946,7 @@ export class IngredientCreationToolsService {
       select: {
         id: true,
         status: true,
+        sourceType: true,
         foodName: true,
         foodNameEn: true,
         normalizedNutrition: true,
@@ -948,7 +1954,7 @@ export class IngredientCreationToolsService {
     });
     if (!record) {
       return this.error(
-        `来源记录 ${sourceRecordId} 不存在。请先用 searchLocalNutrition 检索，并把候选的 sourceRecordId 传进来。`,
+        `来源记录 ${sourceRecordId} 不存在。请先用 searchNames 找到词条，再把 names[].id 传进来。`,
       );
     }
     if (record.status !== 'ACTIVE') {
@@ -973,6 +1979,7 @@ export class IngredientCreationToolsService {
         record: {
           id: record.id,
           name: record.foodName,
+          sourceType: record.sourceType,
           state: derivePreparationStateFromSource(record),
           coverage,
           values,
@@ -993,85 +2000,40 @@ export class IngredientCreationToolsService {
   }
 
   /**
-   * 工具 3：写草稿里的一个营养字段。
+   * 工具 4：批量写草稿里的营养档案。
    *
-   * 校验顺序固定：下标 → 字段目录 → 单位 → 数值 → 来源记录 → 档案。
-   * 每一步失败都只返回错误文本，不抛 500 —— 模型可以照着改。
+   * 硬约束：
+   * - 每条都必须有 `sourceRecordId`，没有来源直接拒绝（不是警告）；
+   * - 字段 / 单位 / 数值逐条校验，失败项进 `failed`，成功项照常写入；
+   * - 只 patch 草稿，不碰正式表；没有提交 / 确认工具。
    */
-  private async updateNutritionField(
+  private async writeNutrition(
     draftId: string,
     args: Record<string, unknown>,
   ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
-    const profileIndex = readNonNegativeInteger(args.profileIndex);
-    if (profileIndex === null) {
-      return this.error('profileIndex 必须是从 0 开始的整数。');
+    const rawProfileIndex = args.profileIndex;
+    let explicitProfileIndex: number | null = null;
+    if (
+      rawProfileIndex !== undefined &&
+      rawProfileIndex !== null &&
+      rawProfileIndex !== ''
+    ) {
+      explicitProfileIndex = readNonNegativeInteger(rawProfileIndex);
+      if (explicitProfileIndex === null) {
+        return this.error(
+          'profileIndex 必须是从 0 开始的整数；不确定写哪份档案就省略它。',
+        );
+      }
     }
 
-    const validation = validateFieldArgs(args);
-    if (!validation.ok) {
-      return this.error(validation.error);
-    }
-
-    const draft = await this.draftService.get(draftId);
-    const write = await this.applyFieldWrite({
-      profiles: readProfiles(draft),
-      profileIndex,
-      field: validation.field,
-      fieldPath: validation.fieldPath,
-      value: validation.value,
-      sourceRecordId: validation.sourceRecordId,
-      sourceCache: new Map(),
-    });
-    if (!write.ok) {
-      return this.error(write.error);
-    }
-
-    await this.draftService.patch(draftId, draft.step, {
-      profiles: write.profiles,
-    });
-
-    const saved = write.profiles[profileIndex];
-    return {
-      ok: true,
-      content: okContent({
-        profileIndex,
-        preparationState: write.preparationState,
-        fieldPath: validation.fieldPath,
-        value: validation.value,
-        unit: validation.field.unit,
-        status: validation.sourceRecordId ? 'DIRECT' : 'MANUAL',
-        entryCount: saved.entries.length,
-      }),
-      progress: {
-        writtenFieldPaths: write.changed ? [validation.fieldPath] : [],
-        sourceRecordIds: [],
-      },
-    };
-  }
-
-  /**
-   * 工具 4：批量写同一份营养档案里的多个字段。
-   *
-   * 逐条复用 `updateNutritionField` 的校验；单条失败只进 `failed`，不影响其它条目。
-   * 全部成功条目在**一次 patch** 里落库（部分成功也保留已写入的），
-   * 避免 60 个字段打 60 次补丁。
-   */
-  private async updateNutritionFields(
-    draftId: string,
-    args: Record<string, unknown>,
-  ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
-    const profileIndex = readNonNegativeInteger(args.profileIndex);
-    if (profileIndex === null) {
-      return this.error('profileIndex 必须是从 0 开始的整数。');
-    }
     if (!Array.isArray(args.entries)) {
       return this.error(
-        `updateNutritionFields 需要 entries 数组（一次最多 ${MAX_BATCH_NUTRITION_FIELDS} 条）。`,
+        `writeNutrition 需要 entries 数组（一次最多 ${MAX_BATCH_NUTRITION_FIELDS} 条）。`,
       );
     }
     if (args.entries.length > MAX_BATCH_NUTRITION_FIELDS) {
       return this.error(
-        `updateNutritionFields 一次最多写入 ${MAX_BATCH_NUTRITION_FIELDS} 条，收到 ${args.entries.length} 条；请拆成多批，每批不超过 ${MAX_BATCH_NUTRITION_FIELDS} 条。`,
+        `writeNutrition 一次最多写入 ${MAX_BATCH_NUTRITION_FIELDS} 条，收到 ${args.entries.length} 条；请拆成多批。`,
       );
     }
     if (args.entries.length === 0) {
@@ -1080,6 +2042,21 @@ export class IngredientCreationToolsService {
 
     const draft = await this.draftService.get(draftId);
     let profiles = readProfiles(draft);
+
+    let profileIndex = explicitProfileIndex;
+    if (profileIndex === null) {
+      const firstRaw = args.entries[0];
+      const firstSourceId = isRecord(firstRaw)
+        ? normalizeText(firstRaw.sourceRecordId)
+        : '';
+      profileIndex = this.resolveProfileIndex(profiles, firstSourceId);
+      if (profileIndex === null) {
+        return this.error(
+          `草稿有 ${profiles.length} 份营养档案，无法自动判断写哪一份；请传 profileIndex（0..${profiles.length - 1}），或让 entries 里的 sourceRecordId 与其中一份档案一致。`,
+        );
+      }
+    }
+
     const failed: Array<{ fieldPath: string; error: string }> = [];
     const writtenFieldPaths: string[] = [];
     const sourceCache = new Map<string, SourceRecordRow | null>();
@@ -1133,9 +2110,42 @@ export class IngredientCreationToolsService {
       await this.draftService.patch(draftId, draft.step, { profiles });
     }
 
+    // 一条都没写进去：把逐条错误当成本次工具失败返回，模型必须按错误改；
+    // 只要写进去一部分，就按批量工具的语义返回 ok=true + failed 明细。
+    if (applied === 0 && failed.length > 0) {
+      const error = failed[0]?.error ?? '没有写入任何营养字段。';
+      return {
+        ok: false,
+        error,
+        content: JSON.stringify({
+          ok: false,
+          error,
+          profileIndex,
+          applied,
+          failed,
+        }),
+        progress: {
+          writtenFieldPaths,
+          sourceRecordIds: [],
+        },
+      };
+    }
+
     return {
       ok: true,
-      content: okContent({ applied, failed }),
+      content: okContent({
+        profileIndex,
+        applied,
+        failed,
+        ...(writtenFieldPaths.length > 0
+          ? { writtenFieldPaths }
+          : {}),
+        ...(failed.length > 0
+          ? {
+              hint: 'failed 里的条目没有写入；按每条的 error 改正后，只重试失败项即可。',
+            }
+          : {}),
+      }),
       progress: {
         writtenFieldPaths,
         sourceRecordIds: [],
@@ -1144,40 +2154,77 @@ export class IngredientCreationToolsService {
   }
 
   /**
+   * 省略 profileIndex 时的档案定位：零份 / 一份直接落，几份按来源 id 唯一匹配。
+   * 匹配不上就让模型显式传下标，避免把生数据写进熟档案。
+   */
+  private resolveProfileIndex(
+    profiles: readonly ProfileDraft[],
+    sourceRecordId: string,
+  ): number | null {
+    if (profiles.length === 0) {
+      return 0;
+    }
+    if (profiles.length === 1) {
+      return 0;
+    }
+    if (!sourceRecordId) {
+      return null;
+    }
+    const index = profiles.findIndex(
+      (profile) => profile.sourceRecordId === sourceRecordId,
+    );
+    return index >= 0 ? index : null;
+  }
+
+  /**
    * 工具 5：写草稿里的原料卡（名称 / 英文名 / 类别 / 基准单位 / 展示名 /
    * CFCT 分类 / 可食部）。
    *
-   * 三道闸门都在这里：
+   * 三道校验都在这里：
    * - 字段白名单：未知字段直接拒绝，不让 `brand` 之类混进草稿；
    * - 枚举 / 长度 / 范围：非法值返回错误文本，模型可以照着改；
-   * - 人工保护：`ingredient.manualFields` 里的字段一律跳过并说明，
-   *   AI 不能把审核人刚改过的判断悄悄改回去。
+   * - 人工保护：`ingredient.manualFields` 里的字段一律跳过并说明。
    */
-  private async updateIngredientFields(
+  private async writeIngredient(
     draftId: string,
     args: Record<string, unknown>,
   ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
-    const unsupported = Object.keys(args).filter(
+    const rawFields = args.fields;
+    if (!isRecord(rawFields)) {
+      return this.error(
+        `writeIngredient 需要 fields 对象，至少包含一个字段（${INGREDIENT_CARD_FIELDS.join('、')}）。`,
+      );
+    }
+
+    const unsupported = Object.keys(rawFields).filter(
       (key) => !INGREDIENT_CARD_FIELD_SET.has(key),
     );
     if (unsupported.length > 0) {
       return this.error(
-        `updateIngredientFields 不支持字段「${unsupported.join('、')}」。可写字段只有：${INGREDIENT_CARD_FIELDS.join('、')}。`,
+        `writeIngredient 不支持字段「${unsupported.join('、')}」。可写字段只有：${INGREDIENT_CARD_FIELDS.join('、')}。`,
       );
     }
 
-    const provided = INGREDIENT_CARD_FIELDS.filter((field) => field in args);
+    const provided = INGREDIENT_CARD_FIELDS.filter((field) => field in rawFields);
     if (provided.length === 0) {
       return this.error(
-        `updateIngredientFields 至少需要一个字段（${INGREDIENT_CARD_FIELDS.join('、')}）。`,
+        `writeIngredient 的 fields 至少需要一个字段（${INGREDIENT_CARD_FIELDS.join('、')}）。`,
       );
     }
 
     const draft = await this.draftService.get(draftId);
+    const stored = isRecord(draft.payload.ingredient)
+      ? draft.payload.ingredient
+      : {};
     const current = readIngredientEditorCard(draft);
+    // 草稿 patch 是浅合并（`payload = payload || $1::jsonb`）：只传 9 个编辑器
+    // 字段会把人工填的其余字段（brand / weightG / shelfLifeMonths …）整张卡
+    // 覆盖掉。先铺开草稿里的完整原料卡，再用规范化后的编辑器字段覆盖可见的
+    // 9 项；循环里只改 AI 本次写入的字段。
     const next: IngredientDraft = {
+      ...stored,
       ...current,
-      manualFields: [...(current.manualFields ?? [])],
+      manualFields: readStoredIngredientManualFields(stored),
     };
     const previousBaseUnit = current.baseUnit;
     const applied: IngredientCardField[] = [];
@@ -1194,7 +2241,7 @@ export class IngredientCreationToolsService {
         continue;
       }
 
-      const validation = validateIngredientField(field, args[field]);
+      const validation = validateIngredientField(field, rawFields[field]);
       if (!validation.ok) {
         return this.error(validation.error);
       }
@@ -1302,6 +2349,7 @@ export class IngredientCreationToolsService {
    * 单条字段写入的公共实现：来源记录校验 + 档案定位 + 生成新 profiles。
    *
    * 不落库，由调用方决定 patch 一次还是多次；失败只返回错误文本。
+   * 来源是必填的：这里没有「无来源也写」的分支。
    */
   private async applyFieldWrite(input: {
     profiles: ProfileDraft[];
@@ -1309,7 +2357,7 @@ export class IngredientCreationToolsService {
     field: NutritionFieldDefinition;
     fieldPath: string;
     value: number;
-    sourceRecordId: string | null;
+    sourceRecordId: string;
     sourceCache: Map<string, SourceRecordRow | null>;
   }): Promise<
     | {
@@ -1322,39 +2370,35 @@ export class IngredientCreationToolsService {
   > {
     const { field, fieldPath, value, profileIndex, profiles } = input;
 
-    let sourceRecord: SourceRecordRow | null = null;
-    if (input.sourceRecordId) {
-      sourceRecord = await this.lookupSourceRecord(
-        input.sourceRecordId,
-        input.sourceCache,
-      );
-      if (!sourceRecord) {
-        return {
-          ok: false,
-          error: `来源记录 ${input.sourceRecordId} 不存在。请先用 searchLocalNutrition 检索，并把候选的 sourceRecordId 传进来。`,
-        };
-      }
-      if (sourceRecord.status !== 'ACTIVE') {
-        return {
-          ok: false,
-          error: `来源记录 ${input.sourceRecordId} 已停用（${sourceRecord.status}），不能作为营养来源。`,
-        };
-      }
+    const sourceRecord = await this.lookupSourceRecord(
+      input.sourceRecordId,
+      input.sourceCache,
+    );
+    if (!sourceRecord) {
+      return {
+        ok: false,
+        error: `来源记录 ${input.sourceRecordId} 不存在。请先用 searchNames 找到词条、getRecord 读取真实数值，再把来源 id 传进来。`,
+      };
+    }
+    if (sourceRecord.status !== 'ACTIVE') {
+      return {
+        ok: false,
+        error: `来源记录 ${input.sourceRecordId} 已停用（${sourceRecord.status}），不能作为营养来源。`,
+      };
     }
 
     const entry: NutritionEvidenceEntry = {
       fieldPath,
       finalValue: value,
       unit: field.unit,
-      // 有来源 → DIRECT；没有来源 → MANUAL（架构文档第四节）。
-      status: input.sourceRecordId ? 'DIRECT' : 'MANUAL',
+      status: 'DIRECT',
       sourceRecordId: input.sourceRecordId,
       // 工具只收到目录单位下的值，不伪造来源原文值 / 原文单位。
       sourceValue: null,
       sourceUnit: null,
       formula: null,
       // 人没有参与这一步：标记 AI 起草，人工审核时再覆盖。
-      confirmedBy: input.sourceRecordId ? null : 'AI_AGENT',
+      confirmedBy: null,
       confirmedAt: new Date().toISOString(),
     };
 
@@ -1398,7 +2442,7 @@ export class IngredientCreationToolsService {
       };
     }
 
-    if (profileIndex === profiles.length && sourceRecord) {
+    if (profileIndex === profiles.length) {
       // 新草稿没有任何档案：第一次写入时按来源记录自动建一份（状态不猜）。
       const state = derivePreparationStateFromSource(sourceRecord);
       if (!state) {
@@ -1430,11 +2474,7 @@ export class IngredientCreationToolsService {
         : `草稿目前有 ${profiles.length} 份营养档案（可用下标 0..${profiles.length - 1}）`;
     return {
       ok: false,
-      error:
-        `profileIndex ${profileIndex} 超出范围：${range}` +
-        (input.sourceRecordId
-          ? '。'
-          : '；要新建一份档案，请把 profileIndex 设为当前档案数并带上 sourceRecordId。'),
+      error: `profileIndex ${profileIndex} 超出范围：${range}。`,
     };
   }
 
@@ -1461,8 +2501,8 @@ export class IngredientCreationToolsService {
     return record ?? null;
   }
 
-  /** 工具 5：跑现有终检服务，只返回三档摘要；服务报错也变成错误文本。 */
-  private async runCheck(
+  /** 工具 6：跑现有终检服务，只返回三档摘要；服务报错也变成错误文本。 */
+  private async selfCheck(
     draftId: string,
   ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
     try {
@@ -1493,8 +2533,220 @@ export class IngredientCreationToolsService {
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      return this.error(`runCheck 跑不了：${message}`);
+      return this.error(`selfCheck 跑不了：${message}`);
     }
+  }
+
+  /**
+   * 用一个选项名查本地营养库，判断它是不是真能选。
+   *
+   * 复用候选检索（limit=1），不自己写一套名字匹配；查询失败 / 超时返回
+   * `inLibrary: null`（未知），由调用方决定「不阻塞提问」。
+   */
+  private async checkAskOption(
+    option: string,
+    states: readonly PreparationState[],
+  ): Promise<{ inLibrary: boolean | null; matchedName: string | null }> {
+    let hadUnknown = false;
+    for (const state of states) {
+      const result = await settleWithin(
+        this.candidateService.findCandidates({ name: option, state }, 1),
+        ASK_OPTION_VERIFY_TIMEOUT_MS,
+      );
+      if (result === null) {
+        hadUnknown = true;
+        continue;
+      }
+      const hit = result.candidates[0];
+      if (hit) {
+        return { inLibrary: true, matchedName: hit.foodName };
+      }
+    }
+    return { inLibrary: hadUnknown ? null : false, matchedName: null };
+  }
+
+  /**
+   * 工具 7：问人。
+   *
+   * 校验通过就把问题写进草稿，交给起草循环收尾。
+   * 不再检查「有没有先收窄 / 有没有先列候选」：这是提示词与 skill 的事。
+   */
+  private async askUser(
+    draftId: string,
+    args: Record<string, unknown>,
+  ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
+    const rawQuestion = normalizeText(args.question);
+    if (!rawQuestion) {
+      return this.error('askUser 需要非空的 question。');
+    }
+    // 超长截断而不是报错：让模型重写一遍文案只会多花一轮调用。
+    const question = truncateAskCopy(rawQuestion, ASK_USER_QUESTION_MAX);
+
+    if (!Array.isArray(args.options)) {
+      return this.error('askUser 的 options 必须是 2–5 个字符串组成的数组。');
+    }
+    if (
+      args.options.length < ASK_USER_OPTION_MIN ||
+      args.options.length > ASK_USER_OPTION_MAX_COUNT
+    ) {
+      return this.error(
+        `askUser 的 options 必须是 2–${ASK_USER_PLAIN_OPTION_MAX_COUNT} 个选项（列候选时最多 5 条 + 最后一条「${CANDIDATE_GROUP_FALLBACK_OPTION}」，共 6 个），收到 ${args.options.length} 个。`,
+      );
+    }
+
+    const rawOptions: string[] = [];
+    for (const [index, raw] of args.options.entries()) {
+      const option = normalizeText(raw);
+      if (!option) {
+        return this.error(
+          `askUser 的 options 第 ${index + 1} 项必须是非空字符串。`,
+        );
+      }
+      rawOptions.push(option);
+    }
+    // 第 6 个只认兜底文案：普通问题仍然最多 5 个选项。
+    if (
+      rawOptions.length === ASK_USER_OPTION_MAX_COUNT &&
+      rawOptions[rawOptions.length - 1] !== CANDIDATE_GROUP_FALLBACK_OPTION
+    ) {
+      return this.error(
+        `askUser 的 options 必须是 2–${ASK_USER_PLAIN_OPTION_MAX_COUNT} 个选项；只有列候选时，第 6 个才允许是「${CANDIDATE_GROUP_FALLBACK_OPTION}」。收到 ${rawOptions.length} 个。`,
+      );
+    }
+
+    const draft = await this.draftService.get(draftId);
+    const targetState = resolveAskTargetState(draft);
+
+    // 选项可能带 AI 判断文案（`Yam, raw —— 相关：就是山药`）：查库要用拆出来
+    // 的候选名，不能拿整句去匹配。
+    const parsedOptions = rawOptions.map((label) => {
+      const parsed = parseAskOptionLabel(label);
+      return {
+        fullLabel: label,
+        label: truncateAskCopy(label, ASK_USER_OPTION_MAX),
+        candidateLabel: parsed.candidateLabel,
+      };
+    });
+
+    const optionChecks: PendingQuestionOption[] = await Promise.all(
+      parsedOptions.map(async (option) => {
+        // 自由输入兜底不是库里的具体词条：不查库，也不能被标成「未收录」。
+        if (option.fullLabel === CANDIDATE_GROUP_FALLBACK_OPTION) {
+          return {
+            label: option.label,
+            kind: 'FREE' as const,
+            inLibrary: null,
+            matchedName: null,
+            displayLabel: option.fullLabel,
+          };
+        }
+
+        const check = await this.checkAskOption(option.candidateLabel, [
+          targetState,
+        ]);
+        return {
+          label: option.label,
+          ...(option.candidateLabel !== option.fullLabel
+            ? { candidateLabel: option.candidateLabel }
+            : {}),
+          inLibrary: check.inLibrary,
+          matchedName: check.matchedName,
+          displayLabel:
+            check.inLibrary === false
+              ? `${option.fullLabel}${ASK_OPTION_MISSING_SUFFIX}`
+              : option.fullLabel,
+        };
+      }),
+    );
+
+    const pendingQuestion: PendingQuestion = {
+      question,
+      options: parsedOptions.map((option) => option.label),
+      optionChecks,
+      askedAt: new Date().toISOString(),
+    };
+
+    await this.draftService.patch(draftId, draft.step, { pendingQuestion });
+
+    return {
+      ok: true,
+      content: okContent({
+        question: pendingQuestion.question,
+        options: pendingQuestion.options,
+        optionChecks: pendingQuestion.optionChecks,
+        askedAt: pendingQuestion.askedAt,
+        awaitingUser: true,
+      }),
+      pendingQuestion,
+    };
+  }
+
+  /**
+   * 工具：提交检索方案并结束本轮。
+   *
+   * 只写草稿里的方案（待确认），不写原料卡、不写营养；用户确认走另一个接口。
+   */
+  private async proposeSearchPlan(
+    draftId: string,
+    args: Record<string, unknown>,
+  ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
+    const built = buildPendingSearchPlan(args);
+    if (!built.ok) {
+      return this.error(built.error);
+    }
+
+    // 想指定的来源记录必须真实存在，否则确认后写营养会被这条 id 卡住。
+    if (built.plan.chosenRecordId) {
+      const record = await this.prisma.nutritionSourceRecord.findUnique({
+        where: { id: built.plan.chosenRecordId },
+        select: { id: true, status: true },
+      });
+      if (!record || record.status !== 'ACTIVE') {
+        return this.error(
+          `来源记录 ${built.plan.chosenRecordId} 不存在或已停用；先 getRecord 确认后再写进方案。`,
+        );
+      }
+    }
+
+    const draft = await this.draftService.get(draftId);
+    await this.draftService.patch(draftId, draft.step, {
+      searchPlan: built.plan,
+    });
+
+    return {
+      ok: true,
+      content: okContent({
+        searchPlan: built.plan,
+        awaitingApproval: true,
+      }),
+      pendingPlan: built.plan,
+    };
+  }
+
+  /**
+   * 工具 8：结束本轮。
+   *
+   * 不写草稿、不提交；只给循环一个明确的停止信号和可选结论。
+   */
+  private finish(
+    args: Record<string, unknown>,
+  ): Omit<AgentToolExecution, 'durationMs'> {
+    const rawSummary = normalizeText(args.summary);
+    const reply = rawSummary ? truncate(rawSummary, FINISH_REPLY_MAX) : null;
+
+    return {
+      ok: true,
+      content: okContent({
+        finished: true,
+        ...(reply ? { reply } : {}),
+        hint: '本轮已结束；不要在同一轮里继续调用其它工具。',
+      }),
+      progress: {
+        writtenFieldPaths: [],
+        sourceRecordIds: [],
+      },
+      finished: { reply },
+    };
   }
 
   private error(message: string): Omit<AgentToolExecution, 'durationMs'> {

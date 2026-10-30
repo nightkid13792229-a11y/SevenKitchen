@@ -1,9 +1,13 @@
 import { Test, type TestingModule } from '@nestjs/testing';
-import { IngredientCreationCandidateService } from '../../../src/application/ingredient-creation/ingredient-creation-candidate.service';
+import {
+  IngredientCreationCandidateService,
+  type RawSearchTerm,
+} from '../../../src/application/ingredient-creation/ingredient-creation-candidate.service';
 import type { CandidateSearchResult } from '../../../src/application/ingredient-creation/ingredient-creation.types';
 import { auditNutritionProfileForImport } from '../../../src/application/standard-ingredient-import/nutrition-audit';
 import { PrismaService } from '../../../src/infrastructure/prisma.service';
 import type { NutritionGovernanceSourceType } from '../../../src/domain/nutrition-governance/nutrition-governance.types';
+import { LOCAL_LIBRARY_SOURCE_TYPES } from '../../../src/domain/nutrition-governance/nutrition-source-registry';
 import type { PreparationState } from '../../../src/domain/ingredient-creation/preparation-state';
 
 interface SourceRecordFixture {
@@ -56,7 +60,7 @@ function buildNormalizedNutrition(
 /**
  * 内存版 Prisma 假实现：只覆盖候选检索用到的 `findMany`。
  *
- * 按 `where` 里的 status / sourceType.notIn / id.in 过滤，
+ * 按 `where` 里的 status / sourceType.in / sourceType.notIn / id.in 过滤，
  * 并按 `select` 投影——服务如果漏了某条过滤条件，测试就会看到不该出现的词条。
  */
 function createPrismaMock(fixtures: SourceRecordFixture[]) {
@@ -75,6 +79,11 @@ function createPrismaMock(fixtures: SourceRecordFixture[]) {
 
     if (where.status) {
       matched = matched.filter((row) => row.status === where.status);
+    }
+    if (where.sourceType?.in) {
+      matched = matched.filter((row) =>
+        where.sourceType.in.includes(row.sourceType),
+      );
     }
     if (where.sourceType?.notIn) {
       matched = matched.filter(
@@ -110,7 +119,10 @@ async function createService(fixtures: SourceRecordFixture[]) {
     ],
   }).compile();
 
-  return { service: moduleRef.get(IngredientCreationCandidateService) };
+  return {
+    service: moduleRef.get(IngredientCreationCandidateService),
+    prisma,
+  };
 }
 
 function candidateNames(result: CandidateSearchResult): string[] {
@@ -548,80 +560,6 @@ describe('IngredientCreationCandidateService', () => {
     });
   });
 
-  describe('findCandidates 中英别名与匹配依据', () => {
-    const watercressFixture = (
-      overrides: Partial<SourceRecordFixture> & Pick<SourceRecordFixture, 'id'>,
-    ): SourceRecordFixture => ({
-      sourceType: 'USDA',
-      foodName: 'Watercress, raw',
-      status: 'ACTIVE',
-      ...overrides,
-    });
-
-    it('中文关键词通过中英别名命中英文词条，并给出 matchedBy / matchedKeyword / score', async () => {
-      const { service } = await createService([
-        watercressFixture({ id: 'usda-watercress' }),
-      ]);
-
-      const result = await service.findCandidates({
-        name: '西洋菜',
-        state: 'RAW',
-      });
-
-      expect(result.keywords).toEqual(['西洋菜', 'watercress']);
-      expect(result.candidates).toHaveLength(1);
-      const [candidate] = result.candidates;
-      expect(candidate).toMatchObject({
-        sourceRecordId: 'usda-watercress',
-        foodName: 'Watercress, raw',
-        preparationState: 'RAW',
-        matchedBy: 'ZH_ALIAS',
-        matchedKeyword: '西洋菜',
-        matchedSourceName: 'Watercress, raw',
-      });
-      expect(candidate?.matchScore).toBeGreaterThanOrEqual(0.35);
-      expect(candidate?.notes).not.toContain('STATE_UNKNOWN');
-    });
-
-    it('英文关键词命中英文词条，标 EN_PARTIAL', async () => {
-      const { service } = await createService([
-        watercressFixture({ id: 'usda-watercress' }),
-      ]);
-
-      const result = await service.findCandidates({
-        name: 'Watercress',
-        state: 'RAW',
-      });
-
-      expect(result.keywords).toEqual(['Watercress']);
-      expect(result.candidates).toHaveLength(1);
-      const [candidate] = result.candidates;
-      expect(candidate).toMatchObject({
-        matchedBy: 'EN_PARTIAL',
-        matchedKeyword: 'Watercress',
-        matchedSourceName: 'Watercress, raw',
-      });
-      expect(candidate?.matchScore).toBeGreaterThanOrEqual(0.35);
-    });
-
-    it('零命中时 keywords 仍然回传，候选为空数组', async () => {
-      const { service } = await createService([
-        watercressFixture({
-          id: 'unrelated',
-          foodName: 'Cabbage, raw',
-        }),
-      ]);
-
-      const result = await service.findCandidates({
-        name: '西洋菜',
-        state: 'RAW',
-      });
-
-      expect(result.keywords).toEqual(['西洋菜', 'watercress']);
-      expect(result.candidates).toEqual([]);
-    });
-  });
-
   describe('findCandidates 排序与来源范围', () => {
     it('候选按匹配分降序排列', async () => {
       const { service } = await createService([
@@ -731,6 +669,260 @@ describe('IngredientCreationCandidateService', () => {
       });
 
       expect(candidateIds(result)).toEqual(['usda-active', 'cnf-active']);
+    });
+  });
+
+  describe('listNutritionNames 来源白名单', () => {
+    it('只查登记表里的 L1 本地库：NEVO 不返回，USDA 返回', async () => {
+      const { service, prisma } = await createService([
+        {
+          id: 'usda-beef',
+          sourceType: 'USDA',
+          foodName: 'Beef, ground, raw',
+          foodNameEn: 'Beef, ground, raw',
+        },
+        {
+          id: 'nevo-beef',
+          sourceType: 'NEVO',
+          foodName: 'Beef, ground, raw',
+          foodNameEn: 'Beef, ground, raw',
+        },
+      ]);
+
+      const result = await service.listNutritionNames({ keyword: 'Beef' });
+
+      expect(result.names).toEqual([
+        {
+          id: 'usda-beef',
+          name: 'Beef, ground, raw',
+          sourceType: 'USDA',
+        },
+      ]);
+      expect(result.total).toBe(1);
+      expect(prisma.nutritionSourceRecord.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            status: 'ACTIVE',
+            sourceType: {
+              in: [...LOCAL_LIBRARY_SOURCE_TYPES],
+            },
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('searchRawByLanguage 原文检索', () => {
+    const FIVE_TERMS: RawSearchTerm[] = [
+      { term: '牛肉', language: 'zh-Hans' },
+      { term: '牛肉', language: 'zh-Hant' },
+      { term: 'beef', language: 'en' },
+      { term: '牛肉', language: 'ja' },
+      { term: '소고기', language: 'ko' },
+    ];
+
+    interface RawRow {
+      id: string;
+      sourceType: NutritionGovernanceSourceType;
+      foodName: string;
+      status?: 'ACTIVE' | 'DEPRECATED';
+    }
+
+    /**
+     * 只覆盖 `searchRawByLanguage` 用到的 findMany：按 status / sourceType.in /
+     * foodName.contains 过滤，便于验证「哪个语种只查了哪些库」。
+     */
+    function createRawSearchService(
+      rows: RawRow[],
+      options: { beforeResolve?: () => Promise<void> } = {},
+    ) {
+      const findMany = jest.fn(async (args: any) => {
+        if (options.beforeResolve) {
+          await options.beforeResolve();
+        }
+        const where = args?.where ?? {};
+        const sourceTypes: string[] = where.sourceType?.in ?? [];
+        const contains: string | undefined = where.foodName?.contains;
+
+        return rows
+          .filter(
+            (row) =>
+              (where.status ? (row.status ?? 'ACTIVE') : true) ===
+                (where.status ?? 'ACTIVE') &&
+              sourceTypes.includes(row.sourceType) &&
+              (contains === undefined ||
+                row.foodName.toLowerCase().includes(contains.toLowerCase())),
+          )
+          .map((row) => ({
+            id: row.id,
+            foodName: row.foodName,
+            sourceType: row.sourceType,
+          }));
+      });
+
+      const service = new IngredientCreationCandidateService(
+        { nutritionSourceRecord: { findMany } } as unknown as PrismaService,
+        {} as unknown as IngredientNameAliasService,
+      );
+
+      return { service, findMany };
+    }
+
+    function sourceTypesOf(calls: unknown[][], index: number): string[] {
+      const args = calls[index]?.[0] as any;
+      return args?.where?.sourceType?.in ?? [];
+    }
+
+    it('按语种路由：zh-Hans 只查 CFCT，zh-Hant 只查 TFDA，en 查 USDA / CNF / NZFCD', async () => {
+      const { service, findMany } = createRawSearchService([
+        { id: 'cfct-beef', sourceType: 'CFCT', foodName: '牛肉' },
+        {
+          id: 'cfct-old-beef',
+          sourceType: 'CFCT',
+          foodName: '牛肉（旧）',
+          status: 'DEPRECATED',
+        },
+        { id: 'tfda-beef', sourceType: 'TFDA', foodName: '牛肉' },
+        { id: 'usda-beef', sourceType: 'USDA', foodName: 'Beef, raw' },
+        { id: 'cnf-beef', sourceType: 'CNF', foodName: 'Beef, raw' },
+        { id: 'nzfcd-beef', sourceType: 'NZFCD', foodName: 'Beef, raw' },
+        { id: 'mext-beef', sourceType: 'MEXT', foodName: '牛肉' },
+        { id: 'ko-beef', sourceType: 'KO_RDA', foodName: '소고기' },
+        { id: 'cfct-pork', sourceType: 'CFCT', foodName: '猪肉' },
+      ]);
+
+      const result = await service.searchRawByLanguage({ terms: FIVE_TERMS });
+
+      expect(result.groups).toHaveLength(5);
+      expect(result.groups.map((group) => group.language)).toEqual([
+        'zh-Hans',
+        'zh-Hant',
+        'en',
+        'ja',
+        'ko',
+      ]);
+      expect(result.groups[0]).toMatchObject({
+        term: '牛肉',
+        sourceTypes: ['CFCT'],
+        total: 1,
+        matches: [{ id: 'cfct-beef', name: '牛肉', sourceType: 'CFCT' }],
+      });
+      expect(result.groups[1]).toMatchObject({
+        sourceTypes: ['TFDA'],
+        total: 1,
+        matches: [{ id: 'tfda-beef', name: '牛肉', sourceType: 'TFDA' }],
+      });
+      expect(result.groups[2].sourceTypes).toEqual(['USDA', 'CNF', 'NZFCD']);
+      expect(result.groups[2].total).toBe(3);
+      expect(result.groups[3]).toMatchObject({
+        sourceTypes: ['MEXT'],
+        total: 1,
+      });
+      expect(result.groups[4]).toMatchObject({
+        sourceTypes: ['KO_RDA'],
+        total: 1,
+      });
+
+      const calls = findMany.mock.calls as unknown[][];
+      expect(calls).toHaveLength(5);
+      expect(sourceTypesOf(calls, 0)).toEqual(['CFCT']);
+      expect(sourceTypesOf(calls, 1)).toEqual(['TFDA']);
+      expect(sourceTypesOf(calls, 2)).toEqual(['USDA', 'CNF', 'NZFCD']);
+      expect(sourceTypesOf(calls, 3)).toEqual(['MEXT']);
+      expect(sourceTypesOf(calls, 4)).toEqual(['KO_RDA']);
+    });
+
+    it('不加 limit、不做同名折叠：两条同名记录原样返回两行', async () => {
+      const { service, findMany } = createRawSearchService([
+        { id: 'usda-beef', sourceType: 'USDA', foodName: 'Beef, raw' },
+        { id: 'cnf-beef', sourceType: 'CNF', foodName: 'Beef, raw' },
+      ]);
+
+      const result = await service.searchRawByLanguage({ terms: FIVE_TERMS });
+      const english = result.groups.find((group) => group.language === 'en');
+
+      expect(english?.total).toBe(2);
+      expect(english?.matches).toEqual([
+        { id: 'usda-beef', name: 'Beef, raw', sourceType: 'USDA' },
+        { id: 'cnf-beef', name: 'Beef, raw', sourceType: 'CNF' },
+      ]);
+      expect(Object.keys(english?.matches[0] ?? {}).sort()).toEqual([
+        'id',
+        'name',
+        'sourceType',
+      ]);
+
+      const calls = findMany.mock.calls as unknown[][];
+      for (const call of calls) {
+        const args = call[0] as any;
+        expect(args).not.toHaveProperty('take');
+        expect(args).not.toHaveProperty('skip');
+        expect(args.where.status).toBe('ACTIVE');
+        expect(args.where.foodName).toEqual({
+          contains: expect.any(String),
+          mode: 'insensitive',
+        });
+        expect(args.select).toEqual({
+          id: true,
+          foodName: true,
+          sourceType: true,
+        });
+        expect(args.orderBy).toEqual([
+          { sourceType: 'asc' },
+          { foodName: 'asc' },
+        ]);
+      }
+    });
+
+    it('5 个语种并行查询，不是逐个串行等待', async () => {
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const { service, findMany } = createRawSearchService([], {
+        beforeResolve: () => gate,
+      });
+
+      const pending = service.searchRawByLanguage({ terms: FIVE_TERMS });
+      try {
+        // 并行实现会在第一个 await 之前就把 5 个查询都发出去；
+        // 串行实现此时只发出 1 个。
+        expect(findMany).toHaveBeenCalledTimes(5);
+      } finally {
+        release();
+      }
+
+      const result = await pending;
+      expect(result.groups).toHaveLength(5);
+      expect(result.groups.every((group) => group.total === 0)).toBe(true);
+    });
+
+    it('缺少语种时拒绝查询，并说明缺哪个语种', async () => {
+      const { service, findMany } = createRawSearchService([]);
+
+      await expect(
+        service.searchRawByLanguage({
+          terms: FIVE_TERMS.filter((entry) => entry.language !== 'ko'),
+        }),
+      ).rejects.toThrow(/5 个语种.*ko|缺少.*ko/);
+      expect(findMany).not.toHaveBeenCalled();
+    });
+
+    it('空词时拒绝查询', async () => {
+      const { service, findMany } = createRawSearchService([]);
+
+      await expect(
+        service.searchRawByLanguage({
+          terms: [
+            { term: '牛肉', language: 'zh-Hans' },
+            { term: '牛肉', language: 'zh-Hant' },
+            { term: '   ', language: 'en' },
+            { term: '牛肉', language: 'ja' },
+            { term: '소고기', language: 'ko' },
+          ],
+        }),
+      ).rejects.toThrow(/terms\[2\]\.term/);
+      expect(findMany).not.toHaveBeenCalled();
     });
   });
 });

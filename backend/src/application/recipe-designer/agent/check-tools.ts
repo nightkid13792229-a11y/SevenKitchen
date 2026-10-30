@@ -1,7 +1,7 @@
 /**
  * 检查工具（P0a Task 4）。
  *
- * 四个工具都只回答“现在能不能交付”，不改草稿：
+ * 四个工具只提供交付前参考信息，都不改草稿、也不阻断本轮运行：
  * `run_assessment` / `check_coverage` / `check_catalog_conflicts` / `check_ready`。
  *
  * 依据 `docs/superpowers/specs/2026-10-24-ai-recipe-design-agent-design.md`
@@ -9,22 +9,26 @@
  *
  * - 评估必须跑在**当前内容版本**上；`check_ready` 只看 `draft.lastAssessment`，
  *   不重新跑评估，版本对不上就算“没准备好”。
- * - 七类允许缺，但没确认的缺类会 BLOCKED；确认过只算警告。
+ * - 11 类选料检查清单不是门禁：基础类缺只 WARN，建议类缺只提示，都不阻断交付。
  * - 20% 余量是工作标准不是门禁：不足只 WARN，但必须逐条列出来。
- * - 目录对比只给证据：主蛋白重合 HARD，内脏/碳水/蔬菜/菌藻/坚果/水果/乳/蛋/豆重合 SOFT；
+ * - 目录对比只给证据：主蛋白（畜/禽/水产）重合 HARD，内脏/碳水/蔬菜/菌藻/坚果/水果/乳/蛋/豆重合 SOFT；
  *   油脂/调味/补剂不比。
  *
  * 入参来自模型（运行时会绕过 TypeScript 类型），所以所有字段先做 `typeof`
  * 守卫：非法值返回 `INVALID_ARGUMENT`，绝不让 `TypeError` 冒出去。
  */
 import {
-  REQUIRED_FOOD_CATEGORIES,
+  BASE_FOOD_CATEGORIES,
+  CHECKLIST_FOOD_CATEGORIES,
+  SUGGESTED_FOOD_CATEGORIES,
   summarizeFoodCategoryCoverage,
 } from '../../../domain/recipe-designer/food-category-map';
+import { isPreparationRequiredFoodCategory } from '../../../domain/recipe-designer/preparation-field.constants';
 import type {
+  BaseFoodCategory,
   FoodCategory,
   OptionalFoodCategory,
-  RequiredFoodCategory,
+  SuggestedFoodCategory,
 } from '../../../domain/recipe-designer/food-category-map';
 import {
   RecipeAgentPortError,
@@ -43,8 +47,8 @@ export const MARGIN_RATIO = 0.2;
 /** 低于这个百分数就算“余量不足”。 */
 const MARGIN_PERCENT = MARGIN_RATIO * 100;
 
-/** 目录对比里算硬撞的类别（主蛋白必须不同）。 */
-const HARD_CATEGORIES: readonly FoodCategory[] = ['PROTEIN'];
+/** 目录对比里算硬撞的类别（主蛋白必须不同；水产也算主蛋白）。 */
+const HARD_CATEGORIES: readonly FoodCategory[] = ['PROTEIN', 'AQUATIC'];
 
 /** 目录对比里算软撞的类别；油脂/调味/补剂不参与。 */
 const SOFT_CATEGORIES: readonly FoodCategory[] = [
@@ -67,6 +71,7 @@ const COMPARED_CATEGORIES = new Set<FoodCategory>([
 const CATEGORY_LABELS: Record<FoodCategory, string> = {
   PROTEIN: '蛋白',
   ORGAN: '内脏',
+  AQUATIC: '水产',
   CARB: '碳水',
   VEGETABLE: '蔬菜',
   MUSHROOM: '菌藻',
@@ -87,18 +92,23 @@ const READY_CHECK_LABELS = {
   ASSESSMENT_FRESH: '评估版本',
   ASSESSMENT_COMPLIANT: '评估达标',
   MARGIN: '指标余量',
-  COVERAGE: '七类覆盖',
+  COVERAGE: '分类检查',
   COPY: '文案',
   PRODUCTION_STEPS: '制作步骤',
-  PREPARATION: '预处理',
+  PREPARATION: '部位 / 状态 / 预处理',
   TAGS: '健康标签',
+  ALLERGENS: '过敏原',
 } as const;
 
-/** `check_coverage` 的结果；`missing` 已排除人确认过的缺类。 */
+/** `check_coverage` 的结果；`missing` 是真实的基础类缺口，不受确认记录影响。 */
 export interface AgentCoverageResult {
-  covered: RequiredFoodCategory[];
-  missing: RequiredFoodCategory[];
-  confirmedOmissions: RequiredFoodCategory[];
+  covered: BaseFoodCategory[];
+  missing: BaseFoodCategory[];
+  suggestedCovered: SuggestedFoodCategory[];
+  suggestedMissing: SuggestedFoodCategory[];
+  /** @deprecated 缺类确认已不参与门禁，仅回显后端审批状态以兼容旧调用方。 */
+  confirmedOmissions: BaseFoodCategory[];
+  /** 实际只会出现 DAIRY / SEASONING。 */
   optionalPresent: OptionalFoodCategory[];
   supplementCount: number;
   unclassifiedCount: number;
@@ -127,7 +137,8 @@ export interface AgentReadyResult {
 }
 
 export interface CheckCoverageArgs {
-  confirmedOmissions?: RequiredFoodCategory[];
+  /** @deprecated 仅用于兼容旧调用方，不再过滤缺类。 */
+  confirmedOmissions?: BaseFoodCategory[];
 }
 
 export interface CheckCatalogConflictsArgs {
@@ -135,7 +146,8 @@ export interface CheckCatalogConflictsArgs {
 }
 
 export interface CheckReadyArgs {
-  confirmedOmissions?: RequiredFoodCategory[];
+  /** @deprecated 缺类确认已不参与门禁，传了也会被忽略。 */
+  confirmedOmissions?: BaseFoodCategory[];
   exceptionApproved?: boolean;
 }
 
@@ -184,8 +196,8 @@ function asRawArgs(args: unknown): RawToolArgs | null {
   return args as RawToolArgs;
 }
 
-function isRequiredFoodCategory(value: string): value is RequiredFoodCategory {
-  return (REQUIRED_FOOD_CATEGORIES as readonly string[]).includes(value);
+function isBaseFoodCategory(value: string): value is BaseFoodCategory {
+  return (BASE_FOOD_CATEGORIES as readonly string[]).includes(value);
 }
 
 function isNonEmptyString(value: unknown): value is string {
@@ -200,83 +212,126 @@ function formatPercent(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
+/** 余量方向后缀；方向未知时不加，避免把“无法判断”说成某一侧。 */
+function formatMarginSide(entry: AgentAssessmentEntry): string {
+  if (entry.marginSide === 'LOWER') return '（距下限）';
+  if (entry.marginSide === 'UPPER') return '（距上限）';
+  return '';
+}
+
+type MarginSide = 'LOWER' | 'UPPER';
+
+interface MarginCandidate {
+  side: MarginSide;
+  margin: number;
+}
+
+/**
+ * 列出某条指标所有可用的余量（未四舍五入）。
+ *
+ * 下限型：(value - min) / min × 100；上限型：(max - value) / max × 100。
+ * 没有可用限值、或分母为 0 时返回空数组。
+ */
+function listMarginCandidates(
+  entry: Pick<AgentAssessmentEntry, 'value' | 'min' | 'max'>,
+): MarginCandidate[] {
+  const { value, min, max } = entry;
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return [];
+  }
+
+  const candidates: MarginCandidate[] = [];
+  if (typeof min === 'number' && Number.isFinite(min) && min !== 0) {
+    candidates.push({ side: 'LOWER', margin: ((value - min) / min) * 100 });
+  }
+  if (typeof max === 'number' && Number.isFinite(max) && max !== 0) {
+    candidates.push({ side: 'UPPER', margin: ((max - value) / max) * 100 });
+  }
+  return candidates;
+}
+
+/** 取更小的余量；相等时保留下限，保证方向稳定。 */
+function pickSmallestMargin(
+  candidates: readonly MarginCandidate[],
+): MarginCandidate | null {
+  if (candidates.length === 0) {
+    return null;
+  }
+  return candidates.reduce((best, candidate) =>
+    candidate.margin < best.margin ? candidate : best,
+  );
+}
+
 /**
  * 计算某条指标离最近一边限值的余量百分比。
  *
- * 下限型：(value - min) / min × 100；上限型：(max - value) / max × 100。
- * 两边都有取较小值；没有可用限值、或分母为 0 时返回 null。
  * 结果保留 1 位小数。
  */
 export function computeMarginPercent(
   entry: Pick<AgentAssessmentEntry, 'value' | 'min' | 'max'>,
 ): number | null {
-  const { value, min, max } = entry;
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
+  const smallest = pickSmallestMargin(listMarginCandidates(entry));
+  if (!smallest) {
     return null;
   }
 
-  const margins: number[] = [];
-  if (typeof min === 'number' && Number.isFinite(min) && min !== 0) {
-    margins.push(((value - min) / min) * 100);
-  }
-  if (typeof max === 'number' && Number.isFinite(max) && max !== 0) {
-    margins.push(((max - value) / max) * 100);
-  }
-  if (margins.length === 0) {
-    return null;
-  }
-
-  const rounded = Math.round(Math.min(...margins) * 10) / 10;
+  const rounded = Math.round(smallest.margin * 10) / 10;
   // 避免 -0 这种对模型无意义的输出。
   return rounded === 0 ? 0 : rounded;
 }
 
+/** 余量更近的一边；缺值或缺限值时无法判断，返回 null。 */
+export function computeMarginSide(
+  entry: Pick<AgentAssessmentEntry, 'value' | 'min' | 'max'>,
+): MarginSide | null {
+  return pickSmallestMargin(listMarginCandidates(entry))?.side ?? null;
+}
+
 /**
- * 补齐评估里缺失的余量。
+ * 补齐评估里缺失的余量，并给每条指标标出更近的一边。
  *
  * P0b 的评估适配器可能只给 `value/min/max` 而不填 `marginPercent`；这里对
  * `marginPercent == null` 的条目用 `computeMarginPercent` 补算，算不出来就保持
  * null，让 `check_ready` 如实说“无法计算余量”，而不是假装达标。
+ * `marginSide` 与 `marginPercent` 是否已存在无关，永远按 value/min/max 重算：
+ * 警告文案要靠它说清“距下限”还是“距上限”。
  */
 export function withComputedMargins(
   view: AgentAssessmentView,
 ): AgentAssessmentView {
   return {
     ...view,
-    entries: view.entries.map((entry) => {
-      if (
+    entries: view.entries.map((entry) => ({
+      ...entry,
+      marginPercent:
         typeof entry.marginPercent === 'number' &&
         Number.isFinite(entry.marginPercent)
-      ) {
-        return entry;
-      }
-      const computed = computeMarginPercent(entry);
-      return computed === null ? entry : { ...entry, marginPercent: computed };
-    }),
+          ? entry.marginPercent
+          : computeMarginPercent(entry),
+      marginSide: computeMarginSide(entry),
+    })),
   };
 }
 
-/** 解析人确认过的缺类：必须是七类之一，去空白、去重。 */
-function readConfirmedOmissions(
-  value: unknown,
-): Parsed<RequiredFoodCategory[]> {
+/** 解析兼容用的缺类确认：必须是基础类别之一，去空白、去重。 */
+function readConfirmedOmissions(value: unknown): Parsed<BaseFoodCategory[]> {
   if (value === undefined) {
     return { ok: true, value: [] };
   }
   if (!Array.isArray(value)) {
     return {
       ok: false,
-      message: `confirmedOmissions 必须是数组，只能确认七类：${REQUIRED_FOOD_CATEGORIES.join('、')}。`,
+      message: `confirmedOmissions 必须是数组，只能确认基础类别：${BASE_FOOD_CATEGORIES.join('、')}。`,
     };
   }
 
-  const seen = new Set<RequiredFoodCategory>();
-  const omissions: RequiredFoodCategory[] = [];
+  const seen = new Set<BaseFoodCategory>();
+  const omissions: BaseFoodCategory[] = [];
   for (const entry of value) {
     if (typeof entry !== 'string') {
       return {
         ok: false,
-        message: `confirmedOmissions 必须是七类类别的字符串数组：${REQUIRED_FOOD_CATEGORIES.join('、')}。`,
+        message: `confirmedOmissions 必须是基础类别的字符串数组：${BASE_FOOD_CATEGORIES.join('、')}。`,
       };
     }
     const trimmed = entry.trim();
@@ -286,10 +341,10 @@ function readConfirmedOmissions(
         message: 'confirmedOmissions 不能包含空白类别。',
       };
     }
-    if (!isRequiredFoodCategory(trimmed)) {
+    if (!isBaseFoodCategory(trimmed)) {
       return {
         ok: false,
-        message: `confirmedOmissions 里的「${trimmed}」不是七类必需类别；只能确认：${REQUIRED_FOOD_CATEGORIES.join('、')}。`,
+        message: `confirmedOmissions 里的「${trimmed}」不是基础类别；只能确认：${BASE_FOOD_CATEGORIES.join('、')}。`,
       };
     }
     if (seen.has(trimmed)) continue;
@@ -299,13 +354,13 @@ function readConfirmedOmissions(
   return { ok: true, value: omissions };
 }
 
-/** 克数最大的 PROTEIN 项名；没有主蛋白时返回 null。 */
+/** 克数最大的主蛋白（PROTEIN / AQUATIC）项名；没有主蛋白时返回 null。 */
 function findLargestProteinName(
   items: readonly AgentDraftItem[],
 ): string | null {
   let selected: AgentDraftItem | null = null;
   for (const item of items) {
-    if (item.category !== 'PROTEIN') continue;
+    if (item.category !== 'PROTEIN' && item.category !== 'AQUATIC') continue;
     if (selected === null || item.weightG > selected.weightG) {
       selected = item;
     }
@@ -323,7 +378,16 @@ function summarizeAssessment(view: AgentAssessmentView): string {
   if (view.deficient > 0) parts.push(`${view.deficient} 项不足`);
   if (view.excess > 0) parts.push(`${view.excess} 项超标`);
   if (view.missingData > 0) parts.push(`${view.missingData} 项缺数据`);
-  return `${parts.join('，')}。`;
+  const text = `${parts.join('，')}。`;
+  const allergenWarnings = view.allergenWarnings ?? [];
+  if (allergenWarnings.length === 0) return text;
+
+  const allergens = Array.from(
+    new Set(
+      allergenWarnings.map((warning) => warning.allergen).filter(Boolean),
+    ),
+  ).join('、');
+  return `${text} 过敏提示 ${allergenWarnings.length} 条：${allergens}；必须逐条告知用户，并替换原料或请人确认。`;
 }
 
 function buildReadyCheck(
@@ -342,7 +406,7 @@ function summarizeReady(checks: readonly AgentReadyCheck[]): string {
     return `还不能交付：${failCount} 项不通过${warnings}。`;
   }
   if (warnCount > 0) {
-    return `可以交付，但有 ${warnCount} 项警告，需要人在交付确认卡上确认。`;
+    return `可以交付，但有 ${warnCount} 项警告，请在最终总结里说明并请人确认。`;
   }
   return '检查全部通过，可以交付。';
 }
@@ -388,34 +452,40 @@ export function createCheckTools(deps: CheckToolDeps): RecipeAgentCheckTools {
 
       const draft = await port.getDraft(draftId);
       const coverage = summarizeFoodCategoryCoverage(draft.items);
-      const confirmedSet = new Set(omissions.value);
-      const missing = coverage.missing.filter(
-        (category) => !confirmedSet.has(category),
-      );
-      // 摘要只说“确实缺 + 已确认”的交集；确认一个已经覆盖的类别不该被说成缺类。
-      const confirmedMissing = coverage.missing.filter((category) =>
-        confirmedSet.has(category),
-      );
 
       const result: AgentCoverageResult = {
         covered: coverage.covered,
-        missing,
+        // 真实缺口照实报；缺类确认只回显，不再过滤。
+        missing: coverage.missing,
+        suggestedCovered: coverage.suggestedCovered,
+        suggestedMissing: coverage.suggestedMissing,
         confirmedOmissions: omissions.value,
         optionalPresent: coverage.optionalPresent,
         supplementCount: coverage.supplementCount,
         unclassifiedCount: coverage.unclassifiedCount,
       };
 
+      const totalCovered =
+        coverage.covered.length + coverage.suggestedCovered.length;
       const parts = [
-        `七类覆盖 ${coverage.covered.length}/${REQUIRED_FOOD_CATEGORIES.length}`,
+        `分类检查 ${totalCovered}/${CHECKLIST_FOOD_CATEGORIES.length}（基础 ${coverage.covered.length}/${BASE_FOOD_CATEGORIES.length}，建议 ${coverage.suggestedCovered.length}/${SUGGESTED_FOOD_CATEGORIES.length}）`,
       ];
-      if (coverage.missing.length === 0) {
-        parts.push('七类齐全');
+      if (
+        coverage.missing.length === 0 &&
+        coverage.suggestedMissing.length === 0
+      ) {
+        parts.push(`${CHECKLIST_FOOD_CATEGORIES.length} 类检查项齐全`);
       } else {
-        parts.push(`未覆盖「${categoryLabels(coverage.missing)}」`);
-      }
-      if (confirmedMissing.length > 0) {
-        parts.push(`已确认缺类「${categoryLabels(confirmedMissing)}」`);
+        parts.push(
+          coverage.missing.length === 0
+            ? `基础 ${BASE_FOOD_CATEGORIES.length} 类齐全`
+            : `基础缺「${categoryLabels(coverage.missing)}」`,
+        );
+        parts.push(
+          coverage.suggestedMissing.length === 0
+            ? `建议 ${SUGGESTED_FOOD_CATEGORIES.length} 类齐全`
+            : `建议未覆盖「${categoryLabels(coverage.suggestedMissing)}」`,
+        );
       }
       if (coverage.optionalPresent.length > 0) {
         parts.push(`可选类：${categoryLabels(coverage.optionalPresent)}`);
@@ -503,16 +573,12 @@ export function createCheckTools(deps: CheckToolDeps): RecipeAgentCheckTools {
       if (!raw) {
         return fail('INVALID_ARGUMENT', '参数必须是对象。');
       }
-      const omissions = readConfirmedOmissions(raw.confirmedOmissions);
-      if (!omissions.ok) {
-        return fail('INVALID_ARGUMENT', omissions.message);
-      }
+      // confirmedOmissions 保留在参数里只为兼容；缺类确认已不参与门禁，直接忽略。
       const exceptionValue = raw.exceptionApproved;
       if (exceptionValue !== undefined && typeof exceptionValue !== 'boolean') {
         return fail('INVALID_ARGUMENT', 'exceptionApproved 必须是布尔值。');
       }
       const exceptionApproved = exceptionValue === true;
-      const confirmedSet = new Set(omissions.value);
 
       const draft = await port.getDraft(draftId);
       const assessment = draft.lastAssessment
@@ -634,11 +700,50 @@ export function createCheckTools(deps: CheckToolDeps): RecipeAgentCheckTools {
               'ASSESSMENT_COMPLIANT',
               exceptionApproved ? 'WARN' : 'FAIL',
               exceptionApproved
-                ? `${detail}已批例外放行，需在交付确认卡上留痕。`
+                ? `${detail}已批例外放行，请在最终总结里说明。`
                 : `${detail}需调整配方，或请管理员批准例外。`,
             ),
           );
         }
+      }
+
+      // ALLERGENS：配方命中的狗狗过敏原。只提示、不硬拦（与人工评估口径一致），
+      // 但交付前必须逐条确认或替换；没有评估结果时无法判断，给 WARN 让模型重跑。
+      const allergenWarnings = assessment?.allergenWarnings ?? [];
+      if (draft.context.kind !== 'ORDER') {
+        checks.push(
+          buildReadyCheck(
+            'ALLERGENS',
+            'PASS',
+            '产品线食谱未绑定狗狗，不做过敏核对。',
+          ),
+        );
+      } else if (!assessment) {
+        checks.push(
+          buildReadyCheck(
+            'ALLERGENS',
+            'WARN',
+            '还没跑评估，无法核对配料是否命中狗狗过敏原；先跑 run_assessment。',
+          ),
+        );
+      } else if (allergenWarnings.length > 0) {
+        const detail = allergenWarnings
+          .map(
+            (warning) =>
+              `${warning.itemName || warning.itemId}：${warning.allergen}`,
+          )
+          .join('、');
+        checks.push(
+          buildReadyCheck(
+            'ALLERGENS',
+            'WARN',
+            `配方命中 ${allergenWarnings.length} 条狗狗过敏原（${detail}）；交付前必须逐条确认或替换。`,
+          ),
+        );
+      } else {
+        checks.push(
+          buildReadyCheck('ALLERGENS', 'PASS', '配方没有命中狗狗的过敏原。'),
+        );
       }
 
       // MARGIN：INFO 条目只是参考；缺失的余量先补算，补不出来的如实说。
@@ -665,7 +770,7 @@ export function createCheckTools(deps: CheckToolDeps): RecipeAgentCheckTools {
             `余量不足 ${formatPercent(MARGIN_PERCENT)}%：${lowMargin
               .map(
                 (entry) =>
-                  `${entry.label} ${formatPercent(entry.marginPercent as number)}%`,
+                  `${entry.label} ${formatPercent(entry.marginPercent as number)}%${formatMarginSide(entry)}`,
               )
               .join('、')}。交付前需逐条确认${unresolvedNote}。`,
           ),
@@ -689,32 +794,33 @@ export function createCheckTools(deps: CheckToolDeps): RecipeAgentCheckTools {
         );
       }
 
-      // COVERAGE：没确认的缺类硬拦；确认过的只警告。
+      // COVERAGE：11 类选料检查清单，不是门禁。
+      // 基础类缺只 WARN；建议类缺只提示（仍 PASS）；都不阻断交付。
       const coverage = summarizeFoodCategoryCoverage(draft.items);
-      const unconfirmedMissing = coverage.missing.filter(
-        (category) => !confirmedSet.has(category),
-      );
-      const confirmedMissing = coverage.missing.filter((category) =>
-        confirmedSet.has(category),
-      );
-      if (unconfirmedMissing.length > 0) {
-        checks.push(
-          buildReadyCheck(
-            'COVERAGE',
-            'FAIL',
-            `七类里还缺「${categoryLabels(unconfirmedMissing)}」，没有确认过；请补原料，或让人确认缺类。`,
-          ),
-        );
-      } else if (confirmedMissing.length > 0) {
+      if (coverage.missing.length > 0) {
         checks.push(
           buildReadyCheck(
             'COVERAGE',
             'WARN',
-            `已确认缺类「${categoryLabels(confirmedMissing)}」。`,
+            `基础分类还缺「${categoryLabels(coverage.missing)}」；分类是选料检查清单，不阻断交付；能补就补，不能补请在交付说明里写原因。`,
+          ),
+        );
+      } else if (coverage.suggestedMissing.length > 0) {
+        checks.push(
+          buildReadyCheck(
+            'COVERAGE',
+            'PASS',
+            `基础 ${BASE_FOOD_CATEGORIES.length} 类齐全；建议项未覆盖：${categoryLabels(coverage.suggestedMissing)}。`,
           ),
         );
       } else {
-        checks.push(buildReadyCheck('COVERAGE', 'PASS', '七类齐全。'));
+        checks.push(
+          buildReadyCheck(
+            'COVERAGE',
+            'PASS',
+            `${CHECKLIST_FOOD_CATEGORIES.length} 类检查项齐全。`,
+          ),
+        );
       }
 
       // COPY：四个字段都要有内容。
@@ -757,23 +863,30 @@ export function createCheckTools(deps: CheckToolDeps): RecipeAgentCheckTools {
         );
       }
 
-      // PREPARATION：每条原料都要有预处理方式。
+      // PREPARATION：只有必填食材类别要求填写；补剂/油脂/调味/乳制品/未分类豁免。
       const missingPreparation = draft.items.filter(
-        (item) => !isNonEmptyString(item.preparationMethod),
+        (item) =>
+          isPreparationRequiredFoodCategory(item.category) &&
+          item.ingredientType !== 'SUPPLEMENT' &&
+          !isNonEmptyString(item.preparationMethod),
       );
       if (missingPreparation.length > 0) {
         checks.push(
           buildReadyCheck(
             'PREPARATION',
             'FAIL',
-            `${missingPreparation.length} 条原料没写预处理方式：${missingPreparation
+            `${missingPreparation.length} 条食材没写部位 / 状态 / 预处理：${missingPreparation
               .map((item) => item.name || item.id)
               .join('、')}。`,
           ),
         );
       } else {
         checks.push(
-          buildReadyCheck('PREPARATION', 'PASS', '每条原料都有预处理方式。'),
+          buildReadyCheck(
+            'PREPARATION',
+            'PASS',
+            '必填食材都有部位 / 状态 / 预处理。',
+          ),
         );
       }
 

@@ -130,23 +130,44 @@
         -->
         <template v-if="isOfflinePaidOrder">
           <el-divider />
-          <h3>线下收款</h3>
+          <!--
+            赠送单（2026-10-30）：没有这笔钱，就不该显示收款方式。
+            以前赠送只能靠「实收 0 + 差异原因」表达，详情页因此会挂一个
+            假的「收款方式：线下微信」，对账时看着像收过钱。
+          -->
+          <h3>{{ order.isGift ? '赠送（0 元）' : '线下收款' }}</h3>
           <div class="info-group">
-            <div class="info-item">
-              <label>收款方式</label>
-              <span>{{ paymentChannelText }}</span>
-            </div>
-            <div
-              class="info-item"
-              v-if="order.actualPaidAmount !== null && order.actualPaidAmount !== undefined"
-            >
-              <label>实收金额</label>
-              <span class="amount">¥{{ Number(order.actualPaidAmount).toFixed(2) }}</span>
-            </div>
-            <div class="info-item" v-if="order.externalPaymentRef">
-              <label>收款备注</label>
-              <span>{{ order.externalPaymentRef }}</span>
-            </div>
+            <template v-if="order.isGift">
+              <div class="info-item">
+                <label>赠送原因</label>
+                <span>{{ giftReasonText }}</span>
+              </div>
+              <div class="info-item" v-if="order.giftNote">
+                <label>补充说明</label>
+                <span>{{ order.giftNote }}</span>
+              </div>
+              <div class="info-item">
+                <label>实收金额</label>
+                <span class="amount">¥0.00</span>
+              </div>
+            </template>
+            <template v-else>
+              <div class="info-item">
+                <label>收款方式</label>
+                <span>{{ paymentChannelText }}</span>
+              </div>
+              <div
+                class="info-item"
+                v-if="order.actualPaidAmount !== null && order.actualPaidAmount !== undefined"
+              >
+                <label>实收金额</label>
+                <span class="amount">¥{{ Number(order.actualPaidAmount).toFixed(2) }}</span>
+              </div>
+              <div class="info-item" v-if="order.externalPaymentRef">
+                <label>收款备注</label>
+                <span>{{ order.externalPaymentRef }}</span>
+              </div>
+            </template>
           </div>
           <p v-if="offlineRefundCap > 0" class="offline-refund-tip">
             这是线下收款订单，退款不走微信原路退回。
@@ -388,6 +409,19 @@
               @click="openInDesigner"
             >
               {{ designEntryLabel }}
+            </el-button>
+            <!--
+              代客发起调整（2026-10-27）：
+              已交付的单，顾客不会/不方便在小程序提单时，老板从这里开一张调整单并直接改稿。
+            -->
+            <el-button
+              v-if="canInitiateAdjustment"
+              type="warning"
+              plain
+              :loading="adjustSubmitting"
+              @click="openAdjustDialog"
+            >
+              代客发起调整
             </el-button>
             <span
               v-if="legacyOrderWithoutDesignSlots"
@@ -656,6 +690,46 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 代客发起调整：先写一句给顾客看的说明，再进入设计器改稿 -->
+    <el-dialog
+      v-model="adjustDialogVisible"
+      title="代客发起调整"
+      width="520px"
+      :close-on-click-modal="false"
+    >
+      <el-alert
+        type="info"
+        :closable="false"
+        show-icon
+        title="这是商家主动发起的调整"
+        description="不占用顾客的免费调整次数，也不受售后受理期限制。发起后会直接打开设计器改稿；改完回「售后处理」页点「重新交付并完成」即可交回给顾客。"
+      />
+
+      <el-form label-width="90px" class="offline-refund-form">
+        <el-form-item label="调整说明">
+          <el-input
+            v-model="adjustDescription"
+            type="textarea"
+            :rows="3"
+            maxlength="200"
+            show-word-limit
+            placeholder="例如：狗狗体重下降，把兔里脊换成鸭胸，蛋白比例上调"
+          />
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="adjustDialogVisible = false">再想想</el-button>
+        <el-button
+          type="primary"
+          :loading="adjustSubmitting"
+          @click="submitStaffAdjustment"
+        >
+          发起并去改稿
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -675,6 +749,7 @@ import type {
 } from '@/api/customRecipe';
 import { dogApi } from '@/api/dogs';
 import { orderRecipeDesignApi } from '@/api/orderRecipeDesign';
+import { recipeDesignerApi } from '@/api/recipeDesigner';
 import type { OrderDesignWorkspace } from '@/types/orderRecipeDesign';
 import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole';
 import {
@@ -693,7 +768,9 @@ import {
   isMultiRecipeOrderQuantity,
   isOfflinePaidCustomRecipeOrder,
   normalizeRecipeQuantity,
+  shouldUseOfflineRefundForCancel,
 } from '@/constants/customRecipeOrder';
+import { getGiftReasonLabel } from '@/utils/assistedOrder';
 import {
   CUSTOM_RECIPE_GOAL_SET,
   CUSTOM_RECIPE_STATUS_SET,
@@ -757,6 +834,82 @@ const canStartDesign = computed(() => {
   const status = String(order.value?.status || '');
   return Boolean(status) && !['PENDING_PAYMENT', 'CANCELLED'].includes(status);
 });
+
+// ---------- 代客发起调整（2026-10-27）----------
+
+/**
+ * 已交付（含已自动完成）的订单才需要这个入口。
+ *
+ * 未交付的单直接在订单设计工作台改就行，不需要走调整单 ——
+ * 多开一条只会让售后列表多一条「没有顾客诉求」的记录。
+ */
+const canInitiateAdjustment = computed(() => {
+  if (!isAdmin.value) return false;
+  const status = String(order.value?.status || '');
+  return status === 'DELIVERED' || status === 'COMPLETED';
+});
+
+const adjustDialogVisible = ref(false);
+const adjustDescription = ref('');
+const adjustSubmitting = ref(false);
+
+function openAdjustDialog() {
+  adjustDescription.value = '';
+  adjustDialogVisible.value = true;
+}
+
+/**
+ * 发起调整 → 直接打开设计器改稿。
+ *
+ * 三步顺序不能变：先建单（售后页才有记录可重交）→ 再 reopen（把已交付的
+ * 槽位改回编辑中并开新版本草稿）→ 最后跳设计器。
+ *
+ * ⚠️ 空窗口必须在**点击的同步栈**里先开：建单和 reopen 都要 await，
+ * 等完再 window.open 会被浏览器当成非用户触发的弹窗直接拦掉。
+ */
+async function submitStaffAdjustment() {
+  if (!order.value || adjustSubmitting.value) return;
+  const description = adjustDescription.value.trim();
+  if (!description) {
+    ElMessage.warning('请写一句这次要调整什么，顾客会看到这句话');
+    return;
+  }
+
+  const orderId = order.value.orderId;
+  const designerWindow = window.open('', '_blank');
+  adjustSubmitting.value = true;
+  try {
+    const aftersale = await customRecipeApi.createStaffAftersale(orderId, {
+      description,
+    });
+    const reopened = await recipeDesignerApi.reopenAftersaleDesign(aftersale.id);
+
+    adjustDialogVisible.value = false;
+    const url =
+      `/recipe-designer/series/${reopened.seriesId}/drafts/${reopened.draftId}` +
+      `?orderId=${encodeURIComponent(reopened.orderId)}` +
+      `&designId=${encodeURIComponent(reopened.designId)}` +
+      `&aftersaleId=${encodeURIComponent(aftersale.id)}`;
+    if (designerWindow) {
+      designerWindow.location.href = url;
+    } else {
+      window.open(url, '_blank');
+    }
+    ElMessage.success(
+      aftersale.resumed
+        ? '这张单已经有一条进行中的调整，正在打开设计器继续处理'
+        : '已发起调整，正在打开设计器',
+    );
+    emit('refresh');
+  } catch (error) {
+    designerWindow?.close();
+    toastApiError(error, '发起调整失败，请重试', (message) =>
+      ElMessage.error(message),
+    );
+  } finally {
+    adjustSubmitting.value = false;
+  }
+}
 
 /**
  * 订单绑定食谱设计（2026-10-22 · Task 5）。
@@ -872,6 +1025,9 @@ const paymentChannelText = computed(() =>
   getCustomRecipePaymentChannelText(order.value?.paymentChannel),
 );
 
+/** 赠送原因中文（未知/老数据给出可读兜底，不显示英文 code） */
+const giftReasonText = computed(() => getGiftReasonLabel(order.value?.giftReason));
+
 /** 线下退款的登记记录（有登记过才显示那一块） */
 const hasOfflineRefundInfo = computed(
   () =>
@@ -896,6 +1052,16 @@ const offlineRefundCap = computed(() => {
   const quoted = Number(order.value?.amount);
   return Number.isFinite(quoted) && quoted > 0 ? quoted : 0;
 });
+
+/**
+ * 0 元赠送单：线下已收款，但实收是 0。
+ *
+ * 它没有款可退，线下退款入口本来就不显示；取消必须直接走「取消订单」。
+ * 文案与点击行为共用这一个判断，避免两处再分叉（2026-10-28 修）。
+ */
+const isZeroAmountGiftOrder = computed(
+  () => isOfflinePaidOrder.value && offlineRefundCap.value <= 0,
+);
 
 /**
  * 是否显示「线下退款并取消」。
@@ -925,9 +1091,7 @@ const isCancellableStatus = computed(() => {
 });
 
 const cancelOrderLabel = computed(() =>
-  isOfflinePaidOrder.value && offlineRefundCap.value <= 0
-    ? '取消赠送订单'
-    : '取消订单',
+  isZeroAmountGiftOrder.value ? '取消赠送订单' : '取消订单',
 );
 
 /**
@@ -939,9 +1103,12 @@ const canCancelOrder = computed(
   () =>
     isAdmin.value &&
     isCancellableStatus.value &&
-    // 线下单有实收金额时必须走「线下退款并取消」；
-    // 0 元赠送单没有款可退，允许直接取消。
-    (!isOfflinePaidOrder.value || offlineRefundCap.value <= 0),
+    // 只有「实收 > 0 的线下单」才必须走「线下退款并取消」；
+    // 0 元赠送单没有款可退，允许直接取消（与点击处理共用同一条规则）。
+    !shouldUseOfflineRefundForCancel(
+      isOfflinePaidOrder.value,
+      offlineRefundCap.value,
+    ),
 );
 
 /** 下单时填写的过敏 vs 档案最新：两份口径不同，必须分开显示并提示差异 */
@@ -1403,10 +1570,15 @@ const cancelOrder = async () => {
   /**
    * 线下收款单不能走这里（2026-10-21 · 代客订单 Task 5）。
    *
-   * 按钮已换成「线下退款并取消」，这里再兜一层：
-   * 旧页面缓存/误触都不能让线下单去调微信原路退款。
+   * 但 0 元赠送单例外：没有实收金额，线下退款弹窗根本不显示，
+   * 必须允许直接取消，否则按钮点了只会弹提示（2026-10-28 修）。
    */
-  if (isOfflinePaidOrder.value) {
+  if (
+    shouldUseOfflineRefundForCancel(
+      isOfflinePaidOrder.value,
+      offlineRefundCap.value,
+    )
+  ) {
     ElMessage.warning(
       '线下收款订单请使用「线下退款并取消」登记，系统不会调用微信退款',
     );
@@ -1417,8 +1589,10 @@ const cancelOrder = async () => {
     const { value } = await ElMessageBox.prompt(
       order.value!.status === 'PENDING_PAYMENT'
         ? '取消该订单？未付款的订单会释放当天名额。'
-        : '取消该订单？系统会立即发起微信原路退款（退款失败则不会取消），并释放当天名额。',
-      '取消订单',
+        : isZeroAmountGiftOrder.value
+          ? '取消这张 0 元赠送单？没有款可退，不会调用微信退款；取消后会释放当天名额。'
+          : '取消该订单？系统会立即发起微信原路退款（退款失败则不会取消），并释放当天名额。',
+      isZeroAmountGiftOrder.value ? '取消赠送订单' : '取消订单',
       {
         confirmButtonText: '确认取消',
         cancelButtonText: '再想想',

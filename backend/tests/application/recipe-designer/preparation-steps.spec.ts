@@ -53,8 +53,6 @@ function foodItem(overrides: Record<string, unknown> = {}) {
     includeInAssessment: true,
     ratioPercent: 100,
     preparationMethod: null,
-    preparationNote: null,
-    preparationSource: null,
     nutrientTargetKey: null,
     nutrientTargetValue: null,
     supplementTargets: null,
@@ -192,14 +190,25 @@ function createPrismaMock() {
 describe('原料预处理与结构化制作步骤（Task 4）', () => {
   let prisma: any;
   let targetProvider: any;
+  let preparationHistory: any;
   let service: RecipeDesignerService;
 
   beforeEach(() => {
     prisma = createPrismaMock();
     targetProvider = { getTargets: jest.fn().mockResolvedValue([]) };
+    preparationHistory = {
+      getLatestText: jest.fn().mockResolvedValue(null),
+      getLatestTextMap: jest.fn().mockResolvedValue(new Map()),
+    };
     service = new RecipeDesignerService(
       prisma as PrismaService,
       targetProvider,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      preparationHistory,
     );
   });
 
@@ -217,289 +226,6 @@ describe('原料预处理与结构化制作步骤（Task 4）', () => {
       }),
     );
   }
-
-  describe('addItem preparation', () => {
-    function mockCreate() {
-      prisma.designRecipeItem.create.mockImplementation(async (args: any) => ({
-        id: 'created-item',
-        ...args.data,
-      }));
-    }
-
-    it('persists an explicit method and note as MANUAL and returns them in the item DTO', async () => {
-      mockEditableDraft();
-      mockCreate();
-
-      const created = await service.addItem(
-        'design-1',
-        {
-          ingredientId: 'ingredient-food',
-          nutritionFoodId: 'food-base',
-          weightG: 5000,
-          preparationMethod: '去皮切块',
-          preparationNote: '鸡胸肉，去皮，按生重称',
-        },
-        STAFF_ACCESS,
-      );
-
-      const createArgs = prisma.designRecipeItem.create.mock.calls[0][0];
-      expect(createArgs.data).toEqual(
-        expect.objectContaining({
-          preparationMethod: '去皮切块',
-          preparationNote: '鸡胸肉，去皮，按生重称',
-          preparationSource: 'MANUAL',
-        }),
-      );
-      // 返回给编辑器的明细 DTO 必须带预处理字段
-      expect(createArgs.select).toEqual(
-        expect.objectContaining({
-          preparationNote: true,
-          preparationSource: true,
-        }),
-      );
-      expect(created).toEqual(
-        expect.objectContaining({
-          preparationMethod: '去皮切块',
-          preparationNote: '鸡胸肉，去皮，按生重称',
-          preparationSource: 'MANUAL',
-        }),
-      );
-    });
-
-    it('marks a system-resolved default method as AUTO', async () => {
-      mockEditableDraft();
-      mockCreate();
-      prisma.recipeItem.findMany.mockResolvedValue([
-        {
-          ingredientId: 'ingredient-food',
-          preparationMethod: '生重',
-          recipe: { updatedAt: new Date('2026-10-20T00:00:00Z') },
-        },
-      ]);
-      prisma.nutritionFood.findUnique.mockImplementation(async (args: any) => {
-        if (args?.select?.preparationState) {
-          return { preparationState: 'RAW' };
-        }
-        return null;
-      });
-
-      await service.addItem(
-        'design-1',
-        {
-          ingredientId: 'ingredient-food',
-          nutritionFoodId: 'food-base',
-          weightG: 5000,
-        },
-        STAFF_ACCESS,
-      );
-
-      const createData = prisma.designRecipeItem.create.mock.calls[0][0].data;
-      expect(createData).toEqual(
-        expect.objectContaining({
-          preparationMethod: '生重',
-          preparationNote: null,
-          preparationSource: 'AUTO',
-        }),
-      );
-    });
-
-    it('defaults a note-only edit to MANUAL while still bringing the default method', async () => {
-      mockEditableDraft();
-      mockCreate();
-      prisma.recipeItem.findMany.mockResolvedValue([
-        {
-          ingredientId: 'ingredient-food',
-          preparationMethod: '生重',
-          recipe: { updatedAt: new Date('2026-10-20T00:00:00Z') },
-        },
-      ]);
-      prisma.nutritionFood.findUnique.mockImplementation(async (args: any) => {
-        if (args?.select?.preparationState) {
-          return { preparationState: 'RAW' };
-        }
-        return null;
-      });
-
-      await service.addItem(
-        'design-1',
-        {
-          ingredientId: 'ingredient-food',
-          nutritionFoodId: 'food-base',
-          weightG: 5000,
-          preparationNote: '去骨后按生重称',
-        },
-        STAFF_ACCESS,
-      );
-
-      const createData = prisma.designRecipeItem.create.mock.calls[0][0].data;
-      expect(createData).toEqual(
-        expect.objectContaining({
-          preparationMethod: '生重',
-          preparationNote: '去骨后按生重称',
-          preparationSource: 'MANUAL',
-        }),
-      );
-    });
-
-    it('honors an explicitly supplied AUTO source', async () => {
-      mockEditableDraft();
-      mockCreate();
-
-      await service.addItem(
-        'design-1',
-        {
-          ingredientId: 'ingredient-food',
-          nutritionFoodId: 'food-base',
-          weightG: 5000,
-          preparationMethod: '去皮切块',
-          preparationSource: 'AUTO',
-        },
-        STAFF_ACCESS,
-      );
-
-      const createData = prisma.designRecipeItem.create.mock.calls[0][0].data;
-      expect(createData.preparationSource).toBe('AUTO');
-    });
-  });
-
-  describe('updateItem preparation', () => {
-    function mockUpdateItem(
-      current: {
-        preparationMethod?: string | null;
-        preparationNote?: string | null;
-        preparationSource?: string | null;
-      } = {},
-    ) {
-      prisma.designRecipeItem.findUnique.mockResolvedValue({
-        id: 'food-item-1',
-        preparationMethod: current.preparationMethod ?? null,
-        preparationNote: current.preparationNote ?? null,
-        preparationSource: current.preparationSource ?? null,
-        designRecipe: {
-          id: 'design-1',
-          createdBy: 'staff-1',
-          status: 'DRAFT',
-          publishedRecipeId: null,
-          publishedAt: null,
-          totalWeightG: 5000,
-        },
-      });
-      prisma.designRecipeItem.update.mockImplementation(async (args: any) => ({
-        id: 'food-item-1',
-        ...args.data,
-      }));
-    }
-
-    it('persists edited method and note and flips the source to MANUAL', async () => {
-      mockUpdateItem({
-        preparationMethod: '生重',
-        preparationNote: null,
-        preparationSource: 'AUTO',
-      });
-
-      await service.updateItem(
-        'food-item-1',
-        {
-          preparationMethod: '去皮切块',
-          preparationNote: '去皮后按生重称',
-        },
-        STAFF_ACCESS,
-      );
-
-      expect(prisma.designRecipeItem.update.mock.calls[0][0].data).toEqual(
-        expect.objectContaining({
-          preparationMethod: '去皮切块',
-          preparationNote: '去皮后按生重称',
-          preparationSource: 'MANUAL',
-        }),
-      );
-    });
-
-    it('keeps AUTO when the editor echoes unchanged values without a source', async () => {
-      mockUpdateItem({
-        preparationMethod: '生重',
-        preparationNote: null,
-        preparationSource: 'AUTO',
-      });
-
-      await service.updateItem(
-        'food-item-1',
-        { preparationMethod: '生重', preparationNote: null },
-        STAFF_ACCESS,
-      );
-
-      expect(prisma.designRecipeItem.update.mock.calls[0][0].data).toEqual(
-        expect.objectContaining({
-          preparationMethod: '生重',
-          preparationNote: null,
-          preparationSource: 'AUTO',
-        }),
-      );
-    });
-
-    it('does not touch preparation columns when only weight changes', async () => {
-      mockUpdateItem({
-        preparationMethod: '生重',
-        preparationNote: '去骨',
-        preparationSource: 'MANUAL',
-      });
-
-      await service.updateItem('food-item-1', { weightG: 4500 }, STAFF_ACCESS);
-
-      const updateData = prisma.designRecipeItem.update.mock.calls[0][0].data;
-      expect(updateData).toEqual({ weightG: 4500 });
-    });
-
-    it('rejects an invalid preparation source and an over-long note', async () => {
-      mockUpdateItem();
-
-      await expect(
-        service.updateItem(
-          'food-item-1',
-          { preparationSource: 'INHERITED' as any },
-          STAFF_ACCESS,
-        ),
-      ).rejects.toThrow(BadRequestException);
-
-      await expect(
-        service.updateItem(
-          'food-item-1',
-          { preparationNote: 'x'.repeat(501) },
-          STAFF_ACCESS,
-        ),
-      ).rejects.toThrow(
-        new BadRequestException('原料预处理补充说明不能超过 500 个字符'),
-      );
-
-      expect(prisma.designRecipeItem.update).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('draft reload', () => {
-    it('returns preparation note/source from getDraft', async () => {
-      prisma.designRecipe.findUnique.mockResolvedValue(
-        designDraft({
-          items: [
-            foodItem({
-              preparationMethod: '去皮切块',
-              preparationNote: '鸡胸肉，去皮，生重',
-              preparationSource: 'MANUAL',
-            }),
-          ],
-        }),
-      );
-
-      const draft = await service.getDraft('design-1', STAFF_ACCESS);
-
-      expect(draft.items[0]).toEqual(
-        expect.objectContaining({
-          preparationMethod: '去皮切块',
-          preparationNote: '鸡胸肉，去皮，生重',
-          preparationSource: 'MANUAL',
-        }),
-      );
-    });
-  });
 
   describe('production steps', () => {
     function mockStepsDraft(productionStepsJson: unknown) {
@@ -679,8 +405,6 @@ describe('原料预处理与结构化制作步骤（Task 4）', () => {
         [
           foodItem({
             preparationMethod: '去皮切块',
-            preparationNote: '鸡胸肉，去皮，按生重称',
-            preparationSource: 'MANUAL',
           }),
         ],
         { productionStepsJson: VALID_STEPS },
@@ -701,8 +425,6 @@ describe('原料预处理与结构化制作步骤（Task 4）', () => {
       expect(publishedItem).toEqual(
         expect.objectContaining({
           preparationMethod: '去皮切块',
-          preparationNote: '鸡胸肉，去皮，按生重称',
-          preparationSource: 'MANUAL',
         }),
       );
 
@@ -714,13 +436,11 @@ describe('原料预处理与结构化制作步骤（Task 4）', () => {
       );
     });
 
-    it('keeps AUTO source and publishes no legacy productionSteps string', async () => {
+    it('publishes no legacy productionSteps string', async () => {
       mockPublishDraft(
         [
           foodItem({
             preparationMethod: '生重',
-            preparationNote: null,
-            preparationSource: 'AUTO',
           }),
         ],
         { productionStepsJson: VALID_STEPS },
@@ -733,7 +453,6 @@ describe('原料预处理与结构化制作步骤（Task 4）', () => {
       );
 
       const createData = prisma.recipe.create.mock.calls[0][0].data;
-      expect(createData.items.create[0].preparationSource).toBe('AUTO');
       expect(createData.productionStepsJson).toEqual(VALID_STEPS);
       expect(createData.productionSteps).toContain('将所有食材按配方称重');
     });
@@ -756,14 +475,12 @@ describe('原料预处理与结构化制作步骤（Task 4）', () => {
   });
 
   describe('private recipe snapshot', () => {
-    it('persists preparation note/source and structured steps without touching legacy productionSteps', async () => {
+    it('persists structured steps without touching legacy productionSteps', async () => {
       const draft = designDraft({
         productionStepsJson: VALID_STEPS,
         items: [
           foodItem({
             preparationMethod: '去皮切块',
-            preparationNote: '鸡胸肉，去皮，按生重称',
-            preparationSource: 'MANUAL',
           }),
         ],
       });
@@ -784,8 +501,6 @@ describe('原料预处理与结构化制作步骤（Task 4）', () => {
       expect(createData.items.create[0]).toEqual(
         expect.objectContaining({
           preparationMethod: '去皮切块',
-          preparationNote: '鸡胸肉，去皮，按生重称',
-          preparationSource: 'MANUAL',
         }),
       );
     });
@@ -793,7 +508,7 @@ describe('原料预处理与结构化制作步骤（Task 4）', () => {
     it('updates steps on an existing private recipe without rewriting legacy productionSteps', async () => {
       const draft = designDraft({
         productionStepsJson: VALID_STEPS,
-        items: [foodItem({ preparationSource: 'AUTO' })],
+        items: [foodItem()],
       });
       prisma.recipe.findFirst.mockResolvedValue({
         id: 'private-row-1',
@@ -818,40 +533,6 @@ describe('原料预处理与结构化制作步骤（Task 4）', () => {
   });
 
   describe('DTO validation', () => {
-    it('accepts preparationNote up to 500 characters and a known source', async () => {
-      const dto = plainToInstance(AddRecipeDesignItemDto, {
-        nutritionFoodId: 'food-base',
-        weightG: 100,
-        preparationNote: 'x'.repeat(500),
-        preparationSource: 'AUTO',
-      });
-      await expect(validate(dto)).resolves.toEqual([]);
-
-      const updateDto = plainToInstance(UpdateRecipeDesignItemDto, {
-        preparationNote: null,
-        preparationSource: null,
-      });
-      await expect(validate(updateDto)).resolves.toEqual([]);
-    });
-
-    it('rejects an over-long note and an unknown source', async () => {
-      const tooLong = plainToInstance(AddRecipeDesignItemDto, {
-        nutritionFoodId: 'food-base',
-        weightG: 100,
-        preparationNote: 'x'.repeat(501),
-      });
-      await expect(validate(tooLong)).resolves.toEqual([
-        expect.objectContaining({ property: 'preparationNote' }),
-      ]);
-
-      const badSource = plainToInstance(UpdateRecipeDesignItemDto, {
-        preparationSource: 'INHERITED',
-      });
-      await expect(validate(badSource)).resolves.toEqual([
-        expect.objectContaining({ property: 'preparationSource' }),
-      ]);
-    });
-
     it('validates the production steps body shape and numeric limits', async () => {
       const valid = plainToInstance(UpdateRecipeProductionStepsDto, {
         steps: VALID_STEPS,

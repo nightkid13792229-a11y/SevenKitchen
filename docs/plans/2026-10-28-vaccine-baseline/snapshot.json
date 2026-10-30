@@ -1,0 +1,4836 @@
+{
+  "baselineDate": "2026-10-28",
+  "note": "B0 改前照片；由现有排期引擎生成，不是期望行为。",
+  "scenarios": [
+    {
+      "id": "P-A",
+      "title": "6 周幼犬，没打过",
+      "note": "原型 A：4 针首免 + 钩端 + 狂犬 + 26 周补强。",
+      "input": {
+        "birthday": "2026-08-30",
+        "today": "2026-10-15",
+        "records": [],
+        "tests": [],
+        "decisions": {}
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2026-08-30",
+        "ageWeeks": 6,
+        "next": {
+          "key": "core-puppy-1",
+          "kind": "core",
+          "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+          "kindShort": "核心疫苗",
+          "label": "第 1 针",
+          "layer": "MUST",
+          "windowStart": "2026-10-11",
+          "windowEnd": "2026-10-25",
+          "status": "DUE",
+          "statusLabel": "待接种",
+          "hint": "幼犬从 6~8 周龄开始，每 2~4 周打一针，一直接种到满 16 周龄。",
+          "basis": "犬瘟、细小、腺病毒为必须接种的核心疫苗。首次免疫从 6~8 周龄起，间隔 2~4 周接种一次，一直接种到满 16 周龄（WSAVA 2024）。幼犬的母源抗体会干扰疫苗，但每只幼犬的抗体消退时间差异比较大，所以需要在 6~16 周龄之间间隔接种。确保至少有一针落在抗体消退的窗口期里。16 周龄后，绝大多数幼犬母源抗体大幅减弱，所以 16 周龄后的核心疫苗接种尤为重要，也是幼犬首免程序中的最后一针。是否接种、何时接种，请以执业兽医的意见为准。",
+          "titerable": false,
+          "products": [
+            "宠必威优免康",
+            "卫佳伍"
+          ],
+          "combo": null
+        },
+        "plan": [
+          {
+            "key": "core-puppy-1",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "第 1 针",
+            "layer": "MUST",
+            "windowStart": "2026-10-11",
+            "windowEnd": "2026-10-25",
+            "status": "DUE",
+            "statusLabel": "待接种",
+            "hint": "幼犬从 6~8 周龄开始，每 2~4 周打一针，一直接种到满 16 周龄。",
+            "basis": "犬瘟、细小、腺病毒为必须接种的核心疫苗。首次免疫从 6~8 周龄起，间隔 2~4 周接种一次，一直接种到满 16 周龄（WSAVA 2024）。幼犬的母源抗体会干扰疫苗，但每只幼犬的抗体消退时间差异比较大，所以需要在 6~16 周龄之间间隔接种。确保至少有一针落在抗体消退的窗口期里。16 周龄后，绝大多数幼犬母源抗体大幅减弱，所以 16 周龄后的核心疫苗接种尤为重要，也是幼犬首免程序中的最后一针。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "宠必威优免康",
+              "卫佳伍"
+            ],
+            "combo": null
+          },
+          {
+            "key": "core-puppy-2",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "第 2 针",
+            "layer": "MUST",
+            "windowStart": "2026-10-25",
+            "windowEnd": "2026-11-08",
+            "status": "UPCOMING",
+            "statusLabel": "待接种",
+            "hint": "幼犬从 6~8 周龄开始，每 2~4 周打一针，一直接种到满 16 周龄。",
+            "basis": "犬瘟、细小、腺病毒为必须接种的核心疫苗。首次免疫从 6~8 周龄起，间隔 2~4 周接种一次，一直接种到满 16 周龄（WSAVA 2024）。幼犬的母源抗体会干扰疫苗，但每只幼犬的抗体消退时间差异比较大，所以需要在 6~16 周龄之间间隔接种。确保至少有一针落在抗体消退的窗口期里。16 周龄后，绝大多数幼犬母源抗体大幅减弱，所以 16 周龄后的核心疫苗接种尤为重要，也是幼犬首免程序中的最后一针。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "宠必威优免康",
+              "卫佳伍"
+            ],
+            "combo": {
+              "withKind": "lepto",
+              "withLabel": "钩端螺旋体",
+              "windowStart": "2026-10-25",
+              "windowEnd": "2026-11-08",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和钩端螺旋体一起打"
+            }
+          },
+          {
+            "key": "lepto-primary-1",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "第 1 针",
+            "layer": "SUGGEST",
+            "windowStart": "2026-10-25",
+            "windowEnd": "2026-11-22",
+            "status": "UPCOMING",
+            "statusLabel": "待接种",
+            "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+            "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "宠必威乐必妥"
+            ],
+            "combo": {
+              "withKind": "core",
+              "withLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+              "windowStart": "2026-10-25",
+              "windowEnd": "2026-11-08",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和核心疫苗（犬瘟、细小、腺病毒）一起打"
+            }
+          },
+          {
+            "key": "core-puppy-3",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "第 3 针",
+            "layer": "MUST",
+            "windowStart": "2026-11-22",
+            "windowEnd": "2026-12-06",
+            "status": "UPCOMING",
+            "statusLabel": "待接种",
+            "hint": "幼犬从 6~8 周龄开始，每 2~4 周打一针，一直接种到满 16 周龄。",
+            "basis": "犬瘟、细小、腺病毒为必须接种的核心疫苗。首次免疫从 6~8 周龄起，间隔 2~4 周接种一次，一直接种到满 16 周龄（WSAVA 2024）。幼犬的母源抗体会干扰疫苗，但每只幼犬的抗体消退时间差异比较大，所以需要在 6~16 周龄之间间隔接种。确保至少有一针落在抗体消退的窗口期里。16 周龄后，绝大多数幼犬母源抗体大幅减弱，所以 16 周龄后的核心疫苗接种尤为重要，也是幼犬首免程序中的最后一针。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "宠必威优免康",
+              "卫佳伍"
+            ],
+            "combo": null
+          },
+          {
+            "key": "rabies-1",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "首针",
+            "layer": "MUST",
+            "windowStart": "2026-11-22",
+            "windowEnd": "2026-12-22",
+            "status": "UPCOMING",
+            "statusLabel": "待接种",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "宠必威锐必威",
+              "瑞贝康",
+              "瑞比克"
+            ],
+            "combo": null
+          },
+          {
+            "key": "core-puppy-4",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "第 4 针",
+            "layer": "MUST",
+            "windowStart": "2026-12-20",
+            "windowEnd": "2027-01-03",
+            "status": "UPCOMING",
+            "statusLabel": "待接种",
+            "hint": "幼犬从 6~8 周龄开始，每 2~4 周打一针，一直接种到满 16 周龄。",
+            "basis": "犬瘟、细小、腺病毒为必须接种的核心疫苗。首次免疫从 6~8 周龄起，间隔 2~4 周接种一次，一直接种到满 16 周龄（WSAVA 2024）。幼犬的母源抗体会干扰疫苗，但每只幼犬的抗体消退时间差异比较大，所以需要在 6~16 周龄之间间隔接种。确保至少有一针落在抗体消退的窗口期里。16 周龄后，绝大多数幼犬母源抗体大幅减弱，所以 16 周龄后的核心疫苗接种尤为重要，也是幼犬首免程序中的最后一针。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "宠必威优免康",
+              "卫佳伍"
+            ],
+            "combo": null
+          },
+          {
+            "key": "core-26w",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "26 周补强",
+            "layer": "MUST",
+            "windowStart": "2027-02-28",
+            "windowEnd": "2027-03-28",
+            "status": "UPCOMING",
+            "statusLabel": "待接种",
+            "hint": "26 周龄这一针是首免程序的收尾；之后每 3 年加强一次。",
+            "basis": "WSAVA 2024：26 周龄或稍后再补一针核心疫苗（而不是等到 12~16 月龄）；若已在 20 周龄后做过抗体检测且显示有保护，则不需要这一针",
+            "titerable": true,
+            "products": [
+              "宠必威优免康",
+              "卫佳伍"
+            ],
+            "combo": null
+          }
+        ],
+        "ignored": {
+          "count": 0,
+          "items": []
+        },
+        "rhythm": "之后：狂犬与钩端每年一次，核心疫苗每 3 年一次",
+        "pendingReview": 0,
+        "conflicts": [],
+        "noRecordAtAll": true
+      }
+    },
+    {
+      "id": "P-B",
+      "title": "6 岁，一条记录都没有",
+      "note": "原型 B：核心“补一针”，绝不出现“第 1 针”。",
+      "input": {
+        "birthday": "2020-08-30",
+        "today": "2026-10-15",
+        "records": [],
+        "tests": [],
+        "decisions": {}
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2020-08-30",
+        "ageWeeks": 319,
+        "next": {
+          "key": "core-catchup",
+          "kind": "core",
+          "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+          "kindShort": "核心疫苗",
+          "label": "补一针",
+          "layer": "MUST",
+          "windowStart": "2026-10-15",
+          "windowEnd": "2026-10-29",
+          "missedWindowStart": "2020-10-11",
+          "missedWindowEnd": "2020-10-25",
+          "status": "OVERDUE",
+          "statusLabel": "尽快补种",
+          "hint": "已经满 26 周，补一针核心疫苗即可；之后每 3 年接种一次。",
+          "basis": "这只狗狗已经满 26 周，按成年犬的常规安排补一针核心疫苗即可（WSAVA 2024：16 周龄以上的犬只免疫史不明时，一针 MLV 或重组疫苗即可保护大多数犬只）；之后每 3 年接种一次。如果你手上还有以前的记录，录进来之后我们会重新算。",
+          "titerable": true,
+          "products": [
+            "卫佳捌",
+            "宠必威优免康",
+            "卫佳伍"
+          ],
+          "combo": {
+            "withKind": "lepto",
+            "withLabel": "钩端螺旋体",
+            "windowStart": "2026-10-15",
+            "windowEnd": "2026-10-29",
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "海博莱犬四联加钩端",
+              "维克犬四联加钩端"
+            ],
+            "hint": "这一针可以和钩端螺旋体一起打"
+          }
+        },
+        "plan": [
+          {
+            "key": "core-catchup",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "补一针",
+            "layer": "MUST",
+            "windowStart": "2026-10-15",
+            "windowEnd": "2026-10-29",
+            "missedWindowStart": "2020-10-11",
+            "missedWindowEnd": "2020-10-25",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "已经满 26 周，补一针核心疫苗即可；之后每 3 年接种一次。",
+            "basis": "这只狗狗已经满 26 周，按成年犬的常规安排补一针核心疫苗即可（WSAVA 2024：16 周龄以上的犬只免疫史不明时，一针 MLV 或重组疫苗即可保护大多数犬只）；之后每 3 年接种一次。如果你手上还有以前的记录，录进来之后我们会重新算。",
+            "titerable": true,
+            "products": [
+              "卫佳捌",
+              "宠必威优免康",
+              "卫佳伍"
+            ],
+            "combo": {
+              "withKind": "lepto",
+              "withLabel": "钩端螺旋体",
+              "windowStart": "2026-10-15",
+              "windowEnd": "2026-10-29",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和钩端螺旋体一起打"
+            }
+          },
+          {
+            "key": "rabies-1",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "首针",
+            "layer": "MUST",
+            "windowStart": "2026-10-15",
+            "windowEnd": "2026-11-14",
+            "missedWindowStart": "2020-11-22",
+            "missedWindowEnd": "2020-12-22",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "宠必威锐必威",
+              "瑞贝康",
+              "瑞比克"
+            ],
+            "combo": null
+          },
+          {
+            "key": "lepto-primary-1",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "第 1 针",
+            "layer": "SUGGEST",
+            "windowStart": "2026-10-15",
+            "windowEnd": "2026-11-12",
+            "missedWindowStart": "2020-10-25",
+            "missedWindowEnd": "2020-11-22",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+            "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "宠必威乐必妥"
+            ],
+            "combo": {
+              "withKind": "core",
+              "withLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+              "windowStart": "2026-10-15",
+              "windowEnd": "2026-10-29",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和核心疫苗（犬瘟、细小、腺病毒）一起打"
+            }
+          }
+        ],
+        "ignored": {
+          "count": 0,
+          "items": []
+        },
+        "rhythm": "之后：狂犬与钩端每年一次，核心疫苗每 3 年一次",
+        "pendingReview": 0,
+        "conflicts": [],
+        "noRecordAtAll": true
+      }
+    },
+    {
+      "id": "P-C",
+      "title": "3 岁，记录齐全",
+      "note": "原型 C：狂犬年度、核心 3 年、钩端年度。",
+      "input": {
+        "birthday": "2023-08-30",
+        "today": "2026-10-15",
+        "records": [
+          {
+            "id": "r1",
+            "vaccineName": "狂犬疫苗",
+            "vaccinationDate": "2025-11-20"
+          },
+          {
+            "id": "r2",
+            "vaccineName": "卫佳伍",
+            "vaccinationDate": "2024-01-15"
+          },
+          {
+            "id": "r3",
+            "vaccineName": "钩端螺旋体",
+            "vaccinationDate": "2023-11-20"
+          },
+          {
+            "id": "r4",
+            "vaccineName": "钩端螺旋体",
+            "vaccinationDate": "2023-12-10"
+          },
+          {
+            "id": "r5",
+            "vaccineName": "钩端螺旋体",
+            "vaccinationDate": "2026-03-10"
+          },
+          {
+            "id": "r6",
+            "vaccineName": "卫佳伍",
+            "vaccinationDate": "2023-10-20"
+          }
+        ],
+        "tests": [],
+        "decisions": {}
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2023-08-30",
+        "ageWeeks": 163,
+        "next": {
+          "key": "rabies-2",
+          "kind": "rabies",
+          "kindLabel": "狂犬疫苗",
+          "kindShort": "狂犬疫苗",
+          "label": "每年一次",
+          "layer": "MUST",
+          "windowStart": "2026-11-20",
+          "windowEnd": "2026-12-20",
+          "status": "UPCOMING",
+          "statusLabel": "待接种",
+          "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+          "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+          "titerable": false,
+          "products": [
+            "迪安适",
+            "宠必威锐必威",
+            "瑞贝康"
+          ],
+          "combo": null
+        },
+        "plan": [
+          {
+            "key": "rabies-2",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "每年一次",
+            "layer": "MUST",
+            "windowStart": "2026-11-20",
+            "windowEnd": "2026-12-20",
+            "status": "UPCOMING",
+            "statusLabel": "待接种",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "迪安适",
+              "宠必威锐必威",
+              "瑞贝康"
+            ],
+            "combo": null
+          },
+          {
+            "key": "core-adult-1",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "加强（每 3 年）",
+            "layer": "MUST",
+            "windowStart": "2027-01-15",
+            "windowEnd": "2027-04-15",
+            "status": "UPCOMING",
+            "statusLabel": "待接种",
+            "hint": "之后每 3 年接种一次。",
+            "basis": "WSAVA 2024：成年加强三年一次或更少频次；16 周龄后的补强在 26 周龄（取代了旧的「12~16 月龄第一次加强」）",
+            "titerable": true,
+            "products": [
+              "卫佳捌",
+              "卫佳伍",
+              "宠必威优免康"
+            ],
+            "combo": {
+              "withKind": "lepto",
+              "withLabel": "钩端螺旋体",
+              "windowStart": "2027-03-10",
+              "windowEnd": "2027-04-09",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和钩端螺旋体一起打"
+            }
+          },
+          {
+            "key": "lepto-repeat-1",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "每年一次",
+            "layer": "SUGGEST",
+            "windowStart": "2027-03-10",
+            "windowEnd": "2027-04-09",
+            "status": "UPCOMING",
+            "statusLabel": "待接种",
+            "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+            "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "宠必威乐必妥"
+            ],
+            "combo": {
+              "withKind": "core",
+              "withLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+              "windowStart": "2027-03-10",
+              "windowEnd": "2027-04-09",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和核心疫苗（犬瘟、细小、腺病毒）一起打"
+            }
+          }
+        ],
+        "ignored": {
+          "count": 0,
+          "items": []
+        },
+        "rhythm": "之后：狂犬与钩端每年一次，核心疫苗每 3 年一次",
+        "pendingReview": 0,
+        "conflicts": [],
+        "noRecordAtAll": false
+      }
+    },
+    {
+      "id": "V1",
+      "title": "抗体合格过期后，核心永远不再提醒",
+      "note": "复查日 2025-05-01 已过，核心仍是“已完成/评估”。",
+      "input": {
+        "birthday": "2023-01-01",
+        "today": "2026-10-28",
+        "records": [
+          {
+            "id": "a",
+            "vaccineName": "卫佳伍",
+            "vaccinationDate": "2023-04-01"
+          }
+        ],
+        "tests": [
+          {
+            "id": "t",
+            "testedAt": "2024-05-01",
+            "targets": [
+              "CORE"
+            ],
+            "result": "PASS"
+          }
+        ],
+        "decisions": {}
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2023-01-01",
+        "ageWeeks": 199,
+        "next": {
+          "key": "rabies-1",
+          "kind": "rabies",
+          "kindLabel": "狂犬疫苗",
+          "kindShort": "狂犬疫苗",
+          "label": "首针",
+          "layer": "MUST",
+          "windowStart": "2026-10-28",
+          "windowEnd": "2026-11-27",
+          "missedWindowStart": "2023-03-26",
+          "missedWindowEnd": "2023-04-25",
+          "status": "OVERDUE",
+          "statusLabel": "尽快补种",
+          "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+          "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+          "titerable": false,
+          "products": [
+            "迪安适",
+            "宠必威锐必威",
+            "瑞贝康"
+          ],
+          "combo": null
+        },
+        "plan": [
+          {
+            "key": "core-catchup",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "评估",
+            "layer": "MUST",
+            "windowStart": "2025-05-01",
+            "windowEnd": "2025-05-01",
+            "status": "DONE",
+            "statusLabel": "已完成",
+            "hint": "这次不用打：抗体检测合格（2024-05-01）",
+            "titer": {
+              "testedAt": "2024-05-01",
+              "nextReviewAt": "2025-05-01"
+            },
+            "basis": "已用抗体检测替代：2024-05-01 的抗体检测结果为合格，核心疫苗这一针不用打；下次评估 2025-05-01。是否接种请以执业兽医的意见为准。",
+            "titerable": true,
+            "products": [],
+            "combo": null
+          },
+          {
+            "key": "rabies-1",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "首针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-27",
+            "missedWindowStart": "2023-03-26",
+            "missedWindowEnd": "2023-04-25",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "迪安适",
+              "宠必威锐必威",
+              "瑞贝康"
+            ],
+            "combo": null
+          },
+          {
+            "key": "lepto-primary-1",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "第 1 针",
+            "layer": "SUGGEST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-25",
+            "missedWindowStart": "2023-02-26",
+            "missedWindowEnd": "2023-03-26",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+            "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "宠必威乐必妥"
+            ],
+            "combo": null
+          }
+        ],
+        "ignored": {
+          "count": 0,
+          "items": []
+        },
+        "rhythm": "之后：狂犬与钩端每年一次，核心疫苗每年复查抗体",
+        "pendingReview": 0,
+        "conflicts": [],
+        "noRecordAtAll": false
+      }
+    },
+    {
+      "id": "V2",
+      "title": "26 周补强满 1 岁后消失",
+      "note": "8/12/16 周打完，没打 26 周补强；下一次核心是 2028-12。",
+      "input": {
+        "birthday": "2025-09-01",
+        "today": "2026-10-28",
+        "records": [
+          {
+            "id": "a",
+            "vaccineName": "卫佳伍",
+            "vaccinationDate": "2025-11-01"
+          },
+          {
+            "id": "b",
+            "vaccineName": "卫佳伍",
+            "vaccinationDate": "2025-12-01"
+          },
+          {
+            "id": "c",
+            "vaccineName": "卫佳伍",
+            "vaccinationDate": "2025-12-22"
+          }
+        ],
+        "tests": [],
+        "decisions": {}
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2025-09-01",
+        "ageWeeks": 60,
+        "next": {
+          "key": "rabies-1",
+          "kind": "rabies",
+          "kindLabel": "狂犬疫苗",
+          "kindShort": "狂犬疫苗",
+          "label": "首针",
+          "layer": "MUST",
+          "windowStart": "2026-10-28",
+          "windowEnd": "2026-11-27",
+          "missedWindowStart": "2025-11-24",
+          "missedWindowEnd": "2025-12-24",
+          "status": "OVERDUE",
+          "statusLabel": "尽快补种",
+          "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+          "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+          "titerable": false,
+          "products": [
+            "迪安适",
+            "宠必威锐必威",
+            "瑞贝康"
+          ],
+          "combo": null
+        },
+        "plan": [
+          {
+            "key": "rabies-1",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "首针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-27",
+            "missedWindowStart": "2025-11-24",
+            "missedWindowEnd": "2025-12-24",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "迪安适",
+              "宠必威锐必威",
+              "瑞贝康"
+            ],
+            "combo": null
+          },
+          {
+            "key": "lepto-primary-1",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "第 1 针",
+            "layer": "SUGGEST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-25",
+            "missedWindowStart": "2025-10-27",
+            "missedWindowEnd": "2025-11-24",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+            "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "宠必威乐必妥"
+            ],
+            "combo": null
+          },
+          {
+            "key": "core-adult-1",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "加强（每 3 年）",
+            "layer": "MUST",
+            "windowStart": "2028-12-22",
+            "windowEnd": "2029-03-22",
+            "status": "UPCOMING",
+            "statusLabel": "待接种",
+            "hint": "之后每 3 年接种一次。",
+            "basis": "WSAVA 2024：成年加强三年一次或更少频次；16 周龄后的补强在 26 周龄（取代了旧的「12~16 月龄第一次加强」）",
+            "titerable": true,
+            "products": [
+              "卫佳伍",
+              "宠必威优免康"
+            ],
+            "combo": null
+          }
+        ],
+        "ignored": {
+          "count": 0,
+          "items": []
+        },
+        "rhythm": "之后：狂犬与钩端每年一次，核心疫苗每 3 年一次",
+        "pendingReview": 0,
+        "conflicts": [],
+        "noRecordAtAll": false
+      }
+    },
+    {
+      "id": "V3",
+      "title": "抗体不合格被静默忽略",
+      "note": "2026-09-01 不合格；核心仍显示 2027-05 才到期。",
+      "input": {
+        "birthday": "2024-01-01",
+        "today": "2026-10-28",
+        "records": [
+          {
+            "id": "a",
+            "vaccineName": "卫佳伍",
+            "vaccinationDate": "2024-03-20"
+          },
+          {
+            "id": "b",
+            "vaccineName": "卫佳伍",
+            "vaccinationDate": "2024-04-20"
+          },
+          {
+            "id": "c",
+            "vaccineName": "卫佳伍",
+            "vaccinationDate": "2024-05-10"
+          },
+          {
+            "id": "d",
+            "vaccineName": "卫佳伍",
+            "vaccinationDate": "2024-05-24"
+          }
+        ],
+        "tests": [
+          {
+            "id": "t",
+            "testedAt": "2026-09-01",
+            "targets": [
+              "CORE"
+            ],
+            "result": "FAIL"
+          }
+        ],
+        "decisions": {}
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2024-01-01",
+        "ageWeeks": 147,
+        "next": {
+          "key": "rabies-1",
+          "kind": "rabies",
+          "kindLabel": "狂犬疫苗",
+          "kindShort": "狂犬疫苗",
+          "label": "首针",
+          "layer": "MUST",
+          "windowStart": "2026-10-28",
+          "windowEnd": "2026-11-27",
+          "missedWindowStart": "2024-03-25",
+          "missedWindowEnd": "2024-04-24",
+          "status": "OVERDUE",
+          "statusLabel": "尽快补种",
+          "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+          "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+          "titerable": false,
+          "products": [
+            "迪安适",
+            "宠必威锐必威",
+            "瑞贝康"
+          ],
+          "combo": null
+        },
+        "plan": [
+          {
+            "key": "rabies-1",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "首针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-27",
+            "missedWindowStart": "2024-03-25",
+            "missedWindowEnd": "2024-04-24",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "迪安适",
+              "宠必威锐必威",
+              "瑞贝康"
+            ],
+            "combo": null
+          },
+          {
+            "key": "lepto-primary-1",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "第 1 针",
+            "layer": "SUGGEST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-25",
+            "missedWindowStart": "2024-02-26",
+            "missedWindowEnd": "2024-03-25",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+            "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "宠必威乐必妥"
+            ],
+            "combo": null
+          },
+          {
+            "key": "core-adult-1",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "加强（每 3 年）",
+            "layer": "MUST",
+            "windowStart": "2027-05-24",
+            "windowEnd": "2027-08-22",
+            "status": "UPCOMING",
+            "statusLabel": "待接种",
+            "hint": "之后每 3 年接种一次。",
+            "basis": "WSAVA 2024：成年加强三年一次或更少频次；16 周龄后的补强在 26 周龄（取代了旧的「12~16 月龄第一次加强」）",
+            "titerable": true,
+            "products": [
+              "卫佳伍",
+              "宠必威优免康"
+            ],
+            "combo": null
+          }
+        ],
+        "ignored": {
+          "count": 0,
+          "items": []
+        },
+        "rhythm": "之后：狂犬与钩端每年一次，核心疫苗每 3 年一次",
+        "pendingReview": 0,
+        "conflicts": [],
+        "noRecordAtAll": false
+      }
+    },
+    {
+      "id": "V4",
+      "title": "单病种疫苗被当成完整核心一针",
+      "note": "“细小单苗”被算成核心第 1 针，计划从第 2 针开始。",
+      "input": {
+        "birthday": "2026-05-01",
+        "today": "2026-06-27",
+        "records": [
+          {
+            "id": "a",
+            "vaccineName": "细小单苗",
+            "vaccinationDate": "2026-06-26"
+          }
+        ],
+        "tests": [],
+        "decisions": {}
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2026-05-01",
+        "ageWeeks": 8,
+        "next": {
+          "key": "lepto-primary-1",
+          "kind": "lepto",
+          "kindLabel": "钩端螺旋体",
+          "kindShort": "钩端螺旋体",
+          "label": "第 1 针",
+          "layer": "SUGGEST",
+          "windowStart": "2026-06-26",
+          "windowEnd": "2026-07-24",
+          "status": "DUE",
+          "statusLabel": "待接种",
+          "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+          "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+          "titerable": false,
+          "products": [
+            "卫佳捌",
+            "优乐康",
+            "宠必威乐必妥"
+          ],
+          "combo": {
+            "withKind": "core",
+            "withLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "windowStart": "2026-07-10",
+            "windowEnd": "2026-07-24",
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "海博莱犬四联加钩端",
+              "维克犬四联加钩端"
+            ],
+            "hint": "这一针可以和核心疫苗（犬瘟、细小、腺病毒）一起打"
+          }
+        },
+        "plan": [
+          {
+            "key": "lepto-primary-1",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "第 1 针",
+            "layer": "SUGGEST",
+            "windowStart": "2026-06-26",
+            "windowEnd": "2026-07-24",
+            "status": "DUE",
+            "statusLabel": "待接种",
+            "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+            "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "宠必威乐必妥"
+            ],
+            "combo": {
+              "withKind": "core",
+              "withLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+              "windowStart": "2026-07-10",
+              "windowEnd": "2026-07-24",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和核心疫苗（犬瘟、细小、腺病毒）一起打"
+            }
+          },
+          {
+            "key": "core-puppy-2",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "第 2 针",
+            "layer": "MUST",
+            "windowStart": "2026-07-10",
+            "windowEnd": "2026-07-24",
+            "status": "UPCOMING",
+            "statusLabel": "待接种",
+            "hint": "幼犬从 6~8 周龄开始，每 2~4 周打一针，一直接种到满 16 周龄。",
+            "basis": "犬瘟、细小、腺病毒为必须接种的核心疫苗。首次免疫从 6~8 周龄起，间隔 2~4 周接种一次，一直接种到满 16 周龄（WSAVA 2024）。幼犬的母源抗体会干扰疫苗，但每只幼犬的抗体消退时间差异比较大，所以需要在 6~16 周龄之间间隔接种。确保至少有一针落在抗体消退的窗口期里。16 周龄后，绝大多数幼犬母源抗体大幅减弱，所以 16 周龄后的核心疫苗接种尤为重要，也是幼犬首免程序中的最后一针。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "宠必威优免康",
+              "卫佳伍"
+            ],
+            "combo": {
+              "withKind": "lepto",
+              "withLabel": "钩端螺旋体",
+              "windowStart": "2026-07-10",
+              "windowEnd": "2026-07-24",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和钩端螺旋体一起打"
+            }
+          },
+          {
+            "key": "rabies-1",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "首针",
+            "layer": "MUST",
+            "windowStart": "2026-07-24",
+            "windowEnd": "2026-08-23",
+            "status": "UPCOMING",
+            "statusLabel": "待接种",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "宠必威锐必威",
+              "瑞贝康",
+              "瑞比克"
+            ],
+            "combo": null
+          },
+          {
+            "key": "core-puppy-3",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "第 3 针",
+            "layer": "MUST",
+            "windowStart": "2026-08-07",
+            "windowEnd": "2026-08-21",
+            "status": "UPCOMING",
+            "statusLabel": "待接种",
+            "hint": "幼犬从 6~8 周龄开始，每 2~4 周打一针，一直接种到满 16 周龄。",
+            "basis": "犬瘟、细小、腺病毒为必须接种的核心疫苗。首次免疫从 6~8 周龄起，间隔 2~4 周接种一次，一直接种到满 16 周龄（WSAVA 2024）。幼犬的母源抗体会干扰疫苗，但每只幼犬的抗体消退时间差异比较大，所以需要在 6~16 周龄之间间隔接种。确保至少有一针落在抗体消退的窗口期里。16 周龄后，绝大多数幼犬母源抗体大幅减弱，所以 16 周龄后的核心疫苗接种尤为重要，也是幼犬首免程序中的最后一针。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "宠必威优免康",
+              "卫佳伍"
+            ],
+            "combo": null
+          },
+          {
+            "key": "core-puppy-4",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "第 4 针",
+            "layer": "MUST",
+            "windowStart": "2026-09-04",
+            "windowEnd": "2026-09-18",
+            "status": "UPCOMING",
+            "statusLabel": "待接种",
+            "hint": "幼犬从 6~8 周龄开始，每 2~4 周打一针，一直接种到满 16 周龄。",
+            "basis": "犬瘟、细小、腺病毒为必须接种的核心疫苗。首次免疫从 6~8 周龄起，间隔 2~4 周接种一次，一直接种到满 16 周龄（WSAVA 2024）。幼犬的母源抗体会干扰疫苗，但每只幼犬的抗体消退时间差异比较大，所以需要在 6~16 周龄之间间隔接种。确保至少有一针落在抗体消退的窗口期里。16 周龄后，绝大多数幼犬母源抗体大幅减弱，所以 16 周龄后的核心疫苗接种尤为重要，也是幼犬首免程序中的最后一针。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "宠必威优免康",
+              "卫佳伍"
+            ],
+            "combo": null
+          },
+          {
+            "key": "core-26w",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "26 周补强",
+            "layer": "MUST",
+            "windowStart": "2026-10-30",
+            "windowEnd": "2026-11-27",
+            "status": "UPCOMING",
+            "statusLabel": "待接种",
+            "hint": "26 周龄这一针是首免程序的收尾；之后每 3 年加强一次。",
+            "basis": "WSAVA 2024：26 周龄或稍后再补一针核心疫苗（而不是等到 12~16 月龄）；若已在 20 周龄后做过抗体检测且显示有保护，则不需要这一针",
+            "titerable": true,
+            "products": [
+              "宠必威优免康",
+              "卫佳伍"
+            ],
+            "combo": null
+          }
+        ],
+        "ignored": {
+          "count": 0,
+          "items": []
+        },
+        "rhythm": "之后：狂犬与钩端每年一次，核心疫苗每 3 年一次",
+        "pendingReview": 0,
+        "conflicts": [],
+        "noRecordAtAll": false
+      }
+    },
+    {
+      "id": "V5",
+      "title": "钩端旧的第 2 针盖住真正该打的针",
+      "note": "2023/09 第 1 针；2025/06 又打一针；下一针应是重启第 2 针。",
+      "input": {
+        "birthday": "2020-01-01",
+        "today": "2026-10-28",
+        "records": [
+          {
+            "id": "a",
+            "vaccineName": "卫佳捌",
+            "vaccinationDate": "2023-09-01"
+          },
+          {
+            "id": "b",
+            "vaccineName": "宠必威乐必妥",
+            "vaccinationDate": "2025-06-01"
+          }
+        ],
+        "tests": [],
+        "decisions": {}
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2020-01-01",
+        "ageWeeks": 356,
+        "next": {
+          "key": "lepto-primary-2",
+          "kind": "lepto",
+          "kindLabel": "钩端螺旋体",
+          "kindShort": "钩端螺旋体",
+          "label": "第 2 针",
+          "layer": "SUGGEST",
+          "windowStart": "2023-09-15",
+          "windowEnd": "2023-09-29",
+          "missedWindowStart": "2023-09-15",
+          "missedWindowEnd": "2023-09-29",
+          "status": "OVERDUE",
+          "statusLabel": "尽快补种",
+          "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+          "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+          "titerable": false,
+          "products": [
+            "宠必威乐必妥"
+          ],
+          "combo": null
+        },
+        "plan": [
+          {
+            "key": "lepto-primary-2",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "第 2 针",
+            "layer": "SUGGEST",
+            "windowStart": "2023-09-15",
+            "windowEnd": "2023-09-29",
+            "missedWindowStart": "2023-09-15",
+            "missedWindowEnd": "2023-09-29",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+            "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "宠必威乐必妥"
+            ],
+            "combo": null
+          },
+          {
+            "key": "core-adult-1",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "加强（每 3 年）",
+            "layer": "MUST",
+            "windowStart": "2026-09-01",
+            "windowEnd": "2026-11-30",
+            "status": "DUE",
+            "statusLabel": "待接种",
+            "hint": "之后每 3 年接种一次。",
+            "basis": "WSAVA 2024：成年加强三年一次或更少频次；16 周龄后的补强在 26 周龄（取代了旧的「12~16 月龄第一次加强」）",
+            "titerable": true,
+            "products": [
+              "宠必威优免康",
+              "卫佳捌",
+              "卫佳伍"
+            ],
+            "combo": null
+          },
+          {
+            "key": "rabies-1",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "首针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-27",
+            "missedWindowStart": "2020-03-25",
+            "missedWindowEnd": "2020-04-24",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "宠必威锐必威",
+              "瑞贝康",
+              "瑞比克"
+            ],
+            "combo": null
+          }
+        ],
+        "ignored": {
+          "count": 0,
+          "items": []
+        },
+        "rhythm": "之后：狂犬与钩端每年一次，核心疫苗每 3 年一次",
+        "pendingReview": 0,
+        "conflicts": [],
+        "noRecordAtAll": false
+      }
+    },
+    {
+      "id": "V10",
+      "title": "太早的记录静默不算，没有解释",
+      "note": "5 周核心、10 周狂犬；都不算数，但 conflicts 为空。",
+      "input": {
+        "birthday": "2026-08-01",
+        "today": "2026-10-28",
+        "records": [
+          {
+            "id": "a",
+            "vaccineName": "卫佳伍",
+            "vaccinationDate": "2026-09-05"
+          },
+          {
+            "id": "b",
+            "vaccineName": "狂犬疫苗",
+            "vaccinationDate": "2026-10-10"
+          }
+        ],
+        "tests": [],
+        "decisions": {}
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2026-08-01",
+        "ageWeeks": 12,
+        "next": {
+          "key": "core-puppy-1",
+          "kind": "core",
+          "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+          "kindShort": "核心疫苗",
+          "label": "第 1 针",
+          "layer": "MUST",
+          "windowStart": "2026-09-12",
+          "windowEnd": "2026-09-26",
+          "missedWindowStart": "2026-09-12",
+          "missedWindowEnd": "2026-09-26",
+          "status": "OVERDUE",
+          "statusLabel": "尽快补种",
+          "hint": "幼犬从 6~8 周龄开始，每 2~4 周打一针，一直接种到满 16 周龄。",
+          "basis": "犬瘟、细小、腺病毒为必须接种的核心疫苗。首次免疫从 6~8 周龄起，间隔 2~4 周接种一次，一直接种到满 16 周龄（WSAVA 2024）。幼犬的母源抗体会干扰疫苗，但每只幼犬的抗体消退时间差异比较大，所以需要在 6~16 周龄之间间隔接种。确保至少有一针落在抗体消退的窗口期里。16 周龄后，绝大多数幼犬母源抗体大幅减弱，所以 16 周龄后的核心疫苗接种尤为重要，也是幼犬首免程序中的最后一针。是否接种、何时接种，请以执业兽医的意见为准。",
+          "titerable": false,
+          "products": [
+            "卫佳伍",
+            "宠必威优免康"
+          ],
+          "combo": null
+        },
+        "plan": [
+          {
+            "key": "core-puppy-1",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "第 1 针",
+            "layer": "MUST",
+            "windowStart": "2026-09-12",
+            "windowEnd": "2026-09-26",
+            "missedWindowStart": "2026-09-12",
+            "missedWindowEnd": "2026-09-26",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "幼犬从 6~8 周龄开始，每 2~4 周打一针，一直接种到满 16 周龄。",
+            "basis": "犬瘟、细小、腺病毒为必须接种的核心疫苗。首次免疫从 6~8 周龄起，间隔 2~4 周接种一次，一直接种到满 16 周龄（WSAVA 2024）。幼犬的母源抗体会干扰疫苗，但每只幼犬的抗体消退时间差异比较大，所以需要在 6~16 周龄之间间隔接种。确保至少有一针落在抗体消退的窗口期里。16 周龄后，绝大多数幼犬母源抗体大幅减弱，所以 16 周龄后的核心疫苗接种尤为重要，也是幼犬首免程序中的最后一针。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳伍",
+              "宠必威优免康"
+            ],
+            "combo": null
+          },
+          {
+            "key": "core-puppy-2",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "第 2 针",
+            "layer": "MUST",
+            "windowStart": "2026-09-26",
+            "windowEnd": "2026-10-10",
+            "missedWindowStart": "2026-09-26",
+            "missedWindowEnd": "2026-10-10",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "幼犬从 6~8 周龄开始，每 2~4 周打一针，一直接种到满 16 周龄。",
+            "basis": "犬瘟、细小、腺病毒为必须接种的核心疫苗。首次免疫从 6~8 周龄起，间隔 2~4 周接种一次，一直接种到满 16 周龄（WSAVA 2024）。幼犬的母源抗体会干扰疫苗，但每只幼犬的抗体消退时间差异比较大，所以需要在 6~16 周龄之间间隔接种。确保至少有一针落在抗体消退的窗口期里。16 周龄后，绝大多数幼犬母源抗体大幅减弱，所以 16 周龄后的核心疫苗接种尤为重要，也是幼犬首免程序中的最后一针。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳伍",
+              "宠必威优免康"
+            ],
+            "combo": null
+          },
+          {
+            "key": "core-puppy-3",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "第 3 针",
+            "layer": "MUST",
+            "windowStart": "2026-10-24",
+            "windowEnd": "2026-11-07",
+            "status": "DUE",
+            "statusLabel": "待接种",
+            "hint": "幼犬从 6~8 周龄开始，每 2~4 周打一针，一直接种到满 16 周龄。",
+            "basis": "犬瘟、细小、腺病毒为必须接种的核心疫苗。首次免疫从 6~8 周龄起，间隔 2~4 周接种一次，一直接种到满 16 周龄（WSAVA 2024）。幼犬的母源抗体会干扰疫苗，但每只幼犬的抗体消退时间差异比较大，所以需要在 6~16 周龄之间间隔接种。确保至少有一针落在抗体消退的窗口期里。16 周龄后，绝大多数幼犬母源抗体大幅减弱，所以 16 周龄后的核心疫苗接种尤为重要，也是幼犬首免程序中的最后一针。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "卫佳伍",
+              "宠必威优免康"
+            ],
+            "combo": {
+              "withKind": "lepto",
+              "withLabel": "钩端螺旋体",
+              "windowStart": "2026-10-28",
+              "windowEnd": "2026-11-07",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和钩端螺旋体一起打"
+            }
+          },
+          {
+            "key": "rabies-1",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "首针",
+            "layer": "MUST",
+            "windowStart": "2026-10-24",
+            "windowEnd": "2026-11-23",
+            "status": "DUE",
+            "statusLabel": "待接种",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "迪安适",
+              "宠必威锐必威",
+              "瑞贝康"
+            ],
+            "combo": null
+          },
+          {
+            "key": "lepto-primary-1",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "第 1 针",
+            "layer": "SUGGEST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-25",
+            "missedWindowStart": "2026-09-26",
+            "missedWindowEnd": "2026-10-24",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+            "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "宠必威乐必妥"
+            ],
+            "combo": {
+              "withKind": "core",
+              "withLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+              "windowStart": "2026-10-28",
+              "windowEnd": "2026-11-07",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和核心疫苗（犬瘟、细小、腺病毒）一起打"
+            }
+          },
+          {
+            "key": "core-puppy-4",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "第 4 针",
+            "layer": "MUST",
+            "windowStart": "2026-11-21",
+            "windowEnd": "2026-12-05",
+            "status": "UPCOMING",
+            "statusLabel": "待接种",
+            "hint": "幼犬从 6~8 周龄开始，每 2~4 周打一针，一直接种到满 16 周龄。",
+            "basis": "犬瘟、细小、腺病毒为必须接种的核心疫苗。首次免疫从 6~8 周龄起，间隔 2~4 周接种一次，一直接种到满 16 周龄（WSAVA 2024）。幼犬的母源抗体会干扰疫苗，但每只幼犬的抗体消退时间差异比较大，所以需要在 6~16 周龄之间间隔接种。确保至少有一针落在抗体消退的窗口期里。16 周龄后，绝大多数幼犬母源抗体大幅减弱，所以 16 周龄后的核心疫苗接种尤为重要，也是幼犬首免程序中的最后一针。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "卫佳伍",
+              "宠必威优免康"
+            ],
+            "combo": {
+              "withKind": "lepto",
+              "withLabel": "钩端螺旋体",
+              "windowStart": "2026-11-21",
+              "windowEnd": "2026-11-25",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和钩端螺旋体一起打"
+            }
+          },
+          {
+            "key": "core-26w",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "26 周补强",
+            "layer": "MUST",
+            "windowStart": "2027-01-30",
+            "windowEnd": "2027-02-27",
+            "status": "UPCOMING",
+            "statusLabel": "待接种",
+            "hint": "26 周龄这一针是首免程序的收尾；之后每 3 年加强一次。",
+            "basis": "WSAVA 2024：26 周龄或稍后再补一针核心疫苗（而不是等到 12~16 月龄）；若已在 20 周龄后做过抗体检测且显示有保护，则不需要这一针",
+            "titerable": true,
+            "products": [
+              "卫佳伍",
+              "宠必威优免康"
+            ],
+            "combo": null
+          }
+        ],
+        "ignored": {
+          "count": 0,
+          "items": []
+        },
+        "rhythm": "之后：狂犬与钩端每年一次，核心疫苗每 3 年一次",
+        "pendingReview": 0,
+        "conflicts": [],
+        "noRecordAtAll": false
+      }
+    },
+    {
+      "id": "V11",
+      "title": "抗体替代后出现两行一样的“评估”",
+      "note": "25 周幼犬、无核心记录、抗体合格；2 个核心步骤都被换成“评估”。",
+      "input": {
+        "birthday": "2026-05-01",
+        "today": "2026-10-28",
+        "records": [],
+        "tests": [
+          {
+            "id": "t",
+            "testedAt": "2026-10-01",
+            "targets": [
+              "CORE"
+            ],
+            "result": "PASS"
+          }
+        ],
+        "decisions": {}
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2026-05-01",
+        "ageWeeks": 25,
+        "next": {
+          "key": "rabies-1",
+          "kind": "rabies",
+          "kindLabel": "狂犬疫苗",
+          "kindShort": "狂犬疫苗",
+          "label": "首针",
+          "layer": "MUST",
+          "windowStart": "2026-10-28",
+          "windowEnd": "2026-11-27",
+          "missedWindowStart": "2026-07-24",
+          "missedWindowEnd": "2026-08-23",
+          "status": "OVERDUE",
+          "statusLabel": "尽快补种",
+          "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+          "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+          "titerable": false,
+          "products": [
+            "宠必威锐必威",
+            "瑞贝康",
+            "瑞比克"
+          ],
+          "combo": null
+        },
+        "plan": [
+          {
+            "key": "rabies-1",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "首针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-27",
+            "missedWindowStart": "2026-07-24",
+            "missedWindowEnd": "2026-08-23",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "宠必威锐必威",
+              "瑞贝康",
+              "瑞比克"
+            ],
+            "combo": null
+          },
+          {
+            "key": "lepto-primary-1",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "第 1 针",
+            "layer": "SUGGEST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-25",
+            "missedWindowStart": "2026-06-26",
+            "missedWindowEnd": "2026-07-24",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+            "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "宠必威乐必妥"
+            ],
+            "combo": null
+          },
+          {
+            "key": "core-26w",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "评估",
+            "layer": "MUST",
+            "windowStart": "2027-10-01",
+            "windowEnd": "2027-10-01",
+            "status": "DONE",
+            "statusLabel": "已完成",
+            "hint": "这次不用打：抗体检测合格（2026-10-01）",
+            "titer": {
+              "testedAt": "2026-10-01",
+              "nextReviewAt": "2027-10-01"
+            },
+            "basis": "已用抗体检测替代：2026-10-01 的抗体检测结果为合格，核心疫苗这一针不用打；下次评估 2027-10-01。是否接种请以执业兽医的意见为准。",
+            "titerable": true,
+            "products": [],
+            "combo": null
+          },
+          {
+            "key": "core-puppy-1",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "评估",
+            "layer": "MUST",
+            "windowStart": "2027-10-01",
+            "windowEnd": "2027-10-01",
+            "status": "DONE",
+            "statusLabel": "已完成",
+            "hint": "这次不用打：抗体检测合格（2026-10-01）",
+            "titer": {
+              "testedAt": "2026-10-01",
+              "nextReviewAt": "2027-10-01"
+            },
+            "basis": "已用抗体检测替代：2026-10-01 的抗体检测结果为合格，核心疫苗这一针不用打；下次评估 2027-10-01。是否接种请以执业兽医的意见为准。",
+            "titerable": true,
+            "products": [],
+            "combo": null
+          }
+        ],
+        "ignored": {
+          "count": 0,
+          "items": []
+        },
+        "rhythm": "之后：狂犬与钩端每年一次，核心疫苗每年复查抗体",
+        "pendingReview": 0,
+        "conflicts": [],
+        "noRecordAtAll": true
+      }
+    },
+    {
+      "id": "C-TITER-PASS-1Y",
+      "title": "抗体合格刚好 1 年（复查日昨天）",
+      "note": "对照 V1：只差一天，仍是“已完成/下次评估”。",
+      "input": {
+        "birthday": "2023-01-01",
+        "today": "2026-10-28",
+        "records": [
+          {
+            "id": "a",
+            "vaccineName": "卫佳伍",
+            "vaccinationDate": "2023-04-01"
+          }
+        ],
+        "tests": [
+          {
+            "id": "t",
+            "testedAt": "2025-10-27",
+            "targets": [
+              "CORE"
+            ],
+            "result": "PASS"
+          }
+        ],
+        "decisions": {}
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2023-01-01",
+        "ageWeeks": 199,
+        "next": {
+          "key": "rabies-1",
+          "kind": "rabies",
+          "kindLabel": "狂犬疫苗",
+          "kindShort": "狂犬疫苗",
+          "label": "首针",
+          "layer": "MUST",
+          "windowStart": "2026-10-28",
+          "windowEnd": "2026-11-27",
+          "missedWindowStart": "2023-03-26",
+          "missedWindowEnd": "2023-04-25",
+          "status": "OVERDUE",
+          "statusLabel": "尽快补种",
+          "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+          "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+          "titerable": false,
+          "products": [
+            "迪安适",
+            "宠必威锐必威",
+            "瑞贝康"
+          ],
+          "combo": null
+        },
+        "plan": [
+          {
+            "key": "core-catchup",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "评估",
+            "layer": "MUST",
+            "windowStart": "2026-10-27",
+            "windowEnd": "2026-10-27",
+            "status": "DONE",
+            "statusLabel": "已完成",
+            "hint": "这次不用打：抗体检测合格（2025-10-27）",
+            "titer": {
+              "testedAt": "2025-10-27",
+              "nextReviewAt": "2026-10-27"
+            },
+            "basis": "已用抗体检测替代：2025-10-27 的抗体检测结果为合格，核心疫苗这一针不用打；下次评估 2026-10-27。是否接种请以执业兽医的意见为准。",
+            "titerable": true,
+            "products": [],
+            "combo": null
+          },
+          {
+            "key": "rabies-1",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "首针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-27",
+            "missedWindowStart": "2023-03-26",
+            "missedWindowEnd": "2023-04-25",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "迪安适",
+              "宠必威锐必威",
+              "瑞贝康"
+            ],
+            "combo": null
+          },
+          {
+            "key": "lepto-primary-1",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "第 1 针",
+            "layer": "SUGGEST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-25",
+            "missedWindowStart": "2023-02-26",
+            "missedWindowEnd": "2023-03-26",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+            "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "宠必威乐必妥"
+            ],
+            "combo": null
+          }
+        ],
+        "ignored": {
+          "count": 0,
+          "items": []
+        },
+        "rhythm": "之后：狂犬与钩端每年一次，核心疫苗每年复查抗体",
+        "pendingReview": 0,
+        "conflicts": [],
+        "noRecordAtAll": false
+      }
+    },
+    {
+      "id": "C-TITER-EARLY",
+      "title": "抗体在 20 周龄前做",
+      "note": "对照：20 周前不替代，应继续按疫苗排。",
+      "input": {
+        "birthday": "2026-06-15",
+        "today": "2026-10-28",
+        "records": [],
+        "tests": [
+          {
+            "id": "t",
+            "testedAt": "2026-10-20",
+            "targets": [
+              "CORE"
+            ],
+            "result": "PASS"
+          }
+        ],
+        "decisions": {}
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2026-06-15",
+        "ageWeeks": 19,
+        "next": {
+          "key": "core-puppy-1",
+          "kind": "core",
+          "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+          "kindShort": "核心疫苗",
+          "label": "第 1 针",
+          "layer": "MUST",
+          "windowStart": "2026-10-28",
+          "windowEnd": "2026-11-11",
+          "missedWindowStart": "2026-07-27",
+          "missedWindowEnd": "2026-08-10",
+          "status": "OVERDUE",
+          "statusLabel": "尽快补种",
+          "hint": "幼犬从 6~8 周龄开始，每 2~4 周打一针，一直接种到满 16 周龄。",
+          "basis": "犬瘟、细小、腺病毒为必须接种的核心疫苗。首次免疫从 6~8 周龄起，间隔 2~4 周接种一次，一直接种到满 16 周龄（WSAVA 2024）。幼犬的母源抗体会干扰疫苗，但每只幼犬的抗体消退时间差异比较大，所以需要在 6~16 周龄之间间隔接种。确保至少有一针落在抗体消退的窗口期里。16 周龄后，绝大多数幼犬母源抗体大幅减弱，所以 16 周龄后的核心疫苗接种尤为重要，也是幼犬首免程序中的最后一针。是否接种、何时接种，请以执业兽医的意见为准。",
+          "titerable": false,
+          "products": [
+            "卫佳捌",
+            "宠必威优免康",
+            "卫佳伍"
+          ],
+          "combo": {
+            "withKind": "lepto",
+            "withLabel": "钩端螺旋体",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-11",
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "海博莱犬四联加钩端",
+              "维克犬四联加钩端"
+            ],
+            "hint": "这一针可以和钩端螺旋体一起打"
+          }
+        },
+        "plan": [
+          {
+            "key": "core-puppy-1",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "第 1 针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-11",
+            "missedWindowStart": "2026-07-27",
+            "missedWindowEnd": "2026-08-10",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "幼犬从 6~8 周龄开始，每 2~4 周打一针，一直接种到满 16 周龄。",
+            "basis": "犬瘟、细小、腺病毒为必须接种的核心疫苗。首次免疫从 6~8 周龄起，间隔 2~4 周接种一次，一直接种到满 16 周龄（WSAVA 2024）。幼犬的母源抗体会干扰疫苗，但每只幼犬的抗体消退时间差异比较大，所以需要在 6~16 周龄之间间隔接种。确保至少有一针落在抗体消退的窗口期里。16 周龄后，绝大多数幼犬母源抗体大幅减弱，所以 16 周龄后的核心疫苗接种尤为重要，也是幼犬首免程序中的最后一针。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "宠必威优免康",
+              "卫佳伍"
+            ],
+            "combo": {
+              "withKind": "lepto",
+              "withLabel": "钩端螺旋体",
+              "windowStart": "2026-10-28",
+              "windowEnd": "2026-11-11",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和钩端螺旋体一起打"
+            }
+          },
+          {
+            "key": "rabies-1",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "首针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-27",
+            "missedWindowStart": "2026-09-07",
+            "missedWindowEnd": "2026-10-07",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "宠必威锐必威",
+              "瑞贝康",
+              "瑞比克"
+            ],
+            "combo": null
+          },
+          {
+            "key": "lepto-primary-1",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "第 1 针",
+            "layer": "SUGGEST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-25",
+            "missedWindowStart": "2026-08-10",
+            "missedWindowEnd": "2026-09-07",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+            "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "宠必威乐必妥"
+            ],
+            "combo": {
+              "withKind": "core",
+              "withLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+              "windowStart": "2026-10-28",
+              "windowEnd": "2026-11-11",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和核心疫苗（犬瘟、细小、腺病毒）一起打"
+            }
+          },
+          {
+            "key": "core-26w",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "26 周补强",
+            "layer": "MUST",
+            "windowStart": "2026-12-14",
+            "windowEnd": "2027-01-11",
+            "status": "UPCOMING",
+            "statusLabel": "待接种",
+            "hint": "26 周龄这一针是首免程序的收尾；之后每 3 年加强一次。",
+            "basis": "WSAVA 2024：26 周龄或稍后再补一针核心疫苗（而不是等到 12~16 月龄）；若已在 20 周龄后做过抗体检测且显示有保护，则不需要这一针",
+            "titerable": true,
+            "products": [
+              "宠必威优免康",
+              "卫佳伍"
+            ],
+            "combo": null
+          }
+        ],
+        "ignored": {
+          "count": 0,
+          "items": []
+        },
+        "rhythm": "之后：狂犬与钩端每年一次，核心疫苗每 3 年一次",
+        "pendingReview": 0,
+        "conflicts": [
+          {
+            "kind": "core",
+            "recordId": "t",
+            "recordDate": "2026-10-20",
+            "vaccineName": "抗体检测（核心三项）",
+            "reason": "这份抗体检测是在 20 周龄之前做的",
+            "suggestion": "WSAVA 2024：20 周龄以上犬只血清中有抗体才被认为指示保护。这一份先不作为\"可以不打\"的依据，建议 20 周龄后复查，或直接按计划接种。"
+          }
+        ],
+        "noRecordAtAll": true
+      }
+    },
+    {
+      "id": "C-TITER-4W",
+      "title": "抗体在最后一针 4 周内做",
+      "note": "对照：最后一针后不满 28 天，不替代。",
+      "input": {
+        "birthday": "2024-01-01",
+        "today": "2026-10-28",
+        "records": [
+          {
+            "id": "a",
+            "vaccineName": "卫佳伍",
+            "vaccinationDate": "2026-09-01"
+          }
+        ],
+        "tests": [
+          {
+            "id": "t",
+            "testedAt": "2026-09-20",
+            "targets": [
+              "CORE"
+            ],
+            "result": "PASS"
+          }
+        ],
+        "decisions": {}
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2024-01-01",
+        "ageWeeks": 147,
+        "next": {
+          "key": "rabies-1",
+          "kind": "rabies",
+          "kindLabel": "狂犬疫苗",
+          "kindShort": "狂犬疫苗",
+          "label": "首针",
+          "layer": "MUST",
+          "windowStart": "2026-10-28",
+          "windowEnd": "2026-11-27",
+          "missedWindowStart": "2024-03-25",
+          "missedWindowEnd": "2024-04-24",
+          "status": "OVERDUE",
+          "statusLabel": "尽快补种",
+          "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+          "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+          "titerable": false,
+          "products": [
+            "迪安适",
+            "宠必威锐必威",
+            "瑞贝康"
+          ],
+          "combo": null
+        },
+        "plan": [
+          {
+            "key": "rabies-1",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "首针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-27",
+            "missedWindowStart": "2024-03-25",
+            "missedWindowEnd": "2024-04-24",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "迪安适",
+              "宠必威锐必威",
+              "瑞贝康"
+            ],
+            "combo": null
+          },
+          {
+            "key": "lepto-primary-1",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "第 1 针",
+            "layer": "SUGGEST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-25",
+            "missedWindowStart": "2024-02-26",
+            "missedWindowEnd": "2024-03-25",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+            "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "宠必威乐必妥"
+            ],
+            "combo": null
+          },
+          {
+            "key": "core-adult-1",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "加强（每 3 年）",
+            "layer": "MUST",
+            "windowStart": "2029-09-01",
+            "windowEnd": "2029-11-30",
+            "status": "UPCOMING",
+            "statusLabel": "待接种",
+            "hint": "之后每 3 年接种一次。",
+            "basis": "WSAVA 2024：成年加强三年一次或更少频次；16 周龄后的补强在 26 周龄（取代了旧的「12~16 月龄第一次加强」）",
+            "titerable": true,
+            "products": [
+              "卫佳伍",
+              "宠必威优免康"
+            ],
+            "combo": null
+          }
+        ],
+        "ignored": {
+          "count": 0,
+          "items": []
+        },
+        "rhythm": "之后：狂犬与钩端每年一次，核心疫苗每 3 年一次",
+        "pendingReview": 0,
+        "conflicts": [
+          {
+            "kind": "core",
+            "recordId": "t",
+            "recordDate": "2026-09-20",
+            "vaccineName": "抗体检测（核心三项）",
+            "reason": "这份抗体检测离上一针核心疫苗太近（不满 4 周）",
+            "suggestion": "刚接种完测到的是这一针打进去的抗体，不能用来证明\"这一针本可以不打\"。建议接种满 4 周后复查；这一份先不作为依据。"
+          }
+        ],
+        "noRecordAtAll": false
+      }
+    },
+    {
+      "id": "C-CATCHUP-2Y",
+      "title": "8/12/15 周，2 岁才补一针",
+      "note": "对照：系列未在 16 周完成，成年后补一针。",
+      "input": {
+        "birthday": "2024-09-01",
+        "today": "2026-10-28",
+        "records": [
+          {
+            "id": "a",
+            "vaccineName": "卫佳伍",
+            "vaccinationDate": "2024-10-27"
+          },
+          {
+            "id": "b",
+            "vaccineName": "卫佳伍",
+            "vaccinationDate": "2024-11-24"
+          },
+          {
+            "id": "c",
+            "vaccineName": "卫佳伍",
+            "vaccinationDate": "2024-12-15"
+          }
+        ],
+        "tests": [],
+        "decisions": {}
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2024-09-01",
+        "ageWeeks": 112,
+        "next": {
+          "key": "core-catchup",
+          "kind": "core",
+          "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+          "kindShort": "核心疫苗",
+          "label": "补一针",
+          "layer": "MUST",
+          "windowStart": "2026-10-28",
+          "windowEnd": "2026-11-11",
+          "missedWindowStart": "2024-12-29",
+          "missedWindowEnd": "2025-01-12",
+          "status": "OVERDUE",
+          "statusLabel": "尽快补种",
+          "hint": "已经满 26 周，补一针核心疫苗即可；之后每 3 年接种一次。",
+          "basis": "这只狗狗已经满 26 周，按成年犬的常规安排补一针核心疫苗即可（WSAVA 2024：16 周龄以上的犬只免疫史不明时，一针 MLV 或重组疫苗即可保护大多数犬只）；之后每 3 年接种一次。如果你手上还有以前的记录，录进来之后我们会重新算。",
+          "titerable": true,
+          "products": [
+            "卫佳捌",
+            "卫佳伍",
+            "宠必威优免康"
+          ],
+          "combo": {
+            "withKind": "lepto",
+            "withLabel": "钩端螺旋体",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-11",
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "海博莱犬四联加钩端",
+              "维克犬四联加钩端"
+            ],
+            "hint": "这一针可以和钩端螺旋体一起打"
+          }
+        },
+        "plan": [
+          {
+            "key": "core-catchup",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "补一针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-11",
+            "missedWindowStart": "2024-12-29",
+            "missedWindowEnd": "2025-01-12",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "已经满 26 周，补一针核心疫苗即可；之后每 3 年接种一次。",
+            "basis": "这只狗狗已经满 26 周，按成年犬的常规安排补一针核心疫苗即可（WSAVA 2024：16 周龄以上的犬只免疫史不明时，一针 MLV 或重组疫苗即可保护大多数犬只）；之后每 3 年接种一次。如果你手上还有以前的记录，录进来之后我们会重新算。",
+            "titerable": true,
+            "products": [
+              "卫佳捌",
+              "卫佳伍",
+              "宠必威优免康"
+            ],
+            "combo": {
+              "withKind": "lepto",
+              "withLabel": "钩端螺旋体",
+              "windowStart": "2026-10-28",
+              "windowEnd": "2026-11-11",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和钩端螺旋体一起打"
+            }
+          },
+          {
+            "key": "rabies-1",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "首针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-27",
+            "missedWindowStart": "2024-11-24",
+            "missedWindowEnd": "2024-12-24",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "迪安适",
+              "宠必威锐必威",
+              "瑞贝康"
+            ],
+            "combo": null
+          },
+          {
+            "key": "lepto-primary-1",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "第 1 针",
+            "layer": "SUGGEST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-25",
+            "missedWindowStart": "2024-10-27",
+            "missedWindowEnd": "2024-11-24",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+            "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "宠必威乐必妥"
+            ],
+            "combo": {
+              "withKind": "core",
+              "withLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+              "windowStart": "2026-10-28",
+              "windowEnd": "2026-11-11",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和核心疫苗（犬瘟、细小、腺病毒）一起打"
+            }
+          }
+        ],
+        "ignored": {
+          "count": 0,
+          "items": []
+        },
+        "rhythm": "之后：狂犬与钩端每年一次，核心疫苗每 3 年一次",
+        "pendingReview": 0,
+        "conflicts": [],
+        "noRecordAtAll": false
+      }
+    },
+    {
+      "id": "C-16W-2Y",
+      "title": "16 周完成 + 2 岁补一针",
+      "note": "对照：成年加强锚在最后一针。",
+      "input": {
+        "birthday": "2024-09-01",
+        "today": "2026-10-28",
+        "records": [
+          {
+            "id": "a",
+            "vaccineName": "卫佳伍",
+            "vaccinationDate": "2024-10-27"
+          },
+          {
+            "id": "b",
+            "vaccineName": "卫佳伍",
+            "vaccinationDate": "2024-11-24"
+          },
+          {
+            "id": "c",
+            "vaccineName": "卫佳伍",
+            "vaccinationDate": "2024-12-22"
+          },
+          {
+            "id": "d",
+            "vaccineName": "卫佳伍",
+            "vaccinationDate": "2026-09-01"
+          }
+        ],
+        "tests": [],
+        "decisions": {}
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2024-09-01",
+        "ageWeeks": 112,
+        "next": {
+          "key": "rabies-1",
+          "kind": "rabies",
+          "kindLabel": "狂犬疫苗",
+          "kindShort": "狂犬疫苗",
+          "label": "首针",
+          "layer": "MUST",
+          "windowStart": "2026-10-28",
+          "windowEnd": "2026-11-27",
+          "missedWindowStart": "2024-11-24",
+          "missedWindowEnd": "2024-12-24",
+          "status": "OVERDUE",
+          "statusLabel": "尽快补种",
+          "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+          "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+          "titerable": false,
+          "products": [
+            "迪安适",
+            "宠必威锐必威",
+            "瑞贝康"
+          ],
+          "combo": null
+        },
+        "plan": [
+          {
+            "key": "rabies-1",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "首针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-27",
+            "missedWindowStart": "2024-11-24",
+            "missedWindowEnd": "2024-12-24",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "迪安适",
+              "宠必威锐必威",
+              "瑞贝康"
+            ],
+            "combo": null
+          },
+          {
+            "key": "lepto-primary-1",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "第 1 针",
+            "layer": "SUGGEST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-25",
+            "missedWindowStart": "2024-10-27",
+            "missedWindowEnd": "2024-11-24",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+            "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "宠必威乐必妥"
+            ],
+            "combo": null
+          },
+          {
+            "key": "core-adult-1",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "加强（每 3 年）",
+            "layer": "MUST",
+            "windowStart": "2029-09-01",
+            "windowEnd": "2029-11-30",
+            "status": "UPCOMING",
+            "statusLabel": "待接种",
+            "hint": "之后每 3 年接种一次。",
+            "basis": "WSAVA 2024：成年加强三年一次或更少频次；16 周龄后的补强在 26 周龄（取代了旧的「12~16 月龄第一次加强」）",
+            "titerable": true,
+            "products": [
+              "卫佳伍",
+              "宠必威优免康"
+            ],
+            "combo": null
+          }
+        ],
+        "ignored": {
+          "count": 0,
+          "items": []
+        },
+        "rhythm": "之后：狂犬与钩端每年一次，核心疫苗每 3 年一次",
+        "pendingReview": 0,
+        "conflicts": [],
+        "noRecordAtAll": false
+      }
+    },
+    {
+      "id": "C-LEPTO-RESTART-2W",
+      "title": "钩端重启第 2 针（2.8 个月内）",
+      "note": "对照：上一针是重启第 1 针，且不到 3 个月 → 现在会显示重启第 2 针。",
+      "input": {
+        "birthday": "2020-01-01",
+        "today": "2026-10-28",
+        "records": [
+          {
+            "id": "a",
+            "vaccineName": "卫佳捌",
+            "vaccinationDate": "2023-09-01"
+          },
+          {
+            "id": "b",
+            "vaccineName": "宠必威乐必妥",
+            "vaccinationDate": "2026-08-01"
+          }
+        ],
+        "tests": [],
+        "decisions": {}
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2020-01-01",
+        "ageWeeks": 356,
+        "next": {
+          "key": "lepto-primary-2",
+          "kind": "lepto",
+          "kindLabel": "钩端螺旋体",
+          "kindShort": "钩端螺旋体",
+          "label": "第 2 针",
+          "layer": "SUGGEST",
+          "windowStart": "2023-09-15",
+          "windowEnd": "2023-09-29",
+          "missedWindowStart": "2023-09-15",
+          "missedWindowEnd": "2023-09-29",
+          "status": "OVERDUE",
+          "statusLabel": "尽快补种",
+          "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+          "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+          "titerable": false,
+          "products": [
+            "宠必威乐必妥"
+          ],
+          "combo": null
+        },
+        "plan": [
+          {
+            "key": "lepto-primary-2",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "第 2 针",
+            "layer": "SUGGEST",
+            "windowStart": "2023-09-15",
+            "windowEnd": "2023-09-29",
+            "missedWindowStart": "2023-09-15",
+            "missedWindowEnd": "2023-09-29",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+            "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "宠必威乐必妥"
+            ],
+            "combo": null
+          },
+          {
+            "key": "core-adult-1",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "加强（每 3 年）",
+            "layer": "MUST",
+            "windowStart": "2026-09-01",
+            "windowEnd": "2026-11-30",
+            "status": "DUE",
+            "statusLabel": "待接种",
+            "hint": "之后每 3 年接种一次。",
+            "basis": "WSAVA 2024：成年加强三年一次或更少频次；16 周龄后的补强在 26 周龄（取代了旧的「12~16 月龄第一次加强」）",
+            "titerable": true,
+            "products": [
+              "宠必威优免康",
+              "卫佳捌",
+              "卫佳伍"
+            ],
+            "combo": null
+          },
+          {
+            "key": "rabies-1",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "首针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-27",
+            "missedWindowStart": "2020-03-25",
+            "missedWindowEnd": "2020-04-24",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "宠必威锐必威",
+              "瑞贝康",
+              "瑞比克"
+            ],
+            "combo": null
+          }
+        ],
+        "ignored": {
+          "count": 0,
+          "items": []
+        },
+        "rhythm": "之后：狂犬与钩端每年一次，核心疫苗每 3 年一次",
+        "pendingReview": 0,
+        "conflicts": [],
+        "noRecordAtAll": false
+      }
+    },
+    {
+      "id": "C-LEPTO-17M",
+      "title": "钩端上一针 17.9 个月",
+      "note": "对照：不满 18 个月 → 年度逾期，不是重启。",
+      "input": {
+        "birthday": "2020-01-01",
+        "today": "2026-10-28",
+        "records": [
+          {
+            "id": "a",
+            "vaccineName": "宠必威乐必妥",
+            "vaccinationDate": "2025-05-01"
+          }
+        ],
+        "tests": [],
+        "decisions": {}
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2020-01-01",
+        "ageWeeks": 356,
+        "next": {
+          "key": "lepto-primary-2",
+          "kind": "lepto",
+          "kindLabel": "钩端螺旋体",
+          "kindShort": "钩端螺旋体",
+          "label": "第 2 针",
+          "layer": "SUGGEST",
+          "windowStart": "2025-05-15",
+          "windowEnd": "2025-05-29",
+          "missedWindowStart": "2025-05-15",
+          "missedWindowEnd": "2025-05-29",
+          "status": "OVERDUE",
+          "statusLabel": "尽快补种",
+          "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+          "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+          "titerable": false,
+          "products": [
+            "宠必威乐必妥"
+          ],
+          "combo": null
+        },
+        "plan": [
+          {
+            "key": "lepto-primary-2",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "第 2 针",
+            "layer": "SUGGEST",
+            "windowStart": "2025-05-15",
+            "windowEnd": "2025-05-29",
+            "missedWindowStart": "2025-05-15",
+            "missedWindowEnd": "2025-05-29",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+            "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "宠必威乐必妥"
+            ],
+            "combo": null
+          },
+          {
+            "key": "core-catchup",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "补一针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-11",
+            "missedWindowStart": "2020-02-12",
+            "missedWindowEnd": "2020-02-26",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "已经满 26 周，补一针核心疫苗即可；之后每 3 年接种一次。",
+            "basis": "这只狗狗已经满 26 周，按成年犬的常规安排补一针核心疫苗即可（WSAVA 2024：16 周龄以上的犬只免疫史不明时，一针 MLV 或重组疫苗即可保护大多数犬只）；之后每 3 年接种一次。如果你手上还有以前的记录，录进来之后我们会重新算。",
+            "titerable": true,
+            "products": [
+              "宠必威优免康",
+              "卫佳捌",
+              "卫佳伍"
+            ],
+            "combo": null
+          },
+          {
+            "key": "rabies-1",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "首针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-27",
+            "missedWindowStart": "2020-03-25",
+            "missedWindowEnd": "2020-04-24",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "宠必威锐必威",
+              "瑞贝康",
+              "瑞比克"
+            ],
+            "combo": null
+          }
+        ],
+        "ignored": {
+          "count": 0,
+          "items": []
+        },
+        "rhythm": "之后：狂犬与钩端每年一次，核心疫苗每 3 年一次",
+        "pendingReview": 0,
+        "conflicts": [],
+        "noRecordAtAll": false
+      }
+    },
+    {
+      "id": "C-LEPTO-19M",
+      "title": "钩端上一针 19.9 个月",
+      "note": "对照：超过 18 个月 → 重启第 1/2 针。",
+      "input": {
+        "birthday": "2020-01-01",
+        "today": "2026-10-28",
+        "records": [
+          {
+            "id": "a",
+            "vaccineName": "宠必威乐必妥",
+            "vaccinationDate": "2025-03-01"
+          }
+        ],
+        "tests": [],
+        "decisions": {}
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2020-01-01",
+        "ageWeeks": 356,
+        "next": {
+          "key": "core-catchup",
+          "kind": "core",
+          "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+          "kindShort": "核心疫苗",
+          "label": "补一针",
+          "layer": "MUST",
+          "windowStart": "2026-10-28",
+          "windowEnd": "2026-11-11",
+          "missedWindowStart": "2020-02-12",
+          "missedWindowEnd": "2020-02-26",
+          "status": "OVERDUE",
+          "statusLabel": "尽快补种",
+          "hint": "已经满 26 周，补一针核心疫苗即可；之后每 3 年接种一次。",
+          "basis": "这只狗狗已经满 26 周，按成年犬的常规安排补一针核心疫苗即可（WSAVA 2024：16 周龄以上的犬只免疫史不明时，一针 MLV 或重组疫苗即可保护大多数犬只）；之后每 3 年接种一次。如果你手上还有以前的记录，录进来之后我们会重新算。",
+          "titerable": true,
+          "products": [
+            "宠必威优免康",
+            "卫佳捌",
+            "卫佳伍"
+          ],
+          "combo": {
+            "withKind": "lepto",
+            "withLabel": "钩端螺旋体",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-11",
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "海博莱犬四联加钩端",
+              "维克犬四联加钩端"
+            ],
+            "hint": "这一针可以和钩端螺旋体一起打"
+          }
+        },
+        "plan": [
+          {
+            "key": "core-catchup",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "补一针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-11",
+            "missedWindowStart": "2020-02-12",
+            "missedWindowEnd": "2020-02-26",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "已经满 26 周，补一针核心疫苗即可；之后每 3 年接种一次。",
+            "basis": "这只狗狗已经满 26 周，按成年犬的常规安排补一针核心疫苗即可（WSAVA 2024：16 周龄以上的犬只免疫史不明时，一针 MLV 或重组疫苗即可保护大多数犬只）；之后每 3 年接种一次。如果你手上还有以前的记录，录进来之后我们会重新算。",
+            "titerable": true,
+            "products": [
+              "宠必威优免康",
+              "卫佳捌",
+              "卫佳伍"
+            ],
+            "combo": {
+              "withKind": "lepto",
+              "withLabel": "钩端螺旋体",
+              "windowStart": "2026-10-28",
+              "windowEnd": "2026-11-11",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和钩端螺旋体一起打"
+            }
+          },
+          {
+            "key": "rabies-1",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "首针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-27",
+            "missedWindowStart": "2020-03-25",
+            "missedWindowEnd": "2020-04-24",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "宠必威锐必威",
+              "瑞贝康",
+              "瑞比克"
+            ],
+            "combo": null
+          },
+          {
+            "key": "lepto-restart-1",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "重启免疫 第 1 针",
+            "layer": "SUGGEST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-11",
+            "status": "DUE",
+            "statusLabel": "待接种",
+            "hint": "距离上一针已经超过 18 个月，需要重新打两针。",
+            "basis": "WSAVA 2024 问答：上一针钩端螺旋体疫苗距今 18 个月或更久时，虽然支持的证据很少，但基于预防性原则，需要重新开始接种程序（2 针，间隔 2~4 周）。指南同时说明：现有钩端疫苗的免疫力被认为撑不到 18 个月。",
+            "titerable": false,
+            "products": [
+              "宠必威乐必妥",
+              "卫佳捌",
+              "优乐康"
+            ],
+            "combo": {
+              "withKind": "core",
+              "withLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+              "windowStart": "2026-10-28",
+              "windowEnd": "2026-11-11",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和核心疫苗（犬瘟、细小、腺病毒）一起打"
+            }
+          }
+        ],
+        "ignored": {
+          "count": 0,
+          "items": []
+        },
+        "rhythm": "之后：狂犬与钩端每年一次，核心疫苗每 3 年一次",
+        "pendingReview": 0,
+        "conflicts": [],
+        "noRecordAtAll": false
+      }
+    },
+    {
+      "id": "C-NOT-NOW",
+      "title": "“这次先不打”",
+      "note": "对照：NOT_NOW 会跳过这一针，下一年再提醒。",
+      "input": {
+        "birthday": "2020-01-01",
+        "today": "2026-10-28",
+        "records": [
+          {
+            "id": "a",
+            "vaccineName": "狂犬疫苗",
+            "vaccinationDate": "2025-10-01"
+          }
+        ],
+        "tests": [],
+        "decisions": {
+          "rabies-2": {
+            "decision": "SKIP",
+            "reason": "NOT_NOW"
+          }
+        }
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2020-01-01",
+        "ageWeeks": 356,
+        "next": {
+          "key": "core-catchup",
+          "kind": "core",
+          "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+          "kindShort": "核心疫苗",
+          "label": "补一针",
+          "layer": "MUST",
+          "windowStart": "2026-10-28",
+          "windowEnd": "2026-11-11",
+          "missedWindowStart": "2020-02-12",
+          "missedWindowEnd": "2020-02-26",
+          "status": "OVERDUE",
+          "statusLabel": "尽快补种",
+          "hint": "已经满 26 周，补一针核心疫苗即可；之后每 3 年接种一次。",
+          "basis": "这只狗狗已经满 26 周，按成年犬的常规安排补一针核心疫苗即可（WSAVA 2024：16 周龄以上的犬只免疫史不明时，一针 MLV 或重组疫苗即可保护大多数犬只）；之后每 3 年接种一次。如果你手上还有以前的记录，录进来之后我们会重新算。",
+          "titerable": true,
+          "products": [
+            "卫佳捌",
+            "宠必威优免康",
+            "卫佳伍"
+          ],
+          "combo": {
+            "withKind": "lepto",
+            "withLabel": "钩端螺旋体",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-11",
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "海博莱犬四联加钩端",
+              "维克犬四联加钩端"
+            ],
+            "hint": "这一针可以和钩端螺旋体一起打"
+          }
+        },
+        "plan": [
+          {
+            "key": "core-catchup",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "补一针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-11",
+            "missedWindowStart": "2020-02-12",
+            "missedWindowEnd": "2020-02-26",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "已经满 26 周，补一针核心疫苗即可；之后每 3 年接种一次。",
+            "basis": "这只狗狗已经满 26 周，按成年犬的常规安排补一针核心疫苗即可（WSAVA 2024：16 周龄以上的犬只免疫史不明时，一针 MLV 或重组疫苗即可保护大多数犬只）；之后每 3 年接种一次。如果你手上还有以前的记录，录进来之后我们会重新算。",
+            "titerable": true,
+            "products": [
+              "卫佳捌",
+              "宠必威优免康",
+              "卫佳伍"
+            ],
+            "combo": {
+              "withKind": "lepto",
+              "withLabel": "钩端螺旋体",
+              "windowStart": "2026-10-28",
+              "windowEnd": "2026-11-11",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和钩端螺旋体一起打"
+            }
+          },
+          {
+            "key": "lepto-primary-1",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "第 1 针",
+            "layer": "SUGGEST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-25",
+            "missedWindowStart": "2020-02-26",
+            "missedWindowEnd": "2020-03-25",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+            "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "宠必威乐必妥"
+            ],
+            "combo": {
+              "withKind": "core",
+              "withLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+              "windowStart": "2026-10-28",
+              "windowEnd": "2026-11-11",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和核心疫苗（犬瘟、细小、腺病毒）一起打"
+            }
+          },
+          {
+            "key": "rabies-3",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "每年一次",
+            "layer": "MUST",
+            "windowStart": "2027-10-01",
+            "windowEnd": "2027-10-31",
+            "status": "UPCOMING",
+            "statusLabel": "待接种",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "宠必威锐必威",
+              "瑞贝康",
+              "瑞比克"
+            ],
+            "combo": null
+          }
+        ],
+        "ignored": {
+          "count": 1,
+          "items": [
+            {
+              "key": "rabies-2",
+              "kindLabel": "狂犬疫苗",
+              "label": "每年一次",
+              "reason": "NOT_NOW"
+            }
+          ]
+        },
+        "rhythm": "之后：狂犬与钩端每年一次，核心疫苗每 3 年一次",
+        "pendingReview": 0,
+        "conflicts": [],
+        "noRecordAtAll": false
+      }
+    },
+    {
+      "id": "C-STOPPED",
+      "title": "“不再接种了”",
+      "note": "对照：STOPPED 会停掉整类提醒。",
+      "input": {
+        "birthday": "2020-01-01",
+        "today": "2026-10-28",
+        "records": [
+          {
+            "id": "a",
+            "vaccineName": "狂犬疫苗",
+            "vaccinationDate": "2025-10-01"
+          }
+        ],
+        "tests": [],
+        "decisions": {
+          "rabies-2": {
+            "decision": "SKIP",
+            "reason": "STOPPED"
+          }
+        }
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2020-01-01",
+        "ageWeeks": 356,
+        "next": {
+          "key": "core-catchup",
+          "kind": "core",
+          "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+          "kindShort": "核心疫苗",
+          "label": "补一针",
+          "layer": "MUST",
+          "windowStart": "2026-10-28",
+          "windowEnd": "2026-11-11",
+          "missedWindowStart": "2020-02-12",
+          "missedWindowEnd": "2020-02-26",
+          "status": "OVERDUE",
+          "statusLabel": "尽快补种",
+          "hint": "已经满 26 周，补一针核心疫苗即可；之后每 3 年接种一次。",
+          "basis": "这只狗狗已经满 26 周，按成年犬的常规安排补一针核心疫苗即可（WSAVA 2024：16 周龄以上的犬只免疫史不明时，一针 MLV 或重组疫苗即可保护大多数犬只）；之后每 3 年接种一次。如果你手上还有以前的记录，录进来之后我们会重新算。",
+          "titerable": true,
+          "products": [
+            "卫佳捌",
+            "宠必威优免康",
+            "卫佳伍"
+          ],
+          "combo": {
+            "withKind": "lepto",
+            "withLabel": "钩端螺旋体",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-11",
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "海博莱犬四联加钩端",
+              "维克犬四联加钩端"
+            ],
+            "hint": "这一针可以和钩端螺旋体一起打"
+          }
+        },
+        "plan": [
+          {
+            "key": "rabies-1",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "首针",
+            "layer": "MUST",
+            "windowStart": "2020-03-25",
+            "windowEnd": "2020-04-24",
+            "status": "DONE",
+            "statusLabel": "已完成",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "宠必威锐必威",
+              "瑞贝康",
+              "瑞比克"
+            ],
+            "combo": null
+          },
+          {
+            "key": "core-catchup",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "补一针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-11",
+            "missedWindowStart": "2020-02-12",
+            "missedWindowEnd": "2020-02-26",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "已经满 26 周，补一针核心疫苗即可；之后每 3 年接种一次。",
+            "basis": "这只狗狗已经满 26 周，按成年犬的常规安排补一针核心疫苗即可（WSAVA 2024：16 周龄以上的犬只免疫史不明时，一针 MLV 或重组疫苗即可保护大多数犬只）；之后每 3 年接种一次。如果你手上还有以前的记录，录进来之后我们会重新算。",
+            "titerable": true,
+            "products": [
+              "卫佳捌",
+              "宠必威优免康",
+              "卫佳伍"
+            ],
+            "combo": {
+              "withKind": "lepto",
+              "withLabel": "钩端螺旋体",
+              "windowStart": "2026-10-28",
+              "windowEnd": "2026-11-11",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和钩端螺旋体一起打"
+            }
+          },
+          {
+            "key": "lepto-primary-1",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "第 1 针",
+            "layer": "SUGGEST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-25",
+            "missedWindowStart": "2020-02-26",
+            "missedWindowEnd": "2020-03-25",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+            "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "宠必威乐必妥"
+            ],
+            "combo": {
+              "withKind": "core",
+              "withLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+              "windowStart": "2026-10-28",
+              "windowEnd": "2026-11-11",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和核心疫苗（犬瘟、细小、腺病毒）一起打"
+            }
+          }
+        ],
+        "ignored": {
+          "count": 1,
+          "items": [
+            {
+              "key": "rabies-2",
+              "kindLabel": "狂犬疫苗",
+              "label": "每年一次",
+              "reason": "STOPPED"
+            }
+          ]
+        },
+        "rhythm": "之后：钩端每年一次，核心疫苗每 3 年一次",
+        "pendingReview": 0,
+        "conflicts": [],
+        "noRecordAtAll": false
+      }
+    },
+    {
+      "id": "C-UNVERIFIED",
+      "title": "识别出来还没核对",
+      "note": "对照：productVerified=false 不参与计划，pendingReview=1。",
+      "input": {
+        "birthday": "2024-01-01",
+        "today": "2026-10-28",
+        "records": [
+          {
+            "id": "a",
+            "vaccineName": "卫佳伍",
+            "vaccinationDate": "2024-03-01",
+            "productVerified": false
+          }
+        ],
+        "tests": [],
+        "decisions": {}
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2024-01-01",
+        "ageWeeks": 147,
+        "next": {
+          "key": "core-catchup",
+          "kind": "core",
+          "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+          "kindShort": "核心疫苗",
+          "label": "补一针",
+          "layer": "MUST",
+          "windowStart": "2026-10-28",
+          "windowEnd": "2026-11-11",
+          "missedWindowStart": "2024-02-12",
+          "missedWindowEnd": "2024-02-26",
+          "status": "OVERDUE",
+          "statusLabel": "尽快补种",
+          "hint": "已经满 26 周，补一针核心疫苗即可；之后每 3 年接种一次。",
+          "basis": "这只狗狗已经满 26 周，按成年犬的常规安排补一针核心疫苗即可（WSAVA 2024：16 周龄以上的犬只免疫史不明时，一针 MLV 或重组疫苗即可保护大多数犬只）；之后每 3 年接种一次。如果你手上还有以前的记录，录进来之后我们会重新算。",
+          "titerable": true,
+          "products": [
+            "卫佳捌",
+            "卫佳伍",
+            "宠必威优免康"
+          ],
+          "combo": {
+            "withKind": "lepto",
+            "withLabel": "钩端螺旋体",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-11",
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "海博莱犬四联加钩端",
+              "维克犬四联加钩端"
+            ],
+            "hint": "这一针可以和钩端螺旋体一起打"
+          }
+        },
+        "plan": [
+          {
+            "key": "core-catchup",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "补一针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-11",
+            "missedWindowStart": "2024-02-12",
+            "missedWindowEnd": "2024-02-26",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "已经满 26 周，补一针核心疫苗即可；之后每 3 年接种一次。",
+            "basis": "这只狗狗已经满 26 周，按成年犬的常规安排补一针核心疫苗即可（WSAVA 2024：16 周龄以上的犬只免疫史不明时，一针 MLV 或重组疫苗即可保护大多数犬只）；之后每 3 年接种一次。如果你手上还有以前的记录，录进来之后我们会重新算。",
+            "titerable": true,
+            "products": [
+              "卫佳捌",
+              "卫佳伍",
+              "宠必威优免康"
+            ],
+            "combo": {
+              "withKind": "lepto",
+              "withLabel": "钩端螺旋体",
+              "windowStart": "2026-10-28",
+              "windowEnd": "2026-11-11",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和钩端螺旋体一起打"
+            }
+          },
+          {
+            "key": "rabies-1",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "首针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-27",
+            "missedWindowStart": "2024-03-25",
+            "missedWindowEnd": "2024-04-24",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "迪安适",
+              "宠必威锐必威",
+              "瑞贝康"
+            ],
+            "combo": null
+          },
+          {
+            "key": "lepto-primary-1",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "第 1 针",
+            "layer": "SUGGEST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-25",
+            "missedWindowStart": "2024-02-26",
+            "missedWindowEnd": "2024-03-25",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+            "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "宠必威乐必妥"
+            ],
+            "combo": {
+              "withKind": "core",
+              "withLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+              "windowStart": "2026-10-28",
+              "windowEnd": "2026-11-11",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和核心疫苗（犬瘟、细小、腺病毒）一起打"
+            }
+          }
+        ],
+        "ignored": {
+          "count": 0,
+          "items": []
+        },
+        "rhythm": "之后：狂犬与钩端每年一次，核心疫苗每 3 年一次",
+        "pendingReview": 1,
+        "conflicts": [],
+        "noRecordAtAll": false
+      }
+    },
+    {
+      "id": "C-FUTURE",
+      "title": "接种日期在未来",
+      "note": "对照：未来日期不参与计划，conflicts 有提示。",
+      "input": {
+        "birthday": "2024-01-01",
+        "today": "2026-10-28",
+        "records": [
+          {
+            "id": "a",
+            "vaccineName": "卫佳伍",
+            "vaccinationDate": "2027-03-01"
+          }
+        ],
+        "tests": [],
+        "decisions": {}
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2024-01-01",
+        "ageWeeks": 147,
+        "next": {
+          "key": "core-catchup",
+          "kind": "core",
+          "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+          "kindShort": "核心疫苗",
+          "label": "补一针",
+          "layer": "MUST",
+          "windowStart": "2026-10-28",
+          "windowEnd": "2026-11-11",
+          "missedWindowStart": "2024-02-12",
+          "missedWindowEnd": "2024-02-26",
+          "status": "OVERDUE",
+          "statusLabel": "尽快补种",
+          "hint": "已经满 26 周，补一针核心疫苗即可；之后每 3 年接种一次。",
+          "basis": "这只狗狗已经满 26 周，按成年犬的常规安排补一针核心疫苗即可（WSAVA 2024：16 周龄以上的犬只免疫史不明时，一针 MLV 或重组疫苗即可保护大多数犬只）；之后每 3 年接种一次。如果你手上还有以前的记录，录进来之后我们会重新算。",
+          "titerable": true,
+          "products": [
+            "卫佳捌",
+            "卫佳伍",
+            "宠必威优免康"
+          ],
+          "combo": {
+            "withKind": "lepto",
+            "withLabel": "钩端螺旋体",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-11",
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "海博莱犬四联加钩端",
+              "维克犬四联加钩端"
+            ],
+            "hint": "这一针可以和钩端螺旋体一起打"
+          }
+        },
+        "plan": [
+          {
+            "key": "core-catchup",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "补一针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-11",
+            "missedWindowStart": "2024-02-12",
+            "missedWindowEnd": "2024-02-26",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "已经满 26 周，补一针核心疫苗即可；之后每 3 年接种一次。",
+            "basis": "这只狗狗已经满 26 周，按成年犬的常规安排补一针核心疫苗即可（WSAVA 2024：16 周龄以上的犬只免疫史不明时，一针 MLV 或重组疫苗即可保护大多数犬只）；之后每 3 年接种一次。如果你手上还有以前的记录，录进来之后我们会重新算。",
+            "titerable": true,
+            "products": [
+              "卫佳捌",
+              "卫佳伍",
+              "宠必威优免康"
+            ],
+            "combo": {
+              "withKind": "lepto",
+              "withLabel": "钩端螺旋体",
+              "windowStart": "2026-10-28",
+              "windowEnd": "2026-11-11",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和钩端螺旋体一起打"
+            }
+          },
+          {
+            "key": "rabies-1",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "首针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-27",
+            "missedWindowStart": "2024-03-25",
+            "missedWindowEnd": "2024-04-24",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "迪安适",
+              "宠必威锐必威",
+              "瑞贝康"
+            ],
+            "combo": null
+          },
+          {
+            "key": "lepto-primary-1",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "第 1 针",
+            "layer": "SUGGEST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-25",
+            "missedWindowStart": "2024-02-26",
+            "missedWindowEnd": "2024-03-25",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+            "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "宠必威乐必妥"
+            ],
+            "combo": {
+              "withKind": "core",
+              "withLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+              "windowStart": "2026-10-28",
+              "windowEnd": "2026-11-11",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和核心疫苗（犬瘟、细小、腺病毒）一起打"
+            }
+          }
+        ],
+        "ignored": {
+          "count": 0,
+          "items": []
+        },
+        "rhythm": "之后：狂犬与钩端每年一次，核心疫苗每 3 年一次",
+        "pendingReview": 0,
+        "conflicts": [
+          {
+            "kind": "other",
+            "recordId": "a",
+            "recordDate": "2027-03-01",
+            "vaccineName": "卫佳伍",
+            "reason": "这一针的接种日期（2027-03-01）还没到",
+            "suggestion": "请核对疫苗本上的日期（最常见的错法是把年份写错）。"
+          }
+        ],
+        "noRecordAtAll": false
+      }
+    },
+    {
+      "id": "C-RABIES-6M",
+      "title": "狂犬两针间隔 6 个月",
+      "note": "对照：间隔不足一年，conflicts 有提示。",
+      "input": {
+        "birthday": "2024-01-01",
+        "today": "2026-10-28",
+        "records": [
+          {
+            "id": "a",
+            "vaccineName": "狂犬疫苗",
+            "vaccinationDate": "2025-01-01"
+          },
+          {
+            "id": "b",
+            "vaccineName": "狂犬疫苗",
+            "vaccinationDate": "2025-07-01"
+          }
+        ],
+        "tests": [],
+        "decisions": {}
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2024-01-01",
+        "ageWeeks": 147,
+        "next": {
+          "key": "rabies-2",
+          "kind": "rabies",
+          "kindLabel": "狂犬疫苗",
+          "kindShort": "狂犬疫苗",
+          "label": "每年一次",
+          "layer": "MUST",
+          "windowStart": "2026-07-01",
+          "windowEnd": "2026-07-31",
+          "missedWindowStart": "2026-07-01",
+          "missedWindowEnd": "2026-07-31",
+          "status": "OVERDUE",
+          "statusLabel": "尽快补种",
+          "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+          "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+          "titerable": false,
+          "products": [
+            "宠必威锐必威",
+            "瑞贝康",
+            "瑞比克"
+          ],
+          "combo": null
+        },
+        "plan": [
+          {
+            "key": "rabies-2",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "每年一次",
+            "layer": "MUST",
+            "windowStart": "2026-07-01",
+            "windowEnd": "2026-07-31",
+            "missedWindowStart": "2026-07-01",
+            "missedWindowEnd": "2026-07-31",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "宠必威锐必威",
+              "瑞贝康",
+              "瑞比克"
+            ],
+            "combo": null
+          },
+          {
+            "key": "core-catchup",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "补一针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-11",
+            "missedWindowStart": "2024-02-12",
+            "missedWindowEnd": "2024-02-26",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "已经满 26 周，补一针核心疫苗即可；之后每 3 年接种一次。",
+            "basis": "这只狗狗已经满 26 周，按成年犬的常规安排补一针核心疫苗即可（WSAVA 2024：16 周龄以上的犬只免疫史不明时，一针 MLV 或重组疫苗即可保护大多数犬只）；之后每 3 年接种一次。如果你手上还有以前的记录，录进来之后我们会重新算。",
+            "titerable": true,
+            "products": [
+              "卫佳捌",
+              "宠必威优免康",
+              "卫佳伍"
+            ],
+            "combo": {
+              "withKind": "lepto",
+              "withLabel": "钩端螺旋体",
+              "windowStart": "2026-10-28",
+              "windowEnd": "2026-11-11",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和钩端螺旋体一起打"
+            }
+          },
+          {
+            "key": "lepto-primary-1",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "第 1 针",
+            "layer": "SUGGEST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-25",
+            "missedWindowStart": "2024-02-26",
+            "missedWindowEnd": "2024-03-25",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+            "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "宠必威乐必妥"
+            ],
+            "combo": {
+              "withKind": "core",
+              "withLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+              "windowStart": "2026-10-28",
+              "windowEnd": "2026-11-11",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和核心疫苗（犬瘟、细小、腺病毒）一起打"
+            }
+          }
+        ],
+        "ignored": {
+          "count": 0,
+          "items": []
+        },
+        "rhythm": "之后：狂犬与钩端每年一次，核心疫苗每 3 年一次",
+        "pendingReview": 0,
+        "conflicts": [
+          {
+            "kind": "rabies",
+            "recordId": "b",
+            "recordDate": "2025-07-01",
+            "vaccineName": "狂犬疫苗",
+            "reason": "与上一针狂犬相隔约 6 个月，短于一年",
+            "suggestion": "国内狂犬通常每年一次。这次间隔偏短，建议与兽医确认是否按当地要求执行。"
+          }
+        ],
+        "noRecordAtAll": false
+      }
+    },
+    {
+      "id": "C-NO-BIRTHDAY",
+      "title": "没有生日",
+      "note": "对照：算不出计划，返回空计划。",
+      "input": {
+        "birthday": "",
+        "today": "2026-10-28",
+        "records": [
+          {
+            "id": "a",
+            "vaccineName": "卫佳伍",
+            "vaccinationDate": "2025-01-01"
+          }
+        ],
+        "tests": [],
+        "decisions": {}
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "",
+        "ageWeeks": null,
+        "next": null,
+        "plan": [],
+        "ignored": {
+          "count": 0,
+          "items": []
+        },
+        "rhythm": "",
+        "pendingReview": 0,
+        "conflicts": [],
+        "noRecordAtAll": false
+      }
+    },
+    {
+      "id": "C-CAT",
+      "title": "猫三联（不是犬苗）",
+      "note": "对照：猫苗不归类，不参与犬的计划。",
+      "input": {
+        "birthday": "2024-01-01",
+        "today": "2026-10-28",
+        "records": [
+          {
+            "id": "a",
+            "vaccineName": "猫三联",
+            "vaccinationDate": "2025-01-01"
+          }
+        ],
+        "tests": [],
+        "decisions": {}
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2024-01-01",
+        "ageWeeks": 147,
+        "next": {
+          "key": "core-catchup",
+          "kind": "core",
+          "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+          "kindShort": "核心疫苗",
+          "label": "补一针",
+          "layer": "MUST",
+          "windowStart": "2026-10-28",
+          "windowEnd": "2026-11-11",
+          "missedWindowStart": "2024-02-12",
+          "missedWindowEnd": "2024-02-26",
+          "status": "OVERDUE",
+          "statusLabel": "尽快补种",
+          "hint": "已经满 26 周，补一针核心疫苗即可；之后每 3 年接种一次。",
+          "basis": "这只狗狗已经满 26 周，按成年犬的常规安排补一针核心疫苗即可（WSAVA 2024：16 周龄以上的犬只免疫史不明时，一针 MLV 或重组疫苗即可保护大多数犬只）；之后每 3 年接种一次。如果你手上还有以前的记录，录进来之后我们会重新算。",
+          "titerable": true,
+          "products": [
+            "卫佳捌",
+            "宠必威优免康",
+            "卫佳伍"
+          ],
+          "combo": {
+            "withKind": "lepto",
+            "withLabel": "钩端螺旋体",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-11",
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "海博莱犬四联加钩端",
+              "维克犬四联加钩端"
+            ],
+            "hint": "这一针可以和钩端螺旋体一起打"
+          }
+        },
+        "plan": [
+          {
+            "key": "core-catchup",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "补一针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-11",
+            "missedWindowStart": "2024-02-12",
+            "missedWindowEnd": "2024-02-26",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "已经满 26 周，补一针核心疫苗即可；之后每 3 年接种一次。",
+            "basis": "这只狗狗已经满 26 周，按成年犬的常规安排补一针核心疫苗即可（WSAVA 2024：16 周龄以上的犬只免疫史不明时，一针 MLV 或重组疫苗即可保护大多数犬只）；之后每 3 年接种一次。如果你手上还有以前的记录，录进来之后我们会重新算。",
+            "titerable": true,
+            "products": [
+              "卫佳捌",
+              "宠必威优免康",
+              "卫佳伍"
+            ],
+            "combo": {
+              "withKind": "lepto",
+              "withLabel": "钩端螺旋体",
+              "windowStart": "2026-10-28",
+              "windowEnd": "2026-11-11",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和钩端螺旋体一起打"
+            }
+          },
+          {
+            "key": "rabies-1",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "首针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-27",
+            "missedWindowStart": "2024-03-25",
+            "missedWindowEnd": "2024-04-24",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "宠必威锐必威",
+              "瑞贝康",
+              "瑞比克"
+            ],
+            "combo": null
+          },
+          {
+            "key": "lepto-primary-1",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "第 1 针",
+            "layer": "SUGGEST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-25",
+            "missedWindowStart": "2024-02-26",
+            "missedWindowEnd": "2024-03-25",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+            "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "宠必威乐必妥"
+            ],
+            "combo": {
+              "withKind": "core",
+              "withLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+              "windowStart": "2026-10-28",
+              "windowEnd": "2026-11-11",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和核心疫苗（犬瘟、细小、腺病毒）一起打"
+            }
+          }
+        ],
+        "ignored": {
+          "count": 0,
+          "items": []
+        },
+        "rhythm": "之后：狂犬与钩端每年一次，核心疫苗每 3 年一次",
+        "pendingReview": 0,
+        "conflicts": [],
+        "noRecordAtAll": false
+      }
+    },
+    {
+      "id": "C-COMBO",
+      "title": "卫佳捌（核心 + 钩端）",
+      "note": "对照：一支组合苗同时顶两类。",
+      "input": {
+        "birthday": "2024-01-01",
+        "today": "2026-10-28",
+        "records": [
+          {
+            "id": "a",
+            "vaccineName": "卫佳捌",
+            "vaccinationDate": "2026-01-01"
+          }
+        ],
+        "tests": [],
+        "decisions": {}
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2024-01-01",
+        "ageWeeks": 147,
+        "next": {
+          "key": "lepto-primary-2",
+          "kind": "lepto",
+          "kindLabel": "钩端螺旋体",
+          "kindShort": "钩端螺旋体",
+          "label": "第 2 针",
+          "layer": "SUGGEST",
+          "windowStart": "2026-01-15",
+          "windowEnd": "2026-01-29",
+          "missedWindowStart": "2026-01-15",
+          "missedWindowEnd": "2026-01-29",
+          "status": "OVERDUE",
+          "statusLabel": "尽快补种",
+          "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+          "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+          "titerable": false,
+          "products": [
+            "宠必威乐必妥"
+          ],
+          "combo": null
+        },
+        "plan": [
+          {
+            "key": "lepto-primary-2",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "第 2 针",
+            "layer": "SUGGEST",
+            "windowStart": "2026-01-15",
+            "windowEnd": "2026-01-29",
+            "missedWindowStart": "2026-01-15",
+            "missedWindowEnd": "2026-01-29",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+            "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "宠必威乐必妥"
+            ],
+            "combo": null
+          },
+          {
+            "key": "rabies-1",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "首针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-27",
+            "missedWindowStart": "2024-03-25",
+            "missedWindowEnd": "2024-04-24",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "迪安适",
+              "宠必威锐必威",
+              "瑞贝康"
+            ],
+            "combo": null
+          },
+          {
+            "key": "core-adult-1",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "加强（每 3 年）",
+            "layer": "MUST",
+            "windowStart": "2029-01-01",
+            "windowEnd": "2029-04-01",
+            "status": "UPCOMING",
+            "statusLabel": "待接种",
+            "hint": "之后每 3 年接种一次。",
+            "basis": "WSAVA 2024：成年加强三年一次或更少频次；16 周龄后的补强在 26 周龄（取代了旧的「12~16 月龄第一次加强」）",
+            "titerable": true,
+            "products": [
+              "卫佳伍",
+              "宠必威优免康"
+            ],
+            "combo": null
+          }
+        ],
+        "ignored": {
+          "count": 0,
+          "items": []
+        },
+        "rhythm": "之后：狂犬与钩端每年一次，核心疫苗每 3 年一次",
+        "pendingReview": 0,
+        "conflicts": [],
+        "noRecordAtAll": false
+      }
+    },
+    {
+      "id": "C-SINGLE",
+      "title": "卫佳细（只防细小）",
+      "note": "对照：产品库单苗不当核心，记成 other。",
+      "input": {
+        "birthday": "2024-01-01",
+        "today": "2026-10-28",
+        "records": [
+          {
+            "id": "a",
+            "vaccineName": "卫佳细",
+            "vaccinationDate": "2026-01-01"
+          }
+        ],
+        "tests": [],
+        "decisions": {}
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2024-01-01",
+        "ageWeeks": 147,
+        "next": {
+          "key": "core-catchup",
+          "kind": "core",
+          "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+          "kindShort": "核心疫苗",
+          "label": "补一针",
+          "layer": "MUST",
+          "windowStart": "2026-10-28",
+          "windowEnd": "2026-11-11",
+          "missedWindowStart": "2024-02-12",
+          "missedWindowEnd": "2024-02-26",
+          "status": "OVERDUE",
+          "statusLabel": "尽快补种",
+          "hint": "已经满 26 周，补一针核心疫苗即可；之后每 3 年接种一次。",
+          "basis": "这只狗狗已经满 26 周，按成年犬的常规安排补一针核心疫苗即可（WSAVA 2024：16 周龄以上的犬只免疫史不明时，一针 MLV 或重组疫苗即可保护大多数犬只）；之后每 3 年接种一次。如果你手上还有以前的记录，录进来之后我们会重新算。",
+          "titerable": true,
+          "products": [
+            "卫佳捌",
+            "卫佳伍",
+            "宠必威优免康"
+          ],
+          "combo": {
+            "withKind": "lepto",
+            "withLabel": "钩端螺旋体",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-11",
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "海博莱犬四联加钩端",
+              "维克犬四联加钩端"
+            ],
+            "hint": "这一针可以和钩端螺旋体一起打"
+          }
+        },
+        "plan": [
+          {
+            "key": "core-catchup",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "补一针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-11",
+            "missedWindowStart": "2024-02-12",
+            "missedWindowEnd": "2024-02-26",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "已经满 26 周，补一针核心疫苗即可；之后每 3 年接种一次。",
+            "basis": "这只狗狗已经满 26 周，按成年犬的常规安排补一针核心疫苗即可（WSAVA 2024：16 周龄以上的犬只免疫史不明时，一针 MLV 或重组疫苗即可保护大多数犬只）；之后每 3 年接种一次。如果你手上还有以前的记录，录进来之后我们会重新算。",
+            "titerable": true,
+            "products": [
+              "卫佳捌",
+              "卫佳伍",
+              "宠必威优免康"
+            ],
+            "combo": {
+              "withKind": "lepto",
+              "withLabel": "钩端螺旋体",
+              "windowStart": "2026-10-28",
+              "windowEnd": "2026-11-11",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和钩端螺旋体一起打"
+            }
+          },
+          {
+            "key": "rabies-1",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "首针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-27",
+            "missedWindowStart": "2024-03-25",
+            "missedWindowEnd": "2024-04-24",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "迪安适",
+              "宠必威锐必威",
+              "瑞贝康"
+            ],
+            "combo": null
+          },
+          {
+            "key": "lepto-primary-1",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "第 1 针",
+            "layer": "SUGGEST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-25",
+            "missedWindowStart": "2024-02-26",
+            "missedWindowEnd": "2024-03-25",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+            "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "宠必威乐必妥"
+            ],
+            "combo": {
+              "withKind": "core",
+              "withLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+              "windowStart": "2026-10-28",
+              "windowEnd": "2026-11-11",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和核心疫苗（犬瘟、细小、腺病毒）一起打"
+            }
+          }
+        ],
+        "ignored": {
+          "count": 0,
+          "items": []
+        },
+        "rhythm": "之后：狂犬与钩端每年一次，核心疫苗每 3 年一次",
+        "pendingReview": 0,
+        "conflicts": [],
+        "noRecordAtAll": false
+      }
+    },
+    {
+      "id": "C-NO-RECORD-ADULT",
+      "title": "3 岁，一条记录都没有",
+      "note": "对照：成年犬补一针（与 P-B 同日不同生日）。",
+      "input": {
+        "birthday": "2023-10-28",
+        "today": "2026-10-28",
+        "records": [],
+        "tests": [],
+        "decisions": {}
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2023-10-28",
+        "ageWeeks": 156,
+        "next": {
+          "key": "core-catchup",
+          "kind": "core",
+          "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+          "kindShort": "核心疫苗",
+          "label": "补一针",
+          "layer": "MUST",
+          "windowStart": "2026-10-28",
+          "windowEnd": "2026-11-11",
+          "missedWindowStart": "2023-12-09",
+          "missedWindowEnd": "2023-12-23",
+          "status": "OVERDUE",
+          "statusLabel": "尽快补种",
+          "hint": "已经满 26 周，补一针核心疫苗即可；之后每 3 年接种一次。",
+          "basis": "这只狗狗已经满 26 周，按成年犬的常规安排补一针核心疫苗即可（WSAVA 2024：16 周龄以上的犬只免疫史不明时，一针 MLV 或重组疫苗即可保护大多数犬只）；之后每 3 年接种一次。如果你手上还有以前的记录，录进来之后我们会重新算。",
+          "titerable": true,
+          "products": [
+            "卫佳捌",
+            "宠必威优免康",
+            "卫佳伍"
+          ],
+          "combo": {
+            "withKind": "lepto",
+            "withLabel": "钩端螺旋体",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-11",
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "海博莱犬四联加钩端",
+              "维克犬四联加钩端"
+            ],
+            "hint": "这一针可以和钩端螺旋体一起打"
+          }
+        },
+        "plan": [
+          {
+            "key": "core-catchup",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "补一针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-11",
+            "missedWindowStart": "2023-12-09",
+            "missedWindowEnd": "2023-12-23",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "已经满 26 周，补一针核心疫苗即可；之后每 3 年接种一次。",
+            "basis": "这只狗狗已经满 26 周，按成年犬的常规安排补一针核心疫苗即可（WSAVA 2024：16 周龄以上的犬只免疫史不明时，一针 MLV 或重组疫苗即可保护大多数犬只）；之后每 3 年接种一次。如果你手上还有以前的记录，录进来之后我们会重新算。",
+            "titerable": true,
+            "products": [
+              "卫佳捌",
+              "宠必威优免康",
+              "卫佳伍"
+            ],
+            "combo": {
+              "withKind": "lepto",
+              "withLabel": "钩端螺旋体",
+              "windowStart": "2026-10-28",
+              "windowEnd": "2026-11-11",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和钩端螺旋体一起打"
+            }
+          },
+          {
+            "key": "rabies-1",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "首针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-27",
+            "missedWindowStart": "2024-01-20",
+            "missedWindowEnd": "2024-02-19",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "宠必威锐必威",
+              "瑞贝康",
+              "瑞比克"
+            ],
+            "combo": null
+          },
+          {
+            "key": "lepto-primary-1",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "第 1 针",
+            "layer": "SUGGEST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-25",
+            "missedWindowStart": "2023-12-23",
+            "missedWindowEnd": "2024-01-20",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+            "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "宠必威乐必妥"
+            ],
+            "combo": {
+              "withKind": "core",
+              "withLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+              "windowStart": "2026-10-28",
+              "windowEnd": "2026-11-11",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和核心疫苗（犬瘟、细小、腺病毒）一起打"
+            }
+          }
+        ],
+        "ignored": {
+          "count": 0,
+          "items": []
+        },
+        "rhythm": "之后：狂犬与钩端每年一次，核心疫苗每 3 年一次",
+        "pendingReview": 0,
+        "conflicts": [],
+        "noRecordAtAll": true
+      }
+    },
+    {
+      "id": "C-NO-RECORD-25W",
+      "title": "25 周，一条记录都没有（V17）",
+      "note": "B0.5 新发现：25 周无记录被套 6~8 周首免，还排了 2 天后的 26 周补强。",
+      "input": {
+        "birthday": "2026-05-01",
+        "today": "2026-10-28",
+        "records": [],
+        "tests": [],
+        "decisions": {}
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2026-05-01",
+        "ageWeeks": 25,
+        "next": {
+          "key": "core-puppy-1",
+          "kind": "core",
+          "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+          "kindShort": "核心疫苗",
+          "label": "第 1 针",
+          "layer": "MUST",
+          "windowStart": "2026-10-28",
+          "windowEnd": "2026-11-11",
+          "missedWindowStart": "2026-06-12",
+          "missedWindowEnd": "2026-06-26",
+          "status": "OVERDUE",
+          "statusLabel": "尽快补种",
+          "hint": "幼犬从 6~8 周龄开始，每 2~4 周打一针，一直接种到满 16 周龄。",
+          "basis": "犬瘟、细小、腺病毒为必须接种的核心疫苗。首次免疫从 6~8 周龄起，间隔 2~4 周接种一次，一直接种到满 16 周龄（WSAVA 2024）。幼犬的母源抗体会干扰疫苗，但每只幼犬的抗体消退时间差异比较大，所以需要在 6~16 周龄之间间隔接种。确保至少有一针落在抗体消退的窗口期里。16 周龄后，绝大多数幼犬母源抗体大幅减弱，所以 16 周龄后的核心疫苗接种尤为重要，也是幼犬首免程序中的最后一针。是否接种、何时接种，请以执业兽医的意见为准。",
+          "titerable": true,
+          "products": [
+            "卫佳捌",
+            "宠必威优免康",
+            "卫佳伍"
+          ],
+          "combo": {
+            "withKind": "lepto",
+            "withLabel": "钩端螺旋体",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-11",
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "海博莱犬四联加钩端",
+              "维克犬四联加钩端"
+            ],
+            "hint": "这一针可以和钩端螺旋体一起打"
+          }
+        },
+        "plan": [
+          {
+            "key": "core-puppy-1",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "第 1 针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-11",
+            "missedWindowStart": "2026-06-12",
+            "missedWindowEnd": "2026-06-26",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "幼犬从 6~8 周龄开始，每 2~4 周打一针，一直接种到满 16 周龄。",
+            "basis": "犬瘟、细小、腺病毒为必须接种的核心疫苗。首次免疫从 6~8 周龄起，间隔 2~4 周接种一次，一直接种到满 16 周龄（WSAVA 2024）。幼犬的母源抗体会干扰疫苗，但每只幼犬的抗体消退时间差异比较大，所以需要在 6~16 周龄之间间隔接种。确保至少有一针落在抗体消退的窗口期里。16 周龄后，绝大多数幼犬母源抗体大幅减弱，所以 16 周龄后的核心疫苗接种尤为重要，也是幼犬首免程序中的最后一针。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": true,
+            "products": [
+              "卫佳捌",
+              "宠必威优免康",
+              "卫佳伍"
+            ],
+            "combo": {
+              "withKind": "lepto",
+              "withLabel": "钩端螺旋体",
+              "windowStart": "2026-10-28",
+              "windowEnd": "2026-11-11",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和钩端螺旋体一起打"
+            }
+          },
+          {
+            "key": "rabies-1",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "首针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-27",
+            "missedWindowStart": "2026-07-24",
+            "missedWindowEnd": "2026-08-23",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "宠必威锐必威",
+              "瑞贝康",
+              "瑞比克"
+            ],
+            "combo": null
+          },
+          {
+            "key": "lepto-primary-1",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "第 1 针",
+            "layer": "SUGGEST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-25",
+            "missedWindowStart": "2026-06-26",
+            "missedWindowEnd": "2026-07-24",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+            "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "宠必威乐必妥"
+            ],
+            "combo": {
+              "withKind": "core",
+              "withLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+              "windowStart": "2026-10-28",
+              "windowEnd": "2026-11-11",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和核心疫苗（犬瘟、细小、腺病毒）一起打"
+            }
+          },
+          {
+            "key": "core-26w",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "26 周补强",
+            "layer": "MUST",
+            "windowStart": "2026-10-30",
+            "windowEnd": "2026-11-27",
+            "status": "UPCOMING",
+            "statusLabel": "待接种",
+            "hint": "26 周龄这一针是首免程序的收尾；之后每 3 年加强一次。",
+            "basis": "WSAVA 2024：26 周龄或稍后再补一针核心疫苗（而不是等到 12~16 月龄）；若已在 20 周龄后做过抗体检测且显示有保护，则不需要这一针",
+            "titerable": true,
+            "products": [
+              "卫佳捌",
+              "宠必威优免康",
+              "卫佳伍"
+            ],
+            "combo": {
+              "withKind": "lepto",
+              "withLabel": "钩端螺旋体",
+              "windowStart": "2026-10-30",
+              "windowEnd": "2026-11-25",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和钩端螺旋体一起打"
+            }
+          }
+        ],
+        "ignored": {
+          "count": 0,
+          "items": []
+        },
+        "rhythm": "之后：狂犬与钩端每年一次，核心疫苗每 3 年一次",
+        "pendingReview": 0,
+        "conflicts": [],
+        "noRecordAtAll": true
+      }
+    },
+    {
+      "id": "C-NO-RECORD-17W",
+      "title": "17 周，一条记录都没有",
+      "note": "对照 V17：17 周无记录，同样被套“第 1 针”（原建议 8 月）。",
+      "input": {
+        "birthday": "2026-07-01",
+        "today": "2026-10-28",
+        "records": [],
+        "tests": [],
+        "decisions": {}
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2026-07-01",
+        "ageWeeks": 17,
+        "next": {
+          "key": "core-puppy-1",
+          "kind": "core",
+          "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+          "kindShort": "核心疫苗",
+          "label": "第 1 针",
+          "layer": "MUST",
+          "windowStart": "2026-10-28",
+          "windowEnd": "2026-11-11",
+          "missedWindowStart": "2026-08-12",
+          "missedWindowEnd": "2026-08-26",
+          "status": "OVERDUE",
+          "statusLabel": "尽快补种",
+          "hint": "幼犬从 6~8 周龄开始，每 2~4 周打一针，一直接种到满 16 周龄。",
+          "basis": "犬瘟、细小、腺病毒为必须接种的核心疫苗。首次免疫从 6~8 周龄起，间隔 2~4 周接种一次，一直接种到满 16 周龄（WSAVA 2024）。幼犬的母源抗体会干扰疫苗，但每只幼犬的抗体消退时间差异比较大，所以需要在 6~16 周龄之间间隔接种。确保至少有一针落在抗体消退的窗口期里。16 周龄后，绝大多数幼犬母源抗体大幅减弱，所以 16 周龄后的核心疫苗接种尤为重要，也是幼犬首免程序中的最后一针。是否接种、何时接种，请以执业兽医的意见为准。",
+          "titerable": false,
+          "products": [
+            "卫佳捌",
+            "宠必威优免康",
+            "卫佳伍"
+          ],
+          "combo": {
+            "withKind": "lepto",
+            "withLabel": "钩端螺旋体",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-11",
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "海博莱犬四联加钩端",
+              "维克犬四联加钩端"
+            ],
+            "hint": "这一针可以和钩端螺旋体一起打"
+          }
+        },
+        "plan": [
+          {
+            "key": "core-puppy-1",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "第 1 针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-11",
+            "missedWindowStart": "2026-08-12",
+            "missedWindowEnd": "2026-08-26",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "幼犬从 6~8 周龄开始，每 2~4 周打一针，一直接种到满 16 周龄。",
+            "basis": "犬瘟、细小、腺病毒为必须接种的核心疫苗。首次免疫从 6~8 周龄起，间隔 2~4 周接种一次，一直接种到满 16 周龄（WSAVA 2024）。幼犬的母源抗体会干扰疫苗，但每只幼犬的抗体消退时间差异比较大，所以需要在 6~16 周龄之间间隔接种。确保至少有一针落在抗体消退的窗口期里。16 周龄后，绝大多数幼犬母源抗体大幅减弱，所以 16 周龄后的核心疫苗接种尤为重要，也是幼犬首免程序中的最后一针。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "宠必威优免康",
+              "卫佳伍"
+            ],
+            "combo": {
+              "withKind": "lepto",
+              "withLabel": "钩端螺旋体",
+              "windowStart": "2026-10-28",
+              "windowEnd": "2026-11-11",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和钩端螺旋体一起打"
+            }
+          },
+          {
+            "key": "rabies-1",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "首针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-27",
+            "missedWindowStart": "2026-09-23",
+            "missedWindowEnd": "2026-10-23",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "宠必威锐必威",
+              "瑞贝康",
+              "瑞比克"
+            ],
+            "combo": null
+          },
+          {
+            "key": "lepto-primary-1",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "第 1 针",
+            "layer": "SUGGEST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-25",
+            "missedWindowStart": "2026-08-26",
+            "missedWindowEnd": "2026-09-23",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+            "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "宠必威乐必妥"
+            ],
+            "combo": {
+              "withKind": "core",
+              "withLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+              "windowStart": "2026-10-28",
+              "windowEnd": "2026-11-11",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和核心疫苗（犬瘟、细小、腺病毒）一起打"
+            }
+          },
+          {
+            "key": "core-26w",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "26 周补强",
+            "layer": "MUST",
+            "windowStart": "2026-12-30",
+            "windowEnd": "2027-01-27",
+            "status": "UPCOMING",
+            "statusLabel": "待接种",
+            "hint": "26 周龄这一针是首免程序的收尾；之后每 3 年加强一次。",
+            "basis": "WSAVA 2024：26 周龄或稍后再补一针核心疫苗（而不是等到 12~16 月龄）；若已在 20 周龄后做过抗体检测且显示有保护，则不需要这一针",
+            "titerable": true,
+            "products": [
+              "宠必威优免康",
+              "卫佳伍"
+            ],
+            "combo": null
+          }
+        ],
+        "ignored": {
+          "count": 0,
+          "items": []
+        },
+        "rhythm": "之后：狂犬与钩端每年一次，核心疫苗每 3 年一次",
+        "pendingReview": 0,
+        "conflicts": [],
+        "noRecordAtAll": true
+      }
+    },
+    {
+      "id": "C-16W-25W",
+      "title": "25 周，16 周一针已打（26 周补强仍在）",
+      "note": "对照 V17：16 周完成首免的狗，26 周补强必须保留（给那一小部分兜底）。",
+      "input": {
+        "birthday": "2026-05-01",
+        "today": "2026-10-28",
+        "records": [
+          {
+            "id": "a",
+            "vaccineName": "卫佳伍",
+            "vaccinationDate": "2026-08-21"
+          }
+        ],
+        "tests": [],
+        "decisions": {}
+      },
+      "output": {
+        "dogId": "baseline",
+        "birthday": "2026-05-01",
+        "ageWeeks": 25,
+        "next": {
+          "key": "rabies-1",
+          "kind": "rabies",
+          "kindLabel": "狂犬疫苗",
+          "kindShort": "狂犬疫苗",
+          "label": "首针",
+          "layer": "MUST",
+          "windowStart": "2026-10-28",
+          "windowEnd": "2026-11-27",
+          "missedWindowStart": "2026-07-24",
+          "missedWindowEnd": "2026-08-23",
+          "status": "OVERDUE",
+          "statusLabel": "尽快补种",
+          "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+          "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+          "titerable": false,
+          "products": [
+            "迪安适",
+            "宠必威锐必威",
+            "瑞贝康"
+          ],
+          "combo": null
+        },
+        "plan": [
+          {
+            "key": "rabies-1",
+            "kind": "rabies",
+            "kindLabel": "狂犬疫苗",
+            "kindShort": "狂犬疫苗",
+            "label": "首针",
+            "layer": "MUST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-27",
+            "missedWindowStart": "2026-07-24",
+            "missedWindowEnd": "2026-08-23",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。",
+            "basis": "国家法律要求犬只\"定期\"免疫狂犬病疫苗（《动物防疫法》第三十条）；各地办养犬登记与年审要凭有效的免疫证明，年审每年一次，所以每年补一针最稳妥；疫苗说明书标的免疫期是 36 个月。首次免疫程序须大于 12 周龄（WSAVA 2024），是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "迪安适",
+              "宠必威锐必威",
+              "瑞贝康"
+            ],
+            "combo": null
+          },
+          {
+            "key": "lepto-primary-1",
+            "kind": "lepto",
+            "kindLabel": "钩端螺旋体",
+            "kindShort": "钩端螺旋体",
+            "label": "第 1 针",
+            "layer": "SUGGEST",
+            "windowStart": "2026-10-28",
+            "windowEnd": "2026-11-25",
+            "missedWindowStart": "2026-06-26",
+            "missedWindowEnd": "2026-07-24",
+            "status": "OVERDUE",
+            "statusLabel": "尽快补种",
+            "hint": "首次两针，间隔 2~4 周；之后每年一次。",
+            "basis": "幼犬 8 周龄后可以完成首次免疫，首次免疫共两针，间隔 2~4 周。首次免疫后每年接种一次（WSAVA 2024）。中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。是否接种、何时接种，请以执业兽医的意见为准。",
+            "titerable": false,
+            "products": [
+              "卫佳捌",
+              "优乐康",
+              "宠必威乐必妥"
+            ],
+            "combo": {
+              "withKind": "core",
+              "withLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+              "windowStart": "2026-10-30",
+              "windowEnd": "2026-11-25",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和核心疫苗（犬瘟、细小、腺病毒）一起打"
+            }
+          },
+          {
+            "key": "core-26w",
+            "kind": "core",
+            "kindLabel": "核心疫苗（犬瘟、细小、腺病毒）",
+            "kindShort": "核心疫苗",
+            "label": "26 周补强",
+            "layer": "MUST",
+            "windowStart": "2026-10-30",
+            "windowEnd": "2026-11-27",
+            "status": "UPCOMING",
+            "statusLabel": "待接种",
+            "hint": "26 周龄这一针是首免程序的收尾；之后每 3 年加强一次。",
+            "basis": "WSAVA 2024：26 周龄或稍后再补一针核心疫苗（而不是等到 12~16 月龄）；若已在 20 周龄后做过抗体检测且显示有保护，则不需要这一针",
+            "titerable": true,
+            "products": [
+              "卫佳捌",
+              "卫佳伍",
+              "宠必威优免康"
+            ],
+            "combo": {
+              "withKind": "lepto",
+              "withLabel": "钩端螺旋体",
+              "windowStart": "2026-10-30",
+              "windowEnd": "2026-11-25",
+              "products": [
+                "卫佳捌",
+                "优乐康",
+                "海博莱犬四联加钩端",
+                "维克犬四联加钩端"
+              ],
+              "hint": "这一针可以和钩端螺旋体一起打"
+            }
+          }
+        ],
+        "ignored": {
+          "count": 0,
+          "items": []
+        },
+        "rhythm": "之后：狂犬与钩端每年一次，核心疫苗每 3 年一次",
+        "pendingReview": 0,
+        "conflicts": [],
+        "noRecordAtAll": false
+      }
+    }
+  ]
+}

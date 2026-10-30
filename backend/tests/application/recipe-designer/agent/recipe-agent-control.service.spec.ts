@@ -147,7 +147,7 @@ describe('RecipeAgentControlService', () => {
       sessionId: 'session-1',
       type: 'CATEGORY_OMISSION',
       reason: '这份菜谱刻意不加主食和蔬菜',
-      detail: { categories: ['CARB', 'VEGETABLE'] },
+      detail: { categories: ['AQUATIC', 'CARB', 'VEGETABLE'] },
     });
     expect(sessionService.appendMessage).toHaveBeenCalledTimes(1);
     const message = sessionService.appendMessage.mock.calls[0][0];
@@ -160,6 +160,7 @@ describe('RecipeAgentControlService', () => {
       items: [
         { category: 'PROTEIN' },
         { category: 'ORGAN' },
+        { category: 'AQUATIC' },
         { category: 'CARB' },
         { category: 'VEGETABLE' },
         { category: 'MUSHROOM' },
@@ -190,7 +191,7 @@ describe('RecipeAgentControlService', () => {
     expect(sessionService.appendMessage).not.toHaveBeenCalled();
   });
 
-  it('finishDraft 用当前 contentRevision 写快照、置 COMPLETED 并写交付卡', async () => {
+  it('旧会话兼容：finishDraft 用当前 contentRevision 写快照、置 COMPLETED 并写交付卡', async () => {
     const { service, prisma, sessionService } = makeService();
 
     await service.finishDraft({
@@ -233,7 +234,7 @@ describe('RecipeAgentControlService', () => {
     expect(message.content).toContain('缺 VEGETABLE：没有蔬菜');
   });
 
-  it('finishDraft 在会话已停止（状态没抢到）时不写快照也不写交付卡', async () => {
+  it('旧会话兼容：finishDraft 在会话已停止（状态没抢到）时不写快照也不写交付卡', async () => {
     const { service, prisma, sessionService, port } = makeService();
     sessionService.transitionStatus.mockResolvedValue(false);
 

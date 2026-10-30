@@ -89,6 +89,19 @@ const CHINESE_TO_ENGLISH_FOOD_ALIASES: ReadonlyArray<{
   { zh: '亚麻籽油', aliases: ['flaxseed oil', 'linseed oil'] },
 ];
 
+/**
+ * 手写别名表的只读快照，供「把现有别名导入数据库词典」的种子脚本使用。
+ *
+ * 表本身先保留：词典跑通、验证过之后再由后续改动删除。检索链路已经
+ * 不再读它（`allowStaticChineseEnglishAliases: false`），只认数据库词典。
+ */
+export function listChineseEnglishFoodAliasSeeds(): ReadonlyArray<{
+  zh: string;
+  aliases: readonly string[];
+}> {
+  return CHINESE_TO_ENGLISH_FOOD_ALIASES;
+}
+
 const CHINESE_TO_ENGLISH_PORTION_REQUIREMENTS: ReadonlyArray<{
   zh: readonly string[];
   positive: readonly RegExp[];
@@ -145,6 +158,8 @@ export function getSourcePriority(
       return 2;
     case 'CNF':
       return 2;
+    case 'KO_RDA':
+      return 2;
     case 'COFID':
       return 2;
     case 'CIQUAL':
@@ -189,16 +204,23 @@ export function scoreIngredientSourceNameMatch(params: {
   ingredientName: string;
   sourceFoodName: string;
   sourceType: NutritionGovernanceSourceType;
+  /**
+   * 是否允许用手写中英别名表兜底（默认允许，营养治理工作台沿用旧行为）。
+   *
+   * 原料创建候选检索要传 `false`：那条链路只认数据库里会自己长的
+   * `ingredient_name_alias`，翻译由模型负责，命中后再沉淀回词典。
+   */
+  allowStaticChineseEnglishAliases?: boolean;
 }): { score: number; reasons: NutritionMatchReason[] } {
   const ingredientName = normalizeNameForMatch(params.ingredientName);
   const sourceFoodName = normalizeNameForMatch(params.sourceFoodName);
   const reasons: NutritionMatchReason[] = [];
   let score = 0;
 
-  const aliasMatched = findChineseEnglishAliasMatch(
-    ingredientName,
-    params.sourceFoodName,
-  );
+  const aliasMatched =
+    params.allowStaticChineseEnglishAliases === false
+      ? false
+      : findChineseEnglishAliasMatch(ingredientName, params.sourceFoodName);
 
   if (ingredientName && ingredientName === sourceFoodName) {
     score += 0.75;

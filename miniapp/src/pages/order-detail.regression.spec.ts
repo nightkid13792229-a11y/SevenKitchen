@@ -334,8 +334,8 @@ describe('order detail runtime regressions', () => {
     expect(source).not.toContain('定制费抵扣')
     expect(source).not.toContain('credit-original')
     expect(source).not.toContain('credit-applied')
-    // 只删抵扣：订单金额行仍在
-    expect(source).toContain('订单金额:')
+    // 只删抵扣：金额行仍在（2026-10-30 改版后并入首屏主卡，文案为「实付金额」）
+    expect(source).toContain('实付金额')
     expect(source).toContain(
       'formatAmount(order.amountTotal || order.totalAmount)',
     )

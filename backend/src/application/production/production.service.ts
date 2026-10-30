@@ -372,6 +372,15 @@ export class ProductionService {
           new Date(),
         );
 
+        /**
+         * 订单锅不再复制整份配方：只记「配方从哪条订单明细取」。
+         * 这样上游修正订单快照后，锅跟着变，不用删批次重排。
+         * （试吃装备货批次没有订单，仍由备货服务把快照存在锅里。）
+         */
+        if (sourceOrderItemIds.length > 0) {
+          unit.recipeSnapshotRefOrderItemId = sourceOrderItemIds[0];
+        }
+
         // 将生肉重量分配信息附加到 unit 对象上（用于后续分装）
         (unit as any).rawMaterialAllocations = rawMaterialAllocations;
         (unit as any).productionGroupKey = productionGroupKey;
@@ -1429,18 +1438,18 @@ export class ProductionService {
       // 确定实际转移量
       const transferAmount = Math.min(maxTransferable, remainingDeficit);
 
-      // 执行转移
-      this.transferWeightBetweenPots(
+      // 执行转移（返回真正转过去的净重，源锅分配不足时会小于 transferAmount）
+      const actualTransferAmount = this.transferWeightBetweenPots(
         sourcePot,
         lastPot,
         transferAmount,
         lossRate,
       );
 
-      remainingDeficit -= transferAmount;
+      remainingDeficit -= actualTransferAmount;
 
       this.logger.debug(
-        `[optimizePotWeights] 从锅 ${i + 1} 转移 ${transferAmount}g 到最后一锅，剩余缺口 ${remainingDeficit}g`,
+        `[optimizePotWeights] 从锅 ${i + 1} 转移 ${actualTransferAmount.toFixed(2)}g 到最后一锅，剩余缺口 ${remainingDeficit.toFixed(2)}g`,
       );
     }
 
@@ -1459,6 +1468,12 @@ export class ProductionService {
 
   /**
    * 在两锅之间转移重量，保持 FIFO 分配完整性
+   *
+   * 注意：跨锅订单（尾部被拆到下一锅的那笔）在目标锅本来就已经有一份分配，
+   * 因此转移时必须累加，不能覆盖，否则会凭空丢掉目标锅原有的那部分，
+   * 触发"分配总和 ≠ 净重 × 损耗率"的数据完整性校验。
+   *
+   * @returns 实际转移的净重（分配不足时会小于请求的 transferNetWeightG）
    * @private
    */
   private transferWeightBetweenPots(
@@ -1466,21 +1481,20 @@ export class ProductionService {
     targetPot: PackagingUnit,
     transferNetWeightG: number,
     lossRate: number,
-  ): void {
-    // 1. 更新净重
+  ): number {
+    // 1. 记录原始净重（真正的赋值放到最后，按实际转移量结算）
     const sourceOriginalWeight = sourcePot.totalProductionG;
     const targetOriginalWeight = targetPot.totalProductionG;
 
-    // 注意：totalProductionG 在构造函数中是 readonly
-    // 但 TypeScript 运行时允许修改对象属性
-    (sourcePot as any).totalProductionG =
-      sourceOriginalWeight - transferNetWeightG;
-    (targetPot as any).totalProductionG =
-      targetOriginalWeight + transferNetWeightG;
-
     // 2. 更新生肉重量分配
-    const sourceAllocations = (sourcePot as any).rawMaterialAllocations;
-    const targetAllocations = (targetPot as any).rawMaterialAllocations;
+    const sourceAllocations = (sourcePot as any).rawMaterialAllocations as Record<
+      string,
+      number
+    >;
+    const targetAllocations = (targetPot as any).rawMaterialAllocations as Record<
+      string,
+      number
+    >;
 
     // 计算需要转移的生肉重量（净重 × 损耗率）
     const transferRawWeightG = transferNetWeightG * lossRate;
@@ -1488,7 +1502,14 @@ export class ProductionService {
     // 从源锅转移订单分配到目标锅
     // 策略：从源锅分配的末尾开始转移（保持 FIFO 顺序）
     let transferredRawWeight = 0;
-    const orderItemsToTransfer: string[] = [];
+    const fullyTransferredItemIds: string[] = [];
+    const targetOrderItemIds = [...targetPot.sourceOrderItemIds];
+
+    const rememberTargetItem = (orderItemId: string) => {
+      if (!targetOrderItemIds.includes(orderItemId)) {
+        targetOrderItemIds.push(orderItemId);
+      }
+    };
 
     // 从后向前遍历源锅的订单项
     for (let i = sourcePot.sourceOrderItemIds.length - 1; i >= 0; i--) {
@@ -1497,55 +1518,67 @@ export class ProductionService {
       const orderItemId = sourcePot.sourceOrderItemIds[i];
       const rawWeight = sourceAllocations[orderItemId];
 
+      if (rawWeight === undefined) {
+        // 分配记录里没有这笔订单，跳过，避免把 NaN/undefined 传下去
+        continue;
+      }
+
       if (rawWeight <= transferRawWeightG - transferredRawWeight) {
         // 完全转移：整个订单项
-        orderItemsToTransfer.unshift(orderItemId);
+        fullyTransferredItemIds.unshift(orderItemId);
         transferredRawWeight += rawWeight;
 
-        // 更新分配
-        targetAllocations[orderItemId] = rawWeight;
+        // 目标锅可能已有这笔订单的前半段（跨锅订单），必须累加
+        targetAllocations[orderItemId] =
+          (targetAllocations[orderItemId] ?? 0) + rawWeight;
         delete sourceAllocations[orderItemId];
+        rememberTargetItem(orderItemId);
       } else {
         // 部分转移：拆分订单项
         const partialRawWeight = transferRawWeightG - transferredRawWeight;
 
-        // 减少源锅分配
+        // 减少源锅分配，增加目标锅分配（同样累加，不覆盖）
         sourceAllocations[orderItemId] = rawWeight - partialRawWeight;
-
-        // 增加目标锅分配
-        // 如果目标锅已有该订单的部分分配，则累加
-        if (targetAllocations[orderItemId]) {
-          targetAllocations[orderItemId] += partialRawWeight;
-        } else {
-          targetAllocations[orderItemId] = partialRawWeight;
-        }
-
-        // 确保订单项在目标锅的 sourceOrderItemIds 中
-        if (!targetPot.sourceOrderItemIds.includes(orderItemId)) {
-          targetPot.sourceOrderItemIds.push(orderItemId);
-        }
+        targetAllocations[orderItemId] =
+          (targetAllocations[orderItemId] ?? 0) + partialRawWeight;
+        rememberTargetItem(orderItemId);
 
         transferredRawWeight += partialRawWeight;
       }
     }
 
-    // 3. 更新 sourceOrderItemIds 数组
+    // 3. 按实际转移的生肉重量折算净重，保证"分配总和 = 净重 × 损耗率"始终成立
+    const actualTransferNetWeightG = transferredRawWeight / lossRate;
+    if (Math.abs(actualTransferNetWeightG - transferNetWeightG) > 0.01) {
+      this.logger.warn(
+        `[transferWeightBetweenPots] 计划转移 ${transferNetWeightG.toFixed(2)}g，` +
+          `实际只能转移 ${actualTransferNetWeightG.toFixed(2)}g（源锅分配不足）`,
+      );
+    }
+
+    // 注意：totalProductionG 在构造函数中是 readonly
+    // 但 TypeScript 运行时允许修改对象属性
+    (sourcePot as any).totalProductionG =
+      sourceOriginalWeight - actualTransferNetWeightG;
+    (targetPot as any).totalProductionG =
+      targetOriginalWeight + actualTransferNetWeightG;
+
+    // 4. 更新 sourceOrderItemIds 数组
     // 从源锅移除完全转移的订单项
     (sourcePot as any).sourceOrderItemIds = sourcePot.sourceOrderItemIds.filter(
-      (id) => !orderItemsToTransfer.includes(id),
+      (id) => !fullyTransferredItemIds.includes(id),
     );
 
-    // 将完全转移的订单项添加到目标锅（保持顺序）
-    (targetPot as any).sourceOrderItemIds = [
-      ...targetPot.sourceOrderItemIds,
-      ...orderItemsToTransfer,
-    ];
+    // 将订单项记到目标锅（去重，避免同一笔订单在锅里出现两次）
+    (targetPot as any).sourceOrderItemIds = targetOrderItemIds;
 
-    // 4. 日志记录
+    // 5. 日志记录
     this.logger.debug(
       `[transferWeightBetweenPots] ` +
-        `转移 ${transferNetWeightG}g 净重 (${transferRawWeightG.toFixed(2)}g 生肉) ` +
+        `转移 ${actualTransferNetWeightG.toFixed(2)}g 净重 (${transferredRawWeight.toFixed(2)}g 生肉) ` +
         `从锅（原 ${sourceOriginalWeight}g）到锅（原 ${targetOriginalWeight}g）`,
     );
+
+    return actualTransferNetWeightG;
   }
 }

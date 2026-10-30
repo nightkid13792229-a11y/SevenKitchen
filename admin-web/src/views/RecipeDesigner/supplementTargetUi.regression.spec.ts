@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 import editorSource from '@/views/RecipeDesigner/Editor.vue?raw'
 import assessmentSource from '@/views/RecipeDesigner/components/AssessmentPanel.vue?raw'
 import dialogSource from '@/views/RecipeDesigner/components/SupplementTargetDialog.vue?raw'
-import managerDialogSource from '@/views/RecipeDesigner/components/PreparationMethodManagerDialog.vue?raw'
-import preparationMethodApiSource from '@/api/preparationMethods.ts?raw'
+import preparationFieldSource from '@/views/RecipeDesigner/components/PreparationMethodField.vue?raw'
 import designerApiSource from '@/api/recipeDesigner.ts?raw'
 import saveQueueSource from '@/composables/useDesignerSaveQueue.ts?raw'
 import designerTypesSource from '@/types/recipeDesigner.ts?raw'
@@ -62,8 +61,6 @@ describe('设计器 · 添加补剂必须先选择目标营养素', () => {
     expect(editor).toContain('recipeDesignerApi.updateItem(dialogState.itemId, {')
     expect(editor).toContain('supplementTargets: payloadTargets')
     expect(designerApiSource).toContain('supplementTargets?: RecipeDesignSupplementTargetPayload[]')
-    expect(designerApiSource).toContain('preparationNote?: string | null')
-    expect(designerApiSource).toContain("preparationSource?: 'AUTO' | 'MANUAL' | null")
   })
 
   it('明细行展示目标标签与实际添加浓度，并允许修改目标', () => {
@@ -93,21 +90,22 @@ describe('设计器 · 原料预处理控件内联与 Tab 顺序', () => {
     return editor.slice(start, end)
   }
 
-  it('预处理选择 / 来源标签 / 管理入口与重量、占比、开关同排', () => {
+  it('部位 / 状态 / 预处理与重量、占比、开关同排，不再有管理 / 来源标签', () => {
     const controls = itemControlsSource()
 
-    expect(controls).toContain('class="preparation-method-select"')
-    expect(controls).toContain('preparationSource === \'MANUAL\'')
-    expect(controls).toContain('人工')
-    expect(controls).toContain('自动')
-    expect(controls).toContain('preparation-manage-btn')
-    expect(controls).toContain('openPreparationMethodManager')
+    expect(controls).toContain('class="preparation-method-field"')
+    expect(controls).toContain('PREPARATION_FIELD_LABEL')
+    expect(controls).not.toContain('preparationSource ===')
+    expect(controls).not.toContain('人工')
+    expect(controls).not.toContain('自动')
+    expect(controls).not.toContain('preparation-manage-btn')
+    expect(controls).not.toContain('openPreparationMethodManager')
     expect(controls).toContain('class="weight-input"')
     expect(controls).toContain('class="item-ratio-column"')
     expect(controls).toContain('el-switch')
     expect(controls).toContain('type="danger"')
 
-    const prepIndex = controls.indexOf('class="preparation-method-select"')
+    const prepIndex = controls.indexOf('class="preparation-method-field"')
     const weightIndex = controls.indexOf('class="weight-input"')
     const ratioIndex = controls.indexOf('class="item-ratio-column"')
     expect(prepIndex).toBeGreaterThan(-1)
@@ -122,11 +120,11 @@ describe('设计器 · 原料预处理控件内联与 Tab 顺序', () => {
 
     expect(itemMetaStart).toBeGreaterThan(-1)
     expect(itemMeta).toContain('item-profile-name')
-    expect(itemMeta).not.toContain('preparation-method-select')
+    expect(itemMeta).not.toContain('preparation-method-field')
     expect(itemMeta).not.toContain('preparation-label')
     expect(itemMeta).not.toContain('preparation-manage-btn')
 
-    const prepIndex = editor.indexOf('class="preparation-method-select"')
+    const prepIndex = editor.indexOf('class="preparation-method-field"')
     const controlsIndex = editor.indexOf('<div class="item-controls">')
     expect(controlsIndex).toBeGreaterThan(-1)
     expect(prepIndex).toBeGreaterThan(controlsIndex)
@@ -135,13 +133,12 @@ describe('设计器 · 原料预处理控件内联与 Tab 顺序', () => {
   it('重量输入是行内唯一可 Tab 进入的控件，其余控件 tabindex=-1', () => {
     const controls = itemControlsSource()
 
-    // ElSelect / ElSwitch 支持 tabindex prop；ElButton 透传原生 tabindex。
     const tabindexCount = (controls.match(/:tabindex="-1"/g) ?? []).length
-    expect(tabindexCount).toBeGreaterThanOrEqual(4)
+    expect(tabindexCount).toBeGreaterThanOrEqual(3)
 
     const prepTag = controls.slice(
-      controls.indexOf('<el-select'),
-      controls.indexOf('</el-select>')
+      controls.indexOf('<PreparationMethodField'),
+      controls.indexOf('/>', controls.indexOf('<PreparationMethodField'))
     )
     expect(prepTag).toContain(':tabindex="-1"')
 
@@ -157,13 +154,6 @@ describe('设计器 · 原料预处理控件内联与 Tab 顺序', () => {
     )
     expect(deleteTag).toContain(':tabindex="-1"')
 
-    const manageTag = controls.slice(
-      controls.indexOf('class="preparation-manage-btn"'),
-      controls.indexOf('>', controls.indexOf('class="preparation-manage-btn"'))
-    )
-    expect(manageTag).toContain(':tabindex="-1"')
-
-    // 重量输入本身不设置 tabindex=-1：Tab 会按 DOM 顺序落到下一条原料的重量输入。
     const weightTag = controls.slice(
       controls.indexOf('<el-input-number'),
       controls.indexOf('/>', controls.indexOf('<el-input-number'))
@@ -173,22 +163,16 @@ describe('设计器 · 原料预处理控件内联与 Tab 顺序', () => {
     expect(editor).toContain(':tabindex="-1"')
   })
 
-  it('行内不再提供预处理补充说明输入，但后端字段与类型保持兼容', () => {
+  it('行内不再提供预处理补充说明输入', () => {
     expect(editor).not.toContain('preparation-note-input')
     expect(editor).not.toContain('onPreparationNoteChange')
     expect(editor).not.toContain('补充说明')
-    expect(designerTypesSource).toContain('preparationNote?: string | null')
-    expect(designerApiSource).toContain('preparationNote?: string | null')
     expect(designerTypesSource).toContain('preparationMethod?: string')
   })
 
   it('预处理修改通过 updateItem 持久化，不复制历史默认值', () => {
     expect(editor).toContain('data: { preparationMethod: nextMethod }')
     expect(editor).not.toContain('historicalPreparation')
-    expect(designerTypesSource).toContain('preparationNote?: string | null')
-    expect(designerTypesSource).toContain(
-      "preparationSource?: DesignerPreparationSource | null"
-    )
   })
 
   it('同一原料排队的多个字段修改会合并，不会互相覆盖', () => {
@@ -196,42 +180,38 @@ describe('设计器 · 原料预处理控件内联与 Tab 顺序', () => {
   })
 })
 
-describe('设计器 · 预处理方式字典管理', () => {
+describe('设计器 · 部位 / 状态 / 预处理可直接编辑（2026-10-26）', () => {
   const editor = clean(editorSource)
-  const manager = clean(managerDialogSource)
+  const field = clean(preparationFieldSource)
 
-  it('编辑器内打开管理弹窗，不跳转页面', () => {
-    expect(editor).toContain('PreparationMethodManagerDialog')
-    expect(editor).toContain('openPreparationMethodManager')
-    expect(editor).toContain('preparationMethodManagerVisible')
-    expect(editor).toContain('@changed="onPreparationMethodsChanged"')
-    expect(editor).not.toContain('router.push(\'/recipe-designer/preparation')
+  it('编辑器用可编辑输入框替换只能选的下拉框，并回填当前文字', () => {
+    expect(editor).toContain('<PreparationMethodField')
+    expect(editor).toContain(':model-value="element.preparationMethod')
+    expect(editor).toContain(':label="element.preparationMethodLabel')
+    expect(editor).toContain(':ingredient-id="element.ingredientId"')
+    expect(editor).not.toContain(':legacy-options="preparationMethodOptions"')
+    expect(editor).not.toContain(':options="preparationMethodOptions"')
+    expect(editor).not.toContain('<el-select')
   })
 
-  it('管理弹窗使用现有 preparationMethodApi 完成列表 / 新增 / 编辑 / 删除', () => {
-    expect(manager).toContain('preparationMethodApi.list')
-    expect(manager).toContain('preparationMethodApi.create')
-    expect(manager).toContain('preparationMethodApi.update')
-    expect(manager).toContain('preparationMethodApi.delete')
-    expect(manager).toContain('el-dialog')
-    expect(manager).toContain('编辑')
-    expect(manager).toContain('删除')
-    expect(preparationMethodApiSource).toContain("'/admin/preparation-methods'")
-    expect(preparationMethodApiSource).toContain('updateSort')
+  it('输入框直接显示原文字，回车 / 失焦都会提交', () => {
+    expect(field).toContain('el-autocomplete')
+    expect(field).toContain('v-model="text"')
+    expect(field).toContain('select-when-unmatched')
+    expect(field).toContain('@select="handleSelect"')
+    expect(field).toContain('@change="handleChange"')
+    expect(field).toContain('@blur="handleBlur"')
+    expect(field).toContain('resolvePreparationMethodDisplayText')
   })
 
-  it('新增 / 编辑 / 删除成功后回传最新列表并刷新草稿选项', () => {
-    expect(manager).toContain('emit("changed"')
-    expect(manager).toContain('loadMethods(true)')
-    expect(editor).toContain('onPreparationMethodsChanged')
-    expect(editor).toContain('draft.value.preparationMethodOptions = [...optionById.values()]')
-    // 当前行已选但字典中不存在的值要保留，避免显示裸 id
-    expect(editor).toContain('item.preparationMethodLabel || method')
-  })
-
-  it('管理弹窗只做本地增删改，不引入路由跳转', () => {
-    expect(manager).not.toContain('useRouter')
-    expect(manager).not.toContain('router.push')
-    expect(manager).not.toContain('router.replace')
+  it('下拉建议来自该原料历史，最多 3 条，不再保存字典 id', () => {
+    expect(field).toContain('getIngredientPreparationMethodHistory')
+    expect(field).toContain('resolvePreparationHistorySuggestions')
+    expect(field).toContain('resolvePreparationMethodCommitText')
+    expect(field).not.toContain('filterPreparationMethodOptions')
+    expect(field).not.toContain('applyPreparationMethodSuggestion')
+    expect(field).toContain('clearable')
+    expect(field).toContain('width: 240px')
+    expect(field).toContain('preparation-method-field')
   })
 })

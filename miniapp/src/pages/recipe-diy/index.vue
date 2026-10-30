@@ -78,9 +78,15 @@
       <view v-else class="dog-feeding-content">
         <!-- 选项卡与下方参数同属一只狗：同一内嵌面板 + 分隔线，建立视觉归属 -->
         <view class="dog-context-panel">
-          <scroll-view scroll-x class="order-dog-scroll">
+          <scroll-view
+            scroll-x
+            scroll-with-animation
+            class="order-dog-scroll"
+            :scroll-into-view="selectedDogId ? `dog-chip-${selectedDogId}` : ''"
+          >
             <view
-              v-for="dog in dogs"
+              v-for="dog in orderedDogs"
+              :id="`dog-chip-${dog.id}`"
               :key="dog.id"
               :class="['order-dog-chip', { active: dog.id === selectedDogId }]"
               @tap="selectDog(dog.id)"
@@ -255,20 +261,31 @@
         </text>
       </view>
 
-      <button
-        class="btn-generate"
-        :disabled="!canGenerateSheet || isGeneratingSheet"
-        @tap="generateSheet"
-      >
-        生成制作单
-      </button>
+      <view class="bottom-bar-actions">
+        <CustomerServiceInlineButton
+          compact
+          label="Seven爸爸"
+          :source-type="orderId ? 'ORDER' : 'GENERAL'"
+          :order-id="orderId"
+          :order-no="orderId"
+          :title="orderId ? `定制订单 ${orderId}` : 'DIY 制作咨询'"
+          path="/pages/recipe-diy/index"
+        />
+        <button
+          class="btn-generate"
+          :disabled="!canGenerateSheet || isGeneratingSheet"
+          @tap="generateSheet"
+        >
+          生成制作单
+        </button>
+      </view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { onLoad, onShow } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
 import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
@@ -284,6 +301,7 @@ import {
   type LifeStageMatchVerdict,
 } from '../../utils/life-stage-match'
 import LifeStageVersionCard from '@/components/recipe/LifeStageVersionCard.vue'
+import CustomerServiceInlineButton from '@/components/CustomerServiceInlineButton.vue'
 import { useDogSelection } from '@/composables/useDogSelection'
 import { usePackagePlan } from '@/composables/usePackagePlan'
 import { useLifeStageVersion } from '@/composables/useLifeStageVersion'
@@ -345,6 +363,13 @@ interface RecipeLifeStageVersion {
 
 
 const recipeId = ref('')
+/**
+ * 定制订单号（2026-10-24）。
+ *
+ * 从「我的定制食谱」点「自己做」进来时带上，后端据此按**交付那一版**取食谱；
+ * 从橱窗进来时为空，行为与原来完全一致（取最新版）。
+ */
+const orderId = ref('')
 const shareToken = ref('')
 const selectedLifeStage = ref('')
 const recipe = ref<Recipe>({
@@ -389,6 +414,21 @@ const {
   setDogs,
   select: selectDogState,
 } = useDogSelection<Dog>()
+
+/**
+ * 选中的爱犬排第一位（2026-10-24 老板定）。
+ *
+ * 横向选择器里狗一多，选中的那只可能滚在屏幕外；
+ * 把它放到最前面，再配合 scroll-into-view，选中后一定在最左边。
+ */
+const orderedDogs = computed(() => {
+  const selectedId = selectedDogId.value
+  if (!selectedId) return dogs.value
+  const selected = dogs.value.find((dog) => dog.id === selectedId)
+  if (!selected) return dogs.value
+  return [selected, ...dogs.value.filter((dog) => dog.id !== selected.id)]
+})
+
 // 列表加载失败与「没有档案」是两件事：失败时若显示"暂无档案"会诱导重复建档
 const dogsLoadFailed = ref(false)
 const isGeneratingSheet = ref(false)
@@ -580,6 +620,14 @@ const {
 // 「每日饭量是怎么算的？」展开状态
 const feedingNoteExpanded = ref(false)
 const initialDogId = ref('')
+/** onLoad 里的路由参数：比 onMounted 里翻页面栈更可靠 */
+const routeDogId = ref('')
+
+onLoad((options) => {
+  routeDogId.value = options?.dogId
+    ? decodeURIComponent(String(options.dogId))
+    : ''
+})
 
 onMounted(async () => {
   console.log('========== [RecipeDiy] onMounted ==========')
@@ -591,10 +639,19 @@ onMounted(async () => {
   console.log('[页面参数]', options)
 
   recipeId.value = options.recipeId || ''
+  orderId.value = options.orderId || ''
   shareToken.value = options.shareToken || ''
-  initialDogId.value = options.dogId || ''
+  initialDogId.value = routeDogId.value || options.dogId || ''
   selectedLifeStage.value = options.lifeStage || ''
-  console.log('[食谱ID]', recipeId.value)
+  console.log('[食谱ID]', recipeId.value, '[订单]', orderId.value)
+
+  /**
+   * 从定制食谱进来时，这一页就是「自己做」——
+   * 导航标题跟着按钮文案走，顾客不会觉得点进了另一个功能。
+   */
+  if (orderId.value) {
+    uni.setNavigationBarTitle({ title: '自己做' })
+  }
 
   if (recipeId.value) {
     // 【修复】先加载健康标签映射
@@ -629,6 +686,10 @@ async function loadRecipe() {
     }
     if (shareToken.value) {
       requestData.shareToken = shareToken.value
+    }
+    // 定制场景：按交付记录冻结的那一版取食谱（后端据此解析版本）
+    if (orderId.value) {
+      requestData.orderId = orderId.value
     }
 
     const res = await request({
@@ -1037,6 +1098,7 @@ async function generateAndNavigateToSheet() {
       method: 'POST',
       data: {
         dogId: selectedDogId.value,
+        ...(orderId.value ? { orderId: orderId.value } : {}),
         ...(shareToken.value ? { shareToken: shareToken.value } : {})
       }
     })
@@ -1072,6 +1134,7 @@ function navigateToSheet() {
     packageCount: totalPackages.value,
     packageSpecG: getPrimaryPackageSpecG(normalizedPackagePlan.value),
     packagePlan: JSON.stringify(normalizedPackagePlan.value),
+    ...(orderId.value ? { orderId: orderId.value } : {}),
     ...(shareToken.value ? { shareToken: shareToken.value } : {})
   }
 
@@ -2004,7 +2067,9 @@ function getHealthTagLabel(tagOrUuid: string): string {
 }
 
 .btn-generate {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
+  width: auto;
   height: 88rpx;
   display: flex;
   align-items: center;
@@ -2021,4 +2086,12 @@ function getHealthTagLabel(tagOrUuid: string): string {
   background-color: #f2f4ea;
   color: #6b6653;
 }
+
+/* 底栏两颗：找 Seven爸爸 + 生成制作单（2026-10-24） */
+.bottom-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
 </style>

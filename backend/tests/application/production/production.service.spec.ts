@@ -142,13 +142,14 @@ describe('ProductionService - Phase 8.10', () => {
       | 'MARKET_PREMIUM'
       | 'WHOLESALE'
       | null = null,
+    quantityG = 1000,
   ): OrderItem => {
     return new OrderItem(
       id,
       'order-id-1',
       'dog-id-1',
       recipeSnapshot,
-      1000, // quantityG
+      quantityG, // quantityG
       5, // packageCount
       200, // packageSpecG
       null, // customRequirements
@@ -523,6 +524,76 @@ describe('ProductionService - Phase 8.10', () => {
       // Assert: Even if empty, should be an array
       expect(Array.isArray(dtoUnit.sourceOrderItemIds)).toBe(true);
       expect(dtoUnit.sourceOrderItemIds.length).toBe(1); // item-1
+    });
+  });
+
+  describe('createProductionBatch - 最小锅重优化 (Phase 8.12.1)', () => {
+    it('挪动尾锅重量时，不应丢掉跨锅订单已在前一锅分配的那部分', async () => {
+      // 生产实测（2026-10-26，食谱 3541c417）：损耗率 1.05，
+      // 三笔订单净重 2250 / 1800 / 1350，合计生肉 5670g。
+      // 分锅后 pot#1 = 5250g（含第三笔的 1200g），pot#2 只剩 150g。
+      // 最小锅重 2000g 触发优化：需要从 pot#1 挪 1850g 净重（1942.5g 生肉）到 pot#2。
+      // pot#1 尾部那笔订单是跨锅订单，pot#2 里已经有它的前半段。
+      const recipeSnapshot: RecipeSnapshot = {
+        ...createMockRecipeSnapshot('recipe-cross-pot'),
+        production_loss_rate: 1.05,
+      };
+
+      const itemA = createMockOrderItem('item-a', recipeSnapshot, 300, null, 2250);
+      const itemB = createMockOrderItem('item-b', recipeSnapshot, 300, null, 1800);
+      const itemC = createMockOrderItem('item-c', recipeSnapshot, 300, null, 1350);
+      const order = createMockPurchasingOrder('order-1', [itemA, itemB, itemC]);
+
+      orderRepository.findByTargetProductionDateRange.mockResolvedValue({
+        list: [order],
+        total: 1,
+      });
+      productionRepository.save.mockImplementation(async (batch) => batch);
+
+      // Act
+      const batch = await service.createProductionBatch({
+        productionDate: '2025-01-20',
+      });
+
+      // Assert: 优化后 pot#1 = 3400g，pot#2 补到 2000g
+      expect(batch.packagingUnits.map((u) => u.totalProductionG)).toEqual([
+        3400, 2000,
+      ]);
+
+      // Assert: 每口锅的生肉分配都必须等于 净重 × 损耗率
+      for (const unit of batch.packagingUnits) {
+        const allocations: Record<string, number> = (unit as any)
+          .rawMaterialAllocations;
+        const allocatedRaw = Object.values(allocations).reduce(
+          (sum, weight) => sum + weight,
+          0,
+        );
+        expect(allocatedRaw).toBeCloseTo(unit.totalProductionG * 1.05, 2);
+      }
+
+      // Assert: 跨锅订单在两口锅里各留一部分，全批次合计仍是原始生肉重量
+      const allocatedByItem: Record<string, number> = {};
+      for (const unit of batch.packagingUnits) {
+        const allocations: Record<string, number> = (unit as any)
+          .rawMaterialAllocations;
+        for (const [itemId, weight] of Object.entries(allocations)) {
+          allocatedByItem[itemId] = (allocatedByItem[itemId] ?? 0) + weight;
+        }
+      }
+      expect(allocatedByItem['item-a']).toBeCloseTo(2250 * 1.05, 2);
+      expect(allocatedByItem['item-b']).toBeCloseTo(1800 * 1.05, 2);
+      expect(allocatedByItem['item-c']).toBeCloseTo(1350 * 1.05, 2);
+
+      // Assert: 来源订单明细不重复（重复会让这口锅的任务重复显示同一笔订单）
+      for (const unit of batch.packagingUnits) {
+        expect(new Set(unit.sourceOrderItemIds).size).toBe(
+          unit.sourceOrderItemIds.length,
+        );
+      }
+      const unit2 = batch.packagingUnits[1];
+      expect(new Set(unit2.sourceOrderItemIds)).toEqual(
+        new Set(['item-b', 'item-c']),
+      );
     });
   });
 

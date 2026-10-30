@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const transport = vi.hoisted(() => ({
   get: vi.fn(),
   post: vi.fn(),
+  patch: vi.fn(),
   delete: vi.fn(),
 }))
 
@@ -14,6 +15,7 @@ describe('订单设计 API 路径', () => {
   beforeEach(() => {
     transport.get.mockReset()
     transport.post.mockReset()
+    transport.patch.mockReset()
     transport.delete.mockReset()
   })
 
@@ -77,6 +79,20 @@ describe('订单设计 API 路径', () => {
 
     expect(transport.post).toHaveBeenCalledWith(
       '/recipe-designer/orders/CR20261022001/designs/design-1/ready',
+    )
+  })
+
+  it('切换生命阶段走 stage 接口，只带 scenario（原地换，不换草稿）', async () => {
+    transport.patch.mockResolvedValue({ status: 'EDITING' })
+    await orderRecipeDesignApi.switchStage(
+      'CR20261022001',
+      'design-1',
+      'ADULT_MER_110',
+    )
+
+    expect(transport.patch).toHaveBeenCalledWith(
+      '/recipe-designer/orders/CR20261022001/designs/design-1/stage',
+      { scenario: 'ADULT_MER_110' },
     )
   })
 

@@ -30,9 +30,31 @@ export type ComputedSupplementTarget = SupplementTarget;
 
 const MASS_UNITS = new Set(['g', 'mg', 'ug']);
 
-type NutritionTargetField = NonNullable<
-  ReturnType<typeof findAnyNutritionField>
->;
+/**
+ * 目标字段的统一形态。
+ * 标准/派生字段来自营养字段目录；自定义成分来自营养档案的 customItems。
+ */
+interface ResolvedTargetField {
+  fieldPath: string;
+  label: string;
+  unit: string;
+  customItem?: {
+    name: string;
+    value?: number | null;
+    unit?: string | null;
+    rawBasisType?: string | null;
+  };
+}
+
+const CUSTOM_TARGET_PREFIX = 'custom:';
+
+function isCustomTargetKey(value: string): boolean {
+  return value.startsWith(CUSTOM_TARGET_PREFIX);
+}
+
+function normalizeCustomTargetName(value: string): string {
+  return value.trim().replace(/\s+/g, '').toLowerCase();
+}
 
 /**
  * 补剂目标解析、校验与添加浓度计算。
@@ -149,10 +171,10 @@ export class SupplementTargetService {
         throw new BadRequestException('补剂目标的营养素字段不能为空');
       }
 
-      const field = findAnyNutritionField(rawFieldPath);
+      const field = this.resolveTargetField(nutritionProfile, rawFieldPath);
       if (!field) {
         throw new BadRequestException(
-          `补剂目标营养素 ${rawFieldPath} 不在营养字段目录中`,
+          `补剂目标营养素 ${rawFieldPath} 不在营养字段目录或营养档案的自定义成分中`,
         );
       }
 
@@ -162,7 +184,16 @@ export class SupplementTargetService {
       seenFieldPaths.add(field.fieldPath);
 
       const unit = resolveTargetUnit(field, targetRecord.unit);
-      this.assertProfileFieldHasValue(nutritionProfile, field);
+      if (field.customItem) {
+        const value = Number(field.customItem.value);
+        if (!Number.isFinite(value) || value <= 0) {
+          throw new BadRequestException(
+            `营养档案中「${field.label}」的自定义成分为空或为 0，不能作为补剂目标`,
+          );
+        }
+      } else {
+        this.assertProfileFieldHasValue(nutritionProfile, field);
+      }
 
       definitions.push({
         fieldPath: field.fieldPath,
@@ -175,11 +206,14 @@ export class SupplementTargetService {
   }
 
   /**
-   * 按当前配方总重量计算每个目标的实际添加浓度：
+   * 按当前**食材**总重量计算每个目标的实际添加浓度：
    *
-   *   添加浓度（每 kg 配方）= 补剂提供的目标营养素总量 ÷ 配方总重量（g）× 1000
+   *   添加浓度（每 kg 食材）= 补剂提供的目标营养素总量 ÷ 食材总重量（g）× 1000
    *
-   * 分母必须是 `assessment.totalWeightG`（计入评估的有效原料重量），
+   * 分母统一用「参与评估的食材有效重量合计」（不含补剂）：
+   *   · 文案写的就是「每kg食材添加 X」；
+   *   · 车间投放也按食材净重乘回去。
+   * 两端同基准，才不会出现「标签写食材、公式算全部配料」的偏差。
    * 总重量或补剂用量无效时直接报错，不按 0 静默处理。
    */
   computeTargets(
@@ -189,15 +223,25 @@ export class SupplementTargetService {
     totalWeightG: number | null | undefined,
   ): ComputedSupplementTarget[] {
     const definitions = this.validateTargets(nutritionProfile, targets);
+    if (!nutritionProfile) {
+      // 没有档案时 validateTargets 已经拦下非空目标；这里只剩“目标也为空”的情况。
+      return [];
+    }
     const supplementWeightG = toPositiveWeight(weightG, '补剂用量');
     const recipeTotalWeightG = toPositiveWeight(totalWeightG, '配方总重量');
 
     return definitions.map((definition) => {
-      const read = readProfileFieldAmount(
-        nutritionProfile,
-        definition.fieldPath,
-        supplementWeightG,
-      );
+      const read = isCustomTargetKey(definition.fieldPath)
+        ? this.readCustomTargetAmount(
+            nutritionProfile,
+            definition.fieldPath,
+            supplementWeightG,
+          )
+        : readProfileFieldAmount(
+            nutritionProfile,
+            definition.fieldPath,
+            supplementWeightG,
+          );
       if (
         read.missing ||
         read.amount === null ||
@@ -227,9 +271,74 @@ export class SupplementTargetService {
     });
   }
 
+  private resolveTargetField(
+    nutritionProfile: NutritionProfile,
+    rawFieldPath: string,
+  ): ResolvedTargetField | null {
+    if (isCustomTargetKey(rawFieldPath)) {
+      const wanted = normalizeCustomTargetName(
+        rawFieldPath.slice(CUSTOM_TARGET_PREFIX.length),
+      );
+      const normalized = normalizeNutritionProfile(nutritionProfile);
+      const item = (normalized?.customItems ?? []).find(
+        (candidate) =>
+          normalizeCustomTargetName(candidate.name) === wanted,
+      );
+      if (!item) return null;
+      return {
+        fieldPath: `${CUSTOM_TARGET_PREFIX}${normalizeCustomTargetName(item.name)}`,
+        label: item.name,
+        unit: String(item.unit ?? ''),
+        customItem: item,
+      };
+    }
+
+    const standard = findAnyNutritionField(rawFieldPath);
+    if (!standard) return null;
+    return {
+      fieldPath: standard.fieldPath,
+      label: standard.label,
+      unit: standard.unit,
+    };
+  }
+
+  private readCustomTargetAmount(
+    nutritionProfile: NutritionProfile,
+    fieldPath: string,
+    amount: number,
+  ): { amount: number | null; missing: boolean } {
+    const normalized = normalizeNutritionProfile(nutritionProfile);
+    const wanted = normalizeCustomTargetName(
+      fieldPath.slice(CUSTOM_TARGET_PREFIX.length),
+    );
+    const item = (normalized?.customItems ?? []).find(
+      (candidate) => normalizeCustomTargetName(candidate.name) === wanted,
+    );
+    const value = Number(item?.value);
+    if (!item || !Number.isFinite(value) || value <= 0) {
+      return { amount: null, missing: true };
+    }
+
+    const basis = String(
+      item.rawBasisType ?? normalized?.meta?.rawBasisType ?? 'PER_100_G',
+    ).toUpperCase();
+    switch (basis) {
+      case 'PER_1_G':
+      case 'PER_1_ML':
+      case 'PER_SERVING':
+      case 'PER_1_PCS':
+        return { amount: value * amount, missing: false };
+      case 'PER_100_G':
+      case 'PER_100_ML':
+        return { amount: (value * amount) / 100, missing: false };
+      default:
+        return { amount: null, missing: true };
+    }
+  }
+
   private assertProfileFieldHasValue(
     nutritionProfile: NutritionProfile,
-    field: NutritionTargetField,
+    field: ResolvedTargetField,
   ) {
     const read = readProfileFieldAmount(nutritionProfile, field.fieldPath, 1);
     if (
@@ -288,7 +397,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 function resolveTargetUnit(
-  field: NutritionTargetField,
+  field: ResolvedTargetField,
   rawUnit: unknown,
 ): string {
   if (rawUnit === null || rawUnit === undefined) {

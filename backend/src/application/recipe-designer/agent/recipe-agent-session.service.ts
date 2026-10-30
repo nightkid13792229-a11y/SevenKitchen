@@ -99,6 +99,10 @@ export class RecipeAgentSessionService {
     }
     if (lastError !== undefined) {
       data.lastError = lastError;
+    } else if (status !== 'FAILED' && status !== 'INTERRUPTED') {
+      // 旧错误不能跟着会话进入下一次运行/完成状态；否则 UI 会在
+      // “已完成/等待回答”下面继续显示上一轮的“超过运行上限”。
+      data.lastError = null;
     }
 
     await this.prisma.recipeDesignAgentSession.update({
@@ -110,7 +114,7 @@ export class RecipeAgentSessionService {
   /**
    * 条件状态迁移（compare-and-set）：只有当前状态落在 `from` 里才写入 `to`。
    *
-   * 运行态是并发入口（开始 / 继续 / 停止 / 交付），不能先读再写：读到的
+   * 运行态是并发入口（开始 / 继续 / 停止），不能先读再写：读到的
    * 状态可能在写之前就被别处改掉。这里用一条带 `status in (...)` 的
    * `updateMany` 把判断和写入合成一个原子操作，返回是否真的迁移成功。
    */
@@ -126,6 +130,8 @@ export class RecipeAgentSessionService {
     };
     if (lastError !== undefined) {
       data.lastError = lastError;
+    } else if (to !== 'FAILED' && to !== 'INTERRUPTED') {
+      data.lastError = null;
     }
 
     const result = await this.prisma.recipeDesignAgentSession.updateMany({
@@ -152,6 +158,31 @@ export class RecipeAgentSessionService {
     });
   }
 
+  /**
+   * 记录「本轮起点」：把当前累计值快照到 runStart*。
+   * 每次用户发新消息（start / resume）都会调用；之后
+   * 本次 = 当前累计 - runStart，草稿累计仍然看 stepCount / promptTokens。
+   */
+  async beginRunCounters(sessionId: string): Promise<void> {
+    const session = await this.prisma.recipeDesignAgentSession.findUnique({
+      where: { id: sessionId },
+      select: {
+        stepCount: true,
+        promptTokens: true,
+        completionTokens: true,
+      },
+    });
+    if (!session) return;
+    await this.prisma.recipeDesignAgentSession.update({
+      where: { id: sessionId },
+      data: {
+        runStartStepCount: session.stepCount,
+        runStartPromptTokens: session.promptTokens,
+        runStartCompletionTokens: session.completionTokens,
+      },
+    });
+  }
+
   async incrementStep(sessionId: string): Promise<void> {
     await this.prisma.recipeDesignAgentSession.update({
       where: { id: sessionId },
@@ -167,6 +198,22 @@ export class RecipeAgentSessionService {
         designRecipeId,
         status: { in: ['RUNNING', 'WAITING_USER'] },
       },
+      orderBy: { startedAt: 'desc' },
+    });
+    return session ? this.toSessionRecord(session) : null;
+  }
+
+  /**
+   * 草稿最近一次会话（不看状态）。
+   *
+   * 2026-10-29 起「一个草稿一本会话」：停止/失败后重新开始也续写这一本，
+   * 这样抽屉能看到全部聊天记录，模型每轮也能读到同一份历史。
+   */
+  async getLatestSession(
+    designRecipeId: string,
+  ): Promise<AgentSessionRecord | null> {
+    const session = await this.prisma.recipeDesignAgentSession.findFirst({
+      where: { designRecipeId },
       orderBy: { startedAt: 'desc' },
     });
     return session ? this.toSessionRecord(session) : null;
@@ -217,6 +264,9 @@ export class RecipeAgentSessionService {
       stepCount: session.stepCount,
       promptTokens: session.promptTokens,
       completionTokens: session.completionTokens,
+      runStartStepCount: session.runStartStepCount,
+      runStartPromptTokens: session.runStartPromptTokens,
+      runStartCompletionTokens: session.runStartCompletionTokens,
       startedAt: session.startedAt,
       endedAt: session.endedAt,
       lastError: session.lastError,

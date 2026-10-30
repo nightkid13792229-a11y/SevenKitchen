@@ -521,9 +521,17 @@ interface PackRow {
  * 只改页面级外壳（页边距 / 重复标题），业务逻辑与独立访问时完全一致，
  * 保证两条入口不会各自演化出不同行为。
  */
-const props = withDefaults(defineProps<{ embedded?: boolean }>(), {
-  embedded: false,
-});
+const props = withDefaults(
+  defineProps<{
+    embedded?: boolean;
+    /** 从订单中心点进来时，直接把这一单筛出来；没有则回退到地址栏 keyword */
+    initialKeyword?: string;
+  }>(),
+  {
+    embedded: false,
+    initialKeyword: '',
+  },
+);
 
 const route = useRoute();
 const router = useRouter();
@@ -541,9 +549,9 @@ const loading = ref(false);
 const submitting = ref(false);
 const orders = ref<SupplementOrder[]>([]);
 const counts = ref<Record<string, number>>({});
-const initialKeyword = String(route.query.keyword || '').trim();
-const activeStatus = ref(initialKeyword ? '' : 'PAID');
-const keyword = ref(initialKeyword);
+const seedKeyword = String(props.initialKeyword || route.query.keyword || '').trim();
+const activeStatus = ref(seedKeyword ? '' : 'PAID');
+const keyword = ref(seedKeyword);
 const page = ref(1);
 const pageSize = ref(20);
 const total = ref(0);

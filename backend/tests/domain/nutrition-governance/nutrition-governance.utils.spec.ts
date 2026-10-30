@@ -91,6 +91,17 @@ describe('nutrition governance utilities', () => {
     });
   });
 
+  it('can skip the handwritten alias table when the learned dictionary is the source of truth', () => {
+    expect(
+      scoreIngredientSourceNameMatch({
+        ingredientName: '鸡胸肉',
+        sourceFoodName: 'Chicken breast, cooked, roasted',
+        sourceType: 'USDA',
+        allowStaticChineseEnglishAliases: false,
+      }).score,
+    ).toBeLessThan(0.35);
+  });
+
   it('keeps cabbage variants recallable while still preferring the requested variant', () => {
     const common = scoreIngredientSourceNameMatch({
       ingredientName: '卷心菜',

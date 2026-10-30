@@ -17,111 +17,47 @@
 
     <view v-else-if="order" class="order-detail">
       <!-- 订单类型标签 -->
-      <view class="order-type-tag">鲜食制作订单</view>
-
-      <!-- 订单进度条 -->
-      <view class="progress-section">
-        <OrderProgressBar :status="order.status" />
-      </view>
-
-      <view class="section order-center-section">
-        <view class="order-center-header">
-          <view class="order-center-title-block">
-            <text class="order-center-title">{{ orderCenterTitle }}</text>
-            <text class="order-center-subtitle"
-              >微信订单中心可查看的商品订单详情</text
-            >
-          </view>
+      <!-- 首屏主卡（2026-10-30）：进度、商品、金额、预计发货一次说完 -->
+      <view class="section hero-section">
+        <view class="hero-top">
+          <view class="hero-kind"><view class="hero-kind-dot" /><text>鲜食</text></view>
           <text
-            class="order-center-status"
-              :style="{ color: getStatusColor(order) }"
-            >
-              {{ getStatusText(order) }}
-          </text>
-        </view>
-
-        <view class="order-center-goods">
-          <view class="goods-main">
-            <image
-              v-if="orderCenterCover"
-              class="goods-cover"
-              :src="orderCenterCover"
-              mode="aspectFill"
-            />
-            <view v-else class="goods-cover-placeholder">
-              <text>{{ orderCenterTitle.charAt(0) }}</text>
-            </view>
-            <view class="goods-text">
-              <text class="goods-name">{{ orderCenterTitle }}</text>
-              <text class="goods-desc">{{ orderCenterDescription }}</text>
-            </view>
-          </view>
-          <view class="goods-amount-row">
-            <text class="goods-amount-label">实付/应付金额</text>
-            <text class="goods-amount-value"
-              >¥{{ formatAmount(order.amountTotal || order.totalAmount) }}</text
-            >
-          </view>
-        </view>
-
-        <view class="order-center-grid">
-          <view class="order-center-cell">
-            <text class="cell-label">订单编号</text>
-            <text class="cell-value">{{ order.id }}</text>
-          </view>
-          <view class="order-center-cell">
-            <text class="cell-label">下单时间</text>
-            <text class="cell-value">{{
-              formatDateTime(order.createdAt)
-            }}</text>
-          </view>
-          <view class="order-center-cell">
-            <text class="cell-label">购买账号</text>
-            <text class="cell-value">{{ customerDisplayName }}</text>
-          </view>
-          <view class="order-center-cell">
-            <text class="cell-label">联系电话</text>
-            <text class="cell-value">{{ customerPhoneText }}</text>
-          </view>
-        </view>
-      </view>
-
-      <!-- 订单基本信息 -->
-      <view class="section info-section">
-        <view class="section-title">基本信息</view>
-        <view class="info-row">
-          <text class="label">订单编号:</text>
-          <text class="value order-id">{{ order.orderNo || formatOrderId(order.id) }}</text>
-          <button class="btn-copy" @tap="copyOrderId">复制</button>
-        </view>
-        <view class="info-row">
-          <text class="label">订单状态:</text>
-          <text
-            class="value status"
+            class="hero-status"
             :style="{ color: getStatusColor(order) }"
-          >
-            {{ getStatusText(order) }}
+          >{{ getStatusText(order) }}</text>
+        </view>
+
+        <text class="hero-title">{{ orderCenterTitle }}</text>
+        <text class="hero-meta">{{ orderCenterDescription }}</text>
+
+        <OrderProgressSteps
+          class="hero-progress"
+          kind="food"
+          :status="order.status"
+        />
+
+        <view v-if="heroEtaText" class="hero-eta">
+          <text class="hero-eta__text">{{ heroEtaText }}</text>
+        </view>
+
+        <view class="hero-price-row">
+          <text class="hero-price-label">实付金额</text>
+          <text class="hero-price-value">¥{{ formatAmount(order.amountTotal || order.totalAmount) }}</text>
+        </view>
+
+        <view class="hero-foot">
+          <text class="hero-no" @tap="copyOrderId">
+            订单号 {{ order.orderNo || formatOrderId(order.id) }}
+            <text class="hero-no__copy">复制</text>
           </text>
+          <text class="hero-time">{{ formatDateTime(order.createdAt) }}</text>
         </view>
-        <view class="info-row">
-          <text class="label">下单时间:</text>
-          <text class="value">{{ formatDateTime(order.createdAt) }}</text>
-        </view>
-        <view class="info-row" v-if="order.targetProductionDate">
-          <text class="label">目标制作日期:</text>
-          <text class="value">{{
-            formatDate(order.targetProductionDate)
-          }}</text>
-          <picker
-            v-if="canEditDate"
-            mode="date"
-            :value="selectedDate"
-            :start="minDateStr"
-            @change="onDateSelected"
-          >
-            <view class="btn-edit">修改</view>
-          </picker>
-        </view>
+      </view>
+
+      <!-- 收货与配送（2026-10-30 合并：地址、预计时间、购买人） -->
+      <view class="section delivery-section">
+        <view class="section-title">收货与配送</view>
+
         <view class="info-row address-row">
           <text class="label">收货地址:</text>
           <view class="address-content">
@@ -179,68 +115,47 @@
             </template>
           </view>
         </view>
-        <view class="info-row">
-          <text class="label">订单金额:</text>
-          <text class="value amount"
-            >¥{{ formatAmount(order.amountTotal || order.totalAmount) }}</text
-          >
-        </view>
-      </view>
 
-      <view class="section buyer-section">
-        <view class="section-title">购买人与配送</view>
-        <view class="buyer-card">
-          <view class="buyer-row">
-            <text class="buyer-label">购买人</text>
-            <text class="buyer-value">{{ customerDisplayName }}</text>
-          </view>
-          <view class="buyer-row">
-            <text class="buyer-label">联系方式</text>
-            <text class="buyer-value">{{ customerPhoneText }}</text>
-          </view>
-          <view class="buyer-row">
-            <text class="buyer-label">收货人</text>
-            <text class="buyer-value">{{
-              order.address?.recipientName || '-'
-            }}</text>
-          </view>
-          <view class="buyer-row">
-            <text class="buyer-label">收货电话</text>
-            <text class="buyer-value">{{
-              order.address ? getOrderAddressPhone(order.address) : '-'
-            }}</text>
-          </view>
-          <view class="buyer-row address-line">
-            <text class="buyer-label">收货地址</text>
-            <text class="buyer-value">{{ fullAddressText }}</text>
-          </view>
-          <view v-if="!isStockOrder" class="buyer-row">
-            <text class="buyer-label">预计制作</text>
-            <text class="buyer-value">{{
-              formatDate(order.targetProductionDate)
-            }}</text>
-          </view>
-          <view v-else class="buyer-row">
-            <text class="buyer-label">发货方式</text>
-            <text class="buyer-value">现货，付款后尽快发出</text>
-          </view>
-          <!-- 补发单：0 元补寄，要讲清楚"不用再付钱、也不是又下了一单" -->
-          <view v-if="isReshipOrder" class="buyer-row">
-            <text class="buyer-label">订单性质</text>
-            <text class="buyer-value">免费补发（不收费）</text>
-          </view>
-          <view class="buyer-row">
-            <text class="buyer-label">预计发货</text>
-            <text class="buyer-value">{{
-              formatDate(order.estimatedShippingDate)
-            }}</text>
-          </view>
+        <view class="info-row" v-if="!isStockOrder && order.targetProductionDate">
+          <text class="label">目标制作日期:</text>
+          <text class="value">{{
+            formatDate(order.targetProductionDate)
+          }}</text>
+          <picker
+            v-if="canEditDate"
+            mode="date"
+            :value="selectedDate"
+            :start="minDateStr"
+            @change="onDateSelected"
+          >
+            <view class="btn-edit">修改</view>
+          </picker>
+        </view>
+
+        <view class="info-row">
+          <text class="label">预计发货:</text>
+          <text class="value">{{ formatDate(order.estimatedShippingDate) }}</text>
+        </view>
+        <view v-if="isStockOrder" class="info-row">
+          <text class="label">发货方式:</text>
+          <text class="value">现货，付款后尽快发出</text>
+        </view>
+        <view class="info-row">
+          <text class="label">购买人:</text>
+          <text class="value">{{ customerDisplayName }} {{ customerPhoneText }}</text>
+        </view>
+        <view v-if="isReshipOrder" class="info-row">
+          <text class="label">订单性质:</text>
+          <text class="value">免费补发（不收费）</text>
         </view>
       </view>
 
       <view class="section merchant-note-section">
-        <view class="section-title">商家说明</view>
-        <view class="merchant-note-list">
+        <view class="merchant-note-toggle" @tap="toggleMerchantNotes">
+          <text class="section-title" style="margin-bottom: 0">服务说明</text>
+          <text class="merchant-note-arrow">{{ merchantNotesExpanded ? '收起' : '查看' }} ›</text>
+        </view>
+        <view v-if="merchantNotesExpanded" class="merchant-note-list">
           <view class="merchant-note-item">
             <text class="merchant-note-label">订单备注</text>
             <text class="merchant-note-value">{{
@@ -320,22 +235,17 @@
       </view>
 
       <view
-        v-if="shouldShowFinancialSummary"
+        v-if="shouldShowFinancialSummary && hasPendingSettlementAmount"
         class="section settlement-section"
       >
-        <view class="section-title">生产结算</view>
+        <view class="section-title">成品调整</view>
         <view class="settlement-card" :class="settlementAdjustmentClass">
           <view class="settlement-header">
             <text class="settlement-title">{{ formatAdjustmentText() }}</text>
-            <text class="settlement-status">{{
-              orderFinancialSummary?.settlementStatus === 'SETTLED'
-                ? '已结算'
-                : '待结算'
-            }}</text>
           </view>
-          <text class="settlement-desc">{{ settlementDescription }}</text>
+          <text class="settlement-desc">{{ settlementPlainText }}</text>
           <view
-            v-if="orderFinancialSummary?.latestSettlement"
+            v-if="orderFinancialSummary?.latestSettlement && settlementDetailExpanded"
             class="settlement-metrics"
           >
             <view class="settlement-metric">
@@ -469,6 +379,18 @@
         </view>
       </view>
 
+      <!-- 怎么喂、怎么存：已发货/已完成给一个入口，复用现成页面 -->
+      <view
+        v-if="order.status === 'SHIPPED' || order.status === 'COMPLETED'"
+        class="section reminder-section"
+        @tap="goShippingNotice"
+      >
+        <view class="reminder-row">
+          <text class="reminder-title">怎么喂、怎么存</text>
+          <text class="reminder-link">食用与保存提醒 ›</text>
+        </view>
+      </view>
+
       <view class="section service-section">
         <view class="section-title">客服</view>
         <button
@@ -513,18 +435,31 @@
             :key="item.id"
             class="order-item-card"
           >
-            <!-- 第1层：食谱基本信息 -->
+            <!-- 第1层：食谱基本信息（版本/营养标准收进「规格与来源」） -->
             <view class="item-header">
               <text class="recipe-name">{{ item.recipeSnapshot?.name }}</text>
               <text v-if="isStockOrder" class="nutrition-standard"
                 >现货 · 试吃装</text
               >
-              <text v-else class="recipe-version"
-                >v{{ item.recipeSnapshot?.version }}</text
-              >
-              <text class="nutrition-standard">{{
-                getNutritionStandardLabel(item.recipeSnapshot?.nutrition_standard || '')
-              }}</text>
+              <text class="spec-toggle" @tap.stop="toggleItemSpec(item.id)">
+                {{ isItemSpecExpanded(item.id) ? '收起' : '规格与来源' }} ›
+              </text>
+            </view>
+
+            <view
+              v-if="isItemSpecExpanded(item.id)"
+              class="item-spec-fold"
+            >
+              <view class="package-row">
+                <text class="package-label">食谱版本:</text>
+                <text class="package-value">v{{ item.recipeSnapshot?.version }}</text>
+              </view>
+              <view class="package-row">
+                <text class="package-label">营养标准:</text>
+                <text class="package-value">{{
+                  getNutritionStandardLabel(item.recipeSnapshot?.nutrition_standard || '')
+                }}</text>
+              </view>
             </view>
 
             <!-- 试吃装：列出这一套包含哪几道菜 -->
@@ -685,75 +620,68 @@
       </view>
 
       <!--
-        ① 取消订单：仅"已付款"（尚未进入采购）阶段。
-        此时我们还没为这一单产生任何成本，顾客可以随时整单取消、全额退款。
+        售后与修改（2026-10-30 三块合一）。
+        取消 / 锁定期提示 / 售后服务原本是三张互斥的卡，顾客要在页面
+        中段找三处；现在同一张卡按状态给一组按钮，规则不变。
       -->
       <view
-        class="section cancel-order-section"
-        v-if="canCancelOrder(order.status)"
+        class="section aftersale-hub-section"
+        v-if="hasAftersaleHub"
       >
-        <view class="section-title">取消订单</view>
-        <text class="section-note">
-          订单尚未进入采购，现在取消不产生任何费用，将全额原路退回。
-        </text>
-        <view class="aftersale-buttons">
-          <button
-            class="btn-aftersale"
-            @tap="applyAftersaleType('REFUND')"
-          >
-            <text class="btn-text">取消订单</text>
-          </button>
-        </view>
-      </view>
+        <view class="section-title">售后与修改</view>
 
-      <!--
-        ② 锁定期（采购中/生产中/急冻中）：已开始为这一单投入，
-        不再提供自助取消或退款，改为引导联系客服。
-        投诉建议仍然保留在下方板块里。
-      -->
-      <view
-        class="section aftersale-locked-section"
-        v-else-if="isAftersaleLocked(order.status)"
-      >
-        <view class="section-title">需要修改或取消？</view>
-        <text class="section-note">
-          订单已进入采购与制作，食材按您的预约单独采买，无法自助取消。
-          如有特殊情况请联系客服协助。
-        </text>
-        <button class="btn-aftersale" @tap="contactService">
-          <text class="btn-text">联系客服</text>
-        </button>
-      </view>
+        <template v-if="canCancelOrder(order.status)">
+          <text class="section-note">
+            订单尚未进入采购，现在取消不产生任何费用，将全额原路退回。
+          </text>
+          <view class="aftersale-buttons">
+            <button
+              class="btn-aftersale"
+              @tap="applyAftersaleType('REFUND')"
+            >
+              <text class="btn-text">取消订单</text>
+            </button>
+          </view>
+        </template>
 
-      <!-- ③ 售后服务：已发货 / 已完成（破损、变质等品质问题） -->
-      <view
-        class="section aftersale-section"
-        v-if="canApplyAftersale(order.status, order.completedAt)"
-      >
-        <view class="section-title">售后服务</view>
-        <view class="aftersale-buttons">
-          <button
-            v-if="canApplyRefund(order.status, order.completedAt)"
-            class="btn-aftersale"
-            @tap="applyAftersaleType('REFUND')"
-          >
-            <text class="btn-text">申请退款</text>
+        <template v-else-if="isAftersaleLocked(order.status)">
+          <text class="section-note">
+            订单已进入采购与制作，食材按您的预约单独采买，无法自助取消。
+            如有特殊情况请联系客服协助。
+          </text>
+          <button class="btn-aftersale" @tap="contactService">
+            <text class="btn-text">联系客服</text>
           </button>
-          <button
-            v-if="canApplyRemake(order.status, order.completedAt)"
-            class="btn-aftersale"
-            @tap="applyAftersaleType('REMAKE')"
-          >
-            <text class="btn-text">申请重做</text>
-          </button>
-          <button
-            v-if="canApplyComplaint(order.status)"
-            class="btn-aftersale"
-            @tap="applyAftersaleType('COMPLAINT')"
-          >
-            <text class="btn-text">投诉建议</text>
-          </button>
-        </view>
+        </template>
+
+        <template v-else>
+          <text class="section-note">
+            收到后有问题，可以在这里申请退款、重做，或直接告诉我们。
+          </text>
+          <view class="aftersale-buttons">
+            <button
+              v-if="canApplyRefund(order.status, order.completedAt)"
+              class="btn-aftersale"
+              @tap="applyAftersaleType('REFUND')"
+            >
+              <text class="btn-text">申请退款</text>
+            </button>
+            <button
+              v-if="canApplyRemake(order.status, order.completedAt)"
+              class="btn-aftersale"
+              @tap="applyAftersaleType('REMAKE')"
+            >
+              <text class="btn-text">申请重做</text>
+            </button>
+            <button
+              v-if="canApplyComplaint(order.status)"
+              class="btn-aftersale"
+              @tap="applyAftersaleType('COMPLAINT')"
+            >
+              <text class="btn-text">投诉建议</text>
+            </button>
+          </view>
+        </template>
       </view>
 
       <!-- 售后信息（AFTERSALE状态显示） -->
@@ -960,7 +888,7 @@
     <!-- 底部操作按钮 -->
     <!-- Phase 9: Simplified action buttons aligned with e-commerce standards -->
     <!-- Phase 9.1: Added FREEZING and AFTERSALE status actions -->
-    <view class="bottom-actions" v-if="order">
+    <view class="bottom-actions" v-if="order && hasBottomActions">
       <!-- 待付款状态 -->
       <view v-if="order.status === 'PENDING_PAYMENT'" class="action-buttons">
         <button class="btn-action btn-cancel" @tap="cancelOrder">
@@ -1065,6 +993,7 @@ import {
   type WechatPaymentResult,
 } from '../../api/orders';
 import OrderProgressBar from '../../components/OrderProgressBar.vue';
+import OrderProgressSteps from '../../components/OrderProgressSteps.vue';
 import { normalizeImageUrl } from '../../utils/config';
 import { formatDateTime } from '../../utils/date';
 import { getNutritionStandardLabel } from '../../utils/label-mapping';
@@ -1277,6 +1206,95 @@ const userInfo = ref({
 
 const isStaffOrAdmin = computed(() => {
   return userInfo.value.role === 'STAFF' || userInfo.value.role === 'ADMIN';
+});
+
+/** 售后与修改卡：三个互斥状态任一成立就显示（2026-10-30） */
+/** 有未处理的退款/补款时才值得给顾客看这张卡（2026-10-30） */
+const hasPendingSettlementAmount = computed(() => {
+  const summary = orderFinancialSummary.value?.adjustmentSummary;
+  if (!summary) return false;
+  return (
+    Number(summary.pendingRefundAmount || 0) > 0 ||
+    Number(summary.pendingExtraPaymentAmount || 0) > 0
+  );
+});
+
+/** 成品调整的人话：少了多少克、退多少钱；补款同理 */
+const settlementPlainText = computed(() => {
+  const summary = orderFinancialSummary.value;
+  if (!summary) return '';
+  const refund = Number(summary.adjustmentSummary?.pendingRefundAmount || 0);
+  const extra = Number(
+    summary.adjustmentSummary?.pendingExtraPaymentAmount || 0,
+  );
+  const shortageG = Math.round(
+    Number(summary.latestSettlement?.shortageG || 0),
+  );
+
+  if (refund > 0) {
+    return shortageG > 0
+      ? `这单成品比计划少了 ${shortageG}g，会退你 ¥${formatAmount(refund)}，原路退回。`
+      : `这单会退你 ¥${formatAmount(refund)}，原路退回。`;
+  }
+  if (extra > 0) {
+    return `这单需要补 ¥${formatAmount(extra)}，客服会联系你确认方式。`;
+  }
+  return '';
+});
+
+const settlementDetailExpanded = ref(false);
+/** 每个商品行的「规格与来源」是否展开（2026-10-30） */
+const expandedItemSpecs = ref<Record<string, boolean>>({});
+
+function toggleItemSpec(itemId: string): void {
+  if (!itemId) return;
+  expandedItemSpecs.value[itemId] = !expandedItemSpecs.value[itemId];
+}
+
+function isItemSpecExpanded(itemId: string): boolean {
+  return Boolean(expandedItemSpecs.value[itemId]);
+}
+
+const merchantNotesExpanded = ref(false);
+
+function toggleMerchantNotes(): void {
+  merchantNotesExpanded.value = !merchantNotesExpanded.value;
+}
+
+function goShippingNotice(): void {
+  const current = order.value;
+  if (!current) return;
+  uni.navigateTo({
+    url: `/pages/order-shipping-notice/index?orderId=${current.id}`,
+  });
+}
+
+const hasAftersaleHub = computed(() => {
+  const current = order.value;
+  if (!current) return false;
+  return (
+    canCancelOrder(current.status) ||
+    isAftersaleLocked(current.status) ||
+    canApplyAftersale(current.status, current.completedAt)
+  );
+});
+
+/**
+ * 底部操作栏（2026-10-30）。
+ *
+ * 锁定期与售后中原来会渲染一条空的白栏，挡内容还看着像坏了；
+ * 现在只有真的会出按钮的状态才渲染。
+ */
+const hasBottomActions = computed(() => {
+  const status = order.value?.status;
+  if (!status) return false;
+  return [
+    'PENDING_PAYMENT',
+    'PAID',
+    'SHIPPED',
+    'COMPLETED',
+    'CANCELLED',
+  ].includes(status);
 });
 
 const paymentExpired = computed(() => {
@@ -1527,6 +1545,36 @@ const orderCenterDescription = computed(() => {
     totalQuantityKg.value > 0 ? `约${totalQuantityKg.value}kg` : '',
   ].filter(Boolean);
   return parts.join(' · ') || '宠物鲜食定制商品';
+});
+
+/** 「11月2日」这种顾客读得出来的日期 */
+function formatMonthDay(value?: string | null): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return `${date.getMonth() + 1}月${date.getDate()}日`;
+}
+
+/**
+ * 首屏那一行"什么时候到"（2026-10-30）。
+ *
+ * 没排产说"等待排期"，不要拼出"预计 —— 月 —— 日"；
+ * 已完成/已取消不占这一行。
+ */
+const heroEtaText = computed(() => {
+  const current = order.value;
+  if (!current) return '';
+  if (
+    current.status === 'COMPLETED' ||
+    current.status === 'CANCELLED' ||
+    current.status === 'AFTERSALE'
+  ) {
+    return '';
+  }
+  if (current.status === 'PENDING_PAYMENT') return '付款后开始制作';
+  if (current.status === 'SHIPPED') return '已发出，等待签收';
+  const day = formatMonthDay(current.estimatedShippingDate);
+  return day ? `预计 ${day} 发出` : '等待排期';
 });
 
 const customerDisplayName = computed(() => {
@@ -4876,5 +4924,166 @@ async function applyRefund() {
 
 .btn-share-photos::after {
   border: none;
+}
+
+/* ===== 首屏主卡（2026-10-30）===== */
+.hero-section {
+  padding: 28rpx 24rpx;
+}
+
+.hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.hero-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 8rpx;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #2e7d32;
+}
+
+.hero-kind-dot {
+  width: 10rpx;
+  height: 10rpx;
+  border-radius: 999rpx;
+  background: #2e7d32;
+}
+
+.hero-status {
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.hero-title {
+  display: block;
+  margin-top: 14rpx;
+  font-size: 36rpx;
+  font-weight: 700;
+  line-height: 1.35;
+  color: #26261f;
+}
+
+.hero-meta {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: #6b6653;
+}
+
+.hero-progress {
+  margin: 26rpx 0 10rpx;
+}
+
+.hero-eta {
+  margin-top: 10rpx;
+  padding: 14rpx 18rpx;
+  border-radius: 12rpx;
+  background: #f6efe0;
+}
+
+.hero-eta__text {
+  font-size: 22rpx;
+  line-height: 1.4;
+  color: #7a5f2e;
+}
+
+.hero-price-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 18rpx;
+}
+
+.hero-price-label {
+  font-size: 24rpx;
+  color: #6b6653;
+}
+
+.hero-price-value {
+  font-size: 38rpx;
+  font-weight: 800;
+  color: #b4553f;
+}
+
+.hero-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-top: 16rpx;
+  padding-top: 14rpx;
+  border-top: 1rpx solid #eef1e2;
+}
+
+.hero-no {
+  font-size: 20rpx;
+  color: #968f6d;
+}
+
+.hero-no__copy {
+  margin-left: 8rpx;
+  padding: 2rpx 10rpx;
+  border-radius: 6rpx;
+  border: 1rpx solid #e3e6d4;
+  font-size: 18rpx;
+  color: #6b6653;
+}
+
+.hero-time {
+  font-size: 20rpx;
+  color: #968f6d;
+}
+
+/* 规格与来源（2026-10-30） */
+.spec-toggle {
+  margin-left: auto;
+  font-size: 20rpx;
+  color: #6b6653;
+}
+
+.item-spec-fold {
+  margin-bottom: 16rpx;
+  padding: 12rpx 16rpx;
+  border-radius: 10rpx;
+  background: #f6f8ef;
+}
+
+.merchant-note-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.merchant-note-arrow {
+  font-size: 22rpx;
+  color: #968f6d;
+}
+
+.reminder-section {
+  padding: 0;
+}
+
+.reminder-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 26rpx 24rpx;
+}
+
+.reminder-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #26261f;
+}
+
+.reminder-link {
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #1e3a2f;
 }
 </style>

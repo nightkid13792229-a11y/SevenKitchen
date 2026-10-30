@@ -368,3 +368,40 @@ describe('食谱定制 · 数据库结构守卫', () => {
     });
   });
 });
+
+/**
+ * 赠送单（2026-10-30）
+ *
+ * 赠送此前只能靠「实收填 0 + 手写差异原因」表达，订单上还会留下
+ * 一个假的收款渠道。赠送要能单独统计，就必须有自己的标记与原因，
+ * 不能再从金额反推 —— 否则一次优惠/退款就会把正常单误判成赠送。
+ */
+describe('食谱定制 · 赠送单结构守卫', () => {
+  const schema = readProjectFile('prisma/schema.prisma');
+  const orderBlock = modelBlock(schema, 'CustomRecipeOrder');
+
+  it('★ 订单上有赠送标记、原因与补充说明', () => {
+    expect(orderBlock).toMatch(
+      /isGift\s+Boolean\s+@default\(false\)\s+@map\("is_gift"\)/,
+    );
+    expect(orderBlock).toMatch(
+      /giftReason\s+String\?\s+@map\("gift_reason"\)\s+@db\.VarChar\(30\)/,
+    );
+    expect(orderBlock).toMatch(
+      /giftNote\s+String\?\s+@map\("gift_note"\)\s+@db\.VarChar\(200\)/,
+    );
+  });
+
+  it('★ 迁移只加列：可回滚，不碰既有金额/收款列', () => {
+    const sql = readProjectFile(
+      'prisma/migrations/20261030130000_custom_recipe_gift_order/migration.sql',
+    );
+
+    expect(sql).toMatch(/ADD COLUMN "is_gift" BOOLEAN NOT NULL DEFAULT false/);
+    expect(sql).toMatch(/ADD COLUMN "gift_reason" VARCHAR\(30\)/);
+    expect(sql).toMatch(/ADD COLUMN "gift_note" VARCHAR\(200\)/);
+    expect(sql).not.toMatch(/DROP COLUMN/i);
+    expect(sql).not.toMatch(/ALTER COLUMN/i);
+    expect(sql).not.toMatch(/UPDATE "custom_recipe_order"/);
+  });
+});

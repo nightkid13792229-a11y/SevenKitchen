@@ -1,8 +1,8 @@
 /**
  * 内存版 `RecipeAgentDraftPort`（P0a Task 2）。
  *
- * 只用于单元测试：不连数据库、不调模型。默认草稿是一份七类齐全的鸭肉南瓜餐
- * （7 种原料、900g、内容版本 4、3 步制作步骤）；默认评估 34/34 全部达标，
+ * 只用于单元测试：不连数据库、不调模型。默认草稿是一份八类基础齐全的鸭肉南瓜餐
+ * （8 种原料、940g、内容版本 4、3 步制作步骤）；默认评估 34/34 全部达标，
  * 三条示例指标的余量分别为 32% / 25% / 21%。
  *
  * `getDraft` 的 `lastAssessment` 由 `createFakeRecipeAgentPort` 的 `assessment`
@@ -12,16 +12,19 @@ import type {
   AgentAssessmentView,
   AgentCatalogUsage,
   AgentCopyPatch,
+  AgentDogRecipeHistory,
   AgentDraftItem,
   AgentDraftSnapshot,
   AgentIngredientCandidate,
   AgentIngredientDetail,
   AgentProductionStep,
+  AgentRecipeDetail,
+  AgentRecipeSearchPage,
 } from 'src/application/recipe-designer/agent/agent-types';
 import type { RecipeAgentDraftPort } from 'src/application/recipe-designer/agent/recipe-agent.port';
 import { classifyFoodCategory } from 'src/domain/recipe-designer/food-category-map';
 
-/** 七类必需类别各一条的默认草稿原料，总重 900g。 */
+/** 八类基础类别各一条的默认草稿原料，总重 940g。 */
 const DEFAULT_ITEMS: readonly AgentDraftItem[] = [
   {
     id: 'item-1',
@@ -34,7 +37,6 @@ const DEFAULT_ITEMS: readonly AgentDraftItem[] = [
     weightG: 450,
     ratioPercent: 50,
     preparationMethod: '去皮切块',
-    preparationNote: '去掉可见脂肪',
   },
   {
     id: 'item-2',
@@ -47,7 +49,6 @@ const DEFAULT_ITEMS: readonly AgentDraftItem[] = [
     weightG: 60,
     ratioPercent: 6.67,
     preparationMethod: '去筋膜切丁',
-    preparationNote: null,
   },
   {
     id: 'item-3',
@@ -60,7 +61,6 @@ const DEFAULT_ITEMS: readonly AgentDraftItem[] = [
     weightG: 160,
     ratioPercent: 17.78,
     preparationMethod: '提前浸泡',
-    preparationNote: '浸泡 20 分钟',
   },
   {
     id: 'item-4',
@@ -73,7 +73,6 @@ const DEFAULT_ITEMS: readonly AgentDraftItem[] = [
     weightG: 120,
     ratioPercent: 13.33,
     preparationMethod: '去皮切块',
-    preparationNote: null,
   },
   {
     id: 'item-5',
@@ -86,7 +85,6 @@ const DEFAULT_ITEMS: readonly AgentDraftItem[] = [
     weightG: 40,
     ratioPercent: 4.44,
     preparationMethod: '焯水切丁',
-    preparationNote: null,
   },
   {
     id: 'item-6',
@@ -99,7 +97,6 @@ const DEFAULT_ITEMS: readonly AgentDraftItem[] = [
     weightG: 30,
     ratioPercent: 3.33,
     preparationMethod: '研磨成粉',
-    preparationNote: null,
   },
   {
     id: 'item-7',
@@ -112,7 +109,18 @@ const DEFAULT_ITEMS: readonly AgentDraftItem[] = [
     weightG: 40,
     ratioPercent: 4.44,
     preparationMethod: '直接拌入',
-    preparationNote: '出锅后放凉至 40°C 以下再加',
+  },
+  {
+    id: 'item-8',
+    ingredientId: 'ing-8',
+    nutritionFoodId: 'nf-8',
+    name: '三文鱼',
+    cfctClass: '水产类',
+    nutritionCategory: 'SEAFOOD',
+    category: 'AQUATIC',
+    weightG: 40,
+    ratioPercent: 4.26,
+    preparationMethod: '去刺切丁',
   },
 ];
 
@@ -127,6 +135,32 @@ const DEFAULT_SEARCH_RESULTS: readonly AgentIngredientCandidate[] = [
     cfctClass: '菌藻类',
     nutritionCategory: 'OTHER',
     verified: true,
+    nutritionProfiles: [
+      {
+        nutritionFoodId: 'nf-8',
+        name: '香菇（鲜）',
+        displayNameZh: '香菇（鲜）',
+        status: 'VERIFIED',
+        category: 'OTHER',
+        dataSource: 'CFCT',
+        isPrimary: true,
+        preparationState: 'raw',
+        preparationStateLabel: '生',
+        verified: true,
+      },
+      {
+        nutritionFoodId: 'nf-8-cooked',
+        name: '香菇（水煮）',
+        displayNameZh: '香菇（水煮）',
+        status: 'VERIFIED',
+        category: 'OTHER',
+        dataSource: 'CFCT',
+        isPrimary: false,
+        preparationState: 'boiled',
+        preparationStateLabel: '水煮',
+        verified: true,
+      },
+    ],
   },
   {
     ingredientId: 'ing-9',
@@ -137,16 +171,41 @@ const DEFAULT_SEARCH_RESULTS: readonly AgentIngredientCandidate[] = [
     cfctClass: '菌藻类',
     nutritionCategory: 'OTHER',
     verified: true,
+    nutritionProfiles: [
+      {
+        nutritionFoodId: 'nf-9',
+        name: '口蘑（鲜）',
+        displayNameZh: '口蘑（鲜）',
+        status: 'VERIFIED',
+        category: 'OTHER',
+        dataSource: 'CFCT',
+        isPrimary: true,
+        preparationState: 'raw',
+        preparationStateLabel: '生',
+        verified: true,
+      },
+    ],
   },
 ];
 
-/** 默认原料详情：对应 `nf-8` 香菇。 */
+const FAKE_DETAIL_CREATED_AT = new Date('2026-08-01T08:00:00.000Z');
+const FAKE_DETAIL_UPDATED_AT = new Date('2026-10-03T08:00:00.000Z');
+const FAKE_DRAFT_CREATED_AT = new Date('2026-10-01T08:00:00.000Z');
+const FAKE_DRAFT_UPDATED_AT = new Date('2026-10-24T08:00:00.000Z');
+const FAKE_DETAIL_NUTRITION_DATA = {
+  meta: { rawBasisType: 'PER_100_G' },
+  macros: { protein: 2.2, fat: 0.3, fiber: 3.3 },
+  minerals: { calcium: 2, phosphorus: 53 },
+};
+
+/** 默认原料详情：对应 `nf-8` 香菇，带生/水煮两个档案。 */
 const DEFAULT_INGREDIENT_DETAIL: AgentIngredientDetail = {
   ingredientId: 'ing-8',
   nutritionFoodId: 'nf-8',
   name: '香菇',
   nutritionProfileName: '香菇（鲜）',
   type: 'FOOD',
+  baseUnit: 'G',
   cfctClass: '菌藻类',
   nutritionCategory: 'OTHER',
   category: 'MUSHROOM',
@@ -162,6 +221,88 @@ const DEFAULT_INGREDIENT_DETAIL: AgentIngredientDetail = {
   preparationMethods: ['切丁', '焯水'],
   pricePerPurchaseUnit: 12.5,
   purchaseUnit: 'kg',
+  unitDisplayLabel: 'g',
+  brand: null,
+  productModel: null,
+  purchaseChannel: null,
+  notes: null,
+  procurementStrategy: 'DAILY_PURCHASE',
+  diyEnabled: false,
+  procurementEnabled: true,
+  nutritionProfile: null,
+  purchaseToBaseRatio: 1000,
+  currentPricePerPurchaseUnit: 12.5,
+  effectivePricePerPurchaseUnit: null,
+  weightG: null,
+  maxCapacityG: null,
+  safetyStock: null,
+  reorderPoint: null,
+  targetStock: null,
+  physicalForm: null,
+  isOilBased: false,
+  supplementRetailEnabled: false,
+  shelfLifeMonths: null,
+  storageCondition: null,
+  openedShelfLifeDays: null,
+  properties: { cfct_class: '菌藻类' },
+  tags: [],
+  recommendedProducts: [],
+  createdAt: FAKE_DETAIL_CREATED_AT,
+  updatedAt: FAKE_DETAIL_UPDATED_AT,
+  nutritionProfiles: [
+    {
+      nutritionFoodId: 'nf-8',
+      mappingId: 'map-8-raw',
+      name: '香菇（鲜）',
+      displayNameZh: '香菇（鲜）',
+      status: 'VERIFIED',
+      category: 'OTHER',
+      dataSource: 'CFCT',
+      externalId: null,
+      version: 1,
+      preparationState: 'raw',
+      preparationStateLabel: '生',
+      ediblePortionLabel: null,
+      processingLabel: null,
+      nutritionData: FAKE_DETAIL_NUTRITION_DATA,
+      defaultSupplementTargets: null,
+      notes: null,
+      verifiedBy: null,
+      verifiedAt: null,
+      createdAt: FAKE_DETAIL_CREATED_AT,
+      updatedAt: FAKE_DETAIL_UPDATED_AT,
+      isPrimary: true,
+      verified: true,
+      yieldRate: 1,
+      mappingNotes: null,
+    },
+    {
+      nutritionFoodId: 'nf-8-cooked',
+      mappingId: 'map-8-cooked',
+      name: '香菇（水煮）',
+      displayNameZh: '香菇（水煮）',
+      status: 'VERIFIED',
+      category: 'OTHER',
+      dataSource: 'CFCT',
+      externalId: null,
+      version: 1,
+      preparationState: 'boiled',
+      preparationStateLabel: '水煮',
+      ediblePortionLabel: null,
+      processingLabel: '水煮',
+      nutritionData: FAKE_DETAIL_NUTRITION_DATA,
+      defaultSupplementTargets: null,
+      notes: null,
+      verifiedBy: null,
+      verifiedAt: null,
+      createdAt: FAKE_DETAIL_CREATED_AT,
+      updatedAt: FAKE_DETAIL_UPDATED_AT,
+      isPrimary: false,
+      verified: true,
+      yieldRate: 1,
+      mappingNotes: null,
+    },
+  ],
 };
 
 /** 默认目录证据：26 道已发布食谱，鸭肉出现 2 次。 */
@@ -192,19 +333,25 @@ export interface FakeRecipeAgentPortOverrides {
   searchResults?: AgentIngredientCandidate[];
   ingredientDetail?: AgentIngredientDetail | null;
   catalogUsage?: AgentCatalogUsage;
+  recipeSearchPage?: AgentRecipeSearchPage;
+  recipeDetail?: AgentRecipeDetail | null;
 }
 
-/** 默认草稿：七类齐全、900g、内容版本 4、文案与步骤都填好。 */
+/** 默认草稿：八类基础齐全、940g、内容版本 4、文案与步骤都填好。 */
 export function fakeDraftSnapshot(
   overrides: Partial<AgentDraftSnapshot> = {},
 ): AgentDraftSnapshot {
   return {
     draftId: 'draft-1',
     seriesId: 'series-1',
+    designMode: 'CATALOG',
+    orderId: null,
+    orderQuantity: null,
+    context: { kind: 'PRODUCT' },
     name: '鸭肉南瓜成犬餐',
     scenario: '成犬 110ME',
     contentRevision: 4,
-    totalWeightG: 900,
+    totalWeightG: 940,
     items: DEFAULT_ITEMS.map((item) => ({ ...item })),
     copy: {
       coverTitle: '鲜鸭南瓜餐',
@@ -237,6 +384,17 @@ export function fakeDraftSnapshot(
       },
     ],
     lastAssessment: null,
+    status: 'DRAFT',
+    applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
+    coverImageUrl: null,
+    detailImages: [],
+    videoUrl: null,
+    energyDensityKcalPerKg: 1420,
+    nutritionStandard: 'FEDIAF_2025',
+    nutritionDetailedData: null,
+    seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+    createdAt: FAKE_DRAFT_CREATED_AT,
+    updatedAt: FAKE_DRAFT_UPDATED_AT,
     nutritionSummary: { fatWetPercent: 12, moisturePercent: 60 },
     animalSpecies: ['鸭'],
     ...overrides,
@@ -253,6 +411,7 @@ export function fakeAssessment(
     deficient: 0,
     excess: 0,
     missingData: 0,
+    allergenWarnings: [],
     entries: [
       {
         key: 'protein',
@@ -299,6 +458,9 @@ function cloneDraft(draft: AgentDraftSnapshot): AgentDraftSnapshot {
       ? {
           ...draft.lastAssessment,
           entries: draft.lastAssessment.entries.map((entry) => ({ ...entry })),
+          allergenWarnings: (draft.lastAssessment.allergenWarnings ?? []).map(
+            (warning) => ({ ...warning }),
+          ),
         }
       : null,
   };
@@ -308,6 +470,9 @@ function cloneAssessment(view: AgentAssessmentView): AgentAssessmentView {
   return {
     ...view,
     entries: view.entries.map((entry) => ({ ...entry })),
+    allergenWarnings: (view.allergenWarnings ?? []).map((warning) => ({
+      ...warning,
+    })),
   };
 }
 
@@ -339,9 +504,25 @@ export function createFakeRecipeAgentPort(
             preparationMethods: [
               ...DEFAULT_INGREDIENT_DETAIL.preparationMethods,
             ],
+            tags: [...DEFAULT_INGREDIENT_DETAIL.tags],
+            recommendedProducts: [
+              ...DEFAULT_INGREDIENT_DETAIL.recommendedProducts,
+            ],
+            nutritionProfiles: DEFAULT_INGREDIENT_DETAIL.nutritionProfiles.map(
+              (profile) => ({ ...profile }),
+            ),
           }
         : overrides.ingredientDetail,
     catalogUsage: overrides.catalogUsage ?? DEFAULT_CATALOG_USAGE,
+    recipeSearchPage: overrides.recipeSearchPage ?? {
+      data: [],
+      page: 1,
+      pageSize: 20,
+      total: 0,
+      hasMore: false,
+    },
+    recipeDetail:
+      overrides.recipeDetail === undefined ? null : overrides.recipeDetail,
   };
 
   // 显式传 null 表示还没跑过评估，但真跑一次时仍要有一份可返回的基线结果。
@@ -416,6 +597,18 @@ export function createFakeRecipeAgentPort(
 
   const getCatalogUsage = jest.fn(async () => state.catalogUsage);
 
+  const searchRecipes = jest.fn(
+    async (_input: {
+      search?: string;
+      ingredientName?: string;
+      lifeStage?: string;
+      page: number;
+      limit: number;
+    }) => state.recipeSearchPage,
+  );
+
+  const getRecipeDetail = jest.fn(async () => state.recipeDetail);
+
   const addItem = jest.fn(
     async (
       _draftId: string,
@@ -439,7 +632,6 @@ export function createFakeRecipeAgentPort(
         ratioPercent: null,
         // 缺省给「生」，免得后续 check_ready 因为新加的原料没预处理而误挂。
         preparationMethod: input.preparationMethod?.trim() || '生',
-        preparationNote: null,
       };
       state.draft = {
         ...state.draft,
@@ -511,15 +703,13 @@ export function createFakeRecipeAgentPort(
   const setPreparation = jest.fn(
     async (
       itemId: string,
-      input: { method: string; note?: string | null },
+      input: { method: string },
     ): Promise<AgentDraftItem> => {
       const index = findItemIndex(itemId);
       const existing = state.draft.items[index];
       return commitItem(index, {
         ...existing,
         preparationMethod: input.method,
-        preparationNote:
-          input.note === undefined ? existing.preparationNote : input.note,
       });
     },
   );
@@ -554,11 +744,22 @@ export function createFakeRecipeAgentPort(
     },
   );
 
+  const getDogRecipeHistory = jest.fn(
+    async (): Promise<AgentDogRecipeHistory> => ({
+      dogName: '测试狗',
+      total: 0,
+      recipes: [],
+    }),
+  );
+
   const port: RecipeAgentDraftPort = {
     getDraft,
     searchIngredients,
     getIngredient,
     getCatalogUsage,
+    searchRecipes,
+    getRecipeDetail,
+    getDogRecipeHistory,
     addItem,
     replaceItem,
     updateWeight,

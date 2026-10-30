@@ -108,7 +108,7 @@ describe('WechatService · 定制订单状态通知', () => {
     expect(send).toHaveBeenCalledTimes(1);
   });
 
-  it('交付通知直接跳到那道定制食谱；其它状态跳「我的定制订单」', async () => {
+  it('交付通知直接跳到那道定制食谱；其它状态跳当前订单详情（2026-10-24）', async () => {
     process.env.WECHAT_TEMPLATE_CUSTOM_RECIPE_ORDER = TEMPLATE_ID;
     const { service, send } = createService();
 
@@ -129,7 +129,7 @@ describe('WechatService · 定制订单状态通知', () => {
       'PAID',
     );
     expect((send.mock.calls[0][0] as any).page).toBe(
-      'pages/custom-recipe/orders',
+      'pages/custom-recipe/order-detail?orderId=CR202609280001',
     );
   });
 

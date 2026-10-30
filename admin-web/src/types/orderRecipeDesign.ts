@@ -106,6 +106,19 @@ export interface StageOrderDesignResult {
   readyCount: number
 }
 
+/** `PATCH /recipe-designer/orders/:orderId/designs/:designId/stage` 的返回。 */
+export interface SwitchOrderDesignStageResult {
+  designId: string
+  draftId: string
+  /** READY 的那份换阶段后会退回 EDITING，需要重新加入待提交 */
+  status: OrderRecipeDesignStatus
+  scenario: string
+  /** 换阶段后草稿的系列生命阶段代码 */
+  lifeStage: string
+  /** 与新阶段比对后重算的提示；null = 与本单狗狗阶段一致 */
+  stageWarning: string | null
+}
+
 export interface OrderDesignSubmitRecipe {
   recipeId: string
   name?: string

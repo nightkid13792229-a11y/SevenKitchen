@@ -152,7 +152,6 @@ export class PrismaOrderRepository implements OrderRepository {
                 ? (item.packagePlan as unknown as Prisma.InputJsonValue)
                 : undefined,
               ingredientSourcePlan: item.ingredientSourcePlan ?? null,
-              preparationMethod: item.preparationMethod ?? null,
               cookingMethod: item.cookingMethod ?? null,
               customRequirements: item.customRequirements,
               dailyIntakeG: item.dailyIntakeG,
@@ -278,7 +277,6 @@ export class PrismaOrderRepository implements OrderRepository {
           this.normalizeStoredIngredientSourcePlan(
             (i as any).ingredientSourcePlan,
           ),
-          (i as any).preparationMethod ?? null,
           (i as any).cookingMethod ?? null,
           (i as any).tastingPackId ?? null,
         ),
@@ -662,7 +660,6 @@ export class PrismaOrderRepository implements OrderRepository {
       allocatedAt: orderItem.allocatedAt,
       productionBatchId: orderItem.productionBatchId,
       // createdAt exists in the Prisma schema and is included for production service use.
-      preparationMethod: (orderItem as any).preparationMethod,
       cookingMethod: (orderItem as any).cookingMethod,
       createdAt: (orderItem as any).createdAt,
     };

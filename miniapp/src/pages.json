@@ -17,6 +17,18 @@
       }
     },
     {
+      "path": "pages/staff-recipe-snapshot/index",
+      "style": {
+        "navigationBarTitleText": "食谱快照"
+      }
+    },
+    {
+      "path": "pages/staff-dog-profile/index",
+      "style": {
+        "navigationBarTitleText": "狗狗档案"
+      }
+    },
+    {
       "path": "pages/me/index",
       "style": {
         "navigationBarTitleText": "我的"
@@ -81,7 +93,8 @@
     {
       "path": "pages/orders-list/index",
       "style": {
-        "navigationBarTitleText": "我的订单"
+        "navigationBarTitleText": "我的订单",
+        "enablePullDownRefresh": true
       }
     },
     {
@@ -195,12 +208,6 @@
       }
     },
     {
-      "path": "pages/staff-supplement-aftersales/index",
-      "style": {
-        "navigationBarTitleText": "补剂售后"
-      }
-    },
-    {
       "path": "pages/recipe-designer/list",
       "style": {
         "navigationBarTitleText": "食谱设计器"
@@ -274,13 +281,6 @@
       }
     },
     {
-      "path": "pages/custom-recipe/orders",
-      "style": {
-        "navigationBarTitleText": "我的定制订单",
-        "enablePullDownRefresh": true
-      }
-    },
-    {
       "path": "pages/custom-recipe/order-detail",
       "style": {
         "navigationBarTitleText": "定制订单详情",
@@ -290,20 +290,21 @@
     {
       "path": "pages/custom-recipe/aftersale",
       "style": {
-        "navigationBarTitleText": "售后与问题反馈"
+        "navigationBarTitleText": "食谱调整"
+      }
+    },
+
+    {
+      "path": "pages/custom-recipe/refund",
+      "style": {
+        "navigationBarTitleText": "退款",
+        "enablePullDownRefresh": true
       }
     },
     {
       "path": "pages/custom-recipe/delivery",
       "style": {
-        "navigationBarTitleText": "我的专属食谱",
-        "enablePullDownRefresh": true
-      }
-    },
-    {
-      "path": "pages/custom-recipe/delivery-shopping",
-      "style": {
-        "navigationBarTitleText": "采购与制作",
+        "navigationBarTitleText": "我的定制食谱",
         "enablePullDownRefresh": true
       }
     },
@@ -436,7 +437,7 @@
         {
           "path": "detail",
           "style": {
-            "navigationBarTitleText": "订单详情"
+            "navigationBarTitleText": "鲜食订单详情"
           }
         }
       ]
@@ -601,7 +602,7 @@
         {
           "path": "index",
           "style": {
-            "navigationBarTitleText": "订单详情",
+            "navigationBarTitleText": "鲜食订单详情",
             "enablePullDownRefresh": true
           }
         }

@@ -1287,6 +1287,20 @@ export class WechatPaymentService {
     });
 
     if (succeeded) {
+      // 退款成功后才停单；PROCESSING 等下一次回调，避免提前取消
+      try {
+        await this.customRecipeService.cancelOrderAfterRefund(order.id, {
+          outRefundNo,
+          refundId: (decrypted.refund_id as string) ?? order.refundId,
+          refundedAt: successTime ?? new Date(),
+          reason: '退款申请审核通过，已全额退款，自动停单取消',
+        });
+      } catch (error) {
+        this.logger.error(
+          `Custom recipe refund succeeded but auto-cancel failed: order=${order.orderId}`,
+          error as any,
+        );
+      }
       this.logger.log(
         `Custom recipe refund succeeded: order=${order.orderId}, outRefundNo=${outRefundNo}`,
       );
@@ -1295,6 +1309,20 @@ export class WechatPaymentService {
         `Custom recipe refund NOT successful: order=${order.orderId}, outRefundNo=${outRefundNo}, status=${refundStatus}`,
       );
     }
+
+    const requestStatus = succeeded
+      ? 'REFUNDED'
+      : ['PROCESSING', 'PENDING'].includes(refundStatus)
+        ? 'PROCESSING'
+        : 'FAILED';
+    await this.prisma.customRecipeRefundRequest.updateMany({
+      where: { orderId: order.id, refundOutNo: outRefundNo },
+      data: {
+        status: requestStatus as any,
+        refundStatus: refundStatus || order.refundStatus,
+        refundId: (decrypted.refund_id as string) ?? order.refundId,
+      },
+    });
 
     return { handled: true, refundStatus };
   }

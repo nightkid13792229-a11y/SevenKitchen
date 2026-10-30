@@ -96,6 +96,7 @@ describe('callDeepSeekTools', () => {
       messages: BASE_OPTIONS.messages,
       tools: BASE_OPTIONS.tools,
       tool_choice: 'auto',
+      thinking: { type: 'disabled' },
       temperature: 0.3,
       max_tokens: 16384,
     });

@@ -87,11 +87,11 @@ describe('recipe-order phase one UI contract', () => {
       .toBeLessThan(wiring.indexOf('schedulePricePreview()'));
   });
 
-  it('stores preparation and cooking methods for checkout display', () => {
+  it('stores cooking method for checkout display', () => {
     expect(source).toContain("uni.setStorageSync('direct_buy_order_config'");
     expect(source).toContain('dogId: selectedDog.value?.id || selectedDogId.value');
     expect(source).toContain('recipeId: recipeId.value');
-    expect(source).toContain("preparationMethod: preparationMethod.value || 'CHOPPED'");
+    expect(source).not.toContain('preparationMethod');
     expect(source).toContain("cookingMethod: cookingMethod.value || 'RAW'");
   });
 

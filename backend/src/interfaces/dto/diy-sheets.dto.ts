@@ -38,7 +38,7 @@ export class PurchaseListItemDto {
   @ApiProperty({ description: '显示单位' })
   displayUnit!: string;
 
-  @ApiPropertyOptional({ description: '制备方法' })
+  @ApiPropertyOptional({ description: '部位 / 状态 / 预处理' })
   preparationMethod?: string;
 
   @ApiProperty({ description: '格式化显示 - 理论用量' })
@@ -117,6 +117,24 @@ export class CreateDIYSheetDto {
   @IsOptional()
   @IsString()
   productionSteps?: string;
+
+  @ApiPropertyOptional({
+    description:
+      '客户端当前食谱版本（用于补剂算量与下单版本锚定；不传则按最新版）',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  recipeVersion?: number;
+
+  @ApiPropertyOptional({
+    description:
+      '顾客选中的补剂原料（recipeItemId/ingredientId/amount/unit/浓度/来源）',
+    type: [Object],
+  })
+  @IsOptional()
+  @IsArray()
+  supplementSelections?: Array<Record<string, unknown>>;
 }
 
 /**
@@ -167,6 +185,9 @@ export class DIYSheetResponseDto {
 
   @ApiPropertyOptional({ description: '快照冻结时间' })
   snapshotAt?: string | null;
+
+  @ApiPropertyOptional({ description: '顾客选中的补剂原料' })
+  supplementSelections?: Array<Record<string, unknown>> | null;
 
   @ApiProperty({ description: '创建时间' })
   createdAt!: string;

@@ -206,12 +206,6 @@
         <text class="info-card-title">制作说明</text>
         <view class="config-grid">
           <view class="config-item">
-            <text class="config-label">加工方式</text>
-            <text class="config-value">{{
-              orderConfig.preparationMethod === 'CHOPPED' ? '打碎' : '切丁'
-            }}</text>
-          </view>
-          <view class="config-item">
             <text class="config-label">烹饪要求</text>
             <text class="config-value">{{
               orderConfig.cookingMethod === 'RAW' ? '蒸/炖/低温慢煮' : '预加热'
@@ -384,7 +378,6 @@ interface CartItem {
   packageSpecG: number;
   unitPrice: number;
   totalPrice: number;
-  preparationMethod?: string;
   cookingMethod?: string;
 }
 
@@ -417,7 +410,6 @@ interface OrderConfig {
   packagePlan: PackagePlanItem[];
   ingredientSourcePlan?: string;
   ingredientSourcePlanLabel: string;
-  preparationMethod: 'CHOPPED' | 'DICED';
   cookingMethod: 'RAW' | 'COOKED';
   recipeId?: string;
   recipeName: string;
@@ -448,7 +440,6 @@ const orderConfig = ref<OrderConfig>({
   packagePlan: [],
   ingredientSourcePlan: '',
   ingredientSourcePlanLabel: '',
-  preparationMethod: 'CHOPPED',
   cookingMethod: 'RAW',
   recipeId: '',
   recipeName: '',
@@ -859,10 +850,6 @@ function buildDirectBuyOrderConfig(
     packagePlan,
     ingredientSourcePlan,
     ingredientSourcePlanLabel,
-    preparationMethod: (readTextValue(
-      storedConfig.preparationMethod,
-      options.preparationMethod,
-    ) || 'CHOPPED') as 'CHOPPED' | 'DICED',
     cookingMethod: (readTextValue(
       storedConfig.cookingMethod,
       options.cookingMethod,
@@ -1050,7 +1037,6 @@ function loadDirectBuyItem(options: any) {
       orderConfig.value.perMealG,
     unitPrice: 0,
     totalPrice: directBuyPrice.value.amountTotal,
-    preparationMethod: orderConfig.value.preparationMethod,
     cookingMethod: orderConfig.value.cookingMethod,
   };
 
@@ -1114,7 +1100,6 @@ function buildPricingPreviewItemFromOrderConfig() {
     packagePlan: orderConfig.value.packagePlan,
     cycleDays: orderConfig.value.cycleDays,
     dailyIntakeG: orderConfig.value.dailyIntakeG,
-    preparationMethod: orderConfig.value.preparationMethod || undefined,
     cookingMethod: orderConfig.value.cookingMethod || undefined,
     customRequirements: customerNote.value.trim() || undefined,
   };

@@ -65,8 +65,8 @@ describe('customer service page placement regressions', () => {
   it('renders the inline customer service button with an icon and label', () => {
     const source = readPage('src/components/CustomerServiceInlineButton.vue')
 
-    expect(source).toContain('咨询客服')
-    // 图标：金色对话气泡（原为纯文字，按产品要求补充图标）
+    expect(source).toContain('找 Seven爸爸')
+    // 图标：金色对话气泡；文案统一为 Seven爸爸（2026-10-24）
     expect(source).toContain('customer-service-inline-icon')
     expect(source).toContain("src=\"/static/ui-icons/service-chat.png\"")
   })
@@ -80,6 +80,27 @@ describe('customer service page placement regressions', () => {
     expect(source).toContain('border: 1rpx solid rgba(176, 141, 79, 0.55);')
     expect(source).toContain('font-size: 26rpx;')
     expect(source).not.toContain('background: #07c160;')
+  })
+
+  it('退款页客服入口与主按钮并排，文案短，不再单独占一行', () => {
+    const refund = readPage('src/pages/custom-recipe/refund.vue')
+    const template = refund.slice(0, refund.indexOf('<script setup'))
+
+    expect(template).toContain('class="bottom-bar__row"')
+    expect(template).toContain('label="Seven爸爸"')
+    expect(template).not.toContain('拿不准？联系Seven爸爸')
+    expect(template).not.toContain('退款有问题？联系Seven爸爸')
+    expect(template).not.toContain('class="service-line"')
+    expect(refund).toContain('display: flex;')
+    expect(refund).toContain('.bottom-bar__row .btn')
+  })
+
+  it('客服按钮组件自身防止长文案溢出容器', () => {
+    const source = readPage('src/components/CustomerServiceInlineButton.vue')
+
+    expect(source).toContain('max-width: 100%;')
+    expect(source).toContain('overflow: hidden;')
+    expect(source).toContain('text-overflow: ellipsis;')
   })
 
   it('keeps the cart page and its shortcut removed from the mini program', () => {

@@ -300,6 +300,7 @@ export class StaffProductionService {
       );
 
     // Convert to DTOs with order information
+    const globalConfig = await this.globalConfigService.getGlobalConfig();
     const list = await Promise.all(
       paginatedUnits.map(async (unit: PackagingUnit) => {
         const recipeSnapshot = unit.recipeSnapshot as any;
@@ -327,6 +328,12 @@ export class StaffProductionService {
             purchaseLists: purchaseListsByDate.get(productionDate) || [],
           });
 
+        const plannedUsage = calculateProductionUsage({
+          recipeSnapshot: productionRecipeSnapshot,
+          totalProductionG: unit.totalProductionG,
+          supplementLossRate: globalConfig.supplementLossRate,
+        });
+
         return {
           id: unit.id,
           productionBatchId: unit.productionBatchId, // 添加批次ID用于删除操作
@@ -350,6 +357,8 @@ export class StaffProductionService {
           resultPhotoUrls: unit.resultPhotoUrls || [],
           photosRaw: unit.photosRaw || [],
           ingredientsUsageSnapshot: unit.ingredientsUsageSnapshot,
+          plannedIngredientsUsage: plannedUsage.items,
+          plannedFoodInputWeightG: plannedUsage.foodInputWeightG,
           recipeSnapshot: productionRecipeSnapshot, // 添加完整的食谱快照（包含原料列表和生产采购SKU）
         } as PackagingUnitDetailDto;
       }),

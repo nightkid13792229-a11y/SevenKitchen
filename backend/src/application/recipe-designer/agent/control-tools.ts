@@ -1,14 +1,15 @@
 /**
  * 控制工具（P0a Task 5）。
  *
- * 三个工具都管“人”这一侧，不改草稿：
- * `ask_user` 停下来问、`request_exception` 申请例外/缺类确认、
- * `finish_draft` 生成交付确认卡。
+ * 两个工具都管“人”这一侧，不改草稿：
+ * `ask_user` 停下来问、`request_exception` 申请例外/缺类确认。
+ *
+ * 交付确认卡（`finish_draft`）已下线：新运行不再生成快照，模型也没有
+ * 触发生成交付卡的工具。历史会话的快照仍由 `getSessionView` 读取。
  *
  * 安全边界（spec 4.3 / 5.2）：审批状态只能由后端从会话/数据库读取。
- * `finish_draft` 内部先调 `controlPort.getApprovalState()`，再把结果注入
- * Task 4 的 `check_ready`；模型传入的 `exceptionApproved` /
- * `confirmedOmissions` 一律不看。模型只能 `request_exception`，不能自批。
+ * 模型传入的 `exceptionApproved` / `confirmedOmissions` 一律不看；
+ * 模型只能 `request_exception`，不能自批。
  *
  * 入参来自模型（运行时会绕过 TypeScript 类型），所以每个字段先做 `typeof`
  * 守卫：非法值返回 `INVALID_ARGUMENT`，绝不让 `TypeError` 冒出去。
@@ -16,7 +17,6 @@
 import { REQUIRED_FOOD_CATEGORIES } from '../../../domain/recipe-designer/food-category-map';
 import type { RequiredFoodCategory } from '../../../domain/recipe-designer/food-category-map';
 import type { AgentToolErrorCode, AgentToolResult } from './agent-types';
-import type { AgentReadyResult, RecipeAgentCheckTools } from './check-tools';
 import type { RecipeAgentControlPort } from './recipe-agent.port';
 
 /** 例外类型：达标例外（管理员批）或缺类确认（营养师确认）。 */
@@ -35,12 +35,6 @@ export interface AgentExceptionRequest {
   type: AgentExceptionType;
   reason: string;
   detail?: string;
-}
-
-/** `finish_draft` 成功后给模型看的结果；`warnings` 会原样进交付确认卡。 */
-export interface AgentDeliveryResult {
-  status: Exclude<AgentReadyResult['status'], 'BLOCKED'>;
-  warnings: string[];
 }
 
 /** 从后端读到的审批状态；模型不可传入。 */
@@ -152,7 +146,7 @@ export async function readApprovalState(
     if (typeof entry !== 'string' || !isRequiredFoodCategory(entry)) {
       return {
         ok: false,
-        message: `审批状态格式不正确：confirmedOmissions 只能包含七类必需类别（${REQUIRED_FOOD_CATEGORIES.join('、')}）。`,
+        message: `审批状态格式不正确：confirmedOmissions 只能包含基础必需类别（${REQUIRED_FOOD_CATEGORIES.join('、')}）。`,
       };
     }
     confirmedOmissions.push(entry);
@@ -252,8 +246,6 @@ async function callControl(
 
 export interface ControlToolDeps {
   controlPort: RecipeAgentControlPort;
-  /** Task 4 的 `check_ready`；审批参数由本模块注入。 */
-  checkReady: RecipeAgentCheckTools['check_ready'];
 }
 
 /** `createControlTools` 的返回类型；Task 5 的注册表按这个形状挂 handler。 */
@@ -264,21 +256,17 @@ export interface RecipeAgentControlTools {
   request_exception(
     args?: RawToolArgs,
   ): Promise<AgentToolResult<AgentExceptionRequest>>;
-  finish_draft(
-    args?: RawToolArgs,
-  ): Promise<AgentToolResult<AgentDeliveryResult>>;
 }
 
 /**
- * 造三个控制工具。
+ * 造两个控制工具。
  *
- * @param deps.controlPort 控制端口：提问 / 申请 / 交付 / 读审批状态
- * @param deps.checkReady Task 4 的检查单；只接受后端注入的审批参数
+ * @param deps.controlPort 控制端口：提问 / 申请 / 读审批状态
  */
 export function createControlTools(
   deps: ControlToolDeps,
 ): RecipeAgentControlTools {
-  const { controlPort, checkReady } = deps;
+  const { controlPort } = deps;
 
   return {
     async ask_user(
@@ -352,68 +340,9 @@ export function createControlTools(
 
       const summary =
         type === 'COMPLIANCE'
-          ? '已提交达标例外申请，等待管理员批准；批准前 check_ready 仍会拦截。'
-          : '已提交缺类确认申请，等待营养师确认；确认前 check_ready 仍会拦截。';
+          ? '已提交达标例外申请，等待管理员批准；批准前 check_ready 自检仍会标记为未通过。'
+          : '已提交缺类确认申请，等待营养师确认；确认前 check_ready 自检仍会标记为未确认。';
       return ok(request, summary);
-    },
-
-    async finish_draft(
-      args: RawToolArgs = {},
-    ): Promise<AgentToolResult<AgentDeliveryResult>> {
-      const raw = asRawArgs(args);
-      if (!raw) {
-        return fail('INVALID_ARGUMENT', '参数必须是对象。');
-      }
-
-      const summaryValue = raw.summary;
-      if (typeof summaryValue !== 'string' || !summaryValue.trim()) {
-        return fail('INVALID_ARGUMENT', 'summary 不能为空。');
-      }
-      const summary = summaryValue.trim();
-
-      // 审批状态只从后端读；args 里的 exceptionApproved / confirmedOmissions
-      // 在这里根本不会被读取。
-      const approval = await readApprovalState(controlPort);
-      if (!approval.ok) {
-        return fail(
-          'CONTROL_NOT_AVAILABLE',
-          `不能生成交付确认卡：${approval.message}`,
-        );
-      }
-
-      const ready = await checkReady({
-        exceptionApproved: approval.state.approvedException,
-        confirmedOmissions: approval.state.confirmedOmissions,
-      });
-      if (!ready.ok) {
-        return fail(ready.error.code, ready.error.message);
-      }
-
-      if (ready.data.status === 'BLOCKED') {
-        const blocked = ready.data.checks
-          .filter((check) => check.status === 'FAIL')
-          .map((check) => check.detail ?? check.label);
-        return fail(
-          'READY_BLOCKED',
-          `还不能交付：${blocked.join('；') || ready.summary}`,
-        );
-      }
-
-      const warnings = ready.data.checks
-        .filter((check) => check.status === 'WARN')
-        .map((check) => check.detail ?? check.label);
-
-      const written = await callControl(() =>
-        controlPort.finishDraft({ summary, warnings }),
-      );
-      if (!written.ok) {
-        return fail('CONTROL_NOT_AVAILABLE', written.message);
-      }
-
-      return ok(
-        { status: ready.data.status, warnings },
-        '已生成交付确认卡，等人点确认。',
-      );
     },
   };
 }

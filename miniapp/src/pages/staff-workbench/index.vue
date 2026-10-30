@@ -191,10 +191,13 @@ function goToSupplementSummary() {
   uni.navigateTo({ url: '/pages/staff-supplement-summary/index' })
 }
 
-function goToSupplementAftersales() {
-  uni.navigateTo({ url: '/pages/staff-supplement-aftersales/index' })
-}
-
+/**
+ * 补剂售后不再单独占一个格子（2026-10-30）。
+ *
+ * 员工看售后统一走「订单中心」：那里勾「只看售后」能看到这单有没有售后、
+ * 是还在处理还是已经结完；点进补剂订单详情有完整的「售后记录」
+ * （诉求 / 原因 / 补发单号）。所以这个入口和那个页面一起撤掉了。
+ */
 const workbenchModules = computed<WorkbenchModule[]>(() => [
   {
     key: 'purchasing',
@@ -222,12 +225,6 @@ const workbenchModules = computed<WorkbenchModule[]>(() => [
     title: '分装备料',
     icon: '/static/ui-icons/inventory.png',
     onTap: goToSupplementSummary,
-  },
-  {
-    key: 'supplementAftersales',
-    title: '补剂售后',
-    icon: '/static/ui-icons/orders.png',
-    onTap: goToSupplementAftersales,
   },
   {
     key: 'customers',

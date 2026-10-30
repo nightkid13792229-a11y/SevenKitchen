@@ -23,6 +23,12 @@ import { ApiResponseDto } from '../dto/common/response.dto';
 import { AuthGuard } from '../auth';
 import { StaffGuard } from '../guards/role.guard';
 
+/** '0' / 'false' / 'no' 视为关闭；缺省或其它值保持老行为 */
+function isFalseLike(value: string | undefined): boolean {
+  if (value === undefined || value === null || value === '') return false;
+  return ['0', 'false', 'no', 'off'].includes(String(value).toLowerCase());
+}
+
 /**
  * 营养师端 · 健康档案（2026-10-01，第八期）。
  *
@@ -60,9 +66,21 @@ export class StaffDogHealthController {
   @ApiOperation({ summary: 'Full health overview of a dog for staff' })
   @ApiSecurity('bearer')
   @ApiParam({ name: 'dogId', description: 'Dog ID' })
+  @ApiQuery({
+    name: 'includeAnalysis',
+    required: false,
+    description:
+      '是否生成 AI 分析（默认 true）。大模型要十几秒，小程序只读页传 0',
+  })
   @ApiResponse({ status: 200, description: 'Overview retrieved successfully' })
-  async getHealthOverview(@Param('dogId') dogId: string) {
-    const data = await this.staffHealthService.getHealthOverview(dogId);
+  async getHealthOverview(
+    @Param('dogId') dogId: string,
+    @Query('includeAnalysis') includeAnalysis?: string,
+  ) {
+    const data = await this.staffHealthService.getHealthOverview(dogId, {
+      // 缺省 = 带分析（后台营养师页的老行为不能变）
+      includeAnalysis: !isFalseLike(includeAnalysis),
+    });
     return ApiResponseDto.success(data);
   }
 

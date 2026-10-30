@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import panelSource from '@/views/RecipeDesigner/components/PresentationPanel.vue?raw'
+import fieldSource from '@/views/RecipeDesigner/components/AICoverField.vue?raw'
 import drawerSource from '@/views/RecipeDesigner/components/LaunchReadinessDrawer.vue?raw'
 import editorSource from '@/views/RecipeDesigner/Editor.vue?raw'
 import apiSource from '@/api/recipeDesigner.ts?raw'
@@ -76,25 +77,30 @@ describe('产品展示 · API 与类型契约', () => {
 describe('产品展示 · 面板', () => {
   const panel = clean(panelSource)
 
-  it('两种分支都有封面图上传与封面标题，上传复用 recipeApi.uploadImage', () => {
-    expect(panel).toContain(
-      'const result = await recipeApi.uploadImage(file)'
-    )
-    expect(panel).toContain('封面图')
+  it('两种分支都有 AI 封面组件与封面标题，组件已导入', () => {
+    expect(panel).toContain("import AICoverField from './AICoverField.vue'")
+    expect(panel).toContain('<AICoverField')
+    expect(panel).toContain(':entity-id="draftId"')
+    expect(panel).toContain(':baseline-value="baseline.coverImageUrl"')
     expect(panel).toContain('封面标题')
     expect(panel).toContain('v-model="form.coverTitle"')
-    expect(panel).toContain('validatePresentationCoverFile(file)')
+    expect(panel).not.toContain('recipeApi.uploadImage')
+    const field = clean(fieldSource)
+    expect(field).toContain('AI 生成封面')
+    expect(field).toContain('AI 封面预览')
+    expect(field).toContain("entityType === 'design'")
   })
 
-  it('产品线分支有卖点 / 健康标签，标签值是 id', () => {
+  it('产品线分支只保留卖点，不再编辑目标健康标签', () => {
     expect(panel).toContain('<template v-if="isCatalog">')
     expect(panel).not.toContain('v-model="form.description"')
     expect(panel).not.toContain('适用生命阶段')
     expect(panel).toContain('v-model="form.sellingPoint"')
-    expect(panel).toContain('v-model="form.targetHealthTags"')
-    expect(panel).toContain('recipeHealthTagApi.list()')
-    expect(panel).toContain(':key="tag.id"')
-    expect(panel).toContain(':value="tag.id"')
+    expect(panel).not.toContain('目标健康标签')
+    expect(panel).not.toContain('v-model="form.targetHealthTags"')
+    // 标签字典与加载/错误状态一并移除，面板不再发健康标签请求
+    expect(panel).not.toContain('recipeHealthTagApi')
+    expect(panel).not.toContain('healthTags')
     expect(panel).toContain('ORDER_DESIGN_LIFE_STAGE_LABELS')
     expect(panel).toContain('RECIPE_PRESENTATION_LIMITS.coverTitle')
     expect(panel).toContain('RECIPE_PRESENTATION_LIMITS.sellingPoint')
@@ -109,13 +115,12 @@ describe('产品展示 · 面板', () => {
     expect(panel).toContain('订单信息来自本单，只读')
   })
 
-  it('保存时 PATCH 展示字段与产品线字段，并通知抽屉刷新', () => {
+  it('保存时只 PATCH 展示字段，并通知抽屉刷新', () => {
     expect(panel).toContain('recipeDesignerApi.updateDraftPresentation(')
-    expect(panel).toContain('recipeDesignerApi.updateDraft(props.draftId')
+    expect(panel).not.toContain('recipeDesignerApi.updateDraft(props.draftId')
     expect(panel).toContain('buildPresentationPatch(form, baseline.value)')
-    expect(panel).toContain(
-      'buildPresentationTargetPatch(form, baseline.value)'
-    )
+    expect(panel).not.toContain('buildPresentationTargetPatch')
+    expect(panel).not.toContain('targetHealthTags')
     expect(panel).toContain('保存展示资料')
     expect(panel).toContain("emit('saved'")
   })

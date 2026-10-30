@@ -45,6 +45,12 @@
             关闭后小程序端不再展示「一键购买补剂」入口，后台配置不受影响
           </span>
         </el-form-item>
+        <el-form-item label="启用补剂等价组候选">
+          <el-switch v-model="form.equivalenceEnabled" />
+          <span class="form-tip">
+            默认关闭。等价组审核通过后再打开；关闭时制作单只显示原原料，不做替代推荐
+          </span>
+        </el-form-item>
 
         <el-divider content-position="left">定价</el-divider>
         <el-form-item label="加价倍率">
@@ -671,6 +677,7 @@ async function handleSave() {
   try {
     form.value = await supplementShopApi.updateConfig({
       enabled: form.value.enabled,
+      equivalenceEnabled: form.value.equivalenceEnabled === true,
       markupMultiplier: form.value.markupMultiplier,
       serviceFeeMode: form.value.serviceFeeMode,
       serviceFeeAmount: form.value.serviceFeeAmount,

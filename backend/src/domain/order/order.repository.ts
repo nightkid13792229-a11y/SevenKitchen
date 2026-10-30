@@ -20,7 +20,6 @@ export interface OrderItemDto {
   customRequirements: string | null;
   dailyIntakeG: number | null;
   vacuumBagSpec: string | null;
-  preparationMethod: string | null;
   cookingMethod: string | null;
   allocatedAt: Date | null;
   productionBatchId: string | null;

@@ -7,6 +7,21 @@ import type { PrismaService } from '../../../src/infrastructure/prisma.service';
 const DRAFT_ID = 'draft-1';
 const RUN_ID = 'run-1';
 
+/** 写草稿的前提：已经有人确认过检索方案。 */
+const APPROVED_SEARCH_PLAN = {
+  status: 'APPROVED',
+  keywords: [{ term: '鸡肝', language: 'zh' }],
+  libraries: ['CFCT'],
+  findings: '',
+  chosenRecordId: null,
+  chosenRecordName: null,
+  rationale: '',
+  proposedAt: '2026-10-24T00:00:00.000Z',
+  approvedAt: '2026-10-24T00:00:01.000Z',
+  approvedBy: 'admin-1',
+  editedByUser: false,
+};
+
 interface DraftFixture {
   id: string;
   name: string;
@@ -24,7 +39,7 @@ function createTools(draftPayload: Record<string, unknown> = {}) {
     name: '鸡肝',
     type: 'FOOD',
     step: 'INGREDIENT',
-    payload: draftPayload,
+    payload: { searchPlan: APPROVED_SEARCH_PLAN, ...draftPayload },
     createdBy: 'admin-1',
     createdAt: new Date('2026-10-24T00:00:00.000Z'),
     updatedAt: new Date('2026-10-24T00:00:00.000Z'),
@@ -47,6 +62,24 @@ function createTools(draftPayload: Record<string, unknown> = {}) {
     {
       nutritionSourceRecord: { findUnique: jest.fn() },
     } as unknown as PrismaService,
+    {
+      classifyNames: jest.fn(async (input: any) => ({
+        results: input.items.map((item: { id: string }) => ({
+          id: item.id,
+          state: 'UNKNOWN',
+          method: 'NONE',
+          cutLabel: null,
+          cutGroup: null,
+          evidence: null,
+          confidence: null,
+        })),
+        counts: {
+          byState: { RAW: 0, COOKED: 0, UNKNOWN: input.items.length },
+          byMethod: { BOILED: 0, STEAMED: 0, GRILLED: 0, FRIED: 0, OTHER: 0, NONE: input.items.length },
+          byCutGroup: {},
+        },
+      })),
+    } as never,
   );
 
   return { tools, draftService };
@@ -59,8 +92,8 @@ async function executeIngredient(
   const execution = await tools.execute({
     runId: RUN_ID,
     draftId: DRAFT_ID,
-    name: 'updateIngredientFields',
-    args,
+    name: 'writeIngredient',
+    args: { fields: args },
   });
 
   return {
@@ -75,19 +108,21 @@ async function executeIngredient(
   };
 }
 
-describe('IngredientCreationToolsService · updateIngredientFields 原料卡', () => {
+describe('IngredientCreationToolsService · writeIngredient 原料卡', () => {
   it('工具定义存在：七个人工审核字段、类别与基准单位是枚举', () => {
     const { tools } = createTools();
 
     const definition = tools
       .getDefinitions()
-      .find((tool) => tool.function.name === 'updateIngredientFields');
+      .find((tool) => tool.function.name === 'writeIngredient');
 
     expect(definition).toBeDefined();
-    const properties = definition?.function.parameters.properties as Record<
-      string,
-      { enum?: unknown[] }
-    >;
+    const properties = (
+      definition?.function.parameters.properties as Record<
+        string,
+        { properties?: Record<string, { enum?: unknown[] }> }
+      >
+    ).fields?.properties as Record<string, { enum?: unknown[] }>;
     expect(Object.keys(properties)).toEqual(
       expect.arrayContaining([
         'name',
@@ -180,6 +215,63 @@ describe('IngredientCreationToolsService · updateIngredientFields 原料卡', (
       cfctClass: '畜肉类及制品',
       edibleYieldRate: 0.95,
     });
+  });
+
+  it('草稿是 30 字段全量卡时：只改写入字段，其余字段与 manualFields 原样保留', async () => {
+    const fullCard = {
+      name: '冷冻三文鱼',
+      nameEn: 'Frozen salmon',
+      type: 'FOOD',
+      category: 'MEAT_ORGAN',
+      notes: '带皮',
+      baseUnit: 'G',
+      unitDisplayLabel: '克',
+      weightG: 150,
+      maxCapacityG: 500,
+      cfctClass: '禽肉类及制品',
+      edibleYieldRate: 0.95,
+      mainNutrientsDesc: '蛋白质、脂肪',
+      procurementStrategy: 'DAILY_PURCHASE',
+      purchaseUnit: '袋',
+      purchaseToBaseRatio: 1000,
+      currentPricePerPurchaseUnit: 128,
+      brand: '××',
+      productModel: '1kg/袋',
+      purchaseChannel: '京东',
+      safetyStock: 2,
+      reorderPoint: 3,
+      targetStock: 10,
+      diyEnabled: false,
+      addTiming: 'BEFORE_MIXING',
+      productionLossRate: 1.05,
+      tags: ['水产'],
+      shelfLifeMonths: 12,
+      storageCondition: '-18℃ 冷冻',
+      openedShelfLifeDays: 3,
+      isOilBased: false,
+      manualFields: ['brand'],
+    };
+
+    const { tools, draftService } = createTools({ ingredient: fullCard });
+
+    const result = await executeIngredient(tools, {
+      cfctClass: '畜肉类及制品',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.body.applied).toEqual(['cfctClass']);
+
+    const ingredient = (draftService.patch.mock.calls[0][2] as any)
+      .ingredient as Record<string, unknown>;
+    // 整张卡逐字段比对：只有 cfctClass 变，品牌 / 重量 / 保质期等一律不能丢。
+    expect(ingredient).toEqual({
+      ...fullCard,
+      cfctClass: '畜肉类及制品',
+    });
+    expect(ingredient.manualFields).toEqual(['brand']);
+    expect(ingredient.brand).toBe('××');
+    expect(ingredient.weightG).toBe(150);
+    expect(ingredient.shelfLifeMonths).toBe(12);
   });
 
   it('草稿没有原料卡时用草稿名与起手卡兜底', async () => {
@@ -325,5 +417,94 @@ describe('IngredientCreationToolsService · updateIngredientFields 原料卡', (
     // 值没变：不 patch、progress 为空（否则循环会误判成有进展）
     expect(result.progress?.writtenFieldPaths).toEqual([]);
     expect(draftService.patch).not.toHaveBeenCalled();
+  });
+});
+
+describe('IngredientCreationToolsService · 进展信号只认真读', () => {
+  function createProgressTools() {
+    const listNutritionNames = jest.fn(async () => ({
+      total: 2,
+      names: [
+        { id: 'rec-1', name: 'Chicken, liver, raw', sourceType: 'USDA_FDC' },
+        { id: 'rec-2', name: 'Chicken, liver, cooked', sourceType: 'CFCT' },
+      ],
+      keywords: ['鸡肝'],
+    }));
+    const findUnique = jest.fn(async (input: any) => ({
+      id: input.where.id,
+      status: 'ACTIVE',
+      sourceType: 'USDA',
+      foodName: 'Chicken, liver, raw',
+      foodNameEn: 'Chicken liver raw',
+      normalizedNutrition: {},
+    }));
+
+    const searchByLibrary = jest.fn(async ({ library }: { library: string }) => ({
+      library,
+      total: 2,
+      hits: [
+        {
+          id: 'rec-1',
+          name: 'Chicken, liver, raw',
+          sourceType: 'USDA_FDC',
+          sourceKey: 'rec-1',
+          dataType: null,
+          filledFieldCount: 10,
+        },
+      ],
+    }));
+
+    const tools = new IngredientCreationToolsService(
+      {
+        findCandidates: jest.fn(),
+        listNutritionNames,
+        searchByLibrary,
+      } as unknown as IngredientCreationCandidateService,
+      {
+        get: jest.fn(),
+        patch: jest.fn(),
+      } as unknown as IngredientCreationDraftService,
+      { runCheck: jest.fn() } as unknown as IngredientCreationCheckService,
+      {
+        nutritionSourceRecord: { findUnique },
+      } as unknown as PrismaService,
+    );
+
+    return { tools, findUnique };
+  }
+
+  async function executeTool(
+    tools: IngredientCreationToolsService,
+    name: string,
+    args: Record<string, unknown>,
+  ) {
+    return tools.execute({ runId: RUN_ID, draftId: DRAFT_ID, name, args });
+  }
+
+  it('searchLibraries 只列清单不算已读；getRecord 才算真正读了这条记录', async () => {
+    const { tools } = createProgressTools();
+
+    const searched = await executeTool(tools, 'searchLibraries', {
+      groups: [{ library: 'CFCT', terms: ['鸡肝'] }],
+    });
+    expect(searched.ok).toBe(true);
+    // 只列了名字、没读记录：不能上报成「已见过的来源」。
+    expect(searched.progress?.sourceRecordIds).toEqual([]);
+
+    const read = await executeTool(tools, 'getRecord', { id: 'rec-1' });
+    expect(read.ok).toBe(true);
+    expect(read.progress?.sourceRecordIds).toEqual(['rec-1']);
+  });
+
+  it('getRecord 返回来源库，步骤摘要才能写清这条记录来自哪个库', async () => {
+    const { tools } = createProgressTools();
+
+    const read = await executeTool(tools, 'getRecord', { id: 'rec-1' });
+
+    expect(read.ok).toBe(true);
+    const body = JSON.parse(read.content) as {
+      record?: { sourceType?: string };
+    };
+    expect(body.record?.sourceType).toBe('USDA');
   });
 });

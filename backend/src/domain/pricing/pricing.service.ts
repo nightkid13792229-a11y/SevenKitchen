@@ -27,6 +27,7 @@ import {
   normalizeFoodRatioPercent,
   sumFoodRatioPercent,
 } from '../recipe/food-ratio-normalization';
+import { buildFoodQuantityTable } from '../recipe/food-quantity';
 
 export interface GlobalConfig {
   laborHourlyRate: number;
@@ -99,7 +100,7 @@ export interface RecipeItem {
   id?: string;
   ingredientId: string;
   ingredient: Ingredient;
-  preparationMethod?: string | null; // 添加时机/制备方法
+  preparationMethod?: string | null; // 添加时机 / 部位状态预处理
   ratioPercent?: number | null;
   exampleWeight?: number | null;
   nutrientTargetKey?: string | null;
@@ -258,7 +259,7 @@ export interface IngredientCostItem {
   procurementSkuSourceTier?: string; // 实际命中的采购 SKU 来源等级
   procurementSkuFallbackLevel?: number; // 来源方案回退层级
   properties?: any; // 完整的properties对象（包含purchase_link等）
-  preparationMethod?: string; // 添加时机/制备方法
+  preparationMethod?: string; // 添加时机 / 部位状态预处理
   nutrientTargetKey?: string; // 营养素名称（补剂用）
   nutrientTargetValue?: number; // 营养目标值（补剂用）
   supplementTargets?: SupplementTarget[];
@@ -831,6 +832,36 @@ export class PricingService {
     const recipeFoodExampleWeightG = this.getRecipeFoodExampleWeightG(
       recipe.items,
     );
+    /**
+     * 食材用量统一交给内核算（净需求 / 毛需求 / 只含损耗），
+     * 这里只做成本换算。运算顺序与原先逐行一致，价格不受影响。
+     *
+     * 用「配方明细行」而不是食材 id 做键：同一种食材理论上可能出现两行。
+     * 明细行没有 id 时用序号兜底，保证每行都有稳定键。
+     */
+    const foodRows = recipe.items
+      .map((item, index) => ({
+        item,
+        itemId: item.id ?? `food-row-${index}`,
+      }))
+      .filter((row) => row.item.ingredient.type === IngredientType.FOOD);
+    const foodItemIdByIdentity = new Map(
+      foodRows.map((row) => [row.item, row.itemId] as const),
+    );
+    const foodQuantityTable = buildFoodQuantityTable({
+      items: foodRows.map((row) => ({ itemId: row.itemId })),
+      totalNetWeightG: totalNetFoodWeightG,
+      lossRate: recipe.productionLossRate,
+      yieldRateByItemId: new Map(
+        foodRows.map((row) => [
+          row.itemId,
+          row.item.ingredient.getEdibleYieldRate(),
+        ]),
+      ),
+      ratioPercentByItemId: new Map(
+        foodRows.map((row) => [row.itemId, row.item.ratioPercent]),
+      ),
+    });
 
     for (const item of recipe.items) {
       const ingredient = item.ingredient;
@@ -853,21 +884,23 @@ export class PricingService {
         }
 
         // 不含生产损耗和出肉率的净需求（用于前端显示和补剂用量计算）
-        // 单位：kg (从 totalNetFoodWeightG 转换)
-        const normalizedRatioPercent = normalizeFoodRatioPercent(
-          item.ratioPercent,
-          foodRatioTotalPercent,
+        const quantityLine = foodQuantityTable.get(
+          foodItemIdByIdentity.get(item) ?? '',
         );
-        const itemNetNeededKg =
-          (totalNetFoodWeightG / 1000.0) * (normalizedRatioPercent / 100.0);
+        if (!quantityLine) {
+          throw new ValidationError(
+            `Unable to resolve quantity for FOOD ingredient: ${ingredient.name}`,
+          );
+        }
+        const normalizedRatioPercent = quantityLine.normalizedRatioPercent;
+        const itemNetNeededKg = quantityLine.netKg;
 
         // 出肉率校准（用于成本计算）
         const yieldRate = ingredient.getEdibleYieldRate();
-        const itemGrossPurchaseKg =
-          (itemNetNeededKg / yieldRate) * recipe.productionLossRate;
+        const itemGrossPurchaseKg = quantityLine.grossKg;
 
         // 采购用量（仅含生产损耗率，不含出肉率）
-        const itemPurchaseKg = itemNetNeededKg * recipe.productionLossRate;
+        const itemPurchaseKg = quantityLine.purchaseKg;
 
         const unitCost = ingredient.getUnitCost();
         const grossPurchaseBaseAmount = this.convertFoodMassKgToBaseAmount(

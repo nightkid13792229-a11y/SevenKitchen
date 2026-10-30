@@ -8,7 +8,7 @@
   "scripts": {
     "prebuild": "npm run prisma:generate:build",
     "prisma:generate:build": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} prisma generate",
-    "build": "nest build && node copy-fonts.js",
+    "build": "nest build && node copy-fonts.js && node copy-skills.js",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "NODE_ENV=development nest start --entryFile src/main --watch",
@@ -20,10 +20,13 @@
     "start:check:miniapp": "PORT=${PORT:-3011} DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} NODE_ENV=development npm run start:check",
     "seed:fediaf-2025-dog-standard": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register prisma/seed-fediaf-2025-dog-standards.ts",
     "seed:search-governance-aliases": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register prisma/seed-search-governance-aliases.ts",
+    "seed:ingredient-name-aliases": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register prisma/seed-ingredient-name-aliases.ts",
     "seed:platform-options": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register prisma/seed-platform-options.ts",
     "seed:platform-options:apply": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register prisma/seed-platform-options.ts --apply",
     "seed:allergen-vocabulary": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register prisma/seed-allergen-vocabulary.ts",
     "seed:allergen-vocabulary:apply": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register prisma/seed-allergen-vocabulary.ts --apply",
+    "seed:recipe-taxonomy": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register prisma/seed-recipe-taxonomy.ts",
+    "seed:recipe-taxonomy:apply": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register prisma/seed-recipe-taxonomy.ts --apply",
     "backfill:allergy-certainty": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register prisma/backfill-allergy-certainty.ts",
     "backfill:allergy-certainty:apply": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register prisma/backfill-allergy-certainty.ts --apply",
     "backfill:breed-aliases": "ts-node -r tsconfig-paths/register prisma/backfill-breed-aliases.ts",
@@ -111,7 +114,9 @@
     "env:dev": "cp .env.development .env && echo 'Switched to development environment'",
     "env:prod": "cp .env.production .env && echo 'Switched to production environment'",
     "audit:preparation-basis": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register scripts/audit-preparation-basis.ts",
-    "audit:supplement-shop-catalog": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register scripts/audit-supplement-shop-catalog.ts"
+    "audit:supplement-shop-catalog": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register scripts/audit-supplement-shop-catalog.ts",
+    "audit:nutrition-duplicates": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register scripts/audit-nutrition-duplicates.ts",
+    "audit:nutrition-coverage": "ts-node -r tsconfig-paths/register scripts/audit-nutrition-coverage.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

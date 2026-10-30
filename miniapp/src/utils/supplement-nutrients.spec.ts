@@ -453,7 +453,16 @@ describe('supplement nutrient resolution', () => {
           }
         ]
       })
-    ).toBe('每kg食材添加660μg碘')
+    ).toBe('每公斤食材添加660μg碘')
+
+    // 数值取整（2026-10-24）
+    expect(
+      formatSupplementTargets({
+        supplement_targets: [
+          { fieldPath: 'minerals.calcium', label: '钙', targetValuePerKg: 5.6, unit: 'g' }
+        ]
+      })
+    ).toBe('每公斤食材添加6g钙')
   })
 
   it('returns display unit from item snapshot', () => {

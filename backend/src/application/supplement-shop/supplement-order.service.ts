@@ -33,6 +33,11 @@ import { SupplementInventoryService } from './supplement-inventory.service';
 import { SupplementSnapshotService } from './supplement-snapshot.service';
 import { SupplementNotificationService } from './supplement-notification.service';
 import {
+  SupplementCandidateService,
+  type SupplementCandidateItem,
+} from './supplement-candidate.service';
+import { computeSheetTotalWeightG } from './supplement-sheet-weight.util';
+import {
   isSupplementUnitOneToOne,
   toSupplementBaseQuantity,
 } from './supplement-unit.util';
@@ -83,7 +88,15 @@ function formatAmount(value: number): string {
 }
 
 export interface SupplementQuoteRequest {
-  lines: Array<{ ingredientId: string; amount: number }>;
+  /**
+   * 旧协议：{ ingredientId, amount }（客户端算量）；
+   * 新协议：{ ingredientId, recipeItemId }（服务端算量，amount 可省略）。
+   */
+  lines: Array<{
+    ingredientId: string;
+    amount?: number;
+    recipeItemId?: string;
+  }>;
   /**
    * 加量份数（1 = 不加量）。每份 = 每个补剂多做一袋同样规格的小袋。
    * 服务端会按配置的份数上限与总天数上限校验，越界直接拒绝。
@@ -94,6 +107,8 @@ export interface SupplementQuoteRequest {
    * 也是"总天数 ≤ 效期安全线"这条校验的必需输入。
    */
   cycleDays?: number;
+  /** 新协议必须带：制作单 ID（算量、版本锚定、冻结快照都靠它） */
+  diySheetId?: string;
 }
 
 export interface CreateSupplementOrderRequest extends SupplementQuoteRequest {
@@ -102,7 +117,6 @@ export interface CreateSupplementOrderRequest extends SupplementQuoteRequest {
   recipeName?: string;
   dogId?: string;
   dogName?: string;
-  diySheetId?: string;
   reorderFromOrderNo?: string;
   remark?: string;
 }
@@ -119,6 +133,9 @@ export interface SupplementQuoteResponse {
 export interface SupplementOrderItemView {
   id: string;
   ingredientId: string;
+  recipeItemId?: string | null;
+  sourceIngredientId?: string | null;
+  dosageSnapshot?: unknown | null;
   name: string;
   brand: string | null;
   productModel: string | null;
@@ -189,7 +206,30 @@ export interface SupplementOrderView {
   carrierCode: string | null;
   shippedAt: string | null;
   createdAt: string;
+  /**
+   * 这单的全部售后记录（2026-10-30，新→旧）。
+   *
+   * 为什么放在订单详情里：补剂售后独立页撤掉后，订单中心卡片只知道
+   * 「这单有没有售后、到哪一步」，具体的诉求 / 原因 / 补发单号，
+   * 以及「一单提过两条售后」这种情况，都靠这里展开。
+   * 员工端脱敏：不给退款金额。
+   */
+  aftersaleCases?: SupplementOrderAftersaleCaseView[];
   items: SupplementOrderItemView[];
+}
+
+/** 订单详情里的一条售后记录（员工只看流程，不看钱） */
+export interface SupplementOrderAftersaleCaseView {
+  id: string;
+  caseNo: string;
+  status: string;
+  requestType: string;
+  requestedReason: string;
+  resolutionType: string | null;
+  reshipOrderNo: string | null;
+  createdAt: string;
+  /** 仅管理员可见；员工端为 null */
+  refundAmount: number | null;
 }
 
 export interface SupplementLabel {
@@ -247,6 +287,8 @@ export class SupplementOrderService {
     private readonly snapshotService?: SupplementSnapshotService,
     @Optional()
     private readonly notificationService?: SupplementNotificationService,
+    @Optional()
+    private readonly candidateService?: SupplementCandidateService,
   ) {}
 
   /**
@@ -255,8 +297,9 @@ export class SupplementOrderService {
    */
   async quote(
     request: SupplementQuoteRequest,
+    userId?: string,
   ): Promise<SupplementQuoteResponse> {
-    const { quote, unavailable, config } = await this.buildQuote(request);
+    const { quote, unavailable, config } = await this.buildQuote(request, userId);
     return {
       quote,
       unavailable,
@@ -270,7 +313,8 @@ export class SupplementOrderService {
     userId: string,
     request: CreateSupplementOrderRequest,
   ): Promise<SupplementOrderView> {
-    const { quote, unavailable, config, meta } = await this.buildQuote(request);
+    const { quote, unavailable, config, meta, dosage } =
+      await this.buildQuote(request, userId);
 
     if (!config.enabled) {
       throw new BadRequestException('补剂商城暂未开放');
@@ -355,8 +399,22 @@ export class SupplementOrderService {
           totalDays: quote.totalDays,
           remark: request.remark ?? null,
           items: {
-            create: quote.lines.map((line) => ({
+            create: quote.lines.map((line) => {
+              const dosageLines = (dosage?.byIngredient.get(
+                line.ingredientId,
+              ) ?? []) as any[];
+              return {
               ingredientId: line.ingredientId,
+              recipeItemId: dosageLines[0]?.recipeItemId ?? null,
+              sourceIngredientId:
+                dosageLines[0]?.sourceIngredientId ?? null,
+              dosageSnapshot: dosageLines.length
+                ? ({
+                    totalWeightG: dosage?.totalWeightG ?? null,
+                    weightSource: dosage?.weightSource ?? 'DIY_SHEET',
+                    lines: dosageLines,
+                  } as Prisma.InputJsonValue)
+                : undefined,
               name: line.name,
               brand: meta.get(line.ingredientId)?.brand ?? null,
               productModel: meta.get(line.ingredientId)?.productModel ?? null,
@@ -377,7 +435,8 @@ export class SupplementOrderService {
               storageCondition:
                 meta.get(line.ingredientId)?.storageCondition ||
                 DEFAULT_STORAGE_CONDITION,
-            })),
+              };
+            }),
           },
         },
         select: { id: true },
@@ -511,7 +570,62 @@ export class SupplementOrderService {
     const [view] = await this.decorateOpenAftersale([
       this.toOrderView(order, actor.role === 'STAFF'),
     ]);
+    view.aftersaleCases = await this.loadAftersaleCases(
+      orderId,
+      actor.role === 'STAFF',
+    );
     return view;
+  }
+
+  /**
+   * 这单的全部售后记录（2026-10-30）。
+   *
+   * 和 `decorateOpenAftersale` 一样用可选链兜底：旧库/测试环境没有
+   * `aftersale_case` 表时，订单详情照常打开，只是没有售后区块，
+   * 不能因为查售后把整页拖黑。
+   * 员工端不给退款金额 —— 和售后列表的口径保持一致。
+   */
+  private async loadAftersaleCases(
+    orderId: string,
+    redact: boolean,
+  ): Promise<SupplementOrderAftersaleCaseView[]> {
+    try {
+      const rows = await (this.prisma as any).aftersaleCase?.findMany?.({
+        where: { orderType: 'SUPPLEMENT', orderId },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          caseNo: true,
+          status: true,
+          requestType: true,
+          requestedReason: true,
+          resolutionType: true,
+          reshipOrderNo: true,
+          createdAt: true,
+          refundAmount: true,
+        },
+      });
+      if (!Array.isArray(rows)) return [];
+      return rows.map((row: any) => ({
+        id: row.id,
+        caseNo: row.caseNo,
+        status: row.status,
+        requestType: row.requestType,
+        requestedReason: row.requestedReason ?? '',
+        resolutionType: row.resolutionType ?? null,
+        reshipOrderNo: row.reshipOrderNo ?? null,
+        createdAt:
+          row.createdAt instanceof Date
+            ? row.createdAt.toISOString()
+            : String(row.createdAt ?? ''),
+        refundAmount:
+          redact || row.refundAmount === null || row.refundAmount === undefined
+            ? null
+            : Number(row.refundAmount),
+      }));
+    } catch {
+      return [];
+    }
   }
 
   // ---------------- 后台：收款 / 分装 / 发货 / 售后 ----------------
@@ -1674,7 +1788,10 @@ export class SupplementOrderService {
   // ---------------- 内部工具 ----------------
 
   /** 报价的公共路径：解析补剂行 → 现价计算。meta 只在下单时用得到。 */
-  private async buildQuote(request: SupplementQuoteRequest): Promise<{
+  private async buildQuote(
+    request: SupplementQuoteRequest,
+    userId?: string,
+  ): Promise<{
     quote: SupplementQuote;
     unavailable: Array<{ ingredientId: string; name: string; reason: string }>;
     config: SupplementShopConfigDto;
@@ -1686,8 +1803,16 @@ export class SupplementOrderService {
         storageCondition: string | null;
       }
     >;
+    dosage: {
+      totalWeightG: number;
+      weightSource: 'DIY_SHEET';
+      byIngredient: Map<string, any[]>;
+    } | null;
   }> {
-    const requested = this.normalizeRequestedLines(request.lines);
+    const dosage = await this.resolveServerDosageLines(request, userId);
+    const requested = this.normalizeRequestedLines(
+      dosage ? dosage.lines : request.lines,
+    );
     const { available, unavailable, meta } =
       await this.resolveAvailableLines(requested);
 
@@ -1744,11 +1869,163 @@ export class SupplementOrderService {
       cycleDays,
     });
 
-    return { quote, unavailable, config, meta };
+    return { quote, unavailable, config, meta, dosage };
+  }
+
+  /**
+   * 新协议：按制作单 + 食谱版本 + 被选原料，服务端算量。
+   *
+   * 旧协议（没有任何 recipeItemId）返回 null，行为完全不变。
+   * 这里同时复核“被选原料是不是这一行允许的候选”，
+   * 防止客户端把任意补剂塞进某一行。
+   */
+  private async resolveServerDosageLines(
+    request: SupplementQuoteRequest,
+    userId?: string,
+  ): Promise<{
+    lines: Array<{ ingredientId: string; amount: number }>;
+    totalWeightG: number;
+    weightSource: 'DIY_SHEET';
+    byIngredient: Map<string, any[]>;
+  } | null> {
+    const rawLines = request.lines ?? [];
+    const withRecipeItem = rawLines.filter((line) => line.recipeItemId);
+    if (withRecipeItem.length === 0) {
+      return null;
+    }
+    if (withRecipeItem.length !== rawLines.length) {
+      throw new BadRequestException('补剂清单不能混用新旧格式');
+    }
+    if (!request.diySheetId) {
+      throw new BadRequestException('新协议必须带制作单 ID');
+    }
+    if (!this.candidateService) {
+      throw new BadRequestException('补剂候选服务未启用');
+    }
+
+    const sheet = await this.prisma.dIYSheet.findUnique({
+      where: { id: request.diySheetId },
+      select: {
+        id: true,
+        userId: true,
+        recipeId: true,
+        recipeVersion: true,
+        packagePlan: true,
+        dailyIntakeG: true,
+        cycleDays: true,
+      },
+    });
+    if (!sheet) {
+      throw new BadRequestException('制作单不存在');
+    }
+    if (userId && sheet.userId !== userId) {
+      throw new BadRequestException('制作单不属于当前用户');
+    }
+
+    const totalWeightG = computeSheetTotalWeightG(sheet);
+    if (!(totalWeightG > 0)) {
+      throw new BadRequestException('制作单缺少批次总重，无法计算补剂用量');
+    }
+
+    let recipeVersion = sheet.recipeVersion ?? null;
+    if (!recipeVersion) {
+      const latest = await this.prisma.recipe.findFirst({
+        where: { recipeId: sheet.recipeId },
+        orderBy: { version: 'desc' },
+        select: { version: true },
+      });
+      if (!latest) {
+        throw new BadRequestException('制作单对应的食谱不存在');
+      }
+      recipeVersion = latest.version;
+    }
+
+    const resolved = await this.candidateService.resolveForRecipe({
+      recipeBusinessId: sheet.recipeId,
+      recipeVersion,
+      totalWeightG,
+      weightSource: 'DIY_SHEET',
+      audience: 'CUSTOMER',
+    });
+    const itemMap = new Map(
+      resolved.items.map((item) => [item.recipeItemId, item]),
+    );
+    const byIngredient = new Map<string, any[]>();
+    const lines: Array<{ ingredientId: string; amount: number }> = [];
+
+    for (const line of rawLines) {
+      const item = line.recipeItemId
+        ? itemMap.get(line.recipeItemId)
+        : undefined;
+      if (!item) {
+        throw new BadRequestException('食谱已更新，请刷新制作单');
+      }
+
+      const candidate = item.candidates.find(
+        (option) => option.ingredientId === line.ingredientId,
+      );
+
+      let amount: number | null = candidate?.dosage.amount ?? null;
+      let dosage = candidate?.dosage;
+      let selectionSource:
+        | 'EQUIVALENCE_GROUP'
+        | 'RECIPE_ALTERNATIVE'
+        | 'DEFAULT'
+        | 'RATIO' = 'DEFAULT';
+
+      if (candidate) {
+        selectionSource =
+          candidate.ingredientId === item.sourceIngredientId
+            ? 'DEFAULT'
+            : item.source === 'EQUIVALENCE_GROUP'
+              ? 'EQUIVALENCE_GROUP'
+              : 'RECIPE_ALTERNATIVE';
+      } else if (
+        line.ingredientId === item.sourceIngredientId &&
+        item.fallbackAmount !== null
+      ) {
+        amount = item.fallbackAmount;
+        dosage = item.defaultIngredient.dosage;
+        selectionSource = 'RATIO';
+      } else {
+        throw new BadRequestException(
+          item.unavailableReason ?? '该补剂已调整，请刷新制作单',
+        );
+      }
+
+      if (amount === null || !Number.isFinite(amount) || amount <= 0) {
+        throw new BadRequestException(
+          `「${item.defaultIngredient.name}」用量暂不可算，请联系客服`,
+        );
+      }
+
+      lines.push({ ingredientId: line.ingredientId, amount });
+
+      const bucket = byIngredient.get(line.ingredientId) ?? [];
+      bucket.push({
+        recipeItemId: item.recipeItemId,
+        sourceIngredientId: item.sourceIngredientId,
+        selectionSource,
+        group: item.group,
+        targets: dosage?.targets ?? [],
+        concentrations: dosage?.concentrations ?? [],
+        calculatedAmount: amount,
+        submittedAmount: line.amount ?? null,
+        unit: dosage?.unit ?? item.defaultIngredient.displayUnit,
+      });
+      byIngredient.set(line.ingredientId, bucket);
+    }
+
+    return {
+      lines,
+      totalWeightG,
+      weightSource: 'DIY_SHEET',
+      byIngredient,
+    };
   }
 
   private normalizeRequestedLines(
-    lines: Array<{ ingredientId: string; amount: number }>,
+    lines: Array<{ ingredientId: string; amount?: number }>,
   ): Array<{ ingredientId: string; amount: number }> {
     if (!Array.isArray(lines) || lines.length === 0) {
       throw new BadRequestException('补剂清单不能为空');
@@ -2194,6 +2471,9 @@ export class SupplementOrderService {
       items: row.items.map((item) => ({
         id: item.id,
         ingredientId: item.ingredientId,
+        recipeItemId: (item as any).recipeItemId ?? null,
+        sourceIngredientId: (item as any).sourceIngredientId ?? null,
+        dosageSnapshot: (item as any).dosageSnapshot ?? null,
         name: item.name,
         brand: item.brand,
         productModel: item.productModel,

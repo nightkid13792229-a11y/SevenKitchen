@@ -47,8 +47,9 @@ describe('RecipeNutritionCard · 核心营养成分卡', () => {
     expect(source).toContain('raw / 1000')
   })
 
-  it('没有 standard 时整行不显示（不留空标签）', () => {
-    expect(source).toContain('v-if="standardLabel"')
+  it('没有 standard 时整行不显示（不留空标签）；页面有 banner 时可关闭', () => {
+    expect(source).toContain('v-if="showStandard && standardLabel"')
     expect(source).toContain("if (!value) return ''")
+    expect(source).toContain('showStandard?: boolean')
   })
 })

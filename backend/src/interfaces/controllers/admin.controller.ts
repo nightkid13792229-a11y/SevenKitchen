@@ -110,6 +110,10 @@ import type { IngredientPreparationMethodHistoryDto } from '../dto/recipes/admin
 import type { Ingredient } from '../../domain/ingredient';
 import { resolveOrderProductionPhotos } from './order-production-photos';
 import { scanForbiddenClaims } from '../../application/recipe-designer/recipe-copywriting-compliance';
+import {
+  COVER_BADGE_ALLOWED_NAMES,
+  isCoverBadgeEligibleName,
+} from '../../domain/recipe-designer/cover-badge-policy';
 
 const CUSTOMER_TEST_USER_ID = 'production-experience-customer-test-user';
 const CUSTOMER_TEST_USER_PHONE = '19900000001';
@@ -759,9 +763,18 @@ export class AdminController {
   @ApiParam({ name: 'id', description: 'Ingredient ID' })
   async getIngredientPreparationMethodHistory(
     @Param('id') id: string,
+    @Query('limit') limit?: string,
   ): Promise<ApiResponseDto<IngredientPreparationMethodHistoryDto[]>> {
+    const parsed = limit === undefined ? undefined : Number(limit);
+    const effectiveLimit =
+      parsed !== undefined && Number.isInteger(parsed) && parsed > 0
+        ? Math.min(parsed, 50)
+        : undefined;
     const history =
-      await this.recipeService.getIngredientPreparationMethodHistory(id);
+      await this.recipeService.getIngredientPreparationMethodHistory(
+        id,
+        effectiveLimit,
+      );
     return ApiResponseDto.success(history);
   }
 
@@ -2451,7 +2464,6 @@ export class AdminController {
       packageSpecG: item.packageSpecG,
       packagePlan: item.packagePlan ?? null,
       ingredientSourcePlan: item.ingredientSourcePlan ?? null,
-      preparationMethod: item.preparationMethod ?? null,
       cookingMethod: item.cookingMethod ?? null,
       customRequirements: item.customRequirements,
       dailyIntakeG: item.dailyIntakeG,
@@ -4240,7 +4252,12 @@ export class AdminController {
     const healthTags = await this.prisma.recipeHealthTag.findMany({
       orderBy: [{ sort: 'asc' }, { name: 'asc' }],
     });
-    return ApiResponseDto.success(healthTags);
+    return ApiResponseDto.success(
+      healthTags.map((tag) => ({
+        ...tag,
+        coverBadgeEligible: isCoverBadgeEligibleName(tag.name),
+      })),
+    );
   }
 
   @Get('health-tags/hierarchy')
@@ -4256,7 +4273,11 @@ export class AdminController {
     const rootTags: any[] = [];
 
     allTags.forEach((tag) => {
-      tagMap.set(tag.id, { ...tag, children: [] });
+      tagMap.set(tag.id, {
+        ...tag,
+        coverBadgeEligible: isCoverBadgeEligibleName(tag.name),
+        children: [],
+      });
     });
 
     allTags.forEach((tag) => {
@@ -4279,7 +4300,12 @@ export class AdminController {
       where: { parentId: null },
       orderBy: [{ sort: 'asc' }, { name: 'asc' }],
     });
-    return ApiResponseDto.success(rootTags);
+    return ApiResponseDto.success(
+      rootTags.map((tag) => ({
+        ...tag,
+        coverBadgeEligible: isCoverBadgeEligibleName(tag.name),
+      })),
+    );
   }
 
   @Get('health-tags/:id')
@@ -4410,13 +4436,30 @@ export class AdminController {
       include: { healthTag: { select: { id: true, name: true, parentId: true } } },
       orderBy: { sortOrder: 'asc' },
     });
+    const badges: Array<{
+      healthTagId: string;
+      name: string;
+      sortOrder: number;
+    }> = [];
+    const hiddenBadges: string[] = [];
+    for (const row of rows) {
+      const name = row.healthTag?.name ?? '';
+      if (!name) continue;
+      if (isCoverBadgeEligibleName(name)) {
+        badges.push({
+          healthTagId: row.healthTagId,
+          name,
+          sortOrder: row.sortOrder,
+        });
+      } else {
+        hiddenBadges.push(name);
+      }
+    }
+
     return ApiResponseDto.success({
       seriesId,
-      badges: rows.map((row) => ({
-        healthTagId: row.healthTagId,
-        name: row.healthTag?.name ?? '',
-        sortOrder: row.sortOrder,
-      })),
+      badges,
+      hiddenBadges,
     });
   }
 
@@ -4459,6 +4502,19 @@ export class AdminController {
         return ApiResponseDto.error(
           400,
           `以下标签不在合规词表中，无法作为封面角标：${missing.join('、')}`,
+        );
+      }
+
+      // 2026-10-27：角标只允许老板确认的 6 个词；「含…」/工艺特性/FEDIAF 2021 一律拒绝
+      const ineligible = found.filter(
+        (tag) => !isCoverBadgeEligibleName(tag.name),
+      );
+      if (ineligible.length > 0) {
+        return ApiResponseDto.error(
+          400,
+          `以下词不能作为封面角标：${ineligible
+            .map((tag) => tag.name)
+            .join('、')}。只允许：${COVER_BADGE_ALLOWED_NAMES.join('、')}`,
         );
       }
 
@@ -4506,176 +4562,6 @@ export class AdminController {
       return ApiResponseDto.error(
         400,
         error.message || 'Failed to delete health tag',
-      );
-    }
-  }
-
-  // ==========================================
-  // Preparation Methods Management
-  // ==========================================
-
-  @Get('preparation-methods')
-  @ApiOperation({ summary: 'Get all preparation methods' })
-  @ApiResponse({ status: 200, description: 'List of preparation methods' })
-  async getPreparationMethods(): Promise<ApiResponseDto<any>> {
-    const methods = await this.prisma.preparationMethod.findMany({
-      orderBy: [{ sort: 'asc' }, { name: 'asc' }],
-    });
-    return ApiResponseDto.success(methods);
-  }
-
-  @Get('preparation-methods/:id')
-  @ApiOperation({ summary: 'Get preparation method by ID' })
-  @ApiParam({ name: 'id', description: 'Preparation method ID' })
-  @ApiResponse({ status: 200, description: 'Preparation method detail' })
-  @ApiResponse({ status: 404, description: 'Preparation method not found' })
-  async getPreparationMethod(
-    @Param('id') id: string,
-  ): Promise<ApiResponseDto<any>> {
-    try {
-      const method = await this.prisma.preparationMethod.findUnique({
-        where: { id },
-      });
-      if (!method) {
-        return ApiResponseDto.error(404, 'Preparation method not found');
-      }
-      return ApiResponseDto.success(method);
-    } catch (error: any) {
-      return ApiResponseDto.error(
-        400,
-        error.message || 'Failed to get preparation method',
-      );
-    }
-  }
-
-  @Post('preparation-methods')
-  @ApiOperation({ summary: 'Create new preparation method' })
-  @ApiResponse({ status: 201, description: 'Preparation method created' })
-  @ApiResponse({ status: 400, description: 'Invalid input' })
-  async createPreparationMethod(
-    @Body() dto: any,
-  ): Promise<ApiResponseDto<any>> {
-    try {
-      const method = await this.prisma.preparationMethod.create({
-        data: {
-          name: dto.name,
-          description: dto.description || null,
-          sort: dto.sort || 0,
-        },
-      });
-      return ApiResponseDto.success(method);
-    } catch (error: any) {
-      return ApiResponseDto.error(
-        400,
-        error.message || 'Failed to create preparation method',
-      );
-    }
-  }
-
-  @Put('preparation-methods/:id')
-  @ApiOperation({ summary: 'Update preparation method' })
-  @ApiParam({ name: 'id', description: 'Preparation method ID' })
-  @ApiResponse({ status: 200, description: 'Preparation method updated' })
-  @ApiResponse({ status: 404, description: 'Preparation method not found' })
-  @ApiResponse({ status: 400, description: 'Invalid input' })
-  async updatePreparationMethod(
-    @Param('id') id: string,
-    @Body() dto: any,
-  ): Promise<ApiResponseDto<any>> {
-    try {
-      const method = await this.prisma.preparationMethod.update({
-        where: { id },
-        data: {
-          ...(dto.name !== undefined && { name: dto.name }),
-          ...(dto.description !== undefined && {
-            description: dto.description,
-          }),
-          ...(dto.sort !== undefined && { sort: dto.sort }),
-        },
-      });
-      return ApiResponseDto.success(method);
-    } catch (error: any) {
-      if (error.code === 'P2025') {
-        return ApiResponseDto.error(404, 'Preparation method not found');
-      }
-      return ApiResponseDto.error(
-        400,
-        error.message || 'Failed to update preparation method',
-      );
-    }
-  }
-
-  @Delete('preparation-methods/:id')
-  @ApiOperation({ summary: 'Delete preparation method' })
-  @ApiParam({ name: 'id', description: 'Preparation method ID' })
-  @ApiResponse({ status: 200, description: 'Preparation method deleted' })
-  @ApiResponse({ status: 404, description: 'Preparation method not found' })
-  async deletePreparationMethod(
-    @Param('id') id: string,
-  ): Promise<ApiResponseDto<any>> {
-    try {
-      await this.prisma.preparationMethod.delete({
-        where: { id },
-      });
-      return ApiResponseDto.success({
-        message: 'Preparation method deleted successfully',
-      });
-    } catch (error: any) {
-      if (error.code === 'P2025') {
-        return ApiResponseDto.error(404, 'Preparation method not found');
-      }
-      return ApiResponseDto.error(
-        400,
-        error.message || 'Failed to delete preparation method',
-      );
-    }
-  }
-
-  @Put('preparation-methods/sort')
-  @ApiOperation({ summary: 'Batch update preparation methods sort order' })
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        items: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'string' },
-              sort: { type: 'number' },
-            },
-          },
-        },
-      },
-    },
-  })
-  @ApiResponse({ status: 200, description: 'Sort order updated' })
-  @ApiResponse({ status: 400, description: 'Invalid input' })
-  async updatePreparationMethodsSort(
-    @Body() dto: { items: { id: string; sort: number }[] },
-  ): Promise<ApiResponseDto<any>> {
-    try {
-      if (!dto.items || !Array.isArray(dto.items)) {
-        return ApiResponseDto.error(400, 'Invalid input: items array required');
-      }
-
-      // Update sort order for each item
-      const updatePromises = dto.items.map((item) =>
-        this.prisma.preparationMethod.update({
-          where: { id: item.id },
-          data: { sort: item.sort },
-        }),
-      );
-
-      await Promise.all(updatePromises);
-      return ApiResponseDto.success({
-        message: 'Sort order updated successfully',
-      });
-    } catch (error: any) {
-      return ApiResponseDto.error(
-        400,
-        error.message || 'Failed to update sort order',
       );
     }
   }
@@ -4767,6 +4653,33 @@ export class AdminController {
   async getRecipeCopywritingAvailability(): Promise<ApiResponseDto<any>> {
     const available = await this.recipeService.isRecipeCopywritingAvailable();
     return ApiResponseDto.success({ available });
+  }
+
+  @Get('recipe-designer/naming/availability')
+  @ApiOperation({ summary: 'AI 命名为可用' })
+  async getRecipeNamingAvailability(): Promise<ApiResponseDto<any>> {
+    const available = await this.recipeService.isRecipeNamingAvailable();
+    return ApiResponseDto.success({ available });
+  }
+
+  @Post('recipe-designer/series/:seriesId/name-candidates')
+  @ApiOperation({ summary: 'AI 生成食谱名称候选（只生成，不落库）' })
+  async generateSeriesNameCandidates(
+    @Param('seriesId') seriesId: string,
+  ): Promise<ApiResponseDto<any>> {
+    try {
+      const result =
+        await this.recipeService.generateSeriesNameCandidates(seriesId);
+      return ApiResponseDto.success(result);
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      throw error;
+    }
   }
 
   @Post('recipes/:id/ai-copywriting')

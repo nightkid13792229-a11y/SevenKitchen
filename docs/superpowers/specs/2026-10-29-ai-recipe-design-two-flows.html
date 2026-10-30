@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI 食谱设计 · 两条来源的流程图（草案）</title>
+<style>
+  :root {
+    --bg-primary: #f5f5f7;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #e5e5e7;
+    --border: #d1d1d6;
+    --text-primary: #1d1d1f;
+    --text-secondary: #6e6e73;
+    --text-tertiary: #8e8e93;
+    --accent: #0071e3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg-primary: #1d1d1f;
+      --bg-secondary: #2d2d2f;
+      --bg-tertiary: #3d3d3f;
+      --border: #424245;
+      --text-primary: #f5f5f7;
+      --text-secondary: #a1a1a6;
+      --text-tertiary: #8e8e93;
+      --accent: #0a84ff;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.5;
+  }
+  .page-wrap { padding: 2rem; }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+<style>
+  .flow-page { max-width: 1280px; margin: 0 auto; }
+  .flow-head { margin-bottom: 1.25rem; }
+  .flow-head h2 { margin-bottom: 0.35rem; }
+  .flow-head p { color: var(--text-secondary); font-size: 0.9rem; }
+  .legend { display: flex; flex-wrap: wrap; gap: 0.9rem; margin: 1rem 0 1.4rem; font-size: 0.78rem; color: var(--text-secondary); }
+  .legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+  .dot { width: 9px; height: 9px; border-radius: 999px; display: inline-block; }
+  .dot.shared { background: #0071e3; }
+  .dot.specific { background: #ff9f0a; }
+  .dot.gate { background: #ff3b30; }
+  .dot.handoff { background: #34c759; }
+  .flow-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; align-items: start; }
+  @media (max-width: 980px) { .flow-grid { grid-template-columns: 1fr; } }
+  .flow-column { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 16px; padding: 1rem; }
+  .flow-column.product { border-top: 4px solid #0071e3; }
+  .flow-column.order { border-top: 4px solid #ff9f0a; }
+  .column-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.35rem; }
+  .column-head h3 { margin: 0; font-size: 1.05rem; }
+  .column-sub { color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 0.75rem; }
+  .scope { border: 1px dashed var(--border); border-radius: 10px; padding: 0.65rem 0.75rem; margin-bottom: 0.9rem; background: var(--bg-primary); }
+  .scope-title { font-size: 0.68rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.25rem; }
+  .scope-line { font-size: 0.8rem; margin: 0.15rem 0; }
+  .scope-line b { font-weight: 600; }
+  .scope-line.no { color: var(--text-secondary); }
+  .steps { display: flex; flex-direction: column; }
+  .step { position: relative; display: flex; gap: 0.7rem; padding: 0.65rem 0.7rem; border: 1px solid var(--border); border-left-width: 4px; border-radius: 10px; background: var(--bg-primary); }
+  .step.shared { border-left-color: #0071e3; }
+  .step.specific { border-left-color: #ff9f0a; }
+  .step.gate { border-left-color: #ff3b30; }
+  .step.handoff { border-left-color: #34c759; }
+  .step.todo { border-style: dashed; border-left-style: solid; }
+  .step-num { flex: 0 0 1.4rem; width: 1.4rem; height: 1.4rem; border-radius: 999px; background: var(--bg-tertiary); color: var(--text-secondary); display: flex; align-items: center; justify-content: center; font-size: 0.72rem; font-weight: 700; margin-top: 0.1rem; }
+  .step.shared .step-num { background: rgba(0,113,227,0.12); color: #0071e3; }
+  .step.specific .step-num { background: rgba(255,159,10,0.14); color: #b26a00; }
+  .step.gate .step-num { background: rgba(255,59,48,0.12); color: #d70015; }
+  .step.handoff .step-num { background: rgba(52,199,89,0.14); color: #1d7a35; }
+  .step-body { min-width: 0; flex: 1; }
+  .step-top { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-bottom: 0.15rem; }
+  .step-title { font-size: 0.86rem; font-weight: 600; }
+  .tag { font-size: 0.62rem; padding: 0.08rem 0.4rem; border-radius: 999px; border: 1px solid var(--border); color: var(--text-secondary); white-space: nowrap; }
+  .tag.shared { border-color: rgba(0,113,227,0.3); color: #0071e3; background: rgba(0,113,227,0.07); }
+  .tag.specific { border-color: rgba(255,159,10,0.35); color: #b26a00; background: rgba(255,159,10,0.08); }
+  .tag.gate { border-color: rgba(255,59,48,0.3); color: #d70015; background: rgba(255,59,48,0.07); }
+  .tag.todo { border-style: dashed; color: var(--text-secondary); }
+  .step-desc { font-size: 0.76rem; color: var(--text-secondary); line-height: 1.45; }
+  .step-meta { font-size: 0.7rem; color: var(--text-tertiary); margin-top: 0.2rem; }
+  .arrow { text-align: center; color: var(--text-tertiary); font-size: 0.85rem; line-height: 1; padding: 0.22rem 0; }
+  .column-foot { margin-top: 0.85rem; border-top: 1px solid var(--border); padding-top: 0.65rem; font-size: 0.76rem; color: var(--text-secondary); }
+  .column-foot b { color: var(--text-primary); }
+  .bands { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; margin-top: 1.1rem; }
+  @media (max-width: 980px) { .bands { grid-template-columns: 1fr; } }
+  .band { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 14px; padding: 0.9rem 1rem; }
+  .band h4 { margin: 0 0 0.5rem; font-size: 0.9rem; }
+  .chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+  .chip { font-size: 0.72rem; padding: 0.2rem 0.55rem; border-radius: 999px; background: var(--bg-tertiary); color: var(--text-secondary); }
+  .chip.keep { background: rgba(0,113,227,0.1); color: #0071e3; }
+  .chip.split { background: rgba(255,159,10,0.12); color: #b26a00; }
+  .todo-box { margin-top: 1.1rem; border: 1px dashed rgba(255,159,10,0.55); border-radius: 14px; padding: 0.95rem 1.1rem; background: rgba(255,159,10,0.06); }
+  .todo-box h4 { margin: 0 0 0.45rem; font-size: 0.9rem; }
+  .todo-box ol { margin: 0; padding-left: 1.1rem; font-size: 0.8rem; color: var(--text-secondary); }
+  .todo-box li { margin: 0.22rem 0; }
+  .footnote { margin-top: 0.85rem; font-size: 0.72rem; color: var(--text-tertiary); }
+</style>
+
+<div class="flow-page">
+  <div class="flow-head">
+    <h2>AI 食谱设计 · 两条来源的流程图</h2>
+    <p>这是流程草图，不是最终版。橙色 = 这条线专属；红色 = 必须人确认或硬停点；绿色 = 人工交接。先看流程，Agent 拆不拆下一步再定。</p>
+  </div>
+
+  <div class="legend">
+    <span><i class="dot shared"></i>共用动作</span>
+    <span><i class="dot specific"></i>来源专属</span>
+    <span><i class="dot gate"></i>人工确认 / 硬停点</span>
+    <span><i class="dot handoff"></i>人工交接</span>
+  </div>
+
+  <div class="flow-grid">
+    <section class="flow-column product">
+      <div class="column-head">
+        <h3>产品线食谱</h3>
+        <span class="tag shared">CATALOG</span>
+      </div>
+      <div class="column-sub">从食谱列表 → 新建食谱 → 编辑页 → AI 食谱设计</div>
+
+      <div class="scope">
+        <div class="scope-title">AI 能看到</div>
+        <div class="scope-line"><b>系列 / 阶段 / 本系列已发布版本 / 全站已发布目录</b></div>
+        <div class="scope-line no"><b>看不到：</b>订单、顾客狗狗、顾客历史食谱</div>
+      </div>
+
+      <div class="steps">
+        <div class="step specific">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <div class="step-top"><span class="step-title">读系列与阶段</span><span class="tag specific">来源专属</span></div>
+            <div class="step-desc">确认这是产品线草稿，读阶段、健康标签、现有原料与已发布版本。</div>
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+
+        <div class="step specific todo">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <div class="step-top"><span class="step-title">确认设计简报</span><span class="tag specific">来源专属</span><span class="tag todo">待你细化</span></div>
+            <div class="step-desc">这道菜给哪个阶段、什么定位、要避开什么类别、成本/供应有什么限制。</div>
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+
+        <div class="step specific todo">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <div class="step-top"><span class="step-title">查目录与差异化</span><span class="tag specific">来源专属</span><span class="tag todo">待你细化</span></div>
+            <div class="step-desc">主蛋白有没有撞车、哪些类别最好不同；硬冲突要人拍板。</div>
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+
+        <div class="step shared">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <div class="step-top"><span class="step-title">定配方方向</span><span class="tag shared">共用</span></div>
+            <div class="step-desc">主蛋白、配方结构、营养重点；先定骨架，不急着写克数。</div>
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+
+        <div class="step shared gate">
+          <div class="step-num">5</div>
+          <div class="step-body">
+            <div class="step-top"><span class="step-title">铺候选 + 人工确认</span><span class="tag shared">共用</span><span class="tag gate">人确认</span></div>
+            <div class="step-desc">按现有类别清单每类找候选，比较关键营养；确认前不许写进草稿。</div>
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+
+        <div class="step shared">
+          <div class="step-num">6</div>
+          <div class="step-body">
+            <div class="step-top"><span class="step-title">写配方 + 跑评估</span><span class="tag shared">共用</span></div>
+            <div class="step-desc">先写骨架，再按评估缺口调克数/换原料；补剂只在明确缺口时加。</div>
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+
+        <div class="step shared">
+          <div class="step-num">7</div>
+          <div class="step-body">
+            <div class="step-top"><span class="step-title">补文案 / 标签 / 步骤</span><span class="tag shared">共用</span></div>
+            <div class="step-desc">系列名、封面标题、卖点、描述、健康标签、制作步骤、预处理。</div>
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+
+        <div class="step specific gate todo">
+          <div class="step-num">8</div>
+          <div class="step-body">
+            <div class="step-top"><span class="step-title">发布前检查</span><span class="tag specific">来源专属</span><span class="tag gate">人确认</span><span class="tag todo">待你细化</span></div>
+            <div class="step-desc">发布门槛、系列一致性；BLOCKED 时停下问人或申请例外。</div>
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+
+        <div class="step handoff">
+          <div class="step-num">9</div>
+          <div class="step-body">
+            <div class="step-top"><span class="step-title">人工发布 / 更新</span><span class="tag handoff">人工交接</span></div>
+            <div class="step-desc">AI 只交付可发布草稿；发布动作永远由人做。</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="column-foot"><b>完成：</b>可发布草稿 → 人工发布 / 更新系列阶段。</div>
+    </section>
+
+    <section class="flow-column order">
+      <div class="column-head">
+        <h3>定制订单食谱</h3>
+        <span class="tag specific">ORDER</span>
+      </div>
+      <div class="column-sub">从定制订单 → 订单设计工作台 → 某份草稿 → AI 食谱设计</div>
+
+      <div class="scope">
+        <div class="scope-title">AI 能看到</div>
+        <div class="scope-line"><b>本单 / 订单狗狗 / 这只狗的全部历史食谱 / 本单其他份</b></div>
+        <div class="scope-line no"><b>看不到：</b>全站食谱目录、其他顾客的订单/定制食谱</div>
+      </div>
+
+      <div class="steps">
+        <div class="step specific">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <div class="step-top"><span class="step-title">读订单 / 狗狗 / 历史 / 本单其他份</span><span class="tag specific">来源专属</span></div>
+            <div class="step-desc">确认是哪张单、哪只狗、第几份；资料不全就停。</div>
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+
+        <div class="step specific gate">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <div class="step-top"><span class="step-title">确认硬约束</span><span class="tag specific">来源专属</span><span class="tag gate">硬停点</span></div>
+            <div class="step-desc">过敏、忌口、目标、份数、备注；确诊与可疑过敏都要避开。</div>
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+
+        <div class="step specific todo">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <div class="step-top"><span class="step-title">看历史与本单差异化</span><span class="tag specific">来源专属</span><span class="tag todo">待你细化</span></div>
+            <div class="step-desc">这只狗吃过什么、本单其他份用了什么；哪些必须不同，哪些可以重复。</div>
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+
+        <div class="step shared">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <div class="step-top"><span class="step-title">定配方方向</span><span class="tag shared">共用</span></div>
+            <div class="step-desc">在安全约束内定主蛋白、结构、营养重点与适口性。</div>
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+
+        <div class="step shared gate">
+          <div class="step-num">5</div>
+          <div class="step-body">
+            <div class="step-top"><span class="step-title">铺候选（先筛过敏）+ 人工确认</span><span class="tag shared">共用</span><span class="tag gate">人确认</span></div>
+            <div class="step-desc">候选先过过敏筛，再给人选；同一主蛋白不要和本单其他份撞。</div>
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+
+        <div class="step shared">
+          <div class="step-num">6</div>
+          <div class="step-body">
+            <div class="step-top"><span class="step-title">写配方 + 跑评估</span><span class="tag shared">共用</span></div>
+            <div class="step-desc">先写骨架再评估；评估返回过敏警告时必须逐条说明并处理。</div>
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+
+        <div class="step shared">
+          <div class="step-num">7</div>
+          <div class="step-body">
+            <div class="step-top"><span class="step-title">补文案 / 步骤 / 交付说明</span><span class="tag shared">共用</span></div>
+            <div class="step-desc">写清这是本单第几份、主蛋白是什么、和另外几份怎么区分。</div>
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+
+        <div class="step specific gate todo">
+          <div class="step-num">8</div>
+          <div class="step-body">
+            <div class="step-top"><span class="step-title">交付前检查</span><span class="tag specific">来源专属</span><span class="tag gate">人确认</span><span class="tag todo">待你细化</span></div>
+            <div class="step-desc">过敏零命中、营养达标、份数正确、与本单其他份有明显差异。</div>
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+
+        <div class="step handoff">
+          <div class="step-num">9</div>
+          <div class="step-body">
+            <div class="step-top"><span class="step-title">加入本单待提交</span><span class="tag handoff">人工交接</span></div>
+            <div class="step-desc">N 份齐后由人最终交付；AI 不直接交付。</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="column-foot"><b>完成：</b>加入本单待提交 → N 份齐后人工交付。</div>
+    </section>
+  </div>
+
+  <div class="bands">
+    <div class="band">
+      <h4>两条线共用（不需要复制两套）</h4>
+      <div class="chips">
+        <span class="chip keep">对话循环 / 会话</span>
+        <span class="chip keep">读写当前草稿</span>
+        <span class="chip keep">原料库 / 营养评估</span>
+        <span class="chip keep">候选确认 / 例外审批</span>
+        <span class="chip keep">文案 / 制作步骤</span>
+      </div>
+    </div>
+    <div class="band">
+      <h4>必须按来源分开（工具和数据硬隔离）</h4>
+      <div class="chips">
+        <span class="chip split">可见数据范围</span>
+        <span class="chip split">注册的工具</span>
+        <span class="chip split">硬约束</span>
+        <span class="chip split">交付检查</span>
+        <span class="chip split">出口</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="todo-box">
+    <h4>这一版最需要你优化的 3 处</h4>
+    <ol>
+      <li><b>产品线的“设计简报”</b>到底要确认哪些内容？阶段、标签、定位、成本，哪些必须问、哪些可以直接用默认？</li>
+      <li><b>定制订单的“与本单其他份差异化”</b>是硬规则还是提醒？主蛋白必须不同，碳水/蔬菜也要不同吗？</li>
+      <li><b>两条线的“交付检查”</b>分别卡哪些项？哪些是硬阻断，哪些只是提醒人看一眼？</li>
+    </ol>
+  </div>
+
+  <div class="footnote">这是流程草图，不是最终版；橙色/红色/虚线框都是可以调整的地方。Agent 拆不拆，等流程定下来再判断。</div>
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>后台左侧导航 · 现状与建议</title>
+<style>
+  :root{
+    --ink:#303133; --ink2:#606266; --ink3:#909399; --line:#dcdfe6; --line2:#ebeef5;
+    --bg:#e9ebee; --card:#fff;
+    --nav:#1f2d3d; --nav2:#26374a; --nav-text:#c0c4cc; --nav-dim:#8a94a3;
+    --blue:#409eff; --blue-soft:#ecf5ff;
+    --green:#67c23a; --amber:#e6a23c; --red:#f56c6c;
+    --violet:#6b5cff; --violet-soft:#f1efff;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;font-size:14px;}
+  .wrap{max-width:1360px;margin:0 auto;padding:34px 30px 60px;}
+
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12px;letter-spacing:.14em;font-weight:700;
+    color:var(--violet);background:var(--violet-soft);border:1px solid #ddd6ff;border-radius:999px;padding:6px 12px;}
+  h1{margin:14px 0 8px;font-size:30px;line-height:1.2;letter-spacing:-.01em;}
+  .sub{margin:0 0 24px;color:var(--ink2);font-size:14px;line-height:1.75;max-width:860px;}
+
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:start;}
+  .col-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:10px;}
+  .col-title{font-size:16px;font-weight:800;}
+  .col-title small{font-weight:600;color:var(--ink3);font-size:12px;margin-left:6px;}
+  .pill{font-size:11px;font-weight:800;border-radius:999px;padding:4px 9px;}
+  .pill.bad{color:#b42318;background:#fee4e2;border:1px solid #fecdca;}
+  .pill.good{color:#067647;background:#dcfae6;border:1px solid #abe6c5;}
+
+  .win{background:var(--card);border:1px solid #d6dae0;border-radius:12px;overflow:hidden;
+    box-shadow:0 16px 34px rgba(16,24,40,.10);}
+  .win-bar{display:flex;align-items:center;gap:10px;padding:9px 13px;background:#f7f8fa;border-bottom:1px solid var(--line);}
+  .dots{display:flex;gap:6px;}
+  .dots i{width:10px;height:10px;border-radius:50%;display:block;background:#dcdfe6;}
+  .dots i:nth-child(1){background:#ff5f57;}.dots i:nth-child(2){background:#febc2e;}.dots i:nth-child(3){background:#28c840;}
+  .addr{flex:1;background:#fff;border:1px solid var(--line);border-radius:6px;padding:4px 10px;font-size:11px;color:var(--ink3);}
+  .win-tag{font-size:10px;font-weight:800;color:#fff;border-radius:4px;padding:3px 7px;letter-spacing:.04em;}
+  .win-tag.bad{background:#b42318;}
+  .win-tag.good{background:#067647;}
+
+  .app{display:grid;grid-template-columns:224px 1fr;height:760px;}
+
+  /* ---------- 现状侧栏 ---------- */
+  .side-old{background:var(--nav);overflow:hidden;position:relative;}
+  .logo{height:50px;line-height:50px;text-align:center;font-size:15px;font-weight:800;color:#fff;background:#2b3a4b;letter-spacing:.02em;}
+  .old-list{padding:6px 0;}
+  .old-item{display:flex;align-items:center;gap:9px;height:38px;padding:0 16px;color:#bfcbd9;font-size:12.5px;white-space:nowrap;}
+  .old-item .ico{width:15px;height:15px;border-radius:3px;border:1.4px solid #7d8b9c;flex:none;opacity:.85;}
+  .old-item.on{background:#1c2b3b;color:#409eff;}
+  .old-item.on .ico{border-color:#409eff;}
+  .old-fade{position:absolute;left:0;right:0;bottom:0;height:150px;
+    background:linear-gradient(to bottom,rgba(31,45,61,0) 0%,rgba(31,45,61,.96) 62%,#1f2d3d 100%);
+    display:flex;align-items:flex-end;justify-content:center;padding-bottom:16px;}
+  .old-fade span{font-size:11.5px;color:#e5e9f0;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);
+    border-radius:999px;padding:6px 11px;font-weight:700;}
+  .scroll{position:absolute;top:50px;right:2px;bottom:0;width:5px;border-radius:3px;background:rgba(255,255,255,.06);}
+  .scroll i{position:absolute;top:0;left:0;right:0;height:240px;border-radius:3px;background:rgba(255,255,255,.26);}
+
+  /* ---------- 建议侧栏 ---------- */
+  .side-new{background:var(--nav);display:flex;flex-direction:column;overflow:hidden;}
+  .new-top{padding:14px 13px 10px;background:#1b2836;}
+  .brand{display:flex;align-items:center;justify-content:space-between;color:#fff;font-weight:800;font-size:14px;margin-bottom:10px;}
+  .brand b{font-size:12px;color:#8fa3b8;font-weight:600;}
+  .search{display:flex;align-items:center;gap:7px;height:32px;border-radius:7px;background:#141f2b;border:1px solid #33475c;
+    color:#8fa3b8;font-size:11.5px;padding:0 9px;white-space:nowrap;overflow:hidden;}
+  .search .ph{overflow:hidden;text-overflow:ellipsis;}
+  .search kbd{margin-left:auto;font:600 10px/1.4 inherit;color:#8fa3b8;border:1px solid #3b5068;border-radius:4px;padding:2px 5px;background:#1d2b3a;flex:none;}
+
+  .new-scroll{flex:1;overflow:hidden;padding:10px 8px 8px;}
+  .sec-label{display:flex;align-items:center;justify-content:space-between;color:#7f8fa3;font-size:10.5px;font-weight:800;
+    letter-spacing:.12em;padding:8px 8px 5px;}
+  .pin{display:flex;align-items:center;gap:9px;height:34px;padding:0 9px;border-radius:7px;color:#dbe4ee;font-size:12.5px;}
+  .pin .dot{width:6px;height:6px;border-radius:2px;background:#7f8fa3;flex:none;}
+  .pin .pin-mark{margin-left:auto;font-size:10px;color:#6f8096;}
+
+  .nav-group{margin-top:3px;}
+  .g-row{display:flex;align-items:center;gap:9px;height:40px;padding:0 9px 0 10px;border-radius:7px;color:#c7d2df;font-size:13px;font-weight:600;
+    position:relative;}
+  .g-row .gico{width:16px;height:16px;border-radius:4px;border:1.5px solid #8fa3b8;flex:none;opacity:.9;}
+  .g-row .chev{margin-left:auto;color:#7f8fa3;font-size:10px;transform:translateY(-1px);}
+  .g-row.active{background:#22344a;color:#fff;}
+  .g-row.active .gico{border-color:#fff;}
+  .g-row .badge{margin-left:auto;min-width:18px;height:18px;border-radius:9px;background:#f56c6c;color:#fff;
+    font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 5px;}
+  .g-row .badge + .chev{margin-left:6px;}
+  .g-row .badge.gray{background:#b58a2e;}
+
+  .kids{padding:2px 0 4px 0;}
+  .kid{display:flex;align-items:center;gap:8px;height:35px;padding:0 9px 0 38px;border-radius:6px;color:#aebccd;font-size:12.5px;position:relative;}
+  .kid:before{content:"";position:absolute;left:19px;top:50%;width:9px;height:1px;background:#41566e;}
+  .kid.on{background:#1b4f86;color:#fff;font-weight:700;}
+  .kid.on:before{background:#7fb6ea;}
+  .kid .tag{margin-left:auto;font-size:9px;color:#8fa3b8;border:1px solid #465d76;border-radius:4px;padding:1px 4px;}
+  .kid.dim{color:#6f8096;}
+  .kid.dim .tag{color:#8fa3b8;}
+
+  .new-foot{padding:9px 12px;border-top:1px solid #33475c;background:#1b2836;display:flex;align-items:center;gap:8px;
+    color:#9fb0c4;font-size:11.5px;}
+  .avatar{width:22px;height:22px;border-radius:50%;background:#409eff;color:#fff;font-size:10px;font-weight:800;
+    display:flex;align-items:center;justify-content:center;}
+
+  /* ---------- 右侧内容占位 ---------- */
+  .content{background:#f0f2f5;padding:16px 18px;overflow:hidden;position:relative;}
+  .c-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+  .c-title{font-size:16px;font-weight:800;}
+  .c-crumb{font-size:11px;color:#909399;margin-top:4px;}
+  .c-btn{width:86px;height:28px;border-radius:6px;background:#409eff;opacity:.85;}
+  .skeleton{background:#fff;border:1px solid #e4e7ed;border-radius:8px;padding:14px;margin-bottom:12px;}
+  .sk-line{height:10px;border-radius:5px;background:#eef1f5;margin-bottom:9px;}
+  .sk-line.w40{width:40%;}.sk-line.w70{width:70%;}.sk-line.w55{width:55%;}
+  .sk-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px;}
+  .sk-card{background:#fff;border:1px solid #e4e7ed;border-radius:8px;height:74px;padding:12px;}
+
+  /* ---------- 标注 ---------- */
+  .notes{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-top:12px;}
+  .note{background:#fff;border:1px solid #e4e7ed;border-radius:10px;padding:13px 15px;}
+  .note h4{margin:0 0 7px;font-size:12px;color:#98a2b3;letter-spacing:.1em;font-weight:800;}
+  .note ul{margin:0;padding-left:17px;color:#475467;font-size:12.5px;line-height:1.75;}
+  .note li b{color:#101828;}
+  .arrow{color:#b54708;font-weight:800;}
+
+  .legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px;}
+  .chip{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid #e4e7ed;border-radius:999px;
+    padding:7px 12px;font-size:12px;color:#475467;}
+  .chip i{width:8px;height:8px;border-radius:2px;display:block;}
+  .chip b{color:#101828;}
+
+  @media (max-width:1200px){.cols{grid-template-columns:1fr;}.notes{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">七号厨房 · 后台导航整理</div>
+  <h1>左侧入口：从 45 个平铺，到 7 组、常用置顶</h1>
+  <p class="sub">
+    左图是现在的后台：45 个入口按开发顺序平铺，菜单高 2,178px，在 900px 的笔记本屏幕上要滚 2.4 屏，
+    财务、采购、设置都在屏幕外。右图是建议：按“事情”分成 7 组，默认只展开当前组，常用的 4 个固定在顶部，
+    待办数量直接标在菜单上。<b>页面本身不改，先改“怎么找”。</b>
+  </p>
+
+  <div class="cols">
+    <!-- 现状 -->
+    <div>
+      <div class="col-head">
+        <div class="col-title">现在<small>45 个入口平铺 · 无分组</small></div>
+        <span class="pill bad">首屏只能看到 15 个</span>
+      </div>
+      <div class="win">
+        <div class="win-bar">
+          <div class="dots"><i></i><i></i><i></i></div>
+          <div class="addr">admin.sevenkitchen.cn/dashboard</div>
+          <span class="win-tag bad">现状</span>
+        </div>
+        <div class="app">
+          <div class="side-old">
+            <div class="logo">七号厨房后台</div>
+            <div class="scroll"><i></i></div>
+            <div class="old-list">
+              <div class="old-item on"><span class="ico"></span>仪表盘</div>
+              <div class="old-item"><span class="ico"></span>档案管理</div>
+              <div class="old-item"><span class="ico"></span>品种管理</div>
+              <div class="old-item"><span class="ico"></span>用户管理</div>
+              <div class="old-item"><span class="ico"></span>原料管理</div>
+              <div class="old-item"><span class="ico"></span>补剂看板</div>
+              <div class="old-item"><span class="ico"></span>补剂上架清单</div>
+              <div class="old-item"><span class="ico"></span>补剂等价组</div>
+              <div class="old-item"><span class="ico"></span>分装汇总</div>
+              <div class="old-item"><span class="ico"></span>补剂包材</div>
+              <div class="old-item"><span class="ico"></span>补剂售后</div>
+              <div class="old-item"><span class="ico"></span>补剂商城设置</div>
+              <div class="old-item"><span class="ico"></span>订单中心</div>
+              <div class="old-item"><span class="ico"></span>试吃装设置</div>
+              <div class="old-item"><span class="ico"></span>试吃装商品</div>
+              <div class="old-item"><span class="ico"></span>试吃装库存</div>
+              <div class="old-item"><span class="ico"></span>试吃装备货</div>
+              <div class="old-item"><span class="ico"></span>搜索治理</div>
+              <div class="old-item"><span class="ico"></span>AI / Agent 配置</div>
+              <div class="old-item"><span class="ico"></span>食谱列表 &amp; 设计</div>
+            </div>
+            <div class="old-fade"><span>↓ 下面还有 25 个入口（财务在第 42 行）</span></div>
+          </div>
+          <div class="content">
+            <div class="c-head">
+              <div>
+                <div class="c-title">仪表盘</div>
+                <div class="c-crumb">首页</div>
+              </div>
+              <div class="c-btn"></div>
+            </div>
+            <div class="sk-cards">
+              <div class="sk-card"><div class="sk-line w55"></div><div class="sk-line w40"></div></div>
+              <div class="sk-card"><div class="sk-line w55"></div><div class="sk-line w40"></div></div>
+              <div class="sk-card"><div class="sk-line w55"></div><div class="sk-line w40"></div></div>
+            </div>
+            <div class="skeleton">
+              <div class="sk-line w40"></div>
+              <div class="sk-line w70"></div>
+              <div class="sk-line w55"></div>
+              <div class="sk-line w70"></div>
+            </div>
+            <div class="skeleton">
+              <div class="sk-line w40"></div>
+              <div class="sk-line w55"></div>
+              <div class="sk-line w70"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="notes" style="grid-template-columns:1fr;">
+        <div class="note">
+          <h4>为什么乱</h4>
+          <ul>
+            <li><b>没有分组</b>：45 个入口一个接一个，顺序就是“哪天做的”</li>
+            <li><b>同一件事好几个入口</b>：售后/退款 4 个、补剂 7 个、试吃装 4 个、设置 8 个</li>
+            <li><b>点进去才知道是什么</b>：“补剂上架清单”“选项字典”“全局配置”名字看不出用途</li>
+            <li><b>常用的找不到</b>：每天用的食谱设计，夹在 20 个入口中间</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- 建议 -->
+    <div>
+      <div class="col-head">
+        <div class="col-title">建议<small>7 组 · 只展开当前组</small></div>
+        <span class="pill good">一屏看全 · 常用 1 次点击</span>
+      </div>
+      <div class="win">
+        <div class="win-bar">
+          <div class="dots"><i></i><i></i><i></i></div>
+          <div class="addr">admin.sevenkitchen.cn/dashboard</div>
+          <span class="win-tag good">建议</span>
+        </div>
+        <div class="app">
+          <div class="side-new">
+            <div class="new-top">
+              <div class="brand">七号厨房 <b>后台</b></div>
+              <div class="search">
+                <span>⌕</span><span class="ph">搜索功能 / 订单 / 顾客</span><kbd>⌘K</kbd>
+              </div>
+            </div>
+            <div class="new-scroll">
+              <div class="sec-label"><span>常用</span><span>可自己钉</span></div>
+              <div class="pin"><span class="dot"></span>订单中心<span class="pin-mark">★</span></div>
+              <div class="pin"><span class="dot"></span>食谱设计<span class="pin-mark">★</span></div>
+              <div class="pin"><span class="dot"></span>狗档案<span class="pin-mark">★</span></div>
+              <div class="pin"><span class="dot"></span>原料库<span class="pin-mark">★</span></div>
+
+              <div class="nav-group">
+                <div class="g-row"><span class="gico"></span>工作台</div>
+                <div class="g-row"><span class="gico"></span>订单与售后<span class="badge">3</span><span class="chev">▸</span></div>
+                <div class="g-row"><span class="gico"></span>顾客与客服<span class="chev">▸</span></div>
+                <div class="g-row active"><span class="gico"></span>食谱与原料<span class="chev">▾</span></div>
+                <div class="kids">
+                  <div class="kid on">食谱设计</div>
+                  <div class="kid">原料库</div>
+                  <div class="kid">营养标准</div>
+                  <div class="kid dim">评价管理<span class="tag">未启用</span></div>
+                </div>
+                <div class="g-row"><span class="gico"></span>商品与库存<span class="badge gray">2</span><span class="chev">▸</span></div>
+                <div class="g-row"><span class="gico"></span>采购与财务<span class="chev">▸</span></div>
+                <div class="g-row"><span class="gico"></span>设置<span class="chev">▸</span></div>
+              </div>
+            </div>
+            <div class="new-foot"><span class="avatar">管</span>管理员 · 全部权限</div>
+          </div>
+          <div class="content">
+            <div class="c-head">
+              <div>
+                <div class="c-title">食谱设计</div>
+                <div class="c-crumb">食谱与原料 / 食谱设计</div>
+              </div>
+              <div class="c-btn"></div>
+            </div>
+            <div class="sk-cards">
+              <div class="sk-card"><div class="sk-line w55"></div><div class="sk-line w40"></div></div>
+              <div class="sk-card"><div class="sk-line w55"></div><div class="sk-line w40"></div></div>
+              <div class="sk-card"><div class="sk-line w55"></div><div class="sk-line w40"></div></div>
+            </div>
+            <div class="skeleton">
+              <div class="sk-line w40"></div>
+              <div class="sk-line w70"></div>
+              <div class="sk-line w55"></div>
+              <div class="sk-line w70"></div>
+            </div>
+            <div class="skeleton">
+              <div class="sk-line w40"></div>
+              <div class="sk-line w55"></div>
+              <div class="sk-line w70"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="notes" style="grid-template-columns:1fr;">
+        <div class="note">
+          <h4>改了什么</h4>
+          <ul>
+            <li><b>7 个分组</b>：订单、顾客、食谱、商品、采购财务、设置，+ 工作台</li>
+            <li><b>默认只展开当前组</b>：其余组只留一行，点开才展开</li>
+            <li><b>常用 4 个置顶</b>：每天要做的事，不用在菜单里找</li>
+            <li><b>菜单直接显示待办</b>：售后 3、库存 2，一眼知道今天先做哪件</li>
+            <li><b>搜索 + 面包屑</b>：记不住在哪，直接搜；详情页也知道自己在哪</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span class="chip"><i style="background:#409eff"></i><b>45 → 24</b>&nbsp;个入口</span>
+    <span class="chip"><i style="background:#67c23a"></i><b>2.4 屏 → 1 屏</b>&nbsp;首屏看全</span>
+    <span class="chip"><i style="background:#e6a23c"></i><b>22 个</b>&nbsp;近 15 天零使用（需逐项确认）</span>
+    <span class="chip"><i style="background:#f56c6c"></i><b>9 个</b>&nbsp;没人引用的旧页面</span>
+    <span class="chip"><i style="background:#6b5cff"></i><b>旧网址全部保留跳转</b>&nbsp;书签不会失效</span>
+  </div>
+</div>
+</body>
+</html>

@@ -35,7 +35,8 @@ describe('custom recipe customer flow', () => {
     expect(pagesJson).toContain('pages/custom-recipe/index')
     expect(pagesJson).not.toContain('pages/custom-recipe/success')
     expect(pagesJson).toContain('pages/custom-recipe/confirm')
-    expect(pagesJson).toContain('pages/custom-recipe/orders')
+    // 2026-10-24：定制专属列表已删除，所有订单在「我的订单」统一列表
+    expect(pagesJson).not.toContain('pages/custom-recipe/orders')
     expect(pagesJson).toContain('pages/custom-recipe/order-detail')
   })
 
@@ -44,13 +45,13 @@ describe('custom recipe customer flow', () => {
       true,
     )
 
-    const orders = read(`${PAGE_DIR}/orders.vue`)
+    const orders = read('src/pages/orders-list/index.vue')
     expect(orders).toContain('/pages/custom-recipe/order-detail?orderId=')
   })
 
   it('calls the custom recipe APIs through the shared request client', () => {
     const submit = read(`${PAGE_DIR}/index.vue`)
-    const orders = read(`${PAGE_DIR}/orders.vue`)
+    const orders = read('src/pages/orders-list/index.vue')
     const detail = read(`${PAGE_DIR}/order-detail.vue`)
     const success = read(`${PAGE_DIR}/success.vue`)
     /**
@@ -76,7 +77,7 @@ describe('custom recipe customer flow', () => {
 
   it('never treats response code 200 as success', () => {
     // 全站统一响应结构的成功码是 0；写成 200 会导致"下单成功却提示失败"
-    for (const file of ['index.vue', 'orders.vue', 'order-detail.vue', 'success.vue']) {
+    for (const file of ['index.vue', 'order-detail.vue', 'success.vue']) {
       const source = read(`${PAGE_DIR}/${file}`)
       expect(source).not.toContain('code === 200')
       expect(source).not.toContain('code === 0 ||')
@@ -139,7 +140,7 @@ describe('custom recipe customer flow', () => {
   it('offers WeChat pay on every surface where a pending order can be paid', () => {
     // 提交成功页、订单详情页、订单列表 —— 三处都要能直接付款，少任何一处都会让顾客
     // 卡在"找不到付款入口"
-    for (const file of ['success.vue', 'order-detail.vue', 'orders.vue']) {
+    for (const file of ['success.vue', 'order-detail.vue']) {
       const source = read(`${PAGE_DIR}/${file}`)
       expect(source).toContain("from '@/utils/custom-recipe-payment'")
       expect(source).toContain('runCustomRecipePayment(')
@@ -149,7 +150,7 @@ describe('custom recipe customer flow', () => {
   it('does not fall back to manual collection when online pay is unavailable', () => {
     // 2026-10-19 老板确认：不做人工收款兜底，支付通道不可用时只提示稍后重试。
     const confirm = read(`${PAGE_DIR}/confirm.vue`)
-    const orders = read(`${PAGE_DIR}/orders.vue`)
+    const orders = read('src/pages/orders-list/index.vue')
     const detail = read(`${PAGE_DIR}/order-detail.vue`)
 
     for (const source of [confirm, orders, detail]) {
@@ -157,7 +158,7 @@ describe('custom recipe customer flow', () => {
       expect(source).not.toContain('success?orderId=')
     }
     // 企业微信客服仍用于订单咨询，但不能被拿来收定制费
-    expect(orders).toContain('openCustomerServiceChat')
+    expect(orders).toContain('CustomerServiceInlineButton')
   })
 
   it('treats a closed order as closed instead of pushing manual payment', () => {
@@ -530,6 +531,21 @@ describe('custom recipe page · 结构与知情同意', () => {
     expect(page).toContain(':focus="stomachOtherFocused"')
   })
 
+  it('★ 选项加载失败有“加载中/加载失败/重试”，不把空列表当成没有选项', () => {
+    expect(page).toContain('currentFoodOptionsLoading')
+    expect(page).toContain('currentFoodOptionsFailed')
+    expect(page).toContain('retryCurrentFoodOptions')
+    expect(page).toContain('changeReasonOptionsLoading')
+    expect(page).toContain('changeReasonOptionsFailed')
+    expect(page).toContain('retryChangeReasonOptions')
+    expect(page).toContain('stomachOptionsLoading')
+    expect(page).toContain('stomachOptionsFailed')
+    expect(page).toContain('retryStomachOptions')
+    expect(page).toContain('选项加载中')
+    expect(page).toContain('选项没加载出来')
+    expect(page).toContain('option-state__retry')
+  })
+
   it('补上了附件上传入口（此前字段有、界面没有）', () => {
     expect(page).toContain('pickAttachmentEntry')
     expect(page).toContain('uploadCustomRecipeDraftAttachment')
@@ -787,7 +803,7 @@ describe('custom recipe scheduling · 系统自动排期', () => {
   const templateOf = (source: string) => source.slice(0, source.indexOf('<script'))
 
   it('三个页面的模板里都不再出现"预约"这一栏', () => {
-    for (const file of ['index.vue', 'success.vue', 'orders.vue', 'order-detail.vue']) {
+    for (const file of ['index.vue', 'success.vue', 'order-detail.vue']) {
       expect(templateOf(read(`${PAGE_DIR}/${file}`))).not.toContain('预约')
     }
   })
@@ -803,14 +819,14 @@ describe('custom recipe scheduling · 系统自动排期', () => {
     expect(success).not.toContain('2025年1月23日')
   })
 
-  it('订单列表与详情都显示后端排好的预计交付日', () => {
-    const orders = read(`${PAGE_DIR}/orders.vue`)
+  it('订单详情仍显示后端排好的预计交付日（列表卡已按 2026-10-24 要求隐藏）', () => {
+    const orders = read('src/pages/orders-list/index.vue')
     const detail = read(`${PAGE_DIR}/order-detail.vue`)
 
-    for (const source of [orders, detail]) {
-      expect(source).toContain('estimatedDeliveryDate')
-      expect(source).toContain('排期中')
-    }
+    expect(detail).toContain('estimatedDeliveryDate')
+    expect(detail).toContain('排期中')
+    // 列表卡只留"狗 · 品种 · 体重 · 份数"，不再显示定制目标/预计交付
+    expect(orders).not.toContain('estimatedDeliveryDate')
   })
 
   it('提交页不再自己造排期日，载荷里不含 scheduledDate', () => {
@@ -880,7 +896,7 @@ describe('custom recipe payment copy · 下一步付款与时限', () => {
     expect(api).toContain("url: '/custom-recipe-config'")
     expect(api).toContain('paymentTimeoutMinutes')
 
-    const pages = ['index.vue', 'success.vue', 'orders.vue', 'order-detail.vue']
+    const pages = ['index.vue', 'success.vue', 'order-detail.vue']
     for (const file of pages) {
       const source = read(`${PAGE_DIR}/${file}`)
       expect(source).toContain('paymentTimeoutMinutes')
@@ -899,7 +915,6 @@ describe('custom recipe payment copy · 下一步付款与时限', () => {
       'order-detail.vue',
       'index.vue',
       'success.vue',
-      'orders.vue',
     ]) {
       const source = read(`${PAGE_DIR}/${file}`)
       expect(source).not.toContain("url: '/custom-recipe/")
@@ -911,7 +926,7 @@ describe('custom recipe payment copy · 下一步付款与时限', () => {
   })
 
   it('三个"能看到待付款单"的页面都告知时限；订单对象优先用 paymentDeadlineAt', () => {
-    for (const file of ['success.vue', 'orders.vue', 'order-detail.vue']) {
+    for (const file of ['success.vue', 'order-detail.vue']) {
       const source = read(`${PAGE_DIR}/${file}`)
       expect(source).toContain('buildPaymentTimeoutHint')
       expect(source).toContain('paymentDeadlineAt')
@@ -1005,6 +1020,34 @@ describe('custom recipe pending payment reminder · 待付款提醒', () => {
     expect(submit).toContain('runCustomRecipePayment(')
   })
 
+  it('★ 多张待付款：带狗名/金额/张数，并给出查看全部', () => {
+    // 2026-10-25：当前狗狗优先，没当前狗狗才显示最急的
+    expect(submit).toContain('pendingOrder.dogName')
+    expect(submit).toContain('pendingOrder.amount')
+    expect(submit).toContain('pendingOrderCount')
+    expect(submit).toContain('pendingOrderIsCurrentDog')
+    expect(submit).toContain('otherPendingCount')
+    expect(submit).toContain('viewAllPendingOrders')
+    expect(submit).toContain('pages/orders-list/index?status=PENDING_PAYMENT')
+    // 不能只取一张
+    expect(submit).toContain('pageSize: 20')
+  });
+
+  it('★ 从健康管理/体重计划返回：刷新门槛字段和过敏报告，不动草稿', () => {
+    const onShowSource =
+      submit.match(/onShow\(\(\) => \{[\s\S]*?\n\}\);/)?.[0] || ''
+    expect(onShowSource).toContain('refreshDogGateAndReports')
+    expect(onShowSource).toContain('refreshHealthSummary')
+    expect(submit).toContain('dogApi.detail')
+    expect(submit).toContain('bcsScoreConfirmed')
+    expect(submit).toContain('activityLevelConfirmed')
+    expect(submit).toContain('mealsPerDayConfirmed')
+    expect(submit).toContain('loadAllergyReports')
+    expect(submit).toContain('loadSelectedPlan')
+    // 慢响应保护
+    expect(submit).toContain("String(formData.value.dogId || '') !== dogId")
+  })
+
   it('只提醒不阻断：提交校验里没有"有待付款单就不许下单"', () => {
     const validationSource =
       submit.match(/function validateCustomRecipeForm\(\)[\s\S]*?\n\}/)?.[0] || ''
@@ -1069,7 +1112,8 @@ describe('custom recipe dog switch isolation · 换狗隔离医疗数据', () =>
  */
 describe('custom recipe cancelled & refund · 已取消与退款', () => {
   const shared = read('src/utils/custom-recipe-order.ts')
-  const orders = read(`${PAGE_DIR}/orders.vue`)
+  // 2026-10-24：定制专属列表已删除，统一列表是唯一入口
+  const orders = read('src/pages/orders-list/index.vue')
   const detail = read(`${PAGE_DIR}/order-detail.vue`)
 
   it('★ 状态与目标的中文来自**选项字典**，三个页面共用后端那一份', () => {
@@ -1084,7 +1128,7 @@ describe('custom recipe cancelled & refund · 已取消与退款', () => {
      * 现在中文只存在于后端的选项字典里。
      * 这条守卫因此比原来更强：**不只是"只有一份"，而是"那一份在后端"**。
      */
-    for (const file of ['success.vue', 'orders.vue', 'order-detail.vue']) {
+    for (const file of ['success.vue', 'order-detail.vue']) {
       const source = read(`${PAGE_DIR}/${file}`)
       expect(source).toContain("from '@/utils/option-set'")
       expect(source).toContain('useOptionSet')
@@ -1092,6 +1136,9 @@ describe('custom recipe cancelled & refund · 已取消与退款', () => {
       expect(source).not.toContain("PENDING_PAYMENT: '待付款'")
       expect(source).not.toContain('const GOAL_TEXT')
     }
+    // 统一列表也必须用后端字典（专属列表删除后，它是唯一入口）
+    expect(orders).toContain('CUSTOM_RECIPE_STATUS_SET')
+    expect(orders).toContain('useOptionSet')
     // 本地那三份表本身也不该还在
     const sharedCode = stripComments(shared)
     expect(sharedCode).not.toContain('CUSTOM_RECIPE_STATUS_TEXT')
@@ -1104,9 +1151,10 @@ describe('custom recipe cancelled & refund · 已取消与退款', () => {
      * 这条守的是**兜底**：字典没取到（网络问题）或后端加了新枚举时，
      * 顾客看到的必须是中文，不能是 `COMPLETED` 这种。
      */
-    for (const file of ['orders.vue', 'success.vue', 'order-detail.vue']) {
+    for (const file of ['success.vue', 'order-detail.vue']) {
       expect(read(`${PAGE_DIR}/${file}`)).toContain("|| '状态待确认'")
     }
+    expect(orders).toContain("|| '状态待确认'")
   })
 
   it('★ 查不到时返回空串而不是原始码（兜底的决定权留给页面）', () => {
@@ -1124,17 +1172,17 @@ describe('custom recipe cancelled & refund · 已取消与退款', () => {
     // 后端的 tone 是语义档位，前端只做档位→类名映射
     const optionSet = read('src/utils/option-set.ts')
     expect(optionSet).toContain('toneToStatusClass')
-    expect(orders).toContain('toneToStatusClass')
+    expect(orders).toContain('toneColors')
     // 样式类仍然定义在页面里
-    expect(orders).toContain('.status-badge.cancelled')
+    expect(orders).toContain('.order-status')
   })
 
   it('已取消的单展示退款进度（退款中 / 已退款 ¥XX / 退款失败）', () => {
     for (const source of [orders, detail]) {
       expect(source).toContain('describeCustomRecipeRefund')
       expect(source).toContain('refundStatus')
-      expect(source).toContain('refundAmount')
     }
+    expect(detail).toContain('refundAmount')
 
     expect(shared).toContain('退款中')
     expect(shared).toContain('已退款')
@@ -1145,7 +1193,7 @@ describe('custom recipe cancelled & refund · 已取消与退款', () => {
 
   it('退款状态认不出来时不显示（退款进度不能靠猜）', () => {
     expect(shared).toContain('return null')
-    expect(orders).toMatch(/describeCustomRecipeRefund\(order\)\?\.text \|\| ''/)
+    expect(orders).toMatch(/describeCustomRecipeRefund\(order as any\)\?\.text \|\| ''/)
   })
 
   it('自助取消时当场告知退款结果，退款失败不能只提示"已发起"', () => {
@@ -1175,7 +1223,7 @@ describe('custom recipe cancelled & refund · 已取消与退款', () => {
  */
 describe('custom recipe auth expired · 登录态过期', () => {
   it('订单列表区分"登录已过期"与"网络错误"', () => {
-    const orders = read(`${PAGE_DIR}/orders.vue`)
+    const orders = read('src/pages/orders-list/index.vue')
 
     expect(orders).toContain('isAuthError')
     expect(orders).toContain('Authentication required')
@@ -1196,10 +1244,10 @@ describe('custom recipe auth expired · 登录态过期', () => {
   })
 
   it('未登录时不再白打一次必然 401 的请求', () => {
-    const orders = read(`${PAGE_DIR}/orders.vue`)
+    const orders = read('src/pages/orders-list/index.vue')
     const detail = read(`${PAGE_DIR}/order-detail.vue`)
 
-    expect(orders).toMatch(/if \(!getToken\(\)\)/)
+    expect(orders).toMatch(/!getToken\(\)/)
     expect(detail).toMatch(/if \(!getToken\(\)\)/)
   })
 })
@@ -1839,32 +1887,49 @@ describe('定制页 · 2026-10-05 第三批（4 条）', () => {
     expect(template).not.toContain('过敏信息（可选）')
   })
 
-  it('③ 先问「小家伙是否对部分食物过敏？」，答没有就跳过整块录入', () => {
+  it('③ 先问「小家伙是否对部分食物过敏？」，答没有就跳过过敏食物录入', () => {
     expect(template).toContain('小家伙是否对部分食物过敏？')
     expect(template).toContain('@tap="answerFoodAllergy(true)"')
     expect(template).toContain('@tap="answerFoodAllergy(false)"')
-    // 录入界面整块收在"有过敏"分支里（文本框、扫描、已上传报告）
-    const editor = template.slice(
-      template.indexOf('v-if="hasFoodAllergy === true"'),
-      template.indexOf('v-else-if="hasFoodAllergy === false"'),
-    )
+
+    // 只有“过敏食物”文本框收在“有过敏”分支里
+    const trueStart = template.indexOf('<template v-if="hasFoodAllergy === true">')
+    const trueEnd = template.indexOf('</template>', trueStart)
+    expect(trueStart).toBeGreaterThan(-1)
+    expect(trueEnd).toBeGreaterThan(trueStart)
+    const editor = template.slice(trueStart, trueEnd)
     expect(editor).toContain('allergy-text')
     expect(editor).toContain('v-model="formData.allergyText"')
     expect(editor).toContain('<textarea')
-    expect(editor).toContain('<AllergyScanBlock')
-    expect(editor).toContain('allergyReports')
-    // 没作答不能提交（否则"跳过"这件事只做了一半）
+    // 报告区不再藏在答案后面（2026-10-25）
+    expect(editor).not.toContain('<AllergyScanBlock')
+    expect(editor).not.toContain('allergyReports')
+
+    const reportArea = template.slice(
+      template.indexOf('class="allergy-report-area"'),
+    )
+    expect(reportArea).toContain('<AllergyScanBlock')
+    expect(reportArea).toContain('allergyReports')
+    expect(reportArea).toContain('formData.reportDrafts')
+
+    // 连草稿里旧版本自动选的答案也不恢复（避免“一进来又是有过敏”）
+    expect(code).not.toContain('hasFoodAllergy.value = draft.hasFoodAllergy')
+    expect(code).toContain('hasFoodAllergy.value = null;')
+
+    // 没作答不能提交（否则“跳过”这件事只做了一半）
     expect(code).toContain('const hasFoodAllergy = ref<boolean | null>(null)')
     expect(code).toContain('请先回答：小家伙是否对部分食物过敏')
   })
 
-  it('③ 答"没有"不抹掉档案里的过敏；也不再多写一句说明', () => {
+  it('③ 答"没有"不抹掉档案里的过敏；题目始终由顾客自己答', () => {
     // 2026-10-05 老板：答"没有"下面那句说明删掉，不再多话
     expect(code).not.toContain('noFoodAllergyNote')
     expect(template).not.toContain('不再新增过敏信息')
-    // 档案里有过敏时默认答"有"（让家长再答一遍是多余的）
-    expect(code).toContain('if (formData.value.allergyText || summaryAllergies.length > 0) {')
-    expect(code).toContain('hasFoodAllergy.value = true;')
+    // 2026-10-25：档案里有过敏也不预选答案；文本仍然带出
+    expect(code).not.toContain(
+      'if (formData.value.allergyText || summaryAllergies.length > 0) {',
+    )
+    expect(code).toContain('prefilledAllergyText.value = formData.value.allergyText;')
     // 换狗要重新问（上一只狗的答案不能替新狗作答）
     expect(code).toContain('hasFoodAllergy.value = null;')
   })
@@ -1965,10 +2030,21 @@ describe('定制页 · 报告缩略图相关（第五批补丁）', () => {
     expect(block).toContain('识别失败，请手工添加过敏原')
   })
 
-  it('有历史报告时默认答"有过敏"，别把预览一起藏起来', () => {
-    expect(page).toContain('allergyReports.value.length > 0 && hasFoodAllergy.value === null')
-    // 只在未作答时兜底，不覆盖家长自己选过的答案
-    expect(page).toContain('hasFoodAllergy.value = true;')
+  it('有历史报告也不预选答案；报告区常显，由顾客自己答', () => {
+    // 2026-10-25 老板：报告常显、题目不预选
+    expect(page).not.toContain('allergyReports.value.length > 0 && hasFoodAllergy.value === null')
+
+    const loadAllergyReports = page.match(
+      /async function loadAllergyReports[\s\S]*?\n\}/,
+    )?.[0] || ''
+    expect(loadAllergyReports).not.toContain('hasFoodAllergy.value = true')
+
+    // 报告区在“有过敏”模板之外
+    const trueStart = page.indexOf('<template v-if="hasFoodAllergy === true">')
+    const trueEnd = page.indexOf('</template>', trueStart)
+    const reportStart = page.indexOf('class="allergy-report-area"')
+    expect(reportStart).toBeGreaterThan(trueEnd)
+    expect(page.slice(reportStart)).toContain('<AllergyScanBlock')
   })
 })
 
@@ -1987,79 +2063,6 @@ describe('定制页 · 报告缩略图相关（第五批补丁）', () => {
  *
  * 而详情页是对的（用 `renderable.actions`）—— 同一件事两套判定，
  * 迟早只改一处。这正是老板说的"前端只渲染"要解决的问题。
- */
-describe('订单列表按钮来自后端契约', () => {
-  const raw = read('src/pages/custom-recipe/orders.vue');
-
-  /**
-   * ⚠️ **必须先剥注释** —— 这段代码的说明注释里**逐字引用了被删掉的旧代码**
-   * （"此前这里是 `v-if="order.status === 'PENDING_PAYMENT'"`"）。
-   * 第一版没剥，守卫对着注释红了 —— 本项目第 6 次栽在"注释骗过断言"上。
-   */
-  const source = raw
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[^:])\/\/.*$/gm, '$1');
-
-  it('★ 不再用写死的状态判断决定按钮', () => {
-    const footerStart = source.indexOf('class="order-footer"');
-    const footerEnd = source.indexOf('</view>', footerStart);
-    const footer = source.slice(footerStart, footerEnd);
-
-    expect(footer).not.toContain('order.status');
-    expect(footer).not.toContain('PENDING_PAYMENT');
-    expect(footer).not.toContain('DELIVERED');
-  });
-
-  /**
-   * ⚠️ **不在本守卫范围内的一处前端判断**（记录在案，不是漏了）
-   *
-   * 支付时限提示那一行还留着 `order.status === 'PENDING_PAYMENT' &&`。
-   * 它**不能直接删** —— 因为 `buildPaymentTimeoutHint` 在没有截止时间时
-   * 会退回**全局配置**分支（"请在 30 分钟内完成支付"），
-   * 而对已付款单后端返回的 `paymentDeadlineAt` 是 `null`，
-   * 于是一旦去掉那个状态判断，**已付款的订单上会冒出一句
-   * "请在 30 分钟内完成支付，超时订单会自动取消"**。
-   *
-   * 也就是说：那个判断实际在**挡一个错**。要清掉它，
-   * 得先把提示文案本身改成由后端下发（`renderable` 里加一项），
-   * 而那属于另一处改动，不适合塞进这一批。
-   *
-   * 这里把它写下来，免得下次有人看到"还有一处写死判断"就直接删掉。
-   */
-  it('（记录）支付时限提示仍有一处前端状态判断，删之前要先改后端', () => {
-    expect(source).toContain("order.status === 'PENDING_PAYMENT'");
-    // 一旦这行没了，说明有人动过 —— 提醒他同时确认提示文案已改由后端下发
-    expect(source).toContain('paymentHintOf');
-  });
-
-  it('★ 按钮从 renderable.actions 渲染', () => {
-    expect(source).toContain('actionsOf(order)');
-    expect(source).toContain('action.code');
-    expect(source).toContain('action.label');
-  });
-
-  it('★ "能不能点"也用后端的 enabled，不是前端判的', () => {
-    expect(source).toContain('action.enabled');
-  });
-
-  it('★ 前端只做 code → 处理函数的映射', () => {
-    expect(source).toContain('function onListAction');
-    for (const code of ['PAY', 'VIEW_DELIVERY', 'CONTACT_SERVICE']) {
-      expect(source).toContain(`case '${code}'`);
-    }
-  });
-
-  it('老后端不返回 renderable 时兜底成"查看详情"，而不是回到写死判断', () => {
-    expect(source).toContain("code: 'VIEW_DETAIL'");
-    expect(source).toContain("label: '查看详情'");
-  });
-});
-
-/**
- * 2026-10-19：定制页本地草稿 + 付款后才写狗狗档案。
- *
- * 老板确认：草稿先放手机本地；付款后退款档案保留；未付款订单设计器禁止开始。
  */
 describe('custom recipe draft · 本地草稿与付款后同步', () => {
   const page = read('src/pages/custom-recipe/index.vue')

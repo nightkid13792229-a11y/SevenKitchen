@@ -94,6 +94,10 @@ export class SupplementSnapshotService {
         requestedAmount: orderItem?.requestedAmount ?? null,
         packedAmount: orderItem?.packedAmount ?? null,
         bags: orderItem?.bags ?? null,
+        recipeItemId: (orderItem as any)?.recipeItemId ?? null,
+        sourceIngredientId:
+          (orderItem as any)?.sourceIngredientId ?? null,
+        dosageSnapshot: (orderItem as any)?.dosageSnapshot ?? null,
         purchased: Boolean(orderItem),
       });
     }
@@ -109,6 +113,9 @@ export class SupplementSnapshotService {
         requestedAmount: item.requestedAmount,
         packedAmount: item.packedAmount,
         bags: item.bags,
+        recipeItemId: (item as any).recipeItemId ?? null,
+        sourceIngredientId: (item as any).sourceIngredientId ?? null,
+        dosageSnapshot: (item as any).dosageSnapshot ?? null,
         purchased: true,
       });
     }

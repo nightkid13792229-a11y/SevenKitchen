@@ -51,6 +51,10 @@ export interface LabelData {
   shelfLife: string;
   cookingMethod?: CookingMethod | string;
   productionTime: string;
+  /** 饲料添加剂（顿号分隔，只写目录规范名称）——传了才渲染独立「添加剂组成」段 */
+  additiveIngredients?: string;
+  /** 本单用到的原料 ID，用于服务端校验标签信息是否齐备 */
+  ingredientIds?: string[];
 }
 
 /**

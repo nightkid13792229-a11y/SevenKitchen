@@ -6,6 +6,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { CustomRecipeStatus, Prisma } from '@prisma/client';
@@ -13,6 +14,7 @@ import { PrismaService } from '../../infrastructure/prisma.service';
 import { CustomRecipeConfigService } from './custom-recipe-config.service';
 import { Optional } from '@nestjs/common';
 import { CustomerMessageService } from '../message/customer-message.service';
+import { WechatShippingUploadService } from '../shipping/wechat-shipping-upload.service';
 import { calculateDailyIntakeG } from '../../domain/dog/dog-calc.service';
 import {
   assertTransition,
@@ -56,6 +58,8 @@ import {
  */
 @Injectable()
 export class CustomRecipeDeliveryService {
+  private readonly logger = new Logger(CustomRecipeDeliveryService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: CustomRecipeConfigService,
@@ -67,6 +71,12 @@ export class CustomRecipeDeliveryService {
      */
     @Optional()
     private readonly customerMessages?: CustomerMessageService,
+    /**
+     * 微信虚拟发货上报（2026-10-30）。
+     * 放参数表最后并 @Optional，避免既有测试按位置构造时错位。
+     */
+    @Optional()
+    private readonly wechatShipping?: WechatShippingUploadService,
   ) {}
 
   /**
@@ -266,6 +276,8 @@ export class CustomRecipeDeliveryService {
       })
       .catch(() => false);
 
+    await this.uploadWechatVirtualShippingSafely(order.id);
+
     return result;
   }
 
@@ -420,7 +432,7 @@ export class CustomRecipeDeliveryService {
         ? new Date(now.getTime() + autoCompleteDays * 24 * 60 * 60 * 1000)
         : null;
 
-    return this.prisma.$transaction(async (tx) => {
+    const batchResult = await this.prisma.$transaction(async (tx) => {
       /** 同一订单的批次交付串行化。 */
       await tx.$queryRaw`
         SELECT id FROM "custom_recipe_order" WHERE id = ${order.id} FOR UPDATE
@@ -488,6 +500,10 @@ export class CustomRecipeDeliveryService {
         legacyRecipeId: recipes[0].id,
       };
     });
+
+    await this.uploadWechatVirtualShippingSafely(order.id);
+
+    return batchResult;
   }
 
   /**
@@ -980,6 +996,69 @@ export class CustomRecipeDeliveryService {
     });
   }
 
+  /**
+   * 从交付记录解析「交付那一刻的版本」（2026-10-24 · 定制交付页重构）。
+   *
+   * 顾客从交付页点「自己做」或「订购成品」时，必须看到**交付给他的那一版**，
+   * 而不是设计器里后来改出的最新版（后台改配方不会自动挂到已交付的单上）。
+   *
+   * 规则：
+   *   · 订单必须属于当前顾客，否则返回 null（不泄露"有没有交付"）；
+   *   · 多份批次先查明细，老单份交付再查 `custom_recipe_delivery`；
+   *   · 查不到就返回 null —— 调用方返回 404，**绝不回退最新版**。
+   */
+  async resolveDeliveredRecipeVersion(
+    input: {
+      orderNo: string;
+      recipeBusinessId: string;
+      customerId: string;
+    },
+    /**
+     * 员工端（STAFF/ADMIN）从订单中心点「看食谱」时用得上（2026-10-30）：
+     * 员工不是这张单的顾客，`customerId` 天然对不上。
+     * 放开归属校验**只对员工**生效，且入口本身已被 StaffGuard 挡过。
+     */
+    options: { staffBypass?: boolean } = {},
+  ): Promise<{ version: number; source: 'BATCH' | 'SINGLE' } | null> {
+    const orderNo = String(input.orderNo ?? '').trim();
+    const recipeBusinessId = String(input.recipeBusinessId ?? '').trim();
+    const customerId = String(input.customerId ?? '').trim();
+    if (!orderNo || !recipeBusinessId || !customerId) return null;
+
+    const order = await this.prisma.customRecipeOrder.findUnique({
+      where: { orderId: orderNo },
+      select: { id: true, customerId: true },
+    });
+    if (!order) return null;
+    if (!options.staffBypass && order.customerId !== customerId) return null;
+
+    const batchItem = await this.prisma.customRecipeDeliveryItem.findFirst({
+      where: {
+        batch: { orderId: order.id },
+        recipe: { recipeId: recipeBusinessId },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { recipeVersion: true },
+    });
+    if (batchItem) {
+      return { version: batchItem.recipeVersion, source: 'BATCH' };
+    }
+
+    const single = await this.prisma.customRecipeDelivery.findFirst({
+      where: {
+        orderId: order.id,
+        recipe: { recipeId: recipeBusinessId },
+      },
+      orderBy: { version: 'desc' },
+      select: { recipeVersion: true },
+    });
+    if (single && typeof single.recipeVersion === 'number') {
+      return { version: single.recipeVersion, source: 'SINGLE' };
+    }
+
+    return null;
+  }
+
   // ==================== 内部 ====================
 
   /**
@@ -1112,6 +1191,31 @@ export class CustomRecipeDeliveryService {
    * 老单份与多份批次共用这一段，避免两处各写一遍状态写入
    * （GD-01 源码守卫按 `customRecipeOrder.update` 计数，重复写会直接超基线）。
    */
+  /**
+   * 交付成功后上报微信「虚拟发货」。
+   *
+   * 失败不回滚交付：食谱已经交出去了，微信上报失败只记录日志，
+   * 后续可在微信后台手工补，或重新交付时再试（订单上有幂等标记）。
+   */
+  private async uploadWechatVirtualShippingSafely(orderId: string) {
+    if (!this.wechatShipping) return;
+    try {
+      const result =
+        await this.wechatShipping.uploadVirtualForCustomRecipeOrder(orderId);
+      if (!result.success && !result.skipped) {
+        this.logger.warn(
+          `[WechatVirtualShipping] 订单 ${orderId} 上报失败：${result.message}`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `[WechatVirtualShipping] 订单 ${orderId} 上报异常：${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
   private async markOrderCompleted(
     tx: Prisma.TransactionClient,
     orderId: string,
@@ -1473,6 +1577,8 @@ export class CustomRecipeDeliveryService {
           : null,
         // 2026-10-18：核心营养 8 项（交付第 1 页的 4×2 网格）
         macros: toSnapshotMacros(input.recipe.nutritionDetailedData),
+        // 2026-10-28：宏量报告行原样冻结，供「历史订单食谱」回看交付当时那张表
+        reportRows: toSnapshotReportRows(input.recipe.nutritionDetailedData),
       },
       /**
        * 采购清单（批次 2.2）—— 这套算法原先在**小程序页面里**，
@@ -1670,6 +1776,33 @@ function round1(value: number): number {
  *
  * ⚠️ 缺失就给 null，不给 0 —— `0%` 和"没算"是两回事。
  */
+function toSnapshotReportRows(
+  detailed: unknown,
+): Array<{
+  key?: string;
+  name: string;
+  dryMatterLabel: string;
+  energyPercentLabel: string;
+  weightPercentLabel: string;
+}> | null {
+  const report =
+    detailed && typeof detailed === 'object'
+      ? (detailed as Record<string, any>).report
+      : null;
+  const rows = report?.macroRows;
+  if (!Array.isArray(rows)) return null;
+  const normalized = rows
+    .map((row: any) => ({
+      ...(typeof row?.key === 'string' ? { key: row.key } : {}),
+      name: String(row?.name ?? '').trim(),
+      dryMatterLabel: String(row?.dryMatterLabel ?? '').trim(),
+      energyPercentLabel: String(row?.energyPercentLabel ?? '').trim(),
+      weightPercentLabel: String(row?.weightPercentLabel ?? '').trim(),
+    }))
+    .filter((row) => row.name);
+  return normalized.length > 0 ? normalized : null;
+}
+
 function toSnapshotMacros(
   detailed: unknown,
 ): Record<string, number | null> | null {

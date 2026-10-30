@@ -17,19 +17,23 @@ describe('我的订单合并补剂订单', () => {
   const template = source.slice(0, source.indexOf('<script setup'))
   const meSource = readPage('src/pages/me/index.vue')
 
-  it('筛选项统一成 6 个状态 + 全部，且不再用旧的鲜食口径文案', () => {
-    const labels = ['全部', '未付款', '已付款', '已发货', '已完成', '售后中', '已取消']
+  it('状态筛选精简为 6 个，并按订单类型换词（2026-10-24）', () => {
+    // 全部 / 待付款 / 进行中 / 待收货·待确认 / 已完成 / 售后中
+    expect(source).toMatch(
+      /'ALL',\s*'PENDING_PAYMENT',\s*'IN_PROGRESS',\s*'WAIT_RECEIVE',\s*'COMPLETED',\s*'AFTERSALE'/,
+    )
+    // 同一档位在三种订单上的说法不同
+    expect(source).toContain("IN_PROGRESS: '制作中'")
+    expect(source).toContain("WAIT_RECEIVE: '待收货'")
+    expect(source).toContain("IN_PROGRESS: '分装中'")
+    expect(source).toContain("IN_PROGRESS: '定制中'")
+    expect(source).toContain("WAIT_RECEIVE: '待确认'")
 
-    labels.forEach((label) => {
-      expect(source, `缺少筛选项 ${label}`).toContain(`label: '${label}'`)
-    })
-
-    // 旧文案不能残留，否则两个列表会对同一个状态叫两个名字
-    expect(source).not.toContain("label: '待付款'")
-    expect(source).not.toContain("label: '已付款/制作中'")
-    expect(source).not.toContain("label: '待收货'")
-    expect(source).not.toContain("label: '已收货'")
-    expect(source).not.toContain("label: '已取消/退款'")
+    // 旧的七档文案不再作为 Tab 出现
+    expect(source).not.toContain("label: '未付款'")
+    expect(source).not.toContain("label: '已付款'")
+    expect(source).not.toContain("label: '已发货'")
+    expect(source).not.toContain("label: '已取消'")
   })
 
   it('鲜食状态分组原样保留，补剂补上 PACKING / PACKED', () => {
@@ -66,8 +70,12 @@ describe('我的订单合并补剂订单', () => {
     expect(source).toContain('fetchSupplementOrders(')
     expect(source).toContain('fetchAllSupplementOrders')
     expect(source).toContain('SUPPLEMENT_ORDER_PAGE_SIZE')
-    // 管理员视角只看全部顾客的鲜食订单，不该混进管理员自己的补剂订单
-    expect(source).toMatch(/viewAllOrders\.value\s*\n?\s*\? Promise\.resolve\(\[\]\)/)
+    // 2026-10-25：viewAll 是管理员测试视图，补剂也要把当前管理员自己的测试单带进来
+    expect(source).not.toMatch(
+      /viewAllOrders\.value\s*\n?\s*\? Promise\.resolve\(\[\]\)/,
+    )
+    expect(template).toContain('全部顾客鲜食')
+    expect(template).toContain('我的测试单')
   })
 
   it('补剂卡片展示订单号、概要、金额与状态，并复用补剂自己的支付流程', () => {
@@ -84,9 +92,11 @@ describe('我的订单合并补剂订单', () => {
     expect(template).toContain('order.status === \'PENDING_PAYMENT\'')
   })
 
-  it('补剂没有详情页，点卡片不跳转；鲜食点击行为不变', () => {
+  it('补剂有详情页：卡片和「查看详情」都跳转；鲜食点击行为不变', () => {
+    expect(source).toContain('function viewSupplementDetail')
+    expect(source).toContain('url: `/pages/supplement-order-detail/index?orderId=')
     expect(source).toContain('function handleOrderTap(order: UnifiedOrder)')
-    expect(source).toContain("if (order._orderType !== 'food') return")
+    expect(source).toContain("_orderType === 'supplement'")
     expect(source).toContain('viewOrder(order.id)')
     expect(source).toContain('url: `/pages/order-detail/index?id=${orderId}`')
   })

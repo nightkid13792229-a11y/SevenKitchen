@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SevenKitchen · 定制食谱退款页原型</title>
+<style>
+  :root {
+    --ink: #1e3a2f;
+    --ink-2: #3c4a3d;
+    --muted: #8a7a63;
+    --muted-2: #a79b86;
+    --gold: #d8bc85;
+    --gold-soft: #f1e5cc;
+    --cream: #fffdf7;
+    --bg: #f7f8f2;
+    --line: #e8e2d2;
+    --line-soft: #f0ebdf;
+    --green-soft: #eef3e8;
+    --warm-soft: #fbf3e5;
+    --danger: #b45309;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background:
+      radial-gradient(circle at 12% 8%, rgba(216, 188, 133, 0.13), transparent 28%),
+      radial-gradient(circle at 88% 92%, rgba(30, 58, 47, 0.07), transparent 30%),
+      #edf0e5;
+    color: var(--ink);
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .canvas { width: 1400px; padding: 44px 56px 34px; }
+  .eyebrow {
+    font-size: 10px; letter-spacing: 0.22em; color: var(--muted);
+    text-transform: uppercase; font-weight: 700;
+  }
+  h1 { margin: 8px 0 6px; font-size: 28px; letter-spacing: -0.02em; }
+  .sub { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.6; }
+  .top-note {
+    display: inline-flex; align-items: center; gap: 7px;
+    margin-top: 14px; padding: 7px 11px; border-radius: 999px;
+    background: rgba(255, 253, 247, 0.72); border: 1px solid var(--line);
+    font-size: 10px; color: var(--muted);
+  }
+  .top-note i { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); display: inline-block; }
+  .phones { display: flex; gap: 38px; align-items: flex-start; margin-top: 30px; }
+  .phone-wrap { width: 370px; }
+  .phone {
+    position: relative; width: 360px; height: 780px;
+    background: var(--bg); border: 7px solid #1d2923; border-radius: 38px;
+    box-shadow: 0 22px 55px rgba(30, 46, 36, 0.16), 0 3px 8px rgba(30, 46, 36, 0.08);
+    overflow: hidden;
+  }
+  .phone::after {
+    content: ""; position: absolute; left: 50%; bottom: 7px; transform: translateX(-50%);
+    width: 96px; height: 4px; border-radius: 99px; background: rgba(30, 46, 36, 0.2);
+  }
+  .statusbar {
+    height: 27px; padding: 8px 19px 0; display: flex; align-items: flex-start;
+    justify-content: space-between; font-size: 9px; color: var(--ink);
+    font-weight: 700; letter-spacing: 0.02em;
+  }
+  .statusbar .right { letter-spacing: 0.1em; font-size: 8px; }
+  .nav {
+    height: 40px; padding: 0 16px; display: flex; align-items: center;
+    justify-content: space-between; font-size: 15px; font-weight: 700;
+  }
+  .nav .back { font-size: 24px; font-weight: 400; line-height: 1; margin-top: -2px; color: var(--ink); }
+  .nav .more { font-size: 16px; color: var(--muted-2); letter-spacing: 1px; }
+  .screen { padding: 8px 14px 108px; height: calc(100% - 67px); overflow: hidden; }
+  .card {
+    background: var(--cream); border: 1px solid var(--line); border-radius: 16px;
+    padding: 14px;
+  }
+  .hero {
+    display: flex; gap: 12px; align-items: flex-start;
+    padding: 15px 14px; border-radius: 16px;
+    background: linear-gradient(135deg, #eef3e8 0%, #f7f9f1 100%);
+    border: 1px solid #dfe7d4;
+  }
+  .hero--warm { background: linear-gradient(135deg, #fbf3e5 0%, #fffaf1 100%); border-color: #eddfc6; }
+  .hero-icon {
+    width: 34px; height: 34px; flex: none; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--ink); color: var(--gold-soft); font-size: 16px; font-weight: 800;
+    box-shadow: 0 4px 10px rgba(30, 58, 47, 0.16);
+  }
+  .hero--warm .hero-icon { background: var(--gold); color: var(--ink); }
+  .hero-title { display: flex; align-items: center; gap: 7px; font-size: 15px; font-weight: 800; letter-spacing: -0.01em; }
+  .badge {
+    display: inline-flex; align-items: center; height: 17px; padding: 0 7px;
+    border-radius: 999px; font-size: 9px; font-weight: 700; letter-spacing: 0.02em;
+    background: var(--ink); color: var(--gold-soft);
+  }
+  .badge--gold { background: var(--gold-soft); color: #7a5a20; border: 1px solid #e6d3ae; }
+  .hero-desc { margin-top: 5px; font-size: 10px; color: var(--muted); line-height: 1.55; }
+  .section { margin-top: 11px; }
+  .section-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 7px; padding: 0 2px;
+  }
+  .section-title { font-size: 12px; font-weight: 800; color: var(--ink); }
+  .section-hint { font-size: 9px; color: var(--muted-2); }
+  .order-card { display: flex; gap: 10px; align-items: center; }
+  .dog-avatar {
+    width: 42px; height: 42px; flex: none; border-radius: 50%;
+    background: linear-gradient(145deg, #d9b98a, #b99561);
+    color: #fffaf1; display: flex; align-items: center; justify-content: center;
+    font-size: 15px; font-weight: 800; box-shadow: inset 0 0 0 2px rgba(255,255,255,0.32);
+  }
+  .order-main { flex: 1; min-width: 0; }
+  .order-name { font-size: 13px; font-weight: 800; }
+  .order-meta { margin-top: 2px; font-size: 9px; color: var(--muted); }
+  .order-meta--sub { margin-top: 1px; font-size: 8px; color: var(--muted-2); }
+  .order-amount { text-align: right; }
+  .order-amount .label { font-size: 8px; color: var(--muted-2); }
+  .order-amount .value { margin-top: 2px; font-size: 15px; font-weight: 800; }
+  .amount-card {
+    margin-top: 11px; padding: 14px 16px; border-radius: 16px;
+    background: var(--cream); border: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .amount-label { font-size: 10px; color: var(--muted); }
+  .amount-value { margin-top: 3px; font-size: 34px; font-weight: 800; letter-spacing: -0.04em; line-height: 1; }
+  .amount-value small { font-size: 16px; font-weight: 700; letter-spacing: 0; margin-right: 2px; }
+  .amount-side { text-align: right; }
+  .amount-side .line { font-size: 9px; color: var(--muted); line-height: 1.55; }
+  .amount-side .line strong { color: var(--ink); font-weight: 700; }
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; }
+  .chip {
+    height: 27px; padding: 0 10px; border-radius: 999px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid var(--line); background: var(--cream);
+    font-size: 10px; color: var(--muted); white-space: nowrap;
+  }
+  .chip--on { background: var(--ink); border-color: var(--ink); color: var(--gold-soft); font-weight: 700; }
+  .field {
+    width: 100%; min-height: 70px; resize: none; outline: none;
+    border: 1px solid var(--line); border-radius: 12px; background: #fffefb;
+    padding: 10px 11px; font-size: 10px; color: var(--ink); line-height: 1.6;
+    font-family: inherit;
+  }
+  .field::placeholder { color: #b8ae9b; }
+  .field-foot { display: flex; justify-content: flex-end; margin-top: 5px; font-size: 8px; color: var(--muted-2); }
+  .upload-row { display: flex; gap: 7px; align-items: center; }
+  .upload-tile {
+    width: 50px; height: 50px; border-radius: 10px; border: 1px dashed #d7c9b0;
+    background: #fffdf8; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 2px; color: var(--muted-2); font-size: 15px;
+  }
+  .upload-tile small { font-size: 7px; color: var(--muted-2); }
+  .upload-hint { font-size: 8px; color: var(--muted-2); line-height: 1.5; max-width: 150px; }
+  .notice {
+    margin-top: 11px; padding: 10px 12px; border-radius: 12px;
+    background: #f4f1e7; border: 1px solid #ebe4d4;
+    font-size: 9px; line-height: 1.6; color: var(--muted);
+  }
+  .notice strong { color: var(--ink-2); font-weight: 700; }
+  .service-line { text-align: center; font-size: 9px; color: var(--muted-2); margin-bottom: 7px; }
+  .service-line b { color: var(--ink); font-weight: 700; }
+  .bottom-bar {
+    position: absolute; left: 0; right: 0; bottom: 0; padding: 10px 14px 16px;
+    background: linear-gradient(180deg, rgba(247,248,242,0) 0%, rgba(247,248,242,0.92) 25%, #f7f8f2 55%);
+  }
+  .btn {
+    width: 100%; height: 48px; border: 0; border-radius: 14px;
+    background: linear-gradient(135deg, #1e3a2f 0%, #2b5040 100%);
+    color: var(--gold-soft); font-size: 14px; font-weight: 800; letter-spacing: 0.01em;
+    box-shadow: 0 8px 18px rgba(30, 58, 47, 0.2);
+    font-family: inherit;
+  }
+  .btn small { font-weight: 600; opacity: 0.8; margin-left: 5px; }
+  .btn--gold { background: linear-gradient(135deg, #e7d3a5 0%, #d8bc85 100%); color: var(--ink); }
+  .btn--ghost {
+    height: 36px; background: transparent; color: var(--ink); font-size: 11px;
+    border: 1px solid var(--line); box-shadow: none; margin-top: 7px; font-weight: 700;
+  }
+  .timeline { padding: 4px 2px 0; }
+  .t-row { display: flex; gap: 10px; min-height: 42px; position: relative; }
+  .t-rail { width: 16px; flex: none; display: flex; flex-direction: column; align-items: center; }
+  .t-dot {
+    width: 16px; height: 16px; border-radius: 50%; border: 1px solid #d9cfbd;
+    background: #fffdf7; display: flex; align-items: center; justify-content: center;
+    font-size: 8px; color: transparent; z-index: 1;
+  }
+  .t-line { width: 1px; flex: 1; background: #e5ddcd; margin: 3px 0; }
+  .t-row--done .t-dot { background: #6fb3a0; border-color: #6fb3a0; color: #fff; }
+  .t-row--active .t-dot { background: var(--gold); border-color: var(--gold); color: var(--ink); box-shadow: 0 0 0 4px rgba(216,188,133,0.18); }
+  .t-row--done .t-line { background: #b9d7cb; }
+  .t-body { padding-top: 1px; }
+  .t-title { font-size: 10px; font-weight: 700; color: var(--ink); }
+  .t-meta { margin-top: 2px; font-size: 8px; color: var(--muted-2); }
+  .result-hero {
+    padding: 18px 16px; border-radius: 18px;
+    background: linear-gradient(135deg, #eef3e8 0%, #f8faf2 100%);
+    border: 1px solid #dfe7d4;
+  }
+  .result-hero--warm {
+    background: linear-gradient(135deg, #fbf3e5 0%, #fffaf1 100%);
+    border-color: #eddfc6;
+  }
+  .result-hero--warm .result-icon { background: var(--gold); color: var(--ink); }
+  .result-icon {
+    width: 40px; height: 40px; border-radius: 50%; background: var(--ink); color: var(--gold-soft);
+    display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 800;
+    margin-bottom: 10px;
+  }
+  .result-title { font-size: 17px; font-weight: 800; letter-spacing: -0.01em; }
+  .result-desc { margin-top: 5px; font-size: 10px; color: var(--muted); line-height: 1.6; }
+  .result-amount { margin-top: 12px; font-size: 28px; font-weight: 800; letter-spacing: -0.03em; }
+  .result-amount small { font-size: 14px; margin-right: 2px; }
+  .result-chip { display: inline-flex; margin-left: 7px; vertical-align: 3px; }
+  .screen--b .section { margin-top: 9px; }
+  .screen--b .hero { padding: 12px 13px; }
+  .screen--b .card { padding: 12px; }
+  .screen--b .amount-card { padding: 12px 14px; margin-top: 9px; }
+  .screen--b .field { min-height: 56px; }
+  .screen--b .notice { margin-top: 9px; padding: 8px 11px; font-size: 8.5px; }
+  .screen--b .upload-tile { width: 46px; height: 46px; }
+  .caption { padding: 14px 4px 0; }
+  .caption b { display: block; font-size: 12px; letter-spacing: 0.01em; }
+  .caption span { display: block; margin-top: 4px; font-size: 10px; color: var(--muted); line-height: 1.55; }
+  .caption em { font-style: normal; color: var(--gold); font-weight: 700; }
+  .foot {
+    margin-top: 30px; padding-top: 14px; border-top: 1px solid rgba(138, 122, 99, 0.16);
+    display: flex; justify-content: space-between; gap: 20px;
+    font-size: 9px; color: var(--muted-2); line-height: 1.6;
+  }
+  .foot b { color: var(--muted); font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="canvas">
+  <div class="eyebrow">SevenKitchen · mini program prototype</div>
+  <h1>定制食谱 · 退款</h1>
+  <p class="sub">两种进入场景，一套退款进度。未开始制作走全额原路退回；已交付走人工审核，不预先承诺金额。</p>
+  <div class="top-note"><i></i> 原型示意 · 信息结构确认用，不是最终 UI</div>
+
+  <div class="phones">
+    <!-- A: full refund before production -->
+    <figure class="phone-wrap" style="margin:0">
+      <div class="phone">
+        <div class="statusbar"><span>9:41</span><span class="right">● ● ▮</span></div>
+        <div class="nav"><span class="back">‹</span><span>退款</span><span class="more">···</span></div>
+        <div class="screen">
+          <div class="hero">
+            <div class="hero-icon">¥</div>
+            <div>
+              <div class="hero-title">可全额退款 <span class="badge">未开始制作</span></div>
+              <div class="hero-desc">营养师还未开始设计这份食谱，定制费将原路退回微信。</div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="order-card card">
+              <div class="dog-avatar">豆</div>
+              <div class="order-main">
+                <div class="order-name">豆豆 · 定制食谱</div>
+                <div class="order-meta">1 份 · 付款 10 月 25 日 10:12</div>
+                <div class="order-meta order-meta--sub">订单 CR202610250001</div>
+              </div>
+              <div class="order-amount"><div class="label">实付</div><div class="value">¥299</div></div>
+            </div>
+          </div>
+
+          <div class="amount-card">
+            <div>
+              <div class="amount-label">退款金额</div>
+              <div class="amount-value"><small>¥</small>299</div>
+            </div>
+            <div class="amount-side">
+              <div class="line"><strong>微信原路退回</strong></div>
+              <div class="line">零钱即时 · 银行卡 0-3 个工作日</div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-head">
+              <span class="section-title">退款原因 <span class="section-hint">（选填）</span></span>
+            </div>
+            <div class="chips">
+              <span class="chip chip--on">时间不合适</span>
+              <span class="chip">不想要了</span>
+              <span class="chip">想换方案</span>
+              <span class="chip">其他</span>
+            </div>
+          </div>
+
+          <div class="notice">
+            退款后这张订单会取消。已上传的检测报告仍会保留在豆豆的健康档案里，下次定制可以继续用。
+          </div>
+        </div>
+        <div class="bottom-bar">
+          <div class="service-line">有问题？<b>联系 Seven爸爸</b></div>
+          <button class="btn">确认退款 <small>¥299</small></button>
+        </div>
+      </div>
+      <figcaption class="caption">
+        <b>A · 未开始制作 <em>全额退款</em></b>
+        <span>金额、原因、退款后的影响一屏说清；原因选填，不增加退款门槛。</span>
+      </figcaption>
+    </figure>
+
+    <!-- B: after delivery, manual review -->
+    <figure class="phone-wrap" style="margin:0">
+      <div class="phone">
+        <div class="statusbar"><span>9:41</span><span class="right">● ● ▮</span></div>
+        <div class="nav"><span class="back">‹</span><span>申请退款</span><span class="more">···</span></div>
+        <div class="screen screen--b">
+          <div class="hero hero--warm">
+            <div class="hero-icon">!</div>
+            <div>
+              <div class="hero-title">已交付 <span class="badge badge--gold">需要审核</span></div>
+              <div class="hero-desc">食谱已经交付。退款会根据实际使用情况和你的说明审核，不是一键全额。</div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="order-card card">
+              <div class="dog-avatar">豆</div>
+              <div class="order-main">
+                <div class="order-name">豆豆 · 定制食谱</div>
+                <div class="order-meta">1 份 · 付款 10 月 25 日 10:12</div>
+                <div class="order-meta order-meta--sub">订单 CR202610250001 · 10 月 24 日已交付</div>
+              </div>
+              <div class="order-amount"><div class="label">实付</div><div class="value">¥299</div></div>
+            </div>
+          </div>
+
+          <div class="amount-card">
+            <div>
+              <div class="amount-label">退款金额</div>
+              <div class="amount-value" style="font-size:20px; letter-spacing:-0.02em; margin-top:6px;">待Seven爸爸确认</div>
+            </div>
+            <div class="amount-side">
+              <div class="line">最终金额以审核为准</div>
+              <div class="line">审核通过后原路退回</div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-head">
+              <span class="section-title">退款原因 <span class="section-hint">（必选）</span></span>
+            </div>
+            <div class="chips">
+              <span class="chip chip--on">与预期不符</span>
+              <span class="chip">口味不合适</span>
+              <span class="chip">狗狗不适应</span>
+              <span class="chip">其他</span>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-head"><span class="section-title">具体情况 <span class="section-hint">（必填）</span></span></div>
+            <textarea class="field" placeholder="比如：狗狗吃了两天不太适应，或和沟通的方案不一致……"></textarea>
+            <div class="field-foot">0 / 200</div>
+          </div>
+
+          <div class="section">
+            <div class="section-head"><span class="section-title">上传照片 <span class="section-hint">（选填，最多 6 张）</span></span></div>
+            <div class="upload-row">
+              <div class="upload-tile">＋<small>添加</small></div>
+              <div class="upload-hint">食谱、实际喂食情况或狗狗状态的照片，能帮助客服更快判断。</div>
+            </div>
+          </div>
+
+          <div class="notice">
+            提交后一个工作日内处理。
+          </div>
+        </div>
+        <div class="bottom-bar">
+          <div class="service-line">拿不准？<b>联系Seven爸爸</b></div>
+          <button class="btn btn--gold">提交退款申请</button>
+        </div>
+      </div>
+      <figcaption class="caption">
+        <b>B · 已交付 <em>人工审核</em></b>
+        <span>原因 + 描述 + 照片；金额不预先承诺，避免顾客以为提交即退款。</span>
+      </figcaption>
+    </figure>
+
+    <!-- C: progress -->
+    <figure class="phone-wrap" style="margin:0">
+      <div class="phone">
+        <div class="statusbar"><span>9:41</span><span class="right">● ● ▮</span></div>
+        <div class="nav"><span class="back">‹</span><span>退款申请进度</span><span class="more">···</span></div>
+        <div class="screen">
+          <div class="result-hero result-hero--warm">
+            <div class="result-icon">审</div>
+            <div class="result-title">退款申请审核中</div>
+            <div class="result-desc">已收到申请，Seven爸爸会在 1 个工作日内处理。</div>
+            <div class="result-amount" style="font-size:20px; letter-spacing:-0.02em;">待确认 <span class="badge badge--gold result-chip">已交付</span></div>
+          </div>
+
+          <div class="section">
+            <div class="card">
+              <div class="timeline">
+                <div class="t-row t-row--done">
+                  <div class="t-rail"><div class="t-dot">✓</div><div class="t-line"></div></div>
+                  <div class="t-body"><div class="t-title">申请已提交</div><div class="t-meta">今天 10:24</div></div>
+                </div>
+                <div class="t-row t-row--active">
+                  <div class="t-rail"><div class="t-dot">•</div><div class="t-line"></div></div>
+                  <div class="t-body"><div class="t-title">Seven爸爸审核中</div><div class="t-meta">1 个工作日内处理</div></div>
+                </div>
+                <div class="t-row">
+                  <div class="t-rail"><div class="t-dot">•</div><div class="t-line"></div></div>
+                  <div class="t-body"><div class="t-title">审核通过后退款</div><div class="t-meta">审核通过后原路发起</div></div>
+                </div>
+                <div class="t-row">
+                  <div class="t-rail"><div class="t-dot">•</div></div>
+                  <div class="t-body"><div class="t-title">微信退款到账</div><div class="t-meta">零钱即时 · 银行卡 0-3 个工作日</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="card">
+              <div class="order-card" style="padding:0">
+                <div class="dog-avatar">豆</div>
+                <div class="order-main">
+                  <div class="order-name">豆豆 · 定制食谱</div>
+                  <div class="order-meta">订单 CR202610250001</div>
+                  <div class="order-meta order-meta--sub">付款 10 月 25 日 10:12 · 10 月 24 日已交付</div>
+                </div>
+                <div class="order-amount"><div class="label">实付</div><div class="value">¥299</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="notice">
+            审核通过后才会发起退款；未通过会说明原因。到账时间以微信为准。
+          </div>
+        </div>
+        <div class="bottom-bar">
+          <div class="service-line">退款有问题？<b>联系Seven爸爸</b></div>
+          <button class="btn">查看订单</button>
+        </div>
+      </div>
+      <figcaption class="caption">
+        <b>C · 已交付 <em>审核进度</em></b>
+        <span>先审核、再退款；A 的全额退款跳过审核，直接从“退款已发起”开始。</span>
+      </figcaption>
+    </figure>
+  </div>
+
+  <div class="foot">
+    <span><b>A / B / C 三屏是同一套组件：</b>订单摘要、金额卡、原因 chip、说明/照片、进度时间轴；正式开发时复用，不各写一套。</span>
+    <span><b>待确认的产品口径：</b>A 和现有「取消并退款」是同一笔钱，正式做时建议只留一个入口；B 需要后端新增退款申请记录与审核状态；C 先展示审核，审核通过后再进入微信退款。</span>
+  </div>
+</div>
+</body>
+</html>

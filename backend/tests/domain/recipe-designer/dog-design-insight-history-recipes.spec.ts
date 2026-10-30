@@ -139,7 +139,8 @@ describe('DogDesignInsight · 历史食谱清单', () => {
       [
         {
           id: 'cro-1',
-          status: 'DELIVERED',
+          // 2026-10-28：只有「已完成」的定制单进历史
+          status: 'COMPLETED',
           createdAt: '2026-10-01T00:00:00.000Z',
           deliveredAt: '2026-10-05T00:00:00.000Z',
           recipe: {
@@ -188,7 +189,7 @@ describe('DogDesignInsight · 历史食谱清单', () => {
         name: '定制鲜食 A',
         kind: 'CUSTOM',
         date: '2026-10-05T00:00:00.000Z',
-        status: 'DELIVERED',
+        status: 'COMPLETED',
         ingredients: [{ name: '鸭肉', amount: '100g' }],
         macros: [
           {
@@ -280,7 +281,8 @@ describe('DogDesignInsight · 历史食谱清单', () => {
       [
         {
           id: 'cro-1',
-          status: 'DELIVERED',
+          // 只有完成的定制单进历史（2026-10-28）
+          status: 'COMPLETED',
           createdAt: '2026-10-01T00:00:00.000Z',
           recipe: { id: 'recipe-4', name: '最新的定制' },
         },
@@ -433,6 +435,95 @@ describe('DogDesignInsight · 历史食谱清单', () => {
         macros: [],
       },
     ]);
+  });
+
+  /**
+   * 2026-10-28：私密 Recipe 行是活行（改名、重新生成快照都会就地覆盖它），
+   * 历史必须读**交付快照**，否则「历史里写着鸭肉、点开原料还是兔里脊」。
+   */
+  it('★ 定制单优先用交付快照的名字 / 原料 / 宏量，而不是被改过的活行', () => {
+    const [entry] = buildDogHistoryRecipes(
+      [],
+      [
+        {
+          id: 'cro-1',
+          status: 'COMPLETED',
+          createdAt: '2026-10-01T00:00:00.000Z',
+          deliveredAt: '2026-10-02T00:00:00.000Z',
+          // 活行：改名 + 换原料之后的样子
+          recipe: {
+            id: 'recipe-2',
+            name: '鸭肉高蛋白定制餐',
+            items: [
+              { exampleWeight: 150, ingredient: { name: '鸭胸' } },
+            ],
+          },
+          // 交付快照：交付那一刻的真实内容
+          deliveredSnapshot: {
+            recipe: {
+              name: '兔肉高蛋白定制餐',
+              items: [
+                { name: '兔里脊', weightG: 155 },
+                { name: '燕麦', weightG: 10 },
+              ],
+            },
+            nutrition: {
+              reportRows: [
+                {
+                  key: 'crudeProtein',
+                  name: '蛋白质',
+                  dryMatterLabel: '52.85%',
+                  energyPercentLabel: '43.23%',
+                  weightPercentLabel: '14.21%',
+                },
+              ],
+            },
+          },
+        },
+      ],
+    );
+
+    expect(entry.name).toBe('兔肉高蛋白定制餐');
+    expect(entry.ingredients).toEqual([
+      { name: '兔里脊', amount: '155g' },
+      { name: '燕麦', amount: '10g' },
+    ]);
+    expect(entry.macros).toEqual([
+      {
+        name: '蛋白质',
+        dryMatter: '52.85%',
+        energyPercent: '43.23%',
+        weightPercent: '14.21%',
+      },
+    ]);
+  });
+
+  /**
+   * 老板 2026-10-28 口径：交付 ≠ 吃过。
+   * 顾客不认可、正在改的那份可能连一顿都没做过，不能算「历史」。
+   */
+  it('★ 只交付、还没完成的定制单不算历史（正在调整的那一份）', () => {
+    const result = buildDogHistoryRecipes(
+      [],
+      [
+        {
+          id: 'cro-delivered',
+          status: 'DELIVERED',
+          createdAt: '2026-10-27T15:00:00.000Z',
+          deliveredAt: '2026-10-27T15:15:00.000Z',
+          recipe: { id: 'recipe-rabbit', name: '兔肉高蛋白定制餐' },
+        },
+        {
+          id: 'cro-completed',
+          status: 'COMPLETED',
+          createdAt: '2026-09-01T00:00:00.000Z',
+          deliveredAt: '2026-09-02T00:00:00.000Z',
+          recipe: { id: 'recipe-old', name: '以前在用的一份' },
+        },
+      ],
+    );
+
+    expect(result.map((row) => row.name)).toEqual(['以前在用的一份']);
   });
 
   it('没有任何历史时返回空数组', () => {

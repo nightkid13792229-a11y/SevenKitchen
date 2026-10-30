@@ -7,12 +7,13 @@
       </div>
       <div class="header-actions">
         <el-button
-          v-if="designModeFilter === 'CATALOG'"
+          v-if="filters.mode === 'CATALOG' || pendingReferenceDogId"
           type="primary"
           :icon="Plus"
-          @click="openCreateDialog"
+          :loading="creating"
+          @click="createSeries"
         >
-          新建设计系列
+          新建食谱
         </el-button>
       </div>
     </div>
@@ -83,7 +84,7 @@
           <span>食谱设计</span>
           <div class="card-header-controls">
             <el-input
-              v-model="searchKeyword"
+              v-model="filters.search"
               class="series-search"
               placeholder="搜索系列名称 / 原料 / 参考爱犬"
               clearable
@@ -92,24 +93,45 @@
                 <el-icon><Search /></el-icon>
               </template>
             </el-input>
-            <el-radio-group v-model="designModeFilter" size="small" @change="onDesignModeChange">
-              <el-radio-button value="CATALOG">产品线食谱</el-radio-button>
-              <el-radio-button value="ORDER">订单定制食谱</el-radio-button>
+            <el-radio-group v-model="filters.mode" size="small" @change="onDesignModeChange">
+              <el-radio-button
+                v-for="option in designModeOptions"
+                :key="option.value"
+                :value="option.value"
+              >{{ option.label }}</el-radio-button>
             </el-radio-group>
-            <el-radio-group v-model="statusFilter" size="small" @change="onStatusFilterChange">
-              <el-radio-button :value="undefined">全部</el-radio-button>
-              <el-radio-button value="DRAFT">草稿</el-radio-button>
-              <el-radio-button value="PUBLIC">已发布</el-radio-button>
-              <el-radio-button value="PRIVATE_CUSTOM">定制</el-radio-button>
+            <el-radio-group v-model="filters.status" size="small" @change="onStatusFilterChange">
+              <el-radio-button
+                v-for="option in statusFilterOptions"
+                :key="option.label"
+                :value="option.value"
+              >{{ option.label }}</el-radio-button>
+            </el-radio-group>
+            <!-- 2026-10-26 需求分类：按系列 / 按需求分类 两种看法，数据源互不影响 -->
+            <el-radio-group v-model="viewMode" size="small">
+              <el-radio-button value="SERIES">按系列</el-radio-button>
+              <el-radio-button value="TAXONOMY">按需求分类</el-radio-button>
             </el-radio-group>
           </div>
         </div>
       </template>
 
-      <el-empty v-if="loading && series.length === 0" description="加载中…" />
-      <el-empty v-else-if="!loading && series.length === 0" :description="emptyDescription" />
+      <TaxonomyView
+        v-if="viewMode === 'TAXONOMY'"
+        :design-mode="filters.mode"
+        :status="filters.status"
+      />
 
-      <div v-loading="loading" class="series-grid">
+      <el-empty
+        v-if="viewMode === 'SERIES' && loading && series.length === 0"
+        description="加载中…"
+      />
+      <el-empty
+        v-else-if="viewMode === 'SERIES' && !loading && series.length === 0"
+        :description="emptyDescription"
+      />
+
+      <div v-if="viewMode === 'SERIES'" v-loading="loading" class="series-grid">
         <div v-for="card in series" :key="card.id" class="series-card">
           <div class="series-card-head">
             <div class="series-name-wrap">
@@ -137,7 +159,7 @@
             </span>
             <span class="updated-at">更新于 {{ formatTime(card.updatedAt) }}</span>
           </div>
-          <div v-if="designModeFilter === 'ORDER'" class="order-meta">
+          <div v-if="filters.mode === 'ORDER'" class="order-meta">
             <el-tag size="small" type="success" effect="plain">订单定制</el-tag>
             <span v-if="card.orderNo">订单 {{ card.orderNo }}</span>
             <span v-if="card.orderDogName">🐶 {{ card.orderDogName }}</span>
@@ -176,7 +198,7 @@
             </div>
           </div>
 
-          <div v-if="designModeFilter === 'CATALOG'" class="release-progress">
+          <div v-if="filters.mode === 'CATALOG'" class="release-progress">
             <el-tag size="small" type="info" effect="plain">
               已发布 {{ stageProgressLabel(card) }} 阶段
             </el-tag>
@@ -197,11 +219,11 @@
               待重新发布
             </el-tag>
             <span class="release-progress-hint">
-              未发布的阶段可在「系列发布」里查看
+              未发布的阶段可在「发布 / 更新」里查看
             </span>
           </div>
 
-          <div v-if="designModeFilter === 'CATALOG'" class="series-card-actions">
+          <div v-if="filters.mode === 'CATALOG'" class="series-card-actions">
             <el-button size="small" text type="primary" @click="openSeriesReleaseDrawer(card)">{{ seriesReleaseEntryLabel(card) }}</el-button>
             <el-button size="small" text @click="handleCardCommand('duplicate', card)">复制系列</el-button>
             <el-button size="small" text @click="handleCardCommand('rename', card)">重命名</el-button>
@@ -209,62 +231,32 @@
           </div>
         </div>
       </div>
-      <div v-if="seriesHasMore" class="loadmore-tip">
-        <div ref="loadMoreSentinel" class="load-more-sentinel" />
-        <el-button size="small" text :loading="loadingMore" @click="loadSeries(false)">
-          {{ loadingMore ? '加载中…' : '加载更多系列' }}
-        </el-button>
+      <div
+        v-if="viewMode === 'SERIES' && seriesTotal > SERIES_PAGE_SIZE"
+        class="series-pagination"
+      >
+        <el-pagination
+          background
+          layout="prev, pager, next, total"
+          :total="seriesTotal"
+          :page-size="SERIES_PAGE_SIZE"
+          :current-page="filters.page"
+          @current-change="handleSeriesPageChange"
+        />
       </div>
     </el-card>
 
-    <!-- 新建系列 -->
-    <el-dialog v-model="createDialogVisible" title="新建设计系列" width="520px" @closed="resetCreateForm">
-      <el-form label-width="96px">
-        <el-form-item label="参考爱犬">
-          <el-select
-            v-model="createForm.referenceDogId"
-            filterable
-            remote
-            clearable
-            placeholder="可选：选择一位客户的爱犬（用于设计参考）"
-            :remote-method="searchDogs"
-            :loading="dogLoading"
-            style="width: 100%"
-            @change="handleReferenceDogChange"
-          >
-            <el-option
-              v-for="dog in dogOptions"
-              :key="dog.id"
-              :label="dogLabel(dog)"
-              :value="dog.id"
-            />
-          </el-select>
-          <div class="form-tip">可选的参考爱犬：进入配方编辑页后，可随时在「爱犬信息」面板设置或更换；该犬档案与 AI 建议仅作设计参考，发布后与犬解耦</div>
-        </el-form-item>
-        <el-form-item label="默认阶段">
-          <el-select v-model="createForm.scenario" clearable placeholder="默认：普通成年犬（110ME）" style="width: 100%">
-            <el-option
-              v-for="(label, key) in FEDIAF_DOG_SCENARIO_LABELS"
-              :key="key"
-              :label="label"
-              :value="key"
-            />
-          </el-select>
-          <div class="form-tip">选择参考爱犬后，会自动按它的生命阶段带出默认阶段；仍可在这里手动修改。</div>
-        </el-form-item>
-      </el-form>
-      <div class="form-tip create-name-tip">
-        创建时会自动生成临时名称（如「未命名系列 · 10-21 22:15」），可稍后在列表、编辑页或发布页改名。
-      </div>
-      <template #footer>
-        <el-button @click="createDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="creating" @click="createSeries">创建</el-button>
-      </template>
-    </el-dialog>
-
     <!-- 重命名 -->
     <el-dialog v-model="renameDialogVisible" title="重命名系列" width="420px">
-      <el-input v-model="renameForm.name" maxlength="60" show-word-limit />
+      <el-input
+        v-model="renameForm.name"
+        maxlength="12"
+        show-word-limit
+        placeholder="例如：均衡营养|三文鱼南瓜"
+      />
+      <div class="form-tip">
+        价值点在前、食材在后，最多 12 个字——多了标签印不下。
+      </div>
       <template #footer>
         <el-button @click="renameDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="renaming" @click="confirmRename">保存</el-button>
@@ -310,6 +302,7 @@
       :series-name="releaseDrawerSeriesName"
       @released="handleSeriesReleased"
       @updated="handleSeriesUpdated"
+      @saved="handleSeriesUpdated"
     />
   </div>
 </template>
@@ -321,6 +314,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { MoreFilled, Plus, Search } from '@element-plus/icons-vue'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import { resolveCopySourceStages } from '@/utils/recipeDesigner/copySourceStages'
+import { useFilterQueryState } from '@/composables/useFilterQueryState'
 import { resolveDogScenarioFromDetail } from '@/utils/recipeDesigner/dogScenario'
 import {
   buildTemporarySeriesName,
@@ -328,8 +322,8 @@ import {
 } from '@/utils/recipeDesigner/seriesName'
 import { dogApi } from '@/api/dogs'
 import { customRecipeApi } from '@/api/customRecipe'
-import type { DogProfile } from '@/types/dog'
 import SeriesReleaseDrawer from './components/SeriesReleaseDrawer.vue'
+import TaxonomyView from './components/TaxonomyView.vue'
 import {
   FEDIAF_DOG_SCENARIO_LABELS,
   type FediafDogScenario,
@@ -352,25 +346,49 @@ const multiOrderProgress = ref<{
 const entryOrderId = ref('')
 
 const loading = ref(false)
-const loadingMore = ref(false)
 const creating = ref(false)
 const renaming = ref(false)
 const series = ref<RecipeDesignerSeriesCard[]>([])
-const designModeFilter = ref<'CATALOG' | 'ORDER'>('CATALOG')
-const statusFilter = ref<RecipeDesignerSeriesStatusFilter | undefined>(undefined)
-const searchKeyword = ref('')
-const seriesPage = ref(1)
-const seriesHasMore = ref(true)
-const SERIES_PAGE_SIZE = 20
-const loadMoreSentinel = ref<HTMLElement | null>(null)
-let seriesObserver: IntersectionObserver | null = null
+/** 产品线 / 订单定制的选项；新增模式只需要改这里 */
+const designModeOptions = [
+  { value: 'CATALOG' as const, label: '产品线食谱' },
+  { value: 'ORDER' as const, label: '订单定制食谱' }
+]
+/** 状态筛选项；新增状态只需要改这里，地址栏同步会自动跟着走 */
+const statusFilterOptions: Array<{
+  value: RecipeDesignerSeriesStatusFilter | undefined
+  label: string
+}> = [
+  { value: undefined, label: '全部' },
+  { value: 'DRAFT', label: '草稿' },
+  { value: 'PUBLIC', label: '已发布' },
+  { value: 'PRIVATE_CUSTOM', label: '定制' }
+]
+/**
+ * 列表筛选的唯一状态源（2026-10-30）。
+ * 新增一类筛选：只在下面加一个字段，地址栏同步 + 刷新恢复会自动生效，
+ * 不需要再补第二处登记。
+ */
+const filters = reactive({
+  mode: 'CATALOG' as 'CATALOG' | 'ORDER',
+  status: undefined as RecipeDesignerSeriesStatusFilter | undefined,
+  search: '',
+  // 页码也是筛选状态的一部分：刷新后停在第 N 页
+  page: 1
+})
+/** 2026-10-26：列表与需求分类是同一页的两种看法 */
+const viewMode = ref<'SERIES' | 'TAXONOMY'>('SERIES')
+
+useFilterQueryState(filters)
+
+const seriesTotal = ref(0)
+const SERIES_PAGE_SIZE = 24
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
-const createDialogVisible = ref(false)
-const createForm = reactive<{ referenceDogId?: string; scenario?: FediafDogScenario }>({
-  referenceDogId: undefined,
-  scenario: undefined
-})
+/** 从订单入口带入的参考爱犬：不弹窗，点“新建食谱”时直接使用。 */
+const pendingReferenceDogId = ref<string | null>(null)
+const pendingReferenceDogName = ref<string | null>(null)
+const pendingScenario = ref<FediafDogScenario | undefined>(undefined)
 
 const renameDialogVisible = ref(false)
 const renameForm = reactive<{ id: string; name: string }>({ id: '', name: '' })
@@ -390,10 +408,6 @@ const copyTargetStage = ref<RecipeDesignerSeriesStage | null>(null)
 const copyingItems = ref(false)
 const duplicatingStage = ref(false)
 
-const dogOptions = ref<DogProfile[]>([])
-const dogLoading = ref(false)
-/** 参考爱犬详情请求序号：只接受最后一次请求的结果，避免快速切换时旧结果覆盖新犬 */
-let referenceDogRequestSeq = 0
 
 function formatTime(value?: string): string {
   if (!value) return '—'
@@ -458,11 +472,9 @@ function hasCardPendingUpdates(card: RecipeDesignerSeriesCard): boolean {
   )
 }
 
-/** 卡片入口文案：已上线过的系列叫「重新发布系列」，其余叫「系列发布」 */
+/** 卡片入口文案：已上线叫「更新」，未上线叫「发布」（设计 6.1） */
 function seriesReleaseEntryLabel(card: RecipeDesignerSeriesCard): string {
-  return hasCardPendingUpdates(card) || card.businessStatus === 'PUBLIC'
-    ? '重新发布系列'
-    : '系列发布'
+  return card.businessStatus === 'PUBLIC' ? '更新' : '发布'
 }
 
 function openSeriesReleaseDrawer(card: RecipeDesignerSeriesCard): void {
@@ -473,126 +485,58 @@ function openSeriesReleaseDrawer(card: RecipeDesignerSeriesCard): void {
 
 /** 发布成功后刷新列表：卡片状态与阶段进度立即反映整系列已发布 */
 async function handleSeriesReleased(): Promise<void> {
-  await loadSeries(true)
+  await loadSeries(filters.page)
 }
 
 /** 下架 / 系列状态变化后刷新列表，卡片入口文案与进度同步更新 */
 async function handleSeriesUpdated(): Promise<void> {
-  await loadSeries(true)
+  await loadSeries(filters.page)
 }
 
-function dogLabel(dog: DogProfile): string {
-  return `${dog.name}（${dog.breedName || dog.customBreedName || '未知品种'}，${dog.currentWeightKg}kg）`
-}
-
-async function searchDogs(keyword: string) {
-  dogLoading.value = true
-  try {
-    const res = await dogApi.list({ search: keyword, pageSize: 50 })
-    dogOptions.value = (res as unknown as { data: DogProfile[] }).data ?? res ?? []
-  } catch {
-    dogOptions.value = []
-  } finally {
-    dogLoading.value = false
-  }
-}
-
-function addDogOption(profile: DogProfile | null | undefined) {
-  if (!profile?.id) return
-  const index = dogOptions.value.findIndex((dog) => dog.id === profile.id)
-  if (index >= 0) {
-    dogOptions.value = dogOptions.value.map((dog, dogIndex) =>
-      dogIndex === index ? { ...dog, ...profile } : dog
-    )
-  } else {
-    dogOptions.value = [profile, ...dogOptions.value]
-  }
-}
-
-/**
- * 按参考爱犬档案自动带出「默认阶段」。
- *
- * 只在能明确推断时写入；缺生命阶段/周龄/活动量时保持 undefined，不猜。
- * 请求期间如果营养师手动改过默认阶段，则尊重手动选择，不让异步结果覆盖。
- */
-async function autoFillScenarioFromDog(dogId: string) {
-  const requestId = ++referenceDogRequestSeq
-  const scenarioBefore = createForm.scenario
-  try {
-    const res: any = await dogApi.getDetail(dogId)
-    if (requestId !== referenceDogRequestSeq) return
-    const detail = res?.data ?? res
-    addDogOption((detail?.profile ?? null) as DogProfile | null)
-    const scenario = resolveDogScenarioFromDetail(detail)
-    if (createForm.scenario !== scenarioBefore) return
-    createForm.scenario = scenario
-  } catch {
-    if (requestId !== referenceDogRequestSeq) return
-    if (createForm.scenario === scenarioBefore) createForm.scenario = undefined
-  }
-}
-
-function handleReferenceDogChange(dogId?: string) {
-  const id = String(dogId || '').trim()
-  if (!id) {
-    // 清空参考犬：保留当前默认阶段，营养师仍可手动选择
-    referenceDogRequestSeq += 1
-    return
-  }
-  void autoFillScenarioFromDog(id)
-}
-
-async function loadSeries(reset = true) {
-  if (reset) {
-    seriesPage.value = 1
-    seriesHasMore.value = true
-    loading.value = true
-  } else {
-    if (loadingMore.value || !seriesHasMore.value) return
-    loadingMore.value = true
-  }
+async function loadSeries(targetPage = filters.page) {
+  const page = Math.max(1, Number(targetPage) || 1)
+  filters.page = page
+  loading.value = true
   try {
     const res = await recipeDesignerApi.listSeries({
-      designMode: designModeFilter.value,
-      status: statusFilter.value,
-      search: searchKeyword.value.trim() || undefined,
-      page: reset ? 1 : seriesPage.value + 1,
-      pageSize: SERIES_PAGE_SIZE,
+      designMode: filters.mode,
+      status: filters.status,
+      search: filters.search.trim() || undefined,
+      page,
+      pageSize: SERIES_PAGE_SIZE
     })
-    const items = Array.isArray(res) ? res : res.items
-    series.value = reset ? items : [...series.value, ...items]
-    seriesPage.value = reset ? 1 : seriesPage.value + 1
-    seriesHasMore.value = Array.isArray(res) ? false : Boolean(res.hasMore)
+    if (Array.isArray(res)) {
+      series.value = res
+      seriesTotal.value = res.length
+    } else {
+      series.value = res.items
+      if (typeof res.total === 'number') {
+        seriesTotal.value = res.total
+      } else {
+        // 兼容旧后端：至少能判断还有没有下一页
+        seriesTotal.value =
+          (page - 1) * SERIES_PAGE_SIZE +
+          res.items.length +
+          (res.hasMore ? 1 : 0)
+      }
+      // 删除 / 下架后当前页可能空了：自动回到上一页
+      if (res.items.length === 0 && page > 1) {
+        await loadSeries(page - 1)
+        return
+      }
+    }
   } catch {
     series.value = []
+    seriesTotal.value = 0
   } finally {
     loading.value = false
-    loadingMore.value = false
   }
 }
 
-/** 用 IntersectionObserver 监听底部哨兵，接近时自动加载下一页（不依赖具体滚动容器） */
-function setupSeriesObserver() {
-  if (typeof IntersectionObserver === 'undefined') return
-  if (seriesObserver) seriesObserver.disconnect()
-  seriesObserver = new IntersectionObserver(
-    (entries) => {
-      for (const entry of entries) {
-        if (entry.isIntersecting && seriesHasMore.value && !loadingMore.value) {
-          void loadSeries(false)
-        }
-      }
-    },
-    { rootMargin: '120px' }
-  )
-  if (loadMoreSentinel.value) seriesObserver.observe(loadMoreSentinel.value)
-}
-
-function teardownSeriesObserver() {
-  if (seriesObserver) {
-    seriesObserver.disconnect()
-    seriesObserver = null
-  }
+/** 翻页：换页后回到页面顶部 */
+function handleSeriesPageChange(page: number) {
+  void loadSeries(page)
+  window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 /** 状态筛选变化：重置到第一页重新加载 */
@@ -610,74 +554,63 @@ function orderStatusLabel(status: string): string {
 }
 
 function onStatusFilterChange() {
-  void loadSeries(true)
+  filters.page = 1
+  void loadSeries(1)
 }
 
 /** 切换产品线 / 订单定制：回到第一页并清空状态筛选，避免两种上下文混用 */
 function onDesignModeChange() {
-  statusFilter.value = undefined
-  void loadSeries(true)
+  filters.status = undefined
+  filters.page = 1
+  void loadSeries(1)
 }
 
 /** 名称搜索：输入停顿 300ms 后自动搜索（清空按钮立即生效） */
-watch(searchKeyword, () => {
+watch(() => filters.search, () => {
   if (searchTimer) clearTimeout(searchTimer)
   searchTimer = setTimeout(() => {
-    void loadSeries(true)
+    filters.page = 1
+    void loadSeries(1)
   }, 300)
 })
 
 const emptyDescription = computed(() => {
-  if (designModeFilter.value === 'ORDER') {
-    return searchKeyword.value.trim()
-      ? `没有找到包含「${searchKeyword.value.trim()}」的订单定制系列`
+  if (filters.mode === 'ORDER') {
+    return filters.search.trim()
+      ? `没有找到包含「${filters.search.trim()}」的订单定制系列`
       : '还没有订单定制系列；请从订单设计工作台创建设计'
   }
-  return searchKeyword.value.trim()
-    ? `没有找到名称、原料或爱犬包含「${searchKeyword.value.trim()}」的设计系列`
-    : '还没有设计系列，点击右上角「新建设计系列」开始'
+  return filters.search.trim()
+    ? `没有找到名称、原料或爱犬包含「${filters.search.trim()}」的设计系列`
+    : '还没有设计系列，点击右上角「新建食谱」开始'
 })
 
-function openCreateDialog() {
-  referenceDogRequestSeq += 1
-  createForm.referenceDogId = undefined
-  createForm.scenario = undefined
-  createDialogVisible.value = true
-  searchDogs('')
-}
-
-function resetCreateForm() {
-  referenceDogRequestSeq += 1
-  createForm.referenceDogId = undefined
-  createForm.scenario = undefined
-}
-
 async function createSeries() {
-  const referenceDog = dogOptions.value.find((dog) => dog.id === createForm.referenceDogId)
-  // 系列名不再要求营养师在创建时填写：先落一个带「未命名」前缀的临时名称，
-  // 发布前会在 Publish.vue 强制改名（后端 CreateRecipeSeriesDto.name 仍必填）。
-  const name = buildTemporarySeriesName({ dogName: referenceDog?.name })
-  // 参考爱犬为可选项（2026-10-14 修正）。
-  //
-  // 背景：产品线系列是面向所有用户的，不绑定某只具体的狗，因此这里不能强制必选。
-  // 后端 CreateRecipeSeriesDto.referenceDogId 本就是 @IsOptional()，不传即 null；
-  // 此前前端多加了一道必选校验，与输入框提示「可选：选择一位客户的爱犬」自相矛盾，
-  // 且挡住「无犬设计」这条路。
+  // 一键创建：不再弹「参考爱犬 / 默认阶段」。
+  // 产品线默认普通成年犬；参考爱犬只在从订单带入时使用，阶段由后端/编辑器再切。
+  const referenceDogId = pendingReferenceDogId.value || undefined
+  // 临时名固定 12 个字（含日期时间）；狗名放在卡片标签上，不塞进名字
+  const name = buildTemporarySeriesName()
   creating.value = true
   try {
     const card = await recipeDesignerApi.createSeries({
       name,
-      referenceDogId: createForm.referenceDogId || undefined,
-      scenario: createForm.scenario
+      referenceDogId,
+      scenario: pendingScenario.value
     })
-    ElMessage.success('系列创建成功')
-    createDialogVisible.value = false
-    // 创建成功后直接进入默认阶段（第一个有草稿的阶段）编辑器
+    ElMessage.success(
+      referenceDogId
+        ? '食谱创建成功，已按参考爱犬带出默认阶段；可在编辑器切换阶段。'
+        : '食谱创建成功，默认阶段为普通成年犬；可在编辑器切换阶段、设置参考爱犬。'
+    )
+    pendingReferenceDogId.value = null
+    pendingReferenceDogName.value = null
+    pendingScenario.value = undefined
     const targetDraftId = card?.initialDraftId || card?.stages.find((s) => s.draftId)?.draftId
     if (targetDraftId) {
       router.push(draftRoute(card.id, targetDraftId))
     } else {
-      await loadSeries(true)
+      await loadSeries(1)
     }
   } catch {
     // 错误提示由拦截器统一处理
@@ -689,7 +622,7 @@ async function createSeries() {
 async function openStage(card: RecipeDesignerSeriesCard, stage: RecipeDesignerSeriesStage) {
   // 订单定制列表进入时，把业务订单号带进编辑器：锁狗、显示本单进度。
   entryOrderId.value =
-    designModeFilter.value === 'ORDER' && card.orderNo ? card.orderNo : ''
+    filters.mode === 'ORDER' && card.orderNo ? card.orderNo : ''
   if (stage.draftId) {
     // 已有草稿：若草稿为空且该阶段有已发布配方，走后端"自动带入已发布原料"，
     // 避免进入历史遗留的空草稿；否则直接进入该草稿（已发布草稿由编辑器自动创建修订版）
@@ -729,13 +662,14 @@ async function handleCardCommand(command: string, card: RecipeDesignerSeriesCard
     try {
       await recipeDesignerApi.duplicateSeries(card.id)
       ElMessage.success('系列已复制')
-      await loadSeries(true)
+      await loadSeries(1)
     } catch {
       // 已提示
     }
   } else if (command === 'rename') {
     renameForm.id = card.id
-    renameForm.name = card.name
+    // 临时名（未命名…）只是占位，直接清空，让用户填正式名称
+    renameForm.name = isTemporarySeriesName(card.name) ? '' : card.name
     renameDialogVisible.value = true
   } else if (command === 'delete') {
     try {
@@ -753,7 +687,7 @@ async function handleCardCommand(command: string, card: RecipeDesignerSeriesCard
         confirmUserVisibleRemoval: true
       })
       ElMessage.success('系列已删除')
-      await loadSeries(true)
+      await loadSeries(filters.page)
     } catch (error) {
       if (error === 'cancel' || error === 'close') return
       // 其它错误已由拦截器提示
@@ -772,7 +706,7 @@ async function confirmRename() {
     await recipeDesignerApi.renameSeries(renameForm.id, { name })
     ElMessage.success('已重命名')
     renameDialogVisible.value = false
-    await loadSeries(true)
+    await loadSeries(filters.page)
   } finally {
     renaming.value = false
   }
@@ -804,7 +738,7 @@ async function handleStageCommand(
     try {
       await recipeDesignerApi.duplicateSeriesStage(card.id, stage.lifeStage)
       ElMessage.success('已复制为新系列')
-      await loadSeries(true)
+      await loadSeries(1)
     } catch {
       // 拦截器已提示
     } finally {
@@ -877,15 +811,21 @@ async function applyEntryQuery() {
   const dogId = String(route.query.dogId || '').trim()
   const orderId = String(route.query.orderId || '').trim()
   entryOrderId.value = orderId
-  if (!dogId) return
 
-  createForm.referenceDogId = dogId
-  createDialogVisible.value = true
-
-  await searchDogs('')
-  // 参考爱犬可能不在前 50 条里：详情接口同时负责把犬补进下拉选项，
-  // 并按它的生命阶段自动带出默认阶段（推断不出来时保持为空）。
-  await autoFillScenarioFromDog(dogId)
+  // 从订单带入参考爱犬：不弹窗，点“新建食谱”时直接使用；
+  // 犬的生命阶段能推断就带出，推断不出来再用普通成年犬默认值。
+  if (dogId) {
+    pendingReferenceDogId.value = dogId
+    try {
+      const res: any = await dogApi.getDetail(dogId)
+      const detail = res?.data ?? res
+      pendingReferenceDogName.value = detail?.profile?.name ?? null
+      pendingScenario.value = resolveDogScenarioFromDetail(detail) ?? undefined
+    } catch {
+      pendingReferenceDogName.value = null
+      pendingScenario.value = undefined
+    }
+  }
 
   /**
    * 从订单进来时带上本单份数与已设计数量。
@@ -954,8 +894,8 @@ function openDogHealth(dogId: string) {
 }
 
 onMounted(async () => {
-  await loadSeries(true)
-  setupSeriesObserver()
+  // 地址栏里可能带着 page=3：按恢复的页码加载
+  await loadSeries(filters.page)
   void applyEntryQuery()
   // 健康信息变更提醒（2026-10-04 第四期）。
   // 不 await：它是辅助信息，不该拖慢设计系列列表的首屏。
@@ -963,7 +903,6 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  teardownSeriesObserver()
   if (searchTimer) clearTimeout(searchTimer)
 })</script>
 
@@ -1049,6 +988,11 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   gap: 16px;
   min-height: 120px;
+}
+.series-pagination {
+  display: flex;
+  justify-content: center;
+  margin-top: 18px;
 }
 .loadmore-tip {
   text-align: center;

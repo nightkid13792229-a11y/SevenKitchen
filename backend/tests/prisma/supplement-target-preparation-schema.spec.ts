@@ -64,15 +64,11 @@ describe('supplement target and preparation Prisma schema', () => {
   });
 
   describe('design recipe item preparation metadata', () => {
-    it('adds an optional preparation note and source', () => {
+    it('removes the legacy preparation note and source', () => {
       const block = modelBlock(schema, 'DesignRecipeItem');
 
-      expect(block).toMatch(
-        /preparationNote\s+String\?\s+@map\("preparation_note"\)\s+@db\.VarChar\(500\)/,
-      );
-      expect(block).toMatch(
-        /preparationSource\s+String\?\s+@map\("preparation_source"\)\s+@db\.VarChar\(20\)/,
-      );
+      expect(block).not.toMatch(/preparationNote/);
+      expect(block).not.toMatch(/preparationSource/);
     });
 
     it('keeps the existing preparation method column', () => {
@@ -85,15 +81,11 @@ describe('supplement target and preparation Prisma schema', () => {
   });
 
   describe('published recipe item preparation metadata', () => {
-    it('adds an optional preparation note and source', () => {
+    it('removes the legacy preparation note and source', () => {
       const block = modelBlock(schema, 'RecipeItem');
 
-      expect(block).toMatch(
-        /preparationNote\s+String\?\s+@map\("preparation_note"\)\s+@db\.VarChar\(500\)/,
-      );
-      expect(block).toMatch(
-        /preparationSource\s+String\?\s+@map\("preparation_source"\)\s+@db\.VarChar\(20\)/,
-      );
+      expect(block).not.toMatch(/preparationNote/);
+      expect(block).not.toMatch(/preparationSource/);
     });
 
     it('keeps the existing preparation method column', () => {

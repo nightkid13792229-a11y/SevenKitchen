@@ -80,6 +80,21 @@ export class LabelDataDto {
   @ApiProperty({ description: '补充剂原料（用顿号分隔）' })
   supplementIngredients!: string;
 
+  @ApiProperty({
+    description:
+      '饲料添加剂（用顿号分隔，只写目录规范名称）。传入时渲染独立的「添加剂组成」段；不传则沿用旧行为（补剂并入原料表）',
+    required: false,
+  })
+  additiveIngredients?: string;
+
+  @ApiProperty({
+    description:
+      '本单用到的原料 ID（用于服务端校验标签信息是否齐备）。传了才做校验',
+    required: false,
+    type: [String],
+  })
+  ingredientIds?: string[];
+
   @ApiProperty({ description: '每袋重量(g)' })
   weightPerPack!: number;
 
@@ -101,6 +116,12 @@ export class LabelDataDto {
 
   @ApiProperty({ description: '保质期说明' })
   shelfLife!: string;
+
+  @ApiProperty({
+    description: '保质期月数（冷冻 -18℃ 下的月数），不传按 6 个月',
+    required: false,
+  })
+  shelfLifeMonths?: number;
 
   @ApiProperty({ description: '烹饪方法', required: false })
   cookingMethod?: CookingMethodDto | string;

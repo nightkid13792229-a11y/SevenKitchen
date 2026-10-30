@@ -1,0 +1,75 @@
+{
+  "generatedAt": "2026-10-27T18:02:41.075Z",
+  "sources": [
+    {
+      "sourceType": "USDA",
+      "records": 8263,
+      "uniqueKeys": 8263,
+      "energyRate": 0.9600629311388116,
+      "proteinRate": 0.9949171003267578,
+      "mineralRate": 0.9892290935495582,
+      "vitaminRate": 0.9687764734357981,
+      "resolvableSourceCodeRate": 1
+    },
+    {
+      "sourceType": "CNF",
+      "records": 5993,
+      "uniqueKeys": 5993,
+      "energyRate": 1,
+      "proteinRate": 1,
+      "mineralRate": 0.9964959118972134,
+      "vitaminRate": 0.9599532788252961,
+      "resolvableSourceCodeRate": 1
+    },
+    {
+      "sourceType": "NZFCD",
+      "records": 2857,
+      "uniqueKeys": 2857,
+      "energyRate": 1,
+      "proteinRate": 1,
+      "mineralRate": 1,
+      "vitaminRate": 1,
+      "resolvableSourceCodeRate": 1
+    },
+    {
+      "sourceType": "MEXT",
+      "records": 2478,
+      "uniqueKeys": 2478,
+      "energyRate": 1,
+      "proteinRate": 0.9907183212267958,
+      "mineralRate": 0.9991928974979822,
+      "vitaminRate": 0.9979822437449556,
+      "resolvableSourceCodeRate": 1
+    },
+    {
+      "sourceType": "TFDA",
+      "records": 2213,
+      "uniqueKeys": 2213,
+      "energyRate": 1,
+      "proteinRate": 0.9864437415273385,
+      "mineralRate": 0.9769543605964753,
+      "vitaminRate": 0.9796656122910077,
+      "resolvableSourceCodeRate": 1
+    },
+    {
+      "sourceType": "KO_RDA",
+      "records": 3366,
+      "uniqueKeys": 3366,
+      "energyRate": 1,
+      "proteinRate": 0.9961378490790256,
+      "mineralRate": 0.9904931669637552,
+      "vitaminRate": 0.9625668449197861,
+      "resolvableSourceCodeRate": 1
+    },
+    {
+      "sourceType": "CFCT",
+      "records": 1868,
+      "uniqueKeys": 1868,
+      "energyRate": 0.9930406852248393,
+      "proteinRate": 0.9839400428265525,
+      "mineralRate": 0.9668094218415417,
+      "vitaminRate": 0.930406852248394,
+      "resolvableSourceCodeRate": 1
+    }
+  ]
+}

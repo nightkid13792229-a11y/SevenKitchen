@@ -229,7 +229,31 @@ export function listSupplementTargetFieldCandidates(
     })
   }
 
+  for (const item of normalized.customItems ?? []) {
+    if (item.canonicalFieldPath) {
+      // 已映射到标准字段的条目会在上面的目录循环里出现，避免重复
+      continue
+    }
+    const name = String(item.name ?? '').trim()
+    const unit = String(item.unit ?? '').trim()
+    const value = Number(item.value)
+    if (!name || !unit || !isPositiveFiniteNumber(value)) {
+      continue
+    }
+    candidates.push({
+      fieldPath: `custom:${normalizeCustomName(name)}`,
+      label: name,
+      unit,
+      value,
+      valueText: `档案值 ${formatNumber(value)} ${unit}`,
+    })
+  }
+
   return candidates
+}
+
+function normalizeCustomName(value: string): string {
+  return value.trim().replace(/\s+/g, '').toLowerCase()
 }
 
 function normalizeLookupKey(value: string | null | undefined): string {

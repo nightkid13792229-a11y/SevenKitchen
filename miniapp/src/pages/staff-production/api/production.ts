@@ -137,7 +137,7 @@ export function getPackagingUnits(params: {
           nutrient_target_value?: number;
           supplement_targets?: any[];
           nutrition_profile_snapshot?: any;
-          preparation_methods?: string[]; // 制备方法名称数组
+          preparation_methods?: string[]; // 部位 / 状态 / 预处理名称数组
         }>;
         production_loss_rate?: number;
       };

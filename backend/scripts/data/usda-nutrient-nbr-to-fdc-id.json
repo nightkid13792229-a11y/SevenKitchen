@@ -19,6 +19,10 @@
     "fdcId": 1004,
     "name": "Total lipid (fat)"
   },
+  "205": {
+    "fdcId": 1005,
+    "name": "Carbohydrate, by difference"
+  },
   "207": {
     "fdcId": 1007,
     "name": "Ash"
@@ -275,6 +279,10 @@
     "fdcId": 1078,
     "name": "Xylitol"
   },
+  "291": {
+    "fdcId": 1079,
+    "name": "Fiber, total dietary"
+  },
   "292": {
     "fdcId": 1080,
     "name": "Lignin"
@@ -302,6 +310,54 @@
   "300": {
     "fdcId": 2043,
     "name": "Minerals"
+  },
+  "301": {
+    "fdcId": 1087,
+    "name": "Calcium, Ca"
+  },
+  "303": {
+    "fdcId": 1089,
+    "name": "Iron, Fe"
+  },
+  "304": {
+    "fdcId": 1090,
+    "name": "Magnesium, Mg"
+  },
+  "305": {
+    "fdcId": 1091,
+    "name": "Phosphorus, P"
+  },
+  "306": {
+    "fdcId": 1092,
+    "name": "Potassium, K"
+  },
+  "307": {
+    "fdcId": 1093,
+    "name": "Sodium, Na"
+  },
+  "309": {
+    "fdcId": 1095,
+    "name": "Zinc, Zn"
+  },
+  "312": {
+    "fdcId": 1098,
+    "name": "Copper, Cu"
+  },
+  "313": {
+    "fdcId": 1099,
+    "name": "Fluoride, F"
+  },
+  "314": {
+    "fdcId": 1101,
+    "name": "Manganese, Mn"
+  },
+  "315": {
+    "fdcId": 1103,
+    "name": "Selenium, Se"
+  },
+  "317": {
+    "fdcId": 1100,
+    "name": "Iodine, I"
   },
   "319": {
     "fdcId": 1105,
@@ -363,6 +419,10 @@
     "fdcId": 1158,
     "name": "Vitamin E"
   },
+  "401": {
+    "fdcId": 1162,
+    "name": "Vitamin C, total ascorbic acid"
+  },
   "404": {
     "fdcId": 1165,
     "name": "Thiamin"
@@ -391,9 +451,17 @@
     "fdcId": 1176,
     "name": "Biotin"
   },
+  "417": {
+    "fdcId": 1177,
+    "name": "Folate, total"
+  },
   "418": {
     "fdcId": 1178,
     "name": "Vitamin B-12"
+  },
+  "421": {
+    "fdcId": 1180,
+    "name": "Choline, total"
   },
   "422": {
     "fdcId": 1181,
@@ -591,6 +659,10 @@
     "fdcId": 1256,
     "name": "Glycolipids"
   },
+  "606": {
+    "fdcId": 1258,
+    "name": "Fatty acids, total saturated"
+  },
   "607": {
     "fdcId": 1259,
     "name": "SFA 4:0"
@@ -726,6 +798,14 @@
   "643": {
     "fdcId": 1290,
     "name": "Unsaponifiable matter (lipids)"
+  },
+  "645": {
+    "fdcId": 1292,
+    "name": "Fatty acids, total monounsaturated"
+  },
+  "646": {
+    "fdcId": 1293,
+    "name": "Fatty acids, total polyunsaturated"
   },
   "647": {
     "fdcId": 1294,

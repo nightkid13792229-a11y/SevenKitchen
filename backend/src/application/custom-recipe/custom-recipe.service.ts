@@ -7,6 +7,7 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
+  ForbiddenException,
   ConflictException,
   Optional,
 } from '@nestjs/common';
@@ -824,7 +825,7 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   }
 
   async getOrderByOrderId(orderId: string): Promise<any | null> {
-    return await this.prisma.customRecipeOrder.findUnique({
+    const order = await this.prisma.customRecipeOrder.findUnique({
       where: { orderId },
       include: {
         dog: {
@@ -835,6 +836,10 @@ export class CustomRecipeService implements ICustomRecipeRepository {
             currentWeightKg: true,
             bcsScore: true,
             activityLevel: true,
+            mealsPerDay: true,
+            /** 定制对象档案（2026-10-24）：详情页要显示品种 */
+            customBreedName: true,
+            breedId: true,
             /**
              * 过敏（2026-10-04 第四期补）。
              *
@@ -905,6 +910,38 @@ export class CustomRecipeService implements ICustomRecipeRepository {
         },
       },
     });
+    if (!order) return null;
+    await this.attachDogBreedNames([order]);
+    return order;
+  }
+
+  /**
+   * 给订单的 dog 补上品种名（2026-10-24）。
+   *
+   * Dog 表只有 breedId，Prisma 里没有 breed 关联；列表/详情要显示"柯基"，
+   * 就在这里按 id 批量查一次 dog_breed，挂到 dog.breedName 上。
+   * 不改 schema、不加迁移，避免为了一个展示字段动数据模型。
+   */
+  private async attachDogBreedNames(orders: any[]): Promise<void> {
+    const ids = Array.from(
+      new Set(
+        orders
+          .map((order) => order?.dog?.breedId)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0),
+      ),
+    );
+    if (ids.length === 0) return;
+
+    const breeds = await this.prisma.dogBreed.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true },
+    });
+    const nameById = new Map(breeds.map((breed) => [breed.id, breed.name]));
+    for (const order of orders) {
+      if (order?.dog) {
+        order.dog.breedName = nameById.get(order.dog.breedId) ?? '';
+      }
+    }
   }
 
   /**
@@ -945,6 +982,11 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       ];
     }
 
+    // 赠送单单独筛（2026-10-30）：按月看「送了几份」不能靠金额猜
+    if (typeof query.isGift === 'boolean') {
+      where.isGift = query.isGift;
+    }
+
     const page = query.page || 1;
     const pageSize = query.pageSize || 20;
     const skip = (page - 1) * pageSize;
@@ -969,6 +1011,10 @@ export class CustomRecipeService implements ICustomRecipeRepository {
               currentWeightKg: true,
               bcsScore: true,
               activityLevel: true,
+              mealsPerDay: true,
+              /** 列表卡要显示"豆豆 · 柯基 · 11.2kg"（2026-10-24） */
+              customBreedName: true,
+              breedId: true,
             },
           },
           recipe: {
@@ -1015,6 +1061,7 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       this.prisma.customRecipeOrder.count({ where }),
     ]);
 
+    await this.attachDogBreedNames(orders);
     return { orders, total };
   }
 
@@ -1063,7 +1110,21 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   async updateOrderStatus(
     orderIdOrId: string,
     status: CustomRecipeStatus,
-    options?: { reason?: string },
+    options?: {
+      reason?: string;
+      /**
+       * 退款成功后的订单退款字段（2026-10-26）。
+       *
+       * 只允许随状态迁移一起写，避免退款服务再开一条直接写订单表的路径；
+       * 金额固定为订单实付，不支持部分退款。
+       */
+      refund?: {
+        outRefundNo?: string | null;
+        refundId?: string | null;
+        refundedAt?: Date | null;
+        reason?: string;
+      };
+    },
   ): Promise<void> {
     const ref = await this.resolveOrderRef(orderIdOrId);
 
@@ -1074,6 +1135,7 @@ export class CustomRecipeService implements ICustomRecipeRepository {
         status: true,
         scheduledDate: true,
         recipeQuantity: true,
+        amount: true,
         allergyReportDrafts: true,
       },
     });
@@ -1163,6 +1225,19 @@ export class CustomRecipeService implements ICustomRecipeRepository {
             ? {
                 cancelledAt: new Date(),
                 cancellationReason: options?.reason || '后台手动取消',
+              }
+            : {}),
+          ...(options?.refund
+            ? {
+                refundStatus: 'SUCCESS',
+                refundAmount: Number(order.amount),
+                refundOutNo: options.refund.outRefundNo ?? null,
+                refundId: options.refund.refundId ?? null,
+                refundedAt: options.refund.refundedAt ?? new Date(),
+                refundReason:
+                  options.refund.reason ||
+                  options?.reason ||
+                  '退款申请审核通过',
               }
             : {}),
         },
@@ -1430,6 +1505,58 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     });
 
     return result;
+  }
+
+  /**
+   * 退款申请审核通过并退款成功后，取消还没交付的订单并释放排期。
+   *
+   * 只处理 PAID / IN_PROGRESS（制作中）；DELIVERED / COMPLETED 的钱
+   * 可以退，但已经交付，订单不能撤销。
+   *
+   * 状态与名额统一走 `updateOrderStatus`（GD-01 唯一入口）；
+   * 退款字段随这次状态迁移一起写，不再另开直接写订单表的路径。
+   * 金额固定取订单实付，**不支持部分退款**。
+   */
+  async cancelOrderAfterRefund(
+    orderPk: string,
+    refund: {
+      outRefundNo?: string | null;
+      refundId?: string | null;
+      refundedAt?: Date | null;
+      reason?: string;
+    } = {},
+  ): Promise<{ cancelled: boolean; orderId?: string }> {
+    const order = await this.prisma.customRecipeOrder.findUnique({
+      where: { id: orderPk },
+      select: {
+        id: true,
+        orderId: true,
+        status: true,
+        amount: true,
+      },
+    });
+    if (!order) return { cancelled: false };
+
+    if (!['PAID', 'IN_PROGRESS'].includes(String(order.status))) {
+      // 已交付/已完成/已取消：退款字段由退款创建/微信回调写入，这里不撤单
+      return { cancelled: false, orderId: order.orderId };
+    }
+
+    const reason =
+      String(refund.reason || '').trim() ||
+      '退款申请审核通过，已全额退款，自动停单取消';
+
+    await this.updateOrderStatus(order.id, CustomRecipeStatus.CANCELLED, {
+      reason,
+      refund: {
+        outRefundNo: refund.outRefundNo ?? null,
+        refundId: refund.refundId ?? null,
+        refundedAt: refund.refundedAt ?? new Date(),
+        reason,
+      },
+    });
+
+    return { cancelled: true, orderId: order.orderId };
   }
 
   /**
@@ -2748,7 +2875,27 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   /**
    * Delete attachment
    */
-  async deleteAttachment(id: string): Promise<void> {
+  /**
+   * 删除附件（2026-10-25）。
+   *
+   * 必须连 COS 对象一起删：只删数据库记录会留下永久孤儿文件。
+   * 顾客调用时传 `customerId` 校验归属；后台不传，沿用后台权限。
+   * COS 删除失败就抛错、保留记录，让顾客重试，避免“页面删了、桶里还在”。
+   */
+  async deleteAttachment(id: string, customerId?: string): Promise<void> {
+    const attachment = await this.prisma.customRecipeAttachment.findUnique({
+      where: { id },
+      include: { order: { select: { customerId: true } } },
+    });
+    if (!attachment) {
+      throw new NotFoundException('附件不存在');
+    }
+    if (customerId && attachment.order.customerId !== customerId) {
+      throw new ForbiddenException('无权删除此附件');
+    }
+    if (attachment.fileUrl) {
+      await this.cosService.deleteImageByUrl(attachment.fileUrl);
+    }
     await this.prisma.customRecipeAttachment.delete({
       where: { id },
     });
@@ -3205,14 +3352,29 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   /**
    * Upload attachment
    */
-  async uploadAttachment(file: Express.Multer.File, orderId: string) {
+  async uploadAttachment(file: Express.Multer.File, orderIdOrId: string) {
+    /**
+     * 附件表的 order_id 外键指向 custom_recipe_order.id（uuid），
+     * 而控制器手里是业务订单号 CR…。这里必须先解析成主键再写；
+     * 否则 COS 上传成功、附件落库却因外键失败，页面拿不到 URL。
+     */
+    const order = await this.prisma.customRecipeOrder.findFirst({
+      where: {
+        OR: [{ orderId: orderIdOrId }, { id: orderIdOrId }],
+      },
+      select: { id: true },
+    });
+    if (!order) {
+      throw new NotFoundException(`订单不存在: ${orderIdOrId}`);
+    }
+
     const result = await this.cosService.uploadImage(
       file,
       file.originalname,
       'custom-recipe-attachments',
     );
 
-    const attachment = await this.addAttachment(orderId, {
+    const attachment = await this.addAttachment(order.id, {
       fileName: file.originalname,
       fileUrl: result.url,
       fileSize: file.size,

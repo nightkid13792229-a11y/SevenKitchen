@@ -7,6 +7,7 @@ import {
   Controller,
   Post,
   Get,
+  Delete,
   Body,
   Param,
   Query,
@@ -18,12 +19,14 @@ import {
   UseInterceptors,
   UploadedFile,
   ServiceUnavailableException,
+  Optional,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CustomRecipeService } from '../../../application/custom-recipe/custom-recipe.service';
 import { CustomRecipeDeliveryService } from '../../../application/custom-recipe/custom-recipe-delivery.service';
 import { CustomRecipeAftersaleService } from '../../../application/custom-recipe/custom-recipe-aftersale.service';
+import { CustomRecipeRefundService } from '../../../application/custom-recipe/custom-recipe-refund.service';
 import { CustomRecipeViewService } from '../../../application/custom-recipe/custom-recipe-view.service';
 import { MiniProgramCodeService } from '../../../application/wechat/mini-program-code.service';
 import { CustomRecipeConfigService } from '../../../application/custom-recipe/custom-recipe-config.service';
@@ -61,6 +64,9 @@ export class CustomRecipeController {
     /** 多份购买（2026-10-20）：报价必须由服务端权威计算 */
     private readonly customRecipeConfigService: CustomRecipeConfigService,
     private readonly customRecipePricingService: CustomRecipePricingService,
+    /** 已交付/制作中的退款申请（2026-10-25） */
+    @Optional()
+    private readonly refundService?: CustomRecipeRefundService,
   ) {}
 
   /**
@@ -200,11 +206,26 @@ export class CustomRecipeController {
       ),
     );
 
+    /**
+     * 统一订单列表要看到最新退款申请（2026-10-25）。
+     * 退款申请是追加字段；老小程序忽略，不影响原字段。
+     */
+    const refundRequestMap = this.refundService
+      ? await this.refundService.getLatestForOrderPks(
+          orders.map((order) => order.id),
+        )
+      : {};
+
     return ApiResponseDto.success({
       orders: orders.map((order, index) => ({
         orderId: order.orderId,
         dogId: order.dogId,
         dogName: order.dog?.name ?? '',
+        /** 列表卡要显示"豆豆 · 柯基 · 11.2kg · 3 份"（2026-10-24） */
+        dogBreedName:
+          order.dog?.customBreedName || order.dog?.breedName || '',
+        dogWeightKg: order.dog?.currentWeightKg ?? null,
+        recipeQuantity: order.recipeQuantity ?? 1,
         targetGoal: order.targetGoal,
         needsHealthManagement: Boolean(order.needsHealthManagement),
         scheduledDate: order.scheduledDate,
@@ -234,6 +255,7 @@ export class CustomRecipeController {
         refundAmount: this.toNullableNumber(order.refundAmount),
         refundedAt: order.refundedAt ?? null,
         createdAt: order.createdAt,
+        refundRequest: refundRequestMap[order.id] ?? null,
         renderable: renderables[index],
       })),
       total,
@@ -335,6 +357,57 @@ export class CustomRecipeController {
     });
   }
 
+  /**
+   * 已交付/制作中订单：提交退款申请（2026-10-25）。
+   *
+   * 未开始制作不走这里 —— 那种情况在退款页直接取消并全额原路退回。
+   */
+  @Post('orders/:orderId/refund-request')
+  @ApiOperation({ summary: 'Submit a refund request for a started/delivered order' })
+  async createRefundRequest(
+    @Req() req: any,
+    @Param('orderId') orderId: string,
+    @Body()
+    body: {
+      reasonCode?: string;
+      reasonLabel?: string;
+      description?: string;
+      photos?: string[];
+    },
+  ) {
+    if (!this.refundService) {
+      throw new ServiceUnavailableException('退款服务暂不可用');
+    }
+    const result = await this.refundService.createForCustomer(
+      orderId,
+      req.user.userId,
+      {
+        reasonCode: String(body?.reasonCode || ''),
+        reasonLabel: String(body?.reasonLabel || ''),
+        description: String(body?.description || ''),
+        photos: Array.isArray(body?.photos) ? body.photos : [],
+      },
+    );
+    return ApiResponseDto.success({ ...result.request, reused: result.reused });
+  }
+
+  /** 顾客查看最新一条退款申请。 */
+  @Get('orders/:orderId/refund-request')
+  @ApiOperation({ summary: 'Get my latest refund request' })
+  async getRefundRequest(
+    @Req() req: any,
+    @Param('orderId') orderId: string,
+  ) {
+    if (!this.refundService) {
+      throw new ServiceUnavailableException('退款服务暂不可用');
+    }
+    const request = await this.refundService.getForCustomer(
+      orderId,
+      req.user.userId,
+    );
+    return ApiResponseDto.success({ request });
+  }
+
   @Get('orders/:orderId')
   @ApiOperation({ summary: 'Get order detail' })
   async getOrderDetail(@Req() req: any, @Param('orderId') orderId: string) {
@@ -393,6 +466,18 @@ export class CustomRecipeController {
       orderId: order.orderId,
       dogId: order.dogId,
       dogName: order.dog?.name ?? '',
+      /**
+       * 定制对象档案（2026-10-24）：详情页要显示品种/体重/年龄/体况/活动量/餐数，
+       * 以及本单份数 —— 这些是营养师设计时用到的输入，顾客有权核对。
+       */
+      dogBreedName:
+        order.dog?.customBreedName || order.dog?.breedName || '',
+      dogWeightKg: order.dog?.currentWeightKg ?? null,
+      dogBirthday: order.dog?.birthday ?? null,
+      dogBcsScore: order.dog?.bcsScore ?? null,
+      dogActivityLevel: order.dog?.activityLevel ?? null,
+      dogMealsPerDay: order.dog?.mealsPerDay ?? null,
+      recipeQuantity: order.recipeQuantity ?? 1,
       targetGoal: order.targetGoal,
       needsHealthManagement: Boolean(order.needsHealthManagement),
       scheduledDate: order.scheduledDate,
@@ -504,6 +589,14 @@ export class CustomRecipeController {
        * 老小程序忽略 `renderable` 照常工作，所以两端不必同批上线。
        * 真正切到三件套、删掉旧字段是在批次 2。
        */
+      /**
+       * 最新一条退款申请（2026-10-25）。
+       * 没有申请时为 null；老小程序忽略这个追加字段。
+       */
+      refundRequest: this.refundService
+        ? await this.refundService.getLatestForOrderPk(order.id)
+        : null,
+
       renderable: await this.viewService.buildCustomerView({
         status: order.status,
         createdAt: order.createdAt,
@@ -600,6 +693,11 @@ export class CustomRecipeController {
         deliveredAt: batch.deliveredAt,
         confirmedAt: batch.confirmedAt,
         /**
+         * 这只狗（2026-10-24）：交付页要拿它预选 DIY / 成品下单，
+         * 不能让顾客进去再选一次、更不能选错。
+         */
+        dogId: order.dogId ?? null,
+        /**
          * 批次级交付物 = 各份的**并集**（去重、保持出现顺序）。
          *
          * 每份自己还有 `items[].itemCodes` —— 前端要判断"这一份有没有采购单"
@@ -643,6 +741,8 @@ export class CustomRecipeController {
       version: delivery.version,
       deliveredAt: delivery.deliveredAt,
       confirmedAt: delivery.confirmedAt,
+      /** 这只狗（2026-10-24）：交付页预选 DIY / 成品下单用 */
+      dogId: order.dogId ?? null,
       itemCodes: Array.isArray(delivery.items) ? delivery.items : [],
       /** 内容快照：前端照着渲染，不做任何加工 */
       content: delivery.contentSnapshot,
@@ -979,12 +1079,32 @@ export class CustomRecipeController {
     );
 
     return ApiResponseDto.success({
+      id: attachment.id,
       fileUrl: attachment.fileUrl,
       fileName: attachment.fileName,
       fileSize: attachment.fileSize,
       fileType: attachment.fileType,
       uploadedAt: attachment.uploadedAt,
     });
+  }
+
+  /**
+   * 删除附件（2026-10-25）。
+   *
+   * 顾客在提交前可以删掉上传错的文件；删除会连 COS 对象一起删。
+   * 归属校验在服务层做，控制器只传当前登录顾客。
+   */
+  @Delete('attachments/:attachmentId')
+  @ApiOperation({ summary: 'Delete a custom recipe attachment' })
+  async deleteAttachment(
+    @Req() req: any,
+    @Param('attachmentId') attachmentId: string,
+  ) {
+    await this.customRecipeService.deleteAttachment(
+      attachmentId,
+      req.user.userId,
+    );
+    return ApiResponseDto.success({ deleted: true });
   }
 
   /**

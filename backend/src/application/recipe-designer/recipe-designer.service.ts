@@ -1,3 +1,4 @@
+import { CoverTrashService } from './cover-trash.service';
 import {
   BadRequestException,
   ConflictException,
@@ -49,6 +50,11 @@ import {
   getProfileEffectiveWeightG,
   readProfileValuePer100g,
 } from '../../domain/recipe-designer/nutrition-profile-reader';
+import {
+  classifyFoodCategory,
+  sortRecipeItemsByDisplayOrder,
+  type FoodCategory,
+} from '../../domain/recipe-designer/food-category-map';
 import { buildFoodWeightRatioMap } from '../../domain/recipe/food-ratio-normalization';
 import {
   assessRecipeDraft,
@@ -60,9 +66,11 @@ import {
   type DraftLaunchReadiness,
   type LaunchReadinessAssessmentSnapshot,
 } from '../../domain/recipe-designer/launch-readiness';
+import { assertRecipeNameLength } from '../../domain/recipe-designer/series-name';
 import {
   buildSeriesReleaseReadiness,
   type SeriesReleaseReadiness,
+  type SeriesReleaseStageReadiness,
   type SeriesReleaseStageSnapshot,
   type SeriesReleaseStageStatus,
   type SeriesReleaseState,
@@ -85,7 +93,6 @@ import type {
   CreateRecipeSeriesStageDraftDto,
   DeleteRecipeSeriesDto,
   RecipeDesignerSeriesStatusFilter,
-  RecipePreparationSource,
   ReplaceRecipeDesignItemDto,
   ListRecipeDesignerIngredientOptionsDto,
   ListRecipeDesignerSeriesDto,
@@ -99,10 +106,7 @@ import type {
   UpdateRecipeProductionStepsDto,
   UpdateRecipeSeriesReleaseSettingsDto,
 } from '../../interfaces/dto/recipe-designer/recipe-designer.dto';
-import {
-  RECIPE_PREPARATION_NOTE_MAX_LENGTH,
-  RECIPE_PRESENTATION_LIMITS,
-} from '../../interfaces/dto/recipe-designer/recipe-designer.dto';
+import { RECIPE_PRESENTATION_LIMITS } from '../../interfaces/dto/recipe-designer/recipe-designer.dto';
 import {
   formatProductionStepsText,
   readProductionSteps,
@@ -118,32 +122,20 @@ import {
   normalizeInsightAttachments,
   type DogDesignInsight,
 } from '../../domain/recipe-designer/dog-design-insight';
-import {
-  collectAllergyKeywords,
-  formatAllergyKeywordsForAi,
-  splitAllergyKeywords,
-} from '../../domain/dog/allergy-keywords';
+import { splitAllergyKeywords } from '../../domain/dog/allergy-keywords';
 import { AllergenVocabularyService } from '../health/allergen-vocabulary.service';
+import { IngredientPreparationHistoryService } from '../recipe/ingredient-preparation-history.service';
+import { isPreparationRequiredFoodCategory } from '../../domain/recipe-designer/preparation-field.constants';
+import { pickCoverBadgeNames } from '../../domain/recipe-designer/cover-badge-policy';
 import {
-  AiDesignSuggestionService,
-  type AiDesignSuggestionInput,
-} from './ai-design-suggestion.service';
-import {
-  RecipeAiWizardService,
-  type AiWizardDogProfile,
-  type AiWizardDraftSummary,
-} from './recipe-ai-wizard.service';
+  PREPARATION_METHOD_MAX_CONTENT_LENGTH,
+  isPreparationMethodWithinContentLimit,
+  truncatePreparationMethodContent,
+} from '../../domain/recipe/preparation-field-text';
 import {
   SupplementTargetService,
   type SupplementTargetDefinition,
 } from './supplement-target.service';
-import type {
-  IngredientRecommendationResult,
-  NutritionPlanResult,
-  RecipeAiDesignData,
-  RecipeReviewResult,
-  SopResult,
-} from '../../domain/recipe-designer/recipe-ai-wizard/types';
 import {
   getNutritionProfileSourceName,
   resolveNutritionProfileDisplayName,
@@ -155,7 +147,6 @@ import {
 } from '../recipe/preparation-method-text.util';
 import { SearchGovernanceService } from '../search-governance/search-governance.service';
 import { LifeStage as RecipeLifeStage } from '../../domain/recipe/enums';
-import { alignPreparationMethodBasis } from '../../domain/recipe-designer/preparation-basis';
 import {
   DEFAULT_PRODUCTION_LOSS_RATE,
   MAX_PRODUCTION_LOSS_RATE,
@@ -298,7 +289,7 @@ type SeriesReleaseResult = {
   seriesId: string;
   name: string;
   businessStatus: string;
-  requiredLifeStages: string[];
+  /** 本次实际发布 / 更新的阶段代码（首次发布=当前全部 READY） */
   releasedStageCodes: string[];
   /** 本次从 DRAFT 变成 PUBLIC 的食谱行数 */
   publishedRecipeCount: number;
@@ -340,8 +331,6 @@ const DESIGN_RECIPE_ITEM_CLIENT_SELECT = {
   includeInAssessment: true,
   ratioPercent: true,
   preparationMethod: true,
-  preparationNote: true,
-  preparationSource: true,
   nutrientTargetKey: true,
   nutrientTargetValue: true,
   sortOrder: true,
@@ -419,8 +408,6 @@ const DESIGN_RECIPE_LIST_SELECT = {
       includeInAssessment: true,
       ratioPercent: true,
       preparationMethod: true,
-      preparationNote: true,
-      preparationSource: true,
       nutrientTargetKey: true,
       nutrientTargetValue: true,
       supplementTargets: true,
@@ -492,6 +479,20 @@ const INTERNAL_RECIPE_DESIGNER_CREATOR_IDS = [
 const PUBLISHED_RECIPE_BATCH_LABOR_HOURS = 2;
 const DESIGN_RECIPE_VERSION_CREATE_MAX_ATTEMPTS = 3;
 const DESIGN_RECIPE_ITEM_ORDER_MAX_ATTEMPTS = 3;
+
+/** 读标准原料 `properties.cfct_class`；非对象/空白一律 null。 */
+function readCfctClass(properties: unknown): string | null {
+  if (
+    typeof properties !== 'object' ||
+    properties === null ||
+    Array.isArray(properties)
+  ) {
+    return null;
+  }
+  const value = (properties as Record<string, unknown>).cfct_class;
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
 const COPYABLE_RECIPE_STATUS_PRIORITY: Record<string, number> = {
   [RecipeStatus.PRIVATE_CUSTOM]: 3,
   [RecipeStatus.DRAFT]: 2,
@@ -640,8 +641,6 @@ type DesignRecipeItemWithFood = {
   includeInAssessment: boolean;
   ratioPercent: number | null;
   preparationMethod: string | null;
-  preparationNote?: string | null;
-  preparationSource?: string | null;
   nutrientTargetKey: string | null;
   nutrientTargetValue: number | null;
   supplementTargets?: unknown;
@@ -662,6 +661,7 @@ type DesignRecipeItemWithFood = {
     name: string;
     displayNameZh?: string | null;
     preparationState?: string | null;
+    category?: NutritionFoodCategory | string | null;
     nutritionData: unknown;
     mappings?: Array<{
       ingredientId: string;
@@ -833,8 +833,6 @@ type RecipeSeriesCopyableRecipeItem = {
   exampleWeight?: number | null;
   ratioPercent?: number | null;
   preparationMethod?: string | null;
-  preparationNote?: string | null;
-  preparationSource?: string | null;
   nutrientTargetKey?: string | null;
   nutrientTargetValue?: number | null;
   supplementTargets?: unknown;
@@ -889,6 +887,8 @@ type IngredientOptionRecord = {
       category: NutritionFoodCategory;
       dataSource: string;
       status: NutritionFoodStatus;
+      preparationState?: string | null;
+      preparationStateLabel?: string | null;
       nutritionData?: unknown;
     };
   }>;
@@ -1485,10 +1485,6 @@ export class RecipeDesignerService {
     private readonly targetProvider: FediafTargetProvider,
     @Optional()
     private readonly searchGovernanceService?: SearchGovernanceService,
-    @Optional()
-    private readonly aiDesignSuggestionService?: AiDesignSuggestionService,
-    @Optional()
-    private readonly recipeAiWizardService?: RecipeAiWizardService,
     /**
      * 过敏原词表（2026-10-04 第一期）。营养评估要靠它判断
      * 配方里的食材有没有命中这只狗的过敏原 —— 改造前评估完全不读过敏。
@@ -1536,6 +1532,18 @@ export class RecipeDesignerService {
      */
     @Optional()
     private readonly supplementTargetService?: SupplementTargetService,
+    /**
+     * 原料预处理历史（2026-10-26）。
+     *
+     * 自动带出改为读「橱窗 + 当前有效交付定制」的历史原文；不再自动改写
+     * 生/熟/干口径。同样放在参数表最后并 @Optional，避免既有按位置构造的测试错位。
+     */
+    @Optional()
+    @Inject(IngredientPreparationHistoryService)
+    private readonly ingredientPreparationHistoryService?: IngredientPreparationHistoryService,
+    /** 旧封面回收站（2026-10-28）：保存 / 发布成功后引用安全地移入 7 天回收站 */
+    @Optional()
+    private readonly coverTrashService?: CoverTrashService,
   ) {}
 
   /**
@@ -2343,41 +2351,52 @@ export class RecipeDesignerService {
     const searchWhere = search
       ? await this.buildSeriesKeywordWhere(search)
       : undefined;
-    const series = (await this.prisma.recipeSeries.findMany({
-      where: {
-        ...(await this.buildSeriesVisibilityWhere(context)),
-        ...(query.status ? { businessStatus: query.status } : {}),
-        ...(searchWhere ?? {}),
-      },
-      include: {
-        designs: {
-          select: DESIGN_RECIPE_SERIES_LIST_SELECT,
-          orderBy: { updatedAt: 'desc' },
-        },
-        recipes: {
-          select: RECIPE_SERIES_WORKBENCH_RECIPE_SELECT,
-          orderBy: { updatedAt: 'desc' },
-        },
-      },
-      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-      ...(usePagination
-        ? {
-            skip: (page - 1) * pageSize,
-            take: pageSize + 1,
-          }
-        : {}),
-    })) as RecipeSeriesWorkbenchRecord[];
-
-    const hasMore = usePagination && series.length > pageSize;
-    const visibleSeries = hasMore ? series.slice(0, pageSize) : series;
     /**
      * 列表上下文（2026-10-22）：
      *  · CATALOG：产品线设计（默认，保持原行为）；
      *  · ORDER：订单绑定设计，单独入口展示，不混入产品线。
      * 历史系列 `designMode` 为空，按 CATALOG 处理（与数据库默认值一致）。
+     *
+     * 2026-10-30：模式过滤下推到数据库。之前先在内存过滤再分页，
+     * 一页 24 条里混着另一模式时会被过滤掉，页数和总数都不准。
      */
     const designMode = query.designMode ?? RecipeDesignMode.CATALOG;
-    const modeSeries = visibleSeries.filter(
+    // designMode 在库里有默认值 CATALOG（非空），直接等值过滤即可
+    const designModeWhere: Prisma.RecipeSeriesWhereInput = { designMode };
+    const where: Prisma.RecipeSeriesWhereInput = {
+      ...(await this.buildSeriesVisibilityWhere(context)),
+      ...(query.status ? { businessStatus: query.status } : {}),
+      ...(searchWhere ?? {}),
+      AND: [designModeWhere],
+    };
+    const [series, total] = (await Promise.all([
+      this.prisma.recipeSeries.findMany({
+        where,
+        include: {
+          designs: {
+            select: DESIGN_RECIPE_SERIES_LIST_SELECT,
+            orderBy: { updatedAt: 'desc' },
+          },
+          recipes: {
+            select: RECIPE_SERIES_WORKBENCH_RECIPE_SELECT,
+            orderBy: { updatedAt: 'desc' },
+          },
+        },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        ...(usePagination
+          ? {
+              skip: (page - 1) * pageSize,
+              take: pageSize,
+            }
+          : {}),
+      }),
+      usePagination
+        ? this.prisma.recipeSeries.count({ where })
+        : Promise.resolve(0),
+    ])) as [RecipeSeriesWorkbenchRecord[], number];
+
+    const hasMore = usePagination ? page * pageSize < total : false;
+    const modeSeries = series.filter(
       (record) =>
         (record.designMode ?? RecipeDesignMode.CATALOG) === designMode,
     );
@@ -2395,7 +2414,7 @@ export class RecipeDesignerService {
           record.createdBy === context.userId,
         ),
       );
-      return usePagination ? { items, page, pageSize, hasMore } : items;
+      return usePagination ? { items, page, pageSize, hasMore, total } : items;
     }
 
     const referenceDogNameById =
@@ -2453,11 +2472,11 @@ export class RecipeDesignerService {
         };
       });
       return usePagination
-        ? { items: orderItems, page, pageSize, hasMore }
+        ? { items: orderItems, page, pageSize, hasMore, total }
         : orderItems;
     }
 
-    return usePagination ? { items, page, pageSize, hasMore } : items;
+    return usePagination ? { items, page, pageSize, hasMore, total } : items;
   }
 
   async createSeries(
@@ -2465,9 +2484,16 @@ export class RecipeDesignerService {
     access: RecipeDesignerAccessInput,
   ) {
     const context = normalizeRecipeDesignerAccessContext(access);
-    const name = dto.name.trim();
-    if (!name) {
+    const rawName = dto.name.trim();
+    if (!rawName) {
       throw new BadRequestException('请填写系列名称');
+    }
+    // 长度硬上限 12：超了标签印不下（见 domain/recipe-designer/series-name.ts）
+    let name: string;
+    try {
+      name = assertRecipeNameLength(rawName);
+    } catch (error) {
+      throw new BadRequestException((error as Error).message);
     }
 
     // W2：食谱设计器不再向所有用户开放。
@@ -3828,12 +3854,6 @@ export class RecipeDesignerService {
         preparationMethod: this.sanitizeCopiedPreparationMethod(
           item.preparationMethod,
         ),
-        preparationNote: this.normalizeStoredPreparationNote(
-          item.preparationNote,
-        ),
-        preparationSource: this.normalizeStoredPreparationSource(
-          item.preparationSource,
-        ),
         nutrientTargetKey: item.nutrientTargetKey ?? null,
         nutrientTargetValue: item.nutrientTargetValue ?? null,
         ...(supplementTargets.length > 0
@@ -3870,7 +3890,7 @@ export class RecipeDesignerService {
       .map((s) => s.trim())
       .find(Boolean);
     const candidate = firstSegment || trimmed;
-    return candidate.length > 100 ? candidate.slice(0, 100) : candidate;
+    return truncatePreparationMethodContent(candidate) || null;
   }
 
   private resolveRecipeItemDesignWeight(
@@ -3934,12 +3954,6 @@ export class RecipeDesignerService {
       includeInAssessment: item.includeInAssessment,
       ratioPercent: item.ratioPercent,
       preparationMethod: item.preparationMethod,
-      preparationNote: this.normalizeStoredPreparationNote(
-        item.preparationNote,
-      ),
-      preparationSource: this.normalizeStoredPreparationSource(
-        item.preparationSource,
-      ),
       nutrientTargetKey: item.nutrientTargetKey,
       nutrientTargetValue: item.nutrientTargetValue,
       ...(supplementTargets.length > 0
@@ -4049,12 +4063,6 @@ export class RecipeDesignerService {
         preparationMethod: this.sanitizeCopiedPreparationMethod(
           item.preparationMethod,
         ),
-        preparationNote: this.normalizeStoredPreparationNote(
-          item.preparationNote,
-        ),
-        preparationSource: this.normalizeStoredPreparationSource(
-          item.preparationSource,
-        ),
         nutrientTargetKey: item.nutrientTargetKey ?? null,
         nutrientTargetValue: item.nutrientTargetValue ?? null,
         sortOrder: item.sortOrder ?? index,
@@ -4092,9 +4100,16 @@ export class RecipeDesignerService {
     access: RecipeDesignerAccessInput,
   ) {
     const context = normalizeRecipeDesignerAccessContext(access);
-    const name = dto.name.trim();
-    if (!name) {
+    const rawName = dto.name.trim();
+    if (!rawName) {
       throw new BadRequestException('请填写系列名称');
+    }
+    // 改名是设置正式名称：和新建一样按标签 12 字硬上限拦（2026-10-29）
+    let name: string;
+    try {
+      name = assertRecipeNameLength(rawName);
+    } catch (error) {
+      throw new BadRequestException((error as Error).message);
     }
 
     const series = await this.prisma.recipeSeries.findUnique({
@@ -4136,9 +4151,29 @@ export class RecipeDesignerService {
         });
       }
 
-      // 正式食谱：该系列下**所有版本行**一起改名，保持与系列名一致
+      /**
+       * 正式食谱：该系列下**未交付过**的版本行一起改名，保持与系列名一致。
+       *
+       * ⚠️ **已经交付过的私密食谱不改名**（2026-10-28 修）。
+       *
+       * 改名此前会连带把**已交付的定制食谱**一起改掉，于是出现
+       * 「历史订单里写着鸭肉高蛋白定制餐，点开原料却是兔里脊」——
+       * 名字跟着系列走、原料却冻结在交付那一刻，两边对不上。
+       * 交付快照（`custom_recipe_delivery_item.content_snapshot`）
+       * 里存的是交付当时真实的名字，那才是顾客手里那份的历史。
+       *
+       * 客户重新改稿重交时，`createOrUpdatePrivateRecipeSnapshot`
+       * 会把名字按最新草稿重写一次 —— 所以"改名后重交"仍然生效，
+       * 只有"改名但不重交"不会去篡改已经交出去的那一版。
+       */
       await tx.recipe.updateMany({
-        where: { seriesId, name: { not: name } },
+        where: {
+          seriesId,
+          name: { not: name },
+          // 批次交付 / 老单份交付 任一存在 = 已经交到顾客手里了
+          deliveryItems: { none: {} },
+          deliveries: { none: {} },
+        },
         data: { name },
       });
 
@@ -4204,16 +4239,17 @@ export class RecipeDesignerService {
   }
 
   /**
-   * ===== 产品线整系列发布（2026-10-22 · 两阶段发布）=====
+   * ===== 产品线发布 / 更新（2026-10-26 · 发布范围由阶段状态推导）=====
    *
    * 两阶段口径：
    *  1. **阶段入库**：`publishDraft` 把某个生命阶段的设计写成
    *     `Recipe.status=DRAFT`（系列仓库），此时产品线不对外可见；
-   *  2. **整系列发布**：`requiredLifeStages` 全部就绪 + 系列展示资料齐全后，
-   *     管理员调用 `releaseSeries` 一次性把整个系列发布。
+   *  2. **发布 / 更新**：系列展示资料齐全后，管理员调用 `releaseSeries`：
+   *     首次发布取当前全部 READY 阶段（1 个就绪也能发）；
+   *     已上线更新只发本次选中的可操作阶段。
    *
    * 展示资料（封面图 / 封面标题 / 卖点 / 目标健康标签）因此挂在**系列**上，
-   * 不再要求每个阶段草稿各填一份。
+   * 不再要求每个阶段草稿各填一份；封面角标单独存系列角标表，只读回传。
    */
   async getSeriesReleaseReadiness(
     seriesId: string,
@@ -4221,21 +4257,36 @@ export class RecipeDesignerService {
   ): Promise<SeriesReleaseReadiness> {
     const context = normalizeRecipeDesignerAccessContext(access);
     const series = await this.loadCatalogSeriesForRelease(seriesId, context);
-    const sources = await this.loadSeriesReleaseStageSources(seriesId);
-    return this.buildSeriesReleaseReadinessForSeries(series, sources);
+    const [sources, coverBadges, taxonomyLinkCount] = await Promise.all([
+      this.loadSeriesReleaseStageSources(seriesId),
+      this.loadSeriesCoverBadgeNames(seriesId),
+      this.countSeriesTaxonomyLinks(seriesId),
+    ]);
+    return this.buildSeriesReleaseReadinessForSeries(
+      series,
+      sources,
+      coverBadges,
+      taxonomyLinkCount,
+    );
   }
 
   /**
-   * 保存产品线发布设置（阶段清单 + 系列级展示资料）。
+   * 保存产品线发布设置（系列级展示资料）。
    *
    * - 只有内部员工可维护（产品线资料不是顾客自助内容）；
    * - patch semantics：只写请求里出现的字段，显式 null 表示清空；
+   * - `requiredLifeStages` 已废弃：DTO 仍接受但这里忽略；
+   * - 已上线系列（businessStatus=PUBLIC 或已有 PUBLIC 食谱行）不能清空
+   *   封面图 / 一句话卖点，避免线上商品变空白；
+   * - `options.applyToLive=true` 时把最终门面资料同步到该系列所有 PUBLIC
+   *   食谱行；只有后台「保存发布设置」会传，AI `set_copy` 不传；
    * - 系列没有 contentRevision，不产生版本号；保存后由发布门槛重新评估。
    */
   async updateSeriesReleaseSettings(
     seriesId: string,
     dto: UpdateRecipeSeriesReleaseSettingsDto,
     access: RecipeDesignerAccessInput,
+    options: { applyToLive?: boolean } = {},
   ): Promise<SeriesReleaseSettingsSnapshot> {
     const context = normalizeRecipeDesignerAccessContext(access);
     if (!isInternalRecipeDesignerRole(context)) {
@@ -4245,11 +4296,6 @@ export class RecipeDesignerService {
     const series = await this.loadCatalogSeriesForRelease(seriesId, context);
 
     const data: Prisma.RecipeSeriesUpdateInput = {};
-    if (dto.requiredLifeStages !== undefined) {
-      data.requiredLifeStages = this.normalizeSeriesReleaseRequiredStages(
-        dto.requiredLifeStages,
-      );
-    }
     if (dto.coverImageUrl !== undefined) {
       data.coverImageUrl = this.normalizeSeriesReleaseText(
         dto.coverImageUrl,
@@ -4282,35 +4328,73 @@ export class RecipeDesignerService {
       return this.toSeriesReleaseSettingsSnapshot(series);
     }
 
-    const updated = await this.prisma.recipeSeries.update({
-      where: { id: seriesId },
-      data,
+    const oldCoverUrl = series.coverImageUrl
+      ? String(series.coverImageUrl)
+      : null;
+
+    const isLive =
+      series.businessStatus === RecipeSeriesBusinessStatus.PUBLIC ||
+      (await this.prisma.recipe.count({
+        where: { seriesId, status: RecipeStatus.PUBLIC },
+      })) > 0;
+    if (isLive && data.coverImageUrl === null) {
+      throw new BadRequestException('已上线系列不能清空封面图');
+    }
+    if (isLive && data.sellingPoint === null) {
+      throw new BadRequestException('已上线系列不能清空一句话卖点');
+    }
+
+    const snapshot = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.recipeSeries.update({
+        where: { id: seriesId },
+        data,
+      });
+      if (options.applyToLive === true) {
+        await tx.recipe.updateMany({
+          where: { seriesId, status: RecipeStatus.PUBLIC },
+          data: this.buildSeriesPresentationUpdateData(updated),
+        });
+      }
+      return this.toSeriesReleaseSettingsSnapshot(updated);
     });
-    return this.toSeriesReleaseSettingsSnapshot(updated);
+
+    if (
+      dto.coverImageUrl !== undefined &&
+      oldCoverUrl &&
+      oldCoverUrl !== snapshot.coverImageUrl
+    ) {
+      await this.trashOldCover(
+        oldCoverUrl,
+        dto.coverImageUrl ? 'REPLACED' : 'REMOVED',
+      );
+    }
+
+    return snapshot;
   }
 
   /**
-   * 发布整条产品线（管理员）。
+   * 发布 / 更新整条产品线（管理员）。
    *
    * 先按同一份门槛断言就绪，再在一个事务里：
-   *  · 每个生命阶段只处理**最新一版**：
-   *      - 最新一版是 DRAFT → 改成 PUBLIC（这是「重新发布」要发出去的新版本）；
-   *      - 最新一版已经是 PUBLIC → 只刷新系列展示资料；
-   *      - 更老的版本保持原状（可以继续是 PUBLIC，不影响前台取最新版本）；
-   *    —— 不只必填阶段：未勾选但已经设计好的阶段如果留在 DRAFT，
-   *       就是顾客永远看不到的「隐藏草稿」，所以一起发布；
-   *       只有设计稿、从未写进系列仓库的阶段没有 `Recipe` 可发，保持原状，
-   *       后台仍能在 readiness.stages 里看到它的 DRAFT 状态；
-   *  · 系列展示资料复制到每个阶段最新一版（目标健康标签为空时保留食谱原值，
-   *    因为空标签只是提醒，不应清掉阶段发布时已有的标签）；
-   *  · 系列 `businessStatus` → `PUBLIC`。
+   *  · **首次发布**（系列还没 PUBLIC）：忽略前端 `stageCodes`，取当前全部
+   *    READY 阶段的最新一版（1 个就绪也能发，不要求生命阶段齐全）；
+   *  · **已上线更新**：`stageCodes` 省略 = 全部可操作阶段（兼容旧前端），
+   *    空数组 = 400，非法 / 不可操作代码 = 400；只把选中阶段的最新 DRAFT
+   *    改成 PUBLIC，未选中的待更新阶段保持 DRAFT；
+   *  · 每个阶段只处理**最新一版**，更老版本保持原状；
+   *  · 门面资料写入「本次选中的目标 + 所有其余 PUBLIC 行」：
+   *    选中的目标带 `status: PUBLIC`，其余 PUBLIC 行只刷新门面；
+   *  · 系列 `businessStatus` → `PUBLIC`；
+   *  · 选中的阶段为空时直接 400，不开事务（只改门面请走保存发布设置）。
    *
-   * 「旧 PUBLIC + 新 DRAFT」不是阻断项：重新发布时旧版本原样保留，
-   * 新 DRAFT 版本成为该阶段新的 PUBLIC 版本。
+   * 返回 `releasedStageCodes` 为本次实际操作的阶段代码；
+   * `publishedRecipeCount` 是第一次 DRAFT→PUBLIC 的行数，
+   * `updatedRecipeCount` 是两次写入行数之和。
    */
   async releaseSeries(
     seriesId: string,
     access: RecipeDesignerAccessInput,
+    options: { stageCodes?: string[] } = {},
   ): Promise<SeriesReleaseResult> {
     const context = normalizeRecipeDesignerAccessContext(access);
     if (context.role !== UserRole.ADMIN) {
@@ -4318,10 +4402,22 @@ export class RecipeDesignerService {
     }
 
     const series = await this.loadCatalogSeriesForRelease(seriesId, context);
-    const sources = await this.loadSeriesReleaseStageSources(seriesId);
+    // 临时名（「未命名系列 · 10-21 22:15」）不能上线：它会印在标签上
+    if (String(series.name ?? '').trim().startsWith('未命名')) {
+      throw new BadRequestException(
+        '系列名称还是临时名称，先在「发布设置」里改成正式名称再发布',
+      );
+    }
+    const [sources, coverBadges, taxonomyLinkCount] = await Promise.all([
+      this.loadSeriesReleaseStageSources(seriesId),
+      this.loadSeriesCoverBadgeNames(seriesId),
+      this.countSeriesTaxonomyLinks(seriesId),
+    ]);
     const readiness = this.buildSeriesReleaseReadinessForSeries(
       series,
       sources,
+      coverBadges,
+      taxonomyLinkCount,
     );
     if (!readiness.ready) {
       throw new BadRequestException(
@@ -4329,46 +4425,61 @@ export class RecipeDesignerService {
       );
     }
 
-    const presentation = readiness.presentation;
-    const seriesTargetHealthTags = presentation.targetHealthTags;
-    const recipeUpdateData: Prisma.RecipeUpdateManyMutationInput = {
-      status: RecipeStatus.PUBLIC,
-      coverImageUrl: presentation.coverImageUrl,
-      coverTitle: presentation.coverTitle,
-      sellingPoint: presentation.sellingPoint,
-      ...(seriesTargetHealthTags.length > 0
-        ? { targetHealthTags: this.toJsonValue(seriesTargetHealthTags) }
-        : {}),
-    };
+    const actionableStages = readiness.stages.filter(
+      (stage) => stage.actionable,
+    );
+    const selectedStageCodes =
+      readiness.releaseState === 'UNPUBLISHED'
+        ? actionableStages
+            .filter((stage) => stage.status === 'READY')
+            .map((stage) => stage.stageCode)
+        : this.resolveSeriesReleaseSelectedStageCodes(
+            actionableStages,
+            options.stageCodes,
+          );
     /**
-     * 只发布每个阶段的最新一版：旧版本（包括旧 PUBLIC 和更早的 DRAFT）
-     * 一律不动。已公开的最新版本仍会写入展示资料，但不计入「新发布」。
+     * 空发布必须拒绝：首次发布没有 READY、或更新时没有可操作阶段，
+     * 都不能开事务把系列置 PUBLIC。只改门面走「保存发布设置」。
+     */
+    if (selectedStageCodes.length === 0) {
+      throw new BadRequestException(
+        readiness.releaseState === 'UNPUBLISHED'
+          ? '还没有可发布的阶段，请先完成阶段上线检查'
+          : '当前没有可更新的阶段',
+      );
+    }
+    const selectedStageCodeSet = new Set(selectedStageCodes);
+
+    /**
+     * 只发布选中阶段的最新一版：未选中的阶段（含其它待更新阶段）保持原状。
+     * 未选中的 PUBLIC 行会在第二个 updateMany 里只刷新门面资料。
      */
     const releaseTargets = this.pickSeriesReleasePublishTargets(
       sources.recipes,
-    );
+    ).filter((recipe) => {
+      const stage = this.resolveSeriesReleaseRecipeStage(recipe);
+      return stage !== null && selectedStageCodeSet.has(stage);
+    });
     const releaseTargetIds = releaseTargets.map((recipe) => recipe.id);
-    const publishedRecipeCount = releaseTargets.filter(
-      (recipe) => recipe.status === RecipeStatus.DRAFT,
-    ).length;
-    const releasedStageCodes = readiness.stages
-      .filter((stage) => stage.status === 'READY' || stage.status === 'PUBLIC')
-      .map((stage) => stage.stageCode);
+    const presentationData = this.buildSeriesPresentationUpdateData(series);
 
     return this.prisma.$transaction(async (tx) => {
-      const updatedRecipes =
-        releaseTargetIds.length > 0
-          ? await tx.recipe.updateMany({
-              where: {
-                id: { in: releaseTargetIds },
-                seriesId,
-                status: {
-                  in: [RecipeStatus.DRAFT, RecipeStatus.PUBLIC],
-                },
-              },
-              data: recipeUpdateData,
-            })
-          : { count: 0 };
+      const publishedRecipes = await tx.recipe.updateMany({
+        where: {
+          id: { in: releaseTargetIds },
+          seriesId,
+          status: RecipeStatus.DRAFT,
+        },
+        data: { ...presentationData, status: RecipeStatus.PUBLIC },
+      });
+      const refreshedRecipes = await tx.recipe.updateMany({
+        where: {
+          seriesId,
+          status: RecipeStatus.PUBLIC,
+          id: { notIn: releaseTargetIds },
+        },
+        data: presentationData,
+      });
 
       const updatedSeries = await tx.recipeSeries.update({
         where: { id: seriesId },
@@ -4379,13 +4490,46 @@ export class RecipeDesignerService {
         seriesId,
         name: updatedSeries.name,
         businessStatus: updatedSeries.businessStatus,
-        requiredLifeStages: readiness.requiredLifeStages,
-        releasedStageCodes,
-        publishedRecipeCount,
-        updatedRecipeCount: updatedRecipes.count,
+        releasedStageCodes: selectedStageCodes,
+        publishedRecipeCount: publishedRecipes.count,
+        updatedRecipeCount: publishedRecipes.count + refreshedRecipes.count,
         releasedAt: updatedSeries.updatedAt,
       };
     });
+  }
+
+  /**
+   * 已上线更新时解析本次要发布的阶段：
+   *  · `stageCodes` 省略 = 全部可操作阶段（兼容旧前端）；
+   *  · 传空数组 = 400（必须明确选一个）；
+   *  · 含非法 / 不可操作阶段代码 = 400，并列出具体代码。
+   */
+  private resolveSeriesReleaseSelectedStageCodes(
+    actionableStages: SeriesReleaseStageReadiness[],
+    stageCodes: string[] | undefined,
+  ): string[] {
+    if (stageCodes === undefined) {
+      return actionableStages.map((stage) => stage.stageCode);
+    }
+    if (stageCodes.length === 0) {
+      throw new BadRequestException('请至少选择一个要更新的阶段');
+    }
+
+    const actionableStageCodes = new Set(
+      actionableStages.map((stage) => stage.stageCode),
+    );
+    const invalidStageCodes = [...new Set(stageCodes)].filter(
+      (stageCode) => !actionableStageCodes.has(stageCode),
+    );
+    if (invalidStageCodes.length > 0) {
+      throw new BadRequestException(
+        `以下阶段当前不可更新：${invalidStageCodes.join('、')}`,
+      );
+    }
+
+    return actionableStages
+      .filter((stage) => stageCodes.includes(stage.stageCode))
+      .map((stage) => stage.stageCode);
   }
 
   /**
@@ -4488,13 +4632,46 @@ export class RecipeDesignerService {
     return { recipes, designs };
   }
 
+  /**
+   * 该系列挂了几条需求分类（用于发布门禁「已归类」）。
+   *
+   * 查不到（表还没建 / 该部署形态下没有这个模型）时返回 `undefined`，
+   * 让门槛**跳过**而不是把整条发布流程打成阻断：
+   * 分类服务挂掉不该让人连菜都发不出去。
+   */
+  private async countSeriesTaxonomyLinks(
+    seriesId: string,
+  ): Promise<number | undefined> {
+    try {
+      return await this.prisma.recipeSeriesTaxonomy.count({
+        where: { seriesId },
+      });
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * 系列封面角标名称（合规词表词名，按 sortOrder 排序）。
+   * 只读回传给 readiness，供发布抽屉预览「顾客看到的封面」。
+   */
+  private async loadSeriesCoverBadgeNames(seriesId: string): Promise<string[]> {
+    const rows = await this.prisma.recipeSeriesCoverBadge.findMany({
+      where: { seriesId },
+      select: { healthTag: { select: { name: true } } },
+      orderBy: { sortOrder: 'asc' },
+    });
+    return pickCoverBadgeNames(
+      rows.map((row) => row.healthTag?.name),
+    );
+  }
+
   private buildSeriesReleaseReadinessForSeries(
     series: Pick<
       RecipeSeries,
       | 'id'
       | 'designMode'
       | 'businessStatus'
-      | 'requiredLifeStages'
       | 'coverImageUrl'
       | 'coverTitle'
       | 'sellingPoint'
@@ -4504,23 +4681,64 @@ export class RecipeDesignerService {
       recipes: SeriesReleaseRecipeRecord[];
       designs: SeriesReleaseDesignRecord[];
     },
+    coverBadges: string[],
+    taxonomyLinkCount = 0,
   ): SeriesReleaseReadiness {
     return buildSeriesReleaseReadiness({
       seriesId: series.id,
+      taxonomyLinkCount,
       designMode: series.designMode ?? RecipeDesignMode.CATALOG,
       businessStatus: series.businessStatus,
-      requiredLifeStages: series.requiredLifeStages,
       presentation: {
         coverImageUrl: series.coverImageUrl,
         coverTitle: series.coverTitle,
         sellingPoint: series.sellingPoint,
         targetHealthTags: series.targetHealthTags,
+        coverBadges,
       },
       stages: this.buildSeriesReleaseStageSnapshots(
         sources.recipes,
         sources.designs,
       ),
     });
+  }
+
+  /**
+   * 门面资料写入规则（保存发布设置与发布共用）：
+   *  · 封面图 / 一句话卖点必写（null 也会写入，调用方负责拦截已上线清空）；
+   *  · 封面标题只在系列值非空时写，避免清掉旧食谱行上的历史值；
+   *  · 目标健康标签只在系列值非空时写，为空时保留食谱原值。
+   */
+  private buildSeriesPresentationUpdateData(
+    series: Pick<
+      RecipeSeries,
+      'coverImageUrl' | 'coverTitle' | 'sellingPoint' | 'targetHealthTags'
+    >,
+  ): Prisma.RecipeUpdateManyMutationInput {
+    const coverTitle = this.normalizeSeriesReleaseText(
+      series.coverTitle,
+      '封面标题',
+      RECIPE_PRESENTATION_LIMITS.coverTitle,
+    );
+    const targetHealthTags = this.normalizeRecipeStringArray(
+      series.targetHealthTags,
+    );
+
+    return {
+      coverImageUrl: this.normalizeSeriesReleaseText(
+        series.coverImageUrl,
+        '封面图地址',
+      ),
+      sellingPoint: this.normalizeSeriesReleaseText(
+        series.sellingPoint,
+        '一句话卖点',
+        RECIPE_PRESENTATION_LIMITS.sellingPoint,
+      ),
+      ...(coverTitle ? { coverTitle } : {}),
+      ...(targetHealthTags.length > 0
+        ? { targetHealthTags: this.toJsonValue(targetHealthTags) }
+        : {}),
+    };
   }
 
   /**
@@ -4702,23 +4920,6 @@ export class RecipeDesignerService {
       ],
       updatedAt: series.updatedAt,
     };
-  }
-
-  /** 必需生命阶段：只接受合法阶段代码，去重后按系统固定顺序保存。 */
-  private normalizeSeriesReleaseRequiredStages(value: unknown): string[] {
-    const stages = this.normalizeSeriesReleaseStringList(value, '必需生命阶段');
-    const validStageCodes = new Set<string>(
-      ORDERED_RECIPE_SERIES_LIFE_STAGES as string[],
-    );
-    const invalidStages = stages.filter((stage) => !validStageCodes.has(stage));
-    if (invalidStages.length > 0) {
-      throw new BadRequestException(
-        `无效的生命阶段代码：${invalidStages.join('、')}`,
-      );
-    }
-    return (ORDERED_RECIPE_SERIES_LIFE_STAGES as string[]).filter((stage) =>
-      stages.includes(stage),
-    );
   }
 
   /**
@@ -5235,7 +5436,8 @@ export class RecipeDesignerService {
       if (draft.createdBy !== context.userId) {
         throw new NotFoundException(`Design recipe ${id} not found`);
       }
-      return this.withPreparationMethodLabels(draft);
+      const labeled = await this.withPreparationMethodLabels(draft);
+      return this.withItemDisplayOrder(labeled);
     }
 
     const internalUserIds = await this.listInternalRecipeDesignerCreatorIds();
@@ -5243,7 +5445,8 @@ export class RecipeDesignerService {
       throw new NotFoundException(`Design recipe ${id} not found`);
     }
 
-    return this.withPreparationMethodLabels(draft);
+    const labeled = await this.withPreparationMethodLabels(draft);
+    return this.withItemDisplayOrder(labeled);
   }
 
   /**
@@ -5261,7 +5464,87 @@ export class RecipeDesignerService {
   ): Promise<DraftLaunchReadiness> {
     const draft = await this.getDraft(id, access);
     const { readiness } = await this.evaluateDraftLaunchReadiness(draft);
+
+    /**
+     * AI 交付卡已改成只读：它落库的 warnings 不在这里重新跑 Agent，
+     * 只取**当前内容版本**最近一次快照，作为额外提醒并入上线检查。
+     * 只加 warnings，不参与 ready / blockers。
+     */
+    const aiWarnings = await this.loadAiDeliveryWarnings(draft);
+    if (aiWarnings.length > 0) {
+      const seenMessages = new Set(
+        readiness.warnings.map((warning) => warning.message),
+      );
+      for (const warning of aiWarnings) {
+        const message = `AI 交付提醒：${warning}`;
+        if (seenMessages.has(message)) continue;
+        seenMessages.add(message);
+        readiness.warnings.push({
+          code: 'AI_DELIVERY_WARNING',
+          scope: 'COMMON',
+          message,
+        });
+      }
+    }
+
     return readiness;
+  }
+
+  /**
+   * 读取当前内容版本上最近一次 AI 交付快照里的 warnings。
+   *
+   * 版本对不上（旧快照）、快照结构不对、或测试/历史库没有这张表时都按
+   * “没有 AI 提醒”处理，绝不让上线检查 500。
+   */
+  private async loadAiDeliveryWarnings(
+    draft: DesignRecipeWithItems,
+  ): Promise<string[]> {
+    const snapshotModel = (this.prisma as any).recipeDesignAgentSnapshot;
+    if (!snapshotModel?.findFirst) {
+      return [];
+    }
+
+    let record: { snapshot?: unknown } | null;
+    try {
+      record = await snapshotModel.findFirst({
+        where: {
+          designRecipeId: draft.id,
+          contentRevision: draft.contentRevision,
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { snapshot: true },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `草稿 ${draft.id} AI 交付快照读取失败，跳过 AI 提醒：${this.resolveLaunchReadinessErrorMessage(error)}`,
+      );
+      return [];
+    }
+    if (!record) {
+      return [];
+    }
+
+    const snapshot = record.snapshot;
+    if (
+      typeof snapshot !== 'object' ||
+      snapshot === null ||
+      Array.isArray(snapshot)
+    ) {
+      return [];
+    }
+    const warnings = (snapshot as { warnings?: unknown }).warnings;
+    if (
+      !Array.isArray(warnings) ||
+      !warnings.every(
+        (warning): warning is string => typeof warning === 'string',
+      )
+    ) {
+      return [];
+    }
+
+    return warnings
+      .map((warning) => warning.trim())
+      .filter((warning) => warning.length > 0);
   }
 
   /**
@@ -5645,6 +5928,10 @@ export class RecipeDesignerService {
     const draft = await this.getDraft(id, access);
     this.validateDraftPresentation(dto);
 
+    const oldCoverUrl = draft.coverImageUrl
+      ? String(draft.coverImageUrl)
+      : null;
+
     const data: Prisma.DesignRecipeUpdateInput = {};
     if (dto.coverImageUrl !== undefined) {
       data.coverImageUrl = dto.coverImageUrl;
@@ -5682,7 +5969,32 @@ export class RecipeDesignerService {
       select: DRAFT_PRESENTATION_SELECT,
     });
 
-    return this.toDraftPresentationSnapshot(updated);
+    const snapshot = this.toDraftPresentationSnapshot(updated);
+    if (
+      dto.coverImageUrl !== undefined &&
+      oldCoverUrl &&
+      oldCoverUrl !== snapshot.coverImageUrl
+    ) {
+      await this.trashOldCover(
+        oldCoverUrl,
+        dto.coverImageUrl ? 'REPLACED' : 'REMOVED',
+      );
+    }
+    return snapshot;
+  }
+
+  /** 保存成功后再扔旧图；失败只记录，不回滚已保存内容 */
+  private async trashOldCover(
+    url: string,
+    reason: 'REPLACED' | 'REMOVED',
+  ): Promise<void> {
+    try {
+      await this.coverTrashService?.trashIfUnreferenced(url, reason);
+    } catch (error: any) {
+      console.warn(
+        `[cover-cleanup] failed to trash ${url}: ${error?.message || error}`,
+      );
+    }
   }
 
   /**
@@ -5886,12 +6198,6 @@ export class RecipeDesignerService {
               includeInAssessment: item.includeInAssessment,
               ratioPercent: item.ratioPercent,
               preparationMethod: item.preparationMethod,
-              preparationNote: this.normalizeStoredPreparationNote(
-                item.preparationNote,
-              ),
-              preparationSource: this.normalizeStoredPreparationSource(
-                item.preparationSource,
-              ),
               nutrientTargetKey: item.nutrientTargetKey,
               nutrientTargetValue: item.nutrientTargetValue,
               ...(supplementTargets.length > 0
@@ -6035,14 +6341,10 @@ export class RecipeDesignerService {
       await this.resolveDesignItemPreparationMethod(
         dto.preparationMethod,
         ingredientId,
-        dto.nutritionFoodId,
       );
-    const preparationData = this.buildPreparationCreateData({
-      explicitMethod: dto.preparationMethod,
-      explicitNote: dto.preparationNote,
-      explicitSource: this.parsePreparationSourceInput(dto.preparationSource),
-      resolvedMethod: resolvedPreparationMethod,
-    });
+    const preparationData = {
+      preparationMethod: resolvedPreparationMethod,
+    };
     const shouldPersistNutrientTarget =
       await this.isIngredientIdSupplement(ingredientId);
     /**
@@ -6196,22 +6498,14 @@ export class RecipeDesignerService {
       }
     }
 
-    const changesPreparation =
-      dto.preparationMethod !== undefined ||
-      dto.preparationNote !== undefined ||
-      dto.preparationSource !== undefined;
-    const preparationData = changesPreparation
-      ? this.buildPreparationUpdateData({
-          explicitMethod: dto.preparationMethod,
-          explicitNote: dto.preparationNote,
-          explicitSource: this.parsePreparationSourceInput(
-            dto.preparationSource,
-          ),
-          currentMethod: draft.preparationMethod,
-          currentNote: draft.preparationNote,
-          currentSource: draft.preparationSource,
-        })
-      : {};
+    const preparationData =
+      dto.preparationMethod !== undefined
+        ? {
+            preparationMethod: this.normalizePreparationMethod(
+              dto.preparationMethod,
+            ),
+          }
+        : {};
 
     const data = {
       ...(dto.weightG !== undefined ? { weightG: dto.weightG } : {}),
@@ -6273,28 +6567,21 @@ export class RecipeDesignerService {
     }
 
     const weightG = dto.weightG ?? current.weightG;
+    const ingredientChanged =
+      String(ingredientId ?? '').trim() !==
+      String(current.ingredientId ?? '').trim();
+    // 换原料时不能沿用旧原料的部位/状态/预处理；没有显式传入就按新原料历史重新带出。
     const preparationMethod =
-      dto.preparationMethod ?? current.preparationMethod;
-    const preparationNote =
-      dto.preparationNote !== undefined
-        ? dto.preparationNote
-        : current.preparationNote;
-    const preparationSource =
-      dto.preparationSource !== undefined
-        ? dto.preparationSource
-        : this.normalizeStoredPreparationSource(current.preparationSource);
+      dto.preparationMethod ??
+      (ingredientChanged ? undefined : current.preparationMethod);
     const resolvedPreparationMethod =
       await this.resolveDesignItemPreparationMethod(
         preparationMethod,
         ingredientId,
-        dto.nutritionFoodId,
       );
-    const preparationData = this.buildPreparationCreateData({
-      explicitMethod: preparationMethod,
-      explicitNote: preparationNote,
-      explicitSource: this.parsePreparationSourceInput(preparationSource),
-      resolvedMethod: resolvedPreparationMethod,
-    });
+    const preparationData = {
+      preparationMethod: resolvedPreparationMethod,
+    };
 
     /**
      * 换入补剂时必须带目标定义；换入普通原料时目标字段全部清空，
@@ -6633,7 +6920,10 @@ export class RecipeDesignerService {
       );
     }
 
-    const assessmentData = this.buildAssessmentUpdateData(result);
+    const assessmentData = this.buildAssessmentUpdateData(
+      result,
+      allergenWarnings,
+    );
     await this.prisma.designRecipe.updateMany({
       where: { id, contentRevision: draft.contentRevision },
       data: {
@@ -6660,6 +6950,7 @@ export class RecipeDesignerService {
   ): Promise<{
     contentRevision: number;
     assessment: DesignRecipeAssessmentResult;
+    allergenWarnings: DraftAllergenWarning[];
   }> {
     const draft = await this.getDraft(id, access);
     if (this.isPublishedDraft(draft)) {
@@ -6669,17 +6960,22 @@ export class RecipeDesignerService {
       draft.fediafDogScenario,
     );
     const result = await this.assessLoadedDraft(draft, targets);
+    const allergenWarnings = await this.buildDraftAllergenWarnings(draft);
     const { count } = await this.prisma.designRecipe.updateMany({
       where: { id, contentRevision: draft.contentRevision },
       data: {
-        ...this.buildAssessmentUpdateData(result),
+        ...this.buildAssessmentUpdateData(result, allergenWarnings),
         assessmentContentRevision: draft.contentRevision,
       },
     });
     if (count === 0) {
       throw new ConflictException('草稿在评估期间被修改，请重新评估');
     }
-    return { contentRevision: draft.contentRevision, assessment: result };
+    return {
+      contentRevision: draft.contentRevision,
+      assessment: result,
+      allergenWarnings,
+    };
   }
 
   /**
@@ -6936,10 +7232,32 @@ export class RecipeDesignerService {
       displayName?: string | null;
     },
   ) {
+    /**
+     * ⚠️ 分母必须是「当前配料的合计」，不能再用 `draft.totalWeightG`。
+     *
+     * 那个字段只在评估落库时刷新；人工改完克数、没再跑评估时就还是旧值。
+     * 2026-10-28 的事故就是它：克数合计 311g，草稿总重还停在 385.2g，
+     * 配比被写成 85÷385.2=22.07%（应为 27.56%），车间少投料 20%，
+     * 补剂浓度也一起偏低 19%。
+     */
+    const totalWeightG = this.resolveIncludedItemsTotalWeightG(draft.items);
+    const supplementBasisWeightG = this.resolveSupplementTargetBasisWeightG(
+      draft.items,
+    );
+    const publishedFoodRatioMap = this.buildPublishedFoodRatioMap(
+      draft.items
+        .filter((item) => this.isItemIncludedInAssessment(item))
+        .map((item) => ({ item })),
+    );
     const privateSupplementTargetMap =
-      await this.buildPrivateSnapshotSupplementTargetMap(draft);
+      await this.buildPrivateSnapshotSupplementTargetMap(
+        draft,
+        supplementBasisWeightG,
+      );
     const itemCreates = this.buildPrivateRecipeSnapshotItemCreateData(
       draft,
+      totalWeightG,
+      publishedFoodRatioMap,
       privateSupplementTargetMap,
     );
     const customOrderId = options.customOrderId;
@@ -7088,13 +7406,11 @@ export class RecipeDesignerService {
     const publishedFoodRatioMap =
       this.buildPublishedFoodRatioMap(ingredientItems);
     const defaultPreparationMethods =
-      await this.loadDefaultPreparationMethodMap(
+      (await this.ingredientPreparationHistoryService?.getLatestTextMap(
         ingredientItems.map(({ ingredientId }) => ingredientId),
-      );
-    const supplementTargetMap = await this.buildPublishedSupplementTargetMap(
-      draft,
-      assessment,
-    );
+      )) ?? new Map<string, string>();
+    const supplementTargetMap =
+      await this.buildPublishedSupplementTargetMap(draft);
     const healthTagAssignments = this.buildPublishedHealthTagAssignments(
       draft.targetHealthTags,
     );
@@ -7341,8 +7657,6 @@ export class RecipeDesignerService {
         nutritionFoodId: item.nutritionFoodId,
         weightG: this.normalizeComparableNumber(item.weightG),
         preparationMethod: this.normalizeComparableText(item.preparationMethod),
-        preparationNote: this.normalizeComparableText(item.preparationNote),
-        preparationSource: this.normalizeComparableText(item.preparationSource),
         nutrientTargetKey: this.normalizeComparableText(item.nutrientTargetKey),
         nutrientTargetValue: this.normalizeComparableNumber(
           item.nutrientTargetValue,
@@ -7361,8 +7675,6 @@ export class RecipeDesignerService {
             left.ingredientId.localeCompare(right.ingredientId),
             left.nutritionFoodId.localeCompare(right.nutritionFoodId),
             left.preparationMethod.localeCompare(right.preparationMethod),
-            left.preparationNote.localeCompare(right.preparationNote),
-            left.preparationSource.localeCompare(right.preparationSource),
             left.nutrientTargetKey.localeCompare(right.nutrientTargetKey),
             left.supplementTargets.localeCompare(right.supplementTargets),
           ].find((result) => result !== 0) ?? 0
@@ -7659,6 +7971,8 @@ export class RecipeDesignerService {
 
   private buildPrivateRecipeSnapshotItemCreateData(
     draft: DesignRecipeWithItems,
+    totalWeightG: number,
+    publishedFoodRatioMap: Map<string, number>,
     privateSupplementTargetMap: Map<
       string,
       PublishedSupplementNutrientTarget[]
@@ -7685,15 +7999,9 @@ export class RecipeDesignerService {
           preparationMethod: this.normalizePreparationMethod(
             item.preparationMethod,
           ),
-          ...this.resolveSnapshotPreparation({
-            note: item.preparationNote,
-            source: item.preparationSource,
-            usedAutomaticFallback: false,
-          }),
-          ratioPercent: this.resolvePrivateRecipeItemRatio(
-            item,
-            draft.totalWeightG,
-          ),
+          ratioPercent: isSupplement
+            ? this.resolveSupplementSnapshotRatio(item, totalWeightG)
+            : (publishedFoodRatioMap.get(item.id) ?? null),
           nutrientTargetKey: isSupplement
             ? (primaryTarget?.nutrientTargetKey ?? null)
             : item.nutrientTargetKey,
@@ -7723,17 +8031,92 @@ export class RecipeDesignerService {
   }
 
   /**
-   * 私密快照的补剂目标（2026-10-22 · Task 3）。
+   * 补剂在快照里的配比只用于展示与兜底（真正定量走补剂目标），
+   * 分母同样取「当前配料的合计」，不再取可能过期的草稿总重。
+   */
+  private resolveSupplementSnapshotRatio(
+    item: DesignRecipeItemWithFood,
+    totalWeightG: number,
+  ): number | null {
+    const total = Number(totalWeightG);
+    const weight = Number(item.weightG);
+    if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(weight)) {
+      return null;
+    }
+    return Math.round((weight / total) * 10000) / 100;
+  }
+
+  /**
+   * 当前参与评估的**食材**有效重量合计（不含补剂）。
    *
-   * 只认显式目标 / 营养档案默认目标，并按当前配方总重量重算每 kg 添加浓度。
-   * 不再按「档案里第一个有值的营养字段」兜底 —— 那会把功能性补剂的目标
-   * 悄悄换成别的营养素；没有目标时直接 400 阻断。
+   * 补剂浓度统一按「每 kg 食材」计：
+   *   · 文案写的就是「每kg食材添加 X」；
+   *   · 车间投放也是按食材净重乘回去的。
+   * 两者同基准，才不会再出现「标签写食材、公式算全部配料」的 0.7%–2% 偏差。
+   */
+  private resolveIncludedFoodTotalWeightG(
+    items: DesignRecipeWithItems['items'],
+  ): number {
+    return items
+      .filter(
+        (item) =>
+          this.isItemIncludedInAssessment(item) &&
+          this.resolveIngredientType(item) === IngredientType.FOOD,
+      )
+      .reduce(
+        (sum, item) =>
+          sum +
+          getProfileEffectiveWeightG(
+            this.toAssessmentNutritionProfile(item),
+            item.weightG,
+          ),
+        0,
+      );
+  }
+
+  /**
+   * 补剂浓度的分母：优先「每 kg 食材」；只有补剂、没有食材的极端配方
+   * 退回「全部配料合计」，避免把「无食材」当成错误。
+   */
+  private resolveSupplementTargetBasisWeightG(
+    items: DesignRecipeWithItems['items'],
+  ): number {
+    const foodWeightG = this.resolveIncludedFoodTotalWeightG(items);
+    return foodWeightG > 0
+      ? foodWeightG
+      : this.resolveIncludedItemsTotalWeightG(items);
+  }
+
+  /**
+   * 当前参与评估的配料合计（按有效重量：油按密度折克、按粒的补剂按每粒克重）。
+   * 与评估引擎的 totalWeightG 同一口径，用来替代可能过期的 draft.totalWeightG。
+   */
+  private resolveIncludedItemsTotalWeightG(
+    items: DesignRecipeWithItems['items'],
+  ): number {
+    return items
+      .filter((item) => this.isItemIncludedInAssessment(item))
+      .reduce(
+        (sum, item) =>
+          sum +
+          getProfileEffectiveWeightG(
+            this.toAssessmentNutritionProfile(item),
+            item.weightG,
+          ),
+        0,
+      );
+  }
+
+  /**
+   * 私密快照的补剂目标：只认显式目标 / 营养档案默认目标。
+   * 分母用「当前食材有效重量合计」（每 kg 食材），不用可能过期的草稿总重。
    */
   private async buildPrivateSnapshotSupplementTargetMap(
     draft: DesignRecipeWithItems,
+    foodWeightG: number,
   ): Promise<Map<string, PublishedSupplementNutrientTarget[]>> {
     const result = new Map<string, PublishedSupplementNutrientTarget[]>();
-    if (draft.totalWeightG <= 0) return result;
+    if (foodWeightG <= 0) return result;
 
     for (const item of draft.items) {
       if (
@@ -7755,7 +8138,7 @@ export class RecipeDesignerService {
         this.toAssessmentNutritionProfile(item),
         definitions,
         item.weightG,
-        draft.totalWeightG,
+        foodWeightG,
       );
       result.set(
         item.id,
@@ -7763,22 +8146,6 @@ export class RecipeDesignerService {
       );
     }
     return result;
-  }
-
-  private resolvePrivateRecipeItemRatio(
-    item: DesignRecipeItemWithFood,
-    totalWeightG: number,
-  ) {
-    const existingRatio = Number(item.ratioPercent);
-    if (Number.isFinite(existingRatio) && existingRatio > 0) {
-      return existingRatio;
-    }
-    const total = Number(totalWeightG);
-    const weight = Number(item.weightG);
-    if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(weight)) {
-      return null;
-    }
-    return Math.round((weight / total) * 10000) / 100;
   }
 
   /**
@@ -7847,11 +8214,7 @@ export class RecipeDesignerService {
       item.preparationMethod,
     );
     const preparationMethod =
-      explicitPreparationMethod ??
-      alignPreparationMethodBasis(
-        defaultPreparationMethod,
-        item.nutritionFood?.preparationState ?? null,
-      );
+      explicitPreparationMethod ?? defaultPreparationMethod;
 
     return {
       ingredientId,
@@ -7859,12 +8222,6 @@ export class RecipeDesignerService {
       // 否则正式食谱只能靠后台保存时回填默认档案，导致生熟状态被改写。
       nutritionFoodId: this.resolvePublishedNutritionFoodId(item, ingredientId),
       preparationMethod,
-      ...this.resolveSnapshotPreparation({
-        note: item.preparationNote,
-        source: item.preparationSource,
-        usedAutomaticFallback:
-          !explicitPreparationMethod && Boolean(preparationMethod),
-      }),
       ratioPercent: isSupplement
         ? null
         : (publishedFoodRatioMap.get(item.id) ??
@@ -7972,9 +8329,10 @@ export class RecipeDesignerService {
    */
   private async buildPublishedSupplementTargetMap(
     draft: DesignRecipeWithItems,
-    assessment: DesignRecipeAssessmentResult,
   ) {
     const result = new Map<string, PublishedSupplementNutrientTarget[]>();
+    // 每 kg 食材：与文案「每kg食材添加」、车间按食材净重投放同一基准
+    const foodWeightG = this.resolveSupplementTargetBasisWeightG(draft.items);
 
     for (const item of draft.items) {
       if (
@@ -7986,7 +8344,10 @@ export class RecipeDesignerService {
 
       result.set(
         item.id,
-        await this.resolvePublishedSupplementTargetsForItem(item, assessment),
+        await this.resolvePublishedSupplementTargetsForItem(
+          item,
+          foodWeightG,
+        ),
       );
     }
 
@@ -7999,11 +8360,11 @@ export class RecipeDesignerService {
    */
   private async resolvePublishedSupplementTargetsForItem(
     item: DesignRecipeItemWithFood,
-    assessment: DesignRecipeAssessmentResult,
+    foodWeightG: number,
   ): Promise<PublishedSupplementNutrientTarget[]> {
-    if (assessment.totalWeightG <= 0) {
+    if (foodWeightG <= 0) {
       throw new BadRequestException(
-        `补剂原料「${this.resolveIngredientDisplayName(item)}」无法在总重量为 0 的配方中生成营养目标`,
+        `补剂原料「${this.resolveIngredientDisplayName(item)}」无法在食材总重量为 0 的配方中生成营养目标`,
       );
     }
 
@@ -8019,7 +8380,7 @@ export class RecipeDesignerService {
       this.toAssessmentNutritionProfile(item),
       definitions,
       item.weightG,
-      assessment.totalWeightG,
+      foodWeightG,
     );
 
     return computed
@@ -8129,6 +8490,17 @@ export class RecipeDesignerService {
     const targetService = this.requireSupplementTargetService();
 
     let definitions: SupplementTargetDefinition[];
+    /**
+     * 客户端带回的**原目标值**（撤销删除重建原料时用）。
+     *
+     * 目标浓度 = 本份提供的营养素 ÷ 配方总重 × 1000。总重取的是草稿上一次
+     * 评估回写的缓存，删除/撤销之后可能明显偏小 —— 分母一小，目标就被
+     * 放大几十上百倍（2026-10-27 实测：碘目标被写成 144,834 μg，应为 ~918）。
+     * 所以「原样恢复」时直接沿用原值，不再重算。
+     */
+    const presetTargetValues = this.readPresetSupplementTargetValues(
+      input.explicitTargets,
+    );
     if (input.explicitTargets !== undefined) {
       if (input.explicitTargets === null) {
         throw new BadRequestException(
@@ -8181,6 +8553,24 @@ export class RecipeDesignerService {
       );
     }
 
+    /**
+     * 所有目标都带着原值（= 原样恢复）时，直接用原值，不重算。
+     * 部分带值时仍然整体重算，避免同一条记录里一半是旧值一半是新值。
+     */
+    const allPreset =
+      definitions.length > 0 &&
+      definitions.every((definition) =>
+        presetTargetValues.has(definition.fieldPath),
+      );
+    if (allPreset) {
+      return definitions.map((definition) =>
+        this.toDesignSupplementTarget(
+          definition,
+          presetTargetValues.get(definition.fieldPath) ?? null,
+        ),
+      );
+    }
+
     const computed = targetService.computeTargets(
       profile,
       definitions,
@@ -8190,6 +8580,34 @@ export class RecipeDesignerService {
     return computed.map((target) =>
       this.toDesignSupplementTarget(target, target.targetValuePerKg),
     );
+  }
+
+  /**
+   * 从显式目标里读出「客户端带回来的原值」。
+   *
+   * ⚠️ 只认 `targetValue`（**落库口径**，撤销重建时原样带回来），
+   * **不认 `targetValuePerKg`**（客户端自己算的浓度，历史规则明确忽略 ——
+   * 浓度必须由服务端按当前配方总重算，不能被前端指定）。
+   *
+   * 只接受有限正数：0 或空值等于没有，不能当成「原值就是 0」。
+   */
+  private readPresetSupplementTargetValues(
+    explicitTargets: unknown,
+  ): Map<string, number> {
+    const presets = new Map<string, number>();
+    if (!Array.isArray(explicitTargets)) return presets;
+    for (const raw of explicitTargets) {
+      if (!raw || typeof raw !== 'object') continue;
+      const record = raw as Record<string, unknown>;
+      const fieldPath =
+        typeof record.fieldPath === 'string' ? record.fieldPath.trim() : '';
+      if (!fieldPath) continue;
+      const value = Number(record.targetValue);
+      if (Number.isFinite(value) && value > 0) {
+        presets.set(fieldPath, value);
+      }
+    }
+    return presets;
   }
 
   private resolveSupplementTargetTotalWeightG(input: {
@@ -8683,15 +9101,24 @@ export class RecipeDesignerService {
       name: string;
       included: boolean;
       isSupplement: boolean;
+      preparationRequired: boolean;
       preparationMethod?: string | null;
-      preparationNote?: string | null;
       supplementTargets?: unknown;
     }> = [];
+    // 补剂目标按「每 kg 食材」校验，与发布时同一基准
+    const launchFoodWeightG = this.resolveSupplementTargetBasisWeightG(
+      draft.items,
+    );
     for (const item of draft.items) {
       const isSupplement =
         this.resolveIngredientType(item) === IngredientType.SUPPLEMENT;
+      const preparationRequired =
+        !isSupplement &&
+        isPreparationRequiredFoodCategory(
+          this.resolveDraftItemDisplayCategory(item),
+        );
       let supplementTargets: unknown = item.supplementTargets;
-      if (isSupplement && assessment && assessment.totalWeightG > 0) {
+      if (isSupplement && assessment && launchFoodWeightG > 0) {
         try {
           const definitions =
             this.requireSupplementTargetService().validateTargets(
@@ -8704,7 +9131,7 @@ export class RecipeDesignerService {
                 this.toAssessmentNutritionProfile(item),
                 definitions,
                 item.weightG,
-                assessment.totalWeightG,
+                launchFoodWeightG,
               );
           }
         } catch (error) {
@@ -8720,8 +9147,8 @@ export class RecipeDesignerService {
         name: this.resolveIngredientDisplayName(item),
         included: this.isItemIncludedInAssessment(item),
         isSupplement,
+        preparationRequired,
         preparationMethod: item.preparationMethod,
-        preparationNote: item.preparationNote,
         supplementTargets,
       });
     }
@@ -8745,6 +9172,7 @@ export class RecipeDesignerService {
 
     const readiness = buildDraftLaunchReadiness({
       draftId: draft.id,
+      seriesId: draft.seriesId ?? null,
       designMode,
       requirePresentation,
       name: options.name ?? draft.series?.name ?? draft.name,
@@ -8773,6 +9201,10 @@ export class RecipeDesignerService {
         orderQuantity: draft.series?.orderQuantity,
         customerDogId: draft.customerDogId,
       },
+      // 没有系列（历史独立草稿）就没有分类可挂，跳过这条门禁而不是判它阻断
+      taxonomyLinkCount: draft.seriesId
+        ? await this.countSeriesTaxonomyLinks(draft.seriesId)
+        : undefined,
     });
 
     return { readiness, assessment };
@@ -9375,10 +9807,7 @@ export class RecipeDesignerService {
         includeInAssessment: true,
         nutritionFoodId: true,
         ingredientId: true,
-        // 预处理更新需要在同一次查询里带回当前值，避免再把 AUTO 误翻成 MANUAL
         preparationMethod: true,
-        preparationNote: true,
-        preparationSource: true,
         designRecipe: {
           select: {
             id: true,
@@ -9409,8 +9838,6 @@ export class RecipeDesignerService {
       nutritionFoodId: item.nutritionFoodId,
       ingredientId: item.ingredientId,
       preparationMethod: item.preparationMethod,
-      preparationNote: item.preparationNote,
-      preparationSource: item.preparationSource,
     };
   }
 
@@ -9548,7 +9975,10 @@ export class RecipeDesignerService {
     );
   }
 
-  private buildAssessmentUpdateData(result: DesignRecipeAssessmentResult) {
+  private buildAssessmentUpdateData(
+    result: DesignRecipeAssessmentResult,
+    allergenWarnings: DraftAllergenWarning[] = [],
+  ) {
     const missingDataReport = result.groupedEntries
       .filter((entry) => entry.status === 'MISSING_DATA')
       .map((entry) => ({
@@ -9569,6 +9999,9 @@ export class RecipeDesignerService {
         summary: result.summary,
         rawSummary: result.rawSummary,
         rawEntryCount: result.entries.length,
+        // 过敏提示随评估一起落库：Agent 的 get_draft.lastAssessment / check_ready
+        // 都从这里读，不需要每次重新跑词表匹配。
+        allergenWarnings,
       }),
       missingDataReport: this.toJsonValue(missingDataReport),
       isCompliant,
@@ -9667,8 +10100,12 @@ export class RecipeDesignerService {
   private async resolveDesignItemPreparationMethod(
     explicitPreparationMethod: string | null | undefined,
     ingredientId: string | null,
-    nutritionFoodId?: string | null,
   ) {
+    // 补剂不维护这个字段；显式传入也忽略，避免后续又被历史带出。
+    if (ingredientId && (await this.isIngredientIdSupplement(ingredientId))) {
+      return null;
+    }
+
     const normalizedExplicit = this.normalizePreparationMethod(
       explicitPreparationMethod,
     );
@@ -9681,173 +10118,24 @@ export class RecipeDesignerService {
       return null;
     }
 
+    // 自动带出只取历史原文；状态是否与营养档案一致由黄字提示/AI 复核，
+    // 代码不再自动改写「生重/熟重/干重」。
     const fallback =
-      await this.resolveDefaultPreparationMethodForIngredient(ingredientId);
-
-    // 自动生成的默认文案必须与所选营养档案的称重口径一致，
-    // 否则会出现「档案是熟、文案却写生重」这类矛盾。
-    return alignPreparationMethodBasis(
-      fallback,
-      await this.resolveNutritionFoodPreparationState(nutritionFoodId),
-    );
-  }
-
-  /** 读取营养档案的制备状态（决定称重口径：生/熟/干…） */
-  private async resolveNutritionFoodPreparationState(
-    nutritionFoodId?: string | null,
-  ): Promise<string | null> {
-    const id = nutritionFoodId?.trim();
-    if (!id) {
-      return null;
-    }
-
-    const nutritionFood = await this.prisma.nutritionFood.findUnique({
-      where: { id },
-      select: { preparationState: true },
-    });
-
-    return nutritionFood?.preparationState ?? null;
+      await this.ingredientPreparationHistoryService?.getLatestText(
+        ingredientId,
+      );
+    return this.normalizePreparationMethod(fallback);
   }
 
   private normalizePreparationMethod(value: string | null | undefined) {
-    return normalizePreparationMethodHistoryText(value) ?? null;
-  }
-
-  /**
-   * 预处理补充说明（2026-10-22 · Task 4）。
-   *
-   * 写入路径严格限制 500 字符（DTO 也会拦一次，服务层保证内部调用不越界）；
-   * 存量数据读取/复制用 `normalizeStoredPreparationNote`，只截断不抛错。
-   */
-  private normalizePreparationNote(value: string | null | undefined) {
-    const trimmed = value?.trim();
-    if (!trimmed) {
-      return null;
-    }
-    if (trimmed.length > RECIPE_PREPARATION_NOTE_MAX_LENGTH) {
+    const normalized = normalizePreparationMethodHistoryText(value);
+    if (!normalized) return null;
+    if (!isPreparationMethodWithinContentLimit(normalized)) {
       throw new BadRequestException(
-        `原料预处理补充说明不能超过 ${RECIPE_PREPARATION_NOTE_MAX_LENGTH} 个字符`,
+        `部位 / 状态 / 预处理最多 ${PREPARATION_METHOD_MAX_CONTENT_LENGTH} 个字（不含符号）`,
       );
     }
-    return trimmed;
-  }
-
-  private normalizeStoredPreparationNote(value: string | null | undefined) {
-    const trimmed = value?.trim();
-    return trimmed
-      ? trimmed.slice(0, RECIPE_PREPARATION_NOTE_MAX_LENGTH)
-      : null;
-  }
-
-  private parsePreparationSourceInput(
-    value: RecipePreparationSource | null | undefined,
-  ): RecipePreparationSource | null | undefined {
-    if (value === undefined) {
-      return undefined;
-    }
-    if (value === null) {
-      return null;
-    }
-    if (value === 'AUTO' || value === 'MANUAL') {
-      return value;
-    }
-    throw new BadRequestException('原料预处理来源只能是 AUTO 或 MANUAL');
-  }
-
-  private normalizeStoredPreparationSource(
-    value: unknown,
-  ): RecipePreparationSource | null {
-    return value === 'AUTO' || value === 'MANUAL' ? value : null;
-  }
-
-  /**
-   * 新增原料时的预处理默认来源：
-   * - 显式填写了 method 或补充说明 → MANUAL（调用方显式传 AUTO 时尊重调用方）；
-   * - 只有系统按原料历史/档案自动解析出的 method → AUTO；
-   * - 什么都没有 → null。
-   */
-  private buildPreparationCreateData(input: {
-    explicitMethod: string | null | undefined;
-    explicitNote: string | null | undefined;
-    explicitSource: RecipePreparationSource | null | undefined;
-    resolvedMethod: string | null;
-  }) {
-    const explicitMethod = this.normalizePreparationMethod(
-      input.explicitMethod,
-    );
-    const method = this.normalizePreparationMethod(input.resolvedMethod);
-    const note = this.normalizePreparationNote(input.explicitNote);
-    const hasExplicitContent = Boolean(explicitMethod) || Boolean(note);
-    const preparationSource = hasExplicitContent
-      ? (input.explicitSource ?? 'MANUAL')
-      : method
-        ? (input.explicitSource ?? 'AUTO')
-        : null;
-
-    return {
-      preparationMethod: method,
-      preparationNote: note,
-      preparationSource,
-    };
-  }
-
-  /**
-   * 修改原料时的预处理字段（2026-10-22 · Task 4）。
-   *
-   * 只有传了 method / note / source 才写这几列；保存队列回传未修改的旧值时
-   * 不把 AUTO 误翻成 MANUAL（内容没变就保留原来源）。
-   */
-  private buildPreparationUpdateData(input: {
-    explicitMethod: string | null | undefined;
-    explicitNote: string | null | undefined;
-    explicitSource: RecipePreparationSource | null | undefined;
-    currentMethod: string | null | undefined;
-    currentNote: string | null | undefined;
-    currentSource: string | null | undefined;
-  }) {
-    const currentMethod = this.normalizePreparationMethod(input.currentMethod);
-    const currentNote = this.normalizeStoredPreparationNote(input.currentNote);
-    const nextMethod =
-      input.explicitMethod !== undefined
-        ? this.normalizePreparationMethod(input.explicitMethod)
-        : currentMethod;
-    const nextNote =
-      input.explicitNote !== undefined
-        ? this.normalizePreparationNote(input.explicitNote)
-        : currentNote;
-    const contentChanged =
-      nextMethod !== currentMethod || nextNote !== currentNote;
-
-    let preparationSource: RecipePreparationSource | null;
-    if (input.explicitSource !== undefined) {
-      preparationSource = input.explicitSource;
-    } else if (contentChanged) {
-      preparationSource = nextMethod || nextNote ? 'MANUAL' : null;
-    } else {
-      preparationSource = this.normalizeStoredPreparationSource(
-        input.currentSource,
-      );
-    }
-
-    return {
-      preparationMethod: nextMethod,
-      preparationNote: nextNote,
-      preparationSource,
-    };
-  }
-
-  /** 发布/私密快照写库前的预处理字段（保留显式来源，自动兜底标 AUTO）。 */
-  private resolveSnapshotPreparation(input: {
-    note: string | null | undefined;
-    source: string | null | undefined;
-    usedAutomaticFallback: boolean;
-  }) {
-    return {
-      preparationNote: this.normalizeStoredPreparationNote(input.note),
-      preparationSource:
-        this.normalizeStoredPreparationSource(input.source) ??
-        (input.usedAutomaticFallback ? 'AUTO' : null),
-    };
+    return normalized;
   }
 
   /** 制作步骤读取（GET / 私有快照展示）：坏条目丢弃，避免脏数据锁死编辑器。 */
@@ -9885,58 +10173,6 @@ export class RecipeDesignerService {
     };
   }
 
-  private async resolveDefaultPreparationMethodForIngredient(
-    ingredientId: string,
-  ) {
-    const defaults = await this.loadDefaultPreparationMethodMap([ingredientId]);
-    return defaults.get(ingredientId) ?? null;
-  }
-
-  private async loadDefaultPreparationMethodMap(ingredientIds: string[]) {
-    const uniqueIngredientIds = [...new Set(ingredientIds.filter(Boolean))];
-    const defaults = new Map<string, string>();
-    if (uniqueIngredientIds.length === 0) {
-      return defaults;
-    }
-
-    const rows = await this.prisma.recipeItem.findMany({
-      where: {
-        ingredientId: { in: uniqueIngredientIds },
-        preparationMethod: { not: null },
-        recipe: { isCustomRecipe: false },
-      },
-      select: {
-        ingredientId: true,
-        preparationMethod: true,
-        recipe: { select: { updatedAt: true } },
-      },
-      orderBy: {
-        recipe: { updatedAt: 'desc' },
-      },
-    });
-    const methodMap = await this.loadPreparationMethodNameMap(
-      rows.map((row) => row.preparationMethod),
-    );
-
-    for (const row of rows) {
-      if (defaults.has(row.ingredientId)) {
-        continue;
-      }
-
-      const readable = resolvePreparationMethodText(
-        row.preparationMethod,
-        methodMap,
-        { preserveUnresolvedLegacy: false },
-      );
-      const normalized = this.normalizePreparationMethod(readable);
-      if (normalized) {
-        defaults.set(row.ingredientId, normalized);
-      }
-    }
-
-    return defaults;
-  }
-
   private async loadPreparationMethodNameMap(
     values: Array<string | null | undefined>,
   ) {
@@ -9953,18 +10189,12 @@ export class RecipeDesignerService {
     return new Map(methods.map((method) => [method.id, method.name] as const));
   }
 
-  private async loadPreparationMethodOptions() {
-    const methods = await this.prisma.preparationMethod.findMany({
-      select: { id: true, name: true },
-      orderBy: [{ sort: 'asc' }, { name: 'asc' }],
-    });
-    return methods.map((method) => ({ id: method.id, name: method.name }));
-  }
-
   /**
    * 为草稿明细补充展示用字段（不改变原始存储值，小程序兼容）：
-   * - items[].preparationMethodLabel：烹饪方式文字名（UUID 解析为名称，旧文本原样保留）
-   * - preparationMethodOptions：全部可选烹饪方式（供编辑器下拉使用）
+   * - items[].preparationMethodLabel：文字名（UUID 解析为名称，旧文本原样保留）
+   *
+   * 2026-10-26 Phase 3：不再返回 preparationMethodOptions。
+   * 旧字典 ID 已回填，编辑器改由历史文案做建议。
    */
   private async withPreparationMethodLabels<T extends DesignRecipeWithItems>(
     draft: T,
@@ -9972,10 +10202,8 @@ export class RecipeDesignerService {
     const methodMap = await this.loadPreparationMethodNameMap(
       (draft.items ?? []).map((item) => item.preparationMethod),
     );
-    const preparationMethodOptions = await this.loadPreparationMethodOptions();
     return {
       ...draft,
-      preparationMethodOptions,
       items: (draft.items ?? []).map((item) => ({
         ...item,
         preparationMethodLabel:
@@ -9986,70 +10214,43 @@ export class RecipeDesignerService {
   }
 
   /**
-   * 用代码核对 AI 推荐的食材里有没有这只狗的过敏原（2026-10-04 第一期）。
-   *
-   * 提示词里那句「过敏食材必须硬性避开」只是**请求**，不是**保证**。
-   * 这里把它变成保证：命中的食材从 recommendations 里摘掉，
-   * 改记到 avoidIngredients，并写一条 warning 让人看得见发生过什么。
-   *
-   * 保守方向：命中的一律摘掉（不分确诊/可疑）——
-   * 这是**机器在自动推荐**，宁可少推一个，也不能推错一个。
-   * 营养师手动加食材是另一条路（那边是提示 + 人工确认，不硬拦）。
+   * 一条草稿明细的分类：与 Agent / 目录对比共用 `classifyFoodCategory` 口径。
+   * 营养档案缺失或脏数据时归 `UNCLASSIFIED`，只影响展示顺序。
    */
-  private async screenAiRecommendationsAgainstAllergens(
-    result: IngredientRecommendationResult,
-    profile: AiWizardDogProfile,
-  ): Promise<IngredientRecommendationResult> {
-    const dogAllergens = splitAllergyKeywords(profile.allergyFoods);
-    if (dogAllergens.length === 0 || !this.allergenVocabulary) {
-      return result;
+  private resolveDraftItemDisplayCategory(
+    item: DesignRecipeItemWithFood,
+  ): FoodCategory {
+    if (!item.nutritionFood) {
+      return 'UNCLASSIFIED';
     }
+    const ingredient = this.resolveItemIngredient(item);
+    const name =
+      ingredient?.name ??
+      item.nutritionFood.displayNameZh ??
+      item.nutritionFood.name ??
+      '';
+    return classifyFoodCategory({
+      name,
+      cfctClass: readCfctClass(ingredient?.properties),
+      nutritionCategory: item.nutritionFood.category ?? null,
+      ingredientType:
+        ingredient?.type === IngredientType.SUPPLEMENT ? 'SUPPLEMENT' : 'FOOD',
+    });
+  }
 
-    const kept: typeof result.recommendations = [];
-    const blocked: Array<{ name: string; reason: string }> = [];
-
-    for (const recommendation of result.recommendations) {
-      const hits = await this.allergenVocabulary.matchIngredients({
-        dogAllergens,
-        ingredientNames: [recommendation.name],
-      });
-
-      if (hits.length === 0) {
-        kept.push(recommendation);
-        continue;
-      }
-
-      const names = Array.from(new Set(hits.map((hit) => hit.allergen)));
-      blocked.push({
-        name: recommendation.name,
-        reason: `命中档案里的过敏原：${names.join('、')}`,
-      });
-    }
-
-    if (blocked.length === 0) {
-      return result;
-    }
-
-    // 已经因为别的原因（疾病禁忌、挑食）被列进 avoidIngredients 的不要重复
-    const existingAvoid = new Set(
-      result.avoidIngredients.map((item) => item.name),
+  /**
+   * 读接口按固定分类顺序展示明细；只改返回顺序，不改库里的 `sortOrder`。
+   * 同一分类内保留原 `sortOrder` 升序，作为稳定 tie-break。
+   */
+  private withItemDisplayOrder<T extends DesignRecipeWithItems>(draft: T): T {
+    const ordered = sortRecipeItemsByDisplayOrder(
+      (draft.items ?? []).map((item) => ({
+        category: this.resolveDraftItemDisplayCategory(item),
+        sortOrder: item.sortOrder ?? 0,
+        item,
+      })),
     );
-    const mergedAvoid = [
-      ...result.avoidIngredients,
-      ...blocked.filter((item) => !existingAvoid.has(item.name)),
-    ];
-
-    return {
-      ...result,
-      recommendations: kept,
-      avoidIngredients: mergedAvoid,
-      warnings: [
-        ...result.warnings,
-        `系统已拦下 ${blocked.length} 项含过敏原的 AI 推荐：${blocked
-          .map((item) => item.name)
-          .join('、')}`,
-      ],
-    };
+    return { ...draft, items: ordered.map((entry) => entry.item) } as T;
   }
 
   private resolveIngredientDisplayName(item: DesignRecipeItemWithFood) {
@@ -10136,9 +10337,13 @@ export class RecipeDesignerService {
             mapping.nutritionFood,
           ),
           nameEn: getNutritionProfileSourceName(mapping.nutritionFood),
+          displayNameZh: mapping.nutritionFood.displayNameZh ?? null,
           category: mapping.nutritionFood.category,
           dataSource: mapping.nutritionFood.dataSource,
           status: mapping.nutritionFood.status,
+          preparationState: mapping.nutritionFood.preparationState ?? null,
+          preparationStateLabel:
+            mapping.nutritionFood.preparationStateLabel ?? null,
           yieldRate: mapping.yieldRate,
           isPrimary: mapping.isPrimary,
           notes: mapping.notes,
@@ -10213,6 +10418,8 @@ export class RecipeDesignerService {
               category: true,
               dataSource: true,
               status: true,
+              preparationState: true,
+              preparationStateLabel: true,
               ...(includeNutritionData ? { nutritionData: true } : {}),
             },
           },
@@ -10471,6 +10678,34 @@ export class RecipeDesignerService {
     };
   }
 
+  /**
+   * 从交付快照里只挑出「历史食谱」要用的三样：名字、原料、宏量行。
+   *
+   * 快照整份有采购清单/制作步骤/喂食参数，几十 KB —— 历史列表不该背着它们，
+   * 这里裁完再往下传。
+   */
+  private pickDeliveredHistorySnapshot(snapshot: unknown): {
+    recipe: { name: string | null; items: unknown[] };
+    nutrition: { reportRows: unknown[] };
+  } | null {
+    if (!snapshot || typeof snapshot !== 'object') return null;
+    const record = snapshot as Record<string, any>;
+    const recipe = (record.recipe ?? null) as Record<string, any> | null;
+    if (!recipe) return null;
+    const nutrition = (record.nutrition ?? null) as Record<string, any> | null;
+    return {
+      recipe: {
+        name: typeof recipe.name === 'string' ? recipe.name : null,
+        items: Array.isArray(recipe.items) ? recipe.items : [],
+      },
+      nutrition: {
+        reportRows: Array.isArray(nutrition?.reportRows)
+          ? nutrition.reportRows
+          : [],
+      },
+    };
+  }
+
   // ============ Web 食谱设计器配套：爱犬设计洞察 ============
 
   async getDogDesignInsight(
@@ -10561,18 +10796,27 @@ export class RecipeDesignerService {
     });
 
     /**
-     * 历史食谱清单里的定制单（2026-10-22）。
+     * 历史食谱清单里的定制单（2026-10-22；2026-10-28 收紧）。
      *
-     * 只取**已关联正式食谱**（`recipeId` 非空）且未取消的定制单：
-     * 没有关联食谱的单一律没有食谱可展示。除身份字段外，
-     * 一并取营养报告与食谱项（名称/示例重量），供 builder 归一化明细；
-     * 问卷答案/附件等整单内容不进入洞察。
+     * ## 只收「已完成」的定制单
+     *
+     * 这个面板回答的是「**这只狗真真正正吃过什么**」。交付 ≠ 吃过：
+     * 顾客收到后不认可、正在改的那一份，狗可能连一顿都没吃过，
+     * 把它列进历史会误导营养师（老板 2026-10-28 口径）。
+     *
+     * 「已完成」= 顾客点「确认收到」或交付满确认期无异议自动确认
+     * （`CustomRecipeScheduler` 每小时跑一次）。这条口径天然排除了：
+     *   · 刚交付、还没确认的；
+     *   · **有未处理完调整的**（调度器`decideAutoComplete`明确跳过）。
+     *
+     * 除身份字段外，一并取营养报告与食谱项（名称/示例重量），供 builder
+     * 归一化明细；问卷答案/附件等整单内容不进入洞察。
      */
-    const customRecipeHistoryOrders =
+    const rawCustomRecipeHistoryOrders =
       await this.prisma.customRecipeOrder.findMany({
         where: {
           dogId,
-          status: { not: CustomRecipeStatus.CANCELLED },
+          status: CustomRecipeStatus.COMPLETED,
           recipeId: { not: null },
         },
         orderBy: { createdAt: 'desc' },
@@ -10594,8 +10838,54 @@ export class RecipeDesignerService {
               },
             },
           },
+          /**
+           * 交付快照（2026-10-28）：历史食谱的名字与原料以**交付那一刻**为准。
+           *
+           * 私密 Recipe 行是活行 —— 改名、重新生成私密食谱快照都会就地覆盖它，
+           * 直接读会出现「历史里写着鸭肉高蛋白定制餐，点开原料还是兔里脊」。
+           */
+          deliveryBatches: {
+            orderBy: { version: 'desc' },
+            take: 1,
+            select: {
+              items: { select: { recipeId: true, contentSnapshot: true } },
+            },
+          },
+          deliveries: {
+            where: { replacedByDeliveryId: null },
+            orderBy: { version: 'desc' },
+            take: 1,
+            select: { recipeId: true, contentSnapshot: true },
+          },
         },
       });
+
+    /**
+     * 给每张定制单挂上「交付那一刻的快照」。
+     *
+     * 只取与本单当前食谱同一条的那份快照（多份订单里其它份不在此列），
+     * 老的单份交付走 `deliveries`。
+     */
+    const customRecipeHistoryOrders = rawCustomRecipeHistoryOrders.map(
+      (order) => {
+        const batchItem = order.deliveryBatches?.[0]?.items?.find(
+          (item) => item.recipeId === order.recipe?.id,
+        );
+        const legacyDelivery =
+          !batchItem &&
+          order.deliveries?.[0] &&
+          order.deliveries[0].recipeId === order.recipe?.id
+            ? order.deliveries[0]
+            : null;
+        const snapshot = batchItem?.contentSnapshot ?? legacyDelivery?.contentSnapshot;
+        return {
+          ...order,
+          deliveredSnapshot: snapshot
+            ? this.pickDeliveredHistorySnapshot(snapshot)
+            : null,
+        };
+      },
+    );
 
     // 「最近吃过的食材」：订单至少推进到冷冻中（FREEZING），且最近 N 天内实际食用
     const recentWindowStart = new Date(
@@ -10838,10 +11128,25 @@ export class RecipeDesignerService {
         : null,
     });
 
-    const aiEnabled =
-      ((await this.aiDesignSuggestionService?.isAvailable()) ?? false) === true;
+    return this.signInsightAttachments(insight);
+  }
 
-    return { ...this.signInsightAttachments(insight), aiEnabled };
+  /**
+   * 这只狗的历史食谱（AI 只读工具用，2026-10-28）。
+   *
+   * 直接复用「爱犬设计洞察」的同一份历史：
+   *   · 鲜食订单快照（`order_item.recipe_snapshot`）；
+   *   · 已完成定制单的**交付快照**（不是会被改名的活行）。
+   *
+   * 为什么不让 AI 自己查全站食谱：那会把别的狗 / 目录里的菜当成这只狗
+   * 吃过的东西（2026-10-28 线上实例）。这里保证 AI 与页面看到同一份数据。
+   */
+  async getDogRecipeHistory(
+    dogId: string,
+    access: RecipeDesignerAccessInput,
+  ): Promise<DogDesignInsight['historyRecipes']> {
+    const insight = await this.getDogDesignInsight(dogId, access);
+    return insight.historyRecipes ?? [];
   }
 
   /**
@@ -11033,87 +11338,6 @@ export class RecipeDesignerService {
     };
   }
 
-  async generateAiDesignSuggestions(
-    dogId: string,
-    access: RecipeDesignerAccessInput,
-    draftId?: string,
-  ) {
-    const context = normalizeRecipeDesignerAccessContext(access);
-    if (!isInternalRecipeDesignerRole(context)) {
-      throw new BadRequestException('仅内部角色可使用 AI 设计建议');
-    }
-    if (!this.aiDesignSuggestionService) {
-      throw new BadRequestException('AI 设计建议服务不可用');
-    }
-
-    const insight = await this.getDogDesignInsight(dogId, context);
-
-    let currentDraft: AiDesignSuggestionInput['currentDraft'] = null;
-    if (draftId) {
-      const draft = await this.getDraft(draftId, context);
-      currentDraft = {
-        name: draft.name,
-        scenario: draft.fediafDogScenario,
-        items: (draft.items ?? [])
-          .filter((item) => item.includeInAssessment !== false)
-          .map((item) => ({
-            name: this.resolveIngredientDisplayName(item),
-            weightG: item.weightG,
-            isSupplement:
-              this.resolveIngredientType(item) === IngredientType.SUPPLEMENT,
-          })),
-        assessmentSummary: this.buildAiAssessmentSummaryText(draft),
-      };
-    }
-
-    return this.aiDesignSuggestionService.generate({
-      dog: {
-        name: insight.dog.name,
-        breedName: insight.dog.breedName,
-        lifeStageLabel: insight.dog.lifeStageLabel,
-        currentWeightKg: insight.dog.currentWeightKg,
-        // 过敏：旧文本备注 + 顾客在健康档案里填的结构化记录，两边都送给 AI。
-        // 只送旧字段的话，顾客明确声明的过敏在配方生成里会被忽略。
-        allergyFoods: formatAllergyKeywordsForAi(
-          collectAllergyKeywords({
-            allergyFoods: insight.dog.allergyFoods,
-            allergens: insight.dog.structuredAllergies,
-          }),
-        ),
-        pickyFoods: insight.dog.pickyFoods,
-        preferredFoods: insight.dog.preferredFoods,
-        medicalHistory: insight.dog.medicalHistory,
-      },
-      designHistory: insight.designHistory,
-      orderSummary: insight.orderSummary,
-      currentDraft,
-    });
-  }
-
-  private buildAiAssessmentSummaryText(draft: DesignRecipeWithItems): string {
-    const summary = draft.assessmentSummary as
-      | Record<string, unknown>
-      | null
-      | undefined;
-    if (!summary || typeof summary !== 'object') {
-      return '';
-    }
-    const overallStatus = summary.overallStatus ?? summary.status ?? '';
-    const raw = (summary.summary ?? summary.rawSummary ?? {}) as Record<
-      string,
-      unknown
-    >;
-    const parts: string[] = [];
-    if (overallStatus) parts.push(`总体状态: ${String(overallStatus)}`);
-    for (const key of ['deficient', 'excess', 'missingData', 'compliant']) {
-      const value = raw[key];
-      if (typeof value === 'number' && value > 0) {
-        parts.push(`${key}: ${value}`);
-      }
-    }
-    return parts.join('，');
-  }
-
   private findAssessedRatio(
     assessment: DesignRecipeAssessmentResult,
     itemId: string,
@@ -11132,800 +11356,9 @@ export class RecipeDesignerService {
   private toJsonValue(value: unknown): Prisma.InputJsonValue {
     return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
   }
-
-  // ---------- AI 设计建议四步向导 ----------
-
-  /** 步骤一：生成营养方案 */
-  async generateAiNutritionPlan(
-    dogId: string,
-    draftId: string | undefined,
-    access: RecipeDesignerAccessInput,
-    userNotes?: string | null,
-  ): Promise<NutritionPlanResult> {
-    const context = normalizeRecipeDesignerAccessContext(access);
-    if (!isInternalRecipeDesignerRole(context)) {
-      throw new BadRequestException('仅内部角色可使用 AI 设计建议');
-    }
-    if (!this.recipeAiWizardService) {
-      throw new BadRequestException('AI 设计建议服务不可用');
-    }
-
-    const profile = await this.buildAiWizardDogProfile(dogId);
-    const { tags, keywords } = deriveKnowledgeTags(profile);
-    const currentDraft = draftId
-      ? await this.buildAiWizardDraftSummary(draftId, access)
-      : null;
-
-    const result = await this.recipeAiWizardService.generateNutritionPlan({
-      dog: profile,
-      knowledgeTags: tags,
-      extraKeywords: keywords,
-      currentDraft,
-      userNotes: userNotes ?? null,
-    });
-
-    if (draftId) {
-      await this.persistAiNutritionPlan(draftId, access, result, {
-        accepted: false,
-        note: null,
-      });
-    }
-
-    return result;
-  }
-
-  /** 步骤一（共识）：认可/修改营养方案 */
-  async acceptAiNutritionPlan(
-    draftId: string,
-    dto: {
-      accepted: boolean;
-      note?: string | null;
-      plan?: unknown;
-    },
-    access: RecipeDesignerAccessInput,
-  ): Promise<NutritionPlanResult> {
-    const context = normalizeRecipeDesignerAccessContext(access);
-    if (!isInternalRecipeDesignerRole(context)) {
-      throw new BadRequestException('仅内部角色可确认营养方案');
-    }
-    const data = await this.getOrCreateAiDesignData(draftId, access);
-    const current = (data.nutritionPlan ?? {}) as Record<string, unknown>;
-    const history = Array.isArray(data.nutritionPlanHistory)
-      ? (data.nutritionPlanHistory as Array<Record<string, unknown>>)
-      : [];
-
-    const plan =
-      (dto.plan as NutritionPlanResult | null | undefined) ??
-      (current.result as NutritionPlanResult | null);
-    if (!plan) {
-      throw new BadRequestException('尚无营养方案可确认，请先生成');
-    }
-
-    if (dto.accepted) {
-      // 认可：写入当前方案 + 历史留痕
-      const now = new Date().toISOString();
-      await this.prisma.designRecipeAiDesignData.upsert({
-        where: { designRecipeId: draftId },
-        create: {
-          designRecipeId: draftId,
-          nutritionPlan: this.toJsonValue({
-            result: plan,
-            accepted: true,
-            acceptedAt: new Date().toISOString(),
-            note: dto.note ?? null,
-          }),
-          nutritionPlanAccepted: true,
-          nutritionPlanAcceptedAt: new Date(),
-          nutritionPlanNote: dto.note ?? null,
-          nutritionPlanHistory: this.toJsonValue([
-            ...history,
-            { result: plan, note: dto.note ?? '认可', createdAt: now },
-          ]),
-        },
-        update: {
-          nutritionPlan: this.toJsonValue({
-            result: plan,
-            accepted: true,
-            acceptedAt: new Date().toISOString(),
-            note: dto.note ?? null,
-          }),
-          nutritionPlanAccepted: true,
-          nutritionPlanAcceptedAt: new Date(),
-          nutritionPlanNote: dto.note ?? null,
-          nutritionPlanHistory: this.toJsonValue([
-            ...history,
-            { result: plan, note: dto.note ?? '认可', createdAt: now },
-          ]),
-        },
-      });
-    } else {
-      // 拒绝：仅留痕，不置为已认可
-      const now = new Date().toISOString();
-      await this.prisma.designRecipeAiDesignData.upsert({
-        where: { designRecipeId: draftId },
-        create: {
-          designRecipeId: draftId,
-          nutritionPlan: this.toJsonValue({
-            result: plan,
-            accepted: false,
-            acceptedAt: null,
-            note: dto.note ?? null,
-          }),
-          nutritionPlanHistory: this.toJsonValue([
-            ...history,
-            {
-              result: plan,
-              note: dto.note ?? '未认可（修改中）',
-              createdAt: now,
-            },
-          ]),
-        },
-        update: {
-          nutritionPlan: this.toJsonValue({
-            result: plan,
-            accepted: false,
-            acceptedAt: null,
-            note: dto.note ?? null,
-          }),
-          nutritionPlanHistory: this.toJsonValue([
-            ...history,
-            {
-              result: plan,
-              note: dto.note ?? '未认可（修改中）',
-              createdAt: now,
-            },
-          ]),
-        },
-      });
-    }
-
-    return plan;
-  }
-
-  /** 步骤二：食材推荐 */
-  async generateAiIngredientRecommendation(
-    draftId: string,
-    access: RecipeDesignerAccessInput,
-  ): Promise<IngredientRecommendationResult> {
-    const context = normalizeRecipeDesignerAccessContext(access);
-    if (!isInternalRecipeDesignerRole(context)) {
-      throw new BadRequestException('仅内部角色可使用 AI 设计建议');
-    }
-    if (!this.recipeAiWizardService) {
-      throw new BadRequestException('AI 设计建议服务不可用');
-    }
-
-    const draft = await this.getDraft(draftId, access);
-    const dogId = await this.resolveDraftReferenceDogId(draft, context);
-    if (!dogId) {
-      throw new BadRequestException('请先为该配方设置参考爱犬');
-    }
-
-    const profile = await this.buildAiWizardDogProfile(dogId);
-    const { tags } = deriveKnowledgeTags(profile);
-    const insight = await this.getDogDesignInsight(dogId, access);
-    const aiData = await this.getOrCreateAiDesignData(draftId, access);
-    // 食材推荐需在营养方案达成共识（认可）后进行
-    if (!aiData.nutritionPlan || !aiData.nutritionPlan.accepted) {
-      throw new BadRequestException(
-        '请先在「营养方案」步骤生成并认可方案，再进行食材推荐',
-      );
-    }
-    const nutritionPlan = aiData.nutritionPlan
-      ? ((aiData.nutritionPlan as Record<string, unknown>)
-          .result as NutritionPlanResult)
-      : null;
-
-    const result =
-      await this.recipeAiWizardService.generateIngredientRecommendation({
-        dog: profile,
-        nutritionPlan,
-        knowledgeTags: tags,
-        designHistory: insight.designHistory,
-        orderSummary: insight.orderSummary,
-        frameworkTemplateName: deriveFrameworkTemplateName(tags),
-        currentDraft: await this.buildAiWizardDraftSummary(draftId, access),
-      });
-
-    // ── 代码复核 AI 的产出（2026-10-04 第一期）──────────────────
-    //
-    // 改造前：提示词里写了"过敏食材必须硬性避开"，但 AI 返回的食材清单
-    // **代码从不校验**。它到底避没避开，系统不知道，也没人能查。
-    // 大模型有可能凭常识避开，但那是"有可能"，不是"一定"，
-    // 而且不可验证、不可追责 —— 安全底线不能建立在大模型的常识上。
-    //
-    // 现在：拿这只狗的过敏原把 AI 推荐的食材**再核一遍**，
-    // 命中的直接从推荐里摘掉、改记到 avoidIngredients 里。
-    const screened = await this.screenAiRecommendationsAgainstAllergens(
-      result,
-      profile,
-    );
-
-    // 把 AI 推荐的食材名称与原料库/营养食材库匹配，填充 ID 以便一键添加
-    const enriched = await this.enrichRecommendationWithLibrary(screened);
-
-    await this.prisma.designRecipeAiDesignData.upsert({
-      where: { designRecipeId: draftId },
-      create: {
-        designRecipeId: draftId,
-        ingredientRecommendations: this.toJsonValue([
-          { result: enriched, createdAt: new Date().toISOString() },
-        ]),
-      },
-      update: {
-        ingredientRecommendations: this.toJsonValue([
-          ...(Array.isArray(aiData.ingredientRecommendations)
-            ? (aiData.ingredientRecommendations as Array<
-                Record<string, unknown>
-              >)
-            : []),
-          { result: enriched, createdAt: new Date().toISOString() },
-        ]),
-      },
-    });
-
-    return enriched;
-  }
-
-  /** 步骤三：食谱审核 */
-  async reviewAiRecipe(
-    draftId: string,
-    access: RecipeDesignerAccessInput,
-  ): Promise<RecipeReviewResult> {
-    const context = normalizeRecipeDesignerAccessContext(access);
-    if (!isInternalRecipeDesignerRole(context)) {
-      throw new BadRequestException('仅内部角色可使用 AI 设计建议');
-    }
-    if (!this.recipeAiWizardService) {
-      throw new BadRequestException('AI 设计建议服务不可用');
-    }
-
-    const draft = await this.getDraft(draftId, access);
-    const dogId = await this.resolveDraftReferenceDogId(draft, context);
-    const aiData = await this.getOrCreateAiDesignData(draftId, access);
-    const nutritionPlan = aiData.nutritionPlan
-      ? ((aiData.nutritionPlan as Record<string, unknown>)
-          .result as NutritionPlanResult)
-      : null;
-
-    let tags: string[] = [];
-    if (dogId) {
-      const profile = await this.buildAiWizardDogProfile(dogId);
-      tags = deriveKnowledgeTags(profile).tags;
-    }
-
-    const result = await this.recipeAiWizardService.reviewRecipe({
-      nutritionPlan,
-      knowledgeTags: tags,
-      frameworkTemplateName: deriveFrameworkTemplateName(tags),
-      draft: await this.buildAiWizardDraftSummary(draftId, access),
-    });
-
-    await this.prisma.designRecipeAiDesignData.upsert({
-      where: { designRecipeId: draftId },
-      create: {
-        designRecipeId: draftId,
-        reviewResults: this.toJsonValue([
-          { result, createdAt: new Date().toISOString() },
-        ]),
-      },
-      update: {
-        reviewResults: this.toJsonValue([
-          ...(Array.isArray(aiData.reviewResults)
-            ? (aiData.reviewResults as Array<Record<string, unknown>>)
-            : []),
-          { result, createdAt: new Date().toISOString() },
-        ]),
-      },
-    });
-
-    return result;
-  }
-
-  /** 步骤四：生成制作 SOP */
-  async generateAiSop(
-    draftId: string,
-    access: RecipeDesignerAccessInput,
-  ): Promise<SopResult> {
-    const context = normalizeRecipeDesignerAccessContext(access);
-    if (!isInternalRecipeDesignerRole(context)) {
-      throw new BadRequestException('仅内部角色可使用 AI 设计建议');
-    }
-    if (!this.recipeAiWizardService) {
-      throw new BadRequestException('AI 设计建议服务不可用');
-    }
-
-    const result = await this.recipeAiWizardService.generateSop({
-      draft: await this.buildAiWizardDraftSummary(draftId, access),
-      audience: 'both',
-    });
-
-    await this.prisma.designRecipeAiDesignData.upsert({
-      where: { designRecipeId: draftId },
-      create: {
-        designRecipeId: draftId,
-        sop: this.toJsonValue({ result, accepted: false }),
-      },
-      update: {
-        sop: this.toJsonValue({ result, accepted: false }),
-      },
-    });
-
-    return result;
-  }
-
-  /** 读取配方草稿上的 AI 设计数据 */
-  async getAiDesignData(
-    draftId: string,
-    access: RecipeDesignerAccessInput,
-  ): Promise<RecipeAiDesignData> {
-    const context = normalizeRecipeDesignerAccessContext(access);
-    if (!isInternalRecipeDesignerRole(context)) {
-      throw new BadRequestException('仅内部角色可查看 AI 设计数据');
-    }
-    return this.getOrCreateAiDesignData(draftId, access);
-  }
-
-  /** 构建完整犬档案（含体检/病历/体重趋势）供 AI 使用 */
-  private async buildAiWizardDogProfile(
-    dogId: string,
-  ): Promise<AiWizardDogProfile> {
-    const dog = await this.prisma.dog.findUnique({
-      where: { id: dogId },
-      include: {
-        // 结构化过敏记录：顾客在健康档案 / 定制单里填的那一份。
-        // 这份 AI 档案过去只带 checkup/medical/weight，漏了过敏记录，
-        // 导致顾客明确声明的过敏进不了配方生成 —— 2026-09-27 起一并带上。
-        allergyRecords: {
-          orderBy: { createdAt: 'desc' },
-          select: { allergen: true, notes: true },
-        },
-        checkupRecords: {
-          orderBy: { checkupDate: 'desc' },
-          take: 8,
-          select: {
-            checkupType: true,
-            checkupDate: true,
-            findings: true,
-            // 化验数据独立成栏之后，标签派生也要读它 ——
-            // 肾病之类的关键词（肌酐/蛋白尿/SDMA）本来就藏在化验数值里
-            labValues: true,
-            recommendations: true,
-          },
-        },
-        medicalRecords: {
-          orderBy: { visitDate: 'desc' },
-          take: 8,
-          select: {
-            visitDate: true,
-            chiefComplaint: true,
-            diagnosis: true,
-            // 这次就诊做的化验（2026-10-02 新增）
-            labValues: true,
-            treatment: true,
-            medications: true,
-            status: true,
-          },
-        },
-        weightRecords: {
-          orderBy: { recordDate: 'desc' },
-          take: 6,
-          select: { recordDate: true, weightKg: true },
-        },
-      },
-    });
-    if (!dog) {
-      throw new NotFoundException('爱犬不存在');
-    }
-
-    const breed = dog.breedId
-      ? await this.prisma.dogBreed.findUnique({
-          where: { id: dog.breedId },
-          select: {
-            name: true,
-            sizeCategory: true,
-            adultAgeMonths: true,
-            seniorAgeYears: true,
-          },
-        })
-      : null;
-    const dogForLifeStage = { ...dog, breed };
-
-    const lifeStage = mapDogProfileToSeriesLifeStage(dogForLifeStage);
-    const lifeStageLabel = SERIES_LIFE_STAGE_LABELS[lifeStage] ?? null;
-
-    /**
-     * 顾客最近一笔定制订单（未取消），一并交给 AI。
-     * 否则 AI 不知道顾客要减重还是增重、备注里写了什么。
-     */
-    const customerOrder = await this.prisma.customRecipeOrder.findFirst({
-      where: { dogId, status: { not: CustomRecipeStatus.CANCELLED } },
-      orderBy: { createdAt: 'desc' },
-      select: {
-        orderId: true,
-        targetGoal: true,
-        needsHealthManagement: true,
-        additionalNotes: true,
-        preferredIngredients: true,
-        dislikedIngredients: true,
-        currentFoodMain: true,
-        currentFoodOther: true,
-        changeReasons: true,
-        changeReasonOther: true,
-        stomachConditions: true,
-        stomachOther: true,
-        allergyStatus: true,
-      },
-    });
-
-    return {
-      name: dog.name,
-      customOrder: customerOrder
-        ? {
-            orderId: customerOrder.orderId,
-            targetGoal: customerOrder.targetGoal,
-            needsHealthManagement: Boolean(customerOrder.needsHealthManagement),
-            additionalNotes: customerOrder.additionalNotes ?? null,
-            preferredIngredients: customerOrder.preferredIngredients ?? [],
-            dislikedIngredients: customerOrder.dislikedIngredients ?? [],
-            currentFoodMain: customerOrder.currentFoodMain ?? null,
-            currentFoodOther: customerOrder.currentFoodOther ?? null,
-            changeReasons: customerOrder.changeReasons ?? [],
-            changeReasonOther: customerOrder.changeReasonOther ?? null,
-            stomachConditions: customerOrder.stomachConditions ?? [],
-            stomachOther: customerOrder.stomachOther ?? null,
-            allergyStatus: customerOrder.allergyStatus ?? null,
-          }
-        : null,
-      breedName: breed?.name ?? dog.customBreedName ?? null,
-      gender: dog.gender,
-      ageMonths: dog.birthday
-        ? calcMonthsBetween(dog.birthday, new Date())
-        : null,
-      isNeutered: dog.isNeutered,
-      bcsScore: dog.bcsScore,
-      currentWeightKg: dog.currentWeightKg,
-      lifeStageLabel,
-      activityLevel: dog.activityLevel,
-      mealsPerDay: dog.mealsPerDay,
-      treatLevel: dog.treatLevel,
-      manualTreatKcal: dog.manualTreatKcal,
-      targetFoodKcal: dog.cachedTargetFoodKcal,
-      // 过敏：旧文本备注 + 顾客填的结构化记录合并后再交给 AI，
-      // 避免「顾客在健康档案里写了过敏、配方却照样用」。
-      allergyFoods: formatAllergyKeywordsForAi(
-        collectAllergyKeywords({
-          allergyFoods: dog.allergyFoods,
-          allergens: dog.allergyRecords.map((record) => record.allergen),
-        }),
-      ),
-      /**
-       * 口味偏好：档案里的 + **顾客在定制单里单独填的**，合并后交给 AI。
-       *
-       * 定制单里的喜好/忌口不写回档案（知情同意的范围只有过敏与疾病，
-       * 不能顺手把口味也写进去），但 AI 与设计器必须看得到 ——
-       * 否则顾客在订单里写的"不吃鸡胸"会被彻底忽略。
-       */
-      pickyFoods: mergeFoodText(
-        dog.pickyFoods,
-        customerOrder?.dislikedIngredients ?? [],
-      ),
-      preferredFoods: mergeFoodText(
-        dog.preferredFoods,
-        customerOrder?.preferredIngredients ?? [],
-      ),
-      medicalHistory: dog.medicalHistory,
-      healthTagOverrides: parseHealthTagOverrides(dog.healthTagOverrides),
-      weightTrend: dog.weightRecords
-        .slice()
-        .reverse()
-        .map((record) => ({
-          date: record.recordDate.toISOString().slice(0, 10),
-          weightKg: record.weightKg,
-        })),
-      checkups: dog.checkupRecords.map((record) => ({
-        type: record.checkupType,
-        date: record.checkupDate.toISOString().slice(0, 10),
-        findings: record.findings,
-        labValues: record.labValues,
-        recommendations: record.recommendations,
-      })),
-      medicalRecords: dog.medicalRecords.map((record) => ({
-        date: record.visitDate.toISOString().slice(0, 10),
-        chiefComplaint: record.chiefComplaint,
-        diagnosis: record.diagnosis,
-        labValues: record.labValues,
-        treatment: record.treatment,
-        medications: record.medications,
-        status: record.status,
-      })),
-    };
-  }
-
-  /** 构建配方草稿摘要供 AI 使用 */
-  private async buildAiWizardDraftSummary(
-    draftId: string,
-    access: RecipeDesignerAccessInput,
-  ): Promise<AiWizardDraftSummary> {
-    const draft = await this.getDraft(draftId, access);
-    const items = (draft.items ?? [])
-      .filter((item) => item.includeInAssessment !== false)
-      .map((item) => ({
-        name: this.resolveIngredientDisplayName(item),
-        category: this.resolveIngredientType(item),
-        weightG: item.weightG,
-        ratioPercent: item.ratioPercent,
-        isSupplement:
-          this.resolveIngredientType(item) === IngredientType.SUPPLEMENT,
-        preparationMethod: item.preparationMethod ?? null,
-        nutritionProfileSummary: this.buildAiItemNutritionProfileSummary(item),
-      }));
-    return {
-      name: draft.name,
-      scenario: draft.fediafDogScenario,
-      items,
-      totalWeightG: draft.totalWeightG,
-      energyDensityKcalPerKg: draft.energyDensityKcalPerKg,
-      assessmentSummaryText: this.buildAiAssessmentSummaryText(draft),
-    };
-  }
-
-  private buildAiItemNutritionProfileSummary(
-    item: DesignRecipeItemWithFood,
-  ): string | null {
-    const profile = item.nutritionFood?.nutritionData as
-      | Record<string, unknown>
-      | null
-      | undefined;
-    if (!profile || typeof profile !== 'object') return null;
-    const parts: string[] = [];
-    const macro = profile.macros as Record<string, unknown> | null;
-    if (macro && typeof macro === 'object') {
-      const energy =
-        macro.energyKcalPer100g ?? macro.energyKcal ?? macro.energy;
-      if (typeof energy === 'number') parts.push(`能量${energy}kcal/100g`);
-      const protein = macro.proteinG ?? macro.protein;
-      if (typeof protein === 'number') parts.push(`蛋白${protein}g/100g`);
-      const fat = macro.fatG ?? macro.fat;
-      if (typeof fat === 'number') parts.push(`脂肪${fat}g/100g`);
-      const carb = macro.carbohydrateG ?? macro.carbohydrate;
-      if (typeof carb === 'number') parts.push(`碳水${carb}g/100g`);
-    }
-    return parts.length > 0 ? parts.join('，') : null;
-  }
-
-  /** 把 AI 推荐的食材名称与原料库/营养食材库匹配，填充 inLibrary 与 ID 供一键添加 */
-  private async enrichRecommendationWithLibrary(
-    result: IngredientRecommendationResult,
-  ): Promise<IngredientRecommendationResult> {
-    const names = result.recommendations
-      .map((rec) => rec.name)
-      .filter((name) => Boolean(name) && name !== '未命名');
-    if (names.length === 0) return result;
-
-    // 营养食材库全量加载（数量有限，便于做名称包含匹配）
-    const foods = await this.prisma.nutritionFood.findMany({
-      select: {
-        id: true,
-        name: true,
-        displayNameZh: true,
-        mappings: {
-          select: {
-            ingredientId: true,
-            isPrimary: true,
-            ingredient: { select: { id: true, name: true } },
-          },
-        },
-      },
-    });
-    // 原料库全量名称（数量有限），做包含匹配
-    const allIngredients = await this.prisma.ingredient.findMany({
-      select: { id: true, name: true, type: true },
-    });
-
-    // 营养食材 → 主原料映射（供“按原料反查营养食材”用）
-    const foodByIngredientId = new Map<string, (typeof foods)[number]>();
-    for (const food of foods) {
-      for (const mapping of food.mappings ?? []) {
-        if (!foodByIngredientId.has(mapping.ingredientId)) {
-          foodByIngredientId.set(mapping.ingredientId, food);
-        }
-      }
-    }
-
-    // 去掉括号内容与空格，便于名称匹配（如「鸭胸肉（去皮）」→「鸭胸肉」）
-    const normalizeName = (value: string): string =>
-      value
-        .replace(/[（(][^（()）]*[）)]/g, '')
-        .replace(/\s+/g, '')
-        .trim();
-
-    /** 在营养食材库中按名称找最贴合的一项（先精确，再包含，取名称最短者） */
-    const resolveFood = (recName: string) => {
-      const normalized = normalizeName(recName);
-      const exact = foods.find(
-        (food) =>
-          normalizeName(food.name) === normalized ||
-          (food.displayNameZh &&
-            normalizeName(food.displayNameZh) === normalized),
-      );
-      if (exact) return exact;
-      const contains = foods
-        .filter((food) => {
-          const zhName = food.displayNameZh ?? '';
-          const foodNames = [normalizeName(food.name)];
-          if (zhName) foodNames.push(normalizeName(zhName));
-          return foodNames.some(
-            (candidate) =>
-              (candidate.length >= 2 &&
-                (normalized.includes(candidate) ||
-                  candidate.includes(normalized))) ||
-              (normalized.length >= 2 &&
-                (food.name.includes(normalized) ||
-                  zhName.includes(normalized))),
-          );
-        })
-        .sort(
-          (a, b) =>
-            (a.displayNameZh ?? a.name).length -
-            (b.displayNameZh ?? b.name).length,
-        )[0];
-      return contains;
-    };
-
-    /** 在原料库中按名称找（先精确，再包含） */
-    const resolveIngredient = (recName: string) => {
-      const normalized = normalizeName(recName);
-      const exact = allIngredients.find(
-        (ingredient) => normalizeName(ingredient.name) === normalized,
-      );
-      if (exact) return exact;
-      if (normalized.length >= 2) {
-        const candidate = allIngredients
-          .filter((ingredient) => {
-            const candidateName = normalizeName(ingredient.name);
-            return (
-              candidateName.length >= 2 &&
-              (normalized.includes(candidateName) ||
-                candidateName.includes(normalized))
-            );
-          })
-          .sort(
-            (a, b) =>
-              normalizeName(a.name).length - normalizeName(b.name).length,
-          )[0];
-        if (candidate) return candidate;
-      }
-      return undefined;
-    };
-
-    return {
-      ...result,
-      recommendations: result.recommendations.map((rec) => {
-        const food = resolveFood(rec.name);
-        const ingredient = resolveIngredient(rec.name);
-        const primaryMapping =
-          food?.mappings?.find((mapping) => mapping.isPrimary) ??
-          food?.mappings?.[0];
-        const resolvedIngredientId =
-          ingredient?.id ?? primaryMapping?.ingredientId ?? undefined;
-        // 若按原料名匹配到营养食材（AI 名称与原料名一致但营养食材名不同），补上 food
-        const resolvedFood =
-          food ??
-          (resolvedIngredientId
-            ? foodByIngredientId.get(resolvedIngredientId)
-            : undefined);
-        return {
-          ...rec,
-          inLibrary: Boolean(resolvedFood || ingredient),
-          nutritionFoodId: resolvedFood?.id ?? undefined,
-          ingredientId: resolvedIngredientId,
-        };
-      }),
-    };
-  }
-
-  /** 获取（或初始化）配方草稿的 AI 设计数据 */
-  private async getOrCreateAiDesignData(
-    draftId: string,
-    access: RecipeDesignerAccessInput,
-  ): Promise<RecipeAiDesignData> {
-    await this.getDraft(draftId, access);
-    const record = await this.prisma.designRecipeAiDesignData.findUnique({
-      where: { designRecipeId: draftId },
-    });
-    if (!record) {
-      return {
-        nutritionPlan: null,
-        nutritionPlanHistory: [],
-        ingredientRecommendations: [],
-        reviewResults: [],
-        sop: null,
-        updatedAt: new Date().toISOString(),
-      };
-    }
-    return normalizeAiDesignDataRecord(record);
-  }
-
-  /** 保存营养方案（生成后写入，未认可状态） */
-  private async persistAiNutritionPlan(
-    draftId: string,
-    access: RecipeDesignerAccessInput,
-    result: NutritionPlanResult,
-    meta: { accepted: boolean; note: string | null },
-  ): Promise<void> {
-    const aiData = await this.getOrCreateAiDesignData(draftId, access);
-    const history = aiData.nutritionPlanHistory;
-    const now = new Date().toISOString();
-    const wrapped = {
-      result,
-      accepted: meta.accepted,
-      acceptedAt: meta.accepted ? new Date().toISOString() : null,
-      note: meta.note,
-    };
-    await this.prisma.designRecipeAiDesignData.upsert({
-      where: { designRecipeId: draftId },
-      create: {
-        designRecipeId: draftId,
-        nutritionPlan: this.toJsonValue(wrapped),
-        nutritionPlanAccepted: meta.accepted,
-        nutritionPlanNote: meta.note,
-        nutritionPlanHistory: this.toJsonValue([
-          ...history,
-          { result, note: meta.note ?? '生成', createdAt: now },
-        ]),
-      },
-      update: {
-        nutritionPlan: this.toJsonValue(wrapped),
-        nutritionPlanAccepted: meta.accepted,
-        nutritionPlanNote: meta.note,
-        nutritionPlanHistory: this.toJsonValue([
-          ...history,
-          { result, note: meta.note ?? '生成', createdAt: now },
-        ]),
-      },
-    });
-  }
-
-  /** 解析草稿的参考犬 ID */
-  private async resolveDraftReferenceDogId(
-    draft: { seriesId?: string | null; customerDogId?: string | null },
-    context: RecipeDesignerAccessContext,
-  ): Promise<string | null> {
-    if (draft.customerDogId) return draft.customerDogId;
-    if (draft.seriesId) {
-      const series = await this.prisma.recipeSeries.findUnique({
-        where: { id: draft.seriesId },
-        select: { referenceDogId: true, customerDogId: true },
-      });
-      return series?.referenceDogId ?? series?.customerDogId ?? null;
-    }
-    return null;
-  }
 }
 
-/** 把档案口味文本与订单里填的食材合并成一段逗号分隔文本（去重、保序） */
-function mergeFoodText(
-  archiveText: string | null | undefined,
-  orderItems: string[],
-): string | null {
-  const merged: string[] = [];
-  const push = (value: string) => {
-    const trimmed = value.trim();
-    if (trimmed && !merged.includes(trimmed)) {
-      merged.push(trimmed);
-    }
-  };
-
-  String(archiveText || '')
-    .split(/[,，、;；\n\r]/)
-    .forEach(push);
-  orderItems.forEach(push);
-
-  return merged.length > 0 ? merged.join('、') : null;
-}
-
-// ---------- AI 四步向导辅助函数 ----------
+// ---------- 健康标签派生辅助函数 ----------
 
 /** 由犬档案推导知识检索标签与关键词 */
 export function deriveKnowledgeTags(profile: {
@@ -12260,85 +11693,5 @@ export function parseHealthTagOverrides(value: unknown): {
   return {
     added: toStringList(source.added),
     removed: toStringList(source.removed),
-  };
-}
-
-/** 由标签推导食谱结构框架模板名 */
-function deriveFrameworkTemplateName(tags: string[]): string {
-  const set = new Set(tags);
-  if (set.has('ckd') || set.has('renal')) return '肾脏病低磷模板';
-  if (set.has('pancreatitis') || set.has('hyperlipidemia'))
-    return '胰腺炎/低脂模板';
-  if (set.has('urolith')) return '泌尿结石模板（需先明确结石类型）';
-  return '默认模板';
-}
-
-/** 计算两个日期之间的完整月数 */
-function calcMonthsBetween(from: Date, to: Date): number {
-  return (
-    (to.getFullYear() - from.getFullYear()) * 12 +
-    (to.getMonth() - from.getMonth())
-  );
-}
-
-/** 将 Prisma 记录归一化为 RecipeAiDesignData */
-function normalizeAiDesignDataRecord(record: {
-  nutritionPlan: unknown;
-  nutritionPlanAccepted: boolean;
-  nutritionPlanAcceptedAt: Date | null;
-  nutritionPlanNote: string | null;
-  nutritionPlanHistory: unknown;
-  ingredientRecommendations: unknown;
-  reviewResults: unknown;
-  sop: unknown;
-  sopAccepted: boolean;
-  sopAcceptedAt: Date | null;
-  updatedAt: Date;
-}): RecipeAiDesignData {
-  return {
-    nutritionPlan:
-      record.nutritionPlan &&
-      typeof record.nutritionPlan === 'object' &&
-      !Array.isArray(record.nutritionPlan)
-        ? {
-            result: (record.nutritionPlan as Record<string, unknown>)
-              .result as NutritionPlanResult,
-            accepted: record.nutritionPlanAccepted,
-            acceptedAt: record.nutritionPlanAcceptedAt
-              ? record.nutritionPlanAcceptedAt.toISOString()
-              : undefined,
-            note: record.nutritionPlanNote ?? undefined,
-          }
-        : null,
-    nutritionPlanHistory: Array.isArray(record.nutritionPlanHistory)
-      ? (record.nutritionPlanHistory as Array<{
-          result: NutritionPlanResult;
-          note?: string;
-          createdAt: string;
-        }>)
-      : [],
-    ingredientRecommendations: Array.isArray(record.ingredientRecommendations)
-      ? (record.ingredientRecommendations as Array<{
-          result: IngredientRecommendationResult;
-          createdAt: string;
-        }>)
-      : [],
-    reviewResults: Array.isArray(record.reviewResults)
-      ? (record.reviewResults as Array<{
-          result: RecipeReviewResult;
-          createdAt: string;
-        }>)
-      : [],
-    sop:
-      record.sop && typeof record.sop === 'object' && !Array.isArray(record.sop)
-        ? {
-            result: (record.sop as Record<string, unknown>).result as SopResult,
-            accepted: record.sopAccepted,
-            acceptedAt: record.sopAcceptedAt
-              ? record.sopAcceptedAt.toISOString()
-              : undefined,
-          }
-        : null,
-    updatedAt: record.updatedAt.toISOString(),
   };
 }

@@ -1,0 +1,1707 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>疫苗排期 · 现状体检报告（2026-10-28）</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; background:#eef1f5; color:#1f2937; font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; line-height:1.6; }
+  .wrap { max-width:1240px; margin:0 auto; padding:36px 22px 90px; }
+  h1 { font-size:28px; margin:0 0 8px; letter-spacing:.5px; }
+  .sub { color:#5b6472; font-size:15px; margin:0 0 22px; }
+  .banner { background:#fff; border:1px solid #e3e8ef; border-radius:16px; padding:18px 20px; margin-bottom:18px; font-size:14px; }
+  .banner b { color:#0f7b49; }
+  .b0 { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin:18px 0 8px; }
+  .b0 > div { background:#fff; border:1px solid #e3e8ef; border-radius:14px; padding:16px; }
+  .b0 h3 { margin:0 0 6px; font-size:15px; color:#0f7b49; }
+  .b0 p { margin:0; font-size:13px; color:#4b5563; }
+  .plain { color:#6b7280; font-size:13px; margin:10px 0 26px; }
+  .toc { background:#fff; border:1px solid #e3e8ef; border-radius:16px; padding:16px 20px; margin:24px 0; }
+  .toc h2 { margin:0 0 10px; font-size:17px; }
+  table.sum { width:100%; border-collapse:collapse; font-size:13px; }
+  table.sum th, table.sum td { text-align:left; padding:9px 8px; border-bottom:1px solid #eef1f5; vertical-align:top; }
+  table.sum th { color:#6b7280; font-weight:600; font-size:12px; }
+  table.sum a { color:#0f7b49; font-weight:700; text-decoration:none; }
+  .legend { display:flex; gap:18px; flex-wrap:wrap; font-size:12px; color:#4b5563; margin:10px 0 0; }
+  .legend span { display:flex; align-items:center; gap:6px; }
+  .sw { width:12px; height:12px; border-radius:3px; display:inline-block; }
+  .sw.red { background:#b3261e; } .sw.green { background:#0f7b49; } .sw.gray { background:#9ca3af; }
+  .case { background:#fff; border:1px solid #e3e8ef; border-radius:20px; padding:24px; margin:26px 0; box-shadow:0 2px 10px rgba(16,24,40,.04); }
+  .case-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .case-id { background:#0f7b49; color:#fff; font-weight:800; font-size:13px; padding:3px 9px; border-radius:8px; letter-spacing:.5px; }
+  .case-head h2 { font-size:19px; margin:0; }
+  .pill { font-size:11px; font-weight:700; padding:2px 8px; border-radius:20px; }
+  .pill.p0 { background:#fdecea; color:#b3261e; }
+  .pill.p1 { background:#fff4e5; color:#b26a00; }
+  .pill.p2 { background:#eef2ff; color:#4f5bd5; }
+  .one-line { color:#4b5563; font-size:14px; margin:8px 0 14px; }
+  .input { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; background:#f8fafc; border:1px solid #eef1f5; border-radius:12px; padding:12px 14px; font-size:12px; color:#374151; }
+  .input b { display:block; color:#9ca3af; font-weight:600; font-size:11px; margin-bottom:2px; }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:22px; margin-top:20px; }
+  .col { min-width:0; }
+  .phone { background:#f4f6f9; border:1px solid #e3e8ef; border-radius:22px; padding:12px; }
+  .phone-top { display:flex; align-items:center; gap:7px; font-size:12px; color:#6b7280; margin:2px 4px 9px; font-weight:600; }
+  .dot { width:9px; height:9px; border-radius:50%; display:inline-block; }
+  .dot.current { background:#b3261e; } .dot.expected { background:#0f7b49; }
+  .next { border-radius:16px; padding:15px 16px; color:#fff; }
+  .next.warn { background:linear-gradient(135deg,#a8402f,#c25a45); }
+  .next.now { background:linear-gradient(135deg,#0f7b49,#1a9a5e); }
+  .next.calm { background:linear-gradient(135deg,#2f6b55,#3c7f66); }
+  .eyebrow { display:flex; justify-content:space-between; font-size:11px; opacity:.88; }
+  .what { font-size:17px; font-weight:800; margin:6px 0 4px; line-height:1.35; }
+  .when { font-size:12.5px; line-height:1.5; }
+  .hint { font-size:11.5px; opacity:.9; margin-top:6px; line-height:1.45; }
+  .btn { margin-top:11px; background:#fff; color:#0f7b49; border-radius:9px; text-align:center; padding:9px; font-weight:700; font-size:12.5px; }
+  .plan { margin-top:12px; background:#fff; border:1px solid #e5e9ef; border-radius:14px; padding:10px 12px; }
+  .plan-head { display:flex; justify-content:space-between; font-size:12.5px; font-weight:800; color:#111827; margin:2px 0 4px; }
+  .muted { color:#9ca3af; font-weight:500; font-size:11.5px; }
+  .row { display:flex; gap:9px; padding:9px 0; border-top:1px solid #f1f4f7; }
+  .row:first-of-type { border-top:none; }
+  .when-col { flex:0 0 88px; width:88px; font-size:11.5px; font-weight:700; color:#4b5563; line-height:1.35; padding-top:1px; }
+  .when-col .sub { font-weight:400; color:#9ca3af; }
+  .body { flex:1; min-width:0; }
+  .line { display:flex; align-items:center; gap:5px; flex-wrap:wrap; }
+  .bar { width:4px; height:13px; border-radius:2px; background:#9ca3af; flex:0 0 4px; }
+  .bar.core { background:#0f7b49; } .bar.rabies { background:#8a5a2b; } .bar.lepto { background:#0e7490; }
+  .title { font-size:12.5px; font-weight:700; }
+  .layer { font-size:9.5px; padding:1px 6px; border-radius:5px; background:#e8f5ee; color:#0f7b49; font-weight:700; }
+  .layer.suggest { background:#eef2ff; color:#4f5bd5; }
+  .status { font-size:9.5px; padding:1px 6px; border-radius:5px; margin-left:auto; font-weight:700; }
+  .status.over { background:#fdecea; color:#b3261e; }
+  .status.due { background:#e8f5ee; color:#0f7b49; }
+  .status.done { background:#f1f3f5; color:#6b7280; }
+  .status.plain { background:#f1f3f5; color:#6b7280; }
+  .note { font-size:10.5px; color:#6b7280; margin-top:2px; line-height:1.45; }
+  .note.over { color:#b3261e; }
+  .rhythm { font-size:10.5px; color:#9ca3af; border-top:1px solid #f1f4f7; padding-top:8px; margin-top:6px; }
+  .rec { display:flex; gap:10px; padding:8px 0; border-top:1px solid #f1f4f7; }
+  .rec:first-of-type { border-top:none; }
+  .rec-body { flex:1; min-width:0; }
+  .rec-name { font-size:12px; font-weight:700; }
+  .rec-note { font-size:10.5px; color:#9ca3af; margin-top:2px; }
+  .rec-warn { font-size:10.5px; color:#b3261e; margin-top:3px; line-height:1.45; }
+  .rec-date { flex:0 0 74px; text-align:right; font-size:10.5px; color:#9ca3af; }
+  .verdict { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:16px; }
+  .verdict > div { background:#f8fafc; border:1px solid #eef1f5; border-radius:12px; padding:12px 14px; }
+  .verdict h4 { margin:0 0 4px; font-size:11.5px; color:#6b7280; letter-spacing:.3px; }
+  .verdict p { margin:0; font-size:12.5px; color:#374151; }
+  .good { color:#0f7b49; font-weight:600; }
+  .decision { margin-top:12px; background:#fffbeb; border:1px solid #fde68a; border-radius:12px; padding:11px 14px; font-size:12.5px; color:#92400e; }
+  .whybox { margin-top:12px; background:#f8fafc; border:1px solid #e3e8ef; border-radius:12px; padding:11px 14px; font-size:12.5px; color:#374151; line-height:1.65; }
+  .whybox b { color:#0f766e; }
+  .other { background:#fff; border:1px solid #e3e8ef; border-radius:16px; padding:18px 20px; margin-top:26px; }
+  .other h2 { margin:0 0 8px; font-size:17px; }
+  .other table { width:100%; border-collapse:collapse; font-size:13px; }
+  .other td, .other th { padding:8px 6px; border-bottom:1px solid #eef1f5; text-align:left; vertical-align:top; }
+  .other th { color:#6b7280; font-size:12px; }
+  .footer { margin-top:30px; font-size:12.5px; color:#6b7280; }
+  @media (max-width: 900px) {
+    .cols, .b0, .verdict { grid-template-columns:1fr; }
+    .input { grid-template-columns:1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>疫苗排期 · 现状体检报告</h1>
+  <p class="sub">2026-10-28 · 8 个排期案例 · 左边是现在的真实输出，右边是建议改成什么样</p>
+
+  <div class="banner">
+    <b>先说清楚：</b>这些案例的输入是我按典型情况设定的（不是客户数据），但每一条结果都是<strong>用现在后端的排期算法、按小程序现有显示规则</strong>算出来的；同样的输入，每次结果一样。<br>
+    这次一共发现 <strong>17 个问题</strong>（V1–V17；其中 V17 是 B0.5 状态模型复查时新发现的 25 周边界）。其中 <strong>8 个是排期算法</strong>（V1–V5、V10、V11、V17，就是本页）；另外 9 个是：提醒缺口 1 个（V6）、交互 4 个（V7／V8／V9／V12）、显示日期 1 个（V13）、文案 3 个（V14–V16）——见页尾。
+  </div>
+
+  <div class="b0">
+    <div><h3>1. 复现</h3><p>用真实日期把这 7 个问题各跑一遍，证明“不是猜的”，而且每次跑结果一样。</p></div>
+    <div><h3>2. 存档</h3><p>把 20~30 组典型狗狗的页面结果（下一针、计划、记录提示）存成“改前照片”。</p></div>
+    <div><h3>3. 对照</h3><p>每一批改动后，再生成“改后照片”，逐条对比：只允许该变的变，不允许别的地方被改坏。</p></div>
+  </div>
+  <p class="plain">“快照基线”就是这个“改前照片”——不是技术黑话，就是一份可重复生成的现状存档；B0 不改任何业务逻辑，只做这件事。</p>
+
+  <div class="toc">
+    <h2>8 个案例（点编号跳到对应屏）</h2>
+    <table class="sum">
+      <tr><th>编号</th><th>一句话</th><th>级别</th><th>现在的核心问题</th></tr>
+      <tr><td><a href="#V1">V1</a></td><td>抗体合格过期后，核心疫苗永远不再提醒</td><td>P0</td><td>抗体报告写着“下次评估 2025/05”。过了这一天，核心那一行还是“已完成”，从此“下一针”里再也没有核心疫苗。</td></tr><tr><td><a href="#V2">V2</a></td><td>26 周补强在狗满 1 岁后被静默取消</td><td>P0</td><td>8/12/16 周打完了首免，但没打 26 周补强。狗现在 60 周大，计划里既没有补强，下一次核心要等到 2028/12。</td></tr><tr><td><a href="#V3">V3</a></td><td>抗体“不合格”被静默忽略</td><td>P0</td><td>报告上写着“不合格”，这是最该行动的信号；但计划什么都不做，核心疫苗仍显示 2027 年才到期。</td></tr><tr><td><a href="#V4">V4</a></td><td>单病种疫苗被当成完整核心一针</td><td>P0</td><td>记录写的是“细小单苗”——只防细小一种；系统却把它当成核心首免的第 1 针，计划直接从第 2 针开始。</td></tr><tr><td><a href="#V5">V5</a></td><td>钩端旧的第 2 针盖住真正该打的针</td><td>P1</td><td>3 岁第一次打钩端，两年后（2025/06）又打了一针；系统却拿 2023 年的“第 2 针”当门面，说“原建议 2023/09 已过”。</td></tr><tr><td><a href="#V10">V10</a></td><td>太早打的记录被静默忽略，没有任何解释</td><td>P2</td><td>5 周打的核心苗、10 周打的狂犬苗，系统都不算数——但页面上一个字都不说，家长只会觉得“记了没反应”。</td></tr><tr><td><a href="#V11">V11</a></td><td>抗体合格后，计划里只该留下“下一步”</td><td>P2</td><td>首免还没打完的幼犬做了抗体，计划里出现两条同日期、同文案的“核心疫苗 · 评估”；正确的做法不是去重，而是只保留一个“下次复查”。</td></tr><tr><td><a href="#V17">V17</a></td><td>25 周晚起步，被套上 6~8 周首免</td><td>P1</td><td>25 周、一条记录都没有：下一针写“第 1 针（原建议 6 月）”，同时还排了 2 天后的“26 周补强”。</td></tr>
+    </table>
+    <div class="legend">
+      <span><i class="sw red"></i>红色 = 会漏提醒 / 会误导</span>
+      <span><i class="sw green"></i>绿色 = 建议改成这样</span>
+      <span><i class="sw gray"></i>灰色 = 正常 / 已完成</span>
+    </div>
+  </div>
+
+  
+    <section class="case" id="V1">
+      <div class="case-head">
+        <span class="case-id">V1</span>
+        <h2>抗体合格过期后，核心疫苗永远不再提醒</h2>
+        <span class="pill p0">P0</span>
+      </div>
+      <p class="one-line">抗体报告写着“下次评估 2025/05”。过了这一天，核心那一行还是“已完成”，从此“下一针”里再也没有核心疫苗。</p>
+      <div class="input">
+        <div><b>生日</b>2023-01-01</div>
+        <div><b>今天</b>2026-10-28</div>
+        <div><b>接种记录</b>2023/04/01 卫佳伍（核心）</div>
+        <div><b>抗体检测</b>2024/05/01 抗体检测（核心三项）合格</div>
+      </div>
+      <div class="cols">
+        <div class="col">
+  <div class="phone">
+    <div class="phone-top"><span class="dot current"></span><span class="phone-label">现在（现有算法真实输出）</span></div>
+    <div class="next warn">
+      <div class="eyebrow"><span>下一针</span><span>现状 · 查看详情 ›</span></div>
+      <div class="what">狂犬疫苗 · 首针</div>
+      <div class="when">建议尽快补种（原建议时间 2023/03/26 ~ 04/25，已过）</div>
+      <div class="hint">狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。</div>
+      <div class="btn">记录这一针</div>
+    </div>
+    <div class="plan">
+      <div class="plan-head"><span>免疫计划</span><span class="muted">共 3 项</span></div>
+      
+  <div class="row">
+    <div class="when-col"><div class="main">2025/05/01</div><div class="sub">下次评估</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗 · 评估</span>
+        <span class="layer must">必打</span>
+        <span class="status done">已完成</span>
+      </div>
+      <div class="note ">这次不用打：报告上写着抗体检测合格（2024/05/01）</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar rabies"></span>
+        <span class="title">狂犬疫苗 · 首针</span>
+        <span class="layer must">必打</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2023/03 已过</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar lepto"></span>
+        <span class="title">钩端螺旋体</span>
+        <span class="layer suggest">强烈建议</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2023/02 已过</div>
+    </div>
+  </div>
+      <div class="rhythm">之后：狂犬与钩端每年一次，核心疫苗每年复查抗体</div>
+    </div>
+    
+  <div class="plan">
+    <div class="plan-head"><span>接种记录</span><span class="muted">2 条</span></div>
+    
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">卫佳伍</div>
+          
+          
+        </div>
+        <div class="rec-date">2023/04/01</div>
+      </div>
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">抗体检测 · 核心三项（合格）</div>
+          <div class="rec-note">下次评估 2025/05/01</div>
+          
+        </div>
+        <div class="rec-date">2024/05/01</div>
+      </div>
+  </div>
+  </div></div>
+        <div class="col">
+  <div class="phone">
+    <div class="phone-top"><span class="dot expected"></span><span class="phone-label">建议（待你拍板）</span></div>
+    <div class="next warn">
+      <div class="eyebrow"><span>下一针</span><span>建议 · 查看详情 ›</span></div>
+      <div class="what">核心疫苗（犬瘟、细小、腺病毒） · 抗体复查</div>
+      <div class="when">建议尽快复查抗体（原建议时间 2025/05/01，已过）</div>
+      <div class="hint">上次抗体合格是 2024/05/01。复查合格可以继续免打；不合格再补打。</div>
+      <div class="btn">记录这一针</div>
+    </div>
+    <div class="plan">
+      <div class="plan-head"><span>免疫计划</span><span class="muted">共 3 项</span></div>
+      
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗 · 抗体复查</span>
+        <span class="layer must">必打</span>
+        <span class="status over">该复查了</span>
+      </div>
+      <div class="note over">原建议时间 2025/05 已过</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar rabies"></span>
+        <span class="title">狂犬疫苗 · 首针</span>
+        <span class="layer must">必打</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2023/03 已过</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar lepto"></span>
+        <span class="title">钩端螺旋体</span>
+        <span class="layer suggest">强烈建议</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2023/02 已过</div>
+    </div>
+  </div>
+      <div class="rhythm">之后：狂犬与钩端每年一次，核心疫苗每年复查抗体</div>
+    </div>
+    
+  <div class="plan">
+    <div class="plan-head"><span>接种记录</span><span class="muted">2 条</span></div>
+    
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">卫佳伍</div>
+          
+          
+        </div>
+        <div class="rec-date">2023/04/01</div>
+      </div>
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">抗体检测 · 核心三项（合格）</div>
+          
+          <div class="rec-warn">复查时间 2025/05/01 已过：建议复查抗体</div>
+        </div>
+        <div class="rec-date">2024/05/01</div>
+      </div>
+  </div>
+  </div></div>
+      </div>
+      <div class="verdict">
+        <div><h4>现在会怎样</h4><p>核心那一行是“已完成”，日期停在 2025/05/01（下次评估）。“下一针”里只有狂犬和钩端，核心疫苗<b>再也不会出现</b>——不管过 2 年还是 5 年。</p></div>
+        <div><h4>应该怎样</h4><p class="good">复查日一过，核心那一行变成“该复查了”（红色、逾期），并重新进入“下一针”。复查合格继续免打，不合格再补打。</p></div>
+        <div><h4>影响</h4><p>录过抗体报告的家长，通常是最在意健康的那批人；狗可能<b>多年不再被提醒核心免疫</b>，而页面上看不出异常。</p></div>
+      </div>
+      
+      <div class="decision"><b>需要你拍板：</b>Q1：A 恢复“核心疫苗该打了” / B 提醒“该复查抗体了”（推荐 B）</div>
+    </section>
+    <section class="case" id="V2">
+      <div class="case-head">
+        <span class="case-id">V2</span>
+        <h2>26 周补强在狗满 1 岁后被静默取消</h2>
+        <span class="pill p0">P0</span>
+      </div>
+      <p class="one-line">8/12/16 周打完了首免，但没打 26 周补强。狗现在 60 周大，计划里既没有补强，下一次核心要等到 2028/12。</p>
+      <div class="input">
+        <div><b>生日</b>2025-09-01</div>
+        <div><b>今天</b>2026-10-28（60 周龄）</div>
+        <div><b>接种记录</b>2025/11/01、2025/12/01、2025/12/22（约 8/12/16 周）</div>
+        <div><b>抗体检测</b>无</div>
+      </div>
+      <div class="cols">
+        <div class="col">
+  <div class="phone">
+    <div class="phone-top"><span class="dot current"></span><span class="phone-label">现在（现有算法真实输出）</span></div>
+    <div class="next warn">
+      <div class="eyebrow"><span>下一针</span><span>现状 · 查看详情 ›</span></div>
+      <div class="what">狂犬疫苗 · 首针</div>
+      <div class="when">建议尽快补种（原建议时间 2025/11/24 ~ 12/24，已过）</div>
+      <div class="hint">狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。</div>
+      <div class="btn">记录这一针</div>
+    </div>
+    <div class="plan">
+      <div class="plan-head"><span>免疫计划</span><span class="muted">共 3 项</span></div>
+      
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar rabies"></span>
+        <span class="title">狂犬疫苗 · 首针</span>
+        <span class="layer must">必打</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2025/11 已过</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar lepto"></span>
+        <span class="title">钩端螺旋体</span>
+        <span class="layer suggest">强烈建议</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2025/10 已过</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">2028/12/22</div><div class="sub">~ 03/22</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗 · 加强（每 3 年）</span>
+        <span class="layer must">必打</span>
+        <span class="status plain">待接种</span>
+      </div>
+      
+    </div>
+  </div>
+      <div class="rhythm">之后：狂犬与钩端每年一次，核心疫苗每 3 年一次</div>
+    </div>
+    
+  <div class="plan">
+    <div class="plan-head"><span>接种记录</span><span class="muted">3 条</span></div>
+    
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">卫佳伍</div>
+          
+          
+        </div>
+        <div class="rec-date">2025/11/01</div>
+      </div>
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">卫佳伍</div>
+          
+          
+        </div>
+        <div class="rec-date">2025/12/01</div>
+      </div>
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">卫佳伍</div>
+          
+          
+        </div>
+        <div class="rec-date">2025/12/22</div>
+      </div>
+  </div>
+  </div></div>
+        <div class="col">
+  <div class="phone">
+    <div class="phone-top"><span class="dot expected"></span><span class="phone-label">建议（待你拍板）</span></div>
+    <div class="next warn">
+      <div class="eyebrow"><span>下一针</span><span>建议 · 查看详情 ›</span></div>
+      <div class="what">狂犬疫苗 · 首针</div>
+      <div class="when">建议尽快补种（原建议时间 2025/11/24 ~ 12/24，已过）</div>
+      <div class="hint">狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。</div>
+      <div class="btn">记录这一针</div>
+    </div>
+    <div class="plan">
+      <div class="plan-head"><span>免疫计划</span><span class="muted">共 3 项</span></div>
+      
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar rabies"></span>
+        <span class="title">狂犬疫苗 · 首针</span>
+        <span class="layer must">必打</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2025/11 已过</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗 · 补一针（26 周补强）</span>
+        <span class="layer must">必打</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2026/03 已过</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar lepto"></span>
+        <span class="title">钩端螺旋体</span>
+        <span class="layer suggest">强烈建议</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2025/10 已过</div>
+    </div>
+  </div>
+      <div class="rhythm">之后：狂犬与钩端每年一次，核心疫苗每 3 年一次</div>
+    </div>
+    
+  <div class="plan">
+    <div class="plan-head"><span>接种记录</span><span class="muted">3 条</span></div>
+    
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">卫佳伍</div>
+          
+          
+        </div>
+        <div class="rec-date">2025/11/01</div>
+      </div>
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">卫佳伍</div>
+          
+          
+        </div>
+        <div class="rec-date">2025/12/01</div>
+      </div>
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">卫佳伍</div>
+          
+          
+        </div>
+        <div class="rec-date">2025/12/22</div>
+      </div>
+  </div>
+  </div></div>
+      </div>
+      <div class="verdict">
+        <div><h4>现在会怎样</h4><p>计划里没有 26 周补强。核心那一行是“加强（每 3 年）”，日期 <b>2028/12/22</b>——从 16 周到 3 岁多，中间没有任何核心提醒。</p></div>
+        <div><h4>应该怎样</h4><p class="good">错过 26 周补强，就显示“补一针（26 周补强）”，并按逾期提醒；打了之后从这一针起算 3 年。</p></div>
+        <div><h4>影响</h4><p>26 周补强就是用来兜住“16 周时还没建立起免疫”的那一小部分幼犬；静默取消，等于让它们裸奔 3 年。</p></div>
+      </div>
+      
+      <div class="decision"><b>需要你拍板：</b>Q3：A 保持现状 / B 一直显示“补一针”直到记录（推荐） / C 只显示到 3 年</div>
+    </section>
+    <section class="case" id="V3">
+      <div class="case-head">
+        <span class="case-id">V3</span>
+        <h2>抗体“不合格”被静默忽略</h2>
+        <span class="pill p0">P0</span>
+      </div>
+      <p class="one-line">报告上写着“不合格”，这是最该行动的信号；但计划什么都不做，核心疫苗仍显示 2027 年才到期。</p>
+      <div class="input">
+        <div><b>生日</b>2024-01-01</div>
+        <div><b>今天</b>2026-10-28</div>
+        <div><b>接种记录</b>2024/03/20、04/20、05/10、05/24（核心 4 针）</div>
+        <div><b>抗体检测</b>2026/09/01 抗体检测（核心三项）不合格</div>
+      </div>
+      <div class="cols">
+        <div class="col">
+  <div class="phone">
+    <div class="phone-top"><span class="dot current"></span><span class="phone-label">现在（现有算法真实输出）</span></div>
+    <div class="next warn">
+      <div class="eyebrow"><span>下一针</span><span>现状 · 查看详情 ›</span></div>
+      <div class="what">狂犬疫苗 · 首针</div>
+      <div class="when">建议尽快补种（原建议时间 2024/03/25 ~ 04/24，已过）</div>
+      <div class="hint">狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。</div>
+      <div class="btn">记录这一针</div>
+    </div>
+    <div class="plan">
+      <div class="plan-head"><span>免疫计划</span><span class="muted">共 3 项</span></div>
+      
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar rabies"></span>
+        <span class="title">狂犬疫苗 · 首针</span>
+        <span class="layer must">必打</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2024/03 已过</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar lepto"></span>
+        <span class="title">钩端螺旋体</span>
+        <span class="layer suggest">强烈建议</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2024/02 已过</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">2027/05/24</div><div class="sub">~ 08/22</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗 · 加强（每 3 年）</span>
+        <span class="layer must">必打</span>
+        <span class="status plain">待接种</span>
+      </div>
+      
+    </div>
+  </div>
+      <div class="rhythm">之后：狂犬与钩端每年一次，核心疫苗每 3 年一次</div>
+    </div>
+    
+  <div class="plan">
+    <div class="plan-head"><span>接种记录</span><span class="muted">5 条</span></div>
+    
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">卫佳伍</div>
+          
+          
+        </div>
+        <div class="rec-date">2024/03/20</div>
+      </div>
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">卫佳伍</div>
+          
+          
+        </div>
+        <div class="rec-date">2024/04/20</div>
+      </div>
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">卫佳伍</div>
+          
+          
+        </div>
+        <div class="rec-date">2024/05/10</div>
+      </div>
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">卫佳伍</div>
+          
+          
+        </div>
+        <div class="rec-date">2024/05/24</div>
+      </div>
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">抗体检测 · 核心三项（不合格）</div>
+          
+          
+        </div>
+        <div class="rec-date">2026/09/01</div>
+      </div>
+  </div>
+  </div></div>
+        <div class="col">
+  <div class="phone">
+    <div class="phone-top"><span class="dot expected"></span><span class="phone-label">建议（待你拍板）</span></div>
+    <div class="next warn">
+      <div class="eyebrow"><span>下一针</span><span>建议 · 查看详情 ›</span></div>
+      <div class="what">核心疫苗（犬瘟、细小、腺病毒） · 补一针</div>
+      <div class="when">建议尽快补种（抗体检测不合格，2026/09/01）</div>
+      <div class="hint">报告上写着不合格：建议尽快补打核心疫苗，并咨询兽医。</div>
+      <div class="btn">记录这一针</div>
+    </div>
+    <div class="plan">
+      <div class="plan-head"><span>免疫计划</span><span class="muted">共 3 项</span></div>
+      
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">现在</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗 · 补一针（抗体检测不合格）</span>
+        <span class="layer must">必打</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">报告上写着不合格（2026/09/01）</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar rabies"></span>
+        <span class="title">狂犬疫苗 · 首针</span>
+        <span class="layer must">必打</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2024/03 已过</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar lepto"></span>
+        <span class="title">钩端螺旋体</span>
+        <span class="layer suggest">强烈建议</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2024/02 已过</div>
+    </div>
+  </div>
+      <div class="rhythm">之后：狂犬与钩端每年一次，核心疫苗每 3 年一次</div>
+    </div>
+    
+  <div class="plan">
+    <div class="plan-head"><span>接种记录</span><span class="muted">5 条</span></div>
+    
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">卫佳伍</div>
+          
+          
+        </div>
+        <div class="rec-date">2024/03/20</div>
+      </div>
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">卫佳伍</div>
+          
+          
+        </div>
+        <div class="rec-date">2024/04/20</div>
+      </div>
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">卫佳伍</div>
+          
+          
+        </div>
+        <div class="rec-date">2024/05/10</div>
+      </div>
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">卫佳伍</div>
+          
+          
+        </div>
+        <div class="rec-date">2024/05/24</div>
+      </div>
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">抗体检测 · 核心三项（不合格）</div>
+          
+          <div class="rec-warn">报告不合格：建议尽快补打核心疫苗，并咨询兽医</div>
+        </div>
+        <div class="rec-date">2026/09/01</div>
+      </div>
+  </div>
+  </div></div>
+      </div>
+      <div class="verdict">
+        <div><h4>现在会怎样</h4><p>计划里核心那一行是“加强（每 3 年）”，2027/05/24 才到期；记录区只有一行“抗体检测 · 核心三项（不合格）”，<b>没有任何提示</b>。</p></div>
+        <div><h4>应该怎样</h4><p class="good">记录区红字提示“报告不合格，建议尽快补打”；计划把核心提前成“补一针”，并进入“下一针”。</p></div>
+        <div><h4>影响</h4><p>抗体不合格=可能没有保护。指南明确“建议立即补打”，我们却什么都不做——这是最不该静默的一条。</p></div>
+      </div>
+      
+      <div class="decision"><b>需要你拍板：</b>Q2：A 只在记录区提示 / B 把核心提前成“补一针”（推荐，带条件）</div>
+    </section>
+    <section class="case" id="V4">
+      <div class="case-head">
+        <span class="case-id">V4</span>
+        <h2>单病种疫苗被当成完整核心一针</h2>
+        <span class="pill p0">P0</span>
+      </div>
+      <p class="one-line">记录写的是“细小单苗”——只防细小一种；系统却把它当成核心首免的第 1 针，计划直接从第 2 针开始。</p>
+      <div class="input">
+        <div><b>生日</b>2026-05-01</div>
+        <div><b>今天</b>2026-06-27（8 周龄）</div>
+        <div><b>接种记录</b>2026/06/26 细小单苗</div>
+        <div><b>抗体检测</b>无</div>
+      </div>
+      <div class="cols">
+        <div class="col">
+  <div class="phone">
+    <div class="phone-top"><span class="dot current"></span><span class="phone-label">现在（现有算法真实输出）</span></div>
+    <div class="next now">
+      <div class="eyebrow"><span>下一针</span><span>现状 · 查看详情 ›</span></div>
+      <div class="what">钩端螺旋体 · 第 1 针</div>
+      <div class="when">建议接种时间 06/26 ~ 07/24</div>
+      <div class="hint">首次两针，间隔 2~4 周；之后每年一次。</div>
+      <div class="btn">记录这一针</div>
+    </div>
+    <div class="plan">
+      <div class="plan-head"><span>免疫计划</span><span class="muted">共 6 项</span></div>
+      
+  <div class="row">
+    <div class="when-col"><div class="main">06/26 ~ 07/24</div><div class="sub">现在</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar lepto"></span>
+        <span class="title">钩端螺旋体</span>
+        <span class="layer suggest">强烈建议</span>
+        <span class="status due">待接种</span>
+      </div>
+      
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">2026/07/10</div><div class="sub">~ 07/24</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗</span>
+        <span class="layer must">必打</span>
+        <span class="status plain">待接种</span>
+      </div>
+      
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">2026/07/24</div><div class="sub">~ 08/23</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar rabies"></span>
+        <span class="title">狂犬疫苗 · 首针</span>
+        <span class="layer must">必打</span>
+        <span class="status plain">待接种</span>
+      </div>
+      
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">2026/08/07</div><div class="sub">~ 08/21</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗</span>
+        <span class="layer must">必打</span>
+        <span class="status plain">待接种</span>
+      </div>
+      
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">2026/09/04</div><div class="sub">~ 09/18</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗</span>
+        <span class="layer must">必打</span>
+        <span class="status plain">待接种</span>
+      </div>
+      
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">2026/10/30</div><div class="sub">~ 11/27</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗 · 26 周补强</span>
+        <span class="layer must">必打</span>
+        <span class="status plain">待接种</span>
+      </div>
+      
+    </div>
+  </div>
+      <div class="rhythm">之后：狂犬与钩端每年一次，核心疫苗每 3 年一次</div>
+    </div>
+    
+  <div class="plan">
+    <div class="plan-head"><span>接种记录</span><span class="muted">1 条</span></div>
+    
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">细小单苗</div>
+          
+          
+        </div>
+        <div class="rec-date">2026/06/26</div>
+      </div>
+  </div>
+  </div></div>
+        <div class="col">
+  <div class="phone">
+    <div class="phone-top"><span class="dot expected"></span><span class="phone-label">建议（待你拍板）</span></div>
+    <div class="next warn">
+      <div class="eyebrow"><span>下一针</span><span>建议 · 查看详情 ›</span></div>
+      <div class="what">核心疫苗（犬瘟、细小、腺病毒） · 第 1 针</div>
+      <div class="when">建议尽快补种（原建议时间 2026/06/12 ~ 06/26，已过）</div>
+      <div class="hint">幼犬从 6~8 周龄开始，每 2~4 周打一针，一直接种到满 16 周龄。</div>
+      <div class="btn">记录这一针</div>
+    </div>
+    <div class="plan">
+      <div class="plan-head"><span>免疫计划</span><span class="muted">共 7 项</span></div>
+      
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗</span>
+        <span class="layer must">必打</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2026/06 已过</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">06/26 ~ 07/24</div><div class="sub">现在</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar lepto"></span>
+        <span class="title">钩端螺旋体</span>
+        <span class="layer suggest">强烈建议</span>
+        <span class="status due">待接种</span>
+      </div>
+      
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">2026/07/10</div><div class="sub">~ 07/24</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗</span>
+        <span class="layer must">必打</span>
+        <span class="status plain">待接种</span>
+      </div>
+      
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">2026/07/24</div><div class="sub">~ 08/23</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar rabies"></span>
+        <span class="title">狂犬疫苗 · 首针</span>
+        <span class="layer must">必打</span>
+        <span class="status plain">待接种</span>
+      </div>
+      
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">2026/08/07</div><div class="sub">~ 08/21</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗</span>
+        <span class="layer must">必打</span>
+        <span class="status plain">待接种</span>
+      </div>
+      
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">2026/09/04</div><div class="sub">~ 09/18</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗</span>
+        <span class="layer must">必打</span>
+        <span class="status plain">待接种</span>
+      </div>
+      
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">2026/10/30</div><div class="sub">~ 11/27</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗 · 26 周补强</span>
+        <span class="layer must">必打</span>
+        <span class="status plain">待接种</span>
+      </div>
+      
+    </div>
+  </div>
+      <div class="rhythm">之后：狂犬与钩端每年一次，核心疫苗每 3 年一次</div>
+    </div>
+    
+  <div class="plan">
+    <div class="plan-head"><span>接种记录</span><span class="muted">1 条</span></div>
+    
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">细小单苗</div>
+          
+          <div class="rec-warn">这一针只防细小一种，不能顶核心一针；请补勾它含哪些疫苗，或咨询兽医</div>
+        </div>
+        <div class="rec-date">2026/06/26</div>
+      </div>
+  </div>
+  </div></div>
+      </div>
+      <div class="verdict">
+        <div><h4>现在会怎样</h4><p>核心“第 1 针”被算成已完成（计划里看不到它），计划直接从 <b>2026/07/10</b> 的第 2 针开始；“下一针”是钩端。</p></div>
+        <div><h4>应该怎样</h4><p class="good">单病种疫苗只算“记录”，不能顶核心一针；核心第 1 针仍是“待接种/逾期”，并在记录上提示“只防一种，请补勾病种”。</p></div>
+        <div><h4>影响</h4><p>狗会被认为已经打过一针核心，整段首免少一针；如果只打了细小单苗，犬瘟和腺病毒根本没有覆盖。</p></div>
+      </div>
+      
+      <div class="decision"><b>需要你拍板：</b>Q4：A 不算核心 + 要求补全病种（推荐） / B 算早期苗 / C 只记录不提示</div>
+    </section>
+    <section class="case" id="V5">
+      <div class="case-head">
+        <span class="case-id">V5</span>
+        <h2>钩端旧的第 2 针盖住真正该打的针</h2>
+        <span class="pill p1">P1</span>
+      </div>
+      <p class="one-line">3 岁第一次打钩端，两年后（2025/06）又打了一针；系统却拿 2023 年的“第 2 针”当门面，说“原建议 2023/09 已过”。</p>
+      <div class="input">
+        <div><b>生日</b>2020-01-01</div>
+        <div><b>今天</b>2026-10-28</div>
+        <div><b>接种记录</b>2023/09/01 卫佳捌（含钩端）；2025/06/01 宠必威乐必妥（钩端）</div>
+        <div><b>抗体检测</b>无</div>
+      </div>
+      <div class="cols">
+        <div class="col">
+  <div class="phone">
+    <div class="phone-top"><span class="dot current"></span><span class="phone-label">现在（现有算法真实输出）</span></div>
+    <div class="next warn">
+      <div class="eyebrow"><span>下一针</span><span>现状 · 查看详情 ›</span></div>
+      <div class="what">钩端螺旋体 · 第 2 针</div>
+      <div class="when">建议尽快补种（原建议时间 2023/09/15 ~ 09/29，已过）</div>
+      <div class="hint">首次两针，间隔 2~4 周；之后每年一次。</div>
+      <div class="btn">记录这一针</div>
+    </div>
+    <div class="plan">
+      <div class="plan-head"><span>免疫计划</span><span class="muted">共 3 项</span></div>
+      
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar lepto"></span>
+        <span class="title">钩端螺旋体</span>
+        <span class="layer suggest">强烈建议</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2023/09 已过</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">09/01 ~ 11/30</div><div class="sub">现在</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗 · 加强（每 3 年）</span>
+        <span class="layer must">必打</span>
+        <span class="status due">待接种</span>
+      </div>
+      
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar rabies"></span>
+        <span class="title">狂犬疫苗 · 首针</span>
+        <span class="layer must">必打</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2020/03 已过</div>
+    </div>
+  </div>
+      <div class="rhythm">之后：狂犬与钩端每年一次，核心疫苗每 3 年一次</div>
+    </div>
+    
+  <div class="plan">
+    <div class="plan-head"><span>接种记录</span><span class="muted">2 条</span></div>
+    
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">卫佳捌</div>
+          
+          
+        </div>
+        <div class="rec-date">2023/09/01</div>
+      </div>
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">宠必威乐必妥</div>
+          
+          
+        </div>
+        <div class="rec-date">2025/06/01</div>
+      </div>
+  </div>
+  </div></div>
+        <div class="col">
+  <div class="phone">
+    <div class="phone-top"><span class="dot expected"></span><span class="phone-label">建议（待你拍板）</span></div>
+    <div class="next warn">
+      <div class="eyebrow"><span>下一针</span><span>建议 · 查看详情 ›</span></div>
+      <div class="what">钩端螺旋体 · 重启免疫 第 2 针</div>
+      <div class="when">建议尽快补种（原建议时间 2025/06/15 ~ 06/29，已过）</div>
+      <div class="hint">上一针（2025/06/01）是重启免疫的第 1 针；第 2 针应在 2~4 周后打。</div>
+      <div class="btn">记录这一针</div>
+    </div>
+    <div class="plan">
+      <div class="plan-head"><span>免疫计划</span><span class="muted">共 3 项</span></div>
+      
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar lepto"></span>
+        <span class="title">钩端螺旋体 · 重启免疫 第 2 针</span>
+        <span class="layer suggest">强烈建议</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2025/06 已过</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">09/01 ~ 11/30</div><div class="sub">现在</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗 · 加强（每 3 年）</span>
+        <span class="layer must">必打</span>
+        <span class="status due">待接种</span>
+      </div>
+      
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar rabies"></span>
+        <span class="title">狂犬疫苗 · 首针</span>
+        <span class="layer must">必打</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2020/03 已过</div>
+    </div>
+  </div>
+      <div class="rhythm">之后：狂犬与钩端每年一次，核心疫苗每 3 年一次</div>
+    </div>
+    
+  <div class="plan">
+    <div class="plan-head"><span>接种记录</span><span class="muted">2 条</span></div>
+    
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">卫佳捌</div>
+          
+          
+        </div>
+        <div class="rec-date">2023/09/01</div>
+      </div>
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">宠必威乐必妥</div>
+          
+          
+        </div>
+        <div class="rec-date">2025/06/01</div>
+      </div>
+  </div>
+  </div></div>
+      </div>
+      <div class="verdict">
+        <div><h4>现在会怎样</h4><p>“下一针”写的是“钩端螺旋体 · 第 2 针”，原建议时间 <b>2023/09</b>——看起来像三年前漏了一针；实际上 2025/06 那针是“重启第 1 针”，该补的是重启第 2 针。</p></div>
+        <div><h4>应该怎样</h4><p class="good">把旧的首免步骤让开，显示“重启免疫 第 2 针”，原建议时间 2025/06；后面的年度从这一针重新起算。</p></div>
+        <div><h4>影响</h4><p>家长会以为“三年前漏了一针”，实际是“去年重启的第二针没打”；时间差 2 年，容易导致补错针。</p></div>
+      </div>
+      <div class="whybox"><b>为什么会这样：</b>时间线：2023/09/01 第 1 针 → 2023/09 第 2 针没记录 → 2025/06/01 又打了一针。它距离上一针 21 个月（≥18），按指南这一针本身就是“重启第 1 针”，所以下一步是“重启第 2 针”，不是“先打第 1 针”。系统只按记录判断：没记录＝没打（宁可多提醒）。如果 2023 年那一针第 2 针其实打了、只是忘了记录，家长补记之后，2025 那一针仍按 18 个月规则算“重启第 1 针”，应该继续显示“重启第 2 针”——现在的“超过 3 个月就不算重启”会把它漏掉，B4 一并修。所以 V5 的修复要带一个“补记历史接种”的入口，不能只把旧步骤藏起来。</div>
+      <div class="decision"><b>需要你拍板：</b>不需要拍板；按 18 个月规则修正。</div>
+    </section>
+    <section class="case" id="V10">
+      <div class="case-head">
+        <span class="case-id">V10</span>
+        <h2>太早打的记录被静默忽略，没有任何解释</h2>
+        <span class="pill p2">P2</span>
+      </div>
+      <p class="one-line">5 周打的核心苗、10 周打的狂犬苗，系统都不算数——但页面上一个字都不说，家长只会觉得“记了没反应”。</p>
+      <div class="input">
+        <div><b>生日</b>2026-08-01</div>
+        <div><b>今天</b>2026-10-28（12 周龄）</div>
+        <div><b>接种记录</b>2026/09/05 核心苗（5 周龄）；2026/10/10 狂犬（10 周龄）</div>
+        <div><b>抗体检测</b>无</div>
+      </div>
+      <div class="cols">
+        <div class="col">
+  <div class="phone">
+    <div class="phone-top"><span class="dot current"></span><span class="phone-label">现在（现有算法真实输出）</span></div>
+    <div class="next warn">
+      <div class="eyebrow"><span>下一针</span><span>现状 · 查看详情 ›</span></div>
+      <div class="what">核心疫苗（犬瘟、细小、腺病毒） · 第 1 针</div>
+      <div class="when">建议尽快补种（原建议时间 2026/09/12 ~ 09/26，已过）</div>
+      <div class="hint">幼犬从 6~8 周龄开始，每 2~4 周打一针，一直接种到满 16 周龄。</div>
+      <div class="btn">记录这一针</div>
+    </div>
+    <div class="plan">
+      <div class="plan-head"><span>免疫计划</span><span class="muted">共 7 项</span></div>
+      
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗</span>
+        <span class="layer must">必打</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2026/09 已过</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗</span>
+        <span class="layer must">必打</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2026/09 已过</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">10/24 ~ 11/07</div><div class="sub">现在</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗</span>
+        <span class="layer must">必打</span>
+        <span class="status due">待接种</span>
+      </div>
+      
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">10/24 ~ 11/23</div><div class="sub">现在</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar rabies"></span>
+        <span class="title">狂犬疫苗 · 首针</span>
+        <span class="layer must">必打</span>
+        <span class="status due">待接种</span>
+      </div>
+      
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar lepto"></span>
+        <span class="title">钩端螺旋体</span>
+        <span class="layer suggest">强烈建议</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2026/09 已过</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">2026/11/21</div><div class="sub">~ 12/05</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗</span>
+        <span class="layer must">必打</span>
+        <span class="status plain">待接种</span>
+      </div>
+      
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">2027/01/30</div><div class="sub">~ 02/27</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗 · 26 周补强</span>
+        <span class="layer must">必打</span>
+        <span class="status plain">待接种</span>
+      </div>
+      
+    </div>
+  </div>
+      <div class="rhythm">之后：狂犬与钩端每年一次，核心疫苗每 3 年一次</div>
+    </div>
+    
+  <div class="plan">
+    <div class="plan-head"><span>接种记录</span><span class="muted">2 条</span></div>
+    
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">卫佳伍</div>
+          
+          
+        </div>
+        <div class="rec-date">2026/09/05</div>
+      </div>
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">狂犬疫苗</div>
+          
+          
+        </div>
+        <div class="rec-date">2026/10/10</div>
+      </div>
+  </div>
+  </div></div>
+        <div class="col">
+  <div class="phone">
+    <div class="phone-top"><span class="dot expected"></span><span class="phone-label">建议（待你拍板）</span></div>
+    <div class="next warn">
+      <div class="eyebrow"><span>下一针</span><span>建议 · 查看详情 ›</span></div>
+      <div class="what">核心疫苗（犬瘟、细小、腺病毒） · 第 1 针</div>
+      <div class="when">建议尽快补种（原建议时间 2026/09/12 ~ 09/26，已过）</div>
+      <div class="hint">幼犬从 6~8 周龄开始，每 2~4 周打一针，一直接种到满 16 周龄。</div>
+      <div class="btn">记录这一针</div>
+    </div>
+    <div class="plan">
+      <div class="plan-head"><span>免疫计划</span><span class="muted">共 7 项</span></div>
+      
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗</span>
+        <span class="layer must">必打</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2026/09 已过</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗</span>
+        <span class="layer must">必打</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2026/09 已过</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">10/24 ~ 11/07</div><div class="sub">现在</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗</span>
+        <span class="layer must">必打</span>
+        <span class="status due">待接种</span>
+      </div>
+      
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">10/24 ~ 11/23</div><div class="sub">现在</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar rabies"></span>
+        <span class="title">狂犬疫苗 · 首针</span>
+        <span class="layer must">必打</span>
+        <span class="status due">待接种</span>
+      </div>
+      
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar lepto"></span>
+        <span class="title">钩端螺旋体</span>
+        <span class="layer suggest">强烈建议</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2026/09 已过</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">2026/11/21</div><div class="sub">~ 12/05</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗</span>
+        <span class="layer must">必打</span>
+        <span class="status plain">待接种</span>
+      </div>
+      
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">2027/01/30</div><div class="sub">~ 02/27</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗 · 26 周补强</span>
+        <span class="layer must">必打</span>
+        <span class="status plain">待接种</span>
+      </div>
+      
+    </div>
+  </div>
+      <div class="rhythm">之后：狂犬与钩端每年一次，核心疫苗每 3 年一次</div>
+    </div>
+    
+  <div class="plan">
+    <div class="plan-head"><span>接种记录</span><span class="muted">2 条</span></div>
+    
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">卫佳伍</div>
+          
+          <div class="rec-warn">这一针早于建议起始周龄（6 周龄），本程序未计入；请咨询兽医是否需要补种</div>
+        </div>
+        <div class="rec-date">2026/09/05</div>
+      </div>
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">狂犬疫苗</div>
+          
+          <div class="rec-warn">这一针早于建议起始周龄（12 周龄），本程序未计入；请咨询兽医</div>
+        </div>
+        <div class="rec-date">2026/10/10</div>
+      </div>
+  </div>
+  </div></div>
+      </div>
+      <div class="verdict">
+        <div><h4>现在会怎样</h4><p>两针都不算数：计划仍说“核心第 1 针逾期”“狂犬首针待接种”，但记录区<b>没有任何说明</b>。</p></div>
+        <div><h4>应该怎样</h4><p class="good">计划不变，但在两条记录下面各加一句“早于建议起始周龄，本程序未计入；请咨询兽医”。</p></div>
+        <div><h4>影响</h4><p>家长明明记了，页面却像没记；很容易认为系统坏了，或者不知道自己打早了。</p></div>
+      </div>
+      
+      <div class="decision"><b>需要你拍板：</b>不需要拍板；加一条冲突提示。</div>
+    </section>
+    <section class="case" id="V11">
+      <div class="case-head">
+        <span class="case-id">V11</span>
+        <h2>抗体合格后，计划里只该留下“下一步”</h2>
+        <span class="pill p2">P2</span>
+      </div>
+      <p class="one-line">首免还没打完的幼犬做了抗体，计划里出现两条同日期、同文案的“核心疫苗 · 评估”；正确的做法不是去重，而是只保留一个“下次复查”。</p>
+      <div class="input">
+        <div><b>生日</b>2026-05-01</div>
+        <div><b>今天</b>2026-10-28（25 周龄）</div>
+        <div><b>接种记录</b>无核心记录</div>
+        <div><b>抗体检测</b>2026/10/01 抗体检测（核心三项）合格</div>
+      </div>
+      <div class="cols">
+        <div class="col">
+  <div class="phone">
+    <div class="phone-top"><span class="dot current"></span><span class="phone-label">现在（现有算法真实输出）</span></div>
+    <div class="next warn">
+      <div class="eyebrow"><span>下一针</span><span>现状 · 查看详情 ›</span></div>
+      <div class="what">狂犬疫苗 · 首针</div>
+      <div class="when">建议尽快补种（原建议时间 2026/07/24 ~ 08/23，已过）</div>
+      <div class="hint">狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。</div>
+      <div class="btn">记录这一针</div>
+    </div>
+    <div class="plan">
+      <div class="plan-head"><span>免疫计划</span><span class="muted">共 4 项</span></div>
+      
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar rabies"></span>
+        <span class="title">狂犬疫苗 · 首针</span>
+        <span class="layer must">必打</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2026/07 已过</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar lepto"></span>
+        <span class="title">钩端螺旋体</span>
+        <span class="layer suggest">强烈建议</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2026/06 已过</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">2027/10/01</div><div class="sub">下次评估</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗 · 评估</span>
+        <span class="layer must">必打</span>
+        <span class="status done">已完成</span>
+      </div>
+      <div class="note ">这次不用打：报告上写着抗体检测合格（2026/10/01）</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">2027/10/01</div><div class="sub">下次评估</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗 · 评估</span>
+        <span class="layer must">必打</span>
+        <span class="status done">已完成</span>
+      </div>
+      <div class="note ">这次不用打：报告上写着抗体检测合格（2026/10/01）</div>
+    </div>
+  </div>
+      <div class="rhythm">之后：狂犬与钩端每年一次，核心疫苗每年复查抗体</div>
+    </div>
+    
+  <div class="plan">
+    <div class="plan-head"><span>接种记录</span><span class="muted">1 条</span></div>
+    
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">抗体检测 · 核心三项（合格）</div>
+          <div class="rec-note">下次评估 2027/10/01</div>
+          
+        </div>
+        <div class="rec-date">2026/10/01</div>
+      </div>
+  </div>
+  </div></div>
+        <div class="col">
+  <div class="phone">
+    <div class="phone-top"><span class="dot expected"></span><span class="phone-label">建议（待你拍板）</span></div>
+    <div class="next warn">
+      <div class="eyebrow"><span>下一针</span><span>建议 · 查看详情 ›</span></div>
+      <div class="what">狂犬疫苗 · 首针</div>
+      <div class="when">建议尽快补种（原建议时间 2026/07/24 ~ 08/23，已过）</div>
+      <div class="hint">狂犬每年都要有一张有效的免疫证明（办养犬年审要用），漏了要尽快补上。</div>
+      <div class="btn">记录这一针</div>
+    </div>
+    <div class="plan">
+      <div class="plan-head"><span>免疫计划</span><span class="muted">共 3 项</span></div>
+      
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar rabies"></span>
+        <span class="title">狂犬疫苗 · 首针</span>
+        <span class="layer must">必打</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2026/07 已过</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar lepto"></span>
+        <span class="title">钩端螺旋体</span>
+        <span class="layer suggest">强烈建议</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2026/06 已过</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">2027/10/01</div><div class="sub">下次复查</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗 · 抗体复查</span>
+        <span class="layer must">必打</span>
+        <span class="status plain">待复查</span>
+      </div>
+      <div class="note ">复查合格可继续免打；不合格再补打</div>
+    </div>
+  </div>
+      <div class="rhythm">之后：狂犬与钩端每年一次，核心疫苗每年复查抗体</div>
+    </div>
+    
+  <div class="plan">
+    <div class="plan-head"><span>接种记录</span><span class="muted">1 条</span></div>
+    
+      <div class="rec">
+        <div class="rec-body">
+          <div class="rec-name">抗体检测 · 核心三项（合格）</div>
+          <div class="rec-note">下次评估 2027/10/01</div>
+          
+        </div>
+        <div class="rec-date">2026/10/01</div>
+      </div>
+  </div>
+  </div></div>
+      </div>
+      <div class="verdict">
+        <div><h4>现在会怎样</h4><p>计划里有 <b>两条</b>“核心疫苗 · 评估”，日期和文案完全一样。</p></div>
+        <div><h4>应该怎样</h4><p class="good">核心这一类只显示 <b>一个“下次复查”</b>（2027/10/01），被替代的疫苗步骤不再逐条显示；重复行随之消失。</p></div>
+        <div><h4>影响</h4><p>页面噪音；家长会以为重复记了，或者不知道该点哪一条。</p></div>
+      </div>
+      <div class="whybox"><b>为什么会这样：</b>25 周的幼犬、没打核心、抗体合格：计划里本来有 2 个核心步骤（第 1 针 + 26 周补强）。现在的代码把“每一个未完成的核心步骤”都换成了“评估”，于是 2 个步骤 → 2 行。正确的模型不是“去重”，而是“一个类别只保留一个下一步”——核心这一类只留一个“下次复查”，其余收起来。</div>
+      <div class="decision"><b>需要你拍板：</b>不需要拍板；按“一个类别只保留一个下一步”统一处理。</div>
+    </section>
+    <section class="case" id="V17">
+      <div class="case-head">
+        <span class="case-id">V17</span>
+        <h2>25 周晚起步，被套上 6~8 周首免</h2>
+        <span class="pill p1">P1</span>
+      </div>
+      <p class="one-line">25 周、一条记录都没有：下一针写“第 1 针（原建议 6 月）”，同时还排了 2 天后的“26 周补强”。</p>
+      <div class="input">
+        <div><b>生日</b>2026-05-01</div>
+        <div><b>今天</b>2026-10-28（25 周龄）</div>
+        <div><b>接种记录</b>无</div>
+        <div><b>抗体检测</b>无</div>
+      </div>
+      <div class="cols">
+        <div class="col">
+  <div class="phone">
+    <div class="phone-top"><span class="dot current"></span><span class="phone-label">现在（现有算法真实输出）</span></div>
+    <div class="next warn">
+      <div class="eyebrow"><span>下一针</span><span>现状 · 查看详情 ›</span></div>
+      <div class="what">核心疫苗（犬瘟、细小、腺病毒） · 第 1 针</div>
+      <div class="when">建议尽快补种（原建议时间 2026/06/12 ~ 06/26，已过）</div>
+      <div class="hint">幼犬从 6~8 周龄开始，每 2~4 周打一针，一直接种到满 16 周龄。</div>
+      <div class="btn">记录这一针</div>
+    </div>
+    <div class="plan">
+      <div class="plan-head"><span>免疫计划</span><span class="muted">共 4 项</span></div>
+      
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗</span>
+        <span class="layer must">必打</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2026/06 已过</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar rabies"></span>
+        <span class="title">狂犬疫苗 · 首针</span>
+        <span class="layer must">必打</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2026/07 已过</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar lepto"></span>
+        <span class="title">钩端螺旋体</span>
+        <span class="layer suggest">强烈建议</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2026/06 已过</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">2026/10/30</div><div class="sub">~ 11/27</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗 · 26 周补强</span>
+        <span class="layer must">必打</span>
+        <span class="status plain">待接种</span>
+      </div>
+      
+    </div>
+  </div>
+      <div class="rhythm">之后：狂犬与钩端每年一次，核心疫苗每 3 年一次</div>
+    </div>
+    
+  </div></div>
+        <div class="col">
+  <div class="phone">
+    <div class="phone-top"><span class="dot expected"></span><span class="phone-label">建议（待你拍板）</span></div>
+    <div class="next warn">
+      <div class="eyebrow"><span>下一针</span><span>建议 · 查看详情 ›</span></div>
+      <div class="what">核心疫苗（犬瘟、细小、腺病毒） · 补一针</div>
+      <div class="when">建议尽快补种（16 周龄以后才开始，补一针即可）</div>
+      <div class="hint">已经满 16 周，不用再从 6~8 周首免开始；补一针，之后每 3 年。16~26 周可听兽医加一针（2~4 周后）。</div>
+      <div class="btn">记录这一针</div>
+    </div>
+    <div class="plan">
+      <div class="plan-head"><span>免疫计划</span><span class="muted">共 3 项</span></div>
+      
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">现在</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar core"></span>
+        <span class="title">核心疫苗 · 补一针</span>
+        <span class="layer must">必打</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note ">16 周龄以后才开始；不用套 6~8 周首免</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar rabies"></span>
+        <span class="title">狂犬疫苗 · 首针</span>
+        <span class="layer must">必打</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2026/07 已过</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="when-col"><div class="main">尽快</div><div class="sub">已过</div></div>
+    <div class="body">
+      <div class="line">
+        <span class="bar lepto"></span>
+        <span class="title">钩端螺旋体</span>
+        <span class="layer suggest">强烈建议</span>
+        <span class="status over">尽快补种</span>
+      </div>
+      <div class="note over">原建议时间 2026/06 已过</div>
+    </div>
+  </div>
+      <div class="rhythm">之后：狂犬与钩端每年一次，核心疫苗每 3 年一次</div>
+    </div>
+    
+  </div></div>
+      </div>
+      <div class="verdict">
+        <div><h4>现在会怎样</h4><p>25 周的狗没有记录，系统把它当成 6~8 周首免：下一针写“第 1 针”、原建议 6 月；同时还排了 2 天后的“26 周补强”。</p></div>
+        <div><h4>应该怎样</h4><p class="good"><b>16 周是分界线</b>：满 16 周、首免没完成，按“补一针”处理（现在打一针，之后每 3 年）；不再套 6~8 周首免。<b>26 周补强仍保留给 16 周完成首免的狗</b>——它给那一小部分（约 1%）兜底，晚起步是另一类。</p></div>
+        <div><h4>影响</h4><p>家长会看到“第 1 针”和“26 周补强”挤在一起，不知道该打哪一针；也可能被要求多打一针。</p></div>
+      </div>
+      <div class="whybox"><b>为什么会这样：</b>现在的代码用 26 周做分界：&lt;26 周一律走首免系列，于是 25 周的狗被套上 6~8 周第 1 针；而 26 周补强又按 26 周龄排，两者只差 2 天。正确的分界是 16 周：满 16 周还没完成首免，就是“晚起步”，补一针即可。<b>这不是取消 26 周补强</b>——16 周完成首免的狗仍然要打，用来兜住那一小部分在 16 周时仍受母源抗体干扰、没建立起免疫的狗；晚起步的狗没有 16 周那一针，是另一类。</div>
+      <div class="decision"><b>需要你拍板：</b>V17 是 B0.5 复查新发现；建议放进 B2（和 V2 一起改）。</div>
+    </section>
+
+  <div class="other">
+    <h2>另外 9 个问题（不在本页，不属于排期算法）</h2>
+    <table>
+      <tr><th>编号</th><th>类别</th><th>一句话</th><th>安排</th></tr>
+      <tr><td>V6</td><td>提醒</td><td>没有到点提醒：不打开小程序就收不到</td><td>R（另立项）</td></tr>
+      <tr><td>V7</td><td>交互</td><td>“这次先不打”实际跳过一整年</td><td>B6 + F</td></tr>
+      <tr><td>V8</td><td>交互</td><td>计划里除“下一针”外不能一键记录</td><td>F</td></tr>
+      <tr><td>V9</td><td>交互</td><td>缺生日时整页挡住记录，按钮没反应，填完回来不刷新</td><td>F</td></tr>
+      <tr><td>V12</td><td>交互</td><td>远程开关拉不到时，“疫苗”书签整个消失</td><td>F</td></tr>
+      <tr><td>V13</td><td>显示</td><td>“已完成”行显示的是计划日，不是实际接种日</td><td>B7 + F</td></tr>
+      <tr><td>V14</td><td>文案</td><td>三处依据与 WSAVA 原文不符（26 周／12 周／15 个月）</td><td>B5</td></tr>
+      <tr><td>V15</td><td>文案</td><td>狂犬“说明书 36 个月 vs 年审每年”的补充说明</td><td>B5</td></tr>
+      <tr><td>V16</td><td>文案</td><td>钩端“中国属流行地区”→“我国部分地区流行”</td><td>B5</td></tr>
+    </table>
+  </div>
+
+  <div class="footer">
+    说明：本页所有“现在”的数据由现有排期引擎实时算出；右侧“建议”是为了让你判断方向而画的目标状态，具体实现方式与文案会在对应批次再确认。<br>
+    生成时间：2026-10-28 · 数据来源：现有后端排期引擎 + 小程序现有显示规则。
+  </div>
+</div>
+</body>
+</html>

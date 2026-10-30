@@ -411,66 +411,141 @@
           </el-descriptions-item>
         </el-descriptions>
         <div v-else class="empty-hint">正在获取服务端报价…</div>
+
+        <div v-if="isGiftOrder && quote" class="gift-badge-line">
+          <el-tag type="success" effect="plain">
+            本单赠送{{ form.payment.giftReason ? ` · ${giftReasonLabel}` : '' }}
+          </el-tag>
+          <span class="muted">实收 ¥0.00（系统报价仅作记录）</span>
+        </div>
       </div>
 
       <el-divider />
 
       <el-form label-width="130px" :model="form" class="payment-form">
-        <el-form-item label="收款状态" required>
-          <el-radio-group v-model="form.payment.collected">
-            <el-radio :value="true">已收款</el-radio>
-            <el-radio :value="false">未收款</el-radio>
+        <!--
+          先问「这单收不收钱」，再问收款细节（2026-10-30）。
+
+          以前没有这一层：赠送只能靠「把实收改成 0 + 手写差异原因」表达，
+          而收款方式还是必填 —— 等于逼员工给一笔不存在的钱挑渠道，
+          订单上于是留下「线下微信」这种假记录。
+        -->
+        <el-form-item label="结算方式" required>
+          <el-radio-group
+            v-model="form.payment.isGift"
+            @change="onSettlementChange"
+          >
+            <el-radio :value="false">正常收款</el-radio>
+            <el-radio :value="true">赠送（0 元）</el-radio>
           </el-radio-group>
-          <span class="field-hint">未收款时订单进入待付款，之后可在订单中心确认收款</span>
+          <span class="field-hint">
+            赠送单记 0 元成交，照常占名额、设计、交付、写档案
+          </span>
         </el-form-item>
 
-        <el-form-item label="收款方式" required>
-          <el-select v-model="form.payment.channel" style="width: 240px">
-            <el-option
-              v-for="channel in ASSISTED_PAYMENT_CHANNELS"
-              :key="channel.value"
-              :label="channel.label"
-              :value="channel.value"
+        <template v-if="!form.payment.isGift">
+          <el-form-item label="收款状态" required>
+            <el-radio-group v-model="form.payment.collected">
+              <el-radio :value="true">已收款</el-radio>
+              <el-radio :value="false">未收款</el-radio>
+            </el-radio-group>
+            <span class="field-hint">未收款时订单进入待付款，之后可在订单中心确认收款</span>
+          </el-form-item>
+
+          <el-form-item label="收款方式" required>
+            <el-select v-model="form.payment.channel" style="width: 240px">
+              <el-option
+                v-for="channel in ASSISTED_PAYMENT_CHANNELS"
+                :key="channel.value"
+                :label="channel.label"
+                :value="channel.value"
+              />
+            </el-select>
+            <span class="field-hint">只登记线下收款，不提供线上支付选项</span>
+          </el-form-item>
+
+          <el-form-item label="实收金额" required>
+            <el-input-number
+              v-model="form.payment.amount"
+              :min="0"
+              :precision="2"
+              :step="1"
+              @change="onActualAmountChange"
             />
-          </el-select>
-          <span class="field-hint">只登记线下收款，不提供线上支付选项</span>
-        </el-form-item>
+            <span class="field-hint">默认等于服务端应付</span>
+          </el-form-item>
 
-        <el-form-item label="实收金额" required>
-          <el-input-number
-            v-model="form.payment.amount"
-            :min="0"
-            :precision="2"
-            :step="1"
-            @change="onActualAmountChange"
-          />
-          <span class="field-hint">默认等于服务端应付</span>
-        </el-form-item>
+          <el-form-item v-if="form.payment.collected" label="线下流水号/备注（选填）">
+            <el-input
+              v-model="form.payment.externalRef"
+              maxlength="100"
+              show-word-limit
+              placeholder="选填，例如微信/支付宝转账单号"
+              style="width: 360px"
+            />
+          </el-form-item>
 
-        <el-form-item v-if="form.payment.collected" label="线下流水号/备注">
-          <el-input
-            v-model="form.payment.externalRef"
-            maxlength="100"
-            show-word-limit
-            placeholder="选填，例如微信/支付宝转账单号"
-            style="width: 360px"
-          />
-        </el-form-item>
+          <el-form-item v-if="needsOverrideReason" label="实收差异原因" required>
+            <el-input
+              v-model="form.payment.overrideReason"
+              type="textarea"
+              :rows="2"
+              maxlength="200"
+              show-word-limit
+              placeholder="实收与系统报价不一致时必须说明，例如抹零、老客户优惠"
+            />
+            <div class="field-warn block-hint">
+              实收 ¥{{ formatMoney(form.payment.amount) }}，系统应付
+              ¥{{ formatMoney(quote?.payableAmount) }}，请填写差异原因。
+            </div>
+          </el-form-item>
+        </template>
 
-        <el-form-item v-if="needsOverrideReason" label="实收差异原因" required>
-          <el-input
-            v-model="form.payment.overrideReason"
-            type="textarea"
-            :rows="2"
-            maxlength="200"
-            show-word-limit
-            placeholder="实收与系统报价不一致时必须说明，例如抹零、老客户优惠"
-          />
-          <div class="field-warn block-hint">
-            实收 ¥{{ formatMoney(form.payment.amount) }}，系统应付
-            ¥{{ formatMoney(quote?.payableAmount) }}，请填写差异原因。
-          </div>
-        </el-form-item>
+        <!-- 赠送单：只问「为什么送」，钱与渠道都不存在 -->
+        <template v-else>
+          <el-form-item label="赠送原因" required>
+            <el-select
+              v-model="form.payment.giftReason"
+              placeholder="请选择赠送原因"
+              style="width: 240px"
+            >
+              <el-option
+                v-for="option in ASSISTED_GIFT_REASON_OPTIONS"
+                :key="option.value"
+                :label="option.label"
+                :value="option.value"
+              />
+            </el-select>
+            <span class="field-hint">下单后可按原因筛选、统计</span>
+          </el-form-item>
+
+          <el-form-item
+            label="补充说明"
+            :required="form.payment.giftReason === 'OTHER'"
+          >
+            <el-input
+              v-model="form.payment.giftNote"
+              type="textarea"
+              :rows="2"
+              maxlength="200"
+              show-word-limit
+              placeholder="选填，例如：第三次复购，送一份新口味"
+            />
+            <div
+              v-if="form.payment.giftReason === 'OTHER'"
+              class="field-warn block-hint"
+            >
+              赠送原因选「其他」时，请写一句说明。
+            </div>
+          </el-form-item>
+
+          <el-form-item label="本单金额">
+            <span class="gift-amount">¥0.00</span>
+            <span class="field-hint">
+              系统报价 ¥{{ formatMoney(quote?.payableAmount) }} 只作记录，本单不收款
+            </span>
+          </el-form-item>
+        </template>
       </el-form>
     </el-card>
 
@@ -682,6 +757,7 @@ import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole'
 import { getApiErrorMessage, toastApiError } from '@/utils/apiError'
 import { INTERNAL_CUSTOMER_ACCOUNT_BADGE } from '@/utils/customerRole'
 import {
+  ASSISTED_GIFT_REASON_OPTIONS,
   ASSISTED_PAYMENT_CHANNELS,
   ASSISTED_TARGET_GOAL_CODES,
   PROTEIN_OPTIONS,
@@ -694,6 +770,7 @@ import {
   formatDogAge,
   formatDogWeight,
   formatMoney,
+  getGiftReasonLabel,
   getPaymentValidationError,
   requiresInternalConfirmation,
   shouldSyncActualAmount,
@@ -795,6 +872,9 @@ const form = reactive<AssistedOrderFormState>({
   additionalNotes: '',
   payment: {
     collected: true,
+    isGift: false,
+    giftReason: '',
+    giftNote: '',
     channel: 'OFFLINE_WECHAT' as AssistedPaymentChannel,
     amount: 0,
     externalRef: '',
@@ -836,8 +916,15 @@ const amountDifference = computed(() => {
   }
   return Math.round((amount - payable) * 100) / 100
 })
+const isGiftOrder = computed(() => form.payment.isGift === true)
+const giftReasonLabel = computed(() =>
+  getGiftReasonLabel(form.payment.giftReason),
+)
 const needsOverrideReason = computed(
-  () => amountDifference.value !== null && amountDifference.value !== 0,
+  () =>
+    !isGiftOrder.value &&
+    amountDifference.value !== null &&
+    amountDifference.value !== 0,
 )
 const paymentValidationError = computed(() =>
   getPaymentValidationError({
@@ -845,6 +932,9 @@ const paymentValidationError = computed(() =>
     amount: form.payment.amount,
     payableAmount: quote.value?.payableAmount ?? null,
     overrideReason: form.payment.overrideReason,
+    isGift: isGiftOrder.value,
+    giftReason: form.payment.giftReason,
+    giftNote: form.payment.giftNote,
   }),
 )
 
@@ -1072,7 +1162,8 @@ function applyQuote(next: CustomRecipeQuote) {
     actualAmountTouched.value,
   )
   quote.value = next
-  if (syncAmount) {
+  // 赠送单金额恒为 0，不能被报价刷新改回 299
+  if (syncAmount && !isGiftOrder.value) {
     form.payment.amount = next.payableAmount
   }
 }
@@ -1105,6 +1196,29 @@ async function refreshQuote() {
 
 function onActualAmountChange() {
   actualAmountTouched.value = true
+}
+
+/**
+ * 切换「正常收款 / 赠送」。
+ *
+ * 两个方向都必须清理另一侧留下的字段，否则会出现
+ * 「赠送单里还挂着一笔 299 的实收」「正常单里还留着赠送原因」这种脏数据。
+ */
+function onSettlementChange(value: boolean) {
+  actualAmountTouched.value = false
+  form.payment.externalRef = ''
+  form.payment.overrideReason = ''
+
+  if (value === true) {
+    // 赠送一定是已成交：不能挂成待付款的 0 元单
+    form.payment.collected = true
+    form.payment.amount = 0
+    return
+  }
+
+  form.payment.giftReason = ''
+  form.payment.giftNote = ''
+  form.payment.amount = quote.value?.payableAmount ?? 0
 }
 
 watch(
@@ -1626,6 +1740,18 @@ onMounted(async () => {
   color: #f56c6c;
   font-size: 18px;
   font-weight: 600;
+}
+/* 赠送单：金额恒为 0，不能被看成「打错价」 */
+.gift-amount {
+  color: #67c23a;
+  font-size: 18px;
+  font-weight: 600;
+}
+.gift-badge-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
 }
 .muted {
   color: #909399;

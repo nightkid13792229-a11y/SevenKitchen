@@ -4,12 +4,14 @@
  */
 
 import {
+  Inject,
   Injectable,
   NotFoundException,
   BadRequestException,
   Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
+import { IngredientPreparationHistoryService } from './ingredient-preparation-history.service';
 import { normalizeImageUrlProtocol } from '../../utils/image-url.util';
 import { Prisma, RecipeSeriesBusinessStatus } from '@prisma/client';
 import {
@@ -20,6 +22,7 @@ import {
   RECIPE_LIFE_STAGE_LABELS,
 } from '../../domain/recipe/enums';
 import { RecipeCopywritingService } from '../recipe-designer/recipe-copywriting.service';
+import { RecipeNamingService, type RecipeNamingResult } from '../recipe-designer/recipe-naming.service';
 import type { RecipeCopywritingResult } from '../recipe-designer/recipe-copywriting.service';
 import { UserRole } from '../../domain/user/enums';
 import {
@@ -36,6 +39,7 @@ import {
   normalizePreparationMethodHistoryText,
   resolvePreparationMethodText,
 } from './preparation-method-text.util';
+import { readProductionSteps } from '../../domain/recipe-designer/production-steps';
 import type { RecipeQueryDto } from '../../interfaces/dto/recipes/admin-recipe.dto';
 import type {
   IngredientPreparationMethodHistoryDto,
@@ -58,6 +62,11 @@ export class RecipeService {
     private readonly prisma: PrismaService,
     @Optional()
     private readonly recipeCopywritingService?: RecipeCopywritingService,
+    @Optional()
+    private readonly recipeNamingService?: RecipeNamingService,
+    @Optional()
+    @Inject(IngredientPreparationHistoryService)
+    private readonly ingredientPreparationHistoryService?: IngredientPreparationHistoryService,
   ) {}
 
   private readonly recipeDetailInclude = {
@@ -1515,6 +1524,101 @@ export class RecipeService {
     return (await this.recipeCopywritingService?.isAvailable()) ?? false;
   }
 
+  /** AI 命名是否可用（后台据此决定按钮是否置灰） */
+  async isRecipeNamingAvailable(): Promise<boolean> {
+    return (await this.recipeNamingService?.isAvailable()) ?? false;
+  }
+
+  /**
+   * 给某个系列生成名字候选（只生成，不落库）。
+   *
+   * 取该系列**最近更新的一份配方**作为事实来源：同一个系列的各生命阶段
+   * 主料与工艺相同，用哪一版读出来的价值点都一样。
+   */
+  async generateSeriesNameCandidates(
+    seriesId: string,
+  ): Promise<RecipeNamingResult> {
+    if (!this.recipeNamingService) {
+      throw new BadRequestException('AI 命名服务不可用');
+    }
+
+    const series = await this.prisma.recipeSeries.findUnique({
+      where: { id: seriesId },
+      include: {
+        recipes: {
+          include: {
+            items: {
+              include: { ingredient: true },
+              orderBy: { sortOrder: 'asc' },
+            },
+          },
+          orderBy: { updatedAt: 'desc' },
+        },
+      },
+    });
+    if (!series) {
+      throw new NotFoundException('系列不存在');
+    }
+    /**
+     * 一个系列有多个生命阶段时，用哪一份起名？
+     *
+     * 菜的身份（主蛋白、主碳水）各阶段相同，只有配比不同，所以取哪份名字都差不多；
+     * 但**配比不同会推出不同的价值点**（幼犬版蛋白更高）。
+     * 因此固定用「普通成年犬」这一版当基准——它是这套配方最有代表性的一份；
+     * 没有这一版时退到已发布版本，再退到最近更新的一份。
+     */
+    const pickCanonicalRecipe = (list: typeof series.recipes) => {
+      const adult = list.find(
+        (item) => item.seriesLifeStage === 'HIGH_ACTIVITY_ADULT',
+      );
+      if (adult) return adult;
+      const published = list.find((item) => item.status === 'PUBLIC');
+      return published ?? list[0];
+    };
+
+    const recipe = pickCanonicalRecipe(series.recipes);
+    if (!recipe) {
+      throw new BadRequestException('这个系列还没有配方，先设计再起名');
+    }
+
+    const detailed = (recipe.nutritionDetailedData as any) || {};
+    const nutrition = detailed.summary || detailed;
+
+    const foodItems = recipe.items
+      .filter((item) => item.ingredient?.type === 'FOOD')
+      .map((item) => ({
+        name: item.ingredient?.name || '',
+        ratio: item.ratioPercent ?? null,
+      }))
+      .filter((item) => Boolean(item.name));
+
+    // 在架产品线的名字：既要让模型避重，也要在服务端兜一次
+    const existing = await this.prisma.recipeSeries.findMany({
+      where: {
+        deletedAt: null,
+        customerDogId: null,
+        businessStatus: { not: 'PRIVATE_CUSTOM' },
+        NOT: { id: seriesId },
+      },
+      select: { name: true },
+      orderBy: { updatedAt: 'desc' },
+      take: 200,
+    });
+
+    return this.recipeNamingService.generate({
+      existingNames: existing.map((item) => item.name).filter(Boolean),
+      foodItems,
+      energyDensityKcalPerKg: recipe.energyDensityKcalPerKg ?? null,
+      moisturePercent: nutrition?.moisture_pct ?? null,
+      fatPercentDm: nutrition?.fat_dm_pct ?? null,
+      proteinPercentDm: nutrition?.protein_dm_pct ?? null,
+      lifeStageLabels: ((recipe.applicableLifeStages as string[]) || [])
+        .map((stage) => RECIPE_LIFE_STAGE_LABELS[stage] || stage)
+        .filter(Boolean),
+      currentName: series.name,
+    });
+  }
+
   async updateRecipe(
     id: string,
     dto: Record<string, any>,
@@ -1912,75 +2016,19 @@ export class RecipeService {
 
   async getIngredientPreparationMethodHistory(
     ingredientId: string,
+    limit?: number,
   ): Promise<IngredientPreparationMethodHistoryDto[]> {
-    const rows = await this.prisma.recipeItem.findMany({
-      where: {
+    const entries =
+      (await this.ingredientPreparationHistoryService?.getHistory(
         ingredientId,
-        recipe: { isCustomRecipe: false },
-      },
-      select: {
-        preparationMethod: true,
-        recipe: { select: { updatedAt: true } },
-      },
-    });
+        limit,
+      )) ?? [];
 
-    const methodMap = await this.loadPreparationMethodNameMap(
-      rows.map(
-        (row: { preparationMethod: string | null }) => row.preparationMethod,
-      ),
-    );
-
-    const aggregated = new Map<
-      string,
-      { text: string; usageCount: number; lastUsedAt: Date }
-    >();
-
-    for (const row of rows) {
-      const readable = resolvePreparationMethodText(
-        row.preparationMethod,
-        methodMap,
-        { preserveUnresolvedLegacy: false },
-      );
-      const normalized = normalizePreparationMethodHistoryText(readable);
-      if (!normalized) {
-        continue;
-      }
-
-      const existing = aggregated.get(normalized);
-      if (existing) {
-        existing.usageCount += 1;
-        if (row.recipe.updatedAt > existing.lastUsedAt) {
-          existing.lastUsedAt = row.recipe.updatedAt;
-        }
-        continue;
-      }
-
-      aggregated.set(normalized, {
-        text: normalized,
-        usageCount: 1,
-        lastUsedAt: row.recipe.updatedAt,
-      });
-    }
-
-    return [...aggregated.values()]
-      .sort((left, right) => {
-        const byLastUsed =
-          right.lastUsedAt.getTime() - left.lastUsedAt.getTime();
-        if (byLastUsed !== 0) {
-          return byLastUsed;
-        }
-
-        const byUsage = right.usageCount - left.usageCount;
-        if (byUsage !== 0) {
-          return byUsage;
-        }
-
-        return left.text.localeCompare(right.text);
-      })
-      .map((item) => ({
-        ...item,
-        lastUsedAt: item.lastUsedAt.toISOString(),
-      }));
+    return entries.map((entry) => ({
+      text: entry.text,
+      usageCount: entry.usageCount,
+      lastUsedAt: entry.lastUsedAt.toISOString(),
+    }));
   }
 
   /**
@@ -2111,6 +2159,12 @@ export class RecipeService {
       nutritionStandard: recipe.nutritionStandard as NutritionStandard,
       nutritionDetailedData: recipe.nutritionDetailedData || undefined,
       productionSteps: recipe.productionSteps || undefined,
+      /**
+       * 结构化制作步骤（2026-10-24）：新设计器写的是 productionStepsJson，
+       * 老字段 productionSteps 故意不动；顾客制作单要按新结构渲染，
+       * 否则新食谱的"制作步骤"会是空的。
+       */
+      productionStepsList: readProductionSteps(recipe.productionStepsJson),
       productionLossRate: recipe.productionLossRate,
       batchLaborHours: recipe.batchLaborHours || undefined,
       items:

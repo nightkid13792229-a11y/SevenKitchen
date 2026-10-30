@@ -31,6 +31,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CustomRecipeService } from '../../../application/custom-recipe/custom-recipe.service';
 import { CustomRecipeDeliveryService } from '../../../application/custom-recipe/custom-recipe-delivery.service';
 import { CustomRecipeAftersaleService } from '../../../application/custom-recipe/custom-recipe-aftersale.service';
+import { CustomRecipeRefundService } from '../../../application/custom-recipe/custom-recipe-refund.service';
 import { PrismaService } from '../../../infrastructure/prisma.service';
 import {
   DEFAULT_PRODUCTION_LOSS_RATE,
@@ -139,6 +140,9 @@ export class AdminCustomRecipeController {
      */
     @Optional()
     private readonly orderDesignSubmitService?: OrderDesignSubmitService,
+    /** 已交付/制作中的退款申请审核（2026-10-25） */
+    @Optional()
+    private readonly refundService?: CustomRecipeRefundService,
   ) {}
 
   /**
@@ -327,6 +331,7 @@ export class AdminCustomRecipeController {
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
     @Query('search') search?: string,
+    @Query('isGift') isGift?: string,
     @Query('page', new ParseIntPipe({ optional: true })) page = 1,
     @Query('pageSize', new ParseIntPipe({ optional: true })) pageSize = 20,
   ) {
@@ -335,6 +340,8 @@ export class AdminCustomRecipeController {
       dateFrom: dateFrom ? new Date(dateFrom) : undefined,
       dateTo: dateTo ? new Date(dateTo) : undefined,
       search,
+      // 只认 'true' / 'false'；传别的值当没传，避免把列表筛成空的
+      isGift: isGift === 'true' ? true : isGift === 'false' ? false : undefined,
       page,
       pageSize,
     });
@@ -421,8 +428,16 @@ export class AdminCustomRecipeController {
         allergyReportDrafts: dto.allergyReportDrafts,
         attachmentKeys: dto.attachmentKeys,
         attachmentUrls: dto.attachmentUrls,
+        /**
+         * 逐字段搬运，别整体透传：DTO 的 `whitelist` 已经挡掉未知字段，
+         * 但漏搬一个字段就是线上「填了赠送却按正常收款校验」那种 bug。
+         * 赠送三件套（2026-10-30）必须一起带上。
+         */
         payment: {
           collected: dto.payment.collected,
+          isGift: dto.payment.isGift,
+          giftReason: dto.payment.giftReason,
+          giftNote: dto.payment.giftNote,
           channel: dto.payment.channel,
           amount: dto.payment.amount,
           externalRef: dto.payment.externalRef,
@@ -890,6 +905,66 @@ export class AdminCustomRecipeController {
    *
    * 仅管理员：退款是资金动作，与"取消订单"同级。
    */
+  /**
+   * 退款申请列表（2026-10-25）。
+   *
+   * 只给管理员：审核通过会直接触发微信退款，是资金动作。
+   */
+  @Get('refund-requests')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'List custom recipe refund requests' })
+  async listRefundRequests(@Query('status') status?: string) {
+    if (!this.refundService) {
+      throw new ServiceUnavailableException('退款服务暂不可用');
+    }
+    const items = await this.refundService.listForAdmin(
+      String(status || '').trim() || undefined,
+    );
+    return ApiResponseDto.success({ items });
+  }
+
+  @Post('refund-requests/:id/approve')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Approve a refund request and refund via WeChat' })
+  async approveRefundRequest(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body('note') note?: string,
+  ) {
+    if (!this.refundService) {
+      throw new ServiceUnavailableException('退款服务暂不可用');
+    }
+    const request = await this.refundService.approve(
+      id,
+      this.adminUserId(req),
+      String(note || ''),
+    );
+    return ApiResponseDto.success({ request });
+  }
+
+  @Post('refund-requests/:id/reject')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Reject a refund request' })
+  async rejectRefundRequest(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body('reason') reason?: string,
+  ) {
+    if (!this.refundService) {
+      throw new ServiceUnavailableException('退款服务暂不可用');
+    }
+    const request = await this.refundService.reject(
+      id,
+      this.adminUserId(req),
+      String(reason || ''),
+    );
+    return ApiResponseDto.success({ request });
+  }
+
+  private adminUserId(req: any): string {
+    return String(req?.user?.userId || req?.user?.id || '').trim() || 'admin';
+  }
+
   @Post('orders/:orderId/refund')
   @UseGuards(AdminGuard)
   @ApiOperation({ summary: '手工补退款（仅管理员，已付款的已取消单）' })
@@ -1379,6 +1454,53 @@ export class AdminCustomRecipeController {
       includeClosed: includeClosed === 'true',
     });
     return ApiResponseDto.success({ items });
+  }
+
+  /**
+   * 代客发起调整（2026-10-27）。
+   *
+   * 顾客不满意但不会/不方便在小程序提交调整单时，老板直接在后台开一条，
+   * 然后走既有链路：售后页「修改食谱」→ 改稿 → 加入本单待提交 →
+   * 售后页「重新交付并完成」。
+   *
+   * 只有管理员能做：这条链的终点是给顾客重新交付（与 `redeliver-batch` 同一口径）。
+   */
+  @Post('orders/:orderId/aftersales')
+  @UseGuards(AdminGuard)
+  @ApiOperation({
+    summary: 'Create a recipe adjustment on behalf of the customer',
+  })
+  async createAftersaleByStaff(
+    @Req() req: any,
+    @Param('orderId') orderId: string,
+    @Body('description') description: string,
+    @Body('deliveryItemIds') deliveryItemIds?: unknown,
+  ) {
+    /**
+     * 不传 = 最新批次全部份（单份订单就是唯一那份）；
+     * 传了必须是**非空字符串数组**，空数组当成表单没填完。
+     */
+    let ids: string[] | null = null;
+    if (deliveryItemIds !== undefined && deliveryItemIds !== null) {
+      if (!Array.isArray(deliveryItemIds) || deliveryItemIds.length === 0) {
+        throw new BadRequestException('请至少选择一份要调整的食谱');
+      }
+      ids = deliveryItemIds.map((value) =>
+        typeof value === 'string' ? value.trim() : '',
+      );
+      if (ids.some((id) => id.length === 0)) {
+        throw new BadRequestException('要调整的食谱参数不正确，请刷新后重试');
+      }
+    }
+
+    return ApiResponseDto.success(
+      await this.aftersaleService.createByStaff({
+        orderIdOrId: orderId,
+        operatorId: this.currentOperatorId(req),
+        description,
+        deliveryItemIds: ids,
+      }),
+    );
   }
 
   /** 受理 */

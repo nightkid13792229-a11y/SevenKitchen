@@ -19,6 +19,12 @@ export interface TaskDetail {
     items?: RecipeItem[];
     production_loss_rate?: number;
   };
+  /** 后端算好的用量表（按克数推导）；老版本接口没有该字段时走本地计算 */
+  plannedIngredientsUsage?: Array<{
+    ingredientId: string;
+    requiredAmount: number;
+    unit?: string;
+  }>;
   createdBy?: string; // 创建人
 }
 
@@ -240,6 +246,57 @@ function drawPackagingInfo(
 /**
  * 绘制原料清单（带网格线，大字体）
  */
+/**
+ * 生产打印的预处理列可能很长（生产库最长 32 字）。
+ * 单行 23px 在 500px 列里会溢出，这里按长度缩字号并最多拆 3 行。
+ */
+function drawPreparationMethodText(
+  ctx: any,
+  text: string,
+  centerX: number,
+  baselineY: number
+): void {
+  const chars = Array.from(String(text || ''));
+  if (chars.length === 0) return;
+
+  const lineCount = chars.length <= 18 ? 1 : chars.length <= 36 ? 2 : 3;
+  const fontSize = lineCount === 1 ? 23 : lineCount === 2 ? 18 : 14;
+  const lines: string[] = [];
+  let start = 0;
+
+  for (let lineIndex = 0; lineIndex < lineCount; lineIndex += 1) {
+    const remainingLines = lineCount - lineIndex;
+    const remainingChars = chars.length - start;
+    let take =
+      lineIndex === lineCount - 1
+        ? remainingChars
+        : Math.ceil(remainingChars / remainingLines);
+
+    if (lineIndex < lineCount - 1) {
+      const limit = Math.min(start + take + 4, chars.length);
+      for (let index = start + take; index < limit; index += 1) {
+        if ('、,，/'.includes(chars[index])) {
+          take = index + 1 - start;
+          break;
+        }
+      }
+    }
+
+    lines.push(chars.slice(start, start + take).join(''));
+    start += take;
+    if (start >= chars.length) break;
+  }
+
+  ctx.setFontSize(fontSize);
+  const lineHeight = fontSize;
+  const firstBaseline = baselineY - ((lines.length - 1) * lineHeight) / 2;
+  lines.forEach((line, index) => {
+    ctx.fillText(line, centerX, firstBaseline + index * lineHeight);
+  });
+  // 恢复表格正文默认字号，避免影响下一行/其他列
+  ctx.setFontSize(23);
+}
+
 function drawIngredientsList(ctx: any, ingredients: ParsedIngredient[], y: number): number {
   y += 20; // 缩小与分装信息的间距
 
@@ -259,7 +316,7 @@ function drawIngredientsList(ctx: any, ingredients: ParsedIngredient[], y: numbe
   const colType = 120; // 类型列
   const colName = 300; // 原料名称列
   const colAmount = 200; // 用量列
-  const colMethod = CONTENT_WIDTH - colType - colName - colAmount; // 制备方法列（500px，填满剩余空间）
+  const colMethod = CONTENT_WIDTH - colType - colName - colAmount; // 部位 / 状态 / 预处理列（500px，填满剩余空间）
 
   // 绘制表头
   ctx.setFillStyle(COLORS.highlight);
@@ -284,7 +341,7 @@ function drawIngredientsList(ctx: any, ingredients: ParsedIngredient[], y: numbe
   ctx.fillText('用量', headerX + colAmount / 2, y + 35);
   headerX += colAmount;
 
-  ctx.fillText('制备方法', headerX + colMethod / 2, y + 35);
+  ctx.fillText('部位 / 状态 / 预处理', headerX + colMethod / 2, y + 35);
 
   y += headerHeight;
 
@@ -351,9 +408,14 @@ function drawIngredientsList(ctx: any, ingredients: ParsedIngredient[], y: numbe
     ctx.fillText(`${ingredient.amount}${ingredient.unit}`, textX + colAmount / 2, y + 30);
     textX += colAmount;
 
-    // 制备方法列（居中）
+    // 部位 / 状态 / 预处理列（居中；长文案自动缩字号/换行）
     if (ingredient.method) {
-      ctx.fillText(ingredient.method, textX + colMethod / 2, y + 30);
+      drawPreparationMethodText(
+        ctx,
+        ingredient.method,
+        textX + colMethod / 2,
+        y + 30
+      );
     }
 
     y += rowHeight;
@@ -392,7 +454,7 @@ function drawIngredientsList(ctx: any, ingredients: ParsedIngredient[], y: numbe
         y + 30
       );
 
-      // 制备方法列：空
+      // 部位 / 状态 / 预处理列：空
       ctx.setFontSize(23);
       ctx.setFillStyle(COLORS.text);
       ctx.fillText('', PADDING + colType + colName + colAmount + colMethod / 2, y + 30);
@@ -435,10 +497,17 @@ function parseIngredients(taskDetail: TaskDetail): ParsedIngredient[] {
   const productionLossRate = recipeSnapshot.production_loss_rate || 1.1;
 
   const theoreticalWeight = totalProductionG * productionLossRate;
+  const plannedById = new Map(
+    (taskDetail.plannedIngredientsUsage || []).map((entry) => [
+      entry.ingredientId,
+      entry,
+    ]),
+  );
 
   return recipeSnapshot.items.map((item) => {
     let amount = 0;
     let unit = 'g';
+    const planned = plannedById.get(item.ingredient_id);
 
     const typeMap: Record<string, string> = {
       'FOOD': '食材',
@@ -451,7 +520,10 @@ function parseIngredients(taskDetail: TaskDetail): ParsedIngredient[] {
       ? item.preparation_methods.join('、')
       : '';
 
-    if (item.ingredient_type === 'SUPPLEMENT') {
+    if (planned && Number.isFinite(planned.requiredAmount)) {
+      amount = planned.requiredAmount;
+      unit = planned.unit || 'g';
+    } else if (item.ingredient_type === 'SUPPLEMENT') {
       const supplementAmount = calculateSupplementAmountForProduction(item, theoreticalWeight);
       amount = supplementAmount.amount;
       unit = supplementAmount.unit;

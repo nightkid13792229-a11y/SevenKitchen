@@ -23,12 +23,26 @@
 
     <el-card shadow="never" class="filter-card">
       <div class="type-row">
-        <el-radio-group v-model="query.type" @change="handleSearch">
+        <div class="type-left">
+        <el-radio-group v-model="query.type" @change="handleTypeChange">
           <el-radio-button :value="undefined">全部</el-radio-button>
           <el-radio-button value="FOOD">鲜食</el-radio-button>
           <el-radio-button value="CUSTOM_RECIPE">食谱定制</el-radio-button>
           <el-radio-button value="SUPPLEMENT">补剂</el-radio-button>
         </el-radio-group>
+        <!--
+          赠送单筛选（2026-10-30）：赠送是定制单的结算方式，
+          鲜食/补剂没有这个概念，所以只在「食谱定制」下出现。
+        -->
+        <el-checkbox
+          v-if="query.type === 'CUSTOM_RECIPE'"
+          v-model="query.gift"
+          class="gift-filter"
+          @change="handleSearch"
+        >
+          只看赠送单
+        </el-checkbox>
+        </div>
         <div class="counts">
           <span>鲜食 {{ counts.FOOD }}</span>
           <span>食谱定制 {{ counts.CUSTOM_RECIPE }}</span>
@@ -68,7 +82,9 @@
           />
         </el-form-item>
         <el-form-item>
-          <el-checkbox v-model="query.aftersale">只看售后中</el-checkbox>
+          <!-- 2026-10-30：补剂售后改成「提过就算」，已解决/已驳回的也会出现，
+               所以文案不能再写「只看售后中」 -->
+          <el-checkbox v-model="query.aftersale">只看有售后</el-checkbox>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">查询</el-button>
@@ -124,6 +140,16 @@
           <template #default="{ row }">
             <span v-if="row.amountTotal === null" class="muted">—</span>
             <span v-else>¥{{ formatMoney(row.amountTotal) }}</span>
+            <!-- 赠送单金额是 0 元：不标出来会被当成价格异常 -->
+            <el-tag
+              v-if="row.isGift"
+              type="success"
+              size="small"
+              effect="plain"
+              class="gift-tag"
+            >
+              赠送
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column label="下单时间" width="165">
@@ -167,6 +193,21 @@
         @close="customDrawerVisible = false"
       />
     </el-drawer>
+
+    <!-- 补剂订单详情：从订单中心直接打开，不再跳隐藏的补剂订单页 -->
+    <el-drawer
+      v-model="supplementDrawerVisible"
+      title="补剂订单"
+      size="92%"
+      direction="rtl"
+      destroy-on-close
+    >
+      <SupplementOrdersPanel
+        v-if="supplementDrawerVisible"
+        embedded
+        :initial-keyword="supplementDrawerKeyword"
+      />
+    </el-drawer>
   </div>
 </template>
 
@@ -181,6 +222,7 @@ import type {
   UnifiedStatusGroup,
 } from '@/api/orderCenter'
 import OrderDetail from '@/views/CustomRecipes/OrderDetail.vue'
+import SupplementOrdersPanel from '@/views/SupplementShop/components/SupplementOrdersPanel.vue'
 import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole'
 import {
   INTERNAL_CUSTOMER_BADGE,
@@ -200,6 +242,10 @@ const dateRange = ref<[string, string] | null>(null)
 const customDrawerVisible = ref(false)
 const customDrawerOrderId = ref('')
 
+/** 补剂订单抽屉（2026-10-31 合并入口）：按订单号筛出这一单，操作仍在原面板里 */
+const supplementDrawerVisible = ref(false)
+const supplementDrawerKeyword = ref('')
+
 const route = useRoute();
 const initialType = String(route.query.type || '');
 /** 深链 /order-center?type=CUSTOM_RECIPE&orderId=CR...：列表加载完后自动开抽屉 */
@@ -210,8 +256,9 @@ const query = reactive<OrderCenterQuery>({
     : undefined,
   status: undefined,
   dateField: 'created',
-  keyword: '',
+  keyword: String(route.query.keyword || '').trim(),
   aftersale: String(route.query.aftersale || '') === '1',
+  gift: false,
   page: 1,
   pageSize: 20,
 })
@@ -310,6 +357,14 @@ function formatTime(value: string | null) {
   return date.toLocaleString('zh-CN', { hour12: false })
 }
 
+/** 切换类型：离开食谱定制时，赠送筛选必须一起清掉 */
+function handleTypeChange() {
+  if (query.type !== 'CUSTOM_RECIPE') {
+    query.gift = false
+  }
+  handleSearch()
+}
+
 async function load() {
   loading.value = true
   try {
@@ -318,6 +373,8 @@ async function load() {
       dateFrom: dateRange.value?.[0],
       dateTo: dateRange.value?.[1],
       keyword: query.keyword?.trim() || undefined,
+      // 只有食谱定制会带这个参数，其余类型传了也不该生效
+      gift: query.type === 'CUSTOM_RECIPE' ? query.gift || undefined : undefined,
     })
     items.value = result.items
     total.value = result.total
@@ -352,6 +409,13 @@ function openCustomOrder(orderId: string) {
   customDrawerVisible.value = true
 }
 
+function openSupplementOrder(orderNo: string) {
+  const keyword = String(orderNo || '').trim()
+  if (!keyword) return
+  supplementDrawerKeyword.value = keyword
+  supplementDrawerVisible.value = true
+}
+
 function openOrder(row: OrderCenterItem) {
   if (row.type === 'FOOD') {
     router.push(`/orders/${row.id}`)
@@ -362,7 +426,8 @@ function openOrder(row: OrderCenterItem) {
     openCustomOrder(row.orderNo)
     return
   }
-  router.push({ path: '/supplement-shop/orders', query: { keyword: row.orderNo } })
+  // 补剂订单也在订单中心里开抽屉，不再跳隐藏页
+  openSupplementOrder(row.orderNo)
 }
 
 /** 去代客下单页（仅管理员；按钮对其他人置灰并说明原因） */
@@ -402,6 +467,7 @@ watch(
 .subtitle { margin: 6px 0 0; color: #909399; font-size: 13px; }
 .filter-card { margin-bottom: 12px; }
 .type-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.type-left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .counts { display: flex; gap: 14px; color: #606266; font-size: 13px; }
 .filter-form { margin-top: 12px; }
 .muted { color: #909399; font-size: 12px; }

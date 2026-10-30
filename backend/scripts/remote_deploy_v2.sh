@@ -202,14 +202,28 @@ echo ""
 
 info "Installing/updating runtime dependencies..."
 NEEDS_INSTALL=false
-if [ ! -d node_modules ] || [ ! -f node_modules/.pnpm-lock.yaml ]; then
-  NEEDS_INSTALL=true
-elif [ package.json -nt node_modules/.pnpm-lock.yaml ] || [ pnpm-lock.yaml -nt node_modules/.pnpm-lock.yaml ]; then
+# 2026-10-28 事故：package.json 只加了两个审计脚本（依赖没变），
+# 但旧逻辑按 mtime 判断，触发了一次完整 pnpm install，把 1.9G 的服务器拖垮。
+# 现在只认 pnpm-lock.yaml 的内容哈希：依赖没变就不装。
+LOCK_HASH="$(sha256sum pnpm-lock.yaml | awk '{print $1}')"
+INSTALLED_LOCK_HASH="$(cat node_modules/.pnpm-lock.sha256 2>/dev/null || true)"
+if [ ! -d node_modules ] || [ "$LOCK_HASH" != "$INSTALLED_LOCK_HASH" ]; then
   NEEDS_INSTALL=true
 fi
 
 if [ "$NEEDS_INSTALL" = true ]; then
+  AVAILABLE_KB="$(df -Pk / | awk 'NR==2{print $4}')"
+  if [ "${AVAILABLE_KB:-0}" -lt 2097152 ]; then
+    fail "Not enough disk for pnpm install: need at least 2GB free, have $(( ${AVAILABLE_KB:-0} / 1024 ))MB"
+    exit 1
+  fi
+  AVAILABLE_MB="$(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo)"
+  if [ "${AVAILABLE_MB:-0}" -lt 512 ]; then
+    fail "Not enough memory for pnpm install: need at least 512MB available, have ${AVAILABLE_MB:-0}MB"
+    exit 1
+  fi
   pnpm install --frozen-lockfile --prod=false
+  sha256sum pnpm-lock.yaml | awk '{print $1}' > node_modules/.pnpm-lock.sha256
   ok "Dependencies installed"
 else
   ok "Dependencies are up to date"
@@ -228,6 +242,20 @@ else
   pnpm prisma migrate deploy
   ok "Database migrations applied"
   echo ""
+
+  # 营养库覆盖率门禁（2026-10-28）：低于基线就不部署，避免"数据坏了照常上线"。
+  if [ -f scripts/audit-nutrition-coverage.ts ]; then
+    info "Checking nutrition coverage baseline (read-only)..."
+    if pnpm ts-node -r tsconfig-paths/register scripts/audit-nutrition-coverage.ts --assert; then
+      ok "Nutrition coverage baseline passed"
+    else
+      fail "Nutrition coverage below baseline — aborting deploy"
+      exit 1
+    fi
+    echo ""
+  else
+    warn "Coverage audit script not found — skipping gate"
+  fi
 
   # ==========================================================================
   # 选项字典的初始内容（2026-10-16 加）
@@ -251,6 +279,15 @@ else
   else
     # 不 fail：seed 失败不该拦住整个部署（服务本身还能跑，只是少几个下拉选项）
     warn "Option dictionary seeding failed — 服务照常部署，但后台下拉可能是空的"
+  fi
+
+  # 需求分类节点词典（2026-10-26）：只补缺失节点，不覆盖运营改过的定义与排序。
+  # 不 fail：词典没灌进去只影响"按需求分类"页面为空，不影响服务启动。
+  info "Seeding recipe taxonomy nodes (idempotent)..."
+  if pnpm ts-node -r tsconfig-paths/register prisma/seed-recipe-taxonomy.ts --apply; then
+    ok "Recipe taxonomy seeded"
+  else
+    warn "Recipe taxonomy seeding failed — 服务照常部署，但需求分类树可能是空的"
   fi
 fi
 echo ""

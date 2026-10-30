@@ -17,6 +17,7 @@ import {
   ForbiddenException,
   ConflictException,
   UseGuards,
+  Optional,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -28,6 +29,7 @@ import {
   ApiHeader,
 } from '@nestjs/swagger';
 import { OrderService } from '../../application/order/order.service';
+import { OrderSummaryService } from '../../application/order/order-summary.service';
 import { WechatPaymentService } from '../../application/payment/wechat-payment.service';
 import { RecipeService } from '../../application/recipe/recipe.service';
 import { PrismaService } from '../../infrastructure/prisma.service';
@@ -39,6 +41,7 @@ import type { OrderRepository } from '../../domain/order/order.repository';
 import type { DogRepository } from '../../domain/dog/dog.repository';
 import type { ProductionBatchRepository } from '../../domain/production/production.repository';
 import { Order, OrderItem } from '../../domain/order';
+import { computeEstimatedShippingDate } from '../../domain/order/estimated-shipping';
 import { OrderStatus } from '../../domain';
 import {
   InvalidStateTransitionError,
@@ -87,6 +90,8 @@ export class OrdersController {
     @Inject(PRODUCTION_BATCH_REPOSITORY)
     private readonly productionRepository: ProductionBatchRepository,
     private readonly shippingNotificationService: ShippingNotificationService,
+    @Optional()
+    private readonly orderSummaryService?: OrderSummaryService,
   ) {}
 
   @Post()
@@ -492,6 +497,27 @@ export class OrdersController {
       orders.map((order) => this.mapOrderToSummaryDto(order)),
     );
     return ApiResponseDto.success(summaries);
+  }
+
+  @Get('summary')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Get current customer order tab summary' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiHeader({
+    name: 'X-Customer-Id',
+    description: 'Customer ID for authentication',
+    required: true,
+  })
+  async getOrderSummary(
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    if (!this.orderSummaryService) {
+      return ApiResponseDto.error(503, '订单汇总暂不可用');
+    }
+    const summary = await this.orderSummaryService.getCustomerSummary(
+      user.customerId,
+    );
+    return ApiResponseDto.success(summary);
   }
 
   @Get(':id/financial-summary')
@@ -1059,17 +1085,10 @@ export class OrdersController {
     console.log('[Order Detail] order.amountProduct:', order.amountProduct);
     console.log('[Order Detail] order.amountShipping:', order.amountShipping);
 
-    // 计算预计发货日期（制作日期 + 1天）
-    let estimatedShippingDate = null;
-    if (order.targetProductionDate) {
-      const shippingDate = new Date(order.targetProductionDate);
-      shippingDate.setDate(shippingDate.getDate() + 1);
-      estimatedShippingDate = shippingDate.toISOString();
-      console.log(
-        '[Order Detail] Estimated shipping date:',
-        estimatedShippingDate,
-      );
-    }
+    // 预计发货日：制作日期 + 1 天（口径与列表共用同一函数，2026-10-30）
+    const estimatedShippingDate = computeEstimatedShippingDate(
+      order.targetProductionDate,
+    );
 
     const productionPhotos = await this.getOrderProductionPhotos(order);
     const paymentWindow =
@@ -1172,6 +1191,24 @@ export class OrdersController {
     }
   }
 
+  /**
+   * 订单项里展示的"品种"（2026-10-30）。
+   *
+   * 以前只取 `customBreedName`（顾客自己填的"其他品种"）——
+   * 正经登记过品种的狗，这里全都是 undefined，
+   * 员工在详情页只能看到"给 么鸡 · 6.4kg"，不知道是什么狗。
+   */
+  private async resolveDogBreedName(dog: any): Promise<string | undefined> {
+    if (!dog) return undefined;
+    if (dog.customBreedName) return dog.customBreedName;
+    if (!dog.breedId) return undefined;
+    const breed = await this.prisma.dogBreed.findUnique({
+      where: { id: dog.breedId },
+      select: { name: true },
+    });
+    return breed?.name ?? undefined;
+  }
+
   private async mapOrderItemToDto(
     item: OrderItem,
     totalPrice?: number,
@@ -1184,7 +1221,7 @@ export class OrdersController {
         dogInfo = {
           id: dog.id,
           name: dog.name,
-          breedName: dog.customBreedName ?? undefined,
+          breedName: await this.resolveDogBreedName(dog),
           weightKg: dog.currentWeightKg,
           gender: dog.gender,
         };
@@ -1212,7 +1249,6 @@ export class OrdersController {
       packageSpecG: item.packageSpecG,
       packagePlan: item.packagePlan ?? null,
       ingredientSourcePlan: item.ingredientSourcePlan ?? null,
-      preparationMethod: item.preparationMethod ?? null,
       cookingMethod: item.cookingMethod ?? null,
       customRequirements: item.customRequirements,
       dailyIntakeG: item.dailyIntakeG,
@@ -1235,7 +1271,7 @@ export class OrdersController {
           dogInfo = {
             id: dog.id,
             name: dog.name,
-            breedName: dog.customBreedName ?? undefined,
+            breedName: await this.resolveDogBreedName(dog),
             weightKg: dog.currentWeightKg,
             gender: dog.gender,
             mealsPerDay: dog.mealsPerDay,
@@ -1316,6 +1352,14 @@ export class OrdersController {
       aftersaleType: order.aftersaleType ?? null,
       // 补发单：顾客列表要能标出"这是免费补寄的一单"，否则会被当成又下了一单
       reshipFromOrderId: order.reshipFromOrderId ?? null,
+      // 2026-10-30：列表卡片要能报单号、给出预计发货日、显示运单。
+      // 老订单 orderNo 可能为 null，前端整行不渲染。
+      orderNo: order.orderNo ?? null,
+      estimatedShippingDate: computeEstimatedShippingDate(
+        order.targetProductionDate,
+      ),
+      trackingNumber: order.trackingNumber ?? null,
+      carrierCode: order.carrierCode ?? null,
       totalAmount: order.totalAmount ?? order.amountTotal,
       itemCount: order.items.length,
       createdAt: order.createdAt.toISOString(),

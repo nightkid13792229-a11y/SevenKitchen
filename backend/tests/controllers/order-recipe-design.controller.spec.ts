@@ -10,7 +10,10 @@ import { SupplementLabelExtractionService } from '../../src/application/recipe-d
 import { TencentCosService } from '../../src/infrastructure/services/tencent-cos.service';
 import { AuthGuard, JwtAuthService } from '../../src/interfaces/auth';
 import { RecipeDesignerController } from '../../src/interfaces/controllers/recipe-designer.controller';
-import { CreateOrderDesignFromTemplateDto } from '../../src/interfaces/dto/recipe-designer/recipe-designer.dto';
+import {
+  CreateOrderDesignFromTemplateDto,
+  SwitchOrderDesignStageDto,
+} from '../../src/interfaces/dto/recipe-designer/recipe-designer.dto';
 import {
   ROLES_KEY,
   StaffGuard,
@@ -54,6 +57,18 @@ describe('Order recipe design routes', () => {
     );
   });
 
+  it('exposes the stage switch behind StaffGuard (same permission level as editing)', () => {
+    const source = controllerSource();
+
+    expect(source).toMatch(
+      /@Patch\('orders\/:orderId\/designs\/:designId\/stage'\)\s+@UseGuards\(StaffGuard\)/,
+    );
+    // 换阶段只改这份草稿，不涉及上架 / 交付，不额外要求管理员
+    expect(source).not.toMatch(
+      /@Patch\('orders\/:orderId\/designs\/:designId\/stage'\)[\s\S]{0,80}@Roles\('ADMIN'\)/,
+    );
+  });
+
   it('keeps the controller class authenticated by AuthGuard only', () => {
     expect(Reflect.getMetadata(GUARDS_METADATA, RecipeDesignerController)).toEqual(
       [AuthGuard],
@@ -69,6 +84,21 @@ describe('Order recipe design routes', () => {
     const valid = new CreateOrderDesignFromTemplateDto();
     valid.sourceRecipeId = 'recipe-1';
     valid.name = '低脂鸡肉版';
+    await expect(validate(valid)).resolves.toEqual([]);
+  });
+
+  it('validates the stage switch payload against the designer scenarios', async () => {
+    const missing = new SwitchOrderDesignStageDto();
+    await expect(validate(missing)).resolves.toEqual([
+      expect.objectContaining({ property: 'scenario' }),
+    ]);
+
+    const unknown = new SwitchOrderDesignStageDto();
+    unknown.scenario = 'SENIOR_ONLY' as any;
+    await expect(validate(unknown)).resolves.not.toEqual([]);
+
+    const valid = new SwitchOrderDesignStageDto();
+    valid.scenario = 'ADULT_MER_110';
     await expect(validate(valid)).resolves.toEqual([]);
   });
 });
@@ -114,6 +144,7 @@ describe('RecipeDesignerController · order design delegation', () => {
     createBlank: jest.fn(),
     stageDraft: jest.fn(),
     removeSlot: jest.fn(),
+    switchStage: jest.fn(),
   };
 
   const staffUser = {
@@ -222,6 +253,34 @@ describe('RecipeDesignerController · order design delegation', () => {
       'CR202610220001',
       'staff-1',
     );
+  });
+
+  it('delegates the stage switch with order, design and operator context', async () => {
+    const result = {
+      designId: 'design-1',
+      draftId: 'draft-1',
+      status: 'EDITING',
+      scenario: 'ADULT_MER_110',
+      lifeStage: 'HIGH_ACTIVITY_ADULT',
+      stageWarning: null,
+    };
+    orderRecipeDesignService.switchStage.mockResolvedValue(result);
+
+    await expect(
+      controller.switchOrderDesignStage(
+        'CR202610220001',
+        'design-1',
+        { scenario: 'ADULT_MER_110' },
+        staffUser,
+      ),
+    ).resolves.toEqual({ code: 0, data: result, message: 'Success' });
+
+    expect(orderRecipeDesignService.switchStage).toHaveBeenCalledWith({
+      orderId: 'CR202610220001',
+      designId: 'design-1',
+      scenario: 'ADULT_MER_110',
+      access: { userId: 'staff-1', role: 'STAFF' },
+    });
   });
 
   it('delegates staging (admin route) with the current operator id', async () => {

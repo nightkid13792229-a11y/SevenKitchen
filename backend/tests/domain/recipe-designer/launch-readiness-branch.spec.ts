@@ -77,6 +77,42 @@ describe('buildDraftLaunchReadiness · presentation and design branch', () => {
     expect(readiness.warnings).toEqual([]);
   });
 
+  it('does not require preparation when the item is exempt', () => {
+    const base = baseInput();
+    const readiness = buildDraftLaunchReadiness({
+      ...base,
+      items: [
+        {
+          ...base.items[0],
+          preparationMethod: null,
+          preparationRequired: false,
+        },
+      ],
+    });
+
+    expect(readiness.ready).toBe(true);
+    expect(codes(readiness.blockers)).not.toContain(
+      'PREPARATION_METHOD_REQUIRED',
+    );
+  });
+
+  it('requires preparation when the item is required and empty', () => {
+    const base = baseInput();
+    const readiness = buildDraftLaunchReadiness({
+      ...base,
+      items: [
+        {
+          ...base.items[0],
+          preparationMethod: null,
+          preparationRequired: true,
+        },
+      ],
+    });
+
+    expect(readiness.ready).toBe(false);
+    expect(codes(readiness.blockers)).toContain('PREPARATION_METHOD_REQUIRED');
+  });
+
   it('keeps a complete ORDER draft ready', () => {
     const readiness = buildDraftLaunchReadiness(
       baseInput({ designMode: 'ORDER' }),

@@ -3,8 +3,11 @@
  * 对应 backend /api/v1/recipe-designer/*
  */
 import api from './index'
+import {
+  SERIES_AI_COVER_TIMEOUT_MESSAGE,
+  SERIES_AI_COVER_TIMEOUT_MS,
+} from '@/utils/recipeDesigner/seriesAiCover'
 import type {
-  AiDesignSuggestion,
   AssessmentTarget,
   CreateRecipeSeriesPayload,
   DesignerItem,
@@ -17,19 +20,16 @@ import type {
   DraftPresentationSnapshot,
   FediafDogScenario,
   IngredientOptionListResponse,
-  IngredientRecommendationResult,
-  NutritionPlanResult,
+  RecipeAgentApprovalStatus,
   RecipeAgentSessionView,
-  RecipeAiDesignData,
   RecipeDesignerIngredientOption,
   RecipeDesignerSeriesCard,
   RecipeDesignerSeriesStatusFilter,
-  RecipeReviewResult,
+  SeriesAiCoverResult,
   SeriesReleaseReadiness,
   SeriesReleaseResult,
   SeriesReleaseSettingsSnapshot,
   SeriesUnpublishResult,
-  SopResult,
   SupplementLabelExtractionDraft,
   SupplementNutritionBasisType,
   SupplementUsageUnit,
@@ -53,6 +53,8 @@ export interface RecipeDesignerSeriesListResult {
   page: number
   pageSize: number
   hasMore: boolean
+  /** 总条数（2026-10-30 分页）：旧后端可能没有，前端需要兜底 */
+  total?: number
 }
 
 export interface CreateRecipeSeriesStageDraftPayload {
@@ -78,8 +80,6 @@ export interface DesignRecipeItemPayload {
   nutritionFoodId: string
   weightG: number
   preparationMethod?: string
-  preparationNote?: string | null
-  preparationSource?: 'AUTO' | 'MANUAL' | null
   nutrientTargetKey?: string
   nutrientTargetValue?: number
   /** 补剂目标营养素；补剂不传且档案没有默认目标时后端会 400 */
@@ -91,8 +91,6 @@ export interface DesignRecipeItemPayload {
 export interface UpdateDesignRecipeItemPayload {
   weightG?: number
   preparationMethod?: string | null
-  preparationNote?: string | null
-  preparationSource?: 'AUTO' | 'MANUAL' | null
   nutrientTargetKey?: string | null
   nutrientTargetValue?: number | null
   supplementTargets?: RecipeDesignSupplementTargetPayload[]
@@ -158,9 +156,17 @@ export const recipeDesignerApi = {
     data: UpdateRecipeSeriesReleaseSettingsPayload,
   ): Promise<SeriesReleaseSettingsSnapshot> =>
     api.patch(`/recipe-designer/series/${seriesId}/release-settings`, data),
-  /** 发布整条产品线（仅管理员；后端会再次校验门槛与角色） */
-  releaseSeries: (seriesId: string): Promise<SeriesReleaseResult> =>
-    api.post(`/recipe-designer/series/${seriesId}/release`),
+  /**
+   * 发布整条产品线（仅管理员；后端会再次校验门槛与角色）。
+   *
+   * 首次发布不传 `stageCodes`，由后端取当前全部 READY 阶段；
+   * 更新时传本次勾选的阶段代码，省略 = 全量更新，空数组 = 400。
+   */
+  releaseSeries: (
+    seriesId: string,
+    payload: { stageCodes?: string[] } = {},
+  ): Promise<SeriesReleaseResult> =>
+    api.post(`/recipe-designer/series/${seriesId}/release`, payload),
   /**
    * 下架整条产品线（仅管理员）。
    *
@@ -169,6 +175,37 @@ export const recipeDesignerApi = {
    */
   unpublishSeries: (seriesId: string): Promise<SeriesUnpublishResult> =>
     api.post(`/recipe-designer/series/${seriesId}/unpublish`),
+  /**
+   * AI 生成产品线封面（2026-10-27，仅管理员）。
+   *
+   * `save` 由前端按「封面为空 + 系列未上线」决定；后端仍会兜底：
+   * 已上线系列即使传 true 也不落库（响应 saved=false，前端转预览）。
+   * 生图约 20–40 秒，超时放宽到 120 秒，避免默认 30 秒误判失败。
+   */
+  generateSeriesAiCover: (
+    seriesId: string,
+  ): Promise<SeriesAiCoverResult> =>
+    api.post(`/admin/recipe-series/${seriesId}/ai-cover`, {}, {
+      timeout: SERIES_AI_COVER_TIMEOUT_MS,
+      timeoutErrorMessage: SERIES_AI_COVER_TIMEOUT_MESSAGE,
+    }),
+
+  generateDraftAiCover: (draftId: string): Promise<{
+    url: string
+    provider: string
+    model: string
+    foodNames: string[]
+  }> =>
+    api.post(`/recipe-designer/drafts/${draftId}/ai-cover`, {}, {
+      timeout: SERIES_AI_COVER_TIMEOUT_MS,
+      timeoutErrorMessage: SERIES_AI_COVER_TIMEOUT_MESSAGE,
+    }),
+
+  discardAiCoverPreview: (
+    url: string,
+    reason: 'PREVIEW_DISCARDED' | 'UPLOAD_DISCARDED' = 'PREVIEW_DISCARDED'
+  ): Promise<{ trashed: boolean }> =>
+    api.delete('/admin/ai-covers/preview', { data: { url, reason } }),
 
   // 草稿
   getDraft: (draftId: string): Promise<DesignRecipeDraftDetail> =>
@@ -344,25 +381,6 @@ export const recipeDesignerApi = {
     }),
   updateDogDesignNotes: (dogId: string, data: UpdateDogDesignNotesPayload): Promise<unknown> =>
     api.patch(`/recipe-designer/dogs/${dogId}/design-notes`, data),
-  generateAiSuggestions: (dogId: string, draftId?: string): Promise<AiDesignSuggestion> =>
-    api.post(`/recipe-designer/dogs/${dogId}/design-insight/ai-suggest`, { draftId }),
-
-  // AI 设计建议四步向导（AI 生成耗时较长，单独设置较长的请求超时，避免 30s 默认超时误判失败）
-  generateAiNutritionPlan: (dogId: string, draftId?: string, userNotes?: string | null): Promise<NutritionPlanResult> =>
-    api.post(`/recipe-designer/dogs/${dogId}/design-insight/ai-nutrition-plan`, { draftId, userNotes }, { timeout: 180000 }),
-  acceptAiNutritionPlan: (
-    draftId: string,
-    data: { accepted: boolean; note?: string | null; plan?: NutritionPlanResult | null }
-  ): Promise<NutritionPlanResult> =>
-    api.post(`/recipe-designer/drafts/${draftId}/ai/nutrition-plan/accept`, data),
-  generateAiIngredientRecommendation: (draftId: string): Promise<IngredientRecommendationResult> =>
-    api.post(`/recipe-designer/drafts/${draftId}/ai/ingredient-recommendation`, undefined, { timeout: 180000 }),
-  reviewAiRecipe: (draftId: string): Promise<RecipeReviewResult> =>
-    api.post(`/recipe-designer/drafts/${draftId}/ai/review`, undefined, { timeout: 180000 }),
-  generateAiSop: (draftId: string): Promise<SopResult> =>
-    api.post(`/recipe-designer/drafts/${draftId}/ai/sop`, undefined, { timeout: 180000 }),
-  getAiDesignData: (draftId: string): Promise<RecipeAiDesignData> =>
-    api.get(`/recipe-designer/drafts/${draftId}/ai-design-data`),
 
   // AI 食谱设计 Agent（P2 对话抽屉）
   startAgentRun: (draftId: string, message: string): Promise<{ sessionId: string }> =>
@@ -373,4 +391,9 @@ export const recipeDesignerApi = {
     api.post(`/recipe-designer/agent/runs/${sessionId}/stop`),
   answerAgentRun: (sessionId: string, message: string): Promise<void> =>
     api.post(`/recipe-designer/agent/runs/${sessionId}/answer`, { message }),
+  decideAgentApproval: (
+    approvalId: string,
+    status: RecipeAgentApprovalStatus
+  ): Promise<unknown> =>
+    api.post(`/recipe-designer/agent/approvals/${approvalId}/decide`, { status }),
 }

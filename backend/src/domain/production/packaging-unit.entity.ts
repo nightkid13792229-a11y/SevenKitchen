@@ -28,6 +28,15 @@ export interface ProductionResultInput {
 }
 
 export class PackagingUnit {
+  /**
+   * 订单锅的配方来源：指向提供配方的 order_item。
+   *
+   * 有值时不再复制整份 `recipeSnapshot` —— 配方永远从这张订单明细读，
+   * 上游修正订单快照后，锅跟着变，不需要删批次重排。
+   * 备货锅（试吃装）没有订单，仍然把快照存在自己身上。
+   */
+  public recipeSnapshotRefOrderItemId: string | null = null;
+
   constructor(
     public readonly id: string,
     public readonly productionBatchId: string,

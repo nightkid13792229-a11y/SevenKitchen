@@ -796,7 +796,7 @@ export class PrintCanvasBuilder {
    *
    * ## 为什么是同步的、路径由调用方传
    *
-   * `uni.getImageInfo` 是异步的，而 `drawDeliverySheet` 是同步的 ——
+   * `uni.getImageInfo` 是异步的，而画布绘制函数是同步的 ——
    * 不能在里面 await。所以**由页面预先确认素材存在**，再把路径传进来。
    *
    * ## 为什么"没有素材就整块不画"

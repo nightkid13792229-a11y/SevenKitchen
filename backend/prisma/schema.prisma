@@ -171,7 +171,6 @@ model OrderItem {
   /// 试吃装商品 ID（鲜食订单为 null）。便于按商品统计销量
   tastingPackId        String?   @map("tasting_pack_id")
   cookingMethod        String?   @map("cooking_method") @db.VarChar(20)
-  preparationMethod    String?   @map("preparation_method") @db.VarChar(20)
   dogId                String?   @map("dog_id")
   vacuumBagSpec        String?   @map("vacuum_bag_spec") @db.VarChar(20)
   order                Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -740,6 +739,7 @@ model RecipeSeries {
   designs        DesignRecipe[]
   coverBadges    RecipeSeriesCoverBadge[]
   orderDesign    OrderRecipeDesign?         @relation("OrderRecipeDesignSeries")
+  taxonomyLinks  RecipeSeriesTaxonomy[]
 
   @@index([status])
   @@index([businessStatus])
@@ -759,10 +759,6 @@ model RecipeItem {
   ingredientId           String                        @map("ingredient_id")
   nutritionFoodId        String?                       @map("nutrition_food_id")
   preparationMethod      String?                       @map("preparation_method")
-  /// 原料预处理的补充说明（部位/规格等自由文本）
-  preparationNote        String?                       @map("preparation_note") @db.VarChar(500)
-  /// 预处理来源：AUTO（营养档案/原料默认带出）| MANUAL（人工修改）
-  preparationSource      String?                       @map("preparation_source") @db.VarChar(20)
   ratioPercent           Float?                        @map("ratio_percent")
   nutrientTargetKey      String?                       @map("nutrient_target_key")
   nutrientTargetValue    Float?                        @map("nutrient_target_value")
@@ -776,6 +772,7 @@ model RecipeItem {
 
   @@index([recipeId, recipeVersion])
   @@index([nutritionFoodId])
+  @@index([ingredientId])
   @@map("recipe_item")
 }
 
@@ -938,7 +935,11 @@ enum ProductionBatchSource {
 model PackagingUnit {
   id                       String              @id @default(uuid()) @map("id")
   productionBatchId        String              @map("production_batch_id")
-  recipeSnapshot           Json                @map("recipe_snapshot")
+  /// 订单锅不再复制整份配方：留空，改由 recipeSnapshotRefOrderItemId 指向来源
+  /// 订单明细的 recipe_snapshot。备货锅（试吃装）没有订单，仍在这里存一份。
+  recipeSnapshot           Json?               @map("recipe_snapshot")
+  /// 订单锅的配方来源：指向提供配方的 order_item（引用，不复制）
+  recipeSnapshotRefOrderItemId String?         @map("recipe_snapshot_ref_order_item_id")
   totalProductionG         Float               @map("total_production_g")
   sourceOrderItemIds       String[]            @map("source_order_item_ids")
   createdAt                DateTime            @default(now()) @map("created_at")
@@ -961,6 +962,7 @@ model PackagingUnit {
 
   @@index([productionBatchId])
   @@index([status])
+  @@index([recipeSnapshotRefOrderItemId])
   @@map("packaging_unit")
 }
 
@@ -991,6 +993,10 @@ model Ingredient {
   /// 内容物是否油性（鱼油、鱼肝油等）：分装标签效期取更保守的一档
   isOilBased                    Boolean                       @default(false) @map("is_oil_based")
   supplementRetailEnabled       Boolean                       @default(false) @map("supplement_retail_enabled")
+  /// 补剂等价组：一个原料最多归一个主组（2026-10-26）
+  equivalenceGroupId            String?                       @map("equivalence_group_id")
+  /// 组内推荐顺序：0 优先；排序第一的成员是“参考原料”
+  equivalencePriority           Int                           @default(0) @map("equivalence_priority")
   shelfLifeMonths               Int?                          @map("shelf_life_months")
   storageCondition              String?                       @map("storage_condition") @db.VarChar(200)
   openedShelfLifeDays           Int?                          @map("opened_shelf_life_days")
@@ -1014,11 +1020,13 @@ model Ingredient {
   procurementSkuPriceHistories  ProcurementSkuPriceHistory[]
   allergenTags                  IngredientAllergenTag[]
   supplementPackagingRules      SupplementPackagingRule[]
+  equivalenceGroup              SupplementEquivalenceGroup?   @relation(fields: [equivalenceGroupId], references: [id], onDelete: SetNull)
 
   @@unique([name, brand, productModel])
   @@index([type])
   @@index([procurementStrategy])
   @@index([name])
+  @@index([equivalenceGroupId])
   @@map("ingredient")
 }
 
@@ -1075,6 +1083,68 @@ model RecommendedProduct {
   @@index([ingredientId])
   @@index([isActive])
   @@map("recommended_product")
+}
+
+/// 补剂等价组的审核状态。
+/// 只有 APPROVED 且 isActive 的组参与线上替换；任何成员/营养素变更都会退回 DRAFT。
+enum SupplementEquivalenceStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  DISABLED
+}
+
+/// 补剂原料等价组（2026-10-26）
+///
+/// 组定义在**原料层**，按“营养素 × 形态/来源”划分：
+/// 钙·矿物盐（碳酸钙/柠檬酸钙/鸡蛋壳粉）可互换，钙·骨源（骨粉）单独一组。
+/// 一个原料最多归一个组；组不直接存用量，用量由 D4 的“锁目标、实时解析”计算。
+model SupplementEquivalenceGroup {
+  id            String                      @id @default(uuid())
+  code          String                      @unique @db.VarChar(64)
+  name          String                      @db.VarChar(100)
+  /// 标准营养素用 fieldPath（如 minerals.calcium）；自定义成分为 custom:<规范化名称>
+  nutrientKey   String                      @map("nutrient_key") @db.VarChar(100)
+  nutrientLabel String                      @map("nutrient_label") @db.VarChar(50)
+  nutrientUnit  String                      @map("nutrient_unit") @db.VarChar(20)
+  /// 形态/来源（矿物盐、骨源、螯合、天然…）；人读 + 筛选，不做硬限制
+  formCategory  String?                     @map("form_category") @db.VarChar(50)
+  description   String?
+  rationale     String?
+  /// 依据说明：一两句话说明“这些原料为什么可以互换/边界在哪”
+  evidenceSummary String?                   @map("evidence_summary")
+  /// 依据：URL 或可点开的文献条目（字符串数组）
+  evidenceUrls  Json?                       @map("evidence_urls")
+  status        SupplementEquivalenceStatus @default(DRAFT)
+  reviewedBy    String?                     @map("reviewed_by") @db.VarChar(100)
+  reviewedAt    DateTime?                   @map("reviewed_at")
+  reviewNote    String?                     @map("review_note")
+  isActive      Boolean                     @default(true) @map("is_active")
+  sortOrder     Int                         @default(0) @map("sort_order")
+  createdAt     DateTime                    @default(now()) @map("created_at")
+  updatedAt     DateTime                    @updatedAt @map("updated_at")
+  ingredients   Ingredient[]
+  auditLogs     SupplementEquivalenceGroupAudit[]
+
+  @@index([nutrientKey])
+  @@index([status])
+  @@index([isActive])
+  @@map("supplement_equivalence_group")
+}
+
+/// 等价组变更审计（只追加）：建组/改信息/成员增减/审核/停用。
+model SupplementEquivalenceGroupAudit {
+  id           String                     @id @default(uuid())
+  groupId      String                     @map("group_id")
+  action       String                     @db.VarChar(30)
+  changes      Json?
+  operatorId   String?                    @map("operator_id")
+  operatorName String?                    @map("operator_name") @db.VarChar(100)
+  createdAt    DateTime                   @default(now()) @map("created_at")
+  group        SupplementEquivalenceGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId, createdAt])
+  @@map("supplement_equivalence_group_audit")
 }
 
 model ProcurementSku {
@@ -2182,6 +2252,8 @@ model DIYSheet {
   packagePlan     Json?    @map("package_plan")
   purchaseList    Json     @map("purchase_list")
   productionSteps String?  @map("production_steps")
+  /// 顾客在制作单里选的补剂原料（2026-10-26）
+  supplementSelections Json? @map("supplement_selections")
   /// 首次下单补剂时冻结：食谱版本 / 整张制作单快照 / 冻结时间
   recipeVersion   Int?     @map("recipe_version")
   snapshot        Json?    @map("snapshot")
@@ -2598,6 +2670,11 @@ model CustomRecipeOrder {
   paymentConfirmedAt    DateTime?                @map("payment_confirmed_at")
   /// 微信支付交易号（对账/客服排查用）
   paymentTransactionId  String?                  @map("payment_transaction_id")
+  /// 微信「虚拟发货」信息上传时间（2026-10-30）。
+  /// 定制食谱交付的是电子食谱/采购清单/报告，没有快递单号；
+  /// 交付成功后按 logistics_type=3（虚拟商品）上报微信，避免资金一直冻结。
+  /// 非空 = 已成功上报（幂等标记，重复交付不重复上传）。
+  wechatShippingUploadedAt DateTime?            @map("wechat_shipping_uploaded_at")
 
   // ===== 2026-10-21 收款渠道与实收（Task 1）=====
   //
@@ -2613,6 +2690,20 @@ model CustomRecipeOrder {
   actualPaidAmount      Decimal?                 @map("actual_paid_amount") @db.Decimal(10, 2)
   /// 实收与系统报价不一致时，管理员必须填写的原因
   priceOverrideReason   String?                  @map("price_override_reason") @db.VarChar(200)
+
+  // ===== 2026-10-30 赠送单（老客户回馈 / 售后补偿 / 朋友人情）=====
+  //
+  // 赠送**不能**靠「实收恰好为 0」去推断：以后改一次优惠、退一次款，
+  // 正常单就会被误判成赠送；也查不出「这个月送了几份、为什么送」。
+  // `isGift = true` 时金额固定 0、不记收款渠道与流水号，
+  // 但订单照常排期、设计、交付、写狗狗档案。
+
+  /// 是否为赠送单（0 元）。赠送单不记收款渠道与流水号
+  isGift                Boolean                  @default(false) @map("is_gift")
+  /// 赠送原因 code：REPEAT_CUSTOMER / AFTERSALE_COMPENSATION / FRIEND_SERVICE / OTHER
+  giftReason            String?                  @map("gift_reason") @db.VarChar(30)
+  /// 赠送补充说明（选填；原因为 OTHER 时必填）
+  giftNote              String?                  @map("gift_note") @db.VarChar(200)
 
   inProgressAt          DateTime?                @map("in_progress_at")
   deliveredAt           DateTime?                @map("delivered_at")
@@ -2687,6 +2778,8 @@ model CustomRecipeOrder {
   /// 只读交付分享链接（2026-10-21 新增，无账号代客客户用）
   deliveryShares        CustomRecipeDeliveryShare[]
   aftersales            CustomRecipeAftersale[]
+  /// 已交付/制作中订单的退款申请（2026-10-25）。未开始制作仍走取消+全额退款。
+  refundRequests        CustomRecipeRefundRequest[]
   customer              User                     @relation("CustomRecipeOrderCustomer", fields: [customerId], references: [id], onDelete: Cascade)
   dog                   Dog                      @relation("CustomRecipeOrderDog", fields: [dogId], references: [id], onDelete: Cascade)
   recipe                Recipe?                  @relation("CustomRecipeOrders", fields: [recipeId], references: [id])
@@ -3075,6 +3168,15 @@ model CustomRecipeAftersale {
   recipeRequests Json?  @map("recipe_requests")
   /// 类型 —— 取值来自选项集 `custom_recipe_aftersale_type`
   type          String   @map("type") @db.VarChar(48)
+  /// 谁发起的这一条（2026-10-27）。
+  ///
+  /// - `CUSTOMER`：顾客在小程序提交；
+  /// - `STAFF`：员工在后台「代客发起调整」——老板改稿后重新交付，
+  ///   不必等顾客自己提单（顾客不方便/不会用时唯一的路）。
+  ///
+  /// 员工发起的**不占顾客免费次数、不受售后窗口限制**，创建时直接进入 ACCEPTED，
+  /// 处理人就是发起人，链路照旧走「改稿 → 重新交付 → 完成」。
+  source        String   @default("CUSTOMER") @map("source") @db.VarChar(16)
   status        CustomRecipeAftersaleStatus @default(PENDING)
   description   String   @db.VarChar(1000)
   photos        String[] @default([])
@@ -3099,6 +3201,54 @@ model CustomRecipeAftersale {
   @@index([handlerId])
   @@index([deliveryBatchId])
   @@map("custom_recipe_aftersale")
+}
+
+/// 已交付/制作中订单的退款申请（2026-10-25）。
+///
+/// 为什么单独一张表，不复用售后表：
+/// 售后是"调整食谱"，有免费次数/交付窗口；退款是资金动作，有自己的审核、
+/// 退款单号和失败状态。混在一起会让两个配额互相污染。
+model CustomRecipeRefundRequest {
+  id            String   @id @default(uuid()) @map("id")
+  orderId       String   @map("order_id")
+  customerId    String   @map("customer_id")
+  /// 原因码 + 提交时的中文快照（后台/顾客看到的是当时选的那一项）
+  reasonCode    String   @map("reason_code") @db.VarChar(48)
+  reasonLabel   String   @map("reason_label") @db.VarChar(100)
+  description   String   @db.VarChar(1000)
+  photos        String[] @default([])
+  /// 申请退款金额；当前按订单实付全额，后续要支持部分退款时再扩
+  amount        Decimal  @db.Decimal(10, 2)
+  status        CustomRecipeRefundRequestStatus @default(PENDING)
+  /// 后台审核备注 / 驳回原因（给顾客看）
+  adminNote     String?  @map("admin_note") @db.VarChar(1000)
+  /// 微信退款状态快照：PROCESSING / SUCCESS / FAILED …
+  refundStatus  String?  @map("refund_status") @db.VarChar(20)
+  refundOutNo   String?  @map("refund_out_no") @db.VarChar(64)
+  refundId      String?  @map("refund_id") @db.VarChar(64)
+  reviewedBy    String?  @map("reviewed_by") @db.VarChar(64)
+  reviewedAt    DateTime? @map("reviewed_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  order         CustomRecipeOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([status])
+  @@map("custom_recipe_refund_request")
+}
+
+enum CustomRecipeRefundRequestStatus {
+  /// 待审核
+  PENDING
+  /// 审核通过，退款处理中
+  PROCESSING
+  /// 退款成功
+  REFUNDED
+  /// 审核驳回
+  REJECTED
+  /// 退款失败（可重试）
+  FAILED
 }
 
 enum CustomRecipeAftersaleStatus {
@@ -3638,6 +3788,7 @@ enum NutritionGovernanceSourceType {
   COFID
   CIQUAL
   CNF
+  KO_RDA
   SUPPLEMENT_LABEL
   MANUAL
 }
@@ -3863,6 +4014,23 @@ model NutritionFoodMapping {
   @@map("nutrition_food_mapping")
 }
 
+/// 词条名的生熟判断（AI 读名字得出，落库复用、可人工纠正）。
+enum NutritionRecordState {
+  RAW
+  COOKED
+  UNKNOWN
+}
+
+/// 词条名的加工方式判断；生 / 未识别都写 NONE，不硬套「其它做法」。
+enum NutritionRecordMethod {
+  BOILED
+  STEAMED
+  GRILLED
+  FRIED
+  OTHER
+  NONE
+}
+
 model NutritionSourceRecord {
   id                  String                           @id @default(uuid()) @map("id")
   sourceType          NutritionGovernanceSourceType    @map("source_type")
@@ -3880,12 +4048,44 @@ model NutritionSourceRecord {
   updatedAt           DateTime                         @updatedAt @map("updated_at")
   candidates          IngredientNutritionCandidate[]
   supplementDrafts    SupplementNutritionDraft[]
+  classification      NutritionRecordClassification?
 
   @@unique([sourceType, sourceKey])
   @@index([sourceType])
   @@index([foodName])
   @@index([status])
   @@map("nutrition_source_record")
+}
+
+/// 一条来源词条名的 AI 分类结果。
+///
+/// `evidence` 必须是词条名里真实出现的片段（大小写 / 全半角归一后包含），
+/// 用于解释为什么判成这个状态 / 做法 / 部位；校验不过时整条按 UNKNOWN 处理。
+/// 人工纠正过的行（`correctedBy` 非空）永不被 AI 覆盖。
+model NutritionRecordClassification {
+  id           String                @id @default(uuid()) @map("id")
+  recordId     String                @unique @map("record_id")
+  state        NutritionRecordState  @default(UNKNOWN) @map("state")
+  method       NutritionRecordMethod @default(NONE) @map("method")
+  /// 自由文本部位名，如「牛绞肉 85/15」；认不出时为空。
+  cutLabel     String?               @map("cut_label") @db.VarChar(100)
+  /// 归组 key，如 ground / chuck；认不出时为空。
+  cutGroup     String?               @map("cut_group") @db.VarChar(50)
+  /// 判断依据词，必须是词条名里真实出现的片段。
+  evidence     String?               @map("evidence") @db.VarChar(200)
+  confidence   Float?                @map("confidence")
+  model        String?               @map("model") @db.VarChar(100)
+  classifiedAt DateTime              @default(now()) @map("classified_at")
+  correctedBy  String?               @map("corrected_by") @db.VarChar(100)
+  correctedAt  DateTime?             @map("corrected_at")
+  createdAt    DateTime              @default(now()) @map("created_at")
+  updatedAt    DateTime              @updatedAt @map("updated_at")
+  record       NutritionSourceRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+
+  @@index([state])
+  @@index([method])
+  @@index([cutGroup])
+  @@map("nutrition_record_classification")
 }
 
 model IngredientNutritionCandidate {
@@ -4009,7 +4209,6 @@ model DesignRecipe {
   updatedAt              DateTime                      @updatedAt @map("updated_at")
   items                  DesignRecipeItem[]
   aiGenerationLog        DesignRecipeAIGenerationLog?
-  aiDesignData           DesignRecipeAiDesignData?
   publishSnapshots       DesignRecipePublishSnapshot[]
   agentSessions          RecipeDesignAgentSession[]
   agentSnapshots         RecipeDesignAgentSnapshot[]
@@ -4039,10 +4238,6 @@ model DesignRecipeItem {
   includeInAssessment Boolean       @default(true) @map("include_in_assessment")
   ratioPercent        Float?        @map("ratio_percent")
   preparationMethod   String?       @map("preparation_method") @db.VarChar(100)
-  /// 原料预处理的补充说明（部位/规格等自由文本）
-  preparationNote     String?       @map("preparation_note") @db.VarChar(500)
-  /// 预处理来源：AUTO（营养档案/原料默认带出）| MANUAL（人工修改）
-  preparationSource   String?       @map("preparation_source") @db.VarChar(20)
   nutrientTargetKey   String?       @map("nutrient_target_key")
   nutrientTargetValue Float?        @map("nutrient_target_value")
   supplementTargets   Json?         @map("supplement_targets")
@@ -4078,32 +4273,6 @@ model DesignRecipeAIGenerationLog {
   @@index([generationModel])
   @@index([finalAttemptResult])
   @@map("design_recipe_ai_generation_log")
-}
-
-model DesignRecipeAiDesignData {
-  id                        String       @id @default(uuid()) @map("id")
-  designRecipeId            String       @unique @map("design_recipe_id")
-  /// 当前营养方案（认可后保存的版本）
-  nutritionPlan             Json?        @map("nutrition_plan")
-  nutritionPlanAccepted     Boolean      @default(false) @map("nutrition_plan_accepted")
-  nutritionPlanAcceptedAt   DateTime?    @map("nutrition_plan_accepted_at")
-  nutritionPlanNote         String?      @map("nutrition_plan_note") @db.VarChar(2000)
-  /// 营养方案历史版本（留痕）
-  nutritionPlanHistory      Json         @default("[]") @map("nutrition_plan_history")
-  /// 食材推荐结果（可多轮）
-  ingredientRecommendations Json         @default("[]") @map("ingredient_recommendations")
-  /// 食谱审核记录
-  reviewResults             Json         @default("[]") @map("review_results")
-  /// 制作 SOP（production + customer）
-  sop                       Json?        @map("sop")
-  sopAccepted               Boolean      @default(false) @map("sop_accepted")
-  sopAcceptedAt             DateTime?    @map("sop_accepted_at")
-  createdAt                 DateTime     @default(now()) @map("created_at")
-  updatedAt                 DateTime     @updatedAt @map("updated_at")
-  designRecipe              DesignRecipe @relation(fields: [designRecipeId], references: [id], onDelete: Cascade)
-
-  @@index([designRecipeId])
-  @@map("design_recipe_ai_design_data")
 }
 
 model DesignRecipePublishSnapshot {
@@ -4299,6 +4468,8 @@ model FeedbackReply {
 model SupplementShopConfig {
   id                        String                       @id @default("singleton") @map("id")
   enabled                   Boolean                      @default(false) @map("enabled")
+  /// 补剂等价组候选总开关：审核完再打开；出问题可一键关闭（2026-10-26）
+  equivalenceEnabled        Boolean                      @default(false) @map("equivalence_enabled")
 
   // ---- 定价 ----
   markupMultiplier          Decimal                      @default(2.5) @map("markup_multiplier") @db.Decimal(6, 2)
@@ -4850,6 +5021,12 @@ model SupplementOrderItem {
   id                String                 @id @default(uuid()) @map("id")
   orderId           String                 @map("order_id")
   ingredientId      String                 @map("ingredient_id")
+  /// 对应的食谱行（新协议；旧订单为空）
+  recipeItemId      String?                @map("recipe_item_id")
+  /// 食谱原本的补剂原料（顾客可能换成了同组另一条原料）
+  sourceIngredientId String?               @map("source_ingredient_id")
+  /// 目标/浓度/服务端算量/提交量/来源/组的快照（2026-10-26）
+  dosageSnapshot    Json?                  @map("dosage_snapshot")
 
   // ---- 下单时的商品快照 ----
   name              String                 @map("name") @db.VarChar(200)
@@ -5052,6 +5229,39 @@ model IngredientCreationAudit {
   @@map("ingredient_creation_audit")
 }
 
+/// AI 辅助新建标准原料 · 按域核验报告
+///
+/// 每跑一次某一域（`INGREDIENT` / `NUTRITION`）的核验落一条。`payload_hash` 是
+/// 当时草稿 payload 的**内容哈希**：授权与页面刷新时拿当前草稿重算，只有相等才
+/// 认这份报告（同一毫秒两次改动也不会误判成新鲜，设计 M1）。
+///
+/// 只由 `IngredientCheckRunService.runDomain()` 写入；只追加、不修改，方便事后
+/// 复盘「当时按哪版规则、对着哪份内容、报了什么」。
+model IngredientCheckRun {
+  id String @id @default(uuid()) @map("id")
+  /// 草稿 id（草稿永久保留，这里不设外键，跟 ingredient_creation_audit 一致）
+  draftId String @map("draft_id")
+  /// 核验域：INGREDIENT / NUTRITION
+  domain String @db.VarChar(20)
+  /// 触发方式：AGENT / USER
+  trigger String @db.VarChar(20)
+  /// 规则版本号；规则一改就必须升版本，旧报告自然不被信任
+  rulesVersion String @map("rules_version") @db.VarChar(40)
+  /// 发起核验时的草稿 payload 内容哈希（SHA-256 hex）
+  payloadHash String @map("payload_hash") @db.VarChar(64)
+  /// 三档问题明细（CheckItem[]）
+  result Json
+  blockingCount      Int @default(0) @map("blocking_count")
+  exceptionableCount Int @default(0) @map("exceptionable_count")
+  warningCount       Int @default(0) @map("warning_count")
+  /// 谁触发的这次核验（controller 固定取当前登录人）
+  createdBy String   @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([draftId, domain, createdAt])
+  @@map("ingredient_check_run")
+}
+
 enum RecipeAgentSessionStatus {
   RUNNING
   WAITING_USER
@@ -5087,6 +5297,10 @@ model RecipeDesignAgentSession {
   stepCount        Int                       @default(0) @map("step_count")
   promptTokens     Int                       @default(0) @map("prompt_tokens")
   completionTokens Int                       @default(0) @map("completion_tokens")
+  /** 本轮开始时（每次用户发新消息）的累计值快照：本次 = 当前累计 - 本轮起点 */
+  runStartStepCount        Int                @default(0) @map("run_start_step_count")
+  runStartPromptTokens     Int                @default(0) @map("run_start_prompt_tokens")
+  runStartCompletionTokens Int                @default(0) @map("run_start_completion_tokens")
   startedAt        DateTime                  @default(now()) @map("started_at")
   endedAt          DateTime?                 @map("ended_at")
   lastError        String?                   @map("last_error")
@@ -5147,4 +5361,93 @@ model RecipeDesignAgentSnapshot {
 
   @@index([designRecipeId, createdAt])
   @@map("recipe_design_agent_snapshot")
+}
+
+// ===== 食谱需求分类（2026-10-26）=====
+//
+// 三张独立表，与食谱完全解耦：分类（kind）/ 节点（node）/ 归属（link）。
+// 食谱表不加任何分类字段，以后加分类、改节点名、重排顺序都只动这三张表。
+
+enum TaxonomyNodeStatus {
+  ACTIVE
+  DISABLED
+
+  @@map("taxonomy_node_status")
+}
+
+model RecipeTaxonomyKind {
+  id        String   @id @default(uuid()) @map("id")
+  code      String   @unique @map("code") @db.VarChar(40)
+  name      String   @map("name") @db.VarChar(50)
+  sort      Int      @default(0) @map("sort")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  nodes RecipeTaxonomyNode[]
+
+  @@map("recipe_taxonomy_kind")
+}
+
+model RecipeTaxonomyNode {
+  id         String             @id @default(uuid()) @map("id")
+  kindId     String             @map("kind_id")
+  parentId   String?            @map("parent_id")
+  name       String             @map("name") @db.VarChar(50)
+  definition String             @map("definition") @db.VarChar(200)
+  sort       Int                @default(0) @map("sort")
+  status     TaxonomyNodeStatus @default(ACTIVE) @map("status")
+  createdAt  DateTime           @default(now()) @map("created_at")
+  updatedAt  DateTime           @updatedAt @map("updated_at")
+
+  kind     RecipeTaxonomyKind   @relation(fields: [kindId], references: [id], onDelete: Restrict)
+  parent   RecipeTaxonomyNode?  @relation("TaxonomyNodeHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children RecipeTaxonomyNode[] @relation("TaxonomyNodeHierarchy")
+  links    RecipeSeriesTaxonomy[]
+
+  @@index([kindId, parentId, sort])
+  @@index([parentId])
+  @@map("recipe_taxonomy_node")
+}
+
+/// 系列与节点的归属关系：跨分类可多挂，同一分类最多一条（由唯一约束兜底）。
+model RecipeSeriesTaxonomy {
+  id        String   @id @default(uuid()) @map("id")
+  seriesId  String   @map("series_id")
+  kindId    String   @map("kind_id")
+  nodeId    String   @map("node_id")
+  createdBy String?  @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  series RecipeSeries       @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  node   RecipeTaxonomyNode @relation(fields: [nodeId], references: [id], onDelete: Restrict)
+
+  @@unique([seriesId, kindId])
+  @@index([nodeId])
+  @@index([kindId])
+  @@map("recipe_series_taxonomy")
+}
+
+/// AI 食谱封面的 DeepSeek 系统提示词（单例，2026-10-28）
+model RecipeCoverConfig {
+  id             String   @id @default("singleton")
+  promptTemplate String   @map("prompt_template") @db.Text
+  updatedBy      String?  @map("updated_by")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("recipe_cover_config")
+}
+
+/// 旧封面回收站：7 天后删除，支持引用安全（2026-10-28）
+model CoverTrash {
+  id         String   @id @default(uuid())
+  sourceUrl  String   @map("source_url") @db.VarChar(1000)
+  trashUrl   String   @map("trash_url") @db.VarChar(1000)
+  reason     String   @db.VarChar(40)
+  movedAt    DateTime @default(now()) @map("moved_at")
+  deleteAfter DateTime @map("delete_after")
+  status     String   @default("PENDING") @db.VarChar(20)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([deleteAfter])
+  @@map("cover_trash")
 }

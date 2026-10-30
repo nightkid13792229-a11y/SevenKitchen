@@ -44,6 +44,12 @@ describe('定制页 → 订单确认页（2026-10-19 老板确认）', () => {
     expect(page).toContain("focus: 'changeReasonOther'");
     expect(page).toContain("focus: 'stomachOther'");
     expect(page).toContain('uni.pageScrollTo');
+    // 2026-10-25：缺项错误常驻在对应板块/底部，不只靠 toast
+    expect(page).toContain('showValidation');
+    expect(page).toContain('validationMessage');
+    expect(page).toContain('validationTarget');
+    expect(page).toContain('class="section-error"');
+    expect(page).toContain('class="form-error"');
   });
 
   it('确认页有只读汇总、附件预览和确认并支付', () => {
@@ -62,6 +68,33 @@ describe('定制页 → 订单确认页（2026-10-19 老板确认）', () => {
     expect(confirm).not.toContain('仅提交，稍后支付');
     expect(confirm).toContain('delivery-note');
     expect(confirm).toContain('（含）之前交付');
+  });
+
+  it('★ 多份选择按顾客+狗记住，返回再进不重置', () => {
+    expect(confirm).toContain('loadCustomRecipeMultiChoice');
+    expect(confirm).toContain('saveCustomRecipeMultiChoice');
+    expect(confirm).toContain('loadQuote(recipeQuantity.value)');
+    expect(confirm).toContain('loadDeliveryDate(recipeQuantity.value)');
+    expect(confirm).toContain('watch(');
+  });
+
+  it('★ 单份费用为 0 时挡住支付，不显示“¥0”', () => {
+    expect(confirm).toContain('singleFeeMissing');
+    expect(confirm).toContain('!singleFeeMissing.value');
+    expect(confirm).toContain("'费用读取失败，请返回重试'");
+    expect(confirm).toContain('定制费用没读取出来');
+  });
+
+  it('★ 支付前有退款/取消规则说明', () => {
+    expect(confirm).toContain('未开始制作可全额退款');
+    expect(confirm).toContain('联系 Seven爸爸审核');
+  });
+
+  it('★ 确认页死代码清理：不再有 post* 状态和 payAfterSubmit', () => {
+    expect(confirm).not.toContain('postTitle');
+    expect(confirm).not.toContain('postDesc');
+    expect(confirm).not.toContain('postPaymentHint');
+    expect(confirm).not.toContain('payAfterSubmit');
   });
 
   it('确认页创建订单后留在本页支付，不再跳提交成功页', () => {
@@ -219,6 +252,54 @@ describe('多份购买 · 确认页（2026-10-20）', () => {
   });
 });
 
+describe('确认页 · 支付前可靠性（2026-10-25）', () => {
+  const confirm = read(`${PAGE_DIR}/confirm.vue`);
+
+  it('选项字典没就绪时挡住支付，并给加载/失败/重试', () => {
+    expect(confirm).toContain('optionsReady');
+    expect(confirm).toContain('optionsFailed');
+    expect(confirm).toContain('optionsLoading');
+    expect(confirm).toContain('optionLoadingText');
+    expect(confirm).toContain('retryOptions');
+    expect(confirm).toContain('currentFoodLoading');
+    expect(confirm).toContain('changeReasonFailed');
+    expect(confirm).toContain('canSubmit = computed');
+    expect(confirm).toContain('optionsReady.value');
+    // 摘要不能只显示空白
+    expect(confirm).toContain("'读取中…'");
+    expect(confirm).toContain("'读取失败'");
+  });
+
+  it('首次交付日期失败不挡整页，狗狗详情失败要阻断', () => {
+    expect(confirm).toContain('fetchNextDeliveryDate().catch');
+    expect(confirm).toContain("loadError.value = '狗狗信息读取失败，请重试'");
+    expect(confirm).toContain('resolveDogAvatarSrc');
+    expect(confirm).toContain('dogAvatar');
+    // 狗狗详情失败后不再用通用“狗狗”继续付款
+    expect(confirm).toContain("dogRes?.data?.profile");
+  });
+
+  it('提交幂等键按顾客+狗持久化，创建成功后清掉', () => {
+    expect(confirm).toContain('getOrCreateCustomRecipeSubmitKey');
+    expect(confirm).toContain('clearCustomRecipeSubmitKey');
+    expect(confirm).toContain("clientRequestId.value = ''");
+    // onLoad 不再自己生成新 key
+    expect(confirm).not.toContain('clientRequestId.value = `cr-');
+  });
+
+  it('提交守卫先立起来；支付未完成先讲清“订单已创建”', () => {
+    const submitIndex = confirm.indexOf('submitting.value = true');
+    const subscribeIndex = confirm.indexOf('const subscriptionRequest');
+    expect(submitIndex).toBeGreaterThan(-1);
+    expect(subscribeIndex).toBeGreaterThan(submitIndex);
+
+    expect(confirm).toContain("title: '订单已创建'");
+    expect(confirm).toContain('本次支付已取消');
+    expect(confirm).toContain('微信支付没有完成');
+    expect(confirm).toContain('onBackPress');
+  });
+});
+
 /**
  * 成品抵扣彻底下线（2026-10-20）。
  *
@@ -247,12 +328,12 @@ describe('定制链路 · 成品抵扣已彻底下线（2026-10-20）', () => {
     }
   };
 
-  it('确认页 / 定制订单详情 / 定制页 / 定制订单列表 不再出现抵扣文案与字段', () => {
+  it('确认页 / 定制订单详情 / 定制页 / 统一订单列表 不再出现抵扣文案与字段', () => {
     const sources: Array<[string, string]> = [
       ['确认页', read(`${PAGE_DIR}/confirm.vue`)],
       ['定制订单详情', read(`${PAGE_DIR}/order-detail.vue`)],
       ['定制页', read(`${PAGE_DIR}/index.vue`)],
-      ['定制订单列表', read(`${PAGE_DIR}/orders.vue`)],
+      ['统一订单列表', read('src/pages/orders-list/index.vue')],
     ];
 
     for (const [name, source] of sources) assertNoCredit(name, source);

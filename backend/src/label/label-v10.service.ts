@@ -101,8 +101,18 @@ export class LabelV10Service {
     const contentW = right - left;
     const bottomLimit = height - mm(PAD.bottom);
 
-    const ingredientItems = this.splitItems(labelData.foodIngredients);
+    const foodItems = this.splitItems(labelData.foodIngredients);
     const additiveItems = this.splitItems(labelData.additiveIngredients);
+    // 兼容还没升级的客户端：老口径把补剂放在 supplementIngredients 里。
+    // V10 没有「补剂」这一段，直接忽略会让补剂从标签上消失，
+    // 所以把还没并进原料的补剂补回原料组成（旧版就是这样并排显示的）。
+    const legacySupplementItems = this.splitItems(
+      labelData.supplementIngredients,
+    ).filter((item) => !foodItems.includes(item));
+    const ingredientItems =
+      legacySupplementItems.length > 0
+        ? [...foodItems, ...legacySupplementItems]
+        : foodItems;
     const specs = this.normalizeSpecs(labelData);
 
     // 字号档位：从大到小试，取能放下的最大一档，保证纸张被填满且不溢出

@@ -28,6 +28,7 @@ import {
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { StaffProductionService } from '../../application/production/kitchen.service';
 import { ProductionService } from '../../application/production/production.service';
+import { LabelIngredientInfoService } from '../../application/ingredient/label-ingredient-info.service';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import {
   AutoScheduleDto,
@@ -51,6 +52,7 @@ export class StaffProductionController {
     private readonly staffProductionService: StaffProductionService,
     private readonly productionService: ProductionService,
     private readonly cosService: TencentCosService,
+    private readonly labelIngredientInfoService: LabelIngredientInfoService,
   ) {}
 
   @Get('statistics/today')
@@ -474,6 +476,40 @@ export class StaffProductionController {
         id: unit.id,
         photosRaw: unit.photosRaw || [],
       },
+    };
+  }
+
+  @Get('ingredient-label-info')
+  @ApiOperation({
+    summary: '按原料 ID 获取标签分类与标签名称（打印标签时回查主数据）',
+    description:
+      '老订单快照里没有 label_category / label_names，打印前用它回查原料主数据，快照只做兜底。',
+  })
+  @ApiResponse({ status: 200, description: '原料标签信息' })
+  async getIngredientLabelInfo(
+    @Query('ids') ids?: string,
+  ): Promise<
+    ApiResponseDto<{
+      items: Array<{
+        id: string;
+        name: string;
+        type: string;
+        labelCategory: string | null;
+        labelNames: string[];
+      }>;
+    }>
+  > {
+    const idList = (ids || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+    const items = await this.labelIngredientInfoService.getByIngredientIds(
+      idList,
+    );
+    return {
+      code: 0,
+      message: 'Success',
+      data: { items },
     };
   }
 

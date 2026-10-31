@@ -554,6 +554,48 @@ export function getCookingTime(vacuumBagSpec: string) {
   return timeMap[size] || timeMap['12*17'];
 }
 
+export type IngredientLabelInfo = {
+  id: string;
+  labelCategory?: string | null;
+  labelNames?: string[] | null;
+};
+
+/**
+ * 用原料主数据里的标签字段覆盖快照（主数据优先，快照兜底）。
+ *
+ * 老订单（2026-10-30 之前）的快照里没有 label_category / label_names，
+ * 打印前回查原料库后，通过这里把分类补进快照再分组。
+ */
+export function applyIngredientLabelInfo(
+  recipeSnapshot: any,
+  labelInfo: Map<string, IngredientLabelInfo>
+) {
+  if (!recipeSnapshot || !Array.isArray(recipeSnapshot.items)) {
+    return recipeSnapshot;
+  }
+  return {
+    ...recipeSnapshot,
+    items: recipeSnapshot.items.map((item: any) => {
+      const info = item?.ingredient_id ? labelInfo.get(item.ingredient_id) : undefined;
+      if (!info) {
+        return item;
+      }
+      const properties = item.properties || {};
+      const labelNames = Array.isArray(info.labelNames)
+        ? info.labelNames.filter((name) => typeof name === 'string' && name.trim())
+        : [];
+      return {
+        ...item,
+        properties: {
+          ...properties,
+          label_category: info.labelCategory || properties.label_category,
+          label_names: labelNames.length > 0 ? labelNames : properties.label_names
+        }
+      };
+    })
+  };
+}
+
 /**
  * 格式化原料信息
  * @param recipeSnapshot 食谱快照
@@ -580,6 +622,16 @@ export function formatIngredients(recipeSnapshot: any, totalWeightG = 0) {
 
   const labelIssues: string[] = [];
 
+  /** 饲料原料：有占比就写占比，算不出就只写名称（法规不强制标占比） */
+  const pushFeedMaterial = (name: string, ratio: unknown) => {
+    const percentage = Number(ratio);
+    if (Number.isFinite(percentage) && percentage > 0) {
+      foodIngredients.push(`${name}${percentage.toFixed(2)}%`);
+    } else {
+      foodIngredients.push(name);
+    }
+  };
+
   recipeSnapshot.items.forEach((item: any) => {
     const props = item.properties || {};
     const labelCategory = props.label_category as string | undefined;
@@ -593,10 +645,13 @@ export function formatIngredients(recipeSnapshot: any, totalWeightG = 0) {
       ingredientIds.push(item.ingredient_id);
     }
 
-    // 补剂/食材是否要出现在标签上，由标签分类决定；没有分类的走旧口径
-    const isAdditive = labelCategory === 'FEED_ADDITIVE';
+    // 包材/耗材不上标签
+    if (labelCategory === 'NON_FEED') {
+      return;
+    }
 
-    if (isAdditive) {
+    // 补剂/食材是否要出现在标签上，由标签分类决定；没有分类的走旧口径
+    if (labelCategory === 'FEED_ADDITIVE') {
       if (labelNames.length === 0) {
         labelIssues.push(item.name);
       } else {
@@ -609,16 +664,29 @@ export function formatIngredients(recipeSnapshot: any, totalWeightG = 0) {
       return;
     }
 
-    if (item.ingredient_type === 'FOOD' && item.ratio) {
-      // ratio 已经是百分比值（如 25.51 表示 25.51%），直接格式化即可
-      const percentage = Number(item.ratio).toFixed(2);
-      const displayName = labelNames[0] || item.name;
-      foodIngredients.push(`${displayName}${percentage}%`);
-    } else if (item.ingredient_type === 'SUPPLEMENT') {
-      if (labelCategory && labelNames.length === 0) {
+    // 2026-10-30 起：饲料原料一律进「原料组成」，不再按食材/补剂区分。
+    // 海藻粉、酵母粉这类补剂其实是原料，以前被塞进补剂行，新排版会把它丢掉。
+    if (labelCategory === 'FEED_MATERIAL') {
+      if (labelNames.length === 0) {
         labelIssues.push(item.name);
         return;
       }
+      if (item.ingredient_type === 'FOOD' || item.ingredient_type === 'SUPPLEMENT') {
+        pushFeedMaterial(labelNames[0], item.ratio);
+      }
+      return;
+    }
+
+    // 没有标签分类：老快照。保持旧口径输出，但标记缺失，打印前会拦下。
+    if (item.ingredient_type === 'FOOD') {
+      labelIssues.push(item.name);
+      if (item.ratio) {
+        // ratio 已经是百分比值（如 25.51 表示 25.51%），直接格式化即可
+        const percentage = Number(item.ratio).toFixed(2);
+        foodIngredients.push(`${labelNames[0] || item.name}${percentage}%`);
+      }
+    } else if (item.ingredient_type === 'SUPPLEMENT') {
+      labelIssues.push(item.name);
       const supplementAmount = calculateSupplementAmountForProduction(item, totalWeightG, {
         includeProductionLoss: true
       });

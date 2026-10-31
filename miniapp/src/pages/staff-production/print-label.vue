@@ -240,6 +240,7 @@ import { ref, computed, onMounted, getCurrentInstance } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import jcPrinter from './utils/jcing-printer';
 import {
+  applyIngredientLabelInfo,
   drawProductionLabel,
   drawProductionLabelWithJCSDK,
   formatIngredients,
@@ -251,7 +252,7 @@ import {
   getLifeStageLabel,
   getHealthTagLabel
 } from '../../utils/label-mapping';
-import { getRecipeBatchesWithOrders } from './api/production';
+import { getRecipeBatchesWithOrders, getIngredientLabelInfo } from './api/production';
 import { generateLabelImage, type LabelData as ApiLabelData } from './api/label';
 import {
   expandOrderPrintLabels,
@@ -649,8 +650,14 @@ async function previewLabel(order: OrderPrintConfig) {
     uni.showLoading({ title: '生成预览中...' });
 
     // 准备标签数据
-    const { data: labelData, labelIssues } = prepareLabelData(order);
+    const prepared = await prepareLabelData(order);
+    if (!prepared) {
+      uni.hideLoading();
+      return;
+    }
+    const { data: labelData, labelIssues } = prepared;
     if (!guardLabelInfoCompleteness(labelIssues)) {
+      uni.hideLoading();
       return;
     }
 
@@ -695,16 +702,82 @@ function closePreview() {
   }
 }
 
+type ResolvedIngredientLabelInfo = {
+  id: string;
+  name: string;
+  type: string;
+  labelCategory: 'FEED_MATERIAL' | 'FEED_ADDITIVE' | 'NON_FEED' | null;
+  labelNames: string[];
+};
+
+// 本次进入页面后查到的原料标签信息（同一次打印多个标签项时只查一次）
+const ingredientLabelInfoCache = new Map<string, ResolvedIngredientLabelInfo>();
+
+/**
+ * 打印标签前回查原料主数据里的标签分类/名称。
+ *
+ * 为什么不在快照里取：快照冻结在下单那一刻，2026-10-30 之前的老订单
+ * 快照里没有 label_category，直接分组会让「添加剂组成」消失、补剂被丢掉。
+ * 返回 null 表示没查到（网络/接口失败），调用方必须放弃本次打印。
+ */
+async function loadIngredientLabelInfo(
+  ids: string[]
+): Promise<Map<string, ResolvedIngredientLabelInfo> | null> {
+  const missing = Array.from(new Set(ids.filter(Boolean))).filter(
+    (id) => !ingredientLabelInfoCache.has(id)
+  );
+  if (missing.length === 0) {
+    return ingredientLabelInfoCache;
+  }
+
+  try {
+    const response = await getIngredientLabelInfo(missing);
+    if (response.code !== 0 || !response.data) {
+      return null;
+    }
+    response.data.items.forEach((item) => {
+      ingredientLabelInfoCache.set(item.id, item);
+    });
+    return ingredientLabelInfoCache;
+  } catch (error) {
+    console.error('[PrintLabel] 读取原料标签信息失败:', error);
+    return null;
+  }
+}
+
+/** 用原料主数据覆盖快照里的标签字段（主数据优先，快照兜底） */
 // 准备标签数据
-function prepareLabelData(order: OrderPrintConfig): { data: LabelData; labelIssues: string[] } {
+async function prepareLabelData(
+  order: OrderPrintConfig
+): Promise<{ data: LabelData; labelIssues: string[] } | null> {
   // 调试：输出完整的recipeSnapshot结构
   console.log('[PrintLabel] recipeSnapshot完整结构:', JSON.stringify(order.recipeSnapshot, null, 2));
   console.log('[PrintLabel] nutrition_detailed_data是否存在:', !!order.recipeSnapshot?.nutrition_detailed_data);
   console.log('[PrintLabel] nutrition_detailed_data内容:', order.recipeSnapshot?.nutrition_detailed_data);
 
+  const snapshotItems = Array.isArray(order.recipeSnapshot?.items)
+    ? order.recipeSnapshot.items
+    : [];
+  const ingredientIds = snapshotItems
+    .map((item: any) => item?.ingredient_id)
+    .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0);
+
+  const labelInfo = await loadIngredientLabelInfo(ingredientIds);
+  if (!labelInfo) {
+    uni.showModal({
+      title: '无法读取原料标签信息',
+      content: '连接服务器失败，请检查网络后重试。\n\n为避免打出缺项的标签，本次不生成。',
+      showCancel: false,
+      confirmText: '知道了'
+    });
+    return null;
+  }
+
+  const resolvedSnapshot = applyIngredientLabelInfo(order.recipeSnapshot, labelInfo);
+
   // 获取生命阶段和健康标签
-  const lifeStages = order.recipeSnapshot?.applicable_life_stages || [];
-  const healthTags = order.recipeSnapshot?.target_health_tags || [];
+  const lifeStages = resolvedSnapshot?.applicable_life_stages || [];
+  const healthTags = resolvedSnapshot?.target_health_tags || [];
   const packagePlan = normalizePackagePlanRows(order.packagePlan);
   const firstPackageRow = packagePlan[0];
   const weightPerPack = firstPackageRow?.packageSpecG ?? Number(order.packageSpecG || 0);
@@ -714,21 +787,21 @@ function prepareLabelData(order: OrderPrintConfig): { data: LabelData; labelIssu
     : getPackagePlanTotalWeight(order);
 
   // 使用当前订单净重计算补剂实际添加总量
-  const formatted = formatIngredients(order.recipeSnapshot, totalWeight);
+  const formatted = formatIngredients(resolvedSnapshot, totalWeight);
   const foodIngredients = formatted.foodIngredients;
   const supplementIngredients = formatted.supplementIngredients;
 
   // 提取营养成分分析数据（字段名与数据库保持一致）
-  const nutritionAnalysis = order.recipeSnapshot?.nutrition_detailed_data ? {
-    proteinPercent: order.recipeSnapshot.nutrition_detailed_data.protein_dm_pct,
-    fatPercent: order.recipeSnapshot.nutrition_detailed_data.fat_dm_pct,
-    ashPercent: order.recipeSnapshot.nutrition_detailed_data.ash_dm_pct,
-    moisturePercent: order.recipeSnapshot.nutrition_detailed_data.moisture_pct,
-    crudeFiberPercent: order.recipeSnapshot.nutrition_detailed_data.fiber_dm_pct,
-    carbohydratePercent: order.recipeSnapshot.nutrition_detailed_data.carbs_dm_pct,
+  const nutritionAnalysis = resolvedSnapshot?.nutrition_detailed_data ? {
+    proteinPercent: resolvedSnapshot.nutrition_detailed_data.protein_dm_pct,
+    fatPercent: resolvedSnapshot.nutrition_detailed_data.fat_dm_pct,
+    ashPercent: resolvedSnapshot.nutrition_detailed_data.ash_dm_pct,
+    moisturePercent: resolvedSnapshot.nutrition_detailed_data.moisture_pct,
+    crudeFiberPercent: resolvedSnapshot.nutrition_detailed_data.fiber_dm_pct,
+    carbohydratePercent: resolvedSnapshot.nutrition_detailed_data.carbs_dm_pct,
     // 优先使用recipeSnapshot根级别的energyDensityKcalPerKg（1494），而不是nutrition_detailed_data里的（1500）
-    energyDensityKcalPerKg: order.recipeSnapshot.energy_density_kcal_per_kg ?? order.recipeSnapshot.nutrition_detailed_data.energy_density_kcal_per_kg,
-    calciumPhosphorusRatio: order.recipeSnapshot.nutrition_detailed_data.ca_p_ratio?.toString()
+    energyDensityKcalPerKg: resolvedSnapshot.energy_density_kcal_per_kg ?? resolvedSnapshot.nutrition_detailed_data.energy_density_kcal_per_kg,
+    calciumPhosphorusRatio: resolvedSnapshot.nutrition_detailed_data.ca_p_ratio?.toString()
   } : undefined;
 
   console.log('[PrintLabel] 提取的nutritionAnalysis:', nutritionAnalysis);
@@ -737,7 +810,7 @@ function prepareLabelData(order: OrderPrintConfig): { data: LabelData; labelIssu
     data: {
       brandName: 'seven的厨房',
       recipeName: order.recipeName,
-      nutritionStandard: order.recipeSnapshot?.nutrition_standard || 'FEDIAF_2021',
+      nutritionStandard: resolvedSnapshot?.nutrition_standard || 'FEDIAF_2021',
       lifeStages,
       healthTags,
       dogName: order.dogName,
@@ -830,7 +903,12 @@ async function printSingleOrder(order: OrderPrintConfig) {
 
       try {
         // 准备标签数据
-        const { data: labelData, labelIssues } = prepareLabelData(order);
+        const prepared = await prepareLabelData(order);
+        if (!prepared) {
+          uni.hideLoading();
+          return;
+        }
+        const { data: labelData, labelIssues } = prepared;
         if (!guardLabelInfoCompleteness(labelIssues)) {
           uni.hideLoading();
           return;

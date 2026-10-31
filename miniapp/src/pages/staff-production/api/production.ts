@@ -292,6 +292,29 @@ export function deleteProductionPhoto(unitId: string, photoUrl: string) {
 }
 
 /**
+ * 按原料 ID 获取标签分类与标签名称。
+ *
+ * 订单快照冻结在下单那一刻，2026-10-30 之前的老订单快照里没有
+ * label_category / label_names。打印前用这个接口回查原料主数据，
+ * 快照只做兜底，避免「添加剂组成」整段消失、补剂被丢掉。
+ */
+export function getIngredientLabelInfo(ids: string[]) {
+  return request<{
+    items: Array<{
+      id: string;
+      name: string;
+      type: string;
+      labelCategory: 'FEED_MATERIAL' | 'FEED_ADDITIVE' | 'NON_FEED' | null;
+      labelNames: string[];
+    }>;
+  }>({
+    url: '/staff/production/ingredient-label-info',
+    method: 'GET',
+    data: { ids: ids.join(',') },
+  });
+}
+
+/**
  * 获取食谱的所有批次及订单（用于批量打印标签）
  * 在第一个批次中可以打印该食谱所有批次的订单标签
  */

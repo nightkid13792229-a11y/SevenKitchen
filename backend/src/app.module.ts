@@ -126,6 +126,7 @@ import {
   INGREDIENT_REPOSITORY,
 } from './application/ingredient/ingredient.service';
 import { IngredientPricingService } from './application/ingredient/ingredient-pricing.service';
+import { LabelIngredientInfoService } from './application/ingredient/label-ingredient-info.service';
 import { PrismaIngredientRepository } from './infrastructure/repositories/prisma-ingredient.repository';
 // import { InMemoryIngredientRepository } from './infrastructure/repositories/in-memory-ingredient.repository'; // NOTE: Currently unused
 // import { Ingredient } from './domain/ingredient'; // NOTE: Currently unused (seed disabled)
@@ -607,6 +608,7 @@ validatePrismaConfig();
     AuthGuard,
     IngredientService,
     IngredientPricingService,
+    LabelIngredientInfoService,
     {
       provide: INGREDIENT_REPOSITORY,
       useClass: PrismaIngredientRepository,

@@ -457,12 +457,15 @@
               <el-table-column prop="name" label="词条名称" min-width="150" />
               <el-table-column prop="sourceType" label="来源库" width="88" />
               <el-table-column prop="state" label="状态" width="90" />
-              <el-table-column label="覆盖率" width="92">
+              <el-table-column label="字段覆盖率（60 项）" width="140">
                 <template #default="{ row }">{{ row.coverage }}%</template>
               </el-table-column>
               <el-table-column prop="reason" label="入选原因" min-width="200" />
             </el-table>
           </div>
+          <p v-else class="agent-plan__empty">
+            这次没有可选的营养档案：可以继续补检索词重查，或告诉我改去线上补充。
+          </p>
 
           <div class="agent-plan__row">
             <span class="agent-plan__label">搜索词</span>

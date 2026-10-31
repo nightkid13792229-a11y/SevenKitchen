@@ -463,7 +463,7 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
       total: 42,
       found: true,
     });
-    expect((result.toolCalls[0]?.result as any).names[0]).toEqual({
+    expect((result.toolCalls[0]?.result as any).groups[0].hits[0]).toMatchObject({
       id: 'rec-liver-raw',
       name: 'Chicken, liver, raw',
       sourceType: 'USDA_FDC',
@@ -2422,11 +2422,31 @@ describe('IngredientDraftAgentService · 检索方案闸门', () => {
             keywords: [{ term: '鸡蛋清', language: 'zh' }],
             libraries: ['CFCT'],
             findings: 'CFCT 2 条',
+            candidates: [
+              {
+                recordId: 'rec-1',
+                name: '鸡蛋白',
+                state: '生',
+                profileState: 'RAW',
+                reason: '中文口径',
+              },
+            ],
           }),
         ),
       );
     global.fetch = fetchMock as unknown as typeof global.fetch;
-    const harness = createHarness();
+    const harness = createHarness({
+      sourceRecords: [
+        {
+          id: 'rec-1',
+          status: 'ACTIVE',
+          sourceType: 'CFCT',
+          foodName: '鸡蛋白',
+          foodNameEn: null,
+          normalizedNutrition: {},
+        },
+      ],
+    });
     const events: any[] = [];
 
     const result = await harness.agent.run(

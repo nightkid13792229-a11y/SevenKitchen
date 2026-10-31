@@ -744,7 +744,14 @@ export function buildToolResultSummary(
         typeof result.total === 'number' && Number.isFinite(result.total)
           ? Math.floor(result.total)
           : 0;
-      const returned = Array.isArray(result.names) ? result.names.length : 0;
+      const returned = Array.isArray(result.groups)
+        ? result.groups.reduce((sum, group) => {
+            if (!isRecord(group) || !Array.isArray(group.hits)) {
+              return sum;
+            }
+            return sum + group.hits.length;
+          }, 0)
+        : 0;
       if (result.found !== true) {
         return '没有找到匹配词条';
       }
@@ -859,22 +866,35 @@ function buildSearchStepEvidence(
     firstKeyword || readTextValue(parsed.keyword),
     STEP_KEYWORD_MAX,
   );
-  if (Array.isArray(parsed.names)) {
-    for (const entry of parsed.names) {
-      if (!isRecord(entry)) {
+  // 行数据只在 groups[].hits 里（不再有扁平 names），按库逐个取，按 id 去重。
+  const seenIds = new Set<string>();
+  if (Array.isArray(parsed.groups)) {
+    outer: for (const group of parsed.groups) {
+      if (!isRecord(group) || !Array.isArray(group.hits)) {
         continue;
       }
-      matches.push({
-        name:
-          oneLine(readTextValue(entry.name) || '（未知词条）', STEP_NAME_MAX) ||
-          '（未知词条）',
-        // searchNames 只按名字命中；没有 AI 复核与分类。
-        matchedBy: 'NAME',
-        matchedKeyword,
-        score: null,
-      });
-      if (matches.length >= STEP_MATCH_LIMIT) {
-        break;
+      for (const entry of group.hits) {
+        if (!isRecord(entry)) {
+          continue;
+        }
+        const id = readTextValue(entry.id);
+        if (id && seenIds.has(id)) {
+          continue;
+        }
+        if (id) {
+          seenIds.add(id);
+        }
+        matches.push({
+          name:
+            oneLine(readTextValue(entry.name) || '（未知词条）', STEP_NAME_MAX) ||
+            '（未知词条）',
+          matchedBy: 'NAME',
+          matchedKeyword,
+          score: null,
+        });
+        if (matches.length >= STEP_MATCH_LIMIT) {
+          break outer;
+        }
       }
     }
   }
@@ -1236,7 +1256,7 @@ function buildDraftPromptLines(draft: IngredientCreationDraft): string[] {
   const searchPlan = readSearchPlan(draft.payload.searchPlan);
   if (!searchPlan) {
     lines.push(
-      '【检索方案】还没有提交过。查库、汇总、读来源可以自由做；**一旦查到候选，就先调用 proposeSearchPlan 提交方案**（把候选放进 candidates、主选放进 chosenRecordId），不要在交方案前用 askUser 问「要哪一条」。要写原料卡或营养之前，方案必须已确认。',
+      '【检索方案】还没有提交过。查库、汇总、读来源可以自由做；**一旦查到候选，就先调用 proposeSearchPlan 提交方案**（把候选放进 candidates，每条都给 recordId / profileState / reason），不要在交方案前用 askUser 问「要哪一条」。要写原料卡或营养之前，方案必须已确认。',
     );
   } else if (searchPlan.status === 'PENDING') {
     lines.push(
@@ -1257,7 +1277,7 @@ function buildDraftPromptLines(draft: IngredientCreationDraft): string[] {
           (selection) =>
             `${selection.name}（${selection.sourceType}，${
               selection.profileState === 'RAW' ? '生' : '熟'
-            }）`,
+            }，recordId=${selection.recordId}）`,
         )
         .join('、')}；已确认，每条记录各写一份档案（新建档案时带对应的 preparationState：RAW / COOKED）。`,
     );

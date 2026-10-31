@@ -23,6 +23,7 @@ whenToUse: 已经拿到候选、准备提交检索方案之前
 ## 方案怎么写
 
 - candidates 全部列出、按推荐排序；不要挑一条就说“库里只有这一条”；
-- name 只写库里原名，不要拼来源 key；
+- 每条候选都要给：`recordId`、`name`（库里原名，不拼编号）、`state`（展示用生/熟/干）、
+  `profileState`（写档案用 RAW / COOKED）、`reason`（一句话入选原因）；
 - 生熟都要时，两个状态各给一条建议，一份档案一条来源；
 - rationale 一句话说清为什么。

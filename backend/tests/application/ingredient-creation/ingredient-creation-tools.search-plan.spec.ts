@@ -159,6 +159,26 @@ describe('IngredientCreationToolsService · 检索方案', () => {
     );
   });
 
+  it('工具定义要求每条候选带 profileState 与 reason，且不再有单主选字段', () => {
+    const { tools } = createHarness();
+    const definition = tools
+      .getDefinitions()
+      .find((tool) => tool.function.name === 'proposeSearchPlan');
+
+    const parameters = definition?.function.parameters as {
+      properties: Record<string, any>;
+    };
+    const candidates = parameters.properties.candidates;
+
+    expect(candidates.maxItems).toBe(12);
+    expect(candidates.items.required).toEqual(
+      expect.arrayContaining(['recordId', 'name', 'state', 'profileState', 'reason']),
+    );
+    expect(candidates.items.properties.profileState.enum).toEqual(['RAW', 'COOKED']);
+    expect(parameters.properties.chosenRecordId).toBeUndefined();
+    expect(parameters.properties.chosenRecordName).toBeUndefined();
+  });
+
   it('没有按库检索过 → 拒绝交方案', async () => {
     const { tools } = createHarness({ searchReport: [] });
 

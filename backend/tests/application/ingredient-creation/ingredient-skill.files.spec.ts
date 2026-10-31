@@ -33,7 +33,7 @@ describe('IngredientSkillService · 仓库里的真实技能文件', () => {
     expect(body).toContain('必须选覆盖率高的');
     expect(body).toContain('未标生熟');
     // 候选名只写原名，不拼来源 key。
-    expect(body).toContain('不要拼来源 key');
+    expect(body).toContain('不拼编号');
   });
 
   it('名字扩展：简繁两种写法要同时给 CFCT 和 TFDA', () => {

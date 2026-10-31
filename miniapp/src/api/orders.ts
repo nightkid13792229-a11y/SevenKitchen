@@ -62,12 +62,15 @@ export interface CustomerOrderFinancialSummary {
     status: 'PENDING' | 'SETTLED' | 'CANCELLED' | string;
     requiresCustomerPayment: boolean;
     visibleToCustomer: boolean;
+    createdBy?: string;
+    createdById?: string | null;
     settledAt: string | null;
     createdAt: string | null;
   }>;
   latestSettlement: {
     plannedOutputG: number;
     actualOutputG: number;
+    surplusG?: number;
     shortageG: number;
     settledAt: string | null;
   } | null;
@@ -511,5 +514,42 @@ export function retryWechatRefund(
       amount,
       reason,
     },
+  });
+}
+
+export interface OrderSettlementAdjustmentInput {
+  amount: number;
+  reason: string;
+  adjustmentType?: 'REFUND' | 'EXTRA_PAYMENT';
+  visibleToCustomer?: boolean;
+  requiresCustomerPayment?: boolean;
+  requestId?: string;
+}
+
+/**
+ * 员工工作台录入成品调整（退款/补收）。
+ * 仅记账并决定顾客是否可见，不直接动钱。
+ */
+export function createOrderSettlementAdjustment(
+  orderId: string,
+  payload: OrderSettlementAdjustmentInput,
+) {
+  return request({
+    url: `/admin/orders/${orderId}/settlement-adjustments`,
+    method: 'POST',
+    data: payload,
+  });
+}
+
+/** 管理员把一条成品调整标记为已处理/已取消。 */
+export function updateOrderSettlementAdjustmentStatus(
+  orderId: string,
+  adjustmentId: string,
+  status: 'PENDING' | 'SETTLED' | 'CANCELLED',
+) {
+  return request({
+    url: `/admin/orders/${orderId}/settlement-adjustments/${adjustmentId}/status`,
+    method: 'PATCH',
+    data: { status },
   });
 }

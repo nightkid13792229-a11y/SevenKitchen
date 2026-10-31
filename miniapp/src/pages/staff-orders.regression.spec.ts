@@ -279,3 +279,63 @@ describe('staff order detail · 状态改版', () => {
     expect(detailSource).toContain('carrierLabel');
   });
 });
+
+/**
+ * 2026-10-31：工作台成品调整。
+ *
+ * 员工在生产现场发现缺口后，不用回电脑后台；这里只记账并决定
+ * 顾客是否可见，实际退款仍走原退款流程。
+ */
+describe('staff order detail · 成品调整', () => {
+  it('生产结算后才出现，并显示计划/实际/缺口或余量', () => {
+    expect(detailSource).toContain('settlementAdjustmentVisible');
+    expect(detailSource).toContain('settlementShortageG');
+    expect(detailSource).toContain('settlementSurplusG');
+    expect(detailSource).toContain('成品调整');
+    expect(detailSource).toContain('计划成品');
+    expect(detailSource).toContain('实际成品');
+  });
+
+  it('读取财务汇总，并复用现有结算调整接口', () => {
+    expect(detailSource).toContain('getAdminOrderFinancialSummary');
+    expect(detailSource).toContain('createOrderSettlementAdjustment');
+    expect(detailSource).toContain('updateOrderSettlementAdjustmentStatus');
+    expect(ordersApiSource).toContain(
+      '/admin/orders/${orderId}/settlement-adjustments',
+    );
+    expect(ordersApiSource).toContain(
+      '/admin/orders/${orderId}/settlement-adjustments/${adjustmentId}/status',
+    );
+  });
+
+  it('按缺口预填建议退款金额，但仍允许修改', () => {
+    expect(detailSource).toContain('settlementSuggestedRefundAmount');
+    expect(detailSource).toContain('settlementAmountDraft');
+    expect(detailSource).toContain(
+      'settlementAdjustmentType.value = shortage > 0 ?',
+    );
+    expect(detailSource).toContain('退款/补收都填正数');
+  });
+
+  it('员工可录，只有管理员能标记已处理', () => {
+    expect(detailSource).toContain('const isAdminUser');
+    expect(detailSource).toContain('markSettlementAdjustmentHandled');
+    expect(detailSource).toContain('标记已处理');
+    expect(detailSource).toContain(
+      'await updateOrderSettlementAdjustmentStatus(',
+    );
+  });
+
+  it('只记账不动钱，并明确告诉员工', () => {
+    expect(detailSource).toContain(
+      '这里只记账，不会直接退钱；退款仍走原退款流程。',
+    );
+    expect(detailSource).toContain('顾客可见');
+    expect(detailSource).toContain('visibleToCustomer');
+  });
+
+  it('带幂等键，弱网重试不会重复记账', () => {
+    expect(detailSource).toContain('settlementRequestId');
+    expect(detailSource).toContain('requestId: settlementRequestId.value');
+  });
+});

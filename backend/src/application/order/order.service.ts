@@ -151,6 +151,7 @@ export interface OrderFinancialSummaryDto {
     productionBatchSettlementId: string;
     plannedOutputG: number;
     actualOutputG: number;
+    surplusG: number;
     shortageG: number;
     settledAt: string | null;
     createdAt: string | null;
@@ -234,6 +235,8 @@ export interface CreateOrderSettlementAdjustmentInput {
   requiresCustomerPayment?: boolean;
   createdBy?: 'admin' | 'staff' | 'system';
   createdById?: string | null;
+  /** 客户端幂等键：同一订单重复提交时返回同一条记录，不会重复记账。 */
+  requestId?: string | null;
   metadata?: unknown;
 }
 
@@ -577,6 +580,19 @@ export class OrderService {
       revenue,
     );
     const refundStatus = this.getWechatRefundStatus(adjustments);
+    const batchSettlement = latestSettlement?.productionBatchSettlement;
+    const batchPlannedOutputG = this.toNumber(
+      batchSettlement?.plannedOutputG,
+    );
+    const orderSurplusG =
+      latestSettlement && batchPlannedOutputG > 0
+        ? Math.round(
+            ((this.toNumber(batchSettlement?.surplusG) *
+              this.toNumber(latestSettlement.plannedOutputG)) /
+              batchPlannedOutputG) *
+              1000,
+          ) / 1000
+        : 0;
 
     return {
       orderId: order.id,
@@ -610,6 +626,7 @@ export class OrderService {
               latestSettlement.productionBatchSettlementId,
             plannedOutputG: latestSettlement.plannedOutputG,
             actualOutputG: latestSettlement.actualOutputG,
+            surplusG: orderSurplusG,
             shortageG: latestSettlement.shortageG,
             settledAt:
               latestSettlement.productionBatchSettlement.settledAt?.toISOString() ??
@@ -690,26 +707,57 @@ export class OrderService {
       input.adjustmentType ?? (amount > 0 ? 'EXTRA_PAYMENT' : 'REFUND');
     const requiresCustomerPayment =
       input.requiresCustomerPayment ?? amount > 0;
+    const requestId = input.requestId?.trim() || null;
+    if (requestId && requestId.length > 80) {
+      throw new BadRequestException('Adjustment requestId is too long');
+    }
+    // 手机工作台弱网下容易重复点提交：用客户端 requestId 当 sourceId，
+    // 命中 (orderId, sourceType, sourceId) 唯一索引时直接返回原记录。
+    const sourceId = requestId ?? id;
+    if (requestId) {
+      const existing = await this.prisma.orderSettlementAdjustment.findFirst({
+        where: { orderId: input.orderId, sourceType: 'MANUAL', sourceId },
+      });
+      if (existing) {
+        return this.mapOrderSettlementAdjustment(existing);
+      }
+    }
 
-    const adjustment = await this.prisma.orderSettlementAdjustment.create({
-      data: {
-        id,
-        orderId: input.orderId,
-        sourceType: 'MANUAL',
-        sourceId: id,
-        adjustmentType,
-        amount,
-        reason,
-        status: 'PENDING',
-        requiresCustomerPayment,
-        visibleToCustomer: input.visibleToCustomer ?? true,
-        createdBy: input.createdBy ?? 'admin',
-        createdById: input.createdById ?? null,
-        metadata: (input.metadata ?? null) as any,
-      },
-    });
+    try {
+      const adjustment = await this.prisma.orderSettlementAdjustment.create({
+        data: {
+          id,
+          orderId: input.orderId,
+          sourceType: 'MANUAL',
+          sourceId,
+          adjustmentType,
+          amount,
+          reason,
+          status: 'PENDING',
+          requiresCustomerPayment,
+          visibleToCustomer: input.visibleToCustomer ?? true,
+          createdBy: input.createdBy ?? 'admin',
+          createdById: input.createdById ?? null,
+          metadata: (input.metadata ?? null) as any,
+        },
+      });
 
-    return this.mapOrderSettlementAdjustment(adjustment);
+      return this.mapOrderSettlementAdjustment(adjustment);
+    } catch (error) {
+      if (
+        requestId &&
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const existing = await this.prisma.orderSettlementAdjustment.findFirst({
+          where: { orderId: input.orderId, sourceType: 'MANUAL', sourceId },
+        });
+        if (existing) {
+          return this.mapOrderSettlementAdjustment(existing);
+        }
+      }
+      throw error;
+    }
   }
 
   async updateOrderSettlementAdjustmentStatus(

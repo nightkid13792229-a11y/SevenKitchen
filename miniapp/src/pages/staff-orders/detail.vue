@@ -208,6 +208,144 @@
         </view>
       </view>
 
+      <!-- 成品调整（2026-10-31）：生产结算后的缺口/余量，员工录一笔给顾客看的退款/补款 -->
+      <view v-if="settlementAdjustmentVisible" class="card settlement-card">
+        <view class="card-title">
+          成品调整
+          <text class="card-note">生产结算后</text>
+        </view>
+
+        <view class="settlement-metrics">
+          <view class="settlement-metric">
+            <text class="settlement-metric-label">计划成品</text>
+            <text class="settlement-metric-value">
+              {{ Math.round(financialSummary?.latestSettlement?.plannedOutputG || 0) }}g
+            </text>
+          </view>
+          <view class="settlement-metric">
+            <text class="settlement-metric-label">实际成品</text>
+            <text class="settlement-metric-value">
+              {{ Math.round(financialSummary?.latestSettlement?.actualOutputG || 0) }}g
+            </text>
+          </view>
+          <view class="settlement-metric">
+            <text class="settlement-metric-label">{{ settlementShortageG > 0 ? '缺口' : '余量' }}</text>
+            <text class="settlement-metric-value" :class="{ warning: settlementShortageG > 0 }">
+              {{ settlementShortageG > 0 ? settlementShortageG : settlementSurplusG }}g
+            </text>
+          </view>
+        </view>
+
+        <text class="settlement-hint">{{ settlementHint }}</text>
+
+        <view v-if="settlementAdjustments.length" class="settlement-list">
+          <view
+            v-for="adjustment in settlementAdjustments"
+            :key="adjustment.id"
+            class="settlement-item"
+          >
+            <view class="settlement-item-main">
+              <text class="settlement-item-reason">{{ adjustment.reason }}</text>
+              <text class="settlement-item-meta">
+                {{ settlementStatusText(adjustment.status) }}
+                · {{ settlementSourceText(adjustment.createdBy) }}
+                · {{ adjustment.visibleToCustomer ? '顾客可见' : '仅内部' }}
+              </text>
+            </view>
+            <view class="settlement-item-side">
+              <text
+                class="settlement-item-amount"
+                :class="{ refund: adjustment.amount < 0, extra: adjustment.amount > 0 }"
+              >
+                {{ settlementAmountText(adjustment.amount) }}
+              </text>
+              <button
+                v-if="isAdminUser && adjustment.status === 'PENDING'"
+                class="settlement-mark-btn"
+                :disabled="markingSettlementAdjustmentId === adjustment.id"
+                @tap="markSettlementAdjustmentHandled(adjustment)"
+              >
+                {{ markingSettlementAdjustmentId === adjustment.id ? '处理中...' : '标记已处理' }}
+              </button>
+            </view>
+          </view>
+        </view>
+
+        <view v-if="!settlementFormVisible" class="settlement-actions">
+          <button
+            class="address-action-btn primary"
+            :disabled="loadingFinancialSummary"
+            @tap="openSettlementAdjustmentForm"
+          >
+            录入成品调整
+          </button>
+        </view>
+
+        <view v-else class="settlement-form">
+          <view class="settlement-type-row">
+            <button
+              class="settlement-type-btn"
+              :class="{ active: settlementAdjustmentType === 'REFUND' }"
+              @tap="settlementAdjustmentType = 'REFUND'"
+            >
+              退款
+            </button>
+            <button
+              class="settlement-type-btn"
+              :class="{ active: settlementAdjustmentType === 'EXTRA_PAYMENT' }"
+              @tap="settlementAdjustmentType = 'EXTRA_PAYMENT'"
+            >
+              补收
+            </button>
+          </view>
+          <view class="form-item">
+            <text class="form-label">金额（元）</text>
+            <input
+              class="form-input"
+              v-model="settlementAmountDraft"
+              type="digit"
+              placeholder="退款/补收都填正数"
+            />
+          </view>
+          <view class="form-item">
+            <text class="form-label">原因（顾客可见时会给顾客看）</text>
+            <textarea
+              class="form-textarea"
+              v-model="settlementReasonDraft"
+              maxlength="200"
+              placeholder="例如：成品缺口 120g，退差价"
+            />
+          </view>
+          <view class="settlement-visible-row">
+            <text class="form-label">顾客可见</text>
+            <switch
+              :checked="settlementVisibleToCustomer"
+              color="#1e3a2f"
+              @change="onSettlementVisibleChange"
+            />
+          </view>
+          <text class="address-lock-hint">
+            这里只记账，不会直接退钱；退款仍走原退款流程。提交后顾客端会出现「成品调整」。
+          </text>
+          <view class="settlement-form-actions">
+            <button
+              class="address-action-btn secondary"
+              :disabled="savingSettlementAdjustment"
+              @tap="closeSettlementAdjustmentForm"
+            >
+              取消
+            </button>
+            <button
+              class="address-action-btn primary"
+              :disabled="savingSettlementAdjustment"
+              @tap="saveSettlementAdjustment"
+            >
+              {{ savingSettlementAdjustment ? '提交中...' : '提交' }}
+            </button>
+          </view>
+        </view>
+      </view>
+
       <!-- 管理员备注：只在开产前有用；开产后制作单已经带走了备注 -->
       <view v-if="remarkVisible" class="card">
         <view class="card-title">
@@ -554,6 +692,8 @@ import {
   bindOrderCustomerAddress as bindExistingOrderAddress,
   confirmOfflinePayment,
   createOrderCustomerAddress,
+  createOrderSettlementAdjustment,
+  getAdminOrderFinancialSummary,
   listOrderCustomerDogs,
   listOrderCustomerAddresses,
   retryWechatRefund,
@@ -561,7 +701,9 @@ import {
   updateAdminOrderRemark,
   updateOrderCustomerAddress,
   updateOrderItemPackagePlan,
+  updateOrderSettlementAdjustmentStatus,
   updateStaffCustomerServiceAmount,
+  type CustomerOrderFinancialSummary,
   type OrderPackagePlanItem,
   type StaffOrderAddress,
   type StaffOrderDog,
@@ -755,6 +897,17 @@ const refundVisible = ref(false)
 const refundAmountDraft = ref('')
 const refundReason = ref('')
 const savingRefund = ref(false)
+/** 成品调整（2026-10-31）：生产结算后的缺口/余量 → 顾客可见的退款/补款记录 */
+const financialSummary = ref<CustomerOrderFinancialSummary | null>(null)
+const loadingFinancialSummary = ref(false)
+const settlementFormVisible = ref(false)
+const settlementAdjustmentType = ref<'REFUND' | 'EXTRA_PAYMENT'>('REFUND')
+const settlementAmountDraft = ref('')
+const settlementReasonDraft = ref('')
+const settlementVisibleToCustomer = ref(true)
+const savingSettlementAdjustment = ref(false)
+const markingSettlementAdjustmentId = ref('')
+const settlementRequestId = ref('')
 const addressFormMode = ref<'create' | 'edit'>('create')
 const editingAddressId = ref('')
 const addressRegionValue = ref<string[]>([])
@@ -830,6 +983,74 @@ const canAdminRefund = computed(() => {
   const paid = order.value.paymentStatus === 'SUCCESS' || Boolean(order.value.paidAt)
   const refunded = order.value.refundStatus?.success === true
   return user?.role === 'ADMIN' && paid && order.value.paymentMethod === 'WECHAT_PAY' && !refunded
+})
+
+/* ===== 成品调整（2026-10-31）===== */
+/** 员工能录入，只有管理员能标记已处理；钱不在这里动。 */
+const isAdminUser = computed(() => getStoredUser()?.role === 'ADMIN')
+const settlementShortageG = computed(() =>
+  Math.max(0, Math.round(toNumber(financialSummary.value?.latestSettlement?.shortageG))),
+)
+const settlementSurplusG = computed(() => {
+  const latest = financialSummary.value?.latestSettlement
+  if (!latest) return 0
+  if (typeof latest.surplusG === 'number') {
+    return Math.max(0, Math.round(latest.surplusG))
+  }
+  return Math.max(
+    0,
+    Math.round(
+      toNumber(latest.actualOutputG) -
+        toNumber(latest.plannedOutputG) +
+        toNumber(latest.shortageG),
+    ),
+  )
+})
+const settlementAdjustmentVisible = computed(() => {
+  const summary = financialSummary.value
+  if (!summary || !order.value || order.value.status === 'CANCELLED') return false
+  if (summary.settlementStatus !== 'SETTLED') return false
+  return (
+    settlementShortageG.value > 0 ||
+    settlementSurplusG.value > 0 ||
+    (summary.adjustments?.length || 0) > 0
+  )
+})
+const settlementAdjustments = computed(
+  () => financialSummary.value?.adjustments || [],
+)
+const settlementSuggestedRefundAmount = computed(() =>
+  Math.abs(toNumber(financialSummary.value?.shortageAdjustmentAmount)),
+)
+const settlementPendingText = computed(() => {
+  const summary = financialSummary.value?.adjustmentSummary
+  if (!summary) return ''
+  if (toNumber(summary.pendingRefundAmount) > 0) {
+    return `待退 ¥${formatAmount(summary.pendingRefundAmount)}`
+  }
+  if (toNumber(summary.pendingExtraPaymentAmount) > 0) {
+    return `待补 ¥${formatAmount(summary.pendingExtraPaymentAmount)}`
+  }
+  return ''
+})
+const settlementHint = computed(() => {
+  if (!financialSummary.value) return ''
+  if (settlementPendingText.value) {
+    const delta =
+      settlementShortageG.value > 0
+        ? `缺口 ${settlementShortageG.value}g`
+        : `余量 ${settlementSurplusG.value}g`
+    return `顾客端显示：${settlementPendingText.value}（${delta}）`
+  }
+  if (settlementShortageG.value > 0) {
+    return `缺口 ${settlementShortageG.value}g，建议退 ¥${formatAmount(
+      settlementSuggestedRefundAmount.value,
+    )}；提交后顾客端才会出现成品调整。`
+  }
+  if (settlementSurplusG.value > 0) {
+    return `余量 ${settlementSurplusG.value}g，通常不补收；如要补收请手填金额。`
+  }
+  return '本次调整已处理，顾客端不再提示。'
 })
 
 /* ===== 2026-10-30 改版：状态 → 颜色 / 四段进度 / 主操作 ===== */
@@ -1177,6 +1398,7 @@ async function loadOrderDetail() {
       order.value = response.data
       remarkDraft.value = response.data.adminRemark || ''
       void ensureProductionPhotoShareToken()
+      void loadOrderFinancialSummary()
     }
   } catch (error: any) {
     console.error('[OrderDetail] Load error:', error)
@@ -1187,6 +1409,25 @@ async function loadOrderDetail() {
   } finally {
     loading.value = false
     uni.hideLoading()
+  }
+}
+
+/**
+ * 读取生产结算摘要（管理员/员工都能读）。
+ * 没有结算、接口失败都静默当成"还没有成品调整"，不影响主页面。
+ */
+async function loadOrderFinancialSummary() {
+  if (!orderId.value) return
+  loadingFinancialSummary.value = true
+  try {
+    const response = await getAdminOrderFinancialSummary(orderId.value)
+    financialSummary.value =
+      response.code === 0 && response.data ? response.data : null
+  } catch (error) {
+    console.error('[OrderDetail] Financial summary error:', error)
+    financialSummary.value = null
+  } finally {
+    loadingFinancialSummary.value = false
   }
 }
 
@@ -1937,6 +2178,166 @@ async function savePackagePlan() {
   } finally {
     savingPackage.value = false
   }
+}
+
+function openSettlementAdjustmentForm() {
+  if (!order.value || savingSettlementAdjustment.value) return
+  const shortage = settlementShortageG.value
+  settlementAdjustmentType.value = shortage > 0 ? 'REFUND' : 'EXTRA_PAYMENT'
+  settlementAmountDraft.value =
+    shortage > 0 && settlementSuggestedRefundAmount.value > 0
+      ? formatAmount(settlementSuggestedRefundAmount.value)
+      : ''
+  settlementReasonDraft.value =
+    shortage > 0
+      ? `成品缺口 ${shortage}g，退差价`
+      : settlementSurplusG.value > 0
+        ? `成品余量 ${settlementSurplusG.value}g`
+        : ''
+  settlementVisibleToCustomer.value = true
+  // 每次打开生成一个幂等键：弱网重试不会重复记账。
+  settlementRequestId.value = `staff-adjust-${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2, 10)}`
+  settlementFormVisible.value = true
+}
+
+function closeSettlementAdjustmentForm() {
+  if (savingSettlementAdjustment.value) return
+  settlementFormVisible.value = false
+}
+
+function onSettlementVisibleChange(event: any) {
+  settlementVisibleToCustomer.value = Boolean(event?.detail?.value)
+}
+
+function settlementStatusText(status: string): string {
+  const statusMap: Record<string, string> = {
+    PENDING: '待处理',
+    SETTLED: '已处理',
+    CANCELLED: '已取消',
+  }
+  return statusMap[status] || status
+}
+
+function settlementAmountText(amount: number): string {
+  const value = toNumber(amount)
+  return `${value < 0 ? '退' : '补'} ¥${Math.abs(value).toFixed(2)}`
+}
+
+function settlementSourceText(createdBy?: string): string {
+  if (createdBy === 'staff') return '员工录入'
+  if (createdBy === 'admin') return '管理员录入'
+  return '系统生成'
+}
+
+async function saveSettlementAdjustment() {
+  if (!order.value || savingSettlementAdjustment.value) return
+  const amount = Math.round(Number(settlementAmountDraft.value) * 100) / 100
+  if (!Number.isFinite(amount) || amount <= 0) {
+    uni.showToast({
+      title: '请输入正确的金额',
+      icon: 'none',
+    })
+    return
+  }
+  if (
+    settlementAdjustmentType.value === 'REFUND' &&
+    amount > toNumber(order.value.amountTotal || order.value.totalAmount)
+  ) {
+    uni.showToast({
+      title: '退款金额不能超过订单实付',
+      icon: 'none',
+    })
+    return
+  }
+  const reason = settlementReasonDraft.value.trim()
+  if (!reason) {
+    uni.showToast({
+      title: '请填写调整原因',
+      icon: 'none',
+    })
+    return
+  }
+  const isRefund = settlementAdjustmentType.value === 'REFUND'
+  const signedAmount = isRefund ? -amount : amount
+  const visible = settlementVisibleToCustomer.value
+
+  uni.showModal({
+    title: isRefund ? '确认记一笔退款' : '确认记一笔补收',
+    content: [
+      '这里只记账，不会直接退钱；退款仍走原退款流程。',
+      `订单：${displayOrderNo.value}`,
+      `金额：${isRefund ? '退' : '补'} ¥${formatAmount(amount)}`,
+      visible ? '提交后顾客端会看到这条调整。' : '这条调整仅内部可见。',
+    ].join('\n'),
+    confirmText: '确认提交',
+    success: async (res) => {
+      if (!res.confirm || !order.value) return
+      savingSettlementAdjustment.value = true
+      try {
+        await createOrderSettlementAdjustment(order.value.id, {
+          amount: signedAmount,
+          reason,
+          adjustmentType: isRefund ? 'REFUND' : 'EXTRA_PAYMENT',
+          visibleToCustomer: visible,
+          requiresCustomerPayment: !isRefund,
+          requestId: settlementRequestId.value || undefined,
+        })
+        uni.showToast({
+          title: visible ? '已提交，顾客端已更新' : '已提交',
+          icon: 'none',
+        })
+        settlementFormVisible.value = false
+        await loadOrderFinancialSummary()
+      } catch (error: any) {
+        uni.showToast({
+          title: error?.message || '提交失败',
+          icon: 'none',
+        })
+      } finally {
+        savingSettlementAdjustment.value = false
+      }
+    },
+  })
+}
+
+function markSettlementAdjustmentHandled(
+  adjustment: CustomerOrderFinancialSummary['adjustments'][number],
+) {
+  if (!order.value || !isAdminUser.value) return
+  if (markingSettlementAdjustmentId.value) return
+  uni.showModal({
+    title: '标记已处理',
+    content: [
+      `确认「${adjustment.reason}」的 ${settlementAmountText(adjustment.amount)} 已经处理到位？`,
+      '标记后顾客端不再提示；这里不会自动退钱。',
+    ].join('\n'),
+    confirmText: '确认处理',
+    success: async (res) => {
+      if (!res.confirm || !order.value) return
+      markingSettlementAdjustmentId.value = adjustment.id
+      try {
+        await updateOrderSettlementAdjustmentStatus(
+          order.value.id,
+          adjustment.id,
+          'SETTLED',
+        )
+        uni.showToast({
+          title: '已标记处理',
+          icon: 'none',
+        })
+        await loadOrderFinancialSummary()
+      } catch (error: any) {
+        uni.showToast({
+          title: error?.message || '标记失败',
+          icon: 'none',
+        })
+      } finally {
+        markingSettlementAdjustmentId.value = ''
+      }
+    },
+  })
 }
 
 function openRefundPanel() {
@@ -3142,4 +3543,42 @@ async function saveAddressForm() {
 .danger-btn { font-size: 24rpx; color: #c0392b; }
 
 .section-subtitle { display: block; margin-top: 8rpx; font-size: 20rpx; color: #909399; }
+
+/* ===== 成品调整（2026-10-31）===== */
+.settlement-metrics { display: flex; gap: 12rpx; margin-top: 18rpx; }
+.settlement-metric {
+  flex: 1; padding: 14rpx 16rpx; border-radius: 12rpx;
+  background: #f4f7f2; text-align: center;
+}
+.settlement-metric-label { display: block; font-size: 20rpx; color: #6b6653; }
+.settlement-metric-value { display: block; margin-top: 6rpx; font-size: 28rpx; font-weight: 700; color: #1e3a2f; }
+.settlement-metric-value.warning { color: #b4553f; }
+.settlement-hint { display: block; margin-top: 14rpx; font-size: 22rpx; line-height: 1.6; color: #6b6653; }
+.settlement-list { margin-top: 8rpx; }
+.settlement-item {
+  display: flex; align-items: center; gap: 16rpx;
+  margin-top: 12rpx; padding: 16rpx 18rpx; border-radius: 12rpx; background: #f7f9f8;
+}
+.settlement-item-main { flex: 1; min-width: 0; }
+.settlement-item-reason { display: block; font-size: 24rpx; color: #26261f; line-height: 1.5; }
+.settlement-item-meta { display: block; margin-top: 4rpx; font-size: 20rpx; color: #909399; }
+.settlement-item-side { flex: none; text-align: right; }
+.settlement-item-amount { display: block; font-size: 26rpx; font-weight: 700; }
+.settlement-item-amount.refund { color: #b4553f; }
+.settlement-item-amount.extra { color: #8a6b33; }
+.settlement-mark-btn {
+  margin-top: 8rpx; padding: 6rpx 14rpx; border: 1rpx solid #1e3a2f; border-radius: 999rpx;
+  background: #fff; color: #1e3a2f; font-size: 20rpx; line-height: 1.4;
+}
+.settlement-actions { margin-top: 18rpx; }
+.settlement-form { margin-top: 18rpx; padding-top: 18rpx; border-top: 1rpx solid #f0f1f2; }
+.settlement-type-row { display: flex; gap: 12rpx; margin-bottom: 16rpx; }
+.settlement-type-btn {
+  flex: 1; height: 64rpx; line-height: 64rpx; border-radius: 999rpx;
+  background: #fff; color: #6b6653; font-size: 24rpx; border: 1rpx solid #dfe4e1;
+}
+.settlement-type-btn.active { background: #1e3a2f; color: #f3eddd; border-color: #1e3a2f; font-weight: 600; }
+.settlement-visible-row { display: flex; align-items: center; justify-content: space-between; margin: 8rpx 0 4rpx; }
+.settlement-form-actions { display: flex; gap: 16rpx; margin-top: 18rpx; }
+.settlement-form-actions .address-action-btn { flex: 1; }
 </style>

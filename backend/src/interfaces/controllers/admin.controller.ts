@@ -1537,7 +1537,7 @@ export class AdminController {
    */
   @Post('orders/:orderId/settlement-adjustments')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Create order settlement adjustment (admin-only)' })
+  @ApiOperation({ summary: 'Create order settlement adjustment (staff/admin)' })
   @ApiParam({ name: 'orderId', description: 'Order ID' })
   @ApiBody({
     schema: {
@@ -1557,6 +1557,11 @@ export class AdminController {
         },
         visibleToCustomer: { type: 'boolean', default: true },
         requiresCustomerPayment: { type: 'boolean' },
+        requestId: {
+          type: 'string',
+          description:
+            'Client-generated idempotency key. Retries with the same value return the same adjustment.',
+        },
       },
     },
   })
@@ -1569,7 +1574,9 @@ export class AdminController {
       adjustmentType?: 'REFUND' | 'EXTRA_PAYMENT' | 'DISCOUNT' | 'MANUAL_CORRECTION';
       visibleToCustomer?: boolean;
       requiresCustomerPayment?: boolean;
+      requestId?: string;
     },
+    @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<any> | ApiResponseDto<null>> {
     try {
       const adjustment =
@@ -1580,8 +1587,9 @@ export class AdminController {
           adjustmentType: body.adjustmentType,
           visibleToCustomer: body.visibleToCustomer,
           requiresCustomerPayment: body.requiresCustomerPayment,
-          createdBy: 'admin',
-          createdById: null,
+          requestId: body.requestId,
+          createdBy: user?.role === 'ADMIN' ? 'admin' : 'staff',
+          createdById: user?.userId ?? null,
         });
       return ApiResponseDto.success(adjustment);
     } catch (error) {
@@ -1599,6 +1607,7 @@ export class AdminController {
    * PATCH /admin/orders/:orderId/settlement-adjustments/:adjustmentId/status
    */
   @Patch('orders/:orderId/settlement-adjustments/:adjustmentId/status')
+  @UseGuards(AuthGuard, AdminGuard)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Update order settlement adjustment status (admin-only)',

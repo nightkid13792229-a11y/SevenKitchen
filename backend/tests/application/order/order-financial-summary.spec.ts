@@ -39,6 +39,7 @@ describe('Order financial summary', () => {
               requiresCustomerPayment: false,
               plannedOutputG: 5000,
               actualOutputG: 4500,
+              surplusG: 0,
               shortageG: 500,
               createdAt: new Date('2026-04-17T06:00:00.000Z'),
               productionBatchSettlement: {
@@ -171,6 +172,7 @@ describe('Order financial summary', () => {
         productionBatchId: 'batch-1',
         plannedOutputG: 5000,
         actualOutputG: 4500,
+        surplusG: 0,
         shortageG: 500,
       }),
     );
@@ -241,6 +243,67 @@ describe('Order financial summary', () => {
         amount: 15,
         status: 'PENDING',
         requiresCustomerPayment: true,
+      }),
+    );
+  });
+
+  it('returns the existing adjustment when the same requestId is submitted twice', async () => {
+    const existing = {
+      id: 'manual-adjustment-1',
+      orderId: 'order-1',
+      sourceType: 'MANUAL',
+      sourceId: 'staff-request-1',
+      adjustmentType: 'REFUND',
+      amount: -12,
+      reason: '成品缺口 120g',
+      status: 'PENDING',
+      requiresCustomerPayment: false,
+      visibleToCustomer: true,
+      createdBy: 'staff',
+      createdById: 'staff-1',
+      metadata: null,
+      settledAt: null,
+      createdAt: new Date('2026-10-31T09:00:00.000Z'),
+      updatedAt: new Date('2026-10-31T09:00:00.000Z'),
+    };
+    const prisma = {
+      order: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'order-1',
+          amountTotal: 120,
+        }),
+      },
+      orderSettlementAdjustment: {
+        findFirst: jest.fn().mockResolvedValue(existing),
+        create: jest.fn(),
+      },
+    };
+    const service = createService(prisma);
+
+    const adjustment = await service.createOrderSettlementAdjustment({
+      orderId: 'order-1',
+      amount: -12,
+      reason: '成品缺口 120g',
+      adjustmentType: 'REFUND',
+      requestId: 'staff-request-1',
+      createdBy: 'staff',
+      createdById: 'staff-1',
+    });
+
+    expect(prisma.orderSettlementAdjustment.findFirst).toHaveBeenCalledWith({
+      where: {
+        orderId: 'order-1',
+        sourceType: 'MANUAL',
+        sourceId: 'staff-request-1',
+      },
+    });
+    expect(prisma.orderSettlementAdjustment.create).not.toHaveBeenCalled();
+    expect(adjustment).toEqual(
+      expect.objectContaining({
+        id: 'manual-adjustment-1',
+        sourceId: 'staff-request-1',
+        amount: -12,
+        createdBy: 'staff',
       }),
     );
   });

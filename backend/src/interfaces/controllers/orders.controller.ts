@@ -577,6 +577,7 @@ export class OrdersController {
         ? {
             plannedOutputG: summary.latestSettlement.plannedOutputG,
             actualOutputG: summary.latestSettlement.actualOutputG,
+            surplusG: summary.latestSettlement.surplusG,
             shortageG: summary.latestSettlement.shortageG,
             settledAt: summary.latestSettlement.settledAt,
           }

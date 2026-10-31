@@ -771,11 +771,16 @@ describe('AdminController', () => {
         {} as any,
       );
 
-      const result = await controller.createOrderSettlementAdjustment('order-1', {
-        amount: 18,
-        reason: '补收定制分装差价',
-        visibleToCustomer: true,
-      });
+      const result = await controller.createOrderSettlementAdjustment(
+        'order-1',
+        {
+          amount: 18,
+          reason: '补收定制分装差价',
+          visibleToCustomer: true,
+          requestId: 'staff-request-1',
+        },
+        { userId: 'admin-1', customerId: '', role: 'ADMIN' },
+      );
 
       expect(
         mockOrderService.createOrderSettlementAdjustment,
@@ -786,11 +791,68 @@ describe('AdminController', () => {
         adjustmentType: undefined,
         visibleToCustomer: true,
         requiresCustomerPayment: undefined,
+        requestId: 'staff-request-1',
         createdBy: 'admin',
-        createdById: null,
+        createdById: 'admin-1',
       });
       expect(result.code).toBe(0);
       expect(result.data).toEqual(adjustment);
+    });
+
+    it('lets staff create a settlement adjustment and records who did it', async () => {
+      const adjustment = {
+        id: 'adjustment-1',
+        orderId: 'order-1',
+        amount: -12,
+        reason: '成品缺口 120g',
+        status: 'PENDING',
+      };
+      const mockOrderService = {
+        createOrderSettlementAdjustment: jest
+          .fn()
+          .mockResolvedValue(adjustment),
+      };
+      const controller = new AdminController(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        mockOrderService as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+      );
+
+      const result = await controller.createOrderSettlementAdjustment(
+        'order-1',
+        {
+          amount: -12,
+          reason: '成品缺口 120g',
+          adjustmentType: 'REFUND',
+          visibleToCustomer: true,
+          requestId: 'staff-request-2',
+        },
+        { userId: 'staff-1', customerId: '', role: 'STAFF' },
+      );
+
+      expect(
+        mockOrderService.createOrderSettlementAdjustment,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderId: 'order-1',
+          amount: -12,
+          createdBy: 'staff',
+          createdById: 'staff-1',
+          requestId: 'staff-request-2',
+        }),
+      );
+      expect(result.code).toBe(0);
     });
 
     it('updates manual settlement adjustment status for admins', async () => {

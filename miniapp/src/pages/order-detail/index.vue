@@ -481,14 +481,13 @@
         </view>
       </view>
 
-      <view class="section service-section">
-        <button
-          class="btn-service-contact"
-          :class="{ secondary: !customerServiceConfig.enabled }"
-          @tap="contactService"
-        >
-          联系客服
-        </button>
+      <view class="section service-section" @tap="contactService">
+        <view class="entry-row">
+          <text class="entry-title">联系客服</text>
+          <text class="entry-link">{{
+            customerServiceConfig.enabled ? '在线咨询 ›' : '查看联系方式 ›'
+          }}</text>
+        </view>
       </view>
 
       <!-- 原料照片（所有状态下都显示，如果有照片的话） -->
@@ -3122,7 +3121,7 @@ async function applyRefund() {
 }
 
 .order-error-desc {
-  font-size: 26rpx;
+  font-size: 24rpx;
   color: #6b6653;
   margin-bottom: 48rpx;
   line-height: 1.5;
@@ -3135,11 +3134,11 @@ async function applyRefund() {
 
 .order-error-btn {
   min-width: 200rpx;
-  height: 80rpx;
-  line-height: 80rpx;
+  height: 64rpx;
+  line-height: 64rpx;
   padding: 0 32rpx;
   font-size: 28rpx;
-  border-radius: 40rpx;
+  border-radius: 999rpx;
   border: none;
 }
 
@@ -3155,7 +3154,7 @@ async function applyRefund() {
 .order-error-btn.back {
   background-color: #fbfcf7;
   color: #1e3a2f;
-  border: 1rpx solid #e5e8d4;
+  border: 1rpx solid #e3e6d4;
 }
 
 .order-detail {
@@ -3170,7 +3169,7 @@ async function applyRefund() {
   right: 0;
   background-color: #fbfcf7;
   padding: 16rpx 20rpx;
-  border-top: 1rpx solid #e5e8d4;
+  border-top: 1rpx solid #e3e6d4;
   box-shadow: 0 -2rpx 8rpx rgba(30, 46, 36, 0.06);
   z-index: 100;
 }
@@ -3182,13 +3181,13 @@ async function applyRefund() {
 
 .btn-action {
   flex: 1;
-  height: 88rpx;
+  height: 64rpx;
   line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  border-radius: 44rpx;
+  border-radius: 999rpx;
   font-size: 28rpx;
   border: none;
   text-align: center;
@@ -3197,7 +3196,7 @@ async function applyRefund() {
 .btn-cancel {
   background-color: #fbfcf7;
   color: #6b6653;
-  border: 1rpx solid #e5e8d4;
+  border: 1rpx solid #e3e6d4;
 }
 
 .btn-primary {
@@ -3212,7 +3211,7 @@ async function applyRefund() {
 }
 
 .order-type-tag {
-  font-size: 26rpx;
+  font-size: 24rpx;
   color: #b08d4f;
   margin-bottom: 20rpx;
   padding: 10rpx 20rpx;
@@ -3237,134 +3236,13 @@ async function applyRefund() {
 }
 
 .section-title {
-  font-size: 32rpx;
+  font-size: 28rpx;
   font-weight: bold;
   color: #26261f;
   margin-bottom: 20rpx;
 }
 
-.order-center-section {
-  display: flex;
-  flex-direction: column;
-  gap: 22rpx;
-}
-
-.order-center-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 20rpx;
-}
-
-.order-center-title-block {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-}
-
-.order-center-title {
-  font-size: 34rpx;
-  font-weight: 700;
-  color: #26261f;
-  line-height: 1.35;
-  word-break: break-word;
-}
-
-.order-center-subtitle {
-  font-size: 24rpx;
-  color: #6b6653;
-  line-height: 1.4;
-}
-
-.order-center-status {
-  flex-shrink: 0;
-  font-size: 28rpx;
-  font-weight: 700;
-}
-
-.order-center-goods {
-  padding: 20rpx;
-  border-radius: 12rpx;
-  background-color: #eef2e4;
-}
-
-.goods-main {
-  display: flex;
-  align-items: center;
-  gap: 18rpx;
-}
-
-.goods-cover,
-.goods-cover-placeholder {
-  width: 112rpx;
-  height: 112rpx;
-  border-radius: 10rpx;
-  flex-shrink: 0;
-}
-
-.goods-cover-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: #eef2e4;
-  color: #b08d4f;
-  font-size: 36rpx;
-  font-weight: 700;
-}
-
-.goods-text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-}
-
-.goods-name {
-  font-size: 30rpx;
-  font-weight: 700;
-  color: #26261f;
-  line-height: 1.4;
-  word-break: break-word;
-}
-
-.goods-desc {
-  font-size: 25rpx;
-  color: #26261f;
-  line-height: 1.45;
-}
-
-.goods-amount-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 20rpx;
-  margin-top: 20rpx;
-  padding-top: 18rpx;
-  border-top: 1rpx solid #eef1e2;
-}
-
-.goods-amount-label {
-  font-size: 25rpx;
-  color: #26261f;
-}
-
-.goods-amount-value {
-  font-size: 36rpx;
-  font-weight: 800;
-  color: #b4553f;
-}
-
-.order-center-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 14rpx;
-}
-
-.order-center-cell,
-.buyer-row,
+/* 服务说明里的两行字（2026-10-31 收口，只保留模板在用的规则） */
 .merchant-note-item {
   display: flex;
   align-items: flex-start;
@@ -3372,29 +3250,24 @@ async function applyRefund() {
   gap: 20rpx;
 }
 
-.cell-label,
-.buyer-label,
 .merchant-note-label {
   flex-shrink: 0;
   min-width: 136rpx;
-  font-size: 25rpx;
+  font-size: 20rpx;
   color: #6b6653;
 }
 
-.cell-value,
-.buyer-value,
 .merchant-note-value {
   flex: 1;
   min-width: 0;
   text-align: right;
-  font-size: 25rpx;
+  font-size: 24rpx;
   color: #26261f;
   line-height: 1.5;
   word-break: break-word;
   overflow-wrap: anywhere;
 }
 
-.buyer-card,
 .merchant-note-list {
   display: flex;
   flex-direction: column;
@@ -3408,113 +3281,35 @@ async function applyRefund() {
   text-align: right;
 }
 
-.remark-section {
-  display: flex;
-  flex-direction: column;
-  gap: 20rpx;
-}
-
 .service-section {
-  display: flex;
-  flex-direction: column;
-  gap: 16rpx;
+  padding: 0;
 }
 
-.btn-service-contact {
-  width: 100%;
-  height: 82rpx;
-  line-height: 1;
+/* 入口统一成「文字 + ›」（2026-10-31） */
+.entry-row {
   display: flex;
   align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  border-radius: 12rpx;
-  border: none;
-  background-color: #1e3a2f;
-  color: #f3eddd;
-  font-size: 30rpx;
+  justify-content: space-between;
+  padding: 26rpx 24rpx;
 }
 
-.btn-service-contact.secondary {
-  background-color: #fbfcf7;
-  color: #b08d4f;
-  border: 1rpx solid #1e3a2f;
-}
-
-.remark-textarea {
-  width: 100%;
-  min-height: 180rpx;
-  padding: 24rpx;
-  box-sizing: border-box;
-  border-radius: 12rpx;
-  background-color: #eef2e4;
+.entry-title {
   font-size: 28rpx;
-  line-height: 1.6;
+  font-weight: 600;
   color: #26261f;
 }
 
-.remark-meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 24rpx;
-}
-
-.remark-hint {
-  flex: 1;
+.entry-link {
   font-size: 24rpx;
-  color: #6b6653;
-  line-height: 1.5;
-}
-
-.remark-count {
-  font-size: 24rpx;
-  color: #6b6653;
-  white-space: nowrap;
-}
-
-.remark-actions {
-  display: flex;
-  gap: 16rpx;
-}
-
-.remark-btn {
-  flex: 1;
-  height: 80rpx;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  border-radius: 12rpx;
-  font-size: 28rpx;
-  border: none;
-}
-
-.remark-btn.primary {
-  background-color: #1e3a2f;
-  color: #f3eddd;
-}
-
-.remark-btn.secondary {
-  background-color: #fbfcf7;
-  color: #b08d4f;
-  border: 1rpx solid #1e3a2f;
-}
-
-.remark-btn[disabled] {
-  opacity: 0.5;
-}
-
-.info-section {
-  margin-bottom: 20rpx;
+  font-weight: 700;
+  color: #1e3a2f;
 }
 
 .info-row {
   display: flex;
   align-items: center;
   margin-bottom: 16rpx;
-  font-size: 28rpx;
+  font-size: 24rpx;
 }
 
 .info-row:last-child {
@@ -3567,24 +3362,9 @@ async function applyRefund() {
   gap: 12rpx;
 }
 
-.btn-edit {
-  padding: 6rpx 16rpx;
-  background-color: #1e3a2f;
-  color: #f3eddd;
-  border-radius: 6rpx;
-  font-size: 24rpx;
-  border: none;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.btn-edit::after {
-  border: none;
-}
-
 .order-id {
   font-family: monospace;
-  font-size: 26rpx;
+  font-size: 24rpx;
 }
 
 .status {
@@ -3592,7 +3372,7 @@ async function applyRefund() {
 }
 
 .amount {
-  font-size: 32rpx;
+  font-size: 28rpx;
   font-weight: bold;
   color: #b4553f;
 }
@@ -3614,8 +3394,8 @@ async function applyRefund() {
 }
 
 .settlement-card.extra-payment {
-  border-left-color: #dde3cd;
-  background-color: #f8e8e2;
+  border-left-color: #e3e6d4;
+  background-color: #f6efe0;
 }
 
 .refund-status-section {
@@ -3645,7 +3425,7 @@ async function applyRefund() {
 .refund-status-title {
   flex: 1;
   min-width: 0;
-  font-size: 30rpx;
+  font-size: 28rpx;
   font-weight: 700;
   color: #1e3a2f;
   word-break: break-word;
@@ -3677,7 +3457,7 @@ async function applyRefund() {
 .settlement-title {
   flex: 1;
   min-width: 0;
-  font-size: 30rpx;
+  font-size: 28rpx;
   font-weight: 700;
   color: #26261f;
   word-break: break-word;
@@ -3688,13 +3468,13 @@ async function applyRefund() {
   padding: 4rpx 14rpx;
   border-radius: 999rpx;
   background-color: rgba(251, 252, 247, 0.6);
-  font-size: 22rpx;
+  font-size: 20rpx;
   color: #26261f;
 }
 
 .settlement-desc {
   display: block;
-  font-size: 25rpx;
+  font-size: 24rpx;
   line-height: 1.5;
   color: #26261f;
 }
@@ -3716,14 +3496,14 @@ async function applyRefund() {
 
 .metric-label {
   display: block;
-  font-size: 22rpx;
+  font-size: 20rpx;
   color: #6b6653;
   margin-bottom: 6rpx;
 }
 
 .metric-value {
   display: block;
-  font-size: 25rpx;
+  font-size: 24rpx;
   font-weight: 600;
   color: #26261f;
 }
@@ -3761,13 +3541,13 @@ async function applyRefund() {
 }
 
 .adjustment-status {
-  font-size: 22rpx;
+  font-size: 20rpx;
   color: #6b6653;
 }
 
 .adjustment-amount {
   flex-shrink: 0;
-  font-size: 25rpx;
+  font-size: 24rpx;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -3781,20 +3561,24 @@ async function applyRefund() {
 }
 
 .btn-copy {
-  padding: 8rpx 20rpx;
+  height: 48rpx;
+  line-height: 48rpx;
+  padding: 0 20rpx;
   background-color: #f0f3e9;
   color: #26261f;
-  border-radius: 6rpx;
-  font-size: 24rpx;
+  border-radius: 999rpx;
+  font-size: 20rpx;
   border: none;
 }
 
 .btn-copy-address {
-  padding: 8rpx 20rpx;
+  height: 48rpx;
+  line-height: 48rpx;
+  padding: 0 20rpx;
   background-color: #f0f3e9;
   color: #26261f;
-  border-radius: 6rpx;
-  font-size: 24rpx;
+  border-radius: 999rpx;
+  font-size: 20rpx;
   border: none;
   flex-shrink: 0;
 }
@@ -3807,7 +3591,7 @@ async function applyRefund() {
 
 .address-empty-text,
 .address-lock-hint {
-  font-size: 26rpx;
+  font-size: 24rpx;
   color: #6b6653;
   line-height: 1.5;
 }
@@ -3816,8 +3600,8 @@ async function applyRefund() {
   min-width: 180rpx;
   height: 64rpx;
   padding: 0 24rpx;
-  border-radius: 10rpx;
-  font-size: 26rpx;
+  border-radius: 999rpx;
+  font-size: 24rpx;
   border: none;
   display: flex;
   align-items: center;
@@ -3831,8 +3615,8 @@ async function applyRefund() {
 
 .address-action-btn.secondary {
   background-color: #fbfcf7;
-  color: #b08d4f;
-  border: 2rpx solid #e5e8d4;
+  color: #1e3a2f;
+  border: 1rpx solid #1e3a2f;
 }
 
 .address-action-btn.full {
@@ -3878,7 +3662,7 @@ async function applyRefund() {
 }
 
 .address-modal-title {
-  font-size: 32rpx;
+  font-size: 28rpx;
   font-weight: 600;
   color: #26261f;
 }
@@ -3914,7 +3698,7 @@ async function applyRefund() {
 .address-select-item {
   padding: 24rpx;
   border-radius: 12rpx;
-  border: 2rpx solid #eef1e2;
+  border: 2rpx solid #e3e6d4;
 }
 
 .address-select-header {
@@ -3925,24 +3709,24 @@ async function applyRefund() {
 }
 
 .address-recipient-name {
-  font-size: 30rpx;
+  font-size: 28rpx;
   font-weight: 500;
   color: #26261f;
 }
 
 .address-recipient-phone,
 .address-select-text {
-  font-size: 26rpx;
+  font-size: 24rpx;
   color: #26261f;
   line-height: 1.6;
 }
 
 .address-default-tag {
   padding: 2rpx 10rpx;
-  border-radius: 6rpx;
+  border-radius: 8rpx;
   background-color: #eef2e4;
   color: #b08d4f;
-  font-size: 22rpx;
+  font-size: 20rpx;
 }
 
 .address-form-item {
@@ -3952,7 +3736,7 @@ async function applyRefund() {
 .address-form-label {
   display: block;
   margin-bottom: 12rpx;
-  font-size: 26rpx;
+  font-size: 24rpx;
   color: #26261f;
   font-weight: 500;
 }
@@ -3962,8 +3746,8 @@ async function applyRefund() {
 .address-form-textarea {
   width: 100%;
   box-sizing: border-box;
-  border: 2rpx solid #eef1e2;
-  border-radius: 10rpx;
+  border: 2rpx solid #e3e6d4;
+  border-radius: 8rpx;
   background-color: #fbfcf7;
   font-size: 28rpx;
   color: #26261f;
@@ -4014,11 +3798,12 @@ async function applyRefund() {
 
 .address-save-btn {
   width: 100%;
-  height: 82rpx;
-  border-radius: 12rpx;
+  height: 64rpx;
+  line-height: 64rpx;
+  border-radius: 999rpx;
   background-color: #1e3a2f;
   color: #f3eddd;
-  font-size: 30rpx;
+  font-size: 28rpx;
   border: none;
 }
 
@@ -4030,7 +3815,7 @@ async function applyRefund() {
 .dog-group {
   margin-bottom: 24rpx;
   padding-bottom: 24rpx;
-  border-bottom: 1rpx solid #eef1e2;
+  border-bottom: 1rpx solid #e3e6d4;
 }
 
 .dog-group:last-child {
@@ -4054,17 +3839,17 @@ async function applyRefund() {
 }
 
 .dog-gender {
-  font-size: 22rpx;
+  font-size: 20rpx;
   font-weight: normal;
   padding: 2rpx 8rpx;
-  border-radius: 4rpx;
+  border-radius: 8rpx;
   color: #26261f;
   background-color: #f0f3e9;
 }
 
 .dog-divider {
-  font-size: 22rpx;
-  color: #968f6d;
+  font-size: 20rpx;
+  color: #6b6653;
   margin: 0 4rpx;
 }
 
@@ -4091,7 +3876,7 @@ async function applyRefund() {
   gap: 12rpx;
   margin-bottom: 16rpx;
   padding-bottom: 16rpx;
-  border-bottom: 1rpx solid #e5e8d4;
+  border-bottom: 1rpx solid #e3e6d4;
   flex-wrap: wrap;
 }
 
@@ -4104,9 +3889,9 @@ async function applyRefund() {
 
 .recipe-version,
 .nutrition-standard {
-  font-size: 22rpx;
+  font-size: 20rpx;
   padding: 4rpx 10rpx;
-  border-radius: 4rpx;
+  border-radius: 8rpx;
   flex-shrink: 0;
 }
 
@@ -4142,12 +3927,12 @@ async function applyRefund() {
 }
 
 .package-label {
-  font-size: 26rpx;
+  font-size: 24rpx;
   color: #26261f;
 }
 
 .package-value {
-  font-size: 26rpx;
+  font-size: 24rpx;
   color: #26261f;
   font-weight: 500;
   min-width: 0;
@@ -4167,7 +3952,7 @@ async function applyRefund() {
 .ingredients-section {
   margin-top: 16rpx;
   padding-top: 16rpx;
-  border-top: 1rpx solid #e5e8d4;
+  border-top: 1rpx solid #e3e6d4;
 }
 
 .ingredients-header {
@@ -4188,18 +3973,18 @@ async function applyRefund() {
 }
 
 .ingredients-title {
-  font-size: 26rpx;
+  font-size: 24rpx;
   font-weight: 500;
   color: #26261f;
 }
 
 .ingredients-count {
-  font-size: 22rpx;
+  font-size: 20rpx;
   color: #6b6653;
 }
 
 .expand-icon {
-  font-size: 22rpx;
+  font-size: 20rpx;
   color: #b08d4f;
   padding: 4rpx 8rpx;
 }
@@ -4225,7 +4010,7 @@ async function applyRefund() {
 }
 
 .hint-text {
-  font-size: 22rpx;
+  font-size: 20rpx;
   color: #6b6653;
 }
 
@@ -4248,20 +4033,20 @@ async function applyRefund() {
   font-weight: 700;
   color: #8a6b33;
   background: #f6efe0;
-  border-radius: 6rpx;
+  border-radius: 8rpx;
   padding: 2rpx 12rpx;
   margin-bottom: 10rpx;
 }
 
 .ingredient-item {
-  font-size: 22rpx;
+  font-size: 20rpx;
   color: #26261f;
   line-height: 34rpx;
   padding: 3rpx 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  border-radius: 4rpx;
+  border-radius: 8rpx;
   transition: background-color 0.2s;
 }
 
@@ -4273,20 +4058,6 @@ async function applyRefund() {
   word-break: break-all;
 }
 
-/* 售后服务 */
-.cancel-order-section .section-note,
-.aftersale-locked-section .section-note {
-  display: block;
-  margin-bottom: 20rpx;
-}
-
-.aftersale-locked-section .btn-aftersale {
-  background-color: #1e3a2f;
-}
-
-.aftersale-locked-section .btn-text {
-  color: #f7faf5;
-}
 
 .aftersale-section {
   margin-bottom: 20rpx;
@@ -4299,18 +4070,19 @@ async function applyRefund() {
 
 .btn-aftersale {
   flex: 1;
+  height: 64rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24rpx 16rpx;
+  padding: 0 16rpx;
   background-color: #fbfcf7;
-  border-radius: 12rpx;
-  border: none;
+  border-radius: 999rpx;
+  border: 1rpx solid #1e3a2f;
 }
 
 .btn-aftersale .btn-text {
-  font-size: 26rpx;
-  color: #26261f;
+  font-size: 24rpx;
+  color: #1e3a2f;
 }
 
 /* 评价及建议 */
@@ -4337,7 +4109,7 @@ async function applyRefund() {
 
 .star {
   font-size: 48rpx;
-  color: #968f6d;
+  color: #6b6653;
 }
 
 .star.active {
@@ -4363,7 +4135,7 @@ async function applyRefund() {
   border-radius: 8rpx;
   font-size: 28rpx;
   color: #26261f;
-  border: 1rpx solid #e5e8d4;
+  border: 1rpx solid #e3e6d4;
 }
 
 .char-count {
@@ -4414,7 +4186,7 @@ async function applyRefund() {
   align-items: center;
   justify-content: center;
   color: #f3eddd;
-  font-size: 32rpx;
+  font-size: 28rpx;
   line-height: 1;
 }
 
@@ -4422,7 +4194,7 @@ async function applyRefund() {
   width: 160rpx;
   height: 160rpx;
   background-color: #fbfcf7;
-  border: 2rpx dashed #e5e8d4;
+  border: 2rpx dashed #e3e6d4;
   border-radius: 8rpx;
   display: flex;
   flex-direction: column;
@@ -4437,7 +4209,7 @@ async function applyRefund() {
 }
 
 .add-text {
-  font-size: 22rpx;
+  font-size: 20rpx;
   color: #6b6653;
   margin-top: 8rpx;
 }
@@ -4459,7 +4231,7 @@ async function applyRefund() {
   box-sizing: border-box;
   background-color: #1e3a2f;
   color: #f3eddd;
-  border-radius: 44rpx;
+  border-radius: 999rpx;
   font-size: 28rpx;
   border: none;
 }
@@ -4495,11 +4267,11 @@ async function applyRefund() {
 }
 
 .guide-icon {
-  font-size: 32rpx;
+  font-size: 28rpx;
 }
 
 .guide-title {
-  font-size: 30rpx;
+  font-size: 28rpx;
   font-weight: bold;
   color: #b08d4f;
 }
@@ -4515,12 +4287,12 @@ async function applyRefund() {
 }
 
 .amount-label {
-  font-size: 26rpx;
+  font-size: 24rpx;
   color: #26261f;
 }
 
 .amount-value {
-  font-size: 36rpx;
+  font-size: 34rpx;
   font-weight: bold;
   color: #b4553f;
 }
@@ -4536,12 +4308,12 @@ async function applyRefund() {
 }
 
 .deadline-label {
-  font-size: 26rpx;
+  font-size: 24rpx;
   color: #26261f;
 }
 
 .deadline-value {
-  font-size: 32rpx;
+  font-size: 34rpx;
   font-weight: 700;
   color: #b4553f;
   font-family: monospace;
@@ -4570,14 +4342,14 @@ async function applyRefund() {
   background-color: #1e3a2f;
   color: #f3eddd;
   border-radius: 50%;
-  font-size: 22rpx;
+  font-size: 20rpx;
   font-weight: bold;
   flex-shrink: 0;
 }
 
 .step-text {
   flex: 1;
-  font-size: 26rpx;
+  font-size: 24rpx;
   color: #26261f;
   line-height: 36rpx;
 }
@@ -4595,14 +4367,14 @@ async function applyRefund() {
 
 .contact-label,
 .order-id-label {
-  font-size: 26rpx;
+  font-size: 24rpx;
   color: #26261f;
 }
 
 .contact-value,
 .order-id-value {
   flex: 1;
-  font-size: 26rpx;
+  font-size: 24rpx;
   color: #b08d4f;
   font-weight: bold;
   font-family: monospace;
@@ -4610,11 +4382,13 @@ async function applyRefund() {
 
 .btn-copy-wechat,
 .btn-copy-order-id {
-  padding: 8rpx 20rpx;
-  background-color: #1e3a2f;
-  color: #f3eddd;
-  border-radius: 6rpx;
-  font-size: 24rpx;
+  height: 48rpx;
+  line-height: 48rpx;
+  padding: 0 20rpx;
+  background-color: #f0f3e9;
+  color: #26261f;
+  border-radius: 999rpx;
+  font-size: 20rpx;
   border: none;
 }
 
@@ -4691,19 +4465,20 @@ async function applyRefund() {
 }
 
 .section-title-text {
-  font-size: 32rpx;
+  font-size: 28rpx;
   font-weight: bold;
   color: #26261f;
 }
 
 .btn-share-photos {
-  padding: 12rpx 24rpx;
-  background-color: #1e3a2f;
-  color: #f3eddd;
-  font-size: 26rpx;
-  border-radius: 8rpx;
-  border: none;
-  line-height: 1.4;
+  height: 48rpx;
+  line-height: 48rpx;
+  padding: 0 20rpx;
+  background-color: #fbfcf7;
+  color: #1e3a2f;
+  font-size: 20rpx;
+  border-radius: 999rpx;
+  border: 1rpx solid #e3e6d4;
 }
 
 .btn-share-photos::after {
@@ -4726,27 +4501,27 @@ async function applyRefund() {
   display: inline-flex;
   align-items: center;
   gap: 8rpx;
-  font-size: 22rpx;
+  font-size: 20rpx;
   font-weight: 700;
-  color: #2e7d32;
+  color: #1e3a2f;
 }
 
 .hero-kind-dot {
   width: 10rpx;
   height: 10rpx;
   border-radius: 999rpx;
-  background: #2e7d32;
+  background: #1e3a2f;
 }
 
 .hero-status {
-  font-size: 26rpx;
+  font-size: 24rpx;
   font-weight: 700;
 }
 
 .hero-title {
   display: block;
   margin-top: 14rpx;
-  font-size: 36rpx;
+  font-size: 34rpx;
   font-weight: 700;
   line-height: 1.35;
   color: #26261f;
@@ -4755,7 +4530,7 @@ async function applyRefund() {
 .hero-meta {
   display: block;
   margin-top: 6rpx;
-  font-size: 22rpx;
+  font-size: 20rpx;
   color: #6b6653;
 }
 
@@ -4771,9 +4546,9 @@ async function applyRefund() {
 }
 
 .hero-eta__text {
-  font-size: 22rpx;
+  font-size: 20rpx;
   line-height: 1.4;
-  color: #7a5f2e;
+  color: #8a6b33;
 }
 
 .hero-price-row {
@@ -4789,7 +4564,7 @@ async function applyRefund() {
 }
 
 .hero-price-value {
-  font-size: 38rpx;
+  font-size: 34rpx;
   font-weight: 800;
   color: #b4553f;
 }
@@ -4801,45 +4576,26 @@ async function applyRefund() {
   gap: 16rpx;
   margin-top: 16rpx;
   padding-top: 14rpx;
-  border-top: 1rpx solid #eef1e2;
+  border-top: 1rpx solid #e3e6d4;
 }
 
 .hero-no {
   font-size: 20rpx;
-  color: #968f6d;
+  color: #6b6653;
 }
 
 .hero-no__copy {
   margin-left: 8rpx;
   padding: 2rpx 10rpx;
-  border-radius: 6rpx;
+  border-radius: 8rpx;
   border: 1rpx solid #e3e6d4;
-  font-size: 18rpx;
+  font-size: 20rpx;
   color: #6b6653;
 }
 
 .hero-time {
   font-size: 20rpx;
-  color: #968f6d;
-}
-
-/* 规格与来源（2026-10-30） */
-.item-spec-fold {
-  margin-bottom: 16rpx;
-  padding: 12rpx 16rpx;
-  border-radius: 10rpx;
-  background: #f6f8ef;
-}
-
-.merchant-note-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.merchant-note-arrow {
-  font-size: 22rpx;
-  color: #968f6d;
+  color: #6b6653;
 }
 
 .reminder-section {
@@ -4860,7 +4616,7 @@ async function applyRefund() {
 }
 
 .reminder-link {
-  font-size: 22rpx;
+  font-size: 20rpx;
   font-weight: 700;
   color: #1e3a2f;
 }
@@ -4903,18 +4659,18 @@ async function applyRefund() {
 .order-note-row {
   margin-top: 16rpx;
   padding: 12rpx 16rpx;
-  border-radius: 10rpx;
-  background: #f6f8ef;
+  border-radius: 8rpx;
+  background: #f0f3e9;
 }
 
 .order-note-label {
   font-size: 20rpx;
-  color: #8a7a66;
+  color: #6b6653;
   margin-right: 10rpx;
 }
 
 .order-note-text {
-  font-size: 22rpx;
+  font-size: 20rpx;
   color: #26261f;
   line-height: 1.5;
 }

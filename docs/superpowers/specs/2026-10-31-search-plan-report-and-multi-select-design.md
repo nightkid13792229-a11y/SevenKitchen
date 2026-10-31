@@ -58,6 +58,10 @@ payload.searchReport: Array<{
 - `proposeSearchPlan` 汇总成“每库一行”：`terms` 取该库所有轮次的词并去重，
   `total` 取该库**最后一轮**的命中数，`rounds` 记录查了几轮。
 - 模型不再需要在 findings 里复述数字；`findings` 只保留“你从中看到了什么”的判断。
+- **闸门**：`payload.searchReport` 为空时，`proposeSearchPlan` 直接拒绝
+  （“先调用 searchLibraries 查库，再交方案”）——否则汇报块会是空的。
+- 仓库根目录的 `skills/ingredient-agent/SKILL.md` 还写着已删除的
+  `searchNames / searchLocalLibraries`，一并更新或删除，避免误导。
 
 ### 4.2 检索工具：不评分、不排序、不截断相关性
 
@@ -78,8 +82,12 @@ payload.searchReport: Array<{
 覆盖率 = round(分子 / 分母 × 1000) / 10   // 一位小数
 ```
 
-使用点：`getRecord`、方案候选表补数、`selfCheck` 的覆盖率提示、提交时的审计展示。
-完全没值的记录覆盖率为 0。
+使用点：`getRecord`、方案候选表补数。完全没值的记录覆盖率为 0。
+
+**口径只此一套，不碰导入审计**：`auditNutritionProfileForImport` 里的
+`essentialCoveragePercent`（FEDIAF 必需营养素 49 项、0 算已填）继续给导入管线与 selfCheck 用，
+语义不同、不要合并。为免混淆，候选表列头写「字段覆盖率（64 项）」，
+selfCheck 仍叫「必需营养素覆盖率」。
 
 ### 4.4 方案数据结构 v2
 
@@ -95,8 +103,9 @@ interface SearchPlanCandidate {
   recordId: string;
   name: string;       // 来源库原名，不拼编号
   sourceType: string;
-  state: string;      // 模型判断：生 / 熟 / 未标生熟 / 干 …
-  coverage: number;   // 系统计算
+  state: string;      // 展示用：生 / 熟 / 干 / 未标生熟 …
+  profileState: 'RAW' | 'COOKED' | null; // 写入档案用的状态；模型必须给
+  coverage: number;   // 系统计算（64 项目录，0 不计入）
   reason: string;     // 一句话入选原因
 }
 
@@ -105,6 +114,7 @@ interface SearchPlanSelection {
   name: string;
   sourceType: string;
   state: string;
+  profileState: 'RAW' | 'COOKED';
   coverage: number;
 }
 
@@ -127,6 +137,9 @@ interface SearchPlan {
 - 移除 `chosenRecordId / chosenRecordName`；旧草稿读取时按“缺字段 = 空”兼容。
 - `proposeSearchPlan` 收到候选后，服务端逐条查记录：不存在或非 ACTIVE → 返回错误让模型改；
   存在则补 `coverage` 与规范化的 `sourceType`，`state` 保留模型给的值。
+- `profileState` 必须由模型给（RAW / COOKED）。来源记录自己推不出生熟时
+  （如 CFCT「鸡蛋白」），模型要根据名字或用户回答先定一个；定不了就先 `askUser`，
+  不允许交一张“选不了”的表。
 
 ### 4.5 方案卡
 
@@ -142,7 +155,9 @@ interface SearchPlan {
 |---|---|---|---|---|---|
 
 - 行来自 `plan.candidates`，默认全不勾（人自己选）；
-- 覆盖率显示为百分比；
+- 覆盖率显示为百分比，列头写「字段覆盖率（64 项）」；
+- **同一来源库 + 同一状态只能勾一条**：勾了之后，其余同库同状态的行置灰，
+  提示“同一来源库、同一状态只能选一条”（避免正式档案名与唯一键冲突）；
 - 确认按钮在“至少勾一条”时可用；勾 0 条时提示“没有可写档案”。
 
 ### 4.6 确认之后
@@ -156,14 +171,18 @@ interface SearchPlan {
 
 ```
 检索方案已确认，请按方案写草稿：把以下 N 条来源记录各写成一份营养档案，
-每条只用它自己的来源记录，profileIndex 从 0 递增：
+每条只用它自己的来源记录；profileIndex 从当前草稿的档案数开始递增
+（草稿里没有档案就从 0 开始）：
 1) 鸡蛋清（CFCT，生，覆盖率 60%）
 2) 鸡蛋清（MEXT，生，覆盖率 78.3%）
 写完调用 selfCheck。
 ```
 
-- 模型用 `writeNutrition` 逐份写入；第一份用 `profileIndex = 0`，
-  第二份用 `profileIndex = 1`（工具已支持“下标 == 档案数”时新建一份）。
+- 模型用 `writeNutrition` 逐份写入；「下标 == 当前档案数」时新建一份，
+  并显式带上该条候选的 `profileState`（不再依赖来源推导）。
+- **写入硬校验**（本期新增，保证不缝合）：
+  - 新建档案：一次批量写入里的 `sourceRecordId` 必须全相同；
+  - 写入已有档案：`sourceRecordId` 必须等于该档案的来源，否则拒绝并提示“一份档案只能有一个来源”。
 
 ### 4.7 同状态多档案与标签
 
@@ -171,6 +190,8 @@ interface SearchPlan {
   “生熟状态 X 只能有一份营养档案”的 `seenStates` 校验；
 - **正式档案名**：`buildNutritionFoodData` 里按该原料的状态分组，
   同状态只有一份时 `原料名（生）`，多份时 `原料名（生 · CFCT）`；
+- **同一来源库 + 同一状态只允许一条**（确认时校验 + 表格置灰），
+  这样 `(name, dataSource)` 唯一键不会被两份同名档案撞上；
 - **草稿档案标签**：`draftReview` 生成的 `stateLabel` 在检测到同状态多份时
   追加来源，保证两个「生」标签可区分；
 - 配方端不需要改：下拉本来就列出全部档案并强制人工选，名字区分开即可。
@@ -187,7 +208,7 @@ interface SearchPlan {
 | `search-plan.ts` | 新结构：`libraryReports`、候选带 `coverage/reason`、`selections`；移除 chosen* |
 | `confirm-search-plan.dto.ts` | `selectedRecordIds: string[]`（必填，≥1） |
 | `ingredient-search-plan.service.ts` | 校验 id ∈ candidates；写 selections |
-| `ingredient-creation-tools.service.ts` | `proposeSearchPlan` 收 `libraryReports`（系统覆盖）、候选补 coverage；`searchLibraries` 去评分/截断，写 `searchReport` |
+| `ingredient-creation-tools.service.ts` | `proposeSearchPlan`：无 searchReport 拒绝；候选补 coverage、校验 profileState；`searchLibraries` 去评分/截断，写 `searchReport`；`writeNutrition` 加“一份档案一个来源”校验，新建档案支持显式 state |
 | `ingredient-creation-candidate.service.ts` | 去 `MIN_MATCH_SCORE`；`computeRecordCoverage` 统一；0 不计入 |
 | `ingredient-creation-commit.service.ts` | 删除同状态唯一校验；档案名按需带来源 |
 | `admin-web/ai-agent` | 方案卡：汇报块 + 候选表多选；确认传 ids；草稿标签带来源 |

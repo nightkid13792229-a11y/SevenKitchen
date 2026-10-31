@@ -59,29 +59,29 @@ else
 fi
 echo ""
 
-# Step 0: 构建源必须是 origin/main，且没有未提交改动
-# 这个脚本按「当前工作区」构建；若工作区停在旧分支，会把旧前端发到线上（2026-11-01 发生过）。
-info "Verifying build source is origin/main..."
+# Step 0: 解析构建源（始终用 origin/main，与当前工作区停在哪个分支无关）
+info "Resolving build source (origin/main)..."
 git -C "$SCRIPT_DIR" fetch origin --quiet
-LOCAL_HEAD="$(git -C "$SCRIPT_DIR" rev-parse HEAD)"
-MAIN_HEAD="$(git -C "$SCRIPT_DIR" rev-parse origin/main)"
-if [ "$LOCAL_HEAD" != "$MAIN_HEAD" ]; then
-  fail "当前工作区不在 origin/main：HEAD=$(git -C "$SCRIPT_DIR" rev-parse --short HEAD)，origin/main=$(git -C "$SCRIPT_DIR" rev-parse --short origin/main)"
-  info "请在一个已更新到 origin/main 的工作区里执行，例如："
-  info "  git worktree add --detach /tmp/sevenkitchen-deploy origin/main"
-  info "  cd /tmp/sevenkitchen-deploy && bash deploy-admin-web.sh"
-  exit 1
-fi
-if ! git -C "$SCRIPT_DIR" diff --quiet; then
-  fail "工作区有未提交的改动，拒绝用它构建前端（避免把半成品发上线）。"
-  info "请先提交/还原，或改用干净的 origin/main 工作区。"
-  exit 1
-fi
-ok "Build source verified: $(git -C "$SCRIPT_DIR" rev-parse --short HEAD)"
+DEPLOY_COMMIT="$(git -C "$SCRIPT_DIR" rev-parse origin/main)"
+ok "Build source: origin/main @ ${DEPLOY_COMMIT:0:8}"
 
-# Step 1: Install dependencies
-info "Step 1: Installing dependencies..."
-cd "$ADMIN_WEB_DIR"
+# Step 1: 导出源码到临时目录（不读当前工作区，旧分支 / 脏工作区都不影响结果）
+BUILD_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/sevenkitchen-admin-web.XXXXXX")"
+cleanup() {
+  if [ -n "${BUILD_ROOT:-}" ] && [ -d "$BUILD_ROOT" ]; then
+    rm -rf "$BUILD_ROOT"
+  fi
+}
+trap cleanup EXIT
+info "Exporting source to $BUILD_ROOT..."
+git -C "$SCRIPT_DIR" archive "$DEPLOY_COMMIT" | tar -x -C "$BUILD_ROOT"
+ADMIN_WEB_BUILD_DIR="$BUILD_ROOT/admin-web"
+DIST_DIR="$ADMIN_WEB_BUILD_DIR/dist"
+ok "Source exported"
+
+# Step 2: Install dependencies
+cd "$ADMIN_WEB_BUILD_DIR"
+info "Step 2: Installing dependencies..."
 if npm install; then
   ok "Dependencies installed successfully"
 else
@@ -90,8 +90,8 @@ else
 fi
 echo ""
 
-# Step 2: Build project
-info "Step 2: Building admin-web..."
+# Step 3: Build project
+info "Step 3: Building admin-web..."
 if npm run build:prod; then
   ok "Build completed successfully"
 else
@@ -100,8 +100,8 @@ else
 fi
 echo ""
 
-# Step 3: Verify build output
-info "Step 3: Verifying build output..."
+# Step 4: Verify build output
+info "Step 4: Verifying build output..."
 if [ ! -d "$DIST_DIR" ]; then
   fail "Build output directory not found: $DIST_DIR"
   exit 1
@@ -113,7 +113,7 @@ fi
 ok "Build output verified"
 echo ""
 
-# Step 4: Deploy to server
+# Step 5: Deploy to server
 info "Step 4: Deploying to server..."
 
 # Clear remote directory and upload new files

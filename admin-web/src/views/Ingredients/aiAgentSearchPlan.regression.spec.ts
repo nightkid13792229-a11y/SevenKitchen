@@ -28,15 +28,16 @@ describe('AI 添加原料 · 检索方案确认', () => {
     expect(page).toContain('addPlanKeyword')
   })
 
-  it('候选记录可以在卡里改选', () => {
-    expect(page).toContain('chosenRecordKey')
-    expect(page).toContain('candidates')
-    expect(page).toContain('chosenRecordId')
+  it('候选记录在卡里以表格多选呈现，并显示汇报与事实列', () => {
+    expect(page).toContain('selectedRecordIds')
+    expect(page).toContain('libraryReports')
+    expect(page).toContain('isCandidateDisabled')
+    expect(page).toContain('入选原因')
   })
 
   it('确认走 confirmSearchPlan，并自动继续一轮', () => {
     expect(page).toContain('confirmSearchPlan')
-    expect(page).toContain('检索方案已确认，请按方案继续。')
+    expect(page).toContain('各写一份营养档案')
   })
 
   it('接口与类型都在该在的位置', () => {

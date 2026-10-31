@@ -33,7 +33,7 @@ export const ingredientCreationApi = {
    */
   confirmSearchPlan: (
     id: string,
-    input: ConfirmSearchPlanInput = {}
+    input: ConfirmSearchPlanInput
   ): Promise<SearchPlan> =>
     api.post(`${BASE}/drafts/${id}/search-plan/confirm`, input),
 

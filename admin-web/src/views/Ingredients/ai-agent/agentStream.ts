@@ -340,25 +340,54 @@ export function readSearchPlan(value: unknown): SearchPlan | null {
         .filter((item) => item.length > 0)
     : []
 
+  const candidates = Array.isArray(value.candidates)
+    ? value.candidates
+        .filter((item): item is Record<string, unknown> => isRecord(item))
+        .map((item) => ({
+          recordId: readText(item.recordId),
+          name: readText(item.name),
+          sourceType: readText(item.sourceType),
+          state: readText(item.state),
+          profileState: item.profileState === 'COOKED' ? ('COOKED' as const) : ('RAW' as const),
+          coverage: typeof item.coverage === 'number' ? item.coverage : 0,
+          reason: readText(item.reason)
+        }))
+        .filter((item) => item.recordId.length > 0 && item.name.length > 0)
+        .slice(0, 12)
+    : []
+
   return {
     status,
     keywords,
     libraries,
     findings: readText(value.findings),
-    candidates: Array.isArray(value.candidates)
-      ? value.candidates
+    libraryReports: Array.isArray(value.libraryReports)
+      ? value.libraryReports
           .filter((item): item is Record<string, unknown> => isRecord(item))
           .map((item) => ({
-            recordId: readText(item.recordId) || null,
-            name: readText(item.name),
-            sourceType: readText(item.sourceType) || null,
-            state: readText(item.state) || null
+            library: readText(item.library),
+            terms: Array.isArray(item.terms)
+              ? item.terms.map((term) => readText(term)).filter(Boolean)
+              : [],
+            total: typeof item.total === 'number' ? item.total : 0,
+            rounds: typeof item.rounds === 'number' ? item.rounds : 1
           }))
-          .filter((item) => item.name.length > 0)
-          .slice(0, 5)
+          .filter((item) => item.library.length > 0)
       : [],
-    chosenRecordId: readText(value.chosenRecordId) || null,
-    chosenRecordName: readText(value.chosenRecordName) || null,
+    candidates,
+    selections: Array.isArray(value.selections)
+      ? value.selections
+          .filter((item): item is Record<string, unknown> => isRecord(item))
+          .map((item) => ({
+            recordId: readText(item.recordId),
+            name: readText(item.name),
+            sourceType: readText(item.sourceType),
+            state: readText(item.state),
+            profileState: item.profileState === 'COOKED' ? ('COOKED' as const) : ('RAW' as const),
+            coverage: typeof item.coverage === 'number' ? item.coverage : 0
+          }))
+          .filter((item) => item.recordId.length > 0)
+      : [],
     rationale: readText(value.rationale),
     proposedAt: readText(value.proposedAt),
     approvedAt: readText(value.approvedAt) || null,

@@ -501,12 +501,35 @@ export interface SearchPlanKeyword {
 
 export type SearchPlanStatus = 'PENDING' | 'APPROVED'
 
+/** 每个库的检索汇报：用了哪些词、命中多少条、查了几轮。 */
+export interface SearchPlanLibraryReport {
+  library: string
+  terms: string[]
+  total: number
+  rounds: number
+}
+
+export type SearchPlanProfileState = 'RAW' | 'COOKED'
+
 /** 方案里列给人挑的候选来源记录。 */
 export interface SearchPlanCandidate {
-  recordId: string | null
+  recordId: string
   name: string
-  sourceType: string | null
-  state: string | null
+  sourceType: string
+  state: string
+  profileState: SearchPlanProfileState
+  coverage: number
+  reason: string
+}
+
+/** 人勾中的候选。 */
+export interface SearchPlanSelection {
+  recordId: string
+  name: string
+  sourceType: string
+  state: string
+  profileState: SearchPlanProfileState
+  coverage: number
 }
 
 /**
@@ -519,9 +542,9 @@ export interface SearchPlan {
   keywords: SearchPlanKeyword[]
   libraries: string[]
   findings: string
+  libraryReports: SearchPlanLibraryReport[]
   candidates: SearchPlanCandidate[]
-  chosenRecordId: string | null
-  chosenRecordName: string | null
+  selections: SearchPlanSelection[]
   rationale: string
   proposedAt: string
   approvedAt: string | null
@@ -533,6 +556,5 @@ export interface SearchPlan {
 export interface ConfirmSearchPlanInput {
   keywords?: SearchPlanKeyword[]
   libraries?: string[]
-  chosenRecordId?: string
-  chosenRecordName?: string
+  selectedRecordIds: string[]
 }

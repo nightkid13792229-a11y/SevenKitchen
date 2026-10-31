@@ -20,13 +20,13 @@ export interface KnowledgeDomainSummary {
 }
 
 export interface KnowledgeHit {
-  id: string;
   domain: string;
   title: string;
   summary: string;
   points: string[];
   caveats: string[];
-  source: string;
+  /** 出处：书名/指南名 · 章节（+ 说明）。内部条目编号不再给模型。 */
+  citations: string[];
 }
 
 const SEARCH_LIMIT = 8;
@@ -85,18 +85,18 @@ export class RecipeKnowledgePort {
       .sort((left, right) => right.score - left.score)
       .slice(0, SEARCH_LIMIT)
       .map(({ entry }) => ({
-        id: entry.id,
         domain: KNOWLEDGE_DOMAIN_LABELS[entry.domain as KnowledgeDomain] ?? entry.domain,
         title: entry.title,
         summary: entry.summary,
         points: Array.isArray(entry.details) ? entry.details.slice(0, 3) : [],
         caveats: Array.isArray(entry.caveats) ? entry.caveats.slice(0, 2) : [],
-        source:
-          Array.isArray(entry.sources) && entry.sources.length > 0
-            ? [entry.sources[0].sourceId, entry.sources[0].locator]
+        citations: Array.isArray(entry.citations)
+          ? entry.citations.slice(0, 2).map((citation: any) =>
+              [citation.source, citation.chapter]
                 .filter(Boolean)
-                .join(' · ')
-            : '',
+                .join(' · '),
+            )
+          : [],
       }));
   }
 }

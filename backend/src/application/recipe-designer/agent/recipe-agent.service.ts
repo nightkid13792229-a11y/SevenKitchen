@@ -215,7 +215,7 @@ export class RecipeAgentService implements OnModuleInit {
     const catalog = new RecipeCatalogPort(this.prisma);
     const knowledge = new RecipeKnowledgePort(this.knowledgeBase);
 
-    const messages = await this.buildMessages(sessionId, message);
+    const messages = await this.buildMessages(sessionId, message, flow);
     let toolCalls = 0;
 
     while (true) {
@@ -332,6 +332,7 @@ export class RecipeAgentService implements OnModuleInit {
   private async buildMessages(
     sessionId: string,
     currentMessage: string,
+    flow: RecipeDesignFlow,
   ): Promise<DeepSeekToolsMessage[]> {
     const rows = await this.prisma.recipeDesignAgentMessage.findMany({
       where: { sessionId, role: { in: ['USER', 'ASSISTANT'] } },
@@ -352,6 +353,7 @@ export class RecipeAgentService implements OnModuleInit {
         content: `本份食谱的目的：${purpose}`,
       });
     }
+    messages.push({ role: 'system', content: flowContext(flow) });
     for (const row of historyRows) {
       messages.push({
         role: row.role === 'USER' ? 'user' : 'assistant',
@@ -462,6 +464,19 @@ export class RecipeAgentService implements OnModuleInit {
         `（原始错误：${(lastError as Error)?.message ?? '未配置'}）`,
     );
   }
+}
+
+/**
+ * 按流程注入的一段上下文。
+ *
+ * 为什么不写进系统提示词：两条流程要的东西不一样。产品线是通用食谱，
+ * 问体重/品种就是多余；定制订单则必须读狗狗档案。写死在一处只会互相打架。
+ */
+function flowContext(flow: RecipeDesignFlow): string {
+  if (flow === 'ORDER') {
+    return '这是定制订单食谱：按本单狗狗的过敏、忌口与备注设计，过敏是硬约束。';
+  }
+  return '这是产品线的通用食谱：按生命阶段与营养需求设计，不针对具体某只狗。不要询问或假设体重、年龄、品种、病史、过敏。';
 }
 
 function formatAsk(ask: { question: string; options: string[] }): string {

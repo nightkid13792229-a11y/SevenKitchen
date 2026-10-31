@@ -28,7 +28,7 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
     function: {
       name: 'read_draft',
       description:
-        '读当前草稿：目的之外的状态（名称、阶段、现有原料与克数、上次评估是否最新）。开工前和每次大改后读一次。',
+        '读当前草稿：名称、阶段、现有原料与克数、上次评估是否最新。需要看现有配方或阶段时读；草稿是空的就不用读。',
       parameters: NO_ARGS,
     },
   },
@@ -116,7 +116,7 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
     function: {
       name: 'assess',
       description:
-        '在当前内容上跑营养评估。只回：过没过、各项计数、还差的项（最多 12 条）、命中的过敏原。',
+        '在当前内容上跑营养评估。只回：过没过、各项计数、还差的项（最多 12 条）、命中的过敏原。配方定稿前必须跑通；没跑过就不算完成。',
       parameters: NO_ARGS,
     },
   },

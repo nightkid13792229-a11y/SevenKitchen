@@ -41,7 +41,7 @@
    原因：部署脚本是"从 `origin/main` 构建"的，分支上的提交不会被带上：
    - 后端：`bash backend/scripts/remote_deploy_v2.sh`（本地按 `origin/main` 打包 dist 再上传；
      生产机也会 `git reset --hard` 到 `origin/main`）
-   - admin-web：`bash deploy-admin-web.sh`
+   - admin-web：`bash deploy-admin-web.sh`（用**主工作区**那份，见第 6 条）
 4. **每次部署/上传后必须向老板报告结果**（部署了哪个提交、或体验版版本号）
 5. ⚠️ **部署前先看后端到底改没改**（2026-10-12 加的：这一轮白跑了一次部署）：
    只有 `miniapp/` 变动、`backend/` 一个字没改时，**不要部署后端** ——
@@ -51,6 +51,14 @@
    ```
    同理 admin-web：`git diff --stat <上次>..HEAD -- admin-web/`。
    小程序不一样 —— **每次都要上传**（老板要在手机上看到最新那份）。
+6. ⚠️ **前端部署统一用主工作区那份脚本**（2026-11-01 加的）：
+   ```bash
+   bash /Users/zhaochen/Documents/SevenKitchen/deploy-admin-web.sh
+   ```
+   脚本内部会先取 `origin/main` 的提交，再导出到临时目录构建，**与执行目录、
+   该目录停在哪个分支、有没有未提交改动都无关**。
+   不要用某个旧工作区里各自的同名脚本 —— 那些还是旧版，会按那个目录的代码打包
+   （2026-11-01 因此把旧前端发上线过两次；旧工作区请及时 `git worktree remove`）。
 
 
 ### 小程序上传体验版（固定动作 · 2026-10-31 起用脚本）

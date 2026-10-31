@@ -7,6 +7,7 @@
 import type { DeepSeekToolDefinition } from '../deepseek-tools-chat';
 import { RecipeDraftPort } from './draft-port';
 import { RecipeCatalogPort } from './catalog-port';
+import { RecipeKnowledgePort } from './knowledge-port';
 import {
   AgentToolError,
   fail,
@@ -51,6 +52,30 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
           nodeId: {
             type: 'string',
             description: '分类节点 id，来自上一层返回',
+          },
+          node: {
+            type: 'string',
+            description:
+              '也可以直接给节点名或路径（如「肾脏泌尿 / 尿石症」）；命中多条会返回候选让你挑',
+          },
+        },
+        required: [],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'read_knowledge',
+      description:
+        '查营养与疾病饮食的权威知识库（只读）。不带参数：列出有哪些领域、各多少条；给 topic：按主题模糊匹配，返回最相关的前 8 条（标题、建议、要点、注意、出处）。设计特殊需求配方前先查。',
+      parameters: {
+        type: 'object',
+        properties: {
+          topic: {
+            type: 'string',
+            description: '主题，如「草酸钙结石」「胰腺炎」「肾脏病」',
           },
         },
         required: [],
@@ -161,6 +186,7 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
 export interface ToolExecutionContext {
   port: RecipeDraftPort;
   catalog: RecipeCatalogPort;
+  knowledge: RecipeKnowledgePort;
   /** ask 工具把问题交回运行时：运行时暂停并等用户回答。 */
   onAsk: (question: string, options: string[]) => void;
 }
@@ -184,8 +210,34 @@ export async function executeTool(
           typeof args.kind === 'string' ? args.kind.trim() : undefined;
         const nodeId =
           typeof args.nodeId === 'string' ? args.nodeId.trim() : undefined;
-        const result = await context.catalog.read({ kind, nodeId });
+        const node =
+          typeof args.node === 'string' ? args.node.trim() : undefined;
+        const result = await context.catalog.read({ kind, nodeId, node });
         return ok(result, summarizeTaxonomy(result));
+      }
+
+      case 'read_knowledge': {
+        const topic =
+          typeof args.topic === 'string' ? args.topic.trim() : '';
+        if (!topic) {
+          const domains = context.knowledge.listDomains();
+          return ok(
+            { domains },
+            `知识库共 ${domains.length} 个领域：${domains
+              .map((item) => `${item.label} ${item.count} 条`)
+              .join('；')}`,
+          );
+        }
+        const hits = context.knowledge.search(topic);
+        return ok(
+          { topic, hits },
+          hits.length === 0
+            ? `知识库里没有「${topic}」相关条目`
+            : `命中 ${hits.length} 条：${hits
+                .map((hit) => hit.title)
+                .slice(0, 5)
+                .join('；')}`,
+        );
       }
 
       case 'find_food': {
@@ -341,6 +393,12 @@ function summarizeTaxonomy(result: unknown): string {
     return `${value.kinds.length} 个分类，共挂 ${totalSeries} 道：${value.kinds
       .map((kind) => `${kind.name} ${kind.nodeCount} 节点/${kind.seriesCount} 道`)
       .join('；')}`;
+  }
+  if ((value as { matches?: unknown[] }).matches) {
+    const matches = (value as { matches: Array<{ path: string }> }).matches;
+    return `命中 ${matches.length} 个节点，请确认是哪一个：${matches
+      .map((item) => item.path)
+      .join('、')}`;
   }
   if (value.node) {
     return `${value.node.path}：共 ${value.total ?? 0} 道，返回 ${value.series?.length ?? 0} 道`;

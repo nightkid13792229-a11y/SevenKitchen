@@ -30,6 +30,8 @@ import { RecipeDesignerService } from '../recipe-designer.service';
 import { buildSystemPrompt } from './prompt';
 import { RecipeDraftPort } from './draft-port';
 import { RecipeCatalogPort } from './catalog-port';
+import { RecipeKnowledgePort } from './knowledge-port';
+import { KnowledgeBaseService } from '../knowledge-base.service';
 import { AGENT_TOOLS, executeTool } from './tools';
 import type { RecipeAgentActor } from './agent-types';
 
@@ -50,6 +52,7 @@ export class RecipeAgentService {
     private readonly prisma: PrismaService,
     private readonly providerConfig: AgentProviderConfigService,
     private readonly designer: RecipeDesignerService,
+    private readonly knowledgeBase: KnowledgeBaseService,
   ) {}
 
   private accessFor(actor: RecipeAgentActor) {
@@ -192,10 +195,10 @@ export class RecipeAgentService {
       draftId,
     );
     const catalog = new RecipeCatalogPort(this.prisma);
+    const knowledge = new RecipeKnowledgePort(this.knowledgeBase);
 
     const messages = await this.buildMessages(sessionId, message);
     let toolCalls = 0;
-    let askedQuestion = false;
 
     while (true) {
       if (this.stopped.has(sessionId)) return;
@@ -243,10 +246,18 @@ export class RecipeAgentService {
           await this.fail(sessionId, '超过工具调用上限');
           return;
         }
-        const outcome = await this.runTool(port, catalog, call, (question) => {
-          askedQuestion = true;
-          void this.appendMessage(sessionId, 'ASSISTANT', question);
-        });
+        // ask 的问题先攒着，等工具结果落库后再写助手消息：
+        // 顺序反了会出现"执行记录有、问题没显示"（2026-11-01 实测）。
+        let pendingAsk: { question: string; options: string[] } | null = null;
+        const outcome = await this.runTool(
+          port,
+          catalog,
+          knowledge,
+          call,
+          (question, options) => {
+            pendingAsk = { question, options };
+          },
+        );
         toolCalls += 1;
 
         await this.recordTool(sessionId, call, outcome.result);
@@ -256,7 +267,12 @@ export class RecipeAgentService {
           content: JSON.stringify(outcome.result),
         });
 
-        if (askedQuestion) {
+        if (pendingAsk) {
+          await this.appendMessage(
+            sessionId,
+            'ASSISTANT',
+            formatAsk(pendingAsk),
+          );
           await this.markWaiting(sessionId);
           return;
         }
@@ -267,8 +283,9 @@ export class RecipeAgentService {
   private async runTool(
     port: RecipeDraftPort,
     catalog: RecipeCatalogPort,
+    knowledge: RecipeKnowledgePort,
     call: DeepSeekToolCall,
-    onAsk: (question: string) => void,
+    onAsk: (question: string, options: string[]) => void,
   ): Promise<{ result: unknown }> {
     let args: unknown = {};
     try {
@@ -281,7 +298,8 @@ export class RecipeAgentService {
     const result = await executeTool(call.function.name, args, {
       port,
       catalog,
-      onAsk: (question) => onAsk(question),
+      knowledge,
+      onAsk: (question, options) => onAsk(question, options),
     });
     return { result };
   }
@@ -426,6 +444,13 @@ export class RecipeAgentService {
         `（原始错误：${(lastError as Error)?.message ?? '未配置'}）`,
     );
   }
+}
+
+function formatAsk(ask: { question: string; options: string[] }): string {
+  if (ask.options.length === 0) return ask.question;
+  return `${ask.question}\n\n${ask.options
+    .map((option, index) => `${index + 1}. ${option}`)
+    .join('\n')}`;
 }
 
 function safeParse(text: string): unknown {

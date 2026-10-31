@@ -27,6 +27,10 @@ export interface TaxonomyKindView {
   nodes: Array<{ id: string; path: string; seriesCount: number }>;
 }
 
+export interface TaxonomyMatchView {
+  matches: Array<{ id: string; path: string }>;
+}
+
 export interface TaxonomyNodeView {
   node: { id: string; path: string };
   total: number;
@@ -48,9 +52,15 @@ export class RecipeCatalogPort {
   async read(input: {
     kind?: string;
     nodeId?: string;
-  }): Promise<TaxonomyOverview | TaxonomyKindView | TaxonomyNodeView> {
+    node?: string;
+  }): Promise<
+    TaxonomyOverview | TaxonomyKindView | TaxonomyMatchView | TaxonomyNodeView
+  > {
     if (input.nodeId) {
       return this.readNode(input.nodeId);
+    }
+    if (input.node) {
+      return this.readByName(input.node, input.kind);
     }
     if (input.kind) {
       return this.readKind(input.kind);
@@ -87,6 +97,58 @@ export class RecipeCatalogPort {
         name: kind.name,
         nodeCount: nodeCount.get(kind.id) ?? 0,
         seriesCount: linkCount.get(kind.id) ?? 0,
+      })),
+    };
+  }
+
+  /**
+   * 按名字找节点。模型经常把节点名（「肾脏泌尿」）当 id 传，
+   * 所以这里必须能吃名字；命中多条就让它挑，别报一个看不懂的错。
+   */
+  private async readByName(
+    name: string,
+    kindCode?: string,
+  ): Promise<TaxonomyMatchView | TaxonomyNodeView> {
+    const keyword = name.trim();
+    if (!keyword) {
+      throw new Error('node 不能为空');
+    }
+    const kind = kindCode
+      ? await this.prisma.recipeTaxonomyKind.findUnique({
+          where: { code: kindCode },
+          select: { id: true },
+        })
+      : null;
+
+    const nodes = await this.prisma.recipeTaxonomyNode.findMany({
+      where: {
+        status: 'ACTIVE',
+        ...(kind ? { kindId: kind.id } : {}),
+        OR: [
+          { name: { contains: keyword } },
+          { definition: { contains: keyword } },
+        ],
+      },
+      take: 10,
+      select: {
+        id: true,
+        name: true,
+        parent: { select: { name: true } },
+      },
+    });
+
+    if (nodes.length === 0) {
+      throw new Error(
+        `没有找到名字含「${keyword}」的分类节点。可以先不带参数看分类，或给 kind 看该分类下的节点。`,
+      );
+    }
+    if (nodes.length === 1) {
+      return this.readNode(nodes[0].id);
+    }
+    return {
+      matches: nodes.map((node) => ({
+        id: node.id,
+        path: node.parent ? `${node.parent.name} / ${node.name}` : node.name,
       })),
     };
   }

@@ -667,9 +667,11 @@ export class LabelV10Service {
         this.fmt('碳水', nutrition.carbohydratePercent, '≤'),
       ],
     ];
-    const energy = nutrition.energyDensityKcalPerKg
-      ? `能量密度 ${nutrition.energyDensityKcalPerKg} kcal/kg（计算值）`
-      : '';
+    const energyValue = Number(nutrition.energyDensityKcalPerKg);
+    const energy =
+      Number.isFinite(energyValue) && energyValue > 0
+        ? `能量密度 ${Math.round(energyValue)} kcal/kg（计算值）`
+        : '';
     if (energy) {
       rows.push([energy, '', '']);
     }

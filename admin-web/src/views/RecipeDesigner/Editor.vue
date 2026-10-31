@@ -72,6 +72,13 @@
           title="公共门槛 + 展示资料 + 分支条件（产品线文案或订单信息）"
           @click="openLaunchReadiness"
         >上线检查</el-button>
+        <el-button
+          text
+          :type="agentDrawerVisible ? 'primary' : 'default'"
+          :icon="MagicStick"
+          :disabled="!draft"
+          @click="agentDrawerVisible = true"
+        >AI 设计对话</el-button>
         <span class="save-status" :class="saveStatus">
           <el-icon v-if="saveStatus === 'saving'"><Loading /></el-icon>
           <el-icon v-else-if="saveStatus === 'error'"><WarningFilled /></el-icon>
@@ -406,6 +413,9 @@
       @go-to-series-list="goToSeriesListFromCheck"
     />
 
+
+    <!-- AI 食谱设计（2026-10-31 极简版）：聊天 + 执行记录 -->
+    <RecipeAgentDrawer v-model="agentDrawerVisible" :draft-id="currentDraftId" />
   </div>
 </template>
 
@@ -413,8 +423,9 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown, ArrowLeft, CircleCheck, CircleCheckFilled, Delete, EditPen, Loading, Rank, RefreshLeft, RefreshRight, WarningFilled } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowLeft, CircleCheck, CircleCheckFilled, Delete, EditPen, Loading, MagicStick, Rank, RefreshLeft, RefreshRight, WarningFilled } from '@element-plus/icons-vue'
 import draggable from 'vuedraggable'
+import RecipeAgentDrawer from './components/RecipeAgentDrawer.vue'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import type { CreateRecipeSeriesStageDraftPayload } from '@/api/recipeDesigner'
 import { nutritionFoodApi, type NutritionFoodDetail } from '@/api/ingredients'
@@ -514,6 +525,7 @@ async function loadOrderDesignWorkspace() {
 
 // 进入已发布草稿会自动跳转到修订版，此后用 currentDraftId 跟随最新草稿
 const currentDraftId = ref(draftId)
+const agentDrawerVisible = ref(false)
 
 const draft = ref<DesignRecipeDraftDetail | null>(null)
 /** 当前设计模式：路由带订单号，或系列本身标记为 ORDER，都算订单定制 */

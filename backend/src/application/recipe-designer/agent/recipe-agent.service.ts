@@ -17,7 +17,10 @@ import {
 
 import { PrismaService } from '../../../infrastructure/prisma.service';
 import { AgentProviderConfigService } from '../../nutrition-governance/agent-provider-config.service';
-import { RECIPE_DESIGN_AGENT_PURPOSE } from '../recipe-design-agent-purpose';
+import {
+  recipeDesignPurposesForFlow,
+  type RecipeDesignFlow,
+} from '../recipe-design-agent-purpose';
 import {
   callDeepSeekTools,
   type DeepSeekToolCall,
@@ -70,7 +73,12 @@ export class RecipeAgentService {
     let launched = false;
     try {
       const access = this.accessFor(input.actor);
-      await this.designer.getDraft(input.draftId, access);
+      const draft = (await this.designer.getDraft(
+        input.draftId,
+        access,
+      )) as any;
+      const flow: RecipeDesignFlow =
+        draft?.series?.designMode === 'ORDER' ? 'ORDER' : 'CATALOG';
 
       const existing = await this.prisma.recipeDesignAgentSession.findFirst({
         where: { designRecipeId: input.draftId },
@@ -100,7 +108,7 @@ export class RecipeAgentService {
       }
 
       await this.appendMessage(sessionId, 'USER', input.message);
-      this.launch(sessionId, input.draftId, input.actor, input.message);
+      this.launch(sessionId, input.draftId, input.actor, input.message, flow);
       launched = true;
       return { sessionId };
     } finally {
@@ -147,8 +155,9 @@ export class RecipeAgentService {
     draftId: string,
     actor: RecipeAgentActor,
     message: string,
+    flow: RecipeDesignFlow,
   ): void {
-    void this.run(sessionId, draftId, actor, message)
+    void this.run(sessionId, draftId, actor, message, flow)
       .catch(async (error: unknown) => {
         await this.prisma.recipeDesignAgentSession
           .update({
@@ -172,11 +181,10 @@ export class RecipeAgentService {
     draftId: string,
     actor: RecipeAgentActor,
     message: string,
+    flow: RecipeDesignFlow,
   ): Promise<void> {
     const startedAt = Date.now();
-    const config = await this.providerConfig.getEnabledDeepSeekRuntimeConfig({
-      purpose: RECIPE_DESIGN_AGENT_PURPOSE,
-    });
+    const config = await this.resolveConfig(flow);
     const port = new RecipeDraftPort(
       this.designer,
       this.accessFor(actor),
@@ -389,9 +397,30 @@ export class RecipeAgentService {
       .catch(() => undefined);
   }
 
-  /** 不做额外校验，只为把错误信息说清楚。 */
-  private assertMessage(message: string): void {
-    if (!message.trim()) throw new BadRequestException('消息不能为空');
+  /**
+   * 按流程取模型配置：先本流程（产品线 / 订单），再共享键 RECIPE_DESIGN。
+   *
+   * 刻意**不回退到系统默认 DEFAULT** —— 食谱设计必须有自己的一行配置，
+   * 否则就是用健康识别或某个不相干的模型在设计食谱。
+   */
+  private async resolveConfig(flow: RecipeDesignFlow) {
+    const purposes = recipeDesignPurposesForFlow(flow);
+    let lastError: unknown = null;
+    for (const purpose of purposes) {
+      try {
+        return await this.providerConfig.getEnabledDeepSeekRuntimeConfig({
+          purpose,
+          fallbackToDefault: false,
+        });
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw new BadRequestException(
+      `AI 食谱设计（${flow === 'ORDER' ? '定制订单' : '产品线'}）还没有配置模型：` +
+        `请在后台「AI 配置」里配置 ${purposes[0]}。` +
+        `（原始错误：${(lastError as Error)?.message ?? '未配置'}）`,
+    );
   }
 }
 

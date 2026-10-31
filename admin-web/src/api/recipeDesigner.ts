@@ -380,4 +380,36 @@ export const recipeDesignerApi = {
   updateDogDesignNotes: (dogId: string, data: UpdateDogDesignNotesPayload): Promise<unknown> =>
     api.patch(`/recipe-designer/dogs/${dogId}/design-notes`, data),
 
+  // AI 食谱设计对话（2026-10-31 重建：极简版）
+  startAgentRun: (draftId: string, message: string): Promise<{ sessionId: string }> =>
+    api.post(`/recipe-designer/drafts/${draftId}/agent/runs`, { message }),
+  getAgentSession: (
+    draftId: string
+  ): Promise<{ session: AgentSession; messages: AgentMessage[] } | null> =>
+    api.get(`/recipe-designer/drafts/${draftId}/agent/session`),
+  stopAgentRun: (sessionId: string): Promise<void> =>
+    api.post(`/recipe-designer/agent/runs/${sessionId}/stop`),
+
+}
+
+/** AI 食谱设计会话（2026-10-31 极简版） */
+export interface AgentSession {
+  id: string
+  designRecipeId: string
+  status: 'RUNNING' | 'WAITING_USER' | 'COMPLETED' | 'STOPPED' | 'FAILED' | 'INTERRUPTED'
+  stepCount: number
+  promptTokens: number
+  completionTokens: number
+  lastError?: string | null
+  startedAt: string
+  endedAt?: string | null
+}
+
+export interface AgentMessage {
+  id: string
+  seq: number
+  role: 'USER' | 'ASSISTANT' | 'TOOL'
+  content: string
+  toolName?: string | null
+  createdAt: string
 }

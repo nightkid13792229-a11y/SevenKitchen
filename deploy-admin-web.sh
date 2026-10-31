@@ -59,6 +59,26 @@ else
 fi
 echo ""
 
+# Step 0: 构建源必须是 origin/main，且没有未提交改动
+# 这个脚本按「当前工作区」构建；若工作区停在旧分支，会把旧前端发到线上（2026-11-01 发生过）。
+info "Verifying build source is origin/main..."
+git -C "$SCRIPT_DIR" fetch origin --quiet
+LOCAL_HEAD="$(git -C "$SCRIPT_DIR" rev-parse HEAD)"
+MAIN_HEAD="$(git -C "$SCRIPT_DIR" rev-parse origin/main)"
+if [ "$LOCAL_HEAD" != "$MAIN_HEAD" ]; then
+  fail "当前工作区不在 origin/main：HEAD=$(git -C "$SCRIPT_DIR" rev-parse --short HEAD)，origin/main=$(git -C "$SCRIPT_DIR" rev-parse --short origin/main)"
+  info "请在一个已更新到 origin/main 的工作区里执行，例如："
+  info "  git worktree add --detach /tmp/sevenkitchen-deploy origin/main"
+  info "  cd /tmp/sevenkitchen-deploy && bash deploy-admin-web.sh"
+  exit 1
+fi
+if ! git -C "$SCRIPT_DIR" diff --quiet; then
+  fail "工作区有未提交的改动，拒绝用它构建前端（避免把半成品发上线）。"
+  info "请先提交/还原，或改用干净的 origin/main 工作区。"
+  exit 1
+fi
+ok "Build source verified: $(git -C "$SCRIPT_DIR" rev-parse --short HEAD)"
+
 # Step 1: Install dependencies
 info "Step 1: Installing dependencies..."
 cd "$ADMIN_WEB_DIR"

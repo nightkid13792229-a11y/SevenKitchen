@@ -1436,7 +1436,7 @@ export class IngredientCreationToolsService {
 
     switch (input.name) {
       case 'searchLibraries':
-        return this.searchLibraries(input.args);
+        return this.searchLibraries(input.args, input.draftId);
       case 'loadSkill':
         return this.loadSkill(input.args);
       case 'summarizeByKeyword':
@@ -1465,6 +1465,7 @@ export class IngredientCreationToolsService {
   /** 按库检索：只按模型给的库与词查，不做任何扩展。 */
   private async searchLibraries(
     args: Record<string, unknown>,
+    draftId: string,
   ): Promise<Omit<AgentToolExecution, 'durationMs'>> {
     const rawGroups = args.groups;
     if (!Array.isArray(rawGroups) || rawGroups.length === 0) {
@@ -1520,6 +1521,26 @@ export class IngredientCreationToolsService {
         }),
       ),
     );
+
+    // 汇报数据由系统记录，不让模型复述：同一库多轮就留多条。
+    const draft = await this.draftService.get(draftId);
+    if (draft?.payload) {
+      const previous = Array.isArray(draft.payload.searchReport)
+        ? draft.payload.searchReport
+        : [];
+      const at = new Date().toISOString();
+      await this.draftService.patch(draftId, draft.step, {
+        searchReport: [
+          ...previous,
+          ...groups.map((group, index) => ({
+            library: group.library,
+            terms: group.terms,
+            total: results[index]?.total ?? 0,
+            at,
+          })),
+        ],
+      });
+    }
 
     const empty = results
       .filter((result) => result.total === 0)

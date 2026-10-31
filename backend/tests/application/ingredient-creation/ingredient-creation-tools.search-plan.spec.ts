@@ -147,7 +147,11 @@ describe('IngredientCreationToolsService · 检索方案', () => {
 
     expect(result.ok).toBe(false);
     expect(String(result.error)).toContain('GOOGLE');
-    expect(draftService.patch).not.toHaveBeenCalled();
+    // 零命中不记「查到过候选」的记号，但检索流水照样要记（汇报块要用）。
+    const patches = draftService.patch.mock.calls.map(
+      (call) => call[2] as Record<string, unknown>,
+    );
+    expect(patches.some((payload) => 'searchProbe' in payload)).toBe(false);
   });
 
   it('没有方案就写原料卡 → 拒绝，且不动草稿', async () => {
@@ -159,7 +163,11 @@ describe('IngredientCreationToolsService · 检索方案', () => {
 
     expect(result.ok).toBe(false);
     expect(String(result.error)).toContain('检索方案');
-    expect(draftService.patch).not.toHaveBeenCalled();
+    // 零命中不记「查到过候选」的记号，但检索流水照样要记（汇报块要用）。
+    const patches = draftService.patch.mock.calls.map(
+      (entry) => entry[2] as Record<string, unknown>,
+    );
+    expect(patches.some((payload) => 'searchProbe' in payload)).toBe(false);
   });
 
   it('方案还是待确认 → 同样拒绝写原料卡', async () => {
@@ -238,7 +246,11 @@ describe('IngredientCreationToolsService · 查到候选后不许用提问代替
       groups: [{ library: 'CFCT', terms: ['不存在的名字'] }],
     });
 
-    expect(draftService.patch).not.toHaveBeenCalled();
+    // 零命中不记「查到过候选」的记号，但检索流水照样要记（汇报块要用）。
+    const patches = draftService.patch.mock.calls.map(
+      (entry) => entry[2] as Record<string, unknown>,
+    );
+    expect(patches.some((payload) => 'searchProbe' in payload)).toBe(false);
   });
 
   it('查到候选、还没交方案 → 拒绝提问', async () => {

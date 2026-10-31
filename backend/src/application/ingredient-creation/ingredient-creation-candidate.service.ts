@@ -500,26 +500,6 @@ function classifyMatchMethod(
  * 两种情况都压到 `DIFFERENT_PART_SCORE` 并带备注，不当同名命中。
  * 同时保留最高分那一对（关键词 / 词条名 / 匹配方式），供页面展示匹配依据。
  */
-/** 数一条记录里非空数值的个数：模型据此比较候选的完整度。 */
-function countFilledNutritionValues(value: unknown): number {
-  if (typeof value === 'number') {
-    return 1;
-  }
-  if (Array.isArray(value)) {
-    return value.reduce<number>(
-      (sum, item) => sum + countFilledNutritionValues(item),
-      0,
-    );
-  }
-  if (typeof value === 'object' && value !== null) {
-    return Object.values(value as Record<string, unknown>).reduce<number>(
-      (sum, item) => sum + countFilledNutritionValues(item),
-      0,
-    );
-  }
-  return 0;
-}
-
 function scoreSourceRecord(
   query: QueryAnalysis,
   record: SourceRecordMeta,
@@ -819,9 +799,6 @@ export interface LibrarySearchHit {
   sourceType: string;
   /** 来源库自己的主键（如 USDA FDC id），同名多条时靠它区分版本。 */
   sourceKey: string;
-  dataType: string | null;
-  /** 该记录已填的营养字段数，供模型比较完整度。 */
-  filledFieldCount: number;
 }
 
 export interface LibrarySearchResult {
@@ -861,6 +838,8 @@ export interface LibrarySearchInput {
  */
 @Injectable()
 export class IngredientCreationCandidateService {
+  constructor(private readonly prisma: PrismaService) {}
+
   /**
    * 按**指定库**检索：模型给「库 + 该库的词组」，代码只负责按库查、打分、截断。
    *
@@ -880,8 +859,10 @@ export class IngredientCreationCandidateService {
           .filter((term) => term.length > 0),
       ),
     ];
-    const limit = Math.min(Math.max(input.limit ?? 20, 1), 50);
+    const limit = Math.min(Math.max(input.limit ?? 100, 1), 100);
 
+    // 只按「库内名字包含任一词」查，不评分、不按相关性过滤：
+    // 哪些命中是同一个食物、哪些该进候选，由模型判断。
     const rows = await this.prisma.nutritionSourceRecord.findMany({
       where: {
         status: 'ACTIVE',
@@ -897,58 +878,21 @@ export class IngredientCreationCandidateService {
         foodNameEn: true,
         sourceType: true,
         sourceKey: true,
-        dataType: true,
-        normalizedNutrition: true,
       },
+      orderBy: [{ foodName: 'asc' }, { id: 'asc' }],
     });
-
-    const scored = rows
-      .map((row) => {
-        let best = 0;
-        for (const term of terms) {
-          for (const name of [row.foodName, row.foodNameEn]) {
-            if (!name) {
-              continue;
-            }
-            const { score } = scoreIngredientSourceNameMatch({
-              ingredientName: term,
-              sourceFoodName: name,
-              sourceType: row.sourceType,
-              allowStaticChineseEnglishAliases: false,
-            });
-            if (score > best) {
-              best = score;
-            }
-          }
-        }
-        return { row, score: best };
-      })
-      .filter((entry) => entry.score >= MIN_MATCH_SCORE)
-      .sort(
-        (left, right) =>
-          right.score - left.score ||
-          left.row.foodName.localeCompare(right.row.foodName) ||
-          left.row.id.localeCompare(right.row.id),
-      );
 
     return {
       library,
-      total: scored.length,
-      hits: scored.slice(0, limit).map(({ row }) => ({
+      total: rows.length,
+      hits: rows.slice(0, limit).map((row) => ({
         id: row.id,
         name: row.foodName,
         sourceType: row.sourceType,
         sourceKey: row.sourceKey,
-        dataType: row.dataType ?? null,
-        filledFieldCount: countFilledNutritionValues(row.normalizedNutrition),
       })),
     };
   }
-
-
-  private readonly logger = new Logger(IngredientCreationCandidateService.name);
-
-  constructor(private readonly prisma: PrismaService) {}
 
   /**
    * 只按名字摆事实：返回真实命中的词条名（最多 3000 条），**不做分类**。

@@ -441,6 +441,20 @@ export interface IngredientCreationDraftPayload {
    * 零命中不记——那时候问「要不要换名字 / 要不要去线上找」是合理的。
    */
   searchProbe?: { hitAt: string } | null;
+  /**
+   * 每轮按库检索的流水：库、用的词、命中数。
+   *
+   * 汇报块由它生成，不让模型复述数字；同一库多轮（换词重查）会有多条。
+   */
+  searchReport?: SearchReportEntry[];
+}
+
+export interface SearchReportEntry {
+  library: string;
+  terms: string[];
+  /** 该轮该库的命中总数（截断前）。 */
+  total: number;
+  at: string;
 }
 
 /**

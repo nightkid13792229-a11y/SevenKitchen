@@ -29,6 +29,7 @@ import {
 import { RecipeDesignerService } from '../recipe-designer.service';
 import { buildSystemPrompt } from './prompt';
 import { RecipeDraftPort } from './draft-port';
+import { RecipeCatalogPort } from './catalog-port';
 import { AGENT_TOOLS, executeTool } from './tools';
 import type { RecipeAgentActor } from './agent-types';
 
@@ -190,6 +191,7 @@ export class RecipeAgentService {
       this.accessFor(actor),
       draftId,
     );
+    const catalog = new RecipeCatalogPort(this.prisma);
 
     const messages = await this.buildMessages(sessionId, message);
     let toolCalls = 0;
@@ -241,7 +243,7 @@ export class RecipeAgentService {
           await this.fail(sessionId, '超过工具调用上限');
           return;
         }
-        const outcome = await this.runTool(port, call, (question) => {
+        const outcome = await this.runTool(port, catalog, call, (question) => {
           askedQuestion = true;
           void this.appendMessage(sessionId, 'ASSISTANT', question);
         });
@@ -264,6 +266,7 @@ export class RecipeAgentService {
 
   private async runTool(
     port: RecipeDraftPort,
+    catalog: RecipeCatalogPort,
     call: DeepSeekToolCall,
     onAsk: (question: string) => void,
   ): Promise<{ result: unknown }> {
@@ -277,6 +280,7 @@ export class RecipeAgentService {
     }
     const result = await executeTool(call.function.name, args, {
       port,
+      catalog,
       onAsk: (question) => onAsk(question),
     });
     return { result };

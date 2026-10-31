@@ -6,6 +6,7 @@
  */
 import type { DeepSeekToolDefinition } from '../deepseek-tools-chat';
 import { RecipeDraftPort } from './draft-port';
+import { RecipeCatalogPort } from './catalog-port';
 import {
   AgentToolError,
   fail,
@@ -29,6 +30,29 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
       description:
         '读当前草稿：目的之外的状态（名称、阶段、现有原料与克数、上次评估是否最新）。开工前和每次大改后读一次。',
       parameters: NO_ARGS,
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'read_taxonomy',
+      description:
+        '查看现有产品线的需求分类（只读）。不带参数：有哪些分类、各自多少节点多少道；给 kind：这个分类下的节点；给 nodeId：这个节点下的食谱（最多 20 条）。',
+      parameters: {
+        type: 'object',
+        properties: {
+          kind: {
+            type: 'string',
+            description: '分类代码，如 HEALTH_NEED / MAIN_PROTEIN / SCENARIO',
+          },
+          nodeId: {
+            type: 'string',
+            description: '分类节点 id，来自上一层返回',
+          },
+        },
+        required: [],
+        additionalProperties: false,
+      },
     },
   },
   {
@@ -133,6 +157,7 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
 
 export interface ToolExecutionContext {
   port: RecipeDraftPort;
+  catalog: RecipeCatalogPort;
   /** ask 工具把问题交回运行时：运行时暂停并等用户回答。 */
   onAsk: (question: string, options: string[]) => void;
 }
@@ -149,6 +174,15 @@ export async function executeTool(
       case 'read_draft': {
         const summary = await context.port.readDraft();
         return ok(summary, summarizeDraft(summary));
+      }
+
+      case 'read_taxonomy': {
+        const kind =
+          typeof args.kind === 'string' ? args.kind.trim() : undefined;
+        const nodeId =
+          typeof args.nodeId === 'string' ? args.nodeId.trim() : undefined;
+        const result = await context.catalog.read({ kind, nodeId });
+        return ok(result, summarizeTaxonomy(result));
       }
 
       case 'find_food': {
@@ -286,6 +320,32 @@ function parseOps(
     return { ok: false, message: `不认识的 op：${String(op)}` };
   }
   return { ok: true, ops };
+}
+
+function summarizeTaxonomy(result: unknown): string {
+  const value = result as {
+    kinds?: Array<{ name: string; nodeCount: number; seriesCount: number }>;
+    kind?: { name: string };
+    total?: number;
+    node?: { path: string };
+    series?: unknown[];
+  };
+  if (value.kinds) {
+    const totalSeries = value.kinds.reduce(
+      (sum, kind) => sum + kind.seriesCount,
+      0,
+    );
+    return `${value.kinds.length} 个分类，共挂 ${totalSeries} 道：${value.kinds
+      .map((kind) => `${kind.name} ${kind.nodeCount} 节点/${kind.seriesCount} 道`)
+      .join('；')}`;
+  }
+  if (value.node) {
+    return `${value.node.path}：共 ${value.total ?? 0} 道，返回 ${value.series?.length ?? 0} 道`;
+  }
+  if (value.kind) {
+    return `${value.kind.name}：${value.total ?? 0} 个节点`;
+  }
+  return '分类信息';
 }
 
 function summarizeDraft(summary: {

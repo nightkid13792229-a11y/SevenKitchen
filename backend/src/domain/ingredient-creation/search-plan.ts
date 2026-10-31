@@ -1,5 +1,5 @@
 /**
- * 「检索方案」：AI 查完库之后，把最终要怎么查、想用哪条记录交给用户确认。
+ * 「检索方案」：AI 查完库之后，把最终要怎么查、查到什么、候选有哪些交给用户确认。
  *
  * 闸门在**写草稿之前**，不是查库之前：查库、汇总、读来源、问人都是只读的，
  * 拦它们只会让方案变瞎；写原料卡与营养才是真正落东西，必须先有人点头。
@@ -26,27 +26,54 @@ export interface SearchPlanKeyword {
 
 export type SearchPlanStatus = 'PENDING' | 'APPROVED';
 
-/** 方案里列给人挑的候选来源记录（最多 5 条）。 */
+export type SearchPlanProfileState = 'RAW' | 'COOKED';
+
+/** 每个库的检索汇报：用了哪些词、命中多少条、查了几轮。 */
+export interface SearchPlanLibraryReport {
+  library: SearchPlanLibrary;
+  terms: string[];
+  /** 最后一轮的命中总数（截断前）。 */
+  total: number;
+  rounds: number;
+}
+
+/** 方案里列给人挑的候选来源记录（由模型挑，代码只补事实列）。 */
 export interface SearchPlanCandidate {
-  recordId: string | null;
+  recordId: string;
   name: string;
-  sourceType: string | null;
-  /** 生 / 熟；来源没给就 null。 */
-  state: string | null;
+  sourceType: string;
+  /** 展示用：生 / 熟 / 干 / 未标生熟 … */
+  state: string;
+  /** 写入档案用的状态；模型必须给。 */
+  profileState: SearchPlanProfileState;
+  /** 字段覆盖率（60 项目录，0 不计入）。 */
+  coverage: number;
+  /** 一句话入选原因。 */
+  reason: string;
+}
+
+/** 人确认时勾中的候选，原样冻结下来作为写入依据。 */
+export interface SearchPlanSelection {
+  recordId: string;
+  name: string;
+  sourceType: string;
+  state: string;
+  profileState: SearchPlanProfileState;
+  coverage: number;
 }
 
 export interface SearchPlan {
   status: SearchPlanStatus;
   keywords: SearchPlanKeyword[];
   libraries: SearchPlanLibrary[];
-  /** 已经查到了什么（各库命中概况），给人判断用。 */
-  findings: string;
-  /** 列给人挑的候选（最多 5 条）；主选仍看 chosenRecordId。 */
+  /** 每库一行的检索汇报（系统记录，不由模型复述）。 */
+  libraryReports: SearchPlanLibraryReport[];
+  /** 列给人挑的候选（最多 12 条）。 */
   candidates: SearchPlanCandidate[];
-  /** 打算用哪条来源记录；还没定就是 null。 */
-  chosenRecordId: string | null;
-  chosenRecordName: string | null;
-  /** 为什么这么查，一句话。 */
+  /** 人勾中的候选；确认后才有。 */
+  selections: SearchPlanSelection[];
+  /** 已经查到了什么（各库命中概况的补充判断），给人判断用。 */
+  findings: string;
   rationale: string;
   proposedAt: string;
   approvedAt: string | null;
@@ -62,8 +89,7 @@ export type SearchPlanResult =
 export type SearchPlanApprovalInput = {
   keywords?: unknown;
   libraries?: unknown;
-  chosenRecordId?: unknown;
-  chosenRecordName?: unknown;
+  selectedRecordIds?: unknown;
 };
 
 /** 没确认就想写草稿时给模型的原文；不给绕过口子。 */
@@ -78,7 +104,10 @@ const FINDINGS_MAX = 300;
 const RATIONALE_MAX = 120;
 const RECORD_ID_MAX = 64;
 const RECORD_NAME_MAX = 100;
-const CANDIDATES_MAX = 5;
+const STATE_MAX = 20;
+const REASON_MAX = 120;
+const CANDIDATES_MAX = 12;
+const REPORT_TERMS_MAX = 30;
 
 const LIBRARY_SET = new Set<string>(SEARCH_PLAN_LIBRARIES);
 
@@ -91,6 +120,10 @@ function readText(value: unknown, max: number): string {
     return '';
   }
   return Array.from(value.trim()).slice(0, max).join('');
+}
+
+function readProfileState(value: unknown): SearchPlanProfileState | null {
+  return value === 'RAW' || value === 'COOKED' ? value : null;
 }
 
 function readKeywords(
@@ -161,6 +194,45 @@ function readLibraries(
   return { ok: true, libraries };
 }
 
+function readLibraryReports(input: unknown): SearchPlanLibraryReport[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  const reports: SearchPlanLibraryReport[] = [];
+  for (const raw of input) {
+    if (!isRecord(raw)) {
+      continue;
+    }
+    const library = readText(raw.library, 20).toUpperCase();
+    if (!LIBRARY_SET.has(library)) {
+      continue;
+    }
+    const terms = Array.isArray(raw.terms)
+      ? [
+          ...new Set(
+            raw.terms
+              .map((term) => readText(term, TERM_MAX))
+              .filter((term) => term.length > 0),
+          ),
+        ].slice(0, REPORT_TERMS_MAX)
+      : [];
+    const total =
+      typeof raw.total === 'number' && Number.isFinite(raw.total) && raw.total >= 0
+        ? Math.floor(raw.total)
+        : 0;
+    const rounds =
+      typeof raw.rounds === 'number' &&
+      Number.isFinite(raw.rounds) &&
+      raw.rounds >= 1
+        ? Math.floor(raw.rounds)
+        : 1;
+    reports.push({ library: library as SearchPlanLibrary, terms, total, rounds });
+  }
+
+  return reports;
+}
+
 function readCandidates(input: unknown): SearchPlanCandidate[] {
   if (!Array.isArray(input)) {
     return [];
@@ -174,15 +246,26 @@ function readCandidates(input: unknown): SearchPlanCandidate[] {
     if (!isRecord(raw)) {
       continue;
     }
+    const recordId = readText(raw.recordId, RECORD_ID_MAX);
     const name = readText(raw.name, RECORD_NAME_MAX);
-    if (!name) {
+    const profileState = readProfileState(raw.profileState);
+    if (!recordId || !name || !profileState) {
       continue;
     }
+    const coverage =
+      typeof raw.coverage === 'number' &&
+      Number.isFinite(raw.coverage) &&
+      raw.coverage >= 0
+        ? Math.round(raw.coverage * 10) / 10
+        : 0;
     candidates.push({
-      recordId: readText(raw.recordId, RECORD_ID_MAX) || null,
+      recordId,
       name,
-      sourceType: readText(raw.sourceType, 20) || null,
-      state: readText(raw.state, 20) || null,
+      sourceType: readText(raw.sourceType, 20) || 'UNKNOWN',
+      state: readText(raw.state, STATE_MAX) || '未标',
+      profileState,
+      coverage,
+      reason: readText(raw.reason, REASON_MAX),
     });
   }
 
@@ -213,6 +296,30 @@ function sameLibraries(
   );
 }
 
+function readSelectedIds(
+  input: unknown,
+): { ok: true; ids: string[] } | { ok: false; error: string } {
+  if (!Array.isArray(input)) {
+    return { ok: false, error: 'selectedRecordIds 必须是数组。' };
+  }
+
+  const ids: string[] = [];
+  for (const raw of input) {
+    const id = readText(raw, RECORD_ID_MAX);
+    if (!id) {
+      return { ok: false, error: 'selectedRecordIds 里不能有空值。' };
+    }
+    if (!ids.includes(id)) {
+      ids.push(id);
+    }
+  }
+
+  if (ids.length === 0) {
+    return { ok: false, error: '至少要勾选一条候选记录才能确认。' };
+  }
+  return { ok: true, ids };
+}
+
 /** 生成一份待确认方案；参数不合法时把原因原样交给模型。 */
 export function buildPendingSearchPlan(
   input: Record<string, unknown>,
@@ -228,19 +335,16 @@ export function buildPendingSearchPlan(
     return libraries;
   }
 
-  const chosenRecordId = readText(input.chosenRecordId, RECORD_ID_MAX);
-
   return {
     ok: true,
     plan: {
       status: 'PENDING',
       keywords: keywords.keywords,
       libraries: libraries.libraries,
-      findings: readText(input.findings, FINDINGS_MAX),
+      libraryReports: readLibraryReports(input.libraryReports),
       candidates: readCandidates(input.candidates),
-      chosenRecordId: chosenRecordId || null,
-      chosenRecordName:
-        readText(input.chosenRecordName, RECORD_NAME_MAX) || null,
+      selections: [],
+      findings: readText(input.findings, FINDINGS_MAX),
       rationale: readText(input.rationale, RATIONALE_MAX),
       proposedAt: now.toISOString(),
       approvedAt: null,
@@ -283,20 +387,52 @@ export function approveSearchPlan(
     libraries = parsed.libraries;
   }
 
-  const recordId =
-    input.chosenRecordId === undefined
-      ? plan.chosenRecordId
-      : readText(input.chosenRecordId, RECORD_ID_MAX) || null;
-  const recordName =
-    input.chosenRecordName === undefined
-      ? plan.chosenRecordName
-      : readText(input.chosenRecordName, RECORD_NAME_MAX) || null;
+  if (input.selectedRecordIds === undefined) {
+    return { ok: false, error: '确认检索方案时必须勾选至少一条候选记录。' };
+  }
+  const parsedIds = readSelectedIds(input.selectedRecordIds);
+  if (!parsedIds.ok) {
+    return parsedIds;
+  }
 
+  const byId = new Map(
+    plan.candidates.map((candidate) => [candidate.recordId, candidate]),
+  );
+  const selections: SearchPlanSelection[] = [];
+  const stateKeys = new Set<string>();
+
+  for (const id of parsedIds.ids) {
+    const candidate = byId.get(id);
+    if (!candidate) {
+      return {
+        ok: false,
+        error: `记录 ${id} 不在这次方案的候选里；只能勾选候选表中的记录。`,
+      };
+    }
+    const stateKey = `${candidate.sourceType}::${candidate.profileState}`;
+    if (stateKeys.has(stateKey)) {
+      return {
+        ok: false,
+        error: `同一来源库、同一状态只能选一条：${candidate.sourceType} ${
+          candidate.profileState === 'RAW' ? '生' : '熟'
+        }。`,
+      };
+    }
+    stateKeys.add(stateKey);
+    selections.push({
+      recordId: candidate.recordId,
+      name: candidate.name,
+      sourceType: candidate.sourceType,
+      state: candidate.state,
+      profileState: candidate.profileState,
+      coverage: candidate.coverage,
+    });
+  }
+
+  // 勾选候选是确认动作本身，不算「人改了方案」；只有改词/改库才算。
   const editedByUser =
     !sameKeywords(keywords, plan.keywords) ||
-    !sameLibraries(libraries, plan.libraries) ||
-    recordId !== plan.chosenRecordId ||
-    recordName !== plan.chosenRecordName;
+    !sameLibraries(libraries, plan.libraries);
 
   return {
     ok: true,
@@ -305,8 +441,7 @@ export function approveSearchPlan(
       status: 'APPROVED',
       keywords,
       libraries,
-      chosenRecordId: recordId,
-      chosenRecordName: recordName,
+      selections,
       approvedAt: (approver.now ?? new Date()).toISOString(),
       approvedBy: approver.userId,
       editedByUser,
@@ -339,14 +474,31 @@ export function readSearchPlan(value: unknown): SearchPlan | null {
         .filter((item): item is SearchPlanLibrary => LIBRARY_SET.has(item))
     : [];
 
+  const candidates = readCandidates(value.candidates);
+  const byId = new Map(
+    candidates.map((candidate) => [candidate.recordId, candidate]),
+  );
+  const rawSelections = Array.isArray(value.selections) ? value.selections : [];
+
   return {
     status,
     keywords,
     libraries,
+    libraryReports: readLibraryReports(value.libraryReports),
+    candidates,
+    selections: rawSelections
+      .filter(isRecord)
+      .map((item) => byId.get(readText(item.recordId, RECORD_ID_MAX)))
+      .filter((candidate): candidate is SearchPlanCandidate => Boolean(candidate))
+      .map((candidate) => ({
+        recordId: candidate.recordId,
+        name: candidate.name,
+        sourceType: candidate.sourceType,
+        state: candidate.state,
+        profileState: candidate.profileState,
+        coverage: candidate.coverage,
+      })),
     findings: readText(value.findings, FINDINGS_MAX),
-    candidates: readCandidates(value.candidates),
-    chosenRecordId: readText(value.chosenRecordId, RECORD_ID_MAX) || null,
-    chosenRecordName: readText(value.chosenRecordName, RECORD_NAME_MAX) || null,
     rationale: readText(value.rationale, RATIONALE_MAX),
     proposedAt: readText(value.proposedAt, 40),
     approvedAt: readText(value.approvedAt, 40) || null,

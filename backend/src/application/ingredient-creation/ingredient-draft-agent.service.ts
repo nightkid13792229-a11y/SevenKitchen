@@ -1250,11 +1250,16 @@ function buildDraftPromptLines(draft: IngredientCreationDraft): string[] {
     lines.push(
       `【检索方案·已确认】关键词=${searchPlan.keywords
         .map((item) => `${item.term}(${item.language})`)
-        .join('、')} 目标库=${searchPlan.libraries.join('、')}${
-        searchPlan.chosenRecordName
-          ? ` 计划使用=${searchPlan.chosenRecordName}`
-          : ''
-      }；已确认，可以按这个方案查库并写草稿。`,
+        .join('、')} 目标库=${searchPlan.libraries.join('、')}；已选 ${
+        searchPlan.selections.length
+      } 条：${searchPlan.selections
+        .map(
+          (selection) =>
+            `${selection.name}（${selection.sourceType}，${
+              selection.profileState === 'RAW' ? '生' : '熟'
+            }）`,
+        )
+        .join('、')}；已确认，每条记录各写一份档案。`,
     );
   }
 

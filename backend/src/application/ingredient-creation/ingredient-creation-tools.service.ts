@@ -2716,19 +2716,6 @@ export class IngredientCreationToolsService {
       return this.error(built.error);
     }
 
-    // 想指定的来源记录必须真实存在，否则确认后写营养会被这条 id 卡住。
-    if (built.plan.chosenRecordId) {
-      const record = await this.prisma.nutritionSourceRecord.findUnique({
-        where: { id: built.plan.chosenRecordId },
-        select: { id: true, status: true },
-      });
-      if (!record || record.status !== 'ACTIVE') {
-        return this.error(
-          `来源记录 ${built.plan.chosenRecordId} 不存在或已停用；先 getRecord 确认后再写进方案。`,
-        );
-      }
-    }
-
     const draft = await this.draftService.get(draftId);
     await this.draftService.patch(draftId, draft.step, {
       searchPlan: built.plan,

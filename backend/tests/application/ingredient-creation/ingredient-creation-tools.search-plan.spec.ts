@@ -14,8 +14,17 @@ const VALID_ARGS = {
   ],
   libraries: ['CFCT', 'USDA'],
   findings: 'CFCT 0 条；USDA 3 条（raw / dried）',
-  chosenRecordId: 'd6705357-d14b-48c0-81b0-d6cd347f7a88',
-  chosenRecordName: 'Egg, white, raw, fresh',
+  candidates: [
+    {
+      recordId: 'd6705357-d14b-48c0-81b0-d6cd347f7a88',
+      name: 'Egg, white, raw, fresh',
+      sourceType: 'USDA',
+      state: '生',
+      profileState: 'RAW',
+      coverage: 52,
+      reason: '英文名统一',
+    },
+  ],
   rationale: '英文名在 USDA 更统一',
 };
 
@@ -107,8 +116,9 @@ const APPROVED_PLAN = {
   keywords: [{ term: '鸡蛋清', language: 'zh' }],
   libraries: ['USDA'],
   findings: '',
-  chosenRecordId: null,
-  chosenRecordName: null,
+  libraryReports: [],
+  candidates: [],
+  selections: [],
   rationale: '',
   proposedAt: '2026-10-29T00:00:00.000Z',
   approvedAt: '2026-10-29T00:00:01.000Z',
@@ -126,7 +136,9 @@ describe('IngredientCreationToolsService · 检索方案', () => {
     expect(result.pendingPlan).toMatchObject({
       status: 'PENDING',
       libraries: ['CFCT', 'USDA'],
-      chosenRecordName: 'Egg, white, raw, fresh',
+      candidates: [
+        expect.objectContaining({ name: 'Egg, white, raw, fresh' }),
+      ],
     });
     expect(draftService.patch).toHaveBeenCalledWith(
       DRAFT_ID,

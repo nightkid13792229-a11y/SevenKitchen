@@ -254,8 +254,7 @@ export class IngredientCreationController {
       {
         keywords: dto.keywords,
         libraries: dto.libraries,
-        chosenRecordId: dto.chosenRecordId,
-        chosenRecordName: dto.chosenRecordName,
+        selectedRecordIds: dto.selectedRecordIds,
       },
       { userId: user.userId },
     );

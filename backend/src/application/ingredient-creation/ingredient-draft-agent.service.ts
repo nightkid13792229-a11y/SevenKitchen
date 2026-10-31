@@ -1259,7 +1259,7 @@ function buildDraftPromptLines(draft: IngredientCreationDraft): string[] {
               selection.profileState === 'RAW' ? '生' : '熟'
             }）`,
         )
-        .join('、')}；已确认，每条记录各写一份档案。`,
+        .join('、')}；已确认，每条记录各写一份档案（新建档案时带对应的 preparationState：RAW / COOKED）。`,
     );
   }
 

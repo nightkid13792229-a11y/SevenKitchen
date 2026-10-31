@@ -20,8 +20,6 @@ import type {
   DraftPresentationSnapshot,
   FediafDogScenario,
   IngredientOptionListResponse,
-  RecipeAgentApprovalStatus,
-  RecipeAgentSessionView,
   RecipeDesignerIngredientOption,
   RecipeDesignerSeriesCard,
   RecipeDesignerSeriesStatusFilter,
@@ -382,18 +380,4 @@ export const recipeDesignerApi = {
   updateDogDesignNotes: (dogId: string, data: UpdateDogDesignNotesPayload): Promise<unknown> =>
     api.patch(`/recipe-designer/dogs/${dogId}/design-notes`, data),
 
-  // AI 食谱设计 Agent（P2 对话抽屉）
-  startAgentRun: (draftId: string, message: string): Promise<{ sessionId: string }> =>
-    api.post(`/recipe-designer/drafts/${draftId}/agent/runs`, { message }),
-  getAgentSession: (draftId: string): Promise<RecipeAgentSessionView | null> =>
-    api.get(`/recipe-designer/drafts/${draftId}/agent/session`),
-  stopAgentRun: (sessionId: string): Promise<void> =>
-    api.post(`/recipe-designer/agent/runs/${sessionId}/stop`),
-  answerAgentRun: (sessionId: string, message: string): Promise<void> =>
-    api.post(`/recipe-designer/agent/runs/${sessionId}/answer`, { message }),
-  decideAgentApproval: (
-    approvalId: string,
-    status: RecipeAgentApprovalStatus
-  ): Promise<unknown> =>
-    api.post(`/recipe-designer/agent/approvals/${approvalId}/decide`, { status }),
 }

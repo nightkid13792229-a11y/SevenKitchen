@@ -237,7 +237,7 @@ describe('审核页 · 营养档案映射', () => {
   })
 
   it('同一状态多份档案时，标签带来源才分得清', () => {
-    const raw = payload.profiles.find(
+    const raw = (payload.profiles ?? []).find(
       (profile) => profile.preparationState === 'RAW'
     )!
     const groups = toProfileRows(

@@ -236,35 +236,29 @@ export class LabelV10Service {
     let h = 0;
     h += mm(this.F.brand * lineHeight);
     h += mm(1.3) + mm(this.F.title * 1.18);
-    h += mm(1.2) + 1;
-    h += mm(1.1);
+    h += mm(2.2);
     h += 2 * lh(this.F.meta) + mm(0.55);
 
     // 原料
-    h += mm(1.7) + mm(this.F.section) + mm(0.75) + mm(0.9);
+    h += mm(1.7) + mm(this.F.section) + mm(1.3);
     h +=
       this.layoutIngredientParagraph(ctx, ingredientItems, contentW).length *
       lh(this.F.ingredient);
 
     // 添加剂
     if (additiveItems.length > 0) {
-      ctx.font = `bold ${mm(this.F.additive)}px "Chinese-Bold"`;
-      const prefixWidth = ctx.measureText('添加剂组成：').width;
-      const addLines = this.packAdditive(
-        ctx,
-        additiveItems,
-        contentW,
-        prefixWidth,
-      );
-      h += mm(0.9) + addLines.length * lh(this.F.additive);
+      h += mm(1.7) + mm(this.F.section) + mm(1.3);
+      h +=
+        this.packAdditive(ctx, additiveItems, contentW, 0).length *
+        lh(this.F.additive);
     }
 
     // 保证值
-    h += mm(1.7) + mm(this.F.section) + mm(0.75) + mm(0.9);
+    h += mm(1.7) + mm(this.F.section) + mm(1.3);
     h += this.valueRows(labelData).length * lh(this.F.value);
 
     // 烹饪
-    h += mm(1.7) + mm(this.F.section * 1.2) + mm(1.0);
+    h += mm(1.7) + mm(this.F.section) + mm(1.3);
     const cookingLayouts = specs.map((spec) =>
       this.layoutCookingRow(ctx, spec, contentW),
     );
@@ -404,15 +398,8 @@ export class LabelV10Service {
     ctx.fillText(labelData.recipeName, left, y);
     y += mm(this.F.title * 1.18);
 
-    // 分隔线
-    y += mm(1.2);
-    ctx.strokeStyle = '#111111';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(left, y);
-    ctx.lineTo(right, y);
-    ctx.stroke();
-    y += 1 + mm(1.1);
+    // 食谱标题下不再画分隔线，留白收紧
+    y += mm(2.2);
 
     // 三行元信息
     ctx.textBaseline = 'alphabetic';
@@ -486,25 +473,22 @@ export class LabelV10Service {
     ctx.textBaseline = 'top';
     y += ingredientLines.length * lh(this.F.ingredient);
 
-    // 添加剂组成
+    // 添加剂组成：和其余三个一样，单独一行标题，字号统一
     if (additiveItems.length > 0) {
-      y += mm(0.9);
+      y = this.drawSection(
+        ctx,
+        '添加剂组成',
+        '',
+        y,
+        left,
+        contentW,
+        lineHeight,
+      );
       ctx.font = `${mm(this.F.additive)}px "Chinese"`;
       ctx.fillStyle = '#111111';
-      const prefix = '添加剂组成：';
-      const prefixW = ctx.measureText(prefix).width;
-      ctx.font = `bold ${mm(this.F.additive)}px "Chinese-Bold"`;
-      ctx.fillText(prefix, left, y);
-      ctx.font = `${mm(this.F.additive)}px "Chinese"`;
-
-      const availW = contentW - prefixW;
-      const addLines = this.packAdditive(ctx, additiveItems, contentW, prefixW);
+      const addLines = this.packAdditive(ctx, additiveItems, contentW, 0);
       addLines.forEach((line, index) => {
-        ctx.fillText(
-          line,
-          index === 0 ? left + prefixW : left,
-          y + index * lh(this.F.additive),
-        );
+        ctx.fillText(line, left, y + index * lh(this.F.additive));
       });
       y += addLines.length * lh(this.F.additive);
     }
@@ -607,15 +591,7 @@ export class LabelV10Service {
       ctx.textAlign = 'left';
     }
 
-    const lineY = top + mm(this.F.section) + mm(0.75);
-    ctx.strokeStyle = '#BDBDB8';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(left, lineY);
-    ctx.lineTo(left + contentW, lineY);
-    ctx.stroke();
-
-    return lineY + mm(0.9);
+    return top + mm(this.F.section) + mm(1.3);
   }
 
   // ---------------- 文本工具 ----------------
@@ -691,9 +667,11 @@ export class LabelV10Service {
         this.fmt('碳水', nutrition.carbohydratePercent, '≤'),
       ],
     ];
-    const energy = nutrition.energyDensityKcalPerKg
-      ? `能量密度 ${nutrition.energyDensityKcalPerKg} kcal/kg（计算值）`
-      : '';
+    const energyValue = Number(nutrition.energyDensityKcalPerKg);
+    const energy =
+      Number.isFinite(energyValue) && energyValue > 0
+        ? `能量密度 ${Math.round(energyValue)} kcal/kg（计算值）`
+        : '';
     if (energy) {
       rows.push([energy, '', '']);
     }

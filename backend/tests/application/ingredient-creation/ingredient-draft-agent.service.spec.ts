@@ -1727,7 +1727,18 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
     global.fetch = fetchMock as unknown as typeof fetch;
 
     const harness = createHarness({
-      draft: draftWithProfile(),
+      draft: createDraft({
+        payload: {
+          profiles: [
+            {
+              preparationState: 'RAW',
+              sourceRecordId: 'rec-liver-raw',
+              entries: [],
+              notes: null,
+            },
+          ],
+        },
+      }),
       sourceRecords: [
         {
           id: 'rec-liver-raw',

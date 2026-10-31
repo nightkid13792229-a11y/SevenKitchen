@@ -428,9 +428,9 @@ describe('IngredientCreationToolsService · writeNutrition', () => {
         {
           fieldPath: 'minerals.calcium',
           value: 120,
-          unit: 'mg',
-          // 来源不存在
-          sourceRecordId: 'missing-source',
+          // 单位不在目录里：同一来源下的逐条失败
+          unit: 'kg',
+          sourceRecordId: 'rec-liver-raw',
         },
       ],
     });
@@ -439,7 +439,7 @@ describe('IngredientCreationToolsService · writeNutrition', () => {
     expect(result.body.applied).toBe(1);
     expect(result.body.failed).toHaveLength(2);
     expect(result.body.failed[0].error).toContain('不在营养字段目录');
-    expect(result.body.failed[1].error).toContain('不存在');
+    expect(result.body.failed[1].error).toContain('单位');
     expect(draftService.patch).toHaveBeenCalledTimes(1);
   });
 

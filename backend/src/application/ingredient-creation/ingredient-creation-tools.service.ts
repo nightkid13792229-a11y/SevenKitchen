@@ -357,6 +357,12 @@ const WRITE_NUTRITION_TOOL: AgentToolDefinition = {
           description:
             '营养档案下标，从 0 开始。省略时按草稿已有档案与来源自动判断；等于当前档案数时按来源新建一份。',
         },
+        preparationState: {
+          type: 'string',
+          enum: ['RAW', 'COOKED'],
+          description:
+            '新建档案时的生熟状态。来源记录推不出生熟时必须由方案指定；写入已有档案时忽略。',
+        },
         entries: {
           type: 'array',
           minItems: 1,
@@ -2088,6 +2094,28 @@ export class IngredientCreationToolsService {
       return this.error('entries 不能为空：至少提供 1 条营养字段。');
     }
 
+    const rawState = normalizeText(args.preparationState).toUpperCase();
+    if (rawState && rawState !== 'RAW' && rawState !== 'COOKED') {
+      return this.error('preparationState 只能是 RAW 或 COOKED。');
+    }
+    const explicitState =
+      rawState === 'RAW' || rawState === 'COOKED'
+        ? (rawState as PreparationState)
+        : null;
+
+    const entrySourceIds = new Set(
+      args.entries
+        .map((entry) =>
+          isRecord(entry) ? normalizeText(entry.sourceRecordId) : '',
+        )
+        .filter((id) => id.length > 0),
+    );
+    if (entrySourceIds.size > 1) {
+      return this.error(
+        '一份档案只能有一个来源：这批 entries 里出现了多个 sourceRecordId，请按来源分份写入。',
+      );
+    }
+
     const draft = await this.draftService.get(draftId);
     let profiles = readProfiles(draft);
 
@@ -2136,6 +2164,7 @@ export class IngredientCreationToolsService {
         fieldPath: validation.fieldPath,
         value: validation.value,
         sourceRecordId: validation.sourceRecordId,
+        explicitState,
         sourceCache,
       });
       if (!write.ok) {
@@ -2406,6 +2435,7 @@ export class IngredientCreationToolsService {
     fieldPath: string;
     value: number;
     sourceRecordId: string;
+    explicitState: PreparationState | null;
     sourceCache: Map<string, SourceRecordRow | null>;
   }): Promise<
     | {
@@ -2464,6 +2494,16 @@ export class IngredientCreationToolsService {
         };
       }
 
+      if (
+        current.sourceRecordId &&
+        current.sourceRecordId !== input.sourceRecordId
+      ) {
+        return {
+          ok: false,
+          error: `一份档案只能有一个来源：第 ${profileIndex} 份档案来自 ${current.sourceRecordId}，不能写入 ${input.sourceRecordId} 的值。`,
+        };
+      }
+
       const existing = current.entries.find(
         (candidate) => candidate.fieldPath === fieldPath,
       );
@@ -2491,8 +2531,8 @@ export class IngredientCreationToolsService {
     }
 
     if (profileIndex === profiles.length) {
-      // 新草稿没有任何档案：第一次写入时按来源记录自动建一份（状态不猜）。
-      const state = derivePreparationStateFromSource(sourceRecord);
+      // 新建档案：优先用方案里指定的状态；没给才按来源推导（状态不猜）。
+      const state = input.explicitState ?? derivePreparationStateFromSource(sourceRecord);
       if (!state) {
         return {
           ok: false,

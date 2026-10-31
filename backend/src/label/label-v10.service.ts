@@ -457,9 +457,14 @@ export class LabelV10Service {
       (count, line) => count + line.length,
       0,
     );
+    // 用基线对齐：正体名称和加粗数字的字面高度不同，按"顶部"对齐会让占比高/低半个像素
+    ctx.textBaseline = 'alphabetic';
+    ctx.font = `${mm(this.F.ingredient)}px "Chinese"`;
+    const baselineOffset = ctx.measureText('国').actualBoundingBoxAscent;
     ingredientLines.forEach((tokens, lineIndex) => {
       let x = left;
-      const lineY = y + lineIndex * lh(this.F.ingredient);
+      const lineY =
+        y + lineIndex * lh(this.F.ingredient) + baselineOffset;
       tokens.forEach((token) => {
         drawnTokens += 1;
         ctx.fillStyle = '#111111';
@@ -478,6 +483,7 @@ export class LabelV10Service {
         }
       });
     });
+    ctx.textBaseline = 'top';
     y += ingredientLines.length * lh(this.F.ingredient);
 
     // 添加剂组成
